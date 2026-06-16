@@ -15,7 +15,7 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.mem.allocator.base,
+  nextpas.core.mem.intf,
   nextpas.core.mem.allocator.rtl_allocator,
   nextpas.core.mem.pool;
 

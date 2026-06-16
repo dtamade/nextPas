@@ -150,6 +150,19 @@ begin
     'truncated sequence consumes one replacement byte at a time');
 end;
 
+procedure TestStringWrappers;
+var
+  LValue: string;
+begin
+  CheckEqual(Int64(5), Int64(UTF8Length('hello')), 'string ASCII length');
+  CheckEqual(Int64($4E2D), Int64(UTF8CodePointAt(#$E4#$B8#$AD, 0)), 'string CJK codepoint');
+
+  LValue := #$80 + 'A';
+  CheckEqual(Int64(2), Int64(UTF8Length(LValue)), 'invalid byte still counts once');
+  CheckEqual(Int64($FFFD), Int64(UTF8CodePointAt(LValue, 0)), 'invalid byte wrapper returns replacement');
+  CheckEqual(Int64(Ord('A')), Int64(UTF8CodePointAt(LValue, 1)), 'wrapper keeps following ASCII addressable');
+end;
+
 procedure TestIterator;
 var
   Iter: TUTF8Iterator;
@@ -201,6 +214,7 @@ begin
   T.Run('encode nil destination fails closed', @TestEncodeNilDestinationFailsClosed);
   T.Run('isValid', @TestIsValid);
   T.Run('codepoint count', @TestCodePointCount);
+  T.Run('string wrappers', @TestStringWrappers);
   T.Run('iterator', @TestIterator);
   T.Run('iterator invalid', @TestIteratorInvalid);
   T.Run('byte length', @TestByteLength);

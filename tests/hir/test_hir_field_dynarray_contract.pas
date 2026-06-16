@@ -93,6 +93,24 @@ const
     'begin' + LineEnding +
     'end.';
 
+  InterfaceDynArrayFieldSource =
+    'program test;' + LineEnding +
+    'type IStack = interface' + LineEnding +
+    '  procedure Push(V: Integer);' + LineEnding +
+    'end;' + LineEnding +
+    'type TStack = class(TInterfacedObject, IStack)' + LineEnding +
+    '  FItems: array of Integer;' + LineEnding +
+    '  FTop: Integer;' + LineEnding +
+    '  procedure Push(V: Integer);' + LineEnding +
+    'end;' + LineEnding +
+    'procedure TStack.Push(V: Integer);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'var S: IStack;' + LineEnding +
+    'begin' + LineEnding +
+    '  S := TStack.Create;' + LineEnding +
+    'end.';
+
 procedure Fail(const AMessage: string);
 begin
   WriteLn('hir-field-dynarray-contract-failure=', AMessage);
@@ -385,11 +403,40 @@ begin
   end;
 end;
 
+procedure AssertInterfaceSlotAfterWideFieldsContract;
+var
+  Model: TSemanticModel;
+  LlvmText: string;
+begin
+  Model := BuildModel(InterfaceDynArrayFieldSource);
+  try
+    if Model = nil then
+      Fail('interface-dynarray-field-model-nil');
+    RequireConst(Model, 'TStack.FItems$arr', 1);
+    RequireConst(Model, 'TStack.FItems$idx', 1);
+    RequireConst(Model, 'TStack.FTop$idx', 3);
+    RequireConst(Model, 'TStack$intf_offset_IStack', 32);
+    RequireConst(Model, 'TStack$size', 40);
+
+    LlvmText := EmitLlvm(Model);
+    if Pos('@TStack.imt.IStack', LlvmText) = 0 then
+      Fail('missing-stack-imt-global');
+    RequireSequence(LlvmText, [
+      'add i64 4, 0',
+      'getelementptr i64, ptr ',
+      'store ptr @TStack.imt.IStack'
+    ], 'missing-interface-slot-after-wide-field-sequence');
+  finally
+    Model.Free;
+  end;
+end;
+
 begin
   AssertLayoutContract;
   AssertFieldResizeContract;
   AssertFieldArrayPtrSlotContract;
   AssertObjectFreeCompileTimeClassContract;
   AssertStringFieldPathUntouched;
+  AssertInterfaceSlotAfterWideFieldsContract;
   WriteLn('hir-field-dynarray-contract-status=pass');
 end.

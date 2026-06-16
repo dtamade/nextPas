@@ -24,6 +24,7 @@ type
     ContentLength: Int64;
     Consumed: SizeUInt;
     HasHost: Boolean;
+    HostRepeated: Boolean;
     HasConnection: Boolean;
     ConnectionKeepAlive: Boolean;
     ConnectionClose: Boolean;
@@ -41,24 +42,37 @@ function FastParseRequest(const ABuf: PAnsiChar; const ALen: SizeUInt): TFastPar
 implementation
 
 uses
+  nextpas.core.errors,
   nextpas.core.http.headers,
   nextpas.core.http.impl.h1.scan;
 
 type
+  TFastRawHeaderSpan = record
+    NameStart: SizeInt;
+    NameLen: SizeInt;
+    ValueStart: SizeInt;
+    ValueLen: SizeInt;
+  end;
+
   TFastLazyHeaders = class(TInterfacedObject, IHttpHeaders)
   private
     FRaw: string;
     FHeaders: IHttpHeaders;
+    function NextRawHeader(var ALineStart: SizeInt;
+      out ASpan: TFastRawHeaderSpan): Boolean;
+    function HasRawHeader(const AName: string): Boolean;
     procedure EnsureMaterialized;
     function FindRawFirstValue(const AName: string; out AValue: string): Boolean;
+    function GetAllRawValues(const AName: string): TStringArray;
+    function CountRawHeaders: Int32;
   public
     constructor Create(const ABuf: PAnsiChar; const ALen: SizeUInt);
-    procedure Set_(const AName, AValue: string);
+    procedure SetHeader(const AName, AValue: string);
     procedure Add(const AName, AValue: string);
     function Get(const AName: string): string;
     function GetAll(const AName: string): TStringArray;
     function Has(const AName: string): Boolean;
-    procedure Del(const AName: string);
+    procedure Remove(const AName: string);
     procedure Clear;
     function Count: Int32;
     procedure ForEach(const ACallback: THeaderIterator);
@@ -69,29 +83,68 @@ function IsValidHeaderNameFast(const ABuf: PAnsiChar;
   const ALen: SizeUInt): Boolean; inline;
 var
   LI: SizeUInt;
-  LB: Byte;
 begin
   if ALen = 0 then
     Exit(False);
   for LI := 0 to ALen - 1 do
-  begin
-    LB := Byte(ABuf[LI]);
-    if (LB < 33) or (LB > 126) or (LB = Byte(':')) then
+    if not IsHttpHeaderNameChar(ABuf[LI]) then
       Exit(False);
-  end;
   Result := True;
+end;
+
+function ValidateLookupHeaderNameFast(const AName: string): string;
+var
+  LI: SizeInt;
+  LNeedsNormalize: Boolean;
+begin
+  if AName = '' then
+    raise EHttpError.Create('empty header name');
+  Result := AName;
+  LNeedsNormalize := False;
+  for LI := 1 to Length(AName) do
+  begin
+    if not IsHttpHeaderNameChar(AnsiChar(AName[LI])) then
+      raise EHttpError.Create('invalid header name character');
+    if (AName[LI] >= 'A') and (AName[LI] <= 'Z') then
+      LNeedsNormalize := True;
+  end;
+  if LNeedsNormalize then
+    for LI := 1 to Length(Result) do
+      if (Result[LI] >= 'A') and (Result[LI] <= 'Z') then
+        Result[LI] := Chr(Ord(Result[LI]) + 32);
 end;
 
 function IsValidHeaderValueFast(const ABuf: PAnsiChar;
   const ALen: SizeUInt): Boolean; inline;
 var
   LI: SizeUInt;
+  LByte: Byte;
 begin
   if ALen = 0 then
     Exit(True);
   for LI := 0 to ALen - 1 do
-    if ABuf[LI] = #0 then
+  begin
+    LByte := Byte(ABuf[LI]);
+    if ((LByte < 32) and (LByte <> Ord(#9))) or (LByte = 127) then
       Exit(False);
+  end;
+  Result := True;
+end;
+
+function IsValidRequestTargetFast(const ABuf: PAnsiChar;
+  const ALen: SizeUInt): Boolean; inline;
+var
+  LI: SizeUInt;
+  LByte: Byte;
+begin
+  if ALen = 0 then
+    Exit(False);
+  for LI := 0 to ALen - 1 do
+  begin
+    LByte := Byte(ABuf[LI]);
+    if (LByte <= 31) or (LByte = 127) then
+      Exit(False);
+  end;
   Result := True;
 end;
 
@@ -101,6 +154,11 @@ begin
     Result := AnsiChar(Ord(AChar) + 32)
   else
     Result := AChar;
+end;
+
+function IsHeaderOwsFast(const AChar: AnsiChar): Boolean; inline;
+begin
+  Result := (AChar = ' ') or (AChar = #9);
 end;
 
 function FastHeaderNameMatches(const ARaw: string; const AStart: SizeInt;
@@ -126,100 +184,157 @@ begin
     SetString(FRaw, ABuf, ALen);
 end;
 
-procedure TFastLazyHeaders.EnsureMaterialized;
+function TFastLazyHeaders.NextRawHeader(var ALineStart: SizeInt;
+  out ASpan: TFastRawHeaderSpan): Boolean;
 var
-  LLineStart, LLineEnd: SizeInt;
+  LLineEnd: SizeInt;
   LColon: SizeInt;
   LValStart: SizeInt;
+  LValEnd: SizeInt;
   LRawLen: SizeInt;
-  LName, LValue: string;
+begin
+  Result := False;
+  ASpan := Default(TFastRawHeaderSpan);
+  LRawLen := Length(FRaw);
+  if ALineStart > LRawLen then
+    Exit;
+
+  LLineEnd := ALineStart;
+  while (LLineEnd <= LRawLen) and
+        (not ((FRaw[LLineEnd] = #13) and
+              (LLineEnd < LRawLen) and (FRaw[LLineEnd + 1] = #10))) do
+    Inc(LLineEnd);
+
+  LColon := ALineStart;
+  while (LColon < LLineEnd) and (FRaw[LColon] <> ':') do
+    Inc(LColon);
+  if LColon >= LLineEnd then
+  begin
+    ALineStart := LRawLen + 1;
+    Exit;
+  end;
+
+  LValStart := LColon + 1;
+  while (LValStart < LLineEnd) and
+        IsHeaderOwsFast(AnsiChar(FRaw[LValStart])) do
+    Inc(LValStart);
+  LValEnd := LLineEnd;
+  while (LValEnd > LValStart) and
+        IsHeaderOwsFast(AnsiChar(FRaw[LValEnd - 1])) do
+    Dec(LValEnd);
+
+  ASpan.NameStart := ALineStart;
+  ASpan.NameLen := LColon - ALineStart;
+  ASpan.ValueStart := LValStart;
+  ASpan.ValueLen := LValEnd - LValStart;
+
+  if (LLineEnd < LRawLen) and (FRaw[LLineEnd] = #13) then
+    ALineStart := LLineEnd + 2
+  else
+    ALineStart := LRawLen + 1;
+  Result := True;
+end;
+
+procedure TFastLazyHeaders.EnsureMaterialized;
+var
+  LLineStart: SizeInt;
+  LSpan: TFastRawHeaderSpan;
+  LHeaders: THttpHeaders;
 begin
   if FHeaders <> nil then
     Exit;
 
-  FHeaders := NewHttpHeaders;
-  LRawLen := Length(FRaw);
+  LHeaders := THttpHeaders.Create;
+  FHeaders := LHeaders as IHttpHeaders;
   LLineStart := 1;
-  while LLineStart <= LRawLen do
-  begin
-    LLineEnd := LLineStart;
-    while (LLineEnd <= LRawLen) and
-          (not ((FRaw[LLineEnd] = #13) and
-                (LLineEnd < LRawLen) and (FRaw[LLineEnd + 1] = #10))) do
-      Inc(LLineEnd);
-
-    LColon := LLineStart;
-    while (LColon < LLineEnd) and (FRaw[LColon] <> ':') do
-      Inc(LColon);
-    if LColon >= LLineEnd then
-      Break;
-
-    LValStart := LColon + 1;
-    while (LValStart < LLineEnd) and
-          ((FRaw[LValStart] = ' ') or (FRaw[LValStart] = #9)) do
-      Inc(LValStart);
-
-    SetString(LName, PAnsiChar(FRaw) + LLineStart - 1, LColon - LLineStart);
-    SetString(LValue, PAnsiChar(FRaw) + LValStart - 1, LLineEnd - LValStart);
-    FHeaders.Add(LName, LValue);
-
-    if (LLineEnd < LRawLen) and (FRaw[LLineEnd] = #13) then
-      LLineStart := LLineEnd + 2
-    else
-      Break;
-  end;
+  while NextRawHeader(LLineStart, LSpan) do
+    LHeaders.AddParsedSpans(PAnsiChar(FRaw) + LSpan.NameStart - 1,
+      SizeUInt(LSpan.NameLen), PAnsiChar(FRaw) + LSpan.ValueStart - 1,
+      SizeUInt(LSpan.ValueLen));
   FRaw := '';
 end;
 
 function TFastLazyHeaders.FindRawFirstValue(const AName: string;
   out AValue: string): Boolean;
 var
-  LLineStart, LLineEnd: SizeInt;
-  LColon: SizeInt;
-  LValStart: SizeInt;
-  LRawLen: SizeInt;
+  LLineStart: SizeInt;
+  LSpan: TFastRawHeaderSpan;
 begin
   Result := False;
   AValue := '';
-  LRawLen := Length(FRaw);
   LLineStart := 1;
-  while LLineStart <= LRawLen do
+  while NextRawHeader(LLineStart, LSpan) do
   begin
-    LLineEnd := LLineStart;
-    while (LLineEnd <= LRawLen) and
-          (not ((FRaw[LLineEnd] = #13) and
-                (LLineEnd < LRawLen) and (FRaw[LLineEnd + 1] = #10))) do
-      Inc(LLineEnd);
-
-    LColon := LLineStart;
-    while (LColon < LLineEnd) and (FRaw[LColon] <> ':') do
-      Inc(LColon);
-    if LColon >= LLineEnd then
-      Break;
-
-    if FastHeaderNameMatches(FRaw, LLineStart, LColon - LLineStart,
+    if FastHeaderNameMatches(FRaw, LSpan.NameStart, LSpan.NameLen,
       AName) then
     begin
-      LValStart := LColon + 1;
-      while (LValStart < LLineEnd) and
-            ((FRaw[LValStart] = ' ') or (FRaw[LValStart] = #9)) do
-        Inc(LValStart);
-      SetString(AValue, PAnsiChar(FRaw) + LValStart - 1,
-        LLineEnd - LValStart);
+      SetString(AValue, PAnsiChar(FRaw) + LSpan.ValueStart - 1,
+        LSpan.ValueLen);
       Exit(True);
     end;
-
-    if (LLineEnd < LRawLen) and (FRaw[LLineEnd] = #13) then
-      LLineStart := LLineEnd + 2
-    else
-      Break;
   end;
 end;
 
-procedure TFastLazyHeaders.Set_(const AName, AValue: string);
+function TFastLazyHeaders.HasRawHeader(const AName: string): Boolean;
+var
+  LLineStart: SizeInt;
+  LSpan: TFastRawHeaderSpan;
+begin
+  LLineStart := 1;
+  while NextRawHeader(LLineStart, LSpan) do
+    if FastHeaderNameMatches(FRaw, LSpan.NameStart, LSpan.NameLen,
+      AName) then
+      Exit(True);
+  Result := False;
+end;
+
+function TFastLazyHeaders.GetAllRawValues(const AName: string): TStringArray;
+var
+  LCount: Int32;
+  LIndex: Int32;
+  LLineStart: SizeInt;
+  LSpan: TFastRawHeaderSpan;
+
+begin
+  Result := nil;
+  LCount := 0;
+  LLineStart := 1;
+  while NextRawHeader(LLineStart, LSpan) do
+    if FastHeaderNameMatches(FRaw, LSpan.NameStart, LSpan.NameLen,
+      AName) then
+      Inc(LCount);
+
+  if LCount = 0 then
+    Exit;
+
+  SetLength(Result, LCount);
+  LIndex := 0;
+  LLineStart := 1;
+  while NextRawHeader(LLineStart, LSpan) do
+    if FastHeaderNameMatches(FRaw, LSpan.NameStart, LSpan.NameLen,
+      AName) then
+    begin
+      SetString(Result[LIndex], PAnsiChar(FRaw) + LSpan.ValueStart - 1,
+        LSpan.ValueLen);
+      Inc(LIndex);
+    end;
+end;
+
+function TFastLazyHeaders.CountRawHeaders: Int32;
+var
+  LLineStart: SizeInt;
+  LSpan: TFastRawHeaderSpan;
+begin
+  Result := 0;
+  LLineStart := 1;
+  while NextRawHeader(LLineStart, LSpan) do
+    Inc(Result);
+end;
+
+procedure TFastLazyHeaders.SetHeader(const AName, AValue: string);
 begin
   EnsureMaterialized;
-  FHeaders.Set_(AName, AValue);
+  FHeaders.SetHeader(AName, AValue);
 end;
 
 procedure TFastLazyHeaders.Add(const AName, AValue: string);
@@ -229,32 +344,40 @@ begin
 end;
 
 function TFastLazyHeaders.Get(const AName: string): string;
+var
+  LName: string;
 begin
   if FHeaders <> nil then
     Exit(FHeaders.Get(AName));
-  if not FindRawFirstValue(AName, Result) then
+  LName := ValidateLookupHeaderNameFast(AName);
+  if not FindRawFirstValue(LName, Result) then
     Result := '';
 end;
 
 function TFastLazyHeaders.GetAll(const AName: string): TStringArray;
+var
+  LName: string;
 begin
-  EnsureMaterialized;
-  Result := FHeaders.GetAll(AName);
+  if FHeaders <> nil then
+    Exit(FHeaders.GetAll(AName));
+  LName := ValidateLookupHeaderNameFast(AName);
+  Result := GetAllRawValues(LName);
 end;
 
 function TFastLazyHeaders.Has(const AName: string): Boolean;
 var
-  LValue: string;
+  LName: string;
 begin
   if FHeaders <> nil then
     Exit(FHeaders.Has(AName));
-  Result := FindRawFirstValue(AName, LValue);
+  LName := ValidateLookupHeaderNameFast(AName);
+  Result := HasRawHeader(LName);
 end;
 
-procedure TFastLazyHeaders.Del(const AName: string);
+procedure TFastLazyHeaders.Remove(const AName: string);
 begin
   EnsureMaterialized;
-  FHeaders.Del(AName);
+  FHeaders.Remove(AName);
 end;
 
 procedure TFastLazyHeaders.Clear;
@@ -265,8 +388,9 @@ end;
 
 function TFastLazyHeaders.Count: Int32;
 begin
-  EnsureMaterialized;
-  Result := FHeaders.Count;
+  if FHeaders <> nil then
+    Exit(FHeaders.Count);
+  Result := CountRawHeaders;
 end;
 
 procedure TFastLazyHeaders.ForEach(const ACallback: THeaderIterator);
@@ -348,19 +472,19 @@ end;
 function ParseInt64Fast(const ABuf: PAnsiChar; const ALen: SizeUInt): Int64; inline;
 var
   LI: SizeUInt;
-  LB: Byte;
+  LDigit: Int64;
 begin
   Result := 0;
   if ALen = 0 then
     Exit(-1);
   for LI := 0 to ALen - 1 do
   begin
-    LB := Byte(ABuf[LI]);
-    if (LB < Byte('0')) or (LB > Byte('9')) then
+    if (ABuf[LI] < '0') or (ABuf[LI] > '9') then
       Exit(-1);
-    Result := Result * 10 + Int64(LB - Byte('0'));
-    if Result < 0 then // overflow
+    LDigit := Ord(ABuf[LI]) - Ord('0');
+    if Result > (High(Int64) - LDigit) div 10 then
       Exit(-1);
+    Result := Result * 10 + LDigit;
   end;
 end;
 
@@ -384,23 +508,46 @@ begin
   Result := True;
 end;
 
-function AsciiValueEqualsCITrimmed(const ABuf: PAnsiChar; const ALen: SizeUInt;
-  const AText: AnsiString): Boolean; inline;
+procedure ApplyConnectionTokenFast(const ABuf: PAnsiChar;
+  const AStart, AEnd: SizeUInt; var AResult: TFastParseResult); inline;
+begin
+  if AStart >= AEnd then
+    Exit;
+  if AsciiEqualsCI(ABuf + AStart, AEnd - AStart, 'keep-alive') then
+    AResult.ConnectionKeepAlive := True
+  else if AsciiEqualsCI(ABuf + AStart, AEnd - AStart, 'close') then
+    AResult.ConnectionClose := True
+  else
+    AResult.ConnectionUnsupported := True;
+end;
+
+procedure UpdateConnectionFlagsFast(const ABuf: PAnsiChar;
+  const ALen: SizeUInt; var AResult: TFastParseResult);
 var
   LStart: SizeUInt;
-  LEnd: SizeUInt;
+  LPos: SizeUInt;
+  LTokenStart: SizeUInt;
+  LTokenEnd: SizeUInt;
 begin
   LStart := 0;
-  while (LStart < ALen) and
-        ((ABuf[LStart] = ' ') or (ABuf[LStart] = #9)) do
-    Inc(LStart);
+  while LStart < ALen do
+  begin
+    LPos := LStart;
+    while (LPos < ALen) and (ABuf[LPos] <> ',') do
+      Inc(LPos);
 
-  LEnd := ALen;
-  while (LEnd > LStart) and
-        ((ABuf[LEnd - 1] = ' ') or (ABuf[LEnd - 1] = #9)) do
-    Dec(LEnd);
+    LTokenStart := LStart;
+    LTokenEnd := LPos;
+    while (LTokenStart < LTokenEnd) and
+          ((ABuf[LTokenStart] = ' ') or (ABuf[LTokenStart] = #9)) do
+      Inc(LTokenStart);
+    while (LTokenEnd > LTokenStart) and
+          ((ABuf[LTokenEnd - 1] = ' ') or (ABuf[LTokenEnd - 1] = #9)) do
+      Dec(LTokenEnd);
 
-  Result := AsciiEqualsCI(ABuf + LStart, LEnd - LStart, AText);
+    ApplyConnectionTokenFast(ABuf, LTokenStart, LTokenEnd, AResult);
+    LStart := LPos + 1;
+  end;
 end;
 
 function FastParseRequest(const ABuf: PAnsiChar; const ALen: SizeUInt): TFastParseResult;
@@ -414,16 +561,18 @@ var
   LLineStart, LLineEnd: SizeUInt;
   LColonOff: SizeInt;
   LNameStart, LNameLen: SizeUInt;
-  LValStart, LValLen: SizeUInt;
+  LValStart, LValEnd, LValLen: SizeUInt;
   LHeadersStart, LHeadersLen: SizeUInt;
   LBodyStart: SizeUInt;
   LContentLength: Int64;
   LSeenContentLength: Boolean;
+  LSeenHost: Boolean;
 begin
   Result := Default(TFastParseResult);
   Result.ContentLength := -1;
   LContentLength := 0;
   LSeenContentLength := False;
+  LSeenHost := False;
 
   // Step 1: Find header end (\r\n\r\n)
   LHeaderEnd := ScanFindDoubleCRLF(ABuf, ALen);
@@ -459,6 +608,9 @@ begin
     Exit;
 
   // Extract path
+  if not IsValidRequestTargetFast(ABuf + LSpace1 + 1,
+    LSpace2 - LSpace1 - 1) then
+    Exit;
   SetString(Result.Path, ABuf + LSpace1 + 1, LSpace2 - LSpace1 - 1);
 
   // Parse version
@@ -517,25 +669,31 @@ begin
 
     // Value starts after colon, trim leading OWS (spaces/tabs)
     LValStart := LLineStart + SizeUInt(LColonOff) + 1;
-    while (LValStart < LLineEnd) and ((ABuf[LValStart] = ' ') or (ABuf[LValStart] = #9)) do
+    while (LValStart < LLineEnd) and IsHeaderOwsFast(ABuf[LValStart]) do
       Inc(LValStart);
-    LValLen := LLineEnd - LValStart;
+    LValEnd := LLineEnd;
+    while (LValEnd > LValStart) and IsHeaderOwsFast(ABuf[LValEnd - 1]) do
+      Dec(LValEnd);
+    LValLen := LValEnd - LValStart;
 
     if (not IsValidHeaderNameFast(ABuf + LNameStart, LNameLen)) or
        (not IsValidHeaderValueFast(ABuf + LValStart, LValLen)) then
       Exit;
 
     if AsciiEqualsCI(ABuf + LNameStart, LNameLen, 'host') then
-      Result.HasHost := LValLen > 0
+    begin
+      if LSeenHost then
+        Result.HostRepeated := True
+      else
+      begin
+        LSeenHost := True;
+        Result.HasHost := LValLen > 0;
+      end;
+    end
     else if AsciiEqualsCI(ABuf + LNameStart, LNameLen, 'connection') then
     begin
       Result.HasConnection := True;
-      if AsciiValueEqualsCITrimmed(ABuf + LValStart, LValLen, 'keep-alive') then
-        Result.ConnectionKeepAlive := True
-      else if AsciiValueEqualsCITrimmed(ABuf + LValStart, LValLen, 'close') then
-        Result.ConnectionClose := True
-      else
-        Result.ConnectionUnsupported := True;
+      UpdateConnectionFlagsFast(ABuf + LValStart, LValLen, Result);
     end
     else if AsciiEqualsCI(ABuf + LNameStart, LNameLen, 'expect') then
       Result.HasExpect := True

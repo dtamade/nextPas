@@ -17,8 +17,7 @@ unit nextpas.core.tls.capability.diff;
 interface
 
 uses
-  SysUtils, Classes,
-  nextpas.core.tls.base;
+  SysUtils,nextpas.core.tls.base;
 
 type
   { TCapabilityDifference - 差异级别 }
@@ -88,7 +87,8 @@ function CompareTwoBackends(
 implementation
 
 uses
-  nextpas.core.tls.factory,
+  nextpas.core.text.strings,
+    nextpas.core.tls.factory,
   fpjson, jsonparser;
 
 { 内部辅助函数 }
@@ -422,10 +422,9 @@ end;
 
 function GenerateTextReport(const ADiff: TCapabilityDiffResult): string;
 var
-  Report: TStringList;
+  Report: TStringArray;
   i: Integer;
 begin
-  Report := TStringList.Create;
   try
     Report.Add('════════════════════════════════════════════════════════════');
     Report.Add('  能力矩阵差异报告');
@@ -478,7 +477,6 @@ begin
 
     Result := Report.Text;
   finally
-    Report.Free;
   end;
 end;
 
@@ -530,7 +528,6 @@ begin
 
     Result := Root.FormatJSON;
   finally
-    Root.Free;
   end;
 end;
 
@@ -538,11 +535,10 @@ end;
 
 function GenerateHTMLReport(const ADiff: TCapabilityDiffResult): string;
 var
-  HTML: TStringList;
+  HTML: TStringArray;
   i: Integer;
   LevelClass, LevelText: string;
 begin
-  HTML := TStringList.Create;
   try
     // 差异级别样式
     case ADiff.DifferenceLevel of
@@ -675,7 +671,6 @@ begin
 
     Result := HTML.Text;
   finally
-    HTML.Free;
   end;
 end;
 

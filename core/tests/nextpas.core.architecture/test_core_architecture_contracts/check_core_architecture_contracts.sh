@@ -73,6 +73,7 @@ require_file "docs/platform/master-spec.md"
 require_file "docs/platform/goal-tree.md"
 require_file "docs/platform/consumer-contract-audit.md"
 require_file "docs/platform/runtime-truth-matrix.md"
+require_file "docs/mem/README.md"
 
 for tier in source-contract forced-compile focused-runtime; do
   require_token "docs/module-registry.md" "$tier"
@@ -101,6 +102,12 @@ require_token "docs/platform/master-spec.md" "not runtime ready"
 require_token "docs/platform/consumer-contract-audit.md" "Readiness lane"
 require_token "docs/platform/consumer-contract-audit.md" "Completion lane"
 require_token "docs/platform/runtime-truth-matrix.md" "AsyncRead/AsyncWrite file completion"
+require_token "docs/mem/README.md" '`nextpas.core.mem.mapped_slab_pool` owns only the anonymous mapping allocator surface.'
+require_token "docs/mem/README.md" '`nextpas.core.io.mapped.slab_pool` is the fixed owner for file-backed and shared-memory slab pools.'
+require_token "docs/mem/README.md" 'must not grow `CreateFile`, `OpenFile`, `CreateShared`, `OpenShared`, or `nextpas.core.platform.files` dependencies.'
+reject_token "docs/mem/README.md" "still mixes"
+reject_token "docs/mem/README.md" 'mapped_slab_pool` file/shared manager path is future migration surface'
+reject_token "docs/mem/README.md" "docs/mem/mapped-family-ownership-decision.md"
 
 ALLOWED_L0_TOP_MODULES=(
   "base"
@@ -118,9 +125,8 @@ ALLOWED_L0_TOP_MODULES=(
 KNOWN_L0_DEPENDENCY_DEBT=(
   "src/nextpas.core.mem.allocator.mimalloc.pas|nextpas.core.os.env"
   "src/nextpas.core.mem.allocator.mimalloc.pas|nextpas.core.path"
-  "src/nextpas.core.mem.mapped_ring_buffer.pas|nextpas.core.fs.util"
-  "src/nextpas.core.mem.mapped_ring_buffer.sharded.pas|nextpas.core.text.conv"
-  "src/nextpas.core.mem.mapped_slab_pool.pas|nextpas.core.fs.util"
+  "src/nextpas.core.mem.mapped_ring_buffer.pas|nextpas.core.io.mapped.ring_buffer"
+  "src/nextpas.core.mem.mapped_ring_buffer.sharded.pas|nextpas.core.io.mapped.ring_buffer.sharded"
   "src/nextpas.core.simd.cpuinfo.lazy.pas|nextpas.core.os.env"
   "src/nextpas.core.system.sysutils.pas|nextpas.core.text.conv"
 )
@@ -141,9 +147,6 @@ RAW_HOST_ALLOWLIST=(
   "src/nextpas.core.git.libgit2.ffi.pas|ctypes"
   "src/nextpas.core.io.uring.pas|BaseUnix"
   "src/nextpas.core.mem.allocator.mimalloc.pas|dynlibs"
-  "src/nextpas.core.mem.mimalloc.binding.pas|DynLibs"
-  "src/nextpas.core.mem.secure.pas|Windows"
-  "src/nextpas.core.mem.secure.pas|BaseUnix"
   "src/nextpas.core.simd.cpuinfo.darwin.pas|BaseUnix"
   "src/nextpas.core.simd.cpuinfo.darwin.pas|ctypes"
   "src/nextpas.core.simd.cpuinfo.diagnostic.pas|Windows"

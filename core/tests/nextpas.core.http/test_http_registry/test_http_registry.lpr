@@ -4,6 +4,7 @@ program test_http_registry;
 
 uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
+  SysUtils,
   nextpas.core.base,
   nextpas.core.testing,
   nextpas.core.net,
@@ -80,14 +81,15 @@ begin
   Dispose(LCtx);
 end;
 
-function StartServer(const AHandler: IHttpHandler; out AServer: THttpServer;
+function StartServerWithOptions(const AHandler: IHttpHandler;
+  const AOptions: THttpServerOptions; out AServer: THttpServer;
   out APort: UInt16): TPlatformThreadHandle;
 var
   LCtx: PServerCtx;
   LHandle: TPlatformThreadHandle;
   LWait: Int32;
 begin
-  AServer := THttpServer.Create(AHandler, THttpServerOptions.Default);
+  AServer := THttpServer.Create(AHandler, AOptions);
   New(LCtx);
   LCtx^.Server := AServer;
   LCtx^.Addr := '127.0.0.1';
@@ -101,6 +103,13 @@ begin
   end;
   APort := AServer.LocalAddr.Port;
   Result := LHandle;
+end;
+
+function StartServer(const AHandler: IHttpHandler; out AServer: THttpServer;
+  out APort: UInt16): TPlatformThreadHandle;
+begin
+  Result := StartServerWithOptions(AHandler, THttpServerOptions.Default, AServer,
+    APort);
 end;
 
 procedure StopServer(var AServer: THttpServer; const AHandle: TPlatformThreadHandle);
@@ -234,6 +243,96 @@ begin
   end;
 end;
 
+procedure TestClientConstructorUsesRegisteredHttp2RegistryDefault;
+var
+  LOldFactory: THttpClientTransportFactory;
+  LHadFactory: Boolean;
+  LOldVersion: THttpVersion;
+  LClient: IHttpClient;
+  LOptions: THttpClientOptions;
+  LMock: TMockHttpTransport;
+  LResp: IHttpResponse;
+begin
+  LOldFactory := nil;
+  LHadFactory := TryGetClientTransportFactory(hvHttp2, LOldFactory);
+  LOldVersion := GetDefaultClientVersion;
+  LMock := TMockHttpTransport.Create;
+  GClientFactoryTransport := LMock as IHttpTransport;
+  GSeenClientTimeout := 0;
+  RegisterClientTransport(hvHttp2, @CreateMockClientTransport);
+  SetDefaultClientVersion(hvHttp2);
+  try
+    LOptions := THttpClientOptions.Default;
+    LOptions.Timeout := 2345;
+    LClient := THttpClient.Create(LOptions);
+    LResp := LClient.Get('http://example.com/h2-registry');
+    Check(LResp <> nil, 'HTTP/2 registry client returns response');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'HTTP/2 registry client response status');
+    Check(LMock.RoundTripCalled,
+      'default client constructor uses registered HTTP/2 transport');
+    Check(LMock.SeenMethod = hmGet, 'HTTP/2 registry client sees GET');
+    CheckEqual('/h2-registry', LMock.SeenPath, 'HTTP/2 registry client sees request path');
+    CheckEqual(Int64(2345), GSeenClientTimeout,
+      'HTTP/2 registry client factory sees options');
+  finally
+    LResp := nil;
+    LClient := nil;
+    if LHadFactory then
+      RestoreClientFactory(LOldFactory, hvHttp2)
+    else
+      UnregisterClientTransport(hvHttp2);
+    SetDefaultClientVersion(LOldVersion);
+    GClientFactoryTransport := nil;
+  end;
+end;
+
+procedure TestClientConstructorUsesExplicitVersionOverRegistryDefault;
+var
+  LOldH1Factory: THttpClientTransportFactory;
+  LOldH2Factory: THttpClientTransportFactory;
+  LHadH2Factory: Boolean;
+  LOldVersion: THttpVersion;
+  LH2Mock: TMockHttpTransport;
+  LClient: IHttpClient;
+  LOptions: THttpClientOptions;
+  LResp: IHttpResponse;
+begin
+  Check(TryGetClientTransportFactory(hvHttp11, LOldH1Factory),
+    'built-in HTTP/1.1 client factory exists');
+  LOldH2Factory := nil;
+  LHadH2Factory := TryGetClientTransportFactory(hvHttp2, LOldH2Factory);
+  LOldVersion := GetDefaultClientVersion;
+  LH2Mock := TMockHttpTransport.Create;
+  GClientFactoryTransport := LH2Mock as IHttpTransport;
+  GSeenClientTimeout := 0;
+  RegisterClientTransport(hvHttp2, @CreateMockClientTransport);
+  SetDefaultClientVersion(hvHttp11);
+  try
+    LOptions := THttpClientOptions.Default.WithVersion(hvHttp2);
+    LOptions.Timeout := 4567;
+    LClient := THttpClient.Create(LOptions);
+    LResp := LClient.Get('http://example.com/explicit-h2');
+    Check(LResp <> nil, 'explicit HTTP/2 client returns response');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'explicit HTTP/2 client response status');
+    Check(LH2Mock.RoundTripCalled,
+      'explicit client version uses HTTP/2 transport');
+    CheckEqual(Int64(4567), GSeenClientTimeout,
+      'explicit client version preserves options');
+  finally
+    LResp := nil;
+    LClient := nil;
+    RestoreClientFactory(LOldH1Factory, hvHttp11);
+    if LHadH2Factory then
+      RestoreClientFactory(LOldH2Factory, hvHttp2)
+    else
+      UnregisterClientTransport(hvHttp2);
+    SetDefaultClientVersion(LOldVersion);
+    GClientFactoryTransport := nil;
+  end;
+end;
+
 procedure TestServerConstructorUsesRegistryDefault;
 var
   LOldFactory: THttpServerTransportFactory;
@@ -244,6 +343,7 @@ var
   LHandle: TPlatformThreadHandle;
   LConn: ITcpStream;
   LHandlerCalled: Boolean;
+  LSeenHandlerPath: string;
   LWait: Int32;
 begin
   Check(TryGetServerTransportFactory(hvHttp11, LOldFactory),
@@ -255,12 +355,13 @@ begin
   RegisterServerTransport(hvHttp11, @CreateMockServerTransport);
   SetDefaultServerVersion(hvHttp11);
   LHandlerCalled := False;
+  LSeenHandlerPath := '';
   try
     LHandle := StartServer(nextpas.core.http.middleware.HandlerFunc(procedure(const AReq: IHttpRequest;
       const AW: IHttpResponseWriter)
     begin
       LHandlerCalled := True;
-      CheckEqual('/registry', AReq.Url.Path, 'registry server passes handler request');
+      LSeenHandlerPath := AReq.Url.Path;
     end), LServer, LPort);
     try
       LConn := TcpConnect('127.0.0.1', LPort);
@@ -273,6 +374,8 @@ begin
       end;
       Check(LMock.ServeConnCalled, 'default server constructor uses registry transport');
       Check(LHandlerCalled, 'registry server transport can dispatch handler');
+      CheckEqual('/registry', LSeenHandlerPath,
+        'registry server passes handler request');
       CheckEqual(Int64(8192), Int64(GSeenServerHeaderLimit),
         'registry server factory sees default options');
     finally
@@ -285,6 +388,151 @@ begin
   end;
 end;
 
+procedure TestServerConstructorUsesRegisteredHttp3RegistryDefault;
+var
+  LOldFactory: THttpServerTransportFactory;
+  LHadFactory: Boolean;
+  LOldVersion: THttpVersion;
+  LMock: TMockServerTransport;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LHandlerCalled: Boolean;
+  LSeenHandlerPath: string;
+  LWait: Int32;
+  LOptions: THttpServerOptions;
+begin
+  LOldFactory := nil;
+  LHadFactory := TryGetServerTransportFactory(hvHttp3, LOldFactory);
+  LOldVersion := GetDefaultServerVersion;
+  LMock := TMockServerTransport.Create;
+  GServerFactoryTransport := LMock as IHttpServerTransport;
+  GSeenServerHeaderLimit := 0;
+  RegisterServerTransport(hvHttp3, @CreateMockServerTransport);
+  SetDefaultServerVersion(hvHttp3);
+  LHandlerCalled := False;
+  LSeenHandlerPath := '';
+  LOptions := THttpServerOptions.Default;
+  LOptions.MaxHeaderSize := 16384;
+  try
+    LHandle := StartServerWithOptions(nextpas.core.http.middleware.HandlerFunc(
+      procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+      begin
+        LHandlerCalled := True;
+        LSeenHandlerPath := AReq.Url.Path;
+      end), LOptions, LServer, LPort);
+    try
+      LConn := TcpConnect('127.0.0.1', LPort);
+      LConn.Close;
+      LWait := 0;
+      while (not LMock.ServeConnCalled) and (LWait < 200) do
+      begin
+        platform_thread_sleep_ns(5000000);
+        Inc(LWait);
+      end;
+      Check(LMock.ServeConnCalled,
+        'default server constructor uses registered HTTP/3 transport');
+      Check(LHandlerCalled, 'HTTP/3 registry server transport can dispatch handler');
+      CheckEqual('/registry', LSeenHandlerPath,
+        'HTTP/3 registry server passes handler request');
+      CheckEqual(Int64(16384), Int64(GSeenServerHeaderLimit),
+        'HTTP/3 registry server factory sees explicit options');
+    finally
+      StopServer(LServer, LHandle);
+    end;
+  finally
+    if LHadFactory then
+      RestoreServerFactory(LOldFactory, hvHttp3)
+    else
+      UnregisterServerTransport(hvHttp3);
+    SetDefaultServerVersion(LOldVersion);
+    GServerFactoryTransport := nil;
+  end;
+end;
+
+procedure TestServerConstructorUsesExplicitVersionOverRegistryDefault;
+var
+  LOldH1Factory: THttpServerTransportFactory;
+  LOldH3Factory: THttpServerTransportFactory;
+  LHadH3Factory: Boolean;
+  LOldVersion: THttpVersion;
+  LMock: TMockServerTransport;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LHandlerCalled: Boolean;
+  LSeenHandlerPath: string;
+  LWait: Int32;
+  LOptions: THttpServerOptions;
+begin
+  Check(TryGetServerTransportFactory(hvHttp11, LOldH1Factory),
+    'built-in HTTP/1.1 server factory exists');
+  LOldH3Factory := nil;
+  LHadH3Factory := TryGetServerTransportFactory(hvHttp3, LOldH3Factory);
+  LOldVersion := GetDefaultServerVersion;
+  LMock := TMockServerTransport.Create;
+  GServerFactoryTransport := LMock as IHttpServerTransport;
+  GSeenServerHeaderLimit := 0;
+  RegisterServerTransport(hvHttp3, @CreateMockServerTransport);
+  SetDefaultServerVersion(hvHttp11);
+  LHandlerCalled := False;
+  LSeenHandlerPath := '';
+  LOptions := THttpServerOptions.Default.WithVersion(hvHttp3);
+  LOptions.MaxHeaderSize := 24576;
+  try
+    LHandle := StartServerWithOptions(nextpas.core.http.middleware.HandlerFunc(
+      procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+      begin
+        LHandlerCalled := True;
+        LSeenHandlerPath := AReq.Url.Path;
+      end), LOptions, LServer, LPort);
+    try
+      LConn := TcpConnect('127.0.0.1', LPort);
+      LConn.Close;
+      LWait := 0;
+      while (not LMock.ServeConnCalled) and (LWait < 200) do
+      begin
+        platform_thread_sleep_ns(5000000);
+        Inc(LWait);
+      end;
+      Check(LMock.ServeConnCalled,
+        'explicit server version uses requested transport');
+      Check(LHandlerCalled, 'explicit server version still dispatches handler');
+      CheckEqual('/registry', LSeenHandlerPath,
+        'explicit server version preserves handler request');
+      CheckEqual(Int64(24576), Int64(GSeenServerHeaderLimit),
+        'explicit server version preserves options');
+    finally
+      StopServer(LServer, LHandle);
+    end;
+  finally
+    RestoreServerFactory(LOldH1Factory, hvHttp11);
+    if LHadH3Factory then
+      RestoreServerFactory(LOldH3Factory, hvHttp3)
+    else
+      UnregisterServerTransport(hvHttp3);
+    SetDefaultServerVersion(LOldVersion);
+    GServerFactoryTransport := nil;
+  end;
+end;
+
+procedure TestBuiltinHttp2ServerTransportIsRegistered;
+var
+  LTransport: IHttpServerTransport;
+  LFactory: IHttpServerSessionFactory;
+  LContextFactory: IHttpServerSessionFactoryWithContext;
+begin
+  LTransport := ResolveServerTransport(hvHttp2, THttpServerOptions.Default);
+  Check(LTransport <> nil, 'built-in HTTP/2 server transport resolves');
+  Check(Supports(LTransport, IHttpServerSessionFactory, LFactory),
+    'built-in HTTP/2 server transport exposes session factory');
+  Check(Supports(LTransport, IHttpServerSessionFactoryWithContext,
+    LContextFactory),
+    'built-in HTTP/2 server transport exposes context-aware session factory');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.http.impl.registry');
   T.Run('ResolveClientTransport raises when version is missing',
@@ -293,7 +541,17 @@ begin
     @TestResolveServerTransportRaisesWhenMissing);
   T.Run('THttpClient default constructor uses registry default',
     @TestClientConstructorUsesRegistryDefault);
+  T.Run('THttpClient default constructor accepts registered HTTP/2 registry default',
+    @TestClientConstructorUsesRegisteredHttp2RegistryDefault);
+  T.Run('THttpClient explicit version overrides registry default',
+    @TestClientConstructorUsesExplicitVersionOverRegistryDefault);
   T.Run('THttpServer default constructor uses registry default',
     @TestServerConstructorUsesRegistryDefault);
+  T.Run('THttpServer default constructor accepts registered HTTP/3 registry default',
+    @TestServerConstructorUsesRegisteredHttp3RegistryDefault);
+  T.Run('THttpServer explicit version overrides registry default',
+    @TestServerConstructorUsesExplicitVersionOverRegistryDefault);
+  T.Run('Built-in HTTP/2 server transport is registered',
+    @TestBuiltinHttp2ServerTransportIsRegistered);
   T.Summary;
 end.

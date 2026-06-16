@@ -19,7 +19,7 @@ unit nextpas.core.tls.crl;
 interface
 
 uses
-  SysUtils, Classes, DateUtils,
+  SysUtils,DateUtils,
   nextpas.core.tls.asn1, nextpas.core.tls.x509;
 
 type
@@ -127,7 +127,8 @@ function CRLRevokeReasonToString(AReason: TCRLRevokeReason): string;
 implementation
 
 uses
-  nextpas.core.time;
+  nextpas.core.text.strings,
+    nextpas.core.time;
 
 // ========================================================================
 // Forward declarations
@@ -189,10 +190,8 @@ begin
     try
       ParseCRL(Root);
     finally
-      Root.Free;
     end;
   finally
-    Reader.Free;
   end;
 end;
 
@@ -243,7 +242,6 @@ begin
         LoadFromPEM(AnsiString(nextpas.core.text.conv.UTF8BytesToString(Data)));
     end;
   finally
-    Stream.Free;
   end;
 end;
 
@@ -451,9 +449,7 @@ begin
           AEntry.HasReason := True;
         end;
         if ValueRoot <> nil then
-          ValueRoot.Free;
       finally
-        ValueReader.Free;
       end;
     end
     else if ExtOID = OID_INVALIDITY_DATE then
@@ -466,10 +462,8 @@ begin
         begin
           AEntry.InvalidityDate := ValueRoot.AsDateTime;
           AEntry.HasInvalidityDate := True;
-          ValueRoot.Free;
         end;
       finally
-        ValueReader.Free;
       end;
     end;
   end;
@@ -624,10 +618,9 @@ var
   Ext: TX509Extension;
   Reader: TASN1Reader;
   Node, DPNode, DPNameNode, NameNode, URINode: TASN1Node;
-  URLList: TStringList;
+  URLList: TStringArray;
 begin
   SetLength(Result, 0);
-  URLList := TStringList.Create;
   try
     // 查找 CRL Distribution Points 扩展
     for I := 0 to High(ACert.Extensions) do
@@ -688,20 +681,17 @@ begin
               end;
             end;
           finally
-            Node.Free;
           end;
         finally
-          Reader.Free;
         end;
       end;
     end;
 
     // 转换为数组
-    SetLength(Result, URLList.Count);
-    for I := 0 to URLList.Count - 1 do
+    SetLength(Result, Length(URLList));
+    for I := 0 to Length(URLList) - 1 do
       Result[I] := URLList[I];
   finally
-    URLList.Free;
   end;
 end;
 

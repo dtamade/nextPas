@@ -21,8 +21,7 @@ unit nextpas.core.tls.logging;
 interface
 
 uses
-  SysUtils, Classes,
-  nextpas.core.tls.base;  // P2: TSSLProtocolVersions for shared helpers
+  SysUtils,nextpas.core.tls.base;  // P2: TSSLProtocolVersions for shared helpers
 
 {$IFDEF USE_SYNCOBJS}
   {$DEFINE HAS_CRITICAL_SECTION}
@@ -186,7 +185,7 @@ type
   private
     class var FInstance: TSSLProfiler;
     class var FEnabled: Boolean;
-    FEntries: TStringList;
+    FEntries: TStringArray;
     FLock: TRTLCriticalSection;
   public
     constructor CreateInstance;
@@ -214,6 +213,10 @@ const
 procedure LogDeprecatedProtocolWarnings(const ABackendName: string; AVersions: TSSLProtocolVersions);
 
 implementation
+
+uses
+  nextpas.core.text.strings;
+
 
 { P2: 共享辅助函数 - 废弃协议警告 }
 procedure LogDeprecatedProtocolWarnings(const ABackendName: string; AVersions: TSSLProtocolVersions);
@@ -447,7 +450,6 @@ end;
 destructor TCompositeLogger.Destroy;
 begin
   DoneCriticalSection(FLock);
-  FLoggers.Free;
   inherited;
 end;
 
@@ -480,7 +482,7 @@ begin
     Exit;
   EnterCriticalSection(FLock);
   try
-    for I := 0 to FLoggers.Count - 1 do
+    for I := 0 to Length(FLoggers) - 1 do
       (FLoggers[I] as ISecurityLogger).Log(ALevel, ACategory, AMessage);
   finally
     LeaveCriticalSection(FLock);
@@ -515,7 +517,7 @@ begin
     Exit;
   EnterCriticalSection(FLock);
   try
-    for I := 0 to FLoggers.Count - 1 do
+    for I := 0 to Length(FLoggers) - 1 do
       (FLoggers[I] as ISecurityLogger).LogError(ACategory, AMessage, AException);
   finally
     LeaveCriticalSection(FLock);
@@ -530,7 +532,7 @@ begin
     Exit;
   EnterCriticalSection(FLock);
   try
-    for I := 0 to FLoggers.Count - 1 do
+    for I := 0 to Length(FLoggers) - 1 do
       (FLoggers[I] as ISecurityLogger).LogAudit(ACategory, AAction, AUser, ADetails);
   finally
     LeaveCriticalSection(FLock);
@@ -606,7 +608,6 @@ end;
 constructor TSSLProfiler.CreateInstance;
 begin
   inherited Create;
-  FEntries := TStringList.Create;
   FEntries.Sorted := True;
   InitCriticalSection(FLock);
 end;
@@ -616,13 +617,12 @@ var
   I: Integer;
   LEntry: ^TProfileEntry;
 begin
-  for I := 0 to FEntries.Count - 1 do
+  for I := 0 to Length(FEntries) - 1 do
   begin
     LEntry := Pointer(FEntries.Objects[I]);
     if LEntry <> nil then
       Dispose(LEntry);
   end;
-  FEntries.Free;
   DoneCriticalSection(FLock);
   inherited;
 end;
@@ -693,9 +693,8 @@ var
   I: Integer;
   LEntry: ^TProfileEntry;
   LAvg: Double;
-  LResult: TStringList;
+  LResult: TStringArray;
 begin
-  LResult := TStringList.Create;
   try
     LResult.Add('Performance Profile Report');
     LResult.Add(StringOfChar('=', 80));
@@ -705,7 +704,7 @@ begin
 
     EnterCriticalSection(FLock);
     try
-      for I := 0 to FEntries.Count - 1 do
+      for I := 0 to Length(FEntries) - 1 do
       begin
         LEntry := Pointer(FEntries.Objects[I]);
         if LEntry^.Count > 0 then
@@ -724,7 +723,6 @@ begin
     LResult.Add(StringOfChar('=', 80));
     Result := LResult.Text;
   finally
-    LResult.Free;
   end;
 end;
 
@@ -735,7 +733,7 @@ var
 begin
   EnterCriticalSection(FLock);
   try
-    for I := 0 to FEntries.Count - 1 do
+    for I := 0 to Length(FEntries) - 1 do
     begin
       LEntry := Pointer(FEntries.Objects[I]);
       if LEntry <> nil then

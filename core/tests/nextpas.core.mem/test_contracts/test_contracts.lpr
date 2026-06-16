@@ -4,40 +4,46 @@ program test_contracts;
 
 uses
   SysUtils,
-  nextpas.core.base,
-	  nextpas.core.testing,
-	  nextpas.core.mem.intf,
-	  nextpas.core.mem.utils,
-	  nextpas.core.mem.allocator,
-	  nextpas.core.mem.allocator.base,
-	  nextpas.core.mem.allocator.mimalloc,
-	  nextpas.core.mem.alloc,
-	  nextpas.core.mem.error,
-	  nextpas.core.mem.layout,
-	  nextpas.core.mem.adapter;
+  nextpas.core.testing,
+  nextpas.core.mem.compat,
+  nextpas.core.mem.intf,
+  nextpas.core.mem.utils,
+  nextpas.core.mem.allocator,
+  nextpas.core.mem.allocator.base,
+  nextpas.core.mem.allocator.mimalloc,
+  nextpas.core.mem.aligned;
+
+const
+  MEM_ALIGNED_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.aligned.pas';
+  MEM_ALIGNED_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.aligned.pas';
+  MEM_BASE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.base.pas';
+  MEM_BASE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.base.pas';
+  MEM_BLOCKPOOL_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.blockpool.pas';
+  MEM_BLOCKPOOL_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.blockpool.pas';
+  MEM_BLOCKPOOL_CONCURRENT_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.blockpool.concurrent.pas';
+  MEM_BLOCKPOOL_CONCURRENT_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.blockpool.concurrent.pas';
+  MEM_COMPAT_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.compat.pas';
+  MEM_COMPAT_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.compat.pas';
+  MEM_ARENA_GROWABLE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.arena.growable.pas';
+  MEM_ARENA_GROWABLE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.arena.growable.pas';
+  MEM_BLOCKPOOL_GROWABLE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.blockpool.growable.pas';
+  MEM_BLOCKPOOL_GROWABLE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.blockpool.growable.pas';
+  MEM_ERROR_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.error.pas';
+  MEM_ERROR_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.error.pas';
+  MEM_ALLOC_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.alloc.pas';
+  MEM_ALLOC_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.alloc.pas';
+  MEM_ADAPTER_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.adapter.pas';
+  MEM_ADAPTER_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.adapter.pas';
+  MEM_LAYOUT_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.layout.pas';
+  MEM_LAYOUT_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.layout.pas';
+  MEM_MIMALLOC_BINDING_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.mimalloc.binding.pas';
+  MEM_MIMALLOC_BINDING_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.mimalloc.binding.pas';
 
 type
   TByteArray = array[0..5] of Byte;
   TWordArray = array[0..3] of Word;
   TDWordArray = array[0..2] of UInt32;
   TQWordArray = array[0..1] of UInt64;
-
-  TRecordingAlloc = class(TInterfacedObject, IAlloc)
-  public
-    AllocCalls: Integer;
-    ReallocCalls: Integer;
-    DeallocCalls: Integer;
-    LastAllocLayout: TMemLayout;
-    LastReallocOldLayout: TMemLayout;
-    LastReallocNewLayout: TMemLayout;
-    LastDeallocLayout: TMemLayout;
-
-    function Alloc(const aLayout: TMemLayout): TAllocResult;
-    function AllocZeroed(const aLayout: TMemLayout): TAllocResult;
-    procedure Dealloc(aPtr: Pointer; const aLayout: TMemLayout);
-    function Realloc(aPtr: Pointer; const aOldLayout, aNewLayout: TMemLayout): TAllocResult;
-    function Caps: TAllocCaps;
-  end;
 
 var
   T: TTestRunner;
@@ -46,72 +52,55 @@ var
   GReallocMemCalls: Integer = 0;
   GFreeMemCalls: Integer = 0;
 
+function ReadSourceText(const APath: string): string;
+var
+  LFile: Text;
+  LLine: string;
+begin
+  Result := '';
+  Assign(LFile, APath);
+  Reset(LFile);
+  try
+    while not Eof(LFile) do
+    begin
+      ReadLn(LFile, LLine);
+      Result := Result + LowerCase(LLine) + #10;
+    end;
+  finally
+    Close(LFile);
+  end;
+end;
+
+function ResolveSourcePath(const APathFromTest, APathFromRoot: string): string;
+begin
+  if FileExists(APathFromTest) then
+    Exit(APathFromTest);
+  if FileExists(APathFromRoot) then
+    Exit(APathFromRoot);
+  Result := APathFromTest;
+end;
+
+function SourceExists(const APathFromTest, APathFromRoot: string): Boolean;
+begin
+  Result := FileExists(APathFromTest) or FileExists(APathFromRoot);
+end;
+
+procedure CheckContains(const ASource, AToken, AMessage: string);
+begin
+  Check(Pos(LowerCase(AToken), ASource) > 0, AMessage + ': ' + AToken);
+end;
+
+procedure CheckNotContains(const ASource, AToken, AMessage: string);
+begin
+  Check(Pos(LowerCase(AToken), ASource) = 0, AMessage + ': ' + AToken);
+end;
+
 procedure ResetAllocatorCounters;
 begin
   GGetMemCalls := 0;
   GAllocMemCalls := 0;
   GReallocMemCalls := 0;
   GFreeMemCalls := 0;
-end;
-
-function TRecordingAlloc.Alloc(const aLayout: TMemLayout): TAllocResult;
-var
-  LPtr: Pointer;
-begin
-  Inc(AllocCalls);
-  LastAllocLayout := aLayout;
-  if not aLayout.IsValid then
-    Exit(TAllocResult.Err(aeInvalidLayout));
-  if aLayout.IsZeroSized then
-    Exit(TAllocResult.Ok(nil));
-
-  LPtr := System.GetMem(aLayout.Size);
-  if LPtr = nil then
-    Result := TAllocResult.Err(aeOutOfMemory)
-  else
-    Result := TAllocResult.Ok(LPtr);
-end;
-
-function TRecordingAlloc.AllocZeroed(const aLayout: TMemLayout): TAllocResult;
-begin
-  Result := Alloc(aLayout);
-  if Result.IsOk and (Result.Ptr <> nil) then
-    FillChar(Result.Ptr^, aLayout.Size, 0);
-end;
-
-procedure TRecordingAlloc.Dealloc(aPtr: Pointer; const aLayout: TMemLayout);
-begin
-  Inc(DeallocCalls);
-  LastDeallocLayout := aLayout;
-  if (aPtr <> nil) and (aLayout.Size > 0) then
-    System.FreeMem(aPtr);
-end;
-
-function TRecordingAlloc.Realloc(aPtr: Pointer; const aOldLayout, aNewLayout: TMemLayout): TAllocResult;
-var
-  LPtr: Pointer;
-begin
-  Inc(ReallocCalls);
-  LastReallocOldLayout := aOldLayout;
-  LastReallocNewLayout := aNewLayout;
-  if aPtr = nil then
-    Exit(Alloc(aNewLayout));
-  if aNewLayout.IsZeroSized then
-  begin
-    Dealloc(aPtr, aOldLayout);
-    Exit(TAllocResult.Ok(nil));
-  end;
-
-  LPtr := System.ReallocMem(aPtr, aNewLayout.Size);
-  if LPtr = nil then
-    Result := TAllocResult.Err(aeOutOfMemory)
-  else
-    Result := TAllocResult.Ok(LPtr);
-end;
-
-function TRecordingAlloc.Caps: TAllocCaps;
-begin
-  Result := TAllocCaps.Create(False, True, False, True, True, 256);
 end;
 
 function CallbackGetMem(aSize: SizeUInt): Pointer;
@@ -246,6 +235,261 @@ begin
   end;
 end;
 
+procedure TestAlignedCompatShimSmoke;
+var
+  LPtr: Pointer;
+begin
+  LPtr := nextpas.core.mem.aligned.AllocAligned(64, 32);
+  try
+    Check(LPtr <> nil, 'aligned compat shim should allocate');
+    CheckEqual(Int64(0), Int64(PtrUInt(LPtr) mod 32),
+      'aligned compat shim should honor requested alignment');
+    PByte(LPtr)^ := $4D;
+    CheckEqual(Int64($4D), Int64(PByte(LPtr)^),
+      'aligned compat shim should return writable memory');
+  finally
+    nextpas.core.mem.aligned.FreeAligned(LPtr);
+  end;
+end;
+
+procedure TestAlignedCompatShimDelegatesToCanonicalAllocator;
+var
+  LSource: string;
+begin
+  LSource := ReadSourceText(ResolveSourcePath(
+    MEM_ALIGNED_SOURCE_PATH_FROM_TEST,
+    MEM_ALIGNED_SOURCE_PATH_FROM_ROOT));
+  CheckContains(LSource, '{$warning ''nextpas.core.mem.aligned is deprecated',
+    'aligned compat shim should publish a deprecation warning');
+  CheckContains(LSource,
+    'deprecated ''use nextpas.core.mem.default.defaultallocator.allocaligned instead''',
+    'aligned compat alloc surface should be deprecated');
+  CheckContains(LSource,
+    'deprecated ''use nextpas.core.mem.default.defaultallocator.freealigned instead''',
+    'aligned compat free surface should be deprecated');
+  CheckContains(LSource, 'nextpas.core.mem.default',
+    'aligned compat shim should depend on the canonical default allocator');
+  CheckContains(LSource, 'nextpas.core.mem.intf',
+    'aligned compat shim should reference the canonical allocator contract');
+  CheckContains(LSource, 'lallocator := nextpas.core.mem.default.defaultallocator;',
+    'aligned compat shim should obtain the canonical allocator');
+  CheckContains(LSource, 'result := lallocator.allocaligned(asize, aalignment);',
+    'aligned compat alloc should delegate to the canonical allocator');
+  CheckContains(LSource, 'lallocator.freealigned(aptr);',
+    'aligned compat free should delegate to the canonical allocator');
+  CheckNotContains(LSource, '_aligned_malloc',
+    'aligned compat shim should not own a windows allocation path');
+  CheckNotContains(LSource, 'posix_memalign',
+    'aligned compat shim should not own a unix allocation path');
+  CheckNotContains(LSource, 'libc_free',
+    'aligned compat shim should not own a unix free path');
+  CheckNotContains(LSource, 'sysgetmem',
+    'aligned compat shim should not own a raw rtl fallback path');
+  CheckNotContains(LSource, 'sysfreemem',
+    'aligned compat shim should not own a raw rtl free path');
+end;
+
+procedure TestMemCompatFacadeExportsLegacyPoolSurface;
+var
+  LPool: nextpas.core.mem.compat.TMemPool;
+  LCompatPool: nextpas.core.mem.compat.IMemPool;
+  LPtr: Pointer;
+begin
+  LPool := nextpas.core.mem.compat.TMemPool.Create(32, 2);
+  try
+    LCompatPool := nextpas.core.mem.compat.TMemPoolAdapter.Create(LPool);
+    LPtr := LCompatPool.Alloc;
+    try
+      Check(LPtr <> nil, 'mem.compat should export the legacy mem-pool adapter surface');
+      Check(nextpas.core.mem.compat.WrapAsBlockPool(LCompatPool) <> nil,
+        'mem.compat should export pool bridge helpers');
+    finally
+      LCompatPool.Free(LPtr);
+    end;
+  finally
+    LPool.Free;
+  end;
+end;
+
+procedure TestMemCompatArenaBridgeRuntime;
+var
+  LPool: nextpas.core.mem.compat.TStackPool;
+  LStackView: nextpas.core.mem.compat.IStackPool;
+  LArena: nextpas.core.mem.compat.IArena;
+  LPtr: Pointer;
+  I: Integer;
+begin
+  LPool := nextpas.core.mem.compat.TStackPool.Create(256);
+  try
+    LStackView := nextpas.core.mem.compat.TStackPoolAdapter.Create(LPool);
+    LArena := nextpas.core.mem.compat.WrapAsArena(LStackView);
+    Check(LArena <> nil, 'mem.compat should expose WrapAsArena');
+
+    LPtr := LArena.AllocAligned(32, 32);
+    Check(LPtr <> nil, 'arena bridge should allocate aligned memory');
+    CheckEqual(Int64(0), Int64(PtrUInt(LPtr) mod 32), 'arena bridge should honor explicit alignment');
+
+    LPtr := LArena.AllocZeroed(16);
+    Check(LPtr <> nil, 'arena bridge should allocate zeroed memory');
+    for I := 0 to 15 do
+      CheckEqual(Int64(0), Int64(PByte(LPtr)[I]), 'arena bridge zeroed memory');
+
+    LStackView := nextpas.core.mem.compat.WrapAsStackPool(LArena);
+    Check(LStackView <> nil, 'mem.compat should expose WrapAsStackPool');
+    LPtr := LStackView.Alloc(24, 8);
+    Check(LPtr <> nil, 'stack-pool bridge should allocate');
+  finally
+    LPool.Free;
+  end;
+end;
+
+procedure TestMemCompatSourceContracts;
+var
+  LCompatSource: string;
+begin
+  LCompatSource := ReadSourceText(ResolveSourcePath(
+    MEM_COMPAT_SOURCE_PATH_FROM_TEST,
+    MEM_COMPAT_SOURCE_PATH_FROM_ROOT));
+  CheckContains(LCompatSource, 'compatibility layer',
+    'mem.compat should document that it is a compatibility layer');
+  CheckContains(LCompatSource, 'new code',
+    'mem.compat should tell new code to stay on canonical units');
+  CheckContains(LCompatSource, 'nextpas.core.mem.intf',
+    'mem.compat should depend on the canonical allocator contract');
+  CheckContains(LCompatSource, 'nextpas.core.mem.pool.fixed',
+    'mem.compat should depend on the canonical fixed-pool implementation');
+  CheckContains(LCompatSource, 'nextpas.core.mem.stack_pool',
+    'mem.compat should depend on the canonical stack-pool implementation');
+  CheckContains(LCompatSource, 'nextpas.core.mem.pool.slab',
+    'mem.compat should depend on the canonical slab-pool implementation');
+  CheckContains(LCompatSource, 'nextpas.core.mem.blockpool',
+    'mem.compat should depend on the canonical block-pool contract');
+  CheckNotContains(LCompatSource, 'nextpas.core.mem.layout',
+    'mem.compat must not depend on the removed layout unit');
+  CheckNotContains(LCompatSource, 'tmemlayout =',
+    'mem.compat must not re-export TMemLayout');
+  CheckNotContains(LCompatSource, 'tallocresult =',
+    'mem.compat must not re-export TAllocResult');
+  CheckContains(LCompatSource, 'function alloc(asize: sizeuint): pointer;',
+    'mem.compat arena bridge should expose explicit-size allocation');
+  CheckContains(LCompatSource, 'function allocaligned(asize, aalignment: sizeuint): pointer;',
+    'mem.compat arena bridge should expose explicit aligned allocation');
+end;
+
+procedure TestGrowableAllocatorsUseCanonicalAllocatorContract;
+var
+  LArenaSource: string;
+  LBlockPoolSource: string;
+begin
+  LArenaSource := ReadSourceText(ResolveSourcePath(
+    MEM_ARENA_GROWABLE_SOURCE_PATH_FROM_TEST,
+    MEM_ARENA_GROWABLE_SOURCE_PATH_FROM_ROOT));
+  CheckContains(LArenaSource, 'nextpas.core.mem.intf',
+    'growable arena should depend on the canonical allocator contract');
+  CheckNotContains(LArenaSource, 'nextpas.core.mem.alloc',
+    'growable arena should not depend on the removed legacy allocator contract');
+  CheckNotContains(LArenaSource, 'nextpas.core.mem.layout',
+    'growable arena should not depend on the removed layout unit');
+  CheckContains(LArenaSource, 'allocator: iallocator',
+    'growable arena config should expose iallocator');
+  CheckContains(LArenaSource, 'fallocator: iallocator',
+    'growable arena field should store iallocator');
+  CheckContains(LArenaSource, 'function alloc(asize: sizeuint): pointer;',
+    'growable arena should expose explicit-size allocation');
+  CheckContains(LArenaSource, 'function allocaligned(asize, aalignment: sizeuint): pointer;',
+    'growable arena should expose explicit aligned allocation');
+  CheckContains(LArenaSource, 'lraw := fallocator.getmem(lallocsize);',
+    'growable arena should allocate segments via iallocator.getmem');
+  CheckContains(LArenaSource, 'fallocator.freemem(lraw)',
+    'growable arena should release segments via iallocator.freemem');
+
+  LBlockPoolSource := ReadSourceText(ResolveSourcePath(
+    MEM_BLOCKPOOL_GROWABLE_SOURCE_PATH_FROM_TEST,
+    MEM_BLOCKPOOL_GROWABLE_SOURCE_PATH_FROM_ROOT));
+  CheckContains(LBlockPoolSource, 'nextpas.core.mem.intf',
+    'growable block pool should depend on the canonical allocator contract');
+  CheckNotContains(LBlockPoolSource, 'nextpas.core.mem.alloc',
+    'growable block pool should not depend on the removed legacy allocator contract');
+  CheckNotContains(LBlockPoolSource, 'nextpas.core.mem.layout',
+    'growable block pool should not depend on the removed layout unit');
+  CheckContains(LBlockPoolSource, 'allocator: iallocator',
+    'growable block pool config should expose iallocator');
+  CheckContains(LBlockPoolSource, 'fallocator: iallocator',
+    'growable block pool field should store iallocator');
+  CheckContains(LBlockPoolSource, 'lraw := fallocator.getmem(lallocsize);',
+    'growable block pool should allocate segments via iallocator.getmem');
+  CheckContains(LBlockPoolSource, 'fallocator.freemem(lraw)',
+    'growable block pool should release segments via iallocator.freemem');
+end;
+
+procedure TestArenaUnitsUseExplicitArenaApi;
+var
+  LBlockPoolSource: string;
+  LConcurrentSource: string;
+begin
+  LBlockPoolSource := ReadSourceText(ResolveSourcePath(
+    MEM_BLOCKPOOL_SOURCE_PATH_FROM_TEST,
+    MEM_BLOCKPOOL_SOURCE_PATH_FROM_ROOT));
+  CheckContains(LBlockPoolSource, 'function alloc(asize: sizeuint): pointer;',
+    'blockpool IArena should expose explicit-size allocation');
+  CheckContains(LBlockPoolSource, 'function allocaligned(asize, aalignment: sizeuint): pointer;',
+    'blockpool IArena should expose explicit aligned allocation');
+  CheckContains(LBlockPoolSource, 'function alloczeroed(asize: sizeuint): pointer;',
+    'blockpool IArena should expose explicit zeroed allocation');
+  CheckNotContains(LBlockPoolSource, 'function alloc(const alayout: tmemlayout)',
+    'blockpool IArena should not expose layout-based allocation');
+  CheckNotContains(LBlockPoolSource, 'function alloczeroed(const alayout: tmemlayout)',
+    'blockpool IArena should not expose layout-based zeroed allocation');
+
+  LConcurrentSource := ReadSourceText(ResolveSourcePath(
+    MEM_BLOCKPOOL_CONCURRENT_SOURCE_PATH_FROM_TEST,
+    MEM_BLOCKPOOL_CONCURRENT_SOURCE_PATH_FROM_ROOT));
+  CheckContains(LConcurrentSource, 'function alloc(asize: sizeuint): pointer;',
+    'concurrent arena wrapper should expose explicit-size allocation');
+  CheckContains(LConcurrentSource, 'function allocaligned(asize, aalignment: sizeuint): pointer;',
+    'concurrent arena wrapper should expose explicit aligned allocation');
+  CheckContains(LConcurrentSource, 'function alloczeroed(asize: sizeuint): pointer;',
+    'concurrent arena wrapper should expose explicit zeroed allocation');
+  CheckNotContains(LConcurrentSource, 'nextpas.core.mem.layout',
+    'concurrent arena wrapper should not depend on the removed layout unit');
+end;
+
+procedure TestLegacyAllocatorFilesRemoved;
+begin
+  Check(not SourceExists(MEM_ALLOC_SOURCE_PATH_FROM_TEST, MEM_ALLOC_SOURCE_PATH_FROM_ROOT),
+    'mem.alloc should be removed');
+  Check(not SourceExists(MEM_ADAPTER_SOURCE_PATH_FROM_TEST, MEM_ADAPTER_SOURCE_PATH_FROM_ROOT),
+    'mem.adapter should be removed');
+  Check(not SourceExists(MEM_LAYOUT_SOURCE_PATH_FROM_TEST, MEM_LAYOUT_SOURCE_PATH_FROM_ROOT),
+    'mem.layout should be removed');
+  Check(not SourceExists(MEM_MIMALLOC_BINDING_SOURCE_PATH_FROM_TEST, MEM_MIMALLOC_BINDING_SOURCE_PATH_FROM_ROOT),
+    'mem.mimalloc.binding should be removed');
+end;
+
+procedure TestBaseOwnsMemConstantsAndErrorDropsAllocResult;
+var
+  LBaseSource: string;
+  LErrorSource: string;
+begin
+  LBaseSource := ReadSourceText(ResolveSourcePath(
+    MEM_BASE_SOURCE_PATH_FROM_TEST,
+    MEM_BASE_SOURCE_PATH_FROM_ROOT));
+  CheckContains(LBaseSource, 'mem_default_align',
+    'mem.base should own MEM_DEFAULT_ALIGN');
+  CheckContains(LBaseSource, 'mem_cache_line_size',
+    'mem.base should own MEM_CACHE_LINE_SIZE');
+  CheckContains(LBaseSource, 'mem_page_size',
+    'mem.base should own MEM_PAGE_SIZE');
+
+  LErrorSource := ReadSourceText(ResolveSourcePath(
+    MEM_ERROR_SOURCE_PATH_FROM_TEST,
+    MEM_ERROR_SOURCE_PATH_FROM_ROOT));
+  CheckNotContains(LErrorSource, 'tallocresult',
+    'mem.error should drop TAllocResult');
+  CheckNotContains(LErrorSource, 'expectptr',
+    'mem.error should drop TAllocResult.ExpectPtr');
+end;
+
 procedure TestCanonicalAllocatorSurface;
 var
   LAllocator: nextpas.core.mem.intf.IAllocator;
@@ -279,245 +523,16 @@ begin
   Check(LCanonical = LFacade, 'facade and canonical allocator interfaces should resolve to the same interface identity');
 end;
 
-procedure TestAllocatorAdapterRoundTrip;
-var
-  LAllocator: nextpas.core.mem.allocator.IAllocator;
-  LAlloc: IAlloc;
-  LRoundTrip: nextpas.core.mem.allocator.IAllocator;
-  LPtr: Pointer;
-begin
-  LAllocator := GetRtlAllocator;
-  LAlloc := WrapAsAlloc(LAllocator);
-  Check(LAlloc <> nil, 'WrapAsAlloc should return an adapter');
-
-  LRoundTrip := WrapAsAllocator(LAlloc);
-  Check(LRoundTrip <> nil, 'WrapAsAllocator should return an adapter');
-
-  LPtr := LRoundTrip.GetMem(24);
-  try
-    Check(LPtr <> nil, 'adapter round trip should allocate');
-    PByte(LPtr)^ := $27;
-    LPtr := LRoundTrip.ReallocMem(LPtr, 48);
-    Check(LPtr <> nil, 'adapter round trip should reallocate');
-    CheckEqual(Int64($27), Int64(PByte(LPtr)^), 'adapter round trip should preserve data');
-  finally
-    LRoundTrip.FreeMem(LPtr);
-  end;
-end;
-
-procedure TestAllocatorToAllocAdapterRejectsUnsupportedAlignment;
-var
-  LAllocator: nextpas.core.mem.allocator.IAllocator;
-  LAlloc: IAlloc;
-  LLayout: TMemLayout;
-  LResult: TAllocResult;
-begin
-  LAllocator := GetRtlAllocator;
-  LAlloc := WrapAsAlloc(LAllocator);
-  Check(LAlloc <> nil, 'WrapAsAlloc should return an adapter');
-
-  LLayout := TMemLayout.Create(64, MEM_CACHE_LINE_SIZE);
-  CheckEqual(False, LAlloc.Caps.SupportsLayout(LLayout),
-    'wrapped RTL allocator caps should reject cache-line alignment');
-
-  LResult := LAlloc.Alloc(LLayout);
-  if LResult.IsOk and (LResult.Ptr <> nil) then
-    LAllocator.FreeAligned(LResult.Ptr);
-  Check(LResult.IsErr, 'adapter Alloc should reject unsupported alignment');
-  CheckEqual(Int64(Ord(aeAlignmentNotSupported)), Int64(Ord(LResult.Error)),
-    'adapter Alloc unsupported alignment error');
-
-  LResult := LAlloc.AllocZeroed(LLayout);
-  if LResult.IsOk and (LResult.Ptr <> nil) then
-    LAllocator.FreeAligned(LResult.Ptr);
-  Check(LResult.IsErr, 'adapter AllocZeroed should reject unsupported alignment');
-  CheckEqual(Int64(Ord(aeAlignmentNotSupported)), Int64(Ord(LResult.Error)),
-    'adapter AllocZeroed unsupported alignment error');
-
-  LResult := LAlloc.Realloc(nil, TMemLayout.Empty, LLayout);
-  if LResult.IsOk and (LResult.Ptr <> nil) then
-    LAllocator.FreeAligned(LResult.Ptr);
-  Check(LResult.IsErr, 'adapter Realloc(nil) should reject unsupported alignment');
-  CheckEqual(Int64(Ord(aeAlignmentNotSupported)), Int64(Ord(LResult.Error)),
-    'adapter Realloc(nil) unsupported alignment error');
-end;
-
-procedure TestAllocatorToAllocAdapterRejectsInvalidOldLayout;
-var
-  LRecording: TRecordingAlloc;
-  LAlloc: IAlloc;
-  LPtr: Pointer;
-  LOldLayout: TMemLayout;
-  LNewLayout: TMemLayout;
-  LResult: TAllocResult;
-begin
-  LRecording := TRecordingAlloc.Create;
-  LAlloc := WrapAsAlloc(WrapAsAllocator(LRecording as IAlloc));
-  Check(LAlloc <> nil, 'round-trip adapter should return an IAlloc');
-
-  LNewLayout := TMemLayout.Create(32, MEM_DEFAULT_ALIGN);
-  LResult := LAlloc.Alloc(LNewLayout);
-  Check(LResult.IsOk and (LResult.Ptr <> nil), 'round-trip adapter should allocate');
-  LPtr := LResult.Ptr;
-
-  FillChar(LOldLayout, SizeOf(LOldLayout), 0);
-  CheckEqual(False, LOldLayout.IsValid, 'test old layout should be invalid');
-
-  LResult := LAlloc.Realloc(LPtr, LOldLayout, TMemLayout.Create(64, MEM_DEFAULT_ALIGN));
-  Check(LResult.IsErr, 'adapter Realloc should reject invalid old layout');
-  CheckEqual(Int64(Ord(aeInvalidLayout)), Int64(Ord(LResult.Error)),
-    'adapter Realloc invalid old layout error');
-  CheckEqual(Int64(0), Int64(LRecording.ReallocCalls),
-    'invalid old layout must not reach wrapped allocator Realloc');
-  CheckEqual(Int64(0), Int64(LRecording.DeallocCalls),
-    'invalid old layout must not release the old block');
-
-  LAlloc.Dealloc(LPtr, LNewLayout);
-end;
-
-procedure TestAllocatorAdapterAlignedRoundTrip;
-var
-  LAlloc: IAlloc;
-  LAllocator: nextpas.core.mem.allocator.IAllocator;
-  LPtr: Pointer;
-begin
-  LAlloc := GetAlignedAlloc;
-  LAllocator := WrapAsAllocator(LAlloc);
-  Check(LAllocator <> nil, 'aligned IAlloc should adapt to IAllocator');
-
-  LPtr := LAllocator.AllocAligned(64, 64);
-  try
-    Check(LPtr <> nil, 'aligned adapter should allocate');
-    CheckEqual(Int64(0), Int64(PtrUInt(LPtr) mod 64), 'aligned adapter should honor alignment');
-    PByte(LPtr)^ := $42;
-
-    LPtr := LAllocator.ReallocMem(LPtr, 128);
-    Check(LPtr <> nil, 'aligned adapter should reallocate through tracked layout');
-    CheckEqual(Int64(0), Int64(PtrUInt(LPtr) mod 64), 'aligned adapter realloc should preserve alignment');
-    CheckEqual(Int64($42), Int64(PByte(LPtr)^), 'aligned adapter realloc should preserve prefix');
-  finally
-    LAllocator.FreeAligned(LPtr);
-  end;
-end;
-
-procedure TestAlignedAllocRejectsBackingSizeOverflow;
-var
-  LAlloc: IAlloc;
-  LLayout: TMemLayout;
-  LResult: TAllocResult;
-begin
-  LAlloc := GetAlignedAlloc;
-  LLayout := TMemLayout.Create(High(SizeUInt), 64);
-  LResult := LAlloc.Alloc(LLayout);
-  try
-    Check(LResult.IsErr, 'aligned IAlloc should reject backing size calculations that overflow SizeUInt');
-  finally
-    if LResult.IsOk and (LResult.Ptr <> nil) then
-      LAlloc.Dealloc(LResult.Ptr, LLayout);
-  end;
-end;
-
-procedure TestAllocToAllocatorAdapterTracksLayoutsAndRejectsUntrackedPointers;
-var
-  LRecording: TRecordingAlloc;
-  LAlloc: IAlloc;
-  LAllocator: nextpas.core.mem.allocator.IAllocator;
-  LPtr: Pointer;
-  LForeignByte: Byte;
-begin
-  LRecording := TRecordingAlloc.Create;
-  LAlloc := LRecording as IAlloc;
-  LAllocator := WrapAsAllocator(LAlloc);
-
-  LPtr := LAllocator.AllocAligned(96, 64);
-  try
-    Check(LPtr <> nil, 'tracked adapter allocation should succeed');
-    CheckEqual(Int64(96), Int64(LRecording.LastAllocLayout.Size),
-      'tracked adapter allocation should pass requested size');
-    CheckEqual(Int64(64), Int64(LRecording.LastAllocLayout.Align),
-      'tracked adapter allocation should pass requested alignment');
-
-    LPtr := LAllocator.ReallocMem(LPtr, 160);
-    Check(LPtr <> nil, 'tracked adapter realloc should succeed');
-    CheckEqual(Int64(1), Int64(LRecording.ReallocCalls),
-      'tracked adapter realloc should forward once');
-    CheckEqual(Int64(96), Int64(LRecording.LastReallocOldLayout.Size),
-      'tracked adapter realloc should preserve old size');
-    CheckEqual(Int64(64), Int64(LRecording.LastReallocOldLayout.Align),
-      'tracked adapter realloc should preserve old alignment');
-    CheckEqual(Int64(160), Int64(LRecording.LastReallocNewLayout.Size),
-      'tracked adapter realloc should pass new size');
-    CheckEqual(Int64(64), Int64(LRecording.LastReallocNewLayout.Align),
-      'tracked adapter realloc should preserve new alignment');
-
-    try
-      LAllocator.FreeMem(@LForeignByte);
-      Fail('untracked pointer FreeMem should raise');
-    except
-      on E: EAllocError do
-        CheckEqual(Int64(Ord(aeInvalidPointer)), Int64(Ord(E.Error)),
-          'untracked pointer FreeMem error code');
-    end;
-    CheckEqual(Int64(0), Int64(LRecording.DeallocCalls),
-      'untracked pointer must not be forwarded to IAlloc.Dealloc');
-
-    try
-      LAllocator.ReallocMem(@LForeignByte, 16);
-      Fail('untracked pointer ReallocMem should raise');
-    except
-      on E: EAllocError do
-        CheckEqual(Int64(Ord(aeInvalidPointer)), Int64(Ord(E.Error)),
-          'untracked pointer ReallocMem error code');
-    end;
-    CheckEqual(Int64(1), Int64(LRecording.ReallocCalls),
-      'untracked pointer must not be forwarded to IAlloc.Realloc');
-  finally
-    if LPtr <> nil then
-      LAllocator.FreeMem(LPtr);
-  end;
-
-  CheckEqual(Int64(1), Int64(LRecording.DeallocCalls),
-    'tracked adapter free should forward exactly once');
-  CheckEqual(Int64(160), Int64(LRecording.LastDeallocLayout.Size),
-    'tracked adapter free should pass tracked final size');
-  CheckEqual(Int64(64), Int64(LRecording.LastDeallocLayout.Align),
-    'tracked adapter free should pass tracked final alignment');
-end;
-
 procedure TestMimallocUsableSizeCapabilityFallback;
 var
   LAllocator: nextpas.core.mem.allocator.IAllocator;
-  LTraits: nextpas.core.mem.allocator.base.TAllocatorTraits;
   LPtr: Pointer;
   LSize: SizeUInt;
-  LHasSurface: Boolean;
 begin
-  LAllocator := nextpas.core.mem.allocator.mimalloc.GetMimallocAllocator;
-  Check(LAllocator <> nil, 'mimalloc allocator object should be creatable without eager loading');
-
-  LTraits := LAllocator.Traits;
-  LHasSurface := nextpas.core.mem.allocator.mimalloc.MimallocUsableSizeAvailable;
-  CheckEqual(LHasSurface, LTraits.HasMemSize, 'mimalloc HasMemSize should match mi_malloc_usable_size availability');
-
-  LSize := 123;
-  CheckEqual(False, nextpas.core.mem.allocator.mimalloc.TryGetMimallocUsableSize(nil, LSize),
-    'nil is not a usable-size query target');
-  CheckEqual(Int64(0), Int64(LSize), 'failed usable-size queries should clear the output size');
-
-  if LTraits.HasMemSize then
+  if not nextpas.core.mem.allocator.mimalloc.TryGetMimallocAllocator(LAllocator) then
   begin
-    LPtr := LAllocator.GetMem(33);
-    try
-      Check(LPtr <> nil, 'mimalloc allocation should succeed when usable-size surface is available');
-      Check(nextpas.core.mem.allocator.mimalloc.TryGetMimallocUsableSize(LPtr, LSize),
-        'usable-size query should succeed for mimalloc-owned blocks when symbol is available');
-      Check(LSize >= 33, 'mimalloc usable size should cover the requested allocation size');
-    finally
-      LAllocator.FreeMem(LPtr);
-    end;
-  end
-  else
-  begin
+    LAllocator := GetRtlAllocator;
+    LSize := 0;
     LPtr := nil;
     try
       try
@@ -617,14 +632,20 @@ begin
   T.Run('callback allocator supports allocate interface', @TestCallbackAllocatorSupportsAllocateInterface);
   T.Run('rtl allocator zero init traits and aligned alloc', @TestRtlAllocatorZeroInitTraitsAndAlignedAlloc);
   T.Run('rtl allocator aligned alloc rejects size overflow', @TestRtlAllocatorAlignedAllocRejectsSizeOverflow);
+  T.Run('aligned compat shim smoke', @TestAlignedCompatShimSmoke);
+  T.Run('aligned compat shim delegates to canonical allocator',
+    @TestAlignedCompatShimDelegatesToCanonicalAllocator);
+  T.Run('mem.compat exports legacy pool surface', @TestMemCompatFacadeExportsLegacyPoolSurface);
+  T.Run('mem.compat arena bridge runtime', @TestMemCompatArenaBridgeRuntime);
+  T.Run('mem.compat source contracts', @TestMemCompatSourceContracts);
+  T.Run('growable allocators use canonical allocator contract',
+    @TestGrowableAllocatorsUseCanonicalAllocatorContract);
+  T.Run('arena units use explicit arena api', @TestArenaUnitsUseExplicitArenaApi);
+  T.Run('legacy allocator files removed', @TestLegacyAllocatorFilesRemoved);
+  T.Run('mem.base owns constants and mem.error drops alloc result',
+    @TestBaseOwnsMemConstantsAndErrorDropsAllocResult);
   T.Run('canonical allocator surface', @TestCanonicalAllocatorSurface);
   T.Run('allocator aliases are canonical', @TestAllocatorAliasesAreCanonical);
-  T.Run('allocator adapter round trip', @TestAllocatorAdapterRoundTrip);
-  T.Run('allocator-to-alloc adapter rejects unsupported alignment', @TestAllocatorToAllocAdapterRejectsUnsupportedAlignment);
-  T.Run('allocator-to-alloc adapter rejects invalid old layout', @TestAllocatorToAllocAdapterRejectsInvalidOldLayout);
-  T.Run('allocator adapter aligned round trip', @TestAllocatorAdapterAlignedRoundTrip);
-  T.Run('aligned alloc rejects backing size overflow', @TestAlignedAllocRejectsBackingSizeOverflow);
-  T.Run('alloc adapter tracks layouts and rejects untracked pointers', @TestAllocToAllocatorAdapterTracksLayoutsAndRejectsUntrackedPointers);
   T.Run('mimalloc usable-size capability fallback', @TestMimallocUsableSizeCapabilityFallback);
   T.Run('mem.utils no-op and overlap contract', @TestMemUtilsNoOpAndOverlapContract);
   T.Run('mem.utils copy unchecked handles overlap', @TestMemUtilsCopyUncheckedHandlesOverlap);

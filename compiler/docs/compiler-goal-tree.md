@@ -366,3 +366,128 @@
   137/137 LLVM smoke 全绿。C5 下一步建议优先收口 `WalkHaltCalls` 剩余
   constructor-like / raw object-dot / pointer-return helper call special-case，
   再设计更显式的 receiver/address call contract。
+- 2026-06-12 C6-H7：owned string return 的 `Write/WriteLn` consumer 第一刀：
+  `WriteLn(MakeText())` 现在从 fail-closed 推进为可验证的临时所有权路径，
+  形态是 `string-temp-owned-runtime -> write-str-var-runtime -> string-temp-release-runtime`。
+  sema 只对 `Write/WriteLn` 的 direct root owned string return 参数放行，不放宽
+  `Copy`、concat、compare、field store、var/out、virtual/interface/external 等 consumer。
+  RED=`test_hir_string_call_argument_ownership_contract` 失败
+  `missing-writeln-string-temp-owned-runtime`；GREEN 后新增 runtime smoke
+  `llvm_string_arg_owned_writeln`，真实输出 `42` 并以 exit 42 通过；相邻 C6 string
+  ownership/return/length contract 与 runtime smoke 全绿。C6 仍在推进中，下一步可继续
+  从剩余 fail-closed string consumer 中选择最小可释放切片。
+- 2026-06-12 C6-H8：owned string return 的 `Copy` consumer 第一刀：
+  `S := Copy(MakeText(), 2, 2)` 现在从 fail-closed 推进为 owned slice copy。
+  sema 只识别 `Copy` 第一个参数是 direct root owned string-return call、起点和长度可编码
+  的 assignment consumer；旧 `copy-str-runtime` 继续表示 borrowed alias copy，不改语义。
+  新增 `copy-str-owned-runtime` 走 `np_str_copy_owned`，先分配独立 slice owner，再释放
+  producer temp，避免目标字符串悬空。RED=`test_hir_string_length_ownership_contract`
+  失败 `missing-owned-string-copy-hir:sema.c6h4-owned-string-return-deferred-consumer`；
+  GREEN 后 `llvm_string_copy_owned_direct` 通过 LLVM verify/llc/link/run，exit 42。
+  concat、compare、field store、var/out、virtual/interface/external 等 consumer 仍保持
+  fail-closed。
+- 2026-06-12 C6-H9：owned string return 的 assignment concat consumer 第一刀：
+  `S := MakeText() + 'x'`、`S := 'x' + MakeText()` 和 `S := MakeA() + MakeB()` 现在从 fail-closed 推进为
+  owned temp -> `assign-str-owned-concat-runtime` -> temp release。sema 只在字符串赋值 RHS 的
+  binary `+` 中放行 zero-arg direct root owned string-return operand；带参数 producer、
+  compare concat、field store、var/out、virtual/interface/external 等 consumer 继续 fail-closed。RED=
+  `test_hir_string_call_argument_ownership_contract` 失败
+  `missing-concat-left-string-temp-owned-runtime`；GREEN 后
+  `llvm_string_arg_owned_concat_left` / `llvm_string_arg_owned_concat_right` /
+  `llvm_string_arg_owned_concat_both` 均通过 LLVM
+  verify/llc/link/run，exit 42；`build/verify_local.sh` 已纳入 string-call-argument
+  contract 和 runtime smoke。
+- 2026-06-12 C6-H10：owned string return 的 direct string compare consumer 第一刀：
+  `if MakeText() = 'x' then ...`、`if 'x' = MakeText() then ...`、
+  `if MakeText() <> 'y' then ...` 和 `if MakeText() = S then ...` 现在从
+  fail-closed 推进为 owned temp -> `cond-br-runtime` string compare -> temp release。
+  sema 只在 `if` 条件的 direct `=` / `<>` 字符串比较中放行 zero-arg direct root
+  owned string-return operand，另一侧必须是 literal 或 runtime string var；compare concat、
+  双 owned operand、复合布尔、循环条件、field store、var/out、
+  virtual/interface/external 等 consumer 继续 fail-closed。RED=
+  `test_hir_string_call_argument_ownership_contract` 失败
+  `missing-compare-string-temp-owned-runtime`；GREEN 后
+  `llvm_string_arg_owned_compare_left` / `llvm_string_arg_owned_compare_right` /
+  `llvm_string_arg_owned_compare_not_equal` /
+  `llvm_string_arg_owned_compare_runtime_var` 均通过 LLVM verify/llc/link/run，
+  exit 42；`build/verify_local.sh` 已纳入新增 compare runtime smoke 输出。
+- 2026-06-12 C6-H11：owned string return 的双 direct compare operand 第一刀：
+  `if MakeA() = MakeB() then ...` 现在从 fail-closed 推进为两个 owned temp ->
+  `cond-br-runtime` string compare -> 双 temp 逆序 release。sema 仍只在 `if`
+  条件的 direct `=` / `<>` 字符串比较中放行 zero-arg direct root owned
+  string-return operand；compare concat、复合布尔、循环条件、field store、
+  var/out、virtual/interface/external 等 consumer 继续 fail-closed。RED=
+  `test_hir_string_call_argument_ownership_runtime_smoke` 失败
+  `sema.c6h4-owned-string-return-deferred-consumer`；GREEN 后
+  `llvm_string_arg_owned_compare_both` 通过 LLVM verify/llc/link/run，exit 42；
+  `build/verify_local.sh` 已纳入 compare-both runtime smoke 输出。
+- 2026-06-12 C6-H12：owned string return 的 compare concat consumer 第一刀：
+  `if MakeText() + 'y' = 'xy' then ...` 现在从 fail-closed 推进为 producer
+  owned temp -> compare concat owned temp -> `cond-br-runtime` string compare ->
+  concat temp 与 producer temp 逆序 release。sema 只在 direct `if` 字符串 `=` / `<>`
+  比较中放行包含 supported owned string-return operand 的 concat tree；普通 field
+  store、var/out、virtual/interface/external、复合布尔和循环条件继续 fail-closed。
+  RED=`test_hir_string_call_argument_ownership_contract` 失败
+  `missing-compare-concat-temp-order-node`，runtime smoke 失败
+  `sema.c6h4-owned-string-return-deferred-consumer`；GREEN 后
+  `llvm_string_arg_owned_compare_concat` 通过 LLVM verify/llc/link/run，exit 42；
+  `build/verify_local.sh` 已纳入 compare-concat runtime smoke 输出。
+- 2026-06-12 C6-H13：owned string return 的 direct `if` compound bool compare
+  第一刀：`if (MakeText() = 'x') and True then ...` 现在从 fail-closed 推进为
+  owned temp -> compound `cond-br-runtime` string compare -> temp release。sema 只在
+  direct `if` 条件中让 `not` / `and` / `or` wrapper 递归保留 owned string compare
+  allow flag；while/repeat/for 条件、field store、var/out、
+  virtual/interface/external 继续 fail-closed。RED=
+  `test_hir_string_call_argument_ownership_contract` 失败
+  `missing-compare-compound-string-temp-order-node`，runtime smoke 失败
+  `sema.c6h4-owned-string-return-deferred-consumer`；GREEN 后
+  `llvm_string_arg_owned_compare_compound` 通过 LLVM verify/llc/link/run，exit 42；
+  `build/verify_local.sh` 已纳入 compare-compound runtime smoke 输出。
+- 2026-06-12 C6-H14：owned string return 的 `while` / `repeat until` 条件
+  compare 第一刀：`while MakeText() = 'x' do ...` 与
+  `repeat ... until MakeText() = 'x'` 现在从 fail-closed 推进为 condition block 内
+  owned temp -> `cond-br-runtime` string compare -> temp release。sema 不再在 loop
+  label 生成前试探性编码 owned condition，而是先进入 `while-cond` / `repeat-cond`
+  block，再发出 owned temp 与 compare，保证每次迭代重新创建 temp；builder/emitter 仍把
+  release 放在 LLVM `br i1` 前。`for`、field store、var/out、
+  virtual/interface/external 和更宽泛的 loop condition 仍保持 fail-closed。RED=
+  `test_hir_string_call_argument_ownership_contract` 失败
+  `missing-compare-while-string-temp-order-node`，runtime smoke 失败
+  `missing-owned-string-return-runtime:sema.c6h4-owned-string-return-deferred-consumer`；
+  GREEN 后 `llvm_string_arg_owned_compare_while` 与
+  `llvm_string_arg_owned_compare_repeat` 均通过 LLVM verify/llc/link/run，exit 42；
+  `build/verify_local.sh` 已纳入 compare-while / compare-repeat runtime smoke 输出。
+- 2026-06-12 C6-H15：owned string return 的 concat `Length` consumer 第一刀：
+  `Length(MakeText() + 'z')` 现在从 fail-closed 推进为 producer owned temp ->
+  length concat owned temp -> `string-temp-length-runtime` -> concat temp 与 producer
+  temp 逆序 release。sema 只在 `Length(<supported string concat tree>)` 中放行
+  zero-arg direct root owned string-return operand；field store、var/out、
+  virtual/interface/external 和对象 string field ownership 继续 fail-closed。RED=
+  `test_hir_string_length_ownership_contract` 失败
+  `missing-owned-string-concat-length-hir:sema.c6h4-owned-string-return-deferred-consumer`，
+  runtime smoke 失败
+  `missing-owned-string-length-runtime:sema.c6h4-owned-string-return-deferred-consumer`；
+  GREEN 后 focused runtime smoke 中 `llvm_string_length_owned_concat` 通过
+  LLVM verify/llc/link/run，exit 42。
+- 2026-06-12 C6-H16：owned string return 的 concat `Write/WriteLn` consumer 第一刀：
+  `WriteLn(MakeText() + 'z')` 现在从 fail-closed 推进为 producer owned temp ->
+  writer concat owned temp -> `write-str-var-runtime` -> concat temp 与 producer
+  temp 逆序 release。sema 只在 `Write/WriteLn(<supported string concat tree>)`
+  中放行 zero-arg direct root owned string-return operand；field store、var/out、
+  virtual/interface/external 和对象 string field ownership 继续 fail-closed。RED=
+  `test_hir_string_call_argument_ownership_contract` 失败
+  `missing-writeln-concat-temp-order-node`，runtime smoke 失败
+  `missing-owned-string-return-runtime:sema.c6h4-owned-string-return-deferred-consumer`；
+  GREEN 后 focused runtime smoke 中 `llvm_string_arg_owned_writeln_concat` 通过
+  LLVM verify/llc/link/run，exit 42。
+- 2026-06-13 C6-H17：owned string return 的 class string field store 收尾：
+  在 GREEN-2A 基础上完成 GREEN-2B + GREEN-3。contract 侧新增三类锁定：
+  1) class string field 后跟 Integer/interface 的 metadata layout，固定
+  `$idx` / `$size` / `$intf_offset`；
+  2) 同一 string field 连续 overwrite 时，第二次 store 前必须 release 旧 owner；
+  3) object free 路径必须调用 `np_object_string_cleanup_<Class>`，并在 helper 中
+  逐个 string field release owner 后清空 ptr/len/owner/alloc 四个 slot。
+  runtime smoke 侧补两条证据：Pascal 端到端 `Box.Text := MakeTextA(); Box.Note := ...;
+  Box.Text := MakeTextC(); Box.Free;` 通过 LLVM verify/llc/link/run，exit 42；
+  直接 IR probe `np_object_string_cleanup_TStringPair` 证明 cleanup 后两个 string field
+  的 ptr/len/owner/alloc 均归零，再经 `np_object_free_release` 释放对象，exit 42。

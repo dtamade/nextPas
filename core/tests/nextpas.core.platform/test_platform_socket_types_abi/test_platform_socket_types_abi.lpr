@@ -3,6 +3,7 @@ program test_platform_socket_types_abi;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.platform.socket,
   nextpas.core.platform.posix.base,
   nextpas.core.platform.linux.base,
   nextpas.core.testing;
@@ -80,6 +81,14 @@ begin
   CheckEqual($00004000, MSG_NOSIGNAL, 'MSG_NOSIGNAL');
 end;
 
+procedure TestSocketTimeoutErrorClassifier;
+begin
+  Check(platform_socket_error_timed_out(ESysETIMEDOUT),
+    'ETIMEDOUT is a socket timeout');
+  Check(not platform_socket_error_timed_out(ESysEAGAIN),
+    'EAGAIN is not a socket timeout');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.socket_types_abi');
   T.Run('in_addr size', @TestInAddrSize);
@@ -94,5 +103,6 @@ begin
   T.Run('SOCK_* constants', @TestSOCKConstants);
   T.Run('IPPROTO_* constants', @TestIPPROTOConstants);
   T.Run('MSG_* constants', @TestMSGConstants);
+  T.Run('socket timeout error classifier', @TestSocketTimeoutErrorClassifier);
   T.Summary;
 end.

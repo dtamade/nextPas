@@ -1,56 +1,82 @@
-# nextPas Core Framework Goal Tree
+# nextPas Core Framework — 目标树
 
-This goal tree tracks evidence, not optimism. Every status row must name the
-evidence tier that supports it.
+> 最后更新: 2026-06-08 | 本轮证据: 本地 Linux x86_64 focused gate: atomic 43/43 + lockfree 46/46 + lockfree stress 12/12, heaptrc 0
+> 证据边界: 未有目标机 runtime gate 的平台只声明 source-contract 覆盖，不声明跨平台实机全绿。
 
-## Truth Levels
+## 定位
 
-- `source-contract`: source/static guards lock a boundary or public claim.
-- `forced-compile`: a host or facade path compiles under an explicit target gate.
-- `focused-runtime`: focused runtime tests cover named behavior on a host.
-- `ci-matrix`: repeated CI proof across the named host/arch matrix.
+nextPas Core 是 FreePascal 领域最优秀的框架之一。分三层：
+- **L0**: base/errors/platform/mem — OS 底座
+- **L1**: bytes/text/encoding/collections/sync/thread/lockfree/async/io/time/id/testing — 基础设施
+- **L2**: fs/net/json/toml/yaml/compress/regex/log/encoding/hash/crypto — 领域能力
+- **L3**: http/args/process/coroutine/event — 应用层
 
-## Position
+## L0 模块状态
 
-nextPas Core is moving from module-by-module feature growth to architecture
-governance hardening. The control surface is intentionally compact; module
-details live in module docs or focused plans.
+| 模块 | 职责 | 状态 |
+|------|------|------|
+| `base` | 核心类型、异常、TByteSpan、契约 | ✅ 完成 |
+| `errors` | 异常层级 (ENextPasError 体系) | ✅ 完成 |
+| `platform` | OS API 封装 (posix/linux/darwin/windows) | ✅ 完成 (Tier 1 全绿) |
+| `mem` | 内存管理 (IAllocator/Pool/Arena/StackPool) | ✅ 完成 |
+| `atomic` | 原子操作 (Load/Store/CAS/Fetch*, 全内存序) | source-contract / forced compile / focused runtime: public contract hardening, typed records, memory-order/CAS/fence contracts, 32/64-bit compile-surface gate parity, compat legacy alias coverage, refcount zero-state/concurrent-borrow/terminal-race contracts; local Linux x86_64 focused runtime evidence only |
+| `math` | 数学函数 (Min/Max/Clamp/Abs/Pow/Trig) | ✅ 完成 |
+| `simd` | SIMD 抽象 (SSE2/AVX2/NEON, 统一宽度 API) | ✅ 完成 |
 
-## Layer map
+## L1 模块状态
 
-| Layer | Module families | Required proof before stronger claims |
-| --- | --- | --- |
-| L0 | `base`, `errors`, `platform`, `mem`, `system`, `atomic`, `math`, `simd`, `log.intf` | source-contract for owner boundaries; focused runtime for public behavior; ci-matrix for host truth |
-| L1 | `bytes`, `text`, `encoding`, `collections`, `sync`, `thread`, `lockfree`, `async`, `io`, `time`, `id`, `testing`, `stopwatch` | source-contract for public facade/dependencies; focused runtime for each public API group |
-| L2 | `fs`, `net`, `process`, `args`, `json`, `toml`, `yaml`, `compress`, `regex`, `hash`, `crypto`, `tls` | forced compile for host/backend seams; focused runtime for behavior; no backend readiness claim without runtime evidence |
-| L3 | `log`, `config`, `http`, `websocket`, `tui`, `event`, `coroutine`, `template` | consumer contracts, focused runtime, leak proof for lifecycle paths |
+| 模块 | 职责 | 状态 |
+|------|------|------|
+| `bytes` | 字节容器、字节序、Builder | ✅ 完成 (ops+binary+builder, 33 tests, bench) |
+| `text` | 字符串操作、Unicode、格式化、conv | ✅ 完成 (base+conv+format+builder, 自实现 Format, 0 SysUtils) |
+| `encoding` | 编解码 (base64/hex/url/varint) | ✅ 完成 (23 tests, Codex审查3项修复) |
+| `collections` | 20+ 容器 (Vec/HashMap/Deque/BTree/SwissTable/SkipList/LRU/Trie) | ✅ 完成 (422+ tests, SwissTable Get 超越 Rust 7%) |
+| `sync` | 同步原语 (Mutex/RWLock/CondVar/WaitGroup/Once/Semaphore/Barrier/SpinLock) | ✅ 完成 (28 tests, Codex审查) |
+| `thread` | 线程池/WorkStealing/Channel/Future/Cancel | ✅ 完成 (18 tests, Codex审查) |
+| `lockfree` | 无锁 (MPMC/SPSC/MPSC/Stack/Deque) | source-contract / focused runtime / stress: 46 default + 46 debug + stress gate on local Linux x86_64, close/wake/timeout contracts, SPSC/MPMC partial-progress contracts, MPSC producer-stop/drain discipline, stack/deque query contracts, tagged-index ABA-risk mitigation; no cross-platform runtime claim without target gate |
+| `async` | 事件循环 (io_uring+epoll双后端, timer heap, timeout) | ✅ 完成 (31 tests, Codex审查5项修复) |
+| `io` | 流抽象 (IReader/IWriter/IStream/Buffer/Scanner/Pipe) | ✅ 完成 (46 tests, Go parity) |
+| `time` | DateTime/Duration/Deadline/Sleep/Timer/Ticker/Period | ✅ 完成 (Wave 1-5, 49 tests, ISO 8601) |
+| `id` | UUID/ULID/Snowflake/NanoID/KSUID/XID/V7 | ✅ 完成 (70 tests) |
+| `testing` | TTestRunner 测试框架 | ✅ 完成 |
+| `stopwatch` | 高精度计时 | ✅ 完成 (15 tests) |
 
-## Evidence
+## L2 模块状态
 
-| Area | Current truth | Required next proof |
-| --- | --- | --- |
-| L0 owner boundary | truth=source-contract; scope=`base/errors/platform/mem/system/atomic/math/simd` | shrink explicit debt allowlists where L0 policy requires it |
-| Platform | truth=focused-runtime; host=Linux; other hosts=source-contract/forced-compile | platform runtime truth matrix by host and feature |
-| Mem | truth=focused-runtime; scope=public allocator/pool; debt=explicit L0 allowlist | mem L0 debt zero lane |
-| System | truth=source-contract+focused-runtime; scope=root/facade slices | system final facade plan and consumer compile matrix |
-| Math/SIMD | truth=focused-runtime; scope=current APIs; matrix=not frozen | source-contract guards plus ci-matrix before performance claims |
-| TLS/Crypto | truth=mixed source-contract/focused-runtime; backend truth not normalized | TLS master spec with backend truth tiers |
-| HTTP/TUI/Config | truth=focused-runtime; scope=active slices | keep consumer contracts aligned with lower-layer owner boundaries |
+| 模块 | 职责 | 状态 |
+|------|------|------|
+| `fs` | 文件系统 (IFile/Walk/Symlink/Atomic) | ✅ 完成 (47 tests, Codex审查10项全修) |
+| `net` | 网络 (TCP/UDP/Resolve, deadline) | ✅ 完成 (24 tests, Codex审查) |
+| `json` | JSON (parser/builder/reader/writer/marshal) | ✅ 完成 (98 tests, 3-12x fpjson) |
+| `toml` | TOML v1.0+v1.1 | ✅ 完成 (291 tests, 6-8x Rust toml-rs) |
+| `yaml` | YAML (scanner/parser/builder) | ✅ 完成 (77 tests, 10x Go yaml.v3) |
+| `compress` | deflate/gzip/lz4 | ✅ 完成 (26 tests) |
+| `regex` | Thompson NFA + DFA, SIMD first-byte | ✅ 完成 (115 tests, Phase 4 API 完整) |
+| `log` | 结构化日志 (async, audit, multi-handler) | ✅ 完成 (102 tests) |
+| `hash` | WyHash + SHA-256/MD5 | ✅ 完成 |
+| `crypto` | P-256 field (ASM multiply, 常量时间) | 🔶 进行中 |
 
-## Governance gates
+## L3 模块状态
 
-| Gate | Scope | Required before Ready |
-| --- | --- | --- |
-| module registry | layer, owner, facade, dependency policy, truth level | registry row updated for changed module family |
-| dependency boundary audit | L0 upward dependency ban plus explicit debt | no unknown violations |
-| host raw FFI audit | raw host unit use outside owner/allowlist | no unknown violations |
-| focused runtime | changed public API/lifecycle path | test output and heaptrc evidence when runtime path is touched |
-| hygiene | build artifact and source tree hygiene | `make hygiene` passes |
+| 模块 | 职责 | 状态 |
+|------|------|------|
+| `http` | HTTP server/client (radix router, middleware, H1 writer) | 🔶 Phase 1 完成 (88 tests), H1 parser 待实现 |
+| `args` | CLI 解析 (TArgParser+TArgApp, 子命令路由) | ✅ 完成 (56 tests) |
+| `process` | 子进程 (spawn/pipe/env/wait) | ✅ 完成 (45 tests) |
+| `coroutine` | 协程调度器 | ✅ 完成 (10 tests) |
+| `event` | 事件总线 (priority dispatch) | ✅ 完成 |
+| `props` | 属性系统 | ✅ 完成 (11 tests) |
 
-## Next priorities
+## 下一步优先级
 
-1. TLS master spec and backend truth table.
-2. System final facade and compatibility pressure matrix.
-3. Mem L0 debt zero.
-4. Platform runtime truth matrix.
-5. Benchmarks only after source-contract and runtime truth are stable.
+1. **HTTP Phase 2**: H1 parser (llhttp 翻译) + Server accept loop + Client 连接池
+2. **TLS/Crypto**: P-256 完整 ECDH + TLS 1.3 握手
+3. **性能基准**: 系统性 benchmark vs Go/Rust/FPC RTL（collections/json/toml/regex/compress）
+
+## 质量门禁
+
+- 100% 接口测试覆盖
+- heaptrc 验证 0 内存泄漏
+- Codex 独立审查关键模块
+- 每轮 git 提交，变更清晰可追溯
+- 框架纪律：用自有 API（CopyNonOverlap, IAllocator），不依赖 SysUtils

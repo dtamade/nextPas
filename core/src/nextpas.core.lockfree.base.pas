@@ -8,6 +8,9 @@ const
   LOCKFREE_SPIN_COUNT = 32;
   LOCKFREE_YIELD_COUNT = 32;
 
+type
+  TCacheLinePad = array[0..3] of Int64;
+
 function LockFreeNextPow2(const AValue: PtrUInt): PtrUInt;
 function LockFreeIsPow2(const AValue: PtrUInt): Boolean;
 

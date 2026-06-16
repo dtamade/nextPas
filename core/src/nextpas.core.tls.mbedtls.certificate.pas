@@ -17,8 +17,7 @@ unit nextpas.core.tls.mbedtls.certificate;
 interface
 
 uses
-  SysUtils, Classes,
-  nextpas.core.tls.base,
+  SysUtils,nextpas.core.tls.base,
   nextpas.core.tls.base64,
   nextpas.core.tls.errors,
   nextpas.core.tls.exceptions,
@@ -154,7 +153,8 @@ type
 implementation
 
 uses
-  Contnrs, DateUtils,
+  nextpas.core.text.strings,
+    Contnrs, DateUtils,
   nextpas.core.time,
   nextpas.core.tls.utils,
   nextpas.core.crypto.hash;
@@ -459,7 +459,6 @@ begin
 
     Result := (APublicKeyAlgorithm <> '') or (ASignatureAlgorithm <> '');
   finally
-    LParser.Free;
   end;
 end;
 
@@ -571,7 +570,6 @@ begin
     try
       Result := SaveToStream(LStream);
     finally
-      LStream.Free;
     end;
   except
     Result := False;
@@ -695,7 +693,6 @@ begin
       Result.KeyUsage := X509KeyUsageToBitfield(LParser.KeyUsage);
       Result.SubjectAltNames := X509SubjectAltNamesToStrings(LParser.SubjectAltNames);
     finally
-      LParser.Free;
     end;
   end
   else
@@ -721,7 +718,6 @@ begin
       if Result <> '' then
         Exit;
     finally
-      LParser.Free;
     end;
   end;
 
@@ -756,7 +752,6 @@ begin
       if Result <> '' then
         Exit;
     finally
-      LParser.Free;
     end;
   end;
 
@@ -793,7 +788,6 @@ begin
       if Result <> '' then
         Exit;
     finally
-      LParser.Free;
     end;
   end;
 
@@ -889,7 +883,6 @@ begin
       if Result > 0 then
         Exit;
     finally
-      LParser.Free;
     end;
   end;
 
@@ -940,7 +933,6 @@ begin
       if Result > 0 then
         Exit;
     finally
-      LParser.Free;
     end;
   end;
 
@@ -1012,7 +1004,6 @@ begin
       Result := Ord(LParser.Version) + 1;
       Exit;
     finally
-      LParser.Free;
     end;
   end;
 end;
@@ -1189,7 +1180,7 @@ var
 
   function MatchWildcard(const APattern, AHostname: string): Boolean;
   var
-    PatternParts, HostParts: TStringList;
+    PatternParts, HostParts: TStringArray;
     j: Integer;
   begin
     Result := False;
@@ -1204,21 +1195,14 @@ var
     // Wildcard match (*.example.com)
     if (Pos('*.', APattern) = 1) then
     begin
-      PatternParts := TStringList.Create;
-      HostParts := TStringList.Create;
       try
-        PatternParts.Delimiter := '.';
-        PatternParts.DelimitedText := APattern;
-
-        HostParts.Delimiter := '.';
-        HostParts.DelimitedText := AHostname;
 
         // Same label count
-        if PatternParts.Count = HostParts.Count then
+        if Length(PatternParts) = Length(HostParts) then
         begin
           Result := True;
           // Compare from 2nd label (skip wildcard)
-          for j := 1 to PatternParts.Count - 1 do
+          for j := 1 to Length(PatternParts) - 1 do
           begin
             if not SameText(PatternParts[j], HostParts[j]) then
             begin
@@ -1228,8 +1212,6 @@ var
           end;
         end;
       finally
-        PatternParts.Free;
-        HostParts.Free;
       end;
     end;
   end;
@@ -1342,7 +1324,6 @@ begin
   try
     Result := LParser.IsCA;
   finally
-    LParser.Free;
   end;
 end;
 
@@ -1406,7 +1387,6 @@ begin
       end;
     end;
   finally
-    LParser.Free;
   end;
 end;
 
@@ -1421,7 +1401,6 @@ begin
   try
     Result := X509SubjectAltNamesToStrings(LParser.SubjectAltNames);
   finally
-    LParser.Free;
   end;
 end;
 
@@ -1436,7 +1415,6 @@ begin
   try
     Result := X509KeyUsageToStrings(LParser.KeyUsage);
   finally
-    LParser.Free;
   end;
 end;
 
@@ -1451,7 +1429,6 @@ begin
   try
     Result := X509ExtKeyUsageToStrings(LParser.ExtKeyUsage);
   finally
-    LParser.Free;
   end;
 end;
 
@@ -1603,7 +1580,6 @@ begin
     Result := LClone;
     LClone := nil;
   finally
-    LClone.Free;
   end;
 end;
 
@@ -1620,7 +1596,6 @@ end;
 destructor TMbedTLSCertificateStore.Destroy;
 begin
   Clear;
-  FCertificates.Free;
   FreeStore;
   inherited Destroy;
 end;
@@ -1702,7 +1677,7 @@ begin
 
     if LTarget <> '' then
     begin
-      for I := 0 to FCertificates.Count - 1 do
+      for I := 0 to Length(FCertificates) - 1 do
       begin
         LExisting := FCertificates[I] as ISSLCertificate;
         if NormalizeMbedTLSCertFingerprint(LExisting.GetFingerprintSHA256) = LTarget then
@@ -1740,7 +1715,7 @@ begin
   if LTarget = '' then
     Exit(False);
 
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to Length(FCertificates) - 1 do
   begin
     LExisting := FCertificates[I] as ISSLCertificate;
     if NormalizeMbedTLSCertFingerprint(LExisting.GetFingerprintSHA256) = LTarget then
@@ -1755,13 +1730,13 @@ end;
 
 function TMbedTLSCertificateStore.GetCount: Integer;
 begin
-  Result := FCertificates.Count;
+  Result := Length(FCertificates);
 end;
 
 function TMbedTLSCertificateStore.GetCertificate(AIndex: Integer): ISSLCertificate;
 begin
   Result := nil;
-  if (AIndex >= 0) and (AIndex < FCertificates.Count) then
+  if (AIndex >= 0) and (AIndex < Length(FCertificates)) then
     Result := FCertificates[AIndex] as ISSLCertificate;
 end;
 
@@ -1780,7 +1755,6 @@ begin
       Result := True;
     end;
   except
-    LCert.Free;
     raise;
   end;
 end;
@@ -1833,7 +1807,7 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to Length(FCertificates) - 1 do
   begin
     LCert := FCertificates[I] as ISSLCertificate;
     if Pos(LTarget, NormalizeMbedTLSCertText(LCert.GetSubject)) > 0 then
@@ -1855,7 +1829,7 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to Length(FCertificates) - 1 do
   begin
     LCert := FCertificates[I] as ISSLCertificate;
     if Pos(LTarget, NormalizeMbedTLSCertText(LCert.GetIssuer)) > 0 then
@@ -1877,7 +1851,7 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to Length(FCertificates) - 1 do
   begin
     LCert := FCertificates[I] as ISSLCertificate;
     if NormalizeMbedTLSCertHex(LCert.GetSerialNumber) = LTarget then
@@ -1899,7 +1873,7 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to Length(FCertificates) - 1 do
   begin
     LCert := FCertificates[I] as ISSLCertificate;
     if NormalizeMbedTLSCertFingerprint(LCert.GetFingerprintSHA256) = LTarget then

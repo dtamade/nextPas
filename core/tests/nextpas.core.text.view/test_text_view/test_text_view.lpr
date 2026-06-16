@@ -48,12 +48,11 @@ begin
   V := TStringView.FromSpan(S);
   Check(V.IsEmpty, 'nil+zero span is empty');
 
-  S := TByteSpan.Create(nil, 1);
   try
-    V := TStringView.FromSpan(S);
-    Fail('nil+nonzero span: expected EInvalidArgument');
+    S := TByteSpan.Create(nil, 1);
+    Fail('nil+nonzero span create: expected EArgumentNil');
   except
-    on E: EInvalidArgument do
+    on E: EArgumentNil do
       ;
   end;
 end;
@@ -181,6 +180,17 @@ begin
   CheckEqual(Int64(0), Int64(V.IndexOfStr(N)), 'empty needle');
 end;
 
+procedure TestStringIndexOfHelpers;
+begin
+  CheckEqual(Int64(2), Int64(IndexOfStr('hello', 'llo')), 'substring index');
+  CheckEqual(Int64(0), Int64(IndexOfStr('hello', '')), 'empty substring');
+  CheckEqual(Int64(-1), Int64(IndexOfStr('hello', 'xyz')), 'missing substring');
+
+  CheckEqual(Int64(3), Int64(LastIndexOfStr('abcabc', 'abc')), 'last substring');
+  CheckEqual(Int64(0), Int64(LastIndexOfStr('abcdef', 'abc')), 'only substring');
+  CheckEqual(Int64(-1), Int64(LastIndexOfStr('hello', '')), 'empty last substring');
+end;
+
 procedure TestAdvanceCursor;
 var
   V: TStringView;
@@ -277,6 +287,7 @@ begin
   T.Run('starts/ends with', @TestStartsEndsWith);
   T.Run('indexOf char', @TestIndexOf);
   T.Run('indexOf string', @TestIndexOfStr);
+  T.Run('string index helpers', @TestStringIndexOfHelpers);
   T.Run('advance cursor', @TestAdvanceCursor);
   T.Run('toString', @TestToString);
   T.Run('countChar', @TestCountChar);

@@ -32,7 +32,7 @@ Copyright: (c) 2025 fafafaStudio. All rights reserved.
 
 interface
 
-uses nextpas.core.system.typinfo, nextpas.core.base, nextpas.core.math, nextpas.core.mem.utils, nextpas.core.mem.allocator, nextpas.core.collections.element_manager.intf;
+uses nextpas.core.system.typinfo, nextpas.core.base, nextpas.core.math, nextpas.core.mem.utils, nextpas.core.mem.intf, nextpas.core.mem.default, nextpas.core.collections.element_manager.intf;
 
   type
 
@@ -101,7 +101,7 @@ end;
 
 constructor TElementManager.Create;
 begin
-  Create(nextpas.core.mem.allocator.GetRtlAllocator);
+  Create(DefaultAllocator);
 end;
 
 function TElementManager.GeTAllocator: IAllocator;

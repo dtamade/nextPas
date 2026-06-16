@@ -6,17 +6,16 @@ primitives without pulling in higher-layer runtime policy by accident.
 
 ## Stable Surface
 
-The current stable public surface is centered on `IAllocator`:
+The only canonical public allocator contract is `IAllocator`:
 
-- `nextpas.core.mem.intf.IAllocator` is the canonical allocator contract.
+- `nextpas.core.mem.intf.IAllocator` is the canonical allocator contract and
+  the only primary public allocator interface in `nextpas.core.mem`.
 - `nextpas.core.mem.allocator` and `nextpas.core.mem.allocator.base` keep
   compatibility aliases to that same contract.
 - `nextpas.core.mem.DefaultAllocator` returns the process-wide default
   allocator facade.
-- `TAllocResult.ExpectPtr` raises canonical `EOutOfMemory` for
-  `aeOutOfMemory`. Capacity exhaustion remains an `EAllocError` with
-  `Error = aeCapacityExhausted` and reports `ecResourceExhausted`; it is not an
-  invalid-pointer leaf.
+- Allocation-specific exceptions stay in `nextpas.core.mem.error`, with
+  canonical OOM behavior owned by `nextpas.core.mem.error.EOutOfMemory`.
 
 The facade unit `nextpas.core.mem` also re-exports the current local record
 types:
@@ -27,6 +26,26 @@ types:
 These names are intended to make ownership and lifecycle shape visible in call
 sites without forcing downstream code to migrate all at once.
 
+The class-based arena surface also stays explicit and small:
+
+- `nextpas.core.mem.blockpool.IArena` uses explicit `size/alignment`
+  parameters instead of layout/result compatibility records.
+- `Alloc` and `AllocZeroed` return `Pointer`, and failure returns `nil`.
+- `AllocAligned` is the aligned-allocation escape hatch for arena-backed call
+  sites that need it.
+
+The remaining compatibility and owner shims stay deliberately thin:
+
+- `nextpas.core.mem.aligned` is a deprecated shim over
+  `DefaultAllocator.AllocAligned` and `DefaultAllocator.FreeAligned`.
+- `nextpas.core.mem.secure` keeps the public secure-zero helpers, but the
+  backend delegates to `nextpas.core.platform.memory`.
+- `nextpas.core.mem.mapped_ring_buffer*` are deprecated compatibility wrappers
+  over `nextpas.core.io.mapped.ring_buffer*`.
+- `nextpas.core.mem.mapped_slab_pool` owns the anonymous-only mapped slab
+  allocator surface through `TMappedSlabAllocator.CreateAnonymous`;
+  `TMappedSlabPool` stays as a deprecated compatibility alias.
+
 The current internal L0 helper surface also includes `nextpas.core.mem.mutex`
 and `nextpas.core.mem.rwlock`, which keep concurrent mem units on
 platform-owned sync primitives instead of routing through the broader L1 sync
@@ -36,8 +55,7 @@ module.
 
 The mem tree currently contains four practical families:
 
-- Allocator contracts and adapters: `mem.intf`, `mem.allocator*`, `mem.alloc`,
-  `mem.adapter`
+- Allocator contracts and facades: `mem.intf`, `mem.allocator*`, `mem.default`
 - Local ownership primitives: `mem.arena`, `mem.pool`, `mem.blockpool`
 - Backend allocators: default RTL allocator, memory-map allocator, mimalloc
   bindings, NUMA provider facade
@@ -88,15 +106,19 @@ What is already aligned with the L0 direction:
 - `nextpas.core.mem.memory_map` and the mapped-family units no longer use
   `nextpas.core.fs.util` or `nextpas.core.text.conv` where they were previously
   avoidable; file existence checks now go through platform file stat helpers.
+- `nextpas.core.mem.aligned` is now only a deprecated shim. Aligned-allocation
+  policy lives on the allocator contract and `DefaultAllocator`, not on a side
+  surface.
 - `nextpas.core.mem.mapped_ring_buffer.sharded` now uses `nextpas.core.mem.mutex`
   instead of `SyncObjs`, so the concurrent wrapper stays inside the mem-local
   sync surface rather than pulling in a broader host-only unit.
 - `nextpas.core.mem.pool.fixed` no longer depends on `nextpas.core.text.conv`;
   the debug-only `Format` path was moved behind a narrow `{$IFDEF FAF_MEM_DEBUG}`
   implementation guard.
-- `nextpas.core.mem.secure` no longer uses raw `Windows` or `BaseUnix` units
-  directly; secure zeroing is now expressed through explicit zeroing plus
-  memory/compiler barriers.
+- `nextpas.core.mem.secure` now delegates secure zeroing to `nextpas.core.platform.memory`, so backend truth and future host promotion stay under the platform owner.
+- `nextpas.core.mem.mapped_slab_pool` is now an anonymous-only allocator
+  surface. File-backed and shared-memory lifecycle entrypoints stay owned by
+  `nextpas.core.io.mapped.slab_pool`.
 - `mem.blockpool.concurrent`, `mem.pool.fixed.concurrent`, and
   `mem.pool.slab.concurrent` no longer depend on `nextpas.core.sync`; they use
   the local `TMemMutex` helper backed by `nextpas.core.platform.sync`.
@@ -112,6 +134,12 @@ What is already aligned with the L0 direction:
 - `mem.manager.crt` no longer depends on `nextpas.core.sync`; the guarded CRT
   manager path now has a focused compile gate so the optional macro branch
   cannot silently rot.
+- `TLocalArena` now fails closed on invalid alignment, capacity exhaustion, and
+  pointer-arithmetic overflow paths, with focused regression coverage for
+  marker/restore and capacity preservation.
+- `TStackPool` and `TScopedStackPool` now reject invalid aligned-allocation
+  requests, keep state/scope restore paths explicit, and only allow auto-grow
+  when relocation cannot invalidate outstanding pointers.
 - NUMA remains an explicit optional capability, with a no-op default provider
   instead of silent best-effort behavior.
 - Raw mapping and shared-memory host ownership have moved behind the
@@ -128,49 +156,56 @@ regressions, but it does **not** mean mapped-family ownership was already
 settled. The debt gate only proves known source-boundary violations have been
 removed.
 
+The broader core architecture registry is a separate contract. It still carries
+explicit allowlist entries for the deprecated `mem.mapped_ring_buffer*` wrapper
+edges and the mimalloc loader debt, even though the mem-local boundary gate is
+currently at zero allowlisted entries.
+
 The ownership decision is now explicit:
 
 - `nextpas.core.mem.memory_map` stays in L0 mem for now.
 - `nextpas.core.mem.allocator.memory_map_allocator` stays in L0 mem for now.
-- `mapped_slab_pool` anonymous allocator path stays in L0 mem for now.
-- `mapped_ring_buffer` is future migration surface.
-- `mapped_ring_buffer.sharded` is future migration surface.
-- `mapped_slab_pool` file/shared manager path is future migration surface.
+- `nextpas.core.mem.mapped_slab_pool` owns only the anonymous mapping allocator surface.
+- `nextpas.core.io.mapped.slab_pool` is the fixed owner for file-backed and shared-memory slab pools.
+- `nextpas.core.io.mapped.ring_buffer` and
+  `nextpas.core.io.mapped.ring_buffer.sharded` are the fixed owners for mapped
+  ring buffer behavior.
+- The mem allocator surface must not grow `CreateFile`, `OpenFile`, `CreateShared`, `OpenShared`, or `nextpas.core.platform.files` dependencies.
+- `nextpas.core.mem.mapped_ring_buffer*` are thin deprecated compatibility wrappers only.
 
-See `docs/mem/mapped-family-ownership-decision.md` for the full decision note.
+See `src/nextpas.core.mem.mapped_slab_pool.pas` and `src/nextpas.core.io.mapped.slab_pool.pas` for the current owner split.
 
 Additional architecture debt that remains:
 
-- `mapped_ring_buffer*` are still present in `mem`, but their preferred
-  long-term home is a higher mapped IO owner. Do not treat them as permanent
-  L0 surface.
-- `mapped_slab_pool` still mixes anonymous allocator behavior with
-  file-backed/shared-memory manager behavior; that split must be preserved
-  during any future work.
-- `mem.secure` was cleaned by removing direct host-unit uses, not by
-  introducing a dedicated platform-owned secure seam. The current
-  `FillChar` + barrier strategy is honest for L0, but a later slice may
-  still decide to promote this into a minimal platform primitive.
+- `nextpas.core.mem.mapped_ring_buffer*` remain in `mem` only as deprecated
+  wrappers. Keep them thin and do not grow new behavior there.
+- `mem.secure` now relies on the `nextpas.core.platform.memory` secure-zero seam; future host upgrades should evolve that owner instead of reintroducing raw imports into `mem`.
 
 ## Follow-Up Route
 
-Priority follow-up work:
+Already completed in the current shape:
 
-0. **mapped_ring_buffer migration readiness** (active):
-   - Target owner: `nextpas.core.io.mapped.ring_buffer`
-   - Compatibility: thin wrapper with deprecation
-   - Status: readiness gates in progress; no unit moved yet
-1. If migration is later approved, relocate `mapped_ring_buffer` and
-   `mapped_ring_buffer.sharded` first.
-2. Split `mapped_slab_pool` into allocator surface and file/shared manager
-   surface before moving it.
-3. Treat `memory_map` as temporary L0 surface, not permanent stable surface;
+1. The mapped ring buffer owner split landed. `nextpas.core.io.mapped.ring_buffer*`
+   own the behavior, and `nextpas.core.mem.mapped_ring_buffer*` stay as thin
+   deprecated wrappers.
+2. The secure-zero owner handoff landed. `mem.secure` remains the public helper
+   surface, while backend selection lives in `nextpas.core.platform.memory`.
+3. The local primitive hardening landed. `TLocalArena`, `TStackPool`, and
+   `TScopedStackPool` now fail closed on the key alignment, overflow, restore,
+   and relocation hazards that were previously soft spots.
+
+Still open:
+
+1. Keep the `mapped_slab_pool` split stable: anonymous allocator work stays in
+   `mem`, and file/shared lifecycle work stays in
+   `nextpas.core.io.mapped.slab_pool`.
+2. Treat `memory_map` as temporary L0 surface, not permanent stable surface;
    always replay `nextpas.core.io.mapped` before changing `memory_map`
    ownership.
-4. Revisit the `mem.secure` barrier strategy if a later platform slice
-   requires a more explicit secure-memory primitive.
-5. Keep allocator-manager behavior narrow and explicit: `rtl` already has a
+3. Revisit `nextpas.core.platform.memory` only if a later platform slice
+   promotes a native Windows secure-zero owner.
+4. Keep allocator-manager behavior narrow and explicit: `rtl` already has a
    runtime regression test for installation safety, while optional guarded
    backends such as CRT still need at least compile truth before wider rollout.
-6. Keep narrowing public allocator claims so traits, ownership, and fallback
+5. Keep deprecated compatibility shims thin so traits, ownership, and fallback
    behavior remain verifiable and unsurprising.

@@ -7,7 +7,7 @@ program test_mem_secure_windows_compile_gate;
 {$ENDIF}
 
 uses
-  nextpas.core.platform.memory,
+  nextpas.core.platform.secure,
   nextpas.core.mem.secure;
 
 var

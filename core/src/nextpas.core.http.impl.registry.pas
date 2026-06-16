@@ -47,7 +47,11 @@ function ResolveDefaultServerTransport(
 implementation
 
 uses
-  nextpas.core.http.impl.h1;
+  nextpas.core.http.impl.h1,
+  nextpas.core.http.impl.h2.client,
+  nextpas.core.http.impl.h2.server,
+  nextpas.core.http.impl.h2.tls,
+  nextpas.core.http.impl.h2.types;
 
 var
   GClientFactories: array[THttpVersion] of THttpClientTransportFactory;
@@ -60,7 +64,19 @@ var
   LH1Options: TH1ClientTransportOptions;
 begin
   LH1Options.Timeout := AOptions.Timeout;
+  LH1Options.MaxPoolSize := AOptions.MaxPoolSize;
   Result := NewH1ClientTransport(LH1Options);
+end;
+
+function CreateH2ClientTransport(const AOptions: THttpClientOptions): IHttpTransport;
+var
+  LH2Options: TH2ClientTransportOptions;
+begin
+  LH2Options := TH2ClientTransportOptions.Default;
+  LH2Options.Timeout := AOptions.Timeout;
+  LH2Options.MaxPoolSize := AOptions.MaxPoolSize;
+  LH2Options.TLSContext := AOptions.TLSContext;
+  Result := NewH2ClientTransport(LH2Options);
 end;
 
 function CreateH1ServerTransport(
@@ -68,6 +84,9 @@ function CreateH1ServerTransport(
 var
   LH1Options: TH1ServerTransportOptions;
 begin
+  if AOptions.TLSContext <> nil then
+    raise EHttpError.Create(
+      'TLS HTTP server currently requires HTTP/2 transport selection');
   LH1Options.ReadTimeout := AOptions.ReadTimeout;
   LH1Options.WriteTimeout := AOptions.WriteTimeout;
   LH1Options.IdleTimeout := AOptions.IdleTimeout;
@@ -76,6 +95,32 @@ begin
   Result := NewH1ServerTransport(LH1Options);
 end;
 
+function CreateH2ServerTransport(
+  const AOptions: THttpServerOptions): IHttpServerTransport;
+var
+  LH2Options: TH2ServerTransportOptions;
+  LInnerTransport: IHttpServerTransport;
+begin
+  LH2Options := TH2ServerTransportOptions.Default;
+  LH2Options.ReadTimeout := AOptions.ReadTimeout;
+  LH2Options.WriteTimeout := AOptions.WriteTimeout;
+  LH2Options.IdleTimeout := AOptions.IdleTimeout;
+  if AOptions.MaxHeaderSize > 0 then
+    LH2Options.MaxHeaderListSize := UInt32(AOptions.MaxHeaderSize)
+  else
+    LH2Options.MaxHeaderListSize := 0;
+  if AOptions.MaxBodySize > 0 then
+    LH2Options.MaxBodySize := UInt32(AOptions.MaxBodySize)
+  else
+    LH2Options.MaxBodySize := 0;
+  LInnerTransport := NewH2ServerTransport(LH2Options);
+  if AOptions.TLSContext <> nil then
+    Result := NewH2TlsServerTransport(AOptions.TLSContext, LInnerTransport)
+  else
+    Result := LInnerTransport;
+end;
+
+{ Note: must be called before any concurrent HTTP client/server creation. }
 procedure RegisterClientTransport(const AVersion: THttpVersion;
   const AFactory: THttpClientTransportFactory);
 begin
@@ -84,6 +129,7 @@ begin
   GClientFactories[AVersion] := AFactory;
 end;
 
+{ Note: must be called before any concurrent HTTP client/server creation. }
 procedure RegisterServerTransport(const AVersion: THttpVersion;
   const AFactory: THttpServerTransportFactory);
 begin
@@ -190,8 +236,10 @@ procedure RegisterBuiltins;
 begin
   RegisterClientTransport(hvHttp10, @CreateH1ClientTransport);
   RegisterClientTransport(hvHttp11, @CreateH1ClientTransport);
+  RegisterClientTransport(hvHttp2, @CreateH2ClientTransport);
   RegisterServerTransport(hvHttp10, @CreateH1ServerTransport);
   RegisterServerTransport(hvHttp11, @CreateH1ServerTransport);
+  RegisterServerTransport(hvHttp2, @CreateH2ServerTransport);
   GDefaultClientVersion := hvHttp11;
   GDefaultServerVersion := hvHttp11;
 end;

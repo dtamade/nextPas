@@ -27,6 +27,8 @@ var
 const
   ExampleRelativeDir =
     'examples/nextpas.core.http/http_server_options_demo';
+  GetClientExampleRelativeDir =
+    'examples/nextpas.core.http/http_get_client';
   HelloExampleRelativeDir =
     'examples/nextpas.core.http/http_hello_server';
   WebSocketExampleRelativeDir =
@@ -101,9 +103,10 @@ begin
     Result := 'make';
 end;
 
-procedure RunProcessAndCapture(const AExecutable: string;
+procedure RunProcessAndCaptureWithEnv(const AExecutable: string;
   const AArguments: array of string; const AWorkingDir: string;
-  out AExitCode: Integer; out AOutput: string);
+  const AEnvironment: array of string; out AExitCode: Integer;
+  out AOutput: string);
 var
   LProcess: TProcess;
   I: Integer;
@@ -116,6 +119,8 @@ begin
     LProcess.CurrentDirectory := AWorkingDir;
     for I := Low(AArguments) to High(AArguments) do
       LProcess.Parameters.Add(AArguments[I]);
+    for I := Low(AEnvironment) to High(AEnvironment) do
+      LProcess.Environment.Add(AEnvironment[I]);
     LProcess.Options := [poUsePipes, poStderrToOutPut];
     LProcess.Execute;
     while LProcess.Running do
@@ -134,6 +139,14 @@ begin
     end;
   end;
   LProcess.Free;
+end;
+
+procedure RunProcessAndCapture(const AExecutable: string;
+  const AArguments: array of string; const AWorkingDir: string;
+  out AExitCode: Integer; out AOutput: string);
+begin
+  RunProcessAndCaptureWithEnv(AExecutable, AArguments, AWorkingDir, [],
+    AExitCode, AOutput);
 end;
 
 procedure CheckContains(const AOutput, AFragment, ALabel: string);
@@ -448,6 +461,12 @@ begin
     'build/projects/nextpas.core.http/http_hello_server/hello_http_server');
 end;
 
+function ResolveGetClientExampleBinaryPath(const ARootDir: string): string;
+begin
+  Result := PathJoin(ARootDir,
+    'build/projects/nextpas.core.http/http_get_client/http_get_client');
+end;
+
 procedure BuildHelloExample(out ABinaryPath: string; out AExampleDir: string);
 var
   LRootDir: string;
@@ -463,6 +482,23 @@ begin
     'hello example build exit code: ' + LOutput);
   ABinaryPath := ResolveHelloExampleBinaryPath(LRootDir);
   Check(FileExists(ABinaryPath), 'hello example binary exists');
+end;
+
+procedure BuildGetClientExample(out ABinaryPath: string; out AExampleDir: string);
+var
+  LRootDir: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(GetClientExampleRelativeDir);
+  AExampleDir := PathJoin(LRootDir, GetClientExampleRelativeDir);
+  Check(DirectoryExists(AExampleDir), 'get client example directory exists');
+  RunProcessAndCapture(ResolveMakeExecutable, ['build'], AExampleDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'get client example build exit code: ' + LOutput);
+  ABinaryPath := ResolveGetClientExampleBinaryPath(LRootDir);
+  Check(FileExists(ABinaryPath), 'get client example binary exists');
 end;
 
 procedure StartHelloExampleServer(const ABinaryPath, AExampleDir: string;
@@ -532,6 +568,41 @@ begin
     CheckContains(LBody, 'hello=world', 'hello example path param marker');
     CheckContains(LBody, 'page=2', 'hello example query marker');
     CheckContains(LBody, 'path=/hello/world', 'hello example path marker');
+  finally
+    StopExampleServer(LProcess, LStartupOutput);
+  end;
+end;
+
+procedure TestGetClientExampleUsesEnvUrlWithoutFixedPort;
+var
+  LHelloBinaryPath: string;
+  LHelloExampleDir: string;
+  LClientBinaryPath: string;
+  LClientExampleDir: string;
+  LPort: UInt16;
+  LProcess: TProcess;
+  LStartupOutput: string;
+  LExitCode: Integer;
+  LOutput: string;
+  LUrl: string;
+begin
+  LProcess := nil;
+  LStartupOutput := '';
+  BuildHelloExample(LHelloBinaryPath, LHelloExampleDir);
+  BuildGetClientExample(LClientBinaryPath, LClientExampleDir);
+  LPort := ReserveLoopbackPort;
+  StartHelloExampleServer(LHelloBinaryPath, LHelloExampleDir, LPort, LProcess,
+    LStartupOutput);
+  try
+    LUrl := MakeUrl(LPort, '/hello/world?page=3');
+    RunProcessAndCaptureWithEnv(LClientBinaryPath, [], LClientExampleDir,
+      ['NEXTPAS_HTTP_GET_URL=' + LUrl], LExitCode, LOutput);
+    CheckEqual(Int64(0), Int64(LExitCode),
+      'get client env URL smoke exit code: ' + LOutput);
+    CheckContains(LOutput, 'url=' + LUrl, 'get client env URL marker');
+    CheckContains(LOutput, 'status-code=200', 'get client status marker');
+    CheckContains(LOutput, 'hello=world', 'get client body path marker');
+    CheckContains(LOutput, 'page=3', 'get client body query marker');
   finally
     StopExampleServer(LProcess, LStartupOutput);
   end;
@@ -648,6 +719,8 @@ begin
     @TestServerOptionsDemoServesDocumentedEndpoints);
   T.Run('hello server example serves documented endpoint',
     @TestHelloServerExampleServesDocumentedEndpoint);
+  T.Run('get client example uses env URL without fixed port',
+    @TestGetClientExampleUsesEnvUrlWithoutFixedPort);
   T.Run('websocket echo demo serves documented endpoint',
     @TestWebSocketEchoDemoServesDocumentedEndpoint);
   T.Summary;

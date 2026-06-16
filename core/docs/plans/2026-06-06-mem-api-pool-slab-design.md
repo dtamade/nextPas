@@ -65,8 +65,10 @@ These aliases stay in `nextpas.core.mem.allocator.base` and `nextpas.core.mem.al
 
 `IAlloc` stays source-compatible for existing layout/result users, but it is no longer described as the next main API. It becomes an advanced compatibility layer with adapters:
 
-- `WrapAsAlloc(IAllocator): IAlloc`
-- `WrapAsAllocator(IAlloc): IAllocator`
+- `WrapAsAlloc(IAllocator): IAlloc` stays as the legacy outlet for existing
+  layout/result consumers.
+- `WrapAsAllocator(IAlloc): IAllocator` stays only as a deprecated inbound
+  bridge for compatibility implementations.
 
 ## Naming Convergence
 

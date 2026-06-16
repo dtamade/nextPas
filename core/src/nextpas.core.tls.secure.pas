@@ -128,7 +128,8 @@ const
 implementation
 
 uses
-  nextpas.core.tls.exceptions,
+  nextpas.core.text.strings,
+    nextpas.core.tls.exceptions,
   nextpas.core.tls.random,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.evp,
@@ -476,7 +477,7 @@ type
 
   TSecureKeyStoreImpl = class(TInterfacedObject, ISecureKeyStore)
   private
-    FKeys: TStringList;
+    FKeys: TStringArray;
     FLocked: Boolean;
     FMasterPassword: TSecureString;
 
@@ -516,7 +517,6 @@ end;
 constructor TSecureKeyStoreImpl.Create;
 begin
   inherited;
-  FKeys := TStringList.Create;
   FKeys.OwnsObjects := True; // Automatically free wrapper objects
   FLocked := False;
 end;
@@ -524,7 +524,6 @@ end;
 destructor TSecureKeyStoreImpl.Destroy;
 begin
   // Objects are automatically freed due to OwnsObjects
-  FKeys.Free;
   FMasterPassword.Clear;
   inherited;
 end;

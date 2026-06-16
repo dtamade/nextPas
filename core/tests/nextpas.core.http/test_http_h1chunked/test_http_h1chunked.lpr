@@ -34,6 +34,11 @@ type
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
   end;
 
+  TOverreportingWriter = class(TInterfacedObject, IWriter)
+  public
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+  end;
+
 function TBytesWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LOld: SizeUInt;
@@ -79,6 +84,11 @@ end;
 function TZeroWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 begin
   Result := 0;
+end;
+
+function TOverreportingWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  Result := ACount + 1;
 end;
 
 var
@@ -228,6 +238,27 @@ begin
   LChunked.Free;
 end;
 
+procedure TestOverreportingWriterRaises;
+var
+  LInner: TOverreportingWriter;
+  LChunked: TChunkedWriter;
+  LBody: string;
+  LRaised: Boolean;
+begin
+  LInner := TOverreportingWriter.Create;
+  LChunked := TChunkedWriter.Create(LInner as IWriter);
+  LBody := 'hello';
+  LRaised := False;
+  try
+    LChunked.Write(LBody[1], SizeUInt(Length(LBody)));
+  except
+    on E: EIOError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'over-reporting writer raises EIOError');
+  LChunked.Free;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.http.impl.h1.chunked');
   T.Run('Single Write frames one chunk', @TestSingleWriteFramesOneChunk);
@@ -239,5 +270,6 @@ begin
   T.Run('Short writer still frames complete chunk', @TestShortWriterStillFramesCompleteChunk);
   T.Run('Short writer Flush still writes terminal chunk', @TestShortWriterFlushStillWritesTerminalChunk);
   T.Run('Zero-progress writer raises', @TestZeroProgressWriterRaises);
+  T.Run('Over-reporting writer raises', @TestOverreportingWriterRaises);
   T.Summary;
 end.

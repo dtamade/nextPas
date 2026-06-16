@@ -14,6 +14,7 @@ uses nextpas.core.io.intf, nextpas.core.net.intf, nextpas.core.net.server.intf, 
 type
   TH1ClientTransportOptions = record
     Timeout: Int64;
+    MaxPoolSize: Int32;
   end;
 
   TH1ServerTransportOptions = record
@@ -93,19 +94,26 @@ type
     procedure Reset;
   end;
 
-  TH1ClientTransport = class(TInterfacedObject, IHttpTransport)
+  TH1ClientTransport = class(TInterfacedObject, IHttpTransport,
+    IHttpTransportIdleConnections)
   private
     FOptions: TH1ClientTransportOptions;
     FPool: array of TPoolEntry;
     FPoolCount: Int32;
+    function PooledConnectionIsReusable(const AConn: ITcpStream): Boolean;
     function PoolGet(const AHost: string; const APort: UInt16): ITcpStream;
     procedure PoolPut(const AHost: string; const APort: UInt16; const AConn: ITcpStream);
-    function WriteRequest(const AWriter: IWriter; const AReq: IHttpRequest): Boolean;
+    procedure PoolClear;
+    function WriteRequest(const AWriter: IWriter; const AReq: IHttpRequest;
+      const AAutoHost: string): Boolean;
     function ReadResponse(const AReader: IReader;
-      const ARequestMethod: THttpMethod; out AKeepAlive: Boolean): IHttpResponse;
+      const ARequestMethod: THttpMethod; out AKeepAlive: Boolean;
+      out AResponseStarted: Boolean): IHttpResponse;
   public
     constructor Create(const AOptions: TH1ClientTransportOptions);
+    destructor Destroy; override;
     function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
+    procedure CloseIdleConnections;
   end;
 
   TH1ServerTransport = class(TInterfacedObject, IHttpServerTransport,
@@ -182,6 +190,7 @@ type
     FParser: IH1Parser;
     FPending: string;
     FKeepAlive: Boolean;
+    FReadMs: Int64;
     FIdleMs: Int64;
     FBuf: array[0..4095] of Byte;
     FPollSubmitted: Boolean;
@@ -199,15 +208,21 @@ type
     FPollQueuedResponsePending: Boolean;
     FPollQueuedCloseAfterDrain: Boolean;
     FPollReadDeadline: TDeadline;
+    FPollReadDeadlineIsIdle: Boolean;
     FPollWriteDeadline: TDeadline;
     FParserIsSnapshot: Boolean;
-    procedure ArmPollReadDeadline;
+    procedure ArmPollReadDeadline(const ATimeoutMs: Int64;
+      const AIsIdle: Boolean);
+    procedure ArmPollRequestReadDeadline;
     procedure ClearPollReadDeadline;
     procedure ResetRequestParser;
     function TryUseFastRequestParser(const ABuf: PAnsiChar; const ALen: SizeUInt;
       out AConsumed: SizeUInt): Boolean;
+    procedure ResetPollRequestStateWithDeadline(const ATimeoutMs: Int64;
+      const AIsIdle: Boolean);
     procedure ResetPollRequestState;
     procedure PreparePollRequestParse;
+    procedure PreparePollKeepAliveRequestParse;
     procedure ResetPollResponseState;
     procedure PromoteQueuedPollResponse;
     function EnqueuePollResponse(const AOutbound: IH1OutboundBuffer;
@@ -262,14 +277,164 @@ begin
     Result := not LMetadata.ConnectionClose;
 end;
 
+function LowerTrim(const AValue: string): string; inline;
+begin
+  Result := LowerCase(Trim(AValue));
+end;
+
+function HeaderValueHasToken(const AValue, AToken: string): Boolean;
+var
+  LStart: SizeInt;
+  LPos: SizeInt;
+begin
+  Result := False;
+  if AValue = '' then
+    Exit;
+
+  LStart := 1;
+  while LStart <= Length(AValue) do
+  begin
+    LPos := LStart;
+    while (LPos <= Length(AValue)) and (AValue[LPos] <> ',') do
+      Inc(LPos);
+    if LowerTrim(Copy(AValue, LStart, LPos - LStart)) = AToken then
+      Exit(True);
+    LStart := LPos + 1;
+  end;
+end;
+
+procedure ValidateWireHeaderValue(const AValue: string);
+var
+  LI: SizeInt;
+begin
+  for LI := 1 to Length(AValue) do
+    if (((AValue[LI] < #32) and (AValue[LI] <> #9)) or
+        (AValue[LI] = #127)) then
+      raise EHttpError.Create('invalid header value character');
+end;
+
+procedure ValidateWireRequestTarget(const ATarget: string);
+var
+  LI: SizeInt;
+begin
+  for LI := 1 to Length(ATarget) do
+    if (ATarget[LI] <= #32) or (ATarget[LI] = #127) then
+      raise EHttpError.Create('invalid request target character');
+end;
+
+procedure ValidateWireHeaderName(const AName: string);
+var
+  LI: SizeInt;
+begin
+  if AName = '' then
+    raise EHttpError.Create('empty header name');
+  for LI := 1 to Length(AName) do
+    if not IsHttpHeaderNameChar(AnsiChar(AName[LI])) then
+      raise EHttpError.Create('invalid header name character');
+end;
+
+procedure ValidatePlainHttpClientUrlScheme(const AUrl: TUrl);
+var
+  LScheme: string;
+begin
+  LScheme := LowerCase(AUrl.Scheme);
+  if (LScheme <> '') and (LScheme <> 'http') then
+    raise EHttpError.Create('unsupported HTTP client URL scheme: ' +
+      AUrl.Scheme);
+end;
+
+function CanonicalPoolHostKey(const AHost: string): string; inline;
+begin
+  Result := LowerCase(AHost);
+end;
+
+function HeadersHaveConnectionCloseToken(const AHeaders: IHttpHeaders): Boolean;
+var
+  LValues: TStringArray;
+  LI: SizeInt;
+begin
+  Result := False;
+  if AHeaders = nil then
+    Exit;
+
+  LValues := AHeaders.GetAll('connection');
+  for LI := Low(LValues) to High(LValues) do
+    if HeaderValueHasToken(LValues[LI], 'close') then
+      Exit(True);
+end;
+
 function ParserErrorStatus(const AParser: IH1Parser): THttpStatus; inline;
 begin
   case AParser.ErrorKind of
-    pekUnsupportedTransferCoding:
+    pekUnsupportedTransferCoding,
+    pekUnsupportedMethod:
       Result := HTTP_STATUS_NOT_IMPLEMENTED;
   else
     Result := HTTP_STATUS_BAD_REQUEST;
   end;
+end;
+
+function IsRetryableMethod(const AMethod: THttpMethod): Boolean; inline;
+begin
+  Result := AMethod in [hmGet, hmHead, hmOptions, hmTrace];
+end;
+
+function HasRetryIdempotencyKey(const AReq: IHttpRequest): Boolean; inline;
+begin
+  Result := (AReq <> nil) and (AReq.Headers <> nil) and
+    (AReq.Headers.Has('idempotency-key') or AReq.Headers.Has('x-idempotency-key'));
+end;
+
+function IsRetrySafeRequest(const AReq: IHttpRequest): Boolean; inline;
+begin
+  if AReq = nil then
+    Exit(False);
+  Result := IsRetryableMethod(AReq.Method) or HasRetryIdempotencyKey(AReq);
+end;
+
+function IsSkippableInformationalResponse(const AStatus: THttpStatus): Boolean; inline;
+begin
+  Result := HttpStatusIsInformational(AStatus) and
+    (AStatus <> HTTP_STATUS_SWITCHING_PROTOCOLS);
+end;
+
+function CaptureRetryBodyPosition(const AReq: IHttpRequest;
+  out ABodyStream: IStream; out AStartPosition: Int64): Boolean;
+begin
+  ABodyStream := nil;
+  AStartPosition := 0;
+  if (AReq = nil) or (AReq.Body = nil) or (AReq.ContentLength = 0) then
+    Exit(True);
+  Result := Supports(AReq.Body, IStream, ABodyStream);
+  if Result then
+    AStartPosition := ABodyStream.Position;
+end;
+
+procedure RewindRetryBody(const AReq: IHttpRequest; const ABodyStream: IStream;
+  const AStartPosition: Int64);
+begin
+  if (AReq = nil) or (AReq.Body = nil) or (AReq.ContentLength = 0) then
+    Exit;
+  if ABodyStream = nil then
+    raise EHttpError.Create('pooled retry request body is not replayable');
+  ABodyStream.Position := AStartPosition;
+end;
+
+function ClientRequestDeadline(const ATimeoutMs: Int64): TDeadline;
+begin
+  if ATimeoutMs > 0 then
+    Result := TDeadline.After(TDuration.FromMilliseconds(ATimeoutMs))
+  else
+    Result := TDeadline.Infinite;
+end;
+
+procedure ApplyClientDeadline(const AConn: ITcpStream;
+  const ADeadline: TDeadline);
+begin
+  if ADeadline.IsInfinite then
+    Exit;
+  AConn.SetReadDeadline(ADeadline);
+  AConn.SetWriteDeadline(ADeadline);
 end;
 
 function RequestMetadata(const AParser: IH1Parser): TH1RequestMetadata; inline;
@@ -277,6 +442,17 @@ begin
   if AParser = nil then
     Exit(Default(TH1RequestMetadata));
   Result := AParser.GetRequestMetadata;
+end;
+
+function HasHttp11HostPolicyError(const AParser: IH1Parser): Boolean; inline;
+var
+  LMetadata: TH1RequestMetadata;
+begin
+  Result := False;
+  if (AParser = nil) or (AParser.GetHttpVersion <> hvHttp11) then
+    Exit;
+  LMetadata := RequestMetadata(AParser);
+  Result := (not LMetadata.HasHost) or LMetadata.HostRepeated;
 end;
 
 function ShouldSendContinueResponse(const AParser: IH1Parser;
@@ -310,15 +486,17 @@ begin
   if AParser.HasError then
     Exit(ParserErrorStatus(AParser));
 
+  if HasHttp11HostPolicyError(AParser) then
+    Exit(HTTP_STATUS_BAD_REQUEST);
+
   if AFastSnapshot then
     Exit(0);
 
-  if (AParser.GetHttpVersion = hvHttp11) and
-     (not LMetadata.HasHost) then
-    Exit(HTTP_STATUS_BAD_REQUEST);
-
   if LMetadata.HasUnsupportedExpect then
     Exit(HTTP_STATUS_EXPECTATION_FAILED);
+
+  if (AOptions.MaxBodySize > 0) and LMetadata.ContentLengthTooLarge then
+    Exit(HTTP_STATUS_PAYLOAD_TOO_LARGE);
 
   if (AOptions.MaxBodySize > 0) and LMetadata.HasContentLength and
      (LMetadata.DeclaredContentLength > AOptions.MaxBodySize) then
@@ -448,6 +626,7 @@ begin
   FComplete := True;
   FRequestMetadata := Default(TH1RequestMetadata);
   FRequestMetadata.HasHost := AResult.HasHost;
+  FRequestMetadata.HostRepeated := AResult.HostRepeated;
   FRequestMetadata.HasTransferEncoding := AResult.HasTransferEncoding;
   FRequestMetadata.HasContentLength := AResult.HasContentLength;
   FRequestMetadata.DeclaredContentLength := AResult.ContentLength;
@@ -572,8 +751,8 @@ begin
         TDuration.FromMilliseconds(AWriteTimeoutMs)));
     LW := TH1ResponseWriter.Create(AConn as IWriter);
     LBody := HttpStatusText(AStatus);
-    LW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
-    LW.GetHeaders.Set_('connection', 'close');
+    LW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
+    LW.GetHeaders.SetHeader('connection', 'close');
     LW.WriteHeader(AStatus);
     if Length(LBody) > 0 then
       LW.Write(LBody[1], SizeUInt(Length(LBody)));
@@ -590,8 +769,8 @@ var
 begin
   LW := TH1ResponseWriter.Create(AWriter);
   LBody := HttpStatusText(AStatus);
-  LW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
-  LW.GetHeaders.Set_('connection', 'close');
+  LW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
+  LW.GetHeaders.SetHeader('connection', 'close');
   LW.WriteHeader(AStatus);
   if Length(LBody) > 0 then
     LW.Write(LBody[1], SizeUInt(Length(LBody)));
@@ -742,6 +921,10 @@ begin
     FIdleMs := FOptions.IdleTimeout
   else
     FIdleMs := 30000;
+  if FOptions.ReadTimeout > 0 then
+    FReadMs := FOptions.ReadTimeout
+  else
+    FReadMs := FIdleMs;
   FPollSubmitted := False;
   FPollWorkerPending := False;
   FPollCompletionReady := False;
@@ -757,23 +940,32 @@ begin
   FPollQueuedResponsePending := False;
   FPollQueuedCloseAfterDrain := False;
   FPollReadDeadline := TDeadline.Infinite;
+  FPollReadDeadlineIsIdle := False;
   FPollWriteDeadline := TDeadline.Infinite;
   FParserIsSnapshot := False;
   if FStreamRuntime <> nil then
-    ArmPollReadDeadline;
+    ArmPollRequestReadDeadline;
 end;
 
-procedure TH1ServerConnectionState.ArmPollReadDeadline;
+procedure TH1ServerConnectionState.ArmPollReadDeadline(const ATimeoutMs: Int64;
+  const AIsIdle: Boolean);
 begin
   if FStreamRuntime = nil then
     Exit;
-  FPollReadDeadline := TDeadline.After(TDuration.FromMilliseconds(FIdleMs));
+  FPollReadDeadline := TDeadline.After(TDuration.FromMilliseconds(ATimeoutMs));
+  FPollReadDeadlineIsIdle := AIsIdle;
   FConn.SetReadDeadline(FPollReadDeadline);
+end;
+
+procedure TH1ServerConnectionState.ArmPollRequestReadDeadline;
+begin
+  ArmPollReadDeadline(FReadMs, False);
 end;
 
 procedure TH1ServerConnectionState.ClearPollReadDeadline;
 begin
   FPollReadDeadline := TDeadline.Infinite;
+  FPollReadDeadlineIsIdle := False;
   if FStreamRuntime <> nil then
     FConn.SetReadDeadline(TDeadline.Infinite);
 end;
@@ -825,19 +1017,35 @@ begin
   Result := True;
 end;
 
-procedure TH1ServerConnectionState.ResetPollRequestState;
+procedure TH1ServerConnectionState.ResetPollRequestStateWithDeadline(
+  const ATimeoutMs: Int64; const AIsIdle: Boolean);
 begin
   ResetRequestParser;
   FParseTotalRead := 0;
   FParseHeadersDone := False;
   FContinueSent := False;
   FPollNeedRequestReset := False;
-  ArmPollReadDeadline;
+  ArmPollReadDeadline(ATimeoutMs, AIsIdle);
+end;
+
+procedure TH1ServerConnectionState.ResetPollRequestState;
+begin
+  ResetPollRequestStateWithDeadline(FReadMs, False);
 end;
 
 procedure TH1ServerConnectionState.PreparePollRequestParse;
 begin
   if FPollNeedRequestReset then
+    ResetPollRequestState;
+end;
+
+procedure TH1ServerConnectionState.PreparePollKeepAliveRequestParse;
+begin
+  if not FPollNeedRequestReset then
+    Exit;
+  if FPending = '' then
+    ResetPollRequestStateWithDeadline(FIdleMs, True)
+  else
     ResetPollRequestState;
 end;
 
@@ -971,8 +1179,7 @@ begin
     else
       FKeepAlive := ShouldKeepAlive(FParser);
 
-    if (not FParserIsSnapshot) and (FParser.GetHttpVersion = hvHttp11) and
-       (not RequestMetadata(FParser).HasHost) then
+    if HasHttp11HostPolicyError(FParser) then
     begin
       WriteErrorResponse(FConn, HTTP_STATUS_BAD_REQUEST, FOptions.WriteTimeout);
       FKeepAlive := False;
@@ -1004,11 +1211,11 @@ begin
     LOutbound := NewH1OutboundBuffer;
     LResponseWriter := LOutbound as IWriter;
     LW := TH1ResponseWriter.Create(LResponseWriter, LHijackConn,
-      LReq.Method = hmHead);
+      LReq.Method = hmHead, not FKeepAlive);
     if FKeepAlive and (FParser.GetHttpVersion = hvHttp10) then
-      LW.GetHeaders.Set_('connection', 'keep-alive');
+      LW.GetHeaders.SetHeader('connection', 'keep-alive');
     if not FKeepAlive then
-      LW.GetHeaders.Set_('connection', 'close');
+      LW.GetHeaders.SetHeader('connection', 'close');
 
     FHandler.ServeHTTP(LReq, LW);
 
@@ -1016,6 +1223,7 @@ begin
     begin
       Result := tscoHandler;
       FKeepAlive := False;
+      FConn.SetReadDeadline(TDeadline.Infinite);
       Exit;
     end;
 
@@ -1024,7 +1232,8 @@ begin
     ArmDirectWriteDeadline;
     LOutbound.DrainAllTo(FConn as IWriter);
 
-    if LW.GetHeaders.Get('connection') = 'close' then
+    if HeadersHaveConnectionCloseToken(
+      (LW as TH1ResponseWriter).GetCommittedHeaders) then
       FKeepAlive := False;
   except
     on E: Exception do
@@ -1075,8 +1284,7 @@ begin
     else
       LKeepAlive := ShouldKeepAlive(FParser);
 
-    if (not FParserIsSnapshot) and (FParser.GetHttpVersion = hvHttp11) and
-       (not RequestMetadata(FParser).HasHost) then
+    if HasHttp11HostPolicyError(FParser) then
     begin
       LOutbound := NewH1OutboundBuffer;
       WriteErrorResponseToWriter(LOutbound as IWriter, HTTP_STATUS_BAD_REQUEST);
@@ -1110,11 +1318,11 @@ begin
     LOutbound := NewH1OutboundBuffer;
     LResponseWriter := LOutbound as IWriter;
     LW := TH1ResponseWriter.Create(LResponseWriter, LHijackConn,
-      LReq.Method = hmHead);
+      LReq.Method = hmHead, not LKeepAlive);
     if LKeepAlive and (FParser.GetHttpVersion = hvHttp10) then
-      LW.GetHeaders.Set_('connection', 'keep-alive');
+      LW.GetHeaders.SetHeader('connection', 'keep-alive');
     if not LKeepAlive then
-      LW.GetHeaders.Set_('connection', 'close');
+      LW.GetHeaders.SetHeader('connection', 'close');
 
     FHandler.ServeHTTP(LReq, LW);
 
@@ -1127,7 +1335,8 @@ begin
 
     LW.Flush;
 
-    if LW.GetHeaders.Get('connection') = 'close' then
+    if HeadersHaveConnectionCloseToken(
+      (LW as TH1ResponseWriter).GetCommittedHeaders) then
       LKeepAlive := False;
     AOutbound := LOutbound;
     ACloseAfterDrain := not LKeepAlive;
@@ -1173,12 +1382,20 @@ var
   LHeadersDone: Boolean;
   LRejected: Boolean;
   LHeaderStatus: THttpStatus;
+  LIdleBeforeNextRequest: Boolean;
+  LUsingIdleDeadline: Boolean;
 begin
   Result := tscoServer;
+  LIdleBeforeNextRequest := False;
   while FKeepAlive do
   begin
     try
-      FConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(FIdleMs)));
+      LUsingIdleDeadline := LIdleBeforeNextRequest and (FPending = '');
+      if LUsingIdleDeadline then
+        FConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(FIdleMs)))
+      else
+        FConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(FReadMs)));
+      LIdleBeforeNextRequest := False;
 
       ResetRequestParser;
       LTotalRead := 0;
@@ -1207,6 +1424,11 @@ begin
                (not FParser.HasError) then
               FParser.Finish;
             Break;
+          end;
+          if LUsingIdleDeadline then
+          begin
+            FConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(FReadMs)));
+            LUsingIdleDeadline := False;
           end;
           if not ((LTotalRead = 0) and
              TryUseFastRequestParser(@FBuf[0], LN, LConsumed)) then
@@ -1295,8 +1517,7 @@ begin
       Result := ExecuteCurrentRequest;
       if Result <> tscoServer then
         Continue;
-      if not FKeepAlive then
-        FKeepAlive := False;
+      LIdleBeforeNextRequest := FKeepAlive and (FPending = '');
     except
       on E: Exception do
       begin
@@ -1413,7 +1634,7 @@ begin
       ANextEvents := [];
       Exit(tsprDone);
     end;
-    PreparePollRequestParse;
+    PreparePollKeepAliveRequestParse;
     Exit(AdvancePollRequestParse([], ANextEvents, AOwnership));
   end;
 
@@ -1474,7 +1695,7 @@ begin
     ANextEvents := [];
     Exit(tsprDone);
   end;
-  PreparePollRequestParse;
+  PreparePollKeepAliveRequestParse;
   Result := AdvancePollRequestParse([], ANextEvents, AOwnership);
 end;
 
@@ -1498,7 +1719,7 @@ begin
       ANextEvents := [];
       Exit(tsprDone);
     end;
-    PreparePollRequestParse;
+    PreparePollKeepAliveRequestParse;
     Exit(AdvancePollRequestParse(AEvents, ANextEvents, AOwnership));
   end;
 
@@ -1544,7 +1765,7 @@ begin
             ANextEvents := [];
             Exit(tsprDone);
           end;
-          PreparePollRequestParse;
+          PreparePollKeepAliveRequestParse;
           Exit(AdvancePollRequestParse([], ANextEvents, AOwnership));
         end;
         if LWritten > 0 then
@@ -1646,6 +1867,8 @@ begin
           end;
       else
       begin
+        if FPollReadDeadlineIsIdle then
+          ArmPollRequestReadDeadline;
         if not ((FParseTotalRead = 0) and
            TryUseFastRequestParser(@FBuf[0], LN, LConsumed)) then
           LConsumed := FParser.Execute(@FBuf[0], LN);
@@ -1750,7 +1973,40 @@ constructor TH1ClientTransport.Create(const AOptions: TH1ClientTransportOptions)
 begin
   inherited Create;
   FOptions := AOptions;
+  if FOptions.MaxPoolSize <= 0 then
+    FOptions.MaxPoolSize := 64;
   FPoolCount := 0;
+end;
+
+destructor TH1ClientTransport.Destroy;
+begin
+  PoolClear;
+  inherited Destroy;
+end;
+
+function TH1ClientTransport.PooledConnectionIsReusable(
+  const AConn: ITcpStream): Boolean;
+var
+  LRuntime: ITcpStreamRuntime;
+  LByte: Byte;
+  LRead: SizeUInt;
+begin
+  Result := False;
+  if AConn = nil then
+    Exit;
+  if not Supports(AConn, ITcpStreamRuntime, LRuntime) then
+    Exit;
+
+  try
+    LRuntime.SetBlocking(False);
+    try
+      Result := LRuntime.TryRead(LByte, 1, LRead) = tsiorWouldBlock;
+    finally
+      LRuntime.SetBlocking(True);
+    end;
+  except
+    Result := False;
+  end;
 end;
 
 function TH1ClientTransport.PoolGet(const AHost: string; const APort: UInt16): ITcpStream;
@@ -1764,6 +2020,10 @@ begin
       Result := FPool[LI].Conn;
       FPool[LI] := FPool[FPoolCount - 1];
       Dec(FPoolCount);
+      if PooledConnectionIsReusable(Result) then
+        Exit;
+      Result.Close;
+      Result := nil;
       Exit;
     end;
 end;
@@ -1771,6 +2031,13 @@ end;
 procedure TH1ClientTransport.PoolPut(const AHost: string; const APort: UInt16;
   const AConn: ITcpStream);
 begin
+  if (FOptions.MaxPoolSize > 0) and (FPoolCount >= FOptions.MaxPoolSize) then
+  begin
+    AConn.Close;
+    Exit;
+  end;
+  AConn.SetReadDeadline(TDeadline.Infinite);
+  AConn.SetWriteDeadline(TDeadline.Infinite);
   if FPoolCount >= Length(FPool) then
     SetLength(FPool, FPoolCount + 4);
   FPool[FPoolCount].Host := AHost;
@@ -1779,8 +2046,19 @@ begin
   Inc(FPoolCount);
 end;
 
+procedure TH1ClientTransport.PoolClear;
+var
+  LI: Int32;
+begin
+  for LI := 0 to FPoolCount - 1 do
+    if FPool[LI].Conn <> nil then
+      FPool[LI].Conn.Close;
+  FPoolCount := 0;
+  SetLength(FPool, 0);
+end;
+
 function TH1ClientTransport.WriteRequest(const AWriter: IWriter;
-  const AReq: IHttpRequest): Boolean;
+  const AReq: IHttpRequest; const AAutoHost: string): Boolean;
 const
   CRLF: AnsiString = #13#10;
 var
@@ -1788,6 +2066,8 @@ var
   LBuf: IWriter;
   LFlusher: IFlusher;
   LN: SizeUInt;
+  LRemaining: Int64;
+  LReadSize: SizeUInt;
   LTmp: array[0..4095] of Byte;
   LStr: string;
 begin
@@ -1795,17 +2075,18 @@ begin
   if not (AReq.Version in [hvHttp10, hvHttp11]) then
     raise EHttpError.Create('h1 transport only supports HTTP/1.x requests');
 
-  LBuf := CreateBufferedWriter(AWriter, 4096);
-
-  LStr := HttpMethodToStr(AReq.Method);
-  LBuf.Write(LStr[1], SizeUInt(Length(LStr)));
-  LBuf.Write(PAnsiChar(' ')^, 1);
-
   LPath := AReq.Path;
   if LPath = '' then
     LPath := '/';
   if AReq.RawQuery <> '' then
     LPath := LPath + '?' + AReq.RawQuery;
+  ValidateWireRequestTarget(LPath);
+
+  LBuf := CreateBufferedWriter(AWriter, 4096);
+
+  LStr := HttpMethodToStr(AReq.Method);
+  LBuf.Write(LStr[1], SizeUInt(Length(LStr)));
+  LBuf.Write(PAnsiChar(' ')^, 1);
   LBuf.Write(LPath[1], SizeUInt(Length(LPath)));
 
   LStr := ' ' + HttpVersionToStr(AReq.Version);
@@ -1816,20 +2097,58 @@ begin
   var
     LHeader: string;
   begin
+    ValidateWireHeaderName(AName);
+    ValidateWireHeaderValue(AValue);
     LHeader := AName + ': ' + AValue;
     LBuf.Write(LHeader[1], SizeUInt(Length(LHeader)));
     LBuf.Write(CRLF[1], 2);
   end);
 
+  if (AReq.ContentLength > 0) and (not AReq.Headers.Has('content-length')) then
+  begin
+    LStr := 'content-length: ' + IntToStr(AReq.ContentLength);
+    LBuf.Write(LStr[1], SizeUInt(Length(LStr)));
+    LBuf.Write(CRLF[1], 2);
+  end;
+
+  if (AAutoHost <> '') and (not AReq.Headers.Has('host')) then
+  begin
+    LStr := 'host: ' + AAutoHost;
+    LBuf.Write(LStr[1], SizeUInt(Length(LStr)));
+    LBuf.Write(CRLF[1], 2);
+  end;
+
   LBuf.Write(CRLF[1], 2);
 
-  if AReq.Body <> nil then
+  if (AReq.Body <> nil) and (AReq.ContentLength > 0) then
   begin
-    repeat
-      LN := AReq.Body.Read(LTmp[0], 4096);
+    LRemaining := AReq.ContentLength;
+    while LRemaining > 0 do
+    begin
+      LReadSize := SizeUInt(SizeOf(LTmp));
+      if LRemaining < Int64(LReadSize) then
+        LReadSize := SizeUInt(LRemaining);
+      try
+        LN := AReq.Body.Read(LTmp[0], LReadSize);
+      except
+        on E: Exception do
+          raise EHttpError.Create('HTTP request body read failed: ' + E.Message);
+      end;
       if LN > 0 then
+      begin
+        if Int64(LN) > LRemaining then
+          LN := SizeUInt(LRemaining);
         LBuf.Write(LTmp[0], LN);
-    until LN = 0;
+        Dec(LRemaining, Int64(LN));
+      end;
+      if LN = 0 then
+      begin
+        if Supports(LBuf, IFlusher, LFlusher) then
+          LFlusher.Flush;
+        raise EHttpError.Create(
+          'HTTP request body shorter than declared content-length');
+      end;
+    end;
   end;
 
   if Supports(LBuf, IFlusher, LFlusher) then
@@ -1837,30 +2156,80 @@ begin
 end;
 
 function TH1ClientTransport.ReadResponse(const AReader: IReader;
-  const ARequestMethod: THttpMethod; out AKeepAlive: Boolean): IHttpResponse;
+  const ARequestMethod: THttpMethod; out AKeepAlive: Boolean;
+  out AResponseStarted: Boolean): IHttpResponse;
 var
   LParser: IH1Parser;
   LBuf: array[0..4095] of Byte;
   LN: SizeUInt;
+  LConsumed: SizeUInt;
+  LPending: string;
+  LHasResponseTail: Boolean;
   LBodyReader: IReader;
+  LSkippedInformational: Boolean;
+  LCurrentResponseStarted: Boolean;
 begin
+  AResponseStarted := False;
+  LHasResponseTail := False;
+  LSkippedInformational := False;
+  LCurrentResponseStarted := False;
+  LPending := '';
   LParser := NewH1ResponseParser(ARequestMethod = hmHead);
   repeat
-    LN := AReader.Read(LBuf[0], 4096);
-    if LN = 0 then
-      Break;
-    LParser.Execute(@LBuf[0], LN);
+    if LPending <> '' then
+    begin
+      LN := SizeUInt(Length(LPending));
+      LCurrentResponseStarted := True;
+      LConsumed := LParser.Execute(PAnsiChar(LPending), LN);
+      if LConsumed < LN then
+        LPending := System.Copy(LPending, SizeInt(LConsumed) + 1,
+          SizeInt(LN - LConsumed))
+      else
+        LPending := '';
+    end
+    else
+    begin
+      LN := AReader.Read(LBuf[0], 4096);
+      if LN = 0 then
+        Break;
+      AResponseStarted := True;
+      LCurrentResponseStarted := True;
+      LConsumed := LParser.Execute(@LBuf[0], LN);
+      if LConsumed < LN then
+      begin
+        SetLength(LPending, Int32(LN - LConsumed));
+        Move(LBuf[Int32(LConsumed)], LPending[1], LN - LConsumed);
+      end;
+    end;
+
+    if LParser.IsComplete and
+      IsSkippableInformationalResponse(LParser.GetStatusCode) then
+    begin
+      LSkippedInformational := True;
+      LCurrentResponseStarted := False;
+      LParser := NewH1ResponseParser(ARequestMethod = hmHead);
+      Continue;
+    end;
   until LParser.IsComplete or LParser.HasError;
 
   if (not LParser.IsComplete) and (not LParser.HasError) then
     LParser.Finish;
+
+  if LParser.IsComplete and
+    IsSkippableInformationalResponse(LParser.GetStatusCode) then
+    raise EHttpError.Create('HTTP response incomplete: missing final response');
+
+  if LSkippedInformational and (not LCurrentResponseStarted) then
+    raise EHttpError.Create('HTTP response incomplete: missing final response');
 
   if LParser.HasError then
     raise EHttpError.Create('HTTP parse error: ' + LParser.ErrorMessage);
   if not LParser.IsComplete then
     raise EHttpError.Create('HTTP response incomplete: connection closed');
 
-  AKeepAlive := LParser.ShouldKeepAlive;
+  LHasResponseTail := LPending <> '';
+  AKeepAlive := LParser.ShouldKeepAlive and (not LHasResponseTail) and
+    (LParser.GetStatusCode <> HTTP_STATUS_SWITCHING_PROTOCOLS);
 
   LBodyReader := LParser.NewBodyReader;
   if LBodyReader <> nil then
@@ -1876,52 +2245,81 @@ function TH1ClientTransport.RoundTrip(const AReq: IHttpRequest): IHttpResponse;
 var
   LUrl: TUrl;
   LHost: string;
+  LPoolHostKey: string;
+  LAutoHost: string;
   LPort: UInt16;
   LConn: ITcpStream;
   LResp: IHttpResponse;
   LPooled: Boolean;
   LKeepAlive: Boolean;
+  LRequestClose: Boolean;
+  LResponseStarted: Boolean;
+  LRequestWriteComplete: Boolean;
+  LBodyStream: IStream;
+  LBodyStartPosition: Int64;
+  LRequestDeadline: TDeadline;
 begin
+  if AReq = nil then
+    raise EArgumentError.Create('h1 client transport requires request');
+  if AReq.Headers = nil then
+    raise EArgumentError.Create('h1 client transport requires request headers');
+
   LUrl := AReq.Url;
+  ValidatePlainHttpClientUrlScheme(LUrl);
   LHost := LUrl.Host;
+  LPoolHostKey := CanonicalPoolHostKey(LHost);
+  LAutoHost := '';
+  if not AReq.Headers.Has('host') then
+  begin
+    LAutoHost := LUrl.HostPort;
+    ValidateWireHeaderValue(LAutoHost);
+  end;
+  LRequestClose := HeadersHaveConnectionCloseToken(AReq.Headers);
   LPort := LUrl.Port;
   if LPort = 0 then
-  begin
-    if LUrl.Scheme = 'https' then
-      LPort := 443
-    else
-      LPort := 80;
-  end;
+    LPort := 80;
 
-  LConn := PoolGet(LHost, LPort);
+  CaptureRetryBodyPosition(AReq, LBodyStream, LBodyStartPosition);
+  LRequestDeadline := ClientRequestDeadline(FOptions.Timeout);
+  LConn := PoolGet(LPoolHostKey, LPort);
   LPooled := LConn <> nil;
   if not LPooled then
     LConn := TcpConnect(LHost, LPort);
 
-  if FOptions.Timeout > 0 then
-  begin
-    LConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(FOptions.Timeout)));
-    LConn.SetWriteDeadline(TDeadline.After(TDuration.FromMilliseconds(FOptions.Timeout)));
-  end;
+  ApplyClientDeadline(LConn, LRequestDeadline);
 
-  if not AReq.Headers.Has('host') then
-    AReq.Headers.Set_('host', LUrl.HostPort);
-
+  LResponseStarted := False;
+  LRequestWriteComplete := False;
   try
-    WriteRequest(LConn as IWriter, AReq);
-    LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive);
+    WriteRequest(LConn as IWriter, AReq, LAutoHost);
+    LRequestWriteComplete := True;
+    LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive,
+      LResponseStarted);
   except
     if LPooled then
     begin
       LConn.Close;
+      if (not LRequestWriteComplete) and (ExceptObject is EHttpError) then
+        raise;
+      if LResponseStarted then
+        raise;
+      if not IsRetrySafeRequest(AReq) then
+        raise;
+      if (AReq.Body <> nil) and (AReq.ContentLength > 0) and (LBodyStream = nil) then
+        raise;
+      RewindRetryBody(AReq, LBodyStream, LBodyStartPosition);
       LConn := TcpConnect(LHost, LPort);
-      if FOptions.Timeout > 0 then
-      begin
-        LConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(FOptions.Timeout)));
-        LConn.SetWriteDeadline(TDeadline.After(TDuration.FromMilliseconds(FOptions.Timeout)));
+      try
+        ApplyClientDeadline(LConn, LRequestDeadline);
+        LRequestWriteComplete := False;
+        WriteRequest(LConn as IWriter, AReq, LAutoHost);
+        LRequestWriteComplete := True;
+        LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive,
+          LResponseStarted);
+      except
+        LConn.Close;
+        raise;
       end;
-      WriteRequest(LConn as IWriter, AReq);
-      LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive);
     end
     else
     begin
@@ -1930,12 +2328,17 @@ begin
     end;
   end;
 
-  if LKeepAlive then
-    PoolPut(LHost, LPort, LConn)
+  if LKeepAlive and (not LRequestClose) then
+    PoolPut(LPoolHostKey, LPort, LConn)
   else
     LConn.Close;
 
   Result := LResp;
+end;
+
+procedure TH1ClientTransport.CloseIdleConnections;
+begin
+  PoolClear;
 end;
 
 { TH1ServerTransport }

@@ -3,13 +3,20 @@
 HTTP module providing server and client capabilities with radix-tree routing,
 middleware chaining, and a centralized internal transport registry.
 
+## Module Docs
+
+- `GOAL_TREE.md` — north star, route map, done criteria, and current highest-value slices
+- `ARCHITECTURE.md` — stable architecture facts, runtime ownership, and protocol seams
+- `API_COVERAGE.md` — public API proof and parity decisions
+- `BENCHMARKS.md` — benchmark truth, microbenchmark evidence, and comparator caveats
+
 ## Architecture
 
 ```
 Facade (nextpas.core.http) — single uses entry point
   Application layer: Request, Response, Headers, Router, Middleware
   Internal registry: default version -> transport factory
-  Protocol layer: impl.h1 (landed), impl.h2/impl.h3 (planned)
+  Protocol layer: impl.h1 (landed), impl.h2 foundation (started), impl.h2 transport / impl.h3 (planned)
 ```
 
 Current built-in mapping is `hvHttp10` / `hvHttp11` -> H1, with `hvHttp11`
@@ -29,18 +36,32 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 - `http_hello_server` shows `NewRouter`, `Router.Get(...)`,
   `Req.PathParam`, `Req.QueryParam`, `NewHttpServer(..., THttpServerOptions.Default)`,
   and `ListenAndServe`.
-- `http_get_client` shows `NewHttpClient`, `Client.Get(URL)`, reading
-  `IHttpResponse.Body`, and printing status / headers / body.
+- `http_get_client` shows `NewHttpClient`, `Client.Get(URL)`,
+  `HttpReadResponseBodyString(Resp)`, and printing status / headers / body.
+  Pass a URL as the first argument, or set `NEXTPAS_HTTP_GET_URL` when running
+  it from a smoke harness that has selected a non-default port.
 - `http_server_options_demo` shows `THttpServerOptions.Backend`,
   `WriteTimeout`, `MaxHeaderSize`, `MaxBodySize`, and a runnable `POST /echo`
   path where oversize request bodies are rejected before the handler.
 - `http_websocket_echo_demo` shows `UpgradeWebSocket`, `IWebSocket.ReadFrame`,
   `WriteText`, and `Close` on a runnable `/ws` echo endpoint.
-- The client defaults to `http://127.0.0.1:8080/hello/world?page=1`.
+- The client defaults to `http://127.0.0.1:8080/hello/world?page=1` only when
+  neither an argument nor `NEXTPAS_HTTP_GET_URL` is supplied.
 - The server-options demo defaults to `threaded` on `127.0.0.1:8081`; pass
   `epoll` as the first arg on Linux to exercise the readiness backend.
 
 ## API Reference
+
+### Status And Method Helpers
+
+- `HttpMethodToStr` / `HttpStrToMethod` — convert between `THttpMethod` and
+  wire method names.
+- `HttpStatusText` — return the reason phrase for known status codes, or
+  `Unknown` for unrecognized codes.
+- `HttpStatusIsInformational` / `HttpStatusIsSuccess` /
+  `HttpStatusIsRedirect` / `HttpStatusIsClientError` /
+  `HttpStatusIsServerError` — classify status-code ranges without forcing
+  callers to repeat magic `1xx` / `2xx` / `3xx` / `4xx` / `5xx` checks.
 
 ### Router
 
@@ -52,11 +73,14 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 ### Headers
 
 - `NewHeaders` — create IHttpHeaders (case-insensitive, multi-value)
-- `Set_/Add/Get/GetAll/Has/Del/Count/ForEach/Clone`
+- `SetHeader/Add/Get/GetAll/Has/Remove/Count/ForEach/Clone`
+- `SetBasicAuth(Headers, Username, Password)` / `SetBearerAuth(Headers, Token)`
+  — set the `Authorization` header for common client request auth cases; nil
+  headers raise `EArgumentError`, and existing authorization values are replaced.
 
 ### URL Utilities
 
-- `TUrl.Parse` — parse full/relative URLs into scheme, userinfo, host, port, path, query, and fragment fields
+- `TUrl.Parse` — parse full/relative URLs into scheme, userinfo, host, port, path, query, and fragment fields; invalid explicit authority ports raise `EHttpError`
 - `TUrl.ParseRequestTarget` — parse HTTP request-target strings; origin-form skips authority parsing, absolute-form remains compatible with `TUrl.Parse`, and asterisk/authority-form targets are preserved as `Path`
 - `UrlEncode/UrlDecode` — percent encoding
 - `ParseQueryString/EncodeQueryString` — query parameter handling
@@ -68,18 +92,147 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 
 ### Messages
 
-- `NewRequest(Method, Url)` / `NewGetRequest(Path)` — build requests
-- `NewResponse(Status, Headers, Body)` — build responses
+- `NewRequest(Method, Url)` / `NewGetRequest(Path)` — build simple requests;
+  `Url` can be either a `TUrl` or a URL string.
+- `NewRequest(Method, Url, Headers)` — build a headers-only request with nil
+  body and zero `Content-Length`; this covers the common `GET` / `HEAD` /
+  custom-header case without forcing callers to spell `Headers, nil, 0`.
+  An explicit single numeric `Content-Length: 0` is accepted; positive,
+  invalid, duplicate, or oversized `Content-Length` is rejected because no body
+  is supplied.
+  `nil` as the third argument is not the headers-only form: it stays source
+  compatible with the older empty-`TBytes` helper and therefore still produces
+  a zero-length body with `Content-Length: 0`.
+- `NewRequest(Method, Url, Headers, Body, ContentLength)` — build custom
+  requests for `IHttpClient.Send`; `Url` can be either a `TUrl` or a URL string,
+  nil headers create an empty header set, body requests publish
+  `Content-Length`, and negative content length raises `EArgumentError`.
+  Caller-supplied `Content-Length` is valid only when it is a single numeric
+  value matching the helper body length; duplicate, invalid, oversized, or
+  conflicting values raise `EArgumentError`.
+- `NewRequest(Method, Url, Headers, BodyText)` — build a custom request with
+  a copied Pascal string body and generated `Content-Length`; callers still set
+  `Content-Type` explicitly on the supplied headers when needed.
+- `NewRequest(Method, Url, ContentType, BodyText)` — the same copied Pascal
+  string body helper, but for the common case where callers want to declare a
+  request `Content-Type` without hand-constructing a header set first.
+- `NewRequest(Method, Url, BodyText)` — the same copied Pascal string body
+  helper, but with auto-created empty headers when callers do not need custom
+  request headers.
+- `NewRequest(Method, Url, Headers, BodyBytes)` — build a custom request with
+  a copied `TBytes` body and generated `Content-Length`; this preserves binary
+  payload bytes without forcing callers through a Pascal string.
+- `NewRequest(Method, Url, ContentType, BodyBytes)` / `NewRequest(Method, Url,
+  ContentType, Body, ContentLength)` — the same binary / reader body helpers
+  for the common case where callers want `Content-Type` published without
+  allocating a separate `IHttpHeaders` first.
+- `NewRequest(Method, Url, BodyBytes)` / `NewRequest(Method, Url, Body,
+  ContentLength)` — the same binary / reader body helpers without an explicit
+  headers object; they still publish `Content-Length` and still do not guess
+  `Content-Type`.
+- Request helpers do not implement caller-supplied `Transfer-Encoding`; any
+  `Transfer-Encoding` header raises `EArgumentError`. Streaming/chunked request
+  body ownership remains a future API seam rather than a silent header escape
+  hatch. When a headers object is supplied, the helper treats it as
+  request-owned and may write `Content-Length`; do not reuse the same headers
+  object for a different request shape.
+- `NewResponse(Status, Headers, Body)` — build responses; nil headers create
+  an empty header set so callers can safely read or mutate `Resp.Headers`.
+- `NewResponse(Status, Headers, BodyText)` /
+  `NewResponse(Status, Headers, BodyBytes)` — build fixed-body responses with
+  a copied Pascal string or `TBytes` body and generated `Content-Length`.
+  Caller-supplied headers are treated as response-owned; a matching
+  `Content-Length` is accepted, conflicting values and `Transfer-Encoding` are
+  rejected. `NewResponse(Status, Headers, nil)` stays source compatible with
+  the nil-body form and does not publish `Content-Length`.
+- `HttpWriteResponseString(Writer, Status, ContentType, Body)` — write a
+  fixed Pascal string response through an `IHttpResponseWriter` and return the
+  body bytes accepted by the writer. Nil writers raise `EArgumentError`;
+  informational statuses raise `EHttpError` because the helper writes final
+  responses; non-empty bodies for `204` / `304` raise before committing bytes;
+  empty `204` / `304` responses skip entity headers; body-permitted final
+  statuses publish a non-empty `Content-Type` and always set `Content-Length`.
 
 ### Server / Client (interfaces)
 
 - `IHttpServer.ListenAndServe(Addr, Port)` / `Shutdown` / `LocalAddr` / `IsRunning`
-- `IHttpClient.Do_(Req)` / `Get(Url)` / `Post(Url, ContentType, Body)`
-- `HttpGetToWriter(Client, Url, Writer)` — copies a successful GET response body to an `IWriter` and returns the byte count; non-2xx responses raise `EHttpError`
-- `HttpGetToFile(Client, Url, Path)` — writes a successful GET response through a same-directory temp file, atomically publishes the final path, and cleans partial temp files on failure
+- `IHttpClient.Send(Req)` / `CloseIdleConnections` / `Get(Url)` /
+  `Post(Url, ContentType, Body)` / `Put` / `Delete` / `Patch` / `Head`;
+  `Send(nil)` raises `EArgumentError`
+- `Post` / `Put` / `Patch` expose three shortcut body forms:
+  `IReader`, Pascal `string`, and `TBytes`.
+- All three shortcut body forms publish `Content-Length`; a non-empty caller
+  supplied `Content-Type` is forwarded, while an empty content type omits the
+  header instead of sending an empty header value. The `IReader` form still
+  buffers to bytes rather than routing payload through a Pascal string, while
+  the `string` / `TBytes` forms reuse the public `NewRequest(..., BodyText)` /
+  `NewRequest(..., BodyBytes)` helpers.
+- `IHttpClient.Send` owns any close-capable request body for the duration of the
+  request. After the final round trip or failure, `IReadCloser` / `ICloser` /
+  `IStream` request bodies are closed. The `Post` / `Put` / `Patch`
+  `IReader` shortcut closes the source reader after buffering it to bytes for
+  `Content-Length`, so callers do not have to close a file/stream body
+  separately once the helper returns.
+- `CloseIdleConnections` is a lifecycle seam for explicitly releasing idle
+  keep-alive state. The public client does not leak H1 pool details; transports
+  that own idle pooled connections may implement the optional capability and
+  unsupported transports safely no-op.
+- If a transport returns nil from `RoundTrip`, `IHttpClient.Send` raises
+  `EHttpError` instead of leaking a nil-response access violation through the
+  client facade.
+- If a stale pooled keep-alive connection fails during `RoundTrip`, the client
+  only retries automatically when the request is retry-safe and the body is
+  replayable. Retry-safe means `GET` / `HEAD` / `OPTIONS` / `TRACE`, or an
+  explicit `Idempotency-Key` / `X-Idempotency-Key`. Non-retry-safe requests and
+  non-replayable non-empty bodies fail fast instead of silently sending a
+  second request with changed semantics.
+- Client redirects follow `301` / `302` / `303` by replaying as `GET` with no body;
+  `307` / `308` preserve the original method and replay body readers that support
+  `IStream` rewind. Non-empty non-replayable bodies raise `EHttpError` instead
+  of silently sending an empty follow-up request.
+- When a `301` / `302` / `303` follow-up drops the original request body, the
+  client closes the original close-capable body before issuing the follow-up and
+  does not close it a second time after `Send` returns.
+- Redirect follow-up requests inherit caller headers. Cross-authority redirects
+  strip `Authorization`, `WWW-Authenticate`, `Cookie`, and `Cookie2`; bodyless
+  `301` / `302` / `303` follow-ups also drop `Content-Length` /
+  `Transfer-Encoding`. Caller-specified `Host` is preserved for relative and
+  same-authority redirects, including omitted-port vs. default-port equivalents,
+  but dropped when the redirect changes authority so the transport derives the
+  host from the new URL.
+- Relative, path-relative, and network-path redirect `Location` values are
+  resolved before the follow-up request is passed to the transport. Absolute
+  `http` / `https` redirect schemes are matched case-insensitively and
+  normalized to lowercase for the follow-up request; any absolute `Location`
+  with another scheme, including non-hierarchical `scheme:` forms, raises
+  `EHttpError` before a second round trip. Path-relative redirects merge
+  against the original request directory and normalize dot segments, while
+  network-path URLs inherit the original scheme and replace
+  authority/path/query/fragment. Fragment-only redirects preserve the original
+  path/query and update only the request URL fragment; H1 request writing still
+  omits fragments from the wire request-target.
+- Redirect responses that are followed or discarded by redirect errors are not
+  returned to the caller. Before the follow-up round trip, or before raising a
+  redirect error such as too many redirects, missing `Location`, or unsupported
+  absolute scheme, the client releases the previous response body:
+  close-capable readers are closed, and plain `IReader` bodies are drained to
+  EOF. This keeps injected/future streaming transports from leaking an
+  abandoned redirect body into connection reuse.
+- `HttpGetToWriter(Client, Url, Writer)` — copies a successful GET response body to an `IWriter` and returns the byte count; non-2xx responses raise `EHttpError`; consumed or discarded response bodies are released before the helper returns or raises
+- `HttpGetToFile(Client, Url, Path)` — writes a successful GET response through a same-directory temp file, atomically publishes the final path, cleans partial temp files on failure, and releases the response body before returning or raising
+- `HttpReadResponseBodyBytes(Resp)` — consumes `Resp.Body` into `TBytes`; nil body returns empty bytes, nil response raises `EArgumentError`
+- `HttpReadResponseBodyString(Resp)` — consumes `Resp.Body` into a Pascal string; nil body returns `''`, nil response raises `EArgumentError`
+- `HttpReleaseResponseBody(Resp)` — releases a response body the caller will
+  not read: close-capable bodies are closed, plain `IReader` bodies are drained
+  to EOF, nil body is a no-op, and nil response raises `EArgumentError`
 - `NewHttpServer(Handler[, Transport][, Options])` — 默认路径通过 internal registry 解析到 H1，也可显式注入 `IHttpServerTransport`
-- `THttpServerOptions` — 公开 carrier，当前包括 `Backend`、timeouts、`MaxHeaderSize`、`MaxBodySize`
+- `THttpServerOptions` — 公开 carrier，当前包括 `Backend`、timeouts、
+  `MaxHeaderSize`、`MaxBodySize`; negative timeout or size-limit fields raise
+  `EArgumentError` at server construction time.
 - `NewHttpClient([Transport][, Options])` — 默认路径通过 internal registry 解析到 H1，也可显式注入 `IHttpTransport`
+- `THttpClientOptions` — 公开 carrier，当前包括 `Timeout`、`MaxRedirects` 和
+  `FollowRedirects`; negative `Timeout` or `MaxRedirects` raises
+  `EArgumentError` at client construction time.
 
 ### WebSocket
 
@@ -106,8 +259,13 @@ public HTTP contract，但通过 foundation 的 completion-aware runtime path �
 ## Cross-Platform
 
 Current transport implementation depends on `nextpas.core.net` (TCP) and
-`nextpas.core.io` (stream interfaces). Future H2/H3 work will extend this with
-TLS/ALPN and QUIC when those protocol families are actually implemented.
+`nextpas.core.io` (stream interfaces). The current H2 slice keeps the public
+HTTP facade stable while adding two transport modes behind the registry seam:
+cleartext H2 uses prior-knowledge preface on `http://`, and TLS H2 uses strict
+ALPN negotiation on `https://`. HTTP/1.1 `Upgrade: h2c` / `HTTP2-Settings`
+upgrade is not exposed yet; cleartext H2 is direct H2 only. Future H3 work will
+extend the transport family with QUIC when that protocol family is actually
+implemented.
 
 ## Benchmarks
 
@@ -133,6 +291,17 @@ make -C benchmarks/nextpas.core.http/bench_router clean run
 
 This emits `operation=http.router.dispatch` and a `handler dispatch` row for
 route match plus no-op handler invocation, without H1 parsing or socket I/O.
+
+Run the focused header lookup benchmark:
+
+```sh
+NEXTPAS_BENCH_MAX_ITERS=100000 \
+NEXTPAS_BENCH_FILTER='Get hit' \
+make -C benchmarks/nextpas.core.http/bench_headers clean run
+```
+
+This emits `operation=http.headers` and lowercase / uppercase lookup rows for
+`THttpHeaders.Get`, without H1 parsing or socket I/O.
 
 Run the focused H1 response serialization benchmark:
 
@@ -172,8 +341,16 @@ NEXTPAS_BENCH_FILTER=plaintext \
 make -C benchmarks/nextpas.core.http/bench_fullchain clean run
 ```
 
-This emits `operation=http.fullchain.keepalive` and a `workload=plaintext` row
-with `iterations`, `completed`, `elapsed_ns`, `ns/op`, and `req/s`.
+This emits `operation=http.fullchain.keepalive` and a `workload=plaintext` row;
+`workload=middleware_noop` is the matching `GET /` router row with one no-op
+middleware layer. Keep the captured row with its truth markers:
+`request_body_bytes`, `response_body_bytes`, `backend`, `nextpas_h1_path`,
+`nextpas_dispatch_path`, `nextpas_dispatch_path=middleware_router`,
+`observed_direct_handler_hits`, `observed_router_handler_hits`,
+`observed_middleware_hits`, `client_read_mode=buffered`, `iterations`,
+`completed`, `elapsed_ns`, `ns/op`, and `req/s`. If
+`NEXTPAS_BENCH_FILTER` matches no scenario, the benchmark exits non-zero and
+prints the unmatched filter instead of emitting a misleading row.
 
 Run the focused comparator smoke from the test harness:
 
@@ -181,11 +358,16 @@ Run the focused comparator smoke from the test harness:
 make -C tests/nextpas.core.http/test_http_benchmarks test
 ```
 
-The harness builds and runs nextPas, Go, and Rust keep-alive server benchmarks at
-smoke scale. Each implementation reports `operation`, `workload`, `impl`,
-`iterations`, `threads`, `completed`, `elapsed_ns`, `ns/op`, and `req/s`, so
-later benchmark result capture can use one stable format. It also builds
-`bench_fullchain` and validates the filtered plaintext row markers.
+The harness builds and runs nextPas, Go, Rust std-only, and Hyper/Tokio
+keep-alive server benchmarks at smoke scale. Each implementation reports
+`operation`, `workload`, `impl`, `iterations`, `threads`, `completed`,
+`elapsed_ns`, `ns/op`, and `req/s`, so later benchmark result capture can use
+one stable format. The std-only Rust row is labeled `impl=rust_std` and also
+reports `rust_profile=std_only`; the Hyper/Tokio row is labeled
+`impl=rust_hyper` and reports `rust_profile=hyper_tokio`,
+`rust_http_stack=hyper_http1`, and `rust_runtime=tokio_multi_thread`. The
+harness also builds `bench_headers` and `bench_fullchain`, validating filtered
+header lookup and plaintext full-chain row markers.
 
 For manual comparison runs, use the server comparison runner:
 
@@ -195,16 +377,24 @@ benchmarks/nextpas.core.http/run_server_comparison.sh \
   --output build/projects/nextpas.core.http/server_comparison/report.txt
 ```
 
-The runner builds all three implementations, streams the combined output to
-stdout, and optionally writes the same report to `--output`. Use `--runs N` to
-repeat each implementation after one build and print median `ns/op` / `req/s`
-summary rows. Use
+The runner builds the default nextPas / Go / Rust std-only implementations,
+streams the combined output to stdout, and optionally writes the same report to
+`--output`; that path must stay under
+`build/projects/nextpas.core.http/server_comparison` to keep benchmark reports
+out of source and test trees. Use `--runs N` to repeat each implementation
+after one build and print median `ns/op` / `req/s` summary rows. Use
 `--workload url_path` to make the client request `/api/v1/users` and make each
 server implementation touch the request path before writing the response. Use
 `--workload adapter_no_url` to keep the handler no-URL while adding
-`Connection: keep-alive`, which forces nextPas through the llhttp adapter path
-instead of the H1 fast path. Use `--workload response_1k` to write and read a
-complete 1 KiB fixed-length response body.
+`Connection: keep-alive`; current nextPas reports the actual route with
+`nextpas_h1_path`, because explicit HTTP/1.1 keep-alive is fast-path compatible
+while `close`, `upgrade`, and unsupported connection-policy tokens still fall
+back to the llhttp adapter path. Use `--workload response_1k` to write and read
+a complete 1 KiB fixed-length response body.
+Pass `--include-hyper` when you want the optional Cargo-based Hyper/Tokio
+comparator included in the same runner output and median summary. Summary rows
+preserve Rust identity through `summary_rust_profile`,
+`summary_rust_http_stack`, and `summary_rust_runtime`.
 
 To capture environment metadata and the comparison output in Markdown, run:
 
@@ -217,6 +407,8 @@ benchmarks/nextpas.core.http/capture_server_comparison_snapshot.sh \
 The snapshot includes `git_head`, OS, FPC, Go, and Rust versions, the benchmark
 parameters including `runs`, and the raw comparison output plus summary rows.
 Treat snapshots as local evidence, not as a permanent ranking across machines.
+It uses the same `server_comparison` output-root guard and removes the adjacent
+`${output}.raw` temp file after embedding the raw comparison output.
 
 For narrowed `Pascal raw llhttp vs C llhttp` work, use the H1 parser flag
 matrix runner instead of repeating separate single-shot commands:
@@ -229,8 +421,17 @@ benchmarks/nextpas.core.http/bench_h1parser/run_flag_matrix.sh \
   --smoke --no-perf --runs 3
 ```
 
+`NEXTPAS_BENCH_FILTER` is a case-insensitive substring over benchmark row
+names. H1 parser, full-chain, and C llhttp comparator filters exit non-zero on
+no-match instead of emitting an empty evidence row. `LLHTTP_ROOT` takes
+precedence; `NEXTPAS_LLHTTP_ROOT` is accepted as a fallback for shared
+test/benchmark environments.
+
 This writes per-run `results.tsv`, aggregated `summary.tsv`, `env.txt`, and
 logs under `build/projects/nextpas.core.http/bench_h1parser/flag_matrix/...`.
+`NEXTPAS_FLAG_MATRIX_OUTPUT_DIR` must stay under that root. Do not commit
+generated objects, binaries, `.raw` captures, flag-matrix outputs, perf logs,
+or vendored llhttp sources.
 
 See [BENCHMARKS.md](BENCHMARKS.md) for the current harness details and the
 latest committed local snapshot.

@@ -18,7 +18,8 @@ uses
   nextpas.core.collections.vec.intf,
   nextpas.core.collections.arr,
   nextpas.core.collections.slice,
-  nextpas.core.mem.allocator;
+  nextpas.core.mem.intf,
+  nextpas.core.mem.default;
 
 function MemIsOverlap(aPtr1: Pointer; aSize1: SizeUInt; aPtr2: Pointer; aSize2: SizeUInt): Boolean; inline;
 
@@ -794,7 +795,7 @@ end;
 { TVec<T> }
 constructor TVec.Create;
 begin
-  Create(VEC_DEFAULT_CAPACITY, GetRtlAllocator(), nil, nil);
+  Create(VEC_DEFAULT_CAPACITY, DefaultAllocator(), nil, nil);
 end;
 
 
@@ -816,7 +817,7 @@ end;
 
 constructor TVec.Create(aCapacity: SizeUInt);
 begin
-  Create(aCapacity, GetRtlAllocator(), nil, nil);
+  Create(aCapacity, DefaultAllocator(), nil, nil);
 end;
 
 constructor TVec.Create(aCapacity: SizeUInt; aAllocator: IAllocator);

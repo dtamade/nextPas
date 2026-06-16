@@ -1,5 +1,1295 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 comparator scale validation slice
+
+- 本轮继续收紧 benchmark truth 的输入契约：
+  runner 已经拒绝非正 `--requests` / `--threads`，但四个单体 comparator 仍会把
+  `0` 静默夹到 `1` 或回落默认值，并继续输出正常 benchmark row。
+- 选择依据：
+  - 这和 earlier invalid workload fallback 属于同类 evidence 污染：调用方输入错了，
+    却得到一条看似成功的 row。
+  - 手工 smoke、局部 profile、或保存单体 comparator 输出时，并不总会经过 runner。
+  - 只收紧 CLI fail-fast，不改变 valid scale 的 benchmark 行为。
+- RED 证据：
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `49 total, 45 passed, 4 failed`
+    - failed at `bench_server rejects invalid scale`
+    - failed at `go server comparator rejects invalid scale`
+    - failed at `rust server comparator rejects invalid scale`
+    - failed at `hyper/tokio server comparator rejects invalid scale`
+    - failures all emitted successful benchmark rows despite `--requests 0` or
+      `--threads 0`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - nextPas `bench_server` now rejects invalid positive options in `ParseOptions`.
+  - Go comparator exits with `invalid --requests` / `invalid --threads`.
+  - Rust std-only and Hyper/Tokio comparators exit with the same diagnostics.
+  - focused gate also locks that invalid scale runs do not emit
+    `operation=http.server.keepalive`.
+- 复盘结论：
+  single-implementation comparator binaries 现在不会把 invalid scale 输入伪装成成功
+  benchmark row。后续 benchmark truth 仍应优先补输入契约、metadata 和 artifact
+  boundary，而不是直接追加数字。
+
+## 2026-06-06 h1 parser operation marker slice
+
+- 本轮继续收紧 parser benchmark metadata contract：
+  `bench_h1parser` 和外部 C llhttp comparator 已经有 title、`bench_max_iters`、
+  `bench_filter` 等文本信息，但 focused smoke 还没有锁住稳定 `operation=` marker。
+- 选择依据：
+  - parser benchmark 现在不仅被人直接运行，也会被 filter、flag matrix、保存 raw
+    output、后续 snapshot/parser 工具消费。
+  - 只靠 `=== ... ===` 标题区分工具不够稳；machine-readable marker 更适合 runner
+    和证据收集链路。
+  - 这是 benchmark truth slice，不改变 row schema、性能数字、HTTP runtime 或
+    public API。
+- RED 证据：
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `49 total, 47 passed, 2 failed`
+    - failed at `H1 parser benchmark max iterations env`
+    - failed at `C llhttp comparator max iterations env when configured`
+    - failures: missing `operation=http.h1parser` and
+      `operation=http.h1parser.c_llhttp`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - `bench_h1parser` now emits `operation=http.h1parser`.
+  - `bench_h1parser/compare_c` now emits `operation=http.h1parser.c_llhttp`.
+  - focused gate locks both markers alongside the existing `bench_max_iters`
+    smoke.
+- 复盘结论：
+  parser benchmark 与 C comparator 现在和 server/header/writer/outbound/fullchain
+  benchmark 一样有稳定 operation marker。后续若再加 snapshot/runner 机器消费逻辑，
+  应优先复用这些 marker，而不是重新解析标题文本。
+
+## 2026-06-06 benchmark inventory cleanup slice
+
+- 本轮不是新增 benchmark，而是清理 HTTP benchmark lane 内一个遗留孤岛资产：
+  `benchmarks/nextpas.core.http/bench_http/bench_http.lpr`。
+- 选择依据：
+  - 它是 HTTP benchmark 目录下唯一没有 project `Makefile` 的顶层 Pascal benchmark
+    project。
+  - 它输出的是旧式自由文本，没有 `operation=` / `bench_filter=` / `iterations`
+    等稳定 metadata contract。
+  - 它把 router / URL / header 三类 microbenchmark 混在一个聚合程序里，而这些面
+    现在都已有更窄、更可比较、带 focused gate 的专门 benchmark 资产。
+  - 在当前 benchmark truth 主线下，继续维护这个聚合 bench 只会制造第二套不受约束
+    的数字入口。
+- RED 证据：
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - 新增 inventory contract 后，唯一新失败是
+      `HTTP top-level Pascal benchmark projects have Makefiles`
+    - failure: `top-level HTTP Pascal benchmark projects missing Makefile: expected "", got "bench_http"`
+- GREEN / behavior 证据：
+  - 删除 `bench_http` 遗留聚合 benchmark。
+  - `test_http_benchmarks` 改为锁定：HTTP 顶层 Pascal benchmark project 不再存在
+    无 `Makefile` 的孤岛资产。
+- 复盘结论：
+  benchmark truth 不只是“更多 benchmark”；也包括主动移除不再受维护契约约束的旧入口。
+  当前 HTTP benchmark 公开资产以 focused projects + comparator runners 为准。
+
+## 2026-06-06 header benchmark smoke marker slice
+
+- 本轮收紧 header microbenchmark evidence：
+  `bench_headers` 已有多个 header container rows，并且历史优化记录多次引用它，
+  但 `test_http_benchmarks` 没有 smoke 该 benchmark，且 benchmark 输出缺少
+  stable `operation=` marker。
+- 选择依据：
+  - Header lookup 是 H1 parser metadata、server policy、client/server header handling
+    的基础热路径。
+  - 这个 slice 把已有 benchmark 资产纳入 focused gate，比继续追加同型 correctness
+    case 更符合 performance evidence 主线。
+  - 只补 marker 和 smoke，不改变 `THttpHeaders` 实现或 public contract。
+- RED 证据：
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `45 total, 44 passed, 1 failed`
+    - failed at `bench_headers lookup smoke`
+    - failure: missing `operation=http.headers`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - `bench_headers` now emits `operation=http.headers`.
+  - focused smoke locks `NEXTPAS_BENCH_FILTER=Get hit`, lowercase `Get hit`
+    row, uppercase `Get hit uppercase` row, `bench_filter`, `ns/op`, and `ops/s`.
+- 复盘结论：
+  header benchmark 现在和 router/writer/outbound microbenchmarks 一样有 stable
+  operation marker 和 focused gate coverage。后续 header 性能 slice 可以依赖这个
+  gate，但不能把单次 row 当成持久性能排名。
+
+## 2026-06-06 snapshot raw cleanup slice
+
+- 本轮收紧 benchmark snapshot helper 的 artifact hygiene：
+  `capture_server_comparison_snapshot.sh` 会把 runner 输出先写入
+  `${OUTPUT_PATH}.raw`，再嵌入 Markdown snapshot。旧实现成功后保留该 raw 文件，
+  容易让 build tree 留下不该提交的临时 benchmark 输出。
+- 选择依据：
+  - benchmark truth 不只依赖 row schema，也依赖 evidence capture 的可维护性和
+    artifact boundary。
+  - `.md` snapshot 已包含 raw comparison output；相邻 `.raw` 文件只是实现临时文件，
+    不应成为第二个需要人工清理的产物。
+  - 这是 harness cleanup，不触碰 HTTP runtime、public API、comparator workload 或
+    Hyper/Tokio dependency set。
+- RED 证据：
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `44 total, 43 passed, 1 failed`
+    - failed at `server comparison snapshot small smoke`
+    - failure: `server comparison snapshot raw temp file should be removed`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - snapshot helper 现在用 `trap cleanup EXIT` 删除 `${OUTPUT_PATH}.raw`。
+  - Markdown snapshot 仍保留 `## Raw Comparison Output`，runner stdout/report schema
+    不变。
+- 复盘结论：
+  snapshot helper 现在只留下 durable Markdown snapshot，不再在成功路径残留临时 raw
+  capture。后续 benchmark evidence slice 应继续优先收紧可复现参数和 artifact
+  boundary，而不是追加裸数字。
+
+## 2026-06-06 http response body release helper slice
+
+- 本轮转向 client response body ownership：
+  redirect/download 内部已经有 close/drain 语义，但普通调用方拿到
+  `IHttpResponse` 后，如果选择不读取 `Body`，没有稳定 public helper 可释放 body。
+  直接要求调用方探测 `IReadCloser` / `ICloser` / `IStream` 会把 transport/body
+  implementation detail 暴露到应用代码。
+- 选择依据：
+  - Go/Rust 生态都强调 response body 未消费时也要显式 release / discard，避免资源泄漏
+    或阻碍连接复用。
+  - 公开 `HttpReleaseResponseBody` 是小 surface：只复用已有内部 release 语义，不新增
+    request builder、streaming response API 或 H1 transport contract。
+  - 不把 close 行为隐式加入 `HttpReadResponseBodyString` /
+    `HttpReadResponseBodyBytes`，避免改变已落地的 read-all helper contract。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - compile failed at four missing call sites:
+      `Identifier not found "HttpReleaseResponseBody"`
+- GREEN / behavior 证据：
+  - `HttpReleaseResponseBody(nil)` 抛 `EArgumentError`。
+  - nil body no-op。
+  - close-capable body 走 close。
+  - plain `IReader` body drain 到 EOF。
+  - facade `nextpas.core.http.HttpReleaseResponseBody` 转发同一 helper。
+- 复盘结论：
+  client response body ownership 现在有三个清晰路径：调用方读取 bytes/string、download
+  helper 代为消费并释放、或者调用 `HttpReleaseResponseBody` 显式丢弃/释放。后续若继续
+  response body 方向，应设计 streaming lifetime 或 close-on-read policy，不要偷偷改变
+  既有 read-all helper。
+
+## 2026-06-06 runner include-hyper marker slice
+
+- 本轮继续收紧 comparison report header：
+  runner raw output 已有 `comparison`、`requests`、`threads`、`workload`、`runs`，
+  但缺 `include_hyper`。保存 report 后，调用方只能从后续是否出现
+  `section=rust_hyper` / `summary_impl=rust_hyper` 推断当时是否请求了 Hyper/Tokio
+  comparator。
+- 选择依据：
+  - 这是 benchmark evidence metadata，不改变任何 comparator row 或 summary
+    解析。
+  - snapshot helper 已经记录 `include_hyper=`，runner raw report 也应有同一
+    参数 truth。
+  - marker 位于 header，便于 grep/脚本消费。
+- RED 证据：
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `44 total, 43 passed, 1 failed`
+    - failed at `server comparison runner include hyper smoke`
+    - failure: missing `include_hyper=1`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - `run_server_comparison.sh` header 现在输出 `include_hyper=0|1`。
+  - include-hyper smoke 锁住 stdout 和 saved report 都包含 `include_hyper=1`。
+- 复盘结论：
+  server comparison report 现在能直接说明是否请求 Hyper/Tokio comparator。后续
+  benchmark truth 可继续补 runner/snapshot 的 parameter metadata，但不应改变已经
+  稳定的 row schema。
+
+## 2026-06-06 hyper snapshot cargo metadata slice
+
+- 本轮继续收紧 Hyper/Tokio comparator 的环境证据：
+  snapshot 已记录 `rustc_version`，但 include-hyper 路径实际还依赖 Cargo 和
+  `compare_hyper/Cargo.lock` 锁定的 dependency set。没有这些 marker，后续
+  Hyper/Tokio row 的复现信息弱于 Go / Rust std-only row。
+- 选择依据：
+  - Hyper comparator 是 Cargo-based；Cargo 版本和 lockfile hash 是比裸
+    `rustc_version` 更接近真实环境的最小补充。
+  - 这是 snapshot evidence，不改变 comparator 代码、依赖版本或 runner 输出格式。
+  - hash 只记录已追踪 `Cargo.lock`，不提交任何 build/cargo target 产物。
+- RED 证据：
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `44 total, 43 passed, 1 failed`
+    - failed at `server comparison snapshot include hyper smoke`
+    - failure: missing `cargo_version=`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - snapshot helper 现在记录 `cargo_version=<cargo --version|unknown>`。
+  - snapshot helper 现在记录
+    `hyper_cargo_lock_sha256=<sha256(compare_hyper/Cargo.lock)|unknown>`。
+  - include-hyper snapshot smoke 锁住这两个 marker 与 `rust_hyper` row 同时出现。
+- 复盘结论：
+  Hyper/Tokio benchmark snapshot 的环境块现在包含 Cargo toolchain 与 locked
+  dependency set 指纹。后续若继续 Rust comparator truth，应考虑记录 Cargo package
+  versions 或确保 snapshot 可同时覆盖 `--include-hyper + --workload response_1k`。
+
+## 2026-06-06 snapshot workload propagation slice
+
+- 本轮继续收紧 benchmark evidence capture：
+  `run_server_comparison.sh` 已能选择 `no_url` / `url_path` /
+  `adapter_no_url` / `response_1k`，但 snapshot helper 只能捕获默认
+  `no_url`。这使得 docs 里的 non-default workload 证据难以通过带环境元数据的
+  Markdown snapshot 复现。
+- 选择依据：
+  - snapshot 是长期性能证据入口，应该能记录同一个 runner 支持的 workload。
+  - 这是 benchmark harness truth，不触碰 HTTP public API、server runtime 或
+    comparator 输出格式。
+  - 默认 snapshot 行为保持兼容；只有显式 `--workload` 时才在 command block 中展示。
+- RED 证据：
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `44 total, 43 passed, 1 failed`
+    - failed at `server comparison snapshot url_path smoke`
+    - failure: `unknown argument: --workload`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - snapshot helper 新增 `--workload no_url|url_path|adapter_no_url|response_1k`。
+  - 非法 workload 走与 runner 相同的 allow-list validation。
+  - 显式 workload 会透传到 runner，并写入 snapshot environment `workload=...`
+    和 command block。
+- 复盘结论：
+  现在可以用 snapshot helper 捕获 non-default workload 的环境化证据。下一步若继续
+  benchmark truth，应优先让 snapshot 覆盖 `--include-hyper + --workload` 的组合或
+  记录 Cargo/Hyper dependency versions，而不是只追加裸 benchmark 数字。
+
+## 2026-06-06 comparator workload validation slice
+
+- 本轮转向 benchmark truth 的输入契约：
+  `run_server_comparison.sh` 已经拒绝非法 `--workload`，但四个单体 comparator
+  仍会把拼错的 workload 静默 fallback 到 `no_url`。这会让手工 smoke 或后续报告
+  捕获出一条真实完成的 `workload=no_url` row，从而掩盖调用方原本想测的 workload
+  并污染性能证据。
+- 选择依据：
+  - 这是 benchmark harness correctness，不是新增 public HTTP API。
+  - Go/Rust/Hyper comparator 的价值在于提供可信对照；显式输入错误必须 fail-fast，
+    否则 Rust std-only / Hyper rows 再清晰也可能被错误 workload 污染。
+  - runner 已经有 allow-list，本轮只让单体 comparator 与 runner 契约一致。
+- RED 证据：
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `43 total, 39 passed, 4 failed`
+    - failed at `bench_server rejects invalid workload`
+    - failed at `go server comparator rejects invalid workload`
+    - failed at `rust server comparator rejects invalid workload`
+    - failed at `hyper/tokio server comparator rejects invalid workload`
+    - 四条失败输出都包含成功的 `workload=no_url` benchmark row
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - nextPas `bench_server` 对非法 workload `Halt(2)`。
+  - Go comparator 对非法 workload `os.Exit(2)`。
+  - Rust std-only / Hyper comparator 对非法 workload `std::process::exit(2)`。
+  - 四者都输出 `invalid --workload` 和相同 workload allow-list。
+- 复盘结论：
+  benchmark comparator 现在不会因 workload 拼写错误生成误导性 `no_url` 行。后续
+  benchmark truth 更高价值方向是继续加强 snapshot/runner 的参数透传和环境元数据，
+  或补更完整的 Hyper/Tokio workload，而不是新增未验证的性能排名。
+
+## 2026-06-06 http download body release slice
+
+- 本轮收紧 client download helper 的 response body ownership：
+  `HttpGetToWriter` / `HttpGetToFile` 旧实现会消费成功响应体、丢弃非 2xx 响应体，
+  但没有在 helper 边界释放 close-capable body。调用方拿不到 response，因此也无法
+  自己 close。
+- 选择依据：
+  - Go/Rust 生态里代替调用方消费 response body 的 helper 应同时负责释放资源。
+  - 这属于 client helper 错误/资源语义，不是新增 builder、transport vtable 或 H1
+    runtime 改造。
+  - redirect 路径已经有 close/drain release 语义，可以复用同一内部 contract。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `55 total, 52 passed, 3 failed`
+    - failed at `HttpGetToWriter closes body after successful copy`
+    - failed at `HttpGetToWriter closes body when copy fails`
+    - failed at `HttpGetToWriter closes non-2xx body before raising`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - `ReleaseRedirectResponseBody` 泛化为 `ReleaseResponseBody`。
+  - redirect 路径继续复用同一 release helper。
+  - `HttpGetToWriter` / `HttpGetToFile` 现在在 successful copy、copy failure、
+    non-2xx rejection、temp-file failure 等路径通过 `finally` 释放 response body。
+- 复盘结论：
+  download helper 现在承担它隐藏掉的 response body ownership。后续如果继续
+  response body 方向，应先设计 streaming/read helper 是否也应 close，而不是把 close
+  行为隐式扩散到所有 reader helper。
+
+## 2026-06-06 http shortcut body bytes-buffer slice
+
+- 本轮收紧 client shortcut body materialization：
+  `IHttpClient.Post` / `Put` / `Patch` 旧实现各自重复读取 `IReader`，并把 bytes
+  先追加到 Pascal string，再用 `StrToBytes` 转回 `TBytes` 创建 body stream。
+- 选择依据：
+  - 这不是新增 public API，而是让已有 shortcut 的内部载体与刚落地的
+    `NewRequest(..., BodyBytes)` helper 对齐。
+  - Go/Rust 的 body helper 语义应把 bytes 当 bytes 处理；string 中转既重复，也让
+    binary payload ownership 更难审计。
+  - 本 slice 不改变 shortcut 仍需 buffer body 以生成 `Content-Length` 的当前
+    public contract，也不引入 streaming/chunked request body。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `52 total, 51 passed, 1 failed`
+    - failed at `Client shortcut bodies use bytes buffer`
+    - failure: `client shortcut body path uses one bytes-buffer request helper`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - 新增内部 `BufferedBodyRequest`。
+  - `Post` / `Put` / `Patch` 共享该 helper；helper 用
+    `nextpas.core.io.ReadAll` 读取 body，再调用 bytes body `NewRequest` helper。
+  - source-contract 证明不再存在 `LBodyBuf: string;` 与
+    `CreateBytesStreamFrom(StrToBytes(LBodyBuf))` 中转。
+- 复盘结论：
+  client shortcut body path 现在和 public bytes request helper 用同一个载体语义。
+  后续若继续 body ownership，应先设计 streaming/chunked request contract，而不是在
+  shortcut 内继续堆 ad hoc buffer 逻辑。
+
+## 2026-06-06 http request bytes body helper slice
+
+- 本轮补齐 client request body ergonomics：
+  `NewRequest(..., BodyText)` 已覆盖文本请求体，但 binary request body 仍需要调用方
+  自己创建 `IReader` 和显式 length。`TBytes` helper 是 Go/Rust 常见 binary body
+  使用面的低风险补齐。
+- 选择依据：
+  - 这是 public message/facade helper，不新增 builder、不扩大 transport vtable。
+  - helper 复制 bytes 到 in-memory reader，ownership 与 string body helper 对齐。
+  - `Content-Type` 仍由调用方设置，避免 helper 根据 bytes 做不稳定推断。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - compile failed at missing overload:
+      `Error: Incompatible type for arg no. 4: Got "TBytes", expected "AnsiString"`
+- GREEN / behavior 证据：
+  - 新增 `NewRequest(Method, Url, Headers, BodyBytes)` overload，`Url` 支持
+    `TUrl` 与 URL string。
+  - 新增内部 `BytesBodyReader`；`StringBodyReader` 复用同一 bytes reader 路径。
+  - facade `nextpas.core.http.NewRequest(..., BodyBytes)` 转发同一 helper。
+- 复盘结论：
+  request body helper 现在覆盖 reader + explicit length、string、bytes 三个低风险
+  使用面。后续若继续 client ergonomics，应审计 per-request policy 或 streaming
+  body ownership contract，而不是直接引入完整 builder。
+
+## 2026-06-06 http response body bytes helper slice
+
+- 本轮补齐 client response body ergonomics：
+  `HttpReadResponseBodyString(Resp)` 已覆盖文本 body 便利读取，但二进制响应仍需要
+  调用方直接消费 `IHttpResponse.Body` 或走 download helper。`TBytes` helper 是
+  Go `io.ReadAll(resp.Body)` / Rust bytes-style 取用的低风险基础面。
+- 选择依据：
+  - 这是 public client helper ergonomics，不新增 builder、不扩大 transport vtable。
+  - helper 明确消费 response body reader，因此 ownership 语义与 string helper 对齐。
+  - nil body 返回 empty bytes，nil response 抛 `EArgumentError`，延续 string helper
+    已落地的错误边界。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - compile failed at missing `HttpReadResponseBodyBytes`
+    - `test_http_client.lpr(1096,39) Error: Identifier not found "HttpReadResponseBodyBytes"`
+    - 同一 RED 还覆盖 nil body / nil response helper call site。
+- GREEN / behavior 证据：
+  - 新增 `nextpas.core.http.client.HttpReadResponseBodyBytes(Resp): TBytes`。
+  - facade `nextpas.core.http.HttpReadResponseBodyBytes` 转发同一 helper。
+  - `HttpReadResponseBodyString` 现在复用 bytes helper，再转换成 Pascal string，
+    避免 duplicate body read loop。
+- 复盘结论：
+  response body 现在有 string 与 bytes 两条常用消费 helper。后续若继续 client
+  ergonomics，应审计 per-request policy、charset decoding 或 streaming ownership
+  contract；不要在没有明确 contract 前继续堆格式化 body helper。
+
+## 2026-06-06 http server options validation slice
+
+- 本轮收紧 server options error semantics：
+  `THttpServerOptions` 是 server facade 的 public carrier。旧实现只校验 nil
+  handler，negative `ReadTimeout` / `WriteTimeout` / `IdleTimeout` 会继续下沉到
+  H1 runtime，negative `MaxHeaderSize` / `MaxBodySize` 也会下沉到 request parser /
+  limit handling。
+- 选择依据：
+  - Go/Rust 侧 timeout 和 size limit 都是明确策略输入，负数不是稳定 public
+    contract。
+  - construction-time `EArgumentError` 比把非法 options 延迟到 runtime 更可测试，
+    也避免 HTTP facade 把坏 carrier 推给 foundation。
+  - 本 slice 不改变 `0` timeout / limit 的现有语义，不修改
+    `nextpas.core.net.server`，也不扩大 H1 runtime。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - `33 total, 32 passed, 1 failed`
+    - failed at `HttpServer options reject negative values`
+    - failure: `negative server read timeout raises EArgumentError`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - 新增内部 `ValidateServerOptions`。
+  - `THttpServer.Create(Handler, Options)` 与
+    `THttpServer.Create(Handler, Transport, Options)` 共享同一校验路径，因此
+    default transport 与 injected transport overload 都会拒绝 negative timeout /
+    size-limit fields。
+- 复盘结论：
+  server options 现在与 client options 一样具备明确 non-negative invariant。后续若
+  继续 options 方向，应先审计 zero-value limit 是否需要 contract，而不是顺手改变。
+
+## 2026-06-06 http client options validation slice
+
+- 本轮继续收紧 client options error semantics：
+  `THttpClientOptions.Timeout` 与 `MaxRedirects` 是 public client policy carrier。
+  旧实现把 negative timeout 传给 H1 transport，实际表现为“不设置 deadline”；
+  negative max redirects 则只会在遇到 redirect 时通过 `too many redirects` side
+  effect 暴露，而不是在 construction 边界失败。
+- 选择依据：
+  - Go/Rust 侧 timeout/redirect limit 都是明确策略输入，负数不是稳定语义。
+  - construction-time `EArgumentError` 比把非法选项延迟到 transport 或 redirect
+    runtime 更可测试，也更接近 nextPas 公共 API 的防御性输入校验风格。
+  - 本 slice 不新增 per-request timeout、redirect callback、cookie jar 或 transport
+    vtable，只收紧现有 options carrier。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `47 total, 46 passed, 1 failed`
+    - failed at `Client options reject negative values`
+    - failure: `negative client timeout raises EArgumentError`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - 新增内部 `ValidateClientOptions`。
+  - `THttpClient.Create(Options)` 与 `THttpClient.Create(Transport, Options)` 共享
+    同一校验路径，因此默认 transport 与 injected transport overload 都会拒绝
+    negative `Timeout` / `MaxRedirects`。
+- 复盘结论：
+  client options 现在有明确 non-negative invariant。后续若继续 client ergonomics，
+  更高价值方向是 per-request policy seam 或 response/body ownership helper，而不是
+  扩大一次性 validation 列表。
+
+## 2026-06-06 http request constructor nil headers slice
+
+- 本轮继续收紧 message carrier ergonomics：
+  helper 层 `NewRequest(..., nil headers, ...)` 已创建空 header set，但 direct
+  `THttpRequest.Create` / `CreateFromRequestTarget` 仍会保存 nil headers。高级调用方
+  或内部路径若直接构造 request，再交给 client/H1，后续 `Req.Headers.Has/Get/ForEach`
+  仍可能 access violation。
+- 选择依据：
+  - `THttpRequest` 是 `http.message` 单元公开的 concrete implementation；虽然 helper
+    是推荐入口，constructor 不应保留更弱的 header carrier invariant。
+  - 这与上一轮 `THttpResponse.Create` nil headers normalization 是同一类
+    ownership/ergonomics 修正。
+  - 本 slice 不改变 public helper signatures、不新增 builder，也不触碰 H1 transport。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - `27 total, 26 passed, 1 failed`
+    - failed at `Request constructors create headers when headers argument is nil`
+    - failure: `direct request constructor creates headers when nil`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - 新增内部 `HeadersOrNew` helper。
+  - `THttpRequest.Create`、`CreateFromRequestTarget` 与 `THttpResponse.Create`
+    共享同一 nil headers normalization。
+- 复盘结论：
+  request/response message carrier 现在都有稳定 non-nil headers invariant。后续如果
+  继续同线，应审计 options validation 或 client redirect policy，而不是继续扩大
+  constructor surface。
+
+## 2026-06-06 http response nil headers slice
+
+- 本轮转向 message helper ergonomics：
+  `NewRequest(..., nil headers, ...)` 已经会创建空 header set，但
+  `NewResponse(Status, nil, Body)` 旧行为保留 nil headers。调用方随后读
+  `Resp.Headers.Get(...)` 或追加 headers 会触发 access violation。
+- 选择依据：
+  - Go/Rust 的 response header carrier 通常给调用方稳定空集合语义；nil header
+    map/collection 不应成为普通 response helper 的陷阱。
+  - 这是 public message/facade API 质量，不是 H1 malformed case。
+  - 实现可以落在 `THttpResponse.Create`，让 public helper 与内部 direct
+    response construction 共享同一语义。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - `26 total, 25 passed, 1 failed`
+    - failed at `NewResponse with nil headers creates headers`
+    - failure: `response helper creates headers when nil`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据:
+  - `THttpResponse.Create` 现在把 nil headers 规范化成 `NewHttpHeaders`。
+  - `test_http_message` 锁住 helper contract；`test_http_contract` 锁住 facade
+    可见性。
+- 复盘结论：
+  response helper 的 nil headers 语义已与 request helper 对齐。后续可继续审计
+  direct request constructor nil headers 或 client option validation，但应单独切片。
+
+## 2026-06-06 http client nil transport response slice
+
+- 本轮转向 client transport seam 错误语义：
+  `IHttpTransport.RoundTrip` 是 default H1、future H2/H3 与 injected test/custom
+  transport 的共同边界。若 transport 返回 nil response，旧 `THttpClient.DoRequest`
+  会直接读取 `LResp.StatusCode`，把 contract violation 暴露成 access violation。
+- 选择依据：
+  - Go/Rust HTTP client 都把“没有 response”表达为 error，而不是让调用方碰到
+    nil response runtime fault。
+  - 这是 public client facade 的错误语义，不是 redirect URL spelling 变体。
+  - 本 slice 不需要新增 public API 或修改 transport vtable。
+- RED 证据：
+  - injected `TNilResponseTransport.RoundTrip` 返回 nil。
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `46 total, 45 passed, 1 failed`
+    - failed at `Client Do rejects nil transport response`
+    - failure: `Access violation`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - `THttpClient.DoRequest` 在 `RoundTrip` 后立即检查 nil response，并抛
+    `EHttpError`。
+  - focused gate 证明该错误不会再穿透成 access violation。
+- 复盘结论：
+  client facade 现在对 transport 返回 nil response 有稳定错误边界。后续同线可继续
+  审计 nil headers、options validation 或 per-request policy，但不要混成一个大
+  API 变更。
+
+## 2026-06-06 http redirect response body error-path proof
+
+- 本轮补齐上一 slice 的 error-path proof：
+  redirect follow-up 前的 body release 已落地，但 `too many redirects`、
+  missing `Location`、unsupported absolute scheme 这些会丢弃当前 3xx response
+  并抛出 `EHttpError` 的路径也需要明确 body ownership 证据。
+- 选择依据：
+  - 这些路径都不会把中间 redirect response 返回给调用方；如果不释放 body，
+    close/drain 责任会丢失。
+  - 这是 client error semantics / resource ownership，不是继续铺 URL spelling
+    variant。
+  - 当前实现已具备 release 顺序，本轮只补 source-contract proof，不新增 public
+    API。
+- RED 证据：
+  - 临时移除 `too many redirects` / missing `Location` 分支的 release，并把正常
+    release 移到 `ResolveRedirectUrl` 之后。
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `45 total, 42 passed, 3 failed`
+    - failed at
+      `Client closes redirect response body on too many redirects`
+    - failed at
+      `Client closes redirect response body on missing Location`
+    - failed at
+      `Client closes redirect response body on unsupported scheme`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - 恢复正式 release 顺序后，`test_http_client` 锁住三条错误路径都会在抛出前
+    close discarded redirect body，且不会执行 follow-up `RoundTrip`。
+- 复盘结论：
+  error-path body release 已有直接 focused proof。后续同线更高价值方向是
+  per-request redirect policy 或 timeout/body ownership API，而不是继续枚举
+  redirect resolver 拼写。
+
+## 2026-06-06 http redirect response body release slice
+
+- 本轮转向 client redirect response body ownership：
+  `THttpClient.DoRequest` 在收到 redirect response 后直接构造 follow-up request，
+  没有释放上一跳 response body。默认 H1 transport 当前会在返回前把
+  fixed/chunked/close-delimited body 收到内存 reader，所以 live H1 connection
+  reuse 不会立刻被未消费 body 污染；但 injected/future streaming transport seam
+  仍会看到被丢弃的 response body 没有 close/drain。
+- 选择依据：
+  - Go `net/http` redirect 路径不会把中间 redirect response body 交给最终调用方；
+    resource ownership 必须由 client 处理。
+  - nextPas 已有 `IReadCloser` / `ICloser` / `IStream.Close` 语义；不需要为了本
+    slice 新增 public redirect policy 或 streaming response API。
+  - plain `IReader` 没有 close 能力时，唯一可表达的释放方式是 drain 到 EOF。
+- 实现决策：
+  - 新增内部 `ReleaseRedirectResponseBody`。
+  - 优先 close `IReadCloser`、`ICloser`、`IStream`。
+  - non-closeable `IReader` fallback 读取到 EOF。
+  - `too many redirects` 和 `redirect with no Location header` 错误路径也会释放
+    当前 redirect body。
+- RED 证据：
+  - close-capable body RED：
+    - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `41 total, 40 passed, 1 failed`
+    - failed at `Client closes redirect response body before follow-up`
+    - failure: `redirect response body is closed before follow-up round trip`
+    - heaptrc: `0 unfreed memory blocks`
+  - non-closeable drain RED：
+    - 临时移除 fallback drain 循环后，同一 focused gate 失败在
+      `Client drains redirect response body before follow-up`
+    - failure:
+      `non-closeable redirect response body is drained before follow-up round trip`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `42/42 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  这是 redirect 中间响应 body ownership 的窄修正。它没有声明新增 response
+  streaming API、per-request redirect callback、cookie jar 或 H1 parser 重构。
+  后续 client 方向可以继续审计 redirect error-path body release、timeout
+  ergonomics 或 per-request redirect policy，但应先有具体 contract。
+
+## 2026-06-06 http redirect default-port authority slice
+
+- 本轮继续收紧 client redirect Host ownership：
+  上一轮 same-authority 判断直接比较 raw `Port` 字段。`TUrl.Parse` 对省略端口
+  使用 `Port=0`，因此 `http://example.test` redirect 到
+  `http://example.test:80` 会被误判为 authority 变化，进而删除 caller
+  `Host` override。
+- 选择依据：
+  - 对 HTTP redirect 来说，omitted port 与 scheme 默认端口应视为同一
+    effective authority；这符合 Go/Rust 常见 URL/client 使用面。
+  - 本缺口只影响 redirect Host ownership，不要求修改全局 `TUrl.Parse`
+    表达方式，也不要求 H1 transport 改端口选择逻辑。
+  - 继续保持 cross-authority 时删除旧 Host 的安全边界。
+- 实现决策：
+  - 新增内部 `DefaultPortForScheme` 与 `EffectiveAuthorityPort`。
+  - `IsRedirectSameAuthority` 现在比较 lower-case host 与 effective port。
+  - 未知 scheme 仍落到 effective port `0`；本轮不扩大到非 HTTP scheme 设计。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `40 total, 39 passed, 1 failed`
+    - failed at `Client redirect preserves custom host header on default-port authority`
+    - failure: `default-port redirect preserves caller host override: expected "override.test", got ""`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `40/40 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  这是 redirect Host ownership 的 effective-authority 修正。后续若继续同线，
+  更高价值方向应转向 redirect response body drain / connection reuse 或
+  per-request redirect policy，而不是继续枚举 URL spelling variants。
+
+## 2026-06-06 http redirect absolute scheme slice
+
+- 本轮继续收紧 client redirect URL resolution：
+  `ResolveRedirectUrl` 只直接识别小写 `http://` / `https://`。大写 scheme
+  例如 `HTTP://redirect.test/new` 会进入 relative 分支，导致 follow-up request
+  保留 base host；unsupported absolute scheme 例如 `ftp://...` 也会被误当成
+  relative target，而不是 fail-fast。
+- 选择依据：
+  - URL scheme 语义是 case-insensitive；Go/Rust 常见 client 都不会把
+    `HTTP://...` 当成相对路径。
+  - redirect client 层应该决定是否支持一个 absolute scheme，transport 不应收到
+    被错误合并到 base authority 的 request object。
+  - 本 slice 仍限于 redirect resolver，不改全局 `TUrl.Parse`、不新增 TLS/H2/H3
+    或 redirect policy。
+- 实现决策：
+  - 新增内部 `RedirectAbsoluteScheme`，用 `://` 检测 absolute redirect scheme
+    并转小写。
+  - `http` / `https` scheme 走 `TUrl.Parse`，然后把 follow-up `Scheme`
+    规范成小写。
+  - 其他 `://` absolute scheme 抛 `EHttpError`，并且不会执行第二次
+    `RoundTrip`。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `39 total, 37 passed, 2 failed`
+    - failed at `Client redirect transport resolves uppercase absolute Location`
+    - failure: `uppercase absolute redirect updates host: expected "redirect.test", got "example.test"`
+    - failed at `Client redirect rejects unsupported absolute scheme`
+    - failure: `absolute redirect with unsupported scheme raises EHttpError`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `39/39 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  这是 redirect request-object URL scheme contract 的真实收紧。后续如果继续
+  URL resolution，可以单独审计 default-port authority normalization；不要把
+  TLS implementation 或 H2/H3 support 混入此 resolver slice。
+
+## 2026-06-06 http redirect Host ownership slice
+
+- 本轮继续收紧 client redirect header ownership：
+  上一个 header carry-over slice 为了避免跨 authority 旧 Host 污染新目标，
+  在 follow-up request 中无条件删除 `host`。这会破坏调用方显式设置的
+  Host override：relative redirect 没有改变 URL authority，却丢掉了 caller
+  `Host: override.test`。
+- 选择依据：
+  - Go/Rust 常见 client 语义都把 redirect follow-up 当作同一个调用方请求意图的
+    延续；relative / same-authority redirect 不应丢失 caller 指定的 authority
+    override。
+  - `Host` 与 auth/cookie 不同，不能用 trusted-subdomain 规则。它只在 URL
+    authority 变化时删除，否则 same-authority redirect 中 caller override
+    应继续可见。
+  - 这仍是 redirect request-object contract，不改 `IHttpClient` vtable、
+    cookie jar、per-request redirect policy、H1 writer 或底层 net runtime。
+- 实现决策：
+  - 新增内部 `IsRedirectSameAuthority`，只比较 host（case-insensitive）和 port。
+  - `RedirectHeadersFor` 在 authority 不同时删除 `host`；relative redirect
+    经 `ResolveRedirectUrl` 继承 base authority，因此保留 caller Host override。
+  - sensitive header stripping 仍使用 `IsRedirectTrustedHost`，保持 previous
+    same-host/subdomain auth-cookie 语义不变。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `37 total, 36 passed, 1 failed`
+    - failed at `Client redirect preserves custom host header on relative Location`
+    - failure: `relative redirect preserves caller host override: expected "override.test", got ""`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `37/37 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  这是 follow-up Host ownership 的窄修正。后续如果继续 redirect header
+  semantics，可单独补 cross-authority Host removal proof 或 default-port
+  authority 规范化，但不要混进 cookie jar / redirect callback 扩展。
+
+## 2026-06-06 http redirect header ownership slice
+
+- 本轮转向 client redirect header ownership：
+  当前 redirect follow-up request 每次都用 `NewHttpHeaders`，导致 caller headers
+  在 same-authority redirect 中也全部丢失；这与 Go `net/http` 常见语义不符，
+  也让 future H2/H3 transport seam 看不到稳定的 follow-up request headers。
+- 选择依据：
+  - Go `net/http` 会把初始请求 headers 带到 redirect follow-up，但跨到非同域 /
+    非子域目标时剥离 `Authorization`、`WWW-Authenticate`、`Cookie`、`Cookie2`
+    这类敏感 header。
+  - 这是真实安全/API 语义，不是继续铺 malformed H1 case，也不需要改
+    `IHttpClient` vtable、cookie jar 或 per-request redirect policy。
+  - nextPas 的 `content-length` 是普通 header；`301` / `302` / `303` 改成
+    bodyless `GET` 时必须额外删除 `content-length` / `transfer-encoding`，
+    否则会生成声明 body 但无 body 的 H1 request。
+- 实现决策：
+  - 新增内部 `RedirectHeadersFor`，从当前 request clone headers。
+  - redirect follow-up 永远删除 `host`，让 H1 transport 根据新 URL 重新设置。
+  - bodyless redirect 删除 `content-length` / `transfer-encoding`。
+  - cross-authority redirect 删除 `authorization`、`www-authenticate`、`cookie`、
+    `cookie2`；same host 或 subdomain 保留敏感 headers。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `36 total, 34 passed, 2 failed`
+    - failed at `Client redirect preserves headers on same authority`
+    - failure: `same-authority redirect preserves ordinary header: expected "trace-1", got ""`
+    - failed at `Client redirect strips sensitive headers across authority`
+    - failure: `cross-authority redirect preserves ordinary header: expected "trace-2", got ""`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `36/36 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  这是 redirect follow-up request header contract 的真实收紧。后续如果继续
+  client redirect，应单独设计 per-request redirect policy / callback 或 cookie
+  jar，而不是把这些扩展混入 header carry-over slice。
+
+## 2026-06-06 http 307 seekable body replay slice
+
+- 本轮转向 client redirect body ownership：
+  旧文档说 `307` / `308` preserve method/body reader，但真实行为只是复用同一
+  `IReader`。一旦第一跳 transport 已经读完 body，第二跳就会拿到 EOF。
+- 选择依据：
+  - Go/Rust HTTP client 都不会把 body replay 语义伪装成“复用 reader 就够了”；
+    可 replay body 应该能 replay，不能 replay 的非空 body 应该 fail-fast。
+  - 这比继续铺 relative URL 变体更有 API 质量价值，且仍可限制在 client
+    redirect layer，不需要改 H1 writer 或底层 net runtime。
+  - 当前 `IStream` 已经是 nextPas 的 seekable body carrier，足够覆盖
+    `NewRequest(..., BodyText)` 和 in-memory request helpers。
+- 实现决策：
+  - 在第一跳 `RoundTrip` 前记录 body stream 起始 position。
+  - `307` / `308` follow-up 构造前，如果 body 支持 `IStream`，把 position
+    rewind 回起点。
+  - 非空 body 不支持 `IStream` 时抛 `EHttpError`，避免第二跳静默发送空 body。
+- RED 证据：
+  - seekable replay RED：
+    - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `33 total, 32 passed, 1 failed`
+    - failed at `Client replays seekable body on 307 redirect`
+    - failure: `temporary redirect replays seekable body on follow-up: expected "payload", got ""`
+    - heaptrc: `0 unfreed memory blocks`
+  - non-replayable fail-fast RED：
+    - 临时移除 raise 分支后，同一 focused gate 失败在
+      `Client rejects non-replayable body on 307 redirect`
+    - failure: `temporary redirect rejects non-replayable request body`
+- GREEN / behavior 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `34/34 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  这是 body ownership contract 的真实收紧，不是 helper 糖。后续如果继续 client
+  ergonomics，应单独设计 streaming body replay / `GetBody` callback 或
+  per-request redirect policy，不应把这些混进本 slice。
+
+## 2026-06-06 http fragment-only redirect slice
+
+- 本轮继续收紧 client redirect URL resolution：
+  dot-segment path merging 已收口，但 fragment-only `Location` 例如
+  `#section` 会把 base query 清空，follow-up request object 只剩 fragment。
+- 选择依据：
+  - Go/Rust HTTP client 都按 RFC-style relative reference resolution 处理
+    fragment-only redirects；它们不应该改变 path/query。
+  - 这仍是 internal resolver contract，不改 `IHttpClient` vtable、
+    public helper、timeout 或 body replay ownership。
+  - H1 writer 已经只写 path/query，不把 fragment 发到 request-target；本 slice
+    只保证 request object 的 URL parts 正确，避免 future transport 复制错误语义。
+- 实现决策：
+  - 新增内部 `HasRedirectQueryDelimiter`，只扫描 fragment delimiter 前的 `?`。
+  - relative redirect 分支中，非空 path 继续替换/清空 query；
+    query-only reference 继续替换 query；fragment-only reference 保留 base query。
+  - absolute URL 与 network-path redirect 分支保持不变。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `32 total, 31 passed, 1 failed`
+    - failed at
+      `Client redirect transport preserves query on fragment-only Location`
+    - failure: `fragment-only redirect preserves original raw query: expected "from=base", got ""`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `32/32 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  方向仍然是 redirect follow-up request object URL-resolution contract，不是
+  H1 malformed parity。后续若继续 client ergonomics，应优先审计 redirect
+  body replay ownership、per-request redirect policy 或 timeout ergonomics，而不是
+  继续铺同型 relative URL case。
+
+## 2026-06-06 http dot-segment redirect slice
+
+- 本轮继续收紧 client redirect URL resolution：
+  path-relative redirect 已按 base directory 合并，但 merged path 中的 `..`
+  segment 仍原样暴露给 follow-up request。
+- 选择依据：
+  - Go/Rust HTTP client 都按 RFC-style relative reference resolution 移除
+    dot segments；transport 不应收到 `/dir/sub/../next` 再自行解释。
+  - 这仍是 internal resolver contract，不改 `IHttpClient` vtable、
+    public helper、timeout 或 body replay ownership。
+  - 对 future H2/H3 transport seam 有直接价值：protocol implementation 应收到
+    已解析的 path，而不是把 URL resolution 逻辑复制到每个 transport。
+- 实现决策：
+  - 新增内部 `NormalizeRedirectPath`，在 relative `Location` 分支完成
+    base-directory merge 后移除 `.` / `..` segments。
+  - normalizer 使用 segment-moving algorithm，避免把逻辑下沉到 H1 writer。
+  - 本 slice 不改变 absolute URL 和 network-path redirect 的既有分支。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `31 total, 30 passed, 1 failed`
+    - failed at `Client redirect transport normalizes dot-segment Location`
+    - failure: `dot-segment redirect normalizes merged path: expected "/dir/next", got "/dir/sub/../next"`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `31/31 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  方向没有走偏：这是 redirect follow-up request object path normalization
+  contract，不是 H1 malformed parity。后续若继续 URL resolution，应单独审计
+  query-only / fragment-only 语义或 absolute/network-path dot-segment normalization。
+
+## 2026-06-06 http path-relative redirect slice
+
+- 本轮继续收紧 client redirect URL resolution：
+  network-path redirect 已能替换 authority，但 path-relative `Location`
+  例如 `next?from=relative-path` 仍被直接写入 follow-up `Url.Path`，
+  变成裸 `next`。
+- 选择依据：
+  - Go/Rust HTTP client 都按 base URL 目录解析 path-relative redirects；
+    transport 不应收到没有 leading slash 的 request path。
+  - 这仍是 internal resolver contract，不改 `IHttpClient` vtable、
+    public helper、timeout 或 body replay ownership。
+  - 对 H1 wire 和 future H2/H3 transport seam 都有价值：follow-up request
+    object 应暴露合并后的 path，而不是要求 transport 再做 URL resolution。
+- 实现决策：
+  - 新增内部 `MergeRedirectPath(BasePath, TargetPath)`。
+  - absolute-path target 仍直接替换 path。
+  - path-relative target 使用 base path 的最后一个 `/` 作为目录边界；
+    base path 没有目录时落到 root-relative `/<target>`。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `30 total, 29 passed, 1 failed`
+    - failed at `Client redirect transport resolves path-relative Location`
+    - failure: `path-relative redirect merges with base directory: expected "/dir/next", got "next"`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `30/30 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  方向没有走偏：这是 redirect follow-up request object path contract，不是 H1
+  malformed parity。后续可单独审计 dot-segment normalization、query-only 和
+  fragment-only redirects，但不应混入本 slice。
+
+## 2026-06-06 http network-path redirect slice
+
+- 本轮继续收紧 client redirect URL resolution：
+  relative redirect query 已能拆分 path/query，但 network-path `Location`
+  例如 `//redirect.test/new?from=network` 仍被当成普通 relative target，
+  follow-up request 继续保留 base host。
+- 选择依据：
+  - Go/Rust HTTP client 都在 client redirect 层完成 URL resolution；
+    network-path redirect 必须继承 base scheme 并替换 authority，transport
+    不应再猜 `//host/path` 的含义。
+  - 这仍是 internal resolver contract，不改 `IHttpClient` vtable、
+    public helper、timeout 或 body replay ownership。
+  - 对 future H2/H3 transport seam 有直接价值：follow-up request object
+    必须暴露权威 `Scheme` / `Host` / `Path` / `RawQuery`。
+- 实现决策：
+  - `ResolveRedirectUrl(BaseUrl, Location)` 对 `//...` 先要求 base scheme 非空。
+  - network-path Location 使用 `BaseUrl.Scheme + ':' + Location` 转成 absolute URL，
+    再复用 `TUrl.Parse`。
+  - base scheme 为空时抛 `EHttpError`，避免 silent 生成无效 authority。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `29 total, 28 passed, 1 failed`
+    - failed at `Client redirect transport resolves network-path Location`
+    - failure: `network-path redirect updates host: expected "redirect.test", got "example.test"`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `29/29 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  方向没有走偏：这是 redirect follow-up request object authority contract，
+  不是继续铺 H1 malformed case。后续若继续 redirect URL resolution，应单独审计
+  query-only / fragment-only / dot-segment merge，而不是混入本 slice。
+
+## 2026-06-06 http relative redirect query slice
+
+- 本轮继续收紧 client redirect transport seam：
+  live H1 request-target 会在 server 侧重新解析，所以 `/new?from=redirect`
+  端到端已能工作；但显式注入 `IHttpTransport` 时，redirect follow-up request
+  对象本身仍把 query 留在 `Url.Path`，`RawQuery` 为空。
+- 选择依据：
+  - Go/Rust HTTP client 都把 redirect 解析视为 client 层职责；transport 应收到
+    已拆分的 URL parts，而不是被迫自己从 path 字符串里二次解析 query。
+  - 这直接影响 future H2/H3 transport seam：H2/H3 不会发送 HTTP/1.1
+    request-target 文本再让 server 解析，follow-up request object 必须是权威。
+  - 这是内部 redirect resolver 收敛，不改 public API、vtable、timeout 或
+    body replay ownership。
+- 实现决策：
+  - `ResolveRedirectUrl(BaseUrl, Location)` 作为 client 内部 helper。
+  - absolute `http://` / `https://` 继续走 `TUrl.Parse`。
+  - relative Location 走 `TUrl.ParseRequestTarget` 拆分 path/query/fragment，再合并
+    scheme/host/port 等 base URL authority。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `28 total, 27 passed, 1 failed`
+    - failed at `Client redirect transport sees parsed relative query`
+    - failure: `redirect follow-up request path excludes query: expected "/new", got "/new?from=redirect"`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `28/28 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  方向没有走偏：这是 redirect follow-up request object contract，不是再铺一个
+  H1 live malformed case。后续可继续审计 query-only / network-path Location 或
+  per-request redirect policy，但应单独 RED，不和本 slice 混合。
+
+## 2026-06-06 http see-other redirect slice
+
+- 本轮继续收紧 client redirect/error semantics：
+  HTTP status surface 里缺少 `303 See Other`，client redirect set 也只覆盖
+  `301/302/307/308`。
+- 选择依据：
+  - Go `net/http` 与 Rust 常见 client surface 都把 `303 See Other` 视作常见
+    redirect 语义，POST 后跳转到 GET 结果页是核心使用面，不是边角 malformed case。
+  - 这是 redirect/status contract tightening，不改 `IHttpClient` vtable、
+    transport、timeout、连接池或 request helper。
+  - `303` 明确应丢弃原 body；`307/308` 继续保持既有 method/body preservation
+    语义，本轮不扩大到 body replay ownership 设计。
+- 实现决策：
+  - `HTTP_STATUS_SEE_OTHER = 303` 进入 `http.base` 与 facade。
+  - `HttpStatusText(303)` 返回 `See Other`。
+  - `THttpClient.DoRequest` 将 `303` 纳入 redirect set，并与 `301/302`
+    一样构造无 body 的 `GET` follow-up request。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_base clean test`
+    - 编译失败：`Identifier not found "HTTP_STATUS_SEE_OTHER"`。
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - 编译失败：`Identifier not found "HTTP_STATUS_SEE_OTHER"`。
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - 编译失败：`Identifier not found "HTTP_STATUS_SEE_OTHER"`。
+- GREEN / behavior 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_base clean test`
+    - `22/22 passed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - `32/32 passed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `26/26 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  方向没有走偏：这是 client redirect 语义真实缺口，不是扩大 builder 或继续铺
+  malformed wire case。后续若继续 client 侧，应优先单独审计 redirect override、
+  per-request timeout 与 body replay ownership，而不是把这些塞进 `303` slice。
+
+## 2026-06-06 http request string body helper slice
+
+- 本轮继续收紧 client request construction ergonomics：
+  request helper 已支持 custom `IReader + ContentLength`，但简单 string body
+  仍要求调用方手写 bytes stream 和长度。
+- 选择依据：
+  - Go `net/http` 的 `NewRequest` 和 Rust 常见 client builder surface 都让简单
+    string/body 构造保持直接；nextPas 只接受 `IReader` 时，对普通 POST/PUT
+    过于啰嗦。
+  - 这是 helper overload，不改 `IHttpClient` vtable，不改 transport，不引入完整
+    fluent builder。
+  - helper 不猜 `Content-Type`，避免把 JSON/form/text policy 写死在 HTTP core。
+- 实现决策：
+  - `NewRequest(Method, Url, Headers, BodyText)` 同时支持 `TUrl` 和 URL string。
+  - helper 复制 Pascal string 到 `CreateBytesStreamFrom` 生成的 in-memory reader。
+  - helper 复用既有 custom request contract：nil headers 创建空 header set，
+    并发布 `Content-Length`。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - 编译失败：`Wrong number of parameters specified for call to "NewRequest"`。
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - 编译失败于 facade `NewRequest(..., string body)` 缺失。
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - 编译失败于 live `IHttpClient.Do_` helper path 的 string body overload 缺失。
+- GREEN / behavior 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - `25/25 passed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - `32/32 passed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `25/25 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  方向没有走偏：这是低风险 body ergonomics helper，不是扩大成 request builder。
+  后续如果继续 client API，应单独设计 per-request timeout / redirect override /
+  streaming body ownership，而不是让 string helper 承担这些语义。
+
+## 2026-06-06 http client nil request error slice
+
+- 本轮继续收紧 client public error semantics：
+  `IHttpClient.Do_(nil)` 之前会进入 `DoRequest`，读取 `AReq.Url` 时触发
+  access violation。
+- 选择依据：
+  - Go / Rust 的 HTTP client 使用面都会把 request 对象视为调用边界的必需参数；
+    nil request 属于调用方参数错误，应该在 public API 入口给出明确错误。
+  - 这是错误语义 guard，不改 `IHttpClient` vtable，不改 transport registry，
+    不改变 redirect 或 body ownership。
+- 实现决策：
+  - `THttpClient.Do_` 在调用 `DoRequest` 前检查 `AReq = nil`。
+  - nil request 抛 `EArgumentError.Create('HTTP request is nil')`。
+  - redirect recursion 仍走内部 `DoRequest`，不额外扩大 internal guard。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `25 total, 24 passed, 1 failed`
+    - failure: `Client Do rejects nil request - Access violation`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `25/25 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  方向没有走偏：这是 client API 边界的真实错误语义缺口，不是继续铺
+  malformed wire case。后续 client 侧仍应优先审计 timeout / redirect /
+  body ownership 等 public contract，而不是扩大 builder。
+
+## 2026-06-06 http response body string helper slice
+
+- 本轮继续收紧 client response ergonomics：
+  request construction helper 已落地，但常见 response body 读取仍散落在测试和
+  example 的 reader loop / `ReadAll` + bytes conversion 中。
+- 选择依据：
+  - Go `net/http` 和 Rust reqwest/hyper 生态都让调用方很直接地表达“消费 body
+    并读完整内容”；nextPas 目前只有底层 `IReader`，对简单 client/example 场景
+    过于啰嗦。
+  - 这是 helper，不改 `IHttpClient` vtable，不改 transport，不改变 body
+    ownership；helper 明确消费当前 response body reader。
+  - 不把它扩大成 charset-aware decoder、streaming builder 或 response owner 类型；
+    这些 contract 需要后续单独设计。
+- 实现决策：
+  - `nextpas.core.http.client.HttpReadResponseBodyString(Resp)` 读取 `Resp.Body`
+    到 Pascal string。
+  - nil response 抛 `EArgumentError`；nil body 返回 `''`。
+  - facade `nextpas.core.http.HttpReadResponseBodyString` 只做 inline 转发。
+  - `http_get_client` example 改用新 helper，删除本地 bytes-to-string helper。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - 编译失败于 3 处 `Identifier not found "HttpReadResponseBodyString"`。
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - 编译失败于 facade helper 缺失：
+      `Identifier not found "HttpReadResponseBodyString"`。
+- GREEN / behavior 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `24/24 passed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - `32/32 passed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_examples clean test`
+    - `5/5 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  方向没有走偏：这是低风险 public helper ergonomics，不是继续复制 correctness
+  malformed case，也不是 premature request/response builder。后续 client API 仍应
+  评估 per-request timeout / redirect override / charset decoding 是否需要独立
+  contract。
+
+## 2026-06-06 http hyper comparator smoke slice
+
+- 本轮继续收紧 benchmark truth：
+  `rust_std` 已经明确不是 Rust 生态代表，但 runner 仍缺少真实 Rust HTTP
+  stack 的可执行 seam。
+- 选择依据：
+  - Hyper/Tokio 是 Rust HTTP 生态常见基础栈，比 std-only microbaseline 更接近
+    真实 async server stack。
+  - 直接把 Hyper 纳入默认 runner 会让普通 smoke 依赖 Cargo dependency fetch，
+    不适合所有快速验证；因此本轮做 opt-in `--include-hyper`。
+- 实现决策：
+  - 新增 `benchmarks/nextpas.core.http/compare_hyper` Cargo project。
+  - Hyper/Tokio comparator 只负责 HTTP/1.1 server；client 仍使用 raw
+    keep-alive workload shape，保持与 std-only comparator 的 request/response
+    读取口径一致。
+  - 输出统一为 `impl=rust_hyper` 与 `rust_profile=hyper_tokio`。
+  - `run_server_comparison.sh --include-hyper` 才 cargo build / run Hyper
+    comparator；默认仍只跑 nextPas、Go、Rust std-only。
+  - `capture_server_comparison_snapshot.sh --include-hyper` 透传同一 flag，并在
+    Markdown 中记录 `include_hyper=1` 和完整 command。
+- RED 证据：
+  - `test_http_benchmarks` 首次 RED：
+    - `38 total, 36 passed, 2 failed`
+    - Hyper comparator 失败于无法 resolve `compare_hyper` core root。
+    - runner 失败于 `unknown argument: --include-hyper`。
+    - heaptrc: `0 unfreed memory blocks`
+  - snapshot pass-through RED：
+    - `39 total, 38 passed, 1 failed`
+    - `capture_server_comparison_snapshot.sh` 失败于
+      `unknown argument: --include-hyper`。
+    - heaptrc: `0 unfreed memory blocks`
+- 调试证据：
+  - 直接 smoke 初版 Hyper comparator 暴露 runtime-context bug：
+    `TokioTcpListener::from_std` 在 runtime 外调用会 panic。
+  - 根因是 Tokio listener 需要在 runtime context 内注册 IO driver；修复为在
+    server thread 的 `runtime.block_on(async move { ... })` 内执行 `from_std`。
+- GREEN / behavior 证据：
+  - direct comparator smoke：
+    - `bench_http_server_hyper --requests 32 --threads 2`
+    - 输出 `impl=rust_hyper`、`rust_profile=hyper_tokio`、`completed=32`
+  - optional runner smoke：
+    - `run_server_comparison.sh --requests 8 --threads 1 --include-hyper`
+    - 输出 `section=rust_hyper` 与 `summary_impl=rust_hyper`
+  - focused gate：
+    - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `39/39 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  方向没有走偏：这是 benchmark truth seam，不是把一次本机数字包装成排名。
+  后续正式 benchmark 应继续把 `rust_std` 与 `rust_hyper` 分开报告，必要时再补
+  TLS、router/middleware 或 async-client workload。
+
+## 2026-06-06 http request string URL overload slice
+
+- 本轮继续收紧 client request construction ergonomics：
+  上一轮 `NewRequest(Method, Url, Headers, Body, ContentLength)` 已让调用方摆脱
+  concrete `THttpRequest`，但仍要求先手写 `TUrl.Parse`。
+- 选择依据：
+  - Go `net/http.NewRequest` 和 Rust 常见 client builder surface 都允许调用方直接给
+    URL 字符串，手动 URL record 解析不应成为构造 `IHttpClient.Do_` request 的默认负担。
+  - 这是 helper overload，不改 `IHttpClient` vtable，不引入 fluent builder，
+    也不改变 H1 transport/body ownership。
+- 实现决策：
+  - `nextpas.core.http.message.NewRequest` 新增两个 string URL overload：
+    简单 request 和 headers/body/content-length request。
+  - facade `nextpas.core.http.NewRequest` 同步转发两个 overload。
+  - 实现只调用 `TUrl.Parse(AUrl)` 后复用既有 `TUrl` overload，因此 nil headers、
+    `content-length`、negative length 和 URL parse error contract 不分叉。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - 编译失败，`Incompatible type for arg no. 2: Got "Constant String", expected "TUrl"`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - 编译失败，facade overload 同样缺失。
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - 编译失败，live `IHttpClient.Do_` helper 用例不能直接传 URL string。
+- GREEN / behavior 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - `24/24 passed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - `31/31 passed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `21/21 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  方向没有走偏：这是低风险 public helper ergonomics，不是 premature builder。
+  后续 client API 仍应优先评估 per-request timeout / redirect override /
+  body ownership，而不是扩大 shortcut 方法数量。
+
+## 2026-06-06 http get client example env URL slice
+
+- 本轮针对 goal 中“examples / smoke 不依赖固定端口”的剩余小缺口：
+  server examples 的 smoke 已用保留端口启动，但 `http_get_client` 尚未纳入
+  runnable smoke，且无参数时只能连固定 `8080`。
+- 选择依据：
+  - client example 本身已支持命令行 URL，但 Makefile / smoke 场景更适合用环境变量
+    注入动态 URL，避免要求额外参数拼接。
+  - 这是 example ergonomics / runnable smoke 改良，不改变 HTTP runtime 或 public API。
+- 实现决策：
+  - `http_get_client` 的 URL 优先级为：命令行第一个参数 >
+    `NEXTPAS_HTTP_GET_URL` > 原默认 `http://127.0.0.1:8080/hello/world?page=1`。
+  - `test_http_examples` 新增 `http_get_client` build/run smoke：先启动
+    `hello_http_server` 的保留 loopback port，再通过 env URL 运行 client，
+    验证 `url=...`、`status-code=200`、`hello=world`、`page=3`。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_examples clean test`
+    - `5 total, 4 passed, 1 failed`
+    - failed at `get client example uses env URL without fixed port`
+    - client 仍连接默认 `8080`，报 `ENetworkError: tcp connect failed (111)`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_examples clean test`
+    - `5/5 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  方向没有走偏：这是 runnable example smoke 的实际缺口，不是扩大 HTTP API。
+  后续如继续 example work，优先考虑 Makefile 参数传递或 server examples 的更清晰
+  dynamic-port story；不应为此改 HTTP server runtime。
+
+## 2026-06-06 http rust std comparator label slice
+
+- 本轮不是新增 Hyper/Tokio comparator，而是先修正现有 benchmark harness 的
+  输出 contract：std-only Rust comparator 不能继续以 `impl=rust` 出现在 raw rows、
+  summary rows 和 snapshots 里。
+- 选择依据：
+  - 文档已经明确该 comparator 是 std-only microbaseline，但机器可读输出仍是
+    `impl=rust` / `summary_impl=rust`，后续报告容易被误读成 Rust 生态代表。
+  - 引入真实 Hyper/Tokio 需要 Cargo dependency、async runtime 和 server/client
+    harness 设计；当前更小、更可回滚的 truth slice 是先把已有 baseline 标准化为
+    `rust_std`。
+- 实现决策：
+  - `compare_rust/main.rs` 输出 `impl=rust_std` 与 `rust_profile=std_only`。
+  - `run_server_comparison.sh` 的 runner section、expected impl 和 median summary
+    统一使用 `rust_std`。
+  - `test_http_benchmarks` 同时锁住 comparator smoke、runner report、multi-run
+    summary 和 snapshot 中的新 marker。
+- RED 证据：
+  - `test_http_benchmarks` 先失败 9 个 case，典型失败为
+    `implementation marker missing from output: impl=rust_std`，实际输出仍是
+    `impl=rust` / `summary_impl=rust`。
+  - 失败 run 仍显示 heaptrc `0 unfreed memory blocks`。
+- GREEN / behavior 证据：
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+  - `36/36 passed`，heaptrc `0 unfreed memory blocks`。
+- 复盘结论：
+  方向没有走偏：这是 benchmark truth 的 contract tightening，不是性能数字包装。
+  后续仍不能声明 Rust 生态对标完成；下一步若继续 benchmark truth，应新增真实
+  Hyper/Tokio 或等价 async Rust comparator。
+
+## 2026-06-06 http API parity request helper slice
+
+- 对标结论：
+  - Go `net/http` 的稳定使用面是同步 `Server` lifecycle、handler/middleware
+    composition、`Request`/`Header`/`Body` ownership 与 `Client.Do`。
+  - Rust 生态不能只看 std-only comparator；hyper/tower 更强调 service/connection
+    seam，reqwest 更强调 request-builder ergonomics。
+  - nextPas 当前 server lifecycle、router/middleware、transport injection、
+    static helper 与 WebSocket helper surface 已经够稳；H2/H3 仍只能保留 registry
+    seam 和 future plan，不能伪实现。
+- 真实缺口：
+  - client shortcut 已有 `Get/Post/Put/Delete/Patch/Head`，download helpers 也已落地；
+    缺的是一个不用 concrete `THttpRequest` 的 request construction helper。
+  - 完整 fluent `IHttpRequestBuilder` 还不是当前最佳切片，因为 per-request timeout、
+    redirect override、form/json convenience、streaming/chunked request body ownership
+    都需要额外 contract。
+- 实现决策：
+  - 新增 `NewRequest(Method, Url, Headers, Body, ContentLength)` overload。
+  - nil headers 创建空 `IHttpHeaders`，body/positive length 会设置
+    `content-length`，negative length 抛 `EArgumentError`。
+  - 不改 `IHttpClient` vtable，不改 transport registry，不改 H1 request writer
+    streaming model。
+- RED 证据：
+  - `test_http_message` 先失败于 `Wrong number of parameters specified for call to "NewRequest"`。
+  - `test_http_contract` 先失败于 facade `NewRequest` overload 缺失。
+  - negative content-length 用例先失败：`22 total, 21 passed, 1 failed`，heaptrc
+    `0 unfreed memory blocks`。
+- GREEN / behavior 证据：
+  - `test_http_message`：`22/22 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_contract`：`30/30 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_client`：`21/21 passed`，heaptrc `0 unfreed memory blocks`
+- 复盘结论：
+  方向没有走偏：这是 API ergonomics 的小 public surface，不是继续堆 correctness
+  case，也不是 premature builder。后续若继续 API 设计，对 client 侧优先评估
+  per-request options / body ownership；若转 benchmark truth，优先补 Hyper/Tokio
+  comparator 或至少明确 runner smoke。
+
 ## 2026-06-06 http h1 parser metadata span fast path slice
 
 - 本轮把 H1 parser watched request metadata 从“parse-time cache 但仍为部分
@@ -166,7 +1456,6 @@
   下一步应继续处理 H1 writer/header serialization 或 llhttp adapter parsed-header
   insertion 成本；跨语言正式 benchmark 仍后置。
 
-
 ## 2026-06-06 http h1 parser request metadata cache slice
 
 - 本轮把 H1 request metadata 从 headers-complete 后回扫 `IHttpHeaders`
@@ -207,7 +1496,6 @@
   方向没有走偏：本轮是 adapter 热路径固定成本削减，不是碎片化 inline。实现标准达到
   当前切片目标：source-contract 锁住不回扫，行为测试锁住高风险语义，server gate 锁住
   对外 wire contract。下一步应进入 fast lazy headers 按需命中，而不是继续扩大本 slice。
-
 
 ## 2026-06-06 http request path-only projection slice
 
@@ -332,7 +1620,6 @@
   公共 API，并用 focused tests + microbenchmark 证明。下一步应继续找能影响 full-chain
   server row 的剩余 adapter/runtime 成本，而不是扩大同类 accessor。
 
-
 ## 2026-06-06 http header lookup hot-helper inline slice
 
 - 本轮只处理 `THttpHeaders` lookup/normalize 热路径中的三个短 helper：
@@ -362,7 +1649,6 @@
 - 复盘结论：
   方向仍在 HttpServer 性能主线上；这轮比继续堆大 server benchmark 更有效，
   因为它用一个小 source-contract 固定了 server 内部高频 header lookup 形状。
-
 
 ## 2026-06-05 http h1 server policy-helper inline slice
 
@@ -447,7 +1733,7 @@
   -> `26/26 passed`，`heaptrc: 0 unfreed memory blocks`。
 - live smoke 结果：
   `benchmarks/nextpas.core.http/run_server_comparison.sh --requests 8 --threads 1 --workload adapter_no_url --runs 2 --output build/projects/nextpas.core.http/server_comparison/adapter_no_url_completed_smoke.txt`
-  -> nextPas/Go/Rust raw rows 均有 `completed=8`，nextPas rows 有
+  -> nextPas/Go/Rust std-only raw rows 均有 `completed=8`，nextPas rows 有
   `nextpas_h1_path=fast`，summary rows 均有 `median_completed=8`。
 - 复盘结论：这轮仍属于 benchmark harness correctness，不是生产性能优化；下一轮性能优化应基于更可信的 harness，优先审计 H1 热路径小函数 `inline`、URL materialization、response writer/drain、以及 Pascal llhttp adapter raw gap。
 
@@ -904,7 +2190,7 @@
   - `feat/platform-pty`：干净的基础功能线；
   - `codex/platform-pty-main-merge`：对 `feat/platform-pty` patch-equivalent 的重复线；
   - `codex/platform-pty-integration`：在基础 PTY 之上继续叠加 main refresh 和额外改动的 dirty 线。
-  因此后续清理时不应同时保留前两条 clean 线。
+    因此后续清理时不应同时保留前两条 clean 线。
 - TLS 组并不是简单的“final 完全覆盖 base/refresh”。反向 `git cherry` 证明 base/refresh 还各自带着 5 个 final 没有的 TLS/time/helper 命名相关提交，所以不能只因为有 `final` 就把另外两条直接删掉。
 - `docs/cross-module-workflow` 虽然只是文档，但它引导了危险的临时回退方式（`git reset --hard`），不适合未经修订直接进主线。
 - `crypto-polish` 的工作树脏状态不是新源码，而是 planning files 和测试产物；这类 worktree 清理优先级高，因为继续保留只会污染根 checkout 观察结果。
@@ -915,7 +2201,7 @@
   - current `main` 已同时提供 `DateTimeNow` 和 `DateTimeUtcNow`
   - `x509verify` 当前使用 `nextpas.core.time.DateTimeUtcNow`
   - dirty worktree 中那句 “DateTimeNow - UTC-shaped wall clock time” 注释与 current main 语义不符，因为 current `DateTimeNow` 已带本地 UTC offset
-  因此这条线只能摘测试，不能再回收它的实现/注释口径。
+    因此这条线只能摘测试，不能再回收它的实现/注释口径。
 - `codex/datetime-now` 的 dirty worktree 里确实藏着值得保留的未提交代码：`x509verify` 的
   expired / not-yet-valid behavior tests。它们已经在 integration branch 上改写为基于
   `TCertificateUtils.GenerateSelfSigned` 的版本，避免把 openssl 固定窗口参数细节带回主线。
@@ -941,7 +2227,7 @@
 - 对 `final` 这条线做的两条 focused verification 在本轮为绿：
   - `make -C core/tests/nextpas.core.tls/test_certificate_validity_utc_contract clean test`
   - `make -C core/tests/nextpas.core.tls/test_mbedtls_certificate_text_conv_contract clean test`
-  两条都通过，且 heaptrc 为 `0 unfreed memory blocks`。
+    两条都通过，且 heaptrc 为 `0 unfreed memory blocks`。
 - 后续按 commit-by-commit 吸收后，`final` 已不再缺那 5 个 follow-up：
   - `86afb4a9` / `959b1bee` / `98a475d0` / `162d920d` / `493a9b43`
     分别以当前 `final` 代码为准解冲突，保留更强实现并补齐缺失测试覆盖。
@@ -3733,3 +5019,899 @@
   - 不确定，需要继续审查：
     - `codex/compiler-truth-audit-main-20260603`
     - `fix/sema-include-resolver`
+
+## 2026-06-07 full-chain direct-root isolation findings
+
+- `bench_fullchain` 之前最小的 `plaintext` row 仍然经过 router，所以它并不能单独
+  表示“runtime/socket + fixed handler response”成本；router dispatch 一直混在里边。
+- 给 full-chain harness 增加 direct path 时，最先暴露出的不是 runtime bug，而是
+  benchmark truth bug：
+  - 如果 workload 叫 `direct_plaintext`，substring filter 会让
+    `NEXTPAS_BENCH_FILTER=plaintext` 同时命中两条 row。
+  - 这会污染 filter 语义，比“有没有新数字”更值得先修。
+- 最终方案选择：
+  - 不改 substring filter 机制本身；
+  - 新 workload 命名为 `direct_root`，避免和 `plaintext` 重叠；
+  - 让 routed row 使用 `Host: router`，direct row 使用 `Host: direct`，
+    两者都保持 `GET /` + fixed-length plaintext response，差异主要落在是否经过 router。
+- focused gate 现在直接锁住两件事：
+  - `direct_root` row 确实存在；
+  - `NEXTPAS_BENCH_FILTER=plaintext` 不会再误发 `workload=direct_root`。
+- 这轮最重要的产出不是单次 `ns/op` 高低，而是：
+  - full-chain benchmark 首次具备 router-free 对照 row；
+  - filter 语义没有因为新增 workload 退化成模糊匹配假证据。
+
+## 2026-06-07 router direct-call isolation findings
+
+- 仅靠 `bench_fullchain direct_root/plaintext` 还不足以精确描述 router 成本：
+  那两条 row 仍混有 real socket、server runtime、response serialization 和
+  outer-handler gating。
+- `bench_router` 原先只有 `handler dispatch (match + no-op handler)`，没有一个
+  “同一 request、同一 handler、完全不经过 router”的纯基线，所以即使知道 routed
+  row 的数字，也不能把纯 router dispatch 和 handler 调用本身拆开。
+- 本轮选择的最小补充不是再加一个 full-chain workload，而是在现有 router
+  microbenchmark 里补 `direct call (same request, no router)`：
+  - 它复用同一个 `NewGetRequest('/health')` 和同一个 no-op handler 形状；
+  - 唯一去掉的是 `THttpRouter.ServeHTTP` / route lookup / dispatch。
+- focused gate 现在锁住三件事：
+  - direct baseline row 确实存在；
+  - `NEXTPAS_BENCH_FILTER=handler dispatch` 不会误命中 direct row；
+  - `NEXTPAS_BENCH_FILTER=direct call` 不会误命中 routed row。
+- 本地方向性数字：
+  - `direct call (same request, no router)` 约 `3.8 ns/op`
+  - `handler dispatch (match + no-op handler)` 约 `264.5 ns/op`
+- 这说明：
+  - router dispatch 现在已经有一条足够窄的纯进程基线；
+  - 纯 handler 调用本身几乎可以忽略；
+  - short-GET full-chain 的主要剩余成本仍应继续在 runtime/socket、
+    response writer/drain、以及其他 server-path 成本上找，而不是回头扩大
+    router parity 清单。
+
+## 2026-06-07 bench_server backend marker and epoll smoke findings
+
+- 目前 cross-language server comparison runner 明确写着“不覆盖 epoll”，但
+  nextPas 自己的 `bench_server` raw row 之前也没有任何 `backend=` metadata。
+  这会导致保存下来的 nextPas benchmark row 无法直接说明它到底测的是哪条
+  runtime path。
+- 本轮优先收紧的是 benchmark truth，不是立刻把 runner 扩成 threaded/epoll
+  双模式比较：
+  - 先给 nextPas `bench_server` 自己补 `--backend threaded|epoll`；
+  - 再把 `backend=<...>` 写进 raw row / runner / snapshot 会继承到的 nextPas
+    输出里；
+  - 并让 invalid backend fail-fast，而不是静默回到默认 threaded。
+- 这样做的好处是：
+  - nextPas-only runtime characterization 可以立即开始；
+  - 现有 Go/Rust comparison runner 不需要同步长出“只对 nextPas 有意义”的参数面；
+  - 保存下来的报告不会再把 threaded 默认值隐含在背景知识里。
+- focused gate 现在锁住三件事：
+  - nextPas `bench_server` row 默认带 `backend=threaded`
+  - invalid `--backend` 不会再产出伪成功 benchmark row
+  - Linux epoll smoke row 确实能跑并带 `backend=epoll`
+- 本地方向性 smoke：
+  - `threaded no_url 128x1` 约 `41890 ns/op`
+  - `epoll no_url 128x1` 约 `91425 ns/op`
+- 这组数字不是 threaded-vs-epoll 的最终结论；它只是说明：
+  - backend seam 现在已经进入 benchmark artifact truth；
+  - 下一轮若继续追 runtime/socket overhead，可以在 nextPas-only bench 上直接
+    对 threaded/epoll 做更窄、更受控的重复测量，而不是先改比较 runner。
+
+## 2026-06-07 bench_fullchain backend marker and epoll smoke findings
+
+- `bench_server --backend` 解决的是多线程吞吐维度，但 `bench_fullchain` 之前仍把
+  backend 选择隐藏在默认 threaded 背景里。这样保存下来的 single-connection
+  `direct_root/plaintext` row 仍无法直接说明自己跑的是哪条 runtime path。
+- 这轮继续沿同一 benchmark-truth 方向走，但不去改 cross-language runner：
+  - 只给 nextPas-only `bench_fullchain` 补 `NEXTPAS_BENCH_BACKEND`
+  - 只让 full-chain header / row 公开 `backend=<...>` truth
+  - 只让 invalid backend fail-fast
+- 这样做的价值在于：
+  - `direct_root` 本来就是当前最窄的 “single-connection runtime/socket +
+    fixed handler response” row；
+  - 有了 backend seam，它终于可以在 threaded / epoll 之间做受控切换；
+  - 而 Go/Rust comparison runner 仍保持原来的 apples-to-apples 边界。
+- focused gate 现在锁住三件事：
+  - 默认 full-chain row 带 `backend=threaded`
+  - invalid `NEXTPAS_BENCH_BACKEND` 不会再产出伪成功 benchmark row
+  - Linux `epoll + direct_root` smoke 确实能跑并带 `backend=epoll`
+- 本地方向性 smoke：
+  - `threaded direct_root 128` 约 `32058.8 ns/op`
+  - `epoll direct_root 128` 约 `92845.4 ns/op`
+- 这组数字仍不是 threaded-vs-epoll 的稳定排名；它只是把 single-connection
+  runtime characterization 从“默认 threaded 的隐含状态”推进到了“backend truth
+  明示且可切换”的状态。下一轮如果继续追 runtime/socket overhead，就可以把
+  `bench_server` 与 `bench_fullchain direct_root` 两条 backend-aware row 结合起来看。
+
+## 2026-06-07 server comparison nextPas backend truth findings
+
+- 只给 `bench_server` / `bench_fullchain` 增 `backend=` 还不够：
+  人真正保存和转发的常常是 comparison runner report 或 snapshot，而不是单体 row。
+  如果 report/snapshot 自己不写明 nextPas backend，那么 `backend=epoll` 只会埋在
+  nextPas section 里，调用方很容易把整份 artifact 误读成默认 threaded。
+- 这轮选择的是最小 truth 收口，而不是把 cross-language runner 扩成“所有实现都能切 backend”：
+  - runner 增 `--nextpas-backend threaded|epoll`
+  - raw comparison header 直接写 `nextpas_backend=<...>`
+  - snapshot environment block 与 embedded command 同步保留这条 truth
+  - 只有 nextPas row 吃这个参数，Go / Rust comparator row 完全不变
+- 默认值仍保持 `threaded`，这点很关键：
+  - 旧的 cross-language smoke / saved command 形状仍然成立
+  - 调用方只有在明确做 nextPas-only runtime characterization 时，才需要显式传
+    `--nextpas-backend epoll`
+  - 这样不会把“nextPas epoll vs Go/Rust default implementation”伪装成新的
+    apples-to-apples 公平比较
+- focused gate 现在锁住：
+  - runner 默认 header 带 `nextpas_backend=threaded`
+  - invalid `--nextpas-backend` fail-fast，不会再打印伪 benchmark header
+  - Linux `epoll` runner/snapshot smoke 都能把 `nextpas_backend=epoll` 透传到
+    raw report / Markdown snapshot
+- 本地手工 smoke 也确认 artifact truth 已贯通：
+  - `run_server_comparison.sh --requests 8 --threads 1 --nextpas-backend epoll`
+    输出 `nextpas_backend=epoll`，且 nextPas row 带 `backend=epoll`
+  - `capture_server_comparison_snapshot.sh --requests 8 --threads 1 --nextpas-backend epoll`
+    snapshot environment block 带 `nextpas_backend=epoll`，command block 保留
+    `--nextpas-backend epoll`
+- 一个额外观察是：runner 和 snapshot 共用同一 build output root，若并行触发可能在
+  Rust comparator build 阶段互相踩到目标文件。这是 benchmark harness 并发安全问题，
+  不属于本轮 contract 最小收口，但值得作为下一轮 benchmark-truth 候选切片。
+
+## 2026-06-07 server comparison concurrent build lock findings
+
+- 在给 runner/snapshot 补完 `nextpas_backend` truth 后，手工并行触发两者时直接撞出了
+  另一类 benchmark truth 污染：
+  - 两个进程都会往同一个
+    `build/projects/nextpas.core.http/server_comparison/` output root 重建 Go/Rust
+    comparator 二进制；
+  - 实际失败表现是 Rust link 阶段找不到刚被另一个进程覆盖/清理的目标文件。
+- 这不是 “parallel shell misuse 才会出现的假问题”：
+  - comparison runner 与 snapshot helper 本来就共用 build root；
+  - 只要 CI/脚本/人工并行抓 report + snapshot，就可能命中同一类竞争；
+  - 失败时得到的不是明确 “busy/locked” 诊断，而是一条看似 toolchain 自身损坏的
+    linker error，会污染 benchmark evidence。
+- 本轮选择的最小收口不是给每个 comparator 发明独立 cache key，也不是改 row/summary
+  contract，而是：
+  - 只在 `run_server_comparison.sh` 增一个 shared comparison lock；
+  - snapshot 继续复用 runner，因此自动吃到同一条并发保护；
+  - 锁住的是整个 comparison invocation，而不只是 build step，避免
+    “A 刚 build 完、B 立刻原地重写二进制、A 再去执行半写入产物” 这类更隐蔽的竞争。
+- 实现边界里还暴露出一个 shell 细节：
+  - 旧的 `run_comparison | tee ...` 会把 `run_comparison` 推进 pipeline subshell；
+  - 锁如果在 subshell 里拿到，就可能因为 parent trap 看不到持锁状态而残留 stale lock。
+  - 因此输出路径分支也必须改成 process substitution，让 runner 继续在当前 shell 持锁并释放锁。
+- focused gate 现在锁住 `run_server_comparison.sh` 拥有显式 comparison lock seam。
+- 手工并发 smoke 也已转绿：
+  - `run_server_comparison.sh --requests 8 --threads 1 --workload url_path --output ...`
+    与
+    `capture_server_comparison_snapshot.sh --requests 8 --threads 1 --nextpas-backend epoll --output ...`
+    并发启动后均返回 `exit=0`
+  - runner report 仍保留 `nextpas_backend=threaded`
+  - snapshot environment block 仍保留 `nextpas_backend=epoll`
+
+## 2026-06-07 full-chain direct-1k isolation findings
+
+- 现有 1 KiB 证据链仍有一个空档：
+  - `bench_h1writer` / `bench_h1outbound` 只证明内存内 writer/drain 成本；
+  - `bench_server response_1k` 证明的是多连接 server throughput；
+  - 但还没有一条 “real socket + single keep-alive connection + no router +
+    fixed 1 KiB response” 的 nextPas-only row。
+- 本轮选择的最小补充不是扩 comparison runner，也不是改 `bench_server` workload，
+  而是在 `bench_fullchain` 现有 outer-handler seam 上补 `direct_1k`：
+  - 复用 `Host: direct` 的 no-router path；
+  - 只新增 `GET /1k` + fixed 1 KiB body；
+  - 继续沿用同一个 real socket / keep-alive client read contract。
+- focused gate 锁住两件关键 truth：
+  - `direct_1k` row 确实存在；
+  - `NEXTPAS_BENCH_FILTER=direct_root` 不会误发 `workload=direct_1k`。
+- 本地方向性 smoke：
+  - `threaded direct_1k 128` 约 `36978.2 ns/op`
+  - `epoll direct_1k 128` 约 `75342.2 ns/op`
+- 这组数字不是新的 cross-language 排名；它们的意义更窄但更重要：
+  - full-chain 现在终于有了 1 KiB fixed response 的 single-connection
+    no-router seam；
+  - 后续如果继续追 runtime/socket overhead，可以把
+    `direct_root`、`direct_1k`、`bench_server response_1k` 和
+    writer/outbound 1 KiB rows 串起来看，而不是继续把这些成本混成一条笼统
+    的 “response_1k 很快/很慢” 结论。
+
+## 2026-06-07 full-chain response-body-bytes marker findings
+
+- `bench_server`、Go comparator、Rust std-only comparator 与 Hyper/Tokio comparator
+  都已经公开 `response_body_bytes=...`，但 `bench_fullchain` 之前只有
+  `client_read_mode=buffered`，没有 row-level response size marker。
+- 这会让 `direct_root`、`direct_1k`、`plaintext` 等 full-chain row 的“完成条件”
+  只能靠 workload 名称间接推断，不利于后续 grep、脚本消费和 saved artifact 对照。
+- 本轮选择的最小收口不是改 full-chain client read mode，也不是扩 runner：
+  - 只让 `bench_fullchain` 每条 row 追加 `response_body_bytes=...`
+  - `direct_root` / `plaintext` 锁成 `13`
+  - `direct_1k` 锁成 `1024`
+- focused gate RED 直接暴露了 contract 缺口：
+  `bench_fullchain plaintext` / `direct_root` / `direct_1k` / `epoll direct_root`
+  smoke 全都因为缺失 `response_body_bytes=` marker 而失败。
+- 这个 slice 没有新增任何性能数字；它补的是 full-chain artifact truth。
+  现在 `bench_fullchain` 和 `bench_server`/comparators 一样，都会把 response
+  size 当作 machine-readable metadata 输出，后续分析 `direct_root` vs `direct_1k`
+  时不必再靠 workload 名字猜测 body 规模。
+
+## 2026-06-07 full-chain H1 path marker findings
+
+- `bench_server` 早就输出了 `nextpas_h1_path=...`，但 `bench_fullchain` 之前没有。
+  这会让 full-chain saved row 难以直接说明自己是在当前 conservative fast path，
+  还是已经落回 llhttp adapter path。
+- 这轮选择的最小收口不是扩 comparison runner，也不是去改 H1 fast path 本身：
+  - 只让 `bench_fullchain` 每条 nextPas row 输出 `nextpas_h1_path=...`
+  - 当前 no-body GET rows 锁成 `fast`
+  - body-bearing `echo_1k` / `sink_16k` rows 锁成 `llhttp`
+- focused gate 这次不仅锁 metadata，还顺手补上了一个之前缺失的 full-chain
+  body-bearing smoke：
+  - `plaintext` / `direct_root` / `direct_1k` / `epoll direct_root`
+    都因为缺 `nextpas_h1_path=fast` marker 而 RED
+  - 新增 `echo_1k` smoke 进一步证明 llhttp path row 真实存在，并要求
+    `nextpas_h1_path=llhttp`
+- 本地手工 smoke 也给出了最窄的 llhttp full-chain row：
+  - `echo_1k` threaded 128 次约 `39532.8 ns/op`
+  - row 同时带 `response_body_bytes=1024` 与 `nextpas_h1_path=llhttp`
+- 这轮的价值不在于又多了一条 benchmark 数字，而在于：
+  - full-chain row 终于能直接说明自己测的是 fast ingress 还是 llhttp ingress
+  - 后续把 `direct_root/direct_1k` 和 `echo_1k/sink_16k` 放在一起看时，不必再从
+    request shape 间接推断 parser path
+
+## 2026-06-07 full-chain request-body-bytes marker findings
+
+- `bench_fullchain` 现在已经有 `response_body_bytes=...` 和
+  `nextpas_h1_path=...`，但请求侧 body 大小之前仍只能靠 workload 名称猜。
+- 这在 body-bearing full-chain rows 上会留下真实 artifact gap：
+  - `echo_1k` 看名字还能勉强推断 request size；
+  - `sink_16k` 这种 “大请求、空响应” row 如果没有 request-size marker，保存后的
+    raw output 很难直接说明自己到底测了多少 ingress body。
+- 本轮选择的最小收口仍然只落在 `bench_fullchain` metadata contract：
+  - 每条 row 追加 `request_body_bytes=...`
+  - focused rows 锁住 no-body GET workloads -> `0`
+  - `echo_1k` 锁住 `request_body_bytes=1024`
+- focused gate RED 直接说明这是 contract 缺口，不是性能数字问题：
+  `bench_fullchain plaintext` / `direct_root` / `direct_1k` / `echo_1k` /
+  `epoll direct_root` 全都因为缺失 `request_body_bytes=` marker 而失败。
+- 本地手工 smoke 进一步把最容易误读的 request-heavy row 公开出来：
+  - `sink_16k` threaded 128 次输出 `request_body_bytes=16384`
+  - 同一 row 也保留 `response_body_bytes=0` 与 `nextpas_h1_path=llhttp`
+- 这轮的价值仍是 benchmark truth，而不是新排名：
+  full-chain saved artifacts 现在终于能同时自描述请求大小、响应大小和 ingress
+  parser path，后续拆 request-body parse cost / response drain cost 时不必再从
+  workload 名称做二次推断。
+
+## 2026-06-07 full-chain sink-16k focused smoke findings
+
+- `request_body_bytes` slice 之后，`sink_16k` 已经作为 docs/manual smoke 证据存在，
+  但 focused gate 仍只锁住了 `echo_1k` 这一条 body-bearing llhttp row。
+- 这会留下一个真实 coverage 空洞：
+  - `echo_1k` 证明的是 “有请求体 + 有响应体”；
+  - 但 `sink_16k` 代表的是 “大请求体 + 空响应体”，它更接近 ingress-heavy seam，
+    也正是 request-size marker 文档里最容易误读的一条 row。
+- 本轮选择的最小收口不是再加新 workload，也不是扩 epoll/backend matrix：
+  - 只把既有 `sink_16k` row 提升进 `test_http_benchmarks` focused gate
+  - 锁住 `request_body_bytes=16384`
+  - 同时锁住 `response_body_bytes=0` 与 `nextpas_h1_path=llhttp`
+- 这轮没有改 benchmark runtime，也没有新增 benchmark 输出字段；价值在于：
+  request-heavy llhttp row 不再只是文档里的手工 smoke，而是进入了可回归的
+  focused benchmark truth。
+
+## 2026-06-07 full-chain epoll-echo focused smoke findings
+
+- 到上一轮为止，`bench_fullchain` 的 epoll focused proof 仍只有
+  `epoll + direct_root`。
+- 这意味着 epoll backend 在 focused gate 里只被证明过 fast-path/no-body row，
+  body-bearing llhttp path 还停留在手工 smoke，而不是持续回归证据。
+- 本轮继续按最小矩阵补洞，不扩到 request-heavy epoll row，也不改 runtime：
+  - 只把 `epoll + echo_1k` 提升进 focused gate
+  - 锁住 `backend=epoll`
+  - 同时锁住 `request_body_bytes=1024`、
+    `response_body_bytes=1024`、`nextpas_h1_path=llhttp`
+- 本地手工 smoke 也说明这条 row 真实存在：
+  - `epoll echo_1k 64` 约 `107034.3 ns/op`
+  - `req/s` 约 `9343`
+- 这轮的价值仍是 benchmark truth：
+  epoll 后端现在不再只靠 `direct_root` fast-path row 代表自己，focused gate 已经
+  覆盖到至少一条 body-bearing llhttp full-chain row。
+
+## 2026-06-07 full-chain param-route focused smoke findings
+
+- `bench_fullchain` 里已有 `param_route` row，但此前 focused gate 仍没有锁住它。
+- 这不是“再补一个普通 GET row”：
+  - `plaintext` 只证明静态 route 的 routed path；
+  - `param_route` 代表的是 URL path + router param extraction 这一条更具体的
+    full-chain seam。
+- 本轮继续遵守窄刀纪律：
+  - 不改 runtime，不扩 backend matrix，不引入新 marker
+  - 只把既有 `param_route` row 提升进 focused gate
+  - 锁住 `request_body_bytes=0`、`response_body_bytes=10`、
+    `backend=threaded`、`nextpas_h1_path=fast`
+- 本地手工 smoke 也说明了这条 row 的现实形状：
+  - `param_route 64` 约 `34646.2 ns/op`
+  - `req/s` 约 `28863`
+- 价值在于：
+  full-chain saved artifacts 现在不只锁 “router/no-router/body/no-body”，还把
+  path-params 这一条独立路由成本面纳入了持续回归证据。
+
+## 2026-06-07 full-chain epoll-sink focused smoke findings
+
+- 在 `epoll + echo_1k` slice 之后，epoll backend 已经覆盖到一条 body-bearing
+  llhttp row，但它仍然没有覆盖 request-heavy / empty-response 这一格。
+- `sink_16k` 在这里不是重复 `echo_1k`：
+  - `echo_1k` 是对称的 request/response body row；
+  - `sink_16k` 代表的是“重 ingress、空 egress”的 full-chain seam。
+- 这轮继续保持窄刀，不扩 runtime、不加新 marker：
+  - 只把 `epoll + sink_16k` 提升进 focused gate
+  - 锁住 `backend=epoll`
+  - 同时锁住 `request_body_bytes=16384`、`response_body_bytes=0`、
+    `nextpas_h1_path=llhttp`
+- 这轮的价值仍是 benchmark truth：
+  epoll backend 的 durable full-chain proof 现在同时覆盖
+  fast-path row、对称 body-bearing llhttp row，以及 request-heavy llhttp row。
+
+## 2026-06-07 snapshot include-hyper response-1k focused smoke findings
+
+- support 文档里之前已经明确提过一个更窄的后续缺口：
+  snapshot helper 虽然支持 `--include-hyper` 和 `--workload`，但 focused gate
+  还没有锁住这两个参数同时出现的组合。
+- 在所有 workload 里，`response_1k` 比默认 no-body workload 更有信息量：
+  - 它要求 raw output 继续保留 `response_body_bytes=1024`；
+  - 同时它还能证明 Hyper/Tokio snapshot 不只是在默认 hello-world shape 上可用。
+- 本轮保持窄刀，没有去扩 runner/schema/runtime：
+  - 只把 `capture_server_comparison_snapshot.sh --include-hyper --workload response_1k`
+    提升进 focused gate
+  - 锁住 `workload=response_1k`
+  - 锁住命令块同时包含 `--workload response_1k --include-hyper`
+  - 锁住 `rust_hyper` row、`rust_profile=hyper_tokio`、`response_body_bytes=1024`
+- 这轮的价值仍是 benchmark truth：
+  Hyper/Tokio snapshot evidence 现在不再只靠默认 workload，saved artifact 对
+  body-bearing response workload 也有 durable regression proof。
+
+## 2026-06-07 hyper url_path direct comparator focused smoke findings
+
+- 之前的 focused gate 里，Hyper/Tokio direct comparator 只有默认 `no_url`
+  smoke；虽然 shared runner / snapshot 已覆盖 `url_path`，但 Cargo-based
+  comparator 自己还没有一个独立、非默认 request-target workload contract。
+- 这一轮不需要扩 runner/schema，也不需要改 comparator 实现：
+  `compare_hyper` 源码本来就支持 `--workload url_path`，真实缺口只是 focused gate
+  没有把这个 seam 锁住。
+- 本轮继续保持窄刀：
+  - 只把 `bench_http_server_hyper --requests 32 --threads 2 --workload url_path`
+    提升进 focused gate
+  - 锁住 `workload=url_path`
+  - 锁住 `impl=rust_hyper`、`rust_profile=hyper_tokio`、`completed=32`
+- 这轮的价值仍是 benchmark truth：
+  Hyper/Tokio direct comparator 现在也有 durable non-default request-target
+  proof，Go / Rust std-only / Hyper direct comparator 三条 direct smoke 的
+  `url_path` parity 更完整，但没有借机扩到 `adapter_no_url` 或新的 runner
+  组合。
+
+## 2026-06-07 runner include-hyper url_path focused smoke findings
+
+- 当前 matrix 里，runner 对 `url_path` 的证明原先只覆盖 nextPas / Go /
+  Rust std-only 三行；Hyper/Tokio 只在默认 `no_url` include-hyper smoke 和
+  `response_1k` snapshot 组合里出现。
+- 这意味着一个真实而独特的 parity gap 仍存在：
+  `run_server_comparison.sh --workload url_path --include-hyper` 虽然逻辑上应当
+  可用，但 focused gate 还没有锁住 raw report 里 Hyper row 的非默认
+  request-target seam。
+- 本轮继续保持窄刀，没有扩到 snapshot 或 comparator 实现：
+  - 只把 `run_server_comparison.sh --requests 8 --threads 1 --workload url_path --include-hyper`
+    提升进 focused gate
+  - 锁住 `include_hyper=1`
+  - 锁住 `workload=url_path`
+  - 锁住 `rust_hyper` row、`rust_profile=hyper_tokio`、`summary_impl=rust_hyper`
+- 这轮的价值仍是 benchmark truth：
+  Hyper/Tokio 现在不仅有 direct `url_path` smoke，也有 raw runner 级别的
+  `url_path` durable proof；但没有借机扩大到新的 snapshot 组合或内部
+  `adapter_no_url` 变体。
+
+## 2026-06-07 full-chain epoll direct-1k focused smoke findings
+
+- `direct_1k` 这个 1 KiB full-chain isolation row 之前已经有 threaded focused
+  smoke，也在文档里记过本地 `epoll` 数字，但 regression gate 还没有把
+  `epoll + direct_1k` 这条 nextPas-only egress-heavy seam 锁住。
+- 这会留下一个真实 evidence gap：
+  后续如果继续用 `direct_root` / `direct_1k` 对比 threaded 与 epoll 的
+  runtime/socket开销，`direct_1k` 的 epoll 侧只能依赖文档里的手工 smoke，
+  不够 durable。
+- 本轮继续保持窄刀，没有扩 `bench_fullchain` 生产逻辑，也没有去碰 runner /
+  comparator：
+  - 只把 `NEXTPAS_BENCH_FILTER=direct_1k NEXTPAS_BENCH_BACKEND=epoll`
+    提升进 focused gate
+  - 锁住 `backend=epoll`
+  - 锁住 `workload=direct_1k`
+  - 锁住 `request_body_bytes=0`、`response_body_bytes=1024`、
+    `nextpas_h1_path=fast`
+- 这轮的价值仍是 benchmark truth：
+  `direct_1k` 的 backend split 现在两侧都有 durable regression proof，更适合后续
+  继续拆 runtime/socket overhead；但没有借机包装成 threaded-vs-epoll 排名。
+
+## 2026-06-07 snapshot include-hyper url_path focused smoke findings
+
+- 经过前两轮收口后，Hyper/Tokio 的 `url_path` 证据链已经有：
+  - direct comparator smoke；
+  - raw runner `--include-hyper + --workload url_path`；
+  - 但 durable snapshot artifact 还没有锁住同一个组合。
+- 这会留下一个很具体的 artifact gap：
+  saved Markdown 里虽然已有默认 `include-hyper` 和 `response_1k` 组合 proof，
+  但 request-target workload 的 Hyper row 仍只能从 raw runner 或 direct smoke
+  间接推断。
+- 本轮继续保持窄刀，没有扩 runner/schema，也没有碰 comparator 实现：
+  - 只把
+    `capture_server_comparison_snapshot.sh --requests 8 --threads 1 --workload url_path --include-hyper`
+    提升进 focused gate
+  - 锁住 `workload=url_path`
+  - 锁住命令块同时包含 `--workload url_path --include-hyper`
+  - 锁住 `cargo_version=`、`hyper_cargo_lock_sha256=`
+  - 锁住 `rust_hyper` row、`rust_profile=hyper_tokio`、`summary_impl=rust_hyper`
+- 这轮的价值仍是 benchmark truth：
+  Hyper/Tokio 的 `url_path` 现在在 direct comparator、raw runner 和 durable snapshot
+  三层都有回归证据，但没有借机扩到 `adapter_no_url` 或新的 API/runtime 改动。
+
+## 2026-06-07 runner include-hyper response-1k focused smoke findings
+
+- `response_1k` 这条 body-bearing workload 之前已经有：
+  - shared direct comparator 的 response-read contract；
+  - include-hyper snapshot artifact；
+  - 但 raw runner report 还没有把 Hyper/Tokio 自己的 body/read markers 锁住。
+- 这会留下一个真实 gap：
+  `run_server_comparison.sh --workload response_1k --include-hyper` 虽然逻辑上可用，
+  但 saved text report 上的 `rust_hyper` body-bearing row 还没有 durable focused proof。
+- 本轮继续保持窄刀，没有扩 runner/schema，也没有碰 comparator 实现：
+  - 只把
+    `run_server_comparison.sh --requests 8 --threads 1 --workload response_1k --include-hyper`
+    提升进 focused gate
+  - 锁住 `include_hyper=1`
+  - 锁住 `workload=response_1k`
+  - 锁住 `rust_hyper` row、`rust_profile=hyper_tokio`
+  - 锁住 `client_read_mode=header_plus_content_length`、
+    `response_body_bytes=1024`、`summary_impl=rust_hyper`
+- 这轮的价值仍是 benchmark truth：
+  Hyper/Tokio 的 body-bearing raw runner row 现在也有 durable regression proof，
+  request-target 和 body-bearing 两条高信息量 workload 都不再只靠 snapshot
+  或 indirect contract 覆盖。
+
+## 2026-06-07 runner epoll url_path focused smoke findings
+
+- 当前 `--nextpas-backend epoll` 的 comparison proof 还停在默认 `no_url` workload。
+  这意味着 nextPas epoll 虽然已经能进入 cross-language runner，但 public
+  request-target seam 还没有 durable raw report。
+- 这不是机械补一条同型 row：
+  - `no_url` 更像 fast-path baseline；
+  - `url_path` 代表的是 nextPas 在公开 request-target 访问面上的 backend 证据。
+- 本轮继续保持窄刀，没有扩 snapshot，也没有碰 runner/HTTP 生产逻辑：
+  - 只把
+    `run_server_comparison.sh --requests 8 --threads 1 --workload url_path --nextpas-backend epoll`
+    提升进 focused gate
+  - 锁住 `nextpas_backend=epoll`
+  - 锁住 `workload=url_path`
+  - 锁住 nextPas row 的 `backend=epoll`
+  - 同时保留 Go / Rust std-only 的同 workload 对照行
+- 这轮的价值仍是 benchmark truth：
+  epoll backend 现在不再只在默认 no-URL comparison 上有 durable proof，而是进入了
+  public request-target cross-language report。
+
+## 2026-06-07 snapshot epoll url_path focused smoke findings
+
+- raw runner 的 `--nextpas-backend epoll + --workload url_path` 这轮已经有了 focused
+  proof，但 durable snapshot artifact 还停在默认 epoll row。
+- 这会留下一个 artifact gap：
+  后续如果只看 Markdown snapshot，仍然无法直接看到 epoll backend 在 public
+  request-target comparison seam 上的保存结果。
+- 本轮继续保持窄刀，没有扩 snapshot schema，也没有碰 runner/HTTP 生产逻辑：
+  - 只把
+    `capture_server_comparison_snapshot.sh --requests 8 --threads 1 --workload url_path --nextpas-backend epoll`
+    提升进 focused gate
+  - 锁住 `nextpas_backend=epoll`
+  - 锁住 `workload=url_path`
+  - 锁住命令块同时包含 `--workload url_path --nextpas-backend epoll`
+  - 锁住 nextPas row 的 `backend=epoll`
+  - 同时保留 Go / Rust std-only 的同 workload 对照行
+- 这轮的价值仍是 benchmark truth：
+  epoll backend 现在在 raw runner 和 durable snapshot 两层都覆盖到了 public
+  request-target seam，而不再只停在默认 no-URL artifact。
+
+## 2026-06-07 runner epoll response-1k focused smoke findings
+
+- 目前 `--nextpas-backend epoll` 的 public comparison evidence 已覆盖默认
+  `no_url` 和 request-target `url_path`，但 body-bearing `response_1k` raw report
+  还没有 durable focused proof。
+- 这会留下一个真实 gap：
+  后续如果只看 saved text report，epoll backend 仍然缺少公开 response-body seam
+  的 regression evidence。
+- 本轮继续保持窄刀，没有扩 snapshot，也没有碰 runner/HTTP 生产逻辑：
+  - 只把
+    `run_server_comparison.sh --requests 8 --threads 1 --workload response_1k --nextpas-backend epoll`
+    提升进 focused gate
+  - 锁住 `nextpas_backend=epoll`
+  - 锁住 `workload=response_1k`
+  - 锁住 nextPas row 的 `backend=epoll`
+  - 锁住 `client_read_mode=header_plus_content_length`、
+    `response_body_bytes=1024`
+  - 同时保留 Go row 的 `client_read_mode=http_client_body_drain`
+- 这轮的价值仍是 benchmark truth：
+  epoll backend 现在也进入了 public body-bearing raw comparison seam，不再只停在
+  no-URL 和 request-target 两条无请求体 workload。
+
+## 2026-06-07 snapshot epoll response-1k focused smoke findings
+
+- raw runner 的 `--nextpas-backend epoll + --workload response_1k` 现在已有 focused
+  proof，但 durable snapshot artifact 还没有锁住同一个 body-bearing backend 组合。
+- 这会留下一个 artifact gap：
+  后续如果只看 Markdown snapshot，仍然看不到 epoll backend 在 public
+  response-body seam 上的保存结果。
+- 本轮继续保持窄刀，没有扩 snapshot schema，也没有碰 runner/HTTP 生产逻辑：
+  - 只把
+    `capture_server_comparison_snapshot.sh --requests 8 --threads 1 --workload response_1k --nextpas-backend epoll`
+    提升进 focused gate
+  - 锁住 `nextpas_backend=epoll`
+  - 锁住 `workload=response_1k`
+  - 锁住命令块同时包含 `--workload response_1k --nextpas-backend epoll`
+  - 锁住 nextPas row 的 `backend=epoll`
+  - 锁住 `client_read_mode=header_plus_content_length`、
+    `response_body_bytes=1024`
+  - 同时保留 Go row 的 `client_read_mode=http_client_body_drain`
+- 这轮的价值仍是 benchmark truth：
+  epoll backend 现在在 raw runner 和 durable snapshot 两层都覆盖到了 public
+  body-bearing comparison seam。
+
+## 2026-06-07 runner include-hyper epoll response-1k focused smoke findings
+
+- 之前的 focused coverage 已分别证明：
+  - `--include-hyper + --workload response_1k`
+  - `--nextpas-backend epoll + --workload response_1k`
+  但还没有一条测试证明这两个 opt-in knob 能在同一个 public raw report 里稳定共存。
+- 这不是机械补笛卡尔积：
+  它锁的是“真实用户会一起打开的两条非默认 comparison 维度是否能组合”，也就是
+  Rust Hyper/Tokio comparator 与 nextPas epoll backend 能否同时进入同一条
+  body-bearing cross-language report。
+- 本轮继续保持窄刀，没有改 runner 或 comparator 实现：
+  - 只把
+    `run_server_comparison.sh --requests 8 --threads 1 --workload response_1k --include-hyper --nextpas-backend epoll`
+    提升进 focused gate
+  - 锁住 `include_hyper=1`
+  - 锁住 `nextpas_backend=epoll`
+  - 锁住 `workload=response_1k`
+  - 锁住 nextPas row 的 `backend=epoll`
+  - 锁住 `rust_hyper` row 的 `rust_profile=hyper_tokio`
+  - 锁住 `response_body_bytes=1024` 与 `summary_impl=rust_hyper`
+- 这轮的价值仍是 benchmark truth：
+  它证明 dual opt-in body-bearing public comparison 能稳定组合，而不是只在两个分离的
+  focused seam 里各自成立。
+
+## 2026-06-07 snapshot include-hyper epoll response-1k focused smoke findings
+
+- raw runner 的 dual opt-in body-bearing seam 这轮已经有了 focused proof，但 durable
+  snapshot artifact 还没有锁住同一个组合。
+- 这会留下一个 artifact gap：
+  如果调用方只消费保存下来的 Markdown snapshot，仍然无法直接证明 Hyper/Tokio comparator
+  与 nextPas epoll backend 在同一条 public body-bearing report 上稳定共存。
+- 本轮继续保持窄刀，没有扩 snapshot schema，也没有碰 runner/HTTP 生产逻辑：
+  - 只把
+    `capture_server_comparison_snapshot.sh --requests 8 --threads 1 --workload response_1k --include-hyper --nextpas-backend epoll`
+    提升进 focused gate
+  - 锁住 `include_hyper=1`
+  - 锁住 `nextpas_backend=epoll`
+  - 锁住 `workload=response_1k`
+  - 锁住命令块同时包含
+    `--workload response_1k --include-hyper --nextpas-backend epoll`
+  - 锁住 `cargo_version=`、`hyper_cargo_lock_sha256=`
+  - 锁住 nextPas row 的 `backend=epoll`
+  - 锁住 `rust_hyper` row 的 `rust_profile=hyper_tokio`
+  - 锁住 `client_read_mode=header_plus_content_length`、
+    `response_body_bytes=1024`、`summary_impl=rust_hyper`
+- 这轮的价值仍是 benchmark truth：
+  dual opt-in body-bearing public comparison 现在在 raw runner 和 durable snapshot
+  两层都能稳定取证。
+
+## 2026-06-07 h1 metadata-cache filter focused smoke findings
+
+- `request metadata` 这组 bench_h1parser row 之前只在较宽的过滤器下一起出现：
+  legacy row 与 cached row 会同时输出。
+- 这会留下一个微基准 truth gap：
+  后续如果只想盯住 parse-time metadata cache 本身，focused gate 还不能证明
+  `request metadata cached` 这条 row 能单独稳定存在，也不能证明过滤器不会顺手带出
+  legacy row 或无关 fast-headers row。
+- 本轮继续保持窄刀，没有碰 parser 生产逻辑：
+  - 只把 `NEXTPAS_BENCH_FILTER=request metadata cached` 提升进 focused gate
+  - 锁住 `bench_filter=request metadata cached`
+  - 锁住 `adapter cost: request metadata cached expect+cl`
+  - 锁住 filtered output 不包含
+    `adapter cost: request metadata legacy expect+cl`
+  - 也不包含无关的 `fast headers get host only`
+- 这轮的价值仍是 benchmark truth：
+  request metadata cache 现在有了更窄、更适合后续性能 isolation 的 standalone
+  microbenchmark proof，而不是只附着在更宽的 filter 组合里。
+
+## 2026-06-07 h1 fast-headers filter focused smoke findings
+
+- `fast headers` 这组 bench_h1parser row 之前也只在较宽的过滤器下一起出现：
+  `get host only`、`count all`、`has accept`、`get all accept`、`foreach all`
+  会同时输出。
+- 这会留下另一个微基准 truth gap：
+  后续如果只想盯住 fast lazy headers 的单-header raw lookup，本来的 focused gate
+  还不能证明 `fast headers get host only` 这条 row 能单独稳定存在，也不能证明
+  过滤器不会顺手带出 materialization 更重的 `count all` / `foreach all` 或无关的
+  metadata-cache row。
+- 本轮继续保持窄刀，没有碰 parser 生产逻辑：
+  - 只把 `NEXTPAS_BENCH_FILTER=fast headers get host only` 提升进 focused gate
+  - 锁住 `bench_filter=fast headers get host only`
+  - 锁住 `adapter cost: fast headers get host only`
+  - 锁住 filtered output 不包含
+    `adapter cost: fast headers count all`
+  - 也不包含 `adapter cost: fast headers foreach all`
+  - 也不包含无关的 `request metadata cached expect+cl`
+- 这轮的价值仍是 benchmark truth：
+  fast lazy headers 的单-header raw lookup 现在有了更窄、更适合后续性能 isolation
+  的 standalone microbenchmark proof，而不是只附着在更宽的 `fast headers`
+  filter 组合里。
+
+## 2026-06-07 h1 fast-headers get-all filter focused smoke findings
+
+- `fast headers get all accept` 之前虽然有独立 row，但 focused gate 仍只证明整组
+  `fast headers` filter 会一起输出。
+- 这会留下同名多值 lookup 的 truth gap：
+  后续如果只想盯住 `GetAllRawValues` 这一层的 raw multi-value lookup，本来的
+  focused gate 还不能证明 `fast headers get all accept` 这条 row 能单独稳定存在，
+  也不能证明过滤器不会顺手带出单值 `get host only`、materialization 更重的
+  `foreach all` 或无关的 metadata-cache row。
+- 本轮继续保持窄刀，没有碰 parser 生产逻辑：
+  - 只把 `NEXTPAS_BENCH_FILTER=fast headers get all accept` 提升进 focused gate
+  - 锁住 `bench_filter=fast headers get all accept`
+  - 锁住 `adapter cost: fast headers get all accept`
+  - 锁住 filtered output 不包含
+    `adapter cost: fast headers get host only`
+  - 也不包含 `adapter cost: fast headers foreach all`
+  - 也不包含无关的 `request metadata cached expect+cl`
+- 这轮的价值仍是 benchmark truth：
+  fast lazy headers 的 same-name multi-value raw lookup 现在有了更窄、更适合后续
+  性能 isolation 的 standalone microbenchmark proof，而不是只附着在更宽的
+  `fast headers` filter 组合里。
+
+## 2026-06-07 h1 fast-headers has filter focused smoke findings
+
+- `fast headers has accept` 之前虽然有独立 row，但 focused gate 仍只证明整组
+  `fast headers` filter 会一起输出。
+- 这会留下 presence-only lookup 的 truth gap：
+  后续如果只想盯住 `HasRawHeader` 这一层的 raw presence lookup，本来的 focused
+  gate 还不能证明 `fast headers has accept` 这条 row 能单独稳定存在，也不能证明
+  过滤器不会顺手带出 `get host only`、`get all accept` 或无关的 metadata-cache row。
+- 本轮继续保持窄刀，没有碰 parser 生产逻辑：
+  - 只把 `NEXTPAS_BENCH_FILTER=fast headers has accept` 提升进 focused gate
+  - 锁住 `bench_filter=fast headers has accept`
+  - 锁住 `adapter cost: fast headers has accept`
+  - 锁住 filtered output 不包含
+    `adapter cost: fast headers get host only`
+  - 也不包含 `adapter cost: fast headers get all accept`
+  - 也不包含无关的 `request metadata cached expect+cl`
+- 这轮的价值仍是 benchmark truth：
+  fast lazy headers 的 presence-only raw lookup 现在有了更窄、更适合后续性能
+  isolation 的 standalone microbenchmark proof，而不是只附着在更宽的
+  `fast headers` filter 组合里。
+
+## 2026-06-07 h1 fast-headers count filter focused smoke findings
+
+- `fast headers count all` 之前虽然有独立 row，但 focused gate 仍只证明整组
+  `fast headers` filter 会一起输出。
+- 这会留下 raw header-count 的 truth gap：
+  后续如果只想盯住 `TFastLazyHeaders.Count` 这一层的 raw count path，本来的 focused
+  gate 还不能证明 `fast headers count all` 这条 row 能单独稳定存在，也不能证明
+  过滤器不会顺手带出 `get host only`、`foreach all` 或无关的 metadata-cache row。
+- 本轮继续保持窄刀，没有碰 parser 生产逻辑：
+  - 只把 `NEXTPAS_BENCH_FILTER=fast headers count all` 提升进 focused gate
+  - 锁住 `bench_filter=fast headers count all`
+  - 锁住 `adapter cost: fast headers count all`
+  - 锁住 filtered output 不包含
+    `adapter cost: fast headers get host only`
+  - 也不包含 `adapter cost: fast headers foreach all`
+  - 也不包含无关的 `request metadata cached expect+cl`
+- 这轮的价值仍是 benchmark truth：
+  fast lazy headers 的 raw count path 现在有了更窄、更适合后续性能 isolation 的
+  standalone microbenchmark proof，而不是只附着在更宽的 `fast headers`
+  filter 组合里。
+
+## 2026-06-07 h1 fast-headers foreach filter focused smoke findings
+
+- `fast headers foreach all` 之前虽然有独立 row，但 focused gate 仍只证明整组
+  `fast headers` filter 会一起输出。
+- 这会留下 full materialization path 的 truth gap：
+  后续如果只想盯住 `EnsureMaterialized + ForEach` 这一层的重路径，本来的 focused
+  gate 还不能证明 `fast headers foreach all` 这条 row 能单独稳定存在，也不能证明
+  过滤器不会顺手带出 `get host only`、`get all accept` 或无关的 metadata-cache row。
+- 本轮继续保持窄刀，没有碰 parser 生产逻辑：
+  - 只把 `NEXTPAS_BENCH_FILTER=fast headers foreach all` 提升进 focused gate
+  - 锁住 `bench_filter=fast headers foreach all`
+  - 锁住 `adapter cost: fast headers foreach all`
+  - 锁住 filtered output 不包含
+    `adapter cost: fast headers get host only`
+  - 也不包含 `adapter cost: fast headers get all accept`
+  - 也不包含无关的 `request metadata cached expect+cl`
+- 这轮的价值仍是 benchmark truth：
+  fast lazy headers 的 full materialization path 现在有了更窄、更适合后续性能
+  isolation 的 standalone microbenchmark proof，而不是只附着在更宽的
+  `fast headers` filter 组合里。
+
+## 2026-06-07 h1 request-path filter focused smoke findings
+
+- `request direct Path access` 之前虽然已有独立 row，但 focused gate 仍只证明宽
+  `request ` filter 会一起输出 `lazy Url.Path`、`direct Path`、`direct RawQuery`、
+  `direct Path+RawQuery`。
+- 这会留下 request-target projection 的 truth gap：
+  后续如果只想盯住 `Req.Path` 这条 direct path projection，本来的 focused gate
+  还不能证明 `request direct Path access` 这条 row 能单独稳定存在，也不能证明
+  过滤器不会顺手带出 `lazy Url.Path`、`direct RawQuery` 或无关的 metadata-cache row。
+- 本轮继续保持窄刀，没有碰 request/URL 生产逻辑：
+  - 只把 `NEXTPAS_BENCH_FILTER=request direct Path access` 提升进 focused gate
+  - 锁住 `bench_filter=request direct Path access`
+  - 锁住 `adapter cost: request direct Path access`
+  - 锁住 filtered output 不包含
+    `adapter cost: request lazy Url.Path access`
+  - 也不包含 `adapter cost: request direct RawQuery access`
+  - 也不包含无关的 `request metadata cached expect+cl`
+- 这轮的价值仍是 benchmark truth：
+  direct request-path projection 现在有了更窄、更适合后续 URL/request-target
+  成本隔离的 standalone microbenchmark proof，而不是只附着在更宽的
+  `request ` filter 组合里。
+
+## 2026-06-07 h1 request-rawquery filter focused smoke findings
+
+- `request direct RawQuery access` 之前虽然已有独立 row，但 focused gate 仍只证明宽
+  `request ` filter 会一起输出 `lazy Url.Path`、`direct Path`、`direct RawQuery`、
+  `direct Path+RawQuery`。
+- 这会留下 request-target query projection 的 truth gap：
+  后续如果只想盯住 `Req.RawQuery` 这条 direct query projection，本来的 focused gate
+  还不能证明 `request direct RawQuery access` 这条 row 能单独稳定存在，也不能证明
+  过滤器不会顺手带出 `lazy Url.Path`、`direct Path` 或无关的 metadata-cache row。
+- 本轮继续保持窄刀，没有碰 request/URL 生产逻辑：
+  - 只把 `NEXTPAS_BENCH_FILTER=request direct RawQuery access` 提升进 focused gate
+  - 锁住 `bench_filter=request direct RawQuery access`
+  - 锁住 `adapter cost: request direct RawQuery access`
+  - 锁住 filtered output 不包含
+    `adapter cost: request lazy Url.Path access`
+  - 也不包含 `adapter cost: request direct Path access`
+  - 也不包含无关的 `request metadata cached expect+cl`
+- 这轮的价值仍是 benchmark truth：
+  direct request-query projection 现在有了更窄、更适合后续 URL/request-target
+  成本隔离的 standalone microbenchmark proof，而不是只附着在更宽的
+  `request ` filter 组合里。
+
+## 2026-06-07 h1 request-path+rawquery filter focused smoke findings
+
+- `request direct Path+RawQuery access` 之前虽然已有独立 row，但 focused gate 仍只证明宽
+  `request ` filter 会一起输出 `lazy Url.Path`、`direct Path`、`direct RawQuery`、
+  `direct Path+RawQuery`。
+- 这会留下 combined request-target projection 的 truth gap：
+  后续如果只想盯住 `Req.Path` + `Req.RawQuery` 的组合 direct projection，本来的
+  focused gate 还不能证明 `request direct Path+RawQuery access` 这条 row 能单独
+  稳定存在，也不能证明过滤器不会顺手带出 `direct Path`、`direct RawQuery` 或
+  无关的 metadata-cache row。
+- 本轮继续保持窄刀，没有碰 request/URL 生产逻辑：
+  - 只把 `NEXTPAS_BENCH_FILTER=request direct Path+RawQuery access` 提升进 focused gate
+  - 锁住 `bench_filter=request direct Path+RawQuery access`
+  - 锁住 `adapter cost: request direct Path+RawQuery access`
+  - 锁住 filtered output 不包含
+    `adapter cost: request direct Path access`
+  - 也不包含 `adapter cost: request direct RawQuery access`
+  - 也不包含无关的 `request metadata cached expect+cl`
+- 这轮的价值仍是 benchmark truth：
+  combined direct request path/query projection 现在有了更窄、更适合后续
+  URL/request-target 成本隔离的 standalone microbenchmark proof，而不是只附着在
+  更宽的 `request ` filter 组合里。
+
+## 2026-06-07 h1 url-parse request-target filter focused smoke findings
+
+- `url parse request-target origin-form` 之前虽然已有独立 row，但 focused gate 仍只证明
+  宽 `url parse` filter 会一起输出 `generic origin-form` 与
+  `request-target origin-form`。
+- 这会留下 parse-only 成本中心的 truth gap：
+  后续如果只想盯住 request-target-specialized parse path，本来的 focused gate
+  还不能证明 `url parse request-target origin-form` 这条 row 能单独稳定存在，也不能
+  证明过滤器不会顺手带出 `url parse generic origin-form`、request projection row
+  或无关的 metadata-cache row。
+- 本轮继续保持窄刀，没有碰 URL/request 生产逻辑：
+  - 只把 `NEXTPAS_BENCH_FILTER=url parse request-target origin-form` 提升进 focused gate
+  - 锁住 `bench_filter=url parse request-target origin-form`
+  - 锁住 `adapter cost: url parse request-target origin-form`
+  - 锁住 filtered output 不包含
+    `adapter cost: url parse generic origin-form`
+  - 也不包含 `adapter cost: request direct Path access`
+  - 也不包含无关的 `request metadata cached expect+cl`
+- 这轮的价值仍是 benchmark truth：
+  request-target-specialized URL parse path 现在有了更窄、更适合后续 parse-only
+  成本隔离的 standalone microbenchmark proof，而不是只附着在更宽的 `url parse`
+  filter 组合里。
+
+## 2026-06-07 h1 url-parse generic filter focused smoke findings
+
+- `url parse generic origin-form` 之前虽然已有独立 row，但 focused gate 仍只证明宽
+  `url parse` filter 会一起输出 `generic origin-form` 与
+  `request-target origin-form`。
+- 这会留下 parse-only 对照组的 truth gap：
+  后续如果只想盯住 generic origin-form parse path，本来的 focused gate 还不能证明
+  `url parse generic origin-form` 这条 row 能单独稳定存在，也不能证明过滤器不会
+  顺手带出 `url parse request-target origin-form`、request projection row 或无关的
+  metadata-cache row。
+- 本轮继续保持窄刀，没有碰 URL/request 生产逻辑：
+  - 只把 `NEXTPAS_BENCH_FILTER=url parse generic origin-form` 提升进 focused gate
+  - 锁住 `bench_filter=url parse generic origin-form`
+  - 锁住 `adapter cost: url parse generic origin-form`
+  - 锁住 filtered output 不包含
+    `adapter cost: url parse request-target origin-form`
+  - 也不包含 `adapter cost: request direct Path access`
+  - 也不包含无关的 `request metadata cached expect+cl`
+- 这轮的价值仍是 benchmark truth：
+  generic origin-form URL parse path 现在有了更窄、更适合后续 parse-only 成本隔离的
+  standalone microbenchmark proof，也给 request-target-specialized parse row 留下
+  对照组。
+
+## 2026-06-07 h1 header-span-add filter focused smoke findings
+
+- `header span add 10 headers` 之前虽然已有独立 row，但 focused gate 仍只在
+  max-iters smoke 中证明它随整组 adapter materialization rows 出现。
+- 这会留下 parser-trusted header store materialization 的 truth gap：
+  后续如果只想盯住 `AddParsedSpans` 对应的 span-to-header-store 成本，本来的
+  focused gate 还不能证明 `header span add 10 headers` 这条 row 能单独稳定存在，
+  也不能证明过滤器不会顺手带出 `span append`、`header add`、`body copy` 或无关
+  metadata-cache row。
+- 本轮继续保持窄刀，没有碰 parser 生产逻辑：
+  - 只把 `NEXTPAS_BENCH_FILTER=header span add 10 headers` 提升进 focused gate
+  - 锁住 `bench_filter=header span add 10 headers`
+  - 锁住 `adapter cost: header span add 10 headers`
+  - 锁住 filtered output 不包含
+    `adapter cost: span append 10 headers`
+  - 也不包含 `adapter cost: header add 10 headers`
+  - 也不包含 `adapter cost: body copy 1KB`
+  - 也不包含无关的 `request metadata cached expect+cl`
+- 这轮顺手把若干 H1 parser standalone filter smoke 收敛到同一个测试 helper，
+  避免后续继续复制大段同型 build/filter/run 逻辑。
+- 第一次 focused gate 中已知的 `bench_fullchain epoll sink 16k` exit `217`
+  transient 再次出现；同一命令立即重跑通过。结论仍然只能记录为残余风险，
+  不能声明 runtime 问题已修复。
+
+## 2026-06-07 fullchain dispatch-path metadata findings
+
+- runtime/socket overhead 的剩余证据缺口不是再造一个新吞吐 row，而是让已有
+  `bench_fullchain` rows 的归因维度更完整。
+- `direct_root` 与 `direct_1k` 之前需要从 workload 名字或 host routing 代码推断
+  “no router”；保存下来的 row 只有 `workload`、`backend`、`nextpas_h1_path`、
+  request/response body bytes，缺少明确的 dispatch-path marker。
+- 本轮把这个隐含维度变成显式 benchmark metadata：
+  - direct workloads 输出 `nextpas_dispatch_path=direct_handler`
+  - routed workloads 输出 `nextpas_dispatch_path=router`
+- 这不是 HTTP server 行为变化：
+  - direct workloads 仍由 outer benchmark handler 在 `THttpRouter` 之前回答
+  - routed workloads 仍进入 `THttpRouter`
+  - 没有改 request parser、response writer、socket runtime、server comparison
+    runner 或 public API
+- 对后续归因的价值：
+  fullchain 行现在同时带有 backend、H1 ingress path、dispatch path、request body
+  bytes、response body bytes。后续看 runtime/socket 开销时，不需要从 workload
+  名字反推这些维度。
+
+## 2026-06-07 fullchain direct-dispatch source-contract findings
+
+- `nextpas_dispatch_path=direct_handler` 不能只靠 workload 名称自证；它需要和
+  `bench_fullchain` 的实际 direct host branch 绑定。
+- 本轮新增 source-contract 后，focused gate 明确检查：
+  - `direct_root` / `direct_1k` 才映射到 `direct_handler`
+  - `plaintext` 不映射到 `direct_handler`
+  - direct scenario request 使用 `DIRECT_HOST`
+  - direct root 和 direct 1 KiB response 分支都在进入 router 前 `Exit`
+  - direct scenario block 不使用 `ROUTER_HOST`
+- 这仍然是 benchmark truth guard，不是 runtime fix；已知的 epoll sink 16k exit
+  `217` transient 在第一轮验证中再次出现并在立即重跑时消失，仍作为残余风险记录。
+
+## 2026-06-07 fullchain server lifecycle source-contract findings
+
+- `bench_fullchain` 的真实风险不是新增 benchmark row，而是 harness lifecycle：
+  它在独立 server thread 里跑 `THttpServer.ListenAndServe`，旧形态没有保留
+  thread handle，也没有在 teardown 前 join。
+- 本轮把这个生命周期变成显式 contract：
+  - server thread handle 和 started state 由 benchmark 全局保存
+  - `StopServer` 统一执行 `Shutdown -> platform_thread_join -> Free`
+  - thread 创建失败时释放已经创建的 server 后再抛错
+  - normal 与 no-match path 都由 `try/finally StopServer` 收口
+- 这仍然是 benchmark harness correctness，不是 HTTP runtime 行为改动：
+  - 没有修改 `THttpServer`、router、parser、writer、socket runtime 或 public API
+  - 没有新增性能数字或改变 benchmark row schema
+  - 价值在于后续 fullchain 证据不再依赖进程退出替未 join 的 server thread 收尸
+- 本轮同时确认最近提到的 `include-hyper url_path summary_impl=rust_hyper`
+  缺失不是当前树的现态问题；fresh focused gate 中 runner 和 snapshot 相关 smoke
+  均已通过。

@@ -27,6 +27,8 @@ function UTF8IsValid(const AData: PByte; const ALen: SizeUInt): Boolean;
 function UTF8Decode(const AData: PByte; const ALen: SizeUInt): TUTF8DecodeResult;
 function UTF8Encode(const ACodePoint: UInt32; const ADst: PByte): Byte;
 function UTF8CodePointCount(const AData: PByte; const ALen: SizeUInt): SizeUInt;
+function UTF8Length(const AValue: string): SizeUInt;
+function UTF8CodePointAt(const AValue: string; const AIndex: Integer): UInt32;
 function UTF8ByteLength(const ALeadByte: Byte): Byte; inline;
 
 implementation
@@ -188,6 +190,31 @@ begin
     else
       Inc(LPos, LDec.ByteLen);
   end;
+end;
+
+function UTF8Length(const AValue: string): SizeUInt;
+begin
+  Result := UTF8CodePointCount(PByte(PAnsiChar(AValue)), SizeUInt(Length(AValue)));
+end;
+
+function UTF8CodePointAt(const AValue: string; const AIndex: Integer): UInt32;
+var
+  LIter: TUTF8Iterator;
+  LCurrent: Integer;
+begin
+  Result := 0;
+  if AIndex < 0 then
+    Exit;
+
+  LIter.Init(PByte(PAnsiChar(AValue)), SizeUInt(Length(AValue)));
+  LCurrent := 0;
+  while LIter.Next(Result) do
+  begin
+    if LCurrent = AIndex then
+      Exit;
+    Inc(LCurrent);
+  end;
+  Result := 0;
 end;
 
 procedure TUTF8Iterator.Init(const AData: PByte; const ALen: SizeUInt);

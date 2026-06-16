@@ -9,7 +9,8 @@ uses
   nextpas.core.base,
   nextpas.core.math,
   nextpas.core.mem.utils,
-  nextpas.core.mem.allocator,
+  nextpas.core.mem.intf,
+  nextpas.core.mem.default,
   nextpas.core.collections.base,
   nextpas.core.collections.intf,
   nextpas.core.collections.arr.intf,
@@ -1453,7 +1454,7 @@ end;
 
 constructor TVecDeque.Create(aCapacity: SizeUInt);
 begin
-  Create(aCapacity, GetRtlAllocator(), GetDefaultGrowStrategy, nil);
+  Create(aCapacity, DefaultAllocator(), GetDefaultGrowStrategy, nil);
 end;
 
 constructor TVecDeque.Create(aCapacity: SizeUInt; aAllocator: IAllocator);

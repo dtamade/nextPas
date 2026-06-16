@@ -9,42 +9,47 @@ interface
 
 uses
   nextpas.core.text.base,
+  nextpas.core.text.compare,
   nextpas.core.text.conv,
-  nextpas.core.text.format;
+  nextpas.core.text.format,
+  nextpas.core.text.strings,
+  nextpas.core.text.utf8,
+  nextpas.core.text.utils,
+  nextpas.core.text.view;
 
 type
   TStringArray = nextpas.core.text.base.TStringArray;
 
-function TextTrim(const AValue: string): string;
-function TextTrimLeft(const AValue: string): string;
-function TextTrimRight(const AValue: string): string;
+function TextTrim(const AValue: string): string; inline;
+function TextTrimLeft(const AValue: string): string; inline;
+function TextTrimRight(const AValue: string): string; inline;
 
-function TextStartsWith(const AValue, APrefix: string): Boolean;
-function TextEndsWith(const AValue, ASuffix: string): Boolean;
-function TextContains(const AValue, ASubStr: string): Boolean;
+function TextStartsWith(const AValue, APrefix: string): Boolean; inline;
+function TextEndsWith(const AValue, ASuffix: string): Boolean; inline;
+function TextContains(const AValue, ASubStr: string): Boolean; inline;
 
-function TextSplit(const AValue, ADelimiter: string): TStringArray;
-function TextJoin(const AParts: TStringArray; const ASeparator: string): string;
+function TextSplit(const AValue, ADelimiter: string): TStringArray; inline;
+function TextJoin(const AParts: TStringArray; const ASeparator: string): string; inline;
 
-function TextReplace(const AValue, AOld, ANew: string): string;
-function TextReplaceAll(const AValue, AOld, ANew: string): string;
+function TextReplace(const AValue, AOld, ANew: string): string; inline;
+function TextReplaceAll(const AValue, AOld, ANew: string): string; inline;
 
-function TextToUpper(const AValue: string): string;
-function TextToLower(const AValue: string): string;
+function TextToUpper(const AValue: string): string; inline;
+function TextToLower(const AValue: string): string; inline;
 
-function TextPadLeft(const AValue: string; const AWidth: Integer; const APadChar: Char = ' '): string;
-function TextPadRight(const AValue: string; const AWidth: Integer; const APadChar: Char = ' '): string;
+function TextPadLeft(const AValue: string; const AWidth: Integer; const APadChar: Char = ' '): string; inline;
+function TextPadRight(const AValue: string; const AWidth: Integer; const APadChar: Char = ' '): string; inline;
 
-function TextRepeat(const AValue: string; const ACount: Integer): string;
+function TextRepeat(const AValue: string; const ACount: Integer): string; inline;
 
-function TextIndexOf(const AValue, ASubStr: string): Integer;
-function TextLastIndexOf(const AValue, ASubStr: string): Integer;
+function TextIndexOf(const AValue, ASubStr: string): Integer; inline;
+function TextLastIndexOf(const AValue, ASubStr: string): Integer; inline;
 
-function TextIsEmpty(const AValue: string): Boolean;
-function TextIsBlank(const AValue: string): Boolean;
+function TextIsEmpty(const AValue: string): Boolean; inline;
+function TextIsBlank(const AValue: string): Boolean; inline;
 
-function TextUTF8Length(const AValue: string): Integer;
-function TextUTF8CodePointAt(const AValue: string; const AIndex: Integer): UInt32;
+function TextUTF8Length(const AValue: string): Integer; inline;
+function TextUTF8CodePointAt(const AValue: string; const AIndex: Integer): UInt32; inline;
 
 { Number conversion (from text.conv) }
 function IntToStr(const AValue: Int64): string; inline;
@@ -59,342 +64,113 @@ function TryStrToFloat(const AStr: string; out AValue: Double): Boolean; inline;
 function TextOfChar(const ACh: Char; const ACount: Integer): string; inline;
 
 { Formatting (from text.format) }
-function TextFormat(const AFmt: string; const AArgs: array of const): string;
+function TextFormat(const AFmt: string; const AArgs: array of const): string; inline;
 
 implementation
 
-uses
-  nextpas.core.text.utf8;
-
-function MemEqual(const A, B: Pointer; const ASize: SizeUInt): Boolean;
-var
-  LI: SizeUInt;
-  LP, LQ: PByte;
-begin
-  if ASize = 0 then Exit(True);
-  LP := PByte(A);
-  LQ := PByte(B);
-  for LI := 0 to ASize - 1 do
-    if LP[LI] <> LQ[LI] then
-      Exit(False);
-  Result := True;
-end;
-
-{ Trim }
-
 function TextTrim(const AValue: string): string;
-var
-  LStart, LEnd: Integer;
 begin
-  LStart := 1;
-  LEnd := Length(AValue);
-  while (LStart <= LEnd) and (AValue[LStart] <= ' ') do
-    Inc(LStart);
-  while (LEnd >= LStart) and (AValue[LEnd] <= ' ') do
-    Dec(LEnd);
-  Result := Copy(AValue, LStart, LEnd - LStart + 1);
+  Result := nextpas.core.text.utils.Trim(AValue);
 end;
 
 function TextTrimLeft(const AValue: string): string;
-var
-  LStart: Integer;
 begin
-  LStart := 1;
-  while (LStart <= Length(AValue)) and (AValue[LStart] <= ' ') do
-    Inc(LStart);
-  Result := Copy(AValue, LStart, Length(AValue) - LStart + 1);
+  Result := nextpas.core.text.utils.TrimLeft(AValue);
 end;
 
 function TextTrimRight(const AValue: string): string;
-var
-  LEnd: Integer;
 begin
-  LEnd := Length(AValue);
-  while (LEnd >= 1) and (AValue[LEnd] <= ' ') do
-    Dec(LEnd);
-  Result := Copy(AValue, 1, LEnd);
+  Result := nextpas.core.text.utils.TrimRight(AValue);
 end;
 
-{ StartsWith / EndsWith / Contains }
-
 function TextStartsWith(const AValue, APrefix: string): Boolean;
-var
-  LPrefixLen: Integer;
 begin
-  LPrefixLen := Length(APrefix);
-  if LPrefixLen = 0 then
-    Exit(True);
-  if Length(AValue) < LPrefixLen then
-    Exit(False);
-  Result := MemEqual(@AValue[1], @APrefix[1], LPrefixLen);
+  Result := nextpas.core.text.compare.TextStartsWith(AValue, APrefix);
 end;
 
 function TextEndsWith(const AValue, ASuffix: string): Boolean;
-var
-  LSuffixLen, LOffset: Integer;
 begin
-  LSuffixLen := Length(ASuffix);
-  if LSuffixLen = 0 then
-    Exit(True);
-  if Length(AValue) < LSuffixLen then
-    Exit(False);
-  LOffset := Length(AValue) - LSuffixLen + 1;
-  Result := MemEqual(@AValue[LOffset], @ASuffix[1], LSuffixLen);
+  Result := nextpas.core.text.compare.TextEndsWith(AValue, ASuffix);
 end;
 
 function TextContains(const AValue, ASubStr: string): Boolean;
 begin
-  if Length(ASubStr) = 0 then
-    Exit(True);
-  Result := Pos(ASubStr, AValue) > 0;
+  Result := nextpas.core.text.compare.TextContains(AValue, ASubStr);
 end;
 
-{ Split / Join }
-
 function TextSplit(const AValue, ADelimiter: string): TStringArray;
-var
-  LPos, LStart, LDelimLen, LCount, LCapacity: Integer;
 begin
-  Result := nil;
-  LDelimLen := Length(ADelimiter);
-  if LDelimLen = 0 then
-  begin
-    SetLength(Result, 1);
-    Result[0] := AValue;
-    Exit;
-  end;
-  LCount := 0;
-  LCapacity := 0;
-  LStart := 1;
-  repeat
-    LPos := Pos(ADelimiter, AValue, LStart);
-    if LPos = 0 then
-      LPos := Length(AValue) + 1;
-    if LCount >= LCapacity then
-    begin
-      if LCapacity = 0 then
-        LCapacity := 8
-      else
-        LCapacity := LCapacity * 2;
-      SetLength(Result, LCapacity);
-    end;
-    Result[LCount] := Copy(AValue, LStart, LPos - LStart);
-    Inc(LCount);
-    LStart := LPos + LDelimLen;
-  until LPos > Length(AValue);
-  SetLength(Result, LCount);
+  Result := nextpas.core.text.strings.StringsSplit(AValue, ADelimiter);
 end;
 
 function TextJoin(const AParts: TStringArray; const ASeparator: string): string;
-var
-  LIdx: Integer;
 begin
-  if Length(AParts) = 0 then
-    Exit('');
-  Result := AParts[0];
-  for LIdx := 1 to High(AParts) do
-    Result := Result + ASeparator + AParts[LIdx];
+  Result := nextpas.core.text.strings.StringsJoin(AParts, ASeparator);
 end;
 
-{ Replace }
-
 function TextReplace(const AValue, AOld, ANew: string): string;
-var
-  LPos: Integer;
 begin
-  LPos := Pos(AOld, AValue);
-  if (LPos = 0) or (Length(AOld) = 0) then
-    Exit(AValue);
-  Result := Copy(AValue, 1, LPos - 1) + ANew +
-            Copy(AValue, LPos + Length(AOld), Length(AValue));
+  Result := nextpas.core.text.conv.StringReplace(AValue, AOld, ANew, False);
 end;
 
 function TextReplaceAll(const AValue, AOld, ANew: string): string;
-var
-  LPos, LStart, LOldLen: Integer;
 begin
-  LOldLen := Length(AOld);
-  if LOldLen = 0 then
-    Exit(AValue);
-  Result := '';
-  LStart := 1;
-  repeat
-    LPos := Pos(AOld, AValue, LStart);
-    if LPos = 0 then
-    begin
-      Result := Result + Copy(AValue, LStart, Length(AValue) - LStart + 1);
-      Break;
-    end;
-    Result := Result + Copy(AValue, LStart, LPos - LStart) + ANew;
-    LStart := LPos + LOldLen;
-  until False;
+  Result := nextpas.core.text.conv.StringReplace(AValue, AOld, ANew, True);
 end;
 
-{ ToUpper / ToLower (ASCII fast path) }
-
 function TextToUpper(const AValue: string): string;
-var
-  LIdx: Integer;
-  LC: Byte;
 begin
-  SetLength(Result, Length(AValue));
-  for LIdx := 1 to Length(AValue) do
-  begin
-    LC := Byte(AValue[LIdx]);
-    if (LC >= Byte('a')) and (LC <= Byte('z')) then
-      Result[LIdx] := Char(LC - 32)
-    else
-      Result[LIdx] := AValue[LIdx];
-  end;
+  Result := nextpas.core.text.conv.UpperCase(AValue);
 end;
 
 function TextToLower(const AValue: string): string;
-var
-  LIdx: Integer;
-  LC: Byte;
 begin
-  SetLength(Result, Length(AValue));
-  for LIdx := 1 to Length(AValue) do
-  begin
-    LC := Byte(AValue[LIdx]);
-    if (LC >= Byte('A')) and (LC <= Byte('Z')) then
-      Result[LIdx] := Char(LC + 32)
-    else
-      Result[LIdx] := AValue[LIdx];
-  end;
+  Result := nextpas.core.text.conv.LowerCase(AValue);
 end;
 
-{ PadLeft / PadRight }
-
 function TextPadLeft(const AValue: string; const AWidth: Integer; const APadChar: Char): string;
-var
-  LPadCount: Integer;
 begin
-  LPadCount := AWidth - Length(AValue);
-  if LPadCount <= 0 then
-    Exit(AValue);
-  Result := nextpas.core.text.conv.TextOfChar(APadChar, LPadCount) + AValue;
+  Result := nextpas.core.text.utils.PadLeft(AValue, AWidth, APadChar);
 end;
 
 function TextPadRight(const AValue: string; const AWidth: Integer; const APadChar: Char): string;
-var
-  LPadCount: Integer;
 begin
-  LPadCount := AWidth - Length(AValue);
-  if LPadCount <= 0 then
-    Exit(AValue);
-  Result := AValue + nextpas.core.text.conv.TextOfChar(APadChar, LPadCount);
+  Result := nextpas.core.text.utils.PadRight(AValue, AWidth, APadChar);
 end;
-
-{ Repeat }
 
 function TextRepeat(const AValue: string; const ACount: Integer): string;
-var
-  LIdx: Integer;
 begin
-  if ACount <= 0 then
-    Exit('');
-  Result := '';
-  for LIdx := 1 to ACount do
-    Result := Result + AValue;
+  Result := nextpas.core.text.utils.RepeatString(AValue, ACount);
 end;
-
-{ IndexOf / LastIndexOf }
 
 function TextIndexOf(const AValue, ASubStr: string): Integer;
 begin
-  if ASubStr = '' then
-    Exit(0);
-  Result := Pos(ASubStr, AValue);
-  if Result > 0 then
-    Dec(Result)
-  else
-    Result := -1;
+  Result := Integer(nextpas.core.text.view.IndexOfStr(AValue, ASubStr));
 end;
 
 function TextLastIndexOf(const AValue, ASubStr: string): Integer;
-var
-  LPos, LLast, LSubLen: Integer;
 begin
-  LSubLen := Length(ASubStr);
-  if (LSubLen = 0) or (Length(AValue) < LSubLen) then
-    Exit(-1);
-  LLast := -1;
-  LPos := 1;
-  repeat
-    LPos := Pos(ASubStr, AValue, LPos);
-    if LPos = 0 then
-      Break;
-    LLast := LPos - 1;
-    Inc(LPos);
-  until False;
-  Result := LLast;
+  Result := Integer(nextpas.core.text.view.LastIndexOfStr(AValue, ASubStr));
 end;
-
-{ IsEmpty / IsBlank }
 
 function TextIsEmpty(const AValue: string): Boolean;
 begin
-  Result := Length(AValue) = 0;
+  Result := nextpas.core.text.utils.IsEmpty(AValue);
 end;
 
 function TextIsBlank(const AValue: string): Boolean;
-var
-  LIdx: Integer;
 begin
-  for LIdx := 1 to Length(AValue) do
-    if AValue[LIdx] > ' ' then
-      Exit(False);
-  Result := True;
+  Result := nextpas.core.text.utils.IsBlank(AValue);
 end;
 
-{ UTF-8 }
-
 function TextUTF8Length(const AValue: string): Integer;
-var
-  LIdx, LLen: Integer;
-  LDec: TUTF8DecodeResult;
 begin
-  Result := 0;
-  LLen := Length(AValue);
-  LIdx := 1;
-  while LIdx <= LLen do
-  begin
-    LDec := UTF8Decode(PByte(@AValue[LIdx]), SizeUInt(LLen - LIdx + 1));
-    Inc(Result);
-    if LDec.ByteLen = 0 then
-      Inc(LIdx)
-    else
-      Inc(LIdx, LDec.ByteLen);
-  end;
+  Result := Integer(nextpas.core.text.utf8.UTF8Length(AValue));
 end;
 
 function TextUTF8CodePointAt(const AValue: string; const AIndex: Integer): UInt32;
-var
-  LIdx, LLen, LCharIdx: Integer;
-  LDec: TUTF8DecodeResult;
 begin
-  Result := 0;
-  LLen := Length(AValue);
-  LIdx := 1;
-  LCharIdx := 0;
-  while LIdx <= LLen do
-  begin
-    LDec := UTF8Decode(PByte(@AValue[LIdx]), SizeUInt(LLen - LIdx + 1));
-    if LCharIdx = AIndex then
-    begin
-      if LDec.ByteLen = 0 then
-        Result := $FFFD
-      else
-        Result := LDec.CodePoint;
-      Exit;
-    end;
-    if LDec.ByteLen = 0 then
-      Inc(LIdx)
-    else
-      Inc(LIdx, LDec.ByteLen);
-    Inc(LCharIdx);
-  end;
+  Result := nextpas.core.text.utf8.UTF8CodePointAt(AValue, AIndex);
 end;
 
 { Re-export: conv }

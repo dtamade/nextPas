@@ -72,6 +72,20 @@ type
     function Run: TTcpServerConnOwnership;
   end;
 
+procedure ValidateServerOptions(const AOptions: THttpServerOptions);
+begin
+  if AOptions.ReadTimeout < 0 then
+    raise EArgumentError.Create('http server read timeout must not be negative');
+  if AOptions.WriteTimeout < 0 then
+    raise EArgumentError.Create('http server write timeout must not be negative');
+  if AOptions.IdleTimeout < 0 then
+    raise EArgumentError.Create('http server idle timeout must not be negative');
+  if AOptions.MaxHeaderSize < 0 then
+    raise EArgumentError.Create('http server max header size must not be negative');
+  if AOptions.MaxBodySize < 0 then
+    raise EArgumentError.Create('http server max body size must not be negative');
+end;
+
 constructor THttpConnHandler.Create(const ATransport: IHttpServerTransport;
   const AHandler: IHttpHandler);
 begin
@@ -137,12 +151,14 @@ begin
   if AHandler = nil then
     raise EArgumentError.Create('http server handler must not be nil');
   inherited Create;
+  ValidateServerOptions(AOptions);
   FHandler := AHandler;
   FOptions := AOptions;
   if ATransport <> nil then
     FTransport := ATransport
   else
-    FTransport := ResolveDefaultServerTransport(AOptions);
+    FTransport := ResolveServerTransport(
+      AOptions.EffectiveVersion(GetDefaultServerVersion), AOptions);
   LTcpOptions := TTcpServerOptions.Default;
   LTcpOptions.Backend := AOptions.Backend;
   FTcpServer := NewTcpServer(LTcpOptions);
@@ -162,6 +178,8 @@ end;
 
 procedure THttpServer.ListenAndServe(const AAddr: string; const APort: UInt16);
 begin
+  if IsRunning then
+    raise EInvalidOperationError.Create('http server is already running');
   FTcpServer.ListenAndServe(AAddr, APort, FConnHandler);
 end;
 

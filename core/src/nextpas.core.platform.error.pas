@@ -254,7 +254,11 @@ begin
     ERROR_OPERATION_ABORTED:
       Result := ecInterrupted;
     {$ENDIF}
+<<<<<<< HEAD
     {$IFNDEF NEXTPAS_UNIX}
+=======
+    {$IF not defined(NEXTPAS_LINUX) and not defined(NEXTPAS_MACOS) and not defined(NEXTPAS_FREEBSD)}
+>>>>>>> origin/main
     PLATFORM_ERR_INVALID:
       Result := ecInvalidArgument;
     PLATFORM_ERR_UNSUPPORTED:

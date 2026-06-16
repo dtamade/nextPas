@@ -6,6 +6,7 @@ uses
   SysUtils,
   nextpas.core.errors,
   nextpas.core.testing,
+  nextpas.core.math.base,
   nextpas.core.math.scalar;
 
 var

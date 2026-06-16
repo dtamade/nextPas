@@ -4,6 +4,10 @@ program test_facade;
 
 uses
   nextpas.core.testing,
+  nextpas.core.math.base,
+  nextpas.core.math.scalar,
+  nextpas.core.math.vec,
+  nextpas.core.math.vec.base,
   nextpas.core.math;
 
 var
@@ -50,10 +54,28 @@ begin
   CheckNear(0.5, SmoothStep(Single(0.0), Single(1.0), Single(0.5)), 'facade exposes Single SmoothStep');
 end;
 
+procedure TestFacadeVecTypes;
+var
+  V2: TVec2f;
+  V3: TVec3f;
+  V4: TVec4f;
+begin
+  V2 := Vec2f(1.0, 2.0);
+  CheckNear(1.0, V2.X, 'facade exposes Vec2f constructor');
+  CheckNear(2.0, V2.Y, 'facade exposes Vec2f Y field');
+
+  V3 := Vec3f(1.0, 2.0, 3.0);
+  CheckNear(3.0, V3.Z, 'facade exposes Vec3f constructor');
+
+  V4 := Vec4f(1.0, 2.0, 3.0, 4.0);
+  CheckNear(4.0, V4.W, 'facade exposes Vec4f constructor');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math facade');
   T.Run('scalar and trig re-export', @TestFacadeScalarAndTrig);
   T.Run('facade scalar rounding surface', @TestFacadeRoundingSurface);
   T.Run('facade new scalar surface', @TestFacadeNewScalarSurface);
+  T.Run('facade vec types', @TestFacadeVecTypes);
   T.Summary;
 end.

@@ -9,7 +9,7 @@ interface
 uses
   nextpas.core.system.typinfo,
   nextpas.core.base,
-  nextpas.core.mem.allocator,
+  nextpas.core.mem.intf,
   nextpas.core.collections.base,
   nextpas.core.collections.hashmap.base,
   nextpas.core.collections.hashmap.intf;

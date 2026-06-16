@@ -42,6 +42,17 @@ type
     FDataBuffer: Pointer;     // 本端“发送”方向数据区基址（Creator=AB，Opener=BA）
     FDataBufferIn: Pointer;   // 本端“接收”方向数据区基址（Creator=BA，Opener=AB）
 
+    function SendSeqBase: PByte; inline;
+    function ReceiveSeqBase: PByte; inline;
+    function SendProducerSeqPtr: PInt64; inline;
+    function SendConsumerSeqPtr: PInt64; inline;
+    function SendCachedConsumerSeqPtr: PInt64; inline;
+    function ReceiveProducerSeqPtr: PInt64; inline;
+    function ReceiveConsumerSeqPtr: PInt64; inline;
+    function ReceiveCachedProducerSeqPtr: PInt64; inline;
+    procedure BindDataBuffers;
+    procedure ResetSendDirection;
+    procedure ResetReceiveDirection;
     function GetWriteIndex: UInt64; inline;
     function GetReadIndex: UInt64; inline;
     procedure SetWriteIndex(const Value: UInt64); inline;
@@ -217,6 +228,14 @@ begin
   Result := x;
 end;
 
+function IsMappedRingBufferBackingSizeValid(const AStat: TPlatformFileStat;
+  ARequiredSize: UInt64): Boolean; inline;
+begin
+  if AStat.Size < 0 then
+    Exit(False);
+  Result := UInt64(AStat.Size) >= ARequiredSize;
+end;
+
 
 const
   // 缓存行大小，避免伪共享
@@ -352,39 +371,204 @@ begin
   Result := True;
 end;
 
+function TMappedRingBuffer.SendSeqBase: PByte;
+begin
+  if FHeader = nil then
+    Exit(nil);
+  if FIsCreator then
+    Result := PByte(FHeader) + PMappedRingBufferHeader(FHeader)^.OffSeq_AB
+  else
+    Result := PByte(FHeader) + PMappedRingBufferHeader(FHeader)^.OffSeq_BA;
+end;
+
+function TMappedRingBuffer.ReceiveSeqBase: PByte;
+begin
+  if FHeader = nil then
+    Exit(nil);
+  if FIsCreator then
+    Result := PByte(FHeader) + PMappedRingBufferHeader(FHeader)^.OffSeq_BA
+  else
+    Result := PByte(FHeader) + PMappedRingBufferHeader(FHeader)^.OffSeq_AB;
+end;
+
+function TMappedRingBuffer.SendProducerSeqPtr: PInt64;
+begin
+  if FHeader = nil then
+    Exit(nil);
+  if FIsCreator then
+    Result := @PMappedRingBufferHeader(FHeader)^.ProducerSeq_AB
+  else
+    Result := @PMappedRingBufferHeader(FHeader)^.ProducerSeq_BA;
+end;
+
+function TMappedRingBuffer.SendConsumerSeqPtr: PInt64;
+begin
+  if FHeader = nil then
+    Exit(nil);
+  if FIsCreator then
+    Result := @PMappedRingBufferHeader(FHeader)^.ConsumerSeq_AB
+  else
+    Result := @PMappedRingBufferHeader(FHeader)^.ConsumerSeq_BA;
+end;
+
+function TMappedRingBuffer.SendCachedConsumerSeqPtr: PInt64;
+begin
+  if FHeader = nil then
+    Exit(nil);
+  if FIsCreator then
+    Result := @PMappedRingBufferHeader(FHeader)^.CachedConsumerSeq_AB
+  else
+    Result := @PMappedRingBufferHeader(FHeader)^.CachedConsumerSeq_BA;
+end;
+
+function TMappedRingBuffer.ReceiveProducerSeqPtr: PInt64;
+begin
+  if FHeader = nil then
+    Exit(nil);
+  if FIsCreator then
+    Result := @PMappedRingBufferHeader(FHeader)^.ProducerSeq_BA
+  else
+    Result := @PMappedRingBufferHeader(FHeader)^.ProducerSeq_AB;
+end;
+
+function TMappedRingBuffer.ReceiveConsumerSeqPtr: PInt64;
+begin
+  if FHeader = nil then
+    Exit(nil);
+  if FIsCreator then
+    Result := @PMappedRingBufferHeader(FHeader)^.ConsumerSeq_BA
+  else
+    Result := @PMappedRingBufferHeader(FHeader)^.ConsumerSeq_AB;
+end;
+
+function TMappedRingBuffer.ReceiveCachedProducerSeqPtr: PInt64;
+begin
+  if FHeader = nil then
+    Exit(nil);
+  if FIsCreator then
+    Result := @PMappedRingBufferHeader(FHeader)^.CachedProducerSeq_BA
+  else
+    Result := @PMappedRingBufferHeader(FHeader)^.CachedProducerSeq_AB;
+end;
+
+procedure TMappedRingBuffer.BindDataBuffers;
+var
+  LHeader: PMappedRingBufferHeader;
+begin
+  if FHeader = nil then
+  begin
+    FDataBuffer := nil;
+    FDataBufferIn := nil;
+    Exit;
+  end;
+
+  LHeader := PMappedRingBufferHeader(FHeader);
+  if FIsCreator then
+  begin
+    FDataBuffer := Pointer(PByte(FHeader) + LHeader^.OffData_AB);
+    FDataBufferIn := Pointer(PByte(FHeader) + LHeader^.OffData_BA);
+  end
+  else
+  begin
+    FDataBuffer := Pointer(PByte(FHeader) + LHeader^.OffData_BA);
+    FDataBufferIn := Pointer(PByte(FHeader) + LHeader^.OffData_AB);
+  end;
+end;
+
+procedure TMappedRingBuffer.ResetSendDirection;
+var
+  LHeader: PMappedRingBufferHeader;
+  LIndex: UInt64;
+  LSeqPtr: PInt64;
+begin
+  if FHeader = nil then
+    Exit;
+
+  LHeader := PMappedRingBufferHeader(FHeader);
+  atomic_store_64(SendProducerSeqPtr^, 0, mo_relaxed);
+  atomic_store_64(SendConsumerSeqPtr^, 0, mo_relaxed);
+  atomic_store_64(SendCachedConsumerSeqPtr^, 0, mo_relaxed);
+
+  if FIsCreator then
+    atomic_store_64(LHeader^.CachedProducerSeq_AB, 0, mo_relaxed)
+  else
+    atomic_store_64(LHeader^.CachedProducerSeq_BA, 0, mo_relaxed);
+
+  for LIndex := 0 to FCapacity - 1 do
+  begin
+    LSeqPtr := PInt64(SendSeqBase + SizeUInt(LIndex) * SizeOf(Int64));
+    atomic_store_64(LSeqPtr^, LIndex, mo_relaxed);
+  end;
+end;
+
+procedure TMappedRingBuffer.ResetReceiveDirection;
+var
+  LHeader: PMappedRingBufferHeader;
+  LIndex: UInt64;
+  LSeqPtr: PInt64;
+begin
+  if FHeader = nil then
+    Exit;
+
+  LHeader := PMappedRingBufferHeader(FHeader);
+  atomic_store_64(ReceiveProducerSeqPtr^, 0, mo_relaxed);
+  atomic_store_64(ReceiveConsumerSeqPtr^, 0, mo_relaxed);
+  atomic_store_64(ReceiveCachedProducerSeqPtr^, 0, mo_relaxed);
+
+  if FIsCreator then
+    atomic_store_64(LHeader^.CachedConsumerSeq_BA, 0, mo_relaxed)
+  else
+    atomic_store_64(LHeader^.CachedConsumerSeq_AB, 0, mo_relaxed);
+
+  for LIndex := 0 to FCapacity - 1 do
+  begin
+    LSeqPtr := PInt64(ReceiveSeqBase + SizeUInt(LIndex) * SizeOf(Int64));
+    atomic_store_64(LSeqPtr^, LIndex, mo_relaxed);
+  end;
+end;
+
 function TMappedRingBuffer.GetWriteIndex: UInt64;
 begin
   if FHeader = nil then Exit(0);
-  // 仅用于旧语义的估算：返回当前方向的序号
-  if FIsCreator then
-    Result := atomic_load_64(PMappedRingBufferHeader(FHeader)^.ProducerSeq_AB, mo_relaxed)
+
+  case FMode of
+    mrbConsumer:
+      Result := atomic_load_64(ReceiveProducerSeqPtr^, mo_relaxed);
   else
-    Result := atomic_load_64(PMappedRingBufferHeader(FHeader)^.ProducerSeq_BA, mo_relaxed);
+    Result := atomic_load_64(SendProducerSeqPtr^, mo_relaxed);
+  end;
 end;
 
 function TMappedRingBuffer.GetReadIndex: UInt64;
 begin
   if FHeader = nil then Exit(0);
-  if FIsCreator then
-    Result := atomic_load_64(PMappedRingBufferHeader(FHeader)^.ConsumerSeq_AB, mo_relaxed)
+
+  case FMode of
+    mrbConsumer:
+      Result := atomic_load_64(ReceiveConsumerSeqPtr^, mo_relaxed);
   else
-    Result := atomic_load_64(PMappedRingBufferHeader(FHeader)^.ConsumerSeq_BA, mo_relaxed);
+    Result := atomic_load_64(SendConsumerSeqPtr^, mo_relaxed);
+  end;
 end;
 
 procedure TMappedRingBuffer.SetWriteIndex(const Value: UInt64);
 begin
-  if FIsCreator then
-    atomic_store_64(PMappedRingBufferHeader(FHeader)^.ProducerSeq_AB, Value, mo_relaxed)
+  case FMode of
+    mrbConsumer:
+      atomic_store_64(ReceiveProducerSeqPtr^, Value, mo_relaxed);
   else
-    atomic_store_64(PMappedRingBufferHeader(FHeader)^.ProducerSeq_BA, Value, mo_relaxed);
+    atomic_store_64(SendProducerSeqPtr^, Value, mo_relaxed);
+  end;
 end;
 
 procedure TMappedRingBuffer.SetReadIndex(const Value: UInt64);
 begin
-  if FIsCreator then
-    atomic_store_64(PMappedRingBufferHeader(FHeader)^.ConsumerSeq_AB, Value, mo_relaxed)
+  case FMode of
+    mrbConsumer:
+      atomic_store_64(ReceiveConsumerSeqPtr^, Value, mo_relaxed);
   else
-    atomic_store_64(PMappedRingBufferHeader(FHeader)^.ConsumerSeq_BA, Value, mo_relaxed);
+    atomic_store_64(SendConsumerSeqPtr^, Value, mo_relaxed);
+  end;
 end;
 
 function TMappedRingBuffer.GetAvailableSpace: UInt64;
@@ -393,16 +577,24 @@ var
 begin
   LWriteIdx := GetWriteIndex;
   LReadIdx := GetReadIndex;
-  if LWriteIdx >= LReadIdx then
-    Result := FCapacity - (LWriteIdx - LReadIdx)
-  else
-    Result := LReadIdx - LWriteIdx;
-  if Result > 0 then Dec(Result); // 留一个空槽以区分满/空
+
+  if LWriteIdx < LReadIdx then
+    Exit(0);
+  if (LWriteIdx - LReadIdx) >= FCapacity then
+    Exit(0);
+  Result := FCapacity - (LWriteIdx - LReadIdx);
 end;
 
 function TMappedRingBuffer.GetUsedSpace: UInt64;
+var
+  LWriteIdx, LReadIdx: UInt64;
 begin
-  Result := FCapacity - GetAvailableSpace;
+  LWriteIdx := GetWriteIndex;
+  LReadIdx := GetReadIndex;
+  if LWriteIdx < LReadIdx then
+    Result := 0
+  else
+    Result := LWriteIdx - LReadIdx;
 end;
 
 {$PUSH}
@@ -414,6 +606,7 @@ var
   LAccess: TMemoryMapAccess;
   LFileHandle: TPlatformFileHandle;
   LStat: TPlatformFileStat;
+  LExpectedSize: UInt64;
 begin
   Result := False;
   Close;
@@ -422,20 +615,16 @@ begin
 
   LRequiredSize := CalculateRequiredSize(aCapacity, aElementSize);
 
-  // 根据模式确定访问权限
-  case aMode of
-    mrbProducer: LAccess := mmaWrite;
-    mrbConsumer: LAccess := mmaRead;
-    mrbBidirectional: LAccess := mmaReadWrite;
-  else
-    LAccess := mmaReadWrite;
-  end;
+  // 环形缓冲区的控制字段需要双向读写；访问模式只限制公开 API，不降低映射权限。
+  LAccess := mmaReadWrite;
 
   FMemoryMap := TMemoryMap.Create;
   try
     // 尝试打开现有文件
     if platform_file_stat(PAnsiChar(aFileName), LStat) = 0 then
     begin
+      if not IsMappedRingBufferBackingSizeValid(LStat, HEADER_SIZE) then
+        Exit;
       if not FMemoryMap.OpenFile(aFileName, LAccess) then Exit;
       FIsCreator := False;
     end
@@ -454,9 +643,6 @@ begin
     FIsShared := False;
     FMode := aMode;
     FHeader := FMemoryMap.BaseAddress;
-    // 单向默认绑定 AB 方向数据区
-    FDataBuffer := Pointer(PByte(FHeader) + PMappedRingBufferHeader(FHeader)^.OffData_AB);
-    FDataBufferIn := Pointer(PByte(FHeader) + PMappedRingBufferHeader(FHeader)^.OffData_BA);
 
     if FIsCreator then
     begin
@@ -465,8 +651,13 @@ begin
     else
     begin
       if not ValidateHeader then Exit;
+      LExpectedSize := CalculateRequiredSize(FCapacity, FElementSize);
+      if (platform_file_stat(PAnsiChar(aFileName), LStat) <> 0) or
+         (not IsMappedRingBufferBackingSizeValid(LStat, LExpectedSize)) then
+        Exit;
     end;
 
+    BindDataBuffers;
     Result := True;
   except
     FreeAndNil(FMemoryMap);
@@ -481,19 +672,15 @@ function TMappedRingBuffer.OpenFile(const aFileName: string;
 var
   LAccess: TMemoryMapAccess;
   LStat: TPlatformFileStat;
+  LExpectedSize: UInt64;
 begin
   Result := False;
   Close;
 
   if platform_file_stat(PAnsiChar(aFileName), LStat) <> 0 then Exit;
+  if not IsMappedRingBufferBackingSizeValid(LStat, HEADER_SIZE) then Exit;
 
-  case aMode of
-    mrbProducer: LAccess := mmaWrite;
-    mrbConsumer: LAccess := mmaRead;
-    mrbBidirectional: LAccess := mmaReadWrite;
-  else
-    LAccess := mmaReadWrite;
-  end;
+  LAccess := mmaReadWrite;
 
   FMemoryMap := TMemoryMap.Create;
   try
@@ -505,8 +692,10 @@ begin
     FHeader := FMemoryMap.BaseAddress;
     // 先校验头，再计算偏移
     if not ValidateHeader then Exit;
-    FDataBuffer := Pointer(PByte(FHeader) + PMappedRingBufferHeader(FHeader)^.OffData_AB);
-    FDataBufferIn := Pointer(PByte(FHeader) + PMappedRingBufferHeader(FHeader)^.OffData_BA);
+    LExpectedSize := CalculateRequiredSize(FCapacity, FElementSize);
+    if not IsMappedRingBufferBackingSizeValid(LStat, LExpectedSize) then
+      Exit;
+    BindDataBuffers;
 
     Result := True;
   except
@@ -530,13 +719,7 @@ begin
 
   LRequiredSize := CalculateRequiredSize(aCapacity, aElementSize);
 
-  case aMode of
-    mrbProducer: LAccess := mmaWrite;
-    mrbConsumer: LAccess := mmaRead;
-    mrbBidirectional: LAccess := mmaReadWrite;
-  else
-    LAccess := mmaReadWrite;
-  end;
+  LAccess := mmaReadWrite;
 
   FSharedMemory := TSharedMemory.Create;
   try
@@ -565,8 +748,7 @@ begin
     end;
 
     // 必须在 InitializeHeader/ValidateHeader 之后设置，因为 offset 字段需要先初始化
-    FDataBuffer := Pointer(PByte(FHeader) + PMappedRingBufferHeader(FHeader)^.OffData_AB);
-    FDataBufferIn := Pointer(PByte(FHeader) + PMappedRingBufferHeader(FHeader)^.OffData_BA);
+    BindDataBuffers;
 
     Result := True;
   except
@@ -585,13 +767,7 @@ begin
   Result := False;
   Close;
 
-  case aMode of
-    mrbProducer: LAccess := mmaWrite;
-    mrbConsumer: LAccess := mmaRead;
-    mrbBidirectional: LAccess := mmaReadWrite;
-  else
-    LAccess := mmaReadWrite;
-  end;
+  LAccess := mmaReadWrite;
 
   FSharedMemory := TSharedMemory.Create;
   try
@@ -603,8 +779,7 @@ begin
     FHeader := FSharedMemory.BaseAddress;
     // 先校验头，再计算偏移
     if not ValidateHeader then Exit;
-    FDataBuffer := Pointer(PByte(FHeader) + PMappedRingBufferHeader(FHeader)^.OffData_AB);
-    FDataBufferIn := Pointer(PByte(FHeader) + PMappedRingBufferHeader(FHeader)^.OffData_BA);
+    BindDataBuffers;
 
     Result := True;
   except
@@ -640,7 +815,6 @@ end;
 {$WARN 6058 OFF} // 局部屏蔽：inline 未内联提示
 function TMappedRingBuffer.Push(const aData: Pointer): Boolean;
 var
-  LHeader: PMappedRingBufferHeader;
   LProdSeq, LConsSeq, LCachedCons: Int64;
   LIndex: UInt64;
   LExpectedSeq: Int64;
@@ -650,38 +824,21 @@ begin
   Result := False;
   if not IsValid or (FMode = mrbConsumer) then Exit;
 
-  LHeader := PMappedRingBufferHeader(FHeader);
-  // 发送方向选择：Creator端使用AB，Open端使用BA
-  if FIsCreator then
-    LProdSeq := atomic_load_64(LHeader^.ProducerSeq_AB, mo_relaxed)
-  else
-    LProdSeq := atomic_load_64(LHeader^.ProducerSeq_BA, mo_relaxed);
-  LIndex := UInt64(LProdSeq) and LHeader^.Mask;
-  if FIsCreator then
-    LSeqPtr := PInt64(PByte(FHeader) + LHeader^.OffSeq_AB + LIndex * SizeOf(Int64))
-  else
-    LSeqPtr := PInt64(PByte(FHeader) + LHeader^.OffSeq_BA + LIndex * SizeOf(Int64));
+  LProdSeq := atomic_load_64(SendProducerSeqPtr^, mo_relaxed);
+  LIndex := UInt64(LProdSeq) and (FCapacity - 1);
+  LSeqPtr := PInt64(SendSeqBase + SizeUInt(LIndex) * SizeOf(Int64));
 
   // 槽位可用性检查：期望等于 LProdSeq
   LExpectedSeq := LProdSeq;
   if atomic_load_64(LSeqPtr^, mo_acquire) <> LExpectedSeq then
   begin
     // 检查是否满：Prod - CachedCons >= Capacity
-    if FIsCreator then
-      LCachedCons := atomic_load_64(LHeader^.CachedConsumerSeq_AB, mo_relaxed)
-    else
-      LCachedCons := atomic_load_64(LHeader^.CachedConsumerSeq_BA, mo_relaxed);
-    if (LProdSeq - LCachedCons) >= Int64(LHeader^.Capacity) then
+    LCachedCons := atomic_load_64(SendCachedConsumerSeqPtr^, mo_relaxed);
+    if (LProdSeq - LCachedCons) >= Int64(FCapacity) then
     begin
-      if FIsCreator then
-        LConsSeq := atomic_load_64(LHeader^.ConsumerSeq_AB, mo_acquire)
-      else
-        LConsSeq := atomic_load_64(LHeader^.ConsumerSeq_BA, mo_acquire);
-      if FIsCreator then
-        atomic_store_64(LHeader^.CachedConsumerSeq_AB, LConsSeq, mo_relaxed)
-      else
-        atomic_store_64(LHeader^.CachedConsumerSeq_BA, LConsSeq, mo_relaxed);
-      if (LProdSeq - LConsSeq) >= Int64(LHeader^.Capacity) then Exit(False);
+      LConsSeq := atomic_load_64(SendConsumerSeqPtr^, mo_acquire);
+      atomic_store_64(SendCachedConsumerSeqPtr^, LConsSeq, mo_relaxed);
+      if (LProdSeq - LConsSeq) >= Int64(FCapacity) then Exit(False);
     end
     else
       Exit(False);
@@ -694,10 +851,7 @@ begin
   // 发布槽位：sequence = LProdSeq + 1（release）
   atomic_store_64(LSeqPtr^, LProdSeq + 1, mo_release);
   // 推进生产者序号（relaxed）
-  if FIsCreator then
-    atomic_store_64(LHeader^.ProducerSeq_AB, LProdSeq + 1, mo_relaxed)
-  else
-    atomic_store_64(LHeader^.ProducerSeq_BA, LProdSeq + 1, mo_relaxed);
+  atomic_store_64(SendProducerSeqPtr^, LProdSeq + 1, mo_relaxed);
 
   Result := True;
 end;
@@ -706,7 +860,6 @@ end;
 {$WARN 6058 OFF}
 function TMappedRingBuffer.Pop(aData: Pointer): Boolean;
 var
-  LHeader: PMappedRingBufferHeader;
   LConsSeq, LProdSeq, LCachedProd: Int64;
   LIndex: UInt64;
   LExpectedSeq: Int64;
@@ -716,37 +869,20 @@ begin
   Result := False;
   if not IsValid or (FMode = mrbProducer) then Exit;
 
-  LHeader := PMappedRingBufferHeader(FHeader);
-  // 接收方向选择：Creator端读取AB，Open端读取BA
-  if FIsCreator then
-    LConsSeq := atomic_load_64(LHeader^.ConsumerSeq_AB, mo_relaxed)
-  else
-    LConsSeq := atomic_load_64(LHeader^.ConsumerSeq_BA, mo_relaxed);
-  LIndex := UInt64(LConsSeq) and LHeader^.Mask;
-  if FIsCreator then
-    LSeqPtr := PInt64(PByte(FHeader) + LHeader^.OffSeq_AB + LIndex * SizeOf(Int64))
-  else
-    LSeqPtr := PInt64(PByte(FHeader) + LHeader^.OffSeq_BA + LIndex * SizeOf(Int64));
+  LConsSeq := atomic_load_64(ReceiveConsumerSeqPtr^, mo_relaxed);
+  LIndex := UInt64(LConsSeq) and (FCapacity - 1);
+  LSeqPtr := PInt64(ReceiveSeqBase + SizeUInt(LIndex) * SizeOf(Int64));
 
   // 槽位可读性检查：期望等于 LConsSeq + 1
   LExpectedSeq := LConsSeq + 1;
   if atomic_load_64(LSeqPtr^, mo_acquire) <> LExpectedSeq then
   begin
     // 检查是否空：CachedProd - Cons <= 0
-    if FIsCreator then
-      LCachedProd := atomic_load_64(LHeader^.CachedProducerSeq_AB, mo_relaxed)
-    else
-      LCachedProd := atomic_load_64(LHeader^.CachedProducerSeq_BA, mo_relaxed);
+    LCachedProd := atomic_load_64(ReceiveCachedProducerSeqPtr^, mo_relaxed);
     if (LCachedProd - LConsSeq) <= 0 then
     begin
-      if FIsCreator then
-        LProdSeq := atomic_load_64(LHeader^.ProducerSeq_AB, mo_acquire)
-      else
-        LProdSeq := atomic_load_64(LHeader^.ProducerSeq_BA, mo_acquire);
-      if FIsCreator then
-        atomic_store_64(LHeader^.CachedProducerSeq_AB, LProdSeq, mo_relaxed)
-      else
-        atomic_store_64(LHeader^.CachedProducerSeq_BA, LProdSeq, mo_relaxed);
+      LProdSeq := atomic_load_64(ReceiveProducerSeqPtr^, mo_acquire);
+      atomic_store_64(ReceiveCachedProducerSeqPtr^, LProdSeq, mo_relaxed);
       if (LProdSeq - LConsSeq) <= 0 then Exit(False);
     end
     else
@@ -754,16 +890,13 @@ begin
   end;
 
   // 读取数据
-  LDataPtr := Pointer(PByte(FDataBuffer) + (LIndex * UInt64(FElementSize)));
+  LDataPtr := Pointer(PByte(FDataBufferIn) + (LIndex * UInt64(FElementSize)));
   Move(LDataPtr^, aData^, FElementSize);
 
   // 释放槽位：sequence = LConsSeq + Capacity（release）
-  atomic_store_64(LSeqPtr^, LConsSeq + Int64(LHeader^.Capacity), mo_release);
+  atomic_store_64(LSeqPtr^, LConsSeq + Int64(FCapacity), mo_release);
   // 推进消费者序号
-  if FIsCreator then
-    atomic_store_64(LHeader^.ConsumerSeq_AB, LConsSeq + 1, mo_relaxed)
-  else
-    atomic_store_64(LHeader^.ConsumerSeq_BA, LConsSeq + 1, mo_relaxed);
+  atomic_store_64(ReceiveConsumerSeqPtr^, LConsSeq + 1, mo_relaxed);
 
   Result := True;
 end;
@@ -774,7 +907,6 @@ end;
 {$WARN 6058 OFF}
 function TMappedRingBuffer.Peek(aData: Pointer): Boolean;
 var
-  LHeader: PMappedRingBufferHeader;
   LConsSeq, LProdSeq, LCachedProd: Int64;
   LIndex: UInt64;
   LExpectedSeq: Int64;
@@ -784,41 +916,25 @@ begin
   Result := False;
   if not IsValid or (FMode = mrbProducer) then Exit;
 
-  LHeader := PMappedRingBufferHeader(FHeader);
-  if FIsCreator then
-    LConsSeq := atomic_load_64(LHeader^.ConsumerSeq_AB, mo_relaxed)
-  else
-    LConsSeq := atomic_load_64(LHeader^.ConsumerSeq_BA, mo_relaxed);
-  LIndex := UInt64(LConsSeq) and LHeader^.Mask;
-  if FIsCreator then
-    LSeqPtr := PInt64(PByte(FHeader) + LHeader^.OffSeq_AB + LIndex * SizeOf(Int64))
-  else
-    LSeqPtr := PInt64(PByte(FHeader) + LHeader^.OffSeq_BA + LIndex * SizeOf(Int64));
+  LConsSeq := atomic_load_64(ReceiveConsumerSeqPtr^, mo_relaxed);
+  LIndex := UInt64(LConsSeq) and (FCapacity - 1);
+  LSeqPtr := PInt64(ReceiveSeqBase + SizeUInt(LIndex) * SizeOf(Int64));
 
   LExpectedSeq := LConsSeq + 1;
   if atomic_load_64(LSeqPtr^, mo_acquire) <> LExpectedSeq then
   begin
-    if FIsCreator then
-      LCachedProd := atomic_load_64(LHeader^.CachedProducerSeq_AB, mo_relaxed)
-    else
-      LCachedProd := atomic_load_64(LHeader^.CachedProducerSeq_BA, mo_relaxed);
+    LCachedProd := atomic_load_64(ReceiveCachedProducerSeqPtr^, mo_relaxed);
     if (LCachedProd - LConsSeq) <= 0 then
     begin
-      if FIsCreator then
-        LProdSeq := atomic_load_64(LHeader^.ProducerSeq_AB, mo_acquire)
-      else
-        LProdSeq := atomic_load_64(LHeader^.ProducerSeq_BA, mo_acquire);
-      if FIsCreator then
-        atomic_store_64(LHeader^.CachedProducerSeq_AB, LProdSeq, mo_relaxed)
-      else
-        atomic_store_64(LHeader^.CachedProducerSeq_BA, LProdSeq, mo_relaxed);
+      LProdSeq := atomic_load_64(ReceiveProducerSeqPtr^, mo_acquire);
+      atomic_store_64(ReceiveCachedProducerSeqPtr^, LProdSeq, mo_relaxed);
       if (LProdSeq - LConsSeq) <= 0 then Exit(False);
     end
     else
       Exit(False);
   end;
 
-  LDataPtr := Pointer(PByte(FDataBuffer) + (LIndex * UInt64(FElementSize)));
+  LDataPtr := Pointer(PByte(FDataBufferIn) + (LIndex * UInt64(FElementSize)));
   Move(LDataPtr^, aData^, FElementSize);
 
   Result := True;
@@ -829,107 +945,66 @@ end;
 {$WARN 6058 OFF}
 function TMappedRingBuffer.PushBatch(const aData: Pointer; aCount: UInt64): UInt64;
 var
-  LWriteIdx, LReadIdx, LAvailSpace, LBatchSize: UInt64;
   LIndex: UInt64;
-  LSrcPtr, LDstPtr: Pointer;
+  LSrcPtr: Pointer;
 begin
   Result := 0;
   if not IsValid or (FMode = mrbConsumer) or (aCount = 0) then Exit;
 
-  LWriteIdx := GetWriteIndex;
-  LReadIdx := GetReadIndex;
-
-  // 计算可用空间
-  if LWriteIdx >= LReadIdx then
-    LAvailSpace := FCapacity - (LWriteIdx - LReadIdx) - 1
-  else
-    LAvailSpace := LReadIdx - LWriteIdx - 1;
-
-  if aCount < LAvailSpace then LBatchSize := aCount else LBatchSize := LAvailSpace;
-  if LBatchSize = 0 then Exit;
-
-  // 批量复制数据
-  for LIndex := 0 to LBatchSize - 1 do
+  for LIndex := 0 to aCount - 1 do
   begin
-    LSrcPtr := Pointer(PByte(aData) + LIndex * FElementSize);
-    LDstPtr := Pointer(PByte(FDataBuffer) + ((LWriteIdx + LIndex) mod FCapacity) * FElementSize);
-    Move(LSrcPtr^, LDstPtr^, FElementSize);
+    LSrcPtr := Pointer(PByte(aData) + SizeUInt(LIndex) * FElementSize);
+    if not Push(LSrcPtr) then
+      Break;
+    Inc(Result);
   end;
-
-  // 原子更新写入索引
-  SetWriteIndex((LWriteIdx + LBatchSize) mod FCapacity);
-
-  Result := LBatchSize;
 end;
 
 {$PUSH}
 {$WARN 6058 OFF}
 function TMappedRingBuffer.PopBatch(aData: Pointer; aCount: UInt64): UInt64;
 var
-  LWriteIdx, LReadIdx, LBatchSize: UInt64;
   LIndex: UInt64;
-  LSrcPtr, LDstPtr: Pointer;
+  LDstPtr: Pointer;
 begin
   Result := 0;
   if not IsValid or (FMode = mrbProducer) or (aCount = 0) then Exit;
 
-  LWriteIdx := GetWriteIndex;
-  LReadIdx := GetReadIndex;
-
-  // 计算已用空间并确定批量大小
-  if LWriteIdx >= LReadIdx then
+  for LIndex := 0 to aCount - 1 do
   begin
-    if aCount < (LWriteIdx - LReadIdx) then
-      LBatchSize := aCount
-    else
-      LBatchSize := LWriteIdx - LReadIdx;
-  end
-  else
-  begin
-    if aCount < (FCapacity - (LReadIdx - LWriteIdx)) then
-      LBatchSize := aCount
-    else
-      LBatchSize := FCapacity - (LReadIdx - LWriteIdx);
+    LDstPtr := Pointer(PByte(aData) + SizeUInt(LIndex) * FElementSize);
+    if not Pop(LDstPtr) then
+      Break;
+    Inc(Result);
   end;
-  if LBatchSize = 0 then Exit;
-
-  // 批量复制数据
-  for LIndex := 0 to LBatchSize - 1 do
-  begin
-    LSrcPtr := Pointer(PByte(FDataBuffer) + ((LReadIdx + LIndex) mod FCapacity) * FElementSize);
-    LDstPtr := Pointer(PByte(aData) + LIndex * FElementSize);
-    Move(LSrcPtr^, LDstPtr^, FElementSize);
-  end;
-
-  // 原子更新读取索引
-  SetReadIndex((LReadIdx + LBatchSize) mod FCapacity);
-
-  Result := LBatchSize;
 end;
 {$POP}
 
 procedure TMappedRingBuffer.Clear;
 begin
   if not IsValid then Exit;
-  SetWriteIndex(0);
-  SetReadIndex(0);
+
+  case FMode of
+    mrbProducer:
+      ResetSendDirection;
+    mrbConsumer:
+      ResetReceiveDirection;
+  else
+    begin
+      ResetSendDirection;
+      ResetReceiveDirection;
+    end;
+  end;
 end;
 
 function TMappedRingBuffer.IsEmpty: Boolean;
 begin
-  Result := not IsValid or (GetWriteIndex = GetReadIndex);
+  Result := not IsValid or (GetUsedSpace = 0);
 end;
 
 function TMappedRingBuffer.IsFull: Boolean;
-var
-  LWriteIdx, LReadIdx: UInt64;
 begin
-  Result := False;
-  if not IsValid then Exit;
-
-  LWriteIdx := GetWriteIndex;
-  LReadIdx := GetReadIndex;
-  Result := ((LWriteIdx + 1) mod FCapacity) = LReadIdx;
+  Result := IsValid and (GetAvailableSpace = 0);
 end;
 
 function TMappedRingBuffer.IsValid: Boolean;

@@ -5,6 +5,7 @@ program test_http_h1fast;
 uses
   SysUtils,
   nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.testing,
   nextpas.core.http.base,
   nextpas.core.http.intf,
@@ -54,13 +55,16 @@ begin
   LReq := 'GET /api HTTP/1.1'#13#10 +
            'Host: example.com'#13#10 +
            'Accept: application/json'#13#10 +
-           'X-Request-Id: abc123'#13#10#13#10;
+           'X-Request-Id: abc123'#13#10 +
+           'X-!#$%&''*+-.^_`|~09: token'#13#10#13#10;
   LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
   Check(LR.Success, 'should succeed');
-  CheckEqual(Int64(3), Int64(LR.Headers.Count), 'header count');
+  CheckEqual(Int64(4), Int64(LR.Headers.Count), 'header count');
   CheckEqual('example.com', LR.Headers.Get('Host'), 'host');
   CheckEqual('application/json', LR.Headers.Get('Accept'), 'accept');
   CheckEqual('abc123', LR.Headers.Get('X-Request-Id'), 'x-request-id');
+  CheckEqual('token', LR.Headers.Get('X-!#$%&''*+-.^_`|~09'),
+    'tchar field-name remains accepted');
 end;
 
 procedure TestHttp10Version;
@@ -153,6 +157,40 @@ begin
   Check(not LR.Success, 'should fail — invalid content-length fallback');
 end;
 
+procedure CheckContentLengthFallbackWithoutRaise(const AValue, ALabel: string);
+var
+  LReq: AnsiString;
+  LR: TFastParseResult;
+  LRaised: Boolean;
+begin
+  LReq := 'POST /data HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'Content-Length:' + AValue + #13#10#13#10;
+  LR := Default(TFastParseResult);
+  LRaised := False;
+  try
+    LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
+  except
+    on E: Exception do
+      LRaised := True;
+  end;
+
+  Check(not LRaised, ALabel + ': fast parser does not raise');
+  Check(not LR.Success, ALabel + ': fast parser falls back');
+end;
+
+procedure TestContentLengthGrammarFallbacksWithoutRaise;
+begin
+  CheckContentLengthFallbackWithoutRaise(' 18446744073709551616',
+    'content-length overflows uint64-wrap boundary');
+  CheckContentLengthFallbackWithoutRaise(' +5',
+    'content-length plus sign');
+  CheckContentLengthFallbackWithoutRaise('',
+    'content-length empty value');
+  CheckContentLengthFallbackWithoutRaise('   ',
+    'content-length whitespace-only value');
+end;
+
 procedure TestInvalidHeaderNameFallback;
 var
   LReq: AnsiString;
@@ -165,6 +203,32 @@ begin
   Check(not LR.Success, 'should fail — invalid header name fallback');
 end;
 
+procedure CheckInvalidHeaderNameFallsBack(const AName, ALabel: string);
+var
+  LReq: AnsiString;
+  LR: TFastParseResult;
+begin
+  LReq := 'GET / HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           AName + ': value'#13#10#13#10;
+  LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
+  Check(not LR.Success, ALabel);
+end;
+
+procedure TestHeaderNameTCharSeparatorFallbacks;
+begin
+  CheckInvalidHeaderNameFallsBack('Bad Name',
+    'space is not allowed in header field-name');
+  CheckInvalidHeaderNameFallsBack('Bad/Name',
+    'slash is not allowed in header field-name');
+  CheckInvalidHeaderNameFallsBack('Bad;Name',
+    'semicolon is not allowed in header field-name');
+  CheckInvalidHeaderNameFallsBack('Bad=Name',
+    'equals is not allowed in header field-name');
+  CheckInvalidHeaderNameFallsBack('Bad(Name',
+    'left paren is not allowed in header field-name');
+end;
+
 procedure TestInvalidHeaderValueFallback;
 var
   LReq: AnsiString;
@@ -174,6 +238,72 @@ begin
            'Host: local'#0'host'#13#10#13#10;
   LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
   Check(not LR.Success, 'should fail — invalid header value fallback');
+end;
+
+procedure CheckInvalidHeaderValueFallsBack(const AValue, ALabel: AnsiString);
+var
+  LReq: AnsiString;
+  LR: TFastParseResult;
+begin
+  LReq := 'GET / HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'X-Test: ' + AValue + #13#10#13#10;
+  LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
+  Check(not LR.Success, string(ALabel));
+end;
+
+procedure TestHeaderValueCtlAndDelFallbacks;
+begin
+  CheckInvalidHeaderValueFallsBack('bad' + #10 + 'value',
+    'header value bare LF falls back');
+  CheckInvalidHeaderValueFallsBack('bad' + #13 + 'value',
+    'header value bare CR falls back');
+  CheckInvalidHeaderValueFallsBack('bad' + #127 + 'value',
+    'header value DEL falls back');
+end;
+
+procedure TestHeaderValueHtabAndObsTextRemainAccepted;
+var
+  LReq: AnsiString;
+  LR: TFastParseResult;
+begin
+  LReq := 'GET / HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'X-Tab: left'#9'right'#13#10 +
+           'X-Obs: high' + #128 + 'byte'#13#10#13#10;
+  LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
+  Check(LR.Success, 'HTAB and obs-text header values remain fast-parseable');
+  CheckEqual('left'#9'right', LR.Headers.Get('X-Tab'),
+    'HTAB value is preserved');
+  CheckEqual('high' + #128 + 'byte', LR.Headers.Get('X-Obs'),
+    'obs-text value is preserved');
+end;
+
+procedure CheckInvalidRequestTargetFallsBackLikeLlhttp(const ATarget,
+  ALabel: AnsiString);
+var
+  LReq: AnsiString;
+  LR: TFastParseResult;
+  LP: IH1Parser;
+begin
+  LReq := 'GET ' + ATarget + ' HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10#13#10;
+
+  LP := NewH1RequestParser;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(LP.HasError, string(ALabel) + ': llhttp rejects request-target');
+
+  LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
+  Check(not LR.Success,
+    string(ALabel) + ': fast parser falls back on invalid request-target');
+end;
+
+procedure TestRequestTargetCtlAndDelFallbacks;
+begin
+  CheckInvalidRequestTargetFallsBackLikeLlhttp('/bad' + #0 + 'path',
+    'request-target NUL');
+  CheckInvalidRequestTargetFallsBackLikeLlhttp('/bad' + #127 + 'path',
+    'request-target DEL');
 end;
 
 procedure TestIncompleteBodyFallback;
@@ -229,6 +359,57 @@ begin
   CheckEqual('*/*', LR.Headers.Get('Accept'), 'trimmed accept');
 end;
 
+procedure TestLazyHeadersTrimTrailingOwsLikeLlhttp;
+var
+  LReq: AnsiString;
+  LFast: TFastParseResult;
+  LP: IH1Parser;
+  LFastValues: TStringArray;
+  LParserValues: TStringArray;
+begin
+  LReq := 'GET / HTTP/1.1'#13#10 +
+           'Host: localhost '#9#13#10 +
+           'X-Dupe: first  '#13#10 +
+           'X-Dupe: second'#9' '#13#10#13#10;
+
+  LP := NewH1RequestParser;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(LP.IsComplete, 'llhttp trailing OWS request completes');
+  Check(not LP.HasError, 'llhttp trailing OWS request has no parser error');
+
+  LFast := FastParseRequest(PAnsiChar(LReq), Length(LReq));
+  Check(LFast.Success, 'fast parser accepts trailing OWS request');
+
+  CheckEqual('localhost', LP.GetHeaders.Get('Host'),
+    'llhttp trims trailing OWS');
+  CheckEqual('localhost', LFast.Headers.Get('Host'),
+    'raw lazy Get trims trailing OWS');
+  LFastValues := LFast.Headers.GetAll('X-Dupe');
+  LParserValues := LP.GetHeaders.GetAll('X-Dupe');
+  CheckEqual(Int64(2), Int64(Length(LFastValues)),
+    'raw lazy GetAll keeps duplicate count');
+  CheckEqual('first', LParserValues[0],
+    'llhttp trims first duplicate trailing OWS');
+  CheckEqual('second', LParserValues[1],
+    'llhttp trims second duplicate trailing OWS');
+  CheckEqual('first', LFastValues[0],
+    'raw lazy GetAll trims first duplicate trailing OWS');
+  CheckEqual('second', LFastValues[1],
+    'raw lazy GetAll trims second duplicate trailing OWS');
+
+  LFast.Headers.ForEach(
+    procedure(const AName, AValue: string)
+    begin
+    end);
+  CheckEqual('localhost', LFast.Headers.Get('Host'),
+    'materialized lazy Get keeps trailing OWS trim');
+  LFastValues := LFast.Headers.GetAll('X-Dupe');
+  CheckEqual('first', LFastValues[0],
+    'materialized lazy GetAll keeps first duplicate trailing OWS trim');
+  CheckEqual('second', LFastValues[1],
+    'materialized lazy GetAll keeps second duplicate trailing OWS trim');
+end;
+
 procedure TestLazyHeadersRawLookupPreservesSemantics;
 var
   LReq: AnsiString;
@@ -261,6 +442,74 @@ begin
     'GetAll preserves second duplicate value');
 end;
 
+procedure TestLazyHeadersRejectInvalidLookupNames;
+var
+  LReq: AnsiString;
+  LR: TFastParseResult;
+  LAll: TStringArray;
+  LRaised: Boolean;
+begin
+  LReq := 'GET / HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'X-Keep: value'#13#10#13#10;
+  LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
+  Check(LR.Success, 'lazy header invalid lookup request should parse');
+
+  LRaised := False;
+  try
+    LR.Headers.Get('');
+  except
+    on E: EHttpError do
+      LRaised := E.Message = 'empty header name';
+  end;
+  Check(LRaised, 'lazy headers get rejects empty name');
+
+  LRaised := False;
+  try
+    LR.Headers.Has('Bad Name');
+  except
+    on E: EHttpError do
+      LRaised := E.Message = 'invalid header name character';
+  end;
+  Check(LRaised, 'lazy headers has rejects separator space in name');
+
+  LRaised := False;
+  try
+    LAll := LR.Headers.GetAll('Bad:Name');
+  except
+    on E: EHttpError do
+      LRaised := E.Message = 'invalid header name character';
+  end;
+  Check(LRaised, 'lazy headers getall rejects colon in name');
+
+  CheckEqual('value', LR.Headers.Get('X-Keep'),
+    'invalid lazy lookup attempts preserve valid raw lookup state');
+end;
+
+procedure TestLazyHeadersForEachRejectsNilCallback;
+var
+  LReq: AnsiString;
+  LR: TFastParseResult;
+  LCallback: THeaderIterator;
+  LRaised: Boolean;
+begin
+  LReq := 'GET / HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'X-Test: value'#13#10#13#10;
+  LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
+  Check(LR.Success, 'lazy header nil callback request should parse');
+
+  LCallback := nil;
+  LRaised := False;
+  try
+    LR.Headers.ForEach(LCallback);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'lazy headers foreach rejects nil callback');
+end;
+
 procedure TestPolicyHeaderFlags;
 var
   LReq: AnsiString;
@@ -273,6 +522,7 @@ begin
   LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
   Check(LR.Success, 'policy request should parse');
   Check(LR.HasHost, 'host flag');
+  Check(not LR.HostRepeated, 'single host does not set repeated-host flag');
   Check(LR.HasConnection, 'connection flag');
   Check(LR.ConnectionKeepAlive, 'connection keep-alive flag');
   Check(not LR.ConnectionClose, 'connection close flag absent');
@@ -292,6 +542,30 @@ begin
 
   LReq := 'GET / HTTP/1.1'#13#10 +
            'Host: localhost'#13#10 +
+           'Connection: upgrade, close'#13#10#13#10;
+  LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
+  Check(LR.Success, 'connection close token-list request should parse');
+  Check(LR.HasConnection, 'connection close token-list has connection flag');
+  Check(not LR.ConnectionKeepAlive,
+    'connection close token-list keep-alive flag absent');
+  Check(LR.ConnectionClose, 'connection close token-list flag');
+  Check(LR.ConnectionUnsupported,
+    'connection close token-list keeps unsupported token flag');
+
+  LReq := 'GET / HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'Connection: upgrade, keep-alive'#13#10#13#10;
+  LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
+  Check(LR.Success, 'connection keep-alive token-list request should parse');
+  Check(LR.HasConnection, 'connection keep-alive token-list has connection flag');
+  Check(LR.ConnectionKeepAlive, 'connection keep-alive token-list flag');
+  Check(not LR.ConnectionClose,
+    'connection keep-alive token-list close flag absent');
+  Check(LR.ConnectionUnsupported,
+    'connection keep-alive token-list keeps unsupported token flag');
+
+  LReq := 'GET / HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
            'Connection: upgrade'#13#10#13#10;
   LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
   Check(LR.Success, 'connection upgrade request should parse');
@@ -306,6 +580,29 @@ begin
   LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
   Check(not LR.Success, 'transfer-encoding still falls back');
   Check(LR.HasTransferEncoding, 'transfer-encoding flag');
+end;
+
+procedure TestDuplicateHostPolicyFlag;
+var
+  LReq: AnsiString;
+  LR: TFastParseResult;
+  LHostValues: TStringArray;
+begin
+  LReq := 'GET / HTTP/1.1'#13#10 +
+           'Host: first.example'#13#10 +
+           'Host: second.example'#13#10#13#10;
+  LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
+  Check(LR.Success, 'duplicate Host remains fast-parseable for policy');
+  Check(LR.HasHost, 'duplicate Host keeps first host presence');
+  Check(LR.HostRepeated, 'duplicate Host sets repeated-host policy flag');
+
+  LHostValues := LR.Headers.GetAll('Host');
+  CheckEqual(Int64(2), Int64(Length(LHostValues)),
+    'duplicate Host values remain available to lazy headers');
+  CheckEqual('first.example', LHostValues[0],
+    'first duplicate Host value preserved');
+  CheckEqual('second.example', LHostValues[1],
+    'second duplicate Host value preserved');
 end;
 
 procedure TestEmptyPath;
@@ -423,15 +720,32 @@ begin
   T.Run('Unsupported transfer-encoding fallback', @TestUnsupportedTransferEncodingFallback);
   T.Run('Duplicate Content-Length fallback', @TestDuplicateContentLengthFallback);
   T.Run('Invalid Content-Length fallback', @TestInvalidContentLengthFallback);
+  T.Run('Content-Length grammar fallbacks without raise',
+    @TestContentLengthGrammarFallbacksWithoutRaise);
   T.Run('Invalid header name fallback', @TestInvalidHeaderNameFallback);
+  T.Run('Header name tchar separator fallbacks',
+    @TestHeaderNameTCharSeparatorFallbacks);
   T.Run('Invalid header value fallback', @TestInvalidHeaderValueFallback);
+  T.Run('Header value CTL/DEL fallbacks',
+    @TestHeaderValueCtlAndDelFallbacks);
+  T.Run('Header value HTAB/obs-text acceptance',
+    @TestHeaderValueHtabAndObsTextRemainAccepted);
+  T.Run('Request-target CTL/DEL fallbacks',
+    @TestRequestTargetCtlAndDelFallbacks);
   T.Run('Incomplete body fallback', @TestIncompleteBodyFallback);
   T.Run('Large headers (>1KB)', @TestLargeHeaders);
   T.Run('Path with query string', @TestPathWithQuery);
   T.Run('Header value leading spaces', @TestHeaderValueLeadingSpaces);
+  T.Run('Lazy headers trim trailing OWS like llhttp',
+    @TestLazyHeadersTrimTrailingOwsLikeLlhttp);
   T.Run('Lazy headers raw lookup preserves semantics',
     @TestLazyHeadersRawLookupPreservesSemantics);
+  T.Run('Lazy headers reject invalid lookup names',
+    @TestLazyHeadersRejectInvalidLookupNames);
+  T.Run('Lazy headers ForEach rejects nil callback',
+    @TestLazyHeadersForEachRejectsNilCallback);
   T.Run('Policy header flags', @TestPolicyHeaderFlags);
+  T.Run('Duplicate Host policy flag', @TestDuplicateHostPolicyFlag);
   T.Run('Empty path', @TestEmptyPath);
   T.Run('All methods', @TestAllMethods);
   T.Run('Differential (vs llhttp)', @TestDifferential);

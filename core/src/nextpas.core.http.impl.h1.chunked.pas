@@ -28,27 +28,8 @@ implementation
 
 uses
   nextpas.core.errors,
-  nextpas.core.text.number;
-
-procedure WriteAllOrRaise(const AWriter: IWriter; const ABuf;
-  const ACount: SizeUInt);
-var
-  LWritten: SizeUInt;
-  LTotal: SizeUInt;
-  LPtr: PByte;
-begin
-  if ACount = 0 then
-    Exit;
-  LPtr := @ABuf;
-  LTotal := 0;
-  while LTotal < ACount do
-  begin
-    LWritten := AWriter.Write(LPtr[LTotal], ACount - LTotal);
-    if LWritten = 0 then
-      raise EIOError.Create('chunked writer: write failed (zero progress)');
-    Inc(LTotal, LWritten);
-  end;
-end;
+  nextpas.core.text.number,
+  nextpas.core.io.util;
 
 constructor TChunkedWriter.Create(const AInner: IWriter);
 begin
@@ -66,10 +47,10 @@ begin
   if FFinished then
     raise EHttpError.Create('chunked response already finalized');
   LHexLen := IntToHexBuffer(UInt64(ACount), @LHex[0], 1);
-  WriteAllOrRaise(FInner, LHex[0], SizeUInt(LHexLen));
-  WriteAllOrRaise(FInner, PAnsiChar(#13#10)^, 2);
-  WriteAllOrRaise(FInner, ABuf, ACount);
-  WriteAllOrRaise(FInner, PAnsiChar(#13#10)^, 2);
+  IoWriteAll(FInner, LHex[0], SizeUInt(LHexLen));
+  IoWriteAll(FInner, PAnsiChar(#13#10)^, 2);
+  IoWriteAll(FInner, ABuf, ACount);
+  IoWriteAll(FInner, PAnsiChar(#13#10)^, 2);
   Result := ACount;
 end;
 
@@ -77,7 +58,7 @@ procedure TChunkedWriter.Flush;
 begin
   if not FFinished then
   begin
-    WriteAllOrRaise(FInner, PAnsiChar('0'#13#10#13#10)^, 5);
+    IoWriteAll(FInner, PAnsiChar('0'#13#10#13#10)^, 5);
     FFinished := True;
   end;
 end;

@@ -197,6 +197,13 @@ function atomic_notify_one(var aObj: UInt32): Int32; overload; inline;
 function atomic_notify_all(var aObj: Int32): Int32; overload; inline;
 function atomic_notify_all(var aObj: UInt32): Int32; overload; inline;
 
+function atomic_wait(var aObj: Int64; aExpected: Int64; const aTimeoutNs: Int64 = -1): Int32; overload; inline;
+function atomic_wait(var aObj: UInt64; aExpected: UInt64; const aTimeoutNs: Int64 = -1): Int32; overload; inline;
+function atomic_notify_one(var aObj: Int64): Int32; overload; inline;
+function atomic_notify_one(var aObj: UInt64): Int32; overload; inline;
+function atomic_notify_all(var aObj: Int64): Int32; overload; inline;
+function atomic_notify_all(var aObj: UInt64): Int32; overload; inline;
+
 //┌────────────────────────────────────────────────────────────────────────────┐
 //│                                atomic_load                                 │
 //└────────────────────────────────────────────────────────────────────────────┘
@@ -363,6 +370,17 @@ function atomic_compare_exchange_weak_64(var aObj: UInt64; var aExpected: UInt64
 {$ENDIF}
 function atomic_compare_exchange_weak(var aObj: Pointer; var aExpected: Pointer; aDesired: Pointer;
   aSuccessOrder, aFailureOrder: memory_order_t): Boolean; overload; inline;
+
+function atomic_update_if_equal(var aObj: Int32; const AExpected: Int32; const ADesired: Int32; out AObserved: Int32;
+  AOrder: memory_order_t = mo_seq_cst): Boolean; overload; inline;
+function atomic_update_if_equal(var aObj: UInt32; const AExpected: UInt32; const ADesired: UInt32; out AObserved: UInt32;
+  AOrder: memory_order_t = mo_seq_cst): Boolean; overload; inline;
+{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+function atomic_update_if_equal_64(var aObj: Int64; const AExpected: Int64; const ADesired: Int64; out AObserved: Int64;
+  AOrder: memory_order_t = mo_seq_cst): Boolean; overload; inline;
+function atomic_update_if_equal_64(var aObj: UInt64; const AExpected: UInt64; const ADesired: UInt64; out AObserved: UInt64;
+  AOrder: memory_order_t = mo_seq_cst): Boolean; overload; inline;
+{$ENDIF}
 
 // ✅ P1-002: CAS 带单内存序参数 (aOrder) - 简化常见用法（自动派生合法 failure order）
 {**
@@ -606,10 +624,16 @@ function atomic_fetch_nand(var aObj: Int32; aArg: Int32): Int32; overload; inlin
 {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
 function atomic_fetch_max_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_t): Int64; overload; inline;
 function atomic_fetch_max_64(var aObj: Int64; aArg: Int64): Int64; overload; inline;
+function atomic_fetch_max_64(var aObj: UInt64; aArg: UInt64; aOrder: memory_order_t): UInt64; overload; inline;
+function atomic_fetch_max_64(var aObj: UInt64; aArg: UInt64): UInt64; overload; inline;
 function atomic_fetch_min_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_t): Int64; overload; inline;
 function atomic_fetch_min_64(var aObj: Int64; aArg: Int64): Int64; overload; inline;
+function atomic_fetch_min_64(var aObj: UInt64; aArg: UInt64; aOrder: memory_order_t): UInt64; overload; inline;
+function atomic_fetch_min_64(var aObj: UInt64; aArg: UInt64): UInt64; overload; inline;
 function atomic_fetch_nand_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_t): Int64; overload; inline;
 function atomic_fetch_nand_64(var aObj: Int64; aArg: Int64): Int64; overload; inline;
+function atomic_fetch_nand_64(var aObj: UInt64; aArg: UInt64; aOrder: memory_order_t): UInt64; overload; inline;
+function atomic_fetch_nand_64(var aObj: UInt64; aArg: UInt64): UInt64; overload; inline;
 {$ENDIF}
 
 //┌────────────────────────────────────────────────────────────────────────────┐
@@ -2454,6 +2478,41 @@ begin
     _cas_success_order(aOrder), AtomicCompatFailureOrder(aOrder));
 end;
 
+// atomic_update_if_equal: typed CAS-loop helper
+function atomic_update_if_equal(var aObj: Int32; const AExpected: Int32; const ADesired: Int32; out AObserved: Int32;
+  AOrder: memory_order_t): Boolean;
+begin
+  AObserved := AExpected;
+  Result := atomic_compare_exchange_strong(aObj, AObserved, ADesired,
+    _cas_success_order(AOrder), AtomicCompareExchangeMaxFailureOrder(_cas_success_order(AOrder)));
+end;
+
+function atomic_update_if_equal(var aObj: UInt32; const AExpected: UInt32; const ADesired: UInt32; out AObserved: UInt32;
+  AOrder: memory_order_t): Boolean;
+begin
+  AObserved := AExpected;
+  Result := atomic_compare_exchange_strong(aObj, AObserved, ADesired,
+    _cas_success_order(AOrder), AtomicCompareExchangeMaxFailureOrder(_cas_success_order(AOrder)));
+end;
+
+{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+function atomic_update_if_equal_64(var aObj: Int64; const AExpected: Int64; const ADesired: Int64; out AObserved: Int64;
+  AOrder: memory_order_t): Boolean;
+begin
+  AObserved := AExpected;
+  Result := atomic_compare_exchange_strong_64(aObj, AObserved, ADesired,
+    _cas_success_order(AOrder), AtomicCompareExchangeMaxFailureOrder(_cas_success_order(AOrder)));
+end;
+
+function atomic_update_if_equal_64(var aObj: UInt64; const AExpected: UInt64; const ADesired: UInt64; out AObserved: UInt64;
+  AOrder: memory_order_t): Boolean;
+begin
+  AObserved := AExpected;
+  Result := atomic_compare_exchange_strong_64(aObj, AObserved, ADesired,
+    _cas_success_order(AOrder), AtomicCompareExchangeMaxFailureOrder(_cas_success_order(AOrder)));
+end;
+{$ENDIF}
+
 function atomic_increment(var aObj: Int32): Int32;
 begin
   // Convenience API: seq_cst.
@@ -3360,6 +3419,65 @@ function atomic_fetch_max_64(var aObj: Int64; aArg: Int64): Int64;
 begin
   Result := atomic_fetch_max_64(aObj, aArg, mo_seq_cst);
 end;
+
+function atomic_fetch_max_64(var aObj: UInt64; aArg: UInt64; aOrder: memory_order_t): UInt64;
+var
+  LOld, LNew: UInt64;
+begin
+  AtomicValidateRmwOrder(aOrder);
+
+  {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
+  case aOrder of
+    mo_seq_cst:
+      atomic_seq_cst_fence;
+    mo_release, mo_acq_rel:
+      WriteBarrier;
+  else
+    ;
+  end;
+  {$ENDIF}
+  repeat
+    {$IF DEFINED(CPUX86) AND NOT DEFINED(CPU64)}
+    {$PUSH}
+    {$WARN 4055 OFF}
+    LOld := UInt64(_atomic_load_64_x86(PInt64(@aObj)^));
+    {$POP}
+    {$ELSE}
+    LOld := aObj;
+    {$ENDIF}
+    if aArg > LOld then
+      LNew := aArg
+    else
+      LNew := LOld;
+    {$IF DEFINED(CPUX86) AND NOT DEFINED(CPU64)}
+    {$PUSH}
+    {$WARN 4055 OFF}
+    if _atomic_cmpxchg_64_x86(PInt64(@aObj)^, PInt64(@LOld)^, PInt64(@LNew)^) then
+      Break;
+    {$POP}
+    {$ELSE}
+    if UInt64(InterlockedCompareExchange64(PInt64(@aObj)^, Int64(LNew), Int64(LOld))) = LOld then
+      Break;
+    {$ENDIF}
+    cpu_pause;
+  until False;
+  Result := LOld;
+  {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
+  case aOrder of
+    mo_seq_cst:
+      atomic_seq_cst_fence;
+    mo_consume, mo_acquire, mo_acq_rel:
+      ReadBarrier;
+  else
+    ;
+  end;
+  {$ENDIF}
+end;
+
+function atomic_fetch_max_64(var aObj: UInt64; aArg: UInt64): UInt64;
+begin
+  Result := atomic_fetch_max_64(aObj, aArg, mo_seq_cst);
+end;
 {$ENDIF}
 
 // ✅ Phase 3: atomic_fetch_min - 返回旧值，存储 min(old, arg)
@@ -3458,6 +3576,65 @@ function atomic_fetch_min_64(var aObj: Int64; aArg: Int64): Int64;
 begin
   Result := atomic_fetch_min_64(aObj, aArg, mo_seq_cst);
 end;
+
+function atomic_fetch_min_64(var aObj: UInt64; aArg: UInt64; aOrder: memory_order_t): UInt64;
+var
+  LOld, LNew: UInt64;
+begin
+  AtomicValidateRmwOrder(aOrder);
+
+  {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
+  case aOrder of
+    mo_seq_cst:
+      atomic_seq_cst_fence;
+    mo_release, mo_acq_rel:
+      WriteBarrier;
+  else
+    ;
+  end;
+  {$ENDIF}
+  repeat
+    {$IF DEFINED(CPUX86) AND NOT DEFINED(CPU64)}
+    {$PUSH}
+    {$WARN 4055 OFF}
+    LOld := UInt64(_atomic_load_64_x86(PInt64(@aObj)^));
+    {$POP}
+    {$ELSE}
+    LOld := aObj;
+    {$ENDIF}
+    if aArg < LOld then
+      LNew := aArg
+    else
+      LNew := LOld;
+    {$IF DEFINED(CPUX86) AND NOT DEFINED(CPU64)}
+    {$PUSH}
+    {$WARN 4055 OFF}
+    if _atomic_cmpxchg_64_x86(PInt64(@aObj)^, PInt64(@LOld)^, PInt64(@LNew)^) then
+      Break;
+    {$POP}
+    {$ELSE}
+    if UInt64(InterlockedCompareExchange64(PInt64(@aObj)^, Int64(LNew), Int64(LOld))) = LOld then
+      Break;
+    {$ENDIF}
+    cpu_pause;
+  until False;
+  Result := LOld;
+  {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
+  case aOrder of
+    mo_seq_cst:
+      atomic_seq_cst_fence;
+    mo_consume, mo_acquire, mo_acq_rel:
+      ReadBarrier;
+  else
+    ;
+  end;
+  {$ENDIF}
+end;
+
+function atomic_fetch_min_64(var aObj: UInt64; aArg: UInt64): UInt64;
+begin
+  Result := atomic_fetch_min_64(aObj, aArg, mo_seq_cst);
+end;
 {$ENDIF}
 
 // ✅ Phase 3: atomic_fetch_nand - 返回旧值，存储 NOT(old AND arg)
@@ -3547,6 +3724,62 @@ begin
 end;
 
 function atomic_fetch_nand_64(var aObj: Int64; aArg: Int64): Int64;
+begin
+  Result := atomic_fetch_nand_64(aObj, aArg, mo_seq_cst);
+end;
+
+function atomic_fetch_nand_64(var aObj: UInt64; aArg: UInt64; aOrder: memory_order_t): UInt64;
+var
+  LOld, LNew: UInt64;
+begin
+  AtomicValidateRmwOrder(aOrder);
+
+  {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
+  case aOrder of
+    mo_seq_cst:
+      atomic_seq_cst_fence;
+    mo_release, mo_acq_rel:
+      WriteBarrier;
+  else
+    ;
+  end;
+  {$ENDIF}
+  repeat
+    {$IF DEFINED(CPUX86) AND NOT DEFINED(CPU64)}
+    {$PUSH}
+    {$WARN 4055 OFF}
+    LOld := UInt64(_atomic_load_64_x86(PInt64(@aObj)^));
+    {$POP}
+    {$ELSE}
+    LOld := aObj;
+    {$ENDIF}
+    LNew := not (LOld and aArg);
+    {$IF DEFINED(CPUX86) AND NOT DEFINED(CPU64)}
+    {$PUSH}
+    {$WARN 4055 OFF}
+    if _atomic_cmpxchg_64_x86(PInt64(@aObj)^, PInt64(@LOld)^, PInt64(@LNew)^) then
+      Break;
+    {$POP}
+    {$ELSE}
+    if UInt64(InterlockedCompareExchange64(PInt64(@aObj)^, Int64(LNew), Int64(LOld))) = LOld then
+      Break;
+    {$ENDIF}
+    cpu_pause;
+  until False;
+  Result := LOld;
+  {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
+  case aOrder of
+    mo_seq_cst:
+      atomic_seq_cst_fence;
+    mo_consume, mo_acquire, mo_acq_rel:
+      ReadBarrier;
+  else
+    ;
+  end;
+  {$ENDIF}
+end;
+
+function atomic_fetch_nand_64(var aObj: UInt64; aArg: UInt64): UInt64;
 begin
   Result := atomic_fetch_nand_64(aObj, aArg, mo_seq_cst);
 end;
@@ -3773,6 +4006,36 @@ begin
   Result := platform_wake_address_all(PInt32(@aObj));
 end;
 
+function atomic_wait(var aObj: Int64; aExpected: Int64; const aTimeoutNs: Int64): Int32;
+begin
+  Result := platform_wait_address64(@aObj, aExpected, aTimeoutNs);
+end;
+
+function atomic_wait(var aObj: UInt64; aExpected: UInt64; const aTimeoutNs: Int64): Int32;
+begin
+  Result := platform_wait_address64(PInt64(@aObj), Int64(aExpected), aTimeoutNs);
+end;
+
+function atomic_notify_one(var aObj: Int64): Int32;
+begin
+  Result := platform_wake_address_one64(@aObj);
+end;
+
+function atomic_notify_one(var aObj: UInt64): Int32;
+begin
+  Result := platform_wake_address_one64(PInt64(@aObj));
+end;
+
+function atomic_notify_all(var aObj: Int64): Int32;
+begin
+  Result := platform_wake_address_all64(@aObj);
+end;
+
+function atomic_notify_all(var aObj: UInt64): Int32;
+begin
+  Result := platform_wake_address_all64(PInt64(@aObj));
+end;
+
 function atomic_tagged_ptr_next(const aTaggedPtr: atomic_tagged_ptr_t): {$IFDEF CPU64}UInt16{$ELSE}UInt32{$ENDIF};
 begin
   Result := nextpas.core.atomic.core.atomic_tagged_ptr_next(aTaggedPtr);
@@ -3896,6 +4159,21 @@ end;
 function AtomicFetchSub64(var ATarget: Int64; const AValue: Int64; const AOrder: TMemoryOrder): Int64;
 begin
   Result := atomic_fetch_sub_64(ATarget, AValue, AOrder);
+end;
+
+function AtomicWait64(var ATarget: Int64; const AExpected: Int64; const ATimeoutNs: Int64): Int32;
+begin
+  Result := platform_wait_address64(@ATarget, AExpected, ATimeoutNs);
+end;
+
+function AtomicNotifyOne64(var ATarget: Int64): Int32;
+begin
+  Result := platform_wake_address_one64(@ATarget);
+end;
+
+function AtomicNotifyAll64(var ATarget: Int64): Int32;
+begin
+  Result := platform_wake_address_all64(@ATarget);
 end;
 {$ENDIF}
 

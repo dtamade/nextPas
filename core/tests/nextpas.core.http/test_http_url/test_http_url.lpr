@@ -94,6 +94,59 @@ begin
   CheckEqual(LOriginal, LDecoded, 'unreserved round-trip');
 end;
 
+{ UrlDecodeQuery: '+' is interpreted as space (form-encoded behavior) }
+procedure TestUrlDecodeQueryPlusToSpace;
+begin
+  CheckEqual('hello world', UrlDecodeQuery('hello+world'), '+ becomes space');
+  CheckEqual('a b c', UrlDecodeQuery('a+b+c'), 'multiple +');
+  CheckEqual('hello world', UrlDecodeQuery('hello%20world'), '%20 also becomes space');
+end;
+
+{ UrlDecodeQuery: percent-encoding works normally }
+procedure TestUrlDecodeQueryPercent;
+begin
+  CheckEqual('hello world', UrlDecodeQuery('hello%20world'), '%20 to space');
+  CheckEqual('/foo/bar', UrlDecodeQuery('%2Ffoo%2Fbar'), '%2F decoded');
+end;
+
+{ UrlDecodePath: '+' is treated as a literal character per RFC 3986 }
+procedure TestUrlDecodePathPlusLiteral;
+begin
+  CheckEqual('report+2024.pdf', UrlDecodePath('report+2024.pdf'), '+ stays literal');
+  CheckEqual('a+b+c', UrlDecodePath('a+b+c'), 'multiple + stay literal');
+  CheckEqual('c++', UrlDecodePath('c++'), '+ at end');
+end;
+
+{ UrlDecodePath: percent-encoding still works normally }
+procedure TestUrlDecodePathPercent;
+begin
+  CheckEqual('hello world', UrlDecodePath('hello%20world'), '%20 to space');
+  CheckEqual('/foo/bar', UrlDecodePath('%2Ffoo%2Fbar'), '%2F decoded');
+  CheckEqual('report+2024.pdf', UrlDecodePath('report%2B2024.pdf'), '%2B to +');
+end;
+
+{ UrlDecodePath: mixed '+' and percent-encoding }
+procedure TestUrlDecodePathMixed;
+begin
+  CheckEqual('file name+2024.pdf', UrlDecodePath('file%20name+2024.pdf'),
+    '%20 becomes space, + stays literal');
+end;
+
+{ UrlDecodePath: invalid percent-encoding still raises }
+procedure TestUrlDecodePathInvalidRaises;
+var
+  LCaught: Boolean;
+begin
+  LCaught := False;
+  try
+    UrlDecodePath('%2');
+  except
+    on E: EHttpError do
+      LCaught := True;
+  end;
+  Check(LCaught, 'incomplete %XX raises in path');
+end;
+
 procedure TestParseQueryStringBasic;
 var
   LParams: TQueryParams;
@@ -205,6 +258,12 @@ begin
   T.Run('UrlDecode plus', @TestUrlDecodePlus);
   T.Run('UrlDecode invalid raises', @TestUrlDecodeInvalidRaises);
   T.Run('UrlEncode/Decode round-trip', @TestUrlEncodeDecodeRoundTrip);
+  T.Run('UrlDecodeQuery + to space', @TestUrlDecodeQueryPlusToSpace);
+  T.Run('UrlDecodeQuery percent', @TestUrlDecodeQueryPercent);
+  T.Run('UrlDecodePath + literal', @TestUrlDecodePathPlusLiteral);
+  T.Run('UrlDecodePath percent', @TestUrlDecodePathPercent);
+  T.Run('UrlDecodePath mixed', @TestUrlDecodePathMixed);
+  T.Run('UrlDecodePath invalid raises', @TestUrlDecodePathInvalidRaises);
   T.Run('ParseQueryString basic', @TestParseQueryStringBasic);
   T.Run('ParseQueryString multiple', @TestParseQueryStringMultiple);
   T.Run('ParseQueryString empty value', @TestParseQueryStringEmptyValue);

@@ -4,77 +4,282 @@ unit nextpas.core.math.scalar;
 
 interface
 
-const
-  PI_VALUE: Double = 3.14159265358979323846;
-  TWO_PI: Double = 6.28318530717958647692;
-  HALF_PI: Double = 1.57079632679489661923;
-  DEG_TO_RAD: Double = 0.01745329251994329577;
-  RAD_TO_DEG: Double = 57.2957795130823208768;
+uses
+  nextpas.core.math.base;
 
+{** * Checks whether adding two values would overflow.
+ * @param AA First operand
+ * @param AB Second operand
+ * @return True if AA + AB would overflow
+ *}
 function IsAddOverflow(AA, AB: SizeUInt): Boolean; overload; inline;
 function IsAddOverflow(AA, AB: UInt32): Boolean; overload; inline;
+
+{** * Checks whether multiplying two values would overflow.
+ * @param AA First operand
+ * @param AB Second operand
+ * @return True if AA * AB would overflow
+ *}
 function IsMulOverflow(AA, AB: SizeUInt): Boolean; overload; inline;
 function IsMulOverflow(AA, AB: UInt32): Boolean; overload; inline;
 
+{** * Returns the lesser of two values.
+ * @param AA First value
+ * @param AB Second value
+ * @return The smaller of AA and AB
+ *}
 function Min(AA, AB: SizeUInt): SizeUInt; overload; inline;
+
+{** * Returns the greater of two values.
+ * @param AA First value
+ * @param AB Second value
+ * @return The larger of AA and AB
+ *}
 function Max(AA, AB: SizeUInt): SizeUInt; overload; inline;
+
 function Min(AA, AB: SizeInt): SizeInt; overload; inline;
 function Max(AA, AB: SizeInt): SizeInt; overload; inline;
 function Min(AA, AB: Double): Double; overload; inline;
 function Max(AA, AB: Double): Double; overload; inline;
 function Min(AA, AB: Single): Single; overload; inline;
 function Max(AA, AB: Single): Single; overload; inline;
+
+{** * Constrains a value to lie within a given range.
+ * @param AValue The value to constrain
+ * @param AMin The lower bound
+ * @param AMax The upper bound
+ * @return AValue clamped to [AMin, AMax]
+ *}
 function Clamp(const AValue, AMin, AMax: Double): Double; overload; inline;
 function Clamp(const AValue, AMin, AMax: Single): Single; overload; inline;
 function Clamp(const AValue, AMin, AMax: Int32): Int32; overload; inline;
+
+{** * Performs linear interpolation between two values.
+ * @param AA The start value (returned when AT = 0)
+ * @param AB The end value (returned when AT = 1)
+ * @param AT The interpolation factor in [0, 1]
+ * @return The interpolated value AA + (AB - AA) * AT
+ *}
 function Lerp(const AA, AB, AT: Double): Double; overload; inline;
 function Lerp(const AA, AB, AT: Single): Single; overload; inline;
+
+{** * Returns the normalized position of AValue within [AA, AB].
+ * @param AA The start of the range
+ * @param AB The end of the range
+ * @param AValue The value to normalize
+ * @return (AValue - AA) / (AB - AA), or 0 when AA = AB
+ *}
 function InverseLerp(const AA, AB, AValue: Double): Double; overload; inline;
 function InverseLerp(const AA, AB, AValue: Single): Single; overload; inline;
+
+{** * Wraps a value into the range [AMin, AMax).
+ * @param AValue The value to wrap
+ * @param AMin The lower bound (inclusive)
+ * @param AMax The upper bound (exclusive)
+ * @return AValue wrapped into [AMin, AMax)
+ *}
 function Wrap(const AValue, AMin, AMax: Double): Double; overload;
 function Wrap(const AValue, AMin, AMax: Single): Single; overload; inline;
+
+{** * Computes a smooth Hermite interpolation between 0 and 1.
+ * @param AEdge0 The lower edge of the transition
+ * @param AEdge1 The upper edge of the transition
+ * @param AValue The input value
+ * @return 0 when AValue <= AEdge0, 1 when AValue >= AEdge1, smooth curve between
+ *}
 function SmoothStep(const AEdge0, AEdge1, AValue: Double): Double; overload; inline;
 function SmoothStep(const AEdge0, AEdge1, AValue: Single): Single; overload; inline;
 
+{** * Returns the largest integer not greater than AValue.
+ * @param AValue The input value
+ * @return Floor of AValue as Int64
+ *}
 function Floor(const AValue: Double): Int64; overload; inline;
 function Floor(const AValue: Single): Int64; overload; inline;
+
+{** * Returns the smallest integer not less than AValue.
+ * @param AValue The input value
+ * @return Ceiling of AValue as Int64
+ *}
 function Ceil(const AValue: Double): Int64; overload; inline;
 function Ceil(const AValue: Single): Int64; overload; inline;
+
+{** * Rounds AValue to the nearest integer.
+ * @param AValue The input value
+ * @return AValue rounded to Int64
+ *}
 function Round(const AValue: Double): Int64; overload; inline;
 function Round(const AValue: Single): Int64; overload; inline;
+
+{** * Truncates AValue toward zero.
+ * @param AValue The input value
+ * @return The integer part of AValue as Int64
+ *}
 function Trunc(const AValue: Double): Int64; overload; inline;
 function Trunc(const AValue: Single): Int64; overload; inline;
+
+{** * Returns the fractional part of AValue.
+ * @param AValue The input value
+ * @return AValue - Trunc(AValue)
+ *}
 function Frac(const AValue: Double): Double; overload; inline;
 function Frac(const AValue: Single): Single; overload; inline;
 
+{** * Returns the absolute value.
+ * @param AValue The input value
+ * @return |AValue|
+ *}
 function Abs(const AValue: Double): Double; overload; inline;
 function Abs(const AValue: Single): Single; overload; inline;
 function Abs(const AValue: Int32): Int32; overload; inline;
 function Abs(const AValue: Int64): Int64; overload; inline;
+
+{** * Returns the sign of a value as a typed value.
+ * @param AValue The input value
+ * @return -1, 0, or 1 matching the sign of AValue
+ *}
 function Sign(const AValue: Double): Double; overload; inline;
 function Sign(const AValue: Single): Single; overload; inline;
 function Sign(const AValue: Int32): Int32; overload; inline;
 function Sign(const AValue: Int64): Int64; overload; inline;
+
+{** * Tests whether AValue is NaN (Not a Number).
+ * @param AValue The value to test
+ * @return True if AValue is NaN
+ *}
 function IsNaN(const AValue: Double): Boolean; overload; inline;
 function IsNaN(const AValue: Single): Boolean; overload; inline;
+
+{** * Tests whether AValue is positive or negative infinity.
+ * @param AValue The value to test
+ * @return True if AValue is infinite
+ *}
 function IsInfinite(const AValue: Double): Boolean; overload; inline;
 function IsInfinite(const AValue: Single): Boolean; overload; inline;
+
+{** * Tests approximate equality of two floating-point values.
+ * @param AA First value
+ * @param AB Second value
+ * @param AEpsilon Maximum allowed difference (must be non-negative and finite)
+ * @return True if |AA - AB| <= AEpsilon
+ *}
 function FloatEquals(const AA, AB: Double; const AEpsilon: Double): Boolean; overload; inline;
 function FloatEquals(const AA, AB: Single; const AEpsilon: Single): Boolean; overload; inline;
+
+{** * Tests whether a floating-point value is approximately zero.
+ * @param AValue The value to test
+ * @param AEpsilon Tolerance (must be non-negative and finite)
+ * @return True if |AValue| <= AEpsilon
+ *}
 function FloatIsZero(const AValue: Double; const AEpsilon: Double): Boolean; overload; inline;
 function FloatIsZero(const AValue: Single; const AEpsilon: Single): Boolean; overload; inline;
 
+{** * Converts degrees to radians.
+ * @param ADegrees Angle in degrees
+ * @return Equivalent angle in radians
+ *}
 function DegToRad(const ADegrees: Double): Double; overload; inline;
 function DegToRad(const ADegrees: Single): Single; overload; inline;
+
+{** * Converts radians to degrees.
+ * @param ARadians Angle in radians
+ * @return Equivalent angle in degrees
+ *}
 function RadToDeg(const ARadians: Double): Double; overload; inline;
 function RadToDeg(const ARadians: Single): Single; overload; inline;
 
+{** * Computes the greatest common divisor of two integers.
+ * @param AA First integer
+ * @param AB Second integer
+ * @return GCD of |AA| and |AB|
+ *}
 function GCD(AA, AB: Int64): Int64; inline;
+
+{** * Computes the least common multiple of two integers.
+ * @param AA First integer
+ * @param AB Second integer
+ * @return LCM of |AA| and |AB|
+ *}
 function LCM(AA, AB: Int64): Int64; inline;
+
+{** * Computes the Euclidean distance sqrt(AX^2 + AY^2) without overflow.
+ * @param AX The X component
+ * @param AY The Y component
+ * @return The hypotenuse length
+ *}
 function Hypot(const AX, AY: Double): Double; overload; inline;
 function Hypot(const AX, AY: Single): Single; overload; inline;
+
+{** * Computes the floating-point remainder of AX / AY (C fmod semantics).
+ * @param AX The dividend
+ * @param AY The divisor
+ * @return AX - AY * Int(AX / AY)
+ *}
 function Fmod(const AX, AY: Double): Double; overload; inline;
 function Fmod(const AX, AY: Single): Single; overload; inline;
+
+{** * Rounds AValue to the specified number of decimal places.
+ * @param AValue The value to round
+ * @param ADecimals Number of decimal places (negative for tens, hundreds, etc.)
+ * @return AValue rounded to ADecimals places
+ *}
+function RoundTo(const AValue: Double; const ADecimals: Integer): Double; overload;
+function RoundTo(const AValue: Single; const ADecimals: Integer): Single; overload;
+
+{** * Computes the sum of all elements in an array.
+ * @param AData The input array
+ * @return The sum of all elements
+ *}
+function Sum(const AData: array of Double): Double; overload;
+function Sum(const AData: array of Single): Single; overload;
+
+{** * Computes the sum of all integer elements in an array.
+ * @param AData The input array
+ * @return The sum as Int64
+ *}
+function SumInt(const AData: array of Integer): Int64;
+
+{** * Computes the arithmetic mean of all elements in an array.
+ * @param AData The input array
+ * @return The mean, or NaN if the array is empty
+ *}
+function Mean(const AData: array of Double): Double; overload;
+function Mean(const AData: array of Single): Single; overload;
+
+{** * Computes the sample variance (Bessel-corrected, denominator N-1).
+ * @param AData The input array
+ * @return The sample variance, or NaN if fewer than 2 elements
+ *}
+function Variance(const AData: array of Double): Double; overload;
+function Variance(const AData: array of Single): Single; overload;
+
+{** * Computes the population variance (denominator N).
+ * @param AData The input array
+ * @return The population variance, or NaN if the array is empty
+ *}
+function PopnVariance(const AData: array of Double): Double; overload;
+function PopnVariance(const AData: array of Single): Single; overload;
+
+{** * Computes the sample standard deviation (sqrt of sample variance).
+ * @param AData The input array
+ * @return The sample standard deviation
+ *}
+function StdDev(const AData: array of Double): Double; overload;
+function StdDev(const AData: array of Single): Single; overload;
+
+{** * Computes the population standard deviation (sqrt of population variance).
+ * @param AData The input array
+ * @return The population standard deviation
+ *}
+function PopnStdDev(const AData: array of Double): Double; overload;
+function PopnStdDev(const AData: array of Single): Single; overload;
+
+{** * Computes the total variance (population variance * N).
+ * @param AData The input array
+ * @return The total variance, or NaN if the array is empty
+ *}
+function TotalVariance(const AData: array of Double): Double; overload;
+function TotalVariance(const AData: array of Single): Single; overload;
 
 implementation
 
@@ -617,6 +822,210 @@ begin
   if IsInfinite(AY) then
     Exit(AX);
   Result := AX - AY * System.Int(AX / AY);
+end;
+
+function RoundTo(const AValue: Double; const ADecimals: Integer): Double;
+var
+  LFactor: Double;
+  i: Integer;
+begin
+  if DoubleIsNaN(AValue) then
+    Exit(DoubleQuietNaN);
+  LFactor := 1.0;
+  if ADecimals >= 0 then
+  begin
+    for i := 1 to ADecimals do
+      LFactor := LFactor * 10.0;
+    Result := System.Round(AValue * LFactor) / LFactor;
+  end
+  else
+  begin
+    for i := 1 to -ADecimals do
+      LFactor := LFactor * 10.0;
+    Result := System.Round(AValue / LFactor) * LFactor;
+  end;
+end;
+
+function RoundTo(const AValue: Single; const ADecimals: Integer): Single;
+begin
+  Result := Single(RoundTo(Double(AValue), ADecimals));
+end;
+
+function Sum(const AData: array of Double): Double;
+var
+  i: Integer;
+begin
+  Result := 0.0;
+  for i := 0 to Length(AData) - 1 do
+    Result := Result + AData[i];
+end;
+
+function Sum(const AData: array of Single): Single;
+var
+  i: Integer;
+begin
+  Result := 0.0;
+  for i := 0 to Length(AData) - 1 do
+    Result := Result + AData[i];
+end;
+
+function SumInt(const AData: array of Integer): Int64;
+var
+  i: Integer;
+begin
+  Result := 0;
+  for i := 0 to Length(AData) - 1 do
+    Result := Result + AData[i];
+end;
+
+procedure SumsAndSquares(const AData: array of Double; out ASum, ASumOfSquares: Double);
+var
+  i: Integer;
+  LVal: Double;
+begin
+  ASum := 0.0;
+  ASumOfSquares := 0.0;
+  for i := 0 to Length(AData) - 1 do
+  begin
+    LVal := AData[i];
+    ASum := ASum + LVal;
+    ASumOfSquares := ASumOfSquares + LVal * LVal;
+  end;
+end;
+
+procedure SumsAndSquares(const AData: array of Single; out ASum, ASumOfSquares: Single);
+var
+  i: Integer;
+  LVal: Single;
+begin
+  ASum := 0.0;
+  ASumOfSquares := 0.0;
+  for i := 0 to Length(AData) - 1 do
+  begin
+    LVal := AData[i];
+    ASum := ASum + LVal;
+    ASumOfSquares := ASumOfSquares + LVal * LVal;
+  end;
+end;
+
+function Mean(const AData: array of Double): Double;
+var
+  LCount: Integer;
+begin
+  LCount := Length(AData);
+  if LCount = 0 then
+    Exit(DoubleQuietNaN);
+  Result := Sum(AData) / LCount;
+end;
+
+function Mean(const AData: array of Single): Single;
+var
+  LCount: Integer;
+begin
+  LCount := Length(AData);
+  if LCount = 0 then
+    Exit(SingleQuietNaN);
+  Result := Sum(AData) / LCount;
+end;
+
+function Variance(const AData: array of Double): Double;
+var
+  i, LCount: Integer;
+  LMean, LSumSqDiff: Double;
+begin
+  LCount := Length(AData);
+  if LCount < 2 then
+    Exit(DoubleQuietNaN);
+  LMean := Mean(AData);
+  LSumSqDiff := 0.0;
+  for i := 0 to LCount - 1 do
+    LSumSqDiff := LSumSqDiff + (AData[i] - LMean) * (AData[i] - LMean);
+  Result := LSumSqDiff / (LCount - 1);
+end;
+
+function Variance(const AData: array of Single): Single;
+var
+  i, LCount: Integer;
+  LMean, LSumSqDiff: Single;
+begin
+  LCount := Length(AData);
+  if LCount < 2 then
+    Exit(SingleQuietNaN);
+  LMean := Mean(AData);
+  LSumSqDiff := 0.0;
+  for i := 0 to LCount - 1 do
+    LSumSqDiff := LSumSqDiff + (AData[i] - LMean) * (AData[i] - LMean);
+  Result := LSumSqDiff / (LCount - 1);
+end;
+
+function PopnVariance(const AData: array of Double): Double;
+var
+  i, LCount: Integer;
+  LMean, LSumSqDiff: Double;
+begin
+  LCount := Length(AData);
+  if LCount = 0 then
+    Exit(DoubleQuietNaN);
+  LMean := Mean(AData);
+  LSumSqDiff := 0.0;
+  for i := 0 to LCount - 1 do
+    LSumSqDiff := LSumSqDiff + (AData[i] - LMean) * (AData[i] - LMean);
+  Result := LSumSqDiff / LCount;
+end;
+
+function PopnVariance(const AData: array of Single): Single;
+var
+  i, LCount: Integer;
+  LMean, LSumSqDiff: Single;
+begin
+  LCount := Length(AData);
+  if LCount = 0 then
+    Exit(SingleQuietNaN);
+  LMean := Mean(AData);
+  LSumSqDiff := 0.0;
+  for i := 0 to LCount - 1 do
+    LSumSqDiff := LSumSqDiff + (AData[i] - LMean) * (AData[i] - LMean);
+  Result := LSumSqDiff / LCount;
+end;
+
+function StdDev(const AData: array of Double): Double;
+begin
+  Result := System.Sqrt(Variance(AData));
+end;
+
+function StdDev(const AData: array of Single): Single;
+begin
+  Result := Single(System.Sqrt(Double(Variance(AData))));
+end;
+
+function PopnStdDev(const AData: array of Double): Double;
+begin
+  Result := System.Sqrt(PopnVariance(AData));
+end;
+
+function PopnStdDev(const AData: array of Single): Single;
+begin
+  Result := Single(System.Sqrt(Double(PopnVariance(AData))));
+end;
+
+function TotalVariance(const AData: array of Double): Double;
+var
+  LCount: Integer;
+begin
+  LCount := Length(AData);
+  if LCount = 0 then
+    Exit(DoubleQuietNaN);
+  Result := PopnVariance(AData) * LCount;
+end;
+
+function TotalVariance(const AData: array of Single): Single;
+var
+  LCount: Integer;
+begin
+  LCount := Length(AData);
+  if LCount = 0 then
+    Exit(SingleQuietNaN);
+  Result := PopnVariance(AData) * LCount;
 end;
 
 end.

@@ -82,6 +82,177 @@ const
     '  Halt(5);' + LineEnding +
     'end.';
 
+  WriteLnOwnedArgumentSource =
+    'program c6h7_writeln_string_arg_runtime;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := IntToStr(42);' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  WriteLn(MakeText());' + LineEnding +
+    '  Halt(42);' + LineEnding +
+    'end.';
+
+  WriteLnConcatOwnedArgumentSource =
+    'program c6h16_writeln_concat_string_arg_runtime;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := IntToStr(4);' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  WriteLn(MakeText() + ''2'');' + LineEnding +
+    '  Halt(42);' + LineEnding +
+    'end.';
+
+  ConcatLeftOwnedArgumentSource =
+    'program c6h9_concat_left_string_arg_runtime;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := ''left'';' + LineEnding +
+    'end;' + LineEnding +
+    'var S: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  S := MakeText() + ''x'';' + LineEnding +
+    '  if Length(S) = 5 then Halt(42);' + LineEnding +
+    '  Halt(29);' + LineEnding +
+    'end.';
+
+  ConcatRightOwnedArgumentSource =
+    'program c6h9_concat_right_string_arg_runtime;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := ''right'';' + LineEnding +
+    'end;' + LineEnding +
+    'var S: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  S := ''x'' + MakeText();' + LineEnding +
+    '  if Length(S) = 6 then Halt(42);' + LineEnding +
+    '  Halt(31);' + LineEnding +
+    'end.';
+
+  ConcatBothOwnedArgumentSource =
+    'program c6h9_concat_both_string_arg_runtime;' + LineEnding +
+    'function MakeA: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeA := ''left'';' + LineEnding +
+    'end;' + LineEnding +
+    'function MakeB: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeB := ''right'';' + LineEnding +
+    'end;' + LineEnding +
+    'var S: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  S := MakeA() + MakeB();' + LineEnding +
+    '  if Length(S) = 9 then Halt(42);' + LineEnding +
+    '  Halt(37);' + LineEnding +
+    'end.';
+
+  CompareLeftOwnedArgumentSource =
+    'program c6h10_compare_left_string_arg_runtime;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := ''x'';' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  if MakeText() = ''x'' then Halt(42);' + LineEnding +
+    '  Halt(39);' + LineEnding +
+    'end.';
+
+  CompareRightOwnedArgumentSource =
+    'program c6h10_compare_right_string_arg_runtime;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := ''x'';' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  if ''x'' = MakeText() then Halt(42);' + LineEnding +
+    '  Halt(41);' + LineEnding +
+    'end.';
+
+  CompareNotEqualOwnedArgumentSource =
+    'program c6h10_compare_not_equal_string_arg_runtime;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := ''x'';' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  if MakeText() <> ''y'' then Halt(42);' + LineEnding +
+    '  Halt(43);' + LineEnding +
+    'end.';
+
+  CompareRuntimeVarOwnedArgumentSource =
+    'program c6h10_compare_runtime_var_string_arg_runtime;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := ''x'';' + LineEnding +
+    'end;' + LineEnding +
+    'var S: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  S := ''x'';' + LineEnding +
+    '  if MakeText() = S then Halt(42);' + LineEnding +
+    '  Halt(45);' + LineEnding +
+    'end.';
+
+  CompareBothOwnedArgumentSource =
+    'program c6h11_compare_both_string_arg_runtime;' + LineEnding +
+    'function MakeA: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeA := ''x'';' + LineEnding +
+    'end;' + LineEnding +
+    'function MakeB: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeB := ''x'';' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  if MakeA() = MakeB() then Halt(42);' + LineEnding +
+    '  Halt(47);' + LineEnding +
+    'end.';
+
+  CompareConcatOwnedArgumentSource =
+    'program c6h12_compare_concat_string_arg_runtime;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := ''x'';' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  if MakeText() + ''y'' = ''xy'' then Halt(42);' + LineEnding +
+    '  Halt(49);' + LineEnding +
+    'end.';
+
+  CompareCompoundOwnedArgumentSource =
+    'program c6h13_compare_compound_string_arg_runtime;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := ''x'';' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  if (MakeText() = ''x'') and True then Halt(42);' + LineEnding +
+    '  Halt(51);' + LineEnding +
+    'end.';
+
+  CompareWhileOwnedArgumentSource =
+    'program c6h14_compare_while_string_arg_runtime;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := ''x'';' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  while MakeText() = ''x'' do Halt(42);' + LineEnding +
+    '  Halt(53);' + LineEnding +
+    'end.';
+
+  CompareRepeatOwnedArgumentSource =
+    'program c6h14_compare_repeat_string_arg_runtime;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := ''x'';' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  repeat' + LineEnding +
+    '  until MakeText() = ''x'';' + LineEnding +
+    '  Halt(42);' + LineEnding +
+    'end.';
+
 procedure Fail(const AMessage: string);
 begin
   WriteLn('hir-string-call-argument-ownership-runtime-smoke-failure=', AMessage);
@@ -119,7 +290,7 @@ begin
     Proc.Executable := AExecutable;
     for I := Low(AArgs) to High(AArgs) do
       Proc.Parameters.Add(AArgs[I]);
-    Proc.Options := [poWaitOnExit];
+    Proc.Options := [poWaitOnExit, poUsePipes];
     Proc.Execute;
     if Proc.ExitStatus <> AExpectedExit then
       Fail(ALabel + '-exit:' + IntToStr(Proc.ExitStatus) +
@@ -282,6 +453,190 @@ begin
     'literal-borrowed-argument-must-not-release-runtime');
 end;
 
+procedure AssertWriteLnOwnedRuntimeContract(const ALlvmText: string);
+var
+  ProducerPos, WritePos, ReleasePos: LongInt;
+begin
+  ProducerPos := Pos(' = call {ptr, i64, ptr, i64} @MakeText(', ALlvmText);
+  WritePos := Pos('call void asm sideeffect "movq $$1, %rax; syscall"',
+    ALlvmText);
+  if (ProducerPos = 0) or (WritePos = 0) then
+    Fail('missing-writeln-owned-string-write-runtime');
+  ReleasePos := FindAfter(ALlvmText, 'call void @np_string_release(',
+    WritePos + 1);
+  if ReleasePos = 0 then
+    Fail('missing-writeln-owned-string-release-runtime');
+  if (ProducerPos >= WritePos) or (WritePos >= ReleasePos) then
+    Fail('writeln-owned-string-temp-release-order-runtime');
+end;
+
+procedure AssertWriteLnConcatOwnedRuntimeContract(const ALlvmText: string);
+var
+  ProducerPos, ConcatPos, WritePos, ConcatReleasePos,
+    SourceReleasePos: LongInt;
+begin
+  ProducerPos := Pos(' = call {ptr, i64, ptr, i64} @MakeText(', ALlvmText);
+  ConcatPos := Pos(' = call {ptr, i64, ptr, i64} @np_str_concat_owned(',
+    ALlvmText);
+  WritePos := FindAfter(ALlvmText,
+    'call void asm sideeffect "movq $$1, %rax; syscall"', ConcatPos + 1);
+  if (ProducerPos = 0) or (ConcatPos = 0) or (WritePos = 0) then
+    Fail('missing-writeln-concat-owned-string-runtime');
+  ConcatReleasePos := FindAfter(ALlvmText, 'call void @np_string_release(',
+    WritePos + 1);
+  SourceReleasePos := FindAfter(ALlvmText, 'call void @np_string_release(',
+    ConcatReleasePos + 1);
+  if (ConcatReleasePos = 0) or (SourceReleasePos = 0) then
+    Fail('missing-writeln-concat-owned-string-release-runtime');
+  if (ProducerPos >= ConcatPos) or (ConcatPos >= WritePos) then
+    Fail('writeln-concat-owned-string-temp-creation-order-runtime');
+  if WritePos >= ConcatReleasePos then
+    Fail('writeln-concat-owned-string-release-must-follow-write-runtime');
+  if ConcatReleasePos >= SourceReleasePos then
+    Fail('writeln-concat-owned-string-release-order-runtime');
+end;
+
+procedure AssertConcatOwnedRuntimeContract(const ALlvmText: string);
+var
+  ProducerPos, ConcatPos, ReleasePos: LongInt;
+begin
+  ProducerPos := Pos(' = call {ptr, i64, ptr, i64} @MakeText(', ALlvmText);
+  ConcatPos := Pos(' = call {ptr, i64, ptr, i64} @np_str_concat_owned(',
+    ALlvmText);
+  if (ProducerPos = 0) or (ConcatPos = 0) then
+    Fail('missing-concat-owned-string-runtime');
+  ReleasePos := FindAfter(ALlvmText, 'call void @np_string_release(',
+    ConcatPos + 1);
+  if ReleasePos = 0 then
+    Fail('missing-concat-owned-string-release-runtime');
+  if (ProducerPos >= ConcatPos) or (ConcatPos >= ReleasePos) then
+    Fail('concat-owned-string-temp-release-order-runtime');
+end;
+
+procedure AssertConcatBothOwnedRuntimeContract(const ALlvmText: string);
+var
+  MakeAPos, MakeBPos, ConcatPos, ReleaseBPos, ReleaseAPos: LongInt;
+begin
+  MakeAPos := Pos(' = call {ptr, i64, ptr, i64} @MakeA(', ALlvmText);
+  MakeBPos := Pos(' = call {ptr, i64, ptr, i64} @MakeB(', ALlvmText);
+  ConcatPos := Pos(' = call {ptr, i64, ptr, i64} @np_str_concat_owned(',
+    ALlvmText);
+  if (MakeAPos = 0) or (MakeBPos = 0) or (ConcatPos = 0) then
+    Fail('missing-concat-both-owned-string-runtime');
+  ReleaseBPos := FindAfter(ALlvmText, 'call void @np_string_release(',
+    ConcatPos + 1);
+  ReleaseAPos := FindAfter(ALlvmText, 'call void @np_string_release(',
+    ReleaseBPos + 1);
+  if (ReleaseBPos = 0) or (ReleaseAPos = 0) then
+    Fail('missing-concat-both-owned-string-release-runtime');
+  if (MakeAPos >= MakeBPos) or (MakeBPos >= ConcatPos) then
+    Fail('concat-both-owned-string-temp-creation-order-runtime');
+  if ReleaseBPos >= ReleaseAPos then
+    Fail('concat-both-owned-string-temp-release-order-runtime');
+end;
+
+procedure AssertCompareOwnedRuntimeContract(const ALlvmText: string);
+var
+  ProducerPos, ComparePos, ReleasePos: LongInt;
+begin
+  ProducerPos := Pos(' = call {ptr, i64, ptr, i64} @MakeText(', ALlvmText);
+  ComparePos := Pos(' = call i64 @np_str_cmp(', ALlvmText);
+  if (ProducerPos = 0) or (ComparePos = 0) then
+    Fail('missing-compare-owned-string-runtime');
+  ReleasePos := FindAfter(ALlvmText, 'call void @np_string_release(',
+    ComparePos + 1);
+  if ReleasePos = 0 then
+    Fail('missing-compare-owned-string-release-runtime');
+  if (ProducerPos >= ComparePos) or (ComparePos >= ReleasePos) then
+    Fail('compare-owned-string-temp-release-order-runtime');
+end;
+
+procedure AssertCompareBothOwnedRuntimeContract(const ALlvmText: string);
+var
+  MakeAPos, MakeBPos, ComparePos, ReleaseBPos, ReleaseAPos: LongInt;
+begin
+  MakeAPos := Pos(' = call {ptr, i64, ptr, i64} @MakeA(', ALlvmText);
+  MakeBPos := Pos(' = call {ptr, i64, ptr, i64} @MakeB(', ALlvmText);
+  ComparePos := Pos(' = call i64 @np_str_cmp(', ALlvmText);
+  if (MakeAPos = 0) or (MakeBPos = 0) or (ComparePos = 0) then
+    Fail('missing-compare-both-owned-string-runtime');
+  ReleaseBPos := FindAfter(ALlvmText, 'call void @np_string_release(',
+    ComparePos + 1);
+  ReleaseAPos := FindAfter(ALlvmText, 'call void @np_string_release(',
+    ReleaseBPos + 1);
+  if (ReleaseBPos = 0) or (ReleaseAPos = 0) then
+    Fail('missing-compare-both-owned-string-release-runtime');
+  if (MakeAPos >= MakeBPos) or (MakeBPos >= ComparePos) then
+    Fail('compare-both-owned-string-temp-creation-order-runtime');
+  if ReleaseBPos >= ReleaseAPos then
+    Fail('compare-both-owned-string-temp-release-order-runtime');
+end;
+
+procedure AssertCompareConcatOwnedRuntimeContract(const ALlvmText: string);
+var
+  ProducerPos, ConcatPos, ComparePos, ConcatReleasePos, SourceReleasePos: LongInt;
+begin
+  ProducerPos := Pos(' = call {ptr, i64, ptr, i64} @MakeText(', ALlvmText);
+  ConcatPos := Pos(' = call {ptr, i64, ptr, i64} @np_str_concat_owned(',
+    ALlvmText);
+  ComparePos := Pos(' = call i64 @np_str_cmp(', ALlvmText);
+  if (ProducerPos = 0) or (ConcatPos = 0) or (ComparePos = 0) then
+    Fail('missing-compare-concat-owned-string-runtime');
+  ConcatReleasePos := FindAfter(ALlvmText, 'call void @np_string_release(',
+    ComparePos + 1);
+  SourceReleasePos := FindAfter(ALlvmText, 'call void @np_string_release(',
+    ConcatReleasePos + 1);
+  if (ConcatReleasePos = 0) or (SourceReleasePos = 0) then
+    Fail('missing-compare-concat-owned-string-release-runtime');
+  if (ProducerPos >= ConcatPos) or (ConcatPos >= ComparePos) then
+    Fail('compare-concat-owned-string-temp-creation-order-runtime');
+  if ComparePos >= ConcatReleasePos then
+    Fail('compare-concat-owned-string-release-must-follow-compare-runtime');
+  if ConcatReleasePos >= SourceReleasePos then
+    Fail('compare-concat-owned-string-release-order-runtime');
+end;
+
+procedure AssertCompareCompoundOwnedRuntimeContract(const ALlvmText: string);
+var
+  ProducerPos, ComparePos, ReleasePos: LongInt;
+begin
+  ProducerPos := Pos(' = call {ptr, i64, ptr, i64} @MakeText(', ALlvmText);
+  ComparePos := Pos(' = call i64 @np_str_cmp(', ALlvmText);
+  ReleasePos := FindAfter(ALlvmText, 'call void @np_string_release(',
+    ComparePos + 1);
+  if (ProducerPos = 0) or (ComparePos = 0) then
+    Fail('missing-compare-compound-owned-string-runtime');
+  if ReleasePos = 0 then
+    Fail('missing-compare-compound-owned-string-release-runtime');
+  if ProducerPos >= ComparePos then
+    Fail('compare-compound-owned-string-temp-creation-order-runtime');
+  if ComparePos >= ReleasePos then
+    Fail('compare-compound-owned-string-release-must-follow-compare-runtime');
+end;
+
+procedure AssertCompareLoopOwnedRuntimeContract(const ALlvmText: string);
+var
+  ProducerPos, ComparePos, ReleasePos, BranchPos: LongInt;
+begin
+  ProducerPos := Pos(' = call {ptr, i64, ptr, i64} @MakeText(', ALlvmText);
+  ComparePos := Pos(' = call i64 @np_str_cmp(', ALlvmText);
+  ReleasePos := FindAfter(ALlvmText, 'call void @np_string_release(',
+    ComparePos + 1);
+  BranchPos := FindAfter(ALlvmText, 'br i1 ', ReleasePos + 1);
+  if (ProducerPos = 0) or (ComparePos = 0) then
+    Fail('missing-compare-loop-owned-string-runtime');
+  if ReleasePos = 0 then
+    Fail('missing-compare-loop-owned-string-release-runtime');
+  if BranchPos = 0 then
+    Fail('missing-compare-loop-conditional-branch-runtime');
+  if ProducerPos >= ComparePos then
+    Fail('compare-loop-owned-string-temp-creation-order-runtime');
+  if ComparePos >= ReleasePos then
+    Fail('compare-loop-owned-string-release-must-follow-compare-runtime');
+  if ReleasePos >= BranchPos then
+    Fail('compare-loop-owned-string-release-must-precede-branch-runtime');
+end;
+
 procedure RunRuntimeSmoke(const AOutputDir, AStem: string);
 var
   LlPath: string;
@@ -319,6 +674,24 @@ begin
     RequireReverseReleaseOrder(LlvmText)
   else if AAssertKind = 'literal' then
     AssertLiteralBorrowedRuntimeContract(LlvmText)
+  else if AAssertKind = 'writeln' then
+    AssertWriteLnOwnedRuntimeContract(LlvmText)
+  else if AAssertKind = 'writeln-concat' then
+    AssertWriteLnConcatOwnedRuntimeContract(LlvmText)
+  else if AAssertKind = 'concat' then
+    AssertConcatOwnedRuntimeContract(LlvmText)
+  else if AAssertKind = 'concat-both' then
+    AssertConcatBothOwnedRuntimeContract(LlvmText)
+  else if AAssertKind = 'compare' then
+    AssertCompareOwnedRuntimeContract(LlvmText)
+  else if AAssertKind = 'compare-both' then
+    AssertCompareBothOwnedRuntimeContract(LlvmText)
+  else if AAssertKind = 'compare-concat' then
+    AssertCompareConcatOwnedRuntimeContract(LlvmText)
+  else if AAssertKind = 'compare-compound' then
+    AssertCompareCompoundOwnedRuntimeContract(LlvmText)
+  else if AAssertKind = 'compare-loop' then
+    AssertCompareLoopOwnedRuntimeContract(LlvmText)
   else
     Fail('unknown-assert-kind:' + AAssertKind);
 
@@ -345,5 +718,33 @@ begin
     MultiOwnedArgumentSource, 'multi');
   EmitAssertAndRun(OutputDir, 'llvm_string_arg_borrowed_literal',
     LiteralBorrowedArgumentSource, 'literal');
+  EmitAssertAndRun(OutputDir, 'llvm_string_arg_owned_writeln',
+    WriteLnOwnedArgumentSource, 'writeln');
+  EmitAssertAndRun(OutputDir, 'llvm_string_arg_owned_writeln_concat',
+    WriteLnConcatOwnedArgumentSource, 'writeln-concat');
+  EmitAssertAndRun(OutputDir, 'llvm_string_arg_owned_concat_left',
+    ConcatLeftOwnedArgumentSource, 'concat');
+  EmitAssertAndRun(OutputDir, 'llvm_string_arg_owned_concat_right',
+    ConcatRightOwnedArgumentSource, 'concat');
+  EmitAssertAndRun(OutputDir, 'llvm_string_arg_owned_concat_both',
+    ConcatBothOwnedArgumentSource, 'concat-both');
+  EmitAssertAndRun(OutputDir, 'llvm_string_arg_owned_compare_left',
+    CompareLeftOwnedArgumentSource, 'compare');
+  EmitAssertAndRun(OutputDir, 'llvm_string_arg_owned_compare_right',
+    CompareRightOwnedArgumentSource, 'compare');
+  EmitAssertAndRun(OutputDir, 'llvm_string_arg_owned_compare_not_equal',
+    CompareNotEqualOwnedArgumentSource, 'compare');
+  EmitAssertAndRun(OutputDir, 'llvm_string_arg_owned_compare_runtime_var',
+    CompareRuntimeVarOwnedArgumentSource, 'compare');
+  EmitAssertAndRun(OutputDir, 'llvm_string_arg_owned_compare_both',
+    CompareBothOwnedArgumentSource, 'compare-both');
+  EmitAssertAndRun(OutputDir, 'llvm_string_arg_owned_compare_concat',
+    CompareConcatOwnedArgumentSource, 'compare-concat');
+  EmitAssertAndRun(OutputDir, 'llvm_string_arg_owned_compare_compound',
+    CompareCompoundOwnedArgumentSource, 'compare-compound');
+  EmitAssertAndRun(OutputDir, 'llvm_string_arg_owned_compare_while',
+    CompareWhileOwnedArgumentSource, 'compare-loop');
+  EmitAssertAndRun(OutputDir, 'llvm_string_arg_owned_compare_repeat',
+    CompareRepeatOwnedArgumentSource, 'compare-loop');
   WriteLn('hir-string-call-argument-ownership-runtime-smoke-status=pass');
 end.

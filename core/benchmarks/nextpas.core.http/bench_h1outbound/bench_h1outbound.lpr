@@ -5,6 +5,7 @@ program bench_h1outbound;
 uses
   nextpas.core.bench,
   nextpas.core.io.intf,
+  nextpas.core.net.intf,
   nextpas.core.http.impl.h1.outbound;
 
 type
@@ -16,6 +17,22 @@ type
     procedure Reset;
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
     function Size: SizeUInt;
+  end;
+
+  TFixedChunkRuntime = class(TInterfacedObject, ITcpStreamRuntime)
+  private
+    FChunkSize: SizeUInt;
+    FBytesAccepted: SizeUInt;
+  public
+    constructor Create(const AChunkSize: SizeUInt);
+    function NativeSocketHandle: PtrUInt;
+    procedure SetBlocking(const ABlocking: Boolean);
+    function TryRead(var ABuf; const ACount: SizeUInt;
+      out ARead: SizeUInt): TTcpStreamIOResult;
+    function TryWrite(const ABuf; const ACount: SizeUInt;
+      out AWritten: SizeUInt): TTcpStreamIOResult;
+    procedure Reset;
+    function BytesAccepted: SizeUInt;
   end;
 
 var
@@ -46,6 +63,48 @@ end;
 function TFixedMemoryWriter.Size: SizeUInt;
 begin
   Result := FSize;
+end;
+
+constructor TFixedChunkRuntime.Create(const AChunkSize: SizeUInt);
+begin
+  inherited Create;
+  FChunkSize := AChunkSize;
+end;
+
+function TFixedChunkRuntime.NativeSocketHandle: PtrUInt;
+begin
+  Result := 0;
+end;
+
+procedure TFixedChunkRuntime.SetBlocking(const ABlocking: Boolean);
+begin
+end;
+
+function TFixedChunkRuntime.TryRead(var ABuf; const ACount: SizeUInt;
+  out ARead: SizeUInt): TTcpStreamIOResult;
+begin
+  ARead := 0;
+  Result := tsiorClosed;
+end;
+
+function TFixedChunkRuntime.TryWrite(const ABuf; const ACount: SizeUInt;
+  out AWritten: SizeUInt): TTcpStreamIOResult;
+begin
+  AWritten := ACount;
+  if (FChunkSize > 0) and (AWritten > FChunkSize) then
+    AWritten := FChunkSize;
+  Inc(FBytesAccepted, AWritten);
+  Result := tsiorOk;
+end;
+
+procedure TFixedChunkRuntime.Reset;
+begin
+  FBytesAccepted := 0;
+end;
+
+function TFixedChunkRuntime.BytesAccepted: SizeUInt;
+begin
+  Result := FBytesAccepted;
 end;
 
 procedure InitPayload;
@@ -81,6 +140,31 @@ begin
   end;
 end;
 
+procedure BenchBufferTryDrainRuntime1KBChunk128(aIters: Int64);
+var
+  LIt: Int64;
+  LBuffer: IH1OutboundBuffer;
+  LRuntime: TFixedChunkRuntime;
+  LRuntimeIntf: ITcpStreamRuntime;
+  LWritten: SizeUInt;
+begin
+  LRuntime := TFixedChunkRuntime.Create(128);
+  LRuntimeIntf := LRuntime as ITcpStreamRuntime;
+  try
+    for LIt := 1 to aIters do
+    begin
+      LRuntime.Reset;
+      LBuffer := NewH1OutboundBuffer;
+      LBuffer.Write(GPayload[0], SizeUInt(Length(GPayload)));
+      while not LBuffer.IsEmpty do
+        LBuffer.TryDrainTo(LRuntimeIntf, LWritten);
+      Inc(GBytesDrained, LRuntime.BytesAccepted);
+    end;
+  finally
+    LRuntimeIntf := nil;
+  end;
+end;
+
 begin
   InitPayload;
   B := TBenchRunner.Create;
@@ -88,6 +172,8 @@ begin
   WriteLn('operation=http.h1outbound.drain');
   WriteLn;
   B.Run('buffer write+drain 1KB', @BenchBufferWriteDrain1KB);
+  B.Run('buffer trydrain runtime 1KB chunk128',
+    @BenchBufferTryDrainRuntime1KBChunk128);
   WriteLn;
   B.Summary;
   B.Free;

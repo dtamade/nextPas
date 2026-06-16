@@ -178,6 +178,21 @@ begin
   end;
 end;
 
+procedure BenchDirectCall(aIters: Int64);
+var
+  LIt: Int64;
+  LReq: IHttpRequest;
+  LHandler: THttpHandlerFunc;
+begin
+  LReq := NewGetRequest('/health');
+  LHandler := procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    Inc(GDispatchCount);
+  end;
+  for LIt := 1 to aIters do
+    LHandler(LReq, nil);
+end;
+
 begin
   B := TBenchRunner.Create;
   WriteLn('=== nextpas.core.http.router benchmark ===');
@@ -191,6 +206,7 @@ begin
   B.Run('Deep path (3 params, 8 segs)', @BenchDeepPath);
   B.Run('Miss (no match)', @BenchMiss);
   B.Run('handler dispatch (match + no-op handler)', @BenchHandlerDispatch);
+  B.Run('direct call (same request, no router)', @BenchDirectCall);
   WriteLn;
   B.Summary;
   B.Free;

@@ -10,7 +10,6 @@ uses
   SysUtils,
   nextpas.core.testing,
   nextpas.core.mem.error,
-  nextpas.core.mem.layout,
   nextpas.core.mem.blockpool.concurrent,
   nextpas.core.mem.pool.fixed.concurrent,
   nextpas.core.mem.pool.slab.concurrent;
@@ -188,12 +187,13 @@ end;
 procedure TestArenaConcurrentWrapper;
 var
   LArena: TArenaConcurrent;
-  LResult: TAllocResult;
+  LPtr: Pointer;
 begin
   LArena := TArenaConcurrent.Create(256);
   try
-    LResult := LArena.Alloc(TMemLayout.Create(32, 8));
-    Check(LResult.IsOk, 'Alloc should succeed');
+    LPtr := LArena.AllocAligned(32, 8);
+    Check(LPtr <> nil, 'AllocAligned should succeed');
+    CheckEqual(Int64(0), Int64(PtrUInt(LPtr) mod 8), 'AllocAligned should honor alignment');
     Check(LArena.UsedSize >= 32, 'arena usage should grow');
     LArena.Reset;
     Check(LArena.UsedSize = 0, 'reset should rewind usage');

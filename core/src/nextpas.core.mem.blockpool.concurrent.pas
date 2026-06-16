@@ -8,7 +8,6 @@ uses
   nextpas.core.base.utils,
   nextpas.core.mem.blockpool,
   nextpas.core.mem.mutex,
-  nextpas.core.mem.layout,
   nextpas.core.mem.error;
 
 type
@@ -58,8 +57,9 @@ type
     destructor Destroy; override;
 
     { IArena }
-    function Alloc(const aLayout: TMemLayout): TAllocResult;
-    function AllocZeroed(const aLayout: TMemLayout): TAllocResult;
+    function Alloc(aSize: SizeUInt): Pointer;
+    function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
+    function AllocZeroed(aSize: SizeUInt): Pointer;
     function SaveMark: TArenaMarker;
     procedure RestoreToMark(aMark: TArenaMarker);
     procedure Reset;
@@ -243,21 +243,31 @@ begin
   inherited Destroy;
 end;
 
-function TArenaConcurrent.Alloc(const aLayout: TMemLayout): TAllocResult;
+function TArenaConcurrent.Alloc(aSize: SizeUInt): Pointer;
 begin
   FLock.Acquire;
   try
-    Result := FInner.Alloc(aLayout);
+    Result := FInner.Alloc(aSize);
   finally
     FLock.Release;
   end;
 end;
 
-function TArenaConcurrent.AllocZeroed(const aLayout: TMemLayout): TAllocResult;
+function TArenaConcurrent.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
 begin
   FLock.Acquire;
   try
-    Result := FInner.AllocZeroed(aLayout);
+    Result := FInner.AllocAligned(aSize, aAlignment);
+  finally
+    FLock.Release;
+  end;
+end;
+
+function TArenaConcurrent.AllocZeroed(aSize: SizeUInt): Pointer;
+begin
+  FLock.Acquire;
+  try
+    Result := FInner.AllocZeroed(aSize);
   finally
     FLock.Release;
   end;
