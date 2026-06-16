@@ -29,7 +29,20 @@ type
 
 implementation
 
-uses BaseUnix, Unix;
+uses BaseUnix, Unix, nextpas.core.platform.env;
+
+function PlatformEnvGetStr(const AName: PAnsiChar): AnsiString;
+var
+  LLen: Int32;
+begin
+  Result := '';
+  if platform_env_get(AName, nil, 0, LLen) <> 0 then
+    Exit;
+  if LLen <= 0 then
+    Exit;
+  SetLength(Result, LLen);
+  platform_env_get(AName, PAnsiChar(Result), LLen + 1, LLen);
+end;
 
 // ---------- Base64 encoder (self-contained) ----------
 
@@ -99,8 +112,8 @@ function IsOSC52Terminal: Boolean;
 var
   TermProg, Term: AnsiString;
 begin
-  TermProg := GetEnvironmentVariable('TERM_PROGRAM');
-  Term := GetEnvironmentVariable('TERM');
+  TermProg := PlatformEnvGetStr('TERM_PROGRAM');
+  Term := PlatformEnvGetStr('TERM');
   // Known OSC 52 supporters
   if (TermProg = 'iTerm.app') or (TermProg = 'iTerm2') or
      (TermProg = 'kitty') or (TermProg = 'alacritty') or
@@ -121,12 +134,12 @@ end;
 function FindExternalTool: AnsiString;
 begin
   // Check Wayland first
-  if GetEnvironmentVariable('WAYLAND_DISPLAY') <> '' then
+  if PlatformEnvGetStr('WAYLAND_DISPLAY') <> '' then
   begin
     if ToolExists('wl-copy') then begin Result := 'wl-copy'; Exit; end;
   end;
   // X11
-  if GetEnvironmentVariable('DISPLAY') <> '' then
+  if PlatformEnvGetStr('DISPLAY') <> '' then
   begin
     if ToolExists('xclip') then begin Result := 'xclip'; Exit; end;
     if ToolExists('xsel') then begin Result := 'xsel'; Exit; end;

@@ -23,6 +23,10 @@ type
   public
     property Stack: TScreenStack read FStack;
     property SharedStateObject: TObject read GetSharedStateObject;
+    /// Typed accessor for SharedStateObject.
+    /// Lifecycle: stored by reference; caller owns creation/destruction; returns
+    /// nil when no stack is attached (screen not yet pushed).
+    generic function GetShared<T>: T;
     procedure Render(const Area: TRect; Buf: TBuffer); virtual; abstract;
     procedure HandleEvent(const Ev: TEvent); virtual;
     procedure HandleTaskCompletions(const Slots: array of TCompletionSlot;
@@ -64,6 +68,14 @@ function TScreen.GetSharedStateObject: TObject;
 begin
   if FStack <> nil then
     Result := FStack.SharedStateObject
+  else
+    Result := nil;
+end;
+
+generic function TScreen.GetShared<T>: T;
+begin
+  if FStack <> nil then
+    Result := T(FStack.SharedStateObject)
   else
     Result := nil;
 end;

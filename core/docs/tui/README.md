@@ -93,6 +93,23 @@ end;
 - widget catalog 与 widget facade ownership 看 [WIDGET_CATALOG.md](./WIDGET_CATALOG.md)
 - benchmark smoke 口径看 [BENCHMARK.md](./BENCHMARK.md)
 
+## Examples
+
+7 个示例覆盖从单屏 hello 到主题切换的完整教学路径。所有示例都进入
+`uses nextpas.core.tui.ext`（除 `demo_widgets` 用 full facade 演示高级 widget）。
+
+| 示例 | 教学目标 | 关键 API |
+|------|----------|----------|
+| [`demo_hello`](../../examples/nextpas.core.tui/demo_hello/) | 单屏 hello | `TApp`, `TScreen.Render` |
+| [`demo_layout`](../../examples/nextpas.core.tui/demo_layout/) | layout 基础 | `IPanel`, `TPanel.Grid` |
+| [`demo_widgets`](../../examples/nextpas.core.tui/demo_widgets/) | 高级 widget | `IListWidget`, `IGauge`, `IParagraph` |
+| [`demo_multi_screen`](../../examples/nextpas.core.tui/demo_multi_screen/) | 多屏导航 + typed shared state | `Stack.Push/Pop`, `Self.specialize GetShared<T>` |
+| [`demo_task_completion`](../../examples/nextpas.core.tui/demo_task_completion/) | 后台任务 + 主线程 completion | `TTaskManager.Spawn`, `HandleTaskCompletions` |
+| [`demo_panel_layout`](../../examples/nextpas.core.tui/demo_panel_layout/) | panel 网格组合 | `TPanel.Grid`, `PanelCell` |
+| [`demo_theme_focus_keybind`](../../examples/nextpas.core.tui/demo_theme_focus_keybind/) | 主题切换 + 键绑定 | `TTheme.Dark/Light/Nord/Dracula`, `TKeybindManager` |
+
+每个示例都有自己的 Makefile，运行：`make -C core/examples/nextpas.core.tui/<demo> run`。
+
 ## 当前 focused verification envelope
 
 这条演进线只维护 TUI focused gates，不把全仓验证重新拖进来。当前里程碑的最小闭环是：

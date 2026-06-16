@@ -67,6 +67,10 @@ type
     procedure EnableBudget(BudgetMs: Double);
     procedure RequestAnimationFrame;
     function ElapsedMs: QWord;
+    /// Typed accessor for SharedStateObject.
+    /// Lifecycle: stored by reference; caller owns creation/destruction; returns
+    /// nil when no shared state is attached.
+    generic function GetShared<T>: T;
     property Terminal: TTerminal read FTerminal;
     property Screens: TScreenStack read FScreens;
     property Focus: TFocusManager read FFocus;
@@ -148,6 +152,11 @@ begin
   FSharedStateObject := AValue;
   if FScreens <> nil then
     FScreens.SharedStateObject := AValue;
+end;
+
+generic function TApp.GetShared<T>: T;
+begin
+  Result := T(FSharedStateObject);
 end;
 
 procedure TApp.EnableBudget(BudgetMs: Double);

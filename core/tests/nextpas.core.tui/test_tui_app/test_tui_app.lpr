@@ -1621,6 +1621,81 @@ begin
   end;
 end;
 
+procedure TestAppTypedGetSharedReturnsCorrectObject;
+var
+  LApp: TFakeApp;
+  LSharedState: TSharedStateBox;
+  LResult: TSharedStateBox;
+begin
+  LApp := TFakeApp.Create([]);
+  LSharedState := TSharedStateBox.Create;
+  try
+    LSharedState.Value := 'typed-access';
+    LApp.SharedStateObject := LSharedState;
+
+    LResult := LApp.specialize GetShared<TSharedStateBox>;
+    Check(LResult = LSharedState,
+      'app typed GetShared returns the correct shared-state object');
+    CheckEqual('typed-access', String(LResult.Value),
+      'app typed GetShared preserves shared-state field values');
+  finally
+    LSharedState.Free;
+    LApp.Free;
+  end;
+end;
+
+procedure TestAppTypedGetSharedReturnsNilWhenNoSharedState;
+var
+  LApp: TFakeApp;
+begin
+  LApp := TFakeApp.Create([]);
+  try
+    Check(LApp.specialize GetShared<TSharedStateBox> = nil,
+      'app typed GetShared returns nil when no shared state is attached');
+  finally
+    LApp.Free;
+  end;
+end;
+
+procedure TestScreenTypedGetSharedDelegatesToStack;
+var
+  LApp: TFakeApp;
+  LScreen: TRecordingScreen;
+  LSharedState: TSharedStateBox;
+  LResult: TSharedStateBox;
+begin
+  LApp := TFakeApp.Create([]);
+  LScreen := TRecordingScreen.Create;
+  LSharedState := TSharedStateBox.Create;
+  try
+    LSharedState.Value := 'screen-typed';
+    LApp.SharedStateObject := LSharedState;
+    LApp.Screens.Push(LScreen);
+
+    LResult := LScreen.specialize GetShared<TSharedStateBox>;
+    Check(LResult = LSharedState,
+      'screen typed GetShared delegates to stack shared-state object');
+    CheckEqual('screen-typed', String(LResult.Value),
+      'screen typed GetShared preserves shared-state field values');
+  finally
+    LSharedState.Free;
+    LApp.Free;
+  end;
+end;
+
+procedure TestScreenTypedGetSharedReturnsNilWhenNotPushed;
+var
+  LScreen: TRecordingScreen;
+begin
+  LScreen := TRecordingScreen.Create;
+  try
+    Check(LScreen.specialize GetShared<TSharedStateBox> = nil,
+      'screen typed GetShared returns nil when screen is not pushed to a stack');
+  finally
+    LScreen.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.tui.app');
   T.Run('app raises backend exception when enter fails', @TestAppRunRaisesBackendExceptionWhenEnterFails);
@@ -1655,6 +1730,10 @@ begin
   T.Run('app falls back to screen after callback bootstrap releases ownership', @TestAppFallsBackToScreenAfterCallbackBootstrapReleasesOwnership);
   T.Run('app callback commits shared state before first render', @TestAppCallbackCommitsSharedStateBeforeFirstRender);
   T.Run('app callback retains shared-state ownership across screen transition', @TestAppCallbackRetainsSharedStateOwnershipAcrossScreenTransition);
+  T.Run('app typed GetShared returns correct object', @TestAppTypedGetSharedReturnsCorrectObject);
+  T.Run('app typed GetShared returns nil when no shared state', @TestAppTypedGetSharedReturnsNilWhenNoSharedState);
+  T.Run('screen typed GetShared delegates to stack', @TestScreenTypedGetSharedDelegatesToStack);
+  T.Run('screen typed GetShared returns nil when not pushed', @TestScreenTypedGetSharedReturnsNilWhenNotPushed);
   T.Summary;
   if not T.AllPassed then
     Halt(1);

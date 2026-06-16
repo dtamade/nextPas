@@ -30,6 +30,22 @@ function DetectImageProtocol: TImageProtocol;
 
 implementation
 
+uses
+  nextpas.core.platform.env;
+
+function PlatformEnvGetStr(const AName: PAnsiChar): AnsiString;
+var
+  LLen: Int32;
+begin
+  Result := '';
+  if platform_env_get(AName, nil, 0, LLen) <> 0 then
+    Exit;
+  if LLen <= 0 then
+    Exit;
+  SetLength(Result, LLen);
+  platform_env_get(AName, PAnsiChar(Result), LLen + 1, LLen);
+end;
+
 
 function DetectImageProtocolFromHints(const ATerm, ATermProgram,
   ATermFeatures, AKittyWindowId: AnsiString): TImageProtocol;
@@ -58,10 +74,10 @@ end;
 function DetectImageProtocol: TImageProtocol;
 begin
   Result := DetectImageProtocolFromHints(
-    GetEnvironmentVariable('TERM'),
-    GetEnvironmentVariable('TERM_PROGRAM'),
-    GetEnvironmentVariable('TERM_FEATURES'),
-    GetEnvironmentVariable('KITTY_WINDOW_ID'));
+    PlatformEnvGetStr('TERM'),
+    PlatformEnvGetStr('TERM_PROGRAM'),
+    PlatformEnvGetStr('TERM_FEATURES'),
+    PlatformEnvGetStr('KITTY_WINDOW_ID'));
 end;
 
 end.

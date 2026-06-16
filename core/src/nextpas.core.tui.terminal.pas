@@ -20,7 +20,7 @@ unit nextpas.core.tui.terminal;
 
 interface
 
-uses nextpas.core.tui.base, nextpas.core.tui.cap.base, nextpas.core.tui.error, nextpas.core.tui.cell, nextpas.core.tui.buffer, nextpas.core.tui.overlay, nextpas.core.tui.event, nextpas.core.tui.input, nextpas.core.tui.interaction, nextpas.core.tui.image_cap, nextpas.core.tui.backend.ansi, nextpas.core.platform.console, nextpas.core.platform.signal;
+uses nextpas.core.tui.base, nextpas.core.tui.cap.base, nextpas.core.tui.error, nextpas.core.tui.cell, nextpas.core.tui.buffer, nextpas.core.tui.overlay, nextpas.core.tui.event, nextpas.core.tui.input, nextpas.core.tui.interaction, nextpas.core.tui.image_cap, nextpas.core.tui.backend.ansi, nextpas.core.platform.console, nextpas.core.platform.signal, nextpas.core.platform.env;
 
 const
   STDIN_FD  = 0;
@@ -151,6 +151,19 @@ type
   end;
 
 implementation
+
+function PlatformEnvGetStr(const AName: PAnsiChar): AnsiString;
+var
+  LLen: Int32;
+begin
+  Result := '';
+  if platform_env_get(AName, nil, 0, LLen) <> 0 then
+    Exit;
+  if LLen <= 0 then
+    Exit;
+  SetLength(Result, LLen);
+  platform_env_get(AName, PAnsiChar(Result), LLen + 1, LLen);
+end;
 
 var
   GResizePending: LongInt = 0;
@@ -534,11 +547,11 @@ procedure TTerminal.DetectCapabilities;
 var
   LCT, LTP, LT, LTF, LKittyWindowId: AnsiString;
 begin
-  LCT := GetEnvironmentVariable('COLORTERM');
-  LTP := GetEnvironmentVariable('TERM_PROGRAM');
-  LT := GetEnvironmentVariable('TERM');
-  LTF := GetEnvironmentVariable('TERM_FEATURES');
-  LKittyWindowId := GetEnvironmentVariable('KITTY_WINDOW_ID');
+  LCT := PlatformEnvGetStr('COLORTERM');
+  LTP := PlatformEnvGetStr('TERM_PROGRAM');
+  LT := PlatformEnvGetStr('TERM');
+  LTF := PlatformEnvGetStr('TERM_FEATURES');
+  LKittyWindowId := PlatformEnvGetStr('KITTY_WINDOW_ID');
   FCapabilityProfile := DetectCapabilityProfileFromHints(
     LCT, LTP, LT, LTF, LKittyWindowId);
 end;

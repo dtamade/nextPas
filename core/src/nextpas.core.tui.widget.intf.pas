@@ -23,7 +23,7 @@ unit nextpas.core.tui.widget.intf;
 
 interface
 
-uses nextpas.core.tui.base, nextpas.core.tui.buffer;
+uses nextpas.core.tui.base, nextpas.core.tui.buffer, nextpas.core.errors;
 
 type
   {**
@@ -52,7 +52,7 @@ implementation
 constructor TWidgetAdapter.Create(AProc: TWidgetRenderFn);
 begin
   if not Assigned(AProc) then
-    raise EArgumentException.Create('TWidgetAdapter.Create: render function must not be nil');
+    raise EArgumentError.Create('TWidgetAdapter.Create: render function must not be nil');
   inherited Create;
   FProc := AProc;
 end;
