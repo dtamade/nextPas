@@ -96,6 +96,15 @@ const
   {$ENDIF}
   );
 
+  { POSIX d_type constants for directory entries }
+  PLATFORM_DT_FIFO = 1;
+  PLATFORM_DT_CHR  = 2;
+  PLATFORM_DT_DIR  = 4;
+  PLATFORM_DT_BLK  = 6;
+  PLATFORM_DT_REG  = 8;
+  PLATFORM_DT_LNK  = 10;
+  PLATFORM_DT_SOCK = 12;
+
 implementation
 
 end.
