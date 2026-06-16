@@ -84,6 +84,7 @@ uses
   nextpas.core.platform.random
 {$IFDEF NEXTPAS_UNIX}
   , nextpas.core.platform.posix.ffi
+  , nextpas.core.platform.posix.base
 {$ENDIF}
   ;
 
@@ -276,6 +277,10 @@ var
   LBuf: array[0..PLATFORM_FS_COPY_BUFFER_SIZE - 1] of Byte;
   LRead: PtrUInt;
   LR, LCloseR: Int32;
+{$IFDEF NEXTPAS_LINUX}
+  LSrcStat: TPlatformFileStat;
+  LTotal, LSent: ssize_t;
+{$ENDIF}
 begin
   LR := platform_file_open(ASrc, fomReadOnly, fcmOpenExisting, LSrcH);
   if LR <> 0 then Exit(LR);
@@ -285,11 +290,35 @@ begin
     platform_file_close(LSrcH);
     Exit(LR);
   end;
-  repeat
-    LR := platform_file_read(LSrcH, @LBuf[0], SizeOf(LBuf), LRead);
-    if (LR <> 0) or (LRead = 0) then Break;
-    LR := platform_fs_write_all(LDstH, @LBuf[0], LRead);
-  until LR <> 0;
+{$IFDEF NEXTPAS_LINUX}
+  { Use sendfile for zero-copy kernel transfer (avoids userspace buffer) }
+  LR := platform_file_fstat(LSrcH, LSrcStat);
+  if LR = 0 then
+  begin
+    LTotal := LSrcStat.Size;
+    while LTotal > 0 do
+    begin
+      LSent := nextpas.core.platform.posix.ffi.sendfile(
+        cint(LDstH), cint(LSrcH), nil, size_t(LTotal));
+      if LSent < 0 then
+      begin
+        LR := __errno_location^;
+        Break;
+      end;
+      if LSent = 0 then
+        Break;
+      Dec(LTotal, LSent);
+    end;
+  end
+  else
+{$ENDIF}
+  begin
+    repeat
+      LR := platform_file_read(LSrcH, @LBuf[0], SizeOf(LBuf), LRead);
+      if (LR <> 0) or (LRead = 0) then Break;
+      LR := platform_fs_write_all(LDstH, @LBuf[0], LRead);
+    until LR <> 0;
+  end;
   LCloseR := platform_file_close(LDstH);
   if (LR = 0) and (LCloseR <> 0) then
     LR := LCloseR;

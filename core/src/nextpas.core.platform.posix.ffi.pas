@@ -194,6 +194,10 @@ function grantpt(AFd: cint): cint; cdecl; external 'c' name 'grantpt';
 function unlockpt(AFd: cint): cint; cdecl; external 'c' name 'unlockpt';
 function ptsname(AFd: cint): PAnsiChar; cdecl; external 'c' name 'ptsname';
 
+{ sendfile - zero-copy file transfer between file descriptors (Linux) }
+function sendfile(AOutFd: cint; AInFd: cint; AOffset: Pointer;
+  ACount: size_t): ssize_t; cdecl; external 'c' name 'sendfile';
+
 implementation
 
 end.

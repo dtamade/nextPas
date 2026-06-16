@@ -85,6 +85,7 @@ scan_root() {
         -path "$REPO_ROOT/rtl/core/sysutils/np_sysutils_test" \
       \) \
       ! -name '*.*' \
+      ! -name 'Makefile' \
       -print
   fi
 }

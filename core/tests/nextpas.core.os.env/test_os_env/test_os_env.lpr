@@ -150,6 +150,68 @@ begin
   Check(LGot, 'empty var name raises EArgumentError');
 end;
 
+{ --- ExpandEnv $VAR tests --- }
+
+procedure TestExpandEnv_DollarVar;
+begin
+  SetEnv('NEXTPAS_TEST_DOLLAR', 'hello');
+  CheckEqual('hello', ExpandEnv('$NEXTPAS_TEST_DOLLAR'),
+    'ExpandEnv expands $VAR');
+  UnsetEnv('NEXTPAS_TEST_DOLLAR');
+end;
+
+procedure TestExpandEnv_DollarVarWithSuffix;
+begin
+  SetEnv('NEXTPAS_TEST_DOLLAR', 'hello');
+  CheckEqual('hello.txt', ExpandEnv('$NEXTPAS_TEST_DOLLAR.txt'),
+    'ExpandEnv $VAR with suffix');
+  UnsetEnv('NEXTPAS_TEST_DOLLAR');
+end;
+
+procedure TestExpandEnv_DollarVarAtStart;
+begin
+  SetEnv('NEXTPAS_TEST_DOLLAR', 'hello');
+  CheckEqual('hello world', ExpandEnv('$NEXTPAS_TEST_DOLLAR world'),
+    'ExpandEnv $VAR at start');
+  UnsetEnv('NEXTPAS_TEST_DOLLAR');
+end;
+
+procedure TestExpandEnv_DollarVarInMiddle;
+begin
+  SetEnv('NEXTPAS_TEST_DOLLAR', 'hello');
+  CheckEqual('prefix hello suffix', ExpandEnv('prefix $NEXTPAS_TEST_DOLLAR suffix'),
+    'ExpandEnv $VAR in middle');
+  UnsetEnv('NEXTPAS_TEST_DOLLAR');
+end;
+
+procedure TestExpandEnv_DollarAlone;
+begin
+  CheckEqual('$', ExpandEnv('$'),
+    'ExpandEnv lone dollar');
+end;
+
+procedure TestExpandEnv_DollarAtEnd;
+begin
+  CheckEqual('text$', ExpandEnv('text$'),
+    'ExpandEnv dollar at end of string');
+end;
+
+procedure TestExpandEnv_MixedSyntax;
+begin
+  SetEnv('NEXTPAS_TEST_DOLLAR', 'dollar');
+  SetEnv('NEXTPAS_TEST_BRACE', 'brace');
+  CheckEqual('dollar brace', ExpandEnv('$NEXTPAS_TEST_DOLLAR ${NEXTPAS_TEST_BRACE}'),
+    'ExpandEnv mixed $VAR and ${VAR}');
+  UnsetEnv('NEXTPAS_TEST_DOLLAR');
+  UnsetEnv('NEXTPAS_TEST_BRACE');
+end;
+
+procedure TestExpandEnv_DollarVarUndefined;
+begin
+  CheckEqual('', ExpandEnv('$NONEXISTENT_VAR_XYZ'),
+    'ExpandEnv undefined $VAR returns empty');
+end;
+
 { --- main --- }
 
 begin
@@ -170,5 +232,13 @@ begin
   T.Run('ExpandEnv_NoMarkers', @Test_ExpandEnv_NoMarkers);
   T.Run('ExpandEnv_Unterminated', @Test_ExpandEnv_Unterminated);
   T.Run('ExpandEnv_InvalidName', @Test_ExpandEnv_InvalidName);
+  T.Run('ExpandEnv $VAR', @TestExpandEnv_DollarVar);
+  T.Run('ExpandEnv $VAR.txt', @TestExpandEnv_DollarVarWithSuffix);
+  T.Run('ExpandEnv $VAR world', @TestExpandEnv_DollarVarAtStart);
+  T.Run('ExpandEnv prefix $VAR suffix', @TestExpandEnv_DollarVarInMiddle);
+  T.Run('ExpandEnv lone $', @TestExpandEnv_DollarAlone);
+  T.Run('ExpandEnv text$', @TestExpandEnv_DollarAtEnd);
+  T.Run('ExpandEnv $VAR + ${VAR}', @TestExpandEnv_MixedSyntax);
+  T.Run('ExpandEnv $UNDEFINED', @TestExpandEnv_DollarVarUndefined);
   T.Summary;
 end.

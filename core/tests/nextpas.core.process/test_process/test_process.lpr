@@ -696,6 +696,80 @@ begin
   Check(AName, LRaised);
 end;
 
+procedure TestRunEnvPassed;
+var LOut: TProcessOutput;
+begin
+  LOut := Command('/bin/sh')
+    .Args(['-c', 'echo $NEXTPAS_TEST_RUN_ENV'])
+    .EnvAdd('NEXTPAS_TEST_RUN_ENV', 'hello')
+    .Stdout(stPiped)
+    .Stderr(stPiped)
+    .Output;
+  Check('RunEnv passed — exit 0', LOut.ExitCode = 0);
+  Check('RunEnv passed — child reads env', Pos('hello', LOut.StdOut) > 0);
+end;
+
+procedure TestRunTimeout;
+var
+  LOut: TProcessOutput;
+  LStart: TInstant;
+begin
+  LStart := TInstant.Now;
+  LOut := TCommand.New('/bin/sleep')
+    .Arg('60')
+    .Timeout(TDuration.FromMilliseconds(200))
+    .Output;
+  Check('Run timeout — signaled', LOut.Status = psSignaled);
+  Check('Run timeout — elapsed < 2s', LStart.Elapsed.AsMilliseconds < 2000);
+end;
+
+procedure TestCaptureEmpty;
+var LStr: string;
+begin
+  LStr := Capture('/bin/true', []);
+  Check('Capture empty — empty string', LStr = '');
+end;
+
+procedure TestCaptureMultiLine;
+var LStr: string;
+begin
+  LStr := Capture('/bin/sh', ['-c', 'echo "line1"; echo "line2"; echo "line3"']);
+  Check('Capture multiline — has line1', Pos('line1', LStr) > 0);
+  Check('Capture multiline — has line2', Pos('line2', LStr) > 0);
+  Check('Capture multiline — has line3', Pos('line3', LStr) > 0);
+end;
+
+procedure TestRunInNonexistentDir;
+var LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    RunIn('/bin/true', [], '/nonexistent_dir_xyz');
+  except
+    on E: EProcessError do
+      LRaised := True;
+  end;
+  Check('RunIn nonexistent dir — raises EProcessError', LRaised);
+end;
+
+procedure TestRunLargeOutput;
+var LOut: TProcessOutput;
+begin
+  LOut := TCommand.New('/bin/sh')
+    .Args(['-c', 'dd if=/dev/zero bs=1024 count=1024 2>/dev/null | tr "\0" "A"'])
+    .Output;
+  Check('Large output — exit 0', LOut.ExitCode = 0);
+  Check('Large output — >= 1MB captured', Length(LOut.StdOut) >= 1024 * 1024);
+end;
+
+procedure TestRunStderrCapture;
+var LOut: TProcessOutput;
+begin
+  LOut := Run('/bin/sh', ['-c', 'echo error >&2']);
+  Check('Stderr capture — exit 0', LOut.ExitCode = 0);
+  Check('Stderr capture — stderr contains error', Pos('error', LOut.StdErr) > 0);
+end;
+
 procedure TestCommandValidation;
 begin
   ExpectProcessError('Validation — empty command path raises',
@@ -1035,6 +1109,7 @@ begin
   TestStdinNull;
   TestStdoutNull;
   TestStderrPiped;
+  TestRunStderrCapture;
   TestDualPipeLargeOutput;
   TestMultipleSpawnSameCommand;
   TestEmptyArgs;
@@ -1042,6 +1117,12 @@ begin
   TestWaitWithOutputDualPipe;
   TestArgSingle;
   TestCommandValidation;
+  TestRunEnvPassed;
+  TestRunTimeout;
+  TestCaptureEmpty;
+  TestCaptureMultiLine;
+  TestRunInNonexistentDir;
+  TestRunLargeOutput;
 
   WriteLn('');
   WriteLn('--- ', LPassed, ' passed, ', LFailed, ' failed ---');

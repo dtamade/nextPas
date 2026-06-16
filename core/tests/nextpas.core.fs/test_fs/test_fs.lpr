@@ -22,6 +22,8 @@ uses
   nextpas.core.fs.dir,
   nextpas.core.fs.path,
   nextpas.core.fs.util,
+  nextpas.core.io.scanner,
+  nextpas.core.io.mapped,
   nextpas.core.fs;
 
 var
@@ -459,18 +461,11 @@ begin
   Check(FsExists(LChild), 'child remains after failed remove');
 end;
 
-procedure TestRemoveMissingPathRaisesNotFound;
-var
-  LGot: Boolean;
+procedure TestRemoveMissingPathReturnsTrue;
 begin
-  LGot := False;
-  try
-    FsRemove(GTmpDir + '/missing-remove-path');
-  except
-    on E: ENotFoundError do
-      LGot := True;
-  end;
-  Check(LGot, 'FsRemove missing path raises ENotFoundError');
+  { FsRemove returns True for missing paths, matching Pascal Erase/DeleteFile }
+  Check(FsRemove(GTmpDir + '/missing-remove-path'),
+    'FsRemove missing path returns True');
 end;
 
 procedure TestRemoveAllMissingPathRaisesNotFound;
@@ -1232,6 +1227,351 @@ begin
 end;
 {$ENDIF}
 
+{ T1: ScanFileLines tests }
+
+procedure TestScanFileLines_Basic;
+var
+  LScanner: IScanner;
+  LCount: Integer;
+  LLine1, LLine2, LLine3: string;
+begin
+  nextpas.core.fs.WriteFileLines(GTmpDir + '/scan_basic.txt',
+    TStringArray.Create('alpha', 'beta', 'gamma'));
+  LScanner := nextpas.core.fs.ScanFileLines(GTmpDir + '/scan_basic.txt');
+  LCount := 0;
+  LLine1 := '';
+  LLine2 := '';
+  LLine3 := '';
+  while LScanner.Scan do
+  begin
+    Inc(LCount);
+    case LCount of
+      1: LLine1 := LScanner.Text;
+      2: LLine2 := LScanner.Text;
+      3: LLine3 := LScanner.Text;
+    end;
+  end;
+  CheckEqual(Int64(3), Int64(LCount), 'ScanFileLines basic line count');
+  CheckEqual('alpha', LLine1, 'ScanFileLines line 1');
+  CheckEqual('beta', LLine2, 'ScanFileLines line 2');
+  CheckEqual('gamma', LLine3, 'ScanFileLines line 3');
+end;
+
+procedure TestScanFileLines_Empty;
+var
+  LScanner: IScanner;
+begin
+  nextpas.core.fs.WriteFile(GTmpDir + '/scan_empty.txt', nil);
+  LScanner := nextpas.core.fs.ScanFileLines(GTmpDir + '/scan_empty.txt');
+  Check(not LScanner.Scan, 'ScanFileLines empty file Scan returns False');
+end;
+
+procedure TestScanFileLines_SingleLine;
+var
+  LScanner: IScanner;
+begin
+  nextpas.core.fs.WriteFile(GTmpDir + '/scan_single.txt',
+    TBytes.Create(Ord('h'), Ord('i')));
+  LScanner := nextpas.core.fs.ScanFileLines(GTmpDir + '/scan_single.txt');
+  Check(LScanner.Scan, 'ScanFileLines single line Scan returns True');
+  CheckEqual('hi', LScanner.Text, 'ScanFileLines single line content');
+  Check(not LScanner.Scan, 'ScanFileLines single line second Scan returns False');
+end;
+
+procedure TestScanFileLines_CRLF;
+var
+  LScanner: IScanner;
+  LCount: Integer;
+  LLine1, LLine2: string;
+begin
+  nextpas.core.fs.WriteFileText(GTmpDir + '/scan_crlf.txt', 'one'#13#10'two'#13#10);
+  LScanner := nextpas.core.fs.ScanFileLines(GTmpDir + '/scan_crlf.txt');
+  LCount := 0;
+  LLine1 := '';
+  LLine2 := '';
+  while LScanner.Scan do
+  begin
+    Inc(LCount);
+    case LCount of
+      1: LLine1 := LScanner.Text;
+      2: LLine2 := LScanner.Text;
+    end;
+  end;
+  CheckEqual(Int64(2), Int64(LCount), 'ScanFileLines CRLF line count');
+  CheckEqual('one', LLine1, 'ScanFileLines CRLF line 1 strips CR');
+  CheckEqual('two', LLine2, 'ScanFileLines CRLF line 2 strips CR');
+end;
+
+procedure TestScanFileLines_LargeFile;
+var
+  LLines: TStringArray;
+  LScanner: IScanner;
+  LCount: Integer;
+  LI: Integer;
+begin
+  SetLength(LLines, 1000);
+  for LI := 0 to 999 do
+    LLines[LI] := 'line_' + IntToStr(LI);
+  nextpas.core.fs.WriteFileLines(GTmpDir + '/scan_large.txt', LLines);
+  LScanner := nextpas.core.fs.ScanFileLines(GTmpDir + '/scan_large.txt');
+  LCount := 0;
+  while LScanner.Scan do
+    Inc(LCount);
+  CheckEqual(Int64(1000), Int64(LCount), 'ScanFileLines large file line count');
+end;
+
+procedure TestScanFileLines_Bytes;
+var
+  LScanner: IScanner;
+  LBytes: TBytes;
+begin
+  nextpas.core.fs.WriteFileText(GTmpDir + '/scan_bytes.txt', 'abc'#10'def'#10);
+  LScanner := nextpas.core.fs.ScanFileLines(GTmpDir + '/scan_bytes.txt');
+  Check(LScanner.Scan, 'ScanFileLines bytes Scan');
+  LBytes := LScanner.Bytes;
+  CheckEqual(Int64(3), Int64(Length(LBytes)), 'ScanFileLines bytes length');
+  CheckEqual(Byte(Ord('a')), LBytes[0], 'ScanFileLines bytes[0]');
+  CheckEqual(Byte(Ord('b')), LBytes[1], 'ScanFileLines bytes[1]');
+  CheckEqual(Byte(Ord('c')), LBytes[2], 'ScanFileLines bytes[2]');
+end;
+
+procedure TestScanFileLines_ErrorPath;
+var
+  LGot: Boolean;
+begin
+  LGot := False;
+  try
+    nextpas.core.fs.ScanFileLines(GTmpDir + '/nonexistent_scan_xyz');
+  except
+    on E: Exception do
+      LGot := True;
+  end;
+  Check(LGot, 'ScanFileLines nonexistent file raises exception');
+end;
+
+{ T2: MapFileLines tests }
+
+procedure TestMapFileLines_Basic;
+var
+  LMap: IMappedLines;
+begin
+  nextpas.core.fs.WriteFileLines(GTmpDir + '/map_basic.txt',
+    TStringArray.Create('alpha', 'beta', 'gamma'));
+  LMap := nextpas.core.fs.MapFileLines(GTmpDir + '/map_basic.txt');
+  CheckEqual(Int64(3), Int64(LMap.Count), 'MapFileLines basic count');
+  CheckEqual('alpha', LMap.Line(0).ToString, 'MapFileLines line 0');
+  CheckEqual('beta', LMap.Line(1).ToString, 'MapFileLines line 1');
+  CheckEqual('gamma', LMap.Line(2).ToString, 'MapFileLines line 2');
+end;
+
+procedure TestMapFileLines_Empty;
+var
+  LMap: IMappedLines;
+begin
+  nextpas.core.fs.WriteFile(GTmpDir + '/map_empty.txt', nil);
+  LMap := nextpas.core.fs.MapFileLines(GTmpDir + '/map_empty.txt');
+  CheckEqual(Int64(0), Int64(LMap.Count), 'MapFileLines empty count = 0');
+end;
+
+procedure TestMapFileLines_CrossValidate;
+var
+  LLines: TStringArray;
+  LMap: IMappedLines;
+  LI: Integer;
+begin
+  LLines := TStringArray.Create('foo', 'bar', 'baz');
+  nextpas.core.fs.WriteFileLines(GTmpDir + '/map_cross.txt', LLines);
+  LLines := nextpas.core.fs.ReadFileLines(GTmpDir + '/map_cross.txt');
+  LMap := nextpas.core.fs.MapFileLines(GTmpDir + '/map_cross.txt');
+  CheckEqual(Int64(Length(LLines)), Int64(LMap.Count),
+    'MapFileLines cross-validate count matches ReadFileLines');
+  for LI := 0 to High(LLines) do
+    CheckEqual(LLines[LI], LMap.Line(LI).ToString,
+      'MapFileLines cross-validate line ' + IntToStr(LI));
+end;
+
+procedure TestMapFileLines_IndexOf;
+var
+  LMap: IMappedLines;
+begin
+  nextpas.core.fs.WriteFileLines(GTmpDir + '/map_indexof.txt',
+    TStringArray.Create('aaa', 'bbb', 'ccc'));
+  LMap := nextpas.core.fs.MapFileLines(GTmpDir + '/map_indexof.txt');
+  CheckEqual(Int64(1), Int64(LMap.IndexOf('bbb')), 'MapFileLines IndexOf finds bbb');
+  CheckEqual(Int64(0), Int64(LMap.IndexOf('aaa')), 'MapFileLines IndexOf finds aaa');
+  CheckEqual(Int64(2), Int64(LMap.IndexOf('ccc')), 'MapFileLines IndexOf finds ccc');
+end;
+
+procedure TestMapFileLines_IndexOfNotFound;
+var
+  LMap: IMappedLines;
+begin
+  nextpas.core.fs.WriteFileLines(GTmpDir + '/map_notfound.txt',
+    TStringArray.Create('aaa', 'bbb'));
+  LMap := nextpas.core.fs.MapFileLines(GTmpDir + '/map_notfound.txt');
+  CheckEqual(Int64(-1), Int64(LMap.IndexOf('zzz')),
+    'MapFileLines IndexOf not found returns -1');
+end;
+
+procedure TestMapFileLines_Contains;
+var
+  LMap: IMappedLines;
+begin
+  nextpas.core.fs.WriteFileLines(GTmpDir + '/map_contains.txt',
+    TStringArray.Create('hello', 'world'));
+  LMap := nextpas.core.fs.MapFileLines(GTmpDir + '/map_contains.txt');
+  Check(LMap.Contains('hello'), 'MapFileLines Contains hello');
+  Check(LMap.Contains('world'), 'MapFileLines Contains world');
+end;
+
+procedure TestMapFileLines_ContainsNotFound;
+var
+  LMap: IMappedLines;
+begin
+  nextpas.core.fs.WriteFileLines(GTmpDir + '/map_contains_not.txt',
+    TStringArray.Create('hello', 'world'));
+  LMap := nextpas.core.fs.MapFileLines(GTmpDir + '/map_contains_not.txt');
+  Check(not LMap.Contains('zzz'), 'MapFileLines Contains not found returns False');
+end;
+
+procedure TestMapFileLines_ErrorPath;
+var
+  LMap: IMappedLines;
+begin
+  LMap := nextpas.core.fs.MapFileLines(GTmpDir + '/nonexistent_map_xyz');
+  CheckEqual(Int64(0), Int64(LMap.Count),
+    'MapFileLines nonexistent file returns count 0');
+end;
+
+{ T3: WriteFileLines / ReadFileLines tests }
+
+procedure TestWriteReadFileLines_Roundtrip;
+var
+  LWritten, LRead: TStringArray;
+begin
+  LWritten := TStringArray.Create('first', 'second', 'third');
+  nextpas.core.fs.WriteFileLines(GTmpDir + '/roundtrip.txt', LWritten);
+  LRead := nextpas.core.fs.ReadFileLines(GTmpDir + '/roundtrip.txt');
+  CheckEqual(Int64(3), Int64(Length(LRead)), 'roundtrip line count');
+  CheckEqual('first', LRead[0], 'roundtrip line 0');
+  CheckEqual('second', LRead[1], 'roundtrip line 1');
+  CheckEqual('third', LRead[2], 'roundtrip line 2');
+end;
+
+procedure TestWriteFileLines_Empty;
+var
+  LWritten, LRead: TStringArray;
+begin
+  LWritten := nil;
+  nextpas.core.fs.WriteFileLines(GTmpDir + '/write_empty.txt', LWritten);
+  LRead := nextpas.core.fs.ReadFileLines(GTmpDir + '/write_empty.txt');
+  CheckEqual(Int64(0), Int64(Length(LRead)), 'WriteFileLines empty array');
+end;
+
+procedure TestWriteFileLines_SingleLine;
+var
+  LRead: TStringArray;
+begin
+  nextpas.core.fs.WriteFileLines(GTmpDir + '/write_single.txt',
+    TStringArray.Create('only'));
+  LRead := nextpas.core.fs.ReadFileLines(GTmpDir + '/write_single.txt');
+  CheckEqual(Int64(1), Int64(Length(LRead)), 'WriteFileLines single line count');
+  CheckEqual('only', LRead[0], 'WriteFileLines single line content');
+end;
+
+procedure TestWriteFileLines_Unicode;
+var
+  LWritten, LRead: TStringArray;
+begin
+  LWritten := TStringArray.Create('hello', '日本語', 'émoji 🎉');
+  nextpas.core.fs.WriteFileLines(GTmpDir + '/write_unicode.txt', LWritten);
+  LRead := nextpas.core.fs.ReadFileLines(GTmpDir + '/write_unicode.txt');
+  CheckEqual(Int64(3), Int64(Length(LRead)), 'Unicode line count');
+  CheckEqual('hello', LRead[0], 'Unicode line 0');
+  CheckEqual('日本語', LRead[1], 'Unicode line 1');
+  CheckEqual('émoji 🎉', LRead[2], 'Unicode line 2');
+end;
+
+procedure TestWriteFileLines_NativeLineEnding;
+var
+  LRaw: TBytes;
+  LFoundLF: Boolean;
+  LFoundCRLF: Boolean;
+  LI: Integer;
+begin
+  nextpas.core.fs.WriteFileLines(GTmpDir + '/write_native.txt',
+    TStringArray.Create('a', 'b'));
+  LRaw := nextpas.core.fs.ReadFile(GTmpDir + '/write_native.txt');
+  LFoundLF := False;
+  LFoundCRLF := False;
+  for LI := 0 to High(LRaw) - 1 do
+    if (LRaw[LI] = 13) and (LRaw[LI + 1] = 10) then
+      LFoundCRLF := True;
+  for LI := 0 to High(LRaw) do
+    if LRaw[LI] = 10 then
+    begin
+      LFoundLF := True;
+      Break;
+    end;
+{$IFDEF NEXTPAS_WINDOWS}
+  Check(LFoundCRLF, 'WriteFileLines uses CRLF on Windows');
+{$ELSE}
+  Check(LFoundLF, 'WriteFileLines uses LF on Unix');
+  Check(not LFoundCRLF, 'WriteFileLines does not use CRLF on Unix');
+{$ENDIF}
+end;
+
+{ T7: fs facade source-contract for ScanFileLines / MapFileLines }
+
+procedure TestScanFileLinesUsesCreateScannerContract;
+var
+  LSource, LImpl, LBody: string;
+  LImplPos: Integer;
+begin
+  LSource := LoadSourceText('src/nextpas.core.fs.pas');
+  LImplPos := Pos('implementation', LSource);
+  Check(LImplPos > 0, 'fs facade ScanFileLines has implementation section');
+  LImpl := Copy(LSource, LImplPos, Length(LSource));
+  LBody := ExtractFunctionBody(LImpl,
+    'function ScanFileLines(const APath: string): IScanner;',
+    'function MapFileLines');
+  CheckContains(LBody, 'CreateScanner',
+    'ScanFileLines uses CreateScanner from io.scanner');
+  CheckContains(LBody, 'FsOpen',
+    'ScanFileLines opens file with FsOpen');
+end;
+
+procedure TestMapFileLinesUsesMmapLinesContract;
+var
+  LSource, LImpl, LBody: string;
+  LImplPos: Integer;
+begin
+  LSource := LoadSourceText('src/nextpas.core.fs.pas');
+  LImplPos := Pos('implementation', LSource);
+  Check(LImplPos > 0, 'fs facade MapFileLines has implementation section');
+  LImpl := Copy(LSource, LImplPos, Length(LSource));
+  LBody := ExtractFunctionBody(LImpl,
+    'function MapFileLines(const APath: string): IMappedLines;',
+    'procedure WriteAtomic');
+  CheckContains(LBody, 'MmapLines',
+    'MapFileLines uses MmapLines from io.mapped');
+end;
+
+procedure TestFsFacadeUsesIOModulesContract;
+var
+  LSource: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.fs.pas');
+  CheckContains(LSource, 'nextpas.core.io.scanner',
+    'fs facade uses io.scanner');
+  CheckContains(LSource, 'nextpas.core.io.mapped',
+    'fs facade uses io.mapped');
+  CheckContains(LSource, 'IScanner = nextpas.core.io.scanner.IScanner',
+    'fs facade re-exports IScanner type');
+  CheckContains(LSource, 'IMappedLines = nextpas.core.io.mapped.IMappedLines',
+    'fs facade re-exports IMappedLines type');
+end;
+
 procedure TestFsWalkDelegatesToPlatformWalker;
 var
   LSource: string;
@@ -1387,8 +1727,8 @@ begin
     T.Run('Remove', @TestRemove);
     T.Run('Remove non-empty dir raises invalid operation',
       @TestRemoveNonEmptyDirRaisesInvalidOperation);
-    T.Run('Remove missing path raises not found',
-      @TestRemoveMissingPathRaisesNotFound);
+    T.Run('Remove missing path returns true',
+      @TestRemoveMissingPathReturnsTrue);
     T.Run('RemoveAll missing path raises not found',
       @TestRemoveAllMissingPathRaisesNotFound);
     T.Run('RemoveAll unsafe root guard raises invalid operation',
@@ -1426,6 +1766,40 @@ begin
     T.Run('PathEnsureSep/PathTrimSep', @TestPathEnsureTrimSep);
     T.Run('SameFileName', @TestSameFileName);
     T.Run('PathJoin long', @TestPathLong);
+
+    { T1: ScanFileLines }
+    T.Run('ScanFileLines basic', @TestScanFileLines_Basic);
+    T.Run('ScanFileLines empty', @TestScanFileLines_Empty);
+    T.Run('ScanFileLines single line', @TestScanFileLines_SingleLine);
+    T.Run('ScanFileLines CRLF', @TestScanFileLines_CRLF);
+    T.Run('ScanFileLines large file', @TestScanFileLines_LargeFile);
+    T.Run('ScanFileLines bytes', @TestScanFileLines_Bytes);
+    T.Run('ScanFileLines error path', @TestScanFileLines_ErrorPath);
+
+    { T2: MapFileLines }
+    T.Run('MapFileLines basic', @TestMapFileLines_Basic);
+    T.Run('MapFileLines empty', @TestMapFileLines_Empty);
+    T.Run('MapFileLines cross-validate', @TestMapFileLines_CrossValidate);
+    T.Run('MapFileLines IndexOf', @TestMapFileLines_IndexOf);
+    T.Run('MapFileLines IndexOf not found', @TestMapFileLines_IndexOfNotFound);
+    T.Run('MapFileLines Contains', @TestMapFileLines_Contains);
+    T.Run('MapFileLines Contains not found', @TestMapFileLines_ContainsNotFound);
+    T.Run('MapFileLines error path', @TestMapFileLines_ErrorPath);
+
+    { T3: WriteFileLines / ReadFileLines }
+    T.Run('WriteReadFileLines roundtrip', @TestWriteReadFileLines_Roundtrip);
+    T.Run('WriteFileLines empty', @TestWriteFileLines_Empty);
+    T.Run('WriteFileLines single line', @TestWriteFileLines_SingleLine);
+    T.Run('WriteFileLines unicode', @TestWriteFileLines_Unicode);
+    T.Run('WriteFileLines native line ending', @TestWriteFileLines_NativeLineEnding);
+
+    { T7: fs facade source-contract }
+    T.Run('ScanFileLines uses CreateScanner contract',
+      @TestScanFileLinesUsesCreateScannerContract);
+    T.Run('MapFileLines uses MmapLines contract',
+      @TestMapFileLinesUsesMmapLinesContract);
+    T.Run('Fs facade uses io.scanner and io.mapped contract',
+      @TestFsFacadeUsesIOModulesContract);
 
     T.Run('Open not found', @TestOpenNotFound);
     T.Run('Close invalid handle raises', @TestCloseInvalidHandleRaises);
