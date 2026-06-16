@@ -335,7 +335,7 @@ type
 
 implementation
 
-uses Windows, nextpas.core.crypto.hash, nextpas.core.tls.errors, nextpas.core.tls.random, nextpas.core.tls.freepascal.context.material, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.sha, nextpas.core.tls.openssl.api.sha3.evp, nextpas.core.tls.openssl.api.blake2;
+uses nextpas.core.crypto.hash, nextpas.core.tls.errors, nextpas.core.tls.random, nextpas.core.tls.freepascal.context.material, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.sha, nextpas.core.tls.openssl.api.sha3.evp, nextpas.core.tls.openssl.api.blake2;
 
 var
   GFactoryLock: TRTLCriticalSection;  // 工厂类的全局锁

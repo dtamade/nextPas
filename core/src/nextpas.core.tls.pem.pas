@@ -31,6 +31,8 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
   nextpas.core.io.intf,
   nextpas.core.fs;
 
@@ -209,7 +211,7 @@ var
 begin
   for I := 0 to High(FBlocks) do
     if FBlocks[I].Headers <> nil then
-      FBlocks[I].Headers.Free;
+      FBlocks[I].Headers := nil;
   inherited Destroy;
 end;
 
@@ -272,7 +274,7 @@ begin
 
   // 提取并处理内容
   try
-    Lines.Text := Copy(FText, ContentStart, ContentEnd - ContentStart);
+    Lines := nextpas.core.text.strings.StringsParseLines(Copy(FText, ContentStart, ContentEnd - ContentStart));
     InHeaders := True;
     HeaderEnded := False;
 
@@ -297,7 +299,8 @@ begin
         (Pos(': ', Line) < 20) then  // 头部名称通常较短
       begin
         // 这是一个头部字段
-        AHeaders.Add(Line);
+        SetLength(AHeaders, Length(AHeaders) + 1);
+        AHeaders[High(AHeaders)] := Line;
       end
       else
       begin
@@ -451,7 +454,7 @@ begin
   // 清除旧数据
   for I := 0 to High(FBlocks) do
     if FBlocks[I].Headers <> nil then
-      FBlocks[I].Headers.Free;
+      FBlocks[I].Headers := nil;
   SetLength(FBlocks, 0);
 
   FText := APEMText;
