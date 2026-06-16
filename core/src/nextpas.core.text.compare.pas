@@ -16,6 +16,7 @@ function TextEndsWith(const AStr, ASuffix: string): Boolean;
 function TextEndsWithI(const AStr, ASuffix: string): Boolean;
 function TextContains(const AStr, ASub: string): Boolean;
 function TextContainsI(const AStr, ASub: string): Boolean;
+function SameText(const A, B: string): Boolean; inline;
 
 implementation
 
@@ -234,6 +235,11 @@ begin
   LFoldedStr := UTF8CaseFoldSimple(AStr);
   LFoldedSub := UTF8CaseFoldSimple(ASub);
   Result := TextContains(LFoldedStr, LFoldedSub);
+end;
+
+function SameText(const A, B: string): Boolean;
+begin
+  Result := TextEqualI(A, B);
 end;
 
 end.
