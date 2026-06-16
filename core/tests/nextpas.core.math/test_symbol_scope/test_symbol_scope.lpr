@@ -4,6 +4,7 @@ program test_symbol_scope;
 
 uses
   nextpas.core.testing,
+  nextpas.core.math.scalar,
   nextpas.core.math,
   nextpas.core.math.trig,
   nextpas.core.simd.mathutil;

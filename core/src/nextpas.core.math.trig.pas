@@ -4,12 +4,8 @@ unit nextpas.core.math.trig;
 
 interface
 
-const
-  PI_VALUE: Double = 3.14159265358979323846;
-  TWO_PI: Double = 6.28318530717958647692;
-  HALF_PI: Double = 1.57079632679489661923;
-  DEG_TO_RAD: Double = 0.01745329251994329577;
-  RAD_TO_DEG: Double = 57.2957795130823208768;
+uses
+  nextpas.core.math.scalar;
 
 function Sin(const AX: Double): Double; overload; inline;
 function Sin(const AX: Single): Single; overload; inline;

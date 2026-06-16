@@ -1,4 +1,4 @@
-PROJECTS := test_api_surface test_facade test_scalar test_symbol_scope test_trig
+PROJECTS := test_api_surface test_facade test_scalar test_symbol_scope test_trig test_vec test_mat test_quat
 
 .PHONY: test clean $(PROJECTS)
 
