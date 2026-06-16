@@ -32,6 +32,45 @@ begin
   Result := False;
 end;
 
+procedure SpawnWithPipes(const APath: PAnsiChar; AArgv: PPAnsiChar;
+  out AProc: TPlatformProcess; out AStdinWrite, AStdoutRead,
+  AStderrRead: PtrInt);
+var
+  LChildStdin: PtrInt;
+  LChildStdout: PtrInt;
+  LChildStderr: PtrInt;
+  LFailStage: TPlatformProcessSpawnStage;
+begin
+  FillChar(AProc, SizeOf(AProc), 0);
+  AStdinWrite := -1;
+  AStdoutRead := -1;
+  AStderrRead := -1;
+  LChildStdin := -1;
+  LChildStdout := -1;
+  LChildStderr := -1;
+  try
+    Check(platform_process_create_pipe(LChildStdin, AStdinWrite) = 0,
+      'create stdin pipe');
+    Check(platform_process_create_pipe(AStdoutRead, LChildStdout) = 0,
+      'create stdout pipe');
+    Check(platform_process_create_pipe(AStderrRead, LChildStderr) = 0,
+      'create stderr pipe');
+    Check(platform_process_spawn_fds(APath, AArgv, nil, nil, LChildStdin,
+      LChildStdout, LChildStderr, AProc, LFailStage) = 0, 'spawn');
+  except
+    platform_process_close_handle(LChildStdin);
+    platform_process_close_handle(LChildStdout);
+    platform_process_close_handle(LChildStderr);
+    platform_process_close_handle(AStdinWrite);
+    platform_process_close_handle(AStdoutRead);
+    platform_process_close_handle(AStderrRead);
+    raise;
+  end;
+  platform_process_close_handle(LChildStdin);
+  platform_process_close_handle(LChildStdout);
+  platform_process_close_handle(LChildStderr);
+end;
+
 procedure TestENOENT;
 var
   Buf: array[0..255] of AnsiChar;
@@ -95,25 +134,27 @@ end;
 procedure TestFatalBehavior;
 var
   Proc: TPlatformProcess;
-  Pipes: TPlatformProcessPipes;
   R: TPlatformProcessResult;
   LArgv: array[0..3] of PAnsiChar;
   LBuf: array[0..255] of AnsiChar;
   LRead: PtrInt;
+  LStdinWrite: PtrInt;
+  LStdoutRead: PtrInt;
+  LStderrRead: PtrInt;
 begin
   LArgv[0] := '/bin/sh';
   LArgv[1] := '-c';
   LArgv[2] := 'echo "fatal: test message" >&2; exit 1';
   LArgv[3] := nil;
-  Check(platform_process_spawn_piped('/bin/sh', @LArgv[0], nil, Proc, Pipes) = 0, 'spawn');
-  nextpas.core.platform.posix.ffi.close(Pipes.StdinWrite);
-  nextpas.core.platform.posix.ffi.close(Pipes.StdoutRead);
+  SpawnWithPipes('/bin/sh', @LArgv[0], Proc, LStdinWrite, LStdoutRead, LStderrRead);
+  platform_process_close_handle(LStdinWrite);
+  platform_process_close_handle(LStdoutRead);
   FillChar(LBuf, SizeOf(LBuf), 0);
-  LRead := nextpas.core.platform.posix.ffi.read(Pipes.StderrRead, @LBuf[0], 256);
+  LRead := nextpas.core.platform.posix.ffi.read(LStderrRead, @LBuf[0], 256);
   Check(LRead > 0, 'stderr has output');
   Check(LBuf[0] = 'f', 'starts with f');
   Check(LBuf[1] = 'a', 'second char a');
-  nextpas.core.platform.posix.ffi.close(Pipes.StderrRead);
+  platform_process_close_handle(LStderrRead);
   platform_process_wait(Proc, R);
   Check(R.ExitCode = 1, 'exit code 1');
 end;

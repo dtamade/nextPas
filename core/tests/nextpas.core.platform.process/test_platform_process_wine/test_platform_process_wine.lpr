@@ -20,6 +20,51 @@ var
 
 {$IFDEF NEXTPAS_WINDOWS}
 
+procedure SpawnWithPipes(const APath: PAnsiChar; AArgv: PPAnsiChar;
+  out AProc: TPlatformProcess; out AStdinWrite, AStdoutRead,
+  AStderrRead: PtrInt);
+var
+  LChildStdin: PtrInt;
+  LChildStdout: PtrInt;
+  LChildStderr: PtrInt;
+  LFailStage: TPlatformProcessSpawnStage;
+begin
+  FillChar(AProc, SizeOf(AProc), 0);
+  AStdinWrite := -1;
+  AStdoutRead := -1;
+  AStderrRead := -1;
+  LChildStdin := -1;
+  LChildStdout := -1;
+  LChildStderr := -1;
+  try
+    Check(platform_process_create_pipe(LChildStdin, AStdinWrite) = 0,
+      'create stdin pipe');
+    Check(platform_process_create_pipe(AStdoutRead, LChildStdout) = 0,
+      'create stdout pipe');
+    Check(platform_process_create_pipe(AStderrRead, LChildStderr) = 0,
+      'create stderr pipe');
+    Check(SetHandleInformation(HANDLE(PtrUInt(AStdinWrite)),
+      HANDLE_FLAG_INHERIT, 0), 'stdin parent handle non-inheritable');
+    Check(SetHandleInformation(HANDLE(PtrUInt(AStdoutRead)),
+      HANDLE_FLAG_INHERIT, 0), 'stdout parent handle non-inheritable');
+    Check(SetHandleInformation(HANDLE(PtrUInt(AStderrRead)),
+      HANDLE_FLAG_INHERIT, 0), 'stderr parent handle non-inheritable');
+    Check(platform_process_spawn_fds(APath, AArgv, nil, nil, LChildStdin,
+      LChildStdout, LChildStderr, AProc, LFailStage) = 0, 'spawn');
+  except
+    platform_process_close_handle(LChildStdin);
+    platform_process_close_handle(LChildStdout);
+    platform_process_close_handle(LChildStderr);
+    platform_process_close_handle(AStdinWrite);
+    platform_process_close_handle(AStdoutRead);
+    platform_process_close_handle(AStderrRead);
+    raise;
+  end;
+  platform_process_close_handle(LChildStdin);
+  platform_process_close_handle(LChildStdout);
+  platform_process_close_handle(LChildStderr);
+end;
+
 { 1. Spawn cmd.exe and wait for it to exit with code 0 }
 procedure TestSpawnAndWait;
 var
@@ -57,29 +102,30 @@ end;
 procedure TestSpawnPipedStdout;
 var
   P: TPlatformProcess;
-  Pipes: TPlatformProcessPipes;
   R: TPlatformProcessResult;
   LArgv: array[0..3] of PAnsiChar;
   LBuf: array[0..255] of AnsiChar;
   LRead: DWORD;
   LTotal: Int32;
+  LStdinWrite: PtrInt;
+  LStdoutRead: PtrInt;
+  LStderrRead: PtrInt;
 begin
   LArgv[0] := 'cmd.exe';
   LArgv[1] := '/c';
   LArgv[2] := 'echo hello_wine';
   LArgv[3] := nil;
-  Check(platform_process_spawn_piped('cmd.exe', @LArgv[0], nil, P, Pipes) = 0, 'spawn piped');
-  Check(Pipes.StdoutRead >= 0, 'stdout pipe valid');
+  SpawnWithPipes('cmd.exe', @LArgv[0], P, LStdinWrite, LStdoutRead, LStderrRead);
+  Check(LStdoutRead >= 0, 'stdout pipe valid');
 
   { Close unused write end of stdin pipe }
-  if Pipes.StdinWrite >= 0 then
-    CloseHandle(HANDLE(PtrUInt(Pipes.StdinWrite)));
+  platform_process_close_handle(LStdinWrite);
 
   LTotal := 0;
   FillChar(LBuf, SizeOf(LBuf), 0);
   while True do
   begin
-    if not ReadFile(HANDLE(PtrUInt(Pipes.StdoutRead)), @LBuf[LTotal],
+    if not ReadFile(HANDLE(PtrUInt(LStdoutRead)), @LBuf[LTotal],
       DWORD(SizeOf(LBuf) - LTotal - 1), @LRead, nil) then
       Break;
     if LRead = 0 then Break;
@@ -91,9 +137,8 @@ begin
   Check(Pos('hello_wine', string(LBuf)) > 0, 'stdout contains hello_wine');
 
   { Close remaining pipe handles }
-  CloseHandle(HANDLE(PtrUInt(Pipes.StdoutRead)));
-  if Pipes.StderrRead >= 0 then
-    CloseHandle(HANDLE(PtrUInt(Pipes.StderrRead)));
+  platform_process_close_handle(LStdoutRead);
+  platform_process_close_handle(LStderrRead);
 
   platform_process_wait(P, R);
   Check(R.ExitCode = 0, 'exit 0');
