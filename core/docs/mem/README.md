@@ -6,13 +6,19 @@ primitives without pulling in higher-layer runtime policy by accident.
 
 ## Stable Surface
 
-The current stable public surface is centered on `IAllocator`:
+The only canonical public allocator contract is `IAllocator`:
 
-- `nextpas.core.mem.intf.IAllocator` is the canonical allocator contract.
+- `nextpas.core.mem.intf.IAllocator` is the canonical allocator contract and
+  the only primary public allocator interface in `nextpas.core.mem`.
 - `nextpas.core.mem.allocator` and `nextpas.core.mem.allocator.base` keep
   compatibility aliases to that same contract.
 - `nextpas.core.mem.DefaultAllocator` returns the process-wide default
   allocator facade.
+- `nextpas.core.mem.alloc.IAlloc`, `TAllocResult`, and `TAllocCaps` stay as
+  legacy layout/result compatibility surface for existing callers. They are not
+  the primary allocator API.
+- `nextpas.core.mem.adapter` stays as a legacy bridge between canonical
+  `IAllocator` call sites and compatibility `IAlloc` call sites.
 - `TAllocResult.ExpectPtr` raises canonical `EOutOfMemory` for
   `aeOutOfMemory`. Capacity exhaustion remains an `EAllocError` with
   `Error = aeCapacityExhausted` and reports `ecResourceExhausted`; it is not an

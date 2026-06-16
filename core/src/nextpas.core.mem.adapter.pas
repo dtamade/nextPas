@@ -7,11 +7,12 @@
     \/_/     \/_/\/_/   \/_/     \/_/\/_/   \/_/     \/_/\/_/  Studio
 
 ```
-# nextpas.core.mem.adapter - 分配器接口适配器
+# nextpas.core.mem.adapter - Legacy allocator bridge
 ## Abstract 摘要
 
-Adapter classes to bridge IAllocator (v1.x) and IAlloc (v2.0) interfaces.
-适配器类，用于桥接 IAllocator (v1.x) 和 IAlloc (v2.0) 接口。
+Legacy adapter classes that bridge canonical IAllocator and compatibility
+IAlloc surfaces.
+遗留适配器类，用于桥接 canonical IAllocator 与兼容层 IAlloc。
 
 ## Declaration 声明
 
@@ -38,11 +39,11 @@ type
   {**
    * TAllocatorToAllocAdapter
    *
-   * @desc 将 IAllocator (v1.x) 适配为 IAlloc (v2.0) 接口
-   *       Adapts IAllocator (v1.x) to IAlloc (v2.0) interface
+   * @desc 将 canonical IAllocator 适配为兼容层 IAlloc
+   *       Adapts canonical IAllocator to the compatibility IAlloc surface
    *
    * @purpose
-   *   - 让旧的 IAllocator 实现可以被新的 IAlloc 代码使用
+   *   - 为仍依赖 layout/result API 的旧调用点保留出口
    *   - 渐进式迁移：无需一次性重写所有分配器
    *
    * @example
@@ -79,12 +80,12 @@ type
   {**
    * TAllocToAllocatorAdapter
    *
-   * @desc 将 IAlloc (v2.0) 适配为 IAllocator (v1.x) 接口
-   *       Adapts IAlloc (v2.0) to IAllocator (v1.x) interface
+   * @desc 将兼容层 IAlloc 适配为 canonical IAllocator
+   *       Adapts compatibility IAlloc to canonical IAllocator
    *
    * @purpose
-   *   - 让新的 IAlloc 实现可以被旧的 IAllocator 代码使用
-   *   - 渐进式迁移：新分配器可以用于旧代码
+   *   - 让遗留 IAlloc 实现继续接入 canonical IAllocator 调用点
+   *   - 渐进式迁移：保留受控兼容桥接
    *
    * @example
    *   var NewAlloc: IAlloc := GetSystemAlloc;
@@ -140,18 +141,21 @@ type
 {**
  * WrapAsAlloc
  *
- * @desc 便捷函数：将 IAllocator 包装为 IAlloc
- *       Convenience function: wrap IAllocator as IAlloc
+ * @desc 兼容出口：将 canonical IAllocator 包装为 legacy IAlloc
+ *       Legacy outlet: wrap canonical IAllocator as compatibility IAlloc
  *}
 function WrapAsAlloc(aAllocator: IAllocator): IAlloc;
 
 {**
  * WrapAsAllocator
  *
- * @desc 便捷函数：将 IAlloc 包装为 IAllocator
- *       Convenience function: wrap IAlloc as IAllocator
+ * @desc 遗留桥接：将 compatibility IAlloc 包装为 canonical IAllocator
+ *       Legacy bridge: wrap compatibility IAlloc as canonical IAllocator
+ *
+ * @note Deprecated. Prefer native IAllocator implementations for new code.
  *}
 function WrapAsAllocator(aAlloc: IAlloc): IAllocator;
+  deprecated 'IAlloc is a legacy compatibility surface; prefer native IAllocator implementations';
 
 {**
  * TraitsToAllocCaps
