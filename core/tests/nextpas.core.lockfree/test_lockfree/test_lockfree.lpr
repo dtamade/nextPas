@@ -4338,6 +4338,14 @@ begin
     'goal tree evidence header must report the current lockfree stress count');
   CheckNotContains(LCoreGoalTree, 'lockfree stress 11/11',
     'goal tree evidence header must not keep stale lockfree stress count');
+  CheckContains(LChannelSource, 'EInvalidOperationError.Create(''TLockFreeChannel.Send: channel closed''',
+    'channel Send on closed must raise EInvalidOperationError');
+  CheckContains(LHashMapSource, 'AtomicExchange32(AShard.Lock, 1, moAcquire)',
+    'hashmap ShardLock must use AtomicExchange with moAcquire');
+  CheckContains(LHazardSource, 'AllocMem(SizeOf(THazardThreadRec))',
+    'hazard RegisterThread must use AllocMem for zero-init');
+  CheckNotContains(LHazardSource, 'AtomicStorePtr(Pointer(FThreads), nil, moRelease)',
+    'hazard UnregisterThread must not blindly nil FThreads');
   CheckNotContains(LCoreGoalTree,
     '| `lockfree` | 无锁 (MPMC/SPSC/MPSC/Stack/Deque) | ✅ 完成/强化中',
     'goal tree must not report lockfree as broad completion without evidence-level truth');
