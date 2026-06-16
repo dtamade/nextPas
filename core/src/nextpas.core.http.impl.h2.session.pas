@@ -98,8 +98,9 @@ type
     FPeerSettingsAcked: Boolean;
     FGoawayReceived: Boolean;
     FGoawaySent: Boolean;
-    FLastPeerStreamID: UInt32;
+    FLastSeenPeerStreamID: UInt32;
     FLastLocalStreamID: UInt32;
+    FPeerGoawayLastLocalStreamID: UInt32;
     FPendingContinuationStreamID: UInt32;
     FShutdownErrorCode: UInt32;
     FReadDeadline: TDeadline;
@@ -501,8 +502,9 @@ begin
   FPeerSettingsAcked := False;
   FGoawayReceived := False;
   FGoawaySent := False;
-  FLastPeerStreamID := 0;
+  FLastSeenPeerStreamID := 0;
   FLastLocalStreamID := 0;
+  FPeerGoawayLastLocalStreamID := 0;
   FPendingContinuationStreamID := 0;
   FShutdownErrorCode := H2_ERR_NO_ERROR;
   FReadDeadline := TDeadline.Infinite;
@@ -782,7 +784,7 @@ begin
   begin
     if not H2ValidateFrame(LFrame, FRemoteSettings.MaxFrameSize, LErrorCode) then
     begin
-      QueueGoaway(FLastPeerStreamID, LErrorCode);
+      QueueGoaway(FLastSeenPeerStreamID, LErrorCode);
       FShutdownErrorCode := LErrorCode;
       FState := h2sesClosed;
       Exit(False);
@@ -889,12 +891,12 @@ begin
   LStreamIndex := FStreams.FindIndex(AFrame.Header.StreamID);
   if LStreamIndex < 0 then
   begin
-    if AFrame.Header.StreamID <= FLastPeerStreamID then
+    if AFrame.Header.StreamID <= FLastSeenPeerStreamID then
       Exit(RejectFrame(AFrame.Header.StreamID, H2_ERR_STREAM_CLOSED, False));
     LStream := FStreams.FindOrCreate(AFrame.Header.StreamID,
       FRemoteSettings.InitialWindowSize, FOptions.InitialStreamWindowSize,
       FConnectionFlow, FDecoder, FLocalSettings.MaxHeaderListSize);
-    FLastPeerStreamID := AFrame.Header.StreamID;
+    FLastSeenPeerStreamID := AFrame.Header.StreamID;
     if (FLocalSettings.MaxConcurrentStreams > 0) and
        (FStreams.ActiveCount >= FLocalSettings.MaxConcurrentStreams) then
     begin
@@ -1112,8 +1114,12 @@ var
 begin
   if not H2DecodeGoaway(AFrame.Payload, LLastStreamID, LErrorCode, LDebugData) then
     Exit(RejectFrame(0, H2_ERR_FRAME_SIZE_ERROR, True));
+  if LLastStreamID > FLastLocalStreamID then
+    Exit(RejectFrame(0, H2_ERR_PROTOCOL_ERROR, True));
+  if FGoawayReceived and (LLastStreamID > FPeerGoawayLastLocalStreamID) then
+    Exit(RejectFrame(0, H2_ERR_PROTOCOL_ERROR, True));
   FGoawayReceived := True;
-  FLastPeerStreamID := LLastStreamID;
+  FPeerGoawayLastLocalStreamID := LLastStreamID;
   FShutdownErrorCode := LErrorCode;
   FState := h2sesShuttingDown;
   Result := True;
@@ -1124,7 +1130,7 @@ function TH2ServerSession.RejectFrame(const AStreamID: UInt32;
 begin
   if AConnectionLevel then
   begin
-    QueueGoaway(FLastPeerStreamID, AErrorCode);
+    QueueGoaway(FLastSeenPeerStreamID, AErrorCode);
     FShutdownErrorCode := AErrorCode;
     FState := h2sesClosed;
   end
@@ -1427,7 +1433,7 @@ begin
     if (FState = h2sesShuttingDown) and (FStreams.ActiveCount = 0) then
     begin
       if not FGoawaySent then
-        StartGracefulShutdown(FLastPeerStreamID, FShutdownErrorCode);
+        StartGracefulShutdown(FLastSeenPeerStreamID, FShutdownErrorCode);
       if not DrainWriteBuffer then
         Break;
       Break;
@@ -1502,7 +1508,7 @@ begin
   if (FState = h2sesShuttingDown) and (FStreams.ActiveCount = 0) then
   begin
     if not FGoawaySent then
-      StartGracefulShutdown(FLastPeerStreamID, FShutdownErrorCode);
+      StartGracefulShutdown(FLastSeenPeerStreamID, FShutdownErrorCode);
     if FWriteBuffer <> '' then
     begin
       ANextEvents := [peWritable];
