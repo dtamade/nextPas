@@ -10,7 +10,8 @@ uses
   nextpas.core.base,
   nextpas.core.math,
   nextpas.core.mem.utils,
-  nextpas.core.mem.allocator,
+  nextpas.core.mem.intf,
+  nextpas.core.mem.default,
   nextpas.core.collections.base,
   nextpas.core.collections.intf,
   nextpas.core.collections.treemap.base,
@@ -280,7 +281,7 @@ begin
   inherited Create;
   FAllocator := aAllocator;
   if FAllocator = nil then
-    FAllocator := GetRtlAllocator;
+    FAllocator := DefaultAllocator;
 
   FElementManager := TElementManagerType.Create(FAllocator);
   InitTree;
@@ -1068,7 +1069,7 @@ begin
     raise EArgumentNil.Create('TTreeMap.AfterConstruction: compare function cannot be nil');
 
   if FAllocator = nil then
-    FAllocator := GetRtlAllocator;
+    FAllocator := DefaultAllocator;
 
   FTree := TRedBlackTreeType.Create(FAllocator, LCompare);
   FComparer := nil;

@@ -11,7 +11,8 @@ uses
   nextpas.core.collections.intf,
   nextpas.core.collections.tree_set.intf,
   nextpas.core.collections.tree.rb,
-  nextpas.core.mem.allocator;
+  nextpas.core.mem.intf,
+  nextpas.core.mem.default;
 
 type
   generic TTreeSet<T> = class(specialize TGenericCollection<T>, specialize ITreeSet<T>)
@@ -209,7 +210,7 @@ end;
 
 constructor TTreeSet.Create;
 begin
-  Create(GetRtlAllocator(), nil);
+  Create(DefaultAllocator(), nil);
 end;
 
 constructor TTreeSet.Create(aAllocator: IAllocator);

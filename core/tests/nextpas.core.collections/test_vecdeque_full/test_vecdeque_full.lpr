@@ -9,7 +9,8 @@ uses
   nextpas.core.collections.base,
   nextpas.core.collections.vecdeque.base,
   nextpas.core.collections.vecdeque,
-  nextpas.core.mem.allocator;
+  nextpas.core.mem.intf,
+  nextpas.core.mem.default;
 
 type
   TVecDequeInt = specialize TVecDeque<Integer>;
@@ -913,7 +914,7 @@ begin
   try
     Check(LD.GetData = nil, 'Default data should be nil');
       LData := Pointer(PtrUInt($12345678));
-      LVecDeque := TVecDequeInt.Create(GetRtlAllocator(), LData);
+      LVecDeque := TVecDequeInt.Create(DefaultAllocator(), LData);
       try
         Check(LVecDeque.GetData = LData, 'GetData should return constructor data pointer');
       finally

@@ -8,7 +8,8 @@ uses
   nextpas.core.base,
   nextpas.core.math,
   nextpas.core.mem.utils,
-  nextpas.core.mem.allocator,
+  nextpas.core.mem.intf,
+  nextpas.core.mem.default,
   nextpas.core.collections.base,
   nextpas.core.collections.lrucache.base,
   nextpas.core.collections.lrucache.intf,
@@ -111,7 +112,7 @@ begin
   FMissCount := 0;
   FAllocator := aAllocator;
   if FAllocator = nil then
-    FAllocator := GetRtlAllocator;
+    FAllocator := DefaultAllocator;
 
   FHashFunc := aHash;
   FEqualsFunc := aEquals;
