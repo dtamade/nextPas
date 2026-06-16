@@ -4,7 +4,7 @@ program test_memory_map_compile_gate;
 
 uses
   nextpas.core.mem.allocator,
-  nextpas.core.mem.allocator.mmap,
+  nextpas.core.mem.allocator.memory_map_allocator,
   nextpas.core.mem.memory_map;
 
 var

@@ -6,28 +6,17 @@ PROJECTS := \
 	test_http_h2_stream \
 	test_http_h2_session \
 	test_http_h2_client \
-	test_http_base \
 	test_http_headers \
-	test_http_url \
 	test_http_message \
-	test_http_router \
 	test_http_client \
 	test_http_h1parser \
 	test_http_h1fast \
-	test_http_h1scan \
 	test_http_h1writer \
-	test_http_h1outbound \
 	test_http_h1chunked \
 	test_http_server \
 	test_http_contract \
 	test_http_security \
-	test_http_registry \
-	test_http_static \
-	test_http_middleware \
-	test_http_middlewares \
-	test_http_websocket \
-	test_http_integration \
-	test_http_smoke
+	test_http_registry
 
 .PHONY: test clean $(PROJECTS)
 

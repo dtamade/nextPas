@@ -4,6 +4,7 @@ program bench_riscvv_vs_scalar;
 {$CODEPAGE UTF8}
 
 uses
+  SysUtils,
   nextpas.core.simd,
   nextpas.core.simd.base,
   nextpas.core.simd.dispatch,

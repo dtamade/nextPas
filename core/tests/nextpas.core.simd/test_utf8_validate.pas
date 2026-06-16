@@ -3,7 +3,7 @@ program test_utf8_validate;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.text.conv,
+  SysUtils,
   nextpas.core.simd.base,
   nextpas.core.simd.dispatch;
 

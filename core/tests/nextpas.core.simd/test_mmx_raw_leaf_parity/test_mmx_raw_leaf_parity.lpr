@@ -3,6 +3,7 @@ program test_mmx_raw_leaf_parity;
 
 uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
+  SysUtils,
   nextpas.core.simd.intrinsics.mmx;
 
 type

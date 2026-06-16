@@ -10,7 +10,7 @@ uses
   {$IFDEF WINDOWS}
   Windows,
   {$ENDIF}
-  nextpas.core.text.conv, Math,
+  SysUtils, Math,
   nextpas.core.simd,
   nextpas.core.simd.base,
   nextpas.core.simd.dispatch;
@@ -21,14 +21,6 @@ const
 
 var
   Src1, Src2, Dst: array[0..N-1] of Single;
-
-function BoolToYesNo(const AValue: Boolean): string; inline;
-begin
-  if AValue then
-    Result := 'YES'
-  else
-    Result := 'NO';
-end;
 
 function GetTimeUs: Int64;
 {$IFDEF UNIX}
@@ -182,9 +174,9 @@ begin
 
   // CPU feature detection
   WriteLn('CPU Feature Detection:');
-  WriteLn('  SSE2:    ', BoolToYesNo(IsBackendRegistered(sbSSE2)));
-  WriteLn('  AVX2:    ', BoolToYesNo(IsBackendRegistered(sbAVX2)));
-  WriteLn('  AVX-512: ', BoolToYesNo(IsBackendRegistered(sbAVX512)));
+  WriteLn('  SSE2:    ', BoolToStr(IsBackendRegistered(sbSSE2), 'YES', 'NO'));
+  WriteLn('  AVX2:    ', BoolToStr(IsBackendRegistered(sbAVX2), 'YES', 'NO'));
+  WriteLn('  AVX-512: ', BoolToStr(IsBackendRegistered(sbAVX512), 'YES', 'NO'));
   WriteLn('');
 
   if not IsBackendRegistered(sbAVX512) then

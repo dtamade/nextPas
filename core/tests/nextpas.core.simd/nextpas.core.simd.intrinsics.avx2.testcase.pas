@@ -7,8 +7,7 @@ unit nextpas.core.simd.intrinsics.avx2.testcase;
 interface
 
 uses
-  nextpas.core.exception,
-  nextpas.core.text.conv,
+  SysUtils,
   fpcunit, testregistry,
   nextpas.core.errors,
   nextpas.core.simd.intrinsics.base,

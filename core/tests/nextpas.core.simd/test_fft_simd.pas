@@ -4,7 +4,7 @@ program test_fft_simd;
 {$I nextpas.core.simd.settings.inc}
 
 uses
-  nextpas.core.text.conv, Math,
+  SysUtils, Math,
   nextpas.core.simd,
   nextpas.core.simd.alloc,
   nextpas.core.simd.mathutil,

@@ -26,11 +26,13 @@ type
     FReallocateCalls: SizeUInt;
   public
     constructor Create(const AFailOnReallocateCall: SizeUInt);
+    function Allocate(const ASize: SizeUInt): Pointer;
+    function Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
+    procedure Deallocate(const APtr: Pointer);
     function GetMem(aSize: SizeUInt): Pointer;
     function AllocMem(aSize: SizeUInt): Pointer;
     function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
     procedure FreeMem(aDst: Pointer);
-    function MemSize(aPtr: Pointer): SizeUInt;
     function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
     procedure FreeAligned(aPtr: Pointer);
     function Traits: TAllocatorTraits;
@@ -42,11 +44,13 @@ type
     FAllocateCalls: SizeUInt;
   public
     constructor Create(const AFailOnAllocateCall: SizeUInt);
+    function Allocate(const ASize: SizeUInt): Pointer;
+    function Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
+    procedure Deallocate(const APtr: Pointer);
     function GetMem(aSize: SizeUInt): Pointer;
     function AllocMem(aSize: SizeUInt): Pointer;
     function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
     procedure FreeMem(aDst: Pointer);
-    function MemSize(aPtr: Pointer): SizeUInt;
     function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
     procedure FreeAligned(aPtr: Pointer);
     function Traits: TAllocatorTraits;
@@ -58,6 +62,22 @@ begin
   inherited Create;
   FFailOnReallocateCall := AFailOnReallocateCall;
   FReallocateCalls := 0;
+end;
+
+function TFailingReallocateAllocator.Allocate(const ASize: SizeUInt): Pointer;
+begin
+  Result := GetMem(ASize);
+end;
+
+function TFailingReallocateAllocator.Reallocate(const APtr: Pointer;
+  const ANewSize: SizeUInt): Pointer;
+begin
+  Result := ReallocMem(APtr, ANewSize);
+end;
+
+procedure TFailingReallocateAllocator.Deallocate(const APtr: Pointer);
+begin
+  FreeMem(APtr);
 end;
 
 function TFailingReallocateAllocator.GetMem(aSize: SizeUInt): Pointer;
@@ -97,11 +117,6 @@ begin
     System.FreeMem(aDst);
 end;
 
-function TFailingReallocateAllocator.MemSize(aPtr: Pointer): SizeUInt;
-begin
-  Result := 0;
-end;
-
 function TFailingReallocateAllocator.AllocAligned(aSize,
   aAlignment: SizeUInt): Pointer;
 begin
@@ -127,6 +142,22 @@ begin
   inherited Create;
   FFailOnAllocateCall := AFailOnAllocateCall;
   FAllocateCalls := 0;
+end;
+
+function TFailingAllocateAllocator.Allocate(const ASize: SizeUInt): Pointer;
+begin
+  Result := GetMem(ASize);
+end;
+
+function TFailingAllocateAllocator.Reallocate(const APtr: Pointer;
+  const ANewSize: SizeUInt): Pointer;
+begin
+  Result := ReallocMem(APtr, ANewSize);
+end;
+
+procedure TFailingAllocateAllocator.Deallocate(const APtr: Pointer);
+begin
+  FreeMem(APtr);
 end;
 
 function TFailingAllocateAllocator.GetMem(aSize: SizeUInt): Pointer;
@@ -166,11 +197,6 @@ procedure TFailingAllocateAllocator.FreeMem(aDst: Pointer);
 begin
   if aDst <> nil then
     System.FreeMem(aDst);
-end;
-
-function TFailingAllocateAllocator.MemSize(aPtr: Pointer): SizeUInt;
-begin
-  Result := 0;
 end;
 
 function TFailingAllocateAllocator.AllocAligned(aSize,
@@ -853,19 +879,19 @@ begin
     'document tracks initialized state');
   CheckSourceContains(LSource, 'if not finited then',
     'done must guard uninited records');
-  CheckSourceContains(LSource, 'lptr := fallocator.getmem(fnodecap * sizeof(ttomlnode));',
+  CheckSourceContains(LSource, 'lptr := fallocator.allocate(fnodecap * sizeof(ttomlnode));',
     'init must stage node allocation');
   CheckSourceContains(LSource, 'if lptr = nil then',
     'init must guard node allocation');
-  CheckSourceContains(LSource, 'lnewbufs := ppointer(fallocator.reallocmem(pointer(fownedbufs), lnewcap * sizeof(pointer)));',
+  CheckSourceContains(LSource, 'lnewbufs := ppointer(fallocator.reallocate(pointer(fownedbufs), lnewcap * sizeof(pointer)));',
     'owned buffer growth must stage reallocate');
-  CheckSourceContains(LSource, 'lnewnodes := fallocator.reallocmem(fnodes, lnewcap * sizeof(ttomlnode));',
+  CheckSourceContains(LSource, 'lnewnodes := fallocator.reallocate(fnodes, lnewcap * sizeof(ttomlnode));',
     'node growth must stage reallocate');
-  CheckSourceContains(LSource, 'lhashbuckets := fallocator.getmem(lcap * sizeof(uint32));',
+  CheckSourceContains(LSource, 'lhashbuckets := fallocator.allocate(lcap * sizeof(uint32));',
     'hash index buckets must stage allocation');
-  CheckSourceContains(LSource, 'lbuf := doc^.fallocator.getmem(lbuflen);',
+  CheckSourceContains(LSource, 'lbuf := doc^.fallocator.allocate(lbuflen);',
     'basic string unescape buffer must stage allocation');
-  CheckSourceContains(LSource, 'lbuf := doc^.fallocator.getmem(lbuflen + 1);',
+  CheckSourceContains(LSource, 'lbuf := doc^.fallocator.allocate(lbuflen + 1);',
     'multi-line string buffers must stage allocation');
 end;
 

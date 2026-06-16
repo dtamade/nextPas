@@ -288,3 +288,16 @@ begin
 end;
 
 end.
+
+function platform_env_get_str(const AName: PAnsiChar): AnsiString;
+var
+  LLen: Int32;
+begin
+  Result := '';
+  if platform_env_get(AName, nil, 0, LLen) <> 0 then
+    Exit;
+  if LLen <= 0 then
+    Exit;
+  SetLength(Result, LLen);
+  platform_env_get(AName, PAnsiChar(Result), LLen + 1, LLen);
+end;

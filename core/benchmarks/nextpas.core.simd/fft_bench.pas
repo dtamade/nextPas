@@ -4,8 +4,7 @@ program fft_bench;
 {$I nextpas.core.simd.settings.inc}
 
 uses
-  Math, Unix, BaseUnix,
-  nextpas.core.text.conv,
+  SysUtils, Math, Unix, BaseUnix,
   nextpas.core.simd,
   nextpas.core.simd.alloc,
   nextpas.core.simd.signal;

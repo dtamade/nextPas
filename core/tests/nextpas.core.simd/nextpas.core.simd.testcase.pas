@@ -12,8 +12,7 @@ unit nextpas.core.simd.testcase;
 interface
 
 uses
-  Classes, Math, nextpas.core.base, nextpas.core.exception, nextpas.core.math,
-  nextpas.core.text.conv, fpcunit, testregistry,
+  Classes, SysUtils, Math, nextpas.core.base, nextpas.core.math, fpcunit, testregistry,
   nextpas.core.simd,
   nextpas.core.simd.base,
   nextpas.core.simd.fixturehelpers,

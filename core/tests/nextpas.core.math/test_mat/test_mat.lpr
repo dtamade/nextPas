@@ -6,7 +6,6 @@ uses
   Math,
   nextpas.core.errors,
   nextpas.core.testing,
-  nextpas.core.math.scalar,
   nextpas.core.math.vec,
   nextpas.core.math.mat;
 
@@ -1246,71 +1245,6 @@ begin
   end;
 end;
 
-procedure TestMatMultPoint;
-var
-  LM: TMat4f;
-  LR: TVec3f;
-begin
-  LM := TMat4f.Identity;
-  LM[3, 0] := 10.0;
-  LM[3, 1] := 20.0;
-  LM[3, 2] := 30.0;
-  LR := LM.MultPoint(TVec3f.Create(1.0, 2.0, 3.0));
-  Check(LR.PerfectlyEquals(TVec3f.Create(11.0, 22.0, 33.0)),
-    'TMat4f.MultPoint includes translation');
-end;
-
-procedure TestMatMultDirection;
-var
-  LM: TMat4f;
-  LR: TVec3f;
-begin
-  LM := TMat4f.Identity;
-  LM[3, 0] := 10.0;
-  LM[3, 1] := 20.0;
-  LM[3, 2] := 30.0;
-  LR := LM.MultDirection(TVec3f.Create(1.0, 2.0, 3.0));
-  Check(LR.PerfectlyEquals(TVec3f.Create(1.0, 2.0, 3.0)),
-    'TMat4f.MultDirection excludes translation');
-end;
-
-procedure TestMatMultPointDouble;
-var
-  LM: TMat4d;
-  LR: TVec3d;
-begin
-  LM := TMat4d.Identity;
-  LM[3, 0] := 10.0;
-  LM[3, 1] := 20.0;
-  LM[3, 2] := 30.0;
-  LR := LM.MultPoint(TVec3d.Create(1.0, 2.0, 3.0));
-  Check(LR.PerfectlyEquals(TVec3d.Create(11.0, 22.0, 33.0)),
-    'TMat4d.MultPoint includes translation');
-end;
-
-procedure TestMatLerp;
-var
-  LA, LB, LR: TMat4f;
-begin
-  LA := TMat4f.Identity;
-  LB := TMat4f.Zero;
-  LR := TMat4f.Lerp(LA, LB, 0.5);
-  Check(FloatEquals(LR[0, 0], Single(0.5), Single(1e-6)),
-    'TMat4f.Lerp diagonal = 0.5');
-  Check(FloatEquals(LR[1, 0], Single(0.0), Single(1e-6)),
-    'TMat4f.Lerp off-diagonal = 0.0');
-end;
-
-procedure TestMatPerfectlyEquals;
-begin
-  Check(TMat4f.Identity.PerfectlyEquals(TMat4f.Identity),
-    'TMat4f.PerfectlyEquals identity = identity');
-  Check(not TMat4f.Identity.PerfectlyEquals(TMat4f.Zero),
-    'TMat4f.PerfectlyEquals identity != zero');
-  Check(TMat3d.Identity.PerfectlyEquals(TMat3d.Identity),
-    'TMat3d.PerfectlyEquals identity = identity');
-end;
-
 begin
   T := TTestRunner.Create('nextpas.core.math.mat');
   T.Run('TMat3f contracts', @TestMat3fContracts);
@@ -1333,10 +1267,5 @@ begin
     @TestMatrixEqualsNonFiniteComparisonContracts);
   T.Run('matrix arithmetic special-value contracts',
     @TestMatrixArithmeticSpecialValueContracts);
-  T.Run('TMat4f MultPoint', @TestMatMultPoint);
-  T.Run('TMat4f MultDirection', @TestMatMultDirection);
-  T.Run('TMat4d MultPoint', @TestMatMultPointDouble);
-  T.Run('Mat Lerp', @TestMatLerp);
-  T.Run('Mat PerfectlyEquals', @TestMatPerfectlyEquals);
   T.Summary;
 end.

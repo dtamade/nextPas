@@ -10,8 +10,7 @@ uses
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
   nextpas.core.tui.widget.intf,
-  nextpas.core.testing,
-  nextpas.core.errors;
+  nextpas.core.testing;
 
 type
   { 最小 stub widget：用单字符填满区域，验证 IWidget 契约可实现可调用 }
@@ -112,7 +111,7 @@ begin
   try
     TWidgetAdapter.Create(nil);
   except
-    on E: EArgumentError do
+    on E: EArgumentException do
     begin
       LCaught := True;
       Check(Pos('render function', E.Message) > 0, 'adapter error message names render function');

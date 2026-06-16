@@ -10,7 +10,7 @@ interface
 
 uses
   Math,
-  Classes, nextpas.core.exception, nextpas.core.math, fpcunit, testregistry,
+  Classes, SysUtils, nextpas.core.math, fpcunit, testregistry,
   nextpas.core.simd,
   nextpas.core.simd.testcase,
   nextpas.core.simd.base,

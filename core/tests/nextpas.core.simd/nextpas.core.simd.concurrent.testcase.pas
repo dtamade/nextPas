@@ -22,7 +22,7 @@ uses
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
-  Classes, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.time.cpu, Math,
+  Classes, SysUtils, Math,
   fpcunit, testregistry,
   nextpas.core.simd,
   nextpas.core.simd.testcase,
@@ -638,7 +638,7 @@ end;
 function DescribeBackendInfoLocal(const aInfo: TSimdBackendInfo): string;
 begin
   Result := Format('backend=%s available=%s caps=%d priority=%d name=%s',
-    [ConcurrentBackendName(aInfo.Backend), BoolToStr(aInfo.Available),
+    [ConcurrentBackendName(aInfo.Backend), BoolToStr(aInfo.Available, True),
      CapabilitiesToAbiBitsLocal(aInfo.Capabilities), aInfo.Priority, aInfo.Name]);
 end;
 
@@ -1242,7 +1242,7 @@ begin
       if LCurrent <> LExpected then
       begin
         FErrorMsg := Format('toggle mismatch at iter %d: expected=%s got=%s',
-          [LIndex, BoolToStr(LExpected), BoolToStr(LCurrent)]);
+          [LIndex, BoolToStr(LExpected, True), BoolToStr(LCurrent, True)]);
         Exit;
       end;
 
@@ -1593,7 +1593,7 @@ begin
       if (LIndex and 1) = 0 then
         ThreadSwitch;
 
-      LNameText := AnsiString(string(LNamePtr));
+      LNameText := AnsiString(StrPas(LNamePtr));
       if (LNameText <> FExpectedNameA) and (LNameText <> FExpectedNameB) then
       begin
         FErrorMsg := Format(
@@ -1612,7 +1612,7 @@ begin
       if (LIndex and 1) = 0 then
         ThreadSwitch;
 
-      LDescriptionText := AnsiString(string(LDescriptionPtr));
+      LDescriptionText := AnsiString(StrPas(LDescriptionPtr));
       if (LDescriptionText <> FExpectedDescriptionA) and
          (LDescriptionText <> FExpectedDescriptionB) then
       begin
@@ -1810,14 +1810,14 @@ begin
           'backend ops mixed snapshot at iter %d: info=(%s) add=[A:%s B:%s] mul=[A:%s B:%s] addi=[A:%s B:%s] select=[A:%s B:%s]',
           [LIndex,
            DescribeBackendInfoLocal(LObservedTable.BackendInfo),
-           BoolToStr(Pointer(LObservedTable.AddF32x4) = Pointer(FExpectedTableA.AddF32x4)),
-           BoolToStr(Pointer(LObservedTable.AddF32x4) = Pointer(FExpectedTableB.AddF32x4)),
-           BoolToStr(Pointer(LObservedTable.MulF32x4) = Pointer(FExpectedTableA.MulF32x4)),
-           BoolToStr(Pointer(LObservedTable.MulF32x4) = Pointer(FExpectedTableB.MulF32x4)),
-           BoolToStr(Pointer(LObservedTable.AddI32x4) = Pointer(FExpectedTableA.AddI32x4)),
-           BoolToStr(Pointer(LObservedTable.AddI32x4) = Pointer(FExpectedTableB.AddI32x4)),
-           BoolToStr(Pointer(LObservedTable.SelectF32x4) = Pointer(FExpectedTableA.SelectF32x4)),
-           BoolToStr(Pointer(LObservedTable.SelectF32x4) = Pointer(FExpectedTableB.SelectF32x4))]);
+           BoolToStr(Pointer(LObservedTable.AddF32x4) = Pointer(FExpectedTableA.AddF32x4), True),
+           BoolToStr(Pointer(LObservedTable.AddF32x4) = Pointer(FExpectedTableB.AddF32x4), True),
+           BoolToStr(Pointer(LObservedTable.MulF32x4) = Pointer(FExpectedTableA.MulF32x4), True),
+           BoolToStr(Pointer(LObservedTable.MulF32x4) = Pointer(FExpectedTableB.MulF32x4), True),
+           BoolToStr(Pointer(LObservedTable.AddI32x4) = Pointer(FExpectedTableA.AddI32x4), True),
+           BoolToStr(Pointer(LObservedTable.AddI32x4) = Pointer(FExpectedTableB.AddI32x4), True),
+           BoolToStr(Pointer(LObservedTable.SelectF32x4) = Pointer(FExpectedTableA.SelectF32x4), True),
+           BoolToStr(Pointer(LObservedTable.SelectF32x4) = Pointer(FExpectedTableB.SelectF32x4), True)]);
         Exit;
       end;
     end;

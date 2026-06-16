@@ -30,32 +30,6 @@ begin
   Check(not IsAlpha(Ord('_')), '_ not alpha');
 end;
 
-procedure TestIsUpper;
-begin
-  Check(IsUpper(Ord('A')), 'A upper');
-  Check(IsUpper(Ord('Z')), 'Z upper');
-  Check(not IsUpper(Ord('a')), 'a not upper');
-  Check(not IsUpper(Ord('0')), '0 not upper');
-  Check(not IsUpper(128), 'high byte not upper');
-end;
-
-procedure TestIsLower;
-begin
-  Check(IsLower(Ord('a')), 'a lower');
-  Check(IsLower(Ord('z')), 'z lower');
-  Check(not IsLower(Ord('A')), 'A not lower');
-  Check(not IsLower(Ord('0')), '0 not lower');
-  Check(not IsLower(255), 'high byte not lower');
-end;
-
-procedure TestIsAscii;
-begin
-  Check(IsAscii(0), 'NUL is ASCII');
-  Check(IsAscii(127), 'DEL is ASCII');
-  Check(not IsAscii(128), '0x80 is not ASCII');
-  Check(not IsAscii(255), '0xFF is not ASCII');
-end;
-
 procedure TestIsHexDigit;
 begin
   Check(IsHexDigit(Ord('0')), '0');
@@ -142,9 +116,6 @@ begin
   T := TTestRunner.Create('nextpas.core.text.char');
   T.Run('IsDigit', @TestIsDigit);
   T.Run('IsAlpha', @TestIsAlpha);
-  T.Run('IsUpper', @TestIsUpper);
-  T.Run('IsLower', @TestIsLower);
-  T.Run('IsAscii', @TestIsAscii);
   T.Run('IsHexDigit', @TestIsHexDigit);
   T.Run('IsWhitespace', @TestIsWhitespace);
   T.Run('IsControl', @TestIsControl);

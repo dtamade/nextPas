@@ -9,7 +9,7 @@ unit nextpas.core.simd.vecu32x8.testcase;
 interface
 
 uses
-  Classes, nextpas.core.exception, nextpas.core.text.conv, fpcunit, testregistry,
+  Classes, SysUtils, fpcunit, testregistry,
   nextpas.core.simd,
   nextpas.core.simd.testcase,
   nextpas.core.simd.base;
@@ -523,9 +523,8 @@ begin
     for i := 0 to 7 do
       AssertEquals('U32x8 Sub underflow wraps to max [' + IntToStr(i) + ']', UInt32($FFFFFFFF), r.u[i]);
   except
-    on E: Exception do
-      if E.ClassName <> 'ERangeError' then
-        raise;
+    on E: ERangeError do
+      ; // 忽略: 项目启用了范围检查，跳过此测试
   end;
 end;
 {$POP}

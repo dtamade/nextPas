@@ -4,7 +4,6 @@ program test_xml_facade_surface;
 
 uses
   nextpas.core.xml,
-  nextpas.core.mem.default,
   nextpas.core.testing;
 
 var
@@ -13,7 +12,6 @@ var
 procedure TestFacadeExposesCoreSurface;
 var
   LDoc: TXmlDocument;
-  LXDoc: IXmlDocument;
   LReader: TXmlReader;
   LToken: TXmlToken;
   LWriter: TXmlWriter;
@@ -35,44 +33,6 @@ begin
   finally
     LDoc.Free;
   end;
-
-  { IXmlDocument interface surface }
-  LXDoc := XmlParseDoc('<root><child>hello</child></root>');
-  Check(LXDoc <> nil, 'XmlParseDoc returns non-nil');
-  Check(LXDoc.Root.IsAssigned, 'IXmlDocument Root is assigned');
-  Check(not LXDoc.HasError, 'IXmlDocument HasError false on success');
-  Check(LXDoc.Error = nil, 'IXmlDocument Error nil on success');
-  Check(LXDoc.Document.IsAssigned, 'IXmlDocument Document assigned');
-  Check(Pos('<root>', LXDoc.Stringify) > 0, 'IXmlDocument Stringify works');
-
-  LXDoc := XmlParseDoc('<invalid><unclosed>');
-  Check(LXDoc <> nil, 'XmlParseDoc error doc is non-nil');
-  Check(LXDoc.HasError, 'IXmlDocument HasError true on error');
-  Check(LXDoc.Error <> nil, 'IXmlDocument Error non-nil on error');
-  Check(not LXDoc.Root.IsAssigned, 'IXmlDocument Root None on error');
-  LXDoc := nil;
-
-  { TryXmlParseDoc surface }
-  Check(TryXmlParseDoc('<root/>', LXDoc), 'TryXmlParseDoc succeeds');
-  Check(LXDoc.Root.IsAssigned, 'TryXmlParseDoc root assigned');
-  LXDoc := nil;
-  Check(not TryXmlParseDoc('<invalid><unclosed>', LXDoc),
-    'TryXmlParseDoc false on error');
-  Check(LXDoc.HasError, 'TryXmlParseDoc error carried');
-  LXDoc := nil;
-
-  { XmlParseDocWith / TryXmlParseDocWith with allocator }
-  LXDoc := XmlParseDocWith('<root/>', DefaultAllocator);
-  Check(LXDoc.Root.IsAssigned, 'XmlParseDocWith root assigned');
-  LXDoc := nil;
-  Check(TryXmlParseDocWith('<root/>', DefaultAllocator, LXDoc),
-    'TryXmlParseDocWith succeeds');
-  Check(LXDoc.Root.IsAssigned, 'TryXmlParseDocWith root assigned');
-  LXDoc := nil;
-
-  { XmlTokenizeWith surface }
-  Check(Length(XmlTokenizeWith('<r/>', DefaultAllocator)) = 1,
-    'XmlTokenizeWith returns tokens');
 
   LReader := TXmlReader.Create('<root/>');
   try

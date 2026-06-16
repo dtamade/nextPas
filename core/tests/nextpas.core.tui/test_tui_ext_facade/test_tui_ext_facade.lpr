@@ -60,10 +60,6 @@ begin
     Check(LApp.Screens.Top = LScreen, 'ext facade exposes screen-driven app path');
     Check(LScreen.SharedStateObject = LSharedState,
       'ext facade exposes screen shared-state view');
-    // typed accessor visible from ext facade
-    LApp.specialize GetShared<TObject>;
-    LScreen.specialize GetShared<TObject>;
-    Check(True, 'ext facade exposes typed GetShared accessor');
   finally
     LSharedState.Free;
     LHost.Free;

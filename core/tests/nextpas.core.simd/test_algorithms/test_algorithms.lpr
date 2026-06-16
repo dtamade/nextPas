@@ -4,7 +4,7 @@ program test_algorithms;
 
 uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
-  Classes,
+  Classes, SysUtils,
   fpcunit, testregistry, consoletestrunner,
   nextpas.core.simd,
   nextpas.core.simd.algorithms.testcase;

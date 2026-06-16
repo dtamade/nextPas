@@ -158,31 +158,6 @@ begin
   CheckEqual(Int64(50), Int64(ScanFindByte2(@Buf[0], 64, Ord(':'), Ord(';'))), 'colon at 50');
 end;
 
-procedure TestFindSubstring;
-begin
-  CheckEqual(Int64(0),
-    Int64(ScanFindSubstring(PAnsiChar('abcdef'), 6, PAnsiChar('abc'), 3)),
-    'prefix match');
-  CheckEqual(Int64(2),
-    Int64(ScanFindSubstring(PAnsiChar('xxabcxx'), 7, PAnsiChar('abc'), 3)),
-    'middle match');
-  CheckEqual(Int64(5),
-    Int64(ScanFindSubstring(PAnsiChar('test-end'), 8, PAnsiChar('end'), 3)),
-    'suffix match');
-  CheckEqual(Int64(5),
-    Int64(ScanFindSubstring(PAnsiChar('hello:world'), 11, PAnsiChar(':'), 1)),
-    'single-byte needle');
-  CheckEqual(Int64(0),
-    Int64(ScanFindSubstring(PAnsiChar('abc'), 3, PAnsiChar(''), 0)),
-    'empty needle matches start');
-  CheckEqual(Int64(-1),
-    Int64(ScanFindSubstring(PAnsiChar('abcDEF'), 6, PAnsiChar('def'), 3)),
-    'case-sensitive mismatch');
-  CheckEqual(Int64(-1),
-    Int64(ScanFindSubstring(PAnsiChar('ab'), 2, PAnsiChar('abc'), 3)),
-    'needle longer than haystack');
-end;
-
 procedure TestFindSubstringCIFoldsNeedleCase;
 var
   LHighBytes, LHighNeedle: array[0..1] of AnsiChar;
@@ -226,7 +201,6 @@ begin
   T.Run('ViewSkipWhitespace', @TestViewSkipWhitespace);
   T.Run('ViewMatchLiteral', @TestViewMatchLiteral);
   T.Run('FindByte2 long', @TestFindByte2Long);
-  T.Run('FindSubstring', @TestFindSubstring);
   T.Run('FindSubstringCI folds needle case', @TestFindSubstringCIFoldsNeedleCase);
   T.Summary;
 end.

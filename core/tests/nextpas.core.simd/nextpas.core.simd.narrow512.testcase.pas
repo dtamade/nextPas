@@ -6,7 +6,7 @@ unit nextpas.core.simd.narrow512.testcase;
 interface
 
 uses
-  Classes, nextpas.core.text.conv, fpcunit, testregistry,
+  Classes, SysUtils, fpcunit, testregistry,
   nextpas.core.simd,
   nextpas.core.simd.base;
 

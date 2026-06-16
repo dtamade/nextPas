@@ -28,11 +28,13 @@ type
     FReallocateCalls: SizeUInt;
   public
     constructor Create(const AFailOnReallocateCall: SizeUInt);
+    function Allocate(const ASize: SizeUInt): Pointer;
+    function Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
+    procedure Deallocate(const APtr: Pointer);
     function GetMem(aSize: SizeUInt): Pointer;
     function AllocMem(aSize: SizeUInt): Pointer;
     function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
     procedure FreeMem(aDst: Pointer);
-    function MemSize(aPtr: Pointer): SizeUInt;
     function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
     procedure FreeAligned(aPtr: Pointer);
     function Traits: TAllocatorTraits;
@@ -44,11 +46,13 @@ type
     FAllocateCalls: SizeUInt;
   public
     constructor Create(const AFailOnAllocateCall: SizeUInt);
+    function Allocate(const ASize: SizeUInt): Pointer;
+    function Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
+    procedure Deallocate(const APtr: Pointer);
     function GetMem(aSize: SizeUInt): Pointer;
     function AllocMem(aSize: SizeUInt): Pointer;
     function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
     procedure FreeMem(aDst: Pointer);
-    function MemSize(aPtr: Pointer): SizeUInt;
     function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
     procedure FreeAligned(aPtr: Pointer);
     function Traits: TAllocatorTraits;
@@ -59,11 +63,13 @@ type
     FAllocations: SizeUInt;
     FDeallocations: SizeUInt;
   public
+    function Allocate(const ASize: SizeUInt): Pointer;
+    function Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
+    procedure Deallocate(const APtr: Pointer);
     function GetMem(aSize: SizeUInt): Pointer;
     function AllocMem(aSize: SizeUInt): Pointer;
     function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
     procedure FreeMem(aDst: Pointer);
-    function MemSize(aPtr: Pointer): SizeUInt;
     function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
     procedure FreeAligned(aPtr: Pointer);
     function Traits: TAllocatorTraits;
@@ -75,6 +81,22 @@ begin
   inherited Create;
   FFailOnReallocateCall := AFailOnReallocateCall;
   FReallocateCalls := 0;
+end;
+
+function TFailingReallocateAllocator.Allocate(const ASize: SizeUInt): Pointer;
+begin
+  Result := GetMem(ASize);
+end;
+
+function TFailingReallocateAllocator.Reallocate(const APtr: Pointer;
+  const ANewSize: SizeUInt): Pointer;
+begin
+  Result := ReallocMem(APtr, ANewSize);
+end;
+
+procedure TFailingReallocateAllocator.Deallocate(const APtr: Pointer);
+begin
+  FreeMem(APtr);
 end;
 
 function TFailingReallocateAllocator.GetMem(aSize: SizeUInt): Pointer;
@@ -112,11 +134,6 @@ begin
     System.FreeMem(aDst);
 end;
 
-function TFailingReallocateAllocator.MemSize(aPtr: Pointer): SizeUInt;
-begin
-  Result := 0;
-end;
-
 function TFailingReallocateAllocator.AllocAligned(aSize,
   aAlignment: SizeUInt): Pointer;
 begin
@@ -141,6 +158,22 @@ begin
   inherited Create;
   FFailOnAllocateCall := AFailOnAllocateCall;
   FAllocateCalls := 0;
+end;
+
+function TFailingAllocateAllocator.Allocate(const ASize: SizeUInt): Pointer;
+begin
+  Result := GetMem(ASize);
+end;
+
+function TFailingAllocateAllocator.Reallocate(const APtr: Pointer;
+  const ANewSize: SizeUInt): Pointer;
+begin
+  Result := ReallocMem(APtr, ANewSize);
+end;
+
+procedure TFailingAllocateAllocator.Deallocate(const APtr: Pointer);
+begin
+  FreeMem(APtr);
 end;
 
 function TFailingAllocateAllocator.GetMem(aSize: SizeUInt): Pointer;
@@ -181,11 +214,6 @@ begin
     System.FreeMem(aDst);
 end;
 
-function TFailingAllocateAllocator.MemSize(aPtr: Pointer): SizeUInt;
-begin
-  Result := 0;
-end;
-
 function TFailingAllocateAllocator.AllocAligned(aSize,
   aAlignment: SizeUInt): Pointer;
 begin
@@ -203,6 +231,22 @@ begin
   Result.ThreadSafe := False;
   Result.HasMemSize := False;
   Result.SupportsAligned := False;
+end;
+
+function TCountingAllocator.Allocate(const ASize: SizeUInt): Pointer;
+begin
+  Result := GetMem(ASize);
+end;
+
+function TCountingAllocator.Reallocate(const APtr: Pointer;
+  const ANewSize: SizeUInt): Pointer;
+begin
+  Result := ReallocMem(APtr, ANewSize);
+end;
+
+procedure TCountingAllocator.Deallocate(const APtr: Pointer);
+begin
+  FreeMem(APtr);
 end;
 
 function TCountingAllocator.GetMem(aSize: SizeUInt): Pointer;
@@ -240,11 +284,6 @@ begin
     System.FreeMem(aDst);
     Inc(FDeallocations);
   end;
-end;
-
-function TCountingAllocator.MemSize(aPtr: Pointer): SizeUInt;
-begin
-  Result := 0;
 end;
 
 function TCountingAllocator.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
@@ -410,17 +449,17 @@ begin
     'document must expose allocator accessor');
   CheckSourceContains(LSource, 'procedure setroot(aidx: uint32); inline;',
     'document must expose root setter for builder');
-  CheckSourceContains(LSource, 'lnewptr := fallocator.reallocmem(pointer(fnodes),',
+  CheckSourceContains(LSource, 'lnewptr := fallocator.reallocate(pointer(fnodes),',
     'node growth must stage reallocate result');
   CheckSourceContains(LSource, 'if lnewptr = nil then',
     'node growth must guard nil reallocate');
-  CheckSourceContains(LSource, 'lnewptr := fallocator.reallocmem(pointer(fanchors),',
+  CheckSourceContains(LSource, 'lnewptr := fallocator.reallocate(pointer(fanchors),',
     'anchor growth must stage reallocate result');
-  CheckSourceContains(LSource, 'lptr := fallocator.getmem(fnodecap * sizeof(tyamlnode));',
+  CheckSourceContains(LSource, 'lptr := fallocator.allocate(fnodecap * sizeof(tyamlnode));',
     'init must stage node allocation');
-  CheckSourceContains(LSource, 'lptr := fallocator.getmem(fanchorcap * sizeof(tyamlanchorentry));',
+  CheckSourceContains(LSource, 'lptr := fallocator.allocate(fanchorcap * sizeof(tyamlanchorentry));',
     'init must stage anchor allocation');
-  CheckSourceContains(LSource, 'fallocator.freemem(pointer(fnodes));',
+  CheckSourceContains(LSource, 'fallocator.deallocate(pointer(fnodes));',
     'init must release staged nodes when anchor allocation fails');
   CheckSourceContains(LSource, 'if adoc.fnodes <> nil then',
     'parse with allocator must clean an existing document first');

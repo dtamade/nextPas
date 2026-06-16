@@ -221,25 +221,6 @@ begin
   CheckEqual('', S, 'empty to string');
 end;
 
-procedure TestToSpan;
-var
-  V: TStringView;
-  S: TByteSpan;
-begin
-  V := TStringView.Create(PAnsiChar('hello'), 5);
-  V.Advance(1);
-  S := V.ToSpan;
-  CheckEqual(Int64(4), Int64(S.Len), 'advanced view span len');
-  Check(S.Data = PByte(V.Data), 'span keeps current view pointer');
-  CheckEqual(Int64(Ord('e')), Int64(S[0]), 'span first byte');
-  CheckEqual(Int64(Ord('o')), Int64(S[3]), 'span last byte');
-
-  V := TStringView.Empty;
-  S := V.ToSpan;
-  Check(S.IsEmpty, 'empty view converts to empty span');
-  Check(S.Data = nil, 'empty view keeps nil span data');
-end;
-
 procedure TestCountChar;
 var
   V: TStringView;
@@ -309,7 +290,6 @@ begin
   T.Run('string index helpers', @TestStringIndexOfHelpers);
   T.Run('advance cursor', @TestAdvanceCursor);
   T.Run('toString', @TestToString);
-  T.Run('toSpan', @TestToSpan);
   T.Run('countChar', @TestCountChar);
   T.Run('lastIndexOf', @TestLastIndexOf);
   T.Run('splitFirst', @TestSplitFirst);

@@ -1,6 +1,6 @@
 # SIMD Interface/Implementation Completeness Report
 
-- generated_at: 2026-06-13T05:29:05
+- generated_at: 2026-06-06T12:29:20
 - dispatch_slots_total: `616`
 - strict: `True`
 - strict_level: `p2`

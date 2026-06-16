@@ -2,7 +2,7 @@ program test_vec_unified;
 {$mode objfpc}{$H+}
 {$Q-}{$R-}
 uses
-  nextpas.core.text.conv,
+  SysUtils,
   nextpas.core.simd.base,
   nextpas.core.simd.vec;
 

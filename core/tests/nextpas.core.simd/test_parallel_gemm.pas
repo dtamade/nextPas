@@ -3,7 +3,7 @@ program test_parallel;
 {$I nextpas.core.simd.settings.inc}
 uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
-  nextpas.core.text.conv, Unix, BaseUnix,
+  SysUtils, Unix, BaseUnix,
   nextpas.core.simd,
   nextpas.core.simd.alloc,
   nextpas.core.simd.linalg.gemm,

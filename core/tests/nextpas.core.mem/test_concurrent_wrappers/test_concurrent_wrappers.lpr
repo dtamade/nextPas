@@ -11,7 +11,7 @@ uses
   nextpas.core.testing,
   nextpas.core.mem.error,
   nextpas.core.mem.blockpool.concurrent,
-  nextpas.core.mem.pool.fixed,
+  nextpas.core.mem.pool.fixed.concurrent,
   nextpas.core.mem.pool.slab.concurrent;
 
 const

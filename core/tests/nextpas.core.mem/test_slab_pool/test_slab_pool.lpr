@@ -22,11 +22,13 @@ type
   public
     GetCalls: Integer;
     FreeAlignedCalls: Integer;
+    function Allocate(const ASize: SizeUInt): Pointer;
+    function Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
+    procedure Deallocate(const APtr: Pointer);
     function GetMem(aSize: SizeUInt): Pointer;
     function AllocMem(aSize: SizeUInt): Pointer;
     function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
     procedure FreeMem(aDst: Pointer);
-    function MemSize(aPtr: Pointer): SizeUInt;
     function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
     procedure FreeAligned(aPtr: Pointer);
     function Traits: TAllocatorTraits;
@@ -86,6 +88,21 @@ begin
   SetLength(FPtrs, LLast);
 end;
 
+function TFixedSlabRecordingAllocator.Allocate(const ASize: SizeUInt): Pointer;
+begin
+  Result := GetMem(ASize);
+end;
+
+function TFixedSlabRecordingAllocator.Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
+begin
+  Result := ReallocMem(APtr, ANewSize);
+end;
+
+procedure TFixedSlabRecordingAllocator.Deallocate(const APtr: Pointer);
+begin
+  FreeMem(APtr);
+end;
+
 function TFixedSlabRecordingAllocator.GetMem(aSize: SizeUInt): Pointer;
 begin
   if aSize = 0 then Exit(nil);
@@ -124,11 +141,6 @@ begin
   if aDst = nil then Exit;
   if Untrack(aDst) then
     System.FreeMem(aDst);
-end;
-
-function TFixedSlabRecordingAllocator.MemSize(aPtr: Pointer): SizeUInt;
-begin
-  Result := 0;
 end;
 
 function TFixedSlabRecordingAllocator.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;

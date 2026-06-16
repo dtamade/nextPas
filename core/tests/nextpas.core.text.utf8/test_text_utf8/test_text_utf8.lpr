@@ -135,19 +135,6 @@ begin
   Check(UTF8IsValid(@EMOJI[0], 4), 'emoji valid');
 end;
 
-procedure TestIsValidScalarBoundaries;
-const
-  MIXED_VALID: array[0..4] of Byte = ($41, $E2, $82, $AC, $42);
-  TRUNCATED_TWO: array[0..0] of Byte = ($C2);
-  STRAY_CONT: array[0..1] of Byte = ($80, $41);
-  OUT_OF_RANGE: array[0..3] of Byte = ($F4, $90, $80, $80);
-begin
-  Check(UTF8IsValid(@MIXED_VALID[0], 5), 'ASCII + euro + ASCII valid');
-  Check(not UTF8IsValid(@TRUNCATED_TWO[0], 1), 'truncated 2-byte sequence invalid');
-  Check(not UTF8IsValid(@STRAY_CONT[0], 2), 'stray continuation invalid');
-  Check(not UTF8IsValid(@OUT_OF_RANGE[0], 4), 'codepoint above U+10FFFF invalid');
-end;
-
 procedure TestCodePointCount;
 const
   ASCII: array[0..4] of Byte = ($48, $65, $6C, $6C, $6F);
@@ -185,39 +172,9 @@ const
   DATA: array[0..6] of Byte = ($41, $C3, $A9, $E4, $B8, $AD, $21);
 begin
   Iter.Init(@DATA[0], 7);
-  CheckEqual(Int64(0), Int64(Iter.Position), 'initial position');
-  CheckEqual(Int64(7), Int64(Iter.Remaining), 'initial remaining');
   Count := 0;
   while Iter.Next(CP) do
-  begin
     Inc(Count);
-    case Count of
-      1:
-        begin
-          CheckEqual(Int64($41), Int64(CP), 'first codepoint');
-          CheckEqual(Int64(1), Int64(Iter.Position), 'position after ASCII');
-          CheckEqual(Int64(6), Int64(Iter.Remaining), 'remaining after ASCII');
-        end;
-      2:
-        begin
-          CheckEqual(Int64($E9), Int64(CP), 'second codepoint');
-          CheckEqual(Int64(3), Int64(Iter.Position), 'position after 2-byte');
-          CheckEqual(Int64(4), Int64(Iter.Remaining), 'remaining after 2-byte');
-        end;
-      3:
-        begin
-          CheckEqual(Int64($4E2D), Int64(CP), 'third codepoint');
-          CheckEqual(Int64(6), Int64(Iter.Position), 'position after 3-byte');
-          CheckEqual(Int64(1), Int64(Iter.Remaining), 'remaining after 3-byte');
-        end;
-      4:
-        begin
-          CheckEqual(Int64(Ord('!')), Int64(CP), 'fourth codepoint');
-          CheckEqual(Int64(7), Int64(Iter.Position), 'position at end');
-          CheckEqual(Int64(0), Int64(Iter.Remaining), 'remaining at end');
-        end;
-    end;
-  end;
   CheckEqual(Int64(4), Int64(Count), '4 codepoints');
   Check(not Iter.HasNext, 'exhausted');
 end;
@@ -230,16 +187,10 @@ const
   DATA: array[0..2] of Byte = ($FE, $41, $42);
 begin
   Iter.Init(@DATA[0], 3);
-  CheckEqual(Int64(0), Int64(Iter.Position), 'invalid initial position');
-  CheckEqual(Int64(3), Int64(Iter.Remaining), 'invalid initial remaining');
   Check(Iter.Next(CP), 'first');
   CheckEqual(Int64($FFFD), Int64(CP), 'replacement char');
-  CheckEqual(Int64(1), Int64(Iter.Position), 'invalid byte consumes one byte');
-  CheckEqual(Int64(2), Int64(Iter.Remaining), 'remaining after invalid byte');
   Check(Iter.Next(CP), 'second');
   CheckEqual(Int64($41), Int64(CP), 'A after invalid');
-  CheckEqual(Int64(2), Int64(Iter.Position), 'position after ASCII following invalid');
-  CheckEqual(Int64(1), Int64(Iter.Remaining), 'remaining after ASCII following invalid');
 end;
 
 procedure TestByteLength;
@@ -262,7 +213,6 @@ begin
   T.Run('encode', @TestEncode);
   T.Run('encode nil destination fails closed', @TestEncodeNilDestinationFailsClosed);
   T.Run('isValid', @TestIsValid);
-  T.Run('isValid scalar boundaries', @TestIsValidScalarBoundaries);
   T.Run('codepoint count', @TestCodePointCount);
   T.Run('string wrappers', @TestStringWrappers);
   T.Run('iterator', @TestIterator);

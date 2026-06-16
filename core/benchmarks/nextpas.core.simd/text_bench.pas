@@ -4,8 +4,7 @@ program text_bench;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.text.conv,
-  nextpas.core.time.cpu,
+  SysUtils,
   nextpas.core.simd,
   nextpas.core.simd.alloc,
   nextpas.core.simd.base,

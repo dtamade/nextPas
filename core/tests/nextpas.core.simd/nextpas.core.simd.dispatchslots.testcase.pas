@@ -9,7 +9,7 @@ unit nextpas.core.simd.dispatchslots.testcase;
 interface
 
 uses
-  Classes, nextpas.core.text.conv, fpcunit, testregistry,
+  Classes, SysUtils, fpcunit, testregistry,
   nextpas.core.simd.testcase,
   nextpas.core.simd.base,
   nextpas.core.simd.dispatch,

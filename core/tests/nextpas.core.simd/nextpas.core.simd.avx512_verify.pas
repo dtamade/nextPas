@@ -7,7 +7,7 @@ uses
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
-  nextpas.core.text.conv, Math,
+  SysUtils, Math,
   nextpas.core.simd,
   nextpas.core.simd.base,
   nextpas.core.simd.dispatch;
@@ -19,14 +19,6 @@ const
 var
   g_TotalChecks: Integer = 0;
   g_Failures: Integer = 0;
-
-function BoolToYesNo(const AValue: Boolean): string; inline;
-begin
-  if AValue then
-    Result := 'YES'
-  else
-    Result := 'NO';
-end;
 
 procedure Fail(const aMsg: string);
 begin
@@ -180,9 +172,9 @@ begin
   // 检测 CPU 指令集支持
   WriteLn('');
   WriteLn('CPU Feature Detection:');
-  WriteLn('  SSE2:    ', BoolToYesNo(IsBackendRegistered(sbSSE2)));
-  WriteLn('  AVX2:    ', BoolToYesNo(IsBackendRegistered(sbAVX2)));
-  WriteLn('  AVX-512: ', BoolToYesNo(IsBackendRegistered(sbAVX512)));
+  WriteLn('  SSE2:    ', BoolToStr(IsBackendRegistered(sbSSE2), 'YES', 'NO'));
+  WriteLn('  AVX2:    ', BoolToStr(IsBackendRegistered(sbAVX2), 'YES', 'NO'));
+  WriteLn('  AVX-512: ', BoolToStr(IsBackendRegistered(sbAVX512), 'YES', 'NO'));
   WriteLn('');
 
   if not IsBackendRegistered(sbAVX512) then

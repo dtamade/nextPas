@@ -5,7 +5,7 @@ unit nextpas.core.simd.algorithms.testcase;
 interface
 
 uses
-  Classes, nextpas.core.text.conv, fpcunit, testregistry,
+  Classes, SysUtils, fpcunit, testregistry,
   nextpas.core.simd.base,
   nextpas.core.simd.algorithms;
 

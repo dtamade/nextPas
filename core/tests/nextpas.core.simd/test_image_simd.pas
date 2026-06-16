@@ -3,7 +3,7 @@ program test_image_simd;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.text.conv,
+  SysUtils,
   nextpas.core.simd.image;
 
 var

@@ -4,7 +4,7 @@ program test_api_coverage_batch_math;
 {$Q-}{$R-}
 
 uses
-  nextpas.core.text.conv,
+  SysUtils,
   Math,
   nextpas.core.simd,
   nextpas.core.simd.api_coverage.support;

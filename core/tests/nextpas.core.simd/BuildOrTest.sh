@@ -40,7 +40,7 @@ mkdir -p "${BIN_DIR}" "${UNIT_DIR}" "${LOG_DIR}"
 
 usage() {
   cat <<'EOF'
-Usage: BuildOrTest.sh [clean|check|test|contract-signature|publicabi-signature|coverage|experimental-intrinsics-tests|experimental-intrinsics-closure|wiring-sync|nonx86-ieee754|perf-smoke|nonx86-optin-list-suites|helper-semantics|impl-smoke-nonx86|impl-audit-nonx86|native-evidence|verify-nonx86-native-evidence|import-nonx86-native-evidence|closeout-host-local|closeout-host-local-from-import|gate|gate-strict|gate-summary|gate-summary-sample|gate-summary-rehearsal|gate-summary-selfcheck|gate-summary-inject|gate-summary-rollback|gate-summary-backups|historical-closeout-note-check|active-closeout-truth-check|evidence-linux|verify-win-evidence|freeze-status|freeze-status-linux|freeze-status-rehearsal|win-closeout-dryrun|win-closeout-3cmd|qemu-nonx86-evidence|qemu-cpuinfo-nonx86-evidence|qemu-cpuinfo-nonx86-full-evidence|qemu-cpuinfo-nonx86-full-repeat|qemu-cpuinfo-nonx86-suite-repeat|qemu-arch-matrix-evidence|qemu-nonx86-experimental-asm|closeout-release|win-evidence-preflight|win-evidence-via-gh|finalize-win-evidence|win-closeout-snippets|win-closeout-finalize|freshness] [test-args...]
+Usage: BuildOrTest.sh [clean|check|test|contract-signature|publicabi-signature|coverage|experimental-intrinsics-tests|experimental-intrinsics-closure|wiring-sync|nonx86-ieee754|perf-smoke|nonx86-optin-list-suites|helper-semantics|impl-smoke-nonx86|impl-audit-nonx86|native-evidence|verify-nonx86-native-evidence|import-nonx86-native-evidence|closeout-host-local|closeout-host-local-from-import|gate|gate-strict|gate-summary|gate-summary-sample|gate-summary-rehearsal|gate-summary-selfcheck|gate-summary-inject|gate-summary-rollback|gate-summary-backups|historical-closeout-note-check|active-closeout-truth-check|evidence-linux|verify-win-evidence|freeze-status|freeze-status-linux|freeze-status-rehearsal|win-closeout-dryrun|win-closeout-3cmd|qemu-nonx86-evidence|qemu-cpuinfo-nonx86-evidence|qemu-cpuinfo-nonx86-full-evidence|qemu-cpuinfo-nonx86-full-repeat|qemu-cpuinfo-nonx86-suite-repeat|qemu-arch-matrix-evidence|qemu-nonx86-experimental-asm|closeout-release|win-evidence-preflight|win-evidence-via-gh|finalize-win-evidence|win-closeout-snippets|win-closeout-finalize] [test-args...]
 
 Supported actions:
   clean                             Remove shell-runner output directories
@@ -94,7 +94,6 @@ Supported actions:
   finalize-win-evidence             Historical Windows/GH closeout shell surface currently unavailable in this worktree
   win-closeout-snippets             Historical Windows/GH closeout shell surface currently unavailable in this worktree
   win-closeout-finalize             Historical Windows/GH closeout shell surface currently unavailable in this worktree
-	  freshness                         Check evidence freshness vs source code (SKIP if evidence missing, FAIL if stale)
 
 Examples:
   bash tests/nextpas.core.simd/BuildOrTest.sh test --list-suites
@@ -1060,9 +1059,6 @@ case "${ACTION}" in
     ;;
   win-closeout-finalize)
     fail_missing_windows_closeout_surface "WIN-CLOSEOUT-FINALIZE" "win-closeout-finalize"
-    ;;
-  freshness)
-    run_python_checker "FRESHNESS" "${ROOT}/check_freshness.py" --summary-line --json-file "${LOG_DIR}/freshness_check.json" --text-file "${LOG_DIR}/freshness_check.txt"
     ;;
   -h|--help|help)
     usage

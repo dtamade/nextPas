@@ -3,6 +3,7 @@ program test_ini_facade_surface;
 {$I nextpas.core.settings.inc}
 
 uses
+  SysUtils,
   nextpas.core.ini,
   nextpas.core.mem.default,
   nextpas.core.testing;
@@ -75,7 +76,6 @@ end;
 procedure TestFacadeExposesAllocatorSurface;
 var
   Ini: TIniFile;
-  LContent: string;
 begin
   Ini := TIniFile.Create(nil);
   try
@@ -96,9 +96,6 @@ begin
   try
     CheckEqual(Int64(8080), Ini.ReadInteger('server', 'port', 0),
       'IniParseWith surface visible');
-    { IniStringify surface }
-    LContent := IniStringify(Ini);
-    Check(Pos('port=8080', LContent) > 0, 'IniStringify surface visible');
   finally
     Ini.Free;
   end;

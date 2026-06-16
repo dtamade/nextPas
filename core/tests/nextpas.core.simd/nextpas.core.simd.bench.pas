@@ -6,7 +6,7 @@ unit nextpas.core.simd.bench;
 interface
 
 uses
-  nextpas.core.text.conv,
+  SysUtils,
   nextpas.core.simd,
   nextpas.core.simd.base,
   nextpas.core.simd.dispatch,

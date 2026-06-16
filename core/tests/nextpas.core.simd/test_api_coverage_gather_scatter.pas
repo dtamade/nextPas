@@ -4,7 +4,7 @@ program test_api_coverage_gather_scatter;
 {$Q-}{$R-}
 
 uses
-  nextpas.core.exception,
+  SysUtils,
   nextpas.core.base,
   nextpas.core.simd.base,
   nextpas.core.simd,
