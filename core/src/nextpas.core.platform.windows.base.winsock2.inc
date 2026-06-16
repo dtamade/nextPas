@@ -174,11 +174,53 @@ type
   end;
   psockaddr_in = ^sockaddr_in;
 
+  in6_addr = packed record
+    case Byte of
+      0: (u6_addr8: array[0..15] of Byte);
+      1: (u6_addr16: array[0..7] of WORD);
+      2: (u6_addr32: array[0..3] of DWORD);
+      3: (s6_addr: array[0..15] of Byte);
+  end;
+  pin6_addr = ^in6_addr;
+  TIn6Addr = in6_addr;
+  PIn6Addr = pin6_addr;
+
+  sockaddr_in6 = packed record
+    sin6_family: WORD;
+    sin6_port: WORD;
+    sin6_flowinfo: DWORD;
+    sin6_addr: in6_addr;
+    sin6_scope_id: DWORD;
+  end;
+  psockaddr_in6 = ^sockaddr_in6;
+  TInetSockAddr6 = sockaddr_in6;
+
+  linger = packed record
+    l_onoff: Integer;
+    l_linger: Integer;
+  end;
+  plinger = ^linger;
+  TLinger = linger;
+
   sockaddr_storage = packed record
     ss_family: WORD;
     ss_pad: array[0..125] of Byte;
   end;
   psockaddr_storage = ^sockaddr_storage;
+
+  PAddrInfo = ^addrinfo;
+  PPAddrInfo = ^PAddrInfo;
+  addrinfo = record
+    ai_flags: Integer;
+    ai_family: Integer;
+    ai_socktype: Integer;
+    ai_protocol: Integer;
+    ai_addrlen: NativeUInt;
+    ai_canonname: PAnsiChar;
+    ai_addr: ^sockaddr;
+    ai_next: PAddrInfo;
+  end;
+  TAddrInfo = addrinfo;
 
   TWSAData = record
     wVersion: WORD;

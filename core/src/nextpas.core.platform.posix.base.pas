@@ -295,6 +295,11 @@ const
   SO_KEEPALIVE = cint(8);
 {$ENDIF}
   TCP_NODELAY  = cint(1);
+{$IFDEF NEXTPAS_LINUX}
+  SO_LINGER   = cint(13);
+{$ELSE}
+  SO_LINGER   = cint($0080);
+{$ENDIF}
   SHUT_RD     = cint(0);
   SHUT_WR     = cint(1);
   SHUT_RDWR   = cint(2);
