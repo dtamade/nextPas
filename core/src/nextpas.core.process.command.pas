@@ -305,6 +305,8 @@ var
   LFinalEnv: TStringArray;
   LFailStage: TPlatformProcessSpawnStage;
   LResolvedPath: string;
+  LCleanFds: array[0..8] of PtrInt;
+  LCleanCount, LCleanIdx: Integer;
 begin
   { Resolve path: search PATH if using custom env and name has no directory part }
   if (FEnvMode <> pemInherit) and (not CommandPathHasDirectoryPart(FPath)) then
@@ -407,19 +409,23 @@ begin
       end;
 
   except
-    { Clean up all created fds on failure }
-    platform_process_close_handle(LStdinPipe[0]);
-    platform_process_close_handle(LStdinPipe[1]);
-    platform_process_close_handle(LStdoutPipe[0]);
-    platform_process_close_handle(LStdoutPipe[1]);
-    platform_process_close_handle(LStderrPipe[0]);
-    platform_process_close_handle(LStderrPipe[1]);
-    if FStdinMode = stNull then
-      platform_process_close_handle(LChildStdin);
-    if FStdoutMode = stNull then
-      platform_process_close_handle(LChildStdout);
-    if FStderrMode = stNull then
-      platform_process_close_handle(LChildStderr);
+    { Collect all open fds and close them in a single pass.
+      platform_process_close_handle sets handle to -1 after closing,
+      so duplicate entries are safe. }
+    LCleanCount := 0;
+    { Pipe pairs }
+    if LStdinPipe[0] >= 0 then begin LCleanFds[LCleanCount] := LStdinPipe[0]; Inc(LCleanCount); end;
+    if LStdinPipe[1] >= 0 then begin LCleanFds[LCleanCount] := LStdinPipe[1]; Inc(LCleanCount); end;
+    if LStdoutPipe[0] >= 0 then begin LCleanFds[LCleanCount] := LStdoutPipe[0]; Inc(LCleanCount); end;
+    if LStdoutPipe[1] >= 0 then begin LCleanFds[LCleanCount] := LStdoutPipe[1]; Inc(LCleanCount); end;
+    if LStderrPipe[0] >= 0 then begin LCleanFds[LCleanCount] := LStderrPipe[0]; Inc(LCleanCount); end;
+    if LStderrPipe[1] >= 0 then begin LCleanFds[LCleanCount] := LStderrPipe[1]; Inc(LCleanCount); end;
+    { Null fds — only collected if not already in a pipe pair }
+    if (FStdinMode = stNull) and (LChildStdin >= 0) then begin LCleanFds[LCleanCount] := LChildStdin; Inc(LCleanCount); end;
+    if (FStdoutMode = stNull) and (LChildStdout >= 0) then begin LCleanFds[LCleanCount] := LChildStdout; Inc(LCleanCount); end;
+    if (FStderrMode = stNull) and (LChildStderr >= 0) then begin LCleanFds[LCleanCount] := LChildStderr; Inc(LCleanCount); end;
+    for LCleanIdx := 0 to LCleanCount - 1 do
+      platform_process_close_handle(LCleanFds[LCleanIdx]);
     raise;
   end;
 
