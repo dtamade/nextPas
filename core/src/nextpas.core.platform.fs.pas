@@ -36,6 +36,7 @@ const
 function platform_fs_exists(const APath: PAnsiChar): Boolean;
 function platform_fs_is_file(const APath: PAnsiChar): Boolean;
 function platform_fs_is_dir(const APath: PAnsiChar): Boolean;
+function platform_fs_is_executable(const APath: PAnsiChar): Boolean;
 function platform_fs_file_size(const APath: PAnsiChar; out ASize: Int64): Int32;
 function platform_fs_temp_dir(ABuf: PAnsiChar; ABufLen: Int32): Int32;
 function platform_fs_mktemp(const APrefix: PAnsiChar; const ASuffix: PAnsiChar;
@@ -58,7 +59,11 @@ implementation
 uses
   nextpas.core.platform.files,
   nextpas.core.platform.env,
-  nextpas.core.platform.random;
+  nextpas.core.platform.random
+{$IFDEF NEXTPAS_UNIX}
+  , nextpas.core.platform.posix.ffi
+{$ENDIF}
+  ;
 
 const
   PLATFORM_FS_SHORT_WRITE_ERROR = -5;
@@ -125,6 +130,17 @@ begin
   if platform_file_stat(APath, LStat) <> 0 then
     Exit(False);
   Result := LStat.FileType = ftDirectory;
+end;
+
+function platform_fs_is_executable(const APath: PAnsiChar): Boolean;
+begin
+{$IFDEF NEXTPAS_UNIX}
+  Result := access(APath, 1{X_OK}) = 0;
+{$ELSEIF defined(NEXTPAS_WINDOWS)}
+  Result := platform_fs_is_file(APath);
+{$ELSE}
+  Result := False;
+{$ENDIF}
 end;
 
 function platform_fs_file_size(const APath: PAnsiChar; out ASize: Int64): Int32;
@@ -215,7 +231,11 @@ begin
         LBuf[I] := #0;
         LR := platform_file_mkdir(@LBuf[0], AMode);
         if (LR <> 0) and (not platform_fs_is_dir(@LBuf[0])) then
+        begin
+          if LR = 17{EEXIST} then
+            Exit(20{ENOTDIR});  { path component is not a directory }
           Exit(LR);
+        end;
       {$IFDEF NEXTPAS_WINDOWS}
         LBuf[I] := '\';
       {$ELSE}
