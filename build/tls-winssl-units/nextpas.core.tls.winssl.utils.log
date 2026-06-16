@@ -1,0 +1,12 @@
+Hint: Start of reading config file /home/dtamade/.fpc.cfg
+Hint: End of reading config file /home/dtamade/.fpc.cfg
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Win64 for x64
+Compiling /home/dtamade/projects/nextPas/core/src/nextpas.core.tls.winssl.utils.pas
+nextpas.core.tls.winssl.utils.pas(273,15) Warning: Symbol "Format" is deprecated: "Use nextpas.core.text.format.TextFormat or nextpas.core.text.TextFormat"
+nextpas.core.tls.winssl.utils.pas(277,22) Warning: Symbol "Format" is deprecated: "Use nextpas.core.text.format.TextFormat or nextpas.core.text.TextFormat"
+nextpas.core.tls.winssl.utils.pas(301,15) Warning: Symbol "Format" is deprecated: "Use nextpas.core.text.format.TextFormat or nextpas.core.text.TextFormat"
+651 lines compiled, 0.1 sec
+3 warning(s) issued
+2 hint(s) issued

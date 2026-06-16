@@ -11,6 +11,8 @@ uses
 
 type
 
+  EBase64Error = class(ENextPasError);
+
   TBase64Utils = class
   private
     class function Base64Index(AChar: Char): Integer; static;

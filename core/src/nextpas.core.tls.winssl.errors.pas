@@ -5,7 +5,8 @@ unit nextpas.core.tls.winssl.errors;
 
 interface
 
-uses nextpas.core.text.conv, Windows, nextpas.core.tls.base, nextpas.core.time;
+uses nextpas.core.text.conv, Windows, nextpas.core.tls.base, nextpas.core.time,
+  nextpas.core.fs, nextpas.core.exception;
 
 type
   { 错误级别 }
