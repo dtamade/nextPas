@@ -15,6 +15,7 @@ function HasEnv(const AName: string): Boolean;
 function EnvironmentVariableNamesCaseSensitive: Boolean; inline;
 procedure SetEnv(const AName, AValue: string);
 procedure UnsetEnv(const AName: string);
+function ExpandEnv(const AValue: string): string;
 
 implementation
 
@@ -149,6 +150,35 @@ begin
   ValidateEnvName(AName);
   LN := AName;
   RaiseEnvError(platform_env_unset(PAnsiChar(LN)), 'unsetenv', AName);
+end;
+
+function ExpandEnv(const AValue: string): string;
+var
+  I, LStart: Integer;
+  LName: string;
+begin
+  Result := '';
+  I := 1;
+  while I <= Length(AValue) do
+  begin
+    if (AValue[I] = '$') and (I < Length(AValue)) and (AValue[I + 1] = '{') then
+    begin
+      LStart := I + 2;
+      I := LStart;
+      while (I <= Length(AValue)) and (AValue[I] <> '}') do
+        Inc(I);
+      if I > Length(AValue) then
+        raise EArgumentError.Create(
+          'unterminated ${...} in environment expansion');
+      LName := Copy(AValue, LStart, I - LStart);
+      ValidateEnvName(LName);
+      Result := Result + GetEnvironmentVariable(LName);
+      Inc(I);
+      Continue;
+    end;
+    Result := Result + AValue[I];
+    Inc(I);
+  end;
 end;
 
 end.
