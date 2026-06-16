@@ -68,6 +68,7 @@ uses
 const
   PLATFORM_FS_SHORT_WRITE_ERROR = -5;
   PLATFORM_FS_SHORT_READ_ERROR = -6;
+  PLATFORM_FS_COPY_BUFFER_SIZE = 65536;
 
 function platform_fs_write_all(const AHandle: TPlatformFileHandle;
   AData: Pointer; ALen: PtrUInt): Int32;
@@ -251,7 +252,7 @@ end;
 function platform_fs_copy_file(const ASrc: PAnsiChar; const ADst: PAnsiChar): Int32;
 var
   LSrcH, LDstH: TPlatformFileHandle;
-  LBuf: array[0..8191] of Byte;
+  LBuf: array[0..PLATFORM_FS_COPY_BUFFER_SIZE - 1] of Byte;
   LRead: PtrUInt;
   LR, LCloseR: Int32;
 begin
