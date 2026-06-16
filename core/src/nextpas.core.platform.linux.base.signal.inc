@@ -56,7 +56,7 @@ const
   SA_NOMASK    = SA_NODEFER;
   SA_ONESHOT   = SA_RESETHAND;
 
-{$IF defined(NEXTPAS_X86_64) or defined(NEXTPAS_AARCH64)}
+{$IF defined(NEXTPAS_X86_64) or defined(NEXTPAS_AARCH64) or defined(NEXTPAS_RISCV64) or defined(NEXTPAS_ARM)}
 const
   SIG_MAXSIG     = 128;
   wordsinsigset  = SIG_MAXSIG div (8 * SizeOf(culong));

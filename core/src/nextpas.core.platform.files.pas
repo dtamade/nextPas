@@ -1,3 +1,14 @@
+{**
+ * nextpas.core.platform.files - 底层文件 I/O 操作
+ *
+ * 职责：文件描述符级操作（open/close/read/write/seek/stat/dir）
+ * 层次：fd 级操作，不包含路径遍历或目录树操作
+ *
+ * 与 fs.pas 的关系：
+ *   - files.pas = 底层 fd 操作（open/close/read/write/stat/dir）
+ *   - fs.pas = 高层文件系统操作（exists/is_file/mkdir_p/copy_file/walk）
+ *   - fs.pas 依赖 files.pas
+ *}
 unit nextpas.core.platform.files;
 
 {$I nextpas.core.settings.inc}
@@ -234,6 +245,21 @@ begin
     Result := 0
   else
     Result := platform_get_errno;
+end;
+
+function ClassifyDirEntryDType(ADType: Byte): TPlatformFileType;
+begin
+  case ADType of
+    PLATFORM_DT_REG:  Result := ftRegular;
+    PLATFORM_DT_DIR:  Result := ftDirectory;
+    PLATFORM_DT_LNK:  Result := ftSymlink;
+    PLATFORM_DT_CHR:  Result := ftCharDevice;
+    PLATFORM_DT_BLK:  Result := ftBlockDevice;
+    PLATFORM_DT_FIFO: Result := ftFifo;
+    PLATFORM_DT_SOCK: Result := ftSocket;
+  else
+    Result := ftUnknown;
+  end;
 end;
 
 procedure ClassifyStatType(var AStat: TPlatformFileStat);
@@ -626,17 +652,7 @@ begin
     AEntry.Name[LNameLen] := #0;
     AEntry.NameLen := LNameLen;
     AEntry.Ino := LDent^.d_ino;
-    case LDent^.d_type of
-      8:  AEntry.FileType := ftRegular;
-      4:  AEntry.FileType := ftDirectory;
-      10: AEntry.FileType := ftSymlink;
-      2:  AEntry.FileType := ftCharDevice;
-      6:  AEntry.FileType := ftBlockDevice;
-      1:  AEntry.FileType := ftFifo;
-      12: AEntry.FileType := ftSocket;
-    else
-      AEntry.FileType := ftUnknown;
-    end;
+    AEntry.FileType := ClassifyDirEntryDType(LDent^.d_type);
     Result := 0;
     Exit;
   end;
@@ -672,17 +688,7 @@ begin
     AEntry.Name[LNameLen] := #0;
     AEntry.NameLen := LNameLen;
     AEntry.Ino := LDent^.d_ino;
-    case LDent^.d_type of
-      8:  AEntry.FileType := ftRegular;
-      4:  AEntry.FileType := ftDirectory;
-      10: AEntry.FileType := ftSymlink;
-      2:  AEntry.FileType := ftCharDevice;
-      6:  AEntry.FileType := ftBlockDevice;
-      1:  AEntry.FileType := ftFifo;
-      12: AEntry.FileType := ftSocket;
-    else
-      AEntry.FileType := ftUnknown;
-    end;
+    AEntry.FileType := ClassifyDirEntryDType(LDent^.d_type);
     Result := 0;
     Exit;
   end;
@@ -717,17 +723,7 @@ begin
     AEntry.Name[LNameLen] := #0;
     AEntry.NameLen := LNameLen;
     AEntry.Ino := LDent^.d_fileno;
-    case LDent^.d_type of
-      8:  AEntry.FileType := ftRegular;
-      4:  AEntry.FileType := ftDirectory;
-      10: AEntry.FileType := ftSymlink;
-      2:  AEntry.FileType := ftCharDevice;
-      6:  AEntry.FileType := ftBlockDevice;
-      1:  AEntry.FileType := ftFifo;
-      12: AEntry.FileType := ftSocket;
-    else
-      AEntry.FileType := ftUnknown;
-    end;
+    AEntry.FileType := ClassifyDirEntryDType(LDent^.d_type);
     Result := 0;
     Exit;
   end;

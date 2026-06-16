@@ -49,6 +49,7 @@ procedure WakeByAddressSingle(Address: Pointer); stdcall; external 'kernel32' na
 procedure WakeByAddressAll(Address: Pointer); stdcall; external 'kernel32' name 'WakeByAddressAll';
 function LoadLibraryA(lpLibFileName: PAnsiChar): HMODULE; stdcall; external 'kernel32' name 'LoadLibraryA';
 function LoadLibraryW(lpLibFileName: PWideChar): HMODULE; stdcall; external 'kernel32' name 'LoadLibraryW';
+function GetModuleHandleW(lpModuleName: PWideChar): HMODULE; stdcall; external 'kernel32' name 'GetModuleHandleW';
 function GetProcAddress(hModule: HMODULE; lpProcName: PAnsiChar): FARPROC; stdcall; external 'kernel32' name 'GetProcAddress';
 function FreeLibrary(hLibModule: HMODULE): BOOL; stdcall; external 'kernel32' name 'FreeLibrary';
 function VirtualAlloc(lpAddress: Pointer; dwSize: PtrUInt; flAllocationType: DWORD; flProtect: DWORD): Pointer; stdcall; external 'kernel32' name 'VirtualAlloc';
