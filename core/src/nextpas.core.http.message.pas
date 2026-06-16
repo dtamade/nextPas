@@ -28,6 +28,7 @@ type
       FRequestTargetPartsParsed: Boolean;
       FVersion: THttpVersion;
       FHeaders: IHttpHeaders;
+      FTrailers: IHttpHeaders;
       FBody: IReader;
       FContentLength: Int64;
       FPathParams: array of TPathParam;
@@ -49,12 +50,14 @@ type
     procedure SetPathParam(const AName, AValue: string);
     procedure SetRemoteAddr(const AAddr: string);
     procedure SetRemoteNetAddr(const AAddr: TNetAddress);
+    procedure SetTrailers(const ATrailers: IHttpHeaders);
     function GetMethod: THttpMethod;
     function GetUrl: TUrl;
     function GetPath: string;
     function GetRawQuery: string;
     function GetVersion: THttpVersion;
     function GetHeaders: IHttpHeaders;
+    function GetTrailers: IHttpHeaders;
     function GetBody: IReader;
     function GetContentLength: Int64;
     function GetRemoteAddr: string;
@@ -299,6 +302,7 @@ begin
   FRequestTargetPartsParsed := True;
   FVersion := AVersion;
   FHeaders := HeadersOrNew(AHeaders);
+  FTrailers := nil;
   FBody := ABody;
   FContentLength := AContentLength;
 end;
@@ -316,6 +320,7 @@ begin
   FRequestTargetPartsParsed := False;
   FVersion := AVersion;
   FHeaders := HeadersOrNew(AHeaders);
+  FTrailers := nil;
   FBody := ABody;
   FContentLength := AContentLength;
 end;
@@ -382,6 +387,11 @@ begin
   FPathParams[LLen].Value := AValue;
 end;
 
+procedure THttpRequest.SetTrailers(const ATrailers: IHttpHeaders);
+begin
+  FTrailers := ATrailers;
+end;
+
 function THttpRequest.GetMethod: THttpMethod;
 begin
   Result := FMethod;
@@ -413,6 +423,11 @@ end;
 function THttpRequest.GetHeaders: IHttpHeaders;
 begin
   Result := FHeaders;
+end;
+
+function THttpRequest.GetTrailers: IHttpHeaders;
+begin
+  Result := FTrailers;
 end;
 
 function THttpRequest.GetBody: IReader;

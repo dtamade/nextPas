@@ -1185,6 +1185,8 @@ begin
     LHeaders.SetHeader('x-forwarded-proto', LScheme);
   LRequest := THttpRequest.CreateFromRequestTarget(LMethod, LPath, hvHttp2,
     LHeaders, LBody, Int64(Length(AStream.BodyBuffer)));
+  if AStream.Trailers <> nil then
+    LRequest.SetTrailers(AStream.Trailers.Clone);
   LRequest.SetRemoteNetAddr(FConn.RemoteAddr);
   Result := LRequest;
 end;

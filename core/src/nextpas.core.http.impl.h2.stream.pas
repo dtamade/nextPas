@@ -49,6 +49,7 @@ type
     FEndStreamReceived: Boolean;
     FEndStreamSent: Boolean;
     FEndHeadersReceived: Boolean;
+    FTrailerSectionReceived: Boolean;
     FResetCode: UInt32;
     FResetReceived: Boolean;
     FRequestHandled: Boolean;
@@ -139,6 +140,14 @@ const
     'proxy-connection'
   );
 
+  H2_FORBIDDEN_TRAILER_HEADERS: array[0..4] of AnsiString = (
+    'content-length',
+    'transfer-encoding',
+    'host',
+    'te',
+    'trailer'
+  );
+
 type
   TH2BodyReader = class(TInterfacedObject, IH2BodyReader)
   private
@@ -201,6 +210,19 @@ begin
   Result := ByteSpanEquals(AValue, 'trailers');
 end;
 
+function IsForbiddenTrailerHeader(const AName: TH2ByteSpan): Boolean;
+var
+  LI: SizeInt;
+begin
+  if IsForbiddenConnectionHeader(AName) then
+    Exit(True);
+  for LI := Low(H2_FORBIDDEN_TRAILER_HEADERS) to
+    High(H2_FORBIDDEN_TRAILER_HEADERS) do
+    if ByteSpanEquals(AName, H2_FORBIDDEN_TRAILER_HEADERS[LI]) then
+      Exit(True);
+  Result := False;
+end;
+
 { TH2BodyReader }
 
 constructor TH2BodyReader.Create(const AStream: TH2Stream);
@@ -261,6 +283,7 @@ begin
   FEndStreamReceived := False;
   FEndStreamSent := False;
   FEndHeadersReceived := False;
+  FTrailerSectionReceived := False;
   FResetCode := H2_ERR_NO_ERROR;
   FResetReceived := False;
   FRequestHandled := False;
@@ -444,6 +467,11 @@ begin
     begin
       InternalReset(H2_ERR_PROTOCOL_ERROR);
       Exit(h2hfrProtocolError);
+    end
+    else if IsForbiddenTrailerHeader(LHeaders[LIndex].Name) then
+    begin
+      InternalReset(H2_ERR_PROTOCOL_ERROR);
+      Exit(h2hfrProtocolError);
     end;
 
     if FMaxHeaderListSize > 0 then
@@ -483,6 +511,8 @@ begin
   end;
 
   FEndHeadersReceived := True;
+  if LIsTrailerSection then
+    FTrailerSectionReceived := True;
   FHeaderFragments := nil;
   FHeaderBlock := '';
   Result := h2hfrOk;
@@ -602,6 +632,7 @@ begin
   FPendingStreamWindowUpdate := 0;
   FPendingConnectionWindowUpdate := 0;
   FPendingResponseBody := nil;
+  FTrailerSectionReceived := False;
   FState := h2ssClosed;
 end;
 
@@ -696,6 +727,16 @@ var
 begin
   if FResetReceived or (FState = h2ssClosed) then
     Exit;
+  if FEndStreamReceived then
+  begin
+    InternalReset(H2_ERR_PROTOCOL_ERROR);
+    Exit;
+  end;
+  if FTrailerSectionReceived then
+  begin
+    InternalReset(H2_ERR_PROTOCOL_ERROR);
+    Exit;
+  end;
   if not FEndHeadersReceived and (Length(FHeaderFragments) > 0) then
   begin
     InternalReset(H2_ERR_PROTOCOL_ERROR);

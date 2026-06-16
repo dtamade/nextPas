@@ -44,6 +44,7 @@ type
     function GetRawQuery: string;
     function GetVersion: THttpVersion;
     function GetHeaders: IHttpHeaders;
+    function GetTrailers: IHttpHeaders;
     function GetBody: IReader;
     function GetContentLength: Int64;
     function GetRemoteAddr: string;
@@ -55,6 +56,7 @@ type
     property RawQuery: string read GetRawQuery;
     property Version: THttpVersion read GetVersion;
     property Headers: IHttpHeaders read GetHeaders;
+    property Trailers: IHttpHeaders read GetTrailers;
     property Body: IReader read GetBody;
     property ContentLength: Int64 read GetContentLength;
     property RemoteAddr: string read GetRemoteAddr;

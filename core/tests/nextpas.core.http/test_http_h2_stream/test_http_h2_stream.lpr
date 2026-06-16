@@ -731,6 +731,129 @@ begin
   end;
 end;
 
+procedure TestHeadersAfterEndStreamResetStream;
+var
+  LConnectionFlow: TH2ConnectionFlowControl;
+  LDecoder: THPackDecoder;
+  LHeaders: array[0..3] of THPackHeader;
+  LTrailerHeaders: array[0..0] of THPackHeader;
+  LStream: TH2Stream;
+begin
+  LConnectionFlow.Init(8192, 8192);
+  LDecoder.Init;
+  LStream := TH2Stream.Create(50, 4096, 4096, LConnectionFlow, LDecoder);
+  try
+    FillMinimalRequestHeaders(LHeaders, 'GET', '/done');
+    LStream.OnHeaders(H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM,
+      EncodeHeaders(LHeaders));
+    LTrailerHeaders[0].Name := 'x-trailer';
+    LTrailerHeaders[0].Value := 'late';
+    LStream.OnHeaders(H2_FLAG_HEADERS_END_HEADERS, EncodeHeaders(LTrailerHeaders));
+    Check(LStream.ResetReceived, 'HEADERS after END_STREAM resets stream');
+    CheckEqual(Int64(H2_ERR_PROTOCOL_ERROR), Int64(LStream.ResetCode),
+      'HEADERS after END_STREAM uses PROTOCOL_ERROR');
+  finally
+    LStream.Free;
+  end;
+end;
+
+procedure TestSecondTrailerSectionResetStream;
+var
+  LConnectionFlow: TH2ConnectionFlowControl;
+  LDecoder: THPackDecoder;
+  LHeaders: array[0..3] of THPackHeader;
+  LFirstTrailers: array[0..0] of THPackHeader;
+  LSecondTrailers: array[0..0] of THPackHeader;
+  LStream: TH2Stream;
+begin
+  LConnectionFlow.Init(8192, 8192);
+  LDecoder.Init;
+  LStream := TH2Stream.Create(51, 4096, 4096, LConnectionFlow, LDecoder);
+  try
+    FillMinimalRequestHeaders(LHeaders, 'POST', '/trailers');
+    LStream.OnHeaders(H2_FLAG_HEADERS_END_HEADERS, EncodeHeaders(LHeaders));
+    LFirstTrailers[0].Name := 'x-trailer';
+    LFirstTrailers[0].Value := 'one';
+    LStream.OnHeaders(H2_FLAG_HEADERS_END_HEADERS, EncodeHeaders(LFirstTrailers));
+    Check(not LStream.ResetReceived,
+      'first trailer section without END_STREAM stays stream-scoped');
+
+    LSecondTrailers[0].Name := 'x-trailer-2';
+    LSecondTrailers[0].Value := 'two';
+    LStream.OnHeaders(H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM,
+      EncodeHeaders(LSecondTrailers));
+    Check(LStream.ResetReceived, 'second trailer section resets stream');
+    CheckEqual(Int64(H2_ERR_PROTOCOL_ERROR), Int64(LStream.ResetCode),
+      'second trailer section uses PROTOCOL_ERROR');
+  finally
+    LStream.Free;
+  end;
+end;
+
+procedure CheckForbiddenTrailerHeaderResetsStream(
+  const ATrailerHeaders: array of THPackHeader; const AMessage: string);
+var
+  LConnectionFlow: TH2ConnectionFlowControl;
+  LDecoder: THPackDecoder;
+  LHeaders: array[0..3] of THPackHeader;
+  LStream: TH2Stream;
+begin
+  LConnectionFlow.Init(8192, 8192);
+  LDecoder.Init;
+  LStream := TH2Stream.Create(53, 4096, 4096, LConnectionFlow, LDecoder);
+  try
+    FillMinimalRequestHeaders(LHeaders, 'POST', '/invalid-trailer');
+    LStream.OnHeaders(H2_FLAG_HEADERS_END_HEADERS, EncodeHeaders(LHeaders));
+    LStream.OnHeaders(H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM,
+      EncodeHeaders(ATrailerHeaders));
+    Check(LStream.ResetReceived, AMessage + ' resets stream');
+    CheckEqual(Int64(H2_ERR_PROTOCOL_ERROR), Int64(LStream.ResetCode),
+      AMessage + ' uses PROTOCOL_ERROR');
+  finally
+    LStream.Free;
+  end;
+end;
+
+procedure TestTrailerPseudoHeaderResetStream;
+var
+  LTrailerHeaders: array[0..0] of THPackHeader;
+begin
+  LTrailerHeaders[0].Name := ':status';
+  LTrailerHeaders[0].Value := '200';
+  CheckForbiddenTrailerHeaderResetsStream(LTrailerHeaders,
+    'pseudo trailer header');
+end;
+
+procedure TestTrailerContentLengthResetStream;
+var
+  LTrailerHeaders: array[0..0] of THPackHeader;
+begin
+  LTrailerHeaders[0].Name := 'content-length';
+  LTrailerHeaders[0].Value := '1';
+  CheckForbiddenTrailerHeaderResetsStream(LTrailerHeaders,
+    'content-length trailer header');
+end;
+
+procedure TestTrailerTransferEncodingResetStream;
+var
+  LTrailerHeaders: array[0..0] of THPackHeader;
+begin
+  LTrailerHeaders[0].Name := 'transfer-encoding';
+  LTrailerHeaders[0].Value := 'chunked';
+  CheckForbiddenTrailerHeaderResetsStream(LTrailerHeaders,
+    'transfer-encoding trailer header');
+end;
+
+procedure TestTrailerHostResetStream;
+var
+  LTrailerHeaders: array[0..0] of THPackHeader;
+begin
+  LTrailerHeaders[0].Name := 'host';
+  LTrailerHeaders[0].Value := 'example.com';
+  CheckForbiddenTrailerHeaderResetsStream(LTrailerHeaders,
+    'host trailer header');
+end;
+
 { -- Pending response body tests -- }
 
 procedure TestPendingResponseBody;
@@ -984,6 +1107,18 @@ begin
     { -- New tests: trailers -- }
     Run('Trailers stored separately from headers',
       @TestTrailersStoredSeparately);
+    Run('HEADERS after END_STREAM are rejected',
+      @TestHeadersAfterEndStreamResetStream);
+    Run('Second trailer section is rejected',
+      @TestSecondTrailerSectionResetStream);
+    Run('Pseudo trailer header is rejected',
+      @TestTrailerPseudoHeaderResetStream);
+    Run('Content-Length trailer header is rejected',
+      @TestTrailerContentLengthResetStream);
+    Run('Transfer-Encoding trailer header is rejected',
+      @TestTrailerTransferEncodingResetStream);
+    Run('Host trailer header is rejected',
+      @TestTrailerHostResetStream);
     { -- New tests: pending response body -- }
     Run('Pending response body set and get',
       @TestPendingResponseBody);

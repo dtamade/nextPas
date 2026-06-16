@@ -68,6 +68,7 @@ type
     FSeenPath: string;
     FSeenBody: string;
     FSeenHeaders: IHttpHeaders;
+    FSeenTrailers: IHttpHeaders;
     FCallCount: Int32;
     FResponseStatus: THttpStatus;
     FResponseHeaders: array of record
@@ -84,6 +85,7 @@ type
     property SeenPath: string read FSeenPath;
     property SeenBody: string read FSeenBody;
     property SeenHeaders: IHttpHeaders read FSeenHeaders;
+    property SeenTrailers: IHttpHeaders read FSeenTrailers;
     property CallCount: Int32 read FCallCount;
   end;
 
@@ -474,6 +476,7 @@ begin
   FSeenPath := '';
   FSeenBody := '';
   FSeenHeaders := nil;
+  FSeenTrailers := nil;
   FCallCount := 0;
   FResponseStatus := HTTP_STATUS_OK;
   FResponseBody := '';
@@ -510,6 +513,10 @@ begin
     FSeenHeaders := AReq.Headers.Clone
   else
     FSeenHeaders := nil;
+  if AReq.Trailers <> nil then
+    FSeenTrailers := AReq.Trailers.Clone
+  else
+    FSeenTrailers := nil;
   for LI := 0 to High(FResponseHeaders) do
     AW.GetHeaders.SetHeader(FResponseHeaders[LI].Name,
       FResponseHeaders[LI].Value);
@@ -1550,6 +1557,7 @@ var
   LFrames: array[0..7] of TH2Frame;
   LFrameCount: SizeInt;
   LRequestValues: TStringArray;
+  LTrailerValues: TStringArray;
 begin
   LHandler := TCollectingHandler.Create;
   LHandlerRef := LHandler as IHttpHandler;
@@ -1588,6 +1596,17 @@ begin
         'request header value is preserved');
       CheckEqual(False, LHandler.SeenHeaders.Has('x-trailer'),
         'trailers are not exposed as request headers');
+      Check(LHandler.SeenTrailers <> nil, 'handler sees request trailers');
+      LTrailerValues := LHandler.SeenTrailers.GetAll('x-request');
+      CheckEqual(Int64(1), Int64(Length(LTrailerValues)),
+        'handler sees original trailer x-request value');
+      CheckEqual('trailer', LTrailerValues[0],
+        'request trailers keep trailer-scoped x-request value');
+      LTrailerValues := LHandler.SeenTrailers.GetAll('x-trailer');
+      CheckEqual(Int64(1), Int64(Length(LTrailerValues)),
+        'handler sees trailer-only header');
+      CheckEqual('done', LTrailerValues[0],
+        'request trailers preserve trailer-only header');
 
       DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
       CheckEqual(Int64(H2_FRAME_HEADERS), Int64(LFrames[2].Header.FrameType),
