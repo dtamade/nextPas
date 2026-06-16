@@ -176,7 +176,7 @@ begin
     Result := 1.0
   else
   begin
-    C4 := (2.0 * nextpas.core.math.scalar.PI_VALUE) / 3.0;
+    C4 := (2.0 * nextpas.core.math.trig.PI_VALUE) / 3.0;
     Result := -nextpas.core.math.trig.Power(2.0, 10.0 * AT - 10.0) *
       nextpas.core.math.trig.Sin((AT * 10.0 - 10.75) * C4);
   end;
@@ -193,7 +193,7 @@ begin
     Result := 1.0
   else
   begin
-    C4 := (2.0 * nextpas.core.math.scalar.PI_VALUE) / 3.0;
+    C4 := (2.0 * nextpas.core.math.trig.PI_VALUE) / 3.0;
     Result := nextpas.core.math.trig.Power(2.0, -10.0 * AT) *
       nextpas.core.math.trig.Sin((AT * 10.0 - 0.75) * C4) + 1.0;
   end;
@@ -210,7 +210,7 @@ begin
     Result := 1.0
   else
   begin
-    C5 := (2.0 * nextpas.core.math.scalar.PI_VALUE) / 4.5;
+    C5 := (2.0 * nextpas.core.math.trig.PI_VALUE) / 4.5;
     if AT < 0.5 then
       Result := -(nextpas.core.math.trig.Power(2.0, 20.0 * AT - 10.0) *
         nextpas.core.math.trig.Sin((20.0 * AT - 11.125) * C5)) * 0.5

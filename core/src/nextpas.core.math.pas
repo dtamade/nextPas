@@ -17,38 +17,21 @@ uses
 
 type
   { vec types }
-  TVec2f = nextpas.core.math.vec.base.TVec2f;
-  TVec2d = nextpas.core.math.vec.base.TVec2d;
-  TVec3f = nextpas.core.math.vec.base.TVec3f;
-  TVec3d = nextpas.core.math.vec.base.TVec3d;
-  TVec4f = nextpas.core.math.vec.base.TVec4f;
-  TVec4d = nextpas.core.math.vec.base.TVec4d;
-  { mat types }
-  TMat3f = nextpas.core.math.mat.base.TMat3f;
-  TMat3d = nextpas.core.math.mat.base.TMat3d;
-  TMat4f = nextpas.core.math.mat.base.TMat4f;
-  TMat4d = nextpas.core.math.mat.base.TMat4d;
-  { quat types }
-  TQuatf = nextpas.core.math.quat.base.TQuatf;
-  TQuatd = nextpas.core.math.quat.base.TQuatd;
-  { random types }
-  TRandomState = nextpas.core.math.random.TRandomState;
-
-{ scalar functions }
-
-type
   TVec2f = nextpas.core.math.vec.TVec2f;
-  TVec3f = nextpas.core.math.vec.TVec3f;
-  TVec4f = nextpas.core.math.vec.TVec4f;
   TVec2d = nextpas.core.math.vec.TVec2d;
+  TVec3f = nextpas.core.math.vec.TVec3f;
   TVec3d = nextpas.core.math.vec.TVec3d;
+  TVec4f = nextpas.core.math.vec.TVec4f;
   TVec4d = nextpas.core.math.vec.TVec4d;
+  { mat types }
   TMat3f = nextpas.core.math.mat.TMat3f;
-  TMat4f = nextpas.core.math.mat.TMat4f;
   TMat3d = nextpas.core.math.mat.TMat3d;
+  TMat4f = nextpas.core.math.mat.TMat4f;
   TMat4d = nextpas.core.math.mat.TMat4d;
+  { quat types }
   TQuatf = nextpas.core.math.quat.TQuatf;
   TQuatd = nextpas.core.math.quat.TQuatd;
+  { easing/random types }
   TEasingFunction = nextpas.core.math.easing.TEasingFunction;
   TRandomState = nextpas.core.math.random.TRandomState;
   TRandomGen = nextpas.core.math.random.TRandomGen;
