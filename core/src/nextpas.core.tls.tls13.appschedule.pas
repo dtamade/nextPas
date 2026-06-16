@@ -16,7 +16,8 @@ unit nextpas.core.tls.tls13.appschedule;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.base,
+  nextpas.core.text.conv;
 
 type
   TTLS13ApplicationSecrets = record

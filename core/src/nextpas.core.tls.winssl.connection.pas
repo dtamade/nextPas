@@ -25,7 +25,9 @@ uses
   {$ELSE}
   Sockets,
   {$ENDIF}
-  SysUtils,SyncObjs, DateUtils,
+  nextpas.core.exception, nextpas.core.text.conv, SyncObjs, DateUtils,
+  nextpas.core.io.intf,
+  nextpas.core.io.stream_adapter,
   nextpas.core.tls.base,
   nextpas.core.tls.connection.base,
   nextpas.core.tls.exceptions,
@@ -113,7 +115,7 @@ type
     ISSLNativeHandleAccess)
   private
     FSocket: THandle;
-    FStream: TStream;
+    FStream: IStream;
     FCtxtHandle: CtxtHandle;
     FHandshakeState: TSSLHandshakeState;
     FServerName: string;
@@ -212,6 +214,7 @@ type
   public
     constructor Create(AContext: ISSLContext; ASocket: THandle); overload;
     constructor Create(AContext: ISSLContext; AStream: TStream); overload;
+    constructor Create(AContext: ISSLContext; AStream: IStream); overload;
     destructor Destroy; override;
 
     { ISSLClientConnection }
@@ -636,6 +639,11 @@ begin
 end;
 
 constructor TWinSSLConnection.Create(AContext: ISSLContext; AStream: TStream);
+begin
+  Create(AContext, WrapTStream(AStream, False));
+end;
+
+constructor TWinSSLConnection.Create(AContext: ISSLContext; AStream: IStream);
 begin
   inherited Create(AContext);
   FSocket := INVALID_HANDLE_VALUE;

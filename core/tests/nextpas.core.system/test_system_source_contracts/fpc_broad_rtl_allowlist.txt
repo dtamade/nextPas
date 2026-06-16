@@ -23,8 +23,8 @@ simd-host-probe-debt|Windows|2
 system-kernel-route|TypInfo|1
 tls-legacy-host-debt|BaseUnix|7
 tls-legacy-host-debt|Classes|138
-tls-legacy-host-debt|DateUtils|15
-tls-legacy-host-debt|SysUtils|218
+tls-legacy-host-debt|DateUtils|14
+tls-legacy-host-debt|SysUtils|214
 tls-legacy-host-debt|Unix|5
 tls-legacy-host-debt|Windows|18
 tui-legacy-host-debt|BaseUnix|1

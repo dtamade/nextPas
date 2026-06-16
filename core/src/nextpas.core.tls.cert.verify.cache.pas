@@ -25,7 +25,19 @@ unit nextpas.core.tls.cert.verify.cache;
 
 interface
 
-uses SyncObjs, nextpas.core.time, nextpas.core.tls.openssl.base; type TCertVerifyResult = record Valid: Boolean;
+uses
+  nextpas.core.base,
+  SyncObjs,
+  nextpas.core.time,
+  nextpas.core.tls.openssl.base,
+  nextpas.core.tls.openssl.loader,
+  nextpas.core.tls.openssl.api.evp,
+  nextpas.core.tls.openssl.api.x509,
+  nextpas.core.tls.openssl.api.core;
+
+type
+  TCertVerifyResult = record
+    Valid: Boolean;
     ErrorCode: Integer;
     ErrorMessage: string;
     VerifiedAt: TDateTime;
@@ -80,7 +92,8 @@ function GetGlobalCertVerifyCache: TCertVerifyCache;
 
 implementation
 
-uses nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.bio, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.loader; var GlobalCache: TCertVerifyCache = nil;
+var
+  GlobalCache: TCertVerifyCache = nil;
   GlobalCacheLock: TCriticalSection = nil;
 
 function GetGlobalCertVerifyCache: TCertVerifyCache;

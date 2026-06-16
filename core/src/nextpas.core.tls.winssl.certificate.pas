@@ -18,7 +18,11 @@ unit nextpas.core.tls.winssl.certificate;
 interface
 
 uses
-  Windows, SysUtils,nextpas.core.tls.base,
+  Windows, SysUtils, Classes,
+  nextpas.core.base.utils,
+  nextpas.core.fs,
+  nextpas.core.time,
+  nextpas.core.tls.base,
   nextpas.core.tls.winssl.base,
   nextpas.core.tls.winssl.api,
   nextpas.core.tls.winssl.utils,
@@ -107,8 +111,9 @@ function CreateWinSSLCertificateFromContext(ACertContext: PCCERT_CONTEXT; AOwnsC
 implementation
 
 uses
+  nextpas.core.text.conv,
   nextpas.core.text.strings,
-    nextpas.core.time,
+  nextpas.core.time,
   nextpas.core.tls.asn1,
   nextpas.core.tls.x509,
   nextpas.core.crypto.hash;
@@ -144,7 +149,7 @@ begin
     AParser.LoadFromDER(LDER);
     Result := True;
   except
-    FreeAndNil(AParser);
+    nextpas.core.base.utils.FreeAndNil(AParser);
     Result := False;
   end;
 end;
@@ -318,7 +323,7 @@ end;
 
 function FormatHexError(const AValue: DWORD): string;
 begin
-  Result := '0x' + IntToHex(AValue, 8);
+  Result := '0x' + nextpas.core.text.conv.IntToHex(AValue, 8);
 end;
 
 function AlgorithmOIDToDisplayName(AOID: LPCSTR): string;
@@ -376,7 +381,7 @@ begin
   begin
     if i > 0 then
       Result := Result + ':';
-    Result := Result + IntToHex(p^, 2);
+    Result := Result + nextpas.core.text.conv.IntToHex(p^, 2);
     Inc(p);
   end;
 end;
@@ -719,7 +724,7 @@ begin
   begin
     if i < Integer(CertInfo^.SerialNumber.cbData) - 1 then
       Result := Result + ':';
-    Result := Result + IntToHex(PByte(CertInfo^.SerialNumber.pbData)[i], 2);
+    Result := Result + nextpas.core.text.conv.IntToHex(PByte(CertInfo^.SerialNumber.pbData)[i], 2);
   end;
 end;
 
@@ -1308,7 +1313,7 @@ begin
     Exit;
   end;
 
-  Result := Trunc(ExpiryDate - Now);
+  Result := Trunc(ExpiryDate - nextpas.core.time.DateTimeNow);
 end;
 
 function TWinSSLCertificate.GetSubjectCN: string;
@@ -1464,7 +1469,7 @@ begin
           begin
             Addr4 := AltName^.IPAddress.pbData;
             if Addr4 <> nil then
-              AddToResult(Format('%d.%d.%d.%d', [Addr4[0], Addr4[1], Addr4[2], Addr4[3]]));
+              AddToResult(nextpas.core.text.conv.Format('%d.%d.%d.%d', [Addr4[0], Addr4[1], Addr4[2], Addr4[3]]));
           end
           else if AltName^.IPAddress.cbData = 16 then
           begin
@@ -1477,7 +1482,7 @@ begin
                 SegValue := (Word(Addr6[k * 2]) shl 8) or Word(Addr6[k * 2 + 1]);
                 if k > 0 then
                   IpStr := IpStr + ':';
-                IpStr := IpStr + IntToHex(SegValue, 1);
+                IpStr := IpStr + nextpas.core.text.conv.IntToHex(SegValue, 1);
               end;
               if IpStr <> '' then
                 AddToResult(IpStr);

@@ -20,7 +20,12 @@ unit nextpas.core.tls.pkcs11.types;
 
 interface
 
-uses SysUtils, Generics.Collections, nextpas.core.tls.pkcs11.api;
+uses
+  Generics.Collections,
+  nextpas.core.base,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
+  nextpas.core.tls.pkcs11.api;
 
 type
   { TPKCS11URI - RFC 7512 PKCS#11 URI representation

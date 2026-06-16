@@ -17,7 +17,10 @@ unit nextpas.core.tls.wolfssl.certificate;
 interface
 
 uses
-  SysUtils,nextpas.core.tls.base,
+  SysUtils, Classes,
+  nextpas.core.base.utils,
+  nextpas.core.fs,
+  nextpas.core.tls.base,
   nextpas.core.tls.errors,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.x509,
@@ -146,8 +149,10 @@ type
 implementation
 
 uses
+  Contnrs,
+  DateUtils,
+  nextpas.core.text.conv,
   nextpas.core.text.strings,
-    Contnrs, DateUtils,
   nextpas.core.time,
   nextpas.core.tls.utils,
   nextpas.core.crypto.hash,
@@ -223,7 +228,7 @@ begin
     on E: Exception do
     begin
       AError := 'Failed to parse certificate DER: ' + E.Message;
-      FreeAndNil(AParser);
+      nextpas.core.base.utils.FreeAndNil(AParser);
       Result := False;
     end;
   end;
@@ -515,7 +520,7 @@ begin
     end;
     Result := True;
   except
-    FreeAndNil(AParser);
+    nextpas.core.base.utils.FreeAndNil(AParser);
     Result := False;
   end;
 end;
@@ -591,7 +596,7 @@ var
   LStream: TFileStream;
 begin
   Result := False;
-  if not FileExists(AFileName) then Exit;
+  if not nextpas.core.fs.IsFile(AFileName) then Exit;
   ResetLoadedState;
 
   SetLength(LRawBytes, 0);
@@ -1040,7 +1045,7 @@ begin
       AResult.ErrorCode := 4;
       AResult.ChainStatus := 1;
       AResult.ErrorMessage := 'Certificate chain contains a nil entry';
-      AResult.DetailedInfo := Format('WolfSSL VerifyEx encountered a nil chain entry at index %d', [I]);
+      AResult.DetailedInfo := nextpas.core.text.conv.Format('WolfSSL VerifyEx encountered a nil chain entry at index %d', [I]);
       Exit;
     end;
 
@@ -1053,7 +1058,7 @@ begin
         AResult.ErrorCode := 5;
         AResult.ChainStatus := 1;
         AResult.ErrorMessage := 'Certificate validity window is unavailable';
-        AResult.DetailedInfo := Format('WolfSSL VerifyEx requires validity metadata for chain entry %d', [I]);
+        AResult.DetailedInfo := nextpas.core.text.conv.Format('WolfSSL VerifyEx requires validity metadata for chain entry %d', [I]);
         Exit;
       end;
       if LCurrentTime < LNotBefore then
@@ -1061,7 +1066,7 @@ begin
         AResult.ErrorCode := 6;
         AResult.ChainStatus := 1;
         AResult.ErrorMessage := 'Certificate is not yet valid';
-        AResult.DetailedInfo := Format('WolfSSL VerifyEx rejected chain entry %d because notBefore is in the future', [I]);
+        AResult.DetailedInfo := nextpas.core.text.conv.Format('WolfSSL VerifyEx rejected chain entry %d because notBefore is in the future', [I]);
         Exit;
       end;
       if LCurrentTime > LNotAfter then
@@ -1069,7 +1074,7 @@ begin
         AResult.ErrorCode := 7;
         AResult.ChainStatus := 1;
         AResult.ErrorMessage := 'Certificate is expired';
-        AResult.DetailedInfo := Format('WolfSSL VerifyEx rejected chain entry %d because notAfter is in the past', [I]);
+        AResult.DetailedInfo := nextpas.core.text.conv.Format('WolfSSL VerifyEx rejected chain entry %d because notAfter is in the past', [I]);
         Exit;
       end;
     end;
@@ -1296,7 +1301,7 @@ begin
     Exit;
   end;
 
-  Result := DaysBetween(Now, LNotAfter);
+  Result := DaysBetween(nextpas.core.time.DateTimeNow, LNotAfter);
   if IsExpired then
     Result := -Result;
 end;
@@ -1614,7 +1619,7 @@ var
   LCert: TWolfSSLCertificate;
 begin
   Result := False;
-  if not FileExists(AFileName) then Exit;
+  if not nextpas.core.fs.IsFile(AFileName) then Exit;
 
   LCert := TWolfSSLCertificate.Create;
   try
@@ -1634,14 +1639,14 @@ var
   LCount: Integer;
 begin
   Result := False;
-  if not DirectoryExists(APath) then Exit;
+  if not nextpas.core.fs.IsDir(APath) then Exit;
 
   LCount := 0;
-  if FindFirst(IncludeTrailingPathDelimiter(APath) + '*.pem', faAnyFile, LSearchRec) = 0 then
+  if FindFirst(nextpas.core.fs.PathEnsureSep(APath) + '*.pem', faAnyFile, LSearchRec) = 0 then
   begin
     try
       repeat
-        if LoadFromFile(IncludeTrailingPathDelimiter(APath) + LSearchRec.Name) then
+        if LoadFromFile(nextpas.core.fs.PathEnsureSep(APath) + LSearchRec.Name) then
           Inc(LCount);
       until FindNext(LSearchRec) <> 0;
     finally
@@ -1650,11 +1655,11 @@ begin
   end;
 
   // 也加载 .crt 文件
-  if FindFirst(IncludeTrailingPathDelimiter(APath) + '*.crt', faAnyFile, LSearchRec) = 0 then
+  if FindFirst(nextpas.core.fs.PathEnsureSep(APath) + '*.crt', faAnyFile, LSearchRec) = 0 then
   begin
     try
       repeat
-        if LoadFromFile(IncludeTrailingPathDelimiter(APath) + LSearchRec.Name) then
+        if LoadFromFile(nextpas.core.fs.PathEnsureSep(APath) + LSearchRec.Name) then
           Inc(LCount);
       until FindNext(LSearchRec) <> 0;
     finally
@@ -1670,14 +1675,14 @@ begin
   Result := False;
   {$IFDEF LINUX}
   // Linux 系统 CA 路径
-  if DirectoryExists('/etc/ssl/certs') then
+  if nextpas.core.fs.IsDir('/etc/ssl/certs') then
     Result := LoadFromPath('/etc/ssl/certs')
-  else if DirectoryExists('/etc/pki/tls/certs') then
+  else if nextpas.core.fs.IsDir('/etc/pki/tls/certs') then
     Result := LoadFromPath('/etc/pki/tls/certs');
   {$ENDIF}
   {$IFDEF DARWIN}
   // macOS 系统 CA
-  if FileExists('/etc/ssl/cert.pem') then
+  if nextpas.core.fs.IsFile('/etc/ssl/cert.pem') then
     Result := LoadFromFile('/etc/ssl/cert.pem');
   {$ENDIF}
 end;

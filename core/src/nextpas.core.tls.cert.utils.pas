@@ -33,6 +33,7 @@ interface
 
 uses
   SysUtils, Classes,
+  nextpas.core.fs,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
@@ -286,8 +287,9 @@ type
 implementation
 
 uses
+  nextpas.core.text.conv,
   nextpas.core.text.strings,
-    nextpas.core.time,
+  nextpas.core.time,
   nextpas.core.tls.openssl.api.asn1,
   nextpas.core.tls.openssl.api.x509v3,
   nextpas.core.tls.openssl.api.stack,  // Added stack support
@@ -904,13 +906,13 @@ begin
 
       // 支持自定义起始时间
       if AOptions.NotBefore > 0 then
-        X509_gmtime_adj(LNotBefore, Trunc((AOptions.NotBefore - Now) * 24 * 60 * 60))
+        X509_gmtime_adj(LNotBefore, Trunc((AOptions.NotBefore - nextpas.core.time.DateTimeNow) * 24 * 60 * 60))
       else
         X509_gmtime_adj(LNotBefore, 0);  // 使用当前时间
 
       // 支持自定义结束时间
       if AOptions.NotAfter > 0 then
-        X509_gmtime_adj(LNotAfter, Trunc((AOptions.NotAfter - Now) * 24 * 60 * 60))
+        X509_gmtime_adj(LNotAfter, Trunc((AOptions.NotAfter - nextpas.core.time.DateTimeNow) * 24 * 60 * 60))
       else
         X509_gmtime_adj(LNotAfter, Int64(AOptions.ValidDays) * 24 * 60 * 60);
 
@@ -1212,12 +1214,12 @@ begin
             raise ESSLCertError.Create('Required leaf certificate validity-adjustment helper is unavailable');
 
           if AOptions.NotBefore > 0 then
-            X509_gmtime_adj(LNotBefore, Trunc((AOptions.NotBefore - Now) * 24 * 60 * 60))
+            X509_gmtime_adj(LNotBefore, Trunc((AOptions.NotBefore - nextpas.core.time.DateTimeNow) * 24 * 60 * 60))
           else
             X509_gmtime_adj(LNotBefore, 0);
 
           if AOptions.NotAfter > 0 then
-            X509_gmtime_adj(LNotAfter, Trunc((AOptions.NotAfter - Now) * 24 * 60 * 60))
+            X509_gmtime_adj(LNotAfter, Trunc((AOptions.NotAfter - nextpas.core.time.DateTimeNow) * 24 * 60 * 60))
           else
             X509_gmtime_adj(LNotAfter, Int64(AOptions.ValidDays) * 24 * 60 * 60);
           if not Assigned(X509_set_pubkey) then
@@ -1771,12 +1773,12 @@ begin
   begin
     try
       LStore := TSSLFactory.CreateCertificateStore;
-      if DirectoryExists(ACAPath) then
+      if nextpas.core.fs.IsDir(ACAPath) then
       begin
         if not LStore.LoadFromPath(ACAPath) then
           ; // 忽略部分加载错误
       end
-      else if FileExists(ACAPath) then
+      else if nextpas.core.fs.IsFile(ACAPath) then
       begin
         if not LStore.LoadFromFile(ACAPath) then
           ;
@@ -1938,7 +1940,7 @@ var
   LBytes: TBytes;
 begin
   Result := '';
-  if not FileExists(AFileName) then Exit;
+  if not nextpas.core.fs.IsFile(AFileName) then Exit;
 
   LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
   try
@@ -2034,7 +2036,7 @@ begin
 
       // 转换为十六进制字符串
       for I := 0 to 31 do
-        Result := Result + LowerCase(IntToHex(LHash[I], 2));
+        Result := Result + LowerCase(nextpas.core.text.conv.IntToHex(LHash[I], 2));
 
     finally
       if Assigned(X509_free) then

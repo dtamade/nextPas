@@ -15,7 +15,10 @@ unit nextpas.core.tls.dns.ldns;
 
 interface
 
-uses SysUtils, dynlibs;
+uses
+  dynlibs,
+  nextpas.core.base,
+  nextpas.core.text.conv;
 
 const
   // ldns 库名

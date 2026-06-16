@@ -5,7 +5,7 @@ unit nextpas.core.tls.sni.callback;
 interface
 
 uses
-  SysUtils, nextpas.core.tls.x509;
+   nextpas.core.tls.x509;
 
 type
   TSNICertificateEntry = record

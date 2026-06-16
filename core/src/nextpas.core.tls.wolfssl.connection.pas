@@ -18,7 +18,9 @@ unit nextpas.core.tls.wolfssl.connection;
 interface
 
 uses
-  SysUtils, Classes,
+  nextpas.core.text.conv, Classes,
+  nextpas.core.io.intf,
+  nextpas.core.io.stream_adapter,
   nextpas.core.tls.base,
   nextpas.core.tls.errors,
   nextpas.core.tls.exceptions,
@@ -28,6 +30,11 @@ uses
   nextpas.core.tls.wolfssl.api;
 
 type
+  PWolfSSLIOContext = ^TWolfSSLIOContext;
+  TWolfSSLIOContext = record
+    Stream: IStream;
+  end;
+
   { TWolfSSLConnection - WolfSSL SSL 连接类 }
   TWolfSSLConnection = class(TBaseSSLConnection, ISSLClientConnection,
     ISSLNativeHandleAccess)
@@ -35,7 +42,8 @@ type
     FWolfSSLCtx: PWOLFSSL_CTX;
     FWolfSSL: PWOLFSSL;
     FSocket: THandle;
-    FStream: TStream;
+    FStream: IStream;
+    FIOContext: PWolfSSLIOContext;
     FServerName: string;
     FALPNProtocols: string;
     FNegotiatedALPN: string;
@@ -47,6 +55,7 @@ type
 
     procedure SetupSocket;
     procedure SetupStream;
+    procedure FreeIOContext;
     procedure SetupSNI;
     procedure SetupALPN;
     function CompleteStreamHandshake(AIsClient: Boolean): Boolean;
@@ -98,6 +107,7 @@ type
   public
     constructor Create(AContext: ISSLContext; ASocket: THandle); overload;
     constructor Create(AContext: ISSLContext; AStream: TStream); overload;
+    constructor Create(AContext: ISSLContext; AStream: IStream); overload;
     destructor Destroy; override;
 
     function GetConnectionInfo: TSSLConnectionInfo; override;
@@ -151,15 +161,17 @@ end;
 function WolfSSL_StreamRecvCallback(ssl: PWOLFSSL; buf: PAnsiChar; sz: Integer;
   ctx: Pointer): Integer; cdecl;
 var
-  LStream: TStream;
+  LContext: PWolfSSLIOContext;
   LBytesRead: Integer;
 begin
   Result := -1;
   if ctx = nil then Exit;
 
-  LStream := TStream(ctx);
+  LContext := PWolfSSLIOContext(ctx);
+  if (LContext = nil) or (LContext^.Stream = nil) then
+    Exit;
   try
-    LBytesRead := LStream.Read(buf^, sz);
+    LBytesRead := Integer(LContext^.Stream.Read(buf^, sz));
     if LBytesRead = 0 then
       Result := -2  // WOLFSSL_CBIO_ERR_WANT_READ
     else if LBytesRead < 0 then
@@ -174,15 +186,17 @@ end;
 function WolfSSL_StreamSendCallback(ssl: PWOLFSSL; buf: PAnsiChar; sz: Integer;
   ctx: Pointer): Integer; cdecl;
 var
-  LStream: TStream;
+  LContext: PWolfSSLIOContext;
   LBytesWritten: Integer;
 begin
   Result := -1;
   if ctx = nil then Exit;
 
-  LStream := TStream(ctx);
+  LContext := PWolfSSLIOContext(ctx);
+  if (LContext = nil) or (LContext^.Stream = nil) then
+    Exit;
   try
-    LBytesWritten := LStream.Write(buf^, sz);
+    LBytesWritten := Integer(LContext^.Stream.Write(buf^, sz));
     if LBytesWritten = 0 then
       Result := -3  // WOLFSSL_CBIO_ERR_WANT_WRITE
     else if LBytesWritten < 0 then
@@ -202,6 +216,7 @@ begin
   FWolfSSLCtx := PWOLFSSL_CTX(GetNativeHandleSafe(AContext, 'TWolfSSLConnection.Create'));
   FSocket := ASocket;
   FStream := nil;
+  FIOContext := nil;
   FWolfSSL := nil;
   FServerName := '';
   FALPNProtocols := AContext.GetALPNProtocols;
@@ -229,10 +244,16 @@ end;
 
 constructor TWolfSSLConnection.Create(AContext: ISSLContext; AStream: TStream);
 begin
+  Create(AContext, WrapTStream(AStream, False));
+end;
+
+constructor TWolfSSLConnection.Create(AContext: ISSLContext; AStream: IStream);
+begin
   inherited Create(AContext);
   FWolfSSLCtx := PWOLFSSL_CTX(GetNativeHandleSafe(AContext, 'TWolfSSLConnection.Create'));
   FSocket := 0;
   FStream := AStream;
+  FIOContext := nil;
   FWolfSSL := nil;
   FServerName := '';
   FALPNProtocols := AContext.GetALPNProtocols;
@@ -265,6 +286,7 @@ destructor TWolfSSLConnection.Destroy;
 begin
   if FConnected then
     DoShutdown;
+  FreeIOContext;
   if FWolfSSL <> nil then
   begin
     if Assigned(wolfSSL_free) then
@@ -305,9 +327,24 @@ begin
   // 设置 I/O 上下文（传递流指针）
   if Assigned(wolfSSL_SetIOReadCtx) and Assigned(wolfSSL_SetIOWriteCtx) then
   begin
-    wolfSSL_SetIOReadCtx(FWolfSSL, FStream);
-    wolfSSL_SetIOWriteCtx(FWolfSSL, FStream);
+    if FIOContext = nil then
+    begin
+      New(FIOContext);
+      FillChar(FIOContext^, SizeOf(TWolfSSLIOContext), 0);
+    end;
+    FIOContext^.Stream := FStream;
+    wolfSSL_SetIOReadCtx(FWolfSSL, FIOContext);
+    wolfSSL_SetIOWriteCtx(FWolfSSL, FIOContext);
   end;
+end;
+
+procedure TWolfSSLConnection.FreeIOContext;
+begin
+  if FIOContext = nil then
+    Exit;
+  FIOContext^.Stream := nil;
+  Dispose(FIOContext);
+  FIOContext := nil;
 end;
 
 procedure TWolfSSLConnection.SetupSNI;
@@ -638,6 +675,7 @@ end;
 procedure TWolfSSLConnection.DoClose;
 begin
   DoShutdown;
+  FreeIOContext;
 end;
 
 function TWolfSSLConnection.DoRenegotiate: Boolean;

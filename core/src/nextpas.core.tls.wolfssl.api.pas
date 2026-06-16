@@ -21,7 +21,7 @@ unit nextpas.core.tls.wolfssl.api;
 interface
 
 uses
-  SysUtils, dynlibs, ctypes,
+   dynlibs, ctypes,
   nextpas.core.tls.wolfssl.base;
 
 type
@@ -342,6 +342,9 @@ function GetWolfSSLLibraryHandle: TLibHandle;
 
 implementation
 
+uses
+  nextpas.core.fs;
+
 var
   GWolfSSLHandle: TLibHandle = NilHandle;
   GWolfSSLLoaded: Boolean = False;
@@ -354,32 +357,34 @@ end;
 {$IFDEF LINUX}
 function TryLoadWolfSSLLibraryFromPattern(const ADirectory, APattern: string): TLibHandle;
 var
-  LSearch: TSearchRec;
-  LResult: Integer;
-  LPath: string;
+  LEntries: TDirEntryArray;
+  LPath, LPrefix: string;
+  LStarPos: SizeInt;
+  I: Integer;
 begin
   Result := NilHandle;
 
-  if not DirectoryExists(ADirectory) then
+  if not IsDir(ADirectory) then
     Exit;
 
-  LResult := FindFirst(IncludeTrailingPathDelimiter(ADirectory) + APattern, faAnyFile, LSearch);
-  if LResult <> 0 then
-    Exit;
+  // Extract prefix before '*' for prefix matching
+  LStarPos := Pos('*', APattern);
+  if LStarPos > 0 then
+    LPrefix := Copy(APattern, 1, LStarPos - 1)
+  else
+    LPrefix := APattern;
 
-  try
-    repeat
-      if (LSearch.Name <> '.') and (LSearch.Name <> '..') then
-      begin
-        LPath := IncludeTrailingPathDelimiter(ADirectory) + LSearch.Name;
-        Result := LoadLibrary(LPath);
-        if Result <> NilHandle then
-          Exit;
-      end;
-      LResult := FindNext(LSearch);
-    until LResult <> 0;
-  finally
-    FindClose(LSearch);
+  LEntries := ReadDir(ADirectory);
+  for I := 0 to High(LEntries) do
+  begin
+    if LEntries[I].IsDir then
+      Continue;
+    if (LPrefix <> '') and (Copy(LEntries[I].Name, 1, Length(LPrefix)) <> LPrefix) then
+      Continue;
+    LPath := PathEnsureSep(ADirectory) + LEntries[I].Name;
+    Result := LoadLibrary(LPath);
+    if Result <> NilHandle then
+      Exit;
   end;
 end;
 
@@ -399,7 +404,7 @@ begin
 
   for I := Low(CANDIDATE_DIRS) to High(CANDIDATE_DIRS) do
   begin
-    Result := LoadLibrary(IncludeTrailingPathDelimiter(CANDIDATE_DIRS[I]) + WOLFSSL_LIB_NAME);
+    Result := LoadLibrary(PathEnsureSep(CANDIDATE_DIRS[I]) + WOLFSSL_LIB_NAME);
     if Result <> NilHandle then
       Exit;
   end;

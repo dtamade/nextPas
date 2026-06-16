@@ -4,7 +4,7 @@ unit nextpas.core.tls.openssl.api.core;
 
 interface
 
-uses nextpas.core.tls.exceptions, DynLibs, ctypes, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.loader;
+uses nextpas.core.tls.exceptions, DynLibs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.loader;
 
 type
   { SSL Library Management }

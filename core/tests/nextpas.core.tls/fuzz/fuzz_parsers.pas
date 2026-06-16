@@ -15,7 +15,7 @@ program fuzz_parsers;
  *}
 
 uses
-  SysUtils, Classes,
+  SysUtils,
   fuzz_framework,
   nextpas.core.tls.cert,
   nextpas.core.tls.cert.builder,
@@ -56,15 +56,13 @@ end;
 procedure FuzzDistinguishedName(const AInput: TBytes);
 var
   InputStr: string;
-  ParseResult: TStringList;
+  ParseResult: TSSLStringArray;
 begin
   if Length(AInput) = 0 then Exit;
   SetString(InputStr, PAnsiChar(@AInput[0]), Length(AInput));
 
   try
     ParseResult := TSSLUtils.ParseDistinguishedName(InputStr);
-    if ParseResult <> nil then
-      ParseResult.Free;
   except
     // Expected for invalid DN
   end;

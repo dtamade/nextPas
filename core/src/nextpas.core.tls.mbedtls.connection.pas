@@ -19,15 +19,22 @@ unit nextpas.core.tls.mbedtls.connection;
 interface
 
 uses
-  SysUtils, Classes, Sockets,
+  nextpas.core.text.conv, Classes, Sockets,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.connection.base,
+  nextpas.core.io.intf,
+  nextpas.core.io.stream_adapter,
   nextpas.core.tls.mbedtls.base,
   nextpas.core.tls.mbedtls.native_handle,
   nextpas.core.tls.mbedtls.api;
 
 type
+  PMbedTLSIOContext = ^TMbedTLSIOContext;
+  TMbedTLSIOContext = record
+    Stream: IStream;
+  end;
+
   { TMbedTLSConnection - MbedTLS 连接类 }
   TMbedTLSConnection = class(TBaseSSLConnection, ISSLClientConnection,
     ISSLNativeHandleAccess)
@@ -35,7 +42,8 @@ type
     FSSLConfig: Pmbedtls_ssl_config;
     FSSLContext: Pmbedtls_ssl_context;
     FSocket: THandle;
-    FStream: TStream;
+    FStream: IStream;
+    FIOContext: PMbedTLSIOContext;
     FServerName: string;
     FALPNProtocols: string;
     FNegotiatedALPN: string;
@@ -43,6 +51,8 @@ type
     FSessionReused: Boolean;
 
     procedure AllocateSSLContext;
+    procedure SetupTransportBIO;
+    procedure FreeIOContext;
     procedure FreeSSLContext;
 
   protected
@@ -81,6 +91,7 @@ type
   public
     constructor Create(AContext: ISSLContext; ASSLConfig: Pmbedtls_ssl_config; ASocket: THandle); overload;
     constructor Create(AContext: ISSLContext; ASSLConfig: Pmbedtls_ssl_config; AStream: TStream); overload;
+    constructor Create(AContext: ISSLContext; ASSLConfig: Pmbedtls_ssl_config; AStream: IStream); overload;
     destructor Destroy; override;
 
     function GetConnectionInfo: TSSLConnectionInfo; override;
@@ -205,13 +216,13 @@ end;
 { Stream BIO callbacks for MbedTLS }
 function MbedTLSStreamSend(ctx: Pointer; const buf: PByte; len: NativeUInt): Integer; cdecl;
 var
-  LStream: TStream;
+  LContext: PMbedTLSIOContext;
 begin
-  LStream := TStream(ctx);
-  if LStream = nil then
+  LContext := PMbedTLSIOContext(ctx);
+  if (LContext = nil) or (LContext^.Stream = nil) then
     Exit(MBEDTLS_ERR_SSL_WANT_WRITE);
   try
-    Result := LStream.Write(buf^, len);
+    Result := Integer(LContext^.Stream.Write(buf^, len));
     if Result <= 0 then
       Result := MBEDTLS_ERR_SSL_WANT_WRITE;
   except
@@ -221,13 +232,13 @@ end;
 
 function MbedTLSStreamRecv(ctx: Pointer; buf: PByte; len: NativeUInt): Integer; cdecl;
 var
-  LStream: TStream;
+  LContext: PMbedTLSIOContext;
 begin
-  LStream := TStream(ctx);
-  if LStream = nil then
+  LContext := PMbedTLSIOContext(ctx);
+  if (LContext = nil) or (LContext^.Stream = nil) then
     Exit(MBEDTLS_ERR_SSL_WANT_READ);
   try
-    Result := LStream.Read(buf^, len);
+    Result := Integer(LContext^.Stream.Read(buf^, len));
     if Result < 0 then
       Result := MBEDTLS_ERR_SSL_WANT_READ
     else if Result = 0 then
@@ -245,6 +256,7 @@ begin
   FSSLConfig := ASSLConfig;
   FSocket := ASocket;
   FStream := nil;
+  FIOContext := nil;
   FSSLContext := nil;
   FServerName := '';
   FALPNProtocols := '';
@@ -257,10 +269,16 @@ end;
 
 constructor TMbedTLSConnection.Create(AContext: ISSLContext; ASSLConfig: Pmbedtls_ssl_config; AStream: TStream);
 begin
+  Create(AContext, ASSLConfig, WrapTStream(AStream, False));
+end;
+
+constructor TMbedTLSConnection.Create(AContext: ISSLContext; ASSLConfig: Pmbedtls_ssl_config; AStream: IStream);
+begin
   inherited Create(AContext);
   FSSLConfig := ASSLConfig;
   FSocket := 0;
   FStream := AStream;
+  FIOContext := nil;
   FSSLContext := nil;
   FServerName := '';
   FALPNProtocols := '';
@@ -275,6 +293,7 @@ destructor TMbedTLSConnection.Destroy;
 begin
   if FConnected then
     DoShutdown;
+  FreeIOContext;
   FreeSSLContext;
   inherited Destroy;
 end;
@@ -300,20 +319,37 @@ begin
     if LRet <> 0 then
       raise ESSLException.CreateFmt('mbedtls_ssl_setup failed: 0x%04X', [-LRet]);
   end;
+end;
 
-  // Set BIO callbacks based on mode (socket or stream)
-  if Assigned(mbedtls_ssl_set_bio) then
+procedure TMbedTLSConnection.SetupTransportBIO;
+begin
+  if (FSSLContext = nil) or (not Assigned(mbedtls_ssl_set_bio)) then
+    Exit;
+
+  if FStream <> nil then
   begin
-    if FStream <> nil then
-      // Stream mode - use stream callbacks
-      mbedtls_ssl_set_bio(FSSLContext, Pointer(FStream),
-        @MbedTLSStreamSend, @MbedTLSStreamRecv, nil)
-    else
-      // Socket mode - use socket callbacks
-      mbedtls_ssl_set_bio(FSSLContext, Pointer(PtrUInt(FSocket)),
-        @MbedTLSSocketSend, @MbedTLSSocketRecv, nil);
+    if FIOContext = nil then
+    begin
+      New(FIOContext);
+      FillChar(FIOContext^, SizeOf(TMbedTLSIOContext), 0);
+    end;
+    FIOContext^.Stream := FStream;
+    mbedtls_ssl_set_bio(FSSLContext, Pointer(FIOContext),
+      @MbedTLSStreamSend, @MbedTLSStreamRecv, nil);
+    Exit;
   end;
 
+  mbedtls_ssl_set_bio(FSSLContext, Pointer(PtrUInt(FSocket)),
+    @MbedTLSSocketSend, @MbedTLSSocketRecv, nil);
+end;
+
+procedure TMbedTLSConnection.FreeIOContext;
+begin
+  if FIOContext = nil then
+    Exit;
+  FIOContext^.Stream := nil;
+  Dispose(FIOContext);
+  FIOContext := nil;
 end;
 
 procedure TMbedTLSConnection.FreeSSLContext;
@@ -358,6 +394,7 @@ begin
   Result := False;
   if FSSLContext = nil then Exit;
   if not Assigned(mbedtls_ssl_handshake) then Exit;
+  SetupTransportBIO;
 
   LResult := mbedtls_ssl_handshake(FSSLContext);
   FLastNativeError := LResult;
@@ -400,6 +437,7 @@ end;
 procedure TMbedTLSConnection.DoClose;
 begin
   DoShutdown;
+  FreeIOContext;
 end;
 
 function TMbedTLSConnection.DoRenegotiate: Boolean;

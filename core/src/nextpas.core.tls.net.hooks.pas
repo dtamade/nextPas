@@ -13,7 +13,9 @@ unit nextpas.core.tls.net.hooks;
 
 interface
 
-uses nextpas.core.tls.base;
+uses
+  nextpas.core.base,
+  nextpas.core.tls.base;
 
 type
   { Thread-local HTTP hooks bundle }
@@ -134,4 +136,3 @@ initialization
   GThreadHTTPHooks := TSSLHTTPHooks.Empty;
 
 end.
-

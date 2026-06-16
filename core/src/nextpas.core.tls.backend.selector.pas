@@ -16,7 +16,7 @@ unit nextpas.core.tls.backend.selector;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.base,
   nextpas.core.tls.base;
 
 type
@@ -93,9 +93,6 @@ type
 
   { TSSLBackendMatchArray - 匹配结果数组 }
   TSSLBackendMatchArray = array of TSSLBackendMatch;
-
-  { TStringArray - 字符串数组类型 }
-  TStringArray = array of string;
 
 { 主要选择函数 }
 

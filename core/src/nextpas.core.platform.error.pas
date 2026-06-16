@@ -38,6 +38,17 @@ uses
 {$IFDEF NEXTPAS_UNIX}
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi
+  {$IFDEF NEXTPAS_LINUX}
+  , nextpas.core.platform.linux.base
+  {$ELSEIF defined(NEXTPAS_MACOS)}
+  , nextpas.core.platform.darwin.base
+  {$ELSEIF defined(NEXTPAS_FREEBSD)}
+  , nextpas.core.platform.freebsd.base
+  {$ELSEIF defined(NEXTPAS_ANDROID)}
+  , nextpas.core.platform.android.base
+  {$ELSE}
+  , nextpas.core.platform.unix.base
+  {$ENDIF}
 {$ENDIF}
 {$IFDEF NEXTPAS_WINDOWS}
   nextpas.core.platform.windows.base,
@@ -178,6 +189,18 @@ end;
  *}
 function platform_error_category(ACode: Int32): TErrorCategory;
 begin
+  case ACode of
+    PLATFORM_ERR_INVALID:
+      Exit(ecInvalidArgument);
+    PLATFORM_ERR_UNSUPPORTED:
+      Exit(ecNotSupported);
+    PLATFORM_ERR_TIMEOUT:
+      Exit(ecTimeout);
+    PLATFORM_ERR_AGAIN,
+    PLATFORM_ERR_BUSY:
+      Exit(ecWouldBlock);
+  end;
+
   case ACode of
     0:
       Result := ecNone;

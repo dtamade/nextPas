@@ -13,6 +13,8 @@ function IoCopy(const ADst: IWriter; const ASrc: IReader): Int64;
 function IoCopyN(const ADst: IWriter; const ASrc: IReader; const AN: Int64): Int64;
 function IoReadAll(const ASrc: IReader): TBytes;
 procedure IoReadFull(const ASrc: IReader; var ABuf; const ACount: SizeUInt);
+procedure IoWriteAll(const ADst: IWriter; const ABuf; const ACount: SizeUInt); overload;
+procedure IoWriteAll(const ADst: IStream; const ABuf; const ACount: SizeUInt); overload;
 function IoLimitReader(const AInner: IReader; const ALimit: Int64): IReader;
 function IoTeeReader(const AInner: IReader; const AWriter: IWriter): IReader;
 function IoMultiReader(const AReaders: array of IReader): IReader;
@@ -47,6 +49,29 @@ begin
     LWritten := AWriter.Write(LBuf[LTotal], ACount - LTotal);
     if LWritten = 0 then
       raise EIOError.Create(AContext + ': write returned 0');
+    Inc(LTotal, LWritten);
+  end;
+end;
+
+procedure IoWriteAll(const ADst: IWriter; const ABuf; const ACount: SizeUInt); overload;
+begin
+  WriteAll(ADst, ABuf, ACount, 'IoWriteAll');
+end;
+
+procedure IoWriteAll(const ADst: IStream; const ABuf; const ACount: SizeUInt); overload;
+var
+  LBuf: PByte;
+  LTotal, LWritten: SizeUInt;
+begin
+  if ADst = nil then
+    raise EIOError.Create('IoWriteAll: destination stream is nil');
+  LBuf := @ABuf;
+  LTotal := 0;
+  while LTotal < ACount do
+  begin
+    LWritten := ADst.Write(LBuf[LTotal], ACount - LTotal);
+    if LWritten = 0 then
+      raise EIOError.Create('IoWriteAll: write returned 0');
     Inc(LTotal, LWritten);
   end;
 end;

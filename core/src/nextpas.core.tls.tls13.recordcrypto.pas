@@ -14,7 +14,9 @@ unit nextpas.core.tls.tls13.recordcrypto;
 
 interface
 
-uses nextpas.core.tls.tls13.wire;
+uses
+  nextpas.core.base,
+  nextpas.core.tls.tls13.wire;
 
 function BuildTLS13RecordAAD(AEncryptedLength: Word): TBytes;
 function BuildTLS13RecordNonce(const AStaticIV: TBytes; ASequenceNumber: QWord): TBytes;

@@ -27,7 +27,7 @@ unit nextpas.core.tls.base;
 interface
 
 uses
-  SysUtils, Classes;
+  SysUtils, nextpas.core.system.classes;
 
 type
   // ============================================================================

@@ -37,9 +37,25 @@ type
     function Value: Integer;
   end;
 
+  IManagedProbe = interface
+    ['{B2A3C4D5-E6F7-4809-1A2B-3C4D5E6F7012}']
+    function ProbeId: Int32;
+  end;
+
+  TManagedProbe = class(TInterfacedObject, IManagedProbe)
+  private
+    FProbeId: Int32;
+  public
+    constructor Create(AProbeId: Int32);
+    destructor Destroy; override;
+    function ProbeId: Int32;
+  end;
+
 var
   T: TTestRunner;
   ManagedProbeDestroyedCount: Int32 = 0;
+
+{ TManagedProbe }
 
 constructor TManagedProbe.Create(AProbeId: Int32);
 begin
@@ -367,17 +383,17 @@ begin
 
     Check(LDest^[0] = LSource^[0], 'CopyArray should preserve interface identity 0');
     Check(LDest^[1] = LSource^[1], 'CopyArray should preserve interface identity 1');
-    CheckEqual(10, LDest^[0].ProbeId, 'CopyArray should preserve interface value 0');
-    CheckEqual(20, LDest^[1].ProbeId, 'CopyArray should preserve interface value 1');
+    CheckEqual(10, (LDest^[0] as IManagedProbe).ProbeId, 'CopyArray should preserve interface value 0');
+    CheckEqual(20, (LDest^[1] as IManagedProbe).ProbeId, 'CopyArray should preserve interface value 1');
 
     nextpas.core.system.typinfo.FinalizeArray(LSource, LTypeInfo,
       Length(LSource^));
     LSourceInitialized := False;
     CheckEqual(0, ManagedProbeDestroyedCount,
       'destination interface slots should keep probes alive after source finalize');
-    CheckEqual(10, LDest^[0].ProbeId,
+    CheckEqual(10, (LDest^[0] as IManagedProbe).ProbeId,
       'destination interface slot 0 should stay usable after source finalize');
-    CheckEqual(20, LDest^[1].ProbeId,
+    CheckEqual(20, (LDest^[1] as IManagedProbe).ProbeId,
       'destination interface slot 1 should stay usable after source finalize');
 
     nextpas.core.system.typinfo.FinalizeArray(LDest, LTypeInfo, Length(LDest^));

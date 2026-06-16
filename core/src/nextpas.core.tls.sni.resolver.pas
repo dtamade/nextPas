@@ -5,7 +5,6 @@ unit nextpas.core.tls.sni.resolver;
 interface
 
 uses
-  SysUtils,
   nextpas.core.tls.base;
 
 type

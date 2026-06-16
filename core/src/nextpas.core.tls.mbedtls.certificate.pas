@@ -17,7 +17,10 @@ unit nextpas.core.tls.mbedtls.certificate;
 interface
 
 uses
-  SysUtils,nextpas.core.tls.base,
+  SysUtils, Classes,
+  nextpas.core.base.utils,
+  nextpas.core.fs,
+  nextpas.core.tls.base,
   nextpas.core.tls.base64,
   nextpas.core.tls.errors,
   nextpas.core.tls.exceptions,
@@ -153,8 +156,10 @@ type
 implementation
 
 uses
+  Contnrs,
+  DateUtils,
+  nextpas.core.text.conv,
   nextpas.core.text.strings,
-    Contnrs, DateUtils,
   nextpas.core.time,
   nextpas.core.tls.utils,
   nextpas.core.crypto.hash;
@@ -431,7 +436,7 @@ begin
     end;
     Result := True;
   except
-    FreeAndNil(AParser);
+    nextpas.core.base.utils.FreeAndNil(AParser);
     Result := False;
   end;
 end;
@@ -465,7 +470,7 @@ end;
 function TMbedTLSCertificate.LoadFromFile(const AFileName: string): Boolean;
 begin
   Result := False;
-  if not FileExists(AFileName) then Exit;
+  if not nextpas.core.fs.IsFile(AFileName) then Exit;
   if not Assigned(mbedtls_x509_crt_parse_file) then Exit;
 
   FPEMData := '';
@@ -857,7 +862,7 @@ begin
         end;
 
         if (LYear > 0) and (LMonth in [1..12]) and (LDay in [1..31]) then
-          Result := EncodeDate(LYear, LMonth, LDay) + EncodeTime(LHour, LMin, LSec, 0);
+          Result := System.EncodeDate(LYear, LMonth, LDay) + System.EncodeTime(LHour, LMin, LSec, 0);
       except
         Result := 0;
       end;
@@ -1138,7 +1143,7 @@ begin
 
     AResult.Success := True;
     if LIgnoredFlags <> 0 then
-      AResult.DetailedInfo := Format(
+      AResult.DetailedInfo := nextpas.core.text.conv.Format(
         'MbedTLS certificate verification passed after applying VerifyEx flag exceptions (native flags=%u, ignored=%u)',
         [LFlags, LIgnoredFlags])
     else
@@ -1162,11 +1167,11 @@ begin
       LErrorMessage := Trim(LErrorMessage + ' (not trusted)');
     AResult.ErrorMessage := LErrorMessage;
     if LIgnoredFlags <> 0 then
-      AResult.DetailedInfo := Format(
+      AResult.DetailedInfo := nextpas.core.text.conv.Format(
         'MbedTLS verification flags: native=%u effective=%u ignored=%u',
         [LFlags, LEffectiveFlags, LIgnoredFlags])
     else
-      AResult.DetailedInfo := Format('MbedTLS verification flags: %u', [LEffectiveFlags]);
+      AResult.DetailedInfo := nextpas.core.text.conv.Format('MbedTLS verification flags: %u', [LEffectiveFlags]);
   end;
 end;
 
@@ -1338,7 +1343,7 @@ begin
     Exit;
   end;
 
-  Result := DaysBetween(Now, LNotAfter);
+  Result := DaysBetween(nextpas.core.time.DateTimeNow, LNotAfter);
   if IsExpired then
     Result := -Result;
 end;
@@ -1477,7 +1482,7 @@ begin
   if mbedtls_md(LMdInfo, LDERData, LDERLen, @LHash[0]) = 0 then
   begin
     for I := 0 to 19 do
-      Result := Result + IntToHex(LHash[I], 2);
+      Result := Result + nextpas.core.text.conv.IntToHex(LHash[I], 2);
   end;
 end;
 
@@ -1515,7 +1520,7 @@ begin
   if mbedtls_md(LMdInfo, LDERData, LDERLen, @LHash[0]) = 0 then
   begin
     for I := 0 to 31 do
-      Result := Result + IntToHex(LHash[I], 2);
+      Result := Result + nextpas.core.text.conv.IntToHex(LHash[I], 2);
   end;
 end;
 
@@ -1677,7 +1682,7 @@ begin
 
     if LTarget <> '' then
     begin
-      for I := 0 to Length(FCertificates) - 1 do
+      for I := 0 to FCertificates.Count - 1 do
       begin
         LExisting := FCertificates[I] as ISSLCertificate;
         if NormalizeMbedTLSCertFingerprint(LExisting.GetFingerprintSHA256) = LTarget then
@@ -1715,7 +1720,7 @@ begin
   if LTarget = '' then
     Exit(False);
 
-  for I := 0 to Length(FCertificates) - 1 do
+  for I := 0 to FCertificates.Count - 1 do
   begin
     LExisting := FCertificates[I] as ISSLCertificate;
     if NormalizeMbedTLSCertFingerprint(LExisting.GetFingerprintSHA256) = LTarget then
@@ -1730,13 +1735,13 @@ end;
 
 function TMbedTLSCertificateStore.GetCount: Integer;
 begin
-  Result := Length(FCertificates);
+  Result := FCertificates.Count;
 end;
 
 function TMbedTLSCertificateStore.GetCertificate(AIndex: Integer): ISSLCertificate;
 begin
   Result := nil;
-  if (AIndex >= 0) and (AIndex < Length(FCertificates)) then
+  if (AIndex >= 0) and (AIndex < FCertificates.Count) then
     Result := FCertificates[AIndex] as ISSLCertificate;
 end;
 
@@ -1745,7 +1750,7 @@ var
   LCert: TMbedTLSCertificate;
 begin
   Result := False;
-  if not FileExists(AFileName) then Exit;
+  if not nextpas.core.fs.IsFile(AFileName) then Exit;
 
   LCert := TMbedTLSCertificate.Create;
   try
@@ -1764,7 +1769,7 @@ var
   LCount: Integer;
 begin
   Result := False;
-  if not DirectoryExists(APath) then Exit;
+  if not nextpas.core.fs.IsDir(APath) then Exit;
 
   LCount := 0;
 
@@ -1785,13 +1790,13 @@ function TMbedTLSCertificateStore.LoadSystemStore: Boolean;
 begin
   Result := False;
   {$IFDEF LINUX}
-  if DirectoryExists('/etc/ssl/certs') then
+  if nextpas.core.fs.IsDir('/etc/ssl/certs') then
     Result := LoadFromPath('/etc/ssl/certs')
-  else if DirectoryExists('/etc/pki/tls/certs') then
+  else if nextpas.core.fs.IsDir('/etc/pki/tls/certs') then
     Result := LoadFromPath('/etc/pki/tls/certs');
   {$ENDIF}
   {$IFDEF DARWIN}
-  if FileExists('/etc/ssl/cert.pem') then
+  if nextpas.core.fs.IsFile('/etc/ssl/cert.pem') then
     Result := LoadFromFile('/etc/ssl/cert.pem');
   {$ENDIF}
 end;
@@ -1807,7 +1812,7 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to Length(FCertificates) - 1 do
+  for I := 0 to FCertificates.Count - 1 do
   begin
     LCert := FCertificates[I] as ISSLCertificate;
     if Pos(LTarget, NormalizeMbedTLSCertText(LCert.GetSubject)) > 0 then
@@ -1829,7 +1834,7 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to Length(FCertificates) - 1 do
+  for I := 0 to FCertificates.Count - 1 do
   begin
     LCert := FCertificates[I] as ISSLCertificate;
     if Pos(LTarget, NormalizeMbedTLSCertText(LCert.GetIssuer)) > 0 then
@@ -1851,7 +1856,7 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to Length(FCertificates) - 1 do
+  for I := 0 to FCertificates.Count - 1 do
   begin
     LCert := FCertificates[I] as ISSLCertificate;
     if NormalizeMbedTLSCertHex(LCert.GetSerialNumber) = LTarget then
@@ -1873,7 +1878,7 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to Length(FCertificates) - 1 do
+  for I := 0 to FCertificates.Count - 1 do
   begin
     LCert := FCertificates[I] as ISSLCertificate;
     if NormalizeMbedTLSCertFingerprint(LCert.GetFingerprintSHA256) = LTarget then

@@ -18,7 +18,31 @@ unit nextpas.core.tls.openssl.backed;
 
 interface
 
-uses SysUtils, DynLibs, nextpas.core.tls.base, nextpas.core.tls.errors, // Rust-quality: Raise helpers nextpas.core.tls.exceptions, // Rust-quality: Typed exceptions nextpas.core.tls.openssl.errors, // OpenSSL-specific raise helpers nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, // P0-1.1: 使用统一的加载器 nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.api.ssl, nextpas.core.tls.openssl.api.err, nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.asn1, nextpas.core.tls.openssl.api.x509v3, nextpas.core.tls.openssl.api.hmac, nextpas.core.tls.openssl.api.ts, nextpas.core.tls.openssl.api.pkcs, nextpas.core.tls.openssl.api.pkcs12, nextpas.core.tls.openssl.api.ec, nextpas.core.tls.openssl.api.rsa, nextpas.core.tls.openssl.api.ocsp, nextpas.core.tls.openssl.certificate;
+uses
+  DynLibs,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
+  nextpas.core.tls.base,
+  nextpas.core.tls.errors, // Rust-quality: Raise helpers
+  nextpas.core.tls.exceptions, // Rust-quality: Typed exceptions
+  nextpas.core.tls.openssl.errors, // OpenSSL-specific raise helpers
+  nextpas.core.tls.openssl.base,
+  nextpas.core.tls.openssl.loader, // P0-1.1: 使用统一的加载器
+  nextpas.core.tls.openssl.api.core,
+  nextpas.core.tls.openssl.api.ssl,
+  nextpas.core.tls.openssl.api.err,
+  nextpas.core.tls.openssl.api.x509,
+  nextpas.core.tls.openssl.api.evp,
+  nextpas.core.tls.openssl.api.asn1,
+  nextpas.core.tls.openssl.api.x509v3,
+  nextpas.core.tls.openssl.api.hmac,
+  nextpas.core.tls.openssl.api.ts,
+  nextpas.core.tls.openssl.api.pkcs,
+  nextpas.core.tls.openssl.api.pkcs12,
+  nextpas.core.tls.openssl.api.ec,
+  nextpas.core.tls.openssl.api.rsa,
+  nextpas.core.tls.openssl.api.ocsp,
+  nextpas.core.tls.openssl.certificate;
 
 type
   { TOpenSSLLibraryPaths - 自定义库路径配置 }

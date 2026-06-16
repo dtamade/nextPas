@@ -18,7 +18,7 @@ unit nextpas.core.tls.mbedtls.session;
 interface
 
 uses
-  SysUtils, Classes, DateUtils,
+  nextpas.core.exception, nextpas.core.text.conv, Classes, DateUtils,
   nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.base,
@@ -412,6 +412,8 @@ var
   LProtocolOrdinal: Integer;
   LNativeHex: string;
   LPrefix: RawByteString;
+  LLines: TStringArray;
+  LPairs: TStringPairArray;
 begin
   Result := False;
   AHasEnvelope := False;
@@ -433,12 +435,14 @@ begin
   AHasEnvelope := True;
   SetString(LText, PAnsiChar(@AData[0]), Length(AData));
 
+  LLines := StringsParseLines(string(LText));
+  LPairs := StringsParseKeyValues(string(LText));
   try
 
-    if LData.Values['magic'] <> MBEDTLS_SESSION_SERIALIZATION_MAGIC then
+    if StringPairsGet(LPairs, 'magic') <> MBEDTLS_SESSION_SERIALIZATION_MAGIC then
       Exit;
 
-    ASessionID := LData.Values['id'];
+    ASessionID := StringPairsGet(LPairs, 'id');
     if ASessionID = '' then
       Exit;
     if not TryStrToInt64(StringPairsGet(LPairs, 'created_unix'), LCreatedUnix) then
@@ -464,7 +468,11 @@ begin
     AProtocolVersion := TSSLProtocolVersion(LProtocolOrdinal);
     ACipherName := StringPairsGet(LPairs, 'cipher');
     Result := True;
+  except
+    on E: Exception do
+      Exit;
   end;
+end;
 
 procedure TMbedTLSSession.ExtractSessionInfo;
 var

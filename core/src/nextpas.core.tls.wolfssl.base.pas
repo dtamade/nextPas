@@ -20,7 +20,11 @@ unit nextpas.core.tls.wolfssl.base;
 
 interface
 
-uses nextpas.core.tls.base; const WOLFSSL_LIB_NAME = 'wolfssl.dll';
+uses nextpas.core.tls.base;
+
+const
+  {$IFDEF WINDOWS}
+  WOLFSSL_LIB_NAME = 'wolfssl.dll';
   {$ENDIF}
   {$IFDEF LINUX}
   WOLFSSL_LIB_NAME = 'libwolfssl.so';

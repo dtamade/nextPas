@@ -20,7 +20,7 @@ unit nextpas.core.tls.ocsp.cache;
 interface
 
 uses
-  SysUtils, Classes, SyncObjs, DateUtils, fgl;
+   SyncObjs, DateUtils, fgl;
 
 const
   SHARD_COUNT = 16;  // 分片数量 (2的幂次方,便于位运算)
@@ -115,6 +115,11 @@ implementation
 
 uses
   nextpas.core.crypto.hash,
+  nextpas.core.fs.base,
+  nextpas.core.fs.intf,
+  nextpas.core.fs.stream,
+  nextpas.core.io.binary,
+  nextpas.core.io.intf,
   nextpas.core.time;
 
 // ========================================================================
@@ -504,7 +509,9 @@ end;
 
 function TOCSPResponseCache.SaveToFile(const AFileName: string): Boolean;
 var
-  Stream: TFileStream;
+  Stream: IFile;
+  WriterTarget: IWriter;
+  Writer: TBinaryWriter;
   I, J, Count, DataLen: Integer;
   Key: string;
   Entry: TOCSPCacheEntry;
@@ -512,53 +519,50 @@ begin
   Result := False;
   
   try
-    Stream := TFileStream.Create(AFileName, fmCreate);
-    try
-      // 写入版本号
-      I := 2;  // 版本 2 (分片锁版本)
-      Stream.WriteBuffer(I, SizeOf(Integer));
-      
-      // 写入分片数量
-      I := SHARD_COUNT;
-      Stream.WriteBuffer(I, SizeOf(Integer));
-      
-      // 写入每个分片
-      for I := 0 to SHARD_COUNT - 1 do
-      begin
-        FShards[I].Lock.Enter;
-        try
-          Count := FShards[I].Cache.Count;
-          Stream.WriteBuffer(Count, SizeOf(Integer));
-          
-          for J := 0 to FShards[I].Cache.Count - 1 do
-          begin
-            Key := FShards[I].Cache.Keys[J];
-            Entry := FShards[I].Cache.Data[J];
-            
-            DataLen := Length(Key);
-            Stream.WriteBuffer(DataLen, SizeOf(Integer));
-            if DataLen > 0 then
-              Stream.WriteBuffer(Key[1], DataLen);
-            
-            DataLen := Length(Entry.ResponseData);
-            Stream.WriteBuffer(DataLen, SizeOf(Integer));
-            if DataLen > 0 then
-              Stream.WriteBuffer(Entry.ResponseData[0], DataLen);
-            
-            Stream.WriteBuffer(Entry.ThisUpdate, SizeOf(TDateTime));
-            Stream.WriteBuffer(Entry.NextUpdate, SizeOf(TDateTime));
-            Stream.WriteBuffer(Entry.CachedAt, SizeOf(TDateTime));
-            Stream.WriteBuffer(Entry.HitCount, SizeOf(Integer));
-          end;
-        finally
-          FShards[I].Lock.Leave;
+    Stream := FsCreate(AFileName);
+    if not Supports(Stream, IWriter, WriterTarget) then
+      Exit(False);
+    Writer.Init(WriterTarget);
+
+    I := 2;
+    Writer.WriteInt32LE(I);
+
+    I := SHARD_COUNT;
+    Writer.WriteInt32LE(I);
+
+    for I := 0 to SHARD_COUNT - 1 do
+    begin
+      FShards[I].Lock.Enter;
+      try
+        Count := FShards[I].Cache.Count;
+        Writer.WriteInt32LE(Count);
+
+        for J := 0 to FShards[I].Cache.Count - 1 do
+        begin
+          Key := FShards[I].Cache.Keys[J];
+          Entry := FShards[I].Cache.Data[J];
+
+          DataLen := Length(Key);
+          Writer.WriteInt32LE(DataLen);
+          if DataLen > 0 then
+            Writer.WriteString(Key);
+
+          DataLen := Length(Entry.ResponseData);
+          Writer.WriteInt32LE(DataLen);
+          if DataLen > 0 then
+            Writer.WriteBytes(Entry.ResponseData);
+
+          Writer.WriteFloat64LE(Entry.ThisUpdate);
+          Writer.WriteFloat64LE(Entry.NextUpdate);
+          Writer.WriteFloat64LE(Entry.CachedAt);
+          Writer.WriteInt32LE(Entry.HitCount);
         end;
+      finally
+        FShards[I].Lock.Leave;
       end;
-      
-      Result := True;
-    finally
-      Stream.Free;
     end;
+
+    Result := True;
   except
     Result := False;
   end;
@@ -566,7 +570,9 @@ end;
 
 function TOCSPResponseCache.LoadFromFile(const AFileName: string): Boolean;
 var
-  Stream: TFileStream;
+  Stream: IStream;
+  ReaderSource: IReader;
+  Reader: TBinaryReader;
   Version, ShardCount, Count, I, J, DataLen, ShardIdx: Integer;
   Key: string;
   Entry: TOCSPCacheEntry;
@@ -579,115 +585,117 @@ begin
   try
     Clear;
     
-    Stream := TFileStream.Create(AFileName, fmOpenRead);
-    try
-      Stream.ReadBuffer(Version, SizeOf(Integer));
-      if (Version <> 1) and (Version <> 2) then
-        Exit;
-      
-      if Version = 2 then
+    Stream := FsOpen(AFileName, [fmRead]);
+    if not Supports(Stream, IReader, ReaderSource) then
+      Exit(False);
+    Reader.Init(ReaderSource);
+
+    Version := Reader.ReadInt32LE;
+    if (Version <> 1) and (Version <> 2) then
+      Exit;
+
+    if Version = 2 then
+    begin
+      ShardCount := Reader.ReadInt32LE;
+
+      for I := 0 to ShardCount - 1 do
       begin
-        // 版本 2: 分片格式
-        Stream.ReadBuffer(ShardCount, SizeOf(Integer));
-        
-        for I := 0 to ShardCount - 1 do
+        Count := Reader.ReadInt32LE;
+
+        if I < SHARD_COUNT then
         begin
-          Stream.ReadBuffer(Count, SizeOf(Integer));
-          
-          if I < SHARD_COUNT then
-          begin
-            FShards[I].Lock.Enter;
-            try
-              for J := 0 to Count - 1 do
-              begin
-                Stream.ReadBuffer(DataLen, SizeOf(Integer));
-                SetLength(Key, DataLen);
-                if DataLen > 0 then
-                  Stream.ReadBuffer(Key[1], DataLen);
-                
-                FillChar(Entry, SizeOf(Entry), 0);
-                Stream.ReadBuffer(DataLen, SizeOf(Integer));
-                if DataLen > 0 then
-                begin
-                  SetLength(Entry.ResponseData, DataLen);
-                  Stream.ReadBuffer(Entry.ResponseData[0], DataLen);
-                end;
-                
-                Stream.ReadBuffer(Entry.ThisUpdate, SizeOf(TDateTime));
-                Stream.ReadBuffer(Entry.NextUpdate, SizeOf(TDateTime));
-                Stream.ReadBuffer(Entry.CachedAt, SizeOf(TDateTime));
-                Stream.ReadBuffer(Entry.HitCount, SizeOf(Integer));
-                
-                if Entry.IsValid then
-                  FShards[I].Cache.Add(Key, Entry);
-              end;
-            finally
-              FShards[I].Lock.Leave;
-            end;
-          end
-          else
-          begin
-            // 跳过多余的分片数据
+          FShards[I].Lock.Enter;
+          try
             for J := 0 to Count - 1 do
             begin
-              Stream.ReadBuffer(DataLen, SizeOf(Integer));
-              Stream.Seek(DataLen, soCurrent);
-              Stream.ReadBuffer(DataLen, SizeOf(Integer));
-              Stream.Seek(DataLen, soCurrent);
-              Stream.Seek(SizeOf(TDateTime) * 3 + SizeOf(Integer), soCurrent);
+              DataLen := Reader.ReadInt32LE;
+              if DataLen > 0 then
+                Key := Reader.ReadString(DataLen)
+              else
+                Key := '';
+
+              FillChar(Entry, SizeOf(Entry), 0);
+              DataLen := Reader.ReadInt32LE;
+              if DataLen > 0 then
+                Entry.ResponseData := Reader.ReadBytes(DataLen)
+              else
+                Entry.ResponseData := nil;
+
+              Entry.ThisUpdate := Reader.ReadFloat64LE;
+              Entry.NextUpdate := Reader.ReadFloat64LE;
+              Entry.CachedAt := Reader.ReadFloat64LE;
+              Entry.HitCount := Reader.ReadInt32LE;
+
+              if Entry.IsValid then
+                FShards[I].Cache.Add(Key, Entry);
             end;
+          finally
+            FShards[I].Lock.Leave;
           end;
-        end;
-      end
-      else
-      begin
-        // 版本 1: 单一缓存格式 (向后兼容)
-        Stream.ReadBuffer(Count, SizeOf(Integer));
-        
-        for I := 0 to Count - 1 do
+        end
+        else
         begin
-          Stream.ReadBuffer(DataLen, SizeOf(Integer));
-          SetLength(Key, DataLen);
-          if DataLen > 0 then
-            Stream.ReadBuffer(Key[1], DataLen);
-          
-          FillChar(Entry, SizeOf(Entry), 0);
-          Stream.ReadBuffer(DataLen, SizeOf(Integer));
-          if DataLen > 0 then
+          for J := 0 to Count - 1 do
           begin
-            SetLength(Entry.ResponseData, DataLen);
-            Stream.ReadBuffer(Entry.ResponseData[0], DataLen);
-          end;
-          
-          Stream.ReadBuffer(Entry.ThisUpdate, SizeOf(TDateTime));
-          Stream.ReadBuffer(Entry.NextUpdate, SizeOf(TDateTime));
-          Stream.ReadBuffer(Entry.CachedAt, SizeOf(TDateTime));
-          Stream.ReadBuffer(Entry.HitCount, SizeOf(Integer));
-          
-          if Entry.IsValid then
-          begin
-            ShardIdx := GetShardIndex(Key);
-            FShards[ShardIdx].Lock.Enter;
-            try
-              FShards[ShardIdx].Cache.Add(Key, Entry);
-            finally
-              FShards[ShardIdx].Lock.Leave;
-            end;
+            DataLen := Reader.ReadInt32LE;
+            if DataLen > 0 then
+              Reader.ReadString(DataLen);
+            DataLen := Reader.ReadInt32LE;
+            if DataLen > 0 then
+              Reader.ReadBytes(DataLen);
+            Reader.ReadFloat64LE;
+            Reader.ReadFloat64LE;
+            Reader.ReadFloat64LE;
+            Reader.ReadInt32LE;
           end;
         end;
       end;
-      
-      FStatsLock.Enter;
-      try
-        FStats.TotalEntries := GetCount;
-      finally
-        FStatsLock.Leave;
+    end
+    else
+    begin
+      Count := Reader.ReadInt32LE;
+
+      for I := 0 to Count - 1 do
+      begin
+        DataLen := Reader.ReadInt32LE;
+        if DataLen > 0 then
+          Key := Reader.ReadString(DataLen)
+        else
+          Key := '';
+
+        FillChar(Entry, SizeOf(Entry), 0);
+        DataLen := Reader.ReadInt32LE;
+        if DataLen > 0 then
+          Entry.ResponseData := Reader.ReadBytes(DataLen)
+        else
+          Entry.ResponseData := nil;
+
+        Entry.ThisUpdate := Reader.ReadFloat64LE;
+        Entry.NextUpdate := Reader.ReadFloat64LE;
+        Entry.CachedAt := Reader.ReadFloat64LE;
+        Entry.HitCount := Reader.ReadInt32LE;
+
+        if Entry.IsValid then
+        begin
+          ShardIdx := GetShardIndex(Key);
+          FShards[ShardIdx].Lock.Enter;
+          try
+            FShards[ShardIdx].Cache.Add(Key, Entry);
+          finally
+            FShards[ShardIdx].Lock.Leave;
+          end;
+        end;
       end;
-      
-      Result := True;
-    finally
-      Stream.Free;
     end;
+
+    FStatsLock.Enter;
+    try
+      FStats.TotalEntries := GetCount;
+    finally
+      FStatsLock.Leave;
+    end;
+
+    Result := True;
   except
     Result := False;
   end;

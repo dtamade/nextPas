@@ -4,7 +4,9 @@ unit nextpas.core.tls.openssl.api.provider;
 
 interface
 
-uses SysUtils, nextpas.core.tls.openssl.base;
+uses
+  nextpas.core.base,
+  nextpas.core.tls.openssl.base;
 
 type
   // Provider 类型定义

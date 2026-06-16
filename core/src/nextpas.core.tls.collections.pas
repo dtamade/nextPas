@@ -19,6 +19,8 @@ unit nextpas.core.tls.collections;
 
 interface
 
+uses
+  nextpas.core.base;
 
 type
   {**

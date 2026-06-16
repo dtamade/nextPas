@@ -17,7 +17,12 @@ unit nextpas.core.tls.winssl.lib;
 
 interface
 
-uses Windows, SysUtils, nextpas.core.tls.base, nextpas.core.tls.exceptions, // nextpas.core.tls.factory 移到 implementation 以避免循环依赖 nextpas.core.tls.winssl.base, nextpas.core.tls.winssl.api, nextpas.core.tls.winssl.utils;
+uses
+  Windows,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
+  nextpas.core.tls.base,
+  nextpas.core.tls.exceptions, // nextpas.core.tls.factory 移到 implementation 以避免循环依赖 nextpas.core.tls.winssl.base, nextpas.core.tls.winssl.api, nextpas.core.tls.winssl.utils;
 
 type
   { TWinSSLLibrary - Windows Schannel 库管理类 }

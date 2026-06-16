@@ -18,7 +18,7 @@ unit nextpas.core.tls.wolfssl.session;
 interface
 
 uses
-  SysUtils,DateUtils, ctypes,
+  nextpas.core.text.conv, DateUtils, ctypes,
   nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.wolfssl.base,

@@ -18,7 +18,7 @@ unit nextpas.core.tls.winssl.certstore;
 interface
 
 uses
-  Windows, SysUtils,nextpas.core.tls.base,
+  Windows, SysUtils, Classes, nextpas.core.fs, nextpas.core.tls.base,
   nextpas.core.tls.winssl.base,
   nextpas.core.tls.winssl.api,
   nextpas.core.tls.winssl.native_handle,
@@ -511,7 +511,7 @@ var
 begin
   Result := False;
 
-  if not FileExists(AFileName) then
+  if not nextpas.core.fs.IsFile(AFileName) then
     Exit;
 
   // 创建证书对象并加载文件
@@ -533,16 +533,16 @@ begin
   Result := False;
   LoadedCount := 0;
 
-  if not DirectoryExists(APath) then
+  if not nextpas.core.fs.IsDir(APath) then
     Exit;
 
   // 搜索路径中的证书文件
-  if FindFirst(IncludeTrailingPathDelimiter(APath) + '*.cer', faAnyFile, SearchRec) = 0 then
+  if FindFirst(nextpas.core.fs.PathEnsureSep(APath) + '*.cer', faAnyFile, SearchRec) = 0 then
   begin
     repeat
       if (SearchRec.Attr and faDirectory) = 0 then
       begin
-        FilePath := IncludeTrailingPathDelimiter(APath) + SearchRec.Name;
+        FilePath := nextpas.core.fs.PathEnsureSep(APath) + SearchRec.Name;
         if LoadFromFile(FilePath) then
           Inc(LoadedCount);
       end;
@@ -551,12 +551,12 @@ begin
   end;
 
   // 也搜索 .pem 和 .crt 文件
-  if FindFirst(IncludeTrailingPathDelimiter(APath) + '*.pem', faAnyFile, SearchRec) = 0 then
+  if FindFirst(nextpas.core.fs.PathEnsureSep(APath) + '*.pem', faAnyFile, SearchRec) = 0 then
   begin
     repeat
       if (SearchRec.Attr and faDirectory) = 0 then
       begin
-        FilePath := IncludeTrailingPathDelimiter(APath) + SearchRec.Name;
+        FilePath := nextpas.core.fs.PathEnsureSep(APath) + SearchRec.Name;
         if LoadFromFile(FilePath) then
           Inc(LoadedCount);
       end;
@@ -564,12 +564,12 @@ begin
     FindClose(SearchRec);
   end;
 
-  if FindFirst(IncludeTrailingPathDelimiter(APath) + '*.crt', faAnyFile, SearchRec) = 0 then
+  if FindFirst(nextpas.core.fs.PathEnsureSep(APath) + '*.crt', faAnyFile, SearchRec) = 0 then
   begin
     repeat
       if (SearchRec.Attr and faDirectory) = 0 then
       begin
-        FilePath := IncludeTrailingPathDelimiter(APath) + SearchRec.Name;
+        FilePath := nextpas.core.fs.PathEnsureSep(APath) + SearchRec.Name;
         if LoadFromFile(FilePath) then
           Inc(LoadedCount);
       end;

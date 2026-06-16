@@ -37,7 +37,9 @@ unit nextpas.core.tls.x509;
 interface
 
 uses
-  SysUtils,DateUtils,
+  SysUtils, Classes,
+  nextpas.core.text.conv,
+  nextpas.core.time,
   nextpas.core.tls.asn1;
 
 type
@@ -282,8 +284,7 @@ type
 implementation
 
 uses
-  nextpas.core.text.strings,
-    nextpas.core.time;
+  nextpas.core.text.strings;
 
 // ========================================================================
 // Base64 解码辅助函数 (必须在使用前声明)
@@ -463,8 +464,8 @@ end;
 
 function TX509Validity.ToString: string;
 begin
-  Result := Format('Not Before: %s, Not After: %s',
-    [DateTimeToStr(NotBefore), DateTimeToStr(NotAfter)]);
+  Result := nextpas.core.text.conv.Format('Not Before: %s, Not After: %s',
+    [nextpas.core.time.DateTimeToStr(NotBefore), nextpas.core.time.DateTimeToStr(NotAfter)]);
 end;
 
 // ========================================================================
@@ -473,7 +474,7 @@ end;
 
 function TX509PublicKeyInfo.ToString: string;
 begin
-  Result := Format('%s (%d bits)', [KeyType, KeySize]);
+  Result := nextpas.core.text.conv.Format('%s (%d bits)', [KeyType, KeySize]);
 end;
 
 // ========================================================================
@@ -483,7 +484,7 @@ end;
 function TX509Extension.ToString: string;
 begin
   if Critical then
-    Result := Format('%s (critical)', [Name])
+    Result := nextpas.core.text.conv.Format('%s (critical)', [Name])
   else
     Result := Name;
 end;
@@ -501,6 +502,8 @@ end;
 
 destructor TX509Certificate.Destroy;
 begin
+  FRawTBSCertificate := nil;
+  FRawCertificate := nil;
   inherited Destroy;
 end;
 
@@ -516,11 +519,10 @@ begin
     Root := Reader.Parse;
     if Root = nil then
       raise EX509ParseException.Create('Failed to parse certificate');
-    try
-      ParseFromASN1(Root);
-    finally
-    end;
+    ParseFromASN1(Root);
   finally
+    Root.Free;
+    Reader.Free;
   end;
 end;
 
@@ -550,16 +552,13 @@ begin
     EndPos - StartPos - Length(StartMarker));
 
   // 移除空白字符
-  try
-    Lines.Text := Base64Data;
-    Base64Data := '';
-    for I := 0 to Length(Lines) - 1 do
-    begin
-      Line := Trim(Lines[I]);
-      if Line <> '' then
-        Base64Data := Base64Data + Line;
-    end;
-  finally
+  Lines := StringsParseLines(Base64Data);
+  Base64Data := '';
+  for I := 0 to Length(Lines) - 1 do
+  begin
+    Line := Trim(Lines[I]);
+    if Line <> '' then
+      Base64Data := Base64Data + Line;
   end;
 
   // Base64 解码
@@ -576,6 +575,7 @@ begin
   try
     LoadFromStream(Stream);
   finally
+    Stream.Free;
   end;
 end;
 
@@ -597,7 +597,7 @@ begin
       LoadFromDER(Data)
     else if (FirstByte = Ord('-')) or (FirstByte = Ord('M')) then
       // PEM 格式 (以 "-----" 或 "M" (Base64) 开头)
-      LoadFromPEM(AnsiString(nextpas.core.text.conv.ASCIIBytesToString(Data)))
+      LoadFromPEM(ASCIIBytesToString(Data))
     else
       raise EX509ParseException.Create('Unknown certificate format');
   end;
@@ -1030,7 +1030,7 @@ begin
                   SAN.SANType := sanIPAddress;
                   // 转换 IP 地址
                   if Length(Child.RawData) = 4 then
-                    SAN.Value := Format('%d.%d.%d.%d',
+                    SAN.Value := nextpas.core.text.conv.Format('%d.%d.%d.%d',
                       [Child.RawData[0], Child.RawData[1], Child.RawData[2], Child.RawData[3]])
                   else if Length(Child.RawData) = 16 then
                   begin
@@ -1041,7 +1041,7 @@ begin
                         Word(Child.RawData[BitValue * 2 + 1]);
                       if BitValue > 0 then
                         IPv6Value := IPv6Value + ':';
-                      IPv6Value := IPv6Value + IntToHex(SegValue, 1);
+                      IPv6Value := IPv6Value + nextpas.core.text.conv.IntToHex(SegValue, 1);
                     end;
                     SAN.Value := IPv6Value;
                   end;
@@ -1128,7 +1128,7 @@ var
 begin
   Result := '';
   for I := 0 to High(FSerialNumber) do
-    Result := Result + IntToHex(FSerialNumber[I], 2);
+    Result := Result + nextpas.core.text.conv.IntToHex(FSerialNumber[I], 2);
 end;
 
 function TX509Certificate.IsCA: Boolean;
@@ -1186,8 +1186,8 @@ begin
     SB.AppendLine('');
 
     SB.AppendLine('Validity:');
-    SB.AppendLine('  Not Before: ' + DateTimeToStr(FValidity.NotBefore));
-    SB.AppendLine('  Not After: ' + DateTimeToStr(FValidity.NotAfter));
+    SB.AppendLine('  Not Before: ' + nextpas.core.time.DateTimeToStr(FValidity.NotBefore));
+    SB.AppendLine('  Not After: ' + nextpas.core.time.DateTimeToStr(FValidity.NotAfter));
     SB.AppendLine('');
 
     SB.AppendLine('Public Key:');

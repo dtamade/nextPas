@@ -4,7 +4,7 @@ unit nextpas.core.tls.openssl.api.pkcs12;
 
 interface
 
-uses SysUtils, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.pkcs7, nextpas.core.tls.openssl.api.asn1, nextpas.core.tls.openssl.api.bio;
+uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.pkcs7, nextpas.core.tls.openssl.api.asn1, nextpas.core.tls.openssl.api.bio;
 
 type
   // PKCS12 结构体

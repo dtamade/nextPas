@@ -30,7 +30,11 @@ unit nextpas.core.tls.pem;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.base,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
+  nextpas.core.io.intf,
+  nextpas.core.fs;
 
 type
   // ========================================================================
@@ -95,7 +99,7 @@ type
     // 加载 PEM 数据
     procedure LoadFromString(const APEMText: string);
     procedure LoadFromFile(const AFileName: string);
-    procedure LoadFromStream(AStream: TStream);
+    procedure LoadFromStream(AStream: IStream);
 
     // 块访问
     property Blocks: TPEMBlockArray read FBlocks;
@@ -207,7 +211,7 @@ var
 begin
   for I := 0 to High(FBlocks) do
     if FBlocks[I].Headers <> nil then
-      FBlocks[I].Headers.Free;
+      FBlocks[I].Headers := nil;
   inherited Destroy;
 end;
 
@@ -270,7 +274,7 @@ begin
 
   // 提取并处理内容
   try
-    Lines.Text := Copy(FText, ContentStart, ContentEnd - ContentStart);
+    Lines := nextpas.core.text.strings.StringsParseLines(Copy(FText, ContentStart, ContentEnd - ContentStart));
     InHeaders := True;
     HeaderEnded := False;
 
@@ -295,7 +299,8 @@ begin
         (Pos(': ', Line) < 20) then  // 头部名称通常较短
       begin
         // 这是一个头部字段
-        AHeaders.Add(Line);
+        SetLength(AHeaders, Length(AHeaders) + 1);
+        AHeaders[High(AHeaders)] := Line;
       end
       else
       begin
@@ -449,7 +454,7 @@ begin
   // 清除旧数据
   for I := 0 to High(FBlocks) do
     if FBlocks[I].Headers <> nil then
-      FBlocks[I].Headers.Free;
+      FBlocks[I].Headers := nil;
   SetLength(FBlocks, 0);
 
   FText := APEMText;
@@ -471,24 +476,22 @@ end;
 
 procedure TPEMReader.LoadFromFile(const AFileName: string);
 var
-  Stream: TFileStream;
+  LFile: IFile;
 begin
-  Stream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
-  try
-    LoadFromStream(Stream);
-  finally
-  end;
+  LFile := nextpas.core.fs.Open(AFileName, [fmRead]);
+  LoadFromStream(LFile);
 end;
 
-procedure TPEMReader.LoadFromStream(AStream: TStream);
+procedure TPEMReader.LoadFromStream(AStream: IStream);
 var
   Data: TBytes;
+  LSize: SizeInt;
 begin
-  AStream.Position := 0;
-  SetLength(Data, AStream.Size);
-  if AStream.Size > 0 then
+  LSize := AStream.GetSize;
+  SetLength(Data, LSize);
+  if LSize > 0 then
   begin
-    AStream.ReadBuffer(Data[0], AStream.Size);
+    AStream.Read(Data[0], SizeUInt(LSize));
     LoadFromString(AnsiString(nextpas.core.text.conv.UTF8BytesToString(Data)));
   end;
 end;
@@ -704,16 +707,13 @@ end;
 
 procedure TPEMWriter.SaveToFile(const AFileName: string; const APEMText: string);
 var
-  Stream: TFileStream;
+  LFile: IFile;
   Data: TBytes;
 begin
-  Data := nextpas.core.text.conv.StringToUTF8Bytes(APEMText));
-  Stream := TFileStream.Create(AFileName, fmCreate);
-  try
-    if Length(Data) > 0 then
-      Stream.WriteBuffer(Data[0], Length(Data));
-  finally
-  end;
+  Data := nextpas.core.text.conv.StringToUTF8Bytes(APEMText);
+  LFile := nextpas.core.fs.Create(AFileName);
+  if Length(Data) > 0 then
+    LFile.Write(Data[0], SizeUInt(Length(Data)));
 end;
 
 // ========================================================================

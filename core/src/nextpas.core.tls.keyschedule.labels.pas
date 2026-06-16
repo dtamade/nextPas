@@ -13,6 +13,7 @@ unit nextpas.core.tls.keyschedule.labels;
 
 interface
 
+uses nextpas.core.base;
 
 function TLS13_HKDF_Expand_Label_SHA256(
   const ASecret: TBytes;

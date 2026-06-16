@@ -20,7 +20,7 @@ unit nextpas.core.tls.pkcs11.utils;
 interface
 
 uses
-  SysUtils, Classes, Generics.Collections,
+  nextpas.core.text.conv, Classes, Generics.Collections,
   nextpas.core.tls.pkcs11.types,
   nextpas.core.tls.pkcs11.api,
   nextpas.core.tls.pkcs11.loader;

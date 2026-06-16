@@ -18,7 +18,11 @@ unit nextpas.core.tls.ocsp;
 
 interface
 
-uses SysUtils, nextpas.core.tls.asn1, nextpas.core.tls.x509, nextpas.core.crypto.hash;
+uses
+  nextpas.core.base,
+  nextpas.core.tls.asn1,
+  nextpas.core.tls.x509,
+  nextpas.core.crypto.hash;
 
 type
   // ========================================================================

@@ -11,7 +11,7 @@ unit nextpas.core.tls.openssl.certstore;
 interface
 
 uses
-  SysUtils, Classes,
+  SysUtils, Classes, nextpas.core.fs,
   nextpas.core.tls.base,
   nextpas.core.tls.logging,  // P3-8: 添加日志支持
   nextpas.core.tls.openssl.base,
@@ -68,6 +68,7 @@ type
 implementation
 
 uses
+  nextpas.core.text.conv,
   nextpas.core.text.strings,
     nextpas.core.tls.certchain,
   nextpas.core.tls.openssl.api.err,
@@ -125,7 +126,7 @@ begin
     except
       on E: Exception do
         TSecurityLog.Warning('OpenSSL',
-          Format('Exception freeing X509 in cert store list: %s', [E.Message]));
+          nextpas.core.text.conv.Format('Exception freeing X509 in cert store list: %s', [E.Message]));
     end;
   end;
 end;
@@ -208,7 +209,7 @@ begin
       except
         // P3-8: 记录异常而不是静默忽略
         on E: Exception do
-          TSecurityLog.Warning('OpenSSL', Format('Exception in TOpenSSLCertificateStore.Destroy: %s', [E.Message]));
+          TSecurityLog.Warning('OpenSSL', nextpas.core.text.conv.Format('Exception in TOpenSSLCertificateStore.Destroy: %s', [E.Message]));
       end;
     end;
   end;
@@ -256,7 +257,7 @@ begin
   except
     // 索引构建失败不应阻止证书添加
     on E: Exception do
-      TSecurityLog.Warning('OpenSSL', Format('Failed to build index for certificate: %s', [E.Message]));
+      TSecurityLog.Warning('OpenSSL', nextpas.core.text.conv.Format('Failed to build index for certificate: %s', [E.Message]));
   end;
 end;
 
@@ -325,7 +326,7 @@ begin
         LErrCode := ERR_peek_last_error();
 
       TSecurityLog.Warning('CertStore',
-        Format('X509_STORE_add_cert failed: %s', [GetFriendlyErrorMessage(LErrCode)]));
+        nextpas.core.text.conv.Format('X509_STORE_add_cert failed: %s', [GetFriendlyErrorMessage(LErrCode)]));
     end;
   end;
 
@@ -382,7 +383,7 @@ begin
       except
         on E: Exception do
           // Rust-quality: 记录错误而非静默忽略
-          TSecurityLog.Warning('OpenSSL', Format('X509_STORE_free failed in Clear: %s', [E.Message]));
+          TSecurityLog.Warning('OpenSSL', nextpas.core.text.conv.Format('X509_STORE_free failed in Clear: %s', [E.Message]));
       end;
     end;
   end;
@@ -483,7 +484,7 @@ begin
               LErrCode := ERR_peek_last_error();
 
             TSecurityLog.Warning('CertStore',
-              Format('X509_STORE_add_cert failed while loading "%s": %s',
+              nextpas.core.text.conv.Format('X509_STORE_add_cert failed while loading "%s": %s',
                 [AFileName, GetFriendlyErrorMessage(LErrCode)]));
 
             X509_free(X509Cert);
@@ -519,7 +520,7 @@ begin
   
   try
     // 确保路径有正确的分隔符
-    SearchPath := IncludeTrailingPathDelimiter(APath);
+    SearchPath := nextpas.core.fs.PathEnsureSep(APath);
     
     
     // 扫描目录中的所有 .pem 文件
@@ -593,7 +594,7 @@ begin
         X509_STORE_set_default_paths(FStore);
       except
         on E: Exception do
-          TSecurityLog.Debug('CertStore', Format('X509_STORE_set_default_paths failed: %s', [E.Message]));
+          TSecurityLog.Debug('CertStore', nextpas.core.text.conv.Format('X509_STORE_set_default_paths failed: %s', [E.Message]));
       end;
     end;
   end;
@@ -601,12 +602,12 @@ begin
   // 尝试从已知的系统路径加载
   for I := Low(LinuxCertPaths) to High(LinuxCertPaths) do
   begin
-    if DirectoryExists(LinuxCertPaths[I]) then
+    if nextpas.core.fs.IsDir(LinuxCertPaths[I]) then
     begin
       if LoadFromPath(LinuxCertPaths[I]) then
         LoadedAny := True;
     end
-    else if FileExists(LinuxCertPaths[I]) then
+    else if nextpas.core.fs.IsFile(LinuxCertPaths[I]) then
     begin
       if LoadFromFile(LinuxCertPaths[I]) then
         LoadedAny := True;

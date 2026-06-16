@@ -24,7 +24,7 @@ unit nextpas.core.tls.tls;
 interface
 
 uses
-  SysUtils, Classes,
+  nextpas.core.exception, nextpas.core.base.utils, Classes,
   nextpas.core.tls.base,
   nextpas.core.tls.pending,
   nextpas.core.tls.safety,

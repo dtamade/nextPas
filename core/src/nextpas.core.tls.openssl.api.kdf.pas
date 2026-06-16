@@ -8,7 +8,7 @@ unit nextpas.core.tls.openssl.api.kdf;
 
 interface
 
-uses nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.hmac; const // KDF 算法 NID EVP_PKEY_CTRL_TLS_MD = $1000;
+uses nextpas.core.base, nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.hmac; const // KDF 算法 NID EVP_PKEY_CTRL_TLS_MD = $1000;
   EVP_PKEY_CTRL_TLS_SECRET = $1001;
   EVP_PKEY_CTRL_TLS_SEED = $1002;
   EVP_PKEY_CTRL_HKDF_MD = $1003;

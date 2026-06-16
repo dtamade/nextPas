@@ -17,7 +17,10 @@ unit nextpas.core.tls.mbedtls.context;
 interface
 
 uses
-  SysUtils,Base64,
+  Base64, SysUtils, nextpas.core.fs, nextpas.core.system.classes,
+  nextpas.core.io.intf,
+  nextpas.core.io.util,
+  nextpas.core.io.stream_adapter,
   nextpas.core.tls.base,
   nextpas.core.tls.errors,
   nextpas.core.tls.exceptions,
@@ -80,6 +83,8 @@ type
       const AFeature, AMethodName: string);
     procedure RejectUnsupportedCustomCipherAssignment(
       const AFeature, AMethodName: string);
+    function ReadLimitedStreamBytes(const AStream: IStream; const AMaxSize: Int64;
+      const ASubject: string): TBytes;
 
   public
     constructor Create(ALibrary: ISSLLibrary; AType: TSSLContextType);
@@ -175,6 +180,7 @@ type
 implementation
 
 uses
+  nextpas.core.text.conv,
   nextpas.core.text.strings,
     nextpas.core.tls.mbedtls.lib,
   nextpas.core.tls.mbedtls.certificate,
@@ -237,6 +243,26 @@ begin
   FreeConfig;
   FLibrary := nil;
   inherited Destroy;
+end;
+
+function TMbedTLSContext.ReadLimitedStreamBytes(const AStream: IStream;
+  const AMaxSize: Int64; const ASubject: string): TBytes;
+var
+  LReader: IReader;
+begin
+  if AStream = nil then
+    raise ESSLCertError.Create('Stream is nil');
+
+  LReader := IoLimitReader(AStream, AMaxSize + 1);
+  Result := IoReadAll(LReader);
+
+  if Length(Result) = 0 then
+    raise ESSLCertError.Create('Stream is empty');
+  if Length(Result) > AMaxSize then
+    raise ESSLInvalidArgument.CreateFmt(
+      '%s exceeds maximum allowed size (%d > %d bytes)',
+      [ASubject, Length(Result), AMaxSize]
+    );
 end;
 
 procedure TMbedTLSContext.AllocateConfig;
@@ -415,7 +441,7 @@ begin
   if AFileName = '' then
     raise ESSLInvalidArgument.Create('AFileName must not be empty');
 
-  if not FileExists(AFileName) then
+  if not nextpas.core.fs.IsFile(AFileName) then
     raise ESSLCertError.CreateFmt('Certificate file not found: %s', [AFileName]);
 
   LSize := GetFileSizeByName(AFileName);
@@ -443,24 +469,21 @@ end;
 procedure TMbedTLSContext.LoadCertificate(AStream: TStream);
 var
   LData: TBytes;
-  LSize: Integer;
+  LReadData: TBytes;
 begin
   RequireValidContext('LoadCertificate');
 
   if AStream = nil then
     raise ESSLCertError.Create('Stream is nil');
 
-  LSize := AStream.Size - AStream.Position;
-  if LSize <= 0 then
-    raise ESSLCertError.Create('Stream is empty');
-  if LSize > MAX_CERTIFICATE_SIZE then
-    raise ESSLInvalidArgument.CreateFmt(
-      'Certificate stream exceeds maximum allowed size (%d > %d bytes)',
-      [LSize, MAX_CERTIFICATE_SIZE]);
-
-  SetLength(LData, LSize + 1);  // +1 for null terminator (PEM needs it)
-  AStream.ReadBuffer(LData[0], LSize);
-  LData[LSize] := 0;  // Null terminate
+  LReadData := ReadLimitedStreamBytes(
+    WrapTStream(AStream, False),
+    MAX_CERTIFICATE_SIZE,
+    'Certificate stream'
+  );
+  SetLength(LData, Length(LReadData) + 1);
+  Move(LReadData[0], LData[0], Length(LReadData));
+  LData[High(LData)] := 0;
 
   // 分配证书链
   if FCertChain = nil then
@@ -474,7 +497,7 @@ begin
   if not Assigned(mbedtls_x509_crt_parse) then
     raise ESSLCertError.Create('mbedtls_x509_crt_parse not available');
 
-  if mbedtls_x509_crt_parse(FCertChain, @LData[0], LSize + 1) <> 0 then
+  if mbedtls_x509_crt_parse(FCertChain, @LData[0], Length(LData)) <> 0 then
     raise ESSLCertError.Create('Failed to load certificate from stream');
 end;
 
@@ -520,7 +543,7 @@ begin
   if AFileName = '' then
     raise ESSLInvalidArgument.Create('AFileName must not be empty');
 
-  if not FileExists(AFileName) then
+  if not nextpas.core.fs.IsFile(AFileName) then
     raise ESSLCertError.CreateFmt('Private key file not found: %s', [AFileName]);
 
   LSize := GetFileSizeByName(AFileName);
@@ -549,7 +572,7 @@ end;
 procedure TMbedTLSContext.LoadPrivateKey(AStream: TStream; const APassword: string);
 var
   LData: TBytes;
-  LSize: Integer;
+  LReadData: TBytes;
   LPwd: PAnsiChar;
   LPwdLen: NativeUInt;
 begin
@@ -558,19 +581,14 @@ begin
   if AStream = nil then
     raise ESSLCertError.Create('Stream is nil');
 
-  LSize := AStream.Size - AStream.Position;
-  if LSize <= 0 then
-    raise ESSLCertError.Create('Stream is empty');
-  if LSize > MAX_PRIVATE_KEY_SIZE then
-    raise ESSLInvalidArgument.CreateFmt(
-      'Private key stream exceeds maximum allowed size (%d > %d bytes)',
-      [LSize, MAX_PRIVATE_KEY_SIZE]);
-  if LSize <= 0 then
-    raise ESSLCertError.Create('Stream is empty');
-
-  SetLength(LData, LSize + 1);  // +1 for null terminator
-  AStream.ReadBuffer(LData[0], LSize);
-  LData[LSize] := 0;  // Null terminate
+  LReadData := ReadLimitedStreamBytes(
+    WrapTStream(AStream, False),
+    MAX_PRIVATE_KEY_SIZE,
+    'Private key stream'
+  );
+  SetLength(LData, Length(LReadData) + 1);
+  Move(LReadData[0], LData[0], Length(LReadData));
+  LData[High(LData)] := 0;
 
   // 分配私钥上下文
   if FPrivateKey = nil then
@@ -596,7 +614,7 @@ begin
     LPwdLen := 0;
   end;
 
-  if mbedtls_pk_parse_key(FPrivateKey, @LData[0], LSize + 1,
+  if mbedtls_pk_parse_key(FPrivateKey, @LData[0], Length(LData),
     PByte(LPwd), LPwdLen, nil, nil) <> 0 then
     raise ESSLCertError.Create('Failed to load private key from stream');
 end;
@@ -681,7 +699,7 @@ begin
   if AFileName = '' then
     raise ESSLInvalidArgument.Create('AFileName must not be empty');
 
-  if not FileExists(AFileName) then
+  if not nextpas.core.fs.IsFile(AFileName) then
     raise ESSLCertError.CreateFmt('CA file not found: %s', [AFileName]);
 
   LSize := GetFileSizeByName(AFileName);
@@ -714,7 +732,7 @@ procedure TMbedTLSContext.LoadCAPath(const APath: string);
 begin
   RequireValidContext('LoadCAPath');
 
-  if not DirectoryExists(APath) then
+  if not nextpas.core.fs.IsDir(APath) then
     raise ESSLCertError.CreateFmt('CA path not found: %s', [APath]);
 
   // 分配 CA 证书
@@ -784,7 +802,7 @@ procedure TMbedTLSContext.RejectUnsupportedCallbackAssignment(
   const AFeature, AMethodName: string);
 begin
   raise ESSLConfigurationException.CreateWithContext(
-    Format('%s is not published by the current MbedTLS backend runtime. ' +
+    nextpas.core.text.conv.Format('%s is not published by the current MbedTLS backend runtime. ' +
       'Check ISSLLibrary.GetCapabilities.SupportsCallbacks before installing a non-nil callback.',
       [AFeature]),
     sslErrUnsupported,
@@ -810,7 +828,7 @@ procedure TMbedTLSContext.RejectUnsupportedCustomCipherAssignment(
   const AFeature, AMethodName: string);
 begin
   raise ESSLConfigurationException.CreateWithContext(
-    Format('%s is not published by the current MbedTLS backend runtime. ' +
+    nextpas.core.text.conv.Format('%s is not published by the current MbedTLS backend runtime. ' +
       'Check ISSLLibrary.GetCapabilities.SupportsCustomCipherSuites before installing a custom non-default cipher override.',
       [AFeature]),
     sslErrUnsupported,
@@ -1014,7 +1032,7 @@ begin
 
   if Length(LHash) <> 32 then
     raise ESSLException.CreateWithContext(
-      Format('Invalid Base64 hash length: expected 32, got %d', [Length(LHash)]),
+      nextpas.core.text.conv.Format('Invalid Base64 hash length: expected 32, got %d', [Length(LHash)]),
       sslErrInvalidParam,
       'TMbedTLSContext.AddCertificatePinBase64'
     );
@@ -1073,7 +1091,7 @@ begin
   ApplyCredentials;
 
   try
-    Result := TMbedTLSConnection.Create(Self as ISSLContext, FSSLConfig, AStream);
+    Result := TMbedTLSConnection.Create(Self as ISSLContext, FSSLConfig, WrapTStream(AStream, False));
   except
     on E: ESSLException do
       raise;
