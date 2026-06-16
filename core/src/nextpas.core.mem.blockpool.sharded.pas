@@ -118,8 +118,6 @@ type
     // fast statistics (atomic, approximate under heavy contention but monotonic)
     FTotalCapacity: Int64; // blocks
   private
-    function IsPowerOfTwoInt(aValue: Integer): Boolean; inline;
-    function NextPow2Int(aValue: Integer): Integer; inline;
     function NormalizeShardCount(aShardCount: Integer): Integer;
     function ChooseShardIndex: Integer; inline;
     function GetLocalShardIndex: Integer; inline;
@@ -244,22 +242,6 @@ begin
   Result.TrackInUse := True;
 end;
 
-function TShardedBlockPool.IsPowerOfTwoInt(aValue: Integer): Boolean;
-begin
-  Result := (aValue > 0) and ((aValue and (aValue - 1)) = 0);
-end;
-
-function TShardedBlockPool.NextPow2Int(aValue: Integer): Integer;
-var
-  LResult: Integer;
-begin
-  if aValue <= 1 then Exit(1);
-  LResult := 1;
-  while LResult < aValue do
-    LResult := LResult shl 1;
-  Result := LResult;
-end;
-
 function TShardedBlockPool.NormalizeShardCount(aShardCount: Integer): Integer;
 var
   LCPU: Integer;
@@ -271,8 +253,8 @@ begin
     if LCPU > 32 then LCPU := 32;
     aShardCount := LCPU;
   end;
-  if not IsPowerOfTwoInt(aShardCount) then
-    aShardCount := NextPow2Int(aShardCount);
+  if not IsPowerOfTwo(SizeUInt(aShardCount)) then
+    aShardCount := Integer(NextPowerOfTwo(SizeUInt(aShardCount)));
   if aShardCount < 1 then aShardCount := 1;
   Result := aShardCount;
 end;
@@ -1021,7 +1003,7 @@ var
 
   FBlockMask := 0;
   FBlockShift := 0;
-  if (FBlockSize <> 0) and IsPowerOfTwoInt(Integer(FBlockSize)) then
+  if (FBlockSize <> 0) and IsPowerOfTwo(FBlockSize) then
   begin
     FBlockMask := FBlockSize - 1;
     LShift := 0;
@@ -1036,7 +1018,7 @@ var
 
   // page-map granularity (default 4096 bytes)
   LPageSize := SizeUInt(MEM_PAGE_SIZE);
-  if (LPageSize <> 0) and IsPowerOfTwoInt(Integer(LPageSize)) then
+  if (LPageSize <> 0) and IsPowerOfTwo(LPageSize) then
   begin
     LPageShift := 0;
     LPageTmp := LPageSize;

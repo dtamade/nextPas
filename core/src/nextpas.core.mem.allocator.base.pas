@@ -5,6 +5,7 @@ unit nextpas.core.mem.allocator.base;
 interface
 
 uses
+  nextpas.core.mem.base,
   nextpas.core.mem.intf,
   nextpas.core.contracts
   {$IFDEF NEXTPAS_CORE_STRICT_NULL_FREE}
@@ -46,11 +47,6 @@ implementation
 
 {$PUSH}
 {$WARN 4055 OFF} // pointer/ordinal conversions in aligned alloc helpers
-
-function IsPowerOfTwo(x: SizeUInt): Boolean; inline;
-begin
-  Result := (x <> 0) and ((x and (x - 1)) = 0);
-end;
 
 function AlignUpPtr(P: Pointer; AAlignment: SizeUInt): Pointer; inline;
 var

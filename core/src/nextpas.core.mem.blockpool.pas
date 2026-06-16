@@ -45,9 +45,6 @@ const
   {** IArena 接口 GUID *}
   GUID_IARENA = '{C905F1B3-4D6E-5A0C-BF78-8E9D0C102345}';
 
-  {** 默认对齐 *}
-  DEFAULT_ALIGNMENT = 16;
-
 type
   {**
    * IBlockPool
@@ -272,18 +269,6 @@ implementation
 
 {$PUSH}
 {$WARN 4055 OFF} // pointer/ordinal conversions in pool internals
-
-function IsPowerOfTwo(const AValue: SizeUInt): Boolean; inline;
-begin
-  Result := (AValue <> 0) and ((AValue and (AValue - 1)) = 0);
-end;
-
-function NextPowerOfTwo(const AValue: SizeUInt): SizeUInt; inline;
-begin
-  Result := 1;
-  while Result < AValue do
-    Result := Result shl 1;
-end;
 
 function NormalizeArenaAlignment(const AAlignment: SizeUInt): SizeUInt; inline;
 begin

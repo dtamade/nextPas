@@ -38,11 +38,6 @@ type
 
 implementation
 
-function IsPowerOfTwo(const AValue: SizeUInt): Boolean; inline;
-begin
-  Result := (AValue <> 0) and ((AValue and (AValue - 1)) = 0);
-end;
-
 { TLocalArena }
 
 procedure TLocalArena.Init(const ACapacity: SizeUInt);
