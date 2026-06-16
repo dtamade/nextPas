@@ -28,7 +28,8 @@ function TlsFree(dwTlsIndex: DWORD): BOOL; stdcall; external 'kernel32' name 'Tl
 function TlsSetValue(dwTlsIndex: DWORD; lpTlsValue: Pointer): BOOL; stdcall; external 'kernel32' name 'TlsSetValue';
 function TlsGetValue(dwTlsIndex: DWORD): Pointer; stdcall; external 'kernel32' name 'TlsGetValue';
 
-function InterlockedDecrement(var Addend: Int32): Int32;
+function InterlockedDecrement(var Addend: Int32): Int32; stdcall; external 'kernel32' name 'InterlockedDecrement';
+function InterlockedIncrement(var Addend: Int32): Int32; stdcall; external 'kernel32' name 'InterlockedIncrement';
 
 procedure InitializeSRWLock(SRWLock: Pointer); stdcall; external 'kernel32' name 'InitializeSRWLock';
 procedure AcquireSRWLockExclusive(SRWLock: Pointer); stdcall; external 'kernel32' name 'AcquireSRWLockExclusive';
@@ -171,10 +172,5 @@ function UpdateProcThreadAttribute(lpAttributeList: Pointer; dwFlags: DWORD; Att
 procedure DeleteProcThreadAttributeList(lpAttributeList: Pointer); stdcall; external 'kernel32' name 'DeleteProcThreadAttributeList';
 
 implementation
-
-function InterlockedDecrement(var Addend: Int32): Int32;
-begin
-  Result := AtomicDecrement(Addend);
-end;
 
 end.
