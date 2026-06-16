@@ -99,6 +99,34 @@ and forced Windows compile gates.
 | P5 Tier 2 targets | Windows aarch64, Linux riscv64/arm32, FreeBSD/Android | riscv64/aarch64/arm32: 13-module compile gate via cross CI matrix; runtime smoke deferred | FreeBSD/Android compile gate; QEMU runtime smoke |
 | P6 Benchmarks | Platform performance comparison | deferred | only after contract/runtime truth stabilizes |
 
+## P5 Evidence Matrix
+
+| Target | Status | Evidence |
+|--------|--------|----------|
+| riscv64-linux | ✅ PASS | `core/scripts/platform-cross-ci-matrix.sh` — 13-module forced-compile |
+| aarch64-linux | ✅ PASS | `core/scripts/platform-cross-ci-matrix.sh` — 13-module forced-compile |
+| arm32-linux | ✅ PASS | `core/scripts/platform-cross-ci-matrix.sh` — 13-module forced-compile |
+
+## G6-G9 Deferred Notes
+
+| Milestone | Status | Reason |
+|-----------|--------|--------|
+| P6/G6 Windows Win64 | ✅ Complete | Wine CI matrix (G3) already covers 14 modules × Win64 compile + wine-runtime-smoke |
+| P7/G7 macOS/Darwin | ⬜ Deferred | Requires Darwin cross-compiler toolchain; no CI environment |
+| P8/G8 FreeBSD | ⬜ Deferred | Requires cross-platform-actions CI; limited environment |
+| P9/G9 Android | ⬜ Deferred | NDK toolchain + bionic libc + syscall differences from glibc |
+
+## arm32 Cross-Compile Environment Requirements
+
+arm32 (ARMEL) cross-compilation requires the following packages:
+- `libc6-dev-armhf-cross` — provides CRT objects in `/usr/arm-linux-gnueabihf/lib/`
+- GCC cross-toolchain — provides `crtbegin.o`/`crtend.o` in `/usr/lib/gcc-cross/arm-linux-gnueabihf/*/`
+
+Makefile must include:
+```
+-Fl/usr/arm-linux-gnueabihf/lib -Fl/usr/lib/gcc-cross/arm-linux-gnueabihf/14 -k--no-warn-mismatch
+```
+
 ## Evidence rules
 
 - Do not use a status label without an evidence tier.
