@@ -228,7 +228,6 @@ begin
     on E: Exception do
     begin
       AError := 'Failed to parse certificate DER: ' + E.Message;
-      nextpas.core.base.utils.FreeAndNil(AParser);
       Result := False;
     end;
   end;
@@ -520,7 +519,6 @@ begin
     end;
     Result := True;
   except
-    nextpas.core.base.utils.FreeAndNil(AParser);
     Result := False;
   end;
 end;

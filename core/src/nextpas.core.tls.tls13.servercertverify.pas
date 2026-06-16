@@ -18,7 +18,9 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.exception,
+  nextpas.core.system.sysutils,
   nextpas.core.text.conv,
+  nextpas.core.text.strings,
   nextpas.core.tls.tls13.wire,
   nextpas.core.tls.tls13.clienthello.parser,
   nextpas.core.tls.x509;
@@ -2150,7 +2152,7 @@ begin
     TLS13_SIG_RSA_PSS_RSAE_SHA384,
     TLS13_SIG_RSA_PSS_PSS_SHA384:
       begin
-        if not SameText(APublicKeyInfo.KeyType, 'RSA') then
+        if not nextpas.core.system.sysutils.SameText(APublicKeyInfo.KeyType, 'RSA') then
         begin
           AError := 'Unsupported CertificateVerify key type for RSA signature scheme';
           Exit;
@@ -2183,14 +2185,14 @@ begin
 
     TLS13_SIG_ECDSA_SECP256R1_SHA256:
       begin
-        if not SameText(APublicKeyInfo.KeyType, 'ECDSA') then
+        if not nextpas.core.system.sysutils.SameText(APublicKeyInfo.KeyType, 'ECDSA') then
         begin
           AError := 'Unsupported CertificateVerify key type for ECDSA signature scheme';
           Exit;
         end;
 
-        if (not SameText(APublicKeyInfo.ECCurve, 'prime256v1')) and
-          (not SameText(APublicKeyInfo.ECCurve, 'secp256r1')) then
+        if (not nextpas.core.system.sysutils.SameText(APublicKeyInfo.ECCurve, 'prime256v1')) and
+          (not nextpas.core.system.sysutils.SameText(APublicKeyInfo.ECCurve, 'secp256r1')) then
         begin
           AError := 'Unsupported ECDSA curve for CertificateVerify';
           Exit;
@@ -2208,14 +2210,14 @@ begin
 
     TLS13_SIG_ECDSA_SECP384R1_SHA384:
       begin
-        if not SameText(APublicKeyInfo.KeyType, 'ECDSA') then
+        if not nextpas.core.system.sysutils.SameText(APublicKeyInfo.KeyType, 'ECDSA') then
         begin
           AError := 'Unsupported CertificateVerify key type for ECDSA-P384 signature scheme';
           Exit;
         end;
 
-        if (not SameText(APublicKeyInfo.ECCurve, 'secp384r1')) and
-          (not SameText(APublicKeyInfo.ECCurve, 'prime384v1')) then
+        if (not nextpas.core.system.sysutils.SameText(APublicKeyInfo.ECCurve, 'secp384r1')) and
+          (not nextpas.core.system.sysutils.SameText(APublicKeyInfo.ECCurve, 'prime384v1')) then
         begin
           AError := 'Unsupported ECDSA curve for P-384 CertificateVerify';
           Exit;
@@ -2236,7 +2238,7 @@ begin
 
     TLS13_SIG_ED25519:
       begin
-        if not SameText(APublicKeyInfo.KeyType, 'Ed25519') then
+        if not nextpas.core.system.sysutils.SameText(APublicKeyInfo.KeyType, 'Ed25519') then
         begin
           AError := 'Unsupported CertificateVerify key type for Ed25519 signature scheme';
           Exit;

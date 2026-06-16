@@ -4,6 +4,9 @@ unit nextpas.core.tls.dtls.layer;
 
 interface
 
+uses
+  nextpas.core.base;
+
 
 const
   DTLS_CONTENT_TYPE_CHANGE_CIPHER_SPEC = 20;

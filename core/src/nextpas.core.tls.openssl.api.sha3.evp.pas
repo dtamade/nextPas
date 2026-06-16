@@ -15,7 +15,10 @@ unit nextpas.core.tls.openssl.api.sha3.evp;
 
 interface
 
-uses nextpas.core.tls.base, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.evp; const SHA3_224_DIGEST_LENGTH = 28;
+uses nextpas.core.base, nextpas.core.tls.base, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.evp;
+
+const
+  SHA3_224_DIGEST_LENGTH = 28;
   SHA3_256_DIGEST_LENGTH = 32;
   SHA3_384_DIGEST_LENGTH = 48;
   SHA3_512_DIGEST_LENGTH = 64;
@@ -57,7 +60,9 @@ function IsEVPSHA3Available: Boolean;
 
 implementation
 
-uses nextpas.core.tls.openssl.api; constructor TSHA3EVPContext.Create(const Algorithm: string; IsXOF: Boolean);
+uses nextpas.core.tls.openssl.api;
+
+constructor TSHA3EVPContext.Create(const Algorithm: string; IsXOF: Boolean);
 begin
   inherited Create;
   FAlgorithm := Algorithm;

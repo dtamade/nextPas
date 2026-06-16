@@ -7,7 +7,8 @@ interface
 uses
    Classes,
   nextpas.core.io.base,
-  nextpas.core.io.intf;
+  nextpas.core.io.intf,
+  nextpas.core.base.utils;
 
 type
   TSSLIOResult = (

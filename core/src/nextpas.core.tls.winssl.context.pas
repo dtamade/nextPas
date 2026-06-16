@@ -286,7 +286,6 @@ begin
     FreeCredentialsHandle(@FCredHandle);
   
   // 清理证书固定
-  nextpas.core.base.utils.FreeAndNil(FPinValidator);
   
   inherited Destroy;
 end;

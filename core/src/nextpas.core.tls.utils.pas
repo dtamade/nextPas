@@ -28,6 +28,7 @@ unit nextpas.core.tls.utils;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.text.conv,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
@@ -194,7 +195,11 @@ var
   I, LCount: Integer;
 begin
   SetLength(Result, 0);
-  LParts := ADN.Split([',', '/']);
+  LParts := StringsSplit(
+    nextpas.core.text.conv.StringReplace(ADN, '/', ',', True),
+    ',',
+    False
+  );
   LCount := 0;
   for I := 0 to High(LParts) do
   begin
@@ -220,7 +225,7 @@ var
 begin
   Result := False;
   
-  LParts := AStr.Split(['.']);
+  LParts := StringsSplit(AStr, '.', False);
   if Length(LParts) <> 4 then
     Exit;
   

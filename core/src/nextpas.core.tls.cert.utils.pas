@@ -32,6 +32,8 @@ unit nextpas.core.tls.cert.utils;
 interface
 
 uses
+  nextpas.core.exception,
+  nextpas.core.base,
   SysUtils, Classes,
   nextpas.core.fs,
   nextpas.core.tls.openssl.base,

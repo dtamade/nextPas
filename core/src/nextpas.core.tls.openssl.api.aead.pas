@@ -4,7 +4,7 @@ unit nextpas.core.tls.openssl.api.aead;
 
 interface
 
-uses nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.base, nextpas.core.mem.secure;
+uses nextpas.core.base, nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.base, nextpas.core.mem.secure;
 
 type
   { AEAD 加密结果 }

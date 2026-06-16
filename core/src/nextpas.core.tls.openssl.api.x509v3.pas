@@ -201,7 +201,13 @@ function X509AddSubjectAltName(Cert: PX509; const DNS: string): Boolean;
 
 implementation
 
-uses nextpas.core.tls.openssl.api.utils, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.api.asn1, nextpas.core.tls.openssl.api.x509;
+uses
+  nextpas.core.tls.openssl.api.utils,
+  nextpas.core.tls.openssl.loader,
+  nextpas.core.tls.openssl.api.core,
+  nextpas.core.tls.openssl.api.asn1,
+  nextpas.core.tls.openssl.api.x509,
+  nextpas.core.text.conv;
 
 const
   { X509V3 函数绑定数组 - 用于批量加载 }
@@ -422,7 +428,7 @@ begin
   if Cert = nil then
     Exit;
 
-  LUsageValue := Trim(Usage);
+  LUsageValue := nextpas.core.text.conv.Trim(Usage);
   if LUsageValue = '' then
     Exit;
 
@@ -455,11 +461,11 @@ begin
   if Cert = nil then
     Exit;
 
-  LDNSValue := Trim(DNS);
+  LDNSValue := nextpas.core.text.conv.Trim(DNS);
   if LDNSValue = '' then
     Exit;
 
-  if UpperCase(Copy(LDNSValue, 1, 4)) <> 'DNS:' then
+  if nextpas.core.text.conv.UpperCase(Copy(LDNSValue, 1, 4)) <> 'DNS:' then
     LDNSValue := 'DNS:' + LDNSValue;
 
   if (not Assigned(X509_add_ext)) or (not Assigned(X509_EXTENSION_free)) then

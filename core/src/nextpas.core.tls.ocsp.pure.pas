@@ -4,6 +4,10 @@ unit nextpas.core.tls.ocsp.pure;
 
 interface
 
+uses
+  nextpas.core.exception,
+  nextpas.core.base;
+
 
 type
   TOCSPCertStatus = (ocsGood = 0, ocsRevoked = 1, ocsUnknown = 2);

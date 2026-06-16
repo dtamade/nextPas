@@ -8,7 +8,7 @@ unit nextpas.core.tls.openssl.api.comp;
 
 interface
 
-uses nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.bio; const // 压缩方法 NID NID_zlib_compression = 125;
+uses nextpas.core.base, nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.bio; const // 压缩方法 NID NID_zlib_compression = 125;
   NID_rle_compression = 124;
   NID_brotli_compression = 1138;
   NID_zstd_compression = 1139;
@@ -188,7 +188,6 @@ function IsCompressionSupported(Method: PCOMP_METHOD): Boolean;
 
 implementation
 
-uses nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.loader; procedure LoadCOMPFunctions;
 begin
   if not TOpenSSLLoader.IsModuleLoaded(osmCore) then Exit;
   

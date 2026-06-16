@@ -334,7 +334,9 @@ function EC_GROUP_get_curve_name_string(const group: PEC_GROUP): string;
 
 implementation
 
-uses nextpas.core.tls.openssl.api;
+uses
+  nextpas.core.tls.openssl.api,
+  nextpas.core.text.conv;
 
 const
   { EC Function Bindings - 批量加载函数绑定定义 }
@@ -475,7 +477,7 @@ begin
     NID_ED25519: Result := 'ED25519';
     NID_ED448: Result := 'ED448';
   else
-    Result := Format('Unknown(%d)', [nid]);
+    Result := nextpas.core.text.conv.Format('Unknown(%d)', [nid]);
   end;
 end;
 

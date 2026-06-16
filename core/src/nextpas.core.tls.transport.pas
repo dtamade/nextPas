@@ -4,6 +4,9 @@ unit nextpas.core.tls.transport;
 
 interface
 
+uses
+  nextpas.core.base;
+
 
 type
   TSSLTransportResult = (

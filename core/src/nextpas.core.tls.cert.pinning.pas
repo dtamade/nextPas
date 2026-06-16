@@ -30,7 +30,9 @@ unit nextpas.core.tls.cert.pinning;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.text.conv,
+  nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.core,
@@ -229,7 +231,7 @@ begin
   Result.PinType := AType;
   Result.Description := ADescription;
   Result.IsBackup := AIsBackup;
-  Result.AddedDate := Now;
+  Result.AddedDate := nextpas.core.time.DateTimeNow;
   Result.ExpiryDate := 0;  // Never expires by default
 
   DecodedBytes := nextpas.core.encoding.base64.Base64Decode(ABase64Hash);
@@ -253,7 +255,7 @@ end;
 
 function TCertificatePin.IsValid: Boolean;
 begin
-  Result := (ExpiryDate = 0) or (Now < ExpiryDate);
+  Result := (ExpiryDate = 0) or (nextpas.core.time.DateTimeNow < ExpiryDate);
 end;
 
 { TPinValidator }
@@ -409,7 +411,7 @@ begin
   Move(AHash[0], Pin.Hash[0], 32);
   Pin.Description := ADescription;
   Pin.IsBackup := AIsBackup;
-  Pin.AddedDate := Now;
+  Pin.AddedDate := nextpas.core.time.DateTimeNow;
   Pin.ExpiryDate := 0;
 
   SetLength(FPins, Length(FPins) + 1);

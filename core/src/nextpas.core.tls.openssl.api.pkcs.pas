@@ -4,7 +4,7 @@ unit nextpas.core.tls.openssl.api.pkcs;
 
 interface
 
-uses dynlibs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.api.asn1, nextpas.core.tls.openssl.api.bio, nextpas.core.tls.openssl.loader;
+uses nextpas.core.base, nextpas.core.fs, dynlibs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.api.asn1, nextpas.core.tls.openssl.api.bio, nextpas.core.tls.openssl.loader;
 
 type
   // PKCS7 类型定义
@@ -535,7 +535,7 @@ begin
   ACAs := nil;
 
   if not TOpenSSLLoader.IsModuleLoaded(osmPKCS) or
-    not FileExists(AFileName) or
+    not nextpas.core.fs.IsFile(AFileName) or
     not Assigned(BIO_new_file) or
     not Assigned(d2i_PKCS12_bio) or
     not Assigned(PKCS12_parse) or

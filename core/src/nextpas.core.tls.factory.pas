@@ -41,6 +41,8 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.base.utils,
+  nextpas.core.exception,
   nextpas.core.text.conv,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions, // 新增：类型化异常

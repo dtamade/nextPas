@@ -6,6 +6,7 @@ interface
 
 uses
   nextpas.core.text.conv,
+  nextpas.core.base.utils,
   nextpas.core.tls.base;
 
 procedure ValidateContextReplayStoreConfigScope(const AConfig: TSSLConfig;

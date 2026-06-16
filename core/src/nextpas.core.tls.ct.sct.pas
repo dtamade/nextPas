@@ -9,7 +9,7 @@ unit nextpas.core.tls.ct.sct;
 
 interface
 
-uses nextpas.core.text.conv, nextpas.core.time, nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.ct, nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.ssl, nextpas.core.tls.openssl.api.stack;
+uses nextpas.core.base, nextpas.core.text.conv, nextpas.core.time, nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.ct, nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.ssl, nextpas.core.tls.openssl.api.stack;
 
 type
   // SCT 来源类型
@@ -133,7 +133,7 @@ begin
     // 设置时间（当前时间 + 容差）
     if Assigned(CT_POLICY_EVAL_CTX_set_time) then
     begin
-      CurrentTime := UInt64(DateTimeToUnix(Now) * 1000);  // 转换为毫秒
+      CurrentTime := UInt64(DateTimeToUnix(nextpas.core.time.DateTimeNow) * 1000);  // 转换为毫秒
       CurrentTime := CurrentTime + UInt64(FOptions.ClockDriftTolerance);
       CT_POLICY_EVAL_CTX_set_time(Result, CurrentTime);
     end;

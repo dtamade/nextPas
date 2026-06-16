@@ -4,6 +4,9 @@ unit nextpas.core.tls.tls12.recordcrypto;
 
 interface
 
+uses
+  nextpas.core.base;
+
 
 function TLS12GCMEncryptRecord(
   const AKey: TBytes;

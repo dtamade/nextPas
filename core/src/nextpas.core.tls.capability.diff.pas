@@ -17,6 +17,7 @@ unit nextpas.core.tls.capability.diff;
 interface
 
 uses
+  nextpas.core.exception,
   nextpas.core.base,
   nextpas.core.text.conv,
   nextpas.core.tls.base;

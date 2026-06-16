@@ -22,6 +22,7 @@ unit nextpas.core.tls.connection.builder;
 interface
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.exception, Classes,
   nextpas.core.tls.base,
   nextpas.core.tls.safety;

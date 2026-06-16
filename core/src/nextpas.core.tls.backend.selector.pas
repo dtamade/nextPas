@@ -16,6 +16,7 @@ unit nextpas.core.tls.backend.selector;
 interface
 
 uses
+  nextpas.core.exception,
   nextpas.core.base,
   nextpas.core.tls.base;
 

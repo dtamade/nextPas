@@ -5,6 +5,7 @@ unit nextpas.core.tls.tls12.server;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.text.conv, Classes,
   nextpas.core.tls.base,
   nextpas.core.tls.tls12.ciphersuite,

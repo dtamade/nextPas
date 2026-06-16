@@ -26,6 +26,7 @@ uses
   fgl,
   nextpas.core.text.conv,
   nextpas.core.time,
+  nextpas.core.base.utils,
   nextpas.core.tls.base;
 
 const

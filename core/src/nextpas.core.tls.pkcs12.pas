@@ -5,6 +5,10 @@ unit nextpas.core.tls.pkcs12;
 
 interface
 
+uses
+  nextpas.core.exception,
+  nextpas.core.base;
+
 
 type
   TPKCS12ParseResult = record

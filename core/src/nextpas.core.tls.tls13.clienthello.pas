@@ -10,6 +10,8 @@ unit nextpas.core.tls.tls13.clienthello;
 interface
 
 uses
+  nextpas.core.text.conv,
+  nextpas.core.base,
   
   nextpas.core.tls.base;
 

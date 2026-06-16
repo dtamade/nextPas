@@ -23,6 +23,8 @@ unit nextpas.core.tls.cert.rotation;
 interface
 
 uses
+  nextpas.core.base,
+  nextpas.core.exception,
   Classes, SysUtils, SyncObjs,
   nextpas.core.fs, nextpas.core.text.conv, nextpas.core.time,
   nextpas.core.tls.base, nextpas.core.tls.errors, nextpas.core.tls.logging, nextpas.core.tls.exceptions;
@@ -159,7 +161,6 @@ type
 
 implementation
 
-uses
   Math,
   nextpas.core.base.utils,
   nextpas.core.tls.utils,
@@ -445,7 +446,6 @@ begin
   begin
     FMonitorThread.Terminate;
     FMonitorThread.WaitFor;
-    nextpas.core.base.utils.FreeAndNil(FMonitorThread);
   end;
 
   TSecurityLog.Info('CertRotation', 'Certificate rotation monitoring stopped');

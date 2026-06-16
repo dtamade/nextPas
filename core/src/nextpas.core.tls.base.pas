@@ -27,7 +27,7 @@ unit nextpas.core.tls.base;
 interface
 
 uses
-  SysUtils, nextpas.core.system.classes;
+  nextpas.core.base, nextpas.core.system.classes;
 
 type
   // ============================================================================
@@ -2290,6 +2290,8 @@ function GetCapabilitiesDescription(const ACaps: TSSLBackendCapabilities): strin
 implementation
 
 uses
+  nextpas.core.exception,       // EIndexOutOfRangeError (replaces SysUtils.ERangeError)
+  nextpas.core.text.conv,       // IntToStr (replaces SysUtils.IntToStr)
   nextpas.core.tls.errors,      // Stage 2.1 P2 - Standardized error handling
   nextpas.core.tls.exceptions;  // Phase 3.3 P0 - 统一异常定义（修复重复定义问题）
 
@@ -2367,7 +2369,7 @@ function TBytesView.GetByte(AIndex: Integer): Byte;
 begin
   // Rust-quality: Bounds checking like Rust's [] operator
   if (AIndex < 0) or (AIndex >= Length) then
-    raise ERangeError.CreateFmt('TBytesView index %d out of bounds [0..%d)', [AIndex, Length]);
+    raise EIndexOutOfRangeError.CreateFmt('TBytesView index %d out of bounds [0..%d)', [AIndex, Length]);
   Result := Data[AIndex];
 end;
 
@@ -2991,8 +2993,8 @@ begin
     AddLine('Dependencies: None (zero dependency)');
 
   // 评分
-  AddLine('Security Score: ' + IntToStr(GetSecurityScore(ACaps)) + '/100');
-  AddLine('Performance Score: ' + IntToStr(GetPerformanceScore(ACaps)) + '/100');
+  AddLine('Security Score: ' + nextpas.core.text.conv.IntToStr(GetSecurityScore(ACaps)) + '/100');
+  AddLine('Performance Score: ' + nextpas.core.text.conv.IntToStr(GetPerformanceScore(ACaps)) + '/100');
 
   // 已知问题
   if ACaps.KnownIssues <> '' then

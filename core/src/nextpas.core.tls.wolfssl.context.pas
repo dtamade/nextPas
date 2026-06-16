@@ -18,6 +18,7 @@ unit nextpas.core.tls.wolfssl.context;
 interface
 
 uses
+  nextpas.core.base,
   SysUtils, Classes, Base64,
   nextpas.core.fs,
   nextpas.core.text.conv,

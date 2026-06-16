@@ -4,7 +4,7 @@ unit nextpas.core.tls.dane.pure;
 
 interface
 
-uses nextpas.core.tls.x509;
+uses nextpas.core.base, nextpas.core.tls.x509;
 
 type
   TDANECertUsage = (cuCAConstraint = 0, cuServiceCert = 1, cuTrustAnchor = 2, cuDomainEE = 3);
@@ -29,7 +29,6 @@ function BuildTLSARecord(AUsage, ASelector, AMatchingType: Byte;
 
 implementation
 
-uses nextpas.core.crypto.hash;
 
 function ExtractMatchData(const ACertDER: TBytes; ASelector: TDANESelector): TBytes;
 var

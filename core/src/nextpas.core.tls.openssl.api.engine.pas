@@ -18,6 +18,7 @@ interface
 
 uses
    Classes,
+  nextpas.core.base,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader;
 

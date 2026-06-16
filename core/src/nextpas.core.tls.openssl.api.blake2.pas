@@ -12,7 +12,9 @@ unit nextpas.core.tls.openssl.api.blake2;
 
 interface
 
-uses nextpas.core.tls.base, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.loader; const BLAKE2B_BLOCKBYTES = 128;
+uses nextpas.core.base, nextpas.core.tls.base, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.loader;
+
+const BLAKE2B_BLOCKBYTES = 128;
   BLAKE2B_OUTBYTES = 64;
   BLAKE2B_KEYBYTES = 64;
   BLAKE2B_SALTBYTES = 16;
@@ -140,7 +142,12 @@ function BLAKE2sMAC(const Data: TBytes; const Key: TBytes; OutLen: Integer): TBy
 
 implementation
 
-uses nextpas.core.tls.openssl.api; const BLAKE2_BINDINGS: array[0..13] of TFunctionBinding = ( // BLAKE2b functions (Name: 'BLAKE2b_Init'; FuncPtr: @BLAKE2b_Init; Required: False);
+uses nextpas.core.tls.openssl.api;
+
+const
+  BLAKE2_BINDINGS: array[0..13] of TFunctionBinding = (
+    // BLAKE2b functions
+    (Name: 'BLAKE2b_Init';     FuncPtr: @BLAKE2b_Init;     Required: False),
     (Name: 'BLAKE2b_Init_key';   FuncPtr: @BLAKE2b_Init_key;   Required: False),
     (Name: 'BLAKE2b_Init_param'; FuncPtr: @BLAKE2b_Init_param; Required: False),
     (Name: 'BLAKE2b_Update';     FuncPtr: @BLAKE2b_Update;     Required: False),

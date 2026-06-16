@@ -346,7 +346,7 @@ begin
     end;
 
     try
-      LCreateStream := TFileStream.Create(LLockFileName, fmCreate);
+      LCreateStream := TFileStream.Create(LLockFileName, Ord(fmCreate));
       try
       finally
         LCreateStream.Free;
@@ -457,7 +457,7 @@ begin
 
       LFileName := nextpas.core.fs.PathEnsureSep(ADirectoryName) +
         EncodeKey(AEntries[I].Key) + DIRECTORY_REPLAY_ENTRY_SUFFIX;
-      LStream := TFileStream.Create(LFileName, fmCreate);
+      LStream := TFileStream.Create(LFileName, Ord(fmCreate));
       try
         LVersion := FREEPASCAL_DIRECTORY_REPLAY_STORE_VERSION;
         LStream.WriteBuffer(LVersion, SizeOf(Integer));

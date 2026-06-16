@@ -4,7 +4,8 @@ unit nextpas.core.tls.pool;
 
 interface
 
-uses SyncObjs, nextpas.core.tls.base, nextpas.core.tls.tls, nextpas.core.tls.dialer; type TSSLPoolEntry = record Host: string;
+uses nextpas.core.base, SyncObjs, nextpas.core.tls.base, nextpas.core.tls.tls, nextpas.core.tls.dialer; type TSSLPoolEntry = record Host: string;
+  nextpas.core.system.classes,
     Port: Word;
     Stream: TSSLStream;
     IdleSince: TDateTime;

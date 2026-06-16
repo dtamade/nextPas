@@ -11,6 +11,7 @@ unit nextpas.core.tls.capability.serializer;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.text.conv,
   nextpas.core.tls.base;
 
@@ -33,7 +34,39 @@ function LoadCapabilitiesFromFile(const AFileName: string): TSSLBackendCapabilit
 implementation
 
 uses
-  nextpas.core.text.strings;
+  SysUtils, StrUtils,
+  nextpas.core.exception;
+
+{ Local helper: StringsSplit (text.strings PPU has loading issues) }
+function StringsSplit(const AStr: string; ASep: Char; ARemoveEmpty: Boolean): TStringArray;
+var
+  I, LStart, LCount: Integer;
+  LPart: string;
+begin
+  SetLength(Result, 0);
+  LStart := 1;
+  for I := 1 to Length(AStr) do
+  begin
+    if AStr[I] = ASep then
+    begin
+      LPart := Copy(AStr, LStart, I - LStart);
+      if (not ARemoveEmpty) or (LPart <> '') then
+      begin
+        LCount := Length(Result);
+        SetLength(Result, LCount + 1);
+        Result[LCount] := LPart;
+      end;
+      LStart := I + 1;
+    end;
+  end;
+  LPart := Copy(AStr, LStart, Length(AStr) - LStart + 1);
+  if (not ARemoveEmpty) or (LPart <> '') then
+  begin
+    LCount := Length(Result);
+    SetLength(Result, LCount + 1);
+    Result[LCount] := LPart;
+  end;
+end;
 
 { ============================================================================ }
 { JSON 序列化 }
@@ -738,15 +771,15 @@ begin
   Result := Result + '<SSLBackendCapabilities>' + NL;
 
   // v1.1.0 字段
-  Result := Result + AddElement('supportsTLS13', BoolToStr(LCaps.SupportsTLS13, True));
-  Result := Result + AddElement('supportsALPN', BoolToStr(LCaps.SupportsALPN, True));
-  Result := Result + AddElement('supportsSNI', BoolToStr(LCaps.SupportsSNI, True));
-  Result := Result + AddElement('supportsOCSPStapling', BoolToStr(LCaps.SupportsOCSPStapling, True));
-  Result := Result + AddElement('supportsCertificateTransparency', BoolToStr(LCaps.SupportsCertificateTransparency, True));
-  Result := Result + AddElement('supportsSessionTickets', BoolToStr(LCaps.SupportsSessionTickets, True));
-  Result := Result + AddElement('supportsECDHE', BoolToStr(LCaps.SupportsECDHE, True));
-  Result := Result + AddElement('supportsChaChaPoly', BoolToStr(LCaps.SupportsChaChaPoly, True));
-  Result := Result + AddElement('supportsPEMPrivateKey', BoolToStr(LCaps.SupportsPEMPrivateKey, True));
+  Result := Result + AddElement('supportsTLS13', BoolToJSONStr(LCaps.SupportsTLS13));
+  Result := Result + AddElement('supportsALPN', BoolToJSONStr(LCaps.SupportsALPN));
+  Result := Result + AddElement('supportsSNI', BoolToJSONStr(LCaps.SupportsSNI));
+  Result := Result + AddElement('supportsOCSPStapling', BoolToJSONStr(LCaps.SupportsOCSPStapling));
+  Result := Result + AddElement('supportsCertificateTransparency', BoolToJSONStr(LCaps.SupportsCertificateTransparency));
+  Result := Result + AddElement('supportsSessionTickets', BoolToJSONStr(LCaps.SupportsSessionTickets));
+  Result := Result + AddElement('supportsECDHE', BoolToJSONStr(LCaps.SupportsECDHE));
+  Result := Result + AddElement('supportsChaChaPoly', BoolToJSONStr(LCaps.SupportsChaChaPoly));
+  Result := Result + AddElement('supportsPEMPrivateKey', BoolToJSONStr(LCaps.SupportsPEMPrivateKey));
   Result := Result + AddElement('minTLSVersion', nextpas.core.text.conv.IntToStr(Ord(LCaps.MinTLSVersion)));
   Result := Result + AddElement('maxTLSVersion', nextpas.core.text.conv.IntToStr(Ord(LCaps.MaxTLSVersion)));
 
@@ -754,7 +787,7 @@ begin
   Result := Result + AddElement('backendType', nextpas.core.text.conv.IntToStr(Ord(LCaps.BackendType)));
   Result := Result + AddElement('backendImplType', nextpas.core.text.conv.IntToStr(Ord(LCaps.BackendImplType)));
   Result := Result + AddElement('backendVersion', XMLEscape(LCaps.BackendVersion));
-  Result := Result + AddElement('supportsDTLS', BoolToStr(LCaps.SupportsDTLS, True));
+  Result := Result + AddElement('supportsDTLS', BoolToJSONStr(LCaps.SupportsDTLS));
 
   // 功能支持级别
   if LEmitSupportLevels then
@@ -777,30 +810,30 @@ begin
   Result := Result + AddElement('supportedKeyExchanges', EncodeKeyExchangeSet(LCaps.SupportedKeyExchanges));
 
   // 性能特性
-  Result := Result + AddElement('hasHardwareAcceleration', BoolToStr(LCaps.HasHardwareAcceleration, True));
-  Result := Result + AddElement('hasSIMDOptimization', BoolToStr(LCaps.HasSIMDOptimization, True));
-  Result := Result + AddElement('hasAssemblyOptimization', BoolToStr(LCaps.HasAssemblyOptimization, True));
+  Result := Result + AddElement('hasHardwareAcceleration', BoolToJSONStr(LCaps.HasHardwareAcceleration));
+  Result := Result + AddElement('hasSIMDOptimization', BoolToJSONStr(LCaps.HasSIMDOptimization));
+  Result := Result + AddElement('hasAssemblyOptimization', BoolToJSONStr(LCaps.HasAssemblyOptimization));
 
   // 平台特性
-  Result := Result + AddElement('requiresExternalLibrary', BoolToStr(LCaps.RequiresExternalLibrary, True));
-  Result := Result + AddElement('supportsSystemCertStore', BoolToStr(LCaps.SupportsSystemCertStore, True));
-  Result := Result + AddElement('supportsPKCS11', BoolToStr(LCaps.SupportsPKCS11, True));
-  Result := Result + AddElement('supportsTPM', BoolToStr(LCaps.SupportsTPM, True));
+  Result := Result + AddElement('requiresExternalLibrary', BoolToJSONStr(LCaps.RequiresExternalLibrary));
+  Result := Result + AddElement('supportsSystemCertStore', BoolToJSONStr(LCaps.SupportsSystemCertStore));
+  Result := Result + AddElement('supportsPKCS11', BoolToJSONStr(LCaps.SupportsPKCS11));
+  Result := Result + AddElement('supportsTPM', BoolToJSONStr(LCaps.SupportsTPM));
 
   // 安全特性
-  Result := Result + AddElement('hasConstantTimeOperations', BoolToStr(LCaps.HasConstantTimeOperations, True));
-  Result := Result + AddElement('supportsFIPSMode', BoolToStr(LCaps.SupportsFIPSMode, True));
-  Result := Result + AddElement('hasSecureMemoryWipe', BoolToStr(LCaps.HasSecureMemoryWipe, True));
+  Result := Result + AddElement('hasConstantTimeOperations', BoolToJSONStr(LCaps.HasConstantTimeOperations));
+  Result := Result + AddElement('supportsFIPSMode', BoolToJSONStr(LCaps.SupportsFIPSMode));
+  Result := Result + AddElement('hasSecureMemoryWipe', BoolToJSONStr(LCaps.HasSecureMemoryWipe));
 
   // 证书和密钥支持
-  Result := Result + AddElement('supportsDERPrivateKey', BoolToStr(LCaps.SupportsDERPrivateKey, True));
-  Result := Result + AddElement('supportsPKCS8PrivateKey', BoolToStr(LCaps.SupportsPKCS8PrivateKey, True));
-  Result := Result + AddElement('supportsPKCS12', BoolToStr(LCaps.SupportsPKCS12, True));
-  Result := Result + AddElement('supportsPasswordProtectedKeys', BoolToStr(LCaps.SupportsPasswordProtectedKeys, True));
+  Result := Result + AddElement('supportsDERPrivateKey', BoolToJSONStr(LCaps.SupportsDERPrivateKey));
+  Result := Result + AddElement('supportsPKCS8PrivateKey', BoolToJSONStr(LCaps.SupportsPKCS8PrivateKey));
+  Result := Result + AddElement('supportsPKCS12', BoolToJSONStr(LCaps.SupportsPKCS12));
+  Result := Result + AddElement('supportsPasswordProtectedKeys', BoolToJSONStr(LCaps.SupportsPasswordProtectedKeys));
 
   // 扩展性
-  Result := Result + AddElement('supportsCustomCipherSuites', BoolToStr(LCaps.SupportsCustomCipherSuites, True));
-  Result := Result + AddElement('supportsCallbacks', BoolToStr(LCaps.SupportsCallbacks, True));
+  Result := Result + AddElement('supportsCustomCipherSuites', BoolToJSONStr(LCaps.SupportsCustomCipherSuites));
+  Result := Result + AddElement('supportsCallbacks', BoolToJSONStr(LCaps.SupportsCallbacks));
 
   // 兼容性
   Result := Result + AddElement('compatibilityLevel', nextpas.core.text.conv.IntToStr(LCaps.CompatibilityLevel));
@@ -1048,8 +1081,8 @@ end;
 procedure SaveCapabilitiesToFile(const ACaps: TSSLBackendCapabilities;
                                 const AFileName: string;
                                 const AFormat: string = 'json');
-  Content: string;
 var
+  Content: string;
   F: System.TextFile;
 begin
   if SameText(AFormat, 'json') then
@@ -1069,11 +1102,10 @@ begin
 end;
 
 function LoadCapabilitiesFromFile(const AFileName: string): TSSLBackendCapabilities;
+var
   Content: string;
   Ext: string;
-begin
-var
-  F: System.File;
+  F: file;
   LFileSize: Integer;
 begin
   System.Assign(F, AFileName);

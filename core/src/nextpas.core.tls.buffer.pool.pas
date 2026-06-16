@@ -27,7 +27,7 @@ unit nextpas.core.tls.buffer.pool;
 
 interface
 
-uses SyncObjs;
+uses nextpas.core.base, nextpas.core.base.utils, SyncObjs;
 
 const
   { 缓冲区大小级别 }

@@ -28,6 +28,9 @@ unit nextpas.core.tls.ringbuffer;
 
 interface
 
+uses
+  nextpas.core.base;
+
 
 { 内存屏障函数声明 }
 procedure ReadMemoryBarrier;

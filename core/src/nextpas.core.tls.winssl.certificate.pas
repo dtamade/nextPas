@@ -113,7 +113,6 @@ implementation
 uses
   nextpas.core.text.conv,
   nextpas.core.text.strings,
-  nextpas.core.time,
   nextpas.core.tls.asn1,
   nextpas.core.tls.x509,
   nextpas.core.crypto.hash;
@@ -149,7 +148,6 @@ begin
     AParser.LoadFromDER(LDER);
     Result := True;
   except
-    nextpas.core.base.utils.FreeAndNil(AParser);
     Result := False;
   end;
 end;

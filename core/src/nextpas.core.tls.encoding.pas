@@ -42,7 +42,7 @@ unit nextpas.core.tls.encoding;
 
 interface
 
-uses nextpas.core.exception, nextpas.core.text.conv, nextpas.core.tls.base, nextpas.core.tls.exceptions, nextpas.core.tls.errors, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.api.bio;
+uses nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.tls.base, nextpas.core.tls.exceptions, nextpas.core.tls.errors, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.api.bio;
 
 type
   {**
@@ -428,7 +428,7 @@ class function TEncodingUtils.Base64Encode(const AInput: string): string;
 var
   LBytes: TBytes;
 begin
-  LBytes := nextpas.core.text.conv.StringToUTF8Bytes(AInput));
+  LBytes := nextpas.core.text.conv.StringToUTF8Bytes(AInput);
   Result := Base64Encode(LBytes);
 end;
 
@@ -611,7 +611,7 @@ class function TEncodingUtils.StringToHex(const AStr: string): string;
 var
   LBytes: TBytes;
 begin
-  LBytes := nextpas.core.text.conv.StringToUTF8Bytes(AStr));
+  LBytes := nextpas.core.text.conv.StringToUTF8Bytes(AStr);
   Result := BytesToHex(LBytes);
 end;
 

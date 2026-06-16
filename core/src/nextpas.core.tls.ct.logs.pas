@@ -4,6 +4,11 @@ unit nextpas.core.tls.ct.logs;
 
 interface
 
+uses
+  nextpas.core.exception,
+  nextpas.core.base,
+  nextpas.core.system.sysutils;
+
 // No FPC RTL dependencies - using pure nextPas framework
 
 type
@@ -241,13 +246,13 @@ var
   LIndex: Integer;
 begin
   if Length(ALogID) <> 32 then
-    raise EArgumentException.Create('CT log ID must be 32 bytes');
+    raise EArgumentError.Create('CT log ID must be 32 bytes');
 
   if Length(APublicKey) = 0 then
-    raise EArgumentException.Create('CT log public key must not be empty');
+    raise EArgumentError.Create('CT log public key must not be empty');
 
   if (not SameText(AKeyType, 'ECDSA')) and (not SameText(AKeyType, 'Ed25519')) then
-    raise EArgumentException.Create('Unsupported CT log key type');
+    raise EArgumentError.Create('Unsupported CT log key type');
 
   LIndex := Length(GAdditionalCTLogs);
   SetLength(GAdditionalCTLogs, LIndex + 1);

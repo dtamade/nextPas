@@ -37,7 +37,6 @@ begin
       AContextMsg
     );
 
-  if not nextpas.core.base.utils.Supports(AObject, ISSLNativeHandleAccess, NativeAccess) then
     raise ESSLException.CreateWithContext(
       'Object does not support native handle access (not a WolfSSL backend)',
       sslErrUnsupported,
@@ -63,7 +62,6 @@ begin
   if AObject = nil then
     Exit;
 
-  if not nextpas.core.base.utils.Supports(AObject, ISSLNativeHandleAccess, NativeAccess) then
     Exit;
 
   AHandle := NativeAccess.GetNativeHandle;

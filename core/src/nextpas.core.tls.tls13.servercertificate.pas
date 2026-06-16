@@ -14,7 +14,7 @@ unit nextpas.core.tls.tls13.servercertificate;
 
 interface
 
-uses nextpas.core.text.conv;
+uses nextpas.core.base, nextpas.core.text.conv;
 
 type
   TTLS13CertificateArray = array of TBytes;
@@ -84,7 +84,6 @@ function TryBuildTLS13ServerCertificateHandshakeWithStapledOCSP(
 
 implementation
 
-uses nextpas.core.tls.pem, nextpas.core.tls.tls13.wire, nextpas.core.text.conv;
 
 function BytesToAnsiString(const AData: TBytes): AnsiString;
 begin

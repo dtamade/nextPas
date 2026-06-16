@@ -9,6 +9,9 @@ unit nextpas.core.tls.ct.log;
 interface
 
 uses
+  nextpas.core.time,
+  nextpas.core.exception,
+  nextpas.core.base,
    fpjson, jsonparser,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.base,
@@ -85,6 +88,7 @@ uses
   nextpas.core.io,
   nextpas.core.text.conv,
   nextpas.core.tls.base,
+  nextpas.core.fs,
   nextpas.core.tls.net.hooks,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.loader,
@@ -101,7 +105,7 @@ begin
   FAutoUpdate := AutoUpdate;
   
   // 如果指定了缓存文件，尝试从缓存加载
-  if (FCacheFile <> '') and FileExists(FCacheFile) then
+  if (FCacheFile <> '') and nextpas.core.fs.IsFile(FCacheFile) then
     LoadFromFile(FCacheFile);
 end;
 
@@ -355,7 +359,7 @@ var
 begin
   Result := False;
   
-  if not FileExists(FileName) then Exit;
+  if not nextpas.core.fs.IsFile(FileName) then Exit;
   
   try
     FileStream := FsOpen(FileName, [fmRead]);
@@ -401,7 +405,7 @@ begin
       
       JSON.Add('logs', LogsArray);
       JSON.Add('version', '1.0');
-      JSON.Add('timestamp', DateTimeToStr(Now));
+      JSON.Add('timestamp', DateTimeToStr(nextpas.core.time.DateTimeNow));
       
       JSONStr := JSON.AsJSON;
       JSONBytes := StringToUTF8Bytes(JSONStr);

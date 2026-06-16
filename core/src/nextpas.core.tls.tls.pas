@@ -24,7 +24,11 @@ unit nextpas.core.tls.tls;
 interface
 
 uses
-  nextpas.core.exception, nextpas.core.base.utils, Classes,
+  nextpas.core.base.utils,
+  nextpas.core.exception,
+  nextpas.core.base,
+  Classes,
+  nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.pending,
   nextpas.core.tls.safety,
@@ -368,7 +372,6 @@ end;
 procedure TSSLConnector.ApplyClientOptions(AConn: ISSLConnection; const AServerName: string);
 var
   ClientConn: ISSLClientConnection;
-  ClientALPN: ISSLClientALPNConnection;
   SessionResumption: ISSLSessionResumption;
 begin
   if AConn = nil then
@@ -395,17 +398,6 @@ begin
       sslErrUnsupported,
       'TSSLConnector.ApplyClientOptions'
     );
-
-  if FALPN <> '' then
-  begin
-    if not Supports(AConn, ISSLClientALPNConnection, ClientALPN) then
-      raise ESSLException.CreateWithContext(
-        'Backend does not support per-connection ALPN protocols',
-        sslErrUnsupported,
-        'TSSLConnector.ApplyClientOptions'
-      );
-    ClientALPN.SetALPNProtocols(FALPN);
-  end;
 end;
 
 function TSSLConnector.TryQueueEarlyData(AConn: ISSLConnection): TSSLOperationResult;

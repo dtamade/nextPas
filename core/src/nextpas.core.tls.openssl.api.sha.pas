@@ -17,6 +17,7 @@ uses
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.consts,
+  nextpas.core.text.conv,
   nextpas.core.tls.openssl.loader;
 
 const
@@ -350,7 +351,7 @@ function SHA1HashString(const S: string): string;
 var
   Data: TBytes;
 begin
-  Data := nextpas.core.text.conv.StringToUTF8Bytes(S));
+  Data := nextpas.core.text.conv.StringToUTF8Bytes(S);
   Result := BytesToHex(SHA1Hash(Data));
 end;
 
@@ -358,7 +359,7 @@ function SHA256HashString(const S: string): string;
 var
   Data: TBytes;
 begin
-  Data := nextpas.core.text.conv.StringToUTF8Bytes(S));
+  Data := nextpas.core.text.conv.StringToUTF8Bytes(S);
   Result := BytesToHex(SHA256Hash(Data));
 end;
 
@@ -366,7 +367,7 @@ function SHA384HashString(const S: string): string;
 var
   Data: TBytes;
 begin
-  Data := nextpas.core.text.conv.StringToUTF8Bytes(S));
+  Data := nextpas.core.text.conv.StringToUTF8Bytes(S);
   Result := BytesToHex(SHA384Hash(Data));
 end;
 
@@ -374,7 +375,7 @@ function SHA512HashString(const S: string): string;
 var
   Data: TBytes;
 begin
-  Data := nextpas.core.text.conv.StringToUTF8Bytes(S));
+  Data := nextpas.core.text.conv.StringToUTF8Bytes(S);
   Result := BytesToHex(SHA512Hash(Data));
 end;
 

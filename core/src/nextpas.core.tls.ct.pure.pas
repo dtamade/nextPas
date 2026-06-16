@@ -4,7 +4,7 @@ unit nextpas.core.tls.ct.pure;
 
 interface
 
-uses nextpas.core.tls.x509, nextpas.core.tls.ct.logs;
+uses nextpas.core.base, nextpas.core.tls.x509, nextpas.core.tls.ct.logs;
 
 type
   TSCTVerifyResult = (sctValid, sctInvalidSignature, sctExpired, sctUnknownLog);

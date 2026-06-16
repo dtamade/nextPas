@@ -12,7 +12,7 @@ unit nextpas.core.tls.openssl.api.des;
 
 interface
 
-uses nextpas.core.tls.base, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.loader; const DES_ENCRYPT = 1;
+uses nextpas.core.base, nextpas.core.tls.base, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.loader; const DES_ENCRYPT = 1;
   DES_DECRYPT = 0;
   
   DES_CBC_MODE = 0;
@@ -194,7 +194,6 @@ function DES3Decrypt(const Data: TBytes; const Key1, Key2, Key3: TBytes): TBytes
 
 implementation
 
-uses nextpas.core.tls.openssl.api; const DES_FUNCTION_BINDINGS: array[0..35] of TFunctionBinding = ( (Name: 'DES_options'; FuncPtr: @DES_options; Required: False);
     (Name: 'DES_ecb3_encrypt';      FuncPtr: @DES_ecb3_encrypt;      Required: False),
     (Name: 'DES_crypt';             FuncPtr: @DES_crypt;             Required: False),
     (Name: 'DES_fcrypt';            FuncPtr: @DES_fcrypt;            Required: False),

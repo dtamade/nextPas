@@ -650,7 +650,6 @@ end;
 
 class procedure TSSLProfiler.FreeProfilerInstance;
 begin
-  nextpas.core.base.utils.FreeAndNil(FInstance);
 end;
 
 function TSSLProfiler.StartMeasure(const AName: string): Int64;

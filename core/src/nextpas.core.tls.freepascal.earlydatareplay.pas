@@ -10,6 +10,7 @@ unit nextpas.core.tls.freepascal.earlydatareplay;
 interface
 
 uses
+  nextpas.core.base.utils,
   SysUtils, DateUtils, nextpas.core.fs, nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.freepascal.context.material,

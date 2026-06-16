@@ -5,7 +5,7 @@ unit nextpas.core.tls.freepascal.engine;
 
 interface
 
-uses nextpas.core.tls.base, nextpas.core.tls.engine; type TFreePascalEngine = class(TInterfacedObject, ISSLEngine) private FContext: ISSLContext;
+uses nextpas.core.base, nextpas.core.tls.base, nextpas.core.tls.engine; type TFreePascalEngine = class(TInterfacedObject, ISSLEngine) private FContext: ISSLContext;
     FRole: TSSLEngineRole;
     FConnection: ISSLConnection;
     FClientConnection: ISSLClientConnection;

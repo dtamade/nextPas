@@ -5,6 +5,7 @@ unit nextpas.core.tls.openssl.native_handle;
 interface
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.system,
   nextpas.core.tls.base,
   nextpas.core.tls.errors,

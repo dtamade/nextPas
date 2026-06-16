@@ -34,6 +34,7 @@ interface
 
 uses
   nextpas.core.text.conv,
+  nextpas.core.base.utils,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions;
 

@@ -20,6 +20,7 @@ unit nextpas.core.tls.winssl.connection;
 interface
 
 uses
+  nextpas.core.base.utils,
   {$IFDEF WINDOWS}
   Windows, winsock2,
   {$ELSE}

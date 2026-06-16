@@ -28,6 +28,7 @@ unit nextpas.core.tls.pkcs11.uri;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.exception, nextpas.core.text.conv, StrUtils,
   nextpas.core.tls.pkcs11.types;
 
@@ -235,7 +236,7 @@ begin
   try
     // Parse path attributes (separated by ';')
     if PathPart <> '' then
-    begin';
+    begin
       
       for I := 0 to Length(Attributes) - 1 do
       begin
@@ -272,6 +273,7 @@ end;
 class function TPKCS11URIParser.Generate(const AURI: TPKCS11URI): string;
 var
   PathParts, QueryParts: TStringArray;
+  I: Integer;
 begin
   try
     // Build path attributes
@@ -313,12 +315,23 @@ begin
       QueryParts.Add('module-path=' + EncodeURIComponent(AURI.ModulePath));
     
     // Construct URI
-    Result := 'pkcs11:';';
-    Result := Result + PathParts.DelimitedText;
-    
+    Result := 'pkcs11:';
+    for I := 0 to High(PathParts) do
+    begin
+      if I > 0 then
+        Result := Result + ';';
+      Result := Result + PathParts[I];
+    end;
+
     if Length(QueryParts) > 0 then
     begin
-      Result := Result + '?' + QueryParts.DelimitedText;
+      Result := Result + '?';
+      for I := 0 to High(QueryParts) do
+      begin
+        if I > 0 then
+          Result := Result + '&';
+        Result := Result + QueryParts[I];
+      end;
     end;
   finally
   end;

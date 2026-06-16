@@ -4,6 +4,9 @@ unit nextpas.core.tls.tls12.handshakecrypto;
 
 interface
 
+uses
+  nextpas.core.base;
+
 
 type
   TTLS12KeyBlock = record

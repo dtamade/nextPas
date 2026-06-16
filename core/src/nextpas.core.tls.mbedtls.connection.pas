@@ -19,6 +19,7 @@ unit nextpas.core.tls.mbedtls.connection;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.text.conv, Classes, Sockets,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,

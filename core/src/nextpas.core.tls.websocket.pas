@@ -5,6 +5,7 @@ unit nextpas.core.tls.websocket;
 interface
 
 uses
+  nextpas.core.base,
    Classes,
   nextpas.core.io.intf,
   nextpas.core.tls.base;

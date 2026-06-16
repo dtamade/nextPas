@@ -12,6 +12,7 @@ unit nextpas.core.tls.freepascal.context;
 interface
 
 uses
+  nextpas.core.base.utils,
   Base64, SysUtils, Classes,
   nextpas.core.fs,
   nextpas.core.text.conv,

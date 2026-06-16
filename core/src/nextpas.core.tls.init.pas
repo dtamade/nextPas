@@ -16,7 +16,7 @@ uses nextpas.core.tls.init; begin InitializeOpenSSL;
 
 interface
 
-uses nextpas.core.tls.base, nextpas.core.tls.exceptions, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.rand, nextpas.core.tls.openssl.api;
+uses nextpas.core.tls.base, nextpas.core.exception, nextpas.core.tls.exceptions, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.rand, nextpas.core.tls.openssl.api;
 
 { 初始化所有OpenSSL模块
   调用此函数将加载：

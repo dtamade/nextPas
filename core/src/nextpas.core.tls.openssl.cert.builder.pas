@@ -22,6 +22,7 @@ unit nextpas.core.tls.openssl.cert.builder;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.tls.cert.builder;
 
 type

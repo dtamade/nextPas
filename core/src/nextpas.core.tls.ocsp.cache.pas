@@ -20,6 +20,8 @@ unit nextpas.core.tls.ocsp.cache;
 interface
 
 uses
+  nextpas.core.base,
+  nextpas.core.base.utils,
    SyncObjs, DateUtils, fgl;
 
 const
@@ -118,8 +120,10 @@ uses
   nextpas.core.fs.base,
   nextpas.core.fs.intf,
   nextpas.core.fs.stream,
+  nextpas.core.text.conv,
   nextpas.core.io.binary,
   nextpas.core.io.intf,
+  nextpas.core.fs,
   nextpas.core.time;
 
 // ========================================================================
@@ -579,7 +583,7 @@ var
 begin
   Result := False;
   
-  if not FileExists(AFileName) then
+  if not nextpas.core.fs.IsFile(AFileName) then
     Exit;
   
   try

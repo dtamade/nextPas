@@ -11,6 +11,7 @@ unit nextpas.core.tls.freepascal.earlydatareplay.fileprovider;
 interface
 
 uses
+  nextpas.core.base.utils,
   SysUtils, Classes, nextpas.core.fs,
   nextpas.core.tls.base,
   nextpas.core.tls.freepascal.context.material,

@@ -314,6 +314,7 @@ end;
 
 function CreateStringStack(const Strings: array of string): PSTACK_OF_OPENSSL_STRING;
 var
+  LValue: AnsiString;
   i: Integer;
   str: PAnsiChar;
 begin
@@ -328,7 +329,10 @@ begin
     for i := Low(Strings) to High(Strings) do
     begin
       GetMem(str, Length(Strings[i]) + 1);
-      StrPCopy(str, AnsiString(Strings[i]));
+      LValue := AnsiString(Strings[i]);
+      if Length(LValue) > 0 then
+        Move(LValue[1], str^, Length(LValue));
+      str[Length(LValue)] := #0;
       if OPENSSL_sk_push(POPENSSL_STACK(Result), str) = 0 then
         raise ESSLException.Create('Failed to push string to stack');
     end;

@@ -15,7 +15,10 @@ unit nextpas.core.tls.cert.builder;
 
 interface
 
-uses nextpas.core.tls.base, nextpas.core.tls.safety; type ICertificate = interface;
+uses nextpas.core.base, nextpas.core.tls.base, nextpas.core.tls.safety;
+
+type
+  ICertificate = interface;
   IPrivateKey = interface;
   IKeyPairWithCertificate = interface;
   ICertificateBuilder = interface;

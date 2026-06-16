@@ -9,7 +9,7 @@ unit nextpas.core.tls.openssl.api.cmac.evp;
 
 interface
 
-uses nextpas.core.tls.base, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.evp; const CMAC_MAX_SIZE = 32;
+uses nextpas.core.base, nextpas.core.tls.base, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.evp; const CMAC_MAX_SIZE = 32;
 
 type
   TCMACEVPContext = class
@@ -41,7 +41,6 @@ function IsEVPCMACAvailable: Boolean;
 
 implementation
 
-uses nextpas.core.tls.openssl.api.core; type TEVP_MAC_fetch = function(ctx: POSSL_LIB_CTX; const algorithm: PAnsiChar; const properties: PAnsiChar): PEVP_MAC; cdecl;
   TEVP_MAC_free = procedure(mac: PEVP_MAC); cdecl;
   TEVP_MAC_CTX_new = function(mac: PEVP_MAC): PEVP_MAC_CTX; cdecl;
   TEVP_MAC_CTX_free = procedure(ctx: PEVP_MAC_CTX); cdecl;

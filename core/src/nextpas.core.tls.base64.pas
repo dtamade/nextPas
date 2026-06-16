@@ -10,7 +10,6 @@ uses
   nextpas.core.exception;
 
 type
-  EBase64Error = class(nextpas.core.exception.Exception);
 
   TBase64Utils = class
   private

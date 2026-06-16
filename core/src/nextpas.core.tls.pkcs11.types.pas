@@ -221,7 +221,9 @@ type
 
 implementation
 
-uses StrUtils;
+uses
+  StrUtils,
+  nextpas.core.fs;
 
 function HexCharToNibble(AChar: Char; out ANibble: Byte): Boolean;
 begin
@@ -298,7 +300,7 @@ begin
   if AFilePath = '' then
     raise EPKCS11Exception.Create('PIN file path is empty', CKR_ARGUMENTS_BAD);
 
-  if not FileExists(AFilePath) then
+  if not nextpas.core.fs.IsFile(AFilePath) then
     raise EPKCS11Exception.Create('PIN file not found: ' + AFilePath, CKR_GENERAL_ERROR);
 
   AssignFile(F, AFilePath);
@@ -329,7 +331,7 @@ begin
     if LVarName = '' then
       raise EPKCS11Exception.Create('PIN source env variable name is empty', CKR_ARGUMENTS_BAD);
 
-    Result := GetEnvironmentVariable(LVarName);
+    Result := nextpas.core.fs.GetEnv(LVarName);
     if Result = '' then
       raise EPKCS11Exception.Create('PIN source environment variable not set or empty: ' + LVarName, CKR_PIN_INVALID);
     Exit;
@@ -436,7 +438,7 @@ begin
       
     pmEnvironment:
       if PINEnvVar <> '' then
-        Result := GetEnvironmentVariable(PINEnvVar);
+        Result := nextpas.core.fs.GetEnv(PINEnvVar);
       
     pmFile:
       if PINFile <> '' then
@@ -464,7 +466,7 @@ function TPKCS11KeyInfo.ToString: string;
 begin
   Result := Format('Key: %s (Type: %s, Size: %d bits, Sign: %s, Decrypt: %s)',
     [KeyLabel, PKCS11KeyTypeToString(KeyType), KeySize,
-    BoolToStr(CanSign, True), BoolToStr(CanDecrypt, True)]);
+    BoolToStr(CanSign), BoolToStr(CanDecrypt)]);
 end;
 
 { TPKCS11TokenInfo }

@@ -17,6 +17,8 @@ unit nextpas.core.tls.cert.builder.impl;
 interface
 
 uses
+  nextpas.core.exception,
+  nextpas.core.base,
   Classes,
   nextpas.core.tls.base,
   nextpas.core.tls.safety,

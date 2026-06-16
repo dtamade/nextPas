@@ -4,7 +4,8 @@ unit nextpas.core.tls.dialer;
 
 interface
 
-uses nextpas.core.tls.base, nextpas.core.tls.tls, nextpas.core.text.conv; type TSSLDialResult = record Connection: ISSLConnection;
+uses nextpas.core.base, nextpas.core.tls.base, nextpas.core.tls.tls, nextpas.core.text.conv; type TSSLDialResult = record Connection: ISSLConnection;
+  nextpas.core.system.classes,
     Stream: TSSLStream;
     Error: TSSLOperationResult;
   end;

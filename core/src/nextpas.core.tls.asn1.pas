@@ -437,7 +437,6 @@ end;
 
 destructor TASN1Node.Destroy;
 begin
-  nextpas.core.base.utils.FreeAndNil(FChildren);
   inherited Destroy;
 end;
 
@@ -742,7 +741,6 @@ end;
 
 destructor TASN1NodeList.Destroy;
 begin
-  nextpas.core.base.utils.FreeAndNil(FList);
   inherited Destroy;
 end;
 
@@ -1009,7 +1007,6 @@ begin
       end;
     end;
   except
-    nextpas.core.base.utils.FreeAndNil(Result);
     Result := nil;
     raise;
   end;

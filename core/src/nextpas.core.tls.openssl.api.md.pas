@@ -17,6 +17,7 @@ uses
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.consts,
+  nextpas.core.text.conv,
   nextpas.core.tls.openssl.loader;
 
 const
@@ -281,7 +282,7 @@ function MD4HashString(const S: string): string;
 var
   Data: TBytes;
 begin
-  Data := nextpas.core.text.conv.StringToUTF8Bytes(S));
+  Data := nextpas.core.text.conv.StringToUTF8Bytes(S);
   Result := BytesToHex(MD4Hash(Data));
 end;
 
@@ -289,7 +290,7 @@ function MD5HashString(const S: string): string;
 var
   Data: TBytes;
 begin
-  Data := nextpas.core.text.conv.StringToUTF8Bytes(S));
+  Data := nextpas.core.text.conv.StringToUTF8Bytes(S);
   Result := BytesToHex(MD5Hash(Data));
 end;
 
@@ -297,7 +298,7 @@ function MDC2HashString(const S: string): string;
 var
   Data: TBytes;
 begin
-  Data := nextpas.core.text.conv.StringToUTF8Bytes(S));
+  Data := nextpas.core.text.conv.StringToUTF8Bytes(S);
   Result := BytesToHex(MDC2Hash(Data));
 end;
 
@@ -305,7 +306,7 @@ function RIPEMD160HashString(const S: string): string;
 var
   Data: TBytes;
 begin
-  Data := nextpas.core.text.conv.StringToUTF8Bytes(S));
+  Data := nextpas.core.text.conv.StringToUTF8Bytes(S);
   Result := BytesToHex(RIPEMD160Hash(Data));
 end;
 

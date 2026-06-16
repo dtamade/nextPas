@@ -34,9 +34,11 @@ interface
 
 uses
   Math,
+  nextpas.core.base,
   nextpas.core.text.base,
   nextpas.core.text.strings,
   nextpas.core.text.conv,
+  nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions;
 
@@ -393,8 +395,8 @@ begin
     LSB.AppendFormat('主题: %s', [AInfo.Subject]);
     LSB.AppendFormat('颁发者: %s', [AInfo.Issuer]);
     LSB.AppendFormat('序列号: %s', [AInfo.SerialNumber]);
-    LSB.AppendFormat('有效期开始: %s', [DateTimeToStr(AInfo.NotBefore)]);
-    LSB.AppendFormat('有效期结束: %s', [DateTimeToStr(AInfo.NotAfter)]);
+    LSB.AppendFormat('有效期开始: %s', [nextpas.core.time.DateTimeToStr(AInfo.NotBefore)]);
+    LSB.AppendFormat('有效期结束: %s', [nextpas.core.time.DateTimeToStr(AInfo.NotAfter)]);
     LSB.AppendFormat('公钥算法: %s', [AInfo.PublicKeyAlgorithm]);
     LSB.AppendFormat('公钥长度: %d 位', [AInfo.PublicKeySize]);
     LSB.AppendFormat('签名算法: %s', [AInfo.SignatureAlgorithm]);
@@ -898,7 +900,7 @@ begin
 
     LInfo.ResourceType := AType;
     LInfo.ResourcePtr := APtr;
-    LInfo.AllocTime := Now;
+    LInfo.AllocTime := nextpas.core.time.DateTimeNow;
     LInfo.AllocLocation := ALocation;
 
     LLen := Length(FResources);
@@ -957,7 +959,7 @@ begin
       begin
         LSB.AppendFormat('[%d] %s @ %p', [I, FResources[I].ResourceType, FResources[I].ResourcePtr]);
         LSB.Indent;
-        LSB.AppendFormat('分配时间: %s', [DateTimeToStr(FResources[I].AllocTime)]);
+        LSB.AppendFormat('分配时间: %s', [nextpas.core.time.DateTimeToStr(FResources[I].AllocTime)]);
         if FResources[I].AllocLocation <> '' then
           LSB.AppendFormat('分配位置: %s', [FResources[I].AllocLocation]);
         LSB.Unindent;
@@ -995,7 +997,7 @@ begin
       begin
         LSB.AppendFormat('[泄漏 %d] %s @ %p', [I + 1, FResources[I].ResourceType, FResources[I].ResourcePtr]);
         LSB.Indent;
-        LSB.AppendFormat('分配时间: %s', [DateTimeToStr(FResources[I].AllocTime)]);
+        LSB.AppendFormat('分配时间: %s', [nextpas.core.time.DateTimeToStr(FResources[I].AllocTime)]);
         if FResources[I].AllocLocation <> '' then
           LSB.AppendFormat('分配位置: %s', [FResources[I].AllocLocation]);
         LSB.Unindent;
@@ -1055,7 +1057,6 @@ begin
   begin
     EnterCriticalSection(FLock);
     try
-      FreeAndNil(FInstance);
     finally
       LeaveCriticalSection(FLock);
     end;

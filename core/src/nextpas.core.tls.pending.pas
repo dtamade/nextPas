@@ -5,6 +5,9 @@ unit nextpas.core.tls.pending;
 interface
 
 uses
+  nextpas.core.exception,
+  nextpas.core.base,
+  nextpas.core.system.classes,
   Classes,
   nextpas.core.io.intf,
   nextpas.core.tls.base,

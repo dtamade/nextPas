@@ -49,7 +49,6 @@ begin
   FAllowIfNoPins := False;
 end;
 
-procedure TSSLPinningVerifier.AddPin(const ASHA256Hash: nextpas.core.base.TBytes);
 var
   LIdx: Integer;
 begin

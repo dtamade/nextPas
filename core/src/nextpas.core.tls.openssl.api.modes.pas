@@ -4,7 +4,7 @@ unit nextpas.core.tls.openssl.api.modes;
 
 interface
 
-uses nextpas.core.tls.base, nextpas.core.tls.exceptions, nextpas.core.tls.errors, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.evp;
+uses nextpas.core.base, nextpas.core.tls.base, nextpas.core.tls.exceptions, nextpas.core.tls.errors, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.evp;
 
 const
   // GCM constants
@@ -198,7 +198,6 @@ function AES_UnwrapKey(const KEK: TBytes; const Ciphertext: TBytes): TBytes;
 
 implementation
 
-uses nextpas.core.tls.openssl.api.aes;
 
 function LoadModesFunctions: Boolean;
 var

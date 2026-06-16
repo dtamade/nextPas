@@ -4,7 +4,7 @@ unit nextpas.core.tls.openssl.api.ecdsa;
 
 interface
 
-uses DynLibs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.api.ec, nextpas.core.tls.openssl.loader;
+uses nextpas.core.base, DynLibs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.api.ec, nextpas.core.tls.openssl.loader;
 
 type
   { ECDSA_SIG structure for signature }
@@ -122,7 +122,6 @@ function ECDSA_GetSignatureSize(AKey: PEC_KEY): Integer;
 
 implementation
 
-uses nextpas.core.tls.openssl.api.core;
 
 const
   { Function bindings for batch loading }

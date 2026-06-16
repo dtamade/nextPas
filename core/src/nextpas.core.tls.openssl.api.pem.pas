@@ -4,7 +4,7 @@ unit nextpas.core.tls.openssl.api.pem;
 
 interface
 
-uses dynlibs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.bio, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.loader;
+uses dynlibs, nextpas.core.base, nextpas.core.fs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.bio, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.loader;
 
 type
   // PEM 密码回调函数类型
@@ -313,6 +313,7 @@ var
 // 密码回调函数
 function PasswordCallback(buf: PAnsiChar; size: Integer; rwflag: Integer; userdata: Pointer): Integer; cdecl;
 var
+  LPasswordAnsi: AnsiString;
   Password: string;
 begin
   if userdata <> nil then
@@ -320,7 +321,10 @@ begin
     Password := string(PAnsiChar(userdata));
     if Length(Password) < size then
     begin
-      StrPCopy(buf, AnsiString(Password));
+      LPasswordAnsi := AnsiString(Password);
+      if Length(LPasswordAnsi) > 0 then
+        Move(LPasswordAnsi[1], buf^, Length(LPasswordAnsi));
+      buf[Length(LPasswordAnsi)] := #0;
       Result := Length(Password);
     end
     else
@@ -367,7 +371,7 @@ var
 begin
   Result := nil;
   if not TOpenSSLLoader.IsModuleLoaded(osmPEM) or
-    not FileExists(AFileName) or
+    not nextpas.core.fs.Exists(AFileName) or
     not Assigned(BIO_new_file) or
     not Assigned(PEM_read_bio_PrivateKey) or
     not Assigned(BIO_free) then
@@ -395,7 +399,7 @@ var
 begin
   Result := nil;
   if not TOpenSSLLoader.IsModuleLoaded(osmPEM) or
-    not FileExists(AFileName) or
+    not nextpas.core.fs.Exists(AFileName) or
     not Assigned(BIO_new_file) or
     not Assigned(PEM_read_bio_PUBKEY) or
     not Assigned(BIO_free) then
@@ -418,7 +422,7 @@ var
 begin
   Result := nil;
   if not TOpenSSLLoader.IsModuleLoaded(osmPEM) or
-    not FileExists(AFileName) or
+    not nextpas.core.fs.Exists(AFileName) or
     not Assigned(BIO_new_file) or
     not Assigned(PEM_read_bio_X509) or
     not Assigned(BIO_free) then

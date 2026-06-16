@@ -436,7 +436,6 @@ begin
     end;
     Result := True;
   except
-    nextpas.core.base.utils.FreeAndNil(AParser);
     Result := False;
   end;
 end;

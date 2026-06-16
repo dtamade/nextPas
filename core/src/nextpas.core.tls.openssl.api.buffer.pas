@@ -4,7 +4,7 @@ unit nextpas.core.tls.openssl.api.buffer;
 
 interface
 
-uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader;
+uses nextpas.core.base, nextpas.core.text.conv, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader;
 
 type
   // Buffer 结构体
@@ -186,7 +186,7 @@ begin
   Result := False;
   if not Assigned(Buffer) or (Str = '') then Exit;
   
-  StrBytes := nextpas.core.text.conv.StringToUTF8Bytes(Str));
+  StrBytes := nextpas.core.text.conv.StringToUTF8Bytes(Str);
   Result := AppendToBuffer(Buffer, @StrBytes[0], Length(StrBytes));
 end;
 
@@ -218,7 +218,7 @@ begin
   Result := nil;
   if not Assigned(BUF_strdup) then Exit;
   
-  StrBytes := nextpas.core.text.conv.StringToUTF8Bytes(Str));
+  StrBytes := nextpas.core.text.conv.StringToUTF8Bytes(Str);
   Result := BUF_strdup(PAnsiChar(StrBytes));
 end;
 

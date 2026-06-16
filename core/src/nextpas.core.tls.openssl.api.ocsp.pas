@@ -4,7 +4,7 @@ unit nextpas.core.tls.openssl.api.ocsp;
 
 interface
 
-uses dynlibs, nextpas.core.tls.base, nextpas.core.tls.net.hooks, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.api.ssl, nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.crypto, nextpas.core.tls.openssl.api.asn1, nextpas.core.tls.openssl.api.bio, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.stack, nextpas.core.text.conv; type // Additional pointer types needed PPASN1_GENERALIZEDTIME = ^PASN1_GENERALIZEDTIME;
+uses nextpas.core.base, dynlibs, nextpas.core.tls.base, nextpas.core.tls.net.hooks, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.api.ssl, nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.crypto, nextpas.core.tls.openssl.api.asn1, nextpas.core.tls.openssl.api.bio, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.stack, nextpas.core.text.conv; type // Additional pointer types needed PPASN1_GENERALIZEDTIME = ^PASN1_GENERALIZEDTIME;
   POCSP_REQ_CTX = Pointer;
   PPOCSP_REQ_CTX = ^POCSP_REQ_CTX;
   PPASN1_VALUE = ^ASN1_VALUE;

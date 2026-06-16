@@ -4,7 +4,7 @@ unit nextpas.core.tls.bufferpool;
 
 interface
 
-uses SyncObjs;
+uses nextpas.core.base, SyncObjs;
 
 type
   TSSLBufferPool = class

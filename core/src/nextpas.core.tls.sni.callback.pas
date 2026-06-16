@@ -5,6 +5,7 @@ unit nextpas.core.tls.sni.callback;
 interface
 
 uses
+  nextpas.core.base,
    nextpas.core.tls.x509;
 
 type

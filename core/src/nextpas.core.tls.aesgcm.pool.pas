@@ -5,7 +5,7 @@ unit nextpas.core.tls.aesgcm.pool;
 
 interface
 
-uses SyncObjs, nextpas.core.time, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.rand, nextpas.core.tls.exceptions; const // GCM 标准 IV 长度：12 字节（96 位） GCM_IV_LENGTH = 12;
+uses nextpas.core.base, nextpas.core.base.utils, SyncObjs, nextpas.core.time, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.rand, nextpas.core.tls.exceptions; const // GCM 标准 IV 长度：12 字节（96 位） GCM_IV_LENGTH = 12;
 
   // IV 结构：[8字节随机基础] + [4字节计数器]
   GCM_IV_BASE_LENGTH = 8;

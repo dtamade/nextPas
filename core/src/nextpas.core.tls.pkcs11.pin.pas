@@ -77,7 +77,7 @@ type
 
 implementation
 
-uses nextpas.core.tls.pkcs11.api;
+uses SysUtils, nextpas.core.tls.pkcs11.api;
 
 { TPKCS11PINManager }
 
