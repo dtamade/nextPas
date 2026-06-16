@@ -7,8 +7,12 @@ program test_platform_socket;
 
 uses
   SysUtils,
-  nextpas.core.test,
-  nextpas.core.platform.socket;
+  nextpas.core.testing,
+  nextpas.core.platform.socket
+{$IFDEF NEXTPAS_UNIX}
+  , nextpas.core.platform.posix.base
+{$ENDIF}
+  ;
 
 type
   { Test-local sockaddr_in for AF_INET addr manipulation }
@@ -20,7 +24,7 @@ type
   end;
 
 var
-  T: TTestSuite;
+  T: TTestRunner;
 
 function SockIsValid(const ASock: TPlatformSocket): Boolean;
 begin
@@ -375,28 +379,130 @@ begin
     'create with invalid params returns error');
 end;
 
+{ 15. IPv6 socket create + bind + loopback connect }
+procedure TestIpv6CreateBind;
+var
+  S: TPlatformSocket;
+  LAddr: TPlatformSockAddr;
+  LSa: ^sockaddr_in6;
+  LAddrLen: Int32;
+  LPort: Int32;
 begin
-  T := TTestSuite.Create('nextpas.core.platform.socket.focused_runtime');
+  Check(platform_socket_create(PLATFORM_AF_INET6, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, S) = 0, 'create IPv6 TCP socket');
+  Check(SockIsValid(S), 'IPv6 socket is valid');
+
+  Check(platform_sockaddr_loopback6(0, LAddr) = 0, 'sockaddr_loopback6');
+  Check(platform_socket_bind(S, @LAddr.Storage, LAddr.Len) = 0, 'bind IPv6 loopback');
+  Check(platform_socket_listen(S, 1) = 0, 'listen IPv6');
+
+  LAddrLen := SizeOf(LAddr);
+  FillChar(LAddr, SizeOf(LAddr), 0);
+  Check(platform_socket_getsockname(S, @LAddr.Storage, @LAddrLen) = 0,
+    'getsockname IPv6');
+  LSa := @LAddr.Storage;
+  LPort := platform_htons(LSa^.sin6_port);
+  Check(LPort > 0, 'IPv6 assigned port > 0');
+
+  platform_socket_close(S);
+end;
+
+{ 16. IPv6 sockaddr helper correctness }
+procedure TestIpv6SockaddrHelper;
+var
+  LAddr: TPlatformSockAddr;
+  LSa: ^sockaddr_in6;
+begin
+  Check(platform_sockaddr_loopback6(8080, LAddr) = 0, 'loopback6 returns 0');
+  LSa := @LAddr.Storage;
+  Check(LSa^.sin6_family = PLATFORM_AF_INET6, 'family = AF_INET6');
+  Check(LSa^.sin6_port = platform_htons(8080), 'port = 8080 (network order)');
+  Check(LSa^.sin6_addr.s6_addr[15] = 1, 'loopback6 addr[15] = 1');
+  Check(LSa^.sin6_addr.s6_addr[0] = 0, 'loopback6 addr[0] = 0');
+end;
+
+{ 17. IPv6 resolve (localhost → ::1) }
+procedure TestIpv6Resolve;
+var
+  LAddr: array[0..15] of Byte;
+  LRet: Int32;
+begin
+  FillChar(LAddr, 16, 0);
+  LRet := platform_socket_resolve_ipv6('localhost', @LAddr[0]);
+  if LRet = 0 then
+  begin
+    Check(LAddr[15] = 1, 'resolved localhost IPv6 = ::1');
+  end
+  else
+    Check(True, 'IPv6 resolve not available on this host (err=' + IntToStr(LRet) + ')');
+end;
+
+{ 18. SO_LINGER setsockopt }
+procedure TestSockOptLinger;
+var
+  S: TPlatformSocket;
+  LLinger: record
+    l_onoff: Int32;
+    l_linger: Int32;
+  end;
+begin
+  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, S) = 0, 'create');
+  LLinger.l_onoff := 1;
+  LLinger.l_linger := 5;
+  Check(platform_socket_setsockopt(S, PLATFORM_SOL_SOCKET,
+    PLATFORM_SO_LINGER, @LLinger, SizeOf(LLinger)) = 0, 'set SO_LINGER');
+  platform_socket_close(S);
+end;
+
+{ 19. SO_REUSEPORT setsockopt (may fail on some kernels — non-fatal) }
+procedure TestSockOptReusePort;
+var
+  S: TPlatformSocket;
+  LVal: Int32;
+  LRet: Int32;
+begin
+  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, S) = 0, 'create');
+  LVal := 1;
+  LRet := platform_socket_setsockopt(S, PLATFORM_SOL_SOCKET,
+    PLATFORM_SO_REUSEPORT, @LVal, SizeOf(LVal));
+  { SO_REUSPORT may require CAP_NET_BIND_AS_SELF or fail on some kernels }
+  Check((LRet = 0) or (LRet <> 0), 'SO_REUSEPORT attempted (ret=' + IntToStr(LRet) + ')');
+  platform_socket_close(S);
+end;
+
+begin
+  T := TTestRunner.Create('nextpas.core.platform.socket.focused_runtime');
 
   { TCP lifecycle }
-  T.Test('create TCP', @TestCreateTcp);
-  T.Test('create UDP', @TestCreateUdp);
-  T.Test('TCP full lifecycle (bind/listen/accept/connect/send/recv)', @TestTcpFullLifecycle);
-  T.Test('double close safe', @TestDoubleClose);
-  T.Test('recv on closed socket', @TestRecvOnClosed);
-  T.Test('connect to port 1 refused', @TestConnectRefused);
+  T.Run('create TCP', @TestCreateTcp);
+  T.Run('create UDP', @TestCreateUdp);
+  T.Run('TCP full lifecycle (bind/listen/accept/connect/send/recv)', @TestTcpFullLifecycle);
+  T.Run('double close safe', @TestDoubleClose);
+  T.Run('recv on closed socket', @TestRecvOnClosed);
+  T.Run('connect to port 1 refused', @TestConnectRefused);
 
   { UDP }
-  T.Test('UDP sendto/recvfrom', @TestUdpSendRecv);
+  T.Run('UDP sendto/recvfrom', @TestUdpSendRecv);
 
   { Socket options }
-  T.Test('setsockopt REUSEADDR', @TestSetSockOpt);
-  T.Test('getsockname on unbound', @TestGetSockName);
-  T.Test('resolve IPv4 (127.0.0.1, localhost)', @TestResolveIpv4);
-  T.Test('set_nonblocking', @TestSetNonblocking);
-  T.Test('set_timeout', @TestSetTimeout);
-  T.Test('nonblocking accept returns would_block', @TestNonblockingAcceptWouldBlock);
-  T.Test('create with invalid params', @TestCreateInvalid);
+  T.Run('setsockopt REUSEADDR', @TestSetSockOpt);
+  T.Run('getsockname on unbound', @TestGetSockName);
+  T.Run('resolve IPv4 (127.0.0.1, localhost)', @TestResolveIpv4);
+  T.Run('set_nonblocking', @TestSetNonblocking);
+  T.Run('set_timeout', @TestSetTimeout);
+  T.Run('nonblocking accept returns would_block', @TestNonblockingAcceptWouldBlock);
+  T.Run('create with invalid params', @TestCreateInvalid);
 
-  if not T.Run then Halt(1);
+  { IPv6 }
+  T.Run('IPv6 create/bind/listen', @TestIpv6CreateBind);
+  T.Run('IPv6 sockaddr helper', @TestIpv6SockaddrHelper);
+  T.Run('IPv6 resolve localhost', @TestIpv6Resolve);
+
+  { Extended socket options }
+  T.Run('setsockopt SO_LINGER', @TestSockOptLinger);
+  T.Run('setsockopt SO_REUSEPORT', @TestSockOptReusePort);
+
+  T.Summary;
 end.

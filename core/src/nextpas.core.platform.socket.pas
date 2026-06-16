@@ -21,6 +21,7 @@ const
   PLATFORM_SO_REUSEADDR = $0004;
   PLATFORM_SO_REUSEPORT = $0004;
   PLATFORM_SO_KEEPALIVE = $0008;
+  PLATFORM_SO_LINGER   = $0080;
   PLATFORM_SO_RCVTIMEO = $1006;
   PLATFORM_SO_SNDTIMEO = $1005;
   PLATFORM_TCP_NODELAY  = $0001;
@@ -36,19 +37,21 @@ const
   PLATFORM_IPPROTO_UDP = IPPROTO_UDP;
   PLATFORM_SOL_SOCKET  = SOL_SOCKET;
   PLATFORM_SO_REUSEADDR = SO_REUSEADDR;
+{$IFDEF NEXTPAS_DARWIN}
+  PLATFORM_SO_REUSEPORT = $0200;
+{$ELSEIF defined(NEXTPAS_FREEBSD)}
+  PLATFORM_SO_REUSEPORT = $0004;
+{$ELSE}
   PLATFORM_SO_REUSEPORT = 15;
+{$ENDIF}
   PLATFORM_SO_KEEPALIVE = SO_KEEPALIVE;
+  PLATFORM_SO_LINGER   = SO_LINGER;
   PLATFORM_SO_RCVTIMEO = 20;
   PLATFORM_SO_SNDTIMEO = 21;
   PLATFORM_TCP_NODELAY  = TCP_NODELAY;
   PLATFORM_SHUT_RD     = SHUT_RD;
   PLATFORM_SHUT_WR     = SHUT_WR;
   PLATFORM_SHUT_RDWR   = SHUT_RDWR;
-  {$IFDEF NEXTPAS_LINUX}
-  PLATFORM_MSG_NOSIGNAL = $4000;
-  {$ELSE}
-  PLATFORM_MSG_NOSIGNAL = 0;
-  {$ENDIF}
 {$ENDIF}
 
 type
@@ -115,18 +118,16 @@ function platform_sockaddr_ipv4(APort: UInt16; AAddr: UInt32;
   out AResult: TPlatformSockAddr): Int32;
 function platform_sockaddr_loopback4(APort: UInt16;
   out AResult: TPlatformSockAddr): Int32;
-function platform_sockaddr_from_ipv4(AIP: UInt32; APort: UInt16;
-  out ASockAddr: sockaddr_in; out ALen: Int32): Int32;
-procedure platform_sockaddr_to_ipv4(const ASockAddr: sockaddr_in;
-  out AIP: UInt32; out APort: UInt16);
-function platform_ipv4_parse(const AAddr: string): UInt32;
-function platform_ipv4_to_string(AIP: UInt32): string;
+function platform_sockaddr_ipv6(APort: UInt16; AAddr: PByte;
+  AScopeId: UInt32; out AResult: TPlatformSockAddr): Int32;
+function platform_sockaddr_loopback6(APort: UInt16;
+  out AResult: TPlatformSockAddr): Int32;
+function platform_socket_resolve_ipv6(const AHost: PAnsiChar;
+  AAddr: PByte): Int32;
 
 { Byte-order helpers }
 function platform_htons(AHost: UInt16): UInt16; inline;
 function platform_htonl(AHost: UInt32): UInt32; inline;
-function platform_ntohs(ANet: UInt16): UInt16; inline;
-function platform_ntohl(ANet: UInt32): UInt32; inline;
 
 implementation
 
@@ -201,8 +202,7 @@ function platform_socket_send(const ASocket: TPlatformSocket;
 var
   LResult: ssize_t;
 begin
-  LResult := send(ASocket.Value, ABuf, size_t(ALen),
-    AFlags or PLATFORM_MSG_NOSIGNAL);
+  LResult := send(ASocket.Value, ABuf, size_t(ALen), AFlags);
   if LResult < 0 then
   begin
     ASent := 0;
@@ -377,19 +377,6 @@ begin
             ((AHost shr 24) and $FF);
 end;
 
-function platform_ntohs(ANet: UInt16): UInt16; inline;
-begin
-  Result := ((ANet and $FF) shl 8) or ((ANet shr 8) and $FF);
-end;
-
-function platform_ntohl(ANet: UInt32): UInt32; inline;
-begin
-  Result := ((ANet and $FF) shl 24) or
-            ((ANet and $FF00) shl 8) or
-            ((ANet shr 8) and $FF00) or
-            ((ANet shr 24) and $FF);
-end;
-
 function platform_sockaddr_ipv4(APort: UInt16; AAddr: UInt32;
   out AResult: TPlatformSockAddr): Int32;
 var
@@ -410,81 +397,57 @@ begin
   Result := platform_sockaddr_ipv4(APort, platform_htonl($7F000001), AResult);
 end;
 
-function platform_sockaddr_from_ipv4(AIP: UInt32; APort: UInt16;
-  out ASockAddr: sockaddr_in; out ALen: Int32): Int32;
-begin
-  FillChar(ASockAddr, SizeOf(ASockAddr), 0);
-  ASockAddr.sin_family := AF_INET;
-  ASockAddr.sin_port := platform_htons(APort);
-  ASockAddr.sin_addr.s_addr := AIP;
-  ALen := SizeOf(sockaddr_in);
-  Result := 0;
-end;
-
-procedure platform_sockaddr_to_ipv4(const ASockAddr: sockaddr_in;
-  out AIP: UInt32; out APort: UInt16);
-begin
-  AIP := ASockAddr.sin_addr.s_addr;
-  APort := platform_ntohs(ASockAddr.sin_port);
-end;
-
-function platform_ipv4_parse(const AAddr: string): UInt32;
+function platform_sockaddr_ipv6(APort: UInt16; AAddr: PByte;
+  AScopeId: UInt32; out AResult: TPlatformSockAddr): Int32;
 var
-  LPart: UInt32;
-  LShift: Integer;
-  LIdx, LLen, LStart: Integer;
-  LCh: Char;
+  LAddr: ^sockaddr_in6;
 begin
+  FillChar(AResult, SizeOf(AResult), 0);
+  LAddr := @AResult.Storage;
+  LAddr^.sin6_family := AF_INET6;
+  LAddr^.sin6_port := platform_htons(APort);
+  LAddr^.sin6_flowinfo := 0;
+  if AAddr <> nil then
+    Move(AAddr^, LAddr^.sin6_addr, 16)
+  else
+    FillChar(LAddr^.sin6_addr, 16, 0);
+  LAddr^.sin6_scope_id := AScopeId;
+  AResult.Len := SizeOf(sockaddr_in6);
   Result := 0;
-  LLen := Length(AAddr);
-  if LLen = 0 then Exit;
-  LShift := 24;
-  LStart := 1;
-  for LIdx := 1 to LLen + 1 do
-  begin
-    if (LIdx > LLen) or (AAddr[LIdx] = '.') then
-    begin
-      LPart := 0;
-      for LStart := LStart to LIdx - 1 do
-      begin
-        LCh := AAddr[LStart];
-        if (LCh < '0') or (LCh > '9') then begin Result := 0; Exit; end;
-        LPart := LPart * 10 + Ord(LCh) - Ord('0');
-      end;
-      if LPart > 255 then begin Result := 0; Exit; end;
-      Result := Result or (LPart shl LShift);
-      Dec(LShift, 8);
-      LStart := LIdx + 1;
-    end;
-  end;
 end;
 
-function platform_ipv4_to_string(AIP: UInt32): string;
-
-  function OctetToStr(AVal: UInt32): string;
-  var
-    LBuf: array[0..3] of Char;
-    LLen, LI: Integer;
-    LDigit: UInt32;
-  begin
-    LLen := 0;
-    if AVal = 0 then begin Result := '0'; Exit; end;
-    while AVal > 0 do begin
-      LDigit := AVal mod 10;
-      LBuf[LLen] := Chr(Ord('0') + LDigit);
-      Inc(LLen);
-      AVal := AVal div 10;
-    end;
-    SetLength(Result, LLen);
-    for LI := 0 to LLen - 1 do
-      Result[LI + 1] := LBuf[LLen - 1 - LI];
-  end;
-
+function platform_sockaddr_loopback6(APort: UInt16;
+  out AResult: TPlatformSockAddr): Int32;
+var
+  LAddr: array[0..15] of Byte;
 begin
-  Result := OctetToStr(AIP and $FF) + '.' +
-            OctetToStr((AIP shr 8) and $FF) + '.' +
-            OctetToStr((AIP shr 16) and $FF) + '.' +
-            OctetToStr((AIP shr 24) and $FF);
+  FillChar(LAddr, 16, 0);
+  LAddr[15] := 1; { ::1 }
+  Result := platform_sockaddr_ipv6(APort, @LAddr[0], 0, AResult);
+end;
+
+function platform_socket_resolve_ipv6(const AHost: PAnsiChar;
+  AAddr: PByte): Int32;
+var
+  LHints: addrinfo;
+  LRes: PAddrInfo;
+  LSa: ^sockaddr_in6;
+begin
+  FillChar(AAddr^, 16, 0);
+  FillChar(LHints, SizeOf(LHints), 0);
+  LHints.ai_family := AF_INET6;
+  LHints.ai_socktype := SOCK_STREAM;
+  LRes := nil;
+  Result := getaddrinfo(AHost, nil, @LHints, @LRes);
+  if (Result <> 0) or (LRes = nil) then
+  begin
+    if Result = 0 then Result := -1;
+    Exit;
+  end;
+  LSa := Pointer(LRes^.ai_addr);
+  Move(LSa^.sin6_addr, AAddr^, 16);
+  freeaddrinfo(LRes);
+  Result := 0;
 end;
 
 {$ENDIF}
@@ -755,19 +718,6 @@ begin
             ((AHost shr 24) and $FF);
 end;
 
-function platform_ntohs(ANet: UInt16): UInt16; inline;
-begin
-  Result := ((ANet and $FF) shl 8) or ((ANet shr 8) and $FF);
-end;
-
-function platform_ntohl(ANet: UInt32): UInt32; inline;
-begin
-  Result := ((ANet and $FF) shl 24) or
-            ((ANet and $FF00) shl 8) or
-            ((ANet shr 8) and $FF00) or
-            ((ANet shr 24) and $FF);
-end;
-
 function platform_sockaddr_ipv4(APort: UInt16; AAddr: UInt32;
   out AResult: TPlatformSockAddr): Int32;
 var
@@ -786,6 +736,59 @@ function platform_sockaddr_loopback4(APort: UInt16;
   out AResult: TPlatformSockAddr): Int32;
 begin
   Result := platform_sockaddr_ipv4(APort, htonl($7F000001), AResult);
+end;
+
+function platform_sockaddr_ipv6(APort: UInt16; AAddr: PByte;
+  AScopeId: UInt32; out AResult: TPlatformSockAddr): Int32;
+var
+  LAddr: ^sockaddr_in6;
+begin
+  FillChar(AResult, SizeOf(AResult), 0);
+  LAddr := @AResult.Storage;
+  LAddr^.sin6_family := AF_INET6;
+  LAddr^.sin6_port := platform_htons(APort);
+  LAddr^.sin6_flowinfo := 0;
+  if AAddr <> nil then
+    Move(AAddr^, LAddr^.sin6_addr, 16)
+  else
+    FillChar(LAddr^.sin6_addr, 16, 0);
+  LAddr^.sin6_scope_id := AScopeId;
+  AResult.Len := SizeOf(sockaddr_in6);
+  Result := 0;
+end;
+
+function platform_sockaddr_loopback6(APort: UInt16;
+  out AResult: TPlatformSockAddr): Int32;
+var
+  LAddr: array[0..15] of Byte;
+begin
+  FillChar(LAddr, 16, 0);
+  LAddr[15] := 1; { ::1 }
+  Result := platform_sockaddr_ipv6(APort, @LAddr[0], 0, AResult);
+end;
+
+function platform_socket_resolve_ipv6(const AHost: PAnsiChar;
+  AAddr: PByte): Int32;
+var
+  LHints: addrinfo;
+  LRes: PAddrInfo;
+  LSa: ^sockaddr_in6;
+begin
+  FillChar(AAddr^, 16, 0);
+  FillChar(LHints, SizeOf(LHints), 0);
+  LHints.ai_family := AF_INET6;
+  LHints.ai_socktype := SOCK_STREAM;
+  LRes := nil;
+  Result := winsock_getaddrinfo(AHost, nil, @LHints, @LRes);
+  if (Result <> 0) or (LRes = nil) then
+  begin
+    if Result = 0 then Result := -1;
+    Exit;
+  end;
+  LSa := Pointer(LRes^.ai_addr);
+  Move(LSa^.sin6_addr, AAddr^, 16);
+  winsock_freeaddrinfo(LRes);
+  Result := 0;
 end;
 
 var
@@ -820,6 +823,9 @@ function platform_htons(AHost: UInt16): UInt16; begin Result := AHost; end;
 function platform_htonl(AHost: UInt32): UInt32; begin Result := AHost; end;
 function platform_sockaddr_ipv4(APort: UInt16; AAddr: UInt32; out AResult: TPlatformSockAddr): Int32; begin FillChar(AResult, SizeOf(AResult), 0); Result := -1; end;
 function platform_sockaddr_loopback4(APort: UInt16; out AResult: TPlatformSockAddr): Int32; begin FillChar(AResult, SizeOf(AResult), 0); Result := -1; end;
+function platform_sockaddr_ipv6(APort: UInt16; AAddr: PByte; AScopeId: UInt32; out AResult: TPlatformSockAddr): Int32; begin FillChar(AResult, SizeOf(AResult), 0); Result := -1; end;
+function platform_sockaddr_loopback6(APort: UInt16; out AResult: TPlatformSockAddr): Int32; begin FillChar(AResult, SizeOf(AResult), 0); Result := -1; end;
+function platform_socket_resolve_ipv6(const AHost: PAnsiChar; AAddr: PByte): Int32; begin FillChar(AAddr^, 16, 0); Result := -1; end;
 {$ENDIF}
 
 end.
