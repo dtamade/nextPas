@@ -21,6 +21,8 @@ type
   TIntDeque = specialize TWorkStealingDeque<Integer>;
   TIntSegQueue = specialize TSegQueue<Integer>;
   TIntSpmc = specialize TSpmcQueue<Integer>;
+  TIntChannel = specialize TLockFreeChannel<Integer>;
+  TIntIntMap = specialize TLockFreeHashMap<Integer, Integer>;
 
 const
   CloseWakePendingProbeNs = 50000000;
@@ -2297,6 +2299,308 @@ begin
   end;
 end;
 
+{ LockFree Channel tests }
+
+procedure TestChannelBasic;
+var
+  LCh: TIntChannel;
+  LV: Integer;
+begin
+  LCh := TIntChannel.Create(4);
+  try
+    Check(LCh.TrySend(10), 'TrySend 1');
+    Check(LCh.TrySend(20), 'TrySend 2');
+    Check(LCh.TrySend(30), 'TrySend 3');
+    Check(LCh.TrySend(40), 'TrySend 4');
+    Check(not LCh.TrySend(50), 'TrySend full');
+    Check(LCh.TryReceive(LV), 'TryReceive 1');
+    CheckEqual(Int64(10), Int64(LV));
+    Check(LCh.TryReceive(LV), 'TryReceive 2');
+    CheckEqual(Int64(20), Int64(LV));
+    Check(LCh.TryReceive(LV), 'TryReceive 3');
+    CheckEqual(Int64(30), Int64(LV));
+    Check(LCh.TryReceive(LV), 'TryReceive 4');
+    CheckEqual(Int64(40), Int64(LV));
+    Check(not LCh.TryReceive(LV), 'TryReceive empty');
+  finally
+    LCh.Free;
+  end;
+end;
+
+procedure TestChannelClose;
+var
+  LCh: TIntChannel;
+  LV: Integer;
+begin
+  LCh := TIntChannel.Create(4);
+  try
+    Check(LCh.TrySend(10), 'pre-close send');
+    Check(LCh.TrySend(20), 'pre-close send 2');
+    LCh.Close;
+    Check(LCh.IsClosed, 'IsClosed');
+    Check(not LCh.TrySend(30), 'TrySend after close rejected');
+    Check(LCh.TryReceive(LV), 'drain after close 1');
+    CheckEqual(Int64(10), Int64(LV));
+    Check(LCh.TryReceive(LV), 'drain after close 2');
+    CheckEqual(Int64(20), Int64(LV));
+    Check(not LCh.TryReceive(LV), 'empty after close drain');
+  finally
+    LCh.Free;
+  end;
+end;
+
+procedure TestChannelCloseRaiseOnSend;
+var
+  LCh: TIntChannel;
+  LGot: Boolean;
+begin
+  LCh := TIntChannel.Create(2);
+  try
+    LCh.TrySend(1);
+    LCh.TrySend(2);
+    LCh.Close;
+    LGot := False;
+    try
+      LCh.Send(3);
+    except
+      on E: EInvalidOperationError do
+        LGot := True;
+    end;
+    Check(LGot, 'Send after close raises EInvalidOperationError');
+  finally
+    LCh.Free;
+  end;
+end;
+
+var
+  GChannelSendQ: TIntChannel;
+  GChannelSendStarted: Int32;
+  GChannelSendValue: Integer;
+
+function ChannelSendBlockedConsumer(AArg: Pointer): Pointer; cdecl;
+var
+  LV: Integer;
+begin
+  Result := nil;
+  AtomicStore32(GChannelSendStarted, 1, moRelease);
+  if GChannelSendQ.Receive(LV) then
+    GChannelSendValue := LV;
+end;
+
+procedure TestChannelSendReceive;
+var
+  LCh: TIntChannel;
+  LConsumer: TPlatformThreadHandle;
+  LRetVal: Pointer;
+  LSpin: Integer;
+  LConsumerStarted: Boolean;
+begin
+  LCh := TIntChannel.Create(4);
+  LConsumerStarted := False;
+  try
+    GChannelSendQ := LCh;
+    AtomicStore32(GChannelSendStarted, 0, moRelease);
+    GChannelSendValue := 0;
+    StartThread(LConsumer, @ChannelSendBlockedConsumer, nil, 'Channel send/receive consumer');
+    LConsumerStarted := True;
+    for LSpin := 1 to 1000 do
+    begin
+      if AtomicLoad32(GChannelSendStarted, moAcquire) <> 0 then
+        Break;
+      platform_thread_sleep_ns(1000000);
+    end;
+    LCh.Send(42);
+    JoinStartedThread(LConsumer, LConsumerStarted, 'Channel consumer');
+    CheckEqual(Int64(42), Int64(GChannelSendValue), 'Send→Receive delivers value');
+  finally
+    if LConsumerStarted then
+    begin
+      LCh.Close;
+      JoinStartedThread(LConsumer, LConsumerStarted, 'Channel consumer');
+    end;
+    GChannelSendQ := nil;
+    LCh.Free;
+  end;
+end;
+
+procedure TestChannelSendTimeout;
+var
+  LCh: TIntChannel;
+  LV: Integer;
+begin
+  LCh := TIntChannel.Create(4);
+  try
+    LCh.TrySend(1);
+    LCh.TrySend(2);
+    LCh.TrySend(3);
+    LCh.TrySend(4);
+    Check(not LCh.SendTimeout(5, 1000000), 'SendTimeout on full');
+    Check(LCh.TryReceive(LV), 'drain');
+    CheckEqual(Int64(1), Int64(LV));
+    Check(LCh.SendTimeout(5, 1000000), 'SendTimeout after space');
+  finally
+    LCh.Free;
+  end;
+end;
+
+procedure TestChannelReceiveTimeout;
+var
+  LCh: TIntChannel;
+  LV: Integer;
+begin
+  LCh := TIntChannel.Create(4);
+  try
+    Check(not LCh.ReceiveTimeout(LV, 1000000), 'ReceiveTimeout on empty');
+    Check(LCh.TrySend(77), 'send');
+    Check(LCh.ReceiveTimeout(LV, 1000000), 'ReceiveTimeout immediate');
+    CheckEqual(Int64(77), Int64(LV));
+  finally
+    LCh.Free;
+  end;
+end;
+
+procedure TestChannelApproxLen;
+var
+  LCh: TIntChannel;
+begin
+  LCh := TIntChannel.Create(8);
+  try
+    CheckEqual(Int64(8), Int64(LCh.Capacity), 'Capacity');
+    CheckEqual(Int64(0), Int64(LCh.ApproxLen), 'initial ApproxLen');
+    Check(not LCh.IsClosed, 'not closed initially');
+    LCh.TrySend(1);
+    LCh.TrySend(2);
+    LCh.TrySend(3);
+    CheckEqual(Int64(3), Int64(LCh.ApproxLen), 'ApproxLen after sends');
+    LCh.Close;
+    Check(LCh.IsClosed, 'IsClosed after Close');
+  finally
+    LCh.Free;
+  end;
+end;
+
+{ LockFree HashMap tests }
+
+procedure TestHashMapBasic;
+var
+  LM: TIntIntMap;
+  LV: Integer;
+begin
+  LM := TIntIntMap.Create;
+  try
+    LM.Insert(1, 100);
+    LM.Insert(2, 200);
+    LM.Insert(3, 300);
+    Check(LM.Contains(1), 'Contains 1');
+    Check(LM.Contains(2), 'Contains 2');
+    Check(LM.Contains(3), 'Contains 3');
+    Check(LM.Find(1, LV), 'Find 1');
+    CheckEqual(Int64(100), Int64(LV));
+    Check(LM.Find(2, LV), 'Find 2');
+    CheckEqual(Int64(200), Int64(LV));
+    Check(LM.Find(3, LV), 'Find 3');
+    CheckEqual(Int64(300), Int64(LV));
+    Check(LM.Remove(2), 'Remove 2');
+    Check(not LM.Contains(2), 'not Contains after Remove');
+    CheckEqual(Int64(2), Int64(LM.Count), 'Count after remove');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestHashMapUpdate;
+var
+  LM: TIntIntMap;
+  LV: Integer;
+begin
+  LM := TIntIntMap.Create;
+  try
+    LM.Insert(5, 50);
+    LM.Insert(5, 55);
+    Check(LM.Find(5, LV), 'Find after update');
+    CheckEqual(Int64(55), Int64(LV), 'updated value');
+    CheckEqual(Int64(1), Int64(LM.Count), 'Count unchanged after update');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestHashMapNotFound;
+var
+  LM: TIntIntMap;
+  LV: Integer;
+begin
+  LM := TIntIntMap.Create;
+  try
+    Check(not LM.Find(99, LV), 'Find missing key');
+    Check(not LM.Contains(99), 'Contains missing key');
+    Check(not LM.Remove(99), 'Remove missing key');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestHashMapMultipleKeys;
+var
+  LM: TIntIntMap;
+  LV: Integer;
+  LI: Integer;
+begin
+  LM := TIntIntMap.Create;
+  try
+    for LI := 1 to 100 do
+      LM.Insert(LI, LI * 10);
+    CheckEqual(Int64(100), Int64(LM.Count), 'Count after 100 inserts');
+    for LI := 1 to 100 do
+    begin
+      Check(LM.Find(LI, LV), 'Find key ' + IntToStr(LI));
+      CheckEqual(Int64(LI * 10), Int64(LV), 'value for key ' + IntToStr(LI));
+    end;
+    for LI := 1 to 50 do
+      Check(LM.Remove(LI), 'Remove key ' + IntToStr(LI));
+    CheckEqual(Int64(50), Int64(LM.Count), 'Count after 50 removals');
+    for LI := 1 to 50 do
+      Check(not LM.Contains(LI), 'not Contains removed key ' + IntToStr(LI));
+    for LI := 51 to 100 do
+      Check(LM.Contains(LI), 'Contains retained key ' + IntToStr(LI));
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestHashMapZeroCount;
+var
+  LM: TIntIntMap;
+begin
+  LM := TIntIntMap.Create;
+  try
+    CheckEqual(Int64(0), Int64(LM.Count), 'initial Count zero');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestHashMapResize;
+var
+  LM: TIntIntMap;
+  LV: Integer;
+  LI: Integer;
+begin
+  LM := TIntIntMap.Create(4);
+  try
+    for LI := 1 to 20 do
+      LM.Insert(LI, LI);
+    CheckEqual(Int64(20), Int64(LM.Count), 'Count after 20 inserts (triggers resize)');
+    for LI := 1 to 20 do
+    begin
+      Check(LM.Find(LI, LV), 'Find after resize key ' + IntToStr(LI));
+      CheckEqual(Int64(LI), Int64(LV));
+    end;
+  finally
+    LM.Free;
+  end;
+end;
+
 { Multi-thread stress tests }
 
 const
@@ -4430,6 +4734,19 @@ begin
   T.Run('Hazard multiple threads', @TestHazardMultipleThreads);
   T.Run('Hazard destroy reclaims all', @TestHazardDestroyReclaimsAll);
   T.Run('Hazard batch collect', @TestHazardBatchCollect);
+  T.Run('Channel basic', @TestChannelBasic);
+  T.Run('Channel close', @TestChannelClose);
+  T.Run('Channel close raises on Send', @TestChannelCloseRaiseOnSend);
+  T.Run('Channel Send/Receive', @TestChannelSendReceive);
+  T.Run('Channel SendTimeout', @TestChannelSendTimeout);
+  T.Run('Channel ReceiveTimeout', @TestChannelReceiveTimeout);
+  T.Run('Channel ApproxLen/Capacity', @TestChannelApproxLen);
+  T.Run('HashMap basic', @TestHashMapBasic);
+  T.Run('HashMap update', @TestHashMapUpdate);
+  T.Run('HashMap not found', @TestHashMapNotFound);
+  T.Run('HashMap multiple keys', @TestHashMapMultipleKeys);
+  T.Run('HashMap zero count', @TestHashMapZeroCount);
+  T.Run('HashMap resize', @TestHashMapResize);
   T.Run('Stack 4P+4C stress', @TestStackStress);
   T.Run('Deque owner+thief stress', @TestDequeOwnerThief);
   T.Run('SegQueue basic', @TestSegQueueBasic);

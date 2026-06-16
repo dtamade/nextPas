@@ -43,9 +43,9 @@ EBR (Epoch-Based Reclamation) | Hazard Pointer ⏳ 待定
 | 套件 | 测试数 | 泄漏 |
 |------|--------|------|
 | test_atomic | 45 | 0 |
-| test_lockfree | 70 | 0 |
+| test_lockfree | 77 | 0 |
 | test_lockfree_stress | 13 | 0 |
-| **总计** | **128** | **0** |
+| **总计** | **135** | **0** |
 
 ## 性能目标
 
