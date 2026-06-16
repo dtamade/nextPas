@@ -17,7 +17,7 @@ unit nextpas.core.tls.mbedtls.context;
 interface
 
 uses
-  SysUtils,Base64,
+  Base64, SysUtils, nextpas.core.fs, nextpas.core.system.classes,
   nextpas.core.io.intf,
   nextpas.core.io.util,
   nextpas.core.io.stream_adapter,
@@ -180,6 +180,7 @@ type
 implementation
 
 uses
+  nextpas.core.text.conv,
   nextpas.core.text.strings,
     nextpas.core.tls.mbedtls.lib,
   nextpas.core.tls.mbedtls.certificate,
@@ -440,7 +441,7 @@ begin
   if AFileName = '' then
     raise ESSLInvalidArgument.Create('AFileName must not be empty');
 
-  if not FileExists(AFileName) then
+  if not nextpas.core.fs.IsFile(AFileName) then
     raise ESSLCertError.CreateFmt('Certificate file not found: %s', [AFileName]);
 
   LSize := GetFileSizeByName(AFileName);
@@ -542,7 +543,7 @@ begin
   if AFileName = '' then
     raise ESSLInvalidArgument.Create('AFileName must not be empty');
 
-  if not FileExists(AFileName) then
+  if not nextpas.core.fs.IsFile(AFileName) then
     raise ESSLCertError.CreateFmt('Private key file not found: %s', [AFileName]);
 
   LSize := GetFileSizeByName(AFileName);
@@ -698,7 +699,7 @@ begin
   if AFileName = '' then
     raise ESSLInvalidArgument.Create('AFileName must not be empty');
 
-  if not FileExists(AFileName) then
+  if not nextpas.core.fs.IsFile(AFileName) then
     raise ESSLCertError.CreateFmt('CA file not found: %s', [AFileName]);
 
   LSize := GetFileSizeByName(AFileName);
@@ -731,7 +732,7 @@ procedure TMbedTLSContext.LoadCAPath(const APath: string);
 begin
   RequireValidContext('LoadCAPath');
 
-  if not DirectoryExists(APath) then
+  if not nextpas.core.fs.IsDir(APath) then
     raise ESSLCertError.CreateFmt('CA path not found: %s', [APath]);
 
   // 分配 CA 证书
@@ -801,7 +802,7 @@ procedure TMbedTLSContext.RejectUnsupportedCallbackAssignment(
   const AFeature, AMethodName: string);
 begin
   raise ESSLConfigurationException.CreateWithContext(
-    Format('%s is not published by the current MbedTLS backend runtime. ' +
+    nextpas.core.text.conv.Format('%s is not published by the current MbedTLS backend runtime. ' +
       'Check ISSLLibrary.GetCapabilities.SupportsCallbacks before installing a non-nil callback.',
       [AFeature]),
     sslErrUnsupported,
@@ -827,7 +828,7 @@ procedure TMbedTLSContext.RejectUnsupportedCustomCipherAssignment(
   const AFeature, AMethodName: string);
 begin
   raise ESSLConfigurationException.CreateWithContext(
-    Format('%s is not published by the current MbedTLS backend runtime. ' +
+    nextpas.core.text.conv.Format('%s is not published by the current MbedTLS backend runtime. ' +
       'Check ISSLLibrary.GetCapabilities.SupportsCustomCipherSuites before installing a custom non-default cipher override.',
       [AFeature]),
     sslErrUnsupported,
@@ -1031,7 +1032,7 @@ begin
 
   if Length(LHash) <> 32 then
     raise ESSLException.CreateWithContext(
-      Format('Invalid Base64 hash length: expected 32, got %d', [Length(LHash)]),
+      nextpas.core.text.conv.Format('Invalid Base64 hash length: expected 32, got %d', [Length(LHash)]),
       sslErrInvalidParam,
       'TMbedTLSContext.AddCertificatePinBase64'
     );

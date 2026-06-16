@@ -11,7 +11,7 @@ unit nextpas.core.tls.freepascal.earlydatareplay.dirstore;
 interface
 
 uses
-  SysUtils, Classes,
+  SysUtils, Classes, nextpas.core.fs,
   nextpas.core.tls.freepascal.session;
 
 type
@@ -166,7 +166,7 @@ function TFreePascalDirectoryEarlyDataReplayStore.PathExistsAt(
   const APath: string
 ): Boolean;
 begin
-  Result := (APath <> '') and (FileExists(APath) or DirectoryExists(APath));
+  Result := (APath <> '') and (nextpas.core.fs.IsFile(APath) or nextpas.core.fs.IsDir(APath));
 end;
 
 function TFreePascalDirectoryEarlyDataReplayStore.EncodeKey(
@@ -228,7 +228,7 @@ begin
 
   if PathExistsAt(FDirectoryName) then
   begin
-    if not DirectoryExists(FDirectoryName) then
+    if not nextpas.core.fs.IsDir(FDirectoryName) then
       Exit(False);
     ADirectoryName := FDirectoryName;
     Exit(True);
@@ -237,7 +237,7 @@ begin
   LTempDirectoryName := GetTempDirectoryName;
   if PathExistsAt(LTempDirectoryName) then
   begin
-    if not DirectoryExists(LTempDirectoryName) then
+    if not nextpas.core.fs.IsDir(LTempDirectoryName) then
       Exit(False);
     ADirectoryName := LTempDirectoryName;
     Exit(True);
@@ -246,7 +246,7 @@ begin
   LBackupDirectoryName := GetBackupDirectoryName;
   if PathExistsAt(LBackupDirectoryName) then
   begin
-    if not DirectoryExists(LBackupDirectoryName) then
+    if not nextpas.core.fs.IsDir(LBackupDirectoryName) then
       Exit(False);
     ADirectoryName := LBackupDirectoryName;
     Exit(True);
@@ -271,11 +271,11 @@ begin
 
   if ADirectoryName = '' then
     Exit;
-  if not DirectoryExists(ADirectoryName) then
+  if not nextpas.core.fs.IsDir(ADirectoryName) then
     Exit(False);
 
   LEntryCount := 0;
-  if FindFirst(IncludeTrailingPathDelimiter(ADirectoryName) + '*', faAnyFile, LSearchRec) <> 0 then
+  if FindFirst(nextpas.core.fs.PathEnsureSep(ADirectoryName) + '*', faAnyFile, LSearchRec) <> 0 then
     Exit(False);
 
   try
@@ -301,7 +301,7 @@ begin
         1,
         Length(LSearchRec.Name) - Length(DIRECTORY_REPLAY_ENTRY_SUFFIX)
       );
-      LEntryPath := IncludeTrailingPathDelimiter(ADirectoryName) + LSearchRec.Name;
+      LEntryPath := nextpas.core.fs.PathEnsureSep(ADirectoryName) + LSearchRec.Name;
       if not TryLoadEntry(LEntryPath, LEncodedKey, LEntry) then
         Exit(False);
 
@@ -332,7 +332,7 @@ begin
     Exit;
 
   LDir := ExtractFileDir(LLockFileName);
-  if (LDir <> '') and (not ForceDirectories(LDir)) then
+  if (LDir <> '') and (not nextpas.core.fs.MkdirAll(LDir)) then
     Exit;
 
   for LAttempt := 1 to 2 do
@@ -401,18 +401,18 @@ begin
 
   if APath = '' then
     Exit(True);
-  if FileExists(APath) then
-    Exit(DeleteFile(APath));
-  if not DirectoryExists(APath) then
+  if nextpas.core.fs.IsFile(APath) then
+    Exit(nextpas.core.fs.Remove(APath));
+  if not nextpas.core.fs.IsDir(APath) then
     Exit(True);
 
-  if FindFirst(IncludeTrailingPathDelimiter(APath) + '*', faAnyFile, LSearchRec) = 0 then
+  if FindFirst(nextpas.core.fs.PathEnsureSep(APath) + '*', faAnyFile, LSearchRec) = 0 then
   begin
     repeat
       if (LSearchRec.Name = '.') or (LSearchRec.Name = '..') then
         Continue;
 
-      LEntryPath := IncludeTrailingPathDelimiter(APath) + LSearchRec.Name;
+      LEntryPath := nextpas.core.fs.PathEnsureSep(APath) + LSearchRec.Name;
       if not RemovePathTree(LEntryPath) then
       begin
         FindClose(LSearchRec);
@@ -430,7 +430,7 @@ function TFreePascalDirectoryEarlyDataReplayStore.RenamePathAt(
   const ADestPath: string
 ): Boolean;
 begin
-  Result := RenameFile(ASourcePath, ADestPath);
+  Result := nextpas.core.fs.Rename(ASourcePath, ADestPath);
 end;
 
 function TFreePascalDirectoryEarlyDataReplayStore.WriteSnapshotDirectory(
@@ -445,7 +445,7 @@ var
 begin
   Result := False;
 
-  if (ADirectoryName = '') or (not ForceDirectories(ADirectoryName)) then
+  if (ADirectoryName = '') or (not nextpas.core.fs.MkdirAll(ADirectoryName)) then
     Exit;
 
   try
@@ -455,7 +455,7 @@ begin
         (Length(AEntries[I].Key) > MAX_REPLAY_PROVIDER_KEY_LENGTH) then
         Exit(False);
 
-      LFileName := IncludeTrailingPathDelimiter(ADirectoryName) +
+      LFileName := nextpas.core.fs.PathEnsureSep(ADirectoryName) +
         EncodeKey(AEntries[I].Key) + DIRECTORY_REPLAY_ENTRY_SUFFIX;
       LStream := TFileStream.Create(LFileName, fmCreate);
       try
@@ -573,21 +573,21 @@ begin
     Exit;
 
   LParentDirectory := ExtractFileDir(FDirectoryName);
-  if (LParentDirectory <> '') and (not ForceDirectories(LParentDirectory)) then
+  if (LParentDirectory <> '') and (not nextpas.core.fs.MkdirAll(LParentDirectory)) then
     Exit;
 
   LTempDirectoryName := GetTempDirectoryName;
   LBackupDirectoryName := GetBackupDirectoryName;
   if PathExistsAt(LTempDirectoryName) then
   begin
-    if not DirectoryExists(LTempDirectoryName) then
+    if not nextpas.core.fs.IsDir(LTempDirectoryName) then
       Exit(False);
     if not RemovePathTree(LTempDirectoryName) then
       Exit(False);
   end;
   if PathExistsAt(LBackupDirectoryName) then
   begin
-    if not DirectoryExists(LBackupDirectoryName) then
+    if not nextpas.core.fs.IsDir(LBackupDirectoryName) then
       Exit(False);
     if not RemovePathTree(LBackupDirectoryName) then
       Exit(False);

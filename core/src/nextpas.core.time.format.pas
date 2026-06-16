@@ -110,17 +110,31 @@ var
   LDays: Int64;
   LDayNs: Int64;
   LYear, LMonth, LDay, LHour, LMinute, LSecond: Word;
+  LJD, LL, LN, LI, LJ: Int64;
 begin
   // TDateTime = days since 1899-12-30 + fractional day
   LDays := Trunc(ADT);
-  LDayNs := Round(Frac(ADT) * 864000000000.0); // nanoseconds in a day
+  LDayNs := Round(Frac(ADT) * 864000000000.0);
 
-  // Convert days since 1899-12-30 to Y/M/D
-  // 25569 days from 1899-12-30 to 1970-01-01
-  LDays := LDays - 25569 + 719163; // days since 0001-03-01 (Minguo calendar base)
-  // Simplified: use FPC's DecodeDate to avoid reinventing
-  System.DecodeDate(ADT, LYear, LMonth, LDay);
-  System.DecodeTime(ADT, LHour, LMinute, LSecond, LDayNs);
+  // Decode days → Gregorian Y/M/D via Meeus "Astronomical Algorithms" §7.
+  // OLE epoch midnight 1899-12-30 = JD 2415018.5; noon JDN = 2415019.
+  LJD := LDays + 2415019;
+  LL := LJD + 68569;
+  LN := (4 * LL) div 146097;
+  LL := LL - (146097 * LN + 3) div 4;
+  LI := (4000 * (LL + 1)) div 1461001;
+  LL := LL - (1461 * LI) div 4 + 31;
+  LJ := (80 * LL) div 2447;
+  LYear  := Word(100 * (LN - 49) + LI + LJ div 11);
+  LMonth := Word(LJ + 2 - 12 * (LJ div 11));
+  LDay   := Word(LL - (2447 * LJ) div 80);
+
+  // Decode fractional day → H:M:S
+  LHour   := Word(LDayNs div 3600000000000);
+  LDayNs  := LDayNs mod 3600000000000;
+  LMinute := Word(LDayNs div 60000000000);
+  LDayNs  := LDayNs mod 60000000000;
+  LSecond := Word(LDayNs div 1000000000);
 
   Result := DoFormat(APattern,
     LYear, LMonth, LDay,

@@ -11,8 +11,6 @@ SysUtils|nextpas.core.http.impl.h1.parser.pas
 SysUtils|nextpas.core.mem.allocator.mimalloc.pas
 SysUtils|nextpas.core.mem.pool.fixed.pas
 SysUtils|nextpas.core.platform.error.pas
-SysUtils|nextpas.core.tls.asn1.pas
-Classes|nextpas.core.tls.asn1.pas
 SysUtils|nextpas.core.tls.base.pas
 SysUtils|nextpas.core.tls.cert.rotation.pas
 SysUtils|nextpas.core.tls.cert.utils.pas
@@ -49,7 +47,6 @@ SysUtils|nextpas.core.tui.widget.timeline.pas
 #|
 # Classes: 48 files|
 Classes|nextpas.core.crypto.hash.pas
-Classes|nextpas.core.tls.base.pas
 Classes|nextpas.core.tls.cert.builder.impl.pas
 Classes|nextpas.core.tls.cert.rotation.pas
 Classes|nextpas.core.tls.cert.utils.pas
@@ -59,6 +56,7 @@ Classes|nextpas.core.tls.freepascal.connection.pas
 Classes|nextpas.core.tls.freepascal.earlydatareplay.dirstore.pas
 Classes|nextpas.core.tls.freepascal.earlydatareplay.fileprovider.pas
 Classes|nextpas.core.tls.freepascal.lib.pas
+Classes|nextpas.core.tls.freepascal.context.pas
 Classes|nextpas.core.tls.http.client.pas
 Classes|nextpas.core.tls.mbedtls.connection.pas
 Classes|nextpas.core.tls.mbedtls.session.pas
@@ -70,7 +68,6 @@ Classes|nextpas.core.tls.openssl.api.engine.pas
 Classes|nextpas.core.tls.openssl.api.store.pas
 Classes|nextpas.core.tls.openssl.certificate.pas
 Classes|nextpas.core.tls.openssl.certstore.pas
-Classes|nextpas.core.tls.openssl.connection.pas
 Classes|nextpas.core.tls.openssl.context.pas
 Classes|nextpas.core.tls.pending.pas
 Classes|nextpas.core.tls.pkcs11.utils.pas
@@ -86,6 +83,8 @@ Classes|nextpas.core.tls.tls12.server.pas
 Classes|nextpas.core.tls.transport.pas
 Classes|nextpas.core.tls.websocket.pas
 Classes|nextpas.core.tls.winssl.context.pas
+Classes|nextpas.core.tls.winssl.certificate.pas
+Classes|nextpas.core.tls.winssl.certstore.pas
 Classes|nextpas.core.tls.wolfssl.connection.pas
 Classes|nextpas.core.tls.wolfssl.context.pas
 Classes|nextpas.core.tui.task.pas
@@ -97,7 +96,6 @@ TypInfo|nextpas.core.system.typinfo.pas
 # DateUtils: 18 files|
 DateUtils|nextpas.core.git.libgit2.backend.pas
 DateUtils|nextpas.core.git.libgit2.pas
-DateUtils|nextpas.core.tls.cert.rotation.pas
 DateUtils|nextpas.core.tls.crl.pas
 DateUtils|nextpas.core.tls.ct.sct.pas
 DateUtils|nextpas.core.tls.freepascal.context.pas
@@ -110,7 +108,6 @@ DateUtils|nextpas.core.tls.ocsp.pure.pas
 DateUtils|nextpas.core.tls.winssl.connection.pas
 DateUtils|nextpas.core.tls.wolfssl.certificate.pas
 DateUtils|nextpas.core.tls.wolfssl.session.pas
-DateUtils|nextpas.core.tls.x509.pas
 DateUtils|nextpas.core.tui.widget.calendar.pas
 #|
 # BaseUnix: 10 files|

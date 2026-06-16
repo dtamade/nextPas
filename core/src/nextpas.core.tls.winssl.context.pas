@@ -19,6 +19,9 @@ interface
 
 uses
   Windows, SysUtils, Classes, StrUtils,
+  nextpas.core.base.utils,
+  nextpas.core.fs,
+  nextpas.core.text.conv,
   nextpas.core.io.intf,
   nextpas.core.io.stream_adapter,
   nextpas.core.io.util,
@@ -268,7 +271,7 @@ begin
     );
   if Length(Result) > AMaxSize then
     raise ESSLInvalidArgument.CreateWithContext(
-      Format('%s exceeds maximum allowed size (%d > %d bytes)',
+      nextpas.core.text.conv.Format('%s exceeds maximum allowed size (%d > %d bytes)',
         [ASubject, Length(Result), AMaxSize]),
       sslErrInvalidParam,
       AMethodName
@@ -283,7 +286,7 @@ begin
     FreeCredentialsHandle(@FCredHandle);
   
   // 清理证书固定
-  FreeAndNil(FPinValidator);
+  nextpas.core.base.utils.FreeAndNil(FPinValidator);
   
   inherited Destroy;
 end;
@@ -411,7 +414,7 @@ begin
 
   if not IsSuccess(Status) then
     raise ESSLInitializationException.CreateWithContext(
-      Format('Failed to acquire credentials handle: 0x%x (%s mode)', 
+      nextpas.core.text.conv.Format('Failed to acquire credentials handle: 0x%x (%s mode)',
         [Status, IfThen(FContextType = sslCtxServer, 'server', 'client')]),
       sslErrNotInitialized,
       'TWinSSLContext.EnsureCredentialsAcquired',
@@ -575,9 +578,9 @@ begin
   if AFileName = '' then
     RaiseInvalidParameter('AFileName');
 
-  if not FileExists(AFileName) then
+  if not nextpas.core.fs.IsFile(AFileName) then
     raise ESSLFileNotFoundException.CreateWithContext(
-      Format('Certificate file not found: %s', [AFileName]),
+      nextpas.core.text.conv.Format('Certificate file not found: %s', [AFileName]),
       sslErrLoadFailed,
       'TWinSSLContext.LoadCertificate'
     );
@@ -722,9 +725,9 @@ begin
   if AFileName = '' then
     RaiseInvalidParameter('AFileName');
 
-  if not FileExists(AFileName) then
+  if not nextpas.core.fs.IsFile(AFileName) then
     raise ESSLFileNotFoundException.CreateWithContext(
-      Format('Private key file not found: %s', [AFileName]),
+      nextpas.core.text.conv.Format('Private key file not found: %s', [AFileName]),
       sslErrLoadFailed,
       'TWinSSLContext.LoadPrivateKey'
     );
@@ -913,9 +916,9 @@ begin
   if AFileName = '' then
     RaiseInvalidParameter('AFileName');
 
-  if not FileExists(AFileName) then
+  if not nextpas.core.fs.IsFile(AFileName) then
     raise ESSLFileNotFoundException.CreateWithContext(
-      Format('CA file not found: %s', [AFileName]),
+      nextpas.core.text.conv.Format('CA file not found: %s', [AFileName]),
       sslErrLoadFailed,
       'TWinSSLContext.LoadCAFile'
     );
@@ -1206,7 +1209,7 @@ procedure TWinSSLContext.RejectUnsupportedCallbackAssignment(
   const AFeature, AMethodName: string);
 begin
   raise ESSLConfigurationException.CreateWithContext(
-    Format('%s is not published by the current WinSSL backend runtime. ' +
+    nextpas.core.text.conv.Format('%s is not published by the current WinSSL backend runtime. ' +
       'The current WinSSL callback surface only publishes verify/info paths.',
       [AFeature]),
     sslErrUnsupported,
@@ -1232,7 +1235,7 @@ procedure TWinSSLContext.RejectUnsupportedCustomCipherAssignment(
   const AFeature, AMethodName: string);
 begin
   raise ESSLConfigurationException.CreateWithContext(
-    Format('%s is not published by the current WinSSL backend runtime. ' +
+    nextpas.core.text.conv.Format('%s is not published by the current WinSSL backend runtime. ' +
       'Check ISSLLibrary.GetCapabilities.SupportsCustomCipherSuites before installing a custom non-default cipher override.',
       [AFeature]),
     sslErrUnsupported,
@@ -1313,7 +1316,7 @@ begin
     FPinValidator.RequireValidPin := AEnabled;
   
   TSecurityLog.Info('WinSSL', 
-    Format('Certificate pinning %s', [IfThen(AEnabled, 'enabled', 'disabled')]));
+    nextpas.core.text.conv.Format('Certificate pinning %s', [IfThen(AEnabled, 'enabled', 'disabled')]));
 end;
 
 function TWinSSLContext.GetCertificatePinningEnabled: Boolean;

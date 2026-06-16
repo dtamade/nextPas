@@ -4,7 +4,12 @@ unit nextpas.core.tls.openssl.api.asn1;
 
 interface
 
-uses dynlibs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader; type // ASN.1 类型定义 ASN1_TYPE = Pointer;
+uses dynlibs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader,
+  nextpas.core.time, nextpas.core.text.conv;
+
+type
+  // ASN.1 类型定义
+  ASN1_TYPE = Pointer;
   ASN1_OBJECT = Pointer;
   ASN1_STRING = Pointer;
   ASN1_OCTET_STRING = Pointer;
@@ -444,7 +449,7 @@ begin
   // 加上前几年的天数
   for i := 1 to Year - 1 do
   begin
-    if IsLeapYear(i) then
+    if (i mod 4 = 0) and ((i mod 100 <> 0) or (i mod 400 = 0)) then
       Days := Days + 366
     else
       Days := Days + 365;
@@ -454,7 +459,7 @@ begin
   for i := 1 to Month - 1 do
   begin
     Days := Days + DaysInMonth[i];
-    if (i = 2) and IsLeapYear(Year) then
+    if (i = 2) and ((Year mod 4 = 0) and ((Year mod 100 <> 0) or (Year mod 400 = 0))) then
       Days := Days + 1; // 闰年 2 月
   end;
 

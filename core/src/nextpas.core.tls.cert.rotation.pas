@@ -23,7 +23,8 @@ unit nextpas.core.tls.cert.rotation;
 interface
 
 uses
-  Classes, SysUtils, SyncObjs, DateUtils,
+  Classes, SysUtils, SyncObjs,
+  nextpas.core.fs, nextpas.core.text.conv, nextpas.core.time,
   nextpas.core.tls.base, nextpas.core.tls.errors, nextpas.core.tls.logging, nextpas.core.tls.exceptions;
 
 type
@@ -160,6 +161,7 @@ implementation
 
 uses
   Math,
+  nextpas.core.base.utils,
   nextpas.core.tls.utils,
   nextpas.core.tls.factory;
 
@@ -214,10 +216,10 @@ begin
       Exit;
     end;
 
-    if not FileExists(FConfig.CertificatePath) then
+    if not nextpas.core.fs.IsFile(FConfig.CertificatePath) then
     begin
       TSecurityLog.Error('CertRotation',
-        Format('Certificate expiry check failed: file not found: %s',
+        nextpas.core.text.conv.Format('Certificate expiry check failed: file not found: %s',
           [FConfig.CertificatePath]));
       Exit;
     end;
@@ -227,7 +229,7 @@ begin
 
     if NotAfter <= 0 then
       raise ESSLException.CreateWithContext(
-        Format('Certificate does not contain a valid NotAfter timestamp: %s',
+        nextpas.core.text.conv.Format('Certificate does not contain a valid NotAfter timestamp: %s',
           [FConfig.CertificatePath]),
         sslErrCertificate,
         'TCertificateRotationManager.CheckCertificateExpiry',
@@ -235,20 +237,20 @@ begin
         sslAutoDetect
       );
 
-    ADaysRemaining := Floor(NotAfter - Now);
-    Result := Now <= NotAfter;
+    ADaysRemaining := Floor(NotAfter - nextpas.core.time.DateTimeNow);
+    Result := nextpas.core.time.DateTimeNow <= NotAfter;
 
     TSecurityLog.Debug('CertRotation',
-      Format('Certificate expiry check: path=%s, notAfter=%s, daysRemaining=%d, valid=%s',
+      nextpas.core.text.conv.Format('Certificate expiry check: path=%s, notAfter=%s, daysRemaining=%d, valid=%s',
         [FConfig.CertificatePath,
-        DateTimeToStr(NotAfter),
+        nextpas.core.time.DateTimeToStr(NotAfter),
         ADaysRemaining,
         BoolToStr(Result, True)]));
   except
     on E: Exception do
     begin
       TSecurityLog.Error('CertRotation',
-        Format('Failed to check certificate expiry: %s', [E.Message]));
+        nextpas.core.text.conv.Format('Failed to check certificate expiry: %s', [E.Message]));
     end;
   end;
 end;
@@ -280,9 +282,9 @@ begin
       on E: Exception do
       begin
         TSecurityLog.Error('CertRotation',
-          Format('Failed to reload certificate: %s', [E.Message]));
+          nextpas.core.text.conv.Format('Failed to reload certificate: %s', [E.Message]));
         TriggerEvent(retReloadFailed,
-          Format('Certificate reload failed: %s', [E.Message]));
+          nextpas.core.text.conv.Format('Certificate reload failed: %s', [E.Message]));
       end;
     end;
   finally
@@ -325,16 +327,16 @@ begin
       end;
 
       // Check certificate expiry (once per day)
-      if (Now - FLastExpiryCheck) >= 1.0 then
+      if (nextpas.core.time.DateTimeNow - FLastExpiryCheck) >= 1.0 then
       begin
         if CheckCertificateExpiry(DaysRemaining) then
         begin
           if DaysRemaining <= FConfig.ExpiryWarningDays then
           begin
             TSecurityLog.Warning('CertRotation',
-              Format('Certificate expiring in %d days', [DaysRemaining]));
+              nextpas.core.text.conv.Format('Certificate expiring in %d days', [DaysRemaining]));
             TriggerEvent(retCertificateExpiring,
-              Format('Certificate expiring in %d days', [DaysRemaining]));
+              nextpas.core.text.conv.Format('Certificate expiring in %d days', [DaysRemaining]));
 
             if FConfig.AutoReloadOnExpiry then
               NeedReload := True;
@@ -346,7 +348,7 @@ begin
             TriggerEvent(retCertificateExpired, 'Certificate has expired');
           end;
         end;
-        FLastExpiryCheck := Now;
+        FLastExpiryCheck := nextpas.core.time.DateTimeNow;
       end;
 
       // Perform reload if needed
@@ -356,7 +358,7 @@ begin
     except
       on E: Exception do
         TSecurityLog.Error('CertRotation',
-          Format('Monitor thread error: %s', [E.Message]));
+          nextpas.core.text.conv.Format('Monitor thread error: %s', [E.Message]));
     end;
 
     // Sleep for check interval
@@ -374,7 +376,7 @@ begin
     except
       on E: Exception do
         TSecurityLog.Error('CertRotation',
-          Format('Error in rotation event callback: %s', [E.Message]));
+          nextpas.core.text.conv.Format('Error in rotation event callback: %s', [E.Message]));
     end;
   end;
 end;
@@ -390,17 +392,17 @@ begin
   end;
 
   // Validate configuration
-  if not FileExists(AConfig.CertificatePath) then
+  if not nextpas.core.fs.IsFile(AConfig.CertificatePath) then
   begin
     TSecurityLog.Error('CertRotation',
-      Format('Certificate file not found: %s', [AConfig.CertificatePath]));
+      nextpas.core.text.conv.Format('Certificate file not found: %s', [AConfig.CertificatePath]));
     Exit;
   end;
 
-  if (AConfig.PrivateKeyPath <> '') and not FileExists(AConfig.PrivateKeyPath) then
+  if (AConfig.PrivateKeyPath <> '') and not nextpas.core.fs.IsFile(AConfig.PrivateKeyPath) then
   begin
     TSecurityLog.Error('CertRotation',
-      Format('Private key file not found: %s', [AConfig.PrivateKeyPath]));
+      nextpas.core.text.conv.Format('Private key file not found: %s', [AConfig.PrivateKeyPath]));
     Exit;
   end;
 
@@ -424,7 +426,7 @@ begin
   FMonitorThread := TRotationMonitorThread.Create(Self);
 
   TSecurityLog.Info('CertRotation',
-    Format('Certificate rotation monitoring started (check interval: %d seconds)',
+    nextpas.core.text.conv.Format('Certificate rotation monitoring started (check interval: %d seconds)',
       [FConfig.CheckIntervalSeconds]));
 
   Result := True;
@@ -443,7 +445,7 @@ begin
   begin
     FMonitorThread.Terminate;
     FMonitorThread.WaitFor;
-    FreeAndNil(FMonitorThread);
+    nextpas.core.base.utils.FreeAndNil(FMonitorThread);
   end;
 
   TSecurityLog.Info('CertRotation', 'Certificate rotation monitoring stopped');
@@ -480,7 +482,7 @@ begin
   else
     PrivKeyStr := 'N/A';
 
-  Result := Format('Certificate Rotation Status:' + LineEnding +
+  Result := nextpas.core.text.conv.Format('Certificate Rotation Status:' + LineEnding +
     '  Active: %s' + LineEnding +
     '  Certificate: %s' + LineEnding +
     '  Private Key: %s' + LineEnding +
@@ -493,7 +495,7 @@ begin
     FConfig.CheckIntervalSeconds]);
 
   if CheckCertificateExpiry(DaysRemaining) then
-    Result := Result + Format('  Days until expiry: %d' + LineEnding, [DaysRemaining]);
+    Result := Result + nextpas.core.text.conv.Format('  Days until expiry: %d' + LineEnding, [DaysRemaining]);
 end;
 
 { TRotationMonitorThread }

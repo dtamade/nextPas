@@ -21,7 +21,11 @@ unit nextpas.core.tls.logging;
 interface
 
 uses
-  SysUtils, Classes, nextpas.core.text.conv,
+  SysUtils, Classes,
+  nextpas.core.base.utils,
+  nextpas.core.fs,
+  nextpas.core.text.conv,
+  nextpas.core.time,
   nextpas.core.tls.base;  // P2: TSSLProtocolVersions for shared helpers
 
 {$IFDEF USE_SYNCOBJS}
@@ -257,7 +261,7 @@ function TBaseLogger.FormatMessage(ALevel: TSecurityEventLevel; const ACategory,
 var
   LTimeStr: string;
 begin
-  LTimeStr := FormatDateTime('yyyy-mm-dd hh:nn:ss.zzz', Now);
+  LTimeStr := FormatDateTime('yyyy-mm-dd hh:nn:ss.zzz', nextpas.core.time.DateTimeNow);
   // Format: [Time] [Level] [Category] Message
   Result := nextpas.core.text.conv.Format(
     '[%s] [%s] [%s] %s',
@@ -356,12 +360,12 @@ begin
   InitCriticalSection(FLock);
 
   // Ensure log directory exists
-  LDir := ExtractFilePath(AFileName);
-  if (LDir <> '') and not DirectoryExists(LDir) then
-    ForceDirectories(LDir);
+  LDir := nextpas.core.fs.PathDir(AFileName);
+  if (LDir <> '') and not nextpas.core.fs.IsDir(LDir) then
+    nextpas.core.fs.MkdirAll(LDir);
 
   // Get current file size if exists
-  if FileExists(FFileName) then
+  if nextpas.core.fs.IsFile(FFileName) then
   begin
     try
       with TFileStream.Create(FFileName, fmOpenRead or fmShareDenyWrite) do
@@ -397,21 +401,21 @@ begin
   if FMaxFiles > 0 then
   begin
     LOldName := FFileName + '.' + nextpas.core.text.conv.IntToStr(FMaxFiles);
-    if FileExists(LOldName) then
-      DeleteFile(LOldName);
+    if nextpas.core.fs.IsFile(LOldName) then
+      nextpas.core.fs.Remove(LOldName);
 
     // Rename existing rotated files
     for I := FMaxFiles - 1 downto 1 do
     begin
       LOldName := FFileName + '.' + nextpas.core.text.conv.IntToStr(I);
       LNewName := FFileName + '.' + nextpas.core.text.conv.IntToStr(I + 1);
-      if FileExists(LOldName) then
-        RenameFile(LOldName, LNewName);
+      if nextpas.core.fs.IsFile(LOldName) then
+        nextpas.core.fs.Rename(LOldName, LNewName);
     end;
 
     // Rename current log file
-    if FileExists(FFileName) then
-      RenameFile(FFileName, FFileName + '.1');
+    if nextpas.core.fs.IsFile(FFileName) then
+      nextpas.core.fs.Rename(FFileName, FFileName + '.1');
   end;
 
   FCurrentSize := 0;
@@ -428,7 +432,7 @@ begin
     CheckRotation;
 
     AssignFile(LFile, FFileName);
-    if FileExists(FFileName) then
+    if nextpas.core.fs.IsFile(FFileName) then
       Append(LFile)
     else
       Rewrite(LFile);
@@ -646,7 +650,7 @@ end;
 
 class procedure TSSLProfiler.FreeProfilerInstance;
 begin
-  FreeAndNil(FInstance);
+  nextpas.core.base.utils.FreeAndNil(FInstance);
 end;
 
 function TSSLProfiler.StartMeasure(const AName: string): Int64;

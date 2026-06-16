@@ -10,7 +10,7 @@ unit nextpas.core.tls.freepascal.earlydatareplay;
 interface
 
 uses
-  SysUtils, DateUtils,
+  SysUtils, DateUtils, nextpas.core.fs, nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.freepascal.context.material,
   nextpas.core.tls.freepascal.session;
@@ -277,7 +277,7 @@ begin
   LValue := Trim(ADirectoryName);
   if LValue = '' then
     Exit('');
-  Result := ExcludeTrailingPathDelimiter(ExpandFileName(LValue));
+  Result := nextpas.core.fs.PathTrimSep(nextpas.core.fs.PathAbs(LValue));
 end;
 
 function GetDefaultFreePascalEarlyDataReplayStoreDirectory: string;
@@ -289,22 +289,22 @@ begin
     Exit(GDefaultReplayStoreDirectoryOverride);
 
   LBaseDirectory := Trim(
-    GetEnvironmentVariable(FREEPASCAL_DEFAULT_EARLY_DATA_REPLAY_STORE_ENV)
+    nextpas.core.fs.GetEnv(FREEPASCAL_DEFAULT_EARLY_DATA_REPLAY_STORE_ENV)
   );
   if LBaseDirectory <> '' then
     Exit(NormalizeReplayStoreDirectory(LBaseDirectory));
 
   {$IFDEF WINDOWS}
-  LBaseDirectory := Trim(GetEnvironmentVariable('LOCALAPPDATA'));
+  LBaseDirectory := Trim(nextpas.core.fs.GetEnv('LOCALAPPDATA'));
   if LBaseDirectory = '' then
-    LBaseDirectory := Trim(GetEnvironmentVariable('APPDATA'));
+    LBaseDirectory := Trim(nextpas.core.fs.GetEnv('APPDATA'));
   {$ELSE}
-  LBaseDirectory := Trim(GetEnvironmentVariable('XDG_STATE_HOME'));
+  LBaseDirectory := Trim(nextpas.core.fs.GetEnv('XDG_STATE_HOME'));
   if LBaseDirectory = '' then
   begin
-    LHomeDirectory := Trim(GetEnvironmentVariable('HOME'));
+    LHomeDirectory := Trim(nextpas.core.fs.GetEnv('HOME'));
     if LHomeDirectory <> '' then
-      LBaseDirectory := IncludeTrailingPathDelimiter(ExpandFileName(LHomeDirectory)) +
+      LBaseDirectory := nextpas.core.fs.PathEnsureSep(nextpas.core.fs.PathAbs(LHomeDirectory)) +
         '.local' + PathDelim + 'state';
   end;
   {$ENDIF}
@@ -315,7 +315,7 @@ begin
     LBaseDirectory := GetTempDir(False);
 
   LBaseDirectory := NormalizeReplayStoreDirectory(LBaseDirectory);
-  Result := IncludeTrailingPathDelimiter(LBaseDirectory) +
+  Result := nextpas.core.fs.PathEnsureSep(LBaseDirectory) +
     'fafafa.ssl' + PathDelim + 'freepascal' + PathDelim +
     'early-data-replay';
 end;
@@ -848,7 +848,7 @@ begin
     Exit;
 
   try
-    Result := FProvider.TryAcquireReplayKey(LKey, LExpiresAt, Now);
+    Result := FProvider.TryAcquireReplayKey(LKey, LExpiresAt, nextpas.core.time.DateTimeNow);
   except
     Result := False;
   end;

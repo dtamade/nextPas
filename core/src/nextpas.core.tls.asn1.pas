@@ -23,7 +23,7 @@ unit nextpas.core.tls.asn1;
 interface
 
 uses
-  Classes, Contnrs,
+  Contnrs,
   nextpas.core.base,
   nextpas.core.io.intf,
   nextpas.core.exception,
@@ -300,7 +300,8 @@ function TagToString(ATag: Byte): string;
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.base.utils,
+  nextpas.core.time,
   nextpas.core.text.conv,
   nextpas.core.io.memory,
   nextpas.core.io.util,
@@ -436,7 +437,7 @@ end;
 
 destructor TASN1Node.Destroy;
 begin
-  FreeAndNil(FChildren);
+  nextpas.core.base.utils.FreeAndNil(FChildren);
   inherited Destroy;
 end;
 
@@ -703,7 +704,7 @@ begin
       ASN1_TAG_NULL:
         ValueStr := 'NULL';
       ASN1_TAG_UTCTIME, ASN1_TAG_GENERALIZEDTIME:
-        ValueStr := DateTimeToStr(AsDateTime);
+        ValueStr := nextpas.core.time.DateTimeToStr(AsDateTime);
       ASN1_TAG_UTF8STRING, ASN1_TAG_PRINTABLESTRING, ASN1_TAG_IA5STRING,
       ASN1_TAG_VISIBLESTRING, ASN1_TAG_T61STRING, ASN1_TAG_BMPSTRING:
         ValueStr := '"' + AsString + '"';
@@ -741,7 +742,7 @@ end;
 
 destructor TASN1NodeList.Destroy;
 begin
-  FreeAndNil(FList);
+  nextpas.core.base.utils.FreeAndNil(FList);
   inherited Destroy;
 end;
 
@@ -1008,7 +1009,7 @@ begin
       end;
     end;
   except
-    FreeAndNil(Result);
+    nextpas.core.base.utils.FreeAndNil(Result);
     Result := nil;
     raise;
   end;

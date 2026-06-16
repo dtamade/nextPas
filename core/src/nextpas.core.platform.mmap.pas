@@ -247,6 +247,7 @@ function BuildSharedFallbackPath(const AName: string): string;
 var
   LDir: string;
   LBase: string;
+  I: Integer;
 begin
   LDir := PosixGetEnvString('NEXTPAS_SHM_DIR');
   if LDir = '' then
@@ -255,7 +256,10 @@ begin
   LBase := AName;
   if (LBase <> '') and (LBase[1] = '/') then
     Delete(LBase, 1, 1);
-  LBase := StringReplace(LBase, '/', '_', [rfReplaceAll]);
+  // Replace '/' with '_' (avoid SysUtils.StringReplace dependency)
+  for I := 1 to Length(LBase) do
+    if LBase[I] = '/' then
+      LBase[I] := '_';
 
   if (LDir <> '') and (LDir[Length(LDir)] <> '/') then
     LDir := LDir + '/';

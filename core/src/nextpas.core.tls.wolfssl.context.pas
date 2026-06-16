@@ -19,6 +19,8 @@ interface
 
 uses
   SysUtils, Classes, Base64,
+  nextpas.core.fs,
+  nextpas.core.text.conv,
   nextpas.core.io.stream_adapter,
   nextpas.core.io.intf,
   nextpas.core.io.util,
@@ -519,7 +521,7 @@ begin
   if AFileName = '' then
     raise ESSLInvalidArgument.Create('AFileName must not be empty');
 
-  if not FileExists(AFileName) then
+  if not nextpas.core.fs.IsFile(AFileName) then
     raise ESSLCertError.CreateFmt('Certificate file not found: %s', [AFileName]);
 
   LSize := GetFileSizeByName(AFileName);
@@ -604,7 +606,7 @@ begin
   if AFileName = '' then
     raise ESSLInvalidArgument.Create('AFileName must not be empty');
 
-  if not FileExists(AFileName) then
+  if not nextpas.core.fs.IsFile(AFileName) then
     raise ESSLCertError.CreateFmt('Private key file not found: %s', [AFileName]);
 
   LSize := GetFileSizeByName(AFileName);
@@ -719,7 +721,7 @@ begin
   if AFileName = '' then
     raise ESSLInvalidArgument.Create('AFileName must not be empty');
 
-  if not FileExists(AFileName) then
+  if not nextpas.core.fs.IsFile(AFileName) then
     raise ESSLCertError.CreateFmt('CA file not found: %s', [AFileName]);
 
   LSize := GetFileSizeByName(AFileName);
@@ -739,7 +741,7 @@ procedure TWolfSSLContext.LoadCAPath(const APath: string);
 begin
   RequireValidContext('LoadCAPath');
 
-  if not DirectoryExists(APath) then
+  if not nextpas.core.fs.IsDir(APath) then
     raise ESSLCertError.CreateFmt('CA path not found: %s', [APath]);
 
   if not Assigned(wolfSSL_CTX_load_verify_locations) then
@@ -813,7 +815,7 @@ procedure TWolfSSLContext.RejectUnsupportedCallbackAssignment(
   const AFeature, AMethodName: string);
 begin
   raise ESSLConfigurationException.CreateWithContext(
-    Format('%s is not published by the current WolfSSL backend runtime. ' +
+    nextpas.core.text.conv.Format('%s is not published by the current WolfSSL backend runtime. ' +
       'Check ISSLLibrary.GetCapabilities.SupportsCallbacks before installing a non-nil callback.',
       [AFeature]),
     sslErrUnsupported,
@@ -852,7 +854,7 @@ procedure TWolfSSLContext.RejectUnsupportedCustomCipherAssignment(
   const AFeature, AMethodName: string);
 begin
   raise ESSLConfigurationException.CreateWithContext(
-    Format('%s is not published by the current WolfSSL backend runtime. ' +
+    nextpas.core.text.conv.Format('%s is not published by the current WolfSSL backend runtime. ' +
       'Check ISSLLibrary.GetCapabilities.SupportsCustomCipherSuites before installing a custom non-default cipher override.',
       [AFeature]),
     sslErrUnsupported,
@@ -1027,7 +1029,7 @@ begin
 
   if Length(LHash) <> 32 then
     raise ESSLException.CreateWithContext(
-      Format('Invalid Base64 hash length: expected 32, got %d', [Length(LHash)]),
+      nextpas.core.text.conv.Format('Invalid Base64 hash length: expected 32, got %d', [Length(LHash)]),
       sslErrInvalidParam,
       'TWolfSSLContext.AddCertificatePinBase64'
     );
@@ -1209,7 +1211,7 @@ begin
 
     if LRet <> 1 then
       raise ESSLException.CreateWithContext(
-        Format('wolfSSL_CTX_set_max_early_data failed (policy=%d, return=%d)',
+        nextpas.core.text.conv.Format('wolfSSL_CTX_set_max_early_data failed (policy=%d, return=%d)',
           [Ord(APolicy), LRet]),
         sslErrGeneral,
         'SetServerEarlyDataPolicy'
@@ -1237,7 +1239,7 @@ begin
     LRet := wolfSSL_CTX_set_max_early_data(FWolfSSLCtx, ASize);
     if LRet <> 1 then
       raise ESSLException.CreateWithContext(
-        Format('wolfSSL_CTX_set_max_early_data failed (size=%d, return=%d)',
+        nextpas.core.text.conv.Format('wolfSSL_CTX_set_max_early_data failed (size=%d, return=%d)',
           [ASize, LRet]),
         sslErrGeneral,
         'SetServerMaxEarlyDataSize'
@@ -1284,9 +1286,9 @@ var
 begin
   RequireValidContext('LoadServerStapledOCSPResponseFile');
 
-  if not FileExists(AFileName) then
+  if not nextpas.core.fs.IsFile(AFileName) then
     raise ESSLException.CreateWithContext(
-      Format('OCSP response file not found: %s', [AFileName]),
+      nextpas.core.text.conv.Format('OCSP response file not found: %s', [AFileName]),
       sslErrLoadFailed,
       'LoadServerStapledOCSPResponseFile'
     );
@@ -1303,7 +1305,7 @@ begin
 
       if LSize > MAX_OCSP_RESPONSE_SIZE then
         raise ESSLInvalidArgument.Create(
-          Format('OCSP response file too large (%d bytes, max %d)',
+          nextpas.core.text.conv.Format('OCSP response file too large (%d bytes, max %d)',
             [LSize, MAX_OCSP_RESPONSE_SIZE]),
           sslErrInvalidParam
         );
@@ -1320,7 +1322,7 @@ begin
       raise;
     on E: Exception do
       raise ESSLException.CreateWithContext(
-        Format('Failed to load OCSP response file: %s', [E.Message]),
+        nextpas.core.text.conv.Format('Failed to load OCSP response file: %s', [E.Message]),
         sslErrLoadFailed,
         'LoadServerStapledOCSPResponseFile'
       );

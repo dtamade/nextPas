@@ -19,10 +19,12 @@ unit nextpas.core.tls.openssl.connection;
 interface
 
 uses
-  SysUtils, Classes, ctypes,
+  SysUtils, nextpas.core.system.classes, ctypes,
   nextpas.core.io.intf,
   nextpas.core.io.stream_adapter,
   nextpas.core.io.util,
+  nextpas.core.text.conv,
+  nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.errors,
   nextpas.core.tls.net.hooks,
@@ -712,14 +714,14 @@ begin
   else
     LRole := 'Server';
 
-  TSecurityLog.Info('OpenSSL', Format('Starting handshake (%s)', [LRole]));
+  TSecurityLog.Info('OpenSSL', nextpas.core.text.conv.Format('Starting handshake (%s)', [LRole]));
 
   Result := inherited DoHandshake;
 
   if Result = sslHsCompleted then
-    TSecurityLog.Info('OpenSSL', Format('Handshake completed (%s). Cipher: %s', [LRole, GetCipherName]))
+    TSecurityLog.Info('OpenSSL', nextpas.core.text.conv.Format('Handshake completed (%s). Cipher: %s', [LRole, GetCipherName]))
   else if Result = sslHsFailed then
-    TSecurityLog.Error('OpenSSL', Format('Handshake failed (%s)', [LRole]));
+    TSecurityLog.Error('OpenSSL', nextpas.core.text.conv.Format('Handshake failed (%s)', [LRole]));
 end;
 
 function TOpenSSLConnection.DoShutdown: Boolean;
@@ -1024,7 +1026,7 @@ begin
 
   if Res < 0 then
   begin
-    Result := Format('Error: %d', [Res]);
+    Result := nextpas.core.text.conv.Format('Error: %d', [Res]);
     Exit;
   end;
 
@@ -1035,7 +1037,7 @@ begin
   if ErrStr <> nil then
     Result := string(ErrStr)
   else
-    Result := Format('Error: %d', [Res]);
+    Result := nextpas.core.text.conv.Format('Error: %d', [Res]);
 end;
 
 function TOpenSSLConnection.DoGetSession: ISSLSession;
@@ -1393,7 +1395,7 @@ begin
       OCSP_RESPONSE_STATUS_SIGREQUIRED:      Result := 'Signature Required';
       OCSP_RESPONSE_STATUS_UNAUTHORIZED:     Result := 'Unauthorized';
     else
-      Result := Format('Unknown Status (%d)', [RespStatus]);
+      Result := nextpas.core.text.conv.Format('Unknown Status (%d)', [RespStatus]);
     end;
   finally
     if Assigned(OCSP_RESPONSE_free) then
@@ -1968,11 +1970,11 @@ begin
                 else
                   CachedVerifyResult.ErrorCode := X509_V_ERR_APPLICATION_VERIFICATION;
                 CachedVerifyResult.ErrorMessage := '';
-                CachedVerifyResult.VerifiedAt := Now;
+                CachedVerifyResult.VerifiedAt := nextpas.core.time.DateTimeNow;
                 CertVerifyCache.Put(PeerX509, CachedVerifyResult);
 
                 TSecurityLog.Debug('OpenSSL',
-                  Format('Cert verify cache updated (valid=%s, code=%d)',
+                  nextpas.core.text.conv.Format('Cert verify cache updated (valid=%s, code=%d)',
                     [BoolToStr(CachedVerifyResult.Valid, True), CachedVerifyResult.ErrorCode]));
               end;
             end

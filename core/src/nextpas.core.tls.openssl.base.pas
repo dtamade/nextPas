@@ -7,6 +7,7 @@ interface
 type
   // C type aliases (was ctypes, now using FPC built-in types)
   clong  = PtrInt;
+  Pclong = ^clong;
   cint   = LongInt;
   cuint  = LongWord;
   culong = PtrUInt;

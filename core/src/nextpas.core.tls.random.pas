@@ -22,11 +22,11 @@ unit nextpas.core.tls.random;
 interface
 
 uses
-  SysUtils, Classes
+  SysUtils, Classes, nextpas.core.fs
   {$IFDEF USE_RANDOM_POOL}
   , nextpas.core.tls.random.pool
   {$ENDIF}
-  ;
+;
 
 type
   {**
@@ -182,7 +182,7 @@ end;
 
 function IsSecureRandomAvailable: Boolean;
 begin
-  Result := FileExists('/dev/urandom');
+  Result := nextpas.core.fs.IsFile('/dev/urandom');
 end;
 
 {$ENDIF}
