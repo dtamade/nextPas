@@ -43,6 +43,7 @@ const
   PLATFORM_WALK_STOPPED   = 1;
   PLATFORM_WALK_BADARGS   = -1;
   PLATFORM_WALK_MAX_DEPTH = 256;
+  PLATFORM_FS_SHORT_READ_ERROR = -6;
 
 function platform_fs_exists(const APath: PAnsiChar): Boolean;
 function platform_fs_is_file(const APath: PAnsiChar): Boolean;
@@ -59,6 +60,8 @@ function platform_fs_write_atomic(const APath: PAnsiChar;
   AData: Pointer; ALen: PtrUInt): Int32;
 function platform_fs_read_file(const APath: PAnsiChar;
   out AData: Pointer; out ALen: PtrUInt): Int32;
+function platform_fs_read_file_into(const APath: PAnsiChar;
+  ABuf: Pointer; ABufCapacity: PtrUInt; out ALen: PtrUInt): Int32;
 procedure platform_fs_free_buf(AData: Pointer);
 function platform_fs_walk(const ARoot: PAnsiChar;
   ACallback: TPlatformWalkCallback; AUserData: Pointer;
@@ -73,7 +76,6 @@ uses
 
 const
   PLATFORM_FS_SHORT_WRITE_ERROR = -5;
-  PLATFORM_FS_SHORT_READ_ERROR = -6;
 
 function platform_fs_write_all(const AHandle: TPlatformFileHandle;
   AData: Pointer; ALen: PtrUInt): Int32;
@@ -471,6 +473,38 @@ begin
   PAnsiChar(AData)[LRead] := #0;
   ALen := LRead;
   Result := 0;
+end;
+
+function platform_fs_read_file_into(const APath: PAnsiChar;
+  ABuf: Pointer; ABufCapacity: PtrUInt; out ALen: PtrUInt): Int32;
+var
+  LH: TPlatformFileHandle;
+  LSize: Int64;
+  LRead: PtrUInt;
+  LR, LCloseR: Int32;
+begin
+  ALen := 0;
+  LR := platform_fs_file_size(APath, LSize);
+  if LR <> 0 then
+    Exit(LR);
+  if LSize = 0 then
+    Exit(0);
+  if LSize > Int64(ABufCapacity) then
+  begin
+    ALen := PtrUInt(LSize);
+    Exit(PLATFORM_FS_SHORT_READ_ERROR);
+  end;
+  if ABuf = nil then
+    Exit(-1);
+  LR := platform_file_open(APath, fomReadOnly, fcmOpenExisting, LH);
+  if LR <> 0 then
+    Exit(LR);
+  LR := platform_fs_read_all(LH, ABuf, PtrUInt(LSize), LRead);
+  LCloseR := platform_file_close(LH);
+  if (LR = 0) and (LCloseR <> 0) then
+    LR := LCloseR;
+  ALen := LRead;
+  Result := LR;
 end;
 
 procedure platform_fs_free_buf(AData: Pointer);

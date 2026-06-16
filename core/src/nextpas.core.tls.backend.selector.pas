@@ -18,7 +18,8 @@ interface
 uses
   nextpas.core.exception,
   nextpas.core.base,
-  nextpas.core.tls.base;
+  nextpas.core.tls.base,
+  nextpas.core.text.strings;
 
 type
   { TSSLOptimizationTarget - 优化目标 }
@@ -155,7 +156,6 @@ function ValidateRequirements(
 implementation
 
 uses
-  nextpas.core.text.strings,
   nextpas.core.tls.factory;
 
 { 前向声明 }
@@ -317,7 +317,6 @@ begin
   // 转换结果
   AErrors := Copy(ErrorList);
   Result := (Length(ErrorList) = 0);
-  end;
 end;
 
 { 内部评分函数 }
@@ -807,7 +806,6 @@ begin
       Result := '满足基本需求'
     else
       Result := StringsJoin(Reasons, '; ');
-  end;
 end;
 
 end.

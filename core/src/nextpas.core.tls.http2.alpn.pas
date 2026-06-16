@@ -4,7 +4,7 @@ unit nextpas.core.tls.http2.alpn;
 
 interface
 
-uses nextpas.core.base, nextpas.core.tls.base;
+uses nextpas.core.base, nextpas.core.time, nextpas.core.tls.base;
 
 const
   HTTP2_ALPN_PROTOCOL = 'h2';
