@@ -16,7 +16,7 @@ function NewTcpThreadedServer(
 
 implementation
 
-uses nextpas.core.errors, nextpas.core.net.tcp, nextpas.core.net.server.runtime, nextpas.core.platform.thread;
+uses nextpas.core.atomic, nextpas.core.errors, nextpas.core.net.tcp, nextpas.core.net.server.runtime, nextpas.core.platform.thread;
 
 type
   PConnContext = ^TConnContext;
@@ -29,7 +29,7 @@ type
   TTcpThreadedServer = class(TInterfacedObject, ITcpServer)
   private
     FOptions: TTcpServerOptions;
-    FRunning: Boolean;
+    FRunning: Int32;
     FListener: ITcpListener;
     FWorkerHandoff: ITcpServerWorkerHandoff;
     FSessionContext: ITcpServerSessionContext;
@@ -71,13 +71,13 @@ constructor TTcpThreadedServer.Create(const AOptions: TTcpServerOptions);
 begin
   inherited Create;
   FOptions := AOptions;
-  FRunning := False;
+  AtomicStore32(FRunning, 0, moRelease);
   FListener := nil;
 end;
 
 destructor TTcpThreadedServer.Destroy;
 begin
-  if FRunning then
+  if AtomicLoad32(FRunning, moAcquire) <> 0 then
     Shutdown;
   FSessionContext := nil;
   FWorkerHandoff := nil;
@@ -104,9 +104,9 @@ begin
   EnsureRuntimeContext;
   try
     FListener := NetTcpListen(AAddr, APort);
-    FRunning := True;
+    AtomicStore32(FRunning, 1, moRelease);
     try
-      while FRunning do
+      while AtomicLoad32(FRunning, moAcquire) <> 0 do
       begin
         try
           LConn := FListener.Accept;
@@ -115,7 +115,7 @@ begin
         end;
         if LConn = nil then
           Break;
-        if not FRunning then
+        if AtomicLoad32(FRunning, moAcquire) = 0 then
         begin
           LConn.Close;
           Break;
@@ -140,14 +140,14 @@ begin
         end;
       end;
     finally
-      FRunning := False;
+      AtomicStore32(FRunning, 0, moRelease);
       if FWorkerHandoff <> nil then
         FWorkerHandoff.Shutdown;
     end;
   finally
     FSessionContext := nil;
     FWorkerHandoff := nil;
-    if not FRunning then
+    if AtomicLoad32(FRunning, moAcquire) = 0 then
       FListener := nil;
   end;
 end;
@@ -157,7 +157,7 @@ var
   LAddr: TNetAddress;
   LWake: ITcpStream;
 begin
-  FRunning := False;
+  AtomicStore32(FRunning, 0, moRelease);
   if FListener <> nil then
   begin
     LAddr := FListener.LocalAddr;
@@ -182,7 +182,7 @@ end;
 
 function TTcpThreadedServer.IsRunning: Boolean;
 begin
-  Result := FRunning;
+  Result := AtomicLoad32(FRunning, moAcquire) <> 0;
 end;
 
 function NewTcpThreadedServer(

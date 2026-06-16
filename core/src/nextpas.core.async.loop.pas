@@ -86,6 +86,7 @@ implementation
 
 uses
   nextpas.core.atomic,
+  nextpas.core.errors,
   nextpas.core.platform.io,
   nextpas.core.platform.sync;
 
@@ -240,21 +241,29 @@ class function TAsyncLoop.Create(AQueueDepth: UInt32): TAsyncLoop;
 begin
   Result := Default(TAsyncLoop);
   Result.FPoller := TPoller.Create(AQueueDepth);
+  if not Result.FPoller.IsValid then
+    raise EInvalidOperationError.Create('async loop: poller creation failed');
   Result.FWakeReady := False;
   if platform_poller_create(Result.FWakePoller) = 0 then
   begin
     if platform_poller_enable_wake(Result.FWakePoller, nil) = 0 then
       Result.FWakeReady := True
     else
+    begin
       platform_poller_close(Result.FWakePoller);
-  end;
+      raise EInvalidOperationError.Create('async loop: wake poller init failed');
+    end;
+  end
+  else
+    raise EInvalidOperationError.Create('async loop: wake poller creation failed');
   Result.FTimers := TTimerHeap.Create;
   Result.FRunning := 0;
   Result.FPendingCount := 0;
   Result.FPendingCap := PENDING_INITIAL_CAP;
   SetLength(Result.FPendingQueue, PENDING_INITIAL_CAP);
-  Result.FPendingReady := platform_mutex_init(Result.FPendingLock,
-    PLATFORM_MUTEX_NORMAL) = 0;
+  if platform_mutex_init(Result.FPendingLock, PLATFORM_MUTEX_NORMAL) <> 0 then
+    raise EInvalidOperationError.Create('async loop: mutex init failed');
+  Result.FPendingReady := True;
 end;
 
 procedure TAsyncLoop.Close;
@@ -297,7 +306,7 @@ begin
   try
     FPoller.Close;
   finally
-    FTimers.Clear;
+    FTimers.Close;
     if LPendingWasReady then
       platform_mutex_destroy(FPendingLock);
     if LWakeWasReady then
@@ -324,7 +333,7 @@ var
   LNewCap: UInt32;
 begin
   if not IsValid then
-    Exit;
+    raise EInvalidOperationError.Create('async loop: post after close');
   platform_mutex_lock(FPendingLock);
   try
     if FPendingCount >= FPendingCap then
@@ -398,7 +407,7 @@ function TAsyncLoop.Schedule(const ADelay: TDuration; ACallback: TAsyncCallback;
   AContext: Pointer): TAsyncTimerHandle;
 begin
   if not IsValid then
-    Exit(TAsyncTimerHandle.None);
+    raise EInvalidOperationError.Create('async loop: operation after close');
   Result := FTimers.ScheduleAfter(ADelay, ACallback, AContext);
 end;
 
@@ -406,14 +415,14 @@ function TAsyncLoop.ScheduleAt(const ADeadline: TDeadline; ACallback: TAsyncCall
   AContext: Pointer): TAsyncTimerHandle;
 begin
   if not IsValid then
-    Exit(TAsyncTimerHandle.None);
+    raise EInvalidOperationError.Create('async loop: operation after close');
   Result := FTimers.Schedule(ADeadline, ACallback, AContext);
 end;
 
 function TAsyncLoop.CancelTimer(const AHandle: TAsyncTimerHandle): Boolean;
 begin
   if not IsValid then
-    Exit(False);
+    raise EInvalidOperationError.Create('async loop: operation after close');
   Result := FTimers.Cancel(AHandle);
 end;
 
@@ -421,7 +430,7 @@ function TAsyncLoop.AsyncRead(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AOffset:
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 begin
   if not IsValid then
-    Exit(False);
+    raise EInvalidOperationError.Create('async loop: operation after close');
   Result := FPoller.AsyncRead(AFd, ABuf, ALen, AOffset, ACallback, AContext);
 end;
 
@@ -429,7 +438,7 @@ function TAsyncLoop.AsyncWrite(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AOffset
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 begin
   if not IsValid then
-    Exit(False);
+    raise EInvalidOperationError.Create('async loop: operation after close');
   Result := FPoller.AsyncWrite(AFd, ABuf, ALen, AOffset, ACallback, AContext);
 end;
 
@@ -437,7 +446,7 @@ function TAsyncLoop.AsyncAccept(AFd: PtrInt; AAddr: Pointer; AAddrLen: Pointer; 
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 begin
   if not IsValid then
-    Exit(False);
+    raise EInvalidOperationError.Create('async loop: operation after close');
   Result := FPoller.AsyncAccept(AFd, AAddr, AAddrLen, AFlags, ACallback, AContext);
 end;
 
@@ -445,7 +454,7 @@ function TAsyncLoop.AsyncRecv(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: 
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 begin
   if not IsValid then
-    Exit(False);
+    raise EInvalidOperationError.Create('async loop: operation after close');
   Result := FPoller.AsyncRecv(AFd, ABuf, ALen, AFlags, ACallback, AContext);
 end;
 
@@ -453,7 +462,7 @@ function TAsyncLoop.AsyncSend(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: 
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 begin
   if not IsValid then
-    Exit(False);
+    raise EInvalidOperationError.Create('async loop: operation after close');
   Result := FPoller.AsyncSend(AFd, ABuf, ALen, AFlags, ACallback, AContext);
 end;
 
@@ -463,7 +472,7 @@ var
   LIo: Int32;
 begin
   if not IsValid then
-    Exit(0);
+    raise EInvalidOperationError.Create('async loop: operation after close');
   { Drain wake signal and process pending callbacks }
   DrainWake;
   DrainPending;
@@ -482,7 +491,7 @@ var
   LNext: TDeadline;
 begin
   if not IsValid then
-    Exit;
+    raise EInvalidOperationError.Create('async loop: run after close');
   AtomicStore32(FRunning, 1, moRelease);
   try
     while AtomicLoad32(FRunning, moAcquire) <> 0 do
@@ -517,7 +526,7 @@ var
   LNext: TDeadline;
 begin
   if not IsValid then
-    Exit;
+    raise EInvalidOperationError.Create('async loop: run once after close');
   AtomicStore32(FRunning, 1, moRelease);
   try
     { Drain pending first }
@@ -558,7 +567,7 @@ function TAsyncLoop.AsyncSleep(const ADelay: TDuration; ACallback: TAsyncCallbac
   AContext: Pointer): TAsyncTimerHandle;
 begin
   if not IsValid then
-    Exit(TAsyncTimerHandle.None);
+    raise EInvalidOperationError.Create('async loop: operation after close');
   Result := FTimers.ScheduleAfter(ADelay, ACallback, AContext);
 end;
 
@@ -567,7 +576,7 @@ function TAsyncLoop.AsyncReadTimeout(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; A
 var LCtx: PTimeoutCtx;
 begin
   if not IsValid then
-    Exit(False);
+    raise EInvalidOperationError.Create('async loop: operation after close');
   if ADeadline.IsInfinite then
     Exit(AsyncRead(AFd, ABuf, ALen, AOffset, ACallback, AContext));
   LCtx := TimeoutCtxCreate(@Self, ADeadline, ACallback, AContext);
@@ -584,7 +593,7 @@ function TAsyncLoop.AsyncWriteTimeout(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; 
 var LCtx: PTimeoutCtx;
 begin
   if not IsValid then
-    Exit(False);
+    raise EInvalidOperationError.Create('async loop: operation after close');
   if ADeadline.IsInfinite then
     Exit(AsyncWrite(AFd, ABuf, ALen, AOffset, ACallback, AContext));
   LCtx := TimeoutCtxCreate(@Self, ADeadline, ACallback, AContext);
@@ -601,7 +610,7 @@ function TAsyncLoop.AsyncRecvTimeout(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; A
 var LCtx: PTimeoutCtx;
 begin
   if not IsValid then
-    Exit(False);
+    raise EInvalidOperationError.Create('async loop: operation after close');
   if ADeadline.IsInfinite then
     Exit(AsyncRecv(AFd, ABuf, ALen, AFlags, ACallback, AContext));
   LCtx := TimeoutCtxCreate(@Self, ADeadline, ACallback, AContext);
@@ -618,7 +627,7 @@ function TAsyncLoop.AsyncSendTimeout(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; A
 var LCtx: PTimeoutCtx;
 begin
   if not IsValid then
-    Exit(False);
+    raise EInvalidOperationError.Create('async loop: operation after close');
   if ADeadline.IsInfinite then
     Exit(AsyncSend(AFd, ABuf, ALen, AFlags, ACallback, AContext));
   LCtx := TimeoutCtxCreate(@Self, ADeadline, ACallback, AContext);

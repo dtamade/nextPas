@@ -116,3 +116,31 @@ TNetAddress.IPv6('::1', 8080)
 - IOCP is a completion/proactor family backend and must plug into a completion-aware foundation driver.
 
 Deadline support via `nextpas.core.time.deadline.TDeadline`.
+
+## Design Decisions
+
+### ITcpStream implements IStream
+
+`TTcpStream` implements `IStream` (which includes `Seek`, `GetSize`, `GetPosition`, `SetPosition`).
+For TCP sockets, `Seek`/`SetPosition` raise `ENotSupportedError`, `GetSize` returns `-1`,
+and `GetPosition` returns `0`. This is because a TCP socket is a stream of bytes with no
+random access — but implementing `IStream` gives a unified API for `Read`/`Write`/`Close`.
+
+### IPv4-only (current)
+
+`TNetAddress` has full IPv6 support in its data model (`IPv6` constructor, `IsIPv6` flag),
+but `NetTcpListen`, `NetTcpConnect`, and `NetUdpBind` currently hardcode `AF_INET` (IPv4).
+IPv6 socket operations will be added when the platform layer gains dual-stack support.
+
+### Exception semantics
+
+- Deadline/timeout → `ETimeoutError`
+- Network failures → `ENetworkError`
+- Closed socket access → `ENetworkError` (blocking) or `tsiorClosed` (Try-variant)
+- This dual-mode design lets callers choose: blocking APIs raise, non-blocking APIs report
+
+### Socket address helpers
+
+`platform_sockaddr_from_ipv4` and `platform_sockaddr_to_ipv4` in `nextpas.core.platform.socket`
+provide the single source of truth for `TNetAddress` ↔ `sockaddr_in` conversion.
+All net modules use these helpers to avoid code duplication.

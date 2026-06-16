@@ -65,7 +65,7 @@ var
 begin
   LSource := ReadTextFile('../../../src/nextpas.core.net.tcp.pas');
   LBody := ExtractSourceRange(LSource, 'function ttcpstream.write',
-    'function ttcpstream.seek', 'TTcpStream.Write implementation');
+    'procedure ttcpstream.close', 'TTcpStream.Write implementation');
   Check(Pos('if lsent = 0 then' + LineEnding + '      break;', LBody) = 0,
     'blocking Write must not silently short-write on zero progress');
   CheckSourceContains(LBody, 'if lsent = 0 then',
@@ -333,7 +333,7 @@ begin
   try
     LClient.Read(LBuf[0], 32);
   except
-    on ENetworkError do LGot := True;
+    on ETimeoutError do LGot := True;
   end;
   Check(LGot, 'read deadline triggers timeout');
   LClient.Close;
@@ -354,7 +354,7 @@ begin
   try
     LClient.Read(LBuf[0], 32);
   except
-    on ENetworkError do LGot := True;
+    on ETimeoutError do LGot := True;
   end;
   Check(LGot, 'expired deadline raises immediately');
   LClient.Close;

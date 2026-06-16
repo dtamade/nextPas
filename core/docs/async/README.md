@@ -125,6 +125,7 @@ The mechanism uses atomically-reference-counted `TTimeoutCtx` to ensure exactly 
 | Method | Description |
 |--------|-------------|
 | `Create` | Initialize an empty timer heap |
+| `Close` | Release all heap storage and nil callback references (prevents leaks) |
 | `Schedule(ADeadline, ACallback, AContext)` | Schedule at absolute deadline |
 | `ScheduleAfter(ADelay, ACallback, AContext)` | Schedule after relative delay |
 | `Cancel(AHandle)` | Tombstone-cancel a timer |
@@ -229,7 +230,49 @@ The wake timeout:
 - With no pending I/O (pure idle): may sleep indefinitely on platform wake — `pure idle waits may block indefinitely`
 - With pending I/O: the wait is capped so the loop can service I/O completion callbacks — `pending i/o caps wake-only waits`
 
-## Known Limitations
+## Design Decisions
+
+### Schedule naming convention
+
+`TAsyncLoop.Schedule` and `TTimerHeap.Schedule` use **different semantics**:
+
+| Layer | `Schedule` takes | `ScheduleAt`/`ScheduleAfter` takes |
+|-------|------------------|-----------------------------------|
+| `TAsyncLoop` | `TDuration` (relative delay) | `ScheduleAt(TDeadline)` (absolute time) |
+| `TTimerHeap` | `TDeadline` (absolute deadline) | `ScheduleAfter(TDuration)` (relative delay) |
+
+This is intentional: `TAsyncLoop` is the user-facing API where relative delay is the common case,
+so `Schedule` is the convenient shortcut. `TTimerHeap` is the internal engine where absolute
+deadlines are the native representation.
+
+### Two callback signatures
+
+The framework uses two callback types for different purposes:
+
+```pascal
+TAsyncCallback = procedure(AContext: Pointer);
+  // Used by: Schedule, Post, AsyncSleep (no result to report)
+
+TIoCompletion = procedure(AUserData: UInt64; AResult: Int32; AContext: Pointer);
+  // Used by: AsyncRead/Write/Accept/Recv/Send (carries operation result)
+```
+
+This split avoids forcing a result parameter into timer/post callbacks where it would always be ignored.
+`TAsyncTask.OnComplete` uses `TAsyncCallback` — the result is fetched separately via `GetResult`.
+
+### Resource lifecycle (Close convention)
+
+All heap-owning record types use `Close` for teardown:
+- `TAsyncLoop.Close` — releases poller, wake poller, mutex; aborts pending I/O
+- `TPoller.Close` — releases backend reactor
+- `TTimerHeap.Close` — nils callback references, frees heap storage
+
+### Deadline exception semantics
+
+- Deadline/timeout exceeded → `ETimeoutError` (callers can distinguish timeout from network failure)
+- Actual network errors (connection reset, etc.) → `ENetworkError`
+- Linux `SO_RCVTIMEO` returns `EAGAIN` on timeout — the implementation detects this when a
+  deadline is set and re-raises as `ETimeoutError`
 
 - **Timeout is notify-only**: the timer fires the callback with ETIMEDOUT but does not cancel the kernel I/O operation. The I/O will still complete eventually (and be discarded).
 - **No kqueue backend**: the poller backend enum and platform io base define no kqueue variant for the async module's use. no `pbkqueue` backend.

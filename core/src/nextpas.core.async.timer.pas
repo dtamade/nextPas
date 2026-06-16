@@ -37,7 +37,7 @@ type
     procedure RecycleEntry(AIdx: UInt32);
   public
     class function Create: TTimerHeap; static;
-    procedure Clear;
+    procedure Close;
     function Schedule(const ADeadline: TDeadline; ACallback: TAsyncCallback;
       AContext: Pointer): TAsyncTimerHandle;
     function ScheduleAfter(const ADelay: TDuration; ACallback: TAsyncCallback;
@@ -182,7 +182,7 @@ begin
   FFreeHead := Int32(AIdx);
 end;
 
-procedure TTimerHeap.Clear;
+procedure TTimerHeap.Close;
 var
   LI: UInt32;
 begin

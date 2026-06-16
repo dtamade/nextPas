@@ -232,7 +232,7 @@ procedure TestCancelTimerAfterCloseIsStaleNoOp;
 var
   LLoop: TAsyncLoop;
   LH: TAsyncTimerHandle;
-  LCancelled: Boolean;
+  LRaised: Boolean;
 begin
   ResetState;
   LLoop := TAsyncLoop.Create(32);
@@ -240,8 +240,13 @@ begin
   Check(LH.IsValid, 'pre-close timer handle valid');
   LLoop.Close;
   Check(not LLoop.IsValid, 'loop invalid after close');
-  LCancelled := LLoop.CancelTimer(LH);
-  Check(not LCancelled, 'cancel after close is stale-handle no-op');
+  LRaised := False;
+  try
+    LLoop.CancelTimer(LH);
+  except
+    LRaised := True;
+  end;
+  Check(LRaised, 'cancel after close raises EInvalidOperationError');
 end;
 
 { === Test 7: PostStress === }

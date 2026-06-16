@@ -4,7 +4,7 @@ unit nextpas.core.net.server.runtime;
 
 interface
 
-uses nextpas.core.net.intf, nextpas.core.net.server.base, nextpas.core.net.server.intf, nextpas.core.sync.intf, nextpas.core.platform.io.base, nextpas.core.time.deadline;
+uses SysUtils, nextpas.core.net.intf, nextpas.core.net.server.base, nextpas.core.net.server.intf, nextpas.core.sync.intf, nextpas.core.platform.io.base, nextpas.core.time.deadline;
 
 type
   TTcpServerPollSessionTarget = class;

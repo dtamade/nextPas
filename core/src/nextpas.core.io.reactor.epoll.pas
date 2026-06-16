@@ -4,7 +4,7 @@ unit nextpas.core.io.reactor.epoll;
 
 interface
 
-uses nextpas.core.atomic, nextpas.core.platform.posix.base, nextpas.core.platform.posix.ffi, nextpas.core.platform.linux.base, nextpas.core.platform.linux.ffi;
+uses nextpas.core.atomic, nextpas.core.errors, nextpas.core.platform.posix.base, nextpas.core.platform.posix.ffi, nextpas.core.platform.linux.base, nextpas.core.platform.linux.ffi;
 
 type
   TIoCompletion = procedure(AUserData: UInt64; AResult: Int32; AContext: Pointer);

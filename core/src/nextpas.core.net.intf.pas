@@ -1,7 +1,8 @@
 unit nextpas.core.net.intf;
 {**
  * @desc 网络接口定义：ITcpStream、ITcpListener、IUdpSocket。
- *       ITcpStream 继承 IStream，支持 deadline 超时控制。
+ *       ITcpStream 继承 IReadWriteCloser（Read + Write + Close），
+ *       不支持 Seek/Size/Position（TCP 流无随机访问）。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -26,15 +27,17 @@ type
   TTcpStreamIOResult = (
     tsiorOk,
     tsiorWouldBlock,
-    tsiorClosed
+    tsiorClosed,
+    tsiorTimeout
   );
 
   TTcpAcceptResult = (
     tarAccepted,
-    tarWouldBlock
+    tarWouldBlock,
+    tarTimeout
   );
 
-  ITcpStream = interface(IStream)
+  ITcpStream = interface(IReadWriteCloser)
     ['{C1D2E3F4-A5B6-7890-ABCD-300000000001}']
     function LocalAddr: TNetAddress;
     function RemoteAddr: TNetAddress;

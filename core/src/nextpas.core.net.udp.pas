@@ -19,8 +19,7 @@ uses
   nextpas.core.text.conv,
   nextpas.core.errors,
   nextpas.core.platform.posix.base,
-  nextpas.core.platform.socket,
-  nextpas.core.net.resolve;
+  nextpas.core.platform.socket;
 
 type
   TUdpSocket = class(TInterfacedObject, IUdpSocket)
@@ -40,12 +39,12 @@ type
 
 function Htons(AVal: UInt16): UInt16; inline;
 begin
-  Result := ((AVal and $FF) shl 8) or ((AVal shr 8) and $FF);
+  Result := platform_htons(AVal);
 end;
 
 function Ntohs(AVal: UInt16): UInt16; inline;
 begin
-  Result := ((AVal and $FF) shl 8) or ((AVal shr 8) and $FF);
+  Result := platform_htons(AVal);
 end;
 
 constructor TUdpSocket.Create(const ASocket: TPlatformSocket; const ALocal: TNetAddress);
@@ -72,16 +71,15 @@ end;
 function TUdpSocket.SendTo(const ABuf; const ACount: SizeUInt; const AAddr: TNetAddress): SizeUInt;
 var
   LSa: sockaddr_in;
+  LSaLen: Int32;
   LSent: Int32;
   LResult: Int32;
 begin
   EnsureOpen('sendto');
-  FillChar(LSa, SizeOf(LSa), 0);
-  LSa.sin_family := PLATFORM_AF_INET;
-  LSa.sin_port := Htons(AAddr.Port);
-  LSa.sin_addr.s_addr := NetResolveIPv4(AAddr.IP);
+  if platform_sockaddr_from_ipv4(AAddr.IP, AAddr.Port, LSa, LSaLen) <> 0 then
+    raise ENetworkError.Create('udp sendto: invalid address');
   LResult := platform_socket_sendto(FSocket, @ABuf, Int32(ACount), 0,
-    @LSa, SizeOf(LSa), LSent);
+    @LSa, LSaLen, LSent);
   if LResult <> 0 then
     raise ENetworkError.Create('udp sendto failed (' + IntToStr(LResult) + ')');
   Result := SizeUInt(LSent);
@@ -93,7 +91,6 @@ var
   LSaLen: socklen_t;
   LRecvd: Int32;
   LResult: Int32;
-  LA: UInt32;
 begin
   EnsureOpen('recvfrom');
   LSaLen := SizeOf(LSa);
@@ -101,10 +98,7 @@ begin
     @LSa, @LSaLen, LRecvd);
   if LResult <> 0 then
     raise ENetworkError.Create('udp recvfrom failed (' + IntToStr(LResult) + ')');
-  LA := LSa.sin_addr.s_addr;
-  AAddr.IP := IntToStr(LA and $FF) + '.' + IntToStr((LA shr 8) and $FF) + '.' +
-    IntToStr((LA shr 16) and $FF) + '.' + IntToStr((LA shr 24) and $FF);
-  AAddr.Port := Ntohs(LSa.sin_port);
+  platform_sockaddr_to_ipv4(LSa, AAddr.IP, AAddr.Port);
   AAddr.IsIPv6 := False;
   Result := SizeUInt(LRecvd);
 end;
@@ -128,7 +122,7 @@ function NetUdpBind(const AAddr: string; const APort: UInt16): IUdpSocket;
 var
   LSock: TPlatformSocket;
   LSa: sockaddr_in;
-  LSaLen: socklen_t;
+  LSaLen: Int32;
   LOne: Int32;
   LResult: Int32;
   LLocal: TNetAddress;
@@ -139,14 +133,12 @@ begin
     raise ENetworkError.Create('udp bind: socket create failed');
   LOne := 1;
   platform_socket_setsockopt(LSock, PLATFORM_SOL_SOCKET, PLATFORM_SO_REUSEADDR, @LOne, SizeOf(LOne));
-  FillChar(LSa, SizeOf(LSa), 0);
-  LSa.sin_family := PLATFORM_AF_INET;
-  LSa.sin_port := Htons(APort);
-  if (AAddr = '0.0.0.0') or (AAddr = '') then
-    LSa.sin_addr.s_addr := 0
-  else
-    LSa.sin_addr.s_addr := NetResolveIPv4(AAddr);
-  LResult := platform_socket_bind(LSock, @LSa, SizeOf(LSa));
+  if platform_sockaddr_from_ipv4(AAddr, APort, LSa, LSaLen) <> 0 then
+  begin
+    platform_socket_close(LSock);
+    raise ENetworkError.Create('udp bind: invalid address');
+  end;
+  LResult := platform_socket_bind(LSock, @LSa, LSaLen);
   if LResult <> 0 then
   begin
     platform_socket_close(LSock);
@@ -154,7 +146,7 @@ begin
   end;
   LSaLen := SizeOf(LSa);
   if platform_socket_getsockname(LSock, @LSa, @LSaLen) = 0 then
-    LLocal.Port := Ntohs(LSa.sin_port);
+    LLocal.Port := platform_htons(LSa.sin_port);
   Result := TUdpSocket.Create(LSock, LLocal);
 end;
 

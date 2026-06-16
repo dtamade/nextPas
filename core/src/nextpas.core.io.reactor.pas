@@ -4,7 +4,7 @@ unit nextpas.core.io.reactor;
 
 interface
 
-uses nextpas.core.atomic, nextpas.core.platform.posix.base, nextpas.core.platform.linux.base, nextpas.core.platform.linux.modern, nextpas.core.io.uring;
+uses nextpas.core.atomic, nextpas.core.errors, nextpas.core.platform.posix.base, nextpas.core.platform.linux.base, nextpas.core.platform.linux.modern, nextpas.core.io.uring;
 
 type
   TIoCompletion = procedure(AUserData: UInt64; AResult: Int32; AContext: Pointer);

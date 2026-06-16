@@ -19,7 +19,6 @@ implementation
 
 uses
   nextpas.core.text.conv,
-  nextpas.core.io.base,
   nextpas.core.io.intf,
   nextpas.core.errors,
   nextpas.core.time.base,
@@ -29,7 +28,7 @@ uses
   nextpas.core.net.resolve;
 
 type
-  TTcpStream = class(TInterfacedObject, IReader, IWriter, IStream, ITcpStream,
+  TTcpStream = class(TInterfacedObject, IReader, IWriter, IReadWriteCloser, ITcpStream,
     ITcpSocketRuntime,
     ITcpStreamRuntime)
   private
@@ -50,11 +49,7 @@ type
     destructor Destroy; override;
     function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
-    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
     procedure Close;
-    function GetSize: Int64;
-    function GetPosition: Int64;
-    procedure SetPosition(const AValue: Int64);
     function LocalAddr: TNetAddress;
     function RemoteAddr: TNetAddress;
     procedure Shutdown;
@@ -90,36 +85,26 @@ type
 
 function Htons(AVal: UInt16): UInt16; inline;
 begin
-  Result := ((AVal and $FF) shl 8) or ((AVal shr 8) and $FF);
+  Result := platform_htons(AVal);
 end;
 
 function Ntohs(AVal: UInt16): UInt16; inline;
 begin
-  Result := ((AVal and $FF) shl 8) or ((AVal shr 8) and $FF);
+  Result := platform_htons(AVal);
 end;
 
 procedure FillSockAddr(const AAddr: TNetAddress; out ASa: sockaddr_in; out ALen: Int32);
 begin
-  FillChar(ASa, SizeOf(ASa), 0);
-  ASa.sin_family := PLATFORM_AF_INET;
-  ASa.sin_port := Htons(AAddr.Port);
-  if (AAddr.IP = '0.0.0.0') or (AAddr.IP = '') then
-    ASa.sin_addr.s_addr := 0
-  else
-    ASa.sin_addr.s_addr := NetResolveIPv4(AAddr.IP);
-  ALen := SizeOf(sockaddr_in);
+  if platform_sockaddr_from_ipv4(AAddr.IP, AAddr.Port, ASa, ALen) <> 0 then
+  begin
+    FillChar(ASa, SizeOf(ASa), 0);
+    ALen := 0;
+  end;
 end;
 
 function AddrFromSockAddr(const ASa: sockaddr_in): TNetAddress;
-var
-  LA: UInt32;
 begin
-  LA := ASa.sin_addr.s_addr;
-  Result.IP := IntToStr(LA and $FF) + '.' +
-    IntToStr((LA shr 8) and $FF) + '.' +
-    IntToStr((LA shr 16) and $FF) + '.' +
-    IntToStr((LA shr 24) and $FF);
-  Result.Port := Ntohs(ASa.sin_port);
+  platform_sockaddr_to_ipv4(ASa, Result.IP, Result.Port);
   Result.IsIPv6 := False;
 end;
 
@@ -162,7 +147,12 @@ begin
   ApplyReadTimeout;
   LResult := platform_socket_recv(FSocket, @ABuf, Int32(ACount), 0, LRecvd);
   if LResult <> 0 then
+  begin
+    if (not FReadDeadline.IsInfinite) and
+       platform_socket_error_would_block(LResult) then
+      raise ETimeoutError.Create('read deadline exceeded');
     raise ENetworkError.Create('tcp read failed (' + IntToStr(LResult) + ')');
+  end;
   Result := SizeUInt(LRecvd);
 end;
 
@@ -183,7 +173,12 @@ begin
   begin
     LResult := platform_socket_send(FSocket, LPtr, Int32(LRemaining), 0, LSent);
     if LResult <> 0 then
+    begin
+      if (not FWriteDeadline.IsInfinite) and
+         platform_socket_error_would_block(LResult) then
+        raise ETimeoutError.Create('write deadline exceeded');
       raise ENetworkError.Create('tcp write failed (' + IntToStr(LResult) + ')');
+    end;
     if LSent = 0 then
       raise ENetworkError.Create('tcp write failed (zero progress)');
     Inc(LPtr, LSent);
@@ -194,12 +189,6 @@ begin
   end;
 end;
 
-function TTcpStream.Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
-begin
-  Result := 0;
-  raise ENotSupportedError.Create('tcp stream does not support seek');
-end;
-
 procedure TTcpStream.Close;
 begin
   if not FClosed then
@@ -208,21 +197,6 @@ begin
     platform_socket_close(FSocket);
     FSocket := PLATFORM_INVALID_SOCKET;
   end;
-end;
-
-function TTcpStream.GetSize: Int64;
-begin
-  Result := -1;
-end;
-
-function TTcpStream.GetPosition: Int64;
-begin
-  Result := -1;
-end;
-
-procedure TTcpStream.SetPosition(const AValue: Int64);
-begin
-  raise ENotSupportedError.Create('tcp stream does not support seek');
 end;
 
 function TTcpStream.LocalAddr: TNetAddress;
@@ -294,7 +268,7 @@ begin
   if ACount = 0 then
     Exit(tsiorOk);
   if FReadDeadline.IsExpired then
-    raise ENetworkError.Create('read deadline exceeded');
+    Exit(tsiorTimeout);
 
   LResult := platform_socket_recv(FSocket, @ABuf, Int32(ACount), 0, LRecvd);
   if LResult = 0 then
@@ -321,7 +295,7 @@ begin
   if ACount = 0 then
     Exit(tsiorOk);
   if FWriteDeadline.IsExpired then
-    raise ENetworkError.Create('write deadline exceeded');
+    Exit(tsiorTimeout);
 
   LResult := platform_socket_send(FSocket, @ABuf, Int32(ACount), 0, LSent);
   if LResult = 0 then
@@ -351,7 +325,7 @@ begin
     Exit;
   end;
   if FReadDeadline.IsExpired then
-    raise ENetworkError.Create('read deadline exceeded');
+    raise ETimeoutError.Create('read deadline exceeded');
   LRemaining := FReadDeadline.Remaining;
   LMs := UInt32(LRemaining.AsMilliseconds);
   if LMs = 0 then LMs := 1;
@@ -377,7 +351,7 @@ begin
     Exit;
   end;
   if FWriteDeadline.IsExpired then
-    raise ENetworkError.Create('write deadline exceeded');
+    raise ETimeoutError.Create('write deadline exceeded');
   LRemaining := FWriteDeadline.Remaining;
   LMs := UInt32(LRemaining.AsMilliseconds);
   if LMs = 0 then LMs := 1;
