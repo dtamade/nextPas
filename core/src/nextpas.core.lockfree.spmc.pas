@@ -95,7 +95,7 @@ begin
     else if LSeq < LPos then
       Exit(False)
     else
-      CpuPause;
+      Exit(False); // Single producer cannot wait for another producer to free this slot.
   end;
 end;
 

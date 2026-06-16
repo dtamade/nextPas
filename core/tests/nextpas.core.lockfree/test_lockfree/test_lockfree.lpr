@@ -2460,114 +2460,123 @@ begin
 end;
 
 var
-  GSpmcEnqueueWaitQ: TIntSpmc;
-  GSpmcEnqueueWaitDone: Int32;
+  GSpmcSpaceWakeQ: TIntSpmc;
+  GSpmcSpaceWakeConsumerStarted: Int32;
+  GSpmcSpaceWakeConsumerResult: Int32;
+  GSpmcSpaceWakeConsumerValue: Integer;
 
-function SpmcEnqueueWaitProducer(AArg: Pointer): Pointer; cdecl;
-begin
-  Result := nil;
-  GSpmcEnqueueWaitQ.EnqueueWait(99);
-  AtomicStore32(GSpmcEnqueueWaitDone, 1, moRelease);
-end;
-
-procedure TestSpmcEnqueueWaitWake;
-var
-  LQ: TIntSpmc;
-  LHandle: TPlatformThreadHandle;
-  LRetVal: Pointer;
-  LV: Integer;
-  LSpin: Integer;
-begin
-  LQ := TIntSpmc.Create(1);
-  GSpmcEnqueueWaitQ := LQ;
-  AtomicStore32(GSpmcEnqueueWaitDone, 0, moRelease);
-  Check(LQ.TryEnqueue(1), 'fill SPMC before wait');
-  StartThread(LHandle, @SpmcEnqueueWaitProducer, nil, 'SPMC enqueue-wait producer');
-  for LSpin := 1 to 1000 do
-  begin
-    platform_thread_sleep_ns(1000000);
-  end;
-  Check(AtomicLoad32(GSpmcEnqueueWaitDone, moAcquire) = 0,
-    'SPMC EnqueueWait producer must be blocked on full queue');
-  Check(LQ.TryDequeue(LV), 'dequeue to free space for blocked producer');
-  CheckEqual(Int64(1), Int64(LV));
-  JoinThread(LHandle, LRetVal, 'SPMC enqueue-wait producer');
-  Check(AtomicLoad32(GSpmcEnqueueWaitDone, moAcquire) = 1,
-    'SPMC EnqueueWait producer must have completed after dequeue');
-  Check(LQ.TryDequeue(LV), 'dequeue item published by blocked producer');
-  CheckEqual(Int64(99), Int64(LV));
-  Check(LQ.IsEmpty, 'queue empty after all items consumed');
-  LQ.Free;
-end;
-
-var
-  GSpmcDequeueWaitQ: TIntSpmc;
-  GSpmcDequeueWaitDone: Int32;
-
-function SpmcDequeueWaitConsumer(AArg: Pointer): Pointer; cdecl;
+function SpmcSpaceWakeConsumer(AArg: Pointer): Pointer; cdecl;
 var
   LV: Integer;
 begin
   Result := nil;
-  GSpmcDequeueWaitQ.DequeueWait(LV);
-  AtomicStore32(GSpmcDequeueWaitDone, 1, moRelease);
-end;
-
-procedure TestSpmcDequeueWaitWake;
-var
-  LQ: TIntSpmc;
-  LHandle: TPlatformThreadHandle;
-  LRetVal: Pointer;
-  LSpin: Integer;
-begin
-  LQ := TIntSpmc.Create(4);
-  GSpmcDequeueWaitQ := LQ;
-  AtomicStore32(GSpmcDequeueWaitDone, 0, moRelease);
-  StartThread(LHandle, @SpmcDequeueWaitConsumer, nil, 'SPMC dequeue-wait consumer');
-  for LSpin := 1 to 1000 do
+  AtomicStore32(GSpmcSpaceWakeConsumerStarted, 1, moRelease);
+  platform_thread_sleep_ns(QueuePublishWakeDelayNs);
+  if GSpmcSpaceWakeQ.TryDequeue(LV) then
   begin
-    platform_thread_sleep_ns(1000000);
-  end;
-  Check(AtomicLoad32(GSpmcDequeueWaitDone, moAcquire) = 0,
-    'SPMC DequeueWait consumer must be blocked on empty queue');
-  Check(LQ.TryEnqueue(42), 'enqueue to wake blocked consumer');
-  JoinThread(LHandle, LRetVal, 'SPMC dequeue-wait consumer');
-  Check(AtomicLoad32(GSpmcDequeueWaitDone, moAcquire) = 1,
-    'SPMC DequeueWait consumer must have completed after enqueue');
-  Check(LQ.IsEmpty, 'queue empty after consumer took item');
-  LQ.Free;
+    GSpmcSpaceWakeConsumerValue := LV;
+    AtomicStore32(GSpmcSpaceWakeConsumerResult, 1, moRelease);
+  end
+  else
+    AtomicStore32(GSpmcSpaceWakeConsumerResult, 0, moRelease);
 end;
 
-procedure TestSpmcEnqueueTimeout;
+procedure TestSpmcEnqueueTimeoutOnFull;
 var
   LQ: TIntSpmc;
+  LElapsedMs: QWord;
   LV: Integer;
-  LElapsedMs: UInt64;
 begin
   LQ := TIntSpmc.Create(1);
-  Check(LQ.TryEnqueue(1), 'fill SPMC before timeout test');
-  LElapsedMs := GetTickCount64;
-  Check(not LQ.EnqueueTimeout(2, 1000000), 'EnqueueTimeout 1ms on full queue returns false');
-  LElapsedMs := GetTickCount64 - LElapsedMs;
-  Check(LElapsedMs < 5000, 'EnqueueTimeout must return within 5s, got ' + IntToStr(LElapsedMs) + 'ms');
-  Check(LQ.TryDequeue(LV), 'queue still functional after timeout');
-  CheckEqual(Int64(1), Int64(LV));
-  LQ.Free;
+  try
+    Check(LQ.TryEnqueue(1), 'SPMC full-timeout test must fill the queue');
+    LElapsedMs := GetTickCount64;
+    Check(not LQ.EnqueueTimeout(2, 1000000),
+      'SPMC EnqueueTimeout must return false on a full single-slot queue');
+    LElapsedMs := GetTickCount64 - LElapsedMs;
+    Check(LElapsedMs < WaitHelperImmediateReturnBudgetMs,
+      'SPMC EnqueueTimeout on full must return promptly instead of spinning forever');
+    Check(LQ.TryDequeue(LV), 'SPMC full-timeout test must preserve the queued item');
+    CheckEqual(Int64(1), Int64(LV));
+    Check(not LQ.TryDequeue(LV), 'SPMC full-timeout test must leave the queue drained after the preserved item');
+  finally
+    LQ.Free;
+  end;
 end;
 
-procedure TestSpmcDequeueTimeout;
+procedure TestSpmcEnqueueTimeoutOnSpace;
 var
   LQ: TIntSpmc;
+  LConsumer: TPlatformThreadHandle;
+  LRetVal: Pointer;
+  LElapsedMs: QWord;
+  LSpin: Integer;
   LV: Integer;
-  LElapsedMs: UInt64;
+  LThreadCreated: Boolean;
+  LJoined: Boolean;
 begin
-  LQ := TIntSpmc.Create(4);
-  LElapsedMs := GetTickCount64;
-  Check(not LQ.DequeueTimeout(LV, 1000000), 'DequeueTimeout 1ms on empty queue returns false');
-  LElapsedMs := GetTickCount64 - LElapsedMs;
-  Check(LElapsedMs < 5000, 'DequeueTimeout must return within 5s, got ' + IntToStr(LElapsedMs) + 'ms');
-  Check(LQ.TryEnqueue(1), 'queue still functional after timeout');
-  LQ.Free;
+  LQ := TIntSpmc.Create(1);
+  LThreadCreated := False;
+  LJoined := False;
+  try
+    Check(LQ.TryEnqueue(1), 'SPMC queue must be full before the space-release consumer starts');
+    GSpmcSpaceWakeQ := LQ;
+    AtomicStore32(GSpmcSpaceWakeConsumerStarted, 0, moRelease);
+    AtomicStore32(GSpmcSpaceWakeConsumerResult, -1, moRelease);
+    GSpmcSpaceWakeConsumerValue := 0;
+    StartThread(LConsumer, @SpmcSpaceWakeConsumer, nil, 'SPMC space wake consumer thread');
+    LThreadCreated := True;
+
+    for LSpin := 1 to 1000 do
+    begin
+      if AtomicLoad32(GSpmcSpaceWakeConsumerStarted, moAcquire) <> 0 then
+        Break;
+      platform_thread_sleep_ns(1000000);
+    end;
+    CheckEqual(Int64(1), Int64(AtomicLoad32(GSpmcSpaceWakeConsumerStarted, moAcquire)),
+      'SPMC space-release consumer thread must start before EnqueueTimeout waits');
+
+    LElapsedMs := GetTickCount64;
+    Check(LQ.EnqueueTimeout(42, QueuePublishWakeTimeoutNs),
+      'SPMC EnqueueTimeout must succeed after a consumer releases space');
+    LElapsedMs := GetTickCount64 - LElapsedMs;
+
+    JoinThread(LConsumer, LRetVal, 'SPMC space wake consumer thread');
+    LJoined := True;
+    CheckEqual(Int64(1), Int64(AtomicLoad32(GSpmcSpaceWakeConsumerResult, moAcquire)),
+      'SPMC background consumer must release space for the waiting producer');
+    CheckEqual(Int64(1), Int64(GSpmcSpaceWakeConsumerValue));
+    Check(LElapsedMs < QueuePublishWakeBudgetMs,
+      'SPMC EnqueueTimeout must publish after space release before the full timeout');
+    Check(LQ.TryDequeue(LV), 'SPMC space-woken producer item must be drainable');
+    CheckEqual(Int64(42), Int64(LV));
+    Check(not LQ.TryDequeue(LV), 'SPMC queue must be empty after draining the space-woken item');
+  finally
+    if LThreadCreated and (not LJoined) then
+      JoinThread(LConsumer, LRetVal, 'SPMC space wake consumer thread');
+    GSpmcSpaceWakeQ := nil;
+    LQ.Free;
+  end;
+end;
+
+procedure TestSpmcDequeueTimeoutOnEmpty;
+var
+  LQ: TIntSpmc;
+  LElapsedMs: QWord;
+  LV: Integer;
+begin
+  LQ := TIntSpmc.Create(1);
+  try
+    LElapsedMs := GetTickCount64;
+    Check(not LQ.DequeueTimeout(LV, 1000000),
+      'SPMC DequeueTimeout must return false on an empty single-slot queue');
+    LElapsedMs := GetTickCount64 - LElapsedMs;
+    Check(LElapsedMs < WaitHelperImmediateReturnBudgetMs,
+      'SPMC DequeueTimeout on empty must return promptly');
+    Check(LQ.IsEmpty, 'SPMC empty-timeout test must leave the queue empty');
+  finally
+    LQ.Free;
+  end;
 end;
 
 procedure TestSegQueueManagedReject;
@@ -3964,8 +3973,9 @@ begin
   T.Run('SPMC capacity', @TestSpmcCapacity);
   T.Run('SPMC full/empty', @TestSpmcFullEmpty);
   T.Run('SPMC wrap-around', @TestSpmcWrapAround);
-  T.Run('SPMC EnqueueWait wake', @TestSpmcEnqueueWaitWake);
-  T.Run('SPMC DequeueWait wake', @TestSpmcDequeueWaitWake);
+  T.Run('SPMC enqueue timeout on full', @TestSpmcEnqueueTimeoutOnFull);
+  T.Run('SPMC enqueue timeout wakes on space', @TestSpmcEnqueueTimeoutOnSpace);
+  T.Run('SPMC dequeue timeout on empty', @TestSpmcDequeueTimeoutOnEmpty);
 
 
   T.Run('SegQueue managed reject', @TestSegQueueManagedReject);
