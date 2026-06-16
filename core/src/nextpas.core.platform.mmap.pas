@@ -629,8 +629,14 @@ begin
   Result := LInfo.dwPageSize;
 end;
 {$ELSE}
+var
+  LPageSize: Int64;
 begin
-  Result := 4096;
+  LPageSize := sysconf(_SC_PAGESIZE);
+  if LPageSize > 0 then
+    Result := UInt64(LPageSize)
+  else
+    Result := 4096;
 end;
 {$ENDIF}
 

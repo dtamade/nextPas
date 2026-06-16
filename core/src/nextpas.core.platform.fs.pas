@@ -83,6 +83,7 @@ uses
   nextpas.core.platform.error,
   nextpas.core.platform.random
 {$IFDEF NEXTPAS_UNIX}
+  , nextpas.core.platform.posix.base
   , nextpas.core.platform.posix.ffi
 {$ENDIF}
   ;
@@ -159,7 +160,7 @@ end;
 function platform_fs_is_executable(const APath: PAnsiChar): Boolean;
 begin
 {$IFDEF NEXTPAS_UNIX}
-  Result := access(APath, 1 {X_OK}) = 0;
+  Result := access(APath, POSIX_X_OK) = 0;
 {$ELSE}
   Result := platform_fs_is_file(APath);
 {$ENDIF}
