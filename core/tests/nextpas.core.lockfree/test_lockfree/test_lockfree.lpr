@@ -2459,6 +2459,117 @@ begin
   end;
 end;
 
+var
+  GSpmcEnqueueWaitQ: TIntSpmc;
+  GSpmcEnqueueWaitDone: Int32;
+
+function SpmcEnqueueWaitProducer(AArg: Pointer): Pointer; cdecl;
+begin
+  Result := nil;
+  GSpmcEnqueueWaitQ.EnqueueWait(99);
+  AtomicStore32(GSpmcEnqueueWaitDone, 1, moRelease);
+end;
+
+procedure TestSpmcEnqueueWaitWake;
+var
+  LQ: TIntSpmc;
+  LHandle: TPlatformThreadHandle;
+  LRetVal: Pointer;
+  LV: Integer;
+  LSpin: Integer;
+begin
+  LQ := TIntSpmc.Create(1);
+  GSpmcEnqueueWaitQ := LQ;
+  AtomicStore32(GSpmcEnqueueWaitDone, 0, moRelease);
+  Check(LQ.TryEnqueue(1), 'fill SPMC before wait');
+  StartThread(LHandle, @SpmcEnqueueWaitProducer, nil, 'SPMC enqueue-wait producer');
+  for LSpin := 1 to 1000 do
+  begin
+    platform_thread_sleep_ns(1000000);
+  end;
+  Check(AtomicLoad32(GSpmcEnqueueWaitDone, moAcquire) = 0,
+    'SPMC EnqueueWait producer must be blocked on full queue');
+  Check(LQ.TryDequeue(LV), 'dequeue to free space for blocked producer');
+  CheckEqual(Int64(1), Int64(LV));
+  JoinThread(LHandle, LRetVal, 'SPMC enqueue-wait producer');
+  Check(AtomicLoad32(GSpmcEnqueueWaitDone, moAcquire) = 1,
+    'SPMC EnqueueWait producer must have completed after dequeue');
+  Check(LQ.TryDequeue(LV), 'dequeue item published by blocked producer');
+  CheckEqual(Int64(99), Int64(LV));
+  Check(LQ.IsEmpty, 'queue empty after all items consumed');
+  LQ.Free;
+end;
+
+var
+  GSpmcDequeueWaitQ: TIntSpmc;
+  GSpmcDequeueWaitDone: Int32;
+
+function SpmcDequeueWaitConsumer(AArg: Pointer): Pointer; cdecl;
+var
+  LV: Integer;
+begin
+  Result := nil;
+  GSpmcDequeueWaitQ.DequeueWait(LV);
+  AtomicStore32(GSpmcDequeueWaitDone, 1, moRelease);
+end;
+
+procedure TestSpmcDequeueWaitWake;
+var
+  LQ: TIntSpmc;
+  LHandle: TPlatformThreadHandle;
+  LRetVal: Pointer;
+  LSpin: Integer;
+begin
+  LQ := TIntSpmc.Create(4);
+  GSpmcDequeueWaitQ := LQ;
+  AtomicStore32(GSpmcDequeueWaitDone, 0, moRelease);
+  StartThread(LHandle, @SpmcDequeueWaitConsumer, nil, 'SPMC dequeue-wait consumer');
+  for LSpin := 1 to 1000 do
+  begin
+    platform_thread_sleep_ns(1000000);
+  end;
+  Check(AtomicLoad32(GSpmcDequeueWaitDone, moAcquire) = 0,
+    'SPMC DequeueWait consumer must be blocked on empty queue');
+  Check(LQ.TryEnqueue(42), 'enqueue to wake blocked consumer');
+  JoinThread(LHandle, LRetVal, 'SPMC dequeue-wait consumer');
+  Check(AtomicLoad32(GSpmcDequeueWaitDone, moAcquire) = 1,
+    'SPMC DequeueWait consumer must have completed after enqueue');
+  Check(LQ.IsEmpty, 'queue empty after consumer took item');
+  LQ.Free;
+end;
+
+procedure TestSpmcEnqueueTimeout;
+var
+  LQ: TIntSpmc;
+  LV: Integer;
+  LElapsedMs: UInt64;
+begin
+  LQ := TIntSpmc.Create(1);
+  Check(LQ.TryEnqueue(1), 'fill SPMC before timeout test');
+  LElapsedMs := GetTickCount64;
+  Check(not LQ.EnqueueTimeout(2, 1000000), 'EnqueueTimeout 1ms on full queue returns false');
+  LElapsedMs := GetTickCount64 - LElapsedMs;
+  Check(LElapsedMs < 5000, 'EnqueueTimeout must return within 5s, got ' + IntToStr(LElapsedMs) + 'ms');
+  Check(LQ.TryDequeue(LV), 'queue still functional after timeout');
+  CheckEqual(Int64(1), Int64(LV));
+  LQ.Free;
+end;
+
+procedure TestSpmcDequeueTimeout;
+var
+  LQ: TIntSpmc;
+  LV: Integer;
+  LElapsedMs: UInt64;
+begin
+  LQ := TIntSpmc.Create(4);
+  LElapsedMs := GetTickCount64;
+  Check(not LQ.DequeueTimeout(LV, 1000000), 'DequeueTimeout 1ms on empty queue returns false');
+  LElapsedMs := GetTickCount64 - LElapsedMs;
+  Check(LElapsedMs < 5000, 'DequeueTimeout must return within 5s, got ' + IntToStr(LElapsedMs) + 'ms');
+  Check(LQ.TryEnqueue(1), 'queue still functional after timeout');
+  LQ.Free;
+end;
+
 procedure TestSegQueueManagedReject;
 var
   LStrQ: specialize TSegQueue<AnsiString>;
@@ -3853,6 +3964,8 @@ begin
   T.Run('SPMC capacity', @TestSpmcCapacity);
   T.Run('SPMC full/empty', @TestSpmcFullEmpty);
   T.Run('SPMC wrap-around', @TestSpmcWrapAround);
+  T.Run('SPMC EnqueueWait wake', @TestSpmcEnqueueWaitWake);
+  T.Run('SPMC DequeueWait wake', @TestSpmcDequeueWaitWake);
 
 
   T.Run('SegQueue managed reject', @TestSegQueueManagedReject);

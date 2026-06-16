@@ -138,10 +138,7 @@ begin
   begin
     LEpoch := AtomicLoad32(FSpaceEpoch, moAcquire);
     if TryEnqueue(AValue) then
-    begin
-      LockFreeWakeAll(@FDataEpoch);
       Exit(True);
-    end;
     LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, -1);
   end;
 end;
@@ -156,10 +153,7 @@ begin
   begin
     LEpoch := AtomicLoad32(FDataEpoch, moAcquire);
     if TryDequeue(AValue) then
-    begin
-      LockFreeWakeAll(@FSpaceEpoch);
       Exit(True);
-    end;
     LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, -1);
   end;
 end;
@@ -171,10 +165,7 @@ var
   LRemaining: Int64;
 begin
   if TryEnqueue(AValue) then
-  begin
-    LockFreeWakeAll(@FDataEpoch);
     Exit(True);
-  end;
   LStart := TInstant.Now;
   while True do
   begin
@@ -183,10 +174,7 @@ begin
       Exit(TryEnqueue(AValue));
     LEpoch := AtomicLoad32(FSpaceEpoch, moAcquire);
     if TryEnqueue(AValue) then
-    begin
-      LockFreeWakeAll(@FDataEpoch);
       Exit(True);
-    end;
     LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, LRemaining);
   end;
 end;
@@ -207,10 +195,7 @@ begin
       Exit(TryDequeue(AValue));
     LEpoch := AtomicLoad32(FDataEpoch, moAcquire);
     if TryDequeue(AValue) then
-    begin
-      LockFreeWakeAll(@FSpaceEpoch);
       Exit(True);
-    end;
     LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, LRemaining);
   end;
 end;
