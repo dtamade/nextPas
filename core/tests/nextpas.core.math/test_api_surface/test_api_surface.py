@@ -267,6 +267,10 @@ ROOT_FACADE_FORWARD_TARGETS = {
     "easeinbounce": "easing",
     "easeoutbounce": "easing",
     "easeinoutbounce": "easing",
+    "vec3fextend": "vec",
+    "vec4ftruncate": "vec",
+    "vec3dextend": "vec",
+    "vec4dtruncate": "vec",
 }
 REQUIRED_HOST_GATE_RESIDUAL_TRUTH = (
     (
@@ -1410,15 +1414,9 @@ MATH_IMPL_SIMD_ALLOWED_PUBLIC_ROUTINES = {
         "tvec4f",
     ),
     (
-        "simdvec4fmulcomponents",
+        "simdvec4fcomponentmul",
         "function",
         (("const", "tvec4f"), ("const", "tvec4f")),
-        "tvec4f",
-    ),
-    (
-        "simdvec4fscale",
-        "function",
-        (("const", "tvec4f"), ("const", "single")),
         "tvec4f",
     ),
     (
@@ -1434,6 +1432,30 @@ MATH_IMPL_SIMD_ALLOWED_PUBLIC_ROUTINES = {
         "single",
     ),
     (
+        "simdvec4fnormalize",
+        "function",
+        (("const", "tvec4f"),),
+        "tvec4f",
+    ),
+    (
+        "simdvec4fabs",
+        "function",
+        (("const", "tvec4f"),),
+        "tvec4f",
+    ),
+    (
+        "simdvec4fmax",
+        "function",
+        (("const", "tvec4f"), ("const", "tvec4f")),
+        "tvec4f",
+    ),
+    (
+        "simdvec4fmin",
+        "function",
+        (("const", "tvec4f"), ("const", "tvec4f")),
+        "tvec4f",
+    ),
+    (
         "simdvec3fdot",
         "function",
         (("const", "tvec3f"), ("const", "tvec3f")),
@@ -1446,16 +1468,16 @@ MATH_IMPL_SIMD_ALLOWED_PUBLIC_ROUTINES = {
         "tvec3f",
     ),
     (
-        "simdmat4fmulvec4f",
+        "simdvec3fnormalize",
         "function",
-        (("const", "tmat4f"), ("const", "tvec4f")),
-        "tvec4f",
+        (("const", "tvec3f"),),
+        "tvec3f",
     ),
     (
-        "simdquatfrotate",
+        "simdmat4fmul",
         "function",
-        (("const", "tquatf"), ("const", "tvec3f")),
-        "tvec3f",
+        (("const", "tmat4f"), ("const", "tmat4f")),
+        "tmat4f",
     ),
 }
 MATH_IMPL_SIMD_PUBLIC_BACKEND_TYPE_RE = re.compile(
@@ -1686,6 +1708,11 @@ REQUIRED_PUBLIC_DECLARATIONS: dict[str, tuple[tuple[str, str], ...]] = {
         ("vec-cross2d", r"\bfunction\s+Cross2D\s*\("),
         ("vec-mul-components", r"\bfunction\s+ComponentMul\s*\("),
         ("vec-div-components", r"\bfunction\s+ComponentDiv\s*\("),
+        ("vec-lerp", r"\bfunction\s+Lerp\s*\("),
+        ("vec-equals", r"\bfunction\s+Equals\s*\("),
+        ("vec-max", r"\bfunction\s+Max\s*\("),
+        ("vec-min", r"\bfunction\s+Min\s*\("),
+        ("vec-average", r"\bfunction\s+Average\s*\("),
         ("vec-one", r"\bclass\s+function\s+One\s*:"),
         ("vec-distance", r"\bfunction\s+Distance\s*\("),
         ("vec-distancesqr", r"\bfunction\s+DistanceSqr\s*\("),
@@ -4044,12 +4071,12 @@ def run_vector_public_record_contract_self_tests() -> None:
             "    class operator * (const AScalar: Single; const AValue: TVec2f): TVec2f; inline;\n"
             "    class operator * (const AA, AB: TVec2f): TVec2f; inline;\n"
             "    class operator / (const AValue: TVec2f; const AScalar: Single): TVec2f; inline;\n"
-            "    class function ComponentMul(const AA, AB: TVec2f): TVec2f; static; inline;\n"
-            "    class function ComponentDiv(const AA, AB: TVec2f): TVec2f; static; inline;\n"
-            "    class function Dot(const AA, AB: TVec2f): Single; static; inline;\n"
-            "    class function Cross(const AA, AB: TVec2f): Single; static; inline;\n"
-            "    class function Lerp(const AA, AB: TVec2f; const AT: Single): TVec2f; static; inline;\n"
-            "    class function Equals(const AA, AB: TVec2f; const AEpsilon: Single): Boolean; static; inline;\n"
+            "    function ComponentMul(const AOther: TVec2f): TVec2f; inline;\n"
+            "    function ComponentDiv(const AOther: TVec2f): TVec2f; inline;\n"
+            "    function Dot(const AOther: TVec2f): Single; inline;\n"
+            "    function Cross(const AA, AB: TVec2f): Single; static; inline;\n"
+            "    function Lerp(const ATarget: TVec2f; const AT: Single): TVec2f; inline;\n"
+            "    function Equals(const AOther: TVec2f; const AEpsilon: Single): Boolean; inline;\n"
             "    function LengthSqr: Single; inline;\n"
             "    function Length: Single; inline;\n"
             "    function Normalize: TVec2f; inline;\n"
@@ -4071,6 +4098,17 @@ def run_vector_public_record_contract_self_tests() -> None:
             "forbidden-vector-vector-operator-multiply:vec-2f",
             "missing-vector-public-contract:vec-2f:data-alias",
             "unexpected-vector-public-contract:vec-2f:cross",
+            "missing-vector-public-contract:vec-2f:cross2d",
+            "missing-vector-public-contract:vec-2f:one",
+            "missing-vector-public-contract:vec-2f:max",
+            "missing-vector-public-contract:vec-2f:min",
+            "missing-vector-public-contract:vec-2f:distance",
+            "missing-vector-public-contract:vec-2f:distancesqr",
+            "missing-vector-public-contract:vec-2f:reflect",
+            "missing-vector-public-contract:vec-2f:projectonto",
+            "missing-vector-public-contract:vec-2f:rejectfrom",
+            "missing-vector-public-contract:vec-2f:trynormalize",
+            "missing-vector-public-contract:vec-2f:isnormalized",
         }
         if not expected_rules <= rules:
             raise AssertionError(
@@ -4088,17 +4126,28 @@ def run_vector_public_record_contract_self_tests() -> None:
             "      TIndex = 0..1;\n"
             "    class function Create(const AX, AY: Single): TVec2f; static; inline;\n"
             "    class function Zero: TVec2f; static; inline;\n"
+            "    class function One: TVec2f; static; inline;\n"
             "    class operator + (const AA, AB: TVec2f): TVec2f; inline;\n"
             "    class operator - (const AA, AB: TVec2f): TVec2f; inline;\n"
             "    class operator - (const AValue: TVec2f): TVec2f; inline;\n"
             "    class operator * (const AValue: TVec2f; const AScalar: Single): TVec2f; inline;\n"
             "    class operator * (const AScalar: Single; const AValue: TVec2f): TVec2f; inline;\n"
             "    class operator / (const AValue: TVec2f; const AScalar: Single): TVec2f; inline;\n"
-            "    class function ComponentMul(const AA, AB: TVec2f): TVec2f; static; inline;\n"
-            "    class function ComponentDiv(const AA, AB: TVec2f): TVec2f; static; inline;\n"
-            "    class function Dot(const AA, AB: TVec2f): Single; static; inline;\n"
-            "    class function Lerp(const AA, AB: TVec2f; const AT: Single): TVec2f; static; inline;\n"
-            "    class function Equals(const AA, AB: TVec2f; const AEpsilon: Single): Boolean; static; inline;\n"
+            "    function ComponentMul(const AOther: TVec2f): TVec2f; inline;\n"
+            "    function ComponentDiv(const AOther: TVec2f): TVec2f; inline;\n"
+            "    function Dot(const AOther: TVec2f): Single; inline;\n"
+            "    function Cross2D(const AOther: TVec2f): Single; inline;\n"
+            "    function Lerp(const ATarget: TVec2f; const AT: Single): TVec2f; inline;\n"
+            "    function Equals(const AOther: TVec2f; const AEpsilon: Single): Boolean; inline;\n"
+            "    function Max(const AOther: TVec2f): TVec2f; inline;\n"
+            "    function Min(const AOther: TVec2f): TVec2f; inline;\n"
+            "    function Distance(const AOther: TVec2f): Single; inline;\n"
+            "    function DistanceSqr(const AOther: TVec2f): Single; inline;\n"
+            "    function Reflect(const ANormal: TVec2f): TVec2f; inline;\n"
+            "    function ProjectOnto(const ADirection: TVec2f): TVec2f; inline;\n"
+            "    function RejectFrom(const ADirection: TVec2f): TVec2f; inline;\n"
+            "    function TryNormalize: TVec2f; inline;\n"
+            "    function IsNormalized: Boolean; inline;\n"
             "    function LengthSqr: Single; inline;\n"
             "    function Length: Single; inline;\n"
             "    function Normalize: TVec2f; inline;\n"
@@ -4113,18 +4162,29 @@ def run_vector_public_record_contract_self_tests() -> None:
             "      TIndex = 0..2;\n"
             "    class function Create(const AX, AY, AZ: Single): TVec3f; static; inline;\n"
             "    class function Zero: TVec3f; static; inline;\n"
+            "    class function One: TVec3f; static; inline;\n"
             "    class operator + (const AA, AB: TVec3f): TVec3f; inline;\n"
             "    class operator - (const AA, AB: TVec3f): TVec3f; inline;\n"
             "    class operator - (const AValue: TVec3f): TVec3f; inline;\n"
             "    class operator * (const AValue: TVec3f; const AScalar: Single): TVec3f; inline;\n"
             "    class operator * (const AScalar: Single; const AValue: TVec3f): TVec3f; inline;\n"
             "    class operator / (const AValue: TVec3f; const AScalar: Single): TVec3f; inline;\n"
-            "    class function ComponentMul(const AA, AB: TVec3f): TVec3f; static; inline;\n"
-            "    class function ComponentDiv(const AA, AB: TVec3f): TVec3f; static; inline;\n"
-            "    class function Dot(const AA, AB: TVec3f): Single; static; inline;\n"
-            "    class function Cross(const AA, AB: TVec3f): TVec3f; static; inline;\n"
-            "    class function Lerp(const AA, AB: TVec3f; const AT: Single): TVec3f; static; inline;\n"
-            "    class function Equals(const AA, AB: TVec3f; const AEpsilon: Single): Boolean; static; inline;\n"
+            "    function ComponentMul(const AOther: TVec3f): TVec3f; inline;\n"
+            "    function ComponentDiv(const AOther: TVec3f): TVec3f; inline;\n"
+            "    function Dot(const AOther: TVec3f): Single; inline;\n"
+            "    function Cross(const AOther: TVec3f): TVec3f; inline;\n"
+            "    function Lerp(const ATarget: TVec3f; const AT: Single): TVec3f; inline;\n"
+            "    function Equals(const AOther: TVec3f; const AEpsilon: Single): Boolean; inline;\n"
+            "    function Max(const AOther: TVec3f): TVec3f; inline;\n"
+            "    function Min(const AOther: TVec3f): TVec3f; inline;\n"
+            "    function Average(const AOther: TVec3f): TVec3f; inline;\n"
+            "    function Distance(const AOther: TVec3f): Single; inline;\n"
+            "    function DistanceSqr(const AOther: TVec3f): Single; inline;\n"
+            "    function Reflect(const ANormal: TVec3f): TVec3f; inline;\n"
+            "    function ProjectOnto(const ADirection: TVec3f): TVec3f; inline;\n"
+            "    function RejectFrom(const ADirection: TVec3f): TVec3f; inline;\n"
+            "    function TryNormalize: TVec3f; inline;\n"
+            "    function IsNormalized: Boolean; inline;\n"
             "    function LengthSqr: Single; inline;\n"
             "    function Length: Single; inline;\n"
             "    function Normalize: TVec3f; inline;\n"
@@ -4957,7 +5017,7 @@ def run_math_impl_simd_public_seam_self_tests() -> None:
         rules = {finding.rule for finding in findings}
         expected_rules = {
             "math-impl-simd-public-simd-interface-use:nextpas.core.simd",
-            "math-impl-simd-unplanned-public-routine:SimdVec4fNormalize",
+            "math-impl-simd-unplanned-public-routine:SimdRawAdd",
             "math-impl-simd-public-simd-type-leak",
         }
         if not expected_rules.issubset(rules):
@@ -4978,13 +5038,16 @@ def run_math_impl_simd_public_seam_self_tests() -> None:
             "function SimdVec4fAdd(const AA, AB: TVec4f): TVec4f;\n"
             "function SimdVec4fSub(const AA, AB: TVec4f): TVec4f;\n"
             "function SimdVec4fComponentMul(const AA, AB: TVec4f): TVec4f;\n"
-            "function SimdVec4fScale(const AValue: TVec4f; const AScalar: Single): TVec4f;\n"
             "function SimdVec4fDot(const AA, AB: TVec4f): Single;\n"
             "function SimdVec4fLength(const AValue: TVec4f): Single;\n"
+            "function SimdVec4fNormalize(const AValue: TVec4f): TVec4f;\n"
+            "function SimdVec4fAbs(const AValue: TVec4f): TVec4f;\n"
+            "function SimdVec4fMax(const AA, AB: TVec4f): TVec4f;\n"
+            "function SimdVec4fMin(const AA, AB: TVec4f): TVec4f;\n"
             "function SimdVec3fDot(const AA, AB: TVec3f): Single;\n"
             "function SimdVec3fCross(const AA, AB: TVec3f): TVec3f;\n"
-            "function SimdMat4fMulVec4f(const AMatrix: TMat4f; const AVector: TVec4f): TVec4f;\n"
-            "function SimdQuatfRotate(const AQuat: TQuatf; const AVector: TVec3f): TVec3f;\n"
+            "function SimdVec3fNormalize(const AValue: TVec3f): TVec3f;\n"
+            "function SimdMat4fMul(const AA, AB: TMat4f): TMat4f;\n"
             "implementation\n"
             "end.\n",
             encoding="utf-8",

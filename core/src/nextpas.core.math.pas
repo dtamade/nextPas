@@ -37,6 +37,11 @@ type
   TRandomGen = nextpas.core.math.random.TRandomGen;
   TNoiseGen = nextpas.core.math.random.TNoiseGen;
 
+function Vec3fExtend(const AVec: TVec3f; const AW: Single): TVec4f; inline;
+function Vec4fTruncate(const AVec: TVec4f): TVec3f; inline;
+function Vec3dExtend(const AVec: TVec3d; const AW: Double): TVec4d; inline;
+function Vec4dTruncate(const AVec: TVec4d): TVec3d; inline;
+
 function IsAddOverflow(AA, AB: SizeUInt): Boolean; overload; inline;
 function IsAddOverflow(AA, AB: UInt32): Boolean; overload; inline;
 function IsMulOverflow(AA, AB: SizeUInt): Boolean; overload; inline;
@@ -176,6 +181,26 @@ function EaseOutBounce(const AT: Double): Double; inline;
 function EaseInOutBounce(const AT: Double): Double; inline;
 
 implementation
+
+function Vec3fExtend(const AVec: TVec3f; const AW: Single): TVec4f;
+begin
+  Result := nextpas.core.math.vec.Vec3fExtend(AVec, AW);
+end;
+
+function Vec4fTruncate(const AVec: TVec4f): TVec3f;
+begin
+  Result := nextpas.core.math.vec.Vec4fTruncate(AVec);
+end;
+
+function Vec3dExtend(const AVec: TVec3d; const AW: Double): TVec4d;
+begin
+  Result := nextpas.core.math.vec.Vec3dExtend(AVec, AW);
+end;
+
+function Vec4dTruncate(const AVec: TVec4d): TVec3d;
+begin
+  Result := nextpas.core.math.vec.Vec4dTruncate(AVec);
+end;
 
 function IsAddOverflow(AA, AB: SizeUInt): Boolean;
 begin

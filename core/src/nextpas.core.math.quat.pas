@@ -400,7 +400,7 @@ var
 begin
   ValidateAxisAngleInputs('TQuatf.FromAxisAngle', AAxis, AAngleRad);
   Axis := AAxis.Normalize;
-  if TVec3f.Equals(Axis, TVec3f.Zero, Single(0.0)) then
+  if Axis.Equals(TVec3f.Zero, Single(0.0)) then
     Exit(Identity);
 
   HalfAngle := AAngleRad * 0.5;
@@ -549,7 +549,7 @@ var
 begin
   ValidateAxisAngleInputs('TQuatd.FromAxisAngle', AAxis, AAngleRad);
   Axis := AAxis.Normalize;
-  if TVec3d.Equals(Axis, TVec3d.Zero, 0.0) then
+  if Axis.Equals(TVec3d.Zero, 0.0) then
     Exit(Identity);
 
   HalfAngle := AAngleRad * 0.5;
