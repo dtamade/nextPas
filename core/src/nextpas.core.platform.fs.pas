@@ -63,6 +63,7 @@ implementation
 uses
   nextpas.core.platform.files,
   nextpas.core.platform.env,
+  nextpas.core.platform.error,
   nextpas.core.platform.random
 {$IFDEF NEXTPAS_UNIX}
   , nextpas.core.platform.posix.ffi
@@ -238,8 +239,8 @@ begin
         LR := platform_file_mkdir(@LBuf[0], AMode);
         if (LR <> 0) and (not platform_fs_is_dir(@LBuf[0])) then
         begin
-          if LR = 17{EEXIST} then
-            Exit(20{ENOTDIR});  { path component is not a directory }
+          if LR = PLATFORM_ERR_EEXIST then
+            Exit(PLATFORM_ERR_ENOTDIR);  { path component is not a directory }
           Exit(LR);
         end;
       {$IFDEF NEXTPAS_WINDOWS}

@@ -9,6 +9,9 @@ uses
 
 { Portable platform error codes — canonical definitions }
 const
+  PLATFORM_ERR_EEXIST      = 17;    { File exists }
+  PLATFORM_ERR_ENOENT      = 2;     { No such file or directory }
+  PLATFORM_ERR_ENOTDIR     = 20;    { Not a directory }
   PLATFORM_ERR_AGAIN       = 11;    { Resource temporarily unavailable }
   PLATFORM_ERR_BUSY        = 16;    { Device or resource busy }
   PLATFORM_ERR_INVALID     = 22;    { Invalid argument }
