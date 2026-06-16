@@ -89,6 +89,11 @@ type
     property CallCount: Int32 read FCallCount;
   end;
 
+  TFailingHandler = class(TInterfacedObject, IHttpHandler)
+  public
+    procedure ServeHTTP(const AReq: IHttpRequest; const AW: IHttpResponseWriter);
+  end;
+
 function HexNibble(const ACh: Char): Byte;
 begin
   case ACh of
@@ -538,6 +543,12 @@ begin
       'response writer writes full body');
 end;
 
+procedure TFailingHandler.ServeHTTP(const AReq: IHttpRequest;
+  const AW: IHttpResponseWriter);
+begin
+  raise EHttpError.Create('boom');
+end;
+
 procedure TestPartialPrefaceWaits;
 begin
   CheckPrefaceStatus(Copy(H2_CLIENT_PREFACE, 1, 7), h2psNeedMore, 0,
@@ -726,6 +737,270 @@ begin
         LSettingValue), 'server SETTINGS advertises MAX_HEADER_LIST_SIZE');
       CheckEqual(Int64(512), Int64(LSettingValue),
         'server SETTINGS uses configured MAX_HEADER_LIST_SIZE');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+procedure TestRunSettingsAckFromClientIsSilentlyAccepted;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..7] of TH2Frame;
+  LFrameCount: SizeInt;
+  LErrorCode: UInt32;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LHandler.SetResponse(HTTP_STATUS_OK, '');
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_SETTINGS, H2_FLAG_SETTINGS_ACK, 0, '') +
+      H2EncodeFrame(H2_FRAME_HEADERS,
+        H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM, 1,
+        ComposeRequestHeaders('GET', '/settings-ack'));
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+      CheckEqual(Int64(1), Int64(LHandler.CallCount),
+        'client SETTINGS ACK does not block request handling');
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      CheckEqual(Int64(3), Int64(LFrameCount),
+        'server writes handshake and header-only response');
+      Check(not FindGoawayError(LFrames, LFrameCount, LErrorCode),
+        'client SETTINGS ACK does not trigger GOAWAY');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+procedure TestRunMaxConcurrentStreamsExceededSendsRefusedStream;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LOptions: TH2ServerTransportOptions;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..9] of TH2Frame;
+  LFrameCount: SizeInt;
+  LErrorCode: UInt32;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LHandler.SetResponse(HTTP_STATUS_NO_CONTENT, '');
+    LOptions := TH2ServerTransportOptions.Default;
+    LOptions.MaxConcurrentStreams := 1;
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_HEADERS, H2_FLAG_HEADERS_END_HEADERS, 1,
+        ComposeRequestHeaders('POST', '/stream-one')) +
+      H2EncodeFrame(H2_FRAME_HEADERS,
+        H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM, 3,
+        ComposeRequestHeaders('GET', '/stream-three')) +
+      H2EncodeFrame(H2_FRAME_DATA, H2_FLAG_DATA_END_STREAM, 1, '');
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler, LOptions);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+      CheckEqual(Int64(1), Int64(LHandler.CallCount),
+        'first stream still completes under MaxConcurrentStreams limit');
+      CheckEqual('/stream-one', LHandler.SeenPath,
+        'first stream reaches handler');
+
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      Check(FindRstStreamError(LFrames, LFrameCount, 3, LErrorCode),
+        'second concurrent stream receives RST_STREAM');
+      CheckEqual(Int64(H2_ERR_REFUSED_STREAM), Int64(LErrorCode),
+        'second concurrent stream uses REFUSED_STREAM');
+      Check(not HasFrameType(LFrames, LFrameCount, H2_FRAME_GOAWAY),
+        'concurrency refusal stays stream-scoped');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+procedure TestRunPeerSettingsInitialWindowSizeUpdatesOpenStreams;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LEntries: TH2SettingEntries;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..11] of TH2Frame;
+  LFrameCount: SizeInt;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LHandler.SetResponse(HTTP_STATUS_OK, '0123456789AB');
+    SetLength(LEntries, 1);
+    LEntries[0].Identifier := H2_SETTINGS_INITIAL_WINDOW_SIZE;
+    LEntries[0].Value := 10;
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_HEADERS, H2_FLAG_HEADERS_END_HEADERS, 1,
+        ComposeRequestHeaders('POST', '/peer-window')) +
+      H2EncodeFrame(H2_FRAME_SETTINGS, 0, 0, H2EncodeSettingsPayload(LEntries)) +
+      H2EncodeFrame(H2_FRAME_DATA, H2_FLAG_DATA_END_STREAM, 1, 'x');
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+      CheckEqual(Int64(1), Int64(LHandler.CallCount),
+        'request with open stream still reaches handler after peer SETTINGS');
+      CheckEqual('x', LHandler.SeenBody, 'handler sees request body');
+
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      CheckEqual(Int64(H2_FRAME_SETTINGS), Int64(LFrames[2].Header.FrameType),
+        'peer SETTINGS is acknowledged');
+      Check((LFrames[2].Header.Flags and H2_FLAG_SETTINGS_ACK) <> 0,
+        'peer SETTINGS emits ACK frame');
+      CheckEqual(Int64(H2_FRAME_DATA), Int64(LFrames[4].Header.FrameType),
+        'response body frame is emitted after peer SETTINGS');
+      CheckEqual('0123456789', string(LFrames[4].Payload),
+        'peer INITIAL_WINDOW_SIZE updates open stream send capacity');
+      Check((LFrames[4].Header.Flags and H2_FLAG_DATA_END_STREAM) = 0,
+        'reduced send window keeps remaining response bytes pending');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+procedure TestRunInvalidSettingsIdentifierIsIgnored;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LEntries: TH2SettingEntries;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..7] of TH2Frame;
+  LFrameCount: SizeInt;
+  LErrorCode: UInt32;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LHandler.SetResponse(HTTP_STATUS_OK, '');
+    SetLength(LEntries, 1);
+    LEntries[0].Identifier := $FFFF;
+    LEntries[0].Value := 42;
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_SETTINGS, 0, 0, H2EncodeSettingsPayload(LEntries)) +
+      H2EncodeFrame(H2_FRAME_HEADERS,
+        H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM, 1,
+        ComposeRequestHeaders('GET', '/unknown-setting'));
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+      CheckEqual(Int64(1), Int64(LHandler.CallCount),
+        'unknown SETTINGS identifier does not block request handling');
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      Check(not FindGoawayError(LFrames, LFrameCount, LErrorCode),
+        'unknown SETTINGS identifier does not trigger GOAWAY');
+      CheckEqual(Int64(H2_FRAME_SETTINGS), Int64(LFrames[2].Header.FrameType),
+        'unknown SETTINGS still receives ACK');
+      Check((LFrames[2].Header.Flags and H2_FLAG_SETTINGS_ACK) <> 0,
+        'unknown SETTINGS ACK flag is set');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+procedure TestRunSettingsEnablePushGreaterThanOneIsProtocolError;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LEntries: TH2SettingEntries;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..7] of TH2Frame;
+  LFrameCount: SizeInt;
+  LErrorCode: UInt32;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    SetLength(LEntries, 1);
+    LEntries[0].Identifier := H2_SETTINGS_ENABLE_PUSH;
+    LEntries[0].Value := 2;
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_SETTINGS, 0, 0, H2EncodeSettingsPayload(LEntries));
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      Check(FindGoawayError(LFrames, LFrameCount, LErrorCode),
+        'invalid ENABLE_PUSH triggers GOAWAY');
+      CheckEqual(Int64(H2_ERR_PROTOCOL_ERROR), Int64(LErrorCode),
+        'invalid ENABLE_PUSH uses PROTOCOL_ERROR');
     finally
       LConnRef := nil;
       LStream := nil;
@@ -1825,6 +2100,595 @@ begin
   end;
 end;
 
+procedure TestRunConnectionLevelWindowUpdateAdjustsSendWindow;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LOptions: TH2ServerTransportOptions;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..11] of TH2Frame;
+  LFrameCount: SizeInt;
+  LErrorCode: UInt32;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LHandler.SetResponse(HTTP_STATUS_OK, 'abcdefghij');
+    LOptions := TH2ServerTransportOptions.Default;
+    LOptions.InitialConnectionWindowSize := 5;
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_HEADERS,
+        H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM, 1,
+        ComposeRequestHeaders('GET', '/conn-window')) +
+      H2EncodeFrame(H2_FRAME_WINDOW_UPDATE, 0, 0, H2EncodeWindowUpdate(100));
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler, LOptions);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+      CheckEqual(Int64(1), Int64(LHandler.CallCount),
+        'connection WINDOW_UPDATE does not block request handling');
+      CheckEqual('/conn-window', LHandler.SeenPath,
+        'request still reaches handler after connection WINDOW_UPDATE');
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      Check(HasFrameType(LFrames, LFrameCount, H2_FRAME_DATA),
+        'response body is still emitted with connection WINDOW_UPDATE present');
+      Check(not FindGoawayError(LFrames, LFrameCount, LErrorCode),
+        'connection WINDOW_UPDATE does not trigger GOAWAY');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+procedure TestRunWindowUpdateZeroIncrementSendsProtocolErrorGoaway;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..7] of TH2Frame;
+  LFrameCount: SizeInt;
+  LErrorCode: UInt32;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_WINDOW_UPDATE, 0, 0, H2EncodeWindowUpdate(0));
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      Check(FindGoawayError(LFrames, LFrameCount, LErrorCode),
+        'zero-increment WINDOW_UPDATE triggers GOAWAY');
+      CheckEqual(Int64(H2_ERR_PROTOCOL_ERROR), Int64(LErrorCode),
+        'zero-increment WINDOW_UPDATE uses current PROTOCOL_ERROR contract');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+procedure TestRunWindowUpdateExceedingMaxSendsFlowControlError;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LOptions: TH2ServerTransportOptions;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..9] of TH2Frame;
+  LFrameCount: SizeInt;
+  LErrorCode: UInt32;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LOptions := TH2ServerTransportOptions.Default;
+    LOptions.InitialConnectionWindowSize := 1;
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_WINDOW_UPDATE, 0, 0,
+        H2EncodeWindowUpdate(H2_MAX_WINDOW_SIZE)) +
+      H2EncodeFrame(H2_FRAME_WINDOW_UPDATE, 0, 0, H2EncodeWindowUpdate(1));
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler, LOptions);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      Check(FindGoawayError(LFrames, LFrameCount, LErrorCode),
+        'overflowing WINDOW_UPDATE triggers GOAWAY');
+      CheckEqual(Int64(H2_ERR_FLOW_CONTROL_ERROR), Int64(LErrorCode),
+        'overflowing WINDOW_UPDATE uses FLOW_CONTROL_ERROR');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+procedure TestRunHeadersWithPaddingParsesCorrectly;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LHandler.SetResponse(HTTP_STATUS_OK, '');
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_HEADERS,
+        H2_FLAG_HEADERS_PADDED or H2_FLAG_HEADERS_END_HEADERS or
+        H2_FLAG_HEADERS_END_STREAM, 1,
+        AnsiChar(#2) + ComposeRequestHeaders('GET', '/padded') + '..');
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+      CheckEqual(Int64(1), Int64(LHandler.CallCount),
+        'padded HEADERS still reaches handler');
+      CheckEqual('/padded', LHandler.SeenPath,
+        'padding is stripped from HEADERS payload');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+procedure TestRunDataWithPaddingDeliversUnpaddedBody;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LHandler.SetResponse(HTTP_STATUS_OK, '');
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_HEADERS, H2_FLAG_HEADERS_END_HEADERS, 1,
+        ComposeRequestHeaders('POST', '/padded-body')) +
+      H2EncodeFrame(H2_FRAME_DATA,
+        H2_FLAG_DATA_PADDED or H2_FLAG_DATA_END_STREAM, 1,
+        AnsiChar(#3) + 'hello' + '...');
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+      CheckEqual(Int64(1), Int64(LHandler.CallCount),
+        'padded DATA still reaches handler');
+      CheckEqual('hello', LHandler.SeenBody,
+        'padding is stripped from DATA payload');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+procedure TestRunRstStreamOnHalfClosedRemoteStreamIsNoop;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..7] of TH2Frame;
+  LFrameCount: SizeInt;
+  LErrorCode: UInt32;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LHandler.SetResponse(HTTP_STATUS_OK, '');
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_HEADERS,
+        H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM, 1,
+        ComposeRequestHeaders('GET', '/half-closed')) +
+      H2EncodeFrame(H2_FRAME_RST_STREAM, 0, 1, H2EncodeRstStream(H2_ERR_CANCEL));
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        CheckEqual(Int64(TCP_SERVER_CONN_OWNERSHIP_SERVER), Int64(LSession.Run),
+          'RST_STREAM on half-closed remote stream returns normally');
+      finally
+        LSession.Free;
+      end;
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      Check(not FindGoawayError(LFrames, LFrameCount, LErrorCode),
+        'RST_STREAM on half-closed remote stream does not trigger GOAWAY');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+procedure TestRunRstStreamOnIdleStreamIsNoop;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..7] of TH2Frame;
+  LFrameCount: SizeInt;
+  LErrorCode: UInt32;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_RST_STREAM, 0, 99, H2EncodeRstStream(H2_ERR_CANCEL));
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        CheckEqual(Int64(TCP_SERVER_CONN_OWNERSHIP_SERVER), Int64(LSession.Run),
+          'RST_STREAM on idle stream returns normally');
+      finally
+        LSession.Free;
+      end;
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      Check(not FindGoawayError(LFrames, LFrameCount, LErrorCode),
+        'RST_STREAM on idle stream does not trigger GOAWAY');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+procedure TestRunGoawayWithLastStreamIdAllowsFinishingEarlierStreams;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..9] of TH2Frame;
+  LFrameCount: SizeInt;
+  LLastStreamID: UInt32;
+  LErrorCode: UInt32;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LHandler.SetResponse(HTTP_STATUS_OK, '');
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_HEADERS,
+        H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM, 1,
+        ComposeRequestHeaders('GET', '/goaway-finish')) +
+      H2EncodeFrame(H2_FRAME_GOAWAY, 0, 0,
+        H2EncodeGoaway(0, H2_ERR_NO_ERROR, ''));
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+      CheckEqual(Int64(1), Int64(LHandler.CallCount),
+        'peer GOAWAY still allows earlier request to finish');
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      Check(FindGoawayDetails(LFrames, LFrameCount, LLastStreamID, LErrorCode),
+        'peer GOAWAY leads to graceful local GOAWAY');
+      CheckEqual(Int64(1), Int64(LLastStreamID),
+        'graceful local GOAWAY preserves last seen peer stream id');
+      CheckEqual(Int64(H2_ERR_NO_ERROR), Int64(LErrorCode),
+        'graceful local GOAWAY uses NO_ERROR');
+      CheckEqual(Int64(H2_FRAME_HEADERS), Int64(LFrames[2].Header.FrameType),
+        'server still emits response after peer GOAWAY');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+procedure TestRunGoawayWithDecreasingLastStreamIdAccepted;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..7] of TH2Frame;
+  LFrameCount: SizeInt;
+  LLastStreamID: UInt32;
+  LErrorCode: UInt32;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_GOAWAY, 0, 0,
+        H2EncodeGoaway(0, H2_ERR_NO_ERROR, '')) +
+      H2EncodeFrame(H2_FRAME_GOAWAY, 0, 0,
+        H2EncodeGoaway(0, H2_ERR_NO_ERROR, ''));
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        CheckEqual(Int64(TCP_SERVER_CONN_OWNERSHIP_SERVER), Int64(LSession.Run),
+          'decreasing peer GOAWAY sequence returns normally');
+      finally
+        LSession.Free;
+      end;
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      Check(FindGoawayDetails(LFrames, LFrameCount, LLastStreamID, LErrorCode),
+        'decreasing peer GOAWAY sequence still leads to graceful local GOAWAY');
+      CheckEqual(Int64(0), Int64(LLastStreamID),
+        'decreasing peer GOAWAY preserves last local stream boundary');
+      CheckEqual(Int64(H2_ERR_NO_ERROR), Int64(LErrorCode),
+        'decreasing peer GOAWAY keeps NO_ERROR shutdown');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+procedure TestRunPriorityFrameIsSilentlyIgnored;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LHandler.SetResponse(HTTP_STATUS_OK, '');
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_PRIORITY, 0, 3, HexToBytes('0000000001')) +
+      H2EncodeFrame(H2_FRAME_HEADERS,
+        H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM, 1,
+        ComposeRequestHeaders('GET', '/priority'));
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+      CheckEqual(Int64(1), Int64(LHandler.CallCount),
+        'PRIORITY frame does not stop request handling');
+      CheckEqual('/priority', LHandler.SeenPath,
+        'request after PRIORITY still reaches handler');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+procedure TestRunContinuationOnWrongStreamSendsGoaway;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..7] of TH2Frame;
+  LFrameCount: SizeInt;
+  LErrorCode: UInt32;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_HEADERS, 0, 1,
+        ComposeRequestHeaders('GET', '/pending')) +
+      H2EncodeFrame(H2_FRAME_CONTINUATION, H2_FLAG_CONTINUATION_END_HEADERS, 3,
+        '');
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      Check(FindGoawayError(LFrames, LFrameCount, LErrorCode),
+        'wrong-stream CONTINUATION triggers GOAWAY');
+      CheckEqual(Int64(H2_ERR_PROTOCOL_ERROR), Int64(LErrorCode),
+        'wrong-stream CONTINUATION uses PROTOCOL_ERROR');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+procedure TestRunTwoConcurrentRequestsExecuteIndependently;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LHandler.SetResponse(HTTP_STATUS_OK, '');
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_HEADERS,
+        H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM, 1,
+        ComposeRequestHeaders('GET', '/one')) +
+      H2EncodeFrame(H2_FRAME_HEADERS,
+        H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM, 3,
+        ComposeRequestHeaders('GET', '/two'));
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+      CheckEqual(Int64(2), Int64(LHandler.CallCount),
+        'independent concurrent requests both execute');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+procedure TestRunHandlerExceptionResetsStreamWithoutClosingConnection;
+var
+  LHandler: TFailingHandler;
+  LHandlerRef: IHttpHandler;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..7] of TH2Frame;
+  LFrameCount: SizeInt;
+  LErrorCode: UInt32;
+begin
+  LHandler := TFailingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_HEADERS,
+        H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM, 1,
+        ComposeRequestHeaders('GET', '/boom'));
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      Check(FindRstStreamError(LFrames, LFrameCount, 1, LErrorCode),
+        'handler exception resets stream');
+      CheckEqual(Int64(H2_ERR_INTERNAL_ERROR), Int64(LErrorCode),
+        'handler exception uses INTERNAL_ERROR');
+      Check(not HasFrameType(LFrames, LFrameCount, H2_FRAME_GOAWAY),
+        'handler exception stays stream-scoped');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
 begin
   with TTestRunner.Create('nextpas.core.http.impl.h2.session') do
   begin
@@ -1843,6 +2707,16 @@ begin
       @TestRunHandshakeAndSimpleRequestResponse);
     Run('Run handshake advertises MAX_HEADER_LIST_SIZE',
       @TestRunHandshakeAdvertisesMaxHeaderListSizeSetting);
+    Run('Run client SETTINGS ACK is silently accepted',
+      @TestRunSettingsAckFromClientIsSilentlyAccepted);
+    Run('Run MaxConcurrentStreams exceeded sends REFUSED_STREAM',
+      @TestRunMaxConcurrentStreamsExceededSendsRefusedStream);
+    Run('Run peer SETTINGS INITIAL_WINDOW_SIZE updates open streams',
+      @TestRunPeerSettingsInitialWindowSizeUpdatesOpenStreams);
+    Run('Run invalid SETTINGS identifier is ignored',
+      @TestRunInvalidSettingsIdentifierIsIgnored);
+    Run('Run SETTINGS ENABLE_PUSH greater than one is protocol error',
+      @TestRunSettingsEnablePushGreaterThanOneIsProtocolError);
     Run('Run missing :path pseudo header resets stream',
       @TestRunMissingPathPseudoHeaderResetsStream);
     Run('Run missing :authority and host resets stream',
@@ -1893,6 +2767,32 @@ begin
       @TestRunTrailingHeadersCompleteRequestWithoutOverwritingHeaders);
     Run('Run WINDOW_UPDATE resumes blocked response body',
       @TestRunWindowUpdateResumesBlockedResponseBody);
+    Run('Run connection WINDOW_UPDATE adjusts send window',
+      @TestRunConnectionLevelWindowUpdateAdjustsSendWindow);
+    Run('Run WINDOW_UPDATE zero increment sends PROTOCOL_ERROR GOAWAY',
+      @TestRunWindowUpdateZeroIncrementSendsProtocolErrorGoaway);
+    Run('Run WINDOW_UPDATE exceeding max sends FLOW_CONTROL_ERROR',
+      @TestRunWindowUpdateExceedingMaxSendsFlowControlError);
+    Run('Run HEADERS with padding parses correctly',
+      @TestRunHeadersWithPaddingParsesCorrectly);
+    Run('Run DATA with padding delivers unpadded body',
+      @TestRunDataWithPaddingDeliversUnpaddedBody);
+    Run('Run RST_STREAM on half-closed remote stream is noop',
+      @TestRunRstStreamOnHalfClosedRemoteStreamIsNoop);
+    Run('Run RST_STREAM on idle stream is noop',
+      @TestRunRstStreamOnIdleStreamIsNoop);
+    Run('Run GOAWAY with last stream id allows finishing earlier streams',
+      @TestRunGoawayWithLastStreamIdAllowsFinishingEarlierStreams);
+    Run('Run GOAWAY with decreasing last stream id accepted',
+      @TestRunGoawayWithDecreasingLastStreamIdAccepted);
+    Run('Run PRIORITY frame is silently ignored',
+      @TestRunPriorityFrameIsSilentlyIgnored);
+    Run('Run CONTINUATION on wrong stream sends GOAWAY',
+      @TestRunContinuationOnWrongStreamSendsGoaway);
+    Run('Run two concurrent requests execute independently',
+      @TestRunTwoConcurrentRequestsExecuteIndependently);
+    Run('Run handler exception resets stream without closing connection',
+      @TestRunHandlerExceptionResetsStreamWithoutClosingConnection);
     Summary;
   end;
 end.
