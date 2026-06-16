@@ -449,6 +449,10 @@ type
     function IntoInner: PT; inline;
   end;
 
+{ CAS memory order resolution helpers (interface-visible for generic records) }
+function _cas_success_order(const AOrder: memory_order_t): memory_order_t; inline;
+function _cas_failure_order(const ASuccessOrder: memory_order_t): memory_order_t; inline;
+
 implementation
 
 uses
@@ -1745,22 +1749,8 @@ var
   LFailureOrder: memory_order_t;
 begin
   LExp := Pointer(AExpected);
-
-  // NOTE: This is a generic template; avoid referencing implementation-only helpers.
-  if AOrder = mo_consume then
-    LSuccessOrder := mo_acquire
-  else
-    LSuccessOrder := AOrder;
-
-  case LSuccessOrder of
-    mo_relaxed: LFailureOrder := mo_relaxed;
-    mo_acquire: LFailureOrder := mo_acquire;
-    mo_release: LFailureOrder := mo_relaxed;
-    mo_acq_rel: LFailureOrder := mo_acquire;
-    mo_seq_cst: LFailureOrder := mo_seq_cst;
-  else
-    LFailureOrder := mo_relaxed;
-  end;
+  LSuccessOrder := _cas_success_order(AOrder);
+  LFailureOrder := _cas_failure_order(LSuccessOrder);
 
   Result := atomic_compare_exchange_strong(PPointer(@FValue)^, LExp, Pointer(ADesired), LSuccessOrder, LFailureOrder);
   AExpected := PT(LExp);
@@ -1774,22 +1764,8 @@ var
   LFailureOrder: memory_order_t;
 begin
   LExp := Pointer(AExpected);
-
-  // NOTE: This is a generic template; avoid referencing implementation-only helpers.
-  if AOrder = mo_consume then
-    LSuccessOrder := mo_acquire
-  else
-    LSuccessOrder := AOrder;
-
-  case LSuccessOrder of
-    mo_relaxed: LFailureOrder := mo_relaxed;
-    mo_acquire: LFailureOrder := mo_acquire;
-    mo_release: LFailureOrder := mo_relaxed;
-    mo_acq_rel: LFailureOrder := mo_acquire;
-    mo_seq_cst: LFailureOrder := mo_seq_cst;
-  else
-    LFailureOrder := mo_relaxed;
-  end;
+  LSuccessOrder := _cas_success_order(AOrder);
+  LFailureOrder := _cas_failure_order(LSuccessOrder);
 
   Result := atomic_compare_exchange_weak(PPointer(@FValue)^, LExp, Pointer(ADesired), LSuccessOrder, LFailureOrder);
   AExpected := PT(LExp);
