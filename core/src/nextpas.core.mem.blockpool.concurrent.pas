@@ -6,6 +6,7 @@ interface
 
 uses
   nextpas.core.base.utils,
+  nextpas.core.mem.base,
   nextpas.core.mem.blockpool,
   nextpas.core.mem.mutex,
   nextpas.core.mem.error;

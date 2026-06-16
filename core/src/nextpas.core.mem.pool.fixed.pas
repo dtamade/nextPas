@@ -5,8 +5,10 @@ unit nextpas.core.mem.pool.fixed;
 interface
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.mem.pool.base,    // IPool (decoupled from facade)
   nextpas.core.mem.allocator,    // IAllocator + GetRtlAllocator
+  nextpas.core.mem.mutex,
   nextpas.core.mem.error;        // EAllocError, TAllocError
 
 // 说明：
@@ -155,6 +157,38 @@ type
     property PeakAllocated: Integer read FPeakAllocated;
     property TotalAllocCalls: QWord read FTotalAllocCalls;
     property TotalFreeCalls: QWord read FTotalFreeCalls;
+  end;
+
+  {**
+   * @desc Thread-safe wrapper for TFixedPool (mutex-protected).
+   * @note All Acquire/Release operations are serialized via TMemMutex.
+   *}
+  TFixedPoolConcurrent = class(TInterfacedObject, IPool)
+  private
+    FInner: TFixedPool;
+    FLock: TMemMutex;
+    function GetBlockSize: SizeUInt; inline;
+    function GetCapacity: Integer; inline;
+    function GetAllocatedCount: Integer; inline;
+  public
+    constructor Create(aBlockSize: SizeUInt; aCapacity: Integer; aAlignment: SizeUInt = 0; aAllocator: IAllocator = nil); overload;
+    constructor Create(const aConfig: TFixedPoolConfig); overload;
+    destructor Destroy; override;
+
+    function Acquire(out aUnit: Pointer): Boolean; inline;
+    function TryAcquire(out aUnit: Pointer): Boolean; inline;
+    function AcquireN(out aUnits: array of Pointer; aCount: Integer): Integer; inline;
+    procedure Release(aUnit: Pointer); inline;
+    procedure ReleaseN(const aUnits: array of Pointer; aCount: Integer); inline;
+
+    function Alloc: Pointer; inline;
+    function TryAlloc(out aPtr: Pointer): Boolean; inline;
+    procedure ReleasePtr(aPtr: Pointer); inline;
+    procedure Reset; inline;
+
+    property BlockSize: SizeUInt read GetBlockSize;
+    property Capacity: Integer read GetCapacity;
+    property AllocatedCount: Integer read GetAllocatedCount;
   end;
 
 implementation
@@ -447,5 +481,138 @@ begin
 end;
 
 {$POP}
+
+{ TFixedPoolConcurrent }
+
+constructor TFixedPoolConcurrent.Create(aBlockSize: SizeUInt; aCapacity: Integer; aAlignment: SizeUInt; aAllocator: IAllocator);
+begin
+  inherited Create;
+  FLock.Init;
+  FInner := TFixedPool.Create(aBlockSize, aCapacity, aAlignment, aAllocator);
+end;
+
+constructor TFixedPoolConcurrent.Create(const aConfig: TFixedPoolConfig);
+begin
+  inherited Create;
+  FLock.Init;
+  FInner := TFixedPool.Create(aConfig);
+end;
+
+destructor TFixedPoolConcurrent.Destroy;
+begin
+  FLock.Acquire;
+  try
+    FreeAndNil(FInner);
+  finally
+    FLock.Release;
+  end;
+  FLock.Done;
+  inherited Destroy;
+end;
+
+function TFixedPoolConcurrent.Acquire(out aUnit: Pointer): Boolean;
+begin
+  FLock.Acquire;
+  try
+    Result := FInner.Acquire(aUnit);
+  finally
+    FLock.Release;
+  end;
+end;
+
+function TFixedPoolConcurrent.TryAcquire(out aUnit: Pointer): Boolean;
+begin
+  FLock.Acquire;
+  try
+    Result := FInner.TryAcquire(aUnit);
+  finally
+    FLock.Release;
+  end;
+end;
+
+function TFixedPoolConcurrent.AcquireN(out aUnits: array of Pointer; aCount: Integer): Integer;
+begin
+  FLock.Acquire;
+  try
+    Result := FInner.AcquireN(aUnits, aCount);
+  finally
+    FLock.Release;
+  end;
+end;
+
+procedure TFixedPoolConcurrent.Release(aUnit: Pointer);
+begin
+  FLock.Acquire;
+  try
+    FInner.Release(aUnit);
+  finally
+    FLock.Release;
+  end;
+end;
+
+procedure TFixedPoolConcurrent.ReleaseN(const aUnits: array of Pointer; aCount: Integer);
+begin
+  FLock.Acquire;
+  try
+    FInner.ReleaseN(aUnits, aCount);
+  finally
+    FLock.Release;
+  end;
+end;
+
+function TFixedPoolConcurrent.Alloc: Pointer;
+begin
+  FLock.Acquire;
+  try
+    Result := FInner.Alloc;
+  finally
+    FLock.Release;
+  end;
+end;
+
+function TFixedPoolConcurrent.TryAlloc(out aPtr: Pointer): Boolean;
+begin
+  FLock.Acquire;
+  try
+    Result := FInner.TryAlloc(aPtr);
+  finally
+    FLock.Release;
+  end;
+end;
+
+procedure TFixedPoolConcurrent.ReleasePtr(aPtr: Pointer);
+begin
+  FLock.Acquire;
+  try
+    FInner.ReleasePtr(aPtr);
+  finally
+    FLock.Release;
+  end;
+end;
+
+procedure TFixedPoolConcurrent.Reset;
+begin
+  FLock.Acquire;
+  try
+    FInner.Reset;
+  finally
+    FLock.Release;
+  end;
+end;
+
+function TFixedPoolConcurrent.GetBlockSize: SizeUInt;
+begin
+  Result := FInner.BlockSize;
+end;
+
+function TFixedPoolConcurrent.GetCapacity: Integer;
+begin
+  Result := FInner.Capacity;
+end;
+
+function TFixedPoolConcurrent.GetAllocatedCount: Integer;
+begin
+  Result := FInner.AllocatedCount;
+end;
 
 end.
