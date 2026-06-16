@@ -4,7 +4,7 @@
 }
 unit nextpas.core.math.random;
 
-{$mode ObjFPC}{$H+}
+{$I nextpas.core.settings.inc}
 
 interface
 
@@ -15,7 +15,7 @@ uses
 
 type
   TRandomState = record
-    Seed: UInt64;
+    FSeed: UInt64;
   end;
 
 { === Initialization === }
@@ -61,15 +61,15 @@ const
 
 function RandomCreate(ASeed: UInt64): TRandomState;
 begin
-  Result.Seed := ASeed;
+  Result.FSeed := ASeed;
 end;
 
 { === Integer Random === }
 
 function RandomInt(var AState: TRandomState): UInt64;
 begin
-  AState.Seed := AState.Seed * LCG_MULTIPLIER + LCG_INCREMENT;
-  Result := AState.Seed shr 33;
+  AState.FSeed := AState.FSeed * LCG_MULTIPLIER + LCG_INCREMENT;
+  Result := AState.FSeed shr 33;
 end;
 
 function RandomIntRange(var AState: TRandomState; AMin, AMax: Int64): Int64;

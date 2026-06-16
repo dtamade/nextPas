@@ -4,7 +4,7 @@
 }
 unit nextpas.core.math.easing;
 
-{$mode ObjFPC}{$H+}
+{$I nextpas.core.settings.inc}
 
 interface
 

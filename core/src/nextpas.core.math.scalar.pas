@@ -72,6 +72,29 @@ function Hypot(const AX, AY: Single): Single; overload; inline;
 function Fmod(const AX, AY: Double): Double; overload; inline;
 function Fmod(const AX, AY: Single): Single; overload; inline;
 
+function RoundTo(const AValue: Double; const ADecimals: Integer): Double; overload;
+function RoundTo(const AValue: Single; const ADecimals: Integer): Single; overload;
+
+function Sum(const AData: array of Double): Double; overload;
+function Sum(const AData: array of Single): Single; overload;
+function SumInt(const AData: array of Integer): Int64;
+
+function Mean(const AData: array of Double): Double; overload;
+function Mean(const AData: array of Single): Single; overload;
+
+function Variance(const AData: array of Double): Double; overload;
+function Variance(const AData: array of Single): Single; overload;
+function PopnVariance(const AData: array of Double): Double; overload;
+function PopnVariance(const AData: array of Single): Single; overload;
+
+function StdDev(const AData: array of Double): Double; overload;
+function StdDev(const AData: array of Single): Single; overload;
+function PopnStdDev(const AData: array of Double): Double; overload;
+function PopnStdDev(const AData: array of Single): Single; overload;
+
+function TotalVariance(const AData: array of Double): Double; overload;
+function TotalVariance(const AData: array of Single): Single; overload;
+
 implementation
 
 uses
