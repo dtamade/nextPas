@@ -179,6 +179,70 @@ begin
   DeleteFile(LPath);
 end;
 
+{ --- BOM encoding detection --- }
+
+procedure TestReadFileText_UTF16LE_BOM;
+var
+  LPath, LText: string;
+begin
+  LPath := TmpPath + '.txt';
+  { UTF-16LE BOM FF FE + "hi" as UTF-16LE: h=68 00, i=69 00 }
+  WriteFile(LPath, TBytes.Create($FF, $FE, $68, $00, $69, $00));
+  LText := ReadFileText(LPath);
+  Check(LText = 'hi', 'UTF-16LE BOM decoded to UTF-8');
+  DeleteFile(LPath);
+end;
+
+procedure TestReadFileText_UTF16BE_BOM;
+var
+  LPath, LText: string;
+begin
+  LPath := TmpPath + '.txt';
+  { UTF-16BE BOM FE FF + "hi" as UTF-16BE: h=00 68, i=00 69 }
+  WriteFile(LPath, TBytes.Create($FE, $FF, $00, $68, $00, $69));
+  LText := ReadFileText(LPath);
+  Check(LText = 'hi', 'UTF-16BE BOM decoded to UTF-8');
+  DeleteFile(LPath);
+end;
+
+procedure TestReadFileText_EmptyFile;
+var
+  LPath, LText: string;
+begin
+  LPath := TmpPath + '.txt';
+  WriteFile(LPath, nil);
+  LText := ReadFileText(LPath);
+  Check(LText = '', 'empty file returns empty string');
+  DeleteFile(LPath);
+end;
+
+procedure TestReadFileText_ASCII_NoBOM;
+var
+  LPath, LText: string;
+begin
+  LPath := TmpPath + '.txt';
+  WriteFile(LPath, TBytes.Create(Ord('p'), Ord('l'), Ord('a'), Ord('i'), Ord('n')));
+  LText := ReadFileText(LPath);
+  Check(LText = 'plain', 'ASCII no BOM');
+  DeleteFile(LPath);
+end;
+
+procedure TestReadFileText_UTF8_MultiByte;
+var
+  LPath, LText: string;
+begin
+  LPath := TmpPath + '.txt';
+  { UTF-8 encoded "日本語" (3 CJK chars, each 3 bytes = 9 bytes) }
+  WriteFile(LPath, TBytes.Create(
+    $E6, $97, $A5,  // 日
+    $E6, $9C, $AC,  // 本
+    $E8, $AA, $9E   // 語
+  ));
+  LText := ReadFileText(LPath);
+  Check(LText = '日本語', 'UTF-8 multi-byte preserved');
+  DeleteFile(LPath);
+end;
+
 procedure TestScanFileLines;
 var
   LPath: string;
@@ -224,6 +288,11 @@ begin
   T.Run('AppendFileLine', @TestAppendFileLine);
   T.Run('ReadFileText strips UTF-8 BOM', @TestReadFileTextStripsUtf8Bom);
   T.Run('ReadFileText rejects invalid UTF-8', @TestReadFileTextRejectsInvalidUtf8);
+  T.Run('ReadFileText UTF-16LE BOM', @TestReadFileText_UTF16LE_BOM);
+  T.Run('ReadFileText UTF-16BE BOM', @TestReadFileText_UTF16BE_BOM);
+  T.Run('ReadFileText empty file', @TestReadFileText_EmptyFile);
+  T.Run('ReadFileText ASCII no BOM', @TestReadFileText_ASCII_NoBOM);
+  T.Run('ReadFileText UTF-8 multi-byte', @TestReadFileText_UTF8_MultiByte);
   T.Run('ScanFileLines', @TestScanFileLines);
   T.Run('MapFileLines', @TestMapFileLines);
   T.Summary;

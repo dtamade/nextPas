@@ -357,16 +357,78 @@ begin
   until False;
 end;
 
+function UTF16LEToUTF8(const ABytes: PByte; AByteLen: SizeInt): string;
+var
+  LCode: Word;
+  I: SizeInt;
+begin
+  Result := '';
+  I := 0;
+  while I + 1 < AByteLen do
+  begin
+    LCode := ABytes[I] + (ABytes[I + 1] shl 8);
+    Inc(I, 2);
+    if LCode < $80 then
+      Result := Result + AnsiChar(LCode)
+    else if LCode < $800 then
+      Result := Result + AnsiChar($C0 or (LCode shr 6))
+                       + AnsiChar($80 or (LCode and $3F))
+    else
+      Result := Result + AnsiChar($E0 or (LCode shr 12))
+                       + AnsiChar($80 or ((LCode shr 6) and $3F))
+                       + AnsiChar($80 or (LCode and $3F));
+  end;
+end;
+
+function UTF16BEToUTF8(const ABytes: PByte; AByteLen: SizeInt): string;
+var
+  LCode: Word;
+  I: SizeInt;
+begin
+  Result := '';
+  I := 0;
+  while I + 1 < AByteLen do
+  begin
+    LCode := (ABytes[I] shl 8) + ABytes[I + 1];
+    Inc(I, 2);
+    if LCode < $80 then
+      Result := Result + AnsiChar(LCode)
+    else if LCode < $800 then
+      Result := Result + AnsiChar($C0 or (LCode shr 6))
+                       + AnsiChar($80 or (LCode and $3F))
+    else
+      Result := Result + AnsiChar($E0 or (LCode shr 12))
+                       + AnsiChar($80 or ((LCode shr 6) and $3F))
+                       + AnsiChar($80 or (LCode and $3F));
+  end;
+end;
+
 function FsReadFileText(const APath: string): string;
 var
   Bytes: TBytes;
   LOffset, LLen: SizeInt;
+  LUTF8Text: string;
 begin
   Bytes := FsReadFile(APath);
   LOffset := 0;
+
+  { UTF-8 BOM: EF BB BF }
   if (Length(Bytes) >= 3) and (Bytes[0] = $EF) and
     (Bytes[1] = $BB) and (Bytes[2] = $BF) then
-    LOffset := 3;
+    LOffset := 3
+  { UTF-16LE BOM: FF FE → convert to UTF-8 }
+  else if (Length(Bytes) >= 2) and (Bytes[0] = $FF) and (Bytes[1] = $FE) then
+  begin
+    Result := UTF16LEToUTF8(@Bytes[2], Length(Bytes) - 2);
+    Exit;
+  end
+  { UTF-16BE BOM: FE FF → swap bytes, convert to UTF-8 }
+  else if (Length(Bytes) >= 2) and (Bytes[0] = $FE) and (Bytes[1] = $FF) then
+  begin
+    Result := UTF16BEToUTF8(@Bytes[2], Length(Bytes) - 2);
+    Exit;
+  end;
+
   LLen := Length(Bytes) - LOffset;
   if (LLen > 0) and (not UTF8IsValid(@Bytes[LOffset], SizeUInt(LLen))) then
     raise EConvertError.Create('read file: invalid UTF-8: ' + APath);
