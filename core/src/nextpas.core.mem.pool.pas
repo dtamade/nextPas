@@ -6,7 +6,7 @@ interface
 
 uses
   nextpas.core.mem.error,
-  nextpas.core.mem.allocator.base,
+  nextpas.core.mem.intf,
   nextpas.core.mem.pool.base,
   nextpas.core.mem.pool.memory_pool,
   nextpas.core.mem.pool.fixed_slab;

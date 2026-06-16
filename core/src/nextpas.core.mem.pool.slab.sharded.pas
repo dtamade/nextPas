@@ -11,7 +11,7 @@ uses
   nextpas.core.base.utils,
   nextpas.core.base,
   nextpas.core.mem.allocator,
-  nextpas.core.mem.allocator.base,
+  nextpas.core.mem.intf,
   nextpas.core.mem.mutex,
   nextpas.core.mem.pool.memory_pool,
   nextpas.core.mem.rwlock,
