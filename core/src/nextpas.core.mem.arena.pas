@@ -47,8 +47,6 @@ type
     function RemainingSize: SizeUInt; inline;
   end;
 
-  TArena = TLocalArena;
-
 implementation
 
 { TLocalArena }

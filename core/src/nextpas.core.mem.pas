@@ -13,6 +13,7 @@ uses
   nextpas.core.mem.error,
   nextpas.core.mem.default,
   nextpas.core.mem.arena,
+  nextpas.core.mem.blockpool,
   nextpas.core.mem.pool;
 
 type
@@ -20,7 +21,7 @@ type
   TArenaMarker = nextpas.core.mem.base.TArenaMarker;
   IAllocator = nextpas.core.mem.intf.IAllocator;
   TLocalArena = nextpas.core.mem.arena.TLocalArena;
-  TArena = nextpas.core.mem.arena.TArena;
+  TArena = nextpas.core.mem.blockpool.TFixedArena;
   TLocalBlockPool = nextpas.core.mem.pool.TLocalBlockPool;
   TPool = nextpas.core.mem.pool.TPool;
 

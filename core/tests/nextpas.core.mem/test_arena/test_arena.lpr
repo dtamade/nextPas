@@ -248,13 +248,13 @@ begin
   end;
 end;
 
-procedure TestArenaLegacyAlias;
+procedure TestArenaClassAlias;
 var
-  LA: TArena;
+  LA: TLocalArena;
 begin
-  LA := TArena.Create(64);
+  LA := TLocalArena.Create(64);
   try
-    Check(LA.Alloc(8) <> nil, 'legacy TArena alias remains usable');
+    Check(LA.Alloc(8) <> nil, 'TLocalArena class works correctly');
   finally
     LA.Free;
   end;
@@ -275,6 +275,6 @@ begin
   T.Run('Mark nested', @TestArenaMarkNested);
   T.Run('Write/Read', @TestArenaWriteRead);
   T.Run('AllocZeroed', @TestArenaZeroed);
-  T.Run('legacy TArena alias', @TestArenaLegacyAlias);
+  T.Run('TLocalArena class', @TestArenaClassAlias);
   T.Summary;
 end.

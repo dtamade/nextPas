@@ -76,13 +76,6 @@ type
   end;
 
   {**
-   * TArenaMarker
-   *
-   * @desc Arena 位置标记
-   *}
-  TArenaMarker = type SizeUInt;
-
-  {**
    * IArena
    *
    * @desc 线性分配器接口
@@ -229,8 +222,6 @@ type
     property PeakUsed: SizeUInt read FPeakUsed;
     property TotalAllocCount: QWord read FTotalAllocs;
   end;
-
-  TArena = TFixedArena;
 
   { 向后兼容的基类（已废弃，仅用于接口兼容） }
   TBlockPoolBase = class(TInterfacedObject, IBlockPool)

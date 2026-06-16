@@ -228,7 +228,7 @@ end;
 
 constructor TArenaConcurrent.Create(aTotalSize: SizeUInt);
 begin
-  Create(TArena.Create(aTotalSize));
+  Create(TFixedArena.Create(aTotalSize));
 end;
 
 destructor TArenaConcurrent.Destroy;
