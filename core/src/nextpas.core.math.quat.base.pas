@@ -10,6 +10,7 @@ uses
   nextpas.core.math.mat.base;
 
 type
+{ TQuatf - single-precision quaternion (x, y, z, w) }
   TQuatf = record
   private
     FX, FY, FZ, FW: Single;
@@ -22,13 +23,21 @@ type
     function GetW: Single; inline;
     procedure SetW(const AValue: Single); inline;
   public
+    {** Create a quaternion from x, y, z, w components }
     constructor Create(const AX, AY, AZ, AW: Single);
+    {** Create a quaternion from an axis and rotation angle in radians }
     constructor FromAxisAngle(const AAxis: TVec3f; const AAngle: Single);
+    {** Return a unit quaternion; identity if degenerate }
     function Normalize: TQuatf; inline;
+    {** Return the conjugate (negated imaginary, same real) }
     function Conjugate: TQuatf; inline;
+    {** Return the Euclidean length of the quaternion }
     function Length: Single; inline;
+    {** Return the dot product with another quaternion }
     function Dot(constref AOther: TQuatf): Single; inline;
+    {** Convert to a 4x4 rotation matrix }
     function ToMat4f: TMat4f; inline;
+    {** Rotate a 3D vector by this quaternion (assumes unit quaternion) }
     function RotateVec(const AV: TVec3f): TVec3f;
     property X: Single read GetX write SetX;
     property Y: Single read GetY write SetY;
@@ -36,6 +45,7 @@ type
     property W: Single read GetW write SetW;
   end;
 
+{ TQuatd - double-precision quaternion (x, y, z, w) }
   TQuatd = record
   private
     FX, FY, FZ, FW: Double;
@@ -48,13 +58,21 @@ type
     function GetW: Double; inline;
     procedure SetW(const AValue: Double); inline;
   public
+    {** Create a quaternion from x, y, z, w components }
     constructor Create(const AX, AY, AZ, AW: Double);
+    {** Create a quaternion from an axis and rotation angle in radians }
     constructor FromAxisAngle(const AAxis: TVec3d; const AAngle: Double);
+    {** Return a unit quaternion; identity if degenerate }
     function Normalize: TQuatd; inline;
+    {** Return the conjugate (negated imaginary, same real) }
     function Conjugate: TQuatd; inline;
+    {** Return the Euclidean length of the quaternion }
     function Length: Double; inline;
+    {** Return the dot product with another quaternion }
     function Dot(constref AOther: TQuatd): Double; inline;
+    {** Convert to a 4x4 rotation matrix }
     function ToMat4d: TMat4d; inline;
+    {** Rotate a 3D vector by this quaternion (assumes unit quaternion) }
     function RotateVec(const AV: TVec3d): TVec3d;
     property X: Double read GetX write SetX;
     property Y: Double read GetY write SetY;
@@ -62,7 +80,11 @@ type
     property W: Double read GetW write SetW;
   end;
 
+{ Identity quaternion constructors }
+
+{** Return the single-precision identity quaternion (0, 0, 0, 1) }
 function QuatfIdentity: TQuatf; inline;
+{** Return the double-precision identity quaternion (0, 0, 0, 1) }
 function QuatdIdentity: TQuatd; inline;
 
 implementation
