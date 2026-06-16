@@ -134,8 +134,11 @@ begin
 end;
 
 destructor TChild.Destroy;
+const
+  DESTROY_TIMEOUT_NS = 5000000000; { 5 seconds }
 var
   LResult: TPlatformProcessResult;
+  LDeadline: TInstant;
 begin
   if (not FWaited) and (not FDetached) then
   begin
@@ -143,7 +146,21 @@ begin
       if LResult.Status = nextpas.core.platform.process.base.psRunning then
       begin
         if platform_process_kill(FProc) = 0 then
-          platform_process_wait(FProc, LResult)
+        begin
+          LDeadline := TInstant.Now.Add(TDuration.FromNanoseconds(DESTROY_TIMEOUT_NS));
+          repeat
+            if platform_process_try_wait(FProc, LResult) <> 0 then
+              Break;
+            if LResult.Status <> nextpas.core.platform.process.base.psRunning then
+              Break;
+            if TInstant.Now.DurationSince(LDeadline).IsPositive then
+            begin
+              { Timeout: abandon child to avoid blocking destructor }
+              Break;
+            end;
+            platform_thread_sleep_ns(10000000);
+          until False;
+        end
         else
           platform_process_try_wait(FProc, LResult);
       end;
