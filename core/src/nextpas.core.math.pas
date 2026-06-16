@@ -7,7 +7,12 @@ interface
 uses
   nextpas.core.math.scalar,
   nextpas.core.math.trig,
-  nextpas.core.math.vec;
+  nextpas.core.math.vec,
+  nextpas.core.math.mat,
+  nextpas.core.math.quat,
+  nextpas.core.math.transform,
+  nextpas.core.math.easing,
+  nextpas.core.math.random;
 
 function IsAddOverflow(AA, AB: SizeUInt): Boolean; overload; inline;
 function IsAddOverflow(AA, AB: UInt32): Boolean; overload; inline;
