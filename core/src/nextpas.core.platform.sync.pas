@@ -1022,8 +1022,8 @@ var
 begin
   if _WaitAddressResolved then
     Exit;
-  LLib := LoadLibraryA('kernel32');
-  if LLib <> nil then
+  LLib := GetModuleHandleW(L'kernel32');
+  if LLib <> 0 then
   begin
     _WaitOnAddress := TWaitOnAddressFunc(GetProcAddress(LLib, 'WaitOnAddress'));
     _WakeByAddressSingle := TWakeByAddressSingleProc(GetProcAddress(LLib, 'WakeByAddressSingle'));
