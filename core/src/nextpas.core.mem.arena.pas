@@ -38,6 +38,11 @@ type
 
 implementation
 
+function IsPowerOfTwo(const AValue: SizeUInt): Boolean; inline;
+begin
+  Result := (AValue <> 0) and ((AValue and (AValue - 1)) = 0);
+end;
+
 { TLocalArena }
 
 procedure TLocalArena.Init(const ACapacity: SizeUInt);
@@ -61,21 +66,50 @@ begin
 end;
 
 function TLocalArena.Alloc(const ASize: SizeUInt): Pointer;
+var
+  LRemaining: SizeUInt;
 begin
-  if FOffset + ASize > FCapacity then
+  Result := nil;
+  if (ASize = 0) or (FBacking = nil) then
+    Exit;
+  if FOffset > FCapacity then
+    Exit;
+  LRemaining := FCapacity - FOffset;
+  if ASize > LRemaining then
     Exit(nil);
-  Result := FBacking + FOffset;
+  Result := Pointer(PtrUInt(FBacking) + FOffset);
   Inc(FOffset, ASize);
 end;
 
 function TLocalArena.AllocAligned(const ASize: SizeUInt; const AAlign: SizeUInt): Pointer;
 var
+  LCurrent: PtrUInt;
   LAligned: SizeUInt;
   LPadding: SizeUInt;
+  LRemaining: SizeUInt;
+  LMask: SizeUInt;
 begin
-  LAligned := (SizeUInt(FBacking) + FOffset + AAlign - 1) and not (AAlign - 1);
-  LPadding := LAligned - (SizeUInt(FBacking) + FOffset);
-  if FOffset + LPadding + ASize > FCapacity then
+  Result := nil;
+  if (ASize = 0) or (FBacking = nil) then
+    Exit;
+  if not IsPowerOfTwo(AAlign) then
+    Exit;
+  if FOffset > FCapacity then
+    Exit;
+  if PtrUInt(FBacking) > High(PtrUInt) - FOffset then
+    Exit;
+
+  LCurrent := PtrUInt(FBacking) + FOffset;
+  LMask := AAlign - 1;
+  if LCurrent > High(PtrUInt) - LMask then
+    Exit;
+
+  LAligned := (LCurrent + LMask) and not LMask;
+  LPadding := LAligned - LCurrent;
+  LRemaining := FCapacity - FOffset;
+  if LPadding > LRemaining then
+    Exit;
+  if ASize > LRemaining - LPadding then
     Exit(nil);
   Inc(FOffset, LPadding + ASize);
   Result := Pointer(LAligned);

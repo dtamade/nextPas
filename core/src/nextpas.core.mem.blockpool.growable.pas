@@ -14,9 +14,9 @@ interface
 
 uses
   nextpas.core.math,              // ✅ Math facade (for trunc)
+  nextpas.core.mem.base,
   nextpas.core.mem.blockpool,
-  nextpas.core.mem.alloc,
-  nextpas.core.mem.layout,
+  nextpas.core.mem.intf,
   nextpas.core.mem.error;
 
 type
@@ -30,7 +30,7 @@ type
     GrowthFactor: Double;          // geometric only (>= 1.1 recommended)
     GrowthStep: SizeUInt;          // linear only (>= 1)
     Alignment: SizeUInt;           // 0 = DEFAULT_ALIGNMENT, must be power of two
-    Allocator: IAlloc;             // nil = system heap (GetMem/FreeMem)
+    Allocator: IAllocator;         // nil = system heap (GetMem/FreeMem)
     KeepSegments: Boolean;         // keep extra segments on Reset
 
     class function Default(aBlockSize, aInitialCapacity: SizeUInt): TGrowingBlockPoolConfig; static;
@@ -79,7 +79,7 @@ type
     FGrowthStep: SizeUInt;
     FKeepSegments: Boolean;
 
-    FAllocator: IAlloc;
+    FAllocator: IAllocator;
 
     // statistics
     FPeakAlloc: SizeUInt;
@@ -134,6 +134,11 @@ implementation
 
 {$PUSH}
 {$WARN 4055 OFF} // pointer/ordinal conversions in pool internals
+
+function IsPowerOfTwo(const AValue: SizeUInt): Boolean; inline;
+begin
+  Result := (AValue <> 0) and ((AValue and (AValue - 1)) = 0);
+end;
 
 class function TGrowingBlockPoolConfig.Default(aBlockSize, aInitialCapacity: SizeUInt): TGrowingBlockPoolConfig;
 begin
@@ -308,7 +313,6 @@ var
   LBytes: SizeUInt;
   LAllocSize: SizeUInt;
   LRaw: Pointer;
-  LRes: TAllocResult;
   LAddr, LAligned: PtrUInt;
   LMask: SizeUInt;
   LSeg: TSegment;
@@ -348,10 +352,9 @@ begin
 
   if FAllocator <> nil then
   begin
-    LRes := FAllocator.Alloc(TMemLayout.Create(LAllocSize, MEM_DEFAULT_ALIGN));
-    if LRes.IsErr or (LRes.Ptr = nil) then
+    LRaw := FAllocator.GetMem(LAllocSize);
+    if LRaw = nil then
       Exit(False);
-    LRaw := LRes.Ptr;
   end
   else
   begin
@@ -369,7 +372,7 @@ begin
     if PtrUInt(LMask) > (High(PtrUInt) - LAddr) then
     begin
       if FAllocator <> nil then
-        FAllocator.Dealloc(LRaw, TMemLayout.Create(LAllocSize, MEM_DEFAULT_ALIGN))
+        FAllocator.FreeMem(LRaw)
       else
         FreeMem(LRaw);
       Exit(False);
@@ -476,14 +479,12 @@ end;
 procedure TGrowingBlockPool.FreeSegment(aIndex: SizeInt);
 var
   LRaw: Pointer;
-  LRawSize: SizeUInt;
   LBlocks: SizeUInt;
 begin
   if (aIndex < 0) or (aIndex > High(FSegments)) then
     Exit;
 
   LRaw := FSegments[aIndex].Raw;
-  LRawSize := FSegments[aIndex].RawSize;
   LBlocks := FSegments[aIndex].Blocks;
 
   FSegments[aIndex].Raw := nil;
@@ -500,7 +501,7 @@ begin
     Exit;
 
   if FAllocator <> nil then
-    FAllocator.Dealloc(LRaw, TMemLayout.Create(LRawSize, MEM_DEFAULT_ALIGN))
+    FAllocator.FreeMem(LRaw)
   else
     FreeMem(LRaw);
 end;

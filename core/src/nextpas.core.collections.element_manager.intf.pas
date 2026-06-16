@@ -4,7 +4,7 @@ unit nextpas.core.collections.element_manager.intf;
 
 interface
 
-uses nextpas.core.system.typinfo, nextpas.core.base, nextpas.core.mem.allocator, nextpas.core.collections.element_manager.base;
+uses nextpas.core.system.typinfo, nextpas.core.base, nextpas.core.mem.intf, nextpas.core.collections.element_manager.base;
 
 type
 

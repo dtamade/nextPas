@@ -8,7 +8,7 @@ uses
   nextpas.core.system.typinfo,
   nextpas.core.base,
   nextpas.core.errors,
-  nextpas.core.mem.allocator,
+  nextpas.core.mem.intf,
   nextpas.core.collections.hashmap.base,
   nextpas.core.simd.base,
   {$IFDEF HAS_AVX2}

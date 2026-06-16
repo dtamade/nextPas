@@ -19,9 +19,9 @@ uses
   nextpas.core.base.utils,
   nextpas.core.base,
   nextpas.core.atomic,
+  nextpas.core.mem.base,
   nextpas.core.mem.blockpool,
   nextpas.core.mem.blockpool.growable,
-  nextpas.core.mem.layout,
   nextpas.core.mem.error,
   nextpas.core.mem.mutex;
 

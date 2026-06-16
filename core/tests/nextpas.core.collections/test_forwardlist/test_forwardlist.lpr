@@ -7,7 +7,7 @@ uses
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.testing,
-  nextpas.core.mem.allocator,
+  nextpas.core.mem.intf,
   failing_allocator,
   leak_tracker,
   nextpas.core.collections,

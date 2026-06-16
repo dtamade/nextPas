@@ -11,7 +11,7 @@ uses
   nextpas.core.base,
   {$HINTS OFF}nextpas.core.math,{$HINTS ON}
   {$HINTS OFF}nextpas.core.mem.utils,{$HINTS ON}
-  nextpas.core.mem.allocator,
+  nextpas.core.mem.intf,
   nextpas.core.collections.base,
   nextpas.core.collections.element_manager;
 

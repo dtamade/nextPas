@@ -6,7 +6,8 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.mem.allocator,
+  nextpas.core.mem.intf,
+  nextpas.core.mem.default,
   nextpas.core.collections.queue.intf,
   nextpas.core.collections.deque.intf,
   nextpas.core.collections.vecdeque.intf,
@@ -117,7 +118,7 @@ begin
   if aAllocator <> nil then
     FAllocator := aAllocator
   else
-    FAllocator := GetRtlAllocator;
+    FAllocator := DefaultAllocator;
   FDeque := TInternalDeque.Create(FAllocator);
 end;
 
@@ -127,7 +128,7 @@ begin
   if aAllocator <> nil then
     FAllocator := aAllocator
   else
-    FAllocator := GetRtlAllocator;
+    FAllocator := DefaultAllocator;
   FDeque := TInternalDeque.Create(FAllocator);
   FDeque.Push(aElements);
 end;

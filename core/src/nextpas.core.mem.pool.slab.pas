@@ -11,7 +11,7 @@ uses
   nextpas.core.errors,
   nextpas.core.base,
   nextpas.core.mem.allocator,
-  nextpas.core.mem.allocator.base,
+  nextpas.core.mem.intf,
   nextpas.core.mem.pool.memory_pool,
   nextpas.core.mem.pool.fixed_slab,
   nextpas.core.mem.error;        // EAllocError, TAllocError
