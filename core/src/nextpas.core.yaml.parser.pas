@@ -19,19 +19,35 @@ type
   PYamlAnchorEntry = ^TYamlAnchorEntry;
 
   TYamlDocument = record
+  private
+    FNodes: PYamlNode;
+    FNodeCount: UInt32;
+    FNodeCap: UInt32;
+    FRootIdx: UInt32;
+    FAnchors: PYamlAnchorEntry;
+    FAnchorCount: UInt32;
+    FAnchorCap: UInt32;
     FAllocator: IAllocator;
-    Nodes: PYamlNode;
-    NodeCount: UInt32;
-    NodeCap: UInt32;
-    RootIdx: UInt32;
-    Anchors: PYamlAnchorEntry;
-    AnchorCount: UInt32;
-    AnchorCap: UInt32;
-    ParseDepth: Int32;
-    Error: TYamlError;
-    HasError: Boolean;
+    FParseDepth: Int32;
+    FError: TYamlError;
+    FHasError: Boolean;
+    procedure RegisterAnchor(const AName: TStringView; ANodeIdx: UInt32);
+  public
     procedure Init(const AAllocator: IAllocator);
     procedure Done;
+    function AddNode: UInt32;
+    function Node(AIdx: UInt32): PYamlNode; inline;
+    function NodeCount: UInt32; inline;
+    function Root: UInt32; inline;
+    procedure SetRoot(AIdx: UInt32); inline;
+    function AnchorEntry(AIdx: UInt32): PYamlAnchorEntry; inline;
+    function AnchorCount: UInt32; inline;
+    function HasError: Boolean; inline;
+    function Error: TYamlError; inline;
+    function ParseDepth: Int32; inline;
+    function Allocator: IAllocator; inline;
+    procedure SetError(const AMsg: string; const ALine, ACol: UInt32;
+      const AOffset: SizeUInt);
   end;
 
 procedure YamlDocInit(var ADoc: TYamlDocument);
@@ -57,44 +73,151 @@ begin
     FAllocator := DefaultAllocator
   else
     FAllocator := AAllocator;
-  NodeCap := INITIAL_CAPACITY;
-  Nodes := PYamlNode(FAllocator.Allocate(NodeCap * SizeOf(TYamlNode)));
-  NodeCount := 0;
-  RootIdx := 0;
-  AnchorCap := 16;
-  Anchors := PYamlAnchorEntry(FAllocator.Allocate(AnchorCap * SizeOf(TYamlAnchorEntry)));
-  AnchorCount := 0;
-  ParseDepth := 0;
-  Error.Message := TStringView.Empty;
-  Error.Line := 0;
-  Error.Col := 0;
-  Error.Offset := 0;
-  HasError := False;
+  FNodeCap := INITIAL_CAPACITY;
+  FNodes := PYamlNode(FAllocator.Allocate(FNodeCap * SizeOf(TYamlNode)));
+  FNodeCount := 0;
+  FRootIdx := 0;
+  FAnchorCap := 16;
+  FAnchors := PYamlAnchorEntry(FAllocator.Allocate(FAnchorCap * SizeOf(TYamlAnchorEntry)));
+  FAnchorCount := 0;
+  FParseDepth := 0;
+  FError.Message := TStringView.Empty;
+  FError.Line := 0;
+  FError.Col := 0;
+  FError.Offset := 0;
+  FHasError := False;
 end;
 
 procedure TYamlDocument.Done;
 begin
-  if Nodes <> nil then
+  if FNodes <> nil then
   begin
-    FAllocator.Deallocate(Pointer(Nodes));
-    Nodes := nil;
+    FAllocator.Deallocate(Pointer(FNodes));
+    FNodes := nil;
   end;
-  NodeCap := 0;
-  NodeCount := 0;
-  if Anchors <> nil then
+  FNodeCap := 0;
+  FNodeCount := 0;
+  if FAnchors <> nil then
   begin
-    FAllocator.Deallocate(Pointer(Anchors));
-    Anchors := nil;
+    FAllocator.Deallocate(Pointer(FAnchors));
+    FAnchors := nil;
   end;
-  AnchorCap := 0;
-  AnchorCount := 0;
-  ParseDepth := 0;
-  RootIdx := 0;
-  Error.Message := TStringView.Empty;
-  Error.Line := 0;
-  Error.Col := 0;
-  Error.Offset := 0;
-  HasError := False;
+  FAnchorCap := 0;
+  FAnchorCount := 0;
+  FParseDepth := 0;
+  FRootIdx := 0;
+  FError.Message := TStringView.Empty;
+  FError.Line := 0;
+  FError.Col := 0;
+  FError.Offset := 0;
+  FHasError := False;
+end;
+
+function TYamlDocument.AddNode: UInt32;
+var
+  LNewCap: UInt32;
+  LNewPtr: Pointer;
+begin
+  Result := FNodeCount;
+  if FNodeCount >= FNodeCap then
+  begin
+    LNewCap := FNodeCap * 2;
+    LNewPtr := FAllocator.Reallocate(Pointer(FNodes),
+      LNewCap * SizeOf(TYamlNode));
+    if LNewPtr = nil then
+    begin
+      SetError('out of memory', 0, 0, 0);
+      Exit(YAML_NODE_NONE);
+    end;
+    FNodes := PYamlNode(LNewPtr);
+    FNodeCap := LNewCap;
+  end;
+  FillChar(FNodes[Result], SizeOf(TYamlNode), 0);
+  FNodes[Result].Next := YAML_NODE_NONE;
+  Inc(FNodeCount);
+end;
+
+procedure TYamlDocument.RegisterAnchor(const AName: TStringView; ANodeIdx: UInt32);
+var
+  LNewCap: UInt32;
+  LNewPtr: Pointer;
+begin
+  if FAnchorCount >= FAnchorCap then
+  begin
+    LNewCap := FAnchorCap * 2;
+    LNewPtr := FAllocator.Reallocate(Pointer(FAnchors),
+      LNewCap * SizeOf(TYamlAnchorEntry));
+    if LNewPtr = nil then
+    begin
+      SetError('out of memory', 0, 0, 0);
+      Exit;
+    end;
+    FAnchors := PYamlAnchorEntry(LNewPtr);
+    FAnchorCap := LNewCap;
+  end;
+  FAnchors[FAnchorCount].Name := AName;
+  FAnchors[FAnchorCount].NodeIdx := ANodeIdx;
+  Inc(FAnchorCount);
+end;
+
+function TYamlDocument.Node(AIdx: UInt32): PYamlNode;
+begin
+  Result := @FNodes[AIdx];
+end;
+
+function TYamlDocument.NodeCount: UInt32;
+begin
+  Result := FNodeCount;
+end;
+
+function TYamlDocument.Root: UInt32;
+begin
+  Result := FRootIdx;
+end;
+
+procedure TYamlDocument.SetRoot(AIdx: UInt32);
+begin
+  FRootIdx := AIdx;
+end;
+
+function TYamlDocument.AnchorEntry(AIdx: UInt32): PYamlAnchorEntry;
+begin
+  Result := @FAnchors[AIdx];
+end;
+
+function TYamlDocument.AnchorCount: UInt32;
+begin
+  Result := FAnchorCount;
+end;
+
+function TYamlDocument.HasError: Boolean;
+begin
+  Result := FHasError;
+end;
+
+function TYamlDocument.Error: TYamlError;
+begin
+  Result := FError;
+end;
+
+function TYamlDocument.ParseDepth: Int32;
+begin
+  Result := FParseDepth;
+end;
+
+function TYamlDocument.Allocator: IAllocator;
+begin
+  Result := FAllocator;
+end;
+
+procedure TYamlDocument.SetError(const AMsg: string; const ALine, ACol: UInt32;
+  const AOffset: SizeUInt);
+begin
+  FHasError := True;
+  FError.Message := TStringView.FromStr(AMsg);
+  FError.Line := ALine;
+  FError.Col := ACol;
+  FError.Offset := AOffset;
 end;
 
 procedure YamlDocInit(var ADoc: TYamlDocument);
@@ -107,43 +230,16 @@ begin
   ADoc.Init(AAllocator);
 end;
 
-function AddNode(var ADoc: TYamlDocument): UInt32;
-begin
-  Result := ADoc.NodeCount;
-  if ADoc.NodeCount >= ADoc.NodeCap then
-  begin
-    ADoc.NodeCap := ADoc.NodeCap * 2;
-    ADoc.Nodes := PYamlNode(ADoc.FAllocator.Reallocate(Pointer(ADoc.Nodes),
-      ADoc.NodeCap * SizeOf(TYamlNode)));
-  end;
-  FillChar(ADoc.Nodes[Result], SizeOf(TYamlNode), 0);
-  ADoc.Nodes[Result].Next := YAML_NODE_NONE;
-  Inc(ADoc.NodeCount);
-end;
-
-procedure RegisterAnchor(var ADoc: TYamlDocument; const AName: TStringView; ANodeIdx: UInt32);
-begin
-  if ADoc.AnchorCount >= ADoc.AnchorCap then
-  begin
-    ADoc.AnchorCap := ADoc.AnchorCap * 2;
-    ADoc.Anchors := PYamlAnchorEntry(ADoc.FAllocator.Reallocate(Pointer(ADoc.Anchors),
-      ADoc.AnchorCap * SizeOf(TYamlAnchorEntry)));
-  end;
-  ADoc.Anchors[ADoc.AnchorCount].Name := AName;
-  ADoc.Anchors[ADoc.AnchorCount].NodeIdx := ANodeIdx;
-  Inc(ADoc.AnchorCount);
-end;
-
 function ResolveAlias(var ADoc: TYamlDocument; const AName: TStringView): UInt32;
 var
   LI: UInt32;
 begin
-  for LI := 1 to ADoc.AnchorCount do
-    if ADoc.Anchors[LI - 1].Name.Equals(AName) then
+  for LI := 1 to ADoc.FAnchorCount do
+    if ADoc.FAnchors[LI - 1].Name.Equals(AName) then
     begin
-      Result := ADoc.Anchors[LI - 1].NodeIdx;
+      Result := ADoc.FAnchors[LI - 1].NodeIdx;
       Exit;
-  end;
+    end;
   Result := YAML_NODE_NONE;
 end;
 
@@ -156,23 +252,13 @@ begin
   Result := False;
   LIdx := ANodeIdx;
   LDepth := 1;
-  while (LIdx < ADoc.NodeCount) and (ADoc.Nodes[LIdx].Kind = ynkAlias) do
+  while (LIdx < ADoc.FNodeCount) and (ADoc.FNodes[LIdx].Kind = ynkAlias) do
   begin
     if LDepth >= YAML_ALIAS_RESOLUTION_DEPTH_LIMIT then
       Exit(True);
-    LIdx := ADoc.Nodes[LIdx].AliasTarget;
+    LIdx := ADoc.FNodes[LIdx].AliasTarget;
     Inc(LDepth);
   end;
-end;
-
-procedure SetError(var ADoc: TYamlDocument; const AMsg: string;
-  const ALine, ACol: UInt32; const AOffset: SizeUInt);
-begin
-  ADoc.HasError := True;
-  ADoc.Error.Message := TStringView.FromStr(AMsg);
-  ADoc.Error.Line := ALine;
-  ADoc.Error.Col := ACol;
-  ADoc.Error.Offset := AOffset;
 end;
 
 function IsBareMergeKeyToken(const AToken: TYamlToken): Boolean;
@@ -189,14 +275,14 @@ end;
 procedure SetUnsupportedMergeKeyError(var ADoc: TYamlDocument;
   const AToken: TYamlToken);
 begin
-  SetError(ADoc, 'YAML merge keys are not supported',
+  ADoc.SetError('YAML merge keys are not supported',
     AToken.Line, AToken.Col, AToken.Offset);
 end;
 
 procedure SetUnsupportedExplicitMappingKeyError(var ADoc: TYamlDocument;
   const AToken: TYamlToken);
 begin
-  SetError(ADoc, 'YAML explicit mapping keys are not supported',
+  ADoc.SetError('YAML explicit mapping keys are not supported',
     AToken.Line, AToken.Col, AToken.Offset);
 end;
 
@@ -209,22 +295,22 @@ begin
   LCur := AFirstKeyIdx;
   while LCur <> YAML_NODE_NONE do
   begin
-    if (ADoc.Nodes[LCur].Kind = ynkString) and
-       ADoc.Nodes[LCur].Str.Equals(AKey) then
+    if (ADoc.FNodes[LCur].Kind = ynkString) and
+       ADoc.FNodes[LCur].Str.Equals(AKey) then
     begin
       Result := True;
       Exit;
     end;
-    if ADoc.Nodes[LCur].Next = YAML_NODE_NONE then
+    if ADoc.FNodes[LCur].Next = YAML_NODE_NONE then
       Exit;
-    LCur := ADoc.Nodes[ADoc.Nodes[LCur].Next].Next;
+    LCur := ADoc.FNodes[ADoc.FNodes[LCur].Next].Next;
   end;
 end;
 
 procedure SetDuplicateMappingKeyError(var ADoc: TYamlDocument;
   const AToken: TYamlToken);
 begin
-  SetError(ADoc, 'duplicate mapping key',
+  ADoc.SetError('duplicate mapping key',
     AToken.Line, AToken.Col, AToken.Offset);
 end;
 
@@ -284,19 +370,21 @@ var
   LInt: Int64;
   LFloat: Double;
 begin
-  LIdx := AddNode(ADoc);
+  LIdx := ADoc.AddNode;
+  if LIdx = YAML_NODE_NONE then
+    Exit(YAML_NODE_NONE);
 
   if AStyle <> yssPlain then
   begin
-    ADoc.Nodes[LIdx].Kind := ynkString;
-    ADoc.Nodes[LIdx].Str := AValue;
+    ADoc.FNodes[LIdx].Kind := ynkString;
+    ADoc.FNodes[LIdx].Str := AValue;
     Result := LIdx;
     Exit;
   end;
 
   if AValue.IsEmpty then
   begin
-    ADoc.Nodes[LIdx].Kind := ynkNull;
+    ADoc.FNodes[LIdx].Kind := ynkNull;
     Result := LIdx;
     Exit;
   end;
@@ -306,7 +394,7 @@ begin
   // Null
   if (LStr = 'null') or (LStr = 'Null') or (LStr = 'NULL') or (LStr = '~') then
   begin
-    ADoc.Nodes[LIdx].Kind := ynkNull;
+    ADoc.FNodes[LIdx].Kind := ynkNull;
     Result := LIdx;
     Exit;
   end;
@@ -314,15 +402,15 @@ begin
   // Bool
   if (LStr = 'true') or (LStr = 'True') or (LStr = 'TRUE') then
   begin
-    ADoc.Nodes[LIdx].Kind := ynkBool;
-    ADoc.Nodes[LIdx].BoolVal := True;
+    ADoc.FNodes[LIdx].Kind := ynkBool;
+    ADoc.FNodes[LIdx].BoolVal := True;
     Result := LIdx;
     Exit;
   end;
   if (LStr = 'false') or (LStr = 'False') or (LStr = 'FALSE') then
   begin
-    ADoc.Nodes[LIdx].Kind := ynkBool;
-    ADoc.Nodes[LIdx].BoolVal := False;
+    ADoc.FNodes[LIdx].Kind := ynkBool;
+    ADoc.FNodes[LIdx].BoolVal := False;
     Result := LIdx;
     Exit;
   end;
@@ -330,8 +418,8 @@ begin
   // Int
   if ViewToInt64(AValue, LInt) then
   begin
-    ADoc.Nodes[LIdx].Kind := ynkInt;
-    ADoc.Nodes[LIdx].IntVal := LInt;
+    ADoc.FNodes[LIdx].Kind := ynkInt;
+    ADoc.FNodes[LIdx].IntVal := LInt;
     Result := LIdx;
     Exit;
   end;
@@ -343,8 +431,8 @@ begin
     LInt := 0;
     if TryParseHex(AValue, LInt) then
     begin
-      ADoc.Nodes[LIdx].Kind := ynkInt;
-      ADoc.Nodes[LIdx].IntVal := LInt;
+      ADoc.FNodes[LIdx].Kind := ynkInt;
+      ADoc.FNodes[LIdx].IntVal := LInt;
       Result := LIdx;
       Exit;
     end;
@@ -357,8 +445,8 @@ begin
     LInt := 0;
     if TryParseOctal(AValue, LInt) then
     begin
-      ADoc.Nodes[LIdx].Kind := ynkInt;
-      ADoc.Nodes[LIdx].IntVal := LInt;
+      ADoc.FNodes[LIdx].Kind := ynkInt;
+      ADoc.FNodes[LIdx].IntVal := LInt;
       Result := LIdx;
       Exit;
     end;
@@ -368,37 +456,37 @@ begin
   if (LStr = '.inf') or (LStr = '.Inf') or (LStr = '.INF') or
      (LStr = '+.inf') or (LStr = '+.Inf') or (LStr = '+.INF') then
   begin
-    ADoc.Nodes[LIdx].Kind := ynkFloat;
-    ADoc.Nodes[LIdx].RealVal := 1.0 / 0.0;
+    ADoc.FNodes[LIdx].Kind := ynkFloat;
+    ADoc.FNodes[LIdx].RealVal := 1.0 / 0.0;
     Result := LIdx;
     Exit;
   end;
   if (LStr = '-.inf') or (LStr = '-.Inf') or (LStr = '-.INF') then
   begin
-    ADoc.Nodes[LIdx].Kind := ynkFloat;
-    ADoc.Nodes[LIdx].RealVal := -1.0 / 0.0;
+    ADoc.FNodes[LIdx].Kind := ynkFloat;
+    ADoc.FNodes[LIdx].RealVal := -1.0 / 0.0;
     Result := LIdx;
     Exit;
   end;
   if (LStr = '.nan') or (LStr = '.NaN') or (LStr = '.NAN') then
   begin
-    ADoc.Nodes[LIdx].Kind := ynkFloat;
-    ADoc.Nodes[LIdx].RealVal := 0.0 / 0.0;
+    ADoc.FNodes[LIdx].Kind := ynkFloat;
+    ADoc.FNodes[LIdx].RealVal := 0.0 / 0.0;
     Result := LIdx;
     Exit;
   end;
 
   if ViewToDouble(AValue, LFloat) then
   begin
-    ADoc.Nodes[LIdx].Kind := ynkFloat;
-    ADoc.Nodes[LIdx].RealVal := LFloat;
+    ADoc.FNodes[LIdx].Kind := ynkFloat;
+    ADoc.FNodes[LIdx].RealVal := LFloat;
     Result := LIdx;
     Exit;
   end;
 
   // Default: string
-  ADoc.Nodes[LIdx].Kind := ynkString;
-  ADoc.Nodes[LIdx].Str := AValue;
+  ADoc.FNodes[LIdx].Kind := ynkString;
+  ADoc.FNodes[LIdx].Str := AValue;
   Result := LIdx;
 end;
 
@@ -412,8 +500,10 @@ var
   LIdx, LFirst, LPrev, LChild: UInt32;
   LCount: UInt32;
 begin
-  LIdx := AddNode(ADoc);
-  ADoc.Nodes[LIdx].Kind := ynkSequence;
+  LIdx := ADoc.AddNode;
+  if LIdx = YAML_NODE_NONE then
+    Exit(YAML_NODE_NONE);
+  ADoc.FNodes[LIdx].Kind := ynkSequence;
 
   LFirst := YAML_NODE_NONE;
   LPrev := YAML_NODE_NONE;
@@ -423,12 +513,12 @@ begin
   begin
     ACurToken := AScanner.NextToken; // consume - indicator
     LChild := ParseNode(ADoc, AScanner, ACurToken);
-    if ADoc.HasError then begin Result := LIdx; Exit; end;
+    if ADoc.FHasError then begin Result := LIdx; Exit; end;
 
     if LFirst = YAML_NODE_NONE then
       LFirst := LChild
     else
-      ADoc.Nodes[LPrev].Next := LChild;
+      ADoc.FNodes[LPrev].Next := LChild;
     LPrev := LChild;
     Inc(LCount);
   end;
@@ -436,8 +526,8 @@ begin
   if ACurToken.Kind = ytkBlockEnd then
     ACurToken := AScanner.NextToken;
 
-  ADoc.Nodes[LIdx].Container.FirstChild := LFirst;
-  ADoc.Nodes[LIdx].Container.Count := LCount;
+  ADoc.FNodes[LIdx].Container.FirstChild := LFirst;
+  ADoc.FNodes[LIdx].Container.Count := LCount;
   Result := LIdx;
 end;
 
@@ -447,8 +537,10 @@ var
   LIdx, LFirst, LPrev, LKeyNode, LValNode: UInt32;
   LCount: UInt32;
 begin
-  LIdx := AddNode(ADoc);
-  ADoc.Nodes[LIdx].Kind := ynkMapping;
+  LIdx := ADoc.AddNode;
+  if LIdx = YAML_NODE_NONE then
+    Exit(YAML_NODE_NONE);
+  ADoc.FNodes[LIdx].Kind := ynkMapping;
   ACurToken := AScanner.NextToken; // consume BlockMapStart
 
   LFirst := YAML_NODE_NONE;
@@ -476,15 +568,20 @@ begin
         Result := LIdx;
         Exit;
       end;
-      LKeyNode := AddNode(ADoc);
-      ADoc.Nodes[LKeyNode].Kind := ynkString;
-      ADoc.Nodes[LKeyNode].Str := ACurToken.Value;
-      ADoc.Nodes[LKeyNode].Next := YAML_NODE_NONE;
+      LKeyNode := ADoc.AddNode;
+      if LKeyNode = YAML_NODE_NONE then
+      begin
+        Result := LIdx;
+        Exit;
+      end;
+      ADoc.FNodes[LKeyNode].Kind := ynkString;
+      ADoc.FNodes[LKeyNode].Str := ACurToken.Value;
+      ADoc.FNodes[LKeyNode].Next := YAML_NODE_NONE;
       ACurToken := AScanner.NextToken;
     end
     else
     begin
-      SetError(ADoc, 'expected mapping key', ACurToken.Line, ACurToken.Col,
+      ADoc.SetError('expected mapping key', ACurToken.Line, ACurToken.Col,
         ACurToken.Offset);
       Result := LIdx;
       Exit;
@@ -495,20 +592,25 @@ begin
     begin
       ACurToken := AScanner.NextToken;
       LValNode := ParseNode(ADoc, AScanner, ACurToken);
-      if ADoc.HasError then begin Result := LIdx; Exit; end;
+      if ADoc.FHasError then begin Result := LIdx; Exit; end;
     end
     else
     begin
-      LValNode := AddNode(ADoc);
-      ADoc.Nodes[LValNode].Kind := ynkNull;
+      LValNode := ADoc.AddNode;
+      if LValNode = YAML_NODE_NONE then
+      begin
+        Result := LIdx;
+        Exit;
+      end;
+      ADoc.FNodes[LValNode].Kind := ynkNull;
     end;
 
-    ADoc.Nodes[LKeyNode].Next := LValNode;
+    ADoc.FNodes[LKeyNode].Next := LValNode;
 
     if LFirst = YAML_NODE_NONE then
       LFirst := LKeyNode
     else
-      ADoc.Nodes[LPrev].Next := LKeyNode;
+      ADoc.FNodes[LPrev].Next := LKeyNode;
     LPrev := LValNode;
     Inc(LCount);
   end;
@@ -516,8 +618,8 @@ begin
   if ACurToken.Kind = ytkBlockEnd then
     ACurToken := AScanner.NextToken;
 
-  ADoc.Nodes[LIdx].Container.FirstChild := LFirst;
-  ADoc.Nodes[LIdx].Container.Count := LCount;
+  ADoc.FNodes[LIdx].Container.FirstChild := LFirst;
+  ADoc.FNodes[LIdx].Container.Count := LCount;
   Result := LIdx;
 end;
 
@@ -527,8 +629,10 @@ var
   LIdx, LFirst, LPrev, LChild: UInt32;
   LCount: UInt32;
 begin
-  LIdx := AddNode(ADoc);
-  ADoc.Nodes[LIdx].Kind := ynkSequence;
+  LIdx := ADoc.AddNode;
+  if LIdx = YAML_NODE_NONE then
+    Exit(YAML_NODE_NONE);
+  ADoc.FNodes[LIdx].Kind := ynkSequence;
   ACurToken := AScanner.NextToken; // consume [
 
   LFirst := YAML_NODE_NONE;
@@ -542,7 +646,7 @@ begin
     begin
       if ACurToken.Kind <> ytkFlowEntry then
       begin
-        SetError(ADoc, 'expected "," or "]"', ACurToken.Line, ACurToken.Col,
+        ADoc.SetError('expected "," or "]"', ACurToken.Line, ACurToken.Col,
           ACurToken.Offset);
         Result := LIdx;
         Exit;
@@ -553,12 +657,12 @@ begin
     end;
 
     LChild := ParseNode(ADoc, AScanner, ACurToken);
-    if ADoc.HasError then begin Result := LIdx; Exit; end;
+    if ADoc.FHasError then begin Result := LIdx; Exit; end;
 
     if LFirst = YAML_NODE_NONE then
       LFirst := LChild
     else
-      ADoc.Nodes[LPrev].Next := LChild;
+      ADoc.FNodes[LPrev].Next := LChild;
     LPrev := LChild;
     Inc(LCount);
   end;
@@ -567,16 +671,16 @@ begin
   begin
     ACurToken := AScanner.NextToken; // consume ]
   end
-  else if (ACurToken.Kind = ytkStreamEnd) and (not ADoc.HasError) then
+  else if (ACurToken.Kind = ytkStreamEnd) and (not ADoc.FHasError) then
   begin
-    SetError(ADoc, 'expected "]"', ACurToken.Line, ACurToken.Col,
+    ADoc.SetError('expected "]"', ACurToken.Line, ACurToken.Col,
       ACurToken.Offset);
     Result := LIdx;
     Exit;
   end;
 
-  ADoc.Nodes[LIdx].Container.FirstChild := LFirst;
-  ADoc.Nodes[LIdx].Container.Count := LCount;
+  ADoc.FNodes[LIdx].Container.FirstChild := LFirst;
+  ADoc.FNodes[LIdx].Container.Count := LCount;
   Result := LIdx;
 end;
 
@@ -586,8 +690,10 @@ var
   LIdx, LFirst, LPrev, LKeyNode, LValNode: UInt32;
   LCount: UInt32;
 begin
-  LIdx := AddNode(ADoc);
-  ADoc.Nodes[LIdx].Kind := ynkMapping;
+  LIdx := ADoc.AddNode;
+  if LIdx = YAML_NODE_NONE then
+    Exit(YAML_NODE_NONE);
+  ADoc.FNodes[LIdx].Kind := ynkMapping;
   ACurToken := AScanner.NextToken; // consume {
 
   LFirst := YAML_NODE_NONE;
@@ -608,7 +714,7 @@ begin
     begin
       if ACurToken.Kind <> ytkFlowEntry then
       begin
-        SetError(ADoc, 'expected "," or "}"', ACurToken.Line, ACurToken.Col,
+        ADoc.SetError('expected "," or "}"', ACurToken.Line, ACurToken.Col,
           ACurToken.Offset);
         Result := LIdx;
         Exit;
@@ -633,15 +739,20 @@ begin
         Result := LIdx;
         Exit;
       end;
-      LKeyNode := AddNode(ADoc);
-      ADoc.Nodes[LKeyNode].Kind := ynkString;
-      ADoc.Nodes[LKeyNode].Str := ACurToken.Value;
-      ADoc.Nodes[LKeyNode].Next := YAML_NODE_NONE;
+      LKeyNode := ADoc.AddNode;
+      if LKeyNode = YAML_NODE_NONE then
+      begin
+        Result := LIdx;
+        Exit;
+      end;
+      ADoc.FNodes[LKeyNode].Kind := ynkString;
+      ADoc.FNodes[LKeyNode].Str := ACurToken.Value;
+      ADoc.FNodes[LKeyNode].Next := YAML_NODE_NONE;
       ACurToken := AScanner.NextToken;
     end
     else
     begin
-      SetError(ADoc, 'expected mapping key', ACurToken.Line, ACurToken.Col,
+      ADoc.SetError('expected mapping key', ACurToken.Line, ACurToken.Col,
         ACurToken.Offset);
       Result := LIdx;
       Exit;
@@ -652,22 +763,22 @@ begin
       ACurToken := AScanner.NextToken // consume :
     else
     begin
-      SetError(ADoc, 'expected ":"', ACurToken.Line, ACurToken.Col,
+      ADoc.SetError('expected ":"', ACurToken.Line, ACurToken.Col,
         ACurToken.Offset);
       Result := LIdx;
       Exit;
     end;
 
     LValNode := ParseNode(ADoc, AScanner, ACurToken);
-    if ADoc.HasError then begin Result := LIdx; Exit; end;
+    if ADoc.FHasError then begin Result := LIdx; Exit; end;
 
     // Link key → value as siblings
-    ADoc.Nodes[LKeyNode].Next := LValNode;
+    ADoc.FNodes[LKeyNode].Next := LValNode;
 
     if LFirst = YAML_NODE_NONE then
       LFirst := LKeyNode
     else
-      ADoc.Nodes[LPrev].Next := LKeyNode;
+      ADoc.FNodes[LPrev].Next := LKeyNode;
     LPrev := LValNode;
     Inc(LCount);
   end;
@@ -676,16 +787,16 @@ begin
   begin
     ACurToken := AScanner.NextToken; // consume }
   end
-  else if (ACurToken.Kind = ytkStreamEnd) and (not ADoc.HasError) then
+  else if (ACurToken.Kind = ytkStreamEnd) and (not ADoc.FHasError) then
   begin
-    SetError(ADoc, 'expected "}"', ACurToken.Line, ACurToken.Col,
+    ADoc.SetError('expected "}"', ACurToken.Line, ACurToken.Col,
       ACurToken.Offset);
     Result := LIdx;
     Exit;
   end;
 
-  ADoc.Nodes[LIdx].Container.FirstChild := LFirst;
-  ADoc.Nodes[LIdx].Container.Count := LCount;
+  ADoc.FNodes[LIdx].Container.FirstChild := LFirst;
+  ADoc.FNodes[LIdx].Container.Count := LCount;
   Result := LIdx;
 end;
 
@@ -697,14 +808,15 @@ var
   LKeyNode, LValNode, LFirst, LPrev, LIdx: UInt32;
   LCount, LMapCol: UInt32;
 begin
-  Inc(ADoc.ParseDepth);
-  if ADoc.ParseDepth > 256 then
+  Inc(ADoc.FParseDepth);
+  if ADoc.FParseDepth > 256 then
   begin
-    SetError(ADoc, 'nesting too deep', ACurToken.Line, ACurToken.Col,
+    ADoc.SetError('nesting too deep', ACurToken.Line, ACurToken.Col,
       ACurToken.Offset);
-    Result := AddNode(ADoc);
-    ADoc.Nodes[Result].Kind := ynkNull;
-    Dec(ADoc.ParseDepth);
+    Result := ADoc.AddNode;
+    if Result <> YAML_NODE_NONE then
+      ADoc.FNodes[Result].Kind := ynkNull;
+    Dec(ADoc.FParseDepth);
     Exit;
   end;
   case ACurToken.Kind of
@@ -722,27 +834,37 @@ begin
       LKeyView := ACurToken.Value;
       LMapCol := ACurToken.Col;
       Result := ResolveScalar(ACurToken.Value, ACurToken.Style, ADoc);
+      if Result = YAML_NODE_NONE then
+      begin
+        Dec(ADoc.FParseDepth);
+        Exit;
+      end;
       ACurToken := AScanner.NextToken;
       if ACurToken.Kind = ytkValue then
       begin
         if ACurToken.Line <> LKeyToken.Line then
         begin
-          SetError(ADoc, 'expected mapping key', ACurToken.Line, ACurToken.Col,
+          ADoc.SetError('expected mapping key', ACurToken.Line, ACurToken.Col,
             ACurToken.Offset);
-          Dec(ADoc.ParseDepth);
+          Dec(ADoc.FParseDepth);
           Exit;
         end;
         if IsBareMergeKeyToken(LKeyToken) then
         begin
           SetUnsupportedMergeKeyError(ADoc, LKeyToken);
-          Dec(ADoc.ParseDepth);
+          Dec(ADoc.FParseDepth);
           Exit;
         end;
         LKeyNode := Result;
-        ADoc.Nodes[LKeyNode].Kind := ynkString;
-        ADoc.Nodes[LKeyNode].Str := LKeyView;
-        LIdx := AddNode(ADoc);
-        ADoc.Nodes[LIdx].Kind := ynkMapping;
+        ADoc.FNodes[LKeyNode].Kind := ynkString;
+        ADoc.FNodes[LKeyNode].Str := LKeyView;
+        LIdx := ADoc.AddNode;
+        if LIdx = YAML_NODE_NONE then
+        begin
+          Dec(ADoc.FParseDepth);
+          Exit;
+        end;
+        ADoc.FNodes[LIdx].Kind := ynkMapping;
         LFirst := LKeyNode;
         LPrev := YAML_NODE_NONE;
         LCount := 0;
@@ -750,12 +872,12 @@ begin
         begin
           ACurToken := AScanner.NextToken;
           LValNode := ParseNode(ADoc, AScanner, ACurToken);
-          if ADoc.HasError then begin Result := LIdx; Exit; end;
-          ADoc.Nodes[LKeyNode].Next := LValNode;
+          if ADoc.FHasError then begin Result := LIdx; Exit; end;
+          ADoc.FNodes[LKeyNode].Next := LValNode;
           if LCount = 0 then
             LFirst := LKeyNode
           else
-            ADoc.Nodes[LPrev].Next := LKeyNode;
+            ADoc.FNodes[LPrev].Next := LKeyNode;
           LPrev := LValNode;
           Inc(LCount);
           if (ACurToken.Kind = ytkScalar) and (ACurToken.Col = LMapCol) then
@@ -764,21 +886,27 @@ begin
             begin
               SetUnsupportedMergeKeyError(ADoc, ACurToken);
               Result := LIdx;
-              Dec(ADoc.ParseDepth);
+              Dec(ADoc.FParseDepth);
               Exit;
             end;
             if MappingContainsKey(ADoc, LFirst, ACurToken.Value) then
             begin
               SetDuplicateMappingKeyError(ADoc, ACurToken);
               Result := LIdx;
-              Dec(ADoc.ParseDepth);
+              Dec(ADoc.FParseDepth);
               Exit;
             end;
             LKeyView := ACurToken.Value;
-            LKeyNode := AddNode(ADoc);
-            ADoc.Nodes[LKeyNode].Kind := ynkString;
-            ADoc.Nodes[LKeyNode].Str := LKeyView;
-            ADoc.Nodes[LKeyNode].Next := YAML_NODE_NONE;
+            LKeyNode := ADoc.AddNode;
+            if LKeyNode = YAML_NODE_NONE then
+            begin
+              Result := LIdx;
+              Dec(ADoc.FParseDepth);
+              Exit;
+            end;
+            ADoc.FNodes[LKeyNode].Kind := ynkString;
+            ADoc.FNodes[LKeyNode].Str := LKeyView;
+            ADoc.FNodes[LKeyNode].Next := YAML_NODE_NONE;
             ACurToken := AScanner.NextToken;
           end
           else
@@ -786,16 +914,16 @@ begin
         end;
         if ACurToken.Kind = ytkValue then
         begin
-          SetError(ADoc, 'expected mapping key', ACurToken.Line, ACurToken.Col,
+          ADoc.SetError('expected mapping key', ACurToken.Line, ACurToken.Col,
             ACurToken.Offset);
           Result := LIdx;
-          Dec(ADoc.ParseDepth);
+          Dec(ADoc.FParseDepth);
           Exit;
         end;
         if ACurToken.Kind = ytkBlockEnd then
           ACurToken := AScanner.NextToken;
-        ADoc.Nodes[LIdx].Container.FirstChild := LFirst;
-        ADoc.Nodes[LIdx].Container.Count := LCount;
+        ADoc.FNodes[LIdx].Container.FirstChild := LFirst;
+        ADoc.FNodes[LIdx].Container.Count := LCount;
         Result := LIdx;
       end;
     end;
@@ -804,23 +932,30 @@ begin
       LIdx := ResolveAlias(ADoc, ACurToken.Value);
       if LIdx = YAML_NODE_NONE then
       begin
-        SetError(ADoc, 'undefined alias', ACurToken.Line, ACurToken.Col,
+        ADoc.SetError('undefined alias', ACurToken.Line, ACurToken.Col,
           ACurToken.Offset);
-        Result := AddNode(ADoc);
-        ADoc.Nodes[Result].Kind := ynkNull;
+        Result := ADoc.AddNode;
+        if Result <> YAML_NODE_NONE then
+          ADoc.FNodes[Result].Kind := ynkNull;
       end
       else if AliasResolutionDepthExceedsLimit(ADoc, LIdx) then
       begin
-        SetError(ADoc, 'alias resolution depth exceeds limit',
+        ADoc.SetError('alias resolution depth exceeds limit',
           ACurToken.Line, ACurToken.Col, ACurToken.Offset);
-        Result := AddNode(ADoc);
-        ADoc.Nodes[Result].Kind := ynkNull;
+        Result := ADoc.AddNode;
+        if Result <> YAML_NODE_NONE then
+          ADoc.FNodes[Result].Kind := ynkNull;
       end
       else
       begin
-        Result := AddNode(ADoc);
-        ADoc.Nodes[Result].Kind := ynkAlias;
-        ADoc.Nodes[Result].AliasTarget := LIdx;
+        Result := ADoc.AddNode;
+        if Result = YAML_NODE_NONE then
+        begin
+          Dec(ADoc.FParseDepth);
+          Exit;
+        end;
+        ADoc.FNodes[Result].Kind := ynkAlias;
+        ADoc.FNodes[Result].AliasTarget := LIdx;
       end;
       ACurToken := AScanner.NextToken;
     end;
@@ -829,30 +964,33 @@ begin
       LAnchorName := ACurToken.Value;
       ACurToken := AScanner.NextToken;
       Result := ParseNode(ADoc, AScanner, ACurToken);
-      if not ADoc.HasError then
+      if not ADoc.FHasError then
       begin
-        ADoc.Nodes[Result].Anchor := LAnchorName;
-        RegisterAnchor(ADoc, LAnchorName, Result);
+        ADoc.FNodes[Result].Anchor := LAnchorName;
+        ADoc.RegisterAnchor(LAnchorName, Result);
       end;
     end;
     ytkKey:
     begin
       SetUnsupportedExplicitMappingKeyError(ADoc, ACurToken);
-      Result := AddNode(ADoc);
-      ADoc.Nodes[Result].Kind := ynkNull;
+      Result := ADoc.AddNode;
+      if Result <> YAML_NODE_NONE then
+        ADoc.FNodes[Result].Kind := ynkNull;
     end;
     ytkValue:
     begin
-      SetError(ADoc, 'expected mapping key', ACurToken.Line, ACurToken.Col,
+      ADoc.SetError('expected mapping key', ACurToken.Line, ACurToken.Col,
         ACurToken.Offset);
-      Result := AddNode(ADoc);
-      ADoc.Nodes[Result].Kind := ynkNull;
+      Result := ADoc.AddNode;
+      if Result <> YAML_NODE_NONE then
+        ADoc.FNodes[Result].Kind := ynkNull;
     end;
   else
-    Result := AddNode(ADoc);
-    ADoc.Nodes[Result].Kind := ynkNull;
+    Result := ADoc.AddNode;
+    if Result <> YAML_NODE_NONE then
+      ADoc.FNodes[Result].Kind := ynkNull;
   end;
-  Dec(ADoc.ParseDepth);
+  Dec(ADoc.FParseDepth);
 end;
 
 procedure ValidateDocumentTail(var ADoc: TYamlDocument; var AScanner: TYamlScanner;
@@ -865,10 +1003,10 @@ begin
     Exit;
 
   if ACurToken.Kind = ytkDocStart then
-    SetError(ADoc, 'multiple YAML documents are not supported',
+    ADoc.SetError('multiple YAML documents are not supported',
       ACurToken.Line, ACurToken.Col, ACurToken.Offset)
   else
-    SetError(ADoc, 'unexpected content after YAML document',
+    ADoc.SetError('unexpected content after YAML document',
       ACurToken.Line, ACurToken.Col, ACurToken.Offset);
 end;
 
@@ -881,8 +1019,9 @@ begin
   ADoc.Init(AAllocator);
   if (AInput = nil) or (ALen = 0) then
   begin
-    AddNode(ADoc);
-    ADoc.Nodes[0].Kind := ynkNull;
+    ADoc.FRootIdx := ADoc.AddNode;
+    if ADoc.FRootIdx <> YAML_NODE_NONE then
+      ADoc.FNodes[ADoc.FRootIdx].Kind := ynkNull;
     Exit;
   end;
 
@@ -896,20 +1035,21 @@ begin
 
   if (LTok.Kind = ytkStreamEnd) then
   begin
-    AddNode(ADoc);
-    ADoc.Nodes[0].Kind := ynkNull;
+    ADoc.FRootIdx := ADoc.AddNode;
+    if ADoc.FRootIdx <> YAML_NODE_NONE then
+      ADoc.FNodes[ADoc.FRootIdx].Kind := ynkNull;
     Exit;
   end;
 
-  ADoc.RootIdx := ParseNode(ADoc, LScanner, LTok);
+  ADoc.FRootIdx := ParseNode(ADoc, LScanner, LTok);
 
-  if (not ADoc.HasError) and (not LScanner.HasError) then
+  if (not ADoc.FHasError) and (not LScanner.HasError) then
     ValidateDocumentTail(ADoc, LScanner, LTok);
 
   if LScanner.HasError then
   begin
-    ADoc.HasError := True;
-    ADoc.Error := LScanner.Error;
+    ADoc.FHasError := True;
+    ADoc.FError := LScanner.Error;
   end;
 end;
 

@@ -94,22 +94,22 @@ end;
 
 function TYamlDocumentImpl.Root: TYamlValue;
 begin
-  Result := TYamlValue.Create(FDoc, FDoc.RootIdx);
+  Result := TYamlValue.Create(FDoc, FDoc.Root);
 end;
 
 function TYamlDocumentImpl.HasError: Boolean;
 begin
-  Result := FDoc.HasError;
+  Result := FDoc.HasError();
 end;
 
 function TYamlDocumentImpl.Error: TYamlError;
 begin
-  Result := FDoc.Error;
+  Result := FDoc.Error();
 end;
 
 procedure TYamlDocumentImpl.RequireStringifiable(const AOperation: string);
 begin
-  if FDoc.HasError then
+  if FDoc.HasError() then
     raise EInvalidOperationError.Create(
       'TYamlDocument.' + AOperation +
       ': diagnostic document cannot be stringified');
@@ -118,13 +118,13 @@ end;
 function TYamlDocumentImpl.Stringify: string;
 begin
   RequireStringifiable('Stringify');
-  Result := YamlStringify(FDoc, FDoc.RootIdx);
+  Result := YamlStringify(FDoc, FDoc.Root);
 end;
 
 function TYamlDocumentImpl.StringifyPretty(const AIndent: Int32): string;
 begin
   RequireStringifiable('StringifyPretty');
-  Result := YamlStringifyPretty(FDoc, FDoc.RootIdx, AIndent);
+  Result := YamlStringifyPretty(FDoc, FDoc.Root, AIndent);
 end;
 
 function YamlParse(const AInput: string): IYamlDocument;
