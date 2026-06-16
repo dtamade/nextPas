@@ -20,11 +20,17 @@ type
     class function MulComponents(const AA, AB: TVec2f): TVec2f; static; inline;
     class function DivComponents(const AA, AB: TVec2f): TVec2f; static; inline;
     class function Dot(const AA, AB: TVec2f): Single; static; inline;
+    class function Cross2D(const AA, AB: TVec2f): Single; static; inline;
     class function Lerp(const AA, AB: TVec2f; const AT: Single): TVec2f; static; inline;
     class function Equals(const AA, AB: TVec2f; const AEpsilon: Single): Boolean; static; inline;
+    class function Max(const AA, AB: TVec2f): TVec2f; static; inline;
+    class function Min(const AA, AB: TVec2f): TVec2f; static; inline;
     function LengthSqr: Single; inline;
     function Length: Single; inline;
     function Normalize: TVec2f; inline;
+    function Abs: TVec2f; inline;
+    function IsZero: Boolean; inline;
+    function PerfectlyEquals(const AOther: TVec2f): Boolean; inline;
     var
       case Integer of
         0: (X, Y: Single);
@@ -49,9 +55,16 @@ type
     class function Cross(const AA, AB: TVec3f): TVec3f; static; inline;
     class function Lerp(const AA, AB: TVec3f; const AT: Single): TVec3f; static; inline;
     class function Equals(const AA, AB: TVec3f; const AEpsilon: Single): Boolean; static; inline;
+    class function Max(const AA, AB: TVec3f): TVec3f; static; inline;
+    class function Min(const AA, AB: TVec3f): TVec3f; static; inline;
+    class function Average(const AA, AB: TVec3f): TVec3f; static; inline;
     function LengthSqr: Single; inline;
     function Length: Single; inline;
     function Normalize: TVec3f; inline;
+    function AdjustToLength(const ALength: Single): TVec3f; inline;
+    function Abs: TVec3f; inline;
+    function IsZero: Boolean; inline;
+    function PerfectlyEquals(const AOther: TVec3f): Boolean; inline;
     var
       case Integer of
         0: (X, Y, Z: Single);
@@ -75,9 +88,15 @@ type
     class function Dot(const AA, AB: TVec4f): Single; static; inline;
     class function Lerp(const AA, AB: TVec4f; const AT: Single): TVec4f; static; inline;
     class function Equals(const AA, AB: TVec4f; const AEpsilon: Single): Boolean; static; inline;
+    class function Max(const AA, AB: TVec4f): TVec4f; static; inline;
+    class function Min(const AA, AB: TVec4f): TVec4f; static; inline;
     function LengthSqr: Single; inline;
     function Length: Single; inline;
     function Normalize: TVec4f; inline;
+    function ToPosition: TVec3f; inline;
+    function Abs: TVec4f; inline;
+    function IsZero: Boolean; inline;
+    function PerfectlyEquals(const AOther: TVec4f): Boolean; inline;
     var
       case Integer of
         0: (X, Y, Z, W: Single);
@@ -99,11 +118,17 @@ type
     class function MulComponents(const AA, AB: TVec2d): TVec2d; static; inline;
     class function DivComponents(const AA, AB: TVec2d): TVec2d; static; inline;
     class function Dot(const AA, AB: TVec2d): Double; static; inline;
+    class function Cross2D(const AA, AB: TVec2d): Double; static; inline;
     class function Lerp(const AA, AB: TVec2d; const AT: Double): TVec2d; static; inline;
     class function Equals(const AA, AB: TVec2d; const AEpsilon: Double): Boolean; static; inline;
+    class function Max(const AA, AB: TVec2d): TVec2d; static; inline;
+    class function Min(const AA, AB: TVec2d): TVec2d; static; inline;
     function LengthSqr: Double; inline;
     function Length: Double; inline;
     function Normalize: TVec2d; inline;
+    function Abs: TVec2d; inline;
+    function IsZero: Boolean; inline;
+    function PerfectlyEquals(const AOther: TVec2d): Boolean; inline;
     var
       case Integer of
         0: (X, Y: Double);
@@ -128,9 +153,16 @@ type
     class function Cross(const AA, AB: TVec3d): TVec3d; static; inline;
     class function Lerp(const AA, AB: TVec3d; const AT: Double): TVec3d; static; inline;
     class function Equals(const AA, AB: TVec3d; const AEpsilon: Double): Boolean; static; inline;
+    class function Max(const AA, AB: TVec3d): TVec3d; static; inline;
+    class function Min(const AA, AB: TVec3d): TVec3d; static; inline;
+    class function Average(const AA, AB: TVec3d): TVec3d; static; inline;
     function LengthSqr: Double; inline;
     function Length: Double; inline;
     function Normalize: TVec3d; inline;
+    function AdjustToLength(const ALength: Double): TVec3d; inline;
+    function Abs: TVec3d; inline;
+    function IsZero: Boolean; inline;
+    function PerfectlyEquals(const AOther: TVec3d): Boolean; inline;
     var
       case Integer of
         0: (X, Y, Z: Double);
@@ -154,9 +186,15 @@ type
     class function Dot(const AA, AB: TVec4d): Double; static; inline;
     class function Lerp(const AA, AB: TVec4d; const AT: Double): TVec4d; static; inline;
     class function Equals(const AA, AB: TVec4d; const AEpsilon: Double): Boolean; static; inline;
+    class function Max(const AA, AB: TVec4d): TVec4d; static; inline;
+    class function Min(const AA, AB: TVec4d): TVec4d; static; inline;
     function LengthSqr: Double; inline;
     function Length: Double; inline;
     function Normalize: TVec4d; inline;
+    function ToPosition: TVec3d; inline;
+    function Abs: TVec4d; inline;
+    function IsZero: Boolean; inline;
+    function PerfectlyEquals(const AOther: TVec4d): Boolean; inline;
     var
       case Integer of
         0: (X, Y, Z, W: Double);
@@ -1213,6 +1251,40 @@ begin
   Result := NormalizeFiniteVec2(Self);
 end;
 
+class function TVec2f.Cross2D(const AA, AB: TVec2f): Single;
+begin
+  Result := AA.X * AB.Y - AA.Y * AB.X;
+end;
+
+class function TVec2f.Max(const AA, AB: TVec2f): TVec2f;
+begin
+  Result := TVec2f.Create(
+    nextpas.core.math.scalar.Max(AA.X, AB.X),
+    nextpas.core.math.scalar.Max(AA.Y, AB.Y));
+end;
+
+class function TVec2f.Min(const AA, AB: TVec2f): TVec2f;
+begin
+  Result := TVec2f.Create(
+    nextpas.core.math.scalar.Min(AA.X, AB.X),
+    nextpas.core.math.scalar.Min(AA.Y, AB.Y));
+end;
+
+function TVec2f.Abs: TVec2f;
+begin
+  Result := TVec2f.Create(System.Abs(X), System.Abs(Y));
+end;
+
+function TVec2f.IsZero: Boolean;
+begin
+  Result := (X = 0.0) and (Y = 0.0);
+end;
+
+function TVec2f.PerfectlyEquals(const AOther: TVec2f): Boolean;
+begin
+  Result := (X = AOther.X) and (Y = AOther.Y);
+end;
+
 class function TVec3f.Create(const AX, AY, AZ: Single): TVec3f;
 begin
   Result.X := AX;
@@ -1306,6 +1378,56 @@ function TVec3f.Normalize: TVec3f;
 begin
   ValidateVectorInput('TVec3f.Normalize', Self);
   Result := NormalizeFiniteVec3(Self);
+end;
+
+class function TVec3f.Max(const AA, AB: TVec3f): TVec3f;
+begin
+  Result := TVec3f.Create(
+    nextpas.core.math.scalar.Max(AA.X, AB.X),
+    nextpas.core.math.scalar.Max(AA.Y, AB.Y),
+    nextpas.core.math.scalar.Max(AA.Z, AB.Z));
+end;
+
+class function TVec3f.Min(const AA, AB: TVec3f): TVec3f;
+begin
+  Result := TVec3f.Create(
+    nextpas.core.math.scalar.Min(AA.X, AB.X),
+    nextpas.core.math.scalar.Min(AA.Y, AB.Y),
+    nextpas.core.math.scalar.Min(AA.Z, AB.Z));
+end;
+
+class function TVec3f.Average(const AA, AB: TVec3f): TVec3f;
+begin
+  Result := TVec3f.Create(
+    (AA.X + AB.X) * 0.5,
+    (AA.Y + AB.Y) * 0.5,
+    (AA.Z + AB.Z) * 0.5);
+end;
+
+function TVec3f.AdjustToLength(const ALength: Single): TVec3f;
+var
+  LLen: Single;
+begin
+  LLen := Length;
+  if LLen > 0.0 then
+    Result := Self * (ALength / LLen)
+  else
+    Result := TVec3f.Zero;
+end;
+
+function TVec3f.Abs: TVec3f;
+begin
+  Result := TVec3f.Create(System.Abs(X), System.Abs(Y), System.Abs(Z));
+end;
+
+function TVec3f.IsZero: Boolean;
+begin
+  Result := (X = 0.0) and (Y = 0.0) and (Z = 0.0);
+end;
+
+function TVec3f.PerfectlyEquals(const AOther: TVec3f): Boolean;
+begin
+  Result := (X = AOther.X) and (Y = AOther.Y) and (Z = AOther.Z);
 end;
 
 class function TVec4f.Create(const AX, AY, AZ, AW: Single): TVec4f;
@@ -1403,6 +1525,47 @@ begin
   Result := NormalizeFiniteVec4(Self);
 end;
 
+class function TVec4f.Max(const AA, AB: TVec4f): TVec4f;
+begin
+  Result := TVec4f.Create(
+    nextpas.core.math.scalar.Max(AA.X, AB.X),
+    nextpas.core.math.scalar.Max(AA.Y, AB.Y),
+    nextpas.core.math.scalar.Max(AA.Z, AB.Z),
+    nextpas.core.math.scalar.Max(AA.W, AB.W));
+end;
+
+class function TVec4f.Min(const AA, AB: TVec4f): TVec4f;
+begin
+  Result := TVec4f.Create(
+    nextpas.core.math.scalar.Min(AA.X, AB.X),
+    nextpas.core.math.scalar.Min(AA.Y, AB.Y),
+    nextpas.core.math.scalar.Min(AA.Z, AB.Z),
+    nextpas.core.math.scalar.Min(AA.W, AB.W));
+end;
+
+function TVec4f.ToPosition: TVec3f;
+begin
+  if W = 0.0 then
+    Result := TVec3f.Create(X, Y, Z)
+  else
+    Result := TVec3f.Create(X / W, Y / W, Z / W);
+end;
+
+function TVec4f.Abs: TVec4f;
+begin
+  Result := TVec4f.Create(System.Abs(X), System.Abs(Y), System.Abs(Z), System.Abs(W));
+end;
+
+function TVec4f.IsZero: Boolean;
+begin
+  Result := (X = 0.0) and (Y = 0.0) and (Z = 0.0) and (W = 0.0);
+end;
+
+function TVec4f.PerfectlyEquals(const AOther: TVec4f): Boolean;
+begin
+  Result := (X = AOther.X) and (Y = AOther.Y) and (Z = AOther.Z) and (W = AOther.W);
+end;
+
 class function TVec2d.Create(const AX, AY: Double): TVec2d;
 begin
   Result.X := AX;
@@ -1487,6 +1650,40 @@ function TVec2d.Normalize: TVec2d;
 begin
   ValidateVectorInput('TVec2d.Normalize', Self);
   Result := NormalizeFiniteVec2(Self);
+end;
+
+class function TVec2d.Cross2D(const AA, AB: TVec2d): Double;
+begin
+  Result := AA.X * AB.Y - AA.Y * AB.X;
+end;
+
+class function TVec2d.Max(const AA, AB: TVec2d): TVec2d;
+begin
+  Result := TVec2d.Create(
+    nextpas.core.math.scalar.Max(AA.X, AB.X),
+    nextpas.core.math.scalar.Max(AA.Y, AB.Y));
+end;
+
+class function TVec2d.Min(const AA, AB: TVec2d): TVec2d;
+begin
+  Result := TVec2d.Create(
+    nextpas.core.math.scalar.Min(AA.X, AB.X),
+    nextpas.core.math.scalar.Min(AA.Y, AB.Y));
+end;
+
+function TVec2d.Abs: TVec2d;
+begin
+  Result := TVec2d.Create(System.Abs(X), System.Abs(Y));
+end;
+
+function TVec2d.IsZero: Boolean;
+begin
+  Result := (X = 0.0) and (Y = 0.0);
+end;
+
+function TVec2d.PerfectlyEquals(const AOther: TVec2d): Boolean;
+begin
+  Result := (X = AOther.X) and (Y = AOther.Y);
 end;
 
 class function TVec3d.Create(const AX, AY, AZ: Double): TVec3d;
@@ -1584,6 +1781,56 @@ begin
   Result := NormalizeFiniteVec3(Self);
 end;
 
+class function TVec3d.Max(const AA, AB: TVec3d): TVec3d;
+begin
+  Result := TVec3d.Create(
+    nextpas.core.math.scalar.Max(AA.X, AB.X),
+    nextpas.core.math.scalar.Max(AA.Y, AB.Y),
+    nextpas.core.math.scalar.Max(AA.Z, AB.Z));
+end;
+
+class function TVec3d.Min(const AA, AB: TVec3d): TVec3d;
+begin
+  Result := TVec3d.Create(
+    nextpas.core.math.scalar.Min(AA.X, AB.X),
+    nextpas.core.math.scalar.Min(AA.Y, AB.Y),
+    nextpas.core.math.scalar.Min(AA.Z, AB.Z));
+end;
+
+class function TVec3d.Average(const AA, AB: TVec3d): TVec3d;
+begin
+  Result := TVec3d.Create(
+    (AA.X + AB.X) * 0.5,
+    (AA.Y + AB.Y) * 0.5,
+    (AA.Z + AB.Z) * 0.5);
+end;
+
+function TVec3d.AdjustToLength(const ALength: Double): TVec3d;
+var
+  LLen: Double;
+begin
+  LLen := Length;
+  if LLen > 0.0 then
+    Result := Self * (ALength / LLen)
+  else
+    Result := TVec3d.Zero;
+end;
+
+function TVec3d.Abs: TVec3d;
+begin
+  Result := TVec3d.Create(System.Abs(X), System.Abs(Y), System.Abs(Z));
+end;
+
+function TVec3d.IsZero: Boolean;
+begin
+  Result := (X = 0.0) and (Y = 0.0) and (Z = 0.0);
+end;
+
+function TVec3d.PerfectlyEquals(const AOther: TVec3d): Boolean;
+begin
+  Result := (X = AOther.X) and (Y = AOther.Y) and (Z = AOther.Z);
+end;
+
 class function TVec4d.Create(const AX, AY, AZ, AW: Double): TVec4d;
 begin
   Result.X := AX;
@@ -1677,6 +1924,47 @@ function TVec4d.Normalize: TVec4d;
 begin
   ValidateVectorInput('TVec4d.Normalize', Self);
   Result := NormalizeFiniteVec4(Self);
+end;
+
+class function TVec4d.Max(const AA, AB: TVec4d): TVec4d;
+begin
+  Result := TVec4d.Create(
+    nextpas.core.math.scalar.Max(AA.X, AB.X),
+    nextpas.core.math.scalar.Max(AA.Y, AB.Y),
+    nextpas.core.math.scalar.Max(AA.Z, AB.Z),
+    nextpas.core.math.scalar.Max(AA.W, AB.W));
+end;
+
+class function TVec4d.Min(const AA, AB: TVec4d): TVec4d;
+begin
+  Result := TVec4d.Create(
+    nextpas.core.math.scalar.Min(AA.X, AB.X),
+    nextpas.core.math.scalar.Min(AA.Y, AB.Y),
+    nextpas.core.math.scalar.Min(AA.Z, AB.Z),
+    nextpas.core.math.scalar.Min(AA.W, AB.W));
+end;
+
+function TVec4d.ToPosition: TVec3d;
+begin
+  if W = 0.0 then
+    Result := TVec3d.Create(X, Y, Z)
+  else
+    Result := TVec3d.Create(X / W, Y / W, Z / W);
+end;
+
+function TVec4d.Abs: TVec4d;
+begin
+  Result := TVec4d.Create(System.Abs(X), System.Abs(Y), System.Abs(Z), System.Abs(W));
+end;
+
+function TVec4d.IsZero: Boolean;
+begin
+  Result := (X = 0.0) and (Y = 0.0) and (Z = 0.0) and (W = 0.0);
+end;
+
+function TVec4d.PerfectlyEquals(const AOther: TVec4d): Boolean;
+begin
+  Result := (X = AOther.X) and (Y = AOther.Y) and (Z = AOther.Z) and (W = AOther.W);
 end;
 
 end.
