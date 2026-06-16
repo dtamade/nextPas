@@ -159,7 +159,7 @@ begin
       execve(APath, AArgv, AEnvp)
     else
       execvp(APath, AArgv);
-    halt(127);
+    posix_exit(127);
   end;
   AProc.Pid := LPid;
   Result := 0;
