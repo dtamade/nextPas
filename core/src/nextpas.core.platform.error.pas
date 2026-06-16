@@ -26,15 +26,6 @@ uses
 {$IFDEF NEXTPAS_UNIX}
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi
-  {$IFDEF NEXTPAS_LINUX}
-  , nextpas.core.platform.linux.base
-  {$ENDIF}
-  {$IFDEF NEXTPAS_MACOS}
-  , nextpas.core.platform.darwin.base
-  {$ENDIF}
-  {$IFDEF NEXTPAS_FREEBSD}
-  , nextpas.core.platform.freebsd.base
-  {$ENDIF}
 {$ENDIF}
 {$IFDEF NEXTPAS_WINDOWS}
   nextpas.core.platform.windows.base,

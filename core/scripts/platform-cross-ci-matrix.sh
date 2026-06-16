@@ -13,6 +13,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CORE_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REPO_ROOT="$(cd "${CORE_ROOT}/.." && pwd)"
 BUILD_ROOT="${CORE_ROOT}/build/cross-ci-matrix"
 
 # ── color helpers ──────────────────────────────────────────────────
@@ -23,6 +24,10 @@ COLOR_RESET=$'\033[0m'
 
 # ── target matrix ──────────────────────────────────────────────────
 # Each entry: "label  test-dir-relative-to-core/tests"
+# Modules exercised: platform.time, platform.memory, platform.sync,
+#   platform.thread, platform.io, platform.process, platform.files,
+#   platform.fs, platform.path, platform.env, platform.mmap,
+#   platform.random, platform.socket
 declare -a TARGETS=(
   "riscv64-linux  nextpas.core.platform/test_platform_linux_riscv64_compile"
   "aarch64-linux  nextpas.core.platform/test_platform_linux_aarch64_compile"
@@ -34,8 +39,8 @@ PASS_COUNT=0
 FAIL_COUNT=0
 SKIP_COUNT=0
 declare -a FAIL_LOG_PATHS=()
-TMPDIR="${BUILD_ROOT}/tmp"
-mkdir -p "${TMPDIR}"
+mkdir -p "${BUILD_ROOT}"
+TMPDIR="$(mktemp -d "${BUILD_ROOT}/tmp.XXXXXX")"
 
 # ── helpers ─────────────────────────────────────────────────────────
 log_pass() { printf "  ${COLOR_PASS}PASS${COLOR_RESET}  %s\n" "$1"; }
@@ -50,7 +55,7 @@ main() {
 
   for target_entry in "${TARGETS[@]}"; do
     read -r label test_dir <<<"${target_entry}"
-    local full_dir="${CORE_ROOT}/core/tests/${test_dir}"
+    local full_dir="${REPO_ROOT}/core/tests/${test_dir}"
     local log_path="${TMPDIR}/${label//\//_}.log"
 
     if [[ ! -d "${full_dir}" ]]; then

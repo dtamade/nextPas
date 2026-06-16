@@ -3,7 +3,8 @@ CORE_ROOT := ../../..
 BUILD_DIR ?= $(CORE_ROOT)/build/projects/nextpas.core.platform.test_platform_linux_riscv64_compile
 PROGRAM := test_platform_linux_riscv64_compile
 SOURCE := $(PROGRAM).lpr
-FPC_FLAGS ?= -Priscv64 -Tlinux -MObjFPC -Sh -O2 -gl
+FPC_FLAGS ?= -Priscv64 -Tlinux -MObjFPC -Sh -O2
+FPC_FLAGS += -XPriscv64-linux-gnu-
 FPC_FLAGS += -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src
 
 .PHONY: build run test clean
