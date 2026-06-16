@@ -21,6 +21,8 @@ type
   TIntDeque = specialize TWorkStealingDeque<Integer>;
   TIntSegQueue = specialize TSegQueue<Integer>;
   TIntSpmc = specialize TSpmcQueue<Integer>;
+  TIntChannel = specialize TLockFreeChannel<Integer>;
+  TIntIntMap = specialize TLockFreeHashMap<Integer, Integer>;
 
 const
   CloseWakePendingProbeNs = 50000000;
@@ -2916,6 +2918,9 @@ const
   MpscSourcePath = '../../../src/nextpas.core.lockfree.mpsc.pas';
   DequeSourcePath = '../../../src/nextpas.core.lockfree.deque.pas';
   WaitSourcePath = '../../../src/nextpas.core.lockfree.wait.pas';
+  ChannelSourcePath = '../../../src/nextpas.core.lockfree.channel.pas';
+  HashMapSourcePath = '../../../src/nextpas.core.lockfree.hashmap.pas';
+  HazardSourcePath = '../../../src/nextpas.core.lockfree.hazard.pas';
   BenchMakefilePath = '../../../benchmarks/nextpas.core.lockfree/bench_lockfree/Makefile';
   BenchSourcePath = '../../../benchmarks/nextpas.core.lockfree/bench_lockfree/bench_lockfree.lpr';
   BenchRustComparePath = '../../../benchmarks/nextpas.core.lockfree/bench_lockfree/compare_rust/main.rs';
@@ -2938,6 +2943,9 @@ var
   LMpscSource: string;
   LDequeSource: string;
   LWaitSource: string;
+  LChannelSource: string;
+  LHashMapSource: string;
+  LHazardSource: string;
   LBenchMakefile: string;
   LBenchSource: string;
   LRustCompareSource: string;
@@ -3020,6 +3028,9 @@ begin
   LMpscSource := ReadUtf8TextFile(MpscSourcePath);
   LDequeSource := ReadUtf8TextFile(DequeSourcePath);
   LWaitSource := ReadUtf8TextFile(WaitSourcePath);
+  LChannelSource := ReadUtf8TextFile(ChannelSourcePath);
+  LHashMapSource := ReadUtf8TextFile(HashMapSourcePath);
+  LHazardSource := ReadUtf8TextFile(HazardSourcePath);
   LBenchMakefile := ReadUtf8TextFile(BenchMakefilePath);
   LBenchSource := ReadUtf8TextFile(BenchSourcePath);
   LRustCompareSource := ReadUtf8TextFile(BenchRustComparePath);
@@ -3886,6 +3897,14 @@ begin
   CheckNotContains(LCoreGoalTree,
     '| `lockfree` | 无锁 (MPMC/SPSC/MPSC/Stack/Deque) | ✅ 完成/强化中',
     'goal tree must not report lockfree as broad completion without evidence-level truth');
+  CheckContains(LChannelSource, 'EInvalidOperationError.Create(''TLockFreeChannel.Send: channel closed''',
+    'channel Send on closed must raise EInvalidOperationError');
+  CheckContains(LHashMapSource, 'AtomicExchange32(AShard.Lock, 1, moAcquire)',
+    'hashmap ShardLock must use AtomicExchange with moAcquire');
+  CheckContains(LHazardSource, 'AllocMem(SizeOf(THazardThreadRec))',
+    'hazard RegisterThread must use AllocMem for zero-init');
+  CheckNotContains(LHazardSource, 'AtomicStorePtr(Pointer(FThreads), nil, moRelease)',
+    'hazard UnregisterThread must not blindly nil FThreads');
   CheckContains(LMpscSource, 'Assert(FClosed <> 0',
     'MPSC destroy must keep the close-before-destroy debug guard');
   CheckContains(LMpscSource, 'Close must be called before Destroy',

@@ -26,17 +26,6 @@ procedure platform_fatal_code(const AMsg: PAnsiChar; ACode: Int32);
 implementation
 
 uses
-{$IF not defined(NEXTPAS_LINUX) and not defined(NEXTPAS_MACOS) and not defined(NEXTPAS_FREEBSD)}
-{$IFDEF NEXTPAS_LINUX}
-  nextpas.core.platform.linux.base,
-{$ENDIF}
-{$IFDEF NEXTPAS_MACOS}
-  nextpas.core.platform.darwin.base,
-{$ENDIF}
-{$IFDEF NEXTPAS_FREEBSD}
-  nextpas.core.platform.freebsd.base,
-{$ENDIF}
-{$ENDIF}
 {$IFDEF NEXTPAS_UNIX}
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi
