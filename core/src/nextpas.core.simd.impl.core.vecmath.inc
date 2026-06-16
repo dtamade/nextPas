@@ -64,11 +64,20 @@ begin
     Result := GetSimdFacadeDispatchFastPath^.DivF32x4(a, b);
 end;
 
-function VecF32x4CmpEq(const a, b: TVecF32x4): TMask4;
-var dispatch: PSimdDispatchTable;
+function VecF32x4CmpEq(const a, b: TVecF32x4): TMask4; inline;
+var
+  LFunc: TVecF32x4CmpEqFunc;
 begin
-  dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.CmpEqF32x4(a, b);
+  LFunc := TVecF32x4CmpEqFunc(LoadSimdFacadeFastPath(g_FastVecF32x4CmpEqPtr));
+  if not Assigned(LFunc) then
+  begin
+    RebindSimdFacadeFastPaths;
+    LFunc := TVecF32x4CmpEqFunc(LoadSimdFacadeFastPath(g_FastVecF32x4CmpEqPtr));
+  end;
+  if Assigned(LFunc) then
+    Result := LFunc(a, b)
+  else
+    Result := GetSimdFacadeDispatchFastPath^.CmpEqF32x4(a, b);
 end;
 
 function VecF32x4CmpLt(const a, b: TVecF32x4): TMask4;
@@ -172,11 +181,20 @@ end;
 
 // === Extended Math Functions ===
 
-function VecF32x4Fma(const a, b, c: TVecF32x4): TVecF32x4;
-var dispatch: PSimdDispatchTable;
+function VecF32x4Fma(const a, b, c: TVecF32x4): TVecF32x4; inline;
+var
+  LFunc: TVecF32x4FmaFunc;
 begin
-  dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.FmaF32x4(a, b, c);
+  LFunc := TVecF32x4FmaFunc(LoadSimdFacadeFastPath(g_FastVecF32x4FmaPtr));
+  if not Assigned(LFunc) then
+  begin
+    RebindSimdFacadeFastPaths;
+    LFunc := TVecF32x4FmaFunc(LoadSimdFacadeFastPath(g_FastVecF32x4FmaPtr));
+  end;
+  if Assigned(LFunc) then
+    Result := LFunc(a, b, c)
+  else
+    Result := GetSimdFacadeDispatchFastPath^.FmaF32x4(a, b, c);
 end;
 
 function VecF32x4Rcp(const a: TVecF32x4): TVecF32x4;

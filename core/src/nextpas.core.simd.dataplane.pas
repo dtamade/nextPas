@@ -46,6 +46,8 @@ type
     VecF32x4MaxPtr: Pointer;
     VecF32x4DotPtr: Pointer;
     VecF32x4SplatPtr: Pointer;
+    VecF32x4CmpEqPtr: Pointer;
+    VecF32x4FmaPtr: Pointer;
   end;
 
 function GetCurrentSimdDataPlane: PSimdDataPlane; inline;
@@ -121,6 +123,8 @@ begin
   aDataPlane^.VecF32x4MaxPtr := Pointer(aDispatch^.MaxF32x4);
   aDataPlane^.VecF32x4DotPtr := Pointer(aDispatch^.DotF32x4);
   aDataPlane^.VecF32x4SplatPtr := Pointer(aDispatch^.SplatF32x4);
+  aDataPlane^.VecF32x4CmpEqPtr := Pointer(aDispatch^.CmpEqF32x4);
+  aDataPlane^.VecF32x4FmaPtr := Pointer(aDispatch^.FmaF32x4);
 end;
 
 function GetCurrentSimdDataPlane: PSimdDataPlane; inline;

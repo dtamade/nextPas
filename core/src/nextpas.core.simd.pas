@@ -1430,6 +1430,8 @@ uses
 
 type
   TVecF32x4AddFunc = function(const a, b: TVecF32x4): TVecF32x4;
+  TVecF32x4CmpEqFunc = function(const a, b: TVecF32x4): TMask4;
+  TVecF32x4FmaFunc = function(const a, b, c: TVecF32x4): TVecF32x4;
   TVecI16x32AddFunc = function(const a, b: TVecI16x32): TVecI16x32;
   TVecU32x16MulFunc = function(const a, b: TVecU32x16): TVecU32x16;
   TVecU64x8AddFunc = function(const a, b: TVecU64x8): TVecU64x8;
@@ -1458,6 +1460,8 @@ var
   g_FastVecF32x4MaxPtr: Pointer = nil;
   g_FastVecF32x4DotPtr: Pointer = nil;
   g_FastVecF32x4SplatPtr: Pointer = nil;
+  g_FastVecF32x4CmpEqPtr: Pointer = nil;
+  g_FastVecF32x4FmaPtr: Pointer = nil;
 
 procedure RebindSimdFacadeFastPaths;
 var
@@ -1482,6 +1486,8 @@ begin
   atomic_store(g_FastVecF32x4MaxPtr, LDataPlane^.VecF32x4MaxPtr, mo_release);
   atomic_store(g_FastVecF32x4DotPtr, LDataPlane^.VecF32x4DotPtr, mo_release);
   atomic_store(g_FastVecF32x4SplatPtr, LDataPlane^.VecF32x4SplatPtr, mo_release);
+  atomic_store(g_FastVecF32x4CmpEqPtr, LDataPlane^.VecF32x4CmpEqPtr, mo_release);
+  atomic_store(g_FastVecF32x4FmaPtr, LDataPlane^.VecF32x4FmaPtr, mo_release);
 end;
 
 procedure InvalidateSimdFacadeFastPaths;
@@ -1501,29 +1507,36 @@ begin
   atomic_store(g_FastVecF32x4MaxPtr, nil, mo_release);
   atomic_store(g_FastVecF32x4DotPtr, nil, mo_release);
   atomic_store(g_FastVecF32x4SplatPtr, nil, mo_release);
+  atomic_store(g_FastVecF32x4CmpEqPtr, nil, mo_release);
+  atomic_store(g_FastVecF32x4FmaPtr, nil, mo_release);
 end;
 
 function LoadSimdFacadeFastPath(var aFastPathPtr: Pointer): Pointer; inline;
 begin
-  // Use the platform default load order on the hot path:
-  // x86/x86_64 stays relaxed (no compiler-barrier call), while weakly ordered
-  // targets still get acquire semantics through nextpas.core.atomic defaults.
-  Result := atomic_load(aFastPathPtr);
+  Result := atomic_load(aFastPathPtr, mo_acquire);
 end;
 
+function RebindAndFetchDispatch: PSimdDispatchTable; forward;
+
 function GetSimdFacadeDispatchFastPath: PSimdDispatchTable; inline;
-var
-  LDataPlane: PSimdDataPlane;
 begin
   Result := PSimdDispatchTable(LoadSimdFacadeFastPath(g_FastSimdDispatchPtr));
   if Result <> nil then
     Exit;
+  Result := RebindAndFetchDispatch;
+end;
 
+{$I nextpas.core.simd.impl.core.inc}
+{$I nextpas.core.simd.impl.wide.inc}
+
+function RebindAndFetchDispatch: PSimdDispatchTable;
+var
+  LDataPlane: PSimdDataPlane;
+begin
   RebindSimdFacadeFastPaths;
   Result := PSimdDispatchTable(LoadSimdFacadeFastPath(g_FastSimdDispatchPtr));
   if Result <> nil then
     Exit;
-
   LDataPlane := GetCurrentSimdDataPlane;
   if LDataPlane <> nil then
   begin
@@ -1532,45 +1545,39 @@ begin
   end;
 end;
 
-{$I nextpas.core.simd.impl.core.inc}
-{$I nextpas.core.simd.impl.wide.inc}
 
 // Facade function implementations (dispatch-based)
-function GetFacadeDispatch: PSimdDispatchTable; inline;
-begin
-  Result := GetSimdFacadeDispatchFastPath;
-end;
 
 function MemEqual(a, b: Pointer; len: SizeUInt): LongBool; inline;
-begin Result := GetFacadeDispatch^.MemEqual(a, b, len); end;
+begin Result := GetSimdFacadeDispatchFastPath^.MemEqual(a, b, len); end;
 function MemFindByte(p: Pointer; len: SizeUInt; value: Byte): PtrInt; inline;
-begin Result := GetFacadeDispatch^.MemFindByte(p, len, value); end;
+begin Result := GetSimdFacadeDispatchFastPath^.MemFindByte(p, len, value); end;
 function MemDiffRange(a, b: Pointer; len: SizeUInt; out firstDiff, lastDiff: SizeUInt): Boolean; inline;
-begin Result := GetFacadeDispatch^.MemDiffRange(a, b, len, firstDiff, lastDiff); end;
+begin Result := GetSimdFacadeDispatchFastPath^.MemDiffRange(a, b, len, firstDiff, lastDiff); end;
 procedure MemCopy(src, dst: Pointer; len: SizeUInt); inline;
-begin GetFacadeDispatch^.MemCopy(src, dst, len); end;
+begin GetSimdFacadeDispatchFastPath^.MemCopy(src, dst, len); end;
 procedure MemSet(dst: Pointer; len: SizeUInt; value: Byte); inline;
-begin GetFacadeDispatch^.MemSet(dst, len, value); end;
+begin GetSimdFacadeDispatchFastPath^.MemSet(dst, len, value); end;
 procedure MemReverse(p: Pointer; len: SizeUInt); inline;
-begin GetFacadeDispatch^.MemReverse(p, len); end;
+begin GetSimdFacadeDispatchFastPath^.MemReverse(p, len); end;
 function SumBytes(p: Pointer; len: SizeUInt): UInt64; inline;
-begin Result := GetFacadeDispatch^.SumBytes(p, len); end;
+begin Result := GetSimdFacadeDispatchFastPath^.SumBytes(p, len); end;
 procedure MinMaxBytes(p: Pointer; len: SizeUInt; out minVal, maxVal: Byte); inline;
-begin GetFacadeDispatch^.MinMaxBytes(p, len, minVal, maxVal); end;
+begin GetSimdFacadeDispatchFastPath^.MinMaxBytes(p, len, minVal, maxVal); end;
 function CountByte(p: Pointer; len: SizeUInt; value: Byte): SizeUInt; inline;
-begin Result := GetFacadeDispatch^.CountByte(p, len, value); end;
+begin Result := GetSimdFacadeDispatchFastPath^.CountByte(p, len, value); end;
 function Utf8Validate(p: Pointer; len: SizeUInt): Boolean; inline;
-begin Result := GetFacadeDispatch^.Utf8Validate(p, len); end;
+begin Result := GetSimdFacadeDispatchFastPath^.Utf8Validate(p, len); end;
 function AsciiIEqual(a, b: Pointer; len: SizeUInt): Boolean; inline;
-begin Result := GetFacadeDispatch^.AsciiIEqual(a, b, len); end;
+begin Result := GetSimdFacadeDispatchFastPath^.AsciiIEqual(a, b, len); end;
 procedure ToLowerAscii(p: Pointer; len: SizeUInt); inline;
-begin GetFacadeDispatch^.ToLowerAscii(p, len); end;
+begin GetSimdFacadeDispatchFastPath^.ToLowerAscii(p, len); end;
 procedure ToUpperAscii(p: Pointer; len: SizeUInt); inline;
-begin GetFacadeDispatch^.ToUpperAscii(p, len); end;
+begin GetSimdFacadeDispatchFastPath^.ToUpperAscii(p, len); end;
 function BytesIndexOf(haystack: Pointer; haystackLen: SizeUInt; needle: Pointer; needleLen: SizeUInt): PtrInt; inline;
-begin Result := GetFacadeDispatch^.BytesIndexOf(haystack, haystackLen, needle, needleLen); end;
+begin Result := GetSimdFacadeDispatchFastPath^.BytesIndexOf(haystack, haystackLen, needle, needleLen); end;
 function BitsetPopCount(p: Pointer; len: SizeUInt): SizeUInt; inline;
-begin Result := GetFacadeDispatch^.BitsetPopCount(p, len); end;
+begin Result := GetSimdFacadeDispatchFastPath^.BitsetPopCount(p, len); end;
 
 procedure ArrayAddF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
 var
