@@ -9,6 +9,7 @@ unit nextpas.core.math.easing;
 interface
 
 uses
+  nextpas.core.math.base,
   nextpas.core.math.scalar,
   nextpas.core.math.trig;
 

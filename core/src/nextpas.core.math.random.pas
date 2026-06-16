@@ -9,20 +9,13 @@ unit nextpas.core.math.random;
 interface
 
 uses
+  nextpas.core.math.base,
   nextpas.core.math.scalar,
   nextpas.core.math.trig;
 
 type
   TRandomState = record
     Seed: UInt64;
-  end;
-
-  TPoint2f = record
-    X, Y: Single;
-  end;
-
-  TPoint3f = record
-    X, Y, Z: Single;
   end;
 
 { === Initialization === }

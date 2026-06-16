@@ -5,6 +5,7 @@ unit nextpas.core.math.trig;
 interface
 
 uses
+  nextpas.core.math.base,
   nextpas.core.math.scalar;
 
 function Sin(const AX: Double): Double; overload; inline;

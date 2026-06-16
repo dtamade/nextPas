@@ -8,6 +8,7 @@ program test_random;
 
 uses
   SysUtils,
+  nextpas.core.math.base,
   nextpas.core.math.scalar,
   nextpas.core.math.random;
 

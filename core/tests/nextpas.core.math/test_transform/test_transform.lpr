@@ -8,6 +8,7 @@ program test_transform;
 
 uses
   SysUtils,
+  nextpas.core.math.base,
   nextpas.core.math.scalar,
   nextpas.core.math.trig,
   nextpas.core.math.vec.base,
