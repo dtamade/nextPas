@@ -55,3 +55,10 @@ EBR (Epoch-Based Reclamation) | Hazard Pointer ⏳ 待定
 | MPMC 2P+2C | 1.29 | 2.0+ |
 | SegQueue 2P+2C | 1.5 | 2.5+ |
 | SPMC 1P+2C | 2.6 | 4.0+ |
+
+## 证据级别报告
+
+| 模块 | 定位 | 证据 |
+|------|------|------|
+| `atomic` | 原子操作 (Load/Store/CAS/Fetch*, 全内存序) | source-contract / forced compile / focused runtime: atomic 43/43 |
+| `lockfree` | 无锁 (MPMC/SPSC/MPSC/Stack/Deque) | source-contract / focused runtime / stress: lockfree stress 12/12 |
