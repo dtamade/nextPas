@@ -130,7 +130,7 @@ begin
   Check(platform_process_kill(P) = 0, 'kill');
   Check(platform_process_wait(P, R) = 0, 'wait after kill');
   Check(R.Status = psSignaled, 'signaled');
-  Check(R.ExitCode = 9, 'signal 9 (SIGKILL)');
+  Check(R.ExitCode = 137, 'signal 9 (SIGKILL) => 128 + 9 = 137');
 end;
 
 procedure TestTryWait;

@@ -280,7 +280,8 @@ begin
   else if (AWaitStatus and $7F) <> $7F then
   begin
     AResult.Status := psSignaled;
-    AResult.ExitCode := AWaitStatus and $7F;
+    { Unix convention: exit code = 128 + signum (e.g. 137 for SIGKILL) }
+    AResult.ExitCode := 128 + (AWaitStatus and $7F);
   end
   else
     AResult.Status := psUnknown;
