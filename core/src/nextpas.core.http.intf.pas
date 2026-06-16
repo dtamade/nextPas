@@ -14,7 +14,7 @@ uses
   nextpas.core.http.base;
 
 type
-  TStringArray = array of string;
+  TStringArray = nextpas.core.base.TStringArray;
   TTcpServerConnOwnership = nextpas.core.net.server.base.TTcpServerConnOwnership;
   ITcpServerSession = nextpas.core.net.server.intf.ITcpServerSession;
   ITcpServerSessionContext = nextpas.core.net.server.intf.ITcpServerSessionContext;

@@ -42,6 +42,7 @@ function FastParseRequest(const ABuf: PAnsiChar; const ALen: SizeUInt): TFastPar
 implementation
 
 uses
+  nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.http.headers,
   nextpas.core.http.impl.h1.scan;

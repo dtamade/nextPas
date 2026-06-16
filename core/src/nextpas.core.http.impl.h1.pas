@@ -367,7 +367,6 @@ function ParserErrorStatus(const AParser: IH1Parser): THttpStatus; inline;
 begin
   case AParser.ErrorKind of
     pekUnsupportedTransferCoding,
-    pekUnsupportedMethod:
       Result := HTTP_STATUS_NOT_IMPLEMENTED;
   else
     Result := HTTP_STATUS_BAD_REQUEST;
@@ -452,7 +451,7 @@ begin
   if (AParser = nil) or (AParser.GetHttpVersion <> hvHttp11) then
     Exit;
   LMetadata := RequestMetadata(AParser);
-  Result := (not LMetadata.HasHost) or LMetadata.HostRepeated;
+  Result := not LMetadata.HasHost;
 end;
 
 function ShouldSendContinueResponse(const AParser: IH1Parser;
@@ -494,9 +493,6 @@ begin
 
   if LMetadata.HasUnsupportedExpect then
     Exit(HTTP_STATUS_EXPECTATION_FAILED);
-
-  if (AOptions.MaxBodySize > 0) and LMetadata.ContentLengthTooLarge then
-    Exit(HTTP_STATUS_PAYLOAD_TOO_LARGE);
 
   if (AOptions.MaxBodySize > 0) and LMetadata.HasContentLength and
      (LMetadata.DeclaredContentLength > AOptions.MaxBodySize) then
@@ -626,7 +622,6 @@ begin
   FComplete := True;
   FRequestMetadata := Default(TH1RequestMetadata);
   FRequestMetadata.HasHost := AResult.HasHost;
-  FRequestMetadata.HostRepeated := AResult.HostRepeated;
   FRequestMetadata.HasTransferEncoding := AResult.HasTransferEncoding;
   FRequestMetadata.HasContentLength := AResult.HasContentLength;
   FRequestMetadata.DeclaredContentLength := AResult.ContentLength;
@@ -1211,7 +1206,7 @@ begin
     LOutbound := NewH1OutboundBuffer;
     LResponseWriter := LOutbound as IWriter;
     LW := TH1ResponseWriter.Create(LResponseWriter, LHijackConn,
-      LReq.Method = hmHead, not FKeepAlive);
+      LReq.Method = hmHead);
     if FKeepAlive and (FParser.GetHttpVersion = hvHttp10) then
       LW.GetHeaders.SetHeader('connection', 'keep-alive');
     if not FKeepAlive then
@@ -1232,10 +1227,6 @@ begin
     ArmDirectWriteDeadline;
     LOutbound.DrainAllTo(FConn as IWriter);
 
-    if HeadersHaveConnectionCloseToken(
-      (LW as TH1ResponseWriter).GetCommittedHeaders) then
-      FKeepAlive := False;
-  except
     on E: Exception do
     begin
       if (LW <> nil) and (LW as TH1ResponseWriter).IsHijacked then
@@ -1335,10 +1326,6 @@ begin
 
     LW.Flush;
 
-    if HeadersHaveConnectionCloseToken(
-      (LW as TH1ResponseWriter).GetCommittedHeaders) then
-      LKeepAlive := False;
-    AOutbound := LOutbound;
     ACloseAfterDrain := not LKeepAlive;
   except
     on E: Exception do
