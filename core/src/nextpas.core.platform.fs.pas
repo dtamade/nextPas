@@ -35,6 +35,12 @@ const
   PLATFORM_FS_SHORT_WRITE_ERROR = -5;
   PLATFORM_FS_SHORT_READ_ERROR = -6;
 
+{**
+ * @desc Check whether a path exists (any type: file, directory, symlink, etc.)
+ *
+ * @note Uses stat (follows symlinks): a dangling symlink returns False.
+ *       Use platform_file_lstat directly if you need symlink-existence semantics.
+ *}
 function platform_fs_exists(const APath: PAnsiChar): Boolean;
 function platform_fs_is_file(const APath: PAnsiChar): Boolean;
 function platform_fs_is_dir(const APath: PAnsiChar): Boolean;
