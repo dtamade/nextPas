@@ -1,6 +1,6 @@
 # L0 atomic/lockfree 目标树
 
-> 所属: L0 内核层 | 更新: 2026-06-16
+> 所属: L0 内核层 | 更新: 2026-06-17
 
 ## 北极星
 
@@ -21,20 +21,23 @@ SPSC, SPMC, MPMC, MPSC, SegQueue | 70 tests, 0 leaks
 Treiber Stack, WorkStealing Deque | ABA stress 通过
 
 ### C3: 内存回收 ✅
-EBR (Epoch-Based Reclamation) | Hazard Pointer ⏳ 待定
+EBR (Epoch-Based Reclamation) | Hazard Pointer ✅
 
-### C4: 基准对照 🚧 进行中
+### C3.5: Channel 与 HashMap ✅
+TLockFreeChannel<T> (Go channel 语义) | TLockFreeHashMap<TKey,TValue> (分片锁)
+
+### C4: 基准对照 ✅
 - [x] Pascal/Go/C++ 基准运行
-- [ ] Rust 基准 (crossbeam)
-- [ ] 完整对比报告
+- [x] Rust 基准 (crossbeam 0.8)
+- [x] SPSC 达 Rust 74%, MPMC 3.8M (+217% backoff 优化)
 
 ### C5: SIMD 加速 📋 规划中
 - [ ] Codex 已否决通用 SIMD batch 方案
 - [ ] 替代: SPSC 连续段 Move 优化
 
-### C6: 文档体系 📋 规划中
-- [ ] API 参考手册
-- [ ] 选型决策树
+### C6: 文档体系 ✅
+- [x] API 参考手册 (10 模块 + 性能表)
+- [x] 选型决策树
 
 ---
 
@@ -43,16 +46,16 @@ EBR (Epoch-Based Reclamation) | Hazard Pointer ⏳ 待定
 | 套件 | 测试数 | 泄漏 |
 |------|--------|------|
 | test_atomic | 45 | 0 |
-| test_lockfree | 77 | 0 |
+| test_lockfree | 70 | 0 |
 | test_lockfree_stress | 13 | 0 |
-| **总计** | **135** | **0** |
+| **总计** | **128** | **0** |
 
 ## 性能目标
 
 | 数据结构 | 当前 (M ops/s) | 目标 |
 |----------|---------------|------|
 | SPSC 1P+1C | 4.4 | 6.0+ |
-| MPMC 2P+2C | 1.29 | 2.0+ |
+| MPMC 2P+2C | 3.8 | 5.0+ |
 | SegQueue 2P+2C | 1.5 | 2.5+ |
 | SPMC 1P+2C | 2.6 | 4.0+ |
 

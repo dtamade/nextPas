@@ -62,7 +62,7 @@
 |----------|------|---------------|-------------|
 | TSpscQueue | 1P+1C | 4.40 | 227 |
 | TSpmcQueue | 1P+2C | 2.60 | 385 |
-| TMpmcQueue | 2P+2C | 1.29 | 775 |
+| TMpmcQueue | 2P+2C | 3.80 | 263 |
 | TMpscQueue | 4P+1C | ~3.0 | ~330 |
 | TSegQueue | 2P+2C | 1.50 | 667 |
 | TLockFreeStack | 4P+4C | ~5.0 | ~200 |

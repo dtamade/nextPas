@@ -1,6 +1,7 @@
 use std::time::Instant;
 use std::io::Write;
 use std::fs::File;
+use std::sync::mpsc;
 use crossbeam::queue::{ArrayQueue, SegQueue};
 
 const OPS: u64 = 1_000_000;

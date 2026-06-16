@@ -248,7 +248,7 @@ end;
 
 procedure TestFacadeExtendedSurface;
 var
-  LBuilder: TStringBuilder;
+  LBuilder: IStringBuilder;
   LView: TStringView;
   LErr: TUnescapeError;
   LGrapheme: TGraphemeResult;
@@ -261,14 +261,10 @@ var
   LComposed: string;
   LDecomposed: string;
 begin
-  LBuilder.Init(8);
-  try
-    LBuilder.AppendStr('he');
-    LBuilder.AppendView(TStringView.FromStr('llo'));
-    CheckEqual('hello', LBuilder.ToString, 'builder visible through facade');
-  finally
-    LBuilder.Done;
-  end;
+  LBuilder := MakeStringBuilder(8);
+  LBuilder.AppendStr('he');
+  LBuilder.AppendView(TStringView.FromStr('llo'));
+  CheckEqual('hello', LBuilder.ToString, 'builder visible through facade');
 
   LView := TStringView.FromStr('  hello  ').Trim;
   CheckEqual('hello', LView.ToString, 'view visible through facade');
@@ -351,8 +347,14 @@ begin
     'facade utf8 length routed to utf8');
   CheckContains(LSource, 'Result := nextpas.core.text.utf8.UTF8CodePointAt(AValue, AIndex);',
     'facade utf8 codepoint routed to utf8');
-  CheckContains(LSource, 'TStringBuilder = nextpas.core.text.builder.TStringBuilder;',
-    'facade builder type routed to builder');
+  CheckContains(LSource, 'Result := nextpas.core.text.format.TextFormat(AFmt, AArgs);',
+    'facade TextFormat routed to text.format');
+  CheckContains(LSource, 'IStringBuilder = nextpas.core.text.builder.IStringBuilder;',
+    'facade builder interface routed to builder');
+  CheckContains(LSource, 'function MakeStringBuilder',
+    'facade builder factory declared');
+  CheckContains(LSource, 'Result := nextpas.core.text.builder.MakeStringBuilder(AInitialCap);',
+    'facade builder factory routed to builder');
   CheckContains(LSource, 'TStringView = nextpas.core.text.view.TStringView;',
     'facade view type routed to view');
   CheckContains(LSource, 'Result := nextpas.core.text.compare.TextEqualCanonical(AValue, AOther);',
@@ -406,6 +408,9 @@ begin
     'conv upper forwards to utils');
   CheckContains(LConvSource, 'Result := nextpas.core.text.utils.LowerCase(AStr);',
     'conv lower forwards to utils');
+  CheckContains(LConvSource,
+    'Result := nextpas.core.text.format.TextFormat(AFmt, AArgs);',
+    'conv format compatibility delegates to text.format');
   CheckContains(LConvSource,
     '@note ASCII-only. For Unicode-aware conversion use UTF8ToUpper/UTF8ToLower from text.unicode.',
     'conv ascii-only note');
