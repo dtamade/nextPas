@@ -47,9 +47,13 @@ function ASCIIBytesToString(const AData: TBytes): string;
 function StringToASCIIBytes(const AStr: string): TBytes;
 function BigEndianUnicodeBytesToString(const AData: TBytes): string;
 
+{** Case-insensitive ASCII string comparison. Zero allocation. *}
+function SameText(const A, B: string): Boolean;
+
 implementation
 
 uses
+  nextpas.core.text.char,
   nextpas.core.text.number;
 
 {== Integer/String conversion — uses System.Str/Val ==}
@@ -525,6 +529,21 @@ begin
   for I := 0 to LCount - 1 do
     LWChars[I] := WideChar((UInt16(AData[I * 2]) shl 8) or AData[I * 2 + 1]);
   SetString(Result, PWideChar(LWChars), LCount);
+end;
+
+{ SameText - case-insensitive ASCII comparison, zero allocation }
+function SameText(const A, B: string): Boolean;
+var
+  I: SizeInt;
+  LLen: SizeInt;
+begin
+  LLen := Length(A);
+  if Length(B) <> LLen then
+    Exit(False);
+  for I := 1 to LLen do
+    if ToLower(Byte(A[I])) <> ToLower(Byte(B[I])) then
+      Exit(False);
+  Result := True;
 end;
 
 end.

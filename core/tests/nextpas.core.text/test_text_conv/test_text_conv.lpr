@@ -201,6 +201,29 @@ begin
   ExpectFormatOverflow('%.1025f', [1.0], 'unbounded precision must raise');
 end;
 
+procedure TestSameTextBasic;
+begin
+  Assert(SameText('hello', 'HELLO'), 'hello = HELLO');
+  Assert(SameText('Hello', 'Hello'), 'Hello = Hello');
+  Assert(not SameText('hello', 'world'), 'hello <> world');
+  Assert(SameText('tElNeT', 'TELNET'), 'mixed case');
+  Assert(SameText('abc123', 'ABC123'), 'digits preserved');
+  Assert(SameText('a-b_c', 'A-B_C'), 'special chars');
+end;
+
+procedure TestSameTextEdgeCases;
+var
+  LNil: string;
+begin
+  Assert(SameText('', ''), 'empty = empty');
+  Assert(not SameText('', 'a'), 'empty <> a');
+  Assert(not SameText('a', ''), 'a <> empty');
+  LNil := '';
+  Assert(SameText(LNil, ''), 'nil = empty');
+  Assert(not SameText('abc', 'abcd'), 'length mismatch');
+  Assert(SameText('A', 'a'), 'single char');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.text.conv+format');
 
@@ -222,6 +245,9 @@ begin
   T.Run('Format multi-arg', @TestFormatMultiArg);
   T.Run('Format rejects malformed input', @TestFormatRejectsMalformedInput);
   T.Run('Format rejects unbounded width and precision', @TestFormatRejectsUnboundedWidthAndPrecision);
+
+  T.Run('SameText basic', @TestSameTextBasic);
+  T.Run('SameText edge cases', @TestSameTextEdgeCases);
 
   T.Summary;
 end.

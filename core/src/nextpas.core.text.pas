@@ -66,6 +66,9 @@ function TextOfChar(const ACh: Char; const ACount: Integer): string; inline;
 { Formatting (from text.format) }
 function TextFormat(const AFmt: string; const AArgs: array of const): string; inline;
 
+{ Case-insensitive ASCII comparison (from text.conv) }
+function SameText(const A, B: string): Boolean; inline;
+
 implementation
 
 function TextTrim(const AValue: string): string;
@@ -230,6 +233,13 @@ end;
 function TextFormat(const AFmt: string; const AArgs: array of const): string;
 begin
   Result := nextpas.core.text.format.TextFormat(AFmt, AArgs);
+end;
+
+{ Re-export: SameText }
+
+function SameText(const A, B: string): Boolean;
+begin
+  Result := nextpas.core.text.conv.SameText(A, B);
 end;
 
 end.
