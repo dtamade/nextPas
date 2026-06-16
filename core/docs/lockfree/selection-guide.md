@@ -50,10 +50,21 @@
         - 性能: 取决于竞争程度
 
 需要内存回收？
-└── 使用 TEbrDomain + TEbrGuard
-    - Epoch-Based Reclamation
-    - 保守单次检查设计
-    - 适用: 读多写少场景
+├── 使用 TEbrDomain + TEbrGuard
+│   - Epoch-Based Reclamation
+│   - 保守单次检查设计
+│   - 适用: 读多写少场景
+│
+└── 使用 THazardDomain
+    - Hazard Pointer
+    - 精确保护，适合读写均衡场景
+    - 适用: 延迟敏感、内存受限场景
+
+需要并发 HashMap？
+└── 使用 TLockFreeHashMap<TKey,TValue>
+    - 分片锁 HashMap (16 shards)
+    - Insert/Find/Remove/Contains/Count
+    - 自动 resize
 ```
 
 ## 性能对比
