@@ -445,21 +445,8 @@ begin
 end;
 
 function TFixedPool.AcquireN(out aUnits: array of Pointer; aCount: Integer): Integer;
-var
-  LIndex: Integer;
-  LPtr: Pointer;
 begin
-  Result := 0;
-  if aCount <= 0 then Exit;
-  for LIndex := 0 to aCount-1 do
-  begin
-    if LIndex > High(aUnits) then
-      Break;
-    LPtr := Alloc;
-    if LPtr = nil then Exit;
-    aUnits[LIndex] := LPtr;
-    Inc(Result);
-  end;
+  Result := DefaultAcquireN(@Alloc, aUnits, aCount);
 end;
 
 procedure TFixedPool.Release(aUnit: Pointer);
@@ -468,16 +455,8 @@ begin
 end;
 
 procedure TFixedPool.ReleaseN(const aUnits: array of Pointer; aCount: Integer);
-var
-  LIndex: Integer;
 begin
-  if aCount <= 0 then Exit;
-  for LIndex := 0 to aCount-1 do
-  begin
-    if LIndex > High(aUnits) then
-      Break;
-    ReleasePtr(aUnits[LIndex]);
-  end;
+  DefaultReleaseN(@ReleasePtr, aUnits, aCount);
 end;
 
 {$POP}

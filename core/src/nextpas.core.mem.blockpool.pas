@@ -33,6 +33,7 @@ interface
 
 uses
   nextpas.core.mem.base,
+  nextpas.core.mem.pool.base,
   nextpas.core.mem.error;
 
 const
@@ -518,35 +519,13 @@ begin
 end;
 
 function TBlockPool.AcquireN(out aPtrs: array of Pointer; aCount: Integer): Integer;
-var
-  LIdx: Integer;
-  LPtr: Pointer;
 begin
-  Result := 0;
-  if aCount <= 0 then Exit(0);
-  for LIdx := 0 to aCount - 1 do
-  begin
-    if LIdx > High(aPtrs) then
-      Break;
-    LPtr := Acquire;
-    if LPtr = nil then
-      Break;
-    aPtrs[LIdx] := LPtr;
-    Inc(Result);
-  end;
+  Result := DefaultAcquireN(@Acquire, aPtrs, aCount);
 end;
 
 procedure TBlockPool.ReleaseN(const aPtrs: array of Pointer; aCount: Integer);
-var
-  LIdx: Integer;
 begin
-  if aCount <= 0 then Exit;
-  for LIdx := 0 to aCount - 1 do
-  begin
-    if LIdx > High(aPtrs) then
-      Break;
-    Release(aPtrs[LIdx]);
-  end;
+  DefaultReleaseN(@Release, aPtrs, aCount);
 end;
 
 procedure TBlockPool.Release(aPtr: Pointer);
