@@ -184,9 +184,27 @@ begin
       Result := Result + GetEnvironmentVariable(LName);
       Inc(I);
       Continue;
+    end
+    else if (AValue[I] = '$') and (I < Length(AValue)) then
+    begin
+      LStart := I + 1;
+      I := LStart;
+      while (I <= Length(AValue)) and (AValue[I] in ['A'..'Z', 'a'..'z', '0'..'9', '_']) do
+        Inc(I);
+      if I = LStart then
+        Result := Result + '$'
+      else
+      begin
+        LName := Copy(AValue, LStart, I - LStart);
+        Result := Result + GetEnvironmentVariable(LName);
+      end;
+      Continue;
+    end
+    else
+    begin
+      Result := Result + AValue[I];
+      Inc(I);
     end;
-    Result := Result + AValue[I];
-    Inc(I);
   end;
 end;
 
