@@ -43,10 +43,19 @@ const
   PLATFORM_WALK_STOPPED   = 1;
   PLATFORM_WALK_BADARGS   = -1;
   PLATFORM_WALK_MAX_DEPTH = 256;
+  PLATFORM_FS_SHORT_WRITE_ERROR = -5;
+  PLATFORM_FS_SHORT_READ_ERROR = -6;
 
+{**
+ * @desc Check whether a path exists (any type: file, directory, symlink, etc.)
+ *
+ * @note Uses stat (follows symlinks): a dangling symlink returns False.
+ *       Use platform_file_lstat directly if you need symlink-existence semantics.
+ *}
 function platform_fs_exists(const APath: PAnsiChar): Boolean;
 function platform_fs_is_file(const APath: PAnsiChar): Boolean;
 function platform_fs_is_dir(const APath: PAnsiChar): Boolean;
+function platform_fs_is_executable(const APath: PAnsiChar): Boolean;
 function platform_fs_file_size(const APath: PAnsiChar; out ASize: Int64): Int32;
 function platform_fs_temp_dir(ABuf: PAnsiChar; ABufLen: Int32): Int32;
 function platform_fs_mktemp(const APrefix: PAnsiChar; const ASuffix: PAnsiChar;
@@ -59,6 +68,8 @@ function platform_fs_write_atomic(const APath: PAnsiChar;
   AData: Pointer; ALen: PtrUInt): Int32;
 function platform_fs_read_file(const APath: PAnsiChar;
   out AData: Pointer; out ALen: PtrUInt): Int32;
+function platform_fs_read_file_into(const APath: PAnsiChar;
+  ABuf: Pointer; ABufCapacity: PtrUInt; out ALen: PtrUInt): Int32;
 procedure platform_fs_free_buf(AData: Pointer);
 function platform_fs_walk(const ARoot: PAnsiChar;
   ACallback: TPlatformWalkCallback; AUserData: Pointer;
@@ -69,11 +80,18 @@ implementation
 uses
   nextpas.core.platform.files,
   nextpas.core.platform.env,
-  nextpas.core.platform.random;
+  nextpas.core.platform.error,
+  nextpas.core.platform.random
+{$IFDEF NEXTPAS_UNIX}
+  , nextpas.core.platform.posix.ffi
+{$ENDIF}
+  ;
 
 const
-  PLATFORM_FS_SHORT_WRITE_ERROR = -5;
-  PLATFORM_FS_SHORT_READ_ERROR = -6;
+  PLATFORM_FS_COPY_BUFFER_SIZE = 65536;
+  PLATFORM_FS_PATH_BUF_SIZE = 4096;
+  PLATFORM_FS_MKTEMP_PATH_BUF_SIZE = 1024;
+  PLATFORM_FS_TEMP_DIR_BUF_SIZE = 512;
 
 function platform_fs_write_all(const AHandle: TPlatformFileHandle;
   AData: Pointer; ALen: PtrUInt): Int32;
@@ -138,6 +156,17 @@ begin
   Result := LStat.FileType = ftDirectory;
 end;
 
+function platform_fs_is_executable(const APath: PAnsiChar): Boolean;
+begin
+{$IFDEF NEXTPAS_UNIX}
+  Result := access(APath, 1{X_OK}) = 0;
+{$ELSEIF defined(NEXTPAS_WINDOWS)}
+  Result := platform_fs_is_file(APath);
+{$ELSE}
+  Result := False;
+{$ENDIF}
+end;
+
 function platform_fs_file_size(const APath: PAnsiChar; out ASize: Int64): Int32;
 var
   LStat: TPlatformFileStat;
@@ -190,20 +219,20 @@ end;
 
 function platform_fs_mkdir_p(const APath: PAnsiChar; AMode: UInt32): Int32;
 var
-  LBuf: array[0..4095] of AnsiChar;
+  LBuf: array[0..PLATFORM_FS_PATH_BUF_SIZE - 1] of AnsiChar;
   LLen, I: Int32;
   LR: Int32;
 begin
   if (APath = nil) or (APath[0] = #0) then
     Exit(-1);
   LLen := 0;
-  while (LLen < 4095) and (APath[LLen] <> #0) do
+  while (LLen < PLATFORM_FS_PATH_BUF_SIZE - 1) and (APath[LLen] <> #0) do
   begin
     LBuf[LLen] := APath[LLen];
     Inc(LLen);
   end;
   LBuf[LLen] := #0;
-  if LLen >= 4095 then Exit(-36); { ENAMETOOLONG }
+  if LLen >= PLATFORM_FS_PATH_BUF_SIZE - 1 then Exit(-36); { ENAMETOOLONG }
 
   I := 1;
   while I <= LLen do
@@ -226,7 +255,11 @@ begin
         LBuf[I] := #0;
         LR := platform_file_mkdir(@LBuf[0], AMode);
         if (LR <> 0) and (not platform_fs_is_dir(@LBuf[0])) then
+        begin
+          if LR = PLATFORM_ERR_EEXIST then
+            Exit(PLATFORM_ERR_ENOTDIR);  { path component is not a directory }
           Exit(LR);
+        end;
       {$IFDEF NEXTPAS_WINDOWS}
         LBuf[I] := '\';
       {$ELSE}
@@ -242,7 +275,7 @@ end;
 function platform_fs_copy_file(const ASrc: PAnsiChar; const ADst: PAnsiChar): Int32;
 var
   LSrcH, LDstH: TPlatformFileHandle;
-  LBuf: array[0..8191] of Byte;
+  LBuf: array[0..PLATFORM_FS_COPY_BUFFER_SIZE - 1] of Byte;
   LRead: PtrUInt;
   LR, LCloseR: Int32;
 begin
@@ -274,7 +307,7 @@ const
   HEX: array[0..15] of AnsiChar = '0123456789abcdef';
   MAX_ATOMIC_TEMP_ATTEMPTS = 16;
 var
-  LTmpPath: array[0..1023] of AnsiChar;
+  LTmpPath: array[0..PLATFORM_FS_MKTEMP_PATH_BUF_SIZE - 1] of AnsiChar;
   LBaseLen, LPathLen, I, LAttempt: Int32;
   LH: TPlatformFileHandle;
   LR: Int32;
@@ -347,7 +380,7 @@ const
   HEX_CHARS: array[0..15] of AnsiChar = '0123456789abcdef';
   MAX_ATTEMPTS = 16;
 var
-  LTmpDir: array[0..511] of AnsiChar;
+  LTmpDir: array[0..PLATFORM_FS_TEMP_DIR_BUF_SIZE - 1] of AnsiChar;
   LTmpLen, LPrefixLen, LSuffixLen, LPos, I, LAttempt: Int32;
   LRandBytes: array[0..7] of Byte;
 begin
@@ -473,6 +506,38 @@ begin
   Result := 0;
 end;
 
+function platform_fs_read_file_into(const APath: PAnsiChar;
+  ABuf: Pointer; ABufCapacity: PtrUInt; out ALen: PtrUInt): Int32;
+var
+  LH: TPlatformFileHandle;
+  LSize: Int64;
+  LRead: PtrUInt;
+  LR, LCloseR: Int32;
+begin
+  ALen := 0;
+  LR := platform_fs_file_size(APath, LSize);
+  if LR <> 0 then
+    Exit(LR);
+  if LSize = 0 then
+    Exit(0);
+  if LSize > Int64(ABufCapacity) then
+  begin
+    ALen := PtrUInt(LSize);
+    Exit(PLATFORM_FS_SHORT_READ_ERROR);
+  end;
+  if ABuf = nil then
+    Exit(-1);
+  LR := platform_file_open(APath, fomReadOnly, fcmOpenExisting, LH);
+  if LR <> 0 then
+    Exit(LR);
+  LR := platform_fs_read_all(LH, ABuf, PtrUInt(LSize), LRead);
+  LCloseR := platform_file_close(LH);
+  if (LR = 0) and (LCloseR <> 0) then
+    LR := LCloseR;
+  ALen := LRead;
+  Result := LR;
+end;
+
 procedure platform_fs_free_buf(AData: Pointer);
 begin
   if AData <> nil then
@@ -549,7 +614,7 @@ begin
 
     LNameLen := LDirEntry.NameLen;
     LChildLen := APathLen + 1 + LNameLen;
-    if LChildLen >= 4095 then
+    if LChildLen >= PLATFORM_FS_PATH_BUF_SIZE - 1 then
       Continue;
 
   {$IFDEF NEXTPAS_WINDOWS}
@@ -605,7 +670,7 @@ function platform_fs_walk(const ARoot: PAnsiChar;
   ACallback: TPlatformWalkCallback; AUserData: Pointer;
   AFollowSymlinks: Boolean): Int32;
 var
-  LPathBuf: array[0..4095] of AnsiChar;
+  LPathBuf: array[0..PLATFORM_FS_PATH_BUF_SIZE - 1] of AnsiChar;
   LRootLen: Int32;
   LEntry: TPlatformWalkEntry;
   LAction: TPlatformWalkAction;
@@ -617,7 +682,7 @@ begin
     Exit(PLATFORM_WALK_BADARGS);
 
   LRootLen := 0;
-  while (LRootLen < 4095) and (ARoot[LRootLen] <> #0) do
+  while (LRootLen < PLATFORM_FS_PATH_BUF_SIZE - 1) and (ARoot[LRootLen] <> #0) do
   begin
     LPathBuf[LRootLen] := ARoot[LRootLen];
     Inc(LRootLen);

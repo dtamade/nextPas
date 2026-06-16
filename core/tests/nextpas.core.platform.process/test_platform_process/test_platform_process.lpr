@@ -36,6 +36,45 @@ begin
   end;
 end;
 
+procedure SpawnWithPipes(const APath: PAnsiChar; AArgv: PPAnsiChar;
+  out AProc: TPlatformProcess; out AStdinWrite, AStdoutRead,
+  AStderrRead: PtrInt);
+var
+  LChildStdin: PtrInt;
+  LChildStdout: PtrInt;
+  LChildStderr: PtrInt;
+  LFailStage: TPlatformProcessSpawnStage;
+begin
+  FillChar(AProc, SizeOf(AProc), 0);
+  AStdinWrite := -1;
+  AStdoutRead := -1;
+  AStderrRead := -1;
+  LChildStdin := -1;
+  LChildStdout := -1;
+  LChildStderr := -1;
+  try
+    Check(platform_process_create_pipe(LChildStdin, AStdinWrite) = 0,
+      'create stdin pipe');
+    Check(platform_process_create_pipe(AStdoutRead, LChildStdout) = 0,
+      'create stdout pipe');
+    Check(platform_process_create_pipe(AStderrRead, LChildStderr) = 0,
+      'create stderr pipe');
+    Check(platform_process_spawn_fds(APath, AArgv, nil, nil, LChildStdin,
+      LChildStdout, LChildStderr, AProc, LFailStage) = 0, 'spawn');
+  except
+    platform_process_close_handle(LChildStdin);
+    platform_process_close_handle(LChildStdout);
+    platform_process_close_handle(LChildStderr);
+    platform_process_close_handle(AStdinWrite);
+    platform_process_close_handle(AStdoutRead);
+    platform_process_close_handle(AStderrRead);
+    raise;
+  end;
+  platform_process_close_handle(LChildStdin);
+  platform_process_close_handle(LChildStdout);
+  platform_process_close_handle(LChildStderr);
+end;
+
 procedure TestSpawnTrue;
 var
   P: TPlatformProcess;
@@ -91,7 +130,7 @@ begin
   Check(platform_process_kill(P) = 0, 'kill');
   Check(platform_process_wait(P, R) = 0, 'wait after kill');
   Check(R.Status = psSignaled, 'signaled');
-  Check(R.ExitCode = 9, 'signal 9 (SIGKILL)');
+  Check(R.ExitCode = 137, 'signal 9 (SIGKILL) => 128 + 9 = 137');
 end;
 
 procedure TestTryWait;
@@ -148,24 +187,26 @@ end;
 procedure TestSpawnPipedStdout;
 var
   P: TPlatformProcess;
-  Pipes: TPlatformProcessPipes;
   R: TPlatformProcessResult;
   LArgv: array[0..3] of PAnsiChar;
   LBuf: array[0..63] of AnsiChar;
   LRead: PtrInt;
+  LStdinWrite: PtrInt;
+  LStdoutRead: PtrInt;
+  LStderrRead: PtrInt;
 begin
   LArgv[0] := '/bin/echo';
   LArgv[1] := 'hello';
   LArgv[2] := nil;
-  Check(platform_process_spawn_piped('/bin/echo', @LArgv[0], nil, P, Pipes) = 0, 'spawn piped');
-  Check(Pipes.StdoutRead >= 0, 'stdout pipe valid');
-  nextpas.core.platform.posix.ffi.close(Pipes.StdinWrite);
+  SpawnWithPipes('/bin/echo', @LArgv[0], P, LStdinWrite, LStdoutRead, LStderrRead);
+  Check(LStdoutRead >= 0, 'stdout pipe valid');
+  platform_process_close_handle(LStdinWrite);
   FillChar(LBuf, SizeOf(LBuf), 0);
-  LRead := nextpas.core.platform.posix.ffi.read(Pipes.StdoutRead, @LBuf[0], 64);
+  LRead := nextpas.core.platform.posix.ffi.read(LStdoutRead, @LBuf[0], 64);
   Check(LRead >= 5, 'read >= 5 bytes');
   Check(LBuf[0] = 'h', 'stdout[0] = h');
-  nextpas.core.platform.posix.ffi.close(Pipes.StdoutRead);
-  nextpas.core.platform.posix.ffi.close(Pipes.StderrRead);
+  platform_process_close_handle(LStdoutRead);
+  platform_process_close_handle(LStderrRead);
   platform_process_wait(P, R);
   Check(R.ExitCode = 0, 'exit 0');
 end;
@@ -173,24 +214,26 @@ end;
 procedure TestSpawnPipedStderr;
 var
   P: TPlatformProcess;
-  Pipes: TPlatformProcessPipes;
   R: TPlatformProcessResult;
   LArgv: array[0..3] of PAnsiChar;
   LBuf: array[0..255] of AnsiChar;
   LRead: PtrInt;
+  LStdinWrite: PtrInt;
+  LStdoutRead: PtrInt;
+  LStderrRead: PtrInt;
 begin
   LArgv[0] := '/bin/sh';
   LArgv[1] := '-c';
   LArgv[2] := 'echo errmsg >&2; exit 1';
   LArgv[3] := nil;
-  Check(platform_process_spawn_piped('/bin/sh', @LArgv[0], nil, P, Pipes) = 0, 'spawn');
-  nextpas.core.platform.posix.ffi.close(Pipes.StdinWrite);
-  nextpas.core.platform.posix.ffi.close(Pipes.StdoutRead);
+  SpawnWithPipes('/bin/sh', @LArgv[0], P, LStdinWrite, LStdoutRead, LStderrRead);
+  platform_process_close_handle(LStdinWrite);
+  platform_process_close_handle(LStdoutRead);
   FillChar(LBuf, SizeOf(LBuf), 0);
-  LRead := nextpas.core.platform.posix.ffi.read(Pipes.StderrRead, @LBuf[0], 256);
+  LRead := nextpas.core.platform.posix.ffi.read(LStderrRead, @LBuf[0], 256);
   Check(LRead > 0, 'stderr has output');
   Check(LBuf[0] = 'e', 'stderr[0] = e');
-  nextpas.core.platform.posix.ffi.close(Pipes.StderrRead);
+  platform_process_close_handle(LStderrRead);
   platform_process_wait(P, R);
   Check(R.ExitCode = 1, 'exit 1');
 end;
@@ -198,23 +241,25 @@ end;
 procedure TestSpawnPipedStdin;
 var
   P: TPlatformProcess;
-  Pipes: TPlatformProcessPipes;
   R: TPlatformProcessResult;
   LArgv: array[0..3] of PAnsiChar;
   LBuf: array[0..63] of AnsiChar;
   LRead: PtrInt;
+  LStdinWrite: PtrInt;
+  LStdoutRead: PtrInt;
+  LStderrRead: PtrInt;
 begin
   LArgv[0] := '/bin/cat';
   LArgv[1] := nil;
-  Check(platform_process_spawn_piped('/bin/cat', @LArgv[0], nil, P, Pipes) = 0, 'spawn cat');
-  nextpas.core.platform.posix.ffi.write(Pipes.StdinWrite, PAnsiChar('ping'), 4);
-  nextpas.core.platform.posix.ffi.close(Pipes.StdinWrite);
+  SpawnWithPipes('/bin/cat', @LArgv[0], P, LStdinWrite, LStdoutRead, LStderrRead);
+  nextpas.core.platform.posix.ffi.write(LStdinWrite, PAnsiChar('ping'), 4);
+  platform_process_close_handle(LStdinWrite);
   FillChar(LBuf, SizeOf(LBuf), 0);
-  LRead := nextpas.core.platform.posix.ffi.read(Pipes.StdoutRead, @LBuf[0], 64);
+  LRead := nextpas.core.platform.posix.ffi.read(LStdoutRead, @LBuf[0], 64);
   Check(LRead = 4, 'read 4 from cat');
   Check(LBuf[0] = 'p', 'data[0] = p');
-  nextpas.core.platform.posix.ffi.close(Pipes.StdoutRead);
-  nextpas.core.platform.posix.ffi.close(Pipes.StderrRead);
+  platform_process_close_handle(LStdoutRead);
+  platform_process_close_handle(LStderrRead);
   platform_process_wait(P, R);
   Check(R.ExitCode = 0, 'exit 0');
 end;

@@ -221,6 +221,31 @@ begin
   platform_file_unlink(PATH);
 end;
 
+procedure TestReadFileInto;
+var
+  H: TPlatformFileHandle;
+  W, Len: PtrUInt;
+  Buf: array[0..31] of AnsiChar;
+const
+  PATH = '/tmp/nextpas_read_into_test.dat';
+  DATA = 'read me now';
+begin
+  platform_file_unlink(PATH);
+  platform_file_open(PATH, fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar(DATA), 11, W);
+  platform_file_close(H);
+
+  FillChar(Buf, SizeOf(Buf), 0);
+  Len := 0;
+  Check(platform_fs_read_file_into(PATH, @Buf[0], SizeOf(Buf), Len) = 0,
+    'read_file_into ok');
+  Check(Len = 11, 'read_file_into len');
+  Check(Buf[0] = 'r', 'read_file_into first byte');
+  Check(Buf[10] = 'w', 'read_file_into last byte');
+
+  platform_file_unlink(PATH);
+end;
+
 procedure TestFileIoContract;
 var
   LSource: string;
@@ -266,6 +291,12 @@ begin
     'full-read helper must reject zero-progress reads');
   CheckContains(LSource, 'Inc(ABytesRead, LChunk)',
     'full-read helper must advance after positive short reads');
+  CheckContains(LSource, 'ABuf: Pointer; ABufCapacity: PtrUInt; out ALen: PtrUInt',
+    'read_file_into exposes caller-owned buffer contract');
+  CheckContains(LSource, 'if LSize > Int64(ABufCapacity) then',
+    'read_file_into rejects undersized caller buffer');
+  CheckContains(LSource, 'ALen := LRead',
+    'read_file_into returns actual bytes read');
   CheckContains(LSource, 'LR := platform_fs_read_all(LH, AData, PtrUInt(LSize), LRead)',
     'read_file must read the full stat-sized payload');
   CheckContains(LSource, 'LCloseR := platform_file_close(LH)',
@@ -301,6 +332,7 @@ begin
   T.Run('mkdir_p', @TestMkdirP);
   T.Run('copy_file', @TestCopyFile);
   T.Run('write_atomic', @TestWriteAtomic);
+  T.Run('read_file_into', @TestReadFileInto);
   T.Run('file I/O contract', @TestFileIoContract);
   T.Summary;
 end.

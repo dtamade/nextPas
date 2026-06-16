@@ -33,7 +33,8 @@ uses
   nextpas.core.platform.files,
   nextpas.core.platform.fs,
   nextpas.core.fs.util,
-  nextpas.core.fs.path;
+  nextpas.core.fs.path,
+  nextpas.core.text.conv;
 
 type
   TDirIterator = class(TInterfacedObject, IDirIterator)
@@ -285,80 +286,99 @@ begin
   Result := True;
 end;
 
-procedure FsWalk(const ARoot: string; const AFunc: TWalkFunc);
-const
-  MAX_WALK_DEPTH = 256;
+{ FsWalk bridge types — unit-level so WalkCallback can be a plain function }
 
-  procedure ReportWalkError(const APath: string; const AErr: Exception);
-  var
-    LInfo: TFileInfo;
+type
+  PFsWalkBridge = ^TFsWalkBridge;
+  TFsWalkBridge = record
+    Callback: TWalkFunc;
+  end;
+
+function MapPlatformFileType(AFT: nextpas.core.platform.files.base.TPlatformFileType
+  ): nextpas.core.fs.base.TFileType;
+begin
+  case AFT of
+    nextpas.core.platform.files.base.ftRegular:
+      Result := nextpas.core.fs.base.ftRegular;
+    nextpas.core.platform.files.base.ftDirectory:
+      Result := nextpas.core.fs.base.ftDirectory;
+    nextpas.core.platform.files.base.ftSymlink:
+      Result := nextpas.core.fs.base.ftSymlink;
+    nextpas.core.platform.files.base.ftCharDevice:
+      Result := nextpas.core.fs.base.ftCharDevice;
+    nextpas.core.platform.files.base.ftBlockDevice:
+      Result := nextpas.core.fs.base.ftBlockDevice;
+    nextpas.core.platform.files.base.ftFifo:
+      Result := nextpas.core.fs.base.ftFifo;
+    nextpas.core.platform.files.base.ftSocket:
+      Result := nextpas.core.fs.base.ftSocket;
+  else
+    Result := nextpas.core.fs.base.ftUnknown;
+  end;
+end;
+
+function BuildWalkInfo(const AEntry: TPlatformWalkEntry): TFileInfo;
+var
+  LPath: string;
+begin
+  if AEntry.PathLen > 0 then
+    SetString(LPath, AEntry.Path, AEntry.PathLen)
+  else
+    LPath := '';
+  Result := Default(TFileInfo);
+  Result.Name := LPath;
+  Result.FileType := MapPlatformFileType(AEntry.FileType);
+  Result.IsDir := AEntry.FileType = nextpas.core.platform.files.base.ftDirectory;
+  Result.IsSymlink := AEntry.FileType = nextpas.core.platform.files.base.ftSymlink;
+end;
+
+function FsWalkPlatformCallback(const AEntry: TPlatformWalkEntry;
+  AUserData: Pointer): TPlatformWalkAction;
+var
+  LBridge: PFsWalkBridge;
+  LPath: string;
+  LInfo: TFileInfo;
+  LErr: Exception;
+  LKeepGoing: Boolean;
+begin
+  LBridge := PFsWalkBridge(AUserData);
+  SetString(LPath, AEntry.Path, AEntry.PathLen);
+
+  if AEntry.ErrorCode <> 0 then
   begin
     LInfo := Default(TFileInfo);
-    LInfo.Name := APath;
-    AFunc(APath, LInfo, AErr);
-  end;
-
-  procedure DoWalk(const APath: string; ADepth: Int32);
-  var
-    LInfo: TFileInfo;
-    LIter: IDirIterator;
-    LEntry: TDirEntry;
-    LChild: string;
-  begin
-    if ADepth > MAX_WALK_DEPTH then
-      Exit;
+    LInfo.Name := LPath;
+    LErr := EIOError.Create('walk error (' +
+      IntToStr(AEntry.ErrorCode) + '): ' + LPath);
     try
-      LInfo := FsLstat(APath);
-    except
-      on E: Exception do
-      begin
-        ReportWalkError(APath, E);
-        Exit;
-      end;
-    end;
-
-    if not AFunc(APath, LInfo, nil) then
-      Exit;
-
-    if not LInfo.IsDir then
-      Exit;
-
-    try
-      LIter := FsOpenDir(APath);
-    except
-      on E: Exception do
-      begin
-        ReportWalkError(APath, E);
-        Exit;
-      end;
-    end;
-
-    try
-      try
-        while LIter.Next do
-        begin
-          LEntry := LIter.Entry;
-          if (LEntry.Name = '.') or (LEntry.Name = '..') then
-            Continue;
-          LChild := JoinChildPath(APath, LEntry.Name);
-          DoWalk(LChild, ADepth + 1);
-        end;
-      except
-        on E: Exception do
-          ReportWalkError(APath, E);
-      end;
+      LKeepGoing := LBridge^.Callback(LPath, LInfo, LErr);
     finally
-      try
-        LIter.Close;
-      except
-        on E: Exception do
-          ReportWalkError(APath, E);
-      end;
+      LErr.Free;
     end;
+    if not LKeepGoing then
+      Exit(pwaStop);
+    if AEntry.FileType = nextpas.core.platform.files.base.ftDirectory then
+      Exit(pwaSkipSubtree);
+    Exit(pwaContinue);
   end;
 
+  LInfo := BuildWalkInfo(AEntry);
+  if not LBridge^.Callback(LPath, LInfo, nil) then
+    Exit(pwaStop);
+  Result := pwaContinue;
+end;
+
+procedure FsWalk(const ARoot: string; const AFunc: TWalkFunc);
+var
+  LBridge: TFsWalkBridge;
+  LResult: Int32;
 begin
-  DoWalk(ARoot, 0);
+  LBridge.Callback := AFunc;
+  LResult := platform_fs_walk(PAnsiChar(ARoot), @FsWalkPlatformCallback,
+    @LBridge, False{no follow symlinks});
+  if (LResult <> PLATFORM_WALK_COMPLETED) and
+     (LResult <> PLATFORM_WALK_STOPPED) then
+    RaiseFsError(LResult, 'walk', ARoot);
 end;
 
 end.

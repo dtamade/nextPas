@@ -30,6 +30,42 @@ var
   GWalkErrorSeen: Boolean;
   GWalkErrorPath: string;
 
+  { FsWalk success-path capture state }
+  GWalkVisited: TStringArray;
+  GWalkFileTypes: array of TFileType;
+  GWalkStopCount: Integer;
+
+function HasVisitedPath(const APath: string): Boolean;
+var
+  I: SizeInt;
+begin
+  for I := 0 to High(GWalkVisited) do
+    if GWalkVisited[I] = APath then
+      Exit(True);
+  Result := False;
+end;
+
+function WalkCaptureCallback(const APath: string; const AInfo: TFileInfo;
+  const AErr: Exception): Boolean;
+var
+  LIndex: SizeInt;
+begin
+  Check(AErr = nil, 'success walk callback should not receive error');
+  LIndex := Length(GWalkVisited);
+  SetLength(GWalkVisited, LIndex + 1);
+  SetLength(GWalkFileTypes, LIndex + 1);
+  GWalkVisited[LIndex] := APath;
+  GWalkFileTypes[LIndex] := AInfo.FileType;
+  Result := True;
+end;
+
+function WalkStopAfterTwoCallback(const APath: string; const AInfo: TFileInfo;
+  const AErr: Exception): Boolean;
+begin
+  Inc(GWalkStopCount);
+  Result := GWalkStopCount < 2;
+end;
+
 function LoadSourceText(const ARelativePath: string): string;
 var
   LSourcePath: string;
@@ -739,6 +775,20 @@ begin
     'FsSameFileName delegates name comparison semantics to platform.path');
 end;
 
+procedure TestPathStackBufferConstantContract;
+var
+  LSource: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.fs.path.pas');
+
+  CheckContains(LSource, 'FS_PATH_STACK_BUF_SIZE = 1024;',
+    'fs.path names the stack path buffer constant');
+  CheckContains(LSource, 'array[0..FS_PATH_STACK_BUF_SIZE - 1] of AnsiChar;',
+    'fs.path stack buffers use the named size constant');
+  CheckAbsent(LSource, 'PATH_BUF_SIZE = 1024;',
+    'fs.path no longer uses the old path buffer constant name');
+end;
+
 {$IFDEF NEXTPAS_WINDOWS}
 procedure TestWindowsPathWrapperContract;
 begin
@@ -937,6 +987,50 @@ begin
   CheckContains(LStreamSource,
     'Takes ownership of AHandle; the returned IFile closes it.',
     'FsFromPlatformHandle documents owned handle transfer');
+end;
+
+procedure TestTempFilePathBufferConstantContract;
+var
+  LSource, LImpl, LBody: string;
+  LImplPos: Integer;
+begin
+  LSource := LoadSourceText('src/nextpas.core.fs.util.pas');
+  LImplPos := Pos('implementation', LSource);
+  Check(LImplPos > 0, 'fs.util temp buffer contract has implementation section');
+  LImpl := Copy(LSource, LImplPos, Length(LSource));
+  LBody := ExtractFunctionBody(LImpl,
+    'function FsTempFile(const ADir, APattern: string): IFile;',
+    'procedure FillFileInfo');
+
+  CheckContains(LBody, 'TEMP_FILE_PATH_BUF_SIZE = 1024;',
+    'FsTempFile names the temp path stack buffer constant');
+  CheckContains(LBody, 'array[0..TEMP_FILE_PATH_BUF_SIZE - 1] of AnsiChar;',
+    'FsTempFile stack buffer uses the named size constant');
+end;
+
+procedure TestFsReadFileUsesReadIntoContract;
+var
+  LSource, LImpl, LBody: string;
+  LImplPos: Integer;
+begin
+  LSource := LoadSourceText('src/nextpas.core.fs.util.pas');
+  LImplPos := Pos('implementation', LSource);
+  Check(LImplPos > 0, 'fs.util read-file contract has implementation section');
+  LImpl := Copy(LSource, LImplPos, Length(LSource));
+  LBody := ExtractFunctionBody(LImpl,
+    'function FsReadFile(const APath: string): TBytes;',
+    'procedure FsWriteFile');
+
+  CheckContains(LBody, 'platform_fs_file_size(PAnsiChar(APath), LSize)',
+    'FsReadFile stats file size before allocating');
+  CheckContains(LBody, 'SetLength(Result, LSize)',
+    'FsReadFile preallocates the TBytes result');
+  CheckContains(LBody, 'platform_fs_read_file_into(PAnsiChar(APath),',
+    'FsReadFile reads directly into caller-owned TBytes storage');
+  CheckContains(LBody, 'if LRead < PtrUInt(LSize) then',
+    'FsReadFile trims the result when file shrinks after stat');
+  CheckContains(LBody, 'SetLength(Result, LRead)',
+    'FsReadFile crops the result to actual bytes read');
 end;
 
 procedure TestFsCwdRoundTrip;
@@ -1138,6 +1232,129 @@ begin
 end;
 {$ENDIF}
 
+procedure TestFsWalkDelegatesToPlatformWalker;
+var
+  LSource: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.fs.dir.pas');
+  CheckContains(LSource, 'platform_fs_walk(PAnsiChar(ARoot), @FsWalkPlatformCallback,',
+    'FsWalk delegates traversal to platform_fs_walk');
+  CheckAbsent(LSource, 'procedure DoWalk(',
+    'FsWalk no longer embeds recursive Pascal traversal');
+  CheckAbsent(LSource, 'MAX_WALK_DEPTH = 256',
+    'FsWalk depth truth comes from platform walk owner');
+end;
+
+procedure TestWalkVisitsFilesAndDirectories;
+var
+  LRoot: string;
+  I: SizeInt;
+  LFoundRoot, LFoundChildDir, LFoundDeepFile: Boolean;
+begin
+  LRoot := GTmpDir + '/walk-tree';
+  FsMkdirAll(LRoot + '/a/b');
+  FsWriteFile(LRoot + '/root.txt', TBytes.Create(1));
+  FsWriteFile(LRoot + '/a/child.txt', TBytes.Create(2));
+  FsWriteFile(LRoot + '/a/b/deep.txt', TBytes.Create(3));
+
+  GWalkVisited := nil;
+  GWalkFileTypes := nil;
+  FsWalk(LRoot, @WalkCaptureCallback);
+
+  Check(Length(GWalkVisited) >= 6,
+    'walk visits root + dirs + files (got ' +
+    IntToStr(Length(GWalkVisited)) + ')');
+  Check(GWalkVisited[0] = LRoot, 'walk visits root first');
+
+  LFoundRoot := False;
+  LFoundChildDir := False;
+  LFoundDeepFile := False;
+  for I := 0 to High(GWalkVisited) do
+  begin
+    if GWalkVisited[I] = LRoot then
+      LFoundRoot := True;
+    if GWalkVisited[I] = LRoot + '/a' then
+      LFoundChildDir := True;
+    if GWalkVisited[I] = LRoot + '/a/b/deep.txt' then
+      LFoundDeepFile := True;
+  end;
+  Check(LFoundRoot, 'root directory visited');
+  Check(LFoundChildDir, 'child directory visited');
+  Check(LFoundDeepFile, 'deep file visited');
+end;
+
+procedure TestWalkClassifiesFileTypes;
+var
+  LRoot: string;
+  I: SizeInt;
+  LRegularCount, LDirCount: Integer;
+begin
+  LRoot := GTmpDir + '/walk-types';
+  FsMkdirAll(LRoot + '/sub');
+  FsWriteFile(LRoot + '/file.txt', TBytes.Create(1));
+  FsWriteFile(LRoot + '/sub/nested.txt', TBytes.Create(2));
+
+  GWalkVisited := nil;
+  GWalkFileTypes := nil;
+  FsWalk(LRoot, @WalkCaptureCallback);
+
+  LRegularCount := 0;
+  LDirCount := 0;
+  for I := 0 to High(GWalkFileTypes) do
+  begin
+    if GWalkFileTypes[I] = ftRegular then
+      Inc(LRegularCount);
+    if GWalkFileTypes[I] = ftDirectory then
+      Inc(LDirCount);
+  end;
+  Check(LRegularCount >= 2, 'walk classifies regular files');
+  Check(LDirCount >= 2, 'walk classifies directories');
+end;
+
+procedure TestWalkStopsWhenCallbackReturnsFalse;
+var
+  LRoot: string;
+begin
+  LRoot := GTmpDir + '/walk-stop';
+  FsMkdirAll(LRoot + '/a/b');
+  FsWriteFile(LRoot + '/a/b/file.txt', TBytes.Create(1));
+
+  GWalkStopCount := 0;
+  FsWalk(LRoot, @WalkStopAfterTwoCallback);
+  Check(GWalkStopCount = 2, 'walk stops when callback returns false');
+end;
+
+{$IFDEF NEXTPAS_UNIX}
+procedure TestWalkDoesNotDescendSymlinkDirectory;
+var
+  LRoot, LTarget, LLink: string;
+  I: SizeInt;
+  LFoundInside: Boolean;
+begin
+  LRoot := GTmpDir + '/walk-link-root';
+  LTarget := LRoot + '/target';
+  LLink := LRoot + '/link-target';
+  FsMkdirAll(LTarget);
+  FsWriteFile(LTarget + '/inside.txt', TBytes.Create(1));
+  FsSymlink(LTarget, LLink);
+
+  GWalkVisited := nil;
+  GWalkFileTypes := nil;
+  FsWalk(LRoot, @WalkCaptureCallback);
+
+  Check(HasVisitedPath(LLink), 'symlink entry is visited');
+
+  { The real target/ directory is walked (it is a real dir in the tree).
+    We must verify that the symlink path itself is NOT descended —
+    i.e. no path starting with LLink + '/' appears. }
+  LFoundInside := False;
+  for I := 0 to High(GWalkVisited) do
+    if Copy(GWalkVisited[I], 1, Length(LLink) + 1) = LLink + '/' then
+      LFoundInside := True;
+  Check(not LFoundInside, 'symlink target subtree not descended via symlink path');
+end;
+{$ENDIF}
+
 begin
   SetupTmpDir;
   try
@@ -1201,6 +1418,8 @@ begin
     T.Run('PathSplit', @TestPathSplit);
     T.Run('Path separator source contract', @TestPathSeparatorSourceContract);
     T.Run('Path delegates platform root contract', @TestPathDelegatesPlatformRootContract);
+    T.Run('Path stack buffer constant contract',
+      @TestPathStackBufferConstantContract);
 {$IFDEF NEXTPAS_WINDOWS}
     T.Run('Windows path wrapper contract', @TestWindowsPathWrapperContract);
 {$ENDIF}
@@ -1219,6 +1438,10 @@ begin
     T.Run('TempFile in dir', @TestTempFileInDir);
     T.Run('TempFile system dir typed handle contract',
       @TestTempFileSystemDirUsesTypedHandleContract);
+    T.Run('TempFile path buffer constant contract',
+      @TestTempFilePathBufferConstantContract);
+    T.Run('FsReadFile uses read_into contract',
+      @TestFsReadFileUsesReadIntoContract);
     T.Run('FsGetCwd/FsSetCwd roundtrip', @TestFsCwdRoundTrip);
     T.Run('FsSetCwd invalid path raises mapped fs error',
       @TestFsSetCwdInvalidPathRaisesNotFound);
@@ -1228,9 +1451,18 @@ begin
     T.Run('FsGetEnv uses os.env owner contract',
       @TestFsGetEnvUsesOsEnvOwnerContract);
     T.Run('Lstat', @TestLstat);
+    T.Run('FsWalk delegates to platform walker',
+      @TestFsWalkDelegatesToPlatformWalker);
+    T.Run('Walk visits files and directories',
+      @TestWalkVisitsFilesAndDirectories);
+    T.Run('Walk classifies file types', @TestWalkClassifiesFileTypes);
+    T.Run('Walk stops when callback returns false',
+      @TestWalkStopsWhenCallbackReturnsFalse);
 {$IFDEF NEXTPAS_UNIX}
     T.Run('RemoveAll symlink root', @TestRemoveAllSymlinkRoot);
     T.Run('Walk opendir error callback', @TestWalkOpenDirErrorGoesToCallback);
+    T.Run('Walk does not descend symlink directory',
+      @TestWalkDoesNotDescendSymlinkDirectory);
     T.Run('Remove symlink-to-dir unlinks link', @TestRemoveSymlinkToDirUnlinksLink);
     T.Run('Symlink + Readlink', @TestSymlinkReadlink);
     T.Run('Symlink + Readlink long target', @TestSymlinkReadlinkLongTarget);

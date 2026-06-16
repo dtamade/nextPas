@@ -346,13 +346,14 @@ end;
 function platform_path_join(const ABase, AChild: PAnsiChar;
   ABuf: PAnsiChar; ABufLen: Int32): Int32;
 var
-  LBaseLen, LChildLen, LChildStart, LTotal: Int32;
+  LBaseLen, LChildLen, LChildFullLen, LChildStart, LTotal: Int32;
   LNeedSep: Boolean;
   LTmp: array[0..1023] of AnsiChar;
-  LPos: Int32;
+  LPos, LCopyLen: Int32;
 begin
   LBaseLen := StrLen(ABase);
-  LChildLen := StrLen(AChild);
+  LChildFullLen := StrLen(AChild);
+  LChildLen := LChildFullLen;
   LChildStart := 0;
   if LBaseLen = 0 then
     Exit(CopyToBuf(AChild, LChildLen, ABuf, ABufLen));
@@ -365,6 +366,7 @@ begin
   if LChildStart > 0 then
   begin
     Dec(LChildLen, LChildStart);
+    LChildFullLen := LChildLen;
     if LChildLen = 0 then
       Exit(CopyToBuf(ABase, LBaseLen, ABuf, ABufLen));
   end;
@@ -393,21 +395,24 @@ begin
   begin
     if (ABuf = nil) or (ABufLen <= 0) then
       Exit(LTotal);
+    { Copy base prefix }
     LPos := LBaseLen;
     if LPos >= ABufLen then LPos := ABufLen - 1;
     Move(ABase^, ABuf^, LPos);
+    { Add separator if needed }
     if LNeedSep and (LPos < ABufLen - 1) then
     begin
       ABuf[LPos] := PLATFORM_PATH_SEP;
       Inc(LPos);
     end;
+    { Copy child portion — limited by remaining buffer and original child length }
     if LPos < ABufLen - 1 then
     begin
-      LChildLen := ABufLen - 1 - LPos;
-      if LChildLen > StrLen(AChild) - LChildStart then
-        LChildLen := StrLen(AChild) - LChildStart;
-      Move(AChild[LChildStart], ABuf[LPos], LChildLen);
-      Inc(LPos, LChildLen);
+      LCopyLen := ABufLen - 1 - LPos;
+      if LCopyLen > LChildFullLen then
+        LCopyLen := LChildFullLen;
+      Move(AChild[LChildStart], ABuf[LPos], LCopyLen);
+      Inc(LPos, LCopyLen);
     end;
     ABuf[LPos] := #0;
     Result := LTotal;

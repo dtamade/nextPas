@@ -134,8 +134,11 @@ begin
 end;
 
 destructor TChild.Destroy;
+const
+  DESTROY_TIMEOUT_NS = 5000000000; { 5 seconds }
 var
   LResult: TPlatformProcessResult;
+  LDeadline: TInstant;
 begin
   if (not FWaited) and (not FDetached) then
   begin
@@ -143,11 +146,27 @@ begin
       if LResult.Status = nextpas.core.platform.process.base.psRunning then
       begin
         if platform_process_kill(FProc) = 0 then
-          platform_process_wait(FProc, LResult)
+        begin
+          LDeadline := TInstant.Now.Add(TDuration.FromNanoseconds(DESTROY_TIMEOUT_NS));
+          repeat
+            if platform_process_try_wait(FProc, LResult) <> 0 then
+              Break;
+            if LResult.Status <> nextpas.core.platform.process.base.psRunning then
+              Break;
+            if TInstant.Now.DurationSince(LDeadline).IsPositive then
+            begin
+              { Timeout: abandon child to avoid blocking destructor }
+              Break;
+            end;
+            platform_thread_sleep_ns(10000000);
+          until False;
+        end
         else
           platform_process_try_wait(FProc, LResult);
       end;
   end;
+  if not FDetached then
+    platform_process_detach(FProc);
   try
     CloseWriterBestEffort(FStdinWriter);
   except
@@ -273,11 +292,13 @@ begin
 end;
 
 function TChild.WaitWithOutput: TProcessOutput;
+const
+  DRAIN_TIMEOUT_NS = 5000000000; { 5 seconds after process exit }
 var
   LWait: TProcessOutput;
   LProcessResult: TPlatformProcessResult;
   LHaveProcessResult: Boolean;
-  LDeadline: TInstant;
+  LDeadline, LDrainDeadline: TInstant;
   LErr: Int32;
   LStdoutClosed, LStderrClosed: Boolean;
 begin
@@ -292,6 +313,7 @@ begin
   LStdoutClosed := FStdoutReader = nil;
   LStderrClosed := FStderrReader = nil;
   FillChar(LProcessResult, SizeOf(LProcessResult), 0);
+  FillChar(LDrainDeadline, SizeOf(LDrainDeadline), 0);
   if not FTimeout.IsZero then
     LDeadline := TInstant.Now.Add(FTimeout);
 
@@ -311,7 +333,10 @@ begin
       if LErr <> 0 then
         RaiseProcessPlatformError('platform_process_try_wait', LErr);
       if LProcessResult.Status <> nextpas.core.platform.process.base.psRunning then
-        LHaveProcessResult := True
+      begin
+        LHaveProcessResult := True;
+        LDrainDeadline := TInstant.Now.Add(TDuration.FromNanoseconds(DRAIN_TIMEOUT_NS));
+      end
       else if TInstant.Now.DurationSince(LDeadline).IsPositive then
       begin
         LErr := platform_process_kill(FProc);
@@ -321,11 +346,21 @@ begin
         if LErr <> 0 then
           RaiseProcessPlatformError('platform_process_wait', LErr);
         LHaveProcessResult := True;
+        LDrainDeadline := TInstant.Now.Add(TDuration.FromNanoseconds(DRAIN_TIMEOUT_NS));
       end;
     end;
 
     if LHaveProcessResult and LStdoutClosed and LStderrClosed then
       Break;
+    { Force-close pipes if drain takes too long after process exit }
+    if LHaveProcessResult and TInstant.Now.DurationSince(LDrainDeadline).IsPositive then
+    begin
+      FStdoutReader := nil;
+      FStderrReader := nil;
+      LStdoutClosed := True;
+      LStderrClosed := True;
+      Break;
+    end;
     if not LHaveProcessResult then
       platform_thread_sleep_ns(10000000);
   until False;

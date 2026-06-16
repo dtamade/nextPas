@@ -23,7 +23,8 @@ implementation
 {$IFDEF NEXTPAS_UNIX}
 uses
   nextpas.core.platform.posix.base,
-  nextpas.core.platform.posix.ffi;
+  nextpas.core.platform.posix.ffi,
+  nextpas.core.platform.error;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_WINDOWS}
@@ -58,10 +59,10 @@ var
 begin
   ALen := 0;
   if not platform_env_name_valid(AName) then
-    Exit(22);
+    Exit(PLATFORM_ERR_INVALID);
   LVal := getenv(AName);
   if LVal = nil then
-    Exit(2); // ENOENT
+    Exit(PLATFORM_ERR_ENOENT);
   while LVal[ALen] <> #0 do
     Inc(ALen);
   if (ABuf <> nil) and (ABufLen > 0) then
@@ -80,7 +81,7 @@ function platform_env_set(const AName: PAnsiChar;
   const AValue: PAnsiChar): Int32;
 begin
   if (not platform_env_name_valid(AName)) or (AValue = nil) then
-    Exit(22);
+    Exit(PLATFORM_ERR_INVALID);
   if setenv(AName, AValue, 1) = 0 then
     Result := 0
   else
@@ -90,7 +91,7 @@ end;
 function platform_env_unset(const AName: PAnsiChar): Int32;
 begin
   if not platform_env_name_valid(AName) then
-    Exit(22);
+    Exit(PLATFORM_ERR_INVALID);
   if unsetenv(AName) = 0 then
     Result := 0
   else
@@ -110,7 +111,7 @@ var
   LCur: PPAnsiChar;
 begin
   if not Assigned(ACallback) then
-    Exit(22);
+    Exit(PLATFORM_ERR_INVALID);
   LCur := environ;
   if LCur = nil then
     Exit(0);
@@ -216,6 +217,7 @@ var
   LBlock: LPWSTR;
   LCur: PWideChar;
   LUtf8: AnsiString;
+  LEntryLen: Integer;
 begin
   if not Assigned(ACallback) then
     Exit(Int32(ERROR_INVALID_PARAMETER));
@@ -231,7 +233,12 @@ begin
         Exit(Int32(ERROR_INVALID_DATA));
       if not ACallback(PAnsiChar(LUtf8), AData) then
         Break;
-      Inc(LCur, Length(UnicodeString(LCur)) + 1);
+      { Advance past this entry: compute WideChar length inline to avoid
+        temporary UnicodeString allocation per iteration. }
+      LEntryLen := 0;
+      while LCur[LEntryLen] <> #0 do
+        Inc(LEntryLen);
+      Inc(LCur, LEntryLen + 1);
     end;
     Result := 0;
   finally

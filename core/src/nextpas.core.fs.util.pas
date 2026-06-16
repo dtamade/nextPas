@@ -44,6 +44,7 @@ uses
   nextpas.core.platform.files.base,
   nextpas.core.platform.files,
   nextpas.core.platform.fs,
+  nextpas.core.platform.path,
   nextpas.core.platform.random,
   nextpas.core.fs.stream;
 
@@ -64,20 +65,57 @@ end;
 
 function FsReadFile(const APath: string): TBytes;
 var
-  LData: Pointer;
-  LLen: PtrUInt;
+  LSize: Int64;
+  LRead: PtrUInt;
   LResult: Int32;
+  LGrowData: Pointer;
+  LGrowLen: PtrUInt;
 begin
-  LResult := platform_fs_read_file(PAnsiChar(APath), LData, LLen);
+  LResult := platform_fs_file_size(PAnsiChar(APath), LSize);
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'read file size', APath);
+  if LSize = 0 then
+  begin
+    Result := nil;
+    Exit;
+  end;
+  if (SizeOf(PtrUInt) < 8) and (LSize > Int64(High(PtrUInt))) then
+    raise EIOError.Create('file too large for address space: ' + APath);
+  SetLength(Result, LSize);
+  LRead := 0;
+  LResult := platform_fs_read_file_into(PAnsiChar(APath),
+    @Result[0], PtrUInt(LSize), LRead);
+  if LResult = 0 then
+  begin
+    if LRead < PtrUInt(LSize) then
+      SetLength(Result, LRead);
+    Exit;
+  end;
+  if LResult = PLATFORM_FS_SHORT_READ_ERROR then
+  begin
+    if LRead < PtrUInt(LSize) then
+    begin
+      SetLength(Result, LRead);
+      Exit;
+    end;
+    LGrowData := nil;
+    LGrowLen := 0;
+    LResult := platform_fs_read_file(PAnsiChar(APath), LGrowData, LGrowLen);
+    try
+      if LResult = 0 then
+      begin
+        SetLength(Result, LGrowLen);
+        if LGrowLen > 0 then
+          Move(LGrowData^, Result[0], LGrowLen);
+        Exit;
+      end;
+    finally
+      if LGrowData <> nil then
+        platform_fs_free_buf(LGrowData);
+    end;
+  end;
   if LResult <> 0 then
     RaiseFsError(LResult, 'read file', APath);
-  try
-    SetLength(Result, LLen);
-    if LLen > 0 then
-      Move(LData^, Result[0], LLen);
-  finally
-    platform_fs_free_buf(LData);
-  end;
 end;
 
 procedure FsWriteFile(const APath: string; const AData: TBytes;
@@ -140,8 +178,9 @@ function FsTempFile(const ADir, APattern: string): IFile;
 const
   HEX: array[0..15] of AnsiChar = '0123456789abcdef';
   MAX_ATTEMPTS = 32;
+  TEMP_FILE_PATH_BUF_SIZE = 1024;
 var
-  LPathBuf: array[0..1023] of AnsiChar;
+  LPathBuf: array[0..TEMP_FILE_PATH_BUF_SIZE - 1] of AnsiChar;
   LHandle: TPlatformFileHandle;
   LResult: Int32;
   LPath: string;
@@ -172,7 +211,7 @@ begin
       LHex[LI * 2 + 1] := Char(HEX[(LRand[LI] shr 4) and $F]);
       LHex[LI * 2 + 2] := Char(HEX[LRand[LI] and $F]);
     end;
-    LPath := ADir + '/' + APattern + LHex;
+    LPath := ADir + PLATFORM_PATH_SEP + APattern + LHex;
     try
       Result := FsOpenFile(LPath, [fmRead, fmWrite, fmCreate, fmExclusive], PermDefault);
       Exit;
