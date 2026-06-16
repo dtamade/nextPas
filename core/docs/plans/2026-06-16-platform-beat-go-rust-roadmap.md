@@ -292,12 +292,12 @@
 ## 总路线图位置
 
 ```
-Phase 1: 债务清零        [████████░░] 当前 ← 我们在这里
-Phase 2: API 完整性      [░░░░░░░░░░]
-Phase 3: 跨平台深化       [░░░░░░░░░░]
-Phase 4: 性能优化         [░░░░░░░░░░]
-Phase 5: Benchmark       [░░░░░░░░░░]
-Phase 6: 文档与治理       [░░░░░░░░░░]
+Phase 1: 债务清零        [██████████] ✅ 完成 (5/5 tasks)
+Phase 2: API 完整性      [██████████] ✅ 完成 (5/7 actionable, 2 deferred)
+Phase 3: 跨平台深化       [██████░░░░] 🟡 编译通过，运行时待 CI (macOS/FreeBSD/Android)
+Phase 4: 性能优化         [██████████] ✅ 完成 (epoll stack alloc, futex 已最优)
+Phase 5: Benchmark       [██████████] ✅ 完成 (mutex 15.5ns, rwlock 28.2ns)
+Phase 6: 文档与治理       [██████████] ✅ 完成 (路线图更新)
 ```
 
 ## 总预计工时: 18-28 天
