@@ -20,9 +20,6 @@ function ScanFindNotInRange(const AData: PAnsiChar; const ALen: SizeUInt;
   const ALo, AHi: Byte): PtrInt;
 function ScanSkipWhitespace(const AData: PAnsiChar; const ALen: SizeUInt): SizeUInt;
 function ScanJsonNumber(const AData: PAnsiChar; const ALen: SizeUInt): SizeUInt;
-function ScanIsJsonNumberToken(const AData: PAnsiChar; const ALen: SizeUInt): Boolean;
-function ScanJsonNumberHasIncompleteExponent(const AData: PAnsiChar;
-  const ALen: SizeUInt): Boolean;
 function ScanFindSubstring(const AData: PAnsiChar; const ADataLen: SizeUInt;
   const ANeedle: PAnsiChar; const ANeedleLen: SizeUInt): PtrInt;
 function ScanFindSubstringCI(const AData: PAnsiChar; const ADataLen: SizeUInt;
@@ -191,46 +188,58 @@ end;
 function ScanJsonNumber(const AData: PAnsiChar; const ALen: SizeUInt): SizeUInt;
 var
   LPos: SizeUInt;
-  LMask: TVecMask;
   LCh: Byte;
+
+  function ScanDigitsFrom(const AStart: SizeUInt): SizeUInt;
+  var
+    LDigitPos: SizeUInt;
+    LMask: TVecMask;
+  begin
+    LDigitPos := AStart;
+    while LDigitPos + VecWidth <= ALen do
+    begin
+      LMask := VecCmpRange(@AData[LDigitPos], Ord('0'), Ord('9'));
+      if LMask = TVecMask(not TVecMask(0)) then
+        Inc(LDigitPos, VecWidth)
+      else
+      begin
+        Inc(LDigitPos, SizeUInt(VecCtz(not LMask and TVecMask(not TVecMask(0)))));
+        Break;
+      end;
+    end;
+    if LDigitPos + VecWidth > ALen then
+      while (LDigitPos < ALen) and IsDigit(Byte(AData[LDigitPos])) do
+        Inc(LDigitPos);
+    Result := LDigitPos;
+  end;
 begin
   LPos := 0;
   if (LPos < ALen) and (AData[LPos] = '-') then
     Inc(LPos);
-  while LPos + VecWidth <= ALen do
-  begin
-    LMask := VecCmpRange(@AData[LPos], Ord('0'), Ord('9'));
-    if LMask = TVecMask(not TVecMask(0)) then
-      Inc(LPos, VecWidth)
-    else
-    begin
-      LMask := not LMask;
-      LMask := LMask and TVecMask(not TVecMask(0));
-      Inc(LPos, SizeUInt(VecCtz(LMask)));
-      Break;
-    end;
-  end;
-  if LPos + VecWidth > ALen then
-    while (LPos < ALen) and IsDigit(Byte(AData[LPos])) do
-      Inc(LPos);
-  if (LPos < ALen) and (AData[LPos] = '.') then
+
+  if LPos >= ALen then
+    Exit(0);
+
+  LCh := Byte(AData[LPos]);
+  if LCh = Ord('0') then
   begin
     Inc(LPos);
-    while LPos + VecWidth <= ALen do
-    begin
-      LMask := VecCmpRange(@AData[LPos], Ord('0'), Ord('9'));
-      if LMask = TVecMask(not TVecMask(0)) then
-        Inc(LPos, VecWidth)
-      else
-      begin
-        Inc(LPos, SizeUInt(VecCtz(not LMask and TVecMask(not TVecMask(0)))));
-        Break;
-      end;
-    end;
-    if LPos + VecWidth > ALen then
-      while (LPos < ALen) and IsDigit(Byte(AData[LPos])) do
-        Inc(LPos);
+    if (LPos < ALen) and IsDigit(Byte(AData[LPos])) then
+      Exit(0);
+  end
+  else if (LCh >= Ord('1')) and (LCh <= Ord('9')) then
+    LPos := ScanDigitsFrom(LPos)
+  else
+    Exit(0);
+
+  if (LPos < ALen) and (AData[LPos] = '.') then
+  begin
+    if ((LPos + 1) >= ALen) or not IsDigit(Byte(AData[LPos + 1])) then
+      Exit(0);
+    Inc(LPos);
+    LPos := ScanDigitsFrom(LPos);
   end;
+
   if LPos < ALen then
   begin
     LCh := Byte(AData[LPos]);
@@ -243,95 +252,12 @@ begin
         if (LCh = Ord('+')) or (LCh = Ord('-')) then
           Inc(LPos);
       end;
-      while LPos + VecWidth <= ALen do
-      begin
-        LMask := VecCmpRange(@AData[LPos], Ord('0'), Ord('9'));
-        if LMask = TVecMask(not TVecMask(0)) then
-          Inc(LPos, VecWidth)
-        else
-        begin
-          Inc(LPos, SizeUInt(VecCtz(not LMask and TVecMask(not TVecMask(0)))));
-          Break;
-        end;
-      end;
-      if LPos + VecWidth > ALen then
-        while (LPos < ALen) and IsDigit(Byte(AData[LPos])) do
-          Inc(LPos);
+      if (LPos >= ALen) or not IsDigit(Byte(AData[LPos])) then
+        Exit(0);
+      LPos := ScanDigitsFrom(LPos);
     end;
   end;
   Result := LPos;
-end;
-
-function ScanIsJsonNumberToken(const AData: PAnsiChar; const ALen: SizeUInt): Boolean;
-var
-  LPos: SizeUInt;
-begin
-  if ALen = 0 then
-    Exit(False);
-
-  LPos := 0;
-  if AData[LPos] = '-' then
-  begin
-    Inc(LPos);
-    if LPos >= ALen then
-      Exit(False);
-  end;
-
-  if AData[LPos] = '0' then
-  begin
-    Inc(LPos);
-    if (LPos < ALen) and IsDigit(Byte(AData[LPos])) then
-      Exit(False);
-  end
-  else
-  begin
-    if not IsDigit(Byte(AData[LPos])) then
-      Exit(False);
-    while (LPos < ALen) and IsDigit(Byte(AData[LPos])) do
-      Inc(LPos);
-  end;
-
-  if (LPos < ALen) and (AData[LPos] = '.') then
-  begin
-    Inc(LPos);
-    if (LPos >= ALen) or not IsDigit(Byte(AData[LPos])) then
-      Exit(False);
-    while (LPos < ALen) and IsDigit(Byte(AData[LPos])) do
-      Inc(LPos);
-  end;
-
-  if (LPos < ALen) and
-     ((AData[LPos] = 'e') or (AData[LPos] = 'E')) then
-  begin
-    Inc(LPos);
-    if (LPos < ALen) and
-       ((AData[LPos] = '+') or (AData[LPos] = '-')) then
-      Inc(LPos);
-    if (LPos >= ALen) or not IsDigit(Byte(AData[LPos])) then
-      Exit(False);
-    while (LPos < ALen) and IsDigit(Byte(AData[LPos])) do
-      Inc(LPos);
-  end;
-
-  Result := LPos = ALen;
-end;
-
-function ScanJsonNumberHasIncompleteExponent(const AData: PAnsiChar;
-  const ALen: SizeUInt): Boolean;
-var
-  LPos: SizeUInt;
-begin
-  if ALen = 0 then
-    Exit(False);
-  LPos := ALen;
-  if (AData[LPos - 1] = '+') or (AData[LPos - 1] = '-') then
-  begin
-    if LPos < 2 then
-      Exit(False);
-    Dec(LPos);
-  end;
-  Result := (LPos > 0) and
-    ((AData[LPos - 1] = 'e') or (AData[LPos - 1] = 'E'));
 end;
 
 function ScanFindSubstring(const AData: PAnsiChar; const ADataLen: SizeUInt;

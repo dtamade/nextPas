@@ -10,8 +10,8 @@ implementation
 
 uses
   nextpas.core.base,
-  nextpas.core.text.conv,
-  nextpas.core.text.builder;
+  nextpas.core.text.builder,
+  nextpas.core.text.number;
 
 const
   MAX_FORMAT_WIDTH = 1048576;
@@ -72,14 +72,29 @@ var
     end;
   end;
 
-  function FormatInt(const AVal: Int64): string;
+  function BufferToString(const ABuffer: PAnsiChar; const ALen: Int32): string;
   begin
-    Result := IntToStr(AVal);
+    SetLength(Result, ALen);
+    if ALen > 0 then
+      Move(ABuffer^, Result[1], ALen);
+  end;
+
+  function FormatInt(const AVal: Int64): string;
+  var
+    LBuf: array[0..20] of AnsiChar;
+    LLen: Int32;
+  begin
+    LLen := IntToBuffer(AVal, @LBuf[0]);
+    Result := BufferToString(@LBuf[0], LLen);
   end;
 
   function FormatUInt(const AVal: UInt64): string;
+  var
+    LBuf: array[0..19] of AnsiChar;
+    LLen: Int32;
   begin
-    Result := UIntToStr(AVal);
+    LLen := UIntToBuffer(AVal, @LBuf[0]);
+    Result := BufferToString(@LBuf[0], LLen);
   end;
 
   function FormatHex(const AVal: UInt64; const AUpper: Boolean): string;
@@ -135,7 +150,7 @@ var
     LAbs := LAbs + LRound;
     LInt := Trunc(LAbs);
     LFrac := LAbs - LInt;
-    Result := IntToStr(LInt);
+    Result := FormatInt(LInt);
     if LNeg then Result := '-' + Result;
     Result := Result + '.';
     for LI := 1 to ADigits do
@@ -146,6 +161,31 @@ var
       Result := Result + Char(Ord('0') + LDigit);
       LFrac := LFrac - LDigit;
     end;
+  end;
+
+  function ApplyIntegerPrecision(const AStr: string; const AMinDigits: Integer): string;
+  var
+    LDigits: Integer;
+    LPad: Integer;
+    LStart: Integer;
+  begin
+    Result := AStr;
+    if AMinDigits <= 0 then
+      Exit;
+
+    LStart := 1;
+    if (Length(Result) > 0) and (Result[1] = '-') then
+      LStart := 2;
+
+    LDigits := Length(Result) - LStart + 1;
+    LPad := AMinDigits - LDigits;
+    if LPad <= 0 then
+      Exit;
+
+    if LStart = 2 then
+      Result := '-' + StringOfChar('0', LPad) + Copy(Result, 2, MaxInt)
+    else
+      Result := StringOfChar('0', LPad) + Result;
   end;
 
   function GetArgInt(const AIdx: Integer): Int64;
@@ -267,19 +307,19 @@ begin
         RaiseInvalidFormat('missing conversion specifier');
       case AFmt[LIdx] of
         'd': begin
-          SbAppendPadded(FormatInt(GetArgInt(LArgIdx)));
+          SbAppendPadded(ApplyIntegerPrecision(FormatInt(GetArgInt(LArgIdx)), LPrec));
           Inc(LArgIdx);
         end;
         'u': begin
-          SbAppendPadded(FormatUInt(GetArgUInt(LArgIdx)));
+          SbAppendPadded(ApplyIntegerPrecision(FormatUInt(GetArgUInt(LArgIdx)), LPrec));
           Inc(LArgIdx);
         end;
         'x': begin
-          SbAppendPadded(FormatHex(GetArgUInt(LArgIdx), False));
+          SbAppendPadded(ApplyIntegerPrecision(FormatHex(GetArgUInt(LArgIdx), False), LPrec));
           Inc(LArgIdx);
         end;
         'X': begin
-          SbAppendPadded(FormatHex(GetArgUInt(LArgIdx), True));
+          SbAppendPadded(ApplyIntegerPrecision(FormatHex(GetArgUInt(LArgIdx), True), LPrec));
           Inc(LArgIdx);
         end;
         's': begin
