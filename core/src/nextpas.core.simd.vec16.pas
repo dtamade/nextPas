@@ -39,8 +39,6 @@ implementation
 
 {$IFDEF CPUX86_64}
   {$I nextpas.core.simd.vec16.x86_64.inc}
-{$ELSEIF Defined(CPUAARCH64)}
-  {$I nextpas.core.simd.vec16.aarch64.inc}
 {$ELSE}
   {$I nextpas.core.simd.vec16.scalar.inc}
 {$ENDIF}
