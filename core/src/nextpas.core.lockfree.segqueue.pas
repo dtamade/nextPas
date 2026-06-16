@@ -32,7 +32,7 @@ type
     FEnqueuePos: Int64;
     FDequeuePos: Int64;
     FEbr: TEbrDomain;
-    class procedure SegQueueReclaimSegment(AData: Pointer; AUserData: Pointer); static;
+    class procedure SegQueueReclaimSegment(const AData: Pointer; const AUserData: Pointer); static;
     class function AllocSegment(const AStartIndex: Int64): PSegment; static;
   public
     constructor Create;
@@ -87,7 +87,7 @@ begin
   inherited;
 end;
 
-class procedure TSegQueueImpl.SegQueueReclaimSegment(AData: Pointer; AUserData: Pointer);
+class procedure TSegQueueImpl.SegQueueReclaimSegment(const AData: Pointer; const AUserData: Pointer);
 begin
   FreeMem(AData);
 end;

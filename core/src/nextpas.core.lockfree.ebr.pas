@@ -9,7 +9,7 @@ uses
   nextpas.core.atomic;
 
 type
-  TLockFreeReclaimProc = procedure(AData: Pointer; AUserData: Pointer);
+  TLockFreeReclaimProc = procedure(const AData: Pointer; const AUserData: Pointer);
 
   PEbrRetiredNode = ^TEbrRetiredNode;
   TEbrRetiredNode = record
@@ -29,7 +29,7 @@ type
     destructor Destroy; override;
     procedure Enter;
     procedure Leave;
-    procedure Retire(AData: Pointer; AReclaim: TLockFreeReclaimProc; AUserData: Pointer = nil);
+    procedure Retire(const AData: Pointer; const AReclaim: TLockFreeReclaimProc; const AUserData: Pointer = nil);
     procedure Collect;
     function ActiveCount: PtrUInt;
     function RetiredCount: PtrUInt;
@@ -40,7 +40,7 @@ type
     FDomain: TEbrDomain;
     FActive: Boolean;
   public
-    class function Acquire(ADomain: TEbrDomain): TEbrGuard; static;
+    class function Acquire(const ADomain: TEbrDomain): TEbrGuard; static;
     procedure Release;
   end;
 
@@ -80,7 +80,7 @@ begin
   AtomicFetchSub32(FActiveCount, 1, moRelease);
 end;
 
-procedure TEbrDomain.Retire(AData: Pointer; AReclaim: TLockFreeReclaimProc; AUserData: Pointer);
+procedure TEbrDomain.Retire(const AData: Pointer; const AReclaim: TLockFreeReclaimProc; const AUserData: Pointer);
 var
   LNode: PEbrRetiredNode;
 begin
@@ -103,7 +103,7 @@ var
 begin
   if AtomicLoad32(FActiveCount, moAcquire) <> 0 then
     Exit;
-  LList := PEbrRetiredNode(atomic_exchange(PPointer(@FRetired)^, nil, moAcqRel));
+  LList := PEbrRetiredNode(AtomicExchangePtr(PPointer(@FRetired)^, nil, moAcqRel));
   if LList = nil then
     Exit;
   LNode := LList;
@@ -128,7 +128,7 @@ begin
   Result := AtomicLoad32(FRetiredCount, moRelaxed);
 end;
 
-class function TEbrGuard.Acquire(ADomain: TEbrDomain): TEbrGuard;
+class function TEbrGuard.Acquire(const ADomain: TEbrDomain): TEbrGuard;
 begin
   Result.FDomain := ADomain;
   Result.FActive := False;
