@@ -17,16 +17,13 @@ function platform_env_exists(const AName: PAnsiChar): Boolean;
 function platform_env_enumerate(ACallback: TPlatformEnvEnumerateCallback;
   AData: Pointer): Int32;
 function platform_env_names_case_sensitive: Boolean;
-{** String-returning wrapper around platform_env_get. Returns '' if not found. *}
-function platform_env_get_str(const AName: PAnsiChar): AnsiString;
 
 implementation
 
 {$IFDEF NEXTPAS_UNIX}
 uses
   nextpas.core.platform.posix.base,
-  nextpas.core.platform.posix.ffi,
-  nextpas.core.platform.error;
+  nextpas.core.platform.posix.ffi;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_WINDOWS}
@@ -61,10 +58,10 @@ var
 begin
   ALen := 0;
   if not platform_env_name_valid(AName) then
-    Exit(PLATFORM_ERR_INVALID);
+    Exit(22);
   LVal := getenv(AName);
   if LVal = nil then
-    Exit(PLATFORM_ERR_ENOENT);
+    Exit(2); // ENOENT
   while LVal[ALen] <> #0 do
     Inc(ALen);
   if (ABuf <> nil) and (ABufLen > 0) then
@@ -83,7 +80,7 @@ function platform_env_set(const AName: PAnsiChar;
   const AValue: PAnsiChar): Int32;
 begin
   if (not platform_env_name_valid(AName)) or (AValue = nil) then
-    Exit(PLATFORM_ERR_INVALID);
+    Exit(22);
   if setenv(AName, AValue, 1) = 0 then
     Result := 0
   else
@@ -93,7 +90,7 @@ end;
 function platform_env_unset(const AName: PAnsiChar): Int32;
 begin
   if not platform_env_name_valid(AName) then
-    Exit(PLATFORM_ERR_INVALID);
+    Exit(22);
   if unsetenv(AName) = 0 then
     Result := 0
   else
@@ -113,7 +110,7 @@ var
   LCur: PPAnsiChar;
 begin
   if not Assigned(ACallback) then
-    Exit(PLATFORM_ERR_INVALID);
+    Exit(22);
   LCur := environ;
   if LCur = nil then
     Exit(0);
@@ -219,7 +216,6 @@ var
   LBlock: LPWSTR;
   LCur: PWideChar;
   LUtf8: AnsiString;
-  LEntryLen: Integer;
 begin
   if not Assigned(ACallback) then
     Exit(Int32(ERROR_INVALID_PARAMETER));
@@ -235,12 +231,7 @@ begin
         Exit(Int32(ERROR_INVALID_DATA));
       if not ACallback(PAnsiChar(LUtf8), AData) then
         Break;
-      { Advance past this entry: compute WideChar length inline to avoid
-        temporary UnicodeString allocation per iteration. }
-      LEntryLen := 0;
-      while LCur[LEntryLen] <> #0 do
-        Inc(LEntryLen);
-      Inc(LCur, LEntryLen + 1);
+      Inc(LCur, Length(UnicodeString(LCur)) + 1);
     end;
     Result := 0;
   finally
@@ -274,30 +265,4 @@ begin
 {$ENDIF}
 end;
 
-function platform_env_get_str(const AName: PAnsiChar): AnsiString;
-var
-  LLen: Int32;
-begin
-  Result := '';
-  if platform_env_get(AName, nil, 0, LLen) <> 0 then
-    Exit;
-  if LLen <= 0 then
-    Exit;
-  SetLength(Result, LLen);
-  platform_env_get(AName, PAnsiChar(Result), LLen + 1, LLen);
-end;
-
 end.
-
-function platform_env_get_str(const AName: PAnsiChar): AnsiString;
-var
-  LLen: Int32;
-begin
-  Result := '';
-  if platform_env_get(AName, nil, 0, LLen) <> 0 then
-    Exit;
-  if LLen <= 0 then
-    Exit;
-  SetLength(Result, LLen);
-  platform_env_get(AName, PAnsiChar(Result), LLen + 1, LLen);
-end;

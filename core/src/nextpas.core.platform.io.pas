@@ -280,31 +280,16 @@ end;
 function platform_poller_wait(var APoller: TPlatformPoller;
   AEntries: PPlatformPollEntry; AMaxEntries: Int32; ATimeoutMs: Int32;
   out ACount: Int32): Int32;
-const
-  MAX_STACK_EVENTS = 256;
 var
-  LStackEvents: array[0..MAX_STACK_EVENTS - 1] of epoll_event;
-  LHeapEvents: pepoll_event;
   LEvents: pepoll_event;
   LRegistration: PPlatformPollRegistration;
   LN, LI: Int32;
-  LNeedFree: Boolean;
 begin
   ACount := 0;
   if (AEntries = nil) or (AMaxEntries <= 0) then
     Exit(ESysEINVAL);
-  if AMaxEntries <= MAX_STACK_EVENTS then
-  begin
-    LEvents := @LStackEvents[0];
-    LNeedFree := False;
-  end
-  else
-  begin
-    LHeapEvents := nil;
-    GetMem(LHeapEvents, SizeUInt(AMaxEntries) * SizeOf(epoll_event));
-    LEvents := LHeapEvents;
-    LNeedFree := True;
-  end;
+  LEvents := nil;
+  GetMem(LEvents, SizeUInt(AMaxEntries) * SizeOf(epoll_event));
   try
     LN := epoll_wait(APoller.EpollFd, LEvents, AMaxEntries, ATimeoutMs);
     if LN < 0 then
@@ -322,8 +307,7 @@ begin
     ACount := LN;
     Result := 0;
   finally
-    if LNeedFree then
-      FreeMem(LEvents);
+    FreeMem(LEvents);
   end;
 end;
 {$ENDIF}

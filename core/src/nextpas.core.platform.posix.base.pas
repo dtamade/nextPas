@@ -295,11 +295,6 @@ const
   SO_KEEPALIVE = cint(8);
 {$ENDIF}
   TCP_NODELAY  = cint(1);
-{$IFDEF NEXTPAS_LINUX}
-  SO_LINGER   = cint(13);
-{$ELSE}
-  SO_LINGER   = cint($0080);
-{$ENDIF}
   SHUT_RD     = cint(0);
   SHUT_WR     = cint(1);
   SHUT_RDWR   = cint(2);
@@ -367,15 +362,6 @@ const
   F_SETFD    = 2;
   FD_CLOEXEC = 1;
   F_GETFD    = 1;
-
-  { Portable POSIX access permission bits for access(2) }
-  POSIX_F_OK = 0;
-  POSIX_X_OK = 1;
-  POSIX_W_OK = 2;
-  POSIX_R_OK = 4;
-
-  { Portable POSIX sysconf names — identical across Linux/macOS/BSD }
-  POSIX_SC_PAGESIZE = 30;
 implementation
 
 uses
