@@ -32,13 +32,13 @@ type
     FEnqueuePos: Int64;
     FDequeuePos: Int64;
     FEbr: TEbrDomain;
-    class procedure SegQueueReclaimSegment(AData: Pointer; AUserData: Pointer); static;
+    class procedure SegQueueReclaimSegment(const AData: Pointer; const AUserData: Pointer); static;
     class function AllocSegment(const AStartIndex: Int64): PSegment; static;
   public
     {** @desc 创建无界 MPSC 队列（EBR 回收段） }
     constructor Create;
     destructor Destroy; override;
-    {** @desc 阻塞入队；自动扩展段链表 }
+    {** @desc 无界入队；段不足时自动扩展 }
     procedure Enqueue(const AValue: T);
     {** @desc 非阻塞出队；队列空时返回 False }
     function TryDequeue(out AValue: T): Boolean;
@@ -92,7 +92,7 @@ begin
   inherited;
 end;
 
-class procedure TSegQueueImpl.SegQueueReclaimSegment(AData: Pointer; AUserData: Pointer);
+class procedure TSegQueueImpl.SegQueueReclaimSegment(const AData: Pointer; const AUserData: Pointer);
 begin
   FreeMem(AData);
 end;

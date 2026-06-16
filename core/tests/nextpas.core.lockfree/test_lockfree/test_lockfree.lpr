@@ -2020,7 +2020,7 @@ end;
 var
   GEbrReclaimCount: Int32;
 
-procedure EbrTestReclaimProc(AData: Pointer; AUserData: Pointer);
+procedure EbrTestReclaimProc(const AData: Pointer; const AUserData: Pointer);
 begin
   AtomicFetchAdd32(GEbrReclaimCount, 1, moSeqCst);
 end;

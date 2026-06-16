@@ -123,14 +123,14 @@ begin
     LSeq := AtomicLoad64(FSlots[LIdx].Sequence, moAcquire);
     if LSeq = LPos + 2 then
     begin
-        if AtomicCompareExchange64(FDequeuePos, LPos, LPos + 1, moRelaxed) = LPos then
-        begin
-          AValue := FSlots[LIdx].Value;
-          FSlots[LIdx].Value := Default(T);
-          AtomicStore64(FSlots[LIdx].Sequence, LPos + Int64(FCapacity), moRelease);
-          LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters);
-          Exit(True);
-        end;
+      if AtomicCompareExchange64(FDequeuePos, LPos, LPos + 1, moRelaxed) = LPos then
+      begin
+        AValue := FSlots[LIdx].Value;
+        FSlots[LIdx].Value := Default(T);
+        AtomicStore64(FSlots[LIdx].Sequence, LPos + Int64(FCapacity), moRelease);
+        LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters);
+        Exit(True);
+      end;
     end
     else if LSeq <= LPos + 1 then
       Exit(False)
