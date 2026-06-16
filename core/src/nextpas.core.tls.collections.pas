@@ -19,8 +19,10 @@ unit nextpas.core.tls.collections;
 
 interface
 
+uses
+  nextpas.core.base;
+
 type
-  TStringArray = array of string;
   {**
    * 通用键值对
    *}

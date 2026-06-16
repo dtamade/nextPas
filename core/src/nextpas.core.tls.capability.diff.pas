@@ -17,6 +17,7 @@ unit nextpas.core.tls.capability.diff;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.text.conv,
   nextpas.core.tls.base;
 
@@ -38,9 +39,6 @@ type
 
   { TCapabilityFieldChangeArray - 字段变更数组 }
   TCapabilityFieldChangeArray = array of TCapabilityFieldChange;
-
-  { TStringArray - 字符串数组 }
-  TStringArray = array of string;
 
   { TCapabilityDiffResult - 差异对比结果 }
   TCapabilityDiffResult = record

@@ -35,6 +35,7 @@ const
 
 type
   TBytes = array of Byte;
+  TStringArray = array of string;
   ECore = nextpas.core.exception.ENextPasError;
   EInvariantViolation = class(ECore)
   protected
