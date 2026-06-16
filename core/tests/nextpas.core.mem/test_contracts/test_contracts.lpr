@@ -24,16 +24,6 @@ const
   MEM_BLOCKPOOL_CONCURRENT_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.blockpool.concurrent.pas';
   MEM_COMPAT_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.compat.pas';
   MEM_COMPAT_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.compat.pas';
-  MEM_INTERFACES_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.interfaces.pas';
-  MEM_INTERFACES_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.interfaces.pas';
-  MEM_ADAPTERS_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.adapters.pas';
-  MEM_ADAPTERS_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.adapters.pas';
-  MEM_POOL_ADAPTER_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.pool.adapter.pas';
-  MEM_POOL_ADAPTER_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.pool.adapter.pas';
-  MEM_MEM_POOL_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.mem_pool.pas';
-  MEM_MEM_POOL_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.mem_pool.pas';
-  MEM_STATS_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.stats.pas';
-  MEM_STATS_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.stats.pas';
   MEM_ARENA_GROWABLE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.arena.growable.pas';
   MEM_ARENA_GROWABLE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.arena.growable.pas';
   MEM_BLOCKPOOL_GROWABLE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.blockpool.growable.pas';
@@ -356,11 +346,6 @@ end;
 procedure TestMemCompatSourceContracts;
 var
   LCompatSource: string;
-  LInterfacesSource: string;
-  LAdaptersSource: string;
-  LPoolAdapterSource: string;
-  LMemPoolSource: string;
-  LStatsSource: string;
 begin
   LCompatSource := ReadSourceText(ResolveSourcePath(
     MEM_COMPAT_SOURCE_PATH_FROM_TEST,
@@ -379,14 +364,6 @@ begin
     'mem.compat should depend on the canonical slab-pool implementation');
   CheckContains(LCompatSource, 'nextpas.core.mem.blockpool',
     'mem.compat should depend on the canonical block-pool contract');
-  CheckNotContains(LCompatSource, 'nextpas.core.mem.interfaces',
-    'mem.compat must not depend on the deprecated interfaces shim');
-  CheckNotContains(LCompatSource, 'nextpas.core.mem.adapters',
-    'mem.compat must not depend on the deprecated adapters shim');
-  CheckNotContains(LCompatSource, 'nextpas.core.mem.pool.adapter',
-    'mem.compat must not depend on the deprecated pool adapter shim');
-  CheckNotContains(LCompatSource, 'nextpas.core.mem.mem_pool',
-    'mem.compat must not depend on the deprecated mem_pool shim');
   CheckNotContains(LCompatSource, 'nextpas.core.mem.layout',
     'mem.compat must not depend on the removed layout unit');
   CheckNotContains(LCompatSource, 'tmemlayout =',
@@ -397,46 +374,6 @@ begin
     'mem.compat arena bridge should expose explicit-size allocation');
   CheckContains(LCompatSource, 'function allocaligned(asize, aalignment: sizeuint): pointer;',
     'mem.compat arena bridge should expose explicit aligned allocation');
-
-  LInterfacesSource := ReadSourceText(ResolveSourcePath(
-    MEM_INTERFACES_SOURCE_PATH_FROM_TEST,
-    MEM_INTERFACES_SOURCE_PATH_FROM_ROOT));
-  CheckContains(LInterfacesSource, '{$warning ''nextpas.core.mem.interfaces is deprecated',
-    'mem.interfaces should publish a deprecation warning');
-  CheckContains(LInterfacesSource, 'nextpas.core.mem.compat',
-    'mem.interfaces should forward to mem.compat');
-
-  LAdaptersSource := ReadSourceText(ResolveSourcePath(
-    MEM_ADAPTERS_SOURCE_PATH_FROM_TEST,
-    MEM_ADAPTERS_SOURCE_PATH_FROM_ROOT));
-  CheckContains(LAdaptersSource, '{$warning ''nextpas.core.mem.adapters is deprecated',
-    'mem.adapters should publish a deprecation warning');
-  CheckContains(LAdaptersSource, 'nextpas.core.mem.compat',
-    'mem.adapters should forward to mem.compat');
-
-  LPoolAdapterSource := ReadSourceText(ResolveSourcePath(
-    MEM_POOL_ADAPTER_SOURCE_PATH_FROM_TEST,
-    MEM_POOL_ADAPTER_SOURCE_PATH_FROM_ROOT));
-  CheckContains(LPoolAdapterSource, '{$warning ''nextpas.core.mem.pool.adapter is deprecated',
-    'mem.pool.adapter should publish a deprecation warning');
-  CheckContains(LPoolAdapterSource, 'nextpas.core.mem.compat',
-    'mem.pool.adapter should forward to mem.compat');
-
-  LMemPoolSource := ReadSourceText(ResolveSourcePath(
-    MEM_MEM_POOL_SOURCE_PATH_FROM_TEST,
-    MEM_MEM_POOL_SOURCE_PATH_FROM_ROOT));
-  CheckContains(LMemPoolSource, '{$warning ''nextpas.core.mem.mem_pool is deprecated',
-    'mem.mem_pool should publish a deprecation warning');
-  CheckContains(LMemPoolSource, 'nextpas.core.mem.compat',
-    'mem.mem_pool should forward to mem.compat');
-
-  LStatsSource := ReadSourceText(ResolveSourcePath(
-    MEM_STATS_SOURCE_PATH_FROM_TEST,
-    MEM_STATS_SOURCE_PATH_FROM_ROOT));
-  CheckNotContains(LStatsSource, 'nextpas.core.mem.mem_pool',
-    'mem.stats should not depend on the deprecated mem.mem_pool shim');
-  CheckContains(LStatsSource, 'nextpas.core.mem.pool.fixed',
-    'mem.stats should use the canonical fixed-pool implementation');
 end;
 
 procedure TestGrowableAllocatorsUseCanonicalAllocatorContract;
