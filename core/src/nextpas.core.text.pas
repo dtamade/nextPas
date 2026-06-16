@@ -180,12 +180,12 @@ end;
 
 function TextToUpper(const AValue: string): string;
 begin
-  Result := nextpas.core.text.utils.UpperCase(AValue);
+  Result := nextpas.core.text.unicode.UTF8ToUpper(AValue);
 end;
 
 function TextToLower(const AValue: string): string;
 begin
-  Result := nextpas.core.text.utils.LowerCase(AValue);
+  Result := nextpas.core.text.unicode.UTF8ToLower(AValue);
 end;
 
 function TextPadLeft(const AValue: string; const AWidth: Integer; const APadChar: Char): string;

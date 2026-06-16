@@ -9,7 +9,9 @@ function TrimLeft(const S: string): string;
 function TrimRight(const S: string): string;
 function IsEmpty(const S: string): Boolean; inline;
 function IsBlank(const S: string): Boolean;
+{** @note ASCII-only. For Unicode-aware conversion use UTF8ToUpper/UTF8ToLower from text.unicode. *}
 function LowerCase(const S: string): string;
+{** @note ASCII-only. For Unicode-aware conversion use UTF8ToUpper/UTF8ToLower from text.unicode. *}
 function UpperCase(const S: string): string;
 function PadLeft(const S: string; AWidth: Integer; APadChar: Char = ' '): string;
 function PadRight(const S: string; AWidth: Integer; APadChar: Char = ' '): string;

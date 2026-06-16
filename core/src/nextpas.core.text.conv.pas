@@ -13,7 +13,8 @@ function FloatToStr(const AValue: Double): string; inline;
 function FloatToStrF(const AValue: Double; ADecimals: Integer): string;
 function FormatFloat(const AFmt: string; const AValue: Double): string;
 function BoolToStr(const AValue: Boolean): string; inline;
-function BoolToStr(const AValue: Boolean; const ATrueStr, AFalseStr: string): string; inline;
+function BoolToStr(const AValue: Boolean; const ATrueStr: string;
+  const AFalseStr: string): string; inline; overload;
 
 function StrToInt(const AStr: string): Int64; inline;
 function StrToIntDef(const AStr: string; const ADefault: Int64): Int64; inline;
@@ -26,9 +27,11 @@ function StrToFloatDef(const AStr: string; const ADefault: Double): Double;
 function TryStrToFloat(const AStr: string; out AValue: Double): Boolean;
 function TryStrToFloat(const AStr: string; out AValue: Single): Boolean;
 
-function Format(const AFmt: string; const AArgs: array of const): string;
+function Format(const AFmt: string; const AArgs: array of const): string; deprecated 'Use nextpas.core.text.format.TextFormat or nextpas.core.text.TextFormat';
 
+{** @note ASCII-only. For Unicode-aware conversion use UTF8ToUpper/UTF8ToLower from text.unicode. *}
 function LowerCase(const AStr: string): string;
+{** @note ASCII-only. For Unicode-aware conversion use UTF8ToUpper/UTF8ToLower from text.unicode. *}
 function UpperCase(const AStr: string): string;
 function Trim(const AStr: string): string;
 function TrimLeft(const AStr: string): string;
@@ -47,13 +50,11 @@ function ASCIIBytesToString(const AData: TBytes): string;
 function StringToASCIIBytes(const AStr: string): TBytes;
 function BigEndianUnicodeBytesToString(const AData: TBytes): string;
 
-{** Case-insensitive ASCII string comparison. Zero allocation. *}
-function SameText(const A, B: string): Boolean;
-
 implementation
 
 uses
-  nextpas.core.text.char,
+  nextpas.core.errors,
+  nextpas.core.text.format,
   nextpas.core.text.number,
   nextpas.core.text.utils;
 
@@ -112,22 +113,33 @@ end;
 
 function BoolToStr(const AValue: Boolean): string;
 begin
-  if AValue then Result := 'true' else Result := 'false';
+  Result := nextpas.core.text.utils.BoolToStr(AValue);
 end;
 
-function BoolToStr(const AValue: Boolean; const ATrueStr, AFalseStr: string): string;
+function BoolToStr(const AValue: Boolean; const ATrueStr: string;
+  const AFalseStr: string): string;
 begin
-  if AValue then Result := ATrueStr else Result := AFalseStr;
+  Result := nextpas.core.text.utils.BoolToStr(AValue, ATrueStr, AFalseStr);
 end;
 
 {== String to number ==}
+
+procedure RaiseInvalidIntegerValue(const AStr: string);
+begin
+  raise EConvertError.CreateFmt('Invalid integer value: "%s"', [AStr]);
+end;
+
+procedure RaiseInvalidFloatValue(const AStr: string);
+begin
+  raise EConvertError.CreateFmt('Invalid floating-point value: "%s"', [AStr]);
+end;
 
 function StrToInt(const AStr: string): Int64;
 var LCode: Integer;
 begin
   Val(AStr, Result, LCode);
   if LCode <> 0 then
-    Result := 0;
+    RaiseInvalidIntegerValue(AStr);
 end;
 
 function StrToIntDef(const AStr: string; const ADefault: Int64): Int64;
@@ -187,7 +199,7 @@ var LCode: Integer;
 begin
   Val(AStr, Result, LCode);
   if LCode <> 0 then
-    Result := 0.0;
+    RaiseInvalidFloatValue(AStr);
 end;
 
 function StrToFloatDef(const AStr: string; const ADefault: Double): Double;
@@ -227,170 +239,11 @@ begin
   if Result then AValue := Single(LDbl);
 end;
 
-{== Format — self-contained printf-style implementation ==}
+{== Format compatibility entrypoint ==}
 
 function Format(const AFmt: string; const AArgs: array of const): string;
-var
-  LI, LArgIdx, LLen: Integer;
-  LTmp: string;
-  LWidth, LPrec: Integer;
-  LZeroPad, LLeftAlign: Boolean;
-  LFmtStart: Integer;
-  LPadLen: Integer;
-
-  procedure ParseWidthPrec;
-  var LCode: Integer; LS: string;
-  begin
-    LWidth := 0;
-    LPrec := -1;
-    LZeroPad := False;
-    LLeftAlign := False;
-    LFmtStart := LI;
-    if (LI <= LLen) and (AFmt[LI] = '-') then begin LLeftAlign := True; Inc(LI); end;
-    if (LI <= LLen) and (AFmt[LI] = '0') then begin LZeroPad := True; end;
-    LS := '';
-    while (LI <= LLen) and (AFmt[LI] in ['0'..'9']) do begin LS := LS + AFmt[LI]; Inc(LI); end;
-    if LS <> '' then begin Val(LS, LWidth, LCode); if LCode <> 0 then LWidth := 0; end;
-    if (LI <= LLen) and (AFmt[LI] = '.') then
-    begin
-      Inc(LI);
-      LS := '';
-      while (LI <= LLen) and (AFmt[LI] in ['0'..'9']) do begin LS := LS + AFmt[LI]; Inc(LI); end;
-      if LS <> '' then begin Val(LS, LPrec, LCode); if LCode <> 0 then LPrec := -1; end
-      else LPrec := 0;
-    end;
-  end;
-
-  function PadInt(const S: string): string;
-  var LMinDigits, LPad: Integer; LNeg: Boolean; LDigits: string;
-  begin
-    LNeg := (Length(S) > 0) and (S[1] = '-');
-    if LNeg then LDigits := Copy(S, 2, Length(S) - 1) else LDigits := S;
-    LMinDigits := LPrec;
-    if LMinDigits < 0 then LMinDigits := 1;
-    while Length(LDigits) < LMinDigits do LDigits := '0' + LDigits;
-    if LNeg then Result := '-' + LDigits else Result := LDigits;
-    LPad := LWidth - Length(Result);
-    if LPad > 0 then
-    begin
-      if LLeftAlign then
-        Result := Result + StringOfChar(' ', LPad)
-      else if LZeroPad and (LPrec < 0) then
-      begin
-        if LNeg then
-          Result := '-' + StringOfChar('0', LPad) + Copy(Result, 2, Length(Result) - 1)
-        else
-          Result := StringOfChar('0', LPad) + Result;
-      end
-      else
-        Result := StringOfChar(' ', LPad) + Result;
-    end;
-  end;
-
-  function PadStr(const S: string): string;
-  begin
-    Result := S;
-    if (LPrec >= 0) and (Length(Result) > LPrec) then
-      SetLength(Result, LPrec);
-    LPadLen := LWidth - Length(Result);
-    if LPadLen > 0 then
-    begin
-      if LLeftAlign then
-        Result := Result + StringOfChar(' ', LPadLen)
-      else
-        Result := StringOfChar(' ', LPadLen) + Result;
-    end;
-  end;
-
 begin
-  Result := '';
-  LArgIdx := 0;
-  LLen := Length(AFmt);
-  LI := 1;
-  while LI <= LLen do
-  begin
-    if (AFmt[LI] = '%') and (LI < LLen) then
-    begin
-      Inc(LI);
-      ParseWidthPrec;
-      if LI > LLen then Break;
-      case AFmt[LI] of
-        'd', 'i':
-          if LArgIdx <= High(AArgs) then
-          begin
-            case AArgs[LArgIdx].VType of
-              vtInteger:  Str(AArgs[LArgIdx].VInteger, LTmp);
-              vtInt64:    Str(AArgs[LArgIdx].VInt64^, LTmp);
-              vtQWord:    Str(AArgs[LArgIdx].VQWord^, LTmp);
-            else Str(0, LTmp);
-            end;
-            while (Length(LTmp) > 0) and (LTmp[1] = ' ') do Delete(LTmp, 1, 1);
-            Result := Result + PadInt(LTmp);
-            Inc(LArgIdx);
-          end;
-        'u':
-          if LArgIdx <= High(AArgs) then
-          begin
-            case AArgs[LArgIdx].VType of
-              vtInteger:  Str(Cardinal(AArgs[LArgIdx].VInteger), LTmp);
-              vtInt64:    Str(UInt64(AArgs[LArgIdx].VInt64^), LTmp);
-              vtQWord:    Str(AArgs[LArgIdx].VQWord^, LTmp);
-            else Str(UInt64(0), LTmp);
-            end;
-            while (Length(LTmp) > 0) and (LTmp[1] = ' ') do Delete(LTmp, 1, 1);
-            Result := Result + PadInt(LTmp);
-            Inc(LArgIdx);
-          end;
-        's':
-          if LArgIdx <= High(AArgs) then
-          begin
-            case AArgs[LArgIdx].VType of
-              vtString:      LTmp := AArgs[LArgIdx].VString^;
-              vtAnsiString:  LTmp := AnsiString(AArgs[LArgIdx].VAnsiString);
-              vtPChar:       LTmp := AArgs[LArgIdx].VPChar;
-              vtChar:        LTmp := AArgs[LArgIdx].VChar;
-            else LTmp := '?';
-            end;
-            Result := Result + PadStr(LTmp);
-            Inc(LArgIdx);
-          end;
-        'x', 'X':
-          if LArgIdx <= High(AArgs) then
-          begin
-            case AArgs[LArgIdx].VType of
-              vtInteger:  LTmp := IntToHex(UInt64(Cardinal(AArgs[LArgIdx].VInteger)), 1);
-              vtInt64:    LTmp := IntToHex(UInt64(AArgs[LArgIdx].VInt64^), 1);
-              vtQWord:    LTmp := IntToHex(AArgs[LArgIdx].VQWord^, 1);
-            else LTmp := '0';
-            end;
-            if AFmt[LI] = 'x' then LTmp := System.LowerCase(LTmp);
-            LPrec := -1;
-            Result := Result + PadInt(LTmp);
-            Inc(LArgIdx);
-          end;
-        'f', 'e', 'g':
-          if LArgIdx <= High(AArgs) then
-          begin
-            if LPrec < 0 then LPrec := 6;
-            case AArgs[LArgIdx].VType of
-              vtExtended: Str(AArgs[LArgIdx].VExtended^:0:LPrec, LTmp);
-            else Str(0.0:0:LPrec, LTmp);
-            end;
-            Result := Result + LTmp;
-            Inc(LArgIdx);
-          end;
-        '%': Result := Result + '%';
-      else
-        Result := Result + '%' + AFmt[LI];
-      end;
-      Inc(LI);
-    end
-    else
-    begin
-      Result := Result + AFmt[LI];
-      Inc(LI);
-    end;
-  end;
+  Result := nextpas.core.text.format.TextFormat(AFmt, AArgs);
 end;
 
 {== String manipulation ==}
@@ -463,14 +316,15 @@ end;
 
 function UTF8BytesToString(const AData: TBytes): string;
 var
-  LUTF8: UTF8String;
+  LUTF8: RawByteString;
 begin
   Result := '';
   if Length(AData) = 0 then
     Exit;
   SetLength(LUTF8, Length(AData));
   Move(AData[0], LUTF8[1], Length(AData));
-  Result := string(LUTF8);
+  SetCodePage(LUTF8, CP_UTF8, False);
+  Result := string(UTF8String(LUTF8));
 end;
 
 function StringToUTF8Bytes(const AStr: string): TBytes;
@@ -479,7 +333,7 @@ var
   LLen: SizeInt;
 begin
   Result := nil;
-  LUTF8 := UTF8Encode(AStr);
+  LUTF8 := UTF8String(AStr);
   LLen := Length(LUTF8);
   SetLength(Result, LLen);
   if LLen > 0 then
@@ -514,21 +368,6 @@ begin
   for I := 0 to LCount - 1 do
     LWChars[I] := WideChar((UInt16(AData[I * 2]) shl 8) or AData[I * 2 + 1]);
   SetString(Result, PWideChar(LWChars), LCount);
-end;
-
-{ SameText - case-insensitive ASCII comparison, zero allocation }
-function SameText(const A, B: string): Boolean;
-var
-  I: SizeInt;
-  LLen: SizeInt;
-begin
-  LLen := Length(A);
-  if Length(B) <> LLen then
-    Exit(False);
-  for I := 1 to LLen do
-    if ToLower(Byte(A[I])) <> ToLower(Byte(B[I])) then
-      Exit(False);
-  Result := True;
 end;
 
 end.
