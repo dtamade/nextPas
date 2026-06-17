@@ -116,7 +116,7 @@ backend-private magic strings.
 
 S4 boundary note:
 
-- no public unit yet for `system.classes`
+- `system.classes` is live as a stream-only bootstrap shim (TStream, THandleStream, TMemoryStream, TStringStream, TSeekOrigin). TThread, TList, TInterfacedObject remain outside system scope and belong to their respective owner modules (thread, collections, base).
 - `system.sysutils` is live only for `Format`, `SameText`, `IntToStr`, `Trim`,
   `Exception`, `ExceptClass`, `EConvertError`, and `EAssertionFailed`
 - `system.typinfo` is live for `PTypeInfo`, `TTypeKind`,

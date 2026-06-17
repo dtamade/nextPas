@@ -48,7 +48,7 @@ Exit evidence:
 ## S4 SysUtils / TypInfo / Classes Compatibility Facades
 
 - [x] Record that broad SysUtils and Classes remain deferred and are not current phase gates.
-- [x] Record that no public unit yet should exist for `system.classes`.
+- [x] Record that `system.classes` now exists as a stream-only bootstrap shim re-exporting TStream, THandleStream, TMemoryStream, TStringStream, and TSeekOrigin. Broader Classes surface (TThread, TList, TInterfacedObject) remains outside system scope.
 - [x] Record design-only S4 facade boundaries in `compatibility-facades.md`.
 - [x] Record live consumer pressure and migration risk in `compatibility-matrix.md`.
 - [x] Record TypInfo minimal pressure audit in `typinfo-minimal-pressure.md`.
@@ -58,7 +58,7 @@ Exit evidence:
 - [x] Add the minimal live `SameText` string-comparison slice with system-local ASCII fold.
 - [x] Add the minimal live `IntToStr` numeric conversion slice, delegating to the text owner.
 - [x] Add the minimal live `Trim` token-normalization slice for compiler generic parameter matching, delegating to the text owner.
-- [ ] Decide whether broader SysUtils or Classes deserve `system.*` facade units.
+- [ ] Decide whether broader SysUtils or Classes deserve `system.*` facade units. Classes already has a stream-only bootstrap shim; broader Classes surface (TThread, TList, TInterfacedObject) does not belong in system scope and stays with owner modules (thread, collections, base).
 - [ ] Add only tested aliases or forwarding functions for future compatibility slices; no broad historical copy.
 - [ ] Keep filesystem, time, IO, math, text and collection implementation ownership in their existing modules.
 - [x] Report `Needs Review` before exposing compatibility API with wide consumer impact.
@@ -80,7 +80,7 @@ Current phase note:
 - TypInfo has an interface managed-lifetime proof through managed interface
   array lifecycle helpers, without expanding metadata layout promises.
 - S4 is not a current phase gate for this lane.
-- no public unit yet should exist for `nextpas.core.system.classes`.
+- `nextpas.core.system.classes` is live as a stream-only bootstrap shim (TStream, THandleStream, TMemoryStream, TStringStream, TSeekOrigin). This round does not expand the shim; broader Classes types stay with their owner modules.
 - If real consumer pressure appears, reopen as `Needs Review` with focused evidence instead of creating
   broad placeholders.
 
