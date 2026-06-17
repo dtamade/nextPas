@@ -279,3 +279,27 @@ See `docs/plans/bootstrap-line-spec.md` Gate 0 for detailed task breakdown.
 These gates should be reviewed quarterly. Update `goal-tree.md` and this document as
 each gate progresses toward completion. The first gate to close (Gate 5, exception unwind)
 is already partially covered by the `test_hir_exception` test suite.
+
+## Gate 2: Unit Lifecycle — 验证结果 (2026-06-18)
+
+**状态: FAIL** (全部 4 项验收标准未满足)
+
+| 验收标准 | 状态 |
+|----------|------|
+| UnitGraph → HIR nodes for each resolved unit | 未实现 |
+| np.system.unit_init/unit_fini seeded for multi-unit programs | 未实现 |
+| LLVM emitter generates init/fini call sequences | 未实现 |
+| Multi-unit program runs with correct init ordering via nextPas | 未实现 |
+
+**已有基础**:
+- Lexer 解析 initialization/finalization 关键字 ✅
+- Green tree 解析器解析 init/fini sections ✅
+- 契约常量 NPSYSTEM_UNIT_INIT/FINI 已定义 ✅
+- 文档契约已完整登记 ✅
+
+**缺口 (按实现顺序)**:
+1. SeedRuntimeContracts 扩展: 遍历 FUnitGraph，为每个 unit seed unit_init/unit_fini
+2. HIR 层: 新增 unit-init-runtime/unit-fini-runtime 节点类型
+3. LLVM emitter: @np_unit_init/@np_unit_fini helper
+4. Runtime: _start 驱动器（main 前拓扑序 init，main 后逆序 fini）
+5. 端到端测试（非 FPC 依赖的 nextPas 编译器运行时测试）
