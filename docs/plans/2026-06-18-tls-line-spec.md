@@ -23,18 +23,29 @@ cd /home/dtamade/projects/nextPas/.worktrees/core-tls
 
 ### P0: 迁移直接 uses Classes 的 6 个文件 ⏱️ 1 天
 
-**当前**: `system.classes` facade 已存在 (TStream/THandleStream/TMemoryStream/TStringStream/TSeekOrigin)。
-6 个文件仍直接 `uses Classes`：ocsp.stapling/transport/http.client/openssl.api.async/openssl.api.store + tui.task。
+**Codex 审查结论 (2026-06-18)**：不要把 TLS P0 做成扩 system.classes 的理由。system.classes 本轮不扩。
+Classes 依赖必须按符号拆为四类 owner（stream/thread/list/interfaced-base），不能当统一 bucket。
 
-**任务**：
-1. 将 6 个文件的 `uses Classes` 替换为 `uses nextpas.core.system.classes`
-2. 验证编译通过
+**逐案决策**：
+
+| 文件 | 依赖类型 | 分类 | 状态 |
+|------|---------|------|------|
+| `tls.http.client` | TBytes + Exception | **drop uses** | ✅ 已迁：→ `nextpas.core.base` + `nextpas.core.errors` |
+| `tls.openssl.api.async` | TList (private FJobs) | **API redesign** | 待做：改 module-local dynamic array 或 collections 容器 |
+| `tls.openssl.api.store` | TList (public 返回值) | **API redesign** | 待做：改 `array of PX509` 等专名数组 |
+| `tls.transport` | TInterfacedObject | **residual RTL debt** | 保留，owner seam 设计后再议 |
+| `tls.ocsp.stapling` | TThread | **residual RTL debt** | 保留，thread owner 设计后再议 |
+| `tui.task` | TThread | **residual RTL debt** | 保留，同上 |
+
+**剩余任务**：
+1. `async.pas`: 重构 `FJobs: TList` → `FJobs: array of POSSL_ASYNC_JOB` 或用 collections
+2. `store.pas`: 重构 `LoadCertificateChainFromStore` 返回 `array of PX509` 专属类型
 3. 验证 TLS 测试全绿
 
-### P0b: 等待 file-text-compat 决策 ⏱️ 取决于 BOOTSTRAP Gate 0b
+### P0b: TFileStream/TStringList 19+ 文件 ⏱️ 等待 io 模块
 
-**阻塞**: 19+ 文件使用 TFileStream/TStringList/fm* 常量，这些尚未纳入 system.classes facade。
-BOOTSTRAP 线正在评估是否扩展 facade 还是等待纯 Pascal io 模块。
+**决策**: system.classes 不扩（Codex 明确否决）。TFileStream/TStringList 属于 io/collections owner。
+等待 `nextpas.core.io` 模块提供 TFileStream 替代后再迁移。
 
 **当前可并行推进的工作（不依赖 system.classes）**：
 

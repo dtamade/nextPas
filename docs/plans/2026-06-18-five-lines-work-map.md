@@ -49,16 +49,17 @@
 
 | 需求方 | 需要的 system 接口 | 优先级 | 当前状态 |
 |--------|-------------------|--------|---------|
-| **TLS** | `system.classes` (TStream 链: TStream/THandleStream/TMemoryStream/TStringStream/TSeekOrigin) | 🟡 最小已 live | 已有 re-export facade，6 文件仍直接 uses Classes |
-| **TLS** | `system.classes` (file-compat: TFileStream/fm*/TStringList) | 🔴 缺失 | 19 文件用 TFileStream/TStringList，**未纳入 facade** |
+| **TLS** | `system.classes` (TStream 链: TStream/THandleStream/TMemoryStream/TStringStream/TSeekOrigin) | 🟢 已满足 | stream-only shim live，http.client.pas 已迁出 Classes |
+| **TLS** | TThread/TList/TInterfacedObject (非 system scope) | 🟡 residual RTL debt | 按 owner boundary：thread/collections/base 各自承担，本轮不进 system |
+| **TLS** | TFileStream/TStringList (非 system scope) | 🟡 等 io 模块 | system.classes 不扩，等 `nextpas.core.io` 提供 TFileStream 替代 |
 | **TLS** | `system.sysutils` (SameText/Format/IntToStr/Trim/Exception 别名) | 🟢 最小已满足 | S4 已提供最小 live slice |
 | **HTTP** | `system.classes` (TStream 继承链) | 🟡 最小已 live | 同 TLS stream 链 |
 | **collections** | `system.typinfo` (PTypeInfo/TTypeKind/InitializeArray/FinalizeArray/CopyArray) | 🟢 七符号已 live | S4 已提供，需 ongoing RTTI drift guard |
-| **fs** | `system.classes` (TFileStream/fm* 常量) | 🔴 缺失 | file-compat 面未纳入 facade |
+| **fs** | TFileStream/fm* 常量 (非 system scope) | 🟡 等 io 模块 | system.classes 不扩，由 io owner 承担 |
 | **io** | `system.classes` (TStream), `io.memory` (TBytesStream) | 🟡 部分 | TBytesStream 属 io.memory owner，不应进 system.classes |
 | **crypto** | `system.sysutils` (SameText/Format) | 🟢 最小已满足 | S4 最小集 |
 | **config** | `system.sysutils` (Format/异常) | 🟢 最小已满足 | S4 最小集 |
-| **compiler/toolchain** | `system.classes` (TFileStream/TStringList) | 🔴 缺失 | bootstrap 线自身也是 file-compat 消费者 |
+| **compiler/toolchain** | TFileStream/TStringList (非 system scope) | 🟡 等 io 模块 | system.classes 不扩，由 io/collections owner 承担 |
 | **SIMD** | 无 | ✅ 零依赖 | N/A |
 
 ### system.classes 当前真实状态
@@ -75,21 +76,26 @@ type
 ```
 
 **已提供的 stream-core 面**：TStream/THandleStream/TMemoryStream/TStringStream/TSeekOrigin ✅
-**缺失的 file-text-compat 面**：TFileStream/fm* 常量/TStringList ❌
-**不应加入的符号**：TBytesStream（owner 是 `nextpas.core.io.memory`）
+**本轮不扩展**：Codex 审查明确否决扩 system.classes。TFileStream/TStringList 属 io/collections owner。
+**Classes 按符号四分类**：stream（system shim）/ thread（thread owner）/ list（collections owner）/ interfaced-base（base seam）
 
-真实 Classes 债务（按 source 取证）：
-- 直接 `uses Classes`：**6 个生产文件**（TLS ocsp/transport/http/openssl + tui task）
-- 使用 TFileStream/TStringList：**19+ 文件**（TLS cert/quick/crypto + compiler toolchain）
+真实 Classes 债务（Codex 审查细化 2026-06-18）：
+- ✅ `http.client.pas`：已迁，drop uses Classes（TBytes→base, Exception→errors）
+- 🔧 `async.pas` (TList private)：API redesign → dynamic array
+- 🔧 `store.pas` (TList public)：API redesign → TLS owner 专属类型
+- 🟡 `transport.pas` (TInterfacedObject)：residual RTL debt
+- 🟡 `ocsp.stapling.pas` (TThread)：residual RTL debt
+- 🟡 `tui.task.pas` (TThread)：residual RTL debt
 
 ### system 模块接口交付优先级（修正版）
 
 ```
-第一优先级（Week 1-2）：收口已存在的最小面 + 补齐关键缺口
-├── system.classes 收口验证：确认已有 stream-core facade 通过测试
-├── system.classes file-text-compat 扩展：TFileStream/fm*/TStringList（需单独 review）
+第一优先级（Week 1-2）：收口已存在的最小面 + Codex 审查整改
+├── ✅ system.classes 收口验证：stream-only shim 确认，Codex 审查通过
+├── ✅ http.client.pas 已迁出 Classes（→ base + errors）
+├── system.classes 文档 drift 已修复（goal-tree + README）
 ├── RTTI 形状一致性验证 (Gate 1)
-└── 更新 system 文档：README/goal-tree 中 "Classes 已推迟" → "已最小 live，需收口验证"
+└── 待做：async.pas/store.pas TList API redesign
 
 第二优先级（Week 2-4）：运行时基础
 ├── 进程生命周期执行 (Gate 3)
