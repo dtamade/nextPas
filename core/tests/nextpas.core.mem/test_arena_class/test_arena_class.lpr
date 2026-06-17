@@ -5,6 +5,7 @@ program test_arena_class;
 uses
   SysUtils,
   nextpas.core.testing,
+  nextpas.core.mem,
   nextpas.core.mem.blockpool;
 
 var
@@ -13,7 +14,7 @@ var
 procedure TestBasicAlloc;
 var A: TFixedArena; P: Pointer;
 begin
-  A := TArena.Create(1024);
+  A := TFixedArena.Create(1024);
   try
     P := A.Alloc(64);
     Check(P <> nil, 'alloc 64 ok');
@@ -27,7 +28,7 @@ end;
 procedure TestMultipleAllocs;
 var A: TFixedArena; P1, P2, P3: Pointer;
 begin
-  A := TArena.Create(256);
+  A := TFixedArena.Create(256);
   try
     P1 := A.Alloc(32);
     P2 := A.Alloc(32);
@@ -44,7 +45,7 @@ end;
 procedure TestExhaust;
 var A: TFixedArena; P: Pointer;
 begin
-  A := TArena.Create(100);
+  A := TFixedArena.Create(100);
   try
     P := A.Alloc(80);
     Check(P <> nil, 'first alloc ok');
@@ -58,7 +59,7 @@ end;
 procedure TestReset;
 var A: TFixedArena; P: Pointer;
 begin
-  A := TArena.Create(128);
+  A := TFixedArena.Create(128);
   try
     A.Alloc(100);
     Check(A.UsedSize >= 100, 'used after alloc');
@@ -75,7 +76,7 @@ end;
 procedure TestMarkRestore;
 var A: TFixedArena; M: TArenaMarker; P: Pointer;
 begin
-  A := TArena.Create(512);
+  A := TFixedArena.Create(512);
   try
     A.Alloc(64);
     M := A.SaveMark;
@@ -95,7 +96,7 @@ var
   A: TFixedArena;
   P: Pointer;
 begin
-  A := TArena.Create(256);
+  A := TFixedArena.Create(256);
   try
     P := A.AllocAligned(32, 64);
     Check(P <> nil, 'alloc aligned ok');
@@ -110,7 +111,7 @@ end;
 procedure TestAllocZeroed;
 var A: TFixedArena; P: PByte; I: Integer; AllZero: Boolean;
 begin
-  A := TArena.Create(256);
+  A := TFixedArena.Create(256);
   try
     P := A.Alloc(32);
     if P <> nil then FillChar(P^, 32, $FF);
@@ -129,7 +130,7 @@ end;
 procedure TestAllocFast;
 var A: TFixedArena; P1, P2: Pointer;
 begin
-  A := TArena.Create(256);
+  A := TFixedArena.Create(256);
   try
     P1 := A.AllocFast(32);
     P2 := A.AllocFast(64);
@@ -144,7 +145,7 @@ end;
 procedure TestZeroSizeAlloc;
 var A: TFixedArena; P: Pointer;
 begin
-  A := TArena.Create(64);
+  A := TFixedArena.Create(64);
   try
     P := A.Alloc(0);
     Check(P = nil, 'zero size returns nil');
@@ -156,7 +157,7 @@ end;
 procedure TestStats;
 var A: TFixedArena;
 begin
-  A := TArena.Create(256);
+  A := TFixedArena.Create(256);
   try
     A.Alloc(32);
     A.Alloc(64);
