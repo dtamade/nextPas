@@ -21,13 +21,11 @@ type
     FReallocateCalls: SizeUInt;
   public
     constructor Create(const AFailOnReallocateCall: SizeUInt);
-    function Allocate(const ASize: SizeUInt): Pointer;
-    function Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
-    procedure Deallocate(const APtr: Pointer);
     function GetMem(aSize: SizeUInt): Pointer;
     function AllocMem(aSize: SizeUInt): Pointer;
     function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
     procedure FreeMem(aDst: Pointer);
+    function MemSize(aPtr: Pointer): SizeUInt;
     function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
     procedure FreeAligned(aPtr: Pointer);
     function Traits: TAllocatorTraits;
@@ -39,22 +37,6 @@ begin
   inherited Create;
   FFailOnReallocateCall := AFailOnReallocateCall;
   FReallocateCalls := 0;
-end;
-
-function TFailingReallocateAllocator.Allocate(const ASize: SizeUInt): Pointer;
-begin
-  Result := GetMem(ASize);
-end;
-
-function TFailingReallocateAllocator.Reallocate(const APtr: Pointer;
-  const ANewSize: SizeUInt): Pointer;
-begin
-  Result := ReallocMem(APtr, ANewSize);
-end;
-
-procedure TFailingReallocateAllocator.Deallocate(const APtr: Pointer);
-begin
-  FreeMem(APtr);
 end;
 
 function TFailingReallocateAllocator.GetMem(aSize: SizeUInt): Pointer;
@@ -92,6 +74,11 @@ procedure TFailingReallocateAllocator.FreeMem(aDst: Pointer);
 begin
   if aDst <> nil then
     System.FreeMem(aDst);
+end;
+
+function TFailingReallocateAllocator.MemSize(aPtr: Pointer): SizeUInt;
+begin
+  Result := 0;
 end;
 
 function TFailingReallocateAllocator.AllocAligned(aSize,

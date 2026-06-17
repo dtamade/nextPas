@@ -784,11 +784,11 @@ begin
     'builder owned strings must not use rtl dynamic arrays');
   CheckSourceAbsent(LSource, 'setlength(fownedstrings',
     'builder owned strings must not use setlength');
-  CheckSourceContains(LSource, 'fdoc.allocator.allocate(',
+  CheckSourceContains(LSource, 'fdoc.allocator.getmem(',
     'builder init must allocate owned string slots through document allocator');
   CheckSourceContains(LSource, 'fillchar(fownedstrings^, fownedcap * sizeof(string), 0);',
     'builder init must zero owned string slots');
-  CheckSourceContains(LSource, 'fdoc.allocator.reallocate(pointer(fownedstrings),',
+  CheckSourceContains(LSource, 'fdoc.allocator.reallocmem(pointer(fownedstrings),',
     'builder growth must reallocate owned string slots through document allocator');
   CheckSourceContains(LSource,
     'fillchar(fownedstrings[loldcap], (fownedcap - loldcap) * sizeof(string), 0);',
@@ -797,10 +797,10 @@ begin
     'builder done must guard zero-count finalization');
   CheckSourceContains(LSource, 'fownedstrings[li] := '''';',
     'builder done must finalize retained strings before release');
-  CheckSourceContains(LSource, 'fdoc.allocator.deallocate(pointer(fownedstrings));',
+  CheckSourceContains(LSource, 'fdoc.allocator.freemem(pointer(fownedstrings));',
     'builder done must free owned string slots through document allocator');
   CheckSourceOrder(LSource, 'fownedstrings[li] := '''';',
-    'fdoc.allocator.deallocate(pointer(fownedstrings));',
+    'fdoc.allocator.freemem(pointer(fownedstrings));',
     'builder done must finalize strings before freeing owned slots');
   CheckSourceContains(LSource, 'fdoc.addnode',
     'builder must add YAML nodes through TYamlDocument.AddNode');

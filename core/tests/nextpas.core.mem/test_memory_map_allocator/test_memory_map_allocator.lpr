@@ -7,7 +7,7 @@ uses
   nextpas.core.testing,
   nextpas.core.mem.error,
   nextpas.core.mem.allocator,
-  nextpas.core.mem.allocator.memory_map_allocator;
+  nextpas.core.mem.allocator.mmap;
 
 type
   TExceptionProc = procedure;
