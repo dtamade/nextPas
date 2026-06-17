@@ -48,7 +48,7 @@ cd /home/dtamade/projects/nextPas/.worktrees/core-foundation
 | `sync` | ✅ 完成 | 无 | 维护模式 |
 | `thread` | ✅ 完成 | 无 | 维护模式 |
 | `async` | ✅ 完成 | 无 | 维护模式 |
-| `io` | ✅ 完成 | `system.classes` (TStream) | 等 BOOTSTRAP Gate 0 |
+| `io` | ✅ 完成 | `system.classes` (TStream) — stream-core 已 live | 迁移 uses Classes → system.classes |
 | `time` | ✅ 完成 | 无 | 维护模式 |
 | `id` | ✅ 完成 | 无 | 维护模式 |
 | `testing` | 📋 基础 | 无 | 后期迭代 |
@@ -66,12 +66,14 @@ cd /home/dtamade/projects/nextPas/.worktrees/core-foundation
 3. 区分"可立即清理"和"等 system 接口"两类依赖
 4. 将审计结果写入 `docs/plans/foundation-fpc-rtl-dependency-audit.md`
 
-### Phase 2: 等待 BOOTSTRAP Gate 0 后的适配 (Week 2-3) ⏱️ 3-5 天
+### Phase 2: BOOTSTRAP 收口后的适配 (Week 2-3) ⏱️ 2-3 天
 
 **目标**: 将各模块的 FPC RTL uses 迁移到 system 门面或框架对应模块。
 
+**前置条件**: system.classes stream-core 面已 live（已满足），file-text-compat 面待 Gate 0b 决策。
+
 **任务**：
-1. `uses Classes` → `uses nextpas.core.system.classes`（等 BOOTSTRAP Gate 0 交付）
+1. `uses Classes` → `uses nextpas.core.system.classes`（stream-core 面已可用）
 2. `uses SysUtils` → 分析每个调用点：
    - `SameText` → `nextpas.core.system.sysutils` 或 `nextpas.core.text`
    - `Format` → `nextpas.core.system.sysutils` 或 `nextpas.core.text.conv`

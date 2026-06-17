@@ -41,36 +41,63 @@
 
 ## 核心依赖枢纽：system 模块
 
-**system 模块是所有其他模块的运行时契约基础。** BOOTSTRAP 线的首要任务是尽快托起其他模块所需的最小接口集。
+**system 模块是所有其他模块的运行时契约基础。** 关键发现：system 的三个兼容门面
+(`classes`/`sysutils`/`typinfo`) 都已存在最小 live slice，不是从零开始的阻塞点，
+而是需要收口验证和按需扩展的"剩余兼容债务点"。
 
-### 各线对 system 模块的接口需求矩阵
+### 各线对 system 模块的接口需求矩阵（修正版）
 
 | 需求方 | 需要的 system 接口 | 优先级 | 当前状态 |
 |--------|-------------------|--------|---------|
-| **TLS** | `system.classes` (TStream, THandleStream, TMemoryStream, TStringStream, TSeekOrigin) | 🔴 硬阻塞 | **已推迟** — 这是最大阻塞点 |
-| **TLS** | `system.sysutils` (SameText, Format, IntToStr, Trim, Exception 别名) | 🟡 部分满足 | S4 已提供最小集 |
-| **collections** | `system.typinfo` (PTypeInfo, TTypeKind, InitializeArray/FinalizeArray/CopyArray) | 🟡 部分满足 | S4 已提供七符号集 |
-| **HTTP** | `system.classes` (TStream 继承链) | 🔴 硬阻塞 | 同 TLS |
-| **crypto** | `system.sysutils` (SameText, Format) | 🟡 部分满足 | S4 最小集 |
-| **fs** | `system.classes` (TStream, TFileStream) | 🔴 硬阻塞 | 同 TLS |
-| **config** | `system.sysutils` (Format, 异常) | 🟡 部分满足 | S4 最小集 |
+| **TLS** | `system.classes` (TStream 链: TStream/THandleStream/TMemoryStream/TStringStream/TSeekOrigin) | 🟡 最小已 live | 已有 re-export facade，6 文件仍直接 uses Classes |
+| **TLS** | `system.classes` (file-compat: TFileStream/fm*/TStringList) | 🔴 缺失 | 19 文件用 TFileStream/TStringList，**未纳入 facade** |
+| **TLS** | `system.sysutils` (SameText/Format/IntToStr/Trim/Exception 别名) | 🟢 最小已满足 | S4 已提供最小 live slice |
+| **HTTP** | `system.classes` (TStream 继承链) | 🟡 最小已 live | 同 TLS stream 链 |
+| **collections** | `system.typinfo` (PTypeInfo/TTypeKind/InitializeArray/FinalizeArray/CopyArray) | 🟢 七符号已 live | S4 已提供，需 ongoing RTTI drift guard |
+| **fs** | `system.classes` (TFileStream/fm* 常量) | 🔴 缺失 | file-compat 面未纳入 facade |
+| **io** | `system.classes` (TStream), `io.memory` (TBytesStream) | 🟡 部分 | TBytesStream 属 io.memory owner，不应进 system.classes |
+| **crypto** | `system.sysutils` (SameText/Format) | 🟢 最小已满足 | S4 最小集 |
+| **config** | `system.sysutils` (Format/异常) | 🟢 最小已满足 | S4 最小集 |
+| **compiler/toolchain** | `system.classes` (TFileStream/TStringList) | 🔴 缺失 | bootstrap 线自身也是 file-compat 消费者 |
 | **SIMD** | 无 | ✅ 零依赖 | N/A |
 
-### system 模块接口交付优先级
+### system.classes 当前真实状态
+
+`core/src/nextpas.core.system.classes.pas` **已存在**，是纯 re-export facade：
+
+```pascal
+type
+  TStream = Classes.TStream;
+  THandleStream = Classes.THandleStream;
+  TMemoryStream = Classes.TMemoryStream;
+  TStringStream = Classes.TStringStream;
+  TSeekOrigin = Classes.TSeekOrigin;
+```
+
+**已提供的 stream-core 面**：TStream/THandleStream/TMemoryStream/TStringStream/TSeekOrigin ✅
+**缺失的 file-text-compat 面**：TFileStream/fm* 常量/TStringList ❌
+**不应加入的符号**：TBytesStream（owner 是 `nextpas.core.io.memory`）
+
+真实 Classes 债务（按 source 取证）：
+- 直接 `uses Classes`：**6 个生产文件**（TLS ocsp/transport/http/openssl + tui task）
+- 使用 TFileStream/TStringList：**19+ 文件**（TLS cert/quick/crypto + compiler toolchain）
+
+### system 模块接口交付优先级（修正版）
 
 ```
-第一优先级（Week 1-2）：解除硬阻塞
-├── system.classes 最小门面 — TStream 继承链
-├── system.sysutils 扩展 — 补齐 TLS/HTTP 所需
-└── RTTI 形状一致性验证 (Gate 1)
+第一优先级（Week 1-2）：收口已存在的最小面 + 补齐关键缺口
+├── system.classes 收口验证：确认已有 stream-core facade 通过测试
+├── system.classes file-text-compat 扩展：TFileStream/fm*/TStringList（需单独 review）
+├── RTTI 形状一致性验证 (Gate 1)
+└── 更新 system 文档：README/goal-tree 中 "Classes 已推迟" → "已最小 live，需收口验证"
 
 第二优先级（Week 2-4）：运行时基础
 ├── 进程生命周期执行 (Gate 3)
-├── 堆管理器集成 (Gate 4)
-└── 异常展开测试 (Gate 5)
+├── 异常展开测试 (Gate 5，已接近完成，可早收)
+└── 堆管理器集成 (Gate 4)
 
-第三优先级（Week 3-5）：多单元支持
-├── 单元生命周期执行 (Gate 2)
+第三优先级（Week 3-5）：自举关键路径
+├── 单元生命周期执行 (Gate 2) — self-hosting critical gate，不可无限后置
 └── 编译器测试扩展 (pass>=20, fail>=15)
 ```
 
@@ -82,34 +109,42 @@
 
 `nextpas.core.system` + `compiler/` 合并线。目标是让 nextPas 能够自举（用 nextPas 编译 nextPas）。
 
-### 5 道 Gate（按依赖顺序重排）
+### 6 道 Gate（按真实依赖重排）
 
-原始规格中的 Gate 顺序需要调整，因为其他线依赖 system 模块的接口交付：
+system.classes/sysutils/typinfo 三个兼容门面都已存在最小 live slice。
+真正未完成的是收口验证 + file-text-compat 扩展。
 
 ```
-原顺序: G1 → G5 → G3 → G4 → G2
-新顺序: G1 → G5 → G3 → G4 → G2 (执行顺序不变)
-但 G1 内部需要新增：system.classes 最小门面 (新 G0)
+真实依赖顺序（按 self-hosting criticality）:
+G1 (RTTI) → G3 (进程生命周期) → G2 (单元生命周期) — critical path
+G5 (异常) — 已接近完成，可早收
+G4 (堆) — 视决策插入
+G0 (classes 收口+扩展) — 解除跨线兼容债务
 ```
 
-#### 新 Gate 0: system.classes 最小门面 ⏱️ 3-5 天 🔴 最高优先级
+#### Gate 0: system.classes 收口验证与扩展 ⏱️ 3-5 天 🟡 跨线兼容阻塞
 
-**为什么是最高优先级**：TLS、HTTP、fs、crypto 等多个模块的核心类型（TSSLStream、THttpStream 等）继承自 TStream。没有 system.classes，这些模块无法脱离 FPC Classes 单元。
+**当前真实状态**：`core/src/nextpas.core.system.classes.pas` 已存在，是纯 re-export facade。
+已提供 stream-core 面 (TStream/THandleStream/TMemoryStream/TStringStream/TSeekOrigin)。
+**缺失** file-text-compat 面 (TFileStream/fm* 常量/TStringList)，影响 19+ TLS 文件 + compiler/toolchain。
 
 **任务**：
-1. 在 `core/src/nextpas.core.system.classes.pas` 中创建最小门面
-2. 最小符号集：`TStream`, `THandleStream`, `TMemoryStream`, `TStringStream`, `TSeekOrigin`, `TBytesStream`
-3. 策略选择：
-   - **路径 A（推荐短期）**：re-export FPC Classes 单元的类型，作为过渡门面
-   - **路径 B（长期）**：纯 nextPas 实现的 TStream 层次结构
-4. 添加单元测试 `core/tests/nextpas.core.system/test_system_classes/`
-5. 通知 TLS/FOUNDATION 线可以开始迁移 uses 子句
+1. **收口验证**已存在的 stream-core facade：
+   - 确认 `system.classes` 门面通过编译和 source-contract gate
+   - 添加单元测试 `core/tests/nextpas.core.system/test_system_classes/`
+2. **file-text-compat 扩展**（需单独 review）：
+   - 审计 TFileStream/TStringList 消费面（19+ 文件）
+   - 决策：扩展现有 facade vs 等待纯 Pascal io 模块
+   - 如果扩展，加入 `TFileStream`、`fm*` 常量、`TStringList`
+3. **移除 TBytesStream** 从 system.classes 计划（owner 是 `nextpas.core.io.memory`）
+4. **更新 system 文档**：README 中 "Classes 已推迟" → "已最小 live，需收口验证"
+5. 通知所有线 stream-core 面已可用，file-text-compat 面待决策
 
 **验收**：
-- [ ] `nextpas.core.system.classes` 单元可编译
-- [ ] TStream 继承链可用
-- [ ] TLS 模块可以 `uses nextpas.core.system.classes` 替代 `uses Classes`
+- [ ] system.classes 已有 facade 通过 source-contract gate
+- [ ] file-text-compat 扩展决策完成，文档化
 - [ ] 单元测试通过，0 leaks
+- [ ] system 文档状态更新
 
 #### Gate 1: RTTI 形状一致性 ⏱️ 3-5 天
 
@@ -131,16 +166,17 @@
 
 （同原规格，不变）
 
-### BOOTSTRAP 执行节奏（修订版）
+### BOOTSTRAP 执行节奏（修正版 — 基于 self-hosting criticality）
 
 ```
 Week 1:
-  - Gate 0: system.classes 最小门面 — 3-5 天 🔴 最高优先级
+  - Gate 0: system.classes 收口验证 — 2 天（facade 已存在）
+  - Gate 0b: file-text-compat 扩展决策 — 1 天
   - Gate 1: RTTI 测试 — 3 天（可与 G0 并行）
-  - 通知其他线 system.classes 已可用
+  - 通知所有线 stream-core 面已可用
 
 Week 2:
-  - Gate 5: 异常测试 — 2 天
+  - Gate 5: 异常测试 — 2 天（已接近完成，可早收）
   - Gate 3: 进程生命周期 — 3 天
   - 开始 pass/fail 测试扩展
 
@@ -149,11 +185,12 @@ Week 3:
   - 继续 pass/fail 测试扩展
 
 Week 4-5:
-  - Gate 2: 单元生命周期 — 最长任务
+  - Gate 2: 单元生命周期 — self-hosting critical gate，最长单点任务
   - 完成所有 pass/fail 测试
 
 Week 6:
   - 自举集成验证
+  - 用 nextPas 编译 nextPas 编译器本身
   - 收口、文档更新、合并 main
 ```
 
@@ -171,28 +208,31 @@ TLS + HTTP 模块 (L2-L3)。5 后端 TLS 实现 + H1/H2 HTTP transport。
 - HTTP: 36 文件, 37K+ 行, 19 测试工程, 181 H2 测试
 - 文档: 20 TLS + 5 HTTP 文档
 - 安全审计: 30 findings 100% 修复
-- **阻塞点**: 依赖 `system.classes` (TStream)，等待 BOOTSTRAP Gate 0 交付
+- **兼容阻塞点**: stream-core 面已 live (TStream/THandleStream/TMemoryStream/TStringStream/TSeekOrigin)
+- **缺失**: file-text-compat 面 (TFileStream/fm*/TStringList) — 19+ 文件使用，等待 BOOTSTRAP Gate 0b 决策
 
 ### 剩余工作
 
 | 优先级 | 工作项 | 估时 | 依赖 |
 |--------|--------|------|------|
-| P0 | 迁移 uses `Classes` → `nextpas.core.system.classes` | 1-2 天 | BOOTSTRAP Gate 0 |
+| P0 | 迁移 6 个直接 uses Classes 的文件 → system.classes | 1 天 | 无（facade 已存在） |
+| P0 | 等待 file-text-compat 决策 (TFileStream/TStringList) | — | BOOTSTRAP Gate 0b |
 | P1 | H2 测试覆盖率补齐 (client -33, frame -17, hpack -15) | 3-5 天 | 无 |
 | P1 | H2 真实 TLS runtime proof (当前 mock-based) | 2-3 天 | 无 |
 | P2 | 文档对齐 (h2-test-coverage-plan.md) | 1 天 | P1 完成后 |
-| P2 | FPC RTL 依赖清理 (SysUtils/Classes/BaseUnix/Unix/Windows) | 3-5 天 | BOOTSTRAP Gate 0 |
+| P2 | FPC RTL 依赖清理 (SysUtils/BaseUnix/Unix/Windows/DateUtils) | 3-5 天 | 无（SysUtils 面已 live） |
 | P3 | FreePascal 纯 Pascal 后端生产就绪 | 1-2 周 | 无 |
 | P4 | H3/QUIC 支持 | 远期 | QUIC 独立模块 |
 
-### 当前 FPC RTL 依赖债务
+### 当前 FPC RTL 依赖债务（按 source 取证修正）
 
-根据 `goal-tree.md` S6.4 债务表：
+旧 summary 口径 ~138 Classes 文件，按当前 file allowlist + 生产源码面取证：
 
-| 单元 | TLS 文件数 | 说明 |
-|------|-----------|------|
-| SysUtils | ~200 | 最大债务持有者 |
-| Classes | ~138 | 等待 system.classes |
+| 单元 | TLS 生产文件数 | 说明 |
+|------|-------------|------|
+| SysUtils | ~200 (旧 summary 口径) | 需逐步替换为 system.sysutils + text/conv 模块 |
+| Classes (直接 uses) | **6** | ocsp/transport/http/openssl + tui task |
+| Classes (TFileStream/TStringList) | **19+** | cert/quick/crypto/logging/openssl — 等待 file-compat 决策 |
 | Windows | ~18 | WinSSL 后端 |
 | DateUtils | ~15 | 证书时间处理 |
 | BaseUnix | ~7 | Unix 平台 |
@@ -249,7 +289,7 @@ L0-L1 基础模块的维护、完善和新增。涵盖 base, errors, platform, m
 | `sync` | L1 | ✅ 完成 | 无 | — |
 | `thread` | L1 | ✅ 完成 | 无 | — |
 | `async` | L1 | ✅ 完成 | 无 | — |
-| `io` | L1 | ✅ 完成 | system.classes (TStream) | 等待 BOOTSTRAP Gate 0 |
+| `io` | L1 | ✅ 完成 | system.classes (TStream) — stream-core 已 live | TBytesStream 属 io.memory owner |
 | `time` | L1 | ✅ 完成 | 无 | — |
 | `id` | L1 | ✅ 完成 | 无 | — |
 | `testing` | L1 | 基础 | 无 | 后期迭代 |
@@ -347,27 +387,26 @@ L3 框架层模块。为应用程序提供开箱即用的框架能力。
 | `job` | ❌ 未开始 | 无 | 待定 | P3 |
 | `app` | ❌ 未开始 | 无 | 待定 | P2 |
 
-### L3 执行节奏
+### L3 执行节奏（修正版 — 先审计已存在模块，再开发新模块）
 
 ```
-Phase 1 (Week 1-3): 等待 BOOTSTRAP Gate 0 + 审计
-  - 审计已完成 L3 模块的 system 依赖
+Phase 1 (Week 1-2): 已存在 L3 模块依赖审计
+  - 审计 config/http/websocket/tui/coroutine/cookie 的 system/FPC RTL 依赖
+  - 生成完整依赖矩阵 → docs/plans/l3-dependency-audit.md
+  - 不创建独立 L3 worktree，审计在 main checkout 完成
+
+Phase 2 (Week 2-4): 等 system 兼容边界收口后，创建 L3 worktree
+  - 等 BOOTSTRAP Gate 0 收口 (stream-core + file-text-compat 决策)
   - 创建 L3 worktree 和分支
-  - 规划未开始模块的开发顺序
+  - 迁移已完成模块的 FPC RTL uses → system 门面
 
-Phase 2 (Week 3-6): 已开始模块收尾
-  - event 模块设计+实现
-  - ratelimit 模块实现
-  - auth 模块实现
-  - template 模块实现
-  - metrics 模块实现
-  - app 模块实现
+Phase 3 (Week 4+): 新模块开发（按 consumer pressure 驱动）
+  - 只启动有明确消费方需求的模块
+  - 推荐顺序: event → ratelimit → auth → template → metrics → app
+  - 每个模块先写设计文档，与 /codex 讨论后实现
 
-Phase 3 (Week 6+): 新模块开发
-  - redis 客户端
-  - mail (SMTP/IMAP/POP3)
-  - migration
-  - job queue
+Phase 4 (远期): 低优先级模块
+  - redis / mail / migration / job — 等有真实 consumer pressure 再启动
 ```
 
 ---
@@ -375,30 +414,34 @@ Phase 3 (Week 6+): 新模块开发
 ## 依赖关系图与关键路径
 
 ```
-BOOTSTRAP Gate 0 (system.classes)
-    ├──→ TLS: P0 迁移 uses Classes
-    ├──→ FOUNDATION: io 模块适配
-    └──→ L3: http/websocket/tui 适配
+BOOTSTRAP Gate 0 (system.classes 收口验证)
+    ├──→ TLS: P0 迁移 6 个直接 uses Classes 文件 (无阻塞，facade 已存在)
+    ├──→ FOUNDATION: io 模块已有 stream-core 面可用
+    └──→ L3: 已完成模块审计
+
+BOOTSTRAP Gate 0b (file-text-compat 决策: TFileStream/fm*/TStringList)
+    ├──→ TLS: 19+ 文件解除阻塞
+    ├──→ compiler/toolchain: TFileStream/TStringList 迁移
+    └──→ fs: TFileStream 可用
 
 BOOTSTRAP Gate 1 (RTTI)
-    └──→ FOUNDATION: collections RTTI guard
+    └──→ FOUNDATION: collections RTTI guard + ongoing drift monitoring
+
+BOOTSTRAP Gate 2 (单元生命周期) — self-hosting critical gate
+    └──→ 多单元程序支持 (所有线受益)
 
 BOOTSTRAP Gate 3 (进程生命周期)
     └──→ 编译器自举基础
-
-BOOTSTRAP Gate 2 (单元生命周期)
-    └──→ 多单元程序支持 (所有线受益)
 ```
 
 ### 关键路径（最长依赖链）
 
 ```
-BOOTSTRAP Gate 0 → TLS P0 迁移 → TLS P2 依赖清理 → TLS landing
-                 → FOUNDATION 审计 → FOUNDATION 适配 → FOUNDATION landing
-                 → L3 审计 → L3 Phase 2 → L3 landing
+BOOTSTRAP Gate 0b → TLS 19 文件迁移 → TLS FPC RTL 清理 → TLS landing
+                  → compiler/toolchain 适配 → 自举集成验证
 ```
 
-**关键路径上的阻塞点**：BOOTSTRAP Gate 0（system.classes 最小门面）是全局阻塞点。
+**关键路径上的阻塞点**：BOOTSTRAP Gate 0b (file-text-compat 决策) 是剩余的最大阻塞点。
 
 ---
 
@@ -416,23 +459,25 @@ BOOTSTRAP Gate 0 → TLS P0 迁移 → TLS P2 依赖清理 → TLS landing
    - 通知 BOOTSTRAP 线排期
    - 不绕过 system 直接调用 FPC RTL
 
-### Landing 顺序
+### Landing 顺序（修正版 — 基于真实 blocker）
 
 ```
-第一轮 (Week 3-4):
-  - BOOTSTRAP Gate 0 + Gate 1 + Gate 5 → landing
-
-第二轮 (Week 5-6):
-  - BOOTSTRAP Gate 3 + Gate 4 → landing
+第一轮 (Week 2-3):
+  - BOOTSTRAP Gate 0 (system.classes 收口) + Gate 1 (RTTI) + Gate 5 (异常) → landing
   - SIMD G21 → landing
 
-第三轮 (Week 7-8):
-  - BOOTSTRAP Gate 2 → landing
-  - TLS P0-P2 → landing
-  - FOUNDATION 适配 → landing
+第二轮 (Week 4-5):
+  - BOOTSTRAP Gate 0b (file-text-compat) + Gate 3 (进程生命周期) + Gate 4 (堆) → landing
+  - TLS P0 (6 文件迁移) → landing
 
-第四轮 (Week 9+):
-  - L3 Phase 2 → landing
+第三轮 (Week 6-8):
+  - BOOTSTRAP Gate 2 (单元生命周期) → landing
+  - TLS P2 (FPC RTL 清理) → landing
+  - FOUNDATION 审计+适配 → landing
+
+第四轮 (Week 8+):
+  - L3 Phase 2 (已完成模块迁移) → landing
+  - L3 Phase 3 (新模块) → landing
   - 自举集成验证
 ```
 
@@ -476,12 +521,12 @@ bash core/tests/nextpas.core.simd/BuildOrTest.sh gate
 
 ---
 
-## 目标树位置快照 (2026-06-18)
+## 目标树位置快照 (2026-06-18，Codex 复盘修正)
 
-| 线 | 在总路线图的位置 | 完成度 |
-|----|-----------------|--------|
-| **BOOTSTRAP** | system S0-S5 完成，S6 完成，5 Gate 规格就位，待启动 | 规格 100%，执行 0% |
-| **TLS** | TLS v1.6.0 + HTTP H2 transport，剩余 H2 测试补齐 | 代码 95%，测试 85% |
-| **FOUNDATION** | L0-L1 大部分完成，等待 BOOTSTRAP 解阻塞 | 代码 90%，适配 0% |
-| **SIMD** | G1-G20 完成，G21 进行中 | 代码 98%，测试 100% |
-| **L3** | 部分模块完成，待创建 worktree 和系统化推进 | 代码 50%，规划 0% |
+| 线 | 在总路线图的位置 | 完成度 | 修正点 |
+|----|-----------------|--------|--------|
+| **BOOTSTRAP** | system S0-S5 完成，S6 完成；system.classes **已存在**需收口 | 规格 100%，执行 5% | Gate 0 从"创建"→"收口验证+扩展" |
+| **TLS** | TLS v1.6.0 + HTTP H2 transport；剩余 H2 测试补齐 + 6 文件 Classes 迁移 | 代码 95%，测试 85% | Classes 债务从 ~138→6(直接)+19(file-compat) |
+| **FOUNDATION** | L0-L1 大部分完成；io 模块 stream-core 面已可用 | 代码 90%，适配 0% | 阻塞从"等 Gate 0"→"stream-core 已 live" |
+| **SIMD** | G1-G20 完成，G21 进行中 | 代码 98%，测试 100% | 不变 |
+| **L3** | 部分模块完成；**先审计再开发**，不抢跑新模块 | 代码 50%，规划 0% | 新模块延后到 system 收口后 |

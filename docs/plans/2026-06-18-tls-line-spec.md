@@ -21,10 +21,20 @@ cd /home/dtamade/projects/nextPas/.worktrees/core-tls
 
 ## 工作优先级
 
-### P0: 等待 BOOTSTRAP Gate 0（system.classes 最小门面）
+### P0: 迁移直接 uses Classes 的 6 个文件 ⏱️ 1 天
 
-BOOTSTRAP 线正在创建 `nextpas.core.system.classes` 门面，提供 TStream 继承链。
-**这是你的硬阻塞** — TSSLStream 继承自 TStream，必须先有 system.classes 才能迁移。
+**当前**: `system.classes` facade 已存在 (TStream/THandleStream/TMemoryStream/TStringStream/TSeekOrigin)。
+6 个文件仍直接 `uses Classes`：ocsp.stapling/transport/http.client/openssl.api.async/openssl.api.store + tui.task。
+
+**任务**：
+1. 将 6 个文件的 `uses Classes` 替换为 `uses nextpas.core.system.classes`
+2. 验证编译通过
+3. 验证 TLS 测试全绿
+
+### P0b: 等待 file-text-compat 决策 ⏱️ 取决于 BOOTSTRAP Gate 0b
+
+**阻塞**: 19+ 文件使用 TFileStream/TStringList/fm* 常量，这些尚未纳入 system.classes facade。
+BOOTSTRAP 线正在评估是否扩展 facade 还是等待纯 Pascal io 模块。
 
 **当前可并行推进的工作（不依赖 system.classes）**：
 
@@ -48,18 +58,19 @@ BOOTSTRAP 线正在创建 `nextpas.core.system.classes` 门面，提供 TStream 
 2. 验证 ALPN h2 协商正确
 3. 验证证书链验证正确
 
-### P2: FPC RTL 依赖清理 ⏱️ 3-5 天（等 BOOTSTRAP Gate 0）
+### P2: FPC RTL 依赖清理 ⏱️ 3-5 天
 
-**当前债务**：
+**当前债务**（按 source 取证修正）：
 
-| FPC 单元 | TLS 文件数 |
-|----------|-----------|
-| SysUtils | ~200 |
-| Classes | ~138 |
-| Windows | ~18 |
-| DateUtils | ~15 |
-| BaseUnix | ~7 |
-| Unix | ~5 |
+| FPC 单元 | TLS 生产文件数 | 迁移路径 |
+|----------|-------------|---------|
+| Classes (直接 uses) | 6 | → system.classes (facade 已存在) |
+| Classes (TFileStream/TStringList) | 19+ | 等待 BOOTSTRAP Gate 0b file-compat 决策 |
+| SysUtils | ~200 (旧 summary 口径) | → system.sysutils + text.conv + text |
+| Windows | ~18 | WinSSL 后端，平台相关 |
+| DateUtils | ~15 | 证书时间处理 |
+| BaseUnix | ~7 | Unix 平台 |
+| Unix | ~5 | Unix 平台 |
 
 **任务**：
 1. 等 BOOTSTRAP Gate 0 交付后，迁移 `uses Classes` → `uses nextpas.core.system.classes`
