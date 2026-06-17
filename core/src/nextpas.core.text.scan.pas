@@ -8,6 +8,11 @@ interface
 uses
   nextpas.core.text.view;
 
+type
+  TJsonStringValidationError = (
+    jsveControlChar
+  );
+
 function ScanFindByte(const AData: PAnsiChar; const ALen: SizeUInt;
   const A: Byte): PtrInt;
 function ScanFindByte2(const AData: PAnsiChar; const ALen: SizeUInt;
@@ -26,6 +31,13 @@ function ScanFindSubstringCI(const AData: PAnsiChar; const ADataLen: SizeUInt;
   const ANeedle: PAnsiChar; const ANeedleLen: SizeUInt): PtrInt;
 function ScanMatchLiteral(const AData: PAnsiChar; const ALen: SizeUInt;
   const AExpected: PAnsiChar; const AExpectedLen: Byte): Boolean; inline;
+function JsonValidateStringToken(const AData: PAnsiChar; const ALen: SizeUInt;
+  out AError: TJsonStringValidationError;
+  out AErrorOffset: SizeUInt): Boolean;
+function ScanIsJsonNumberToken(const AData: PAnsiChar;
+  const ALen: SizeUInt): Boolean;
+function ScanJsonNumberHasIncompleteExponent(const AData: PAnsiChar;
+  const ALen: SizeUInt): Boolean;
 procedure ViewSkipWhitespace(var AView: TStringView); inline;
 function ViewMatchLiteral(var AView: TStringView;
   const AExpected: PAnsiChar; const AExpectedLen: Byte): Boolean; inline;
@@ -475,6 +487,116 @@ begin
   Result := ScanMatchLiteral(AView.Data, AView.Len, AExpected, AExpectedLen);
   if Result then
     AView.Advance(AExpectedLen);
+end;
+
+function JsonValidateStringToken(const AData: PAnsiChar; const ALen: SizeUInt;
+  out AError: TJsonStringValidationError;
+  out AErrorOffset: SizeUInt): Boolean;
+var
+  I: SizeUInt;
+  LCh: Byte;
+begin
+  I := 0;
+  while I < ALen do
+  begin
+    LCh := Byte(AData[I]);
+    if LCh = Ord('\') then
+    begin
+      Inc(I, 2); // skip backslash + escaped char
+      Continue;
+    end;
+    if LCh < $20 then
+    begin
+      AError := jsveControlChar;
+      AErrorOffset := I;
+      Exit(False);
+    end;
+    Inc(I);
+  end;
+  Result := True;
+end;
+
+function ScanIsJsonNumberToken(const AData: PAnsiChar;
+  const ALen: SizeUInt): Boolean;
+var
+  LPos: SizeUInt;
+  LCh: Byte;
+begin
+  Result := False;
+  if ALen = 0 then
+    Exit;
+  LPos := 0;
+  // optional minus
+  if Byte(AData[0]) = Ord('-') then
+  begin
+    LPos := 1;
+    if LPos >= ALen then
+      Exit;
+  end;
+  LCh := Byte(AData[LPos]);
+  // integer part: must start with 1-9 or be just "0"
+  if LCh = Ord('0') then
+    Inc(LPos)
+  else if (LCh >= Ord('1')) and (LCh <= Ord('9')) then
+  begin
+    Inc(LPos);
+    while (LPos < ALen) and (Byte(AData[LPos]) >= Ord('0'))
+      and (Byte(AData[LPos]) <= Ord('9')) do
+      Inc(LPos);
+  end
+  else
+    Exit;
+  // optional fraction
+  if (LPos < ALen) and (Byte(AData[LPos]) = Ord('.')) then
+  begin
+    Inc(LPos);
+    if (LPos >= ALen) or (Byte(AData[LPos]) < Ord('0'))
+      or (Byte(AData[LPos]) > Ord('9')) then
+      Exit;
+    while (LPos < ALen) and (Byte(AData[LPos]) >= Ord('0'))
+      and (Byte(AData[LPos]) <= Ord('9')) do
+      Inc(LPos);
+  end;
+  // optional exponent
+  if (LPos < ALen) and ((Byte(AData[LPos]) = Ord('e')) or (Byte(AData[LPos]) = Ord('E'))) then
+  begin
+    Inc(LPos);
+    if (LPos < ALen) and ((Byte(AData[LPos]) = Ord('+')) or (Byte(AData[LPos]) = Ord('-'))) then
+      Inc(LPos);
+    if (LPos >= ALen) or (Byte(AData[LPos]) < Ord('0'))
+      or (Byte(AData[LPos]) > Ord('9')) then
+      Exit;
+    while (LPos < ALen) and (Byte(AData[LPos]) >= Ord('0'))
+      and (Byte(AData[LPos]) <= Ord('9')) do
+      Inc(LPos);
+  end;
+  Result := LPos >= ALen;
+end;
+
+function ScanJsonNumberHasIncompleteExponent(const AData: PAnsiChar;
+  const ALen: SizeUInt): Boolean;
+var
+  LPos: SizeUInt;
+begin
+  Result := False;
+  if ALen = 0 then
+    Exit;
+  // Find 'e' or 'E' from the end region
+  LPos := ALen;
+  while LPos > 0 do
+  begin
+    Dec(LPos);
+    if (Byte(AData[LPos]) = Ord('e')) or (Byte(AData[LPos]) = Ord('E')) then
+    begin
+      // exponent exists but may be incomplete (no digits after e/E [+/-])
+      Inc(LPos);
+      if (LPos < ALen) and ((Byte(AData[LPos]) = Ord('+')) or (Byte(AData[LPos]) = Ord('-'))) then
+        Inc(LPos);
+      // incomplete if no digits follow
+      Result := LPos >= ALen;
+      Exit;
+    end;
+  end;
 end;
 
 end.
