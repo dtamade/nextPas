@@ -27,7 +27,7 @@ unit nextpas.core.tls.buffer.pool;
 
 interface
 
-uses nextpas.core.base, nextpas.core.base.utils, SyncObjs;
+uses nextpas.core.base, nextpas.core.base.utils, nextpas.core.sync;
 
 const
   { 缓冲区大小级别 }
@@ -105,7 +105,7 @@ type
   { 单级别缓冲区池 }
   TBufferPoolLevel = class
   private
-    FLock: TCriticalSection;
+    FLock: IMutex;
     FBuffers: array of TPooledBuffer;
     FCapacity: Integer;
     FFreeCount: Integer;
@@ -138,7 +138,7 @@ type
     FMediumPool: TBufferPoolLevel;
     FLargePool: TBufferPoolLevel;
     FStats: TBufferPoolStats;
-    FStatsLock: TCriticalSection;
+    FStatsLock: IMutex;
     FEnabled: Boolean;
 
     function GetPoolForSize(ASize: Integer): TBufferPoolLevel;
@@ -280,7 +280,7 @@ var
   I: Integer;
 begin
   inherited Create;
-  FLock := TCriticalSection.Create;
+  FLock := Mutex;
   FBufferSize := ABufferSize;
   FCapacity := APoolSize;
   FBufferClass := AClass;
@@ -306,7 +306,7 @@ destructor TBufferPoolLevel.Destroy;
 var
   I: Integer;
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try
     for I := 0 to Length(FBuffers) - 1 do
     begin
@@ -315,9 +315,8 @@ begin
     end;
     SetLength(FBuffers, 0);
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
-  FLock.Free;
   inherited Destroy;
 end;
 
@@ -326,7 +325,7 @@ var
   I: Integer;
 begin
   Result := nil;
-  FLock.Enter;
+  FLock.Acquire;
   try
     // 查找空闲缓冲区
     for I := 0 to Length(FBuffers) - 1 do
@@ -344,7 +343,7 @@ begin
     end;
     Inc(FMisses);
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
@@ -352,14 +351,14 @@ procedure TBufferPoolLevel.Release(ABuffer: PPooledBuffer);
 begin
   if ABuffer = nil then Exit;
 
-  FLock.Enter;
+  FLock.Acquire;
   try
     ABuffer^.FInUse := False;
     ABuffer^.FRefCount := 0;
     ABuffer^.FLength := 0;
     Inc(FFreeCount);
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
@@ -370,7 +369,7 @@ end;
 constructor TBufferPool.Create;
 begin
   inherited Create;
-  FStatsLock := TCriticalSection.Create;
+  FStatsLock := Mutex;
   FEnabled := True;
 
   // 创建三级缓冲区池
@@ -391,7 +390,6 @@ begin
   FSmallPool.Free;
   FMediumPool.Free;
   FLargePool.Free;
-  FStatsLock.Free;
   inherited Destroy;
 end;
 
@@ -420,7 +418,7 @@ end;
 
 procedure TBufferPool.UpdateStats(AHit: Boolean; AClass: TBufferClass);
 begin
-  FStatsLock.Enter;
+  FStatsLock.Acquire;
   try
     Inc(FStats.TotalAllocations);
     if AHit then
@@ -444,7 +442,7 @@ begin
       FSmallPool.FreeCount + FMediumPool.FreeCount + FLargePool.FreeCount;
 
   finally
-    FStatsLock.Leave;
+    FStatsLock.Release;
   end;
 end;
 
@@ -542,7 +540,7 @@ end;
 
 function TBufferPool.GetStats: TBufferPoolStats;
 begin
-  FStatsLock.Enter;
+  FStatsLock.Acquire;
   try
     Result := FStats;
     Result.CurrentPooled :=
@@ -552,13 +550,13 @@ begin
       (POOL_SIZE_MEDIUM - FMediumPool.FreeCount) +
       (POOL_SIZE_LARGE - FLargePool.FreeCount);
   finally
-    FStatsLock.Leave;
+    FStatsLock.Release;
   end;
 end;
 
 procedure TBufferPool.ResetStats;
 begin
-  FStatsLock.Enter;
+  FStatsLock.Acquire;
   try
     FStats.TotalAllocations := 0;
     FStats.PoolHits := 0;
@@ -566,7 +564,7 @@ begin
     FStats.OversizeAllocations := 0;
     FStats.PeakInUse := 0;
   finally
-    FStatsLock.Leave;
+    FStatsLock.Release;
   end;
 end;
 

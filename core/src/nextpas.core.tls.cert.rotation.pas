@@ -25,7 +25,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.exception,
-  Classes, SysUtils, SyncObjs,
+  Classes, SysUtils, nextpas.core.sync,
   nextpas.core.fs, nextpas.core.text.conv, nextpas.core.time,
   nextpas.core.tls.base, nextpas.core.tls.errors, nextpas.core.tls.logging, nextpas.core.tls.exceptions;
 
@@ -75,7 +75,7 @@ type
     FContext: ISSLContext;
     FConfig: TRotationConfig;
     FMonitorThread: TThread;
-    FLock: TCriticalSection;
+    FLock: IMutex;
     FActive: Boolean;
     FLastCertModTime: TDateTime;
     FLastKeyModTime: TDateTime;
@@ -172,7 +172,7 @@ constructor TCertificateRotationManager.Create(AContext: ISSLContext);
 begin
   inherited Create;
   FContext := AContext;
-  FLock := TCriticalSection.Create;
+  FLock := Mutex;
   FActive := False;
   FMonitorThread := nil;
   FLastExpiryCheck := 0;
@@ -181,7 +181,7 @@ end;
 destructor TCertificateRotationManager.Destroy;
 begin
   Stop;
-  FLock.Free;
+  FLock := nil;
   inherited Destroy;
 end;
 
@@ -259,7 +259,7 @@ end;
 function TCertificateRotationManager.ReloadCertificate: Boolean;
 begin
   Result := False;
-  FLock.Enter;
+  FLock.Acquire;
   try
     try
       TSecurityLog.Info('CertRotation', 'Reloading certificate...');
@@ -289,7 +289,7 @@ begin
       end;
     end;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 

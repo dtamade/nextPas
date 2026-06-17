@@ -5,7 +5,7 @@ unit nextpas.core.tls.aesgcm.pool;
 
 interface
 
-uses nextpas.core.base, nextpas.core.base.utils, SyncObjs, nextpas.core.time, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.rand, nextpas.core.tls.exceptions; const // GCM 标准 IV 长度：12 字节（96 位） GCM_IV_LENGTH = 12;
+uses nextpas.core.base, nextpas.core.base.utils, nextpas.core.sync, nextpas.core.time, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.rand, nextpas.core.tls.exceptions; const // GCM 标准 IV 长度：12 字节（96 位） GCM_IV_LENGTH = 12;
 
   // IV 结构：[8字节随机基础] + [4字节计数器]
   GCM_IV_BASE_LENGTH = 8;
@@ -50,7 +50,7 @@ type
   TAESGCMContextPool = class
   private
     FEntries: array of TAESGCMContextEntry;
-    FLock: TCriticalSection;
+    FLock: IMutex;
     FPoolSize: Integer;
     FEnabled: Boolean;
 
@@ -142,7 +142,7 @@ begin
 
   FEnabled := AConfig.Enabled;
   FPoolSize := AConfig.PoolSize;
-  FLock := TCriticalSection.Create;
+  FLock := Mutex;
 
   // 预分配上下文条目
   SetLength(FEntries, FPoolSize);
@@ -179,7 +179,6 @@ begin
       EVP_CIPHER_CTX_free(FEntries[I].Ctx);
   end;
 
-  FLock.Free;
   inherited Destroy;
 end;
 
@@ -387,7 +386,7 @@ begin
     Exit;
   end;
 
-  FLock.Enter;
+  FLock.Acquire;
   try
     Inc(FTotalRequests);
 
@@ -404,7 +403,7 @@ begin
     // 返回上下文
     Result := FEntries[LEntryIndex].Ctx;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
@@ -415,7 +414,7 @@ begin
   if not FEnabled then
     Exit;
 
-  FLock.Enter;
+  FLock.Acquire;
   try
     // 查找对应的条目并标记为未使用
     for I := 0 to FPoolSize - 1 do
@@ -427,13 +426,13 @@ begin
       end;
     end;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
 function TAESGCMContextPool.GetStats: TAESGCMPoolStats;
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try
     Result.TotalRequests := FTotalRequests;
     Result.CacheHits := FCacheHits;
@@ -446,13 +445,13 @@ begin
     else
       Result.HitRate := 0.0;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
 procedure TAESGCMContextPool.ResetStats;
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try
     FTotalRequests := 0;
     FCacheHits := 0;
@@ -460,7 +459,7 @@ begin
     FContextResets := 0;
     FIVBaseRegens := 0;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 

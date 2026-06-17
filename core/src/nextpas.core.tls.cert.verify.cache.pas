@@ -26,7 +26,7 @@ unit nextpas.core.tls.cert.verify.cache;
 interface
 
 uses
-  SyncObjs,
+  nextpas.core.sync,
   nextpas.core.base,
   nextpas.core.base.utils,
   nextpas.core.time,
@@ -55,7 +55,7 @@ type
   { 证书验证缓存（线程安全，LRU）}
   TCertVerifyCache = class
   private
-    FLock: TCriticalSection;
+    FLock: IMutex;
     FEntries: array of TCacheEntry;
     FCapacity: Integer;
     FCount: Integer;
@@ -95,20 +95,20 @@ implementation
 
 var
   GlobalCache: TCertVerifyCache = nil;
-  GlobalCacheLock: TCriticalSection = nil;
+  GlobalCacheLock: IMutex = nil;
 
 function GetGlobalCertVerifyCache: TCertVerifyCache;
 begin
   if GlobalCacheLock = nil then
-    GlobalCacheLock := TCriticalSection.Create;
+    GlobalCacheLock := Mutex;
 
-  GlobalCacheLock.Enter;
+  GlobalCacheLock.Acquire;
   try
     if GlobalCache = nil then
       GlobalCache := TCertVerifyCache.Create;
     Result := GlobalCache;
   finally
-    GlobalCacheLock.Leave;
+    GlobalCacheLock.Release;
   end;
 end;
 
@@ -117,7 +117,7 @@ end;
 constructor TCertVerifyCache.Create(ACapacity: Integer; ATTL: Integer);
 begin
   inherited Create;
-  FLock := TCriticalSection.Create;
+  FLock := Mutex;
   FCapacity := ACapacity;
   FTTL := ATTL;
   FCount := 0;
@@ -128,7 +128,7 @@ end;
 
 destructor TCertVerifyCache.Destroy;
 begin
-  FLock.Free;
+  FLock := nil;
   inherited Destroy;
 end;
 
@@ -280,7 +280,7 @@ var
 begin
   Result := False;
 
-  FLock.Enter;
+  FLock.Acquire;
   try
     LFingerprint := ComputeFingerprint(ACert);
     if Length(LFingerprint) <> 32 then
@@ -316,7 +316,7 @@ begin
     Result := True;
 
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
@@ -325,7 +325,7 @@ var
   LFingerprint: TBytes;
   LIdx: Integer;
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try
     LFingerprint := ComputeFingerprint(ACert);
     if Length(LFingerprint) <> 32 then
@@ -354,19 +354,19 @@ begin
     FEntries[LIdx].HitCount := 0;
 
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
 procedure TCertVerifyCache.Clear;
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try
     FCount := 0;
     FHits := 0;
     FMisses := 0;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
@@ -374,7 +374,7 @@ function TCertVerifyCache.GetHitRate: Double;
 var
   LTotal: Int64;
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try
     LTotal := FHits + FMisses;
     if LTotal = 0 then
@@ -382,29 +382,29 @@ begin
     else
       Result := (FHits * 100.0) / LTotal;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
 function TCertVerifyCache.GetSize: Integer;
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try
     Result := FCount;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
 procedure TCertVerifyCache.GetStats(out AHits, AMisses, ASize: Int64);
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try
     AHits := FHits;
     AMisses := FMisses;
     ASize := FCount;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
@@ -416,10 +416,6 @@ finalization
     GlobalCache.Free;
     GlobalCache := nil;
   end;
-  if GlobalCacheLock <> nil then
-  begin
-    GlobalCacheLock.Free;
-    GlobalCacheLock := nil;
-  end;
+  GlobalCacheLock := nil;
 
 end.

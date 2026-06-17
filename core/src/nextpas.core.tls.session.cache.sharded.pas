@@ -22,8 +22,8 @@ unit nextpas.core.tls.session.cache.sharded;
 interface
 
 uses
-  SyncObjs,
-  fgl,
+  nextpas.core.sync,
+  nextpas.core.collections.hashmap,
   nextpas.core.text.conv,
   nextpas.core.time,
   nextpas.core.base.utils,
@@ -53,12 +53,12 @@ type
   end;
 
   { 分片内部映射 }
-  TShardMap = specialize TFPGMap<string, TShardedSessionEntry>;
+  TShardMap = specialize THashMap<string, TShardedSessionEntry>;
 
   { 单个分片 }
   TSessionShard = record
   private
-    FLock: TRTLCriticalSection;
+    FLock: IMutex;
     FMap: TShardMap;
     FPutCount: Integer;
     FMaxEntries: Integer;
@@ -141,7 +141,7 @@ implementation
 
 var
   GShardedCache: TShardedSessionCache = nil;
-  GShardedCacheLock: TRTLCriticalSection;
+  GShardedCacheLock: IMutex;
 
 { ========================================================================
   TShardedSessionEntry
@@ -158,9 +158,8 @@ end;
 
 procedure TSessionShard.Initialize(AMaxEntries, ATimeoutSec: Integer);
 begin
-  InitCriticalSection(FLock);
+  FLock := Mutex;
   FMap := TShardMap.Create;
-  FMap.Sorted := True;  // 启用二分查找
   FPutCount := 0;
   FMaxEntries := AMaxEntries;
   FTimeoutSec := ATimeoutSec;
@@ -170,65 +169,56 @@ end;
 
 procedure TSessionShard.Finalize;
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     FMap.Free;
     FMap := nil;
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
-  DoneCriticalSection(FLock);
+  FLock := nil;
 end;
 
 function TSessionShard.Get(const AKey: string; out ASession: ISSLSession): Boolean;
 var
-  Index: Integer;
   Entry: TShardedSessionEntry;
 begin
   Result := False;
   ASession := nil;
 
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
-    Index := FMap.IndexOf(AKey);
-    if Index >= 0 then
+    if FMap.TryGetValue(AKey, Entry) then
     begin
-      Entry := FMap.Data[Index];
       if not Entry.IsExpired(FTimeoutSec) and (Entry.Session <> nil) then
       begin
         ASession := Entry.Session;
         // 更新访问时间
         Entry.LastAccess := DateTimeNow;
         Inc(Entry.AccessCount);
-        FMap.Data[Index] := Entry;
+        FMap.Put(AKey, Entry);
         Inc(FHits);
         Result := True;
       end
       else
       begin
         // 过期或无效，移除
-        FMap.Delete(Index);
+        FMap.Remove(AKey);
         Inc(FMisses);
       end;
     end
     else
       Inc(FMisses);
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
 procedure TSessionShard.Put(const AKey: string; const AEntry: TShardedSessionEntry);
-var
-  Index: Integer;
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
-    Index := FMap.IndexOf(AKey);
-    if Index >= 0 then
-      FMap.Data[Index] := AEntry
-    else
-      FMap.Add(AKey, AEntry);
+    FMap.Put(AKey, AEntry);
 
     Inc(FPutCount);
 
@@ -240,42 +230,37 @@ begin
       FPutCount := 0;
     end;
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
 function TSessionShard.Remove(const AKey: string): Boolean;
-var
-  Index: Integer;
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
-    Index := FMap.IndexOf(AKey);
-    Result := Index >= 0;
-    if Result then
-      FMap.Delete(Index);
+    Result := FMap.Remove(AKey);
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
 procedure TSessionShard.Clear;
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     FMap.Clear;
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
 function TSessionShard.Count: Integer;
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
-    Result := FMap.Count;
+    Result := FMap.GetCount;
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
@@ -283,42 +268,49 @@ procedure TSessionShard.CleanupExpired;
 var
   I: Integer;
   Entry: TShardedSessionEntry;
+  Keys: specialize THashMap<string, TShardedSessionEntry>.TKeyArray;
 begin
   // 已在锁内调用
-  I := FMap.Count - 1;
-  while I >= 0 do
+  Keys := FMap.GetKeys;
+  for I := 0 to High(Keys) do
   begin
-    Entry := FMap.Data[I];
-    if Entry.IsExpired(FTimeoutSec) then
-      FMap.Delete(I);
-    Dec(I);
+    if FMap.TryGetValue(Keys[I], Entry) and Entry.IsExpired(FTimeoutSec) then
+      FMap.Remove(Keys[I]);
   end;
 end;
 
 procedure TSessionShard.EnforceLimit;
 var
   I, ToRemove: Integer;
-  OldestIndex: Integer;
+  OldestKey: string;
   OldestTime: TDateTime;
   Entry: TShardedSessionEntry;
+  Keys: specialize THashMap<string, TShardedSessionEntry>.TKeyArray;
+  Found: Boolean;
 begin
   // 已在锁内调用
-  ToRemove := FMap.Count - FMaxEntries;
+  ToRemove := FMap.GetCount - FMaxEntries;
   while ToRemove > 0 do
   begin
     // 找最旧的条目
-    OldestIndex := 0;
-    OldestTime := DateTimeNow;
-    for I := 0 to FMap.Count - 1 do
+    Keys := FMap.GetKeys;
+    Found := False;
+    for I := 0 to High(Keys) do
     begin
-      Entry := FMap.Data[I];
-      if Entry.LastAccess < OldestTime then
+      if FMap.TryGetValue(Keys[I], Entry) then
       begin
-        OldestTime := Entry.LastAccess;
-        OldestIndex := I;
+        if not Found or (Entry.LastAccess < OldestTime) then
+        begin
+          OldestTime := Entry.LastAccess;
+          OldestKey := Keys[I];
+          Found := True;
+        end;
       end;
     end;
-    FMap.Delete(OldestIndex);
+    if Found then
+      FMap.Remove(OldestKey)
+    else
+      Break;
     Dec(ToRemove);
   end;
 end;
@@ -514,22 +506,22 @@ function GlobalShardedSessionCache: TShardedSessionCache;
 begin
   if GShardedCache = nil then
   begin
-    EnterCriticalSection(GShardedCacheLock);
+    GShardedCacheLock.Acquire;
     try
       if GShardedCache = nil then
         GShardedCache := TShardedSessionCache.Create;
     finally
-      LeaveCriticalSection(GShardedCacheLock);
+      GShardedCacheLock.Release;
     end;
   end;
   Result := GShardedCache;
 end;
 
 initialization
-  InitCriticalSection(GShardedCacheLock);
+  GShardedCacheLock := Mutex;
 
 finalization
   FreeAndNil(GShardedCache);
-  DoneCriticalSection(GShardedCacheLock);
+  GShardedCacheLock := nil;
 
 end.

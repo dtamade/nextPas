@@ -9,7 +9,7 @@
  * - 目标性能：222,222 - 555,555 ops/s (2-5倍提升)
  *
  * 设计原则：
- * - 线程安全：使用 TCriticalSection 保护共享状态
+ * - 线程安全：使用 IMutex 保护共享状态
  * - 安全性：定期重填，避免可预测性
  * - 可配置：支持启用/禁用优化
  *
@@ -27,7 +27,7 @@ unit nextpas.core.tls.random.pool;
 
 interface
 
-uses SyncObjs; const DEFAULT_POOL_SIZE = 8192; // 8KB 缓存池大小;
+uses nextpas.core.sync; const DEFAULT_POOL_SIZE = 8192; // 8KB 缓存池大小;
   DEFAULT_REFILL_THRESHOLD = 1024; // 当剩余 < 1KB 时重填
   DEFAULT_MAX_REQUEST_SIZE = 4096; // 单次请求最大 4KB（超过则直接生成）
 
@@ -67,7 +67,7 @@ type
   TRandomPool = class
   private
     FConfig: TRandomPoolConfig;
-    FLock: TCriticalSection;
+    FLock: IMutex;
     FBuffer: array of Byte;
     FPosition: Integer;            // 当前读取位置
     FAvailable: Integer;           // 可用字节数
@@ -126,7 +126,7 @@ function PooledRandomBytes(ABuffer: PByte; ACount: Integer): Boolean;
 implementation
 
 uses nextpas.core.tls.random; var GGlobalPool: TRandomPool = nil;
-  GGlobalPoolLock: TCriticalSection = nil;
+  GGlobalPoolLock: IMutex = nil;
 
 { TRandomPoolConfig }
 
@@ -155,7 +155,7 @@ begin
   inherited Create;
 
   FConfig := AConfig;
-  FLock := TCriticalSection.Create;
+  FLock := Mutex;
   SetLength(FBuffer, FConfig.PoolSize);
   FPosition := 0;
   FAvailable := 0;
@@ -174,7 +174,6 @@ begin
     FillChar(FBuffer[0], Length(FBuffer), 0);
   SetLength(FBuffer, 0);
 
-  FLock.Free;
   inherited Destroy;
 end;
 
@@ -293,7 +292,7 @@ begin
   if GGlobalPool = nil then
   begin
     if GGlobalPoolLock = nil then
-      GGlobalPoolLock := TCriticalSection.Create;
+      GGlobalPoolLock := Mutex;
 
     GGlobalPoolLock.Acquire;
     try
@@ -310,7 +309,7 @@ end;
 procedure ConfigureGlobalRandomPool(const AConfig: TRandomPoolConfig);
 begin
   if GGlobalPoolLock = nil then
-    GGlobalPoolLock := TCriticalSection.Create;
+    GGlobalPoolLock := Mutex;
 
   GGlobalPoolLock.Acquire;
   try
@@ -340,10 +339,6 @@ finalization
     GGlobalPool := nil;
   end;
 
-  if GGlobalPoolLock <> nil then
-  begin
-    GGlobalPoolLock.Free;
-    GGlobalPoolLock := nil;
-  end;
+  GGlobalPoolLock := nil;
 
 end.

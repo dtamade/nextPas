@@ -4,7 +4,7 @@ unit nextpas.core.tls.pool;
 
 interface
 
-uses nextpas.core.base, SyncObjs, nextpas.core.tls.base, nextpas.core.tls.tls, nextpas.core.tls.dialer; type TSSLPoolEntry = record Host: string;
+uses nextpas.core.base, nextpas.core.sync, nextpas.core.tls.base, nextpas.core.tls.tls, nextpas.core.tls.dialer; type TSSLPoolEntry = record Host: string;
   nextpas.core.system.classes,
     Port: Word;
     Stream: TSSLStream;
@@ -14,7 +14,7 @@ uses nextpas.core.base, SyncObjs, nextpas.core.tls.base, nextpas.core.tls.tls, n
   TSSLConnectionPool = class
   private
     FEntries: array of TSSLPoolEntry;
-    FLock: TCriticalSection;
+    FLock: IMutex;
     FDialer: TSSLDialer;
     FMaxIdle: Integer;
     FIdleTimeoutMs: Integer;
@@ -42,14 +42,13 @@ begin
   FDialer := ADialer;
   FMaxIdle := AMaxIdle;
   FIdleTimeoutMs := AIdleTimeoutMs;
-  FLock := TCriticalSection.Create;
+  FLock := Mutex;
   SetLength(FEntries, 0);
 end;
 
 destructor TSSLConnectionPool.Destroy;
 begin
   CloseAll;
-  FLock.Free;
   inherited Destroy;
 end;
 
@@ -66,7 +65,7 @@ begin
   LNow := DateTimeNow;
   LExpired := nil;
 
-  FLock.Enter;
+  FLock.Acquire;
   try
     // Find matching idle connection
     for I := High(FEntries) downto 0 do
@@ -93,7 +92,7 @@ begin
       end;
     end;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 
   // Free expired stream outside lock (may block on shutdown)
@@ -118,7 +117,7 @@ begin
     Exit;
   end;
 
-  FLock.Enter;
+  FLock.Acquire;
   try
     // Check pool capacity
     if Length(FEntries) >= FMaxIdle then
@@ -139,7 +138,7 @@ begin
     FEntries[LIdx].Stream := AStream;
     FEntries[LIdx].IdleSince := DateTimeNow;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
@@ -149,7 +148,7 @@ var
   LNow: TDateTime;
 begin
   LNow := DateTimeNow;
-  FLock.Enter;
+  FLock.Acquire;
   try
     I := 0;
     while I <= High(FEntries) do
@@ -164,7 +163,7 @@ begin
         Inc(I);
     end;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
@@ -172,13 +171,13 @@ procedure TSSLConnectionPool.CloseAll;
 var
   I: Integer;
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try
     for I := 0 to High(FEntries) do
       FEntries[I].Stream.Free;
     SetLength(FEntries, 0);
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 

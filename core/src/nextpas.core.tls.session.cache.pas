@@ -25,7 +25,8 @@ unit nextpas.core.tls.session.cache;
 interface
 
 uses
-  SysUtils, Classes, nextpas.core.fs, SyncObjs, fgl,
+  SysUtils, Classes, nextpas.core.fs, nextpas.core.sync,
+  nextpas.core.collections.hashmap,
   {$IFDEF UNIX}BaseUnix,{$ENDIF}
   nextpas.core.time,
   nextpas.core.tls.base,
@@ -88,7 +89,7 @@ type
   // ========================================================================
   // 会话缓存映射
   // ========================================================================
-  TSessionCacheMap = specialize TFPGMap<string, TSessionCacheEntry>;
+  TSessionCacheMap = specialize THashMap<string, TSessionCacheEntry>;
 
   // ========================================================================
   // SSL/TLS 会话缓存管理器
@@ -96,9 +97,9 @@ type
   TSSLSessionCache = class
   private
     FCache: TSessionCacheMap;
-    FLock: TCriticalSection;
+    FLock: IMutex;
     FStats: TSessionCacheStats;
-    FStatsLock: TCriticalSection;
+    FStatsLock: IMutex;
     FMaxSessions: Integer;
     FDefaultTimeout: Integer;
     FPutCount: Integer;
@@ -188,8 +189,8 @@ constructor TSSLSessionCache.Create(AMaxSessions: Integer; ADefaultTimeout: Inte
 begin
   inherited Create;
   FCache := TSessionCacheMap.Create;
-  FLock := TCriticalSection.Create;
-  FStatsLock := TCriticalSection.Create;
+  FLock := Mutex;
+  FStatsLock := Mutex;
   FMaxSessions := AMaxSessions;
   FDefaultTimeout := ADefaultTimeout;
   FPutCount := 0;
@@ -204,8 +205,8 @@ destructor TSSLSessionCache.Destroy;
 begin
   SecureZeroBytes(FIntegrityKey);
   FCache.Free;
-  FLock.Free;
-  FStatsLock.Free;
+  FLock := nil;
+  FStatsLock := nil;
   inherited Destroy;
 end;
 
@@ -217,53 +218,48 @@ end;
 function TSSLSessionCache.Get(const AHostName: string; APort: Word): ISSLSession;
 var
   Key: string;
-  Idx: Integer;
   Entry: TSessionCacheEntry;
 begin
   Result := nil;
   Key := GenerateCacheKey(AHostName, APort);
-  
-  FLock.Enter;
+
+  FLock.Acquire;
   try
-    Idx := FCache.IndexOf(Key);
-    if Idx >= 0 then
+    if FCache.TryGetValue(Key, Entry) then
     begin
-      Entry := FCache.Data[Idx];
-      
       // 检查是否过期
       if Entry.IsExpired(FDefaultTimeout) or not Entry.IsValid then
       begin
-        FCache.Delete(Idx);
+        FCache.Remove(Key);
         UpdateStats(False);
         Exit;
       end;
-      
+
       // 更新访问信息
       Entry.LastAccessedAt := DateTimeNow;
       Inc(Entry.AccessCount);
-      FCache.Data[Idx] := Entry;
-      
+      FCache.Put(Key, Entry);
+
       Result := Entry.Session;
       UpdateStats(True);
     end
     else
       UpdateStats(False);
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
 procedure TSSLSessionCache.Put(const AHostName: string; APort: Word; ASession: ISSLSession);
 var
   Key: string;
-  Idx: Integer;
   Entry: TSessionCacheEntry;
 begin
   if ASession = nil then
     Exit;
-  
+
   Key := GenerateCacheKey(AHostName, APort);
-  
+
   Entry := Default(TSessionCacheEntry);
   Entry.Session := ASession;
   Entry.HostName := AHostName;
@@ -271,15 +267,11 @@ begin
   Entry.CreatedAt := DateTimeNow;
   Entry.LastAccessedAt := Entry.CreatedAt;
   Entry.AccessCount := 0;
-  
-  FLock.Enter;
+
+  FLock.Acquire;
   try
-    Idx := FCache.IndexOf(Key);
-    if Idx >= 0 then
-      FCache.Data[Idx] := Entry
-    else
-      FCache.Add(Key, Entry);
-    
+    FCache.Put(Key, Entry);
+
     // 延迟清理
     Inc(FPutCount);
     if FPutCount >= CLEANUP_THRESHOLD then
@@ -287,55 +279,52 @@ begin
       CleanupExpired;
       FPutCount := 0;
     end;
-    
+
     // 强制执行大小限制
-    if FCache.Count > FMaxSessions then
+    if FCache.GetCount > FMaxSessions then
       EnforceSizeLimit;
-    
+
     // 更新统计
-    FStatsLock.Enter;
+    FStatsLock.Acquire;
     try
-      FStats.TotalSessions := FCache.Count;
+      FStats.TotalSessions := FCache.GetCount;
     finally
-      FStatsLock.Leave;
+      FStatsLock.Release;
     end;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
 procedure TSSLSessionCache.Remove(const AHostName: string; APort: Word);
 var
   Key: string;
-  Idx: Integer;
 begin
   Key := GenerateCacheKey(AHostName, APort);
-  
-  FLock.Enter;
+
+  FLock.Acquire;
   try
-    Idx := FCache.IndexOf(Key);
-    if Idx >= 0 then
-      FCache.Delete(Idx);
+    FCache.Remove(Key);
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
 procedure TSSLSessionCache.Clear;
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try
     FCache.Clear;
     FPutCount := 0;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
   
-  FStatsLock.Enter;
+  FStatsLock.Acquire;
   try
     FStats.TotalSessions := 0;
   finally
-    FStatsLock.Leave;
+    FStatsLock.Release;
   end;
 end;
 
@@ -345,21 +334,21 @@ var
 begin
   Key := GenerateCacheKey(AHostName, APort);
   
-  FLock.Enter;
+  FLock.Acquire;
   try
-    Result := FCache.IndexOf(Key) >= 0;
+    Result := FCache.ContainsKey(Key);
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
 function TSSLSessionCache.GetCount: Integer;
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try
-    Result := FCache.Count;
+    Result := FCache.GetCount;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
@@ -368,64 +357,74 @@ var
   I: Integer;
   Entry: TSessionCacheEntry;
   ExpiredCount: Integer;
+  Keys: specialize THashMap<string, TSessionCacheEntry>.TKeyArray;
 begin
   // 注意: 调用者必须持有锁
-  
+
   ExpiredCount := 0;
-  I := FCache.Count - 1;
-  while I >= 0 do
+  Keys := FCache.GetKeys;
+  for I := 0 to High(Keys) do
   begin
-    Entry := FCache.Data[I];
-    if Entry.IsExpired(FDefaultTimeout) or not Entry.IsValid then
+    if FCache.TryGetValue(Keys[I], Entry) then
     begin
-      FCache.Delete(I);
-      Inc(ExpiredCount);
+      if Entry.IsExpired(FDefaultTimeout) or not Entry.IsValid then
+      begin
+        FCache.Remove(Keys[I]);
+        Inc(ExpiredCount);
+      end;
     end;
-    Dec(I);
   end;
-  
+
   if ExpiredCount > 0 then
   begin
-    FStatsLock.Enter;
+    FStatsLock.Acquire;
     try
       FStats.ExpiredSessions := FStats.ExpiredSessions + ExpiredCount;
     finally
-      FStatsLock.Leave;
+      FStatsLock.Release;
     end;
   end;
 end;
 
 procedure TSSLSessionCache.EnforceSizeLimit;
 var
-  I, OldestIdx: Integer;
+  I: Integer;
+  OldestKey: string;
   OldestTime: TDateTime;
   Entry: TSessionCacheEntry;
+  Keys: specialize THashMap<string, TSessionCacheEntry>.TKeyArray;
+  Found: Boolean;
 begin
   // 注意: 调用者必须持有锁
-  
-  while FCache.Count > FMaxSessions do
+
+  while FCache.GetCount > FMaxSessions do
   begin
     // 找到最旧的条目 (LRU)
-    OldestIdx := 0;
-    OldestTime := FCache.Data[0].LastAccessedAt;
-    
-    for I := 1 to FCache.Count - 1 do
+    Keys := FCache.GetKeys;
+    Found := False;
+    for I := 0 to High(Keys) do
     begin
-      Entry := FCache.Data[I];
-      if Entry.LastAccessedAt < OldestTime then
+      if FCache.TryGetValue(Keys[I], Entry) then
       begin
-        OldestTime := Entry.LastAccessedAt;
-        OldestIdx := I;
+        if not Found or (Entry.LastAccessedAt < OldestTime) then
+        begin
+          OldestTime := Entry.LastAccessedAt;
+          OldestKey := Keys[I];
+          Found := True;
+        end;
       end;
     end;
-    
-    FCache.Delete(OldestIdx);
+
+    if Found then
+      FCache.Remove(OldestKey)
+    else
+      Break;
   end;
 end;
 
 procedure TSSLSessionCache.UpdateStats(AHit: Boolean);
 begin
-  FStatsLock.Enter;
+  FStatsLock.Acquire;
   try
     Inc(FStats.TotalRequests);
     if AHit then
@@ -437,24 +436,24 @@ begin
     if FStats.TotalRequests > 0 then
       FStats.ReuseRate := (FStats.CacheHits / FStats.TotalRequests) * 100.0;
   finally
-    FStatsLock.Leave;
+    FStatsLock.Release;
   end;
 end;
 
 function TSSLSessionCache.GetStats: TSessionCacheStats;
 begin
-  FStatsLock.Enter;
+  FStatsLock.Acquire;
   try
     Result := FStats;
     Result.TotalSessions := GetCount;
   finally
-    FStatsLock.Leave;
+    FStatsLock.Release;
   end;
 end;
 
 procedure TSSLSessionCache.ResetStats;
 begin
-  FStatsLock.Enter;
+  FStatsLock.Acquire;
   try
     FStats.TotalRequests := 0;
     FStats.CacheHits := 0;
@@ -463,7 +462,7 @@ begin
     FStats.ReuseRate := 0.0;
     FStats.TotalSessions := GetCount;
   finally
-    FStatsLock.Leave;
+    FStatsLock.Release;
   end;
 end;
 
@@ -475,10 +474,11 @@ var
   Entry: TSessionCacheEntry;
   SessionData: TBytes;
   CountPosition: Int64;
+  Keys: specialize THashMap<string, TSessionCacheEntry>.TKeyArray;
 begin
   Result := False;
-  
-  FLock.Enter;
+
+  FLock.Acquire;
   try
     try
       Stream := TFileStream.Create(AFileName, Classes.fmCreate);
@@ -497,10 +497,12 @@ begin
         WrittenCount := 0;
 
         // 写入每个条目
-        for I := 0 to FCache.Count - 1 do
+        Keys := FCache.GetKeys;
+        for I := 0 to High(Keys) do
         begin
-          Key := FCache.Keys[I];
-          Entry := FCache.Data[I];
+          Key := Keys[I];
+          if not FCache.TryGetValue(Key, Entry) then
+            Continue;
 
           // 只保存有效的会话
           if not Entry.IsValid or Entry.IsExpired(FDefaultTimeout) then
@@ -548,7 +550,7 @@ begin
       Result := False;
     end;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
@@ -569,7 +571,7 @@ begin
   if not nextpas.core.fs.IsFile(AFileName) then
     Exit;
 
-  FLock.Enter;
+  FLock.Acquire;
   try
     try
       FCache.Clear;
@@ -656,11 +658,11 @@ begin
             Entry.Port := Port;
 
             Key := GenerateCacheKey(HostName, Port);
-            FCache.Add(Key, Entry);
+            FCache.Put(Key, Entry);
           end;
         end;
 
-        FStats.TotalSessions := FCache.Count;
+        FStats.TotalSessions := FCache.GetCount;
         Result := True;
 
       finally
@@ -670,28 +672,28 @@ begin
       Result := False;
     end;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
 procedure TSSLSessionCache.SetSessionCreateFunc(AFunc: TSessionCreateFunc);
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try
     FSessionCreateFunc := AFunc;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
 procedure TSSLSessionCache.SetPersistenceKey(const AKey: TBytes);
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try
     SecureZeroBytes(FIntegrityKey);
     FIntegrityKey := Copy(AKey, 0, Length(AKey));
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 

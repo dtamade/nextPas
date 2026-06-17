@@ -29,7 +29,8 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.exception, nextpas.core.text.conv, StrUtils,
+  nextpas.core.exception, nextpas.core.text.conv,
+  nextpas.core.text.compare,
   nextpas.core.tls.pkcs11.types;
 
 type
@@ -66,7 +67,7 @@ uses
 
 class function TPKCS11URIParser.IsPKCS11URI(const AURIString: string): Boolean;
 begin
-  Result := StartsStr('pkcs11:', LowerCase(Trim(AURIString)));
+  Result := TextStartsWithI(Trim(AURIString), 'pkcs11:');
 end;
 
 class function TPKCS11URIParser.DecodeURIComponent(const AValue: string): string;

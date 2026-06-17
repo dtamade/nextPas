@@ -8,7 +8,7 @@ unit nextpas.core.tls.openssl.api.store;
 
 interface
 
-uses Classes, nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.ui;
+uses nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.ui;
 
 const
   // STORE 对象类型
@@ -296,7 +296,7 @@ procedure UnloadSTOREFunctions;
 // 辅助函数
 function LoadCertificateFromStore(const URI: string; const Password: string = ''): PX509;
 function LoadPrivateKeyFromStore(const URI: string; const Password: string = ''): PEVP_PKEY;
-function LoadCertificateChainFromStore(const URI: string): TList;
+function LoadCertificateChainFromStore(const URI: string): TX509Array;
 function SearchCertificateByAlias(const URI: string; const Alias: string): PX509;
 function StoreObjectTypeToString(ObjType: Integer): string;
 
@@ -542,37 +542,40 @@ begin
   end;
 end;
 
-function LoadCertificateChainFromStore(const URI: string): TList;
+function LoadCertificateChainFromStore(const URI: string): TX509Array;
 var
   URIAnsi: AnsiString;
   StoreCtx: POSSL_STORE_CTX;
   StoreInfo: POSSL_STORE_INFO;
   InfoType: Integer;
   Cert: PX509;
+  Count: Integer;
 begin
-  Result := TList.Create;
-  
+  Result := nil;
+
   if not Assigned(OSSL_STORE_open) or not Assigned(OSSL_STORE_load) or
     not Assigned(OSSL_STORE_eof) or not Assigned(OSSL_STORE_close) then
     Exit;
-  
+
   URIAnsi := AnsiString(URI);
-  
+
   // 打开存储
   StoreCtx := OSSL_STORE_open(PAnsiChar(URIAnsi), nil, nil, nil, nil);
   if StoreCtx = nil then Exit;
-  
+
+  Count := 0;
+
   try
     // 期望证书类型
     if Assigned(OSSL_STORE_expect) then
       OSSL_STORE_expect(StoreCtx, OSSL_STORE_INFO_CERT);
-    
+
     // 加载所有证书
     while OSSL_STORE_eof(StoreCtx) = 0 do
     begin
       StoreInfo := OSSL_STORE_load(StoreCtx);
       if StoreInfo = nil then Continue;
-      
+
       try
         if Assigned(OSSL_STORE_INFO_get_type) then
         begin
@@ -583,7 +586,11 @@ begin
             begin
               Cert := OSSL_STORE_INFO_get1_CERT(StoreInfo);
               if Cert <> nil then
-                Result.Add(Cert);
+              begin
+                Inc(Count);
+                SetLength(Result, Count);
+                Result[Count - 1] := Cert;
+              end;
             end;
           end;
         end;
@@ -592,7 +599,7 @@ begin
           OSSL_STORE_INFO_free(StoreInfo);
       end;
     end;
-    
+
   finally
     OSSL_STORE_close(StoreCtx);
   end;

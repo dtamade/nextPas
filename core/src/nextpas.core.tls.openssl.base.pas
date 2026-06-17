@@ -111,7 +111,10 @@ type
   PPX509_VERIFY_PARAM = ^PX509_VERIFY_PARAM;
   PX509_ALGOR = Pointer;
   PPX509_ALGOR = ^PX509_ALGOR;
-  
+
+  // X509 collection type (TLS owner specific, replaces legacy TList usage)
+  TX509Array = array of PX509;
+
   // Stack types
   OPENSSL_STACK = record end;  // Generic stack structure
   POPENSSL_STACK = ^OPENSSL_STACK;

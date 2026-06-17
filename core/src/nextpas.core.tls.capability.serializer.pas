@@ -34,7 +34,7 @@ function LoadCapabilitiesFromFile(const AFileName: string): TSSLBackendCapabilit
 implementation
 
 uses
-  SysUtils, StrUtils,
+  SysUtils,
   nextpas.core.exception;
 
 { Local helper: StringsSplit (text.strings PPU has loading issues) }
@@ -65,6 +65,36 @@ begin
     LCount := Length(Result);
     SetLength(Result, LCount + 1);
     Result[LCount] := LPart;
+  end;
+end;
+
+{ Local helper: PosFrom (was StrUtils.PosEx) }
+function PosFrom(const ASubStr, AStr: string; AStartPos: Integer): Integer;
+var
+  LLen: Integer;
+  I, J: Integer;
+  LMatch: Boolean;
+begin
+  Result := 0;
+  LLen := Length(ASubStr);
+  if (LLen = 0) or (AStartPos > Length(AStr)) then
+    Exit;
+  for I := AStartPos to Length(AStr) - LLen + 1 do
+  begin
+    LMatch := True;
+    for J := 1 to LLen do
+    begin
+      if AStr[I + J - 1] <> ASubStr[J] then
+      begin
+        LMatch := False;
+        Break;
+      end;
+    end;
+    if LMatch then
+    begin
+      Result := I;
+      Exit;
+    end;
   end;
 end;
 
@@ -510,7 +540,7 @@ var
     if LKeyPos <= 0 then
       Exit;
 
-    LColonPos := PosEx(':', AJSON, LKeyPos + Length(LKey));
+    LColonPos := PosFrom(':', AJSON, LKeyPos + Length(LKey));
     if LColonPos <= 0 then
       Exit;
 
@@ -922,7 +952,7 @@ var
       Exit;
 
     LValueStart := LOpenPos + Length(LOpenTag);
-    LClosePos := PosEx(LCloseTag, AXML, LValueStart);
+    LClosePos := PosFrom(LCloseTag, AXML, LValueStart);
     if LClosePos <= 0 then
       Exit;
 

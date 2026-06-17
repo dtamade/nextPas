@@ -82,7 +82,7 @@ function FormatSCTTimestamp(Timestamp: UInt64): string;
 
 implementation
 
-uses DateUtils, nextpas.core.tls.ocsp, nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.loader;
+uses nextpas.core.tls.ocsp, nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.loader;
 
 { TSCTValidator }
 
@@ -133,7 +133,7 @@ begin
     // 设置时间（当前时间 + 容差）
     if Assigned(CT_POLICY_EVAL_CTX_set_time) then
     begin
-      CurrentTime := UInt64(DateTimeToUnix(nextpas.core.time.DateTimeNow) * 1000);  // 转换为毫秒
+      CurrentTime := UInt64(DateTimeToUnix(DateTimeNow) * 1000);  // 转换为毫秒
       CurrentTime := CurrentTime + UInt64(FOptions.ClockDriftTolerance);
       CT_POLICY_EVAL_CTX_set_time(Result, CurrentTime);
     end;

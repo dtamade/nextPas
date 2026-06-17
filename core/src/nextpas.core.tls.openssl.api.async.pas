@@ -5,7 +5,7 @@ unit nextpas.core.tls.openssl.api.async;
 
 interface
 
-uses Classes, nextpas.core.tls.openssl.base;
+uses nextpas.core.tls.openssl.base;
 
 type
   // ASYNC types
@@ -130,7 +130,7 @@ type
   // Async job pool for managing multiple async operations
   TAsyncJobPool = class
   private
-    FJobs: TList;
+    FJobs: array of Pointer;
     FMaxJobs: Integer;
     FActiveJobs: Integer;
   public
@@ -409,7 +409,7 @@ end;
 constructor TAsyncJobPool.Create(AMaxJobs: Integer);
 begin
   inherited Create;
-  FJobs := TList.Create;
+  FJobs := nil;
   FMaxJobs := AMaxJobs;
   FActiveJobs := 0;
   
@@ -422,9 +422,9 @@ var
   I: Integer;
 begin
   // Clean up all jobs
-  for I := FJobs.Count - 1 downto 0 do
+  for I := High(FJobs) downto 0 do
     TAsyncJob(FJobs[I]).Free;
-  FJobs.Free;
+  FJobs := nil;
   
   // Clean up async context
   CleanupAsyncContext;
@@ -440,7 +440,8 @@ begin
   Result := TAsyncJob.Create(AFunc, AUserData);
   if Result.Start = ASYNC_PAUSE then
   begin
-    FJobs.Add(Result);
+    SetLength(FJobs, Length(FJobs) + 1);
+    FJobs[High(FJobs)] := Result;
     Inc(FActiveJobs);
   end
   else
@@ -453,13 +454,21 @@ end;
 
 function TAsyncJobPool.RemoveJob(AJob: TAsyncJob): Boolean;
 var
-  Index: Integer;
+  Index, I: Integer;
 begin
   Result := False;
-  Index := FJobs.IndexOf(AJob);
+  Index := -1;
+  for I := 0 to High(FJobs) do
+    if FJobs[I] = Pointer(AJob) then
+    begin
+      Index := I;
+      Break;
+    end;
   if Index >= 0 then
   begin
-    FJobs.Delete(Index);
+    for I := Index to High(FJobs) - 1 do
+      FJobs[I] := FJobs[I + 1];
+    SetLength(FJobs, Length(FJobs) - 1);
     Dec(FActiveJobs);
     AJob.Free;
     Result := True;
@@ -475,7 +484,7 @@ var
 begin
   StartTime := GetTickCount64;
   
-  for I := 0 to FJobs.Count - 1 do
+  for I := 0 to High(FJobs) do
   begin
     Job := TAsyncJob(FJobs[I]);
     
@@ -510,9 +519,9 @@ begin
   end;
   
   // Clean up remaining jobs
-  for I := FJobs.Count - 1 downto 0 do
+  for I := High(FJobs) downto 0 do
     TAsyncJob(FJobs[I]).Free;
-  FJobs.Clear;
+  FJobs := nil;
   FActiveJobs := 0;
 end;
 

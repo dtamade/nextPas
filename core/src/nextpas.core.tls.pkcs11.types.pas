@@ -21,7 +21,6 @@ unit nextpas.core.tls.pkcs11.types;
 interface
 
 uses
-  Generics.Collections,
   nextpas.core.base,
   nextpas.core.exception,
   nextpas.core.text.conv,
@@ -222,8 +221,8 @@ type
 implementation
 
 uses
-  StrUtils,
-  nextpas.core.fs;
+  nextpas.core.fs,
+  nextpas.core.text.compare;
 
 function HexCharToNibble(AChar: Char; out ANibble: Byte): Boolean;
 begin
@@ -325,7 +324,7 @@ function ResolvePINSource(const APINSource: string): string;
 var
   LVarName: string;
 begin
-  if StartsStr('env:', APINSource) then
+  if TextStartsWithI(APINSource, 'env:') then
   begin
     LVarName := Copy(APINSource, 5, MaxInt);
     if LVarName = '' then
@@ -337,7 +336,7 @@ begin
     Exit;
   end;
 
-  if StartsStr('file:', APINSource) then
+  if TextStartsWithI(APINSource, 'file:') then
   begin
     Result := ReadPINFromFileStrict(Copy(APINSource, 6, MaxInt));
     Exit;
@@ -413,12 +412,12 @@ begin
       Result.PINMethod := pmValue;
       Result.PINValue := AURI.PINValue;
     end
-    else if StartsStr('env:', AURI.PINSource) then
+    else if TextStartsWithI(AURI.PINSource, 'env:') then
     begin
       Result.PINMethod := pmEnvironment;
       Result.PINEnvVar := Copy(AURI.PINSource, 5, MaxInt);
     end
-    else if StartsStr('file:', AURI.PINSource) then
+    else if TextStartsWithI(AURI.PINSource, 'file:') then
     begin
       Result.PINMethod := pmFile;
       Result.PINFile := Copy(AURI.PINSource, 6, MaxInt);

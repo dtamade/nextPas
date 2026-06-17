@@ -250,6 +250,27 @@ begin
     'add negative seconds');
 end;
 
+procedure TestDateTimeToUnix;
+var
+  LEpoch: TDateTime;
+begin
+  // UnixToDateTime(0) should be 1970-01-01 00:00:00
+  LEpoch := UnixToDateTime(0);
+  Check(Abs(LEpoch - 25569.0) < 0.001, 'UnixToDateTime(0) = epoch');
+
+  // Round-trip: DateTimeToUnix(UnixToDateTime(X)) = X (use 86400 multiples for exact round-trip)
+  CheckEqual(Int64(0), DateTimeToUnix(UnixToDateTime(0)), 'round-trip epoch 0');
+  CheckEqual(Int64(86400), DateTimeToUnix(UnixToDateTime(86400)), 'round-trip 1 day');
+  CheckEqual(Int64(864000), DateTimeToUnix(UnixToDateTime(864000)), 'round-trip 10 days');
+  CheckEqual(Int64(2145916800), DateTimeToUnix(UnixToDateTime(2145916800)), 'round-trip 2038');
+
+  // Negative: exact day boundary
+  CheckEqual(Int64(-86400), DateTimeToUnix(UnixToDateTime(-86400)), 'round-trip -1 day');
+
+  // Current time produces reasonable Unix timestamp (> 2020)
+  Check(DateTimeToUnix(DateTimeUtcNow) > 1577836800, 'current time > 2020');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.time');
   T.Run('Duration zero', @TestDurationZero);
@@ -268,5 +289,6 @@ begin
   T.Run('DateTime now', @TestDateTimeNow);
   T.Run('DateTime UTC now', @TestDateTimeUtcNow);
   T.Run('DateTime math', @TestDateTimeMath);
+  T.Run('DateTimeToUnix/UnixToDateTime', @TestDateTimeToUnix);
   T.Summary;
 end.
