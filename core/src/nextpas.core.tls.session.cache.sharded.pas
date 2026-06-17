@@ -22,7 +22,7 @@ unit nextpas.core.tls.session.cache.sharded;
 interface
 
 uses
-  SyncObjs,
+  nextpas.core.sync,
   fgl,
   nextpas.core.text.conv,
   nextpas.core.time,
@@ -58,7 +58,7 @@ type
   { 单个分片 }
   TSessionShard = record
   private
-    FLock: TRTLCriticalSection;
+    FLock: IMutex;
     FMap: TShardMap;
     FPutCount: Integer;
     FMaxEntries: Integer;
@@ -141,7 +141,7 @@ implementation
 
 var
   GShardedCache: TShardedSessionCache = nil;
-  GShardedCacheLock: TRTLCriticalSection;
+  GShardedCacheLock: IMutex;
 
 { ========================================================================
   TShardedSessionEntry
@@ -158,7 +158,7 @@ end;
 
 procedure TSessionShard.Initialize(AMaxEntries, ATimeoutSec: Integer);
 begin
-  InitCriticalSection(FLock);
+  FLock := Mutex;
   FMap := TShardMap.Create;
   FMap.Sorted := True;  // 启用二分查找
   FPutCount := 0;
@@ -170,14 +170,14 @@ end;
 
 procedure TSessionShard.Finalize;
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     FMap.Free;
     FMap := nil;
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
-  DoneCriticalSection(FLock);
+  FLock := nil;
 end;
 
 function TSessionShard.Get(const AKey: string; out ASession: ISSLSession): Boolean;
@@ -188,7 +188,7 @@ begin
   Result := False;
   ASession := nil;
 
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     Index := FMap.IndexOf(AKey);
     if Index >= 0 then
@@ -214,7 +214,7 @@ begin
     else
       Inc(FMisses);
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
@@ -222,7 +222,7 @@ procedure TSessionShard.Put(const AKey: string; const AEntry: TShardedSessionEnt
 var
   Index: Integer;
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     Index := FMap.IndexOf(AKey);
     if Index >= 0 then
@@ -240,7 +240,7 @@ begin
       FPutCount := 0;
     end;
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
@@ -248,34 +248,34 @@ function TSessionShard.Remove(const AKey: string): Boolean;
 var
   Index: Integer;
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     Index := FMap.IndexOf(AKey);
     Result := Index >= 0;
     if Result then
       FMap.Delete(Index);
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
 procedure TSessionShard.Clear;
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     FMap.Clear;
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
 function TSessionShard.Count: Integer;
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     Result := FMap.Count;
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
@@ -514,22 +514,22 @@ function GlobalShardedSessionCache: TShardedSessionCache;
 begin
   if GShardedCache = nil then
   begin
-    EnterCriticalSection(GShardedCacheLock);
+    GShardedCacheLock.Acquire;
     try
       if GShardedCache = nil then
         GShardedCache := TShardedSessionCache.Create;
     finally
-      LeaveCriticalSection(GShardedCacheLock);
+      GShardedCacheLock.Release;
     end;
   end;
   Result := GShardedCache;
 end;
 
 initialization
-  InitCriticalSection(GShardedCacheLock);
+  GShardedCacheLock := Mutex;
 
 finalization
   FreeAndNil(GShardedCache);
-  DoneCriticalSection(GShardedCacheLock);
+  GShardedCacheLock := nil;
 
 end.

@@ -19,7 +19,7 @@ unit nextpas.core.tls.openssl.context;
 interface
 
 uses
-  SysUtils, Classes, SyncObjs,
+  SysUtils, Classes, nextpas.core.sync,
   nextpas.core.base.utils,
   nextpas.core.fs,
   nextpas.core.io.intf,
@@ -243,7 +243,7 @@ var
   // Phase 3.3 P1-2: 使用读写锁优化多线程性能
   // 读操作（LookupContext）可以并发执行，只有写操作（Register/Unregister）需要独占
   // 性能提升：10-50 倍（多线程场景）
-  GContextLock: TMultiReadExclusiveWriteSynchronizer = nil;
+  GContextLock: IRWLock = nil;
 
 procedure RequireContextCertificateMemoryBIOHelpers(const AMethodName: string);
 begin
@@ -752,26 +752,26 @@ end;
 procedure RegisterContextInstance(const AContext: TOpenSSLContext);
 begin
   if (AContext = nil) or (AContext.FSSLContext = nil) then Exit;
-  GContextLock.BeginWrite;
+  GContextLock.AcquireWrite;
   try
     if GContextRegistry.IndexOf(AContext) = -1 then
       GContextRegistry.Add(AContext);
   finally
-    GContextLock.EndWrite;
+    GContextLock.ReleaseWrite;
   end;
 end;
 
 procedure UnregisterContextInstance(const AContext: TOpenSSLContext);
 begin
   if (GContextLock = nil) or (AContext = nil) then Exit;
-  GContextLock.BeginWrite;
+  GContextLock.AcquireWrite;
   try
     if GContextRegistry = nil then Exit;
     GContextRegistry.Remove(AContext);
     // Note: Don't destroy registry here to avoid race conditions
     // It will be cleaned up in finalization
   finally
-    GContextLock.EndWrite;
+    GContextLock.ReleaseWrite;
   end;
 end;
 
@@ -783,7 +783,7 @@ begin
   Result := nil;
   if (GContextLock = nil) or (AHandle = nil) then Exit;
   // 使用读锁：允许多个线程同时查找上下文
-  GContextLock.BeginRead;
+  GContextLock.AcquireRead;
   try
     if GContextRegistry = nil then Exit;
     for i := 0 to GContextRegistry.Count - 1 do
@@ -796,7 +796,7 @@ begin
       end;
     end;
   finally
-    GContextLock.EndRead;
+    GContextLock.ReleaseRead;
   end;
 end;
 
@@ -2669,7 +2669,7 @@ begin
 end;
 
 initialization
-  GContextLock := TMultiReadExclusiveWriteSynchronizer.Create;
+  GContextLock := RWLock;
   GContextRegistry := TList.Create;
 
 finalization
@@ -2679,10 +2679,6 @@ finalization
     GContextRegistry.Free;
     GContextRegistry := nil;
   end;
-  if GContextLock <> nil then
-  begin
-    GContextLock.Free;
-    GContextLock := nil;
-  end;
+  GContextLock := nil;
 
 end.

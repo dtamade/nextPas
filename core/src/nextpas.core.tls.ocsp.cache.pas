@@ -22,7 +22,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.base.utils,
-   SyncObjs, DateUtils, fgl;
+   nextpas.core.sync, DateUtils, fgl;
 
 const
   SHARD_COUNT = 16;  // 分片数量 (2的幂次方,便于位运算)
@@ -68,7 +68,7 @@ type
   // ========================================================================
   TOCSPCacheShard = record
     Cache: TOCSPCacheMap;
-    Lock: TCriticalSection;
+    Lock: IMutex;
     PutCount: Integer;           // Put 操作计数,用于延迟清理
   end;
 
@@ -79,7 +79,7 @@ type
   private
     FShards: array[0..SHARD_COUNT-1] of TOCSPCacheShard;
     FStats: TOCSPCacheStats;
-    FStatsLock: TCriticalSection;  // 统计信息的独立锁
+    FStatsLock: IMutex;  // 统计信息的独立锁
     FMaxEntries: Integer;
     FDefaultTTL: Integer;
     FCleanupThreshold: Integer;
@@ -177,11 +177,11 @@ begin
   for I := 0 to SHARD_COUNT - 1 do
   begin
     FShards[I].Cache := TOCSPCacheMap.Create;
-    FShards[I].Lock := TCriticalSection.Create;
+    FShards[I].Lock := Mutex;
     FShards[I].PutCount := 0;
   end;
   
-  FStatsLock := TCriticalSection.Create;
+  FStatsLock := Mutex;
   FMaxEntries := AMaxEntries;
   FDefaultTTL := ADefaultTTL;
   FCleanupThreshold := 100;
@@ -196,10 +196,10 @@ begin
   for I := 0 to SHARD_COUNT - 1 do
   begin
     FShards[I].Cache.Free;
-    FShards[I].Lock.Free;
+    FShards[I].Lock := nil;
   end;
   
-  FStatsLock.Free;
+  FStatsLock := nil;
   inherited Destroy;
 end;
 
@@ -241,7 +241,7 @@ begin
   ShardIdx := GetShardIndex(Key);
   
   // 只锁定对应的分片
-  FShards[ShardIdx].Lock.Enter;
+  FShards[ShardIdx].Lock.Acquire;
   try
     Idx := FShards[ShardIdx].Cache.IndexOf(Key);
     if Idx >= 0 then
@@ -254,13 +254,13 @@ begin
         FShards[ShardIdx].Cache.Data[Idx] := Entry;
         
         // 更新统计 (使用独立的统计锁)
-        FStatsLock.Enter;
+        FStatsLock.Acquire;
         try
           Inc(FStats.TotalRequests);
           Inc(FStats.CacheHits);
           FStats.Hits := FStats.CacheHits;
         finally
-          FStatsLock.Leave;
+          FStatsLock.Release;
         end;
         
         Result := True;
@@ -269,29 +269,29 @@ begin
       begin
         FShards[ShardIdx].Cache.Delete(Idx);
         
-        FStatsLock.Enter;
+        FStatsLock.Acquire;
         try
           Inc(FStats.TotalRequests);
           Inc(FStats.CacheMisses);
           FStats.Misses := FStats.CacheMisses;
         finally
-          FStatsLock.Leave;
+          FStatsLock.Release;
         end;
       end;
     end
     else
     begin
-      FStatsLock.Enter;
+      FStatsLock.Acquire;
       try
         Inc(FStats.TotalRequests);
         Inc(FStats.CacheMisses);
         FStats.Misses := FStats.CacheMisses;
       finally
-        FStatsLock.Leave;
+        FStatsLock.Release;
       end;
     end;
   finally
-    FShards[ShardIdx].Lock.Leave;
+    FShards[ShardIdx].Lock.Release;
   end;
 end;
 
@@ -322,7 +322,7 @@ begin
   Entry.HitCount := 0;
   
   // 只锁定对应的分片
-  FShards[ShardIdx].Lock.Enter;
+  FShards[ShardIdx].Lock.Acquire;
   try
     Idx := FShards[ShardIdx].Cache.IndexOf(Key);
     if Idx >= 0 then
@@ -343,7 +343,7 @@ begin
     if FShards[ShardIdx].Cache.Count > MaxEntriesPerShard then
       EnforceSizeLimitInShard(ShardIdx);
   finally
-    FShards[ShardIdx].Lock.Leave;
+    FShards[ShardIdx].Lock.Release;
   end;
 end;
 
@@ -355,13 +355,13 @@ begin
   Key := GenerateCacheKey(ASerialNumber);
   ShardIdx := GetShardIndex(Key);
   
-  FShards[ShardIdx].Lock.Enter;
+  FShards[ShardIdx].Lock.Acquire;
   try
     Idx := FShards[ShardIdx].Cache.IndexOf(Key);
     if Idx >= 0 then
       FShards[ShardIdx].Cache.Delete(Idx);
   finally
-    FShards[ShardIdx].Lock.Leave;
+    FShards[ShardIdx].Lock.Release;
   end;
 end;
 
@@ -371,20 +371,20 @@ var
 begin
   for I := 0 to SHARD_COUNT - 1 do
   begin
-    FShards[I].Lock.Enter;
+    FShards[I].Lock.Acquire;
     try
       FShards[I].Cache.Clear;
       FShards[I].PutCount := 0;
     finally
-      FShards[I].Lock.Leave;
+      FShards[I].Lock.Release;
     end;
   end;
   
-  FStatsLock.Enter;
+  FStatsLock.Acquire;
   try
     FStats.TotalEntries := 0;
   finally
-    FStatsLock.Leave;
+    FStatsLock.Release;
   end;
 end;
 
@@ -396,11 +396,11 @@ begin
   Key := GenerateCacheKey(ASerialNumber);
   ShardIdx := GetShardIndex(Key);
   
-  FShards[ShardIdx].Lock.Enter;
+  FShards[ShardIdx].Lock.Acquire;
   try
     Result := FShards[ShardIdx].Cache.IndexOf(Key) >= 0;
   finally
-    FShards[ShardIdx].Lock.Leave;
+    FShards[ShardIdx].Lock.Release;
   end;
 end;
 
@@ -411,11 +411,11 @@ begin
   Result := 0;
   for I := 0 to SHARD_COUNT - 1 do
   begin
-    FShards[I].Lock.Enter;
+    FShards[I].Lock.Acquire;
     try
       Result := Result + FShards[I].Cache.Count;
     finally
-      FShards[I].Lock.Leave;
+      FShards[I].Lock.Release;
     end;
   end;
 end;
@@ -443,11 +443,11 @@ begin
   
   if ExpiredCount > 0 then
   begin
-    FStatsLock.Enter;
+    FStatsLock.Acquire;
     try
       FStats.ExpiredEntries := FStats.ExpiredEntries + ExpiredCount;
     finally
-      FStatsLock.Leave;
+      FStatsLock.Release;
     end;
   end;
 end;
@@ -484,20 +484,20 @@ end;
 
 function TOCSPResponseCache.GetStats: TOCSPCacheStats;
 begin
-  FStatsLock.Enter;
+  FStatsLock.Acquire;
   try
     Result := FStats;
     Result.TotalEntries := GetCount;
     Result.Hits := FStats.CacheHits;
     Result.Misses := FStats.CacheMisses;
   finally
-    FStatsLock.Leave;
+    FStatsLock.Release;
   end;
 end;
 
 procedure TOCSPResponseCache.ResetStats;
 begin
-  FStatsLock.Enter;
+  FStatsLock.Acquire;
   try
     FStats.TotalRequests := 0;
     FStats.CacheHits := 0;
@@ -507,7 +507,7 @@ begin
     FStats.ExpiredEntries := 0;
     FStats.TotalEntries := GetCount;
   finally
-    FStatsLock.Leave;
+    FStatsLock.Release;
   end;
 end;
 
@@ -536,7 +536,7 @@ begin
 
     for I := 0 to SHARD_COUNT - 1 do
     begin
-      FShards[I].Lock.Enter;
+      FShards[I].Lock.Acquire;
       try
         Count := FShards[I].Cache.Count;
         Writer.WriteInt32LE(Count);
@@ -562,7 +562,7 @@ begin
           Writer.WriteInt32LE(Entry.HitCount);
         end;
       finally
-        FShards[I].Lock.Leave;
+        FShards[I].Lock.Release;
       end;
     end;
 
@@ -608,7 +608,7 @@ begin
 
         if I < SHARD_COUNT then
         begin
-          FShards[I].Lock.Enter;
+          FShards[I].Lock.Acquire;
           try
             for J := 0 to Count - 1 do
             begin
@@ -634,7 +634,7 @@ begin
                 FShards[I].Cache.Add(Key, Entry);
             end;
           finally
-            FShards[I].Lock.Leave;
+            FShards[I].Lock.Release;
           end;
         end
         else
@@ -682,21 +682,21 @@ begin
         if Entry.IsValid then
         begin
           ShardIdx := GetShardIndex(Key);
-          FShards[ShardIdx].Lock.Enter;
+          FShards[ShardIdx].Lock.Acquire;
           try
             FShards[ShardIdx].Cache.Add(Key, Entry);
           finally
-            FShards[ShardIdx].Lock.Leave;
+            FShards[ShardIdx].Lock.Release;
           end;
         end;
       end;
     end;
 
-    FStatsLock.Enter;
+    FStatsLock.Acquire;
     try
       FStats.TotalEntries := GetCount;
     finally
-      FStatsLock.Leave;
+      FStatsLock.Release;
     end;
 
     Result := True;

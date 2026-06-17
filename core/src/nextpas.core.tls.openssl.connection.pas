@@ -19,7 +19,7 @@ unit nextpas.core.tls.openssl.connection;
 interface
 
 uses
-  SyncObjs,
+  nextpas.core.sync,
   nextpas.core.base.utils,
   SysUtils, nextpas.core.system.classes, ctypes,
   nextpas.core.io.intf,

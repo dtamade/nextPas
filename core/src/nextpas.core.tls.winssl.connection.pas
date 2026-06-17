@@ -26,7 +26,7 @@ uses
   {$ELSE}
   Sockets,
   {$ENDIF}
-  nextpas.core.exception, nextpas.core.text.conv, SyncObjs, DateUtils,
+  nextpas.core.exception, nextpas.core.text.conv, nextpas.core.sync, DateUtils,
   nextpas.core.io.intf,
   nextpas.core.io.stream_adapter,
   nextpas.core.tls.base,
@@ -98,7 +98,7 @@ type
   TWinSSLSessionManager = class
   private
     FSessions: TStringArray;
-    FLock: TCriticalSection;
+    FLock: IMutex;
     FMaxSessions: Integer;
   public
     constructor Create;
@@ -496,7 +496,7 @@ begin
   inherited Create;
   FSessions.Duplicates := dupIgnore;
   FSessions.Sorted := False;
-  FLock := TCriticalSection.Create;
+  FLock := Mutex;
   FMaxSessions := 100;
 end;
 
@@ -516,7 +516,7 @@ procedure TWinSSLSessionManager.AddSession(const AID: string; ASession: ISSLSess
 var
   LIndex: Integer;
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try
     LIndex := FSessions.IndexOf(AID);
     if LIndex >= 0 then
@@ -538,7 +538,7 @@ begin
       FSessions.Delete(0);
     end;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
@@ -546,7 +546,7 @@ function TWinSSLSessionManager.GetSession(const AID: string): ISSLSession;
 var
   LIndex: Integer;
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try
     LIndex := FSessions.IndexOf(AID);
     if LIndex >= 0 then
@@ -563,7 +563,7 @@ begin
     else
       Result := nil;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
@@ -571,7 +571,7 @@ procedure TWinSSLSessionManager.RemoveSession(const AID: string);
 var
   LIndex: Integer;
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try
     LIndex := FSessions.IndexOf(AID);
     if LIndex >= 0 then
@@ -581,7 +581,7 @@ begin
       FSessions.Delete(LIndex);
     end;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
@@ -589,7 +589,7 @@ procedure TWinSSLSessionManager.CleanupExpired;
 var
   i: Integer;
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try
     for i := Length(FSessions) - 1 downto 0 do
     begin
@@ -601,7 +601,7 @@ begin
       end;
     end;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 

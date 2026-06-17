@@ -25,7 +25,7 @@ unit nextpas.core.tls.session.cache;
 interface
 
 uses
-  SysUtils, Classes, nextpas.core.fs, SyncObjs, fgl,
+  SysUtils, Classes, nextpas.core.fs, nextpas.core.sync, fgl,
   {$IFDEF UNIX}BaseUnix,{$ENDIF}
   nextpas.core.time,
   nextpas.core.tls.base,
@@ -96,9 +96,9 @@ type
   TSSLSessionCache = class
   private
     FCache: TSessionCacheMap;
-    FLock: TCriticalSection;
+    FLock: IMutex;
     FStats: TSessionCacheStats;
-    FStatsLock: TCriticalSection;
+    FStatsLock: IMutex;
     FMaxSessions: Integer;
     FDefaultTimeout: Integer;
     FPutCount: Integer;
@@ -188,8 +188,8 @@ constructor TSSLSessionCache.Create(AMaxSessions: Integer; ADefaultTimeout: Inte
 begin
   inherited Create;
   FCache := TSessionCacheMap.Create;
-  FLock := TCriticalSection.Create;
-  FStatsLock := TCriticalSection.Create;
+  FLock := Mutex;
+  FStatsLock := Mutex;
   FMaxSessions := AMaxSessions;
   FDefaultTimeout := ADefaultTimeout;
   FPutCount := 0;
@@ -204,8 +204,8 @@ destructor TSSLSessionCache.Destroy;
 begin
   SecureZeroBytes(FIntegrityKey);
   FCache.Free;
-  FLock.Free;
-  FStatsLock.Free;
+  FLock := nil;
+  FStatsLock := nil;
   inherited Destroy;
 end;
 
@@ -223,7 +223,7 @@ begin
   Result := nil;
   Key := GenerateCacheKey(AHostName, APort);
   
-  FLock.Enter;
+  FLock.Acquire;
   try
     Idx := FCache.IndexOf(Key);
     if Idx >= 0 then
@@ -249,7 +249,7 @@ begin
     else
       UpdateStats(False);
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
@@ -272,7 +272,7 @@ begin
   Entry.LastAccessedAt := Entry.CreatedAt;
   Entry.AccessCount := 0;
   
-  FLock.Enter;
+  FLock.Acquire;
   try
     Idx := FCache.IndexOf(Key);
     if Idx >= 0 then
@@ -293,14 +293,14 @@ begin
       EnforceSizeLimit;
     
     // 更新统计
-    FStatsLock.Enter;
+    FStatsLock.Acquire;
     try
       FStats.TotalSessions := FCache.Count;
     finally
-      FStatsLock.Leave;
+      FStatsLock.Release;
     end;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
@@ -311,31 +311,31 @@ var
 begin
   Key := GenerateCacheKey(AHostName, APort);
   
-  FLock.Enter;
+  FLock.Acquire;
   try
     Idx := FCache.IndexOf(Key);
     if Idx >= 0 then
       FCache.Delete(Idx);
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
 procedure TSSLSessionCache.Clear;
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try
     FCache.Clear;
     FPutCount := 0;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
   
-  FStatsLock.Enter;
+  FStatsLock.Acquire;
   try
     FStats.TotalSessions := 0;
   finally
-    FStatsLock.Leave;
+    FStatsLock.Release;
   end;
 end;
 
@@ -345,21 +345,21 @@ var
 begin
   Key := GenerateCacheKey(AHostName, APort);
   
-  FLock.Enter;
+  FLock.Acquire;
   try
     Result := FCache.IndexOf(Key) >= 0;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
 function TSSLSessionCache.GetCount: Integer;
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try
     Result := FCache.Count;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
@@ -386,11 +386,11 @@ begin
   
   if ExpiredCount > 0 then
   begin
-    FStatsLock.Enter;
+    FStatsLock.Acquire;
     try
       FStats.ExpiredSessions := FStats.ExpiredSessions + ExpiredCount;
     finally
-      FStatsLock.Leave;
+      FStatsLock.Release;
     end;
   end;
 end;
@@ -425,7 +425,7 @@ end;
 
 procedure TSSLSessionCache.UpdateStats(AHit: Boolean);
 begin
-  FStatsLock.Enter;
+  FStatsLock.Acquire;
   try
     Inc(FStats.TotalRequests);
     if AHit then
@@ -437,24 +437,24 @@ begin
     if FStats.TotalRequests > 0 then
       FStats.ReuseRate := (FStats.CacheHits / FStats.TotalRequests) * 100.0;
   finally
-    FStatsLock.Leave;
+    FStatsLock.Release;
   end;
 end;
 
 function TSSLSessionCache.GetStats: TSessionCacheStats;
 begin
-  FStatsLock.Enter;
+  FStatsLock.Acquire;
   try
     Result := FStats;
     Result.TotalSessions := GetCount;
   finally
-    FStatsLock.Leave;
+    FStatsLock.Release;
   end;
 end;
 
 procedure TSSLSessionCache.ResetStats;
 begin
-  FStatsLock.Enter;
+  FStatsLock.Acquire;
   try
     FStats.TotalRequests := 0;
     FStats.CacheHits := 0;
@@ -463,7 +463,7 @@ begin
     FStats.ReuseRate := 0.0;
     FStats.TotalSessions := GetCount;
   finally
-    FStatsLock.Leave;
+    FStatsLock.Release;
   end;
 end;
 
@@ -478,7 +478,7 @@ var
 begin
   Result := False;
   
-  FLock.Enter;
+  FLock.Acquire;
   try
     try
       Stream := TFileStream.Create(AFileName, Classes.fmCreate);
@@ -548,7 +548,7 @@ begin
       Result := False;
     end;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
@@ -569,7 +569,7 @@ begin
   if not nextpas.core.fs.IsFile(AFileName) then
     Exit;
 
-  FLock.Enter;
+  FLock.Acquire;
   try
     try
       FCache.Clear;
@@ -670,28 +670,28 @@ begin
       Result := False;
     end;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
 procedure TSSLSessionCache.SetSessionCreateFunc(AFunc: TSessionCreateFunc);
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try
     FSessionCreateFunc := AFunc;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
 procedure TSSLSessionCache.SetPersistenceKey(const AKey: TBytes);
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try
     SecureZeroBytes(FIntegrityKey);
     FIntegrityKey := Copy(AKey, 0, Length(AKey));
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
