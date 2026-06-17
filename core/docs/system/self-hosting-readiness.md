@@ -238,11 +238,39 @@ integration can be deferred.
 
 | Gate | Priority | Owner | Effort | Current Status |
 |------|----------|-------|--------|----------------|
+| 0: system.classes Facade | **Blocker** (global) | system | Medium | **New — unblocks TLS/HTTP/fs/io** |
 | 1: RTTI Shape | Critical | compiler + collections | Medium | Pre-work (test design) |
 | 2: Unit Lifecycle | Critical | compiler + rtl | High | Deferred (no seed) |
 | 3: Process Lifecycle | Important | rtl | Medium | Semantic seed only |
 | 4: Heap Manager | Important | mem + compiler | Medium | Backend-private |
 | 5: Exception Unwind | Normal | compiler | Low | Backend-private, works |
+
+### Gate 0: Why It's the Cross-Line Compatibility Bottleneck
+
+`nextpas.core.system.classes` provides the `TStream` inheritance chain
+(`TStream`, `THandleStream`, `TMemoryStream`, `TStringStream`,
+`TSeekOrigin`). The facade **already exists** as a thin re-export of FPC
+`Classes` types, following the same pattern as `system.typinfo` and
+`system.sysutils`.
+
+The stream-core surface is live. What's missing is the file-text-compat surface
+(`TFileStream`, `fm*` constants, `TStringList`), which blocks 19+ TLS files
+and compiler/toolchain paths.
+
+Gate 0 strategy: **Phase 1 — validate existing stream-core facade** with
+source-contract gate + unit tests. **Phase 2 — decide on file-text-compat
+extension** (expand facade vs wait for pure Pascal io module).
+
+| Blocked module | Blocked type | Current status |
+|---------------|-------------|----------------|
+| TLS | `TSSLStream` (inherits from `TStream`) | stream-core live ✅, file-compat missing ❌ |
+| TLS | `TFileStream`, `TStringList` (19+ files) | waiting for Gate 0b file-compat decision |
+| HTTP | `THttpStream`, `TResponseStream` | stream-core live ✅ |
+| fs | `TFileStream` | waiting for Gate 0b |
+| io | `TBytesStream` | NOT system.classes — owner is `io.memory` |
+| compiler/toolchain | `TFileStream`, `TStringList` | bootstrap itself is a file-compat consumer |
+
+See `docs/plans/bootstrap-line-spec.md` Gate 0 for detailed task breakdown.
 
 ---
 
