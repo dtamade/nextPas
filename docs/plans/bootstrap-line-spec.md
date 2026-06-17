@@ -24,38 +24,35 @@ FPC `Classes` 单元。`system.classes` 排在所有 Gate 之前。
 **为什么排第一**：TLS (138 个文件)、HTTP、fs、io 等模块的核心类型继承自 `TStream`。
 不交付 `system.classes`，这些模块无法迁移脱离 FPC `Classes` 单元，所有其他工作线被阻塞。
 
+**当前真实状态**：`core/src/nextpas.core.system.classes.pas` **已存在**，是纯 re-export facade，
+已提供 TStream/THandleStream/TMemoryStream/TStringStream/TSeekOrigin。**缺失** file-text-compat 面
+(TFileStream/fm*/TStringList)，影响 19+ TLS 文件 + compiler/toolchain。
+
 **任务**：
 
-1. **审计现有依赖**：
-   - 搜索 `core/src/` 下所有 `uses Classes` 的模块
-   - 列出每个模块需要的 Classes 类型（TStream, THandleStream, TMemoryStream, TStringStream, TSeekOrigin 等）
-   - 记录到 `core/docs/system/classes-minimal-pressure.md`
+1. **收口验证**已存在的 stream-core facade：
+   - 确认 `system.classes` 门面通过编译和 source-contract gate
+   - 添加单元测试 `core/tests/nextpas.core.system/test_system_classes/`
+   - 符号清单：`TStream`, `THandleStream`, `TMemoryStream`, `TStringStream`, `TSeekOrigin`
+   - 明确 `TBytesStream` 不属于 system.classes（owner 是 `nextpas.core.io.memory`）
 
-2. **创建最小门面 `core/src/nextpas.core.system.classes.pas`**：
-   - 策略：先做 re-export 门面（路径 A），长期再考虑纯 nextPas 实现（路径 B）
-   - 最小符号集：`TStream`, `THandleStream`, `TMemoryStream`, `TStringStream`, `TBytesStream`, `TSeekOrigin`
-   - 遵循 owner boundary：不实现逻辑，只委派给 FPC `Classes` 或未来纯 Pascal 实现
-   - 遵循设计规范中的门面模式
+2. **file-text-compat 扩展**（需单独 review）：
+   - 审计 TFileStream/TStringList 消费面（19+ 文件）
+   - 决策：扩展现有 facade vs 等待纯 Pascal io 模块
+   - 如果扩展，加入 `TFileStream`、`fmCreate/fmOpenRead/fmOpenWrite/fmShareDeny*` 常量、`TStringList`
 
-3. **添加单元测试 `core/tests/nextpas.core.system/test_system_classes/`**：
-   - TStream 基本读写测试
-   - TMemoryStream 容量/位置测试
-   - TStringStream 字符串读写测试
-   - THandleStream 句柄测试
-   - 继承链验证测试
-   - 0 leaks (heaptrc)
+3. **更新 system 文档**：
+   - `core/docs/system/README.md`：`Classes 已推迟` → `已最小 live，需收口验证`
+   - `core/docs/system/goal-tree.md`：S4 状态更新
+   - 创建 `core/docs/system/classes-minimal-pressure.md` 记录审计结果
 
-4. **通知所有工作线**：
-   - 更新 `docs/plans/2026-06-18-five-lines-work-map.md` 状态
-   - TLS 线可以开始迁移 `uses Classes` → `uses nextpas.core.system.classes`
-   - FOUNDATION 线可以开始 io 模块适配
+4. **通知所有工作线** stream-core 面已可用，file-text-compat 面待决策
 
 **验收**：
-- [ ] `nextpas.core.system.classes` 单元可编译
-- [ ] TStream 继承链可用（TMemoryStream → TStream, TStringStream → TStream）
-- [ ] TLS 模块可以 `uses nextpas.core.system.classes` 替代 `uses Classes`
+- [ ] system.classes 已有 facade 通过 source-contract gate
+- [ ] file-text-compat 扩展决策完成，文档化
 - [ ] 单元测试通过，0 leaks
-- [ ] 不创建裸露的 `System.pas` 或 `Classes.pas` 在 `core/src/`
+- [ ] system 文档状态更新（README/goal-tree 不再写 "Classes 已推迟"）
 - [ ] `make hygiene` PASS
 
 **参考文档**：
@@ -257,25 +254,26 @@ FPC `Classes` 单元。`system.classes` 排在所有 Gate 之前。
 
 ---
 
-## 执行节奏
+## 执行节奏（修正版 — 基于 self-hosting criticality）
 
 ```
 Week 1:
-  - Gate 0 (system.classes 门面) — 3-5 天 🔴 最高优先级，全局阻塞点
-  - Gate 1 (RTTI 测试) — 3 天（可与 G0 部分并行）
-  - 通知 TLS/FOUNDATION/L3 线 system.classes 已可用
+  - Gate 0: system.classes 收口验证 — 2 天（facade 已存在）
+  - Gate 0b: file-text-compat 扩展决策 — 1 天
+  - Gate 1: RTTI 测试 — 3 天（可与 G0 并行）
+  - 通知所有线 stream-core 面已可用
 
 Week 2:
-  - Gate 5 (异常测试) — 2 天
-  - Gate 3 (进程生命周期) — 3 天
-  - 开始 pass/fail 测试扩展（与上面并行）
+  - Gate 5: 异常测试 — 2 天（已接近完成，可早收）
+  - Gate 3: 进程生命周期 — 3 天
+  - 开始 pass/fail 测试扩展
 
 Week 3:
-  - Gate 4 (堆管理器决策+实现) — 1-2 天
+  - Gate 4: 堆管理器 — 决策+实现
   - 继续 pass/fail 测试扩展
 
 Week 4-5:
-  - Gate 2 (单元生命周期) — 最长单点任务
+  - Gate 2: 单元生命周期 — self-hosting critical gate，最长单点任务
   - 完成所有 pass/fail 测试
 
 Week 6:
