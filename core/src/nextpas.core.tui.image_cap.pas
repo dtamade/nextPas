@@ -29,6 +29,7 @@ function DetectImageProtocolFromHints(const ATerm, ATermProgram,
 function DetectImageProtocol: TImageProtocol;
 
 implementation
+uses SysUtils;
 
 
 function DetectImageProtocolFromHints(const ATerm, ATermProgram,
