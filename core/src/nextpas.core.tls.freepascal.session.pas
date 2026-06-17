@@ -9,7 +9,7 @@ unit nextpas.core.tls.freepascal.session;
 
 interface
 
-uses SysUtils, nextpas.core.base, nextpas.core.time, nextpas.core.tls.base;
+uses nextpas.core.base, nextpas.core.time, nextpas.core.tls.base, nextpas.core.exception;
 
 type
   IFreePascalResumptionSession = interface
@@ -160,7 +160,7 @@ type
 
 implementation
 
-uses nextpas.core.tls.tls13.wire;
+uses nextpas.core.base.utils, nextpas.core.tls.tls13.wire;
 
 const
   FREEPASCAL_SESSION_MAGIC: array[0..3] of Byte = ($46, $50, $53, $31); // FPS1
@@ -169,6 +169,16 @@ const
   FREEPASCAL_SESSION_VERSION_V2 = 2;
   FREEPASCAL_SESSION_VERSION_V3 = 3;
   HEX_DIGITS: array[0..15] of Char = '0123456789abcdef';
+
+function StringToBytes(const AStr: string): TBytes;
+var
+  LLen: Integer;
+begin
+  LLen := Length(AStr);
+  SetLength(Result, LLen);
+  if LLen > 0 then
+    Move(AStr[1], Result[0], LLen);
+end;
 
 procedure AppendUInt32(var ADest: TBytes; AValue: Cardinal);
 begin
@@ -439,9 +449,9 @@ begin
   AppendVector16(Result, FTicketNonce);
   AppendVector16(Result, FTicket);
   AppendVector16(Result, FResumptionPSK);
-  LCipherBytes := BytesOf(FCipherName);
+  LCipherBytes := StringToBytes(FCipherName);
   AppendVector16(Result, LCipherBytes);
-  AppendVector16(Result, BytesOf(FBoundServerName));
+  AppendVector16(Result, StringToBytes(FBoundServerName));
   AppendVector16(Result, FTLS12SessionID);
   AppendVector16(Result, FTLS12MasterSecret);
 end;

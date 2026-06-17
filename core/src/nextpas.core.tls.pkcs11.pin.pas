@@ -77,7 +77,7 @@ type
 
 implementation
 
-uses SysUtils, nextpas.core.tls.pkcs11.api;
+uses nextpas.core.fs, nextpas.core.tls.pkcs11.api;
 
 { TPKCS11PINManager }
 
@@ -88,7 +88,7 @@ var
 begin
   Result := '';
   
-  if not FileExists(AFilePath) then
+  if not IsFile(AFilePath) then
     raise EPKCS11Exception.Create(
       Format('PIN file not found: %s', [AFilePath]),
       CKR_GENERAL_ERROR);
@@ -120,7 +120,7 @@ end;
 
 class function TPKCS11PINManager.ReadPINFromEnvironment(const AVarName: string): string;
 begin
-  Result := GetEnvironmentVariable(AVarName);
+  Result := GetEnv(AVarName);
   
   if Result = '' then
     raise EPKCS11Exception.Create(

@@ -4,7 +4,7 @@ unit nextpas.core.git.libgit2;
 
 interface
 
-uses SysUtils, nextpas.core.git.intf, nextpas.core.git.base, nextpas.core.git.libgit2.ffi, nextpas.core.git.libgit2.backend;
+uses nextpas.core.fs, nextpas.core.git.intf, nextpas.core.git.base, nextpas.core.git.libgit2.ffi, nextpas.core.git.libgit2.backend;
 
 type
   EGitError = nextpas.core.git.libgit2.backend.EGitError;
@@ -204,16 +204,16 @@ var
   p, prev: string;
 begin
   // Use pure Pascal fallback first to avoid instability due to header signature differences
-  p := ExpandFileName(AStartPath);
+  p := PathAbs(AStartPath);
   prev := '';
   while (p <> '') and (p <> prev) do
   begin
-    if DirectoryExists(IncludeTrailingPathDelimiter(p) + '.git') then
+    if Exists(PathEnsureSep(p) + '.git') then
     begin
       Exit(p);
     end;
     prev := p;
-    p := ExtractFileDir(p);
+    p := PathDir(p);
   end;
   // If not found, try calling underlying layer (wrap exceptions to avoid crashes)
   try
