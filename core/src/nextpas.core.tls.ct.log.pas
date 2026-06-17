@@ -12,7 +12,7 @@ uses
   nextpas.core.time,
   nextpas.core.exception,
   nextpas.core.base,
-   fpjson, jsonparser,
+  nextpas.core.json, nextpas.core.json.builder,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.ct,
@@ -119,9 +119,8 @@ end;
 
 function TCTLogClient.LoadFromJSON(const JSONData: string): Boolean;
 var
-  JSON: TJSONData;
-  LogsArray: TJSONArray;
-  Log: TJSONObject;
+  LDoc: IJsonDocument;
+  LRoot, LLogsArray, LLog, LVal: TJsonValue;
   LogInfo: TCTLogInfo;
   I: Integer;
 begin
@@ -132,10 +131,7 @@ begin
   // 首先尝试解析 Google CT 日志列表格式
   if ParseGoogleCTLogList(JSONData) then
   begin
-    // 创建日志存储
     Result := CreateLogStore;
-
-    // 如果启用了缓存，保存到文件
     if Result and (FCacheFile <> '') then
       SaveToFile(FCacheFile);
     Exit;
@@ -143,41 +139,47 @@ begin
 
   // 如果 Google 格式解析失败，尝试解析简单的缓存格式
   try
-    JSON := GetJSON(JSONData);
-    if JSON = nil then Exit;
+    LDoc := JsonParse(JSONData);
+    if LDoc.HasError then Exit;
 
-    try
-      if JSON.JSONType <> jtObject then Exit;
+    LRoot := LDoc.Root;
+    if not LRoot.IsObject then Exit;
 
-      // 尝试获取 logs 数组（简单缓存格式）
-      LogsArray := TJSONObject(JSON).Get('logs', TJSONArray(nil));
-      if LogsArray = nil then Exit;
+    // 尝试获取 logs 数组
+    LLogsArray := LRoot.ObjectGet('logs');
+    if not LLogsArray.IsArray then Exit;
 
-      SetLength(FLogList, 0);
+    SetLength(FLogList, 0);
 
-      for I := 0 to LogsArray.Count - 1 do
-      begin
-        if LogsArray.Items[I].JSONType <> jtObject then Continue;
+    for I := 0 to LLogsArray.ArrayLen - 1 do
+    begin
+      LLog := LLogsArray.ArrayGet(I);
+      if not LLog.IsObject then Continue;
 
-        Log := TJSONObject(LogsArray.Items[I]);
+      LogInfo.LogID := LLog.ObjectGet('log_id').AsStr.ToString;
+      LogInfo.Key := LLog.ObjectGet('key').AsStr.ToString;
+      LogInfo.URL := LLog.ObjectGet('url').AsStr.ToString;
+      LogInfo.Description := LLog.ObjectGet('description').AsStr.ToString;
+      LogInfo.OperatorName := LLog.ObjectGet('operator').AsStr.ToString;
 
-        LogInfo.LogID := Log.Get('log_id', '');
-        LogInfo.Key := Log.Get('key', '');
-        LogInfo.URL := Log.Get('url', '');
-        LogInfo.Description := Log.Get('description', '');
-        LogInfo.OperatorName := Log.Get('operator', '');
-        LogInfo.MaxMergeDelay := Log.Get('mmd', 86400);
-        LogInfo.IsUsable := Log.Get('usable', True);
+      LVal := LLog.ObjectGet('mmd');
+      if LVal.IsValid then
+        LogInfo.MaxMergeDelay := LVal.AsInt
+      else
+        LogInfo.MaxMergeDelay := 86400;
 
-        SetLength(FLogList, Length(FLogList) + 1);
-        FLogList[High(FLogList)] := LogInfo;
-      end;
+      LVal := LLog.ObjectGet('usable');
+      if LVal.IsValid then
+        LogInfo.IsUsable := LVal.AsBool
+      else
+        LogInfo.IsUsable := True;
 
-      Result := True;
-      CreateLogStore;
-    finally
-      JSON.Free;
+      SetLength(FLogList, Length(FLogList) + 1);
+      FLogList[High(FLogList)] := LogInfo;
     end;
+
+    Result := True;
+    CreateLogStore;
   except
     Result := False;
   end;
@@ -185,12 +187,9 @@ end;
 
 function TCTLogClient.ParseGoogleCTLogList(const JSONData: string): Boolean;
 var
-  JSON: TJSONData;
-  Operators: TJSONArray;
-  Logs: TJSONArray;
+  LDoc: IJsonDocument;
+  LRoot, LOperators, LOperatorObj, LLogs, LLog, LStateVal: TJsonValue;
   I, J: Integer;
-  OperatorObj: TJSONObject;
-  Log: TJSONObject;
   LogInfo: TCTLogInfo;
   OperatorName: string;
 begin
@@ -198,62 +197,60 @@ begin
   SetLength(FLogList, 0);
 
   try
-    JSON := GetJSON(JSONData);
-    if JSON = nil then Exit;
+    LDoc := JsonParse(JSONData);
+    if LDoc.HasError then Exit;
 
-    try
-      if JSON.JSONType <> jtObject then Exit;
+    LRoot := LDoc.Root;
+    if not LRoot.IsObject then Exit;
 
-      // 获取 operators 数组
-      Operators := TJSONObject(JSON).Get('operators', TJSONArray(nil));
-      if Operators = nil then Exit;
+    // 获取 operators 数组
+    LOperators := LRoot.ObjectGet('operators');
+    if not LOperators.IsArray then Exit;
 
-      // 遍历所有运营商
-      for I := 0 to Operators.Count - 1 do
+    // 遍历所有运营商
+    for I := 0 to LOperators.ArrayLen - 1 do
+    begin
+      LOperatorObj := LOperators.ArrayGet(I);
+      if not LOperatorObj.IsObject then Continue;
+
+      OperatorName := LOperatorObj.ObjectGet('name').AsStr.ToString;
+
+      // 获取该运营商的日志列表
+      LLogs := LOperatorObj.ObjectGet('logs');
+      if not LLogs.IsArray then Continue;
+
+      // 遍历所有日志
+      for J := 0 to LLogs.ArrayLen - 1 do
       begin
-        if Operators.Items[I].JSONType <> jtObject then Continue;
+        LLog := LLogs.ArrayGet(J);
+        if not LLog.IsObject then Continue;
 
-        OperatorObj := TJSONObject(Operators.Items[I]);
-        OperatorName := OperatorObj.Get('name', '');
-        
-        // 获取该运营商的日志列表
-        Logs := OperatorObj.Get('logs', TJSONArray(nil));
-        if Logs = nil then Continue;
-        
-        // 遍历所有日志
-        for J := 0 to Logs.Count - 1 do
-        begin
-          if Logs.Items[J].JSONType <> jtObject then Continue;
-          
-          Log := TJSONObject(Logs.Items[J]);
-          
-          // 提取日志信息
-          LogInfo.LogID := Log.Get('log_id', '');
-          LogInfo.Key := Log.Get('key', '');
-          LogInfo.URL := Log.Get('url', '');
-          LogInfo.Description := Log.Get('description', '');
-          LogInfo.OperatorName := OperatorName;
-          LogInfo.MaxMergeDelay := Log.Get('mmd', 86400);  // 默认 24 小时
-          
-          // 检查日志状态
-          LogInfo.IsUsable := Log.Get('state', TJSONObject(nil)) = nil;  // 没有 state 字段表示可用
-          
-          // 添加到列表
-          SetLength(FLogList, Length(FLogList) + 1);
-          FLogList[High(FLogList)] := LogInfo;
-        end;
+        // 提取日志信息
+        LogInfo.LogID := LLog.ObjectGet('log_id').AsStr.ToString;
+        LogInfo.Key := LLog.ObjectGet('key').AsStr.ToString;
+        LogInfo.URL := LLog.ObjectGet('url').AsStr.ToString;
+        LogInfo.Description := LLog.ObjectGet('description').AsStr.ToString;
+        LogInfo.OperatorName := OperatorName;
+
+        LStateVal := LLog.ObjectGet('mmd');
+        if LStateVal.IsValid then
+          LogInfo.MaxMergeDelay := LStateVal.AsInt
+        else
+          LogInfo.MaxMergeDelay := 86400;
+
+        // 检查日志状态 - 没有 state 字段表示可用
+        LogInfo.IsUsable := not LLog.ObjectHas('state');
+
+        // 添加到列表
+        SetLength(FLogList, Length(FLogList) + 1);
+        FLogList[High(FLogList)] := LogInfo;
       end;
-      
-      Result := Length(FLogList) > 0;
-    finally
-      JSON.Free;
     end;
+
+    Result := Length(FLogList) > 0;
   except
     on E: Exception do
-    begin
-      // 解析失败
       Result := False;
-    end;
   end;
 end;
 
@@ -374,49 +371,54 @@ end;
 function TCTLogClient.SaveToFile(const FileName: string): Boolean;
 var
   FileStream: IFile;
-  JSON: TJSONObject;
-  LogsArray: TJSONArray;
-  LogObj: TJSONObject;
+  LBuilder: IJsonBuilder;
   I: Integer;
   JSONStr: string;
   JSONBytes: TBytes;
 begin
   Result := False;
-  
+
   try
-    JSON := TJSONObject.Create;
-    try
-      LogsArray := TJSONArray.Create;
-      
-      // 将日志列表转换为 JSON
-      for I := 0 to High(FLogList) do
-      begin
-        LogObj := TJSONObject.Create;
-        LogObj.Add('log_id', FLogList[I].LogID);
-        LogObj.Add('key', FLogList[I].Key);
-        LogObj.Add('url', FLogList[I].URL);
-        LogObj.Add('description', FLogList[I].Description);
-        LogObj.Add('operator', FLogList[I].OperatorName);
-        LogObj.Add('mmd', FLogList[I].MaxMergeDelay);
-        LogObj.Add('usable', FLogList[I].IsUsable);
-        
-        LogsArray.Add(LogObj);
-      end;
-      
-      JSON.Add('logs', LogsArray);
-      JSON.Add('version', '1.0');
-      JSON.Add('timestamp', DateTimeToStr(nextpas.core.time.DateTimeNow));
-      
-      JSONStr := JSON.AsJSON;
-      JSONBytes := StringToUTF8Bytes(JSONStr);
-      
-      FileStream := FsCreate(FileName);
-      if Length(JSONBytes) > 0 then
-        FileStream.Write(JSONBytes[0], Length(JSONBytes));
-      Result := True;
-    finally
-      JSON.Free;
+    LBuilder := JsonBuilder;
+    LBuilder.BeginObject;
+
+    // logs array
+    LBuilder.Key('logs');
+    LBuilder.BeginArray;
+    for I := 0 to High(FLogList) do
+    begin
+      LBuilder.BeginObject;
+      LBuilder.Key('log_id');
+      LBuilder.Str(FLogList[I].LogID);
+      LBuilder.Key('key');
+      LBuilder.Str(FLogList[I].Key);
+      LBuilder.Key('url');
+      LBuilder.Str(FLogList[I].URL);
+      LBuilder.Key('description');
+      LBuilder.Str(FLogList[I].Description);
+      LBuilder.Key('operator');
+      LBuilder.Str(FLogList[I].OperatorName);
+      LBuilder.Key('mmd');
+      LBuilder.Int(FLogList[I].MaxMergeDelay);
+      LBuilder.Key('usable');
+      LBuilder.Bool(FLogList[I].IsUsable);
+      LBuilder.EndObject;
     end;
+    LBuilder.EndArray;
+
+    LBuilder.Key('version');
+    LBuilder.Str('1.0');
+    LBuilder.Key('timestamp');
+    LBuilder.Str(nextpas.core.time.DateTimeToStr(nextpas.core.time.DateTimeNow));
+
+    LBuilder.EndObject;
+    JSONStr := LBuilder.ToString;
+    JSONBytes := StringToUTF8Bytes(JSONStr);
+
+    FileStream := FsCreate(FileName);
+    if Length(JSONBytes) > 0 then
+      FileStream.Write(JSONBytes[0], Length(JSONBytes));
+    Result := True;
   except
     Result := False;
   end;

@@ -89,7 +89,7 @@ implementation
 uses
   nextpas.core.text.strings,
     nextpas.core.tls.factory,
-  fpjson, jsonparser;
+  nextpas.core.json.builder;
 
 { 内部辅助函数 }
 
@@ -484,51 +484,61 @@ end;
 
 function GenerateJSONReport(const ADiff: TCapabilityDiffResult): string;
 var
-  Root, Scores, Added, Removed, Changed: TJSONObject;
-  AddedArray, RemovedArray, ChangedArray: TJSONArray;
-  FieldObj: TJSONObject;
+  LBuilder: IJsonBuilder;
   i: Integer;
 begin
-  Root := TJSONObject.Create;
-  try
-    // 差异级别
-    Root.Add('differenceLevel', Ord(ADiff.DifferenceLevel));
-    Root.Add('summary', ADiff.Summary);
+  LBuilder := JsonBuilder;
+  LBuilder.BeginObject;
 
-    // 评分差异
-    Scores := TJSONObject.Create;
-    Scores.Add('security', ADiff.SecurityScoreDiff);
-    Scores.Add('performance', ADiff.PerformanceScoreDiff);
-    Scores.Add('compatibility', ADiff.CompatibilityLevelDiff);
-    Root.Add('scoreDiff', Scores);
+  // 差异级别
+  LBuilder.Key('differenceLevel');
+  LBuilder.Int(Ord(ADiff.DifferenceLevel));
+  LBuilder.Key('summary');
+  LBuilder.Str(ADiff.Summary);
 
-    // 新增功能
-    AddedArray := TJSONArray.Create;
-    for i := 0 to High(ADiff.AddedFeatures) do
-      AddedArray.Add(ADiff.AddedFeatures[i]);
-    Root.Add('addedFeatures', AddedArray);
+  // 评分差异
+  LBuilder.Key('scoreDiff');
+  LBuilder.BeginObject;
+  LBuilder.Key('security');
+  LBuilder.Int(ADiff.SecurityScoreDiff);
+  LBuilder.Key('performance');
+  LBuilder.Int(ADiff.PerformanceScoreDiff);
+  LBuilder.Key('compatibility');
+  LBuilder.Int(ADiff.CompatibilityLevelDiff);
+  LBuilder.EndObject;
 
-    // 缺失功能
-    RemovedArray := TJSONArray.Create;
-    for i := 0 to High(ADiff.RemovedFeatures) do
-      RemovedArray.Add(ADiff.RemovedFeatures[i]);
-    Root.Add('removedFeatures', RemovedArray);
+  // 新增功能
+  LBuilder.Key('addedFeatures');
+  LBuilder.BeginArray;
+  for i := 0 to High(ADiff.AddedFeatures) do
+    LBuilder.Str(ADiff.AddedFeatures[i]);
+  LBuilder.EndArray;
 
-    // 字段变更
-    ChangedArray := TJSONArray.Create;
-    for i := 0 to High(ADiff.ChangedFields) do
-    begin
-      FieldObj := TJSONObject.Create;
-      FieldObj.Add('field', ADiff.ChangedFields[i].FieldName);
-      FieldObj.Add('oldValue', ADiff.ChangedFields[i].OldValue);
-      FieldObj.Add('newValue', ADiff.ChangedFields[i].NewValue);
-      ChangedArray.Add(FieldObj);
-    end;
-    Root.Add('changedFields', ChangedArray);
+  // 缺失功能
+  LBuilder.Key('removedFeatures');
+  LBuilder.BeginArray;
+  for i := 0 to High(ADiff.RemovedFeatures) do
+    LBuilder.Str(ADiff.RemovedFeatures[i]);
+  LBuilder.EndArray;
 
-    Result := Root.FormatJSON;
-  finally
+  // 字段变更
+  LBuilder.Key('changedFields');
+  LBuilder.BeginArray;
+  for i := 0 to High(ADiff.ChangedFields) do
+  begin
+    LBuilder.BeginObject;
+    LBuilder.Key('field');
+    LBuilder.Str(ADiff.ChangedFields[i].FieldName);
+    LBuilder.Key('oldValue');
+    LBuilder.Str(ADiff.ChangedFields[i].OldValue);
+    LBuilder.Key('newValue');
+    LBuilder.Str(ADiff.ChangedFields[i].NewValue);
+    LBuilder.EndObject;
   end;
+  LBuilder.EndArray;
+
+  LBuilder.EndObject;
+  Result := LBuilder.ToString;
 end;
 
 { GenerateDiffReport - HTML format }

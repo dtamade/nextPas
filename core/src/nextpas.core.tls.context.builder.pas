@@ -192,7 +192,7 @@ uses
   nextpas.core.tls.freepascal.context.material,
   nextpas.core.tls.base64,
   nextpas.core.tls.logging,
-  fpjson, jsonparser;
+  nextpas.core.json, nextpas.core.json.builder;
 
 procedure LogBuilderContextLevelServerNameCompatibilityWarning(
   const ACallSite: string;
@@ -1640,285 +1640,354 @@ end;
 
 { Configuration Import/Export - Phase 2.1.3 }
 
-function ProtocolVersionsToJSONArray(const AProtocols: TSSLProtocolVersions): TJSONArray;
+function ProtocolVersionsToJSONArray(const AProtocols: TSSLProtocolVersions): string;
 var
+  LBuilder: IJsonBuilder;
   LProtocol: TSSLProtocolVersion;
 begin
-  Result := TJSONArray.Create;
+  LBuilder := JsonBuilder;
+  LBuilder.BeginArray;
   for LProtocol := Low(TSSLProtocolVersion) to High(TSSLProtocolVersion) do
     if LProtocol in AProtocols then
-      Result.Add(Ord(LProtocol));
+      LBuilder.Int(Ord(LProtocol));
+  LBuilder.EndArray;
+  Result := LBuilder.ToString;
 end;
 
-function CipherSupportToJSONArray(const ACiphers: TSSLCipherSupport): TJSONArray;
+function CipherSupportToJSONArray(const ACiphers: TSSLCipherSupport): string;
 var
+  LBuilder: IJsonBuilder;
   LCipher: TSSLCipher;
 begin
-  Result := TJSONArray.Create;
+  LBuilder := JsonBuilder;
+  LBuilder.BeginArray;
   for LCipher := Low(TSSLCipher) to High(TSSLCipher) do
     if LCipher in ACiphers then
-      Result.Add(Ord(LCipher));
+      LBuilder.Int(Ord(LCipher));
+  LBuilder.EndArray;
+  Result := LBuilder.ToString;
 end;
 
-function HashSupportToJSONArray(const AHashes: TSSLHashSupport): TJSONArray;
+function HashSupportToJSONArray(const AHashes: TSSLHashSupport): string;
 var
+  LBuilder: IJsonBuilder;
   LHash: TSSLHash;
 begin
-  Result := TJSONArray.Create;
+  LBuilder := JsonBuilder;
+  LBuilder.BeginArray;
   for LHash := Low(TSSLHash) to High(TSSLHash) do
     if LHash in AHashes then
-      Result.Add(Ord(LHash));
+      LBuilder.Int(Ord(LHash));
+  LBuilder.EndArray;
+  Result := LBuilder.ToString;
 end;
 
 function KeyExchangeSupportToJSONArray(
-  const AKeyExchanges: TSSLKeyExchangeSupport): TJSONArray;
+  const AKeyExchanges: TSSLKeyExchangeSupport): string;
 var
+  LBuilder: IJsonBuilder;
   LKeyExchange: TSSLKeyExchange;
 begin
-  Result := TJSONArray.Create;
+  LBuilder := JsonBuilder;
+  LBuilder.BeginArray;
   for LKeyExchange := Low(TSSLKeyExchange) to High(TSSLKeyExchange) do
     if LKeyExchange in AKeyExchanges then
-      Result.Add(Ord(LKeyExchange));
+      LBuilder.Int(Ord(LKeyExchange));
+  LBuilder.EndArray;
+  Result := LBuilder.ToString;
 end;
 
-function FeaturesToJSONArray(const AFeatures: TSSLFeatures): TJSONArray;
+function FeaturesToJSONArray(const AFeatures: TSSLFeatures): string;
 var
+  LBuilder: IJsonBuilder;
   LFeature: TSSLFeature;
 begin
-  Result := TJSONArray.Create;
+  LBuilder := JsonBuilder;
+  LBuilder.BeginArray;
   for LFeature := Low(TSSLFeature) to High(TSSLFeature) do
     if LFeature in AFeatures then
-      Result.Add(Ord(LFeature));
+      LBuilder.Int(Ord(LFeature));
+  LBuilder.EndArray;
+  Result := LBuilder.ToString;
 end;
 
 const
   CONTEXT_SERVER_NAME_COMPAT_MODE = 'deprecated_context_sni';
 
-procedure JSONArrayToProtocolVersions(AArray: TJSONArray; out AProtocols: TSSLProtocolVersions);
+procedure JSONArrayToProtocolVersions(const AArray: TJsonValue; out AProtocols: TSSLProtocolVersions);
 var
-  I: Integer;
+  I: UInt32;
 begin
   AProtocols := [];
-  if AArray = nil then
+  if not AArray.IsValid then
     Exit;
 
-  for I := 0 to AArray.Count - 1 do
-    Include(AProtocols, TSSLProtocolVersion(AArray.Integers[I]));
+  for I := 0 to AArray.ArrayLen - 1 do
+    Include(AProtocols, TSSLProtocolVersion(AArray.ArrayGet(I).AsInt));
 end;
 
-procedure JSONArrayToCipherSupport(AArray: TJSONArray; out ACiphers: TSSLCipherSupport);
+procedure JSONArrayToCipherSupport(const AArray: TJsonValue; out ACiphers: TSSLCipherSupport);
 var
-  I: Integer;
+  I: UInt32;
 begin
   ACiphers := [];
-  if AArray = nil then
+  if not AArray.IsValid then
     Exit;
 
-  for I := 0 to AArray.Count - 1 do
-    Include(ACiphers, TSSLCipher(AArray.Integers[I]));
+  for I := 0 to AArray.ArrayLen - 1 do
+    Include(ACiphers, TSSLCipher(AArray.ArrayGet(I).AsInt));
 end;
 
-procedure JSONArrayToHashSupport(AArray: TJSONArray; out AHashes: TSSLHashSupport);
+procedure JSONArrayToHashSupport(const AArray: TJsonValue; out AHashes: TSSLHashSupport);
 var
-  I: Integer;
+  I: UInt32;
 begin
   AHashes := [];
-  if AArray = nil then
+  if not AArray.IsValid then
     Exit;
 
-  for I := 0 to AArray.Count - 1 do
-    Include(AHashes, TSSLHash(AArray.Integers[I]));
+  for I := 0 to AArray.ArrayLen - 1 do
+    Include(AHashes, TSSLHash(AArray.ArrayGet(I).AsInt));
 end;
 
 procedure JSONArrayToKeyExchangeSupport(
-  AArray: TJSONArray; out AKeyExchanges: TSSLKeyExchangeSupport);
+  const AArray: TJsonValue; out AKeyExchanges: TSSLKeyExchangeSupport);
 var
-  I: Integer;
+  I: UInt32;
 begin
   AKeyExchanges := [];
-  if AArray = nil then
+  if not AArray.IsValid then
     Exit;
 
-  for I := 0 to AArray.Count - 1 do
-    Include(AKeyExchanges, TSSLKeyExchange(AArray.Integers[I]));
+  for I := 0 to AArray.ArrayLen - 1 do
+    Include(AKeyExchanges, TSSLKeyExchange(AArray.ArrayGet(I).AsInt));
 end;
 
-procedure JSONArrayToFeatures(AArray: TJSONArray; out AFeatures: TSSLFeatures);
+procedure JSONArrayToFeatures(const AArray: TJsonValue; out AFeatures: TSSLFeatures);
 var
-  I: Integer;
+  I: UInt32;
 begin
   AFeatures := [];
-  if AArray = nil then
+  if not AArray.IsValid then
     Exit;
 
-  for I := 0 to AArray.Count - 1 do
-    Include(AFeatures, TSSLFeature(AArray.Integers[I]));
+  for I := 0 to AArray.ArrayLen - 1 do
+    Include(AFeatures, TSSLFeature(AArray.ArrayGet(I).AsInt));
 end;
 
-function RequirementsToJSONObject(const ARequirements: TSSLRequirements): TJSONObject;
+function RequirementsToJSON(const ARequirements: TSSLRequirements): string;
+var
+  LBuilder: IJsonBuilder;
 begin
-  Result := TJSONObject.Create;
-  Result.Add('required_protocols', ProtocolVersionsToJSONArray(ARequirements.RequiredProtocols));
-  Result.Add('required_ciphers', CipherSupportToJSONArray(ARequirements.RequiredCiphers));
-  Result.Add('required_hashes', HashSupportToJSONArray(ARequirements.RequiredHashes));
-  Result.Add(
-    'required_key_exchanges',
-    KeyExchangeSupportToJSONArray(ARequirements.RequiredKeyExchanges)
-  );
-  Result.Add('required_features', FeaturesToJSONArray(ARequirements.RequiredFeatures));
-  Result.Add('preferred_ciphers', CipherSupportToJSONArray(ARequirements.PreferredCiphers));
-  Result.Add('preferred_hashes', HashSupportToJSONArray(ARequirements.PreferredHashes));
-  Result.Add('min_security_score', ARequirements.MinSecurityScore);
-  Result.Add('min_performance_score', ARequirements.MinPerformanceScore);
-  Result.Add('min_compatibility_level', ARequirements.MinCompatibilityLevel);
-  Result.Add('prefer_os_native', ARequirements.PlatformPreferences.PreferOSNative);
-  Result.Add('prefer_hardware_accel', ARequirements.PlatformPreferences.PreferHardwareAccel);
-  Result.Add('prefer_fips_compliant', ARequirements.PlatformPreferences.PreferFIPSCompliant);
-  Result.Add('require_pkcs11', ARequirements.PlatformPreferences.RequirePKCS11);
-  Result.Add('require_tpm', ARequirements.PlatformPreferences.RequireTPM);
-  Result.Add(
-    'require_system_cert_store',
-    ARequirements.PlatformPreferences.RequireSystemCertStore
-  );
-  Result.Add('optimization_target', Ord(ARequirements.OptimizationTarget));
+  LBuilder := JsonBuilder;
+  LBuilder.BeginObject;
+  LBuilder.Key('required_protocols');
+  LBuilder.RawJson(ProtocolVersionsToJSONArray(ARequirements.RequiredProtocols));
+  LBuilder.Key('required_ciphers');
+  LBuilder.RawJson(CipherSupportToJSONArray(ARequirements.RequiredCiphers));
+  LBuilder.Key('required_hashes');
+  LBuilder.RawJson(HashSupportToJSONArray(ARequirements.RequiredHashes));
+  LBuilder.Key('required_key_exchanges');
+  LBuilder.RawJson(KeyExchangeSupportToJSONArray(ARequirements.RequiredKeyExchanges));
+  LBuilder.Key('required_features');
+  LBuilder.RawJson(FeaturesToJSONArray(ARequirements.RequiredFeatures));
+  LBuilder.Key('preferred_ciphers');
+  LBuilder.RawJson(CipherSupportToJSONArray(ARequirements.PreferredCiphers));
+  LBuilder.Key('preferred_hashes');
+  LBuilder.RawJson(HashSupportToJSONArray(ARequirements.PreferredHashes));
+  LBuilder.Key('min_security_score');
+  LBuilder.Int(ARequirements.MinSecurityScore);
+  LBuilder.Key('min_performance_score');
+  LBuilder.Int(ARequirements.MinPerformanceScore);
+  LBuilder.Key('min_compatibility_level');
+  LBuilder.Int(ARequirements.MinCompatibilityLevel);
+  LBuilder.Key('prefer_os_native');
+  LBuilder.Bool(ARequirements.PlatformPreferences.PreferOSNative);
+  LBuilder.Key('prefer_hardware_accel');
+  LBuilder.Bool(ARequirements.PlatformPreferences.PreferHardwareAccel);
+  LBuilder.Key('prefer_fips_compliant');
+  LBuilder.Bool(ARequirements.PlatformPreferences.PreferFIPSCompliant);
+  LBuilder.Key('require_pkcs11');
+  LBuilder.Bool(ARequirements.PlatformPreferences.RequirePKCS11);
+  LBuilder.Key('require_tpm');
+  LBuilder.Bool(ARequirements.PlatformPreferences.RequireTPM);
+  LBuilder.Key('require_system_cert_store');
+  LBuilder.Bool(ARequirements.PlatformPreferences.RequireSystemCertStore);
+  LBuilder.Key('optimization_target');
+  LBuilder.Int(Ord(ARequirements.OptimizationTarget));
+  LBuilder.EndObject;
+  Result := LBuilder.ToString;
 end;
 
-procedure JSONObjectToRequirements(AObject: TJSONObject; out ARequirements: TSSLRequirements);
+procedure JSONObjectToRequirements(const AObject: TJsonValue; out ARequirements: TSSLRequirements);
 begin
   FillChar(ARequirements, SizeOf(ARequirements), 0);
-  if AObject = nil then
+  if not AObject.IsValid then
     Exit;
 
-  if AObject.IndexOfName('required_protocols') >= 0 then
-    JSONArrayToProtocolVersions(AObject.Arrays['required_protocols'], ARequirements.RequiredProtocols);
-  if AObject.IndexOfName('required_ciphers') >= 0 then
-    JSONArrayToCipherSupport(AObject.Arrays['required_ciphers'], ARequirements.RequiredCiphers);
-  if AObject.IndexOfName('required_hashes') >= 0 then
-    JSONArrayToHashSupport(AObject.Arrays['required_hashes'], ARequirements.RequiredHashes);
-  if AObject.IndexOfName('required_key_exchanges') >= 0 then
+  if AObject.ObjectHas('required_protocols') then
+    JSONArrayToProtocolVersions(AObject.ObjectGet('required_protocols'), ARequirements.RequiredProtocols);
+  if AObject.ObjectHas('required_ciphers') then
+    JSONArrayToCipherSupport(AObject.ObjectGet('required_ciphers'), ARequirements.RequiredCiphers);
+  if AObject.ObjectHas('required_hashes') then
+    JSONArrayToHashSupport(AObject.ObjectGet('required_hashes'), ARequirements.RequiredHashes);
+  if AObject.ObjectHas('required_key_exchanges') then
     JSONArrayToKeyExchangeSupport(
-      AObject.Arrays['required_key_exchanges'],
+      AObject.ObjectGet('required_key_exchanges'),
       ARequirements.RequiredKeyExchanges
     );
-  if AObject.IndexOfName('required_features') >= 0 then
-    JSONArrayToFeatures(AObject.Arrays['required_features'], ARequirements.RequiredFeatures);
-  if AObject.IndexOfName('preferred_ciphers') >= 0 then
-    JSONArrayToCipherSupport(AObject.Arrays['preferred_ciphers'], ARequirements.PreferredCiphers);
-  if AObject.IndexOfName('preferred_hashes') >= 0 then
-    JSONArrayToHashSupport(AObject.Arrays['preferred_hashes'], ARequirements.PreferredHashes);
-  if AObject.IndexOfName('min_security_score') >= 0 then
-    ARequirements.MinSecurityScore := AObject.Integers['min_security_score'];
-  if AObject.IndexOfName('min_performance_score') >= 0 then
-    ARequirements.MinPerformanceScore := AObject.Integers['min_performance_score'];
-  if AObject.IndexOfName('min_compatibility_level') >= 0 then
-    ARequirements.MinCompatibilityLevel := AObject.Integers['min_compatibility_level'];
-  if AObject.IndexOfName('prefer_os_native') >= 0 then
-    ARequirements.PlatformPreferences.PreferOSNative := AObject.Booleans['prefer_os_native'];
-  if AObject.IndexOfName('prefer_hardware_accel') >= 0 then
-    ARequirements.PlatformPreferences.PreferHardwareAccel := AObject.Booleans['prefer_hardware_accel'];
-  if AObject.IndexOfName('prefer_fips_compliant') >= 0 then
-    ARequirements.PlatformPreferences.PreferFIPSCompliant := AObject.Booleans['prefer_fips_compliant'];
-  if AObject.IndexOfName('require_pkcs11') >= 0 then
-    ARequirements.PlatformPreferences.RequirePKCS11 := AObject.Booleans['require_pkcs11'];
-  if AObject.IndexOfName('require_tpm') >= 0 then
-    ARequirements.PlatformPreferences.RequireTPM := AObject.Booleans['require_tpm'];
-  if AObject.IndexOfName('require_system_cert_store') >= 0 then
-    ARequirements.PlatformPreferences.RequireSystemCertStore := AObject.Booleans['require_system_cert_store'];
-  if AObject.IndexOfName('optimization_target') >= 0 then
-    ARequirements.OptimizationTarget := TSSLOptimizationTarget(AObject.Integers['optimization_target']);
+  if AObject.ObjectHas('required_features') then
+    JSONArrayToFeatures(AObject.ObjectGet('required_features'), ARequirements.RequiredFeatures);
+  if AObject.ObjectHas('preferred_ciphers') then
+    JSONArrayToCipherSupport(AObject.ObjectGet('preferred_ciphers'), ARequirements.PreferredCiphers);
+  if AObject.ObjectHas('preferred_hashes') then
+    JSONArrayToHashSupport(AObject.ObjectGet('preferred_hashes'), ARequirements.PreferredHashes);
+  if AObject.ObjectHas('min_security_score') then
+    ARequirements.MinSecurityScore := AObject.ObjectGet('min_security_score').AsInt;
+  if AObject.ObjectHas('min_performance_score') then
+    ARequirements.MinPerformanceScore := AObject.ObjectGet('min_performance_score').AsInt;
+  if AObject.ObjectHas('min_compatibility_level') then
+    ARequirements.MinCompatibilityLevel := AObject.ObjectGet('min_compatibility_level').AsInt;
+  if AObject.ObjectHas('prefer_os_native') then
+    ARequirements.PlatformPreferences.PreferOSNative := AObject.ObjectGet('prefer_os_native').AsBool;
+  if AObject.ObjectHas('prefer_hardware_accel') then
+    ARequirements.PlatformPreferences.PreferHardwareAccel := AObject.ObjectGet('prefer_hardware_accel').AsBool;
+  if AObject.ObjectHas('prefer_fips_compliant') then
+    ARequirements.PlatformPreferences.PreferFIPSCompliant := AObject.ObjectGet('prefer_fips_compliant').AsBool;
+  if AObject.ObjectHas('require_pkcs11') then
+    ARequirements.PlatformPreferences.RequirePKCS11 := AObject.ObjectGet('require_pkcs11').AsBool;
+  if AObject.ObjectHas('require_tpm') then
+    ARequirements.PlatformPreferences.RequireTPM := AObject.ObjectGet('require_tpm').AsBool;
+  if AObject.ObjectHas('require_system_cert_store') then
+    ARequirements.PlatformPreferences.RequireSystemCertStore := AObject.ObjectGet('require_system_cert_store').AsBool;
+  if AObject.ObjectHas('optimization_target') then
+    ARequirements.OptimizationTarget := TSSLOptimizationTarget(AObject.ObjectGet('optimization_target').AsInt);
 end;
 
 function TSSLContextBuilderImpl.ExportToJSON: string;
 var
-  LRoot: TJSONObject;
-  LProtocols: TJSONArray;
-  LVerify: TJSONArray;
-  LOptions: TJSONArray;
+  LBuilder: IJsonBuilder;
   LProto: TSSLProtocolVersion;
   LVerifyMode: TSSLVerifyMode;
   LOption: TSSLOption;
 begin
-  LRoot := TJSONObject.Create;
-  try
-    // Protocol versions
-    LProtocols := TJSONArray.Create;
-    for LProto := Low(TSSLProtocolVersion) to High(TSSLProtocolVersion) do
-      if LProto in FProtocolVersions then
-        LProtocols.Add(Ord(LProto));
-    LRoot.Add('protocols', LProtocols);
+  LBuilder := JsonBuilder;
+  LBuilder.BeginObject;
 
-    // Verification mode
-    LVerify := TJSONArray.Create;
-    for LVerifyMode := Low(TSSLVerifyMode) to High(TSSLVerifyMode) do
-      if LVerifyMode in FVerifyMode then
-        LVerify.Add(Ord(LVerifyMode));
-    LRoot.Add('verify_modes', LVerify);
-    LRoot.Add('verify_mode_explicit', FVerifyModeExplicit);
-    LRoot.Add('verify_depth', FVerifyDepth);
+  // Protocol versions
+  LBuilder.Key('protocols');
+  LBuilder.BeginArray;
+  for LProto := Low(TSSLProtocolVersion) to High(TSSLProtocolVersion) do
+    if LProto in FProtocolVersions then
+      LBuilder.Int(Ord(LProto));
+  LBuilder.EndArray;
 
-    // Certificate configuration
-    LRoot.Add('certificate_file', FCertificateFile);
-    LRoot.Add('certificate_pem', FCertificatePEM);
-    LRoot.Add('private_key_file', FPrivateKeyFile);
-    LRoot.Add('private_key_pem', FPrivateKeyPEM);
-    LRoot.Add('pkcs11_uri', FPKCS11URI);
-    if IsSerializablePKCS11PINSourceMethod(FPKCS11PINMethod) then
-    begin
-      LRoot.Add('pkcs11_pin_method', Ord(FPKCS11PINMethod));
-      LRoot.Add('pkcs11_pin', FPKCS11PIN);
-    end;
-    LRoot.Add('ca_file', FCAFile);
-    LRoot.Add('ca_path', FCAPath);
-    LRoot.Add('use_system_roots', FUseSystemRoots);
+  // Verification mode
+  LBuilder.Key('verify_modes');
+  LBuilder.BeginArray;
+  for LVerifyMode := Low(TSSLVerifyMode) to High(TSSLVerifyMode) do
+    if LVerifyMode in FVerifyMode then
+      LBuilder.Int(Ord(LVerifyMode));
+  LBuilder.EndArray;
+  LBuilder.Key('verify_mode_explicit');
+  LBuilder.Bool(FVerifyModeExplicit);
+  LBuilder.Key('verify_depth');
+  LBuilder.Int(FVerifyDepth);
 
-    // Cipher configuration
-    LRoot.Add('cipher_list', FCipherList);
-    LRoot.Add('tls13_ciphersuites', FTLS13Ciphersuites);
-
-    // Advanced options
-    LRoot.Add('server_name', FServerName);
-    if FServerName <> '' then
-      LRoot.Add('server_name_mode', CONTEXT_SERVER_NAME_COMPAT_MODE);
-    LRoot.Add('alpn_protocols', FALPNProtocols);
-    LRoot.Add('session_cache_enabled', FSessionCacheEnabled);
-    LRoot.Add('session_timeout', FSessionTimeout);
-    LRoot.Add('client_early_data_enabled', FClientEarlyDataEnabled);
-    LRoot.Add('server_early_data_policy', Ord(FServerEarlyDataPolicy));
-    LRoot.Add('server_max_early_data_size', Int64(FServerMaxEarlyDataSize));
-    LRoot.Add('server_early_data_replay_store_file', FServerEarlyDataReplayStoreFile);
-    LRoot.Add('server_early_data_replay_store_directory', FServerEarlyDataReplayStoreDirectory);
-    if FAutoSelectBackend then
-    begin
-      LRoot.Add('auto_select_backend', True);
-      LRoot.Add('backend_requirements', RequirementsToJSONObject(FBackendRequirements));
-    end
-    else if FExplicitBackendSet then
-      LRoot.Add('explicit_backend', Ord(FExplicitBackend));
-
-    // Options
-    LOptions := TJSONArray.Create;
-    for LOption := Low(TSSLOption) to High(TSSLOption) do
-      if LOption in FOptions then
-        LOptions.Add(Ord(LOption));
-    LRoot.Add('options', LOptions);
-
-    // OCSP Stapling
-    LRoot.Add('ocsp_stapling_enabled', FOCSPStaplingEnabled);
-    LRoot.Add('ocsp_stapling_required', FOCSPStaplingRequired);
-    LRoot.Add('server_ocsp_stapled_response_file', FServerOCSPStapledResponseFile);
-    LRoot.Add('certificate_transparency_required', FCertificateTransparencyRequired);
-
-    Result := LRoot.FormatJSON;
-  finally
+  // Certificate configuration
+  LBuilder.Key('certificate_file');
+  LBuilder.Str(FCertificateFile);
+  LBuilder.Key('certificate_pem');
+  LBuilder.Str(FCertificatePEM);
+  LBuilder.Key('private_key_file');
+  LBuilder.Str(FPrivateKeyFile);
+  LBuilder.Key('private_key_pem');
+  LBuilder.Str(FPrivateKeyPEM);
+  LBuilder.Key('pkcs11_uri');
+  LBuilder.Str(FPKCS11URI);
+  if IsSerializablePKCS11PINSourceMethod(FPKCS11PINMethod) then
+  begin
+    LBuilder.Key('pkcs11_pin_method');
+    LBuilder.Int(Ord(FPKCS11PINMethod));
+    LBuilder.Key('pkcs11_pin');
+    LBuilder.Str(FPKCS11PIN);
   end;
+  LBuilder.Key('ca_file');
+  LBuilder.Str(FCAFile);
+  LBuilder.Key('ca_path');
+  LBuilder.Str(FCAPath);
+  LBuilder.Key('use_system_roots');
+  LBuilder.Bool(FUseSystemRoots);
+
+  // Cipher configuration
+  LBuilder.Key('cipher_list');
+  LBuilder.Str(FCipherList);
+  LBuilder.Key('tls13_ciphersuites');
+  LBuilder.Str(FTLS13Ciphersuites);
+
+  // Advanced options
+  LBuilder.Key('server_name');
+  LBuilder.Str(FServerName);
+  if FServerName <> '' then
+  begin
+    LBuilder.Key('server_name_mode');
+    LBuilder.Str(CONTEXT_SERVER_NAME_COMPAT_MODE);
+  end;
+  LBuilder.Key('alpn_protocols');
+  LBuilder.Str(FALPNProtocols);
+  LBuilder.Key('session_cache_enabled');
+  LBuilder.Bool(FSessionCacheEnabled);
+  LBuilder.Key('session_timeout');
+  LBuilder.Int(FSessionTimeout);
+  LBuilder.Key('client_early_data_enabled');
+  LBuilder.Bool(FClientEarlyDataEnabled);
+  LBuilder.Key('server_early_data_policy');
+  LBuilder.Int(Ord(FServerEarlyDataPolicy));
+  LBuilder.Key('server_max_early_data_size');
+  LBuilder.Int(Int64(FServerMaxEarlyDataSize));
+  LBuilder.Key('server_early_data_replay_store_file');
+  LBuilder.Str(FServerEarlyDataReplayStoreFile);
+  LBuilder.Key('server_early_data_replay_store_directory');
+  LBuilder.Str(FServerEarlyDataReplayStoreDirectory);
+  if FAutoSelectBackend then
+  begin
+    LBuilder.Key('auto_select_backend');
+    LBuilder.Bool(True);
+    LBuilder.Key('backend_requirements');
+    LBuilder.RawJson(RequirementsToJSON(FBackendRequirements));
+  end
+  else if FExplicitBackendSet then
+  begin
+    LBuilder.Key('explicit_backend');
+    LBuilder.Int(Ord(FExplicitBackend));
+  end;
+
+  // Options
+  LBuilder.Key('options');
+  LBuilder.BeginArray;
+  for LOption := Low(TSSLOption) to High(TSSLOption) do
+    if LOption in FOptions then
+      LBuilder.Int(Ord(LOption));
+  LBuilder.EndArray;
+
+  // OCSP Stapling
+  LBuilder.Key('ocsp_stapling_enabled');
+  LBuilder.Bool(FOCSPStaplingEnabled);
+  LBuilder.Key('ocsp_stapling_required');
+  LBuilder.Bool(FOCSPStaplingRequired);
+  LBuilder.Key('server_ocsp_stapled_response_file');
+  LBuilder.Str(FServerOCSPStapledResponseFile);
+  LBuilder.Key('certificate_transparency_required');
+  LBuilder.Bool(FCertificateTransparencyRequired);
+
+  LBuilder.EndObject;
+  Result := LBuilder.ToString;
 end;
 
 function TSSLContextBuilderImpl.ImportFromJSON(const AJSON: string): ISSLContextBuilder;
 var
-  LRoot: TJSONData;
-  LBackendRequirementsData: TJSONData;
-  LPKCS11PINMethodData: TJSONData;
-  LProtocols, LVerify, LOptions: TJSONArray;
+  LDoc: IJsonDocument;
+  LRoot, LBackendReq, LProtocolsArr, LVerifyArr, LOptionsArr, LPKCS11PINMethodVal: TJsonValue;
   LImportedRequirements: TSSLRequirements;
   LImportedExplicitBackend: TSSLLibraryType;
   LImportedPKCS11PINMethod: TPKCS11PINMethod;
@@ -1928,7 +1997,7 @@ var
   LHasExplicitBackend: Boolean;
   LHasAutoSelectBackend: Boolean;
   LAutoSelectBackend: Boolean;
-  I: Integer;
+  I: UInt32;
 begin
   Result := Self;
 
@@ -1942,202 +2011,200 @@ begin
   LHasAutoSelectBackend := False;
   LAutoSelectBackend := False;
 
-  LRoot := GetJSON(AJSON);
-  try
-    if not (LRoot is TJSONObject) then
-      Exit;
+  LDoc := JsonParse(AJSON);
+  if LDoc.HasError then
+    Exit;
 
-    with TJSONObject(LRoot) do
+  LRoot := LDoc.Root;
+  if not LRoot.IsObject then
+    Exit;
+
+  // Protocol versions
+  if LRoot.ObjectHas('protocols') then
+  begin
+    LProtocolsArr := LRoot.ObjectGet('protocols');
+    FProtocolVersions := [];
+    for I := 0 to LProtocolsArr.ArrayLen - 1 do
+      if IsValidProtocolVersionOrdinal(LProtocolsArr.ArrayGet(I).AsInt) then
+        Include(FProtocolVersions, TSSLProtocolVersion(LProtocolsArr.ArrayGet(I).AsInt));
+  end;
+
+  // Verification mode
+  if LRoot.ObjectHas('verify_modes') then
+  begin
+    LVerifyArr := LRoot.ObjectGet('verify_modes');
+    FVerifyMode := [];
+    for I := 0 to LVerifyArr.ArrayLen - 1 do
+      if IsValidVerifyModeOrdinal(LVerifyArr.ArrayGet(I).AsInt) then
+        Include(FVerifyMode, TSSLVerifyMode(LVerifyArr.ArrayGet(I).AsInt));
+  end;
+
+  if LRoot.ObjectHas('verify_mode_explicit') then
+  begin
+    LImportedVerifyModeExplicit := LRoot.ObjectGet('verify_mode_explicit').AsBool;
+    LHasImportedVerifyModeExplicit := True;
+  end;
+
+  if LRoot.ObjectHas('verify_depth') then
+    FVerifyDepth := LRoot.ObjectGet('verify_depth').AsInt;
+
+  // Certificate configuration
+  if LRoot.ObjectHas('certificate_file') then
+  begin
+    FCertificateFile := LRoot.ObjectGet('certificate_file').AsStr.ToString;
+    FCertificatePEM := '';
+  end;
+  if LRoot.ObjectHas('certificate_pem') then
+  begin
+    FCertificatePEM := LRoot.ObjectGet('certificate_pem').AsStr.ToString;
+    FCertificateFile := '';
+  end;
+  if LRoot.ObjectHas('private_key_file') then
+  begin
+    FPrivateKeyFile := LRoot.ObjectGet('private_key_file').AsStr.ToString;
+    FPrivateKeyPEM := '';
+  end;
+  if LRoot.ObjectHas('private_key_pem') then
+  begin
+    FPrivateKeyPEM := LRoot.ObjectGet('private_key_pem').AsStr.ToString;
+    FPrivateKeyFile := '';
+  end;
+  if LRoot.ObjectHas('pkcs11_uri') then
+    FPKCS11URI := LRoot.ObjectGet('pkcs11_uri').AsStr.ToString;
+  LPKCS11PINMethodVal := LRoot.ObjectGet('pkcs11_pin_method');
+  if LPKCS11PINMethodVal.IsValid then
+  begin
+    if LPKCS11PINMethodVal.IsInt and
+      TryParsePKCS11PINMethodOrdinal(LPKCS11PINMethodVal.AsInt, LImportedPKCS11PINMethod) then
     begin
-      // Protocol versions
-      if IndexOfName('protocols') >= 0 then
-      begin
-        LProtocols := Arrays['protocols'];
-        FProtocolVersions := [];
-        for I := 0 to LProtocols.Count - 1 do
-          if IsValidProtocolVersionOrdinal(LProtocols.Integers[I]) then
-            Include(FProtocolVersions, TSSLProtocolVersion(LProtocols.Integers[I]));
-      end;
-
-      // Verification mode
-      if IndexOfName('verify_modes') >= 0 then
-      begin
-        LVerify := Arrays['verify_modes'];
-        FVerifyMode := [];
-        for I := 0 to LVerify.Count - 1 do
-          if IsValidVerifyModeOrdinal(LVerify.Integers[I]) then
-            Include(FVerifyMode, TSSLVerifyMode(LVerify.Integers[I]));
-      end;
-
-      if IndexOfName('verify_mode_explicit') >= 0 then
-      begin
-        LImportedVerifyModeExplicit := Booleans['verify_mode_explicit'];
-        LHasImportedVerifyModeExplicit := True;
-      end;
-
-      if IndexOfName('verify_depth') >= 0 then
-        FVerifyDepth := Integers['verify_depth'];
-
-      // Certificate configuration
-      if IndexOfName('certificate_file') >= 0 then
-      begin
-        FCertificateFile := Strings['certificate_file'];
-        FCertificatePEM := '';
-      end;
-      if IndexOfName('certificate_pem') >= 0 then
-      begin
-        FCertificatePEM := Strings['certificate_pem'];
-        FCertificateFile := '';
-      end;
-      if IndexOfName('private_key_file') >= 0 then
-      begin
-        FPrivateKeyFile := Strings['private_key_file'];
-        FPrivateKeyPEM := '';
-      end;
-      if IndexOfName('private_key_pem') >= 0 then
-      begin
-        FPrivateKeyPEM := Strings['private_key_pem'];
-        FPrivateKeyFile := '';
-      end;
-      if IndexOfName('pkcs11_uri') >= 0 then
-        FPKCS11URI := Strings['pkcs11_uri'];
-      LPKCS11PINMethodData := FindPath('pkcs11_pin_method');
-      if Assigned(LPKCS11PINMethodData) then
-      begin
-        if (LPKCS11PINMethodData.JSONType = jtNumber) and
-          TryParsePKCS11PINMethodOrdinal(LPKCS11PINMethodData.AsInteger, LImportedPKCS11PINMethod) then
-        begin
-          FPKCS11PINMethod := LImportedPKCS11PINMethod;
-          LHasImportedPKCS11PINMethod := True;
-        end
-        else if (LPKCS11PINMethodData.JSONType = jtString) and
-                TryParsePKCS11PINMethodValue(LPKCS11PINMethodData.AsString, LImportedPKCS11PINMethod) then
-        begin
-          FPKCS11PINMethod := LImportedPKCS11PINMethod;
-          LHasImportedPKCS11PINMethod := True;
-        end;
-      end;
-      if IndexOfName('pkcs11_pin') >= 0 then
-      begin
-        FPKCS11PIN := Strings['pkcs11_pin'];
-        if not LHasImportedPKCS11PINMethod then
-          FPKCS11PINMethod := pmValue;
-      end;
-      if IndexOfName('ca_file') >= 0 then
-        FCAFile := Strings['ca_file'];
-      if IndexOfName('ca_path') >= 0 then
-        FCAPath := Strings['ca_path'];
-      if IndexOfName('use_system_roots') >= 0 then
-        FUseSystemRoots := Booleans['use_system_roots'];
-
-      // Cipher configuration
-      if IndexOfName('cipher_list') >= 0 then
-        FCipherList := Strings['cipher_list'];
-      if IndexOfName('tls13_ciphersuites') >= 0 then
-        FTLS13Ciphersuites := Strings['tls13_ciphersuites'];
-
-      // Advanced options
-      if IndexOfName('server_name') >= 0 then
-        FServerName := Strings['server_name'];
-      if IndexOfName('server_name_mode') >= 0 then
-      begin
-        // Compatibility metadata only; keep accepting it without changing runtime state.
-      end;
-      if IndexOfName('alpn_protocols') >= 0 then
-        FALPNProtocols := Strings['alpn_protocols'];
-      if IndexOfName('session_cache_enabled') >= 0 then
-        FSessionCacheEnabled := Booleans['session_cache_enabled'];
-      if IndexOfName('session_timeout') >= 0 then
-        FSessionTimeout := Integers['session_timeout'];
-      if IndexOfName('client_early_data_enabled') >= 0 then
-        FClientEarlyDataEnabled := Booleans['client_early_data_enabled'];
-      if IndexOfName('server_early_data_policy') >= 0 then
-        if IsValidEarlyDataPolicyOrdinal(Integers['server_early_data_policy']) then
-          FServerEarlyDataPolicy := TSSLEarlyDataServerPolicy(Integers['server_early_data_policy']);
-      if IndexOfName('server_max_early_data_size') >= 0 then
-        FServerMaxEarlyDataSize := Cardinal(Integers['server_max_early_data_size']);
-      if IndexOfName('server_early_data_replay_store_file') >= 0 then
-        FServerEarlyDataReplayStoreFile := Strings['server_early_data_replay_store_file'];
-      if IndexOfName('server_early_data_replay_store_directory') >= 0 then
-        FServerEarlyDataReplayStoreDirectory := Strings['server_early_data_replay_store_directory'];
-      if IndexOfName('explicit_backend') >= 0 then
-      begin
-        if IsValidLibraryTypeOrdinal(Integers['explicit_backend']) then
-        begin
-          LImportedExplicitBackend := TSSLLibraryType(Integers['explicit_backend']);
-          LHasExplicitBackend := True;
-        end;
-      end;
-      if IndexOfName('auto_select_backend') >= 0 then
-      begin
-        LHasAutoSelectBackend := True;
-        LAutoSelectBackend := Booleans['auto_select_backend'];
-        if LAutoSelectBackend then
-        begin
-          LBackendRequirementsData := FindPath('backend_requirements');
-          if (LBackendRequirementsData <> nil) and (LBackendRequirementsData is TJSONObject) then
-            JSONObjectToRequirements(TJSONObject(LBackendRequirementsData), LImportedRequirements);
-        end;
-      end;
-
-      // Options
-      if IndexOfName('options') >= 0 then
-      begin
-        LOptions := Arrays['options'];
-        FOptions := [];
-        for I := 0 to LOptions.Count - 1 do
-          if IsValidOptionOrdinal(LOptions.Integers[I]) then
-            Include(FOptions, TSSLOption(LOptions.Integers[I]));
-      end;
-
-      // OCSP Stapling
-      if IndexOfName('ocsp_stapling_enabled') >= 0 then
-        FOCSPStaplingEnabled := Booleans['ocsp_stapling_enabled'];
-      if IndexOfName('ocsp_stapling_required') >= 0 then
-        FOCSPStaplingRequired := Booleans['ocsp_stapling_required'];
-      if IndexOfName('server_ocsp_stapled_response_file') >= 0 then
-        FServerOCSPStapledResponseFile := Strings['server_ocsp_stapled_response_file'];
-      if IndexOfName('certificate_transparency_required') >= 0 then
-        FCertificateTransparencyRequired := Booleans['certificate_transparency_required'];
-
-      if LHasAutoSelectBackend and LAutoSelectBackend then
-      begin
-        FAutoSelectBackend := True;
-        FBackendRequirements := LImportedRequirements;
-        FExplicitBackend := sslOpenSSL;
-        FExplicitBackendSet := False;
-      end
-      else if LHasExplicitBackend then
-      begin
-        FExplicitBackend := LImportedExplicitBackend;
-        FExplicitBackendSet := True;
-        FAutoSelectBackend := False;
-      end;
-
-      SyncOCSPStaplingOptions;
-      SyncCertificateTransparencyOptions;
-
-      if IndexOfName('verify_modes') >= 0 then
-      begin
-        if LHasImportedVerifyModeExplicit then
-          FVerifyModeExplicit := LImportedVerifyModeExplicit
-        else
-          FVerifyModeExplicit := ImportedVerifyModeIsExplicit(
-            FVerifyMode,
-            FCAFile,
-            FCAPath,
-            FUseSystemRoots
-          );
-      end;
+      FPKCS11PINMethod := LImportedPKCS11PINMethod;
+      LHasImportedPKCS11PINMethod := True;
+    end
+    else if LPKCS11PINMethodVal.IsStr and
+            TryParsePKCS11PINMethodValue(LPKCS11PINMethodVal.AsStr.ToString, LImportedPKCS11PINMethod) then
+    begin
+      FPKCS11PINMethod := LImportedPKCS11PINMethod;
+      LHasImportedPKCS11PINMethod := True;
     end;
-  finally
+  end;
+  if LRoot.ObjectHas('pkcs11_pin') then
+  begin
+    FPKCS11PIN := LRoot.ObjectGet('pkcs11_pin').AsStr.ToString;
+    if not LHasImportedPKCS11PINMethod then
+      FPKCS11PINMethod := pmValue;
+  end;
+  if LRoot.ObjectHas('ca_file') then
+    FCAFile := LRoot.ObjectGet('ca_file').AsStr.ToString;
+  if LRoot.ObjectHas('ca_path') then
+    FCAPath := LRoot.ObjectGet('ca_path').AsStr.ToString;
+  if LRoot.ObjectHas('use_system_roots') then
+    FUseSystemRoots := LRoot.ObjectGet('use_system_roots').AsBool;
+
+  // Cipher configuration
+  if LRoot.ObjectHas('cipher_list') then
+    FCipherList := LRoot.ObjectGet('cipher_list').AsStr.ToString;
+  if LRoot.ObjectHas('tls13_ciphersuites') then
+    FTLS13Ciphersuites := LRoot.ObjectGet('tls13_ciphersuites').AsStr.ToString;
+
+  // Advanced options
+  if LRoot.ObjectHas('server_name') then
+    FServerName := LRoot.ObjectGet('server_name').AsStr.ToString;
+  if LRoot.ObjectHas('server_name_mode') then
+  begin
+    // Compatibility metadata only; keep accepting it without changing runtime state.
+  end;
+  if LRoot.ObjectHas('alpn_protocols') then
+    FALPNProtocols := LRoot.ObjectGet('alpn_protocols').AsStr.ToString;
+  if LRoot.ObjectHas('session_cache_enabled') then
+    FSessionCacheEnabled := LRoot.ObjectGet('session_cache_enabled').AsBool;
+  if LRoot.ObjectHas('session_timeout') then
+    FSessionTimeout := LRoot.ObjectGet('session_timeout').AsInt;
+  if LRoot.ObjectHas('client_early_data_enabled') then
+    FClientEarlyDataEnabled := LRoot.ObjectGet('client_early_data_enabled').AsBool;
+  if LRoot.ObjectHas('server_early_data_policy') then
+    if IsValidEarlyDataPolicyOrdinal(LRoot.ObjectGet('server_early_data_policy').AsInt) then
+      FServerEarlyDataPolicy := TSSLEarlyDataServerPolicy(LRoot.ObjectGet('server_early_data_policy').AsInt);
+  if LRoot.ObjectHas('server_max_early_data_size') then
+    FServerMaxEarlyDataSize := Cardinal(LRoot.ObjectGet('server_max_early_data_size').AsInt);
+  if LRoot.ObjectHas('server_early_data_replay_store_file') then
+    FServerEarlyDataReplayStoreFile := LRoot.ObjectGet('server_early_data_replay_store_file').AsStr.ToString;
+  if LRoot.ObjectHas('server_early_data_replay_store_directory') then
+    FServerEarlyDataReplayStoreDirectory := LRoot.ObjectGet('server_early_data_replay_store_directory').AsStr.ToString;
+  if LRoot.ObjectHas('explicit_backend') then
+  begin
+    if IsValidLibraryTypeOrdinal(LRoot.ObjectGet('explicit_backend').AsInt) then
+    begin
+      LImportedExplicitBackend := TSSLLibraryType(LRoot.ObjectGet('explicit_backend').AsInt);
+      LHasExplicitBackend := True;
+    end;
+  end;
+  if LRoot.ObjectHas('auto_select_backend') then
+  begin
+    LHasAutoSelectBackend := True;
+    LAutoSelectBackend := LRoot.ObjectGet('auto_select_backend').AsBool;
+    if LAutoSelectBackend then
+    begin
+      LBackendReq := LRoot.ObjectGet('backend_requirements');
+      if LBackendReq.IsValid and LBackendReq.IsObject then
+        JSONObjectToRequirements(LBackendReq, LImportedRequirements);
+    end;
+  end;
+
+  // Options
+  if LRoot.ObjectHas('options') then
+  begin
+    LOptionsArr := LRoot.ObjectGet('options');
+    FOptions := [];
+    for I := 0 to LOptionsArr.ArrayLen - 1 do
+      if IsValidOptionOrdinal(LOptionsArr.ArrayGet(I).AsInt) then
+        Include(FOptions, TSSLOption(LOptionsArr.ArrayGet(I).AsInt));
+  end;
+
+  // OCSP Stapling
+  if LRoot.ObjectHas('ocsp_stapling_enabled') then
+    FOCSPStaplingEnabled := LRoot.ObjectGet('ocsp_stapling_enabled').AsBool;
+  if LRoot.ObjectHas('ocsp_stapling_required') then
+    FOCSPStaplingRequired := LRoot.ObjectGet('ocsp_stapling_required').AsBool;
+  if LRoot.ObjectHas('server_ocsp_stapled_response_file') then
+    FServerOCSPStapledResponseFile := LRoot.ObjectGet('server_ocsp_stapled_response_file').AsStr.ToString;
+  if LRoot.ObjectHas('certificate_transparency_required') then
+    FCertificateTransparencyRequired := LRoot.ObjectGet('certificate_transparency_required').AsBool;
+
+  if LHasAutoSelectBackend and LAutoSelectBackend then
+  begin
+    FAutoSelectBackend := True;
+    FBackendRequirements := LImportedRequirements;
+    FExplicitBackend := sslOpenSSL;
+    FExplicitBackendSet := False;
+  end
+  else if LHasExplicitBackend then
+  begin
+    FExplicitBackend := LImportedExplicitBackend;
+    FExplicitBackendSet := True;
+    FAutoSelectBackend := False;
+  end;
+
+  SyncOCSPStaplingOptions;
+  SyncCertificateTransparencyOptions;
+
+  if LRoot.ObjectHas('verify_modes') then
+  begin
+    if LHasImportedVerifyModeExplicit then
+      FVerifyModeExplicit := LImportedVerifyModeExplicit
+    else
+      FVerifyModeExplicit := ImportedVerifyModeIsExplicit(
+        FVerifyMode,
+        FCAFile,
+        FCAPath,
+        FUseSystemRoots
+      );
   end;
 end;
 
 function TSSLContextBuilderImpl.ExportToINI: string;
 var
   LLines: TStringArray;
-  LBackendRequirements: TJSONObject;
+  LBackendRequirementsStr: string;
   LProto: TSSLProtocolVersion;
   LVerifyMode: TSSLVerifyMode;
   LOption: TSSLOption;
@@ -2237,14 +2304,11 @@ begin
 
     if FAutoSelectBackend then
     begin
-      LBackendRequirements := RequirementsToJSONObject(FBackendRequirements);
-      try
-        LLines.Add('[Backend Selection]');
-        LLines.Add('auto_select_backend=true');
-        LLines.Add('backend_requirements=' + LBackendRequirements.AsJSON);
-        LLines.Add('');
-      finally
-      end;
+      LBackendRequirementsStr := RequirementsToJSON(FBackendRequirements);
+      LLines.Add('[Backend Selection]');
+      LLines.Add('auto_select_backend=true');
+      LLines.Add('backend_requirements=' + LBackendRequirementsStr);
+      LLines.Add('');
     end;
 
     // Options
@@ -2288,7 +2352,7 @@ end;
 function TSSLContextBuilderImpl.ImportFromINI(const AINI: string): ISSLContextBuilder;
 var
   LLines: TStringArray;
-  LBackendRequirementsData: TJSONData;
+  LBackendRequirementsDoc: IJsonDocument;
   I: Integer;
   LLine, LKey, LValue: string;
   LPos: Integer;
@@ -2460,12 +2524,10 @@ begin
           if LValue <> '' then
           begin
             try
-              LBackendRequirementsData := GetJSON(LValue);
-              try
-                if LBackendRequirementsData is TJSONObject then
-                  JSONObjectToRequirements(TJSONObject(LBackendRequirementsData), LImportedRequirements);
-              finally
-              end;
+              LBackendRequirementsDoc := JsonParse(LValue);
+              if (not LBackendRequirementsDoc.HasError) and
+                 LBackendRequirementsDoc.Root.IsObject then
+                JSONObjectToRequirements(LBackendRequirementsDoc.Root, LImportedRequirements);
             except
               // Ignore malformed serialized requirement payloads.
             end;
@@ -2645,10 +2707,8 @@ end;
 function TSSLContextBuilderImpl.Merge(ASource: ISSLContextBuilder): ISSLContextBuilder;
 var
   LSourceJSON: string;
-  LData: TJSONData;
-  LBackendRequirementsData: TJSONData;
-  LObj: TJSONObject;
-  LProtocols, LVerify, LOptions: TJSONArray;
+  LDoc: IJsonDocument;
+  LObj, LBackendReq, LProtocolsArr, LVerifyArr, LOptionsArr: TJsonValue;
   LImportedRequirements: TSSLRequirements;
   LImportedExplicitBackend: TSSLLibraryType;
   LImportedPKCS11PINMethod: TPKCS11PINMethod;
@@ -2658,7 +2718,8 @@ var
   LHasAutoSelectBackend: Boolean;
   LHasVerifyModes: Boolean;
   LAutoSelectBackend: Boolean;
-  I: Integer;
+  I: UInt32;
+  LStrValue: string;
 begin
   Result := Self;
 
@@ -2677,201 +2738,245 @@ begin
   LHasVerifyModes := False;
   LAutoSelectBackend := False;
 
-  LData := GetJSON(LSourceJSON);
-  try
-    if not (LData is TJSONObject) then
-      Exit;
+  LDoc := JsonParse(LSourceJSON);
+  if LDoc.HasError then
+    Exit;
 
-    LObj := TJSONObject(LData);
+  LObj := LDoc.Root;
+  if not LObj.IsObject then
+    Exit;
 
-    // Merge protocols if specified
-    if LObj.IndexOfName('protocols') >= 0 then
+  // Merge protocols if specified
+  if LObj.ObjectHas('protocols') then
+  begin
+    LProtocolsArr := LObj.ObjectGet('protocols');
+    if LProtocolsArr.ArrayLen > 0 then
     begin
-      LProtocols := LObj.Arrays['protocols'];
-      if LProtocols.Count > 0 then
-      begin
-        FProtocolVersions := [];
-        for I := 0 to LProtocols.Count - 1 do
-          if IsValidProtocolVersionOrdinal(LProtocols.Integers[I]) then
-            Include(FProtocolVersions, TSSLProtocolVersion(LProtocols.Integers[I]));
-      end;
+      FProtocolVersions := [];
+      for I := 0 to LProtocolsArr.ArrayLen - 1 do
+        if IsValidProtocolVersionOrdinal(LProtocolsArr.ArrayGet(I).AsInt) then
+          Include(FProtocolVersions, TSSLProtocolVersion(LProtocolsArr.ArrayGet(I).AsInt));
     end;
+  end;
 
-    // Merge verify modes if specified
-    if LObj.IndexOfName('verify_modes') >= 0 then
+  // Merge verify modes if specified
+  if LObj.ObjectHas('verify_modes') then
+  begin
+    LVerifyArr := LObj.ObjectGet('verify_modes');
+    FVerifyMode := [];
+    for I := 0 to LVerifyArr.ArrayLen - 1 do
+      if IsValidVerifyModeOrdinal(LVerifyArr.ArrayGet(I).AsInt) then
+        Include(FVerifyMode, TSSLVerifyMode(LVerifyArr.ArrayGet(I).AsInt));
+    LHasVerifyModes := True;
+  end;
+
+  if LObj.ObjectHas('verify_mode_explicit') then
+  begin
+    LImportedVerifyModeExplicit := LObj.ObjectGet('verify_mode_explicit').AsBool;
+    LHasImportedVerifyModeExplicit := True;
+  end;
+
+  // Merge other fields if non-empty
+  if LObj.ObjectHas('verify_depth') then
+    FVerifyDepth := LObj.ObjectGet('verify_depth').AsInt;
+
+  if LObj.ObjectHas('certificate_file') then
+  begin
+    LStrValue := LObj.ObjectGet('certificate_file').AsStr.ToString;
+    if LStrValue <> '' then
     begin
-      LVerify := LObj.Arrays['verify_modes'];
-      FVerifyMode := [];
-      for I := 0 to LVerify.Count - 1 do
-        if IsValidVerifyModeOrdinal(LVerify.Integers[I]) then
-          Include(FVerifyMode, TSSLVerifyMode(LVerify.Integers[I]));
-      LHasVerifyModes := True;
-    end;
-
-    if LObj.IndexOfName('verify_mode_explicit') >= 0 then
-    begin
-      LImportedVerifyModeExplicit := LObj.Booleans['verify_mode_explicit'];
-      LHasImportedVerifyModeExplicit := True;
-    end;
-
-    // Merge other fields if non-empty
-    if LObj.IndexOfName('verify_depth') >= 0 then
-      FVerifyDepth := LObj.Integers['verify_depth'];
-
-    if (LObj.IndexOfName('certificate_file') >= 0) and (LObj.Strings['certificate_file'] <> '') then
-    begin
-      FCertificateFile := LObj.Strings['certificate_file'];
+      FCertificateFile := LStrValue;
       FCertificatePEM := '';
     end;
+  end;
 
-    if (LObj.IndexOfName('certificate_pem') >= 0) and (LObj.Strings['certificate_pem'] <> '') then
+  if LObj.ObjectHas('certificate_pem') then
+  begin
+    LStrValue := LObj.ObjectGet('certificate_pem').AsStr.ToString;
+    if LStrValue <> '' then
     begin
-      FCertificatePEM := LObj.Strings['certificate_pem'];
+      FCertificatePEM := LStrValue;
       FCertificateFile := '';
     end;
+  end;
 
-    if (LObj.IndexOfName('private_key_file') >= 0) and (LObj.Strings['private_key_file'] <> '') then
+  if LObj.ObjectHas('private_key_file') then
+  begin
+    LStrValue := LObj.ObjectGet('private_key_file').AsStr.ToString;
+    if LStrValue <> '' then
     begin
-      FPrivateKeyFile := LObj.Strings['private_key_file'];
+      FPrivateKeyFile := LStrValue;
       FPrivateKeyPEM := '';
     end;
+  end;
 
-    if (LObj.IndexOfName('private_key_pem') >= 0) and (LObj.Strings['private_key_pem'] <> '') then
+  if LObj.ObjectHas('private_key_pem') then
+  begin
+    LStrValue := LObj.ObjectGet('private_key_pem').AsStr.ToString;
+    if LStrValue <> '' then
     begin
-      FPrivateKeyPEM := LObj.Strings['private_key_pem'];
+      FPrivateKeyPEM := LStrValue;
       FPrivateKeyFile := '';
     end;
+  end;
 
-    if (LObj.IndexOfName('pkcs11_uri') >= 0) and (LObj.Strings['pkcs11_uri'] <> '') then
-      FPKCS11URI := LObj.Strings['pkcs11_uri'];
+  if LObj.ObjectHas('pkcs11_uri') then
+  begin
+    LStrValue := LObj.ObjectGet('pkcs11_uri').AsStr.ToString;
+    if LStrValue <> '' then
+      FPKCS11URI := LStrValue;
+  end;
 
-    if LObj.IndexOfName('pkcs11_pin_method') >= 0 then
+  if LObj.ObjectHas('pkcs11_pin_method') then
+  begin
+    if TryParsePKCS11PINMethodOrdinal(LObj.ObjectGet('pkcs11_pin_method').AsInt, LImportedPKCS11PINMethod) then
+      FPKCS11PINMethod := LImportedPKCS11PINMethod;
+  end;
+
+  if LObj.ObjectHas('pkcs11_pin') then
+    FPKCS11PIN := LObj.ObjectGet('pkcs11_pin').AsStr.ToString;
+
+  if LObj.ObjectHas('ca_file') then
+  begin
+    LStrValue := LObj.ObjectGet('ca_file').AsStr.ToString;
+    if LStrValue <> '' then
+      FCAFile := LStrValue;
+  end;
+
+  if LObj.ObjectHas('ca_path') then
+  begin
+    LStrValue := LObj.ObjectGet('ca_path').AsStr.ToString;
+    if LStrValue <> '' then
+      FCAPath := LStrValue;
+  end;
+
+  if LObj.ObjectHas('use_system_roots') then
+    FUseSystemRoots := LObj.ObjectGet('use_system_roots').AsBool;
+
+  if LObj.ObjectHas('cipher_list') then
+  begin
+    LStrValue := LObj.ObjectGet('cipher_list').AsStr.ToString;
+    if LStrValue <> '' then
+      FCipherList := LStrValue;
+  end;
+
+  if LObj.ObjectHas('tls13_ciphersuites') then
+  begin
+    LStrValue := LObj.ObjectGet('tls13_ciphersuites').AsStr.ToString;
+    if LStrValue <> '' then
+      FTLS13Ciphersuites := LStrValue;
+  end;
+
+  if LObj.ObjectHas('server_name') then
+    FServerName := LObj.ObjectGet('server_name').AsStr.ToString;
+
+  if LObj.ObjectHas('alpn_protocols') then
+    FALPNProtocols := LObj.ObjectGet('alpn_protocols').AsStr.ToString;
+
+  if LObj.ObjectHas('session_cache_enabled') then
+    FSessionCacheEnabled := LObj.ObjectGet('session_cache_enabled').AsBool;
+
+  if LObj.ObjectHas('session_timeout') then
+    FSessionTimeout := LObj.ObjectGet('session_timeout').AsInt;
+
+  if LObj.ObjectHas('client_early_data_enabled') then
+    FClientEarlyDataEnabled := LObj.ObjectGet('client_early_data_enabled').AsBool;
+
+  if LObj.ObjectHas('server_early_data_policy') then
+    if IsValidEarlyDataPolicyOrdinal(LObj.ObjectGet('server_early_data_policy').AsInt) then
+      FServerEarlyDataPolicy := TSSLEarlyDataServerPolicy(LObj.ObjectGet('server_early_data_policy').AsInt);
+
+  if LObj.ObjectHas('server_max_early_data_size') then
+    FServerMaxEarlyDataSize := Cardinal(LObj.ObjectGet('server_max_early_data_size').AsInt);
+
+  if LObj.ObjectHas('server_early_data_replay_store_file') then
+  begin
+    LStrValue := LObj.ObjectGet('server_early_data_replay_store_file').AsStr.ToString;
+    if LStrValue <> '' then
+      FServerEarlyDataReplayStoreFile := LStrValue;
+  end;
+
+  if LObj.ObjectHas('server_early_data_replay_store_directory') then
+  begin
+    LStrValue := LObj.ObjectGet('server_early_data_replay_store_directory').AsStr.ToString;
+    if LStrValue <> '' then
+      FServerEarlyDataReplayStoreDirectory := LStrValue;
+  end;
+
+  if LObj.ObjectHas('ocsp_stapling_enabled') then
+    FOCSPStaplingEnabled := LObj.ObjectGet('ocsp_stapling_enabled').AsBool;
+
+  if LObj.ObjectHas('ocsp_stapling_required') then
+    FOCSPStaplingRequired := LObj.ObjectGet('ocsp_stapling_required').AsBool;
+
+  if LObj.ObjectHas('server_ocsp_stapled_response_file') then
+  begin
+    LStrValue := LObj.ObjectGet('server_ocsp_stapled_response_file').AsStr.ToString;
+    if LStrValue <> '' then
+      FServerOCSPStapledResponseFile := LStrValue;
+  end;
+
+  if LObj.ObjectHas('certificate_transparency_required') then
+    FCertificateTransparencyRequired := LObj.ObjectGet('certificate_transparency_required').AsBool;
+
+  if LObj.ObjectHas('explicit_backend') then
+  begin
+    if IsValidLibraryTypeOrdinal(LObj.ObjectGet('explicit_backend').AsInt) then
     begin
-      if TryParsePKCS11PINMethodOrdinal(LObj.Integers['pkcs11_pin_method'], LImportedPKCS11PINMethod) then
-        FPKCS11PINMethod := LImportedPKCS11PINMethod;
+      LImportedExplicitBackend := TSSLLibraryType(LObj.ObjectGet('explicit_backend').AsInt);
+      LHasExplicitBackend := True;
     end;
+  end;
 
-    if LObj.IndexOfName('pkcs11_pin') >= 0 then
-      FPKCS11PIN := LObj.Strings['pkcs11_pin'];
-
-    if (LObj.IndexOfName('ca_file') >= 0) and (LObj.Strings['ca_file'] <> '') then
-      FCAFile := LObj.Strings['ca_file'];
-
-    if (LObj.IndexOfName('ca_path') >= 0) and (LObj.Strings['ca_path'] <> '') then
-      FCAPath := LObj.Strings['ca_path'];
-
-    if LObj.IndexOfName('use_system_roots') >= 0 then
-      FUseSystemRoots := LObj.Booleans['use_system_roots'];
-
-    if (LObj.IndexOfName('cipher_list') >= 0) and (LObj.Strings['cipher_list'] <> '') then
-      FCipherList := LObj.Strings['cipher_list'];
-
-    if (LObj.IndexOfName('tls13_ciphersuites') >= 0) and (LObj.Strings['tls13_ciphersuites'] <> '') then
-      FTLS13Ciphersuites := LObj.Strings['tls13_ciphersuites'];
-
-    if LObj.IndexOfName('server_name') >= 0 then
-      FServerName := LObj.Strings['server_name'];
-
-    if LObj.IndexOfName('alpn_protocols') >= 0 then
-      FALPNProtocols := LObj.Strings['alpn_protocols'];
-
-    if LObj.IndexOfName('session_cache_enabled') >= 0 then
-      FSessionCacheEnabled := LObj.Booleans['session_cache_enabled'];
-
-    if LObj.IndexOfName('session_timeout') >= 0 then
-      FSessionTimeout := LObj.Integers['session_timeout'];
-
-    if LObj.IndexOfName('client_early_data_enabled') >= 0 then
-      FClientEarlyDataEnabled := LObj.Booleans['client_early_data_enabled'];
-
-    if LObj.IndexOfName('server_early_data_policy') >= 0 then
-      if IsValidEarlyDataPolicyOrdinal(LObj.Integers['server_early_data_policy']) then
-        FServerEarlyDataPolicy := TSSLEarlyDataServerPolicy(LObj.Integers['server_early_data_policy']);
-
-    if LObj.IndexOfName('server_max_early_data_size') >= 0 then
-      FServerMaxEarlyDataSize := Cardinal(LObj.Integers['server_max_early_data_size']);
-
-    if (LObj.IndexOfName('server_early_data_replay_store_file') >= 0) and
-      (LObj.Strings['server_early_data_replay_store_file'] <> '') then
-      FServerEarlyDataReplayStoreFile := LObj.Strings['server_early_data_replay_store_file'];
-
-    if (LObj.IndexOfName('server_early_data_replay_store_directory') >= 0) and
-      (LObj.Strings['server_early_data_replay_store_directory'] <> '') then
-      FServerEarlyDataReplayStoreDirectory := LObj.Strings['server_early_data_replay_store_directory'];
-
-    if LObj.IndexOfName('ocsp_stapling_enabled') >= 0 then
-      FOCSPStaplingEnabled := LObj.Booleans['ocsp_stapling_enabled'];
-
-    if LObj.IndexOfName('ocsp_stapling_required') >= 0 then
-      FOCSPStaplingRequired := LObj.Booleans['ocsp_stapling_required'];
-
-    if (LObj.IndexOfName('server_ocsp_stapled_response_file') >= 0) and
-      (LObj.Strings['server_ocsp_stapled_response_file'] <> '') then
-      FServerOCSPStapledResponseFile := LObj.Strings['server_ocsp_stapled_response_file'];
-
-    if LObj.IndexOfName('certificate_transparency_required') >= 0 then
-      FCertificateTransparencyRequired := LObj.Booleans['certificate_transparency_required'];
-
-    if LObj.IndexOfName('explicit_backend') >= 0 then
+  if LObj.ObjectHas('auto_select_backend') then
+  begin
+    LHasAutoSelectBackend := True;
+    LAutoSelectBackend := LObj.ObjectGet('auto_select_backend').AsBool;
+    if LAutoSelectBackend then
     begin
-      if IsValidLibraryTypeOrdinal(LObj.Integers['explicit_backend']) then
-      begin
-        LImportedExplicitBackend := TSSLLibraryType(LObj.Integers['explicit_backend']);
-        LHasExplicitBackend := True;
-      end;
+      LBackendReq := LObj.ObjectGet('backend_requirements');
+      if LBackendReq.IsValid and LBackendReq.IsObject then
+        JSONObjectToRequirements(LBackendReq, LImportedRequirements);
     end;
+  end;
 
-    if LObj.IndexOfName('auto_select_backend') >= 0 then
-    begin
-      LHasAutoSelectBackend := True;
-      LAutoSelectBackend := LObj.Booleans['auto_select_backend'];
-      if LAutoSelectBackend then
-      begin
-        LBackendRequirementsData := LObj.FindPath('backend_requirements');
-        if (LBackendRequirementsData <> nil) and (LBackendRequirementsData is TJSONObject) then
-          JSONObjectToRequirements(TJSONObject(LBackendRequirementsData), LImportedRequirements);
-      end;
-    end;
+  // Merge options
+  if LObj.ObjectHas('options') then
+  begin
+    LOptionsArr := LObj.ObjectGet('options');
+    FOptions := [];
+    for I := 0 to LOptionsArr.ArrayLen - 1 do
+      Include(FOptions, TSSLOption(LOptionsArr.ArrayGet(I).AsInt));
+  end;
 
-    // Merge options
-    if LObj.IndexOfName('options') >= 0 then
-    begin
-      LOptions := LObj.Arrays['options'];
-      FOptions := [];
-      for I := 0 to LOptions.Count - 1 do
-        Include(FOptions, TSSLOption(LOptions.Integers[I]));
-    end;
+  if LHasAutoSelectBackend and LAutoSelectBackend then
+  begin
+    FAutoSelectBackend := True;
+    FBackendRequirements := LImportedRequirements;
+    FExplicitBackend := sslOpenSSL;
+    FExplicitBackendSet := False;
+  end
+  else if LHasExplicitBackend then
+  begin
+    FExplicitBackend := LImportedExplicitBackend;
+    FExplicitBackendSet := True;
+    FAutoSelectBackend := False;
+  end;
 
-    if LHasAutoSelectBackend and LAutoSelectBackend then
-    begin
-      FAutoSelectBackend := True;
-      FBackendRequirements := LImportedRequirements;
-      FExplicitBackend := sslOpenSSL;
-      FExplicitBackendSet := False;
-    end
-    else if LHasExplicitBackend then
-    begin
-      FExplicitBackend := LImportedExplicitBackend;
-      FExplicitBackendSet := True;
-      FAutoSelectBackend := False;
-    end;
+  SyncOCSPStaplingOptions;
+  SyncCertificateTransparencyOptions;
 
-    SyncOCSPStaplingOptions;
-    SyncCertificateTransparencyOptions;
-
-    if LHasVerifyModes then
-    begin
-      if LHasImportedVerifyModeExplicit then
-        FVerifyModeExplicit := LImportedVerifyModeExplicit
-      else
-        FVerifyModeExplicit := ImportedVerifyModeIsExplicit(
-          FVerifyMode,
-          FCAFile,
-          FCAPath,
-          FUseSystemRoots
-        );
-    end;
-  finally
+  if LHasVerifyModes then
+  begin
+    if LHasImportedVerifyModeExplicit then
+      FVerifyModeExplicit := LImportedVerifyModeExplicit
+    else
+      FVerifyModeExplicit := ImportedVerifyModeIsExplicit(
+        FVerifyMode,
+        FCAFile,
+        FCAPath,
+        FUseSystemRoots
+      );
   end;
 end;
 
