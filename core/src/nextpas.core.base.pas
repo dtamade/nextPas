@@ -211,6 +211,9 @@ function HashString(const AValue: UnicodeString): THashCode; overload;
 function HashInteger(const AValue: Int64): THashCode;
 function HashPointer(const AValue: Pointer): THashCode;
 
+{ C interop helpers }
+function StrComp(A, B: PAnsiChar): Integer;
+
 implementation
 
 { Base validation exceptions }
@@ -545,6 +548,19 @@ end;
 function HashPointer(const AValue: Pointer): THashCode;
 begin
   Result := HashBytes(@AValue, SizeOf(AValue));
+end;
+
+function StrComp(A, B: PAnsiChar): Integer;
+begin
+  if A = B then Exit(0);
+  if A = nil then Exit(-1);
+  if B = nil then Exit(1);
+  while (A^ <> #0) and (A^ = B^) do
+  begin
+    Inc(A);
+    Inc(B);
+  end;
+  Result := Ord(Byte(A^)) - Ord(Byte(B^));
 end;
 
 end.
