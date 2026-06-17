@@ -11,6 +11,9 @@ type
     procedure Free;
   end;
 
+procedure np_process_init;
+procedure np_process_fini;
+
 implementation
 
 constructor TObject.Create;
@@ -23,6 +26,16 @@ end;
 
 procedure TObject.Free;
 begin
+end;
+
+procedure np_process_init;
+begin
+  { stub: will be filled with actual runtime initialization }
+end;
+
+procedure np_process_fini;
+begin
+  { stub: will be filled with actual runtime finalization }
 end;
 
 end.
