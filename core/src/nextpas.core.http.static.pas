@@ -123,7 +123,7 @@ var
 begin
   if not nextpas.core.fs.Exists(AFilePath) then
   begin
-    AW.GetHeaders.Set_('content-length', '9');
+    AW.GetHeaders.SetHeader('content-length', '9');
     AW.WriteHeader(HTTP_STATUS_NOT_FOUND);
     AW.Write(PAnsiChar('Not Found')^, 9);
     Exit;
@@ -131,7 +131,7 @@ begin
   LInfo := nextpas.core.fs.Stat(AFilePath);
   if LInfo.FileType <> ftRegular then
   begin
-    AW.GetHeaders.Set_('content-length', '9');
+    AW.GetHeaders.SetHeader('content-length', '9');
     AW.WriteHeader(HTTP_STATUS_NOT_FOUND);
     AW.Write(PAnsiChar('Not Found')^, 9);
     Exit;
@@ -139,8 +139,8 @@ begin
   LFile := nextpas.core.fs.Open(AFilePath, [fmRead]);
   LExt := ExtractExt(AFilePath);
   LMime := MimeTypeFromExt(LExt);
-  AW.GetHeaders.Set_('content-type', LMime);
-  AW.GetHeaders.Set_('content-length', IntToStr(LInfo.Size));
+  AW.GetHeaders.SetHeader('content-type', LMime);
+  AW.GetHeaders.SetHeader('content-length', IntToStr(LInfo.Size));
   AW.WriteHeader(HTTP_STATUS_OK);
   LWriter := TResponseWriterAdapter.Create(AW);
   nextpas.core.io.Copy(LWriter, LFile);
@@ -175,7 +175,7 @@ begin
     try
       LRelative := nextpas.core.http.url.UrlDecode(LRelative);
     except
-      AW.GetHeaders.Set_('content-length', '11');
+      AW.GetHeaders.SetHeader('content-length', '11');
       AW.WriteHeader(HTTP_STATUS_BAD_REQUEST);
       AW.Write(PAnsiChar('Bad Request')^, 11);
       Exit;
@@ -183,7 +183,7 @@ begin
     { Security: reject traversal attempts }
     if not IsSafePath(LRelative) then
     begin
-      AW.GetHeaders.Set_('content-length', '11');
+      AW.GetHeaders.SetHeader('content-length', '11');
       AW.WriteHeader(HTTP_STATUS_BAD_REQUEST);
       AW.Write(PAnsiChar('Bad Request')^, 11);
       Exit;

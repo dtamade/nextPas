@@ -185,8 +185,9 @@ type
 implementation
 
 uses
+  nextpas.core.base,
   nextpas.core.text.strings,
-    nextpas.core.tls.factory,
+  nextpas.core.tls.factory,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.freepascal.context.material,
   nextpas.core.tls.base64,
@@ -1701,7 +1702,7 @@ begin
   if AArray = nil then
     Exit;
 
-  for I := 0 to Length(AArray) - 1 do
+  for I := 0 to AArray.Count - 1 do
     Include(AProtocols, TSSLProtocolVersion(AArray.Integers[I]));
 end;
 
@@ -1713,7 +1714,7 @@ begin
   if AArray = nil then
     Exit;
 
-  for I := 0 to Length(AArray) - 1 do
+  for I := 0 to AArray.Count - 1 do
     Include(ACiphers, TSSLCipher(AArray.Integers[I]));
 end;
 
@@ -1725,7 +1726,7 @@ begin
   if AArray = nil then
     Exit;
 
-  for I := 0 to Length(AArray) - 1 do
+  for I := 0 to AArray.Count - 1 do
     Include(AHashes, TSSLHash(AArray.Integers[I]));
 end;
 
@@ -1738,7 +1739,7 @@ begin
   if AArray = nil then
     Exit;
 
-  for I := 0 to Length(AArray) - 1 do
+  for I := 0 to AArray.Count - 1 do
     Include(AKeyExchanges, TSSLKeyExchange(AArray.Integers[I]));
 end;
 
@@ -1750,7 +1751,7 @@ begin
   if AArray = nil then
     Exit;
 
-  for I := 0 to Length(AArray) - 1 do
+  for I := 0 to AArray.Count - 1 do
     Include(AFeatures, TSSLFeature(AArray.Integers[I]));
 end;
 
@@ -1953,7 +1954,7 @@ begin
       begin
         LProtocols := Arrays['protocols'];
         FProtocolVersions := [];
-        for I := 0 to Length(LProtocols) - 1 do
+        for I := 0 to LProtocols.Count - 1 do
           if IsValidProtocolVersionOrdinal(LProtocols.Integers[I]) then
             Include(FProtocolVersions, TSSLProtocolVersion(LProtocols.Integers[I]));
       end;
@@ -1963,7 +1964,7 @@ begin
       begin
         LVerify := Arrays['verify_modes'];
         FVerifyMode := [];
-        for I := 0 to Length(LVerify) - 1 do
+        for I := 0 to LVerify.Count - 1 do
           if IsValidVerifyModeOrdinal(LVerify.Integers[I]) then
             Include(FVerifyMode, TSSLVerifyMode(LVerify.Integers[I]));
       end;
@@ -2084,7 +2085,7 @@ begin
       begin
         LOptions := Arrays['options'];
         FOptions := [];
-        for I := 0 to Length(LOptions) - 1 do
+        for I := 0 to LOptions.Count - 1 do
           if IsValidOptionOrdinal(LOptions.Integers[I]) then
             Include(FOptions, TSSLOption(LOptions.Integers[I]));
       end;
@@ -2279,7 +2280,7 @@ begin
     else
       LLines.Add('certificate_transparency_required=false');
 
-    Result := LLines.Text;
+    Result := LLines.Join(#10);
   finally
   end;
 end;
@@ -2318,7 +2319,7 @@ begin
   LHasVerifyModes := False;
   LAutoSelectBackend := False;
   try
-    LLines.Text := AINI;
+    LLines := nextpas.core.text.strings.StringsParseLines(AINI);
 
     for I := 0 to Length(LLines) - 1 do
     begin
@@ -2338,7 +2339,7 @@ begin
         // Parse based on key
         if LKey = 'protocols' then
         begin
-          LParts.CommaText := LValue;
+          LParts := nextpas.core.text.strings.StringsSplit(LValue, ',');
           FProtocolVersions := [];
           for J := 0 to Length(LParts) - 1 do
             if IsValidProtocolVersionOrdinal(StrToIntDef(LParts[J], -1)) then
@@ -2346,7 +2347,7 @@ begin
         end
         else if LKey = 'verify_modes' then
         begin
-          LParts.CommaText := LValue;
+          LParts := nextpas.core.text.strings.StringsSplit(LValue, ',');
           FVerifyMode := [];
           for J := 0 to Length(LParts) - 1 do
             if IsValidVerifyModeOrdinal(StrToIntDef(LParts[J], -1)) then
@@ -2472,7 +2473,7 @@ begin
         end
         else if LKey = 'options' then
         begin
-          LParts.CommaText := LValue;
+          LParts := nextpas.core.text.strings.StringsSplit(LValue, ',');
           FOptions := [];
           for J := 0 to Length(LParts) - 1 do
             if IsValidOptionOrdinal(StrToIntDef(LParts[J], -1)) then
@@ -2687,10 +2688,10 @@ begin
     if LObj.IndexOfName('protocols') >= 0 then
     begin
       LProtocols := LObj.Arrays['protocols'];
-      if Length(LProtocols) > 0 then
+      if LProtocols.Count > 0 then
       begin
         FProtocolVersions := [];
-        for I := 0 to Length(LProtocols) - 1 do
+        for I := 0 to LProtocols.Count - 1 do
           if IsValidProtocolVersionOrdinal(LProtocols.Integers[I]) then
             Include(FProtocolVersions, TSSLProtocolVersion(LProtocols.Integers[I]));
       end;
@@ -2701,7 +2702,7 @@ begin
     begin
       LVerify := LObj.Arrays['verify_modes'];
       FVerifyMode := [];
-      for I := 0 to Length(LVerify) - 1 do
+      for I := 0 to LVerify.Count - 1 do
         if IsValidVerifyModeOrdinal(LVerify.Integers[I]) then
           Include(FVerifyMode, TSSLVerifyMode(LVerify.Integers[I]));
       LHasVerifyModes := True;
@@ -2837,7 +2838,7 @@ begin
     begin
       LOptions := LObj.Arrays['options'];
       FOptions := [];
-      for I := 0 to Length(LOptions) - 1 do
+      for I := 0 to LOptions.Count - 1 do
         Include(FOptions, TSSLOption(LOptions.Integers[I]));
     end;
 

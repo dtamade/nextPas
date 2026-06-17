@@ -448,7 +448,7 @@ begin
   Result := Ortho(
     ACenterX - HalfWidth, ACenterX + HalfWidth,
     ACenterY + HalfHeight, ACenterY - HalfHeight,
-    -1000.0, 1000.0);
+    Single(-1000.0), Single(1000.0));
 end;
 
 function Camera2D(const ACenterX, ACenterY, AZoom: Double;
@@ -469,7 +469,7 @@ begin
   Result := Ortho(
     ACenterX - HalfWidth, ACenterX + HalfWidth,
     ACenterY + HalfHeight, ACenterY - HalfHeight,
-    -1000.0, 1000.0);
+    Double(-1000.0), Double(1000.0));
 end;
 
 end.
