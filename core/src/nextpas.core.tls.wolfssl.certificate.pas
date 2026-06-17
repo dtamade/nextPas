@@ -20,6 +20,7 @@ uses
   SysUtils, Classes,
   nextpas.core.base.utils,
   nextpas.core.fs,
+  nextpas.core.collections.vec,
   nextpas.core.tls.base,
   nextpas.core.tls.errors,
   nextpas.core.tls.exceptions,
@@ -111,7 +112,7 @@ type
   TWolfSSLCertificateStore = class(TInterfacedObject, ISSLCertificateStore, ISSLNativeHandleAccess)
   private
     FX509Store: PWOLFSSL_X509_STORE;
-    FCertificates: TInterfaceList;
+    FCertificates: specialize TVec<IInterface>;
 
   public
     constructor Create;
@@ -149,7 +150,6 @@ type
 implementation
 
 uses
-  Contnrs,
   DateUtils,
   nextpas.core.text.conv,
   nextpas.core.text.strings,
@@ -1505,7 +1505,7 @@ begin
     FX509Store := wolfSSL_X509_STORE_new()
   else
     FX509Store := nil;
-  FCertificates := TInterfaceList.Create;
+  FCertificates := specialize TVec<IInterface>.Create;
 end;
 
 destructor TWolfSSLCertificateStore.Destroy;
@@ -1526,7 +1526,7 @@ begin
   if ACert = nil then Exit;
   if Contains(ACert) then Exit;
 
-  FCertificates.Add(ACert);
+  FCertificates.Push(ACert);
   Result := True;
 end;
 
@@ -1540,7 +1540,7 @@ begin
   Result := False;
   if ACert = nil then Exit;
 
-  LIndex := FCertificates.IndexOf(ACert);
+  LIndex := FCertificates.Find(ACert);
   if LIndex < 0 then
   begin
     LTarget := NormalizeWolfCertFingerprint(ACert.GetFingerprintSHA256);
@@ -1549,9 +1549,9 @@ begin
 
     if LTarget <> '' then
     begin
-      for I := 0 to Length(FCertificates) - 1 do
+      for I := 0 to FCertificates.GetCount - 1 do
       begin
-        LExisting := FCertificates[I] as ISSLCertificate;
+        LExisting := FCertificates.Get(I) as ISSLCertificate;
         if NormalizeWolfCertFingerprint(LExisting.GetFingerprintSHA256) = LTarget then
         begin
           LIndex := I;
@@ -1578,7 +1578,7 @@ begin
   if ACert = nil then
     Exit;
 
-  if FCertificates.IndexOf(ACert) >= 0 then
+  if FCertificates.Find(ACert) >= 0 then
     Exit(True);
 
   LTarget := NormalizeWolfCertFingerprint(ACert.GetFingerprintSHA256);
@@ -1587,9 +1587,9 @@ begin
   if LTarget = '' then
     Exit(False);
 
-  for I := 0 to Length(FCertificates) - 1 do
+  for I := 0 to FCertificates.GetCount - 1 do
   begin
-    LExisting := FCertificates[I] as ISSLCertificate;
+    LExisting := FCertificates.Get(I) as ISSLCertificate;
     if NormalizeWolfCertFingerprint(LExisting.GetFingerprintSHA256) = LTarget then
       Exit(True);
   end;
@@ -1602,14 +1602,14 @@ end;
 
 function TWolfSSLCertificateStore.GetCount: Integer;
 begin
-  Result := Length(FCertificates);
+  Result := FCertificates.GetCount;
 end;
 
 function TWolfSSLCertificateStore.GetCertificate(AIndex: Integer): ISSLCertificate;
 begin
   Result := nil;
-  if (AIndex >= 0) and (AIndex < Length(FCertificates)) then
-    Result := FCertificates[AIndex] as ISSLCertificate;
+  if (AIndex >= 0) and (AIndex < FCertificates.GetCount) then
+    Result := FCertificates.Get(AIndex) as ISSLCertificate;
 end;
 
 function TWolfSSLCertificateStore.LoadFromFile(const AFileName: string): Boolean;
@@ -1623,7 +1623,7 @@ begin
   try
     if LCert.LoadFromFile(AFileName) then
     begin
-      FCertificates.Add(LCert);
+      FCertificates.Push(LCert);
       Result := True;
     end;
   except
@@ -1696,9 +1696,9 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to Length(FCertificates) - 1 do
+  for I := 0 to FCertificates.GetCount - 1 do
   begin
-    LCert := FCertificates[I] as ISSLCertificate;
+    LCert := FCertificates.Get(I) as ISSLCertificate;
     if Pos(LTarget, NormalizeWolfCertText(LCert.GetSubject)) > 0 then
     begin
       Result := LCert;
@@ -1718,9 +1718,9 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to Length(FCertificates) - 1 do
+  for I := 0 to FCertificates.GetCount - 1 do
   begin
-    LCert := FCertificates[I] as ISSLCertificate;
+    LCert := FCertificates.Get(I) as ISSLCertificate;
     if Pos(LTarget, NormalizeWolfCertText(LCert.GetIssuer)) > 0 then
     begin
       Result := LCert;
@@ -1740,9 +1740,9 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to Length(FCertificates) - 1 do
+  for I := 0 to FCertificates.GetCount - 1 do
   begin
-    LCert := FCertificates[I] as ISSLCertificate;
+    LCert := FCertificates.Get(I) as ISSLCertificate;
     if NormalizeWolfCertSerial(LCert.GetSerialNumber) = LTarget then
     begin
       Result := LCert;
@@ -1762,9 +1762,9 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to Length(FCertificates) - 1 do
+  for I := 0 to FCertificates.GetCount - 1 do
   begin
-    LCert := FCertificates[I] as ISSLCertificate;
+    LCert := FCertificates.Get(I) as ISSLCertificate;
     if NormalizeWolfCertFingerprint(LCert.GetFingerprintSHA256) = LTarget then
     begin
       Result := LCert;

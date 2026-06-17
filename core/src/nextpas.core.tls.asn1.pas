@@ -23,8 +23,8 @@ unit nextpas.core.tls.asn1;
 interface
 
 uses
-  Contnrs,
   nextpas.core.base,
+  nextpas.core.collections.vec,
   nextpas.core.io.intf,
   nextpas.core.exception,
   nextpas.core.system.classes;
@@ -189,7 +189,7 @@ type
   // ========================================================================
   TASN1NodeList = class
   private
-    FList: TObjectList;
+    FList: specialize TVec<TASN1Node>;
     function GetCount: Integer;
     function GetItem(AIndex: Integer): TASN1Node;
   public
@@ -736,32 +736,38 @@ end;
 constructor TASN1NodeList.Create;
 begin
   inherited Create;
-  FList := TObjectList.Create(True);
+  FList := specialize TVec<TASN1Node>.Create;
 end;
 
 destructor TASN1NodeList.Destroy;
 begin
+  Clear;
+  FList.Free;
   inherited Destroy;
 end;
 
 procedure TASN1NodeList.Add(ANode: TASN1Node);
 begin
-  FList.Add(ANode);
+  FList.Push(ANode);
 end;
 
 procedure TASN1NodeList.Clear;
+var
+  I: Integer;
 begin
+  for I := 0 to FList.GetCount - 1 do
+    FList.Get(I).Free;
   FList.Clear;
 end;
 
 function TASN1NodeList.GetCount: Integer;
 begin
-  Result := FList.Count;
+  Result := FList.GetCount;
 end;
 
 function TASN1NodeList.GetItem(AIndex: Integer): TASN1Node;
 begin
-  Result := TASN1Node(FList[AIndex]);
+  Result := FList.Get(AIndex);
 end;
 
 // ========================================================================

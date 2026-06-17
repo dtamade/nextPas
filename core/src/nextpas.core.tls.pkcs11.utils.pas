@@ -20,7 +20,8 @@ unit nextpas.core.tls.pkcs11.utils;
 interface
 
 uses
-  nextpas.core.text.conv, Classes, Generics.Collections,
+  nextpas.core.text.conv, Classes,
+  nextpas.core.collections.vec,
   nextpas.core.tls.pkcs11.types,
   nextpas.core.tls.pkcs11.api,
   nextpas.core.tls.pkcs11.loader;
@@ -147,10 +148,10 @@ var
   SlotInfo: CK_SLOT_INFO;
   I: Integer;
   RV: CK_RV;
-  ResultList: specialize TList<TPKCS11SlotInfo>;
+  ResultList: specialize TVec<TPKCS11SlotInfo>;
 begin
   SetLength(Result, 0);
-  ResultList := specialize TList<TPKCS11SlotInfo>.Create;
+  ResultList := specialize TVec<TPKCS11SlotInfo>.Create;
   try
     Loader := TPKCS11Loader.Create;
     try
@@ -188,7 +189,7 @@ begin
       begin
         RV := C_GetSlotInfo(SlotIDs[I], @SlotInfo);
         if RV = CKR_OK then
-          ResultList.Add(TPKCS11SlotInfo.FromCK(SlotInfo, SlotIDs[I]));
+          ResultList.Push(TPKCS11SlotInfo.FromCK(SlotInfo, SlotIDs[I]));
       end;
       
       Result := ResultList.ToArray;
@@ -208,10 +209,10 @@ var
   TokenInfo: CK_TOKEN_INFO;
   I: Integer;
   RV: CK_RV;
-  ResultList: specialize TList<TPKCS11TokenInfo>;
+  ResultList: specialize TVec<TPKCS11TokenInfo>;
 begin
   SetLength(Result, 0);
-  ResultList := specialize TList<TPKCS11TokenInfo>.Create;
+  ResultList := specialize TVec<TPKCS11TokenInfo>.Create;
   try
     // Get all slots with tokens present
     Slots := EnumerateSlots(AModulePath, True);
@@ -239,7 +240,7 @@ begin
       begin
         RV := C_GetTokenInfo(Slots[I].SlotID, @TokenInfo);
         if RV = CKR_OK then
-          ResultList.Add(TPKCS11TokenInfo.FromCK(TokenInfo, Slots[I].SlotID));
+          ResultList.Push(TPKCS11TokenInfo.FromCK(TokenInfo, Slots[I].SlotID));
       end;
       
       Result := ResultList.ToArray;
@@ -310,14 +311,14 @@ var
   ObjectClass: CK_ULONG;
   KeyInfo: TPKCS11KeyInfo;
   RV: CK_RV;
-  ResultList: specialize TList<TPKCS11KeyInfo>;
+  ResultList: specialize TVec<TPKCS11KeyInfo>;
   KeyType: CK_ULONG;
   KeyLabel: array[0..255] of AnsiChar;
   KeyLabelLen: CK_ULONG;
   PINAnsi: AnsiString;
 begin
   SetLength(Result, 0);
-  ResultList := specialize TList<TPKCS11KeyInfo>.Create;
+  ResultList := specialize TVec<TPKCS11KeyInfo>.Create;
   try
     Loader := TPKCS11Loader.Create;
     try
@@ -401,7 +402,7 @@ begin
             if RV = CKR_OK then
               KeyInfo.KeyLabel := TrimPKCS11String(KeyLabel);
             
-            ResultList.Add(KeyInfo);
+            ResultList.Push(KeyInfo);
           end;
         finally
           C_FindObjectsFinal(Session);

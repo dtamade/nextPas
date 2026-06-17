@@ -21,7 +21,6 @@ unit nextpas.core.tls.pkcs11.types;
 interface
 
 uses
-  Generics.Collections,
   nextpas.core.base,
   nextpas.core.exception,
   nextpas.core.text.conv,

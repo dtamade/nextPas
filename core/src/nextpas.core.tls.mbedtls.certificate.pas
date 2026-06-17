@@ -20,6 +20,7 @@ uses
   SysUtils, Classes,
   nextpas.core.base.utils,
   nextpas.core.fs,
+  nextpas.core.collections.vec,
   nextpas.core.tls.base,
   nextpas.core.tls.base64,
   nextpas.core.tls.errors,
@@ -115,7 +116,7 @@ type
   TMbedTLSCertificateStore = class(TInterfacedObject, ISSLCertificateStore, ISSLNativeHandleAccess)
   private
     FCACerts: Pmbedtls_x509_crt;
-    FCertificates: TInterfaceList;
+    FCertificates: specialize TVec<IInterface>;
 
     procedure AllocateStore;
     procedure FreeStore;
@@ -156,7 +157,6 @@ type
 implementation
 
 uses
-  Contnrs,
   DateUtils,
   nextpas.core.text.conv,
   nextpas.core.text.strings,
@@ -1593,7 +1593,7 @@ constructor TMbedTLSCertificateStore.Create;
 begin
   inherited Create;
   FCACerts := nil;
-  FCertificates := TInterfaceList.Create;
+  FCertificates := specialize TVec<IInterface>.Create;
   AllocateStore;
 end;
 
@@ -1658,7 +1658,7 @@ begin
       Exit(False);
   end;
 
-  FCertificates.Add(ACert);
+  FCertificates.Push(ACert);
   Result := True;
 end;
 
@@ -1672,7 +1672,7 @@ begin
   Result := False;
   if ACert = nil then Exit;
 
-  LIndex := FCertificates.IndexOf(ACert);
+  LIndex := FCertificates.Find(ACert);
   if LIndex < 0 then
   begin
     LTarget := NormalizeMbedTLSCertFingerprint(ACert.GetFingerprintSHA256);
@@ -1681,9 +1681,9 @@ begin
 
     if LTarget <> '' then
     begin
-      for I := 0 to FCertificates.Count - 1 do
+      for I := 0 to FCertificates.GetCount - 1 do
       begin
-        LExisting := FCertificates[I] as ISSLCertificate;
+        LExisting := FCertificates.Get(I) as ISSLCertificate;
         if NormalizeMbedTLSCertFingerprint(LExisting.GetFingerprintSHA256) = LTarget then
         begin
           LIndex := I;
@@ -1710,7 +1710,7 @@ begin
   if ACert = nil then
     Exit;
 
-  if FCertificates.IndexOf(ACert) >= 0 then
+  if FCertificates.Find(ACert) >= 0 then
     Exit(True);
 
   LTarget := NormalizeMbedTLSCertFingerprint(ACert.GetFingerprintSHA256);
@@ -1719,9 +1719,9 @@ begin
   if LTarget = '' then
     Exit(False);
 
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to FCertificates.GetCount - 1 do
   begin
-    LExisting := FCertificates[I] as ISSLCertificate;
+    LExisting := FCertificates.Get(I) as ISSLCertificate;
     if NormalizeMbedTLSCertFingerprint(LExisting.GetFingerprintSHA256) = LTarget then
       Exit(True);
   end;
@@ -1734,14 +1734,14 @@ end;
 
 function TMbedTLSCertificateStore.GetCount: Integer;
 begin
-  Result := FCertificates.Count;
+  Result := FCertificates.GetCount;
 end;
 
 function TMbedTLSCertificateStore.GetCertificate(AIndex: Integer): ISSLCertificate;
 begin
   Result := nil;
-  if (AIndex >= 0) and (AIndex < FCertificates.Count) then
-    Result := FCertificates[AIndex] as ISSLCertificate;
+  if (AIndex >= 0) and (AIndex < FCertificates.GetCount) then
+    Result := FCertificates.Get(AIndex) as ISSLCertificate;
 end;
 
 function TMbedTLSCertificateStore.LoadFromFile(const AFileName: string): Boolean;
@@ -1755,7 +1755,7 @@ begin
   try
     if LCert.LoadFromFile(AFileName) then
     begin
-      FCertificates.Add(LCert);
+      FCertificates.Push(LCert);
       Result := True;
     end;
   except
@@ -1811,9 +1811,9 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to FCertificates.GetCount - 1 do
   begin
-    LCert := FCertificates[I] as ISSLCertificate;
+    LCert := FCertificates.Get(I) as ISSLCertificate;
     if Pos(LTarget, NormalizeMbedTLSCertText(LCert.GetSubject)) > 0 then
     begin
       Result := LCert;
@@ -1833,9 +1833,9 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to FCertificates.GetCount - 1 do
   begin
-    LCert := FCertificates[I] as ISSLCertificate;
+    LCert := FCertificates.Get(I) as ISSLCertificate;
     if Pos(LTarget, NormalizeMbedTLSCertText(LCert.GetIssuer)) > 0 then
     begin
       Result := LCert;
@@ -1855,9 +1855,9 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to FCertificates.GetCount - 1 do
   begin
-    LCert := FCertificates[I] as ISSLCertificate;
+    LCert := FCertificates.Get(I) as ISSLCertificate;
     if NormalizeMbedTLSCertHex(LCert.GetSerialNumber) = LTarget then
     begin
       Result := LCert;
@@ -1877,9 +1877,9 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to FCertificates.GetCount - 1 do
   begin
-    LCert := FCertificates[I] as ISSLCertificate;
+    LCert := FCertificates.Get(I) as ISSLCertificate;
     if NormalizeMbedTLSCertFingerprint(LCert.GetFingerprintSHA256) = LTarget then
     begin
       Result := LCert;
