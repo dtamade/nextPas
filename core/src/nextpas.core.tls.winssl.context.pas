@@ -18,7 +18,7 @@ unit nextpas.core.tls.winssl.context;
 interface
 
 uses
-  Windows, SysUtils, Classes, StrUtils,
+  Windows, SysUtils, Classes,
   nextpas.core.base.utils,
   nextpas.core.fs,
   nextpas.core.text.conv,
@@ -195,6 +195,15 @@ implementation
 
 uses
   nextpas.core.tls.winssl.connection;
+
+{ Local helper: IfThen replacement (was StrUtils.IfThen) }
+function IfThenStr(ACondition: Boolean; const ATrue, AFalse: string): string;
+begin
+  if ACondition then
+    Result := ATrue
+  else
+    Result := AFalse;
+end;
 
 // ============================================================================
 // TWinSSLContext - 构造和析构
@@ -414,7 +423,7 @@ begin
   if not IsSuccess(Status) then
     raise ESSLInitializationException.CreateWithContext(
       nextpas.core.text.conv.Format('Failed to acquire credentials handle: 0x%x (%s mode)',
-        [Status, IfThen(FContextType = sslCtxServer, 'server', 'client')]),
+        [Status, IfThenStr(FContextType = sslCtxServer, 'server', 'client')]),
       sslErrNotInitialized,
       'TWinSSLContext.EnsureCredentialsAcquired',
       Status,
@@ -1315,7 +1324,7 @@ begin
     FPinValidator.RequireValidPin := AEnabled;
   
   TSecurityLog.Info('WinSSL', 
-    nextpas.core.text.conv.Format('Certificate pinning %s', [IfThen(AEnabled, 'enabled', 'disabled')]));
+    nextpas.core.text.conv.Format('Certificate pinning %s', [IfThenStr(AEnabled, 'enabled', 'disabled')]));
 end;
 
 function TWinSSLContext.GetCertificatePinningEnabled: Boolean;
