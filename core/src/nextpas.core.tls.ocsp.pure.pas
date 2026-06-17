@@ -37,7 +37,7 @@ function IsOCSPResponseFresh(const AResponse: TOCSPBasicResponse): Boolean;
 
 implementation
 
-uses DateUtils, nextpas.core.time, nextpas.core.tls.asn1;
+uses nextpas.core.time, nextpas.core.tls.asn1;
 
 function TryParseOCSPResponse(const AData: TBytes; out AResponse: TOCSPBasicResponse;
   out AError: string): Boolean;

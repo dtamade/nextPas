@@ -56,6 +56,8 @@ function EncodeDate(const AYear, AMonth, ADay: Word): TDateTime;
 function EncodeTime(const AHour, AMinute, ASecond, AMSec: Word): TDateTime;
 procedure DecodeDate(const AValue: TDateTime; out AYear, AMonth, ADay: Word);
 procedure DecodeTime(const AValue: TDateTime; out AHour, AMinute, ASecond, AMSec: Word);
+function DateTimeToUnix(const AValue: TDateTime): Int64;
+function UnixToDateTime(const AValue: Int64): TDateTime;
 
 implementation
 
@@ -222,6 +224,16 @@ begin
   LDayNs  := LDayNs mod 60000000000;
   ASecond := Word(LDayNs div 1000000000);
   AMSec   := Word((LDayNs mod 1000000000) div 1000000);
+end;
+
+function DateTimeToUnix(const AValue: TDateTime): Int64;
+begin
+  Result := Round((AValue - UNIX_EPOCH_TDATETIME) * 86400.0);
+end;
+
+function UnixToDateTime(const AValue: Int64): TDateTime;
+begin
+  Result := AValue / 86400.0 + UNIX_EPOCH_TDATETIME;
 end;
 
 end.
