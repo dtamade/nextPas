@@ -238,11 +238,36 @@ integration can be deferred.
 
 | Gate | Priority | Owner | Effort | Current Status |
 |------|----------|-------|--------|----------------|
+| 0: system.classes Facade | **Blocker** (global) | system | Medium | **New — unblocks TLS/HTTP/fs/io** |
 | 1: RTTI Shape | Critical | compiler + collections | Medium | Pre-work (test design) |
 | 2: Unit Lifecycle | Critical | compiler + rtl | High | Deferred (no seed) |
 | 3: Process Lifecycle | Important | rtl | Medium | Semantic seed only |
 | 4: Heap Manager | Important | mem + compiler | Medium | Backend-private |
 | 5: Exception Unwind | Normal | compiler | Low | Backend-private, works |
+
+### Gate 0: Why It's the Global Blocker
+
+`nextpas.core.system.classes` provides the `TStream` inheritance chain
+(`TStream`, `THandleStream`, `TMemoryStream`, `TStringStream`, `TBytesStream`,
+`TSeekOrigin`). Multiple modules are blocked without it:
+
+| Blocked module | Blocked type | Files affected |
+|---------------|-------------|---------------|
+| TLS | `TSSLStream` (inherits from `TStream`) | ~138 files use `Classes` |
+| HTTP | `THttpStream`, `TResponseStream` | inherits TStream chain |
+| fs | `TFileStream` | inherits from `THandleStream` |
+| io | `IStream`, `TReader`, `TWriter` | TStream is base type |
+
+Until Gate 0 is delivered, these modules cannot migrate away from FPC `Classes` unit,
+which means they cannot be compiled by nextPas without FPC RTL.
+
+Gate 0 strategy: **Path A (re-export facade)** first — create
+`nextpas.core.system.classes` as a thin re-export of FPC `Classes` types,
+following the same pattern as `system.typinfo` and `system.sysutils`.
+This unblocks all consumer modules immediately. Path B (pure nextPas
+implementation) is deferred until after self-hosting bootstrap.
+
+See `docs/plans/bootstrap-line-spec.md` Gate 0 for detailed task breakdown.
 
 ---
 

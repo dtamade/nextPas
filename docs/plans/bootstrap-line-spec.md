@@ -11,7 +11,60 @@
 - 19 个 `np.system.*` 契约已文档化，7 个有 HIR/LLVM/测试证据
 - LLVM 后端已能编译 hello world → 可执行文件 → exit 0
 
-## 自举 5 道 Gate
+## 接口交付优先级
+
+**`system.classes` 是全局阻塞点**。TLS (TSSLStream)、HTTP (THttpStream)、fs (TFileStream)、
+io (TStream) 等多个模块的核心类型继承自 `TStream`，没有 `system.classes` 门面就无法脱离
+FPC `Classes` 单元。`system.classes` 排在所有 Gate 之前。
+
+## 自举 6 道 Gate
+
+### Gate 0: system.classes 最小门面 🔴 全局阻塞点 ⏱️ 3-5 天
+
+**为什么排第一**：TLS (138 个文件)、HTTP、fs、io 等模块的核心类型继承自 `TStream`。
+不交付 `system.classes`，这些模块无法迁移脱离 FPC `Classes` 单元，所有其他工作线被阻塞。
+
+**任务**：
+
+1. **审计现有依赖**：
+   - 搜索 `core/src/` 下所有 `uses Classes` 的模块
+   - 列出每个模块需要的 Classes 类型（TStream, THandleStream, TMemoryStream, TStringStream, TSeekOrigin 等）
+   - 记录到 `core/docs/system/classes-minimal-pressure.md`
+
+2. **创建最小门面 `core/src/nextpas.core.system.classes.pas`**：
+   - 策略：先做 re-export 门面（路径 A），长期再考虑纯 nextPas 实现（路径 B）
+   - 最小符号集：`TStream`, `THandleStream`, `TMemoryStream`, `TStringStream`, `TBytesStream`, `TSeekOrigin`
+   - 遵循 owner boundary：不实现逻辑，只委派给 FPC `Classes` 或未来纯 Pascal 实现
+   - 遵循设计规范中的门面模式
+
+3. **添加单元测试 `core/tests/nextpas.core.system/test_system_classes/`**：
+   - TStream 基本读写测试
+   - TMemoryStream 容量/位置测试
+   - TStringStream 字符串读写测试
+   - THandleStream 句柄测试
+   - 继承链验证测试
+   - 0 leaks (heaptrc)
+
+4. **通知所有工作线**：
+   - 更新 `docs/plans/2026-06-18-five-lines-work-map.md` 状态
+   - TLS 线可以开始迁移 `uses Classes` → `uses nextpas.core.system.classes`
+   - FOUNDATION 线可以开始 io 模块适配
+
+**验收**：
+- [ ] `nextpas.core.system.classes` 单元可编译
+- [ ] TStream 继承链可用（TMemoryStream → TStream, TStringStream → TStream）
+- [ ] TLS 模块可以 `uses nextpas.core.system.classes` 替代 `uses Classes`
+- [ ] 单元测试通过，0 leaks
+- [ ] 不创建裸露的 `System.pas` 或 `Classes.pas` 在 `core/src/`
+- [ ] `make hygiene` PASS
+
+**参考文档**：
+- `core/docs/design-conventions.md` — 门面模式（§2 模块结构范式）
+- `core/docs/system/README.md` — owner boundary，Classes 已推迟
+- `core/docs/system/compatibility-facades.md` — S4 兼容门面设计
+- `docs/plans/2026-06-18-five-lines-work-map.md` — 5 线接口需求矩阵
+
+---
 
 ### Gate 1: RTTI 形状一致性 ⏱️ 3-5 天
 
@@ -208,20 +261,24 @@
 
 ```
 Week 1:
-  - Gate 1 (RTTI 测试) — 3 天
-  - Gate 5 (异常测试) — 2 天
-  - 开始 pass/fail 测试扩展（与上面并行）
+  - Gate 0 (system.classes 门面) — 3-5 天 🔴 最高优先级，全局阻塞点
+  - Gate 1 (RTTI 测试) — 3 天（可与 G0 部分并行）
+  - 通知 TLS/FOUNDATION/L3 线 system.classes 已可用
 
 Week 2:
+  - Gate 5 (异常测试) — 2 天
   - Gate 3 (进程生命周期) — 3 天
+  - 开始 pass/fail 测试扩展（与上面并行）
+
+Week 3:
   - Gate 4 (堆管理器决策+实现) — 1-2 天
   - 继续 pass/fail 测试扩展
 
-Week 3-4:
+Week 4-5:
   - Gate 2 (单元生命周期) — 最长单点任务
   - 完成所有 pass/fail 测试
 
-Week 5:
+Week 6:
   - 自举集成验证
   - 用 nextPas 编译 nextPas 编译器本身
   - 收口、文档更新、合并 main
