@@ -4,7 +4,7 @@ unit nextpas.core.tls.openssl.api.bio;
 
 interface
 
-uses DynLibs, nextpas.core.tls.openssl.base;
+uses nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.base;
 
 const
   BIO_FLAGS_BASE64_NO_NL = $100;
@@ -358,7 +358,7 @@ uses nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.loader;
 
 procedure LoadOpenSSLBIO;
 var
-  LibSSL, LibCrypto: TLibHandle;
+  LibSSL, LibCrypto: TPlatformLibrary;
 begin
   // Make sure core is loaded first
   if not TOpenSSLLoader.IsModuleLoaded(osmCore) then
@@ -368,45 +368,45 @@ begin
   LibSSL := GetSSLLibHandle;
   LibCrypto := GetCryptoLibHandle;
 
-  if (LibSSL = NilHandle) or (LibCrypto = NilHandle) then
+  if not LibLoaded(LibSSL) or not LibLoaded(LibCrypto) then
     Exit;
 
   // Load function pointers - most BIO functions are in libcrypto
-  BIO_new := TBIO_new(GetProcedureAddress(LibCrypto, 'BIO_new'));
-  BIO_free := TBIO_free(GetProcedureAddress(LibCrypto, 'BIO_free'));
-  BIO_free_all := TBIO_free_all(GetProcedureAddress(LibCrypto, 'BIO_free_all'));
-  BIO_read := TBIO_read(GetProcedureAddress(LibCrypto, 'BIO_read'));
-  BIO_write := TBIO_write(GetProcedureAddress(LibCrypto, 'BIO_write'));
-  BIO_ctrl := TBIO_ctrl(GetProcedureAddress(LibCrypto, 'BIO_ctrl'));
-  BIO_s_mem := TBIO_s_mem(GetProcedureAddress(LibCrypto, 'BIO_s_mem'));
-  BIO_new_mem_buf := TBIO_new_mem_buf(GetProcedureAddress(LibCrypto, 'BIO_new_mem_buf'));
-  BIO_new_file := TBIO_new_file(GetProcedureAddress(LibCrypto, 'BIO_new_file'));
-  BIO_s_file := TBIO_s_file(GetProcedureAddress(LibCrypto, 'BIO_s_file'));
-  BIO_s_null := TBIO_s_null(GetProcedureAddress(LibCrypto, 'BIO_s_null'));
+  BIO_new := TBIO_new(GetProcSymbol(LibCrypto, 'BIO_new'));
+  BIO_free := TBIO_free(GetProcSymbol(LibCrypto, 'BIO_free'));
+  BIO_free_all := TBIO_free_all(GetProcSymbol(LibCrypto, 'BIO_free_all'));
+  BIO_read := TBIO_read(GetProcSymbol(LibCrypto, 'BIO_read'));
+  BIO_write := TBIO_write(GetProcSymbol(LibCrypto, 'BIO_write'));
+  BIO_ctrl := TBIO_ctrl(GetProcSymbol(LibCrypto, 'BIO_ctrl'));
+  BIO_s_mem := TBIO_s_mem(GetProcSymbol(LibCrypto, 'BIO_s_mem'));
+  BIO_new_mem_buf := TBIO_new_mem_buf(GetProcSymbol(LibCrypto, 'BIO_new_mem_buf'));
+  BIO_new_file := TBIO_new_file(GetProcSymbol(LibCrypto, 'BIO_new_file'));
+  BIO_s_file := TBIO_s_file(GetProcSymbol(LibCrypto, 'BIO_s_file'));
+  BIO_s_null := TBIO_s_null(GetProcSymbol(LibCrypto, 'BIO_s_null'));
   // BIO_get_mem_data is a macro
-  BIO_new_connect := TBIO_new_connect(GetProcedureAddress(LibCrypto, 'BIO_new_connect'));
-  BIO_new_accept := TBIO_new_accept(GetProcedureAddress(LibCrypto, 'BIO_new_accept'));
-  BIO_s_connect := TBIO_s_connect(GetProcedureAddress(LibCrypto, 'BIO_s_connect'));
-  BIO_s_accept := TBIO_s_accept(GetProcedureAddress(LibCrypto, 'BIO_s_accept'));
-  BIO_push := TBIO_push(GetProcedureAddress(LibCrypto, 'BIO_push'));
-  BIO_pop := TBIO_pop(GetProcedureAddress(LibCrypto, 'BIO_pop'));
-  BIO_f_base64 := TBIO_f_base64(GetProcedureAddress(LibCrypto, 'BIO_f_base64'));
-  BIO_new_bio_pair := TBIO_new_bio_pair(GetProcedureAddress(LibCrypto, 'BIO_new_bio_pair'));
+  BIO_new_connect := TBIO_new_connect(GetProcSymbol(LibCrypto, 'BIO_new_connect'));
+  BIO_new_accept := TBIO_new_accept(GetProcSymbol(LibCrypto, 'BIO_new_accept'));
+  BIO_s_connect := TBIO_s_connect(GetProcSymbol(LibCrypto, 'BIO_s_connect'));
+  BIO_s_accept := TBIO_s_accept(GetProcSymbol(LibCrypto, 'BIO_s_accept'));
+  BIO_push := TBIO_push(GetProcSymbol(LibCrypto, 'BIO_push'));
+  BIO_pop := TBIO_pop(GetProcSymbol(LibCrypto, 'BIO_pop'));
+  BIO_f_base64 := TBIO_f_base64(GetProcSymbol(LibCrypto, 'BIO_f_base64'));
+  BIO_new_bio_pair := TBIO_new_bio_pair(GetProcSymbol(LibCrypto, 'BIO_new_bio_pair'));
 
   // SSL BIO functions (in libssl)
-  BIO_f_ssl := TBIO_f_ssl(GetProcedureAddress(LibSSL, 'BIO_f_ssl'));
-  BIO_new_ssl := TBIO_new_ssl(GetProcedureAddress(LibSSL, 'BIO_new_ssl'));
-  BIO_new_ssl_connect := TBIO_new_ssl_connect(GetProcedureAddress(LibSSL, 'BIO_new_ssl_connect'));
-  BIO_new_buffer_ssl_connect := TBIO_new_buffer_ssl_connect(GetProcedureAddress(LibSSL, 'BIO_new_buffer_ssl_connect'));
-  BIO_ssl_copy_session_id := TBIO_ssl_copy_session_id(GetProcedureAddress(LibSSL, 'BIO_ssl_copy_session_id'));
-  BIO_ssl_shutdown := TBIO_ssl_shutdown(GetProcedureAddress(LibSSL, 'BIO_ssl_shutdown'));
+  BIO_f_ssl := TBIO_f_ssl(GetProcSymbol(LibSSL, 'BIO_f_ssl'));
+  BIO_new_ssl := TBIO_new_ssl(GetProcSymbol(LibSSL, 'BIO_new_ssl'));
+  BIO_new_ssl_connect := TBIO_new_ssl_connect(GetProcSymbol(LibSSL, 'BIO_new_ssl_connect'));
+  BIO_new_buffer_ssl_connect := TBIO_new_buffer_ssl_connect(GetProcSymbol(LibSSL, 'BIO_new_buffer_ssl_connect'));
+  BIO_ssl_copy_session_id := TBIO_ssl_copy_session_id(GetProcSymbol(LibSSL, 'BIO_ssl_copy_session_id'));
+  BIO_ssl_shutdown := TBIO_ssl_shutdown(GetProcSymbol(LibSSL, 'BIO_ssl_shutdown'));
 
   // BIO_pending is a macro in OpenSSL, use our helper implementation
   BIO_pending := @BIO_pending_impl;
 
   // SSL_SESSION BIO functions (in libssl, not libcrypto)
-  i2d_SSL_SESSION_bio := Ti2d_SSL_SESSION_bio(GetProcedureAddress(LibSSL, 'i2d_SSL_SESSION_bio'));
-  d2i_SSL_SESSION_bio := Td2i_SSL_SESSION_bio(GetProcedureAddress(LibSSL, 'd2i_SSL_SESSION_bio'));
+  i2d_SSL_SESSION_bio := Ti2d_SSL_SESSION_bio(GetProcSymbol(LibSSL, 'i2d_SSL_SESSION_bio'));
+  d2i_SSL_SESSION_bio := Td2i_SSL_SESSION_bio(GetProcSymbol(LibSSL, 'd2i_SSL_SESSION_bio'));
 
   // Mark module as loaded
   TOpenSSLLoader.SetModuleLoaded(osmBIO, Assigned(BIO_new) and Assigned(BIO_free));

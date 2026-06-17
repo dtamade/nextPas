@@ -4,7 +4,7 @@ unit nextpas.core.tls.openssl.api.aria;
 
 interface
 
-uses nextpas.core.tls.openssl.base; type // ARIA types ARIA_KEY = packed record rd_key: array[0..16, 0..3] of Cardinal;
+uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader; type // ARIA types ARIA_KEY = packed record rd_key: array[0..16, 0..3] of Cardinal;
     rounds: Integer;
   end;
   PARIA_KEY = ^ARIA_KEY;
@@ -109,7 +109,7 @@ var
   EVP_aria_256_gcm: TEVP_aria_cipher = nil;
   EVP_aria_256_ccm: TEVP_aria_cipher = nil;
 
-procedure LoadARIAFunctions(AHandle: TLibHandle);
+procedure LoadARIAFunctions(AHandle: TPlatformLibrary);
 procedure UnloadARIAFunctions;
 
 // Helper functions
@@ -120,62 +120,62 @@ function ARIADecryptCBC(const Key: TBytes; KeyBits: Integer; const IV, Input: TB
 
 implementation
 
-uses nextpas.core.tls.openssl.api.utils; procedure LoadARIAFunctions(AHandle: TLibHandle);
+uses nextpas.core.tls.openssl.api.utils; procedure LoadARIAFunctions(AHandle: TPlatformLibrary);
 begin
-  if AHandle = 0 then Exit;
+  if not LibLoaded(AHandle) then Exit;
   
   // Key setup functions
-  ARIA_set_encrypt_key := TARIA_set_encrypt_key(GetProcedureAddress(AHandle, 'ARIA_set_encrypt_key'));
-  ARIA_set_decrypt_key := TARIA_set_decrypt_key(GetProcedureAddress(AHandle, 'ARIA_set_decrypt_key'));
+  ARIA_set_encrypt_key := TARIA_set_encrypt_key(GetProcSymbol(AHandle, 'ARIA_set_encrypt_key'));
+  ARIA_set_decrypt_key := TARIA_set_decrypt_key(GetProcSymbol(AHandle, 'ARIA_set_decrypt_key'));
   
   // Core functions
-  ARIA_encrypt_func := TARIA_encrypt_func(GetProcedureAddress(AHandle, 'ARIA_encrypt'));
-  ARIA_decrypt_func := TARIA_decrypt_func(GetProcedureAddress(AHandle, 'ARIA_decrypt'));
+  ARIA_encrypt_func := TARIA_encrypt_func(GetProcSymbol(AHandle, 'ARIA_encrypt'));
+  ARIA_decrypt_func := TARIA_decrypt_func(GetProcSymbol(AHandle, 'ARIA_decrypt'));
   
   // Mode functions
-  ARIA_ecb_encrypt := TARIA_ecb_encrypt(GetProcedureAddress(AHandle, 'ARIA_ecb_encrypt'));
-  ARIA_cbc_encrypt := TARIA_cbc_encrypt(GetProcedureAddress(AHandle, 'ARIA_cbc_encrypt'));
-  ARIA_cfb128_encrypt := TARIA_cfb128_encrypt(GetProcedureAddress(AHandle, 'ARIA_cfb128_encrypt'));
-  ARIA_cfb1_encrypt := TARIA_cfb_encrypt(GetProcedureAddress(AHandle, 'ARIA_cfb1_encrypt'));
-  ARIA_cfb8_encrypt := TARIA_cfb_encrypt(GetProcedureAddress(AHandle, 'ARIA_cfb8_encrypt'));
-  ARIA_ofb128_encrypt := TARIA_ofb128_encrypt(GetProcedureAddress(AHandle, 'ARIA_ofb128_encrypt'));
-  ARIA_ctr128_encrypt := TARIA_ctr128_encrypt(GetProcedureAddress(AHandle, 'ARIA_ctr128_encrypt'));
+  ARIA_ecb_encrypt := TARIA_ecb_encrypt(GetProcSymbol(AHandle, 'ARIA_ecb_encrypt'));
+  ARIA_cbc_encrypt := TARIA_cbc_encrypt(GetProcSymbol(AHandle, 'ARIA_cbc_encrypt'));
+  ARIA_cfb128_encrypt := TARIA_cfb128_encrypt(GetProcSymbol(AHandle, 'ARIA_cfb128_encrypt'));
+  ARIA_cfb1_encrypt := TARIA_cfb_encrypt(GetProcSymbol(AHandle, 'ARIA_cfb1_encrypt'));
+  ARIA_cfb8_encrypt := TARIA_cfb_encrypt(GetProcSymbol(AHandle, 'ARIA_cfb8_encrypt'));
+  ARIA_ofb128_encrypt := TARIA_ofb128_encrypt(GetProcSymbol(AHandle, 'ARIA_ofb128_encrypt'));
+  ARIA_ctr128_encrypt := TARIA_ctr128_encrypt(GetProcSymbol(AHandle, 'ARIA_ctr128_encrypt'));
   
   // EVP functions - 128 bit
-  EVP_aria_128_ecb := TEVP_aria_cipher(GetProcedureAddress(AHandle, 'EVP_aria_128_ecb'));
-  EVP_aria_128_cbc := TEVP_aria_cipher(GetProcedureAddress(AHandle, 'EVP_aria_128_cbc'));
-  EVP_aria_128_cfb := TEVP_aria_cipher(GetProcedureAddress(AHandle, 'EVP_aria_128_cfb'));
-  EVP_aria_128_cfb1 := TEVP_aria_cipher(GetProcedureAddress(AHandle, 'EVP_aria_128_cfb1'));
-  EVP_aria_128_cfb8 := TEVP_aria_cipher(GetProcedureAddress(AHandle, 'EVP_aria_128_cfb8'));
-  EVP_aria_128_cfb128 := TEVP_aria_cipher(GetProcedureAddress(AHandle, 'EVP_aria_128_cfb128'));
-  EVP_aria_128_ctr := TEVP_aria_cipher(GetProcedureAddress(AHandle, 'EVP_aria_128_ctr'));
-  EVP_aria_128_ofb := TEVP_aria_cipher(GetProcedureAddress(AHandle, 'EVP_aria_128_ofb'));
-  EVP_aria_128_gcm := TEVP_aria_cipher(GetProcedureAddress(AHandle, 'EVP_aria_128_gcm'));
-  EVP_aria_128_ccm := TEVP_aria_cipher(GetProcedureAddress(AHandle, 'EVP_aria_128_ccm'));
+  EVP_aria_128_ecb := TEVP_aria_cipher(GetProcSymbol(AHandle, 'EVP_aria_128_ecb'));
+  EVP_aria_128_cbc := TEVP_aria_cipher(GetProcSymbol(AHandle, 'EVP_aria_128_cbc'));
+  EVP_aria_128_cfb := TEVP_aria_cipher(GetProcSymbol(AHandle, 'EVP_aria_128_cfb'));
+  EVP_aria_128_cfb1 := TEVP_aria_cipher(GetProcSymbol(AHandle, 'EVP_aria_128_cfb1'));
+  EVP_aria_128_cfb8 := TEVP_aria_cipher(GetProcSymbol(AHandle, 'EVP_aria_128_cfb8'));
+  EVP_aria_128_cfb128 := TEVP_aria_cipher(GetProcSymbol(AHandle, 'EVP_aria_128_cfb128'));
+  EVP_aria_128_ctr := TEVP_aria_cipher(GetProcSymbol(AHandle, 'EVP_aria_128_ctr'));
+  EVP_aria_128_ofb := TEVP_aria_cipher(GetProcSymbol(AHandle, 'EVP_aria_128_ofb'));
+  EVP_aria_128_gcm := TEVP_aria_cipher(GetProcSymbol(AHandle, 'EVP_aria_128_gcm'));
+  EVP_aria_128_ccm := TEVP_aria_cipher(GetProcSymbol(AHandle, 'EVP_aria_128_ccm'));
   
   // EVP functions - 192 bit
-  EVP_aria_192_ecb := TEVP_aria_cipher(GetProcedureAddress(AHandle, 'EVP_aria_192_ecb'));
-  EVP_aria_192_cbc := TEVP_aria_cipher(GetProcedureAddress(AHandle, 'EVP_aria_192_cbc'));
-  EVP_aria_192_cfb := TEVP_aria_cipher(GetProcedureAddress(AHandle, 'EVP_aria_192_cfb'));
-  EVP_aria_192_cfb1 := TEVP_aria_cipher(GetProcedureAddress(AHandle, 'EVP_aria_192_cfb1'));
-  EVP_aria_192_cfb8 := TEVP_aria_cipher(GetProcedureAddress(AHandle, 'EVP_aria_192_cfb8'));
-  EVP_aria_192_cfb128 := TEVP_aria_cipher(GetProcedureAddress(AHandle, 'EVP_aria_192_cfb128'));
-  EVP_aria_192_ctr := TEVP_aria_cipher(GetProcedureAddress(AHandle, 'EVP_aria_192_ctr'));
-  EVP_aria_192_ofb := TEVP_aria_cipher(GetProcedureAddress(AHandle, 'EVP_aria_192_ofb'));
-  EVP_aria_192_gcm := TEVP_aria_cipher(GetProcedureAddress(AHandle, 'EVP_aria_192_gcm'));
-  EVP_aria_192_ccm := TEVP_aria_cipher(GetProcedureAddress(AHandle, 'EVP_aria_192_ccm'));
+  EVP_aria_192_ecb := TEVP_aria_cipher(GetProcSymbol(AHandle, 'EVP_aria_192_ecb'));
+  EVP_aria_192_cbc := TEVP_aria_cipher(GetProcSymbol(AHandle, 'EVP_aria_192_cbc'));
+  EVP_aria_192_cfb := TEVP_aria_cipher(GetProcSymbol(AHandle, 'EVP_aria_192_cfb'));
+  EVP_aria_192_cfb1 := TEVP_aria_cipher(GetProcSymbol(AHandle, 'EVP_aria_192_cfb1'));
+  EVP_aria_192_cfb8 := TEVP_aria_cipher(GetProcSymbol(AHandle, 'EVP_aria_192_cfb8'));
+  EVP_aria_192_cfb128 := TEVP_aria_cipher(GetProcSymbol(AHandle, 'EVP_aria_192_cfb128'));
+  EVP_aria_192_ctr := TEVP_aria_cipher(GetProcSymbol(AHandle, 'EVP_aria_192_ctr'));
+  EVP_aria_192_ofb := TEVP_aria_cipher(GetProcSymbol(AHandle, 'EVP_aria_192_ofb'));
+  EVP_aria_192_gcm := TEVP_aria_cipher(GetProcSymbol(AHandle, 'EVP_aria_192_gcm'));
+  EVP_aria_192_ccm := TEVP_aria_cipher(GetProcSymbol(AHandle, 'EVP_aria_192_ccm'));
   
   // EVP functions - 256 bit
-  EVP_aria_256_ecb := TEVP_aria_cipher(GetProcedureAddress(AHandle, 'EVP_aria_256_ecb'));
-  EVP_aria_256_cbc := TEVP_aria_cipher(GetProcedureAddress(AHandle, 'EVP_aria_256_cbc'));
-  EVP_aria_256_cfb := TEVP_aria_cipher(GetProcedureAddress(AHandle, 'EVP_aria_256_cfb'));
-  EVP_aria_256_cfb1 := TEVP_aria_cipher(GetProcedureAddress(AHandle, 'EVP_aria_256_cfb1'));
-  EVP_aria_256_cfb8 := TEVP_aria_cipher(GetProcedureAddress(AHandle, 'EVP_aria_256_cfb8'));
-  EVP_aria_256_cfb128 := TEVP_aria_cipher(GetProcedureAddress(AHandle, 'EVP_aria_256_cfb128'));
-  EVP_aria_256_ctr := TEVP_aria_cipher(GetProcedureAddress(AHandle, 'EVP_aria_256_ctr'));
-  EVP_aria_256_ofb := TEVP_aria_cipher(GetProcedureAddress(AHandle, 'EVP_aria_256_ofb'));
-  EVP_aria_256_gcm := TEVP_aria_cipher(GetProcedureAddress(AHandle, 'EVP_aria_256_gcm'));
-  EVP_aria_256_ccm := TEVP_aria_cipher(GetProcedureAddress(AHandle, 'EVP_aria_256_ccm'));
+  EVP_aria_256_ecb := TEVP_aria_cipher(GetProcSymbol(AHandle, 'EVP_aria_256_ecb'));
+  EVP_aria_256_cbc := TEVP_aria_cipher(GetProcSymbol(AHandle, 'EVP_aria_256_cbc'));
+  EVP_aria_256_cfb := TEVP_aria_cipher(GetProcSymbol(AHandle, 'EVP_aria_256_cfb'));
+  EVP_aria_256_cfb1 := TEVP_aria_cipher(GetProcSymbol(AHandle, 'EVP_aria_256_cfb1'));
+  EVP_aria_256_cfb8 := TEVP_aria_cipher(GetProcSymbol(AHandle, 'EVP_aria_256_cfb8'));
+  EVP_aria_256_cfb128 := TEVP_aria_cipher(GetProcSymbol(AHandle, 'EVP_aria_256_cfb128'));
+  EVP_aria_256_ctr := TEVP_aria_cipher(GetProcSymbol(AHandle, 'EVP_aria_256_ctr'));
+  EVP_aria_256_ofb := TEVP_aria_cipher(GetProcSymbol(AHandle, 'EVP_aria_256_ofb'));
+  EVP_aria_256_gcm := TEVP_aria_cipher(GetProcSymbol(AHandle, 'EVP_aria_256_gcm'));
+  EVP_aria_256_ccm := TEVP_aria_cipher(GetProcSymbol(AHandle, 'EVP_aria_256_ccm'));
 end;
 
 procedure UnloadARIAFunctions;

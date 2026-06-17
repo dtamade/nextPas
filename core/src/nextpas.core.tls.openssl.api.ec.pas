@@ -391,7 +391,7 @@ var
 begin
   Result := False;
 
-  if ALibHandle = 0 then Exit;
+  if not LibLoaded(ALibHandle) then Exit;
 
   // 使用 TOpenSSLLoader.LoadFunctions 批量加载
   LLoadedCount := TOpenSSLLoader.LoadFunctions(ALibHandle, EC_FUNCTION_BINDINGS);

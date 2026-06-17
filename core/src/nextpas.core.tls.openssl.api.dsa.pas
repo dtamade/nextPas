@@ -4,7 +4,7 @@ unit nextpas.core.tls.openssl.api.dsa;
 
 interface
 
-uses DynLibs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.loader;
+uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.loader;
 
 const
   { DSA flags }
@@ -252,20 +252,20 @@ const
 
 function LoadOpenSSLDSA: Boolean;
 var
-  LLib: TLibHandle;
+  LLib: TPlatformLibrary;
 begin
   if TOpenSSLLoader.IsModuleLoaded(osmDSA) then
     Exit(True);
 
   // Use the crypto library handle from core module
   LLib := GetCryptoLibHandle;
-  if LLib = NilHandle then
+  if not LibLoaded(LLib) then
   begin
     LoadOpenSSLCore;
     LLib := GetCryptoLibHandle;
   end;
 
-  if LLib = NilHandle then
+  if not LibLoaded(LLib) then
     Exit(False);
 
   // 使用批量加载模式

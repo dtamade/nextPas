@@ -4,7 +4,7 @@ unit nextpas.core.tls.openssl.api.seed;
 
 interface
 
-uses nextpas.core.tls.openssl.base; type // SEED types SEED_KEY_SCHEDULE = packed record ks: array[0..31] of Cardinal;
+uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader; type // SEED types SEED_KEY_SCHEDULE = packed record ks: array[0..31] of Cardinal;
   end;
   PSEED_KEY_SCHEDULE = ^SEED_KEY_SCHEDULE;
   
@@ -51,7 +51,7 @@ var
   EVP_seed_ofb: TEVP_seed_cipher = nil;
   EVP_seed_ofb128: TEVP_seed_cipher = nil;
 
-procedure LoadSEEDFunctions(AHandle: TLibHandle);
+procedure LoadSEEDFunctions(AHandle: TPlatformLibrary);
 procedure UnloadSEEDFunctions;
 
 // Helper functions
@@ -62,28 +62,28 @@ function SEEDDecryptCBC(const Key, IV, Input: TBytes): TBytes;
 
 implementation
 
-uses nextpas.core.tls.openssl.api.utils; procedure LoadSEEDFunctions(AHandle: TLibHandle);
+uses nextpas.core.tls.openssl.api.utils; procedure LoadSEEDFunctions(AHandle: TPlatformLibrary);
 begin
-  if AHandle = 0 then Exit;
+  if not LibLoaded(AHandle) then Exit;
   
   // Core SEED functions
-  SEED_set_key := TSEED_set_key(GetProcedureAddress(AHandle, 'SEED_set_key'));
-  SEED_encrypt_func := TSEED_encrypt_func(GetProcedureAddress(AHandle, 'SEED_encrypt'));
-  SEED_decrypt_func := TSEED_decrypt_func(GetProcedureAddress(AHandle, 'SEED_decrypt'));
+  SEED_set_key := TSEED_set_key(GetProcSymbol(AHandle, 'SEED_set_key'));
+  SEED_encrypt_func := TSEED_encrypt_func(GetProcSymbol(AHandle, 'SEED_encrypt'));
+  SEED_decrypt_func := TSEED_decrypt_func(GetProcSymbol(AHandle, 'SEED_decrypt'));
   
   // SEED mode functions
-  SEED_ecb_encrypt := TSEED_ecb_encrypt(GetProcedureAddress(AHandle, 'SEED_ecb_encrypt'));
-  SEED_cbc_encrypt := TSEED_cbc_encrypt(GetProcedureAddress(AHandle, 'SEED_cbc_encrypt'));
-  SEED_cfb128_encrypt := TSEED_cfb128_encrypt(GetProcedureAddress(AHandle, 'SEED_cfb128_encrypt'));
-  SEED_ofb128_encrypt := TSEED_ofb128_encrypt(GetProcedureAddress(AHandle, 'SEED_ofb128_encrypt'));
+  SEED_ecb_encrypt := TSEED_ecb_encrypt(GetProcSymbol(AHandle, 'SEED_ecb_encrypt'));
+  SEED_cbc_encrypt := TSEED_cbc_encrypt(GetProcSymbol(AHandle, 'SEED_cbc_encrypt'));
+  SEED_cfb128_encrypt := TSEED_cfb128_encrypt(GetProcSymbol(AHandle, 'SEED_cfb128_encrypt'));
+  SEED_ofb128_encrypt := TSEED_ofb128_encrypt(GetProcSymbol(AHandle, 'SEED_ofb128_encrypt'));
   
   // EVP SEED functions
-  EVP_seed_ecb := TEVP_seed_cipher(GetProcedureAddress(AHandle, 'EVP_seed_ecb'));
-  EVP_seed_cbc := TEVP_seed_cipher(GetProcedureAddress(AHandle, 'EVP_seed_cbc'));
-  EVP_seed_cfb := TEVP_seed_cipher(GetProcedureAddress(AHandle, 'EVP_seed_cfb'));
-  EVP_seed_cfb128 := TEVP_seed_cipher(GetProcedureAddress(AHandle, 'EVP_seed_cfb128'));
-  EVP_seed_ofb := TEVP_seed_cipher(GetProcedureAddress(AHandle, 'EVP_seed_ofb'));
-  EVP_seed_ofb128 := TEVP_seed_cipher(GetProcedureAddress(AHandle, 'EVP_seed_ofb128'));
+  EVP_seed_ecb := TEVP_seed_cipher(GetProcSymbol(AHandle, 'EVP_seed_ecb'));
+  EVP_seed_cbc := TEVP_seed_cipher(GetProcSymbol(AHandle, 'EVP_seed_cbc'));
+  EVP_seed_cfb := TEVP_seed_cipher(GetProcSymbol(AHandle, 'EVP_seed_cfb'));
+  EVP_seed_cfb128 := TEVP_seed_cipher(GetProcSymbol(AHandle, 'EVP_seed_cfb128'));
+  EVP_seed_ofb := TEVP_seed_cipher(GetProcSymbol(AHandle, 'EVP_seed_ofb'));
+  EVP_seed_ofb128 := TEVP_seed_cipher(GetProcSymbol(AHandle, 'EVP_seed_ofb128'));
 end;
 
 procedure UnloadSEEDFunctions;

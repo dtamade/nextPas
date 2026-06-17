@@ -784,8 +784,8 @@ function LoadOpenSSLLibrary: Boolean;
 procedure UnloadOpenSSLLibrary;
 function GetOpenSSLVersion: string;
 function GetOpenSSLErrorString: string;
-function GetCryptoLibHandle: TLibHandle;
-function GetSSLLibHandle: TLibHandle;
+function GetCryptoLibHandle: TPlatformLibrary;
+function GetSSLLibHandle: TPlatformLibrary;
 
 // Helper functions for module loading compatibility (for RAND, EVP, etc.)
 function GetCryptoProcAddress(const ProcName: string): Pointer;
@@ -797,9 +797,9 @@ implementation
 
 function LoadOpenSSLLibrary: Boolean;
 var
-  LCryptoHandle, LSSLHandle: TLibHandle;
+  LCryptoHandle, LSSLHandle: TPlatformLibrary;
 
-  procedure LoadFunc(AHandle: TLibHandle; const AName: string; var AFunc);
+  procedure LoadFunc(AHandle: TPlatformLibrary; const AName: string; var AFunc);
   var
     P: Pointer;
   begin
@@ -809,7 +809,7 @@ var
     Pointer(AFunc) := P;
   end;
 
-  procedure TryLoadFunc(AHandle: TLibHandle; const AName: string; var AFunc);
+  procedure TryLoadFunc(AHandle: TPlatformLibrary; const AName: string; var AFunc);
   var
     P: Pointer;
   begin
@@ -829,11 +829,11 @@ begin
 
   // Phase 3.3 P0+ - 使用统一的动态库加载器（替换 ~30 行重复代码）
   LCryptoHandle := TOpenSSLLoader.GetLibraryHandle(osslLibCrypto);
-  if LCryptoHandle = 0 then
+  if not LibLoaded(LCryptoHandle) then
     raise ESSLInitializationException.Create('Failed to load crypto library');
 
   LSSLHandle := TOpenSSLLoader.GetLibraryHandle(osslLibSSL);
-  if LSSLHandle = 0 then
+  if not LibLoaded(LSSLHandle) then
     raise ESSLInitializationException.Create('Failed to load SSL library');
   
   try
@@ -1181,19 +1181,19 @@ begin
     Result := 0;
 end;
 
-function GetCryptoLibHandle: TLibHandle;
+function GetCryptoLibHandle: TPlatformLibrary;
 begin
   Result := TOpenSSLLoader.GetLibraryHandle(osslLibCrypto);
 end;
 
-function GetSSLLibHandle: TLibHandle;
+function GetSSLLibHandle: TPlatformLibrary;
 begin
   Result := TOpenSSLLoader.GetLibraryHandle(osslLibSSL);
 end;
 
 function GetCryptoProcAddress(const ProcName: string): Pointer;
 var
-  LHandle: TLibHandle;
+  LHandle: TPlatformLibrary;
 begin
   LHandle := TOpenSSLLoader.GetLibraryHandle(osslLibCrypto);
   Result := TOpenSSLLoader.GetFunction(LHandle, ProcName);

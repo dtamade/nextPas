@@ -21,7 +21,7 @@ unit nextpas.core.tls.wolfssl.api;
 interface
 
 uses
-   dynlibs, ctypes,
+   nextpas.core.platform.dl, ctypes,
   nextpas.core.tls.wolfssl.base;
 
 type
@@ -338,7 +338,7 @@ var
 function LoadWolfSSLLibrary: Boolean;
 procedure UnloadWolfSSLLibrary;
 function IsWolfSSLLoaded: Boolean;
-function GetWolfSSLLibraryHandle: TLibHandle;
+function GetWolfSSLLibraryHandle: TPlatformLibrary;
 
 implementation
 
@@ -346,23 +346,33 @@ uses
   nextpas.core.fs;
 
 var
-  GWolfSSLHandle: TLibHandle = NilHandle;
+  GWolfSSLHandle: TPlatformLibrary;
   GWolfSSLLoaded: Boolean = False;
+
+function WolfSSLLibValid(const ALib: TPlatformLibrary): Boolean; inline;
+begin
+  {$IFDEF NEXTPAS_WINDOWS}
+  Result := ALib.Handle <> 0;
+  {$ELSE}
+  Result := ALib.Handle <> nil;
+  {$ENDIF}
+end;
 
 function GetProc(const AProcName: string): Pointer;
 begin
-  Result := GetProcAddress(GWolfSSLHandle, AProcName);
+  Result := nil;
+  platform_dl_sym(GWolfSSLHandle, PAnsiChar(AnsiString(AProcName)), Result);
 end;
 
 {$IFDEF LINUX}
-function TryLoadWolfSSLLibraryFromPattern(const ADirectory, APattern: string): TLibHandle;
+function TryLoadWolfSSLLibraryFromPattern(const ADirectory, APattern: string): TPlatformLibrary;
 var
   LEntries: TDirEntryArray;
   LPath, LPrefix: string;
   LStarPos: SizeInt;
   I: Integer;
 begin
-  Result := NilHandle;
+  FillChar(Result, SizeOf(Result), 0);
 
   if not IsDir(ADirectory) then
     Exit;
@@ -382,13 +392,12 @@ begin
     if (LPrefix <> '') and (Copy(LEntries[I].Name, 1, Length(LPrefix)) <> LPrefix) then
       Continue;
     LPath := PathEnsureSep(ADirectory) + LEntries[I].Name;
-    Result := LoadLibrary(LPath);
-    if Result <> NilHandle then
+    if platform_dl_open(PAnsiChar(AnsiString(LPath)), PLATFORM_DL_NOW, Result) = 0 then
       Exit;
   end;
 end;
 
-function TryLoadWolfSSLLibraryFromCommonLocations: TLibHandle;
+function TryLoadWolfSSLLibraryFromCommonLocations: TPlatformLibrary;
 const
   CANDIDATE_DIRS: array[0..4] of string = (
     '/usr/lib/x86_64-linux-gnu',
@@ -400,19 +409,18 @@ const
 var
   I: Integer;
 begin
-  Result := NilHandle;
+  FillChar(Result, SizeOf(Result), 0);
 
   for I := Low(CANDIDATE_DIRS) to High(CANDIDATE_DIRS) do
   begin
-    Result := LoadLibrary(PathEnsureSep(CANDIDATE_DIRS[I]) + WOLFSSL_LIB_NAME);
-    if Result <> NilHandle then
+    if platform_dl_open(PAnsiChar(AnsiString(PathEnsureSep(CANDIDATE_DIRS[I]) + WOLFSSL_LIB_NAME)), PLATFORM_DL_NOW, Result) = 0 then
       Exit;
   end;
 
   for I := Low(CANDIDATE_DIRS) to High(CANDIDATE_DIRS) do
   begin
     Result := TryLoadWolfSSLLibraryFromPattern(CANDIDATE_DIRS[I], 'libwolfssl.so*');
-    if Result <> NilHandle then
+    if WolfSSLLibValid(Result) then
       Exit;
   end;
 end;
@@ -425,12 +433,14 @@ begin
   if GWolfSSLLoaded then
     Exit(True);
 
-  GWolfSSLHandle := LoadLibrary(WOLFSSL_LIB_NAME);
+  FillChar(GWolfSSLHandle, SizeOf(GWolfSSLHandle), 0);
+  if platform_dl_open(PAnsiChar(AnsiString(WOLFSSL_LIB_NAME)), PLATFORM_DL_NOW, GWolfSSLHandle) <> 0 then
+    FillChar(GWolfSSLHandle, SizeOf(GWolfSSLHandle), 0);
   {$IFDEF LINUX}
-  if GWolfSSLHandle = NilHandle then
+  if not WolfSSLLibValid(GWolfSSLHandle) then
     GWolfSSLHandle := TryLoadWolfSSLLibraryFromCommonLocations;
   {$ENDIF}
-  if GWolfSSLHandle = NilHandle then
+  if not WolfSSLLibValid(GWolfSSLHandle) then
     Exit(False);
 
   // 加载核心函数
@@ -673,11 +683,8 @@ end;
 
 procedure UnloadWolfSSLLibrary;
 begin
-  if GWolfSSLHandle <> NilHandle then
-  begin
-    FreeLibrary(GWolfSSLHandle);
-    GWolfSSLHandle := NilHandle;
-  end;
+  if WolfSSLLibValid(GWolfSSLHandle) then
+    platform_dl_close(GWolfSSLHandle);
 
   // 清空所有函数指针
   wolfssl_init := nil;
@@ -804,7 +811,7 @@ begin
   Result := GWolfSSLLoaded;
 end;
 
-function GetWolfSSLLibraryHandle: TLibHandle;
+function GetWolfSSLLibraryHandle: TPlatformLibrary;
 begin
   Result := GWolfSSLHandle;
 end;

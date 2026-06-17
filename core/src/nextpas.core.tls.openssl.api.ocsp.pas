@@ -4,7 +4,7 @@ unit nextpas.core.tls.openssl.api.ocsp;
 
 interface
 
-uses nextpas.core.base, dynlibs, nextpas.core.tls.base, nextpas.core.tls.net.hooks, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.api.ssl, nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.crypto, nextpas.core.tls.openssl.api.asn1, nextpas.core.tls.openssl.api.bio, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.stack, nextpas.core.text.conv; type // Additional pointer types needed PPASN1_GENERALIZEDTIME = ^PASN1_GENERALIZEDTIME;
+uses nextpas.core.base, nextpas.core.tls.base, nextpas.core.tls.net.hooks, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.api.ssl, nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.crypto, nextpas.core.tls.openssl.api.asn1, nextpas.core.tls.openssl.api.bio, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.stack, nextpas.core.text.conv; type // Additional pointer types needed PPASN1_GENERALIZEDTIME = ^PASN1_GENERALIZEDTIME;
   POCSP_REQ_CTX = Pointer;
   PPOCSP_REQ_CTX = ^POCSP_REQ_CTX;
   PPASN1_VALUE = ^ASN1_VALUE;
@@ -372,7 +372,7 @@ var
   OCSP_accept_responses_new: TOCSP_accept_responses_new = nil;
 
 // 加载和卸载函数
-function LoadOpenSSLOCSP(const ACryptoLib: THandle): Boolean;
+function LoadOpenSSLOCSP(const ACryptoLib: TPlatformLibrary): Boolean;
 procedure UnloadOpenSSLOCSP;
 
 // 辅助函数
@@ -494,12 +494,12 @@ var
     (Name: 'OCSP_accept_responses_new'; FuncPtr: @OCSP_accept_responses_new; Required: False)
   );
 
-function LoadOpenSSLOCSP(const ACryptoLib: THandle): Boolean;
+function LoadOpenSSLOCSP(const ACryptoLib: TPlatformLibrary): Boolean;
 begin
   if TOpenSSLLoader.IsModuleLoaded(osmOCSP) then
     Exit(True);
 
-  if ACryptoLib = 0 then
+  if not LibLoaded(ACryptoLib) then
     Exit(False);
 
   // 使用批量加载模式
@@ -507,13 +507,13 @@ begin
 
   // OpenSSL 3.x 中部分 OCSP API 使用小写命名（非旧式宏导出）
   if not Assigned(OCSP_RESPONSE_create) then
-    OCSP_RESPONSE_create := TOCSP_RESPONSE_create(GetProcedureAddress(ACryptoLib, 'OCSP_response_create'));
+    OCSP_RESPONSE_create := TOCSP_RESPONSE_create(GetProcSymbol(ACryptoLib, 'OCSP_response_create'));
 
   if not Assigned(OCSP_RESPONSE_status) then
-    OCSP_RESPONSE_status := TOCSP_RESPONSE_status(GetProcedureAddress(ACryptoLib, 'OCSP_response_status'));
+    OCSP_RESPONSE_status := TOCSP_RESPONSE_status(GetProcSymbol(ACryptoLib, 'OCSP_response_status'));
 
   if not Assigned(OCSP_RESPONSE_get1_basic) then
-    OCSP_RESPONSE_get1_basic := TOCSP_RESPONSE_get1_basic(GetProcedureAddress(ACryptoLib, 'OCSP_response_get1_basic'));
+    OCSP_RESPONSE_get1_basic := TOCSP_RESPONSE_get1_basic(GetProcSymbol(ACryptoLib, 'OCSP_response_get1_basic'));
 
   TOpenSSLLoader.SetModuleLoaded(osmOCSP, Assigned(OCSP_REQUEST_new) and Assigned(OCSP_RESPONSE_new));
   Result := TOpenSSLLoader.IsModuleLoaded(osmOCSP);
@@ -544,7 +544,7 @@ var
   LVerifyStore: PX509_STORE;
   LOwnsStore: Boolean;
   LNonceRes: Integer;
-  LLib: THandle;
+  LLib: TPlatformLibrary;
 
   procedure Fail(AStage: TOCSPCheckFailureStage; const AMessage: string);
   begin
@@ -576,7 +576,7 @@ var
     if not TOpenSSLLoader.IsModuleLoaded(osmEVP) then
     begin
       LLib := GetCryptoLibHandle;
-      if LLib <> 0 then
+      if LibLoaded(LLib) then
         LoadEVP(LLib);
     end;
 
@@ -935,7 +935,7 @@ end;
 function VerifyOCSPResponseDER(const AResponseDER, ACertDER, AIssuerDER: TBytes;
   out AError: string): Boolean;
 var
-  LCryptoLib: THandle;
+  LCryptoLib: TPlatformLibrary;
   LResponse: POCSP_RESPONSE;
   LLeaf: PX509;
   LIssuer: PX509;
@@ -984,7 +984,7 @@ begin
     end;
 
     LCryptoLib := GetCryptoLibHandle;
-    if (LCryptoLib = 0) or (not LoadOpenSSLOCSP(LCryptoLib)) then
+    if not LibLoaded(LCryptoLib) or (not LoadOpenSSLOCSP(LCryptoLib)) then
     begin
       AError := 'OpenSSL OCSP verification helper is unavailable';
       Exit;

@@ -25,7 +25,7 @@ unit nextpas.core.tls.mbedtls.api;
 
 interface
 
-uses dynlibs, nextpas.core.tls.mbedtls.base;
+uses nextpas.core.platform.dl, nextpas.core.tls.mbedtls.base;
 
 type
   { BIO 回调类型 - MbedTLS 特有 }
@@ -249,19 +249,20 @@ var
 function LoadMbedTLSLibrary: Boolean;
 procedure UnloadMbedTLSLibrary;
 function IsMbedTLSLoaded: Boolean;
-function GetMbedTLSLibraryHandle: TLibHandle;
+function GetMbedTLSLibraryHandle: TPlatformLibrary;
 
 implementation
 
 var
-  GMbedTLSHandle: TLibHandle = NilHandle;
-  GMbedCryptoHandle: TLibHandle = NilHandle;
-  GMbedX509Handle: TLibHandle = NilHandle;
+  GMbedTLSHandle: TPlatformLibrary;
+  GMbedCryptoHandle: TPlatformLibrary;
+  GMbedX509Handle: TPlatformLibrary;
   GMbedTLSLoaded: Boolean = False;
 
-function GetProc(AHandle: TLibHandle; const AProcName: string): Pointer;
+function GetProcSym(const ALib: TPlatformLibrary; const AName: PAnsiChar): Pointer;
 begin
-  Result := GetProcAddress(AHandle, AProcName);
+  Result := nil;
+  platform_dl_sym(ALib, AName, Result);
 end;
 
 procedure ClearAllPointers;
@@ -346,167 +347,161 @@ begin
 
   // MbedTLS 分为三个库，需要按依赖顺序加载
   // 1. mbedcrypto - 基础加密功能
-  GMbedCryptoHandle := LoadLibrary(MBEDCRYPTO_LIB_NAME);
-  if GMbedCryptoHandle = NilHandle then
+  if platform_dl_open(PAnsiChar(AnsiString(MBEDCRYPTO_LIB_NAME)), PLATFORM_DL_NOW, GMbedCryptoHandle) <> 0 then
     Exit(False);
 
   // 2. mbedx509 - 证书处理（依赖 mbedcrypto）
-  GMbedX509Handle := LoadLibrary(MBEDX509_LIB_NAME);
-  if GMbedX509Handle = NilHandle then
+  if platform_dl_open(PAnsiChar(AnsiString(MBEDX509_LIB_NAME)), PLATFORM_DL_NOW, GMbedX509Handle) <> 0 then
   begin
-    FreeLibrary(GMbedCryptoHandle);
-    GMbedCryptoHandle := NilHandle;
+    platform_dl_close(GMbedCryptoHandle);
     Exit(False);
   end;
 
   // 3. mbedtls - SSL/TLS 功能（依赖 mbedx509 和 mbedcrypto）
-  GMbedTLSHandle := LoadLibrary(MBEDTLS_LIB_NAME);
-  if GMbedTLSHandle = NilHandle then
+  if platform_dl_open(PAnsiChar(AnsiString(MBEDTLS_LIB_NAME)), PLATFORM_DL_NOW, GMbedTLSHandle) <> 0 then
   begin
-    FreeLibrary(GMbedX509Handle);
-    FreeLibrary(GMbedCryptoHandle);
-    GMbedX509Handle := NilHandle;
-    GMbedCryptoHandle := NilHandle;
+    platform_dl_close(GMbedX509Handle);
+    platform_dl_close(GMbedCryptoHandle);
     Exit(False);
   end;
 
   // 加载版本函数（从 mbedcrypto）
   mbedtls_version_get_string := Tmbedtls_version_get_string(
-    GetProc(GMbedCryptoHandle, 'mbedtls_version_get_string'));
+    GetProcSym(GMbedCryptoHandle, 'mbedtls_version_get_string'));
   mbedtls_version_get_number := Tmbedtls_version_get_number(
-    GetProc(GMbedCryptoHandle, 'mbedtls_version_get_number'));
+    GetProcSym(GMbedCryptoHandle, 'mbedtls_version_get_number'));
 
   // 加载熵源函数（从 mbedcrypto）
   mbedtls_entropy_init := Tmbedtls_entropy_init(
-    GetProc(GMbedCryptoHandle, 'mbedtls_entropy_init'));
+    GetProcSym(GMbedCryptoHandle, 'mbedtls_entropy_init'));
   mbedtls_entropy_free := Tmbedtls_entropy_free(
-    GetProc(GMbedCryptoHandle, 'mbedtls_entropy_free'));
+    GetProcSym(GMbedCryptoHandle, 'mbedtls_entropy_free'));
   mbedtls_entropy_func := Tmbedtls_entropy_func(
-    GetProc(GMbedCryptoHandle, 'mbedtls_entropy_func'));
+    GetProcSym(GMbedCryptoHandle, 'mbedtls_entropy_func'));
 
   // 加载随机数函数（从 mbedcrypto）
   mbedtls_ctr_drbg_init := Tmbedtls_ctr_drbg_init(
-    GetProc(GMbedCryptoHandle, 'mbedtls_ctr_drbg_init'));
+    GetProcSym(GMbedCryptoHandle, 'mbedtls_ctr_drbg_init'));
   mbedtls_ctr_drbg_seed := Tmbedtls_ctr_drbg_seed(
-    GetProc(GMbedCryptoHandle, 'mbedtls_ctr_drbg_seed'));
+    GetProcSym(GMbedCryptoHandle, 'mbedtls_ctr_drbg_seed'));
   mbedtls_ctr_drbg_free := Tmbedtls_ctr_drbg_free(
-    GetProc(GMbedCryptoHandle, 'mbedtls_ctr_drbg_free'));
+    GetProcSym(GMbedCryptoHandle, 'mbedtls_ctr_drbg_free'));
   mbedtls_ctr_drbg_random := Tmbedtls_ctr_drbg_random(
-    GetProc(GMbedCryptoHandle, 'mbedtls_ctr_drbg_random'));
+    GetProcSym(GMbedCryptoHandle, 'mbedtls_ctr_drbg_random'));
 
   // 加载 SSL 配置函数（从 mbedtls）
   mbedtls_ssl_config_init := Tmbedtls_ssl_config_init(
-    GetProc(GMbedTLSHandle, 'mbedtls_ssl_config_init'));
+    GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_config_init'));
   mbedtls_ssl_config_defaults := Tmbedtls_ssl_config_defaults(
-    GetProc(GMbedTLSHandle, 'mbedtls_ssl_config_defaults'));
+    GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_config_defaults'));
   mbedtls_ssl_config_free := Tmbedtls_ssl_config_free(
-    GetProc(GMbedTLSHandle, 'mbedtls_ssl_config_free'));
+    GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_config_free'));
   mbedtls_ssl_conf_rng := Tmbedtls_ssl_conf_rng(
-    GetProc(GMbedTLSHandle, 'mbedtls_ssl_conf_rng'));
+    GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_conf_rng'));
   mbedtls_ssl_conf_authmode := Tmbedtls_ssl_conf_authmode(
-    GetProc(GMbedTLSHandle, 'mbedtls_ssl_conf_authmode'));
+    GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_conf_authmode'));
   mbedtls_ssl_conf_ca_chain := Tmbedtls_ssl_conf_ca_chain(
-    GetProc(GMbedTLSHandle, 'mbedtls_ssl_conf_ca_chain'));
+    GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_conf_ca_chain'));
   mbedtls_ssl_conf_own_cert := Tmbedtls_ssl_conf_own_cert(
-    GetProc(GMbedTLSHandle, 'mbedtls_ssl_conf_own_cert'));
+    GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_conf_own_cert'));
 
   // 加载 SSL 上下文函数（从 mbedtls）
   mbedtls_ssl_init := Tmbedtls_ssl_init(
-    GetProc(GMbedTLSHandle, 'mbedtls_ssl_init'));
+    GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_init'));
   mbedtls_ssl_setup := Tmbedtls_ssl_setup(
-    GetProc(GMbedTLSHandle, 'mbedtls_ssl_setup'));
+    GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_setup'));
   mbedtls_ssl_free := Tmbedtls_ssl_free(
-    GetProc(GMbedTLSHandle, 'mbedtls_ssl_free'));
+    GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_free'));
   mbedtls_ssl_set_bio := Tmbedtls_ssl_set_bio(
-    GetProc(GMbedTLSHandle, 'mbedtls_ssl_set_bio'));
+    GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_set_bio'));
   mbedtls_ssl_set_hostname := Tmbedtls_ssl_set_hostname(
-    GetProc(GMbedTLSHandle, 'mbedtls_ssl_set_hostname'));
+    GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_set_hostname'));
 
   // 加载 SSL 操作函数（从 mbedtls）
   mbedtls_ssl_handshake := Tmbedtls_ssl_handshake(
-    GetProc(GMbedTLSHandle, 'mbedtls_ssl_handshake'));
+    GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_handshake'));
   mbedtls_ssl_read := Tmbedtls_ssl_read(
-    GetProc(GMbedTLSHandle, 'mbedtls_ssl_read'));
+    GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_read'));
   mbedtls_ssl_write := Tmbedtls_ssl_write(
-    GetProc(GMbedTLSHandle, 'mbedtls_ssl_write'));
+    GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_write'));
   mbedtls_ssl_close_notify := Tmbedtls_ssl_close_notify(
-    GetProc(GMbedTLSHandle, 'mbedtls_ssl_close_notify'));
+    GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_close_notify'));
   mbedtls_ssl_get_verify_result := Tmbedtls_ssl_get_verify_result(
-    GetProc(GMbedTLSHandle, 'mbedtls_ssl_get_verify_result'));
+    GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_get_verify_result'));
   mbedtls_ssl_get_ciphersuite := Tmbedtls_ssl_get_ciphersuite(
-    GetProc(GMbedTLSHandle, 'mbedtls_ssl_get_ciphersuite'));
+    GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_get_ciphersuite'));
   mbedtls_ssl_get_ciphersuite_id := Tmbedtls_ssl_get_ciphersuite_id(
-    GetProc(GMbedTLSHandle, 'mbedtls_ssl_get_ciphersuite_id'));
+    GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_get_ciphersuite_id'));
   mbedtls_ssl_get_ciphersuite_id_from_ssl := Tmbedtls_ssl_get_ciphersuite_id_from_ssl(
-    GetProc(GMbedTLSHandle, 'mbedtls_ssl_get_ciphersuite_id_from_ssl'));
+    GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_get_ciphersuite_id_from_ssl'));
   mbedtls_ssl_ciphersuite_from_id := Tmbedtls_ssl_ciphersuite_from_id(
-    GetProc(GMbedTLSHandle, 'mbedtls_ssl_ciphersuite_from_id'));
+    GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_ciphersuite_from_id'));
   mbedtls_ssl_ciphersuite_get_cipher_key_bitlen := Tmbedtls_ssl_ciphersuite_get_cipher_key_bitlen(
-    GetProc(GMbedTLSHandle, 'mbedtls_ssl_ciphersuite_get_cipher_key_bitlen'));
+    GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_ciphersuite_get_cipher_key_bitlen'));
   mbedtls_ssl_get_alpn_protocol := Tmbedtls_ssl_get_alpn_protocol(
-    GetProc(GMbedTLSHandle, 'mbedtls_ssl_get_alpn_protocol'));
+    GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_get_alpn_protocol'));
   mbedtls_ssl_conf_alpn_protocols := Tmbedtls_ssl_conf_alpn_protocols(
-    GetProc(GMbedTLSHandle, 'mbedtls_ssl_conf_alpn_protocols'));
+    GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_conf_alpn_protocols'));
 
   // 加载 SSL 会话函数（从 mbedtls）
   mbedtls_ssl_session_init := Tmbedtls_ssl_session_init(
-    GetProc(GMbedTLSHandle, 'mbedtls_ssl_session_init'));
+    GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_session_init'));
   mbedtls_ssl_session_free := Tmbedtls_ssl_session_free(
-    GetProc(GMbedTLSHandle, 'mbedtls_ssl_session_free'));
+    GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_session_free'));
   mbedtls_ssl_get_session := Tmbedtls_ssl_get_session(
-    GetProc(GMbedTLSHandle, 'mbedtls_ssl_get_session'));
+    GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_get_session'));
   mbedtls_ssl_set_session := Tmbedtls_ssl_set_session(
-    GetProc(GMbedTLSHandle, 'mbedtls_ssl_set_session'));
+    GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_set_session'));
   mbedtls_ssl_session_load := Tmbedtls_ssl_session_load(
-    GetProc(GMbedTLSHandle, 'mbedtls_ssl_session_load'));
+    GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_session_load'));
   mbedtls_ssl_session_save := Tmbedtls_ssl_session_save(
-    GetProc(GMbedTLSHandle, 'mbedtls_ssl_session_save'));
+    GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_session_save'));
 
   // 加载证书函数（从 mbedx509）
   mbedtls_x509_crt_init := Tmbedtls_x509_crt_init(
-    GetProc(GMbedX509Handle, 'mbedtls_x509_crt_init'));
+    GetProcSym(GMbedX509Handle, 'mbedtls_x509_crt_init'));
   mbedtls_x509_crt_parse := Tmbedtls_x509_crt_parse(
-    GetProc(GMbedX509Handle, 'mbedtls_x509_crt_parse'));
+    GetProcSym(GMbedX509Handle, 'mbedtls_x509_crt_parse'));
   mbedtls_x509_crt_parse_file := Tmbedtls_x509_crt_parse_file(
-    GetProc(GMbedX509Handle, 'mbedtls_x509_crt_parse_file'));
+    GetProcSym(GMbedX509Handle, 'mbedtls_x509_crt_parse_file'));
   mbedtls_x509_crt_parse_path := Tmbedtls_x509_crt_parse_path(
-    GetProc(GMbedX509Handle, 'mbedtls_x509_crt_parse_path'));
+    GetProcSym(GMbedX509Handle, 'mbedtls_x509_crt_parse_path'));
   mbedtls_x509_crt_free := Tmbedtls_x509_crt_free(
-    GetProc(GMbedX509Handle, 'mbedtls_x509_crt_free'));
+    GetProcSym(GMbedX509Handle, 'mbedtls_x509_crt_free'));
   mbedtls_x509_crt_info := Tmbedtls_x509_crt_info(
-    GetProc(GMbedX509Handle, 'mbedtls_x509_crt_info'));
+    GetProcSym(GMbedX509Handle, 'mbedtls_x509_crt_info'));
   mbedtls_x509_crt_verify := Tmbedtls_x509_crt_verify(
-    GetProc(GMbedX509Handle, 'mbedtls_x509_crt_verify'));
+    GetProcSym(GMbedX509Handle, 'mbedtls_x509_crt_verify'));
   mbedtls_x509_crt_verify_info := Tmbedtls_x509_crt_verify_info(
-    GetProc(GMbedX509Handle, 'mbedtls_x509_crt_verify_info'));
+    GetProcSym(GMbedX509Handle, 'mbedtls_x509_crt_verify_info'));
 
   // 加载 SSL 对端证书函数（从 mbedtls）
   mbedtls_ssl_get_peer_cert := Tmbedtls_ssl_get_peer_cert(
-    GetProc(GMbedTLSHandle, 'mbedtls_ssl_get_peer_cert'));
+    GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_get_peer_cert'));
   mbedtls_ssl_get_version := Tmbedtls_ssl_get_version(
-    GetProc(GMbedTLSHandle, 'mbedtls_ssl_get_version'));
+    GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_get_version'));
 
   // 加载私钥函数（从 mbedcrypto）
   mbedtls_pk_init := Tmbedtls_pk_init(
-    GetProc(GMbedCryptoHandle, 'mbedtls_pk_init'));
+    GetProcSym(GMbedCryptoHandle, 'mbedtls_pk_init'));
   mbedtls_pk_free := Tmbedtls_pk_free(
-    GetProc(GMbedCryptoHandle, 'mbedtls_pk_free'));
+    GetProcSym(GMbedCryptoHandle, 'mbedtls_pk_free'));
   mbedtls_pk_parse_keyfile := Tmbedtls_pk_parse_keyfile(
-    GetProc(GMbedCryptoHandle, 'mbedtls_pk_parse_keyfile'));
+    GetProcSym(GMbedCryptoHandle, 'mbedtls_pk_parse_keyfile'));
   mbedtls_pk_parse_key := Tmbedtls_pk_parse_key(
-    GetProc(GMbedCryptoHandle, 'mbedtls_pk_parse_key'));
+    GetProcSym(GMbedCryptoHandle, 'mbedtls_pk_parse_key'));
 
   // 加载错误函数（从 mbedcrypto）
   mbedtls_strerror := Tmbedtls_strerror(
-    GetProc(GMbedCryptoHandle, 'mbedtls_strerror'));
+    GetProcSym(GMbedCryptoHandle, 'mbedtls_strerror'));
 
   // 加载消息摘要函数（从 mbedcrypto）
   mbedtls_md_info_from_type := Tmbedtls_md_info_from_type(
-    GetProc(GMbedCryptoHandle, 'mbedtls_md_info_from_type'));
+    GetProcSym(GMbedCryptoHandle, 'mbedtls_md_info_from_type'));
   mbedtls_md := Tmbedtls_md(
-    GetProc(GMbedCryptoHandle, 'mbedtls_md'));
+    GetProcSym(GMbedCryptoHandle, 'mbedtls_md'));
   mbedtls_md_get_size := Tmbedtls_md_get_size(
-    GetProc(GMbedCryptoHandle, 'mbedtls_md_get_size'));
+    GetProcSym(GMbedCryptoHandle, 'mbedtls_md_get_size'));
 
   // 验证必需函数
   if not Assigned(mbedtls_entropy_init) or
@@ -525,23 +520,9 @@ end;
 procedure UnloadMbedTLSLibrary;
 begin
   // 按相反顺序卸载
-  if GMbedTLSHandle <> NilHandle then
-  begin
-    FreeLibrary(GMbedTLSHandle);
-    GMbedTLSHandle := NilHandle;
-  end;
-
-  if GMbedX509Handle <> NilHandle then
-  begin
-    FreeLibrary(GMbedX509Handle);
-    GMbedX509Handle := NilHandle;
-  end;
-
-  if GMbedCryptoHandle <> NilHandle then
-  begin
-    FreeLibrary(GMbedCryptoHandle);
-    GMbedCryptoHandle := NilHandle;
-  end;
+  platform_dl_close(GMbedTLSHandle);
+  platform_dl_close(GMbedX509Handle);
+  platform_dl_close(GMbedCryptoHandle);
 
   ClearAllPointers;
   GMbedTLSLoaded := False;
@@ -552,7 +533,7 @@ begin
   Result := GMbedTLSLoaded;
 end;
 
-function GetMbedTLSLibraryHandle: TLibHandle;
+function GetMbedTLSLibraryHandle: TPlatformLibrary;
 begin
   Result := GMbedTLSHandle;
 end;

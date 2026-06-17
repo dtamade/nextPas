@@ -5,7 +5,7 @@ unit nextpas.core.tls.openssl.api.async;
 
 interface
 
-uses nextpas.core.tls.openssl.base;
+uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader;
 
 type
   // ASYNC types
@@ -88,7 +88,7 @@ var
   ASYNC_stack_alloc: function(max_size: NativeUInt; init_size: NativeUInt): Pointer; cdecl = nil;
   ASYNC_stack_free: procedure(stack: Pointer); cdecl = nil;
 
-procedure LoadASYNCFunctions(AHandle: TLibHandle);
+procedure LoadASYNCFunctions(AHandle: TPlatformLibrary);
 procedure UnloadASYNCFunctions;
 
 // Helper functions for async operations
@@ -150,7 +150,7 @@ implementation
 
 uses Windows, BaseUnix, nextpas.core.tls.openssl.api.utils;
 
-procedure LoadASYNCFunctions(AHandle: TLibHandle);
+procedure LoadASYNCFunctions(AHandle: TPlatformLibrary);
 type
   T_ASYNC_init_thread = function(max_size: NativeUInt; init_size: NativeUInt): Integer; cdecl;
   T_ASYNC_cleanup_thread = procedure(); cdecl;
@@ -166,31 +166,31 @@ type
   T_ASYNC_stack_alloc = function(max_size: NativeUInt; init_size: NativeUInt): Pointer; cdecl;
   T_ASYNC_stack_free = procedure(stack: Pointer); cdecl;
 begin
-  if AHandle = 0 then Exit;
+  if not LibLoaded(AHandle) then Exit;
   
   // ASYNC thread functions - with type casts
-  ASYNC_init_thread := T_ASYNC_init_thread(GetProcedureAddress(AHandle, 'ASYNC_init_thread'));
-  ASYNC_cleanup_thread := T_ASYNC_cleanup_thread(GetProcedureAddress(AHandle, 'ASYNC_cleanup_thread'));
+  ASYNC_init_thread := T_ASYNC_init_thread(GetProcSymbol(AHandle, 'ASYNC_init_thread'));
+  ASYNC_cleanup_thread := T_ASYNC_cleanup_thread(GetProcSymbol(AHandle, 'ASYNC_cleanup_thread'));
   
   // ASYNC wait context functions - simple assignments (already initialized to nil)
-  ASYNC_WAIT_CTX_new := T_ASYNC_WAIT_CTX_new(GetProcedureAddress(AHandle, 'ASYNC_WAIT_CTX_new'));
-  ASYNC_WAIT_CTX_free := T_ASYNC_WAIT_CTX_free(GetProcedureAddress(AHandle, 'ASYNC_WAIT_CTX_free'));
+  ASYNC_WAIT_CTX_new := T_ASYNC_WAIT_CTX_new(GetProcSymbol(AHandle, 'ASYNC_WAIT_CTX_new'));
+  ASYNC_WAIT_CTX_free := T_ASYNC_WAIT_CTX_free(GetProcSymbol(AHandle, 'ASYNC_WAIT_CTX_free'));
   // Skipping complex function pointers for now - they're optional
   
   // ASYNC job functions
-  ASYNC_start_job := T_ASYNC_start_job(GetProcedureAddress(AHandle, 'ASYNC_start_job'));
-  ASYNC_pause_job := T_ASYNC_pause_job(GetProcedureAddress(AHandle, 'ASYNC_pause_job'));
-  ASYNC_get_current_job := T_ASYNC_get_current_job(GetProcedureAddress(AHandle, 'ASYNC_get_current_job'));
-  ASYNC_get_wait_ctx := T_ASYNC_get_wait_ctx(GetProcedureAddress(AHandle, 'ASYNC_get_wait_ctx'));
-  ASYNC_block_pause := T_ASYNC_block_pause(GetProcedureAddress(AHandle, 'ASYNC_block_pause'));
-  ASYNC_unblock_pause := T_ASYNC_unblock_pause(GetProcedureAddress(AHandle, 'ASYNC_unblock_pause'));
+  ASYNC_start_job := T_ASYNC_start_job(GetProcSymbol(AHandle, 'ASYNC_start_job'));
+  ASYNC_pause_job := T_ASYNC_pause_job(GetProcSymbol(AHandle, 'ASYNC_pause_job'));
+  ASYNC_get_current_job := T_ASYNC_get_current_job(GetProcSymbol(AHandle, 'ASYNC_get_current_job'));
+  ASYNC_get_wait_ctx := T_ASYNC_get_wait_ctx(GetProcSymbol(AHandle, 'ASYNC_get_wait_ctx'));
+  ASYNC_block_pause := T_ASYNC_block_pause(GetProcSymbol(AHandle, 'ASYNC_block_pause'));
+  ASYNC_unblock_pause := T_ASYNC_unblock_pause(GetProcSymbol(AHandle, 'ASYNC_unblock_pause'));
   
   // ASYNC capability functions
-  ASYNC_is_capable := T_ASYNC_is_capable(GetProcedureAddress(AHandle, 'ASYNC_is_capable'));
+  ASYNC_is_capable := T_ASYNC_is_capable(GetProcSymbol(AHandle, 'ASYNC_is_capable'));
   
   // Stack functions (arch specific)
-  ASYNC_stack_alloc := T_ASYNC_stack_alloc(GetProcedureAddress(AHandle, 'ASYNC_stack_alloc'));
-  ASYNC_stack_free := T_ASYNC_stack_free(GetProcedureAddress(AHandle, 'ASYNC_stack_free'));
+  ASYNC_stack_alloc := T_ASYNC_stack_alloc(GetProcSymbol(AHandle, 'ASYNC_stack_alloc'));
+  ASYNC_stack_free := T_ASYNC_stack_free(GetProcSymbol(AHandle, 'ASYNC_stack_free'));
 end;
 
 procedure UnloadASYNCFunctions;

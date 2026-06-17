@@ -180,7 +180,7 @@ function LoadBLAKE2Functions(ALibHandle: TOpenSSLLibHandle): Boolean;
 begin
   Result := False;
 
-  if ALibHandle = 0 then Exit;
+  if not LibLoaded(ALibHandle) then Exit;
 
   // 使用批量加载模式
   TOpenSSLLoader.LoadFunctions(ALibHandle, BLAKE2_BINDINGS);

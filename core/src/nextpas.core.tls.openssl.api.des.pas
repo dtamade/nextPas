@@ -235,7 +235,7 @@ function LoadDESFunctions(ALibHandle: TOpenSSLLibHandle): Boolean;
 begin
   Result := False;
 
-  if ALibHandle = 0 then Exit;
+  if not LibLoaded(ALibHandle) then Exit;
 
   TOpenSSLLoader.LoadFunctions(ALibHandle, DES_FUNCTION_BINDINGS);
   TOpenSSLLoader.SetModuleLoaded(osmDES, True);

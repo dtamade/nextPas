@@ -147,13 +147,13 @@ implementation
 
 function LoadLHashFunctions: Boolean;
 var
-  LHandle: TLibHandle;
+  LHandle: TPlatformLibrary;
 begin
   Result := False;
 
   // Phase 3.3 P0+ - 使用统一的动态库加载器（替换 ~25 行重复代码）
   LHandle := TOpenSSLLoader.GetLibraryHandle(osslLibCrypto);
-  if LHandle = 0 then
+  if not LibLoaded(LHandle) then
     Exit;
     
   // Load LHASH functions (OpenSSL 1.1.0+)

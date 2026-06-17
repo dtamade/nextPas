@@ -4,7 +4,7 @@ unit nextpas.core.tls.openssl.api.ssl;
 
 interface
 
-uses DynLibs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.loader;
+uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.loader;
 
 type
   { SSL Version and Protocol Functions }

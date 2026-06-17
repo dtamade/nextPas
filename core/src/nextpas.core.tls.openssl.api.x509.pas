@@ -4,7 +4,7 @@ unit nextpas.core.tls.openssl.api.x509;
 
 interface
 
-uses DynLibs, nextpas.core.tls.openssl.base;
+uses nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.base;
 
 type
   { X509 Certificate Functions }
@@ -579,140 +579,140 @@ uses nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.loader;
 
 procedure LoadOpenSSLX509;
 var
-  LibHandle: TLibHandle;
+  LibHandle: TPlatformLibrary;
 begin
   if not TOpenSSLLoader.IsModuleLoaded(osmCore) then
     Exit;
     
   LibHandle := GetCryptoLibHandle;
-  if LibHandle = NilHandle then
+  if not LibLoaded(LibHandle) then
     Exit;
   
   // Load X509 Core Functions
-  X509_new := TX509_new(GetProcedureAddress(LibHandle, 'X509_new'));
-  X509_free := TX509_free(GetProcedureAddress(LibHandle, 'X509_free'));
-  X509_dup := TX509_dup(GetProcedureAddress(LibHandle, 'X509_dup'));
-  X509_up_ref := TX509_up_ref(GetProcedureAddress(LibHandle, 'X509_up_ref'));
+  X509_new := TX509_new(GetProcSymbol(LibHandle, 'X509_new'));
+  X509_free := TX509_free(GetProcSymbol(LibHandle, 'X509_free'));
+  X509_dup := TX509_dup(GetProcSymbol(LibHandle, 'X509_dup'));
+  X509_up_ref := TX509_up_ref(GetProcSymbol(LibHandle, 'X509_up_ref'));
   
   // Load X509 Basic Info Functions
-  X509_get_version := TX509_get_version(GetProcedureAddress(LibHandle, 'X509_get_version'));
-  X509_set_version := TX509_set_version(GetProcedureAddress(LibHandle, 'X509_set_version'));
-  X509_get_serialNumber := TX509_get_serialNumber(GetProcedureAddress(LibHandle, 'X509_get_serialNumber'));
-  X509_set_serialNumber := TX509_set_serialNumber(GetProcedureAddress(LibHandle, 'X509_set_serialNumber'));
-  X509_get_subject_name := TX509_get_subject_name(GetProcedureAddress(LibHandle, 'X509_get_subject_name'));
-  X509_set_subject_name := TX509_set_subject_name(GetProcedureAddress(LibHandle, 'X509_set_subject_name'));
-  X509_get_issuer_name := TX509_get_issuer_name(GetProcedureAddress(LibHandle, 'X509_get_issuer_name'));
-  X509_set_issuer_name := TX509_set_issuer_name(GetProcedureAddress(LibHandle, 'X509_set_issuer_name'));
-  X509_get0_notBefore := TX509_get0_notBefore(GetProcedureAddress(LibHandle, 'X509_get0_notBefore'));
-  X509_get0_notAfter := TX509_get0_notAfter(GetProcedureAddress(LibHandle, 'X509_get0_notAfter'));
+  X509_get_version := TX509_get_version(GetProcSymbol(LibHandle, 'X509_get_version'));
+  X509_set_version := TX509_set_version(GetProcSymbol(LibHandle, 'X509_set_version'));
+  X509_get_serialNumber := TX509_get_serialNumber(GetProcSymbol(LibHandle, 'X509_get_serialNumber'));
+  X509_set_serialNumber := TX509_set_serialNumber(GetProcSymbol(LibHandle, 'X509_set_serialNumber'));
+  X509_get_subject_name := TX509_get_subject_name(GetProcSymbol(LibHandle, 'X509_get_subject_name'));
+  X509_set_subject_name := TX509_set_subject_name(GetProcSymbol(LibHandle, 'X509_set_subject_name'));
+  X509_get_issuer_name := TX509_get_issuer_name(GetProcSymbol(LibHandle, 'X509_get_issuer_name'));
+  X509_set_issuer_name := TX509_set_issuer_name(GetProcSymbol(LibHandle, 'X509_set_issuer_name'));
+  X509_get0_notBefore := TX509_get0_notBefore(GetProcSymbol(LibHandle, 'X509_get0_notBefore'));
+  X509_get0_notAfter := TX509_get0_notAfter(GetProcSymbol(LibHandle, 'X509_get0_notAfter'));
   // For OpenSSL 3.x, try getm variants first (mutable), fall back to get0
-  X509_get_notBefore := TX509_get_notBefore(GetProcedureAddress(LibHandle, 'X509_getm_notBefore'));
+  X509_get_notBefore := TX509_get_notBefore(GetProcSymbol(LibHandle, 'X509_getm_notBefore'));
   if not Assigned(X509_get_notBefore) then
-    X509_get_notBefore := TX509_get_notBefore(GetProcedureAddress(LibHandle, 'X509_get0_notBefore'));
-  X509_get_notAfter := TX509_get_notAfter(GetProcedureAddress(LibHandle, 'X509_getm_notAfter'));
+    X509_get_notBefore := TX509_get_notBefore(GetProcSymbol(LibHandle, 'X509_get0_notBefore'));
+  X509_get_notAfter := TX509_get_notAfter(GetProcSymbol(LibHandle, 'X509_getm_notAfter'));
   if not Assigned(X509_get_notAfter) then
-    X509_get_notAfter := TX509_get_notAfter(GetProcedureAddress(LibHandle, 'X509_get0_notAfter'));
-  X509_set1_notBefore := TX509_set1_notBefore(GetProcedureAddress(LibHandle, 'X509_set1_notBefore'));
-  X509_set1_notAfter := TX509_set1_notAfter(GetProcedureAddress(LibHandle, 'X509_set1_notAfter'));
-  X509_set_pubkey := TX509_set_pubkey(GetProcedureAddress(LibHandle, 'X509_set_pubkey'));
-  X509_get_pubkey := TX509_get_pubkey(GetProcedureAddress(LibHandle, 'X509_get_pubkey'));
-  X509_get0_signature := TX509_get0_signature(GetProcedureAddress(LibHandle, 'X509_get0_signature'));
-  X509_get_signature_nid := TX509_get_signature_nid(GetProcedureAddress(LibHandle, 'X509_get_signature_nid'));
-  X509_sign := TX509_sign(GetProcedureAddress(LibHandle, 'X509_sign'));
-  X509_gmtime_adj := TX509_gmtime_adj(GetProcedureAddress(LibHandle, 'X509_gmtime_adj'));
+    X509_get_notAfter := TX509_get_notAfter(GetProcSymbol(LibHandle, 'X509_get0_notAfter'));
+  X509_set1_notBefore := TX509_set1_notBefore(GetProcSymbol(LibHandle, 'X509_set1_notBefore'));
+  X509_set1_notAfter := TX509_set1_notAfter(GetProcSymbol(LibHandle, 'X509_set1_notAfter'));
+  X509_set_pubkey := TX509_set_pubkey(GetProcSymbol(LibHandle, 'X509_set_pubkey'));
+  X509_get_pubkey := TX509_get_pubkey(GetProcSymbol(LibHandle, 'X509_get_pubkey'));
+  X509_get0_signature := TX509_get0_signature(GetProcSymbol(LibHandle, 'X509_get0_signature'));
+  X509_get_signature_nid := TX509_get_signature_nid(GetProcSymbol(LibHandle, 'X509_get_signature_nid'));
+  X509_sign := TX509_sign(GetProcSymbol(LibHandle, 'X509_sign'));
+  X509_gmtime_adj := TX509_gmtime_adj(GetProcSymbol(LibHandle, 'X509_gmtime_adj'));
   
   // Load X509_CRL Functions
-  X509_CRL_new := TX509_CRL_new(GetProcedureAddress(LibHandle, 'X509_CRL_new'));
-  X509_CRL_free := TX509_CRL_free(GetProcedureAddress(LibHandle, 'X509_CRL_free'));
-  X509_CRL_get0_by_cert := TX509_CRL_get0_by_cert(GetProcedureAddress(LibHandle, 'X509_CRL_get0_by_cert'));
-  X509_CRL_get0_nextUpdate := TX509_CRL_get0_nextUpdate(GetProcedureAddress(LibHandle, 'X509_CRL_get0_nextUpdate'));
-  X509_REVOKED_get0_revocationDate := TX509_REVOKED_get0_revocationDate(GetProcedureAddress(LibHandle, 'X509_REVOKED_get0_revocationDate'));
-  X509_REVOKED_get_ext_d2i := TX509_REVOKED_get_ext_d2i(GetProcedureAddress(LibHandle, 'X509_REVOKED_get_ext_d2i'));
+  X509_CRL_new := TX509_CRL_new(GetProcSymbol(LibHandle, 'X509_CRL_new'));
+  X509_CRL_free := TX509_CRL_free(GetProcSymbol(LibHandle, 'X509_CRL_free'));
+  X509_CRL_get0_by_cert := TX509_CRL_get0_by_cert(GetProcSymbol(LibHandle, 'X509_CRL_get0_by_cert'));
+  X509_CRL_get0_nextUpdate := TX509_CRL_get0_nextUpdate(GetProcSymbol(LibHandle, 'X509_CRL_get0_nextUpdate'));
+  X509_REVOKED_get0_revocationDate := TX509_REVOKED_get0_revocationDate(GetProcSymbol(LibHandle, 'X509_REVOKED_get0_revocationDate'));
+  X509_REVOKED_get_ext_d2i := TX509_REVOKED_get_ext_d2i(GetProcSymbol(LibHandle, 'X509_REVOKED_get_ext_d2i'));
   
   // Load X509 Extension Functions  
-  X509_get_ext_count := TX509_get_ext_count(GetProcedureAddress(LibHandle, 'X509_get_ext_count'));
-  X509_get_ext_by_NID := TX509_get_ext_by_NID(GetProcedureAddress(LibHandle, 'X509_get_ext_by_NID'));
-  X509_get_ext_by_OBJ := TX509_get_ext_by_OBJ(GetProcedureAddress(LibHandle, 'X509_get_ext_by_OBJ'));
-  X509_get_ext := TX509_get_ext(GetProcedureAddress(LibHandle, 'X509_get_ext'));
-  X509_get_ext_d2i := TX509_get_ext_d2i(GetProcedureAddress(LibHandle, 'X509_get_ext_d2i'));
-  X509_get_extension_flags := TX509_get_extension_flags(GetProcedureAddress(LibHandle, 'X509_get_extension_flags'));
-  X509_check_ca := TX509_check_ca(GetProcedureAddress(LibHandle, 'X509_check_ca'));
-  X509_get_key_usage := TX509_get_key_usage(GetProcedureAddress(LibHandle, 'X509_get_key_usage'));
-  X509_get_extended_key_usage := TX509_get_extended_key_usage(GetProcedureAddress(LibHandle, 'X509_get_extended_key_usage'));
-  X509_get_pathlen := TX509_get_pathlen(GetProcedureAddress(LibHandle, 'X509_get_pathlen'));
-  X509_get_proxy_pathlen := TX509_get_proxy_pathlen(GetProcedureAddress(LibHandle, 'X509_get_proxy_pathlen'));
-  X509_add_ext := TX509_add_ext(GetProcedureAddress(LibHandle, 'X509_add_ext'));
-  X509_EXTENSION_free := TX509_EXTENSION_free(GetProcedureAddress(LibHandle, 'X509_EXTENSION_free'));
+  X509_get_ext_count := TX509_get_ext_count(GetProcSymbol(LibHandle, 'X509_get_ext_count'));
+  X509_get_ext_by_NID := TX509_get_ext_by_NID(GetProcSymbol(LibHandle, 'X509_get_ext_by_NID'));
+  X509_get_ext_by_OBJ := TX509_get_ext_by_OBJ(GetProcSymbol(LibHandle, 'X509_get_ext_by_OBJ'));
+  X509_get_ext := TX509_get_ext(GetProcSymbol(LibHandle, 'X509_get_ext'));
+  X509_get_ext_d2i := TX509_get_ext_d2i(GetProcSymbol(LibHandle, 'X509_get_ext_d2i'));
+  X509_get_extension_flags := TX509_get_extension_flags(GetProcSymbol(LibHandle, 'X509_get_extension_flags'));
+  X509_check_ca := TX509_check_ca(GetProcSymbol(LibHandle, 'X509_check_ca'));
+  X509_get_key_usage := TX509_get_key_usage(GetProcSymbol(LibHandle, 'X509_get_key_usage'));
+  X509_get_extended_key_usage := TX509_get_extended_key_usage(GetProcSymbol(LibHandle, 'X509_get_extended_key_usage'));
+  X509_get_pathlen := TX509_get_pathlen(GetProcSymbol(LibHandle, 'X509_get_pathlen'));
+  X509_get_proxy_pathlen := TX509_get_proxy_pathlen(GetProcSymbol(LibHandle, 'X509_get_proxy_pathlen'));
+  X509_add_ext := TX509_add_ext(GetProcSymbol(LibHandle, 'X509_add_ext'));
+  X509_EXTENSION_free := TX509_EXTENSION_free(GetProcSymbol(LibHandle, 'X509_EXTENSION_free'));
   
   // Load X509 Verification Functions
-  X509_verify := TX509_verify(GetProcedureAddress(LibHandle, 'X509_verify'));
-  X509_check_purpose := TX509_check_purpose(GetProcedureAddress(LibHandle, 'X509_check_purpose'));
-  X509_check_trust := TX509_check_trust(GetProcedureAddress(LibHandle, 'X509_check_trust'));
-  X509_check_issued := TX509_check_issued(GetProcedureAddress(LibHandle, 'X509_check_issued'));
-  X509_check_akid := TX509_check_akid(GetProcedureAddress(LibHandle, 'X509_check_akid'));
-  X509_check_host := TX509_check_host(GetProcedureAddress(LibHandle, 'X509_check_host'));
-  X509_check_email := TX509_check_email(GetProcedureAddress(LibHandle, 'X509_check_email'));
-  X509_check_ip := TX509_check_ip(GetProcedureAddress(LibHandle, 'X509_check_ip'));
-  X509_check_ip_asc := TX509_check_ip_asc(GetProcedureAddress(LibHandle, 'X509_check_ip_asc'));
-  X509_check_private_key := TX509_check_private_key(GetProcedureAddress(LibHandle, 'X509_check_private_key'));
-  X509_verify_cert := TX509_verify_cert(GetProcedureAddress(LibHandle, 'X509_verify_cert'));
-  X509_verify_cert_error_string := TX509_verify_cert_error_string(GetProcedureAddress(LibHandle, 'X509_verify_cert_error_string'));
+  X509_verify := TX509_verify(GetProcSymbol(LibHandle, 'X509_verify'));
+  X509_check_purpose := TX509_check_purpose(GetProcSymbol(LibHandle, 'X509_check_purpose'));
+  X509_check_trust := TX509_check_trust(GetProcSymbol(LibHandle, 'X509_check_trust'));
+  X509_check_issued := TX509_check_issued(GetProcSymbol(LibHandle, 'X509_check_issued'));
+  X509_check_akid := TX509_check_akid(GetProcSymbol(LibHandle, 'X509_check_akid'));
+  X509_check_host := TX509_check_host(GetProcSymbol(LibHandle, 'X509_check_host'));
+  X509_check_email := TX509_check_email(GetProcSymbol(LibHandle, 'X509_check_email'));
+  X509_check_ip := TX509_check_ip(GetProcSymbol(LibHandle, 'X509_check_ip'));
+  X509_check_ip_asc := TX509_check_ip_asc(GetProcSymbol(LibHandle, 'X509_check_ip_asc'));
+  X509_check_private_key := TX509_check_private_key(GetProcSymbol(LibHandle, 'X509_check_private_key'));
+  X509_verify_cert := TX509_verify_cert(GetProcSymbol(LibHandle, 'X509_verify_cert'));
+  X509_verify_cert_error_string := TX509_verify_cert_error_string(GetProcSymbol(LibHandle, 'X509_verify_cert_error_string'));
 
   // Load X509 Compare/Policy Functions
-  X509_cmp := TX509_cmp(GetProcedureAddress(LibHandle, 'X509_cmp'));
-  X509_policy_check := TX509_policy_check(GetProcedureAddress(LibHandle, 'X509_policy_check'));
-  X509_policy_tree_free := TX509_policy_tree_free(GetProcedureAddress(LibHandle, 'X509_policy_tree_free'));
-  X509_policy_tree_level_count := TX509_policy_tree_level_count(GetProcedureAddress(LibHandle, 'X509_policy_tree_level_count'));
-  X509_policy_tree_get0_level := TX509_policy_tree_get0_level(GetProcedureAddress(LibHandle, 'X509_policy_tree_get0_level'));
+  X509_cmp := TX509_cmp(GetProcSymbol(LibHandle, 'X509_cmp'));
+  X509_policy_check := TX509_policy_check(GetProcSymbol(LibHandle, 'X509_policy_check'));
+  X509_policy_tree_free := TX509_policy_tree_free(GetProcSymbol(LibHandle, 'X509_policy_tree_free'));
+  X509_policy_tree_level_count := TX509_policy_tree_level_count(GetProcSymbol(LibHandle, 'X509_policy_tree_level_count'));
+  X509_policy_tree_get0_level := TX509_policy_tree_get0_level(GetProcSymbol(LibHandle, 'X509_policy_tree_get0_level'));
   
   // Load X509 Store Functions
-  X509_STORE_new := TX509_STORE_new(GetProcedureAddress(LibHandle, 'X509_STORE_new'));
-  X509_STORE_free := TX509_STORE_free(GetProcedureAddress(LibHandle, 'X509_STORE_free'));
-  X509_STORE_add_cert := TX509_STORE_add_cert(GetProcedureAddress(LibHandle, 'X509_STORE_add_cert'));
-  X509_STORE_load_file := TX509_STORE_load_file(GetProcedureAddress(LibHandle, 'X509_STORE_load_file'));
-  X509_STORE_load_path := TX509_STORE_load_path(GetProcedureAddress(LibHandle, 'X509_STORE_load_path'));
-  X509_STORE_load_locations := TX509_STORE_load_locations(GetProcedureAddress(LibHandle, 'X509_STORE_load_locations'));
-  X509_STORE_set_default_paths := TX509_STORE_set_default_paths(GetProcedureAddress(LibHandle, 'X509_STORE_set_default_paths'));
-  X509_STORE_set_flags := TX509_STORE_set_flags(GetProcedureAddress(LibHandle, 'X509_STORE_set_flags'));
+  X509_STORE_new := TX509_STORE_new(GetProcSymbol(LibHandle, 'X509_STORE_new'));
+  X509_STORE_free := TX509_STORE_free(GetProcSymbol(LibHandle, 'X509_STORE_free'));
+  X509_STORE_add_cert := TX509_STORE_add_cert(GetProcSymbol(LibHandle, 'X509_STORE_add_cert'));
+  X509_STORE_load_file := TX509_STORE_load_file(GetProcSymbol(LibHandle, 'X509_STORE_load_file'));
+  X509_STORE_load_path := TX509_STORE_load_path(GetProcSymbol(LibHandle, 'X509_STORE_load_path'));
+  X509_STORE_load_locations := TX509_STORE_load_locations(GetProcSymbol(LibHandle, 'X509_STORE_load_locations'));
+  X509_STORE_set_default_paths := TX509_STORE_set_default_paths(GetProcSymbol(LibHandle, 'X509_STORE_set_default_paths'));
+  X509_STORE_set_flags := TX509_STORE_set_flags(GetProcSymbol(LibHandle, 'X509_STORE_set_flags'));
   
   // Load X509 Store Context Functions
-  X509_STORE_CTX_new := TX509_STORE_CTX_new(GetProcedureAddress(LibHandle, 'X509_STORE_CTX_new'));
-  X509_STORE_CTX_free := TX509_STORE_CTX_free(GetProcedureAddress(LibHandle, 'X509_STORE_CTX_free'));
-  X509_STORE_CTX_init := TX509_STORE_CTX_init(GetProcedureAddress(LibHandle, 'X509_STORE_CTX_init'));
-  X509_STORE_CTX_get0_chain := TX509_STORE_CTX_get0_chain(GetProcedureAddress(LibHandle, 'X509_STORE_CTX_get0_chain'));
-  X509_STORE_CTX_get_current_cert := TX509_STORE_CTX_get_current_cert(GetProcedureAddress(LibHandle, 'X509_STORE_CTX_get_current_cert'));
-  X509_STORE_CTX_get_error := TX509_STORE_CTX_get_error(GetProcedureAddress(LibHandle, 'X509_STORE_CTX_get_error'));
-  X509_STORE_CTX_set_error := TX509_STORE_CTX_set_error(GetProcedureAddress(LibHandle, 'X509_STORE_CTX_set_error'));
-  X509_STORE_CTX_get0_param := TX509_STORE_CTX_get0_param(GetProcedureAddress(LibHandle, 'X509_STORE_CTX_get0_param'));
+  X509_STORE_CTX_new := TX509_STORE_CTX_new(GetProcSymbol(LibHandle, 'X509_STORE_CTX_new'));
+  X509_STORE_CTX_free := TX509_STORE_CTX_free(GetProcSymbol(LibHandle, 'X509_STORE_CTX_free'));
+  X509_STORE_CTX_init := TX509_STORE_CTX_init(GetProcSymbol(LibHandle, 'X509_STORE_CTX_init'));
+  X509_STORE_CTX_get0_chain := TX509_STORE_CTX_get0_chain(GetProcSymbol(LibHandle, 'X509_STORE_CTX_get0_chain'));
+  X509_STORE_CTX_get_current_cert := TX509_STORE_CTX_get_current_cert(GetProcSymbol(LibHandle, 'X509_STORE_CTX_get_current_cert'));
+  X509_STORE_CTX_get_error := TX509_STORE_CTX_get_error(GetProcSymbol(LibHandle, 'X509_STORE_CTX_get_error'));
+  X509_STORE_CTX_set_error := TX509_STORE_CTX_set_error(GetProcSymbol(LibHandle, 'X509_STORE_CTX_set_error'));
+  X509_STORE_CTX_get0_param := TX509_STORE_CTX_get0_param(GetProcSymbol(LibHandle, 'X509_STORE_CTX_get0_param'));
   
   // Load X509 Verify Param Functions
-  X509_VERIFY_PARAM_set_flags := TX509_VERIFY_PARAM_set_flags(GetProcedureAddress(LibHandle, 'X509_VERIFY_PARAM_set_flags'));
+  X509_VERIFY_PARAM_set_flags := TX509_VERIFY_PARAM_set_flags(GetProcSymbol(LibHandle, 'X509_VERIFY_PARAM_set_flags'));
   
   // Load X509 Name Functions
-  X509_NAME_new := TX509_NAME_new(GetProcedureAddress(LibHandle, 'X509_NAME_new'));
-  X509_NAME_free := TX509_NAME_free(GetProcedureAddress(LibHandle, 'X509_NAME_free'));
-  X509_NAME_add_entry_by_txt := TX509_NAME_add_entry_by_txt(GetProcedureAddress(LibHandle, 'X509_NAME_add_entry_by_txt'));
-  X509_NAME_oneline := TX509_NAME_oneline(GetProcedureAddress(LibHandle, 'X509_NAME_oneline'));
-  X509_NAME_print_ex := TX509_NAME_print_ex(GetProcedureAddress(LibHandle, 'X509_NAME_print_ex'));
-  X509_NAME_cmp := TX509_NAME_cmp(GetProcedureAddress(LibHandle, 'X509_NAME_cmp'));
-  X509_NAME_entry_count := TX509_NAME_entry_count(GetProcedureAddress(LibHandle, 'X509_NAME_entry_count'));
-  X509_NAME_get_entry := TX509_NAME_get_entry(GetProcedureAddress(LibHandle, 'X509_NAME_get_entry'));
-  X509_NAME_get_text_by_NID := TX509_NAME_get_text_by_NID(GetProcedureAddress(LibHandle, 'X509_NAME_get_text_by_NID'));
+  X509_NAME_new := TX509_NAME_new(GetProcSymbol(LibHandle, 'X509_NAME_new'));
+  X509_NAME_free := TX509_NAME_free(GetProcSymbol(LibHandle, 'X509_NAME_free'));
+  X509_NAME_add_entry_by_txt := TX509_NAME_add_entry_by_txt(GetProcSymbol(LibHandle, 'X509_NAME_add_entry_by_txt'));
+  X509_NAME_oneline := TX509_NAME_oneline(GetProcSymbol(LibHandle, 'X509_NAME_oneline'));
+  X509_NAME_print_ex := TX509_NAME_print_ex(GetProcSymbol(LibHandle, 'X509_NAME_print_ex'));
+  X509_NAME_cmp := TX509_NAME_cmp(GetProcSymbol(LibHandle, 'X509_NAME_cmp'));
+  X509_NAME_entry_count := TX509_NAME_entry_count(GetProcSymbol(LibHandle, 'X509_NAME_entry_count'));
+  X509_NAME_get_entry := TX509_NAME_get_entry(GetProcSymbol(LibHandle, 'X509_NAME_get_entry'));
+  X509_NAME_get_text_by_NID := TX509_NAME_get_text_by_NID(GetProcSymbol(LibHandle, 'X509_NAME_get_text_by_NID'));
   
   // Load X509 Algorithm Functions
-  X509_ALGOR_get0 := TX509_ALGOR_get0(GetProcedureAddress(LibHandle, 'X509_ALGOR_get0'));
-  X509_ALGOR_set_md := TX509_ALGOR_set_md(GetProcedureAddress(LibHandle, 'X509_ALGOR_set_md'));
+  X509_ALGOR_get0 := TX509_ALGOR_get0(GetProcSymbol(LibHandle, 'X509_ALGOR_get0'));
+  X509_ALGOR_set_md := TX509_ALGOR_set_md(GetProcSymbol(LibHandle, 'X509_ALGOR_set_md'));
   
   // Load X509 I/O Functions
-  d2i_X509_bio := Td2i_X509_bio(GetProcedureAddress(LibHandle, 'd2i_X509_bio'));
-  d2i_X509 := Td2i_X509(GetProcedureAddress(LibHandle, 'd2i_X509'));
-  i2d_X509 := Ti2d_X509(GetProcedureAddress(LibHandle, 'i2d_X509'));
-  i2d_X509_bio := Ti2d_X509_bio(GetProcedureAddress(LibHandle, 'i2d_X509_bio'));
-  PEM_read_bio_X509 := TPEM_read_bio_X509(GetProcedureAddress(LibHandle, 'PEM_read_bio_X509'));
-  PEM_write_bio_X509 := TPEM_write_bio_X509(GetProcedureAddress(LibHandle, 'PEM_write_bio_X509'));
+  d2i_X509_bio := Td2i_X509_bio(GetProcSymbol(LibHandle, 'd2i_X509_bio'));
+  d2i_X509 := Td2i_X509(GetProcSymbol(LibHandle, 'd2i_X509'));
+  i2d_X509 := Ti2d_X509(GetProcSymbol(LibHandle, 'i2d_X509'));
+  i2d_X509_bio := Ti2d_X509_bio(GetProcSymbol(LibHandle, 'i2d_X509_bio'));
+  PEM_read_bio_X509 := TPEM_read_bio_X509(GetProcSymbol(LibHandle, 'PEM_read_bio_X509'));
+  PEM_write_bio_X509 := TPEM_write_bio_X509(GetProcSymbol(LibHandle, 'PEM_write_bio_X509'));
   
   // Load X509 Digest Function
-  Pointer(X509_digest) := GetProcedureAddress(LibHandle, 'X509_digest');
+  Pointer(X509_digest) := GetProcSymbol(LibHandle, 'X509_digest');
 
   // Mark module as loaded
   TOpenSSLLoader.SetModuleLoaded(osmX509, Assigned(X509_new) and Assigned(X509_free));

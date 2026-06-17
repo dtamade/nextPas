@@ -16,7 +16,7 @@ unit nextpas.core.tls.dns.ldns;
 interface
 
 uses
-  dynlibs,
+  nextpas.core.platform.dl,
   nextpas.core.base,
   nextpas.core.text.conv;
 
@@ -255,17 +255,29 @@ function DNSSECStatusToStr(AStatus: TDNSSECStatus): string;
 implementation
 
 var
-  LdnsHandle: TLibHandle = NilHandle;
+  LdnsHandle: TPlatformLibrary;
   LdnsLoaded: Boolean = False;
   LdnsLoadError: string = '';
+
+function LdnsHandleValid(const ALib: TPlatformLibrary): Boolean; inline;
+begin
+  {$IFDEF NEXTPAS_WINDOWS}
+  Result := ALib.Handle <> 0;
+  {$ELSE}
+  Result := ALib.Handle <> nil;
+  {$ENDIF}
+end;
 
 function LoadLdns: Boolean;
 
   function LoadFunc(const AName: string): Pointer;
   begin
-    Result := GetProcAddress(LdnsHandle, AName);
+    Result := nil;
+    platform_dl_sym(LdnsHandle, PAnsiChar(AnsiString(AName)), Result);
   end;
 
+var
+  LLib: TPlatformLibrary;
 begin
   // 如果已加载，直接返回
   if LdnsLoaded then
@@ -274,19 +286,23 @@ begin
   LdnsLoadError := '';
 
   // 尝试加载 ldns 库
-  LdnsHandle := LoadLibrary(LDNS_LIB_NAME_1);
-  if LdnsHandle = NilHandle then
+  if platform_dl_open(PAnsiChar(AnsiString(LDNS_LIB_NAME_1)), PLATFORM_DL_NOW, LLib) = 0 then
+    LdnsHandle := LLib
+  else if LDNS_LIB_NAME_2 <> '' then
   begin
-    if LDNS_LIB_NAME_2 <> '' then
-      LdnsHandle := LoadLibrary(LDNS_LIB_NAME_2);
+    if platform_dl_open(PAnsiChar(AnsiString(LDNS_LIB_NAME_2)), PLATFORM_DL_NOW, LLib) = 0 then
+      LdnsHandle := LLib;
   end;
-  if LdnsHandle = NilHandle then
+  if not LdnsHandleValid(LdnsHandle) then
   begin
     if LDNS_LIB_NAME_3 <> '' then
-      LdnsHandle := LoadLibrary(LDNS_LIB_NAME_3);
+    begin
+      if platform_dl_open(PAnsiChar(AnsiString(LDNS_LIB_NAME_3)), PLATFORM_DL_NOW, LLib) = 0 then
+        LdnsHandle := LLib;
+    end;
   end;
 
-  if LdnsHandle = NilHandle then
+  if not LdnsHandleValid(LdnsHandle) then
   begin
     LdnsLoadError := '无法加载 ldns 库: ' + LDNS_LIB_NAME_1;
     Exit(False);
@@ -376,8 +392,7 @@ begin
     not Assigned(ldns_rr_rdf) then
   begin
     LdnsLoadError := 'ldns 库缺少必要的函数';
-    FreeLibrary(LdnsHandle);
-    LdnsHandle := NilHandle;
+    platform_dl_close(LdnsHandle);
     Exit(False);
   end;
 
@@ -392,11 +407,8 @@ end;
 
 procedure UnloadLdns;
 begin
-  if LdnsHandle <> NilHandle then
-  begin
-    FreeLibrary(LdnsHandle);
-    LdnsHandle := NilHandle;
-  end;
+  if LdnsHandleValid(LdnsHandle) then
+    platform_dl_close(LdnsHandle);
 
   LdnsLoaded := False;
 
@@ -680,7 +692,7 @@ end;
 
 initialization
   LdnsLoaded := False;
-  LdnsHandle := NilHandle;
+  FillChar(LdnsHandle, SizeOf(LdnsHandle), 0);
   LdnsLoadError := '';
 
 finalization

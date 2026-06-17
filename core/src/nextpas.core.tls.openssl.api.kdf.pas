@@ -264,7 +264,7 @@ implementation
 uses nextpas.core.tls.openssl.api.rand, nextpas.core.tls.openssl.loader; procedure LoadKDFFunctions;
 begin
   if TOpenSSLLoader.IsModuleLoaded(osmKDF) then Exit;
-  if GetCryptoLibHandle = 0 then Exit;
+  if not LibLoaded(GetCryptoLibHandle) then Exit;
   
   // PBKDF2 函数
   PKCS5_PBKDF2_HMAC := TPKCS5_PBKDF2_HMAC(GetCryptoProcAddress('PKCS5_PBKDF2_HMAC'));

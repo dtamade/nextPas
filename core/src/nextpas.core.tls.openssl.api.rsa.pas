@@ -4,7 +4,7 @@ unit nextpas.core.tls.openssl.api.rsa;
 
 interface
 
-uses DynLibs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.api.core;
+uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.api.core;
 
 const
   { RSA Padding modes }
@@ -312,7 +312,7 @@ implementation
 
 function LoadOpenSSLRSA: Boolean;
 var
-  LLib: TLibHandle;
+  LLib: TPlatformLibrary;
 begin
   if TOpenSSLLoader.IsModuleLoaded(osmRSA) then
     Exit(True);
@@ -321,7 +321,7 @@ begin
     Exit(False);
 
   LLib := GetCryptoLibHandle;
-  if LLib = NilHandle then
+  if not LibLoaded(LLib) then
     Exit(False);
 
   // Load RSA functions

@@ -4,7 +4,7 @@ unit nextpas.core.tls.openssl.api.ecdh;
 
 interface
 
-uses nextpas.core.base, DynLibs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.api.ec, nextpas.core.tls.openssl.loader;
+uses nextpas.core.base, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.api.ec, nextpas.core.tls.openssl.loader;
 
 const
   { ECDH flags }
@@ -108,7 +108,7 @@ const
 
 function LoadOpenSSLECDH: Boolean;
 var
-  LLib: TLibHandle;
+  LLib: TPlatformLibrary;
   LLoaded: Boolean;
 begin
   if TOpenSSLLoader.IsModuleLoaded(osmECDH) then
@@ -116,13 +116,13 @@ begin
 
   // Use the crypto library handle from core module
   LLib := GetCryptoLibHandle;
-  if LLib = NilHandle then
+  if not LibLoaded(LLib) then
   begin
     LoadOpenSSLCore;
     LLib := GetCryptoLibHandle;
   end;
 
-  if LLib = NilHandle then
+  if not LibLoaded(LLib) then
     Exit(False);
 
   // Batch load all ECDH functions

@@ -4,7 +4,7 @@ unit nextpas.core.tls.openssl.api.crypto;
 
 interface
 
-uses DynLibs, nextpas.core.tls.openssl.base;
+uses nextpas.core.tls.openssl.base;
 
 type
   { Memory Management }
@@ -523,18 +523,18 @@ end;
 
 procedure LoadOpenSSLCrypto;
 var
-  LLib: TLibHandle;
+  LLib: TPlatformLibrary;
 begin
   // Use the crypto library handle from core module
   LLib := GetCryptoLibHandle;
-  if LLib = NilHandle then
+  if not LibLoaded(LLib) then
   begin
     // Try to load core first
     LoadOpenSSLCore;
     LLib := GetCryptoLibHandle;
   end;
 
-  if LLib = NilHandle then
+  if not LibLoaded(LLib) then
     Exit;
 
   // Load crypto functions using batch loading

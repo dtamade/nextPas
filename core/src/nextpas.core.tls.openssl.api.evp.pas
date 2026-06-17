@@ -867,7 +867,7 @@ var
   EVP_DigestVerifyFinal: TEVP_DigestVerifyFinal = nil;
 
 // Public load/unload functions
-function LoadEVP(ALibHandle: THandle): Boolean;
+function LoadEVP(ALibHandle: TPlatformLibrary): Boolean;
 procedure UnloadEVP;
 
 // High-level helper functions
@@ -1012,11 +1012,11 @@ var
     (Name: 'EVP_DigestVerifyFinal'; FuncPtr: @EVP_DigestVerifyFinal; Required: False)
   );
 
-function LoadEVP(ALibHandle: THandle): Boolean;
+function LoadEVP(ALibHandle: TPlatformLibrary): Boolean;
 begin
   Result := False;
 
-  if ALibHandle = 0 then Exit;
+  if not LibLoaded(ALibHandle) then Exit;
   if TOpenSSLLoader.IsModuleLoaded(osmEVP) then Exit(True);
 
   // Batch load all EVP functions

@@ -103,13 +103,13 @@ implementation
 
 function LoadChaChaFunctions: Boolean;
 var
-  LHandle: TLibHandle;
+  LHandle: TPlatformLibrary;
 begin
   Result := False;
 
   // Phase 3.3 P0+ - 使用统一的动态库加载器（替换 ~20 行重复代码）
   LHandle := TOpenSSLLoader.GetLibraryHandle(osslLibCrypto);
-  if LHandle = 0 then
+  if not LibLoaded(LHandle) then
     Exit;
     
   // Load ChaCha20 functions (may not be available in older OpenSSL)

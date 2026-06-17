@@ -10,7 +10,7 @@ uses
   nextpas.core.path,
   nextpas.core.mem.allocator.base
   {$IFNDEF NEXTPAS_CORE_MIMALLOC_STATIC}
-  ,dynlibs
+  ,nextpas.core.platform.dl
   {$ENDIF}
   ;
 
@@ -58,7 +58,7 @@ uses
 {$ELSE}
   // Delayed loading of mimalloc to avoid loader-time failures
   var
-    _miLib: TLibHandle = 0;
+    _miLib: TPlatformLibrary;
     _miLoaded: Boolean = False;
     _mi_malloc: function(aSize: SizeUInt): Pointer; cdecl = nil;
     _mi_calloc: function(aCount, aSize: SizeUInt): Pointer; cdecl = nil;
@@ -73,19 +73,29 @@ uses
     Result := LowerCase({$I %FPCTARGETCPU%}) + '-' + LowerCase({$I %FPCTARGETOS%});
   end;
 
-  function TryLoadFromPath(const aBasePath, aLibName: string): TLibHandle;
+  function TryLoadFromPath(const aBasePath, aLibName: string): TPlatformLibrary;
   var
     FullPath: string;
   begin
+    FillChar(Result, SizeOf(Result), 0);
     FullPath := aBasePath + aLibName;
-    Result := LoadLibrary(PChar(FullPath));
+    platform_dl_open(PAnsiChar(AnsiString(FullPath)), PLATFORM_DL_NOW, Result);
   end;
 
-  function TryLoadMimallocLibrary: TLibHandle;
+  function IsLibValid(const ALib: TPlatformLibrary): Boolean; inline;
+  begin
+    {$IFDEF NEXTPAS_WINDOWS}
+    Result := ALib.Handle <> 0;
+    {$ELSE}
+    Result := ALib.Handle <> nil;
+    {$ENDIF}
+  end;
+
+  function TryLoadMimallocLibrary: TPlatformLibrary;
   var
     EnvPath, ExePath, LibSubdir: AnsiString;
   begin
-    Result := 0;
+    FillChar(Result, SizeOf(Result), 0);
 
     // 1. 环境变量优先（用户可完全控制）
     {$IFDEF MSWINDOWS}
@@ -95,8 +105,8 @@ uses
     {$ENDIF}
     if (EnvPath <> '') then
     begin
-      Result := LoadLibrary(PChar(EnvPath));
-      if Result <> 0 then Exit;
+      platform_dl_open(PAnsiChar(EnvPath), PLATFORM_DL_NOW, Result);
+      if IsLibValid(Result) then Exit;
     end;
 
     // 2. 程序目录下的 lib/<platform>/ 目录
@@ -106,30 +116,30 @@ uses
     begin
       {$IFDEF MSWINDOWS}
       Result := TryLoadFromPath(ExePath + 'lib' + DirectorySeparator + LibSubdir + DirectorySeparator, 'mimalloc.dll');
-      if Result = 0 then
+      if not IsLibValid(Result) then
         Result := TryLoadFromPath(ExePath + 'lib' + DirectorySeparator + LibSubdir + DirectorySeparator, 'mimalloc-redirect.dll');
       {$ELSE}
       Result := TryLoadFromPath(ExePath + 'lib' + DirectorySeparator + LibSubdir + DirectorySeparator, 'libmimalloc.so');
-      if Result = 0 then
+      if not IsLibValid(Result) then
         Result := TryLoadFromPath(ExePath + 'lib' + DirectorySeparator + LibSubdir + DirectorySeparator, 'libmimalloc.so.2');
       {$ENDIF}
-      if Result <> 0 then Exit;
+      if IsLibValid(Result) then Exit;
     end;
 
     // 3. 系统路径回退
     {$IFDEF MSWINDOWS}
-    Result := LoadLibrary('mimalloc.dll');
-    if Result = 0 then Result := LoadLibrary('mimalloc-redirect.dll');
+    Result := TryLoadFromPath('', 'mimalloc.dll');
+    if not IsLibValid(Result) then Result := TryLoadFromPath('', 'mimalloc-redirect.dll');
     {$ELSE}
-    Result := LoadLibrary('libmimalloc.so');
-    if Result = 0 then Result := LoadLibrary('libmimalloc.so.2');
-    if Result = 0 then Result := LoadLibrary('mimalloc');
+    Result := TryLoadFromPath('', 'libmimalloc.so');
+    if not IsLibValid(Result) then Result := TryLoadFromPath('', 'libmimalloc.so.2');
+    if not IsLibValid(Result) then Result := TryLoadFromPath('', 'mimalloc');
     {$ENDIF}
   end;
 
   function EnsureMimallocLoaded: Boolean;
   var
-    LLib: TLibHandle;
+    LLib: TPlatformLibrary;
   begin
     if _miLoaded then Exit(True);
     EnterCriticalSection(GLoadLock);
@@ -137,19 +147,18 @@ uses
       if _miLoaded then Exit(True);
       // try load
       LLib := TryLoadMimallocLibrary;
-      if LLib = 0 then Exit(False);
+      if not IsLibValid(LLib) then Exit(False);
       _miLib := LLib;
-      Pointer(_mi_malloc) := GetProcedureAddress(_miLib, 'mi_malloc');
-      Pointer(_mi_calloc) := GetProcedureAddress(_miLib, 'mi_calloc');
-      Pointer(_mi_realloc) := GetProcedureAddress(_miLib, 'mi_realloc');
-      Pointer(_mi_free) := GetProcedureAddress(_miLib, 'mi_free');
-      Pointer(_mi_malloc_usable_size) := GetProcedureAddress(_miLib, 'mi_malloc_usable_size');
+      platform_dl_sym(_miLib, 'mi_malloc', Pointer(_mi_malloc));
+      platform_dl_sym(_miLib, 'mi_calloc', Pointer(_mi_calloc));
+      platform_dl_sym(_miLib, 'mi_realloc', Pointer(_mi_realloc));
+      platform_dl_sym(_miLib, 'mi_free', Pointer(_mi_free));
+      platform_dl_sym(_miLib, 'mi_malloc_usable_size', Pointer(_mi_malloc_usable_size));
       _miLoaded := Assigned(_mi_malloc) and Assigned(_mi_calloc) and Assigned(_mi_realloc) and Assigned(_mi_free);
       if not _miLoaded then
       begin
         _mi_malloc_usable_size := nil;
-        FreeLibrary(_miLib);
-        _miLib := 0;
+        platform_dl_close(_miLib);
       end;
       Result := _miLoaded;
     finally
@@ -272,9 +281,8 @@ finalization
   _MimallocAllocatorIntf := nil;
   _MimallocAllocatorObj := nil;
   {$IFNDEF NEXTPAS_CORE_MIMALLOC_STATIC}
-  if _miLib <> 0 then
-    FreeLibrary(_miLib);
-  _miLib := 0;
+  if IsLibValid(_miLib) then
+    platform_dl_close(_miLib);
   _mi_malloc := nil;
   _mi_calloc := nil;
   _mi_realloc := nil;

@@ -27,11 +27,7 @@ interface
 uses
   SysUtils, nextpas.core.fs,
   ctypes,  // culong, cint 等 C 类型
-  {$IFDEF WINDOWS}
-  Windows
-  {$ELSE}
-  dynlibs
-  {$ENDIF};
+  nextpas.core.platform.dl;
 
 type
   {**
@@ -42,7 +38,7 @@ type
     osslLibSSL      // libssl (SSL/TLS库)
   );
 
-  TOpenSSLLibHandle = {$IFDEF WINDOWS}HMODULE{$ELSE}TLibHandle{$ENDIF};
+  TOpenSSLLibHandle = TPlatformLibrary;
 
   {**
    * OpenSSL API 模块枚举
@@ -153,8 +149,8 @@ type
   TOpenSSLLoader = class
   private
     class var
-      FLibCrypto: {$IFDEF WINDOWS}HMODULE{$ELSE}TLibHandle{$ENDIF};
-      FLibSSL: {$IFDEF WINDOWS}HMODULE{$ELSE}TLibHandle{$ENDIF};
+      FLibCrypto: TPlatformLibrary;
+      FLibSSL: TPlatformLibrary;
       FInitialized: Boolean;
       FVersionInfo: TOpenSSLVersionInfo;
       FLoadedModules: TOpenSSLModuleSet;  // 已加载的模块集合
@@ -162,8 +158,8 @@ type
       FLastLoadFunctionsMissingRequired: string;
 
     class procedure DetectVersion;
-    class function TryLoadLibrary(const ANames: array of string): {$IFDEF WINDOWS}HMODULE{$ELSE}TLibHandle{$ENDIF};
-    class function TryLoadLibraryFromOpenSSLRoot(ALibType: TOpenSSLLibraryType): {$IFDEF WINDOWS}HMODULE{$ELSE}TLibHandle{$ENDIF};
+    class function TryLoadLibrary(const ANames: array of string): TPlatformLibrary;
+    class function TryLoadLibraryFromOpenSSLRoot(ALibType: TOpenSSLLibraryType): TPlatformLibrary;
   public
     // ========== 库加载 ==========
 
@@ -175,7 +171,7 @@ type
      *
      * 注意: 此方法会自动尝试加载库（懒加载）
      *}
-    class function GetLibraryHandle(ALibType: TOpenSSLLibraryType): {$IFDEF WINDOWS}HMODULE{$ELSE}TLibHandle{$ENDIF};
+    class function GetLibraryHandle(ALibType: TOpenSSLLibraryType): TPlatformLibrary;
 
     {**
      * 从指定库获取函数指针
@@ -186,7 +182,7 @@ type
      *
      * 注意: 此方法不抛出异常，调用者需检查返回值
      *}
-    class function GetFunction(AHandle: {$IFDEF WINDOWS}HMODULE{$ELSE}TLibHandle{$ENDIF}; const AFunctionName: string): Pointer;
+    class function GetFunction(AHandle: TPlatformLibrary; const AFunctionName: string): Pointer;
 
     {**
      * 批量加载函数指针
@@ -205,7 +201,7 @@ type
      *   LoadedCount := TOpenSSLLoader.LoadFunctions(Handle, Bindings);
      * </code>
      *}
-    class function LoadFunctions(AHandle: {$IFDEF WINDOWS}HMODULE{$ELSE}TLibHandle{$ENDIF};
+    class function LoadFunctions(AHandle: TPlatformLibrary;
       const ABindings: array of TFunctionBinding): Integer;
 
     {**
@@ -233,7 +229,7 @@ type
      * @param AFunctionName 函数名称
      * @return True=函数存在，False=不存在
      *}
-    class function IsFunctionAvailable(AHandle: {$IFDEF WINDOWS}HMODULE{$ELSE}TLibHandle{$ENDIF}; const AFunctionName: string): Boolean;
+    class function IsFunctionAvailable(AHandle: TPlatformLibrary; const AFunctionName: string): Boolean;
 
     // ========== 模块状态管理 ==========
 
@@ -334,6 +330,17 @@ type
     class function AreModuleDependenciesLoaded(AModule: TOpenSSLModule): Boolean;
   end;
 
+{**
+ * Check if a TPlatformLibrary handle is loaded (non-empty)
+ *}
+function LibLoaded(const ALib: TPlatformLibrary): Boolean; inline;
+
+{**
+ * Get a function pointer from a loaded library.
+ * Returns nil if the library is not loaded or the symbol is not found.
+ *}
+function GetProcSymbol(const ALib: TPlatformLibrary; const AName: PAnsiChar): Pointer;
+
 implementation
 
 const
@@ -393,38 +400,49 @@ const
     { osmInitCert }   [osmCore, osmX509, osmEVP]    // 证书初始化
   );
 
+{ Helpers }
+
+function LibLoaded(const ALib: TPlatformLibrary): Boolean; inline;
+begin
+  {$IFDEF NEXTPAS_WINDOWS}
+  Result := ALib.Handle <> 0;
+  {$ELSE}
+  Result := ALib.Handle <> nil;
+  {$ENDIF}
+end;
+
+function GetProcSymbol(const ALib: TPlatformLibrary; const AName: PAnsiChar): Pointer;
+begin
+  Result := nil;
+  if not LibLoaded(ALib) then
+    Exit;
+  platform_dl_sym(ALib, AName, Result);
+end;
+
 { TOpenSSLLoader }
 
-class function TOpenSSLLoader.TryLoadLibrary(const ANames: array of string): {$IFDEF WINDOWS}HMODULE{$ELSE}TLibHandle{$ENDIF};
+class function TOpenSSLLoader.TryLoadLibrary(const ANames: array of string): TPlatformLibrary;
 var
   I: Integer;
+  LPath: AnsiString;
 begin
-  Result := 0;
+  FillChar(Result, SizeOf(Result), 0);
   for I := Low(ANames) to High(ANames) do
   begin
-    {$IFDEF WINDOWS}
-    Result := LoadLibrary(PChar(ANames[I]));
-    {$ELSE}
-    Result := LoadLibrary(ANames[I]);
-    {$ENDIF}
-
-    if Result <> 0 then
-      Break;  // 加载成功
+    LPath := AnsiString(ANames[I]);
+    if platform_dl_open(PAnsiChar(LPath), PLATFORM_DL_NOW, Result) = 0 then
+      Break;
+    FillChar(Result, SizeOf(Result), 0);
   end;
 end;
 
 class function TOpenSSLLoader.TryLoadLibraryFromOpenSSLRoot(
-  ALibType: TOpenSSLLibraryType): {$IFDEF WINDOWS}HMODULE{$ELSE}TLibHandle{$ENDIF};
-{$IFDEF WINDOWS}
-begin
-  Result := 0;
-end;
-{$ELSE}
+  ALibType: TOpenSSLLibraryType): TPlatformLibrary;
 var
   LRoot: string;
   LLibDir: string;
 begin
-  Result := 0;
+  FillChar(Result, SizeOf(Result), 0);
 
   LRoot := Trim(nextpas.core.fs.GetEnv('OPENSSL_ROOT'));
   if LRoot = '' then
@@ -453,23 +471,22 @@ begin
       ]);
   end;
 end;
-{$ENDIF}
 
-class function TOpenSSLLoader.GetLibraryHandle(ALibType: TOpenSSLLibraryType): {$IFDEF WINDOWS}HMODULE{$ELSE}TLibHandle{$ENDIF};
+class function TOpenSSLLoader.GetLibraryHandle(ALibType: TOpenSSLLibraryType): TPlatformLibrary;
 begin
-  Result := 0;
+  FillChar(Result, SizeOf(Result), 0);
 
   case ALibType of
     osslLibCrypto:
     begin
-      if FLibCrypto = 0 then
+      if not LibLoaded(FLibCrypto) then
       begin
         FLibCrypto := TryLoadLibraryFromOpenSSLRoot(osslLibCrypto);
 
         // 尝试加载 libcrypto，按优先级顺序
-        if FLibCrypto = 0 then
+        if not LibLoaded(FLibCrypto) then
           FLibCrypto := TryLoadLibrary([
-            {$IFDEF WINDOWS}
+            {$IFDEF NEXTPAS_WINDOWS}
             'libcrypto-3-x64.dll',      // OpenSSL 3.x (Windows 64-bit)
             'libcrypto-3.dll',          // OpenSSL 3.x (Windows 32-bit)
             'libcrypto-1_1-x64.dll',    // OpenSSL 1.1.x (Windows 64-bit)
@@ -486,7 +503,7 @@ begin
             {$ENDIF}
           ]);
 
-        if FLibCrypto <> 0 then
+        if LibLoaded(FLibCrypto) then
         begin
           FInitialized := True;
           DetectVersion;
@@ -497,14 +514,14 @@ begin
 
     osslLibSSL:
     begin
-      if FLibSSL = 0 then
+      if not LibLoaded(FLibSSL) then
       begin
         FLibSSL := TryLoadLibraryFromOpenSSLRoot(osslLibSSL);
 
         // 尝试加载 libssl
-        if FLibSSL = 0 then
+        if not LibLoaded(FLibSSL) then
           FLibSSL := TryLoadLibrary([
-            {$IFDEF WINDOWS}
+            {$IFDEF NEXTPAS_WINDOWS}
             'libssl-3-x64.dll',
             'libssl-3.dll',
             'libssl-1_1-x64.dll',
@@ -526,26 +543,17 @@ begin
   end;
 end;
 
-class function TOpenSSLLoader.GetFunction(AHandle: {$IFDEF WINDOWS}HMODULE{$ELSE}TLibHandle{$ENDIF}; const AFunctionName: string): Pointer;
+class function TOpenSSLLoader.GetFunction(AHandle: TPlatformLibrary; const AFunctionName: string): Pointer;
 begin
-  Result := nil;
-
-  if AHandle = 0 then
-    Exit;
-
-  {$IFDEF WINDOWS}
-  Result := GetProcAddress(AHandle, PChar(AFunctionName));
-  {$ELSE}
-  Result := GetProcAddress(AHandle, PChar(AFunctionName));
-  {$ENDIF}
+  Result := GetProcSymbol(AHandle, PAnsiChar(AnsiString(AFunctionName)));
 end;
 
-class function TOpenSSLLoader.IsFunctionAvailable(AHandle: {$IFDEF WINDOWS}HMODULE{$ELSE}TLibHandle{$ENDIF}; const AFunctionName: string): Boolean;
+class function TOpenSSLLoader.IsFunctionAvailable(AHandle: TPlatformLibrary; const AFunctionName: string): Boolean;
 begin
   Result := GetFunction(AHandle, AFunctionName) <> nil;
 end;
 
-class function TOpenSSLLoader.LoadFunctions(AHandle: {$IFDEF WINDOWS}HMODULE{$ELSE}TLibHandle{$ENDIF};
+class function TOpenSSLLoader.LoadFunctions(AHandle: TPlatformLibrary;
   const ABindings: array of TFunctionBinding): Integer;
 var
   I: Integer;
@@ -556,7 +564,7 @@ begin
   Result := 0;
   FLastLoadFunctionsLoadedCount := 0;
   FLastLoadFunctionsMissingRequired := '';
-  if AHandle = 0 then
+  if not LibLoaded(AHandle) then
     Exit;
 
   LRequiredMissing := False;
@@ -647,7 +655,7 @@ begin
   FillChar(FVersionInfo, SizeOf(FVersionInfo), 0);
   FVersionInfo.VersionString := 'Unknown';
 
-  if FLibCrypto = 0 then
+  if not LibLoaded(FLibCrypto) then
     Exit;
 
   // 尝试获取版本号
@@ -690,17 +698,11 @@ end;
 
 class procedure TOpenSSLLoader.UnloadLibraries;
 begin
-  if FLibCrypto <> 0 then
-  begin
-    FreeLibrary(FLibCrypto);
-    FLibCrypto := 0;
-  end;
+  if LibLoaded(FLibCrypto) then
+    platform_dl_close(FLibCrypto);
 
-  if FLibSSL <> 0 then
-  begin
-    FreeLibrary(FLibSSL);
-    FLibSSL := 0;
-  end;
+  if LibLoaded(FLibSSL) then
+    platform_dl_close(FLibSSL);
 
   FInitialized := False;
   FLoadedModules := [];
@@ -711,8 +713,8 @@ end;
 class function TOpenSSLLoader.IsLoaded(ALibType: TOpenSSLLibraryType): Boolean;
 begin
   case ALibType of
-    osslLibCrypto: Result := FLibCrypto <> 0;
-    osslLibSSL: Result := FLibSSL <> 0;
+    osslLibCrypto: Result := LibLoaded(FLibCrypto);
+    osslLibSSL: Result := LibLoaded(FLibSSL);
   end;
 end;
 
@@ -792,8 +794,8 @@ begin
 end;
 
 initialization
-  TOpenSSLLoader.FLibCrypto := 0;
-  TOpenSSLLoader.FLibSSL := 0;
+  FillChar(TOpenSSLLoader.FLibCrypto, SizeOf(TPlatformLibrary), 0);
+  FillChar(TOpenSSLLoader.FLibSSL, SizeOf(TPlatformLibrary), 0);
   TOpenSSLLoader.FInitialized := False;
   TOpenSSLLoader.FLoadedModules := [];
   TOpenSSLLoader.FLastLoadFunctionsLoadedCount := 0;

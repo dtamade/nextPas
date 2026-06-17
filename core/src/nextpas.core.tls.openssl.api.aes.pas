@@ -142,7 +142,7 @@ function LoadAESFunctions(ALibHandle: TOpenSSLLibHandle): Boolean;
 begin
   Result := False;
 
-  if ALibHandle = 0 then Exit;
+  if not LibLoaded(ALibHandle) then Exit;
 
   if TOpenSSLLoader.LoadFunctions(ALibHandle, AESFunctionBindings) < 0 then
   begin

@@ -12,7 +12,7 @@ unit nextpas.core.tls.pkcs11.loader;
 
 interface
 
-uses DynLibs, nextpas.core.tls.pkcs11.api; type TPKCS11Loader = class private FLibHandle: TLibHandle;
+uses nextpas.core.platform.dl, nextpas.core.tls.pkcs11.api; type TPKCS11Loader = class private FLibHandle: TPlatformLibrary;
     FLibraryPath: string;
     FFunctionList: CK_FUNCTION_LIST_PTR;
     FInitialized: Boolean;
@@ -47,10 +47,25 @@ type
 
 { TPKCS11Loader }
 
+function LibLoaded(const ALib: TPlatformLibrary): Boolean; inline;
+begin
+  {$IFDEF NEXTPAS_WINDOWS}
+  Result := ALib.Handle <> 0;
+  {$ELSE}
+  Result := ALib.Handle <> nil;
+  {$ENDIF}
+end;
+
+function GetProcSym(const ALib: TPlatformLibrary; const AName: PAnsiChar): Pointer;
+begin
+  Result := nil;
+  platform_dl_sym(ALib, AName, Result);
+end;
+
 constructor TPKCS11Loader.Create;
 begin
   inherited Create;
-  FLibHandle := NilHandle;
+  FillChar(FLibHandle, SizeOf(FLibHandle), 0);
   FLibraryPath := '';
   FFunctionList := nil;
   FInitialized := False;
@@ -68,28 +83,29 @@ function TPKCS11Loader.LoadLibrary(const APath: string): Boolean;
 var
   GetFunctionList: TC_GetFunctionList;
   rv: CK_RV;
+  LAddr: Pointer;
 begin
   Result := False;
-  
+
   // Unload existing library
-  if FLibHandle <> NilHandle then
+  if LibLoaded(FLibHandle) then
     UnloadLibrary;
-  
+
   // Load library
-  FLibHandle := DynLibs.LoadLibrary(APath);
-  if FLibHandle = NilHandle then
+  if platform_dl_open(PAnsiChar(AnsiString(APath)), PLATFORM_DL_NOW, FLibHandle) <> 0 then
     Exit;
-  
+
   FLibraryPath := APath;
-  
+
   // Get C_GetFunctionList
-  GetFunctionList := TC_GetFunctionList(GetProcAddress(FLibHandle, 'C_GetFunctionList'));
-  if not Assigned(GetFunctionList) then
+  LAddr := GetProcSym(FLibHandle, 'C_GetFunctionList');
+  if LAddr = nil then
   begin
     UnloadLibrary;
     Exit;
   end;
-  
+  GetFunctionList := TC_GetFunctionList(LAddr);
+
   // Get function list
   rv := GetFunctionList(@FFunctionList);
   if rv <> CKR_OK then
@@ -97,7 +113,7 @@ begin
     UnloadLibrary;
     Exit;
   end;
-  
+
   Result := True;
 end;
 
@@ -105,13 +121,9 @@ procedure TPKCS11Loader.UnloadLibrary;
 begin
   if FInitialized then
     Finalize;
-    
-  if FLibHandle <> NilHandle then
-  begin
-    DynLibs.UnloadLibrary(FLibHandle);
-    FLibHandle := NilHandle;
-  end;
-  
+
+  platform_dl_close(FLibHandle);
+
   FFunctionList := nil;
   FLibraryPath := '';
 end;

@@ -4,7 +4,7 @@ unit nextpas.core.tls.openssl.api.core;
 
 interface
 
-uses nextpas.core.tls.exceptions, DynLibs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.loader;
+uses nextpas.core.tls.exceptions, nextpas.core.platform.dl, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.loader;
 
 type
   { SSL Library Management }
@@ -652,8 +652,8 @@ var
 procedure LoadOpenSSLCore;
 procedure LoadOpenSSLCoreWithVersion(AVersion: TOpenSSLVersion);
 procedure UnloadOpenSSLCore;
-function GetSSLLibHandle: TLibHandle;
-function GetCryptoLibHandle: TLibHandle;
+function GetSSLLibHandle: TPlatformLibrary;
+function GetCryptoLibHandle: TPlatformLibrary;
 function GetOpenSSLVersion: TOpenSSLVersion;
 function GetOpenSSLVersionString: string;
 
@@ -679,12 +679,12 @@ var
   LoadedSSLLibName: string = '';
 
 // P0-1.1: 委托函数，用于向后兼容
-function LibCryptoHandle: TLibHandle; inline;
+function LibCryptoHandle: TPlatformLibrary; inline;
 begin
   Result := TOpenSSLLoader.GetLibraryHandle(osslLibCrypto);
 end;
 
-function LibSSLHandle: TLibHandle; inline;
+function LibSSLHandle: TPlatformLibrary; inline;
 begin
   Result := TOpenSSLLoader.GetLibraryHandle(osslLibSSL);
 end;
@@ -769,191 +769,191 @@ begin
   end;
   
   // Load function pointers
-  OPENSSL_init_ssl := TOPENSSL_init_ssl(GetProcedureAddress(LibSSLHandle, 'OPENSSL_init_ssl'));
-  OPENSSL_cleanup := TOPENSSL_cleanup(GetProcedureAddress(LibCryptoHandle, 'OPENSSL_cleanup'));
-  OpenSSL_version_num := TOpenSSL_version_num(GetProcedureAddress(LibCryptoHandle, 'OpenSSL_version_num'));
-  OpenSSL_version := TOpenSSL_version(GetProcedureAddress(LibCryptoHandle, 'OpenSSL_version'));
+  OPENSSL_init_ssl := TOPENSSL_init_ssl(GetProcSymbol(LibSSLHandle, 'OPENSSL_init_ssl'));
+  OPENSSL_cleanup := TOPENSSL_cleanup(GetProcSymbol(LibCryptoHandle, 'OPENSSL_cleanup'));
+  OpenSSL_version_num := TOpenSSL_version_num(GetProcSymbol(LibCryptoHandle, 'OpenSSL_version_num'));
+  OpenSSL_version := TOpenSSL_version(GetProcSymbol(LibCryptoHandle, 'OpenSSL_version'));
   
   // Methods
-  TLS_method := TTLS_method(GetProcedureAddress(LibSSLHandle, 'TLS_method'));
-  TLS_server_method := TTLS_server_method(GetProcedureAddress(LibSSLHandle, 'TLS_server_method'));
-  TLS_client_method := TTLS_client_method(GetProcedureAddress(LibSSLHandle, 'TLS_client_method'));
-  SSLv23_method := TSSLv23_method(GetProcedureAddress(LibSSLHandle, 'SSLv23_method'));
-  SSLv23_server_method := TSSLv23_server_method(GetProcedureAddress(LibSSLHandle, 'SSLv23_server_method'));
-  SSLv23_client_method := TSSLv23_client_method(GetProcedureAddress(LibSSLHandle, 'SSLv23_client_method'));
-  DTLS_method := TDTLS_method(GetProcedureAddress(LibSSLHandle, 'DTLS_method'));
-  DTLS_server_method := TDTLS_server_method(GetProcedureAddress(LibSSLHandle, 'DTLS_server_method'));
-  DTLS_client_method := TDTLS_client_method(GetProcedureAddress(LibSSLHandle, 'DTLS_client_method'));
+  TLS_method := TTLS_method(GetProcSymbol(LibSSLHandle, 'TLS_method'));
+  TLS_server_method := TTLS_server_method(GetProcSymbol(LibSSLHandle, 'TLS_server_method'));
+  TLS_client_method := TTLS_client_method(GetProcSymbol(LibSSLHandle, 'TLS_client_method'));
+  SSLv23_method := TSSLv23_method(GetProcSymbol(LibSSLHandle, 'SSLv23_method'));
+  SSLv23_server_method := TSSLv23_server_method(GetProcSymbol(LibSSLHandle, 'SSLv23_server_method'));
+  SSLv23_client_method := TSSLv23_client_method(GetProcSymbol(LibSSLHandle, 'SSLv23_client_method'));
+  DTLS_method := TDTLS_method(GetProcSymbol(LibSSLHandle, 'DTLS_method'));
+  DTLS_server_method := TDTLS_server_method(GetProcSymbol(LibSSLHandle, 'DTLS_server_method'));
+  DTLS_client_method := TDTLS_client_method(GetProcSymbol(LibSSLHandle, 'DTLS_client_method'));
   
   // Context functions
-  SSL_CTX_new := TSSL_CTX_new(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_new'));
-  SSL_CTX_free := TSSL_CTX_free(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_free'));
-  SSL_CTX_up_ref := TSSL_CTX_up_ref(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_up_ref'));
-  SSL_CTX_set_timeout := TSSL_CTX_set_timeout(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_set_timeout'));
-  SSL_CTX_get_timeout := TSSL_CTX_get_timeout(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_get_timeout'));
-  SSL_CTX_get_cert_store := TSSL_CTX_get_cert_store(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_get_cert_store'));
-  SSL_CTX_set_cert_store := TSSL_CTX_set_cert_store(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_set_cert_store'));
-  SSL_CTX_set1_cert_store := TSSL_CTX_set1_cert_store(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_set1_cert_store'));
-  SSL_CTX_get0_certificate := TSSL_CTX_get0_certificate(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_get0_certificate'));
-  SSL_CTX_get0_privatekey := TSSL_CTX_get0_privatekey(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_get0_privatekey'));
+  SSL_CTX_new := TSSL_CTX_new(GetProcSymbol(LibSSLHandle, 'SSL_CTX_new'));
+  SSL_CTX_free := TSSL_CTX_free(GetProcSymbol(LibSSLHandle, 'SSL_CTX_free'));
+  SSL_CTX_up_ref := TSSL_CTX_up_ref(GetProcSymbol(LibSSLHandle, 'SSL_CTX_up_ref'));
+  SSL_CTX_set_timeout := TSSL_CTX_set_timeout(GetProcSymbol(LibSSLHandle, 'SSL_CTX_set_timeout'));
+  SSL_CTX_get_timeout := TSSL_CTX_get_timeout(GetProcSymbol(LibSSLHandle, 'SSL_CTX_get_timeout'));
+  SSL_CTX_get_cert_store := TSSL_CTX_get_cert_store(GetProcSymbol(LibSSLHandle, 'SSL_CTX_get_cert_store'));
+  SSL_CTX_set_cert_store := TSSL_CTX_set_cert_store(GetProcSymbol(LibSSLHandle, 'SSL_CTX_set_cert_store'));
+  SSL_CTX_set1_cert_store := TSSL_CTX_set1_cert_store(GetProcSymbol(LibSSLHandle, 'SSL_CTX_set1_cert_store'));
+  SSL_CTX_get0_certificate := TSSL_CTX_get0_certificate(GetProcSymbol(LibSSLHandle, 'SSL_CTX_get0_certificate'));
+  SSL_CTX_get0_privatekey := TSSL_CTX_get0_privatekey(GetProcSymbol(LibSSLHandle, 'SSL_CTX_get0_privatekey'));
   
   // Connection functions
-  SSL_new := TSSL_new(GetProcedureAddress(LibSSLHandle, 'SSL_new'));
-  SSL_free := TSSL_free(GetProcedureAddress(LibSSLHandle, 'SSL_free'));
-  SSL_up_ref := TSSL_up_ref(GetProcedureAddress(LibSSLHandle, 'SSL_up_ref'));
-  SSL_dup := TSSL_dup(GetProcedureAddress(LibSSLHandle, 'SSL_dup'));
-  SSL_get_SSL_CTX := TSSL_get_SSL_CTX(GetProcedureAddress(LibSSLHandle, 'SSL_get_SSL_CTX'));
-  SSL_set_SSL_CTX := TSSL_set_SSL_CTX(GetProcedureAddress(LibSSLHandle, 'SSL_set_SSL_CTX'));
+  SSL_new := TSSL_new(GetProcSymbol(LibSSLHandle, 'SSL_new'));
+  SSL_free := TSSL_free(GetProcSymbol(LibSSLHandle, 'SSL_free'));
+  SSL_up_ref := TSSL_up_ref(GetProcSymbol(LibSSLHandle, 'SSL_up_ref'));
+  SSL_dup := TSSL_dup(GetProcSymbol(LibSSLHandle, 'SSL_dup'));
+  SSL_get_SSL_CTX := TSSL_get_SSL_CTX(GetProcSymbol(LibSSLHandle, 'SSL_get_SSL_CTX'));
+  SSL_set_SSL_CTX := TSSL_set_SSL_CTX(GetProcSymbol(LibSSLHandle, 'SSL_set_SSL_CTX'));
   
   // Connection setup
-  SSL_set_fd := TSSL_set_fd(GetProcedureAddress(LibSSLHandle, 'SSL_set_fd'));
-  SSL_set_rfd := TSSL_set_rfd(GetProcedureAddress(LibSSLHandle, 'SSL_set_rfd'));
-  SSL_set_wfd := TSSL_set_wfd(GetProcedureAddress(LibSSLHandle, 'SSL_set_wfd'));
-  SSL_get_fd := TSSL_get_fd(GetProcedureAddress(LibSSLHandle, 'SSL_get_fd'));
-  SSL_get_rfd := TSSL_get_rfd(GetProcedureAddress(LibSSLHandle, 'SSL_get_rfd'));
-  SSL_get_wfd := TSSL_get_wfd(GetProcedureAddress(LibSSLHandle, 'SSL_get_wfd'));
-  SSL_set_bio := TSSL_set_bio(GetProcedureAddress(LibSSLHandle, 'SSL_set_bio'));
-  SSL_set0_rbio := TSSL_set0_rbio(GetProcedureAddress(LibSSLHandle, 'SSL_set0_rbio'));
-  SSL_set0_wbio := TSSL_set0_wbio(GetProcedureAddress(LibSSLHandle, 'SSL_set0_wbio'));
-  SSL_get_rbio := TSSL_get_rbio(GetProcedureAddress(LibSSLHandle, 'SSL_get_rbio'));
-  SSL_get_wbio := TSSL_get_wbio(GetProcedureAddress(LibSSLHandle, 'SSL_get_wbio'));
+  SSL_set_fd := TSSL_set_fd(GetProcSymbol(LibSSLHandle, 'SSL_set_fd'));
+  SSL_set_rfd := TSSL_set_rfd(GetProcSymbol(LibSSLHandle, 'SSL_set_rfd'));
+  SSL_set_wfd := TSSL_set_wfd(GetProcSymbol(LibSSLHandle, 'SSL_set_wfd'));
+  SSL_get_fd := TSSL_get_fd(GetProcSymbol(LibSSLHandle, 'SSL_get_fd'));
+  SSL_get_rfd := TSSL_get_rfd(GetProcSymbol(LibSSLHandle, 'SSL_get_rfd'));
+  SSL_get_wfd := TSSL_get_wfd(GetProcSymbol(LibSSLHandle, 'SSL_get_wfd'));
+  SSL_set_bio := TSSL_set_bio(GetProcSymbol(LibSSLHandle, 'SSL_set_bio'));
+  SSL_set0_rbio := TSSL_set0_rbio(GetProcSymbol(LibSSLHandle, 'SSL_set0_rbio'));
+  SSL_set0_wbio := TSSL_set0_wbio(GetProcSymbol(LibSSLHandle, 'SSL_set0_wbio'));
+  SSL_get_rbio := TSSL_get_rbio(GetProcSymbol(LibSSLHandle, 'SSL_get_rbio'));
+  SSL_get_wbio := TSSL_get_wbio(GetProcSymbol(LibSSLHandle, 'SSL_get_wbio'));
   
   // Handshake
-  SSL_connect := TSSL_connect(GetProcedureAddress(LibSSLHandle, 'SSL_connect'));
-  SSL_accept := TSSL_accept(GetProcedureAddress(LibSSLHandle, 'SSL_accept'));
-  SSL_do_handshake := TSSL_do_handshake(GetProcedureAddress(LibSSLHandle, 'SSL_do_handshake'));
-  SSL_renegotiate := TSSL_renegotiate(GetProcedureAddress(LibSSLHandle, 'SSL_renegotiate'));
-  SSL_renegotiate_abbreviated := TSSL_renegotiate_abbreviated(GetProcedureAddress(LibSSLHandle, 'SSL_renegotiate_abbreviated'));
-  SSL_renegotiate_pending := TSSL_renegotiate_pending(GetProcedureAddress(LibSSLHandle, 'SSL_renegotiate_pending'));
-  SSL_key_update := TSSL_key_update(GetProcedureAddress(LibSSLHandle, 'SSL_key_update'));
-  SSL_get_key_update_type := TSSL_get_key_update_type(GetProcedureAddress(LibSSLHandle, 'SSL_get_key_update_type'));
+  SSL_connect := TSSL_connect(GetProcSymbol(LibSSLHandle, 'SSL_connect'));
+  SSL_accept := TSSL_accept(GetProcSymbol(LibSSLHandle, 'SSL_accept'));
+  SSL_do_handshake := TSSL_do_handshake(GetProcSymbol(LibSSLHandle, 'SSL_do_handshake'));
+  SSL_renegotiate := TSSL_renegotiate(GetProcSymbol(LibSSLHandle, 'SSL_renegotiate'));
+  SSL_renegotiate_abbreviated := TSSL_renegotiate_abbreviated(GetProcSymbol(LibSSLHandle, 'SSL_renegotiate_abbreviated'));
+  SSL_renegotiate_pending := TSSL_renegotiate_pending(GetProcSymbol(LibSSLHandle, 'SSL_renegotiate_pending'));
+  SSL_key_update := TSSL_key_update(GetProcSymbol(LibSSLHandle, 'SSL_key_update'));
+  SSL_get_key_update_type := TSSL_get_key_update_type(GetProcSymbol(LibSSLHandle, 'SSL_get_key_update_type'));
   
   // Data transfer
-  SSL_read := TSSL_read(GetProcedureAddress(LibSSLHandle, 'SSL_read'));
-  SSL_read_ex := TSSL_read_ex(GetProcedureAddress(LibSSLHandle, 'SSL_read_ex'));
-  SSL_read_early_data := TSSL_read_early_data(GetProcedureAddress(LibSSLHandle, 'SSL_read_early_data'));
-  SSL_peek := TSSL_peek(GetProcedureAddress(LibSSLHandle, 'SSL_peek'));
-  SSL_peek_ex := TSSL_peek_ex(GetProcedureAddress(LibSSLHandle, 'SSL_peek_ex'));
-  SSL_write := TSSL_write(GetProcedureAddress(LibSSLHandle, 'SSL_write'));
-  SSL_write_ex := TSSL_write_ex(GetProcedureAddress(LibSSLHandle, 'SSL_write_ex'));
-  SSL_write_early_data := TSSL_write_early_data(GetProcedureAddress(LibSSLHandle, 'SSL_write_early_data'));
-  SSL_sendfile := TSSL_sendfile(GetProcedureAddress(LibSSLHandle, 'SSL_sendfile'));
+  SSL_read := TSSL_read(GetProcSymbol(LibSSLHandle, 'SSL_read'));
+  SSL_read_ex := TSSL_read_ex(GetProcSymbol(LibSSLHandle, 'SSL_read_ex'));
+  SSL_read_early_data := TSSL_read_early_data(GetProcSymbol(LibSSLHandle, 'SSL_read_early_data'));
+  SSL_peek := TSSL_peek(GetProcSymbol(LibSSLHandle, 'SSL_peek'));
+  SSL_peek_ex := TSSL_peek_ex(GetProcSymbol(LibSSLHandle, 'SSL_peek_ex'));
+  SSL_write := TSSL_write(GetProcSymbol(LibSSLHandle, 'SSL_write'));
+  SSL_write_ex := TSSL_write_ex(GetProcSymbol(LibSSLHandle, 'SSL_write_ex'));
+  SSL_write_early_data := TSSL_write_early_data(GetProcSymbol(LibSSLHandle, 'SSL_write_early_data'));
+  SSL_sendfile := TSSL_sendfile(GetProcSymbol(LibSSLHandle, 'SSL_sendfile'));
   
   // Shutdown
-  SSL_shutdown := TSSL_shutdown(GetProcedureAddress(LibSSLHandle, 'SSL_shutdown'));
-  SSL_CTX_set_quiet_shutdown := TSSL_CTX_set_quiet_shutdown(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_set_quiet_shutdown'));
-  SSL_CTX_get_quiet_shutdown := TSSL_CTX_get_quiet_shutdown(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_get_quiet_shutdown'));
-  SSL_set_quiet_shutdown := TSSL_set_quiet_shutdown(GetProcedureAddress(LibSSLHandle, 'SSL_set_quiet_shutdown'));
-  SSL_get_quiet_shutdown := TSSL_get_quiet_shutdown(GetProcedureAddress(LibSSLHandle, 'SSL_get_quiet_shutdown'));
-  SSL_set_shutdown := TSSL_set_shutdown(GetProcedureAddress(LibSSLHandle, 'SSL_set_shutdown'));
-  SSL_get_shutdown := TSSL_get_shutdown(GetProcedureAddress(LibSSLHandle, 'SSL_get_shutdown'));
+  SSL_shutdown := TSSL_shutdown(GetProcSymbol(LibSSLHandle, 'SSL_shutdown'));
+  SSL_CTX_set_quiet_shutdown := TSSL_CTX_set_quiet_shutdown(GetProcSymbol(LibSSLHandle, 'SSL_CTX_set_quiet_shutdown'));
+  SSL_CTX_get_quiet_shutdown := TSSL_CTX_get_quiet_shutdown(GetProcSymbol(LibSSLHandle, 'SSL_CTX_get_quiet_shutdown'));
+  SSL_set_quiet_shutdown := TSSL_set_quiet_shutdown(GetProcSymbol(LibSSLHandle, 'SSL_set_quiet_shutdown'));
+  SSL_get_quiet_shutdown := TSSL_get_quiet_shutdown(GetProcSymbol(LibSSLHandle, 'SSL_get_quiet_shutdown'));
+  SSL_set_shutdown := TSSL_set_shutdown(GetProcSymbol(LibSSLHandle, 'SSL_set_shutdown'));
+  SSL_get_shutdown := TSSL_get_shutdown(GetProcSymbol(LibSSLHandle, 'SSL_get_shutdown'));
   
   // Error handling
-  SSL_get_error := TSSL_get_error(GetProcedureAddress(LibSSLHandle, 'SSL_get_error'));
-  SSL_want := TSSL_want(GetProcedureAddress(LibSSLHandle, 'SSL_want'));
-  SSL_want_nothing := TSSL_want_nothing(GetProcedureAddress(LibSSLHandle, 'SSL_want_nothing'));
-  SSL_want_read := TSSL_want_read(GetProcedureAddress(LibSSLHandle, 'SSL_want_read'));
-  SSL_want_write := TSSL_want_write(GetProcedureAddress(LibSSLHandle, 'SSL_want_write'));
-  SSL_want_x509_lookup := TSSL_want_x509_lookup(GetProcedureAddress(LibSSLHandle, 'SSL_want_x509_lookup'));
-  SSL_want_async := TSSL_want_async(GetProcedureAddress(LibSSLHandle, 'SSL_want_async'));
-  SSL_want_async_job := TSSL_want_async_job(GetProcedureAddress(LibSSLHandle, 'SSL_want_async_job'));
-  SSL_want_client_hello_cb := TSSL_want_client_hello_cb(GetProcedureAddress(LibSSLHandle, 'SSL_want_client_hello_cb'));
+  SSL_get_error := TSSL_get_error(GetProcSymbol(LibSSLHandle, 'SSL_get_error'));
+  SSL_want := TSSL_want(GetProcSymbol(LibSSLHandle, 'SSL_want'));
+  SSL_want_nothing := TSSL_want_nothing(GetProcSymbol(LibSSLHandle, 'SSL_want_nothing'));
+  SSL_want_read := TSSL_want_read(GetProcSymbol(LibSSLHandle, 'SSL_want_read'));
+  SSL_want_write := TSSL_want_write(GetProcSymbol(LibSSLHandle, 'SSL_want_write'));
+  SSL_want_x509_lookup := TSSL_want_x509_lookup(GetProcSymbol(LibSSLHandle, 'SSL_want_x509_lookup'));
+  SSL_want_async := TSSL_want_async(GetProcSymbol(LibSSLHandle, 'SSL_want_async'));
+  SSL_want_async_job := TSSL_want_async_job(GetProcSymbol(LibSSLHandle, 'SSL_want_async_job'));
+  SSL_want_client_hello_cb := TSSL_want_client_hello_cb(GetProcSymbol(LibSSLHandle, 'SSL_want_client_hello_cb'));
   
   // SSL Context options and verification
-  SSL_CTX_set_options := TSSL_CTX_set_options(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_set_options'));
-  SSL_CTX_clear_options := TSSL_CTX_clear_options(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_clear_options'));
-  SSL_CTX_get_options := TSSL_CTX_get_options(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_get_options'));
-  SSL_CTX_set_verify := TSSL_CTX_set_verify(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_set_verify'));
-  SSL_CTX_set_verify_depth := TSSL_CTX_set_verify_depth(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_set_verify_depth'));
-  SSL_CTX_get_verify_mode := TSSL_CTX_get_verify_mode(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_get_verify_mode'));
-  SSL_CTX_get_verify_depth := TSSL_CTX_get_verify_depth(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_get_verify_depth'));
-  SSL_CTX_get_verify_callback := TSSL_CTX_get_verify_callback(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_get_verify_callback'));
-  SSL_CTX_load_verify_locations := TSSL_CTX_load_verify_locations(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_load_verify_locations'));
-  SSL_CTX_set_default_verify_paths := TSSL_CTX_set_default_verify_paths(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_set_default_verify_paths'));
-  SSL_CTX_set_session_cache_mode := TSSL_CTX_set_session_cache_mode(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_set_session_cache_mode'));
-  SSL_CTX_get_session_cache_mode := TSSL_CTX_get_session_cache_mode(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_get_session_cache_mode'));
-  SSL_CTX_sess_set_cache_size := TSSL_CTX_sess_set_cache_size(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_sess_set_cache_size'));
-  SSL_CTX_sess_get_cache_size := TSSL_CTX_sess_get_cache_size(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_sess_get_cache_size'));
-  SSL_CTX_set_cert_verify_callback := TSSL_CTX_set_cert_verify_callback(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_set_cert_verify_callback'));
+  SSL_CTX_set_options := TSSL_CTX_set_options(GetProcSymbol(LibSSLHandle, 'SSL_CTX_set_options'));
+  SSL_CTX_clear_options := TSSL_CTX_clear_options(GetProcSymbol(LibSSLHandle, 'SSL_CTX_clear_options'));
+  SSL_CTX_get_options := TSSL_CTX_get_options(GetProcSymbol(LibSSLHandle, 'SSL_CTX_get_options'));
+  SSL_CTX_set_verify := TSSL_CTX_set_verify(GetProcSymbol(LibSSLHandle, 'SSL_CTX_set_verify'));
+  SSL_CTX_set_verify_depth := TSSL_CTX_set_verify_depth(GetProcSymbol(LibSSLHandle, 'SSL_CTX_set_verify_depth'));
+  SSL_CTX_get_verify_mode := TSSL_CTX_get_verify_mode(GetProcSymbol(LibSSLHandle, 'SSL_CTX_get_verify_mode'));
+  SSL_CTX_get_verify_depth := TSSL_CTX_get_verify_depth(GetProcSymbol(LibSSLHandle, 'SSL_CTX_get_verify_depth'));
+  SSL_CTX_get_verify_callback := TSSL_CTX_get_verify_callback(GetProcSymbol(LibSSLHandle, 'SSL_CTX_get_verify_callback'));
+  SSL_CTX_load_verify_locations := TSSL_CTX_load_verify_locations(GetProcSymbol(LibSSLHandle, 'SSL_CTX_load_verify_locations'));
+  SSL_CTX_set_default_verify_paths := TSSL_CTX_set_default_verify_paths(GetProcSymbol(LibSSLHandle, 'SSL_CTX_set_default_verify_paths'));
+  SSL_CTX_set_session_cache_mode := TSSL_CTX_set_session_cache_mode(GetProcSymbol(LibSSLHandle, 'SSL_CTX_set_session_cache_mode'));
+  SSL_CTX_get_session_cache_mode := TSSL_CTX_get_session_cache_mode(GetProcSymbol(LibSSLHandle, 'SSL_CTX_get_session_cache_mode'));
+  SSL_CTX_sess_set_cache_size := TSSL_CTX_sess_set_cache_size(GetProcSymbol(LibSSLHandle, 'SSL_CTX_sess_set_cache_size'));
+  SSL_CTX_sess_get_cache_size := TSSL_CTX_sess_get_cache_size(GetProcSymbol(LibSSLHandle, 'SSL_CTX_sess_get_cache_size'));
+  SSL_CTX_set_cert_verify_callback := TSSL_CTX_set_cert_verify_callback(GetProcSymbol(LibSSLHandle, 'SSL_CTX_set_cert_verify_callback'));
 
   // Control functions
-  SSL_CTX_ctrl := TSSL_CTX_ctrl(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_ctrl'));
-  SSL_ctrl := TSSL_ctrl(GetProcedureAddress(LibSSLHandle, 'SSL_ctrl'));
+  SSL_CTX_ctrl := TSSL_CTX_ctrl(GetProcSymbol(LibSSLHandle, 'SSL_CTX_ctrl'));
+  SSL_ctrl := TSSL_ctrl(GetProcSymbol(LibSSLHandle, 'SSL_ctrl'));
   
   // Certificate and private key functions
-  SSL_CTX_use_certificate := TSSL_CTX_use_certificate(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_use_certificate'));
-  SSL_CTX_use_certificate_file := TSSL_CTX_use_certificate_file(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_use_certificate_file'));
-  SSL_CTX_use_certificate_chain_file := TSSL_CTX_use_certificate_chain_file(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_use_certificate_chain_file'));
-  SSL_CTX_use_PrivateKey := TSSL_CTX_use_PrivateKey(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_use_PrivateKey'));
-  SSL_CTX_use_PrivateKey_file := TSSL_CTX_use_PrivateKey_file(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_use_PrivateKey_file'));
-  SSL_CTX_check_private_key := TSSL_CTX_check_private_key(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_check_private_key'));
-  SSL_CTX_set_default_passwd_cb := TSSL_CTX_set_default_passwd_cb(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_set_default_passwd_cb'));
-  SSL_CTX_set_default_passwd_cb_userdata := TSSL_CTX_set_default_passwd_cb_userdata(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_set_default_passwd_cb_userdata'));
-  SSL_CTX_get_default_passwd_cb := TSSL_CTX_get_default_passwd_cb(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_get_default_passwd_cb'));
-  SSL_CTX_get_default_passwd_cb_userdata := TSSL_CTX_get_default_passwd_cb_userdata(GetProcedureAddress(LibSSLHandle, 'SSL_CTX_get_default_passwd_cb_userdata'));
+  SSL_CTX_use_certificate := TSSL_CTX_use_certificate(GetProcSymbol(LibSSLHandle, 'SSL_CTX_use_certificate'));
+  SSL_CTX_use_certificate_file := TSSL_CTX_use_certificate_file(GetProcSymbol(LibSSLHandle, 'SSL_CTX_use_certificate_file'));
+  SSL_CTX_use_certificate_chain_file := TSSL_CTX_use_certificate_chain_file(GetProcSymbol(LibSSLHandle, 'SSL_CTX_use_certificate_chain_file'));
+  SSL_CTX_use_PrivateKey := TSSL_CTX_use_PrivateKey(GetProcSymbol(LibSSLHandle, 'SSL_CTX_use_PrivateKey'));
+  SSL_CTX_use_PrivateKey_file := TSSL_CTX_use_PrivateKey_file(GetProcSymbol(LibSSLHandle, 'SSL_CTX_use_PrivateKey_file'));
+  SSL_CTX_check_private_key := TSSL_CTX_check_private_key(GetProcSymbol(LibSSLHandle, 'SSL_CTX_check_private_key'));
+  SSL_CTX_set_default_passwd_cb := TSSL_CTX_set_default_passwd_cb(GetProcSymbol(LibSSLHandle, 'SSL_CTX_set_default_passwd_cb'));
+  SSL_CTX_set_default_passwd_cb_userdata := TSSL_CTX_set_default_passwd_cb_userdata(GetProcSymbol(LibSSLHandle, 'SSL_CTX_set_default_passwd_cb_userdata'));
+  SSL_CTX_get_default_passwd_cb := TSSL_CTX_get_default_passwd_cb(GetProcSymbol(LibSSLHandle, 'SSL_CTX_get_default_passwd_cb'));
+  SSL_CTX_get_default_passwd_cb_userdata := TSSL_CTX_get_default_passwd_cb_userdata(GetProcSymbol(LibSSLHandle, 'SSL_CTX_get_default_passwd_cb_userdata'));
   
   // Connection state functions
-  SSL_set_connect_state := TSSL_set_connect_state(GetProcedureAddress(LibSSLHandle, 'SSL_set_connect_state'));
-  SSL_set_accept_state := TSSL_set_accept_state(GetProcedureAddress(LibSSLHandle, 'SSL_set_accept_state'));
+  SSL_set_connect_state := TSSL_set_connect_state(GetProcSymbol(LibSSLHandle, 'SSL_set_connect_state'));
+  SSL_set_accept_state := TSSL_set_accept_state(GetProcSymbol(LibSSLHandle, 'SSL_set_accept_state'));
   
   // Peer certificate functions
   // Try deprecated name first (OpenSSL 1.1.x), fall back to new name (OpenSSL 3.x)
-  SSL_get_peer_certificate := TSSL_get_peer_certificate(GetProcedureAddress(LibSSLHandle, 'SSL_get_peer_certificate'));
+  SSL_get_peer_certificate := TSSL_get_peer_certificate(GetProcSymbol(LibSSLHandle, 'SSL_get_peer_certificate'));
   if not Assigned(SSL_get_peer_certificate) then
   begin
     // In OpenSSL 3.x, SSL_get_peer_certificate was renamed to SSL_get1_peer_certificate
-    SSL_get1_peer_certificate := TSSL_get1_peer_certificate(GetProcedureAddress(LibSSLHandle, 'SSL_get1_peer_certificate'));
+    SSL_get1_peer_certificate := TSSL_get1_peer_certificate(GetProcSymbol(LibSSLHandle, 'SSL_get1_peer_certificate'));
     SSL_get_peer_certificate := TSSL_get_peer_certificate(SSL_get1_peer_certificate);
   end;
-  SSL_get_peer_cert_chain := TSSL_get_peer_cert_chain(GetProcedureAddress(LibSSLHandle, 'SSL_get_peer_cert_chain'));
-  SSL_get0_verified_chain := TSSL_get0_verified_chain(GetProcedureAddress(LibSSLHandle, 'SSL_get0_verified_chain'));
+  SSL_get_peer_cert_chain := TSSL_get_peer_cert_chain(GetProcSymbol(LibSSLHandle, 'SSL_get_peer_cert_chain'));
+  SSL_get0_verified_chain := TSSL_get0_verified_chain(GetProcSymbol(LibSSLHandle, 'SSL_get0_verified_chain'));
   
   // Verification result functions
-  SSL_get_verify_result := TSSL_get_verify_result(GetProcedureAddress(LibSSLHandle, 'SSL_get_verify_result'));
-  SSL_set_verify_result := TSSL_set_verify_result(GetProcedureAddress(LibSSLHandle, 'SSL_set_verify_result'));
+  SSL_get_verify_result := TSSL_get_verify_result(GetProcSymbol(LibSSLHandle, 'SSL_get_verify_result'));
+  SSL_set_verify_result := TSSL_set_verify_result(GetProcSymbol(LibSSLHandle, 'SSL_set_verify_result'));
   
   // Session functions
-  SSL_session_reused := TSSL_session_reused(GetProcedureAddress(LibSSLHandle, 'SSL_session_reused'));
-  SSL_get_session := TSSL_get_session(GetProcedureAddress(LibSSLHandle, 'SSL_get_session'));
-  SSL_get1_session := TSSL_get1_session(GetProcedureAddress(LibSSLHandle, 'SSL_get1_session'));
-  SSL_get0_session := TSSL_get0_session(GetProcedureAddress(LibSSLHandle, 'SSL_get0_session'));
-  SSL_set_session := TSSL_set_session(GetProcedureAddress(LibSSLHandle, 'SSL_set_session'));
+  SSL_session_reused := TSSL_session_reused(GetProcSymbol(LibSSLHandle, 'SSL_session_reused'));
+  SSL_get_session := TSSL_get_session(GetProcSymbol(LibSSLHandle, 'SSL_get_session'));
+  SSL_get1_session := TSSL_get1_session(GetProcSymbol(LibSSLHandle, 'SSL_get1_session'));
+  SSL_get0_session := TSSL_get0_session(GetProcSymbol(LibSSLHandle, 'SSL_get0_session'));
+  SSL_set_session := TSSL_set_session(GetProcSymbol(LibSSLHandle, 'SSL_set_session'));
   
   // SSL_SESSION functions
-  SSL_SESSION_new := TSSL_SESSION_new(GetProcedureAddress(LibSSLHandle, 'SSL_SESSION_new'));
-  SSL_SESSION_free := TSSL_SESSION_free(GetProcedureAddress(LibSSLHandle, 'SSL_SESSION_free'));
-  SSL_SESSION_up_ref := TSSL_SESSION_up_ref(GetProcedureAddress(LibSSLHandle, 'SSL_SESSION_up_ref'));
-  SSL_SESSION_get_id := TSSL_SESSION_get_id(GetProcedureAddress(LibSSLHandle, 'SSL_SESSION_get_id'));
-  SSL_SESSION_get_time := TSSL_SESSION_get_time(GetProcedureAddress(LibSSLHandle, 'SSL_SESSION_get_time'));
-  SSL_SESSION_set_time := TSSL_SESSION_set_time(GetProcedureAddress(LibSSLHandle, 'SSL_SESSION_set_time'));
-  SSL_SESSION_get_timeout := TSSL_SESSION_get_timeout(GetProcedureAddress(LibSSLHandle, 'SSL_SESSION_get_timeout'));
-  SSL_SESSION_set_timeout := TSSL_SESSION_set_timeout(GetProcedureAddress(LibSSLHandle, 'SSL_SESSION_set_timeout'));
-  SSL_SESSION_get_protocol_version := TSSL_SESSION_get_protocol_version(GetProcedureAddress(LibSSLHandle, 'SSL_SESSION_get_protocol_version'));
-  SSL_SESSION_get0_cipher := TSSL_SESSION_get0_cipher(GetProcedureAddress(LibSSLHandle, 'SSL_SESSION_get0_cipher'));
-  SSL_SESSION_get0_peer := TSSL_SESSION_get0_peer(GetProcedureAddress(LibSSLHandle, 'SSL_SESSION_get0_peer'));
-  SSL_SESSION_is_resumable := TSSL_SESSION_is_resumable(GetProcedureAddress(LibSSLHandle, 'SSL_SESSION_is_resumable'));
-  SSL_SESSION_get_max_early_data := TSSL_SESSION_get_max_early_data(GetProcedureAddress(LibSSLHandle, 'SSL_SESSION_get_max_early_data'));
-  SSL_SESSION_set_max_early_data := TSSL_SESSION_set_max_early_data(GetProcedureAddress(LibSSLHandle, 'SSL_SESSION_set_max_early_data'));
+  SSL_SESSION_new := TSSL_SESSION_new(GetProcSymbol(LibSSLHandle, 'SSL_SESSION_new'));
+  SSL_SESSION_free := TSSL_SESSION_free(GetProcSymbol(LibSSLHandle, 'SSL_SESSION_free'));
+  SSL_SESSION_up_ref := TSSL_SESSION_up_ref(GetProcSymbol(LibSSLHandle, 'SSL_SESSION_up_ref'));
+  SSL_SESSION_get_id := TSSL_SESSION_get_id(GetProcSymbol(LibSSLHandle, 'SSL_SESSION_get_id'));
+  SSL_SESSION_get_time := TSSL_SESSION_get_time(GetProcSymbol(LibSSLHandle, 'SSL_SESSION_get_time'));
+  SSL_SESSION_set_time := TSSL_SESSION_set_time(GetProcSymbol(LibSSLHandle, 'SSL_SESSION_set_time'));
+  SSL_SESSION_get_timeout := TSSL_SESSION_get_timeout(GetProcSymbol(LibSSLHandle, 'SSL_SESSION_get_timeout'));
+  SSL_SESSION_set_timeout := TSSL_SESSION_set_timeout(GetProcSymbol(LibSSLHandle, 'SSL_SESSION_set_timeout'));
+  SSL_SESSION_get_protocol_version := TSSL_SESSION_get_protocol_version(GetProcSymbol(LibSSLHandle, 'SSL_SESSION_get_protocol_version'));
+  SSL_SESSION_get0_cipher := TSSL_SESSION_get0_cipher(GetProcSymbol(LibSSLHandle, 'SSL_SESSION_get0_cipher'));
+  SSL_SESSION_get0_peer := TSSL_SESSION_get0_peer(GetProcSymbol(LibSSLHandle, 'SSL_SESSION_get0_peer'));
+  SSL_SESSION_is_resumable := TSSL_SESSION_is_resumable(GetProcSymbol(LibSSLHandle, 'SSL_SESSION_is_resumable'));
+  SSL_SESSION_get_max_early_data := TSSL_SESSION_get_max_early_data(GetProcSymbol(LibSSLHandle, 'SSL_SESSION_get_max_early_data'));
+  SSL_SESSION_set_max_early_data := TSSL_SESSION_set_max_early_data(GetProcSymbol(LibSSLHandle, 'SSL_SESSION_set_max_early_data'));
   
   // State and version functions
-  SSL_get_state := TSSL_get_state(GetProcedureAddress(LibSSLHandle, 'SSL_get_state'));
-  SSL_state := TSSL_state(GetProcedureAddress(LibSSLHandle, 'SSL_state'));
-  SSL_is_init_finished := TSSL_is_init_finished(GetProcedureAddress(LibSSLHandle, 'SSL_is_init_finished'));
-  SSL_in_init := TSSL_in_init(GetProcedureAddress(LibSSLHandle, 'SSL_in_init'));
-  SSL_in_before := TSSL_in_before(GetProcedureAddress(LibSSLHandle, 'SSL_in_before'));
-  SSL_is_server := TSSL_is_server(GetProcedureAddress(LibSSLHandle, 'SSL_is_server'));
-  SSL_version := TSSL_version(GetProcedureAddress(LibSSLHandle, 'SSL_version'));
-  SSL_client_version := TSSL_client_version(GetProcedureAddress(LibSSLHandle, 'SSL_client_version'));
-  SSL_get_version := TSSL_get_version(GetProcedureAddress(LibSSLHandle, 'SSL_get_version'));
-  SSL_get_ssl_method := TSSL_get_ssl_method(GetProcedureAddress(LibSSLHandle, 'SSL_get_ssl_method'));
-  SSL_set_ssl_method := TSSL_set_ssl_method(GetProcedureAddress(LibSSLHandle, 'SSL_set_ssl_method'));
+  SSL_get_state := TSSL_get_state(GetProcSymbol(LibSSLHandle, 'SSL_get_state'));
+  SSL_state := TSSL_state(GetProcSymbol(LibSSLHandle, 'SSL_state'));
+  SSL_is_init_finished := TSSL_is_init_finished(GetProcSymbol(LibSSLHandle, 'SSL_is_init_finished'));
+  SSL_in_init := TSSL_in_init(GetProcSymbol(LibSSLHandle, 'SSL_in_init'));
+  SSL_in_before := TSSL_in_before(GetProcSymbol(LibSSLHandle, 'SSL_in_before'));
+  SSL_is_server := TSSL_is_server(GetProcSymbol(LibSSLHandle, 'SSL_is_server'));
+  SSL_version := TSSL_version(GetProcSymbol(LibSSLHandle, 'SSL_version'));
+  SSL_client_version := TSSL_client_version(GetProcSymbol(LibSSLHandle, 'SSL_client_version'));
+  SSL_get_version := TSSL_get_version(GetProcSymbol(LibSSLHandle, 'SSL_get_version'));
+  SSL_get_ssl_method := TSSL_get_ssl_method(GetProcSymbol(LibSSLHandle, 'SSL_get_ssl_method'));
+  SSL_set_ssl_method := TSSL_set_ssl_method(GetProcSymbol(LibSSLHandle, 'SSL_set_ssl_method'));
   
   // Cipher functions
-  SSL_get_current_cipher := TSSL_get_current_cipher(GetProcedureAddress(LibSSLHandle, 'SSL_get_current_cipher'));
-  SSL_get_pending_cipher := TSSL_get_pending_cipher(GetProcedureAddress(LibSSLHandle, 'SSL_get_pending_cipher'));
-  SSL_CIPHER_get_name := TSSL_CIPHER_get_name(GetProcedureAddress(LibSSLHandle, 'SSL_CIPHER_get_name'));
-  SSL_CIPHER_get_bits := TSSL_CIPHER_get_bits(GetProcedureAddress(LibSSLHandle, 'SSL_CIPHER_get_bits'));
-  SSL_CIPHER_get_version := TSSL_CIPHER_get_version(GetProcedureAddress(LibSSLHandle, 'SSL_CIPHER_get_version'));
+  SSL_get_current_cipher := TSSL_get_current_cipher(GetProcSymbol(LibSSLHandle, 'SSL_get_current_cipher'));
+  SSL_get_pending_cipher := TSSL_get_pending_cipher(GetProcSymbol(LibSSLHandle, 'SSL_get_pending_cipher'));
+  SSL_CIPHER_get_name := TSSL_CIPHER_get_name(GetProcSymbol(LibSSLHandle, 'SSL_CIPHER_get_name'));
+  SSL_CIPHER_get_bits := TSSL_CIPHER_get_bits(GetProcSymbol(LibSSLHandle, 'SSL_CIPHER_get_bits'));
+  SSL_CIPHER_get_version := TSSL_CIPHER_get_version(GetProcSymbol(LibSSLHandle, 'SSL_CIPHER_get_version'));
   
   // SSL_want_read and SSL_want_write are often macros in OpenSSL headers
   // Try to load them directly, if not available, use our helper implementations
@@ -987,13 +987,13 @@ begin
   // Continue resetting all function pointers...
 end;
 
-function GetSSLLibHandle: TLibHandle;
+function GetSSLLibHandle: TPlatformLibrary;
 begin
   // P0-1.1: 委托给 TOpenSSLLoader
   Result := TOpenSSLLoader.GetLibraryHandle(osslLibSSL);
 end;
 
-function GetCryptoLibHandle: TLibHandle;
+function GetCryptoLibHandle: TPlatformLibrary;
 begin
   // P0-1.1: 委托给 TOpenSSLLoader
   Result := TOpenSSLLoader.GetLibraryHandle(osslLibCrypto);
@@ -1001,22 +1001,22 @@ end;
 
 function GetCryptoProcAddress(const ProcName: string): Pointer;
 var
-  LHandle: TLibHandle;
+  LHandle: TPlatformLibrary;
 begin
   Result := nil;
   LHandle := TOpenSSLLoader.GetLibraryHandle(osslLibCrypto);
-  if LHandle <> NilHandle then
-    Result := GetProcedureAddress(LHandle, PChar(ProcName));
+  if LibLoaded(LHandle) then
+    Result := GetProcSymbol(LHandle, PChar(ProcName));
 end;
 
 function GetSSLProcAddress(const ProcName: string): Pointer;
 var
-  LHandle: TLibHandle;
+  LHandle: TPlatformLibrary;
 begin
   Result := nil;
   LHandle := TOpenSSLLoader.GetLibraryHandle(osslLibSSL);
-  if LHandle <> NilHandle then
-    Result := GetProcedureAddress(LHandle, PChar(ProcName));
+  if LibLoaded(LHandle) then
+    Result := GetProcSymbol(LHandle, PChar(ProcName));
 end;
 
 function GetOpenSSLVersion: TOpenSSLVersion;

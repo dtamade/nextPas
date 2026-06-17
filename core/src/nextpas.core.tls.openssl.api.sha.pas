@@ -242,7 +242,7 @@ function LoadSHAFunctions(ALibHandle: TOpenSSLLibHandle): Boolean;
 begin
   Result := False;
 
-  if ALibHandle = 0 then Exit;
+  if not LibLoaded(ALibHandle) then Exit;
 
   // 使用批量加载模式
   if TOpenSSLLoader.LoadFunctions(ALibHandle, SHA_FUNCTION_BINDINGS) < 0 then

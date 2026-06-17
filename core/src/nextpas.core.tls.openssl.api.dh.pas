@@ -4,7 +4,7 @@ unit nextpas.core.tls.openssl.api.dh;
 
 interface
 
-uses DynLibs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.loader;
+uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.loader;
 
 const
   { DH flags }
@@ -254,21 +254,21 @@ const
 
 function LoadOpenSSLDH: Boolean;
 var
-  LLib: TLibHandle;
+  LLib: TPlatformLibrary;
 begin
   if TOpenSSLLoader.IsModuleLoaded(osmDH) then
     Exit(True);
 
   // Use the crypto library handle from core module
   LLib := GetCryptoLibHandle;
-  if LLib = NilHandle then
+  if not LibLoaded(LLib) then
   begin
     // Try to load core first
     LoadOpenSSLCore;
     LLib := GetCryptoLibHandle;
   end;
 
-  if LLib = NilHandle then
+  if not LibLoaded(LLib) then
     Exit(False);
 
   // Batch load all DH functions

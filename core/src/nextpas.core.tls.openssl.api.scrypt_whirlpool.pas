@@ -5,7 +5,7 @@ unit nextpas.core.tls.openssl.api.scrypt_whirlpool;
 
 interface
 
-uses nextpas.core.base, nextpas.core.text.conv, nextpas.core.tls.openssl.base;
+uses nextpas.core.base, nextpas.core.text.conv, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader;
 
 type
   // WHIRLPOOL types
@@ -52,7 +52,7 @@ var
   // EVP functions
   EVP_whirlpool: function(): PEVP_MD; cdecl = nil;
 
-procedure LoadScryptWhirlpoolFunctions(AHandle: TLibHandle);
+procedure LoadScryptWhirlpoolFunctions(AHandle: TPlatformLibrary);
 procedure UnloadScryptWhirlpoolFunctions;
 
 // Helper functions
@@ -65,7 +65,7 @@ function WhirlpoolHashString(const S: string): string;
 implementation
 
 
-procedure LoadScryptWhirlpoolFunctions(AHandle: TLibHandle);
+procedure LoadScryptWhirlpoolFunctions(AHandle: TPlatformLibrary);
 type
   TEVP_PBE_scrypt = function(const pass: PAnsiChar; passlen: NativeUInt;
     const salt: PByte; saltlen: NativeUInt;
@@ -85,21 +85,21 @@ type
     len: NativeUInt); cdecl;
   TEVP_whirlpool = function(): PEVP_MD; cdecl;
 begin
-  if AHandle = 0 then Exit;
+  if not LibLoaded(AHandle) then Exit;
   
   // SCRYPT functions
-  EVP_PBE_scrypt := TEVP_PBE_scrypt(GetProcedureAddress(AHandle, 'EVP_PBE_scrypt'));
-  PKCS5_PBKDF2_HMAC := TPKCS5_PBKDF2_HMAC(GetProcedureAddress(AHandle, 'PKCS5_PBKDF2_HMAC'));
+  EVP_PBE_scrypt := TEVP_PBE_scrypt(GetProcSymbol(AHandle, 'EVP_PBE_scrypt'));
+  PKCS5_PBKDF2_HMAC := TPKCS5_PBKDF2_HMAC(GetProcSymbol(AHandle, 'PKCS5_PBKDF2_HMAC'));
   
   // WHIRLPOOL functions
-  WHIRLPOOL_Init := TWHIRLPOOL_Init(GetProcedureAddress(AHandle, 'WHIRLPOOL_Init'));
-  WHIRLPOOL_Update := TWHIRLPOOL_Update(GetProcedureAddress(AHandle, 'WHIRLPOOL_Update'));
-  WHIRLPOOL_Final := TWHIRLPOOL_Final(GetProcedureAddress(AHandle, 'WHIRLPOOL_Final'));
-  WHIRLPOOL := TWHIRLPOOL(GetProcedureAddress(AHandle, 'WHIRLPOOL'));
-  WHIRLPOOL_BitUpdate := TWHIRLPOOL_BitUpdate(GetProcedureAddress(AHandle, 'WHIRLPOOL_BitUpdate'));
+  WHIRLPOOL_Init := TWHIRLPOOL_Init(GetProcSymbol(AHandle, 'WHIRLPOOL_Init'));
+  WHIRLPOOL_Update := TWHIRLPOOL_Update(GetProcSymbol(AHandle, 'WHIRLPOOL_Update'));
+  WHIRLPOOL_Final := TWHIRLPOOL_Final(GetProcSymbol(AHandle, 'WHIRLPOOL_Final'));
+  WHIRLPOOL := TWHIRLPOOL(GetProcSymbol(AHandle, 'WHIRLPOOL'));
+  WHIRLPOOL_BitUpdate := TWHIRLPOOL_BitUpdate(GetProcSymbol(AHandle, 'WHIRLPOOL_BitUpdate'));
   
   // EVP functions
-  EVP_whirlpool := TEVP_whirlpool(GetProcedureAddress(AHandle, 'EVP_whirlpool'));
+  EVP_whirlpool := TEVP_whirlpool(GetProcSymbol(AHandle, 'EVP_whirlpool'));
 end;
 
 procedure UnloadScryptWhirlpoolFunctions;

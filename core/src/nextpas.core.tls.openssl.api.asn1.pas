@@ -4,7 +4,7 @@ unit nextpas.core.tls.openssl.api.asn1;
 
 interface
 
-uses dynlibs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader,
+uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader,
   nextpas.core.time, nextpas.core.text.conv;
 
 type

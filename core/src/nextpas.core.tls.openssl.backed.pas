@@ -19,7 +19,6 @@ unit nextpas.core.tls.openssl.backed;
 interface
 
 uses
-  DynLibs,
   nextpas.core.exception,
   nextpas.core.text.conv,
   nextpas.core.tls.base,
@@ -254,7 +253,7 @@ end;
 
 function TOpenSSLLibrary.LoadOpenSSLLibraries: Boolean;
 var
-  CryptoHandle, SSLHandle: TLibHandle;
+  CryptoHandle, SSLHandle: TPlatformLibrary;
 begin
   // P0-1.1: 委托给 TOpenSSLLoader 进行加载
   Result := False;
@@ -265,14 +264,14 @@ begin
   CryptoHandle := TOpenSSLLoader.GetLibraryHandle(osslLibCrypto);
   SSLHandle := TOpenSSLLoader.GetLibraryHandle(osslLibSSL);
 
-  if CryptoHandle = 0 then
+  if not LibLoaded(CryptoHandle) then
   begin
     SetError(-1, 'Failed to load libcrypto via TOpenSSLLoader');
     InternalLog(sslLogError, FLastErrorString);
     Exit;
   end;
 
-  if SSLHandle = 0 then
+  if not LibLoaded(SSLHandle) then
   begin
     SetError(-1, 'Failed to load libssl via TOpenSSLLoader');
     InternalLog(sslLogError, FLastErrorString);

@@ -4,7 +4,7 @@ unit nextpas.core.tls.openssl.api.ecdsa;
 
 interface
 
-uses nextpas.core.base, DynLibs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.api.ec, nextpas.core.tls.openssl.loader;
+uses nextpas.core.base, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.api.ec, nextpas.core.tls.openssl.loader;
 
 type
   { ECDSA_SIG structure for signature }
@@ -161,20 +161,20 @@ const
 
 function LoadOpenSSLECDSA: Boolean;
 var
-  LLib: TLibHandle;
+  LLib: TPlatformLibrary;
 begin
   if TOpenSSLLoader.IsModuleLoaded(osmECDSA) then
     Exit(True);
 
   // Use the crypto library handle from core module
   LLib := GetCryptoLibHandle;
-  if LLib = NilHandle then
+  if not LibLoaded(LLib) then
   begin
     LoadOpenSSLCore;
     LLib := GetCryptoLibHandle;
   end;
 
-  if LLib = NilHandle then
+  if not LibLoaded(LLib) then
     Exit(False);
 
   // Batch load all ECDSA functions

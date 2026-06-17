@@ -4,7 +4,7 @@ unit nextpas.core.tls.openssl.api.pem;
 
 interface
 
-uses dynlibs, nextpas.core.base, nextpas.core.fs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.bio, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.loader;
+uses nextpas.core.base, nextpas.core.fs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.bio, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.loader;
 
 type
   // PEM 密码回调函数类型

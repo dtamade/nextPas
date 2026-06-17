@@ -4,7 +4,7 @@ unit nextpas.core.tls.openssl.api.x509v3;
 
 interface
 
-uses DynLibs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts;
+uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.loader;
 
 type
   // Forward declarations for missing types
@@ -190,7 +190,7 @@ var
   // Purpose functions
   X509_check_purpose: function(x: PX509; id: Integer; ca: Integer): Integer; cdecl = nil;
 
-procedure LoadX509V3Functions(AHandle: TLibHandle);
+procedure LoadX509V3Functions(AHandle: TPlatformLibrary);
 procedure UnloadX509V3Functions;
 
 // Helper functions
@@ -273,9 +273,9 @@ var
     (Name: 'X509_check_purpose';          FuncPtr: @X509_check_purpose;          Required: False)
   );
 
-procedure LoadX509V3Functions(AHandle: TLibHandle);
+procedure LoadX509V3Functions(AHandle: TPlatformLibrary);
 begin
-  if AHandle = 0 then Exit;
+  if not LibLoaded(AHandle) then Exit;
 
   TOpenSSLLoader.LoadFunctions(AHandle, X509V3FunctionBindings);
 end;

@@ -80,20 +80,20 @@ const
 
 procedure LoadFunctions;
 var
-  LLib: TLibHandle;
+  LLib: TPlatformLibrary;
 begin
   if TOpenSSLLoader.IsModuleLoaded(osmCMAC) then Exit;
 
   // Use the crypto library handle from core module
   LLib := GetCryptoLibHandle;
-  if LLib = NilHandle then
+  if not LibLoaded(LLib) then
   begin
     // Try to load core first
     LoadOpenSSLCore;
     LLib := GetCryptoLibHandle;
   end;
 
-  if LLib = NilHandle then Exit;
+  if not LibLoaded(LLib) then Exit;
 
   // Load CMAC EVP functions using batch loading
   TOpenSSLLoader.LoadFunctions(LLib, CMAC_EVP_BINDINGS);
