@@ -59,7 +59,7 @@ type
 implementation
 
 uses
-  SysUtils;
+  nextpas.core.text.conv;
 
 const
   BlockChars: array[0..7] of AnsiString = (

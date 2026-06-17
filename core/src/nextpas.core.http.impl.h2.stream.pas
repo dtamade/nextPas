@@ -129,7 +129,6 @@ type
 implementation
 
 uses
-  SysUtils,
   nextpas.core.http.headers;
 
 const

@@ -29,7 +29,8 @@ function TlsTcpStreamSelectedALPN(const AConn: ITcpStream): string;
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.base.utils,
+  nextpas.core.exception,
   nextpas.core.errors,
   nextpas.core.time.base,
   nextpas.core.tls.quick,

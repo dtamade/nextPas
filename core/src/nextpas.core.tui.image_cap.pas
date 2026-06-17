@@ -29,7 +29,6 @@ function DetectImageProtocolFromHints(const ATerm, ATermProgram,
 function DetectImageProtocol: TImageProtocol;
 
 implementation
-uses SysUtils;
 
 uses
   nextpas.core.platform.env;

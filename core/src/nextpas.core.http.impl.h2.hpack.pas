@@ -132,7 +132,7 @@ function H2NameHash(const AName: AnsiString): Byte;
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.base.utils,
   nextpas.core.http.impl.h2.hpack.huffman;
 
 { Precomputed static table name hashes for fast lookup }

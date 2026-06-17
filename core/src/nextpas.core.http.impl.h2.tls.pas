@@ -17,7 +17,7 @@ function NewH2TlsServerTransport(const AContext: ISSLContext;
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.errors,
   nextpas.core.http.base,
   nextpas.core.http.impl.h2.types,

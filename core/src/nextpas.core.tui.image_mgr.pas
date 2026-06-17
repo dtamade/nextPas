@@ -54,7 +54,7 @@ type
 implementation
 
 uses
-  SysUtils;
+  nextpas.core.text.conv;
 
 const
   MaxRawChunkBytes = 3072;

@@ -72,17 +72,26 @@ type
 implementation
 
 uses
-  SysUtils, DateUtils;
+  nextpas.core.text.conv,
+  nextpas.core.time.date,
+  nextpas.core.time.offsetdatetime;
+
+const
+  MonthNames: array[1..12] of string = (
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  );
 
 { TCalendarState }
 
 class function TCalendarState.Today: TCalendarState;
-var Y, M, D: Word;
+var
+  LToday: TDate;
 begin
-  DecodeDate(Now, Y, M, D);
-  Result.Year := Y;
-  Result.Month := M;
-  Result.SelectedDay := D;
+  LToday := TOffsetDateTime.Now.GetDate;
+  Result.Year := Word(LToday.GetYear);
+  Result.Month := Word(LToday.GetMonth);
+  Result.SelectedDay := Word(LToday.GetDay);
 end;
 
 class function TCalendarState.Make(AYear, AMonth, ADay: Word): TCalendarState;
@@ -94,7 +103,7 @@ end;
 
 function TCalendarState.DaysInMonth: Word;
 begin
-  Result := DateUtils.DaysInAMonth(Year, Month);
+  Result := Word(nextpas.core.time.date.DaysInMonthFn(Integer(Year), Integer(Month)));
 end;
 
 procedure TCalendarState.PrevMonth;
@@ -209,8 +218,10 @@ var
   FirstDow, Days, Day, Col, Row, Y, X: Integer;
   DayBuf: string[2];
   CellStyle: TStyle;
-  NowY, NowM, NowD: Word;
+  NowDate: TDate;
+  NowY, NowM, NowD: Integer;
   IsToday: Boolean;
+  LFirstOfMonth: TDate;
 const
   DowHeader = 'Mo Tu We Th Fr Sa Su';
 begin
@@ -229,7 +240,8 @@ begin
   if (Inner.Width < 20) or (Inner.Height < 3) then Exit;
 
   // Header: "January 2026"
-  HeaderStr := FormatDateTime('mmmm yyyy', EncodeDate(AState.Year, AState.Month, 1));
+  LFirstOfMonth := TDate.Create(Integer(AState.Year), Integer(AState.Month), 1);
+  HeaderStr := MonthNames[AState.Month] + ' ' + nextpas.core.text.conv.IntToStr(Int64(AState.Year));
   X := Inner.X + (Inner.Width - Length(HeaderStr)) div 2;
   if X < Inner.X then X := Inner.X;
   ABuffer.SetStringN(X, Inner.Y, HeaderStr, Inner.Width, FHeaderStyle);
@@ -240,9 +252,14 @@ begin
 
   // Calendar grid
   Days := AState.DaysInMonth;
-  FirstDow := DayOfTheWeek(EncodeDate(AState.Year, AState.Month, 1)); // 1=Mon..7=Sun
+  FirstDow := Ord(LFirstOfMonth.GetDayOfWeek);
+  // Convert: dowSunday=1..dowSaturday=7 → ISO: Monday=1..Sunday=7
+  if FirstDow = 1 then FirstDow := 7 else Dec(FirstDow);
 
-  DecodeDate(Now, NowY, NowM, NowD);
+  NowDate := TOffsetDateTime.Now.GetDate;
+  NowY := NowDate.GetYear;
+  NowM := NowDate.GetMonth;
+  NowD := NowDate.GetDay;
 
   Day := 1;
   Row := 0;
@@ -261,7 +278,7 @@ begin
 
       Str(Day:2, DayBuf);
 
-      IsToday := (AState.Year = NowY) and (AState.Month = NowM) and (Word(Day) = NowD);
+      IsToday := (AState.Year = Word(NowY)) and (AState.Month = Word(NowM)) and (Word(Day) = Word(NowD));
 
       if Word(Day) = AState.SelectedDay then
         CellStyle := FSelectedStyle

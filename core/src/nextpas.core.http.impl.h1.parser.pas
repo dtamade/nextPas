@@ -58,8 +58,8 @@ function NewH1ResponseParser(const ASkipBody: Boolean): IH1Parser; overload;
 implementation
 
 uses
-  SysUtils,
   nextpas.core.base,
+  nextpas.core.text.conv,
   nextpas.core.http.impl.h1.llhttp,
   nextpas.core.http.headers,
   nextpas.core.text;

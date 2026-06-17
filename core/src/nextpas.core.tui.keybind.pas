@@ -70,7 +70,7 @@ type
 implementation
 
 uses
-  SysUtils;
+  nextpas.core.text.conv;
 
 constructor TKeybindManager.Create;
 begin

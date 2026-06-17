@@ -187,9 +187,10 @@ function H2ValidateServerPreface(const ABuf: PAnsiChar; const ALen: SizeUInt;
 implementation
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.errors,
+  nextpas.core.text.conv,
+  nextpas.core.exception,
   nextpas.core.io.memory,
   nextpas.core.time.base,
   nextpas.core.http.headers,

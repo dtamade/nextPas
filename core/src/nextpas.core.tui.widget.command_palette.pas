@@ -82,7 +82,7 @@ function FuzzyScore(const Pattern, Text: AnsiString): Integer;
 implementation
 
 uses
-  SysUtils;
+  nextpas.core.text.conv;
 
 { TCommandItem }
 

@@ -69,7 +69,7 @@ function ParseMarkdownLines(const Source: AnsiString): TMdLineArray;
 implementation
 
 uses
-  SysUtils;
+  nextpas.core.text.conv;
 
 { TMdTheme }
 

@@ -17,7 +17,7 @@ procedure EncodeSixelDCS(var Out_: nextpas.core.text.builder.TStringBuilder;
 implementation
 
 uses
-  SysUtils;
+  nextpas.core.text.conv;
 
 type
   TColorBox = record

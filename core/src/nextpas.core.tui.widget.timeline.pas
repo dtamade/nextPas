@@ -58,7 +58,7 @@ type
 implementation
 
 uses
-  SysUtils, nextpas.core.text.width;
+  nextpas.core.text.width;
 
 class function TTimelineEvent.Make(const ATime, ATitle: AnsiString): TTimelineEvent;
 begin
