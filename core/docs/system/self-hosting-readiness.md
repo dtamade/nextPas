@@ -303,3 +303,24 @@ is already partially covered by the `test_hir_exception` test suite.
 3. LLVM emitter: @np_unit_init/@np_unit_fini helper
 4. Runtime: _start 驱动器（main 前拓扑序 init，main 后逆序 fini）
 5. 端到端测试（非 FPC 依赖的 nextPas 编译器运行时测试）
+
+## Gate 3: Process Lifecycle — 验证结果 (2026-06-18)
+
+**状态: FAIL** (全部 3 项验收标准未满足)
+
+| 验收标准 | 状态 |
+|----------|------|
+| process_init 在 main 前执行 | 未实现 (runtime-contract → hnkUnknown, 静默丢弃) |
+| process_fini 在 main 后执行 | 未实现 |
+| 退出码通过关闭序列保留 | 不适用 (无关闭序列) |
+
+**关键发现**: SeedRuntimeContracts 正确 seed process_init/fini 为 typed HIR 节点，
+但 `'runtime-contract'` 不在 ParseHirNodeKind 的 case 语句中，映射到 hnkUnknown（空操作）。
+
+**缺口 (按实现顺序)**:
+1. THirNodeKind 新增 hnkProcessInitRuntime/hnkProcessFiniRuntime + ParseHirNodeKind 映射
+2. THIRBuilder.ProcessNode 新增 ProcessProcessInit/ProcessProcessFini 处理
+3. LLVM emitter 新增 @np_process_init/@np_process_fini helper
+4. _start 发射改为：process_init → user code → process_fini → halt
+5. Runtime 实现 process_init/process_fini 例程
+6. 端到端烟雾测试
