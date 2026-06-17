@@ -161,6 +161,10 @@ function Mat4dMulVec(const AM: TMat4d; const AV: TVec4d): TVec4d;
 
 implementation
 
+uses
+  nextpas.core.math.mat,
+  nextpas.core.math.vec;
+
 { Helper functions }
 
 function Mat3fIdentity: TMat3f;
@@ -201,6 +205,34 @@ end;
 function Mat4dZero: TMat4d;
 begin
   Result := TMat4d.Create(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+end;
+
+function BaseVec4fToSimdVec4f(const AValue: nextpas.core.math.vec.base.TVec4f): nextpas.core.math.vec.TVec4f; inline;
+begin
+  Result := nextpas.core.math.vec.TVec4f.Create(AValue.X, AValue.Y, AValue.Z, AValue.W);
+end;
+
+function SimdVec4fToBaseVec4f(const AValue: nextpas.core.math.vec.TVec4f): nextpas.core.math.vec.base.TVec4f; inline;
+begin
+  Result := nextpas.core.math.vec.base.TVec4f.Create(AValue.X, AValue.Y, AValue.Z, AValue.W);
+end;
+
+function BaseMat4fToSimdMat4f(const AValue: nextpas.core.math.mat.base.TMat4f): nextpas.core.math.mat.TMat4f; inline;
+begin
+  Result := nextpas.core.math.mat.TMat4f.Create(
+    nextpas.core.math.vec.TVec4f.Create(AValue.Data[0, 0], AValue.Data[1, 0], AValue.Data[2, 0], AValue.Data[3, 0]),
+    nextpas.core.math.vec.TVec4f.Create(AValue.Data[0, 1], AValue.Data[1, 1], AValue.Data[2, 1], AValue.Data[3, 1]),
+    nextpas.core.math.vec.TVec4f.Create(AValue.Data[0, 2], AValue.Data[1, 2], AValue.Data[2, 2], AValue.Data[3, 2]),
+    nextpas.core.math.vec.TVec4f.Create(AValue.Data[0, 3], AValue.Data[1, 3], AValue.Data[2, 3], AValue.Data[3, 3]));
+end;
+
+function SimdMat4fToBaseMat4f(const AValue: nextpas.core.math.mat.TMat4f): nextpas.core.math.mat.base.TMat4f; inline;
+begin
+  Result := nextpas.core.math.mat.base.TMat4f.Create(
+    AValue.Data[0, 0], AValue.Data[1, 0], AValue.Data[2, 0], AValue.Data[3, 0],
+    AValue.Data[0, 1], AValue.Data[1, 1], AValue.Data[2, 1], AValue.Data[3, 1],
+    AValue.Data[0, 2], AValue.Data[1, 2], AValue.Data[2, 2], AValue.Data[3, 2],
+    AValue.Data[0, 3], AValue.Data[1, 3], AValue.Data[2, 3], AValue.Data[3, 3]);
 end;
 
 { TMat3f }
@@ -500,18 +532,18 @@ begin
   Result := True;
 end;
 
-function TMat4f.MultPoint(const AV: TVec3f): TVec3f;
+function TMat4f.MultPoint(const AV: nextpas.core.math.vec.base.TVec3f): nextpas.core.math.vec.base.TVec3f;
 begin
-  Result := TVec3f.Create(
+  Result := nextpas.core.math.vec.base.TVec3f.Create(
     FData[0,0] * AV.X + FData[0,1] * AV.Y + FData[0,2] * AV.Z + FData[0,3],
     FData[1,0] * AV.X + FData[1,1] * AV.Y + FData[1,2] * AV.Z + FData[1,3],
     FData[2,0] * AV.X + FData[2,1] * AV.Y + FData[2,2] * AV.Z + FData[2,3]
   );
 end;
 
-function TMat4f.MultDirection(const AV: TVec3f): TVec3f;
+function TMat4f.MultDirection(const AV: nextpas.core.math.vec.base.TVec3f): nextpas.core.math.vec.base.TVec3f;
 begin
-  Result := TVec3f.Create(
+  Result := nextpas.core.math.vec.base.TVec3f.Create(
     FData[0,0] * AV.X + FData[0,1] * AV.Y + FData[0,2] * AV.Z,
     FData[1,0] * AV.X + FData[1,1] * AV.Y + FData[1,2] * AV.Z,
     FData[2,0] * AV.X + FData[2,1] * AV.Y + FData[2,2] * AV.Z
@@ -650,18 +682,18 @@ begin
   Result := True;
 end;
 
-function TMat4d.MultPoint(const AV: TVec3f): TVec3f;
+function TMat4d.MultPoint(const AV: nextpas.core.math.vec.base.TVec3f): nextpas.core.math.vec.base.TVec3f;
 begin
-  Result := TVec3f.Create(
+  Result := nextpas.core.math.vec.base.TVec3f.Create(
     FData[0,0] * AV.X + FData[0,1] * AV.Y + FData[0,2] * AV.Z + FData[0,3],
     FData[1,0] * AV.X + FData[1,1] * AV.Y + FData[1,2] * AV.Z + FData[1,3],
     FData[2,0] * AV.X + FData[2,1] * AV.Y + FData[2,2] * AV.Z + FData[2,3]
   );
 end;
 
-function TMat4d.MultDirection(const AV: TVec3f): TVec3f;
+function TMat4d.MultDirection(const AV: nextpas.core.math.vec.base.TVec3f): nextpas.core.math.vec.base.TVec3f;
 begin
-  Result := TVec3f.Create(
+  Result := nextpas.core.math.vec.base.TVec3f.Create(
     FData[0,0] * AV.X + FData[0,1] * AV.Y + FData[0,2] * AV.Z,
     FData[1,0] * AV.X + FData[1,1] * AV.Y + FData[1,2] * AV.Z,
     FData[2,0] * AV.X + FData[2,1] * AV.Y + FData[2,2] * AV.Z
@@ -703,7 +735,7 @@ end;
 
 operator * (constref A, B: TMat4f): TMat4f;
 begin
-  SimdMat4fMul(@A.FData[0, 0], @B.FData[0, 0], @Result.FData[0, 0]);
+  Result := SimdMat4fToBaseMat4f(SimdMat4fMul(BaseMat4fToSimdMat4f(A), BaseMat4fToSimdMat4f(B)));
 end;
 
 operator * (constref A, B: TMat4d): TMat4d;
@@ -750,17 +782,14 @@ end;
 
 { === Matrix-vector multiply === }
 
-function Mat4fMulVec(const AM: TMat4f; const AV: TVec4f): TVec4f;
-var
-  LOX, LOY, LOZ, LOW: Single;
+function Mat4fMulVec(const AM: nextpas.core.math.mat.base.TMat4f; const AV: nextpas.core.math.vec.base.TVec4f): nextpas.core.math.vec.base.TVec4f;
 begin
-  SimdMat4fMulVec4f(@AM.FData[0, 0], AV.X, AV.Y, AV.Z, AV.W, LOX, LOY, LOZ, LOW);
-  Result := TVec4f.Create(LOX, LOY, LOZ, LOW);
+  Result := SimdVec4fToBaseVec4f(SimdMat4fMulVec4f(BaseMat4fToSimdMat4f(AM), BaseVec4fToSimdVec4f(AV)));
 end;
 
-function Mat4dMulVec(const AM: TMat4d; const AV: TVec4d): TVec4d;
+function Mat4dMulVec(const AM: nextpas.core.math.mat.base.TMat4d; const AV: nextpas.core.math.vec.base.TVec4d): nextpas.core.math.vec.base.TVec4d;
 begin
-  Result := TVec4d.Create(
+  Result := nextpas.core.math.vec.base.TVec4d.Create(
     AM.FData[0, 0] * AV.X + AM.FData[0, 1] * AV.Y + AM.FData[0, 2] * AV.Z + AM.FData[0, 3] * AV.W,
     AM.FData[1, 0] * AV.X + AM.FData[1, 1] * AV.Y + AM.FData[1, 2] * AV.Z + AM.FData[1, 3] * AV.W,
     AM.FData[2, 0] * AV.X + AM.FData[2, 1] * AV.Y + AM.FData[2, 2] * AV.Z + AM.FData[2, 3] * AV.W,
