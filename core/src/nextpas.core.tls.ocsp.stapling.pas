@@ -22,7 +22,7 @@ unit nextpas.core.tls.ocsp.stapling;
 
 interface
 
-uses Classes, SyncObjs, nextpas.core.base, nextpas.core.tls.base, nextpas.core.tls.ocsp, nextpas.core.tls.ocsp.cache, nextpas.core.tls.x509, nextpas.core.crypto.hash;
+uses Classes, nextpas.core.sync, nextpas.core.base, nextpas.core.tls.base, nextpas.core.tls.ocsp, nextpas.core.tls.ocsp.cache, nextpas.core.tls.x509, nextpas.core.crypto.hash;
 
 type
   // ========================================================================
@@ -126,7 +126,7 @@ type
   TOCSPAutoRefreshThread = class(TThread)
   private
     FOwner: TOCSPStaplingServer;
-    FStopEvent: TEvent;
+    FStopEvent: IEvent;
     FCheckIntervalMS: Integer;  // 检查间隔（毫秒）
   protected
     procedure Execute; override;
@@ -147,12 +147,12 @@ type
   private
     FConfig: TOCSPStaplingConfig;
     FCache: TOCSPResponseCache;
-    FLock: TCriticalSection;
+    FLock: IMutex;
     FAutoRefreshEnabled: Boolean;
     FRefreshThread: TOCSPAutoRefreshThread;
     // 存储需要刷新的证书列表
     FCertificates: TOCSPCertificatePairArray;
-    FCertLock: TCriticalSection;
+    FCertLock: IMutex;
 
     function FetchOCSPResponse(ACert, AIssuerCert: TX509Certificate): TBytes;
     function SendOCSPRequest(const AURL: string; const ARequest: TBytes): TBytes;
@@ -474,8 +474,8 @@ begin
   inherited Create;
   FConfig := AConfig;
   FCache := ACache;
-  FLock := TCriticalSection.Create;
-  FCertLock := TCriticalSection.Create;
+  FLock := Mutex;
+  FCertLock := Mutex;
   FAutoRefreshEnabled := False;
   FRefreshThread := nil;
   SetLength(FCertificates, 0);
@@ -485,8 +485,6 @@ destructor TOCSPStaplingServer.Destroy;
 begin
   // 确保停止刷新线程
   DisableAutoRefresh;
-  FCertLock.Free;
-  FLock.Free;
   inherited Destroy;
 end;
 
@@ -501,7 +499,7 @@ begin
   if not FConfig.EnableServerStapling then
     Exit;
   
-  FLock.Enter;
+  FLock.Acquire;
   try
     NeedsFetch := AForceRefresh;
     
@@ -532,7 +530,7 @@ begin
     end;
     
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
@@ -683,7 +681,7 @@ end;
 
 procedure TOCSPStaplingServer.EnableAutoRefresh;
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try
     if FAutoRefreshEnabled then
       Exit;  // 已经启用
@@ -697,7 +695,7 @@ begin
       FRefreshThread.Start;
     end;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
@@ -705,7 +703,7 @@ procedure TOCSPStaplingServer.DisableAutoRefresh;
 var
   LThread: TOCSPAutoRefreshThread;
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try
     if not FAutoRefreshEnabled then
       Exit;  // 已经禁用
@@ -714,7 +712,7 @@ begin
     LThread := FRefreshThread;
     FRefreshThread := nil;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 
   // 在锁外停止线程，避免死锁
@@ -733,7 +731,7 @@ begin
   if ACert = nil then
     Exit;
 
-  FCertLock.Enter;
+  FCertLock.Acquire;
   try
     // 检查是否已存在
     for I := 0 to High(FCertificates) do
@@ -748,7 +746,7 @@ begin
     FCertificates[Len].Cert := ACert;
     FCertificates[Len].IssuerCert := AIssuerCert;
   finally
-    FCertLock.Leave;
+    FCertLock.Release;
   end;
 end;
 
@@ -759,7 +757,7 @@ begin
   if ACert = nil then
     Exit;
 
-  FCertLock.Enter;
+  FCertLock.Acquire;
   try
     for I := 0 to High(FCertificates) do
     begin
@@ -773,7 +771,7 @@ begin
       end;
     end;
   finally
-    FCertLock.Leave;
+    FCertLock.Release;
   end;
 end;
 
@@ -783,13 +781,13 @@ var
   CertsCopy: TOCSPCertificatePairArray;
 begin
   // 复制证书列表以避免长时间持有锁
-  FCertLock.Enter;
+  FCertLock.Acquire;
   try
     SetLength(CertsCopy, Length(FCertificates));
     for I := 0 to High(FCertificates) do
       CertsCopy[I] := FCertificates[I];
   finally
-    FCertLock.Leave;
+    FCertLock.Release;
   end;
 
   // 刷新每个证书的 OCSP 响应
@@ -814,12 +812,11 @@ begin
   FOwner := AOwner;
   // 默认每 5 分钟检查一次
   FCheckIntervalMS := 5 * 60 * 1000;
-  FStopEvent := TEvent.Create(nil, True, False, '');
+  FStopEvent := Event(True);
 end;
 
 destructor TOCSPAutoRefreshThread.Destroy;
 begin
-  FStopEvent.Free;
   inherited Destroy;
 end;
 
@@ -830,15 +827,14 @@ begin
 end;
 
 procedure TOCSPAutoRefreshThread.Execute;
-var
-  WaitResult: TWaitResult;
 begin
   while not Terminated do
   begin
     // 等待指定时间或收到停止信号
-    WaitResult := FStopEvent.WaitFor(FCheckIntervalMS);
+    if FStopEvent.WaitTimeout(Int64(FCheckIntervalMS) * 1000 * 1000) then
+      Break;
 
-    if Terminated or (WaitResult = wrSignaled) then
+    if Terminated then
       Break;
 
     // 执行刷新

@@ -4,7 +4,7 @@ unit nextpas.core.tls.bufferpool;
 
 interface
 
-uses nextpas.core.base, SyncObjs;
+uses nextpas.core.base, nextpas.core.sync;
 
 type
   TSSLBufferPool = class
@@ -13,7 +13,7 @@ type
     FCount: Integer;
     FBufferSize: Integer;
     FMaxPooled: Integer;
-    FLock: TCriticalSection;
+    FLock: IMutex;
   public
     constructor Create(ABufferSize: Integer = 16384; AMaxPooled: Integer = 32);
     destructor Destroy; override;
@@ -34,18 +34,17 @@ begin
   FMaxPooled := AMaxPooled;
   FCount := 0;
   SetLength(FPool, AMaxPooled);
-  FLock := TCriticalSection.Create;
+  FLock := Mutex;
 end;
 
 destructor TSSLBufferPool.Destroy;
 begin
-  FLock.Free;
   inherited;
 end;
 
 function TSSLBufferPool.Acquire: TBytes;
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try
     if FCount > 0 then
     begin
@@ -58,7 +57,7 @@ begin
       SetLength(Result, FBufferSize);
     end;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
@@ -69,7 +68,7 @@ begin
     SetLength(ABuffer, 0);
     Exit;
   end;
-  FLock.Enter;
+  FLock.Acquire;
   try
     if FCount < FMaxPooled then
     begin
@@ -80,7 +79,7 @@ begin
     else
       SetLength(ABuffer, 0);
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
