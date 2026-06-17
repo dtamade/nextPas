@@ -324,3 +324,35 @@ is already partially covered by the `test_hir_exception` test suite.
 4. _start 发射改为：process_init → user code → process_fini → halt
 5. Runtime 实现 process_init/process_fini 例程
 6. 端到端烟雾测试
+
+## Gate 4: Heap Manager — 验证结果 (2026-06-18)
+
+**状态: PARTIAL** (@np_alloc/@np_free 存在但未连接 nextpas.core.mem)
+
+**关键发现**:
+- @np_alloc/@np_free 已在 LLVM emitter 中实现为自包含分配器
+- 区分 large (mmap/munmap) 和 small (bump allocator + free-list) 路径
+- 带错误检查 (prelude overflow, mmap failure, magic 校验)
+- 但未通过 nextpas.core.mem (52+ 文件) 进行分配
+
+**缺口**:
+1. @np_alloc/@np_free 未委托给 nextpas.core.mem
+2. 无 np.system.heap_alloc/heap_free contract 中间层
+3. 未记录为临时实现
+4. 需要决定：委托 vs 记录为 backend-private temporary
+
+## Gate 5: Exception Unwind — 验证结果 (2026-06-18)
+
+**状态: PASS (for self-hosting bootstrap)**
+
+**关键发现**:
+- 完整 setjmp/longjmp 异常基础设施已在 LLVM emitter 中实现
+- 异常状态全局变量: @__np_exc_stack, @__np_exc_pending, @__np_exc_object
+- try push/pop, raise, finally_end, except_end 全部实现
+- Freestanding setjmp/longjmp (x86_64 asm, 不依赖 libc)
+- HIR 模型完整定义: hikTryBegin/End, hikFinallyBegin/End, hikExceptBegin/End, hikRaise
+
+**缺口 (非阻塞)**:
+1. 无运行时异常对象模型 (裸指针, 无 Exception class 布局)
+2. 无 unwinder 集成 (标记为可推迟)
+3. 异常对象创建/访问只有基本 store/load
