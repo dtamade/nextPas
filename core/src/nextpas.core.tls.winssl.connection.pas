@@ -509,6 +509,7 @@ begin
     if FSessions.Objects[i] <> nil then
       ISSLSession(Pointer(FSessions.Objects[i]))._Release;
   end;
+  FLock := nil;
   inherited Destroy;
 end;
 
