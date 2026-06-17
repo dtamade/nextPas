@@ -165,7 +165,22 @@ procedure git_buf_dispose(buffer: Pgit_buf); cdecl;
 
 implementation
 
-uses Dynlibs;
+uses nextpas.core.platform.dl;
+
+function LibLoaded(const ALib: TPlatformLibrary): Boolean; inline;
+begin
+  Result := ALib.Handle <> nil;
+end;
+
+function GetProcSymbol(const ALib: TPlatformLibrary; const AName: PAnsiChar): Pointer;
+var
+  LAddr: Pointer;
+begin
+  if platform_dl_sym(ALib, AName, LAddr) = 0 then
+    Result := LAddr
+  else
+    Result := nil;
+end;
 
 const
   LIBGIT2_PATH_ENV = 'NEXTPAS_LIBGIT2_PATH';
@@ -871,7 +886,7 @@ end;
 
 {$ELSE}
 var
-  GLibGit2Handle: TLibHandle = NilHandle;
+  GLibGit2Handle: TPlatformLibrary;
   GLibGit2Loaded: Boolean = False;
   GLibGit2LoadedPath: string = '';
   GLibGit2Lock: TRTLCriticalSection;
@@ -1100,18 +1115,18 @@ begin
   ClearLibGit2Symbols;
   GLibGit2Loaded := False;
   GLibGit2LoadedPath := '';
-  if GLibGit2Handle <> NilHandle then
+  if LibLoaded(GLibGit2Handle) then
   begin
-    FreeLibrary(GLibGit2Handle);
-    GLibGit2Handle := NilHandle;
+    platform_dl_close(GLibGit2Handle);
+    FillChar(GLibGit2Handle, SizeOf(GLibGit2Handle), 0);
   end;
 end;
 
 function TryResolveCoreLibGit2Symbols: Boolean;
 begin
-  Pointer(dyn_git_libgit2_init) := GetProcedureAddress(GLibGit2Handle, 'git_libgit2_init');
-  Pointer(dyn_git_libgit2_shutdown) := GetProcedureAddress(GLibGit2Handle, 'git_libgit2_shutdown');
-  Pointer(dyn_git_libgit2_version) := GetProcedureAddress(GLibGit2Handle, 'git_libgit2_version');
+  Pointer(dyn_git_libgit2_init) := GetProcSymbol(GLibGit2Handle, 'git_libgit2_init');
+  Pointer(dyn_git_libgit2_shutdown) := GetProcSymbol(GLibGit2Handle, 'git_libgit2_shutdown');
+  Pointer(dyn_git_libgit2_version) := GetProcSymbol(GLibGit2Handle, 'git_libgit2_version');
   Result := Assigned(dyn_git_libgit2_init) and
             Assigned(dyn_git_libgit2_shutdown) and
             Assigned(dyn_git_libgit2_version);
@@ -1119,14 +1134,14 @@ end;
 
 function TryLoadLibGit2FromPath(const APath: string): Boolean;
 var
-  LHandle: TLibHandle;
+  LHandle: TPlatformLibrary;
 begin
   Result := False;
   if APath = '' then
     Exit;
 
-  LHandle := LoadLibrary(PChar(APath));
-  if LHandle = NilHandle then
+  FillChar(LHandle, SizeOf(LHandle), 0);
+  if platform_dl_open(PAnsiChar(AnsiString(APath)), 0, LHandle) <> 0 then
     Exit;
 
   GLibGit2Handle := LHandle;
@@ -1208,7 +1223,7 @@ begin
   if not EnsureLibGit2Loaded then
     raise Exception.Create('libgit2 is not available');
 
-  Result := GetProcedureAddress(GLibGit2Handle, PChar(AName));
+  Result := GetProcSymbol(GLibGit2Handle, PAnsiChar(AnsiString(AName)));
   if Result = nil then
     raise Exception.Create('libgit2 symbol not available: ' + AName);
 end;
