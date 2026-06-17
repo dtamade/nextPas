@@ -303,3 +303,56 @@ is already partially covered by the `test_hir_exception` test suite.
 3. LLVM emitter: @np_unit_init/@np_unit_fini helper
 4. Runtime: _start 驱动器（main 前拓扑序 init，main 后逆序 fini）
 5. 端到端测试（非 FPC 依赖的 nextPas 编译器运行时测试）
+
+## Gate 3: Process Lifecycle — 验证结果 (2026-06-18)
+
+**状态: FAIL** (全部 3 项验收标准未满足)
+
+| 验收标准 | 状态 |
+|----------|------|
+| process_init 在 main 前执行 | 未实现 (runtime-contract → hnkUnknown, 静默丢弃) |
+| process_fini 在 main 后执行 | 未实现 |
+| 退出码通过关闭序列保留 | 不适用 (无关闭序列) |
+
+**关键发现**: SeedRuntimeContracts 正确 seed process_init/fini 为 typed HIR 节点，
+但 `'runtime-contract'` 不在 ParseHirNodeKind 的 case 语句中，映射到 hnkUnknown（空操作）。
+
+**缺口 (按实现顺序)**:
+1. THirNodeKind 新增 hnkProcessInitRuntime/hnkProcessFiniRuntime + ParseHirNodeKind 映射
+2. THIRBuilder.ProcessNode 新增 ProcessProcessInit/ProcessProcessFini 处理
+3. LLVM emitter 新增 @np_process_init/@np_process_fini helper
+4. _start 发射改为：process_init → user code → process_fini → halt
+5. Runtime 实现 process_init/process_fini 例程
+6. 端到端烟雾测试
+
+## Gate 4: Heap Manager — 验证结果 (2026-06-18)
+
+**状态: PARTIAL** (@np_alloc/@np_free 存在但未连接 nextpas.core.mem)
+
+**关键发现**:
+- @np_alloc/@np_free 已在 LLVM emitter 中实现为自包含分配器
+- 区分 large (mmap/munmap) 和 small (bump allocator + free-list) 路径
+- 带错误检查 (prelude overflow, mmap failure, magic 校验)
+- 但未通过 nextpas.core.mem (52+ 文件) 进行分配
+
+**缺口**:
+1. @np_alloc/@np_free 未委托给 nextpas.core.mem
+2. 无 np.system.heap_alloc/heap_free contract 中间层
+3. 未记录为临时实现
+4. 需要决定：委托 vs 记录为 backend-private temporary
+
+## Gate 5: Exception Unwind — 验证结果 (2026-06-18)
+
+**状态: PASS (for self-hosting bootstrap)**
+
+**关键发现**:
+- 完整 setjmp/longjmp 异常基础设施已在 LLVM emitter 中实现
+- 异常状态全局变量: @__np_exc_stack, @__np_exc_pending, @__np_exc_object
+- try push/pop, raise, finally_end, except_end 全部实现
+- Freestanding setjmp/longjmp (x86_64 asm, 不依赖 libc)
+- HIR 模型完整定义: hikTryBegin/End, hikFinallyBegin/End, hikExceptBegin/End, hikRaise
+
+**缺口 (非阻塞)**:
+1. 无运行时异常对象模型 (裸指针, 无 Exception class 布局)
+2. 无 unwinder 集成 (标记为可推迟)
+3. 异常对象创建/访问只有基本 store/load
