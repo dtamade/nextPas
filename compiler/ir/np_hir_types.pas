@@ -101,6 +101,8 @@ type
     hnkExceptBeginRuntime,
     hnkExceptEndRuntime,
     hnkRaiseRuntime,
+    hnkProcessInitRuntime,
+    hnkProcessFiniRuntime,
     hnkUnknown
   );
 
@@ -245,6 +247,8 @@ begin
     'except-begin-runtime': Result := hnkExceptBeginRuntime;
     'except-end-runtime': Result := hnkExceptEndRuntime;
     'raise-runtime': Result := hnkRaiseRuntime;
+    'process-init-runtime': Result := hnkProcessInitRuntime;
+    'process-fini-runtime': Result := hnkProcessFiniRuntime;
   else
     Result := hnkUnknown;
   end;

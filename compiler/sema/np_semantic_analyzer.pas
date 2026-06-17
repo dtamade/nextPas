@@ -5948,10 +5948,10 @@ begin
 end;
 
 procedure TSemanticAnalyzer.SeedRuntimeContracts;
-  procedure AddRuntimeContract(const AContractName: string);
+  procedure AddRuntimeContract(const AContractName, AKind: string);
   begin
     FModel.AddRuntimeContract(AContractName);
-    FModel.AddTypedHirNode('runtime-contract', AContractName, 0, 0, '');
+    FModel.AddTypedHirNode(AKind, AContractName, 0, 0, '');
   end;
 begin
   if (FRootAst.RootKindName <> 'program') and
@@ -5959,8 +5959,8 @@ begin
     (FRootAst.RootKindName <> 'package') then
     Exit;
 
-  AddRuntimeContract(NPSYSTEM_PROCESS_INIT);
-  AddRuntimeContract(NPSYSTEM_PROCESS_FINI);
+  AddRuntimeContract(NPSYSTEM_PROCESS_INIT, 'process-init-runtime');
+  AddRuntimeContract(NPSYSTEM_PROCESS_FINI, 'process-fini-runtime');
 end;
 
 procedure TSemanticAnalyzer.SeedForeignProcedureBindings;

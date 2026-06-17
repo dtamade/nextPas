@@ -289,6 +289,8 @@ type
     procedure EmitInterfaceSlotStore(AObjPtr: THIRValueId;
       const AClassName: string; const ASlot: TInterfaceSlotMeta);
     procedure ProcessExceptionNode(const ANode: TTypedHirNode);
+    procedure EmitProcessInit;
+    procedure EmitProcessFini;
     procedure EnsureVmtForClass(const AClassName: string);
   public
     constructor Create(ASemaModel: TSemanticModel);
@@ -7226,6 +7228,10 @@ begin
     hnkExceptBeginRuntime, hnkExceptEndRuntime,
     hnkRaiseRuntime:
       ProcessExceptionNode(ANode);
+    hnkProcessInitRuntime:
+      EmitProcessInit;
+    hnkProcessFiniRuntime:
+      EmitProcessFini;
     hnkUnknown:
       ;
   end;
@@ -7255,6 +7261,30 @@ begin
     end;
   end;
   FPendingCleanupCount := 0;
+end;
+
+procedure THIRBuilder.EmitProcessInit;
+var
+  Instr: THIRInstr;
+begin
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikCall;
+  Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
+  Instr.CallTarget := 'np_process_init';
+  EmitInstr(Instr);
+end;
+
+procedure THIRBuilder.EmitProcessFini;
+var
+  Instr: THIRInstr;
+begin
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikCall;
+  Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
+  Instr.CallTarget := 'np_process_fini';
+  EmitInstr(Instr);
 end;
 
 procedure THIRBuilder.Build;

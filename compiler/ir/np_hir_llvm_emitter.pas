@@ -45,6 +45,7 @@ type
     FPendingObjectFreeActive: Boolean;
     FPendingObjectFreeEndLabel: string;
     FNeedsExceptionRuntime: Boolean;
+    FNeedsProcessLifecycle: Boolean;
     FTryCounter: LongInt;
     procedure Emit(const S: string);
     function ValueRef(AValueId: THIRValueId): string;
@@ -143,6 +144,7 @@ begin
   FPendingObjectFreeActive := False;
   FPendingObjectFreeEndLabel := '';
   FNeedsExceptionRuntime := False;
+  FNeedsProcessLifecycle := False;
   FTryCounter := 0;
   SetLength(FLines, 0);
 end;
@@ -489,7 +491,12 @@ begin
           ValueRef(AInstr.Operands[0].ValueId) + ' to ' +
           TypeToLlvm(AInstr.TypeId));
     hikCall:
+    begin
+      if (AInstr.CallTarget = 'np_process_init') or
+        (AInstr.CallTarget = 'np_process_fini') then
+        FNeedsProcessLifecycle := True;
       EmitCallInstr(AInstr);
+    end;
     hikIntrinsic:
     begin
       if AInstr.IntrinsicName = 'halt' then
@@ -1174,6 +1181,7 @@ begin
   FNeedsObjectFreeRelease := False;
   FNeedsDynArrayHelpers := False;
   FNeedsExceptionRuntime := False;
+  FNeedsProcessLifecycle := False;
   FTryCounter := 0;
   FObjectFreeCounter := 0;
   FPendingObjectFreeActive := False;
@@ -1194,6 +1202,13 @@ begin
 
   for I := 0 to FModule.FunctionCount - 1 do
     EmitFunction(FModule.FunctionAt(I));
+
+  if FNeedsProcessLifecycle then
+  begin
+    Emit('');
+    Emit('declare void @np_process_init()');
+    Emit('declare void @np_process_fini()');
+  end;
 
   if FStrConstCount > 0 then
   begin
