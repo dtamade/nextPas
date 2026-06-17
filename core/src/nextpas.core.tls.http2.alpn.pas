@@ -36,8 +36,6 @@ function GetHTTP2ALPNProtocols: TStringArray;
 
 implementation
 
-uses nextpas.core.time;
-
 function SecondsBetween(const ANewer, AOlder: TDateTime): Int64;
 begin
   Result := Trunc((ANewer - AOlder) * 86400.0);
