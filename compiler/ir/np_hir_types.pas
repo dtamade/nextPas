@@ -103,6 +103,8 @@ type
     hnkRaiseRuntime,
     hnkProcessInitRuntime,
     hnkProcessFiniRuntime,
+    hnkUnitInitRuntime,
+    hnkUnitFiniRuntime,
     hnkUnknown
   );
 
@@ -249,6 +251,8 @@ begin
     'raise-runtime': Result := hnkRaiseRuntime;
     'process-init-runtime': Result := hnkProcessInitRuntime;
     'process-fini-runtime': Result := hnkProcessFiniRuntime;
+    'unit-init-runtime': Result := hnkUnitInitRuntime;
+    'unit-fini-runtime': Result := hnkUnitFiniRuntime;
   else
     Result := hnkUnknown;
   end;

@@ -25,6 +25,7 @@ type
     gnkProgram, gnkUnit, gnkLibrary, gnkPackage,
     gnkUsesClause, gnkUseEntry,
     gnkInterfaceSection, gnkImplementationSection,
+    gnkInitializationSection, gnkFinalizationSection,
     gnkForeignProcedureDecl,
     gnkBeginBlock, gnkEndBlock,
     gnkStatementList,
@@ -419,6 +420,8 @@ begin
     gnkUseEntry: Result := 'use-entry';
     gnkInterfaceSection: Result := 'interface-section';
     gnkImplementationSection: Result := 'implementation-section';
+    gnkInitializationSection: Result := 'initialization-section';
+    gnkFinalizationSection: Result := 'finalization-section';
     gnkForeignProcedureDecl: Result := 'foreign-procedure-decl';
     gnkBeginBlock: Result := 'begin-block';
     gnkEndBlock: Result := 'end-block';
@@ -4438,6 +4441,8 @@ function ParseUnitRoot(
 var
   InterfaceNode: TGreenNode;
   ImplementationNode: TGreenNode;
+  LInitNode: TGreenNode;
+  LFiniNode: TGreenNode;
 begin
   Result := MatchToken(
     ALexer,
@@ -4512,18 +4517,26 @@ begin
   if (ACursor < ALexer.TokenCount) and
     (CurrentToken(ALexer, ACursor).Kind = tkInitializationKeyword) then
   begin
+    LInitNode := TGreenNode.Create(
+      gnkInitializationSection,
+      CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
     Inc(ACursor);
-    ParseStatementList(ALexer, ACursor, ImplementationNode,
+    ParseStatementList(ALexer, ACursor, LInitNode,
       [tkFinalizationKeyword, tkEndKeyword, tkEOF],
       ATree, ADiagnostics, ARootFileId);
+    ImplementationNode.AppendChild(LInitNode);
   end;
 
   if (ACursor < ALexer.TokenCount) and
     (CurrentToken(ALexer, ACursor).Kind = tkFinalizationKeyword) then
   begin
+    LFiniNode := TGreenNode.Create(
+      gnkFinalizationSection,
+      CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
     Inc(ACursor);
-    ParseStatementList(ALexer, ACursor, ImplementationNode,
+    ParseStatementList(ALexer, ACursor, LFiniNode,
       [tkEndKeyword, tkEOF], ATree, ADiagnostics, ARootFileId);
+    ImplementationNode.AppendChild(LFiniNode);
   end;
 
   Result := MatchToken(

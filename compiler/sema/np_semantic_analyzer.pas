@@ -5953,14 +5953,56 @@ procedure TSemanticAnalyzer.SeedRuntimeContracts;
     FModel.AddRuntimeContract(AContractName);
     FModel.AddTypedHirNode(AKind, AContractName, 0, 0, '');
   end;
-begin
-  if (FRootAst.RootKindName <> 'program') and
-    (FRootAst.RootKindName <> 'library') and
-    (FRootAst.RootKindName <> 'package') then
-    Exit;
 
-  AddRuntimeContract(NPSYSTEM_PROCESS_INIT, 'process-init-runtime');
-  AddRuntimeContract(NPSYSTEM_PROCESS_FINI, 'process-fini-runtime');
+  procedure SeedUnitLifecycle;
+  var
+    RootNode, Child, ImplChild: TGreenNode;
+    I, J: LongInt;
+    HirId: LongInt;
+    UnitName: string;
+  begin
+    if FRootAst = nil then
+      Exit;
+    RootNode := FRootAst.RootNode;
+    if RootNode = nil then
+      Exit;
+    UnitName := FUnitGraph.RootName;
+    for I := 0 to RootNode.ChildCount - 1 do
+    begin
+      Child := RootNode.Children[I];
+      if Child.NodeKind = gnkImplementationSection then
+      begin
+        for J := 0 to Child.ChildCount - 1 do
+        begin
+          ImplChild := Child.Children[J];
+          if ImplChild.NodeKind = gnkInitializationSection then
+          begin
+            FModel.AddRuntimeContract(NPSYSTEM_UNIT_INIT);
+            HirId := FModel.AddTypedHirNode('unit-init-runtime', UnitName, 0, 0, UnitName);
+            FModel.SetTypedHirNodeGreenRef(HirId, ImplChild);
+          end
+          else if ImplChild.NodeKind = gnkFinalizationSection then
+          begin
+            FModel.AddRuntimeContract(NPSYSTEM_UNIT_FINI);
+            HirId := FModel.AddTypedHirNode('unit-fini-runtime', UnitName, 0, 0, UnitName);
+            FModel.SetTypedHirNodeGreenRef(HirId, ImplChild);
+          end;
+        end;
+        Break;
+      end;
+    end;
+  end;
+
+begin
+  if (FRootAst.RootKindName = 'program') or
+    (FRootAst.RootKindName = 'library') or
+    (FRootAst.RootKindName = 'package') then
+  begin
+    AddRuntimeContract(NPSYSTEM_PROCESS_INIT, 'process-init-runtime');
+    AddRuntimeContract(NPSYSTEM_PROCESS_FINI, 'process-fini-runtime');
+  end
+  else if FRootAst.RootKindName = 'unit' then
+    SeedUnitLifecycle;
 end;
 
 procedure TSemanticAnalyzer.SeedForeignProcedureBindings;

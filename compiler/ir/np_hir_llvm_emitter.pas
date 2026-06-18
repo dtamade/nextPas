@@ -1166,6 +1166,10 @@ procedure THIRLlvmEmitter.EmitModule;
 var
   I: LongInt;
   G: THIRGlobal;
+  LFunc: THIRFunction;
+  LInitCount, LFiniCount: LongInt;
+  LInitNames, LFiniNames: array of string;
+  LEmitCtors: Boolean;
 begin
   FLineCount := 0;
   FStrConstCount := 0;
@@ -1200,8 +1204,59 @@ begin
       Emit('@g_' + G.Name + ' = internal global i64 0');
   end;
 
+  LInitCount := 0;
+  LFiniCount := 0;
+  SetLength(LInitNames, 16);
+  SetLength(LFiniNames, 16);
+
   for I := 0 to FModule.FunctionCount - 1 do
-    EmitFunction(FModule.FunctionAt(I));
+  begin
+    LFunc := FModule.FunctionAt(I);
+    if Copy(LFunc.Name, 1, 14) = 'np_unit_init_' then
+    begin
+      if LInitCount >= Length(LInitNames) then
+        SetLength(LInitNames, LInitCount + 16);
+      LInitNames[LInitCount] := LFunc.Name;
+      Inc(LInitCount);
+    end
+    else if Copy(LFunc.Name, 1, 14) = 'np_unit_fini_' then
+    begin
+      if LFiniCount >= Length(LFiniNames) then
+        SetLength(LFiniNames, LFiniCount + 16);
+      LFiniNames[LFiniCount] := LFunc.Name;
+      Inc(LFiniCount);
+    end;
+    EmitFunction(LFunc);
+  end;
+
+  LEmitCtors := (LInitCount > 0) or (LFiniCount > 0);
+  if LEmitCtors then
+  begin
+    if LInitCount > 0 then
+    begin
+      Emit('');
+      Emit('@llvm.global_ctors = appending global [' + IntToStr(LInitCount) +
+        ' x { i32, ptr, ptr }] [');
+      for I := 0 to LInitCount - 1 do
+      begin
+        if I > 0 then Emit(',');
+        Emit('  { i32 65535, ptr @' + LInitNames[I] + ', ptr null }');
+      end;
+      Emit(']');
+    end;
+    if LFiniCount > 0 then
+    begin
+      Emit('');
+      Emit('@llvm.global_dtors = appending global [' + IntToStr(LFiniCount) +
+        ' x { i32, ptr, ptr }] [');
+      for I := 0 to LFiniCount - 1 do
+      begin
+        if I > 0 then Emit(',');
+        Emit('  { i32 65535, ptr @' + LFiniNames[I] + ', ptr null }');
+      end;
+      Emit(']');
+    end;
+  end;
 
   if FNeedsProcessLifecycle then
   begin
