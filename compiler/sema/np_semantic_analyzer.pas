@@ -1088,12 +1088,10 @@ begin
   { Accept any valid assignment target as a safe consumer for owned string
     returns. The key invariant: if the node appears on the left side of an
     assignment, the owned string temporary is transferred to the target,
-    which is always safe. We accept identifiers, dot-access, array-access,
-    and gnkParameterList (empirically observed for some field-access targets
-    like State.SelectorName — likely a parser intermediate representation). }
+    which is always safe. }
   Result := (ATargetNode <> nil) and
     (ATargetNode.NodeKind in [gnkIdentifier, gnkDotAccess,
-      gnkArrayAccess, gnkParameterList]);
+      gnkArrayAccess]);
 end;
 
 function TSemanticAnalyzer.AssignmentOwnsStringReturn(const ANode: TGreenNode;
