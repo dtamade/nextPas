@@ -1501,133 +1501,42 @@ begin
   end;
 end;
 
+// ---------------------------------------------------------------------------
+// BOOTSTRAP-TEMPORARY: Inline runtime helpers
+//
+// The following procedures emit inline LLVM IR for allocator, memory, and
+// object lifecycle operations.  This is a BOOTSTRAP TEMPORARY — every
+// compiled binary carries its own copy of these ~300 lines of IR.
+//
+// Gate 4 roadmap (docs/plans/2026-06-18-debt-roadmap.md):
+//   Phase 1 (done): mark as bootstrap-temporary
+//   Phase 2 (pending): create runtime.allocator Pascal module with C ABI
+//   Phase 3 (pending): replace `define internal` with `declare external`
+//
+// Once Phase 3 is complete, these emit helpers become no-ops and the runtime
+// module provides the single canonical implementation.
+// ---------------------------------------------------------------------------
+
 procedure THIRLlvmEmitter.EmitAllocHelper;
 begin
+  // Phase 3: allocator 已移至 libnprt.a runtime 模块，只 emit 外部声明
   Emit('');
-  Emit('@__heap_cur = internal global ptr null');
-  Emit('@__heap_free = internal global ptr null');
-  Emit('');
-  Emit('define internal ptr @np_alloc(i64 %size) {');
-  Emit('entry:');
-  Emit('  %alloc.is.large = icmp uge i64 %size, ' +
-    IntToStr(NP_ALLOCATOR_LARGE_THRESHOLD));
-  Emit('  br i1 %alloc.is.large, label %alloc.large, label %alloc.small.normalize');
-  Emit('alloc.large:');
-  Emit('  %alloc.large.rawlen = add i64 %size, ' +
-    IntToStr(NP_ALLOCATOR_PRELUDE_SIZE));
-  Emit('  %alloc.rawlen.overflow = icmp ult i64 %alloc.large.rawlen, %size');
-  Emit('  br i1 %alloc.rawlen.overflow, label %alloc.fault.prelude, label %alloc.round');
-  Emit('alloc.fault.prelude:');
-  Emit('  call void @np_allocator_fault(i64 2, i64 %size, i64 ' +
-    IntToStr(NP_ALLOCATOR_PRELUDE_SIZE) + ')');
-  Emit('  unreachable');
-  Emit('alloc.round:');
-  Emit('  %alloc.large.plusmask = add i64 %alloc.large.rawlen, ' +
-    IntToStr(NP_ALLOCATOR_PAGE_SIZE - 1));
-  Emit('  %alloc.plusmask.overflow = icmp ult i64 %alloc.large.plusmask, %alloc.large.rawlen');
-  Emit('  br i1 %alloc.plusmask.overflow, label %alloc.fault.round, label %alloc.mmap');
-  Emit('alloc.fault.round:');
-  Emit('  call void @np_allocator_fault(i64 3, i64 %alloc.large.rawlen, i64 ' +
-    IntToStr(NP_ALLOCATOR_PAGE_SIZE) + ')');
-  Emit('  unreachable');
-  Emit('alloc.mmap:');
-  Emit('  %alloc.mapped.len = and i64 %alloc.large.plusmask, -' +
-    IntToStr(NP_ALLOCATOR_PAGE_SIZE));
-  Emit('  %alloc.mmap.result = call i64 asm sideeffect "movq $$9, %rax\0Axorq %rdi, %rdi\0Amovq $$3, %rdx\0Amovq $$34, %r10\0Amovq $$-1, %r8\0Axorq %r9, %r9\0Asyscall", "={rax},{rsi},~{rcx},~{r11},~{rdi},~{rdx},~{r10},~{r8},~{r9},~{memory}"(i64 %alloc.mapped.len)');
-  Emit('  %alloc.mmap.failed = icmp eq i64 %alloc.mmap.result, -1');
-  Emit('  br i1 %alloc.mmap.failed, label %alloc.fault.mmap, label %alloc.write.prelude');
-  Emit('alloc.fault.mmap:');
-  Emit('  call void @np_allocator_fault(i64 4, i64 %size, i64 %alloc.mapped.len)');
-  Emit('  unreachable');
-  Emit('alloc.write.prelude:');
-  Emit('  %alloc.large.base = inttoptr i64 %alloc.mmap.result to ptr');
-  Emit('  store i64 ' + NP_ALLOCATOR_LARGE_MAGIC + ', ptr %alloc.large.base');
-  Emit('  %alloc.large.lenp = getelementptr i8, ptr %alloc.large.base, i64 8');
-  Emit('  store i64 %alloc.mapped.len, ptr %alloc.large.lenp');
-  Emit('  %alloc.payload = getelementptr i8, ptr %alloc.large.base, i64 ' +
-    IntToStr(NP_ALLOCATOR_PRELUDE_SIZE));
-  Emit('  ret ptr %alloc.payload');
-  Emit('');
-  Emit('alloc.small.normalize:');
-  Emit('  %alloc.too.small = icmp ult i64 %size, ' +
-    IntToStr(NP_ALLOCATOR_MIN_SMALL_BLOCK_SIZE));
-  Emit('  %alloc.size = select i1 %alloc.too.small, i64 ' +
-    IntToStr(NP_ALLOCATOR_MIN_SMALL_BLOCK_SIZE) + ', i64 %size');
-  Emit('  br label %free.scan');
-  Emit('free.scan:');
-  Emit('  %free.linkslot = phi ptr [ @__heap_free, %alloc.small.normalize ], [ %free.nextslot, %free.advance ]');
-  Emit('  %free.head = load ptr, ptr %free.linkslot');
-  Emit('  %free.has = icmp ne ptr %free.head, null');
-  Emit('  br i1 %free.has, label %free.check, label %init');
-  Emit('free.check:');
-  Emit('  %free.size = load i64, ptr %free.head');
-  Emit('  %free.fits = icmp uge i64 %free.size, %alloc.size');
-  Emit('  br i1 %free.fits, label %reuse, label %free.advance');
-  Emit('free.advance:');
-  Emit('  %free.nextslot = getelementptr i8, ptr %free.head, i64 16');
-  Emit('  br label %free.scan');
-  Emit('reuse:');
-  Emit('  %free.nextp = getelementptr i8, ptr %free.head, i64 16');
-  Emit('  %free.next = load ptr, ptr %free.nextp');
-  Emit('  store ptr %free.next, ptr %free.linkslot');
-  Emit('  ret ptr %free.head');
-  Emit('init:');
-  Emit('  %cur = load ptr, ptr @__heap_cur');
-  Emit('  %is_null = icmp eq ptr %cur, null');
-  Emit('  br i1 %is_null, label %heap.init, label %alloc');
-  Emit('heap.init:');
-  Emit('  %brk0 = call i64 asm sideeffect "movq $$12, %rax\0Axorq %rdi, %rdi\0Asyscall", "={rax},~{rcx},~{r11},~{rdi}"()');
-  Emit('  %brk0p = inttoptr i64 %brk0 to ptr');
-  Emit('  store ptr %brk0p, ptr @__heap_cur');
-  Emit('  br label %alloc');
-  Emit('alloc:');
-  Emit('  %base = load ptr, ptr @__heap_cur');
-  Emit('  %next = getelementptr i8, ptr %base, i64 %alloc.size');
-  Emit('  %nexti = ptrtoint ptr %next to i64');
-  Emit('  call i64 asm sideeffect "movq $$12, %rax\0Asyscall", "={rax},{rdi},~{rcx},~{r11}"(i64 %nexti)');
-  Emit('  store ptr %next, ptr @__heap_cur');
-  Emit('  ret ptr %base');
-  Emit('}');
+  Emit('declare ptr @np_alloc(i64 %size)');
+  Emit('declare void @np_free(ptr %raw, i64 %size)');
+  Emit('declare void @np_allocator_fault(i64 %code, i64 %arg0, i64 %arg1)');
 end;
 
 procedure THIRLlvmEmitter.EmitMemcpyHelper;
 begin
+  // Phase 3: memops 已移至 libnprt.a runtime 模块
   Emit('');
-  Emit('define internal void @np_memcpy(ptr %dst, ptr %src, i64 %n) {');
-  Emit('entry:');
-  Emit('  %cmp0 = icmp eq i64 %n, 0');
-  Emit('  br i1 %cmp0, label %done, label %loop');
-  Emit('loop:');
-  Emit('  %i = phi i64 [ 0, %entry ], [ %i_next, %loop ]');
-  Emit('  %sp = getelementptr i8, ptr %src, i64 %i');
-  Emit('  %b = load i8, ptr %sp');
-  Emit('  %dp = getelementptr i8, ptr %dst, i64 %i');
-  Emit('  store i8 %b, ptr %dp');
-  Emit('  %i_next = add i64 %i, 1');
-  Emit('  %cond = icmp eq i64 %i_next, %n');
-  Emit('  br i1 %cond, label %done, label %loop');
-  Emit('done:');
-  Emit('  ret void');
-  Emit('}');
+  Emit('declare void @np_memcpy(ptr %dst, ptr %src, i64 %n)');
+  Emit('declare void @np_memzero(ptr %dst, i64 %n)');
 end;
 
 procedure THIRLlvmEmitter.EmitMemzeroHelper;
 begin
-  Emit('');
-  Emit('define internal void @np_memzero(ptr %dst, i64 %n) {');
-  Emit('entry:');
-  Emit('  %cmp0 = icmp eq i64 %n, 0');
-  Emit('  br i1 %cmp0, label %done, label %loop');
-  Emit('loop:');
-  Emit('  %i = phi i64 [ 0, %entry ], [ %i_next, %loop ]');
-  Emit('  %dp = getelementptr i8, ptr %dst, i64 %i');
-  Emit('  store i8 0, ptr %dp');
-  Emit('  %i_next = add i64 %i, 1');
-  Emit('  %cond = icmp eq i64 %i_next, %n');
-  Emit('  br i1 %cond, label %done, label %loop');
-  Emit('done:');
-  Emit('  ret void');
-  Emit('}');
+  // Phase 3: memzero 声明已在 EmitMemcpyHelper 中 emit
 end;
 
 procedure THIRLlvmEmitter.EmitStrConcatHelper;
@@ -1873,216 +1782,48 @@ end;
 
 procedure THIRLlvmEmitter.EmitObjectAllocHelper;
 begin
+  // Phase 3: object alloc 已移至 libnprt.a runtime 模块
   Emit('');
-  Emit('define internal ptr @np_object_alloc(i64 %size) {');
-  Emit('entry:');
-  Emit('  %total = add i64 %size, 24');
-  Emit('  %total.overflow = icmp ult i64 %total, %size');
-  Emit('  br i1 %total.overflow, label %object.alloc.fault.total, label %object.alloc.header');
-  Emit('object.alloc.fault.total:');
-  Emit('  call void @np_allocator_fault(i64 1, i64 %size, i64 24)');
-  Emit('  unreachable');
-  Emit('object.alloc.header:');
-  Emit('  %raw = call ptr @np_alloc(i64 %total)');
-  Emit('  store i64 %size, ptr %raw');
-  Emit('  %magicp = getelementptr i8, ptr %raw, i64 8');
-  Emit('  store i64 1313882451, ptr %magicp');
-  Emit('  %rcp = getelementptr i8, ptr %raw, i64 16');
-  Emit('  store i64 0, ptr %rcp');
-  Emit('  %obj = getelementptr i8, ptr %raw, i64 24');
-  Emit('  call void @np_memzero(ptr %obj, i64 %size)');
-  Emit('  ret ptr %obj');
-  Emit('}');
+  Emit('declare ptr @np_object_alloc(i64 %size)');
 end;
 
 procedure THIRLlvmEmitter.EmitObjectFreeReleaseHelper;
 begin
+  // Phase 3: object free 已移至 libnprt.a runtime 模块
   Emit('');
-  Emit('define internal void @np_object_free_release(ptr %obj) {');
-  Emit('entry:');
-  Emit('  %isnull = icmp eq ptr %obj, null');
-  Emit('  br i1 %isnull, label %done, label %header');
-  Emit('header:');
-  Emit('  %raw = getelementptr i8, ptr %obj, i64 -24');
-  Emit('  %size = load i64, ptr %raw');
-  Emit('  %magicp = getelementptr i8, ptr %raw, i64 8');
-  Emit('  %magic = load i64, ptr %magicp');
-  Emit('  %magic.ok = icmp eq i64 %magic, 1313882451');
-  Emit('  br i1 %magic.ok, label %release, label %invalid');
-  Emit('invalid:');
-  Emit('  call void @np_object_release_invalid(ptr %raw, i64 %size, i64 %magic)');
-  Emit('  br label %done');
-  Emit('release:');
-  Emit('  call void @np_object_release_valid(ptr %raw, i64 %size)');
-  Emit('  br label %done');
-  Emit('done:');
-  Emit('  ret void');
-  Emit('}');
+  Emit('declare void @np_object_free_release(ptr %obj)');
 end;
 
 procedure THIRLlvmEmitter.EmitObjectReleaseValidHelper;
 begin
-  Emit('');
-  Emit('define internal void @np_object_release_valid(ptr %raw, i64 %size) {');
-  Emit('entry:');
-  Emit('  %released.magicp = getelementptr i8, ptr %raw, i64 8');
-  Emit('  store i64 0, ptr %released.magicp');
-  Emit('  %alloc.size = add i64 %size, 24');
-  Emit('  call void @np_free(ptr %raw, i64 %alloc.size)');
-  Emit('  ret void');
-  Emit('}');
+  // Phase 3: 已移至 libnprt.a runtime 模块（内部函数，不需要外部声明）
 end;
 
 procedure THIRLlvmEmitter.EmitFreeHelper;
 begin
-  Emit('');
-  Emit('define internal void @np_free(ptr %raw, i64 %size) {');
-  Emit('entry:');
-  Emit('  %free.is.large = icmp uge i64 %size, ' +
-    IntToStr(NP_ALLOCATOR_LARGE_THRESHOLD));
-  Emit('  br i1 %free.is.large, label %free.large, label %free.small');
-  Emit('free.large:');
-  Emit('  %free.large.base = getelementptr i8, ptr %raw, i64 -' +
-    IntToStr(NP_ALLOCATOR_PRELUDE_SIZE));
-  Emit('  %free.large.magic = load i64, ptr %free.large.base');
-  Emit('  %free.large.magic.ok = icmp eq i64 %free.large.magic, ' +
-    NP_ALLOCATOR_LARGE_MAGIC);
-  Emit('  br i1 %free.large.magic.ok, label %free.large.len.check, label %free.large.magic.fault');
-  Emit('free.large.magic.fault:');
-  Emit('  call void @np_allocator_fault(i64 5, i64 %size, i64 %free.large.magic)');
-  Emit('  unreachable');
-  Emit('free.large.len.check:');
-  Emit('  %free.large.lenp = getelementptr i8, ptr %free.large.base, i64 8');
-  Emit('  %free.large.len = load i64, ptr %free.large.lenp');
-  Emit('  %free.large.min = add i64 %size, ' +
-    IntToStr(NP_ALLOCATOR_PRELUDE_SIZE));
-  Emit('  %free.large.min.overflow = icmp ult i64 %free.large.min, %size');
-  Emit('  br i1 %free.large.min.overflow, label %free.large.len.fault, label %free.large.len.validate');
-  Emit('free.large.len.validate:');
-  Emit('  %free.large.len.ok = icmp uge i64 %free.large.len, %free.large.min');
-  Emit('  br i1 %free.large.len.ok, label %free.large.munmap, label %free.large.len.fault');
-  Emit('free.large.len.fault:');
-  Emit('  call void @np_allocator_fault(i64 6, i64 %size, i64 %free.large.len)');
-  Emit('  unreachable');
-  Emit('free.large.munmap:');
-  Emit('  %free.large.base.i = ptrtoint ptr %free.large.base to i64');
-  Emit('  %free.munmap.result = call i64 asm sideeffect "movq $$11, %rax\0Asyscall", "={rax},{rdi},{rsi},~{rcx},~{r11},~{memory}"(i64 %free.large.base.i, i64 %free.large.len)');
-  Emit('  %free.munmap.ok = icmp eq i64 %free.munmap.result, 0');
-  Emit('  br i1 %free.munmap.ok, label %free.done, label %free.munmap.fault');
-  Emit('free.munmap.fault:');
-  Emit('  call void @np_allocator_fault(i64 7, i64 %free.large.base.i, i64 %free.large.len)');
-  Emit('  unreachable');
-  Emit('free.small:');
-  Emit('  %free.too.small = icmp ult i64 %size, ' +
-    IntToStr(NP_ALLOCATOR_MIN_SMALL_BLOCK_SIZE));
-  Emit('  %free.size.normalized = select i1 %free.too.small, i64 ' +
-    IntToStr(NP_ALLOCATOR_MIN_SMALL_BLOCK_SIZE) + ', i64 %size');
-  Emit('  %free.end = getelementptr i8, ptr %raw, i64 %free.size.normalized');
-  Emit('  %free.cur = load ptr, ptr @__heap_cur');
-  Emit('  %free.is.top = icmp eq ptr %free.cur, %free.end');
-  Emit('  br i1 %free.is.top, label %free.reclaim, label %free.push');
-  Emit('free.reclaim:');
-  Emit('  %free.rawi = ptrtoint ptr %raw to i64');
-  Emit('  call i64 asm sideeffect "movq $$12, %rax\0Asyscall", "={rax},{rdi},~{rcx},~{r11}"(i64 %free.rawi)');
-  Emit('  store ptr %raw, ptr @__heap_cur');
-  Emit('  ret void');
-  Emit('free.push:');
-  Emit('  br label %coalesce.scan');
-  Emit('coalesce.scan:');
-  Emit('  %coalesce.raw = phi ptr [ %raw, %free.push ], [ %coalesce.raw, %coalesce.advance ], [ %coalesce.raw, %coalesce.merge ], [ %coalesce.head, %coalesce.merge.prev ]');
-  Emit('  %coalesce.total = phi i64 [ %free.size.normalized, %free.push ], [ %coalesce.total, %coalesce.advance ], [ %free.merged.total, %coalesce.merge ], [ %free.prev.merged.total, %coalesce.merge.prev ]');
-  Emit('  %coalesce.linkslot = phi ptr [ @__heap_free, %free.push ], [ %coalesce.nextslot, %coalesce.advance ], [ @__heap_free, %coalesce.merge ], [ @__heap_free, %coalesce.merge.prev ]');
-  Emit('  %coalesce.end = getelementptr i8, ptr %coalesce.raw, i64 %coalesce.total');
-  Emit('  %coalesce.head = load ptr, ptr %coalesce.linkslot');
-  Emit('  %coalesce.has = icmp ne ptr %coalesce.head, null');
-  Emit('  br i1 %coalesce.has, label %coalesce.check, label %free.insert');
-  Emit('coalesce.check:');
-  Emit('  %coalesce.size = load i64, ptr %coalesce.head');
-  Emit('  %coalesce.match = icmp eq ptr %coalesce.end, %coalesce.head');
-  Emit('  br i1 %coalesce.match, label %coalesce.merge, label %coalesce.check.prev');
-  Emit('coalesce.check.prev:');
-  Emit('  %coalesce.prev.end = getelementptr i8, ptr %coalesce.head, i64 %coalesce.size');
-  Emit('  %coalesce.prev.match = icmp eq ptr %coalesce.prev.end, %coalesce.raw');
-  Emit('  br i1 %coalesce.prev.match, label %coalesce.merge.prev, label %coalesce.advance');
-  Emit('coalesce.advance:');
-  Emit('  %coalesce.nextslot = getelementptr i8, ptr %coalesce.head, i64 16');
-  Emit('  br label %coalesce.scan');
-  Emit('coalesce.merge:');
-  Emit('  %free.merged.total = add i64 %coalesce.total, %coalesce.size');
-  Emit('  %coalesce.nextp = getelementptr i8, ptr %coalesce.head, i64 16');
-  Emit('  %coalesce.next = load ptr, ptr %coalesce.nextp');
-  Emit('  store ptr %coalesce.next, ptr %coalesce.linkslot');
-  Emit('  br label %coalesce.scan');
-  Emit('coalesce.merge.prev:');
-  Emit('  %free.prev.merged.total = add i64 %coalesce.size, %coalesce.total');
-  Emit('  %coalesce.prev.nextp = getelementptr i8, ptr %coalesce.head, i64 16');
-  Emit('  %coalesce.prev.next = load ptr, ptr %coalesce.prev.nextp');
-  Emit('  store ptr %coalesce.prev.next, ptr %coalesce.linkslot');
-  Emit('  br label %coalesce.scan');
-  Emit('free.insert:');
-  Emit('  store i64 %coalesce.total, ptr %coalesce.raw');
-  Emit('  %free.nextp = getelementptr i8, ptr %coalesce.raw, i64 16');
-  Emit('  %free.old = load ptr, ptr @__heap_free');
-  Emit('  store ptr %free.old, ptr %free.nextp');
-  Emit('  store ptr %coalesce.raw, ptr @__heap_free');
-  Emit('  br label %free.done');
-  Emit('free.done:');
-  Emit('  ret void');
-  Emit('}');
+  // Phase 3: np_free 声明已在 EmitAllocHelper 中 emit
 end;
 
 procedure THIRLlvmEmitter.EmitObjectReleaseInvalidHelper;
 begin
-  Emit('');
-  Emit('define internal void @np_object_release_invalid(ptr %raw, i64 %size, i64 %magic) {');
-  Emit('entry:');
-  Emit('  call void @llvm.trap()');
-  Emit('  unreachable');
-  Emit('}');
+  // Phase 3: 已移至 libnprt.a runtime 模块（内部函数，不需要外部声明）
 end;
 
 procedure THIRLlvmEmitter.EmitAllocatorFaultHelper;
 begin
+  // Phase 3: allocator fault 已移至 libnprt.a runtime 模块
+  // np_allocator_fault 声明已在 EmitAllocHelper 中 emit
+  // llvm.trap 声明保留（其他 helpers 也需要）
   Emit('');
   Emit('declare void @llvm.trap()');
-  Emit('');
-  Emit('define internal void @np_allocator_fault(i64 %code, i64 %arg0, i64 %arg1) {');
-  Emit('entry:');
-  Emit('  call void @llvm.trap()');
-  Emit('  unreachable');
-  Emit('}');
 end;
 
 procedure THIRLlvmEmitter.EmitIntfRefCountHelpers;
 begin
+  // Phase 3: intf refcount 已移至 libnprt.a runtime 模块
   Emit('');
-  Emit('define internal void @np_intf_addref(ptr %obj) {');
-  Emit('entry:');
-  Emit('  %isnull = icmp eq ptr %obj, null');
-  Emit('  br i1 %isnull, label %done, label %inc');
-  Emit('inc:');
-  Emit('  %rcp = getelementptr i8, ptr %obj, i64 -8');
-  Emit('  %old = load i64, ptr %rcp');
-  Emit('  %new = add i64 %old, 1');
-  Emit('  store i64 %new, ptr %rcp');
-  Emit('  br label %done');
-  Emit('done:');
-  Emit('  ret void');
-  Emit('}');
-  Emit('');
-  Emit('define internal void @np_intf_release(ptr %obj) {');
-  Emit('entry:');
-  Emit('  %isnull = icmp eq ptr %obj, null');
-  Emit('  br i1 %isnull, label %done, label %dec');
-  Emit('dec:');
-  Emit('  %rcp = getelementptr i8, ptr %obj, i64 -8');
-  Emit('  %old = load i64, ptr %rcp');
-  Emit('  %new = sub i64 %old, 1');
-  Emit('  store i64 %new, ptr %rcp');
-  Emit('  br label %done');
-  Emit('done:');
-  Emit('  ret void');
-  Emit('}');
+  Emit('declare void @np_intf_addref(ptr %obj)');
+  Emit('declare void @np_intf_release(ptr %obj)');
 end;
 
 procedure THIRLlvmEmitter.EmitExceptionRuntimeHelpers;

@@ -207,6 +207,7 @@ type
     function ToolProfileRootPath: string;
     function RepoRootPath: string;
     function DistributionRuntimeRootPath: string;
+    function FindRuntimeLibrary(const ATargetId: string): string;
     function ResolveDirectLinkLibraries(
       out ARuntimeRootPath: string;
       out ASharedLibraryPath: string;
@@ -967,6 +968,34 @@ begin
   );
 end;
 
+function TToolchainPlanner.FindRuntimeLibrary(const ATargetId: string): string;
+var
+  EnvDir: string;
+  RepoRoot: string;
+  Candidate: string;
+begin
+  Result := '';
+  // 1. 环境变量 NEXTPAS_RUNTIME_DIR
+  EnvDir := GetEnvironmentVariable('NEXTPAS_RUNTIME_DIR');
+  if EnvDir <> '' then
+  begin
+    Candidate := IncludeTrailingPathDelimiter(EnvDir) +
+      'libnprt.a';
+    if FileExists(Candidate) then
+      Exit(Candidate);
+  end;
+  // 2. 项目根目录 build/runtime/<target>/
+  RepoRoot := RepoRootPath;
+  if RepoRoot <> '' then
+  begin
+    Candidate := IncludeTrailingPathDelimiter(RepoRoot) + 'build' +
+      DirectorySeparator + 'runtime' + DirectorySeparator +
+      ATargetId + DirectorySeparator + 'libnprt.a';
+    if FileExists(Candidate) then
+      Exit(Candidate);
+  end;
+end;
+
 function TToolchainPlanner.DistributionRuntimeRootPath: string;
 begin
   if Trim(FTargetFacts.RuntimeSdkId) = '' then
@@ -1250,6 +1279,7 @@ var
   ObjectArtifactPath: string;
   OutputKindValue: string;
   PrimaryArtifactKindValue: string;
+  RuntimeLibPath: string;
   RuntimeRootPath: string;
   SharedLibraryPath: string;
 begin
@@ -1407,6 +1437,9 @@ begin
   FPlan.AddStepArg(LinkStep, '-o');
   FPlan.AddStepArg(LinkStep, ExpandFileName(ArtifactPath));
   FPlan.AddStepArg(LinkStep, ExpandFileName(ObjectArtifactPath));
+  RuntimeLibPath := FindRuntimeLibrary(FTargetFacts.TargetId);
+  if RuntimeLibPath <> '' then
+    FPlan.AddStepArg(LinkStep, ExpandFileName(RuntimeLibPath));
   if HasResolvedLibrary then
   begin
     FPlan.AddStepArg(
