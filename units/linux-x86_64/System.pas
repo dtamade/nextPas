@@ -92,25 +92,13 @@ type
   end;
 
   Exception = class(TObject)
-    FMessage: string;
-    constructor Create(const AMsg: string);
-    constructor CreateFmt(const AMsg: string; const Args: array of const);
+    constructor Create;
     destructor Destroy; override;
-    property Message: string read FMessage write FMessage;
   end;
 
   EAbort = class(Exception);
   ERangeError = class(Exception);
   EDivByZero = class(Exception);
-  EIntOverflow = class(Exception);
-  EInvalidPointer = class(Exception);
-  EOutOfMemory = class(Exception);
-  EAccessViolation = class(Exception);
-  EStackOverflow = class(Exception);
-  EExternalException = class(Exception);
-  EInOutError = class(Exception)
-    ErrorCode: Integer;
-  end;
 
   { FreeAndNil — compiler inline, no body needed }
   procedure FreeAndNil(var Obj);
@@ -199,19 +187,12 @@ begin
   Result := 0;
 end;
 
-constructor Exception.Create(const AMsg: string);
+constructor Exception.Create;
 begin
-  FMessage := AMsg;
-end;
-
-constructor Exception.CreateFmt(const AMsg: string; const Args: array of const);
-begin
-  FMessage := AMsg;
 end;
 
 destructor Exception.Destroy;
 begin
-  FMessage := '';
   inherited Destroy;
 end;
 

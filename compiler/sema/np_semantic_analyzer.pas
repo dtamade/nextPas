@@ -1683,7 +1683,8 @@ begin
     begin
       DestNode := ANode.ChildAt(0);
       SourceNode := ANode.ChildAt(1);
-      if IsSupportedOwnedStringReturnStoreTarget(DestNode) and
+      if (IsSupportedOwnedStringReturnStoreTarget(DestNode) or
+        IsSupportedOwnedStringReturnIdentifierTarget(DestNode)) and
         StringReturnFunctionNameFromNode(SourceNode, SourceName) and
         IsOwnedStringReturnFunc(SourceName) then
         Exit(False);

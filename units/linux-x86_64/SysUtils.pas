@@ -173,8 +173,25 @@ begin
 end;
 
 function SameText(const S1, S2: string): Boolean;
+var
+  I, L: Integer;
+  C1, C2: Char;
 begin
-  Result := LowerCase(S1) = LowerCase(S2);
+  L := Length(S1);
+  if L <> Length(S2) then
+    Exit(False);
+  for I := 1 to L do
+  begin
+    C1 := S1[I];
+    C2 := S2[I];
+    if C1 in ['a'..'z'] then
+      C1 := Chr(Ord(C1) - 32);
+    if C2 in ['a'..'z'] then
+      C2 := Chr(Ord(C2) - 32);
+    if C1 <> C2 then
+      Exit(False);
+  end;
+  Result := True;
 end;
 
 procedure Delete(var S: string; Index, Count: Integer);
@@ -394,7 +411,7 @@ function StringReplace(const S, OldPattern, NewPattern: string;
   Flags: TReplaceFlags): string;
 var
   I, OldLen, NewLen: Integer;
-  SearchStr: string;
+  SearchStr, SubStr: string;
   UpperS, UpperOld: string;
 begin
   if rfIgnoreCase in Flags then
@@ -412,15 +429,23 @@ begin
   I := 1;
   while I <= Length(S) do
   begin
-    if (I + OldLen - 1 <= Length(S)) and
-      (Copy(SearchStr, I, OldLen) = UpperOld) then
+    if (I + OldLen - 1 <= Length(S)) then
     begin
-      Result := Result + NewPattern;
-      Inc(I, OldLen);
-      if not (rfReplaceAll in Flags) then
+      SubStr := Copy(SearchStr, I, OldLen);
+      if SubStr = UpperOld then
       begin
-        Result := Result + Copy(S, I, Length(S));
-        Exit;
+        Result := Result + NewPattern;
+        Inc(I, OldLen);
+        if not (rfReplaceAll in Flags) then
+        begin
+          Result := Result + Copy(S, I, Length(S));
+          Exit;
+        end;
+      end
+      else
+      begin
+        Result := Result + S[I];
+        Inc(I);
       end;
     end
     else
