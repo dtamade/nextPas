@@ -1052,14 +1052,6 @@ begin
           FNeedsFree := True;
         end;
       end
-      else if AInstr.IntrinsicName = 'assigned' then
-      begin
-        if Length(AInstr.Operands) >= 1 then
-        begin
-          Emit('  ' + ValueRef(AInstr.ResultId) +
-            ' = icmp ne ptr ' + ValueRef(AInstr.Operands[0].ValueId) + ', null');
-        end;
-      end;
     end;
     hikTryBegin:
     begin

@@ -4393,21 +4393,14 @@ procedure THIRBuilder.ProcessAssignedRuntime(const ANode: TTypedHirNode);
 var
   VarName: string;
   PtrAlloca, PtrVal: THIRValueId;
-  Instr: THIRInstr;
 begin
   VarName := Trim(ANode.Operand);
   if VarName = '' then Exit;
   PtrAlloca := FindAlloca(VarName);
   if PtrAlloca = 0 then Exit;
   PtrVal := EmitLoad(GetPtrType, PtrAlloca);
-  FillChar(Instr, SizeOf(Instr), 0);
-  Instr.ResultId := FModule.NewValue;
-  Instr.Kind := hikIntrinsic;
-  Instr.TypeId := FModule.Types.AddType(htkBool, 'bool');
-  Instr.IntrinsicName := 'assigned';
-  SetLength(Instr.Operands, 1);
-  Instr.Operands[0] := MakeTypedOperand(PtrVal, GetPtrType);
-  EmitInstr(Instr);
+  EmitCmpOp(hikCmpNe, GetBoolType,
+    PtrVal, EmitNullPtrValue, GetPtrType, GetPtrType);
 end;
 
 procedure THIRBuilder.ProcessIntToStr(const ANode: TTypedHirNode);
