@@ -26,6 +26,23 @@ done:
   ret void
 }
 
+; void @np_memset(ptr %dst, i8 %val, i64 %n)
+; FillChar(var Dest, Count, Value) maps to: call void @np_memset(ptr %dst, i8 %val, i64 %count)
+define void @np_memset(ptr %dst, i8 %val, i64 %n) {
+entry:
+  %cmp0 = icmp eq i64 %n, 0
+  br i1 %cmp0, label %done, label %loop
+loop:
+  %i = phi i64 [ 0, %entry ], [ %i_next, %loop ]
+  %dp = getelementptr i8, ptr %dst, i64 %i
+  store i8 %val, ptr %dp
+  %i_next = add i64 %i, 1
+  %cond = icmp eq i64 %i_next, %n
+  br i1 %cond, label %done, label %loop
+done:
+  ret void
+}
+
 ; void @np_memzero(ptr %dst, i64 %n)
 define void @np_memzero(ptr %dst, i64 %n) {
 entry:

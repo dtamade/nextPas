@@ -30,6 +30,7 @@ type
     FNeedsAlloc: Boolean;
     FNeedsFree: Boolean;
     FNeedsMemcpy: Boolean;
+    FNeedsMemset: Boolean;
     FNeedsStrConcat: Boolean;
     FNeedsStringOwnership: Boolean;
     FNeedsStrCmp: Boolean;
@@ -132,6 +133,7 @@ begin
   FNeedsAlloc := False;
   FNeedsFree := False;
   FNeedsMemcpy := False;
+  FNeedsMemset := False;
   FNeedsStrConcat := False;
   FNeedsStringOwnership := False;
   FNeedsStrCmp := False;
@@ -1007,6 +1009,51 @@ begin
             ' = phi i64 [ 1, %is.true.' + IntToStr(FIsCheckCounter) +
             ' ], [ 0, %is.false.' + IntToStr(FIsCheckCounter) + ' ]');
         end;
+      end
+      else if AInstr.IntrinsicName = 'fillchar' then
+      begin
+        if Length(AInstr.Operands) >= 3 then
+        begin
+          Emit('  call void @np_memset(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', i8 ' +
+            ValueRef(AInstr.Operands[2].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[1].ValueId) + ')');
+          FNeedsMemset := True;
+        end;
+      end
+      else if AInstr.IntrinsicName = 'move' then
+      begin
+        if Length(AInstr.Operands) >= 3 then
+          Emit('  call void @np_memcpy(ptr ' +
+            ValueRef(AInstr.Operands[1].ValueId) + ', ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[2].ValueId) + ')');
+      end
+      else if AInstr.IntrinsicName = 'getmem' then
+      begin
+        if Length(AInstr.Operands) >= 1 then
+        begin
+          Emit('  ' + ValueRef(AInstr.ResultId) + ' = call ptr @np_alloc(i64 ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ')');
+          FNeedsAlloc := True;
+        end;
+      end
+      else if AInstr.IntrinsicName = 'freemem' then
+      begin
+        if Length(AInstr.Operands) >= 1 then
+        begin
+          Emit('  call void @np_free(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', i64 0)');
+          FNeedsFree := True;
+        end;
+      end
+      else if AInstr.IntrinsicName = 'assigned' then
+      begin
+        if Length(AInstr.Operands) >= 1 then
+        begin
+          Emit('  ' + ValueRef(AInstr.ResultId) +
+            ' = icmp ne ptr ' + ValueRef(AInstr.Operands[0].ValueId) + ', null');
+        end;
       end;
     end;
     hikTryBegin:
@@ -1177,6 +1224,7 @@ begin
   FNeedsAlloc := False;
   FNeedsFree := False;
   FNeedsMemcpy := False;
+  FNeedsMemset := False;
   FNeedsStrConcat := False;
   FNeedsStringOwnership := False;
   FNeedsStrCmp := False;
@@ -1280,7 +1328,7 @@ begin
   if FNeedsAlloc then
     EmitAllocHelper;
 
-  if FNeedsMemcpy or FNeedsStringOwnership then
+  if FNeedsMemcpy or FNeedsMemset or FNeedsStringOwnership then
     EmitMemcpyHelper;
 
   if FNeedsObjectAlloc then
@@ -1407,6 +1455,7 @@ begin
   // Phase 3: memops 已移至 libnprt.a runtime 模块
   Emit('');
   Emit('declare void @np_memcpy(ptr %dst, ptr %src, i64 %n)');
+  Emit('declare void @np_memset(ptr %dst, i8 %val, i64 %n)');
   Emit('declare void @np_memzero(ptr %dst, i64 %n)');
 end;
 

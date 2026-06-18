@@ -5251,6 +5251,8 @@ begin
     SameText(AName, 'Insert') or SameText(AName, 'IntToStr') or
     SameText(AName, 'StrToInt') or SameText(AName, 'Addr') or
     SameText(AName, 'FillChar') or SameText(AName, 'Move') or
+    SameText(AName, 'GetMem') or SameText(AName, 'FreeMem') or
+    SameText(AName, 'ReallocMem') or
     SameText(AName, 'Exclude') or SameText(AName, 'Include') or
     SameText(AName, 'Assert') or SameText(AName, 'Swap') or
     SameText(AName, 'Lo') or SameText(AName, 'Hi') or
@@ -13318,6 +13320,107 @@ begin
                   'var ' + Decoded + #10 + 'int 1' + #10 + StringValue + #10);
             end;
           end;
+        end;
+        Continue;
+      end;
+      if FNoFold and SameText(Child.Text, 'FillChar') then
+      begin
+        Arg := Child;
+        ArgIndex := 0;
+        if (Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) and
+          (Child.ChildAt(0).NodeKind = gnkFunctionCall) then
+        begin
+          Arg := Child.ChildAt(0);
+          ArgIndex := 1;
+        end;
+        if (Arg <> nil) and (Arg.ChildCount >= ArgIndex + 3) then
+        begin
+          Decoded := Arg.ChildAt(ArgIndex).Text;
+          if EncodeRuntimeIntExprFold(Arg.ChildAt(ArgIndex + 1), Operand) then
+          begin
+            StringValue := '';
+            EncodeRuntimeIntExprFold(Arg.ChildAt(ArgIndex + 2), StringValue);
+            FModel.AddTypedHirNode(
+              'fillchar-runtime', Decoded, 0, 0,
+              Decoded + #9 + Operand + #9 + StringValue);
+          end;
+        end;
+        Continue;
+      end;
+      if FNoFold and SameText(Child.Text, 'Move') then
+      begin
+        Arg := Child;
+        ArgIndex := 0;
+        if (Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) and
+          (Child.ChildAt(0).NodeKind = gnkFunctionCall) then
+        begin
+          Arg := Child.ChildAt(0);
+          ArgIndex := 1;
+        end;
+        if (Arg <> nil) and (Arg.ChildCount >= ArgIndex + 3) then
+        begin
+          Decoded := Arg.ChildAt(ArgIndex).Text;
+          Operand := Arg.ChildAt(ArgIndex + 1).Text;
+          if EncodeRuntimeIntExprFold(Arg.ChildAt(ArgIndex + 2), StringValue) then
+            FModel.AddTypedHirNode(
+              'move-runtime', Decoded, 0, 0,
+              Decoded + #9 + Operand + #9 + StringValue);
+        end;
+        Continue;
+      end;
+      if FNoFold and SameText(Child.Text, 'GetMem') then
+      begin
+        Arg := Child;
+        ArgIndex := 0;
+        if (Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) and
+          (Child.ChildAt(0).NodeKind = gnkFunctionCall) then
+        begin
+          Arg := Child.ChildAt(0);
+          ArgIndex := 1;
+        end;
+        if (Arg <> nil) and (Arg.ChildCount >= ArgIndex + 2) then
+        begin
+          Decoded := Arg.ChildAt(ArgIndex).Text;
+          if EncodeRuntimeIntExprFold(Arg.ChildAt(ArgIndex + 1), Operand) then
+            FModel.AddTypedHirNode(
+              'getmem-runtime', Decoded, 0, 0,
+              Decoded + #9 + Operand);
+        end;
+        Continue;
+      end;
+      if FNoFold and SameText(Child.Text, 'FreeMem') then
+      begin
+        Arg := Child;
+        ArgIndex := 0;
+        if (Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) and
+          (Child.ChildAt(0).NodeKind = gnkFunctionCall) then
+        begin
+          Arg := Child.ChildAt(0);
+          ArgIndex := 1;
+        end;
+        if (Arg <> nil) and (Arg.ChildCount >= ArgIndex + 1) then
+        begin
+          Decoded := Arg.ChildAt(ArgIndex).Text;
+          FModel.AddTypedHirNode(
+            'freemem-runtime', Decoded, 0, 0, Decoded);
+        end;
+        Continue;
+      end;
+      if FNoFold and SameText(Child.Text, 'Assigned') then
+      begin
+        Arg := Child;
+        ArgIndex := 0;
+        if (Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) and
+          (Child.ChildAt(0).NodeKind = gnkFunctionCall) then
+        begin
+          Arg := Child.ChildAt(0);
+          ArgIndex := 1;
+        end;
+        if (Arg <> nil) and (Arg.ChildCount >= ArgIndex + 1) then
+        begin
+          Decoded := Arg.ChildAt(ArgIndex).Text;
+          FModel.AddTypedHirNode(
+            'assigned-runtime', Decoded, 0, 0, Decoded);
         end;
         Continue;
       end;

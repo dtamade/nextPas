@@ -245,6 +245,11 @@ type
     procedure ProcessStringTempLengthRuntime(const ANode: TTypedHirNode);
     procedure ProcessStringTempReleaseRuntime(const ANode: TTypedHirNode);
     procedure ProcessObjectFreeRuntime(const ANode: TTypedHirNode);
+    procedure ProcessFillCharRuntime(const ANode: TTypedHirNode);
+    procedure ProcessMoveRuntime(const ANode: TTypedHirNode);
+    procedure ProcessGetMemRuntime(const ANode: TTypedHirNode);
+    procedure ProcessFreeMemRuntime(const ANode: TTypedHirNode);
+    procedure ProcessAssignedRuntime(const ANode: TTypedHirNode);
     procedure ProcessIntToStr(const ANode: TTypedHirNode);
     procedure ProcessOwnedIntToStr(const ANode: TTypedHirNode);
     procedure ProcessCopyStr(const ANode: TTypedHirNode);
@@ -4253,6 +4258,141 @@ begin
   end;
 end;
 
+procedure THIRBuilder.ProcessFillCharRuntime(const ANode: TTypedHirNode);
+var
+  TabPos1, TabPos2: LongInt;
+  VarName, CountStr, ValueStr, Rest: string;
+  DestAlloca, CountV, ValueV: THIRValueId;
+  Instr: THIRInstr;
+begin
+  Rest := ANode.Operand;
+  TabPos1 := Pos(#9, Rest);
+  if TabPos1 = 0 then Exit;
+  VarName := Trim(Copy(Rest, 1, TabPos1 - 1));
+  Rest := Copy(Rest, TabPos1 + 1, Length(Rest));
+  TabPos2 := Pos(#9, Rest);
+  if TabPos2 = 0 then Exit;
+  CountStr := Trim(Copy(Rest, 1, TabPos2 - 1));
+  ValueStr := Trim(Copy(Rest, TabPos2 + 1, Length(Rest)));
+  DestAlloca := FindAlloca(VarName);
+  if DestAlloca = 0 then Exit;
+  CountV := ParseIntBlob(CountStr);
+  if CountV = 0 then Exit;
+  ValueV := ParseIntBlob(ValueStr);
+  if ValueV = 0 then Exit;
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
+  Instr.IntrinsicName := 'fillchar';
+  SetLength(Instr.Operands, 3);
+  Instr.Operands[0] := MakeTypedOperand(DestAlloca, GetPtrType);
+  Instr.Operands[1] := MakeTypedOperand(CountV, GetIntType);
+  Instr.Operands[2] := MakeTypedOperand(ValueV, GetIntType);
+  EmitInstr(Instr);
+end;
+
+procedure THIRBuilder.ProcessMoveRuntime(const ANode: TTypedHirNode);
+var
+  TabPos1, TabPos2: LongInt;
+  SrcVar, DstVar, CountStr, Rest: string;
+  SrcAlloca, DstAlloca, CountV: THIRValueId;
+  Instr: THIRInstr;
+begin
+  Rest := ANode.Operand;
+  TabPos1 := Pos(#9, Rest);
+  if TabPos1 = 0 then Exit;
+  SrcVar := Trim(Copy(Rest, 1, TabPos1 - 1));
+  Rest := Copy(Rest, TabPos1 + 1, Length(Rest));
+  TabPos2 := Pos(#9, Rest);
+  if TabPos2 = 0 then Exit;
+  DstVar := Trim(Copy(Rest, 1, TabPos2 - 1));
+  CountStr := Trim(Copy(Rest, TabPos2 + 1, Length(Rest)));
+  SrcAlloca := FindAlloca(SrcVar);
+  if SrcAlloca = 0 then Exit;
+  DstAlloca := FindAlloca(DstVar);
+  if DstAlloca = 0 then Exit;
+  CountV := ParseIntBlob(CountStr);
+  if CountV = 0 then Exit;
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
+  Instr.IntrinsicName := 'move';
+  SetLength(Instr.Operands, 3);
+  Instr.Operands[0] := MakeTypedOperand(SrcAlloca, GetPtrType);
+  Instr.Operands[1] := MakeTypedOperand(DstAlloca, GetPtrType);
+  Instr.Operands[2] := MakeTypedOperand(CountV, GetIntType);
+  EmitInstr(Instr);
+end;
+
+procedure THIRBuilder.ProcessGetMemRuntime(const ANode: TTypedHirNode);
+var
+  TabPos: LongInt;
+  VarName, SizeStr, Rest: string;
+  SizeV: THIRValueId;
+  Instr: THIRInstr;
+begin
+  Rest := ANode.Operand;
+  TabPos := Pos(#9, Rest);
+  if TabPos = 0 then Exit;
+  VarName := Trim(Copy(Rest, 1, TabPos - 1));
+  SizeStr := Trim(Copy(Rest, TabPos + 1, Length(Rest)));
+  SizeV := ParseIntBlob(SizeStr);
+  if SizeV = 0 then Exit;
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'getmem';
+  SetLength(Instr.Operands, 1);
+  Instr.Operands[0] := MakeTypedOperand(SizeV, GetIntType);
+  EmitInstr(Instr);
+  EmitStore(GetPtrType, Instr.ResultId, FindAlloca(VarName));
+end;
+
+procedure THIRBuilder.ProcessFreeMemRuntime(const ANode: TTypedHirNode);
+var
+  VarName: string;
+  PtrAlloca, PtrVal: THIRValueId;
+  Instr: THIRInstr;
+begin
+  VarName := Trim(ANode.Operand);
+  if VarName = '' then Exit;
+  PtrAlloca := FindAlloca(VarName);
+  if PtrAlloca = 0 then Exit;
+  PtrVal := EmitLoad(GetPtrType, PtrAlloca);
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
+  Instr.IntrinsicName := 'freemem';
+  SetLength(Instr.Operands, 1);
+  Instr.Operands[0] := MakeTypedOperand(PtrVal, GetPtrType);
+  EmitInstr(Instr);
+end;
+
+procedure THIRBuilder.ProcessAssignedRuntime(const ANode: TTypedHirNode);
+var
+  VarName: string;
+  PtrAlloca, PtrVal: THIRValueId;
+  Instr: THIRInstr;
+begin
+  VarName := Trim(ANode.Operand);
+  if VarName = '' then Exit;
+  PtrAlloca := FindAlloca(VarName);
+  if PtrAlloca = 0 then Exit;
+  PtrVal := EmitLoad(GetPtrType, PtrAlloca);
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := FModule.Types.AddType(htkBool, 'bool');
+  Instr.IntrinsicName := 'assigned';
+  SetLength(Instr.Operands, 1);
+  Instr.Operands[0] := MakeTypedOperand(PtrVal, GetPtrType);
+  EmitInstr(Instr);
+end;
+
 procedure THIRBuilder.ProcessIntToStr(const ANode: TTypedHirNode);
 var
   TabPos: LongInt;
@@ -7236,6 +7376,16 @@ begin
       ;  // handled by SeedUnitLifecycleBodies → function-body-begin
     hnkUnitFiniRuntime:
       ;  // handled by SeedUnitLifecycleBodies → function-body-begin
+    hnkFillCharRuntime:
+      ProcessFillCharRuntime(ANode);
+    hnkMoveRuntime:
+      ProcessMoveRuntime(ANode);
+    hnkGetMemRuntime:
+      ProcessGetMemRuntime(ANode);
+    hnkFreeMemRuntime:
+      ProcessFreeMemRuntime(ANode);
+    hnkAssignedRuntime:
+      ProcessAssignedRuntime(ANode);
     hnkUnknown:
       ;
   end;
