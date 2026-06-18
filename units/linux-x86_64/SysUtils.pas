@@ -25,6 +25,7 @@ type
     Size: Int64;
     Time: LongInt;
     FindHandle: Pointer;
+    Pattern: string; { stored by FindFirst, used by FindNext to filter }
   end;
 
   Exception = class
@@ -127,6 +128,7 @@ function np_read(fd: LongInt; buf: Pointer; count: SizeUInt): SizeUInt; cdecl; e
 function np_close(fd: LongInt): LongInt; cdecl; external 'c' name 'close';
 function readlink(path: PChar; buf: PChar; bufsiz: SizeUInt): SizeInt; cdecl; external 'c' name 'readlink';
 function np_stat(path: PChar; buf: Pointer): LongInt; cdecl; external 'c' name 'stat';
+function np_realpath(path: PChar; resolved: PChar): PChar; cdecl; external 'c' name 'realpath';
 
 { Exception }
 
@@ -213,17 +215,13 @@ end;
 
 { File operations }
 
+function np_access(path: PChar; mode: LongInt): LongInt; cdecl; external 'c' name 'access';
+
 function FileExists(const FileName: string): Boolean;
-var
-  F: File;
 begin
-  Assign(F, FileName);
-  {$I-}
-  Reset(F);
-  {$I+}
-  Result := IOResult = 0;
-  if Result then
-    Close(F);
+  { Use access(R_OK) which follows symlinks and works for all file types.
+    FPC's Reset(F) on untyped files does not follow symlinks to ELF binaries. }
+  Result := np_access(PChar(FileName), 0) = 0; { F_OK = 0: file exists }
 end;
 
 function DirectoryExists(const Directory: string): Boolean;
@@ -348,16 +346,34 @@ begin
   Result := LongInt(LSecs);
 end;
 
+{ ExpandFileName: resolve path to absolute, normalizing . and ..
+  Uses libc realpath(3) for existing paths. For non-existent paths,
+  returns the original path (matching FPC behavior for relative paths
+  that don't contain .. components). }
 function ExpandFileName(const FileName: string): string;
+const
+  PATH_MAX = 4096;
+var
+  LBuf: array[0..PATH_MAX] of Char;
+  LRes: PChar;
 begin
-  // Simple implementation: if it starts with /, it's already absolute
-  if (FileName <> '') and (FileName[1] = '/') then
-    Exit(FileName);
-
-  // Otherwise, we can't expand it without getcwd
-  // For now, just return as-is
-  // TODO: Implement proper getcwd support
-  Result := FileName;
+  if FileName = '' then
+  begin
+    LRes := getcwd(@LBuf[0], PATH_MAX);
+    if LRes <> nil then
+      Result := LBuf
+    else
+      Result := '';
+    Exit;
+  end;
+  FillChar(LBuf[0], SizeOf(LBuf), 0);
+  LRes := np_realpath(PChar(FileName), @LBuf[0]);
+  if LRes <> nil then
+    Result := LBuf
+  else
+    { realpath fails if file doesn't exist — return original path.
+      This matches FPC behavior for relative paths. }
+    Result := FileName;
 end;
 
 function ExtractFileDir(const FileName: string): string;
@@ -525,30 +541,162 @@ begin
   end;
 end;
 
-{ File search - simplified stub implementation }
-{ TODO: Implement proper file search using system calls }
+{ File search using libc opendir/readdir/closedir }
+
+const
+  DT_REG = 8;   { regular file }
+  DT_DIR = 4;   { directory }
+  DT_UNKNOWN = 0;
+
+type
+  { Minimal struct dirent for linux-x86_64 (280 bytes) }
+  TDirent = packed record
+    d_ino: QWord;        { inode number, offset 0 }
+    d_off: QWord;        { offset to next dirent, offset 8 }
+    d_reclen: Word;      { length of this record, offset 16 }
+    d_type: Byte;        { type of file, offset 18 }
+    d_name: array[0..255] of Char; { filename, offset 19 }
+  end;
+
+  { Opaque directory handle — libc DIR* }
+  PDirHandle = Pointer;
+
+{ libc functions }
+function np_opendir(name: PChar): PDirHandle; cdecl; external 'c' name 'opendir';
+function np_readdir(dir: PDirHandle): Pointer; cdecl; external 'c' name 'readdir';
+function np_closedir(dir: PDirHandle): LongInt; cdecl; external 'c' name 'closedir';
+
+{ Pattern matching: supports * and *.ext patterns (sufficient for compiler). }
+function MatchesPattern(const AName, APattern: string): Boolean;
+var
+  DotPos: LongInt;
+begin
+  if (APattern = '*') or (APattern = '') then
+    Exit(True);
+  { *.ext — match extension }
+  if (Length(APattern) > 1) and (APattern[1] = '*') and (APattern[2] = '.') then
+  begin
+    DotPos := Length(AName) - (Length(APattern) - 1);
+    if DotPos < 1 then
+      Exit(False);
+    Exit(Copy(AName, DotPos, MaxInt) = Copy(APattern, 2, MaxInt));
+  end;
+  { exact match }
+  Result := SameText(AName, APattern);
+end;
 
 function FindFirst(const Path: string; Attr: LongInt; var F: TSearchRec): LongInt;
+var
+  DirPath, Name: string;
+  SepPos: LongInt;
+  Ent: ^TDirent;
 begin
-  // Stub implementation - always returns "not found"
   F.Name := '';
   F.Attr := 0;
   F.Size := 0;
   F.Time := 0;
   F.FindHandle := nil;
-  Result := -1; // Error: no files found
+  F.Pattern := '';
+
+  { Split Path into directory + pattern (e.g. "/tmp/*.pas" → "/tmp" + "*.pas") }
+  SepPos := Length(Path);
+  while (SepPos > 0) and (Path[SepPos] <> '/') do
+    Dec(SepPos);
+  if SepPos > 0 then
+  begin
+    DirPath := Copy(Path, 1, SepPos - 1);
+    F.Pattern := Copy(Path, SepPos + 1, MaxInt);
+  end
+  else
+  begin
+    DirPath := '.';
+    F.Pattern := Path;
+  end;
+  if DirPath = '' then
+    DirPath := '/';
+
+  F.FindHandle := np_opendir(PChar(DirPath));
+  if F.FindHandle = nil then
+  begin
+    Result := -1;
+    Exit;
+  end;
+
+  { Read entries until we find a match }
+  while True do
+  begin
+    Ent := np_readdir(F.FindHandle);
+    if Ent = nil then
+    begin
+      np_closedir(F.FindHandle);
+      F.FindHandle := nil;
+      Result := -1;
+      Exit;
+    end;
+    Name := Ent^.d_name;
+    if (Name = '.') or (Name = '..') then
+      Continue;
+    if MatchesPattern(Name, F.Pattern) then
+    begin
+      F.Name := Name;
+      if Ent^.d_type = DT_DIR then
+        F.Attr := faDirectory
+      else
+        F.Attr := 0;
+      F.Size := 0;
+      F.Time := 0;
+      Result := 0;
+      Exit;
+    end;
+  end;
 end;
 
 function FindNext(var F: TSearchRec): LongInt;
+var
+  Ent: ^TDirent;
+  Name: string;
 begin
-  // Stub implementation - always returns "no more files"
-  Result := -1;
+  if F.FindHandle = nil then
+  begin
+    Result := -1;
+    Exit;
+  end;
+
+  while True do
+  begin
+    Ent := np_readdir(F.FindHandle);
+    if Ent = nil then
+    begin
+      np_closedir(F.FindHandle);
+      F.FindHandle := nil;
+      Result := -1;
+      Exit;
+    end;
+    Name := Ent^.d_name;
+    if (Name = '.') or (Name = '..') then
+      Continue;
+    if MatchesPattern(Name, F.Pattern) then
+    begin
+      F.Name := Name;
+      if Ent^.d_type = DT_DIR then
+        F.Attr := faDirectory
+      else
+        F.Attr := 0;
+      F.Size := 0;
+      F.Time := 0;
+      Result := 0;
+      Exit;
+    end;
+  end;
 end;
 
 procedure FindClose(var F: TSearchRec);
 begin
-  // Stub implementation - nothing to close
-  F.FindHandle := nil;
+  if F.FindHandle <> nil then
+  begin
+    np_closedir(F.FindHandle);
+    F.FindHandle := nil;
+  end;
 end;
 
 { Type conversions }

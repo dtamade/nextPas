@@ -1739,8 +1739,9 @@ begin
         ConcatTreeHasSupportedOwnedStringReturn(Child) and
         CanEmitStrConcatOperand(Child) then
         Continue;
-      if NodeConsumesOwnedStringReturnDeferred(
-        Child, AInsideDirectOwnedAssignmentRhs) then
+      { WriteLn/Write arguments are safe contexts: temporaries live for
+        the entire call duration. }
+      if NodeConsumesOwnedStringReturnDeferred(Child, True) then
         Exit(True);
     end;
     Exit(False);
