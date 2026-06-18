@@ -150,7 +150,7 @@ type
 implementation
 
 uses {$IFDEF WINDOWS}nextpas.core.platform.windows.ffi,{$ENDIF}
-  nextpas.core.tls.openssl.api.utils;
+  nextpas.core.time, nextpas.core.tls.openssl.api.utils;
 
 {$IFDEF WINDOWS}
 function WaitForMultipleObjects(nCount: DWORD; lpHandles: Pointer;
@@ -490,18 +490,20 @@ procedure TAsyncJobPool.WaitAll(TimeoutMs: Integer);
 var
   I: Integer;
   Job: TAsyncJob;
-  StartTime: QWord;
+  StartTime: TDateTime;
+  ElapsedMs: Int64;
   RemainingTime: Integer;
 begin
-  StartTime := GetTickCount64;
-  
+  StartTime := DateTimeNow;
+
   for I := 0 to High(FJobs) do
   begin
     Job := TAsyncJob(FJobs[I]);
-    
+
     if TimeoutMs >= 0 then
     begin
-      RemainingTime := TimeoutMs - (GetTickCount64 - StartTime);
+      ElapsedMs := DateTimeMillisecondsBetween(DateTimeNow, StartTime);
+      RemainingTime := TimeoutMs - Integer(ElapsedMs);
       if RemainingTime <= 0 then Break;
       Job.Wait(RemainingTime);
     end

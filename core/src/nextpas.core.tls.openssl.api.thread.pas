@@ -127,7 +127,11 @@ function AtomicDecrement(var Value: TOpenSSLInt; Lock: PCRYPTO_RWLOCK = nil): TO
 
 implementation
 
-uses nextpas.core.tls.openssl.api.utils; const ThreadBindings: array[0..25] of TFunctionBinding = ( (Name: 'CRYPTO_thread_setup'; FuncPtr: @CRYPTO_thread_setup; Required: False);
+uses nextpas.core.tls.openssl.api.utils;
+
+const
+  ThreadBindings: array[0..25] of TFunctionBinding = (
+    (Name: 'CRYPTO_thread_setup'; FuncPtr: @CRYPTO_thread_setup; Required: False),
     (Name: 'CRYPTO_thread_cleanup';            FuncPtr: @CRYPTO_thread_cleanup;            Required: False),
     (Name: 'CRYPTO_THREAD_run_once';           FuncPtr: @CRYPTO_THREAD_run_once;           Required: False),
     (Name: 'CRYPTO_THREAD_get_current_id';     FuncPtr: @CRYPTO_THREAD_get_current_id;     Required: False),
