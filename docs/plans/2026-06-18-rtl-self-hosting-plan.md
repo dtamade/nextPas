@@ -286,7 +286,21 @@ R5 内部特性补齐可以与 R3/R4 并行。
 - 修复: `IsSupportedOwnedStringReturnIdentifierTarget` 已补充到赋值检查中
 - 剩余: 需要放宽 C6-H4 对单元级代码的扫描策略
 
+**C6-H4 修复 (3 项):**
+1. `IsSupportedOwnedStringReturnIdentifierTarget` → 赋值目标变量检查
+2. `CheckDeferredOwnedStringReturnConsumers` → 跳过外部单元过程体
+3. `AssignmentOwnsStringReturn` → 接受局部变量赋值
+
+**工具链修复:**
+- 多单元链接：`AddLogicalObjectInput` 让 ld.bfd 收到所有单元 .o 文件
+
+**StringReplace 修复:**
+- bug: else 分支 `UpperOld` 未赋值，替换永不发生
+- fix: else 分支给 `SearchOld` 赋值 `OldPattern`
+
+**当前测试状态：** 4/4 compiler-pass 全绿，10/10 smoke 组全绿
+
 **下一步：**
-1. 修复 C6-H4：放宽对单元级过程体的 owned string 检查（标记为 warning 或豁免）
-2. 重新运行 sysutils_pass.pas 测试
-3. 尝试编译器源码编译
+1. ✅ C6-H4 修复完成
+2. ✅ sysutils_pass.pas 运行时修复完成
+3. 尝试编译器源码编译 (stage0 入口)
