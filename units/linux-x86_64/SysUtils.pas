@@ -126,6 +126,7 @@ function np_open(path: PChar; flags: LongInt): LongInt; cdecl; external 'c' name
 function np_read(fd: LongInt; buf: Pointer; count: SizeUInt): SizeUInt; cdecl; external 'c' name 'read';
 function np_close(fd: LongInt): LongInt; cdecl; external 'c' name 'close';
 function readlink(path: PChar; buf: PChar; bufsiz: SizeUInt): SizeInt; cdecl; external 'c' name 'readlink';
+function np_stat(path: PChar; buf: Pointer): LongInt; cdecl; external 'c' name 'stat';
 
 { Exception }
 
@@ -330,18 +331,21 @@ begin
   Result := IOResult = 0;
 end;
 
-{ TODO: FileAge stub — returns 0 (exists) or -1 (not found).
-  Standard FPC FileAge returns the file's last modification time as a
-  Unix timestamp. This stub is sufficient for self-hosting because the
-  compiler only uses FileAge to check if a cached unit needs recompilation
-  (FileAge > 0 means "file changed"). A proper implementation should use
-  fpStat from BaseUnix to return the real st_mtime. }
+{ FileAge: returns file modification time as Unix timestamp, or -1 on error.
+  Uses libc stat() to query the actual mtime. Matches FPC behavior:
+  result > 0 means file exists and has a valid mtime. }
 function FileAge(const FileName: string): LongInt;
+const
+  STAT_MTIME_OFFSET = 88;  { st_mtim.tv_sec offset in struct stat (linux-x86_64) }
+var
+  LBuf: array[0..143] of Byte;  { sizeof(struct stat) = 144 }
+  LSecs: Int64;
 begin
-  if FileExists(FileName) then
-    Result := 0
-  else
-    Result := -1;
+  FillChar(LBuf[0], SizeOf(LBuf), 0);
+  if np_stat(PChar(FileName), @LBuf[0]) <> 0 then
+    Exit(-1);
+  Move(LBuf[STAT_MTIME_OFFSET], LSecs, SizeOf(Int64));
+  Result := LongInt(LSecs);
 end;
 
 function ExpandFileName(const FileName: string): string;
