@@ -6109,9 +6109,10 @@ begin
   SetLength(FGenericWorkQueue, 64);
   SeedHaltCalls;
   if FNoFold then
+  begin
     SeedFunctionBodies;
-  if FNoFold then
     SeedUnitLifecycleBodies;
+  end;
   CheckUnusedSymbols;
   CheckUnreachableCode;
   CheckDuplicateCaseLabels;
@@ -14645,16 +14646,20 @@ begin
     SavedBlockTerminated := FCurrentBlockTerminated;
     SavedMethodClass := FCurrentMethodClass;
 
-    // Reset for void function with no params
+    // Reset for void function with no params — 全部 13 个 tracker 清零
     SetLength(FVarParamNames, 0);
     SetLength(FRuntimeVarNames, 0);
     SetLength(FRuntimeArrVarNames, 0);
     SetLength(FBorrowedRuntimeArrVarNames, 0);
     SetLength(FRuntimeStrVarNames, 0);
+    SetLength(FOwnedRuntimeStrVarNames, 0);
     SetLength(FBorrowedRuntimeStrVarNames, 0);
-    SetLength(FPointerVarNames, 0);
+    SetLength(FClassVarNames, 0);
+    SetLength(FClassVarTypes, 0);
     SetLength(FRecordVarNames, 0);
     SetLength(FRecordVarTypes, 0);
+    SetLength(FPointerVarNames, 0);
+    SetLength(FPointerVarTypes, 0);
     FCurrentRetVarName := '';
     FCurrentOwnedStringReturn := False;
     FCurrentBlockTerminated := False;
@@ -14673,7 +14678,7 @@ begin
       begin
         EmitOwnedDynArrayCleanupNodes;
         EmitOwnedStringCleanupNodes('');
-        FModel.AddTypedHirNode('ret-runtime', '', 0, 0, '');
+        FModel.AddTypedHirNode('ret-runtime', '0', 0, 0, 'int 0' + #10);
       end;
       FModel.AddTypedHirNode('function-body-end',
         LFuncName, 0, 0, '');
@@ -14688,7 +14693,7 @@ begin
       begin
         EmitOwnedDynArrayCleanupNodes;
         EmitOwnedStringCleanupNodes('');
-        FModel.AddTypedHirNode('ret-runtime', '', 0, 0, '');
+        FModel.AddTypedHirNode('ret-runtime', '0', 0, 0, 'int 0' + #10);
       end;
       FModel.AddTypedHirNode('function-body-end',
         LFuncName, 0, 0, '');
