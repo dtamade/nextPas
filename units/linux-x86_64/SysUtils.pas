@@ -573,10 +573,10 @@ var
 begin
   if (APattern = '*') or (APattern = '') then
     Exit(True);
-  { *.ext — match extension }
+  { *.ext — match extension (suffix after '*') }
   if (Length(APattern) > 1) and (APattern[1] = '*') and (APattern[2] = '.') then
   begin
-    DotPos := Length(AName) - (Length(APattern) - 1);
+    DotPos := Length(AName) - Length(APattern) + 2;
     if DotPos < 1 then
       Exit(False);
     Exit(Copy(AName, DotPos, MaxInt) = Copy(APattern, 2, MaxInt));
