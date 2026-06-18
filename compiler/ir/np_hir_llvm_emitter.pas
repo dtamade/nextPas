@@ -836,7 +836,7 @@ begin
         begin
           Emit('  ' + ValueRef(AInstr.ResultId) +
             ' = call i64 @np_str_pos(ptr ' + ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' + ValueRef(AInstr.Operands[1].ValueId) + ', ptr ' + ValueRef(AInstr.Operands[2].ValueId) + ', i64 ' + ValueRef(AInstr.Operands[3].ValueId) + ')');
-          FNeedsStrCmp := True;
+          FNeedsStrCmp := True;  // 复用标志：str_cmp/str_pos 一起声明（linker 忽略未引用的 declare）
         end;
       end
       else if AInstr.IntrinsicName = 'arr_alloc' then
