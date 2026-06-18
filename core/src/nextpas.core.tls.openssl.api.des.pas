@@ -194,6 +194,11 @@ function DES3Decrypt(const Data: TBytes; const Key1, Key2, Key3: TBytes): TBytes
 
 implementation
 
+const
+  DES_FUNCTION_COUNT = 35;
+
+var
+  DES_FUNCTION_BINDINGS: array[0..DES_FUNCTION_COUNT-1] of TFunctionBinding = (
     (Name: 'DES_ecb3_encrypt';      FuncPtr: @DES_ecb3_encrypt;      Required: False),
     (Name: 'DES_crypt';             FuncPtr: @DES_crypt;             Required: False),
     (Name: 'DES_fcrypt';            FuncPtr: @DES_fcrypt;            Required: False),

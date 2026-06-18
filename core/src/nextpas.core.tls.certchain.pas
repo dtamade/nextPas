@@ -222,14 +222,14 @@ begin
   Result := FIntermediateStore;
 end;
 
-procedure TSSLCertificateChainVerifier.SetCRLStore(const ACRLs: TStringArray);
+procedure TSSLCertificateChainVerifier.SetCRLStore(const ACRLs: nextpas.core.base.TStringArray);
 begin
-  FCRLStore.Clear;
+  SetLength(FCRLStore, 0);
   if ACRLs <> nil then
-    FCRLStore.Assign(ACRLs);
+    FCRLStore := ACRLs;
 end;
 
-function TSSLCertificateChainVerifier.GetCRLStore: TStringArray;
+function TSSLCertificateChainVerifier.GetCRLStore: nextpas.core.base.TStringArray;
 begin
   Result := FCRLStore;
 end;
@@ -325,7 +325,7 @@ end;
 
 function TSSLCertificateChainVerifier.MatchHostname(const ACertName, AHostname: string): Boolean;
 var
-  CertParts, HostParts: TStringArray;
+  CertParts, HostParts: nextpas.core.base.TStringArray;
   i: Integer;
 begin
   Result := False;
@@ -361,7 +361,7 @@ begin
   end;
 end;
 
-function TSSLCertificateChainVerifier.ParseSubjectAltNames(ACert: ISSLCertificate): TStringArray;
+function TSSLCertificateChainVerifier.ParseSubjectAltNames(ACert: ISSLCertificate): nextpas.core.base.TStringArray;
 var
   RawSANs: TSSLStringArray;
   Line, Item: string;
@@ -403,7 +403,10 @@ begin
           Item := nextpas.core.text.conv.Trim(Copy(Item, SepPos + 1, MaxInt));
 
         if Item <> '' then
-          Result.Add(Item);
+        begin
+          SetLength(Result, Length(Result) + 1);
+          Result[High(Result)] := Item;
+        end;
       end;
     until Line = '';
   end;
@@ -645,7 +648,7 @@ function TSSLCertificateChainVerifier.CheckHostname(ACert: ISSLCertificate;
   const AHostname: string): Boolean;
 var
   CN: string;
-  SANs: TStringArray;
+  SANs: nextpas.core.base.TStringArray;
   i: Integer;
   LSANCount: Integer;
   CertInfo: TSSLCertificateInfo;
@@ -708,7 +711,7 @@ begin
     // 构建证书链
     while (not IsSelfSigned(CurrentCert)) and
           (not IsRootCertificate(CurrentCert)) and
-          (Length(ChainList) < MaxDepth) do
+          (ChainList.Count < MaxDepth) do
     begin
       IssuerCert := FindIssuer(CurrentCert);
       if IssuerCert = nil then
@@ -726,8 +729,8 @@ begin
     end;
 
     // 转换为数组
-    SetLength(AChain, Length(ChainList));
-    for LIndex := 0 to Length(ChainList) - 1 do
+    SetLength(AChain, ChainList.Count);
+    for LIndex := 0 to ChainList.Count - 1 do
       AChain[LIndex] := ISSLCertificate(ChainList[LIndex]);
 
     Result := True;

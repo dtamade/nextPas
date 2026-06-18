@@ -161,7 +161,6 @@ implementation
 uses
   nextpas.core.text.strings;
 
-
 // ========================================================================
 // TPEMBlock
 // ========================================================================
@@ -249,7 +248,7 @@ begin
 end;
 
 function TPEMReader.ExtractBlockContent(const AStartMarker, AEndMarker: string;
-  var APos: Integer; out AHeaders: TStringArray): string;
+  var APos: Integer; out AHeaders: nextpas.core.base.TStringArray): string;
 var
   ContentStart, ContentEnd: Integer;
   Lines: TStringArray;

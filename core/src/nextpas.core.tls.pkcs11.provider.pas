@@ -53,7 +53,7 @@ uses nextpas.core.tls.pkcs11.types, nextpas.core.tls.pkcs11.api, nextpas.core.tl
 
 implementation
 
-uses nextpas.core.tls.openssl.api.x509, nextpas.core.text.conv; constructor TProviderBackend.Create;
+uses nextpas.core.tls.openssl.api.x509; constructor TProviderBackend.Create;
 begin
   inherited Create;
   FProvider := nil;

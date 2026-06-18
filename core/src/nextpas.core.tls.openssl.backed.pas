@@ -906,7 +906,7 @@ begin
   end;
 
   InternalLog(sslLogDebug, Format('Feature support check (type-safe): %d = %s',
-    [Ord(AFeature), BoolToStr(Result, True)]));
+    [Ord(AFeature), BoolToStr(Result)]));
 end;
 {$WARN 6018 ON}
 function TOpenSSLLibrary.GetCapabilities: TSSLBackendCapabilities;
@@ -1137,9 +1137,9 @@ begin
 
   InternalLog(sslLogDebug, Format('GetCapabilities: TLS1.3=%s, ALPN=%s, SNI=%s',
     [
-      BoolToStr(Result.SupportsTLS13, True),
-      BoolToStr(Result.SupportsALPN, True),
-      BoolToStr(Result.SupportsSNI, True)
+      BoolToStr(Result.SupportsTLS13),
+      BoolToStr(Result.SupportsALPN),
+      BoolToStr(Result.SupportsSNI)
     ]));
 
   // v1.2.0: 缓存能力矩阵

@@ -17,8 +17,8 @@ unit nextpas.core.tls.openssl.api.engine;
 interface
 
 uses
-   Classes,
   nextpas.core.base,
+  nextpas.core.text.strings,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.platform.dl;
@@ -245,6 +245,7 @@ end;
 function ListAvailableEngines: TStringArray;
 var
   Eng: PENGINE;
+  LId: PAnsiChar;
 begin
   Result := nil;
   if not TOpenSSLLoader.IsModuleLoaded(osmEngine) then
@@ -260,7 +261,9 @@ begin
     Eng := ENGINE_get_first();
     while Eng <> nil do
     begin
-      Result.Add(string(ENGINE_get_id(Eng)));
+      LId := ENGINE_get_id(Eng);
+      if LId <> nil then
+        StringsAppend(Result, string(LId));
       Eng := ENGINE_get_next(Eng);
     end;
   end;
