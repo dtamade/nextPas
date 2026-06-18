@@ -411,36 +411,41 @@ end;
 function StringReplace(const S, OldPattern, NewPattern: string;
   Flags: TReplaceFlags): string;
 var
-  I, OldLen, NewLen: Integer;
-  SearchStr, SubStr: string;
-  UpperS, UpperOld: string;
+  I, OldLen, L: Integer;
+  SearchStr, SearchOld, SubStr: string;
+  Replaced: Boolean;
 begin
   if rfIgnoreCase in Flags then
   begin
-    UpperS := UpperCase(S);
-    UpperOld := UpperCase(OldPattern);
-    SearchStr := UpperS;
+    SearchStr := UpperCase(S);
+    SearchOld := UpperCase(OldPattern);
   end
   else
+  begin
     SearchStr := S;
+    SearchOld := OldPattern;
+  end;
 
   OldLen := Length(OldPattern);
-  NewLen := Length(NewPattern);
+  L := Length(S);
   Result := '';
+  Replaced := False;
   I := 1;
-  while I <= Length(S) do
+  while I <= L do
   begin
-    if (I + OldLen - 1 <= Length(S)) then
+    if (not Replaced or (rfReplaceAll in Flags))
+       and (I + OldLen - 1 <= L) then
     begin
       SubStr := Copy(SearchStr, I, OldLen);
-      if SubStr = UpperOld then
+      if SubStr = SearchOld then
       begin
         Result := Result + NewPattern;
         Inc(I, OldLen);
+        Replaced := True;
         if not (rfReplaceAll in Flags) then
         begin
-          Result := Result + Copy(S, I, Length(S));
-          Exit;
+          Result := Result + Copy(S, I, L - I + 1);
+          I := L + 1;  { exit loop }
         end;
       end
       else
