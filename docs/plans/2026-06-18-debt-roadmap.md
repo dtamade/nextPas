@@ -2,7 +2,7 @@
 
 > 日期: 2026-06-18
 > 来源: Codex 架构研究 + Claude 执行
-> 状态: Sprint 1-3 完成，Sprint 4-5 待执行
+> 状态: Sprint 1-4 完成，Sprint 5 待执行
 
 ## 七项债务总览
 
@@ -44,10 +44,10 @@
 - [x] #4 Gate 2 unit lifecycle: @llvm.global_ctors (5天) — Phase 0-5 + Codex 修复完成
 
 ### Sprint 4 (第 4 周)
-- [ ] #6 Gate 4 heap: 阶段 1-2 (3.5天)
+- [x] #6 Gate 4 heap: 阶段 1-3 (4.5天) — runtime library 解耦完成
 
 ### Sprint 5 (第 5 周)
-- [ ] #6 Gate 4 heap: 阶段 3-4
+- [ ] #6 Gate 4 heap: 阶段 4 (字符串/dynarray/异常处理外部化)
 - [ ] #2 全局 TInterfacedObject 替换 (5天)
 
 ## 各项详细方案
