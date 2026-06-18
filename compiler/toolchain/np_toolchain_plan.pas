@@ -1711,6 +1711,8 @@ begin
       'object-file',
       ExpandFileName(AdditionalObjectPath)
     );
+    // Add dependent unit .o to linker inputs so multi-unit programs link correctly
+    FPlan.AddLogicalObjectInput(ExpandFileName(AdditionalObjectPath));
   end;
 
   if not RequiresLink then

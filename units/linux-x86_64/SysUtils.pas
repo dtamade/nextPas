@@ -117,9 +117,10 @@ implementation
 { External C functions }
 function getenv(name: PChar): PChar; cdecl; external 'c' name 'getenv';
 function getcwd(buf: PChar; size: SizeUInt): PChar; cdecl; external 'c' name 'getcwd';
-var
-  argc: LongInt; cvar; external;
-  argv: PPChar; cvar; external;
+function np_open(path: PChar; flags: LongInt): LongInt; cdecl; external 'c' name 'open';
+function np_read(fd: LongInt; buf: Pointer; count: SizeUInt): SizeUInt; cdecl; external 'c' name 'read';
+function np_close(fd: LongInt): LongInt; cdecl; external 'c' name 'close';
+function readlink(path: PChar; buf: PChar; bufsiz: SizeUInt): SizeInt; cdecl; external 'c' name 'readlink';
 
 { Exception }
 
@@ -561,18 +562,74 @@ begin
 end;
 
 function ParamStr(Index: Integer): string;
+var
+  Buf: array[0..4095] of Char;
+  N, I, Start, PIdx: Integer;
+  Fd: LongInt;
 begin
-  if (Index >= 0) and (Index < argc) and (argv <> nil) and (argv[Index] <> nil) then
-    Result := string(argv[Index])
-  else
-    Result := '';
+  Result := '';
+  if Index < 0 then Exit;
+
+  // ParamStr(0) = executable path via /proc/self/exe
+  if Index = 0 then
+  begin
+    N := readlink('/proc/self/exe', @Buf[0], SizeOf(Buf) - 1);
+    if N > 0 then
+    begin
+      Buf[N] := #0;
+      Result := PChar(@Buf[0]);
+    end;
+    Exit;
+  end;
+
+  // ParamStr(N) for N > 0: parse /proc/self/cmdline (null-separated)
+  Fd := np_open('/proc/self/cmdline', 0 { O_RDONLY });
+  if Fd < 0 then Exit;
+  N := np_read(Fd, @Buf[0], SizeOf(Buf) - 1);
+  np_close(Fd);
+  if N <= 0 then Exit;
+  Buf[N] := #0;
+
+  PIdx := 0;
+  I := 0;
+  while I < N do
+  begin
+    Start := I;
+    while (I < N) and (Buf[I] <> #0) do
+      Inc(I);
+    if PIdx = Index then
+    begin
+      SetLength(Result, I - Start);
+      Move(Buf[Start], Result[1], I - Start);
+      Exit;
+    end;
+    Inc(PIdx);
+    Inc(I); // skip null
+  end;
 end;
 
 function ParamCount: Integer;
+var
+  Buf: array[0..4095] of Char;
+  N, I, Cnt: Integer;
+  Fd: LongInt;
 begin
-  Result := argc - 1;
-  if Result < 0 then
-    Result := 0;
+  Result := 0;
+  Fd := np_open('/proc/self/cmdline', 0 { O_RDONLY });
+  if Fd < 0 then Exit;
+  N := np_read(Fd, @Buf[0], SizeOf(Buf) - 1);
+  np_close(Fd);
+  if N <= 0 then Exit;
+  Cnt := 0;
+  I := 0;
+  while I < N do
+  begin
+    while (I < N) and (Buf[I] <> #0) do
+      Inc(I);
+    Inc(Cnt);
+    Inc(I); // skip null
+  end;
+  Result := Cnt - 1; // exclude argv[0]
 end;
 
 function GetCurrentDir: string;
