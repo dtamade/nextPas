@@ -1,7 +1,7 @@
 # R6 运行时对齐与 musl 目标支持
 
-> **状态**: 🔴 待执行
-> **时间**: ~3-4 天
+> **状态**: 🟡 Phase 3-4 已完成，Phase 5 待执行
+> **时间**: ~2 天剩余
 > **前提**: R5 自举收敛完成（stage3≡stage4 SHA256 一致）
 
 ---
@@ -265,14 +265,14 @@ NEXTPAS_TARGET=linux-x86_64-musl make verify
 ## 5. 迁移后清理
 
 - [x] Step 0: 搜索路径就绪 (rebuild-compiler.sh 已有 -Fu core/src)
-- [ ] Phase 1: nextpas.core.path 补 SysUtils 兼容别名
-- [ ] Phase 2: FPC host-compile probe (逐模块)
-- [ ] Phase 3: 叶子函数替换 (18 文件)
-- [ ] Phase 4: fs.util/fs.dir 函数改名 (2 文件)
-- [ ] Phase 5: FindFirst → FsReadDir 重写 (2 文件)
-- [ ] Phase 6: Now → DateTimeNow (1 处)
+- [x] Phase 1: nextpas.core.path 补 SysUtils 兼容别名 (IncludeTrailingPathDelimiter/ExcludeTrailingPathDelimiter/ExpandFileName/ExtractFileDir)
+- [x] Phase 2: FPC host-compile probe (text.conv/path/fs.util/fs.dir/os.env/time 全部通过)
+- [x] Phase 3: 叶子函数替换 (23 文件完成，仅剩 np_unit_resolver + np_toolchain_runner)
+- [x] Phase 4: fs.util/fs.dir 函数改名 (FileExists→FsExists, DirectoryExists→FsIsDir, ForceDirectories→FsMkdirAll)
+- [ ] Phase 5: FindFirst → FsReadDir 重写 (np_unit_resolver.pas)
+- [x] Phase 6: Now → DateTimeNow (np_compilation_session.pas)
 - [ ] Phase 7: np_toolchain_runner Classes/Process 处理 (推迟 R6.4)
-- [ ] Phase 8: 验证自举循环 stage3≡stage4
+- [ ] Phase 8: 验证自举循环 stage3≡stage4 (需 resolver 修复)
 - [ ] Phase 9: 删除 `units/linux-x86_64/SysUtils.pas`
 - [ ] R6.2: musl 目标支持
 - [ ] R6.3: 双目标验证
@@ -292,12 +292,12 @@ NEXTPAS_TARGET=linux-x86_64-musl make verify
 
 开始前需确认:
 - [x] rebuild-compiler.sh 包含 `-Fu$ROOT/core/src`
-- [ ] nextpas.core.text.conv 能被 FPC trunk 正确编译
-- [ ] nextpas.core.path 能被 FPC trunk 正确编译
-- [ ] nextpas.core.fs.util 能被 FPC trunk 正确编译
-- [ ] nextpas.core.fs.dir 能被 FPC trunk 正确编译
-- [ ] nextpas.core.os.env 能被 FPC trunk 正确编译
-- [ ] nextpas.core.time 能被 FPC trunk 正确编译
+- [x] nextpas.core.text.conv 能被 FPC trunk 正确编译
+- [x] nextpas.core.path 能被 FPC trunk 正确编译
+- [x] nextpas.core.fs.util 能被 FPC trunk 正确编译
+- [x] nextpas.core.fs.dir 能被 FPC trunk 正确编译
+- [x] nextpas.core.os.env 能被 FPC trunk 正确编译
+- [x] nextpas.core.time 能被 FPC trunk 正确编译
 
 ---
 
