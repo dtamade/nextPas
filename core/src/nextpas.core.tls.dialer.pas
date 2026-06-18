@@ -35,12 +35,12 @@ type
 
 implementation
 
-uses nextpas.core.platform.socket, nextpas.core.net.base, nextpas.core.net.resolve, nextpas.core.tls.quick, nextpas.core.tls.connection.builder;
+uses nextpas.core.platform.socket, nextpas.core.net.base, nextpas.core.net.resolve, nextpas.core.tls.quick, nextpas.core.tls.connection.builder, nextpas.core.exception;
 
 { Helper: wrap a THandle back into TPlatformSocket for platform calls }
 function HandleToSocket(AHandle: THandle): TPlatformSocket; inline;
 begin
-  Result.Value := {$IFDEF NEXTPAS_WINDOWS}PtrUInt{$ELSE}cint{$ENDIF}(AHandle);
+  Result.Value := {$IFDEF NEXTPAS_WINDOWS}PtrUInt{$ELSE}LongInt{$ENDIF}(AHandle);
 end;
 
 function ResolveAndConnect(const AHost: string; APort: Word;
