@@ -1744,6 +1744,14 @@ begin
   FPlan.AddStepArg(StepIndex, '-s');
   FPlan.AddStepArg(StepIndex, '-L.');
   FPlan.AddStepArg(StepIndex, '-lc');
+  { Override FPC's default interpreter path (/lib/ld64.so.1) with the
+    system's actual dynamic linker. FPC hardcodes /lib/ld64.so.1 for
+    Linux x86_64, but many modern systems use /lib64/ld-linux-x86-64.so.2. }
+  if SameText(FTargetFacts.TargetId, 'linux-x86_64') then
+  begin
+    FPlan.AddStepArg(StepIndex, '--dynamic-linker');
+    FPlan.AddStepArg(StepIndex, '/lib64/ld-linux-x86-64.so.2');
+  end;
   FPlan.AddStepArg(StepIndex, '-o');
   FPlan.AddStepArg(StepIndex, ExpandFileName(ArtifactPath));
   FPlan.AddStepArg(StepIndex, '-T');
