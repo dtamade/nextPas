@@ -251,3 +251,42 @@ R5 内部特性补齐可以与 R3/R4 并行。
 | R5: Self-Hosting | 5天 | 21天 |
 
 **总计: ~21 工作日 (约 4 周)**
+
+## 6. 进度跟踪
+
+### Sprint R1: 编译器内置函数 ✅ (2026-06-18)
+- FillChar → @np_memset (新增运行时函数)
+- Move → @np_memcpy
+- GetMem → @np_alloc
+- FreeMem → @np_free
+- Assigned → icmp ne ptr null
+- 测试: builtins_pass.pas 全绿
+
+### Sprint R2: System Unit ✅ (2026-06-18)
+- 所有 ordinal/pointer/string 类型声明
+- TObject + TInterfacedObject + Exception 层次
+- MaxInt/True/False/PathDelim/LineEnding 常量
+- 测试: 3/3 compiler-pass 全绿
+
+### Sprint R3: SysUtils 补齐 ✅ (2026-06-18)
+- 新增: IntToStr(Int64)/StrToInt64Def/ExtractFileExt/StringReplace/ParamStr/ParamCount/GetCurrentDir
+- FFI: getcwd/argc/argv
+- 测试: 10/10 组全绿
+
+### Sprint R4: Classes 扩展 ✅ (2026-06-18)
+- TStringList: Insert/IndexOfName/Names/Values/Text/LoadFromStream/AddStrings
+- 测试: 10/10 组全绿
+
+### Sprint R5: Self-Hosting 尝试 🔄 (2026-06-18)
+**发现 C6-H4 阻塞项：**
+- 编译器加载 SysUtils.pas 时，扫描所有过程体，发现 `LowerCase`/`Trim` 等函数的
+  owned string 返回值被用于非直接赋值上下文（如比较、拼接），触发 C6-H4 错误
+- 根因: `IsOwnedStringReturnFunc` 依赖注册，但非字符串返回函数（如 SameText）中
+  使用的 owned string 函数不会被注册
+- 修复: `IsSupportedOwnedStringReturnIdentifierTarget` 已补充到赋值检查中
+- 剩余: 需要放宽 C6-H4 对单元级代码的扫描策略
+
+**下一步：**
+1. 修复 C6-H4：放宽对单元级过程体的 owned string 检查（标记为 warning 或豁免）
+2. 重新运行 sysutils_pass.pas 测试
+3. 尝试编译器源码编译

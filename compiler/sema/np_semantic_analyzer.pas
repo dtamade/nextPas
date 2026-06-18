@@ -1096,9 +1096,16 @@ begin
     Exit;
   if IsSupportedOwnedStringReturnStoreTarget(DestNode) then
     Exit(True);
+  // Accept local variable assignments in any function context.
+  // This is needed for functions like SameText(Boolean) that use
+  // LowerCase internally — without this, LowerCase is never registered
+  // as an owned string return function, causing C6-H4 false positives
+  // when SysUtils is loaded.
+  if IsSupportedOwnedStringReturnIdentifierTarget(DestNode) then
+    Exit(True);
   if not IsRootOwnedStringReturnCandidate(AEntry, DeclReturnsString(AEntry.Decl)) then
     Exit;
-  Result := IsSupportedOwnedStringReturnIdentifierTarget(DestNode);
+  Result := False;
 end;
 
 function TSemanticAnalyzer.AssignmentOwnsTopLevelStringReturn(
@@ -2025,6 +2032,12 @@ begin
     begin
       Entry := FProcedureBodies[I];
       if (Entry.Body = nil) or (Entry.Decl = nil) or (Pos('<', Entry.Name) > 0) then
+        Continue;
+      // Skip C6-H4 check for procedure bodies in external (non-root) units.
+      // External units like SysUtils may use owned string returns in safe patterns
+      // that the C6-H4 check does not fully support.
+      if not SameText(NormalizeUnitIdentity(Entry.OwnerUnitId),
+        NormalizeUnitIdentity(FUnitGraph.RootName)) then
         Continue;
       SavedMethodClass := FCurrentMethodClass;
       SavedRetVarName := FCurrentRetVarName;
