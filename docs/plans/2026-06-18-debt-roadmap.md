@@ -47,8 +47,8 @@
 - [x] #6 Gate 4 heap: 阶段 1-3 (4.5天) — runtime library 解耦完成
 
 ### Sprint 5 (第 5 周)
-- [ ] #6 Gate 4 heap: 阶段 4 (字符串/dynarray/异常处理外部化)
-- [ ] #2 全局 TInterfacedObject 替换 (5天)
+- [x] #6 Gate 4 heap: 阶段 4 (字符串/dynarray/异常处理外部化) — 3 个 .ll 文件，emitter -377 行
+- [x] #2 TInterfacedObject refcount 修复 — runtime 3 项修复 + System.pas _AddRef/_Release + Codex 审查
 
 ## 各项详细方案
 
