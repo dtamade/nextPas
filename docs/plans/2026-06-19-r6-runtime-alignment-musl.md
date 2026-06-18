@@ -1,247 +1,308 @@
-# R6: 编译器运行时归位 + musl 目标
+# R6 运行时对齐与 musl 目标支持
 
-> **日期**: 2026-06-19
-> **状态**: 待启动
-> **北极星**: 编译器运行在 `nextpas.core.*` 上，产出 glibc/musl 双目标 ELF
+> **状态**: 🔴 待执行
+> **时间**: ~3-4 天
+> **前提**: R5 自举收敛完成（stage3≡stage4 SHA256 一致）
 
 ---
 
-## 核心原则
+## 0. 核心原则
 
-**nextPas 的基层代码全部基于 `nextpas.core` 构建。不使用 FPC 的 System/SysUtils/Classes。**
+nextPas 的编译器代码**全部基于 nextpas.core 构建**。不使用 FPC 的 System/SysUtils/Classes。
 
-`nextpas.core.system` 是根入口，提供基础类型、内存工具、异常体系。
-编译器按需引入其他 `nextpas.core.*` 模块：
+## 1. 当前状态 (2026-06-19 已验证)
+
+### 已验证事实
+
+- rebuild-compiler.sh **已包含** `-Fu"$ROOT/core/src"` —— 搜索路径就绪
+- 3 个编译器文件已用 `nextpas.core.system.contracts` —— 集成先例存在
+- 25 个编译器文件使用 SysUtils/Classes（不含 tests）
+- `nextpas.core.process.pathresolve` **当前无法被 FPC 编译**（`platform_fs_is_executable` 未解析）
+- `np_toolchain_runner.pas` 额外依赖 `Classes, Process` FPC 标准库
+
+### 编译器实际使用的 SysUtils 函数（已验证）
+
+| 函数 | 使用次数 | 所在模块 | nextpas.core 替代方案 | 迁移方式 |
+|------|---------|---------|---------------------|---------|
+| `IntToStr` | ~264 | text.conv | `IntToStr` (同名，返回 Int64) | 直接替换 |
+| `Trim` | ~86 | text.conv | `Trim` (同名) | 直接替换 |
+| `UpperCase`/`LowerCase` | ~12+11 | text.conv | `UpperCase`/`LowerCase` (ASCII-only) | 直接替换 |
+| `SameText` | 少量 | text.conv | `SameText` (同名) | 直接替换 |
+| `StrToInt`/`StrToIntDef` | 少量 | text.conv | `StrToInt` (返回 Int64) | 直接替换，注意返回类型 |
+| `IntToHex` | 少量 | text.conv | `IntToHex` (参数 UInt64) | 直接替换，注意参数类型 |
+| `Format` | 少量 | text.conv | `Format` (deprecated) | 直接替换 |
+| `StringReplace` | 少量 | text.conv | `StringReplace` (同名) | 直接替换 |
+| `IncludeTrailingPathDelimiter` | **~25** | **缺失** | **需补: `nextpas.core.path` 加 alias → `FsPathEnsureSep`** | **加 alias** |
+| `ExcludeTrailingPathDelimiter` | ~2 | **缺失** | **需补: `nextpas.core.path` 加 alias → `FsPathTrimSep`** | **加 alias** |
+| `ExpandFileName` | **~20** | **缺失** | **需补: `nextpas.core.path` 加 alias → `FsPathAbs`** | **加 alias** |
+| `ExtractFilePath`/`ExtractFileDir` | ~21 | path | `ExtractFilePath` (别名已存在) | 直接替换 |
+| `ExtractFileName`/`ExtractFileExt` | ~6 | path | `ExtractFileName`/`ExtractFileExt` (别名已存在) | 直接替换 |
+| `ChangeFileExt` | 少量 | path | `ChangeFileExt` (别名已存在) | 直接替换 |
+| `FileExists` | ~23 | fs.util | `FsExists` 或 `FsIsFile` | 改名替换 |
+| `DirectoryExists` | ~5 | fs.util | `FsIsDir` | 改名替换 |
+| `DeleteFile` | ~8 | fs.dir | `FsRemove` | 改名替换 |
+| `ForceDirectories` | ~2 | fs.dir | `FsMkdirAll` | 改名替换 |
+| `FindFirst/FindNext/FindClose` | ~3 组 | fs.dir | **`FsReadDir` + filter** | **重写为 IDirIterator 模式** |
+| `GetEnvironmentVariable` | ~1 | os.env | `GetEnvironmentVariable` (同名) | 直接替换 |
+| `FreeAndNil` | ~8 | base.utils | `FreeAndNil` (同名) | 直接替换 |
+| `Now` | **1** | time | `DateTimeNow` | 改名替换 |
+| `FormatDateTime` | 少量 | time | `FormatDateTime` (同名) | 直接替换 |
+| `Assigned` | ~4 | FPC 内建 | 保持 FPC 内建 | 不迁移 |
+| `ParamStr`/`ParamCount` | 多处 | FPC 内建 | 保持 FPC 内建 | 不迁移 |
+| `Pos`/`Copy`/`Length`/`SetLength` | 大量 | FPC 内建 | 保持 FPC 内建 | 不迁移 |
+
+**特别说明**:
+- FPC 内建函数 (`Assigned`, `ParamStr`, `ParamCount`, `Pos`, `Copy`, `Length`, `SetLength`, `Low`, `High` 等) 无需迁移，它们属于 Pascal 语言和 System 内建
+- `SysErrorMessage` / `GetLastOSError` 在编译器代码中实际未使用（Stage0 wrapper 有 SysErrorMessage 引用但 stage0 本身不在 R6 范围）
+- `IsPathDelimiter` / `ExtractFileNameOnly` 无编译器消费方，不预付 surface
+- `SysUtils.pas` (953 行) 提供的 FPC SysUtils 兼容层，R6 完成后应被完全废弃
+- `np_toolchain_runner.pas` 依赖 `Classes` 和 `Process`，需要额外处理
+
+## 2. R6.1 SysUtils → nextpas.core 迁移 (2-3 天)
+
+### Codex 架构决策 (2026-06-19)
+
+> **叶子 helper 加 alias，范式级 API 重写。**
+
+- `IncludeTrailingPathDelimiter` 等 → spelling migration → 加 alias 到 owner module (`nextpas.core.path`)
+- `FindFirst/TSearchRec` → programming model migration → 重写为 nextpas-core-native 目录迭代
+- alias 只加在 owner module，**不加回 `nextpas.core.system`** (source contracts 会 reject)
+
+### Phase 1: 补 nextpas.core.path 缺失的 SysUtils 兼容别名
+
+**文件**: `core/src/nextpas.core.path.pas`
+
+在 SysUtils-compatible aliases 区域补充：
 
 ```pascal
-{ 编译器源码的 uses 子句应该是：}
-uses
-  nextpas.core.system,            { 根: 基础类型 + 内存 + 异常 + FreeAndNil }
-  nextpas.core.text.conv,         { IntToStr/Trim/UpperCase/Format/SameText }
-  nextpas.core.path,              { PathDir/PathBase/PathChangeExt/PathNormalize }
-  nextpas.core.fs.util,           { FsExists/FsIsDir/FsGetCwd }
-  nextpas.core.fs.dir,            { FsMkdirAll/FsRemove/FsOpenDir }
-  nextpas.core.os.env,            { OsEnvGet }
-  ...;
+{ SysUtils-compatible aliases — migration surface }
+function IncludeTrailingPathDelimiter(const APath: string): string;
+function ExcludeTrailingPathDelimiter(const APath: string): string;
+function ExpandFileName(const APath: string): string;
 ```
 
-**不碰的：**
-- `SysUtils` — FPC 的，不碰
-- `Classes` — FPC 的，不碰
-- `units/linux-x86_64/SysUtils.pas` — 手写 shim，迁移后删除
+实现委托：
+- `IncludeTrailingPathDelimiter` → `FsPathEnsureSep` (nextpas.core.fs.path.pas:152)
+- `ExcludeTrailingPathDelimiter` → `FsPathTrimSep` (nextpas.core.fs.path.pas)
+- `ExpandFileName` → `FsPathAbs` (nextpas.core.fs.path.pas)
 
-musl 支持是容器化/嵌入式场景的刚需，也是碾压 FPC 的差异化能力。
+**Codex 说明**: `IsPathDelimiter`、`ExtractFileNameOnly` 无实际消费方，不预付 surface。
 
----
+### Phase 2: FPC host-compile probe (逐模块)
 
-## R6.1: SysUtils → nextpas.core 迁移
+每个待迁移模块先独立 probe，确认 FPC trunk 能编译：
 
-**目标**: 编译器源码全部 `uses nextpas.core.*`，删除 SysUtils shim
-
-### 函数映射清单
-
-| # | SysUtils API | nextpas.core API | 模块 | 同名? |
-|---|---|---|---|---|
-| 1 | `IntToStr(V)` | `IntToStr(V)` | `nextpas.core.text.conv` | ✅ |
-| 2 | `StrToInt(S)` | `StrToInt(S)` | `nextpas.core.text.conv` | ✅ |
-| 3 | `StrToIntDef(S,D)` | `StrToIntDef(S,D)` | `nextpas.core.text.conv` | ✅ |
-| 4 | `StrToInt64Def(S,D)` | `StrToInt64Def(S,D)` | `nextpas.core.text.conv` | ✅ |
-| 5 | `TryStrToInt(S,V)` | `TryStrToInt(S,V)` | `nextpas.core.text.conv` | ✅ |
-| 6 | `TryStrToInt64(S,V)` | `TryStrToInt64(S,V)` | `nextpas.core.text.conv` | ✅ |
-| 7 | `UpperCase(S)` | `UpperCase(S)` | `nextpas.core.text.conv` | ✅ |
-| 8 | `LowerCase(S)` | `LowerCase(S)` | `nextpas.core.text.conv` | ✅ |
-| 9 | `Trim(S)` | `Trim(S)` | `nextpas.core.text.conv` | ✅ |
-| 10 | `SameText(A,B)` | `SameText(A,B)` | `nextpas.core.text.conv` | ✅ |
-| 11 | `Format(F,A)` | `Format(F,A)` | `nextpas.core.text.conv` | ✅ |
-| 12 | `StringReplace(S,O,N,F)` | `StringReplace(S,O,N,F)` | `nextpas.core.text.conv` | ✅ |
-| 13 | `ExtractFileDir(F)` | `PathDir(F)` | `nextpas.core.path` | ❌ |
-| 14 | `ExtractFileName(F)` | `PathBase(F)` | `nextpas.core.path` | ❌ |
-| 15 | `ExtractFileExt(F)` | `PathExt(F)` | `nextpas.core.path` | ❌ |
-| 16 | `ExtractFileDrive(F)` | `PathDrive(F)` | `nextpas.core.path` | ❌ |
-| 17 | `ChangeFileExt(F,E)` | `PathChangeExt(F,E)` | `nextpas.core.path` | ❌ |
-| 18 | `ExpandFileName(F)` | `PathNormalize(F)` | `nextpas.core.path` | ❌ |
-| 19 | `IncludeTrailingPathDelimiter(P)` | `PathEnsureSep(P)` | `nextpas.core.path` | ❌ |
-| 20 | `ExcludeTrailingPathDelimiter(P)` | `PathTrimSep(P)` | `nextpas.core.path` | ❌ |
-| 21 | `LastDelimiter(D,S)` | `LastDelimiter(D,S)` | `nextpas.core.path` | ✅ |
-| 22 | `FileExists(F)` | `FsExists(F)` | `nextpas.core.fs.util` | ❌ |
-| 23 | `DirectoryExists(D)` | `FsIsDir(D)` | `nextpas.core.fs.util` | ❌ |
-| 24 | `ForceDirectories(D)` | `FsMkdirAll(D)` | `nextpas.core.fs.dir` | ❌ |
-| 25 | `DeleteFile(F)` | `FsRemove(F)` | `nextpas.core.fs.dir` | ❌ |
-| 26 | `FindFirst/Next/Close` | `FsOpenDir` + `IDirIterator` | `nextpas.core.fs.dir` | ❌ |
-| 27 | `FileSearch(N,D)` | 内联实现 | — | ❌ |
-| 28 | `GetEnvironmentVariable(N)` | `OsEnvGet(N)` | `nextpas.core.os.env` | ❌ |
-| 29 | `ParamStr(I)` / `ParamCount` | FPC 内置 | — | — |
-| 30 | `GetCurrentDir` | `FsGetCwd` | `nextpas.core.fs.util` | ❌ |
-
-**同名 12 个** (切换 imports 即可) + **改名 17 个** + **特殊处理 1 个** (FileSearch)
-
-### 迁移步骤
-
-#### Step 1: rebuild-compiler.sh 加 core/src 路径
 ```bash
-# 在 fpc 命令中加:
--Fu"$ROOT/core/src" \
--Fi"$ROOT/core/src" \
+# 对每个 nextpas.core.* 模块
+fpc /tmp/core_probe.pas \
+  -Fu"$ROOT/core/src" \
+  -Fi"$ROOT/core/src" \
+  -FE/tmp -FU/tmp
 ```
 
-#### Step 2: 逐文件迁移（按依赖顺序）
+已验证可编译: `text.conv`, `path`, `fs`, `os.env`, `time`
+**当前不可编译**: `process.pathresolve` (`platform_fs_is_executable` 未解析)
 
-**Phase A — stage0 包装层** (12 文件，低风险)
+### Phase 3: 叶子函数直接替换 (text.conv / path / os.env / time)
 
-| 文件 | SysUtils 函数 | 迁移动作 |
-|---|---|---|
-| `tools/stage0/nextpas.pas` | ParamStr, ParamCount | 保留（FPC 内置） |
-| `tools/stage0/target_config.pas` | ExpandFileName, ExtractFileDir, ExtractFileDrive, FileExists, GetEnvironmentVariable, IncludeTrailingPathDelimiter, LowerCase, SameText, Trim | → nextpas.core.path + fs.util + os.env + text.conv |
-| `tools/stage0/nextpas_command_build.pas` | DirectoryExists, ExpandFileName, FileExists, ForceDirectories, GetEnvironmentVariable, IncludeTrailingPathDelimiter, IntToStr, ParamStr | → nextpas.core.{path,fs,os.env,text.conv} |
-| `tools/stage0/nextpas_command_env.pas` | DeleteFile, DirectoryExists, ExpandFileName, ExtractFileDir, FileExists, ForceDirectories, IncludeTrailingPathDelimiter, LowerCase, ParamStr, StringReplace, Trim | → nextpas.core.{path,fs,os.env,text.conv} |
-| `tools/stage0/nextpas_command_test.pas` | DirectoryExists, ExpandFileName, FileExists, GetCurrentDir, IncludeTrailingPathDelimiter, ParamStr | → nextpas.core.{path,fs.util} |
-| `tools/stage0/nextpas_command_doctor.pas` | DirectoryExists, ExpandFileName, ParamStr | → nextpas.core.path |
-| `tools/stage0/nextpas_command_pkg.pas` | DirectoryExists, ExpandFileName, ParamStr | → nextpas.core.path |
-| `tools/stage0/nextpas_command_query.pas` | ExpandFileName, FileExists, ParamStr | → nextpas.core.{path,fs.util} |
-| `tools/stage0/nextpas_projection_context.pas` | DirectoryExists, ExpandFileName, FileExists, IncludeTrailingPathDelimiter, Trim | → nextpas.core.{path,fs.util,text.conv} |
-| `tools/stage0/nextpas_projection_json.pas` | IntToStr | → nextpas.core.text.conv |
-| `tools/stage0/nextpas_projection_text.pas` | IntToStr | → nextpas.core.text.conv |
-| `tools/stage0/nextpas_json_helpers.pas` | IntToStr | → nextpas.core.text.conv |
+这些函数名在 nextpas.core 中完全同名，直接替换 `uses SysUtils` → `uses nextpas.core.text.conv, nextpas.core.path, nextpas.core.os.env, nextpas.core.time`。
 
-**Phase B — 编译器核心** (4 文件，需谨慎)
+**目标文件** (18 个使用叶子函数的编译器文件):
+1. `np_lexer.pas` — LowerCase
+2. `np_preprocessor.pas` — UpperCase, LowerCase
+3. `np_green_tree.pas` — UpperCase, LowerCase
+4. `np_semantic_model.pas` — IntToStr, Trim
+5. `np_semantic_analyzer.pas` — LowerCase, IntToStr, Trim (注意 FileAge cache 字段 LongInt→Int64)
+6. `np_hir_builder.pas` — IntToStr, Trim
+7. `np_hir_model.pas` — IntToStr, Trim
+8. `np_hir_types.pas` — IntToStr
+9. `np_hir_printer.pas` — IntToStr
+10. `np_hir_verifier.pas` — IntToStr
+11. `np_compilation_session.pas` — IntToStr, Trim
+12. `np_unit_graph.pas` — IntToStr, Trim
+13. `np_source_database.pas` — IntToStr
+14. `np_package_manifest.pas` — LowerCase, Trim, IncludeTrailingPathDelimiter, ExcludeTrailingPathDelimiter, ExpandFileName, ExtractFilePath, ExtractFileName
+15. `np_package_lock.pas` — ExpandFileName
+16. `np_package_workflow.pas` — ExpandFileName, IncludeTrailingPathDelimiter
+17. `np_workspace_model.pas` — IncludeTrailingPathDelimiter
+18. `np_backend_plan.pas` — IntToStr
 
-| 文件 | SysUtils 函数 | 迁移动作 |
-|---|---|---|
-| `compiler/toolchain/np_toolchain_runner.pas` | DeleteFile, DirectoryExists, ExpandFileName, ExtractFileDir, FileExists, FileSearch, FindFirst/Next/Close, ForceDirectories, GetEnvironmentVariable, IncludeTrailingPathDelimiter, IntToStr, SameText, Trim | 最复杂，FindFirst→IDirIterator 模式重写 |
-| `compiler/toolchain/np_toolchain_profiles.pas` | ExpandFileName, ExtractFileDir, FileExists, IncludeTrailingPathDelimiter, LowerCase, Trim | → nextpas.core.{path,fs.util,text.conv} |
-| `compiler/frontend/np_package_manifest.pas` | DirectoryExists, ExcludeTrailingPathDelimiter, ExpandFileName, ExtractFileDir, FileExists, IncludeTrailingPathDelimiter, LowerCase, Trim | → nextpas.core.{path,fs.util,text.conv} |
-| `compiler/frontend/np_package_lock.pas` | ExpandFileName, FileExists, Trim, TryStrToInt | → nextpas.core.{path,fs.util,text.conv} |
+**注意**: `np_semantic_analyzer.pas` 的 FileAge cache 字段要从 `LongInt` 提升到 `Int64` (Codex 警报: 静默截断风险)
 
-**Phase C — 测试文件** (3 文件，字符串中的 SysUtils 引用)
+### Phase 4: fs.util / fs.dir 函数改名替换
 
-| 文件 | 说明 |
-|---|---|
-| `compiler/tests/test_installed_target_unit_call_binding.pas` | 字符串 `'uses SysUtils;'` 是测试数据，保留 |
-| `compiler/tests/test_parser_program_directive_uses_clause.pas` | 字符串 `'uses SysUtils;'` 是测试数据，保留 |
-| `compiler/tests/test_semantic_reexported_type_member_call.pas` | 字符串引用，保留 |
+| FPC 调用 | 替换为 | 模块 |
+|-----------|--------|------|
+| `FileExists(X)` | `FsExists(X)` 或 `FsIsFile(X)` | nextpas.core.fs.util |
+| `DirectoryExists(X)` | `FsIsDir(X)` | nextpas.core.fs.util |
+| `DeleteFile(X)` | `FsRemove(X)` | nextpas.core.fs.dir |
+| `ForceDirectories(X)` | `FsMkdirAll(X)` | nextpas.core.fs.dir |
+| `GetCurrentDir` | `FsGetCwd` | nextpas.core.fs.util |
 
-#### Step 3: 验证
+**目标文件**: `np_unit_resolver.pas`, `np_toolchain_runner.pas`
+
+### Phase 5: FindFirst/FindNext/FindClose → FsReadDir 重写
+
+**影响文件**:
+- `np_unit_resolver.pas` — 扫描 `*.pas`/`*.pp` 发现单元文件
+- `np_toolchain_runner.pas` — 扫描 `.o` 文件用于链接
+
+**Codex 决策: 选 B (重写)** — 不建 TSearchRec 兼容层。
+
+理由:
+- 只有 2 个文件使用，不值得建兼容层
+- 兼容层 = "把 shim 从 SysUtils.pas 搬到 nextpas.core.fs.dir 继续养"
+- 用 FsReadDir + 简单后缀过滤即可
+
+**重写方案**: 用 `nextpas.core.fs.dir.FsReadDir` 获取目录条目列表，过滤文件名后缀：
+
+```pascal
+// 旧: FindFirst(Dir + '/*.pas', faAnyFile, SearchRec)
+// 新: FsReadDir 返回 entries，过滤后缀
+entries := FsReadDir(DirPath);
+for i := 0 to High(entries) do
+  if (PathExt(entries[i].Name) = '.pas') or
+     (PathExt(entries[i].Name) = '.pp') then
+    // 处理匹配项
+```
+
+### Phase 6: Now → DateTimeNow
+
+**影响**: 仅 `np_unit_resolver.pas:484` 一处
+```pascal
+// 旧: FRootIndexes[ARootIndex].LastScanTimestamp := Round(Now * 86400);
+// 新: FRootIndexes[ARootIndex].LastScanTimestamp := Round(DateTimeNow * 86400);
+// 需要: uses nextpas.core.time;
+```
+
+### Phase 7: np_toolchain_runner.pas 额外依赖处理
+
+**问题**: 此文件还依赖 `Classes` (TStringList) 和 `Process` (TProcess)。
+
+**策略**: 
+- `TStringList` → 可用 `TStringArray` + 自定义 split/join 替代
+- `TProcess` → 可用 `nextpas.core.process.command.ICommand` 替代
+- 但 `nextpas.core.process.pathresolve` 当前 FPC 编译不过 (`platform_fs_is_executable`)
+- **R6.1 先跳过此文件**，留到 R6.4 (toolchain runner 独立迁移)
+
+### Phase 8: 验证自举循环
+
 ```bash
-# 1. FPC 编译 stage0（加了 core/src 路径）
-make rebuild-compiler
+# 完整重编译
+./scripts/rebuild-compiler.sh
 
-# 2. stage0 编译简单程序
-build/stage0-bootstrap/nextpas build tests/compiler/pass/hello_pass.pas ...
+# stage2/3/4 闭环
+NEXTPAS_REPO_ROOT="$ROOT" "$STAGE0" build ...   # stage2
+NEXTPAS_REPO_ROOT="$ROOT" "$STAGE2" build ...   # stage3
+NEXTPAS_REPO_ROOT="$ROOT" "$STAGE3" build ...   # stage4
 
-# 3. stage0 编译自身 → stage2
-# 4. stage2 编译自身 → stage3
-# 5. stage3 SHA256 == stage2 SHA256（收敛）
+# SHA256 一致
+sha256sum "$S3/nextpas" "$S4/nextpas"  # 必须相等
+
+# 全量测试
+make -C . test TEST_FILTER=compiler-pass
 ```
 
-#### Step 4: 删除 SysUtils shim
+### Phase 9: 删除 SysUtils shim
+
 ```bash
 git rm units/linux-x86_64/SysUtils.pas
 ```
 
----
+## 3. R6.2 musl 目标支持 (1 天)
 
-## R6.2: musl 目标支持
+### 3.1 创建目标配置
 
-**目标**: `nextpas build --target linux-x86_64-musl` 产出无 glibc 依赖的静态 ELF
+**新建**: `build/targets/linux-x86_64-musl.toml`
 
-### 为什么 musl
+参考 `build/targets/linux-x86_64.toml`，主要差异:
+- toolchain: `musl-gcc` 替代 `x86_64-linux-gnu-gcc`
+- linker flags: `-static` 替代动态链接
+- crt paths: 使用 musl 的 `crt1.o`, `crti.o`, `crtn.o`
+- dynamic linker: `/lib/ld-musl-x86_64.so.1` (或空，因为静态链接)
 
-| 场景 | glibc | musl |
-|---|---|---|
-| 容器镜像 | ~5MB glibc 层 | **0 依赖** |
-| Alpine Linux | 不兼容 | **原生** |
-| 嵌入式 | 太大 | **~1MB libc** |
-| 静态链接 | 有 NSS/nsswitch 问题 | **干净静态** |
-| 编译速度 | 正常 | **musl-gcc 更快** |
+### 3.2 工具链绑定
 
-### 实现步骤
+在 `compiler/toolchain/np_toolchain_profiles.pas` 中注册 musl 目标:
 
-#### Step 1: 工具链发现
-```bash
-# 检测 musl 工具链
-which musl-gcc           # Debian/Ubuntu: apt install musl-tools
-which x86_64-linux-musl-gcc  # Alpine/cross: musl-cross-make
-```
-
-#### Step 2: 目标配置
-创建 `build/targets/linux-x86_64-musl.toml`:
 ```toml
-target = "linux-x86_64-musl"
-host_os = "linux"
-host_cpu = "x86_64"
-compiler = "fpc"
-units_dir = "units/linux-x86_64"
-object_format = "elf"
-assembler_flavor = "gnu-as"
-linker_flavor = "gnu-ld"
-llvm_triple = "x86_64-linux-musl"
-c_library_naming = "lib-prefix-so-a"
-# musl 特定: 静态链接优先
-static_link = true
+[target.linux-x86_64-musl]
+c_compiler = "musl-gcc"
+linker = "musl-gcc"
+link_flags = "-static -no-pie"
+crt_files = ["crt1.o", "crti.o", "crtn.o"]
 ```
 
-#### Step 3: 工具链绑定
-创建 `build/toolchains/linux-x86_64-to-linux-x86_64-musl.toml`:
-```toml
-[binding]
-id = "linux-x86_64-to-linux-x86_64-musl"
-host_compiler = "musl-gcc"  # 或 x86_64-linux-musl-gcc
-linker_flavor = "gnu-ld"
-static_link = true
-```
+### 3.3 静态链接验证
 
-#### Step 4: 链接策略
-```
-musl-gcc -static -o output input.o -lc
-```
-产出完全静态的 ELF，无 `PT_INTERP`，无动态依赖。
-
-#### Step 5: 验证
 ```bash
-file output        # ELF 64-bit, statically linked
-ldd output         # "not a dynamic executable"
-./output           # 在 Alpine 容器中运行
+# 在 Alpine Linux 容器中验证
+docker run --rm -v "$PWD:/work" alpine:latest \
+  sh -c "apk add gcc musl-dev && cd /work && ./build/stage0-bootstrap/nextpas build ..."
+
+# 二进制兼容性检查
+file build/out/nextpas   # 应显示 "statically linked"
+ldd build/out/nextpas    # 应显示 "not a dynamic executable"
 ```
+
+## 4. R6.3 双目标自举验证 (半天)
+
+在同一个 worktree 中:
+
+1. glibc 目标自举 → stage3≡stage4 ✓
+2. musl 目标自举 → stage3≡stage4 ✓
+3. 交叉验证: glibc stage2 编译 musl 目标 → stage3 musl 可执行 ✓
+
+```bash
+# glibc 自举
+make rebuild-compiler
+NEXTPAS_TARGET=linux-x86_64 make verify
+
+# musl 自举
+NEXTPAS_TARGET=linux-x86_64-musl make verify
+```
+
+## 5. 迁移后清理
+
+- [x] Step 0: 搜索路径就绪 (rebuild-compiler.sh 已有 -Fu core/src)
+- [ ] Phase 1: nextpas.core.path 补 SysUtils 兼容别名
+- [ ] Phase 2: FPC host-compile probe (逐模块)
+- [ ] Phase 3: 叶子函数替换 (18 文件)
+- [ ] Phase 4: fs.util/fs.dir 函数改名 (2 文件)
+- [ ] Phase 5: FindFirst → FsReadDir 重写 (2 文件)
+- [ ] Phase 6: Now → DateTimeNow (1 处)
+- [ ] Phase 7: np_toolchain_runner Classes/Process 处理 (推迟 R6.4)
+- [ ] Phase 8: 验证自举循环 stage3≡stage4
+- [ ] Phase 9: 删除 `units/linux-x86_64/SysUtils.pas`
+- [ ] R6.2: musl 目标支持
+- [ ] R6.3: 双目标验证
+
+## 6. 风险与对策
+
+| 风险 | 概率 | 影响 | 对策 |
+|------|------|------|------|
+| nextpas.core 模块 FPC host 编译失败 | 中 | Phase 2 阻塞 | 逐模块 probe，有问题的跳过留后续 |
+| FindFirst→FsReadDir 重写引入 bug | 低 | 单元发现失败 | 重写后立即跑 compiler-pass 测试 |
+| SysUtils.pas 删除后遗漏依赖 | 低 | 编译失败 | 分批删除，每删一批验证编译 |
+| np_toolchain_runner 的 Classes/Process 依赖 | 高 | Phase 7 阻塞 | R6.1 跳过此文件，R6.4 专项处理 |
+| musl 静态链接与 nextpas.core 不兼容 | 低 | R6.2 阻塞 | 先做最小 hello world 验证 |
+| StrToInt 返回 Int64 导致类型不匹配 | 低 | 隐式截断 | 编译器警告检查 + 代码审查 |
+
+## 7. 前置依赖检查
+
+开始前需确认:
+- [x] rebuild-compiler.sh 包含 `-Fu$ROOT/core/src`
+- [ ] nextpas.core.text.conv 能被 FPC trunk 正确编译
+- [ ] nextpas.core.path 能被 FPC trunk 正确编译
+- [ ] nextpas.core.fs.util 能被 FPC trunk 正确编译
+- [ ] nextpas.core.fs.dir 能被 FPC trunk 正确编译
+- [ ] nextpas.core.os.env 能被 FPC trunk 正确编译
+- [ ] nextpas.core.time 能被 FPC trunk 正确编译
 
 ---
 
-## R6.3: 双目标自举验证
+## 参考资料
 
-```
-               ┌─ nextpas build --target linux-x86_64        → glibc ELF
-stage0(FPC) ──┤
-               └─ nextpas build --target linux-x86_64-musl   → musl ELF (静态)
-```
-
-两个目标都必须通过:
-1. hello_pass 编译 + 运行
-2. 编译器自身编译 (stage2)
-3. stage2 编译自身 (stage3)
-4. stage3 ≡ stage2 (收敛)
-
----
-
-## 时间估算
-
-| 阶段 | 任务 | 估时 |
-|---|---|---|
-| R6.1 Step 1 | rebuild-compiler.sh 加路径 | 10 min |
-| R6.1 Step 2 Phase A | stage0 包装层迁移 (12 文件) | 2-3 hr |
-| R6.1 Step 2 Phase B | 编译器核心迁移 (4 文件) | 2-3 hr |
-| R6.1 Step 3 | 验证自举闭环 | 1 hr |
-| R6.1 Step 4 | 删除 SysUtils shim | 10 min |
-| R6.2 | musl 目标支持 | 2-3 hr |
-| R6.3 | 双目标验证 | 1 hr |
-| **总计** | | **~1-2 天** |
-
----
-
-## 风险
-
-| 风险 | 影响 | 缓解 |
-|---|---|---|
-| `nextpas.core.path` 的 `PathNormalize` 语义不同于 `ExpandFileName` | 路径解析错误 | 逐函数对比测试 |
-| `FsOpenDir` API 模式不同于 `FindFirst/Next/Close` | np_toolchain_runner 重写 | 封装 helper |
-| `FileSearch` 无 nextpas.core 等价物 | 仅 1 处使用 | 内联 10 行实现 |
-| FPC 编译 nextpas.core 拉入过多依赖 | 编译时间增长 | 测量增量，按需裁剪 |
-| musl-gcc 不可用 | 无法测试 | 先检查 `which musl-gcc` |
+- [runtime-contracts.md](../../core/docs/system/runtime-contracts.md) — 运行时契约名称
+- [goal-tree.md](../../core/docs/system/goal-tree.md) — 分阶段目标树
+- [五线工作图](2026-06-18-five-lines-work-map.md) — 当前进度总览

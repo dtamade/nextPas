@@ -32,7 +32,7 @@
 
 | 工作线 | Worktree | 分支 | HEAD | 状态 |
 |--------|----------|------|------|------|
-| **BOOTSTRAP** | `.worktrees/rtl-bootstrap` | `rtl-bootstrap` | `1d02504ae` | R5 自举收敛 ✅，**R6 运行时归位+musl 待启动** 🔴 |
+| **BOOTSTRAP** | `.worktrees/rtl-bootstrap` | `rtl-bootstrap` | `553286095` | R5 自举收敛 ✅，**R6 运行时归位+musl 方案已更新(Codex审查)→待执行** 🟡 |
 | **TLS** | `.worktrees/core-tls` | `codex/core-tls` | `4fbbd248c` | 高度成熟，对齐 main |
 | **FOUNDATION** | `.worktrees/core-foundation` | `codex/core-foundation` | `4fbbd248c` | 对齐 main，待启动 |
 | **SIMD** | `.worktrees/core-simd-perf` | `codex/core-simd-perf` | `4fbbd248c` | G1-G20 完成，G21 进行中 |
