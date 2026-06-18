@@ -277,25 +277,34 @@ R5 内部特性补齐可以与 R3/R4 并行。
 - TStringList: Insert/IndexOfName/Names/Values/Text/LoadFromStream/AddStrings
 - 测试: 10/10 组全绿
 
-### Sprint R5: Self-Hosting 尝试 ✅ (2026-06-18-19)
-**自举里程碑达成：编译器成功编译自身源码，产出可运行的 ELF 编译器**
+### Sprint R5: Self-Hosting ✅✅ (2026-06-18-19)
+**自举不动点收敛：stage3 ≡ stage4 SHA256 完全一致**
 
-**修复清单 (5 项):**
+**修复清单 (9 项):**
 1. parser: `IsDeclNameToken` 接受关键字作为参数名 → 消除 56 个 Fail 错误
 2. sema: `FCurrentProcessingUnitId` + 直接导入优先 → 消除 18 个重载歧义
-3. C6-H4 降级为 warning → 消除 1 个阻塞错误
-4. SysUtils 补齐: ExtractFileDrive/LastDelimiter/FileAge/TryStrToInt/TryStrToInt64
+3. C6-H4 误报修复 (5 处): CompareOperandOwnsStringReturn/IsSupportedOwnedStringReturnStoreTarget/IsSupportedOwnedStringReturnConsumerTarget/WriteLn 参数安全上下文/InsideCallArgs
+4. SysUtils 补齐: ExtractFileDrive/LastDelimiter/TryStrToInt/TryStrToInt64
 5. ELF 解释器路径: `--dynamic-linker /lib64/ld-linux-x86-64.so.2`
+6. ExpandFileName: libc `realpath(3)` 替代存根 → 解析 `..` 和符号链接
+7. FileExists: libc `access(F_OK)` 替代 `Reset(F)` → 正确处理符号链接
+8. FindFirst/FindNext: libc `opendir/readdir` 替代存根 → 单元发现正常
+9. **MatchesPattern DotPos 修正**: `Length(AName) - (Length(APattern) - 1)` → `Length(AName) - Length(APattern) + 2` — **自举收敛的关键修复**
 
-**最终状态:**
-- 45 源文件, 46 编译单元解析, 0 语义错误, 1 C6-H4 warning
+**最终状态 (2026-06-19):**
+- 45 源文件, 46 编译单元解析, 0 语义错误, 0 C6-H4 警告
 - 完整管线: syntax → sema → MIR → backend → toolchain ALL PASSED
 - ELF 64-bit 可执行文件 (1.3MB), `--help` 和 `env status` 正常工作
 - 10/10 smoke + 4/4 compiler-pass 全绿
+- **自举闭环**: stage0(FPC) → stage2 → stage3 → stage4 (bit-for-bit 收敛)
+- **不动点**: stage3 SHA256 == stage4 SHA256
 
-**待完成 (后续冲刺):**
-- [x] C6-H4 误报根因分析与修复 — 3 处修复: CompareOperandOwnsStringReturn/IsSupportedOwnedStringReturnStoreTarget/IsSupportedOwnedStringReturnConsumerTarget
-- [ ] Codex 审查技术债务清理
+**已修复 (本轮):**
+- [x] C6-H4 误报根因分析与修复 — 5 处修复
 - [x] FileAge 真实实现 (libc stat)
-- [ ] Stage2 交叉验证
+- [x] Stage2 交叉验证 — hello/stage3 全通
+- [x] Stage3 workspace 发现 — MatchesPattern DotPos 修正
+- [ ] Codex 审查技术债务清理
+- [ ] Assigned 双路径统一
+- [ ] gnkParameterList parser bug 调查
 - [ ] 性能基准对比 FPC
