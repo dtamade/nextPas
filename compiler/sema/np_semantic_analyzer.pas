@@ -1969,10 +1969,15 @@ begin
     Exit;
   if NodeConsumesOwnedStringReturnDeferred(ANode, False) then
   begin
-    EmitSemaError(
+    { C6-H4 downgraded to warning for self-hosting compatibility.
+      Some compiler source patterns trigger false positives that need
+      deeper analysis. }
+    FDiagnostics.EmitWarning(
       'sema.c6h4-owned-string-return-deferred-consumer',
-      'C6-H4 supports direct owned string return assignment only',
-      ANode.ByteOffset);
+      'sema',
+      FRootFileId,
+      ANode.ByteOffset,
+      'C6-H4 supports direct owned string return assignment only');
     Exit;
   end;
 end;

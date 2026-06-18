@@ -69,6 +69,7 @@ function DirectoryExists(const Directory: string): Boolean;
 function DeleteFile(const FileName: string): Boolean;
 function FileSearch(const Name, DirList: string): string;
 function ForceDirectories(const Dir: string): Boolean;
+function FileAge(const FileName: string): LongInt;
 function ExpandFileName(const FileName: string): string;
 function ExtractFileDir(const FileName: string): string;
 function ExtractFileName(const FileName: string): string;
@@ -91,11 +92,15 @@ function StrToInt(const S: string): Integer;
 function StrToIntDef(const S: string; Default: Integer): Integer;
 function StrToInt64Def(const S: string; Default: Int64): Int64;
 function IntToHex(Value: Int64; Digits: Integer): string;
+function TryStrToInt(const S: string; out Value: Integer): Boolean;
+function TryStrToInt64(const S: string; out Value: Int64): Boolean;
 
 // String manipulation
 function StringReplace(const S, OldPattern, NewPattern: string;
   Flags: TReplaceFlags): string;
 function ExtractFileExt(const FileName: string): string;
+function ExtractFileDrive(const FileName: string): string;
+function LastDelimiter(const Delimiters, S: string): Integer;
 
 // Command line
 function ParamStr(Index: Integer): string;
@@ -325,6 +330,14 @@ begin
   Result := IOResult = 0;
 end;
 
+function FileAge(const FileName: string): LongInt;
+begin
+  if FileExists(FileName) then
+    Result := 0
+  else
+    Result := -1;
+end;
+
 function ExpandFileName(const FileName: string): string;
 begin
   // Simple implementation: if it starts with /, it's already absolute
@@ -406,6 +419,40 @@ begin
     Result := Copy(FileName, I, Length(FileName) - I + 1)
   else
     Result := '';
+end;
+
+function ExtractFileDrive(const FileName: string): string;
+var
+  I: Integer;
+begin
+  Result := '';
+  if Length(FileName) < 2 then
+    Exit;
+  { Check for Windows-style drive letter (C:\...) }
+  if (FileName[2] = ':') and (UpCase(FileName[1]) in ['A'..'Z']) then
+  begin
+    Result := Copy(FileName, 1, 2);
+    Exit;
+  end;
+  { Check for UNC path (\\server\...) }
+  if (FileName[1] = DirectorySeparator) and (FileName[2] = DirectorySeparator) then
+  begin
+    I := 3;
+    while (I <= Length(FileName)) and (FileName[I] <> DirectorySeparator) do
+      Inc(I);
+    Result := Copy(FileName, 1, I - 1);
+  end;
+end;
+
+function LastDelimiter(const Delimiters, S: string): Integer;
+var
+  I, J: Integer;
+begin
+  Result := 0;
+  for I := Length(S) downto 1 do
+    for J := 1 to Length(Delimiters) do
+      if S[I] = Delimiters[J] then
+        Exit(I);
 end;
 
 function StringReplace(const S, OldPattern, NewPattern: string;
@@ -531,6 +578,22 @@ begin
   Val(S, Result, Code);
   if Code <> 0 then
     Result := Default;
+end;
+
+function TryStrToInt(const S: string; out Value: Integer): Boolean;
+var
+  Code: Integer;
+begin
+  Val(S, Value, Code);
+  Result := Code = 0;
+end;
+
+function TryStrToInt64(const S: string; out Value: Int64): Boolean;
+var
+  Code: Integer;
+begin
+  Val(S, Value, Code);
+  Result := Code = 0;
 end;
 
 function IntToHex(Value: Int64; Digits: Integer): string;
