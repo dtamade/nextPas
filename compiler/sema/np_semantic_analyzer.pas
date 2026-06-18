@@ -11,7 +11,8 @@ interface
 
 uses
   np_ast_facade, np_base_types, np_diagnostics_sink, np_preprocessor,
-  np_source_database, np_unit_graph, np_semantic_model, np_green_tree, np_lexer;
+  np_source_database, np_unit_graph, np_semantic_model, np_green_tree, np_lexer,
+  np_hir_types;
 
 type
   TProcedureBodyEntry = record
@@ -5970,12 +5971,12 @@ procedure TSemanticAnalyzer.SeedRuntimeContracts;
     UnitName := FUnitGraph.RootName;
     for I := 0 to RootNode.ChildCount - 1 do
     begin
-      Child := RootNode.Children[I];
+      Child := RootNode.ChildAt(I);
       if Child.NodeKind = gnkImplementationSection then
       begin
         for J := 0 to Child.ChildCount - 1 do
         begin
-          ImplChild := Child.Children[J];
+          ImplChild := Child.ChildAt(J);
           if ImplChild.NodeKind = gnkInitializationSection then
           begin
             FModel.AddRuntimeContract(NPSYSTEM_UNIT_INIT);
@@ -14626,6 +14627,8 @@ var
   SavedOwnedReturn: Boolean;
   SavedBlockTerminated: Boolean;
   SavedMethodClass: string;
+  LNormalizedUnitName: string;
+  LFuncName: string;
 begin
   for I := 0 to FModel.TypedHirNodeCount - 1 do
   begin
@@ -14657,10 +14660,14 @@ begin
     FCurrentBlockTerminated := False;
     FCurrentMethodClass := '';
 
+    // Normalize unit name: replace dots with underscores for LLVM function names
+    LNormalizedUnitName := StringReplace(Node.Operand, '.', '_', [rfReplaceAll]);
+
     if Node.NodeKind = hnkUnitInitRuntime then
     begin
+      LFuncName := 'np_unit_init_' + LNormalizedUnitName;
       FModel.AddTypedHirNode('function-body-begin',
-        'np_unit_init_' + Node.Operand, 0, 0, '0:');
+        LFuncName, 0, 0, '0:');
       WalkHaltCalls(TGreenNode(Node.GreenNodeRef));
       if not FCurrentBlockTerminated then
       begin
@@ -14669,12 +14676,13 @@ begin
         FModel.AddTypedHirNode('ret-runtime', '', 0, 0, '');
       end;
       FModel.AddTypedHirNode('function-body-end',
-        'np_unit_init_' + Node.Operand, 0, 0, '');
+        LFuncName, 0, 0, '');
     end
     else
     begin
+      LFuncName := 'np_unit_fini_' + LNormalizedUnitName;
       FModel.AddTypedHirNode('function-body-begin',
-        'np_unit_fini_' + Node.Operand, 0, 0, '0:');
+        LFuncName, 0, 0, '0:');
       WalkHaltCalls(TGreenNode(Node.GreenNodeRef));
       if not FCurrentBlockTerminated then
       begin
@@ -14683,7 +14691,7 @@ begin
         FModel.AddTypedHirNode('ret-runtime', '', 0, 0, '');
       end;
       FModel.AddTypedHirNode('function-body-end',
-        'np_unit_fini_' + Node.Operand, 0, 0, '');
+        LFuncName, 0, 0, '');
     end;
 
     // Restore state
