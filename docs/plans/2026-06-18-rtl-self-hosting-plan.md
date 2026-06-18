@@ -1,6 +1,7 @@
 # P5 RTL Self-Hosting Plan
 
 > **北极星**: nextPas 编译器编译自身源码，产出独立可执行的编译器。
+> **架构原则**: 编译器运行在自己的运行时 (`nextpas.core.*`) 上，不依赖 FPC 兼容层。
 
 ## 1. 现状评估
 
@@ -310,7 +311,89 @@ R5 内部特性补齐可以与 R3/R4 并行。
 - [x] 性能基准对比 FPC — 52965行: FPC 2.1s vs nextPas 24.7s (12x)
 
 ### 下一步方向
-- P2: 泛型支持（FPC 生态核心特性）
-- P3: 接口支持（OOP 完整性）
-- P4: LLVM 后端（终极性能碾压）
+
+---
+
+## ⚠️ 架构纠正 (2026-06-19)
+
+### 问题
+
+R5 自举阶段使用了 `units/linux-x86_64/SysUtils.pas`（953 行手写 FPC 兼容 shim）作为
+编译器的运行时依赖。这违背了项目核心原则：
+
+> **编译器应运行在 `nextpas.core.*` 自有运行时上，不应依赖 FPC 兼容层。**
+
+当前 `SysUtils.pas` 通过 libc FFI 实现了 `FileExists`/`FindFirst`/`ExpandFileName` 等函数，
+功能正确但架构错误——这些功能在 `nextpas.core.fs`/`nextpas.core.path`/`nextpas.core.text` 中已有完整实现。
+
+### 正确架构
+
+```
+Before (错误):
+  编译器源码 → uses SysUtils → units/linux-x86_64/SysUtils.pas (手写 shim) → libc FFI
+
+After (正确):
+  编译器源码 → uses nextpas.core.{text.conv,path,fs.util,os.env,...} → nextpas.core 运行时 → platform FFI
+```
+
+### 迁移映射
+
+| SysUtils API | nextpas.core API | 模块 |
+|---|---|---|
+| `ExtractFileDir(F)` | `PathDir(F)` | `nextpas.core.path` |
+| `ExtractFileName(F)` | `PathBase(F)` | `nextpas.core.path` |
+| `ExtractFileExt(F)` | `PathExt(F)` | `nextpas.core.path` |
+| `ChangeFileExt(F,E)` | `PathChangeExt(F,E)` | `nextpas.core.path` |
+| `ExpandFileName(F)` | `PathNormalize(F)` | `nextpas.core.path` |
+| `IncludeTrailingPathDelimiter` | `PathJoin(P,'')` | `nextpas.core.path` |
+| `FileExists(F)` | `FsExists(F)` | `nextpas.core.fs.util` |
+| `DirectoryExists(D)` | `FsIsDir(D)` | `nextpas.core.fs.util` |
+| `ForceDirectories(D)` | `FsMkdirAll(D)` | `nextpas.core.fs.dir` |
+| `DeleteFile(F)` | `FsRemove(F)` | `nextpas.core.fs.dir` |
+| `FindFirst/Next/Close` | `FsOpenDir` + `IDirIterator` | `nextpas.core.fs.dir` |
+| `GetEnvironmentVariable` | `OsEnvGet` | `nextpas.core.os.env` |
+| `FileSearch` | 内联实现（仅 1 处） | — |
+| `IntToStr/StrToInt/Trim/...` | 同名 | `nextpas.core.text.conv` |
+| `UpperCase/LowerCase` | 同名 | `nextpas.core.text.conv` |
+| `ParamStr/ParamCount` | FPC 内置 / `nextpas.core.args` | — |
+
+### 迁移范围
+
+- 编译器核心: 7 文件 (`np_toolchain_runner.pas`, `np_toolchain_profiles.pas`, `np_package_manifest.pas`, `np_package_lock.pas` + 3 test 文件)
+- stage0 包装: 12 文件 (`tools/stage0/*.pas`)
+- `rebuild-compiler.sh`: 加 `-Fu$ROOT/core/src`
+- 删除: `units/linux-x86_64/SysUtils.pas`
+
+### 验证
+
+- FPC 可编译所有需要的 `nextpas.core` 模块 ✅ (已验证)
+- 依赖链浅: `nextpas.core.text.conv` → 无外部依赖, `nextpas.core.path` → 无外部依赖
+
+---
+
+## Sprint R6: 架构修正 + musl 支持 (计划)
+
+### R6.1: SysUtils → nextpas.core 迁移
+- [ ] 迁移编译器核心 7 文件
+- [ ] 迁移 stage0 包装 12 文件
+- [ ] 更新 `rebuild-compiler.sh` 加 `-Fu$ROOT/core/src`
+- [ ] 验证: stage0(FPC) → stage2 → stage3 自举闭环
+- [ ] 删除 `units/linux-x86_64/SysUtils.pas`
+
+### R6.2: musl 目标支持
+- [ ] 创建 `build/targets/linux-x86_64-musl.toml`
+- [ ] 创建 `build/toolchains/linux-x86_64-to-linux-x86_64-musl.toml`
+- [ ] musl 工具链发现 (`musl-gcc` / `x86_64-linux-musl-gcc`)
+- [ ] 静态链接验证 (产出无 glibc 依赖的 ELF)
+- [ ] Alpine Linux 兼容性测试
+
+### R6.3: 双目标验证
+- [ ] glibc 目标: `nextpas build --target linux-x86_64`
+- [ ] musl 目标: `nextpas build --target linux-x86_64-musl`
+- [ ] 两个目标的自举闭环验证
+
+### 后续冲刺
+- P7: 泛型支持（FPC 生态核心特性）
+- P8: 接口支持（OOP 完整性）
+- P9: LLVM 后端（终极性能碾压）
 - 性能优化：解析/Sema/并行化（12x → 目标 <2x）
