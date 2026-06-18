@@ -38,7 +38,7 @@ object.alloc.header:
   %magicp = getelementptr i8, ptr %raw, i64 8
   store i64 1313882451, ptr %magicp
   %rcp = getelementptr i8, ptr %raw, i64 16
-  store i64 1, ptr %rcp
+  store i64 0, ptr %rcp
   %obj = getelementptr i8, ptr %raw, i64 24
   call void @np_memzero(ptr %obj, i64 %size)
   ret ptr %obj
@@ -99,6 +99,8 @@ done:
 }
 
 ; void @np_intf_release(ptr %obj) — 接口引用计数 -1，降为 0 时释放对象
+; 复用 np_object_free_release 完整链路：magic 校验 + poison + free
+; stage0 临时实现：单线程，非原子操作
 define void @np_intf_release(ptr %obj) {
 entry:
   %isnull = icmp eq ptr %obj, null
@@ -106,18 +108,20 @@ entry:
 dec:
   %rcp = getelementptr i8, ptr %obj, i64 -8
   %old = load i64, ptr %rcp
+  ; old==0 防御：防止下溢（double-release 或逻辑错误）
+  %is_already_zero = icmp eq i64 %old, 0
+  br i1 %is_already_zero, label %fault_underflow, label %do_dec
+fault_underflow:
+  call void @np_allocator_fault(i64 8, i64 0, i64 0)
+  unreachable
+do_dec:
   %new = sub i64 %old, 1
   store i64 %new, ptr %rcp
   %is_zero = icmp eq i64 %new, 0
   br i1 %is_zero, label %free_obj, label %done
 free_obj:
-  ; raw = obj - 24 (回到对象头)
-  %raw = getelementptr i8, ptr %obj, i64 -24
-  ; payload_size 在 [+0]
-  %payload_size = load i64, ptr %raw
-  ; alloc_size = payload_size + 24 (对象头大小)
-  %alloc_size = add i64 %payload_size, 24
-  call void @np_free(ptr %raw, i64 %alloc_size)
+  ; 复用 np_object_free_release：magic 校验 + poison + free
+  call void @np_object_free_release(ptr %obj)
   br label %done
 done:
   ret void
