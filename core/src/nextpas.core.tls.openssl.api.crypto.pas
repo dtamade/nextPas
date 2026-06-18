@@ -506,7 +506,8 @@ procedure UnloadOpenSSLCrypto;
 
 implementation
 
-uses nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.loader;
+uses nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.loader,
+  nextpas.core.platform.dl;
 
 const
   { Crypto function bindings for batch loading }

@@ -4,7 +4,8 @@ unit nextpas.core.tls.openssl.api.lhash;
 
 interface
 
-uses nextpas.core.base, nextpas.core.tls.base, nextpas.core.tls.exceptions, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader;
+uses nextpas.core.base, nextpas.core.tls.base, nextpas.core.tls.exceptions, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader,
+  nextpas.core.platform.dl;
 
 type
   // LHASH node structure (opaque)

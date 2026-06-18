@@ -26,7 +26,8 @@ uses
   nextpas.core.tls.exceptions, // Rust-quality: Typed exceptions
   nextpas.core.tls.openssl.errors, // OpenSSL-specific raise helpers
   nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.loader, // P0-1.1: 使用统一的加载器
+  nextpas.core.tls.openssl.loader,
+  nextpas.core.platform.dl, // P0-1.1: 使用统一的加载器
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.ssl,
   nextpas.core.tls.openssl.api.err,
@@ -905,7 +906,7 @@ begin
   end;
 
   InternalLog(sslLogDebug, Format('Feature support check (type-safe): %d = %s',
-    [Ord(AFeature), BoolToStr(Result, True)]));
+    [Ord(AFeature), BoolToStr(Result)]));
 end;
 {$WARN 6018 ON}
 function TOpenSSLLibrary.GetCapabilities: TSSLBackendCapabilities;
@@ -1136,9 +1137,9 @@ begin
 
   InternalLog(sslLogDebug, Format('GetCapabilities: TLS1.3=%s, ALPN=%s, SNI=%s',
     [
-      BoolToStr(Result.SupportsTLS13, True),
-      BoolToStr(Result.SupportsALPN, True),
-      BoolToStr(Result.SupportsSNI, True)
+      BoolToStr(Result.SupportsTLS13),
+      BoolToStr(Result.SupportsALPN),
+      BoolToStr(Result.SupportsSNI)
     ]));
 
   // v1.2.0: 缓存能力矩阵

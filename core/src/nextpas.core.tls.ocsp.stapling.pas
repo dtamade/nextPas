@@ -22,7 +22,7 @@ unit nextpas.core.tls.ocsp.stapling;
 
 interface
 
-uses Classes, nextpas.core.sync, nextpas.core.base, nextpas.core.tls.base, nextpas.core.tls.ocsp, nextpas.core.tls.ocsp.cache, nextpas.core.tls.x509, nextpas.core.crypto.hash;
+uses nextpas.core.sync, nextpas.core.base, nextpas.core.platform.thread, nextpas.core.tls.base, nextpas.core.tls.ocsp, nextpas.core.tls.ocsp.cache, nextpas.core.tls.x509, nextpas.core.crypto.hash;
 
 type
   // ========================================================================
@@ -123,17 +123,19 @@ type
 
     在后台定期检查缓存的 OCSP 响应，在过期前自动刷新。
   }
-  TOCSPAutoRefreshThread = class(TThread)
+  TOCSPAutoRefreshThread = class
   private
     FOwner: TOCSPStaplingServer;
     FStopEvent: IEvent;
-    FCheckIntervalMS: Integer;  // 检查间隔（毫秒）
-  protected
-    procedure Execute; override;
+    FCheckIntervalMS: Integer;
+    FHandle: TPlatformThreadRecord;
+    FTerminated: LongInt;
   public
     constructor Create(AOwner: TOCSPStaplingServer);
     destructor Destroy; override;
+    procedure Start;
     procedure SignalStop;
+    procedure WaitFor;
   end;
 
   { TOCSPStaplingServer - 服务端 Stapling 管理
@@ -805,48 +807,66 @@ end;
 // TOCSPAutoRefreshThread
 // ========================================================================
 
-constructor TOCSPAutoRefreshThread.Create(AOwner: TOCSPStaplingServer);
+function OCSPRefreshEntry(AArg: Pointer): Pointer; cdecl;
+var
+  LSelf: TOCSPAutoRefreshThread;
 begin
-  inherited Create(True);  // 创建为挂起状态
-  FreeOnTerminate := False;
-  FOwner := AOwner;
-  // 默认每 5 分钟检查一次
-  FCheckIntervalMS := 5 * 60 * 1000;
-  FStopEvent := Event(True);
-end;
-
-destructor TOCSPAutoRefreshThread.Destroy;
-begin
-  inherited Destroy;
-end;
-
-procedure TOCSPAutoRefreshThread.SignalStop;
-begin
-  Terminate;
-  FStopEvent.SetEvent;
-end;
-
-procedure TOCSPAutoRefreshThread.Execute;
-begin
-  while not Terminated do
+  LSelf := TOCSPAutoRefreshThread(AArg);
+  while InterlockedCompareExchange(LSelf.FTerminated, 0, 0) = 0 do
   begin
     // 等待指定时间或收到停止信号
-    if FStopEvent.WaitTimeout(Int64(FCheckIntervalMS) * 1000 * 1000) then
+    if LSelf.FStopEvent.WaitTimeout(Int64(LSelf.FCheckIntervalMS) * 1000 * 1000) then
       Break;
 
-    if Terminated then
+    if InterlockedCompareExchange(LSelf.FTerminated, 0, 0) <> 0 then
       Break;
 
     // 执行刷新
-    if (FOwner <> nil) and FOwner.FAutoRefreshEnabled then
+    if (LSelf.FOwner <> nil) and LSelf.FOwner.FAutoRefreshEnabled then
     begin
       try
-        FOwner.RefreshAllCertificates;
+        LSelf.FOwner.RefreshAllCertificates;
       except
         // 忽略刷新错误，下次重试
       end;
     end;
   end;
+  Result := nil;
+end;
+
+constructor TOCSPAutoRefreshThread.Create(AOwner: TOCSPStaplingServer);
+begin
+  inherited Create;
+  FOwner := AOwner;
+  FCheckIntervalMS := 5 * 60 * 1000;
+  FStopEvent := Event(True);
+  FTerminated := 0;
+  FHandle.Handle := nil;
+end;
+
+destructor TOCSPAutoRefreshThread.Destroy;
+begin
+  SignalStop;
+  WaitFor;
+  FStopEvent := nil;
+  inherited Destroy;
+end;
+
+procedure TOCSPAutoRefreshThread.Start;
+begin
+  platform_thread_spawn(FHandle, @OCSPRefreshEntry, Self);
+end;
+
+procedure TOCSPAutoRefreshThread.SignalStop;
+begin
+  InterlockedExchange(FTerminated, 1);
+  FStopEvent.SetEvent;
+end;
+
+procedure TOCSPAutoRefreshThread.WaitFor;
+begin
+  if platform_thread_is_alive(FHandle) then
+    platform_thread_wait(FHandle);
 end;
 
 // ========================================================================

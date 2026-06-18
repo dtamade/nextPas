@@ -4,7 +4,13 @@ unit nextpas.core.tls.openssl.api.legacy_ciphers;
 
 interface
 
-uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader; type // RC2 types RC2_KEY = packed record data: array[0..63] of Cardinal;
+uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader,
+  nextpas.core.platform.dl;
+
+type
+  // RC2 types
+  RC2_KEY = packed record
+    data: array[0..63] of Cardinal;
   end;
   PRC2_KEY = ^RC2_KEY;
   

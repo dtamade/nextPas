@@ -7232,6 +7232,10 @@ begin
       EmitProcessInit;
     hnkProcessFiniRuntime:
       EmitProcessFini;
+    hnkUnitInitRuntime:
+      ;  // handled by SeedUnitLifecycleBodies → function-body-begin
+    hnkUnitFiniRuntime:
+      ;  // handled by SeedUnitLifecycleBodies → function-body-begin
     hnkUnknown:
       ;
   end;

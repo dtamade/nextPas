@@ -93,7 +93,7 @@ type
     PublicKeyType: string;     // 公钥类型
     PublicKeyBits: Integer;    // 公钥位数
     SignatureAlgorithm: string;// 签名算法
-    SubjectAltNames: TStringArray; // SAN (备用名称)
+    SubjectAltNames: TStringList; // SAN (备用名称)
     KeyUsage: string;          // 密钥用途
     IsCA: Boolean;             // 是否CA证书
     Version: Integer;          // 证书版本
@@ -113,7 +113,7 @@ type
     KeyType: TKeyType;         // 密钥类型
     KeyBits: Integer;          // RSA密钥位数 (2048/4096)
     ECCurve: string;           // EC曲线名称 (prime256v1/secp384r1)
-    SubjectAltNames: TStringArray; // 备用名称
+    SubjectAltNames: TStringList; // 备用名称
     IsCA: Boolean;             // 是否CA证书
     SerialNumber: Int64;       // 序列号 (0=自动生成)
     OCSPResponderURL: string;  // 可选：写入 AIA 的 OCSP Responder URL（http/https）
@@ -417,7 +417,7 @@ begin
   Result.KeyType := ktRSA;
   Result.KeyBits := DEFAULT_RSA_KEY_BITS;
   Result.ECCurve := DEFAULT_EC_CURVE;
-  Result.SubjectAltNames := nil;
+  Result.SubjectAltNames := TStringList.Create;
   Result.IsCA := False;
   Result.SerialNumber := 0;
   Result.OCSPResponderURL := '';
@@ -973,7 +973,7 @@ begin
       AddExtension(LCert, LCert, NID_authority_key_identifier, 'keyid:always');
 
       // Subject Alternative Names
-      if (AOptions.SubjectAltNames <> nil) and (AOptions.Length(SubjectAltNames) > 0) then
+      if (AOptions.SubjectAltNames <> nil) and (AOptions.SubjectAltNames.Count > 0) then
       begin
         // Force comma delimiter without quotes
         AOptions.SubjectAltNames.Delimiter := ',';
@@ -1271,7 +1271,7 @@ begin
           AddExtension(LCert, LCACert, NID_authority_key_identifier, 'keyid:always,issuer');
 
           // Subject Alternative Names
-          if (AOptions.SubjectAltNames <> nil) and (AOptions.Length(SubjectAltNames) > 0) then
+          if (AOptions.SubjectAltNames <> nil) and (AOptions.SubjectAltNames.Count > 0) then
             AddExtension(LCert, LCACert, NID_subject_alt_name, AOptions.SubjectAltNames.DelimitedText);
 
           // Authority Information Access (OCSP)
@@ -1438,7 +1438,7 @@ var
   LKeyUsageFlags: Cardinal;
 begin
   FillChar(Result, SizeOf(Result), 0);
-  Result.SubjectAltNames
+  Result.SubjectAltNames := TStringList.Create;
 
   if not TOpenSSLLoader.IsModuleLoaded(osmCore) then
     LoadOpenSSLCore();
@@ -1823,7 +1823,7 @@ begin
   if AFromFormat = cfPEM then
     Result := PEMToDER(AnsiString(nextpas.core.text.conv.ASCIIBytesToString(AInput)))
   else
-    Result := nextpas.core.text.conv.StringToASCIIBytes(DERToPEM(AInput)));
+    Result := nextpas.core.text.conv.StringToASCIIBytes(DERToPEM(AInput));
 end;
 
 class function TCertificateUtils.PEMToDER(const APEM: string): TBytes;
@@ -1961,9 +1961,9 @@ var
 begin
   Result := False;
   try
-    LStream := TFileStream.Create(AFileName, fmCreate);
+    LStream := TFileStream.Create(AFileName, Word(fmCreate));
     try
-      LBytes := nextpas.core.text.conv.StringToUTF8Bytes(ACertPEM));
+      LBytes := nextpas.core.text.conv.StringToUTF8Bytes(ACertPEM);
       if Length(LBytes) > 0 then
         LStream.Write(LBytes[0], Length(LBytes));
       Result := True;
@@ -2056,7 +2056,7 @@ class function TCertificateUtils.CompareX509Names(
 ): Boolean;
 var
   LName1, LName2: string;
-  LComponents1, LComponents2: TStringArray;
+  LComponents1, LComponents2: TStringList;
   i: Integer;
 
   function NormalizeDN(const ADN: string): string;
@@ -2064,10 +2064,10 @@ var
     s: string;
   begin
     s := Trim(ADN);
-    s := StringReplace(s, ' = ', '=', [rfReplaceAll]);
-    s := StringReplace(s, '= ', '=', [rfReplaceAll]);
-    s := StringReplace(s, ' =', '=', [rfReplaceAll]);
-    s := StringReplace(s, ', ', ',', [rfReplaceAll]);
+    s := SysUtils.StringReplace(s, ' = ', '=', [rfReplaceAll]);
+    s := SysUtils.StringReplace(s, '= ', '=', [rfReplaceAll]);
+    s := SysUtils.StringReplace(s, ' =', '=', [rfReplaceAll]);
+    s := SysUtils.StringReplace(s, ', ', ',', [rfReplaceAll]);
 
     if ACaseInsensitive then
       Result := LowerCase(s)
@@ -2075,7 +2075,7 @@ var
       Result := s;
   end;
 
-  procedure ParseDN(const ADN: string; AList: TStringArray);
+  procedure ParseDN(const ADN: string; AList: TStringList);
   var
     Components: TStringArray;
     j: Integer;
@@ -2106,15 +2106,17 @@ begin
     Result := True;
     Exit;
   end;
+  LComponents1 := TStringList.Create;
+  LComponents2 := TStringList.Create;
   try
     ParseDN(LName1, LComponents1);
     ParseDN(LName2, LComponents2);
 
-    if Length(LComponents1) <> Length(LComponents2) then
+    if LComponents1.Count <> LComponents2.Count then
       Exit;
 
     Result := True;
-    for i := 0 to Length(LComponents1) - 1 do
+    for i := 0 to LComponents1.Count - 1 do
     begin
       if LComponents1[i] <> LComponents2[i] then
       begin
@@ -2123,6 +2125,8 @@ begin
       end;
     end;
   finally
+    LComponents1.Free;
+    LComponents2.Free;
   end;
 end;
 
@@ -2182,7 +2186,7 @@ begin
     Result := True;
   except
     FillChar(AInfo, SizeOf(AInfo), 0);
-    AInfo.SubjectAltNames
+    AInfo.SubjectAltNames := TStringList.Create;
     Result := False;
   end;
 end;

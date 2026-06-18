@@ -11,7 +11,8 @@ unit nextpas.core.tls.openssl.api.dso;
 
 interface
 
-uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.loader; type DSO = record end;
+uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.loader,
+  nextpas.core.platform.dl; type DSO = record end;
   PDSO = ^DSO;
   
   DSO_METHOD = record end;
@@ -84,7 +85,7 @@ var
   DSO_METHOD_vms: TDSOVms = nil;
 
 { Load/Unload functions }
-function LoadDSO(const ALibCrypto: THandle): Boolean;
+function LoadDSO(const ALibCrypto: TPlatformLibrary): Boolean;
 procedure UnloadDSO;
 
 { Helper functions }
@@ -96,7 +97,11 @@ function DSOSetFlags(dso: PDSO; Flags: TOpenSSLInt): Boolean;
 
 implementation
 
-uses nextpas.core.tls.openssl.api.utils; const DSO_BINDINGS: array[0..22] of TFunctionBinding = ( (Name: 'DSO_new'; FuncPtr: @DSO_new; Required: True);
+uses nextpas.core.tls.openssl.api.utils;
+
+const
+  DSO_BINDINGS: array[0..22] of TFunctionBinding = (
+    (Name: 'DSO_new'; FuncPtr: @DSO_new; Required: True),
     (Name: 'DSO_free';              FuncPtr: @DSO_free;              Required: True),
     (Name: 'DSO_up_ref';            FuncPtr: @DSO_up_ref;            Required: False),
     (Name: 'DSO_load';              FuncPtr: @DSO_load;              Required: False),
@@ -125,11 +130,11 @@ uses nextpas.core.tls.openssl.api.utils; const DSO_BINDINGS: array[0..22] of TFu
     (Name: 'DSO_METHOD_vms';        FuncPtr: @DSO_METHOD_vms;        Required: False)
   );
 
-function LoadDSO(const ALibCrypto: THandle): Boolean;
+function LoadDSO(const ALibCrypto: TPlatformLibrary): Boolean;
 begin
   Result := False;
   if TOpenSSLLoader.IsModuleLoaded(osmDSO) then Exit(True);
-  if ALibCrypto = 0 then Exit;
+  if not LibLoaded(ALibCrypto) then Exit;
 
   { Batch load all DSO functions }
   TOpenSSLLoader.LoadFunctions(ALibCrypto, DSO_BINDINGS);

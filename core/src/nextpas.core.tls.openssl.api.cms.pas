@@ -9,6 +9,7 @@ uses
    Classes,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
+  nextpas.core.platform.dl,
   nextpas.core.tls.openssl.api.consts,
   nextpas.core.tls.openssl.api.asn1,
   nextpas.core.tls.openssl.api.bio,
@@ -343,7 +344,7 @@ var
   CMS_RecipientInfo_kari_orig_id_cmp: TCMS_RecipientInfo_kari_orig_id_cmp = nil;
 
 // 加载和卸载函数
-function LoadOpenSSLCMS(const ACryptoLib: THandle): Boolean;
+function LoadOpenSSLCMS(const ACryptoLib: TPlatformLibrary): Boolean;
 procedure UnloadOpenSSLCMS;
 
 // 辅助函数
@@ -462,12 +463,12 @@ var
     (Name: 'CMS_RecipientInfo_kari_orig_id_cmp'; FuncPtr: @CMS_RecipientInfo_kari_orig_id_cmp; Required: False)
   );
 
-function LoadOpenSSLCMS(const ACryptoLib: THandle): Boolean;
+function LoadOpenSSLCMS(const ACryptoLib: TPlatformLibrary): Boolean;
 begin
   if TOpenSSLLoader.IsModuleLoaded(osmCMS) then
     Exit(True);
 
-  if ACryptoLib = 0 then
+  if not LibLoaded(ACryptoLib) then
     Exit(False);
 
   // 使用批量加载模式

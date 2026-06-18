@@ -4,7 +4,7 @@ program test_transport;
 
 uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
-  SysUtils, nextpas.core.tls.transport;
+  SysUtils, nextpas.core.tls.transport, nextpas.core.platform.socket;
 
 var
   LTotal, LPassed: Integer;
@@ -165,7 +165,7 @@ var
   LTransport: TSSLSocketTransport;
 begin
   WriteLn('TestSocketTransportCreate');
-  LTransport := TSSLSocketTransport.Create(THandle(-1), True);
+  LTransport := TSSLSocketTransport.Create(PLATFORM_INVALID_SOCKET, True);
   try
     Check(LTransport.Flush = trOK, 'Socket flush returns trOK');
   finally

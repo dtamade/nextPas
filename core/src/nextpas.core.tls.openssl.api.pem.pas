@@ -4,7 +4,8 @@ unit nextpas.core.tls.openssl.api.pem;
 
 interface
 
-uses nextpas.core.base, nextpas.core.fs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.bio, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.loader;
+uses nextpas.core.base, nextpas.core.fs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.bio, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.loader,
+  nextpas.core.platform.dl;
 
 type
   // PEM 密码回调函数类型
@@ -212,7 +213,7 @@ var
   PEM_dek_info: TPEM_dek_info = nil;
 
 // 加载和卸载函数
-function LoadOpenSSLPEM(const ACryptoLib: THandle): Boolean;
+function LoadOpenSSLPEM(const ACryptoLib: TPlatformLibrary): Boolean;
 procedure UnloadOpenSSLPEM;
 
 // 辅助函数
@@ -334,12 +335,12 @@ begin
     Result := 0;
 end;
 
-function LoadOpenSSLPEM(const ACryptoLib: THandle): Boolean;
+function LoadOpenSSLPEM(const ACryptoLib: TPlatformLibrary): Boolean;
 begin
   if TOpenSSLLoader.IsModuleLoaded(osmPEM) then
     Exit(True);
 
-  if ACryptoLib = 0 then
+  if not LibLoaded(ACryptoLib) then
     Exit(False);
 
   // 使用批量加载模式

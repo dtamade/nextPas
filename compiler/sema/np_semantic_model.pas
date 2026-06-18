@@ -108,6 +108,7 @@ type
     Operand: string;
     ExprId: LongInt;
     TargetExprId: LongInt;
+    GreenNodeRef: TObject;  // optional: green tree node for unit init/fini body
   end;
 
   TSemanticBinding = record
@@ -303,6 +304,8 @@ type
       const AExprId: LongInt);
     procedure SetTypedHirNodeTargetExprId(const AHirNodeId: LongInt;
       const AExprId: LongInt);
+    procedure SetTypedHirNodeGreenRef(const AHirNodeId: LongInt;
+      const AGreenNode: TObject);
     function AddBinding(
       const AKind: string;
       const AName: string;
@@ -826,6 +829,7 @@ begin
   FTypedHirNodes[NextIndex].Operand := AOperand;
   FTypedHirNodes[NextIndex].ExprId := 0;
   FTypedHirNodes[NextIndex].TargetExprId := 0;
+  FTypedHirNodes[NextIndex].GreenNodeRef := nil;
   Result := FTypedHirNodes[NextIndex].HirNodeId;
 end;
 
@@ -885,6 +889,17 @@ begin
   if (AExprId < 0) or (AExprId > Length(FHirExprs)) then
     Exit;
   FTypedHirNodes[Idx].TargetExprId := AExprId;
+end;
+
+procedure TSemanticModel.SetTypedHirNodeGreenRef(
+  const AHirNodeId: LongInt; const AGreenNode: TObject);
+var
+  Idx: LongInt;
+begin
+  Idx := AHirNodeId - 1;
+  if (Idx < 0) or (Idx >= Length(FTypedHirNodes)) then
+    Exit;
+  FTypedHirNodes[Idx].GreenNodeRef := AGreenNode;
 end;
 
 function TSemanticModel.AddBinding(

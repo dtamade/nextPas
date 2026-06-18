@@ -4,7 +4,8 @@ unit nextpas.core.tls.openssl.api.chacha;
 
 interface
 
-uses nextpas.core.base, nextpas.core.tls.base, nextpas.core.tls.exceptions, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.loader;
+uses nextpas.core.base, nextpas.core.tls.base, nextpas.core.tls.exceptions, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.loader,
+  nextpas.core.platform.dl;
 
 const
   CHACHA20_KEY_SIZE = 32;
@@ -184,10 +185,10 @@ begin
     if EVP_EncryptInit_ex(ctx, EVP_chacha20(), nil, @Key[0], @IV[0]) <> 1 then
       raise ESSLCryptoError.Create('Failed to initialize ChaCha20 encryption');
       
-    if EVP_EncryptUpdate(ctx, @Result[0], @outlen, @Plaintext[0], Length(Plaintext)) <> 1 then
+    if EVP_EncryptUpdate(ctx, @Result[0], outlen, @Plaintext[0], Length(Plaintext)) <> 1 then
       raise ESSLEncryptionException.Create('Failed to encrypt with ChaCha20');
       
-    if EVP_EncryptFinal_ex(ctx, @Result[outlen], @finlen) <> 1 then
+    if EVP_EncryptFinal_ex(ctx, @Result[outlen], finlen) <> 1 then
       raise ESSLCryptoError.Create('Failed to finalize ChaCha20 encryption');
       
     SetLength(Result, outlen + finlen);
@@ -218,10 +219,10 @@ begin
     if EVP_DecryptInit_ex(ctx, EVP_chacha20(), nil, @Key[0], @IV[0]) <> 1 then
       raise ESSLCryptoError.Create('Failed to initialize ChaCha20 decryption');
       
-    if EVP_DecryptUpdate(ctx, @Result[0], @outlen, @Ciphertext[0], Length(Ciphertext)) <> 1 then
+    if EVP_DecryptUpdate(ctx, @Result[0], outlen, @Ciphertext[0], Length(Ciphertext)) <> 1 then
       raise ESSLDecryptionException.Create('Failed to decrypt with ChaCha20');
       
-    if EVP_DecryptFinal_ex(ctx, @Result[outlen], @finlen) <> 1 then
+    if EVP_DecryptFinal_ex(ctx, @Result[outlen], finlen) <> 1 then
       raise ESSLCryptoError.Create('Failed to finalize ChaCha20 decryption');
       
     SetLength(Result, outlen + finlen);
@@ -256,15 +257,15 @@ begin
     // Set AAD if provided
     if Length(AAD) > 0 then
     begin
-      if EVP_EncryptUpdate(ctx, nil, @outlen, @AAD[0], Length(AAD)) <> 1 then
+      if EVP_EncryptUpdate(ctx, nil, outlen, @AAD[0], Length(AAD)) <> 1 then
         raise ESSLCryptoError.Create('Failed to set AAD');
     end;
     
     // Encrypt plaintext
-    if EVP_EncryptUpdate(ctx, @Result[0], @outlen, @Plaintext[0], Length(Plaintext)) <> 1 then
+    if EVP_EncryptUpdate(ctx, @Result[0], outlen, @Plaintext[0], Length(Plaintext)) <> 1 then
       raise ESSLEncryptionException.Create('Failed to encrypt with ChaCha20-Poly1305');
       
-    if EVP_EncryptFinal_ex(ctx, @Result[outlen], @finlen) <> 1 then
+    if EVP_EncryptFinal_ex(ctx, @Result[outlen], finlen) <> 1 then
       raise ESSLCryptoError.Create('Failed to finalize ChaCha20-Poly1305 encryption');
       
     SetLength(Result, outlen + finlen);
@@ -302,12 +303,12 @@ begin
     // Set AAD if provided
     if Length(AAD) > 0 then
     begin
-      if EVP_DecryptUpdate(ctx, nil, @outlen, @AAD[0], Length(AAD)) <> 1 then
+      if EVP_DecryptUpdate(ctx, nil, outlen, @AAD[0], Length(AAD)) <> 1 then
         raise ESSLCryptoError.Create('Failed to set AAD');
     end;
     
     // Decrypt ciphertext
-    if EVP_DecryptUpdate(ctx, @Result[0], @outlen, @Ciphertext[0], Length(Ciphertext)) <> 1 then
+    if EVP_DecryptUpdate(ctx, @Result[0], outlen, @Ciphertext[0], Length(Ciphertext)) <> 1 then
       raise ESSLDecryptionException.Create('Failed to decrypt with ChaCha20-Poly1305');
     
     // Set expected tag
@@ -315,7 +316,7 @@ begin
       raise ESSLCryptoError.Create('Failed to set authentication tag');
       
     // Verify tag and finalize
-    if EVP_DecryptFinal_ex(ctx, @Result[outlen], @finlen) <> 1 then
+    if EVP_DecryptFinal_ex(ctx, @Result[outlen], finlen) <> 1 then
       raise ESSLDecryptionException.Create('Authentication verification failed');
       
     SetLength(Result, outlen + finlen);

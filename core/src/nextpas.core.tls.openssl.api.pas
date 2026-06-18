@@ -8,6 +8,7 @@ uses
   nextpas.core.exception,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.openssl.loader,
+  nextpas.core.platform.dl,
   nextpas.core.text.conv;
 
 const

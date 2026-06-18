@@ -133,7 +133,7 @@ type
 
 implementation
 
-uses nextpas.core.tls.openssl.api.provider, nextpas.core.tls.openssl.api.engine, nextpas.core.tls.openssl.api.store, nextpas.core.tls.pkcs11.provider, nextpas.core.tls.pkcs11.engine;
+uses SysUtils, nextpas.core.tls.openssl.api.provider, nextpas.core.tls.openssl.api.engine, nextpas.core.tls.openssl.api.store, nextpas.core.tls.pkcs11.provider, nextpas.core.tls.pkcs11.engine;
 
 { TPKCS11BackendFactory }
 

@@ -575,7 +575,8 @@ procedure UnloadOpenSSLX509;
 
 implementation
 
-uses nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.loader;
+uses nextpas.core.tls.openssl.api.core,
+  nextpas.core.platform.dl;
 
 procedure LoadOpenSSLX509;
 var

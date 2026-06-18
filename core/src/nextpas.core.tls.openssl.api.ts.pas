@@ -8,7 +8,13 @@ unit nextpas.core.tls.openssl.api.ts;
 
 interface
 
-uses nextpas.core.base, nextpas.core.text.conv, nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.bio, nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.asn1, nextpas.core.tls.openssl.api.obj, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.api.rand;
+uses
+  nextpas.core.base, nextpas.core.text.conv, nextpas.core.time,
+  nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.base,
+  nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.bio,
+  nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.asn1,
+  nextpas.core.tls.openssl.api.obj, nextpas.core.tls.openssl.api.evp,
+  nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.api.rand;
 
 const
   // TS 消息类型
@@ -438,6 +444,7 @@ function GetTimestampTime(Response: PTS_RESP): TDateTime;
 
 implementation
 
+uses nextpas.core.tls.openssl.api.core;
 
 procedure LoadTSFunctions;
 begin
@@ -721,7 +728,7 @@ begin
       if Assigned(RAND_bytes) then
         RAND_bytes(@RandomBytes[0], Length(RandomBytes))
       else
-        PQWord(@RandomBytes[0])^ := QWord(GetTickCount64);
+        PQWord(@RandomBytes[0])^ := QWord(nextpas.core.time.DateTimeMillisecondsBetween(nextpas.core.time.DateTimeNow, 0));
 
       Nonce := nil;
 

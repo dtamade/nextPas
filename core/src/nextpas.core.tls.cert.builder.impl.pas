@@ -324,15 +324,15 @@ begin
   Result := FInfo.NotAfter;
 end;
 
-function TCertificateImpl.GetSubjectAltNames: TStringArray;
+function TCertificateImpl.GetSubjectAltNames: nextpas.core.base.TStringArray;
 var
   I: Integer;
 begin
   SetLength(Result, 0);
   if Assigned(FInfo.SubjectAltNames) then
   begin
-    SetLength(Result, FInfo.Length(SubjectAltNames));
-    for I := 0 to FInfo.Length(SubjectAltNames) - 1 do
+    SetLength(Result, FInfo.SubjectAltNames.Count);
+    for I := 0 to FInfo.SubjectAltNames.Count - 1 do
       Result[I] := FInfo.SubjectAltNames[I];
   end;
 end;
@@ -604,7 +604,7 @@ end;
 function TCertificateBuilderImpl.AddSubjectAltName(const ASAN: string): ICertificateBuilder;
 begin
   if not Assigned(FOptions.SubjectAltNames) then
-    FOptions.SubjectAltNames
+    FOptions.SubjectAltNames := TStringList.Create;
   FOptions.SubjectAltNames.Add(ASAN);
   Result := Self;
 end;

@@ -4,7 +4,8 @@ unit nextpas.core.tls.openssl.api.obj;
 
 interface
 
-uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.asn1;
+uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.asn1,
+  nextpas.core.platform.dl;
 
 type
   // OBJ 类型定义
@@ -146,7 +147,7 @@ function GetSignatureAlgorithms(SignatureNID: Integer;
 function FindSignatureNID(ADigestNID, APublicKeyNID: Integer): Integer;
 
 // 模块加载和卸载
-procedure LoadOBJModule(ALibCrypto: THandle);
+procedure LoadOBJModule(ALibCrypto: TPlatformLibrary);
 procedure UnloadOBJModule;
 
 implementation
@@ -184,9 +185,9 @@ const
     (Name: 'OBJ_NAME_new_index';    FuncPtr: @OBJ_NAME_new_index;    Required: False)
   );
 
-procedure LoadOBJModule(ALibCrypto: THandle);
+procedure LoadOBJModule(ALibCrypto: TPlatformLibrary);
 begin
-  if ALibCrypto = 0 then Exit;
+  if not LibLoaded(ALibCrypto) then Exit;
   TOpenSSLLoader.LoadFunctions(ALibCrypto, OBJ_FUNCTION_BINDINGS);
 end;
 

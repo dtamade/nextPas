@@ -4,7 +4,8 @@ unit nextpas.core.tls.openssl.api.buffer;
 
 interface
 
-uses nextpas.core.base, nextpas.core.text.conv, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader;
+uses nextpas.core.base, nextpas.core.text.conv, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader,
+  nextpas.core.platform.dl;
 
 type
   // Buffer 结构体
@@ -63,7 +64,7 @@ function DuplicateString(const Str: string): PAnsiChar;
 function DuplicateData(const Data: TBytes): Pointer;
 
 // 模块加载和卸载
-procedure LoadBufferModule(ALibCrypto: THandle);
+procedure LoadBufferModule(ALibCrypto: TPlatformLibrary);
 procedure UnloadBufferModule;
 
 implementation
@@ -84,9 +85,9 @@ const
     (Name: 'BUF_strlcat';       FuncPtr: @BUF_strlcat;       Required: False)
   );
 
-procedure LoadBufferModule(ALibCrypto: THandle);
+procedure LoadBufferModule(ALibCrypto: TPlatformLibrary);
 begin
-  if ALibCrypto = 0 then Exit;
+  if not LibLoaded(ALibCrypto) then Exit;
   TOpenSSLLoader.LoadFunctions(ALibCrypto, BufferBindings);
 end;
 

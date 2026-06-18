@@ -4,7 +4,8 @@ unit nextpas.core.tls.openssl.api.modes;
 
 interface
 
-uses nextpas.core.base, nextpas.core.tls.base, nextpas.core.tls.exceptions, nextpas.core.tls.errors, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.evp;
+uses nextpas.core.base, nextpas.core.tls.base, nextpas.core.tls.exceptions, nextpas.core.tls.errors, nextpas.core.tls.openssl.loader,
+  nextpas.core.platform.dl, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.evp;
 
 const
   // GCM constants

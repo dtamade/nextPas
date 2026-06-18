@@ -2,7 +2,7 @@
 
 > 日期: 2026-06-18
 > 来源: Codex 架构研究 + Claude 执行
-> 状态: 方案就绪，待执行
+> 状态: Sprint 1-4 完成，Sprint 5 待执行
 
 ## 七项债务总览
 
@@ -32,23 +32,23 @@
 
 ### Sprint 1 (第 1 周)
 - [x] #1 StrComp (0.25天) — 消除最后 1 个 SysUtils
-- [ ] #5 Gate 3 process lifecycle (3天) — 解锁后续 Gates
-- [ ] #7 Platform Phase 1: DynLibs→platform.dl (2天)
+- [x] #5 Gate 3 process lifecycle (3天) — 已完成，代码已存在
+- [x] #7 Platform Phase 1: DynLibs→platform.dl (2天) — Sprint 2 完成
 
 ### Sprint 2 (第 2 周)
-- [ ] #7 Platform Phase 2-4: Socket/Windows/Unix (3.5天)
-- [ ] #3 TThread: 创建 TWorkerThread (3天)
+- [x] #7 Platform Phase 2-4: Socket/Windows/Unix (3.5天) — TPlatformThreadRecord 迁移完成
+- [x] #3 TThread: platform_thread 迁移 (3天) — task/tls 迁移完成
 
 ### Sprint 3 (第 3 周)
-- [ ] #2 transport.pas 平台单元替换 (1天)
-- [ ] #4 Gate 2 unit lifecycle: @llvm.global_ctors (5天)
+- [x] #2 transport.pas 平台单元替换 (1天) — 已在 Sprint 2 完成
+- [x] #4 Gate 2 unit lifecycle: @llvm.global_ctors (5天) — Phase 0-5 + Codex 修复完成
 
 ### Sprint 4 (第 4 周)
-- [ ] #6 Gate 4 heap: 阶段 1-2 (3.5天)
+- [x] #6 Gate 4 heap: 阶段 1-3 (4.5天) — runtime library 解耦完成
 
 ### Sprint 5 (第 5 周)
-- [ ] #6 Gate 4 heap: 阶段 3-4
-- [ ] #2 全局 TInterfacedObject 替换 (5天)
+- [x] #6 Gate 4 heap: 阶段 4 (字符串/dynarray/异常处理外部化) — 3 个 .ll 文件，emitter -377 行
+- [x] #2 TInterfacedObject refcount 修复 — runtime 3 项修复 + System.pas _AddRef/_Release + Codex 审查
 
 ## 各项详细方案
 

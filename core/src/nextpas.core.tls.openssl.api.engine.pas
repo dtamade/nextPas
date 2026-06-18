@@ -17,10 +17,11 @@ unit nextpas.core.tls.openssl.api.engine;
 interface
 
 uses
-   Classes,
   nextpas.core.base,
+  nextpas.core.text.strings,
   nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.loader;
+  nextpas.core.tls.openssl.loader,
+  nextpas.core.platform.dl;
 
 type
   // Engine types
@@ -121,7 +122,7 @@ var
   ENGINE_load_public_key: TENGINE_load_public_key = nil;
 
 // Module loading functions
-function LoadOpenSSLEngine(const ACryptoLib: THandle): Boolean;
+function LoadOpenSSLEngine(const ACryptoLib: TPlatformLibrary): Boolean;
 procedure UnloadOpenSSLEngine;
 
 // Helper functions
@@ -159,10 +160,10 @@ const
     (Name: 'ENGINE_load_public_key'; FuncPtr: @ENGINE_load_public_key; Required: False)
   );
 
-function LoadOpenSSLEngine(const ACryptoLib: THandle): Boolean;
+function LoadOpenSSLEngine(const ACryptoLib: TPlatformLibrary): Boolean;
 begin
   Result := False;
-  if ACryptoLib = 0 then
+  if not LibLoaded(ACryptoLib) then
     Exit;
 
   if TOpenSSLLoader.IsModuleLoaded(osmEngine) then
@@ -244,6 +245,7 @@ end;
 function ListAvailableEngines: TStringArray;
 var
   Eng: PENGINE;
+  LId: PAnsiChar;
 begin
   Result := nil;
   if not TOpenSSLLoader.IsModuleLoaded(osmEngine) then
@@ -259,7 +261,9 @@ begin
     Eng := ENGINE_get_first();
     while Eng <> nil do
     begin
-      Result.Add(string(ENGINE_get_id(Eng)));
+      LId := ENGINE_get_id(Eng);
+      if LId <> nil then
+        StringsAppend(Result, string(LId));
       Eng := ENGINE_get_next(Eng);
     end;
   end;

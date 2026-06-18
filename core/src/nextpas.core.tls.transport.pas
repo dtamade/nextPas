@@ -5,7 +5,7 @@ unit nextpas.core.tls.transport;
 interface
 
 uses
-  nextpas.core.base;
+  nextpas.core.base, nextpas.core.platform.socket;
 
 
 type
@@ -49,10 +49,10 @@ type
 
   TSSLSocketTransport = class(TInterfacedObject, ISSLTransport)
   private
-    FHandle: THandle;
+    FSocket: TPlatformSocket;
     FNonBlocking: Boolean;
   public
-    constructor Create(AHandle: THandle; ANonBlocking: Boolean = False);
+    constructor Create(const ASocket: TPlatformSocket; ANonBlocking: Boolean = False);
     function Read(var ABuffer; ACount: Integer; out ABytesRead: Integer): TSSLTransportResult;
     function Write(const ABuffer; ACount: Integer; out ABytesWritten: Integer): TSSLTransportResult;
     function Flush: TSSLTransportResult;
@@ -60,7 +60,7 @@ type
 
 implementation
 
-uses BaseUnix, Sockets, WinSock2, Classes; constructor TSSLMemoryTransport.Create(ACapacity: Integer);
+uses nextpas.core.system.classes; constructor TSSLMemoryTransport.Create(ACapacity: Integer);
 begin
   inherited Create;
   SetLength(FBuffer, ACapacity);
@@ -150,29 +150,24 @@ begin
   end;
 end;
 
-constructor TSSLSocketTransport.Create(AHandle: THandle; ANonBlocking: Boolean);
+constructor TSSLSocketTransport.Create(const ASocket: TPlatformSocket; ANonBlocking: Boolean);
 begin
   inherited Create;
-  FHandle := AHandle;
+  FSocket := ASocket;
   FNonBlocking := ANonBlocking;
+  if ANonBlocking then
+    platform_socket_set_nonblocking(FSocket, True);
 end;
 
 function TSSLSocketTransport.Read(var ABuffer; ACount: Integer; out ABytesRead: Integer): TSSLTransportResult;
 var
-  LRet: Integer;
-  {$IFDEF UNIX}
-  LErrno: Integer;
-  {$ENDIF}
+  LErr: Int32;
+  LRecvd: Int32;
 begin
-  {$IFDEF UNIX}
-  if FNonBlocking then
-    LRet := fpRecv(FHandle, @ABuffer, ACount, MSG_DONTWAIT)
-  else
-    LRet := fpRecv(FHandle, @ABuffer, ACount, 0);
-  if LRet < 0 then
+  LErr := platform_socket_recv(FSocket, @ABuffer, ACount, 0, LRecvd);
+  if LErr <> 0 then
   begin
-    LErrno := fpGetErrno;
-    if (LErrno = ESysEAGAIN) or (LErrno = ESysEWOULDBLOCK) then
+    if FNonBlocking and platform_socket_error_would_block(LErr) then
     begin
       ABytesRead := 0;
       Exit(trWantRead);
@@ -180,44 +175,24 @@ begin
     ABytesRead := 0;
     Exit(trError);
   end;
-  {$ELSE}
-  LRet := recv(FHandle, ABuffer, ACount, 0);
-  if LRet = SOCKET_ERROR then
-  begin
-    if WSAGetLastError = WSAEWOULDBLOCK then
-    begin
-      ABytesRead := 0;
-      Exit(trWantRead);
-    end;
-    ABytesRead := 0;
-    Exit(trError);
-  end;
-  {$ENDIF}
-  if LRet = 0 then
+  if LRecvd = 0 then
   begin
     ABytesRead := 0;
     Exit(trClosed);
   end;
-  ABytesRead := LRet;
+  ABytesRead := LRecvd;
   Result := trOK;
 end;
 
 function TSSLSocketTransport.Write(const ABuffer; ACount: Integer; out ABytesWritten: Integer): TSSLTransportResult;
 var
-  LRet: Integer;
-  {$IFDEF UNIX}
-  LErrno: Integer;
-  {$ENDIF}
+  LErr: Int32;
+  LSent: Int32;
 begin
-  {$IFDEF UNIX}
-  if FNonBlocking then
-    LRet := fpSend(FHandle, @ABuffer, ACount, MSG_DONTWAIT or MSG_NOSIGNAL)
-  else
-    LRet := fpSend(FHandle, @ABuffer, ACount, MSG_NOSIGNAL);
-  if LRet < 0 then
+  LErr := platform_socket_send(FSocket, @ABuffer, ACount, 0, LSent);
+  if LErr <> 0 then
   begin
-    LErrno := fpGetErrno;
-    if (LErrno = ESysEAGAIN) or (LErrno = ESysEWOULDBLOCK) then
+    if FNonBlocking and platform_socket_error_would_block(LErr) then
     begin
       ABytesWritten := 0;
       Exit(trWantWrite);
@@ -225,20 +200,7 @@ begin
     ABytesWritten := 0;
     Exit(trError);
   end;
-  {$ELSE}
-  LRet := send(FHandle, ABuffer, ACount, 0);
-  if LRet = SOCKET_ERROR then
-  begin
-    if WSAGetLastError = WSAEWOULDBLOCK then
-    begin
-      ABytesWritten := 0;
-      Exit(trWantWrite);
-    end;
-    ABytesWritten := 0;
-    Exit(trError);
-  end;
-  {$ENDIF}
-  ABytesWritten := LRet;
+  ABytesWritten := LSent;
   Result := trOK;
 end;
 

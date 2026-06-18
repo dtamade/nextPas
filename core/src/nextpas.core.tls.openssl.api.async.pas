@@ -5,7 +5,8 @@ unit nextpas.core.tls.openssl.api.async;
 
 interface
 
-uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader;
+uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader,
+  nextpas.core.platform.dl;
 
 type
   // ASYNC types
@@ -148,7 +149,17 @@ type
 
 implementation
 
-uses Windows, BaseUnix, nextpas.core.tls.openssl.api.utils;
+uses {$IFDEF WINDOWS}nextpas.core.platform.windows.ffi,{$ENDIF}
+  nextpas.core.time, nextpas.core.tls.openssl.api.utils;
+
+{$IFDEF WINDOWS}
+function WaitForMultipleObjects(nCount: DWORD; lpHandles: Pointer;
+  bWaitAll: BOOL; dwMilliseconds: DWORD): DWORD; stdcall;
+  external 'kernel32' name 'WaitForMultipleObjects';
+const
+  WAIT_OBJECT_0 = 0;
+  INFINITE = DWORD($FFFFFFFF);
+{$ENDIF}
 
 procedure LoadASYNCFunctions(AHandle: TPlatformLibrary);
 type
@@ -479,18 +490,20 @@ procedure TAsyncJobPool.WaitAll(TimeoutMs: Integer);
 var
   I: Integer;
   Job: TAsyncJob;
-  StartTime: QWord;
+  StartTime: TDateTime;
+  ElapsedMs: Int64;
   RemainingTime: Integer;
 begin
-  StartTime := GetTickCount64;
-  
+  StartTime := DateTimeNow;
+
   for I := 0 to High(FJobs) do
   begin
     Job := TAsyncJob(FJobs[I]);
-    
+
     if TimeoutMs >= 0 then
     begin
-      RemainingTime := TimeoutMs - (GetTickCount64 - StartTime);
+      ElapsedMs := DateTimeMillisecondsBetween(DateTimeNow, StartTime);
+      RemainingTime := TimeoutMs - Integer(ElapsedMs);
       if RemainingTime <= 0 then Break;
       Job.Wait(RemainingTime);
     end

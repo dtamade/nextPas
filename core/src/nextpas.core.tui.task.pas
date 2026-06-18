@@ -2,7 +2,7 @@ unit nextpas.core.tui.task;
 {$I nextpas.core.settings.inc}
 
 interface
-uses Classes, nextpas.core.exception;
+uses nextpas.core.sync, nextpas.core.platform.thread, nextpas.core.exception;
 const
   TASK_QUEUE_CAPACITY = 32;
   MAX_CONCURRENT_TASKS = 8;
@@ -37,27 +37,9 @@ type
     Result: TTaskResult;
   end;
   TTaskManager = class;
-{$IF FPC_FULLVERSION >= 30300}
-  TTaskThread = class(TThread)
-  private
-    FId: TTaskId;
-    FFunc: TTaskFunc;
-    FContext: TTaskContext;
-    FManager: TTaskManager;
-    FName: ShortString;
-  protected
-    procedure Execute; override;
-  public
-    constructor Create(AManager: TTaskManager; AId: TTaskId;
-                       AFunc: TTaskFunc; const ACtx: TTaskContext;
-                       const AName: ShortString);
-  end;
-{$ENDIF}
   TActiveTask = record
     Id: TTaskId;
-  {$IF FPC_FULLVERSION >= 30300}
-    Thread: TTaskThread;
-  {$ENDIF}
+    Handle: TPlatformThreadRecord;
     Cancel: TCancelToken;
     Status: TTaskStatus;
     Done: Boolean;
@@ -72,7 +54,7 @@ type
   end;
   TTaskManager = class
   private
-    FLock: TRTLCriticalSection;
+    FLock: IMutex;
     FCompletions: array[0..TASK_QUEUE_CAPACITY - 1] of TCompletionSlot;
     FCompHead: Integer;
     FCompTail: Integer;
@@ -100,13 +82,7 @@ type
     procedure RemoveCompletionAt(Index: Integer);
     procedure RemoveOverflowAt(Index: Integer);
     procedure RemovePendingAt(Index: Integer);
-  {$IF FPC_FULLVERSION >= 30300}
     procedure ReapFinished;
-  {$ELSE}
-    procedure RunSync(Slot: Integer; Id: TTaskId; Func: TTaskFunc;
-                      Param: Pointer; ParamSize: UInt32;
-                      const Name: ShortString);
-  {$ENDIF}
   public
     constructor Create;
     destructor Destroy; override;
@@ -126,6 +102,41 @@ function IsCancelled(const Ctx: TTaskContext): Boolean; inline;
 function MakeSpec(Func: TTaskFunc; Param: Pointer; ParamSize: UInt32;
                   const Name: ShortString): TTaskSpec;
 implementation
+type
+  TTaskThreadPayload = record
+    Id: TTaskId;
+    Func: TTaskFunc;
+    Context: TTaskContext;
+    Manager: TTaskManager;
+    Name: ShortString;
+  end;
+  PTaskThreadPayload = ^TTaskThreadPayload;
+
+function TaskThreadEntry(AArg: Pointer): Pointer; cdecl;
+var
+  LP: PTaskThreadPayload;
+  Res: TTaskResult;
+begin
+  LP := PTaskThreadPayload(AArg);
+  try
+    Res := LP^.Func(LP^.Context);
+  except
+    on E: Exception do
+    begin
+      Res.Status := tsFailed;
+      Res.Data := nil;
+      Res.DataSize := 0;
+      Res.Error := PrefixTaskError(LP^.Name, E.Message);
+    end;
+  end;
+  if InterlockedCompareExchange(LP^.Context.Cancel^.FCancelled, 0, 0) = 1 then
+    Res.Status := tsCancelled;
+  LP^.Manager.OnThreadComplete(LP^.Id, Res);
+  if LP^.Context.Param <> nil then
+    FreeMem(LP^.Context.Param);
+  Dispose(LP);
+  Result := nil;
+end;
 function PrefixTaskError(const Name, Msg: ShortString): ShortString;
 begin
   if Name = '' then
@@ -138,6 +149,13 @@ function IsCancelled(const Ctx: TTaskContext): Boolean;
 begin
   Result := InterlockedCompareExchange(Ctx.Cancel^.FCancelled, 0, 0) = 1;
 end;
+function MakeFailedResult(const AError: ShortString): TTaskResult;
+begin
+  Result.Status := tsFailed;
+  Result.Data := nil;
+  Result.DataSize := 0;
+  Result.Error := AError;
+end;
 function MakeSpec(Func: TTaskFunc; Param: Pointer; ParamSize: UInt32;
                   const Name: ShortString): TTaskSpec;
 begin
@@ -146,46 +164,12 @@ begin
   Result.ParamSize := ParamSize;
   Result.Name := Name;
 end;
-{$IF FPC_FULLVERSION >= 30300}
-constructor TTaskThread.Create(AManager: TTaskManager; AId: TTaskId;
-                               AFunc: TTaskFunc; const ACtx: TTaskContext;
-                               const AName: ShortString);
-begin
-  FManager := AManager;
-  FId := AId;
-  FFunc := AFunc;
-  FContext := ACtx;
-  FName := AName;
-  inherited Create(False);
-end;
-procedure TTaskThread.Execute;
-var
-  Res: TTaskResult;
-begin
-  try
-    Res := FFunc(FContext);
-  except
-    on E: Exception do
-    begin
-      Res.Status := tsFailed;
-      Res.Data := nil;
-      Res.DataSize := 0;
-      Res.Error := PrefixTaskError(FName, E.Message);
-    end;
-  end;
-  if InterlockedCompareExchange(FContext.Cancel^.FCancelled, 0, 0) = 1 then
-    Res.Status := tsCancelled;
-  FManager.OnThreadComplete(FId, Res);
-  if FContext.Param <> nil then
-    FreeMem(FContext.Param);
-end;
-{$ENDIF}
 constructor TTaskManager.Create;
 var
   I: Integer;
 begin
   inherited Create;
-  InitCriticalSection(FLock);
+  FLock := Mutex;
   FCompHead := 0;
   FCompTail := 0;
   FCompCount := 0;
@@ -201,9 +185,7 @@ begin
   for I := 0 to MAX_CONCURRENT_TASKS - 1 do
   begin
     FActive[I].Id := 0;
-  {$IF FPC_FULLVERSION >= 30300}
-    FActive[I].Thread := nil;
-  {$ENDIF}
+    FActive[I].Handle.Handle := nil;
     FActive[I].Status := tsQueued;
     FActive[I].Done := True;
     FActive[I].Name := '';
@@ -212,7 +194,7 @@ end;
 destructor TTaskManager.Destroy;
 begin
   ShutdownAndWait;
-  DoneCriticalSection(FLock);
+  FLock := nil;
   inherited;
 end;
 function TTaskManager.FindFreeSlot: Integer;
@@ -358,79 +340,33 @@ begin
   FPendTail := WritePos;
   Dec(FPendCount);
 end;
-{$IF FPC_FULLVERSION >= 30300}
 procedure TTaskManager.ReapFinished;
 var
   I: Integer;
-  T: TTaskThread;
-  Threads: array[0..MAX_CONCURRENT_TASKS - 1] of TTaskThread;
-  ThreadCount: Integer;
+  LHandles: array[0..MAX_CONCURRENT_TASKS - 1] of TPlatformThreadRecord;
+  LCount: Integer;
 begin
-  ThreadCount := 0;
-  EnterCriticalSection(FLock);
+  LCount := 0;
+  FLock.Acquire;
   try
     for I := 0 to MAX_CONCURRENT_TASKS - 1 do
-      if (FActive[I].Thread <> nil) and FActive[I].Done then
+      if platform_thread_is_alive(FActive[I].Handle) and FActive[I].Done then
       begin
-        Threads[ThreadCount] := FActive[I].Thread;
-        FActive[I].Thread := nil;
-        Inc(ThreadCount);
+        LHandles[LCount] := FActive[I].Handle;
+        FActive[I].Handle.Handle := nil;
+        Inc(LCount);
       end;
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
-  for I := 0 to ThreadCount - 1 do
-  begin
-    T := Threads[I];
-    T.WaitFor;
-    T.Free;
-  end;
+  for I := 0 to LCount - 1 do
+    platform_thread_wait(LHandles[I]);
 end;
-{$ELSE}
-procedure TTaskManager.RunSync(Slot: Integer; Id: TTaskId; Func: TTaskFunc;
-                               Param: Pointer; ParamSize: UInt32;
-                               const Name: ShortString);
-var
-  Ctx: TTaskContext;
-  Res: TTaskResult;
-begin
-  FActive[Slot].Id := Id;
-  FActive[Slot].Cancel.FCancelled := 0;
-  FActive[Slot].Status := tsRunning;
-  FActive[Slot].Done := False;
-  FActive[Slot].Name := Name;
-  Inc(FActiveCount);
-  Ctx.Param := Param;
-  Ctx.ParamSize := ParamSize;
-  Ctx.Cancel := @FActive[Slot].Cancel;
-  try
-    Res := Func(Ctx);
-  except
-    on E: Exception do
-    begin
-      Res.Status := tsFailed;
-      Res.Data := nil;
-      Res.DataSize := 0;
-      Res.Error := PrefixTaskError(Name, E.Message);
-    end;
-  end;
-  if InterlockedCompareExchange(FActive[Slot].Cancel.FCancelled, 0, 0) = 1 then
-    Res.Status := tsCancelled;
-  FActive[Slot].Status := Res.Status;
-  FActive[Slot].Done := True;
-  Dec(FActiveCount);
-  EnqueueCompletion(Id, Res, Name);
-  if Param <> nil then
-    FreeMem(Param);
-end;
-{$ENDIF}
 procedure TTaskManager.ScheduleNext;
 var
   Slot, I, LaunchCount: Integer;
   P: TPendingTask;
-{$IF FPC_FULLVERSION >= 30300}
-  Ctx: TTaskContext;
-{$ENDIF}
+  LP: PTaskThreadPayload;
   ToLaunch: array[0..MAX_CONCURRENT_TASKS - 1] of record
     Slot: Integer;
     Id: TTaskId;
@@ -441,10 +377,8 @@ var
   end;
 begin
   LaunchCount := 0;
-{$IF FPC_FULLVERSION >= 30300}
   ReapFinished;
-{$ENDIF}
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     while (FPendCount > 0) and (FActiveCount < MAX_CONCURRENT_TASKS) do
     begin
@@ -458,9 +392,7 @@ begin
       FActive[Slot].Status := tsRunning;
       FActive[Slot].Done := False;
       FActive[Slot].Name := P.Name;
-    {$IF FPC_FULLVERSION >= 30300}
-      FActive[Slot].Thread := nil;
-    {$ENDIF}
+      FActive[Slot].Handle.Handle := nil;
       Inc(FActiveCount);
       ToLaunch[LaunchCount].Slot := Slot;
       ToLaunch[LaunchCount].Id := P.Id;
@@ -471,20 +403,27 @@ begin
       Inc(LaunchCount);
     end;
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
   for I := 0 to LaunchCount - 1 do
   begin
-  {$IF FPC_FULLVERSION >= 30300}
-    Ctx.Param := ToLaunch[I].Param;
-    Ctx.ParamSize := ToLaunch[I].ParamSize;
-    Ctx.Cancel := @FActive[ToLaunch[I].Slot].Cancel;
-    FActive[ToLaunch[I].Slot].Thread := TTaskThread.Create(
-      Self, ToLaunch[I].Id, ToLaunch[I].Func, Ctx, ToLaunch[I].Name);
-  {$ELSE}
-    RunSync(ToLaunch[I].Slot, ToLaunch[I].Id, ToLaunch[I].Func,
-            ToLaunch[I].Param, ToLaunch[I].ParamSize, ToLaunch[I].Name);
-  {$ENDIF}
+    New(LP);
+    LP^.Id := ToLaunch[I].Id;
+    LP^.Func := ToLaunch[I].Func;
+    LP^.Context.Param := ToLaunch[I].Param;
+    LP^.Context.ParamSize := ToLaunch[I].ParamSize;
+    LP^.Context.Cancel := @FActive[ToLaunch[I].Slot].Cancel;
+    LP^.Manager := Self;
+    LP^.Name := ToLaunch[I].Name;
+    if platform_thread_spawn(FActive[ToLaunch[I].Slot].Handle,
+                             @TaskThreadEntry, LP) <> 0 then
+    begin
+      if LP^.Context.Param <> nil then
+        FreeMem(LP^.Context.Param);
+      Dispose(LP);
+      // Thread creation failed — mark task as failed
+      OnThreadComplete(ToLaunch[I].Id, MakeFailedResult('Thread creation failed'));
+    end;
   end;
 end;
 function TTaskManager.Spawn(const Spec: TTaskSpec): TTaskId;
@@ -493,9 +432,7 @@ var
   ParamCopy: Pointer;
   Slot: Integer;
   ShouldLaunch: Boolean;
-{$IF FPC_FULLVERSION >= 30300}
-  Ctx: TTaskContext;
-{$ENDIF}
+  LP: PTaskThreadPayload;
 begin
   if not Assigned(Spec.Func) then
   begin
@@ -511,10 +448,8 @@ begin
   end;
   ShouldLaunch := False;
   Slot := -1;
-{$IF FPC_FULLVERSION >= 30300}
   ReapFinished;
-{$ENDIF}
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     if FShuttingDown then
     begin
@@ -530,9 +465,7 @@ begin
       FActive[Slot].Status := tsRunning;
       FActive[Slot].Done := False;
       FActive[Slot].Name := Spec.Name;
-    {$IF FPC_FULLVERSION >= 30300}
-      FActive[Slot].Thread := nil;
-    {$ENDIF}
+      FActive[Slot].Handle.Handle := nil;
       Inc(FActiveCount);
       ShouldLaunch := True;
     end
@@ -553,18 +486,25 @@ begin
       Inc(FPendCount);
     end;
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
   if ShouldLaunch then
   begin
-  {$IF FPC_FULLVERSION >= 30300}
-    Ctx.Param := ParamCopy;
-    Ctx.ParamSize := Spec.ParamSize;
-    Ctx.Cancel := @FActive[Slot].Cancel;
-    FActive[Slot].Thread := TTaskThread.Create(Self, Id, Spec.Func, Ctx, Spec.Name);
-  {$ELSE}
-    RunSync(Slot, Id, Spec.Func, ParamCopy, Spec.ParamSize, Spec.Name);
-  {$ENDIF}
+    New(LP);
+    LP^.Id := Id;
+    LP^.Func := Spec.Func;
+    LP^.Context.Param := ParamCopy;
+    LP^.Context.ParamSize := Spec.ParamSize;
+    LP^.Context.Cancel := @FActive[Slot].Cancel;
+    LP^.Manager := Self;
+    LP^.Name := Spec.Name;
+    if platform_thread_spawn(FActive[Slot].Handle, @TaskThreadEntry, LP) <> 0 then
+    begin
+      if LP^.Context.Param <> nil then
+        FreeMem(LP^.Context.Param);
+      Dispose(LP);
+      OnThreadComplete(Id, MakeFailedResult('Thread creation failed'));
+    end;
   end;
   Result := Id;
 end;
@@ -574,7 +514,7 @@ var
   Name: ShortString;
 begin
   Name := '';
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     I := FindActiveById(Id);
     if I >= 0 then
@@ -586,7 +526,7 @@ begin
     end;
     EnqueueCompletion(Id, Res, Name);
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 function TTaskManager.Poll(Id: TTaskId; out Res: TTaskResult): Boolean;
@@ -596,7 +536,7 @@ var
 begin
   Result := False;
   ShouldSchedule := False;
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     PromoteOverflowCompletions;
     J := FCompHead;
@@ -631,7 +571,7 @@ begin
       end;
     end;
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
   if ShouldSchedule then
     ScheduleNext;
@@ -642,10 +582,8 @@ var
   Count: Integer;
 begin
   Count := 0;
-{$IF FPC_FULLVERSION >= 30300}
   ReapFinished;
-{$ENDIF}
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     PromoteOverflowCompletions;
     while (FCompCount > 0) and (Count < MaxCount) do
@@ -657,7 +595,7 @@ begin
       PromoteOverflowCompletions;
     end;
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
   if Count > 0 then
     ScheduleNext;
@@ -671,7 +609,7 @@ var
   ShouldSchedule: Boolean;
 begin
   ShouldSchedule := False;
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     I := FindActiveById(Id);
     if I >= 0 then
@@ -697,7 +635,7 @@ begin
       end;
     end;
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
   if ShouldSchedule then
     ScheduleNext;
@@ -705,24 +643,21 @@ end;
 procedure TTaskManager.ShutdownAndWait;
 var
   I: Integer;
-{$IF FPC_FULLVERSION >= 30300}
-  Threads: array[0..MAX_CONCURRENT_TASKS - 1] of TTaskThread;
-  ThreadCount: Integer;
-{$ENDIF}
+  LHandles: array[0..MAX_CONCURRENT_TASKS - 1] of TPlatformThreadRecord;
+  LCount: Integer;
 begin
-{$IF FPC_FULLVERSION >= 30300}
-  ThreadCount := 0;
-  EnterCriticalSection(FLock);
+  LCount := 0;
+  FLock.Acquire;
   try
     FShuttingDown := True;
     for I := 0 to MAX_CONCURRENT_TASKS - 1 do
     begin
-      if FActive[I].Thread <> nil then
+      if platform_thread_is_alive(FActive[I].Handle) then
       begin
         InterlockedExchange(FActive[I].Cancel.FCancelled, 1);
-        Threads[ThreadCount] := FActive[I].Thread;
-        FActive[I].Thread := nil;
-        Inc(ThreadCount);
+        LHandles[LCount] := FActive[I].Handle;
+        FActive[I].Handle.Handle := nil;
+        Inc(LCount);
       end;
     end;
     for I := 0 to FPendCount - 1 do
@@ -730,14 +665,11 @@ begin
         FreeMem(FPending[(FPendHead + I) mod TASK_QUEUE_CAPACITY].ParamCopy);
     FPendCount := 0;
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
-  for I := 0 to ThreadCount - 1 do
-  begin
-    Threads[I].WaitFor;
-    Threads[I].Free;
-  end;
-  EnterCriticalSection(FLock);
+  for I := 0 to LCount - 1 do
+    platform_thread_wait(LHandles[I]);
+  FLock.Acquire;
   try
     FActiveCount := 0;
     while FCompCount > 0 do
@@ -755,73 +687,40 @@ begin
       Dec(FOverflowCount);
     end;
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
-{$ELSE}
-  EnterCriticalSection(FLock);
-  try
-    FShuttingDown := True;
-    for I := 0 to FPendCount - 1 do
-      if FPending[(FPendHead + I) mod TASK_QUEUE_CAPACITY].ParamCopy <> nil then
-        FreeMem(FPending[(FPendHead + I) mod TASK_QUEUE_CAPACITY].ParamCopy);
-    FPendCount := 0;
-    FActiveCount := 0;
-    while FCompCount > 0 do
-    begin
-      if FCompletions[FCompHead].Result.Data <> nil then
-        FreeMem(FCompletions[FCompHead].Result.Data);
-      FCompHead := (FCompHead + 1) mod TASK_QUEUE_CAPACITY;
-      Dec(FCompCount);
-    end;
-    while FOverflowCount > 0 do
-    begin
-      if FOverflow[FOverflowHead].Result.Data <> nil then
-        FreeMem(FOverflow[FOverflowHead].Result.Data);
-      FOverflowHead := (FOverflowHead + 1) mod Length(FOverflow);
-      Dec(FOverflowCount);
-    end;
-  finally
-    LeaveCriticalSection(FLock);
-  end;
-{$ENDIF}
 end;
 function TTaskManager.IsThreaded: Boolean;
 begin
-{$IF FPC_FULLVERSION >= 30300}
   Result := True;
-{$ELSE}
-  Result := False;
-{$ENDIF}
 end;
 function TTaskManager.ActiveCount: Integer;
 begin
-{$IF FPC_FULLVERSION >= 30300}
   ReapFinished;
-{$ENDIF}
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     Result := FActiveCount;
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 function TTaskManager.PendingCount: Integer;
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     Result := FPendCount;
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 function TTaskManager.CompletionCount: Integer;
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     PromoteOverflowCompletions;
     Result := FCompCount + FOverflowCount;
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 end.

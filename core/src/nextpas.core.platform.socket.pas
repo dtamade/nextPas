@@ -44,6 +44,11 @@ const
   PLATFORM_SHUT_RD     = SHUT_RD;
   PLATFORM_SHUT_WR     = SHUT_WR;
   PLATFORM_SHUT_RDWR   = SHUT_RDWR;
+  {$IFDEF NEXTPAS_LINUX}
+  PLATFORM_MSG_NOSIGNAL = $4000;
+  {$ELSE}
+  PLATFORM_MSG_NOSIGNAL = 0;
+  {$ENDIF}
 {$ENDIF}
 
 type
@@ -188,7 +193,8 @@ function platform_socket_send(const ASocket: TPlatformSocket;
 var
   LResult: ssize_t;
 begin
-  LResult := send(ASocket.Value, ABuf, size_t(ALen), AFlags);
+  LResult := send(ASocket.Value, ABuf, size_t(ALen),
+    AFlags or PLATFORM_MSG_NOSIGNAL);
   if LResult < 0 then
   begin
     ASent := 0;

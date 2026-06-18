@@ -4,8 +4,13 @@ unit nextpas.core.tls.dialer;
 
 interface
 
-uses nextpas.core.base, nextpas.core.tls.base, nextpas.core.tls.tls, nextpas.core.text.conv; type TSSLDialResult = record Connection: ISSLConnection;
-  nextpas.core.system.classes,
+uses
+  nextpas.core.base, nextpas.core.tls.base, nextpas.core.tls.tls,
+  nextpas.core.text.conv, nextpas.core.system.classes;
+
+type
+  TSSLDialResult = record
+    Connection: ISSLConnection;
     Stream: TSSLStream;
     Error: TSSLOperationResult;
   end;
@@ -30,20 +35,27 @@ uses nextpas.core.base, nextpas.core.tls.base, nextpas.core.tls.tls, nextpas.cor
 
 implementation
 
-uses Sockets, BaseUnix, WinSock2, nextpas.core.net.base, nextpas.core.net.resolve, nextpas.core.tls.quick, nextpas.core.tls.connection.builder, nextpas.core.text.conv; function ResolveAndConnect(const AHost: string; APort: Word;
+uses nextpas.core.platform.socket, nextpas.core.net.base, nextpas.core.net.resolve, nextpas.core.tls.quick, nextpas.core.tls.connection.builder, nextpas.core.exception;
+
+{ Helper: wrap a THandle back into TPlatformSocket for platform calls }
+function HandleToSocket(AHandle: THandle): TPlatformSocket; inline;
+begin
+  Result.Value := {$IFDEF NEXTPAS_WINDOWS}PtrUInt{$ELSE}LongInt{$ENDIF}(AHandle);
+end;
+
+function ResolveAndConnect(const AHost: string; APort: Word;
   out ASocket: THandle; out AError: string): Boolean;
 var
   LAddr: TNetAddress;
-  {$IFDEF UNIX}
-  LSock: LongInt;
-  LSockAddr: TInetSockAddr;
-  {$ENDIF}
+  LSock: TPlatformSocket;
+  LSockAddr: TPlatformSockAddr;
+  LAddrIpv4: UInt32;
+  LErr: Int32;
 begin
   ASocket := THandle(-1);
   AError := '';
   Result := False;
 
-  // Use framework DNS resolver
   LAddr := NetResolve(AHost);
   if LAddr.IP = '' then
   begin
@@ -51,31 +63,39 @@ begin
     Exit;
   end;
 
-  {$IFDEF UNIX}
-  LSock := fpSocket(AF_INET, SOCK_STREAM, 0);
-  if LSock < 0 then
+  LErr := platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0, LSock);
+  if LErr <> 0 then
   begin
     AError := 'Socket creation failed';
     Exit;
   end;
 
-  FillChar(LSockAddr, SizeOf(LSockAddr), 0);
-  LSockAddr.sin_family := AF_INET;
-  LSockAddr.sin_port := htons(APort);
-  LSockAddr.sin_addr := StrToNetAddr(LAddr.IP);
-
-  if fpConnect(LSock, @LSockAddr, SizeOf(LSockAddr)) <> 0 then
+  LErr := platform_socket_resolve_ipv4(PAnsiChar(AnsiString(LAddr.IP)), LAddrIpv4);
+  if LErr <> 0 then
   begin
-    fpClose(LSock);
+    platform_socket_close(LSock);
+    AError := 'Address resolution failed for: ' + LAddr.IP;
+    Exit;
+  end;
+
+  LErr := platform_sockaddr_ipv4(APort, LAddrIpv4, LSockAddr);
+  if LErr <> 0 then
+  begin
+    platform_socket_close(LSock);
+    AError := 'Sockaddr construction failed';
+    Exit;
+  end;
+
+  LErr := platform_socket_connect(LSock, @LSockAddr.Storage, LSockAddr.Len);
+  if LErr <> 0 then
+  begin
+    platform_socket_close(LSock);
     AError := 'TCP connect failed to ' + AHost + ':' + IntToStr(APort);
     Exit;
   end;
 
-  ASocket := THandle(LSock);
+  ASocket := THandle(LSock.Value);
   Result := True;
-  {$ELSE}
-  AError := 'Platform not yet supported for TLS dialer';
-  {$ENDIF}
 end;
 
 constructor TSSLDialer.Create(AConfig: ISSLContext);
@@ -103,6 +123,7 @@ var
   LSocket: THandle;
   LError: string;
   LBuilder: ISSLConnectionBuilder;
+  LSockToClose: TPlatformSocket;
 begin
   Result.Connection := nil;
   Result.Stream := nil;
@@ -136,7 +157,8 @@ begin
     Result.Error := LBuilder.TryBuildClient(Result.Connection);
     if Result.Error.IsErr then
     begin
-      {$IFDEF UNIX}fpClose(LongInt(LSocket));{$ENDIF}
+      LSockToClose := HandleToSocket(LSocket);
+      platform_socket_close(LSockToClose);
       Exit;
     end;
 
@@ -144,7 +166,8 @@ begin
   except
     on E: Exception do
     begin
-      {$IFDEF UNIX}fpClose(LongInt(LSocket));{$ENDIF}
+      LSockToClose := HandleToSocket(LSocket);
+      platform_socket_close(LSockToClose);
       Result.Error := TSSLOperationResult.Err(sslErrOther, E.Message);
     end;
   end;

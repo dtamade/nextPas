@@ -1,5 +1,5 @@
 .text
-.globl setjmp
+.weak setjmp
 .type setjmp, @function
 setjmp:
     movq %rbx, (%rdi)
@@ -15,7 +15,7 @@ setjmp:
     xorl %eax, %eax
     ret
 
-.globl longjmp
+.weak longjmp
 .type longjmp, @function
 longjmp:
     movq (%rdi), %rbx

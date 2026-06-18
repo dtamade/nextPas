@@ -5,7 +5,8 @@ unit nextpas.core.tls.openssl.api.scrypt_whirlpool;
 
 interface
 
-uses nextpas.core.base, nextpas.core.text.conv, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader;
+uses nextpas.core.base, nextpas.core.text.conv, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader,
+  nextpas.core.platform.dl;
 
 type
   // WHIRLPOOL types

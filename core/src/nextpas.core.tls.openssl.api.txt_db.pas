@@ -11,7 +11,7 @@ unit nextpas.core.tls.openssl.api.txt_db;
 
 interface
 
-uses nextpas.core.fs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.bio, nextpas.core.tls.openssl.api.consts;
+uses nextpas.core.fs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.bio, nextpas.core.tls.openssl.api.consts, nextpas.core.platform.dl;
 
 type
   { TXT_DB types }
@@ -70,7 +70,7 @@ var
   TXT_DB_create_index: TTXTDBCreateIndex = nil;
 
 { Load/Unload functions }
-function LoadTXTDB(const ALibCrypto: THandle): Boolean;
+function LoadTXTDB(const ALibCrypto: TPlatformLibrary): Boolean;
 procedure UnloadTXTDB;
 
 { Helper functions }
@@ -97,11 +97,11 @@ const
     (Name: 'TXT_DB_create_index'; FuncPtr: @TXT_DB_create_index; Required: False)
   );
 
-function LoadTXTDB(const ALibCrypto: THandle): Boolean;
+function LoadTXTDB(const ALibCrypto: TPlatformLibrary): Boolean;
 begin
   Result := False;
   if TOpenSSLLoader.IsModuleLoaded(osmTXTDB) then Exit(True);
-  if ALibCrypto = 0 then Exit;
+  if not LibLoaded(ALibCrypto) then Exit;
 
   { Batch load all TXT_DB functions }
   TOpenSSLLoader.LoadFunctions(ALibCrypto, TXTDB_BINDINGS);

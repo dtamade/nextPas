@@ -5,6 +5,7 @@ unit nextpas.core.tls.openssl.api.asn1;
 interface
 
 uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader,
+  nextpas.core.platform.dl,
   nextpas.core.time, nextpas.core.text.conv;
 
 type
@@ -311,7 +312,7 @@ var
   ASN1_object_size: TASN1_object_size = nil;
 
 // 加载和卸载函数
-function LoadOpenSSLASN1(const ACryptoLib: THandle): Boolean;
+function LoadOpenSSLASN1(const ACryptoLib: TPlatformLibrary): Boolean;
 procedure UnloadOpenSSLASN1;
 
 // 辅助函数
@@ -470,12 +471,12 @@ begin
   Result := Trunc(Days) + ((Hour * 3600 + Min * 60 + Sec) / 86400.0);
 end;
 
-function LoadOpenSSLASN1(const ACryptoLib: THandle): Boolean;
+function LoadOpenSSLASN1(const ACryptoLib: TPlatformLibrary): Boolean;
 begin
   if TOpenSSLLoader.IsModuleLoaded(osmASN1) then
     Exit(True);
 
-  if ACryptoLib = 0 then
+  if not LibLoaded(ACryptoLib) then
     Exit(False);
 
   // 使用批量加载模式

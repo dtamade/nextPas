@@ -75,7 +75,7 @@ uses nextpas.core.tls.pkcs11.types, nextpas.core.tls.pkcs11.api, nextpas.core.tl
 
 implementation
 
-uses nextpas.core.tls.openssl.api.x509, nextpas.core.text.conv; var GlobalPINCallbackData: PPKCS11PINCallbackData = nil;
+uses nextpas.core.tls.openssl.api.x509; var GlobalPINCallbackData: PPKCS11PINCallbackData = nil;
 
 { UI_METHOD 回调函数 - 处理 PIN 输入请求 }
 function PKCS11_UI_reader(ui: nextpas.core.tls.openssl.api.ui.PUI;

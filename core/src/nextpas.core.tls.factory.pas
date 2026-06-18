@@ -1609,7 +1609,7 @@ class function TSSLHelper.HashData(const AData: TBytes;
   AHashType: TSSLHash): string;
 var
   LHashBytes: TBytes;
-  LCryptoLib: THandle;
+  LCryptoLib: TOpenSSLLibHandle;
   LDataPtr: PByte;
 
   function HashTypeName(AType: TSSLHash): string;
@@ -1630,7 +1630,7 @@ var
   procedure EnsureOpenSSLLoaded;
   begin
     LCryptoLib := TOpenSSLLoader.GetLibraryHandle(osslLibCrypto);
-    if LCryptoLib = 0 then
+    if not LibLoaded(LCryptoLib) then
       raise ESSLInvalidArgument.Create(
         'Requested hash algorithm requires OpenSSL libcrypto, but it is unavailable'
       );

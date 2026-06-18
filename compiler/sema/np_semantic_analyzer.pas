@@ -11,7 +11,8 @@ interface
 
 uses
   np_ast_facade, np_base_types, np_diagnostics_sink, np_preprocessor,
-  np_source_database, np_unit_graph, np_semantic_model, np_green_tree, np_lexer;
+  np_source_database, np_unit_graph, np_semantic_model, np_green_tree, np_lexer,
+  np_hir_types;
 
 type
   TProcedureBodyEntry = record
@@ -544,6 +545,7 @@ type
     procedure SeedHaltCalls;
     procedure PreRegisterFunctionReturnTypes;
     procedure SeedFunctionBodies;
+    procedure SeedUnitLifecycleBodies;
     procedure SeedImportedUnitBodies;
   public
     constructor Create(
@@ -5953,14 +5955,56 @@ procedure TSemanticAnalyzer.SeedRuntimeContracts;
     FModel.AddRuntimeContract(AContractName);
     FModel.AddTypedHirNode(AKind, AContractName, 0, 0, '');
   end;
-begin
-  if (FRootAst.RootKindName <> 'program') and
-    (FRootAst.RootKindName <> 'library') and
-    (FRootAst.RootKindName <> 'package') then
-    Exit;
 
-  AddRuntimeContract(NPSYSTEM_PROCESS_INIT, 'process-init-runtime');
-  AddRuntimeContract(NPSYSTEM_PROCESS_FINI, 'process-fini-runtime');
+  procedure SeedUnitLifecycle;
+  var
+    RootNode, Child, ImplChild: TGreenNode;
+    I, J: LongInt;
+    HirId: LongInt;
+    UnitName: string;
+  begin
+    if FRootAst = nil then
+      Exit;
+    RootNode := FRootAst.RootNode;
+    if RootNode = nil then
+      Exit;
+    UnitName := FUnitGraph.RootName;
+    for I := 0 to RootNode.ChildCount - 1 do
+    begin
+      Child := RootNode.ChildAt(I);
+      if Child.NodeKind = gnkImplementationSection then
+      begin
+        for J := 0 to Child.ChildCount - 1 do
+        begin
+          ImplChild := Child.ChildAt(J);
+          if ImplChild.NodeKind = gnkInitializationSection then
+          begin
+            FModel.AddRuntimeContract(NPSYSTEM_UNIT_INIT);
+            HirId := FModel.AddTypedHirNode('unit-init-runtime', UnitName, 0, 0, UnitName);
+            FModel.SetTypedHirNodeGreenRef(HirId, ImplChild);
+          end
+          else if ImplChild.NodeKind = gnkFinalizationSection then
+          begin
+            FModel.AddRuntimeContract(NPSYSTEM_UNIT_FINI);
+            HirId := FModel.AddTypedHirNode('unit-fini-runtime', UnitName, 0, 0, UnitName);
+            FModel.SetTypedHirNodeGreenRef(HirId, ImplChild);
+          end;
+        end;
+        Break;
+      end;
+    end;
+  end;
+
+begin
+  if (FRootAst.RootKindName = 'program') or
+    (FRootAst.RootKindName = 'library') or
+    (FRootAst.RootKindName = 'package') then
+  begin
+    AddRuntimeContract(NPSYSTEM_PROCESS_INIT, 'process-init-runtime');
+    AddRuntimeContract(NPSYSTEM_PROCESS_FINI, 'process-fini-runtime');
+  end
+  else if FRootAst.RootKindName = 'unit' then
+    SeedUnitLifecycle;
 end;
 
 procedure TSemanticAnalyzer.SeedForeignProcedureBindings;
@@ -6065,7 +6109,10 @@ begin
   SetLength(FGenericWorkQueue, 64);
   SeedHaltCalls;
   if FNoFold then
+  begin
     SeedFunctionBodies;
+    SeedUnitLifecycleBodies;
+  end;
   CheckUnusedSymbols;
   CheckUnreachableCode;
   CheckDuplicateCaseLabels;
@@ -14570,6 +14617,93 @@ begin
     FCurrentMethodClass := '';
     FCurrentRetVarName := '';
     FCurrentOwnedStringReturn := False;
+  end;
+end;
+
+procedure TSemanticAnalyzer.SeedUnitLifecycleBodies;
+var
+  I: LongInt;
+  Node: TTypedHirNode;
+  SavedRetVarName: string;
+  SavedOwnedReturn: Boolean;
+  SavedBlockTerminated: Boolean;
+  SavedMethodClass: string;
+  LNormalizedUnitName: string;
+  LFuncName: string;
+begin
+  for I := 0 to FModel.TypedHirNodeCount - 1 do
+  begin
+    Node := FModel.TypedHirNodeAt(I);
+    if (Node.NodeKind <> hnkUnitInitRuntime) and
+       (Node.NodeKind <> hnkUnitFiniRuntime) then
+      Continue;
+    if Node.GreenNodeRef = nil then
+      Continue;
+
+    // Save current state
+    SavedRetVarName := FCurrentRetVarName;
+    SavedOwnedReturn := FCurrentOwnedStringReturn;
+    SavedBlockTerminated := FCurrentBlockTerminated;
+    SavedMethodClass := FCurrentMethodClass;
+
+    // Reset for void function with no params — 全部 13 个 tracker 清零
+    SetLength(FVarParamNames, 0);
+    SetLength(FRuntimeVarNames, 0);
+    SetLength(FRuntimeArrVarNames, 0);
+    SetLength(FBorrowedRuntimeArrVarNames, 0);
+    SetLength(FRuntimeStrVarNames, 0);
+    SetLength(FOwnedRuntimeStrVarNames, 0);
+    SetLength(FBorrowedRuntimeStrVarNames, 0);
+    SetLength(FClassVarNames, 0);
+    SetLength(FClassVarTypes, 0);
+    SetLength(FRecordVarNames, 0);
+    SetLength(FRecordVarTypes, 0);
+    SetLength(FPointerVarNames, 0);
+    SetLength(FPointerVarTypes, 0);
+    FCurrentRetVarName := '';
+    FCurrentOwnedStringReturn := False;
+    FCurrentBlockTerminated := False;
+    FCurrentMethodClass := '';
+
+    // Normalize unit name: replace dots with underscores for LLVM function names
+    LNormalizedUnitName := StringReplace(Node.Operand, '.', '_', [rfReplaceAll]);
+
+    if Node.NodeKind = hnkUnitInitRuntime then
+    begin
+      LFuncName := 'np_unit_init_' + LNormalizedUnitName;
+      FModel.AddTypedHirNode('function-body-begin',
+        LFuncName, 0, 0, '0:');
+      WalkHaltCalls(TGreenNode(Node.GreenNodeRef));
+      if not FCurrentBlockTerminated then
+      begin
+        EmitOwnedDynArrayCleanupNodes;
+        EmitOwnedStringCleanupNodes('');
+        FModel.AddTypedHirNode('ret-runtime', '0', 0, 0, 'int 0' + #10);
+      end;
+      FModel.AddTypedHirNode('function-body-end',
+        LFuncName, 0, 0, '');
+    end
+    else
+    begin
+      LFuncName := 'np_unit_fini_' + LNormalizedUnitName;
+      FModel.AddTypedHirNode('function-body-begin',
+        LFuncName, 0, 0, '0:');
+      WalkHaltCalls(TGreenNode(Node.GreenNodeRef));
+      if not FCurrentBlockTerminated then
+      begin
+        EmitOwnedDynArrayCleanupNodes;
+        EmitOwnedStringCleanupNodes('');
+        FModel.AddTypedHirNode('ret-runtime', '0', 0, 0, 'int 0' + #10);
+      end;
+      FModel.AddTypedHirNode('function-body-end',
+        LFuncName, 0, 0, '');
+    end;
+
+    // Restore state
+    FCurrentRetVarName := SavedRetVarName;
+    FCurrentOwnedStringReturn := SavedOwnedReturn;
+    FCurrentBlockTerminated := SavedBlockTerminated;
+    FCurrentMethodClass := SavedMethodClass;
   end;
 end;
 
