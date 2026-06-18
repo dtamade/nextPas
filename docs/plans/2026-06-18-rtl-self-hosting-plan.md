@@ -304,7 +304,13 @@ R5 内部特性补齐可以与 R3/R4 并行。
 - [x] FileAge 真实实现 (libc stat)
 - [x] Stage2 交叉验证 — hello/stage3 全通
 - [x] Stage3 workspace 发现 — MatchesPattern DotPos 修正
-- [ ] Codex 审查技术债务清理
-- [ ] Assigned 双路径统一
-- [ ] gnkParameterList parser bug 调查
-- [ ] 性能基准对比 FPC
+- [x] Codex 审查技术债务清理 — Assigned 双路径 + gnkParameterList workaround
+- [x] Assigned 双路径统一 — 消除 hikIntrinsic 'assigned'，-17 行
+- [x] gnkParameterList parser bug — 确认为不必要 workaround，已移除
+- [x] 性能基准对比 FPC — 52965行: FPC 2.1s vs nextPas 24.7s (12x)
+
+### 下一步方向
+- P2: 泛型支持（FPC 生态核心特性）
+- P3: 接口支持（OOP 完整性）
+- P4: LLVM 后端（终极性能碾压）
+- 性能优化：解析/Sema/并行化（12x → 目标 <2x）
