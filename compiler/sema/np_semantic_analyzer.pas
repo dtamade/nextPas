@@ -57,6 +57,7 @@ type
     FBlockLabelCounter: LongInt;
     FCurrentBlockTerminated: Boolean;
     FCurrentScopeId: LongInt;
+    FCurrentProcessingUnitId: string;
     FBreakLabels: array of string;
     FContinueLabels: array of string;
     FRuntimeVarNames: array of string;
@@ -3115,6 +3116,8 @@ var
   ImportedDiagnosticSignatureMatchCount: LongInt;
   ImportedSignatureMatchCount: LongInt;
   ImportedSignatureMatchIndex: LongInt;
+  DirectImportMatchCount: LongInt;
+  DirectImportMatchIndex: LongInt;
   KnownSymbolId: LongInt;
   RootMatchCount: LongInt;
   RootMatchIndex: LongInt;
@@ -3135,6 +3138,8 @@ begin
   ImportedNameCount := 0;
   ImportedSignatureMatchCount := 0;
   ImportedSignatureMatchIndex := -1;
+  DirectImportMatchCount := 0;
+  DirectImportMatchIndex := -1;
   RootMatchCount := 0;
   RootMatchIndex := -1;
   RootNameCount := 0;
@@ -3145,7 +3150,9 @@ begin
   for Index := 0 to Length(FProcedureBodies) - 1 do
     if SameText(FProcedureBodies[Index].Name, AName) then
     begin
-      if SameText(FProcedureBodies[Index].OwnerUnitId, RootOwnerUnitId) then
+      if SameText(FProcedureBodies[Index].OwnerUnitId, RootOwnerUnitId) or
+        SameText(FProcedureBodies[Index].OwnerUnitId,
+          FCurrentProcessingUnitId) then
       begin
         Inc(RootNameCount);
         if DeclAcceptsArgCount(FProcedureBodies[Index].Decl, AArgCount) then
@@ -3175,6 +3182,12 @@ begin
         begin
           ImportedMatchIndex := Index;
           Inc(ImportedMatchCount);
+          if UnitDirectlyImports(RootOwnerUnitId,
+            FProcedureBodies[Index].OwnerUnitId) then
+          begin
+            DirectImportMatchIndex := Index;
+            Inc(DirectImportMatchCount);
+          end;
           if OwnerUnitAllowsProjectSourceDiagnostic(
             FProcedureBodies[Index].OwnerUnitId
           ) then
@@ -3254,6 +3267,31 @@ begin
     if ImportedDiagnosticNameCount > 0 then
       AResolutionFailureKind := 'wrong-argument-count';
     Exit(False);
+  end;
+
+  { Prefer direct imports over transitive imports (FPC-compatible).
+    When multiple imported units expose the same overload, a unit that
+    the current compilation unit directly uses takes priority. }
+  if (ImportedMatchCount > 1) and (DirectImportMatchCount = 1) then
+  begin
+    if AHasArgSignature and
+      (not DeclParamSignatureMatchesArgs(
+        FProcedureBodies[DirectImportMatchIndex].Decl,
+        AArgSignature,
+        AArgCount
+      )) then
+    begin
+      if AHasTypeMismatchEvidence and
+        OwnerUnitAllowsProjectSourceDiagnostic(
+          FProcedureBodies[DirectImportMatchIndex].OwnerUnitId
+        ) then
+        AResolutionFailureKind := 'type-mismatch';
+      Exit(False);
+    end;
+    ABody := FProcedureBodies[DirectImportMatchIndex].Body;
+    ADecl := FProcedureBodies[DirectImportMatchIndex].Decl;
+    AOwnerUnitId := FProcedureBodies[DirectImportMatchIndex].OwnerUnitId;
+    Exit(True);
   end;
 
   if ImportedMatchCount = 1 then
@@ -4984,17 +5022,22 @@ begin
     Exit;
 
   RootOwnerUnitId := NormalizeUnitIdentity(FUnitGraph.RootName);
+  FCurrentProcessingUnitId := RootOwnerUnitId;
   SeedCallBindingsInNode(FRootAst.RootNode, '', RootOwnerUnitId);
   for Index := 0 to Length(FProcedureBodies) - 1 do
     if (Pos('.', FProcedureBodies[Index].Name) > 0) and
       OwnerUnitAllowsProjectSourceDiagnostic(
         FProcedureBodies[Index].OwnerUnitId
       ) then
+    begin
+      FCurrentProcessingUnitId :=
+        NormalizeUnitIdentity(FProcedureBodies[Index].OwnerUnitId);
       SeedCallBindingsInNode(
         FProcedureBodies[Index].Decl,
         '',
         FProcedureBodies[Index].OwnerUnitId
       );
+    end;
 end;
 
 function TSemanticAnalyzer.IsCurrentlyInlining(const AName: string): Boolean;
