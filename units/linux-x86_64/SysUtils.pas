@@ -17,6 +17,8 @@ type
 
   TDateTime = Double;
 
+  TReplaceFlags = set of (rfReplaceAll, rfIgnoreCase);
+
   TSearchRec = record
     Name: string;
     Attr: LongInt;
@@ -84,9 +86,21 @@ procedure FindClose(var F: TSearchRec);
 
 // Type conversions
 function IntToStr(Value: Integer): string;
+function IntToStr(Value: Int64): string;
 function StrToInt(const S: string): Integer;
 function StrToIntDef(const S: string; Default: Integer): Integer;
+function StrToInt64Def(const S: string; Default: Int64): Int64;
 function IntToHex(Value: Int64; Digits: Integer): string;
+
+// String manipulation
+function StringReplace(const S, OldPattern, NewPattern: string;
+  Flags: TReplaceFlags): string;
+function ExtractFileExt(const FileName: string): string;
+
+// Command line
+function ParamStr(Index: Integer): string;
+function ParamCount: Integer;
+function GetCurrentDir: string;
 
 // Date/Time
 function Now: TDateTime;
@@ -102,6 +116,10 @@ implementation
 
 { External C functions }
 function getenv(name: PChar): PChar; cdecl; external 'c' name 'getenv';
+function getcwd(buf: PChar; size: SizeUInt): PChar; cdecl; external 'c' name 'getcwd';
+var
+  argc: LongInt; cvar; external;
+  argv: PPChar; cvar; external;
 
 { Exception }
 
@@ -359,6 +377,60 @@ begin
     SetLength(Result, Length(Result) - 1);
 end;
 
+function ExtractFileExt(const FileName: string): string;
+var
+  I: Integer;
+begin
+  I := Length(FileName);
+  while (I > 0) and (FileName[I] <> '.') and (FileName[I] <> '/') do
+    Dec(I);
+  if (I > 0) and (FileName[I] = '.') then
+    Result := Copy(FileName, I, Length(FileName) - I + 1)
+  else
+    Result := '';
+end;
+
+function StringReplace(const S, OldPattern, NewPattern: string;
+  Flags: TReplaceFlags): string;
+var
+  I, OldLen, NewLen: Integer;
+  SearchStr: string;
+  UpperS, UpperOld: string;
+begin
+  if rfIgnoreCase in Flags then
+  begin
+    UpperS := UpperCase(S);
+    UpperOld := UpperCase(OldPattern);
+    SearchStr := UpperS;
+  end
+  else
+    SearchStr := S;
+
+  OldLen := Length(OldPattern);
+  NewLen := Length(NewPattern);
+  Result := '';
+  I := 1;
+  while I <= Length(S) do
+  begin
+    if (I + OldLen - 1 <= Length(S)) and
+      (Copy(SearchStr, I, OldLen) = UpperOld) then
+    begin
+      Result := Result + NewPattern;
+      Inc(I, OldLen);
+      if not (rfReplaceAll in Flags) then
+      begin
+        Result := Result + Copy(S, I, Length(S));
+        Exit;
+      end;
+    end
+    else
+    begin
+      Result := Result + S[I];
+      Inc(I);
+    end;
+  end;
+end;
+
 { File search - simplified stub implementation }
 { TODO: Implement proper file search using system calls }
 
@@ -392,6 +464,11 @@ begin
   Str(Value, Result);
 end;
 
+function IntToStr(Value: Int64): string;
+begin
+  Str(Value, Result);
+end;
+
 function StrToInt(const S: string): Integer;
 var
   Code: Integer;
@@ -402,6 +479,15 @@ begin
 end;
 
 function StrToIntDef(const S: string; Default: Integer): Integer;
+var
+  Code: Integer;
+begin
+  Val(S, Result, Code);
+  if Code <> 0 then
+    Result := Default;
+end;
+
+function StrToInt64Def(const S: string; Default: Int64): Int64;
 var
   Code: Integer;
 begin
@@ -447,6 +533,31 @@ begin
     Result := string(P)
   else
     Result := '';
+end;
+
+function ParamStr(Index: Integer): string;
+begin
+  if (Index >= 0) and (Index < argc) and (argv <> nil) and (argv[Index] <> nil) then
+    Result := string(argv[Index])
+  else
+    Result := '';
+end;
+
+function ParamCount: Integer;
+begin
+  Result := argc - 1;
+  if Result < 0 then
+    Result := 0;
+end;
+
+function GetCurrentDir: string;
+var
+  Buf: array[0..4095] of Char;
+begin
+  if getcwd(@Buf[0], SizeOf(Buf)) <> nil then
+    Result := string(@Buf[0])
+  else
+    Result := '/';
 end;
 
 { Date/Time }
