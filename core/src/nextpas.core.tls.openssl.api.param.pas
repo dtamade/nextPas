@@ -11,8 +11,7 @@ unit nextpas.core.tls.openssl.api.param;
 
 interface
 
-uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.api.consts; const OSSL_PARAM_END = 0;
-  nextpas.core.platform.dl,
+uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.api.consts, nextpas.core.platform.dl; const OSSL_PARAM_END = 0;
   OSSL_PARAM_INTEGER = 1;
   OSSL_PARAM_UNSIGNED_INTEGER = 2; 
   OSSL_PARAM_REAL = 3;

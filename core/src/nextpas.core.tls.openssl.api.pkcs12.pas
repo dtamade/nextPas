@@ -229,7 +229,7 @@ procedure UnloadPKCS12Module;
 
 implementation
 
-uses nextpas.core.tls.openssl.api.err, nextpas.core.tls.openssl.loader,
+uses nextpas.core.tls.openssl.api.err, nextpas.core.tls.openssl.loader;
 
 { PKCS12 函数绑定数组
   runtime storage keeps procvar targets writable across macOS batch-loader runs }

@@ -11,8 +11,7 @@ unit nextpas.core.tls.openssl.api.srp;
 
 interface
 
-uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.api.consts; type SRP_gN_cache = record end;
-  nextpas.core.platform.dl,
+uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.api.consts, nextpas.core.platform.dl; type SRP_gN_cache = record end;
   PSRP_gN_cache = ^SRP_gN_cache;
   
   SRP_user_pwd = record end;

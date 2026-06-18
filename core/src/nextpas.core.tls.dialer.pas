@@ -123,6 +123,7 @@ var
   LSocket: THandle;
   LError: string;
   LBuilder: ISSLConnectionBuilder;
+  LSockToClose: TPlatformSocket;
 begin
   Result.Connection := nil;
   Result.Stream := nil;
@@ -156,7 +157,8 @@ begin
     Result.Error := LBuilder.TryBuildClient(Result.Connection);
     if Result.Error.IsErr then
     begin
-      platform_socket_close(HandleToSocket(LSocket));
+      LSockToClose := HandleToSocket(LSocket);
+      platform_socket_close(LSockToClose);
       Exit;
     end;
 
@@ -164,7 +166,8 @@ begin
   except
     on E: Exception do
     begin
-      platform_socket_close(HandleToSocket(LSocket));
+      LSockToClose := HandleToSocket(LSocket);
+      platform_socket_close(LSockToClose);
       Result.Error := TSSLOperationResult.Err(sslErrOther, E.Message);
     end;
   end;

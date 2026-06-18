@@ -11,8 +11,7 @@ unit nextpas.core.tls.openssl.api.txt_db;
 
 interface
 
-uses nextpas.core.fs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.bio, nextpas.core.tls.openssl.api.consts;
-  nextpas.core.platform.dl,
+uses nextpas.core.fs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.bio, nextpas.core.tls.openssl.api.consts, nextpas.core.platform.dl;
 
 type
   { TXT_DB types }

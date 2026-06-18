@@ -195,7 +195,7 @@ procedure UnloadProviderModule;
 
 implementation
 
-uses nextpas.core.tls.openssl.loader,
+uses nextpas.core.tls.openssl.loader;
 
 const
   { 函数绑定数组 - Provider 模块所有函数 }
