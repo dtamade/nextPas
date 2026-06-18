@@ -544,6 +544,7 @@ type
     procedure SeedHaltCalls;
     procedure PreRegisterFunctionReturnTypes;
     procedure SeedFunctionBodies;
+    procedure SeedUnitLifecycleBodies;
     procedure SeedImportedUnitBodies;
   public
     constructor Create(
@@ -6108,6 +6109,8 @@ begin
   SeedHaltCalls;
   if FNoFold then
     SeedFunctionBodies;
+  if FNoFold then
+    SeedUnitLifecycleBodies;
   CheckUnusedSymbols;
   CheckUnreachableCode;
   CheckDuplicateCaseLabels;
@@ -14612,6 +14615,82 @@ begin
     FCurrentMethodClass := '';
     FCurrentRetVarName := '';
     FCurrentOwnedStringReturn := False;
+  end;
+end;
+
+procedure TSemanticAnalyzer.SeedUnitLifecycleBodies;
+var
+  I: LongInt;
+  Node: TTypedHirNode;
+  SavedRetVarName: string;
+  SavedOwnedReturn: Boolean;
+  SavedBlockTerminated: Boolean;
+  SavedMethodClass: string;
+begin
+  for I := 0 to FModel.TypedHirNodeCount - 1 do
+  begin
+    Node := FModel.TypedHirNodeAt(I);
+    if (Node.NodeKind <> hnkUnitInitRuntime) and
+       (Node.NodeKind <> hnkUnitFiniRuntime) then
+      Continue;
+    if Node.GreenNodeRef = nil then
+      Continue;
+
+    // Save current state
+    SavedRetVarName := FCurrentRetVarName;
+    SavedOwnedReturn := FCurrentOwnedStringReturn;
+    SavedBlockTerminated := FCurrentBlockTerminated;
+    SavedMethodClass := FCurrentMethodClass;
+
+    // Reset for void function with no params
+    SetLength(FVarParamNames, 0);
+    SetLength(FRuntimeVarNames, 0);
+    SetLength(FRuntimeArrVarNames, 0);
+    SetLength(FBorrowedRuntimeArrVarNames, 0);
+    SetLength(FRuntimeStrVarNames, 0);
+    SetLength(FBorrowedRuntimeStrVarNames, 0);
+    SetLength(FPointerVarNames, 0);
+    SetLength(FRecordVarNames, 0);
+    SetLength(FRecordVarTypes, 0);
+    FCurrentRetVarName := '';
+    FCurrentOwnedStringReturn := False;
+    FCurrentBlockTerminated := False;
+    FCurrentMethodClass := '';
+
+    if Node.NodeKind = hnkUnitInitRuntime then
+    begin
+      FModel.AddTypedHirNode('function-body-begin',
+        'np_unit_init_' + Node.Operand, 0, 0, '0:');
+      WalkHaltCalls(TGreenNode(Node.GreenNodeRef));
+      if not FCurrentBlockTerminated then
+      begin
+        EmitOwnedDynArrayCleanupNodes;
+        EmitOwnedStringCleanupNodes('');
+        FModel.AddTypedHirNode('ret-runtime', '', 0, 0, '');
+      end;
+      FModel.AddTypedHirNode('function-body-end',
+        'np_unit_init_' + Node.Operand, 0, 0, '');
+    end
+    else
+    begin
+      FModel.AddTypedHirNode('function-body-begin',
+        'np_unit_fini_' + Node.Operand, 0, 0, '0:');
+      WalkHaltCalls(TGreenNode(Node.GreenNodeRef));
+      if not FCurrentBlockTerminated then
+      begin
+        EmitOwnedDynArrayCleanupNodes;
+        EmitOwnedStringCleanupNodes('');
+        FModel.AddTypedHirNode('ret-runtime', '', 0, 0, '');
+      end;
+      FModel.AddTypedHirNode('function-body-end',
+        'np_unit_fini_' + Node.Operand, 0, 0, '');
+    end;
+
+    // Restore state
+    FCurrentRetVarName := SavedRetVarName;
+    FCurrentOwnedStringReturn := SavedOwnedReturn;
+    FCurrentBlockTerminated := SavedBlockTerminated;
+    FCurrentMethodClass := SavedMethodClass;
   end;
 end;
 

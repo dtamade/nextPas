@@ -291,8 +291,6 @@ type
     procedure ProcessExceptionNode(const ANode: TTypedHirNode);
     procedure EmitProcessInit;
     procedure EmitProcessFini;
-    procedure EmitUnitInit(const ANode: TTypedHirNode);
-    procedure EmitUnitFini(const ANode: TTypedHirNode);
     procedure EnsureVmtForClass(const AClassName: string);
   public
     constructor Create(ASemaModel: TSemanticModel);
@@ -7235,9 +7233,9 @@ begin
     hnkProcessFiniRuntime:
       EmitProcessFini;
     hnkUnitInitRuntime:
-      EmitUnitInit(ANode);
+      ;  // handled by SeedUnitLifecycleBodies → function-body-begin
     hnkUnitFiniRuntime:
-      EmitUnitFini(ANode);
+      ;  // handled by SeedUnitLifecycleBodies → function-body-begin
     hnkUnknown:
       ;
   end;
@@ -7291,115 +7289,6 @@ begin
   Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
   Instr.CallTarget := 'np_process_fini';
   EmitInstr(Instr);
-end;
-
-procedure THIRBuilder.EmitUnitInit(const ANode: TTypedHirNode);
-var
-  LFuncName: string;
-  LVoidType: THIRTypeId;
-  LSavedFuncId: THIRFuncId;
-  LSavedBlockId: THIRBlockId;
-  LSavedEntryBlockId: THIRBlockId;
-  LSavedAllocaCount, LSavedGlobalRefCount: LongInt;
-  LSavedBlockCount, LSavedPendingParamCount: LongInt;
-  LEntryBlock: THIRBlockId;
-  Instr: THIRInstr;
-begin
-  LFuncName := 'np_unit_init_' + ANode.Operand;
-  LVoidType := FModule.Types.AddType(htkVoid, 'void');
-  LSavedFuncId := FCurrentFuncId;
-  LSavedBlockId := FCurrentBlockId;
-  LSavedEntryBlockId := FEntryBlockId;
-  LSavedAllocaCount := FAllocaCount;
-  LSavedGlobalRefCount := FGlobalRefCount;
-  LSavedBlockCount := FBlockCount;
-  LSavedPendingParamCount := FPendingParamCount;
-
-  FCurrentFuncId := FModule.AddFunction(LFuncName, LVoidType);
-  LEntryBlock := FModule.AddBlock(FCurrentFuncId, 'entry');
-  FModule.SetEntryBlock(FCurrentFuncId, LEntryBlock);
-  FCurrentBlockId := LEntryBlock;
-  FEntryBlockId := LEntryBlock;
-  FBlockTerminated := False;
-  FAllocaCount := 0;
-  FGlobalRefCount := 0;
-  FBlockCount := 0;
-  FPendingParamCount := 0;
-
-  // TODO Phase 5: process init body statements from ANode.GreenNodeRef
-
-  if not FBlockTerminated then
-  begin
-    FillChar(Instr, SizeOf(Instr), 0);
-    Instr.ResultId := FModule.NewValue;
-    Instr.Kind := hikIntrinsic;
-    Instr.TypeId := LVoidType;
-    Instr.IntrinsicName := 'ret_void';
-    EmitInstr(Instr);
-  end;
-
-  FCurrentFuncId := LSavedFuncId;
-  FCurrentBlockId := LSavedBlockId;
-  FEntryBlockId := LSavedEntryBlockId;
-  FAllocaCount := LSavedAllocaCount;
-  FGlobalRefCount := LSavedGlobalRefCount;
-  FBlockCount := LSavedBlockCount;
-  FPendingParamCount := LSavedPendingParamCount;
-end;
-
-procedure THIRBuilder.EmitUnitFini(const ANode: TTypedHirNode);
-var
-  LFuncName: string;
-  LVoidType: THIRTypeId;
-  LSavedFuncId: THIRFuncId;
-  LSavedBlockId: THIRBlockId;
-  LSavedEntryBlockId: THIRBlockId;
-  LSavedAllocaCount, LSavedGlobalRefCount: LongInt;
-  LSavedBlockCount, LSavedPendingParamCount: LongInt;
-  LEntryBlock: THIRBlockId;
-  Instr: THIRInstr;
-begin
-  LFuncName := 'np_unit_fini_' + ANode.Operand;
-  LVoidType := FModule.Types.AddType(htkVoid, 'void');
-  LSavedFuncId := FCurrentFuncId;
-  LSavedBlockId := FCurrentBlockId;
-  LSavedEntryBlockId := FEntryBlockId;
-  LSavedAllocaCount := FAllocaCount;
-  LSavedGlobalRefCount := FGlobalRefCount;
-  LSavedBlockCount := FBlockCount;
-  LSavedPendingParamCount := FPendingParamCount;
-
-  FCurrentFuncId := FModule.AddFunction(LFuncName, LVoidType);
-  LEntryBlock := FModule.AddBlock(FCurrentFuncId, 'entry');
-  FModule.SetEntryBlock(FCurrentFuncId, LEntryBlock);
-  FCurrentBlockId := LEntryBlock;
-  FEntryBlockId := LEntryBlock;
-  FBlockTerminated := False;
-  FAllocaCount := 0;
-  FGlobalRefCount := 0;
-  FBlockCount := 0;
-  FPendingParamCount := 0;
-
-  // TODO Phase 5: process fini body statements from ANode.GreenNodeRef
-
-  if not FBlockTerminated then
-  begin
-    FillChar(Instr, SizeOf(Instr), 0);
-    Instr.ResultId := FModule.NewValue;
-    Instr.Kind := hikIntrinsic;
-    Instr.TypeId := LVoidType;
-    Instr.IntrinsicName := 'ret_void';
-    EmitInstr(Instr);
-  end;
-
-  FCurrentFuncId := LSavedFuncId;
-  FCurrentBlockId := LSavedBlockId;
-  FEntryBlockId := LSavedEntryBlockId;
-  FAllocaCount := LSavedAllocaCount;
-  FGlobalRefCount := LSavedGlobalRefCount;
-  FBlockCount := LSavedBlockCount;
-  FPendingParamCount := LSavedPendingParamCount;
-end;
 end;
 
 procedure THIRBuilder.Build;
