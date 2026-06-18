@@ -6,12 +6,29 @@
 
 ---
 
-## 为什么这是最高优先级
+## 核心原则
 
-R5 自举虽然 stage3≡stage4 收敛，但编译器依赖 `units/linux-x86_64/SysUtils.pas`
-（953 行手写 FPC 兼容 shim）。这违背项目核心原则：
+**nextPas 的基层代码全部基于 `nextpas.core` 构建。不使用 FPC 的 System/SysUtils/Classes。**
 
-> **nextPas 编译器必须运行在自己的运行时上，不依赖 FPC 兼容层。**
+`nextpas.core.system` 是根入口，提供基础类型、内存工具、异常体系。
+编译器按需引入其他 `nextpas.core.*` 模块：
+
+```pascal
+{ 编译器源码的 uses 子句应该是：}
+uses
+  nextpas.core.system,            { 根: 基础类型 + 内存 + 异常 + FreeAndNil }
+  nextpas.core.text.conv,         { IntToStr/Trim/UpperCase/Format/SameText }
+  nextpas.core.path,              { PathDir/PathBase/PathChangeExt/PathNormalize }
+  nextpas.core.fs.util,           { FsExists/FsIsDir/FsGetCwd }
+  nextpas.core.fs.dir,            { FsMkdirAll/FsRemove/FsOpenDir }
+  nextpas.core.os.env,            { OsEnvGet }
+  ...;
+```
+
+**不碰的：**
+- `SysUtils` — FPC 的，不碰
+- `Classes` — FPC 的，不碰
+- `units/linux-x86_64/SysUtils.pas` — 手写 shim，迁移后删除
 
 musl 支持是容器化/嵌入式场景的刚需，也是碾压 FPC 的差异化能力。
 
