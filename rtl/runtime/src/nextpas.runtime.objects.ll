@@ -38,7 +38,7 @@ object.alloc.header:
   %magicp = getelementptr i8, ptr %raw, i64 8
   store i64 1313882451, ptr %magicp
   %rcp = getelementptr i8, ptr %raw, i64 16
-  store i64 0, ptr %rcp
+  store i64 1, ptr %rcp
   %obj = getelementptr i8, ptr %raw, i64 24
   call void @np_memzero(ptr %obj, i64 %size)
   ret ptr %obj
@@ -98,7 +98,7 @@ done:
   ret void
 }
 
-; void @np_intf_release(ptr %obj) — 接口引用计数 -1
+; void @np_intf_release(ptr %obj) — 接口引用计数 -1，降为 0 时释放对象
 define void @np_intf_release(ptr %obj) {
 entry:
   %isnull = icmp eq ptr %obj, null
@@ -108,6 +108,16 @@ dec:
   %old = load i64, ptr %rcp
   %new = sub i64 %old, 1
   store i64 %new, ptr %rcp
+  %is_zero = icmp eq i64 %new, 0
+  br i1 %is_zero, label %free_obj, label %done
+free_obj:
+  ; raw = obj - 24 (回到对象头)
+  %raw = getelementptr i8, ptr %obj, i64 -24
+  ; payload_size 在 [+0]
+  %payload_size = load i64, ptr %raw
+  ; alloc_size = payload_size + 24 (对象头大小)
+  %alloc_size = add i64 %payload_size, 24
+  call void @np_free(ptr %raw, i64 %alloc_size)
   br label %done
 done:
   ret void

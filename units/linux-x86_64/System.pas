@@ -13,6 +13,8 @@ type
 
   TInterfacedObject = class(TObject)
     constructor Create;
+    function _AddRef: Integer; virtual;
+    function _Release: Integer; virtual;
   end;
 
   Exception = class(TObject)
@@ -41,6 +43,16 @@ end;
 
 constructor TInterfacedObject.Create;
 begin
+end;
+
+function TInterfacedObject._AddRef: Integer;
+begin
+  Result := 1;
+end;
+
+function TInterfacedObject._Release: Integer;
+begin
+  Result := 0;
 end;
 
 constructor Exception.Create(Code: Integer);
