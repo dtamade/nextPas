@@ -1969,9 +1969,14 @@ begin
     Exit;
   if NodeConsumesOwnedStringReturnDeferred(ANode, False) then
   begin
-    { C6-H4 downgraded to warning for self-hosting compatibility.
-      Some compiler source patterns trigger false positives that need
-      deeper analysis. }
+    { TODO(C6-H4): downgraded from error to warning for self-hosting.
+      Some compiler source patterns (e.g. owned string returns used in
+      non-direct-assignment contexts like comparisons or concatenation)
+      trigger false positives. Need to either:
+      (a) improve detection to eliminate false positives, or
+      (b) add a --strict-c6h4 flag (default: warning, strict: error).
+      Risk: real owned string return lifetime violations will not block
+      compilation until this is restored to error. }
     FDiagnostics.EmitWarning(
       'sema.c6h4-owned-string-return-deferred-consumer',
       'sema',
@@ -3276,7 +3281,11 @@ begin
 
   { Prefer direct imports over transitive imports (FPC-compatible).
     When multiple imported units expose the same overload, a unit that
-    the current compilation unit directly uses takes priority. }
+    the current compilation unit directly uses takes priority.
+    Note: DirectImportMatchIndex always records the LAST matching direct
+    import. When DirectImportMatchCount > 1, the index may not point to
+    the "best" candidate — but we only use it when Count = 1, so this
+    is safe. If Count > 1, we fall through to the ambiguity check below. }
   if (ImportedMatchCount > 1) and (DirectImportMatchCount = 1) then
   begin
     if AHasArgSignature and

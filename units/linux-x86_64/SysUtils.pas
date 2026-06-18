@@ -330,6 +330,12 @@ begin
   Result := IOResult = 0;
 end;
 
+{ TODO: FileAge stub — returns 0 (exists) or -1 (not found).
+  Standard FPC FileAge returns the file's last modification time as a
+  Unix timestamp. This stub is sufficient for self-hosting because the
+  compiler only uses FileAge to check if a cached unit needs recompilation
+  (FileAge > 0 means "file changed"). A proper implementation should use
+  fpStat from BaseUnix to return the real st_mtime. }
 function FileAge(const FileName: string): LongInt;
 begin
   if FileExists(FileName) then
