@@ -31,6 +31,20 @@ function platform_tls_get(const AKey: TPlatformTLSKey): Pointer;
 { CPU }
 function platform_cpu_count: Int32;
 
+type
+  {**
+   * Lightweight thread wrapper around platform_thread_create/join/detach.
+   * Does NOT inherit from TThread — zero FPC Classes dependency.
+   *}
+  TPlatformThreadRecord = record
+    Handle: TPlatformThreadHandle;
+  end;
+
+function platform_thread_spawn(out ARec: TPlatformThreadRecord;
+  AProc: TPlatformThreadProc; AArg: Pointer): Int32;
+function platform_thread_wait(var ARec: TPlatformThreadRecord): Int32;
+function platform_thread_is_alive(const ARec: TPlatformThreadRecord): Boolean;
+
 implementation
 
 {$IFDEF NEXTPAS_LINUX}
@@ -559,5 +573,33 @@ function platform_tls_set(const AKey: TPlatformTLSKey; const AValue: Pointer): I
 function platform_tls_get(const AKey: TPlatformTLSKey): Pointer; begin Result := nil; end;
 function platform_cpu_count: Int32; begin Result := 1; end;
 {$ENDIF}{$ENDIF}
+
+{ TPlatformThreadRecord helpers }
+
+function platform_thread_spawn(out ARec: TPlatformThreadRecord;
+  AProc: TPlatformThreadProc; AArg: Pointer): Int32;
+begin
+  ARec.Handle := nil;
+  Result := platform_thread_create(ARec.Handle, AProc, AArg);
+end;
+
+function platform_thread_wait(var ARec: TPlatformThreadRecord): Int32;
+var
+  LRet: Pointer;
+begin
+  if ARec.Handle = nil then
+  begin
+    Result := -1;
+    Exit;
+  end;
+  Result := platform_thread_join(ARec.Handle, LRet);
+  if Result = 0 then
+    ARec.Handle := nil;
+end;
+
+function platform_thread_is_alive(const ARec: TPlatformThreadRecord): Boolean;
+begin
+  Result := ARec.Handle <> nil;
+end;
 
 end.

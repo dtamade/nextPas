@@ -25,7 +25,8 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.exception,
-  Classes, SysUtils, nextpas.core.sync,
+  SysUtils, nextpas.core.sync,
+  nextpas.core.platform.thread,
   nextpas.core.fs, nextpas.core.text.conv, nextpas.core.time,
   nextpas.core.tls.base, nextpas.core.tls.errors, nextpas.core.tls.logging, nextpas.core.tls.exceptions;
 
@@ -74,13 +75,16 @@ type
   private
     FContext: ISSLContext;
     FConfig: TRotationConfig;
-    FMonitorThread: TThread;
+    FMonitorThread: TPlatformThreadRecord;
     FLock: IMutex;
-    FActive: Boolean;
+    FActive: LongInt;  // atomic flag: 0=inactive, 1=active
     FLastCertModTime: TDateTime;
     FLastKeyModTime: TDateTime;
     FLastExpiryCheck: TDateTime;
     FOnRotationEvent: TRotationEventCallback;
+
+    {** Atomic read of FActive *}
+    function GetActive: Boolean;
 
     {** Get file modification time *}
     function GetFileModTime(const AFilePath: string): TDateTime;
@@ -138,25 +142,13 @@ type
     {**
      * Whether monitoring is active
      *}
-    property Active: Boolean read FActive;
+    property Active: Boolean read GetActive;
 
     {**
      * Rotation event callback
      *}
     property OnRotationEvent: TRotationEventCallback
       read FOnRotationEvent write FOnRotationEvent;
-  end;
-
-  {**
-   * Monitor thread for certificate rotation
-   *}
-  TRotationMonitorThread = class(TThread)
-  private
-    FManager: TCertificateRotationManager;
-  protected
-    procedure Execute; override;
-  public
-    constructor Create(AManager: TCertificateRotationManager);
   end;
 
 implementation
@@ -166,6 +158,8 @@ implementation
   nextpas.core.tls.utils,
   nextpas.core.tls.factory;
 
+function RotationMonitorEntry(AArg: Pointer): Pointer; cdecl; forward;
+
 { TCertificateRotationManager }
 
 constructor TCertificateRotationManager.Create(AContext: ISSLContext);
@@ -173,8 +167,8 @@ begin
   inherited Create;
   FContext := AContext;
   FLock := Mutex;
-  FActive := False;
-  FMonitorThread := nil;
+  FActive := 0;
+  FMonitorThread.Handle := nil;
   FLastExpiryCheck := 0;
 end;
 
@@ -183,6 +177,11 @@ begin
   Stop;
   FLock := nil;
   inherited Destroy;
+end;
+
+function TCertificateRotationManager.GetActive: Boolean;
+begin
+  Result := InterlockedCompareExchange(FActive, 0, 0) <> 0;
 end;
 
 function TCertificateRotationManager.GetFileModTime(const AFilePath: string): TDateTime;
@@ -299,7 +298,7 @@ var
   DaysRemaining: Integer;
   NeedReload: Boolean;
 begin
-  while FActive do
+  while InterlockedCompareExchange(FActive, 0, 0) <> 0 do
   begin
     try
       NeedReload := False;
@@ -363,6 +362,7 @@ begin
     end;
 
     // Sleep for check interval
+    // Sleep for check interval (NOTE: Stop() may block up to this duration)
     Sleep(FConfig.CheckIntervalSeconds * 1000);
   end;
 end;
@@ -386,7 +386,7 @@ function TCertificateRotationManager.Start(const AConfig: TRotationConfig): Bool
 begin
   Result := False;
 
-  if FActive then
+  if InterlockedCompareExchange(FActive, 0, 0) <> 0 then
   begin
     TSecurityLog.Warning('CertRotation', 'Rotation manager already active');
     Exit;
@@ -423,8 +423,8 @@ begin
   FLastExpiryCheck := 0;
 
   // Start monitor thread
-  FActive := True;
-  FMonitorThread := TRotationMonitorThread.Create(Self);
+  InterlockedExchange(FActive, 1);
+  platform_thread_spawn(FMonitorThread, @RotationMonitorEntry, Self);
 
   TSecurityLog.Info('CertRotation',
     nextpas.core.text.conv.Format('Certificate rotation monitoring started (check interval: %d seconds)',
@@ -435,18 +435,15 @@ end;
 
 procedure TCertificateRotationManager.Stop;
 begin
-  if not FActive then
+  if InterlockedCompareExchange(FActive, 0, 0) = 0 then
     Exit;
 
   TSecurityLog.Info('CertRotation', 'Stopping certificate rotation monitoring...');
 
-  FActive := False;
+  InterlockedExchange(FActive, 0);
 
-  if FMonitorThread <> nil then
-  begin
-    FMonitorThread.Terminate;
-    FMonitorThread.WaitFor;
-  end;
+  if platform_thread_is_alive(FMonitorThread) then
+    platform_thread_wait(FMonitorThread);
 
   TSecurityLog.Info('CertRotation', 'Certificate rotation monitoring stopped');
 end;
@@ -467,7 +464,7 @@ var
   DaysRemaining: Integer;
   ActiveStr, AutoReloadStr, PrivKeyStr: string;
 begin
-  if FActive then
+  if InterlockedCompareExchange(FActive, 0, 0) <> 0 then
     ActiveStr := 'Yes'
   else
     ActiveStr := 'No';
@@ -498,18 +495,15 @@ begin
     Result := Result + nextpas.core.text.conv.Format('  Days until expiry: %d' + LineEnding, [DaysRemaining]);
 end;
 
-{ TRotationMonitorThread }
+{ Rotation monitor thread entry }
 
-constructor TRotationMonitorThread.Create(AManager: TCertificateRotationManager);
+function RotationMonitorEntry(AArg: Pointer): Pointer; cdecl;
+var
+  LManager: TCertificateRotationManager;
 begin
-  inherited Create(False);  // Not suspended
-  FreeOnTerminate := False;
-  FManager := AManager;
-end;
-
-procedure TRotationMonitorThread.Execute;
-begin
-  FManager.MonitorThreadProc;
+  LManager := TCertificateRotationManager(AArg);
+  LManager.MonitorThreadProc;
+  Result := nil;
 end;
 
 end.
