@@ -4,7 +4,8 @@ unit nextpas.core.tls.openssl.api.aria;
 
 interface
 
-uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader; type // ARIA types ARIA_KEY = packed record rd_key: array[0..16, 0..3] of Cardinal;
+uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader,
+  nextpas.core.platform.dl; type // ARIA types ARIA_KEY = packed record rd_key: array[0..16, 0..3] of Cardinal;
     rounds: Integer;
   end;
   PARIA_KEY = ^ARIA_KEY;

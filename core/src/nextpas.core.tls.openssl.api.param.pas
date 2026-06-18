@@ -12,6 +12,7 @@ unit nextpas.core.tls.openssl.api.param;
 interface
 
 uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.api.consts; const OSSL_PARAM_END = 0;
+  nextpas.core.platform.dl,
   OSSL_PARAM_INTEGER = 1;
   OSSL_PARAM_UNSIGNED_INTEGER = 2; 
   OSSL_PARAM_REAL = 3;
@@ -202,7 +203,7 @@ var
   OSSL_PARAM_BLD_push_octet_ptr: TOSSLPARAMBLDPushOctetPtr = nil;
 
 { Load/Unload functions }
-function LoadOSSLPARAM(const ALibCrypto: THandle): Boolean;
+function LoadOSSLPARAM(const ALibCrypto: TPlatformLibrary): Boolean;
 procedure UnloadOSSLPARAM;
 
 { Helper functions }
@@ -290,11 +291,11 @@ uses nextpas.core.tls.openssl.api.utils; const OSSL_PARAM_BINDINGS: array[0..53]
     (Name: nil; FuncPtr: nil; Required: False)  { Terminator }
   );
 
-function LoadOSSLPARAM(const ALibCrypto: THandle): Boolean;
+function LoadOSSLPARAM(const ALibCrypto: TPlatformLibrary): Boolean;
 begin
   Result := False;
   if TOpenSSLLoader.IsModuleLoaded(osmParam) then Exit(True);
-  if ALibCrypto = 0 then Exit;
+  if not LibLoaded(ALibCrypto) then Exit;
 
   { Batch load all functions }
   TOpenSSLLoader.LoadFunctions(ALibCrypto, OSSL_PARAM_BINDINGS);

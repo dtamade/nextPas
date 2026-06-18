@@ -4,7 +4,8 @@ unit nextpas.core.tls.openssl.api.seed;
 
 interface
 
-uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader; type // SEED types SEED_KEY_SCHEDULE = packed record ks: array[0..31] of Cardinal;
+uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader,
+  nextpas.core.platform.dl; type // SEED types SEED_KEY_SCHEDULE = packed record ks: array[0..31] of Cardinal;
   end;
   PSEED_KEY_SCHEDULE = ^SEED_KEY_SCHEDULE;
   

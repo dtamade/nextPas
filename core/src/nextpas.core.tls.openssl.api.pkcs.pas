@@ -4,7 +4,8 @@ unit nextpas.core.tls.openssl.api.pkcs;
 
 interface
 
-uses nextpas.core.base, nextpas.core.fs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.api.asn1, nextpas.core.tls.openssl.api.bio, nextpas.core.tls.openssl.loader;
+uses nextpas.core.base, nextpas.core.fs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.api.asn1, nextpas.core.tls.openssl.api.bio, nextpas.core.tls.openssl.loader,
+  nextpas.core.platform.dl;
 
 type
   // PKCS7 类型定义
@@ -370,7 +371,7 @@ var
   X509_SIG_getm: TX509_SIG_getm = nil;
 
 // 加载和卸载函数
-function LoadOpenSSLPKCS(const ACryptoLib: THandle): Boolean;
+function LoadOpenSSLPKCS(const ACryptoLib: TPlatformLibrary): Boolean;
 procedure UnloadOpenSSLPKCS;
 
 // 辅助函数
@@ -496,12 +497,12 @@ const
     (Name: 'X509_SIG_getm'; FuncPtr: @X509_SIG_getm; Required: False)
   );
 
-function LoadOpenSSLPKCS(const ACryptoLib: THandle): Boolean;
+function LoadOpenSSLPKCS(const ACryptoLib: TPlatformLibrary): Boolean;
 begin
   if TOpenSSLLoader.IsModuleLoaded(osmPKCS) then
     Exit(True);
 
-  if ACryptoLib = 0 then
+  if not LibLoaded(ACryptoLib) then
     Exit(False);
 
   // 使用批量加载模式

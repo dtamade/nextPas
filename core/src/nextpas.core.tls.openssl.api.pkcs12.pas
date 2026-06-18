@@ -4,7 +4,8 @@ unit nextpas.core.tls.openssl.api.pkcs12;
 
 interface
 
-uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.pkcs7, nextpas.core.tls.openssl.api.asn1, nextpas.core.tls.openssl.api.bio;
+uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.pkcs7, nextpas.core.tls.openssl.api.asn1, nextpas.core.tls.openssl.api.bio,
+  nextpas.core.platform.dl;
 
 type
   // PKCS12 结构体
@@ -223,12 +224,12 @@ function SavePKCS12ToBytes(const Password, FriendlyName: string;
 {$ENDIF}
 
 // 模块加载和卸载
-procedure LoadPKCS12Module(ALibCrypto: THandle);
+procedure LoadPKCS12Module(ALibCrypto: TPlatformLibrary);
 procedure UnloadPKCS12Module;
 
 implementation
 
-uses nextpas.core.tls.openssl.api.err, nextpas.core.tls.openssl.loader;
+uses nextpas.core.tls.openssl.api.err, nextpas.core.tls.openssl.loader,
 
 { PKCS12 函数绑定数组
   runtime storage keeps procvar targets writable across macOS batch-loader runs }
@@ -294,14 +295,14 @@ var
     (Name: 'PKCS8_decrypt'; FuncPtr: @PKCS8_decrypt; Required: False)
   );
 
-procedure LoadPKCS12Module(ALibCrypto: THandle);
+procedure LoadPKCS12Module(ALibCrypto: TPlatformLibrary);
 var
   LLoaded: Boolean;
 begin
   if TOpenSSLLoader.IsModuleLoaded(osmPKCS12) then
     Exit;
 
-  if ALibCrypto = 0 then Exit;
+  if not LibLoaded(ALibCrypto) then Exit;
 
   // 使用批量加载模式
   TOpenSSLLoader.LoadFunctions(ALibCrypto, PKCS12_BINDINGS);

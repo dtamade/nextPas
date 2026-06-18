@@ -14,7 +14,8 @@ interface
 
 uses
   nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.loader;
+  nextpas.core.tls.openssl.loader,
+  nextpas.core.platform.dl;
 
 type
   // EVP structures

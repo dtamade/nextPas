@@ -12,6 +12,7 @@ unit nextpas.core.tls.openssl.api.srp;
 interface
 
 uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.api.consts; type SRP_gN_cache = record end;
+  nextpas.core.platform.dl,
   PSRP_gN_cache = ^SRP_gN_cache;
   
   SRP_user_pwd = record end;
@@ -116,7 +117,7 @@ var
   SRP_create_verifier_BN: TSRPCreateVerifierBN = nil;
 
 { Load/Unload functions }
-function LoadSRP(const ALibCrypto: THandle): Boolean;
+function LoadSRP(const ALibCrypto: TPlatformLibrary): Boolean;
 procedure UnloadSRP;
 
 { Helper functions }
@@ -163,11 +164,11 @@ uses nextpas.core.tls.openssl.api.utils, nextpas.core.tls.openssl.api.crypto; co
     (Name: 'SRP_create_verifier_BN';  FuncPtr: @SRP_create_verifier_BN;  Required: False)
   );
 
-function LoadSRP(const ALibCrypto: THandle): Boolean;
+function LoadSRP(const ALibCrypto: TPlatformLibrary): Boolean;
 begin
   Result := False;
   if TOpenSSLLoader.IsModuleLoaded(osmSRP) then Exit(True);
-  if ALibCrypto = 0 then Exit;
+  if not LibLoaded(ALibCrypto) then Exit;
 
   { Batch load all SRP functions }
   TOpenSSLLoader.LoadFunctions(ALibCrypto, SRPFunctionBindings);

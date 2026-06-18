@@ -11,7 +11,8 @@ unit nextpas.core.tls.openssl.api.thread;
 
 interface
 
-uses Windows, cthreads, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.loader; type CRYPTO_RWLOCK = record end;
+uses nextpas.core.platform.thread, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.loader,
+  nextpas.core.platform.dl; type CRYPTO_RWLOCK = record end;
   PCRYPTO_RWLOCK = ^CRYPTO_RWLOCK;
   
   CRYPTO_THREAD_LOCAL = TOpenSSLULong;
@@ -111,7 +112,7 @@ var
   CRYPTO_thread_id_func: TCRYPTOThreadID = nil;
 
 { Load/Unload functions }
-function LoadThread(const ALibCrypto: THandle): Boolean;
+function LoadThread(const ALibCrypto: TPlatformLibrary): Boolean;
 procedure UnloadThread;
 
 { Helper functions }
@@ -158,11 +159,11 @@ uses nextpas.core.tls.openssl.api.utils; const ThreadBindings: array[0..25] of T
     (Name: 'CRYPTO_thread_id';                 FuncPtr: @CRYPTO_thread_id_func;            Required: False)
   );
 
-function LoadThread(const ALibCrypto: THandle): Boolean;
+function LoadThread(const ALibCrypto: TPlatformLibrary): Boolean;
 begin
   Result := False;
   if TOpenSSLLoader.IsModuleLoaded(osmThread) then Exit(True);
-  if ALibCrypto = 0 then Exit;
+  if not LibLoaded(ALibCrypto) then Exit;
 
   { Batch load all thread functions }
   TOpenSSLLoader.LoadFunctions(ALibCrypto, ThreadBindings);
@@ -223,11 +224,7 @@ begin
   if Assigned(CRYPTO_THREAD_get_current_id) then
     Result := CRYPTO_THREAD_get_current_id()
   else
-  {$IFDEF WINDOWS}
-    Result := GetCurrentThreadId;
-  {$ELSE}
-    Result := TOpenSSLULong(GetThreadID);
-  {$ENDIF}
+    Result := TOpenSSLULong(platform_thread_id);
 end;
 
 function AtomicIncrement(var Value: TOpenSSLInt; Lock: PCRYPTO_RWLOCK): TOpenSSLInt;

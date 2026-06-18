@@ -4,7 +4,8 @@ unit nextpas.core.tls.openssl.api.x509v3;
 
 interface
 
-uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.loader;
+uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.loader,
+  nextpas.core.platform.dl;
 
 type
   // Forward declarations for missing types
@@ -203,7 +204,6 @@ implementation
 
 uses
   nextpas.core.tls.openssl.api.utils,
-  nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.asn1,
   nextpas.core.tls.openssl.api.x509,

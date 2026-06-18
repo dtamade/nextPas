@@ -4,7 +4,8 @@ unit nextpas.core.tls.openssl.api.hmac;
 
 interface
 
-uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader;
+uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader,
+  nextpas.core.platform.dl;
 
 const
   { HMAC constants }

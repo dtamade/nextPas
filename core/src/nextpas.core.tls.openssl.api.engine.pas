@@ -20,7 +20,8 @@ uses
    Classes,
   nextpas.core.base,
   nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.loader;
+  nextpas.core.tls.openssl.loader,
+  nextpas.core.platform.dl;
 
 type
   // Engine types
@@ -121,7 +122,7 @@ var
   ENGINE_load_public_key: TENGINE_load_public_key = nil;
 
 // Module loading functions
-function LoadOpenSSLEngine(const ACryptoLib: THandle): Boolean;
+function LoadOpenSSLEngine(const ACryptoLib: TPlatformLibrary): Boolean;
 procedure UnloadOpenSSLEngine;
 
 // Helper functions
@@ -159,10 +160,10 @@ const
     (Name: 'ENGINE_load_public_key'; FuncPtr: @ENGINE_load_public_key; Required: False)
   );
 
-function LoadOpenSSLEngine(const ACryptoLib: THandle): Boolean;
+function LoadOpenSSLEngine(const ACryptoLib: TPlatformLibrary): Boolean;
 begin
   Result := False;
-  if ACryptoLib = 0 then
+  if not LibLoaded(ACryptoLib) then
     Exit;
 
   if TOpenSSLLoader.IsModuleLoaded(osmEngine) then

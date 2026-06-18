@@ -354,7 +354,8 @@ function BIO_get_mem_data(b: PBIO; pp: PPAnsiChar): Integer; cdecl;
 
 implementation
 
-uses nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.loader;
+uses nextpas.core.tls.openssl.api.core,
+  nextpas.core.platform.dl;
 
 procedure LoadOpenSSLBIO;
 var

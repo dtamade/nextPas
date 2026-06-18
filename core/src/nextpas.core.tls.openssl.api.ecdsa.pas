@@ -4,7 +4,8 @@ unit nextpas.core.tls.openssl.api.ecdsa;
 
 interface
 
-uses nextpas.core.base, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.api.ec, nextpas.core.tls.openssl.loader;
+uses nextpas.core.base, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.api.ec, nextpas.core.tls.openssl.loader,
+  nextpas.core.platform.dl;
 
 type
   { ECDSA_SIG structure for signature }

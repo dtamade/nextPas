@@ -26,7 +26,8 @@ uses
   nextpas.core.tls.exceptions, // Rust-quality: Typed exceptions
   nextpas.core.tls.openssl.errors, // OpenSSL-specific raise helpers
   nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.loader, // P0-1.1: 使用统一的加载器
+  nextpas.core.tls.openssl.loader,
+  nextpas.core.platform.dl, // P0-1.1: 使用统一的加载器
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.ssl,
   nextpas.core.tls.openssl.api.err,

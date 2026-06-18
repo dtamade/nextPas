@@ -17,6 +17,8 @@ type
   TMemoryStream = Classes.TMemoryStream;
   TStringStream = Classes.TStringStream;
   TSeekOrigin = Classes.TSeekOrigin;
+  TInterfacedObject = System.TInterfacedObject;
+  IInterface = System.IInterface;
 
 implementation
 

@@ -7,7 +7,8 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.text.conv,
-  nextpas.core.tls.openssl.base;
+  nextpas.core.tls.openssl.base,
+  nextpas.core.platform.dl;
 
 type
   // Provider 类型定义
@@ -189,12 +190,12 @@ function LoadConfigForContext(LibCtx: POSSL_LIB_CTX; const ConfigFile: string): 
 function SelfTestProvider(Provider: POSSL_PROVIDER): Boolean;
 
 // 模块加载和卸载
-procedure LoadProviderModule(ALibCrypto: THandle);
+procedure LoadProviderModule(ALibCrypto: TPlatformLibrary);
 procedure UnloadProviderModule;
 
 implementation
 
-uses nextpas.core.tls.openssl.loader;
+uses nextpas.core.tls.openssl.loader,
 
 const
   { 函数绑定数组 - Provider 模块所有函数 }
@@ -245,9 +246,9 @@ var
     (Name: 'OSSL_PARAM_construct_end';      FuncPtr: @OSSL_PARAM_construct_end;      Required: False)
   );
 
-procedure LoadProviderModule(ALibCrypto: THandle);
+procedure LoadProviderModule(ALibCrypto: TPlatformLibrary);
 begin
-  if ALibCrypto = 0 then Exit;
+  if not LibLoaded(ALibCrypto) then Exit;
 
   TOpenSSLLoader.LoadFunctions(ALibCrypto, ProviderBindings);
 end;

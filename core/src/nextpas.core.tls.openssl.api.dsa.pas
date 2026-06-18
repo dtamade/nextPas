@@ -4,7 +4,8 @@ unit nextpas.core.tls.openssl.api.dsa;
 
 interface
 
-uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.loader;
+uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.loader,
+  nextpas.core.platform.dl;
 
 const
   { DSA flags }

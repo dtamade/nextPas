@@ -4,7 +4,8 @@ unit nextpas.core.tls.openssl.api.rsa;
 
 interface
 
-uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.api.core;
+uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader,
+  nextpas.core.platform.dl, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.api.core;
 
 const
   { RSA Padding modes }

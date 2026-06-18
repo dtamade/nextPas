@@ -9,7 +9,8 @@ unit nextpas.core.tls.openssl.api.cmac.evp;
 
 interface
 
-uses nextpas.core.base, nextpas.core.tls.base, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.evp; const CMAC_MAX_SIZE = 32;
+uses nextpas.core.base, nextpas.core.tls.base, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader,
+  nextpas.core.platform.dl, nextpas.core.tls.openssl.api.evp; const CMAC_MAX_SIZE = 32;
 
 type
   TCMACEVPContext = class

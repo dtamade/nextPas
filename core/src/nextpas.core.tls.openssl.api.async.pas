@@ -5,7 +5,8 @@ unit nextpas.core.tls.openssl.api.async;
 
 interface
 
-uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader;
+uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader,
+  nextpas.core.platform.dl;
 
 type
   // ASYNC types
@@ -148,7 +149,17 @@ type
 
 implementation
 
-uses Windows, BaseUnix, nextpas.core.tls.openssl.api.utils;
+uses {$IFDEF WINDOWS}nextpas.core.platform.windows.ffi,{$ENDIF}
+  nextpas.core.tls.openssl.api.utils;
+
+{$IFDEF WINDOWS}
+function WaitForMultipleObjects(nCount: DWORD; lpHandles: Pointer;
+  bWaitAll: BOOL; dwMilliseconds: DWORD): DWORD; stdcall;
+  external 'kernel32' name 'WaitForMultipleObjects';
+const
+  WAIT_OBJECT_0 = 0;
+  INFINITE = DWORD($FFFFFFFF);
+{$ENDIF}
 
 procedure LoadASYNCFunctions(AHandle: TPlatformLibrary);
 type
