@@ -213,7 +213,11 @@ function SetParamValue(Params: POSSL_PARAM; const Key: string; const Value: stri
 
 implementation
 
-uses nextpas.core.tls.openssl.api.utils; const OSSL_PARAM_BINDINGS: array[0..53] of TFunctionBinding = ( (Name: 'OSSL_PARAM_construct_int'; FuncPtr: @OSSL_PARAM_construct_int; Required: False);
+uses nextpas.core.tls.openssl.api.utils;
+
+const
+  OSSL_PARAM_BINDINGS: array[0..53] of TFunctionBinding = (
+    (Name: 'OSSL_PARAM_construct_int'; FuncPtr: @OSSL_PARAM_construct_int; Required: False),
     (Name: 'OSSL_PARAM_construct_uint'; FuncPtr: @OSSL_PARAM_construct_uint; Required: False),
     (Name: 'OSSL_PARAM_construct_long'; FuncPtr: @OSSL_PARAM_construct_long; Required: False),
     (Name: 'OSSL_PARAM_construct_ulong'; FuncPtr: @OSSL_PARAM_construct_ulong; Required: False),
