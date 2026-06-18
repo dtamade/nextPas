@@ -7,7 +7,7 @@ unit np_diagnostics_sink;
 interface
 
 uses
-  SysUtils, np_base_types, nextpas_json_helpers;
+  nextpas.core.text.conv, np_base_types, nextpas_json_helpers;
 
 type
   TDiagnosticsPolicy = record

@@ -11,6 +11,7 @@ program toolchain_contract_smoke;
 {$UNITPATH ../../compiler/targets}
 {$UNITPATH ../../rtl/core/base}
 {$UNITPATH ../../rtl/core/text}
+{$UNITPATH ../../core/src}
 {$UNITPATH ../../tools/stage0}
 
 uses

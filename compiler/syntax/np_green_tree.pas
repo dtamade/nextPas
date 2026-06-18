@@ -138,7 +138,7 @@ function GreenNodeKindNameOf(const ANode: TGreenNode): string;
 implementation
 
 uses
-  SysUtils;
+  nextpas.core.text.conv;
 
 type
   TUseSectionKind = (

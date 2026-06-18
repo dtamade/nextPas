@@ -5,13 +5,12 @@ unit np_toolchain_profiles;
 interface
 
 uses
-  Classes, SysUtils;
+  Classes, nextpas.core.text, nextpas.core.text.conv, nextpas.core.path,
+  nextpas.core.fs.util, nextpas.core.exception;
 
 type
   EToolProfileError = class(Exception)
   end;
-
-  TStringArray = array of string;
 
   THostCompilerProfile = record
     Id: string;
@@ -288,7 +287,7 @@ var
   Index: Integer;
 begin
   Path := ProfilePath(ARootPath, 'host-compilers', AProfileId);
-  if not FileExists(Path) then
+  if not FsExists(Path) then
     raise EToolProfileError.Create('missing-tool-profile: ' + Path);
 
   Lines := TStringList.Create;
@@ -344,7 +343,7 @@ var
   Index: Integer;
 begin
   Path := ProfilePath(ARootPath, 'assemblers', AProfileId);
-  if not FileExists(Path) then
+  if not FsExists(Path) then
     raise EToolProfileError.Create('missing-tool-profile: ' + Path);
 
   Lines := TStringList.Create;
@@ -412,7 +411,7 @@ var
   Index: Integer;
 begin
   Path := ProfilePath(ARootPath, 'linkers', AProfileId);
-  if not FileExists(Path) then
+  if not FsExists(Path) then
     raise EToolProfileError.Create('missing-tool-profile: ' + Path);
 
   Lines := TStringList.Create;
@@ -482,7 +481,7 @@ var
   Index: Integer;
 begin
   Path := ProfilePath(ARootPath, 'archivers', AProfileId);
-  if not FileExists(Path) then
+  if not FsExists(Path) then
     raise EToolProfileError.Create('missing-tool-profile: ' + Path);
 
   Lines := TStringList.Create;
@@ -541,7 +540,7 @@ var
   Index: Integer;
 begin
   Path := ProfilePath(ARootPath, 'resources', AProfileId);
-  if not FileExists(Path) then
+  if not FsExists(Path) then
     raise EToolProfileError.Create('missing-tool-profile: ' + Path);
 
   Lines := TStringList.Create;
@@ -603,7 +602,7 @@ var
   Index: Integer;
 begin
   Path := ProfilePath(ARootPath, 'llvm', ASetId);
-  if not FileExists(Path) then
+  if not FsExists(Path) then
     raise EToolProfileError.Create('missing-tool-profile: ' + Path);
 
   Lines := TStringList.Create;

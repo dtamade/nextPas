@@ -101,7 +101,7 @@ type
 implementation
 
 uses
-  SysUtils, nextpas.core.system.contracts;
+  nextpas.core.text.conv, nextpas.core.system.contracts;
 
 const
   NP_ALLOCATOR_PAGE_SIZE = 4096;

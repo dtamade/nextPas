@@ -5,7 +5,8 @@ unit np_package_manifest;
 interface
 
 uses
-  Classes, SysUtils;
+  Classes, nextpas.core.base, nextpas.core.text.conv, nextpas.core.path,
+  nextpas.core.fs.util, nextpas.core.exception;
 
 type
   TPackageDependencyInfo = record
@@ -499,7 +500,7 @@ begin
   begin
     ManifestPath := IncludeTrailingPathDelimiter(CandidateDirectory) +
       'nextpas.package.toml';
-    if FileExists(ManifestPath) then
+    if FsExists(ManifestPath) then
       Exit(ExpandFileName(ManifestPath));
 
     if (WorkspaceRoot <> '') and
@@ -549,7 +550,7 @@ begin
   SetLength(Result.DependencyIssues, 0);
 
   ManifestPath := ExpandFileName(AManifestPath);
-  if not FileExists(ManifestPath) then
+  if not FsExists(ManifestPath) then
     Exit;
 
   Result.ManifestPath := ManifestPath;
@@ -620,7 +621,7 @@ begin
             IncludeTrailingPathDelimiter(ManifestDirectory) + RootEntries[EntryIndex]
           );
 
-        if DirectoryExists(ResolvedRoot) then
+        if FsIsDir(ResolvedRoot) then
           AppendUniqueString(Result.SourceRoots, ResolvedRoot);
       end;
     end;
@@ -684,7 +685,7 @@ begin
   WorkspaceDescriptorPath := IncludeTrailingPathDelimiter(
     ExpandFileName(AWorkspaceRootPath)
   ) + 'nextpas.workspace.toml';
-  if not FileExists(WorkspaceDescriptorPath) then
+  if not FsExists(WorkspaceDescriptorPath) then
     Exit;
 
   Lines := TStringList.Create;
@@ -725,7 +726,7 @@ begin
 
         MemberManifestPath := IncludeTrailingPathDelimiter(MemberRootPath) +
           'nextpas.package.toml';
-        if not FileExists(MemberManifestPath) then
+        if not FsExists(MemberManifestPath) then
           Continue;
 
         PackageInfo := LoadPackageManifestInfo(MemberManifestPath);

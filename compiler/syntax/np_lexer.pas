@@ -7,7 +7,7 @@ unit np_lexer;
 interface
 
 uses
-  SysUtils, np_base_types, np_diagnostics_sink;
+  nextpas.core.text.conv, np_base_types, np_diagnostics_sink;
 
 type
   TTokenKind = (

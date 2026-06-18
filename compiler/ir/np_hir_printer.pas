@@ -32,7 +32,7 @@ type
 implementation
 
 uses
-  SysUtils;
+  nextpas.core.text.conv;
 
 constructor THIRPrinter.Create(AModule: THIRModule);
 begin

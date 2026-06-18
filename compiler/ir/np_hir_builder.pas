@@ -309,7 +309,7 @@ type
 implementation
 
 uses
-  SysUtils, nextpas.core.system.contracts;
+  nextpas.core.text.conv, nextpas.core.system.contracts;
 
 procedure TExprStack.Init;
 begin

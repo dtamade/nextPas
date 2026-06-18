@@ -5,7 +5,8 @@ unit np_package_lock;
 interface
 
 uses
-  Classes, SysUtils;
+  Classes, nextpas.core.text.conv, nextpas.core.path, nextpas.core.fs.util,
+  nextpas.core.exception;
 
 type
   TPackageLockEntryInfo = record
@@ -347,7 +348,7 @@ begin
   SetLength(Result.Snapshots, 0);
   SetLength(Result.Issues, 0);
 
-  if (Result.LockfilePath = '') or (not FileExists(Result.LockfilePath)) then
+  if (Result.LockfilePath = '') or (not FsExists(Result.LockfilePath)) then
     Exit;
 
   CurrentSection := '';

@@ -8,7 +8,9 @@ unit np_toolchain_plan;
 interface
 
 uses
-  SysUtils, np_backend_plan, np_target_facts, np_toolchain_profiles,
+  nextpas.core.text, nextpas.core.text.conv, nextpas.core.path,
+  nextpas.core.fs.util, nextpas.core.os.env,
+  np_backend_plan, np_target_facts, np_toolchain_profiles,
   nextpas_json_helpers;
 
 type
@@ -981,7 +983,7 @@ begin
   begin
     Candidate := IncludeTrailingPathDelimiter(EnvDir) +
       'libnprt.a';
-    if FileExists(Candidate) then
+    if FsExists(Candidate) then
       Exit(Candidate);
   end;
   // 2. 项目根目录 build/runtime/<target>/
@@ -991,7 +993,7 @@ begin
     Candidate := IncludeTrailingPathDelimiter(RepoRoot) + 'build' +
       DirectorySeparator + 'runtime' + DirectorySeparator +
       ATargetId + DirectorySeparator + 'libnprt.a';
-    if FileExists(Candidate) then
+    if FsExists(Candidate) then
       Exit(Candidate);
   end;
 end;
@@ -1046,7 +1048,7 @@ begin
     LibraryPath := IncludeTrailingPathDelimiter(RuntimeRootPath) + 'libc.so';
     if not SameText(FTargetFacts.SysrootMode, 'runtime-sdk') or
       not SameText(FTargetFacts.RuntimeRootKind, 'distribution-runtime-root') or
-      (RuntimeRootPath = '') or not FileExists(LibraryPath) then
+      (RuntimeRootPath = '') or not FsExists(LibraryPath) then
     begin
       FPlan.MarkFailure(
         'toolchain.c-library-not-found',

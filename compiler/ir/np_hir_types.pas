@@ -182,7 +182,7 @@ function ParseHirNodeKind(const AKind: string): THirNodeKind;
 implementation
 
 uses
-  SysUtils;
+  nextpas.core.text.conv;
 
 function ParseHirNodeKind(const AKind: string): THirNodeKind;
 begin

@@ -565,7 +565,8 @@ type
 implementation
 
 uses
-  SysUtils, nextpas.core.system.contracts;
+  nextpas.core.text.conv, nextpas.core.path, nextpas.core.fs.util,
+  nextpas.core.system.contracts;
 
 type
   TStringArray = array of string;
@@ -583,7 +584,7 @@ type
 
   TCachedUnitSymbols = record
     SourcePath: string;
-    FileAge: LongInt;
+    FileAge: Int64;
     Symbols: array of TCachedSymbolEntry;
     SymbolCount: LongInt;
   end;
@@ -592,7 +593,7 @@ var
   GImportedUnitCache: array of TCachedUnitSymbols;
   GImportedUnitCacheCount: LongInt = 0;
 
-function FindCachedUnit(const APath: string; AAge: LongInt): LongInt;
+function FindCachedUnit(const APath: string; AAge: Int64): LongInt;
 var
   I: LongInt;
 begin
@@ -6242,6 +6243,7 @@ var
   CandidateSeen: Boolean;
   DirectImportMatchCount: LongInt;
   DotPos: LongInt;
+  I: LongInt;
   Index: LongInt;
   NormalizedOwnerUnitId: string;
   PreferredMatchCount: LongInt;
@@ -6261,7 +6263,13 @@ begin
   if SameText(ATypeName, 'Extended') then
     Exit(FModel.FindTypeByName('Double'));
 
-  DotPos := LastDelimiter('.', ATypeName);
+  DotPos := 0;
+  for I := Length(ATypeName) downto 1 do
+    if ATypeName[I] = '.' then
+    begin
+      DotPos := I;
+      Break;
+    end;
   if (DotPos > 1) and (DotPos < Length(ATypeName)) then
   begin
     QualifiedOwnerUnitId := NormalizeUnitIdentity(
@@ -9003,7 +9011,7 @@ begin
           ArgName := LookupClassVar(Copy(FuncName, 1, K - 1));
           if ArgName <> '' then
             FuncName := ArgName + '.' + Copy(FuncName, K + 1, Length(FuncName) - K);
-          ArgName := FuncName + '$' + StringReplace(StringReplace(Operand, ', ', '$', [rfReplaceAll]), ',', '$', [rfReplaceAll]);
+          ArgName := FuncName + '$' + StringReplace(StringReplace(Operand, ', ', '$', True), ',', '$', True);
           if not LookupProcedureBody(ArgName, BranchNode, DeclNode) then
           begin
             for K := 0 to Length(FProcedureBodies) - 1 do
@@ -9025,7 +9033,7 @@ begin
         end
         else
         begin
-          ArgName := FuncName + '$' + StringReplace(StringReplace(Operand, ', ', '$', [rfReplaceAll]), ',', '$', [rfReplaceAll]);
+          ArgName := FuncName + '$' + StringReplace(StringReplace(Operand, ', ', '$', True), ',', '$', True);
           if not LookupProcedureBody(ArgName, BranchNode, DeclNode) then
           begin
             for K := 0 to Length(FProcedureBodies) - 1 do
@@ -13147,7 +13155,7 @@ begin
         begin
           FuncName := Copy(ArgName, 1, DotPos - 1);
           Operand := Copy(ArgName, DotPos + 1, Pos('>', ArgName) - DotPos - 1);
-          ArgName := FuncName + '$' + StringReplace(StringReplace(Operand, ', ', '$', [rfReplaceAll]), ',', '$', [rfReplaceAll]);
+          ArgName := FuncName + '$' + StringReplace(StringReplace(Operand, ', ', '$', True), ',', '$', True);
           if not LookupProcedureBody(ArgName, BranchNode, DeclNode) then
           begin
             for K := 0 to Length(FProcedureBodies) - 1 do
@@ -14902,7 +14910,7 @@ begin
     FCurrentMethodClass := '';
 
     // Normalize unit name: replace dots with underscores for LLVM function names
-    LNormalizedUnitName := StringReplace(Node.Operand, '.', '_', [rfReplaceAll]);
+    LNormalizedUnitName := StringReplace(Node.Operand, '.', '_', True);
 
     if Node.NodeKind = hnkUnitInitRuntime then
     begin
@@ -15088,7 +15096,7 @@ var
   PPDefines: TDefineTable;
   IncResolver: TFileIncludeResolver;
   CacheIdx: LongInt;
-  Age: LongInt;
+  Age: Int64;
   SymBefore, SymAfter, J, NextCache: LongInt;
   Sym: TSemanticSymbol;
 begin
@@ -15104,14 +15112,14 @@ begin
       SourcePath := ResolvedUnit.SourcePath;
       if Trim(SourcePath) = '' then
         Continue;
-      if not FileExists(SourcePath) then
+      if not FsExists(SourcePath) then
         Continue;
 
       OwnerUnitId := ResolvedUnit.UnitId;
       if OwnerUnitId = '' then
         OwnerUnitId := NormalizeUnitIdentity(ResolvedUnit.CanonicalName);
 
-      Age := FileAge(SourcePath);
+      Age := FsStat(SourcePath).ModTime;
       CacheIdx := -1;
       if SameText(ResolvedUnit.OriginClass, 'installed-source') then
         CacheIdx := FindCachedUnit(SourcePath, Age);
@@ -15150,12 +15158,12 @@ begin
       IncResolver := TFileIncludeResolver.Create(ExtractFileDir(SourcePath));
       IncResolver.AddSearchPath(ExtractFileDir(SourcePath));
       IncResolver.AddSearchPath(
-        ExtractFileDir(ExtractFileDir(SourcePath)) + PathDelim + 'objpas');
+        ExtractFileDir(ExtractFileDir(SourcePath)) + DirectorySeparator + 'objpas');
       IncResolver.AddSearchPath(
-        ExtractFileDir(ExtractFileDir(SourcePath)) + PathDelim + 'objpas' +
-        PathDelim + 'sysutils');
+        ExtractFileDir(ExtractFileDir(SourcePath)) + DirectorySeparator + 'objpas' +
+        DirectorySeparator + 'sysutils');
       IncResolver.AddSearchPath(
-        ExtractFileDir(ExtractFileDir(SourcePath)) + PathDelim + 'inc');
+        ExtractFileDir(ExtractFileDir(SourcePath)) + DirectorySeparator + 'inc');
       PP := TPreprocessor.Create(PPDefines, True, IncResolver);
       try
         PP.Process(UnitLexer);
