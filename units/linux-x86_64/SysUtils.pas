@@ -415,6 +415,13 @@ var
   SearchStr, SearchOld, SubStr: string;
   Replaced: Boolean;
 begin
+  OldLen := Length(OldPattern);
+  if OldLen = 0 then
+  begin
+    Result := S;
+    Exit;
+  end;
+
   if rfIgnoreCase in Flags then
   begin
     SearchStr := UpperCase(S);
@@ -426,7 +433,6 @@ begin
     SearchOld := OldPattern;
   end;
 
-  OldLen := Length(OldPattern);
   L := Length(S);
   Result := '';
   Replaced := False;

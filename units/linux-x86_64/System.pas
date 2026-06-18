@@ -146,7 +146,8 @@ end;
 
 function TObject.ClassType: TClass;
 begin
-  Result := TClass(Pointer(PByte(Pointer(Self))^ + 0));
+  { First field of any TObject instance is the VMT pointer }
+  Result := TClass(PPointer(Self)^);
 end;
 
 function TObject.ClassName: ShortString;

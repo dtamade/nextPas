@@ -31,6 +31,7 @@ type
     FNeedsFree: Boolean;
     FNeedsMemcpy: Boolean;
     FNeedsMemset: Boolean;
+    FNeedsMemmove: Boolean;
     FNeedsStrConcat: Boolean;
     FNeedsStringOwnership: Boolean;
     FNeedsStrCmp: Boolean;
@@ -134,6 +135,7 @@ begin
   FNeedsFree := False;
   FNeedsMemcpy := False;
   FNeedsMemset := False;
+  FNeedsMemmove := False;
   FNeedsStrConcat := False;
   FNeedsStringOwnership := False;
   FNeedsStrCmp := False;
@@ -1024,10 +1026,13 @@ begin
       else if AInstr.IntrinsicName = 'move' then
       begin
         if Length(AInstr.Operands) >= 3 then
-          Emit('  call void @np_memcpy(ptr ' +
+        begin
+          Emit('  call void @np_memmove(ptr ' +
             ValueRef(AInstr.Operands[1].ValueId) + ', ptr ' +
             ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' +
             ValueRef(AInstr.Operands[2].ValueId) + ')');
+          FNeedsMemmove := True;
+        end;
       end
       else if AInstr.IntrinsicName = 'getmem' then
       begin
@@ -1225,6 +1230,7 @@ begin
   FNeedsFree := False;
   FNeedsMemcpy := False;
   FNeedsMemset := False;
+  FNeedsMemmove := False;
   FNeedsStrConcat := False;
   FNeedsStringOwnership := False;
   FNeedsStrCmp := False;
@@ -1328,7 +1334,7 @@ begin
   if FNeedsAlloc then
     EmitAllocHelper;
 
-  if FNeedsMemcpy or FNeedsMemset or FNeedsStringOwnership then
+  if FNeedsMemcpy or FNeedsMemset or FNeedsMemmove or FNeedsStringOwnership then
     EmitMemcpyHelper;
 
   if FNeedsObjectAlloc then
@@ -1455,6 +1461,7 @@ begin
   // Phase 3: memops 已移至 libnprt.a runtime 模块
   Emit('');
   Emit('declare void @np_memcpy(ptr %dst, ptr %src, i64 %n)');
+  Emit('declare void @np_memmove(ptr %dst, ptr %src, i64 %n)');
   Emit('declare void @np_memset(ptr %dst, i8 %val, i64 %n)');
   Emit('declare void @np_memzero(ptr %dst, i64 %n)');
 end;

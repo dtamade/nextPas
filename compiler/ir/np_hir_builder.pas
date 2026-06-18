@@ -1511,6 +1511,11 @@ begin
         SetExprValue(AResult, ValueId, HirType, shvcScalar);
         Result := True;
       end;
+    shekNilLiteral:
+      begin
+        SetExprValue(AResult, EmitNullPtrValue, GetPtrType, shvcScalar);
+        Result := True;
+      end;
     shekSymbolValue:
       Result := EmitStructuredSymbolValue(AExpr, AResult);
     shekSymbolAddress:
@@ -3166,6 +3171,18 @@ begin
 
     if Token = 'int' then BlobInt(S, Arg)
     else if Token = 'null' then BlobNull(S)
+    else if Token = 'assigned' then
+    begin
+      V := FindAlloca(Arg);
+      if V <> 0 then
+      begin
+        V := EmitLoad(GetPtrType, V);
+        S.Push(EmitCmpOp(hikCmpNe, GetBoolType, V, EmitNullPtrValue,
+          GetPtrType, GetPtrType));
+      end
+      else
+        S.Push(EmitConstIntOfType(0, GetBoolType));
+    end
     else if Token = 'exc_load' then
     begin
       FillChar(Instr, SizeOf(Instr), 0);

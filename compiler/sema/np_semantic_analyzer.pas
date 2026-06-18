@@ -8698,6 +8698,14 @@ begin
     ABlob := 'int 0' + #10;
     Exit(True);
   end;
+  if FNoFold and (ANode.NodeKind = gnkFunctionCall) and
+    (ANode.ChildCount >= 2) and (ANode.ChildAt(0) <> nil) and
+    SameText(ANode.ChildAt(0).Text, 'Assigned') and
+    (ANode.ChildAt(1) <> nil) and (ANode.ChildAt(1).NodeKind = gnkIdentifier) then
+  begin
+    ABlob := 'assigned ' + ANode.ChildAt(1).Text + #10;
+    Exit(True);
+  end;
   if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 2) and
     (ANode.ChildAt(0) <> nil) and
     SameText(ANode.ChildAt(0).Text, 'Length') and
@@ -11057,6 +11065,42 @@ begin
       0, '', '', 0, shvcScalar
     );
     Exit(True);
+  end;
+
+  if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 2) and
+    (ANode.ChildAt(0) <> nil) and
+    SameText(ANode.ChildAt(0).Text, 'Assigned') and
+    (ANode.ChildAt(1) <> nil) and (ANode.ChildAt(1).NodeKind = gnkIdentifier) then
+  begin
+    LeftTypeId := FModel.FindTypeByName('Pointer');
+    BoolTypeId := FModel.FindTypeByName('Boolean');
+    if (LeftTypeId <= 0) or (BoolTypeId <= 0) then
+      Exit(False);
+    SymbolId := FModel.FindSymbolByName(ANode.ChildAt(1).Text);
+    if SymbolId <= 0 then
+      Exit(False);
+    SetLength(Children, 0);
+    LeftExprId := FModel.AddHirExpr(
+      shekSymbolValue, LeftTypeId, SymbolId, Children,
+      0, '', '', ANode.ChildAt(1).ByteOffset, shvcScalar
+    );
+    if LeftExprId <= 0 then
+      Exit(False);
+    SetLength(Children, 0);
+    RightExprId := FModel.AddHirExpr(
+      shekNilLiteral, LeftTypeId, 0, Children,
+      0, '', '', 0, shvcScalar
+    );
+    if RightExprId <= 0 then
+      Exit(False);
+    SetLength(Children, 2);
+    Children[0] := LeftExprId;
+    Children[1] := RightExprId;
+    AExprId := FModel.AddHirExpr(
+      shekCompareOp, BoolTypeId, 0, Children,
+      0, '', 'ne', ANode.ByteOffset, shvcScalar
+    );
+    Exit(AExprId > 0);
   end;
 
   if (ANode.NodeKind = gnkIdentifier) and
