@@ -6215,6 +6215,11 @@ begin
     SeedFunctionBodies;
     SeedUnitLifecycleBodies;
   end;
+
+  // Store unit init order from topological sort
+  if FUnitGraph <> nil then
+    FModel.SetUnitInitOrder(FUnitGraph.TopologicalInitOrder);
+
   CheckUnusedSymbols;
   CheckUnreachableCode;
   CheckDuplicateCaseLabels;

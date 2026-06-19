@@ -7459,6 +7459,7 @@ var
   Instr: THIRInstr;
   FwdName, FwdRest: string;
   FwdColon, FwdColon2: LongInt;
+  LOrder: array of string;
 begin
   FFwdFuncCount := 0;
   for I := 0 to FSemaModel.TypedHirNodeCount - 1 do
@@ -7518,6 +7519,15 @@ begin
     Instr.IntrinsicName := 'halt';
     Instr.CallTarget := '0';
     EmitInstr(Instr);
+  end;
+
+  // Transfer unit init order from semantic model to HIR module
+  if FSemaModel.UnitInitOrderCount > 0 then
+  begin
+    SetLength(LOrder, FSemaModel.UnitInitOrderCount);
+    for I := 0 to FSemaModel.UnitInitOrderCount - 1 do
+      LOrder[I] := FSemaModel.UnitInitOrderAt(I);
+    FModule.SetUnitInitOrder(LOrder);
   end;
 end;
 

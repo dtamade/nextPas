@@ -164,6 +164,7 @@ type
     FNextBlockId: THIRBlockId;
     FNextFuncId: THIRFuncId;
     FModuleName: string;
+    FUnitInitOrder: array of string;
   public
     constructor Create(const AName: string);
     destructor Destroy; override;
@@ -205,6 +206,9 @@ type
       const AParamCounts: array of LongInt; ASlotOffset: LongInt);
     function ImtGlobalCount: LongInt;
     function ImtGlobalAt(AIndex: LongInt): THIRImtGlobal;
+    procedure SetUnitInitOrder(const AOrder: array of string);
+    function UnitInitOrderCount: LongInt;
+    function UnitInitOrderAt(const AIndex: LongInt): string;
   end;
 
 function MakeOperand(AValueId: THIRValueId): THIROperand;
@@ -489,6 +493,27 @@ end;
 function THIRModule.ImtGlobalAt(AIndex: LongInt): THIRImtGlobal;
 begin
   Result := FImtGlobals[AIndex];
+end;
+
+procedure THIRModule.SetUnitInitOrder(const AOrder: array of string);
+var
+  I: LongInt;
+begin
+  SetLength(FUnitInitOrder, Length(AOrder));
+  for I := 0 to High(AOrder) do
+    FUnitInitOrder[I] := AOrder[I];
+end;
+
+function THIRModule.UnitInitOrderCount: LongInt;
+begin
+  Result := Length(FUnitInitOrder);
+end;
+
+function THIRModule.UnitInitOrderAt(const AIndex: LongInt): string;
+begin
+  if (AIndex < 0) or (AIndex >= Length(FUnitInitOrder)) then
+    Exit('');
+  Result := FUnitInitOrder[AIndex];
 end;
 
 end.

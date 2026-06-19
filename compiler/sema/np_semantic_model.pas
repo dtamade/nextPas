@@ -237,6 +237,7 @@ type
     FStringConstValues: array of TSemanticStringConstValue;
     FTypeMetadataEntries: array of TTypeMetadata;
     FTypeScalarFacts: array of TSemanticScalarTypeFact;
+    FUnitInitOrder: array of string;
     FRootName: string;
     FStatus: string;
     function FindTypeScalarFactIndex(const ATypeId: LongInt): LongInt;
@@ -372,6 +373,9 @@ type
       out AValue: string): Boolean;
     procedure SetRootName(const AName: string);
     function RootName: string;
+    procedure SetUnitInitOrder(const AOrder: array of string);
+    function UnitInitOrderCount: LongInt;
+    function UnitInitOrderAt(const AIndex: LongInt): string;
     procedure MarkReady;
     procedure MarkFailure;
     function Status: string;
@@ -1413,6 +1417,27 @@ end;
 function TSemanticModel.RootName: string;
 begin
   Result := FRootName;
+end;
+
+procedure TSemanticModel.SetUnitInitOrder(const AOrder: array of string);
+var
+  I: LongInt;
+begin
+  SetLength(FUnitInitOrder, Length(AOrder));
+  for I := 0 to High(AOrder) do
+    FUnitInitOrder[I] := AOrder[I];
+end;
+
+function TSemanticModel.UnitInitOrderCount: LongInt;
+begin
+  Result := Length(FUnitInitOrder);
+end;
+
+function TSemanticModel.UnitInitOrderAt(const AIndex: LongInt): string;
+begin
+  if (AIndex < 0) or (AIndex >= Length(FUnitInitOrder)) then
+    Exit('');
+  Result := FUnitInitOrder[AIndex];
 end;
 
 procedure TSemanticModel.MarkReady;

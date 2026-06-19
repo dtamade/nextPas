@@ -10,6 +10,8 @@ uses
   nextpas.core.text.conv, np_source_database, np_text_primitives;
 
 type
+  TStringArray = array of string;
+
   TResolvedUnitOrigin = (
     ruoRootSource,
     ruoProjectSource,
@@ -102,6 +104,7 @@ type
     procedure MarkReady;
     procedure MarkFailure;
     function Status: string;
+    function TopologicalInitOrder: TStringArray;
   end;
 
 function NormalizeUnitIdentity(const AName: string): string;
@@ -405,6 +408,121 @@ end;
 function TUnitGraph.Status: string;
 begin
   Result := FStatus;
+end;
+
+function TUnitGraph.TopologicalInitOrder: TStringArray;
+var
+  N, E, I, J, Front, Rear: LongInt;
+  InDeg: array of LongInt;
+  Queue: array of LongInt;
+  Sorted: array of LongInt;
+  SortedCount: LongInt;
+  SrcIdx, TgtIdx: LongInt;
+  SystemIdx: LongInt;
+begin
+  N := Length(FResolvedUnits);
+  E := Length(FEdges);
+
+  if N = 0 then
+  begin
+    SetLength(Result, 0);
+    Exit;
+  end;
+
+  // Build in-degree from ugeInterfaceUse and ugeImplementationUse edges.
+  // An edge (Source -> Target) means Source depends on Target,
+  // so Target must init before Source: Target's in-degree is unaffected,
+  // but we increment in-degree of the dependant (Source).
+  SetLength(InDeg, N);
+  for I := 0 to N - 1 do
+    InDeg[I] := 0;
+
+  for I := 0 to E - 1 do
+  begin
+    if (FEdges[I].Kind <> ugeInterfaceUse) and
+       (FEdges[I].Kind <> ugeImplementationUse) then
+      Continue;
+    // SourceUnitId depends on TargetUnitId
+    SrcIdx := IndexOfUnitId(FEdges[I].SourceUnitId);
+    if SrcIdx < 0 then Continue;
+    Inc(InDeg[SrcIdx]);
+  end;
+
+  // Kahn's algorithm: BFS from units with in-degree 0
+  SetLength(Queue, N);
+  Front := 0;
+  Rear := 0;
+
+  for I := 0 to N - 1 do
+    if InDeg[I] = 0 then
+    begin
+      Queue[Rear] := I;
+      Inc(Rear);
+    end;
+
+  SetLength(Sorted, N);
+  SortedCount := 0;
+
+  while Front < Rear do
+  begin
+    I := Queue[Front];
+    Inc(Front);
+    Sorted[SortedCount] := I;
+    Inc(SortedCount);
+
+    // For all edges where I is the target (I must init before sources
+    // that depend on it), decrease the source's in-degree
+    for J := 0 to E - 1 do
+    begin
+      if (FEdges[J].Kind <> ugeInterfaceUse) and
+         (FEdges[J].Kind <> ugeImplementationUse) then
+        Continue;
+      TgtIdx := IndexOfUnitId(FEdges[J].TargetUnitId);
+      if TgtIdx <> I then Continue;
+      SrcIdx := IndexOfUnitId(FEdges[J].SourceUnitId);
+      if SrcIdx < 0 then Continue;
+      Dec(InDeg[SrcIdx]);
+      if InDeg[SrcIdx] = 0 then
+      begin
+        Queue[Rear] := SrcIdx;
+        Inc(Rear);
+      end;
+    end;
+  end;
+
+  // If not all units were sorted, there is a cycle.
+  // Report what we can; remaining units are appended in original order.
+  if SortedCount < N then
+  begin
+    for I := 0 to N - 1 do
+    begin
+      if InDeg[I] > 0 then
+      begin
+        Sorted[SortedCount] := I;
+        Inc(SortedCount);
+      end;
+    end;
+  end;
+
+  // Convert indices to canonical names
+  SetLength(Result, SortedCount);
+  for I := 0 to SortedCount - 1 do
+    Result[I] := FResolvedUnits[Sorted[I]].CanonicalName;
+
+  // Ensure System unit is first if present
+  SystemIdx := -1;
+  for I := 0 to SortedCount - 1 do
+    if SameText(Result[I], 'system') then
+    begin
+      SystemIdx := I;
+      Break;
+    end;
+  if SystemIdx > 0 then
+  begin
+    // Swap System to front
+    Result[SystemIdx] := Result[0];
+    Result[0] := 'system';
+  end;
 end;
 
 end.

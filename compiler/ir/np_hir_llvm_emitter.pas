@@ -49,6 +49,8 @@ type
     FNeedsExceptionRuntime: Boolean;
     FNeedsProcessLifecycle: Boolean;
     FProcessFiniEmitted: Boolean;
+    FUnitInitCallsEmitted: Boolean;
+    FUnitFiniCallsEmitted: Boolean;
     FTryCounter: LongInt;
     procedure Emit(const S: string);
     function ValueRef(AValueId: THIRValueId): string;
@@ -90,6 +92,8 @@ type
     procedure EmitExceptionRuntimeHelpers;
     procedure EmitVmtGlobals;
     procedure EmitImtGlobals;
+    procedure EmitUnitInitCalls;
+    procedure EmitUnitFiniCalls;
   public
     constructor Create(AModule: THIRModule); overload;
     constructor Create(AModule: THIRModule;
@@ -501,14 +505,31 @@ begin
     hikCall:
     begin
       if AInstr.CallTarget = 'np_process_init' then
-        FNeedsProcessLifecycle := True
+      begin
+        FNeedsProcessLifecycle := True;
+        EmitCallInstr(AInstr);
+        // After process_init, emit unit init calls in topological order
+        if not FUnitInitCallsEmitted then
+        begin
+          EmitUnitInitCalls;
+          FUnitInitCallsEmitted := True;
+        end;
+      end
       else if AInstr.CallTarget = 'np_process_fini' then
       begin
         FNeedsProcessLifecycle := True;
         if FProcessFiniEmitted then
           Exit; // already emitted before halt syscall
-      end;
-      EmitCallInstr(AInstr);
+        // Before process_fini, emit unit fini calls in reverse order
+        if not FUnitFiniCallsEmitted then
+        begin
+          EmitUnitFiniCalls;
+          FUnitFiniCallsEmitted := True;
+        end;
+        EmitCallInstr(AInstr);
+      end
+      else
+        EmitCallInstr(AInstr);
     end;
     hikIntrinsic:
     begin
@@ -516,6 +537,12 @@ begin
       begin
         if FNeedsProcessLifecycle and not FProcessFiniEmitted then
         begin
+          // Emit unit fini calls in reverse order before process_fini
+          if not FUnitFiniCallsEmitted then
+          begin
+            EmitUnitFiniCalls;
+            FUnitFiniCallsEmitted := True;
+          end;
           Emit('  call void @np_process_fini()');
           FProcessFiniEmitted := True;
         end;
@@ -1220,14 +1247,40 @@ begin
   Emit('}');
 end;
 
+procedure THIRLlvmEmitter.EmitUnitInitCalls;
+var
+  I: LongInt;
+  LName: string;
+  LNormalizedUnitName: string;
+begin
+  for I := 0 to FModule.UnitInitOrderCount - 1 do
+  begin
+    LName := FModule.UnitInitOrderAt(I);
+    LNormalizedUnitName := StringReplace(LName, '.', '_', True);
+    Emit('  call void @np_unit_init_' + LNormalizedUnitName + '()');
+  end;
+end;
+
+procedure THIRLlvmEmitter.EmitUnitFiniCalls;
+var
+  I: LongInt;
+  LName: string;
+  LNormalizedUnitName: string;
+begin
+  // Fini in reverse order of init
+  for I := FModule.UnitInitOrderCount - 1 downto 0 do
+  begin
+    LName := FModule.UnitInitOrderAt(I);
+    LNormalizedUnitName := StringReplace(LName, '.', '_', True);
+    Emit('  call void @np_unit_fini_' + LNormalizedUnitName + '()');
+  end;
+end;
+
 procedure THIRLlvmEmitter.EmitModule;
 var
   I: LongInt;
   G: THIRGlobal;
   LFunc: THIRFunction;
-  LInitCount, LFiniCount: LongInt;
-  LInitNames, LFiniNames: array of string;
-  LEmitCtors: Boolean;
 begin
   FLineCount := 0;
   FStrConstCount := 0;
@@ -1247,6 +1300,8 @@ begin
   FNeedsExceptionRuntime := False;
   FNeedsProcessLifecycle := False;
   FProcessFiniEmitted := False;
+  FUnitInitCallsEmitted := False;
+  FUnitFiniCallsEmitted := False;
   FTryCounter := 0;
   FObjectFreeCounter := 0;
   FPendingObjectFreeActive := False;
@@ -1265,58 +1320,10 @@ begin
       Emit('@g_' + G.Name + ' = internal global i64 0');
   end;
 
-  LInitCount := 0;
-  LFiniCount := 0;
-  SetLength(LInitNames, 16);
-  SetLength(LFiniNames, 16);
-
   for I := 0 to FModule.FunctionCount - 1 do
   begin
     LFunc := FModule.FunctionAt(I);
-    if Copy(LFunc.Name, 1, 14) = 'np_unit_init_' then
-    begin
-      if LInitCount >= Length(LInitNames) then
-        SetLength(LInitNames, LInitCount + 16);
-      LInitNames[LInitCount] := LFunc.Name;
-      Inc(LInitCount);
-    end
-    else if Copy(LFunc.Name, 1, 14) = 'np_unit_fini_' then
-    begin
-      if LFiniCount >= Length(LFiniNames) then
-        SetLength(LFiniNames, LFiniCount + 16);
-      LFiniNames[LFiniCount] := LFunc.Name;
-      Inc(LFiniCount);
-    end;
     EmitFunction(LFunc);
-  end;
-
-  LEmitCtors := (LInitCount > 0) or (LFiniCount > 0);
-  if LEmitCtors then
-  begin
-    if LInitCount > 0 then
-    begin
-      Emit('');
-      Emit('@llvm.global_ctors = appending global [' + IntToStr(LInitCount) +
-        ' x { i32, ptr, ptr }] [');
-      for I := 0 to LInitCount - 1 do
-      begin
-        if I > 0 then Emit(',');
-        Emit('  { i32 65535, ptr @' + LInitNames[I] + ', ptr null }');
-      end;
-      Emit(']');
-    end;
-    if LFiniCount > 0 then
-    begin
-      Emit('');
-      Emit('@llvm.global_dtors = appending global [' + IntToStr(LFiniCount) +
-        ' x { i32, ptr, ptr }] [');
-      for I := 0 to LFiniCount - 1 do
-      begin
-        if I > 0 then Emit(',');
-        Emit('  { i32 65535, ptr @' + LFiniNames[I] + ', ptr null }');
-      end;
-      Emit(']');
-    end;
   end;
 
   if FNeedsProcessLifecycle then
