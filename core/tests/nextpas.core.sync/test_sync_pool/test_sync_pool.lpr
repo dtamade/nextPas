@@ -27,10 +27,9 @@ uses
   nextpas.core.sync.pool;
 
 type
-  TTestObject = class
+  TTestObject = class(TPoolItem)
   private
     FValue: Integer;
-    FResetCount: Integer;
   public
     constructor Create(AValue: Integer);
     procedure Reset;
@@ -65,7 +64,6 @@ var
   GTestsFailed: Integer = 0;
   GFactoryCallCount: Integer = 0;
   GDestroyCallCount: Integer = 0;
-  GResetCallCount: Integer = 0;
 
 function S(const AStr: AnsiString): AnsiString;
 begin
@@ -121,11 +119,6 @@ begin
   Result := TTestObject.Create(42);
 end;
 
-procedure ResetTestObject(AItem: Pointer);
-begin
-  if AItem <> nil then
-    TTestObject(AItem).Reset;
-end;
 
 procedure DestroyTestObject(AItem: Pointer);
 begin
@@ -139,13 +132,11 @@ constructor TTestObject.Create(AValue: Integer);
 begin
   inherited Create;
   FValue := AValue;
-  FResetCount := 0;
 end;
 
 procedure TTestObject.Reset;
 begin
   FValue := 42;
-  Inc(FResetCount);
 end;
 
 { TTestThread }
@@ -235,8 +226,8 @@ begin
   WriteLn('--- TestBuilderChain ---');
   LPool := TSyncPoolBuilder.Create(@CreateTestObject)
     
-    .WithMaxGlobal(256)
-    .WithReset(@ResetTestObject)
+    
+    
     .WithDestroy(@DestroyTestObject)
     .Build;
   try
@@ -363,7 +354,7 @@ begin
   GFactoryCallCount := 0;
   LPool := TSyncPoolBuilder.Create(@CreateTestObject)
     
-    .WithMaxGlobal(128)
+    
     .Build;
   try
     LObj := TTestObject(LPool.Get);
@@ -384,19 +375,15 @@ var
   LPool: TSyncPool;
   LObj: TTestObject;
 begin
-  WriteLn('--- TestResetOnAcquire ---');
-  GResetCallCount := 0;
-  LPool := TSyncPoolBuilder.Create(@CreateTestObject)
-    .WithReset(@ResetTestObject)
-    .Build;
+  WriteLn('--- TestRecyclePreservesState ---');
+  LPool := CreateSyncPool(@CreateTestObject);
   try
     LObj := TTestObject(LPool.Get);
     LObj.FValue := 999;
     LPool.Put(LObj);
 
     LObj := TTestObject(LPool.Get);
-    CheckEqual(42, LObj.FValue, 'OnReset resets value to 42');
-    CheckTrue(LObj.FResetCount > 0, 'Reset was called');
+    CheckEqual(999, LObj.FValue, 'Recycle preserves object state (no auto-reset)');
     LPool.Put(LObj);
   finally
     LPool.Free;
@@ -420,7 +407,7 @@ begin
   WriteLn('--- TestMultiThread16x5K ---');
   LPool := TSyncPoolBuilder.Create(@CreateTestObject)
     
-    .WithMaxGlobal(1024)
+    
     .WithDestroy(@DestroyTestObject)
     .Build;
   try
@@ -463,7 +450,7 @@ var
 begin
   WriteLn('--- TestHighContention32x2K ---');
   LPool := TSyncPoolBuilder.Create(@CreateTestObject)
-    .WithMaxGlobal(512)
+    
     .WithDestroy(@DestroyTestObject)
     .Build;
   try
@@ -584,7 +571,7 @@ begin
   WriteLn('--- TestSingleSlotContention ---');
   LPool := TSyncPoolBuilder.Create(@CreateTestObject)
     
-    .WithMaxGlobal(16)
+    
     .Build;
   try
     for I := 1 to OPS do begin
