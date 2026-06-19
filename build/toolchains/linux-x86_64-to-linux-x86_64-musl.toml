@@ -1,0 +1,36 @@
+# nextPas musl toolchain binding
+# Static linking against musl libc. Suitable for containers and embedded.
+
+[binding]
+id = "linux-x86_64-to-linux-x86_64-musl"
+host = "linux-x86_64"
+target = "linux-x86_64-musl"
+backend_family = "native"
+host_compiler = "fpc"
+host_compiler_profile = "fpc-stage0-host"
+
+[profiles]
+assembler = "gnu-as"
+linker = "gnu-ld"
+archiver = "gnu-ar"
+resource = "none"
+
+[llvm]
+enabled = false
+executable_set = "llvm-stable"
+
+[sysroot]
+mode = "runtime-sdk"
+runtime_sdk = "linux-x86_64-musl"
+allow_host_fallback = false
+
+[resolution]
+tool_root_kind = "distribution-helper-root"
+runtime_root_kind = "distribution-runtime-root"
+response_files = "auto"
+link_scripts = "when-required"
+
+[linker]
+# Static linking for musl — produces self-contained binaries
+static = true
+extra_flags = ["-static", "-no-pie"]
