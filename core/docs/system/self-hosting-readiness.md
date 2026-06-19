@@ -4,10 +4,11 @@ This document defines the acceptance criteria for nextPas to reach self-hosting 
 can compile itself). It focuses on the `np.system.*` contract vocabulary and runtime
 support that a self-hosted compiler will require.
 
-## Status: Pre-Self-Hosting
+## Status: Pre-Self-Hosting (Partial Progress)
 
-The compiler currently uses FPC as the stage0 host compiler. All `np.system.*` contracts
-are documented but runtime execution is deferred for most of them. This document records:
+The compiler currently uses FPC as the stage0 host compiler. Significant progress has been
+made on the compiler-side pipeline for unit/process lifecycle (Gates 2/3), but runtime
+implementation remains the primary gap. This document records:
 
 1. What must work before self-hosting can succeed
 2. How to detect RTTI divergence between FPC host RTTI and nextPas RTTI
@@ -238,12 +239,12 @@ integration can be deferred.
 
 | Gate | Priority | Owner | Effort | Current Status |
 |------|----------|-------|--------|----------------|
-| 0: system.classes Facade | **Blocker** (global) | system | Medium | **New — unblocks TLS/HTTP/fs/io** |
-| 1: RTTI Shape | Critical | compiler + collections | Medium | Pre-work (test design) |
-| 2: Unit Lifecycle | Critical | compiler + rtl | High | Deferred (no seed) |
-| 3: Process Lifecycle | Important | rtl | Medium | Semantic seed only |
-| 4: Heap Manager | Important | mem + compiler | Medium | Backend-private |
-| 5: Exception Unwind | Normal | compiler | Low | Backend-private, works |
+| 0: system.classes Facade | **Blocker** (global) | system | Medium | **PARTIAL** — stream-core + interface 基础类型有效 (7 symbols)，file-compat 缺失 |
+| 1: RTTI Shape | Critical | compiler + collections | Medium | **PASS** — TTypeKind/KindOf/ManagedKinds 验证通过 |
+| 2: Unit Lifecycle | Critical | compiler + rtl | High | **PARTIAL** — 编译器管线就绪，运行时 + 拓扑排序待完成 |
+| 3: Process Lifecycle | Important | rtl | Medium | **PARTIAL** — 编译器侧就绪，运行时实现缺失 |
+| 4: Heap Manager | Important | mem + compiler | Medium | **PARTIAL** — @np_alloc/@np_free 存在，未连接 nextpas.core.mem |
+| 5: Exception Unwind | Normal | compiler | Low | **PASS** — setjmp/longjmp freestanding asm 完整 |
 
 ### Gate 0: Why It's the Cross-Line Compatibility Bottleneck
 
@@ -280,49 +281,57 @@ These gates should be reviewed quarterly. Update `goal-tree.md` and this documen
 each gate progresses toward completion. The first gate to close (Gate 5, exception unwind)
 is already partially covered by the `test_hir_exception` test suite.
 
-## Gate 2: Unit Lifecycle — 验证结果 (2026-06-18)
+## Gate 2: Unit Lifecycle — 验证结果 (2026-06-18, 更新于 2026-06-18 Codex 审查)
 
-**状态: FAIL** (全部 4 项验收标准未满足)
+**状态: PARTIAL** (编译器管线已就绪，运行时 + 排序待完成)
 
 | 验收标准 | 状态 |
 |----------|------|
-| UnitGraph → HIR nodes for each resolved unit | 未实现 |
-| np.system.unit_init/unit_fini seeded for multi-unit programs | 未实现 |
-| LLVM emitter generates init/fini call sequences | 未实现 |
-| Multi-unit program runs with correct init ordering via nextPas | 未实现 |
+| UnitGraph → HIR nodes for each resolved unit | ✅ `SeedUnitLifecycleBodies` (sema:14887-14972) 已为每个 unit 生成 init/fini HIR |
+| np.system.unit_init/unit_fini seeded for multi-unit programs | ✅ 生成 `np_unit_init_<unit>`/`np_unit_fini_<unit>` LLVM 函数 |
+| LLVM emitter generates init/fini call sequences | ✅ 注册到 `@llvm.global_ctors`/`@llvm.global_dtors` (emitter:1258-1304) |
+| Multi-unit program runs with correct init ordering via nextPas | ⬜ 优先级同为 65535，LLVM 不保证同优先级内顺序；需 `_start` 驱动拓扑排序 |
 
 **已有基础**:
 - Lexer 解析 initialization/finalization 关键字 ✅
 - Green tree 解析器解析 init/fini sections ✅
 - 契约常量 NPSYSTEM_UNIT_INIT/FINI 已定义 ✅
 - 文档契约已完整登记 ✅
+- `SeedUnitLifecycleBodies` 为每个 unit 生成 LLVM 函数 ✅
+- `@llvm.global_ctors`/`@llvm.global_dtors` 注册 ✅
 
 **缺口 (按实现顺序)**:
-1. SeedRuntimeContracts 扩展: 遍历 FUnitGraph，为每个 unit seed unit_init/unit_fini
-2. HIR 层: 新增 unit-init-runtime/unit-fini-runtime 节点类型
-3. LLVM emitter: @np_unit_init/@np_unit_fini helper
-4. Runtime: _start 驱动器（main 前拓扑序 init，main 后逆序 fini）
-5. 端到端测试（非 FPC 依赖的 nextPas 编译器运行时测试）
+1. ~~SeedRuntimeContracts 扩展~~ ✅ 已完成
+2. ~~HIR 层: unit-init-runtime/unit-fini-runtime 节点类型~~ ✅ 已完成
+3. ~~LLVM emitter: @np_unit_init/@np_unit_fini helper~~ ✅ 已完成
+4. **优先级排序**: 当前全为 65535，需实现 `_start` 驱动拓扑排序
+5. Runtime: `_start` 驱动器（process_init → 拓扑序 unit_init → main → 逆序 unit_fini → process_fini → halt）
+6. 端到端测试（非 FPC 依赖的 nextPas 编译器运行时测试）
 
-## Gate 3: Process Lifecycle — 验证结果 (2026-06-18)
+## Gate 3: Process Lifecycle — 验证结果 (2026-06-18, 更新于 2026-06-18 Codex 审查)
 
-**状态: FAIL** (全部 3 项验收标准未满足)
+**状态: PARTIAL** (编译器侧就绪，运行时实现缺失)
 
 | 验收标准 | 状态 |
 |----------|------|
-| process_init 在 main 前执行 | 未实现 (runtime-contract → hnkUnknown, 静默丢弃) |
-| process_fini 在 main 后执行 | 未实现 |
-| 退出码通过关闭序列保留 | 不适用 (无关闭序列) |
+| process_init 在 main 前执行 | ⬜ 编译器侧就绪，运行时实现缺失 |
+| process_fini 在 main 后执行 | ⬜ 同上 |
+| 退出码通过关闭序列保留 | ⬜ 需 `_start` 改写 |
 
-**关键发现**: SeedRuntimeContracts 正确 seed process_init/fini 为 typed HIR 节点，
-但 `'runtime-contract'` 不在 ParseHirNodeKind 的 case 语句中，映射到 hnkUnknown（空操作）。
+**已有基础** (2026-06-18 更新):
+- `'process-init-runtime'` 正确映射到 `hnkProcessInitRuntime` (hir_types:259) ✅
+- `EmitProcessInit`/`EmitProcessFini` 存在 (hir_builder:7430-7452) ✅
+- LLVM emitter 声明 `@np_process_init`/`@np_process_fini` (emitter:1310-1311) ✅
+
+**原关键发现 (已过时)**: 此前记录 `'runtime-contract'` 映射到 `hnkUnknown` 是不准确的。
+实际代码中 `'process-init-runtime'` 已正确映射到 `hnkProcessInitRuntime`。
 
 **缺口 (按实现顺序)**:
-1. THirNodeKind 新增 hnkProcessInitRuntime/hnkProcessFiniRuntime + ParseHirNodeKind 映射
-2. THIRBuilder.ProcessNode 新增 ProcessProcessInit/ProcessProcessFini 处理
-3. LLVM emitter 新增 @np_process_init/@np_process_fini helper
-4. _start 发射改为：process_init → user code → process_fini → halt
-5. Runtime 实现 process_init/process_fini 例程
+1. ~~THirNodeKind 新增 hnkProcessInitRuntime/hnkProcessFiniRuntime~~ ✅ 已完成
+2. ~~THIRBuilder 处理~~ ✅ 已完成
+3. ~~LLVM emitter 新增 @np_process_init/@np_process_fini~~ ✅ 已完成
+4. **运行时**: `np_process_init`/`np_process_fini` 实际实现 (nextpas.core.system 内)
+5. **_start 改写**: `process_init → 拓扑序 unit_init → main → 逆序 unit_fini → process_fini → halt`
 6. 端到端烟雾测试
 
 ## Gate 4: Heap Manager — 验证结果 (2026-06-18)
