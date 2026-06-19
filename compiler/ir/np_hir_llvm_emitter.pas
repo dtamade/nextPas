@@ -48,6 +48,7 @@ type
     FPendingObjectFreeEndLabel: string;
     FNeedsExceptionRuntime: Boolean;
     FNeedsProcessLifecycle: Boolean;
+    FProcessFiniEmitted: Boolean;
     FTryCounter: LongInt;
     procedure Emit(const S: string);
     function ValueRef(AValueId: THIRValueId): string;
@@ -149,6 +150,7 @@ begin
   FPendingObjectFreeEndLabel := '';
   FNeedsExceptionRuntime := False;
   FNeedsProcessLifecycle := False;
+  FProcessFiniEmitted := False;
   FTryCounter := 0;
   SetLength(FLines, 0);
 end;
@@ -498,15 +500,25 @@ begin
           TypeToLlvm(AInstr.TypeId));
     hikCall:
     begin
-      if (AInstr.CallTarget = 'np_process_init') or
-        (AInstr.CallTarget = 'np_process_fini') then
+      if AInstr.CallTarget = 'np_process_init' then
+        FNeedsProcessLifecycle := True
+      else if AInstr.CallTarget = 'np_process_fini' then
+      begin
         FNeedsProcessLifecycle := True;
+        if FProcessFiniEmitted then
+          Exit; // already emitted before halt syscall
+      end;
       EmitCallInstr(AInstr);
     end;
     hikIntrinsic:
     begin
       if AInstr.IntrinsicName = 'halt' then
       begin
+        if FNeedsProcessLifecycle and not FProcessFiniEmitted then
+        begin
+          Emit('  call void @np_process_fini()');
+          FProcessFiniEmitted := True;
+        end;
         if AInstr.CallTarget <> '' then
           Emit('  call void asm sideeffect "movq $$60, %rax; syscall",' +
             ' "{rdi},~{rax},~{rcx},~{r11}"(i64 ' + AInstr.CallTarget + ')')
@@ -1234,6 +1246,7 @@ begin
   FNeedsDynArrayHelpers := False;
   FNeedsExceptionRuntime := False;
   FNeedsProcessLifecycle := False;
+  FProcessFiniEmitted := False;
   FTryCounter := 0;
   FObjectFreeCounter := 0;
   FPendingObjectFreeActive := False;
