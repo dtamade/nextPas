@@ -243,7 +243,7 @@ integration can be deferred.
 | 1: RTTI Shape | Critical | compiler + collections | Medium | **PASS** — TTypeKind/KindOf/ManagedKinds 验证通过 |
 | 2: Unit Lifecycle | Critical | compiler + rtl | High | **PHASE 0 COMPLETE** — 拓扑排序 + _start 直接调用，System 强制首位 |
 | 3: Process Lifecycle | Important | rtl | Medium | **PHASE 0 COMPLETE** — 编译器+运行时就绪，fsync stdout/stderr，防重入，端到端验证通过 |
-| 4: Heap Manager | Important | mem + compiler | Medium | **PARTIAL** — @np_alloc/@np_free 存在，未连接 nextpas.core.mem |
+| 4: Heap Manager | Important | mem + compiler | Medium | **PHASE 0 COMPLETE** — bump+free-list+mmap 分配器已实现在运行时，@np_alloc/@np_free 链路完整 |
 | 5: Exception Unwind | Normal | compiler | Low | **PASS** — setjmp/longjmp freestanding asm 完整 |
 
 ### Gate 0: Why It's the Cross-Line Compatibility Bottleneck
@@ -359,11 +359,44 @@ is already partially covered by the `test_hir_exception` test suite.
 - 带错误检查 (prelude overflow, mmap failure, magic 校验)
 - 但未通过 nextpas.core.mem (52+ 文件) 进行分配
 
-**缺口**:
-1. @np_alloc/@np_free 未委托给 nextpas.core.mem
+- ✅ Phase 0 已由 `nextpas.runtime.allocator.ll` 完整实现 (bump+free-list+mmap)
+- Phase 1b 将委托给 nextpas.core.mem TCache (三级分配器)
+
+**Phase 1b 缺口** (非阻塞 Phase 0):
+1. @np_alloc/@np_free 未委托给 nextpas.core.mem TCache
 2. 无 np.system.heap_alloc/heap_free contract 中间层
-3. 未记录为临时实现
-4. 需要决定：委托 vs 记录为 backend-private temporary
+3. 需要 TLS destructor + BsfQWord 编译器原语 (C5/C6)
+4. TCache: Per-thread CTZ → Per-sizeclass spinlock → THeap radix tree+buddy
+
+## Gate 4: Heap Manager — 验证结果 (2026-06-18, 更新于 2026-06-19 Phase 0 完成)
+
+**状态: PHASE 0 COMPLETE** (bump 分配器 + free list + mmap 完整链路)
+
+| 验收标准 | 状态 |
+|----------|------|
+| @np_alloc 可分配内存 | ✅ `nextpas.runtime.allocator.ll` 完整实现 |
+| @np_free 可释放内存 | ✅ 小块 free-list reuse + coalesce，大块 munmap |
+| 大块分配安全 (>64K) | ✅ mmap + 16-byte prelude (magic + length) |
+| 堆初始化无 libc 依赖 | ✅ brk syscall (x86_64 inline asm) |
+| 编译器→运行时链路 | ✅ emitter 声明 external, runtime 提供定义 |
+
+**运行时实现** (`nextpas.runtime.allocator.ll`):
+- **小块分配** (<64K): bump pointer via `brk` syscall + free list reuse + coalesce
+- **大块分配** (>=64K): `mmap` syscall + 16-byte prelude (magic=131388245100000016)
+- **Free**: 小块 free list 头插 + 相邻合并 (coalesce)，大块 `munmap`
+- **保护**: 分配/释放溢出检查、magic 校验、`llvm.trap()` 故障
+- **全局状态**: `@__heap_cur` (bump pointer), `@__heap_free` (free list head)
+
+**编译器侧** (`np_hir_llvm_emitter.pas`):
+- `EmitAllocHelper`: emit `@np_alloc(i64 size) -> ptr`
+- `EmitFreeHelper`: emit `@np_free(ptr raw, i64 size)`
+- `EmitAllocatorFaultHelper`: emit `@allocator_fault(i64 code, i64 arg0, i64 arg1)`
+
+**Phase 0 vs Phase 1b 说明**:
+- Phase 0: 当前 bump 分配器足够自举，无锁、无线程竞争
+- Phase 1b: TCache 三级分配器 (TLS+BsfQWord → Per-thread CTZ → Per-sizeclass spinlock → THeap radix tree+buddy)，需要 TLS 解构器 + 编译器 C5/C6
+
+---
 
 ## Gate 5: Exception Unwind — 验证结果 (2026-06-18)
 
