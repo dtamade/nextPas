@@ -364,7 +364,7 @@ var
   DirectoryPath: string;
   Entries: TDirEntryArray;
   I: LongInt;
-  Ext: string;
+  LSuffix: string;
 begin
   if Trim(ADirectory) = '' then
     Exit;
@@ -373,14 +373,19 @@ begin
   if not FsIsDir(DirectoryPath) then
     Exit;
 
+  // APattern is like '*.o' or '*_link.res' — match by suffix after '*'
+  if (Length(APattern) < 2) or (APattern[1] <> '*') then
+    Exit;
+  LSuffix := Copy(APattern, 2, MaxInt);
+
   Entries := FsReadDir(DirectoryPath);
   for I := 0 to High(Entries) do
   begin
     if Entries[I].IsDir then
       Continue;
-    // APattern is like '*.o' — match by extension
-    Ext := '*' + PathExt(Entries[I].Name);
-    if Ext = APattern then
+    if (Length(Entries[I].Name) >= Length(LSuffix)) and
+       SameText(Copy(Entries[I].Name, Length(Entries[I].Name) - Length(LSuffix) + 1,
+         Length(LSuffix)), LSuffix) then
     begin
       CandidatePath := DirectoryPath + Entries[I].Name;
       FsRemove(CandidatePath);

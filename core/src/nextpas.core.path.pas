@@ -40,7 +40,9 @@ function PathWithoutExt(const APath: string): string;
 { SysUtils-compatible aliases }
 {** @desc 提取文件路径的目录部分（SysUtils 兼容，末尾带分隔符） *}
 function ExtractFilePath(const AFileName: string): string;
-{** @desc 提取文件路径的目录部分（与 ExtractFilePath 同义，SysUtils 兼容） *}
+{** @desc 提取文件路径的目录部分（SysUtils 兼容）。
+  注意：FPC SysUtils 中 ExtractFileDir 会去除尾部分隔符，ExtractFilePath 保留。
+  当前实现两者同义（均保留尾部分隔符），与 FPC 行为有细微差异。 *}
 function ExtractFileDir(const AFileName: string): string;
 {** @desc 提取文件名部分（SysUtils 兼容） *}
 function ExtractFileName(const AFileName: string): string; inline;
