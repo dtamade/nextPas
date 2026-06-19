@@ -380,7 +380,7 @@ type
 implementation
 
 uses
-  SysUtils;
+  nextpas.core.text.conv;
 
 constructor TSemanticModel.Create;
 begin

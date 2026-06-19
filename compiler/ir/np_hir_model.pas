@@ -213,7 +213,7 @@ function MakeTypedOperand(AValueId: THIRValueId; ATypeId: THIRTypeId): THIROpera
 implementation
 
 uses
-  SysUtils;
+  nextpas.core.text.conv;
 
 function MakeOperand(AValueId: THIRValueId): THIROperand;
 begin

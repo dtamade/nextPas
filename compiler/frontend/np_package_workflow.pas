@@ -5,7 +5,8 @@ unit np_package_workflow;
 interface
 
 uses
-  SysUtils, np_package_manifest, np_package_lock, np_workspace_model;
+  nextpas.core.text, nextpas.core.text.conv, nextpas.core.path,
+  np_package_manifest, np_package_lock, np_workspace_model;
 
 type
   TPackageManifestTruth = record

@@ -13,7 +13,9 @@ unit np_compilation_session;
 interface
 
 uses
-  SysUtils, np_ast_facade, np_backend_plan, np_diagnostics_sink, np_green_tree,
+  nextpas.core.text, nextpas.core.text.conv, nextpas.core.path, nextpas.core.os.env,
+  nextpas.core.time, nextpas.core.base.utils,
+  np_ast_facade, np_backend_plan, np_diagnostics_sink, np_green_tree,
   np_lexer, np_preprocessor, np_hir_types, np_hir_model, np_hir_builder,
   np_hir_printer, np_hir_llvm_emitter, np_source_database, np_target_facts,
   np_toolchain_plan, np_toolchain_profiles, np_toolchain_runner,
@@ -389,7 +391,7 @@ begin
   SessionNonceText := IntToStr(GSessionNonce);
   while Length(SessionNonceText) < 2 do
     SessionNonceText := '0' + SessionNonceText;
-  EntropyToken := FormatDateTime('yyyymmddhhnnsszzz', Now) + '-' +
+  EntropyToken := FormatDateTime('yyyymmddhhnnsszzz', DateTimeNow) + '-' +
     SessionNonceText;
   Result := ACommandName + '-' + ATargetId + '-' + EntropyToken +
     '-file-' + IntToStr(ARootFileId);

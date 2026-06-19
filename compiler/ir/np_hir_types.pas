@@ -105,6 +105,13 @@ type
     hnkProcessFiniRuntime,
     hnkUnitInitRuntime,
     hnkUnitFiniRuntime,
+    hnkFillCharRuntime,
+    hnkMoveRuntime,
+    hnkGetMemRuntime,
+    hnkFreeMemRuntime,
+    hnkReallocMemRuntime,
+    hnkAssignedRuntime,
+    hnkLowHighRuntime,
     hnkUnknown
   );
 
@@ -175,7 +182,7 @@ function ParseHirNodeKind(const AKind: string): THirNodeKind;
 implementation
 
 uses
-  SysUtils;
+  nextpas.core.text.conv;
 
 function ParseHirNodeKind(const AKind: string): THirNodeKind;
 begin
@@ -253,6 +260,13 @@ begin
     'process-fini-runtime': Result := hnkProcessFiniRuntime;
     'unit-init-runtime': Result := hnkUnitInitRuntime;
     'unit-fini-runtime': Result := hnkUnitFiniRuntime;
+    'fillchar-runtime': Result := hnkFillCharRuntime;
+    'move-runtime': Result := hnkMoveRuntime;
+    'getmem-runtime': Result := hnkGetMemRuntime;
+    'freemem-runtime': Result := hnkFreeMemRuntime;
+    'reallocmem-runtime': Result := hnkReallocMemRuntime;
+    'assigned-runtime': Result := hnkAssignedRuntime;
+    'lowhigh-runtime': Result := hnkLowHighRuntime;
   else
     Result := hnkUnknown;
   end;

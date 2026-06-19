@@ -7,7 +7,8 @@ unit np_source_database;
 interface
 
 uses
-  SysUtils, np_base_types, np_text_primitives;
+  nextpas.core.text.conv, nextpas.core.exception,
+  np_base_types, np_text_primitives;
 
 type
   TSourceFileId = TCoreId;

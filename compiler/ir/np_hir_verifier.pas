@@ -35,7 +35,7 @@ type
 implementation
 
 uses
-  SysUtils;
+  nextpas.core.text.conv;
 
 constructor THIRVerifier.Create(AModule: THIRModule);
 begin

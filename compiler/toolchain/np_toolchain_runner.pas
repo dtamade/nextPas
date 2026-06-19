@@ -5,7 +5,11 @@ unit np_toolchain_runner;
 interface
 
 uses
-  Classes, Process, SysUtils, np_toolchain_plan;
+  Classes, Process,
+  nextpas.core.text.conv, nextpas.core.path, nextpas.core.fs.util,
+  nextpas.core.fs.dir, nextpas.core.fs.base, nextpas.core.os.env,
+  nextpas.core.exception,
+  np_toolchain_plan;
 
 type
   EToolchainRunnerError = class(Exception)
@@ -80,7 +84,7 @@ begin
   Result := (Length(APath) >= 2) and (APath[2] = ':');
 end;
 
-procedure EnsureDirectoryExists(
+procedure EnsureFsIsDir(
   const AResolvedPath: string;
   const AFailureKind: string
 );
@@ -88,15 +92,15 @@ begin
   if Trim(AResolvedPath) = '' then
     Exit;
 
-  if FileExists(AResolvedPath) and not DirectoryExists(AResolvedPath) then
+  if FsExists(AResolvedPath) and not FsIsDir(AResolvedPath) then
     raise EToolchainRunnerError.Create(
       AFailureKind + ': ' + AResolvedPath
     );
 
-  if DirectoryExists(AResolvedPath) then
+  if FsIsDir(AResolvedPath) then
     Exit;
 
-  if not ForceDirectories(AResolvedPath) then
+  if not FsMkdirAll(AResolvedPath) then
     raise EToolchainRunnerError.Create(
       AFailureKind + ': ' + AResolvedPath
     );
@@ -111,7 +115,7 @@ var
 begin
   ParentPath := ExtractFileDir(ExpandFileName(APath));
   if ParentPath <> '' then
-    EnsureDirectoryExists(ParentPath, AFailureKind);
+    EnsureFsIsDir(ParentPath, AFailureKind);
 end;
 
 procedure WriteTextFile(const APath: string; const AText: string);
@@ -119,13 +123,38 @@ var
   Stream: TFileStream;
 begin
   EnsureParentDirectory(APath, 'toolchain.sidecar-parent-invalid');
-  Stream := TFileStream.Create(APath, fmCreate);
+  Stream := TFileStream.Create(APath, Classes.fmCreate);
   try
     if Length(AText) > 0 then
       Stream.WriteBuffer(AText[1], Length(AText));
   finally
     Stream.Free;
   end;
+end;
+
+function LocalFileSearch(const AName, ASearchPath: string): string;
+var
+  Start, SepPos: LongInt;
+  Candidate: string;
+begin
+  if (AName = '') or (ASearchPath = '') then
+    Exit('');
+  Start := 1;
+  while Start <= Length(ASearchPath) do
+  begin
+    SepPos := Start;
+    while (SepPos <= Length(ASearchPath)) and (ASearchPath[SepPos] <> PathSeparator) do
+      Inc(SepPos);
+    if SepPos > Start then
+    begin
+      Candidate := Copy(ASearchPath, Start, SepPos - Start) +
+        DirectorySeparator + AName;
+      if FsExists(Candidate) then
+        Exit(Candidate);
+    end;
+    Start := SepPos + 1;
+  end;
+  Result := '';
 end;
 
 function ResolveExecutablePath(
@@ -147,7 +176,7 @@ begin
   if IsAbsolutePath(SearchName) then
   begin
     Result := ExpandFileName(SearchName);
-    if not FileExists(Result) then
+    if not FsExists(Result) then
       raise EToolchainRunnerError.Create(
         'toolchain.missing-executable: ' + SearchName
       );
@@ -155,9 +184,9 @@ begin
   end;
 
   if AExecutableSearchPath <> '' then
-    Result := FileSearch(SearchName, AExecutableSearchPath)
+    Result := LocalFileSearch(SearchName, AExecutableSearchPath)
   else
-    Result := FileSearch(SearchName, GetEnvironmentVariable('PATH'));
+    Result := LocalFileSearch(SearchName, GetEnvironmentVariable('PATH'));
 
   if Result = '' then
     raise EToolchainRunnerError.Create(
@@ -291,8 +320,8 @@ begin
     if AExecutedSidecars[SidecarIndex].CleanupPolicy = 'delete-on-success' then
     begin
       SidecarPath := ExpandFileName(AExecutedSidecars[SidecarIndex].Path);
-      DeleteFile(SidecarPath);
-      if FileExists(SidecarPath) then
+      FsRemove(SidecarPath);
+      if FsExists(SidecarPath) then
         AExecutedSidecars[SidecarIndex].CleanupStatus := 'retained'
       else
         AExecutedSidecars[SidecarIndex].CleanupStatus := 'deleted';
@@ -308,7 +337,7 @@ var
   SidecarIndex: LongInt;
 begin
   if AStep.WorkingDirectory <> '' then
-    EnsureDirectoryExists(
+    EnsureFsIsDir(
       ExpandFileName(AStep.WorkingDirectory),
       'toolchain.invalid-working-directory'
     );
@@ -326,34 +355,41 @@ begin
     );
 end;
 
-procedure DeleteFilesMatching(
+procedure FsRemovesMatching(
   const ADirectory: string;
   const APattern: string
 );
 var
   CandidatePath: string;
   DirectoryPath: string;
-  Search: TSearchRec;
+  Entries: TDirEntryArray;
+  I: LongInt;
+  LSuffix: string;
 begin
   if Trim(ADirectory) = '' then
     Exit;
 
   DirectoryPath := IncludeTrailingPathDelimiter(ExpandFileName(ADirectory));
-  if not DirectoryExists(DirectoryPath) then
+  if not FsIsDir(DirectoryPath) then
     Exit;
 
-  if FindFirst(DirectoryPath + APattern, faAnyFile, Search) <> 0 then
+  // APattern is like '*.o' or '*_link.res' — match by suffix after '*'
+  if (Length(APattern) < 2) or (APattern[1] <> '*') then
     Exit;
-  try
-    repeat
-      if (Search.Attr and faDirectory) = 0 then
-      begin
-        CandidatePath := DirectoryPath + Search.Name;
-        DeleteFile(CandidatePath);
-      end;
-    until FindNext(Search) <> 0;
-  finally
-    FindClose(Search);
+  LSuffix := Copy(APattern, 2, MaxInt);
+
+  Entries := FsReadDir(DirectoryPath);
+  for I := 0 to High(Entries) do
+  begin
+    if Entries[I].IsDir then
+      Continue;
+    if (Length(Entries[I].Name) >= Length(LSuffix)) and
+       SameText(Copy(Entries[I].Name, Length(Entries[I].Name) - Length(LSuffix) + 1,
+         Length(LSuffix)), LSuffix) then
+    begin
+      CandidatePath := DirectoryPath + Entries[I].Name;
+      FsRemove(CandidatePath);
+    end;
   end;
 end;
 
@@ -362,11 +398,11 @@ begin
   if not SameText(AStep.ToolRole, 'host-compiler') then
     Exit;
 
-  DeleteFilesMatching(AStep.WorkingDirectory, '*.ppu');
-  DeleteFilesMatching(AStep.WorkingDirectory, '*.o');
-  DeleteFilesMatching(AStep.WorkingDirectory, '*.s');
-  DeleteFilesMatching(AStep.WorkingDirectory, '*_link.res');
-  DeleteFilesMatching(AStep.WorkingDirectory, '*_ppas.sh');
+  FsRemovesMatching(AStep.WorkingDirectory, '*.ppu');
+  FsRemovesMatching(AStep.WorkingDirectory, '*.o');
+  FsRemovesMatching(AStep.WorkingDirectory, '*.s');
+  FsRemovesMatching(AStep.WorkingDirectory, '*_link.res');
+  FsRemovesMatching(AStep.WorkingDirectory, '*_ppas.sh');
 end;
 
 function CanSkipAssemblerStep(const AStep: TToolInvocationStep): Boolean;
@@ -381,7 +417,7 @@ begin
 
   for InputIndex := 0 to Length(AStep.Inputs) - 1 do
     if SameText(AStep.Inputs[InputIndex].Kind, 'assembly-text') and
-      (not FileExists(ExpandFileName(AStep.Inputs[InputIndex].Path))) then
+      (not FsExists(ExpandFileName(AStep.Inputs[InputIndex].Path))) then
       Exit(True);
 end;
 

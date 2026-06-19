@@ -8,7 +8,9 @@ unit np_toolchain_plan;
 interface
 
 uses
-  SysUtils, np_backend_plan, np_target_facts, np_toolchain_profiles,
+  nextpas.core.text, nextpas.core.text.conv, nextpas.core.path,
+  nextpas.core.fs.util, nextpas.core.os.env,
+  np_backend_plan, np_target_facts, np_toolchain_profiles,
   nextpas_json_helpers;
 
 type
@@ -981,7 +983,7 @@ begin
   begin
     Candidate := IncludeTrailingPathDelimiter(EnvDir) +
       'libnprt.a';
-    if FileExists(Candidate) then
+    if FsExists(Candidate) then
       Exit(Candidate);
   end;
   // 2. 项目根目录 build/runtime/<target>/
@@ -991,7 +993,7 @@ begin
     Candidate := IncludeTrailingPathDelimiter(RepoRoot) + 'build' +
       DirectorySeparator + 'runtime' + DirectorySeparator +
       ATargetId + DirectorySeparator + 'libnprt.a';
-    if FileExists(Candidate) then
+    if FsExists(Candidate) then
       Exit(Candidate);
   end;
 end;
@@ -1046,7 +1048,7 @@ begin
     LibraryPath := IncludeTrailingPathDelimiter(RuntimeRootPath) + 'libc.so';
     if not SameText(FTargetFacts.SysrootMode, 'runtime-sdk') or
       not SameText(FTargetFacts.RuntimeRootKind, 'distribution-runtime-root') or
-      (RuntimeRootPath = '') or not FileExists(LibraryPath) then
+      (RuntimeRootPath = '') or not FsExists(LibraryPath) then
     begin
       FPlan.MarkFailure(
         'toolchain.c-library-not-found',
@@ -1711,6 +1713,8 @@ begin
       'object-file',
       ExpandFileName(AdditionalObjectPath)
     );
+    // Add dependent unit .o to linker inputs so multi-unit programs link correctly
+    FPlan.AddLogicalObjectInput(ExpandFileName(AdditionalObjectPath));
   end;
 
   if not RequiresLink then
@@ -1742,6 +1746,14 @@ begin
   FPlan.AddStepArg(StepIndex, '-s');
   FPlan.AddStepArg(StepIndex, '-L.');
   FPlan.AddStepArg(StepIndex, '-lc');
+  { Override FPC's default interpreter path (/lib/ld64.so.1) with the
+    system's actual dynamic linker. FPC hardcodes /lib/ld64.so.1 for
+    Linux x86_64, but many modern systems use /lib64/ld-linux-x86-64.so.2. }
+  if SameText(FTargetFacts.TargetId, 'linux-x86_64') then
+  begin
+    FPlan.AddStepArg(StepIndex, '--dynamic-linker');
+    FPlan.AddStepArg(StepIndex, '/lib64/ld-linux-x86-64.so.2');
+  end;
   FPlan.AddStepArg(StepIndex, '-o');
   FPlan.AddStepArg(StepIndex, ExpandFileName(ArtifactPath));
   FPlan.AddStepArg(StepIndex, '-T');

@@ -107,7 +107,7 @@ type
 implementation
 
 uses
-  SysUtils;
+  nextpas.core.text.conv, nextpas.core.fs.util;
 
 function IsConsumedDirective(const ADir: string): Boolean;
 begin
@@ -318,7 +318,7 @@ begin
   APath := '';
   AContent := '';
   Candidate := FBaseDir + DirectorySeparator + AName;
-  if FileExists(Candidate) then
+  if FsExists(Candidate) then
   begin
     APath := Candidate;
     Assign(F, APath);
@@ -335,7 +335,7 @@ begin
   for I := 0 to FSearchCount - 1 do
   begin
     Candidate := FSearchPaths[I] + DirectorySeparator + AName;
-    if FileExists(Candidate) then
+    if FsExists(Candidate) then
     begin
       APath := Candidate;
       Assign(F, APath);

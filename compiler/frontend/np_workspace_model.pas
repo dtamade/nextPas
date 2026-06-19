@@ -5,7 +5,9 @@ unit np_workspace_model;
 interface
 
 uses
-  SysUtils, np_package_manifest;
+  nextpas.core.text, nextpas.core.text.conv, nextpas.core.path,
+  nextpas.core.fs.util, nextpas.core.exception,
+  np_package_manifest;
 
 type
   EWorkspaceModelError = class(Exception)
@@ -133,7 +135,7 @@ begin
   CandidateDirectory := ExpandFileName(AStartDirectory);
   while CandidateDirectory <> '' do
   begin
-    if FileExists(
+    if FsExists(
       IncludeTrailingPathDelimiter(CandidateDirectory) + AMarkerName
     ) then
       Exit(CandidateDirectory);
@@ -159,7 +161,7 @@ begin
   CandidatePath := ExpandFileName(
     IncludeTrailingPathDelimiter(AWorkspaceRootPath) + 'nextpas.workspace.toml'
   );
-  if FileExists(CandidatePath) then
+  if FsExists(CandidatePath) then
     Exit(CandidatePath);
 
   Result := '';
@@ -318,7 +320,7 @@ begin
   if AWorkspaceOverride <> '' then
   begin
     Result.FWorkspaceRootPath := ExpandFileName(AWorkspaceOverride);
-    if not DirectoryExists(Result.FWorkspaceRootPath) then
+    if not FsIsDir(Result.FWorkspaceRootPath) then
       raise EWorkspaceModelError.Create(
         'invalid-workspace-root: ' + AWorkspaceOverride
       );

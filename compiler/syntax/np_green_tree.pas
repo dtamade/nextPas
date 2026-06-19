@@ -138,7 +138,7 @@ function GreenNodeKindNameOf(const ANode: TGreenNode): string;
 implementation
 
 uses
-  SysUtils;
+  nextpas.core.text.conv;
 
 type
   TUseSectionKind = (
@@ -1894,7 +1894,7 @@ begin
       Inc(ACursor);
     end;
 
-    if CurrentToken(ALexer, ACursor).Kind <> tkIdentifier then
+    if not IsDeclNameToken(CurrentToken(ALexer, ACursor).Kind) then
     begin
       EmitSyntaxError(ADiagnostics, ARootFileId,
         CurrentToken(ALexer, ACursor), 'identifier');

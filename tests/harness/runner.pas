@@ -1468,6 +1468,8 @@ begin
           Params.Add('-Fucompiler/toolchain');
           Params.Add('-Fucompiler/targets');
           Params.Add('-Futools/stage0');
+          Params.Add('-Fucore/src');
+          Params.Add('-Ficore/src');
           Params.Add(AFixturePath);
           try
             AExecution.ExitCode := RunProcessCapture(

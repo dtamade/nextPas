@@ -8,7 +8,8 @@ unit np_backend_plan;
 interface
 
 uses
-  SysUtils, np_target_facts,
+  nextpas.core.text.conv, nextpas.core.path, nextpas.core.fs.dir,
+  np_target_facts,
   np_semantic_model, np_hir_types, np_hir_model, np_hir_builder,
   np_hir_llvm_emitter, nextpas_json_helpers;
 
@@ -595,7 +596,7 @@ begin
     FPlan.AddArtifact('llvm-ir', LlvmIrArtifactPath);
     FPlan.AddArtifact('llvm-bitcode', BitcodeArtifactPath);
 
-    if not ForceDirectories(IntermediateRoot) then
+    if not FsMkdirAll(IntermediateRoot) then
     begin
       FPlan.MarkFailure;
       Exit;

@@ -40,12 +40,22 @@ function PathWithoutExt(const APath: string): string;
 { SysUtils-compatible aliases }
 {** @desc 提取文件路径的目录部分（SysUtils 兼容，末尾带分隔符） *}
 function ExtractFilePath(const AFileName: string): string;
+{** @desc 提取文件路径的目录部分（SysUtils 兼容）。
+  注意：FPC SysUtils 中 ExtractFileDir 会去除尾部分隔符，ExtractFilePath 保留。
+  当前实现两者同义（均保留尾部分隔符），与 FPC 行为有细微差异。 *}
+function ExtractFileDir(const AFileName: string): string;
 {** @desc 提取文件名部分（SysUtils 兼容） *}
 function ExtractFileName(const AFileName: string): string; inline;
 {** @desc 提取文件扩展名（SysUtils 兼容） *}
 function ExtractFileExt(const AFileName: string): string; inline;
 {** @desc 替换文件扩展名（SysUtils 兼容） *}
 function ChangeFileExt(const AFileName, AExt: string): string; inline;
+{** @desc 确保路径末尾有路径分隔符（SysUtils 兼容） *}
+function IncludeTrailingPathDelimiter(const APath: string): string;
+{** @desc 去除路径末尾的路径分隔符（SysUtils 兼容） *}
+function ExcludeTrailingPathDelimiter(const APath: string): string;
+{** @desc 将相对路径转为绝对路径（SysUtils 兼容，委托 FsPathAbs） *}
+function ExpandFileName(const APath: string): string;
 
 implementation
 
@@ -144,6 +154,11 @@ begin
     Result := LDir;
 end;
 
+function ExtractFileDir(const AFileName: string): string;
+begin
+  Result := ExtractFilePath(AFileName);
+end;
+
 function ExtractFileName(const AFileName: string): string;
 begin
   Result := FsPathBase(AFileName);
@@ -157,6 +172,21 @@ end;
 function ChangeFileExt(const AFileName, AExt: string): string;
 begin
   Result := FsPathChangeExt(AFileName, AExt);
+end;
+
+function IncludeTrailingPathDelimiter(const APath: string): string;
+begin
+  Result := FsPathEnsureSep(APath);
+end;
+
+function ExcludeTrailingPathDelimiter(const APath: string): string;
+begin
+  Result := FsPathTrimSep(APath);
+end;
+
+function ExpandFileName(const APath: string): string;
+begin
+  Result := FsPathAbs(APath);
 end;
 
 end.

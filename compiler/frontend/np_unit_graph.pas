@@ -7,7 +7,7 @@ unit np_unit_graph;
 interface
 
 uses
-  SysUtils, np_source_database, np_text_primitives;
+  nextpas.core.text.conv, np_source_database, np_text_primitives;
 
 type
   TResolvedUnitOrigin = (

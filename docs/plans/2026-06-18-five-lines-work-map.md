@@ -1,8 +1,9 @@
 # nextPas 5 线并行工作地图
 
-> **日期**: 2026-06-18
+> **日期**: 2026-06-19
 > **总控**: dtamade
 > **目标**: 协调 5 条并行工作线，以 system 模块为核心依赖枢纽，明确各线接口需求和完整开发路线
+> **当前最高优先级**: BOOTSTRAP R6 — 编译器运行时归位 (SysUtils→nextpas.core) + musl 目标
 
 ---
 
@@ -31,7 +32,7 @@
 
 | 工作线 | Worktree | 分支 | HEAD | 状态 |
 |--------|----------|------|------|------|
-| **BOOTSTRAP** | `.worktrees/bootstrap` | `codex/bootstrap` | `44ffd651d` | 规格就位，+1 ahead |
+| **BOOTSTRAP** | `.worktrees/rtl-bootstrap` | `rtl-bootstrap` | `553286095` | R5 自举收敛 ✅，**R6 运行时归位+musl 方案已更新(Codex审查)→待执行** 🟡 |
 | **TLS** | `.worktrees/core-tls` | `codex/core-tls` | `4fbbd248c` | 高度成熟，对齐 main |
 | **FOUNDATION** | `.worktrees/core-foundation` | `codex/core-foundation` | `4fbbd248c` | 对齐 main，待启动 |
 | **SIMD** | `.worktrees/core-simd-perf` | `codex/core-simd-perf` | `4fbbd248c` | G1-G20 完成，G21 进行中 |
