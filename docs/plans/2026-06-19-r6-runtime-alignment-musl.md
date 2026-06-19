@@ -1,7 +1,7 @@
 # R6 运行时对齐与 musl 目标支持
 
-> **状态**: 🟡 Phase 3-4 已完成，Phase 5 待执行
-> **时间**: ~2 天剩余
+> **状态**: 🟢 Phase 1-7 SysUtils 迁移完成，Phase 8-9 + R6.2 待执行
+> **时间**: ~1-2 天剩余
 > **前提**: R5 自举收敛完成（stage3≡stage4 SHA256 一致）
 
 ---
@@ -264,14 +264,16 @@ NEXTPAS_TARGET=linux-x86_64-musl make verify
 
 ## 5. 迁移后清理
 
-- [x] Step 0: 搜索路径就绪 (rebuild-compiler.sh 已有 -Fu core/src)
-- [x] Phase 1: nextpas.core.path 补 SysUtils 兼容别名 (IncludeTrailingPathDelimiter/ExcludeTrailingPathDelimiter/ExpandFileName/ExtractFileDir)
-- [x] Phase 2: FPC host-compile probe (text.conv/path/fs.util/fs.dir/os.env/time 全部通过)
-- [x] Phase 3: 叶子函数替换 (23 文件完成，仅剩 np_unit_resolver + np_toolchain_runner)
-- [x] Phase 4: fs.util/fs.dir 函数改名 (FileExists→FsExists, DirectoryExists→FsIsDir, ForceDirectories→FsMkdirAll)
-- [ ] Phase 5: FindFirst → FsReadDir 重写 (np_unit_resolver.pas)
-- [x] Phase 6: Now → DateTimeNow (np_compilation_session.pas)
-- [ ] Phase 7: np_toolchain_runner Classes/Process 处理 (推迟 R6.4)
+- [x] Step 0: 搜索路径就绪
+- [x] Phase 1: nextpas.core.path 补 SysUtils 兼容别名
+- [x] Phase 2: FPC host-compile probe
+- [x] Phase 3: 叶子函数替换 (23 文件)
+- [x] Phase 4: fs.util/fs.dir 函数改名
+- [x] Phase 5: FindFirst → FsReadDir 重写 (np_unit_resolver + np_toolchain_runner)
+- [x] Phase 6: Now → DateTimeNow
+- [x] Phase 7: np_toolchain_runner SysUtils 清零 (Classes/Process 保留)
+- [ ] Phase 8: 验证自举循环 stage3≡stage4 (需 resolver 修复)
+- [ ] Phase 9: 删除 `units/linux-x86_64/SysUtils.pas`
 - [ ] Phase 8: 验证自举循环 stage3≡stage4 (需 resolver 修复)
 - [ ] Phase 9: 删除 `units/linux-x86_64/SysUtils.pas`
 - [ ] R6.2: musl 目标支持
