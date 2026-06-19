@@ -1,8 +1,9 @@
 # system 模块内核战略路线图
 
-> **文档版本**: v1.0 — 2026-06-18
-> **状态**: 初稿，待 Codex 多轮审查
+> **文档版本**: v6.0 — 2026-06-18
+> **状态**: 4 轮 Codex 审查通过，进入 Phase 0 实现
 > **范围**: nextpas.core.system 内核架构设计，对标 Go/Rust，覆盖自举全路径
+> **质量标准**: 虐哭 FPC，拳打 Go，脚踢 Rust
 
 ---
 
@@ -12,6 +13,41 @@ nextPas system 内核的目标是：**在保持 FPC 源码兼容的前提下，�
 
 这不是重写 FPC System，而是在 FPC 自举完成后，用 5 个结构性支柱替换运行时核心，
 使 nextPas 编译出的程序在内存管理、异常处理、并发调度、类型系统四个维度达到工业级水准。
+
+### 核心架构原则：编译器是 nextpas.core 的消费者
+
+**nextpas.core 是通用基础设施，nextPas 编译器是它的第一个重度用户。**
+
+```
+nextpas.core (通用基础设施，零应用逻辑)
+├── mem: TCache / Arena / Pool
+├── text: TString (SSO + CoW) / intern
+├── sync: TAtomic / TLS / Mutex / RwLock
+├── collections: HashMap / Vec / BTree
+└── ...
+         ↑ 所有应用复用，编译器只是其中之一
+    nextPas compiler (消费者，不搞特殊)
+    ├── AST 节点: nextpas.core.mem TCache 分配
+    ├── 标识符: nextpas.core.text TString + intern
+    ├── 符号表: nextpas.core.collections HashMap
+    ├── 并行编译: nextpas.core.sync TAtomic + RwLock
+    └── 阶段 arena: nextpas.core.mem Arena 批量分配/释放
+```
+
+**这是 Go / Rust / Swift 的最佳实践**:
+- Go 编译器用 Go runtime 的内存分配器，不用特殊的编译器分配器
+- rustc 用 Rust 标准库的 Vec/String/HashMap，不自己造轮子
+- Swift 编译器用 Swift stdlib，编译器和运行时共享基础设施
+
+**禁止**:
+- ❌ 编译器内部搞一套专用的分配器/字符串/容器
+- ❌ 编译器绕过 nextpas.core 直接调用平台 API
+- ❌ "编译器是特殊的所以需要简化方案"
+
+**要求**:
+- ✅ 编译器是 nextpas.core 最严格的测试用例
+- ✅ 编译器发现的性能问题推动 nextpas.core 优化
+- ✅ 编译器验证 nextpas.core 的 API 设计是否足够好
 
 ### 5 支柱概览
 
