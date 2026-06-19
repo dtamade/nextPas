@@ -173,23 +173,24 @@ Go 标准库没有 SSO 优化。代价是 variant record 的 case 判断分支�
 
 ## 4. 支柱 2: TCache 3 级分配器（纯 Pascal，零外部依赖）
 
-> **纯 Pascal 实现**: 参照 Go runtime malloc 的 3 级架构，全部用 Pascal 实现，不链接任何 C/C++ 分配器库。OS 层使用已有的 `TMemoryMap` (mmap/VirtualAlloc)。
-> **性能目标**: 小对象分配必须对齐 tcmalloc (≤20ns)，不得因纯 Pascal 实现而妥协。
+> **纯 Pascal 实现**: 参照 Go runtime malloc 的 3 级层次 + tcmalloc 的 bitmap span 管理，全部用 Pascal 实现，不链接任何 C/C++ 分配器库。OS 层直接使用 `platform_mmap_*` API。
+> **性能目标**: 小对象分配必须对齐 tcmalloc。双轨路径：编译器直连快路径 (≤15ns) + IAllocator 通用路径 (≤25ns)。
 > **不阻塞自举**: 当前 `@np_alloc`/`@np_free` 已有 bump 分配器，TCache 是自举后首要优化目标。
 
 ### 4.1 架构概览
 
 ```
-Thread → TThreadCache (lock-free, per-thread, 纯 Pascal)
+Thread → TThreadCache (lock-free 快路径, per-thread, 纯 Pascal)
            ↓ (cache miss)
-       TCentralCache (per-sizeclass, locked)
+       TCentralCache (per-sizeclass, spinlock)
            ↓ (central exhausted)
-       THeap (global, radix tree, TMemoryMap)
+       THeap (global, radix tree, platform_mmap_*)
            ↓ (heap exhausted)
-       OS (mmap/munmap via nextpas.core.mem.memory_map)
+       OS (mmap/munmap via nextpas.core.platform)
 ```
 
-> **注意**：Go 原版 mcache 是 per-P (per-processor)，nextPas 简化版为 per-thread，依赖 TLS 基础设施。
+> **层次来源**: 3 级层次参照 Go (mcache→mcentral→mheap)，span 内管理参照 tcmalloc (CTZ bitmap)。
+> **注意**: Go 原版 mcache 是 per-P (per-processor)，nextPas 简化版为 per-thread，依赖 TLS。
 
 ### 4.2 与 Go/Rust 对标
 
@@ -202,18 +203,35 @@ Thread → TThreadCache (lock-free, per-thread, 纯 Pascal)
 | 元数据开销 | 每 span 一个 page map | 0 (分配器管理) | radix tree page map |
 | 线程安全 | per-P 无锁 + central 锁 | 分配器内部 | per-thread 无锁 + central 锁 |
 
-### 4.3 性能 SLA（对齐 tcmalloc）
+### 4.3 性能 SLA（对齐 tcmalloc，双轨路径）
 
-| 操作 | tcmalloc 参考值 | TCache 目标 | 实现策略 |
-|------|----------------|-------------|----------|
-| 小对象分配 (8-64B) | ~15ns (CTZ bitmap) | ≤ 15ns | CTZ bitmap 无锁快路径 |
-| 小对象释放 | ~10ns (bitmap set) | ≤ 10ns | bitmap set + 无 CAS |
-| 中对象分配 (64B-32KB) | ~30ns (central fill) | ≤ 30ns | TCentralCache span 填充 |
-| 大对象分配 (>32KB) | ~200ns (mmap) | ≤ 200ns | TMemoryMap 直接分配 |
-| 多线程扩展性 | 近线性 (per-P 无锁) | 近线性 (per-thread 无锁) | CTZ 无竞态 |
+**快路径 (编译器直连，绕过 IAllocator)**:
+```
+@np_alloc(size) → TLS lookup → sizeclass → CTZ bitmap → 返回指针
+// 纯函数调用，无 interface dispatch，无 virtual dispatch
+// 预期: ≤ 15ns (与 tcmalloc 对齐)
+```
 
-**关键约束**: 纯 Pascal 实现不得引入额外开销。FPC 的 `{$mode ObjFPC}` 编译为原生代码，
-内联函数和 variant record 的开销可忽略。瓶颈在 OS syscall (mmap/munmap) 和 atomic (CTZ)，不在语言层面。
+**慢路径 (IAllocator 通用 API)**:
+```
+IAllocator.GetMem(size) → TAllocator.GetMem → virtual DoGetMem
+  → TThreadCacheAllocator.DoGetMem → TLS + CTZ
+// 有 interface + virtual dispatch 开销 (~5-8ns)
+// 预期: ≤ 25ns (仍比 FPC RTL ~100ns 快 4x)
+```
+
+| 操作 | tcmalloc 参考 | TCache 快路径 | TCache 慢路径 (IAllocator) |
+|------|--------------|--------------|---------------------------|
+| 小对象分配 (8-64B) | ~15ns | ≤ 15ns | ≤ 25ns |
+| 小对象释放 | ~10ns | ≤ 10ns | ≤ 18ns |
+| 中对象分配 (64B-32KB) | ~30ns | ≤ 30ns | ≤ 38ns |
+| 大对象分配 (>32KB) | ~200ns | ≤ 200ns (platform_mmap_*) | ≤ 200ns |
+
+**关键实现要求**:
+- `@np_alloc` 的 Pascal 实现直接内联 TLS+CTZ 逻辑，不经过 IAllocator
+- `BsfQWord` FPC 编译器内联函数 (`[internproc:fpc_in_bsf_x]`) → x86 BSF 指令，~3 周期
+- ARM64: `RBIT` + `CLZ` 内联汇编
+- TLS lookup: 使用 `platform_tls_get` (~3-5ns)，评估是否可优化到 ~1ns (如 Go 的 `%gs:` 方案)
 
 ### 4.3 与现有 IAllocator 的关系
 
@@ -246,49 +264,97 @@ IAllocator
 ### 4.4 实现计划
 
 **S8.1: Size classes 定义**
-- 67 个大小类 (8B-32KB)，参照 Go 的 `size_classes.go`
-- 每个 class 的 span 大小、pages 数、元素数
-- `np.system.heap_alloc` 路由到 size class 查找
+- 67 个大小类 (8B-32KB)，参照 Go 的 `size_classes.go` 生成规则
+  - 小 class (≤32B): 每 8B 一档
+  - 中 class (32B-2KB): 每 12.5% 增长，rounded to 8B
+  - 大 class (2KB-32KB): 每 256B 一档
+- Size→class 路由: 查表法 (256 entries, 1 byte each, 覆盖 8B-2KB) + 大 class 除法
+- 每个 class 的 span 大小、pages 数、元素数、CTZ bitmap 宽度
+- 对齐: 所有 sizeclass 保证 8-byte alignment；>16-byte 对齐需求走 page-aligned mmap
 
 **S8.2: TThreadCache (per-thread)**
-- **⚠️ TLS 前置依赖**: `TThreadCacheAllocator` 需要 per-thread TLS 存储 mcache
-  - FPC 的 `ThreadVar` 依赖 FPC RTL 运行时，nextPas 不可使用
-  - 方案 A: `pthread_key_create` / `__thread` (POSIX) + `TlsAlloc` (Windows)
-  - 方案 B: nextPas 自己实现 TLS 抽象层 (nextpas.core.sync.tls)
-  - 必须在 TThreadCache 实现之前确定 TLS 方案
+- **TLS 方案已确定**: 使用已有的 `platform_tls_*` API (`nextpas.core.platform.thread`)
+  - 不使用 FPC `threadvar` (依赖 FPC RTL)
+  - 不自研 TLS 抽象层 (platform 层已有)
+  - **需扩展**: `platform_tls_create` 增加 destructor callback 参数
+    - Linux: `pthread_key_create` 的 destructor
+    - Windows: `FlsAlloc` callback (TlsAlloc 不支持 destructor)
+- **S8.2.1: Thread cache destructor**
+  - 线程退出时将 TThreadCache 中所有非空 span 归还 TCentralCache
+  - 防止线程退出导致的内存泄漏
+- **CTZ 原语** (前置，放 `nextpas.core.mem.bitscan`):
+  - x86-64: `BsfQWord` FPC 编译器内联函数 → BSF 指令 (~3 周期)
+  - ARM64: `RBIT` + `CLZ` 内联汇编
+  - 封装为 `function FindFirstSetBit(v: QWord): SizeUInt; inline;`
 - CTZ bitmap 空闲 slot 查找
-- 无锁快速路径 (~15ns)
-- Cache miss 时从 mcentral 填充
+- Cache hit: 无锁快路径 (~15ns)
+- Cache miss: 从 TCentralCache batch refill (一个完整 span, ~128 对象)
+- Per-thread 内存预算: 67 × ~64 bytes ≈ 4KB per thread
 
 **S8.3: TCentralCache (per-sizeclass)**
 - 自旋锁保护
 - 管理 span 列表 (empty/partial/non-empty)
-- 从 mheap 获取新 span
+- 从 THeap 获取新 span
+- Batch refill: 一次向 TThreadCache 提供一个完整 span (~128 对象)
 
 **S8.4: THeap (global)**
-- Radix tree page map (5 级)
-- 大对象直分配 (>32KB, 使用 `TMemoryMap.AllocateRegion`)
-- Span 合并 (buddy system)
-- **OS 抽象**: 构建在 `nextpas.core.mem.memory_map` 之上，跨平台 (mmap/VirtualAlloc)
+- **OS 层直接使用 `platform_mmap_*`** (不经过 TMemoryMap)
+  - TMemoryMap 是文件映射封装器，不适合堆管理
+  - `platform_mmap_anonymous` 按需分配大块 (如 64MB region)
+  - `platform_munmap` 部分释放
+  - `platform_mprotect` 用于 guard page (P4b 栈溢出检测)
+- Radix tree page map (5 级, 每级 8-bit, 覆盖 1TB 虚拟地址)
+  - **支持 address→span 反查**: ReallocMem 需要从指针反查 sizeclass
+- 大对象直分配 (>32KB, page-aligned mmap 天然对齐)
+- **Span 合并 (buddy system)**:
+  - 释放 span 时检查 buddy span 是否空闲，是则合并
+  - 合并递归进行直到无法合并
+  - 参考 `TFixedSlabPool` 中 `ngx_slab_free_pages` 的实现
+- **Scavenge (向 OS 归还)**:
+  - 空闲 span 通过 `madvise(MADV_DONTNEED)` (Linux) / `VirtualFree(MEM_DECOMMIT)` (Windows) 延迟归还
+  - 比激进 `munmap` 更优 (避免重新 mmap 的 syscall 开销)
+  - 定期扫描或阈值触发
 
-**S8.5: 替换 @np_alloc/@np_free**
-- `TThreadCacheAllocator` 实例化为全局默认分配器
-- `@np_alloc` → `TThreadCacheAllocator.DoAllocMem`
-- `@np_free` → `TThreadCacheAllocator.DoFreeMem`
+**S8.5: ReallocMem 优化**
+- 如果新 size 和旧 size 属于同一 sizeclass → 原地返回 (零拷贝)
+- 如果跨 sizeclass → 分配新块 + 拷贝 + 释放旧块
+- 需要 radix tree 的 address→span 反查支持
+
+**S8.6: 替换 @np_alloc/@np_free — 双轨路径**
+- **编译器内部路径** (快路径):
+  - `@np_alloc` 的 Pascal 实现直接内联 TLS+CTZ 逻辑
+  - 不经过 IAllocator 接口，无 interface/virtual dispatch
+  - 预期 ≤ 15ns
+- **用户 API 路径** (慢路径):
+  - `IAllocator.GetMem` → `TThreadCacheAllocator.DoAllocMem` (有 dispatch)
+  - 预期 ≤ 25ns
 - `np.system.heap_alloc/free` 契约从 vocabulary 变为 live
+
+**S8.7: TCache 统计接口**
+- `TCacheStats` record: per-sizeclass 分配/释放计数, cache hit/miss 率
+- Central fill 次数, total committed/resident 内存, fragmentation 率
+- 与现有 `nextpas.core.mem.stats` 快照机制集成
 
 ### 4.5 验收标准
 
-- [ ] 67 大小类定义完整
-- [ ] TThreadCache CTZ 快路径 ≤ 15ns (对齐 tcmalloc)
-- [ ] TThreadCache 释放快路径 ≤ 10ns (对齐 tcmalloc)
-- [ ] TCentralCache miss 填充 ≤ 30ns
-- [ ] THeap radix tree 大对象分配 ≤ 200ns
-- [ ] @np_alloc/@np_free 路由到 TThreadCacheAllocator
+- [ ] 67 大小类定义完整 + size→class 查表路由
+- [ ] `FindFirstSetBit` (BSF/TZCNT) 原语: x86-64 + ARM64
+- [ ] TLS: platform_tls_* + destructor callback 扩展
+- [ ] TThreadCache 快路径 (编译器直连): 分配 ≤ 15ns, 释放 ≤ 10ns
+- [ ] TThreadCache 慢路径 (IAllocator): 分配 ≤ 25ns, 释放 ≤ 18ns
+- [ ] TCentralCache miss 填充 ≤ 30ns, batch refill 正确
+- [ ] THeap radix tree 5 级 page map + address→span 反查
+- [ ] THeap 大对象 page-aligned mmap ≤ 200ns
+- [ ] Span 合并 (buddy system) 正确性
+- [ ] Scavenge: madvise(MADV_DONTNEED) / VirtualFree(MEM_DECOMMIT)
+- [ ] ReallocMem: 同 sizeclass 原地返回 (零拷贝)
+- [ ] 线程退出: TLS destructor 归还 span 到 central
+- [ ] @np_alloc 快路径绕过 IAllocator dispatch
 - [ ] 多线程分配无竞态 (TSAN clean)
 - [ ] heaptrc 0 leak
-- [ ] 基准测试：小对象分配对齐 tcmalloc (~15ns)，比 FPC RTL 快 5x+
+- [ ] 基准测试：快路径对齐 tcmalloc (~15ns)，慢路径比 FPC RTL 快 4x
 - [ ] 与 TMimallocAllocator 性能对比报告
+- [ ] TCache 统计接口可用 (hit/miss, fragmentation)
 
 ---
 
@@ -575,13 +641,19 @@ Phase 1a: 语言核心 (2026-Q3 → Q4)
     └── S10.4a: sync.Pool/Mutex (简化版，per-thread)
 
 Phase 1b: 性能基础 (2026-Q4 → 2027-Q1)
-│ 前置条件: TLS 基础设施就绪 + compiler-arch-debt C5/C6 完成
+│ 前置条件:
+│   ├── TLS destructor 扩展 (platform_tls_create + callback)
+│   ├── BSF/TZCNT 原语 (nextpas.core.mem.bitscan)
+│   └── compiler-arch-debt C5/C6 完成
 ├── P2: TCache (bump allocator → 3 级分配器替换)
-│   ├── S8.1: Size classes
-│   ├── S8.2: TThreadCache (依赖 TLS)
-│   ├── S8.3: TCentralCache
-│   └── S8.4: THeap
-└── Gate 4 闭合: @np_alloc/@np_free → TThreadCacheAllocator
+│   ├── S8.1: Size classes + 查表路由
+│   ├── S8.2: TThreadCache (TLS + CTZ bitmap)
+│   ├── S8.3: TCentralCache (batch refill)
+│   ├── S8.4: THeap (radix tree + buddy + scavenge)
+│   ├── S8.5: ReallocMem 优化 (同 sizeclass 零拷贝)
+│   ├── S8.6: 双轨路径 (编译器直连 + IAllocator)
+│   └── S8.7: TCache 统计接口
+└── Gate 4 闭合: @np_alloc 快路径 + IAllocator 慢路径
 
 Phase 2: LLVM 后端巩固 (2027-Q1 → Q2)
 ├── Gate 1 闭合: RTTI 形状一致性深化
@@ -605,9 +677,11 @@ Phase 3: 并发调度 + 异常升级 (2027-Q2+)
 - **Phase 1a**: 语言核心改进 (TString + RAII + P4a)，无外部前置依赖
   - P5 RAII 提前: 自举编译器大量使用 try/finally，无 RAII 显著增加负担
   - P4a 拆入: 原子+同步原语不依赖 GMP，可与 TString 并行
-- **Phase 1b**: 性能基础 (TCache)，有明确前置条件
-  - TLS 基础设施必须先就绪 (TThreadCache 依赖 per-thread TLS)
+- **Phase 1b**: 性能基础 (TCache)，有明确前置条件 (Codex Round 3 细化)
+  - TLS destructor 扩展: `platform_tls_create` 需增加 callback (pthread_key_create / FlsAlloc)
+  - BSF/TZCNT 原语: `nextpas.core.mem.bitscan` (FPC `BsfQWord` 内联函数)
   - compiler-arch-debt C5 (lvalue 模型) / C6 (allocator) 必须先完成
+  - THeap 直接用 `platform_mmap_*`，不经过 TMemoryMap (文件映射封装器)
   - Phase 0 使用 bump allocator 完成自举，Phase 1b 用 TCache 替换
 
 ### 8.2 与自举门的对应关系
@@ -647,8 +721,10 @@ Gate 2 (单元生命周期) 和 Gate 3 (进程生命周期) 是自举硬阻塞�
 |------|------|------|----------|
 | TString CoW 与 FPC AnsiString 不兼容 | 高 | 高 | 渐进迁移，保留 FPC string 作 stage0 |
 | CoW refcount atomic 开销 | 中 | 中 | 赋值密集场景 profile，考虑 relaxed ordering |
-| TCache 跨平台 (Windows/macOS) | 中 | 中 | mmap/munmap 抽象层，Windows 用 VirtualAlloc |
-| TLS 基础设施缺失 (TThreadCache 依赖) | 高 | 高 | 优先实现 nextpas.core.sync.tls，或用 pthread_key_create/TlsAlloc |
+| TCache ≤15ns 需绕过 IAllocator dispatch | 高 | 高 | 双轨路径: 编译器直连快路径 + IAllocator 慢路径 |
+| TLS destructor 扩展 (platform_tls_*) | 高 | 高 | Linux pthread_key_create / Windows FlsAlloc callback |
+| THeap OS 层: platform_mmap_* 而非 TMemoryMap | 中 | 低 | TMemoryMap 是文件映射，直接用 platform_mmap_* |
+| TCache 跨平台 (Windows/macOS) | 中 | 中 | platform_mmap_* 已跨平台 |
 | LLVM global_ctors 顺序不确定 | 高 | 中 | Phase 0 实现 _start 驱动拓扑排序替代 |
 | RAII 改变语义分析复杂度 | 高 | 中 | 先支持 record，class 用现有 Free 机制 |
 | Phase 1b 依赖 compiler-arch-debt C5/C6 | 高 | 高 | Phase 1b 前置条件明确，C5/C6 未完成则推迟 |
@@ -756,13 +832,17 @@ Gate 2 (单元生命周期) 和 Gate 3 (进程生命周期) 是自举硬阻塞�
 
 ### 11.7 TLS 前置依赖
 
-**结论**: per-thread TThreadCache 依赖 TLS 基础设施，必须先解决。
+**结论**: 使用已有 `platform_tls_*` API + 扩展 destructor callback。
 
 理由:
-- **Codex 审查 (Round 1)**: FPC 的 ThreadVar 依赖 FPC RTL 运行时，nextPas 不可使用
-- 方案 A: `pthread_key_create`/`__thread` (POSIX) + `TlsAlloc` (Windows)
-- 方案 B: nextPas 自己实现 TLS 抽象层 (nextpas.core.sync.tls)
-- TLS 问题必须在 TThreadCache 实现之前确定
+- **Codex 审查 (Round 3)**: `nextpas.core.platform.thread` 已有 `platform_tls_create/destroy/set/get`
+- FPC `threadvar` 不可用 (依赖 FPC RTL)
+- 不自研 TLS 抽象层 (platform 层已足够)
+- **需扩展**: `platform_tls_create` 增加 destructor callback
+  - Linux: `pthread_key_create` 的 destructor 回调
+  - Windows: `FlsAlloc` callback (`TlsAlloc` 不支持 destructor)
+- TLS lookup 开销: `pthread_getspecific` ~3-5ns，评估是否可优化
+- 线程退出时 destructor 将 TThreadCache span 归还 TCentralCache
 
 ### 11.8 LLVM global_ctors 顺序
 
@@ -804,4 +884,5 @@ Gate 2 (单元生命周期) 和 Gate 3 (进程生命周期) 是自举硬阻塞�
 | 2026-06-18 | v1.0 | 初稿：5 支柱 + 优先级矩阵 + 5 节讨论记录 |
 | 2026-06-18 | v2.0 | Codex Round 1 审查整改：Gate 2/3 FAIL→PARTIAL；P4 拆 P4a/P4b；RAII 提前 Phase 1；TCache 纯 Pascal 重定位；补充 TLS/global_ctors/sync.Pool/seq_cst/RAII-Drop 差异等 |
 | 2026-06-18 | v3.0 | Codex Round 2 审查整改；新增 S11.0 CoW+RAII 协议：Phase 1 拆 1a/1b；测试数量核实修正；S6 完成状态细化；Gate 0 描述精确化；新增 S11.0 协作协议；compiler-arch-debt 依赖入风险表；优先级矩阵重标 |
-| 2026-06-18 | v4.0 | tcmalloc→TCache 重命名：纯 Pascal 实现，零外部依赖；构建在 TMemoryMap 之上；新增讨论记录 11.10 |
+| 2026-06-18 | v4.0 | tcmalloc→TCache 重命名：纯 Pascal 实现，零外部依赖；性能 SLA 对齐 tcmalloc |
+| 2026-06-18 | v5.0 | Codex Round 3 审查整改：双轨路径 (编译器直连 ≤15ns + IAllocator ≤25ns)；TLS 选 platform_tls_* + destructor；THeap 改用 platform_mmap_*；新增 S8.5-S8.7 (ReallocMem/统计/双轨)；sizeclass 路由 + span 合并 + scavenge 详化 |
