@@ -18,7 +18,7 @@ nextPas system 内核的目标是：**在保持 FPC 源码兼容的前提下，�
 | # | 支柱 | 一句话 | 对标 |
 |---|------|--------|------|
 | P1 | Custom TString | SSO + CoW + UTF-8 原生，24 字节 record | Rust `String`, Go `string` |
-| P2 | tcmalloc 3 级分配器 | per-thread mcache → mcentral → mheap | Go `runtime.malloc` |
+| P2 | TCache 3 级分配器（纯 Pascal） | per-thread mcache → mcentral → mheap | Go `runtime.malloc` |
 | P3 | Table-based exceptions | DWARF `.eh_frame` 展开，正常路径零开销 | Rust panic, C++ exception |
 | P4 | Per-thread 内核 | G-M-P 调度模型 + seq_cst 原子 + sync.Pool | Go `runtime` |
 | P5 | RAII for records | 编译器在作用域出口自动插入 Finalize | Rust `Drop` |
@@ -28,7 +28,7 @@ nextPas system 内核的目标是：**在保持 FPC 源码兼容的前提下，�
 | 优先级 | 支柱 | 阻塞自举? | 理由 | 对应阶段 |
 |--------|------|-----------|------|----------|
 | **高** | P1 (TString) + P5 (RAII) + P4a (原子) | 部分 | 语言核心改进，自举编译器直接受益 | Phase 1a |
-| **中** | P2 (tcmalloc) | ❌ | 自举后性能优化首要目标，有前置依赖 | Phase 1b |
+| **中** | P2 (TCache) | ❌ | 自举后性能优化首要目标，有前置依赖 | Phase 1b |
 | **低** | P4b (G-M-P) + P3 (table-based) | ❌ | 需 LLVM 后端稳定 | Phase 3 |
 
 ---
@@ -130,7 +130,7 @@ Go 标准库没有 SSO 优化。代价是 variant record 的 case 判断分支�
 | `@np_memzero` | 参数适配 | 字符串清零目标改为 24B |
 | `string_cleanup` | 重写 | 从 FPC `fpc_ansistr_decr_ref` 改为 CoW refcount decr |
 | `string_assign` (intrinsic) | 重写 | 从 FPC 赋值改写为 CoW bump + 条件 copy |
-| `@np_object_alloc` | 间接影响 | 若字符串走堆分配，需对接 tcmalloc |
+| `@np_object_alloc` | 间接影响 | 若字符串走堆分配，需对接 TCache |
 | `EmitStringLiteral` | 适配 | 字面量 emit 改为 SSO 内联或 CoW 堆 |
 | `EmitManagedTypeFinalize` | 适配 | 字符串 finalize 路径改为 CoW decr |
 
@@ -171,21 +171,21 @@ Go 标准库没有 SSO 优化。代价是 variant record 的 case 判断分支�
 
 ---
 
-## 4. 支柱 2: tcmalloc 3 级分配器（Go runtime malloc 经典架构）
+## 4. 支柱 2: TCache 3 级分配器（纯 Pascal，零外部依赖）
 
-> **⚠️ 不阻塞自举**：当前 `@np_alloc`/`@np_free` 已使用 mmap+free-list 实现了 bump 分配器，足以支撑编译器自举。tcmalloc 是自举完成后替换 bump 分配器的首要性能优化目标。
-> **命名说明**: "tcmalloc" 指 Google 经典的 3 级架构 (mcache→mcentral→mheap)，非 Google 2020 年的 per-CPU CDS 重写版。
+> **纯 Pascal 实现**: 参照 Go runtime malloc 的 3 级架构，全部用 Pascal 实现，不链接任何 C/C++ 分配器库。OS 层使用已有的 `TMemoryMap` (mmap/VirtualAlloc)。
+> **不阻塞自举**: 当前 `@np_alloc`/`@np_free` 已有 bump 分配器，TCache 是自举后首要优化目标。
 
 ### 4.1 架构概览
 
 ```
-Thread → mcache (lock-free, per-thread, nextPas 简化版)
+Thread → TThreadCache (lock-free, per-thread, 纯 Pascal)
            ↓ (cache miss)
-       mcentral (per-sizeclass, locked)
+       TCentralCache (per-sizeclass, locked)
            ↓ (central exhausted)
-       mheap (global, radix tree, mmap)
+       THeap (global, radix tree, TMemoryMap)
            ↓ (heap exhausted)
-       OS (mmap/munmap syscalls)
+       OS (mmap/munmap via nextpas.core.mem.memory_map)
 ```
 
 > **注意**：Go 原版 mcache 是 per-P (per-processor)，nextPas 简化版为 per-thread，依赖 TLS 基础设施。
@@ -194,10 +194,10 @@ Thread → mcache (lock-free, per-thread, nextPas 简化版)
 
 | 维度 | Go `runtime.malloc` | Rust `GlobalAlloc` | nextPas 目标 |
 |------|---------------------|--------------------| ------------ |
-| 线程缓存 | mcache (per-P, lock-free) | 无 (用 jemalloc/mimalloc) | mcache (per-thread) |
+| 线程缓存 | mcache (per-P, lock-free, Go) | 无 (用 jemalloc/mimalloc) | TThreadCache (per-thread) |
 | 大小类 | 67 classes (8B-32KB) | 取决于分配器 | 67 classes (参照 Go) |
 | 小对象快路径 | CTZ bitmap ~15ns | ~20ns (mimalloc) | CTZ bitmap ~15ns |
-| 大对象 | mheap direct | 直接 mmap | mheap direct (>32KB) |
+| 大对象 | THeap direct | 直接 mmap | THeap direct (>32KB) |
 | 元数据开销 | 每 span 一个 page map | 0 (分配器管理) | radix tree page map |
 | 线程安全 | per-P 无锁 + central 锁 | 分配器内部 | per-thread 无锁 + central 锁 |
 
@@ -215,15 +215,15 @@ IAllocator (interface)
 
 已有后端：RTL 默认, mimalloc, mmap, callback。
 
-**tcmalloc 架构不替换 IAllocator 接口**，而是新增一个 `TThreadCacheAllocator` 后端：
+**TCache 架构不替换 IAllocator 接口**，而是新增一个 TThreadCacheAllocator 后端（纯 Pascal 实现）：
 
 ```
 IAllocator
   └── TAllocator
         ├── TRtlAllocator        (现有, FPC RTL)
         ├── TMimallocAllocator   (现有, mimalloc binding)
-        ├── TThreadCacheAllocator (新增, tcmalloc 架构)
-        │     ├── TMCtx (per-thread mcache, CTZ bitmap)
+        ├── TThreadCacheAllocator (新增, TCache 3 级架构 (纯 Pascal))
+        │     ├── TThreadCacheCtx (per-thread TThreadCache, CTZ bitmap)
         │     ├── TCentralCache (per-sizeclass, spinlock)
         │     └── THeap (radix tree, mmap)
         └── ...
@@ -236,25 +236,26 @@ IAllocator
 - 每个 class 的 span 大小、pages 数、元素数
 - `np.system.heap_alloc` 路由到 size class 查找
 
-**S8.2: mcache (per-thread)**
+**S8.2: TThreadCache (per-thread)**
 - **⚠️ TLS 前置依赖**: `TThreadCacheAllocator` 需要 per-thread TLS 存储 mcache
   - FPC 的 `ThreadVar` 依赖 FPC RTL 运行时，nextPas 不可使用
   - 方案 A: `pthread_key_create` / `__thread` (POSIX) + `TlsAlloc` (Windows)
   - 方案 B: nextPas 自己实现 TLS 抽象层 (nextpas.core.sync.tls)
-  - 必须在 mcache 实现之前确定 TLS 方案
+  - 必须在 TThreadCache 实现之前确定 TLS 方案
 - CTZ bitmap 空闲 slot 查找
 - 无锁快速路径 (~15ns)
 - Cache miss 时从 mcentral 填充
 
-**S8.3: mcentral (per-sizeclass)**
+**S8.3: TCentralCache (per-sizeclass)**
 - 自旋锁保护
 - 管理 span 列表 (empty/partial/non-empty)
 - 从 mheap 获取新 span
 
-**S8.4: mheap (global)**
+**S8.4: THeap (global)**
 - Radix tree page map (5 级)
-- 大对象直 mmap (>32KB)
+- 大对象直分配 (>32KB, 使用 `TMemoryMap.AllocateRegion`)
 - Span 合并 (buddy system)
+- **OS 抽象**: 构建在 `nextpas.core.mem.memory_map` 之上，跨平台 (mmap/VirtualAlloc)
 
 **S8.5: 替换 @np_alloc/@np_free**
 - `TThreadCacheAllocator` 实例化为全局默认分配器
@@ -265,9 +266,9 @@ IAllocator
 ### 4.5 验收标准
 
 - [ ] 67 大小类定义完整
-- [ ] mcache CTZ 快路径 ≤ 20ns
-- [ ] mcentral miss 填充正确
-- [ ] mheap radix tree 大对象分配
+- [ ] TThreadCache CTZ 快路径 ≤ 20ns
+- [ ] TCentralCache miss 填充正确
+- [ ] THeap radix tree 大对象分配
 - [ ] @np_alloc/@np_free 路由到 TThreadCacheAllocator
 - [ ] 多线程分配无竞态 (TSAN clean)
 - [ ] heaptrc 0 leak
@@ -404,7 +405,7 @@ TSyncPool
 > **⚠️ 无 GC 的淘汰策略**: Go 的 victim flip 依赖 GC 周期。nextPas 无 GC，需替代方案：
 > - **方案 A**: 时间驱动淘汰 — 每 N 秒执行 victim flip (timer callback)
 > - **方案 B**: 显式 `Clear()` — 应用代码主动调用
-> - **方案 C**: 每 epoch 回收 — 配合分配器 epoch 计数 (类似 tcmalloc 的 epoch reclaim)
+> - **方案 C**: 每 epoch 回收 — 配合分配器 epoch 计数 (类似 Go tcmalloc 的 epoch reclaim)
 > - 初期推荐方案 A (最简单)，后期可升级到方案 C
 
 ### 6.5 实现计划
@@ -537,7 +538,7 @@ end;  // ← 编译器自动插入 LBuf.Finalize
 Phase 0: 自举完成 (当前 → 2026-Q3)
 ├── Gate 2: 单元生命周期 (global_ctors → topology-sorted _start)
 ├── Gate 3: 进程生命周期 (runtime 实现)
-├── Gate 4: 堆管理器连接 (使用 bump allocator，不等 tcmalloc)
+├── Gate 4: 堆管理器连接 (使用 bump allocator，不等 TCache)
 ├── Stage3≡Stage4 收敛
 └── SysUtils.pas shim 管理
 
@@ -559,11 +560,11 @@ Phase 1a: 语言核心 (2026-Q3 → Q4)
 
 Phase 1b: 性能基础 (2026-Q4 → 2027-Q1)
 │ 前置条件: TLS 基础设施就绪 + compiler-arch-debt C5/C6 完成
-├── P2: tcmalloc (bump allocator → 3 级分配器替换)
+├── P2: TCache (bump allocator → 3 级分配器替换)
 │   ├── S8.1: Size classes
-│   ├── S8.2: mcache (依赖 TLS)
-│   ├── S8.3: mcentral
-│   └── S8.4: mheap
+│   ├── S8.2: TThreadCache (依赖 TLS)
+│   ├── S8.3: TCentralCache
+│   └── S8.4: THeap
 └── Gate 4 闭合: @np_alloc/@np_free → TThreadCacheAllocator
 
 Phase 2: LLVM 后端巩固 (2027-Q1 → Q2)
@@ -588,16 +589,16 @@ Phase 3: 并发调度 + 异常升级 (2027-Q2+)
 - **Phase 1a**: 语言核心改进 (TString + RAII + P4a)，无外部前置依赖
   - P5 RAII 提前: 自举编译器大量使用 try/finally，无 RAII 显著增加负担
   - P4a 拆入: 原子+同步原语不依赖 GMP，可与 TString 并行
-- **Phase 1b**: 性能基础 (tcmalloc)，有明确前置条件
-  - TLS 基础设施必须先就绪 (mcache 依赖 per-thread TLS)
+- **Phase 1b**: 性能基础 (TCache)，有明确前置条件
+  - TLS 基础设施必须先就绪 (TThreadCache 依赖 per-thread TLS)
   - compiler-arch-debt C5 (lvalue 模型) / C6 (allocator) 必须先完成
-  - Phase 0 使用 bump allocator 完成自举，Phase 1b 用 tcmalloc 替换
+  - Phase 0 使用 bump allocator 完成自举，Phase 1b 用 TCache 替换
 
 ### 8.2 与自举门的对应关系
 
 | 支柱 | 影响的 Gate | 闭合方式 |
 |------|-------------|----------|
-| P2 tcmalloc | Gate 4 (Heap Manager) | @np_alloc → TThreadCacheAllocator |
+| P2 TCache | Gate 4 (Heap Manager) | @np_alloc → TThreadCacheAllocator |
 | P1 TString | 间接 (string_init/fini 实现) | np.system.string_* 变为 live |
 | P5 RAII | 间接 (managed record cleanup) | managed_record_init/fini 实现 |
 | P4a Atomics/Sync | 间接 (并发基础设施) | TAtomic + sync primitives |
@@ -630,8 +631,8 @@ Gate 2 (单元生命周期) 和 Gate 3 (进程生命周期) 是自举硬阻塞�
 |------|------|------|----------|
 | TString CoW 与 FPC AnsiString 不兼容 | 高 | 高 | 渐进迁移，保留 FPC string 作 stage0 |
 | CoW refcount atomic 开销 | 中 | 中 | 赋值密集场景 profile，考虑 relaxed ordering |
-| tcmalloc 跨平台 (Windows/macOS) | 中 | 中 | mmap/munmap 抽象层，Windows 用 VirtualAlloc |
-| TLS 基础设施缺失 (mcache 依赖) | 高 | 高 | 优先实现 nextpas.core.sync.tls，或用 pthread_key_create/TlsAlloc |
+| TCache 跨平台 (Windows/macOS) | 中 | 中 | mmap/munmap 抽象层，Windows 用 VirtualAlloc |
+| TLS 基础设施缺失 (TThreadCache 依赖) | 高 | 高 | 优先实现 nextpas.core.sync.tls，或用 pthread_key_create/TlsAlloc |
 | LLVM global_ctors 顺序不确定 | 高 | 中 | Phase 0 实现 _start 驱动拓扑排序替代 |
 | RAII 改变语义分析复杂度 | 高 | 中 | 先支持 record，class 用现有 Free 机制 |
 | Phase 1b 依赖 compiler-arch-debt C5/C6 | 高 | 高 | Phase 1b 前置条件明确，C5/C6 未完成则推迟 |
@@ -672,15 +673,15 @@ Gate 2 (单元生命周期) 和 Gate 3 (进程生命周期) 是自举硬阻塞�
 
 ## 11. 确认的讨论记录
 
-### 11.1 tcmalloc vs jemalloc vs mimalloc
+### 11.1 分配器选型：TCache vs jemalloc vs mimalloc
 
-**结论**: 采用 tcmalloc 3 级架构，不直接集成 tcmalloc/jemalloc 库。
+**结论**: 采用 TCache 3 级架构（纯 Pascal 实现），不直接集成 tcmalloc/jemalloc/mimalloc 库。
 
 理由:
-- tcmalloc 的 mcache→mcentral→mheap 分层清晰，与 IAllocator 接口兼容
+- Go runtime malloc 的 mcache→mcentral→mheap 3 级分层清晰，与 IAllocator 接口兼容
 - jemalloc 的 arena 模型在 Pascal 单线程默认假设下过度设计
 - mimalloc 已有一个后端 (`TMimallocAllocator`)，可作对比基准
-- 自研实现可完全控制内存布局和 nextPas 特定优化 (如对象头 magic)
+- 纯 Pascal 自研实现可完全控制内存布局和 nextPas 特定优化 (如对象头 magic)
 
 ### 11.2 TString CoW vs 不可变
 
@@ -722,25 +723,25 @@ Gate 2 (单元生命周期) 和 Gate 3 (进程生命周期) 是自举硬阻塞�
 - P4b (P/M 分离 + 工作窃取 + 栈管理): 需要 LLVM 后端稳定，Phase 3+ 才做
 - goroutine 需要编译器深度集成 (栈增长点注入)，是更远期目标
 
-### 11.6 tcmalloc 定位
+### 11.6 TCache 分配器定位
 
-**结论**: tcmalloc 不阻塞自举，是自举后性能优化的首要目标。
+**结论**: TCache 不阻塞自举，是自举后性能优化的首要目标。
 
 理由:
 - **Codex 审查 (Round 1)**: @np_alloc/@np_free 已有 mmap+free-list bump allocator，足以支撑自举
-- 将 tcmalloc 标记为 "阻塞自举" 会误导优先级判断
-- 自举完成后，tcmalloc 替换 bump allocator 是最高优先级性能优化
-- 命名统一为 "Go runtime malloc 经典架构 (tcmalloc 3 级)" 避免与 Google 2020 per-CPU CDS 版本混淆
+- 将 TCache 标记为 "阻塞自举" 会误导优先级判断
+- 自举完成后，TCache 替换 bump allocator 是最高优先级性能优化
+- 命名统一为 TCache，纯 Pascal 实现，零外部依赖
 
 ### 11.7 TLS 前置依赖
 
-**结论**: per-thread mcache 依赖 TLS 基础设施，必须先解决。
+**结论**: per-thread TThreadCache 依赖 TLS 基础设施，必须先解决。
 
 理由:
 - **Codex 审查 (Round 1)**: FPC 的 ThreadVar 依赖 FPC RTL 运行时，nextPas 不可使用
 - 方案 A: `pthread_key_create`/`__thread` (POSIX) + `TlsAlloc` (Windows)
 - 方案 B: nextPas 自己实现 TLS 抽象层 (nextpas.core.sync.tls)
-- TLS 问题必须在 mcache 实现之前确定
+- TLS 问题必须在 TThreadCache 实现之前确定
 
 ### 11.8 LLVM global_ctors 顺序
 
@@ -760,7 +761,18 @@ Gate 2 (单元生命周期) 和 Gate 3 (进程生命周期) 是自举硬阻塞�
 - **Codex 审查 (Round 1)**: Go 的 victim flip 依赖 GC 周期，nextPas 无 GC
 - 无淘汰策略 → pool 无限增长 → 内存泄漏
 - 时间驱动最简单：每 N 秒执行 victim flip
-- 后期可升级为 per-epoch 回收 (类似 tcmalloc 的 epoch reclaim)
+- 后期可升级为 per-epoch 回收 (类似 Go tcmalloc 的 epoch reclaim)
+
+### 11.10 纯 Pascal 分配器
+
+**结论**: TCache 3 级分配器全部用纯 Pascal 实现，零 C/C++ 外部依赖。
+
+理由:
+- 外部依赖 (tcmalloc/jemalloc/mimalloc) 增加构建复杂度和跨平台风险
+- nextPas 已有 `TMemoryMap` (mmap/VirtualAlloc) 作为 OS 抽象层
+- `IAllocator`/`TAllocator` 接口已成熟，TCache 作为新后端接入
+- 纯 Pascal 实现可完全控制内存布局，便于 nextPas 特定优化 (对象头 magic, 编译器集成)
+- 已有 `TMimallocAllocator` 可作性能对比基准
 
 ---
 
@@ -769,5 +781,6 @@ Gate 2 (单元生命周期) 和 Gate 3 (进程生命周期) 是自举硬阻塞�
 | 日期 | 版本 | 变更 |
 |------|------|------|
 | 2026-06-18 | v1.0 | 初稿：5 支柱 + 优先级矩阵 + 5 节讨论记录 |
-| 2026-06-18 | v2.0 | Codex Round 1 审查整改：Gate 2/3 FAIL→PARTIAL；P4 拆 P4a/P4b；RAII 提前 Phase 1；tcmalloc 重定位；补充 TLS/global_ctors/sync.Pool/seq_cst/RAII-Drop 差异等 |
-| 2026-06-18 | v3.0 | Codex Round 2 审查整改：Phase 1 拆 1a/1b；测试数量核实修正；S6 完成状态细化；Gate 0 描述精确化；新增 S11.0 协作协议；compiler-arch-debt 依赖入风险表；优先级矩阵重标 |
+| 2026-06-18 | v2.0 | Codex Round 1 审查整改：Gate 2/3 FAIL→PARTIAL；P4 拆 P4a/P4b；RAII 提前 Phase 1；TCache 纯 Pascal 重定位；补充 TLS/global_ctors/sync.Pool/seq_cst/RAII-Drop 差异等 |
+| 2026-06-18 | v3.0 | Codex Round 2 审查整改；新增 S11.0 CoW+RAII 协议：Phase 1 拆 1a/1b；测试数量核实修正；S6 完成状态细化；Gate 0 描述精确化；新增 S11.0 协作协议；compiler-arch-debt 依赖入风险表；优先级矩阵重标 |
+| 2026-06-18 | v4.0 | tcmalloc→TCache 重命名：纯 Pascal 实现，零外部依赖；构建在 TMemoryMap 之上；新增讨论记录 11.10 |
