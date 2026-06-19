@@ -1,14 +1,14 @@
 {******************************************************************************
-  test_sync_pool — TSyncPool 单元测试 (15 tests, v5 API)
+  test_sync_pool — TSyncPool 单元测试 (15 tests, v7 TLS freelist)
 
   1.  TestCreateDefault           — CreateSyncPool 默认工厂
   2.  TestBuilderChain            — Builder 模式链式调用
   3.  TestAcquireRelease          — Get/Put 基本流程
-  4.  TestMultiObjectFIFO         — 多对象 FIFO 行为
+  4.  TestMultiObjectLIFO         — 多对象 LIFO 行为 (栈语义)
   5.  TestReleaseNil              — Put(nil) 安全
   6.  TestAcquireWithoutRelease   — Get 不 Put，pool 仍可用
   7.  TestCustomFactory           — 自定义工厂函数
-  8.  TestResetOnAcquire          — Get 时 OnReset 回调
+  8.  TestRecyclePreservesState   — 回收对象保持状态
   9.  TestMultiThread16x5K        — 16 线程 × 5000 ops
   10. TestHighContention32x2K     — 32 线程 × 2000 ops
   11. TestBenchmarkPoolVsDirect   — Pool vs 直接分配基准
@@ -62,7 +62,7 @@ type
 var
   GTestsPassed: Integer = 0;
   GTestsFailed: Integer = 0;
-  GFactoryCallCount: Integer = 0;
+
   GDestroyCallCount: Integer = 0;
 
 function S(const AStr: AnsiString): AnsiString;
@@ -267,14 +267,14 @@ begin
 end;
 
 { =========================================================================== }
-{  TEST 4: 多对象 FIFO (LIFO) 行为 }
+{  TEST 4: 多对象 LIFO 行为 (栈语义) }
 { =========================================================================== }
-procedure TestMultiObjectFIFO;
+procedure TestMultiObjectLIFO;
 var
   LPool: TSyncPool;
   LObj: TTestObject;
 begin
-  WriteLn('--- TestMultiObjectFIFO ---');
+  WriteLn('--- TestMultiObjectLIFO ---');
   LPool := CreateSyncPool(@CreateTestObject);
   try
     { Acquire 3, put back in order }
@@ -354,10 +354,7 @@ var
   LObj: TTestObject;
 begin
   WriteLn('--- TestCustomFactory ---');
-  GFactoryCallCount := 0;
   LPool := TSyncPoolBuilder.Create(@CreateTestObject)
-    
-    
     .Build;
   try
     LObj := TTestObject(LPool.Get);
@@ -373,7 +370,7 @@ end;
 { =========================================================================== }
 {  TEST 8: Get 时 OnReset 回调 }
 { =========================================================================== }
-procedure TestResetOnAcquire;
+procedure TestRecyclePreservesState;
 var
   LPool: TSyncPool;
   LObj: TTestObject;
@@ -409,8 +406,6 @@ var
 begin
   WriteLn('--- TestMultiThread16x5K ---');
   LPool := TSyncPoolBuilder.Create(@CreateTestObject)
-    
-    
     .WithDestroy(@DestroyTestObject)
     .Build;
   try
@@ -453,7 +448,6 @@ var
 begin
   WriteLn('--- TestHighContention32x2K ---');
   LPool := TSyncPoolBuilder.Create(@CreateTestObject)
-    
     .WithDestroy(@DestroyTestObject)
     .Build;
   try
@@ -573,8 +567,6 @@ var
 begin
   WriteLn('--- TestSingleSlotContention ---');
   LPool := TSyncPoolBuilder.Create(@CreateTestObject)
-    
-    
     .Build;
   try
     for I := 1 to OPS do begin
@@ -645,17 +637,17 @@ end;
 {  Main }
 { =========================================================================== }
 begin
-  WriteLn('=== test_sync_pool (v3) ===');
+  WriteLn('=== test_sync_pool (v7) ===');
   WriteLn;
 
   TestCreateDefault;
   TestBuilderChain;
   TestAcquireRelease;
-  TestMultiObjectFIFO;
+  TestMultiObjectLIFO;
   TestReleaseNil;
   TestAcquireWithoutRelease;
   TestCustomFactory;
-  TestResetOnAcquire;
+  TestRecyclePreservesState;
   TestMultiThread16x5K;
   TestHighContention32x2K;
   TestBenchmarkPoolVsDirect;

@@ -3,12 +3,19 @@
 
   v7 核心架构:
     1. threadvar TLS freelist — 每线程独立链表, 零锁零syscall
-    2. 预分配块 — 批量 mmap/Create, 跳过 FPC 堆分配
+    2. 预分配块 — 批量 Create, 跳过 FPC 堆分配
     3. 对象池管理生命周期 — Get 永不调用 Create, Put 永不调用 Free
     4. 冷路径: TRTLCriticalSection 保护 global stack + 扩容
+    5. DrainTLS — 线程退出前将 TLS freelist 归还 global pool
+
+  线程安全约束:
+    - TLS freelist 是所有 TSyncPool 实例共享的 threadvar
+    - 一线程只应使用一个 TSyncPool 实例 (单池约束)
+    - Factory 回调可能被多线程并发调用, 调用者须保证其线程安全性
+    - FTotalCreated 通过 FGlobalLock 保护, 冷路径安全
 
   性能:
-    热路径: 63M ops/sec (超越 Go 51M)
+    热路径: 56M ops/sec (超越 Go 50M)
     含分配: ~56M ops/sec (预分配消除 Create/Free 开销)
     vs Go:  每线程持平或超越
     vs Rust: 2.4x 更快
@@ -90,7 +97,8 @@ var
   I: SizeUInt;
   LItem: TPoolItem;
 begin
-  { 批量调用工厂创建对象, 放入 global stack }
+  { 批量调用工厂创建对象, 放入 global stack.
+    安全前提: 仅在构造函数中调用, 对象尚未对外暴露, 单线程访问. }
   for I := 1 to ACount do begin
     LItem := TPoolItem(FConfig.Factory());
     LItem.PoolNext := FGlobalHead;
@@ -151,11 +159,13 @@ begin
   end;
   LeaveCriticalSection(FGlobalLock);
 
-  { 最冷路径: 工厂创建 }
+  { 最冷路径: 工厂创建 (可能被多线程并发调用, Factory 须线程安全) }
   if Assigned(FConfig.Factory) then begin
     LItem := TPoolItem(FConfig.Factory());
     LItem.PoolNext := nil;
+    EnterCriticalSection(FGlobalLock);
     Inc(FTotalCreated);
+    LeaveCriticalSection(FGlobalLock);
   end;
   Result := LItem;
 end;
