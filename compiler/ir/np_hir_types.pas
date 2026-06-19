@@ -113,6 +113,16 @@ type
     hnkReallocMemRuntime,
     hnkAssignedRuntime,
     hnkLowHighRuntime,
+    { TString 24B runtime nodes (coexist with old 4-slot nodes) }
+    hnkVarDeclTStringRuntime,
+    hnkAssignTStringLiteralRuntime,
+    hnkAssignTStringCopyRuntime,
+    hnkAssignTStringCallRuntime,
+    hnkAssignTStringConcatRuntime,
+    hnkAssignTStringFieldLoadRuntime,
+    hnkTStringCleanupRuntime,
+    hnkFieldStoreTStringRuntime,
+    hnkRetTStringRuntime,
     hnkUnknown
   );
 
@@ -269,6 +279,16 @@ begin
     'reallocmem-runtime': Result := hnkReallocMemRuntime;
     'assigned-runtime': Result := hnkAssignedRuntime;
     'lowhigh-runtime': Result := hnkLowHighRuntime;
+    { TString 24B runtime nodes }
+    'var-decl-tstring-runtime': Result := hnkVarDeclTStringRuntime;
+    'assign-tstring-literal-runtime': Result := hnkAssignTStringLiteralRuntime;
+    'assign-tstring-copy-runtime': Result := hnkAssignTStringCopyRuntime;
+    'assign-tstring-call-runtime': Result := hnkAssignTStringCallRuntime;
+    'assign-tstring-concat-runtime': Result := hnkAssignTStringConcatRuntime;
+    'assign-tstring-field-load-runtime': Result := hnkAssignTStringFieldLoadRuntime;
+    'tstring-cleanup-runtime': Result := hnkTStringCleanupRuntime;
+    'field-store-tstring-runtime': Result := hnkFieldStoreTStringRuntime;
+    'ret-tstring-runtime': Result := hnkRetTStringRuntime;
   else
     Result := hnkUnknown;
   end;
@@ -417,7 +437,7 @@ begin
   Result := AddType(htkString, N);
   Idx := Length(FTypes) - 1;
   FTypes[Idx].StringKind := AKind;
-  FTypes[Idx].SizeBytes := 16;
+  FTypes[Idx].SizeBytes := 24;
   FTypes[Idx].Alignment := 8;
 end;
 

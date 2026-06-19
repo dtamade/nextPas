@@ -128,7 +128,8 @@ type
     Blocks: array of THIRBlock;
     EntryBlockId: THIRBlockId;
     IsExternal: Boolean;
-    UsesOwnedStringReturnAbi: Boolean;
+    UsesOwnedStringReturnAbi: Boolean; { 旧 4-slot owned path — 迁移后删除 }
+    IsTStringReturnAbi: Boolean;        { 新 TString 24B sret path }
   end;
 
   THIRVmtGlobal = record
@@ -178,6 +179,8 @@ type
     function AddFunction(const AName: string;
       ARetType: THIRTypeId): THIRFuncId;
     procedure SetFunctionOwnedStringReturnAbi(AFuncId: THIRFuncId;
+      AValue: Boolean);
+    procedure SetFunctionTStringReturnAbi(AFuncId: THIRFuncId;
       AValue: Boolean);
     procedure AddFunctionParam(AFuncId: THIRFuncId;
       const AName: string; ATypeId: THIRTypeId;
@@ -286,6 +289,7 @@ begin
   FFunctions[Idx].EntryBlockId := 0;
   FFunctions[Idx].IsExternal := False;
   FFunctions[Idx].UsesOwnedStringReturnAbi := False;
+  FFunctions[Idx].IsTStringReturnAbi := False;
   SetLength(FFunctions[Idx].Params, 0);
   SetLength(FFunctions[Idx].Blocks, 0);
   Result := FNextFuncId;
@@ -301,6 +305,19 @@ begin
     if FFunctions[I].Id = AFuncId then
     begin
       FFunctions[I].UsesOwnedStringReturnAbi := AValue;
+      Exit;
+    end;
+end;
+
+procedure THIRModule.SetFunctionTStringReturnAbi(AFuncId: THIRFuncId;
+  AValue: Boolean);
+var
+  I: SizeInt;
+begin
+  for I := 0 to High(FFunctions) do
+    if FFunctions[I].Id = AFuncId then
+    begin
+      FFunctions[I].IsTStringReturnAbi := AValue;
       Exit;
     end;
 end;
