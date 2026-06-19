@@ -188,18 +188,18 @@ Go 标准库没有 SSO 优化。代价是 variant record 的 case 判断分支�
 
 ### 3.4 实现计划
 
-**S7.1: TString 基础 layout**
-- 定义 `TStringHeader` (refcount + capacity + flags)
-- 定义 `TString` variant record
+**S7.1: TString 基础 layout** — ✅ 完成 (core/src, 34 tests, 0 leaks)
+- 定义 `TStringHeader` (refcount + capacity)
+- 定义 `TString` variant record (24B, 8-byte aligned)
 - 实现 `StringInit`/`StringFini` (对应 `np.system.string_init/fini`)
 - 空串 = 零初始化验证
 
-**S7.2: SSO 路径**
+**S7.2: SSO 路径** — ✅ 完成 (core/src)
 - `SSOTag = 0` 且 `SSOLen ≤ 15` 时直接内联，不走堆
 - 拷贝 = record 拷贝 (memcpy 24B)
 - 比较 = memcmp 24B
 
-**S7.3: CoW 路径**
+**S7.3: CoW 路径 + 编译器集成** — 📋 计划中 (6 Phase, 见 p1-tstring-compiler-integration-plan.md)
 - `HeapTag = $FF` 时分配 PStringHeader + payload
 - 赋值 = refcount bump (不拷贝 payload)
 - 写时拷贝 (需要唯一引用检测)
@@ -211,13 +211,19 @@ Go 标准库没有 SSO 优化。代价是 variant record 的 case 判断分支�
 
 ### 3.5 验收标准
 
-- [ ] `SizeOf(TString) = 24`
-- [ ] 空串零初始化有效
-- [ ] SSO (≤15B) 无堆分配
-- [ ] CoW refcount 正确 (赋值 bump，修改时 copy)
-- [ ] UTF-8 透传 (不转码)
-- [ ] text 模块 16 suites (256 tests) 全绿
-- [ ] heaptrc 0 leak
+- [x] `SizeOf(TString) = 24` — ✅ core 层验证
+- [x] 空串零初始化有效 — ✅ core 层验证
+- [x] SSO (≤15B) 无堆分配 — ✅ core 层验证
+- [x] CoW refcount 正确 (赋值 bump，修改时 copy) — ✅ core 层验证
+- [x] UTF-8 透传 (不转码) — ✅ core 层验证
+- [x] text 模块 16 suites (256 tests) 全绿 — ✅ 已通过
+- [x] heaptrc 0 leak — ✅ 已验证
+- [ ] 编译器 4-slot ABI → TString 24B native 迁移 — 📋 计划中 (6 Phase)
+- [ ] compiler-pass + HIR string tests 全绿 (迁移后) — ⬜
+- [ ] sret ABI for 24B string returns — ⬜
+- [ ] try/except string cleanup 验证 — ⬜
+- [ ] interface method string 传参/返回 — ⬜
+- [ ] dynarray of string 元素操作 — ⬜
 
 ---
 
