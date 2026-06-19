@@ -81,6 +81,7 @@ type
     hnkSetLengthFieldArrRuntime,
     hnkDynArrayCleanupRuntime,
     hnkStringCleanupRuntime,
+    hnkManagedRecordCleanupRuntime,
     hnkAssignArrElemRuntime,
     hnkMethodBodyBegin,
     hnkClassNewRuntime,
@@ -236,6 +237,7 @@ begin
     'setlength-field-arr-runtime': Result := hnkSetLengthFieldArrRuntime;
     'dynarray-cleanup-runtime': Result := hnkDynArrayCleanupRuntime;
     'string-cleanup-runtime': Result := hnkStringCleanupRuntime;
+    'managed-record-cleanup-runtime': Result := hnkManagedRecordCleanupRuntime;
     'assign-arr-elem-runtime': Result := hnkAssignArrElemRuntime;
     'method-body-begin': Result := hnkMethodBodyBegin;
     'class-new-runtime': Result := hnkClassNewRuntime;
