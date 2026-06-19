@@ -6093,7 +6093,8 @@ begin
     (FRootAst.RootKindName = 'package') then
   begin
     AddRuntimeContract(NPSYSTEM_PROCESS_INIT, 'process-init-runtime');
-    AddRuntimeContract(NPSYSTEM_PROCESS_FINI, 'process-fini-runtime');
+    { process_fini 不在此处 seed，而是在 Analyze 末尾 SeedHaltCalls 之后，
+      确保 HIR 顺序为: process_init → 用户代码 → process_fini }
   end
   else if FRootAst.RootKindName = 'unit' then
     SeedUnitLifecycle;
@@ -6200,6 +6201,15 @@ begin
   FGenericWorkCount := 0;
   SetLength(FGenericWorkQueue, 64);
   SeedHaltCalls;
+  { process_fini 在用户代码之后 seed，确保退出序列为:
+    process_init → 用户 main → process_fini (对标 FPC 的 init→main→flush→finalize 序列) }
+  if (FRootAst <> nil) and ((FRootAst.RootKindName = 'program') or
+    (FRootAst.RootKindName = 'library') or
+    (FRootAst.RootKindName = 'package')) then
+  begin
+    FModel.AddRuntimeContract(NPSYSTEM_PROCESS_FINI);
+    FModel.AddTypedHirNode('process-fini-runtime', NPSYSTEM_PROCESS_FINI, 0, 0, '');
+  end;
   if FNoFold then
   begin
     SeedFunctionBodies;

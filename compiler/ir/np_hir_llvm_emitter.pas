@@ -312,6 +312,8 @@ begin
   LlvmType := TypeToLlvm(AInstr.TypeId);
   if IsSretFunction(AInstr.CallTarget) then
     Op := '  call void @' + AInstr.CallTarget + '('
+  else if LlvmType = 'void' then
+    Op := '  call void @' + AInstr.CallTarget + '('
   else
     Op := '  ' + ValueRef(AInstr.ResultId) + ' = call ' + LlvmType +
       ' @' + AInstr.CallTarget + '(';

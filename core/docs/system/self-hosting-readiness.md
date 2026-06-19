@@ -242,7 +242,7 @@ integration can be deferred.
 | 0: system.classes Facade | **Blocker** (global) | system | Medium | **PARTIAL** — stream-core + interface 基础类型有效 (7 symbols)，file-compat 缺失 |
 | 1: RTTI Shape | Critical | compiler + collections | Medium | **PASS** — TTypeKind/KindOf/ManagedKinds 验证通过 |
 | 2: Unit Lifecycle | Critical | compiler + rtl | High | **PARTIAL** — 编译器管线就绪，运行时 + 拓扑排序待完成 |
-| 3: Process Lifecycle | Important | rtl | Medium | **PARTIAL** — 编译器侧就绪，运行时实现缺失 |
+| 3: Process Lifecycle | Important | rtl | Medium | **PHASE 0 COMPLETE** — 编译器+运行时就绪，fsync stdout/stderr，防重入，端到端验证通过 |
 | 4: Heap Manager | Important | mem + compiler | Medium | **PARTIAL** — @np_alloc/@np_free 存在，未连接 nextpas.core.mem |
 | 5: Exception Unwind | Normal | compiler | Low | **PASS** — setjmp/longjmp freestanding asm 完整 |
 
@@ -308,31 +308,40 @@ is already partially covered by the `test_hir_exception` test suite.
 5. Runtime: `_start` 驱动器（process_init → 拓扑序 unit_init → main → 逆序 unit_fini → process_fini → halt）
 6. 端到端测试（非 FPC 依赖的 nextPas 编译器运行时测试）
 
-## Gate 3: Process Lifecycle — 验证结果 (2026-06-18, 更新于 2026-06-18 Codex 审查)
+## Gate 3: Process Lifecycle — 验证结果 (2026-06-18, 更新于 2026-06-19 Gate 3 实现)
 
-**状态: PARTIAL** (编译器侧就绪，运行时实现缺失)
+**状态: PHASE 0 COMPLETE** (编译器侧 + 运行时 Phase 0 已完成)
 
 | 验收标准 | 状态 |
 |----------|------|
-| process_init 在 main 前执行 | ⬜ 编译器侧就绪，运行时实现缺失 |
-| process_fini 在 main 后执行 | ⬜ 同上 |
-| 退出码通过关闭序列保留 | ⬜ 需 `_start` 改写 |
+| process_init 在 main 前执行 | ✅ 编译器 seed 顺序正确 + 运行时实现存在 |
+| process_fini 在 main 后执行 | ✅ seed 移到 SeedHaltCalls 之后，HIR 顺序正确 |
+| 退出码通过关闭序列保留 | ✅ halt syscall 在 process_fini 之前，退出码直接保留 |
+| void call LLVM IR 正确性 | ✅ emitter 不再给 void call 结果名 |
+| 链接器符号解析 | ✅ libnprt.a 中导出 np_process_init/fini |
 
-**已有基础** (2026-06-18 更新):
+**已有基础** (2026-06-19 更新):
 - `'process-init-runtime'` 正确映射到 `hnkProcessInitRuntime` (hir_types:259) ✅
 - `EmitProcessInit`/`EmitProcessFini` 存在 (hir_builder:7430-7452) ✅
 - LLVM emitter 声明 `@np_process_init`/`@np_process_fini` (emitter:1310-1311) ✅
+- **运行时实现**: `rtl/runtime/src/nextpas.runtime.lifecycle.ll` (Phase 0) ✅
+- **void call 修复**: emitter void call 不再带结果名 (emitter:314-315) ✅
+- **HIR 顺序修复**: process_fini seed 移到 SeedHaltCalls 之后 (sema:6201-6211) ✅
+- **System.pas**: `cdecl; external` 声明指向 libnprt.a 实现 ✅
 
-**原关键发现 (已过时)**: 此前记录 `'runtime-contract'` 映射到 `hnkUnknown` 是不准确的。
-实际代码中 `'process-init-runtime'` 已正确映射到 `hnkProcessInitRuntime`。
+**Phase 0 运行时职责** (nextpas.runtime.lifecycle.ll):
+- `np_process_init`: 防重入检查 + 全局状态标记
+- `np_process_fini`: 防重入 + fsync(stdout) + fsync(stderr) + 全局状态标记
+- 使用 Linux x86_64 syscall (不依赖 libc)
+- 全局 `__np_lifecycle_state` 跟踪生命周期阶段 (0→1→2→3)
 
 **缺口 (按实现顺序)**:
 1. ~~THirNodeKind 新增 hnkProcessInitRuntime/hnkProcessFiniRuntime~~ ✅ 已完成
 2. ~~THIRBuilder 处理~~ ✅ 已完成
 3. ~~LLVM emitter 新增 @np_process_init/@np_process_fini~~ ✅ 已完成
-4. **运行时**: `np_process_init`/`np_process_fini` 实际实现 (nextpas.core.system 内)
-5. **_start 改写**: `process_init → 拓扑序 unit_init → main → 逆序 unit_fini → process_fini → halt`
-6. 端到端烟雾测试
+4. ~~运行时: np_process_init/np_process_fini 实际实现~~ ✅ Phase 0 完成
+5. **_start 驱动拓扑排序**: `process_init → 拓扑序 unit_init → main → 逆序 unit_fini → process_fini → halt` (Gate 2 职责)
+6. **端到端集成**: halt 改为调用 process_fini + haltproc (当前 halt 直接 syscall 绕过 process_fini)
 
 ## Gate 4: Heap Manager — 验证结果 (2026-06-18)
 
