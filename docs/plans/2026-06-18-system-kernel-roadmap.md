@@ -123,19 +123,33 @@ nextpas.core (通用基础设施，零应用逻辑)
 ### 3.1 设计目标
 
 ```
+TStringSSOTag  = 0;     // SSO 路径 tag
+TStringHeapTag = $FF;   // Heap 路径 tag
+
 TString = record
   case Boolean of
-    False: (SSO: packed record Len: Byte; Buf: array[0..15] of AnsiChar end);
-    True:  (Heap: record Ref: PStringHeader; Len: SizeUInt; Flags: SizeUInt end);
-    // Flags: reserved for future use (encoding hints, small-buffer reclaim, etc.)
+    False: (  // SSO 路径
+      SSOTag: Byte;                   // 0 = SSO
+      SSOLen: Byte;                   // [0..15], 内联字符串长度
+      SSOBuf: array[0..14] of Byte;   // 15 字节内联缓冲区
+      _Pad: array[0..6] of Byte;      // 对齐到 24B
+    );
+    True: (  // Heap 路径
+      HeapTag: Byte;                  // $FF = Heap
+      _Pad2: array[0..6] of Byte;     // 对齐到 offset 8
+      Header: PStringHeader;          // 堆 header 指针 (8-byte aligned)
+      HeapLen: SizeUInt;              // 字符串长度
+    );
 end;
 // SizeOf(TString) = 24 bytes, 8-byte aligned
+// SSO 容量: 15 bytes (tag byte 判别, 零假设零歧义)
+// 验收: Phase 1a plan v2.2 overrides original 16B Len-only layout to 15B tag-byte design
 ```
 
 | 属性 | 规格 |
 |------|------|
-| 小串优化 (SSO) | ≤ 16 字节内联存储，零堆分配 |
-| CoW 堆串 | > 16 字节，引用计数 + Copy-on-Write |
+| 小串优化 (SSO) | ≤ 15 字节内联存储，零堆分配 (tag byte 0) |
+| CoW 堆串 | > 15 字节，引用计数 + Copy-on-Write (tag byte $FF) |
 | UTF-8 原生 | 内部存储 UTF-8，不维护 UTF-16 伴生 |
 | 空串 | 零初始化 = 空串 (SSO 路径) |
 | record 语义 | 赋值 = CoW bump refcount，不是指针拷贝 |
@@ -147,7 +161,7 @@ end;
 | 内部表示 | (ptr, len) 16B | Vec\<u8\> (ptr, len, cap) 24B | SSO/CoW variant 24B |
 | 可变性 | 不可变 | 可变 (所有权) | CoW (refcount) |
 | UTF-8 | 是 | 是 | 是 |
-| 小串优化 | 无 | 无 | ✅ (≤16B inline) |
+| 小串优化 | 无 | 无 | ✅ (≤15B inline, tag byte 判别) |
 | 分配策略 | 每次新分配 | 所有权转移 | CoW + SSO |
 
 **nextPas 优势**: SSO 在短字符串密集场景 (标识符、路径、数字串) 避免堆分配，
@@ -181,28 +195,28 @@ Go 标准库没有 SSO 优化。代价是 variant record 的 case 判断分支�
 - 空串 = 零初始化验证
 
 **S7.2: SSO 路径**
-- `Len ≤ 16` 时直接内联，不走堆
+- `SSOTag = 0` 且 `SSOLen ≤ 15` 时直接内联，不走堆
 - 拷贝 = record 拷贝 (memcpy 24B)
 - 比较 = memcmp 24B
 
 **S7.3: CoW 路径**
-- `Len > 16` 时分配 PStringHeader + payload
+- `HeapTag = $FF` 时分配 PStringHeader + payload
 - 赋值 = refcount bump (不拷贝 payload)
 - 写时拷贝 (需要唯一引用检测)
 
 **S7.4: 与 nextpas.core.text 集成**
 - `TString` 替换当前 `AnsiString` 作为 text 模块主力
 - `np.system.string_assign` 实现 CoW 赋值
-- 现有 16 个 text suites (58 个 T.Run 测试用例) 必须全部通过
+- 现有 16 个 text suites (256 个 T.Run 测试用例) 必须全部通过
 
 ### 3.5 验收标准
 
 - [ ] `SizeOf(TString) = 24`
 - [ ] 空串零初始化有效
-- [ ] SSO (≤16B) 无堆分配
+- [ ] SSO (≤15B) 无堆分配
 - [ ] CoW refcount 正确 (赋值 bump，修改时 copy)
 - [ ] UTF-8 透传 (不转码)
-- [ ] text 模块 16 suites (58 tests) 全绿
+- [ ] text 模块 16 suites (256 tests) 全绿
 - [ ] heaptrc 0 leak
 
 ---
@@ -783,7 +797,7 @@ Gate 2 (单元生命周期) 和 Gate 3 (进程生命周期) 是自举硬阻塞�
 ### 10.2 回归测试保护
 
 - 现有 24 个 mem suites (147 个 T.Run 用例，全绿)
-- 现有 16 个 text suites (58 个 T.Run 用例)
+- 现有 16 个 text suites (256 个 T.Run 用例)
 - 现有 19 个契约源码边界检查
 - 每次支柱变更必须通过 `make verify`
 
