@@ -53,6 +53,10 @@ type
     function Get: Pointer;
     procedure Put(AItem: Pointer);
 
+    { Drain current thread's TLS freelist back to global pool.
+      Call before thread exit to prevent heaptrc leak reports. }
+    procedure DrainTLS;
+
     function Acquire: Pointer; inline;
     procedure Release(AItem: Pointer); inline;
 
@@ -115,6 +119,8 @@ end;
 
 destructor TSyncPool.Destroy;
 begin
+  { 先将当前线程 TLS freelist 移回 global, 再统一释放 }
+  DrainTLS;
   InternalDrainGlobal;
   DoneCriticalSection(FGlobalLock);
   inherited Destroy;
@@ -163,6 +169,25 @@ begin
   LItem := TPoolItem(AItem);
   LItem.PoolNext := TLSHead;
   TLSHead := LItem;
+end;
+
+{ DrainTLS — 将当前线程的 TLS freelist 移回 global pool.
+  线程退出前调用, 防止 heaptrc 报泄漏. }
+procedure TSyncPool.DrainTLS;
+var
+  LItem, LTail: TPoolItem;
+begin
+  LItem := TLSHead;
+  TLSHead := nil;
+  if LItem = nil then Exit;
+  { 找到链表尾, 整段挂到 global head }
+  LTail := LItem;
+  while LTail.PoolNext <> nil do
+    LTail := LTail.PoolNext;
+  EnterCriticalSection(FGlobalLock);
+  LTail.PoolNext := FGlobalHead;
+  FGlobalHead := LItem;
+  LeaveCriticalSection(FGlobalLock);
 end;
 
 function TSyncPool.Acquire: Pointer;

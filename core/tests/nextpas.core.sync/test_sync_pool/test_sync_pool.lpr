@@ -168,6 +168,8 @@ begin
   end;
   if FOps > 0 then
     FHitRate := LHits / FOps;
+  { 将 TLS freelist 归还 global pool, 防止 heaptrc 泄漏报告 }
+  FPool.DrainTLS;
 end;
 
 { THighContentionThread }
@@ -194,6 +196,7 @@ begin
     end;
     FPool.Put(LObj);
   end;
+  FPool.DrainTLS;
 end;
 
 { =========================================================================== }
@@ -222,17 +225,17 @@ end;
 procedure TestBuilderChain;
 var
   LPool: TSyncPool;
+  LObj: Pointer;
 begin
   WriteLn('--- TestBuilderChain ---');
   LPool := TSyncPoolBuilder.Create(@CreateTestObject)
-    
-    
-    
     .WithDestroy(@DestroyTestObject)
     .Build;
   try
     CheckNotNull(Pointer(LPool), 'Builder.Build returns non-nil pool');
-    CheckTrue(LPool.Get <> nil, 'Acquire from builder pool succeeds');
+    LObj := LPool.Get;
+    CheckTrue(LObj <> nil, 'Acquire from builder pool succeeds');
+    LPool.Put(LObj);
   finally
     LPool.Free;
   end;
@@ -605,6 +608,7 @@ begin
       LPool.Put(LObj);
     end;
     { pool 释放时应销毁所有缓存对象 }
+    LPool.DrainTLS;
   finally
     LPool.Free;
   end;
@@ -628,6 +632,8 @@ begin
     LObj := LPool.Get;
     LPool.Put(LObj);
 
+    { 先将 TLS freelist 移回 global, 再统一清 global }
+    LPool.DrainTLS;
     LPool.DrainGlobal;
     CheckTrue(True, 'DrainGlobal completed without crash');
   finally
