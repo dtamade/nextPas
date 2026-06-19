@@ -147,6 +147,7 @@ type
     IsString: Boolean;
     IsPointer: Boolean;
     IsDynArray: Boolean;
+    IsRecord: Boolean;
     TypeId: LongInt;
   end;
 

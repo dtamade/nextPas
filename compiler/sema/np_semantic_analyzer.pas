@@ -6639,6 +6639,7 @@ var
   FieldIndex: LongInt;
   RecName: string;
   Meta: TTypeMetadata;
+  FieldMeta: TTypeMetadata;
 begin
   if ANode = nil then
     Exit;
@@ -6667,6 +6668,7 @@ begin
     if (Child = nil) or (Child.NodeKind <> gnkVarDecl) then
       Continue;
     FieldTypeId := 0;
+    TypeChild := nil;
     for J := 0 to Child.ChildCount - 1 do
     begin
       TypeChild := Child.ChildAt(J);
@@ -6683,9 +6685,18 @@ begin
     SetLength(Meta.Fields, Length(Meta.Fields) + 1);
     Meta.Fields[High(Meta.Fields)].Name := Child.Text;
     Meta.Fields[High(Meta.Fields)].Index := FieldIndex;
-    Meta.Fields[High(Meta.Fields)].IsString := False;
+    { 检测字段类型 — 与 class 字段路径一致 }
+    Meta.Fields[High(Meta.Fields)].IsString :=
+      (TypeChild <> nil) and (TypeChild.NodeKind = gnkIdentifier) and
+      (SameText(TypeChild.Text, 'String') or
+       SameText(TypeChild.Text, 'AnsiString'));
     Meta.Fields[High(Meta.Fields)].IsPointer := False;
-    Meta.Fields[High(Meta.Fields)].IsDynArray := False;
+    Meta.Fields[High(Meta.Fields)].IsDynArray :=
+      (Child.ChildCount > 0) and (Child.ChildAt(0) <> nil) and
+      (Child.ChildAt(0).NodeKind = gnkArrayType);
+    Meta.Fields[High(Meta.Fields)].IsRecord :=
+      (FieldTypeId > 0) and FModel.GetTypeMeta(FieldTypeId, FieldMeta) and
+      FieldMeta.IsRecord;
     Meta.Fields[High(Meta.Fields)].TypeId := FieldTypeId;
     Inc(FieldIndex);
   end;
