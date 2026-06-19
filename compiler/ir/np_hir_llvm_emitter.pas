@@ -34,6 +34,7 @@ type
     FNeedsMemmove: Boolean;
     FNeedsStrConcat: Boolean;
     FNeedsStringOwnership: Boolean;
+    FNeedsTStringRuntime: Boolean;
     FNeedsStrCmp: Boolean;
     FNeedsIntToStr: Boolean;
     FNeedsObjectAlloc: Boolean;
@@ -81,6 +82,7 @@ type
     procedure EmitMemzeroHelper;
     procedure EmitStrConcatHelper;
     procedure EmitStringOwnershipHelpers;
+    procedure EmitTStringHelpers;
     procedure EmitDynArrayHelpers;
     procedure EmitObjectAllocHelper;
     procedure EmitObjectFreeReleaseHelper;
@@ -143,6 +145,7 @@ begin
   FNeedsMemmove := False;
   FNeedsStrConcat := False;
   FNeedsStringOwnership := False;
+  FNeedsTStringRuntime := False;
   FNeedsStrCmp := False;
   FNeedsIntToStr := False;
   FNeedsObjectAlloc := False;
@@ -1215,7 +1218,16 @@ begin
   end;
 
   T := FModule.Types.GetType(AFunc.ReturnTypeId);
-  if (Length(AFunc.Params) > 0) and (AFunc.Params[0].Name = 'sret_ptr') then
+  if AFunc.IsTStringReturnAbi then
+  begin
+    FNeedsTStringRuntime := True;
+    RetStr := 'void';
+    if ParamStr <> '' then
+      ParamStr := 'ptr sret(%TString) %agg.result, ' + ParamStr
+    else
+      ParamStr := 'ptr sret(%TString) %agg.result';
+  end
+  else if (Length(AFunc.Params) > 0) and (AFunc.Params[0].Name = 'sret_ptr') then
     RetStr := 'void'
   else if AFunc.UsesOwnedStringReturnAbi then
     RetStr := '{ptr, i64, ptr, i64}'
@@ -1292,6 +1304,7 @@ begin
   FNeedsMemmove := False;
   FNeedsStrConcat := False;
   FNeedsStringOwnership := False;
+  FNeedsTStringRuntime := False;
   FNeedsStrCmp := False;
   FNeedsIntToStr := False;
   FNeedsObjectAlloc := False;
@@ -1359,6 +1372,9 @@ begin
 
   if FNeedsStringOwnership then
     EmitStringOwnershipHelpers;
+
+  if FNeedsTStringRuntime then
+    EmitTStringHelpers;
 
   if FNeedsDynArrayHelpers then
     EmitDynArrayHelpers;
@@ -1502,6 +1518,31 @@ begin
   Emit('declare {ptr, i64, ptr, i64} @np_str_copy_owned(ptr %src_ptr, i64 %src_len, i64 %start, i64 %count)');
   Emit('declare {ptr, i64} @np_int_to_str(i64 %val)');
   Emit('declare {ptr, i64, ptr, i64} @np_int_to_str_owned(i64 %val)');
+end;
+
+procedure THIRLlvmEmitter.EmitTStringHelpers;
+begin
+  { TString 24B runtime — all functions operate on ptr to 24-byte record }
+  Emit('');
+  Emit('%TString = type [24 x i8]');
+  Emit('declare void @np_tstring_init(ptr %s)');
+  Emit('declare void @np_tstring_fini(ptr %s)');
+  Emit('declare void @np_tstring_assign(ptr %dst, ptr %src)');
+  Emit('declare void @np_tstring_move(ptr %dst, ptr %src)');
+  Emit('declare i64 @np_tstring_len(ptr %s)');
+  Emit('declare ptr @np_tstring_data(ptr %s)');
+  Emit('declare i8 @np_tstring_is_sso(ptr %s)');
+  Emit('declare void @np_tstring_create(ptr %dst, ptr %data, i64 %len)');
+  Emit('declare void @np_tstring_from_literal(ptr %dst, ptr %lit, i64 %len)');
+  Emit('declare void @np_tstring_concat(ptr %dst, ptr %a, ptr %b)');
+  Emit('declare void @np_tstring_copy(ptr %dst, ptr %src, i64 %start, i64 %count)');
+  Emit('declare void @np_tstring_from_int(ptr %dst, i64 %val)');
+  Emit('declare i64 @np_tstring_equal(ptr %a, ptr %b)');
+  Emit('declare i64 @np_tstring_compare(ptr %a, ptr %b)');
+  Emit('declare void @np_tstring_field_assign(ptr %dst, ptr %src)');
+  Emit('declare void @np_tstring_field_fini(ptr %s)');
+  Emit('declare void @np_tstring_ret_move(ptr %sret_dst, ptr %src)');
+  Emit('declare void @np_tstring_ret_copy(ptr %sret_dst, ptr %src)');
 end;
 
 procedure THIRLlvmEmitter.EmitDynArrayHelpers;
