@@ -298,6 +298,11 @@ type
     procedure EmitProcessInit;
     procedure EmitProcessFini;
     procedure EnsureVmtForClass(const AClassName: string);
+    { TString 24B runtime }
+    procedure ProcessVarDeclTString(const ANode: TTypedHirNode);
+    procedure EmitTStringInit(const AName: string);
+    procedure EmitTStringFini(AValue: THIRValueId);
+    procedure EmitTStringAssign(ADst, ASrc: THIRValueId);
   public
     constructor Create(ASemaModel: TSemanticModel);
     destructor Destroy; override;
@@ -7367,11 +7372,13 @@ begin
   if (FPendingCleanupCount > 0) and
     (ANode.NodeKind <> hnkDynArrayCleanupRuntime) and
     (ANode.NodeKind <> hnkStringCleanupRuntime) and
+    (ANode.NodeKind <> hnkTStringCleanupRuntime) and
     (ANode.NodeKind <> hnkHaltCallRuntime) and
     (ANode.NodeKind <> hnkHaltCall) and
     (ANode.NodeKind <> hnkRetRuntime) and
     (ANode.NodeKind <> hnkRetStrRuntime) and
-    (ANode.NodeKind <> hnkRetStrOwnedRuntime) then
+    (ANode.NodeKind <> hnkRetStrOwnedRuntime) and
+    (ANode.NodeKind <> hnkRetTStringRuntime) then
     FlushPendingCleanupNodes;
 
   case ANode.NodeKind of
@@ -7380,6 +7387,8 @@ begin
     hnkVarDeclArrBorrowedRuntime, hnkVarDeclPtrRuntime,
     hnkVarDeclVarrefRuntime, hnkVarDeclRecordRuntime:
       ProcessVarDecl(ANode);
+    hnkVarDeclTStringRuntime:
+      ProcessVarDeclTString(ANode);
     hnkAssignRuntime:
       ProcessAssign(ANode);
     hnkAssignStrRuntime:
@@ -7424,6 +7433,13 @@ begin
       ProcessRetStrRuntime(ANode);
     hnkRetStrOwnedRuntime:
       ProcessRetStrOwnedRuntime(ANode);
+    hnkRetTStringRuntime:
+      begin
+        { Flush pending cleanup before return }
+        if FPendingCleanupCount > 0 then
+          FlushPendingCleanupNodes;
+        { tstring_ret_move writes result to sret pointer }
+      end;
     hnkCallRuntime:
       ProcessCallRuntime(ANode);
     hnkStringTempOwnedRuntime:
@@ -7457,6 +7473,8 @@ begin
     hnkDynArrayCleanupRuntime:
       QueueCleanupNode(ANode);
     hnkStringCleanupRuntime:
+      QueueCleanupNode(ANode);
+    hnkTStringCleanupRuntime:
       QueueCleanupNode(ANode);
     hnkManagedRecordCleanupRuntime:
       QueueCleanupNode(ANode);
@@ -7535,6 +7553,8 @@ begin
         ProcessDynArrayCleanup(Node);
       hnkStringCleanupRuntime:
         ProcessStringCleanup(Node);
+      hnkTStringCleanupRuntime:
+        EmitTStringFini(FindAlloca(Node.Operand + '$ts'));
       hnkManagedRecordCleanupRuntime:
         ProcessManagedRecordCleanup(Node);
     end;
@@ -7644,6 +7664,105 @@ begin
       LOrder[I] := FSemaModel.UnitInitOrderAt(I);
     FModule.SetUnitInitOrder(LOrder);
   end;
+end;
+
+{ TString 24B runtime }
+
+procedure THIRBuilder.ProcessVarDeclTString(const ANode: TTypedHirNode);
+var
+  ParamIdx: LongInt;
+  ParamValueId: THIRValueId;
+begin
+  if FPendingParamCount > 0 then
+  begin
+    { Function parameter: store incoming sret/value into alloca }
+    ParamIdx := FPendingParamLlvmIdx;
+    ParamValueId := FModule.FunctionAt(FModule.FunctionCount - 1).Params[ParamIdx].ValueId;
+    EnsureAlloca(ANode.Operand + '$ts', GetPtrType);
+    EmitStore(GetPtrType, ParamValueId, FindAlloca(ANode.Operand + '$ts'));
+    Dec(FPendingParamCount);
+    Inc(FPendingParamLlvmIdx);
+  end
+  else if FInStartFunc then
+  begin
+    { Global variable: register as global }
+    if FGlobalCount >= Length(FGlobalNames) then
+    begin
+      SetLength(FGlobalNames, FGlobalCount + 32);
+      SetLength(FGlobalTypes, FGlobalCount + 32);
+    end;
+    FGlobalNames[FGlobalCount] := ANode.Operand + '$ts';
+    FGlobalTypes[FGlobalCount] := GetPtrType;
+    Inc(FGlobalCount);
+    FModule.AddGlobal(ANode.Operand + '$ts', GetPtrType);
+  end
+  else
+  begin
+    { Local variable: single 24B alloca + tstring_init }
+    EmitTStringInit(ANode.Operand);
+  end;
+end;
+
+procedure THIRBuilder.EmitTStringInit(const AName: string);
+var
+  Instr: THIRInstr;
+begin
+  if FindAlloca(AName + '$ts') <> 0 then Exit;
+  { alloca [24 x i8] — uses tstring IntrinsicName for emitter dispatch }
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikAlloca;
+  Instr.TypeId := GetIntType; { placeholder — emitter overrides via IntrinsicName }
+  Instr.IntrinsicName := 'tstring';
+  Instr.CallTarget := AName;
+  if (FCurrentFuncId <> 0) and (FEntryBlockId <> 0) then
+    FModule.AddInstr(FCurrentFuncId, FEntryBlockId, Instr)
+  else
+    EmitInstr(Instr);
+  if FAllocaCount >= Length(FAllocas) then
+    SetLength(FAllocas, FAllocaCount + 32);
+  FAllocas[FAllocaCount].Name := AName + '$ts';
+  FAllocas[FAllocaCount].Value := Instr.ResultId;
+  FAllocas[FAllocaCount].TypeId := GetPtrType;
+  FAllocas[FAllocaCount].RecordSlots := 0;
+  FAllocas[FAllocaCount].IsVarParam := False;
+  Inc(FAllocaCount);
+  { call tstring_init to zero-fill 24B }
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.Kind := hikIntrinsic;
+  Instr.IntrinsicName := 'tstring_init';
+  SetLength(Instr.Operands, 1);
+  Instr.Operands[0].ValueId := FindAlloca(AName + '$ts');
+  Instr.Operands[0].TypeId := GetPtrType;
+  EmitInstr(Instr);
+end;
+
+procedure THIRBuilder.EmitTStringFini(AValue: THIRValueId);
+var
+  Instr: THIRInstr;
+begin
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.Kind := hikIntrinsic;
+  Instr.IntrinsicName := 'tstring_fini';
+  SetLength(Instr.Operands, 1);
+  Instr.Operands[0].ValueId := AValue;
+  Instr.Operands[0].TypeId := GetPtrType;
+  EmitInstr(Instr);
+end;
+
+procedure THIRBuilder.EmitTStringAssign(ADst, ASrc: THIRValueId);
+var
+  Instr: THIRInstr;
+begin
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.Kind := hikIntrinsic;
+  Instr.IntrinsicName := 'tstring_assign';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0].ValueId := ADst;
+  Instr.Operands[0].TypeId := GetPtrType;
+  Instr.Operands[1].ValueId := ASrc;
+  Instr.Operands[1].TypeId := GetPtrType;
+  EmitInstr(Instr);
 end;
 
 end.

@@ -411,6 +411,14 @@ begin
           Op := Op + ' ; ' + AInstr.CallTarget;
         Emit(Op);
       end
+      else if AInstr.IntrinsicName = 'tstring' then
+      begin
+        FNeedsTStringRuntime := True;
+        Op := '  ' + ValueRef(AInstr.ResultId) + ' = alloca [24 x i8], align 8';
+        if AInstr.CallTarget <> '' then
+          Op := Op + ' ; ' + AInstr.CallTarget;
+        Emit(Op);
+      end
       else
       begin
         Op := '  ' + ValueRef(AInstr.ResultId) + ' = alloca ' + LlvmType;
@@ -1095,6 +1103,36 @@ begin
             ValueRef(AInstr.Operands[0].ValueId) + ', i64 0)');
           FNeedsFree := True;
         end;
+      end
+      else if AInstr.IntrinsicName = 'tstring_init' then
+      begin
+        FNeedsTStringRuntime := True;
+        if Length(AInstr.Operands) >= 1 then
+          Emit('  call void @np_tstring_init(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ')');
+      end
+      else if AInstr.IntrinsicName = 'tstring_fini' then
+      begin
+        FNeedsTStringRuntime := True;
+        if Length(AInstr.Operands) >= 1 then
+          Emit('  call void @np_tstring_fini(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ')');
+      end
+      else if AInstr.IntrinsicName = 'tstring_assign' then
+      begin
+        FNeedsTStringRuntime := True;
+        if Length(AInstr.Operands) >= 2 then
+          Emit('  call void @np_tstring_assign(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', ptr ' +
+            ValueRef(AInstr.Operands[1].ValueId) + ')');
+      end
+      else if AInstr.IntrinsicName = 'tstring_ret_move' then
+      begin
+        FNeedsTStringRuntime := True;
+        if Length(AInstr.Operands) >= 2 then
+          Emit('  call void @np_tstring_ret_move(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', ptr ' +
+            ValueRef(AInstr.Operands[1].ValueId) + ')');
       end
     end;
     hikTryBegin:
