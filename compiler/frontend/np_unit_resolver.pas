@@ -10,7 +10,10 @@ unit np_unit_resolver;
 interface
 
 uses
-  SysUtils, np_ast_facade, np_diagnostics_sink, np_green_tree, np_lexer,
+  nextpas.core.text, nextpas.core.text.conv, nextpas.core.path,
+  nextpas.core.fs.util, nextpas.core.fs.dir, nextpas.core.fs.base,
+  nextpas.core.time,
+  np_ast_facade, np_diagnostics_sink, np_green_tree, np_lexer,
   np_package_manifest, np_preprocessor, np_source_database, np_target_facts,
   np_text_primitives, np_toolchain_profiles, np_unit_graph;
 
@@ -340,7 +343,7 @@ begin
     begin
       RuntimeSystemPath := IncludeTrailingPathDelimiter(FTargetFacts.UnitsDir) +
         'System.pas';
-      if not FileExists(RuntimeSystemPath) then
+      if not FsExists(RuntimeSystemPath) then
         RuntimeSystemPath := '';
     end;
     Result := BuildResolvedUnit(
@@ -392,8 +395,11 @@ var
   CandidatePath: string;
   EntryIndex: LongInt;
   Index: LongInt;
-  SearchRec: TSearchRec;
   UnitId: string;
+  RootDir: string;
+  Entries: TDirEntryArray;
+  I: LongInt;
+  Ext: string;
 begin
   if (ARootIndex < 0) or (ARootIndex >= Length(FRootIndexes)) then
     Exit;
@@ -404,84 +410,41 @@ begin
   SetLength(FRootIndexes[ARootIndex].Entries, 0);
   Inc(FRootIndexes[ARootIndex].ScanCount);
 
-  if FindFirst(
-    IncludeTrailingPathDelimiter(FRootIndexes[ARootIndex].RootPath) + '*.pas',
-    faAnyFile,
-    SearchRec
-  ) = 0 then
+  RootDir := FRootIndexes[ARootIndex].RootPath;
+  Entries := FsReadDir(RootDir);
+  for I := 0 to High(Entries) do
   begin
-    try
-      repeat
-        if (SearchRec.Attr and faDirectory) <> 0 then
-          Continue;
+    if Entries[I].IsDir then
+      Continue;
 
-        UnitId := NormalizeUnitIdentity(ChangeFileExt(SearchRec.Name, ''));
-        if UnitId = '' then
-          Continue;
+    Ext := LowerCase(PathExt(Entries[I].Name));
+    if (Ext <> '.pas') and (Ext <> '.pp') then
+      Continue;
 
-        CandidatePath := NormalizeCorePath(
-          IncludeTrailingPathDelimiter(FRootIndexes[ARootIndex].RootPath) +
-            SearchRec.Name
-        );
-        EntryIndex := FindIndexedEntry(ARootIndex, UnitId);
-        if EntryIndex < 0 then
-        begin
-          Index := Length(FRootIndexes[ARootIndex].Entries);
-          SetLength(FRootIndexes[ARootIndex].Entries, Index + 1);
-          FRootIndexes[ARootIndex].Entries[Index].UnitId := UnitId;
-          SetLength(FRootIndexes[ARootIndex].Entries[Index].CandidatePaths, 0);
-          EntryIndex := Index;
-        end;
-        AppendString(
-          FRootIndexes[ARootIndex].Entries[EntryIndex].CandidatePaths,
-          CandidatePath
-        );
-      until FindNext(SearchRec) <> 0;
-    finally
-      FindClose(SearchRec);
+    UnitId := NormalizeUnitIdentity(ChangeFileExt(Entries[I].Name, ''));
+    if UnitId = '' then
+      Continue;
+
+    CandidatePath := NormalizeCorePath(
+      IncludeTrailingPathDelimiter(RootDir) + Entries[I].Name
+    );
+    EntryIndex := FindIndexedEntry(ARootIndex, UnitId);
+    if EntryIndex < 0 then
+    begin
+      Index := Length(FRootIndexes[ARootIndex].Entries);
+      SetLength(FRootIndexes[ARootIndex].Entries, Index + 1);
+      FRootIndexes[ARootIndex].Entries[Index].UnitId := UnitId;
+      SetLength(FRootIndexes[ARootIndex].Entries[Index].CandidatePaths, 0);
+      EntryIndex := Index;
     end;
-  end;
-
-  if FindFirst(
-    IncludeTrailingPathDelimiter(FRootIndexes[ARootIndex].RootPath) + '*.pp',
-    faAnyFile,
-    SearchRec
-  ) = 0 then
-  begin
-    try
-      repeat
-        if (SearchRec.Attr and faDirectory) <> 0 then
-          Continue;
-
-        UnitId := NormalizeUnitIdentity(ChangeFileExt(SearchRec.Name, ''));
-        if UnitId = '' then
-          Continue;
-
-        CandidatePath := NormalizeCorePath(
-          IncludeTrailingPathDelimiter(FRootIndexes[ARootIndex].RootPath) +
-            SearchRec.Name
-        );
-        EntryIndex := FindIndexedEntry(ARootIndex, UnitId);
-        if EntryIndex < 0 then
-        begin
-          Index := Length(FRootIndexes[ARootIndex].Entries);
-          SetLength(FRootIndexes[ARootIndex].Entries, Index + 1);
-          FRootIndexes[ARootIndex].Entries[Index].UnitId := UnitId;
-          SetLength(FRootIndexes[ARootIndex].Entries[Index].CandidatePaths, 0);
-          EntryIndex := Index;
-        end;
-        AppendString(
-          FRootIndexes[ARootIndex].Entries[EntryIndex].CandidatePaths,
-          CandidatePath
-        );
-      until FindNext(SearchRec) <> 0;
-    finally
-      FindClose(SearchRec);
-    end;
+    AppendString(
+      FRootIndexes[ARootIndex].Entries[EntryIndex].CandidatePaths,
+      CandidatePath
+    );
   end;
 
   FRootIndexes[ARootIndex].Status := 'ready';
-  FRootIndexes[ARootIndex].LastScanTimestamp := Round(Now * 86400);
+  FRootIndexes[ARootIndex].LastScanTimestamp := Round(DateTimeNow * 86400);
 end;
 
 function TUnitResolver.FindCandidatePathsInRoot(
@@ -616,12 +579,12 @@ begin
     ExtractFileDir(Candidates[0]));
   DependencyIncResolver.AddSearchPath(ExtractFileDir(Candidates[0]));
   DependencyIncResolver.AddSearchPath(
-    ExtractFileDir(ExtractFileDir(Candidates[0])) + PathDelim + 'objpas');
+    ExtractFileDir(ExtractFileDir(Candidates[0])) + DirectorySeparator + 'objpas');
   DependencyIncResolver.AddSearchPath(
-    ExtractFileDir(ExtractFileDir(Candidates[0])) + PathDelim + 'objpas' +
-    PathDelim + 'sysutils');
+    ExtractFileDir(ExtractFileDir(Candidates[0])) + DirectorySeparator + 'objpas' +
+    DirectorySeparator + 'sysutils');
   DependencyIncResolver.AddSearchPath(
-    ExtractFileDir(ExtractFileDir(Candidates[0])) + PathDelim + 'inc');
+    ExtractFileDir(ExtractFileDir(Candidates[0])) + DirectorySeparator + 'inc');
   DependencyPP := TPreprocessor.Create(DependencyDefines, True, DependencyIncResolver);
   try
     DependencyPP.Process(DependencyLexer);
