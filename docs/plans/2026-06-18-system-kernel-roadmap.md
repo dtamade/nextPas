@@ -283,6 +283,17 @@ IAllocator.GetMem(size) → TAllocator.GetMem → virtual DoGetMem
 - ARM64: `RBIT` + `CLZ` 内联汇编
 - TLS lookup: 使用 `platform_tls_get` (~3-5ns)，评估是否可优化到 ~1ns (如 Go 的 `%gs:` 方案)
 
+### 4.3a 与 TSyncPool 预分配的关系
+
+**TCache 完成后，TSyncPool.WithPreAlloc 应重构为复用 TCache 基础设施**:
+- 当前 `WithPreAlloc` 通过循环 `FConfig.Factory()` 创建对象，走 FPC 堆
+- TCache (P2) 完成后，预分配应改为批量从 TThreadCache 获取内存块
+- TThreadCache 的 batch refill 机制天然适配池预分配场景
+- 预期：池对象创建从 FPC 的 ~78ns/对象降低到 TCache 的 ~15ns/对象
+
+> **设计意图**: P2 TCache 是 nextPas 通用高速分配器，取代 FPC 堆；
+> TSyncPool、Arena、TCachePool 等所有池化设施最终都应复用 TCache 作为底层内存来源。
+
 ### 4.3 与现有 IAllocator 的关系
 
 当前 `nextpas.core.mem` 已有：
