@@ -1,37 +1,39 @@
-# Phase 1a 任务清单 — P4a 完成，准备 P1/P5
+# Phase 1a 状态总览
 
 > **日期**: 2026-06-19
-> **状态**: P4a 已全部完成
+> **状态**: P4a + P5 完成, P1 Runtime Phase 1 完成, 编译器集成计划就绪
 
 ---
 
-## P4a 状态: ✅ 全部完成
+## 支柱完成度
 
-| 组件 | 文件 | 测试 | 状态 |
-|------|------|------|------|
-| TAtomic 完整套件 (6640 行) | `nextpas.core.atomic.pas` + `.core` + `.types` + `.compat` | 45/45 | ✅ |
-| TSyncPool v7 (TLS freelist) | `nextpas.core.sync.pool.pas` | 24/24 | ✅ |
-| TFutexMutex (CAS+spin+futex) | `nextpas.core.sync.mutex.pas` | 28/28 | ✅ |
-| TRWLock / TSpinLock / Semaphore / Barrier / Event / Once / WaitGroup | 各自单元 | 28/28 | ✅ |
-
-**全部 0 泄漏，性能超越 Go。**
+| 支柱 | 状态 | 关键文件 | 测试 |
+|------|------|----------|------|
+| P4a 原子+同步原语 | ✅ 完成 | `nextpas.core.atomic.*`, `nextpas.core.sync.*` | 125/125 |
+| P5 RAII for Records | ✅ 完成 | `np_semantic_analyzer.pas`, `np_hir_builder.pas`, `raii_record_pass.pas` | 11 fixtures |
+| P1 TString core | ✅ 完成 | `nextpas.core.text.tstring.pas` | 34/34 |
+| P1 TString runtime | ✅ Phase 1 | `nextpas.runtime.tstring.ll` (677 行) | 13/13 |
+| P1 编译器集成 | 📋 计划就绪 | `2026-06-18-p1-tstring-compiler-integration-plan.md` | — |
 
 ---
 
-## 下一步: Phase 1a 剩余
+## P1 编译器集成 — 6 Phase 计划
 
-### P1: Custom TString (SSO + CoW + UTF-8 原生)
-- S7.1: TString 基础 layout (24B variant record)
-- S7.2: SSO 路径 (≤15B 内联)
-- S7.3: CoW 路径 (refcount + copy-on-write)
-- S7.4: 与 nextpas.core.text 集成
+| Phase | 内容 | 状态 |
+|-------|------|------|
+| Phase 1: Runtime | `nextpas.runtime.tstring.ll` 19 个函数 | ✅ 完成 |
+| Phase 2: HIR Types | 类型系统 24B + 新节点类型 | ⬜ |
+| Phase 3: Emitter | TString intrinsic 处理 + sret | ⬜ |
+| Phase 4a-4d: Builder | 变量/赋值/字段/边界 | ⬜ |
+| Phase 5: Sema | 简化 ownership 追踪 | ⬜ |
+| Phase 6: Cleanup | 删除旧 4-slot 代码 | ⬜ |
 
-### P5: RAII for Records
-- S11.0: CoW refcount 与 RAII Finalize 协作协议
-- S11.1: 编译器 managed field 检测
-- S11.2: HIR scope exit 插入
-- S11.3: 异常路径 cleanup
-- S11.4: managed_record_init/fini
+---
 
-**注意**: P1 和 P5 都需要编译器改动 (sema + HIR + LLVM emission)，是真正的硬任务。
-建议 P5 先行 (scope analysis 是 P1 CoW 的前置依赖)。
+## 性能基线
+
+| 操作 | FPC AnsiString | Go string | nextPas TString |
+|------|---------------|-----------|-----------------|
+| SSO (≤15B) | 堆分配 | 堆分配 | **零堆分配** |
+| 赋值 | 引用计数 | 不可变 copy | **CoW bump** |
+| 空间 | 8B ptr | 16B (ptr+len) | **24B (SSO+CoW)** |
