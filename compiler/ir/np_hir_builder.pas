@@ -273,6 +273,7 @@ type
     procedure ProcessSetLengthFieldArr(const ANode: TTypedHirNode);
     procedure ProcessDynArrayCleanup(const ANode: TTypedHirNode);
     procedure ProcessStringCleanup(const ANode: TTypedHirNode);
+    procedure ProcessManagedRecordCleanup(const ANode: TTypedHirNode);
     procedure ProcessAssignArrElem(const ANode: TTypedHirNode);
     procedure ProcessMethodBegin(const ANode: TTypedHirNode);
     procedure ProcessClassNew(const ANode: TTypedHirNode);
@@ -5729,6 +5730,116 @@ begin
   EmitInstr(Instr);
 end;
 
+procedure THIRBuilder.ProcessManagedRecordCleanup(const ANode: TTypedHirNode);
+var
+  Blob, VarName, TypeName, FieldSpec, FieldName, FieldKind: string;
+  TabPos, ColonPos: LongInt;
+  RecAlloca, RecPtr: THIRValueId;
+  FieldIdx: Int64;
+  FieldPtr, OwnerSlot, AllocSizeSlot, PtrSlot, LenSlot: THIRValueId;
+  NullVal, ZeroVal, ElemSizeVal: THIRValueId;
+  Instr: THIRInstr;
+begin
+  Blob := ANode.Operand;
+  { 解析: VarName#9TypeName#9field1:s#9field2:d#9... }
+  TabPos := Pos(#9, Blob);
+  if TabPos = 0 then Exit;
+  VarName := Copy(Blob, 1, TabPos - 1);
+  Blob := Copy(Blob, TabPos + 1, Length(Blob));
+
+  TabPos := Pos(#9, Blob);
+  if TabPos > 0 then
+  begin
+    TypeName := Copy(Blob, 1, TabPos - 1);
+    Blob := Copy(Blob, TabPos + 1, Length(Blob));
+  end
+  else
+    TypeName := Blob;
+
+  RecAlloca := FindAlloca(VarName);
+  if RecAlloca = 0 then Exit;
+  RecPtr := RecAlloca;
+  if FindAllocaType(VarName) = GetPtrType then
+    RecPtr := EmitLoad(GetPtrType, RecAlloca);
+
+  { 遍历每个需要清理的字段 }
+  while Blob <> '' do
+  begin
+    TabPos := Pos(#9, Blob);
+    if TabPos > 0 then
+    begin
+      FieldSpec := Copy(Blob, 1, TabPos - 1);
+      Blob := Copy(Blob, TabPos + 1, Length(Blob));
+    end
+    else
+    begin
+      FieldSpec := Blob;
+      Blob := '';
+    end;
+
+    ColonPos := Pos(':', FieldSpec);
+    if ColonPos = 0 then Continue;
+    FieldName := Copy(FieldSpec, 1, ColonPos - 1);
+    FieldKind := Copy(FieldSpec, ColonPos + 1, Length(FieldSpec));
+
+    { 查找字段索引: TypeName.FieldName$idx }
+    if not FSemaModel.LookupConstValue(TypeName + '.' + FieldName + '$idx', FieldIdx) then
+      Continue;
+
+    if FieldKind = 's' then
+    begin
+      { string field: 4 slot layout (ptr, len, owner, alloc_size) }
+      OwnerSlot := FieldSlotPtr(RecPtr, FieldIdx + 2);
+      AllocSizeSlot := FieldSlotPtr(RecPtr, FieldIdx + 3);
+      if (OwnerSlot <> 0) and (AllocSizeSlot <> 0) then
+      begin
+        FillChar(Instr, SizeOf(Instr), 0);
+        Instr.ResultId := FModule.NewValue;
+        Instr.Kind := hikIntrinsic;
+        Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
+        Instr.IntrinsicName := 'string_release';
+        SetLength(Instr.Operands, 2);
+        Instr.Operands[0] := MakeTypedOperand(EmitLoad(GetPtrType, OwnerSlot), GetPtrType);
+        Instr.Operands[1] := MakeTypedOperand(EmitLoad(GetIntType, AllocSizeSlot), GetIntType);
+        EmitInstr(Instr);
+
+        { 清零 4 个 slot }
+        NullVal := EmitNullPtrValue;
+        ZeroVal := EmitConstIntOfType(0, GetIntType);
+        if (NullVal <> 0) and (ZeroVal <> 0) then
+        begin
+          PtrSlot := FieldSlotPtr(RecPtr, FieldIdx);
+          LenSlot := FieldSlotPtr(RecPtr, FieldIdx + 1);
+          if PtrSlot <> 0 then EmitStore(GetPtrType, NullVal, PtrSlot);
+          if LenSlot <> 0 then EmitStore(GetIntType, ZeroVal, LenSlot);
+          EmitStore(GetPtrType, NullVal, OwnerSlot);
+          EmitStore(GetIntType, ZeroVal, AllocSizeSlot);
+        end;
+      end;
+    end
+    else if FieldKind = 'd' then
+    begin
+      { dynarray field: 2 slot layout (ptr, len) }
+      PtrSlot := FieldSlotPtr(RecPtr, FieldIdx);
+      LenSlot := FieldSlotPtr(RecPtr, FieldIdx + 1);
+      if (PtrSlot <> 0) and (LenSlot <> 0) then
+      begin
+        ElemSizeVal := EmitConstIntOfType(8, GetIntType);
+        FillChar(Instr, SizeOf(Instr), 0);
+        Instr.ResultId := FModule.NewValue;
+        Instr.Kind := hikIntrinsic;
+        Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
+        Instr.IntrinsicName := 'dynarray_release';
+        SetLength(Instr.Operands, 3);
+        Instr.Operands[0] := MakeTypedOperand(EmitLoad(GetPtrType, PtrSlot), GetPtrType);
+        Instr.Operands[1] := MakeTypedOperand(EmitLoad(GetIntType, LenSlot), GetIntType);
+        Instr.Operands[2] := MakeTypedOperand(ElemSizeVal, GetIntType);
+        EmitInstr(Instr);
+      end;
+    end;
+  end;
+end;
+
 procedure THIRBuilder.ProcessStringCleanup(const ANode: TTypedHirNode);
 var
   VarName: string;
@@ -7347,6 +7458,8 @@ begin
       QueueCleanupNode(ANode);
     hnkStringCleanupRuntime:
       QueueCleanupNode(ANode);
+    hnkManagedRecordCleanupRuntime:
+      QueueCleanupNode(ANode);
     hnkAssignArrElemRuntime:
       ProcessAssignArrElem(ANode);
     hnkMethodBodyBegin:
@@ -7422,6 +7535,8 @@ begin
         ProcessDynArrayCleanup(Node);
       hnkStringCleanupRuntime:
         ProcessStringCleanup(Node);
+      hnkManagedRecordCleanupRuntime:
+        ProcessManagedRecordCleanup(Node);
     end;
   end;
   FPendingCleanupCount := 0;
