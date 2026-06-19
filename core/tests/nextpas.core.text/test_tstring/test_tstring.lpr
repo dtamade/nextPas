@@ -23,7 +23,7 @@ end;
 procedure TestSizeOf;
 begin
   CheckEqual(SizeOf(TString), 24, 'SizeOf(TString) = 24');
-  CheckEqual(SizeOf(TStringHeader), 24, 'SizeOf(TStringHeader) = 24');
+  CheckEqual(SizeOf(TStringHeader), 8, 'SizeOf(TStringHeader) = 8');
 end;
 
 { ===== 零初始化 / 空串 ===== }
@@ -407,6 +407,85 @@ begin
   LC.Done;
 end;
 
+{ ===== Ref=1 快速路径测试 ===== }
+procedure TestRefOneFastPath;
+var
+  LA: TString;
+begin
+  { 独占 heap 字符串 (ref=1) 走快速路径, 无原子操作 }
+  LA := S('this is a heap string for fast path test');
+  CheckEqual(LA.RefCount, 1, 'initial ref=1');
+  StringFini(LA); { 应走快速路径, 直接 FreeMem }
+  Check(LA.IsEmpty, 'freed after fast path');
+end;
+
+{ ===== CoW ref=1 共享后释放 ===== }
+procedure TestCoWRefOneAfterShare;
+var
+  LA, LB: TString;
+begin
+  LA := S('shared then released - long enough for heap');
+  StringAssign(LB, LA);
+  CheckEqual(LA.RefCount, 2, 'shared ref=2');
+  LA.Done; { ref: 2->1, 走原子 decr }
+  CheckEqual(LB.RefCount, 1, 'back to ref=1 after LA freed');
+  LB.Done; { ref=1, 走快速路径 }
+end;
+
+{ ===== FastMemEqual 不同长度测试 ===== }
+procedure TestFastMemEqual;
+var
+  LA, LB, LC: TString;
+begin
+  { 空串 }
+  LA := TString.Empty;
+  LB := TString.Empty;
+  Check(StringEqual(LA, LB), 'empty = empty');
+
+  { 1-8 bytes (i64 fast path) }
+  LA := S('abc');
+  LB := S('abc');
+  LC := S('abd');
+  Check(StringEqual(LA, LB), 'abc = abc (i64 fast)');
+  Check(not StringEqual(LA, LC), 'abc <> abd (i64 fast)');
+  LA.Done; LB.Done; LC.Done;
+
+  { 9-16 bytes (2xi64 fast path) }
+  LA := S('1234567890');
+  LB := S('1234567890');
+  LC := S('1234567891');
+  Check(StringEqual(LA, LB), '10B equal (2xi64 fast)');
+  Check(not StringEqual(LA, LC), '10B differ (2xi64 fast)');
+  LA.Done; LB.Done; LC.Done;
+
+  { 15 bytes (SSO max, i64 fast path) }
+  LA := S('123456789012345');
+  LB := S('123456789012345');
+  Check(StringEqual(LA, LB), '15B SSO equal');
+  LA.Done; LB.Done;
+
+  { 16 bytes (heap, general path) }
+  LA := S('1234567890123456');
+  LB := S('1234567890123456');
+  LC := S('1234567890123457');
+  Check(StringEqual(LA, LB), '16B heap equal');
+  Check(not StringEqual(LA, LC), '16B heap differ');
+  LA.Done; LB.Done; LC.Done;
+
+  { 不同长度 }
+  LA := S('abc');
+  LB := S('abcd');
+  Check(not StringEqual(LA, LB), 'len 3 <> len 4');
+  LA.Done; LB.Done;
+end;
+
+{ ===== Header 大小详细验证 ===== }
+procedure TestHeaderSize;
+begin
+  CheckEqual(SizeOf(TStringHeader), 8, 'TStringHeader = 8 bytes');
+  CheckEqual(SizeOf(TString), 24, 'TString = 24 bytes');
+end;
+
 { ===== 主程序 ===== }
 begin
   T := TTestRunner.Create('nextpas.core.text.tstring');
@@ -439,5 +518,9 @@ begin
   T.Run('StringCreateZero', @TestStringCreateZero);
   T.Run('FPCRoundtrip', @TestFPCRoundtrip);
   T.Run('CompareEqual', @TestCompareEqual);
+  T.Run('RefOneFastPath', @TestRefOneFastPath);
+  T.Run('CoWRefOneAfterShare', @TestCoWRefOneAfterShare);
+  T.Run('FastMemEqual', @TestFastMemEqual);
+  T.Run('HeaderSize', @TestHeaderSize);
   T.Summary;
 end.

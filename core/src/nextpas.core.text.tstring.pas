@@ -13,9 +13,6 @@
 unit nextpas.core.text.tstring;
 interface
 
-uses
-  nextpas.core.atomic.types;
-
 const
   { TString tag 常量 }
   TSTRING_SSO_TAG  = Byte(0);
@@ -25,11 +22,10 @@ const
 type
   PStringHeader = ^TStringHeader;
   TStringHeader = record
-    RefCount: TAtomicISize;  { 原子引用计数, 1 = 独占, >1 = 共享 (CoW), <0 = literal }
-    Capacity: SizeUInt;      { payload 容量 (不含 header + null terminator) }
-    Flags: SizeUInt;         { 保留 }
+    RefCount: LongInt;  { 原子引用计数, 1 = 独占, >1 = 共享 (CoW), <0 = literal }
+    Capacity: LongWord; { payload 容量 (不含 header + null terminator), 上限 4GB }
   end;
-  { SizeOf(TStringHeader) = 24 bytes }
+  { SizeOf(TStringHeader) = 8 bytes }
 
   TString = record
     { 生命周期 — 方法在 variant case 之前 }
@@ -70,7 +66,7 @@ type
 
 { 编译期布局断言 — 防止跨平台 SizeOf 变化 }
 {$ASSERT SizeOf(TString) = 24}
-{$ASSERT SizeOf(TStringHeader) = 24}
+{$ASSERT SizeOf(TStringHeader) = 8}
 
 { 顶层操作 — 编译器 emit / RAII 使用 }
 procedure StringInit(var S: TString);
@@ -99,11 +95,11 @@ function HeapAlloc(ACapacity: SizeUInt): PStringHeader;
 var
   LTotal: SizeUInt;
 begin
+  Assert(ACapacity <= High(LongWord), 'string capacity exceeds 4GB');
   LTotal := SizeOf(TStringHeader) + ACapacity + 1;
   Result := PStringHeader(GetMem(LTotal));
-  Result^.RefCount := TAtomicISize.Create(1);
-  Result^.Capacity := ACapacity;
-  Result^.Flags := 0;
+  Result^.RefCount := 1;
+  Result^.Capacity := LongWord(ACapacity);
   { null terminator }
   PByte(Result)[SizeOf(TStringHeader) + ACapacity] := 0;
 end;
@@ -122,21 +118,30 @@ end;
 
 procedure InternalHeapDecr(var S: TString);
 var
-  LOldRef: PtrInt;
+  LOldRef: LongInt;
   LOldHeader: PStringHeader;
 begin
   LOldHeader := S.HeapHeader;
   if LOldHeader = nil then
     Exit;
-  LOldRef := LOldHeader^.RefCount.Decrement;
-  if LOldRef = 0 then
+  LOldRef := LOldHeader^.RefCount;
+  if LOldRef < 0 then
+    Exit; { literal (ref=-1): 不可释放, 不参与引用计数 }
+  if LOldRef = 1 then
+  begin
+    { 快速路径: 独占, 直接释放, 无需原子操作 }
+    HeapFree(LOldHeader);
+    Exit;
+  end;
+  { 共享: 原子递减 }
+  if InterlockedDecrement(LOldHeader^.RefCount) = 0 then
     HeapFree(LOldHeader);
 end;
 
 procedure InternalHeapIncr(AHeader: PStringHeader); inline;
 begin
-  if AHeader <> nil then
-    AHeader^.RefCount.Increment;
+  if (AHeader <> nil) and (AHeader^.RefCount >= 0) then
+    InterlockedIncrement(AHeader^.RefCount);
 end;
 
 { ===== TString record 方法 ===== }
@@ -314,7 +319,7 @@ begin
   begin
     { Heap 路径 }
     LHeader := S.HeapHeader;
-    if LHeader^.RefCount.Load = 1 then
+    if LHeader^.RefCount = 1 then
     begin
       { 独占: 可能原地修改或 realloc }
       if ANewLen <= LHeader^.Capacity then
@@ -331,7 +336,7 @@ begin
         LHeader := PStringHeader(ReallocMem(LHeader,
           SizeOf(TStringHeader) + ANewLen + 1));
         LHeader^.Capacity := ANewLen;
-        LHeader^.RefCount := TAtomicISize.Create(1);
+        LHeader^.RefCount := 1;
         HeapPayloadPtr(LHeader)[ANewLen] := 0;
         S.HeapHeader := LHeader;
         S.HeapLen := ANewLen;
@@ -375,7 +380,7 @@ begin
   if S.IsSSO then
     Result := 0
   else if S.HeapHeader <> nil then
-    Result := S.HeapHeader^.RefCount.Load
+    Result := S.HeapHeader^.RefCount
   else
     Result := 0;
 end;
@@ -411,30 +416,70 @@ begin
   Move(LData^, PByte(Result)^, LLen);
 end;
 
+{ 安全内存比较 — 无越界读, 兼容 ASan/Valgrind }
+{ 1-4B: 栈上 zero-padded 4B 比较 }
+{ 5-8B: 栈上 zero-padded 8B 比较 }
+{ 9-16B: 首尾重叠 i64 比较 (两端各 ≥8B, 无越界) }
+{ >16B: 逐字节 }
+function FastMemEqual(const A, B; ALen: SizeUInt): Boolean;
+var
+  LA, LB: PByte;
+  LA4, LB4: Cardinal;
+  LA8, LB8: Int64;
+  I: SizeUInt;
+begin
+  case ALen of
+    0: Result := True;
+    1..4:
+    begin
+      { 栈上 zero-padded 比较, 无越界读 }
+      LA4 := 0;
+      LB4 := 0;
+      Move(A, LA4, ALen);
+      Move(B, LB4, ALen);
+      Result := LA4 = LB4;
+    end;
+    5..8:
+    begin
+      { 栈上 zero-padded 比较, 无越界读 }
+      LA8 := 0;
+      LB8 := 0;
+      Move(A, LA8, ALen);
+      Move(B, LB8, ALen);
+      Result := LA8 = LB8;
+    end;
+    9..16:
+    begin
+      { 首尾重叠 i64: 两端各读 8B, 9≤ALen≤16 时无越界 }
+      LA := PByte(@A);
+      LB := PByte(@B);
+      Result := (PInt64(LA)^ = PInt64(LB)^) and
+                (PInt64(LA + ALen - 8)^ = PInt64(LB + ALen - 8)^);
+    end;
+  else
+    { 通用路径: 逐字节 }
+    LA := PByte(@A);
+    LB := PByte(@B);
+    Result := True;
+    for I := 0 to ALen - 1 do
+      if LA[I] <> LB[I] then
+      begin
+        Result := False;
+        Exit;
+      end;
+  end;
+end;
+
 function StringEqual(const A, B: TString): Boolean;
 var
-  LALen, I: SizeUInt;
-  LAData, LBData: PByte;
+  LALen: SizeUInt;
 begin
   LALen := StringLen(A);
   if LALen <> StringLen(B) then
-  begin
-    Result := False;
-    Exit;
-  end;
+    Exit(False);
   if LALen = 0 then
-  begin
-    Result := True;
-    Exit;
-  end;
-  { 逐字节比较, 替代 CompareMem (避免 SysUtils 依赖) }
-  Result := False;
-  LAData := StringData(A);
-  LBData := StringData(B);
-  for I := 0 to LALen - 1 do
-    if LAData[I] <> LBData[I] then
-      Exit;
-  Result := True;
+    Exit(True);
+  Result := FastMemEqual(StringData(A)^, StringData(B)^, LALen);
 end;
 
 function StringCompare(const A, B: TString): SizeInt;
