@@ -15,7 +15,7 @@ const
   N = 1000000;
 
 type
-  TTestObj = class
+  TTestObj = class(TPoolItem)
   public
     Value: Integer;
   end;
@@ -104,16 +104,18 @@ var
   LPerThread: Integer;
   LStart: QWord;
   I: Integer;
+  LObj: TTestObj;
   LThreads: array of TWorkerThread;
 begin
   LPerThread := N div AThreadCount;
   LPool := CreateSyncPool(@FactoryFunc);
   try
-    { warmup }
+    { warmup — 通过 Get/Put 填充 TLS }
     for I := 1 to 1000 do
     begin
-      LPool.Get;
-      LPool.Put(TTestObj.Create);
+      LObj := TTestObj(LPool.Get);
+      LObj.Value := I;
+      LPool.Put(LObj);
     end;
 
     SetLength(LThreads, AThreadCount);
