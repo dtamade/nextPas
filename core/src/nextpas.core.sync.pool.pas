@@ -55,6 +55,34 @@ type
 function DefaultSyncPoolConfig(AFactory: TPoolFactory): TSyncPoolConfig;
 
 type
+  TSyncPool = class; { 前向声明 }
+
+  {**
+   * TSyncPoolBuilder — 链式配置 Builder (Rust 风格)
+   *
+   * @usage
+   *   Pool := TSyncPoolBuilder.Create(@FactoryFunc)
+   *     .WithMaxPerThread(64)
+   *     .WithMaxGlobal(10000)
+   *     .Build;
+   *}
+  TSyncPoolBuilder = record
+  private
+    FConfig: TSyncPoolConfig;
+  public
+    class function Create(AFactory: TPoolFactory): TSyncPoolBuilder; static;
+    function WithMaxPerThread(AValue: SizeUInt): TSyncPoolBuilder;
+    function WithMaxGlobal(AValue: SizeUInt): TSyncPoolBuilder;
+    function WithBatchSize(AValue: SizeUInt): TSyncPoolBuilder;
+    function WithReset(AOnReset: TPoolReset): TSyncPoolBuilder;
+    function WithDestroy(AOnDestroy: TPoolDestroy): TSyncPoolBuilder;
+    function Build: TSyncPool;
+  end;
+
+{** 零配置工厂 — 对标 Go sync.Pool (一行创建) *}
+function CreateSyncPool(AFactory: TPoolFactory): TSyncPool; inline;
+
+type
   TSyncPool = class(TInterfacedObject, IPool)
   private
     type
@@ -100,12 +128,69 @@ type
     procedure ReleaseN(const APtrs: array of Pointer; ACount: Integer);
     procedure Reset;
 
+    { Go 风格别名 }
+    function Get: TObject;             { = Acquire, 直接返回对象 }
+    function TryGet(out AObj: TObject): Boolean;
+    procedure Put(AObj: TObject);      { = Release }
+
     { 扩展查询 }
     function GetPoolStats: TPoolStats;
     property Stats: TPoolStats read GetPoolStats;
   end;
 
 implementation
+
+{ ===== TSyncPoolBuilder ===== }
+
+class function TSyncPoolBuilder.Create(AFactory: TPoolFactory): TSyncPoolBuilder;
+begin
+  FillChar(Result, SizeOf(Result), 0);
+  Result.FConfig := DefaultSyncPoolConfig(AFactory);
+end;
+
+function TSyncPoolBuilder.WithMaxPerThread(AValue: SizeUInt): TSyncPoolBuilder;
+begin
+  Result := Self;
+  Result.FConfig.MaxPerThread := AValue;
+end;
+
+function TSyncPoolBuilder.WithMaxGlobal(AValue: SizeUInt): TSyncPoolBuilder;
+begin
+  Result := Self;
+  Result.FConfig.MaxGlobal := AValue;
+end;
+
+function TSyncPoolBuilder.WithBatchSize(AValue: SizeUInt): TSyncPoolBuilder;
+begin
+  Result := Self;
+  Result.FConfig.BatchSize := AValue;
+end;
+
+function TSyncPoolBuilder.WithReset(AOnReset: TPoolReset): TSyncPoolBuilder;
+begin
+  Result := Self;
+  Result.FConfig.OnReset := AOnReset;
+end;
+
+function TSyncPoolBuilder.WithDestroy(AOnDestroy: TPoolDestroy): TSyncPoolBuilder;
+begin
+  Result := Self;
+  Result.FConfig.OnDestroy := AOnDestroy;
+end;
+
+function TSyncPoolBuilder.Build: TSyncPool;
+begin
+  Result := TSyncPool.Create(FConfig);
+end;
+
+{ ===== CreateSyncPool 工厂 ===== }
+
+function CreateSyncPool(AFactory: TPoolFactory): TSyncPool;
+begin
+  Result := TSyncPool.Create(DefaultSyncPoolConfig(AFactory));
+end;
+
+{ ===== DefaultSyncPoolConfig ===== }
 
 function DefaultSyncPoolConfig(AFactory: TPoolFactory): TSyncPoolConfig;
 begin
@@ -480,6 +565,36 @@ begin
     FGlobalLock.Release;
   end;
 end;
+
+{ Go 风格别名 }
+
+function TSyncPool.Get: TObject;
+var
+  LPtr: Pointer;
+begin
+  if Acquire(LPtr) then
+    Result := TObject(LPtr)
+  else
+    Result := nil;
+end;
+
+function TSyncPool.TryGet(out AObj: TObject): Boolean;
+var
+  LPtr: Pointer;
+begin
+  Result := Acquire(LPtr);
+  if Result then
+    AObj := TObject(LPtr)
+  else
+    AObj := nil;
+end;
+
+procedure TSyncPool.Put(AObj: TObject);
+begin
+  Release(Pointer(AObj));
+end;
+
+{ Stats }
 
 function TSyncPool.GetPoolStats: TPoolStats;
 var
