@@ -76,6 +76,8 @@ type
     FClassVarTypes: array of string;
     FRecordVarNames: array of string;
     FRecordVarTypes: array of string;
+    FManagedRecordVarNames: array of string;
+    FManagedRecordVarTypes: array of string;
     FPointerVarNames: array of string;
     FPointerVarTypes: array of string;
     FVarParamNames: array of string;
@@ -182,6 +184,8 @@ type
     function DynArrayElemSizeOfVar(const AName: string): Int64;
     procedure EmitOwnedStringCleanupNodes(const AExceptName: string = '');
     procedure EmitOwnedDynArrayCleanupNodes;
+    function IsManagedRecord(const ATypeName: string): Boolean;
+    procedure EmitOwnedManagedRecordCleanupNodes;
     function IsRecordVar(const AName: string): Boolean;
     function IsVarParam(const AName: string): Boolean;
     function IsVarParamAtPosition(const ADecl: TGreenNode; APosition: LongInt): Boolean;
@@ -2195,6 +2199,70 @@ begin
       0,
       VarName + #9 + 'int ' + IntToStr(DynArrayElemSizeOfVar(VarName)) + #10
     );
+  end;
+end;
+
+function TSemanticAnalyzer.IsManagedRecord(const ATypeName: string): Boolean;
+var
+  Meta: TTypeMetadata;
+  I: LongInt;
+begin
+  Result := False;
+  if not FModel.GetTypeMetaByName(ATypeName, Meta) then
+    Exit;
+  if not Meta.IsRecord then
+    Exit;
+  for I := 0 to High(Meta.Fields) do
+  begin
+    if Meta.Fields[I].IsString or Meta.Fields[I].IsDynArray then
+      Exit(True);
+    { 递归检查嵌套 record }
+    if Meta.Fields[I].IsRecord then
+    begin
+      if (Meta.Fields[I].TypeId > 0) and
+        (Meta.Fields[I].TypeId <= FModel.TypeCount) and
+        IsManagedRecord(FModel.TypeAt(Meta.Fields[I].TypeId - 1).Name) then
+        Exit(True);
+    end;
+  end;
+end;
+
+procedure TSemanticAnalyzer.EmitOwnedManagedRecordCleanupNodes;
+var
+  I, J: LongInt;
+  VarName, TypeName, Blob: string;
+  Meta: TTypeMetadata;
+  NeedCleanup: Boolean;
+begin
+  for I := 0 to Length(FManagedRecordVarNames) - 1 do
+  begin
+    VarName := FManagedRecordVarNames[I];
+    TypeName := FManagedRecordVarTypes[I];
+    if not FModel.GetTypeMetaByName(TypeName, Meta) then
+      Continue;
+    Blob := VarName + #9 + TypeName;
+    NeedCleanup := False;
+    for J := 0 to High(Meta.Fields) do
+    begin
+      if Meta.Fields[J].IsString then
+      begin
+        Blob := Blob + #9 + Meta.Fields[J].Name + ':s';
+        NeedCleanup := True;
+      end
+      else if Meta.Fields[J].IsDynArray then
+      begin
+        Blob := Blob + #9 + Meta.Fields[J].Name + ':d';
+        NeedCleanup := True;
+      end;
+    end;
+    if NeedCleanup then
+      FModel.AddTypedHirNode(
+        'managed-record-cleanup-runtime',
+        VarName,
+        0,
+        0,
+        Blob
+      );
   end;
 end;
 
@@ -12221,6 +12289,7 @@ begin
     end;
     if (Child.NodeKind = gnkExitStatement) and FNoFold then
     begin
+      EmitOwnedManagedRecordCleanupNodes;
       EmitOwnedDynArrayCleanupNodes;
       EmitOwnedStringCleanupNodes(FCurrentRetVarName);
       if (FCurrentRetVarName <> '') and IsRuntimeStrVar(FCurrentRetVarName) then
@@ -13152,6 +13221,7 @@ begin
         begin
           if EncodeRuntimeIntExprFold(Arg, Operand) then
           begin
+            EmitOwnedManagedRecordCleanupNodes;
             EmitOwnedDynArrayCleanupNodes;
             EmitOwnedStringCleanupNodes;
             NodeId := FModel.AddTypedHirNode(
@@ -13167,6 +13237,7 @@ begin
           if EvaluateIntegerConstant(Arg, Value) then
             Operand := IntToStr(Value);
         end;
+        EmitOwnedManagedRecordCleanupNodes;
         EmitOwnedDynArrayCleanupNodes;
         EmitOwnedStringCleanupNodes;
         FModel.AddTypedHirNode('halt-call', 'Halt', 0, 0, Operand);
@@ -14420,6 +14491,17 @@ begin
               'var-decl-record-runtime', Decl.Text, 0, 0,
               Decl.Text + #9 + IntToStr(TypeMetaSize(Decl.ChildAt(0).Text) div 8)
             );
+            { RAII: 如果 record 含 managed 字段, 注册为 managed record }
+            if IsManagedRecord(Decl.ChildAt(0).Text) then
+            begin
+              SetLength(FManagedRecordVarNames,
+                Length(FManagedRecordVarNames) + 1);
+              FManagedRecordVarNames[High(FManagedRecordVarNames)] := Decl.Text;
+              SetLength(FManagedRecordVarTypes,
+                Length(FManagedRecordVarTypes) + 1);
+              FManagedRecordVarTypes[High(FManagedRecordVarTypes)] :=
+                Decl.ChildAt(0).Text;
+            end;
           end
           else
           begin
@@ -14474,6 +14556,7 @@ begin
   WalkHaltCalls(RootNode);
   if FNoFold and not FCurrentBlockTerminated then
   begin
+    EmitOwnedManagedRecordCleanupNodes;
     EmitOwnedDynArrayCleanupNodes;
     EmitOwnedStringCleanupNodes;
     FModel.AddTypedHirNode('halt-call-runtime', 'Halt', 0, 0, 'int 0' + #10);
@@ -14868,6 +14951,7 @@ begin
     WalkHaltCalls(Entry.Body);
     if not FCurrentBlockTerminated then
     begin
+      EmitOwnedManagedRecordCleanupNodes;
       EmitOwnedDynArrayCleanupNodes;
       EmitOwnedStringCleanupNodes(RetVarName);
       if IsStrReturn and OwnedStringReturn then
@@ -14946,6 +15030,7 @@ begin
       WalkHaltCalls(TGreenNode(Node.GreenNodeRef));
       if not FCurrentBlockTerminated then
       begin
+        EmitOwnedManagedRecordCleanupNodes;
         EmitOwnedDynArrayCleanupNodes;
         EmitOwnedStringCleanupNodes('');
         FModel.AddTypedHirNode('ret-runtime', '0', 0, 0, 'int 0' + #10);
@@ -14961,6 +15046,7 @@ begin
       WalkHaltCalls(TGreenNode(Node.GreenNodeRef));
       if not FCurrentBlockTerminated then
       begin
+        EmitOwnedManagedRecordCleanupNodes;
         EmitOwnedDynArrayCleanupNodes;
         EmitOwnedStringCleanupNodes('');
         FModel.AddTypedHirNode('ret-runtime', '0', 0, 0, 'int 0' + #10);
