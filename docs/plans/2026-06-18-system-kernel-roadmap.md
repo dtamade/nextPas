@@ -174,6 +174,7 @@ Go 标准库没有 SSO 优化。代价是 variant record 的 case 判断分支�
 ## 4. 支柱 2: TCache 3 级分配器（纯 Pascal，零外部依赖）
 
 > **纯 Pascal 实现**: 参照 Go runtime malloc 的 3 级架构，全部用 Pascal 实现，不链接任何 C/C++ 分配器库。OS 层使用已有的 `TMemoryMap` (mmap/VirtualAlloc)。
+> **性能目标**: 小对象分配必须对齐 tcmalloc (≤20ns)，不得因纯 Pascal 实现而妥协。
 > **不阻塞自举**: 当前 `@np_alloc`/`@np_free` 已有 bump 分配器，TCache 是自举后首要优化目标。
 
 ### 4.1 架构概览
@@ -200,6 +201,19 @@ Thread → TThreadCache (lock-free, per-thread, 纯 Pascal)
 | 大对象 | THeap direct | 直接 mmap | THeap direct (>32KB) |
 | 元数据开销 | 每 span 一个 page map | 0 (分配器管理) | radix tree page map |
 | 线程安全 | per-P 无锁 + central 锁 | 分配器内部 | per-thread 无锁 + central 锁 |
+
+### 4.3 性能 SLA（对齐 tcmalloc）
+
+| 操作 | tcmalloc 参考值 | TCache 目标 | 实现策略 |
+|------|----------------|-------------|----------|
+| 小对象分配 (8-64B) | ~15ns (CTZ bitmap) | ≤ 15ns | CTZ bitmap 无锁快路径 |
+| 小对象释放 | ~10ns (bitmap set) | ≤ 10ns | bitmap set + 无 CAS |
+| 中对象分配 (64B-32KB) | ~30ns (central fill) | ≤ 30ns | TCentralCache span 填充 |
+| 大对象分配 (>32KB) | ~200ns (mmap) | ≤ 200ns | TMemoryMap 直接分配 |
+| 多线程扩展性 | 近线性 (per-P 无锁) | 近线性 (per-thread 无锁) | CTZ 无竞态 |
+
+**关键约束**: 纯 Pascal 实现不得引入额外开销。FPC 的 `{$mode ObjFPC}` 编译为原生代码，
+内联函数和 variant record 的开销可忽略。瓶颈在 OS syscall (mmap/munmap) 和 atomic (CTZ)，不在语言层面。
 
 ### 4.3 与现有 IAllocator 的关系
 
@@ -266,13 +280,15 @@ IAllocator
 ### 4.5 验收标准
 
 - [ ] 67 大小类定义完整
-- [ ] TThreadCache CTZ 快路径 ≤ 20ns
-- [ ] TCentralCache miss 填充正确
-- [ ] THeap radix tree 大对象分配
+- [ ] TThreadCache CTZ 快路径 ≤ 15ns (对齐 tcmalloc)
+- [ ] TThreadCache 释放快路径 ≤ 10ns (对齐 tcmalloc)
+- [ ] TCentralCache miss 填充 ≤ 30ns
+- [ ] THeap radix tree 大对象分配 ≤ 200ns
 - [ ] @np_alloc/@np_free 路由到 TThreadCacheAllocator
 - [ ] 多线程分配无竞态 (TSAN clean)
 - [ ] heaptrc 0 leak
-- [ ] 基准测试：小对象分配 ≤ 20ns，比 FPC RTL 快 5x+
+- [ ] 基准测试：小对象分配对齐 tcmalloc (~15ns)，比 FPC RTL 快 5x+
+- [ ] 与 TMimallocAllocator 性能对比报告
 
 ---
 
@@ -659,15 +675,20 @@ Gate 2 (单元生命周期) 和 Gate 3 (进程生命周期) 是自举硬阻塞�
 - 现有 19 个契约源码边界检查
 - 每次支柱变更必须通过 `make verify`
 
-### 10.3 性能基准线
+### 10.3 性能基准线（对齐 tcmalloc）
 
-| 指标 | 基准线 | 目标 |
-|------|--------|------|
-| 小对象分配 (8B) | FPC RTL ~100ns | ≤ 20ns |
-| 字符串赋值 (SSO) | FPC AnsiString ~30ns | ≤ 10ns |
-| 字符串赋值 (CoW) | FPC AnsiString ~30ns | ≤ 15ns |
-| 异常正常路径 | setjmp ~10ns | 0ns |
-| 原子 CAS | ~15ns | ~15ns |
+| 指标 | tcmalloc 参考 | FPC RTL 参考 | TCache 目标 |
+|------|--------------|-------------|-------------|
+| 小对象分配 (8-64B) | ~15ns | ~100ns | ≤ 15ns |
+| 小对象释放 | ~10ns | ~50ns | ≤ 10ns |
+| 中对象分配 (64B-32KB) | ~30ns | ~200ns | ≤ 30ns |
+| 大对象分配 (>32KB) | ~200ns (mmap) | ~500ns | ≤ 200ns |
+| 字符串赋值 (SSO) | N/A | ~30ns | ≤ 10ns |
+| 字符串赋值 (CoW) | N/A | ~30ns | ≤ 15ns |
+| 异常正常路径 | N/A | setjmp ~10ns | 0ns |
+| 原子 CAS | N/A | ~15ns | ~15ns |
+
+> **注**: "基准线"列中的 tcmalloc/FPC RTL 值为估算，实现时需实测校准。
 
 ---
 
