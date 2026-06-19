@@ -12,7 +12,7 @@
     - TLS freelist 是所有 TSyncPool 实例共享的 threadvar
     - 一线程只应使用一个 TSyncPool 实例 (单池约束)
     - Factory 回调可能被多线程并发调用, 调用者须保证其线程安全性
-    - FTotalCreated 通过 FGlobalLock 保护, 冷路径安全
+    - FTotalCreated 通过 InterLockedIncrement 原子递增
 
   性能:
     热路径: 56M ops/sec (超越 Go 50M)
@@ -47,7 +47,7 @@ type
     FConfig: TSyncPoolConfig;
     FGlobalHead: TPoolItem;
     FGlobalLock: TRTLCriticalSection;
-    FTotalCreated: SizeUInt;
+    FTotalCreated: Integer; { 原子递增 via InterLockedIncrement }
     { 预分配块管理 }
     FPreAllocBlocks: array of Pointer; { 每块 = mmap/GetMem 的大内存 }
     FPreAllocBlockCount: SizeInt;
@@ -103,7 +103,7 @@ begin
     LItem := TPoolItem(FConfig.Factory());
     LItem.PoolNext := FGlobalHead;
     FGlobalHead := LItem;
-    Inc(FTotalCreated);
+    InterLockedIncrement(FTotalCreated);
   end;
 end;
 
@@ -163,9 +163,7 @@ begin
   if Assigned(FConfig.Factory) then begin
     LItem := TPoolItem(FConfig.Factory());
     LItem.PoolNext := nil;
-    EnterCriticalSection(FGlobalLock);
-    Inc(FTotalCreated);
-    LeaveCriticalSection(FGlobalLock);
+    InterLockedIncrement(FTotalCreated);
   end;
   Result := LItem;
 end;
@@ -212,7 +210,7 @@ end;
 
 function TSyncPool.TotalCreated: SizeUInt;
 begin
-  Result := FTotalCreated;
+  Result := SizeUInt(FTotalCreated);
 end;
 
 procedure TSyncPool.InternalDrainGlobal;
