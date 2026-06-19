@@ -24,6 +24,7 @@ type
   public
     Pool: TSyncPool;
     Iterations: Integer;
+    InternalMs: QWord; { 内部计时, 排除线程创建/销毁开销 }
     procedure Execute; override;
   end;
 
@@ -43,13 +44,22 @@ procedure TWorkerThread.Execute;
 var
   I: Integer;
   LObj: TTestObj;
+  LStart: QWord;
 begin
-  for I := 1 to Iterations do
-  begin
+  { warmup: 填充 TLS }
+  for I := 1 to 1000 do begin
     LObj := TTestObj(Pool.Get);
     LObj.Value := I;
     Pool.Put(LObj);
   end;
+  { 计时: 仅测量 get/put 循环 }
+  LStart := GetTickCount64;
+  for I := 1 to Iterations do begin
+    LObj := TTestObj(Pool.Get);
+    LObj.Value := I;
+    Pool.Put(LObj);
+  end;
+  InternalMs := GetTickCount64 - LStart;
 end;
 
 procedure BenchDirectAlloc;
@@ -127,17 +137,22 @@ begin
       LThreads[I].FreeOnTerminate := False;
     end;
 
-    LStart := GetTickCount64;
+    { 启动所有线程 }
     for I := 0 to AThreadCount - 1 do
       LThreads[I].Start;
     for I := 0 to AThreadCount - 1 do
-    begin
       LThreads[I].WaitFor;
+
+    { 取最长内部计时 (排除线程创建/销毁开销) }
+    LStart := 0;
+    for I := 0 to AThreadCount - 1 do begin
+      if LThreads[I].InternalMs > LStart then
+        LStart := LThreads[I].InternalMs;
       LThreads[I].Free;
     end;
 
     WriteLn('Pool ', AThreadCount:2, 'T x ', LPerThread * AThreadCount:7,
-      ' ops: ', GetTickCount64 - LStart, ' ms');
+      ' ops: ', LStart, ' ms (internal)');
   finally
     LPool.Free;
   end;
