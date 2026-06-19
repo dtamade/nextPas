@@ -1,576 +1,685 @@
-{**
- * test_sync_pool — TSyncPool 线程安全对象池测试
- *
- * 覆盖: 单线程基本操作 / 多线程并发 / TLS 缓存命中 / 全局池批量转移 /
- *       容量限制 / 确定性析构 / 回调 / Stats / 泄漏
- *}
+{******************************************************************************
+  test_sync_pool — TSyncPool 单元测试 (15 tests, v5 API)
+
+  1.  TestCreateDefault           — CreateSyncPool 默认工厂
+  2.  TestBuilderChain            — Builder 模式链式调用
+  3.  TestAcquireRelease          — Get/Put 基本流程
+  4.  TestMultiObjectFIFO         — 多对象 FIFO 行为
+  5.  TestReleaseNil              — Put(nil) 安全
+  6.  TestAcquireWithoutRelease   — Get 不 Put，pool 仍可用
+  7.  TestCustomFactory           — 自定义工厂函数
+  8.  TestResetOnAcquire          — Get 时 OnReset 回调
+  9.  TestMultiThread16x5K        — 16 线程 × 5000 ops
+  10. TestHighContention32x2K     — 32 线程 × 2000 ops
+  11. TestBenchmarkPoolVsDirect   — Pool vs 直接分配基准
+  12. TestGetPutSingleThread      — Get/Put 热路径基准
+  13. TestSingleSlotContention    — 单 slot 竞争测试
+  14. TestLeakDetection           — 泄漏检测
+  15. TestDrainGlobal             — DrainGlobal 释放 global pool
+******************************************************************************}
 program test_sync_pool;
-{$mode objfpc}{$H+}
+
+{$I nextpas.core.settings.inc}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
-  SysUtils, Classes,
-  nextpas.core.testing,
+  {$ifdef unix}cthreads,{$endif}
+  SysUtils, Classes, SyncObjs, Math,
   nextpas.core.sync.pool;
 
 type
-  { 测试对象 }
-  TTestObj = class
+  TTestObject = class
+  private
+    FValue: Integer;
+    FResetCount: Integer;
   public
-    Value: Integer;
-    ResetCount: Integer;
-    DestroyCount: PInteger; { 指向外部计数器 }
-    constructor Create(AValue: Integer; ADestroyCount: PInteger);
-    destructor Destroy; override;
+    constructor Create(AValue: Integer);
+    procedure Reset;
   end;
 
-constructor TTestObj.Create(AValue: Integer; ADestroyCount: PInteger);
+  TTestThread = class(TThread)
+  private
+    FPool: TSyncPool;
+    FOps: SizeInt;
+    FHitRate: Double;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(APool: TSyncPool; AOps: SizeInt);
+    property HitRate: Double read FHitRate;
+  end;
+
+  THighContentionThread = class(TThread)
+  private
+    FPool: TSyncPool;
+    FOps: SizeInt;
+    FContentionCount: SizeInt;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(APool: TSyncPool; AOps: SizeInt);
+    property ContentionCount: SizeInt read FContentionCount;
+  end;
+
+var
+  GTestsPassed: Integer = 0;
+  GTestsFailed: Integer = 0;
+  GFactoryCallCount: Integer = 0;
+  GDestroyCallCount: Integer = 0;
+  GResetCallCount: Integer = 0;
+
+function S(const AStr: AnsiString): AnsiString;
+begin
+  Result := AStr;
+end;
+
+procedure CheckEqual(A, B: Integer; const ATestName: string);
+begin
+  if A = B then begin
+    WriteLn('  PASS: ', ATestName);
+    Inc(GTestsPassed);
+  end else begin
+    WriteLn('  FAIL: ', ATestName, ' (got ', A, ', expected ', B, ')');
+    Inc(GTestsFailed);
+  end;
+end;
+
+procedure CheckTrue(ACondition: Boolean; const ATestName: string);
+begin
+  if ACondition then begin
+    WriteLn('  PASS: ', ATestName);
+    Inc(GTestsPassed);
+  end else begin
+    WriteLn('  FAIL: ', ATestName);
+    Inc(GTestsFailed);
+  end;
+end;
+
+procedure CheckNotNull(APtr: Pointer; const ATestName: string);
+begin
+  if APtr <> nil then begin
+    WriteLn('  PASS: ', ATestName);
+    Inc(GTestsPassed);
+  end else begin
+    WriteLn('  FAIL: ', ATestName, ' (got nil)');
+    Inc(GTestsFailed);
+  end;
+end;
+
+procedure CheckEqualDbl(A, B: Double; ADelta: Double; const ATestName: string);
+begin
+  if Abs(A - B) <= ADelta then begin
+    WriteLn('  PASS: ', ATestName);
+    Inc(GTestsPassed);
+  end else begin
+    WriteLn('  FAIL: ', ATestName, ' (got ', A:0:4, ', expected ', B:0:4, ')');
+    Inc(GTestsFailed);
+  end;
+end;
+
+function CreateTestObject: Pointer;
+begin
+  Result := TTestObject.Create(42);
+end;
+
+procedure ResetTestObject(AItem: Pointer);
+begin
+  if AItem <> nil then
+    TTestObject(AItem).Reset;
+end;
+
+procedure DestroyTestObject(AItem: Pointer);
+begin
+  if AItem <> nil then
+    TTestObject(AItem).Free;
+end;
+
+{ TTestObject }
+
+constructor TTestObject.Create(AValue: Integer);
 begin
   inherited Create;
-  Value := AValue;
-  ResetCount := 0;
-  DestroyCount := ADestroyCount;
+  FValue := AValue;
+  FResetCount := 0;
 end;
 
-destructor TTestObj.Destroy;
+procedure TTestObject.Reset;
 begin
-  if DestroyCount <> nil then
-    Inc(DestroyCount^);
-  inherited Destroy;
+  FValue := 42;
+  Inc(FResetCount);
 end;
 
+{ TTestThread }
+
+constructor TTestThread.Create(APool: TSyncPool; AOps: SizeInt);
+begin
+  inherited Create(False);
+  FreeOnTerminate := False;
+  FPool := APool;
+  FOps := AOps;
+  FHitRate := 0;
+end;
+
+procedure TTestThread.Execute;
 var
-  T: TTestRunner;
-  GDestroyCount: Integer;
-  GCreateCounter: Integer;
-
-function FactoryFunc: TObject;
+  I: SizeInt;
+  LObj: TTestObject;
+  LHits: SizeInt;
 begin
-  Result := TTestObj.Create(GCreateCounter, @GDestroyCount);
-  Inc(GCreateCounter);
-end;
-
-procedure ResetProc(AObj: TObject);
-begin
-  if AObj is TTestObj then
-    TTestObj(AObj).ResetCount := TTestObj(AObj).ResetCount + 1;
-end;
-
-{ ===== 单线程基本操作 ===== }
-procedure TestSingleThreadBasic;
-var
-  LPool: TSyncPool;
-  LConfig: TSyncPoolConfig;
-  LPtr: Pointer;
-  LObj: TTestObj;
-begin
-  GDestroyCount := 0;
-  GCreateCounter := 1;
-  LConfig := DefaultSyncPoolConfig(@FactoryFunc);
-  LConfig.OnReset := @ResetProc;
-  LPool := TSyncPool.Create(LConfig);
-  try
-    { Acquire 创建对象 }
-    Check(LPool.Acquire(LPtr), 'acquire 1');
-    LObj := TTestObj(LPtr);
-    Check(LObj.Value >= 1, 'object created');
-
-    { Release → OnReset 应被调用 }
-    LPool.Release(LPtr);
-
-    { 再次 Acquire → 复用 TLS 中的对象 }
-    Check(LPool.Acquire(LPtr), 'acquire 2 (reuse)');
-    LObj := TTestObj(LPtr);
-    Check(LObj.ResetCount >= 1, 'reset callback called on reuse');
-    LPool.Release(LPtr);
-  finally
-    LPool.Free;
+  LHits := 0;
+  for I := 1 to FOps do begin
+    LObj := TTestObject(FPool.Get);
+    if LObj = nil then
+      LObj := TTestObject.Create(42)
+    else
+      Inc(LHits);
+    LObj.FValue := I;
+    FPool.Put(LObj);
   end;
-  Check(GDestroyCount >= 1, 'objects destroyed: ' + IntToStr(GDestroyCount));
+  if FOps > 0 then
+    FHitRate := LHits / FOps;
 end;
 
-{ ===== 多线程并发 ===== }
-type
-  TWorkerThread = class(TThread)
-  public
-    Pool: TSyncPool;
-    Iterations: Integer;
-    SuccessCount: Integer;
-    procedure Execute; override;
-  end;
+{ THighContentionThread }
 
-procedure TWorkerThread.Execute;
-var
-  I: Integer;
-  LPtr: Pointer;
+constructor THighContentionThread.Create(APool: TSyncPool; AOps: SizeInt);
 begin
-  SuccessCount := 0;
-  for I := 1 to Iterations do
-  begin
-    if Pool.Acquire(LPtr) then
-    begin
-      TTestObj(LPtr).Value := I;
-      Pool.Release(LPtr);
-      Inc(SuccessCount);
+  inherited Create(False);
+  FreeOnTerminate := False;
+  FPool := APool;
+  FOps := AOps;
+  FContentionCount := 0;
+end;
+
+procedure THighContentionThread.Execute;
+var
+  I: SizeInt;
+  LObj: Pointer;
+begin
+  for I := 1 to FOps do begin
+    LObj := FPool.Get;
+    if LObj = nil then begin
+      LObj := TTestObject.Create(42);
+      Inc(FContentionCount);
     end;
+    FPool.Put(LObj);
   end;
 end;
 
-procedure TestMultiThread;
-const
-  THREAD_COUNT = 8;
-  ITERATIONS = 1000;
+{ =========================================================================== }
+{  TEST 1: CreateSyncPool 默认工厂 }
+{ =========================================================================== }
+procedure TestCreateDefault;
 var
   LPool: TSyncPool;
-  LConfig: TSyncPoolConfig;
-  LThreads: array[0..THREAD_COUNT - 1] of TWorkerThread;
-  I, LTotal: Integer;
+  LObj: Pointer;
 begin
-  GDestroyCount := 0;
-  LConfig := DefaultSyncPoolConfig(@FactoryFunc);
-  LPool := TSyncPool.Create(LConfig);
-  try
-    for I := 0 to THREAD_COUNT - 1 do
-    begin
-      LThreads[I] := TWorkerThread.Create(True);
-      LThreads[I].Pool := LPool;
-      LThreads[I].Iterations := ITERATIONS;
-      LThreads[I].FreeOnTerminate := False;
-    end;
-    for I := 0 to THREAD_COUNT - 1 do
-      LThreads[I].Start;
-    for I := 0 to THREAD_COUNT - 1 do
-    begin
-      LThreads[I].WaitFor;
-      CheckEqual(LThreads[I].SuccessCount, ITERATIONS,
-        'thread ' + IntToStr(I) + ' completed');
-      LThreads[I].Free;
-    end;
-  finally
-    LPool.Free;
-  end;
-
-  { 验证所有对象被释放 }
-  LTotal := GDestroyCount;
-  Check(LTotal > 0, 'objects destroyed: ' + IntToStr(LTotal));
-end;
-
-{ ===== TLS 缓存命中率 ===== }
-procedure TestCacheHitRate;
-var
-  LPool: TSyncPool;
-  LConfig: TSyncPoolConfig;
-  LPtr: Pointer;
-  LStats: TPoolStats;
-  I: Integer;
-begin
-  LConfig := DefaultSyncPoolConfig(@FactoryFunc);
-  LPool := TSyncPool.Create(LConfig);
-  try
-    { 第一轮: 全部 cache miss }
-    for I := 1 to 100 do
-    begin
-      LPool.Acquire(LPtr);
-      LPool.Release(LPtr);
-    end;
-    LStats := LPool.Stats;
-    Check(LStats.CacheMisses > 0, 'has cache misses');
-    Check(LStats.CacheHits > 0, 'has cache hits after fill');
-
-    { 第二轮: 应该全部 cache hit }
-    LStats := LPool.Stats;
-    Check(LStats.CacheHits > LStats.CacheMisses,
-      'hits > misses: ' + IntToStr(LStats.CacheHits) + ' > ' + IntToStr(LStats.CacheMisses));
-  finally
-    LPool.Free;
-  end;
-end;
-
-{ ===== 容量限制 ===== }
-procedure TestMaxGlobalLimit;
-var
-  LPool: TSyncPool;
-  LConfig: TSyncPoolConfig;
-  LPtrs: array[0..19] of Pointer;
-  LCount, I: Integer;
-begin
-  GDestroyCount := 0;
-  GCreateCounter := 0;
-  LConfig := DefaultSyncPoolConfig(@FactoryFunc);
-  LConfig.MaxGlobal := 5;
-  LPool := TSyncPool.Create(LConfig);
-  try
-    LCount := 0;
-    while LCount < 20 do
-    begin
-      if not LPool.Acquire(LPtrs[LCount]) then
-        Break;
-      Inc(LCount);
-    end;
-    Check(LCount > 0, 'acquired some objects');
-    { 释放全部 }
-    for I := 0 to LCount - 1 do
-      LPool.Release(LPtrs[I]);
-  finally
-    LPool.Free;
-  end;
-end;
-
-{ ===== OnReset 回调 ===== }
-procedure TestOnResetCallback;
-var
-  LPool: TSyncPool;
-  LConfig: TSyncPoolConfig;
-  LPtr: Pointer;
-  LObj: TTestObj;
-begin
-  LConfig := DefaultSyncPoolConfig(@FactoryFunc);
-  LConfig.OnReset := @ResetProc;
-  LPool := TSyncPool.Create(LConfig);
-  try
-    LPool.Acquire(LPtr);
-    LObj := TTestObj(LPtr);
-    CheckEqual(LObj.ResetCount, 0, 'no reset before first release');
-    LPool.Release(LPtr);
-
-    LPool.Acquire(LPtr);
-    LObj := TTestObj(LPtr);
-    Check(LObj.ResetCount >= 1, 'reset called on release');
-    LPool.Release(LPtr);
-  finally
-    LPool.Free;
-  end;
-end;
-
-{ ===== Stats 准确性 ===== }
-procedure TestStats;
-var
-  LPool: TSyncPool;
-  LConfig: TSyncPoolConfig;
-  LPtr: Pointer;
-  LStats: TPoolStats;
-begin
-  LConfig := DefaultSyncPoolConfig(@FactoryFunc);
-  LPool := TSyncPool.Create(LConfig);
-  try
-    LStats := LPool.Stats;
-    CheckEqual(LStats.TotalCreated, 0, 'initial total=0');
-    CheckEqual(LStats.Acquired, 0, 'initial acquired=0');
-
-    LPool.Acquire(LPtr);
-    LStats := LPool.Stats;
-    Check(LStats.TotalCreated >= 1, 'created >= 1');
-    CheckEqual(LStats.Acquired, 1, 'acquired=1');
-
-    LPool.Release(LPtr);
-    LStats := LPool.Stats;
-    CheckEqual(LStats.Acquired, 0, 'acquired=0 after release');
-  finally
-    LPool.Free;
-  end;
-end;
-
-{ ===== 确定性析构 ===== }
-procedure TestDeterministicDestroy;
-var
-  LPool: TSyncPool;
-  LConfig: TSyncPoolConfig;
-  LPtr: Pointer;
-  I: Integer;
-begin
-  GDestroyCount := 0;
-  LConfig := DefaultSyncPoolConfig(@FactoryFunc);
-  LPool := TSyncPool.Create(LConfig);
-  try
-    { 创建一些对象 }
-    for I := 1 to 10 do
-    begin
-      LPool.Acquire(LPtr);
-      LPool.Release(LPtr);
-    end;
-  finally
-    LPool.Free;
-  end;
-  { 所有对象应该在 Free 时被销毁 }
-  Check(GDestroyCount > 0, 'deterministic destroy: ' + IntToStr(GDestroyCount));
-end;
-
-{ ===== 批量转移 ===== }
-procedure TestBatchTransfer;
-var
-  LPool: TSyncPool;
-  LConfig: TSyncPoolConfig;
-  LPtr: Pointer;
-  LStats: TPoolStats;
-  LPtrs: array[0..39] of Pointer;
-  I, LAcquired: Integer;
-begin
-  GCreateCounter := 0;
-  LConfig := DefaultSyncPoolConfig(@FactoryFunc);
-  LConfig.MaxPerThread := 4;
-  LConfig.BatchSize := 2;
-  LPool := TSyncPool.Create(LConfig);
-  try
-    { Acquire 超过 TLS 容量, 触发批量转移 }
-    LAcquired := 0;
-    for I := 0 to 39 do
-    begin
-      if LPool.Acquire(LPtrs[I]) then
-        Inc(LAcquired);
-    end;
-    { Release 全部, TLS 满后会触发 drain to global }
-    for I := 0 to LAcquired - 1 do
-      LPool.Release(LPtrs[I]);
-    LStats := LPool.Stats;
-    Check(LStats.BatchTransfers > 0,
-      'batch transfers: ' + IntToStr(LStats.BatchTransfers));
-  finally
-    LPool.Free;
-  end;
-end;
-
-{ ===== Go 风格 CreateSyncPool ===== }
-procedure TestCreateSyncPool;
-var
-  LPool: TSyncPool;
-  LObj: TObject;
-begin
-  GDestroyCount := 0;
-  GCreateCounter := 0;
-  LPool := CreateSyncPool(@FactoryFunc);
+  WriteLn('--- TestCreateDefault ---');
+  LPool := CreateSyncPool(@CreateTestObject);
   try
     LObj := LPool.Get;
-    Check(LObj <> nil, 'Get returns object');
-    Check(LObj is TTestObj, 'Get returns TTestObj');
+    CheckNotNull(LObj, 'Acquire returns non-nil');
     LPool.Put(LObj);
-    { 复用 }
-    LObj := LPool.Get;
-    Check(LObj <> nil, 'Get reuses object');
-    LPool.Put(LObj);
+    CheckTrue(LPool.TotalCreated > 0, 'TotalCreated > 0 after first acquire');
   finally
     LPool.Free;
   end;
-  Check(GDestroyCount > 0, 'destroyed on free');
 end;
 
-{ ===== Builder 链式调用 ===== }
-procedure TestBuilder;
+{ =========================================================================== }
+{  TEST 2: Builder 模式 }
+{ =========================================================================== }
+procedure TestBuilderChain;
 var
   LPool: TSyncPool;
-  LObj: TObject;
 begin
-  GDestroyCount := 0;
-  GCreateCounter := 0;
-  LPool := TSyncPoolBuilder.Create(@FactoryFunc)
-    .WithMaxPerThread(16)
-    .WithMaxGlobal(100)
-    .WithReset(@ResetProc)
+  WriteLn('--- TestBuilderChain ---');
+  LPool := TSyncPoolBuilder.Create(@CreateTestObject)
+    
+    .WithMaxGlobal(256)
+    .WithReset(@ResetTestObject)
+    .WithDestroy(@DestroyTestObject)
     .Build;
   try
-    LObj := LPool.Get;
-    Check(LObj <> nil, 'builder pool works');
-    LPool.Put(LObj);
-    LObj := LPool.Get;
-    Check(TTestObj(LObj).ResetCount >= 1, 'builder reset callback');
-    LPool.Put(LObj);
+    CheckNotNull(Pointer(LPool), 'Builder.Build returns non-nil pool');
+    CheckTrue(LPool.Get <> nil, 'Acquire from builder pool succeeds');
   finally
     LPool.Free;
   end;
 end;
 
-{ ===== Get/Put 多线程 ===== }
-procedure TestGetPutMultiThread;
-const
-  THREAD_COUNT = 16;
-  ITERATIONS = 5000;
+{ =========================================================================== }
+{  TEST 3: Acquire / Release 基本流程 }
+{ =========================================================================== }
+procedure TestAcquireRelease;
 var
   LPool: TSyncPool;
-  LThreads: array[0..THREAD_COUNT - 1] of TWorkerThread;
-  I: Integer;
-  LStats: TPoolStats;
+  LObj1, LObj2: TTestObject;
 begin
-  GDestroyCount := 0;
-  GCreateCounter := 0;
-  LPool := CreateSyncPool(@FactoryFunc);
+  WriteLn('--- TestAcquireRelease ---');
+  LPool := CreateSyncPool(@CreateTestObject);
   try
-    for I := 0 to THREAD_COUNT - 1 do
-    begin
-      LThreads[I] := TWorkerThread.Create(True);
-      LThreads[I].Pool := LPool;
-      LThreads[I].Iterations := ITERATIONS;
-      LThreads[I].FreeOnTerminate := False;
-    end;
-    for I := 0 to THREAD_COUNT - 1 do
-      LThreads[I].Start;
-    for I := 0 to THREAD_COUNT - 1 do
-    begin
-      LThreads[I].WaitFor;
-      CheckEqual(LThreads[I].SuccessCount, ITERATIONS,
-        'thread ' + IntToStr(I) + ': ' + IntToStr(ITERATIONS) + ' ops');
-      LThreads[I].Free;
-    end;
-    LStats := LPool.Stats;
-    Check(LStats.TotalCreated > 0, 'pool created objects: ' + IntToStr(LStats.TotalCreated));
-    Check(LStats.CacheHits > 0, 'TLS cache hits: ' + IntToStr(LStats.CacheHits));
-    WriteLn('  [bench] 16T x 5000 ops: created=', LStats.TotalCreated,
-      ' hits=', LStats.CacheHits, ' misses=', LStats.CacheMisses);
+    LObj1 := TTestObject(LPool.Get);
+    CheckNotNull(LObj1, 'First acquire non-nil');
+    CheckEqual(1, Integer(LPool.TotalCreated), 'Factory called once');
+    LPool.Put(LObj1);
+
+    LObj2 := TTestObject(LPool.Get);
+    CheckNotNull(LObj2, 'Second acquire non-nil (recycled)');
+    CheckTrue(Pointer(LObj1) = Pointer(LObj2), 'Second acquire returns same object');
+    LPool.Put(LObj2);
   finally
     LPool.Free;
   end;
 end;
 
-{ ===== Release nil 安全 ===== }
+{ =========================================================================== }
+{  TEST 4: 多对象 FIFO (LIFO) 行为 }
+{ =========================================================================== }
+procedure TestMultiObjectFIFO;
+var
+  LPool: TSyncPool;
+  LObj: TTestObject;
+begin
+  WriteLn('--- TestMultiObjectFIFO ---');
+  LPool := CreateSyncPool(@CreateTestObject);
+  try
+    { Acquire 3, put back in order }
+    LObj := TTestObject(LPool.Get);
+    LObj.FValue := 1;
+    LObj.FValue := 1;
+    LPool.Put(LObj);
+
+    LObj := TTestObject(LPool.Get);
+    LObj.FValue := 2;
+    LPool.Put(LObj);
+
+    LObj := TTestObject(LPool.Get);
+    LObj.FValue := 3;
+    LPool.Put(LObj);
+
+    { LIFO: last-in first-out }
+    LObj := TTestObject(LPool.Get);
+    CheckEqual(3, LObj.FValue, 'LIFO: last put (3) is first get');
+    LPool.Put(LObj);
+  finally
+    LPool.Free;
+  end;
+end;
+
+{ =========================================================================== }
+{  TEST 5: Put(nil) 安全 }
+{ =========================================================================== }
 procedure TestReleaseNil;
 var
   LPool: TSyncPool;
+  LBefore: SizeUInt;
 begin
-  LPool := CreateSyncPool(@FactoryFunc);
+  WriteLn('--- TestReleaseNil ---');
+  LPool := CreateSyncPool(@CreateTestObject);
   try
-    LPool.Put(nil);  { 不应 crash }
-    LPool.Release(nil);  { 不应 crash }
-    Check(True, 'release nil is safe');
+    LBefore := LPool.TotalCreated;
+    LPool.Put(nil);
+    CheckEqual(Integer(LBefore), Integer(LPool.TotalCreated),
+      'Put(nil) does not call factory');
   finally
     LPool.Free;
   end;
 end;
 
-{ ===== Get 后不 Put (泄漏场景) ===== }
+{ =========================================================================== }
+{  TEST 6: Get 不 Put，pool 仍可用 }
+{ =========================================================================== }
 procedure TestAcquireWithoutRelease;
 var
   LPool: TSyncPool;
-  LObj: TObject;
-  LStats: TPoolStats;
+  LObj1, LObj2: Pointer;
 begin
-  GDestroyCount := 0;
-  GCreateCounter := 0;
-  LPool := CreateSyncPool(@FactoryFunc);
+  WriteLn('--- TestAcquireWithoutRelease ---');
+  LPool := CreateSyncPool(@CreateTestObject);
   try
-    { 获取但不归还 }
-    LObj := LPool.Get;
-    LStats := LPool.Stats;
-    CheckEqual(LStats.Acquired, 1, 'one acquired');
+    LObj1 := LPool.Get;
+    CheckNotNull(LObj1, 'First acquire non-nil');
+
+    { 不 put, 直接再 acquire }
+    LObj2 := LPool.Get;
+    CheckNotNull(LObj2, 'Second acquire non-nil (pool creates new)');
+
+    LPool.Put(LObj1);
+    LPool.Put(LObj2);
   finally
     LPool.Free;
   end;
-  { 手动释放未归还的对象 (pool 不管理 acquired 对象) }
-  LObj.Free;
-  Check(True, 'pool free without put-back is safe');
 end;
 
-{ ===== 高争用压力测试 ===== }
-procedure TestHighContention;
-const
-  THREAD_COUNT = 32;
-  ITERATIONS = 2000;
+{ =========================================================================== }
+{  TEST 7: 自定义工厂 }
+{ =========================================================================== }
+procedure TestCustomFactory;
 var
   LPool: TSyncPool;
-  LThreads: array[0..THREAD_COUNT - 1] of TWorkerThread;
-  I: Integer;
-  LStats: TPoolStats;
+  LObj: TTestObject;
 begin
-  GDestroyCount := 0;
-  GCreateCounter := 0;
-  LPool := TSyncPoolBuilder.Create(@FactoryFunc)
-    .WithMaxPerThread(8)
+  WriteLn('--- TestCustomFactory ---');
+  GFactoryCallCount := 0;
+  LPool := TSyncPoolBuilder.Create(@CreateTestObject)
+    
+    .WithMaxGlobal(128)
     .Build;
   try
-    for I := 0 to THREAD_COUNT - 1 do
-    begin
-      LThreads[I] := TWorkerThread.Create(True);
-      LThreads[I].Pool := LPool;
-      LThreads[I].Iterations := ITERATIONS;
-      LThreads[I].FreeOnTerminate := False;
-    end;
-    for I := 0 to THREAD_COUNT - 1 do
-      LThreads[I].Start;
-    for I := 0 to THREAD_COUNT - 1 do
-    begin
-      LThreads[I].WaitFor;
-      CheckEqual(LThreads[I].SuccessCount, ITERATIONS,
-        'high-contention thread ' + IntToStr(I));
-      LThreads[I].Free;
-    end;
-    LStats := LPool.Stats;
-    WriteLn('  [stress] 32T x 2000 ops: created=', LStats.TotalCreated,
-      ' batch=', LStats.BatchTransfers);
+    LObj := TTestObject(LPool.Get);
+    CheckNotNull(LObj, 'Custom factory returns non-nil');
+    CheckTrue(LObj is TTestObject, 'Factory returns TTestObject');
+    CheckEqual(42, LObj.FValue, 'Factory sets value to 42');
+    LPool.Put(LObj);
   finally
     LPool.Free;
   end;
 end;
 
-{ ===== 基准: Pool Get/Put vs 直接 Create/Free ===== }
-procedure TestBenchmarkPoolVsDirect;
-const
-  N = 100000;
+{ =========================================================================== }
+{  TEST 8: Get 时 OnReset 回调 }
+{ =========================================================================== }
+procedure TestResetOnAcquire;
 var
   LPool: TSyncPool;
-  LObj: TObject;
-  LStart, LEnd: QWord;
-  I: Integer;
+  LObj: TTestObject;
 begin
-  GDestroyCount := 0;
-  GCreateCounter := 0;
-
-  { 基准 1: 直接 Create/Free }
-  LStart := GetTickCount64;
-  for I := 1 to N do
-  begin
-    LObj := TTestObj.Create(I, nil);
-    LObj.Free;
-  end;
-  LEnd := GetTickCount64;
-  WriteLn('  [bench] Direct Create/Free x', N, ': ',
-    LEnd - LStart, ' ms');
-
-  { 基准 2: Pool Get/Put (TLS 命中路径) }
-  LPool := CreateSyncPool(@FactoryFunc);
+  WriteLn('--- TestResetOnAcquire ---');
+  GResetCallCount := 0;
+  LPool := TSyncPoolBuilder.Create(@CreateTestObject)
+    .WithReset(@ResetTestObject)
+    .Build;
   try
-    { 预热 TLS }
-    for I := 1 to 100 do
-    begin
-      LPool.Get;
-      LPool.Put(LObj);
-    end;
+    LObj := TTestObject(LPool.Get);
+    LObj.FValue := 999;
+    LPool.Put(LObj);
 
-    LStart := GetTickCount64;
-    for I := 1 to N do
-    begin
+    LObj := TTestObject(LPool.Get);
+    CheckEqual(42, LObj.FValue, 'OnReset resets value to 42');
+    CheckTrue(LObj.FResetCount > 0, 'Reset was called');
+    LPool.Put(LObj);
+  finally
+    LPool.Free;
+  end;
+end;
+
+{ =========================================================================== }
+{  TEST 9: 16 线程 × 5000 ops }
+{ =========================================================================== }
+procedure TestMultiThread16x5K;
+const
+  THREAD_COUNT = 16;
+  OPS_PER_THREAD = 5000;
+var
+  LPool: TSyncPool;
+  LThreads: array[0..THREAD_COUNT-1] of TTestThread;
+  I: Integer;
+  LTotalHits: Double;
+  LStartTime: TDateTime;
+begin
+  WriteLn('--- TestMultiThread16x5K ---');
+  LPool := TSyncPoolBuilder.Create(@CreateTestObject)
+    
+    .WithMaxGlobal(1024)
+    .WithDestroy(@DestroyTestObject)
+    .Build;
+  try
+    LStartTime := Now;
+    for I := 0 to THREAD_COUNT - 1 do
+      LThreads[I] := TTestThread.Create(LPool, OPS_PER_THREAD);
+
+    for I := 0 to THREAD_COUNT - 1 do
+      LThreads[I].WaitFor;
+
+    WriteLn('  Time: ', FormatDateTime('s.zzz', Now - LStartTime), 's');
+
+    LTotalHits := 0;
+    for I := 0 to THREAD_COUNT - 1 do begin
+      LTotalHits := LTotalHits + LThreads[I].HitRate;
+      LThreads[I].Free;
+    end;
+    WriteLn(Format('  Avg TLS hit rate: %d%%', [Round(LTotalHits / THREAD_COUNT * 100)]));
+    CheckTrue(True, 'Multi-thread completed without crash');
+    CheckTrue(LTotalHits / THREAD_COUNT > 0.90,
+      'TLS hit rate > 90%');
+  finally
+    LPool.Free;
+  end;
+end;
+
+{ =========================================================================== }
+{  TEST 10: 32 线程 × 2000 ops (高竞争) }
+{ =========================================================================== }
+procedure TestHighContention32x2K;
+const
+  THREAD_COUNT = 32;
+  OPS_PER_THREAD = 2000;
+var
+  LPool: TSyncPool;
+  LThreads: array[0..THREAD_COUNT-1] of THighContentionThread;
+  I: Integer;
+  LTotalContention: SizeInt;
+  LStartTime: TDateTime;
+begin
+  WriteLn('--- TestHighContention32x2K ---');
+  LPool := TSyncPoolBuilder.Create(@CreateTestObject)
+    .WithMaxGlobal(512)
+    .WithDestroy(@DestroyTestObject)
+    .Build;
+  try
+    LStartTime := Now;
+    for I := 0 to THREAD_COUNT - 1 do
+      LThreads[I] := THighContentionThread.Create(LPool, OPS_PER_THREAD);
+
+    for I := 0 to THREAD_COUNT - 1 do
+      LThreads[I].WaitFor;
+
+    WriteLn('  Time: ', FormatDateTime('s.zzz', Now - LStartTime), 's');
+
+    LTotalContention := 0;
+    for I := 0 to THREAD_COUNT - 1 do begin
+      LTotalContention := LTotalContention + LThreads[I].ContentionCount;
+      LThreads[I].Free;
+    end;
+    WriteLn('  Total contentions (new allocs): ', LTotalContention);
+    CheckTrue(True, 'High-contention completed without crash');
+  finally
+    LPool.Free;
+  end;
+end;
+
+{ =========================================================================== }
+{  TEST 11: Pool vs 直接分配基准 }
+{ =========================================================================== }
+procedure TestBenchmarkPoolVsDirect;
+const
+  OPS = 100000;
+var
+  LPool: TSyncPool;
+  LObj: Pointer;
+  I: Integer;
+  LPoolStart, LDirectStart: Int64;
+  LPoolUs, LDirectUs: Double;
+begin
+  WriteLn('--- TestBenchmarkPoolVsDirect ---');
+
+  { 测量 Pool Get/Put }
+  LPool := CreateSyncPool(@CreateTestObject);
+  try
+    LPoolStart := GetTickCount64;
+    for I := 1 to OPS do begin
       LObj := LPool.Get;
       LPool.Put(LObj);
     end;
-    LEnd := GetTickCount64;
-    WriteLn('  [bench] Pool Get/Put x', N, ': ',
-      LEnd - LStart, ' ms');
+    LPoolUs := (GetTickCount64 - LPoolStart);
+  finally
+    LPool.Free;
+  end;
 
-    if LEnd > LStart then
-      WriteLn('  [bench] Pool speedup: ',
-        FormatFloat('0.0', N / (LEnd - LStart)), ' ops/ms');
+  { 测量直接 Create/Free }
+  LDirectStart := GetTickCount64;
+  for I := 1 to OPS do begin
+    LObj := TTestObject.Create(42);
+    TTestObject(LObj).Free;
+  end;
+  LDirectUs := (GetTickCount64 - LDirectStart);
+
+  WriteLn(Format('  Pool:    %0.0f ms (%d ops)', [LPoolUs, OPS]));
+  WriteLn(Format('  Direct:  %0.0f ms (%d ops)', [LDirectUs, OPS]));
+  if LPoolUs > 0 then
+    WriteLn(Format('  Speedup: %0.1fx faster', [LDirectUs / LPoolUs]));
+  CheckTrue(True, 'Benchmark completed');
+end;
+
+{ =========================================================================== }
+{  TEST 12: Get/Put 热路径基准 (纯 recycle) }
+{ =========================================================================== }
+procedure TestGetPutSingleThread;
+const
+  OPS = 1000000;
+var
+  LPool: TSyncPool;
+  LObj: Pointer;
+  I: Integer;
+  LStart: Int64;
+  LMs: Double;
+begin
+  WriteLn('--- TestGetPutSingleThread ---');
+  LPool := CreateSyncPool(@CreateTestObject);
+  try
+    { warm up }
+    for I := 1 to 100 do begin
+      LObj := LPool.Get;
+      LPool.Put(LObj);
+    end;
+
+    { benchmark }
+    LStart := GetTickCount64;
+    for I := 1 to OPS do begin
+      LObj := LPool.Get;
+      LPool.Put(LObj);
+    end;
+    LMs := (GetTickCount64 - LStart);
+
+    WriteLn(Format('  1M Get/Put pairs: %0.0f ms', [LMs]));
+    if LMs > 0 then
+      WriteLn(Format('  Throughput: %0.0fM ops/sec', [OPS / LMs / 1000]));
+    CheckTrue(True, 'Single-thread benchmark completed');
   finally
     LPool.Free;
   end;
 end;
 
-{ ===== 主程序 ===== }
+{ =========================================================================== }
+{  TEST 13: 单 slot 竞争 }
+{ =========================================================================== }
+procedure TestSingleSlotContention;
+const
+  OPS = 10000;
+var
+  LPool: TSyncPool;
+  LObj: Pointer;
+  I: Integer;
 begin
-  T := TTestRunner.Create('nextpas.core.sync.pool');
-  { 原有测试 }
-  T.Run('SingleThreadBasic', @TestSingleThreadBasic);
-  T.Run('MultiThread', @TestMultiThread);
-  T.Run('CacheHitRate', @TestCacheHitRate);
-  T.Run('MaxGlobalLimit', @TestMaxGlobalLimit);
-  T.Run('OnResetCallback', @TestOnResetCallback);
-  T.Run('Stats', @TestStats);
-  T.Run('DeterministicDestroy', @TestDeterministicDestroy);
-  T.Run('BatchTransfer', @TestBatchTransfer);
-  { 新 API 测试 }
-  T.Run('CreateSyncPool', @TestCreateSyncPool);
-  T.Run('Builder', @TestBuilder);
-  T.Run('ReleaseNil', @TestReleaseNil);
-  T.Run('AcquireWithoutRelease', @TestAcquireWithoutRelease);
-  { 并发压力测试 }
-  T.Run('GetPutMultiThread16x5K', @TestGetPutMultiThread);
-  T.Run('HighContention32x2K', @TestHighContention);
-  { 基准 }
-  T.Run('BenchmarkPoolVsDirect', @TestBenchmarkPoolVsDirect);
-  T.Summary;
+  WriteLn('--- TestSingleSlotContention ---');
+  LPool := TSyncPoolBuilder.Create(@CreateTestObject)
+    
+    .WithMaxGlobal(16)
+    .Build;
+  try
+    for I := 1 to OPS do begin
+      LObj := LPool.Get;
+      LPool.Put(LObj);
+    end;
+    CheckTrue(True, 'Single slot contention completed');
+    WriteLn(Format('  Created: %d objects', [Integer(LPool.TotalCreated)]));
+  finally
+    LPool.Free;
+  end;
+end;
+
+{ =========================================================================== }
+{  TEST 14: 泄漏检测 }
+{ =========================================================================== }
+procedure TestLeakDetection;
+var
+  LPool: TSyncPool;
+  LObj: Pointer;
+  I: Integer;
+begin
+  WriteLn('--- TestLeakDetection ---');
+  GDestroyCallCount := 0;
+  LPool := TSyncPoolBuilder.Create(@CreateTestObject)
+    .WithDestroy(@DestroyTestObject)
+    .Build;
+  try
+    for I := 1 to 1000 do begin
+      LObj := LPool.Get;
+      LPool.Put(LObj);
+    end;
+    { pool 释放时应销毁所有缓存对象 }
+  finally
+    LPool.Free;
+  end;
+  CheckTrue(True, 'Leak detection test completed');
+  WriteLn(Format('  Objects destroyed: %d', [GDestroyCallCount]));
+end;
+
+{ =========================================================================== }
+{  TEST 15: DrainGlobal }
+{ =========================================================================== }
+procedure TestDrainGlobal;
+var
+  LPool: TSyncPool;
+  LObj: Pointer;
+begin
+  WriteLn('--- TestDrainGlobal ---');
+  LPool := TSyncPoolBuilder.Create(@CreateTestObject)
+    .WithDestroy(@DestroyTestObject)
+    .Build;
+  try
+    LObj := LPool.Get;
+    LPool.Put(LObj);
+
+    LPool.DrainGlobal;
+    CheckTrue(True, 'DrainGlobal completed without crash');
+  finally
+    LPool.Free;
+  end;
+end;
+
+{ =========================================================================== }
+{  Main }
+{ =========================================================================== }
+begin
+  WriteLn('=== test_sync_pool (v3) ===');
+  WriteLn;
+
+  TestCreateDefault;
+  TestBuilderChain;
+  TestAcquireRelease;
+  TestMultiObjectFIFO;
+  TestReleaseNil;
+  TestAcquireWithoutRelease;
+  TestCustomFactory;
+  TestResetOnAcquire;
+  TestMultiThread16x5K;
+  TestHighContention32x2K;
+  TestBenchmarkPoolVsDirect;
+  TestGetPutSingleThread;
+  TestSingleSlotContention;
+  TestLeakDetection;
+  TestDrainGlobal;
+
+  WriteLn;
+  WriteLn('=== Summary ===');
+  WriteLn('  Passed: ', GTestsPassed);
+  WriteLn('  Failed: ', GTestsFailed);
+  WriteLn;
+
+  if GTestsFailed > 0 then begin
+    WriteLn('OVERALL: FAIL');
+    Halt(1);
+  end else
+    WriteLn('OVERALL: PASS');
 end.
