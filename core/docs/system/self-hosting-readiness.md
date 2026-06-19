@@ -241,7 +241,7 @@ integration can be deferred.
 |------|----------|-------|--------|----------------|
 | 0: system.classes Facade | **Blocker** (global) | system | Medium | **PARTIAL** — stream-core + interface 基础类型有效 (7 symbols)，file-compat 缺失 |
 | 1: RTTI Shape | Critical | compiler + collections | Medium | **PASS** — TTypeKind/KindOf/ManagedKinds 验证通过 |
-| 2: Unit Lifecycle | Critical | compiler + rtl | High | **PARTIAL** — 编译器管线就绪，运行时 + 拓扑排序待完成 |
+| 2: Unit Lifecycle | Critical | compiler + rtl | High | **PHASE 0 COMPLETE** — 拓扑排序 + _start 直接调用，System 强制首位 |
 | 3: Process Lifecycle | Important | rtl | Medium | **PHASE 0 COMPLETE** — 编译器+运行时就绪，fsync stdout/stderr，防重入，端到端验证通过 |
 | 4: Heap Manager | Important | mem + compiler | Medium | **PARTIAL** — @np_alloc/@np_free 存在，未连接 nextpas.core.mem |
 | 5: Exception Unwind | Normal | compiler | Low | **PASS** — setjmp/longjmp freestanding asm 完整 |
@@ -281,16 +281,22 @@ These gates should be reviewed quarterly. Update `goal-tree.md` and this documen
 each gate progresses toward completion. The first gate to close (Gate 5, exception unwind)
 is already partially covered by the `test_hir_exception` test suite.
 
-## Gate 2: Unit Lifecycle — 验证结果 (2026-06-18, 更新于 2026-06-18 Codex 审查)
+## Gate 2: Unit Lifecycle — 验证结果 (2026-06-18, 更新于 2026-06-19 Gate 2 实现)
 
-**状态: PARTIAL** (编译器管线已就绪，运行时 + 排序待完成)
+**状态: PHASE 0 COMPLETE** (编译器管线 + 拓扑排序 + _start 驱动全部就绪)
 
 | 验收标准 | 状态 |
 |----------|------|
-| UnitGraph → HIR nodes for each resolved unit | ✅ `SeedUnitLifecycleBodies` (sema:14887-14972) 已为每个 unit 生成 init/fini HIR |
+| UnitGraph → HIR nodes for each resolved unit | ✅ `SeedUnitLifecycleBodies` 已为每个 unit 生成 init/fini HIR |
 | np.system.unit_init/unit_fini seeded for multi-unit programs | ✅ 生成 `np_unit_init_<unit>`/`np_unit_fini_<unit>` LLVM 函数 |
-| LLVM emitter generates init/fini call sequences | ✅ 注册到 `@llvm.global_ctors`/`@llvm.global_dtors` (emitter:1258-1304) |
-| Multi-unit program runs with correct init ordering via nextPas | ⬜ 优先级同为 65535，LLVM 不保证同优先级内顺序；需 `_start` 驱动拓扑排序 |
+| LLVM emitter generates init/fini call sequences | ✅ `_start` 中直接调用 (拓扑序 init, 逆序 fini) |
+| Multi-unit program runs with correct init ordering via nextPas | ✅ Kahn BFS 拓扑排序，System 强制首位 |
+
+**关键变更 (2026-06-19)**:
+- `TUnitGraph.TopologicalInitOrder`: Kahn BFS 拓扑排序 (np_unit_graph.pas)
+- 删除 `@llvm.global_ctors`/`@llvm.global_dtors`，替换为 `_start` 中直接调用
+- 数据流: UnitGraph → SemanticModel → HIRModule → Emitter
+- `_start` 序列: `process_init → unit_init (拓扑序) → 用户代码 → unit_fini (逆序) → process_fini → halt`
 
 **已有基础**:
 - Lexer 解析 initialization/finalization 关键字 ✅
