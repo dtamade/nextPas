@@ -56,12 +56,6 @@ type
     FResults: array of TBenchResult;
     FResultCount: Integer;
 
-    {** 测量函数执行时间 }
-    function MeasureNs(AFunc: TBenchFunc; AIters: Int64): UInt64;
-
-    {** 校准迭代次数 }
-    function CalibrateIterations(AFunc: TBenchFunc): Int64;
-
     {** 热身 }
     procedure Warmup(AFunc: TBenchFunc);
 
@@ -87,6 +81,12 @@ type
     constructor Create;
     destructor Destroy; override;
 
+    {** 测量函数执行时间 }
+    function MeasureNs(AFunc: TBenchFunc; AIters: Int64): UInt64;
+
+    {** 校准迭代次数 }
+    function CalibrateIterations(AFunc: TBenchFunc): Int64;
+
     {** 运行单个基准测试 }
     function RunOne(const AName: string; AFunc: TBenchFunc): TBenchResult;
 
@@ -94,7 +94,7 @@ type
     procedure RunAll(const AEntries: array of TBenchEntry);
 
     {** 获取所有结果 }
-    function GetResults: array of TBenchResult;
+    function GetResults: TBenchResultArray;
 
     {** 获取结果数量 }
     function GetResultCount: Integer;
@@ -449,7 +449,7 @@ begin
   end;
 end;
 
-function TBenchRunner.GetResults: array of TBenchResult;
+function TBenchRunner.GetResults: TBenchResultArray;
 begin
   Result := FResults;
 end;
