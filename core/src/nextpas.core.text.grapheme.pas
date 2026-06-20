@@ -19,7 +19,7 @@ function GraphemeNext(const AData: PByte; ALen: SizeUInt): TGraphemeResult;
 implementation
 
 uses
-  nextpas.core.text.width,
+  nextpas.core.text.width.codepoint,
   nextpas.core.text.unicode.utils;
 
 type
