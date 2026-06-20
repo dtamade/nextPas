@@ -24,6 +24,7 @@ type
   TBenchEnvironment = nextpas.core.bench.base.TBenchEnvironment;
   TBenchConfig = nextpas.core.bench.base.TBenchConfig;
   TDoubleArray = nextpas.core.bench.base.TDoubleArray;
+  TBenchBaseline = nextpas.core.bench.base.TBenchBaseline;
 
   IBenchContext = nextpas.core.bench.intf.IBenchContext;
   IBenchSuite = nextpas.core.bench.intf.IBenchSuite;
@@ -42,10 +43,7 @@ type
     FEntryCount: Integer;
     FConfig: TBenchConfig;
     FFilter: string;
-    FBaselines: array of record
-      Name: string;
-      NsPerOp: Double;
-    end;
+    FBaselines: array of TBenchBaseline;
     FBaselineCount: Integer;
     FRunner: TBenchRunner;
     FReportGenerator: TBenchReportGenerator;
@@ -86,27 +84,21 @@ type
     FResults: array of TBenchResult;
     FResultCount: Integer;
     FEnvironment: TBenchEnvironment;
-    FBaselines: array of record
-      Name: string;
-      NsPerOp: Double;
-    end;
+    FBaselines: array of TBenchBaseline;
     FBaselineCount: Integer;
     FReportGenerator: TBenchReportGenerator;
 
     {** 生成基线对比 }
-    function GenerateComparisons: array of TBenchComparison;
+    function GenerateComparisons: TBenchComparisonArray;
 
   public
     constructor Create(const AResults: array of TBenchResult;
       const AEnvironment: TBenchEnvironment;
-      const ABaselines: array of record
-        Name: string;
-        NsPerOp: Double;
-      end);
+      const ABaselines: array of TBenchBaseline);
     destructor Destroy; override;
 
     {** IBenchResults 实现 }
-    function GetAll: array of TBenchResult;
+    function GetAll: TBenchResultArray;
     function GetByName(const AName: string): TBenchResult;
     function GetCount: Integer;
     function ToConsole: string;
@@ -116,7 +108,7 @@ type
     procedure SaveToJSON(const APath: string);
     procedure SaveToHTML(const APath: string);
     procedure SaveToTSV(const APath: string);
-    function CompareWithBaseline: array of TBenchComparison;
+    function CompareWithBaseline: TBenchComparisonArray;
     function HasRegression(AThreshold: Double): Boolean;
     function GetEnvironment: TBenchEnvironment;
   end;
@@ -366,10 +358,7 @@ end;
 
 constructor TBenchResults.Create(const AResults: array of TBenchResult;
   const AEnvironment: TBenchEnvironment;
-  const ABaselines: array of record
-    Name: string;
-    NsPerOp: Double;
-  end);
+  const ABaselines: array of TBenchBaseline);
 var
   i: Integer;
 begin
@@ -401,7 +390,7 @@ begin
   inherited Destroy;
 end;
 
-function TBenchResults.GenerateComparisons: array of TBenchComparison;
+function TBenchResults.GenerateComparisons: TBenchComparisonArray;
 var
   LComparisons: array of TBenchComparison;
   LStatsAnalyzer: IBenchStatsAnalyzer;
@@ -440,7 +429,7 @@ begin
   Result := LComparisons;
 end;
 
-function TBenchResults.GetAll: array of TBenchResult;
+function TBenchResults.GetAll: TBenchResultArray;
 begin
   Result := FResults;
 end;
@@ -525,7 +514,7 @@ begin
   CloseFile(LFile);
 end;
 
-function TBenchResults.CompareWithBaseline: array of TBenchComparison;
+function TBenchResults.CompareWithBaseline: TBenchComparisonArray;
 begin
   Result := GenerateComparisons;
 end;

@@ -80,6 +80,15 @@ type
   {** 整数数组 }
   TInt64Array = array of Int64;
 
+  {** 基线数据 }
+  TBenchBaseline = record
+    Name: string;
+    NsPerOp: Double;
+  end;
+
+  {** 基线数组 }
+  TBenchBaselineArray = array of TBenchBaseline;
+
 const
   {** 默认配置值 }
   BENCH_DEFAULT_MIN_DURATION_NS = 1000000000;  // 1 秒
