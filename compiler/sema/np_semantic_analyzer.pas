@@ -6766,7 +6766,19 @@ begin
       (FieldTypeId > 0) and FModel.GetTypeMeta(FieldTypeId, FieldMeta) and
       FieldMeta.IsRecord;
     Meta.Fields[High(Meta.Fields)].TypeId := FieldTypeId;
-    Inc(FieldIndex);
+    if Meta.Fields[High(Meta.Fields)].IsString then
+      Inc(FieldIndex, 3)
+    else if Meta.Fields[High(Meta.Fields)].IsDynArray then
+      Inc(FieldIndex, 2)
+    else if Meta.Fields[High(Meta.Fields)].IsRecord then
+    begin
+      if (FieldTypeId > 0) and FModel.GetTypeMeta(FieldTypeId, FieldMeta) then
+        Inc(FieldIndex, FieldMeta.Size div 8)
+      else
+        Inc(FieldIndex, 1);
+    end
+    else
+      Inc(FieldIndex, 1);
   end;
   FModel.AddConstValue(RecName + '$size', FieldIndex * 8);
   FModel.AddConstValue(RecName + '$record', 1);

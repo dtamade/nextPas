@@ -13,6 +13,23 @@ var
   LlvmIr: string;
   TestCount: LongInt;
 
+function CountSubstring(const AText, ASubstring: string): LongInt;
+var
+  Offset, MatchPos: SizeInt;
+begin
+  Result := 0;
+  if (AText = '') or (ASubstring = '') then
+    Exit;
+  Offset := 1;
+  repeat
+    MatchPos := Pos(ASubstring, Copy(AText, Offset, MaxInt));
+    if MatchPos = 0 then
+      Break;
+    Inc(Result);
+    Inc(Offset, MatchPos + Length(ASubstring) - 1);
+  until False;
+end;
+
 procedure Check(Condition: Boolean; const AName: string; ACode: LongInt);
 begin
   if not Condition then
@@ -751,6 +768,76 @@ begin
 
         Check(Pos('call i64 @np_tstring_len(', LlvmIr) > 0,
           'BlobVar $len computes tstring_len', 43);
+      finally
+        Emitter.Free;
+      end;
+    finally
+      Builder.Free;
+    end;
+  finally
+    Model.Free;
+  end;
+
+  { === Test 15: managed-record-cleanup emits tstring_fini for string field === }
+  Model := TSemanticModel.Create;
+  try
+    Model.AddConstValue('TRec.Name$idx', 0);
+    Model.SetTypeMeta(Model.AddType('TRec', 'declared'), Default(TTypeMetadata));
+    Model.AddTypedHirNode('process-init-runtime',
+      'np.system.process_init', 0, 0, '');
+    Model.AddTypedHirNode('var-decl-record-runtime',
+      'R', 0, 0, 'R'#9'3');
+    Model.AddTypedHirNode('managed-record-cleanup-runtime',
+      'Cleanup', 0, 0, 'R'#9'TRec'#9'Name:s');
+    Model.AddTypedHirNode('process-fini-runtime',
+      'np.system.process_fini', 0, 0, '');
+
+    Builder := THIRBuilder.Create(Model);
+    try
+      Builder.Build;
+      Emitter := THIRLlvmEmitter.Create(Builder.Module);
+      try
+        Emitter.EmitModule;
+        LlvmIr := Emitter.AsText;
+
+        Check(Pos('call void @np_tstring_fini(', LlvmIr) > 0,
+          'managed record cleanup emits tstring_fini', 44);
+      finally
+        Emitter.Free;
+      end;
+    finally
+      Builder.Free;
+    end;
+  finally
+    Model.Free;
+  end;
+
+  { === Test 16: managed-record-cleanup only cleans string field once === }
+  Model := TSemanticModel.Create;
+  try
+    Model.AddConstValue('TRec.Name$idx', 0);
+    Model.SetTypeMeta(Model.AddType('TRec', 'declared'), Default(TTypeMetadata));
+    Model.AddTypedHirNode('process-init-runtime',
+      'np.system.process_init', 0, 0, '');
+    Model.AddTypedHirNode('var-decl-record-runtime',
+      'R', 0, 0, 'R'#9'4');
+    Model.AddTypedHirNode('managed-record-cleanup-runtime',
+      'Cleanup', 0, 0, 'R'#9'TRec'#9'Name:s');
+    Model.AddTypedHirNode('process-fini-runtime',
+      'np.system.process_fini', 0, 0, '');
+
+    Builder := THIRBuilder.Create(Model);
+    try
+      Builder.Build;
+      Emitter := THIRLlvmEmitter.Create(Builder.Module);
+      try
+        Emitter.EmitModule;
+        LlvmIr := Emitter.AsText;
+
+        Check(Pos('call void @np_tstring_fini(', LlvmIr) > 0,
+          'mixed record cleanup still emits tstring_fini', 45);
+        Check(CountSubstring(LlvmIr, 'call void @np_tstring_fini(') = 1,
+          'mixed record cleanup emits one tstring_fini call', 46);
       finally
         Emitter.Free;
       end;

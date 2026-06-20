@@ -4531,8 +4531,10 @@ var
   TabPos, ColonPos: LongInt;
   RecAlloca, RecPtr: THIRValueId;
   FieldIdx: Int64;
-  FieldPtr, OwnerSlot, AllocSizeSlot, PtrSlot, LenSlot: THIRValueId;
-  NullVal, ZeroVal, ElemSizeVal: THIRValueId;
+  FieldPtr, PtrSlot, LenSlot: THIRValueId;
+  ZeroVal, ElemSizeVal: THIRValueId;
+  Offset: LongInt;
+  SlotPtr: THIRValueId;
   Instr: THIRInstr;
 begin
   Blob := ANode.Operand;
@@ -4583,32 +4585,19 @@ begin
 
     if FieldKind = 's' then
     begin
-      { string field: 4 slot layout (ptr, len, owner, alloc_size) }
-      OwnerSlot := FieldSlotPtr(RecPtr, FieldIdx + 2);
-      AllocSizeSlot := FieldSlotPtr(RecPtr, FieldIdx + 3);
-      if (OwnerSlot <> 0) and (AllocSizeSlot <> 0) then
-      begin
-        FillChar(Instr, SizeOf(Instr), 0);
-        Instr.ResultId := FModule.NewValue;
-        Instr.Kind := hikIntrinsic;
-        Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
-        Instr.IntrinsicName := 'string_release';
-        SetLength(Instr.Operands, 2);
-        Instr.Operands[0] := MakeTypedOperand(EmitLoad(GetPtrType, OwnerSlot), GetPtrType);
-        Instr.Operands[1] := MakeTypedOperand(EmitLoad(GetIntType, AllocSizeSlot), GetIntType);
-        EmitInstr(Instr);
+      { TString 24B: 调用 tstring_fini 然后清零 24 字节 (3 slots) }
+      FieldPtr := FieldSlotPtr(RecPtr, FieldIdx);
+      if FieldPtr <> 0 then
+        EmitTStringFini(FieldPtr);
 
-        { 清零 4 个 slot }
-        NullVal := EmitNullPtrValue;
-        ZeroVal := EmitConstIntOfType(0, GetIntType);
-        if (NullVal <> 0) and (ZeroVal <> 0) then
+      ZeroVal := EmitConstIntOfType(0, GetIntType);
+      if ZeroVal <> 0 then
+      begin
+        for Offset := 0 to 2 do
         begin
-          PtrSlot := FieldSlotPtr(RecPtr, FieldIdx);
-          LenSlot := FieldSlotPtr(RecPtr, FieldIdx + 1);
-          if PtrSlot <> 0 then EmitStore(GetPtrType, NullVal, PtrSlot);
-          if LenSlot <> 0 then EmitStore(GetIntType, ZeroVal, LenSlot);
-          EmitStore(GetPtrType, NullVal, OwnerSlot);
-          EmitStore(GetIntType, ZeroVal, AllocSizeSlot);
+          SlotPtr := FieldSlotPtr(RecPtr, FieldIdx + Offset);
+          if SlotPtr <> 0 then
+            EmitStore(GetIntType, ZeroVal, SlotPtr);
         end;
       end;
     end
