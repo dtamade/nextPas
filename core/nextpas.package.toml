@@ -1,0 +1,6 @@
+[package]
+name = "nextpas.core"
+version = "0.1.0"
+
+[sources]
+roots = ["src"]

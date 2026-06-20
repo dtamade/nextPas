@@ -1,0 +1,6 @@
+[package]
+name = "nextpas.compiler"
+version = "0.1.0"
+
+[sources]
+roots = ["frontend", "diagnostics", "targets", "syntax", "sema", "ir", "backend", "toolchain"]

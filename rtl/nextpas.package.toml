@@ -1,0 +1,6 @@
+[package]
+name = "nextpas.rtl"
+version = "0.1.0"
+
+[sources]
+roots = ["core/base", "core/text", "core/system"]
