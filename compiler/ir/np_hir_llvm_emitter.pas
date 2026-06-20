@@ -991,8 +991,11 @@ begin
       begin
         if Length(AInstr.Operands) >= 2 then
         begin
-          Op := '  ' + ValueRef(AInstr.ResultId) +
-            ' = call ' + TypeToLlvm(AInstr.TypeId) + ' ' + ValueRef(AInstr.Operands[0].ValueId) +
+          if TypeToLlvm(AInstr.TypeId) = 'void' then
+            Op := '  call void '
+          else
+            Op := '  ' + ValueRef(AInstr.ResultId) + ' = call ' + TypeToLlvm(AInstr.TypeId) + ' ';
+          Op := Op + ValueRef(AInstr.Operands[0].ValueId) +
             '(ptr ' + ValueRef(AInstr.Operands[1].ValueId);
           for I := 2 to High(AInstr.Operands) do
           begin
