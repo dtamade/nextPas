@@ -571,7 +571,7 @@ implementation
 
 uses
   nextpas.core.text.conv, nextpas.core.path, nextpas.core.fs.util,
-  nextpas.core.system.contracts;
+  nextpas.core.system.contracts, np_symbol_cache;
 
 type
   TStringArray = array of string;
@@ -584,6 +584,7 @@ type
     MinParamCount: LongInt;
     ParamSignature: string;
     TypeId: LongInt;
+    TypeRefName: string;
     ByteOffset: LongInt;
   end;
 
@@ -597,6 +598,7 @@ type
 var
   GImportedUnitCache: array of TCachedUnitSymbols;
   GImportedUnitCacheCount: LongInt = 0;
+  GDiskCache: TDiskSymbolCache = nil;
 
 function FindCachedUnit(const APath: string; AAge: Int64): LongInt;
 var
@@ -15306,12 +15308,18 @@ var
   PPDefines: TDefineTable;
   IncResolver: TFileIncludeResolver;
   CacheIdx: LongInt;
+  DiskUnit: TDiskCachedUnit;
+  Fingerprint: UInt32;
+  DiskHit: Boolean;
+  ResolvedTypeId: LongInt;
   Age: Int64;
   SymBefore, SymAfter, J, NextCache: LongInt;
   Sym: TSemanticSymbol;
 begin
   if FUnitGraph = nil then
     Exit;
+  if GDiskCache = nil then
+    GDiskCache := TDiskSymbolCache.Create('.nextpas/cache');
   TmpDiag := TDiagnosticsSink.Create;
   try
     for Index := FUnitGraph.ResolvedUnitCount - 1 downto 0 do
@@ -15349,6 +15357,68 @@ begin
             FModel.SetSymbolParamSignature(FModel.SymbolCount, ParamSignature);
             FModel.SetSymbolScope(FModel.SymbolCount, EnsureUnitScope(OwnerUnitId));
           end;
+        Continue;
+      end;
+
+      { In-memory cache miss — try persistent disk cache }
+      Fingerprint := ComputeSourceFingerprintFromFile(SourcePath);
+      DiskHit := GDiskCache.TryLoad(OwnerUnitId, Fingerprint, DiskUnit);
+      if DiskHit then
+      begin
+        SymBefore := FModel.SymbolCount;
+        for J := 0 to DiskUnit.SymbolCount - 1 do
+        begin
+          if SameText(DiskUnit.Symbols[J].Kind, 'type') and
+            (FModel.FindTypeByName(DiskUnit.Symbols[J].Name) > 0) then
+            Continue;
+          ResolvedTypeId := 0;
+          if DiskUnit.Symbols[J].TypeRefName <> '' then
+            ResolvedTypeId := ResolveTypeIdForOwner(
+              DiskUnit.Symbols[J].TypeRefName, OwnerUnitId);
+          FModel.AddSymbol(
+            DiskUnit.Symbols[J].Name,
+            DiskUnit.Symbols[J].Kind,
+            OwnerUnitId,
+            ResolvedTypeId,
+            DiskUnit.Symbols[J].ByteOffset
+          );
+          FModel.SetSymbolParamCount(FModel.SymbolCount,
+            DiskUnit.Symbols[J].ParamCount);
+          FModel.SetSymbolMinParamCount(FModel.SymbolCount,
+            DiskUnit.Symbols[J].MinParamCount);
+          FModel.SetSymbolParamSignature(FModel.SymbolCount,
+            DiskUnit.Symbols[J].ParamSignature);
+          FModel.SetSymbolScope(FModel.SymbolCount, EnsureUnitScope(OwnerUnitId));
+        end;
+        SymAfter := FModel.SymbolCount;
+        { Promote disk cache entry to in-memory cache }
+        if SymAfter > SymBefore then
+        begin
+          if GImportedUnitCacheCount >= Length(GImportedUnitCache) then
+            SetLength(GImportedUnitCache, GImportedUnitCacheCount + 16);
+          NextCache := GImportedUnitCacheCount;
+          Inc(GImportedUnitCacheCount);
+          GImportedUnitCache[NextCache].SourcePath := SourcePath;
+          GImportedUnitCache[NextCache].FileAge := Age;
+          GImportedUnitCache[NextCache].SymbolCount := SymAfter - SymBefore;
+          SetLength(GImportedUnitCache[NextCache].Symbols, SymAfter - SymBefore);
+          for J := SymBefore to SymAfter - 1 do
+          begin
+            Sym := FModel.SymbolAt(J);
+            with GImportedUnitCache[NextCache].Symbols[J - SymBefore] do
+            begin
+              Name := Sym.Name;
+              Kind := Sym.Kind;
+              OwnerUnitId := Sym.OwnerUnitId;
+              ParamCount := Sym.ParamCount;
+              MinParamCount := Sym.MinParamCount;
+              ParamSignature := Sym.ParamSignature;
+              TypeId := Sym.TypeId;
+              TypeRefName := '';
+              ByteOffset := Sym.ByteOffset;
+            end;
+          end;
+        end;
         Continue;
       end;
 
@@ -15411,6 +15481,12 @@ begin
         GImportedUnitCache[NextCache].FileAge := Age;
         GImportedUnitCache[NextCache].SymbolCount := SymAfter - SymBefore;
         SetLength(GImportedUnitCache[NextCache].Symbols, SymAfter - SymBefore);
+        { Also build disk cache entry }
+        DiskUnit.UnitId := OwnerUnitId;
+        DiskUnit.SourcePath := SourcePath;
+        DiskUnit.Fingerprint := ComputeSourceFingerprintFromFile(SourcePath);
+        DiskUnit.SymbolCount := SymAfter - SymBefore;
+        SetLength(DiskUnit.Symbols, SymAfter - SymBefore);
         for J := SymBefore to SymAfter - 1 do
         begin
           Sym := FModel.SymbolAt(J);
@@ -15423,9 +15499,25 @@ begin
             MinParamCount := Sym.MinParamCount;
             ParamSignature := Sym.ParamSignature;
             TypeId := Sym.TypeId;
+            if Sym.TypeId > 0 then
+              TypeRefName := FModel.TypeAt(Sym.TypeId - 1).Name
+            else
+              TypeRefName := '';
             ByteOffset := Sym.ByteOffset;
           end;
+          DiskUnit.Symbols[J - SymBefore].Name := Sym.Name;
+          DiskUnit.Symbols[J - SymBefore].Kind := Sym.Kind;
+          DiskUnit.Symbols[J - SymBefore].OwnerUnitId := OwnerUnitId;
+          DiskUnit.Symbols[J - SymBefore].ParamCount := Sym.ParamCount;
+          DiskUnit.Symbols[J - SymBefore].MinParamCount := Sym.MinParamCount;
+          DiskUnit.Symbols[J - SymBefore].ParamSignature := Sym.ParamSignature;
+          if Sym.TypeId > 0 then
+            DiskUnit.Symbols[J - SymBefore].TypeRefName := FModel.TypeAt(Sym.TypeId - 1).Name
+          else
+            DiskUnit.Symbols[J - SymBefore].TypeRefName := '';
+          DiskUnit.Symbols[J - SymBefore].ByteOffset := Sym.ByteOffset;
         end;
+        GDiskCache.Save(DiskUnit);
       end;
     end;
   finally
