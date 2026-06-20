@@ -1,0 +1,395 @@
+program test_bench_baseline;
+
+{$mode objfpc}{$H+}
+{$modeswitch advancedrecords}
+
+uses
+  SysUtils,
+  nextpas.core.bench.base,
+  nextpas.core.bench.baseline;
+
+var
+  GTestsPassed: Integer = 0;
+  GTestsFailed: Integer = 0;
+
+procedure Check(ACondition: Boolean; const ATestName: string);
+begin
+  if ACondition then
+  begin
+    Inc(GTestsPassed);
+    WriteLn('  ✓ ', ATestName);
+  end
+  else
+  begin
+    Inc(GTestsFailed);
+    WriteLn('  ✗ ', ATestName);
+  end;
+end;
+
+{ Helper functions }
+
+function CreateTestResult(const AName: string; ANsPerOp: Double;
+                          ABytesPerOp: Int64 = 0; AAllocsPerOp: Int64 = 0): TBenchResult;
+begin
+  Result := Default(TBenchResult);
+  Result.Name := AName;
+  Result.NsPerOp := ANsPerOp;
+  Result.BytesPerOp := ABytesPerOp;
+  Result.AllocsPerOp := AAllocsPerOp;
+end;
+
+function CreateTestBaseline(const AName: string; ANsPerOp: Double;
+                           ABytesPerOp: Int64 = 0; AAllocsPerOp: Int64 = 0): TBaselineData;
+begin
+  Result.Name := AName;
+  Result.NsPerOp := ANsPerOp;
+  Result.BytesPerOp := ABytesPerOp;
+  Result.AllocsPerOp := AAllocsPerOp;
+  Result.Timestamp := Now;
+  Result.GitHash := 'abc123';
+  Result.CompilerVersion := 'FPC 3.3.1';
+  Result.Notes := 'Test baseline';
+end;
+
+{ === TBaselineManager Tests === }
+
+procedure Test_Create;
+var
+  LManager: TBaselineManager;
+begin
+  WriteLn('Test_Create:');
+  LManager := TBaselineManager.Create(1.1);
+  Check(True, 'Created successfully');
+  Check(Length(LManager.GetAllBaselines) = 0, 'Initial baselines = 0');
+end;
+
+procedure Test_AddBaseline;
+var
+  LManager: TBaselineManager;
+  LBaseline: TBaselineData;
+begin
+  WriteLn('Test_AddBaseline:');
+  LManager := TBaselineManager.Create(1.1);
+
+  LBaseline := CreateTestBaseline('Sort', 1000);
+  LManager.AddBaseline(LBaseline);
+
+  Check(LManager.HasBaseline('Sort'), 'Has baseline Sort');
+  Check(not LManager.HasBaseline('Hash'), 'Does not have baseline Hash');
+end;
+
+procedure Test_AddBaselineFromResult;
+var
+  LManager: TBaselineManager;
+  LResult: TBenchResult;
+begin
+  WriteLn('Test_AddBaselineFromResult:');
+  LManager := TBaselineManager.Create(1.1);
+
+  LResult := CreateTestResult('Sort', 1000, 100, 5);
+  LManager.AddBaselineFromResult(LResult, 'def456', 'Initial baseline');
+
+  Check(LManager.HasBaseline('Sort'), 'Has baseline Sort');
+
+  LManager.GetBaseline('Sort');
+  Check(True, 'Can retrieve baseline');
+end;
+
+procedure Test_GetBaseline;
+var
+  LManager: TBaselineManager;
+  LBaseline: TBaselineData;
+begin
+  WriteLn('Test_GetBaseline:');
+  LManager := TBaselineManager.Create(1.1);
+
+  LBaseline := CreateTestBaseline('Sort', 1000);
+  LManager.AddBaseline(LBaseline);
+
+  LBaseline := LManager.GetBaseline('Sort');
+  Check(LBaseline.Name = 'Sort', 'Name = Sort');
+  Check(LBaseline.NsPerOp = 1000, 'NsPerOp = 1000');
+end;
+
+procedure Test_GetBaseline_NotFound;
+var
+  LManager: TBaselineManager;
+  LSuccess: Boolean;
+begin
+  WriteLn('Test_GetBaseline_NotFound:');
+  LManager := TBaselineManager.Create(1.1);
+
+  LSuccess := False;
+  try
+    LManager.GetBaseline('NonExistent');
+  except
+    on E: Exception do
+      LSuccess := True;
+  end;
+  Check(LSuccess, 'Raises exception for missing baseline');
+end;
+
+procedure Test_RemoveBaseline;
+var
+  LManager: TBaselineManager;
+begin
+  WriteLn('Test_RemoveBaseline:');
+  LManager := TBaselineManager.Create(1.1);
+
+  LManager.AddBaseline(CreateTestBaseline('Sort', 1000));
+  LManager.AddBaseline(CreateTestBaseline('Hash', 2000));
+
+  Check(LManager.HasBaseline('Sort'), 'Has baseline Sort');
+  Check(LManager.HasBaseline('Hash'), 'Has baseline Hash');
+
+  LManager.RemoveBaseline('Sort');
+
+  Check(not LManager.HasBaseline('Sort'), 'Baseline Sort removed');
+  Check(LManager.HasBaseline('Hash'), 'Baseline Hash still exists');
+end;
+
+procedure Test_ClearBaselines;
+var
+  LManager: TBaselineManager;
+begin
+  WriteLn('Test_ClearBaselines:');
+  LManager := TBaselineManager.Create(1.1);
+
+  LManager.AddBaseline(CreateTestBaseline('Sort', 1000));
+  LManager.AddBaseline(CreateTestBaseline('Hash', 2000));
+
+  Check(Length(LManager.GetAllBaselines) = 2, 'Has 2 baselines');
+
+  LManager.ClearBaselines;
+
+  Check(Length(LManager.GetAllBaselines) = 0, 'Baselines cleared');
+end;
+
+procedure Test_CompareWithBaseline_NoRegression;
+var
+  LManager: TBaselineManager;
+  LResult: TBenchResult;
+  LComparison: TBaselineComparison;
+begin
+  WriteLn('Test_CompareWithBaseline_NoRegression:');
+  LManager := TBaselineManager.Create(1.1);
+
+  LManager.AddBaseline(CreateTestBaseline('Sort', 1000));
+
+  // Current is 5% slower (1050 vs 1000)
+  LResult := CreateTestResult('Sort', 1050);
+  LComparison := LManager.CompareWithBaseline(LResult);
+
+  Check(LComparison.Ratio > 1, 'Ratio > 1');
+  Check(not LComparison.IsRegression, 'Not a regression');
+  Check(not LComparison.IsImprovement, 'Not an improvement');
+  Check(Abs(LComparison.PercentChange - 5) < 0.1, 'PercentChange ≈ 5%');
+end;
+
+procedure Test_CompareWithBaseline_Regression;
+var
+  LManager: TBaselineManager;
+  LResult: TBenchResult;
+  LComparison: TBaselineComparison;
+begin
+  WriteLn('Test_CompareWithBaseline_Regression:');
+  LManager := TBaselineManager.Create(1.1);
+
+  LManager.AddBaseline(CreateTestBaseline('Sort', 1000));
+
+  // Current is 20% slower (1200 vs 1000)
+  LResult := CreateTestResult('Sort', 1200);
+  LComparison := LManager.CompareWithBaseline(LResult);
+
+  Check(LComparison.Ratio > 1.1, 'Ratio > 1.1');
+  Check(LComparison.IsRegression, 'Is a regression');
+  Check(not LComparison.IsImprovement, 'Not an improvement');
+  Check(Abs(LComparison.PercentChange - 20) < 0.1, 'PercentChange ≈ 20%');
+end;
+
+procedure Test_CompareWithBaseline_Improvement;
+var
+  LManager: TBaselineManager;
+  LResult: TBenchResult;
+  LComparison: TBaselineComparison;
+begin
+  WriteLn('Test_CompareWithBaseline_Improvement:');
+  LManager := TBaselineManager.Create(1.1);
+
+  LManager.AddBaseline(CreateTestBaseline('Sort', 1000));
+
+  // Current is 20% faster (800 vs 1000)
+  LResult := CreateTestResult('Sort', 800);
+  LComparison := LManager.CompareWithBaseline(LResult);
+
+  Check(LComparison.Ratio < 1, 'Ratio < 1');
+  Check(not LComparison.IsRegression, 'Not a regression');
+  Check(LComparison.IsImprovement, 'Is an improvement');
+  Check(Abs(LComparison.PercentChange - (-20)) < 0.1, 'PercentChange ≈ -20%');
+end;
+
+procedure Test_CompareAllWithBaselines;
+var
+  LManager: TBaselineManager;
+  LResults: TBenchResultArray;
+  LComparisons: TBaselineComparisonArray;
+begin
+  WriteLn('Test_CompareAllWithBaselines:');
+  LManager := TBaselineManager.Create(1.1);
+
+  LManager.AddBaseline(CreateTestBaseline('Sort', 1000));
+  LManager.AddBaseline(CreateTestBaseline('Hash', 2000));
+
+  SetLength(LResults, 2);
+  LResults[0] := CreateTestResult('Sort', 1050); // 5% slower
+  LResults[1] := CreateTestResult('Hash', 1800); // 10% faster
+
+  LComparisons := LManager.CompareAllWithBaselines(LResults);
+
+  Check(Length(LComparisons) = 2, 'Found 2 comparisons');
+  Check(LComparisons[0].Baseline.Name = 'Sort', 'First comparison is Sort');
+  Check(LComparisons[1].Baseline.Name = 'Hash', 'Second comparison is Hash');
+end;
+
+procedure Test_HasRegression;
+var
+  LManager: TBaselineManager;
+  LResults: TBenchResultArray;
+begin
+  WriteLn('Test_HasRegression:');
+  LManager := TBaselineManager.Create(1.1);
+
+  LManager.AddBaseline(CreateTestBaseline('Sort', 1000));
+  LManager.AddBaseline(CreateTestBaseline('Hash', 2000));
+
+  // No regression
+  SetLength(LResults, 2);
+  LResults[0] := CreateTestResult('Sort', 1050); // 5% slower
+  LResults[1] := CreateTestResult('Hash', 1800); // 10% faster
+  Check(not LManager.HasRegression(LResults), 'No regression detected');
+
+  // With regression
+  LResults[1] := CreateTestResult('Hash', 2500); // 25% slower
+  Check(LManager.HasRegression(LResults), 'Regression detected');
+end;
+
+procedure Test_GetAllBaselines;
+var
+  LManager: TBaselineManager;
+  LBaselines: TBaselineArray;
+begin
+  WriteLn('Test_GetAllBaselines:');
+  LManager := TBaselineManager.Create(1.1);
+
+  LManager.AddBaseline(CreateTestBaseline('Sort', 1000));
+  LManager.AddBaseline(CreateTestBaseline('Hash', 2000));
+  LManager.AddBaseline(CreateTestBaseline('Parse', 3000));
+
+  LBaselines := LManager.GetAllBaselines;
+  Check(Length(LBaselines) = 3, 'Found 3 baselines');
+end;
+
+procedure Test_UpdateBaseline;
+var
+  LManager: TBaselineManager;
+  LBaseline: TBaselineData;
+begin
+  WriteLn('Test_UpdateBaseline:');
+  LManager := TBaselineManager.Create(1.1);
+
+  LManager.AddBaseline(CreateTestBaseline('Sort', 1000));
+  Check(LManager.GetBaseline('Sort').NsPerOp = 1000, 'Initial NsPerOp = 1000');
+
+  LBaseline := CreateTestBaseline('Sort', 1200);
+  LManager.AddBaseline(LBaseline);
+  Check(LManager.GetBaseline('Sort').NsPerOp = 1200, 'Updated NsPerOp = 1200');
+end;
+
+procedure Test_CustomThreshold;
+var
+  LManager: TBaselineManager;
+  LResult: TBenchResult;
+  LComparison: TBaselineComparison;
+begin
+  WriteLn('Test_CustomThreshold:');
+  // Use 20% threshold
+  LManager := TBaselineManager.Create(1.2);
+
+  LManager.AddBaseline(CreateTestBaseline('Sort', 1000));
+
+  // 15% slower - not a regression with 20% threshold
+  LResult := CreateTestResult('Sort', 1150);
+  LComparison := LManager.CompareWithBaseline(LResult);
+  Check(not LComparison.IsRegression, '15% slower is not regression with 20% threshold');
+
+  // 25% slower - is a regression
+  LResult := CreateTestResult('Sort', 1250);
+  LComparison := LManager.CompareWithBaseline(LResult);
+  Check(LComparison.IsRegression, '25% slower is regression with 20% threshold');
+end;
+
+procedure Test_JSON;
+var
+  LManager: TBaselineManager;
+  LJSON: string;
+begin
+  WriteLn('Test_JSON:');
+  LManager := TBaselineManager.Create(1.1);
+
+  LManager.AddBaseline(CreateTestBaseline('Sort', 1000));
+  LManager.AddBaseline(CreateTestBaseline('Hash', 2000));
+
+  LJSON := LManager.ToJSON;
+  Check(Pos('Sort', LJSON) > 0, 'JSON contains Sort');
+  Check(Pos('Hash', LJSON) > 0, 'JSON contains Hash');
+  Check(Pos('1000', LJSON) > 0, 'JSON contains 1000');
+  Check(Pos('2000', LJSON) > 0, 'JSON contains 2000');
+end;
+
+{ === Run All Tests === }
+
+procedure RunAllTests;
+begin
+  WriteLn('=== TBaselineManager Tests ===');
+  Test_Create;
+  Test_AddBaseline;
+  Test_AddBaselineFromResult;
+  Test_GetBaseline;
+  Test_GetBaseline_NotFound;
+  Test_RemoveBaseline;
+  Test_ClearBaselines;
+  Test_CompareWithBaseline_NoRegression;
+  Test_CompareWithBaseline_Regression;
+  Test_CompareWithBaseline_Improvement;
+  Test_CompareAllWithBaselines;
+  Test_HasRegression;
+  Test_GetAllBaselines;
+  Test_UpdateBaseline;
+  Test_CustomThreshold;
+  Test_JSON;
+end;
+
+begin
+  WriteLn('=== nextpas.core.bench.baseline Test Suite ===');
+  WriteLn('');
+
+  RunAllTests;
+
+  WriteLn('');
+  WriteLn('=== Test Summary ===');
+  WriteLn('Total: ', GTestsPassed + GTestsFailed);
+  WriteLn('Passed: ', GTestsPassed);
+  WriteLn('Failed: ', GTestsFailed);
+
+  if GTestsFailed > 0 then
+  begin
+    WriteLn('');
+    WriteLn('*** FAILED ***');
+    Halt(1);
+  end
+  else
+  begin
+    WriteLn('');
+    WriteLn('✓ All tests passed!');
+  end;
+end.
