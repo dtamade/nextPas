@@ -3228,6 +3228,9 @@ begin
   ADecl := nil;
   AOwnerUnitId := '';
   AResolutionFailureKind := '';
+  { 内建过程 (Write/WriteLn/Read/ReadLn 等) 可变参数，跳过重载解析 }
+  if IsBuiltinProcedure(AName) then
+    Exit(False);
   ImportedDiagnosticMatchCount := 0;
   ImportedMatchCount := 0;
   ImportedMatchIndex := -1;
@@ -5855,6 +5858,7 @@ begin
             LhsSym := FModel.SymbolAt(LhsSymId - 1);
             if (LhsSym.ParamCount >= 0) and
               (not HasOverload(LhsName)) and
+              (not IsBuiltinProcedure(LhsName)) and
               ((LhsSym.Kind = 'procedure') or (LhsSym.Kind = 'function')) then
             begin
               RhsChild := ANode.ChildAt(0);

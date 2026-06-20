@@ -297,6 +297,7 @@ begin
     'if': Exit(tkIfKeyword);
     'then': Exit(tkThenKeyword);
     'else': Exit(tkElseKeyword);
+    'otherwise': Exit(tkElseKeyword); { FPC 兼容: otherwise = else 的 case 别名 }
     'while': Exit(tkWhileKeyword);
     'do': Exit(tkDoKeyword);
     'for': Exit(tkForKeyword);
@@ -1234,7 +1235,9 @@ begin
     end;
 
     if (CurrentChar = '$') or (CurrentChar = '&') or
-       (CurrentChar = '%') or IsDigit(CurrentChar) then
+       ((CurrentChar = '%') and (StartIndex + 1 <= Length(ASourceText)) and
+        (ASourceText[StartIndex + 1] in ['0', '1'])) or
+       IsDigit(CurrentChar) then
     begin
       SaveIndex := StartIndex;
       if not ReadIntegerLiteral(ASourceText, StartIndex, IntegerLexeme) then
