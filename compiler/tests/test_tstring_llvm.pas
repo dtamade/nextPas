@@ -275,5 +275,77 @@ begin
     Model.Free;
   end;
 
+  { === Test 8: assign-tstring-call-runtime (call string-returning func) === }
+  Model := TSemanticModel.Create;
+  try
+    { Declare callee with string return }
+    Model.AddTypedHirNode('func-runtime', 'GetStr:s', 0, 0, '');
+    { Caller function }
+    Model.AddTypedHirNode('start-func-runtime', 'TestCall', 0, 0, '');
+    Model.AddTypedHirNode('var-decl-tstring-runtime',
+      'R', 0, 0, 'R');
+    Model.AddTypedHirNode('assign-tstring-call-runtime',
+      'GetStr', 0, 0, 'R');
+    Model.AddTypedHirNode('process-fini-runtime',
+      'np.system.process_fini', 0, 0, '');
+
+    Builder := THIRBuilder.Create(Model);
+    try
+      Builder.Build;
+      Emitter := THIRLlvmEmitter.Create(Builder.Module);
+      try
+        Emitter.EmitModule;
+        LlvmIr := Emitter.AsText;
+
+        Check(Pos('call void @GetStr(ptr', LlvmIr) > 0,
+          'call emits void @GetStr with sret ptr', 17);
+      finally
+        Emitter.Free;
+      end;
+    finally
+      Builder.Free;
+    end;
+  finally
+    Model.Free;
+  end;
+
+  { === Test 9: tstring_field_assign declared via any tstring intrinsic === }
+  { Field store test deferred: requires full object alloca setup.
+    Instead verify emitter declares tstring_field_assign when any
+    tstring intrinsic is used (from_literal triggers the declarations). }
+  Model := TSemanticModel.Create;
+  try
+    Model.AddTypedHirNode('process-init-runtime',
+      'np.system.process_init', 0, 0, '');
+    Model.AddTypedHirNode('var-decl-tstring-runtime',
+      'S', 0, 0, 'S');
+    Model.AddTypedHirNode('assign-tstring-literal-runtime',
+      'S', 0, 0, 'Check');
+    Model.AddTypedHirNode('process-fini-runtime',
+      'np.system.process_fini', 0, 0, '');
+
+    Builder := THIRBuilder.Create(Model);
+    try
+      Builder.Build;
+      Emitter := THIRLlvmEmitter.Create(Builder.Module);
+      try
+        Emitter.EmitModule;
+        LlvmIr := Emitter.AsText;
+
+        { All tstring runtime functions are declared when any tstring intrinsic is used }
+        Check(Pos('declare void @np_tstring_field_assign(', LlvmIr) > 0,
+          'tstring_field_assign declared', 18);
+        Check(Pos('declare void @np_tstring_ret_move(', LlvmIr) > 0,
+          'tstring_ret_move declared', 19);
+      finally
+        Emitter.Free;
+      end;
+    finally
+      Builder.Free;
+    end;
+  finally
+    Model.Free;
+  end;
+
   WriteLn('tstring LLVM IR tests passed (', TestCount - 1, ' checks)');
 end.
