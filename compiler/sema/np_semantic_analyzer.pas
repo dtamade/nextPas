@@ -1724,7 +1724,7 @@ begin
         (SourceNode.Text = '+') then
         Exit(ConcatExpressionConsumesOwnedStringReturnDeferred(SourceNode));
       Exit(NodeConsumesOwnedStringReturnDeferred(
-        SourceNode, AInsideDirectOwnedAssignmentRhs));
+        SourceNode, {AInsideDirectOwnedAssignmentRhs=}True));
     end;
     Exit(False);
   end;
@@ -15310,7 +15310,7 @@ begin
     Exit;
   TmpDiag := TDiagnosticsSink.Create;
   try
-    for Index := 0 to FUnitGraph.ResolvedUnitCount - 1 do
+    for Index := FUnitGraph.ResolvedUnitCount - 1 downto 0 do
     begin
       ResolvedUnit := FUnitGraph.ResolvedUnitAt(Index);
       if SameText(ResolvedUnit.CanonicalName, FUnitGraph.RootName) then

@@ -261,14 +261,20 @@ end;
 
 constructor ENextPasError.CreateFmt(const AMessage: string;
   const AArgs: array of const);
+var
+  LMsg: string;
 begin
-  Create(Format(AMessage, AArgs));
+  LMsg := Format(AMessage, AArgs);
+  Create(LMsg);
 end;
 
 constructor ENextPasError.CreateFmt(const AMessage: string;
   const ACategory: TErrorCategory; const AArgs: array of const);
+var
+  LMsg: string;
 begin
-  Create(Format(AMessage, AArgs), ACategory);
+  LMsg := Format(AMessage, AArgs);
+  Create(LMsg, ACategory);
 end;
 
 constructor ENextPasError.CreateFmt(const AMessage: string;
@@ -447,8 +453,11 @@ end;
 
 constructor EResourceExhaustedError.CreateFmt(const AMessage: string;
   const AArgs: array of const);
+var
+  LMsg: string;
 begin
-  inherited Create(Format(AMessage, AArgs));
+  LMsg := Format(AMessage, AArgs);
+  inherited Create(LMsg);
 end;
 
 class function EIOError.DefaultCategory: TErrorCategory;
