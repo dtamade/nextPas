@@ -1,0 +1,226 @@
+- generic [ref=e2]:
+  - region "Skip to main content":
+    - link "Skip to main content" [ref=e3] [cursor=pointer]:
+      - /url: "#__docusaurus_skipToContent_fallback"
+  - navigation "Main" [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - button "Toggle navigation bar" [ref=e7] [cursor=pointer]:
+          - img [ref=e8]
+        - link "zig.guide Logo zig.guide" [ref=e10] [cursor=pointer]:
+          - /url: /
+          - img "zig.guide Logo" [ref=e12]
+          - generic [ref=e13]: zig.guide
+      - generic [ref=e15]:
+        - button "expand searchbar"
+        - searchbox "Search" [disabled] [ref=e16]
+  - main [ref=e20]:
+    - generic [ref=e24]:
+      - article [ref=e25]:
+        - navigation "Breadcrumbs" [ref=e26]:
+          - list [ref=e27]:
+            - listitem [ref=e28]:
+              - link "Home page" [ref=e29] [cursor=pointer]:
+                - /url: /
+                - img [ref=e30]
+            - listitem [ref=e32]:
+              - generic [ref=e33]: Language
+            - listitem [ref=e34]:
+              - generic [ref=e35]: Slices
+        - generic [ref=e36]: "Version: Zig 0.15.2"
+        - generic [ref=e37]:
+          - heading "Slices" [level=1] [ref=e39]
+          - paragraph [ref=e40]:
+            - text: Slices can be thought of many-item pointers (
+            - code [ref=e41]: "[*]T"
+            - text: ) with a length (
+            - code [ref=e42]: usize
+            - text: ). These use the syntax
+            - code [ref=e43]: "[]T"
+            - text: . Slices are easier to use safely and more convinient than many-item pointers, as they store the valid length of the buffer with them. Slices are sometimes referred to as "fat pointers" as they're typically double the size of a normal pointer. Slices are the most common way to pass around buffers in Zig.
+          - group [ref=e45]:
+            - generic "Coming from Go? ▼" [ref=e46]:
+              - generic [ref=e48]:
+                - img [ref=e50]
+                - text: Coming from Go?
+              - generic [ref=e71]: ▼
+          - paragraph [ref=e72]:
+            - text: Unlike many-item pointers,
+            - code [ref=e73]: for
+            - text: loops work on slices.
+          - paragraph [ref=e74]:
+            - text: The syntax
+            - code [ref=e75]: x[n..m]
+            - text: is used to create a slice from an array, an operation known as
+            - strong [ref=e76]: slicing
+            - text: . This creates a "slice" - a view into the array consisting of a pointer and a length. Slicing includes the first element (
+            - code [ref=e77]: "n"
+            - text: ), but excludes the last element (
+            - code [ref=e78]: m
+            - text: ).
+          - paragraph [ref=e79]:
+            - text: In this example, a
+            - code [ref=e80]: const
+            - text: slice is used in the
+            - code [ref=e81]: total
+            - text: function as it doesn't write to the slice's buffer.
+          - generic [ref=e83]:
+            - code [ref=e85]:
+              - generic [ref=e86]: "fn total(values: []const u8) usize {"
+              - generic [ref=e87]: "var sum: usize = 0;"
+              - generic [ref=e88]: for (values) |v| sum += v;
+              - generic [ref=e89]: return sum;
+              - generic [ref=e90]: "}"
+              - generic [ref=e91]: "test \"slices\" {"
+              - generic [ref=e92]: "const array = [_]u8{ 1, 2, 3, 4, 5 };"
+              - generic [ref=e93]: const slice = array[0..3];
+              - generic [ref=e94]: try expect(total(slice) == 6);
+              - generic [ref=e95]: "}"
+            - button "Copy code to clipboard" [ref=e97] [cursor=pointer]:
+              - generic [ref=e98]:
+                - img [ref=e99]
+                - img [ref=e101]
+          - paragraph [ref=e103]:
+            - text: When these
+            - code [ref=e104]: "n"
+            - text: and
+            - code [ref=e105]: m
+            - text: values are both known at compile time, slicing will actually produce a pointer to an array. This is not an issue as a pointer to an array i.e.
+            - code [ref=e106]: "*[N]T"
+            - text: will coerce to a slice -
+            - code [ref=e107]: "[]T"
+            - text: .
+          - generic [ref=e109]:
+            - code [ref=e111]:
+              - generic [ref=e112]: "test \"slices 2\" {"
+              - generic [ref=e113]: "const array = [_]u8{ 1, 2, 3, 4, 5 };"
+              - generic [ref=e114]: const slice = array[0..3];
+              - generic [ref=e115]: try expect(@TypeOf(slice) == *const [3]u8);
+              - generic [ref=e116]: "}"
+            - button "Copy code to clipboard" [ref=e118] [cursor=pointer]:
+              - generic [ref=e119]:
+                - img [ref=e120]
+                - img [ref=e122]
+          - paragraph [ref=e124]:
+            - text: The syntax
+            - code [ref=e125]: x[n..]
+            - text: can also be used when you want to slice to the end.
+          - generic [ref=e127]:
+            - code [ref=e129]:
+              - generic [ref=e130]: "test \"slices 3\" {"
+              - generic [ref=e131]: "var array = [_]u8{ 1, 2, 3, 4, 5 };"
+              - generic [ref=e132]: var slice = array[0..];
+              - generic [ref=e133]: _ = slice;
+              - generic [ref=e134]: "}"
+            - button "Copy code to clipboard" [ref=e136] [cursor=pointer]:
+              - generic [ref=e137]:
+                - img [ref=e138]
+                - img [ref=e140]
+          - paragraph [ref=e142]: Let's again compare our pointer types.
+          - table [ref=e143]:
+            - rowgroup [ref=e144]:
+              - row "Feature *T *[N]T [*]T []T" [ref=e145]:
+                - columnheader "Feature" [ref=e146]
+                - columnheader "*T" [ref=e147]:
+                  - code [ref=e148]: "*T"
+                - columnheader "*[N]T" [ref=e149]:
+                  - code [ref=e150]: "*[N]T"
+                - columnheader "[*]T" [ref=e151]:
+                  - code [ref=e152]: "[*]T"
+                - columnheader "[]T" [ref=e153]:
+                  - code [ref=e154]: "[]T"
+            - rowgroup [ref=e155]:
+              - row "Dereferenceable Yes, e.g. ptr.* No No No" [ref=e156]:
+                - cell "Dereferenceable" [ref=e157]
+                - cell "Yes, e.g. ptr.*" [ref=e158]:
+                  - text: Yes, e.g.
+                  - code [ref=e159]: ptr.*
+                - cell "No" [ref=e160]
+                - cell "No" [ref=e161]
+                - cell "No" [ref=e162]
+              - row "Indexable No Yes Yes Yes" [ref=e163]:
+                - cell "Indexable" [ref=e164]
+                - cell "No" [ref=e165]
+                - cell "Yes" [ref=e166]
+                - cell "Yes" [ref=e167]
+                - cell "Yes" [ref=e168]
+              - row "Sliceable No Yes Yes Yes" [ref=e169]:
+                - cell "Sliceable" [ref=e170]
+                - cell "No" [ref=e171]
+                - cell "Yes" [ref=e172]
+                - cell "Yes" [ref=e173]
+                - cell "Yes" [ref=e174]
+              - row "Element Count Always 1 Compile-time known Unknown Runtime known" [ref=e175]:
+                - cell "Element Count" [ref=e176]
+                - cell "Always 1" [ref=e177]
+                - cell "Compile-time known" [ref=e178]
+                - cell "Unknown" [ref=e179]
+                - cell "Runtime known" [ref=e180]
+              - row "Arithmetic No No Yes, e.g. ptr + 1 or ptr - 1 No" [ref=e181]:
+                - cell "Arithmetic" [ref=e182]
+                - cell "No" [ref=e183]
+                - cell "No" [ref=e184]
+                - cell "Yes, e.g. ptr + 1 or ptr - 1" [ref=e185]:
+                  - text: Yes, e.g.
+                  - code [ref=e186]: ptr + 1
+                  - text: or
+                  - code [ref=e187]: ptr - 1
+                - cell "No" [ref=e188]
+              - row "Size @sizeOf(usize) @sizeOf(usize) @sizeOf(usize) @sizeOf(usize) * 2" [ref=e189]:
+                - cell "Size" [ref=e190]
+                - cell "@sizeOf(usize)" [ref=e191]
+                - cell "@sizeOf(usize)" [ref=e192]
+                - cell "@sizeOf(usize)" [ref=e193]
+                - cell "@sizeOf(usize) * 2" [ref=e194]
+              - row "Attributes Yes Yes Yes Yes" [ref=e195]:
+                - cell "Attributes" [ref=e196]
+                - cell "Yes" [ref=e197]
+                - cell "Yes" [ref=e198]
+                - cell "Yes" [ref=e199]
+                - cell "Yes" [ref=e200]
+          - generic [ref=e201]:
+            - generic [ref=e202]:
+              - img [ref=e204]
+              - text: info
+            - paragraph [ref=e207]:
+              - text: We can now apply our knowledge and
+              - link "make another program together" [ref=e208] [cursor=pointer]:
+                - /url: /posts/fahrenheit-to-celsius
+              - text: .
+        - generic [ref=e210]:
+          - link "Edit this page" [ref=e212] [cursor=pointer]:
+            - /url: https://github.com/Sobeston/zig.guide/tree/master/website/versioned_docs/version-0.15.x/01-language-basics/14-slices.mdx
+            - img [ref=e213]
+            - text: Edit this page
+          - generic [ref=e217]:
+            - text: Last updated on
+            - time [ref=e219]: Jan 4, 2026
+            - text: by Sobeston
+      - navigation "Docs pages" [ref=e220]:
+        - link "Previous « Many-item Pointers" [ref=e221] [cursor=pointer]:
+          - /url: /language-basics/many-item-pointers
+          - generic [ref=e222]: Previous
+          - generic [ref=e223]: « Many-item Pointers
+        - link "Next Enums »" [ref=e224] [cursor=pointer]:
+          - /url: /language-basics/enums
+          - generic [ref=e225]: Next
+          - generic [ref=e226]: Enums »
+  - contentinfo [ref=e227]:
+    - generic [ref=e230]:
+      - generic [ref=e231]: Community
+      - list [ref=e232]:
+        - listitem [ref=e233]:
+          - link "GitHub" [ref=e234] [cursor=pointer]:
+            - /url: https://github.com/sobeston/zig.guide
+            - text: GitHub
+            - img [ref=e235]
+        - listitem [ref=e237]:
+          - link "Mastodon" [ref=e238] [cursor=pointer]:
+            - /url: https://hachyderm.io/@sobeston
+            - text: Mastodon
+            - img [ref=e239]
+        - listitem [ref=e241]:
+          - link "Sponsor zig.guide" [ref=e242] [cursor=pointer]:
+            - /url: https://github.com/sponsors/Sobeston
+            - text: Sponsor zig.guide
+            - img [ref=e243]

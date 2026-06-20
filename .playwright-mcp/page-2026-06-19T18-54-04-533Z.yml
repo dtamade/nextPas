@@ -1,0 +1,476 @@
+- generic [active] [ref=e1]:
+  - generic:
+    - generic:
+      - link "跳到主要内容" [ref=e2] [cursor=pointer]
+      - link "无障碍功能帮助" [ref=e3] [cursor=pointer]:
+        - /url: https://support.google.com/websearch/answer/181196?hl=zh-CN
+  - generic [ref=e8]:
+    - search [ref=e9]:
+      - generic [ref=e12]:
+        - link "前往 Google 首页" [ref=e13] [cursor=pointer]:
+          - /url: https://www.google.com.hk/webhp?hl=zh-CN&ictx=0&sa=X&ved=0ahUKEwjEjLuH_ZOVAxXq-TgGHTJuItsQpYkNCAo
+          - img "前往 Google 首页" [ref=e14]
+        - generic [ref=e19]:
+          - combobox "搜索" [ref=e22]: Zig tagged union slice string Zig tagged union slice string
+          - generic [ref=e23]:
+            - button "清除" [ref=e25] [cursor=pointer]:
+              - img [ref=e27]
+            - generic [ref=e30]:
+              - button "按语音搜索" [ref=e31] [cursor=pointer]:
+                - img [ref=e32]
+              - button "按图搜索" [ref=e34] [cursor=pointer]:
+                - img [ref=e35]
+        - button "搜索" [ref=e37] [cursor=pointer]:
+          - img [ref=e40]
+    - generic [ref=e42]:
+      - button "设置" [ref=e44] [cursor=pointer]:
+        - img [ref=e47]
+      - button "分享" [ref=e50] [cursor=pointer]:
+        - img [ref=e54]
+      - generic [ref=e56]:
+        - button "Google 应用" [ref=e58] [cursor=pointer]:
+          - img [ref=e59]
+        - link "登录" [ref=e63] [cursor=pointer]:
+          - /url: https://accounts.google.com/ServiceLogin?hl=zh-CN&passive=true&continue=https://www.google.com.hk/search%3Fq%3DZig%2Btagged%2Bunion%2Bslice%2Bstring%26sei%3DSZA1aqKoK7yv4-EPupnE8Qw&ec=futura_srp_og_si_72236_p
+  - generic [ref=e65]:
+    - navigation [ref=e71]:
+      - generic [ref=e77]:
+        - list [ref=e78]:
+          - listitem [ref=e79]:
+            - link "全部" [disabled] [ref=e80]:
+              - generic [ref=e82]: 全部
+          - listitem [ref=e83]:
+            - link "视频" [ref=e84] [cursor=pointer]:
+              - /url: /search?newwindow=1&sca_esv=c04cb75c69e9099e&udm=7&fbs=ABfTbFUhNGvvPEUFOvrsPMHwBXgO5pJ2ROERAFrb15qpZFNMhsRSmp6-hFETunnF8nx8jMaSEDa4yfRi0-C_1y8rWAUUgUkauefg22KP1nI8zc2FTbjnv1H0YNXmzkHXmV1zutm2CF1kp_Mm0D9UOwIimw2VEwKT9GRx6ENVm3WqHajVYvaQ0YKD_s0BQ-8eTg5SoIxmxGo9&q=Zig+tagged+union+slice+string&sa=X&ved=2ahUKEwjEjLuH_ZOVAxXq-TgGHTJuItsQtKgLegQIFhAB
+              - generic [ref=e86]: 视频
+          - listitem [ref=e87]:
+            - link "图片" [ref=e88] [cursor=pointer]:
+              - /url: /search?newwindow=1&sca_esv=c04cb75c69e9099e&udm=2&fbs=ABfTbFUhNGvvPEUFOvrsPMHwBXgO5pJ2ROERAFrb15qpZFNMhsRSmp6-hFETunnF8nx8jMaSEDa4yfRi0-C_1y8rWAUUgUkauefg22KP1nI8zc2FTbjnv1H0YNXmzkHXmV1zutm2CF1kp_Mm0D9UOwIimw2VEwKT9GRx6ENVm3WqHajVYvaQ0YKD_s0BQ-8eTg5SoIxmxGo9&q=Zig+tagged+union+slice+string&sa=X&ved=2ahUKEwjEjLuH_ZOVAxXq-TgGHTJuItsQtKgLegQIFRAB
+              - generic [ref=e90]: 图片
+          - listitem [ref=e91]:
+            - link "短视频" [ref=e92] [cursor=pointer]:
+              - /url: /search?newwindow=1&sca_esv=c04cb75c69e9099e&udm=39&fbs=ABfTbFUhNGvvPEUFOvrsPMHwBXgO5pJ2ROERAFrb15qpZFNMhsRSmp6-hFETunnF8nx8jMaSEDa4yfRi0-C_1y8rWAUUgUkauefg22KP1nI8zc2FTbjnv1H0YNXmzkHXmV1zutm2CF1kp_Mm0D9UOwIimw2VEwKT9GRx6ENVm3WqHajVYvaQ0YKD_s0BQ-8eTg5SoIxmxGo9&q=Zig+tagged+union+slice+string&sa=X&ved=2ahUKEwjEjLuH_ZOVAxXq-TgGHTJuItsQs6gLegQIFBAB
+              - generic [ref=e94]: 短视频
+          - listitem [ref=e95]:
+            - link "新闻" [ref=e96] [cursor=pointer]:
+              - /url: /search?newwindow=1&sca_esv=c04cb75c69e9099e&q=Zig+tagged+union+slice+string&tbm=nws&source=lnms&fbs=ABfTbFUhNGvvPEUFOvrsPMHwBXgO5pJ2ROERAFrb15qpZFNMhsRSmp6-hFETunnF8nx8jMaSEDa4yfRi0-C_1y8rWAUUgUkauefg22KP1nI8zc2FTbjnv1H0YNXmzkHXmV1zutm2CF1kp_Mm0D9UOwIimw2VEwKT9GRx6ENVm3WqHajVYvaQ0YKD_s0BQ-8eTg5SoIxmxGo9&sa=X&ved=2ahUKEwjEjLuH_ZOVAxXq-TgGHTJuItsQ0pQJegQIExAB
+              - generic [ref=e98]: 新闻
+          - listitem [ref=e99]:
+            - link "网页" [ref=e100] [cursor=pointer]:
+              - /url: /search?newwindow=1&sca_esv=c04cb75c69e9099e&udm=web&fbs=ABfTbFUhNGvvPEUFOvrsPMHwBXgO5pJ2ROERAFrb15qpZFNMhsRSmp6-hFETunnF8nx8jMaSEDa4yfRi0-C_1y8rWAUUgUkauefg22KP1nI8zc2FTbjnv1H0YNXmzkHXmV1zutm2CF1kp_Mm0D9UOwIimw2VEwKT9GRx6ENVm3WqHajVYvaQ0YKD_s0BQ-8eTg5SoIxmxGo9&q=Zig+tagged+union+slice+string&sa=X&ved=2ahUKEwjEjLuH_ZOVAxXq-TgGHTJuItsQs6gLegQIEhAB
+              - generic [ref=e102]: 网页
+          - listitem [ref=e103]:
+            - link "图书" [ref=e104] [cursor=pointer]:
+              - /url: /search?newwindow=1&sca_esv=c04cb75c69e9099e&q=Zig+tagged+union+slice+string&udm=36&source=lnms&fbs=ABfTbFUhNGvvPEUFOvrsPMHwBXgO5pJ2ROERAFrb15qpZFNMhsRSmp6-hFETunnF8nx8jMaSEDa4yfRi0-C_1y8rWAUUgUkauefg22KP1nI8zc2FTbjnv1H0YNXmzkHXmV1zutm2CF1kp_Mm0D9UOwIimw2VEwKT9GRx6ENVm3WqHajVYvaQ0YKD_s0BQ-8eTg5SoIxmxGo9&sa=X&ved=2ahUKEwjEjLuH_ZOVAxXq-TgGHTJuItsQ0pQJegQIERAB
+              - generic [ref=e106]: 图书
+          - listitem [ref=e107]:
+            - button "更多过滤条件" [ref=e108] [cursor=pointer]:
+              - generic "更多过滤条件" [ref=e109]:
+                - generic [ref=e110]:
+                  - generic [ref=e111]: 更多
+                  - img [ref=e113]
+        - button "工具" [ref=e116] [cursor=pointer]:
+          - generic [ref=e118]:
+            - generic [ref=e119]: 工具
+            - img [ref=e121]
+    - heading "搜索结果" [level=1] [ref=e123]
+    - main [ref=e129]:
+      - generic [ref=e133]:
+        - generic [ref=e137]:
+          - generic [ref=e139]:
+            - heading "视频" [level=2] [ref=e140]
+            - button "关于这条结果的详细信息" [ref=e141] [cursor=pointer]:
+              - img [ref=e144]
+          - generic [ref=e147]:
+            - generic [ref=e153]:
+              - generic [ref=e154]:
+                - 'link "Zig Master: Tagged Union Use Cases YouTube Dude the Builder 2024年7月6日" [ref=e156] [cursor=pointer]':
+                  - /url: https://www.youtube.com/watch?v=ZWixcbf3rjE
+                  - 'heading "Zig Master: Tagged Union Use Cases YouTube Dude the Builder 2024年7月6日" [level=3] [ref=e157]':
+                    - generic [ref=e160]: "Zig Master: Tagged Union Use Cases"
+                    - generic [ref=e162]:
+                      - generic [ref=e163]:
+                        - text: YouTube
+                        - generic [ref=e164]: · Dude the Builder
+                      - generic [ref=e165]: 2024年7月6日
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - text: YouTube
+                          - generic: · Dude the Builder
+                    - button "关于这条结果的详细信息" [ref=e166] [cursor=pointer]:
+                      - img [ref=e169]
+              - 'button "Zig Master: Tagged Union Use Cases，由Dude the Builder上传到YouTube上. 在 Google 上播放. 13:19" [ref=e171] [cursor=pointer]':
+                - generic [ref=e172]:
+                  - img [ref=e175]
+                  - generic [ref=e178]:
+                    - generic [ref=e179]: 13:19
+                    - img [ref=e182]
+            - generic [ref=e189]:
+              - generic [ref=e190]:
+                - link "11. Unions in Zig | Zig Programming Language Tutorials YouTube Adebayo 2023年9月24日" [ref=e192] [cursor=pointer]:
+                  - /url: https://www.youtube.com/watch?v=YNpz49FNxDE
+                  - heading "11. Unions in Zig | Zig Programming Language Tutorials YouTube Adebayo 2023年9月24日" [level=3] [ref=e193]:
+                    - generic [ref=e196]: 11. Unions in Zig | Zig Programming Language Tutorials
+                    - generic [ref=e198]:
+                      - generic [ref=e199]:
+                        - text: YouTube
+                        - generic [ref=e200]: · Adebayo
+                      - generic [ref=e201]: 2023年9月24日
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - text: YouTube
+                          - generic: · Adebayo
+                    - button "关于这条结果的详细信息" [ref=e202] [cursor=pointer]:
+                      - img [ref=e205]
+              - button "11. Unions in Zig | Zig Programming Language Tutorials，由Adebayo上传到YouTube上. 在 Google 上播放. 13:53" [ref=e207] [cursor=pointer]:
+                - generic [ref=e208]:
+                  - img [ref=e211]
+                  - generic [ref=e214]:
+                    - generic [ref=e215]: 13:53
+                    - img [ref=e218]
+            - generic [ref=e226]:
+              - generic [ref=e227]:
+                - 'link "Zig Master: union YouTube Dude the Builder 2024年6月30日" [ref=e229] [cursor=pointer]':
+                  - /url: https://www.youtube.com/watch?v=_2_BGpyWjGQ
+                  - 'heading "Zig Master: union YouTube Dude the Builder 2024年6月30日" [level=3] [ref=e230]':
+                    - generic [ref=e233]: "Zig Master: union"
+                    - generic [ref=e235]:
+                      - generic [ref=e236]:
+                        - text: YouTube
+                        - generic [ref=e237]: · Dude the Builder
+                      - generic [ref=e238]: 2024年6月30日
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - text: YouTube
+                          - generic: · Dude the Builder
+                    - button "关于这条结果的详细信息" [ref=e239] [cursor=pointer]:
+                      - img [ref=e242]
+              - 'button "Zig Master: union，由Dude the Builder上传到YouTube上. 在 Google 上播放. 14:15" [ref=e244] [cursor=pointer]':
+                - generic [ref=e245]:
+                  - img [ref=e251]
+                  - generic [ref=e254]:
+                    - generic [ref=e255]: 14:15
+                    - img [ref=e258]
+          - link "查看所有视频" [ref=e262] [cursor=pointer]:
+            - /url: /search?newwindow=1&sca_esv=c04cb75c69e9099e&udm=7&q=Zig+tagged+union+slice+string&sa=X&ved=2ahUKEwjEjLuH_ZOVAxXq-TgGHTJuItsQ8ccDKAJ6BAgaEAQ
+            - separator [ref=e263]
+            - generic [ref=e264]:
+              - generic [ref=e265]: 查看全部
+              - img [ref=e267]
+        - generic [ref=e271]:
+          - heading "Web results" [level=2] [ref=e272]
+          - generic [ref=e273]:
+            - generic [ref=e276]:
+              - link "Zig Language Reference Zig Programming Language https://ziglang.org › documentation › master" [ref=e278] [cursor=pointer]:
+                - /url: https://ziglang.org/documentation/master/
+                - heading "Zig Language Reference" [level=3] [ref=e279]
+                - generic [ref=e285]:
+                  - generic [ref=e287]: Zig Programming Language
+                  - generic [ref=e289]: https://ziglang.org › documentation › master
+              - generic [ref=e290]:
+                - generic [ref=e291]: ·
+                - link "翻译此页" [ref=e292] [cursor=pointer]:
+                  - /url: https://translate.google.com/translate?u=https://ziglang.org/documentation/master/&hl=zh-CN&sl=en&tl=zh-CN&client=search
+              - button "关于这条结果的详细信息" [ref=e293] [cursor=pointer]:
+                - img [ref=e296]
+            - generic [ref=e300]:
+              - text: In
+              - emphasis [ref=e301]: Zig
+              - text: ", we generally prefer"
+              - emphasis [ref=e302]: Slices
+              - text: rather than Sentinel-Terminated Pointers. You can turn an array or pointer into a
+              - emphasis [ref=e303]: slice
+              - text: using
+              - emphasis [ref=e304]: slice
+              - text: syntax.
+              - emphasis [ref=e305]: Slices
+              - text: have ...
+        - generic [ref=e309]:
+          - generic [ref=e312]:
+            - 'link "Zig''s lack of a string type & invalid values - #2 by mnemnion Ziggit https://ziggit.dev › zig-s-lack-of-a-string-ty..." [ref=e314] [cursor=pointer]':
+              - /url: https://ziggit.dev/t/zig-s-lack-of-a-string-type-invalid-values/5425/2
+              - 'heading "Zig''s lack of a string type & invalid values - #2 by mnemnion" [level=3] [ref=e315]'
+              - generic [ref=e321]:
+                - generic [ref=e323]: Ziggit
+                - generic [ref=e325]: https://ziggit.dev › zig-s-lack-of-a-string-ty...
+            - generic [ref=e326]:
+              - generic [ref=e327]: ·
+              - link "翻译此页" [ref=e328] [cursor=pointer]:
+                - /url: https://translate.google.com/translate?u=https://ziggit.dev/t/zig-s-lack-of-a-string-type-invalid-values/5425/2&hl=zh-CN&sl=en&tl=zh-CN&client=search
+            - button "关于这条结果的详细信息" [ref=e329] [cursor=pointer]:
+              - img [ref=e332]
+          - generic [ref=e335]:
+            - generic [ref=e336]: 2024年7月30日 —
+            - generic [ref=e337]:
+              - text: Hi everyone! I was reading a comment on here giving a rationale for why
+              - emphasis [ref=e338]: Zig
+              - text: doesn't have a
+              - emphasis [ref=e339]: string
+              - text: type built into the language.
+        - generic [ref=e343]:
+          - generic [ref=e346]:
+            - link "Learn Zig Series (#33) - Building a State Machine with Tagged ... hive.blog https://hive.blog › hive-196387 › learn-zig..." [ref=e348] [cursor=pointer]:
+              - /url: https://hive.blog/hive-196387/@scipio/learn-zig-series-33-building-a-state-machine-with-tagged-unions
+              - heading "Learn Zig Series (#33) - Building a State Machine with Tagged ..." [level=3] [ref=e349]
+              - generic [ref=e355]:
+                - generic [ref=e357]: hive.blog
+                - generic [ref=e359]: https://hive.blog › hive-196387 › learn-zig...
+            - generic [ref=e360]:
+              - generic [ref=e361]: ·
+              - link "翻译此页" [ref=e362] [cursor=pointer]:
+                - /url: https://translate.google.com/translate?u=https://hive.blog/hive-196387/@scipio/learn-zig-series-33-building-a-state-machine-with-tagged-unions&hl=zh-CN&sl=en&tl=zh-CN&client=search
+            - button "关于这条结果的详细信息" [ref=e363] [cursor=pointer]:
+              - img [ref=e366]
+          - generic [ref=e370]:
+            - text: The combination of
+            - emphasis [ref=e371]: tagged unions
+            - text: + exhaustive switches + zero-cost payload data gives
+            - emphasis [ref=e372]: Zig
+            - text: state machines a level of compile-time safety that's hard to match in ...
+        - generic [ref=e376]:
+          - generic [ref=e379]:
+            - 'link "More control over the data layout of tagged unions #1922 GitHub https://github.com › ziglang › zig › issues" [ref=e381] [cursor=pointer]':
+              - /url: https://github.com/ziglang/zig/issues/1922
+              - 'heading "More control over the data layout of tagged unions #1922" [level=3] [ref=e382]'
+              - generic [ref=e388]:
+                - generic [ref=e390]: GitHub
+                - generic [ref=e392]: https://github.com › ziglang › zig › issues
+            - generic [ref=e393]:
+              - generic [ref=e394]: ·
+              - link "翻译此页" [ref=e395] [cursor=pointer]:
+                - /url: https://translate.google.com/translate?u=https://github.com/ziglang/zig/issues/1922&hl=zh-CN&sl=en&tl=zh-CN&client=search
+            - button "关于这条结果的详细信息" [ref=e396] [cursor=pointer]:
+              - img [ref=e399]
+          - generic [ref=e402]:
+            - generic [ref=e403]: 2019年2月6日 —
+            - generic [ref=e404]:
+              - text: Note the current "
+              - emphasis [ref=e405]: zig
+              - text: way" to do this is to use a bare
+              - emphasis [ref=e406]: union
+              - text: (which has a secret safety
+              - emphasis [ref=e407]: tag
+              - text: field) and then manually manage your
+              - emphasis [ref=e408]: tag
+              - text: wherever ...
+        - generic [ref=e412]:
+          - generic [ref=e415]:
+            - link "Tagged Unions | For the love of Zig Said van de Klundert https://saidvandeklundert.net › fortheloveofzig" [ref=e417] [cursor=pointer]:
+              - /url: https://saidvandeklundert.net/fortheloveofzig/tagged%20unions
+              - heading "Tagged Unions | For the love of Zig" [level=3] [ref=e418]
+              - generic [ref=e420]:
+                - img [ref=e425]
+                - generic [ref=e427]:
+                  - generic [ref=e429]: Said van de Klundert
+                  - generic [ref=e431]: https://saidvandeklundert.net › fortheloveofzig
+            - generic [ref=e432]:
+              - generic [ref=e433]: ·
+              - link "翻译此页" [ref=e434] [cursor=pointer]:
+                - /url: https://translate.google.com/translate?u=https://saidvandeklundert.net/fortheloveofzig/tagged%2520unions&hl=zh-CN&sl=en&tl=zh-CN&client=search
+            - button "关于这条结果的详细信息" [ref=e435] [cursor=pointer]:
+              - img [ref=e438]
+          - generic [ref=e442]:
+            - text: A
+            - emphasis [ref=e443]: tagged union
+            - text: ", aka variant or choice type, is a union that also contains a tag to explicitly indicate which of the types is in use. Why do we have this?"
+        - generic [ref=e447]:
+          - generic [ref=e450]:
+            - link "How can I initialize a union(enum) given a comptime string ... Stack Overflow 1 个回答 · 2年前" [ref=e452] [cursor=pointer]:
+              - /url: https://stackoverflow.com/questions/77603753/how-can-i-initialize-a-unionenum-given-a-comptime-string-specifying-the-member
+              - heading "How can I initialize a union(enum) given a comptime string ..." [level=3] [ref=e453]
+              - generic [ref=e459]:
+                - generic [ref=e461]: Stack Overflow
+                - generic [ref=e463]: 1 个回答 · 2年前
+            - button "关于这条结果的详细信息" [ref=e464] [cursor=pointer]:
+              - img [ref=e467]
+          - generic [ref=e470]: Zig has the @field builtin which allows you to access a struct/union/enum member given a comptime string field name. E.g., as given by the above link, Copyvar ...
+          - generic [ref=e475]:
+            - link "1 个回答" [ref=e476] [cursor=pointer]:
+              - /url: https://stackoverflow.com/a/77604984
+            - generic [ref=e477]: ·
+            - generic [ref=e478]: "最佳答案:"
+            - generic [ref=e479]: "This can be done via the @unionInit builtin. const std = @import(\"std\"); const Ex = union(enum) { A: u32, B: []const u8 }; pub fn main() void { const example ..."
+        - generic [ref=e483]:
+          - generic [ref=e486]:
+            - link "Zig Union(Enum) — WTF is switch(union(enum)) | by Ed Yu Medium · Ed Yu 40+ 个赞 · 3年前" [ref=e488] [cursor=pointer]:
+              - /url: https://medium.com/@edlyuu/zig-union-enum-wtf-is-switch-union-enum-9345659d557f
+              - heading "Zig Union(Enum) — WTF is switch(union(enum)) | by Ed Yu" [level=3] [ref=e489]
+              - generic [ref=e495]:
+                - generic [ref=e497]: Medium · Ed Yu
+                - generic [ref=e499]: 40+ 个赞 · 3年前
+            - button "关于这条结果的详细信息" [ref=e500] [cursor=pointer]:
+              - img [ref=e503]
+          - generic [ref=e507]:
+            - text: For those familiar with C union, please be aware that
+            - emphasis [ref=e508]: Zig union cannot be used to reinterpret memory
+            - text: . So in other words, you cannot use one ...
+        - generic [ref=e512]:
+          - generic [ref=e515]:
+            - 'link "Building Blocks Of Zig: Unions - Dayvster.com dayvster.com https://dayvster.com › blog › building-block..." [ref=e517] [cursor=pointer]':
+              - /url: https://dayvster.com/blog/building-blocks-of-zig-unions/
+              - 'heading "Building Blocks Of Zig: Unions - Dayvster.com" [level=3] [ref=e518]'
+              - generic [ref=e524]:
+                - generic [ref=e526]: dayvster.com
+                - generic [ref=e528]: https://dayvster.com › blog › building-block...
+            - generic [ref=e529]:
+              - generic [ref=e530]: ·
+              - link "翻译此页" [ref=e531] [cursor=pointer]:
+                - /url: https://translate.google.com/translate?u=https://dayvster.com/blog/building-blocks-of-zig-unions/&hl=zh-CN&sl=en&tl=zh-CN&client=search
+            - button "关于这条结果的详细信息" [ref=e532] [cursor=pointer]:
+              - img [ref=e535]
+          - generic [ref=e538]:
+            - generic [ref=e539]: 2024年6月29日 —
+            - generic [ref=e540]:
+              - text: A
+              - emphasis [ref=e541]: tagged union
+              - text: is a union that has a tag. For this we use an enum to define the tag. This way we can tell which field is currently active in the ...
+        - generic [ref=e546]:
+          - heading "相关问题" [level=2] [ref=e548]
+          - generic [ref=e549]:
+            - button "How does Zig handle strings?" [ref=e555] [cursor=pointer]:
+              - generic [ref=e557]: How does Zig handle strings?
+              - img [ref=e560]
+            - button "Does Zig have union types?" [ref=e569] [cursor=pointer]:
+              - generic [ref=e571]: Does Zig have union types?
+              - img [ref=e574]
+            - button "Are Zig strings null terminated?" [ref=e583] [cursor=pointer]:
+              - generic [ref=e585]: Are Zig strings null terminated?
+              - img [ref=e588]
+            - button "How do you declare a string in Zig?" [ref=e597] [cursor=pointer]:
+              - generic [ref=e599]: How do you declare a string in Zig?
+              - img [ref=e602]
+        - generic [ref=e607]:
+          - heading "Web results" [level=2] [ref=e608]
+          - generic [ref=e609]:
+            - generic [ref=e612]:
+              - link "Zig in 30 Minutes Hacker News https://news.ycombinator.com › item" [ref=e614] [cursor=pointer]:
+                - /url: https://news.ycombinator.com/item?id=25618302
+                - heading "Zig in 30 Minutes" [level=3] [ref=e615]
+                - generic [ref=e621]:
+                  - generic [ref=e623]: Hacker News
+                  - generic [ref=e625]: https://news.ycombinator.com › item
+              - generic [ref=e626]:
+                - generic [ref=e627]: ·
+                - link "翻译此页" [ref=e628] [cursor=pointer]:
+                  - /url: https://translate.google.com/translate?u=https://news.ycombinator.com/item?id%3D25618302&hl=zh-CN&sl=en&tl=zh-CN&client=search
+              - button "关于这条结果的详细信息" [ref=e629] [cursor=pointer]:
+                - img [ref=e632]
+            - generic [ref=e635]:
+              - generic [ref=e636]: 2021年1月3日 —
+              - generic [ref=e637]:
+                - emphasis [ref=e638]: Tagged unions
+                - text: carry an enum with that that tells you which thing they are right now.
+                - emphasis [ref=e639]: Zig
+                - text: will not let you work with a
+                - emphasis [ref=e640]: tagged union's
+                - text: value ...
+      - generic [ref=e642]:
+        - generic [ref=e647]:
+          - heading "用户还搜索了" [level=2] [ref=e649]
+          - generic [ref=e651]:
+            - generic [ref=e652]:
+              - link "Zig 包 管理" [ref=e656] [cursor=pointer]:
+                - /url: /search?newwindow=1&sca_esv=c04cb75c69e9099e&q=Zig+%E5%8C%85+%E7%AE%A1%E7%90%86&sa=X&ved=2ahUKEwjEjLuH_ZOVAxXq-TgGHTJuItsQ1QJ6BAg7EAE
+                - generic [ref=e657]:
+                  - generic [ref=e662]: Zig 包 管理
+                  - img [ref=e666]
+              - link "Zig rust 对比" [ref=e671] [cursor=pointer]:
+                - /url: /search?newwindow=1&sca_esv=c04cb75c69e9099e&q=Zig+rust+%E5%AF%B9%E6%AF%94&sa=X&ved=2ahUKEwjEjLuH_ZOVAxXq-TgGHTJuItsQ1QJ6BAhCEAE
+                - generic [ref=e672]:
+                  - generic [ref=e677]: Zig rust 对比
+                  - img [ref=e681]
+              - link "Zig 交叉 编译" [ref=e686] [cursor=pointer]:
+                - /url: /search?newwindow=1&sca_esv=c04cb75c69e9099e&q=Zig+%E4%BA%A4%E5%8F%89+%E7%BC%96%E8%AF%91&sa=X&ved=2ahUKEwjEjLuH_ZOVAxXq-TgGHTJuItsQ1QJ6BAg9EAE
+                - generic [ref=e687]:
+                  - generic [ref=e692]: Zig 交叉 编译
+                  - img [ref=e696]
+              - link "Zig comptime" [ref=e701] [cursor=pointer]:
+                - /url: /search?newwindow=1&sca_esv=c04cb75c69e9099e&q=Zig+comptime&sa=X&ved=2ahUKEwjEjLuH_ZOVAxXq-TgGHTJuItsQ1QJ6BAhHEAE
+                - generic [ref=e702]:
+                  - generic [ref=e707]: Zig comptime
+                  - img [ref=e711]
+            - generic [ref=e713]:
+              - link "Zig c++" [ref=e717] [cursor=pointer]:
+                - /url: /search?newwindow=1&sca_esv=c04cb75c69e9099e&q=Zig+c%2B%2B&sa=X&ved=2ahUKEwjEjLuH_ZOVAxXq-TgGHTJuItsQ1QJ6BAhFEAE
+                - generic [ref=e718]:
+                  - generic [ref=e723]: Zig c++
+                  - img [ref=e727]
+              - link "Zig 0.16" [ref=e732] [cursor=pointer]:
+                - /url: /search?newwindow=1&sca_esv=c04cb75c69e9099e&q=Zig+0.16&sa=X&ved=2ahUKEwjEjLuH_ZOVAxXq-TgGHTJuItsQ1QJ6BAhEEAE
+                - generic [ref=e733]:
+                  - generic [ref=e738]: Zig 0.16
+                  - img [ref=e742]
+              - link "Zig errors" [ref=e747] [cursor=pointer]:
+                - /url: /search?newwindow=1&sca_esv=c04cb75c69e9099e&q=Zig+errors&sa=X&ved=2ahUKEwjEjLuH_ZOVAxXq-TgGHTJuItsQ1QJ6BAg8EAE
+                - generic [ref=e748]:
+                  - generic [ref=e753]: Zig errors
+                  - img [ref=e757]
+              - link "Zig 编译 c++" [ref=e762] [cursor=pointer]:
+                - /url: /search?newwindow=1&sca_esv=c04cb75c69e9099e&q=Zig+%E7%BC%96%E8%AF%91+c%2B%2B&sa=X&ved=2ahUKEwjEjLuH_ZOVAxXq-TgGHTJuItsQ1QJ6BAg-EAE
+                - generic [ref=e763]:
+                  - generic [ref=e768]: Zig 编译 c++
+                  - img [ref=e772]
+        - navigation [ref=e774]:
+          - heading "网页导航" [level=1] [ref=e775]
+          - text: "1"
+          - link "Page 2" [ref=e778] [cursor=pointer]:
+            - /url: /search?q=Zig+tagged+union+slice+string&newwindow=1&sca_esv=c04cb75c69e9099e&ei=SpA1asS_Burz4-EPstyJ2Q0&start=10&sa=N&sstk=AU9db-DQqizNbd6eCk7NS2CRZhDCVXNbAJrEOZ_lrkPIDADKLsIYt7GO5w08_2aHdymB08yFAGkaoGnR3Tsi-tInhmALiW37OYE6iw&ved=2ahUKEwjEjLuH_ZOVAxXq-TgGHTJuItsQ8tMDegQIORAE
+            - text: "2"
+          - link "Page 3" [ref=e780] [cursor=pointer]:
+            - /url: /search?q=Zig+tagged+union+slice+string&newwindow=1&sca_esv=c04cb75c69e9099e&ei=SpA1asS_Burz4-EPstyJ2Q0&start=20&sa=N&sstk=AU9db-DQqizNbd6eCk7NS2CRZhDCVXNbAJrEOZ_lrkPIDADKLsIYt7GO5w08_2aHdymB08yFAGkaoGnR3Tsi-tInhmALiW37OYE6iw&ved=2ahUKEwjEjLuH_ZOVAxXq-TgGHTJuItsQ8tMDegQIORAG
+            - text: "3"
+          - link "Page 4" [ref=e782] [cursor=pointer]:
+            - /url: /search?q=Zig+tagged+union+slice+string&newwindow=1&sca_esv=c04cb75c69e9099e&ei=SpA1asS_Burz4-EPstyJ2Q0&start=30&sa=N&sstk=AU9db-DQqizNbd6eCk7NS2CRZhDCVXNbAJrEOZ_lrkPIDADKLsIYt7GO5w08_2aHdymB08yFAGkaoGnR3Tsi-tInhmALiW37OYE6iw&ved=2ahUKEwjEjLuH_ZOVAxXq-TgGHTJuItsQ8tMDegQIORAI
+            - text: "4"
+          - link "Page 5" [ref=e784] [cursor=pointer]:
+            - /url: /search?q=Zig+tagged+union+slice+string&newwindow=1&sca_esv=c04cb75c69e9099e&ei=SpA1asS_Burz4-EPstyJ2Q0&start=40&sa=N&sstk=AU9db-DQqizNbd6eCk7NS2CRZhDCVXNbAJrEOZ_lrkPIDADKLsIYt7GO5w08_2aHdymB08yFAGkaoGnR3Tsi-tInhmALiW37OYE6iw&ved=2ahUKEwjEjLuH_ZOVAxXq-TgGHTJuItsQ8tMDegQIORAK
+            - text: "5"
+          - link "Page 6" [ref=e786] [cursor=pointer]:
+            - /url: /search?q=Zig+tagged+union+slice+string&newwindow=1&sca_esv=c04cb75c69e9099e&ei=SpA1asS_Burz4-EPstyJ2Q0&start=50&sa=N&sstk=AU9db-DQqizNbd6eCk7NS2CRZhDCVXNbAJrEOZ_lrkPIDADKLsIYt7GO5w08_2aHdymB08yFAGkaoGnR3Tsi-tInhmALiW37OYE6iw&ved=2ahUKEwjEjLuH_ZOVAxXq-TgGHTJuItsQ8tMDegQIORAM
+            - text: "6"
+          - link "Page 7" [ref=e788] [cursor=pointer]:
+            - /url: /search?q=Zig+tagged+union+slice+string&newwindow=1&sca_esv=c04cb75c69e9099e&ei=SpA1asS_Burz4-EPstyJ2Q0&start=60&sa=N&sstk=AU9db-DQqizNbd6eCk7NS2CRZhDCVXNbAJrEOZ_lrkPIDADKLsIYt7GO5w08_2aHdymB08yFAGkaoGnR3Tsi-tInhmALiW37OYE6iw&ved=2ahUKEwjEjLuH_ZOVAxXq-TgGHTJuItsQ8tMDegQIORAO
+            - text: "7"
+          - link "Page 8" [ref=e790] [cursor=pointer]:
+            - /url: /search?q=Zig+tagged+union+slice+string&newwindow=1&sca_esv=c04cb75c69e9099e&ei=SpA1asS_Burz4-EPstyJ2Q0&start=70&sa=N&sstk=AU9db-DQqizNbd6eCk7NS2CRZhDCVXNbAJrEOZ_lrkPIDADKLsIYt7GO5w08_2aHdymB08yFAGkaoGnR3Tsi-tInhmALiW37OYE6iw&ved=2ahUKEwjEjLuH_ZOVAxXq-TgGHTJuItsQ8tMDegQIORAQ
+            - text: "8"
+          - link "Page 9" [ref=e792] [cursor=pointer]:
+            - /url: /search?q=Zig+tagged+union+slice+string&newwindow=1&sca_esv=c04cb75c69e9099e&ei=SpA1asS_Burz4-EPstyJ2Q0&start=80&sa=N&sstk=AU9db-DQqizNbd6eCk7NS2CRZhDCVXNbAJrEOZ_lrkPIDADKLsIYt7GO5w08_2aHdymB08yFAGkaoGnR3Tsi-tInhmALiW37OYE6iw&ved=2ahUKEwjEjLuH_ZOVAxXq-TgGHTJuItsQ8tMDegQIORAS
+            - text: "9"
+          - link "Page 10" [ref=e794] [cursor=pointer]:
+            - /url: /search?q=Zig+tagged+union+slice+string&newwindow=1&sca_esv=c04cb75c69e9099e&ei=SpA1asS_Burz4-EPstyJ2Q0&start=90&sa=N&sstk=AU9db-DQqizNbd6eCk7NS2CRZhDCVXNbAJrEOZ_lrkPIDADKLsIYt7GO5w08_2aHdymB08yFAGkaoGnR3Tsi-tInhmALiW37OYE6iw&ved=2ahUKEwjEjLuH_ZOVAxXq-TgGHTJuItsQ8tMDegQIORAU
+            - text: "10"
+          - heading "下一页" [level=2] [ref=e796]:
+            - link "下一页" [ref=e797] [cursor=pointer]:
+              - /url: /search?q=Zig+tagged+union+slice+string&newwindow=1&sca_esv=c04cb75c69e9099e&ei=SpA1asS_Burz4-EPstyJ2Q0&start=10&sa=N&sstk=AU9db-DQqizNbd6eCk7NS2CRZhDCVXNbAJrEOZ_lrkPIDADKLsIYt7GO5w08_2aHdymB08yFAGkaoGnR3Tsi-tInhmALiW37OYE6iw&ved=2ahUKEwjEjLuH_ZOVAxXq-TgGHTJuItsQ8NMDegQIORAW
+              - generic [ref=e799]: 下一页
+      - navigation
+    - contentinfo [ref=e800]:
+      - heading "页脚链接" [level=1] [ref=e801]
+      - generic [ref=e805]:
+        - generic [ref=e809]:
+          - button "深圳市 中国广东省 - 是根据您的 IP 地址推断出来的" [ref=e811] [cursor=pointer]:
+            - generic [ref=e812]: 深圳市 中国广东省
+            - generic [ref=e814]:
+              - text: "-"
+              - generic [ref=e815]: 是根据您的 IP 地址推断出来的
+          - text: "-"
+          - button "更新位置信息" [ref=e817] [cursor=pointer]: 更新位置信息
+        - generic [ref=e820]:
+          - link "帮助" [ref=e821] [cursor=pointer]:
+            - /url: https://support.google.com/websearch/?p=ws_results_help&hl=zh-CN&fg=1
+          - link "发送反馈" [ref=e822] [cursor=pointer]:
+            - /url: "#"
+          - link "隐私权" [ref=e823] [cursor=pointer]:
+            - /url: https://policies.google.com/privacy?hl=zh-CN&fg=1
+          - link "条款" [ref=e824] [cursor=pointer]:
+            - /url: https://policies.google.com/terms?hl=zh-CN&fg=1

@@ -1,0 +1,607 @@
+- generic [ref=e2]:
+  - generic:
+    - generic:
+      - tooltip "This user has previously committed to the zig repository."
+    - generic:
+      - tooltip "This user is the author of this issue"
+    - generic:
+      - tooltip "This user has previously committed to the zig repository."
+    - generic:
+      - tooltip "This user is the author of this issue"
+    - generic:
+      - tooltip "This user is a member of the ziglang organization."
+    - generic:
+      - tooltip "This user has previously committed to the zig repository."
+    - generic:
+      - tooltip "This user has previously committed to the zig repository."
+    - generic:
+      - tooltip "This user is the author of this issue"
+    - generic:
+      - tooltip "This user has previously committed to the zig repository."
+  - generic [ref=e3]:
+    - link "Skip to content" [ref=e4] [cursor=pointer]:
+      - /url: "#start-of-content"
+    - banner [ref=e6]:
+      - heading "Navigation Menu" [level=2] [ref=e7]
+      - generic [ref=e9]:
+        - button "Toggle navigation" [ref=e11] [cursor=pointer]
+        - link "Homepage" [ref=e17] [cursor=pointer]:
+          - /url: /
+          - img [ref=e18]
+        - generic [ref=e20]:
+          - link "Sign in" [ref=e21] [cursor=pointer]:
+            - /url: /login?return_to=https%3A%2F%2Fgithub.com%2Fziglang%2Fzig%2Fissues%2F1922
+          - button "Appearance settings" [ref=e24] [cursor=pointer]:
+            - img
+  - main [ref=e28]:
+    - generic [ref=e29]:
+      - generic [ref=e30]:
+        - generic [ref=e32]:
+          - img [ref=e33]
+          - link "ziglang" [ref=e36] [cursor=pointer]:
+            - /url: /ziglang
+          - generic [ref=e37]: /
+          - strong [ref=e38]:
+            - link "zig" [ref=e39] [cursor=pointer]:
+              - /url: /ziglang/zig
+          - generic [ref=e40]: Public
+        - generic [ref=e41]:
+          - list:
+            - listitem [ref=e42]:
+              - button "Sponsor ziglang/zig" [ref=e44] [cursor=pointer]:
+                - generic [ref=e46]:
+                  - img [ref=e47]
+                  - text: Sponsor
+            - listitem [ref=e49]:
+              - link "You must be signed in to change notification settings" [ref=e50] [cursor=pointer]:
+                - /url: /login?return_to=%2Fziglang%2Fzig
+                - img [ref=e51]
+                - text: Notifications
+            - listitem [ref=e53]:
+              - link "Fork 3.1k" [ref=e54] [cursor=pointer]:
+                - /url: /login?return_to=%2Fziglang%2Fzig
+                - img [ref=e55]
+                - text: Fork
+                - generic "3,063" [ref=e57]: 3.1k
+            - listitem [ref=e58]:
+              - link "You must be signed in to star a repository" [ref=e60] [cursor=pointer]:
+                - /url: /login?return_to=%2Fziglang%2Fzig
+                - img [ref=e61]
+                - text: Star
+                - generic "43176 users starred this repository" [ref=e63]: 43.2k
+      - navigation "Repository" [ref=e64]:
+        - list [ref=e65]:
+          - listitem [ref=e66]:
+            - link "Code" [ref=e67] [cursor=pointer]:
+              - /url: /ziglang/zig
+              - img [ref=e68]
+              - generic [ref=e70]: Code
+          - listitem [ref=e71]:
+            - link "Issues 2.8k" [ref=e72] [cursor=pointer]:
+              - /url: /ziglang/zig/issues
+              - img [ref=e73]
+              - generic [ref=e76]: Issues
+              - generic "2,786" [ref=e77]: 2.8k
+          - listitem [ref=e78]:
+            - link "Pull requests 124" [ref=e79] [cursor=pointer]:
+              - /url: /ziglang/zig/pulls
+              - img [ref=e80]
+              - generic [ref=e82]: Pull requests
+              - generic "124" [ref=e83]
+          - listitem [ref=e84]:
+            - link "Actions" [ref=e85] [cursor=pointer]:
+              - /url: /ziglang/zig/actions
+              - img [ref=e86]
+              - generic [ref=e88]: Actions
+          - listitem [ref=e89]:
+            - link "Wiki" [ref=e90] [cursor=pointer]:
+              - /url: /ziglang/zig/wiki
+              - img [ref=e91]
+              - generic [ref=e93]: Wiki
+          - listitem [ref=e94]:
+            - link "Security and quality" [ref=e95] [cursor=pointer]:
+              - /url: /ziglang/zig/security
+              - img [ref=e96]
+              - generic [ref=e98]: Security and quality
+          - listitem [ref=e99]
+        - button "Additional navigation options" [ref=e103] [cursor=pointer]:
+          - img
+    - generic [ref=e111]:
+      - region "Header" [ref=e113]:
+        - generic [ref=e114]:
+          - 'heading "More control over the data layout of tagged unions #1922" [level=1] [ref=e116]':
+            - text: More control over the data layout of tagged unions
+            - generic [ref=e118]: "#1922"
+          - generic [ref=e120]:
+            - link "New issue" [ref=e122] [cursor=pointer]:
+              - /url: /login?return_to=https://github.com/ziglang/zig/issues/1922
+              - generic [ref=e124]: New issue
+            - button "Copy link" [ref=e125] [cursor=pointer]:
+              - img [ref=e126]
+      - generic [ref=e134]:
+        - img "Issue, not planned" [ref=e135]
+        - text: Closed as not planned
+      - generic [ref=e138]:
+        - generic [ref=e139]:
+          - generic [ref=e141]:
+            - link "@Hejsil's profile" [ref=e143] [cursor=pointer]:
+              - /url: https://github.com/Hejsil
+              - img "@Hejsil" [ref=e144]
+            - generic [ref=e145]:
+              - heading "Description" [level=2] [ref=e146]
+              - generic [ref=e148]:
+                - generic [ref=e150]:
+                  - generic [ref=e151]:
+                    - link "Hejsil" [ref=e153] [cursor=pointer]:
+                      - /url: https://github.com/Hejsil
+                    - generic [ref=e154]:
+                      - text: opened
+                      - link "on Feb 6, 2019on Feb 6, 2019" [ref=e155] [cursor=pointer]:
+                        - /url: https://github.com/ziglang/zig/issues/1922#issue-407273297
+                  - button "Issue body actions" [ref=e159] [cursor=pointer]:
+                    - img [ref=e160]
+                - generic [ref=e162]:
+                  - generic [ref=e164]:
+                    - paragraph [ref=e165]:
+                      - text: Currently we have a great level of control over the data layout of
+                      - code [ref=e166]: struct
+                      - text: s and
+                      - code [ref=e167]: enum
+                      - text: s using
+                      - code [ref=e168]: packed
+                      - text: and custom tag types. Sadly tagged
+                      - code [ref=e169]: union
+                      - text: "s are quite limited in this aspect since we have no control over where the tag is placed. Imagine if we could do this:"
+                    - generic [ref=e170]:
+                      - generic [ref=e171]:
+                        - text: "packed union { // Normal fields allowed. They are always present, no matter the tag. some_field: u8, // Specify, that the tag is between some_field and some_field2 @tagHere"
+                        - text: "(enum(u8){A, B, C}), some_field2: u16, // The tag maps to one of the fields in here @unionHere( A: u8, B: u16, C: u32, ), };"
+                      - button "Copy code to clipboard" [ref=e173] [cursor=pointer]:
+                        - img [ref=e174]
+                    - paragraph [ref=e177]:
+                      - text: This is just some made of syntax (plz don't accept this) but it get my point across. This would allow us to write the union's bytes to disk/over the internet/whatever and treat the received bytes as the union. No need to serialize and deserialize. The
+                      - code [ref=e178]: packed union
+                      - text: already specifies a cross platform memory layout (after
+                      - link "#649" [ref=e179] [cursor=pointer]:
+                        - /url: https://github.com/ziglang/zig/issues/649
+                      - text: that is). I already do this a lot with
+                      - code [ref=e180]: packed struct
+                      - text: s and it keeps code very simple.
+                    - paragraph [ref=e181]:
+                      - text: The reason I also want to allow struct fields between the tag and the data is, that some binary formats currently encodes data like this (my usecase is
+                      - link "here" [ref=e182] [cursor=pointer]:
+                        - /url: https://github.com/pret/pokeemerald/blob/e9149b86086c1f61309f788a22874ac5b0492e15/asm/macros/event.inc#L631-L684
+                      - text: )
+                  - toolbar "Reactions" [ref=e184]:
+                    - switch "👍 8 reactions" [ref=e185]:
+                      - generic [ref=e186]:
+                        - generic: 👍
+                        - generic [ref=e187]:
+                          - generic [ref=e188]: React with 👍
+                          - text: "8"
+          - generic [ref=e190]:
+            - generic [ref=e191]:
+              - heading "Activity" [level=2] [ref=e192]
+              - link [ref=e193] [cursor=pointer]:
+                - /url: /ziglang/zig/issues/1922?timeline_page=1
+                - text: Next
+              - generic [ref=e194]:
+                - generic [ref=e195]:
+                  - link "@Hejsil's profile" [ref=e196] [cursor=pointer]:
+                    - /url: https://github.com/Hejsil
+                    - img "Hejsil" [ref=e197]
+                  - generic [ref=e204]:
+                    - generic [ref=e206]:
+                      - heading "Hejsil commented on Feb 6, 2019 on Feb 6, 2019" [level=3] [ref=e207]:
+                        - text: Hejsil commented
+                        - generic "Feb 6, 2019, 22:55 GMT+8" [ref=e208]: on Feb 6, 2019 on Feb 6, 2019
+                      - generic [ref=e209]:
+                        - link "Hejsil" [ref=e211] [cursor=pointer]:
+                          - /url: /Hejsil
+                        - link "on Feb 6, 2019on Feb 6, 2019" [ref=e214] [cursor=pointer]:
+                          - /url: https://github.com/ziglang/zig/issues/1922#issuecomment-461052102
+                      - generic [ref=e216]:
+                        - generic [ref=e217]:
+                          - generic "This user has previously committed to the zig repository." [ref=e218]: Contributor
+                          - generic "This user is the author of this issue" [ref=e219]: Author
+                        - button "Actions for Hejsil's comment, 10:55 PM on February 6, 2019" [ref=e221] [cursor=pointer]:
+                          - img [ref=e222]
+                    - generic [ref=e224]:
+                      - generic [ref=e226]:
+                        - paragraph [ref=e227]:
+                          - text: Or maybe, allow some kind of annotation to specify that one field in a
+                          - code [ref=e228]: struct
+                          - text: is the tag of another field.
+                        - generic [ref=e229]:
+                          - generic [ref=e230]:
+                            - text: "packed struct { some_field: u8, @tagOf"
+                            - text: "(\"data\") tag: enum(u8)"
+                            - text: "{A,B,C}, some_field2: u16, data: packed union { A: u8, B: u16, C: u32, ), }"
+                          - button "Copy code to clipboard" [ref=e232] [cursor=pointer]:
+                            - img [ref=e233]
+                      - toolbar "Reactions"
+                - generic [ref=e236]:
+                  - link "@Hejsil's profile" [ref=e237] [cursor=pointer]:
+                    - /url: https://github.com/Hejsil
+                    - img "Hejsil" [ref=e238]
+                  - generic [ref=e245]:
+                    - generic [ref=e247]:
+                      - heading "Hejsil commented on Feb 6, 2019 on Feb 6, 2019" [level=3] [ref=e248]:
+                        - text: Hejsil commented
+                        - generic "Feb 6, 2019, 23:03 GMT+8" [ref=e249]: on Feb 6, 2019 on Feb 6, 2019
+                      - generic [ref=e250]:
+                        - link "Hejsil" [ref=e252] [cursor=pointer]:
+                          - /url: /Hejsil
+                        - link "on Feb 6, 2019on Feb 6, 2019" [ref=e255] [cursor=pointer]:
+                          - /url: https://github.com/ziglang/zig/issues/1922#issuecomment-461055008
+                      - generic [ref=e257]:
+                        - generic [ref=e258]:
+                          - generic "This user has previously committed to the zig repository." [ref=e259]: Contributor
+                          - generic "This user is the author of this issue" [ref=e260]: Author
+                        - button "Actions for Hejsil's comment, 11:03 PM on February 6, 2019" [ref=e262] [cursor=pointer]:
+                          - img [ref=e263]
+                    - generic [ref=e265]:
+                      - paragraph [ref=e268]:
+                        - text: Related
+                        - link "#1072" [ref=e269] [cursor=pointer]:
+                          - /url: https://github.com/ziglang/zig/issues/1072
+                      - toolbar "Reactions"
+                - region "Events" [ref=e270]:
+                  - generic [ref=e277]:
+                    - img [ref=e281]
+                    - generic [ref=e285]:
+                      - link "andrewrk" [ref=e287] [cursor=pointer]:
+                        - /url: /andrewrk
+                        - generic [ref=e288]: andrewrk
+                      - text: added
+                      - link "proposal This issue suggests language modifications. If it also has the \"accepted\" label then it is planned." [ref=e290] [cursor=pointer]:
+                        - /url: /ziglang/zig/issues?q=state%3Aopen%20label%3A%22proposal%22
+                        - generic [ref=e292]: proposal
+                        - generic [ref=e293]: This issue suggests language modifications. If it also has the "accepted" label then it is planned.
+                      - link "on Feb 7, 2019on Feb 7, 2019" [ref=e294] [cursor=pointer]:
+                        - /url: https://github.com/ziglang/zig/issues/1922#event-2121900707
+                  - generic [ref=e298]:
+                    - img [ref=e302]
+                    - generic [ref=e306]:
+                      - link "andrewrk" [ref=e308] [cursor=pointer]:
+                        - /url: /andrewrk
+                        - generic [ref=e309]: andrewrk
+                      - text: added this to the
+                      - link "0.5.0" [ref=e310] [cursor=pointer]:
+                        - /url: https://github.com/ziglang/zig/milestone/7
+                      - text: milestone
+                      - link "on Feb 7, 2019on Feb 7, 2019" [ref=e311] [cursor=pointer]:
+                        - /url: https://github.com/ziglang/zig/issues/1922#event-2121900841
+                - generic [ref=e312]:
+                  - link "@andrewrk's profile" [ref=e313] [cursor=pointer]:
+                    - /url: https://github.com/andrewrk
+                    - img "andrewrk" [ref=e314]
+                  - generic [ref=e321]:
+                    - generic [ref=e323]:
+                      - heading "andrewrk commented on Feb 7, 2019 on Feb 7, 2019" [level=3] [ref=e324]:
+                        - text: andrewrk commented
+                        - generic "Feb 7, 2019, 01:50 GMT+8" [ref=e325]: on Feb 7, 2019 on Feb 7, 2019
+                      - generic [ref=e326]:
+                        - link "andrewrk" [ref=e328] [cursor=pointer]:
+                          - /url: /andrewrk
+                        - link "on Feb 7, 2019on Feb 7, 2019" [ref=e331] [cursor=pointer]:
+                          - /url: https://github.com/ziglang/zig/issues/1922#issuecomment-461119409
+                      - generic [ref=e332]:
+                        - button "Last edited by andrewrk" [ref=e335] [cursor=pointer]:
+                          - generic [ref=e338]: Last edited by andrewrk
+                          - generic:
+                            - img
+                        - generic [ref=e339]:
+                          - generic "This user is a member of the ziglang organization." [ref=e341]: Member
+                          - button "Actions for andrewrk's comment, 1:50 AM on February 7, 2019" [ref=e343] [cursor=pointer]:
+                            - img [ref=e344]
+                    - generic [ref=e346]:
+                      - generic [ref=e348]:
+                        - paragraph [ref=e349]: Interesting idea.
+                        - paragraph [ref=e350]: Note the current "zig way" to do this is to use a bare union (which has a secret safety tag field) and then manually manage your tag wherever you want. You could still switch on the tag, but instead of Zig unwrapping for you, you will do safety-checked direct access of the corresponding union field.
+                        - paragraph [ref=e351]:
+                          - text: That you want to make this work with
+                          - code [ref=e352]: packed
+                          - text: "suggests a particular use case: ability to use the same data structures in serialized form and in memory form. (Related"
+                          - link "#1512" [ref=e353] [cursor=pointer]:
+                            - /url: https://github.com/ziglang/zig/issues/1512
+                          - text: ) I think this requires some thought. I think there are some pitfalls with this approach and I don't want to accidentally encourage Zig programmers to fall into them. I'll keep this proposal in mind, and comment here if I stumble upon a good example of a problem where it could be solved using this approach.
+                      - toolbar "Reactions" [ref=e354]:
+                        - switch "👍 3 reactions" [ref=e355]:
+                          - generic [ref=e356]:
+                            - generic: 👍
+                            - generic [ref=e357]:
+                              - generic [ref=e358]: React with 👍
+                              - text: "3"
+                - region "Events" [ref=e359]:
+                  - generic [ref=e366]:
+                    - img [ref=e370]
+                    - generic [ref=e372]:
+                      - generic [ref=e374]:
+                        - link "andrewrk" [ref=e376] [cursor=pointer]:
+                          - /url: /andrewrk
+                          - generic [ref=e377]: andrewrk
+                        - text: mentioned this
+                        - link "on Feb 7, 2019on Feb 7, 2019" [ref=e378] [cursor=pointer]:
+                          - /url: https://github.com/ziglang/zig/issues/1922#event-865250133
+                      - region "Issues mentioned" [ref=e381]:
+                        - list [ref=e382]:
+                          - listitem [ref=e383]:
+                            - generic [ref=e384]:
+                              - img "Open" [ref=e385]
+                              - 'link "Allow extern tagged unions #1072" [ref=e388] [cursor=pointer]':
+                                - /url: https://github.com/ziglang/zig/issues/1072
+                                - text: Allow extern tagged unions
+                                - generic [ref=e389]: "#1072"
+                - generic [ref=e390]:
+                  - link "@daurnimator's profile" [ref=e391] [cursor=pointer]:
+                    - /url: https://github.com/daurnimator
+                    - img "daurnimator" [ref=e392]
+                  - generic [ref=e399]:
+                    - generic [ref=e401]:
+                      - heading "daurnimator commented on Feb 7, 2019 on Feb 7, 2019" [level=3] [ref=e402]:
+                        - text: daurnimator commented
+                        - generic "Feb 7, 2019, 09:48 GMT+8" [ref=e403]: on Feb 7, 2019 on Feb 7, 2019
+                      - generic [ref=e404]:
+                        - link "daurnimator" [ref=e406] [cursor=pointer]:
+                          - /url: /daurnimator
+                        - link "on Feb 7, 2019on Feb 7, 2019" [ref=e409] [cursor=pointer]:
+                          - /url: https://github.com/ziglang/zig/issues/1922#issuecomment-461259548
+                      - generic [ref=e410]:
+                        - button "Last edited by daurnimator" [ref=e413] [cursor=pointer]:
+                          - generic [ref=e416]: Last edited by daurnimator
+                          - generic:
+                            - img
+                        - generic [ref=e417]:
+                          - generic "This user has previously committed to the zig repository." [ref=e419]: Contributor
+                          - button "Actions for daurnimator's comment, 9:48 AM on February 7, 2019" [ref=e421] [cursor=pointer]:
+                            - img [ref=e422]
+                    - generic [ref=e424]:
+                      - generic [ref=e426]:
+                        - paragraph [ref=e427]: I have a few good use cases for this. One well known use case to consider is nan-packing.
+                        - paragraph [ref=e428]: "My idea for solving this was allowing the programmer to implement their own \"tag\" function:"
+                        - generic [ref=e429]:
+                          - generic [ref=e430]: "packed union { Double: f64, // This would be a great use case for anonymous struct members! Packed: packed struct { _: u1, // sign_bit. not used in this example exponent: u11, // exponent: must be ones mantissa: packet struct { _: u51, // could use this for all sorts of tagged types. Bool: u1, } // must take up 52 bits }, fn @unionType(self: @This()) type { if (self.Packed.exponent == maxInt(@typeOf(self.Packed.exponent))) { return @typeOf(self.Double); } else { return @typeOf(self.Packed.mantissa.Bool); } } };"
+                          - button "Copy code to clipboard" [ref=e432] [cursor=pointer]:
+                            - img [ref=e433]
+                      - toolbar "Reactions" [ref=e436]:
+                        - switch "👍 6 reactions" [ref=e437]:
+                          - generic [ref=e438]:
+                            - generic: 👍
+                            - generic [ref=e439]:
+                              - generic [ref=e440]: React with 👍
+                              - text: "6"
+                - generic [ref=e441]:
+                  - link "@Hejsil's profile" [ref=e442] [cursor=pointer]:
+                    - /url: https://github.com/Hejsil
+                    - img "Hejsil" [ref=e443]
+                  - generic [ref=e450]:
+                    - generic [ref=e452]:
+                      - heading "Hejsil commented on Feb 7, 2019 on Feb 7, 2019" [level=3] [ref=e453]:
+                        - text: Hejsil commented
+                        - generic "Feb 7, 2019, 18:27 GMT+8" [ref=e454]: on Feb 7, 2019 on Feb 7, 2019
+                      - generic [ref=e455]:
+                        - link "Hejsil" [ref=e457] [cursor=pointer]:
+                          - /url: /Hejsil
+                        - link "on Feb 7, 2019on Feb 7, 2019" [ref=e460] [cursor=pointer]:
+                          - /url: https://github.com/ziglang/zig/issues/1922#issuecomment-461364719
+                      - generic [ref=e461]:
+                        - button "Last edited by Hejsil" [ref=e464] [cursor=pointer]:
+                          - generic [ref=e467]: Last edited by Hejsil
+                          - generic:
+                            - img
+                        - generic [ref=e468]:
+                          - generic [ref=e469]:
+                            - generic "This user has previously committed to the zig repository." [ref=e470]: Contributor
+                            - generic "This user is the author of this issue" [ref=e471]: Author
+                          - button "Actions for Hejsil's comment, 6:27 PM on February 7, 2019" [ref=e473] [cursor=pointer]:
+                            - img [ref=e474]
+                    - generic [ref=e476]:
+                      - generic [ref=e478]:
+                        - paragraph [ref=e479]:
+                          - text: I'll throw in use cases when I find them.
+                          - text: Extracted from
+                          - link "real code" [ref=e480] [cursor=pointer]:
+                            - /url: https://github.com/TM35-Metronome/tm35-gen3/blob/a72f053dfca227e9b3e7b0b194300219cef8fd67/src/gen3-types.zig#L150-L226
+                          - text: ":"
+                        - generic [ref=e481]:
+                          - code [ref=e483]: "pub const Trainer = packed struct { party_type: PartyType, class: u8, ... ai: lu32, party: Party, pub fn partyAt(trainer: *Trainer, index: usize, data: []u8) !*PartyMemberBase { return switch (trainer.party_type) { PartyType.None => &(try trainer.party.None.toSlice(data))[index].base, PartyType.Item => &(try trainer.party.Item.toSlice(data))[index].base, PartyType.Moves => &(try trainer.party.Moves.toSlice(data))[index].base, PartyType.Both => &(try trainer.party.Both.toSlice(data))[index].base, }; } }; pub const PartyType = packed enum(u8) { None = 0b00, Item = 0b10, Moves = 0b01, Both = 0b11, }; pub const Party = packed union { None: Slice(PartyMemberNone), Item: Slice(PartyMemberItem), Moves: Slice(PartyMemberMoves), Both: Slice(PartyMemberBoth), };"
+                          - button "Copy code to clipboard" [ref=e485] [cursor=pointer]:
+                            - img [ref=e486]
+                        - paragraph [ref=e489]:
+                          - text: Here, the
+                          - code [ref=e490]: party
+                          - text: field is a
+                          - code [ref=e491]: union
+                          - text: of "slices" and the
+                          - code [ref=e492]: party_type
+                          - text: is its tag. Currently I'm using
+                          - code [ref=e493]: partyAt
+                          - text: as a safe helper, and
+                          - code [ref=e494]: "@fieldToParentPtr"
+                          - text: to get from
+                          - code [ref=e495]: PartyMemberBase
+                          - text: to
+                          - code [ref=e496]: PartyMemberX
+                          - text: .
+                      - toolbar "Reactions"
+                - region "Events" [ref=e497]:
+                  - generic [ref=e504]:
+                    - img [ref=e508]
+                    - generic [ref=e512]:
+                      - link "andrewrk" [ref=e514] [cursor=pointer]:
+                        - /url: /andrewrk
+                        - generic [ref=e515]: andrewrk
+                      - text: "modified the milestones:"
+                      - link "0.5.0" [ref=e516] [cursor=pointer]:
+                        - /url: https://github.com/ziglang/zig/milestone/7
+                      - text: ","
+                      - link "0.6.0" [ref=e517] [cursor=pointer]:
+                        - /url: https://github.com/ziglang/zig/milestone/8
+                      - link "on Sep 21, 2019on Sep 21, 2019" [ref=e518] [cursor=pointer]:
+                        - /url: https://github.com/ziglang/zig/issues/1922#event-2651678719
+                  - generic [ref=e522]:
+                    - img [ref=e526]
+                    - generic [ref=e530]:
+                      - link "andrewrk" [ref=e532] [cursor=pointer]:
+                        - /url: /andrewrk
+                        - generic [ref=e533]: andrewrk
+                      - text: "modified the milestones:"
+                      - link "0.6.0" [ref=e534] [cursor=pointer]:
+                        - /url: https://github.com/ziglang/zig/milestone/8
+                      - text: ","
+                      - link "0.7.0" [ref=e535] [cursor=pointer]:
+                        - /url: https://github.com/ziglang/zig/milestone/9
+                      - link "on Jan 1, 2020on Jan 1, 2020" [ref=e536] [cursor=pointer]:
+                        - /url: https://github.com/ziglang/zig/issues/1922#event-2915970360
+                - generic [ref=e537]:
+                  - link "@hollmmax's profile" [ref=e538] [cursor=pointer]:
+                    - /url: https://github.com/hollmmax
+                    - img "hollmmax" [ref=e539]
+                  - generic [ref=e546]:
+                    - generic [ref=e548]:
+                      - heading "hollmmax commented on Jan 18, 2020 on Jan 18, 2020" [level=3] [ref=e549]:
+                        - text: hollmmax commented
+                        - generic "Jan 18, 2020, 22:37 GMT+8" [ref=e550]: on Jan 18, 2020 on Jan 18, 2020
+                      - generic [ref=e551]:
+                        - link "hollmmax" [ref=e553] [cursor=pointer]:
+                          - /url: /hollmmax
+                        - link "on Jan 18, 2020on Jan 18, 2020" [ref=e556] [cursor=pointer]:
+                          - /url: https://github.com/ziglang/zig/issues/1922#issuecomment-575904153
+                      - generic [ref=e558]:
+                        - generic "This user has previously committed to the zig repository." [ref=e560]: Contributor
+                        - button "Actions for hollmmax's comment, 10:37 PM on January 18, 2020" [ref=e562] [cursor=pointer]:
+                          - img [ref=e563]
+                    - generic [ref=e565]:
+                      - paragraph [ref=e568]:
+                        - text: I'd like to use something like this for parsing/generation of instructions.
+                        - text: It doesn't make sense to serialize/deserialize the data, as it gets used once, and then thrown away.
+                        - text: Combined with
+                        - link "#3380" [ref=e569] [cursor=pointer]:
+                          - /url: https://github.com/ziglang/zig/issues/3380
+                        - text: ", this would greatly simplify maintenance of ZASM and other code handling binary-formatted data."
+                      - toolbar "Reactions" [ref=e570]:
+                        - switch "👍 3 reactions" [ref=e571]:
+                          - generic [ref=e572]:
+                            - generic: 👍
+                            - generic [ref=e573]:
+                              - generic [ref=e574]: React with 👍
+                              - text: "3"
+                - region "Events" [ref=e575]:
+                  - generic [ref=e582]:
+                    - img [ref=e586]
+                    - generic [ref=e590]:
+                      - link "andrewrk" [ref=e592] [cursor=pointer]:
+                        - /url: /andrewrk
+                        - generic [ref=e593]: andrewrk
+                      - text: "modified the milestones:"
+                      - link "0.7.0" [ref=e594] [cursor=pointer]:
+                        - /url: https://github.com/ziglang/zig/milestone/9
+                      - text: ","
+                      - link "0.8.0" [ref=e595] [cursor=pointer]:
+                        - /url: https://github.com/ziglang/zig/milestone/10
+                      - link "on Oct 10, 2020on Oct 10, 2020" [ref=e596] [cursor=pointer]:
+                        - /url: https://github.com/ziglang/zig/issues/1922#event-3862285815
+                - generic [ref=e599]:
+                  - generic [ref=e605]:
+                    - heading "23 remaining items" [level=3] [ref=e607]:
+                      - text: "23"
+                      - generic [ref=e608]: remaining items
+                    - button "Load more" [ref=e610] [cursor=pointer]:
+                      - generic [ref=e613]: Load more
+                  - generic [ref=e615]:
+                    - img [ref=e616]
+                    - generic [ref=e619]: Loading
+            - generic [ref=e620]:
+              - link "Sign up for free" [ref=e621] [cursor=pointer]:
+                - /url: /signup?return_to=https://github.com/ziglang/zig/issues/1922
+                - generic [ref=e623]: Sign up for free
+              - generic [ref=e624]:
+                - strong [ref=e625]: to join this conversation on GitHub.
+                - text: Already have an account?
+              - link "Sign in to comment" [ref=e626] [cursor=pointer]:
+                - /url: /login?return_to=https://github.com/ziglang/zig/issues/1922
+        - generic [ref=e628]:
+          - heading "Metadata" [level=2] [ref=e629]
+          - generic [ref=e631]:
+            - generic [ref=e633]:
+              - generic [ref=e634]:
+                - heading "Assignees" [level=3]
+              - generic [ref=e635]: No one assigned
+            - generic [ref=e636]:
+              - generic [ref=e638]:
+                - heading "Labels" [level=3]
+              - link "proposal This issue suggests language modifications. If it also has the \"accepted\" label then it is planned." [ref=e641] [cursor=pointer]:
+                - /url: https://github.com/ziglang/zig/issues?q=state%3Aopen%20label%3A%22proposal%22
+                - generic [ref=e643]: proposal
+                - generic [ref=e644]: This issue suggests language modifications. If it also has the "accepted" label then it is planned.
+            - generic [ref=e646]:
+              - generic [ref=e647]:
+                - heading "Type" [level=3]
+              - generic [ref=e648]: No type
+            - generic [ref=e649]:
+              - generic [ref=e651]:
+                - heading "Fields" [level=3] [ref=e652]
+                - link "Give feedback" [ref=e653] [cursor=pointer]:
+                  - /url: https://github.com/orgs/community/discussions/189141
+              - generic [ref=e655]: No fields configured for issues without a type.
+            - generic [ref=e657]:
+              - generic [ref=e658]:
+                - heading "Projects" [level=3]
+              - generic [ref=e659]: No projects
+            - generic [ref=e660]:
+              - generic [ref=e662]:
+                - heading "Milestone" [level=3]
+              - list [ref=e664]:
+                - listitem [ref=e665]:
+                  - link "urgent" [ref=e666] [cursor=pointer]:
+                    - /url: https://github.com/ziglang/zig/milestone/19
+                    - generic [ref=e668]:
+                      - generic [ref=e669]: urgent
+                      - generic [ref=e670]: No due date
+            - generic [ref=e672]:
+              - generic [ref=e673]:
+                - heading "Relationships" [level=3]
+              - generic [ref=e674]: None yet
+            - generic [ref=e676]:
+              - generic [ref=e677]:
+                - heading "Development" [level=3]
+              - generic [ref=e678]: No branches or pull requests
+            - heading "Issue actions" [level=2] [ref=e679]
+            - list
+  - contentinfo [ref=e680]:
+    - heading "Footer" [level=2] [ref=e681]
+    - generic [ref=e682]:
+      - generic [ref=e683]:
+        - link "GitHub Homepage" [ref=e684] [cursor=pointer]:
+          - /url: https://github.com
+          - img [ref=e685]
+        - generic [ref=e687]: © 2026 GitHub, Inc.
+      - navigation "Footer" [ref=e688]:
+        - heading "Footer navigation" [level=3] [ref=e689]
+        - list "Footer navigation" [ref=e690]:
+          - listitem [ref=e691]:
+            - link "Terms" [ref=e692] [cursor=pointer]:
+              - /url: https://docs.github.com/site-policy/github-terms/github-terms-of-service
+          - listitem [ref=e693]:
+            - link "Privacy" [ref=e694] [cursor=pointer]:
+              - /url: https://docs.github.com/site-policy/privacy-policies/github-privacy-statement
+          - listitem [ref=e695]:
+            - link "Security" [ref=e696] [cursor=pointer]:
+              - /url: https://github.com/security
+          - listitem [ref=e697]:
+            - link "Status" [ref=e698] [cursor=pointer]:
+              - /url: https://www.githubstatus.com/
+          - listitem [ref=e699]:
+            - link "Community" [ref=e700] [cursor=pointer]:
+              - /url: https://github.community/
+          - listitem [ref=e701]:
+            - link "Docs" [ref=e702] [cursor=pointer]:
+              - /url: https://docs.github.com/
+          - listitem [ref=e703]:
+            - link "Contact" [ref=e704] [cursor=pointer]:
+              - /url: https://support.github.com?tags=dotcom-footer
+          - listitem [ref=e705]:
+            - button "Manage cookies" [ref=e707] [cursor=pointer]
+          - listitem [ref=e708]:
+            - button "Do not share my personal information" [ref=e710] [cursor=pointer]

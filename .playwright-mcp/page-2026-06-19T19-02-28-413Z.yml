@@ -1,0 +1,582 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - heading "Pointers in Zig" [level=1] [ref=e3]
+    - paragraph [ref=e4]:
+      - text: This post is going to explain how pointers, arrays, and slices work in Zig, without depending on knowledge of other languages that use pointers. If you're trying to learn Zig and your only programming experience is in a language with managed memory, this is for you. If you're struggling to understand pointers in C, this might help. If you're coming from C or C++ and just want to know the differences, you might be better off reading the official documentation for
+      - link "arrays" [ref=e5] [cursor=pointer]:
+        - /url: https://ziglang.org/documentation/master/#Arrays
+      - text: ","
+      - link "slices" [ref=e6] [cursor=pointer]:
+        - /url: https://ziglang.org/documentation/master/#Slices
+      - text: ", and"
+      - link "pointers" [ref=e7] [cursor=pointer]:
+        - /url: https://ziglang.org/documentation/master/#Pointers
+      - text: .
+      - link "Ziglearn" [ref=e8] [cursor=pointer]:
+        - /url: https://ziglearn.org/chapter-1/#pointers
+      - text: is another good resource.
+    - heading "Memory" [level=1] [ref=e9]
+    - paragraph [ref=e10]: "Memory in computers that run Zig code is laid out as a large contiguous region of bytes, where each byte has an address. This model is pretty easy to visualize with a table:"
+    - table "16 bytes of memory with random data" [ref=e11]:
+      - rowgroup [ref=e12]:
+        - row "Address Value" [ref=e13]:
+          - columnheader "Address" [ref=e14]
+          - columnheader "Value" [ref=e15]
+        - row "0 3" [ref=e16]:
+          - cell "0" [ref=e17]
+          - cell "3" [ref=e18]
+        - row "1 12" [ref=e19]:
+          - cell "1" [ref=e20]
+          - cell "12" [ref=e21]
+        - row "2 87" [ref=e22]:
+          - cell "2" [ref=e23]
+          - cell "87" [ref=e24]
+        - row "3 255" [ref=e25]:
+          - cell "3" [ref=e26]
+          - cell "255" [ref=e27]
+        - row "4 9" [ref=e28]:
+          - cell "4" [ref=e29]
+          - cell "9" [ref=e30]
+        - row "5 0" [ref=e31]:
+          - cell "5" [ref=e32]
+          - cell "0" [ref=e33]
+        - row "6 0" [ref=e34]:
+          - cell "6" [ref=e35]
+          - cell "0" [ref=e36]
+        - row "7 0" [ref=e37]:
+          - cell "7" [ref=e38]
+          - cell "0" [ref=e39]
+        - row "8 11" [ref=e40]:
+          - cell "8" [ref=e41]
+          - cell "11" [ref=e42]
+        - row "9 57" [ref=e43]:
+          - cell "9" [ref=e44]
+          - cell "57" [ref=e45]
+        - row "10 144" [ref=e46]:
+          - cell "10" [ref=e47]
+          - cell "144" [ref=e48]
+        - row "11 254" [ref=e49]:
+          - cell "11" [ref=e50]
+          - cell "254" [ref=e51]
+        - row "12 93" [ref=e52]:
+          - cell "12" [ref=e53]
+          - cell "93" [ref=e54]
+        - row "13 13" [ref=e55]:
+          - cell "13" [ref=e56]
+          - cell "13" [ref=e57]
+        - row "14 228" [ref=e58]:
+          - cell "14" [ref=e59]
+          - cell "228" [ref=e60]
+        - row "15 65" [ref=e61]:
+          - cell "15" [ref=e62]
+          - cell "65" [ref=e63]
+      - caption [ref=e64]: 16 bytes of memory with random data
+    - paragraph [ref=e65]:
+      - text: This chunk of memory has the number 11 at address 8. Any value stored in memory takes up some number of contiguous bytes. That number varies depending on the type, but no matter how large it is, a value's address is the lowest-numbered address it occupies. So a 4-byte
+      - code [ref=e66]: u32
+      - text: value that occupies addresses 8 through 11 would be said to be at address 8.
+    - paragraph [ref=e67]:
+      - text: Using the table above as an example, if we have a
+      - code [ref=e68]: u16
+      - text: "stored at address 0, we know that it consists of two bytes: 3 and 12 (0x03 and 0x0c in hex). Depending on the machine's endianness (the order in which bytes are interpreted), that means our"
+      - code [ref=e69]: u16
+      - text: is either 3,075 (0x0c03) or 780 (0x030c). Every value that's stored in memory works like this.
+    - heading "Arrays" [level=1] [ref=e70]
+    - paragraph [ref=e71]:
+      - text: Sometimes we want to store several values of the same type. For example, a sequence of characters to make the string "Take off every zig" needs to live in memory somehow. We could store each of those letters as ASCII in its own
+      - code [ref=e72]: u8
+      - text: and feed them in sequence to an output function to print the string, but computers are supposed to do work for us, not the other way around.
+    - paragraph [ref=e73]:
+      - text: Instead, we can store them all in order next to each other in memory, and feed the whole chunk to a print function. This bunch of adjacent values that are all the same type is called an array. Arrays in Zig are defined by their length and the type of value that they hold, with the length in
+      - code [ref=e74]: "[square brackets]"
+      - text: right before the type. So "Take off every zig" is an
+      - code [ref=e75]: "[18]u8"
+      - text: or, if we know that nobody will ever modify its contents, we can declare it
+      - code [ref=e76]: const
+      - text: ". Here it is laid out in memory, at address 51236:"
+    - table "Take off every zig" [ref=e77]:
+      - caption [ref=e78]: Take off every zig
+      - rowgroup [ref=e79]:
+        - row "Address Value" [ref=e80]:
+          - columnheader "Address" [ref=e81]
+          - columnheader "Value" [ref=e82]
+        - row "51236 'T'" [ref=e83]:
+          - cell "51236" [ref=e84]
+          - cell "'T'" [ref=e85]
+        - row "51237 'a'" [ref=e86]:
+          - cell "51237" [ref=e87]
+          - cell "'a'" [ref=e88]
+        - row "51238 'k'" [ref=e89]:
+          - cell "51238" [ref=e90]
+          - cell "'k'" [ref=e91]
+        - row "51239 'e'" [ref=e92]:
+          - cell "51239" [ref=e93]
+          - cell "'e'" [ref=e94]
+        - row "51240 ' '" [ref=e95]:
+          - cell "51240" [ref=e96]
+          - cell "' '" [ref=e97]
+        - row "51241 'o'" [ref=e98]:
+          - cell "51241" [ref=e99]
+          - cell "'o'" [ref=e100]
+        - row "51242 'f'" [ref=e101]:
+          - cell "51242" [ref=e102]
+          - cell "'f'" [ref=e103]
+        - row "51243 'f'" [ref=e104]:
+          - cell "51243" [ref=e105]
+          - cell "'f'" [ref=e106]
+        - row "51244 ' '" [ref=e107]:
+          - cell "51244" [ref=e108]
+          - cell "' '" [ref=e109]
+        - row "51245 'e'" [ref=e110]:
+          - cell "51245" [ref=e111]
+          - cell "'e'" [ref=e112]
+        - row "51246 'v'" [ref=e113]:
+          - cell "51246" [ref=e114]
+          - cell "'v'" [ref=e115]
+        - row "51247 'e'" [ref=e116]:
+          - cell "51247" [ref=e117]
+          - cell "'e'" [ref=e118]
+        - row "51248 'r'" [ref=e119]:
+          - cell "51248" [ref=e120]
+          - cell "'r'" [ref=e121]
+        - row "51249 'y'" [ref=e122]:
+          - cell "51249" [ref=e123]
+          - cell "'y'" [ref=e124]
+        - row "51250 ' '" [ref=e125]:
+          - cell "51250" [ref=e126]
+          - cell "' '" [ref=e127]
+        - row "51251 'z'" [ref=e128]:
+          - cell "51251" [ref=e129]
+          - cell "'z'" [ref=e130]
+        - row "51252 'i'" [ref=e131]:
+          - cell "51252" [ref=e132]
+          - cell "'i'" [ref=e133]
+        - row "51253 'g'" [ref=e134]:
+          - cell "51253" [ref=e135]
+          - cell "'g'" [ref=e136]
+    - paragraph [ref=e137]:
+      - text: That chunk of memory from 51236 to 51253
+      - emphasis [ref=e138]: is
+      - text: the array. We can create an array just like it, taking advantage of Zig's array literal length inference syntax (
+      - code [ref=e139]: "[_]T"
+      - text: "), with the following Zig code:"
+    - generic [ref=e140]: "var orders: [18]u8 = [_]u8{ 'T', 'a', 'k', 'e', ' ', 'o', 'f', 'f', ' ', 'e', 'v', 'e', 'r', 'y', ' ', 'z', 'i', 'g', };"
+    - paragraph [ref=e141]:
+      - text: That's what arrays look like in memory and how to define them. If we wanted to write a function that could accept any 18-byte sequence but promises not to change its contents, it would start with something like
+      - code [ref=e142]: "fn look(array: [18]u8) void"
+      - text: .
+    - heading "Pointers" [level=1] [ref=e143]
+    - paragraph [ref=e144]:
+      - text: A pointer is a value that holds the address of another value. In Zig, you can get the address of any value by using the address-of operator
+      - code [ref=e145]: "&"
+      - text: . The type of a pointer is an asterisk (
+      - code [ref=e146]: "*"
+      - text: ) before the type of the value to which it points. So a
+      - code [ref=e147]: "*u8"
+      - text: points to a
+      - code [ref=e148]: u8
+      - text: . Here's a little bit of sample Zig code, along with its associated memory. We'll use a machine with 8-bit pointers so we don't have to worry about endianness.
+    - generic [ref=e149]: "var num: u8 = 12; const ptr: *u8 = &num; std.testing.expectEqual(ptr.*, num);"
+    - table "A u8 and its pointer" [ref=e150]:
+      - caption [ref=e151]: A u8 and its pointer
+      - rowgroup [ref=e152]:
+        - row "Address Value Note" [ref=e153]:
+          - columnheader "Address" [ref=e154]
+          - columnheader "Value" [ref=e155]
+          - columnheader "Note" [ref=e156]
+        - row "128 12 num" [ref=e157]:
+          - cell "128" [ref=e158]
+          - cell "12" [ref=e159]
+          - cell "num" [ref=e160]
+        - row "129 165 uninitialized" [ref=e161]:
+          - cell "129" [ref=e162]
+          - cell "165" [ref=e163]
+          - cell "uninitialized" [ref=e164]
+        - row "130 165" [ref=e165]:
+          - cell "130" [ref=e166]
+          - cell "165" [ref=e167]
+          - cell [ref=e168]
+        - row "131 165" [ref=e169]:
+          - cell "131" [ref=e170]
+          - cell "165" [ref=e171]
+          - cell [ref=e172]
+        - row "132 128 ptr" [ref=e173]:
+          - cell "132" [ref=e174]
+          - cell "128" [ref=e175]
+          - cell "ptr" [ref=e176]
+        - row "133 165" [ref=e177]:
+          - cell "133" [ref=e178]
+          - cell "165" [ref=e179]
+          - cell [ref=e180]
+        - row "134 165" [ref=e181]:
+          - cell "134" [ref=e182]
+          - cell "165" [ref=e183]
+          - cell [ref=e184]
+        - row "135 165" [ref=e185]:
+          - cell "135" [ref=e186]
+          - cell "165" [ref=e187]
+          - cell [ref=e188]
+    - paragraph [ref=e189]:
+      - text: "The code included one more new thing: dereferencing. The value of"
+      - code [ref=e190]: ptr
+      - text: is 128, but we don't particularly care what its value is; we want to know the value of the thing it points to. To ask Zig for the value pointed to by a pointer, we use the derefrence operator
+      - code [ref=e191]: .*
+      - text: . This is the inverse of the address-of operator (
+      - code [ref=e192]: "&"
+      - text: ).
+    - paragraph [ref=e193]:
+      - text: This kind of pointer (
+      - code [ref=e194]: "*T"
+      - text: where T is a type) only refers to exactly one item at a time. There is another kind of pointer in Zig,
+      - code [ref=e195]: "[*]T"
+      - text: . This is called an unknown-length pointer, and it points to an arbitrary number of values. Using our
+      - code [ref=e196]: orders
+      - text: "array from the last section, we can get a pointer to its elements with this code:"
+    - generic [ref=e197]: "var orders: [18]u8 = [_]u8{ 'T', 'a', 'k', 'e', ' ', 'o', 'f', 'f', ' ', 'e', 'v', 'e', 'r', 'y', ' ', 'z', 'i', 'g', }; var order_ptr: [*]u8 = &orders;"
+    - paragraph [ref=e198]:
+      - text: This lets us address individual elements of the array, like
+      - code [ref=e199]: order_ptr[3]
+      - text: ", which would have the value"
+      - code [ref=e200]: "'e'"
+      - text: . Unfortunately, this also lets us ask for
+      - code [ref=e201]: order_ptr[100]
+      - text: and Zig will happily tell us whatever is 100 bytes away from
+      - code [ref=e202]: order_ptr
+      - text: in memory, even though it's not part of
+      - code [ref=e203]: orders
+      - text: . This can lead to errors that are difficult to detect and fix. The problem here is that unknown-length pointers don't have known lengths (surprise) so access through them can't be checked to ensure that it doesn't go past the end of the array.
+    - heading "Slices" [level=1] [ref=e204]
+    - paragraph [ref=e205]:
+      - text: "Slices solve this problem. You can get a slice from an array with the slicing syntax:"
+      - code [ref=e206]: array[start..end]
+      - text: where
+      - code [ref=e207]: start
+      - text: is the index of the first element that will be in the slice and
+      - code [ref=e208]: end
+      - text: is the index 1 past the last element. The
+      - code [ref=e209]: end
+      - text: parameter can be left off if you want to take the rest of the array, so
+      - code [ref=e210]: array[0..]
+      - text: is a slice comprising all the elements in
+      - code [ref=e211]: array
+      - text: and
+      - code [ref=e212]: array[0..10]
+      - text: is the first 10 elements.
+    - paragraph [ref=e213]: You can think of a slice like a struct with an unknown-length pointer and a length.
+    - generic [ref=e214]: "fn Slice(comptime T: type) type { return struct { ptr: [*]T, len: usize, }; }"
+    - paragraph [ref=e215]:
+      - text: Zig comes with some extra syntax support for slices, so the type
+      - code [ref=e216]: Slice(u8)
+      - text: is referred to as
+      - code [ref=e217]: "[]u8"
+      - text: and the 3rd element of a slice named
+      - code [ref=e218]: slice
+      - text: is
+      - code [ref=e219]: slice[2]
+      - text: . Raw unknown-length pointers are best avoided in Zig; slices are much safer and easier to use. Going back to our trusty
+      - code [ref=e220]: orders
+      - text: example, here's some code and associated memory layout with a slice.
+    - generic [ref=e221]: "var orders: [18]u8 = [_]u8{ 'T', 'a', 'k', 'e', ' ', 'o', 'f', 'f', ' ', 'e', 'v', 'e', 'r', 'y', ' ', 'z', 'i', 'g', }; var slice: []const u8 = orders[0..];"
+    - table "Slices of arrays" [ref=e222]:
+      - caption [ref=e223]: Slices of arrays
+      - rowgroup [ref=e224]:
+        - row "Address Value Note" [ref=e225]:
+          - columnheader "Address" [ref=e226]
+          - columnheader "Value" [ref=e227]
+          - columnheader "Note" [ref=e228]
+        - row "232 236 pointer to orders" [ref=e229]:
+          - cell "232" [ref=e230]
+          - cell "236" [ref=e231]
+          - cell "pointer to orders" [ref=e232]
+        - row "233 18 length of orders" [ref=e233]:
+          - cell "233" [ref=e234]
+          - cell "18" [ref=e235]
+          - cell "length of orders" [ref=e236]
+        - row "234 165 uninitialized" [ref=e237]:
+          - cell "234" [ref=e238]
+          - cell "165" [ref=e239]
+          - cell "uninitialized" [ref=e240]
+        - row "235 165" [ref=e241]:
+          - cell "235" [ref=e242]
+          - cell "165" [ref=e243]
+          - cell [ref=e244]
+        - row "236 'T' beginning of orders" [ref=e245]:
+          - cell "236" [ref=e246]
+          - cell "'T'" [ref=e247]
+          - cell "beginning of orders" [ref=e248]
+        - row "237 'a'" [ref=e249]:
+          - cell "237" [ref=e250]
+          - cell "'a'" [ref=e251]
+          - cell [ref=e252]
+        - row "238 'k'" [ref=e253]:
+          - cell "238" [ref=e254]
+          - cell "'k'" [ref=e255]
+          - cell [ref=e256]
+        - row "239 'e'" [ref=e257]:
+          - cell "239" [ref=e258]
+          - cell "'e'" [ref=e259]
+          - cell [ref=e260]
+        - row "240 ' '" [ref=e261]:
+          - cell "240" [ref=e262]
+          - cell "' '" [ref=e263]
+          - cell [ref=e264]
+        - row "241 'o'" [ref=e265]:
+          - cell "241" [ref=e266]
+          - cell "'o'" [ref=e267]
+          - cell [ref=e268]
+        - row "242 'f'" [ref=e269]:
+          - cell "242" [ref=e270]
+          - cell "'f'" [ref=e271]
+          - cell [ref=e272]
+        - row "243 'f'" [ref=e273]:
+          - cell "243" [ref=e274]
+          - cell "'f'" [ref=e275]
+          - cell [ref=e276]
+        - row "244 ' '" [ref=e277]:
+          - cell "244" [ref=e278]
+          - cell "' '" [ref=e279]
+          - cell [ref=e280]
+        - row "245 'e'" [ref=e281]:
+          - cell "245" [ref=e282]
+          - cell "'e'" [ref=e283]
+          - cell [ref=e284]
+        - row "246 'v'" [ref=e285]:
+          - cell "246" [ref=e286]
+          - cell "'v'" [ref=e287]
+          - cell [ref=e288]
+        - row "247 'e'" [ref=e289]:
+          - cell "247" [ref=e290]
+          - cell "'e'" [ref=e291]
+          - cell [ref=e292]
+        - row "248 'r'" [ref=e293]:
+          - cell "248" [ref=e294]
+          - cell "'r'" [ref=e295]
+          - cell [ref=e296]
+        - row "249 'y'" [ref=e297]:
+          - cell "249" [ref=e298]
+          - cell "'y'" [ref=e299]
+          - cell [ref=e300]
+        - row "250 ' '" [ref=e301]:
+          - cell "250" [ref=e302]
+          - cell "' '" [ref=e303]
+          - cell [ref=e304]
+        - row "251 'z'" [ref=e305]:
+          - cell "251" [ref=e306]
+          - cell "'z'" [ref=e307]
+          - cell [ref=e308]
+        - row "252 'i'" [ref=e309]:
+          - cell "252" [ref=e310]
+          - cell "'i'" [ref=e311]
+          - cell [ref=e312]
+        - row "253 'g'" [ref=e313]:
+          - cell "253" [ref=e314]
+          - cell "'g'" [ref=e315]
+          - cell [ref=e316]
+    - paragraph [ref=e317]:
+      - text: The slicing syntax
+      - code [ref=e318]: orders[0..]
+      - text: says to take a slice of the orders array, starting at index 0 and going to the end. We could get just "off" by slicing
+      - code [ref=e319]: orders[5..8]
+      - text: out of the array instead.
+    - heading "const" [level=1] [ref=e320]
+    - paragraph [ref=e321]:
+      - text: I've sprinkled the
+      - code [ref=e322]: const
+      - text: keyword through this post without really explaining what it does. This is the part where that changes. Whenever you see
+      - code [ref=e323]: const
+      - text: in a Zig type, it means that whatever comes next can't be changed. So a slice of
+      - code [ref=e324]: u8
+      - text: s declared as
+      - code [ref=e325]: "[]const u8"
+      - text: ", means that the slice itself can change, but the"
+      - code [ref=e326]: u8
+      - text: s to which it points can't. Here's some code with the "whatever comes next" in bold.
+    - generic [ref=e327]: "var orders: [18]u8 = [_]u8{ 'T', 'a', 'k', 'e', ' ', 'o', 'f', 'f', ' ', 'e', 'v', 'e', 'r', 'y', ' ', 'z', 'i', 'g', }; var slice: []const u8 = orders[0..]; slice = orders[5..8]; // Legal slice[0] = 'X'; // error: cannot assign to constant const slice2: []u8 = orders[0..]; slice2[0] = 'X'; // Legal slice2 = orders[5..8]; // error: cannot assign to constant"
+    - paragraph [ref=e328]:
+      - text: So values declared
+      - code [ref=e329]: var
+      - text: can change, even if they point to things that can't, and values declared
+      - code [ref=e330]: const
+      - text: can't, even if they point to things that can. This is important for...
+    - heading "Function Parameters" [level=1] [ref=e331]
+    - paragraph [ref=e332]:
+      - text: Function parameters in Zig are always implicitly
+      - code [ref=e333]: const
+      - text: . There's no way to make them
+      - code [ref=e334]: var
+      - text: ". Consider the following 3 tests:"
+    - generic [ref=e335]: "fn times2(a: u32) u32 { return a * 2; } test \"use function\" { var a: u32 = 3; const b = times2(a); } test \"inline\" { const a: u32 = 3; const b: u32 = a * 2; } test \"var\" { var a: u32 = 3; a = a * 2; b = a; }"
+    - paragraph [ref=e336]:
+      - text: The first two tests are equivalent, because
+      - code [ref=e337]: a
+      - text: is
+      - code [ref=e338]: const
+      - text: when it's multiplied by two. The third example is defferent. It modifies the value of
+      - code [ref=e339]: a
+      - text: in place before assigning it to
+      - code [ref=e340]: b
+      - text: . Note that the
+      - code [ref=e341]: const
+      - text: keyword doesn't appear at all in the definition of
+      - code [ref=e342]: times2
+      - text: ", but if we had tried to do"
+      - code [ref=e343]: a = a * 2; return a;
+      - text: in that function, the compiler would have spat out
+      - code [ref=e344]: "error: cannot assign to constant"
+      - text: . That's what "function parameters in Zig are always implicitly
+      - code [ref=e345]: const
+      - text: "\" means."
+    - paragraph [ref=e346]:
+      - text: Limiting the language to pure functions seems nice, but sometimes you need a function to modify its arguments in place. For example, let's write a function to reverse an array of
+      - code [ref=e347]: u8
+      - text: s. It will have to take the array's length as a comptime parameter, since arrays lengths must be known at compile time.
+    - generic [ref=e348]: "fn reverse(comptime L: usize, array: [L]u8) [L]u8 { var out: [L]u8 = undefined; for (array) |elem, idx| { out[L - idx - 1] = elem; } return out; }"
+    - paragraph [ref=e349]: This function has some problems. First is that it doubles the amount of memory required by the array. Even if we're never going to use the un-reversed version of the array again, it's still there, unmodified. The other major issue is that we have to know the array's length at compile time. That means no reversing dynamically allocated memory for us. We can get around both of these by switching from an array-reverser to a slice-reverser.
+    - paragraph [ref=e350]:
+      - text: Instead of accepting and returning
+      - code [ref=e351]: "[L]u8"
+      - text: ", it can just accept a"
+      - code [ref=e352]: "[]u8"
+      - text: ", reverse the slice in place, and return"
+      - code [ref=e353]: void
+      - text: . Let's look at the standard library's implementation of
+      - code [ref=e354]: std.mem.reverse
+      - text: .
+    - generic [ref=e355]: "pub fn swap(comptime T: type, a: *T, b: *T) void { const tmp = a.*; a.* = b.*; b.* = tmp; } pub fn reverse(comptime T: type, items: []T) void { var i: usize = 0; const end = items.len / 2; while (i < end) : (i += 1) { swap(T, &items[i], &items[items.len - i - 1]); } }"
+    - paragraph [ref=e356]:
+      - text: This has an extra
+      - code [ref=e357]: T
+      - text: parameter to make it generic across slices of any type, but it's still pretty straightforward. We walk up to the midpoint of the slice, swapping each element with its pair on the other side of the midpoint. No extra memory required, and no chance of failure. Since
+      - code [ref=e358]: swap
+      - text: can't modify its parameters directly, it takes a pair of pointers and swaps the values they point to.
+    - paragraph [ref=e359]:
+      - text: Let's do one more memory layout example that uses
+      - code [ref=e360]: std.mem.reverse
+      - text: .
+    - generic [ref=e361]: "var orders: [18]u8 = [_]u8{ 'T', 'a', 'k', 'e', ' ', 'o', 'f', 'f', ' ', 'e', 'v', 'e', 'r', 'y', ' ', 'z', 'i', 'g', }; std.mem.reverse(u8, orders[0..]);"
+    - table "Before and and after reversing" [ref=e362]:
+      - caption [ref=e363]: Before and and after reversing
+      - rowgroup [ref=e364]:
+        - row "Address Value Before Value After Note" [ref=e365]:
+          - columnheader "Address" [ref=e366]
+          - columnheader "Value Before" [ref=e367]
+          - columnheader "Value After" [ref=e368]
+          - columnheader "Note" [ref=e369]
+        - row "0 2 2 slice.ptr slice" [ref=e370]:
+          - cell "0" [ref=e371]
+          - cell "2" [ref=e372]
+          - cell "2" [ref=e373]
+          - cell "slice.ptr" [ref=e374]
+          - cell "slice" [ref=e375]
+        - row "1 18 18 slice.len" [ref=e376]:
+          - cell "1" [ref=e377]
+          - cell "18" [ref=e378]
+          - cell "18" [ref=e379]
+          - cell "slice.len" [ref=e380]
+        - row "2 'T' 'g' orders[0] orders" [ref=e381]:
+          - cell "2" [ref=e382]
+          - cell "'T'" [ref=e383]
+          - cell "'g'" [ref=e384]
+          - cell "orders[0]" [ref=e385]
+          - cell "orders" [ref=e386]
+        - row "3 'a' 'i' orders[1]" [ref=e387]:
+          - cell "3" [ref=e388]
+          - cell "'a'" [ref=e389]
+          - cell "'i'" [ref=e390]
+          - cell "orders[1]" [ref=e391]
+        - row "4 'k' 'z' orders[2]" [ref=e392]:
+          - cell "4" [ref=e393]
+          - cell "'k'" [ref=e394]
+          - cell "'z'" [ref=e395]
+          - cell "orders[2]" [ref=e396]
+        - row "5 'e' ' ' orders[3]" [ref=e397]:
+          - cell "5" [ref=e398]
+          - cell "'e'" [ref=e399]
+          - cell "' '" [ref=e400]
+          - cell "orders[3]" [ref=e401]
+        - row "6 ' ' 'y' orders[4]" [ref=e402]:
+          - cell "6" [ref=e403]
+          - cell "' '" [ref=e404]
+          - cell "'y'" [ref=e405]
+          - cell "orders[4]" [ref=e406]
+        - row "7 'o' 'r' orders[5]" [ref=e407]:
+          - cell "7" [ref=e408]
+          - cell "'o'" [ref=e409]
+          - cell "'r'" [ref=e410]
+          - cell "orders[5]" [ref=e411]
+        - row "8 'f' 'e' orders[6]" [ref=e412]:
+          - cell "8" [ref=e413]
+          - cell "'f'" [ref=e414]
+          - cell "'e'" [ref=e415]
+          - cell "orders[6]" [ref=e416]
+        - row "9 'f' 'v' orders[7]" [ref=e417]:
+          - cell "9" [ref=e418]
+          - cell "'f'" [ref=e419]
+          - cell "'v'" [ref=e420]
+          - cell "orders[7]" [ref=e421]
+        - row "10 ' ' 'e' orders[8]" [ref=e422]:
+          - cell "10" [ref=e423]
+          - cell "' '" [ref=e424]
+          - cell "'e'" [ref=e425]
+          - cell "orders[8]" [ref=e426]
+        - row "11 'e' ' ' orders[9]" [ref=e427]:
+          - cell "11" [ref=e428]
+          - cell "'e'" [ref=e429]
+          - cell "' '" [ref=e430]
+          - cell "orders[9]" [ref=e431]
+        - row "12 'v' 'f' orders[10]" [ref=e432]:
+          - cell "12" [ref=e433]
+          - cell "'v'" [ref=e434]
+          - cell "'f'" [ref=e435]
+          - cell "orders[10]" [ref=e436]
+        - row "13 'e' 'f' orders[11]" [ref=e437]:
+          - cell "13" [ref=e438]
+          - cell "'e'" [ref=e439]
+          - cell "'f'" [ref=e440]
+          - cell "orders[11]" [ref=e441]
+        - row "14 'r' 'o' orders[12]" [ref=e442]:
+          - cell "14" [ref=e443]
+          - cell "'r'" [ref=e444]
+          - cell "'o'" [ref=e445]
+          - cell "orders[12]" [ref=e446]
+        - row "15 'y' ' ' orders[13]" [ref=e447]:
+          - cell "15" [ref=e448]
+          - cell "'y'" [ref=e449]
+          - cell "' '" [ref=e450]
+          - cell "orders[13]" [ref=e451]
+        - row "16 ' ' 'e' orders[14]" [ref=e452]:
+          - cell "16" [ref=e453]
+          - cell "' '" [ref=e454]
+          - cell "'e'" [ref=e455]
+          - cell "orders[14]" [ref=e456]
+        - row "17 'z' 'k' orders[15]" [ref=e457]:
+          - cell "17" [ref=e458]
+          - cell "'z'" [ref=e459]
+          - cell "'k'" [ref=e460]
+          - cell "orders[15]" [ref=e461]
+        - row "18 'i' 'a' orders[16]" [ref=e462]:
+          - cell "18" [ref=e463]
+          - cell "'i'" [ref=e464]
+          - cell "'a'" [ref=e465]
+          - cell "orders[16]" [ref=e466]
+        - row "19 'g' 'T' orders[17]" [ref=e467]:
+          - cell "19" [ref=e468]
+          - cell "'g'" [ref=e469]
+          - cell "'T'" [ref=e470]
+          - cell "orders[17]" [ref=e471]
+    - heading "Conclusion" [level=1] [ref=e472]
+    - paragraph [ref=e473]: Hopefully pointers, arrays, and slices are somewhat demystified now. If I did a good job, you should have a solid grasp of the basics. If you want to learn more, here are some topics that might be of interest.
+    - list [ref=e474]:
+      - listitem [ref=e475]:
+        - link "alignment" [ref=e476] [cursor=pointer]:
+          - /url: https://ziglang.org/documentation/master/#Alignment
+      - listitem [ref=e477]:
+        - link "volatile" [ref=e478] [cursor=pointer]:
+          - /url: https://ziglang.org/documentation/master/#volatile
+      - listitem [ref=e479]:
+        - link "sentinel-terminated slices" [ref=e480] [cursor=pointer]:
+          - /url: https://ziglang.org/documentation/master/#Sentinel-Terminated-Slices
+      - listitem [ref=e481]:
+        - link "sentinel-terminated pointers" [ref=e482] [cursor=pointer]:
+          - /url: https://ziglang.org/documentation/master/#Sentinel-Terminated-Pointers
+  - generic [ref=e483]: © 2020 Nathan Michaels

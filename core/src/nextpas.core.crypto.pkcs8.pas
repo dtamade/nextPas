@@ -34,7 +34,7 @@ function PBKDF2_HMAC_SHA256(
 implementation
 
 uses
-  Math,
+  nextpas.core.math,
   nextpas.core.tls.asn1,
   nextpas.core.crypto.hmac,
   nextpas.core.crypto.aescbc,

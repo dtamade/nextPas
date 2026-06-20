@@ -1,0 +1,417 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - generic [ref=e6]:
+          - link "DuckDuckGo home" [ref=e7] [cursor=pointer]:
+            - /url: /
+            - generic [ref=e9]: DuckDuckGo
+          - generic [ref=e15]:
+            - combobox "私密搜索" [ref=e17]: Zig tagged union slice string memory layout
+            - button "search" [ref=e19] [cursor=pointer]:
+              - img [ref=e20]
+        - button "打开菜单" [ref=e23] [cursor=pointer]:
+          - generic [ref=e24]: 打开菜单
+          - img [ref=e25]
+      - navigation [ref=e31]:
+        - list [ref=e32]:
+          - listitem [ref=e33]:
+            - link "全部" [ref=e34] [cursor=pointer]:
+              - /url: /?q=Zig+tagged+union+slice+string+memory+layout&ia=web
+              - img [ref=e35]
+              - text: 全部
+          - listitem [ref=e37]:
+            - link "图片" [ref=e38] [cursor=pointer]:
+              - /url: /?q=Zig+tagged+union+slice+string+memory+layout&ia=images&iax=images
+          - listitem [ref=e39]:
+            - link "视频" [ref=e40] [cursor=pointer]:
+              - /url: /?q=Zig+tagged+union+slice+string+memory+layout&ia=videos&iax=videos
+          - listitem [ref=e41]:
+            - link "新闻" [ref=e42] [cursor=pointer]:
+              - /url: /?q=Zig+tagged+union+slice+string+memory+layout&ia=news&iar=news
+          - listitem [ref=e43]:
+            - link "地图" [ref=e44] [cursor=pointer]:
+              - /url: /?q=Zig+tagged+union+slice+string+memory+layout&iaxm=maps
+        - list [ref=e45]:
+          - listitem [ref=e46]:
+            - link "Search Assist" [ref=e49] [cursor=pointer]:
+              - /url: /?q=Zig+tagged+union+slice+string+memory+layout&ia=web&assist=false
+              - img [ref=e50]
+              - generic [ref=e53]: Search Assist
+          - listitem [ref=e54]:
+            - link "Duck.ai" [ref=e56] [cursor=pointer]:
+              - /url: /?q=Zig+tagged+union+slice+string+memory+layout&ia=chat
+              - img [ref=e57]
+              - text: Duck.ai
+          - listitem [ref=e60]:
+            - button "搜索设置 ✀" [ref=e62] [cursor=pointer]:
+              - img [ref=e63]
+              - generic [ref=e65]: 搜索设置
+              - generic [ref=e68]: ✀
+    - generic [ref=e73]:
+      - navigation [ref=e75]:
+        - generic [ref=e78] [cursor=pointer]:
+          - generic [ref=e86]: 受保护
+          - img [ref=e87]: ▼
+        - generic [ref=e91] [cursor=pointer]:
+          - generic [ref=e94]:
+            - switch "✓" [ref=e95]: ✓
+            - generic [ref=e97]: 新加坡
+          - img [ref=e98]: ▼
+        - generic [ref=e102] [cursor=pointer]:
+          - generic [ref=e103]: 安全搜索： 适中
+          - img [ref=e104]: ▼
+        - generic [ref=e108] [cursor=pointer]:
+          - generic [ref=e109]: 不限时间
+          - img [ref=e110]: ▼
+      - generic [ref=e113]:
+        - list [ref=e114]:
+          - listitem [ref=e115]:
+            - generic [ref=e121]:
+              - button [ref=e124] [cursor=pointer]:
+                - generic [ref=e125]:
+                  - img [ref=e127]
+                  - text: Search Assist
+              - generic "Loading..." [ref=e130]:
+                - generic [ref=e134]: 正在读取搜索结果……
+          - listitem [ref=e135]:
+            - article [ref=e136] [cursor=pointer]:
+              - button [ref=e138]:
+                - img [ref=e139]
+              - generic [ref=e143]:
+                - link "将结果来源限定为 zig.guide" [ref=e145]:
+                  - /url: /?q=Zig%20tagged%20union%20slice%20string%20memory%20layout+site:zig.guide
+                  - img [ref=e147]
+                - generic [ref=e148]:
+                  - paragraph [ref=e149]: zig.guide
+                  - link "https://zig.guide › language-basics › unions" [ref=e150]:
+                    - /url: https://zig.guide/language-basics/unions/
+                    - paragraph [ref=e152]:
+                      - generic [ref=e153]: https://zig.guide
+                      - generic [ref=e154]: › language-basics › unions
+              - heading "Unions - zig.guide" [level=2] [ref=e156]:
+                - link "Unions - zig.guide" [ref=e157]:
+                  - /url: https://zig.guide/language-basics/unions/
+                  - generic [ref=e158]: Unions - zig.guide
+              - generic [ref=e163]: Unions Zig's unions allow you to define types that store one value of many possible typed fields; only one field may be active at one time. Bare union types do not have a guaranteed memory layout. Because of this, bare unions cannot be used to reinterpret memory. Accessing a field in a union that is not active is detectable illegal behaviour.
+          - listitem [ref=e164]:
+            - article [ref=e165] [cursor=pointer]:
+              - button [ref=e167]:
+                - img [ref=e168]
+              - generic [ref=e172]:
+                - link "将结果来源限定为 raymondtana.github.io" [ref=e174]:
+                  - /url: /?q=Zig%20tagged%20union%20slice%20string%20memory%20layout+site:raymondtana.github.io
+                  - img [ref=e176]
+                - generic [ref=e177]:
+                  - paragraph [ref=e178]: raymondtana.github.io
+                  - link "https://raymondtana.github.io › math › programming › 2026 › 01 › 23 › zig-alignment-and-sizing.html" [ref=e179]:
+                    - /url: https://raymondtana.github.io/math/programming/2026/01/23/zig-alignment-and-sizing.html
+                    - paragraph [ref=e181]:
+                      - generic [ref=e182]: https://raymondtana.github.io
+                      - generic [ref=e183]: › math › programming › 2026 › 01 › 23 › zig-alignment-and-sizing.html
+              - heading "Memory Layout in Zig with Formulas - Raymond Tana" [level=2] [ref=e185]:
+                - link "Memory Layout in Zig with Formulas - Raymond Tana" [ref=e186]:
+                  - /url: https://raymondtana.github.io/math/programming/2026/01/23/zig-alignment-and-sizing.html
+                  - generic [ref=e187]: Memory Layout in Zig with Formulas - Raymond Tana
+              - generic [ref=e191]:
+                - text: 2026年1月23日·
+                - generic [ref=e192]: "Memory Layout Formulas To start, one helpful invariant is offered in Zig's documentation. For any type T: @sizeOf (T) ≥ @alignOf (T). Primitives Already, the primitive data types will teach us a good bit about memory layout. Try guessing the results of the following Zig code before looking at the answer:"
+          - listitem [ref=e193]:
+            - article [ref=e194] [cursor=pointer]:
+              - button [ref=e196]:
+                - img [ref=e197]
+              - generic [ref=e201]:
+                - link "将结果来源限定为 saidvandeklundert.net" [ref=e203]:
+                  - /url: /?q=Zig%20tagged%20union%20slice%20string%20memory%20layout+site:saidvandeklundert.net
+                  - img [ref=e205]
+                - generic [ref=e206]:
+                  - paragraph [ref=e207]: saidvandeklundert.net
+                  - link "https://saidvandeklundert.net › fortheloveofzig › tagged unions" [ref=e208]:
+                    - /url: https://saidvandeklundert.net/fortheloveofzig/tagged%20unions
+                    - paragraph [ref=e210]:
+                      - generic [ref=e211]: https://saidvandeklundert.net
+                      - generic [ref=e212]: › fortheloveofzig › tagged unions
+              - heading "Tagged Unions | For the love of Zig" [level=2] [ref=e214]:
+                - link "Tagged Unions | For the love of Zig" [ref=e215]:
+                  - /url: https://saidvandeklundert.net/fortheloveofzig/tagged%20unions
+                  - generic [ref=e216]: Tagged Unions | For the love of Zig
+              - generic [ref=e221]: Zig by example A union is a data structure that can hold a value which can take on several different, but fixed, types. A tagged union, aka variant or choice type, is a union that also contains a tag to explicitly indicate which of the types is in use. Why do we have this? Typesafety. Take the union type in C. There, a union type is a bit of memory that overlaps the layout of 2 different types ...
+          - listitem [ref=e222]:
+            - article [ref=e223] [cursor=pointer]:
+              - button [ref=e225]:
+                - img [ref=e226]
+              - generic [ref=e230]:
+                - link "将结果来源限定为 github.com" [ref=e232]:
+                  - /url: /?q=Zig%20tagged%20union%20slice%20string%20memory%20layout+site:github.com
+                  - img [ref=e234]
+                - generic [ref=e235]:
+                  - paragraph [ref=e236]: Github
+                  - link "https://github.com › ziglang › zig › issues › 1922" [ref=e237]:
+                    - /url: https://github.com/ziglang/zig/issues/1922
+                    - paragraph [ref=e239]:
+                      - generic [ref=e240]: https://github.com
+                      - generic [ref=e241]: › ziglang › zig › issues › 1922
+              - 'heading "More control over the data layout of tagged unions #1922" [level=2] [ref=e243]':
+                - 'link "More control over the data layout of tagged unions #1922" [ref=e244]':
+                  - /url: https://github.com/ziglang/zig/issues/1922
+                  - generic [ref=e245]: "More control over the data layout of tagged unions #1922"
+              - generic [ref=e250]: Currently we have a great level of control over the data layout of structs and enums using packed and custom tag types. Sadly tagged unions are quite limited in this aspect since we have no control over where the tag is placed.
+          - listitem [ref=e251]:
+            - article [ref=e252] [cursor=pointer]:
+              - button [ref=e254]:
+                - img [ref=e255]
+              - generic [ref=e259]:
+                - link "将结果来源限定为 ziggit.dev" [ref=e261]:
+                  - /url: /?q=Zig%20tagged%20union%20slice%20string%20memory%20layout+site:ziggit.dev
+                  - img [ref=e263]
+                - generic [ref=e264]:
+                  - paragraph [ref=e265]: ziggit.dev
+                  - link "https://ziggit.dev › t › can-i-allocate-only-the-required-amount-of-memory-for-tagged-unions › 2822" [ref=e266]:
+                    - /url: https://ziggit.dev/t/can-i-allocate-only-the-required-amount-of-memory-for-tagged-unions/2822
+                    - paragraph [ref=e268]:
+                      - generic [ref=e269]: https://ziggit.dev
+                      - generic [ref=e270]: › t › can-i-allocate-only-the-required-amount-of-memory-for-tagged-unions › 2822
+              - heading "Can I allocate only the required amount of memory for tagged ... - Ziggit" [level=2] [ref=e272]:
+                - link "Can I allocate only the required amount of memory for tagged ... - Ziggit" [ref=e273]:
+                  - /url: https://ziggit.dev/t/can-i-allocate-only-the-required-amount-of-memory-for-tagged-unions/2822
+                  - generic [ref=e274]: Can I allocate only the required amount of memory for tagged ... - Ziggit
+              - generic [ref=e279]: First of all a union in zig has no defined memory layout. The compiler can for example add hidden fields in the background (this is for example done for untagged unions to detect a wrong field access). In order to get defined memory layout you'd need to use a packed or extern union. Secondly there is no library functionality for this.
+          - listitem [ref=e280]:
+            - article [ref=e281] [cursor=pointer]:
+              - button [ref=e283]:
+                - img [ref=e284]
+              - generic [ref=e288]:
+                - link "将结果来源限定为 stackoverflow.com" [ref=e290]:
+                  - /url: /?q=Zig%20tagged%20union%20slice%20string%20memory%20layout+site:stackoverflow.com
+                  - img [ref=e292]
+                - generic [ref=e293]:
+                  - paragraph [ref=e294]: Stack Overflow
+                  - link "https://stackoverflow.com › questions › 76028221 › string-buffers-and-slices-in-zig" [ref=e295]:
+                    - /url: https://stackoverflow.com/questions/76028221/string-buffers-and-slices-in-zig
+                    - paragraph [ref=e297]:
+                      - generic [ref=e298]: https://stackoverflow.com
+                      - generic [ref=e299]: › questions › 76028221 › string-buffers-and-slices-in-zig
+              - heading "arrays - String buffers and slices in Zig - Stack Overflow" [level=2] [ref=e301]:
+                - link "arrays - String buffers and slices in Zig - Stack Overflow" [ref=e302]:
+                  - /url: https://stackoverflow.com/questions/76028221/string-buffers-and-slices-in-zig
+                  - generic [ref=e303]: arrays - String buffers and slices in Zig - Stack Overflow
+              - generic [ref=e308]: String buffers and slices in Zig Asked 3 years, 2 months ago Modified 1 year, 10 months ago Viewed 8k times
+          - listitem [ref=e309]:
+            - article [ref=e310] [cursor=pointer]:
+              - button [ref=e312]:
+                - img [ref=e313]
+              - generic [ref=e317]:
+                - link "将结果来源限定为 pmbanugo.me" [ref=e319]:
+                  - /url: /?q=Zig%20tagged%20union%20slice%20string%20memory%20layout+site:pmbanugo.me
+                  - img [ref=e321]
+                - generic [ref=e322]:
+                  - paragraph [ref=e323]: pmbanugo.me
+                  - link "https://pmbanugo.me › blog › zig-working-with-strings" [ref=e324]:
+                    - /url: https://pmbanugo.me/blog/zig-working-with-strings
+                    - paragraph [ref=e326]:
+                      - generic [ref=e327]: https://pmbanugo.me
+                      - generic [ref=e328]: › blog › zig-working-with-strings
+              - 'heading "Working with Strings in Zig: A Comprehensive Guide" [level=2] [ref=e330]':
+                - 'link "Working with Strings in Zig: A Comprehensive Guide" [ref=e331]':
+                  - /url: https://pmbanugo.me/blog/zig-working-with-strings
+                  - generic [ref=e332]: "Working with Strings in Zig: A Comprehensive Guide"
+              - generic [ref=e336]:
+                - text: 2025年9月10日·
+                - generic [ref=e337]: "Learn how to work with strings in Zig: slicing, formatting, Unicode handling, memory allocation, and C interoperability. A practical reference for Zig developers."
+          - listitem [ref=e338]:
+            - article [ref=e339] [cursor=pointer]:
+              - button [ref=e341]:
+                - img [ref=e342]
+              - generic [ref=e346]:
+                - link "将结果来源限定为 ubos.tech" [ref=e348]:
+                  - /url: /?q=Zig%20tagged%20union%20slice%20string%20memory%20layout+site:ubos.tech
+                  - img [ref=e350]
+                - generic [ref=e351]:
+                  - paragraph [ref=e352]: ubos.tech
+                  - link "https://ubos.tech › news › zig-language-alignment-and-sizing-comprehensive-guide" [ref=e353]:
+                    - /url: https://ubos.tech/news/zig-language-alignment-and-sizing-comprehensive-guide/
+                    - paragraph [ref=e355]:
+                      - generic [ref=e356]: https://ubos.tech
+                      - generic [ref=e357]: › news › zig-language-alignment-and-sizing-comprehensive-guide
+              - 'heading "Zig Language Alignment and Sizing: Comprehensive Guide" [level=2] [ref=e359]':
+                - 'link "Zig Language Alignment and Sizing: Comprehensive Guide" [ref=e360]':
+                  - /url: https://ubos.tech/news/zig-language-alignment-and-sizing-comprehensive-guide/
+                  - generic [ref=e361]: "Zig Language Alignment and Sizing: Comprehensive Guide"
+              - generic [ref=e365]:
+                - text: 2026年1月31日·
+                - generic [ref=e366]: Zig's alignment and sizing rules define how each type occupies memory, and mastering them lets systems programmers write faster, safer, and more memory‑efficient code. Why Zig Memory Layout Matters for Modern Systems Development When you compile a Zig program, the compiler decides where every byte lives in RAM.
+          - listitem [ref=e367]:
+            - article [ref=e368] [cursor=pointer]:
+              - button [ref=e370]:
+                - img [ref=e371]
+              - generic [ref=e375]:
+                - link "将结果来源限定为 ziglang.org" [ref=e377]:
+                  - /url: /?q=Zig%20tagged%20union%20slice%20string%20memory%20layout+site:ziglang.org
+                  - img [ref=e379]
+                - generic [ref=e380]:
+                  - paragraph [ref=e381]: Zig Programming Language
+                  - link "https://ziglang.org › documentation › master" [ref=e382]:
+                    - /url: https://ziglang.org/documentation/master/
+                    - paragraph [ref=e384]:
+                      - generic [ref=e385]: https://ziglang.org
+                      - generic [ref=e386]: › documentation › master
+              - heading "Documentation - The Zig Programming Language" [level=2] [ref=e388]:
+                - link "Documentation - The Zig Programming Language" [ref=e389]:
+                  - /url: https://ziglang.org/documentation/master/
+                  - generic [ref=e390]: Documentation - The Zig Programming Language
+              - generic [ref=e395]: The Zig Standard Library has its own documentation. Zig's Standard Library contains commonly used algorithms, data structures, and definitions to help you build programs or libraries. You will see many examples of Zig's Standard Library used in this documentation. To learn more about the Zig Standard Library, visit the link above.
+          - listitem [ref=e396]:
+            - article [ref=e397] [cursor=pointer]:
+              - button [ref=e399]:
+                - img [ref=e400]
+              - generic [ref=e404]:
+                - link "将结果来源限定为 zig.guide" [ref=e406]:
+                  - /url: /?q=Zig%20tagged%20union%20slice%20string%20memory%20layout+site:zig.guide
+                  - img [ref=e408]
+                - generic [ref=e409]:
+                  - paragraph [ref=e410]: zig.guide
+                  - link "https://zig.guide › language-basics › slices" [ref=e411]:
+                    - /url: https://zig.guide/language-basics/slices/
+                    - paragraph [ref=e413]:
+                      - generic [ref=e414]: https://zig.guide
+                      - generic [ref=e415]: › language-basics › slices
+              - heading "Slices - zig.guide" [level=2] [ref=e417]:
+                - link "Slices - zig.guide" [ref=e418]:
+                  - /url: https://zig.guide/language-basics/slices/
+                  - generic [ref=e419]: Slices - zig.guide
+              - generic [ref=e424]: Unlike many-item pointers, for loops work on slices. The syntax x[n..m] is used to create a slice from an array, an operation known as slicing. This creates a "slice" - a view into the array consisting of a pointer and a length. Slicing includes the first element (n), but excludes the last element (m). In this example, a const slice is used in the total function as it doesn't write to the ...
+          - listitem [ref=e425]:
+            - generic [ref=e427]:
+              - paragraph [ref=e428]: 与 Zig tagged union slice string memory layout 相关的搜索
+              - generic [ref=e429]:
+                - list [ref=e430]:
+                  - listitem [ref=e431]:
+                    - link "tagged union examples" [ref=e432] [cursor=pointer]:
+                      - /url: "?q=tagged%20union%20examples"
+                      - generic [ref=e434]: tagged union examples
+                  - listitem [ref=e435]:
+                    - link "what is a tagged union" [ref=e436] [cursor=pointer]:
+                      - /url: "?q=what%20is%20a%20tagged%20union"
+                      - generic [ref=e438]: what is a tagged union
+                  - listitem [ref=e439]:
+                    - link "zig's bare union" [ref=e440] [cursor=pointer]:
+                      - /url: "?q=zig%27s%20bare%20union"
+                      - generic [ref=e442]: zig's bare union
+                - list [ref=e443]:
+                  - listitem [ref=e444]:
+                    - link "zig tagged unions" [ref=e445] [cursor=pointer]:
+                      - /url: "?q=zig%20tagged%20unions"
+                      - generic [ref=e447]: zig tagged unions
+                  - listitem [ref=e448]:
+                    - link "zig unions i64" [ref=e449] [cursor=pointer]:
+                      - /url: "?q=zig%20unions%20i64"
+                      - generic [ref=e451]: zig unions i64
+                  - listitem [ref=e452]:
+                    - link "love of zig unions" [ref=e453] [cursor=pointer]:
+                      - /url: "?q=love%20of%20zig%20unions"
+                      - generic [ref=e455]: love of zig unions
+        - button "更多结果" [ref=e458] [cursor=pointer]
+    - list [ref=e461]:
+      - button "关闭菜单" [ref=e462] [cursor=pointer]:
+        - generic [ref=e463]: 关闭菜单
+        - img [ref=e464]
+      - list [ref=e466]:
+        - listitem [ref=e467]: 搜索
+        - listitem [ref=e468]:
+          - link "主页" [ref=e469] [cursor=pointer]:
+            - /url: https://start.duckduckgo.com/
+        - listitem [ref=e470]:
+          - link "配色" [ref=e471] [cursor=pointer]:
+            - /url: /settings#appearance
+        - listitem [ref=e472]:
+          - link "设置" [ref=e473] [cursor=pointer]:
+            - /url: /settings
+      - list [ref=e474]:
+        - listitem [ref=e475]: 意见反馈
+        - listitem [ref=e476]:
+          - generic [ref=e479]:
+            - button "Positive feedback" [ref=e480] [cursor=pointer]:
+              - img [ref=e481]
+            - button "Negative feedback" [ref=e484] [cursor=pointer]:
+              - img [ref=e485]
+      - list [ref=e488]:
+        - listitem [ref=e489]: 下载
+        - listitem [ref=e490]:
+          - link "iOS 浏览器" [ref=e491] [cursor=pointer]:
+            - /url: https://apps.apple.com/app/duckduckgo-private-browser/id663592361?platform=iphone&pt=866401&mt=8&ct=serp-atb-serp
+        - listitem [ref=e492]:
+          - link "Android 浏览器" [ref=e493] [cursor=pointer]:
+            - /url: https://play.google.com/store/apps/details?id=com.duckduckgo.mobile.android&referrer=utm_campaign%3Dserp-atb-serp%26origin%3Dfunnel_playstore_searchresults
+        - listitem [ref=e494]:
+          - link "Mac 浏览器" [ref=e495] [cursor=pointer]:
+            - /url: /mac?origin=funnel_browser_searchresults
+        - listitem [ref=e496]:
+          - link "Windows 浏览器" [ref=e497] [cursor=pointer]:
+            - /url: /windows?origin=funnel_browser_searchresults
+        - listitem [ref=e498]: 浏览器扩展插件
+      - list [ref=e499]:
+        - listitem [ref=e500]: 更多 DuckDuckGo 产品和服务
+        - listitem
+        - listitem [ref=e501]:
+          - link "Duck.ai" [ref=e502] [cursor=pointer]:
+            - /url: https://duck.ai
+        - listitem [ref=e503]:
+          - link "Email Protection" [ref=e504] [cursor=pointer]:
+            - /url: /email
+        - listitem [ref=e505]:
+          - link "简讯" [ref=e506] [cursor=pointer]:
+            - /url: /newsletter
+        - listitem [ref=e507]:
+          - link "博客" [ref=e508] [cursor=pointer]:
+            - /url: /blog
+        - listitem [ref=e509]:
+          - link "播客" [ref=e510] [cursor=pointer]:
+            - /url: https://insideduckduckgo.substack.com/?showWelcome=true
+        - listitem [ref=e511]:
+          - link "合作" [ref=e512] [cursor=pointer]:
+            - /url: /collaborations
+      - list [ref=e513]:
+        - listitem [ref=e514]: 详细了解
+        - listitem [ref=e515]:
+          - link "最新功能" [ref=e516] [cursor=pointer]:
+            - /url: /updates
+        - listitem [ref=e517]:
+          - link "隐私保护功能比较" [ref=e518] [cursor=pointer]:
+            - /url: /compare-privacy
+        - listitem [ref=e519]:
+          - link "关于我们的浏览器" [ref=e520] [cursor=pointer]:
+            - /url: /app
+        - listitem [ref=e521]:
+          - link "关于 DuckDuckGo" [ref=e522] [cursor=pointer]:
+            - /url: /about
+      - list [ref=e523]:
+        - listitem [ref=e524]: 其他资源
+        - listitem [ref=e525]:
+          - link "帮助" [ref=e526] [cursor=pointer]:
+            - /url: /duckduckgo-help-pages
+        - listitem [ref=e527]:
+          - link "社群" [ref=e528] [cursor=pointer]:
+            - /url: https://www.reddit.com/r/duckduckgo/
+        - listitem [ref=e529]:
+          - link "工作岗位" [ref=e530] [cursor=pointer]:
+            - /url: /careers
+        - listitem [ref=e531]:
+          - link "隐私协议" [ref=e532] [cursor=pointer]:
+            - /url: /privacy
+        - listitem [ref=e533]:
+          - link "服务条款" [ref=e534] [cursor=pointer]:
+            - /url: /terms
+        - listitem [ref=e535]:
+          - link "媒体资源" [ref=e536] [cursor=pointer]:
+            - /url: /press
+        - listitem [ref=e537]:
+          - link "在搜索时投放广告" [ref=e538] [cursor=pointer]:
+            - /url: /duckduckgo-help-pages/company/advertise-on-duckduckgo-search
+  - generic [ref=e544]:
+    - img [ref=e545]
+    - generic [ref=e555]:
+      - heading "DuckDuckGo 联名系列介绍" [level=3] [ref=e556]
+      - paragraph [ref=e557]: 为真正关心隐私的人精心打造的产品。
+    - link "查看详情" [ref=e558] [cursor=pointer]:
+      - /url: https://duckduckgo.com/collaborations
+  - button "意见反馈" [ref=e563] [cursor=pointer]

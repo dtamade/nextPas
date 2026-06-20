@@ -153,7 +153,7 @@ type
 
 implementation
 
-  Math,
+  nextpas.core.math,
   nextpas.core.base.utils,
   nextpas.core.tls.utils,
   nextpas.core.tls.factory;

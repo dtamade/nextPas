@@ -1,0 +1,624 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - generic [ref=e6]:
+          - link "DuckDuckGo home" [ref=e7] [cursor=pointer]:
+            - /url: /
+            - generic [ref=e9]: DuckDuckGo
+          - generic [ref=e15]:
+            - combobox "私密搜索" [ref=e17]: Zig slice fat pointer layout 64-bit memory
+            - button "search" [ref=e19] [cursor=pointer]:
+              - img [ref=e20]
+        - button "打开菜单" [ref=e23] [cursor=pointer]:
+          - generic [ref=e24]: 打开菜单
+          - img [ref=e25]
+      - navigation [ref=e31]:
+        - list [ref=e32]:
+          - listitem [ref=e33]:
+            - link "全部" [ref=e34] [cursor=pointer]:
+              - /url: /?q=Zig+slice+fat+pointer+layout+64-bit+memory&ia=web
+              - img [ref=e35]
+              - text: 全部
+          - listitem [ref=e37]:
+            - link "图片" [ref=e38] [cursor=pointer]:
+              - /url: /?q=Zig+slice+fat+pointer+layout+64-bit+memory&ia=images&iax=images
+          - listitem [ref=e39]:
+            - link "视频" [ref=e40] [cursor=pointer]:
+              - /url: /?q=Zig+slice+fat+pointer+layout+64-bit+memory&ia=videos&iax=videos
+          - listitem [ref=e41]:
+            - link "新闻" [ref=e42] [cursor=pointer]:
+              - /url: /?q=Zig+slice+fat+pointer+layout+64-bit+memory&ia=news&iar=news
+          - listitem [ref=e43]:
+            - link "地图" [ref=e44] [cursor=pointer]:
+              - /url: /?q=Zig+slice+fat+pointer+layout+64-bit+memory&iaxm=maps
+        - list [ref=e45]:
+          - listitem [ref=e46]:
+            - link "Search Assist" [ref=e49] [cursor=pointer]:
+              - /url: /?q=Zig+slice+fat+pointer+layout+64-bit+memory&ia=web&assist=false
+              - img [ref=e50]
+              - generic [ref=e53]: Search Assist
+          - listitem [ref=e54]:
+            - link "Duck.ai" [ref=e56] [cursor=pointer]:
+              - /url: /?q=Zig+slice+fat+pointer+layout+64-bit+memory&ia=chat
+              - img [ref=e57]
+              - text: Duck.ai
+          - listitem [ref=e60]:
+            - button "搜索设置 ✀" [ref=e62] [cursor=pointer]:
+              - img [ref=e63]
+              - generic [ref=e65]: 搜索设置
+              - generic [ref=e68]: ✀
+    - generic [ref=e73]:
+      - navigation [ref=e75]:
+        - generic [ref=e78] [cursor=pointer]:
+          - generic [ref=e86]: 受保护
+          - img [ref=e87]: ▼
+        - generic [ref=e91] [cursor=pointer]:
+          - generic [ref=e94]:
+            - switch "✓" [ref=e95]: ✓
+            - generic [ref=e97]: 新加坡
+          - img [ref=e98]: ▼
+        - generic [ref=e102] [cursor=pointer]:
+          - generic [ref=e103]: 安全搜索： 适中
+          - img [ref=e104]: ▼
+        - generic [ref=e108] [cursor=pointer]:
+          - generic [ref=e109]: 不限时间
+          - img [ref=e110]: ▼
+      - generic [ref=e113]:
+        - list [ref=e114]:
+          - listitem [ref=e115]:
+            - generic [ref=e121]:
+              - button [ref=e124] [cursor=pointer]:
+                - generic [ref=e125]:
+                  - img [ref=e127]
+                  - text: Search Assist
+              - generic "Loading..." [ref=e130]:
+                - generic [ref=e134]: 正在读取搜索结果……
+          - listitem [ref=e135]:
+            - article [ref=e136] [cursor=pointer]:
+              - button [ref=e138]:
+                - img [ref=e139]
+              - generic [ref=e143]:
+                - link "将结果来源限定为 zig.guide" [ref=e145]:
+                  - /url: /?q=Zig%20slice%20fat%20pointer%20layout%2064%2Dbit%20memory+site:zig.guide
+                  - img [ref=e147]
+                - generic [ref=e148]:
+                  - paragraph [ref=e149]: zig.guide
+                  - link "https://zig.guide › language-basics › slices" [ref=e150]:
+                    - /url: https://zig.guide/language-basics/slices/
+                    - paragraph [ref=e152]:
+                      - generic [ref=e153]: https://zig.guide
+                      - generic [ref=e154]: › language-basics › slices
+              - heading "Slices - zig.guide" [level=2] [ref=e156]:
+                - link "Slices - zig.guide" [ref=e157]:
+                  - /url: https://zig.guide/language-basics/slices/
+                  - generic [ref=e158]: Slices - zig.guide
+              - generic [ref=e163]: Slices Slices can be thought of many-item pointers ([*]T) with a length (usize). These use the syntax []T. Slices are easier to use safely and more convinient than many-item pointers, as they store the valid length of the buffer with them. Slices are sometimes referred to as "fat pointers" as they're typically double the size of a normal pointer.
+              - list [ref=e166]:
+                - listitem [ref=e167]:
+                  - link "Zig 0.11.0 Slices Slices can be thought of as a pair of [*]T (the pointer to the data) and a usize (the element count). Their syntax is []T, with T being the child type. Slices are used heavily throughout Zig for when you need to operate on arbitrary amounts of data. Slices have the same attributes as pointers, meaning that there also exists const slices. For loops also operate over slices. String ..." [ref=e168]:
+                    - /url: https://zig.guide/0.11/language-basics/slices
+                    - heading "Zig 0.11.0" [level=3] [ref=e169]
+                    - paragraph [ref=e170]:
+                      - generic [ref=e171]: Slices Slices can be thought of as a pair of [*]T (the pointer to the data) and a usize (the element count). Their syntax is []T, with T being the child type. Slices are used heavily throughout Zig for when you need to operate on arbitrary amounts of data. Slices have the same attributes as pointers, meaning that there also exists const slices. For loops also operate over slices. String ...
+          - listitem [ref=e172]:
+            - generic [ref=e174]:
+              - heading "Zig slice fat pointer layout 64-bit memory视频" [level=2] [ref=e176]:
+                - link "Zig slice fat pointer layout 64-bit memory视频" [ref=e177] [cursor=pointer]:
+                  - /url: /?q=Zig+slice+fat+pointer+layout+64-bit+memory&ia=videos&iax=videos
+                  - img [ref=e178]
+                  - generic [ref=e181]: Zig slice fat pointer layout 64-bit memory视频
+              - generic [ref=e185]:
+                - list [ref=e186]:
+                  - listitem [ref=e187] [cursor=pointer]:
+                    - link [ref=e188]:
+                      - /url: https://www.youtube.com/watch?v=zdLYY9QhnZY
+                      - article [ref=e189]:
+                        - generic [ref=e191]:
+                          - generic [ref=e193]: ►
+                          - paragraph [ref=e194]: 16:30
+                        - generic [ref=e195]:
+                          - 'heading "Zig in Depth: Memory Layout" [level=3] [ref=e197]':
+                            - generic [ref=e198]: "Zig in Depth: Memory Layout"
+                          - generic [ref=e199]:
+                            - generic [ref=e200]:
+                              - generic [ref=e202]: 2年 |
+                              - generic [ref=e203]: 1.9K 次观看
+                            - generic [ref=e204]:
+                              - generic [ref=e206]: YouTube
+                              - button "menu" [ref=e208]:
+                                - img [ref=e209]
+                  - listitem [ref=e212] [cursor=pointer]:
+                    - link [ref=e213]:
+                      - /url: https://www.youtube.com/watch?v=N2YD_EuP8wI
+                      - article [ref=e214]:
+                        - generic [ref=e216]:
+                          - generic [ref=e218]: ►
+                          - paragraph [ref=e219]: 20:12
+                        - generic [ref=e220]:
+                          - heading "Beginner's Guide to Zig Part 2 - Slices, Printing, If statements and loops" [level=3] [ref=e222]:
+                            - generic [ref=e223]: Beginner's Guide to Zig Part 2 - Slices, Printing, If statements and loops
+                          - generic [ref=e224]:
+                            - generic [ref=e225]:
+                              - generic [ref=e227]: 1年 |
+                              - generic [ref=e228]: 6.2K 次观看
+                            - generic [ref=e229]:
+                              - generic [ref=e231]: YouTube
+                              - button "menu" [ref=e233]:
+                                - img [ref=e234]
+                  - listitem [ref=e237] [cursor=pointer]:
+                    - link [ref=e238]:
+                      - /url: https://www.youtube.com/watch?v=UAS0f42_3uU
+                      - article [ref=e239]:
+                        - generic [ref=e241]:
+                          - generic [ref=e243]: ►
+                          - paragraph [ref=e244]: 3:05:17
+                        - generic [ref=e245]:
+                          - heading "Zig Programming Language - Beginner's Guide" [level=3] [ref=e247]:
+                            - generic [ref=e248]: Zig Programming Language - Beginner's Guide
+                          - generic [ref=e249]:
+                            - generic [ref=e250]:
+                              - generic [ref=e252]: 5个月 |
+                              - generic [ref=e253]: 18K 次观看
+                            - generic [ref=e254]:
+                              - generic [ref=e256]: YouTube
+                              - button "menu" [ref=e258]:
+                                - img [ref=e259]
+                  - listitem [ref=e262] [cursor=pointer]:
+                    - link [ref=e263]:
+                      - /url: https://www.youtube.com/watch?v=whjDH-LKA2s
+                      - article [ref=e264]:
+                        - generic [ref=e266]:
+                          - generic [ref=e268]: ►
+                          - paragraph [ref=e269]: 25:25
+                        - generic [ref=e270]:
+                          - 'heading "Zig Master: Slices" [level=3] [ref=e272]':
+                            - generic [ref=e273]: "Zig Master: Slices"
+                          - generic [ref=e274]:
+                            - generic [ref=e275]:
+                              - generic [ref=e277]: 2年 |
+                              - generic [ref=e278]: 1.8K 次观看
+                            - generic [ref=e279]:
+                              - generic [ref=e281]: YouTube
+                              - button "menu" [ref=e283]:
+                                - img [ref=e284]
+                  - listitem [ref=e287] [cursor=pointer]:
+                    - link [ref=e288]:
+                      - /url: https://www.youtube.com/watch?v=dLh5svxKs_0
+                      - article [ref=e289]:
+                        - generic [ref=e291]:
+                          - generic [ref=e293]: ►
+                          - paragraph [ref=e294]: 36:01
+                        - generic [ref=e295]:
+                          - 'heading "Building a Media Player in Zig: Our first SDL 3 window" [level=3] [ref=e297]':
+                            - generic [ref=e298]: "Building a Media Player in Zig: Our first SDL 3 window"
+                          - generic [ref=e299]:
+                            - generic [ref=e300]:
+                              - generic [ref=e302]: 4个月 |
+                              - generic [ref=e303]: 3K 次观看
+                            - generic [ref=e304]:
+                              - generic [ref=e306]: YouTube
+                              - button "menu" [ref=e308]:
+                                - img [ref=e309]
+                  - listitem [ref=e312] [cursor=pointer]:
+                    - link [ref=e313]:
+                      - /url: https://www.youtube.com/watch?v=xu1S2aJDVgE
+                      - article [ref=e314]:
+                        - generic [ref=e316]:
+                          - generic [ref=e318]: ►
+                          - paragraph [ref=e319]: 2:03
+                        - generic [ref=e320]:
+                          - heading "Zig | Immutable Pointer Argument | Tutorial" [level=3] [ref=e322]:
+                            - generic [ref=e323]: Zig | Immutable Pointer Argument | Tutorial
+                          - generic [ref=e324]:
+                            - generic [ref=e325]:
+                              - generic [ref=e327]: 5个月 |
+                              - generic [ref=e328]: 240 次观看
+                            - generic [ref=e329]:
+                              - generic [ref=e331]: YouTube
+                              - button "menu" [ref=e333]:
+                                - img [ref=e334]
+                  - listitem [ref=e337] [cursor=pointer]:
+                    - link [ref=e338]:
+                      - /url: https://www.youtube.com/watch?v=N23o5J4OxmI
+                      - article [ref=e339]:
+                        - generic [ref=e341]:
+                          - generic [ref=e343]: ►
+                          - paragraph [ref=e344]: 15:36
+                        - generic [ref=e345]:
+                          - 'heading "Zig GUI: Floating Tool Windows, Color Pickers & Sliders (DVUI)" [level=3] [ref=e347]':
+                            - generic [ref=e348]: "Zig GUI: Floating Tool Windows, Color Pickers & Sliders (DVUI)"
+                          - generic [ref=e349]:
+                            - generic [ref=e350]:
+                              - generic [ref=e352]: 3个月 |
+                              - generic [ref=e353]: 558 次观看
+                            - generic [ref=e354]:
+                              - generic [ref=e356]: YouTube
+                              - button "menu" [ref=e358]:
+                                - img [ref=e359]
+                  - listitem [ref=e362] [cursor=pointer]:
+                    - link [ref=e363]:
+                      - /url: https://www.youtube.com/watch?v=-0Erxg8dTrk
+                      - article [ref=e364]:
+                        - generic [ref=e366]:
+                          - generic [ref=e368]: ►
+                          - paragraph [ref=e369]: 33:34
+                        - generic [ref=e370]:
+                          - heading "Zigzag/Peak Layout with Creative Memories Border Cutting Tools" [level=3] [ref=e372]:
+                            - generic [ref=e373]: Zigzag/Peak Layout with Creative Memories Border Cutting Tools
+                          - generic [ref=e374]:
+                            - generic [ref=e375]:
+                              - generic [ref=e377]: 1个月 |
+                              - generic [ref=e378]: 744 次观看
+                            - generic [ref=e379]:
+                              - generic [ref=e381]: YouTube
+                              - button "menu" [ref=e383]:
+                                - img [ref=e384]
+                  - listitem [ref=e387] [cursor=pointer]:
+                    - link [ref=e388]:
+                      - /url: https://www.youtube.com/watch?v=utsQcEyvf60
+                      - article [ref=e389]:
+                        - generic [ref=e391]:
+                          - generic [ref=e393]: ►
+                          - paragraph [ref=e394]: 17:42
+                        - generic [ref=e395]:
+                          - 'heading "Building a Media Player in Zig: Modular Setup (SDL3 & FFmpeg)" [level=3] [ref=e397]':
+                            - generic [ref=e398]: "Building a Media Player in Zig: Modular Setup (SDL3 & FFmpeg)"
+                          - generic [ref=e399]:
+                            - generic [ref=e400]:
+                              - generic [ref=e402]: 4个月 |
+                              - generic [ref=e403]: 1.7K 次观看
+                            - generic [ref=e404]:
+                              - generic [ref=e406]: YouTube
+                              - button "menu" [ref=e408]:
+                                - img [ref=e409]
+                  - listitem [ref=e412] [cursor=pointer]:
+                    - link [ref=e413]:
+                      - /url: https://www.youtube.com/watch?v=zdvtMl-Dw2s
+                      - article [ref=e414]:
+                        - generic [ref=e416]:
+                          - generic [ref=e418]: ►
+                          - paragraph [ref=e419]: 35:03
+                        - generic [ref=e420]:
+                          - 'heading "Building a Media Player in Zig: FFMPEG State Machine (libav)" [level=3] [ref=e422]':
+                            - generic [ref=e423]: "Building a Media Player in Zig: FFMPEG State Machine (libav)"
+                          - generic [ref=e424]:
+                            - generic [ref=e425]:
+                              - generic [ref=e427]: 4个月 |
+                              - generic [ref=e428]: 532 次观看
+                            - generic [ref=e429]:
+                              - generic [ref=e431]: YouTube
+                              - button "menu" [ref=e433]:
+                                - img [ref=e434]
+                  - listitem [ref=e437] [cursor=pointer]:
+                    - generic [ref=e439]: →
+                    - generic [ref=e440]: 更多视频
+                - button "Next page" [ref=e441] [cursor=pointer]:
+                  - img [ref=e442]
+              - link "更多视频" [ref=e446] [cursor=pointer]:
+                - /url: /?q=Zig+slice+fat+pointer+layout+64-bit+memory&ia=videos&iax=videos
+                - generic [ref=e447]: 更多视频
+                - img [ref=e448]
+              - generic [ref=e454]:
+                - text: 这有帮助吗？
+                - button "Positive feedback" [ref=e455] [cursor=pointer]:
+                  - img [ref=e456]
+                - button "Negative feedback" [ref=e459] [cursor=pointer]:
+                  - img [ref=e460]
+          - listitem [ref=e463]:
+            - article [ref=e464] [cursor=pointer]:
+              - button [ref=e466]:
+                - img [ref=e467]
+              - generic [ref=e471]:
+                - link "将结果来源限定为 gencmurat.com" [ref=e473]:
+                  - /url: /?q=Zig%20slice%20fat%20pointer%20layout%2064%2Dbit%20memory+site:www.gencmurat.com
+                  - img [ref=e475]
+                - generic [ref=e476]:
+                  - paragraph [ref=e477]: gencmurat.com
+                  - link "https://www.gencmurat.com › en › posts › understanding-slices-as-fat-pointers-in-zig" [ref=e478]:
+                    - /url: https://www.gencmurat.com/en/posts/understanding-slices-as-fat-pointers-in-zig/
+                    - paragraph [ref=e480]:
+                      - generic [ref=e481]: https://www.gencmurat.com
+                      - generic [ref=e482]: › en › posts › understanding-slices-as-fat-pointers-in-zig
+              - heading "Understanding Slices as Fat Pointers in Zig - Murat Genc" [level=2] [ref=e484]:
+                - link "Understanding Slices as Fat Pointers in Zig - Murat Genc" [ref=e485]:
+                  - /url: https://www.gencmurat.com/en/posts/understanding-slices-as-fat-pointers-in-zig/
+                  - generic [ref=e486]: Understanding Slices as Fat Pointers in Zig - Murat Genc
+              - generic [ref=e490]:
+                - text: 2024年11月15日·
+                - generic [ref=e491]: Conclusion Slices as fat pointers in Zig provide a powerful, safe, and efficient way to work with arrays and memory ranges. They combine the flexibility of dynamic sizing with the performance of direct memory access, while maintaining memory safety through compile-time and runtime checks. Understanding how to effectively use slices, including their sentinel-terminated variants, is crucial for ...
+          - listitem [ref=e492]:
+            - article [ref=e493] [cursor=pointer]:
+              - button [ref=e495]:
+                - img [ref=e496]
+              - generic [ref=e500]:
+                - link "将结果来源限定为 ccapi.ai" [ref=e502]:
+                  - /url: /?q=Zig%20slice%20fat%20pointer%20layout%2064%2Dbit%20memory+site:ccapi.ai
+                  - img [ref=e504]
+                - generic [ref=e505]:
+                  - paragraph [ref=e506]: ccapi.ai
+                  - link "https://ccapi.ai › blog › memory-layout-zig-formulas" [ref=e507]:
+                    - /url: https://ccapi.ai/blog/memory-layout-zig-formulas
+                    - paragraph [ref=e509]:
+                      - generic [ref=e510]: https://ccapi.ai
+                      - generic [ref=e511]: › blog › memory-layout-zig-formulas
+              - heading "Memory layout in Zig with formulas | CCAPI Blog" [level=2] [ref=e513]:
+                - link "Memory layout in Zig with formulas | CCAPI Blog" [ref=e514]:
+                  - /url: https://ccapi.ai/blog/memory-layout-zig-formulas
+                  - generic [ref=e515]: Memory layout in Zig with formulas | CCAPI Blog
+              - generic [ref=e519]:
+                - text: 2026年1月26日·
+                - generic [ref=e520]: "Slices, runtime views into arrays or heap buffers, are \"fat pointers\": slice = { ptr: [*]T, len: usize }, adding 8-16 bytes overhead on 64-bit. Array Alignment and Striding"
+          - listitem [ref=e521]:
+            - article [ref=e522] [cursor=pointer]:
+              - button [ref=e524]:
+                - img [ref=e525]
+              - generic [ref=e529]:
+                - link "将结果来源限定为 topictrick.com" [ref=e531]:
+                  - /url: /?q=Zig%20slice%20fat%20pointer%20layout%2064%2Dbit%20memory+site:topictrick.com
+                  - img [ref=e533]
+                - generic [ref=e534]:
+                  - paragraph [ref=e535]: topictrick.com
+                  - link "https://topictrick.com › blog › zig-pointers-slices-arrays" [ref=e536]:
+                    - /url: https://topictrick.com/blog/zig-pointers-slices-arrays
+                    - paragraph [ref=e538]:
+                      - generic [ref=e539]: https://topictrick.com
+                      - generic [ref=e540]: › blog › zig-pointers-slices-arrays
+              - 'heading "Zig Pointers and Slices: Memory Mastery | TopicTrick" [level=2] [ref=e542]':
+                - 'link "Zig Pointers and Slices: Memory Mastery | TopicTrick" [ref=e543]':
+                  - /url: https://topictrick.com/blog/zig-pointers-slices-arrays
+                  - generic [ref=e544]: "Zig Pointers and Slices: Memory Mastery | TopicTrick"
+              - generic [ref=e548]:
+                - text: 2025年5月2日·
+                - generic [ref=e549]: Master the memory layout. Learn the difference between single-item pointers, many-item pointers, and Zig slices — the preferred abstraction for safe, efficient memory access.
+          - listitem [ref=e550]:
+            - article [ref=e551] [cursor=pointer]:
+              - button [ref=e553]:
+                - img [ref=e554]
+              - generic [ref=e558]:
+                - link "将结果来源限定为 raymondtana.github.io" [ref=e560]:
+                  - /url: /?q=Zig%20slice%20fat%20pointer%20layout%2064%2Dbit%20memory+site:raymondtana.github.io
+                  - img [ref=e562]
+                - generic [ref=e563]:
+                  - paragraph [ref=e564]: raymondtana.github.io
+                  - link "https://raymondtana.github.io › math › programming › 2026 › 01 › 23 › zig-alignment-and-sizing.html" [ref=e565]:
+                    - /url: https://raymondtana.github.io/math/programming/2026/01/23/zig-alignment-and-sizing.html
+                    - paragraph [ref=e567]:
+                      - generic [ref=e568]: https://raymondtana.github.io
+                      - generic [ref=e569]: › math › programming › 2026 › 01 › 23 › zig-alignment-and-sizing.html
+              - heading "Memory Layout in Zig with Formulas - Raymond Tana" [level=2] [ref=e571]:
+                - link "Memory Layout in Zig with Formulas - Raymond Tana" [ref=e572]:
+                  - /url: https://raymondtana.github.io/math/programming/2026/01/23/zig-alignment-and-sizing.html
+                  - generic [ref=e573]: Memory Layout in Zig with Formulas - Raymond Tana
+              - generic [ref=e577]:
+                - text: 2026年1月23日·
+                - generic [ref=e578]: "Memory Layout Formulas To start, one helpful invariant is offered in Zig's documentation. For any type T: @sizeOf (T) ≥ @alignOf (T). Primitives Already, the primitive data types will teach us a good bit about memory layout. Try guessing the results of the following Zig code before looking at the answer:"
+          - listitem [ref=e579]:
+            - article [ref=e580] [cursor=pointer]:
+              - button [ref=e582]:
+                - img [ref=e583]
+              - generic [ref=e587]:
+                - link "将结果来源限定为 learningzig.org" [ref=e589]:
+                  - /url: /?q=Zig%20slice%20fat%20pointer%20layout%2064%2Dbit%20memory+site:learningzig.org
+                  - img [ref=e591]
+                - generic [ref=e592]:
+                  - paragraph [ref=e593]: learningzig.org
+                  - link "https://learningzig.org › lessons › 10-slices-and-iteration" [ref=e594]:
+                    - /url: https://learningzig.org/lessons/10-slices-and-iteration
+                    - paragraph [ref=e596]:
+                      - generic [ref=e597]: https://learningzig.org
+                      - generic [ref=e598]: › lessons › 10-slices-and-iteration
+              - heading "Slices and Iteration · Learn Zig | LearningZig.org" [level=2] [ref=e600]:
+                - link "Slices and Iteration · Learn Zig | LearningZig.org" [ref=e601]:
+                  - /url: https://learningzig.org/lessons/10-slices-and-iteration
+                  - generic [ref=e602]: Slices and Iteration · Learn Zig | LearningZig.org
+              - generic [ref=e607]: Slices and Iteration Slices are one of Zig's most important types. They provide a safe, fat-pointer view into arrays with both a pointer and a length, enabling flexible data access without copying. Slices in Depth A slice []T is a pointer and a length. It can reference any contiguous block of memory.
+          - listitem [ref=e608]:
+            - article [ref=e609] [cursor=pointer]:
+              - button [ref=e611]:
+                - img [ref=e612]
+              - generic [ref=e616]:
+                - link "将结果来源限定为 ziggit.dev" [ref=e618]:
+                  - /url: /?q=Zig%20slice%20fat%20pointer%20layout%2064%2Dbit%20memory+site:ziggit.dev
+                  - img [ref=e620]
+                - generic [ref=e621]:
+                  - paragraph [ref=e622]: ziggit.dev
+                  - link "https://ziggit.dev › t › slightly-confused-by-slices-where-is-the-length › 4155" [ref=e623]:
+                    - /url: https://ziggit.dev/t/slightly-confused-by-slices-where-is-the-length/4155
+                    - paragraph [ref=e625]:
+                      - generic [ref=e626]: https://ziggit.dev
+                      - generic [ref=e627]: › t › slightly-confused-by-slices-where-is-the-length › 4155
+              - heading "Slightly confused by slices - where is the length? - Help - Ziggit" [level=2] [ref=e629]:
+                - link "Slightly confused by slices - where is the length? - Help - Ziggit" [ref=e630]:
+                  - /url: https://ziggit.dev/t/slightly-confused-by-slices-where-is-the-length/4155
+                  - generic [ref=e631]: Slightly confused by slices - where is the length? - Help - Ziggit
+              - generic [ref=e636]: In Zig, allocator.alloc always returns a slice (on success) so you could say that alloc allocates space, creates the slice with its ptr field pointing to this allocation, sets the len field to the length, and returns that slice to be assigned to avg. This is a step forward versus C's malloc for example that just returns the pointer as you ...
+          - listitem [ref=e637]:
+            - article [ref=e638] [cursor=pointer]:
+              - button [ref=e640]:
+                - img [ref=e641]
+              - generic [ref=e645]:
+                - link "将结果来源限定为 nmichaels.org" [ref=e647]:
+                  - /url: /?q=Zig%20slice%20fat%20pointer%20layout%2064%2Dbit%20memory+site:www.nmichaels.org
+                  - img [ref=e649]
+                - generic [ref=e650]:
+                  - paragraph [ref=e651]: nmichaels.org
+                  - link "https://www.nmichaels.org › zig › pointers.html" [ref=e652]:
+                    - /url: https://www.nmichaels.org/zig/pointers.html
+                    - paragraph [ref=e654]:
+                      - generic [ref=e655]: https://www.nmichaels.org
+                      - generic [ref=e656]: › zig › pointers.html
+              - heading "Pointers in Zig - nmichaels" [level=2] [ref=e658]:
+                - link "Pointers in Zig - nmichaels" [ref=e659]:
+                  - /url: https://www.nmichaels.org/zig/pointers.html
+                  - generic [ref=e660]: Pointers in Zig - nmichaels
+              - generic [ref=e665]: Zig comes with some extra syntax support for slices, so the type Slice(u8) is referred to as []u8 and the 3rd element of a slice named slice is slice[2]. Raw unknown-length pointers are best avoided in Zig; slices are much safer and easier to use. Going back to our trusty orders example, here's some code and associated memory layout with a slice.
+          - listitem [ref=e666]:
+            - article [ref=e667] [cursor=pointer]:
+              - button [ref=e669]:
+                - img [ref=e670]
+              - generic [ref=e674]:
+                - link "将结果来源限定为 ziggit.dev" [ref=e676]:
+                  - /url: /?q=Zig%20slice%20fat%20pointer%20layout%2064%2Dbit%20memory+site:ziggit.dev
+                  - img [ref=e678]
+                - generic [ref=e679]:
+                  - paragraph [ref=e680]: ziggit.dev
+                  - link "https://ziggit.dev › t › how-does-passing-slices-as-function-parameters-work-internally-in-zig › 13843" [ref=e681]:
+                    - /url: https://ziggit.dev/t/how-does-passing-slices-as-function-parameters-work-internally-in-zig/13843
+                    - paragraph [ref=e683]:
+                      - generic [ref=e684]: https://ziggit.dev
+                      - generic [ref=e685]: › t › how-does-passing-slices-as-function-parameters-work-internally-in-zig › 13843
+              - heading "How does passing slices as function parameters work internally in Zig ..." [level=2] [ref=e687]:
+                - link "How does passing slices as function parameters work internally in Zig ..." [ref=e688]:
+                  - /url: https://ziggit.dev/t/how-does-passing-slices-as-function-parameters-work-internally-in-zig/13843
+                  - generic [ref=e689]: How does passing slices as function parameters work internally in Zig ...
+              - generic [ref=e693]:
+                - text: 2026年1月7日·
+                - generic [ref=e694]: "Suppose there is the following Zig function fn foo (comptime T: type, slice: []T) void {} How is slice actually passed to foo in memory here? Since slices in Zig are essentially pairs of a pointer and a length, I suppo&hellip;"
+          - listitem [ref=e695]:
+            - article [ref=e696] [cursor=pointer]:
+              - button [ref=e698]:
+                - img [ref=e699]
+              - generic [ref=e703]:
+                - link "将结果来源限定为 hive.blog" [ref=e705]:
+                  - /url: /?q=Zig%20slice%20fat%20pointer%20layout%2064%2Dbit%20memory+site:hive.blog
+                  - img [ref=e707]
+                - generic [ref=e708]:
+                  - paragraph [ref=e709]: Hive
+                  - link "https://hive.blog › blog › @scipio › learn-zig-series-8-pointers-and-memory-layout" [ref=e710]:
+                    - /url: https://hive.blog/blog/@scipio/learn-zig-series-8-pointers-and-memory-layout
+                    - paragraph [ref=e712]:
+                      - generic [ref=e713]: https://hive.blog
+                      - generic [ref=e714]: › blog › @scipio › learn-zig-series-8-pointers-and-memory-layout
+              - heading "Learn Zig Series (#8) - Pointers and Memory Layout — Hive" [level=2] [ref=e716]:
+                - link "Learn Zig Series (#8) - Pointers and Memory Layout — Hive" [ref=e717]:
+                  - /url: https://hive.blog/blog/@scipio/learn-zig-series-8-pointers-and-memory-layout
+                  - generic [ref=e718]: Learn Zig Series (#8) - Pointers and Memory Layout — Hive
+              - generic [ref=e723]: Learn Zig Series (#8) - Pointers and Memory Layout What will I learn You will learn how single-item pointers (*T) work in Zig; the difference between *T (mutable pointer) and *const T (read-only pointer); passing data by reference to modify it inside functions; that slices are pointer-plus-length under the hood -- and what that means for your code; many-item pointers ([*]T) for C interop ...
+          - listitem [ref=e724]:
+            - generic [ref=e726]:
+              - paragraph [ref=e727]: 与 Zig slice fat pointer layout 64-bit memory 相关的搜索
+              - generic [ref=e728]:
+                - list [ref=e729]:
+                  - listitem [ref=e730]:
+                    - link "zig slices meaning" [ref=e731] [cursor=pointer]:
+                      - /url: "?q=zig%20slices%20meaning"
+                      - generic [ref=e733]: zig slices meaning
+                  - listitem [ref=e734]:
+                    - link "zig slice examples" [ref=e735] [cursor=pointer]:
+                      - /url: "?q=zig%20slice%20examples"
+                      - generic [ref=e737]: zig slice examples
+                - list [ref=e738]:
+                  - listitem [ref=e739]:
+                    - link "zig guide slicing" [ref=e740] [cursor=pointer]:
+                      - /url: "?q=zig%20guide%20slicing"
+                      - generic [ref=e742]: zig guide slicing
+                  - listitem [ref=e743]:
+                    - link "zig slices" [ref=e744] [cursor=pointer]:
+                      - /url: "?q=zig%20slices"
+                      - generic [ref=e746]: zig slices
+        - button "更多结果" [ref=e749] [cursor=pointer]
+    - list [ref=e752]:
+      - button "关闭菜单" [ref=e753] [cursor=pointer]:
+        - generic [ref=e754]: 关闭菜单
+        - img [ref=e755]
+      - list [ref=e757]:
+        - listitem [ref=e758]: 搜索
+        - listitem [ref=e759]:
+          - link "主页" [ref=e760] [cursor=pointer]:
+            - /url: https://start.duckduckgo.com/
+        - listitem [ref=e761]:
+          - link "配色" [ref=e762] [cursor=pointer]:
+            - /url: /settings#appearance
+        - listitem [ref=e763]:
+          - link "设置" [ref=e764] [cursor=pointer]:
+            - /url: /settings
+      - list [ref=e765]:
+        - listitem [ref=e766]: 意见反馈
+        - listitem [ref=e767]:
+          - generic [ref=e770]:
+            - button "Positive feedback" [ref=e771] [cursor=pointer]:
+              - img [ref=e772]
+            - button "Negative feedback" [ref=e775] [cursor=pointer]:
+              - img [ref=e776]
+      - list [ref=e779]:
+        - listitem [ref=e780]: 下载
+        - listitem [ref=e781]:
+          - link "iOS 浏览器" [ref=e782] [cursor=pointer]:
+            - /url: https://apps.apple.com/app/duckduckgo-private-browser/id663592361?platform=iphone&pt=866401&mt=8&ct=serp-atb-serp
+        - listitem [ref=e783]:
+          - link "Android 浏览器" [ref=e784] [cursor=pointer]:
+            - /url: https://play.google.com/store/apps/details?id=com.duckduckgo.mobile.android&referrer=utm_campaign%3Dserp-atb-serp%26origin%3Dfunnel_playstore_searchresults
+        - listitem [ref=e785]:
+          - link "Mac 浏览器" [ref=e786] [cursor=pointer]:
+            - /url: /mac?origin=funnel_browser_searchresults
+        - listitem [ref=e787]:
+          - link "Windows 浏览器" [ref=e788] [cursor=pointer]:
+            - /url: /windows?origin=funnel_browser_searchresults
+        - listitem [ref=e789]: 浏览器扩展插件
+      - list [ref=e790]:
+        - listitem [ref=e791]: 更多 DuckDuckGo 产品和服务
+        - listitem
+        - listitem [ref=e792]:
+          - link "Duck.ai" [ref=e793] [cursor=pointer]:
+            - /url: https://duck.ai
+        - listitem [ref=e794]:
+          - link "Email Protection" [ref=e795] [cursor=pointer]:
+            - /url: /email
+        - listitem [ref=e796]:
+          - link "简讯" [ref=e797] [cursor=pointer]:
+            - /url: /newsletter
+        - listitem [ref=e798]:
+          - link "博客" [ref=e799] [cursor=pointer]:
+            - /url: /blog
+        - listitem [ref=e800]:
+          - link "播客" [ref=e801] [cursor=pointer]:
+            - /url: https://insideduckduckgo.substack.com/?showWelcome=true
+        - listitem [ref=e802]:
+          - link "合作" [ref=e803] [cursor=pointer]:
+            - /url: /collaborations
+      - list [ref=e804]:
+        - listitem [ref=e805]: 详细了解
+        - listitem [ref=e806]:
+          - link "最新功能" [ref=e807] [cursor=pointer]:
+            - /url: /updates
+        - listitem [ref=e808]:
+          - link "隐私保护功能比较" [ref=e809] [cursor=pointer]:
+            - /url: /compare-privacy
+        - listitem [ref=e810]:
+          - link "关于我们的浏览器" [ref=e811] [cursor=pointer]:
+            - /url: /app
+        - listitem [ref=e812]:
+          - link "关于 DuckDuckGo" [ref=e813] [cursor=pointer]:
+            - /url: /about
+      - list [ref=e814]:
+        - listitem [ref=e815]: 其他资源
+        - listitem [ref=e816]:
+          - link "帮助" [ref=e817] [cursor=pointer]:
+            - /url: /duckduckgo-help-pages
+        - listitem [ref=e818]:
+          - link "社群" [ref=e819] [cursor=pointer]:
+            - /url: https://www.reddit.com/r/duckduckgo/
+        - listitem [ref=e820]:
+          - link "工作岗位" [ref=e821] [cursor=pointer]:
+            - /url: /careers
+        - listitem [ref=e822]:
+          - link "隐私协议" [ref=e823] [cursor=pointer]:
+            - /url: /privacy
+        - listitem [ref=e824]:
+          - link "服务条款" [ref=e825] [cursor=pointer]:
+            - /url: /terms
+        - listitem [ref=e826]:
+          - link "媒体资源" [ref=e827] [cursor=pointer]:
+            - /url: /press
+        - listitem [ref=e828]:
+          - link "在搜索时投放广告" [ref=e829] [cursor=pointer]:
+            - /url: /duckduckgo-help-pages/company/advertise-on-duckduckgo-search
+  - generic [ref=e835]:
+    - img [ref=e836]
+    - generic [ref=e846]:
+      - heading "DuckDuckGo 联名系列介绍" [level=3] [ref=e847]
+      - paragraph [ref=e848]: 为真正关心隐私的人精心打造的产品。
+    - link "查看详情" [ref=e849] [cursor=pointer]:
+      - /url: https://duckduckgo.com/collaborations
+  - button "意见反馈" [ref=e854] [cursor=pointer]

@@ -1,0 +1,195 @@
+- generic [ref=e2]:
+  - banner [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - link "Logo" [ref=e6] [cursor=pointer]:
+          - /url: /en/
+          - img "Logo" [ref=e7]
+        - generic [ref=e8]:
+          - heading "Murat Genc" [level=1] [ref=e10]:
+            - link "Murat Genc" [ref=e11] [cursor=pointer]:
+              - /url: /en/
+          - navigation [ref=e13]:
+            - list [ref=e14]:
+              - listitem [ref=e15]:
+                - link "Home" [ref=e16] [cursor=pointer]:
+                  - /url: /
+              - listitem [ref=e17]:
+                - link "Posts" [ref=e18] [cursor=pointer]:
+                  - /url: /en/posts
+              - listitem [ref=e19]:
+                - 'link "Programming with Zig: From Basics to Mastery" [ref=e20] [cursor=pointer]':
+                  - /url: https://gencmurat.com/en/pages/programming-with-zig/
+              - listitem [ref=e21]:
+                - link "Tags" [ref=e22] [cursor=pointer]:
+                  - /url: /en/tags
+      - generic [ref=e23]:
+        - textbox "Search" [ref=e24]
+        - text: 
+    - link " linkedin" [ref=e26] [cursor=pointer]:
+      - /url: https://www.linkedin.com/in/gencmurat
+  - generic [ref=e28]:
+    - main [ref=e29]:
+      - link "Buy Me A Coffee" [ref=e30] [cursor=pointer]:
+        - /url: https://www.buymeacoffee.com/muttafiy
+        - img "Buy Me A Coffee" [ref=e31]
+      - article [ref=e32]:
+        - heading "Understanding Slices as Fat Pointers in Zig" [level=1] [ref=e33]
+        - paragraph [ref=e34]:  2024-11-15
+        - generic [ref=e35]:
+          - paragraph [ref=e36]: Slices in Zig are one of the language’s fundamental concepts and are implemented as “fat pointers.” This article explores what slices are, how they work as fat pointers, and their practical applications in Zig programming.
+          - heading "What is a Fat Pointer?" [level=2] [ref=e37]
+          - paragraph [ref=e38]: "A fat pointer is a pointer that carries additional metadata alongside the memory address. In Zig, a slice is a fat pointer that contains:"
+          - list [ref=e39]:
+            - listitem [ref=e40]: A pointer to the underlying data
+            - listitem [ref=e41]: The length of the slice
+          - heading "Slice Syntax and Structure" [level=2] [ref=e42]
+          - paragraph [ref=e43]:
+            - text: In Zig, a slice is denoted using the syntax
+            - code [ref=e44]: "[]T"
+            - text: ", where"
+            - code [ref=e45]: T
+            - text: "is the type of elements in the slice. Internally, a slice can be represented as:"
+          - code [ref=e48]:
+            - text: "struct { ptr: [*]T, // Pointer to the data (many-item pointer type)"
+            - text: "len: usize, // Length of the slice"
+            - text: "}"
+          - paragraph [ref=e49]:
+            - text: "There’s also a sentinel-terminated variant:"
+            - code [ref=e50]: "[:sentinel]T"
+            - text: ", where"
+            - code [ref=e51]: sentinel
+            - text: is a terminating value.
+          - heading "Creating and Using Slices" [level=2] [ref=e52]
+          - heading "1. From Arrays" [level=3] [ref=e53]
+          - code [ref=e56]: "const array = [_]i32{ 1, 2, 3, 4, 5 }; const slice = array[1..4]; // Creates a slice of elements [2, 3, 4]"
+          - heading "2. From Pointers" [level=3] [ref=e57]
+          - code [ref=e60]:
+            - text: "fn processSlice(slice: []const i32) void { for (slice) |value| { // Process each value"
+            - text: "} }"
+          - heading "3. Sentinel-Terminated Slices" [level=3] [ref=e61]
+          - code [ref=e64]:
+            - text: "const string: [:0]const u8 = \"Hello\"; // null-terminated string slice"
+            - text: const peek = string[0..3:0]; // Creates a new null-terminated slice
+          - heading "Key Features of Slices" [level=2] [ref=e65]
+          - heading "Bounds Checking" [level=3] [ref=e66]
+          - paragraph [ref=e67]: "Slices in Zig provide automatic bounds checking in safe modes (debug and release-safe). This helps prevent buffer overflows and underflows:"
+          - code [ref=e70]: "const array = [_]i32{ 1, 2, 3 }; const slice = array[0..]; // This would trigger a runtime error in safe modes: // const invalid = slice[5];"
+          - heading "Immutable Length" [level=3] [ref=e71]
+          - paragraph [ref=e72]: "The length of a slice is immutable once created. This provides safety and predictability:"
+          - code [ref=e75]: "var slice: []i32 = &array; // slice.len = 10; // This would be a compilation error"
+          - heading "Zero-cost Abstraction" [level=3] [ref=e76]
+          - paragraph [ref=e77]: "Slices are a zero-cost abstraction in Zig, meaning they don’t add runtime overhead beyond what’s necessary for their functionality:"
+          - code [ref=e80]: "const array = [_]i32{ 1, 2, 3, 4, 5 }; const slice = array[0..]; // The slice's length is known at compile-time when possible"
+          - heading "Pointer Types in Slices" [level=3] [ref=e81]
+          - paragraph [ref=e82]: "Zig has different pointer types that can be used with slices:"
+          - list [ref=e83]:
+            - listitem [ref=e84]:
+              - code [ref=e85]: "[*]T"
+              - text: ": many-item pointer (used internally in slices)"
+            - listitem [ref=e86]:
+              - code [ref=e87]: "*[N]T"
+              - text: ": pointer to array"
+            - listitem [ref=e88]:
+              - code [ref=e89]: "*T"
+              - text: ": single-item pointer"
+            - listitem [ref=e90]:
+              - code [ref=e91]: "[]T"
+              - text: ": slice (fat pointer)"
+          - heading "Common Use Cases" [level=2] [ref=e92]
+          - heading "1. String Handling" [level=3] [ref=e93]
+          - paragraph [ref=e94]: "Strings in Zig are often represented as slices of bytes:"
+          - code [ref=e97]:
+            - text: "const string: []const u8 = \"Hello, World!\"; const substring = string[0..5]; // \"Hello\""
+            - text: // Null-terminated string slice
+            - text: "const cstring: [:0]const u8 = \"Hello\\x00\";"
+          - heading "2. Dynamic Arrays" [level=3] [ref=e98]
+          - paragraph [ref=e99]: "Slices work well with dynamic arrays (ArrayList in Zig):"
+          - code [ref=e102]: const ArrayList = std.ArrayList; var list = ArrayList(i32).init(allocator); defer list.deinit(); try list.append(1); try list.append(2); const slice = list.items; // Get slice of the ArrayList
+          - heading "3. Function Parameters" [level=3] [ref=e103]
+          - paragraph [ref=e104]: "Slices are commonly used as function parameters to accept arrays of different sizes:"
+          - code [ref=e107]: "fn sum(numbers: []const i32) i32 { var total: i32 = 0; for (numbers) |num| { total += num; } return total; }"
+          - heading "Best Practices" [level=2] [ref=e108]
+          - list [ref=e109]:
+            - listitem [ref=e110]:
+              - paragraph [ref=e111]:
+                - strong [ref=e112]: Use Const When Possible
+              - code [ref=e115]:
+                - text: "fn readOnly(data: []const i32) void { // Can't modify the slice contents"
+                - text: "}"
+            - listitem [ref=e116]:
+              - paragraph [ref=e117]:
+                - strong [ref=e118]: Explicit Lifetime Management
+              - code [ref=e121]:
+                - text: "fn getSlice() ![]i32 { var slice = try allocator.alloc(i32, 10); // Remember to free later with allocator.free(slice)"
+                - text: "return slice; }"
+            - listitem [ref=e122]:
+              - paragraph [ref=e123]:
+                - strong [ref=e124]: Slicing Conventions
+              - code [ref=e127]:
+                - text: const full = array[0..]; // Full slice
+                - text: const partial = array[1..4]; // Partial slice
+                - text: const last = array[array.len-1..]; // Last element
+            - listitem [ref=e128]:
+              - paragraph [ref=e129]:
+                - strong [ref=e130]: Sentinel-Terminated Slices
+              - code [ref=e133]:
+                - text: // Creating a sentinel-terminated slice
+                - text: const terminated = "hello"[0..3:0]; // Creates a null-terminated slice
+          - heading "Common Pitfalls and Solutions" [level=2] [ref=e134]
+          - heading "1. Dangling Slices" [level=3] [ref=e135]
+          - paragraph [ref=e136]: "Be careful not to return slices to temporary data:"
+          - code [ref=e139]:
+            - text: "// Bad:"
+            - text: "fn getDanglingSlice() []i32 { var array = [_]i32{ 1, 2, 3 }; return &array; // Would return dangling pointer"
+            - text: "} // Good:"
+            - text: "fn getSafeSlice(allocator: *std.mem.Allocator) ![]i32 { var slice = try allocator.alloc(i32, 3); return slice; }"
+          - heading "2. Slice Bounds" [level=3] [ref=e140]
+          - paragraph [ref=e141]: "Always verify slice bounds when creating sub-slices:"
+          - code [ref=e144]: "fn safeSlice(data: []const i32, start: usize, end: usize) ![]const i32 { if (end > data.len or start > end) { return error.InvalidBounds; } return data[start..end]; }"
+          - heading "3. Sentinel Handling" [level=3] [ref=e145]
+          - paragraph [ref=e146]: "Be careful when working with sentinel-terminated slices:"
+          - code [ref=e149]:
+            - text: "const string: [:0]const u8 = \"Hello\"; const slice = string[0..3]; // Regular slice, loses sentinel"
+            - text: const terminated = string[0..3:0]; // Maintains null termination
+          - heading "Performance Considerations" [level=2] [ref=e150]
+          - list [ref=e151]:
+            - listitem [ref=e152]: Slices are passed by reference, making them efficient for large data structures
+            - listitem [ref=e153]: Bounds checking can be disabled in release-fast mode for maximum performance
+            - listitem [ref=e154]: The fat pointer structure allows for efficient iteration and access patterns
+            - listitem [ref=e155]: Sentinel-terminated slices may have slightly different performance characteristics due to the additional terminator checks
+          - heading "Conclusion" [level=2] [ref=e156]
+          - paragraph [ref=e157]: Slices as fat pointers in Zig provide a powerful, safe, and efficient way to work with arrays and memory ranges. They combine the flexibility of dynamic sizing with the performance of direct memory access, while maintaining memory safety through compile-time and runtime checks. Understanding how to effectively use slices, including their sentinel-terminated variants, is crucial for writing idiomatic and efficient Zig code.
+          - paragraph [ref=e158]: Remember that while slices provide many safety features, it’s still important to manage memory correctly and be aware of slice lifetimes, especially when working with allocated memory.
+      - link "Twitter" [ref=e159] [cursor=pointer]:
+        - /url: https://twitter.com/intent/tweet/?text=Understanding%20Slices%20as%20Fat%20Pointers%20in%20Zig&url=https://gencmurat.com/en/posts/understanding-slices-as-fat-pointers-in-zig/
+        - img [ref=e162]
+      - link "E-Mail" [ref=e164] [cursor=pointer]:
+        - /url: mailto:?subject=Understanding%20Slices%20as%20Fat%20Pointers%20in%20Zig&body=https://gencmurat.com/en/posts/understanding-slices-as-fat-pointers-in-zig/
+        - img [ref=e167]
+      - link [ref=e169] [cursor=pointer]:
+        - /url: https://www.linkedin.com/shareArticle?mini=true&url=https://gencmurat.com/en/posts/understanding-slices-as-fat-pointers-in-zig/&title=Understanding%20Slices%20as%20Fat%20Pointers%20in%20Zig&summary=Understanding%20Slices%20as%20Fat%20Pointers%20in%20Zig&https://gencmurat.com/en/posts/understanding-slices-as-fat-pointers-in-zig/
+        - img [ref=e172]
+      - link "Reddit" [ref=e174] [cursor=pointer]:
+        - /url: https://reddit.com/submit/?url=https://gencmurat.com/en/posts/understanding-slices-as-fat-pointers-in-zig/&resubmit=true&title=Understanding%20Slices%20as%20Fat%20Pointers%20in%20Zig
+        - img [ref=e177]
+      - link [ref=e179] [cursor=pointer]:
+        - /url: whatsapp://send?text=Understanding%20Slices%20as%20Fat%20Pointers%20in%20Zig%20https://gencmurat.com/en/posts/understanding-slices-as-fat-pointers-in-zig/
+        - img [ref=e182]
+    - contentinfo [ref=e184]:
+      - separator [ref=e185]
+      - paragraph [ref=e186]: 2025 ©
+      - paragraph [ref=e187]:
+        - generic [ref=e188]:
+          - link "Ficurinia theme" [ref=e189] [cursor=pointer]:
+            - /url: https://gitlab.com/gabmus/hugo-ficurinia
+          - text: for
+          - link "Hugo" [ref=e190] [cursor=pointer]:
+            - /url: https://gohugo.io
+          - text: by
+          - link "Gabriele Musco" [ref=e191] [cursor=pointer]:
+            - /url: https://gabmus.org
+          - text: . Licensed under
+          - link "GNU AGPLv3" [ref=e192] [cursor=pointer]:
+            - /url: https://www.gnu.org/licenses/agpl-3.0.html
+          - text: .

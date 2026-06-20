@@ -14,8 +14,8 @@ uses
   nextpas.core.fs.util, nextpas.core.fs.dir, nextpas.core.fs.base,
   nextpas.core.time,
   np_ast_facade, np_diagnostics_sink, np_green_tree, np_lexer,
-  np_package_manifest, np_preprocessor, np_source_database, np_target_facts,
-  np_text_primitives, np_toolchain_profiles, np_unit_graph;
+  np_package_manifest, np_preprocessor, np_source_database,
+  np_target_facts, np_text_primitives, np_toolchain_profiles, np_unit_graph;
 
 type
   TSearchIndexEntry = record

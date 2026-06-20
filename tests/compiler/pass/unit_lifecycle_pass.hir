@@ -1,0 +1,235 @@
+; HIR Module: main
+; Types: 11
+; Functions: 14
+; Globals: 1
+
+global @Count: i64
+
+func @_start() -> i64 {
+  bb1 (entry):
+    %1 = call @np_process_init void
+    %3 = call @GetInitCount i64
+    %4 = intrinsic @global_ref ptr<0>
+    %5 = store i64 %3 %4
+    %6 = load i64 %4
+    %7 = load i64
+    %8 = cmp.ne bool %6 %7
+    br %8, bb2, bb3
+
+  bb2 (then1):
+    %9 = load i32
+    %10 = sext i64 %9
+    %11 = intrinsic @halt void %10
+    unreachable
+
+  bb3 (endif2):
+    %12 = intrinsic @write_str void
+    %13 = load i64 %4
+    %14 = intrinsic @write_int void %13
+    %15 = intrinsic @write_str void
+    %16 = load i64
+    %17 = intrinsic @halt void %16
+    %18 = call @np_process_fini void
+    unreachable
+
+}
+
+func @TObject.Create(%19: ptr) -> i64 {
+  bb4 (entry):
+    %20 = alloca ptr<0>
+    %21 = store ptr<0> %19 %20
+    %22 = alloca i64
+    %23 = load i64 %22
+    ret %23
+
+}
+
+func @TObject.Destroy(%24: ptr) -> i64 {
+  bb5 (entry):
+    %25 = alloca ptr<0>
+    %26 = store ptr<0> %24 %25
+    %27 = alloca i64
+    %28 = load i64 %27
+    ret %28
+
+}
+
+func @TObject.Free(%29: ptr) -> i64 {
+  bb6 (entry):
+    %30 = alloca ptr<0>
+    %31 = store ptr<0> %29 %30
+    %32 = alloca i64
+    %33 = load ptr<0> %30
+    %34 = load ptr<0>
+    %35 = cmp.ne bool %33 %34
+    br %35, bb7, bb8
+
+  bb7 (then3):
+    %36 = load ptr<0> %30
+    %37 = load i64
+    %38 = intrinsic @gep_i64 ptr<0> %36 %37
+    %39 = load ptr<0> %38
+    %40 = load i64
+    %41 = intrinsic @gep_i64 ptr<0> %39 %40
+    %42 = load ptr<0> %41
+    %43 = intrinsic @vcall i64 %42 %36
+    %44 = trunc i32 %43
+    br bb8
+
+  bb8 (endif4):
+    %45 = load i64 %32
+    ret %45
+
+}
+
+func @TObject.ClassType(%46: ptr) -> ptr<0> {
+  bb9 (entry):
+    %47 = alloca ptr<0>
+    %48 = store ptr<0> %46 %47
+    %49 = alloca ptr<0>
+    %50 = load ptr<0> %47
+    %51 = call @PPointer i64 %50
+    %52 = load i64 %51
+    %53 = store ptr<0> %52 %49
+    %54 = load ptr<0> %49
+    ret %54
+
+}
+
+func @TObject.ClassName(%55: ptr) -> i64 {
+  bb10 (entry):
+    %56 = alloca ptr<0>
+    %57 = store ptr<0> %55 %56
+    %58 = alloca i64
+    %59 = load i64 %58
+    ret %59
+
+}
+
+func @TObject.InheritsFrom(%60: ptr, %61: ptr) -> i64 {
+  bb11 (entry):
+    %62 = alloca ptr<0>
+    %63 = store ptr<0> %60 %62
+    %64 = alloca ptr<0>
+    %65 = store ptr<0> %61 %64
+    %66 = alloca i64
+    %67 = alloca ptr<0>
+    %68 = load ptr<0> %62
+    %69 = call @TObject.ClassType ptr<0> %68
+    %70 = store ptr<0> %69 %67
+    br bb12
+
+  bb12 (while-cond5):
+    %71 = load ptr<0> %67
+    %72 = load ptr<0>
+    %73 = cmp.ne bool %71 %72
+    br %73, bb13, bb14
+
+  bb13 (while-body6):
+    %74 = load ptr<0> %67
+    %75 = load ptr<0> %64
+    %76 = cmp.eq bool %74 %75
+    br %76, bb15, bb16
+
+  bb14 (while-end7):
+    %84 = load bool
+    %85 = zext i64 %84
+    %86 = store i64 %85 %66
+    %87 = load i64 %66
+    ret %87
+
+  bb15 (then8):
+    %77 = load i64 %66
+    ret %77
+
+  bb16 (endif9):
+    %78 = load ptr<0> %67
+    %79 = call @Pointer i64 %78
+    %80 = call @PByte i64 %79
+    %81 = load i64 %80
+    %82 = call @Pointer i64 %81
+    %83 = store ptr<0> %82 %67
+    br bb12
+
+}
+
+func @TObject.InstanceSize(%88: ptr) -> i64 {
+  bb17 (entry):
+    %89 = alloca ptr<0>
+    %90 = store ptr<0> %88 %89
+    %91 = alloca i64
+    %92 = load i32
+    %93 = sext i64 %92
+    %94 = store i64 %93 %91
+    %95 = load i64 %91
+    ret %95
+
+}
+
+func @TInterfacedObject.Create(%96: ptr) -> i64 {
+  bb18 (entry):
+    %97 = alloca ptr<0>
+    %98 = store ptr<0> %96 %97
+    %99 = alloca i64
+    %100 = load i64 %99
+    ret %100
+
+}
+
+func @TInterfacedObject._AddRef(%101: ptr) -> i64 {
+  bb19 (entry):
+    %102 = alloca ptr<0>
+    %103 = store ptr<0> %101 %102
+    %104 = alloca i64
+    %105 = load i32
+    %106 = sext i64 %105
+    %107 = store i64 %106 %104
+    %108 = load i64 %104
+    ret %108
+
+}
+
+func @TInterfacedObject._Release(%109: ptr) -> i64 {
+  bb20 (entry):
+    %110 = alloca ptr<0>
+    %111 = store ptr<0> %109 %110
+    %112 = alloca i64
+    %113 = load i32
+    %114 = sext i64 %113
+    %115 = store i64 %114 %112
+    %116 = load i64 %112
+    ret %116
+
+}
+
+func @Exception.Create(%117: ptr) -> i64 {
+  bb21 (entry):
+    %118 = alloca ptr<0>
+    %119 = store ptr<0> %117 %118
+    %120 = alloca i64
+    %121 = load i64 %120
+    ret %121
+
+}
+
+func @Exception.Destroy(%122: ptr) -> i64 {
+  bb22 (entry):
+    %123 = alloca ptr<0>
+    %124 = store ptr<0> %122 %123
+    %125 = alloca i64
+    %126 = load ptr<0> %123
+    %127 = call @TObject.Destroy i64 %126
+    %128 = load i64 %125
+    ret %128
+
+}
+
+func @GetInitCount() -> i64 {
+  bb23 (entry):
+    %129 = alloca i64
+    %130 = call @InitCount i64
+    %131 = store i64 %130 %129
+    %132 = load i64 %129
+    ret %132
+
+}
