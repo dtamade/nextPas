@@ -3901,9 +3901,13 @@ begin
     begin
       FCurrentFuncId := FModule.AddFunction(FuncName, GetStringType);
       FModule.SetFunctionOwnedStringReturnAbi(FCurrentFuncId, True);
+      FModule.SetFunctionTStringReturnAbi(FCurrentFuncId, True);
     end
     else if Rest = 's' then
-      FCurrentFuncId := FModule.AddFunction(FuncName, GetStringType)
+    begin
+      FCurrentFuncId := FModule.AddFunction(FuncName, GetStringType);
+      FModule.SetFunctionTStringReturnAbi(FCurrentFuncId, True);
+    end
     else if Rest = 'p' then
       FCurrentFuncId := FModule.AddFunction(FuncName, GetPtrType)
     else if (Length(Rest) > 1) and (Rest[1] = 'r') then
