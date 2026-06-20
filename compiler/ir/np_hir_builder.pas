@@ -186,10 +186,6 @@ type
       out AIsStatic: Boolean; out ALow, AHigh, ALength: Int64): Boolean;
     procedure EmitStaticArrayBacking(const AName: string; const ALength: Int64);
     procedure InitializeDynArraySlots(const AName: string);
-    procedure ClearStringOwner(const AName: string);
-    procedure ReleaseStringOwner(const AName: string);
-    procedure StoreOwnedStringResult(const AName: string;
-      const AResultInstr: THIRValueId);
     function NormalizeArrayIndexValue(const AArrayName: string;
       const AIndexValue: THIRValueId): THIRValueId;
     function EmitStructuredSymbolValue(const AExpr: TSemanticHirExpr;
@@ -253,7 +249,6 @@ type
     procedure ProcessSetLengthArr(const ANode: TTypedHirNode);
     procedure ProcessSetLengthFieldArr(const ANode: TTypedHirNode);
     procedure ProcessDynArrayCleanup(const ANode: TTypedHirNode);
-    procedure ProcessStringCleanup(const ANode: TTypedHirNode);
     procedure ProcessManagedRecordCleanup(const ANode: TTypedHirNode);
     procedure ProcessAssignArrElem(const ANode: TTypedHirNode);
     procedure ProcessMethodBegin(const ANode: TTypedHirNode);
@@ -857,115 +852,6 @@ begin
     Exit;
   EmitStore(GetPtrType, NullPtr, PtrSlot);
   EmitStore(GetIntType, ZeroLen, LenSlot);
-end;
-
-procedure THIRBuilder.ClearStringOwner(const AName: string);
-var
-  OwnerSlot, AllocSizeSlot: THIRValueId;
-  Instr: THIRInstr;
-begin
-  if AName = '' then
-    Exit;
-  OwnerSlot := FindAlloca(AName + '$owner');
-  AllocSizeSlot := FindAlloca(AName + '$alloc_size');
-  if (OwnerSlot = 0) or (AllocSizeSlot = 0) then
-    Exit;
-
-  FillChar(Instr, SizeOf(Instr), 0);
-  Instr.ResultId := FModule.NewValue;
-  Instr.Kind := hikIntrinsic;
-  Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
-  Instr.IntrinsicName := 'string_owner_clear';
-  SetLength(Instr.Operands, 2);
-  Instr.Operands[0] := MakeTypedOperand(OwnerSlot, GetPtrType);
-  Instr.Operands[1] := MakeTypedOperand(AllocSizeSlot, GetIntType);
-  EmitInstr(Instr);
-end;
-
-procedure THIRBuilder.ReleaseStringOwner(const AName: string);
-var
-  OwnerSlot, AllocSizeSlot, OwnerVal, AllocSizeVal: THIRValueId;
-  Instr: THIRInstr;
-begin
-  if AName = '' then
-    Exit;
-  OwnerSlot := FindAlloca(AName + '$owner');
-  AllocSizeSlot := FindAlloca(AName + '$alloc_size');
-  if (OwnerSlot = 0) or (AllocSizeSlot = 0) then
-    Exit;
-  OwnerVal := EmitLoad(GetPtrType, OwnerSlot);
-  AllocSizeVal := EmitLoad(GetIntType, AllocSizeSlot);
-
-  FillChar(Instr, SizeOf(Instr), 0);
-  Instr.ResultId := FModule.NewValue;
-  Instr.Kind := hikIntrinsic;
-  Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
-  Instr.IntrinsicName := 'string_release';
-  SetLength(Instr.Operands, 2);
-  Instr.Operands[0] := MakeTypedOperand(OwnerVal, GetPtrType);
-  Instr.Operands[1] := MakeTypedOperand(AllocSizeVal, GetIntType);
-  EmitInstr(Instr);
-end;
-
-procedure THIRBuilder.StoreOwnedStringResult(const AName: string;
-  const AResultInstr: THIRValueId);
-var
-  PtrSlot, LenSlot, OwnerSlot, AllocSizeSlot: THIRValueId;
-  Instr: THIRInstr;
-  PtrVal, LenVal, OwnerVal, AllocSizeVal: THIRValueId;
-begin
-  PtrSlot := FindAlloca(AName + '$ptr');
-  LenSlot := FindAlloca(AName + '$len');
-  OwnerSlot := FindAlloca(AName + '$owner');
-  AllocSizeSlot := FindAlloca(AName + '$alloc_size');
-  if (PtrSlot = 0) or (LenSlot = 0) or
-    (OwnerSlot = 0) or (AllocSizeSlot = 0) then
-    Exit;
-
-  FillChar(Instr, SizeOf(Instr), 0);
-  Instr.ResultId := FModule.NewValue;
-  Instr.Kind := hikIntrinsic;
-  Instr.TypeId := GetPtrType;
-  Instr.IntrinsicName := 'string_owned_extract_ptr';
-  SetLength(Instr.Operands, 1);
-  Instr.Operands[0] := MakeTypedOperand(AResultInstr, GetPtrType);
-  EmitInstr(Instr);
-  PtrVal := Instr.ResultId;
-
-  FillChar(Instr, SizeOf(Instr), 0);
-  Instr.ResultId := FModule.NewValue;
-  Instr.Kind := hikIntrinsic;
-  Instr.TypeId := GetIntType;
-  Instr.IntrinsicName := 'string_owned_extract_len';
-  SetLength(Instr.Operands, 1);
-  Instr.Operands[0] := MakeTypedOperand(AResultInstr, GetPtrType);
-  EmitInstr(Instr);
-  LenVal := Instr.ResultId;
-
-  FillChar(Instr, SizeOf(Instr), 0);
-  Instr.ResultId := FModule.NewValue;
-  Instr.Kind := hikIntrinsic;
-  Instr.TypeId := GetPtrType;
-  Instr.IntrinsicName := 'string_owned_extract_owner';
-  SetLength(Instr.Operands, 1);
-  Instr.Operands[0] := MakeTypedOperand(AResultInstr, GetPtrType);
-  EmitInstr(Instr);
-  OwnerVal := Instr.ResultId;
-
-  FillChar(Instr, SizeOf(Instr), 0);
-  Instr.ResultId := FModule.NewValue;
-  Instr.Kind := hikIntrinsic;
-  Instr.TypeId := GetIntType;
-  Instr.IntrinsicName := 'string_owned_extract_alloc_size';
-  SetLength(Instr.Operands, 1);
-  Instr.Operands[0] := MakeTypedOperand(AResultInstr, GetPtrType);
-  EmitInstr(Instr);
-  AllocSizeVal := Instr.ResultId;
-
-  EmitStore(GetPtrType, PtrVal, PtrSlot);
-  EmitStore(GetIntType, LenVal, LenSlot);
-  EmitStore(GetPtrType, OwnerVal, OwnerSlot);
-  EmitStore(GetIntType, AllocSizeVal, AllocSizeSlot);
 end;
 
 function THIRBuilder.NormalizeArrayIndexValue(const AArrayName: string;
@@ -4347,38 +4233,15 @@ procedure THIRBuilder.ProcessStringTempOwnedRuntime(
   const ANode: TTypedHirNode);
 var
   Instr: THIRInstr;
-  ArgBlob, FuncName, TempName: string;
-  ArgValues: array of THIRValueId;
-  ArgTypes: array of THIRTypeId;
-  ArgCount, ArgPartCount, I, TabPos: LongInt;
-  ArgParts: array of string;
-  PartBlob: string;
-  V, TsSlot: THIRValueId;
+  FuncName, TempName: string;
+  TabPos: LongInt;
+  TsSlot: THIRValueId;
 begin
   TempName := ANode.Operand;
   TabPos := Pos(#9, TempName);
   if TabPos > 0 then
-  begin
-    ArgBlob := Copy(TempName, TabPos + 1, Length(TempName));
     TempName := Copy(TempName, 1, TabPos - 1);
-  end
-  else
-    ArgBlob := '';
   FuncName := ANode.DisplayName;
-  if (Length(ArgBlob) > 7) and (Copy(ArgBlob, 1, 7) = 'callee ') then
-  begin
-    TabPos := Pos(#9, ArgBlob);
-    if TabPos > 0 then
-    begin
-      FuncName := Copy(ArgBlob, 8, TabPos - 8);
-      ArgBlob := Copy(ArgBlob, TabPos + 1, Length(ArgBlob));
-    end
-    else
-    begin
-      FuncName := Copy(ArgBlob, 8, Length(ArgBlob) - 7);
-      ArgBlob := '';
-    end;
-  end;
 
   TsSlot := FindAlloca(TempName + '$ts');
   if TsSlot <> 0 then
@@ -4393,102 +4256,7 @@ begin
     Instr.Operands[0].ValueId := TsSlot;
     Instr.Operands[0].TypeId := GetPtrType;
     EmitInstr(Instr);
-    Exit;
   end;
-
-  { Old 4-slot path }
-  ArgCount := 0;
-  SetLength(ArgValues, 0);
-  SetLength(ArgTypes, 0);
-  if ArgBlob <> '' then
-  begin
-    SetLength(ArgParts, 0);
-    ArgPartCount := 0;
-    PartBlob := '';
-    for I := 1 to Length(ArgBlob) do
-    begin
-      if ArgBlob[I] = #9 then
-      begin
-        if PartBlob <> '' then
-        begin
-          if ArgPartCount >= Length(ArgParts) then
-            SetLength(ArgParts, ArgPartCount + 8);
-          ArgParts[ArgPartCount] := PartBlob;
-          Inc(ArgPartCount);
-          PartBlob := '';
-        end;
-      end
-      else
-        PartBlob := PartBlob + ArgBlob[I];
-    end;
-    if PartBlob <> '' then
-    begin
-      if ArgPartCount >= Length(ArgParts) then
-        SetLength(ArgParts, ArgPartCount + 8);
-      ArgParts[ArgPartCount] := PartBlob;
-      Inc(ArgPartCount);
-    end;
-
-    for I := 0 to ArgPartCount - 1 do
-    begin
-      if Copy(ArgParts[I], 1, 7) = 'strvar ' then
-      begin
-        PartBlob := Copy(ArgParts[I], 8, Length(ArgParts[I]) - 8);
-        V := FindAlloca(PartBlob + '$ptr');
-        if V <> 0 then
-        begin
-          if ArgCount >= Length(ArgValues) then
-          begin
-            SetLength(ArgValues, ArgCount + 8);
-            SetLength(ArgTypes, ArgCount + 8);
-          end;
-          ArgValues[ArgCount] := EmitLoad(GetPtrType, V);
-          ArgTypes[ArgCount] := GetPtrType;
-          Inc(ArgCount);
-        end;
-        V := FindAlloca(PartBlob + '$len');
-        if V <> 0 then
-        begin
-          if ArgCount >= Length(ArgValues) then
-          begin
-            SetLength(ArgValues, ArgCount + 8);
-            SetLength(ArgTypes, ArgCount + 8);
-          end;
-          ArgValues[ArgCount] := EmitLoad(GetIntType, V);
-          ArgTypes[ArgCount] := GetIntType;
-          Inc(ArgCount);
-        end;
-      end
-      else
-      begin
-        V := ParseIntBlob(ArgParts[I]);
-        if V <> 0 then
-        begin
-          if ArgCount >= Length(ArgValues) then
-          begin
-            SetLength(ArgValues, ArgCount + 8);
-            SetLength(ArgTypes, ArgCount + 8);
-          end;
-          ArgValues[ArgCount] := V;
-          ArgTypes[ArgCount] := GetIntType;
-          Inc(ArgCount);
-        end;
-      end;
-    end;
-  end;
-
-  FillChar(Instr, SizeOf(Instr), 0);
-  Instr.ResultId := FModule.NewValue;
-  Instr.Kind := hikIntrinsic;
-  Instr.TypeId := GetPtrType;
-  Instr.IntrinsicName := 'call_str_owned_func';
-  Instr.CallTarget := FuncName;
-  SetLength(Instr.Operands, ArgCount);
-  for I := 0 to ArgCount - 1 do
-    Instr.Operands[I] := MakeTypedOperand(ArgValues[I], ArgTypes[I]);
-  EmitInstr(Instr);
-
-  StoreOwnedStringResult(TempName, Instr.ResultId);
 end;
 
 procedure THIRBuilder.ProcessStringTempBorrowArgRuntime(
@@ -4514,13 +4282,7 @@ begin
     Exit;
   TsSlot := FindAlloca(TempName + '$ts');
   if TsSlot <> 0 then
-    EmitTStringLen(TsSlot)
-  else
-  begin
-    LenSlot := FindAlloca(TempName + '$len');
-    if LenSlot <> 0 then
-      EmitLoad(GetIntType, LenSlot);
-  end;
+    EmitTStringLen(TsSlot);
 end;
 
 procedure THIRBuilder.ProcessStringTempReleaseRuntime(
@@ -4530,12 +4292,7 @@ var
 begin
   TsSlot := FindAlloca(ANode.Operand + '$ts');
   if TsSlot <> 0 then
-    EmitTStringFini(TsSlot)
-  else
-  begin
-    ReleaseStringOwner(ANode.Operand);
-    ClearStringOwner(ANode.Operand);
-  end;
+    EmitTStringFini(TsSlot);
 end;
 
 procedure THIRBuilder.ProcessSetLengthArr(const ANode: TTypedHirNode);
@@ -4849,19 +4606,6 @@ begin
       end;
     end;
   end;
-end;
-
-procedure THIRBuilder.ProcessStringCleanup(const ANode: TTypedHirNode);
-var
-  VarName: string;
-begin
-  VarName := ANode.Operand;
-  if VarName = '' then
-    VarName := ANode.DisplayName;
-  if VarName = '' then
-    Exit;
-  ReleaseStringOwner(VarName);
-  ClearStringOwner(VarName);
 end;
 
 procedure THIRBuilder.EmitObjectStringCleanupCall(const AClassName: string;
@@ -6273,8 +6017,6 @@ begin
     case Node.NodeKind of
       hnkDynArrayCleanupRuntime:
         ProcessDynArrayCleanup(Node);
-      hnkStringCleanupRuntime:
-        ProcessStringCleanup(Node);
       hnkTStringCleanupRuntime:
         EmitTStringFini(FindAlloca(Node.Operand + '$ts'));
       hnkManagedRecordCleanupRuntime:
@@ -6683,34 +6425,6 @@ begin
           ArgValues[ArgCount] := V;
           ArgTypes[ArgCount] := GetPtrType;
           Inc(ArgCount);
-        end
-        else
-        begin
-          { Fallback: old 4-slot strvar — pass ptr + len as 2 args }
-          V := FindAlloca(PartBlob + '$ptr');
-          if V <> 0 then
-          begin
-            if ArgCount >= Length(ArgValues) then
-            begin
-              SetLength(ArgValues, ArgCount + 8);
-              SetLength(ArgTypes, ArgCount + 8);
-            end;
-            ArgValues[ArgCount] := EmitLoad(GetPtrType, V);
-            ArgTypes[ArgCount] := GetPtrType;
-            Inc(ArgCount);
-          end;
-          V := FindAlloca(PartBlob + '$len');
-          if V <> 0 then
-          begin
-            if ArgCount >= Length(ArgValues) then
-            begin
-              SetLength(ArgValues, ArgCount + 8);
-              SetLength(ArgTypes, ArgCount + 8);
-            end;
-            ArgValues[ArgCount] := EmitLoad(GetIntType, V);
-            ArgTypes[ArgCount] := GetIntType;
-            Inc(ArgCount);
-          end;
         end;
       end
       else
