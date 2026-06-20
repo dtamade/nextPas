@@ -347,5 +347,351 @@ begin
     Model.Free;
   end;
 
+  { === Test 10: int-to-str-runtime emits np_tstring_from_int === }
+  Model := TSemanticModel.Create;
+  try
+    Model.AddTypedHirNode('process-init-runtime',
+      'np.system.process_init', 0, 0, '');
+    Model.AddTypedHirNode('var-decl-tstring-runtime',
+      'S', 0, 0, 'S');
+    Model.AddTypedHirNode('int-to-str-runtime',
+      'S', 0, 0, 'S'#9'int 42'#10);
+    Model.AddTypedHirNode('process-fini-runtime',
+      'np.system.process_fini', 0, 0, '');
+
+    Builder := THIRBuilder.Create(Model);
+    try
+      Builder.Build;
+      Emitter := THIRLlvmEmitter.Create(Builder.Module);
+      try
+        Emitter.EmitModule;
+        LlvmIr := Emitter.AsText;
+
+        Check(Pos('call void @np_tstring_from_int(', LlvmIr) > 0,
+          'int-to-str emits tstring_from_int', 20);
+      finally
+        Emitter.Free;
+      end;
+    finally
+      Builder.Free;
+    end;
+  finally
+    Model.Free;
+  end;
+
+  { === Test 11: copy-str-runtime emits np_tstring_copy === }
+  Model := TSemanticModel.Create;
+  try
+    Model.AddTypedHirNode('process-init-runtime',
+      'np.system.process_init', 0, 0, '');
+    Model.AddTypedHirNode('var-decl-tstring-runtime',
+      'Src', 0, 0, 'Src');
+    Model.AddTypedHirNode('var-decl-tstring-runtime',
+      'Dst', 0, 0, 'Dst');
+    Model.AddTypedHirNode('copy-str-runtime',
+      'Dst', 0, 0, 'Dst'#9'Src'#9'int 2'#10#9'int 3'#10);
+    Model.AddTypedHirNode('process-fini-runtime',
+      'np.system.process_fini', 0, 0, '');
+
+    Builder := THIRBuilder.Create(Model);
+    try
+      Builder.Build;
+      Emitter := THIRLlvmEmitter.Create(Builder.Module);
+      try
+        Emitter.EmitModule;
+        LlvmIr := Emitter.AsText;
+
+        Check(Pos('call void @np_tstring_copy(', LlvmIr) > 0,
+          'copy-str emits tstring_copy', 21);
+      finally
+        Emitter.Free;
+      end;
+    finally
+      Builder.Free;
+    end;
+  finally
+    Model.Free;
+  end;
+
+  { === Test 12: write-str-var-runtime emits write_str_var from tstring data/len === }
+  Model := TSemanticModel.Create;
+  try
+    Model.AddTypedHirNode('process-init-runtime',
+      'np.system.process_init', 0, 0, '');
+    Model.AddTypedHirNode('var-decl-tstring-runtime',
+      'S', 0, 0, 'S');
+    Model.AddTypedHirNode('write-str-var-runtime',
+      'Write', 0, 0, 'S');
+    Model.AddTypedHirNode('process-fini-runtime',
+      'np.system.process_fini', 0, 0, '');
+
+    Builder := THIRBuilder.Create(Model);
+    try
+      Builder.Build;
+      Emitter := THIRLlvmEmitter.Create(Builder.Module);
+      try
+        Emitter.EmitModule;
+        LlvmIr := Emitter.AsText;
+
+        Check(Pos('call ptr @np_tstring_data(', LlvmIr) > 0,
+          'write-str-var loads tstring data', 22);
+        Check(Pos('call i64 @np_tstring_len(', LlvmIr) > 0,
+          'write-str-var loads tstring len', 23);
+        Check(Pos('syscall", "{rdi},{rsi},{rdx}', LlvmIr) > 0,
+          'write-str-var lowers to write syscall', 24);
+      finally
+        Emitter.Free;
+      end;
+    finally
+      Builder.Free;
+    end;
+  finally
+    Model.Free;
+  end;
+
+  { === Test 13: call-runtime strvar arg uses ptr+len ABI === }
+  Model := TSemanticModel.Create;
+  try
+    Model.AddTypedHirNode('function-body-begin',
+      'Consume', 0, 0, '1:p:s');
+    Model.AddTypedHirNode('function-body-end',
+      'Consume', 0, 0, '');
+    Model.AddTypedHirNode('process-init-runtime',
+      'np.system.process_init', 0, 0, '');
+    Model.AddTypedHirNode('var-decl-tstring-runtime',
+      'S', 0, 0, 'S');
+    Model.AddTypedHirNode('call-runtime',
+      'Consume', 0, 0, 'Consume'#9'strvar S');
+    Model.AddTypedHirNode('process-fini-runtime',
+      'np.system.process_fini', 0, 0, '');
+
+    Builder := THIRBuilder.Create(Model);
+    try
+      Builder.Build;
+      Emitter := THIRLlvmEmitter.Create(Builder.Module);
+      try
+        Emitter.EmitModule;
+        LlvmIr := Emitter.AsText;
+
+        Check(Pos('call ptr @np_tstring_data(', LlvmIr) > 0,
+          'call-runtime strvar extracts data', 25);
+        Check(Pos('call i64 @np_tstring_len(', LlvmIr) > 0,
+          'call-runtime strvar extracts len', 26);
+        Check(Pos('@Consume(ptr ', LlvmIr) > 0,
+          'call-runtime emits ptr arg for string data', 27);
+      finally
+        Emitter.Free;
+      end;
+    finally
+      Builder.Free;
+    end;
+  finally
+    Model.Free;
+  end;
+
+  { === Test 14: class-new-runtime strvar arg uses ptr+len ABI === }
+  Model := TSemanticModel.Create;
+  try
+    Model.AddTypedHirNode('start-func-runtime', 'CtorTest', 0, 0, '');
+    Model.AddTypedHirNode('var-decl-ptr-runtime', 'Obj', 0, 0, 'Obj');
+    Model.AddTypedHirNode('var-decl-tstring-runtime', 'S', 0, 0, 'S');
+    Model.AddTypedHirNode('class-new-runtime',
+      '16', 0, 0, 'Obj'#9'MyClass.Create'#9'strvar S');
+    Model.AddTypedHirNode('process-fini-runtime',
+      'np.system.process_fini', 0, 0, '');
+
+    Builder := THIRBuilder.Create(Model);
+    try
+      Builder.Build;
+      Emitter := THIRLlvmEmitter.Create(Builder.Module);
+      try
+        Emitter.EmitModule;
+        LlvmIr := Emitter.AsText;
+
+        Check(Pos('call ptr @np_tstring_data(', LlvmIr) > 0,
+          'class-new strvar extracts data', 28);
+        Check(Pos('call i64 @np_tstring_len(', LlvmIr) > 0,
+          'class-new strvar extracts len', 29);
+        Check(Pos('@MyClass.Create(ptr ', LlvmIr) > 0,
+          'class-new emits constructor call', 30);
+      finally
+        Emitter.Free;
+      end;
+    finally
+      Builder.Free;
+    end;
+  finally
+    Model.Free;
+  end;
+
+  { === Test 15: assign-tstring-call-runtime strvar arg uses ptr+len ABI === }
+  Model := TSemanticModel.Create;
+  try
+    Model.AddTypedHirNode('start-func-runtime', 'AssignCallTest', 0, 0, '');
+    Model.AddTypedHirNode('function-body-begin', 'Echo', 0, 0, '1:s:s');
+    Model.AddTypedHirNode('function-body-end', 'Echo', 0, 0, '');
+    Model.AddTypedHirNode('function-body-begin', 'AssignCallTest', 0, 0, '0::');
+    Model.AddTypedHirNode('var-decl-tstring-runtime',
+      'ArgS', 0, 0, 'ArgS');
+    Model.AddTypedHirNode('var-decl-tstring-runtime',
+      'ResS', 0, 0, 'ResS');
+    Model.AddTypedHirNode('assign-tstring-call-runtime',
+      'ResS', 0, 0, 'ResS'#9'callee Echo'#9'strvar ArgS');
+    Model.AddTypedHirNode('function-body-end', 'AssignCallTest', 0, 0, '');
+    Model.AddTypedHirNode('process-fini-runtime',
+      'np.system.process_fini', 0, 0, '');
+
+    Builder := THIRBuilder.Create(Model);
+    try
+      Builder.Build;
+      Emitter := THIRLlvmEmitter.Create(Builder.Module);
+      try
+        Emitter.EmitModule;
+        LlvmIr := Emitter.AsText;
+
+        Check(Pos('call ptr @np_tstring_data(', LlvmIr) > 0,
+          'assign-tstring-call strvar extracts data', 31);
+        Check(Pos('call i64 @np_tstring_len(', LlvmIr) > 0,
+          'assign-tstring-call strvar extracts len', 32);
+        Check(Pos('call void @Echo(ptr ', LlvmIr) > 0,
+          'assign-tstring-call emits sret call', 33);
+      finally
+        Emitter.Free;
+      end;
+    finally
+      Builder.Free;
+    end;
+  finally
+    Model.Free;
+  end;
+
+  { === Test 16: method string return uses TString sret ABI === }
+  Model := TSemanticModel.Create;
+  try
+    Model.AddTypedHirNode('method-body-begin',
+      'TMyClass.GetName', 0, 0, '1::s');
+    Model.AddTypedHirNode('var-decl-tstring-runtime',
+      'Result', 0, 0, 'Result');
+    Model.AddTypedHirNode('ret-tstring-runtime',
+      'Result', 0, 0, 'Result');
+    Model.AddTypedHirNode('function-body-end',
+      'TMyClass.GetName', 0, 0, '');
+
+    Builder := THIRBuilder.Create(Model);
+    try
+      Builder.Build;
+      Emitter := THIRLlvmEmitter.Create(Builder.Module);
+      try
+        Emitter.EmitModule;
+        LlvmIr := Emitter.AsText;
+
+        Check(Pos('define void @TMyClass.GetName(ptr sret(%TString) %agg.result', LlvmIr) > 0,
+          'method string return uses sret ABI', 34);
+        Check(Pos('call void @np_tstring_ret_move(ptr %v1, ptr ', LlvmIr) > 0,
+          'method string return moves into sret slot', 35);
+      finally
+        Emitter.Free;
+      end;
+    finally
+      Builder.Free;
+    end;
+  finally
+    Model.Free;
+  end;
+
+  { === Test 17: write-int-runtime emits write_i64_decimal === }
+  Model := TSemanticModel.Create;
+  try
+    Model.AddTypedHirNode('process-init-runtime',
+      'np.system.process_init', 0, 0, '');
+    Model.AddTypedHirNode('write-int-runtime',
+      'Write', 0, 0, 'int 123'#10);
+    Model.AddTypedHirNode('process-fini-runtime',
+      'np.system.process_fini', 0, 0, '');
+
+    Builder := THIRBuilder.Create(Model);
+    try
+      Builder.Build;
+      Emitter := THIRLlvmEmitter.Create(Builder.Module);
+      try
+        Emitter.EmitModule;
+        LlvmIr := Emitter.AsText;
+
+        Check(Pos('call void @write_i64_decimal(i64 ', LlvmIr) > 0,
+          'write-int emits write_i64_decimal', 36);
+      finally
+        Emitter.Free;
+      end;
+    finally
+      Builder.Free;
+    end;
+  finally
+    Model.Free;
+  end;
+
+  { === Test 18: write-string-runtime emits literal write syscall === }
+  Model := TSemanticModel.Create;
+  try
+    Model.AddTypedHirNode('process-init-runtime',
+      'np.system.process_init', 0, 0, '');
+    Model.AddTypedHirNode('write-string-runtime',
+      'Write', 0, 0, 'Hello');
+    Model.AddTypedHirNode('process-fini-runtime',
+      'np.system.process_fini', 0, 0, '');
+
+    Builder := THIRBuilder.Create(Model);
+    try
+      Builder.Build;
+      Emitter := THIRLlvmEmitter.Create(Builder.Module);
+      try
+        Emitter.EmitModule;
+        LlvmIr := Emitter.AsText;
+
+        Check(Pos('syscall", "{rdi},{rsi},{rdx}', LlvmIr) > 0,
+          'write-string emits write syscall', 37);
+        Check(Pos('i64 5)', LlvmIr) > 0,
+          'write-string uses literal length', 38);
+      finally
+        Emitter.Free;
+      end;
+    finally
+      Builder.Free;
+    end;
+  finally
+    Model.Free;
+  end;
+
+  { === Test 19: write-call emits folded literal write syscall === }
+  Model := TSemanticModel.Create;
+  try
+    Model.AddTypedHirNode('process-init-runtime',
+      'np.system.process_init', 0, 0, '');
+    Model.AddTypedHirNode('write-call',
+      'WriteLn', 0, 0, 'Hi'#10);
+    Model.AddTypedHirNode('process-fini-runtime',
+      'np.system.process_fini', 0, 0, '');
+
+    Builder := THIRBuilder.Create(Model);
+    try
+      Builder.Build;
+      Emitter := THIRLlvmEmitter.Create(Builder.Module);
+      try
+        Emitter.EmitModule;
+        LlvmIr := Emitter.AsText;
+
+        Check(Pos('syscall", "{rdi},{rsi},{rdx}', LlvmIr) > 0,
+          'write-call emits write syscall', 39);
+        Check(Pos('i64 3)', LlvmIr) > 0,
+          'write-call preserves newline length', 40);
+      finally
+        Emitter.Free;
+      end;
+    finally
+      Builder.Free;
+    end;
+  finally
+    Model.Free;
+  end;
+
   WriteLn('tstring LLVM IR tests passed (', TestCount - 1, ' checks)');
 end.
