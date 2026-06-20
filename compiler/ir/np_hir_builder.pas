@@ -4179,9 +4179,7 @@ begin
   if TsSlot = 0 then
     Exit;
 
-  IntValue := ParseIntBlob(Blob);
-  if IntValue = 0 then
-    IntValue := LowerNodeExprOrBlob(ANode, Blob);
+  IntValue := LowerNodeExprOrBlob(ANode, Blob);
   if IntValue = 0 then
     Exit;
 
