@@ -693,5 +693,73 @@ begin
     Model.Free;
   end;
 
+  { === Test 13: string-temp-length-runtime stores result in $len alloca === }
+  Model := TSemanticModel.Create;
+  try
+    Model.AddTypedHirNode('process-init-runtime',
+      'np.system.process_init', 0, 0, '');
+    Model.AddTypedHirNode('var-decl-tstring-runtime',
+      'S', 0, 0, 'S');
+    Model.AddTypedHirNode('string-temp-length-runtime',
+      'S', 0, 0, 'strvar S');
+    Model.AddTypedHirNode('process-fini-runtime',
+      'np.system.process_fini', 0, 0, '');
+
+    Builder := THIRBuilder.Create(Model);
+    try
+      Builder.Build;
+      Emitter := THIRLlvmEmitter.Create(Builder.Module);
+      try
+        Emitter.EmitModule;
+        LlvmIr := Emitter.AsText;
+
+        Check(Pos('call i64 @np_tstring_len(', LlvmIr) > 0,
+          'string-temp-length emits tstring_len', 41);
+        Check(Pos('store i64', LlvmIr) > 0,
+          'string-temp-length stores result in $len', 42);
+      finally
+        Emitter.Free;
+      end;
+    finally
+      Builder.Free;
+    end;
+  finally
+    Model.Free;
+  end;
+
+  { === Test 14: BlobVar $len path computes tstring_len for TString vars === }
+  Model := TSemanticModel.Create;
+  try
+    Model.AddTypedHirNode('process-init-runtime',
+      'np.system.process_init', 0, 0, '');
+    Model.AddTypedHirNode('var-decl-tstring-runtime',
+      'S', 0, 0, 'S');
+    Model.AddTypedHirNode('var-decl-runtime',
+      'Len', 0, 0, 'Len');
+    Model.AddTypedHirNode('assign-runtime',
+      'Len', 0, 0, 'Len'#9'var S$len');
+    Model.AddTypedHirNode('process-fini-runtime',
+      'np.system.process_fini', 0, 0, '');
+
+    Builder := THIRBuilder.Create(Model);
+    try
+      Builder.Build;
+      Emitter := THIRLlvmEmitter.Create(Builder.Module);
+      try
+        Emitter.EmitModule;
+        LlvmIr := Emitter.AsText;
+
+        Check(Pos('call i64 @np_tstring_len(', LlvmIr) > 0,
+          'BlobVar $len computes tstring_len', 43);
+      finally
+        Emitter.Free;
+      end;
+    finally
+      Builder.Free;
+    end;
+  finally
+    Model.Free;
+  end;
+
   WriteLn('tstring LLVM IR tests passed (', TestCount - 1, ' checks)');
 end.

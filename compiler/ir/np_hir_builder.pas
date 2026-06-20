@@ -2131,10 +2131,25 @@ end;
 procedure THIRBuilder.BlobVar(var S: TExprStack; const AArg: string);
 var
   Instr: THIRInstr;
-  V: THIRValueId;
+  V, TsSlot, LenVal: THIRValueId;
   ConstVal: Int64;
+  BaseName: string;
 begin
   V := FindAlloca(AArg);
+
+  { Handle $len for TString vars: only $ts alloca exists, compute tstring_len on the fly }
+  if (V = 0) and (Length(AArg) > 4) and
+    (Copy(AArg, Length(AArg) - 3, 4) = '$len') then
+  begin
+    BaseName := Copy(AArg, 1, Length(AArg) - 4);
+    TsSlot := FindAlloca(BaseName + '$ts');
+    if TsSlot <> 0 then
+    begin
+      LenVal := EmitTStringLen(TsSlot);
+      S.Push(LenVal);
+      Exit;
+    end;
+  end;
   if (V = 0) and (Pos('.', AArg) > 0) then
   begin
     EnsureAlloca(AArg, GetIntType);
@@ -4292,7 +4307,11 @@ begin
     Exit;
   TsSlot := FindAlloca(TempName + '$ts');
   if TsSlot <> 0 then
-    EmitTStringLen(TsSlot);
+  begin
+    LenSlot := EmitTStringLen(TsSlot);
+    EnsureAlloca(TempName + '$len', GetIntType);
+    EmitStore(GetIntType, LenSlot, FindAlloca(TempName + '$len'));
+  end;
 end;
 
 procedure THIRBuilder.ProcessStringTempReleaseRuntime(
