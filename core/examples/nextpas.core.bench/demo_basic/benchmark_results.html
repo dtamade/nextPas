@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>nextpas.core.bench Report</title>
+  <meta charset="UTF-8">
+  <style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 20px; }
+  h1 { color: #333; }
+  table { border-collapse: collapse; width: 100%; margin: 20px 0; }
+  th, td { border: 1px solid #ddd; padding: 8px; text-align: right; }
+  th { background-color: #f2f2f2; font-weight: bold; }
+  tr:nth-child(even) { background-color: #f9f9f9; }
+  tr:hover { background-color: #f1f1f1; }
+  .benchmark-name { text-align: left; font-weight: bold; }
+  .stats { margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 5px; }
+  .chart-container { margin: 30px 0; }
+</style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <h1>nextpas.core.bench Report</h1>
+
+  <div class="stats">
+    <h2>Environment</h2>
+    <p><strong>OS:</strong> linux</p>
+    <p><strong>CPU:</strong> x86_64</p>
+    <p><strong>Cores:</strong> 4</p>
+    <p><strong>FPC:</strong> 3.3.1</p>
+    <p><strong>Time:</strong> 2026-06-21T07:36:15</p>
+  </div>
+
+  <div class="chart-container">
+    <h2>Performance Chart</h2>
+    <canvas id="benchmarkChart" width="800" height="400"></canvas>
+<script>
+  var ctx = document.getElementById("benchmarkChart").getContext("2d");
+  var chart = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: ["StringConcat", "ArraySum", "MathOperations"],
+      datasets: [{
+        label: "ns/op",
+        data: [0.10, 0.00, 1.00],
+        backgroundColor: "rgba(54, 162, 235, 0.5)",
+        borderColor: "rgba(54, 162, 235, 1)",
+        borderWidth: 1
+      }]
+    },
+    options: {
+      scales: {
+        y: {
+          beginAtZero: true
+        }
+      }
+    }
+  });
+</script>
+  </div>
+
+  <h2>Benchmark Results</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Iterations</th>
+        <th>ns/op</th>
+        <th>ops/s</th>
+        <th>StdDev</th>
+        <th>Median</th>
+        <th>P95</th>
+        <th>P99</th>
+        <th>Outliers</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="benchmark-name">StringConcat</td>
+        <td>1,000,000</td>
+        <td>0.1</td>
+        <td>4,756,451,732,826,994,964</td>
+        <td>0.0</td>
+        <td>0.1</td>
+        <td>0.1</td>
+        <td>0.1</td>
+        <td>0</td>
+      </tr>
+      <tr>
+        <td class="benchmark-name">ArraySum</td>
+        <td>1,000,000</td>
+        <td>0.0</td>
+        <td>4,786,327,285,711,489,915</td>
+        <td>0.0</td>
+        <td>0.0</td>
+        <td>0.0</td>
+        <td>0.0</td>
+        <td>1</td>
+      </tr>
+      <tr>
+        <td class="benchmark-name">MathOperations</td>
+        <td>1,000,000</td>
+        <td>1.0</td>
+        <td>4,741,701,024,786,399,321</td>
+        <td>0.0</td>
+        <td>1.0</td>
+        <td>1.1</td>
+        <td>1.1</td>
+        <td>3</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="stats">
+    <h2>Detailed Statistics</h2>
+    <h3>StringConcat</h3>
+    <p>Mean: 0.1 ns</p>
+    <p>StdDev: 0.0 ns</p>
+    <p>Median: 0.1 ns</p>
+    <p>P95: 0.1 ns</p>
+    <p>P99: 0.1 ns</p>
+    <p>Outliers: 0/30</p>
+    <h3>ArraySum</h3>
+    <p>Mean: 0.0 ns</p>
+    <p>StdDev: 0.0 ns</p>
+    <p>Median: 0.0 ns</p>
+    <p>P95: 0.0 ns</p>
+    <p>P99: 0.0 ns</p>
+    <p>Outliers: 1/30</p>
+    <h3>MathOperations</h3>
+    <p>Mean: 1.0 ns</p>
+    <p>StdDev: 0.0 ns</p>
+    <p>Median: 1.0 ns</p>
+    <p>P95: 1.1 ns</p>
+    <p>P99: 1.1 ns</p>
+    <p>Outliers: 3/30</p>
+  </div>
+</body>
+</html>
