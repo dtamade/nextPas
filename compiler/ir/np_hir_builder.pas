@@ -7514,6 +7514,7 @@ begin
     FlushPendingCleanupNodes;
 
   case ANode.NodeKind of
+    { hnkVarDeclStr* are DEAD CODE (sema migrated to hnkVarDeclTStringRuntime) }
     hnkVarDeclRuntime, hnkVarDeclStrRuntime, hnkVarDeclStrOwnedRuntime,
     hnkVarDeclStrBorrowedRuntime, hnkVarDeclArrRuntime,
     hnkVarDeclArrBorrowedRuntime, hnkVarDeclPtrRuntime,
@@ -7537,6 +7538,8 @@ begin
       ProcessAssign(ANode);
     hnkAssignStrRuntime:
       ProcessAssignStr(ANode);
+    { DEAD CODE: sema no longer emits old 4-slot string nodes (migrated to TString).
+      These handlers are unreachable. Planned for removal in Phase 6 cleanup. }
     hnkAssignStrLiteralRuntime:
       ProcessAssignStrLiteral(ANode);
     hnkAssignStrCopyRuntime:
@@ -7573,6 +7576,7 @@ begin
       ProcessFunctionEnd(ANode);
     hnkRetRuntime:
       ProcessRetRuntime(ANode);
+    { DEAD CODE: old 4-slot string return — sema now emits hnkRetTStringRuntime }
     hnkRetStrRuntime:
       ProcessRetStrRuntime(ANode);
     hnkRetStrOwnedRuntime:
@@ -7611,6 +7615,7 @@ begin
       ProcessSetLengthFieldArr(ANode);
     hnkDynArrayCleanupRuntime:
       QueueCleanupNode(ANode);
+    { DEAD CODE: sema now emits hnkTStringCleanupRuntime }
     hnkStringCleanupRuntime:
       QueueCleanupNode(ANode);
     hnkTStringCleanupRuntime:
@@ -7629,6 +7634,7 @@ begin
       ProcessRecordFieldStore(ANode);
     hnkRecordCopyRuntime:
       ProcessRecordCopy(ANode);
+    { DEAD CODE: sema now emits hnkFieldStoreTStringRuntime / hnkAssignTStringFieldLoadRuntime }
     hnkFieldStoreStrRuntime:
       ProcessFieldStoreStr(ANode);
     hnkFieldStoreStrOwnedRuntime:
