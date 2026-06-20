@@ -2539,7 +2539,7 @@ begin
   RegisterRuntimeVar(TempName);
   RegisterRuntimeStrVar(TempName);
   FModel.AddTypedHirNode('var-decl-tstring-runtime', TempName, 0, 0, TempName);
-  FModel.AddTypedHirNode('assign-tstring-copy-runtime', LitValue, 0, 0, TempName);
+  FModel.AddTypedHirNode('assign-tstring-literal-runtime', TempName, 0, 0, LitValue);
   Result := TempName;
 end;
 
@@ -9278,9 +9278,9 @@ begin
           RegisterRuntimeVar(ArgName);
           RegisterRuntimeStrVar(ArgName);
           FModel.AddTypedHirNode('var-decl-tstring-runtime', ArgName, 0, 0, ArgName);
-          FModel.AddTypedHirNode('assign-tstring-copy-runtime',
-            DecodePascalStringLiteral(ANode.ChildAt(StrCallIdx).Text),
-            0, 0, ArgName);
+          FModel.AddTypedHirNode('assign-tstring-literal-runtime',
+            ArgName, 0, 0,
+            DecodePascalStringLiteral(ANode.ChildAt(StrCallIdx).Text));
           ABlob := ABlob + 'strvar ' + ArgName + #10;
           Inc(StrCallArgCount, 2);
         end
@@ -12658,8 +12658,8 @@ begin
               RegisterRuntimeVar(FuncName);
               RegisterRuntimeStrVar(FuncName);
               FModel.AddTypedHirNode('var-decl-tstring-runtime', FuncName, 0, 0, FuncName);
-              FModel.AddTypedHirNode('assign-tstring-copy-runtime',
-                DecodePascalStringLiteral(RhsNode.Text), 0, 0, FuncName);
+              FModel.AddTypedHirNode('assign-tstring-literal-runtime',
+                FuncName, 0, 0, DecodePascalStringLiteral(RhsNode.Text));
               Operand := Operand + #9 + 'strvar ' + FuncName + #10;
             end
             else if (RhsNode.NodeKind = gnkIdentifier) and
@@ -12804,7 +12804,7 @@ begin
                 'assign-tstring-literal-runtime', Decoded, 0, 0, StringValue)
             else
               FModel.AddTypedHirNode(
-                'assign-tstring-copy-runtime', StringValue, 0, 0, Decoded
+                'assign-tstring-literal-runtime', Decoded, 0, 0, StringValue
               );
           end
           else if EvaluateStringConstant(Arg, StringValue) then
@@ -12814,7 +12814,7 @@ begin
                 'assign-tstring-literal-runtime', Decoded, 0, 0, StringValue)
             else
               FModel.AddTypedHirNode(
-                'assign-tstring-copy-runtime', StringValue, 0, 0, Decoded
+                'assign-tstring-literal-runtime', Decoded, 0, 0, StringValue
               );
           end
           else if (Arg.NodeKind = gnkIdentifier) and
@@ -12824,7 +12824,7 @@ begin
             if FCurrentOwnedStringReturn and SameText(Decoded, FCurrentRetVarName) and
               IsOwnedRuntimeStrVar(Arg.Text) then
               FModel.AddTypedHirNode(
-                'assign-tstring-copy-runtime', Decoded, 0, 0, Arg.Text)
+                'assign-tstring-copy-runtime', Arg.Text, 0, 0, Decoded)
             else
               FModel.AddTypedHirNode(
                 'assign-tstring-copy-runtime', Arg.Text, 0, 0, Decoded
