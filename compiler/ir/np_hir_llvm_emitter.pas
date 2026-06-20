@@ -1134,6 +1134,73 @@ begin
             ValueRef(AInstr.Operands[0].ValueId) + ', ptr ' +
             ValueRef(AInstr.Operands[1].ValueId) + ')');
       end
+      else if AInstr.IntrinsicName = 'tstring_ret_copy' then
+      begin
+        FNeedsTStringRuntime := True;
+        if Length(AInstr.Operands) >= 2 then
+          Emit('  call void @np_tstring_ret_copy(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', ptr ' +
+            ValueRef(AInstr.Operands[1].ValueId) + ')');
+      end
+      else if AInstr.IntrinsicName = 'tstring_from_literal' then
+      begin
+        FNeedsTStringRuntime := True;
+        if Length(AInstr.Operands) >= 3 then
+          Emit('  call void @np_tstring_from_literal(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', ptr ' +
+            ValueRef(AInstr.Operands[1].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[2].ValueId) + ')');
+      end
+      else if AInstr.IntrinsicName = 'tstring_copy' then
+      begin
+        FNeedsTStringRuntime := True;
+        if Length(AInstr.Operands) >= 4 then
+          Emit('  call void @np_tstring_copy(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', ptr ' +
+            ValueRef(AInstr.Operands[1].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[2].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[3].ValueId) + ')');
+      end
+      else if AInstr.IntrinsicName = 'tstring_concat' then
+      begin
+        FNeedsTStringRuntime := True;
+        if Length(AInstr.Operands) >= 3 then
+          Emit('  call void @np_tstring_concat(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', ptr ' +
+            ValueRef(AInstr.Operands[1].ValueId) + ', ptr ' +
+            ValueRef(AInstr.Operands[2].ValueId) + ')');
+      end
+      else if AInstr.IntrinsicName = 'tstring_field_assign' then
+      begin
+        FNeedsTStringRuntime := True;
+        if Length(AInstr.Operands) >= 2 then
+          Emit('  call void @np_tstring_field_assign(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', ptr ' +
+            ValueRef(AInstr.Operands[1].ValueId) + ')');
+      end
+      else if AInstr.IntrinsicName = 'tstring_field_fini' then
+      begin
+        FNeedsTStringRuntime := True;
+        if Length(AInstr.Operands) >= 1 then
+          Emit('  call void @np_tstring_field_fini(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ')');
+      end
+      else if AInstr.IntrinsicName = 'tstring_len' then
+      begin
+        FNeedsTStringRuntime := True;
+        if Length(AInstr.Operands) >= 1 then
+          Emit('  ' + ValueRef(AInstr.ResultId) +
+            ' = call i64 @np_tstring_len(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ')');
+      end
+      else if AInstr.IntrinsicName = 'tstring_data' then
+      begin
+        FNeedsTStringRuntime := True;
+        if Length(AInstr.Operands) >= 1 then
+          Emit('  ' + ValueRef(AInstr.ResultId) +
+            ' = call ptr @np_tstring_data(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ')');
+      end
     end;
     hikTryBegin:
     begin

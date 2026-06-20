@@ -300,6 +300,13 @@ type
     procedure EnsureVmtForClass(const AClassName: string);
     { TString 24B runtime }
     procedure ProcessVarDeclTString(const ANode: TTypedHirNode);
+    procedure ProcessAssignTStringLiteral(const ANode: TTypedHirNode);
+    procedure ProcessAssignTStringCopy(const ANode: TTypedHirNode);
+    procedure ProcessAssignTStringConcat(const ANode: TTypedHirNode);
+    procedure ProcessAssignTStringCall(const ANode: TTypedHirNode);
+    procedure ProcessAssignTStringFieldLoad(const ANode: TTypedHirNode);
+    procedure ProcessFieldStoreTString(const ANode: TTypedHirNode);
+    procedure ProcessRetTString(const ANode: TTypedHirNode);
     procedure EmitTStringInit(const AName: string);
     procedure EmitTStringFini(AValue: THIRValueId);
     procedure EmitTStringAssign(ADst, ASrc: THIRValueId);
@@ -7389,6 +7396,18 @@ begin
       ProcessVarDecl(ANode);
     hnkVarDeclTStringRuntime:
       ProcessVarDeclTString(ANode);
+    hnkAssignTStringLiteralRuntime:
+      ProcessAssignTStringLiteral(ANode);
+    hnkAssignTStringCopyRuntime:
+      ProcessAssignTStringCopy(ANode);
+    hnkAssignTStringCallRuntime:
+      ProcessAssignTStringCall(ANode);
+    hnkAssignTStringConcatRuntime:
+      ProcessAssignTStringConcat(ANode);
+    hnkAssignTStringFieldLoadRuntime:
+      ProcessAssignTStringFieldLoad(ANode);
+    hnkFieldStoreTStringRuntime:
+      ProcessFieldStoreTString(ANode);
     hnkAssignRuntime:
       ProcessAssign(ANode);
     hnkAssignStrRuntime:
@@ -7763,6 +7782,263 @@ begin
   Instr.Operands[1].ValueId := ASrc;
   Instr.Operands[1].TypeId := GetPtrType;
   EmitInstr(Instr);
+end;
+
+{ Phase 4b: TString assignment operations }
+
+procedure THIRBuilder.ProcessAssignTStringLiteral(const ANode: TTypedHirNode);
+var
+  DstName, LitValue: string;
+  DstPtr, LitPtr, LenConst: THIRValueId;
+  Instr: THIRInstr;
+begin
+  DstName := ANode.Operand;
+  LitValue := ANode.DisplayName;
+  DstPtr := FindAlloca(DstName + '$ts');
+  if DstPtr = 0 then Exit;
+  { Step 1: get literal data pointer via str_const }
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'str_const';
+  Instr.CallTarget := LitValue;
+  EmitInstr(Instr);
+  LitPtr := Instr.ResultId;
+  { Step 2: emit literal length as i64 constant }
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikLoad;
+  Instr.TypeId := GetIntType;
+  Instr.IntrinsicName := 'const:' + IntToStr(Length(LitValue));
+  EmitInstr(Instr);
+  LenConst := Instr.ResultId;
+  { Step 3: call tstring_from_literal(dst, lit, len) }
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.Kind := hikIntrinsic;
+  Instr.IntrinsicName := 'tstring_from_literal';
+  SetLength(Instr.Operands, 3);
+  Instr.Operands[0].ValueId := DstPtr;
+  Instr.Operands[0].TypeId := GetPtrType;
+  Instr.Operands[1].ValueId := LitPtr;
+  Instr.Operands[1].TypeId := GetPtrType;
+  Instr.Operands[2].ValueId := LenConst;
+  Instr.Operands[2].TypeId := GetIntType;
+  EmitInstr(Instr);
+end;
+
+procedure THIRBuilder.ProcessAssignTStringCopy(const ANode: TTypedHirNode);
+var
+  SrcName, DstName: string;
+  SrcPtr, DstPtr: THIRValueId;
+begin
+  SrcName := ANode.DisplayName;
+  DstName := ANode.Operand;
+  if SameText(SrcName, DstName) then Exit;
+  SrcPtr := FindAlloca(SrcName + '$ts');
+  DstPtr := FindAlloca(DstName + '$ts');
+  if (SrcPtr = 0) or (DstPtr = 0) then Exit;
+  EmitTStringAssign(DstPtr, SrcPtr);
+end;
+
+procedure THIRBuilder.ProcessAssignTStringConcat(const ANode: TTypedHirNode);
+var
+  DstName, LhsOp, RhsOp: string;
+  DstPtr, LhsPtr, RhsPtr: THIRValueId;
+  TabPos: LongInt;
+  Instr: THIRInstr;
+begin
+  DstName := ANode.Operand;
+  TabPos := Pos(#9, ANode.DisplayName);
+  if TabPos = 0 then Exit;
+  LhsOp := Copy(ANode.DisplayName, 1, TabPos - 1);
+  RhsOp := Copy(ANode.DisplayName, TabPos + 1, Length(ANode.DisplayName));
+  DstPtr := FindAlloca(DstName + '$ts');
+  LhsPtr := FindAlloca(LhsOp + '$ts');
+  RhsPtr := FindAlloca(RhsOp + '$ts');
+  if (DstPtr = 0) or (LhsPtr = 0) or (RhsPtr = 0) then Exit;
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.Kind := hikIntrinsic;
+  Instr.IntrinsicName := 'tstring_concat';
+  SetLength(Instr.Operands, 3);
+  Instr.Operands[0].ValueId := DstPtr;
+  Instr.Operands[0].TypeId := GetPtrType;
+  Instr.Operands[1].ValueId := LhsPtr;
+  Instr.Operands[1].TypeId := GetPtrType;
+  Instr.Operands[2].ValueId := RhsPtr;
+  Instr.Operands[2].TypeId := GetPtrType;
+  EmitInstr(Instr);
+end;
+
+procedure THIRBuilder.ProcessAssignTStringCall(const ANode: TTypedHirNode);
+var
+  Instr: THIRInstr;
+  FuncName, ArgBlob, DstName: string;
+  DstPtr: THIRValueId;
+  TabPos: LongInt;
+begin
+  { Parse: FuncName in DisplayName, DstName+args in Operand }
+  FuncName := ANode.DisplayName;
+  ArgBlob := ANode.Operand;
+  TabPos := Pos(#9, ArgBlob);
+  if TabPos > 0 then
+  begin
+    DstName := Copy(ArgBlob, 1, TabPos - 1);
+    ArgBlob := Copy(ArgBlob, TabPos + 1, Length(ArgBlob));
+  end
+  else
+  begin
+    DstName := ArgBlob;
+    ArgBlob := '';
+  end;
+
+  DstPtr := FindAlloca(DstName + '$ts');
+  if DstPtr = 0 then Exit;
+
+  { For sret ABI: emit call FuncName with dst as first sret argument,
+    then tstring_ret_move to copy result to dst.
+    Full sret integration will be wired when sema emits TString nodes. }
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikCall;
+  Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
+  Instr.CallTarget := FuncName;
+  SetLength(Instr.Operands, 1);
+  Instr.Operands[0].ValueId := DstPtr;
+  Instr.Operands[0].TypeId := GetPtrType;
+  EmitInstr(Instr);
+end;
+
+procedure THIRBuilder.ProcessAssignTStringFieldLoad(const ANode: TTypedHirNode);
+var
+  TabPos: LongInt;
+  VarName, IdxStr: string;
+  ObjPtr, DstPtr, IdxVal, FieldPtr: THIRValueId;
+  Instr: THIRInstr;
+begin
+  TabPos := Pos(#9, ANode.Operand);
+  if TabPos = 0 then Exit;
+  VarName := Copy(ANode.Operand, 1, TabPos - 1);
+  IdxStr := Copy(ANode.Operand, TabPos + 1, Length(ANode.Operand));
+  DstPtr := FindAlloca(ANode.DisplayName + '$ts');
+  if DstPtr = 0 then Exit;
+  ObjPtr := FindAlloca(VarName);
+  if ObjPtr = 0 then Exit;
+  ObjPtr := EmitLoad(GetPtrType, ObjPtr);
+  { GEP to field offset }
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikLoad;
+  Instr.TypeId := GetIntType;
+  Instr.IntrinsicName := 'const:' + IdxStr;
+  EmitInstr(Instr);
+  IdxVal := Instr.ResultId;
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'gep_i64';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeOperand(ObjPtr);
+  Instr.Operands[1] := MakeOperand(IdxVal);
+  EmitInstr(Instr);
+  FieldPtr := Instr.ResultId;
+  { tstring_field_assign(dst, field_ptr) }
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.Kind := hikIntrinsic;
+  Instr.IntrinsicName := 'tstring_field_assign';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0].ValueId := DstPtr;
+  Instr.Operands[0].TypeId := GetPtrType;
+  Instr.Operands[1].ValueId := FieldPtr;
+  Instr.Operands[1].TypeId := GetPtrType;
+  EmitInstr(Instr);
+end;
+
+procedure THIRBuilder.ProcessFieldStoreTString(const ANode: TTypedHirNode);
+var
+  TabPos: LongInt;
+  VarName, Rest, IdxStr, SrcName: string;
+  ObjPtr, IdxVal, FieldPtr, SrcPtr: THIRValueId;
+  Instr: THIRInstr;
+begin
+  TabPos := Pos(#9, ANode.Operand);
+  if TabPos = 0 then Exit;
+  VarName := Copy(ANode.Operand, 1, TabPos - 1);
+  Rest := Copy(ANode.Operand, TabPos + 1, Length(ANode.Operand));
+  TabPos := Pos(#9, Rest);
+  if TabPos = 0 then Exit;
+  IdxStr := Copy(Rest, 1, TabPos - 1);
+  SrcName := Copy(Rest, TabPos + 1, Length(Rest));
+
+  ObjPtr := FindAlloca(VarName);
+  SrcPtr := FindAlloca(SrcName + '$ts');
+  if (ObjPtr = 0) or (SrcPtr = 0) then Exit;
+  ObjPtr := EmitLoad(GetPtrType, ObjPtr);
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikLoad;
+  Instr.TypeId := GetIntType;
+  Instr.IntrinsicName := 'const:' + IdxStr;
+  EmitInstr(Instr);
+  IdxVal := Instr.ResultId;
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'gep_i64';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeOperand(ObjPtr);
+  Instr.Operands[1] := MakeOperand(IdxVal);
+  EmitInstr(Instr);
+  FieldPtr := Instr.ResultId;
+
+  { tstring_field_assign(field_ptr, src) }
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.Kind := hikIntrinsic;
+  Instr.IntrinsicName := 'tstring_field_assign';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0].ValueId := FieldPtr;
+  Instr.Operands[0].TypeId := GetPtrType;
+  Instr.Operands[1].ValueId := SrcPtr;
+  Instr.Operands[1].TypeId := GetPtrType;
+  EmitInstr(Instr);
+end;
+
+procedure THIRBuilder.ProcessRetTString(const ANode: TTypedHirNode);
+var
+  SrcName: string;
+  SrcPtr: THIRValueId;
+  Instr: THIRInstr;
+  Term: THIRTerminator;
+begin
+  { Flush cleanup before return }
+  if FPendingCleanupCount > 0 then
+    FlushPendingCleanupNodes;
+  { Find source TString variable }
+  SrcName := ANode.Operand;
+  SrcPtr := FindAlloca(SrcName + '$ts');
+  if SrcPtr = 0 then Exit;
+  { tstring_ret_move(agg.result, src) }
+  if FSretValueId <> 0 then
+  begin
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.Kind := hikIntrinsic;
+    Instr.IntrinsicName := 'tstring_ret_move';
+    SetLength(Instr.Operands, 2);
+    Instr.Operands[0].ValueId := FSretValueId;
+    Instr.Operands[0].TypeId := GetPtrType;
+    Instr.Operands[1].ValueId := SrcPtr;
+    Instr.Operands[1].TypeId := GetPtrType;
+    EmitInstr(Instr);
+  end;
+  { Emit return void (sret function) }
+  FillChar(Term, SizeOf(Term), 0);
+  Term.Kind := htkReturn;
+  FModule.SetTerminator(FCurrentFuncId, FCurrentBlockId, Term);
+  FBlockTerminated := True;
 end;
 
 end.
