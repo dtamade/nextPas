@@ -15282,9 +15282,9 @@ procedure TSemanticAnalyzer.SeedImportedUnitBodies;
           FCurrentScopeId := SavedScopeId;
         end;
       end
-      else if (Child.NodeKind = gnkInterfaceSection) or
-        (Child.NodeKind = gnkImplementationSection) then
+      else if Child.NodeKind = gnkInterfaceSection then
         RegisterBodiesInNode(Child, AOwnerUnitId);
+      { gnkImplementationSection 跳过: 实现段声明对外部单元不可见 }
     end;
   end;
 

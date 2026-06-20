@@ -1218,6 +1218,21 @@ begin
       Continue;
     end;
 
+    { &keyword 逃逸标识符: & 后跟标识符首字符 → tkIdentifier }
+    { 语法糖: & 不是标识符的一部分，Lexeme 不含 & }
+    if (CurrentChar = '&') and (StartIndex + 1 <= Length(ASourceText)) and
+       IsIdentifierStart(ASourceText[StartIndex + 1]) then
+    begin
+      SaveIndex := StartIndex; { '&' position, 用于 ByteOffset }
+      Inc(StartIndex, 2); { skip '&' + first identifier char }
+      while (StartIndex <= Length(ASourceText)) and
+        IsIdentifierContinue(ASourceText[StartIndex]) do
+        Inc(StartIndex);
+      Lexeme := Copy(ASourceText, SaveIndex + 1, StartIndex - SaveIndex - 1);
+      AddTokenAt(tkIdentifier, Lexeme, SaveIndex, TokenLine);
+      Continue;
+    end;
+
     if (CurrentChar = '$') or (CurrentChar = '&') or
        (CurrentChar = '%') or IsDigit(CurrentChar) then
     begin
