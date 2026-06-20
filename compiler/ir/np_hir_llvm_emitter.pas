@@ -1193,6 +1193,14 @@ begin
             ' = call i64 @np_tstring_len(ptr ' +
             ValueRef(AInstr.Operands[0].ValueId) + ')');
       end
+      else if AInstr.IntrinsicName = 'tstring_from_int' then
+      begin
+        FNeedsTStringRuntime := True;
+        if Length(AInstr.Operands) >= 2 then
+          Emit('  call void @np_tstring_from_int(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[1].ValueId) + ')');
+      end
       else if AInstr.IntrinsicName = 'tstring_data' then
       begin
         FNeedsTStringRuntime := True;
