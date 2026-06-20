@@ -19,6 +19,19 @@ type
     FEnvironment: TBenchEnvironment;
     FStatsAnalyzer: IBenchStatsAnalyzer;
 
+    {** 生成 HTML 图表 }
+    function GenerateChart(const AResults: array of TBenchResult): string;
+
+    {** 生成 HTML 样式 }
+    function GenerateCSS: string;
+
+    {** 生成 HTML 脚本 }
+    function GenerateJS: string;
+
+  public
+    constructor Create;
+    destructor Destroy; override;
+
     {** 格式化数字 }
     function FormatNumber(AValue: Double; APrecision: Integer): string;
 
@@ -36,19 +49,6 @@ type
 
     {** 转义 HTML 字符串 }
     function EscapeHTML(const AStr: string): string;
-
-    {** 生成 HTML 图表 }
-    function GenerateChart(const AResults: array of TBenchResult): string;
-
-    {** 生成 HTML 样式 }
-    function GenerateCSS: string;
-
-    {** 生成 HTML 脚本 }
-    function GenerateJS: string;
-
-  public
-    constructor Create;
-    destructor Destroy; override;
 
     {** 设置结果 }
     procedure SetResults(const AResults: array of TBenchResult);
@@ -77,7 +77,14 @@ type
 implementation
 
 uses
-  SysUtils, StrUtils;
+  SysUtils, StrUtils, Math;
+
+{ 辅助函数：添加字符串到数组 }
+procedure AddLine(var ALines: TStringArray; const ALine: string);
+begin
+  SetLength(ALines, Length(ALines) + 1);
+  ALines[High(ALines)] := ALine;
+end;
 
 { TBenchReportGenerator }
 
@@ -183,27 +190,27 @@ begin
   SetLength(LLines, 0);
 
   // 标题
-  Add(LLines, '=== nextpas.core.bench v1.0 ===');
-  Add(LLines, '');
-  Add(LLines, 'Environment:');
-  Add(LLines, '  OS: ' + FEnvironment.OS);
-  Add(LLines, '  CPU: ' + FEnvironment.CPU);
-  Add(LLines, '  Cores: ' + IntToStr(FEnvironment.Cores));
-  Add(LLines, '  FPC: ' + FEnvironment.FPCVersion);
-  Add(LLines, '  Time: ' + FEnvironment.Timestamp);
-  Add(LLines, '');
-  Add(LLines, 'Benchmark Results:');
-  Add(LLines, '');
+  AddLine(LLines, '=== nextpas.core.bench v1.0 ===');
+  AddLine(LLines, '');
+  AddLine(LLines, 'Environment:');
+  AddLine(LLines, '  OS: ' + FEnvironment.OS);
+  AddLine(LLines, '  CPU: ' + FEnvironment.CPU);
+  AddLine(LLines, '  Cores: ' + IntToStr(FEnvironment.Cores));
+  AddLine(LLines, '  FPC: ' + FEnvironment.FPCVersion);
+  AddLine(LLines, '  Time: ' + FEnvironment.Timestamp);
+  AddLine(LLines, '');
+  AddLine(LLines, 'Benchmark Results:');
+  AddLine(LLines, '');
 
   // 表头
-  Add(LLines, Format('  %-40s %10s %10s %10s %10s %10s',
+  AddLine(LLines, Format('  %-40s %10s %10s %10s %10s %10s',
     ['Name', 'Iterations', 'ns/op', 'ops/s', 'StdDev', 'P99']));
-  Add(LLines, '  ' + StringOfChar('-', 100));
+  AddLine(LLines, '  ' + StringOfChar('-', 100));
 
   // 结果
   for i := 0 to FResultCount - 1 do
   begin
-    Add(LLines, Format('  %-40s %10s %10s %10s %10s %10s',
+    AddLine(LLines, Format('  %-40s %10s %10s %10s %10s %10s',
       [FResults[i].Name,
        FormatLargeNumber(FResults[i].Iterations),
        FormatNumber(FResults[i].NsPerOp, 1),
@@ -212,19 +219,19 @@ begin
        FormatNumber(FResults[i].P99, 1)]));
   end;
 
-  Add(LLines, '');
-  Add(LLines, '=== Statistics ===');
+  AddLine(LLines, '');
+  AddLine(LLines, '=== Statistics ===');
 
   // 详细统计（只显示前 5 个结果）
   for i := 0 to Min(4, FResultCount - 1) do
   begin
-    Add(LLines, '');
-    Add(LLines, FResults[i].Name + ':');
-    Add(LLines, Format('  Mean: %s  StdDev: %s  Median: %s',
+    AddLine(LLines, '');
+    AddLine(LLines, FResults[i].Name + ':');
+    AddLine(LLines, Format('  Mean: %s  StdDev: %s  Median: %s',
       [FormatTime(FResults[i].NsPerOp),
        FormatTime(FResults[i].StdDev),
        FormatTime(FResults[i].Median)]));
-    Add(LLines, Format('  P95: %s  P99: %s  Outliers: %d/%d',
+    AddLine(LLines, Format('  P95: %s  P99: %s  Outliers: %d/%d',
       [FormatTime(FResults[i].P95),
        FormatTime(FResults[i].P99),
        FResults[i].Outliers,
@@ -247,42 +254,42 @@ var
 begin
   SetLength(LJSON, 0);
 
-  Add(LJSON, '{');
-  Add(LJSON, '  "version": "1.0",');
-  Add(LJSON, '  "timestamp": "' + FEnvironment.Timestamp + '",');
-  Add(LJSON, '  "environment": {');
-  Add(LJSON, '    "os": "' + EscapeJSON(FEnvironment.OS) + '",');
-  Add(LJSON, '    "cpu": "' + EscapeJSON(FEnvironment.CPU) + '",');
-  Add(LJSON, '    "cores": ' + IntToStr(FEnvironment.Cores) + ',');
-  Add(LJSON, '    "fpc_version": "' + EscapeJSON(FEnvironment.FPCVersion) + '"');
-  Add(LJSON, '  },');
-  Add(LJSON, '  "benchmarks": [');
+  AddLine(LJSON, '{');
+  AddLine(LJSON, '  "version": "1.0",');
+  AddLine(LJSON, '  "timestamp": "' + FEnvironment.Timestamp + '",');
+  AddLine(LJSON, '  "environment": {');
+  AddLine(LJSON, '    "os": "' + EscapeJSON(FEnvironment.OS) + '",');
+  AddLine(LJSON, '    "cpu": "' + EscapeJSON(FEnvironment.CPU) + '",');
+  AddLine(LJSON, '    "cores": ' + IntToStr(FEnvironment.Cores) + ',');
+  AddLine(LJSON, '    "fpc_version": "' + EscapeJSON(FEnvironment.FPCVersion) + '"');
+  AddLine(LJSON, '  },');
+  AddLine(LJSON, '  "benchmarks": [');
 
   for i := 0 to FResultCount - 1 do
   begin
-    Add(LJSON, '    {');
-    Add(LJSON, '      "name": "' + EscapeJSON(FResults[i].Name) + '",');
-    Add(LJSON, '      "iterations": ' + IntToStr(FResults[i].Iterations) + ',');
-    Add(LJSON, '      "ns_per_op": ' + FormatNumber(FResults[i].NsPerOp, 2) + ',');
-    Add(LJSON, '      "ops_per_sec": ' + FormatNumber(FResults[i].OpsPerSec, 0) + ',');
-    Add(LJSON, '      "bytes_per_op": ' + IntToStr(FResults[i].BytesPerOp) + ',');
-    Add(LJSON, '      "allocs_per_op": ' + IntToStr(FResults[i].AllocsPerOp) + ',');
-    Add(LJSON, '      "statistics": {');
-    Add(LJSON, '        "stddev": ' + FormatNumber(FResults[i].StdDev, 2) + ',');
-    Add(LJSON, '        "median": ' + FormatNumber(FResults[i].Median, 2) + ',');
-    Add(LJSON, '        "p95": ' + FormatNumber(FResults[i].P95, 2) + ',');
-    Add(LJSON, '        "p99": ' + FormatNumber(FResults[i].P99, 2) + ',');
-    Add(LJSON, '        "outliers": ' + IntToStr(FResults[i].Outliers) + ',');
-    Add(LJSON, '        "sample_count": ' + IntToStr(FResults[i].SampleCount));
-    Add(LJSON, '      }');
+    AddLine(LJSON, '    {');
+    AddLine(LJSON, '      "name": "' + EscapeJSON(FResults[i].Name) + '",');
+    AddLine(LJSON, '      "iterations": ' + IntToStr(FResults[i].Iterations) + ',');
+    AddLine(LJSON, '      "ns_per_op": ' + FormatNumber(FResults[i].NsPerOp, 2) + ',');
+    AddLine(LJSON, '      "ops_per_sec": ' + FormatNumber(FResults[i].OpsPerSec, 0) + ',');
+    AddLine(LJSON, '      "bytes_per_op": ' + IntToStr(FResults[i].BytesPerOp) + ',');
+    AddLine(LJSON, '      "allocs_per_op": ' + IntToStr(FResults[i].AllocsPerOp) + ',');
+    AddLine(LJSON, '      "statistics": {');
+    AddLine(LJSON, '        "stddev": ' + FormatNumber(FResults[i].StdDev, 2) + ',');
+    AddLine(LJSON, '        "median": ' + FormatNumber(FResults[i].Median, 2) + ',');
+    AddLine(LJSON, '        "p95": ' + FormatNumber(FResults[i].P95, 2) + ',');
+    AddLine(LJSON, '        "p99": ' + FormatNumber(FResults[i].P99, 2) + ',');
+    AddLine(LJSON, '        "outliers": ' + IntToStr(FResults[i].Outliers) + ',');
+    AddLine(LJSON, '        "sample_count": ' + IntToStr(FResults[i].SampleCount));
+    AddLine(LJSON, '      }');
     if i < FResultCount - 1 then
-      Add(LJSON, '    },')
+      AddLine(LJSON, '    },')
     else
-      Add(LJSON, '    }');
+      AddLine(LJSON, '    }');
   end;
 
-  Add(LJSON, '  ]');
-  Add(LJSON, '}');
+  AddLine(LJSON, '  ]');
+  AddLine(LJSON, '}');
 
   Result := '';
   for i := 0 to High(LJSON) do
@@ -301,12 +308,12 @@ begin
   SetLength(LLines, 0);
 
   // 表头
-  Add(LLines, 'name' + #9 + 'iterations' + #9 + 'ns_per_op' + #9 + 'ops_per_sec' + #9 + 'stddev' + #9 + 'median' + #9 + 'p95' + #9 + 'p99' + #9 + 'outliers' + #9 + 'samples');
+  AddLine(LLines, 'name' + #9 + 'iterations' + #9 + 'ns_per_op' + #9 + 'ops_per_sec' + #9 + 'stddev' + #9 + 'median' + #9 + 'p95' + #9 + 'p99' + #9 + 'outliers' + #9 + 'samples');
 
   // 数据
   for i := 0 to FResultCount - 1 do
   begin
-    Add(LLines,
+    AddLine(LLines,
       FResults[i].Name + #9 +
       IntToStr(FResults[i].Iterations) + #9 +
       FormatNumber(FResults[i].NsPerOp, 2) + #9 +
@@ -404,84 +411,84 @@ var
 begin
   SetLength(LHTML, 0);
 
-  Add(LHTML, '<!DOCTYPE html>');
-  Add(LHTML, '<html>');
-  Add(LHTML, '<head>');
-  Add(LHTML, '  <title>nextpas.core.bench Report</title>');
-  Add(LHTML, '  <meta charset="UTF-8">');
-  Add(LHTML, '  ' + GenerateCSS);
-  Add(LHTML, '  ' + GenerateJS);
-  Add(LHTML, '</head>');
-  Add(LHTML, '<body>');
-  Add(LHTML, '  <h1>nextpas.core.bench Report</h1>');
-  Add(LHTML, '');
-  Add(LHTML, '  <div class="stats">');
-  Add(LHTML, '    <h2>Environment</h2>');
-  Add(LHTML, '    <p><strong>OS:</strong> ' + EscapeHTML(FEnvironment.OS) + '</p>');
-  Add(LHTML, '    <p><strong>CPU:</strong> ' + EscapeHTML(FEnvironment.CPU) + '</p>');
-  Add(LHTML, '    <p><strong>Cores:</strong> ' + IntToStr(FEnvironment.Cores) + '</p>');
-  Add(LHTML, '    <p><strong>FPC:</strong> ' + EscapeHTML(FEnvironment.FPCVersion) + '</p>');
-  Add(LHTML, '    <p><strong>Time:</strong> ' + EscapeHTML(FEnvironment.Timestamp) + '</p>');
-  Add(LHTML, '  </div>');
-  Add(LHTML, '');
-  Add(LHTML, '  <div class="chart-container">');
-  Add(LHTML, '    <h2>Performance Chart</h2>');
-  Add(LHTML, '    ' + GenerateChart(FResults));
-  Add(LHTML, '  </div>');
-  Add(LHTML, '');
-  Add(LHTML, '  <h2>Benchmark Results</h2>');
-  Add(LHTML, '  <table>');
-  Add(LHTML, '    <thead>');
-  Add(LHTML, '      <tr>');
-  Add(LHTML, '        <th>Name</th>');
-  Add(LHTML, '        <th>Iterations</th>');
-  Add(LHTML, '        <th>ns/op</th>');
-  Add(LHTML, '        <th>ops/s</th>');
-  Add(LHTML, '        <th>StdDev</th>');
-  Add(LHTML, '        <th>Median</th>');
-  Add(LHTML, '        <th>P95</th>');
-  Add(LHTML, '        <th>P99</th>');
-  Add(LHTML, '        <th>Outliers</th>');
-  Add(LHTML, '      </tr>');
-  Add(LHTML, '    </thead>');
-  Add(LHTML, '    <tbody>');
+  AddLine(LHTML, '<!DOCTYPE html>');
+  AddLine(LHTML, '<html>');
+  AddLine(LHTML, '<head>');
+  AddLine(LHTML, '  <title>nextpas.core.bench Report</title>');
+  AddLine(LHTML, '  <meta charset="UTF-8">');
+  AddLine(LHTML, '  ' + GenerateCSS);
+  AddLine(LHTML, '  ' + GenerateJS);
+  AddLine(LHTML, '</head>');
+  AddLine(LHTML, '<body>');
+  AddLine(LHTML, '  <h1>nextpas.core.bench Report</h1>');
+  AddLine(LHTML, '');
+  AddLine(LHTML, '  <div class="stats">');
+  AddLine(LHTML, '    <h2>Environment</h2>');
+  AddLine(LHTML, '    <p><strong>OS:</strong> ' + EscapeHTML(FEnvironment.OS) + '</p>');
+  AddLine(LHTML, '    <p><strong>CPU:</strong> ' + EscapeHTML(FEnvironment.CPU) + '</p>');
+  AddLine(LHTML, '    <p><strong>Cores:</strong> ' + IntToStr(FEnvironment.Cores) + '</p>');
+  AddLine(LHTML, '    <p><strong>FPC:</strong> ' + EscapeHTML(FEnvironment.FPCVersion) + '</p>');
+  AddLine(LHTML, '    <p><strong>Time:</strong> ' + EscapeHTML(FEnvironment.Timestamp) + '</p>');
+  AddLine(LHTML, '  </div>');
+  AddLine(LHTML, '');
+  AddLine(LHTML, '  <div class="chart-container">');
+  AddLine(LHTML, '    <h2>Performance Chart</h2>');
+  AddLine(LHTML, '    ' + GenerateChart(FResults));
+  AddLine(LHTML, '  </div>');
+  AddLine(LHTML, '');
+  AddLine(LHTML, '  <h2>Benchmark Results</h2>');
+  AddLine(LHTML, '  <table>');
+  AddLine(LHTML, '    <thead>');
+  AddLine(LHTML, '      <tr>');
+  AddLine(LHTML, '        <th>Name</th>');
+  AddLine(LHTML, '        <th>Iterations</th>');
+  AddLine(LHTML, '        <th>ns/op</th>');
+  AddLine(LHTML, '        <th>ops/s</th>');
+  AddLine(LHTML, '        <th>StdDev</th>');
+  AddLine(LHTML, '        <th>Median</th>');
+  AddLine(LHTML, '        <th>P95</th>');
+  AddLine(LHTML, '        <th>P99</th>');
+  AddLine(LHTML, '        <th>Outliers</th>');
+  AddLine(LHTML, '      </tr>');
+  AddLine(LHTML, '    </thead>');
+  AddLine(LHTML, '    <tbody>');
 
   for i := 0 to FResultCount - 1 do
   begin
-    Add(LHTML, '      <tr>');
-    Add(LHTML, '        <td class="benchmark-name">' + EscapeHTML(FResults[i].Name) + '</td>');
-    Add(LHTML, '        <td>' + FormatLargeNumber(FResults[i].Iterations) + '</td>');
-    Add(LHTML, '        <td>' + FormatNumber(FResults[i].NsPerOp, 1) + '</td>');
-    Add(LHTML, '        <td>' + FormatLargeNumber(Int64(FResults[i].OpsPerSec)) + '</td>');
-    Add(LHTML, '        <td>' + FormatNumber(FResults[i].StdDev, 1) + '</td>');
-    Add(LHTML, '        <td>' + FormatNumber(FResults[i].Median, 1) + '</td>');
-    Add(LHTML, '        <td>' + FormatNumber(FResults[i].P95, 1) + '</td>');
-    Add(LHTML, '        <td>' + FormatNumber(FResults[i].P99, 1) + '</td>');
-    Add(LHTML, '        <td>' + IntToStr(FResults[i].Outliers) + '</td>');
-    Add(LHTML, '      </tr>');
+    AddLine(LHTML, '      <tr>');
+    AddLine(LHTML, '        <td class="benchmark-name">' + EscapeHTML(FResults[i].Name) + '</td>');
+    AddLine(LHTML, '        <td>' + FormatLargeNumber(FResults[i].Iterations) + '</td>');
+    AddLine(LHTML, '        <td>' + FormatNumber(FResults[i].NsPerOp, 1) + '</td>');
+    AddLine(LHTML, '        <td>' + FormatLargeNumber(Int64(FResults[i].OpsPerSec)) + '</td>');
+    AddLine(LHTML, '        <td>' + FormatNumber(FResults[i].StdDev, 1) + '</td>');
+    AddLine(LHTML, '        <td>' + FormatNumber(FResults[i].Median, 1) + '</td>');
+    AddLine(LHTML, '        <td>' + FormatNumber(FResults[i].P95, 1) + '</td>');
+    AddLine(LHTML, '        <td>' + FormatNumber(FResults[i].P99, 1) + '</td>');
+    AddLine(LHTML, '        <td>' + IntToStr(FResults[i].Outliers) + '</td>');
+    AddLine(LHTML, '      </tr>');
   end;
 
-  Add(LHTML, '    </tbody>');
-  Add(LHTML, '  </table>');
-  Add(LHTML, '');
-  Add(LHTML, '  <div class="stats">');
-  Add(LHTML, '    <h2>Detailed Statistics</h2>');
+  AddLine(LHTML, '    </tbody>');
+  AddLine(LHTML, '  </table>');
+  AddLine(LHTML, '');
+  AddLine(LHTML, '  <div class="stats">');
+  AddLine(LHTML, '    <h2>Detailed Statistics</h2>');
 
   // 显示前 5 个结果的详细统计
   for i := 0 to Min(4, FResultCount - 1) do
   begin
-    Add(LHTML, '    <h3>' + EscapeHTML(FResults[i].Name) + '</h3>');
-    Add(LHTML, '    <p>Mean: ' + FormatTime(FResults[i].NsPerOp) + '</p>');
-    Add(LHTML, '    <p>StdDev: ' + FormatTime(FResults[i].StdDev) + '</p>');
-    Add(LHTML, '    <p>Median: ' + FormatTime(FResults[i].Median) + '</p>');
-    Add(LHTML, '    <p>P95: ' + FormatTime(FResults[i].P95) + '</p>');
-    Add(LHTML, '    <p>P99: ' + FormatTime(FResults[i].P99) + '</p>');
-    Add(LHTML, '    <p>Outliers: ' + IntToStr(FResults[i].Outliers) + '/' + IntToStr(FResults[i].SampleCount) + '</p>');
+    AddLine(LHTML, '    <h3>' + EscapeHTML(FResults[i].Name) + '</h3>');
+    AddLine(LHTML, '    <p>Mean: ' + FormatTime(FResults[i].NsPerOp) + '</p>');
+    AddLine(LHTML, '    <p>StdDev: ' + FormatTime(FResults[i].StdDev) + '</p>');
+    AddLine(LHTML, '    <p>Median: ' + FormatTime(FResults[i].Median) + '</p>');
+    AddLine(LHTML, '    <p>P95: ' + FormatTime(FResults[i].P95) + '</p>');
+    AddLine(LHTML, '    <p>P99: ' + FormatTime(FResults[i].P99) + '</p>');
+    AddLine(LHTML, '    <p>Outliers: ' + IntToStr(FResults[i].Outliers) + '/' + IntToStr(FResults[i].SampleCount) + '</p>');
   end;
 
-  Add(LHTML, '  </div>');
-  Add(LHTML, '</body>');
-  Add(LHTML, '</html>');
+  AddLine(LHTML, '  </div>');
+  AddLine(LHTML, '</body>');
+  AddLine(LHTML, '</html>');
 
   Result := '';
   for i := 0 to High(LHTML) do
@@ -501,15 +508,15 @@ var
 begin
   SetLength(LLines, 0);
 
-  Add(LLines, '=== Baseline Comparison ===');
-  Add(LLines, '');
-  Add(LLines, Format('  %-40s %10s %10s %10s %10s',
+  AddLine(LLines, '=== Baseline Comparison ===');
+  AddLine(LLines, '');
+  AddLine(LLines, Format('  %-40s %10s %10s %10s %10s',
     ['Benchmark', 'Current', 'Baseline', 'Ratio', 'Status']));
-  Add(LLines, '  ' + StringOfChar('-', 90));
+  AddLine(LLines, '  ' + StringOfChar('-', 90));
 
   for i := 0 to High(ABaselines) do
   begin
-    Add(LLines, Format('  %-40s %10s %10s %10s %10s',
+    AddLine(LLines, Format('  %-40s %10s %10s %10s %10s',
       [ABaselines[i].BaselineName,
        FormatTime(ABaselines[i].CurrentNsPerOp),
        FormatTime(ABaselines[i].BaselineNsPerOp),
