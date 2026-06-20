@@ -139,7 +139,6 @@ type
     procedure BlobArrLoadPtr(var S: TExprStack);
     procedure BlobArrElemRef(var S: TExprStack; const AArg: string);
     procedure BlobFieldRef(var S: TExprStack; const AArg: string);
-    procedure BlobStrCharLoad(var S: TExprStack; const AArg: string);
     procedure BlobRLoad(var S: TExprStack; const AArg: string);
     procedure BlobUnaryOp(var S: TExprStack; AKind: THIRInstrKind;
       const AIntrinsic: string);
@@ -147,10 +146,6 @@ type
     procedure BlobCmp(var S: TExprStack; const AArg: string);
     procedure BlobZext(var S: TExprStack);
     procedure BlobCall(var S: TExprStack; const AArg: string);
-    procedure BlobStrVar(var S: TExprStack; const AArg: string);
-    procedure BlobStrLit(var S: TExprStack; const AArg: string);
-    procedure BlobStrLen(var S: TExprStack);
-    procedure BlobStrCmpPos(var S: TExprStack; const AArg, AIntrinsic: string);
     procedure BlobArrLoadVar(var S: TExprStack; const AArg: string);
     procedure BlobField(var S: TExprStack; const AArg: string);
     procedure BlobVcall(var S: TExprStack; AArg: string);
@@ -2346,52 +2341,6 @@ begin
   S.PushTyped(Instr.ResultId, GetPtrType);
 end;
 
-procedure THIRBuilder.BlobStrCharLoad(var S: TExprStack; const AArg: string);
-var
-  Instr: THIRInstr;
-  V, Rhs, SlotIdx: THIRValueId;
-begin
-  Rhs := S.Pop;
-  V := FindAlloca(AArg + '$ptr');
-  if V = 0 then Exit;
-  V := EmitLoad(GetPtrType, V);
-  FillChar(Instr, SizeOf(Instr), 0);
-  Instr.ResultId := FModule.NewValue;
-  Instr.Kind := hikLoad;
-  Instr.TypeId := GetIntType;
-  Instr.IntrinsicName := 'const:1';
-  EmitInstr(Instr);
-  SlotIdx := Instr.ResultId;
-  FillChar(Instr, SizeOf(Instr), 0);
-  Instr.ResultId := FModule.NewValue;
-  Instr.Kind := hikSub;
-  Instr.TypeId := GetIntType;
-  SetLength(Instr.Operands, 2);
-  Instr.Operands[0] := MakeOperand(Rhs);
-  Instr.Operands[1] := MakeOperand(SlotIdx);
-  EmitInstr(Instr);
-  Rhs := Instr.ResultId;
-  FillChar(Instr, SizeOf(Instr), 0);
-  Instr.ResultId := FModule.NewValue;
-  Instr.Kind := hikIntrinsic;
-  Instr.TypeId := GetPtrType;
-  Instr.IntrinsicName := 'gep_i8';
-  SetLength(Instr.Operands, 2);
-  Instr.Operands[0] := MakeOperand(V);
-  Instr.Operands[1] := MakeOperand(Rhs);
-  EmitInstr(Instr);
-  V := Instr.ResultId;
-  FillChar(Instr, SizeOf(Instr), 0);
-  Instr.ResultId := FModule.NewValue;
-  Instr.Kind := hikIntrinsic;
-  Instr.TypeId := GetIntType;
-  Instr.IntrinsicName := 'load_zext_i8';
-  SetLength(Instr.Operands, 1);
-  Instr.Operands[0] := MakeOperand(V);
-  EmitInstr(Instr);
-  S.Push(Instr.ResultId);
-end;
-
 procedure THIRBuilder.BlobRLoad(var S: TExprStack; const AArg: string);
 var
   Instr: THIRInstr;
@@ -2528,76 +2477,6 @@ begin
     S.PushTyped(Instr.ResultId, Instr.TypeId)
   else
     S.Push(Instr.ResultId);
-end;
-
-procedure THIRBuilder.BlobStrVar(var S: TExprStack; const AArg: string);
-var
-  V: THIRValueId;
-begin
-  V := FindAlloca(AArg + '$ptr');
-  if V <> 0 then
-    S.PushTyped(EmitLoad(GetPtrType, V), GetPtrType);
-  V := FindAlloca(AArg + '$len');
-  if V <> 0 then
-    S.Push(EmitLoad(GetIntType, V));
-end;
-
-procedure THIRBuilder.BlobStrLit(var S: TExprStack; const AArg: string);
-var
-  Instr: THIRInstr;
-begin
-  FillChar(Instr, SizeOf(Instr), 0);
-  Instr.ResultId := FModule.NewValue;
-  Instr.Kind := hikIntrinsic;
-  Instr.TypeId := GetPtrType;
-  Instr.IntrinsicName := 'str_const';
-  Instr.CallTarget := AArg;
-  EmitInstr(Instr);
-  S.PushTyped(Instr.ResultId, GetPtrType);
-  FillChar(Instr, SizeOf(Instr), 0);
-  Instr.ResultId := FModule.NewValue;
-  Instr.Kind := hikLoad;
-  Instr.TypeId := GetIntType;
-  Instr.IntrinsicName := 'const:' + IntToStr(Length(AArg) - 2);
-  EmitInstr(Instr);
-  S.Push(Instr.ResultId);
-end;
-
-procedure THIRBuilder.BlobStrLen(var S: TExprStack);
-var
-  LenValue, PtrValue: THIRValueId;
-  PtrType: THIRTypeId;
-begin
-  LenValue := S.Pop;
-  PtrValue := S.PopTyped(PtrType);
-  if (LenValue <> 0) and (PtrValue <> 0) and (PtrType = GetPtrType) then
-    S.Push(LenValue);
-end;
-
-procedure THIRBuilder.BlobStrCmpPos(var S: TExprStack;
-  const AArg, AIntrinsic: string);
-var
-  Instr: THIRInstr;
-  Rhs, V, SlotIdx, ExtraArgCount: THIRValueId;
-begin
-  Rhs := S.Pop;
-  V := S.Pop;
-  SlotIdx := S.Pop;
-  ExtraArgCount := S.Pop;
-  FillChar(Instr, SizeOf(Instr), 0);
-  Instr.ResultId := FModule.NewValue;
-  Instr.Kind := hikIntrinsic;
-  Instr.TypeId := GetIntType;
-  Instr.IntrinsicName := AIntrinsic;
-  if AIntrinsic = 'str_cmp' then
-    Instr.CallTarget := AArg;
-  SetLength(Instr.Operands, 4);
-  Instr.Operands[0] := MakeTypedOperand(ExtraArgCount, GetPtrType);
-  Instr.Operands[1] := MakeOperand(SlotIdx);
-  Instr.Operands[2] := MakeTypedOperand(V, GetPtrType);
-  Instr.Operands[3] := MakeOperand(Rhs);
-  EmitInstr(Instr);
-  S.Push(Instr.ResultId);
 end;
 
 procedure THIRBuilder.BlobArrLoadVar(var S: TExprStack; const AArg: string);
@@ -3062,7 +2941,6 @@ begin
     else if Token = 'arr_load_ptr' then BlobArrLoadPtr(S)
     else if Token = 'arr_elem_ref' then BlobArrElemRef(S, Arg)
     else if Token = 'field_ref' then BlobFieldRef(S, Arg)
-    else if Token = 'strcharload' then BlobStrCharLoad(S, Arg)
     else if Token = 'rload' then BlobRLoad(S, Arg)
     else if Token = 'add' then BlobBinOp(S, hikAdd)
     else if Token = 'sub' then BlobBinOp(S, hikSub)
@@ -3074,11 +2952,6 @@ begin
     else if Token = 'cmp' then BlobCmp(S, Arg)
     else if Token = 'zext' then BlobZext(S)
     else if Token = 'call' then BlobCall(S, Arg)
-    else if Token = 'strvar' then BlobStrVar(S, Arg)
-    else if Token = 'strlit' then BlobStrLit(S, Arg)
-    else if Token = 'strlen' then BlobStrLen(S)
-    else if Token = 'strcmp' then BlobStrCmpPos(S, Arg, 'str_cmp')
-    else if Token = 'strpos' then BlobStrCmpPos(S, Arg, 'str_pos')
     else if Token = 'arrvar' then
     begin
       V := FindAlloca(Arg + '$ptr');
@@ -3884,16 +3757,12 @@ begin
       StrVarName := Copy(ArgBlob, 8, Length(ArgBlob));
       if (Length(StrVarName) > 0) and (StrVarName[Length(StrVarName)] = #10) then
         StrVarName := Copy(StrVarName, 1, Length(StrVarName) - 1);
-      PtrVal := FindAlloca(StrVarName + '$ptr');
-      LenVal := FindAlloca(StrVarName + '$len');
-      if (PtrVal <> 0) and (LenVal <> 0) then
+      PtrVal := FindAlloca(StrVarName + '$ts');
+      if PtrVal <> 0 then
       begin
-        PtrVal := EmitLoad(GetPtrType, PtrVal);
-        LenVal := EmitLoad(GetIntType, LenVal);
-        SetLength(ArgOps, ArgCount + 2);
+        SetLength(ArgOps, ArgCount + 1);
         ArgOps[ArgCount] := MakeTypedOperand(PtrVal, GetPtrType);
-        ArgOps[ArgCount + 1] := MakeTypedOperand(LenVal, GetIntType);
-        Inc(ArgCount, 2);
+        Inc(ArgCount);
       end;
     end
     else if (Length(ArgBlob) > 7) and (Copy(ArgBlob, 1, 7) = 'strlit ') then
@@ -5286,17 +5155,11 @@ begin
       VarName := Copy(ArgBlob, 8, Length(ArgBlob));
       if (Length(VarName) > 0) and (VarName[Length(VarName)] = #10) then
         VarName := Copy(VarName, 1, Length(VarName) - 1);
-      ArgValue := FindAlloca(VarName + '$ptr');
+      ArgValue := FindAlloca(VarName + '$ts');
       if ArgValue <> 0 then
       begin
-        SetLength(ArgOps, ArgCount + 2);
-        ArgOps[ArgCount] := MakeTypedOperand(EmitLoad(GetPtrType, ArgValue), GetPtrType);
-        Inc(ArgCount);
-        ArgValue := FindAlloca(VarName + '$len');
-        if ArgValue <> 0 then
-          ArgOps[ArgCount] := MakeOperand(EmitLoad(GetIntType, ArgValue))
-        else
-          ArgOps[ArgCount] := MakeOperand(0);
+        SetLength(ArgOps, ArgCount + 1);
+        ArgOps[ArgCount] := MakeTypedOperand(ArgValue, GetPtrType);
         Inc(ArgCount);
       end;
     end
