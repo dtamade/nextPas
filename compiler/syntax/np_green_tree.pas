@@ -1775,6 +1775,37 @@ begin
           Result.FText := Result.FText + SpecArgs;
         end;
       end;
+    tkReferenceKeyword:
+      begin
+        Inc(ACursor); // consume 'reference'
+        if MatchTokenSilent(ALexer, ACursor, tkToKeyword) and
+          (ACursor < ALexer.TokenCount) and
+          (CurrentToken(ALexer, ACursor).Kind in
+            [tkProcedureKeyword, tkFunctionKeyword]) then
+        begin
+          Inc(ACursor); // consume 'procedure'/'function'
+          if (ACursor < ALexer.TokenCount) and
+            (CurrentToken(ALexer, ACursor).Kind = tkLParen) then
+          begin
+            Inc(ACursor);
+            while (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind <> tkRParen) and
+              (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+              Inc(ACursor);
+            MatchTokenSilent(ALexer, ACursor, tkRParen);
+          end;
+          if (ACursor < ALexer.TokenCount) and
+            (CurrentToken(ALexer, ACursor).Kind = tkColon) then
+          begin
+            Inc(ACursor);
+            NameNode := ParseTypeReference(
+              ALexer, ACursor, ADiagnostics, ARootFileId);
+            NameNode.Free;
+          end;
+        end;
+        Result := TGreenNode.Create(gnkIdentifier, Token.ByteOffset,
+          Length(Token.Lexeme), Token.Lexeme);
+      end;
   else
     Exit(nil);
   end;

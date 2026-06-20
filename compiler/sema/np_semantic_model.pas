@@ -187,6 +187,7 @@ type
     ArrHighBound: Int64;
     ArrLength: Int64;
     IsStaticArray: Boolean;
+    AliasTargetTypeId: LongInt;
   end;
 
   TSemanticConstValue = record

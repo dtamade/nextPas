@@ -396,6 +396,7 @@ type
     function InferExpressionType(const ANode: TGreenNode): LongInt;
     function AreTypesCompatible(const ALhsTypeId, ARhsTypeId: LongInt): Boolean;
     procedure SeedBuiltinTypes;
+    procedure SeedCachedTypeGaps;
     procedure AssignScopesToSymbols;
     procedure CheckDuplicateDeclarations;
     procedure CheckUndeclaredIdentifiers;
@@ -4460,13 +4461,21 @@ var
   Depth: LongInt;
   MethodNameFound: Boolean;
   TypeSymbol: TSemanticSymbol;
+  AliasMeta: TTypeMetadata;
+  PrevTypeId: LongInt;
 begin
   Result := 0;
   AResolutionFailureKind := '';
   CurrentTypeId := AClassTypeId;
   Depth := 0;
   if not TypeIdHasKnownClassLayout(CurrentTypeId) then
-    Exit;
+  begin
+    if FModel.GetTypeMeta(CurrentTypeId, AliasMeta) and
+      (AliasMeta.AliasTargetTypeId > 0) then
+      CurrentTypeId := AliasMeta.AliasTargetTypeId;
+    if not TypeIdHasKnownClassLayout(CurrentTypeId) then
+      Exit;
+  end;
   while (CurrentTypeId > 0) and (Depth < 32) do
   begin
     if ClassTypeHasKnownNonMethodMember(CurrentTypeId, AMemberName) then
@@ -4512,7 +4521,11 @@ begin
       Exit;
     if (CurrentTypeId <= 0) or (CurrentTypeId > FModel.TypeCount) then
       Exit;
-    CurrentTypeId := FModel.TypeAt(CurrentTypeId - 1).ParentTypeId;
+    PrevTypeId := CurrentTypeId;
+    CurrentTypeId := FModel.TypeAt(PrevTypeId - 1).ParentTypeId;
+    if (CurrentTypeId = 0) and FModel.GetTypeMeta(PrevTypeId, AliasMeta) and
+      (AliasMeta.AliasTargetTypeId > 0) then
+      CurrentTypeId := AliasMeta.AliasTargetTypeId;
     Inc(Depth);
   end;
   if IsDeferredSystemObjectMember(AMemberName) then
@@ -5623,6 +5636,51 @@ begin
   FModel.SetTypeScalarFact(PointerTypeId, sskPointer, 64, False);
 end;
 
+procedure TSemanticAnalyzer.SeedCachedTypeGaps;
+var
+  I: LongInt;
+  Sym: TSemanticSymbol;
+  NewTypeId, ParentTypeId: LongInt;
+  Meta: TTypeMetadata;
+  CachedOwnerUnitId: string;
+begin
+  { Cached units only register symbols, not types. Seed type entries for
+    type symbols from cached units that are missing from the model. }
+  CachedOwnerUnitId := 'sysutils';
+  for I := 0 to FModel.SymbolCount - 1 do
+  begin
+    Sym := FModel.SymbolAt(I);
+    if not SameText(Sym.Kind, 'type') then
+      Continue;
+    if not SameText(Sym.OwnerUnitId, CachedOwnerUnitId) then
+      Continue;
+    if FModel.FindTypeByName(Sym.Name) > 0 then
+      Continue;
+    NewTypeId := FModel.AddType(Sym.Name, 'declared');
+    FModel.SetTypeOwner(NewTypeId, Sym.OwnerUnitId);
+    { Best-effort parent: if the name suggests a class, try TObject }
+    if SameText(Sym.Name, 'Exception') or
+      SameText(Sym.Name, 'ExceptClass') or
+      (SameText(Copy(Sym.Name, 1, 1), 'E') and
+       (Length(Sym.Name) > 1) and
+       (Sym.Name[2] in ['A'..'Z'])) then
+    begin
+      ParentTypeId := FModel.FindTypeByName('TObject');
+      if ParentTypeId > 0 then
+      begin
+        FModel.SetTypeParent(NewTypeId, ParentTypeId);
+        FillChar(Meta, SizeOf(Meta), 0);
+        Meta.TypeId := NewTypeId;
+        Meta.Size := 8;
+        Meta.VmtCount := 1;
+        Meta.ParentClassId := ParentTypeId;
+        Meta.ParentClassName := 'TObject';
+        FModel.SetTypeMeta(NewTypeId, Meta);
+      end;
+    end;
+  end;
+end;
+
 procedure TSemanticAnalyzer.AssignScopesToSymbols;
 var
   I: LongInt;
@@ -6247,6 +6305,7 @@ begin
   FModel.AddScope(skCompilation, FUnitGraph.RootName, 0);
   FCurrentScopeId := FModel.AddScope(skUnit, FUnitGraph.RootName, 1);
   SeedImportedUnitBodies;
+  SeedCachedTypeGaps;
   SeedDeclarations;
   RebindExplicitClassParents;
   CompletePendingSignatures;
@@ -7613,6 +7672,10 @@ var
   ParentTypeId: LongInt;
   InterfaceList: string;
   SizeVal: Int64;
+  AliasTargetId: LongInt;
+  AliasTargetMeta: TTypeMetadata;
+  AliasHasTargetMeta: Boolean;
+  AliasLocalMeta: TTypeMetadata;
 begin
   if ANode = nil then
     Exit;
@@ -7710,7 +7773,32 @@ begin
       end
       else if (TypeChild.NodeKind = gnkIdentifier) and
         (Pos('<', TypeChild.Text) > 0) then
-        InstantiateGenericType(TypeId, TypeChild.Text, AOwnerUnitId);
+        InstantiateGenericType(TypeId, TypeChild.Text, AOwnerUnitId)
+      else if TypeChild.NodeKind = gnkIdentifier then
+      begin
+        AliasTargetId := ResolveTypeIdForOwner(
+          TypeChild.Text, AOwnerUnitId);
+        if AliasTargetId > 0 then
+        begin
+          AliasHasTargetMeta := FModel.GetTypeMeta(
+            AliasTargetId, AliasTargetMeta);
+          if not FModel.GetTypeMeta(TypeId, AliasLocalMeta) then
+            FillChar(AliasLocalMeta, SizeOf(AliasLocalMeta), 0);
+          AliasLocalMeta.TypeId := TypeId;
+          AliasLocalMeta.AliasTargetTypeId := AliasTargetId;
+          if AliasHasTargetMeta and (AliasTargetMeta.Size > 0) then
+          begin
+            AliasLocalMeta.Size := AliasTargetMeta.Size;
+            AliasLocalMeta.IsRecord := AliasTargetMeta.IsRecord;
+            AliasLocalMeta.VmtCount := AliasTargetMeta.VmtCount;
+            AliasLocalMeta.ParentClassId := AliasTargetMeta.ParentClassId;
+            AliasLocalMeta.ParentClassName := AliasTargetMeta.ParentClassName;
+          end;
+          FModel.SetTypeMeta(TypeId, AliasLocalMeta);
+          if AliasHasTargetMeta and (AliasTargetMeta.ParentClassId > 0) then
+            FModel.SetTypeParent(TypeId, AliasTargetMeta.ParentClassId);
+        end;
+      end;
     end;
   end;
 end;
@@ -15246,6 +15334,11 @@ begin
         for J := 0 to GImportedUnitCache[CacheIdx].SymbolCount - 1 do
           with GImportedUnitCache[CacheIdx].Symbols[J] do
           begin
+            { Skip cached type symbols if a type with this name already
+              exists in the model (e.g. seeded in SeedBuiltinTypes). }
+            if SameText(Kind, 'type') and
+              (FModel.FindTypeByName(Name) > 0) then
+              Continue;
             FModel.AddSymbol(Name, Kind, OwnerUnitId, TypeId, ByteOffset);
             FModel.SetSymbolParamCount(FModel.SymbolCount, ParamCount);
             FModel.SetSymbolMinParamCount(FModel.SymbolCount, MinParamCount);
