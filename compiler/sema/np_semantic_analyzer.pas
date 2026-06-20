@@ -1251,7 +1251,7 @@ begin
   TempName := '$str_len_tmp_' + IntToStr(FBlockLabelCounter);
   RegisterRuntimeVar(TempName);
   RegisterRuntimeStrVar(TempName);
-  FModel.AddTypedHirNode('var-decl-str-owned-runtime', TempName, 0, 0,
+  FModel.AddTypedHirNode('var-decl-tstring-runtime', TempName, 0, 0,
     TempName);
   FModel.AddTypedHirNode('string-temp-owned-runtime', SourceName, 0, 0,
     TempName + #9 + 'callee ' + SourceName + #9 +
@@ -1290,9 +1290,9 @@ begin
   TempName := '$str_len_cat_tmp_' + IntToStr(FBlockLabelCounter);
   RegisterRuntimeVar(TempName);
   RegisterRuntimeStrVar(TempName);
-  FModel.AddTypedHirNode('var-decl-str-owned-runtime', TempName, 0, 0,
+  FModel.AddTypedHirNode('var-decl-tstring-runtime', TempName, 0, 0,
     TempName);
-  FModel.AddTypedHirNode('assign-str-owned-concat-runtime', TempName, 0, 0,
+  FModel.AddTypedHirNode('assign-tstring-concat-runtime', TempName, 0, 0,
     LeftName + #9 + RightName);
   FModel.AddTypedHirNode('string-temp-length-runtime', TempName, 0, 0,
     'strvar ' + TempName + #10);
@@ -1354,7 +1354,7 @@ begin
   ATempName := '$str_cpy_tmp_' + IntToStr(FBlockLabelCounter);
   RegisterRuntimeVar(ATempName);
   RegisterRuntimeStrVar(ATempName);
-  FModel.AddTypedHirNode('var-decl-str-owned-runtime', ATempName, 0, 0,
+  FModel.AddTypedHirNode('var-decl-tstring-runtime', ATempName, 0, 0,
     ATempName);
   FModel.AddTypedHirNode('string-temp-owned-runtime', SourceName, 0, 0,
     ATempName + #9 + 'callee ' + SourceName + #9 +
@@ -1405,7 +1405,7 @@ begin
   ATempName := '$str_wrt_tmp_' + IntToStr(FBlockLabelCounter);
   RegisterRuntimeVar(ATempName);
   RegisterRuntimeStrVar(ATempName);
-  FModel.AddTypedHirNode('var-decl-str-owned-runtime', ATempName, 0, 0,
+  FModel.AddTypedHirNode('var-decl-tstring-runtime', ATempName, 0, 0,
     ATempName);
   FModel.AddTypedHirNode('string-temp-owned-runtime', SourceName, 0, 0,
     ATempName + #9 + 'callee ' + SourceName + #9 +
@@ -1434,9 +1434,9 @@ begin
   ATempName := '$str_wrt_cat_tmp_' + IntToStr(FBlockLabelCounter);
   RegisterRuntimeVar(ATempName);
   RegisterRuntimeStrVar(ATempName);
-  FModel.AddTypedHirNode('var-decl-str-owned-runtime', ATempName, 0, 0,
+  FModel.AddTypedHirNode('var-decl-tstring-runtime', ATempName, 0, 0,
     ATempName);
-  FModel.AddTypedHirNode('assign-str-owned-concat-runtime', ATempName, 0, 0,
+  FModel.AddTypedHirNode('assign-tstring-concat-runtime', ATempName, 0, 0,
     LeftName + #9 + RightName);
   QueuePendingStringTempRelease(ATempName, ATempName);
   Result := True;
@@ -2172,7 +2172,7 @@ begin
       SameText(VarName, AExceptName) then
       Continue;
     FModel.AddTypedHirNode(
-      'string-cleanup-runtime',
+      'tstring-cleanup-runtime',
       VarName,
       0,
       0,
@@ -2471,9 +2471,9 @@ begin
     TempName := '$str_tmp_' + IntToStr(FBlockLabelCounter);
     RegisterRuntimeVar(TempName);
     RegisterRuntimeStrVar(TempName);
-    FModel.AddTypedHirNode('var-decl-str-runtime', TempName, 0, 0, TempName);
+    FModel.AddTypedHirNode('var-decl-tstring-runtime', TempName, 0, 0, TempName);
     FModel.AddTypedHirNode(
-      'assign-str-field-load-runtime', TempName, 0, 0,
+      'assign-tstring-field-load-runtime', TempName, 0, 0,
       TempName + #9 + IntToStr(FieldIdx)
     );
     Exit(TempName);
@@ -2492,9 +2492,9 @@ begin
         Result := '$str_tmp_' + IntToStr(FBlockLabelCounter);
         RegisterRuntimeVar(Result);
         RegisterRuntimeStrVar(Result);
-        FModel.AddTypedHirNode('var-decl-str-runtime', Result, 0, 0, Result);
+        FModel.AddTypedHirNode('var-decl-tstring-runtime', Result, 0, 0, Result);
         FModel.AddTypedHirNode(
-          'assign-str-concat-runtime',
+          'assign-tstring-concat-runtime',
           LitValue + #9 + TempName,
           0, 0, Result
         );
@@ -2511,7 +2511,7 @@ begin
     TempName := '$str_tmp_' + IntToStr(FBlockLabelCounter);
     RegisterRuntimeVar(TempName);
     RegisterRuntimeStrVar(TempName);
-    FModel.AddTypedHirNode('var-decl-str-runtime', TempName, 0, 0, TempName);
+    FModel.AddTypedHirNode('var-decl-tstring-runtime', TempName, 0, 0, TempName);
     FModel.AddTypedHirNode('int-to-str-runtime', TempName, 0, 0,
       TempName + #9 + LitValue);
     Exit(TempName);
@@ -2522,7 +2522,7 @@ begin
     TempName := '$str_cat_tmp_' + IntToStr(FBlockLabelCounter);
     RegisterRuntimeVar(TempName);
     RegisterRuntimeStrVar(TempName);
-    FModel.AddTypedHirNode('var-decl-str-owned-runtime', TempName, 0, 0,
+    FModel.AddTypedHirNode('var-decl-tstring-runtime', TempName, 0, 0,
       TempName);
     FModel.AddTypedHirNode('string-temp-owned-runtime', LitValue, 0, 0,
       TempName + #9 + 'callee ' + LitValue + #9 +
@@ -2538,8 +2538,8 @@ begin
   TempName := '$str_tmp_' + IntToStr(FBlockLabelCounter);
   RegisterRuntimeVar(TempName);
   RegisterRuntimeStrVar(TempName);
-  FModel.AddTypedHirNode('var-decl-str-runtime', TempName, 0, 0, TempName);
-  FModel.AddTypedHirNode('assign-str-runtime', LitValue, 0, 0, TempName);
+  FModel.AddTypedHirNode('var-decl-tstring-runtime', TempName, 0, 0, TempName);
+  FModel.AddTypedHirNode('assign-tstring-copy-runtime', LitValue, 0, 0, TempName);
   Result := TempName;
 end;
 
@@ -2640,9 +2640,9 @@ begin
     TempName := '$str_cmp_cat_tmp_' + IntToStr(FBlockLabelCounter);
     RegisterRuntimeVar(TempName);
     RegisterRuntimeStrVar(TempName);
-    FModel.AddTypedHirNode('var-decl-str-owned-runtime', TempName, 0, 0,
+    FModel.AddTypedHirNode('var-decl-tstring-runtime', TempName, 0, 0,
       TempName);
-    FModel.AddTypedHirNode('assign-str-owned-concat-runtime', TempName, 0, 0,
+    FModel.AddTypedHirNode('assign-tstring-concat-runtime', TempName, 0, 0,
       LeftName + #9 + RightName);
     QueuePendingStringTempRelease(TempName, TempName);
     ABlob := 'strvar ' + TempName + #10;
@@ -2655,7 +2655,7 @@ begin
     TempName := '$str_cmp_tmp_' + IntToStr(FBlockLabelCounter);
     RegisterRuntimeVar(TempName);
     RegisterRuntimeStrVar(TempName);
-    FModel.AddTypedHirNode('var-decl-str-owned-runtime', TempName, 0, 0,
+    FModel.AddTypedHirNode('var-decl-tstring-runtime', TempName, 0, 0,
       TempName);
     FModel.AddTypedHirNode('string-temp-owned-runtime', SourceName, 0, 0,
       TempName + #9 + 'callee ' + SourceName + #9 +
@@ -2695,7 +2695,7 @@ begin
       TempName := '$str_arg_tmp_' + IntToStr(FBlockLabelCounter);
       RegisterRuntimeVar(TempName);
       RegisterRuntimeStrVar(TempName);
-      FModel.AddTypedHirNode('var-decl-str-owned-runtime', TempName,
+      FModel.AddTypedHirNode('var-decl-tstring-runtime', TempName,
         0, 0, TempName);
       FModel.AddTypedHirNode('string-temp-owned-runtime', SourceName,
         0, 0, TempName + #9 + 'callee ' + SourceName + #9 +
@@ -2763,7 +2763,7 @@ begin
       TempName := '$str_arg_tmp_' + IntToStr(FBlockLabelCounter);
       RegisterRuntimeVar(TempName);
       RegisterRuntimeStrVar(TempName);
-      FModel.AddTypedHirNode('var-decl-str-owned-runtime', TempName,
+      FModel.AddTypedHirNode('var-decl-tstring-runtime', TempName,
         0, 0, TempName);
       FModel.AddTypedHirNode('string-temp-owned-runtime', SourceName,
         0, 0, TempName + #9 + 'callee ' + SourceName + #9 +
@@ -8906,9 +8906,9 @@ begin
       Operand := '$len_tmp_' + IntToStr(FBlockLabelCounter);
       RegisterRuntimeVar(Operand);
       RegisterRuntimeStrVar(Operand);
-      FModel.AddTypedHirNode('var-decl-str-runtime', Operand, 0, 0, Operand);
+      FModel.AddTypedHirNode('var-decl-tstring-runtime', Operand, 0, 0, Operand);
       FModel.AddTypedHirNode(
-        'assign-str-call-runtime', ANode.ChildAt(1).Text, 0, 0, Operand
+        'assign-tstring-call-runtime', ANode.ChildAt(1).Text, 0, 0, Operand
       );
       ABlob := 'var ' + Operand + '$len' + #10;
     end
@@ -9277,8 +9277,8 @@ begin
           ArgName := '$str_arg_' + IntToStr(FBlockLabelCounter);
           RegisterRuntimeVar(ArgName);
           RegisterRuntimeStrVar(ArgName);
-          FModel.AddTypedHirNode('var-decl-str-runtime', ArgName, 0, 0, ArgName);
-          FModel.AddTypedHirNode('assign-str-runtime',
+          FModel.AddTypedHirNode('var-decl-tstring-runtime', ArgName, 0, 0, ArgName);
+          FModel.AddTypedHirNode('assign-tstring-copy-runtime',
             DecodePascalStringLiteral(ANode.ChildAt(StrCallIdx).Text),
             0, 0, ArgName);
           ABlob := ABlob + 'strvar ' + ArgName + #10;
@@ -11867,7 +11867,7 @@ var
     LocalNodeId: LongInt;
   begin
     LocalNodeId := FModel.AddTypedHirNode(
-      'field-store-str-owned-runtime', ADisplayName, 0, 0, AOperand
+      'field-store-tstring-runtime', ADisplayName, 0, 0, AOperand
     );
     AttachFieldStoreTargetExpr(LocalNodeId, ATargetNode);
   end;
@@ -11891,9 +11891,9 @@ var
       RegisterRuntimeVar(ATempName);
       RegisterRuntimeStrVar(ATempName);
       FModel.AddTypedHirNode(
-        'var-decl-str-runtime', ATempName, 0, 0, ATempName);
+        'var-decl-tstring-runtime', ATempName, 0, 0, ATempName);
       FModel.AddTypedHirNode(
-        'assign-str-field-load-runtime', ATempName, 0, 0,
+        'assign-tstring-field-load-runtime', ATempName, 0, 0,
         ATempName + #9 + IntToStr(FieldIdx));
       Exit(True);
     end;
@@ -11911,9 +11911,9 @@ var
       RegisterRuntimeVar(ATempName);
       RegisterRuntimeStrVar(ATempName);
       FModel.AddTypedHirNode(
-        'var-decl-str-runtime', ATempName, 0, 0, ATempName);
+        'var-decl-tstring-runtime', ATempName, 0, 0, ATempName);
       FModel.AddTypedHirNode(
-        'assign-str-concat-runtime',
+        'assign-tstring-concat-runtime',
         LeftName + #9 + RightName, 0, 0, ATempName);
       Exit(True);
     end;
@@ -12295,10 +12295,10 @@ begin
       if (FCurrentRetVarName <> '') and IsRuntimeStrVar(FCurrentRetVarName) then
       begin
         if FCurrentOwnedStringReturn then
-          FModel.AddTypedHirNode('ret-str-owned-runtime', FCurrentRetVarName,
+          FModel.AddTypedHirNode('ret-tstring-runtime', FCurrentRetVarName,
             0, 0, FCurrentRetVarName)
         else
-          FModel.AddTypedHirNode('ret-str-runtime', FCurrentRetVarName, 0, 0,
+          FModel.AddTypedHirNode('ret-tstring-runtime', FCurrentRetVarName, 0, 0,
             FCurrentRetVarName);
       end
       else if FCurrentRetVarName <> '' then
@@ -12460,7 +12460,7 @@ begin
               RegisterRuntimeStrVar(StringValue);
               RegisterOwnedRuntimeStrVar(StringValue);
               FModel.AddTypedHirNode(
-                'var-decl-str-owned-runtime', StringValue, 0, 0, StringValue);
+                'var-decl-tstring-runtime', StringValue, 0, 0, StringValue);
               if Arg.NodeKind = gnkIdentifier then
                 FModel.AddTypedHirNode(
                   'string-temp-owned-runtime', FuncName, 0, 0,
@@ -12472,7 +12472,7 @@ begin
                 if Operand <> '' then
                   Operand := #9 + Operand;
                 FModel.AddTypedHirNode(
-                  'assign-str-owned-call-runtime', StringValue, 0, 0,
+                  'assign-tstring-call-runtime', StringValue, 0, 0,
                   StringValue + #9 + 'callee ' + FuncName + Operand);
                 EmitPendingStringTempReleases;
               end;
@@ -12486,21 +12486,21 @@ begin
             end;
             if Arg.NodeKind = gnkStringLiteral then
               FModel.AddTypedHirNode(
-                'field-store-str-runtime', Decoded, 0, 0,
+                'field-store-tstring-runtime', Decoded, 0, 0,
                 ArgName + #9 +
                 IntToStr(Value) + #9 + 'lit ' +
                 DecodePascalStringLiteral(Arg.Text)
               )
             else if EvaluateStringConstant(Arg, StringValue) then
               FModel.AddTypedHirNode(
-                'field-store-str-runtime', Decoded, 0, 0,
+                'field-store-tstring-runtime', Decoded, 0, 0,
                 ArgName + #9 +
                 IntToStr(Value) + #9 + 'lit ' + StringValue
               )
             else if (Arg.NodeKind = gnkIdentifier) and
               IsRuntimeStrVar(Arg.Text) then
               FModel.AddTypedHirNode(
-                'field-store-str-runtime', Decoded, 0, 0,
+                'field-store-tstring-runtime', Decoded, 0, 0,
                 ArgName + #9 +
                 IntToStr(Value) + #9 + 'var ' + Arg.Text
               )
@@ -12517,15 +12517,15 @@ begin
               FuncName := '$str_field_tmp_' + IntToStr(FBlockLabelCounter);
               RegisterRuntimeVar(FuncName);
               RegisterRuntimeStrVar(FuncName);
-              FModel.AddTypedHirNode('var-decl-str-runtime', FuncName,
+              FModel.AddTypedHirNode('var-decl-tstring-runtime', FuncName,
                 0, 0, FuncName);
-              FModel.AddTypedHirNode('assign-str-field-load-runtime',
+              FModel.AddTypedHirNode('assign-tstring-field-load-runtime',
                 FuncName, 0, 0,
                 FuncName + #9 + Arg.ChildAt(0).Text + #9 +
                 IntToStr(TypeMetaFieldIndex(
                   LookupClassVar(Arg.ChildAt(0).Text), Arg.ChildAt(1).Text)));
               FModel.AddTypedHirNode(
-                'field-store-str-runtime', Decoded, 0, 0,
+                'field-store-tstring-runtime', Decoded, 0, 0,
                 ArgName + #9 +
                 IntToStr(Value) + #9 + 'var ' + FuncName
               );
@@ -12657,8 +12657,8 @@ begin
               FuncName := '$str_arg_' + IntToStr(FBlockLabelCounter);
               RegisterRuntimeVar(FuncName);
               RegisterRuntimeStrVar(FuncName);
-              FModel.AddTypedHirNode('var-decl-str-runtime', FuncName, 0, 0, FuncName);
-              FModel.AddTypedHirNode('assign-str-runtime',
+              FModel.AddTypedHirNode('var-decl-tstring-runtime', FuncName, 0, 0, FuncName);
+              FModel.AddTypedHirNode('assign-tstring-copy-runtime',
                 DecodePascalStringLiteral(RhsNode.Text), 0, 0, FuncName);
               Operand := Operand + #9 + 'strvar ' + FuncName + #10;
             end
@@ -12801,20 +12801,20 @@ begin
             StringValue := DecodePascalStringLiteral(Arg.Text);
             if FCurrentOwnedStringReturn and SameText(Decoded, FCurrentRetVarName) then
               FModel.AddTypedHirNode(
-                'assign-str-literal-runtime', Decoded, 0, 0, StringValue)
+                'assign-tstring-literal-runtime', Decoded, 0, 0, StringValue)
             else
               FModel.AddTypedHirNode(
-                'assign-str-runtime', StringValue, 0, 0, Decoded
+                'assign-tstring-copy-runtime', StringValue, 0, 0, Decoded
               );
           end
           else if EvaluateStringConstant(Arg, StringValue) then
           begin
             if FCurrentOwnedStringReturn and SameText(Decoded, FCurrentRetVarName) then
               FModel.AddTypedHirNode(
-                'assign-str-literal-runtime', Decoded, 0, 0, StringValue)
+                'assign-tstring-literal-runtime', Decoded, 0, 0, StringValue)
             else
               FModel.AddTypedHirNode(
-                'assign-str-runtime', StringValue, 0, 0, Decoded
+                'assign-tstring-copy-runtime', StringValue, 0, 0, Decoded
               );
           end
           else if (Arg.NodeKind = gnkIdentifier) and
@@ -12824,10 +12824,10 @@ begin
             if FCurrentOwnedStringReturn and SameText(Decoded, FCurrentRetVarName) and
               IsOwnedRuntimeStrVar(Arg.Text) then
               FModel.AddTypedHirNode(
-                'assign-str-move-to-result-runtime', Decoded, 0, 0, Arg.Text)
+                'assign-tstring-copy-runtime', Decoded, 0, 0, Arg.Text)
             else
               FModel.AddTypedHirNode(
-                'assign-str-copy-runtime', Arg.Text, 0, 0, Decoded
+                'assign-tstring-copy-runtime', Arg.Text, 0, 0, Decoded
               );
           end
           else if (Arg.NodeKind = gnkFunctionCall) and
@@ -12871,7 +12871,7 @@ begin
           begin
             Value := TypeMetaFieldIndex(FCurrentMethodClass, Arg.Text);
             FModel.AddTypedHirNode(
-              'assign-str-field-load-runtime', Decoded, 0, 0,
+              'assign-tstring-field-load-runtime', Decoded, 0, 0,
               Decoded + #9 + IntToStr(Value)
             );
           end
@@ -12880,7 +12880,7 @@ begin
             IsOwnedStringReturnFunc(Arg.Text) then
           begin
             FModel.AddTypedHirNode(
-              'assign-str-owned-call-runtime', Decoded, 0, 0,
+              'assign-tstring-call-runtime', Decoded, 0, 0,
               Decoded + #9 + 'callee ' + Arg.Text
             );
           end
@@ -12889,7 +12889,7 @@ begin
             IsRuntimeStrVar(Arg.Text) then
           begin
             FModel.AddTypedHirNode(
-              'assign-str-call-runtime', Decoded, 0, 0,
+              'assign-tstring-call-runtime', Decoded, 0, 0,
               Decoded + #9 + 'callee ' + Arg.Text
             );
           end
@@ -12899,7 +12899,7 @@ begin
           begin
             Operand := EncodeStrCallArgs(Arg, Decoded);
             FModel.AddTypedHirNode(
-              'assign-str-owned-call-runtime', Decoded, 0, 0,
+              'assign-tstring-call-runtime', Decoded, 0, 0,
               Decoded + #9 + 'callee ' + Arg.Text + #9 + Operand
             );
             EmitPendingStringTempReleases;
@@ -12910,7 +12910,7 @@ begin
           begin
             Operand := EncodeStrCallArgs(Arg, Decoded);
             FModel.AddTypedHirNode(
-              'assign-str-call-runtime', Decoded, 0, 0,
+              'assign-tstring-call-runtime', Decoded, 0, 0,
               Decoded + #9 + 'callee ' + Arg.Text + #9 + Operand
             );
             EmitPendingStringTempReleases;
@@ -12927,19 +12927,19 @@ begin
             Value := TypeMetaVmtSlot(FuncName, Arg.ChildAt(1).Text);
             if (Value >= 0) and TypeMetaIsInterface(FuncName) then
               FModel.AddTypedHirNode(
-                'assign-str-ivcall-runtime', Arg.ChildAt(1).Text, 0, 0,
+                'assign-tstring-call-runtime', Arg.ChildAt(1).Text, 0, 0,
                 Decoded + #9 + Arg.ChildAt(0).Text + #9 +
                 IntToStr(Value)
               )
             else if Value >= 0 then
               FModel.AddTypedHirNode(
-                'assign-str-vcall-runtime', Arg.ChildAt(1).Text, 0, 0,
+                'assign-tstring-call-runtime', Arg.ChildAt(1).Text, 0, 0,
                 Decoded + #9 + Arg.ChildAt(0).Text + #9 +
                 IntToStr(Value)
               )
             else
               FModel.AddTypedHirNode(
-                'assign-str-call-runtime',
+                'assign-tstring-call-runtime',
                 FuncName + '.' + Arg.ChildAt(1).Text, 0, 0,
                 Decoded + #9 + 'var ' + Arg.ChildAt(0).Text
               );
@@ -12956,14 +12956,14 @@ begin
               begin
                 if IsOwnedRuntimeStrVar(Decoded) then
                   FModel.AddTypedHirNode(
-                    'assign-str-owned-concat-runtime',
+                    'assign-tstring-concat-runtime',
                     Decoded,
                     0, 0,
                     StringValue + #9 + Operand
                   )
                 else
                   FModel.AddTypedHirNode(
-                    'assign-str-concat-runtime',
+                    'assign-tstring-concat-runtime',
                     StringValue + #9 + Operand,
                     0, 0, Decoded
                   );
@@ -12986,7 +12986,7 @@ begin
             RegisterRuntimeStrVar(StringValue);
             RegisterOwnedRuntimeStrVar(StringValue);
             FModel.AddTypedHirNode(
-              'var-decl-str-owned-runtime', StringValue, 0, 0, StringValue);
+              'var-decl-tstring-runtime', StringValue, 0, 0, StringValue);
             if Arg.NodeKind = gnkIdentifier then
               FModel.AddTypedHirNode(
                 'string-temp-owned-runtime', FuncName, 0, 0,
@@ -12998,7 +12998,7 @@ begin
               if Operand <> '' then
                 Operand := #9 + Operand;
               FModel.AddTypedHirNode(
-                'assign-str-owned-call-runtime', StringValue, 0, 0,
+                'assign-tstring-call-runtime', StringValue, 0, 0,
                 StringValue + #9 + 'callee ' + FuncName + Operand);
               EmitPendingStringTempReleases;
             end;
@@ -13013,29 +13013,29 @@ begin
           begin
             StringValue := DecodePascalStringLiteral(Arg.Text);
             FModel.AddTypedHirNode(
-              'field-store-str-runtime', Decoded, 0, 0,
+              'field-store-tstring-runtime', Decoded, 0, 0,
               'self' + #9 + IntToStr(Value) + #9 + 'lit ' + StringValue
             );
           end
           else if EvaluateStringConstant(Arg, StringValue) then
             FModel.AddTypedHirNode(
-              'field-store-str-runtime', Decoded, 0, 0,
+              'field-store-tstring-runtime', Decoded, 0, 0,
               'self' + #9 + IntToStr(Value) + #9 + 'lit ' + StringValue
             )
           else if (Arg.NodeKind = gnkIdentifier) and
             IsRuntimeStrVar(Arg.Text) then
             FModel.AddTypedHirNode(
-              'field-store-str-runtime', Decoded, 0, 0,
+              'field-store-tstring-runtime', Decoded, 0, 0,
               'self' + #9 + IntToStr(Value) + #9 + 'var ' + Arg.Text
             )
           else if EmitStringFieldStoreRhsTemp(Arg, FuncName) then
             FModel.AddTypedHirNode(
-              'field-store-str-runtime', Decoded, 0, 0,
+              'field-store-tstring-runtime', Decoded, 0, 0,
               'self' + #9 + IntToStr(Value) + #9 + 'var ' + FuncName
             )
           else
             FModel.AddTypedHirNode(
-              'field-store-str-runtime', Decoded, 0, 0,
+              'field-store-tstring-runtime', Decoded, 0, 0,
               'self' + #9 + IntToStr(Value) + #9 + 'var ' + Decoded
             );
         end
@@ -13353,9 +13353,9 @@ begin
               Operand := '$wrt_tmp_' + IntToStr(FBlockLabelCounter);
               RegisterRuntimeVar(Operand);
               RegisterRuntimeStrVar(Operand);
-              FModel.AddTypedHirNode('var-decl-str-runtime', Operand, 0, 0, Operand);
+              FModel.AddTypedHirNode('var-decl-tstring-runtime', Operand, 0, 0, Operand);
               FModel.AddTypedHirNode(
-                'assign-str-call-runtime', RhsNode.Text, 0, 0, Operand
+                'assign-tstring-call-runtime', RhsNode.Text, 0, 0, Operand
               );
               FModel.AddTypedHirNode(
                 'write-str-var-runtime', 'Write', 0, 0, Operand
@@ -13382,9 +13382,9 @@ begin
                 Operand := '$wrt_tmp_' + IntToStr(FBlockLabelCounter);
                 RegisterRuntimeVar(Operand);
                 RegisterRuntimeStrVar(Operand);
-                FModel.AddTypedHirNode('var-decl-str-runtime', Operand, 0, 0, Operand);
+                FModel.AddTypedHirNode('var-decl-tstring-runtime', Operand, 0, 0, Operand);
                 FModel.AddTypedHirNode(
-                  'assign-str-vcall-runtime', RhsNode.ChildAt(1).Text, 0, 0,
+                  'assign-tstring-call-runtime', RhsNode.ChildAt(1).Text, 0, 0,
                   Operand + #9 + RhsNode.ChildAt(0).Text + #9 +
                   IntToStr(Value)
                 );
@@ -14461,7 +14461,7 @@ begin
           RegisterRuntimeStrVar(Decl.Text);
           RegisterOwnedRuntimeStrVar(Decl.Text);
           FModel.AddTypedHirNode(
-            'var-decl-str-owned-runtime', Decl.Text, 0, 0, Decl.Text
+            'var-decl-tstring-runtime', Decl.Text, 0, 0, Decl.Text
           );
         end
         else if ArrayTypeNode <> nil then
@@ -14837,7 +14837,7 @@ begin
               if ParamNameIsByRef(RetVarName) then
                 RetVarName := StripParamModifier(RetVarName);
               if IsRuntimeStrVar(RetVarName) then
-                FModel.AddTypedHirNode('var-decl-str-borrowed-runtime', RetVarName,
+                FModel.AddTypedHirNode('var-decl-tstring-runtime', RetVarName,
                   0, 0, RetVarName)
               else if IsRuntimeArrVar(RetVarName) then
               begin
@@ -14884,10 +14884,10 @@ begin
     if IsRecReturn then
       RegisterRecordVar(RetVarName, PtrReturnClass);
     if IsStrReturn and OwnedStringReturn then
-      FModel.AddTypedHirNode('var-decl-str-owned-runtime', RetVarName, 0, 0,
+      FModel.AddTypedHirNode('var-decl-tstring-runtime', RetVarName, 0, 0,
         RetVarName)
     else if IsStrReturn then
-      FModel.AddTypedHirNode('var-decl-str-runtime', RetVarName, 0, 0, RetVarName)
+      FModel.AddTypedHirNode('var-decl-tstring-runtime', RetVarName, 0, 0, RetVarName)
     else if IsPtrReturn then
       FModel.AddTypedHirNode('var-decl-ptr-runtime', RetVarName, 0, 0, RetVarName)
     else if IsRecReturn then
@@ -14929,7 +14929,7 @@ begin
               RegisterRuntimeStrVar(Decl.Text);
               RegisterOwnedRuntimeStrVar(Decl.Text);
               FModel.AddTypedHirNode(
-                'var-decl-str-owned-runtime', Decl.Text, 0, 0, Decl.Text);
+                'var-decl-tstring-runtime', Decl.Text, 0, 0, Decl.Text);
             end
             else if (Decl.ChildCount > 0) and (Decl.ChildAt(0) <> nil) and
               (Length(Decl.ChildAt(0).Text) > 1) and
@@ -14955,10 +14955,10 @@ begin
       EmitOwnedDynArrayCleanupNodes;
       EmitOwnedStringCleanupNodes(RetVarName);
       if IsStrReturn and OwnedStringReturn then
-        FModel.AddTypedHirNode('ret-str-owned-runtime', RetVarName, 0, 0,
+        FModel.AddTypedHirNode('ret-tstring-runtime', RetVarName, 0, 0,
           RetVarName)
       else if IsStrReturn then
-        FModel.AddTypedHirNode('ret-str-runtime', RetVarName, 0, 0, RetVarName)
+        FModel.AddTypedHirNode('ret-tstring-runtime', RetVarName, 0, 0, RetVarName)
       else
       begin
         NodeId := FModel.AddTypedHirNode('ret-runtime', RetVarName, 0, 0,
