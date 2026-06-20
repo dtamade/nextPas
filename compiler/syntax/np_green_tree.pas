@@ -1463,6 +1463,25 @@ begin
             RHS := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
             if RHS <> nil then
               LhsNode.AppendChild(RHS);
+            { Pascal format specifier: expr:width[:precision] }
+            if (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind = tkColon) then
+            begin
+              Inc(ACursor);
+              if (ACursor < ALexer.TokenCount) and
+                (CurrentToken(ALexer, ACursor).Kind in
+                  [tkMinus, tkPlus, tkIntegerLiteral]) then
+                Inc(ACursor);
+              if (ACursor < ALexer.TokenCount) and
+                (CurrentToken(ALexer, ACursor).Kind = tkColon) then
+              begin
+                Inc(ACursor);
+                if (ACursor < ALexer.TokenCount) and
+                  (CurrentToken(ALexer, ACursor).Kind in
+                    [tkMinus, tkPlus, tkIntegerLiteral]) then
+                  Inc(ACursor);
+              end;
+            end;
             while (ACursor < ALexer.TokenCount) and
               (CurrentToken(ALexer, ACursor).Kind = tkComma) do
             begin
@@ -1470,6 +1489,25 @@ begin
               RHS := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
               if RHS <> nil then
                 LhsNode.AppendChild(RHS);
+              { Pascal format specifier: expr:width[:precision] }
+              if (ACursor < ALexer.TokenCount) and
+                (CurrentToken(ALexer, ACursor).Kind = tkColon) then
+              begin
+                Inc(ACursor);
+                if (ACursor < ALexer.TokenCount) and
+                  (CurrentToken(ALexer, ACursor).Kind in
+                    [tkMinus, tkPlus, tkIntegerLiteral]) then
+                  Inc(ACursor);
+                if (ACursor < ALexer.TokenCount) and
+                  (CurrentToken(ALexer, ACursor).Kind = tkColon) then
+                begin
+                  Inc(ACursor);
+                  if (ACursor < ALexer.TokenCount) and
+                    (CurrentToken(ALexer, ACursor).Kind in
+                      [tkMinus, tkPlus, tkIntegerLiteral]) then
+                    Inc(ACursor);
+                end;
+              end;
             end;
           end;
           MatchTokenSilent(ALexer, ACursor, tkRParen);
@@ -2288,6 +2326,15 @@ begin
 
     if (ACursor < ALexer.TokenCount) and
       (CurrentToken(ALexer, ACursor).Kind = tkEquals) then
+      Inc(ACursor);
+
+    { type X = type Y: 跳过 distinct type 标记
+      但不跳过 type helper (type + identifier + for) }
+    if (ACursor < ALexer.TokenCount) and
+      (CurrentToken(ALexer, ACursor).Kind = tkTypeKeyword) and
+      not ((ACursor + 2 < ALexer.TokenCount) and
+        (ALexer.TokenAt(ACursor + 1).Kind = tkIdentifier) and
+        (ALexer.TokenAt(ACursor + 2).Kind = tkForKeyword)) then
       Inc(ACursor);
 
     if (ACursor < ALexer.TokenCount) then
@@ -4303,6 +4350,22 @@ var
             List.AppendChild(StmtNode);
             Inc(ATree.FNodeCount);
           end;
+          Result := True;
+        end;
+      tkAsmKeyword:
+        begin
+          Inc(ACursor);
+          while (ACursor < ALexer.TokenCount) and
+            (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
+            (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+            Inc(ACursor);
+          MatchTokenSilent(ALexer, ACursor, tkEndKeyword);
+          Result := True;
+        end;
+      tkSemicolon:
+        begin
+          { 空语句: case label: ; 或 if cond then ; }
+          Inc(ACursor);
           Result := True;
         end;
       tkSpecializeKeyword:
