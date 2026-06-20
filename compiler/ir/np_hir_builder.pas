@@ -7944,8 +7944,8 @@ var
   DstPtr, LitPtr, LenConst: THIRValueId;
   Instr: THIRInstr;
 begin
-  DstName := ANode.Operand;
-  LitValue := ANode.DisplayName;
+  DstName := ANode.DisplayName;
+  LitValue := ANode.Operand;
   DstPtr := FindAlloca(DstName + '$ts');
   if DstPtr = 0 then Exit;
   { Step 1: get literal data pointer via str_const }
@@ -8000,11 +8000,11 @@ var
   TabPos: LongInt;
   Instr: THIRInstr;
 begin
-  DstName := ANode.Operand;
-  TabPos := Pos(#9, ANode.DisplayName);
+  DstName := ANode.DisplayName;
+  TabPos := Pos(#9, ANode.Operand);
   if TabPos = 0 then Exit;
-  LhsOp := Copy(ANode.DisplayName, 1, TabPos - 1);
-  RhsOp := Copy(ANode.DisplayName, TabPos + 1, Length(ANode.DisplayName));
+  LhsOp := Copy(ANode.Operand, 1, TabPos - 1);
+  RhsOp := Copy(ANode.Operand, TabPos + 1, Length(ANode.Operand));
   DstPtr := FindAlloca(DstName + '$ts');
   LhsPtr := FindAlloca(LhsOp + '$ts');
   RhsPtr := FindAlloca(RhsOp + '$ts');
