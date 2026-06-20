@@ -245,9 +245,7 @@ type
     procedure ProcessWriteCall(const ANode: TTypedHirNode);
     procedure ProcessWriteStrVar(const ANode: TTypedHirNode);
     procedure ProcessIntToStr(const ANode: TTypedHirNode);
-    procedure ProcessIntToStrOwned(const ANode: TTypedHirNode);
     procedure ProcessCopyStr(const ANode: TTypedHirNode);
-    procedure ProcessCopyStrOwned(const ANode: TTypedHirNode);
     procedure ProcessSetLengthArr(const ANode: TTypedHirNode);
     procedure ProcessSetLengthFieldArr(const ANode: TTypedHirNode);
     procedure ProcessDynArrayCleanup(const ANode: TTypedHirNode);
@@ -4193,11 +4191,6 @@ begin
   EmitInstr(Instr);
 end;
 
-procedure THIRBuilder.ProcessIntToStrOwned(const ANode: TTypedHirNode);
-begin
-  ProcessIntToStr(ANode);
-end;
-
 procedure THIRBuilder.ProcessCopyStr(const ANode: TTypedHirNode);
 var
   Blob, DstName, SrcName, StartBlob, LenBlob: string;
@@ -4245,11 +4238,6 @@ begin
   Instr.Operands[2] := MakeTypedOperand(StartVal, GetIntType);
   Instr.Operands[3] := MakeTypedOperand(LenVal, GetIntType);
   EmitInstr(Instr);
-end;
-
-procedure THIRBuilder.ProcessCopyStrOwned(const ANode: TTypedHirNode);
-begin
-  ProcessCopyStr(ANode);
 end;
 
 procedure THIRBuilder.ProcessStringTempOwnedRuntime(
@@ -5972,14 +5960,10 @@ begin
       ProcessStringTempReleaseRuntime(ANode);
     hnkObjectFreeRuntime:
       ProcessObjectFreeRuntime(ANode);
-    hnkIntToStrRuntime:
+    hnkTStringFromIntRuntime:
       ProcessIntToStr(ANode);
-    hnkIntToStrOwnedRuntime:
-      ProcessIntToStrOwned(ANode);
-    hnkCopyStrRuntime:
+    hnkTStringCopyRuntime:
       ProcessCopyStr(ANode);
-    hnkCopyStrOwnedRuntime:
-      ProcessCopyStrOwned(ANode);
     hnkWriteIntRuntime:
       ProcessWriteInt(ANode);
     hnkWriteStringRuntime:

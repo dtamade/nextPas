@@ -597,109 +597,6 @@ begin
             ' "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 1, ptr ' + ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' + ValueRef(AInstr.Operands[1].ValueId) + ')');
         end;
       end
-      else if AInstr.IntrinsicName = 'store_str_lit' then
-      begin
-        if Length(AInstr.Operands) >= 2 then
-        begin
-          I := AddStrConstant(AInstr.CallTarget);
-          Emit('  store ptr @.str.' + IntToStr(I) + ', ptr ' + ValueRef(AInstr.Operands[0].ValueId));
-          Emit('  store i64 ' + IntToStr(Length(AInstr.CallTarget)) +
-            ', ptr ' + ValueRef(AInstr.Operands[1].ValueId));
-        end;
-      end
-      else if AInstr.IntrinsicName = 'call_str_func' then
-      begin
-        if Length(AInstr.Operands) >= 2 then
-        begin
-          Op := '  %callstr.' + IntToStr(AInstr.ResultId) +
-            ' = call {ptr, i64} @' + AInstr.CallTarget + '(';
-          for I := 2 to High(AInstr.Operands) do
-          begin
-            if I > 2 then Op := Op + ', ';
-            if AInstr.Operands[I].TypeId <> 0 then
-              Op := Op + TypeToLlvm(AInstr.Operands[I].TypeId) + ' ' + ValueRef(AInstr.Operands[I].ValueId)
-            else
-              Op := Op + 'i64 ' + ValueRef(AInstr.Operands[I].ValueId);
-          end;
-          Op := Op + ')';
-          Emit(Op);
-          Emit('  %callstr.' + IntToStr(AInstr.ResultId) +
-            '.p = extractvalue {ptr, i64} %callstr.' +
-            IntToStr(AInstr.ResultId) + ', 0');
-          Emit('  %callstr.' + IntToStr(AInstr.ResultId) +
-            '.l = extractvalue {ptr, i64} %callstr.' +
-            IntToStr(AInstr.ResultId) + ', 1');
-          Emit('  store ptr %callstr.' + IntToStr(AInstr.ResultId) +
-            '.p, ptr ' + ValueRef(AInstr.Operands[0].ValueId));
-          Emit('  store i64 %callstr.' + IntToStr(AInstr.ResultId) +
-            '.l, ptr ' + ValueRef(AInstr.Operands[1].ValueId));
-        end;
-      end
-      else if AInstr.IntrinsicName = 'call_str_owned_func' then
-      begin
-        Op := '  ' + ValueRef(AInstr.ResultId) +
-          ' = call {ptr, i64, ptr, i64} @' + AInstr.CallTarget + '(';
-        for I := 0 to High(AInstr.Operands) do
-        begin
-          if I > 0 then Op := Op + ', ';
-          if AInstr.Operands[I].TypeId <> 0 then
-            Op := Op + TypeToLlvm(AInstr.Operands[I].TypeId) + ' ' +
-              ValueRef(AInstr.Operands[I].ValueId)
-          else
-            Op := Op + 'i64 ' + ValueRef(AInstr.Operands[I].ValueId);
-        end;
-        Op := Op + ')';
-        Emit(Op);
-      end
-      else if AInstr.IntrinsicName = 'str_concat' then
-      begin
-        FNeedsAlloc := True;
-        FNeedsMemcpy := True;
-        FNeedsStrConcat := True;
-        if Length(AInstr.Operands) >= 6 then
-        begin
-          Emit('  %concat.' + IntToStr(AInstr.ResultId) +
-            ' = call {ptr, i64} @np_str_concat(ptr ' + ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' + ValueRef(AInstr.Operands[1].ValueId) + ', ptr ' + ValueRef(AInstr.Operands[2].ValueId) + ', i64 ' + ValueRef(AInstr.Operands[3].ValueId) + ')');
-          Emit('  %concat.' + IntToStr(AInstr.ResultId) +
-            '.p = extractvalue {ptr, i64} %concat.' +
-            IntToStr(AInstr.ResultId) + ', 0');
-          Emit('  %concat.' + IntToStr(AInstr.ResultId) +
-            '.l = extractvalue {ptr, i64} %concat.' +
-            IntToStr(AInstr.ResultId) + ', 1');
-          Emit('  store ptr %concat.' + IntToStr(AInstr.ResultId) +
-            '.p, ptr ' + ValueRef(AInstr.Operands[4].ValueId));
-          Emit('  store i64 %concat.' + IntToStr(AInstr.ResultId) +
-            '.l, ptr ' + ValueRef(AInstr.Operands[5].ValueId));
-        end;
-      end
-      else if AInstr.IntrinsicName = 'str_concat_owned' then
-      begin
-        FNeedsAlloc := True;
-        FNeedsFree := True;
-        FNeedsMemcpy := True;
-        FNeedsStringOwnership := True;
-        if Length(AInstr.Operands) >= 4 then
-          Emit('  ' + ValueRef(AInstr.ResultId) +
-            ' = call {ptr, i64, ptr, i64} @np_str_concat_owned(ptr ' +
-            ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' +
-            ValueRef(AInstr.Operands[1].ValueId) + ', ptr ' +
-            ValueRef(AInstr.Operands[2].ValueId) + ', i64 ' +
-            ValueRef(AInstr.Operands[3].ValueId) + ')');
-      end
-      else if AInstr.IntrinsicName = 'str_copy_owned' then
-      begin
-        FNeedsAlloc := True;
-        FNeedsFree := True;
-        FNeedsMemcpy := True;
-        FNeedsStringOwnership := True;
-        if Length(AInstr.Operands) >= 4 then
-          Emit('  ' + ValueRef(AInstr.ResultId) +
-            ' = call {ptr, i64, ptr, i64} @np_str_copy_owned(ptr ' +
-            ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' +
-            ValueRef(AInstr.Operands[1].ValueId) + ', i64 ' +
-            ValueRef(AInstr.Operands[2].ValueId) + ', i64 ' +
-            ValueRef(AInstr.Operands[3].ValueId) + ')');
-      end
       else if AInstr.IntrinsicName = 'string_owned_extract_ptr' then
       begin
         if Length(AInstr.Operands) >= 1 then
@@ -836,38 +733,6 @@ begin
         Emit('  ' + ValueRef(AInstr.ResultId) +
           ' = getelementptr i8, ptr @.str.' + IntToStr(
             AddStrConstant(Op)) + ', i64 0');
-      end
-      else if AInstr.IntrinsicName = 'int_to_str' then
-      begin
-        if Length(AInstr.Operands) >= 3 then
-        begin
-          FNeedsAlloc := True;
-          Emit('  %its.' + IntToStr(AInstr.ResultId) +
-            ' = call {ptr, i64} @np_int_to_str(i64 ' + ValueRef(AInstr.Operands[0].ValueId) + ')');
-          Emit('  %its.' + IntToStr(AInstr.ResultId) +
-            '.p = extractvalue {ptr, i64} %its.' +
-            IntToStr(AInstr.ResultId) + ', 0');
-          Emit('  %its.' + IntToStr(AInstr.ResultId) +
-            '.l = extractvalue {ptr, i64} %its.' +
-            IntToStr(AInstr.ResultId) + ', 1');
-          Emit('  store ptr %its.' + IntToStr(AInstr.ResultId) +
-            '.p, ptr ' + ValueRef(AInstr.Operands[1].ValueId));
-          Emit('  store i64 %its.' + IntToStr(AInstr.ResultId) +
-            '.l, ptr ' + ValueRef(AInstr.Operands[2].ValueId));
-          FNeedsIntToStr := True;
-        end;
-      end
-      else if AInstr.IntrinsicName = 'int_to_str_owned' then
-      begin
-        if Length(AInstr.Operands) >= 1 then
-        begin
-          FNeedsAlloc := True;
-          FNeedsFree := True;
-          FNeedsStringOwnership := True;
-          Emit('  ' + ValueRef(AInstr.ResultId) +
-            ' = call {ptr, i64, ptr, i64} @np_int_to_str_owned(i64 ' +
-            ValueRef(AInstr.Operands[0].ValueId) + ')');
-        end;
       end
       else if AInstr.IntrinsicName = 'str_cmp' then
       begin
@@ -1630,10 +1495,6 @@ begin
   Emit('');
   Emit('declare void @np_string_fault(i64 %code, i64 %arg0, i64 %arg1)');
   Emit('declare void @np_string_release(ptr %owner, i64 %alloc_size)');
-  Emit('declare {ptr, i64, ptr, i64} @np_str_concat_owned(ptr %a_ptr, i64 %a_len, ptr %b_ptr, i64 %b_len)');
-  Emit('declare {ptr, i64, ptr, i64} @np_str_copy_owned(ptr %src_ptr, i64 %src_len, i64 %start, i64 %count)');
-  Emit('declare {ptr, i64} @np_int_to_str(i64 %val)');
-  Emit('declare {ptr, i64, ptr, i64} @np_int_to_str_owned(i64 %val)');
 end;
 
 procedure THIRLlvmEmitter.EmitTStringHelpers;

@@ -364,14 +364,14 @@ begin
     Model.Free;
   end;
 
-  { === Test 10: int-to-str-runtime emits np_tstring_from_int === }
+  { === Test 10: tstring-from-int-runtime emits np_tstring_from_int === }
   Model := TSemanticModel.Create;
   try
     Model.AddTypedHirNode('process-init-runtime',
       'np.system.process_init', 0, 0, '');
     Model.AddTypedHirNode('var-decl-tstring-runtime',
       'S', 0, 0, 'S');
-    Model.AddTypedHirNode('int-to-str-runtime',
+    Model.AddTypedHirNode('tstring-from-int-runtime',
       'S', 0, 0, 'S'#9'int 42'#10);
     Model.AddTypedHirNode('process-fini-runtime',
       'np.system.process_fini', 0, 0, '');
@@ -385,7 +385,7 @@ begin
         LlvmIr := Emitter.AsText;
 
         Check(Pos('call void @np_tstring_from_int(', LlvmIr) > 0,
-          'int-to-str emits tstring_from_int', 20);
+          'tstring-from-int emits tstring_from_int', 20);
       finally
         Emitter.Free;
       end;
@@ -396,7 +396,7 @@ begin
     Model.Free;
   end;
 
-  { === Test 11: copy-str-runtime emits np_tstring_copy === }
+  { === Test 11: tstring-copy-runtime emits np_tstring_copy === }
   Model := TSemanticModel.Create;
   try
     Model.AddTypedHirNode('process-init-runtime',
@@ -405,7 +405,7 @@ begin
       'Src', 0, 0, 'Src');
     Model.AddTypedHirNode('var-decl-tstring-runtime',
       'Dst', 0, 0, 'Dst');
-    Model.AddTypedHirNode('copy-str-runtime',
+    Model.AddTypedHirNode('tstring-copy-runtime',
       'Dst', 0, 0, 'Dst'#9'Src'#9'int 2'#10#9'int 3'#10);
     Model.AddTypedHirNode('process-fini-runtime',
       'np.system.process_fini', 0, 0, '');
@@ -419,7 +419,7 @@ begin
         LlvmIr := Emitter.AsText;
 
         Check(Pos('call void @np_tstring_copy(', LlvmIr) > 0,
-          'copy-str emits tstring_copy', 21);
+          'tstring-copy emits tstring_copy', 21);
       finally
         Emitter.Free;
       end;

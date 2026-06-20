@@ -1359,7 +1359,7 @@ begin
   FModel.AddTypedHirNode('string-temp-owned-runtime', SourceName, 0, 0,
     ATempName + #9 + 'callee ' + SourceName + #9 +
     'ptr len owner alloc_size');
-  FModel.AddTypedHirNode('copy-str-owned-runtime', ADestName, 0, 0,
+  FModel.AddTypedHirNode('tstring-copy-runtime', ADestName, 0, 0,
     ADestName + #9 + ATempName + #9 + StartBlob + #9 + LenBlob);
   FModel.AddTypedHirNode('string-temp-release-runtime', SourceName, 0, 0,
     ATempName);
@@ -2512,7 +2512,7 @@ begin
     RegisterRuntimeVar(TempName);
     RegisterRuntimeStrVar(TempName);
     FModel.AddTypedHirNode('var-decl-tstring-runtime', TempName, 0, 0, TempName);
-    FModel.AddTypedHirNode('int-to-str-runtime', TempName, 0, 0,
+    FModel.AddTypedHirNode('tstring-from-int-runtime', TempName, 0, 0,
       TempName + #9 + LitValue);
     Exit(TempName);
   end;
@@ -12848,16 +12848,10 @@ begin
           begin
             if EncodeRuntimeIntExprFold(Arg.ChildAt(1), Operand) then
             begin
-              if IsOwnedRuntimeStrVar(Decoded) then
-                FModel.AddTypedHirNode(
-                  'int-to-str-owned-runtime', Decoded, 0, 0,
-                  Decoded + #9 + Operand
-                )
-              else
-                FModel.AddTypedHirNode(
-                  'int-to-str-runtime', Decoded, 0, 0,
-                  Decoded + #9 + Operand
-                );
+              FModel.AddTypedHirNode(
+                'tstring-from-int-runtime', Decoded, 0, 0,
+                Decoded + #9 + Operand
+              );
             end;
           end
           else if (Arg.NodeKind = gnkFunctionCall) and
@@ -12872,7 +12866,7 @@ begin
                 EncodeRuntimeIntExprFold(Arg.ChildAt(2), Operand) and
                 EncodeRuntimeIntExprFold(Arg.ChildAt(3), StringValue) then
                 FModel.AddTypedHirNode(
-                  'copy-str-runtime', Decoded, 0, 0,
+                  'tstring-copy-runtime', Decoded, 0, 0,
                   Decoded + #9 + Arg.ChildAt(1).Text + #9 + Operand + #9 + StringValue
                 );
             end;
