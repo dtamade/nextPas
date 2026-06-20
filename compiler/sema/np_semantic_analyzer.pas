@@ -4344,8 +4344,7 @@ begin
     if SameText(Symbol.Name, QualifiedName) and
       (SameText(Symbol.Kind, 'method') or
        SameText(Symbol.Kind, 'constructor') or
-       SameText(Symbol.Kind, 'destructor')) and
-      SameText(Symbol.OwnerUnitId, TypeSymbol.OwnerUnitId) then
+       SameText(Symbol.Kind, 'destructor')) then
     begin
       AMethodNameFound := True;
       SetLength(ACandidates, Length(ACandidates) + 1);
