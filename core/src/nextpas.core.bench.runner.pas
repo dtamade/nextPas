@@ -324,9 +324,18 @@ end;
 procedure TBenchRunner.Warmup(AFunc: TBenchFunc);
 var
   i: Integer;
+  LCtx: TBenchContext;
 begin
-  for i := 1 to FConfig.WarmupIterations do
-    AFunc(nil);  // 热身时不使用正式上下文
+  LCtx := TBenchContext.Create;
+  try
+    for i := 1 to FConfig.WarmupIterations do
+    begin
+      LCtx.Reset;
+      AFunc(LCtx);
+    end;
+  finally
+    LCtx.Free;
+  end;
 end;
 
 function TBenchRunner.CollectSamples(AFunc: TBenchFunc; AIters: Int64): TDoubleArray;
@@ -429,6 +438,7 @@ end;
 procedure TBenchRunner.RunAll(const AEntries: array of TBenchEntry);
 var
   i: Integer;
+  LSetupData: Pointer;
 begin
   WriteLn('=== nextpas.core.bench v1.0 ===');
   WriteLn;
@@ -436,7 +446,20 @@ begin
   for i := 0 to High(AEntries) do
   begin
     if AEntries[i].Condition then
-      RunOne(AEntries[i].Name, AEntries[i].Func);
+    begin
+      // 执行 Setup
+      LSetupData := nil;
+      if Assigned(AEntries[i].Setup) then
+        LSetupData := AEntries[i].Setup;
+
+      try
+        RunOne(AEntries[i].Name, AEntries[i].Func);
+      finally
+        // 执行 Teardown
+        if Assigned(AEntries[i].Teardown) then
+          AEntries[i].Teardown(LSetupData);
+      end;
+    end;
   end;
 
   WriteLn;

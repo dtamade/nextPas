@@ -400,8 +400,12 @@ end;
 
 function TBenchReportGenerator.GenerateJS: string;
 begin
-  Result :=
-    '<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>';
+  // 使用纯 CSS 柱状图，不依赖外部 CDN
+  Result := '<script>' +
+    'function initCharts() {' +
+    '  // 初始化图表（纯 CSS 实现）' +
+    '}' +
+    '</script>';
 end;
 
 function TBenchReportGenerator.ToHTML: string;

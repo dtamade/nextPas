@@ -56,8 +56,10 @@ type
   TAdvancedStats = record
   private
     FData: TDoubleArray;
+    FSortedData: TDoubleArray;
     FSorted: Boolean;
     procedure EnsureSorted;
+    class procedure QuickSort(var AArr: TDoubleArray; ALo, AHi: Integer); static;
   public
     {**
      * 创建统计分析器
@@ -163,25 +165,51 @@ begin
   Result.FSorted := False;
 end;
 
+class procedure TAdvancedStats.QuickSort(var AArr: TDoubleArray; ALo, AHi: Integer);
+var
+  LPivot: Double;
+  LTemp: Double;
+  I, J: Integer;
+begin
+  if ALo >= AHi then Exit;
+
+  LPivot := AArr[(ALo + AHi) div 2];
+  I := ALo;
+  J := AHi;
+
+  while I <= J do
+  begin
+    while AArr[I] < LPivot do Inc(I);
+    while AArr[J] > LPivot do Dec(J);
+
+    if I <= J then
+    begin
+      LTemp := AArr[I];
+      AArr[I] := AArr[J];
+      AArr[J] := LTemp;
+      Inc(I);
+      Dec(J);
+    end;
+  end;
+
+  if ALo < J then QuickSort(AArr, ALo, J);
+  if I < AHi then QuickSort(AArr, I, AHi);
+end;
+
 procedure TAdvancedStats.EnsureSorted;
 var
-  I, J: Integer;
-  LTemp: Double;
+  I: Integer;
 begin
   if FSorted then Exit;
 
-  // Simple insertion sort for small arrays
-  for I := 1 to High(FData) do
-  begin
-    LTemp := FData[I];
-    J := I - 1;
-    while (J >= 0) and (FData[J] > LTemp) do
-    begin
-      FData[J + 1] := FData[J];
-      Dec(J);
-    end;
-    FData[J + 1] := LTemp;
-  end;
+  // 创建排序副本，不破坏原始数据
+  SetLength(FSortedData, Length(FData));
+  for I := 0 to High(FData) do
+    FSortedData[I] := FData[I];
+
+  // 使用 QuickSort 排序副本
+  if Length(FSortedData) > 1 then
+    QuickSort(FSortedData, 0, High(FSortedData));
 
   FSorted := True;
 end;
@@ -209,9 +237,9 @@ begin
   EnsureSorted;
 
   if LCount mod 2 = 0 then
-    Result := (FData[LCount div 2 - 1] + FData[LCount div 2]) / 2
+    Result := (FSortedData[LCount div 2 - 1] + FSortedData[LCount div 2]) / 2
   else
-    Result := FData[LCount div 2];
+    Result := FSortedData[LCount div 2];
 end;
 
 function TAdvancedStats.StdDev: Double;
@@ -293,9 +321,9 @@ begin
   LCeil := Ceil(LIndex);
 
   if LFloor = LCeil then
-    Result := FData[LFloor]
+    Result := FSortedData[LFloor]
   else
-    Result := FData[LFloor] + (FData[LCeil] - FData[LFloor]) * (LIndex - LFloor);
+    Result := FSortedData[LFloor] + (FSortedData[LCeil] - FSortedData[LFloor]) * (LIndex - LFloor);
 end;
 
 function TAdvancedStats.IQR: Double;
@@ -325,6 +353,7 @@ begin
   Result.Method := omTukey;
   Result.Threshold := AFenceFactor;
 
+  // 使用原始数据检测异常值
   for I := 0 to High(FData) do
   begin
     if (FData[I] < LLower) or (FData[I] > LUpper) then
@@ -376,11 +405,11 @@ var
   LMedian: Double;
   LMAD: Double;
   I: Integer;
-  J: Integer;
-  LTemp: Double;
   LModifiedZ: Double;
   LOutlierCount: Integer;
   LDeviations: TDoubleArray;
+  LTemp: Double;
+  J: Integer;
 begin
   LMedian := Median;
 
@@ -389,18 +418,9 @@ begin
   for I := 0 to High(FData) do
     LDeviations[I] := Abs(FData[I] - LMedian);
 
-  // Sort deviations to find median
-  for I := 1 to High(LDeviations) do
-  begin
-    LTemp := LDeviations[I];
-    J := I - 1;
-    while (J >= 0) and (LDeviations[J] > LTemp) do
-    begin
-      LDeviations[J + 1] := LDeviations[J];
-      Dec(J);
-    end;
-    LDeviations[J + 1] := LTemp;
-  end;
+  // 使用 QuickSort 排序偏差
+  if Length(LDeviations) > 1 then
+    QuickSort(LDeviations, 0, High(LDeviations));
 
   if Length(LDeviations) mod 2 = 0 then
     LMAD := (LDeviations[Length(LDeviations) div 2 - 1] +
@@ -461,12 +481,12 @@ end;
 function TAdvancedStats.TestNormality: TNormalityTest;
 var
   LCount: Integer;
-  LShapiroWilk: Double;
+  LNormalityScore: Double;
 begin
   LCount := Length(FData);
 
-  // Simplified Shapiro-Wilk test
-  // For small samples, we use a simplified approach
+  // 简化的正态性启发式检验（基于偏度和峰度）
+  // 注意：这不是真正的 Shapiro-Wilk 检验，而是一个简化的启发式方法
   if LCount < 3 then
   begin
     Result.IsNormal := True;
@@ -476,19 +496,20 @@ begin
     Exit;
   end;
 
-  // Check skewness and kurtosis
-  LShapiroWilk := 1.0 - (Abs(Skewness) + Abs(Kurtosis)) / 2;
+  // 基于偏度和峰度的简化评分
+  // 理想的正态分布：偏度=0，峰度=0
+  LNormalityScore := 1.0 - (Abs(Skewness) + Abs(Kurtosis)) / 2;
 
-  Result.TestStatistic := LShapiroWilk;
-  Result.Method := 'Shapiro-Wilk (simplified)';
+  Result.TestStatistic := LNormalityScore;
+  Result.Method := 'Simplified heuristic (skewness+kurtosis)';
 
-  // Simplified decision rule
-  if LShapiroWilk > 0.8 then
+  // 简化的决策规则
+  if LNormalityScore > 0.8 then
   begin
     Result.IsNormal := True;
     Result.PValue := 0.5;
   end
-  else if LShapiroWilk > 0.6 then
+  else if LNormalityScore > 0.6 then
   begin
     Result.IsNormal := True;
     Result.PValue := 0.1;

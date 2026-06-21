@@ -17,10 +17,8 @@ uses
   nextpas.core.bench.base;
 
 type
-  {**
-   * 基准结果数组类型
-   *}
-  TBenchResultArray = array of TBenchResult;
+  {** 从 base 模块 re-export 数组类型 }
+  TBenchResultArray = nextpas.core.bench.base.TBenchResultArray;
   {**
    * 基线数据
    *}
@@ -357,11 +355,118 @@ begin
 end;
 
 procedure TBaselineManager.LoadFromJSON(const AJSON: string);
+var
+  LLines: TStringList;
+  LLine: string;
+  LPos: Integer;
+  LName: string;
+  LNsPerOp: Double;
+  LBytesPerOp: Int64;
+  LAllocsPerOp: Int64;
+  LGitHash: string;
+  LNotes: string;
+  LBaseline: TBaselineData;
 begin
-  // Simple JSON parser - in production, use a proper JSON library
-  // For now, just clear existing baselines
   ClearBaselines;
-  // TODO: Implement proper JSON parsing
+
+  // 简单的 JSON 解析 - 提取 baselines 数组中的对象
+  LLines := TStringList.Create;
+  try
+    LLines.Text := AJSON;
+
+    for LLine in LLines do
+    begin
+      LLine := Trim(LLine);
+
+      // 查找 name 字段
+      if Pos('"name":', LLine) > 0 then
+      begin
+        LPos := Pos('"name":', LLine);
+        LName := Copy(LLine, LPos + 7, MaxInt);
+        LName := Trim(LName);
+        // 移除引号和逗号
+        if (Length(LName) > 0) and (LName[1] = '"') then
+          Delete(LName, 1, 1);
+        LPos := Pos('"', LName);
+        if LPos > 0 then
+          LName := Copy(LName, 1, LPos - 1);
+
+        // 初始化默认值
+        LNsPerOp := 0;
+        LBytesPerOp := 0;
+        LAllocsPerOp := 0;
+        LGitHash := '';
+        LNotes := '';
+      end
+
+      // 查找 nsPerOp 字段
+      else if Pos('"nsPerOp":', LLine) > 0 then
+      begin
+        LPos := Pos('"nsPerOp":', LLine);
+        LNsPerOp := StrToFloatDef(Copy(LLine, LPos + 10, MaxInt), 0);
+      end
+
+      // 查找 bytesPerOp 字段
+      else if Pos('"bytesPerOp":', LLine) > 0 then
+      begin
+        LPos := Pos('"bytesPerOp":', LLine);
+        LBytesPerOp := StrToInt64Def(Copy(LLine, LPos + 13, MaxInt), 0);
+      end
+
+      // 查找 allocsPerOp 字段
+      else if Pos('"allocsPerOp":', LLine) > 0 then
+      begin
+        LPos := Pos('"allocsPerOp":', LLine);
+        LAllocsPerOp := StrToInt64Def(Copy(LLine, LPos + 14, MaxInt), 0);
+      end
+
+      // 查找 gitHash 字段
+      else if Pos('"gitHash":', LLine) > 0 then
+      begin
+        LPos := Pos('"gitHash":', LLine);
+        LGitHash := Copy(LLine, LPos + 10, MaxInt);
+        LGitHash := Trim(LGitHash);
+        if (Length(LGitHash) > 0) and (LGitHash[1] = '"') then
+          Delete(LGitHash, 1, 1);
+        LPos := Pos('"', LGitHash);
+        if LPos > 0 then
+          LGitHash := Copy(LGitHash, 1, LPos - 1);
+      end
+
+      // 查找 notes 字段
+      else if Pos('"notes":', LLine) > 0 then
+      begin
+        LPos := Pos('"notes":', LLine);
+        LNotes := Copy(LLine, LPos + 8, MaxInt);
+        LNotes := Trim(LNotes);
+        if (Length(LNotes) > 0) and (LNotes[1] = '"') then
+          Delete(LNotes, 1, 1);
+        LPos := Pos('"', LNotes);
+        if LPos > 0 then
+          LNotes := Copy(LNotes, 1, LPos - 1);
+      end
+
+      // 遇到 } 时保存基线
+      else if LLine = '}' then
+      begin
+        if LName <> '' then
+        begin
+          LBaseline.Name := LName;
+          LBaseline.NsPerOp := LNsPerOp;
+          LBaseline.BytesPerOp := LBytesPerOp;
+          LBaseline.AllocsPerOp := LAllocsPerOp;
+          LBaseline.Timestamp := Now;
+          LBaseline.GitHash := LGitHash;
+          LBaseline.CompilerVersion := 'FPC ' + {$I %FPCVERSION%};
+          LBaseline.Notes := LNotes;
+          AddBaseline(LBaseline);
+          LName := '';
+        end;
+      end;
+    end;
+  finally
+    LLines.Free;
+  end;
 end;
 
 end.

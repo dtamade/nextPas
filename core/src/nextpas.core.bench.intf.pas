@@ -15,9 +15,9 @@ type
   {** 前向声明 }
   IBenchResults = interface;
 
-  {** 数组类型别名 }
-  TBenchResultArray = array of TBenchResult;
-  TBenchComparisonArray = array of TBenchComparison;
+  {** 从 base 模块 re-export 数组类型 }
+  TBenchResultArray = nextpas.core.bench.base.TBenchResultArray;
+  TBenchComparisonArray = nextpas.core.bench.base.TBenchComparisonArray;
 
   {** 基准上下文 - 传递给基准函数的控制接口 }
   IBenchContext = interface
@@ -69,6 +69,8 @@ type
     Teardown: TBenchTeardownFunc;
     Condition: Boolean;
     DependsOn: array of string;
+    EnableParallel: Boolean;
+    ParallelThreads: Integer;
   end;
 
   {** 基准套件接口 - Fluent Builder }

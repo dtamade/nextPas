@@ -1,6 +1,6 @@
 unit nextpas.core.bench.base;
 
-{$mode objfpc}{$H+}
+{$I nextpas.core.settings.inc}
 {$modeswitch advancedrecords}
 
 interface
@@ -79,6 +79,12 @@ type
 
   {** 整数数组 }
   TInt64Array = array of Int64;
+
+  {** 基准结果数组 }
+  TBenchResultArray = array of TBenchResult;
+
+  {** 基准比较数组 }
+  TBenchComparisonArray = array of TBenchComparison;
 
   {** 基线数据 }
   TBenchBaseline = record

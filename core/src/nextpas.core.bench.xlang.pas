@@ -17,10 +17,8 @@ uses
   nextpas.core.bench.base;
 
 type
-  {**
-   * 基准结果数组类型
-   *}
-  TBenchResultArray = array of TBenchResult;
+  {** 从 base 模块 re-export 数组类型 }
+  TBenchResultArray = nextpas.core.bench.base.TBenchResultArray;
 
   {**
    * 解析器类型

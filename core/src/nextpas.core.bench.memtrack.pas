@@ -108,8 +108,37 @@ implementation
 var
   GGlobalTracker: TMemoryTracker;
   GGlobalTrackerInitialized: Boolean = False;
+  GOriginalMemoryManager: TMemoryManager;
+  GTrackingEnabled: Boolean = False;
 
 { TMemoryTracker }
+
+function TrackingGetMem(Size: PtrUInt): Pointer;
+begin
+  Result := GOriginalMemoryManager.GetMem(Size);
+  if GTrackingEnabled then
+    GGlobalTracker.RecordAlloc(Size);
+end;
+
+function TrackingFreeMem(P: Pointer): PtrUInt;
+begin
+  if GTrackingEnabled then
+    GGlobalTracker.RecordFree(0); // 简化：不跟踪具体大小
+  Result := GOriginalMemoryManager.FreeMem(P);
+end;
+
+function TrackingReAllocMem(P: Pointer; Size: PtrUInt): Pointer;
+begin
+  if GTrackingEnabled then
+  begin
+    GGlobalTracker.RecordFree(0);
+    GGlobalTracker.RecordAlloc(Size);
+  end;
+  Result := GOriginalMemoryManager.ReAllocMem(P, Size);
+end;
+
+var
+  GTrackingMemoryManager: TMemoryManager;
 
 class function TMemoryTracker.Create(AEnabled: Boolean): TMemoryTracker;
 begin
@@ -188,14 +217,31 @@ end;
 
 procedure EnableGlobalMemoryTracking;
 begin
-  GlobalMemoryTracker.Reset;
-  // Note: In a real implementation, we would hook into the memory manager
-  // For now, this is a placeholder
+  if GTrackingEnabled then Exit;
+
+  // 保存原始 memory manager
+  GetMemoryManager(GOriginalMemoryManager);
+
+  // 设置跟踪 memory manager
+  GTrackingMemoryManager.GetMem := @TrackingGetMem;
+  GTrackingMemoryManager.FreeMem := @TrackingFreeMem;
+  GTrackingMemoryManager.ReAllocMem := @TrackingReAllocMem;
+
+  // 重置统计
+  GGlobalTracker.Reset;
+
+  // 启用跟踪
+  GTrackingEnabled := True;
+  SetMemoryManager(GTrackingMemoryManager);
 end;
 
 procedure DisableGlobalMemoryTracking;
 begin
-  // Note: In a real implementation, we would unhook the memory manager
+  if not GTrackingEnabled then Exit;
+
+  // 恢复原始 memory manager
+  SetMemoryManager(GOriginalMemoryManager);
+  GTrackingEnabled := False;
 end;
 
 procedure ResetGlobalMemoryTracker;

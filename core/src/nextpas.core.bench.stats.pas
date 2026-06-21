@@ -239,6 +239,7 @@ function TBenchStatsAnalyzer.ComputeStats(const ASamples: TDoubleArray): TBenchS
 var
   LSorted: TDoubleArray;
   LMean: Double;
+  LT95, LT99: Double;
 begin
   if Length(ASamples) = 0 then
   begin
@@ -265,13 +266,15 @@ begin
   Result.OutlierCount := CountOutliers(LSorted, Result.P25, Result.P75, OUTLIER_MULTIPLIER);
   Result.SampleCount := Length(ASamples);
 
-  // 95% 置信区间
+  // 95% 置信区间（使用 t 分布临界值）
   if Length(ASamples) > 1 then
   begin
-    Result.Confidence95Low := LMean - Z_SCORE_95 * Result.StdDev / Sqrt(Length(ASamples));
-    Result.Confidence95High := LMean + Z_SCORE_95 * Result.StdDev / Sqrt(Length(ASamples));
-    Result.Confidence99Low := LMean - Z_SCORE_99 * Result.StdDev / Sqrt(Length(ASamples));
-    Result.Confidence99High := LMean + Z_SCORE_99 * Result.StdDev / Sqrt(Length(ASamples));
+    LT95 := TInv0975(Length(ASamples) - 1);
+    LT99 := LT95 * 1.2; // 近似 99% 置信区间
+    Result.Confidence95Low := LMean - LT95 * Result.StdDev / Sqrt(Length(ASamples));
+    Result.Confidence95High := LMean + LT95 * Result.StdDev / Sqrt(Length(ASamples));
+    Result.Confidence99Low := LMean - LT99 * Result.StdDev / Sqrt(Length(ASamples));
+    Result.Confidence99High := LMean + LT99 * Result.StdDev / Sqrt(Length(ASamples));
   end
   else
   begin

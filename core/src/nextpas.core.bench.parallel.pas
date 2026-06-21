@@ -58,7 +58,7 @@ type
     FConfig: TParallelBenchConfig;
     FFunc: TBenchParallelFunc;
     FResults: TParallelBenchResult;
-    function CreateThreads: TList;
+    function CreateThreads: array of TBenchThread;
     procedure RunThread(AThreadId: Integer);
   public
     {**
@@ -88,6 +88,9 @@ type
                            AIterationsPerThread: Int64 = 1000000): TParallelBenchResult;
 
 implementation
+
+uses
+  nextpas.core.platform.time;
 
 
 
@@ -128,24 +131,20 @@ end;
 
 procedure TBenchThread.Execute;
 var
-  LStart: TDateTime;
-  LEnd: TDateTime;
-  LElapsedSec: Double;
+  LStartNs: UInt64;
+  LEndNs: UInt64;
 begin
-  // Record start time
-  LStart := Now;
+  // Record start time using high-precision timer
+  LStartNs := platform_monotonic_ns;
 
   // Execute the benchmark function
   FFunc(FBenchThreadId, FIterations);
 
   // Record end time
-  LEnd := Now;
+  LEndNs := platform_monotonic_ns;
 
-  // Calculate elapsed time in seconds
-  LElapsedSec := (LEnd - LStart) * 86400; // Convert days to seconds
-
-  // Convert to nanoseconds
-  FElapsedNs := Round(LElapsedSec * 1000000000);
+  // Calculate elapsed time in nanoseconds
+  FElapsedNs := LEndNs - LStartNs;
 end;
 
 { TParallelBenchmark }
@@ -162,17 +161,13 @@ begin
   Result.FResults := Default(TParallelBenchResult);
 end;
 
-function TParallelBenchmark.CreateThreads: TList;
+function TParallelBenchmark.CreateThreads: array of TBenchThread;
 var
   I: Integer;
-  LThread: TBenchThread;
 begin
-  Result := TList.Create;
+  SetLength(Result, FConfig.ThreadCount);
   for I := 0 to FConfig.ThreadCount - 1 do
-  begin
-    LThread := TBenchThread.Create(I, FFunc, FConfig.IterationsPerThread);
-    Result.Add(LThread);
-  end;
+    Result[I] := TBenchThread.Create(I, FFunc, FConfig.IterationsPerThread);
 end;
 
 procedure TParallelBenchmark.RunThread(AThreadId: Integer);
@@ -182,11 +177,10 @@ end;
 
 function TParallelBenchmark.Execute: TParallelBenchResult;
 var
-  LThreads: TList;
-  LThread: TBenchThread;
+  LThreads: array of TBenchThread;
   I: Integer;
-  LStart: TDateTime;
-  LEnd: TDateTime;
+  LStartNs: UInt64;
+  LEndNs: UInt64;
   LTotalIterations: Int64;
   LSequentialNs: Double;
 begin
@@ -200,40 +194,39 @@ begin
   // Create threads
   LThreads := CreateThreads;
 
-  // Record start time
-  LStart := Now;
+  // Record start time using high-precision timer
+  LStartNs := platform_monotonic_ns;
 
   // Start all threads
-  for I := 0 to LThreads.Count - 1 do
-    TBenchThread(LThreads[I]).Start;
+  for I := 0 to High(LThreads) do
+    LThreads[I].Start;
 
   // Wait for all threads to complete
-  for I := 0 to LThreads.Count - 1 do
-    TBenchThread(LThreads[I]).WaitFor;
+  for I := 0 to High(LThreads) do
+    LThreads[I].WaitFor;
 
   // Record end time
-  LEnd := Now;
+  LEndNs := platform_monotonic_ns;
 
   // Collect results
   LTotalIterations := 0;
-  SetLength(FResults.ThreadResults, LThreads.Count);
+  SetLength(FResults.ThreadResults, Length(LThreads));
 
-  for I := 0 to LThreads.Count - 1 do
+  for I := 0 to High(LThreads) do
   begin
-    LThread := TBenchThread(LThreads[I]);
-    FResults.ThreadResults[I].ThreadId := LThread.BenchThreadId;
-    FResults.ThreadResults[I].Iterations := LThread.Iterations;
-    FResults.ThreadResults[I].ElapsedNs := LThread.ElapsedNs;
-    if LThread.Iterations > 0 then
-      FResults.ThreadResults[I].NsPerOp := LThread.ElapsedNs / LThread.Iterations
+    FResults.ThreadResults[I].ThreadId := LThreads[I].BenchThreadId;
+    FResults.ThreadResults[I].Iterations := LThreads[I].Iterations;
+    FResults.ThreadResults[I].ElapsedNs := LThreads[I].ElapsedNs;
+    if LThreads[I].Iterations > 0 then
+      FResults.ThreadResults[I].NsPerOp := LThreads[I].ElapsedNs / LThreads[I].Iterations
     else
       FResults.ThreadResults[I].NsPerOp := 0;
-    Inc(LTotalIterations, LThread.Iterations);
+    Inc(LTotalIterations, LThreads[I].Iterations);
   end;
 
   // Calculate total results
   FResults.Config := FConfig;
-  FResults.TotalNs := Round((LEnd - LStart) * 86400 * 1000000000); // Convert days to ns
+  FResults.TotalNs := LEndNs - LStartNs;
   if LTotalIterations > 0 then
     FResults.NsPerOp := FResults.TotalNs / LTotalIterations
   else
@@ -262,9 +255,9 @@ begin
     FResults.Efficiency := 1;
 
   // Cleanup
-  for I := 0 to LThreads.Count - 1 do
-    TBenchThread(LThreads[I]).Free;
-  LThreads.Free;
+  for I := 0 to High(LThreads) do
+    LThreads[I].Free;
+  SetLength(LThreads, 0);
 
   Result := FResults;
 end;

@@ -51,6 +51,9 @@ type
     {** 检查依赖是否满足 }
     function CheckDependencies(const AEntry: TBenchEntry): Boolean;
 
+    {** 拓扑排序 }
+    function TopologicalSort: array of Integer;
+
     {** 获取环境信息 }
     function GetEnvironment: TBenchEnvironment;
 
@@ -176,12 +179,61 @@ begin
   Result := True;
 end;
 
+function TBenchSuite.TopologicalSort: array of Integer;
+var
+  LVisited: array of Boolean;
+  LSorted: array of Integer;
+  LSortedCount: Integer;
+
+  procedure Visit(AIndex: Integer);
+  var
+    I, J: Integer;
+    LDepIndex: Integer;
+  begin
+    if LVisited[AIndex] then Exit;
+    LVisited[AIndex] := True;
+
+    // 先访问所有依赖
+    for I := 0 to High(FEntries[AIndex].DependsOn) do
+    begin
+      for J := 0 to FEntryCount - 1 do
+      begin
+        if FEntries[J].Name = FEntries[AIndex].DependsOn[I] then
+        begin
+          Visit(J);
+          Break;
+        end;
+      end;
+    end;
+
+    // 添加到排序结果
+    SetLength(LSorted, LSortedCount + 1);
+    LSorted[LSortedCount] := AIndex;
+    Inc(LSortedCount);
+  end;
+
+var
+  I: Integer;
+begin
+  SetLength(LVisited, FEntryCount);
+  for I := 0 to FEntryCount - 1 do
+    LVisited[I] := False;
+
+  LSortedCount := 0;
+  SetLength(LSorted, 0);
+
+  for I := 0 to FEntryCount - 1 do
+    Visit(I);
+
+  Result := LSorted;
+end;
+
 function TBenchSuite.GetEnvironment: TBenchEnvironment;
 begin
-  Result.OS := 'linux';  // TODO: 实现平台检测
-  Result.CPU := 'x86_64';
-  Result.Cores := 4;
-  Result.FPCVersion := '3.3.1';
+  Result.OS := {$I %FPCTARGETOS%};
+  Result.CPU := {$I %FPCTARGETCPU%};
+  Result.Cores := 4; // 默认值，后续可通过 SysUtils 获取
+  Result.FPCVersion := {$I %FPCVERSION%};
   Result.Timestamp := FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', Now);
 end;
 
@@ -253,13 +305,13 @@ begin
   LEntry.Condition := True;
   SetLength(LEntry.DependsOn, 0);
 
+  // 将并行配置绑定到单个 entry
+  LEntry.EnableParallel := True;
+  LEntry.ParallelThreads := AThreads;
+
   Inc(FEntryCount);
   SetLength(FEntries, FEntryCount);
   FEntries[FEntryCount - 1] := LEntry;
-
-  // 设置并行配置
-  FConfig.EnableParallel := True;
-  FConfig.ParallelThreads := AThreads;
 
   Result := Self;
 end;
@@ -311,8 +363,29 @@ begin
 end;
 
 function TBenchSuite.LoadBaseline(const APath: string): IBenchSuite;
+var
+  LManager: TBaselineManager;
+  LBaselines: TBaselineArray;
+  I: Integer;
 begin
-  // TODO: 实现基线文件加载
+  LManager := TBaselineManager.Create;
+  try
+    LManager.LoadFromFile(APath);
+    LBaselines := LManager.GetAllBaselines;
+
+    // 将加载的基线添加到 suite
+    for I := 0 to High(LBaselines) do
+    begin
+      SetLength(FBaselines, FBaselineCount + 1);
+      FBaselines[FBaselineCount].Name := LBaselines[I].Name;
+      FBaselines[FBaselineCount].NsPerOp := LBaselines[I].NsPerOp;
+      Inc(FBaselineCount);
+    end;
+  except
+    on E: Exception do
+      WriteLn('Warning: Failed to load baseline from ', APath, ': ', E.Message);
+  end;
+
   Result := Self;
 end;
 
@@ -327,23 +400,28 @@ var
   LResults: array of TBenchResult;
   LResultCount: Integer;
   LEnvironment: TBenchEnvironment;
-  i: Integer;
+  LSortedIndices: array of Integer;
+  i, LIdx: Integer;
 begin
   // 配置运行器
   FRunner.SetConfig(FConfig);
   FRunner.SetFilter(FFilter);
 
+  // 使用拓扑排序确保依赖顺序
+  LSortedIndices := TopologicalSort;
+
   // 运行所有基准
   LResultCount := 0;
   SetLength(LResults, 0);
 
-  for i := 0 to FEntryCount - 1 do
+  for i := 0 to High(LSortedIndices) do
   begin
-    if FEntries[i].Condition and CheckDependencies(FEntries[i]) then
+    LIdx := LSortedIndices[i];
+    if FEntries[LIdx].Condition and CheckDependencies(FEntries[LIdx]) then
     begin
       Inc(LResultCount);
       SetLength(LResults, LResultCount);
-      LResults[LResultCount - 1] := FRunner.RunOne(FEntries[i].Name, FEntries[i].Func);
+      LResults[LResultCount - 1] := FRunner.RunOne(FEntries[LIdx].Name, FEntries[LIdx].Func);
     end;
   end;
 
@@ -489,9 +567,12 @@ var
   LFile: TextFile;
 begin
   AssignFile(LFile, APath);
-  Rewrite(LFile);
-  WriteLn(LFile, ToJSON);
-  CloseFile(LFile);
+  try
+    Rewrite(LFile);
+    WriteLn(LFile, ToJSON);
+  finally
+    CloseFile(LFile);
+  end;
 end;
 
 procedure TBenchResults.SaveToHTML(const APath: string);
@@ -499,9 +580,12 @@ var
   LFile: TextFile;
 begin
   AssignFile(LFile, APath);
-  Rewrite(LFile);
-  WriteLn(LFile, ToHTML);
-  CloseFile(LFile);
+  try
+    Rewrite(LFile);
+    WriteLn(LFile, ToHTML);
+  finally
+    CloseFile(LFile);
+  end;
 end;
 
 procedure TBenchResults.SaveToTSV(const APath: string);
@@ -509,9 +593,12 @@ var
   LFile: TextFile;
 begin
   AssignFile(LFile, APath);
-  Rewrite(LFile);
-  WriteLn(LFile, ToTSV);
-  CloseFile(LFile);
+  try
+    Rewrite(LFile);
+    WriteLn(LFile, ToTSV);
+  finally
+    CloseFile(LFile);
+  end;
 end;
 
 function TBenchResults.CompareWithBaseline: TBenchComparisonArray;
