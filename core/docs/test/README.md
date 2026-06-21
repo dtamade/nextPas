@@ -125,7 +125,7 @@ ExpectProc(procedure begin StrToInt('bad'); end)
 | `tsSkipped` | 2 | `ETestSkipped` raised | `Skip()` called explicitly |
 | `tsError` | 3 | Unexpected exception | Any non-assertion, non-skip exception (e.g. `EConvertError`) |
 
-`tsError` and `tsFailed` are both counted as failures in `FLastFail`/`TotalFail`.
+`tsError` and `tsFailed` are both counted as failures in `LastFail`/`TotalFail`.
 
 ### Execution Behavior
 
@@ -306,7 +306,7 @@ When using `RunParallel`:
   from multiple threads. Avoid shared mutable state or protect with a mutex.
 - **Setup / Teardown** run serially (before/after all parallel tests) and are
   safe to use shared state. If Setup fails, all tests are skipped and the suite
-  reports `FLastFail = 1`, `FHasRun = True`.
+  reports `LastFail = 1`, `HasRun = True`.
 - **Check\* assertions** work correctly in parallel tests — each thread catches
   its own exceptions locally.
 - **Subtests** (`ITestContext.Run` / `RunNested`) are a serial-only feature.
@@ -347,7 +347,7 @@ done
 ## Architecture
 
 ```
-nextpas.core.test.pas           ← Single-unit framework (~1860 lines)
+nextpas.core.test.pas           ← Single-unit framework (~1870 lines)
   ├── TTestStatus               ← tsPassed/tsFailed/tsSkipped/tsError
   ├── TTestEntry                ← Name + Proc/SubtestProc + Kind
   ├── TTestSuite                ← Suite with lifecycle hooks (record)

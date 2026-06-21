@@ -93,6 +93,32 @@ begin
   end;
 end;
 
+procedure TestCheckNotEqualBool;
+begin
+  CheckNotEqual(True, False);
+  try
+    CheckNotEqual(True, True);
+    Halt(1);
+  except
+    on E: EAssertionFailed do Check(Pos('True', E.Message) > 0, 'bool msg');
+  end;
+end;
+
+procedure TestCheckNotEqualPtr;
+var
+  LP, LP2: Pointer;
+begin
+  LP := @LP;
+  LP2 := @LP2;
+  CheckNotEqual(LP, LP2);
+  try
+    CheckNotEqual(LP, LP);
+    Halt(1);
+  except
+    on E: EAssertionFailed do Check(Pos('differ', LowerCase(E.Message)) > 0, 'ptr msg');
+  end;
+end;
+
 procedure TestCheckTrueFalse;
 begin
   CheckTrue(True);
@@ -299,6 +325,8 @@ begin
   LSuite.Test('CheckEqual (bool)',     @TestCheckEqualBool);
   LSuite.Test('CheckEqual (pointer)',  @TestCheckEqualPtr);
   LSuite.Test('CheckNotEqual',         @TestCheckNotEqual);
+  LSuite.Test('CheckNotEqual (bool)',  @TestCheckNotEqualBool);
+  LSuite.Test('CheckNotEqual (ptr)',   @TestCheckNotEqualPtr);
   LSuite.Test('CheckTrue/False',       @TestCheckTrueFalse);
   LSuite.Test('CheckNil/NotNil',       @TestCheckNilNotNil);
   LSuite.Test('CheckContains',         @TestCheckContains);

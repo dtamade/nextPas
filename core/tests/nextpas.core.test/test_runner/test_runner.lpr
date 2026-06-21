@@ -196,17 +196,17 @@ begin
     WriteLn(AnsiRed('FAIL: Setup failure should cause Run=False'));
     Halt(1);
   end;
-  if LFailSuite1.FLastPass <> 0 then
+  if LFailSuite1.LastPass <> 0 then
   begin
     WriteLn(AnsiRed('FAIL: No tests should pass after setup failure'));
     Halt(1);
   end;
-  if not LFailSuite1.FHasRun then
+  if not LFailSuite1.HasRun then
   begin
-    WriteLn(AnsiRed('FAIL: FHasRun should be True after Run'));
+    WriteLn(AnsiRed('FAIL: HasRun should be True after Run'));
     Halt(1);
   end;
-  if LFailSuite1.FLastFail < 1 then
+  if LFailSuite1.LastFail < 1 then
   begin
     WriteLn(AnsiRed('FAIL: Setup failure should count as failure'));
     Halt(1);
@@ -235,7 +235,7 @@ begin
     WriteLn(AnsiRed('FAIL: BeforeEach failure should cause Run=False'));
     Halt(1);
   end;
-  if LFailSuite2.FLastFail < 1 then
+  if LFailSuite2.LastFail < 1 then
   begin
     WriteLn(AnsiRed('FAIL: At least 1 failure expected'));
     Halt(1);

@@ -94,7 +94,7 @@ begin
   LSuite.Test('t2', @TestParallelPassB);
   { RunParallel should handle beforeEach failure gracefully }
   LSuite.RunParallel(nil);
-  if LSuite.FLastFail < 1 then
+  if LSuite.LastFail < 1 then
   begin
     WriteLn(AnsiRed('FAIL: expected at least 1 failure from beforeEach'));
     Halt(1);
@@ -112,9 +112,9 @@ begin
   LSuite.Test('t2', @TestParallelPassB);
   { Setup failure should skip all tests }
   LSuite.RunParallel(nil);
-  if LSuite.FLastSkip < 2 then
+  if LSuite.LastSkip < 2 then
   begin
-    WriteLn(AnsiRed('FAIL: expected 2 skips from setup failure, got '), LSuite.FLastSkip);
+    WriteLn(AnsiRed('FAIL: expected 2 skips from setup failure, got '), LSuite.LastSkip);
     Halt(1);
   end;
   WriteLn(AnsiGreen('  ✓ Parallel setup failure'));
@@ -163,7 +163,7 @@ begin
     WriteLn(AnsiRed('FAIL: suite with failing test should return False'));
     Halt(1);
   end;
-  if LFailSuite.FLastFail < 1 then
+  if LFailSuite.LastFail < 1 then
   begin
     WriteLn(AnsiRed('FAIL: expected at least 1 failure'));
     Halt(1);
@@ -180,9 +180,9 @@ begin
     WriteLn(AnsiRed('FAIL: suite with skip should still return True'));
     Halt(1);
   end;
-  if LSkipSuite.FLastSkip < 2 then
+  if LSkipSuite.LastSkip < 2 then
   begin
-    WriteLn(AnsiRed('FAIL: expected at least 2 skips (static + worker), got '), LSkipSuite.FLastSkip);
+    WriteLn(AnsiRed('FAIL: expected at least 2 skips (static + worker), got '), LSkipSuite.LastSkip);
     Halt(1);
   end;
   WriteLn(AnsiGreen('  ✓ Parallel with skip'));

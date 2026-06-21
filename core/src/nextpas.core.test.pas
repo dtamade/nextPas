@@ -92,11 +92,11 @@ type
     BeforeEach: TTestProc;
     AfterEach : TTestProc;
     { Cached run results — set by Run/RunParallel }
-    FLastRunPassed: Boolean;
-    FHasRun       : Boolean;
-    FLastPass     : Integer;
-    FLastFail     : Integer;
-    FLastSkip     : Integer;
+    LastRunPassed: Boolean;
+    HasRun       : Boolean;
+    LastPass     : Integer;
+    LastFail     : Integer;
+    LastSkip     : Integer;
 
     class function Create(const AName: string): TTestSuite; static;
     procedure Test(const AName: string; AProc: TTestProc);
@@ -173,6 +173,8 @@ procedure CheckEqual(AExpected, AActual: Boolean); overload;
 procedure CheckEqual(AExpected, AActual: Pointer); overload;
 procedure CheckNotEqual(const AExpected, AActual: string); overload;
 procedure CheckNotEqual(AExpected, AActual: Int64); overload;
+procedure CheckNotEqual(AExpected, AActual: Boolean); overload;
+procedure CheckNotEqual(AExpected, AActual: Pointer); overload;
 procedure CheckTrue(AValue: Boolean; const AMessage: string = '');
 procedure CheckFalse(AValue: Boolean; const AMessage: string = '');
 procedure CheckNil(AValue: Pointer; const AMessage: string = '');
@@ -396,6 +398,20 @@ procedure CheckNotEqual(AExpected, AActual: Int64);
 begin
   if AExpected = AActual then
     InternalFail('Expected values to differ but both are ' + IntToStr(AActual));
+end;
+
+procedure CheckNotEqual(AExpected, AActual: Boolean);
+begin
+  if AExpected = AActual then
+    InternalFail('Expected values to differ but both are ' +
+      BoolToStr(AActual, 'True', 'False'));
+end;
+
+procedure CheckNotEqual(AExpected, AActual: Pointer);
+begin
+  if AExpected = AActual then
+    InternalFail('Expected values to differ but both are $' +
+      IntToHex(NativeUInt(AActual), 16));
 end;
 
 procedure CheckTrue(AValue: Boolean; const AMessage: string);
@@ -1165,11 +1181,11 @@ begin
   Result.Teardown   := nil;
   Result.BeforeEach := nil;
   Result.AfterEach  := nil;
-  Result.FLastRunPassed := False;
-  Result.FHasRun        := False;
-  Result.FLastPass      := 0;
-  Result.FLastFail      := 0;
-  Result.FLastSkip      := 0;
+  Result.LastRunPassed := False;
+  Result.HasRun        := False;
+  Result.LastPass      := 0;
+  Result.LastFail      := 0;
+  Result.LastSkip      := 0;
 end;
 
 procedure TTestSuite.Test(const AName: string; AProc: TTestProc);
@@ -1282,11 +1298,11 @@ begin
         AResult.Failed    := 1;
         AResult.Skipped   := LSkip;
         AResult.AllPassed := False;
-        FHasRun        := True;
-        FLastRunPassed := False;
-        FLastPass      := 0;
-        FLastFail      := 1;
-        FLastSkip      := LSkip;
+        HasRun        := True;
+        LastRunPassed := False;
+        LastPass      := 0;
+        LastFail      := 1;
+        LastSkip      := LSkip;
         Result         := False;
         WriteLn(AnsiDim('  ') + IntToStr(LSkip) + ' skipped (setup failure)');
         Exit;
@@ -1466,12 +1482,12 @@ begin
   AResult.Skipped   := LSkip;
   AResult.AllPassed := LFail = 0;
 
-  FHasRun        := True;
-  FLastRunPassed := AResult.AllPassed;
-  FLastPass      := LPass;
-  FLastFail      := LFail;
-  FLastSkip      := LSkip;
-  Result         := FLastRunPassed;
+  HasRun        := True;
+  LastRunPassed := AResult.AllPassed;
+  LastPass      := LPass;
+  LastFail      := LFail;
+  LastSkip      := LSkip;
+  Result         := LastRunPassed;
   WriteLn(AnsiDim('  ') +
     IntToStr(LPass) + ' passed, ' +
     IntToStr(LFail) + ' failed, ' +
@@ -1670,11 +1686,11 @@ begin
           Inc(LSkip);
           WriteLn('    ', StatusDot(tsSkipped), ' ', AnsiDim(Tests[I].Name));
         end;
-        FHasRun        := True;
-        FLastRunPassed := False;
-        FLastPass      := 0;
-        FLastFail      := 0;
-        FLastSkip      := LSkip;
+        HasRun        := True;
+        LastRunPassed := False;
+        LastPass      := 0;
+        LastFail      := 0;
+        LastSkip      := LSkip;
         Result         := False;
         WriteLn(AnsiDim('  ') + IntToStr(LSkip) + ' skipped (setup failure)');
         Exit;
@@ -1721,12 +1737,12 @@ begin
     end;
   end;
 
-  FHasRun        := True;
-  FLastRunPassed := LFail = 0;
-  FLastPass      := LPass;
-  FLastFail      := LFail;
-  FLastSkip      := LSkip;
-  Result         := FLastRunPassed;
+  HasRun        := True;
+  LastRunPassed := LFail = 0;
+  LastPass      := LPass;
+  LastFail      := LFail;
+  LastSkip      := LSkip;
+  Result         := LastRunPassed;
   WriteLn(AnsiDim('  ') +
     IntToStr(LPass) + ' passed, ' +
     IntToStr(LFail) + ' failed, ' +
@@ -1735,24 +1751,24 @@ end;
 
 procedure TTestSuite.Summary;
 begin
-  if not FHasRun then
+  if not HasRun then
   begin
     WriteLn(AnsiYellow('Warning: ') + Name + ' has not been run yet');
     Exit;
   end;
   WriteLn(AnsiBold('─── ') + AnsiCyan(Name) + AnsiBold(' ───'));
   WriteLn('  Total tests: ', Length(Tests));
-  WriteLn('  Passed: ', FLastPass, ', Failed: ', FLastFail, ', Skipped: ', FLastSkip);
+  WriteLn('  Passed: ', LastPass, ', Failed: ', LastFail, ', Skipped: ', LastSkip);
 end;
 
 function TTestSuite.AllPassed: Boolean;
   { Returns whether all tests passed. If Run/RunParallel has not been called yet,
     this will automatically execute Run (serial mode) first. }
 begin
-  if not FHasRun then
+  if not HasRun then
     Result := Run
   else
-    Result := FLastRunPassed;
+    Result := LastRunPassed;
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }
@@ -1791,9 +1807,9 @@ begin
   begin
     if not Suites[I].Run then
       LAllPassed := False;
-    Inc(TotalPass, Suites[I].FLastPass);
-    Inc(TotalFail, Suites[I].FLastFail);
-    Inc(TotalSkip, Suites[I].FLastSkip);
+    Inc(TotalPass, Suites[I].LastPass);
+    Inc(TotalFail, Suites[I].LastFail);
+    Inc(TotalSkip, Suites[I].LastSkip);
   end;
   Result := LAllPassed;
 end;
@@ -1812,9 +1828,9 @@ begin
   begin
     if not Suites[I].RunParallel(APool) then
       LAllPassed := False;
-    Inc(TotalPass, Suites[I].FLastPass);
-    Inc(TotalFail, Suites[I].FLastFail);
-    Inc(TotalSkip, Suites[I].FLastSkip);
+    Inc(TotalPass, Suites[I].LastPass);
+    Inc(TotalFail, Suites[I].LastFail);
+    Inc(TotalSkip, Suites[I].LastSkip);
   end;
   Result := LAllPassed;
 end;
