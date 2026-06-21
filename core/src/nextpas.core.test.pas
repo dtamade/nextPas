@@ -212,15 +212,10 @@ var
   GActiveTestName : string = '';
   GActiveSuiteName: string = '';
 
-  { Flow control — set by InternalFail/InternalSkip, read by SetTestContext }
-  GTestSkipped   : Boolean = False;  // set true on Skip()
+  { Flow control — set by InternalFail, read by ReportLeakIfAny }
   GTestFailed    : Boolean = False;  // set true on Fail()/Check*
-  GSkipReason    : string  = '';
 
-  { Parallel mode flag — when true, InternalFail/InternalSkip skip global state writes }
-  GParallelMode  : Boolean = False;
-
-  { ANSI capability }
+  { ANSI capability — set once in initialization, read-only after }
   GAnsiEnabled: Boolean = False;
   GAnsiChecked: Boolean = False;
 
@@ -296,18 +291,12 @@ end;
 
 procedure InternalFail(const AMessage: string);
 begin
-  if not GParallelMode then
-    GTestFailed := True;  { Only write global in serial mode }
+  GTestFailed := True;
   raise EAssertionFailed.Create(AMessage);
 end;
 
 procedure InternalSkip(const AReason: string);
 begin
-  if not GParallelMode then
-  begin
-    GTestSkipped := True;
-    GSkipReason  := AReason;
-  end;
   raise ETestSkipped.Create(AReason);
 end;
 
@@ -315,9 +304,7 @@ procedure SetTestContext(const ASuiteName, ATestName: string);
 begin
   GActiveTestName  := ATestName;
   GActiveSuiteName := ASuiteName;
-  GTestSkipped     := False; { read by ReportLeakIfAny under HASHEAPTRACE }
   GTestFailed      := False; { read by ReportLeakIfAny under HASHEAPTRACE }
-  GSkipReason      := '';
 end;
 
 procedure ReportLeakIfAny(AStatus: TTestStatus);
@@ -1409,8 +1396,8 @@ begin
   LStatus := tsPassed;
   LFailMsg := '';
   { Note: We intentionally do NOT call SetTestContext here.
-    SetTestContext writes to non-threadsafe global vars (GActiveTestName etc.)
-    and is only safe in serial mode. Parallel tests track state locally via LStatus. }
+    SetTestContext writes to process-global vars (GActiveTestName etc.)
+    which are not thread-safe. Parallel tests track state locally via LStatus. }
 
   { Subtests are not supported in parallel mode — skip gracefully }
   if R^.Entry.Kind = ekSubtest then
@@ -1596,15 +1583,13 @@ begin
     LRecs[I].Skip      := @LSkip;
   end;
 
-  { Spawn one thread per test — GParallelMode prevents global state writes }
-  GParallelMode := True;
+  { Spawn one thread per test }
   for I := 0 to High(Tests) do
     platform_thread_create(LHandles[I], @ParallelWorkerProc, @LRecs[I]);
 
   { Wait for all threads — join provides happens-before guarantee }
   for I := 0 to High(Tests) do
     platform_thread_join(LHandles[I], LRetVal);
-  GParallelMode := False;
 
   { Suite-level teardown }
   if Assigned(Teardown) then
