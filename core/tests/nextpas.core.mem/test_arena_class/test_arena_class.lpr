@@ -171,8 +171,7 @@ begin
   end;
 end;
 
-{TLocalArena 没有 TotalAllocCount 和 PeakUsed 属性，此测试已删除}
-{procedure TestStats;
+procedure TestStats;
 var A: TLocalArena;
 begin
   A := TLocalArena.Create(256);
@@ -188,7 +187,7 @@ begin
   finally
     A.Free;
   end;
-end;}
+end;
 
 procedure TestArenaClassLegacyAlias;
 var
@@ -216,8 +215,7 @@ begin
   T.Run('alloc fast', @TestAllocFast);
   T.Run('alloc aligned fast', @TestAllocAlignedFast);
   T.Run('zero size alloc', @TestZeroSizeAlloc);
-  {TLocalArena 没有 TotalAllocCount 和 PeakUsed 属性，此测试已删除}
-  {T.Run('statistics', @TestStats);}
+  T.Run('statistics', @TestStats);
   T.Run('legacy TArena alias', @TestArenaClassLegacyAlias);
   T.Summary;
 end.

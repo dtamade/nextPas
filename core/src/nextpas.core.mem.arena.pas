@@ -20,6 +20,8 @@ type
     FBacking: Pointer;
     FCapacity: SizeUInt;
     FOffset: SizeUInt;
+    FPeakUsed: SizeUInt;       { 峰值使用量 }
+    FTotalAllocs: SizeUInt;    { 总分配次数 }
   public
     {** 创建 Arena 并分配 ACapacity 字节的后备内存。ACapacity=0 时不做分配。 }
     constructor Create(const ACapacity: SizeUInt);
@@ -50,6 +52,11 @@ type
     function UsedSize: SizeUInt; inline;
     {** 返回剩余可用字节数。 }
     function RemainingSize: SizeUInt; inline;
+
+    {** 返回峰值使用量。 }
+    property PeakUsed: SizeUInt read FPeakUsed;
+    {** 返回总分配次数。 }
+    property TotalAllocCount: SizeUInt read FTotalAllocs;
   end;
 
 implementation
@@ -69,6 +76,8 @@ begin
     FBacking := nil;
   FCapacity := ACapacity;
   FOffset := 0;
+  FPeakUsed := 0;
+  FTotalAllocs := 0;
 end;
 
 destructor TLocalArena.Destroy;
@@ -97,6 +106,9 @@ begin
     Exit;
   Result := Pointer(PtrUInt(FBacking) + FOffset);
   Inc(FOffset, ASize);
+  Inc(FTotalAllocs);
+  if FOffset > FPeakUsed then
+    FPeakUsed := FOffset;
 end;
 
 function TLocalArena.AllocAligned(ASize: SizeUInt; AAlign: SizeUInt): Pointer;
@@ -131,6 +143,9 @@ begin
     Exit;
   Inc(FOffset, LPadding + ASize);
   Result := Pointer(LAligned);
+  Inc(FTotalAllocs);
+  if FOffset > FPeakUsed then
+    FPeakUsed := FOffset;
 end;
 
 function TLocalArena.AllocZeroed(ASize: SizeUInt): Pointer;
@@ -162,6 +177,7 @@ end;
 procedure TLocalArena.Reset;
 begin
   FOffset := 0;
+  { 注意：FPeakUsed 和 FTotalAllocs 不重置，保留统计信息 }
 end;
 
 function TLocalArena.SaveMark: TArenaMarker;
