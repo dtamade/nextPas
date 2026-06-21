@@ -93,20 +93,26 @@ type
   TStringList = class
   private
     FItems: array of string;
+    FObjects: array of TObject;
     FCount: Integer;
+    FSorted: Boolean;
     FTextLineBreakStyle: Integer; // 0=LF, 1=CRLF
     function GetString(Index: Integer): string;
     procedure SetString(Index: Integer; const Value: string);
+    function GetObject(Index: Integer): TObject;
+    procedure SetObject(Index: Integer; Value: TObject);
     function GetValue(const Name: string): string;
     procedure SetValue(const Name, Value: string);
     function GetName(Index: Integer): string;
     function GetText: string;
     procedure SetText(const Value: string);
+    procedure SetSorted(Value: Boolean);
   public
     constructor Create;
     destructor Destroy; override;
 
     function Add(const S: string): Integer;
+    function AddObject(const S: string; AObject: TObject): Integer;
     procedure Insert(Index: Integer; const S: string);
     procedure Clear;
     function IndexOf(const S: string): Integer;
@@ -118,8 +124,10 @@ type
     procedure AddStrings(AList: TStringList);
 
     property Count: Integer read FCount;
+    property Sorted: Boolean read FSorted write SetSorted;
     property Strings[Index: Integer]: string read GetString write SetString; default;
     property Names[Index: Integer]: string read GetName;
+    property Objects[Index: Integer]: TObject read GetObject write SetObject;
     property Values[const Name: string]: string read GetValue write SetValue;
     property Text: string read GetText write SetText;
   end;
@@ -449,16 +457,47 @@ end;
 
 function TStringList.Add(const S: string): Integer;
 begin
+  Result := AddObject(S, nil);
+end;
+
+function TStringList.AddObject(const S: string; AObject: TObject): Integer;
+begin
   SetLength(FItems, FCount + 1);
+  SetLength(FObjects, FCount + 1);
   FItems[FCount] := S;
+  FObjects[FCount] := AObject;
   Result := FCount;
   Inc(FCount);
 end;
 
 procedure TStringList.Clear;
+var
+  I: Integer;
 begin
+  for I := 0 to FCount - 1 do
+    FObjects[I] := nil;
   SetLength(FItems, 0);
+  SetLength(FObjects, 0);
   FCount := 0;
+end;
+
+function TStringList.GetObject(Index: Integer): TObject;
+begin
+  if (Index < 0) or (Index >= FCount) then
+    Result := nil
+  else
+    Result := FObjects[Index];
+end;
+
+procedure TStringList.SetObject(Index: Integer; Value: TObject);
+begin
+  if (Index >= 0) and (Index < FCount) then
+    FObjects[Index] := Value;
+end;
+
+procedure TStringList.SetSorted(Value: Boolean);
+begin
+  FSorted := Value;
 end;
 
 function TStringList.IndexOf(const S: string): Integer;

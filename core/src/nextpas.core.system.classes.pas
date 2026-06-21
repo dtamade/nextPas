@@ -10,7 +10,8 @@ unit nextpas.core.system.classes;
 interface
 
 uses
-  Classes;
+  Classes,
+  nextpas.core.io.intf;
 
 type
   TSeekOrigin = Classes.TSeekOrigin;
@@ -19,6 +20,10 @@ type
   TList = Classes.TList;
   TInterfaceList = Classes.TInterfaceList;
   TStringList = Classes.TStringList;
+
+  IStream = nextpas.core.io.intf.IStream;
+  IReader = nextpas.core.io.intf.IReader;
+  IWriter = nextpas.core.io.intf.IWriter;
 
 const
   fmCreate = Classes.fmCreate;

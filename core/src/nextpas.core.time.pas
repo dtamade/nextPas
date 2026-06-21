@@ -19,7 +19,8 @@ uses
   nextpas.core.time.timer,
   nextpas.core.time.ticker,
   nextpas.core.time.period,
-  nextpas.core.time.format;
+  nextpas.core.time.format,
+  nextpas.core.time.cpu;
 
 type
   TDuration = nextpas.core.time.base.TDuration;
@@ -51,6 +52,7 @@ function ParseISO8601DateTime(const AStr: string): nextpas.core.time.datetime.TN
 function TryParseISO8601DateTime(const AStr: string; out ADT: nextpas.core.time.datetime.TNaiveDateTime): Boolean; inline;
 function FormatDateTime(const APattern: string; const ADT: TDateTime): string; inline;
 function DateTimeToStr(const ADT: TDateTime): string; inline;
+function GetTickCount64: UInt64; inline;
 function DateToStr(const ADT: TDateTime): string; inline;
 function EncodeDate(const AYear, AMonth, ADay: Word): TDateTime;
 function EncodeTime(const AHour, AMinute, ASecond, AMSec: Word): TDateTime;
@@ -162,6 +164,11 @@ end;
 function DateToStr(const ADT: TDateTime): string;
 begin
   Result := FormatDateTime('yyyy-mm-dd', ADT);
+end;
+
+function GetTickCount64: UInt64;
+begin
+  Result := nextpas.core.time.cpu.GetTickCount64;
 end;
 
 function EncodeDate(const AYear, AMonth, ADay: Word): TDateTime;

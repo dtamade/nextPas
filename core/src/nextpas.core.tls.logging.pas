@@ -21,7 +21,7 @@ unit nextpas.core.tls.logging;
 interface
 
 uses
-  SysUtils, Classes,
+  SysUtils, nextpas.core.system.classes,
   nextpas.core.base.utils,
   nextpas.core.fs,
   nextpas.core.text.conv,

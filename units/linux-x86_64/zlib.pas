@@ -64,6 +64,8 @@ function inflateInit2_(strm: z_streamp; windowBits: Integer; version: PChar; str
 function inflate(strm: z_streamp; flush: Integer): Integer; cdecl;
 function inflateEnd(strm: z_streamp): Integer; cdecl;
 function crc32(crc: ULong; buf: pBytef; len: Cardinal): ULong; cdecl;
+function compress2(dest: pBytef; destLen: PCardinal; source: pBytef; sourceLen: Cardinal; level: Integer): Integer; cdecl;
+function uncompress(dest: pBytef; destLen: PCardinal; source: pBytef; sourceLen: Cardinal): Integer; cdecl;
 function compressBound(sourceLen: Cardinal): Cardinal; cdecl;
 function zlibVersion: PChar; cdecl;
 
@@ -87,6 +89,8 @@ function inflateInit2_(strm: z_streamp; windowBits: Integer; version: PChar; str
 function inflate(strm: z_streamp; flush: Integer): Integer; cdecl; begin Result := Z_STREAM_ERROR; end;
 function inflateEnd(strm: z_streamp): Integer; cdecl; begin Result := Z_STREAM_ERROR; end;
 function crc32(crc: ULong; buf: pBytef; len: Cardinal): ULong; cdecl; begin Result := 0; end;
+function compress2(dest: pBytef; destLen: PCardinal; source: pBytef; sourceLen: Cardinal; level: Integer): Integer; cdecl; begin Result := Z_STREAM_ERROR; end;
+function uncompress(dest: pBytef; destLen: PCardinal; source: pBytef; sourceLen: Cardinal): Integer; cdecl; begin Result := Z_STREAM_ERROR; end;
 function compressBound(sourceLen: Cardinal): Cardinal; cdecl; begin Result := sourceLen + (sourceLen div 1000) + 12; end;
 function zlibVersion: PChar; cdecl; begin Result := '1.0.0'; end;
 
