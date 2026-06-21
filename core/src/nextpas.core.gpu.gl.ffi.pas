@@ -74,9 +74,13 @@ const
   GL_NEAREST            = $2600;
   GL_CLAMP_TO_EDGE      = $812F;
 
+  { Texture units }
+  GL_TEXTURE0 = $84C0;
+
   { PixelStore }
-  GL_UNPACK_ALIGNMENT = $0CF5;
-  GL_PACK_ALIGNMENT   = $0D05;
+  GL_UNPACK_ALIGNMENT  = $0CF5;
+  GL_UNPACK_ROW_LENGTH = $0CF2;
+  GL_PACK_ALIGNMENT    = $0D05;
 
   { Internal formats }
   GL_R8           = $8229;
@@ -145,6 +149,7 @@ type
   TglClearColor = procedure(AR, AG, AB, AA: GLfloat); cdecl;
 
   { Textures }
+  TglActiveTexture = procedure(ATexture: GLenum); cdecl;
   TglGenTextures = procedure(AN: GLsizei; out ATextures: GLuint); cdecl;
   TglDeleteTextures = procedure(AN: GLsizei; ATextures: PGLuint); cdecl;
   TglBindTexture = procedure(ATarget: GLenum; ATexture: GLuint); cdecl;
@@ -235,6 +240,7 @@ var
   glClearColor: TglClearColor;
 
   { Textures }
+  glActiveTexture: TglActiveTexture;
   glGenTextures: TglGenTextures;
   glDeleteTextures: TglDeleteTextures;
   glBindTexture: TglBindTexture;

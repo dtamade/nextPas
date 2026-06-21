@@ -70,6 +70,8 @@ begin
     Exit(GL_ERR_LOAD_FAILED);
 
   { Textures }
+  if not ResolveGL(Pointer(glActiveTexture), 'glActiveTexture') then
+    Exit(GL_ERR_LOAD_FAILED);
   if not ResolveGL(Pointer(glGenTextures), 'glGenTextures') then
     Exit(GL_ERR_LOAD_FAILED);
   if not ResolveGL(Pointer(glDeleteTextures), 'glDeleteTextures') then
@@ -198,6 +200,7 @@ begin
   Pointer(glClearColor) := nil;
 
   { Textures }
+  Pointer(glActiveTexture) := nil;
   Pointer(glGenTextures) := nil;
   Pointer(glDeleteTextures) := nil;
   Pointer(glBindTexture) := nil;
