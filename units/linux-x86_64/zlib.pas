@@ -21,6 +21,9 @@ const
   Z_FINISH = 4;
   Z_BLOCK = 5;
   Z_DEFLATED = 8;
+  Z_NO_COMPRESSION = 0;
+  Z_BEST_SPEED = 1;
+  Z_BEST_COMPRESSION = 9;
   Z_DEFAULT_COMPRESSION = -1;
   Z_DEFAULT_STRATEGY = 0;
   Z_MAX_WBITS = 15;
@@ -48,25 +51,43 @@ type
   end;
   z_streamp = ^z_stream;
 
+type
+  ULong = Cardinal;
+  pBytef = PByte;
+
 function deflateInit_(strm: z_streamp; level: Integer; version: PChar; stream_size: Integer): Integer; cdecl;
+function deflateInit2_(strm: z_streamp; level, method, windowBits, memLevel, strategy: Integer; version: PChar; stream_size: Integer): Integer; cdecl;
 function deflate(strm: z_streamp; flush: Integer): Integer; cdecl;
 function deflateEnd(strm: z_streamp): Integer; cdecl;
 function inflateInit_(strm: z_streamp; version: PChar; stream_size: Integer): Integer; cdecl;
+function inflateInit2_(strm: z_streamp; windowBits: Integer; version: PChar; stream_size: Integer): Integer; cdecl;
 function inflate(strm: z_streamp; flush: Integer): Integer; cdecl;
 function inflateEnd(strm: z_streamp): Integer; cdecl;
+function crc32(crc: ULong; buf: pBytef; len: Cardinal): ULong; cdecl;
+function compressBound(sourceLen: Cardinal): Cardinal; cdecl;
 function zlibVersion: PChar; cdecl;
 
 function deflateInit(var strm: z_stream; level: Integer): Integer;
+function deflateInit2(var strm: z_stream; level, method, windowBits, memLevel, strategy: Integer): Integer;
 function inflateInit(var strm: z_stream): Integer;
+function inflateInit2(var strm: z_stream; windowBits: Integer): Integer;
+function deflate(var strm: z_stream; flush: Integer): Integer;
+function deflateEnd(var strm: z_stream): Integer;
+function inflate(var strm: z_stream; flush: Integer): Integer;
+function inflateEnd(var strm: z_stream): Integer;
 
 implementation
 
 function deflateInit_(strm: z_streamp; level: Integer; version: PChar; stream_size: Integer): Integer; cdecl; begin Result := Z_VERSION_ERROR; end;
+function deflateInit2_(strm: z_streamp; level, method, windowBits, memLevel, strategy: Integer; version: PChar; stream_size: Integer): Integer; cdecl; begin Result := Z_VERSION_ERROR; end;
 function deflate(strm: z_streamp; flush: Integer): Integer; cdecl; begin Result := Z_STREAM_ERROR; end;
 function deflateEnd(strm: z_streamp): Integer; cdecl; begin Result := Z_STREAM_ERROR; end;
 function inflateInit_(strm: z_streamp; version: PChar; stream_size: Integer): Integer; cdecl; begin Result := Z_VERSION_ERROR; end;
+function inflateInit2_(strm: z_streamp; windowBits: Integer; version: PChar; stream_size: Integer): Integer; cdecl; begin Result := Z_VERSION_ERROR; end;
 function inflate(strm: z_streamp; flush: Integer): Integer; cdecl; begin Result := Z_STREAM_ERROR; end;
 function inflateEnd(strm: z_streamp): Integer; cdecl; begin Result := Z_STREAM_ERROR; end;
+function crc32(crc: ULong; buf: pBytef; len: Cardinal): ULong; cdecl; begin Result := 0; end;
+function compressBound(sourceLen: Cardinal): Cardinal; cdecl; begin Result := sourceLen + (sourceLen div 1000) + 12; end;
 function zlibVersion: PChar; cdecl; begin Result := '1.0.0'; end;
 
 function deflateInit(var strm: z_stream; level: Integer): Integer;
@@ -74,9 +95,39 @@ begin
   Result := deflateInit_(@strm, level, zlibVersion, SizeOf(z_stream));
 end;
 
+function deflateInit2(var strm: z_stream; level, method, windowBits, memLevel, strategy: Integer): Integer;
+begin
+  Result := deflateInit2_(@strm, level, method, windowBits, memLevel, strategy, zlibVersion, SizeOf(z_stream));
+end;
+
 function inflateInit(var strm: z_stream): Integer;
 begin
   Result := inflateInit_(@strm, zlibVersion, SizeOf(z_stream));
+end;
+
+function inflateInit2(var strm: z_stream; windowBits: Integer): Integer;
+begin
+  Result := inflateInit2_(@strm, windowBits, zlibVersion, SizeOf(z_stream));
+end;
+
+function deflate(var strm: z_stream; flush: Integer): Integer;
+begin
+  Result := deflate(@strm, flush);
+end;
+
+function deflateEnd(var strm: z_stream): Integer;
+begin
+  Result := deflateEnd(@strm);
+end;
+
+function inflate(var strm: z_stream; flush: Integer): Integer;
+begin
+  Result := inflate(@strm, flush);
+end;
+
+function inflateEnd(var strm: z_stream): Integer;
+begin
+  Result := inflateEnd(@strm);
 end;
 
 end.

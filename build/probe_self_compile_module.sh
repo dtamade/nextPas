@@ -13,7 +13,7 @@ esac
 
 SCRIPT_DIR=$(CDPATH= cd -- "${SCRIPT_PATH%/*}" && pwd)
 REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
-STAGE0_BINARY="$REPO_ROOT/.sisyphus/tmp/stage0-bootstrap/nextpas"
+STAGE0_BINARY="$REPO_ROOT/build/stage0-bootstrap/nextpas"
 TARGET_ID="${TARGET_ID:-linux-x86_64}"
 
 escape_ere() {

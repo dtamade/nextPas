@@ -228,6 +228,14 @@ begin
   begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
   Pointer(XGetSelectionOwner) := LPtr;
 
+  if platform_dl_sym(GLib, 'XCreateColormap', LPtr) <> 0 then
+  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
+  Pointer(XCreateColormap) := LPtr;
+
+  if platform_dl_sym(GLib, 'XFreeColormap', LPtr) <> 0 then
+  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
+  Pointer(XFreeColormap) := LPtr;
+
   GLoaded := True;
   GRefCount := 1;
   Result := X11_SUCCESS;
@@ -272,6 +280,8 @@ begin
   Pointer(XSendEvent) := nil;
   Pointer(XFree) := nil;
   Pointer(XGetSelectionOwner) := nil;
+  Pointer(XCreateColormap) := nil;
+  Pointer(XFreeColormap) := nil;
   platform_dl_close(GLib);
   GLoaded := False;
 end;
@@ -323,18 +333,24 @@ begin
   begin glx_unload; Exit(GLX_ERR_LOAD_FAILED); end;
   Pointer(glXGetProcAddress) := LPtr;
 
-  { Extension: glXCreateContextAttribsARB -- resolved via GetProcAddress. }
+  { Extensions: resolved via GetProcAddress. }
   if @glXGetProcAddress <> nil then
   begin
     Pointer(glXCreateContextAttribsARB) := glXGetProcAddress(
       'glXCreateContextAttribsARB');
     Pointer(glXSwapIntervalEXT) := glXGetProcAddress(
       'glXSwapIntervalEXT');
+    Pointer(glXCreatePbuffer) := glXGetProcAddress(
+      'glXCreatePbuffer');
+    Pointer(glXDestroyPbuffer) := glXGetProcAddress(
+      'glXDestroyPbuffer');
   end
   else
   begin
     Pointer(glXCreateContextAttribsARB) := nil;
     Pointer(glXSwapIntervalEXT) := nil;
+    Pointer(glXCreatePbuffer) := nil;
+    Pointer(glXDestroyPbuffer) := nil;
   end;
 
   GGLLoaded := True;
@@ -358,6 +374,8 @@ begin
   Pointer(glXDestroyContext) := nil;
   Pointer(glXQueryExtension) := nil;
   Pointer(glXSwapIntervalEXT) := nil;
+  Pointer(glXCreatePbuffer) := nil;
+  Pointer(glXDestroyPbuffer) := nil;
   Pointer(glXGetProcAddress) := nil;
   platform_dl_close(GGLLib);
   GGLLoaded := False;

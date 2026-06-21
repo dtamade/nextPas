@@ -13,8 +13,66 @@ const
   fmOpenReadWrite = $0002;
   fmCreate = $FF00;
   fmShareDenyNone = $0040;
+  fmShareDenyWrite = $0020;
 
 type
+  TSeekOrigin = (soBeginning, soCurrent, soEnd);
+
+  TStream = class
+  private
+    function GetPosition: Int64;
+    procedure SetPosition(const Pos: Int64);
+    function GetSize: Int64;
+  protected
+    function GetSize64: Int64; virtual;
+    procedure SetSize64(const NewSize: Int64); virtual;
+  public
+    function Read(var Buffer; Count: LongInt): LongInt; virtual;
+    function Write(const Buffer; Count: LongInt): LongInt; virtual;
+    function Seek(Offset: LongInt; Origin: Word): LongInt; virtual;
+    function Seek64(const Offset: Int64; Origin: TSeekOrigin): Int64; virtual;
+    function ReadByte: Byte;
+    procedure WriteByte(B: Byte);
+    function CopyFrom(Source: TStream; Count: Int64): Int64;
+    property Position: Int64 read GetPosition write SetPosition;
+    property Size: Int64 read GetSize write SetSize64;
+  end;
+
+  TList = class
+  private
+    FItems: array of Pointer;
+    FCount: Integer;
+    function GetItem(Index: Integer): Pointer;
+    procedure SetItem(Index: Integer; Value: Pointer);
+  public
+    constructor Create;
+    destructor Destroy; override;
+    function Add(Item: Pointer): Integer;
+    procedure Delete(Index: Integer);
+    procedure Clear;
+    function IndexOf(Item: Pointer): Integer;
+    property Count: Integer read FCount;
+    property Items[Index: Integer]: Pointer read GetItem write SetItem; default;
+  end;
+
+  TInterfaceList = class
+  private
+    FItems: array of IInterface;
+    FCount: Integer;
+    function GetItem(Index: Integer): IInterface;
+    procedure SetItem(Index: Integer; const Value: IInterface);
+  public
+    constructor Create;
+    destructor Destroy; override;
+    function Add(const Item: IInterface): Integer;
+    procedure Delete(Index: Integer);
+    procedure Clear;
+    function IndexOf(const Item: IInterface): Integer;
+    procedure Remove(const Item: IInterface);
+    property Count: Integer read FCount;
+    property Items[Index: Integer]: IInterface read GetItem write SetItem; default;
+  end;
+
   TFileStream = class
   private
     FHandle: File;
@@ -67,6 +125,231 @@ type
   end;
 
 implementation
+
+{ TStream }
+
+function TStream.Read(var Buffer; Count: LongInt): LongInt;
+begin
+  raise Exception.Create('TStream.Read not implemented');
+end;
+
+function TStream.Write(const Buffer; Count: LongInt): LongInt;
+begin
+  raise Exception.Create('TStream.Write not implemented');
+end;
+
+function TStream.Seek(Offset: LongInt; Origin: Word): LongInt;
+begin
+  raise Exception.Create('TStream.Seek not implemented');
+end;
+
+function TStream.Seek64(const Offset: Int64; Origin: TSeekOrigin): Int64;
+begin
+  raise Exception.Create('TStream.Seek64 not implemented');
+end;
+
+function TStream.ReadByte: Byte;
+begin
+  Read(Result, 1);
+end;
+
+procedure TStream.WriteByte(B: Byte);
+begin
+  Write(B, 1);
+end;
+
+function TStream.GetPosition: Int64;
+begin
+  Result := Seek64(0, soCurrent);
+end;
+
+procedure TStream.SetPosition(const Pos: Int64);
+begin
+  Seek64(Pos, soBeginning);
+end;
+
+function TStream.GetSize: Int64;
+begin
+  Result := GetSize64;
+end;
+
+function TStream.GetSize64: Int64;
+begin
+  Result := 0;
+end;
+
+procedure TStream.SetSize64(const NewSize: Int64);
+begin
+  // no-op
+end;
+
+function TStream.CopyFrom(Source: TStream; Count: Int64): Int64;
+const
+  BUF_SIZE = 32768;
+var
+  Buf: array[0..BUF_SIZE - 1] of Byte;
+  N: LongInt;
+  LRemain: Int64;
+begin
+  Result := 0;
+  if Count = 0 then
+  begin
+    Source.Position := 0;
+    Count := Source.Size;
+  end;
+  LRemain := Count;
+  while LRemain > 0 do
+  begin
+    N := Source.Read(Buf[0], BUF_SIZE);
+    if N <= 0 then Break;
+    Write(Buf[0], N);
+    Inc(Result, N);
+    Dec(LRemain, N);
+  end;
+end;
+
+{ TList }
+
+constructor TList.Create;
+begin
+  inherited Create;
+  FCount := 0;
+  SetLength(FItems, 0);
+end;
+
+destructor TList.Destroy;
+begin
+  Clear;
+  inherited Destroy;
+end;
+
+function TList.Add(Item: Pointer): Integer;
+begin
+  SetLength(FItems, FCount + 1);
+  FItems[FCount] := Item;
+  Result := FCount;
+  Inc(FCount);
+end;
+
+procedure TList.Delete(Index: Integer);
+var
+  I: Integer;
+begin
+  if (Index < 0) or (Index >= FCount) then Exit;
+  for I := Index to FCount - 2 do
+    FItems[I] := FItems[I + 1];
+  Dec(FCount);
+  SetLength(FItems, FCount);
+end;
+
+procedure TList.Clear;
+begin
+  SetLength(FItems, 0);
+  FCount := 0;
+end;
+
+function TList.GetItem(Index: Integer): Pointer;
+begin
+  if (Index < 0) or (Index >= FCount) then
+    Result := nil
+  else
+    Result := FItems[Index];
+end;
+
+procedure TList.SetItem(Index: Integer; Value: Pointer);
+begin
+  if (Index >= 0) and (Index < FCount) then
+    FItems[Index] := Value;
+end;
+
+function TList.IndexOf(Item: Pointer): Integer;
+var
+  I: Integer;
+begin
+  for I := 0 to FCount - 1 do
+    if FItems[I] = Item then
+      Exit(I);
+  Result := -1;
+end;
+
+{ TInterfaceList }
+
+constructor TInterfaceList.Create;
+begin
+  inherited Create;
+  FCount := 0;
+  SetLength(FItems, 0);
+end;
+
+destructor TInterfaceList.Destroy;
+begin
+  Clear;
+  inherited Destroy;
+end;
+
+function TInterfaceList.Add(const Item: IInterface): Integer;
+begin
+  SetLength(FItems, FCount + 1);
+  FItems[FCount] := Item;
+  Result := FCount;
+  Inc(FCount);
+end;
+
+procedure TInterfaceList.Delete(Index: Integer);
+var
+  I: Integer;
+begin
+  if (Index < 0) or (Index >= FCount) then Exit;
+  FItems[Index] := nil;
+  for I := Index to FCount - 2 do
+    FItems[I] := FItems[I + 1];
+  FItems[FCount - 1] := nil;
+  Dec(FCount);
+  SetLength(FItems, FCount);
+end;
+
+procedure TInterfaceList.Clear;
+var
+  I: Integer;
+begin
+  for I := 0 to FCount - 1 do
+    FItems[I] := nil;
+  SetLength(FItems, 0);
+  FCount := 0;
+end;
+
+function TInterfaceList.GetItem(Index: Integer): IInterface;
+begin
+  if (Index < 0) or (Index >= FCount) then
+    Result := nil
+  else
+    Result := FItems[Index];
+end;
+
+procedure TInterfaceList.SetItem(Index: Integer; const Value: IInterface);
+begin
+  if (Index >= 0) and (Index < FCount) then
+    FItems[Index] := Value;
+end;
+
+function TInterfaceList.IndexOf(const Item: IInterface): Integer;
+var
+  I: Integer;
+begin
+  for I := 0 to FCount - 1 do
+    if FItems[I] = Item then
+      Exit(I);
+  Result := -1;
+end;
+
+procedure TInterfaceList.Remove(const Item: IInterface);
+var
+  Idx: Integer;
+begin
+  Idx := IndexOf(Item);
+  if Idx >= 0 then
+    Delete(Idx);
+end;
 
 { TFileStream }
 
