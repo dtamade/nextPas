@@ -12,16 +12,6 @@ unit nextpas.core.test;
 interface
 
 uses
-  SysUtils,
-  Classes,
-  nextpas.core.errors,
-  nextpas.core.text.conv,
-  nextpas.core.atomic,
-  nextpas.core.sync,
-  nextpas.core.thread.base,
-  nextpas.core.thread.intf,
-  nextpas.core.collections.base,
-  nextpas.core.platform.thread,
   nextpas.core.test.types,
   nextpas.core.test.check,
   nextpas.core.test.expect,
@@ -31,6 +21,7 @@ uses
 { ── Re-exported types from test.types ─────────────────────────────────────── }
 
 type
+  ExceptClass = nextpas.core.test.types.ExceptClass;
   TTestProc = nextpas.core.test.types.TTestProc;
   ITestContext = nextpas.core.test.types.ITestContext;
   TSubtestProc = nextpas.core.test.types.TSubtestProc;
@@ -121,6 +112,9 @@ function JUnitXML(const AResults: specialize TArray<TTestRunResult>;
   const ASuiteName: string = ''): string;
 function WriteJUnitXML(const AResults: specialize TArray<TTestRunResult>;
   const AFileName: string; const ASuiteName: string = ''): Boolean;
+
+type
+  TTestResults = nextpas.core.test.types.TTestResults;
 
 implementation
 
@@ -266,13 +260,5 @@ begin Result := nextpas.core.test.output.JUnitXML(AResults, ASuiteName); end;
 function WriteJUnitXML(const AResults: specialize TArray<TTestRunResult>;
   const AFileName: string; const ASuiteName: string): Boolean;
 begin Result := nextpas.core.test.output.WriteJUnitXML(AResults, AFileName, ASuiteName); end;
-
-{ ═════════════════════════════════════════════════════════════════════════════ }
-{ Init / Fini                                                                   }
-{ ═════════════════════════════════════════════════════════════════════════════ }
-
-finalization
-  if GExecState <> nil then
-    Dispose(GExecState);
 
 end.

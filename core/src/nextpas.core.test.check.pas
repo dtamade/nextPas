@@ -41,8 +41,6 @@ procedure CheckNotNear(AExpected, AActual: Double;
 procedure Fail(const AMessage: string);
 procedure Skip(const AReason: string = '');
 
-function StringDiff(const AExpected, AActual: string): string;
-
 implementation
 
 procedure Check(ACondition: Boolean; const AMessage: string);

@@ -10,8 +10,7 @@ interface
 
 uses
   SysUtils,
-  nextpas.core.errors,
-  nextpas.core.collections.base;
+  nextpas.core.errors;
 
 { ── Test Context (for subtests) ───────────────────────────────────────────── }
 { ITestContext MUST be declared before TSubtestProc which references it.       }
@@ -44,6 +43,11 @@ type
 
   PTestCaseProc = ^TTestCaseProc;
 
+{ ── Re-exported from SysUtils (avoid facade depending on FPC RTL) ──────────── }
+
+type
+  ExceptClass = SysUtils.ExceptClass;
+
 { ── Status ────────────────────────────────────────────────────────────────── }
 
   TTestStatus = (
@@ -61,13 +65,15 @@ type
     Message : string;  { fail message or skip reason }
   end;
 
+  TTestResults = array of TTestResult;
+
   TTestRunResult = record
     SuiteName : string;
     Passed    : Integer;
     Failed    : Integer;
     Skipped   : Integer;
     AllPassed : Boolean;
-    Results   : specialize TArray<TTestResult>;
+    Results   : TTestResults;
     class function Create(const ASuiteName: string): TTestRunResult; static;
   end;
 
@@ -176,5 +182,9 @@ begin
   GExecState^.Failed     := False;
   GExecState^.SkipReason := '';
 end;
+
+finalization
+  if GExecState <> nil then
+    Dispose(GExecState);
 
 end.
