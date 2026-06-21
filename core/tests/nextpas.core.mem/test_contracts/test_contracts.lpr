@@ -21,8 +21,8 @@ const
   MEM_BLOCKPOOL_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.blockpool.pas';
   MEM_BLOCKPOOL_CONCURRENT_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.blockpool.concurrent.pas';
   MEM_BLOCKPOOL_CONCURRENT_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.blockpool.concurrent.pas';
-  MEM_ARENA_GROWABLE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.arena.growable.pas';
-  MEM_ARENA_GROWABLE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.arena.growable.pas';
+  MEM_ARENA_CHUNKED_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.arena.chunked.pas';
+  MEM_ARENA_CHUNKED_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.arena.chunked.pas';
   MEM_BLOCKPOOL_GROWABLE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.blockpool.growable.pas';
   MEM_BLOCKPOOL_GROWABLE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.blockpool.growable.pas';
   MEM_ERROR_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.error.pas';
@@ -292,8 +292,8 @@ var
   LBlockPoolSource: string;
 begin
   LArenaSource := ReadSourceText(ResolveSourcePath(
-    MEM_ARENA_GROWABLE_SOURCE_PATH_FROM_TEST,
-    MEM_ARENA_GROWABLE_SOURCE_PATH_FROM_ROOT));
+    MEM_ARENA_CHUNKED_SOURCE_PATH_FROM_TEST,
+    MEM_ARENA_CHUNKED_SOURCE_PATH_FROM_ROOT));
   CheckContains(LArenaSource, 'nextpas.core.mem.intf',
     'growable arena should depend on the canonical allocator contract');
   CheckNotContains(LArenaSource, 'nextpas.core.mem.alloc',

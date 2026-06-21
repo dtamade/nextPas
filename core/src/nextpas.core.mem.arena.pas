@@ -5,205 +5,47 @@ unit nextpas.core.mem.arena;
 interface
 
 uses
-  nextpas.core.mem.base,
-  nextpas.core.mem.error,
-  nextpas.core.mem.arena.types;
+  nextpas.core.mem.arena.base,
+  nextpas.core.mem.arena.intf,
+  nextpas.core.mem.arena.local,
+  nextpas.core.mem.arena.chunked,
+  nextpas.core.mem.arena.virtual;
 
 type
-  {**
-   * @desc 固定大小 bump 分配器，分配只前进，Reset 一次性释放全部。
-   *       实现 IArena 接口，支持引用计数。
-   * @note 非线程安全。适用于请求/帧/文档等有限生命周期的场景。
-   *}
-  TLocalArena = class(TInterfacedObject, IArena)
-  private
-    FBacking: Pointer;
-    FCapacity: SizeUInt;
-    FOffset: SizeUInt;
-    FPeakUsed: SizeUInt;       { 峰值使用量 }
-    FTotalAllocs: SizeUInt;    { 总分配次数 }
-  public
-    {** 创建 Arena 并分配 ACapacity 字节的后备内存。ACapacity=0 时不做分配。 }
-    constructor Create(const ACapacity: SizeUInt);
-    {** 释放后备内存。 }
-    destructor Destroy; override;
+  {** Arena 标记 }
+  TArenaMark = nextpas.core.mem.arena.base.TArenaMark;
+  {** Arena 增长策略 }
+  TArenaGrowthKind = nextpas.core.mem.arena.base.TArenaGrowthKind;
+  {** Arena 统计信息 }
+  TArenaStats = nextpas.core.mem.arena.base.TArenaStats;
+  {** Arena 配置 }
+  TArenaConfig = nextpas.core.mem.arena.base.TArenaConfig;
 
-    {** 从 Arena 分配 ASize 字节，返回指针；空间不足返回 nil。 }
-    function Alloc(ASize: SizeUInt): Pointer;
-    {** 从 Arena 对齐分配 ASize 字节；对齐不是 2 的幂或空间不足返回 nil。 }
-    function AllocAligned(ASize: SizeUInt; AAlign: SizeUInt): Pointer;
-    {** 从 Arena 分配 ASize 字节并清零；空间不足返回 nil。 }
-    function AllocZeroed(ASize: SizeUInt): Pointer;
-    {** 快速分配（无检查版本，极致性能）。 }
-    function AllocFast(ASize: SizeUInt): Pointer; inline;
-    {** 快速对齐分配（无检查版本，极致性能）。 }
-    function AllocAlignedFast(ASize: SizeUInt; AAlign: SizeUInt): Pointer; inline;
-    {** 重置 Arena，所有已分配内存可重新使用。 }
-    procedure Reset;
+  {** IArena 接口 }
+  IArena = nextpas.core.mem.arena.intf.IArena;
 
-    {** 保存当前分配位置的标记，后续可用 RestoreToMark 回退。 }
-    function SaveMark: TArenaMarker;
-    {** 恢复到之前保存的标记位置。 }
-    procedure RestoreToMark(AMarker: TArenaMarker);
+  {** 固定容量 Arena }
+  TLocalArena = nextpas.core.mem.arena.local.TLocalArena;
+  {** 分段可增长 Arena }
+  TChunkedArena = nextpas.core.mem.arena.chunked.TChunkedArena;
+  {** 预留虚拟地址空间 Arena }
+  TVirtualArena = nextpas.core.mem.arena.virtual.TVirtualArena;
 
-    {** 返回后备内存总字节数。 }
-    function TotalSize: SizeUInt; inline;
-    {** 返回已分配字节数。 }
-    function UsedSize: SizeUInt; inline;
-    {** 返回剩余可用字节数。 }
-    function RemainingSize: SizeUInt; inline;
-
-    {** 返回峰值使用量。 }
-    property PeakUsed: SizeUInt read FPeakUsed;
-    {** 返回总分配次数。 }
-    property TotalAllocCount: SizeUInt read FTotalAllocs;
-  end;
+{** 初始化 TVirtualArena }
+procedure TVirtualArena_Init(var AArena: TVirtualArena; AAlignment: SizeUInt = DEFAULT_ALIGNMENT);
+{** 释放 TVirtualArena 所有资源 }
+procedure TVirtualArena_Release(var AArena: TVirtualArena);
 
 implementation
 
-{ TLocalArena }
-
-constructor TLocalArena.Create(const ACapacity: SizeUInt);
+procedure TVirtualArena_Init(var AArena: TVirtualArena; AAlignment: SizeUInt);
 begin
-  inherited Create;
-  if ACapacity > 0 then
-  begin
-    FBacking := GetMem(ACapacity);
-    if FBacking = nil then
-      raise EOutOfMemory.Create(aeOutOfMemory, 'TLocalArena.Create: out of memory');
-  end
-  else
-    FBacking := nil;
-  FCapacity := ACapacity;
-  FOffset := 0;
-  FPeakUsed := 0;
-  FTotalAllocs := 0;
+  nextpas.core.mem.arena.virtual.TVirtualArena_Init(AArena, AAlignment);
 end;
 
-destructor TLocalArena.Destroy;
+procedure TVirtualArena_Release(var AArena: TVirtualArena);
 begin
-  if FBacking <> nil then
-  begin
-    FreeMem(FBacking);
-    FBacking := nil;
-  end;
-  FCapacity := 0;
-  FOffset := 0;
-  inherited;
-end;
-
-function TLocalArena.Alloc(ASize: SizeUInt): Pointer;
-var
-  LRemaining: SizeUInt;
-begin
-  Result := nil;
-  if (ASize = 0) or (FBacking = nil) then
-    Exit;
-  if FOffset > FCapacity then
-    Exit;
-  LRemaining := FCapacity - FOffset;
-  if ASize > LRemaining then
-    Exit;
-  Result := Pointer(PtrUInt(FBacking) + FOffset);
-  Inc(FOffset, ASize);
-  Inc(FTotalAllocs);
-  if FOffset > FPeakUsed then
-    FPeakUsed := FOffset;
-end;
-
-function TLocalArena.AllocAligned(ASize: SizeUInt; AAlign: SizeUInt): Pointer;
-var
-  LCurrent: PtrUInt;
-  LAligned: SizeUInt;
-  LPadding: SizeUInt;
-  LRemaining: SizeUInt;
-  LMask: SizeUInt;
-begin
-  Result := nil;
-  if (ASize = 0) or (FBacking = nil) then
-    Exit;
-  if not IsPowerOfTwo(AAlign) then
-    Exit;
-  if FOffset > FCapacity then
-    Exit;
-  if PtrUInt(FBacking) > High(PtrUInt) - FOffset then
-    Exit;
-
-  LCurrent := PtrUInt(FBacking) + FOffset;
-  LMask := AAlign - 1;
-  if LCurrent > High(PtrUInt) - LMask then
-    Exit;
-
-  LAligned := (LCurrent + LMask) and not LMask;
-  LPadding := LAligned - LCurrent;
-  LRemaining := FCapacity - FOffset;
-  if LPadding > LRemaining then
-    Exit;
-  if ASize > LRemaining - LPadding then
-    Exit;
-  Inc(FOffset, LPadding + ASize);
-  Result := Pointer(LAligned);
-  Inc(FTotalAllocs);
-  if FOffset > FPeakUsed then
-    FPeakUsed := FOffset;
-end;
-
-function TLocalArena.AllocZeroed(ASize: SizeUInt): Pointer;
-begin
-  Result := Alloc(ASize);
-  if Result <> nil then
-    FillChar(Result^, ASize, 0);
-end;
-
-function TLocalArena.AllocFast(ASize: SizeUInt): Pointer;
-begin
-  Result := Pointer(PtrUInt(FBacking) + FOffset);
-  Inc(FOffset, ASize);
-end;
-
-function TLocalArena.AllocAlignedFast(ASize: SizeUInt; AAlign: SizeUInt): Pointer;
-var
-  LCurrent: PtrUInt;
-  LAligned: SizeUInt;
-  LMask: SizeUInt;
-begin
-  LCurrent := PtrUInt(FBacking) + FOffset;
-  LMask := AAlign - 1;
-  LAligned := (LCurrent + LMask) and not LMask;
-  Inc(FOffset, (LAligned - LCurrent) + ASize);
-  Result := Pointer(LAligned);
-end;
-
-procedure TLocalArena.Reset;
-begin
-  FOffset := 0;
-  { 注意：FPeakUsed 和 FTotalAllocs 不重置，保留统计信息 }
-end;
-
-function TLocalArena.SaveMark: TArenaMarker;
-begin
-  Result := FOffset;
-end;
-
-procedure TLocalArena.RestoreToMark(AMarker: TArenaMarker);
-begin
-  if AMarker <= FOffset then
-    FOffset := AMarker;
-end;
-
-function TLocalArena.TotalSize: SizeUInt;
-begin
-  Result := FCapacity;
-end;
-
-function TLocalArena.UsedSize: SizeUInt;
-begin
-  Result := FOffset;
-end;
-
-function TLocalArena.RemainingSize: SizeUInt;
-begin
-  Result := FCapacity - FOffset;
+  nextpas.core.mem.arena.virtual.TVirtualArena_Release(AArena);
 end;
 
 end.

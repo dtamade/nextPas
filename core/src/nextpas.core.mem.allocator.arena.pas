@@ -8,95 +8,90 @@ uses
   nextpas.core.mem.base,
   nextpas.core.mem.intf,
   nextpas.core.mem.allocator.base,
-  nextpas.core.mem.arena.compiler;
+  nextpas.core.mem.arena.virtual;
 
 type
-  {** TFastArenaAllocator
+  {** TVirtualArenaAllocator
    *
-   *  将 TFastArena 包装为 IAllocator 接口。
-   *  分配通过 TFastArena 的 bump 指针完成，DoFreeMem 为 no-op。
+   *  将 TVirtualArena 包装为 IAllocator 接口。
+   *  分配通过 TVirtualArena 的 bump 指针完成，DoFreeMem 为 no-op。
    *  Reset 方法一次性释放所有内存。
    *
    *  注意：DoReallocMem 会分配新块并复制数据，效率不如原地扩展。
    *  非线程安全。}
-  TFastArenaAllocator = class(TAllocator)
+  TVirtualArenaAllocator = class(TAllocator)
   private
-    FArena: TFastArena;
-    FChunkSize: SizeUInt;
+    FArena: TVirtualArena;
   protected
     function DoGetMem(aSize: SizeUInt): Pointer; override;
     function DoAllocMem(aSize: SizeUInt): Pointer; override;
     function DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer; override;
     procedure DoFreeMem(aDst: Pointer); override;
   public
-    {** 创建 TFastArenaAllocator，AChunkSize 为初始 chunk 大小 }
-    constructor Create(AChunkSize: SizeUInt = ARENA_INITIAL_CHUNK_SIZE;
-      AAlignment: SizeUInt = DEFAULT_ALIGNMENT);
+    {** 创建 TVirtualArenaAllocator }
+    constructor Create(AAlignment: SizeUInt = DEFAULT_ALIGNMENT);
     destructor Destroy; override;
 
     {** 重置 Arena（保留 mmap 映射，从头开始分配） }
     procedure Reset;
 
-    {** 直接访问内部 TFastArena }
-    property Arena: TFastArena read FArena;
+    {** 直接访问内部 TVirtualArena }
+    property Arena: TVirtualArena read FArena;
 
     {** IAllocator traits }
     function Traits: TAllocatorTraits; override;
   end;
 
+{** 兼容性别名 }
+TFastArenaAllocator = TVirtualArenaAllocator;
+
 implementation
 
-{ TFastArenaAllocator }
+{ TVirtualArenaAllocator }
 
-constructor TFastArenaAllocator.Create(AChunkSize: SizeUInt; AAlignment: SizeUInt);
+constructor TVirtualArenaAllocator.Create(AAlignment: SizeUInt);
 begin
   inherited Create;
-  FChunkSize := AChunkSize;
-  TFastArena_Init(FArena, AAlignment);
+  TVirtualArena_Init(FArena, AAlignment);
 end;
 
-destructor TFastArenaAllocator.Destroy;
+destructor TVirtualArenaAllocator.Destroy;
 begin
-  TFastArena_Release(FArena);
+  TVirtualArena_Release(FArena);
   inherited;
 end;
 
-function TFastArenaAllocator.DoGetMem(aSize: SizeUInt): Pointer;
+function TVirtualArenaAllocator.DoGetMem(aSize: SizeUInt): Pointer;
 begin
   Result := FArena.Alloc(aSize);
 end;
 
-function TFastArenaAllocator.DoAllocMem(aSize: SizeUInt): Pointer;
+function TVirtualArenaAllocator.DoAllocMem(aSize: SizeUInt): Pointer;
 begin
   Result := FArena.AllocZeroed(aSize);
 end;
 
-function TFastArenaAllocator.DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
-var
-  LCopySize: SizeUInt;
+function TVirtualArenaAllocator.DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
 begin
   Result := FArena.Alloc(aSize);
   if (Result <> nil) and (aDst <> nil) then
   begin
-    { Arena 不跟踪单个分配大小，保守复制 aSize 字节。
-      调用方应确保 aDst 至少有 aSize 字节可读。
-      如果不确定旧大小，可改用 GetMemSize（Arena 不支持）。
-      这里安全假设旧块 >= aSize（否则调用方逻辑有误）。 }
+    { Arena 不跟踪单个分配大小，保守复制 aSize 字节。 }
     Move(aDst^, Result^, aSize);
   end;
 end;
 
-procedure TFastArenaAllocator.DoFreeMem(aDst: Pointer);
+procedure TVirtualArenaAllocator.DoFreeMem(aDst: Pointer);
 begin
   { Arena 不支持单个释放 — no-op }
 end;
 
-procedure TFastArenaAllocator.Reset;
+procedure TVirtualArenaAllocator.Reset;
 begin
   FArena.Reset;
 end;
 
-function TFastArenaAllocator.Traits: TAllocatorTraits;
+function TVirtualArenaAllocator.Traits: TAllocatorTraits;
 begin
   Result.ZeroInitialized := False;
   Result.ThreadSafe      := False;

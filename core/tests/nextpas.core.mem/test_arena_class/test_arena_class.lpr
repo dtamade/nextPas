@@ -74,7 +74,7 @@ begin
 end;
 
 procedure TestMarkRestore;
-var A: TLocalArena; M: TArenaMarker; P: Pointer;
+var A: TLocalArena; M: TArenaMark; P: Pointer;
 begin
   A := TLocalArena.Create(512);
   try
@@ -191,10 +191,10 @@ end;
 
 procedure TestArenaClassLegacyAlias;
 var
-  A: TArena;
+  A: TLocalArena;
   P: Pointer;
 begin
-  A := TArena.Create(128);
+  A := TLocalArena.Create(128);
   try
     P := A.Alloc(16);
     Check(P <> nil, 'legacy blockpool.TArena alias remains usable');

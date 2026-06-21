@@ -12,9 +12,11 @@ uses
   nextpas.core.mem.intf,
   nextpas.core.mem.error,
   nextpas.core.mem.default,
-  nextpas.core.mem.arena.types,
-  nextpas.core.mem.arena,
-  nextpas.core.mem.arena.compiler,
+  nextpas.core.mem.arena.base,
+  nextpas.core.mem.arena.intf,
+  nextpas.core.mem.arena.local,
+  nextpas.core.mem.arena.chunked,
+  nextpas.core.mem.arena.virtual,
   nextpas.core.mem.allocator.arena,
   nextpas.core.mem.allocator.tracking,
   nextpas.core.mem.allocator.leak_check,
@@ -25,10 +27,14 @@ type
   TAllocatorKind = nextpas.core.mem.base.TAllocatorKind;
   TArenaMarker = nextpas.core.mem.base.TArenaMarker;
   IAllocator = nextpas.core.mem.intf.IAllocator;
-  IArena = nextpas.core.mem.arena.types.IArena;
-  TLocalArena = nextpas.core.mem.arena.TLocalArena;
-  TArena = nextpas.core.mem.arena.TLocalArena;
-  TFastArena = nextpas.core.mem.arena.compiler.TFastArena;
+  IArena = nextpas.core.mem.arena.intf.IArena;
+  TArenaMark = nextpas.core.mem.arena.base.TArenaMark;
+  TArenaGrowthKind = nextpas.core.mem.arena.base.TArenaGrowthKind;
+  TArenaStats = nextpas.core.mem.arena.base.TArenaStats;
+  TArenaConfig = nextpas.core.mem.arena.base.TArenaConfig;
+  TLocalArena = nextpas.core.mem.arena.local.TLocalArena;
+  TChunkedArena = nextpas.core.mem.arena.chunked.TChunkedArena;
+  TVirtualArena = nextpas.core.mem.arena.virtual.TVirtualArena;
   TArenaAllocator = nextpas.core.mem.allocator.arena.TFastArenaAllocator;
   TTrackingAllocator = nextpas.core.mem.allocator.tracking.TTrackingAllocator;
   TLeakCheckResult = nextpas.core.mem.allocator.leak_check.TLeakCheckResult;

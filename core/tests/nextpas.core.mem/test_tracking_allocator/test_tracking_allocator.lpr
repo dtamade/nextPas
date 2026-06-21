@@ -16,7 +16,7 @@ uses
   nextpas.core.mem.allocator.arena,
   nextpas.core.mem.allocator.tracking,
   nextpas.core.mem.allocator.leak_check,
-  nextpas.core.mem.arena.compiler;
+  nextpas.core.mem.arena.virtual;
 
 var
   T: TTestRunner;
@@ -257,16 +257,16 @@ end;
 
 procedure TestArenaLeakCheck;
 var
-  LArena: TFastArena;
+  LArena: TVirtualArena;
 begin
-  TFastArena_Init(LArena);
+  TVirtualArena_Init(LArena);
   try
     {$IFDEF NEXTPAS_ARENA_LEAK_CHECK}
     Check(GArenaInstanceCount >= 1, 'GArenaInstanceCount should be >= 1 after Init');
     {$ENDIF}
     Check(LArena.Alloc(64) <> nil, 'should allocate normally');
   finally
-    TFastArena_Release(LArena);
+    TVirtualArena_Release(LArena);
   end;
   {$IFDEF NEXTPAS_ARENA_LEAK_CHECK}
   Check(GArenaInstanceCount = 0, 'GArenaInstanceCount should be 0 after Release');

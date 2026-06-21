@@ -10,7 +10,8 @@ uses
   nextpas.core.mem.allocator,
   nextpas.core.mem.blockpool,
   nextpas.core.mem.blockpool.growable,
-  nextpas.core.mem.arena.growable,
+  nextpas.core.mem.arena.base,
+  nextpas.core.mem.arena.chunked,
   nextpas.core.mem.pool.fixed,
   nextpas.core.mem.pool.fixed.growable,
   nextpas.core.mem.ring_buffer,
@@ -143,14 +144,12 @@ end;
 
 procedure RaiseGrowingArenaAllocatorOom;
 var
-  LConfig: TGrowableArenaConfig;
-  LArena: TGrowableArena;
+  LArena: TChunkedArena;
 begin
-  LConfig := TGrowableArenaConfig.Default(16);
-  LConfig.Allocator := NewFailAllocator;
   LArena := nil;
   try
-    LArena := TGrowableArena.Create(LConfig);
+    { TChunkedArena uses GetMem by default }
+    LArena := TChunkedArena.Create(16);
   finally
     LArena.Free;
   end;
@@ -227,7 +226,7 @@ end;
 procedure TestGrowableMemOomUsesCanonicalRoot;
 begin
   CheckRaisesCanonicalOutOfMemory(@RaiseGrowingBlockPoolAllocatorOom, 'TGrowingBlockPool.Create');
-  CheckRaisesCanonicalOutOfMemory(@RaiseGrowingArenaAllocatorOom, 'TGrowableArena.Create');
+  { TChunkedArena now uses GetMem directly, custom allocator OOM test removed }
   CheckRaisesCanonicalOutOfMemory(@RaiseGrowingFixedPoolAllocatorOom, 'TGrowingFixedPool.Create');
 end;
 
