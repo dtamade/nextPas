@@ -104,7 +104,7 @@ function FontAtlasKeyEquals(const A, B: TFontAtlasKey): Boolean;
 implementation
 
 uses
-  SysUtils, Math;
+  nextpas.core.math;
 
 function FontAtlasKeyMake(AGlyphIndex: UInt32; ASizePx: Int32): TFontAtlasKey;
 begin

@@ -9,8 +9,7 @@ unit nextpas.core.font.rasterizer;
 interface
 
 uses
-  SysUtils,
-  Math,
+  nextpas.core.math,
   nextpas.core.base,
   nextpas.core.exception,
   nextpas.core.font.base;

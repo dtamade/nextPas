@@ -7,7 +7,7 @@ interface
 uses
   nextpas.core.text.unicode.base,
   nextpas.core.text.unicode.props,
-  nextpas.core.text.unicode.&case,
+  nextpas.core.text.unicode.casefold,
   nextpas.core.text.unicode.normalize;
 
 type
@@ -129,47 +129,47 @@ end;
 
 function CodepointToLower(const ACp: TUnicodeCodepoint): TUnicodeCodepoint;
 begin
-  Result := nextpas.core.text.unicode.&case.CodepointToLower(ACp);
+  Result := nextpas.core.text.unicode.casefold.CodepointToLower(ACp);
 end;
 
 function CodepointToUpper(const ACp: TUnicodeCodepoint): TUnicodeCodepoint;
 begin
-  Result := nextpas.core.text.unicode.&case.CodepointToUpper(ACp);
+  Result := nextpas.core.text.unicode.casefold.CodepointToUpper(ACp);
 end;
 
 function CodepointToTitle(const ACp: TUnicodeCodepoint): TUnicodeCodepoint;
 begin
-  Result := nextpas.core.text.unicode.&case.CodepointToTitle(ACp);
+  Result := nextpas.core.text.unicode.casefold.CodepointToTitle(ACp);
 end;
 
 function CaseFoldSimple(const ACp: TUnicodeCodepoint): TUnicodeCodepoint;
 begin
-  Result := nextpas.core.text.unicode.&case.CaseFoldSimple(ACp);
+  Result := nextpas.core.text.unicode.casefold.CaseFoldSimple(ACp);
 end;
 
 function CaseFoldFull(const ACp: TUnicodeCodepoint; out ADst: TCaseFoldMap): Byte;
 begin
-  Result := nextpas.core.text.unicode.&case.CaseFoldFull(ACp, ADst);
+  Result := nextpas.core.text.unicode.casefold.CaseFoldFull(ACp, ADst);
 end;
 
 function UTF8ToUpper(const AValue: string): string;
 begin
-  Result := nextpas.core.text.unicode.&case.UTF8ToUpper(AValue);
+  Result := nextpas.core.text.unicode.casefold.UTF8ToUpper(AValue);
 end;
 
 function UTF8ToLower(const AValue: string): string;
 begin
-  Result := nextpas.core.text.unicode.&case.UTF8ToLower(AValue);
+  Result := nextpas.core.text.unicode.casefold.UTF8ToLower(AValue);
 end;
 
 function UTF8CaseFold(const AValue: string): string;
 begin
-  Result := nextpas.core.text.unicode.&case.UTF8CaseFold(AValue);
+  Result := nextpas.core.text.unicode.casefold.UTF8CaseFold(AValue);
 end;
 
 function UTF8CaseFoldSimple(const AValue: string): string;
 begin
-  Result := nextpas.core.text.unicode.&case.UTF8CaseFoldSimple(AValue);
+  Result := nextpas.core.text.unicode.casefold.UTF8CaseFoldSimple(AValue);
 end;
 
 function NFD(const s: string): string;

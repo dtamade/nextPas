@@ -22,7 +22,7 @@ implementation
 
 uses
   nextpas.core.text.char,
-  nextpas.core.text.unicode.&case,
+  nextpas.core.text.unicode.casefold,
   nextpas.core.text.unicode.normalize,
   nextpas.core.text.unicode.utils;
 
