@@ -24,16 +24,6 @@ type
   TBenchParallelFunc = procedure(AThreadId: Integer; AIterations: Int64);
 
   {**
-   * 基准线程类（前向声明）
-   *}
-  TBenchThread = class;
-
-  {**
-   * 基准线程数组类型
-   *}
-  TBenchThreadArray = array of TBenchThread;
-
-  {**
    * 并行基准配置
    *}
   TParallelBenchConfig = record
@@ -68,7 +58,6 @@ type
     FConfig: TParallelBenchConfig;
     FFunc: TBenchParallelFunc;
     FResults: TParallelBenchResult;
-    function CreateThreads: TBenchThreadArray;
     procedure RunThread(AThreadId: Integer);
   public
     {**
@@ -185,18 +174,9 @@ begin
   // This is handled by TBenchThread.Execute
 end;
 
-function TParallelBenchmark.CreateThreads: TBenchThreadArray;
-var
-  I: Integer;
-begin
-  SetLength(Result, FConfig.ThreadCount);
-  for I := 0 to FConfig.ThreadCount - 1 do
-    Result[I] := TBenchThread.Create(I, FFunc, FConfig.IterationsPerThread);
-end;
-
 function TParallelBenchmark.Execute: TParallelBenchResult;
 var
-  LThreads: TBenchThreadArray;
+  LThreads: array of TBenchThread;
   I: Integer;
   LStartNs: UInt64;
   LEndNs: UInt64;
@@ -211,7 +191,9 @@ begin
   end;
 
   // Create threads
-  LThreads := CreateThreads;
+  SetLength(LThreads, FConfig.ThreadCount);
+  for I := 0 to FConfig.ThreadCount - 1 do
+    LThreads[I] := TBenchThread.Create(I, FFunc, FConfig.IterationsPerThread);
 
   // Record start time using high-precision timer
   LStartNs := platform_monotonic_ns;
