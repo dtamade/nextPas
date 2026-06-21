@@ -120,7 +120,10 @@ type
 implementation
 
 uses
-  SysUtils, Classes,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
+  nextpas.core.time.format,
+  nextpas.core.time.offsetdatetime,
   nextpas.core.bench.baseline,
   nextpas.core.simd.cpuinfo;
 
@@ -170,7 +173,7 @@ begin
   else
     Result.Cores := 0;
   Result.FPCVersion := {$I %FPCVERSION%};
-  Result.Timestamp := FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', Now);
+  Result.Timestamp := FormatDateTime('yyyy-mm-ddThh:nn:ss', TOffsetDateTime.Now);
 end;
 
 function TBenchSuite.Add(const AName: string; AFunc: TBenchFunc): IBenchSuite;

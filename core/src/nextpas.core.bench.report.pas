@@ -7,8 +7,7 @@ interface
 
 uses
   nextpas.core.bench.base,
-  nextpas.core.bench.intf,
-  nextpas.core.bench.stats;
+  nextpas.core.bench.intf;
 
 type
   TCrossLangEntry = record
@@ -25,7 +24,6 @@ type
     FResults: array of TBenchResult;
     FResultCount: Integer;
     FEnvironment: TBenchEnvironment;
-    FStatsAnalyzer: IBenchStatsAnalyzer;
 
     {** 生成 HTML 图表 }
     function GenerateChart(const AResults: array of TBenchResult): string;
@@ -108,7 +106,6 @@ end;
 constructor TBenchReportGenerator.Create;
 begin
   inherited Create;
-  FStatsAnalyzer := TBenchStatsAnalyzer.Create;
   FResultCount := 0;
   SetLength(FResults, 0);
 end;

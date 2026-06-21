@@ -56,7 +56,6 @@ type
     FConfig: TParallelBenchConfig;
     FFunc: TBenchParallelFunc;
     FResults: TParallelBenchResult;
-    procedure RunThread(AThreadId: Integer);
   public
     {**
      * 创建并行基准执行器
@@ -156,11 +155,6 @@ begin
   Result.FConfig.WarmupIterations := AWarmupIterations;
   Result.FFunc := AFunc;
   Result.FResults := Default(TParallelBenchResult);
-end;
-
-procedure TParallelBenchmark.RunThread(AThreadId: Integer);
-begin
-  // This is handled by TBenchThread.Execute
 end;
 
 function TParallelBenchmark.Execute: TParallelBenchResult;
