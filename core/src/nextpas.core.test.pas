@@ -216,6 +216,9 @@ var
   GTestFailed    : Boolean = False;  // set true on Fail()/Check*
   GSkipReason    : string  = '';
 
+  { Parallel mode flag — when true, InternalFail/InternalSkip skip global state writes }
+  GParallelMode  : Boolean = False;
+
   { ANSI capability }
   GAnsiEnabled: Boolean = False;
   GAnsiChecked: Boolean = False;
@@ -292,14 +295,18 @@ end;
 
 procedure InternalFail(const AMessage: string);
 begin
-  GTestFailed := True;
+  if not GParallelMode then
+    GTestFailed := True;  { Only write global in serial mode }
   raise EAssertionFailed.Create(AMessage);
 end;
 
 procedure InternalSkip(const AReason: string);
 begin
-  GTestSkipped := True;
-  GSkipReason  := AReason;
+  if not GParallelMode then
+  begin
+    GTestSkipped := True;
+    GSkipReason  := AReason;
+  end;
   raise ETestSkipped.Create(AReason);
 end;
 
@@ -1405,7 +1412,20 @@ begin
 
   if Assigned(R^.Before) then
   begin
-    try R^.Before; except LStatus := tsError; end;
+    try R^.Before;
+    except
+      on E: Exception do
+      begin
+        LStatus := tsError;
+        R^.Mtx.Acquire;
+        try
+          WriteLn('  ', StatusDot(tsError), ' ', R^.Entry.Name,
+            ' — beforeEach failed: ', E.Message);
+        finally
+          R^.Mtx.Release;
+        end;
+      end;
+    end;
   end;
 
   if LStatus = tsPassed then
@@ -1496,7 +1516,18 @@ begin
       on E: Exception do
       begin
         WriteLn('  ', AnsiRed('✗ setup failed: ') + E.Message);
-        Result := False;
+        for I := 0 to High(Tests) do
+        begin
+          Inc(LSkip);
+          WriteLn('    ', StatusDot(tsSkipped), ' ', AnsiDim(Tests[I].Name));
+        end;
+        FHasRun        := True;
+        FLastRunPassed := False;
+        FLastPass      := 0;
+        FLastFail      := 0;
+        FLastSkip      := LSkip;
+        Result         := False;
+        WriteLn(AnsiDim('  ') + IntToStr(LSkip) + ' skipped (setup failure)');
         Exit;
       end;
     end;
@@ -1522,13 +1553,15 @@ begin
     LRecs[I].Skip      := @LSkip;
   end;
 
-  { Spawn one thread per test }
+  { Spawn one thread per test — GParallelMode prevents global state writes }
+  GParallelMode := True;
   for I := 0 to High(Tests) do
     platform_thread_create(LHandles[I], @ParallelWorkerProc, @LRecs[I]);
 
-  { Wait for all threads }
+  { Wait for all threads — join provides happens-before guarantee }
   for I := 0 to High(Tests) do
     platform_thread_join(LHandles[I], LRetVal);
+  GParallelMode := False;
 
   { Suite-level teardown }
   if Assigned(Teardown) then
