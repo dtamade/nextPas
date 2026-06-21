@@ -256,7 +256,7 @@ begin
 
   // 详细统计（只显示前 5 个未跳过的结果）
   LSkippedCount := 0;
-  for i := 0 to Min(4 + LSkippedCount, FResultCount - 1) do
+  for i := 0 to FResultCount - 1 do
   begin
     if FResults[i].Skipped then
     begin
@@ -395,14 +395,22 @@ var
   LBarX: Double;
   LBarY: Double;
   LHeightRatio: Double;
+  LCount: Integer;
+  LIndex: Integer;
   I: Integer;
 begin
-  if Length(AResults) = 0 then
+  // 计算未跳过的数量
+  LCount := 0;
+  for I := 0 to High(AResults) do
+    if not AResults[I].Skipped then
+      Inc(LCount);
+
+  if LCount = 0 then
     Exit('<svg class="bench-chart" viewBox="0 0 820 280" role="img" aria-label="No benchmark data"></svg>');
 
   LMaxNsPerOp := 0.0;
   for I := 0 to High(AResults) do
-    if AResults[I].NsPerOp > LMaxNsPerOp then
+    if (not AResults[I].Skipped) and (AResults[I].NsPerOp > LMaxNsPerOp) then
       LMaxNsPerOp := AResults[I].NsPerOp;
   if LMaxNsPerOp <= 0 then
     LMaxNsPerOp := 1.0;
@@ -413,12 +421,16 @@ begin
   AddLine(LLines, '  <line x1="64" y1="236" x2="784" y2="236" stroke="#cfd7de" stroke-width="1"/>');
   AddLine(LLines, '  <line x1="64" y1="24" x2="64" y2="236" stroke="#cfd7de" stroke-width="1"/>');
 
-  LBarWidth := 720.0 / Max(Length(AResults), 1);
+  LBarWidth := 720.0 / Max(LCount, 1);
+  LIndex := 0;
   for I := 0 to High(AResults) do
   begin
+    if AResults[I].Skipped then
+      Continue;
+
     LHeightRatio := AResults[I].NsPerOp / LMaxNsPerOp;
     LBarHeight := 184.0 * LHeightRatio;
-    LBarX := 76.0 + I * LBarWidth;
+    LBarX := 76.0 + LIndex * LBarWidth;
     LBarY := 236.0 - LBarHeight;
 
     AddLine(LLines,
@@ -436,6 +448,8 @@ begin
       Format('  <text x="%s" y="254" class="chart-label">%s</text>',
         [FormatNumber(LBarX, 2),
          EscapeHTML(AResults[I].Name)]));
+
+    Inc(LIndex);
   end;
 
   AddLine(LLines, '</svg>');
