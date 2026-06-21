@@ -111,6 +111,8 @@ type
     function  RunParallel(APool: IThreadPool): Boolean;
       { Note: APool is currently unused — parallel mode uses direct platform_thread_create
         to work around FPC closure capture semantics. Reserved for future thread pool integration. }
+    function  RunParallelWithResult(APool: IThreadPool;
+      out AResult: TTestRunResult): Boolean;
     procedure Summary;
     function  AllPassed: Boolean;
   end;
@@ -128,7 +130,11 @@ type
     class function Create(const AName: string): TTestRunner; static;
     procedure Add(var ASuite: TTestSuite);
     function  RunAll: Boolean;
+    function  RunAllWithResult(
+      out AResults: specialize TArray<TTestRunResult>): Boolean;
     function  RunAllParallel(APool: IThreadPool): Boolean;
+    function  RunAllParallelWithResult(APool: IThreadPool;
+      out AResults: specialize TArray<TTestRunResult>): Boolean;
     procedure Summary;
     function  AllPassed: Boolean;
   end;
@@ -155,6 +161,10 @@ type
     function ToRaise(AExceptionClass: ExceptClass;
       const AMessage: string = ''): IExpectation;
     function ToNotRaise: IExpectation;
+    function ToBeNear(AExpected: Double;
+      AEpsilon: Double = 1e-10): IExpectation;
+    function ToNotBeNear(AExpected: Double;
+      AEpsilon: Double = 1e-10): IExpectation;
   end;
 
 { ── Expect (fluent factory) ───────────────────────────────────────────────── }
@@ -162,6 +172,7 @@ type
 function Expect(const AValue: string): IExpectation;
 function ExpectInt(AValue: Int64): IExpectation;
 function ExpectBool(AValue: Boolean): IExpectation;
+function ExpectDouble(AValue: Double): IExpectation;
 function ExpectPtr(AValue: Pointer): IExpectation;
 function ExpectProc(AProc: TTestProc): IExpectation;
 
@@ -190,6 +201,10 @@ procedure CheckLength(AValue: NativeInt; AExpected: NativeInt);
 procedure CheckRaises(AExceptionClass: ExceptClass; AProc: TTestProc;
   const AMessage: string = '');
 procedure CheckNoRaise(AProc: TTestProc; const AMessage: string = '');
+procedure CheckNear(AActual, AExpected: Double;
+  AEpsilon: Double = 1e-10; const AMessage: string = '');
+procedure CheckNotNear(AActual, AExpected: Double;
+  AEpsilon: Double = 1e-10; const AMessage: string = '');
 procedure Fail(const AMessage: string);
 procedure Skip(const AReason: string = '');
 
@@ -554,6 +569,40 @@ begin
   end;
 end;
 
+procedure CheckNear(AActual, AExpected: Double;
+  AEpsilon: Double; const AMessage: string);
+var
+  LDiff: Double;
+begin
+  LDiff := AActual - AExpected;
+  if LDiff < 0 then LDiff := -LDiff;
+  if LDiff > AEpsilon then
+  begin
+    if AMessage <> '' then
+      InternalFail(AMessage)
+    else
+      InternalFail('Expected ' + FloatToStr(AExpected) +
+        ' (±' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual));
+  end;
+end;
+
+procedure CheckNotNear(AActual, AExpected: Double;
+  AEpsilon: Double; const AMessage: string);
+var
+  LDiff: Double;
+begin
+  LDiff := AActual - AExpected;
+  if LDiff < 0 then LDiff := -LDiff;
+  if LDiff <= AEpsilon then
+  begin
+    if AMessage <> '' then
+      InternalFail(AMessage)
+    else
+      InternalFail('Expected not near ' + FloatToStr(AExpected) +
+        ' (±' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual));
+  end;
+end;
+
 procedure Fail(const AMessage: string);
 begin
   InternalFail(AMessage);
@@ -570,24 +619,26 @@ end;
 
 type
   TExpectationKind = (
-    ekString, ekInt64, ekBool, ekPointer, ekProc
+    ekString, ekInt64, ekBool, ekPointer, ekProc, ekDouble
   );
 
   TExpectation = class(TInterfacedObject, IExpectation)
   private
-    FKind      : TExpectationKind;
-    FStrValue  : string;
-    FIntValue  : Int64;
-    FBoolValue : Boolean;
-    FPtrValue  : Pointer;
-    FProcValue : TTestProc;
-    FNegated   : Boolean;
+    FKind       : TExpectationKind;
+    FStrValue   : string;
+    FIntValue   : Int64;
+    FBoolValue  : Boolean;
+    FPtrValue   : Pointer;
+    FProcValue  : TTestProc;
+    FDoubleValue: Double;
+    FNegated    : Boolean;
   public
     constructor CreateStr(const AValue: string);
     constructor CreateInt(AValue: Int64);
     constructor CreateBool(AValue: Boolean);
     constructor CreatePtr(AValue: Pointer);
     constructor CreateProc(AProc: TTestProc);
+    constructor CreateDouble(AValue: Double);
 
     { IExpectation }
     function Not_: IExpectation;
@@ -608,6 +659,10 @@ type
     function ToRaise(AExceptionClass: ExceptClass;
       const AMessage: string = ''): IExpectation;
     function ToNotRaise: IExpectation;
+    function ToBeNear(AExpected: Double;
+      AEpsilon: Double = 1e-10): IExpectation;
+    function ToNotBeNear(AExpected: Double;
+      AEpsilon: Double = 1e-10): IExpectation;
   end;
 
 constructor TExpectation.CreateStr(const AValue: string);
@@ -648,6 +703,14 @@ begin
   FKind      := ekProc;
   FProcValue := AProc;
   FNegated   := False;
+end;
+
+constructor TExpectation.CreateDouble(AValue: Double);
+begin
+  inherited Create;
+  FKind        := ekDouble;
+  FDoubleValue := AValue;
+  FNegated     := False;
 end;
 
 function TExpectation.Not_: IExpectation;
@@ -993,6 +1056,38 @@ begin
   Result := Self;
 end;
 
+function TExpectation.ToBeNear(AExpected: Double;
+  AEpsilon: Double): IExpectation;
+var
+  LDiff: Double;
+begin
+  if FKind <> ekDouble then
+    InternalFail('ToBeNear called on non-double expectation');
+  LDiff := FDoubleValue - AExpected;
+  if LDiff < 0 then LDiff := -LDiff;
+  if FNegated then
+  begin
+    if LDiff <= AEpsilon then
+      InternalFail('Expected not near ' + FloatToStr(AExpected) +
+        ' (±' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(FDoubleValue));
+  end
+  else
+  begin
+    if LDiff > AEpsilon then
+      InternalFail('Expected ' + FloatToStr(AExpected) +
+        ' (±' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(FDoubleValue));
+  end;
+  FNegated := False;
+  Result := Self;
+end;
+
+function TExpectation.ToNotBeNear(AExpected: Double;
+  AEpsilon: Double): IExpectation;
+begin
+  FNegated := not FNegated;
+  Result := ToBeNear(AExpected, AEpsilon);
+end;
+
 { ── Expect factories ──────────────────────────────────────────────────────── }
 
 function Expect(const AValue: string): IExpectation;
@@ -1010,6 +1105,11 @@ begin
   Result := TExpectation.CreateBool(AValue);
 end;
 
+function ExpectDouble(AValue: Double): IExpectation;
+begin
+  Result := TExpectation.CreateDouble(AValue);
+end;
+
 function ExpectPtr(AValue: Pointer): IExpectation;
 begin
   Result := TExpectation.CreatePtr(AValue);
@@ -1021,10 +1121,32 @@ begin
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }
+{ TTestResultAppender (for subtest result collection)                          }
+{ ═════════════════════════════════════════════════════════════════════════════ }
+
+type
+  TTestResultAppender = class
+  private
+    FResults: specialize TArray<TTestResult>;
+  public
+    procedure Append(const AResult: TTestResult);
+  end;
+
+procedure TTestResultAppender.Append(const AResult: TTestResult);
+begin
+  SetLength(FResults, Length(FResults) + 1);
+  FResults[High(FResults)] := AResult;
+end;
+
+{ ═════════════════════════════════════════════════════════════════════════════ }
 { TTestContext (internal, for subtests)                                        }
 { ═════════════════════════════════════════════════════════════════════════════ }
 
 type
+  TTestContext = class;
+
+  TOnSubtestResult = procedure(const AResult: TTestResult) of object;
+
   TTestContext = class(TInterfacedObject, ITestContext)
   private
     FTestName : string;
@@ -1032,6 +1154,7 @@ type
     FSubPass  : Integer;
     FSubFail  : Integer;
     FSubSkip  : Integer;
+    FOnResult : TOnSubtestResult;
   public
     constructor Create(const ATestName: string);
     procedure Run(const AName: string; AProc: TTestProc);
@@ -1049,6 +1172,7 @@ begin
   FSubPass  := 0;
   FSubFail  := 0;
   FSubSkip  := 0;
+  FOnResult := nil;
 end;
 
 procedure TTestContext.Run(const AName: string; AProc: TTestProc);
@@ -1097,18 +1221,22 @@ var
   I: Integer;
   LEntry: TTestEntry;
   LStatus: TTestStatus;
+  LMsg: string;
   LSubCtx: TTestContext;
   LSubCtxI: ITestContext;
+  LTestResult: TTestResult;
 begin
   for I := 0 to High(FSubtests) do
   begin
     LEntry := FSubtests[I];
     LStatus := tsPassed;
+    LMsg    := '';
     SetTestContext(GExecState^.SuiteName, LEntry.Name);
     try
       if LEntry.Kind = ekSkipped then
       begin
         LStatus := tsSkipped;
+        LMsg    := LEntry.SkipReason;
         WriteLn('    ', StatusDot(tsSkipped), ' ', AnsiDim(LEntry.Name),
           ' — ', LEntry.SkipReason);
         Inc(FSubSkip);
@@ -1116,6 +1244,7 @@ begin
       else if LEntry.Kind = ekSubtest then
       begin
         LSubCtx := TTestContext.Create(LEntry.Name);
+        LSubCtx.FOnResult := FOnResult; { propagate result callback }
         LSubCtxI := LSubCtx;
         LEntry.SubtestProc(LSubCtxI);
         LSubCtx.ExecuteSubtests;
@@ -1134,12 +1263,14 @@ begin
       on E: ETestSkipped do
       begin
         LStatus := tsSkipped;
+        LMsg    := E.Message;
         WriteLn('    ', StatusDot(tsSkipped), ' ', AnsiDim(LEntry.Name));
         Inc(FSubSkip);
       end;
       on E: EAssertionFailed do
       begin
         LStatus := tsFailed;
+        LMsg    := E.Message;
         WriteLn('    ', StatusDot(tsFailed), ' ', AnsiRed(LEntry.Name));
         WriteLn('      ', AnsiDim(E.Message));
         Inc(FSubFail);
@@ -1147,6 +1278,7 @@ begin
       on E: Exception do
       begin
         LStatus := tsError;
+        LMsg    := E.ClassName + ': ' + E.Message;
         WriteLn('    ', StatusDot(tsError), ' ', AnsiRed(LEntry.Name),
           ' [', E.ClassName, ']');
         WriteLn('      ', AnsiDim(E.Message));
@@ -1154,6 +1286,14 @@ begin
       end;
     end;
     ReportLeakIfAny(LStatus);
+    { Collect subtest result via callback if caller requested it }
+    if (LEntry.Kind <> ekSubtest) and Assigned(FOnResult) then
+    begin
+      LTestResult.Name    := LEntry.Name;
+      LTestResult.Status  := LStatus;
+      LTestResult.Message := LMsg;
+      FOnResult(LTestResult);
+    end;
   end;
   { Propagate subtest failures to parent }
   if FSubFail > 0 then
@@ -1261,7 +1401,7 @@ end;
 
 function TTestSuite.RunWithResult(out AResult: TTestRunResult): Boolean;
 var
-  I: Integer;
+  I, J: Integer;
   LEntry: TTestEntry;
   LStatus: TTestStatus;
   LSubCtx: TTestContext;
@@ -1269,12 +1409,14 @@ var
   LPass, LFail, LSkip: Integer;
   LLastFailMsg: string;
   LTestResult: TTestResult;
+  LAppender: TTestResultAppender;
 begin
   AResult := TTestRunResult.Create(Name);
   LPass := 0;
   LFail := 0;
   LSkip := 0;
   LLastFailMsg := '';
+  LAppender := TTestResultAppender.Create;
 
   WriteLn;
   WriteLn(AnsiBold('▸ ') + AnsiCyan(Name) +
@@ -1309,6 +1451,7 @@ begin
         LastFail      := 1;
         LastSkip      := LSkip;
         Result         := False;
+        LAppender.Free;
         WriteLn(AnsiDim('  ') + IntToStr(LSkip) + ' skipped (setup failure)');
         Exit;
       end;
@@ -1379,6 +1522,7 @@ begin
       if LEntry.Kind = ekSubtest then
       begin
         LSubCtx := TTestContext.Create(LEntry.Name);
+        LSubCtx.FOnResult := @LAppender.Append;
         LSubCtxI := LSubCtx;
         LEntry.SubtestProc(LSubCtxI);
         try
@@ -1497,6 +1641,14 @@ begin
     end;
   end;
 
+  { Merge subtest-level results from appender }
+  for J := 0 to High(LAppender.FResults) do
+  begin
+    SetLength(AResult.Results, Length(AResult.Results) + 1);
+    AResult.Results[High(AResult.Results)] := LAppender.FResults[J];
+  end;
+  LAppender.Free;
+
   AResult.Passed    := LPass;
   AResult.Failed    := LFail;
   AResult.Skipped   := LSkip;
@@ -1526,6 +1678,7 @@ type
     Pass      : PInteger;
     Fail      : PInteger;
     Skip      : PInteger;
+    Res       : ^TTestResult; { non-nil → write per-test result here }
   end;
   PThreadRec = ^TThreadRec;
 
@@ -1674,6 +1827,19 @@ begin
   finally
     R^.Mtx.Release;
   end;
+  { Write per-test result if caller requested it }
+  if R^.Res <> nil then
+  begin
+    R^.Res^.Name    := R^.Entry.Name;
+    R^.Res^.Status  := LStatus;
+    case LStatus of
+      tsSkipped: R^.Res^.Message := LSkipReason;
+      tsFailed:  R^.Res^.Message := LFailMsg;
+      tsError:   R^.Res^.Message := LFailMsg;
+    else
+      R^.Res^.Message := '';
+    end;
+  end;
 end;
 
 function TTestSuite.RunParallel(APool: IThreadPool): Boolean;
@@ -1774,6 +1940,115 @@ begin
     IntToStr(LSkip) + ' skipped');
 end;
 
+function TTestSuite.RunParallelWithResult(APool: IThreadPool;
+  out AResult: TTestRunResult): Boolean;
+var
+  LTotal: Integer;
+  LPass, LFail, LSkip: Integer;
+  LMtx: IMutex;
+  I: Integer;
+  LRecs: array of TThreadRec;
+  LHandles: array of TPlatformThreadHandle;
+  LRetVal: Pointer;
+  LResults: array of TTestResult;
+begin
+  AResult := TTestRunResult.Create(Name);
+  LTotal := Length(Tests);
+  LPass := 0;
+  LFail := 0;
+  LSkip := 0;
+  LMtx := Mutex();
+
+  WriteLn;
+  WriteLn(AnsiBold('▸ ') + AnsiCyan(Name) +
+    AnsiDim(' (' + IntToStr(LTotal) + ' tests, parallel)'));
+
+  { Suite-level setup (serial) }
+  if Assigned(Setup) then
+  begin
+    try
+      Setup;
+    except
+      on E: Exception do
+      begin
+        WriteLn('  ', AnsiRed('✗ setup failed: ') + E.Message);
+        for I := 0 to High(Tests) do
+        begin
+          Inc(LSkip);
+          WriteLn('    ', StatusDot(tsSkipped), ' ', AnsiDim(Tests[I].Name));
+        end;
+        AResult.Failed    := 1;
+        AResult.Skipped   := LSkip;
+        AResult.AllPassed := False;
+        HasRun        := True;
+        LastRunPassed := False;
+        LastPass      := 0;
+        LastFail      := 1;
+        LastSkip      := LSkip;
+        Result         := False;
+        WriteLn(AnsiDim('  ') + IntToStr(LSkip) + ' skipped (setup failure)');
+        Exit;
+      end;
+    end;
+  end;
+
+  SetLength(LHandles, LTotal);
+  SetLength(LRecs, LTotal);
+  SetLength(LResults, LTotal);
+
+  { Pre-fill records — each thread gets its own result slot }
+  for I := 0 to High(Tests) do
+  begin
+    LRecs[I].Entry     := Tests[I];
+    LRecs[I].SuiteName := Name;
+    LRecs[I].Mtx       := LMtx;
+    LRecs[I].Before    := BeforeEach;
+    LRecs[I].After     := AfterEach;
+    LRecs[I].Pass      := @LPass;
+    LRecs[I].Fail      := @LFail;
+    LRecs[I].Skip      := @LSkip;
+    LRecs[I].Res       := @LResults[I];
+  end;
+
+  for I := 0 to High(Tests) do
+    platform_thread_create(LHandles[I], @ParallelWorkerProc, @LRecs[I]);
+
+  for I := 0 to High(Tests) do
+    platform_thread_join(LHandles[I], LRetVal);
+
+  { Suite-level teardown }
+  if Assigned(Teardown) then
+  begin
+    try
+      Teardown;
+    except
+      on E: Exception do
+        WriteLn('  ', AnsiYellow('⚠ teardown error: ') + E.Message);
+    end;
+  end;
+
+  { Collect results from all threads }
+  SetLength(AResult.Results, LTotal);
+  for I := 0 to High(Tests) do
+    AResult.Results[I] := LResults[I];
+
+  AResult.Passed    := LPass;
+  AResult.Failed    := LFail;
+  AResult.Skipped   := LSkip;
+  AResult.AllPassed := LFail = 0;
+
+  HasRun        := True;
+  LastRunPassed := AResult.AllPassed;
+  LastPass      := LPass;
+  LastFail      := LFail;
+  LastSkip      := LSkip;
+  Result         := LastRunPassed;
+  WriteLn(AnsiDim('  ') +
+    IntToStr(LPass) + ' passed, ' +
+    IntToStr(LFail) + ' failed, ' +
+    IntToStr(LSkip) + ' skipped');
+end;
+
 procedure TTestSuite.Summary;
 begin
   if not HasRun then
@@ -1855,6 +2130,58 @@ begin
   begin
     if not Suites[I].RunParallel(APool) then
       LAllPassed := False;
+    Inc(TotalPass, Suites[I].LastPass);
+    Inc(TotalFail, Suites[I].LastFail);
+    Inc(TotalSkip, Suites[I].LastSkip);
+  end;
+  HasRun := True;
+  Result := LAllPassed;
+end;
+
+function TTestRunner.RunAllWithResult(
+  out AResults: specialize TArray<TTestRunResult>): Boolean;
+var
+  I: Integer;
+  LAllPassed: Boolean;
+  LSuiteResult: TTestRunResult;
+begin
+  WriteLn(AnsiBold('═══ ') + AnsiBold(Name) + AnsiBold(' ═══'));
+  LAllPassed := True;
+  TotalPass := 0;
+  TotalFail := 0;
+  TotalSkip := 0;
+  SetLength(AResults, Length(Suites));
+  for I := 0 to High(Suites) do
+  begin
+    if not Suites[I].RunWithResult(LSuiteResult) then
+      LAllPassed := False;
+    AResults[I] := LSuiteResult;
+    Inc(TotalPass, Suites[I].LastPass);
+    Inc(TotalFail, Suites[I].LastFail);
+    Inc(TotalSkip, Suites[I].LastSkip);
+  end;
+  HasRun := True;
+  Result := LAllPassed;
+end;
+
+function TTestRunner.RunAllParallelWithResult(APool: IThreadPool;
+  out AResults: specialize TArray<TTestRunResult>): Boolean;
+var
+  I: Integer;
+  LAllPassed: Boolean;
+  LSuiteResult: TTestRunResult;
+begin
+  WriteLn(AnsiBold('═══ ') + AnsiBold(Name) + AnsiBold(' (parallel) ═══'));
+  LAllPassed := True;
+  TotalPass := 0;
+  TotalFail := 0;
+  TotalSkip := 0;
+  SetLength(AResults, Length(Suites));
+  for I := 0 to High(Suites) do
+  begin
+    if not Suites[I].RunParallelWithResult(APool, LSuiteResult) then
+      LAllPassed := False;
+    AResults[I] := LSuiteResult;
     Inc(TotalPass, Suites[I].LastPass);
     Inc(TotalFail, Suites[I].LastFail);
     Inc(TotalSkip, Suites[I].LastSkip);

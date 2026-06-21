@@ -338,6 +338,47 @@ begin
   end;
 end;
 
+procedure TestCheckNearPass;
+begin
+  CheckNear(1.0, 1.0);
+  CheckNear(1.0, 1.0 + 1e-11, 1e-10);
+  CheckNear(0.0, 1e-12, 1e-10);
+end;
+
+procedure TestCheckNearFail;
+begin
+  try
+    CheckNear(1.0, 2.0, 1e-10, 'should differ');
+    WriteLn('ERROR: CheckNear did not raise');
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(Pos('should differ', E.Message) > 0, 'custom message');
+    on E: Exception do
+      Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+  end;
+end;
+
+procedure TestCheckNotNearPass;
+begin
+  CheckNotNear(1.0, 2.0);
+  CheckNotNear(0.0, 1.0, 1e-10);
+end;
+
+procedure TestCheckNotNearFail;
+begin
+  try
+    CheckNotNear(1.0, 1.0, 1e-10, 'too close');
+    WriteLn('ERROR: CheckNotNear did not raise');
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(Pos('too close', E.Message) > 0, 'custom message');
+    on E: Exception do
+      Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+  end;
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -369,6 +410,10 @@ begin
   LSuite.Test('StartsWith empty',      @TestCheckStartsWithEmptyPrefix);
   LSuite.Test('Fail',                  @TestFail);
   LSuite.Test('Skip',                  @TestSkip);
+  LSuite.Test('CheckNear (pass)',      @TestCheckNearPass);
+  LSuite.Test('CheckNear (fail)',      @TestCheckNearFail);
+  LSuite.Test('CheckNotNear (pass)',   @TestCheckNotNearPass);
+  LSuite.Test('CheckNotNear (fail)',   @TestCheckNotNearFail);
 
   if not LSuite.Run then
   begin

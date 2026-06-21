@@ -650,6 +650,67 @@ begin
   end;
 end;
 
+procedure TestExpectDouble;
+begin
+  ExpectDouble(1.0).ToBeNear(1.0);
+  ExpectDouble(1.0).ToBeNear(1.0 + 1e-11, 1e-10);
+  ExpectDouble(0.0).ToBeNear(1e-12, 1e-10);
+end;
+
+procedure TestExpectDoubleNotNear;
+begin
+  ExpectDouble(1.0).ToNotBeNear(2.0);
+  ExpectDouble(0.0).ToNotBeNear(1.0, 1e-10);
+end;
+
+procedure TestExpectDoubleFailToBeNear;
+begin
+  try
+    ExpectDouble(1.0).ToBeNear(2.0, 1e-10);
+    WriteLn('ERROR: ToBeNear did not raise');
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(Pos('Expected', E.Message) > 0, 'message');
+    on E: Exception do
+      Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+  end;
+end;
+
+procedure TestExpectDoubleFailNotToBeNear;
+begin
+  try
+    ExpectDouble(1.0).ToNotBeNear(1.0, 1e-10);
+    WriteLn('ERROR: ToNotBeNear did not raise');
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(Pos('not near', E.Message) > 0, 'message');
+    on E: Exception do
+      Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+  end;
+end;
+
+procedure TestExpectDoubleNotNegation;
+begin
+  ExpectDouble(1.0).Not_.ToBeNear(2.0, 1e-10);
+  ExpectDouble(1.0).Not_.ToNotBeNear(1.0, 1e-10);
+end;
+
+procedure TestExpectDoubleTypeMismatch;
+begin
+  try
+    ExpectDouble(1.0).ToEqualInt(1);
+    WriteLn('ERROR: type mismatch not raised');
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(Pos('non-integer', E.Message) > 0, 'mismatch message');
+    on E: Exception do
+      Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+  end;
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -734,6 +795,14 @@ begin
   LSuite.Test('Not_.ToRaise pass (no ex)',     @TestNotToRaisePass);
   LSuite.Test('Not_.ToRaise fail (target ex)', @TestNotToRaiseFail);
   LSuite.Test('Not_.ToRaise other ex propag',  @TestNotToRaiseOtherException);
+
+  { R2-F23: Float/Double assertions }
+  LSuite.Test('Double ToBeNear',               @TestExpectDouble);
+  LSuite.Test('Double ToNotBeNear',            @TestExpectDoubleNotNear);
+  LSuite.Test('Fail: ToBeNear too far',        @TestExpectDoubleFailToBeNear);
+  LSuite.Test('Fail: ToNotBeNear too close',   @TestExpectDoubleFailNotToBeNear);
+  LSuite.Test('Double Not_ negation',          @TestExpectDoubleNotNegation);
+  LSuite.Test('Type: Double→ToEqualInt',       @TestExpectDoubleTypeMismatch);
 
   if not LSuite.Run then
   begin

@@ -142,6 +142,7 @@ var
   { RunWithResult test }
   LResultSuite: TTestSuite;
   LResult: TTestRunResult;
+  LRunAllResults: specialize TArray<TTestRunResult>;
 begin
   { Suite 1: lifecycle }
   LSuite1 := TTestSuite.Create('Lifecycle');
@@ -449,6 +450,112 @@ begin
   WriteLn;
   WriteLn(AnsiBold('─── R2-F12: BeforeEach Skip ───'));
   TestBeforeEachSkip;
+
+  { ── R2-F03: Subtest-level results ────────────────────────────────────────── }
+  WriteLn;
+  WriteLn(AnsiBold('─── R2-F03: Subtest Results ───'));
+  begin
+    LResultSuite := TTestSuite.Create('Subtest Results');
+    LResultSuite.TestSubtest('subtests', @TestSubtests);
+    LResultSuite.Test('plain pass', @TestSimplePass);
+    LResultSuite.RunWithResult(LResult);
+    { TestSubtests registers 3 subtests + 1 plain = 5 results total
+      (3 sub + 1 subtest parent entry + 1 plain) }
+    if Length(LResult.Results) <> 5 then
+    begin
+      WriteLn(AnsiRed('FAIL: Expected 5 results (3 sub + 1 parent + 1 plain), got '),
+        Length(LResult.Results));
+      Halt(1);
+    end;
+    { Check subtest results are individually tracked
+      Order: [0]=subtests(parent), [1]=plain pass, [2..4]=sub results }
+    if LResult.Results[0].Name <> 'subtests' then
+    begin
+      WriteLn(AnsiRed('FAIL: Result[0] name should be "subtests", got '),
+        LResult.Results[0].Name);
+      Halt(1);
+    end;
+    if LResult.Results[2].Status <> tsPassed then
+    begin
+      WriteLn(AnsiRed('FAIL: Subtest result[2] should be tsPassed, got '),
+        Ord(LResult.Results[2].Status));
+      Halt(1);
+    end;
+    if Pos('subtests/', LResult.Results[2].Name) = 0 then
+    begin
+      WriteLn(AnsiRed('FAIL: Subtest result name should contain "subtests/", got '),
+        LResult.Results[2].Name);
+      Halt(1);
+    end;
+    WriteLn(AnsiGreen('  ✓ Subtest results collected'));
+  end;
+
+  { ── R2-F02: RunParallelWithResult ────────────────────────────────────────── }
+  WriteLn;
+  WriteLn(AnsiBold('─── R2-F02: RunParallelWithResult ───'));
+  begin
+    LResultSuite := TTestSuite.Create('Parallel Result');
+    LResultSuite.Test('p1', @TestSimplePass);
+    LResultSuite.Test('p2', @TestSimplePass2);
+    LResultSuite.Skip('sk1', 'reason');
+    LResultSuite.RunParallelWithResult(nil, LResult);
+    if Length(LResult.Results) <> 3 then
+    begin
+      WriteLn(AnsiRed('FAIL: Expected 3 results, got '), Length(LResult.Results));
+      Halt(1);
+    end;
+    if LResult.Passed <> 2 then
+    begin
+      WriteLn(AnsiRed('FAIL: Expected 2 passed, got '), LResult.Passed);
+      Halt(1);
+    end;
+    if LResult.Skipped <> 1 then
+    begin
+      WriteLn(AnsiRed('FAIL: Expected 1 skipped, got '), LResult.Skipped);
+      Halt(1);
+    end;
+    if not LResult.AllPassed then
+    begin
+      WriteLn(AnsiRed('FAIL: AllPassed should be True'));
+      Halt(1);
+    end;
+    WriteLn(AnsiGreen('  ✓ RunParallelWithResult'));
+  end;
+
+  { ── R2-F02: RunAllWithResult ─────────────────────────────────────────────── }
+  WriteLn;
+  WriteLn(AnsiBold('─── R2-F02: RunAllWithResult ───'));
+  begin
+    LRunNestedS1 := TTestSuite.Create('SuiteX');
+    LRunNestedS1.Test('x1', procedure begin CheckTrue(True); end);
+    LRunNestedS1.Skip('x2', 'planned');
+    LRunNestedS2 := TTestSuite.Create('SuiteY');
+    LRunNestedS2.Test('y1', procedure begin CheckTrue(True); end);
+    LRunNestedR := TTestRunner.Create('WithResult Runner');
+    LRunNestedR.Add(LRunNestedS1);
+    LRunNestedR.Add(LRunNestedS2);
+    if not LRunNestedR.RunAllWithResult(LRunAllResults) then
+    begin
+      WriteLn(AnsiRed('FAIL: RunAllWithResult should return True'));
+      Halt(1);
+    end;
+    if Length(LRunAllResults) <> 2 then
+    begin
+      WriteLn(AnsiRed('FAIL: Expected 2 suite results, got '), Length(LRunAllResults));
+      Halt(1);
+    end;
+    if LRunAllResults[0].SuiteName <> 'SuiteX' then
+    begin
+      WriteLn(AnsiRed('FAIL: First suite name should be SuiteX'));
+      Halt(1);
+    end;
+    if LRunAllResults[1].Passed <> 1 then
+    begin
+      WriteLn(AnsiRed('FAIL: SuiteY should have 1 pass, got '), LRunAllResults[1].Passed);
+      Halt(1);
+    end;
+    WriteLn(AnsiGreen('  ✓ RunAllWithResult'));
+  end;
 
   WriteLn;
   WriteLn(AnsiGreen('ALL PASSED'));
