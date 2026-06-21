@@ -79,6 +79,13 @@ implementation
 uses
   SysUtils, StrUtils, Math;
 
+function CreateInvariantFormatSettings: TFormatSettings;
+begin
+  Result := DefaultFormatSettings;
+  Result.DecimalSeparator := '.';
+  Result.ThousandSeparator := ',';
+end;
+
 { 辅助函数：添加字符串到数组 }
 procedure AddLine(var ALines: TStringArray; const ALine: string);
 begin
@@ -119,7 +126,7 @@ end;
 
 function TBenchReportGenerator.FormatNumber(AValue: Double; APrecision: Integer): string;
 begin
-  Result := FloatToStrF(AValue, ffFixed, 15, APrecision);
+  Result := FloatToStrF(AValue, ffFixed, 18, APrecision, CreateInvariantFormatSettings);
 end;
 
 function TBenchReportGenerator.FormatLargeNumber(AValue: Int64): string;
@@ -185,6 +192,7 @@ end;
 function TBenchReportGenerator.ToConsole: string;
 var
   LLines: TStringArray;
+  LSkippedCount: Integer;
   i: Integer;
 begin
   SetLength(LLines, 0);
@@ -207,24 +215,56 @@ begin
     ['Name', 'Iterations', 'ns/op', 'ops/s', 'StdDev', 'P99']));
   AddLine(LLines, '  ' + StringOfChar('-', 100));
 
-  // 结果
+  // 结果（只显示未跳过的）
   for i := 0 to FResultCount - 1 do
   begin
-    AddLine(LLines, Format('  %-40s %10s %10s %10s %10s %10s',
-      [FResults[i].Name,
-       FormatLargeNumber(FResults[i].Iterations),
-       FormatNumber(FResults[i].NsPerOp, 1),
-       FormatLargeNumber(Int64(FResults[i].OpsPerSec)),
-       FormatNumber(FResults[i].StdDev, 1),
-       FormatNumber(FResults[i].P99, 1)]));
+    if not FResults[i].Skipped then
+    begin
+      AddLine(LLines, Format('  %-40s %10s %10s %10s %10s %10s',
+        [FResults[i].Name,
+         FormatLargeNumber(FResults[i].Iterations),
+         FormatNumber(FResults[i].NsPerOp, 1),
+         FormatLargeNumber(Int64(FResults[i].OpsPerSec)),
+         FormatNumber(FResults[i].StdDev, 1),
+         FormatNumber(FResults[i].P99, 1)]));
+    end;
+  end;
+
+  // 跳过的基准
+  LSkippedCount := 0;
+  for i := 0 to FResultCount - 1 do
+    if FResults[i].Skipped then
+      Inc(LSkippedCount);
+
+  if LSkippedCount > 0 then
+  begin
+    AddLine(LLines, '');
+    AddLine(LLines, 'Skipped Benchmarks:');
+    AddLine(LLines, '');
+    for i := 0 to FResultCount - 1 do
+    begin
+      if FResults[i].Skipped then
+      begin
+        AddLine(LLines, '  ' + FResults[i].Name);
+        AddLine(LLines, '    Reason: ' + FResults[i].SkipReason);
+      end;
+    end;
   end;
 
   AddLine(LLines, '');
   AddLine(LLines, '=== Statistics ===');
 
-  // 详细统计（只显示前 5 个结果）
-  for i := 0 to Min(4, FResultCount - 1) do
+  // 详细统计（只显示前 5 个未跳过的结果）
+  LSkippedCount := 0;
+  for i := 0 to Min(4 + LSkippedCount, FResultCount - 1) do
   begin
+    if FResults[i].Skipped then
+    begin
+      Inc(LSkippedCount);
+      Continue;
+    end;
+    if i - LSkippedCount >= 5 then
+      Break;
     AddLine(LLines, '');
     AddLine(LLines, FResults[i].Name + ':');
     AddLine(LLines, Format('  Mean: %s  StdDev: %s  Median: %s',
@@ -269,6 +309,15 @@ begin
   begin
     AddLine(LJSON, '    {');
     AddLine(LJSON, '      "name": "' + EscapeJSON(FResults[i].Name) + '",');
+    if FResults[i].Skipped then
+    begin
+      AddLine(LJSON, '      "status": "skipped",');
+      AddLine(LJSON, '      "skip_reason": "' + EscapeJSON(FResults[i].SkipReason) + '",');
+    end
+    else
+    begin
+      AddLine(LJSON, '      "status": "ok",');
+    end;
     AddLine(LJSON, '      "iterations": ' + IntToStr(FResults[i].Iterations) + ',');
     AddLine(LJSON, '      "ns_per_op": ' + FormatNumber(FResults[i].NsPerOp, 2) + ',');
     AddLine(LJSON, '      "ops_per_sec": ' + FormatNumber(FResults[i].OpsPerSec, 0) + ',');
@@ -308,13 +357,15 @@ begin
   SetLength(LLines, 0);
 
   // 表头
-  AddLine(LLines, 'name' + #9 + 'iterations' + #9 + 'ns_per_op' + #9 + 'ops_per_sec' + #9 + 'stddev' + #9 + 'median' + #9 + 'p95' + #9 + 'p99' + #9 + 'outliers' + #9 + 'samples');
+  AddLine(LLines, 'name' + #9 + 'status' + #9 + 'skip_reason' + #9 + 'iterations' + #9 + 'ns_per_op' + #9 + 'ops_per_sec' + #9 + 'stddev' + #9 + 'median' + #9 + 'p95' + #9 + 'p99' + #9 + 'outliers' + #9 + 'samples');
 
   // 数据
   for i := 0 to FResultCount - 1 do
   begin
     AddLine(LLines,
       FResults[i].Name + #9 +
+      IfThen(FResults[i].Skipped, 'skipped', 'ok') + #9 +
+      FResults[i].SkipReason + #9 +
       IntToStr(FResults[i].Iterations) + #9 +
       FormatNumber(FResults[i].NsPerOp, 2) + #9 +
       FormatNumber(FResults[i].OpsPerSec, 0) + #9 +
@@ -337,48 +388,65 @@ end;
 
 function TBenchReportGenerator.GenerateChart(const AResults: array of TBenchResult): string;
 var
-  LLabels, LData: string;
-  i: Integer;
+  LLines: TStringArray;
+  LMaxNsPerOp: Double;
+  LBarWidth: Double;
+  LBarHeight: Double;
+  LBarX: Double;
+  LBarY: Double;
+  LHeightRatio: Double;
+  I: Integer;
 begin
-  LLabels := '';
-  LData := '';
+  if Length(AResults) = 0 then
+    Exit('<svg class="bench-chart" viewBox="0 0 820 280" role="img" aria-label="No benchmark data"></svg>');
 
-  for i := 0 to High(AResults) do
+  LMaxNsPerOp := 0.0;
+  for I := 0 to High(AResults) do
+    if AResults[I].NsPerOp > LMaxNsPerOp then
+      LMaxNsPerOp := AResults[I].NsPerOp;
+  if LMaxNsPerOp <= 0 then
+    LMaxNsPerOp := 1.0;
+
+  SetLength(LLines, 0);
+  AddLine(LLines, '<svg class="bench-chart" viewBox="0 0 820 280" role="img" aria-label="Benchmark ns per op chart">');
+  AddLine(LLines, '  <rect x="0" y="0" width="820" height="280" rx="18" fill="#fbfcfd"/>');
+  AddLine(LLines, '  <line x1="64" y1="236" x2="784" y2="236" stroke="#cfd7de" stroke-width="1"/>');
+  AddLine(LLines, '  <line x1="64" y1="24" x2="64" y2="236" stroke="#cfd7de" stroke-width="1"/>');
+
+  LBarWidth := 720.0 / Max(Length(AResults), 1);
+  for I := 0 to High(AResults) do
   begin
-    if i > 0 then
-    begin
-      LLabels := LLabels + ', ';
-      LData := LData + ', ';
-    end;
-    LLabels := LLabels + '"' + EscapeJSON(AResults[i].Name) + '"';
-    LData := LData + FormatNumber(AResults[i].NsPerOp, 2);
+    LHeightRatio := AResults[I].NsPerOp / LMaxNsPerOp;
+    LBarHeight := 184.0 * LHeightRatio;
+    LBarX := 76.0 + I * LBarWidth;
+    LBarY := 236.0 - LBarHeight;
+
+    AddLine(LLines,
+      Format('  <rect x="%s" y="%s" width="%s" height="%s" rx="8" fill="#4a7a6f"/>',
+        [FormatNumber(LBarX, 2),
+         FormatNumber(LBarY, 2),
+         FormatNumber(Max(LBarWidth - 18.0, 14.0), 2),
+         FormatNumber(LBarHeight, 2)]));
+    AddLine(LLines,
+      Format('  <text x="%s" y="%s" class="chart-value">%s ns</text>',
+        [FormatNumber(LBarX, 2),
+         FormatNumber(Max(LBarY - 8.0, 18.0), 2),
+         EscapeHTML(FormatNumber(AResults[I].NsPerOp, 1))]));
+    AddLine(LLines,
+      Format('  <text x="%s" y="254" class="chart-label">%s</text>',
+        [FormatNumber(LBarX, 2),
+         EscapeHTML(AResults[I].Name)]));
   end;
 
-  Result :=
-    '<canvas id="benchmarkChart" width="800" height="400"></canvas>' + LineEnding +
-    '<script>' + LineEnding +
-    '  var ctx = document.getElementById("benchmarkChart").getContext("2d");' + LineEnding +
-    '  var chart = new Chart(ctx, {' + LineEnding +
-    '    type: "bar",' + LineEnding +
-    '    data: {' + LineEnding +
-    '      labels: [' + LLabels + '],' + LineEnding +
-    '      datasets: [{' + LineEnding +
-    '        label: "ns/op",' + LineEnding +
-    '        data: [' + LData + '],' + LineEnding +
-    '        backgroundColor: "rgba(54, 162, 235, 0.5)",' + LineEnding +
-    '        borderColor: "rgba(54, 162, 235, 1)",' + LineEnding +
-    '        borderWidth: 1' + LineEnding +
-    '      }]' + LineEnding +
-    '    },' + LineEnding +
-    '    options: {' + LineEnding +
-    '      scales: {' + LineEnding +
-    '        y: {' + LineEnding +
-    '          beginAtZero: true' + LineEnding +
-    '        }' + LineEnding +
-    '      }' + LineEnding +
-    '    }' + LineEnding +
-    '  });' + LineEnding +
-    '</script>';
+  AddLine(LLines, '</svg>');
+
+  Result := '';
+  for I := 0 to High(LLines) do
+  begin
+    if I > 0 then
+      Result := Result + LineEnding;
+    Result := Result + LLines[I];
+  end;
 end;
 
 function TBenchReportGenerator.GenerateCSS: string;
@@ -395,22 +463,21 @@ begin
     '  .benchmark-name { text-align: left; font-weight: bold; }' + LineEnding +
     '  .stats { margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 5px; }' + LineEnding +
     '  .chart-container { margin: 30px 0; }' + LineEnding +
+    '  .bench-chart { width: 100%; height: auto; overflow: visible; }' + LineEnding +
+    '  .chart-label { font: 11px sans-serif; fill: #27403a; }' + LineEnding +
+    '  .chart-value { font: 11px sans-serif; fill: #5b6470; }' + LineEnding +
     '</style>';
 end;
 
 function TBenchReportGenerator.GenerateJS: string;
 begin
-  // 使用纯 CSS 柱状图，不依赖外部 CDN
-  Result := '<script>' +
-    'function initCharts() {' +
-    '  // 初始化图表（纯 CSS 实现）' +
-    '}' +
-    '</script>';
+  Result := '';
 end;
 
 function TBenchReportGenerator.ToHTML: string;
 var
   LHTML: TStringArray;
+  LSkippedCount: Integer;
   i: Integer;
 begin
   SetLength(LHTML, 0);
@@ -459,6 +526,8 @@ begin
 
   for i := 0 to FResultCount - 1 do
   begin
+    if FResults[i].Skipped then
+      Continue;
     AddLine(LHTML, '      <tr>');
     AddLine(LHTML, '        <td class="benchmark-name">' + EscapeHTML(FResults[i].Name) + '</td>');
     AddLine(LHTML, '        <td>' + FormatLargeNumber(FResults[i].Iterations) + '</td>');
@@ -474,13 +543,54 @@ begin
 
   AddLine(LHTML, '    </tbody>');
   AddLine(LHTML, '  </table>');
+
+  // 跳过的基准
+  LSkippedCount := 0;
+  for i := 0 to FResultCount - 1 do
+    if FResults[i].Skipped then
+      Inc(LSkippedCount);
+
+  if LSkippedCount > 0 then
+  begin
+    AddLine(LHTML, '');
+    AddLine(LHTML, '  <h2>Skipped Benchmarks</h2>');
+    AddLine(LHTML, '  <table>');
+    AddLine(LHTML, '    <thead>');
+    AddLine(LHTML, '      <tr>');
+    AddLine(LHTML, '        <th>Name</th>');
+    AddLine(LHTML, '        <th>Reason</th>');
+    AddLine(LHTML, '      </tr>');
+    AddLine(LHTML, '    </thead>');
+    AddLine(LHTML, '    <tbody>');
+    for i := 0 to FResultCount - 1 do
+    begin
+      if FResults[i].Skipped then
+      begin
+        AddLine(LHTML, '      <tr>');
+        AddLine(LHTML, '        <td class="benchmark-name">' + EscapeHTML(FResults[i].Name) + '</td>');
+        AddLine(LHTML, '        <td>' + EscapeHTML(FResults[i].SkipReason) + '</td>');
+        AddLine(LHTML, '      </tr>');
+      end;
+    end;
+    AddLine(LHTML, '    </tbody>');
+    AddLine(LHTML, '  </table>');
+  end;
+
   AddLine(LHTML, '');
   AddLine(LHTML, '  <div class="stats">');
   AddLine(LHTML, '    <h2>Detailed Statistics</h2>');
 
-  // 显示前 5 个结果的详细统计
-  for i := 0 to Min(4, FResultCount - 1) do
+  // 显示前 5 个未跳过结果的详细统计
+  LSkippedCount := 0;
+  for i := 0 to FResultCount - 1 do
   begin
+    if FResults[i].Skipped then
+    begin
+      Inc(LSkippedCount);
+      Continue;
+    end;
+    if i - LSkippedCount >= 5 then
+      Break;
     AddLine(LHTML, '    <h3>' + EscapeHTML(FResults[i].Name) + '</h3>');
     AddLine(LHTML, '    <p>Mean: ' + FormatTime(FResults[i].NsPerOp) + '</p>');
     AddLine(LHTML, '    <p>StdDev: ' + FormatTime(FResults[i].StdDev) + '</p>');
@@ -525,7 +635,7 @@ begin
        FormatTime(ABaselines[i].CurrentNsPerOp),
        FormatTime(ABaselines[i].BaselineNsPerOp),
        FormatNumber(ABaselines[i].Ratio, 2) + 'x',
-       IfThen(ABaselines[i].Significant,
+       IfThen(ABaselines[i].DifferenceHeuristic,
          IfThen(ABaselines[i].Ratio > 1.0, '✓ faster', '✗ slower'),
          '≈ same')]));
   end;

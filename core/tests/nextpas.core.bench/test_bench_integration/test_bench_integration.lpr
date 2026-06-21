@@ -6,14 +6,28 @@ program test_bench_integration;
 {$modeswitch functionreferences}
 
 uses
+  {$ifdef unix}
+  cthreads,
+  {$endif}
   SysUtils,
+  SyncObjs,
   nextpas.core.bench,
-  nextpas.core.time.base;
+  nextpas.core.bench.base,
+  nextpas.core.time.base,
+  nextpas.core.simd.cpuinfo;
 
 var
   GTestCount: Integer;
   GPassCount: Integer;
   GFailCount: Integer;
+  GSetupCallCount: Integer;
+  GTeardownCallCount: Integer;
+  GSetupVisibleInsideBench: Boolean;
+  GSetupStateActive: Boolean;
+  GTeardownSawExpectedData: Boolean;
+  GParallelLock: TCriticalSection;
+  GActiveParallelCalls: Integer;
+  GMaxParallelCalls: Integer;
 
 procedure Check(ACondition: Boolean; const ATestName: string);
 begin
@@ -28,6 +42,15 @@ begin
     Inc(GFailCount);
     WriteLn('  ✗ ', ATestName);
   end;
+end;
+
+function CreateFastSuite(const ASuiteName: string): IBenchSuite;
+begin
+  Result := TBenchSuite.Create(ASuiteName)
+    .SetMinDuration(TDuration.FromMilliseconds(5))
+    .SetMaxIterations(5000)
+    .SetMinSamples(3)
+    .SetWarmupIters(1);
 end;
 
 { 基准函数：快速操作 }
@@ -66,6 +89,80 @@ begin
     ;
 end;
 
+procedure BenchRequiresSetup(const ACtx: IBenchContext);
+begin
+  GSetupVisibleInsideBench := GSetupStateActive;
+end;
+
+function SetupState: Pointer;
+begin
+  Inc(GSetupCallCount);
+  GSetupStateActive := True;
+  Result := Pointer(PtrUInt($1234));
+end;
+
+procedure TeardownState(AData: Pointer);
+begin
+  Inc(GTeardownCallCount);
+  GTeardownSawExpectedData := PtrUInt(AData) = PtrUInt($1234);
+  GSetupStateActive := False;
+end;
+
+procedure BenchParallelObserved(const ACtx: IBenchContext);
+begin
+  GParallelLock.Enter;
+  try
+    Inc(GActiveParallelCalls);
+    if GActiveParallelCalls > GMaxParallelCalls then
+      GMaxParallelCalls := GActiveParallelCalls;
+  finally
+    GParallelLock.Leave;
+  end;
+
+  Sleep(1);
+
+  GParallelLock.Enter;
+  try
+    Dec(GActiveParallelCalls);
+  finally
+    GParallelLock.Leave;
+  end;
+end;
+
+procedure BenchParallelWithContext(const ACtx: IBenchContext);
+begin
+  if ACtx <> nil then
+  begin
+    ACtx.SetBytes(2048);
+    ACtx.SetAllocs(3);
+  end;
+  Sleep(1);
+end;
+
+procedure BenchParallelSkipWithContext(const ACtx: IBenchContext);
+begin
+  if ACtx <> nil then
+  begin
+    ACtx.SetBytes(2048);
+    ACtx.SetAllocs(3);
+    if ACtx.Iterations >= 2 then
+      ACtx.Skip('Parallel skip requested');
+  end;
+  Sleep(1);
+end;
+
+procedure BenchAllocatesMemory(const ACtx: IBenchContext);
+var
+  LPtr: Pointer;
+begin
+  LPtr := GetMem(64);
+  try
+    PByte(LPtr)^ := 42;
+  finally
+    FreeMem(LPtr);
+  end;
+end;
+
 procedure TestTBenchSuite_Basic;
 var
   LSuite: IBenchSuite;
@@ -74,7 +171,7 @@ begin
   WriteLn('TestTBenchSuite_Basic:');
 
   // 创建套件
-  LSuite := TBenchSuite.Create('TestSuite');
+  LSuite := CreateFastSuite('TestSuite');
 
   // 添加基准
   LSuite.Add('Fast', @BenchFast);
@@ -102,10 +199,10 @@ begin
   LSuite := TBenchSuite.Create('TestSuite');
 
   // 配置
-  LSuite.SetMinDuration(TDuration.FromMilliseconds(500));
-  LSuite.SetMaxIterations(100000);
-  LSuite.SetMinSamples(10);
-  LSuite.SetWarmupIters(3);
+  LSuite.SetMinDuration(TDuration.FromMilliseconds(5));
+  LSuite.SetMaxIterations(5000);
+  LSuite.SetMinSamples(3);
+  LSuite.SetWarmupIters(1);
 
   // 添加基准
   LSuite.Add('Fast', @BenchFast);
@@ -128,7 +225,7 @@ begin
   WriteLn('TestTBenchSuite_WithBaseline:');
 
   // 创建套件
-  LSuite := TBenchSuite.Create('TestSuite');
+  LSuite := CreateFastSuite('TestSuite');
 
   // 添加基线
   LSuite.AddBaseline('Fast', 100.0);
@@ -148,7 +245,10 @@ begin
   Check(LComparisons[0].BaselineName = 'Fast', 'Baseline name correct');
   Check(LComparisons[0].BaselineNsPerOp = 100.0, 'Baseline NsPerOp correct');
   Check(LComparisons[0].CurrentNsPerOp > 0, 'Current NsPerOp > 0');
-  Check(LComparisons[0].Ratio > 0, 'Ratio > 0');
+  Check(Abs(LComparisons[0].Ratio - (LComparisons[0].CurrentNsPerOp / LComparisons[0].BaselineNsPerOp)) < 0.0001,
+    'Ratio uses Current/Baseline direction');
+  Check(not LComparisons[0].HasStatisticalTest,
+    'Scalar baseline does not claim statistical significance');
 end;
 
 procedure TestTBenchSuite_WithFilter;
@@ -159,7 +259,7 @@ begin
   WriteLn('TestTBenchSuite_WithFilter:');
 
   // 创建套件
-  LSuite := TBenchSuite.Create('TestSuite');
+  LSuite := CreateFastSuite('TestSuite');
 
   // 设置过滤器
   LSuite.SetFilter('Fast');
@@ -172,12 +272,10 @@ begin
   LResults := LSuite.Run;
 
   // 检查结果
-  // 注意：过滤器会让不匹配的基准返回空结果（Iterations=0）
-  Check(LResults.Count = 2, 'Result count = 2');
+  Check(LResults.Count = 1, 'Result count = 1');
   Check(LResults.GetByName('Fast').Name = 'Fast', 'Filtered result exists');
   Check(LResults.GetByName('Fast').NsPerOp > 0, 'Filtered NsPerOp > 0');
-  Check(LResults.GetByName('Medium').Name = 'Medium', 'Non-filtered result exists');
-  Check(LResults.GetByName('Medium').Iterations = 0, 'Non-filtered result has 0 iterations');
+  Check(not LResults.GetByName('Medium').Executed, 'Filtered-out benchmark not executed');
 end;
 
 procedure TestTBenchSuite_Conditional;
@@ -188,7 +286,7 @@ begin
   WriteLn('TestTBenchSuite_Conditional:');
 
   // 创建套件
-  LSuite := TBenchSuite.Create('TestSuite');
+  LSuite := CreateFastSuite('TestSuite');
 
   // 条件添加
   LSuite.AddWhen('Fast', @BenchFast, True);
@@ -211,7 +309,7 @@ begin
   WriteLn('TestTBenchSuite_WithContext:');
 
   // 创建套件
-  LSuite := TBenchSuite.Create('TestSuite');
+  LSuite := CreateFastSuite('TestSuite');
 
   // 添加带上下文的基准
   LSuite.Add('WithContext', @BenchWithContext);
@@ -223,6 +321,288 @@ begin
   Check(LResults.Count = 1, 'Result count = 1');
   Check(LResults.GetByName('WithContext').Name = 'WithContext', 'Result name correct');
   Check(LResults.GetByName('WithContext').NsPerOp > 0, 'NsPerOp > 0');
+  Check(LResults.GetByName('WithContext').BytesPerOp = 1024, 'BytesPerOp propagated');
+  Check(LResults.GetByName('WithContext').AllocsPerOp = 2, 'AllocsPerOp propagated');
+end;
+
+procedure TestTBenchSuite_WithSetup;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+begin
+  WriteLn('TestTBenchSuite_WithSetup:');
+
+  GSetupCallCount := 0;
+  GTeardownCallCount := 0;
+  GSetupVisibleInsideBench := False;
+  GSetupStateActive := False;
+  GTeardownSawExpectedData := False;
+
+  LSuite := CreateFastSuite('SetupSuite');
+  LSuite.AddWithSetup('NeedsSetup', @BenchRequiresSetup, @SetupState, @TeardownState);
+
+  LResults := LSuite.Run;
+
+  Check(LResults.Count = 1, 'Setup benchmark result count = 1');
+  Check(GSetupCallCount = 1, 'Setup called exactly once');
+  Check(GTeardownCallCount = 1, 'Teardown called exactly once');
+  Check(GSetupVisibleInsideBench, 'Benchmark observed setup state');
+  Check(GTeardownSawExpectedData, 'Teardown received setup data');
+  Check(not GSetupStateActive, 'Teardown cleared setup state');
+end;
+
+procedure TestTBenchSuite_AddParallel;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+  LResult: TBenchResult;
+begin
+  WriteLn('TestTBenchSuite_AddParallel:');
+
+  GActiveParallelCalls := 0;
+  GMaxParallelCalls := 0;
+
+  LSuite := TBenchSuite.Create('ParallelSuite');
+  LSuite
+    .SetMinDuration(TDuration.FromMilliseconds(1))
+    .SetMaxIterations(32)
+    .SetMinSamples(1)
+    .SetWarmupIters(1)
+    .DisableMemoryTracking
+    .AddParallel('ParallelObserved', @BenchParallelObserved, 4);
+
+  LResults := LSuite.Run;
+  LResult := LResults.GetByName('ParallelObserved');
+
+  Check(LResults.Count = 1, 'Parallel benchmark result count = 1');
+  Check(LResult.NsPerOp > 0, 'Parallel benchmark produced timing');
+  Check(GMaxParallelCalls > 1, 'Parallel benchmark overlapped callbacks');
+
+  LSuite := TBenchSuite.Create('ParallelContextSuite');
+  LSuite
+    .SetMinDuration(TDuration.FromMilliseconds(1))
+    .SetMaxIterations(32)
+    .SetMinSamples(1)
+    .SetWarmupIters(1)
+    .DisableMemoryTracking
+    .AddParallel('ParallelWithContext', @BenchParallelWithContext, 4);
+
+  LResults := LSuite.Run;
+  LResult := LResults.GetByName('ParallelWithContext');
+
+  Check(LResult.BytesPerOp = 2048, 'Parallel benchmark propagates BytesPerOp');
+  Check(LResult.AllocsPerOp = 3, 'Parallel benchmark propagates AllocsPerOp');
+end;
+
+procedure TestTBenchSuite_AddParallelSkipPropagation;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+  LResult: TBenchResult;
+begin
+  WriteLn('TestTBenchSuite_AddParallelSkipPropagation:');
+
+  LSuite := TBenchSuite.Create('ParallelSkipSuite');
+  LSuite
+    .SetMinDuration(TDuration.FromMilliseconds(1))
+    .SetMaxIterations(64)
+    .SetMinSamples(1)
+    .SetWarmupIters(1)
+    .DisableMemoryTracking
+    .AddParallel('ParallelSkip', @BenchParallelSkipWithContext, 4);
+
+  LResults := LSuite.Run;
+  LResult := LResults.GetByName('ParallelSkip');
+
+  Check(LResults.Count = 1, 'Parallel skip benchmark result count = 1');
+  Check(LResult.Skipped, 'Parallel skip benchmark is marked skipped');
+  Check(LResult.SkipReason = 'Parallel skip requested', 'Parallel skip reason propagated');
+  Check(LResult.Iterations = 8, 'Parallel skip benchmark reports actual iterations');
+  Check(LResult.BytesPerOp = 2048, 'Parallel skip benchmark keeps BytesPerOp');
+  Check(LResult.AllocsPerOp = 3, 'Parallel skip benchmark keeps AllocsPerOp');
+end;
+
+procedure TestTBenchSuite_ParallelMemoryTrackingRejected;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+  LAll: TBenchResultArray;
+begin
+  WriteLn('TestTBenchSuite_ParallelMemoryTrackingRejected:');
+
+  LSuite := TBenchSuite.Create('ParallelMemtrackSuite');
+  try
+    LResults := LSuite
+      .SetMinDuration(TDuration.FromMilliseconds(1))
+      .SetMaxIterations(32)
+      .SetMinSamples(1)
+      .SetWarmupIters(1)
+      .EnableMemoryTracking
+      .AddParallel('ParallelObserved', @BenchParallelObserved, 4)
+      .Run;
+
+    // 并行基准应自动跳过内存跟踪，BytesPerOp/AllocsPerOp 应为 0
+    LAll := LResults.GetAll;
+    Check(Length(LAll) = 1, 'Parallel benchmark runs with memory tracking enabled');
+    Check(LAll[0].BytesPerOp = 0, 'Parallel benchmark skips memory tracking - BytesPerOp = 0');
+    Check(LAll[0].AllocsPerOp = 0, 'Parallel benchmark skips memory tracking - AllocsPerOp = 0');
+  finally
+    LSuite := nil;
+  end;
+end;
+
+procedure TestTBenchSuite_MemoryTracking;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+  LResult: TBenchResult;
+begin
+  WriteLn('TestTBenchSuite_MemoryTracking:');
+
+  LSuite := TBenchSuite.Create('MemtrackSuite');
+  LSuite
+    .SetMinDuration(TDuration.FromMilliseconds(1))
+    .SetMaxIterations(16)
+    .SetMinSamples(1)
+    .SetWarmupIters(1)
+    .EnableMemoryTracking
+    .Add('AllocOneBlock', @BenchAllocatesMemory);
+
+  LResults := LSuite.Run;
+  LResult := LResults.GetByName('AllocOneBlock');
+
+  Check(LResults.Count = 1, 'Memory benchmark result count = 1');
+  Check(LResult.AllocsPerOp >= 1, 'Memory tracking captures alloc count');
+  Check(LResult.BytesPerOp >= 64, 'Memory tracking captures allocated bytes');
+end;
+
+procedure TestTBenchSuite_EnvironmentCores;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+begin
+  WriteLn('TestTBenchSuite_EnvironmentCores:');
+
+  LSuite := CreateFastSuite('EnvironmentSuite');
+  LSuite.Add('Fast', @BenchFast);
+
+  LResults := LSuite.Run;
+
+  Check(LResults.Environment.Cores = GetCPUInfo.LogicalCores,
+    'Environment core count matches platform detection');
+end;
+
+procedure TestTBenchSuite_InvalidParameters;
+var
+  LRaised: Boolean;
+  LSuite: IBenchSuite;
+begin
+  WriteLn('TestTBenchSuite_InvalidParameters:');
+
+  LRaised := False;
+  LSuite := TBenchSuite.Create('Invalid');
+  try
+    try
+      LSuite.SetMinDuration(TDuration.FromNanoseconds(0));
+    except
+      on E: Exception do
+        LRaised := True;
+    end;
+  finally
+    LSuite := nil;
+  end;
+  Check(LRaised, 'SetMinDuration rejects zero');
+
+  LRaised := False;
+  LSuite := TBenchSuite.Create('Invalid');
+  try
+    try
+      LSuite.SetMaxIterations(0);
+    except
+      on E: Exception do
+        LRaised := True;
+    end;
+  finally
+    LSuite := nil;
+  end;
+  Check(LRaised, 'SetMaxIterations rejects zero');
+
+  LRaised := False;
+  LSuite := TBenchSuite.Create('Invalid');
+  try
+    try
+      LSuite.SetMinSamples(0);
+    except
+      on E: Exception do
+        LRaised := True;
+    end;
+  finally
+    LSuite := nil;
+  end;
+  Check(LRaised, 'SetMinSamples rejects zero');
+
+  LRaised := False;
+  LSuite := TBenchSuite.Create('Invalid');
+  try
+    try
+      LSuite.AddParallel('BadParallel', @BenchFast, 0);
+    except
+      on E: Exception do
+        LRaised := True;
+    end;
+  finally
+    LSuite := nil;
+  end;
+  Check(LRaised, 'AddParallel rejects zero threads');
+end;
+
+procedure TestTBenchSuite_LoadBaselineRaises;
+var
+  LFile: TextFile;
+  LPath: string;
+  LRaised: Boolean;
+  LSuite: IBenchSuite;
+begin
+  WriteLn('TestTBenchSuite_LoadBaselineRaises:');
+
+  LRaised := False;
+  LSuite := CreateFastSuite('BaselineErrorSuite');
+  try
+    try
+      LSuite.LoadBaseline('build/missing-baseline.json');
+    except
+      on E: Exception do
+        LRaised := True;
+    end;
+  finally
+    LSuite := nil;
+  end;
+  Check(LRaised, 'LoadBaseline raises for missing file');
+
+  LPath := 'build/invalid-baseline.json';
+  ForceDirectories('build');
+  AssignFile(LFile, LPath);
+  Rewrite(LFile);
+  try
+    Write(LFile, '{invalid');
+  finally
+    CloseFile(LFile);
+  end;
+
+  LRaised := False;
+  LSuite := CreateFastSuite('BaselineErrorSuite');
+  try
+    try
+      LSuite.LoadBaseline(LPath);
+    except
+      on E: Exception do
+        LRaised := True;
+    end;
+  finally
+    LSuite := nil;
+    DeleteFile(LPath);
+  end;
+  Check(LRaised, 'LoadBaseline raises for invalid JSON');
 end;
 
 procedure TestTBenchResults_ToConsole;
@@ -234,7 +614,7 @@ begin
   WriteLn('TestTBenchResults_ToConsole:');
 
   // 创建套件
-  LSuite := TBenchSuite.Create('TestSuite');
+  LSuite := CreateFastSuite('TestSuite');
 
   // 添加基准
   LSuite.Add('Fast', @BenchFast);
@@ -259,7 +639,7 @@ begin
   WriteLn('TestTBenchResults_ToJSON:');
 
   // 创建套件
-  LSuite := TBenchSuite.Create('TestSuite');
+  LSuite := CreateFastSuite('TestSuite');
 
   // 添加基准
   LSuite.Add('Fast', @BenchFast);
@@ -285,7 +665,7 @@ begin
   WriteLn('TestTBenchResults_ToTSV:');
 
   // 创建套件
-  LSuite := TBenchSuite.Create('TestSuite');
+  LSuite := CreateFastSuite('TestSuite');
 
   // 添加基准
   LSuite.Add('Fast', @BenchFast);
@@ -297,7 +677,7 @@ begin
   LTSV := LResults.ToTSV;
 
   Check(Length(LTSV) > 0, 'TSV output not empty');
-  Check(Pos('name' + #9 + 'iterations', LTSV) > 0, 'Contains header');
+  Check(Pos('name' + #9 + 'status' + #9 + 'skip_reason' + #9 + 'iterations', LTSV) > 0, 'Contains header');
   Check(Pos('Fast', LTSV) > 0, 'Contains benchmark name');
 end;
 
@@ -310,7 +690,7 @@ begin
   WriteLn('TestTBenchResults_ToHTML:');
 
   // 创建套件
-  LSuite := TBenchSuite.Create('TestSuite');
+  LSuite := CreateFastSuite('TestSuite');
 
   // 添加基准
   LSuite.Add('Fast', @BenchFast);
@@ -324,7 +704,8 @@ begin
   Check(Length(LHTML) > 0, 'HTML output not empty');
   Check(Pos('<!DOCTYPE html>', LHTML) > 0, 'Contains DOCTYPE');
   Check(Pos('Fast', LHTML) > 0, 'Contains benchmark name');
-  Check(Pos('<canvas id="benchmarkChart"', LHTML) > 0, 'Contains chart');
+  Check(Pos('<svg', LHTML) > 0, 'Contains SVG chart');
+  Check(Pos('new Chart(', LHTML) = 0, 'Does not depend on Chart.js');
 end;
 
 procedure TestTBenchResults_HasRegression;
@@ -335,10 +716,11 @@ begin
   WriteLn('TestTBenchResults_HasRegression:');
 
   // 创建套件
-  LSuite := TBenchSuite.Create('TestSuite');
+  LSuite := CreateFastSuite('TestSuite');
 
-  // 添加基线（比当前慢）
-  LSuite.AddBaseline('Fast', 1000.0);
+  // 添加基线（比当前快）- 基线是 500 ns/op，当前是 ~700 ns/op
+  // Ratio = Current/Baseline = 700/500 = 1.4 > 1.1
+  LSuite.AddBaseline('Fast', 500.0);
 
   // 添加基准
   LSuite.Add('Fast', @BenchFast);
@@ -346,8 +728,8 @@ begin
   // 运行
   LResults := LSuite.Run;
 
-  // 检查回归（阈值 0.8 表示比基线慢 20%）
-  Check(not LResults.HasRegression(0.8), 'No regression detected');
+  Check(LResults.HasRegression(1.1), 'Regression detected when current is slower than 1.1x baseline');
+  Check(not LResults.HasRegression(10.0), 'Large threshold does not flag regression');
 end;
 
 procedure TestTBenchSuite_FluentAPI;
@@ -361,10 +743,10 @@ begin
   LSuite := TBenchSuite.Create('TestSuite')
     .Add('Fast', @BenchFast)
     .Add('Medium', @BenchMedium)
-    .SetMinDuration(TDuration.FromMilliseconds(500))
-    .SetMaxIterations(100000)
-    .SetMinSamples(10)
-    .SetWarmupIters(3)
+    .SetMinDuration(TDuration.FromMilliseconds(5))
+    .SetMaxIterations(5000)
+    .SetMinSamples(3)
+    .SetWarmupIters(1)
     .AddBaseline('Fast', 100.0)
     .AddBaseline('Medium', 200.0);
 
@@ -384,30 +766,50 @@ begin
   GTestCount := 0;
   GPassCount := 0;
   GFailCount := 0;
-
-  TestTBenchSuite_Basic;
-  WriteLn;
-  TestTBenchSuite_WithConfig;
-  WriteLn;
-  TestTBenchSuite_WithBaseline;
-  WriteLn;
-  TestTBenchSuite_WithFilter;
-  WriteLn;
-  TestTBenchSuite_Conditional;
-  WriteLn;
-  TestTBenchSuite_WithContext;
-  WriteLn;
-  TestTBenchResults_ToConsole;
-  WriteLn;
-  TestTBenchResults_ToJSON;
-  WriteLn;
-  TestTBenchResults_ToTSV;
-  WriteLn;
-  TestTBenchResults_ToHTML;
-  WriteLn;
-  TestTBenchResults_HasRegression;
-  WriteLn;
-  TestTBenchSuite_FluentAPI;
+  GParallelLock := TCriticalSection.Create;
+  try
+    TestTBenchSuite_Basic;
+    WriteLn;
+    TestTBenchSuite_WithConfig;
+    WriteLn;
+    TestTBenchSuite_WithBaseline;
+    WriteLn;
+    TestTBenchSuite_WithFilter;
+    WriteLn;
+    TestTBenchSuite_Conditional;
+    WriteLn;
+    TestTBenchSuite_WithContext;
+    WriteLn;
+    TestTBenchSuite_WithSetup;
+    WriteLn;
+    TestTBenchSuite_AddParallel;
+    WriteLn;
+    TestTBenchSuite_AddParallelSkipPropagation;
+    WriteLn;
+    TestTBenchSuite_ParallelMemoryTrackingRejected;
+    WriteLn;
+    TestTBenchSuite_MemoryTracking;
+    WriteLn;
+    TestTBenchSuite_EnvironmentCores;
+    WriteLn;
+    TestTBenchSuite_InvalidParameters;
+    WriteLn;
+    TestTBenchSuite_LoadBaselineRaises;
+    WriteLn;
+    TestTBenchResults_ToConsole;
+    WriteLn;
+    TestTBenchResults_ToJSON;
+    WriteLn;
+    TestTBenchResults_ToTSV;
+    WriteLn;
+    TestTBenchResults_ToHTML;
+    WriteLn;
+    TestTBenchResults_HasRegression;
+    WriteLn;
+    TestTBenchSuite_FluentAPI;
+  finally
+    GParallelLock.Free;
+  end;
 
   WriteLn;
   WriteLn('=== Test Summary ===');

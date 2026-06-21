@@ -57,10 +57,21 @@ type
     FResultCount: Integer;
 
     {** 热身 }
-    procedure Warmup(AFunc: TBenchFunc);
+    procedure WarmupEntry(const AEntry: TBenchEntry);
 
     {** 采集多个样本 }
-    function CollectSamples(AFunc: TBenchFunc; AIters: Int64): TDoubleArray;
+    function CollectEntrySamples(const AEntry: TBenchEntry; AIters: Int64;
+      out AFirstSample: TBenchResult): TDoubleArray;
+
+    {** 构建简单条目 }
+    function BuildEntry(const AName: string; AFunc: TBenchFunc): TBenchEntry;
+
+    {** 执行单个条目一次 }
+    function ExecuteEntry(const AEntry: TBenchEntry; AIters: Int64;
+      ATrackMemory: Boolean): TBenchResult;
+
+    {** 校准条目迭代次数 }
+    function CalibrateEntryIterations(const AEntry: TBenchEntry): Int64;
 
     {** 计算单次操作时间（纳秒） }
     function ComputeNsPerOp(ATotalNs: UInt64; AIters: Int64): Double;
@@ -89,6 +100,7 @@ type
 
     {** 运行单个基准测试 }
     function RunOne(const AName: string; AFunc: TBenchFunc): TBenchResult;
+    function RunOne(const AEntry: TBenchEntry): TBenchResult; overload;
 
     {** 运行多个基准测试 }
     procedure RunAll(const AEntries: array of TBenchEntry);
@@ -116,7 +128,66 @@ type
 implementation
 
 uses
-  SysUtils, Math;
+  SysUtils, Math,
+  nextpas.core.bench.memtrack,
+  nextpas.core.bench.parallel;
+
+var
+  GParallelBridgeFunc: TBenchFunc;
+  GParallelContexts: array of IBenchContext;
+  GParallelContextsInitialized: Boolean = False;
+
+procedure InitParallelContexts(AThreadCount: Integer);
+var
+  I: Integer;
+begin
+  SetLength(GParallelContexts, AThreadCount);
+  for I := 0 to AThreadCount - 1 do
+    GParallelContexts[I] := nil;
+  GParallelContextsInitialized := True;
+end;
+
+procedure FinalizeParallelContexts;
+var
+  I: Integer;
+begin
+  for I := 0 to High(GParallelContexts) do
+    GParallelContexts[I] := nil;  // 通过接口赋值 nil 释放对象
+  SetLength(GParallelContexts, 0);
+  GParallelContextsInitialized := False;
+end;
+
+procedure ParallelBenchBridge(AThreadId: Integer; AIterations: Int64);
+var
+  LContext: IBenchContext;
+  LContextObj: TBenchContext;
+  I: Int64;
+begin
+  if not Assigned(GParallelBridgeFunc) then
+    Exit;
+
+  LContext := TBenchContext.Create;
+  LContextObj := LContext as TBenchContext;
+  for I := 1 to AIterations do
+  begin
+    LContextObj.SetIterations(I);
+    GParallelBridgeFunc(LContext);
+    if LContextObj.IsSkipped then
+      Break;
+  end;
+
+  // 保存上下文到全局接口数组（引用计数自动管理）
+  if GParallelContextsInitialized and (AThreadId >= 0) and (AThreadId < Length(GParallelContexts)) then
+  begin
+    GParallelContexts[AThreadId] := TBenchContext.Create;
+    (GParallelContexts[AThreadId] as TBenchContext).SetIterations(LContextObj.GetIterations);
+    (GParallelContexts[AThreadId] as TBenchContext).SetBytes(LContextObj.GetBytesPerOp);
+    (GParallelContexts[AThreadId] as TBenchContext).SetAllocs(LContextObj.GetAllocsPerOp);
+    if LContextObj.IsSkipped then
+      (GParallelContexts[AThreadId] as TBenchContext).Skip(LContextObj.GetSkipReason);
+  end;
+  // LContext 离开作用域自动释放对象
+end;
 
 { TBenchContext }
 
@@ -262,58 +333,169 @@ begin
 end;
 
 function TBenchRunner.MeasureNs(AFunc: TBenchFunc; AIters: Int64): UInt64;
-var
-  LCtx: TBenchContext;
-  LStartNs, LEndNs: UInt64;
 begin
-  LCtx := TBenchContext.Create;
-  try
-    LCtx.SetIterations(AIters);
-    LStartNs := platform_monotonic_ns;
-    AFunc(LCtx);
-    LEndNs := platform_monotonic_ns;
-    Result := LEndNs - LStartNs;
-  finally
-    LCtx.Free;
-  end;
+  Result := ExecuteEntry(BuildEntry('', AFunc), AIters, False).TotalNs;
 end;
 
 function TBenchRunner.CalibrateIterations(AFunc: TBenchFunc): Int64;
+begin
+  Result := CalibrateEntryIterations(BuildEntry('', AFunc));
+end;
+
+function TBenchRunner.BuildEntry(const AName: string; AFunc: TBenchFunc): TBenchEntry;
+begin
+  Result := Default(TBenchEntry);
+  Result.Name := AName;
+  Result.Func := AFunc;
+  Result.Condition := True;
+end;
+
+function TBenchRunner.ExecuteEntry(const AEntry: TBenchEntry; AIters: Int64;
+  ATrackMemory: Boolean): TBenchResult;
+var
+  LContext: IBenchContext;
+  LContextObj: TBenchContext;
+  LMemoryStats: TMemoryStats;
+  LParallelResult: TParallelBenchResult;
+  LPerThreadIterations: Int64;
+  I: Int64;
+begin
+  Result := Default(TBenchResult);
+  Result.Executed := True;
+  Result.Name := AEntry.Name;
+
+  if AIters <= 0 then
+    Exit;
+
+  if AEntry.EnableParallel and (AEntry.ParallelThreads > 1) then
+  begin
+    // 并行基准自动跳过内存跟踪（不抛出异常）
+    ATrackMemory := False;
+
+    LPerThreadIterations := AIters div AEntry.ParallelThreads;
+    if (AIters mod AEntry.ParallelThreads) <> 0 then
+      Inc(LPerThreadIterations);
+    if LPerThreadIterations < 1 then
+      LPerThreadIterations := 1;
+
+    // 初始化并行上下文收集
+    InitParallelContexts(AEntry.ParallelThreads);
+    try
+      GParallelBridgeFunc := AEntry.Func;
+      LParallelResult := RunParallelBench(@ParallelBenchBridge,
+        AEntry.ParallelThreads, LPerThreadIterations);
+      GParallelBridgeFunc := nil;
+
+      // 聚合并行上下文数据
+      Result.Iterations := LPerThreadIterations * AEntry.ParallelThreads;
+      Result.TotalNs := LParallelResult.TotalNs;
+
+      // 从所有线程聚合 BytesPerOp, AllocsPerOp
+      for I := 0 to High(GParallelContexts) do
+      begin
+        if Assigned(GParallelContexts[I]) then
+        begin
+          if (GParallelContexts[I] as TBenchContext).GetBytesPerOp > Result.BytesPerOp then
+            Result.BytesPerOp := (GParallelContexts[I] as TBenchContext).GetBytesPerOp;
+          if (GParallelContexts[I] as TBenchContext).GetAllocsPerOp > Result.AllocsPerOp then
+            Result.AllocsPerOp := (GParallelContexts[I] as TBenchContext).GetAllocsPerOp;
+        end;
+      end;
+
+      // 检查是否有任何线程跳过了
+      for I := 0 to High(GParallelContexts) do
+      begin
+        if Assigned(GParallelContexts[I]) and (GParallelContexts[I] as TBenchContext).IsSkipped then
+        begin
+          Result.Skipped := True;
+          Result.SkipReason := (GParallelContexts[I] as TBenchContext).GetSkipReason;
+          Result.Iterations := (GParallelContexts[I] as TBenchContext).GetIterations * AEntry.ParallelThreads;
+          Break;
+        end;
+      end;
+    finally
+      FinalizeParallelContexts;
+    end;
+    Exit;
+  end;
+
+  // 通过接口创建，refcount 正确管理
+  LContext := TBenchContext.Create;
+  LContextObj := LContext as TBenchContext;
+  try
+    if ATrackMemory then
+    begin
+      EnableGlobalMemoryTracking;
+      ResetGlobalMemoryTracker;
+    end;
+    try
+      LContextObj.Reset;
+      for I := 1 to AIters do
+      begin
+        LContextObj.SetIterations(I);
+        AEntry.Func(LContext);
+        if LContextObj.IsSkipped then
+          Break;
+      end;
+
+      Result.Iterations := LContextObj.GetIterations;
+      Result.TotalNs := platform_monotonic_ns - LContextObj.GetStartNs;
+      Result.BytesPerOp := LContextObj.GetBytesPerOp;
+      Result.AllocsPerOp := LContextObj.GetAllocsPerOp;
+      Result.Skipped := LContextObj.IsSkipped;
+      Result.SkipReason := LContextObj.GetSkipReason;
+
+      if ATrackMemory then
+      begin
+        LMemoryStats := GetGlobalMemoryStats;
+        if (Result.Iterations > 0) and (Result.BytesPerOp = 0) then
+          Result.BytesPerOp := Ceil(LMemoryStats.AllocBytes / Result.Iterations);
+        if (Result.Iterations > 0) and (Result.AllocsPerOp = 0) then
+          Result.AllocsPerOp := Ceil(LMemoryStats.AllocCount / Result.Iterations);
+      end;
+    finally
+      if ATrackMemory then
+        DisableGlobalMemoryTracking;
+    end;
+  finally
+    LContext := nil;
+  end;
+end;
+
+function TBenchRunner.CalibrateEntryIterations(const AEntry: TBenchEntry): Int64;
 var
   LElapsed: UInt64;
   LIters: Int64;
   LMaxIters: Int64;
   LTargetNs: UInt64;
+  LProbe: TBenchResult;
 begin
   LTargetNs := FConfig.MinDurationNs;
   LMaxIters := FConfig.MaxIterations;
 
-  // 热身
-  Warmup(AFunc);
+  WarmupEntry(AEntry);
 
-  // 初始小批量
   LIters := 100;
   repeat
-    LElapsed := MeasureNs(AFunc, LIters);
+    LProbe := ExecuteEntry(AEntry, LIters, False);
+    if LProbe.Skipped then
+      Exit(Max(LProbe.Iterations, 1));
+    LElapsed := LProbe.TotalNs;
 
-    // 如果太快，指数增长
-    if LElapsed < LTargetNs div 10 then
+    if LElapsed = 0 then
       LIters := LIters * 10
-    // 如果接近目标，线性外推
+    else if LElapsed < LTargetNs div 10 then
+      LIters := LIters * 10
     else if LElapsed < LTargetNs then
       LIters := Int64((Double(LIters) * Double(LTargetNs)) / Double(LElapsed))
-    // 达到目标
     else
       Break;
 
-    // 安全上限
     if LIters > LMaxIters then
     begin
       LIters := LMaxIters;
       Break;
     end;
-
-    // 最小迭代次数
     if LIters < 100 then
       LIters := 100;
   until False;
@@ -321,35 +503,40 @@ begin
   Result := LIters;
 end;
 
-procedure TBenchRunner.Warmup(AFunc: TBenchFunc);
+procedure TBenchRunner.WarmupEntry(const AEntry: TBenchEntry);
 var
   i: Integer;
-  LCtx: TBenchContext;
 begin
-  LCtx := TBenchContext.Create;
-  try
-    for i := 1 to FConfig.WarmupIterations do
-    begin
-      LCtx.Reset;
-      AFunc(LCtx);
-    end;
-  finally
-    LCtx.Free;
-  end;
+  for i := 1 to FConfig.WarmupIterations do
+    ExecuteEntry(AEntry, 1, False);
 end;
 
-function TBenchRunner.CollectSamples(AFunc: TBenchFunc; AIters: Int64): TDoubleArray;
+function TBenchRunner.CollectEntrySamples(const AEntry: TBenchEntry; AIters: Int64;
+  out AFirstSample: TBenchResult): TDoubleArray;
 var
   LSamples: TDoubleArray;
+  LMeasurement: TBenchResult;
   i: Integer;
-  LTotalNs: UInt64;
 begin
+  AFirstSample := Default(TBenchResult);
   SetLength(LSamples, FConfig.MinSamples);
 
   for i := 0 to FConfig.MinSamples - 1 do
   begin
-    LTotalNs := MeasureNs(AFunc, AIters);
-    LSamples[i] := Double(LTotalNs) / Double(AIters);
+    LMeasurement := ExecuteEntry(AEntry, AIters, FConfig.EnableMemoryTracking and (i = 0));
+    if i = 0 then
+      AFirstSample := LMeasurement;
+
+    if LMeasurement.Iterations > 0 then
+      LSamples[i] := Double(LMeasurement.TotalNs) / Double(LMeasurement.Iterations)
+    else
+      LSamples[i] := 0.0;
+
+    if LMeasurement.Skipped then
+    begin
+      SetLength(LSamples, i + 1);
+      Break;
+    end;
   end;
 
   Result := LSamples;
@@ -385,60 +572,78 @@ begin
 end;
 
 function TBenchRunner.RunOne(const AName: string; AFunc: TBenchFunc): TBenchResult;
+begin
+  Result := RunOne(BuildEntry(AName, AFunc));
+end;
+
+function TBenchRunner.RunOne(const AEntry: TBenchEntry): TBenchResult;
 var
+  LEntry: TBenchEntry;
+  LSetupData: Pointer;
   LIters: Int64;
   LSamples: TDoubleArray;
   LStats: TBenchStats;
-  LTotalNs: UInt64;
-  LCtx: TBenchContext;
+  LMeasurement: TBenchResult;
 begin
-  if not ShouldRun(AName) then
+  LEntry := AEntry;
+  Result := Default(TBenchResult);
+  Result.Name := LEntry.Name;
+
+  if not ShouldRun(LEntry.Name) then
   begin
-    FillChar(Result, SizeOf(Result), 0);
-    Result.Name := AName;
     Exit;
   end;
 
-  // 校准迭代次数
-  LIters := CalibrateIterations(AFunc);
+  Result.Executed := True;
+  LSetupData := nil;
+  if Assigned(LEntry.Setup) then
+    LSetupData := LEntry.Setup();
+  try
+    LIters := CalibrateEntryIterations(LEntry);
 
-  // 采集样本
-  LSamples := CollectSamples(AFunc, LIters);
+    LSamples := CollectEntrySamples(LEntry, LIters, LMeasurement);
+    if LMeasurement.Skipped then
+    begin
+      Result.Iterations := LMeasurement.Iterations;
+      Result.TotalNs := LMeasurement.TotalNs;
+      Result.BytesPerOp := LMeasurement.BytesPerOp;
+      Result.AllocsPerOp := LMeasurement.AllocsPerOp;
+      Result.Skipped := True;
+      Result.SkipReason := LMeasurement.SkipReason;
+      AddResult(Result);
+      Exit;
+    end;
 
-  // 计算统计信息
-  LStats := FStatsAnalyzer.ComputeStats(LSamples);
+    LStats := FStatsAnalyzer.ComputeStats(LSamples);
 
-  // 计算总时间
-  LTotalNs := UInt64(LStats.Mean * LIters);
+    Result.Iterations := LIters;
+    Result.TotalNs := UInt64(Round(LStats.Mean * LIters));
+    Result.NsPerOp := LStats.Mean;
+    Result.OpsPerSec := ComputeOpsPerSec(LStats.Mean);
+    Result.BytesPerOp := LMeasurement.BytesPerOp;
+    Result.AllocsPerOp := LMeasurement.AllocsPerOp;
+    Result.StdDev := LStats.StdDev;
+    Result.Median := LStats.Median;
+    Result.P95 := LStats.P95;
+    Result.P99 := LStats.P99;
+    Result.Outliers := LStats.OutlierCount;
+    Result.SampleCount := LStats.SampleCount;
 
-  // 填充结果
-  Result.Name := AName;
-  Result.Iterations := LIters;
-  Result.TotalNs := LTotalNs;
-  Result.NsPerOp := LStats.Mean;
-  Result.OpsPerSec := ComputeOpsPerSec(LStats.Mean);
-  Result.BytesPerOp := 0;  // 需要从上下文获取
-  Result.AllocsPerOp := 0;  // 需要从上下文获取
-  Result.StdDev := LStats.StdDev;
-  Result.Median := LStats.Median;
-  Result.P95 := LStats.P95;
-  Result.P99 := LStats.P99;
-  Result.Outliers := LStats.OutlierCount;
-  Result.SampleCount := LStats.SampleCount;
+    AddResult(Result);
 
-  AddResult(Result);
-
-  // 输出到控制台
-  WriteLn('  ', AName:40, LIters:12, ' iters',
-    LStats.Mean:10:1, ' ns/op',
-    Result.OpsPerSec:14:0, ' ops/s',
-    LStats.StdDev:10:1, ' stddev');
+    WriteLn('  ', LEntry.Name:40, LIters:12, ' iters',
+      LStats.Mean:10:1, ' ns/op',
+      Result.OpsPerSec:14:0, ' ops/s',
+      LStats.StdDev:10:1, ' stddev');
+  finally
+    if Assigned(LEntry.Teardown) then
+      LEntry.Teardown(LSetupData);
+  end;
 end;
 
 procedure TBenchRunner.RunAll(const AEntries: array of TBenchEntry);
 var
   i: Integer;
-  LSetupData: Pointer;
 begin
   WriteLn('=== nextpas.core.bench v1.0 ===');
   WriteLn;
@@ -446,20 +651,7 @@ begin
   for i := 0 to High(AEntries) do
   begin
     if AEntries[i].Condition then
-    begin
-      // 执行 Setup
-      LSetupData := nil;
-      if Assigned(AEntries[i].Setup) then
-        LSetupData := AEntries[i].Setup;
-
-      try
-        RunOne(AEntries[i].Name, AEntries[i].Func);
-      finally
-        // 执行 Teardown
-        if Assigned(AEntries[i].Teardown) then
-          AEntries[i].Teardown(LSetupData);
-      end;
-    end;
+      RunOne(AEntries[i]);
   end;
 
   WriteLn;

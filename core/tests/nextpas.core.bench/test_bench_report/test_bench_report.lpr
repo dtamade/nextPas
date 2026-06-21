@@ -98,6 +98,17 @@ begin
   Result.Timestamp := '2026-06-21T15:30:00Z';
 end;
 
+function CreateSkippedResults: TBenchResultArray;
+begin
+  Result := CreateTestResults;
+  SetLength(Result, Length(Result) + 1);
+  Result[High(Result)] := Default(TBenchResult);
+  Result[High(Result)].Name := 'Unsupported.SIMD';
+  Result[High(Result)].Executed := True;
+  Result[High(Result)].Skipped := True;
+  Result[High(Result)].SkipReason := 'SIMD extension unavailable';
+end;
+
 procedure TestToConsole;
 var
   LResults: array of TBenchResult;
@@ -173,10 +184,10 @@ begin
   GGenerator.SetEnvironment(LEnvironment);
   LTSV := GGenerator.ToTSV;
 
-  CheckContains(LTSV, 'name' + #9 + 'iterations', 'Contains header');
-  CheckContains(LTSV, 'HashMap.Put' + #9 + '1000000', 'Contains first benchmark');
-  CheckContains(LTSV, 'HashMap.Get(hit)' + #9 + '5000000', 'Contains second benchmark');
-  CheckContains(LTSV, 'Bytes.Compare' + #9 + '10000000', 'Contains third benchmark');
+  CheckContains(LTSV, 'name' + #9 + 'status' + #9 + 'skip_reason' + #9 + 'iterations', 'Contains header');
+  CheckContains(LTSV, 'HashMap.Put' + #9 + 'ok' + #9 + #9 + '1000000', 'Contains first benchmark');
+  CheckContains(LTSV, 'HashMap.Get(hit)' + #9 + 'ok' + #9 + #9 + '5000000', 'Contains second benchmark');
+  CheckContains(LTSV, 'Bytes.Compare' + #9 + 'ok' + #9 + #9 + '10000000', 'Contains third benchmark');
 end;
 
 procedure TestToHTML;
@@ -203,6 +214,8 @@ begin
   CheckContains(LHTML, '<h2>Benchmark Results</h2>', 'Contains results header');
   CheckContains(LHTML, 'HashMap.Put', 'Contains first benchmark');
   CheckContains(LHTML, '245.3', 'Contains NsPerOp');
+  CheckContains(LHTML, '<svg', 'Contains SVG chart');
+  CheckNotContains(LHTML, 'new Chart(', 'Does not depend on Chart.js');
   CheckContains(LHTML, '<h2>Detailed Statistics</h2>', 'Contains statistics header');
 end;
 
@@ -221,15 +234,17 @@ begin
   LComparisons[0].BaselineNsPerOp := 250.0;
   LComparisons[0].CurrentNsPerOp := 245.3;
   LComparisons[0].Ratio := 1.019;
-  LComparisons[0].Significant := True;
-  LComparisons[0].PValue := 0.05;
+  LComparisons[0].HasStatisticalTest := False;
+  LComparisons[0].DifferenceHeuristic := True;
+  LComparisons[0].ApproximatePValue := 0.05;
 
   LComparisons[1].BaselineName := 'HashMap.Get(hit)';
   LComparisons[1].BaselineNsPerOp := 92.1;
   LComparisons[1].CurrentNsPerOp := 89.2;
   LComparisons[1].Ratio := 1.033;
-  LComparisons[1].Significant := True;
-  LComparisons[1].PValue := 0.05;
+  LComparisons[1].HasStatisticalTest := False;
+  LComparisons[1].DifferenceHeuristic := True;
+  LComparisons[1].ApproximatePValue := 0.05;
 
   LReport := GGenerator.GenerateComparisonReport(LResults, LComparisons);
 
@@ -241,6 +256,41 @@ begin
   CheckContains(LReport, 'faster', 'Contains faster status');
 end;
 
+procedure TestSkippedResultsReporting;
+var
+  LResults: array of TBenchResult;
+  LEnvironment: TBenchEnvironment;
+  LConsole: string;
+  LJSON: string;
+  LTSV: string;
+  LHTML: string;
+begin
+  WriteLn('TestSkippedResultsReporting:');
+
+  LResults := CreateSkippedResults;
+  LEnvironment := CreateTestEnvironment;
+
+  GGenerator.SetResults(LResults);
+  GGenerator.SetEnvironment(LEnvironment);
+
+  LConsole := GGenerator.ToConsole;
+  CheckContains(LConsole, 'Skipped Benchmarks', 'Console shows skipped section');
+  CheckContains(LConsole, 'SIMD extension unavailable', 'Console shows skip reason');
+
+  LJSON := GGenerator.ToJSON;
+  CheckContains(LJSON, '"status": "skipped"', 'JSON shows skipped status');
+  CheckContains(LJSON, '"skip_reason": "SIMD extension unavailable"', 'JSON shows skip reason');
+
+  LTSV := GGenerator.ToTSV;
+  CheckContains(LTSV, 'status' + #9 + 'skip_reason', 'TSV header includes skip columns');
+  CheckContains(LTSV, 'Unsupported.SIMD' + #9 + 'skipped' + #9 + 'SIMD extension unavailable',
+    'TSV includes skipped benchmark row');
+
+  LHTML := GGenerator.ToHTML;
+  CheckContains(LHTML, '<h2>Skipped Benchmarks</h2>', 'HTML shows skipped section');
+  CheckContains(LHTML, 'SIMD extension unavailable', 'HTML shows skip reason');
+end;
+
 procedure TestFormatNumber;
 begin
   WriteLn('TestFormatNumber:');
@@ -249,6 +299,34 @@ begin
   Check(GGenerator.FormatNumber(245.3, 1) = '245.3', 'FormatNumber 245.3');
   Check(GGenerator.FormatNumber(89.2, 2) = '89.20', 'FormatNumber 89.2');
   Check(GGenerator.FormatNumber(0.0, 1) = '0.0', 'FormatNumber 0.0');
+end;
+
+procedure TestInvariantLocaleFormatting;
+var
+  LSavedFormatSettings: TFormatSettings;
+  LResults: array of TBenchResult;
+  LEnvironment: TBenchEnvironment;
+  LJSON: string;
+begin
+  WriteLn('TestInvariantLocaleFormatting:');
+
+  LSavedFormatSettings := DefaultFormatSettings;
+  DefaultFormatSettings.DecimalSeparator := ',';
+  DefaultFormatSettings.ThousandSeparator := '.';
+  try
+    Check(GGenerator.FormatNumber(245.3, 1) = '245.3',
+      'FormatNumber ignores process decimal separator');
+
+    LResults := CreateTestResults;
+    LEnvironment := CreateTestEnvironment;
+    GGenerator.SetResults(LResults);
+    GGenerator.SetEnvironment(LEnvironment);
+    LJSON := GGenerator.ToJSON;
+    CheckContains(LJSON, '"ns_per_op": 245.3', 'JSON keeps invariant decimal separator');
+    CheckNotContains(LJSON, '"ns_per_op": 245,3', 'JSON does not emit locale decimal separator');
+  finally
+    DefaultFormatSettings := LSavedFormatSettings;
+  end;
 end;
 
 procedure TestFormatLargeNumber;
@@ -326,7 +404,11 @@ begin
     WriteLn;
     TestGenerateComparisonReport;
     WriteLn;
+    TestSkippedResultsReporting;
+    WriteLn;
     TestFormatNumber;
+    WriteLn;
+    TestInvariantLocaleFormatting;
     WriteLn;
     TestFormatLargeNumber;
     WriteLn;
