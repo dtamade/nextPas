@@ -4,7 +4,7 @@ program test_bench_memtrack;
 {$modeswitch advancedrecords}
 
 uses
-  SysUtils,
+  nextpas.core.math.scalar,
   nextpas.core.bench.memtrack;
 
 var

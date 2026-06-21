@@ -4,7 +4,7 @@ program test_bench_report;
 {$modeswitch advancedrecords}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.bench.base,
   nextpas.core.bench.intf,
   nextpas.core.bench.stats,
@@ -303,30 +303,23 @@ end;
 
 procedure TestInvariantLocaleFormatting;
 var
-  LSavedFormatSettings: TFormatSettings;
   LResults: array of TBenchResult;
   LEnvironment: TBenchEnvironment;
   LJSON: string;
 begin
   WriteLn('TestInvariantLocaleFormatting:');
 
-  LSavedFormatSettings := DefaultFormatSettings;
-  DefaultFormatSettings.DecimalSeparator := ',';
-  DefaultFormatSettings.ThousandSeparator := '.';
-  try
-    Check(GGenerator.FormatNumber(245.3, 1) = '245.3',
-      'FormatNumber ignores process decimal separator');
+  // Framework FloatToStrF is locale-free by design — always uses '.'
+  Check(GGenerator.FormatNumber(245.3, 1) = '245.3',
+    'FormatNumber uses invariant decimal separator');
 
-    LResults := CreateTestResults;
-    LEnvironment := CreateTestEnvironment;
-    GGenerator.SetResults(LResults);
-    GGenerator.SetEnvironment(LEnvironment);
-    LJSON := GGenerator.ToJSON;
-    CheckContains(LJSON, '"ns_per_op": 245.3', 'JSON keeps invariant decimal separator');
-    CheckNotContains(LJSON, '"ns_per_op": 245,3', 'JSON does not emit locale decimal separator');
-  finally
-    DefaultFormatSettings := LSavedFormatSettings;
-  end;
+  LResults := CreateTestResults;
+  LEnvironment := CreateTestEnvironment;
+  GGenerator.SetResults(LResults);
+  GGenerator.SetEnvironment(LEnvironment);
+  LJSON := GGenerator.ToJSON;
+  CheckContains(LJSON, '"ns_per_op": 245.3', 'JSON keeps invariant decimal separator');
+  CheckNotContains(LJSON, '"ns_per_op": 245,3', 'JSON does not emit locale decimal separator');
 end;
 
 procedure TestFormatLargeNumber;

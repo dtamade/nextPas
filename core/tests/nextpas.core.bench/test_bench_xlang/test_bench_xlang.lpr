@@ -4,7 +4,7 @@ program test_bench_xlang;
 {$modeswitch advancedrecords}
 
 uses
-  SysUtils,
+  nextpas.core.math.scalar,
   nextpas.core.bench.base,
   nextpas.core.bench.xlang;
 

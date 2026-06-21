@@ -9,34 +9,35 @@ uses
   {$ifdef unix}
   cthreads,
   {$endif}
-  SysUtils,
-  SyncObjs,
-  nextpas.core.bench,
-  nextpas.core.time.base;
+  nextpas.core.exception,
+  nextpas.core.sync.mutex,
+  nextpas.core.time.sleep,
+  nextpas.core.time.base,
+  nextpas.core.bench;
 
 var
-  GParallelLock: TCriticalSection;
+  GParallelLock: TMutex;
   GActiveParallelCalls: Integer;
   GMaxParallelCalls: Integer;
 
 procedure BenchParallelObserved(const ACtx: IBenchContext);
 begin
-  GParallelLock.Enter;
+  GParallelLock.Acquire;
   try
     Inc(GActiveParallelCalls);
     if GActiveParallelCalls > GMaxParallelCalls then
       GMaxParallelCalls := GActiveParallelCalls;
   finally
-    GParallelLock.Leave;
+    GParallelLock.Release;
   end;
 
-  Sleep(1);
+  TSleep.ForDuration(TDuration.FromMilliseconds(1));
 
-  GParallelLock.Enter;
+  GParallelLock.Acquire;
   try
     Dec(GActiveParallelCalls);
   finally
-    GParallelLock.Leave;
+    GParallelLock.Release;
   end;
 end;
 
@@ -56,7 +57,7 @@ var
   LSuite: IBenchSuite;
   LResults: IBenchResults;
 begin
-  GParallelLock := TCriticalSection.Create;
+  GParallelLock := TMutex.Create;
   try
     LSuite := TBenchSuite.Create('ParallelFirst')
       .SetMinDuration(TDuration.FromMilliseconds(1))

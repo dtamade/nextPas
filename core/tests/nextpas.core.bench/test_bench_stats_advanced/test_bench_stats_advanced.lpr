@@ -4,7 +4,7 @@ program test_bench_stats_advanced;
 {$modeswitch advancedrecords}
 
 uses
-  SysUtils,
+  nextpas.core.math.scalar,
   nextpas.core.bench.base,
   nextpas.core.bench.stats.advanced;
 

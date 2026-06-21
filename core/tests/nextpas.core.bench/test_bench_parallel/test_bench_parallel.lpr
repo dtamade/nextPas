@@ -7,9 +7,8 @@ uses
   {$ifdef unix}
   cthreads,
   {$endif}
-  SysUtils,
-  Classes,
-  SyncObjs,
+  nextpas.core.text.conv,
+  nextpas.core.sync.mutex,
   nextpas.core.bench.base,
   nextpas.core.bench.parallel;
 
@@ -17,7 +16,7 @@ var
   GTestsPassed: Integer = 0;
   GTestsFailed: Integer = 0;
   GCounter: Integer = 0;
-  GCounterLock: TCriticalSection;
+  GCounterLock: TMutex;
 
 procedure Check(ACondition: Boolean; const ATestName: string);
 begin
@@ -51,11 +50,11 @@ var
 begin
   for I := 1 to AIterations do
   begin
-    GCounterLock.Enter;
+    GCounterLock.Acquire;
     try
       Inc(GCounter);
     finally
-      GCounterLock.Leave;
+      GCounterLock.Release;
     end;
   end;
 end;
@@ -98,7 +97,7 @@ begin
 
   for I := 0 to High(LResult.ThreadResults) do
   begin
-    Check(LResult.ThreadResults[I].ThreadId = I, 'ThreadId = ' + IntToStr(I));
+    Check(LResult.ThreadResults[I].ThreadId = I, 'ThreadId = ' + nextpas.core.text.conv.IntToStr(I));
     Check(LResult.ThreadResults[I].Iterations = 5000, 'Iterations = 5000');
     // ElapsedNs might be 0 if execution is too fast for timer resolution
     Check(LResult.ThreadResults[I].ElapsedNs >= 0, 'ElapsedNs >= 0');
@@ -216,7 +215,7 @@ begin
   WriteLn('');
 
   // Initialize
-  GCounterLock := TCriticalSection.Create;
+  GCounterLock := TMutex.Create;
 
   try
     RunAllTests;

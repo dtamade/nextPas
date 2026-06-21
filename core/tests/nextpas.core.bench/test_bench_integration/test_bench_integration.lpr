@@ -9,12 +9,15 @@ uses
   {$ifdef unix}
   cthreads,
   {$endif}
-  SysUtils,
-  Classes,
-  SyncObjs,
+  nextpas.core.exception,
+  nextpas.core.math.scalar,
+  nextpas.core.sync.mutex,
+  nextpas.core.time.sleep,
+  nextpas.core.time.base,
+  nextpas.core.fs,
+  nextpas.core.fs.base,
   nextpas.core.bench,
   nextpas.core.bench.base,
-  nextpas.core.time.base,
   nextpas.core.simd.cpuinfo;
 
 var
@@ -26,7 +29,7 @@ var
   GSetupVisibleInsideBench: Boolean;
   GSetupStateActive: Boolean;
   GTeardownSawExpectedData: Boolean;
-  GParallelLock: TCriticalSection;
+  GParallelLock: TMutex;
   GActiveParallelCalls: Integer;
   GMaxParallelCalls: Integer;
 
@@ -42,6 +45,28 @@ begin
   begin
     Inc(GFailCount);
     WriteLn('  ✗ ', ATestName);
+  end;
+end;
+
+function ReadFileToString(const APath: string): string;
+var
+  LFile: TextFile;
+  LLine: string;
+begin
+  Result := '';
+  AssignFile(LFile, APath);
+  Reset(LFile);
+  try
+    while not Eof(LFile) do
+    begin
+      ReadLn(LFile, LLine);
+      if Result <> '' then
+        Result := Result + LineEnding + LLine
+      else
+        Result := LLine;
+    end;
+  finally
+    CloseFile(LFile);
   end;
 end;
 
@@ -111,22 +136,22 @@ end;
 
 procedure BenchParallelObserved(const ACtx: IBenchContext);
 begin
-  GParallelLock.Enter;
+  GParallelLock.Acquire;
   try
     Inc(GActiveParallelCalls);
     if GActiveParallelCalls > GMaxParallelCalls then
       GMaxParallelCalls := GActiveParallelCalls;
   finally
-    GParallelLock.Leave;
+    GParallelLock.Release;
   end;
 
-  Sleep(1);
+  TSleep.ForDuration(TDuration.FromMilliseconds(1));
 
-  GParallelLock.Enter;
+  GParallelLock.Acquire;
   try
     Dec(GActiveParallelCalls);
   finally
-    GParallelLock.Leave;
+    GParallelLock.Release;
   end;
 end;
 
@@ -137,7 +162,7 @@ begin
     ACtx.SetBytes(2048);
     ACtx.SetAllocs(3);
   end;
-  Sleep(1);
+  TSleep.ForDuration(TDuration.FromMilliseconds(1));
 end;
 
 procedure BenchParallelSkipWithContext(const ACtx: IBenchContext);
@@ -149,7 +174,7 @@ begin
     if ACtx.Iterations >= 2 then
       ACtx.Skip('Parallel skip requested');
   end;
-  Sleep(1);
+  TSleep.ForDuration(TDuration.FromMilliseconds(1));
 end;
 
 procedure BenchAllocatesMemory(const ACtx: IBenchContext);
@@ -581,7 +606,7 @@ begin
   Check(LRaised, 'LoadBaseline raises for missing file');
 
   LPath := 'build/invalid-baseline.json';
-  ForceDirectories('build');
+  nextpas.core.fs.MkdirAll('build', PermDefault);
   AssignFile(LFile, LPath);
   Rewrite(LFile);
   try
@@ -601,7 +626,7 @@ begin
     end;
   finally
     LSuite := nil;
-    DeleteFile(LPath);
+    nextpas.core.fs.Remove(LPath);
   end;
   Check(LRaised, 'LoadBaseline raises for invalid JSON');
 end;
@@ -749,21 +774,14 @@ begin
   LPath := 'build/test_output_save.json';
   LResults.SaveToJSON(LPath);
 
-  Check(FileExists(LPath), 'JSON file created');
+  Check(nextpas.core.fs.Exists(LPath), 'JSON file created');
 
   // 验证文件内容
-  LContent := '';
-  with TStringList.Create do
-  try
-    LoadFromFile(LPath);
-    LContent := Text;
-  finally
-    Free;
-  end;
+  LContent := ReadFileToString(LPath);
   Check(Length(LContent) > 0, 'JSON file not empty');
   Check(Pos('"version"', LContent) > 0, 'JSON contains version');
 
-  DeleteFile(LPath);
+  nextpas.core.fs.Remove(LPath);
 end;
 
 procedure TestTBenchResults_SaveToHTML;
@@ -782,21 +800,14 @@ begin
   LPath := 'build/test_output_save.html';
   LResults.SaveToHTML(LPath);
 
-  Check(FileExists(LPath), 'HTML file created');
+  Check(nextpas.core.fs.Exists(LPath), 'HTML file created');
 
   // 验证文件内容
-  LContent := '';
-  with TStringList.Create do
-  try
-    LoadFromFile(LPath);
-    LContent := Text;
-  finally
-    Free;
-  end;
+  LContent := ReadFileToString(LPath);
   Check(Length(LContent) > 0, 'HTML file not empty');
   Check(Pos('<!DOCTYPE html>', LContent) > 0, 'HTML contains DOCTYPE');
 
-  DeleteFile(LPath);
+  nextpas.core.fs.Remove(LPath);
 end;
 
 procedure TestTBenchResults_SaveToTSV;
@@ -815,21 +826,14 @@ begin
   LPath := 'build/test_output_save.tsv';
   LResults.SaveToTSV(LPath);
 
-  Check(FileExists(LPath), 'TSV file created');
+  Check(nextpas.core.fs.Exists(LPath), 'TSV file created');
 
   // 验证文件内容
-  LContent := '';
-  with TStringList.Create do
-  try
-    LoadFromFile(LPath);
-    LContent := Text;
-  finally
-    Free;
-  end;
+  LContent := ReadFileToString(LPath);
   Check(Length(LContent) > 0, 'TSV file not empty');
   Check(Pos('name' + #9, LContent) > 0, 'TSV contains header');
 
-  DeleteFile(LPath);
+  nextpas.core.fs.Remove(LPath);
 end;
 
 procedure TestTBenchSuite_FluentAPI;
@@ -866,7 +870,7 @@ begin
   GTestCount := 0;
   GPassCount := 0;
   GFailCount := 0;
-  GParallelLock := TCriticalSection.Create;
+  GParallelLock := TMutex.Create;
   try
     TestTBenchSuite_Basic;
     WriteLn;

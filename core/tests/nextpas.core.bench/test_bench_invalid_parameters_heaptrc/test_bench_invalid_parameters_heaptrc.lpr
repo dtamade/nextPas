@@ -9,7 +9,7 @@ uses
   {$ifdef unix}
   cthreads,
   {$endif}
-  SysUtils,
+  nextpas.core.exception,
   nextpas.core.bench,
   nextpas.core.time.base;
 

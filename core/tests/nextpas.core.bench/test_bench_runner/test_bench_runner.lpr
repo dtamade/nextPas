@@ -4,12 +4,14 @@ program test_bench_runner;
 {$modeswitch advancedrecords}
 
 uses
-  SysUtils,
+  nextpas.core.math.scalar,
+  nextpas.core.text.conv,
+  nextpas.core.time.sleep,
+  nextpas.core.time.base,
   nextpas.core.bench.base,
   nextpas.core.bench.intf,
   nextpas.core.bench.stats,
-  nextpas.core.bench.runner,
-  nextpas.core.time.base;
+  nextpas.core.bench.runner;
 
 var
   GTestCount: Integer;
@@ -121,7 +123,7 @@ end;
 
 procedure BenchResetTimerOnly(const ACtx: IBenchContext);
 begin
-  Sleep(25);
+  TSleep.ForDuration(TDuration.FromMilliseconds(25));
   if ACtx <> nil then
     ACtx.ResetTimer;
 end;
