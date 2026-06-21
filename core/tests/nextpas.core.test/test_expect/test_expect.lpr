@@ -492,6 +492,114 @@ begin
   end;
 end;
 
+{ ── F10: Type mismatch error paths ────────────────────────────────────────── }
+
+procedure TestTypeMismatchIntToEqual;
+begin
+  try
+    ExpectInt(42).ToEqual('hello');
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(Pos('non-string', E.Message) > 0, 'type mismatch msg');
+  end;
+end;
+
+procedure TestTypeMismatchStrToEqualInt;
+begin
+  try
+    Expect('hello').ToEqualInt(42);
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(Pos('non-integer', E.Message) > 0, 'type mismatch msg');
+  end;
+end;
+
+procedure TestTypeMismatchStrToBeNil;
+begin
+  try
+    Expect('hello').ToBeNil;
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(Pos('non-pointer', E.Message) > 0, 'type mismatch msg');
+  end;
+end;
+
+procedure TestTypeMismatchStrToRaise;
+begin
+  try
+    Expect('hello').ToRaise(Exception);
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(Pos('non-proc', E.Message) > 0, 'type mismatch msg');
+  end;
+end;
+
+{ ── F12: Not_ positive pass paths ─────────────────────────────────────────── }
+
+procedure TestNotPositivePassToBeNil;
+var
+  x: Integer = 1;
+begin
+  ExpectPtr(@x).Not_.ToBeNil;
+end;
+
+procedure TestNotPositivePassToBeTrue;
+begin
+  ExpectBool(False).Not_.ToBeTrue;
+end;
+
+procedure TestNotPositivePassToBeFalse;
+begin
+  ExpectBool(True).Not_.ToBeFalse;
+end;
+
+procedure TestNotPositivePassToBeGT;
+begin
+  ExpectInt(5).Not_.ToBeGreaterThan(10);
+end;
+
+procedure TestNotPositivePassToBeLT;
+begin
+  ExpectInt(10).Not_.ToBeLessThan(5);
+end;
+
+procedure TestNotPositivePassToBeInRange;
+begin
+  ExpectInt(100).Not_.ToBeInRange(1, 10);
+end;
+
+procedure TestNotPositivePassToHaveLength;
+begin
+  Expect('hello').Not_.ToHaveLength(3);
+end;
+
+procedure TestNotPositivePassToEqualBool;
+begin
+  ExpectBool(True).Not_.ToEqualBool(False);
+end;
+
+{ ── F04: ToNotRaise ───────────────────────────────────────────────────────── }
+
+procedure TestToNotRaisePass;
+begin
+  ExpectProc(procedure begin end).ToNotRaise;
+end;
+
+procedure TestToNotRaiseFail;
+begin
+  try
+    ExpectProc(procedure begin StrToInt('bad'); end).ToNotRaise;
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(Pos('no exception', E.Message) > 0, 'ToNotRaise fail msg');
+  end;
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -548,6 +656,26 @@ begin
   LSuite.Test('Not_ fail: ToBeInRange',    @TestNotFailToBeInRange);
   LSuite.Test('Not_ fail: ToHaveLength',   @TestNotFailToHaveLength);
   LSuite.Test('Not_ fail: ToRaise',        @TestNotFailToRaise);
+
+  { F10: Type mismatch error paths }
+  LSuite.Test('Type: Int→ToEqual(str)',    @TestTypeMismatchIntToEqual);
+  LSuite.Test('Type: Str→ToEqualInt',      @TestTypeMismatchStrToEqualInt);
+  LSuite.Test('Type: Str→ToBeNil',         @TestTypeMismatchStrToBeNil);
+  LSuite.Test('Type: Str→ToRaise',         @TestTypeMismatchStrToRaise);
+
+  { F12: Not_ positive pass paths }
+  LSuite.Test('Not_ pass: ToBeNil',        @TestNotPositivePassToBeNil);
+  LSuite.Test('Not_ pass: ToBeTrue',       @TestNotPositivePassToBeTrue);
+  LSuite.Test('Not_ pass: ToBeFalse',      @TestNotPositivePassToBeFalse);
+  LSuite.Test('Not_ pass: ToBeGT',         @TestNotPositivePassToBeGT);
+  LSuite.Test('Not_ pass: ToBeLT',         @TestNotPositivePassToBeLT);
+  LSuite.Test('Not_ pass: ToBeInRange',    @TestNotPositivePassToBeInRange);
+  LSuite.Test('Not_ pass: ToHaveLength',   @TestNotPositivePassToHaveLength);
+  LSuite.Test('Not_ pass: ToEqualBool',    @TestNotPositivePassToEqualBool);
+
+  { F04: ToNotRaise }
+  LSuite.Test('ToNotRaise pass',           @TestToNotRaisePass);
+  LSuite.Test('ToNotRaise fail',           @TestToNotRaiseFail);
 
   if not LSuite.Run then
   begin

@@ -82,6 +82,44 @@ begin
   Check(True);
 end;
 
+{ ── F09: Parallel lifecycle failure tests ─────────────────────────────────── }
+
+procedure TestParallelBeforeEachFail;
+var
+  LSuite: TTestSuite;
+begin
+  LSuite := TTestSuite.Create('ParBeforeEachFail');
+  LSuite.OnBeforeEach(procedure begin raise Exception.Create('beforeEach boom'); end);
+  LSuite.Test('t1', @TestParallelPassA);
+  LSuite.Test('t2', @TestParallelPassB);
+  { RunParallel should handle beforeEach failure gracefully }
+  LSuite.RunParallel(nil);
+  if LSuite.FLastFail < 1 then
+  begin
+    WriteLn(AnsiRed('FAIL: expected at least 1 failure from beforeEach'));
+    Halt(1);
+  end;
+  WriteLn(AnsiGreen('  ✓ Parallel beforeEach failure'));
+end;
+
+procedure TestParallelSetupFail;
+var
+  LSuite: TTestSuite;
+begin
+  LSuite := TTestSuite.Create('ParSetupFail');
+  LSuite.SetSetup(procedure begin raise Exception.Create('setup boom'); end);
+  LSuite.Test('t1', @TestParallelPassA);
+  LSuite.Test('t2', @TestParallelPassB);
+  { Setup failure should skip all tests }
+  LSuite.RunParallel(nil);
+  if LSuite.FLastSkip < 2 then
+  begin
+    WriteLn(AnsiRed('FAIL: expected 2 skips from setup failure, got '), LSuite.FLastSkip);
+    Halt(1);
+  end;
+  WriteLn(AnsiGreen('  ✓ Parallel setup failure'));
+end;
+
 var
   LSuite: TTestSuite;
   LFailSuite, LSkipSuite: TTestSuite;
@@ -162,4 +200,13 @@ begin
 
   WriteLn;
   WriteLn(AnsiGreen('ALL PARALLEL TESTS PASSED'));
+
+  { ── F09: Parallel lifecycle failures ───────────────────────────────────── }
+  WriteLn;
+  WriteLn(AnsiBold('─── F09: Parallel Lifecycle Failure Tests ───'));
+  TestParallelBeforeEachFail;
+  TestParallelSetupFail;
+
+  WriteLn;
+  WriteLn(AnsiGreen('ALL LIFECYCLE TESTS PASSED'));
 end.

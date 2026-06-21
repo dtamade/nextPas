@@ -32,6 +32,7 @@ type
     procedure Run(const AName: string; AProc: TTestProc);
     procedure RunNested(const AName: string; AProc: Pointer);
     procedure Fail(const AMessage: string);
+    procedure Skip(const AReason: string = '');
     function  GetTestName: string;
     property  TestName: string read GetTestName;
   end;
@@ -154,6 +155,7 @@ type
     function ToHaveLength(AExpected: NativeInt): IExpectation;
     function ToRaise(AExceptionClass: ExceptClass;
       const AMessage: string = ''): IExpectation;
+    function ToNotRaise: IExpectation;
   end;
 
 { ── Expect (fluent factory) ───────────────────────────────────────────────── }
@@ -600,6 +602,7 @@ type
     function ToHaveLength(AExpected: NativeInt): IExpectation;
     function ToRaise(AExceptionClass: ExceptClass;
       const AMessage: string = ''): IExpectation;
+    function ToNotRaise: IExpectation;
   end;
 
 constructor TExpectation.CreateStr(const AValue: string);
@@ -964,6 +967,23 @@ begin
   Result := Self;
 end;
 
+function TExpectation.ToNotRaise: IExpectation;
+begin
+  if FKind <> ekProc then
+    InternalFail('ToNotRaise called on non-proc expectation');
+  try
+    FProcValue;
+  except
+    on E: ETestSkipped do
+      raise; { Skip is flow control, not a testable exception }
+    on E: Exception do
+      InternalFail('Expected no exception but got ' +
+        E.ClassName + ': ' + E.Message);
+  end;
+  FNegated := False;
+  Result := Self;
+end;
+
 { ── Expect factories ──────────────────────────────────────────────────────── }
 
 function Expect(const AValue: string): IExpectation;
@@ -1008,6 +1028,7 @@ type
     procedure Run(const AName: string; AProc: TTestProc);
     procedure RunNested(const AName: string; AProc: Pointer);
     procedure Fail(const AMessage: string);
+    procedure Skip(const AReason: string = '');
     function  GetTestName: string;
     procedure ExecuteSubtests;
   end;
@@ -1050,6 +1071,11 @@ end;
 procedure TTestContext.Fail(const AMessage: string);
 begin
   InternalFail(AMessage);
+end;
+
+procedure TTestContext.Skip(const AReason: string);
+begin
+  InternalSkip(AReason);
 end;
 
 function TTestContext.GetTestName: string;
@@ -1483,11 +1509,13 @@ var
   R: PThreadRec;
   LStatus: TTestStatus;
   LFailMsg: string;
+  LSkipReason: string;
 begin
   Result := nil;
   R := PThreadRec(AArg);
   LStatus := tsPassed;
   LFailMsg := '';
+  LSkipReason := '';
   { Note: We intentionally do NOT call SetTestContext here.
     SetTestContext allocates thread-local GExecState — each thread would get
     its own copy, which is safe but unnecessary since parallel tests track
@@ -1543,7 +1571,11 @@ begin
     try
       R^.Entry.Proc;
     except
-      on E: ETestSkipped do LStatus := tsSkipped;
+      on E: ETestSkipped do
+      begin
+        LStatus := tsSkipped;
+        LSkipReason := E.Message;
+      end;
       on E: EAssertionFailed do
       begin
         LStatus := tsFailed;
@@ -1595,7 +1627,11 @@ begin
       tsSkipped:
         begin
           R^.Skip^ := R^.Skip^ + 1;
-          WriteLn('  ', StatusDot(tsSkipped), ' ', AnsiDim(R^.Entry.Name));
+          if LSkipReason <> '' then
+            WriteLn('  ', StatusDot(tsSkipped), ' ', AnsiDim(R^.Entry.Name),
+              ' — ', LSkipReason)
+          else
+            WriteLn('  ', StatusDot(tsSkipped), ' ', AnsiDim(R^.Entry.Name));
         end;
       tsError:
         begin

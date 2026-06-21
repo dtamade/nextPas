@@ -111,8 +111,9 @@ ExpectProc(procedure begin StrToInt('bad'); end)
 | `ToBeInRange(low, high)` | Int64 |
 | `ToHaveLength` | string |
 | `ToRaise(class, msg)` | proc |
+| `ToNotRaise` | proc (fails if any exception raised) |
 
-**Note**: `CheckRaises` and `ToRaise` intentionally do NOT catch `ETestSkipped` —
+**Note**: `CheckRaises`, `ToRaise`, and `ToNotRaise` intentionally do NOT catch `ETestSkipped` —
 `Skip()` is flow control, not a testable exception. See [Error Handling](#error-handling).
 
 ### TTestStatus Semantic Table
@@ -154,6 +155,11 @@ begin
   { Results }
   LSuite.Summary;       { Print pass/fail/skip counts }
   LSuite.AllPassed;     { Returns True if all passed; auto-runs if not yet run }
+
+  { Programmatic result access (Phase 2) }
+  var LResult: TTestRunResult;
+  LSuite.RunWithResult(LResult);  { Run + collect structured results }
+  WriteLn(LResult.Passed, '/', LResult.Passed + LResult.Failed);
 end;
 ```
 
@@ -223,6 +229,16 @@ end;
 Subtest failures propagate to the parent: if any sub-subtest fails, the parent
 subtest is also marked as failed. This propagation is recursive through arbitrary
 nesting depth.
+
+#### ITestContext API
+
+| Method | Description |
+|--------|-------------|
+| `Run(name, proc)` | Register and run a simple subtest |
+| `RunNested(name, proc)` | Register a subtest that has its own nested subtests |
+| `Fail(msg)` | Unconditionally fail the current test |
+| `Skip(reason)` | Skip the current test (raises ETestSkipped) |
+| `TestName` | Name of the currently executing test |
 
 ## Error Handling
 
