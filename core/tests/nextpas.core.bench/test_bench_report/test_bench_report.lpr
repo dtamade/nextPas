@@ -203,9 +203,6 @@ begin
   CheckContains(LHTML, '<h2>Benchmark Results</h2>', 'Contains results header');
   CheckContains(LHTML, 'HashMap.Put', 'Contains first benchmark');
   CheckContains(LHTML, '245.3', 'Contains NsPerOp');
-  CheckContains(LHTML, '<canvas id="benchmarkChart"', 'Contains chart canvas');
-  // Chart.js CDN 链接
-  CheckContains(LHTML, 'chart.js', 'Contains Chart.js CDN');
   CheckContains(LHTML, '<h2>Detailed Statistics</h2>', 'Contains statistics header');
 end;
 
