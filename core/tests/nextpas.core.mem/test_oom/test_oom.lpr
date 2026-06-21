@@ -113,17 +113,18 @@ begin
   end;
 end;
 
-procedure RaiseBlockPoolArenaAllocationOverflow;
+{ TFixedArena 已删除，此测试不再适用 }
+{procedure RaiseBlockPoolArenaAllocationOverflow;
 var
-  LArena: nextpas.core.mem.blockpool.TArena;
+  LArena: TLocalArena;
 begin
   LArena := nil;
   try
-    LArena := nextpas.core.mem.blockpool.TArena.Create(High(SizeUInt));
+    LArena := TLocalArena.Create(High(SizeUInt));
   finally
     LArena.Free;
   end;
-end;
+end;}
 
 procedure RaiseGrowingBlockPoolAllocatorOom;
 var
@@ -142,14 +143,14 @@ end;
 
 procedure RaiseGrowingArenaAllocatorOom;
 var
-  LConfig: TGrowingArenaConfig;
-  LArena: TGrowingArena;
+  LConfig: TGrowableArenaConfig;
+  LArena: TGrowableArena;
 begin
-  LConfig := TGrowingArenaConfig.Default(16);
+  LConfig := TGrowableArenaConfig.Default(16);
   LConfig.Allocator := NewFailAllocator;
   LArena := nil;
   try
-    LArena := TGrowingArena.Create(LConfig);
+    LArena := TGrowableArena.Create(LConfig);
   finally
     LArena.Free;
   end;
@@ -219,13 +220,14 @@ end;
 procedure TestBlockPoolOverflowContracts;
 begin
   CheckRaisesAllocError(@RaiseBlockPoolTotalSizeOverflow, aeInvalidLayout, 'TBlockPool.Create layout overflow');
-  CheckRaisesCanonicalOutOfMemory(@RaiseBlockPoolArenaAllocationOverflow, 'TArena.Create allocation overflow');
+  { TFixedArena 已删除，此测试不再适用 }
+  {CheckRaisesCanonicalOutOfMemory(@RaiseBlockPoolArenaAllocationOverflow, 'TArena.Create allocation overflow');}
 end;
 
 procedure TestGrowableMemOomUsesCanonicalRoot;
 begin
   CheckRaisesCanonicalOutOfMemory(@RaiseGrowingBlockPoolAllocatorOom, 'TGrowingBlockPool.Create');
-  CheckRaisesCanonicalOutOfMemory(@RaiseGrowingArenaAllocatorOom, 'TGrowingArena.Create');
+  CheckRaisesCanonicalOutOfMemory(@RaiseGrowingArenaAllocatorOom, 'TGrowableArena.Create');
   CheckRaisesCanonicalOutOfMemory(@RaiseGrowingFixedPoolAllocatorOom, 'TGrowingFixedPool.Create');
 end;
 

@@ -11,17 +11,17 @@ uses
   nextpas.core.mem.arena.compiler;
 
 type
-  {** TArenaAllocator
+  {** TFastArenaAllocator
    *
-   *  将 TArena 包装为 IAllocator 接口。
-   *  分配通过 TArena 的 bump 指针完成，DoFreeMem 为 no-op。
+   *  将 TFastArena 包装为 IAllocator 接口。
+   *  分配通过 TFastArena 的 bump 指针完成，DoFreeMem 为 no-op。
    *  Reset 方法一次性释放所有内存。
    *
    *  注意：DoReallocMem 会分配新块并复制数据，效率不如原地扩展。
    *  非线程安全。}
-  TArenaAllocator = class(TAllocator)
+  TFastArenaAllocator = class(TAllocator)
   private
-    FArena: TArena;
+    FArena: TFastArena;
     FChunkSize: SizeUInt;
   protected
     function DoGetMem(aSize: SizeUInt): Pointer; override;
@@ -29,7 +29,7 @@ type
     function DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer; override;
     procedure DoFreeMem(aDst: Pointer); override;
   public
-    {** 创建 TArenaAllocator，AChunkSize 为初始 chunk 大小 }
+    {** 创建 TFastArenaAllocator，AChunkSize 为初始 chunk 大小 }
     constructor Create(AChunkSize: SizeUInt = ARENA_INITIAL_CHUNK_SIZE;
       AAlignment: SizeUInt = DEFAULT_ALIGNMENT);
     destructor Destroy; override;
@@ -37,8 +37,8 @@ type
     {** 重置 Arena（保留 mmap 映射，从头开始分配） }
     procedure Reset;
 
-    {** 直接访问内部 TArena }
-    property Arena: TArena read FArena;
+    {** 直接访问内部 TFastArena }
+    property Arena: TFastArena read FArena;
 
     {** IAllocator traits }
     function Traits: TAllocatorTraits; override;
@@ -46,32 +46,32 @@ type
 
 implementation
 
-{ TArenaAllocator }
+{ TFastArenaAllocator }
 
-constructor TArenaAllocator.Create(AChunkSize: SizeUInt; AAlignment: SizeUInt);
+constructor TFastArenaAllocator.Create(AChunkSize: SizeUInt; AAlignment: SizeUInt);
 begin
   inherited Create;
   FChunkSize := AChunkSize;
-  TArena_Init(FArena, AAlignment);
+  TFastArena_Init(FArena, AAlignment);
 end;
 
-destructor TArenaAllocator.Destroy;
+destructor TFastArenaAllocator.Destroy;
 begin
-  TArena_Release(FArena);
+  TFastArena_Release(FArena);
   inherited;
 end;
 
-function TArenaAllocator.DoGetMem(aSize: SizeUInt): Pointer;
+function TFastArenaAllocator.DoGetMem(aSize: SizeUInt): Pointer;
 begin
   Result := FArena.Alloc(aSize);
 end;
 
-function TArenaAllocator.DoAllocMem(aSize: SizeUInt): Pointer;
+function TFastArenaAllocator.DoAllocMem(aSize: SizeUInt): Pointer;
 begin
   Result := FArena.AllocZeroed(aSize);
 end;
 
-function TArenaAllocator.DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+function TFastArenaAllocator.DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
 var
   LCopySize: SizeUInt;
 begin
@@ -86,17 +86,17 @@ begin
   end;
 end;
 
-procedure TArenaAllocator.DoFreeMem(aDst: Pointer);
+procedure TFastArenaAllocator.DoFreeMem(aDst: Pointer);
 begin
   { Arena 不支持单个释放 — no-op }
 end;
 
-procedure TArenaAllocator.Reset;
+procedure TFastArenaAllocator.Reset;
 begin
   FArena.Reset;
 end;
 
-function TArenaAllocator.Traits: TAllocatorTraits;
+function TFastArenaAllocator.Traits: TAllocatorTraits;
 begin
   Result.ZeroInitialized := False;
   Result.ThreadSafe      := False;

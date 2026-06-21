@@ -15,16 +15,16 @@ type
   {**
    * TArenaGrowthKind
    *
-   * @desc Grow policy for TGrowingArena segment sizes
+   * @desc Grow policy for TGrowableArena segment sizes
    *}
   TArenaGrowthKind = (agkGeometric, agkLinear);
 
   {**
-   * TGrowingArenaConfig
+   * TGrowableArenaConfig
    *
-   * @desc Configuration for TGrowingArena
+   * @desc Configuration for TGrowableArena
    *}
-  TGrowingArenaConfig = record
+  TGrowableArenaConfig = record
     InitialSize: SizeUInt;
     MaxSize: SizeUInt;              // 0 = unlimited (by committed bytes)
     GrowthKind: TArenaGrowthKind;
@@ -34,11 +34,11 @@ type
     Allocator: IAllocator;          // nil = system heap (GetMem/FreeMem)
     KeepSegments: Boolean;          // keep extra segments on Reset/Restore
 
-    class function Default(aInitialSize: SizeUInt): TGrowingArenaConfig; static;
+    class function Default(aInitialSize: SizeUInt): TGrowableArenaConfig; static;
   end;
 
   {**
-   * TGrowingArena
+   * TGrowableArena
    *
    * @desc
    *   基于段的可增长 Arena 分配器（Bump Allocator），使用单调递增的标记管理虚拟地址空间。
@@ -61,12 +61,12 @@ type
    *
    * @example
    *   // 创建 Arena（几何增长策略）
-   *   var Arena: TGrowingArena;
-   *   var Config: TGrowingArenaConfig;
-   *   Config := TGrowingArenaConfig.Default(4096);  // 初始 4KB
+   *   var Arena: TGrowableArena;
+   *   var Config: TGrowableArenaConfig;
+   *   Config := TGrowableArenaConfig.Default(4096);  // 初始 4KB
    *   Config.GrowthKind := agkGeometric;
    *   Config.GrowthFactor := 2.0;  // 每次扩展 2 倍
-   *   Arena := TGrowingArena.Create(Config);
+   *   Arena := TGrowableArena.Create(Config);
    *   try
    *     // 快速分配多个对象
    *     Ptr1 := Arena.Alloc(64);
@@ -97,9 +97,9 @@ type
    *   - 网络服务器：请求处理期间的临时缓冲区
    *   - 数据处理：批量数据转换的中间结果
    *
-   * @see TGrowingArenaConfig, IArena, TArenaMarker, TArenaConcurrent
+   * @see TGrowableArenaConfig, IArena, TArenaMarker, TArenaConcurrent
    *}
-  TGrowingArena = class(TInterfacedObject, IArena)
+  TGrowableArena = class(TInterfacedObject, IArena)
   private
     type
       TSegment = record
@@ -136,7 +136,7 @@ type
     procedure ShrinkToSegmentCount(aCount: SizeInt);
     procedure NormalizeState(aActiveIndex: SizeInt; aActiveUsed: SizeUInt);
   public
-    constructor Create(const aConfig: TGrowingArenaConfig); overload;
+    constructor Create(const aConfig: TGrowableArenaConfig); overload;
     constructor Create(aInitialSize: SizeUInt; aMaxSize: SizeUInt = 0); overload;
     destructor Destroy; override;
 
@@ -163,7 +163,7 @@ implementation
 {$PUSH}
 {$WARN 4055 OFF} // pointer/ordinal conversions in arena internals
 
-class function TGrowingArenaConfig.Default(aInitialSize: SizeUInt): TGrowingArenaConfig;
+class function TGrowableArenaConfig.Default(aInitialSize: SizeUInt): TGrowableArenaConfig;
 begin
   Result.InitialSize := aInitialSize;
   Result.MaxSize := 0;
@@ -175,7 +175,7 @@ begin
   Result.KeepSegments := True;
 end;
 
-function TGrowingArena.AlignPtr(aPtr: PByte; aAlign: SizeUInt): PByte;
+function TGrowableArena.AlignPtr(aPtr: PByte; aAlign: SizeUInt): PByte;
 var
   LMask: PtrUInt;
   LPtrU: PtrUInt;
@@ -189,14 +189,14 @@ begin
   Result := PByte((LPtrU + LMask) and not LMask);
 end;
 
-function TGrowingArena.CurrentUsed: SizeUInt;
+function TGrowableArena.CurrentUsed: SizeUInt;
 begin
   if (FActive < 0) or (FActive > High(FSegments)) then
     Exit(0);
   Result := FSegments[FActive].StartOffset + FSegments[FActive].Used;
 end;
 
-function TGrowingArena.CalcRequiredMinSize(aSize, aAlignment: SizeUInt; out aMinSize: SizeUInt): Boolean;
+function TGrowableArena.CalcRequiredMinSize(aSize, aAlignment: SizeUInt; out aMinSize: SizeUInt): Boolean;
 var
   LAlignPad: SizeUInt;
 begin
@@ -214,7 +214,7 @@ begin
   Result := True;
 end;
 
-function TGrowingArena.CalcNextSegmentSize(aMinSize: SizeUInt; out aUpdateGrowthBase: Boolean): SizeUInt;
+function TGrowableArena.CalcNextSegmentSize(aMinSize: SizeUInt; out aUpdateGrowthBase: Boolean): SizeUInt;
 var
   LBaseSize: SizeUInt;
   LGrowthBase: SizeUInt;
@@ -274,7 +274,7 @@ begin
   Result := LBaseSize;
 end;
 
-function TGrowingArena.AddSegment(aMinSize: SizeUInt): Boolean;
+function TGrowableArena.AddSegment(aMinSize: SizeUInt): Boolean;
 var
   LSegSize: SizeUInt;
   LUpdateGrowthBase: Boolean;
@@ -372,7 +372,7 @@ begin
   Result := True;
 end;
 
-procedure TGrowingArena.FreeSegment(aIndex: SizeInt);
+procedure TGrowableArena.FreeSegment(aIndex: SizeInt);
 var
   LRaw: Pointer;
 begin
@@ -392,7 +392,7 @@ begin
     FreeMem(LRaw);
 end;
 
-procedure TGrowingArena.ShrinkToSegmentCount(aCount: SizeInt);
+procedure TGrowableArena.ShrinkToSegmentCount(aCount: SizeInt);
 var
   LIdx: SizeInt;
 begin
@@ -417,7 +417,7 @@ begin
     FActive := High(FSegments);
 end;
 
-procedure TGrowingArena.NormalizeState(aActiveIndex: SizeInt; aActiveUsed: SizeUInt);
+procedure TGrowableArena.NormalizeState(aActiveIndex: SizeInt; aActiveUsed: SizeUInt);
 var
   LIndex: SizeInt;
 begin
@@ -450,7 +450,7 @@ begin
   FActive := aActiveIndex;
 end;
 
-constructor TGrowingArena.Create(const aConfig: TGrowingArenaConfig);
+constructor TGrowableArena.Create(const aConfig: TGrowableArenaConfig);
 var
   LAlign: SizeUInt;
   LInitSize: SizeUInt;
@@ -459,9 +459,9 @@ begin
 
   LInitSize := aConfig.InitialSize;
   if LInitSize = 0 then
-    raise EAllocError.Create(aeInvalidLayout, 'TGrowingArena: initial size must be > 0');
+    raise EAllocError.Create(aeInvalidLayout, 'TGrowableArena: initial size must be > 0');
   if (aConfig.MaxSize <> 0) and (LInitSize > aConfig.MaxSize) then
-    raise EAllocError.Create(aeInvalidLayout, 'TGrowingArena: initial size exceeds max size');
+    raise EAllocError.Create(aeInvalidLayout, 'TGrowableArena: initial size exceeds max size');
 
   FGrowthKind := aConfig.GrowthKind;
   FGrowthFactor := aConfig.GrowthFactor;
@@ -479,7 +479,7 @@ begin
   if LAlign = 0 then
     LAlign := DEFAULT_ALIGNMENT;
   if (LAlign and (LAlign - 1)) <> 0 then
-    raise EAllocError.Create(aeAlignmentNotSupported, 'TGrowingArena: alignment must be power of 2');
+    raise EAllocError.Create(aeAlignmentNotSupported, 'TGrowableArena: alignment must be power of 2');
   if LAlign < MEM_DEFAULT_ALIGN then
     LAlign := MEM_DEFAULT_ALIGN;
   FAlignment := LAlign;
@@ -492,31 +492,31 @@ begin
   FTotalAllocs := 0;
 
   if not AddSegment(LInitSize) then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'TGrowingArena: failed to allocate initial segment');
+    raise EOutOfMemory.Create(aeOutOfMemory, 'TGrowableArena: failed to allocate initial segment');
   FActive := 0;
 end;
 
-constructor TGrowingArena.Create(aInitialSize: SizeUInt; aMaxSize: SizeUInt);
+constructor TGrowableArena.Create(aInitialSize: SizeUInt; aMaxSize: SizeUInt);
 var
-  LConfig: TGrowingArenaConfig;
+  LConfig: TGrowableArenaConfig;
 begin
-  LConfig := TGrowingArenaConfig.Default(aInitialSize);
+  LConfig := TGrowableArenaConfig.Default(aInitialSize);
   LConfig.MaxSize := aMaxSize;
   Create(LConfig);
 end;
 
-destructor TGrowingArena.Destroy;
+destructor TGrowableArena.Destroy;
 begin
   ShrinkToSegmentCount(0);
   inherited Destroy;
 end;
 
-function TGrowingArena.Alloc(aSize: SizeUInt): Pointer;
+function TGrowableArena.Alloc(aSize: SizeUInt): Pointer;
 begin
   Result := AllocAligned(aSize, MEM_DEFAULT_ALIGN);
 end;
 
-function TGrowingArena.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
+function TGrowableArena.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
 var
   LAlign: SizeUInt;
   LPtr: PByte;
@@ -574,19 +574,19 @@ begin
   end;
 end;
 
-function TGrowingArena.AllocZeroed(aSize: SizeUInt): Pointer;
+function TGrowableArena.AllocZeroed(aSize: SizeUInt): Pointer;
 begin
   Result := Alloc(aSize);
   if Result <> nil then
     FillChar(Result^, aSize, 0);
 end;
 
-function TGrowingArena.SaveMark: TArenaMarker;
+function TGrowableArena.SaveMark: TArenaMarker;
 begin
   Result := TArenaMarker(CurrentUsed);
 end;
 
-procedure TGrowingArena.RestoreToMark(aMark: TArenaMarker);
+procedure TGrowableArena.RestoreToMark(aMark: TArenaMarker);
 var
   LMark: SizeUInt;
   LActiveIdx: SizeInt;
@@ -598,7 +598,7 @@ var
 begin
   LMark := SizeUInt(aMark);
   if LMark > FTotalSize then
-    raise EAllocError.Create(aeInvalidLayout, 'TGrowingArena.RestoreToMark: marker out of range');
+    raise EAllocError.Create(aeInvalidLayout, 'TGrowableArena.RestoreToMark: marker out of range');
 
   if Length(FSegments) = 0 then
     Exit;
@@ -625,7 +625,7 @@ begin
   NormalizeState(LActiveIdx, LSegOffset);
 end;
 
-procedure TGrowingArena.Reset;
+procedure TGrowableArena.Reset;
 var
   LIdx: SizeInt;
 begin
@@ -645,17 +645,17 @@ begin
   FActive := 0;
 end;
 
-function TGrowingArena.TotalSize: SizeUInt;
+function TGrowableArena.TotalSize: SizeUInt;
 begin
   Result := FTotalSize;
 end;
 
-function TGrowingArena.UsedSize: SizeUInt;
+function TGrowableArena.UsedSize: SizeUInt;
 begin
   Result := CurrentUsed;
 end;
 
-function TGrowingArena.RemainingSize: SizeUInt;
+function TGrowableArena.RemainingSize: SizeUInt;
 var
   LUsed: SizeUInt;
 begin
@@ -665,7 +665,7 @@ begin
   Result := FTotalSize - LUsed;
 end;
 
-function TGrowingArena.SegmentCount: SizeUInt;
+function TGrowableArena.SegmentCount: SizeUInt;
 begin
   Result := SizeUInt(Length(FSegments));
 end;

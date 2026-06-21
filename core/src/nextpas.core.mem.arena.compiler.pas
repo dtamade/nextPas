@@ -23,18 +23,18 @@ var
 
 type
   {** Arena 标记：用于 SaveMark/RestoreToMark }
-  TArenaMark = record
+  TFastArenaMark = record
     ChunkIndex: SizeInt;
     Offset: SizeUInt;
   end;
 
-  {** TArena chunk：mmap 映射信息 }
-  TArenaChunk = record
+  {** TFastArena chunk：mmap 映射信息 }
+  TFastArenaChunk = record
     Map: TPlatformMappedFile;
     Used: SizeUInt;
   end;
 
-  {** TArena
+  {** TFastArena
    *
    *  零虚分发的 bump 分配器，使用 mmap 作为后备存储。
    *  适用于编译器热路径等需要极低开销分配的场景。
@@ -42,17 +42,17 @@ type
    *  非线程安全。多线程环境请自行加锁。
    *
    *  使用方式：
-   *    var LArena: TArena;
-   *    TArena_Init(LArena, DEFAULT_ALIGNMENT);
+   *    var LArena: TFastArena;
+   *    TFastArena_Init(LArena, DEFAULT_ALIGNMENT);
    *    try
    *      LP := LArena.Alloc(64);
    *      // ...
    *    finally
-   *      TArena_Release(LArena);
+   *      TFastArena_Release(LArena);
    *    end; }
-  TArena = record
+  TFastArena = record
   private
-    FChunks: array of TArenaChunk;
+    FChunks: array of TFastArenaChunk;
     FChunkCount: SizeInt;
     FCurrentBase: PByte;
     FCurrentEnd: PByte;
@@ -77,9 +77,9 @@ type
     {** 分配 ASize 字节并清零 }
     function AllocZeroed(aSize: SizeUInt): Pointer;
     {** 保存当前分配位置 }
-    function SaveMark: TArenaMark;
+    function SaveMark: TFastArenaMark;
     {** 恢复到标记位置 }
-    procedure RestoreToMark(AMark: TArenaMark);
+    procedure RestoreToMark(AMark: TFastArenaMark);
     {** 重置 Arena（保留 mmap 映射，从头开始分配） }
     procedure Reset;
     {** 释放所有 mmap 映射 }
@@ -94,17 +94,17 @@ type
     function AllocCount: SizeUInt;
   end;
 
-{** 初始化 TArena }
-procedure TArena_Init(var AArena: TArena; AAlignment: SizeUInt = DEFAULT_ALIGNMENT);
-{** 释放 TArena 所有资源 }
-procedure TArena_Release(var AArena: TArena);
+{** 初始化 TFastArena }
+procedure TFastArena_Init(var AArena: TFastArena; AAlignment: SizeUInt = DEFAULT_ALIGNMENT);
+{** 释放 TFastArena 所有资源 }
+procedure TFastArena_Release(var AArena: TFastArena);
 
 implementation
 
 {$PUSH}
 {$WARN 4055 OFF} // pointer/ordinal conversions in arena internals
 
-procedure TArena_Init(var AArena: TArena; AAlignment: SizeUInt);
+procedure TFastArena_Init(var AArena: TFastArena; AAlignment: SizeUInt);
 begin
   AArena.FChunks := nil;
   AArena.FChunkCount := 0;
@@ -129,7 +129,7 @@ begin
   {$ENDIF}
 end;
 
-procedure TArena_Release(var AArena: TArena);
+procedure TFastArena_Release(var AArena: TFastArena);
 var
   I: SizeInt;
 begin
@@ -161,9 +161,9 @@ begin
   AArena.FAllocCount := 0;
 end;
 
-{ TArena }
+{ TFastArena }
 
-function TArena.AllocChunk(aMinSize: SizeUInt): Boolean;
+function TFastArena.AllocChunk(aMinSize: SizeUInt): Boolean;
 var
   LChunkSize: SizeUInt;
   LNewCapacity: SizeInt;
@@ -225,7 +225,7 @@ begin
   Result := True;
 end;
 
-procedure TArena.TrackLargeBlock(const AMap: TPlatformMappedFile);
+procedure TFastArena.TrackLargeBlock(const AMap: TPlatformMappedFile);
 var
   LNewCapacity: SizeInt;
 begin
@@ -241,7 +241,7 @@ begin
   Inc(FLargeCount);
 end;
 
-procedure TArena.UpdateUsedFromChunks;
+procedure TFastArena.UpdateUsedFromChunks;
 var
   I: SizeInt;
 begin
@@ -250,7 +250,7 @@ begin
     Inc(FTotalUsed, FChunks[I].Used);
 end;
 
-function TArena.InternalAlloc(aSize: SizeUInt; aAlignment: SizeUInt): Pointer;
+function TFastArena.InternalAlloc(aSize: SizeUInt; aAlignment: SizeUInt): Pointer;
 var
   LAligned: PtrUInt;
   LMask: PtrUInt;
@@ -327,12 +327,12 @@ begin
   Result := Pointer(LAligned);
 end;
 
-function TArena.Alloc(aSize: SizeUInt): Pointer;
+function TFastArena.Alloc(aSize: SizeUInt): Pointer;
 begin
   Result := InternalAlloc(aSize, FAlignment);
 end;
 
-function TArena.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
+function TFastArena.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
 begin
   if (aAlignment = 0) or (not IsPowerOfTwo(aAlignment)) then
     Exit(nil);
@@ -341,14 +341,14 @@ begin
   Result := InternalAlloc(aSize, aAlignment);
 end;
 
-function TArena.AllocZeroed(aSize: SizeUInt): Pointer;
+function TFastArena.AllocZeroed(aSize: SizeUInt): Pointer;
 begin
   Result := Alloc(aSize);
   if Result <> nil then
     FillChar(Result^, aSize, 0);
 end;
 
-function TArena.SaveMark: TArenaMark;
+function TFastArena.SaveMark: TFastArenaMark;
 begin
   if FChunkCount > 0 then
   begin
@@ -362,7 +362,7 @@ begin
   end;
 end;
 
-procedure TArena.RestoreToMark(AMark: TArenaMark);
+procedure TFastArena.RestoreToMark(AMark: TFastArenaMark);
 var
   I: SizeInt;
 begin
@@ -388,7 +388,7 @@ begin
   UpdateUsedFromChunks;
 end;
 
-procedure TArena.Reset;
+procedure TFastArena.Reset;
 var
   I: SizeInt;
 begin
@@ -403,27 +403,27 @@ begin
   FTotalUsed := FLargeUsed;
 end;
 
-procedure TArena.Release;
+procedure TFastArena.Release;
 begin
-  TArena_Release(Self);
+  TFastArena_Release(Self);
 end;
 
-function TArena.TotalAllocated: SizeUInt;
+function TFastArena.TotalAllocated: SizeUInt;
 begin
   Result := FTotalAllocated;
 end;
 
-function TArena.TotalUsed: SizeUInt;
+function TFastArena.TotalUsed: SizeUInt;
 begin
   Result := FTotalUsed;
 end;
 
-function TArena.PeakUsed: SizeUInt;
+function TFastArena.PeakUsed: SizeUInt;
 begin
   Result := FPeakUsed;
 end;
 
-function TArena.AllocCount: SizeUInt;
+function TFastArena.AllocCount: SizeUInt;
 begin
   Result := FAllocCount;
 end;

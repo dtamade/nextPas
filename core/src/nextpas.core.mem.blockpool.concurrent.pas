@@ -8,6 +8,7 @@ uses
   nextpas.core.base.utils,
   nextpas.core.mem.base,
   nextpas.core.mem.blockpool,
+  nextpas.core.mem.arena,
   nextpas.core.mem.mutex,
   nextpas.core.mem.error;
 
@@ -229,7 +230,7 @@ end;
 
 constructor TArenaConcurrent.Create(aTotalSize: SizeUInt);
 begin
-  Create(TFixedArena.Create(aTotalSize));
+  Create(TLocalArena.Create(aTotalSize));
 end;
 
 destructor TArenaConcurrent.Destroy;

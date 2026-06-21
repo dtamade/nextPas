@@ -12,6 +12,7 @@ uses
   nextpas.core.mem.intf,
   nextpas.core.mem.error,
   nextpas.core.mem.default,
+  nextpas.core.mem.arena.types,
   nextpas.core.mem.arena,
   nextpas.core.mem.arena.compiler,
   nextpas.core.mem.allocator.arena,
@@ -24,10 +25,11 @@ type
   TAllocatorKind = nextpas.core.mem.base.TAllocatorKind;
   TArenaMarker = nextpas.core.mem.base.TArenaMarker;
   IAllocator = nextpas.core.mem.intf.IAllocator;
+  IArena = nextpas.core.mem.arena.types.IArena;
   TLocalArena = nextpas.core.mem.arena.TLocalArena;
-  TArena = nextpas.core.mem.blockpool.TFixedArena;
-  TCompilerArena = nextpas.core.mem.arena.compiler.TArena;
-  TArenaAllocator = nextpas.core.mem.allocator.arena.TArenaAllocator;
+  TArena = nextpas.core.mem.arena.TLocalArena;
+  TFastArena = nextpas.core.mem.arena.compiler.TFastArena;
+  TArenaAllocator = nextpas.core.mem.allocator.arena.TFastArenaAllocator;
   TTrackingAllocator = nextpas.core.mem.allocator.tracking.TTrackingAllocator;
   TLeakCheckResult = nextpas.core.mem.allocator.leak_check.TLeakCheckResult;
   TLocalBlockPool = nextpas.core.mem.pool.TLocalBlockPool;

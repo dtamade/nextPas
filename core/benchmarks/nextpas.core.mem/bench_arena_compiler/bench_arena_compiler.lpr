@@ -12,15 +12,15 @@ var
   B: TBenchRunner;
   GSink: Pointer;
 
-{ --- TArena.Alloc vs System.GetMem (small objects 16B-256B) --- }
+{ --- TFastArena.Alloc vs System.GetMem (small objects 16B-256B) --- }
 
 procedure BenchArenaAlloc16(aIters: Int64);
 var
   LIt: Int64;
-  LArena: TArena;
+  LArena: TFastArena;
   LP: Pointer;
 begin
-  TArena_Init(LArena);
+  TFastArena_Init(LArena);
   try
     for LIt := 1 to aIters do
     begin
@@ -28,7 +28,7 @@ begin
       GSink := LP;
     end;
   finally
-    TArena_Release(LArena);
+    TFastArena_Release(LArena);
   end;
 end;
 
@@ -47,10 +47,10 @@ end;
 procedure BenchArenaAlloc64(aIters: Int64);
 var
   LIt: Int64;
-  LArena: TArena;
+  LArena: TFastArena;
   LP: Pointer;
 begin
-  TArena_Init(LArena);
+  TFastArena_Init(LArena);
   try
     for LIt := 1 to aIters do
     begin
@@ -58,7 +58,7 @@ begin
       GSink := LP;
     end;
   finally
-    TArena_Release(LArena);
+    TFastArena_Release(LArena);
   end;
 end;
 
@@ -77,10 +77,10 @@ end;
 procedure BenchArenaAlloc256(aIters: Int64);
 var
   LIt: Int64;
-  LArena: TArena;
+  LArena: TFastArena;
   LP: Pointer;
 begin
-  TArena_Init(LArena);
+  TFastArena_Init(LArena);
   try
     for LIt := 1 to aIters do
     begin
@@ -88,7 +88,7 @@ begin
       GSink := LP;
     end;
   finally
-    TArena_Release(LArena);
+    TFastArena_Release(LArena);
   end;
 end;
 
@@ -104,16 +104,16 @@ begin
   end;
 end;
 
-{ --- TArena.Alloc vs TGrowingArena.Alloc --- }
+{ --- TFastArena.Alloc vs TGrowableArena.Alloc --- }
 
-procedure BenchTArenaBatch(aIters: Int64);
+procedure BenchTFastArenaBatch(aIters: Int64);
 var
   LIt: Int64;
   I: Integer;
-  LArena: TArena;
+  LArena: TFastArena;
   LP: Pointer;
 begin
-  TArena_Init(LArena);
+  TFastArena_Init(LArena);
   try
     for LIt := 1 to aIters do
     begin
@@ -125,18 +125,18 @@ begin
       LArena.Reset;
     end;
   finally
-    TArena_Release(LArena);
+    TFastArena_Release(LArena);
   end;
 end;
 
-procedure BenchTGrowingArenaBatch(aIters: Int64);
+procedure BenchTGrowableArenaBatch(aIters: Int64);
 var
   LIt: Int64;
   I: Integer;
-  LArena: TGrowingArena;
+  LArena: TGrowableArena;
   LP: Pointer;
 begin
-  LArena := TGrowingArena.Create(65536);
+  LArena := TGrowableArena.Create(65536);
   try
     for LIt := 1 to aIters do
     begin
@@ -155,18 +155,18 @@ end;
 begin
   B := TBenchRunner.Create;
 
-  WriteLn('--- TArena vs System.GetMem (single alloc) ---');
-  B.Run('TArena.Alloc_16B',    @BenchArenaAlloc16);
+  WriteLn('--- TFastArena vs System.GetMem (single alloc) ---');
+  B.Run('TFastArena.Alloc_16B',    @BenchArenaAlloc16);
   B.Run('System.GetMem_16B',   @BenchGetMem16);
-  B.Run('TArena.Alloc_64B',    @BenchArenaAlloc64);
+  B.Run('TFastArena.Alloc_64B',    @BenchArenaAlloc64);
   B.Run('System.GetMem_64B',   @BenchGetMem64);
-  B.Run('TArena.Alloc_256B',   @BenchArenaAlloc256);
+  B.Run('TFastArena.Alloc_256B',   @BenchArenaAlloc256);
   B.Run('System.GetMem_256B',  @BenchGetMem256);
 
   WriteLn;
-  WriteLn('--- TArena vs TGrowingArena (batch 10000 x 64B) ---');
-  B.Run('TArena_batch_10000x64B',       @BenchTArenaBatch);
-  B.Run('TGrowingArena_batch_10000x64B', @BenchTGrowingArenaBatch);
+  WriteLn('--- TFastArena vs TGrowableArena (batch 10000 x 64B) ---');
+  B.Run('TFastArena_batch_10000x64B',       @BenchTFastArenaBatch);
+  B.Run('TGrowableArena_batch_10000x64B', @BenchTGrowableArenaBatch);
 
   B.Summary;
 end.

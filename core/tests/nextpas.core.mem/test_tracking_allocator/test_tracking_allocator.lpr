@@ -257,16 +257,16 @@ end;
 
 procedure TestArenaLeakCheck;
 var
-  LArena: TArena;
+  LArena: TFastArena;
 begin
-  TArena_Init(LArena);
+  TFastArena_Init(LArena);
   try
     {$IFDEF NEXTPAS_ARENA_LEAK_CHECK}
     Check(GArenaInstanceCount >= 1, 'GArenaInstanceCount should be >= 1 after Init');
     {$ENDIF}
     Check(LArena.Alloc(64) <> nil, 'should allocate normally');
   finally
-    TArena_Release(LArena);
+    TFastArena_Release(LArena);
   end;
   {$IFDEF NEXTPAS_ARENA_LEAK_CHECK}
   Check(GArenaInstanceCount = 0, 'GArenaInstanceCount should be 0 after Release');
@@ -281,7 +281,7 @@ var
   LTracker: TTrackingAllocator;
   LP: Pointer;
 begin
-  LArena := TArenaAllocator.Create;
+  LArena := TFastArenaAllocator.Create;
   LTracker := TTrackingAllocator.Create(LArena);
   try
     LP := LTracker.GetMem(256);

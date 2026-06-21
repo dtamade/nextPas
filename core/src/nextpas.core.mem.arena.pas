@@ -6,15 +6,16 @@ interface
 
 uses
   nextpas.core.mem.base,
-  nextpas.core.mem.error;
+  nextpas.core.mem.error,
+  nextpas.core.mem.arena.types;
 
 type
   {**
    * @desc 固定大小 bump 分配器，分配只前进，Reset 一次性释放全部。
-   *       以 class 实现以避免 owning record 的隐式复制 double-free 风险。
+   *       实现 IArena 接口，支持引用计数。
    * @note 非线程安全。适用于请求/帧/文档等有限生命周期的场景。
    *}
-  TLocalArena = class
+  TLocalArena = class(TInterfacedObject, IArena)
   private
     FBacking: Pointer;
     FCapacity: SizeUInt;
@@ -26,18 +27,22 @@ type
     destructor Destroy; override;
 
     {** 从 Arena 分配 ASize 字节，返回指针；空间不足返回 nil。 }
-    function Alloc(const ASize: SizeUInt): Pointer;
+    function Alloc(ASize: SizeUInt): Pointer;
     {** 从 Arena 对齐分配 ASize 字节；对齐不是 2 的幂或空间不足返回 nil。 }
-    function AllocAligned(const ASize: SizeUInt; const AAlign: SizeUInt): Pointer;
+    function AllocAligned(ASize: SizeUInt; AAlign: SizeUInt): Pointer;
     {** 从 Arena 分配 ASize 字节并清零；空间不足返回 nil。 }
-    function AllocZeroed(const ASize: SizeUInt): Pointer;
+    function AllocZeroed(ASize: SizeUInt): Pointer;
+    {** 快速分配（无检查版本，极致性能）。 }
+    function AllocFast(ASize: SizeUInt): Pointer; inline;
+    {** 快速对齐分配（无检查版本，极致性能）。 }
+    function AllocAlignedFast(ASize: SizeUInt; AAlign: SizeUInt): Pointer; inline;
     {** 重置 Arena，所有已分配内存可重新使用。 }
     procedure Reset;
 
     {** 保存当前分配位置的标记，后续可用 RestoreToMark 回退。 }
     function SaveMark: TArenaMarker;
     {** 恢复到之前保存的标记位置。 }
-    procedure RestoreToMark(const AMarker: TArenaMarker);
+    procedure RestoreToMark(AMarker: TArenaMarker);
 
     {** 返回后备内存总字节数。 }
     function TotalSize: SizeUInt; inline;
@@ -78,7 +83,7 @@ begin
   inherited;
 end;
 
-function TLocalArena.Alloc(const ASize: SizeUInt): Pointer;
+function TLocalArena.Alloc(ASize: SizeUInt): Pointer;
 var
   LRemaining: SizeUInt;
 begin
@@ -94,7 +99,7 @@ begin
   Inc(FOffset, ASize);
 end;
 
-function TLocalArena.AllocAligned(const ASize: SizeUInt; const AAlign: SizeUInt): Pointer;
+function TLocalArena.AllocAligned(ASize: SizeUInt; AAlign: SizeUInt): Pointer;
 var
   LCurrent: PtrUInt;
   LAligned: SizeUInt;
@@ -128,11 +133,30 @@ begin
   Result := Pointer(LAligned);
 end;
 
-function TLocalArena.AllocZeroed(const ASize: SizeUInt): Pointer;
+function TLocalArena.AllocZeroed(ASize: SizeUInt): Pointer;
 begin
   Result := Alloc(ASize);
   if Result <> nil then
     FillChar(Result^, ASize, 0);
+end;
+
+function TLocalArena.AllocFast(ASize: SizeUInt): Pointer;
+begin
+  Result := Pointer(PtrUInt(FBacking) + FOffset);
+  Inc(FOffset, ASize);
+end;
+
+function TLocalArena.AllocAlignedFast(ASize: SizeUInt; AAlign: SizeUInt): Pointer;
+var
+  LCurrent: PtrUInt;
+  LAligned: SizeUInt;
+  LMask: SizeUInt;
+begin
+  LCurrent := PtrUInt(FBacking) + FOffset;
+  LMask := AAlign - 1;
+  LAligned := (LCurrent + LMask) and not LMask;
+  Inc(FOffset, (LAligned - LCurrent) + ASize);
+  Result := Pointer(LAligned);
 end;
 
 procedure TLocalArena.Reset;
@@ -145,7 +169,7 @@ begin
   Result := FOffset;
 end;
 
-procedure TLocalArena.RestoreToMark(const AMarker: TArenaMarker);
+procedure TLocalArena.RestoreToMark(AMarker: TArenaMarker);
 begin
   if AMarker <= FOffset then
     FOffset := AMarker;

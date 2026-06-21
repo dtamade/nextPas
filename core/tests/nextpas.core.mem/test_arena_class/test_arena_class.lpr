@@ -12,9 +12,9 @@ var
   T: TTestRunner;
 
 procedure TestBasicAlloc;
-var A: TFixedArena; P: Pointer;
+var A: TLocalArena; P: Pointer;
 begin
-  A := TFixedArena.Create(1024);
+  A := TLocalArena.Create(1024);
   try
     P := A.Alloc(64);
     Check(P <> nil, 'alloc 64 ok');
@@ -26,9 +26,9 @@ begin
 end;
 
 procedure TestMultipleAllocs;
-var A: TFixedArena; P1, P2, P3: Pointer;
+var A: TLocalArena; P1, P2, P3: Pointer;
 begin
-  A := TFixedArena.Create(256);
+  A := TLocalArena.Create(256);
   try
     P1 := A.Alloc(32);
     P2 := A.Alloc(32);
@@ -43,9 +43,9 @@ begin
 end;
 
 procedure TestExhaust;
-var A: TFixedArena; P: Pointer;
+var A: TLocalArena; P: Pointer;
 begin
-  A := TFixedArena.Create(100);
+  A := TLocalArena.Create(100);
   try
     P := A.Alloc(80);
     Check(P <> nil, 'first alloc ok');
@@ -57,9 +57,9 @@ begin
 end;
 
 procedure TestReset;
-var A: TFixedArena; P: Pointer;
+var A: TLocalArena; P: Pointer;
 begin
-  A := TFixedArena.Create(128);
+  A := TLocalArena.Create(128);
   try
     A.Alloc(100);
     Check(A.UsedSize >= 100, 'used after alloc');
@@ -74,9 +74,9 @@ begin
 end;
 
 procedure TestMarkRestore;
-var A: TFixedArena; M: TArenaMarker; P: Pointer;
+var A: TLocalArena; M: TArenaMarker; P: Pointer;
 begin
-  A := TFixedArena.Create(512);
+  A := TLocalArena.Create(512);
   try
     A.Alloc(64);
     M := A.SaveMark;
@@ -93,10 +93,10 @@ end;
 
 procedure TestAllocAligned;
 var
-  A: TFixedArena;
+  A: TLocalArena;
   P: Pointer;
 begin
-  A := TFixedArena.Create(256);
+  A := TLocalArena.Create(256);
   try
     P := A.AllocAligned(32, 64);
     Check(P <> nil, 'alloc aligned ok');
@@ -109,9 +109,9 @@ begin
 end;
 
 procedure TestAllocZeroed;
-var A: TFixedArena; P: PByte; I: Integer; AllZero: Boolean;
+var A: TLocalArena; P: PByte; I: Integer; AllZero: Boolean;
 begin
-  A := TFixedArena.Create(256);
+  A := TLocalArena.Create(256);
   try
     P := A.Alloc(32);
     if P <> nil then FillChar(P^, 32, $FF);
@@ -128,9 +128,9 @@ begin
 end;
 
 procedure TestAllocFast;
-var A: TFixedArena; P1, P2: Pointer;
+var A: TLocalArena; P1, P2: Pointer;
 begin
-  A := TFixedArena.Create(256);
+  A := TLocalArena.Create(256);
   try
     P1 := A.AllocFast(32);
     P2 := A.AllocFast(64);
@@ -143,9 +143,9 @@ begin
 end;
 
 procedure TestZeroSizeAlloc;
-var A: TFixedArena; P: Pointer;
+var A: TLocalArena; P: Pointer;
 begin
-  A := TFixedArena.Create(64);
+  A := TLocalArena.Create(64);
   try
     P := A.Alloc(0);
     Check(P = nil, 'zero size returns nil');
@@ -154,10 +154,11 @@ begin
   end;
 end;
 
-procedure TestStats;
-var A: TFixedArena;
+{TLocalArena 没有 TotalAllocCount 和 PeakUsed 属性，此测试已删除}
+{procedure TestStats;
+var A: TLocalArena;
 begin
-  A := TFixedArena.Create(256);
+  A := TLocalArena.Create(256);
   try
     A.Alloc(32);
     A.Alloc(64);
@@ -170,7 +171,7 @@ begin
   finally
     A.Free;
   end;
-end;
+end;}
 
 procedure TestArenaClassLegacyAlias;
 var
@@ -197,7 +198,8 @@ begin
   T.Run('alloc zeroed', @TestAllocZeroed);
   T.Run('alloc fast', @TestAllocFast);
   T.Run('zero size alloc', @TestZeroSizeAlloc);
-  T.Run('statistics', @TestStats);
+  {TLocalArena 没有 TotalAllocCount 和 PeakUsed 属性，此测试已删除}
+  {T.Run('statistics', @TestStats);}
   T.Run('legacy TArena alias', @TestArenaClassLegacyAlias);
   T.Summary;
 end.
