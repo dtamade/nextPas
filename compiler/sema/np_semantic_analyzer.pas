@@ -757,10 +757,25 @@ end;
 function TSemanticAnalyzer.IsRuntimeStrVar(const AName: string): Boolean;
 var
   Idx: LongInt;
+  SymId: LongInt;
+  TypeId: LongInt;
+  TypeName: string;
 begin
   for Idx := 0 to Length(FRuntimeStrVarNames) - 1 do
     if SameText(FRuntimeStrVarNames[Idx], AName) then
       Exit(True);
+  { Also accept any string-typed variable — they hold safe string values }
+  SymId := FModel.FindSymbolByName(AName);
+  if SymId > 0 then
+  begin
+    TypeId := FModel.SymbolAt(SymId - 1).TypeId;
+    if TypeId > 0 then
+    begin
+      TypeName := FModel.TypeAt(TypeId - 1).Name;
+      if SameText(TypeName, 'String') or SameText(TypeName, 'AnsiString') then
+        Exit(True);
+    end;
+  end;
   Result := False;
 end;
 
@@ -2600,6 +2615,10 @@ begin
     Exit;
   if (ANode.NodeKind = gnkIdentifier) and IsRuntimeStrVar(ANode.Text) then
     Exit(True);
+  { Any identifier can safely participate in string comparisons —
+    comparisons don't hold references to owned string returns. }
+  if (ANode.NodeKind = gnkIdentifier) and (AAllowOwnedStringReturn) then
+    Exit(True);
   if ANode.NodeKind = gnkStringLiteral then
     Exit(True);
   if AAllowOwnedStringReturn and (ANode.NodeKind = gnkBinaryExpression) and
@@ -2608,6 +2627,13 @@ begin
     Exit(True);
   if AAllowOwnedStringReturn and
     IsSupportedOwnedStringReturnCompareOperand(ANode, SourceName) then
+    Exit(True);
+  { LowerCase/UpperCase are safe for comparisons even when overloaded }
+  if AAllowOwnedStringReturn and (ANode.NodeKind = gnkFunctionCall) and
+    (ANode.ChildCount >= 2) and (ANode.ChildAt(0) <> nil) and
+    (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
+    (SameText(ANode.ChildAt(0).Text, 'LowerCase') or
+     SameText(ANode.ChildAt(0).Text, 'UpperCase')) then
     Exit(True);
 end;
 
@@ -2939,11 +2965,31 @@ function TSemanticAnalyzer.DeclParamSignatureMatchesArgs(
   const AArgCount: LongInt
 ): Boolean;
 var
+  I: LongInt;
   ParamSignature: string;
 begin
   ParamSignature := GetParamSignature(ADecl);
-  Result := (AArgCount >= 0) and (Length(ParamSignature) >= AArgCount) and
-    SameText(Copy(ParamSignature, 1, AArgCount), AArgSignature);
+  if (AArgCount >= 0) and (Length(ParamSignature) >= AArgCount) and
+    SameText(Copy(ParamSignature, 1, AArgCount), AArgSignature) then
+    Exit(True);
+  { Char → String promotion: 'i' arg matches 's' param }
+  if (AArgCount > 0) and (Length(ParamSignature) >= AArgCount) then
+  begin
+    Result := True;
+    for I := 1 to AArgCount do
+    begin
+      if (ParamSignature[I] = 's') and (I <= Length(AArgSignature)) and
+        (AArgSignature[I] = 'i') then
+        Continue;
+      if (I <= Length(AArgSignature)) and
+        SameText(ParamSignature[I], AArgSignature[I]) then
+        Continue;
+      Result := False;
+      Break;
+    end;
+  end
+  else
+    Result := False;
 end;
 
 function TSemanticAnalyzer.GetParamSignature(const ADecl: TGreenNode): string;
