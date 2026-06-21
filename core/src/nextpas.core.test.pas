@@ -34,6 +34,8 @@ type
   TTestProc = nextpas.core.test.types.TTestProc;
   ITestContext = nextpas.core.test.types.ITestContext;
   TSubtestProc = nextpas.core.test.types.TSubtestProc;
+  TTestCase = nextpas.core.test.types.TTestCase;
+  TTestCaseProc = nextpas.core.test.types.TTestCaseProc;
   TTestStatus = nextpas.core.test.types.TTestStatus;
   TTestResult = nextpas.core.test.types.TTestResult;
   TTestRunResult = nextpas.core.test.types.TTestRunResult;
@@ -49,6 +51,7 @@ const
   ekTest    = nextpas.core.test.types.ekTest;
   ekSubtest = nextpas.core.test.types.ekSubtest;
   ekSkipped = nextpas.core.test.types.ekSkipped;
+  ekTableTest = nextpas.core.test.types.ekTableTest;
 
 { ── Re-exported types from test.expect ────────────────────────────────────── }
 

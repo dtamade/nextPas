@@ -31,6 +31,19 @@ type
 
   TSubtestProc = procedure(constref Ctx: ITestContext);
 
+{ ── Parameterized test types ─────────────────────────────────────────────── }
+
+  TTestCase = record
+    Name : string;
+    Data : string;  { string as least-common-denominator; caller parses }
+  end;
+
+  PTestCase = ^TTestCase;
+
+  TTestCaseProc = procedure(const ACase: TTestCase);
+
+  PTestCaseProc = ^TTestCaseProc;
+
 { ── Status ────────────────────────────────────────────────────────────────── }
 
   TTestStatus = (
@@ -64,7 +77,7 @@ type
     constructor Create(const AReason: string);
   end;
 
-  TTestEntryKind = (ekTest, ekSubtest, ekSkipped);
+  TTestEntryKind = (ekTest, ekSubtest, ekSkipped, ekTableTest);
 
   TTestEntry = record
     Name       : string;
@@ -72,6 +85,9 @@ type
     SubtestProc: TSubtestProc;  { used when Kind = ekSubtest }
     Kind       : TTestEntryKind;
     SkipReason : string;
+    { Table-driven test fields (used when Kind = ekTableTest) }
+    TableCase  : Pointer;       { PTestCase, heap-allocated }
+    TableProc  : Pointer;       { PTestCaseProc, heap-allocated }
   end;
 
 { ── Internal State ───────────────────────────────────────────────────────── }

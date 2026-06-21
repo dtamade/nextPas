@@ -41,6 +41,9 @@ type
     class function Create(const AName: string): TTestSuite; static;
     procedure Test(const AName: string; AProc: TTestProc);
     procedure TestSubtest(const AName: string; AProc: TSubtestProc);
+    procedure TestTable(const AName: string;
+      ACases: specialize TArray<TTestCase>;
+      AProc: TTestCaseProc);
     procedure Skip(const AName: string; const AReason: string = '');
     procedure SetSetup(AProc: TTestProc);
     procedure SetTeardown(AProc: TTestProc);
@@ -213,6 +216,12 @@ begin
         Inc(FSubPass, LSubCtx.FSubPass);
         Inc(FSubFail, LSubCtx.FSubFail);
         Inc(FSubSkip, LSubCtx.FSubSkip);
+      end
+      else if LEntry.Kind = ekTableTest then
+      begin
+        PTestCaseProc(LEntry.TableProc)^(PTestCase(LEntry.TableCase)^);
+        WriteLn('    ', StatusDot(tsPassed), ' ', LEntry.Name);
+        Inc(FSubPass);
       end
       else
       begin
@@ -407,6 +416,35 @@ begin
   LEntry.SkipReason  := '';
   SetLength(Tests, Length(Tests) + 1);
   Tests[High(Tests)] := LEntry;
+end;
+
+procedure TTestSuite.TestTable(const AName: string;
+  ACases: specialize TArray<TTestCase>;
+  AProc: TTestCaseProc);
+var
+  I: Integer;
+  LEntry: TTestEntry;
+  LPCase: PTestCase;
+  LPProc: PTestCaseProc;
+begin
+  for I := 0 to High(ACases) do
+  begin
+    { Heap-allocate case data and proc to avoid closure capture issues }
+    New(LPCase);
+    LPCase^ := ACases[I];
+    New(LPProc);
+    LPProc^ := AProc;
+
+    LEntry.Name       := AName + '/' + ACases[I].Name;
+    LEntry.Proc       := nil;
+    LEntry.SubtestProc := nil;
+    LEntry.Kind       := ekTableTest;
+    LEntry.SkipReason := '';
+    LEntry.TableCase  := LPCase;
+    LEntry.TableProc  := LPProc;
+    SetLength(Tests, Length(Tests) + 1);
+    Tests[High(Tests)] := LEntry;
+  end;
 end;
 
 procedure TTestSuite.Skip(const AName: string; const AReason: string);
@@ -606,6 +644,12 @@ begin
             Inc(LFail);
           end;
         end;
+      end
+      else if LEntry.Kind = ekTableTest then
+      begin
+        { Table-driven test: invoke the stored proc with case data }
+        PTestCaseProc(LEntry.TableProc)^(PTestCase(LEntry.TableCase)^);
+        Inc(LPass);
       end
       else
       begin
@@ -831,7 +875,10 @@ begin
   if LStatus = tsPassed then
   begin
     try
-      R^.Entry.Proc;
+      if R^.Entry.Kind = ekTableTest then
+        PTestCaseProc(R^.Entry.TableProc)^(PTestCase(R^.Entry.TableCase)^)
+      else
+        R^.Entry.Proc;
     except
       on E: ETestSkipped do
       begin

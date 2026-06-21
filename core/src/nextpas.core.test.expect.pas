@@ -153,9 +153,19 @@ begin
 end;
 
 function TExpectation.Not_: IExpectation;
+var
+  LCopy: TExpectation;
 begin
-  FNegated := not FNegated;
-  Result := Self;
+  case FKind of
+    ekString:  LCopy := TExpectation.CreateStr(FStrValue);
+    ekInt64:   LCopy := TExpectation.CreateInt(FIntValue);
+    ekBool:    LCopy := TExpectation.CreateBool(FBoolValue);
+    ekPointer: LCopy := TExpectation.CreatePtr(FPtrValue);
+    ekProc:    LCopy := TExpectation.CreateProc(FProcValue);
+    ekDouble:  LCopy := TExpectation.CreateDouble(FDoubleValue);
+  end;
+  LCopy.FNegated := not FNegated;
+  Result := LCopy;
 end;
 
 function TExpectation.ToEqual(const AExpected: string): IExpectation;
@@ -175,7 +185,6 @@ begin
     if not LMatch then
       InternalFail('Expected "' + AExpected + '" but got "' + FStrValue + '"');
   end;
-  FNegated := False;
   Result := Self;
 end;
 
@@ -198,7 +207,6 @@ begin
       InternalFail('Expected ' + IntToStr(AExpected) +
         ' but got ' + IntToStr(FIntValue));
   end;
-  FNegated := False;
   Result := Self;
 end;
 
@@ -222,7 +230,6 @@ begin
     if not LMatch then
       InternalFail('Expected ' + LExpStr + ' but got ' + LActStr);
   end;
-  FNegated := False;
   Result := Self;
 end;
 
@@ -254,7 +261,6 @@ begin
       InternalFail('Expected nil but got $' +
         IntToHex(NativeUInt(FPtrValue), 16));
   end;
-  FNegated := False;
   Result := Self;
 end;
 
@@ -275,7 +281,6 @@ begin
     if FPtrValue = nil then
       InternalFail('Expected non-nil but got nil');
   end;
-  FNegated := False;
   Result := Self;
 end;
 
@@ -299,7 +304,6 @@ begin
     if not LFound then
       InternalFail('"' + FStrValue + '" does not contain "' + ASubstr + '"');
   end;
-  FNegated := False;
   Result := Self;
 end;
 
@@ -320,7 +324,6 @@ begin
     if not LMatch then
       InternalFail('"' + FStrValue + '" does not start with "' + APrefix + '"');
   end;
-  FNegated := False;
   Result := Self;
 end;
 
@@ -347,7 +350,6 @@ begin
     if not LMatch then
       InternalFail('"' + FStrValue + '" does not end with "' + ASuffix + '"');
   end;
-  FNegated := False;
   Result := Self;
 end;
 
@@ -368,7 +370,6 @@ begin
     if not LMatch then
       InternalFail(IntToStr(FIntValue) + ' is not > ' + IntToStr(AExpected));
   end;
-  FNegated := False;
   Result := Self;
 end;
 
@@ -389,7 +390,6 @@ begin
     if not LMatch then
       InternalFail(IntToStr(FIntValue) + ' is not < ' + IntToStr(AExpected));
   end;
-  FNegated := False;
   Result := Self;
 end;
 
@@ -412,7 +412,6 @@ begin
       InternalFail(IntToStr(FIntValue) + ' not in [' +
         IntToStr(ALow) + '..' + IntToStr(AHigh) + ']');
   end;
-  FNegated := False;
   Result := Self;
 end;
 
@@ -431,7 +430,6 @@ begin
       InternalFail('Expected length ' + IntToStr(AExpected) +
         ' but got ' + IntToStr(Length(FStrValue)));
   end;
-  FNegated := False;
   Result := Self;
 end;
 
@@ -474,7 +472,6 @@ begin
       InternalFail('Expected ' + AExceptionClass.ClassName +
         ' but nothing raised');
   end;
-  FNegated := False;
   Result := Self;
 end;
 
@@ -491,7 +488,6 @@ begin
       InternalFail('Expected no exception but got ' +
         E.ClassName + ': ' + E.Message);
   end;
-  FNegated := False;
   Result := Self;
 end;
 
@@ -516,7 +512,6 @@ begin
       InternalFail('Expected ' + FloatToStr(AExpected) +
         ' (+/-' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(FDoubleValue));
   end;
-  FNegated := False;
   Result := Self;
 end;
 

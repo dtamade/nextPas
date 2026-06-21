@@ -41,6 +41,8 @@ procedure CheckNotNear(AExpected, AActual: Double;
 procedure Fail(const AMessage: string);
 procedure Skip(const AReason: string = '');
 
+function StringDiff(const AExpected, AActual: string): string;
+
 implementation
 
 procedure Check(ACondition: Boolean; const AMessage: string);
@@ -57,10 +59,42 @@ begin
   end;
 end;
 
+function StringDiff(const AExpected, AActual: string): string;
+var
+  I, LMin, LStart, LEnd: Integer;
+begin
+  LMin := Length(AExpected);
+  if Length(AActual) < LMin then
+    LMin := Length(AActual);
+  I := 1;
+  while (I <= LMin) and (AExpected[I] = AActual[I]) do
+    Inc(I);
+  if I > LMin then
+    I := LMin; { difference is purely in length }
+  { Extract context around first difference }
+  LStart := I - 10;
+  if LStart < 1 then LStart := 1;
+  LEnd := I + 20;
+  if LEnd > Length(AExpected) then LEnd := Length(AExpected);
+  Result := 'Strings differ at position ' + IntToStr(I) + ':' + #10 +
+    '  expected: ...' + Copy(AExpected, LStart, LEnd - LStart + 1) + '...' + #10;
+  LEnd := I + 20;
+  if LEnd > Length(AActual) then LEnd := Length(AActual);
+  Result := Result +
+    '  actual:   ...' + Copy(AActual, LStart, LEnd - LStart + 1) + '...' + #10 +
+    '  (lengths: ' + IntToStr(Length(AExpected)) + ' vs ' + IntToStr(Length(AActual)) + ')';
+end;
+
 procedure CheckEqual(const AExpected, AActual: string);
 begin
   if AExpected <> AActual then
-    InternalFail('Expected "' + AExpected + '" but got "' + AActual + '"');
+  begin
+    if (Length(AExpected) > 40) or (Length(AActual) > 40) or
+       (Pos(#10, AExpected) > 0) or (Pos(#10, AActual) > 0) then
+      InternalFail(StringDiff(AExpected, AActual))
+    else
+      InternalFail('Expected "' + AExpected + '" but got "' + AActual + '"');
+  end;
 end;
 
 procedure CheckEqual(AExpected, AActual: Int64);
@@ -86,7 +120,13 @@ end;
 procedure CheckNotEqual(const AExpected, AActual: string);
 begin
   if AExpected = AActual then
-    InternalFail('Expected values to differ but both are "' + AActual + '"');
+  begin
+    if (Length(AActual) > 40) or (Pos(#10, AActual) > 0) then
+      InternalFail('Expected values to differ but both have length ' +
+        IntToStr(Length(AActual)))
+    else
+      InternalFail('Expected values to differ but both are "' + AActual + '"');
+  end;
 end;
 
 procedure CheckNotEqual(AExpected, AActual: Int64);
