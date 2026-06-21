@@ -126,6 +126,12 @@ type
     function ConfidenceInterval(ALevel: Double = 0.95): TConfidenceInterval;
 
     {**
+     * Bootstrap confidence interval
+     *}
+    function BootstrapCI(AIterations: Integer = 10000;
+      ALevel: Double = 0.95): TConfidenceInterval;
+
+    {**
      * 正态性启发式 (Shapiro-Wilk-like 简化版)
      *}
     function TestNormalityHeuristic: TNormalityTest;
@@ -475,6 +481,78 @@ begin
 
   Result.Lower := LMean - LMargin;
   Result.Upper := LMean + LMargin;
+  Result.Level := ALevel;
+end;
+
+function TAdvancedStats.BootstrapCI(AIterations: Integer;
+  ALevel: Double): TConfidenceInterval;
+var
+  LN: Integer;
+  LIterations: Integer;
+  LMeans: array of Double;
+  LSortedMeans: TDoubleArray;
+  LIterationIndex: Integer;
+  LSampleIndex: Integer;
+  LSeed: QWord;
+  LSum: Double;
+  LDataIndex: Integer;
+  LLowerIndex: Integer;
+  LUpperIndex: Integer;
+  LAlpha: Double;
+begin
+  LN := Length(FData);
+  if LN = 0 then
+  begin
+    Result.Lower := 0.0;
+    Result.Upper := 0.0;
+    Result.Level := ALevel;
+    Exit;
+  end;
+
+  if LN = 1 then
+  begin
+    Result.Lower := FData[0];
+    Result.Upper := FData[0];
+    Result.Level := ALevel;
+    Exit;
+  end;
+
+  LIterations := AIterations;
+  if LIterations <= 0 then
+    LIterations := 1;
+
+  LSeed := 12345;
+  SetLength(LMeans, LIterations);
+  for LIterationIndex := 0 to LIterations - 1 do
+  begin
+    LSum := 0.0;
+    for LSampleIndex := 0 to LN - 1 do
+    begin
+      LSeed := LSeed * 6364136223846793005 + 1442695040888963407;
+      LDataIndex := Integer((LSeed shr 33) mod QWord(LN));
+      LSum := LSum + FData[LDataIndex];
+    end;
+    LMeans[LIterationIndex] := LSum / LN;
+  end;
+
+  SetLength(LSortedMeans, LIterations);
+  for LIterationIndex := 0 to LIterations - 1 do
+    LSortedMeans[LIterationIndex] := LMeans[LIterationIndex];
+  if LIterations > 1 then
+    QuickSort(LSortedMeans, 0, LIterations - 1);
+
+  LAlpha := (1.0 - ALevel) / 2.0;
+  LLowerIndex := Trunc(LAlpha * LIterations);
+  LUpperIndex := Trunc((1.0 - LAlpha) * LIterations) - 1;
+  if LLowerIndex < 0 then
+    LLowerIndex := 0;
+  if LUpperIndex >= LIterations then
+    LUpperIndex := LIterations - 1;
+  if LUpperIndex < LLowerIndex then
+    LUpperIndex := LLowerIndex;
+
+  Result.Lower := LSortedMeans[LLowerIndex];
+  Result.Upper := LSortedMeans[LUpperIndex];
   Result.Level := ALevel;
 end;
 

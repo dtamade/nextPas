@@ -4,12 +4,17 @@ program test_bench_memtrack;
 {$modeswitch advancedrecords}
 
 uses
+  {$ifdef unix}
+  cthreads,
+  {$endif}
   nextpas.core.math.scalar,
-  nextpas.core.bench.memtrack;
+  nextpas.core.bench.memtrack,
+  nextpas.core.bench.parallel;
 
 var
   GTestsPassed: Integer = 0;
   GTestsFailed: Integer = 0;
+  GParallelTracker: TMemoryTracker;
 
 procedure Check(ACondition: Boolean; const ATestName: string);
 begin
@@ -197,6 +202,52 @@ begin
   Check(Abs(LTracker.AllocsPerOp(0) - 0) < 0.01, 'AllocsPerOp(0) = 0');
 end;
 
+procedure ParallelRecordAlloc(AThreadId: Integer; AIterations: Int64);
+var
+  LIteration: Int64;
+begin
+  for LIteration := 1 to AIterations do
+    GParallelTracker.RecordAlloc(1);
+end;
+
+procedure ParallelRecordFree(AThreadId: Integer; AIterations: Int64);
+var
+  LIteration: Int64;
+begin
+  for LIteration := 1 to AIterations do
+    GParallelTracker.RecordFree(1);
+end;
+
+procedure Test_ParallelThreadSafety;
+const
+  THREAD_COUNT = 8;
+  ITERS_PER_THREAD = 200000;
+var
+  LBench: TParallelBenchmark;
+  LStats: TMemoryStats;
+begin
+  WriteLn('Test_ParallelThreadSafety:');
+  GParallelTracker := TMemoryTracker.Create(True);
+
+  LBench := TParallelBenchmark.Create(@ParallelRecordAlloc, THREAD_COUNT,
+    ITERS_PER_THREAD, 0);
+  LBench.Execute;
+  LStats := GParallelTracker.GetStats;
+  Check(LStats.AllocCount = THREAD_COUNT * ITERS_PER_THREAD, 'Parallel AllocCount exact');
+  Check(LStats.AllocBytes = THREAD_COUNT * ITERS_PER_THREAD, 'Parallel AllocBytes exact');
+  Check(LStats.CurrentAllocs = THREAD_COUNT * ITERS_PER_THREAD, 'Parallel CurrentAllocs exact');
+  Check(LStats.CurrentBytes = THREAD_COUNT * ITERS_PER_THREAD, 'Parallel CurrentBytes exact');
+
+  LBench := TParallelBenchmark.Create(@ParallelRecordFree, THREAD_COUNT,
+    ITERS_PER_THREAD, 0);
+  LBench.Execute;
+  LStats := GParallelTracker.GetStats;
+  Check(LStats.FreeCount = THREAD_COUNT * ITERS_PER_THREAD, 'Parallel FreeCount exact');
+  Check(LStats.FreeBytes = THREAD_COUNT * ITERS_PER_THREAD, 'Parallel FreeBytes exact');
+  Check(LStats.CurrentAllocs = 0, 'Parallel CurrentAllocs returns to 0');
+  Check(LStats.CurrentBytes = 0, 'Parallel CurrentBytes returns to 0');
+end;
+
 { === Run All Tests === }
 
 procedure RunAllTests;
@@ -211,6 +262,7 @@ begin
   Test_Disabled;
   Test_BytesPerOp;
   Test_AllocsPerOp;
+  Test_ParallelThreadSafety;
 end;
 
 begin

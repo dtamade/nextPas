@@ -32,6 +32,8 @@ type
   IBenchStatsAnalyzer = nextpas.core.bench.intf.IBenchStatsAnalyzer;
 
   TBenchFunc = nextpas.core.bench.intf.TBenchFunc;
+  TBenchParamFunc = nextpas.core.bench.intf.TBenchParamFunc;
+  TBenchLoopFunc = nextpas.core.bench.intf.TBenchLoopFunc;
   TBenchSetupFunc = nextpas.core.bench.intf.TBenchSetupFunc;
   TBenchTeardownFunc = nextpas.core.bench.intf.TBenchTeardownFunc;
   TBenchEntry = nextpas.core.bench.intf.TBenchEntry;
@@ -63,12 +65,17 @@ type
       ACondition: Boolean): IBenchSuite;
     function AddParallel(const AName: string; AFunc: TBenchFunc;
       AThreads: Integer): IBenchSuite;
+    function AddRange(const AName: string; AFunc: TBenchParamFunc;
+      const AParams: array of Int64): IBenchSuite;
+    function AddLoop(const AName: string; AFunc: TBenchLoopFunc): IBenchSuite;
     function SetMinDuration(ADuration: TDuration): IBenchSuite;
     function SetMaxIterations(AIters: Int64): IBenchSuite;
     function SetMinSamples(ACount: Integer): IBenchSuite;
     function SetWarmupIters(ACount: Integer): IBenchSuite;
     function EnableMemoryTracking: IBenchSuite;
     function DisableMemoryTracking: IBenchSuite;
+    function CollectRawSamples: IBenchSuite;
+    function SetQuiet(AQuiet: Boolean): IBenchSuite;
     function AddBaseline(const AName: string; ANsPerOp: Double): IBenchSuite;
     function LoadBaseline(const APath: string): IBenchSuite;
     function SetFilter(const AFilter: string): IBenchSuite;
@@ -135,6 +142,8 @@ begin
   FConfig.EnableMemoryTracking := True;
   FConfig.EnableParallel := False;
   FConfig.ParallelThreads := BENCH_DEFAULT_PARALLEL_THREADS;
+  FConfig.CollectRawSamples := False;
+  FConfig.Quiet := False;
 
   FRunner := TBenchRunner.Create;
   FReportGenerator := TBenchReportGenerator.Create;
@@ -234,6 +243,43 @@ begin
   FEntries[FEntryCount - 1] := LEntry;
 end;
 
+function TBenchSuite.AddRange(const AName: string; AFunc: TBenchParamFunc;
+  const AParams: array of Int64): IBenchSuite;
+var
+  LEntry: TBenchEntry;
+  LIndex: Integer;
+begin
+  Result := Self;
+  for LIndex := 0 to High(AParams) do
+  begin
+    LEntry := Default(TBenchEntry);
+    LEntry.Name := AName + '/' + IntToStr(AParams[LIndex]);
+    LEntry.ParamFunc := AFunc;
+    LEntry.ParamValue := AParams[LIndex];
+    LEntry.Condition := True;
+
+    Inc(FEntryCount);
+    SetLength(FEntries, FEntryCount);
+    FEntries[FEntryCount - 1] := LEntry;
+  end;
+end;
+
+function TBenchSuite.AddLoop(const AName: string; AFunc: TBenchLoopFunc): IBenchSuite;
+var
+  LEntry: TBenchEntry;
+begin
+  Result := Self;
+  LEntry := Default(TBenchEntry);
+  LEntry.Name := AName;
+  LEntry.Condition := True;
+  LEntry.IsLoop := True;
+  LEntry.LoopFunc := AFunc;
+
+  Inc(FEntryCount);
+  SetLength(FEntries, FEntryCount);
+  FEntries[FEntryCount - 1] := LEntry;
+end;
+
 function TBenchSuite.SetMinDuration(ADuration: TDuration): IBenchSuite;
 begin
   Result := Self;
@@ -276,6 +322,18 @@ function TBenchSuite.DisableMemoryTracking: IBenchSuite;
 begin
   Result := Self;
   FConfig.EnableMemoryTracking := False;
+end;
+
+function TBenchSuite.CollectRawSamples: IBenchSuite;
+begin
+  Result := Self;
+  FConfig.CollectRawSamples := True;
+end;
+
+function TBenchSuite.SetQuiet(AQuiet: Boolean): IBenchSuite;
+begin
+  Result := Self;
+  FConfig.Quiet := AQuiet;
 end;
 
 function TBenchSuite.AddBaseline(const AName: string; ANsPerOp: Double): IBenchSuite;

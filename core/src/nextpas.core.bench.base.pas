@@ -6,6 +6,12 @@ unit nextpas.core.bench.base;
 interface
 
 type
+  {** 双精度浮点数组 }
+  TDoubleArray = array of Double;
+
+  {** 整数数组 }
+  TInt64Array = array of Int64;
+
   {** 基准结果 - 单个基准测试的完整结果 }
   TBenchResult = record
     Name: string;
@@ -24,6 +30,7 @@ type
     P99: Double;
     Outliers: Integer;
     SampleCount: Integer;
+    RawSamples: TDoubleArray;
   end;
 
   {** 统计摘要 - 完整的统计分析结果 }
@@ -76,13 +83,9 @@ type
     EnableMemoryTracking: Boolean;
     EnableParallel: Boolean;
     ParallelThreads: Integer;
+    CollectRawSamples: Boolean;
+    Quiet: Boolean;
   end;
-
-  {** 双精度浮点数组 }
-  TDoubleArray = array of Double;
-
-  {** 整数数组 }
-  TInt64Array = array of Int64;
 
   {** 基准结果数组 }
   TBenchResultArray = array of TBenchResult;

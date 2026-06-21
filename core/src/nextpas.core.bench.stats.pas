@@ -287,16 +287,31 @@ begin
 end;
 
 function TBenchStatsAnalyzer.TInv0975(ADF: Double): Double;
+const
+  TINV_TABLE: array[1..30] of Double = (
+    12.706, 4.303, 3.182, 2.776, 2.571,
+    2.447, 2.365, 2.306, 2.262, 2.228,
+    2.201, 2.179, 2.160, 2.145, 2.131,
+    2.120, 2.110, 2.101, 2.093, 2.086,
+    2.080, 2.074, 2.069, 2.064, 2.060,
+    2.056, 2.052, 2.048, 2.045, 2.042
+  );
+var
+  LDF: Integer;
 begin
-  // 简化的 t 分布临界值近似（用于 Welch's t-test）
-  // 对于 α=0.05（双尾），返回 t_{0.975, df}
-  // 这是一个近似值，对于大样本足够准确
-  if ADF >= 30 then
-    Result := Z_SCORE_95  // 大样本近似为正态分布
-  else if ADF >= 10 then
-    Result := 2.0 + (30 - ADF) * 0.02  // 线性插值近似
+  if ADF < 1.0 then
+    Result := TINV_TABLE[1]
+  else if ADF >= 30.0 then
+    Result := Z_SCORE_95
   else
-    Result := 2.5 + (10 - ADF) * 0.1;  // 小样本更保守
+  begin
+    LDF := Round(ADF);
+    if LDF < 1 then
+      LDF := 1;
+    if LDF > 30 then
+      LDF := 30;
+    Result := TINV_TABLE[LDF];
+  end;
 end;
 
 function TBenchStatsAnalyzer.HasHeuristicDifference(const A, B: TBenchStats): Boolean;

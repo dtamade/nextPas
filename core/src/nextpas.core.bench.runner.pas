@@ -55,6 +55,9 @@ type
     FStatsAnalyzer: IBenchStatsAnalyzer;
     FResults: array of TBenchResult;
     FResultCount: Integer;
+    FParallelBridgeFunc: TBenchFunc;
+    FParallelContexts: array of IBenchContext;
+    FParallelContextsInitialized: Boolean;
 
     {** 热身 }
     procedure WarmupEntry(const AEntry: TBenchEntry);
@@ -87,6 +90,8 @@ type
 
     {** 从环境变量加载配置 }
     procedure LoadConfigFromEnv;
+    procedure InitParallelContexts(AThreadCount: Integer);
+    procedure FinalizeParallelContexts;
 
   public
     constructor Create;
@@ -135,61 +140,53 @@ uses
   nextpas.core.bench.memtrack,
   nextpas.core.bench.parallel;
 
-var
-  GParallelBridgeFunc: TBenchFunc;
-  GParallelContexts: array of IBenchContext;
-  GParallelContextsInitialized: Boolean = False;
+type
+  TParallelBridgeData = record
+    Runner: TBenchRunner;
+    Func: TBenchFunc;
+    ParamFunc: TBenchParamFunc;
+    ParamValue: Int64;
+  end;
 
-procedure InitParallelContexts(AThreadCount: Integer);
 var
-  I: Integer;
-begin
-  SetLength(GParallelContexts, AThreadCount);
-  for I := 0 to AThreadCount - 1 do
-    GParallelContexts[I] := nil;
-  GParallelContextsInitialized := True;
-end;
-
-procedure FinalizeParallelContexts;
-var
-  I: Integer;
-begin
-  for I := 0 to High(GParallelContexts) do
-    GParallelContexts[I] := nil;  // 通过接口赋值 nil 释放对象
-  SetLength(GParallelContexts, 0);
-  GParallelContextsInitialized := False;
-end;
+  GBridgeData: TParallelBridgeData;
 
 procedure ParallelBenchBridge(AThreadId: Integer; AIterations: Int64);
 var
   LContext: IBenchContext;
   LContextObj: TBenchContext;
-  I: Int64;
+  LIteration: Int64;
+  LRunner: TBenchRunner;
 begin
-  if not Assigned(GParallelBridgeFunc) then
+  LRunner := GBridgeData.Runner;
+  if (LRunner = nil) or
+     ((not Assigned(GBridgeData.Func)) and (not Assigned(GBridgeData.ParamFunc))) then
     Exit;
 
   LContext := TBenchContext.Create;
   LContextObj := LContext as TBenchContext;
-  for I := 1 to AIterations do
+  for LIteration := 1 to AIterations do
   begin
-    LContextObj.SetIterations(I);
-    GParallelBridgeFunc(LContext);
+    LContextObj.SetIterations(LIteration);
+    if Assigned(GBridgeData.ParamFunc) then
+      GBridgeData.ParamFunc(LContext, GBridgeData.ParamValue)
+    else
+      GBridgeData.Func(LContext);
     if LContextObj.IsSkipped then
       Break;
   end;
 
-  // 保存上下文到全局接口数组（引用计数自动管理）
-  if GParallelContextsInitialized and (AThreadId >= 0) and (AThreadId < Length(GParallelContexts)) then
+  if LRunner.FParallelContextsInitialized and
+     (AThreadId >= 0) and
+     (AThreadId < Length(LRunner.FParallelContexts)) then
   begin
-    GParallelContexts[AThreadId] := TBenchContext.Create;
-    (GParallelContexts[AThreadId] as TBenchContext).SetIterations(LContextObj.GetIterations);
-    (GParallelContexts[AThreadId] as TBenchContext).SetBytes(LContextObj.GetBytesPerOp);
-    (GParallelContexts[AThreadId] as TBenchContext).SetAllocs(LContextObj.GetAllocsPerOp);
+    LRunner.FParallelContexts[AThreadId] := TBenchContext.Create;
+    (LRunner.FParallelContexts[AThreadId] as TBenchContext).SetIterations(LContextObj.GetIterations);
+    (LRunner.FParallelContexts[AThreadId] as TBenchContext).SetBytes(LContextObj.GetBytesPerOp);
+    (LRunner.FParallelContexts[AThreadId] as TBenchContext).SetAllocs(LContextObj.GetAllocsPerOp);
     if LContextObj.IsSkipped then
-      (GParallelContexts[AThreadId] as TBenchContext).Skip(LContextObj.GetSkipReason);
+      (LRunner.FParallelContexts[AThreadId] as TBenchContext).Skip(LContextObj.GetSkipReason);
   end;
-  // LContext 离开作用域自动释放对象
 end;
 
 { TBenchContext }
@@ -291,14 +288,38 @@ begin
   inherited Create;
   FStatsAnalyzer := TBenchStatsAnalyzer.Create;
   FResultCount := 0;
+  FParallelBridgeFunc := nil;
+  FParallelContextsInitialized := False;
   SetLength(FResults, 0);
+  SetLength(FParallelContexts, 0);
   LoadConfigFromEnv;
 end;
 
 destructor TBenchRunner.Destroy;
 begin
+  FinalizeParallelContexts;
   SetLength(FResults, 0);
   inherited Destroy;
+end;
+
+procedure TBenchRunner.InitParallelContexts(AThreadCount: Integer);
+var
+  LIndex: Integer;
+begin
+  SetLength(FParallelContexts, AThreadCount);
+  for LIndex := 0 to AThreadCount - 1 do
+    FParallelContexts[LIndex] := nil;
+  FParallelContextsInitialized := True;
+end;
+
+procedure TBenchRunner.FinalizeParallelContexts;
+var
+  LIndex: Integer;
+begin
+  for LIndex := 0 to High(FParallelContexts) do
+    FParallelContexts[LIndex] := nil;
+  SetLength(FParallelContexts, 0);
+  FParallelContextsInitialized := False;
 end;
 
 procedure TBenchRunner.LoadConfigFromEnv;
@@ -313,6 +334,8 @@ begin
   FConfig.EnableMemoryTracking := True;
   FConfig.EnableParallel := False;
   FConfig.ParallelThreads := BENCH_DEFAULT_PARALLEL_THREADS;
+  FConfig.CollectRawSamples := False;
+  FConfig.Quiet := False;
 
   // 从环境变量覆盖
   LValue := GetEnvironmentVariable(BENCH_ENV_MAX_ITERS);
@@ -331,6 +354,10 @@ begin
   LValue := GetEnvironmentVariable(BENCH_ENV_WARMUP);
   if (LValue <> '') then
     FConfig.WarmupIterations := Integer(StrToIntDef(LValue, BENCH_DEFAULT_WARMUP_ITERATIONS));
+
+  LValue := GetEnvironmentVariable(BENCH_ENV_QUIET);
+  if (LValue <> '') and (LValue = '1') then
+    FConfig.Quiet := True;
 
   FFilter := GetEnvironmentVariable(BENCH_ENV_FILTER);
 end;
@@ -370,6 +397,44 @@ begin
   if AIters <= 0 then
     Exit;
 
+  if AEntry.IsLoop and Assigned(AEntry.LoopFunc) then
+  begin
+    LContext := TBenchContext.Create;
+    LContextObj := LContext as TBenchContext;
+    try
+      if ATrackMemory then
+      begin
+        EnableGlobalMemoryTracking;
+        ResetGlobalMemoryTracker;
+      end;
+      try
+        LContextObj.Reset;
+        LContextObj.SetIterations(AIters);
+        AEntry.LoopFunc(AIters);
+
+        Result.Iterations := AIters;
+        Result.TotalNs := platform_monotonic_ns - LContextObj.GetStartNs;
+        Result.Skipped := LContextObj.IsSkipped;
+        Result.SkipReason := LContextObj.GetSkipReason;
+
+        if ATrackMemory then
+        begin
+          LMemoryStats := GetGlobalMemoryStats;
+          if (Result.Iterations > 0) and (Result.BytesPerOp = 0) then
+            Result.BytesPerOp := Ceil(LMemoryStats.AllocBytes / Result.Iterations);
+          if (Result.Iterations > 0) and (Result.AllocsPerOp = 0) then
+            Result.AllocsPerOp := Ceil(LMemoryStats.AllocCount / Result.Iterations);
+        end;
+      finally
+        if ATrackMemory then
+          DisableGlobalMemoryTracking;
+      end;
+    finally
+      LContext := nil;
+    end;
+    Exit;
+  end;
+
   if AEntry.EnableParallel and (AEntry.ParallelThreads > 1) then
   begin
     // 并行基准自动跳过内存跟踪（不抛出异常）
@@ -384,35 +449,46 @@ begin
     // 初始化并行上下文收集
     InitParallelContexts(AEntry.ParallelThreads);
     try
-      GParallelBridgeFunc := AEntry.Func;
-      LParallelResult := RunParallelBench(@ParallelBenchBridge,
-        AEntry.ParallelThreads, LPerThreadIterations);
-      GParallelBridgeFunc := nil;
+      FParallelBridgeFunc := AEntry.Func;
+      GBridgeData.Runner := Self;
+      GBridgeData.Func := FParallelBridgeFunc;
+      GBridgeData.ParamFunc := AEntry.ParamFunc;
+      GBridgeData.ParamValue := AEntry.ParamValue;
+      try
+        LParallelResult := RunParallelBench(@ParallelBenchBridge,
+          AEntry.ParallelThreads, LPerThreadIterations);
+      finally
+        GBridgeData.Func := nil;
+        GBridgeData.ParamFunc := nil;
+        GBridgeData.ParamValue := 0;
+        GBridgeData.Runner := nil;
+        FParallelBridgeFunc := nil;
+      end;
 
       // 聚合并行上下文数据
       Result.Iterations := LPerThreadIterations * AEntry.ParallelThreads;
       Result.TotalNs := LParallelResult.TotalNs;
 
       // 从所有线程聚合 BytesPerOp, AllocsPerOp
-      for I := 0 to High(GParallelContexts) do
+      for I := 0 to High(FParallelContexts) do
       begin
-        if Assigned(GParallelContexts[I]) then
+        if Assigned(FParallelContexts[I]) then
         begin
-          if (GParallelContexts[I] as TBenchContext).GetBytesPerOp > Result.BytesPerOp then
-            Result.BytesPerOp := (GParallelContexts[I] as TBenchContext).GetBytesPerOp;
-          if (GParallelContexts[I] as TBenchContext).GetAllocsPerOp > Result.AllocsPerOp then
-            Result.AllocsPerOp := (GParallelContexts[I] as TBenchContext).GetAllocsPerOp;
+          if (FParallelContexts[I] as TBenchContext).GetBytesPerOp > Result.BytesPerOp then
+            Result.BytesPerOp := (FParallelContexts[I] as TBenchContext).GetBytesPerOp;
+          if (FParallelContexts[I] as TBenchContext).GetAllocsPerOp > Result.AllocsPerOp then
+            Result.AllocsPerOp := (FParallelContexts[I] as TBenchContext).GetAllocsPerOp;
         end;
       end;
 
       // 检查是否有任何线程跳过了
-      for I := 0 to High(GParallelContexts) do
+      for I := 0 to High(FParallelContexts) do
       begin
-        if Assigned(GParallelContexts[I]) and (GParallelContexts[I] as TBenchContext).IsSkipped then
+        if Assigned(FParallelContexts[I]) and (FParallelContexts[I] as TBenchContext).IsSkipped then
         begin
           Result.Skipped := True;
-          Result.SkipReason := (GParallelContexts[I] as TBenchContext).GetSkipReason;
-          Result.Iterations := (GParallelContexts[I] as TBenchContext).GetIterations * AEntry.ParallelThreads;
+          Result.SkipReason := (FParallelContexts[I] as TBenchContext).GetSkipReason;
+          Result.Iterations := (FParallelContexts[I] as TBenchContext).GetIterations * AEntry.ParallelThreads;
           Break;
         end;
       end;
@@ -436,7 +512,10 @@ begin
       for I := 1 to AIters do
       begin
         LContextObj.SetIterations(I);
-        AEntry.Func(LContext);
+        if Assigned(AEntry.ParamFunc) then
+          AEntry.ParamFunc(LContext, AEntry.ParamValue)
+        else
+          AEntry.Func(LContext);
         if LContextObj.IsSkipped then
           Break;
       end;
@@ -631,13 +710,16 @@ begin
     Result.P99 := LStats.P99;
     Result.Outliers := LStats.OutlierCount;
     Result.SampleCount := LStats.SampleCount;
+    if FConfig.CollectRawSamples then
+      Result.RawSamples := LSamples;
 
     AddResult(Result);
 
-    WriteLn('  ', LEntry.Name:40, LIters:12, ' iters',
-      LStats.Mean:10:1, ' ns/op',
-      Result.OpsPerSec:14:0, ' ops/s',
-      LStats.StdDev:10:1, ' stddev');
+    if not FConfig.Quiet then
+      WriteLn('  ', LEntry.Name:40, LIters:12, ' iters',
+        LStats.Mean:10:1, ' ns/op',
+        Result.OpsPerSec:14:0, ' ops/s',
+        LStats.StdDev:10:1, ' stddev');
   finally
     if Assigned(LEntry.Teardown) then
       LEntry.Teardown(LSetupData);
@@ -648,8 +730,11 @@ procedure TBenchRunner.RunAll(const AEntries: array of TBenchEntry);
 var
   i: Integer;
 begin
-  WriteLn('=== nextpas.core.bench v1.0 ===');
-  WriteLn;
+  if not FConfig.Quiet then
+  begin
+    WriteLn('=== nextpas.core.bench v1.0 ===');
+    WriteLn;
+  end;
 
   for i := 0 to High(AEntries) do
   begin
@@ -657,13 +742,16 @@ begin
       RunOne(AEntries[i]);
   end;
 
-  WriteLn;
-  WriteLn('=== Summary ===');
-  for i := 0 to FResultCount - 1 do
+  if not FConfig.Quiet then
   begin
-    WriteLn('  ', FResults[i].Name:40,
-      FResults[i].NsPerOp:10:1, ' ns/op',
-      FResults[i].OpsPerSec:14:0, ' ops/s');
+    WriteLn;
+    WriteLn('=== Summary ===');
+    for i := 0 to FResultCount - 1 do
+    begin
+      WriteLn('  ', FResults[i].Name:40,
+        FResults[i].NsPerOp:10:1, ' ns/op',
+        FResults[i].OpsPerSec:14:0, ' ops/s');
+    end;
   end;
 end;
 

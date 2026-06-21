@@ -285,6 +285,45 @@ begin
     'Different distribution heuristic difference');
 end;
 
+procedure TestTInvLookup;
+var
+  LSamples: TDoubleArray;
+  LStats: TBenchStats;
+  LCIWidth: Double;
+  I: Integer;
+begin
+  WriteLn('TestTInvLookup:');
+
+  SetLength(LSamples, 5);
+  LSamples[0] := 1.0;
+  LSamples[1] := 2.0;
+  LSamples[2] := 3.0;
+  LSamples[3] := 4.0;
+  LSamples[4] := 5.0;
+
+  LStats := GAnalyzer.ComputeStats(LSamples);
+  LCIWidth := LStats.Confidence95High - LStats.Confidence95Low;
+
+  CheckApprox(LCIWidth, 3.926, 0.15, 'DF=4 uses lookup-table CI width');
+  Check(LStats.Confidence95Low < LStats.Mean, 'CI95 low < mean');
+  Check(LStats.Confidence95High > LStats.Mean, 'CI95 high > mean');
+
+  SetLength(LSamples, 30);
+  for I := 0 to 29 do
+    LSamples[I] := 100.0 + I;
+
+  LStats := GAnalyzer.ComputeStats(LSamples);
+  Check(LStats.SampleCount = 30, 'TInv sample count = 30');
+  Check(LStats.Confidence95Low < LStats.Mean, 'TInv 30-samples CI95 low < mean');
+  Check(LStats.Confidence95High > LStats.Mean, 'TInv 30-samples CI95 high > mean');
+
+  SetLength(LSamples, 1);
+  LSamples[0] := 42.0;
+  LStats := GAnalyzer.ComputeStats(LSamples);
+  Check(LStats.Confidence95Low = 42.0, 'Single sample CI95 low = mean');
+  Check(LStats.Confidence95High = 42.0, 'Single sample CI95 high = mean');
+end;
+
 procedure TestIsNormal;
 var
   LData: TDoubleArray;
@@ -356,6 +395,8 @@ begin
   TestComputeStats;
   WriteLn;
   TestSignificantDifference;
+  WriteLn;
+  TestTInvLookup;
   WriteLn;
   TestIsNormal;
   WriteLn;

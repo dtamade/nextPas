@@ -5,6 +5,7 @@ program test_bench_runner;
 
 uses
   nextpas.core.math.scalar,
+  nextpas.core.os.env,
   nextpas.core.text.conv,
   nextpas.core.time.sleep,
   nextpas.core.time.base,
@@ -354,6 +355,36 @@ begin
   end;
 end;
 
+procedure TestConfig_QuietEnv;
+var
+  LRunner: TBenchRunner;
+  LConfig: TBenchConfig;
+begin
+  WriteLn('TestConfig_QuietEnv:');
+
+  UnsetEnv(BENCH_ENV_QUIET);
+  LRunner := TBenchRunner.Create;
+  try
+    LConfig := LRunner.GetConfig;
+    Check(not LConfig.Quiet, 'Quiet disabled by default');
+  finally
+    LRunner.Free;
+  end;
+
+  SetEnv(BENCH_ENV_QUIET, '1');
+  try
+    LRunner := TBenchRunner.Create;
+    try
+      LConfig := LRunner.GetConfig;
+      Check(LConfig.Quiet, 'Quiet enabled from env');
+    finally
+      LRunner.Free;
+    end;
+  finally
+    UnsetEnv(BENCH_ENV_QUIET);
+  end;
+end;
+
 procedure TestMeasureNs;
 var
   LRunner: TBenchRunner;
@@ -434,6 +465,8 @@ begin
   TestFilter;
   WriteLn;
   TestConfig;
+  WriteLn;
+  TestConfig_QuietEnv;
   WriteLn;
   TestMeasureNs;
   WriteLn;

@@ -111,6 +111,28 @@ var
   GOriginalMemoryManager: TMemoryManager;
   GTrackingEnabled: Boolean = False;
 
+procedure AtomicInc64(var ATarget: Int64; ADelta: Int64);
+var
+  LOld: Int64;
+  LNew: Int64;
+begin
+  repeat
+    LOld := ATarget;
+    LNew := LOld + ADelta;
+  until InterlockedCompareExchange64(ATarget, LNew, LOld) = LOld;
+end;
+
+procedure AtomicDec64(var ATarget: Int64; ADelta: Int64);
+var
+  LOld: Int64;
+  LNew: Int64;
+begin
+  repeat
+    LOld := ATarget;
+    LNew := LOld - ADelta;
+  until InterlockedCompareExchange64(ATarget, LNew, LOld) = LOld;
+end;
+
 { TMemoryTracker }
 
 function TrackingGetMem(Size: PtrUInt): Pointer;
@@ -185,29 +207,33 @@ begin
 end;
 
 procedure TMemoryTracker.RecordAlloc(ASize: Int64);
+var
+  LCurrentAllocs: Int64;
+  LCurrentBytes: Int64;
 begin
   if not FEnabled then Exit;
 
-  Inc(FStats.AllocCount);
-  Inc(FStats.AllocBytes, ASize);
-  Inc(FStats.CurrentAllocs);
-  Inc(FStats.CurrentBytes, ASize);
+  AtomicInc64(FStats.AllocCount, 1);
+  AtomicInc64(FStats.AllocBytes, ASize);
+  AtomicInc64(FStats.CurrentAllocs, 1);
+  AtomicInc64(FStats.CurrentBytes, ASize);
 
-  // Update peak
-  if FStats.CurrentAllocs > FStats.PeakAllocs then
-    FStats.PeakAllocs := FStats.CurrentAllocs;
-  if FStats.CurrentBytes > FStats.PeakBytes then
-    FStats.PeakBytes := FStats.CurrentBytes;
+  LCurrentAllocs := FStats.CurrentAllocs;
+  if LCurrentAllocs > FStats.PeakAllocs then
+    FStats.PeakAllocs := LCurrentAllocs;
+  LCurrentBytes := FStats.CurrentBytes;
+  if LCurrentBytes > FStats.PeakBytes then
+    FStats.PeakBytes := LCurrentBytes;
 end;
 
 procedure TMemoryTracker.RecordFree(ASize: Int64);
 begin
   if not FEnabled then Exit;
 
-  Inc(FStats.FreeCount);
-  Inc(FStats.FreeBytes, ASize);
-  Dec(FStats.CurrentAllocs);
-  Dec(FStats.CurrentBytes, ASize);
+  AtomicInc64(FStats.FreeCount, 1);
+  AtomicInc64(FStats.FreeBytes, ASize);
+  AtomicDec64(FStats.CurrentAllocs, 1);
+  AtomicDec64(FStats.CurrentBytes, ASize);
 end;
 
 function TMemoryTracker.GetStats: TMemoryStats;

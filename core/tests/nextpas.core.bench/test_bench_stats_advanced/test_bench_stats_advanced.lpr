@@ -219,6 +219,26 @@ begin
   Check(LCI.Upper > 3.0, 'Upper > 3.0');
 end;
 
+procedure Test_BootstrapCI;
+var
+  LData: TDoubleArray;
+  LStats: TAdvancedStats;
+  LCI: TConfidenceInterval;
+begin
+  WriteLn('Test_BootstrapCI:');
+  LData := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0,
+    6.0, 7.0, 8.0, 9.0, 10.0]);
+  LStats := TAdvancedStats.Create(LData);
+
+  LCI := LStats.BootstrapCI(10000, 0.95);
+
+  Check(LCI.Lower < 5.5, 'Bootstrap CI lower < 5.5');
+  Check(LCI.Upper > 5.5, 'Bootstrap CI upper > 5.5');
+  Check(LCI.Upper - LCI.Lower > 1.0, 'Bootstrap CI width > 1.0');
+  Check(LCI.Upper - LCI.Lower < 8.0, 'Bootstrap CI width < 8.0');
+  Check(Abs(LCI.Level - 0.95) < 0.01, 'Bootstrap CI level = 0.95');
+end;
+
 procedure Test_TestNormality;
 var
   LData: TDoubleArray;
@@ -318,6 +338,7 @@ begin
   Test_DetectOutliers_ZScore;
   Test_DetectOutliers_ModifiedZScore;
   Test_ConfidenceInterval;
+  Test_BootstrapCI;
   Test_TestNormality;
   Test_CompareWith;
   Test_EffectSize;

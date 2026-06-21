@@ -57,6 +57,12 @@ type
   {** 基准函数类型 - 简单版本 }
   TBenchFunc = procedure(const ACtx: IBenchContext);
 
+  {** 参数化基准函数类型 }
+  TBenchParamFunc = procedure(const ACtx: IBenchContext; AParam: Int64);
+
+  {** 用户控制循环的基准函数类型 }
+  TBenchLoopFunc = procedure(AN: Int64);
+
   {** 基准函数类型 - 带 setup/teardown }
   TBenchSetupFunc = function: Pointer;
   TBenchTeardownFunc = procedure(AData: Pointer);
@@ -65,6 +71,10 @@ type
   TBenchEntry = record
     Name: string;
     Func: TBenchFunc;
+    ParamFunc: TBenchParamFunc;
+    ParamValue: Int64;
+    IsLoop: Boolean;
+    LoopFunc: TBenchLoopFunc;
     Setup: TBenchSetupFunc;
     Teardown: TBenchTeardownFunc;
     Condition: Boolean;
@@ -91,6 +101,13 @@ type
     function AddParallel(const AName: string; AFunc: TBenchFunc;
       AThreads: Integer): IBenchSuite;
 
+    {** 添加参数化基准测试（自动生成多个子基准） }
+    function AddRange(const AName: string; AFunc: TBenchParamFunc;
+      const AParams: array of Int64): IBenchSuite;
+
+    {** 添加用户控制循环的基准测试 }
+    function AddLoop(const AName: string; AFunc: TBenchLoopFunc): IBenchSuite;
+
     {** 设置最小基准持续时间 }
     function SetMinDuration(ADuration: TDuration): IBenchSuite;
 
@@ -108,6 +125,12 @@ type
 
     {** 禁用内存跟踪 }
     function DisableMemoryTracking: IBenchSuite;
+
+    {** 启用原始样本收集 }
+    function CollectRawSamples: IBenchSuite;
+
+    {** 设置安静模式 }
+    function SetQuiet(AQuiet: Boolean): IBenchSuite;
 
     {** 添加基线（用于对比） }
     function AddBaseline(const AName: string; ANsPerOp: Double): IBenchSuite;

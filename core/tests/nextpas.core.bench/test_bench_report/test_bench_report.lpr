@@ -219,6 +219,90 @@ begin
   CheckContains(LHTML, '<h2>Detailed Statistics</h2>', 'Contains statistics header');
 end;
 
+procedure TestToCrossLanguageHTML;
+var
+  LEntries: TCrossLangEntryArray;
+  LHTML: string;
+begin
+  WriteLn('TestToCrossLanguageHTML:');
+
+  SetLength(LEntries, 4);
+  LEntries[0].Name := 'HashMap.Put';
+  LEntries[0].Language := 'Pascal';
+  LEntries[0].NsPerOp := 245.3;
+  LEntries[1].Name := 'HashMap.Put';
+  LEntries[1].Language := 'Go';
+  LEntries[1].NsPerOp := 320.1;
+  LEntries[2].Name := 'HashMap.Put';
+  LEntries[2].Language := 'Rust';
+  LEntries[2].NsPerOp := 180.5;
+  LEntries[3].Name := 'Sort.1M';
+  LEntries[3].Language := 'Pascal';
+  LEntries[3].NsPerOp := 150000.0;
+
+  LHTML := GGenerator.ToCrossLanguageHTML(LEntries);
+
+  CheckContains(LHTML, '<!DOCTYPE html>', 'Cross-lang contains DOCTYPE');
+  CheckContains(LHTML, 'Pascal', 'Cross-lang contains Pascal');
+  CheckContains(LHTML, 'Go', 'Cross-lang contains Go');
+  CheckContains(LHTML, 'Rust', 'Cross-lang contains Rust');
+  CheckContains(LHTML, 'HashMap.Put', 'Cross-lang contains benchmark name');
+  CheckContains(LHTML, '245.3', 'Cross-lang contains Pascal value');
+  CheckContains(LHTML, 'Sort.1M', 'Cross-lang contains second benchmark');
+end;
+
+procedure TestGenerateBoxPlot;
+var
+  LSamples: TDoubleArray;
+  LSVG: string;
+begin
+  WriteLn('TestGenerateBoxPlot:');
+
+  SetLength(LSamples, 10);
+  LSamples[0] := 1.0;
+  LSamples[1] := 2.0;
+  LSamples[2] := 3.0;
+  LSamples[3] := 4.0;
+  LSamples[4] := 5.0;
+  LSamples[5] := 6.0;
+  LSamples[6] := 7.0;
+  LSamples[7] := 8.0;
+  LSamples[8] := 9.0;
+  LSamples[9] := 10.0;
+
+  LSVG := GGenerator.GenerateBoxPlot(LSamples, 'TestBench');
+
+  CheckContains(LSVG, '<svg', 'BoxPlot contains SVG');
+  CheckContains(LSVG, '<rect', 'BoxPlot contains rect (box)');
+  CheckContains(LSVG, 'stroke="#ff6600"', 'BoxPlot contains median line');
+  CheckContains(LSVG, 'Boxplot TestBench', 'BoxPlot contains name in aria-label');
+end;
+
+procedure TestToHTMLWithBoxPlot;
+var
+  LResults: array of TBenchResult;
+  LEnvironment: TBenchEnvironment;
+  LHTML: string;
+begin
+  WriteLn('TestToHTMLWithBoxPlot:');
+
+  LResults := CreateTestResults;
+  SetLength(LResults[0].RawSamples, 5);
+  LResults[0].RawSamples[0] := 200.0;
+  LResults[0].RawSamples[1] := 220.0;
+  LResults[0].RawSamples[2] := 245.0;
+  LResults[0].RawSamples[3] := 260.0;
+  LResults[0].RawSamples[4] := 280.0;
+  LEnvironment := CreateTestEnvironment;
+
+  GGenerator.SetResults(LResults);
+  GGenerator.SetEnvironment(LEnvironment);
+  LHTML := GGenerator.ToHTML;
+
+  CheckContains(LHTML, 'Sample Distribution', 'HTML includes sample distribution heading');
+  CheckContains(LHTML, 'Boxplot HashMap.Put', 'HTML includes boxplot aria-label');
+end;
+
 procedure TestGenerateComparisonReport;
 var
   LResults: array of TBenchResult;
@@ -394,6 +478,12 @@ begin
     TestToTSV;
     WriteLn;
     TestToHTML;
+    WriteLn;
+    TestToCrossLanguageHTML;
+    WriteLn;
+    TestGenerateBoxPlot;
+    WriteLn;
+    TestToHTMLWithBoxPlot;
     WriteLn;
     TestGenerateComparisonReport;
     WriteLn;

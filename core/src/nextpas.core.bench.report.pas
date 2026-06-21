@@ -11,6 +11,14 @@ uses
   nextpas.core.bench.stats;
 
 type
+  TCrossLangEntry = record
+    Name: string;
+    Language: string;
+    NsPerOp: Double;
+  end;
+
+  TCrossLangEntryArray = array of TCrossLangEntry;
+
   {** 报告生成器 }
   TBenchReportGenerator = class
   private
@@ -67,6 +75,12 @@ type
 
     {** 生成 HTML 报告 }
     function ToHTML: string;
+
+    {** 生成跨语言对比 HTML 报告 }
+    function ToCrossLanguageHTML(const AEntries: TCrossLangEntryArray): string;
+
+    {** 生成 SVG 箱线图 }
+    function GenerateBoxPlot(const ASamples: TDoubleArray; const AName: string): string;
 
     {** 生成基线对比报告 }
     function GenerateComparisonReport(
@@ -611,6 +625,16 @@ begin
   end;
 
   AddLine(LHTML, '  </div>');
+  for i := 0 to FResultCount - 1 do
+  begin
+    if (not FResults[i].Skipped) and (Length(FResults[i].RawSamples) > 0) then
+    begin
+      AddLine(LHTML, '  <div class="chart-container">');
+      AddLine(LHTML, '    <h3>' + EscapeHTML(FResults[i].Name) + ' - Sample Distribution</h3>');
+      AddLine(LHTML, '    ' + GenerateBoxPlot(FResults[i].RawSamples, FResults[i].Name));
+      AddLine(LHTML, '  </div>');
+    end;
+  end;
   AddLine(LHTML, '</body>');
   AddLine(LHTML, '</html>');
 
@@ -620,6 +644,231 @@ begin
     if i > 0 then
       Result := Result + LineEnding;
     Result := Result + LHTML[i];
+  end;
+end;
+
+function TBenchReportGenerator.ToCrossLanguageHTML(
+  const AEntries: TCrossLangEntryArray): string;
+var
+  LHTML: TStringArray;
+  LCurrentName: string;
+  LMaxNsPerOp: Double;
+  LBarWidth: Double;
+  I: Integer;
+begin
+  LMaxNsPerOp := 0.0;
+  for I := 0 to High(AEntries) do
+    if AEntries[I].NsPerOp > LMaxNsPerOp then
+      LMaxNsPerOp := AEntries[I].NsPerOp;
+  if LMaxNsPerOp <= 0.0 then
+    LMaxNsPerOp := 1.0;
+
+  SetLength(LHTML, 0);
+  AddLine(LHTML, '<!DOCTYPE html>');
+  AddLine(LHTML, '<html>');
+  AddLine(LHTML, '<head>');
+  AddLine(LHTML, '  <meta charset="UTF-8">');
+  AddLine(LHTML, '  <title>nextpas.core.bench Cross-Language Report</title>');
+  AddLine(LHTML, '  <style>');
+  AddLine(LHTML, '    body { font-family: sans-serif; margin: 24px; color: #23313a; }');
+  AddLine(LHTML, '    h1, h2 { color: #1a4b5a; }');
+  AddLine(LHTML, '    table { width: 100%; border-collapse: collapse; margin: 16px 0 28px; }');
+  AddLine(LHTML, '    th, td { border-bottom: 1px solid #d9e1e5; padding: 10px 8px; text-align: left; }');
+  AddLine(LHTML, '    .value { white-space: nowrap; }');
+  AddLine(LHTML, '    .bar-track { background: #edf3f5; border-radius: 999px; height: 12px; overflow: hidden; }');
+  AddLine(LHTML, '    .bar-fill { background: linear-gradient(90deg, #4a7a6f, #6ca38c); height: 12px; }');
+  AddLine(LHTML, '  </style>');
+  AddLine(LHTML, '</head>');
+  AddLine(LHTML, '<body>');
+  AddLine(LHTML, '  <h1>Cross-Language Benchmark Comparison</h1>');
+
+  LCurrentName := '';
+  for I := 0 to High(AEntries) do
+  begin
+    if AEntries[I].Name <> LCurrentName then
+    begin
+      if LCurrentName <> '' then
+      begin
+        AddLine(LHTML, '    </tbody>');
+        AddLine(LHTML, '  </table>');
+      end;
+      LCurrentName := AEntries[I].Name;
+      AddLine(LHTML, '  <h2>' + EscapeHTML(LCurrentName) + '</h2>');
+      AddLine(LHTML, '  <table>');
+      AddLine(LHTML, '    <thead>');
+      AddLine(LHTML, '      <tr><th>Language</th><th>ns/op</th><th>Relative</th></tr>');
+      AddLine(LHTML, '    </thead>');
+      AddLine(LHTML, '    <tbody>');
+    end;
+
+    LBarWidth := (AEntries[I].NsPerOp / LMaxNsPerOp) * 100.0;
+    AddLine(LHTML, '      <tr>');
+    AddLine(LHTML, '        <td>' + EscapeHTML(AEntries[I].Language) + '</td>');
+    AddLine(LHTML, '        <td class="value">' + FormatNumber(AEntries[I].NsPerOp, 1) + '</td>');
+    AddLine(LHTML,
+      '        <td><div class="bar-track"><div class="bar-fill" style="width: ' +
+      FormatNumber(LBarWidth, 1) + '%"></div></div></td>');
+    AddLine(LHTML, '      </tr>');
+  end;
+
+  if Length(AEntries) > 0 then
+  begin
+    AddLine(LHTML, '    </tbody>');
+    AddLine(LHTML, '  </table>');
+  end;
+
+  AddLine(LHTML, '</body>');
+  AddLine(LHTML, '</html>');
+
+  Result := '';
+  for I := 0 to High(LHTML) do
+  begin
+    if I > 0 then
+      Result := Result + LineEnding;
+    Result := Result + LHTML[I];
+  end;
+end;
+
+function TBenchReportGenerator.GenerateBoxPlot(
+  const ASamples: TDoubleArray; const AName: string): string;
+var
+  LSorted: TDoubleArray;
+  LLines: TStringArray;
+  LCount: Integer;
+  LIndex: Integer;
+  LInnerIndex: Integer;
+  LKey: Double;
+  LMin: Double;
+  LMax: Double;
+  LQ1: Double;
+  LMedian: Double;
+  LQ3: Double;
+  LIQR: Double;
+  LOutlierLow: Double;
+  LOutlierHigh: Double;
+  LWhiskerLow: Double;
+  LWhiskerHigh: Double;
+  LScale: Double;
+  LBaseX: Double;
+  LScaledQ1: Double;
+  LScaledMedian: Double;
+  LScaledQ3: Double;
+  LScaledWhiskerLow: Double;
+  LScaledWhiskerHigh: Double;
+  LScaledOutlier: Double;
+begin
+  LCount := Length(ASamples);
+  if LCount = 0 then
+    Exit('');
+
+  SetLength(LSorted, LCount);
+  for LIndex := 0 to LCount - 1 do
+    LSorted[LIndex] := ASamples[LIndex];
+
+  for LIndex := 1 to LCount - 1 do
+  begin
+    LKey := LSorted[LIndex];
+    LInnerIndex := LIndex - 1;
+    while (LInnerIndex >= 0) and (LSorted[LInnerIndex] > LKey) do
+    begin
+      LSorted[LInnerIndex + 1] := LSorted[LInnerIndex];
+      Dec(LInnerIndex);
+    end;
+    LSorted[LInnerIndex + 1] := LKey;
+  end;
+
+  LMin := LSorted[0];
+  LMax := LSorted[LCount - 1];
+  if LCount >= 4 then
+  begin
+    LQ1 := LSorted[LCount div 4];
+    LMedian := LSorted[LCount div 2];
+    LQ3 := LSorted[(3 * LCount) div 4];
+  end
+  else
+  begin
+    LQ1 := LSorted[0];
+    LMedian := LSorted[LCount div 2];
+    LQ3 := LSorted[LCount - 1];
+  end;
+
+  LIQR := LQ3 - LQ1;
+  LOutlierLow := LQ1 - 1.5 * LIQR;
+  LOutlierHigh := LQ3 + 1.5 * LIQR;
+  LWhiskerLow := LMin;
+  LWhiskerHigh := LMax;
+
+  for LIndex := 0 to LCount - 1 do
+  begin
+    if LSorted[LIndex] >= LOutlierLow then
+    begin
+      LWhiskerLow := LSorted[LIndex];
+      Break;
+    end;
+  end;
+
+  for LIndex := LCount - 1 downto 0 do
+  begin
+    if LSorted[LIndex] <= LOutlierHigh then
+    begin
+      LWhiskerHigh := LSorted[LIndex];
+      Break;
+    end;
+  end;
+
+  if Abs(LMax - LMin) < 1e-10 then
+    LScale := 1.0
+  else
+    LScale := 200.0 / (LMax - LMin);
+
+  LBaseX := 50.0;
+  LScaledWhiskerLow := LBaseX + (LWhiskerLow - LMin) * LScale;
+  LScaledWhiskerHigh := LBaseX + (LWhiskerHigh - LMin) * LScale;
+  LScaledQ1 := LBaseX + (LQ1 - LMin) * LScale;
+  LScaledMedian := LBaseX + (LMedian - LMin) * LScale;
+  LScaledQ3 := LBaseX + (LQ3 - LMin) * LScale;
+
+  SetLength(LLines, 0);
+  AddLine(LLines,
+    '<svg viewBox="0 0 300 60" role="img" aria-label="Boxplot ' +
+    EscapeHTML(AName) + '">');
+  AddLine(LLines, '  <rect x="0" y="0" width="300" height="60" fill="#fbfcfd"/>');
+  AddLine(LLines,
+    '  <line x1="' + FormatNumber(LScaledWhiskerLow, 1) + '" y1="30" x2="' +
+    FormatNumber(LScaledWhiskerHigh, 1) + '" y2="30" stroke="#666" stroke-width="1"/>');
+  AddLine(LLines,
+    '  <line x1="' + FormatNumber(LScaledWhiskerLow, 1) + '" y1="24" x2="' +
+    FormatNumber(LScaledWhiskerLow, 1) + '" y2="36" stroke="#666" stroke-width="1"/>');
+  AddLine(LLines,
+    '  <line x1="' + FormatNumber(LScaledWhiskerHigh, 1) + '" y1="24" x2="' +
+    FormatNumber(LScaledWhiskerHigh, 1) + '" y2="36" stroke="#666" stroke-width="1"/>');
+  AddLine(LLines,
+    '  <rect x="' + FormatNumber(LScaledQ1, 1) + '" y="18" width="' +
+    FormatNumber(LScaledQ3 - LScaledQ1, 1) +
+    '" height="24" fill="#4a7a6f" stroke="#333" stroke-width="1"/>');
+  AddLine(LLines,
+    '  <line x1="' + FormatNumber(LScaledMedian, 1) + '" y1="18" x2="' +
+    FormatNumber(LScaledMedian, 1) + '" y2="42" stroke="#ff6600" stroke-width="2"/>');
+
+  for LIndex := 0 to LCount - 1 do
+  begin
+    if (LSorted[LIndex] < LWhiskerLow) or (LSorted[LIndex] > LWhiskerHigh) then
+    begin
+      LScaledOutlier := LBaseX + (LSorted[LIndex] - LMin) * LScale;
+      AddLine(LLines,
+        '  <circle cx="' + FormatNumber(LScaledOutlier, 1) +
+        '" cy="30" r="2" fill="#cc0000"/>');
+    end;
+  end;
+
+  AddLine(LLines, '</svg>');
+
+  Result := '';
+  for LIndex := 0 to High(LLines) do
+  begin
+    if LIndex > 0 then
+      Result := Result + LineEnding;
+    Result := Result + LLines[LIndex];
   end;
 end;
 

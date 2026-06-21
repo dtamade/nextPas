@@ -189,6 +189,26 @@ begin
   end;
 end;
 
+procedure BenchParamFunc(const ACtx: IBenchContext; AParam: Int64);
+var
+  LIteration: Int64;
+  LSum: Int64;
+begin
+  LSum := 0;
+  for LIteration := 1 to AParam do
+    LSum := LSum + LIteration;
+end;
+
+procedure BenchLoopN(AN: Int64);
+var
+  LIteration: Int64;
+  LSum: Int64;
+begin
+  LSum := 0;
+  for LIteration := 1 to AN do
+    LSum := LSum + LIteration;
+end;
+
 procedure TestTBenchSuite_Basic;
 var
   LSuite: IBenchSuite;
@@ -377,6 +397,53 @@ begin
   Check(not GSetupStateActive, 'Teardown cleared setup state');
 end;
 
+procedure TestTBenchSuite_AddRange;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+begin
+  WriteLn('TestTBenchSuite_AddRange:');
+
+  LSuite := CreateFastSuite('RangeSuite');
+  LSuite.AddRange('Sum', @BenchParamFunc, [100, 1000, 10000]);
+
+  LResults := LSuite.Run;
+
+  Check(LResults.Count = 3, 'AddRange result count = 3');
+  Check(LResults.GetByName('Sum/100').Executed, 'Sum/100 executed');
+  Check(LResults.GetByName('Sum/1000').Executed, 'Sum/1000 executed');
+  Check(LResults.GetByName('Sum/10000').Executed, 'Sum/10000 executed');
+  Check(LResults.GetByName('Sum/100').NsPerOp > 0, 'Sum/100 NsPerOp > 0');
+  Check(LResults.GetByName('Sum/1000').NsPerOp > 0, 'Sum/1000 NsPerOp > 0');
+  Check(LResults.GetByName('Sum/10000').NsPerOp > 0, 'Sum/10000 NsPerOp > 0');
+  Check(LResults.GetByName('Sum/10000').NsPerOp > LResults.GetByName('Sum/100').NsPerOp,
+    'Sum/10000 slower than Sum/100');
+end;
+
+procedure TestTBenchSuite_AddLoop;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+  LResult: TBenchResult;
+begin
+  WriteLn('TestTBenchSuite_AddLoop:');
+
+  LSuite := TBenchSuite.Create('LoopSuite');
+  LSuite
+    .SetMinDuration(TDuration.FromMilliseconds(5))
+    .SetMaxIterations(1000000)
+    .SetMinSamples(5)
+    .SetWarmupIters(1);
+  LSuite.AddLoop('LoopSum', @BenchLoopN);
+
+  LResults := LSuite.Run;
+  LResult := LResults.GetByName('LoopSum');
+
+  Check(LResult.Executed, 'Loop benchmark executed');
+  Check(LResult.NsPerOp > 0, 'Loop NsPerOp > 0');
+  Check(LResult.Iterations >= 100, 'Loop calibrated N >= 100');
+end;
+
 procedure TestTBenchSuite_AddParallel;
 var
   LSuite: IBenchSuite;
@@ -500,6 +567,51 @@ begin
   Check(LResults.Count = 1, 'Memory benchmark result count = 1');
   Check(LResult.AllocsPerOp >= 1, 'Memory tracking captures alloc count');
   Check(LResult.BytesPerOp >= 64, 'Memory tracking captures allocated bytes');
+end;
+
+procedure TestTBenchSuite_RawSamples;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+  LResult: TBenchResult;
+begin
+  WriteLn('TestTBenchSuite_RawSamples:');
+
+  LSuite := TBenchSuite.Create('RawSamplesSuite');
+  LSuite
+    .SetMinDuration(TDuration.FromMilliseconds(5))
+    .SetMaxIterations(5000)
+    .SetMinSamples(10)
+    .SetWarmupIters(1)
+    .CollectRawSamples;
+  LSuite.Add('Fast', @BenchFast);
+
+  LResults := LSuite.Run;
+  LResult := LResults.GetByName('Fast');
+
+  Check(LResult.SampleCount >= 10, 'RawSamples sample count >= 10');
+  Check(Length(LResult.RawSamples) >= 10, 'RawSamples array non-empty');
+  Check(LResult.RawSamples[0] > 0, 'RawSamples[0] > 0');
+end;
+
+procedure TestTBenchSuite_QuietMode;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+begin
+  WriteLn('TestTBenchSuite_QuietMode:');
+
+  LSuite := TBenchSuite.Create('QuietSuite');
+  LSuite
+    .SetQuiet(True)
+    .SetMinDuration(TDuration.FromMilliseconds(5))
+    .SetMaxIterations(5000)
+    .SetMinSamples(3)
+    .SetWarmupIters(1);
+  LSuite.Add('Fast', @BenchFast);
+
+  LResults := LSuite.Run;
+  Check(LResults.Count = 1, 'Quiet mode benchmark still runs');
 end;
 
 procedure TestTBenchSuite_EnvironmentCores;
@@ -882,17 +994,25 @@ begin
     WriteLn;
     TestTBenchSuite_Conditional;
     WriteLn;
-    TestTBenchSuite_WithContext;
-    WriteLn;
-    TestTBenchSuite_WithSetup;
-    WriteLn;
-    TestTBenchSuite_AddParallel;
-    WriteLn;
+  TestTBenchSuite_WithContext;
+  WriteLn;
+  TestTBenchSuite_WithSetup;
+  WriteLn;
+  TestTBenchSuite_AddRange;
+  WriteLn;
+  TestTBenchSuite_AddLoop;
+  WriteLn;
+  TestTBenchSuite_AddParallel;
+  WriteLn;
     TestTBenchSuite_AddParallelSkipPropagation;
     WriteLn;
     TestTBenchSuite_ParallelMemoryTrackingRejected;
     WriteLn;
     TestTBenchSuite_MemoryTracking;
+    WriteLn;
+    TestTBenchSuite_RawSamples;
+    WriteLn;
+    TestTBenchSuite_QuietMode;
     WriteLn;
     TestTBenchSuite_EnvironmentCores;
     WriteLn;
