@@ -164,6 +164,7 @@ procedure CheckEndsWith(const AStr, ASuffix: string);
 procedure CheckSame(AExpected, AActual: Pointer; const AMessage: string = '');
 procedure CheckInRange(AValue, ALow, AHigh: Int64);
 procedure CheckLength(AValue: NativeInt; AExpected: NativeInt);
+  { Note: parameter order is (actual, expected), not (expected, actual) like CheckEqual }
 procedure CheckRaises(AExceptionClass: ExceptClass; AProc: TTestProc;
   const AMessage: string = '');
 procedure CheckNoRaise(AProc: TTestProc; const AMessage: string = '');
@@ -1190,10 +1191,12 @@ var
   LSubCtx: TTestContext;
   LSubCtxI: ITestContext;
   LPass, LFail, LSkip: Integer;
+  LLastFailMsg: string;
 begin
   LPass := 0;
   LFail := 0;
   LSkip := 0;
+  LLastFailMsg := '';
 
   WriteLn;
   WriteLn(AnsiBold('▸ ') + AnsiCyan(Name) +
@@ -1293,11 +1296,13 @@ begin
       on E: EAssertionFailed do
       begin
         LStatus := tsFailed;
+        LLastFailMsg := E.Message;
         Inc(LFail);
       end;
       on E: Exception do
       begin
         LStatus := tsError;
+        LLastFailMsg := E.ClassName + ': ' + E.Message;
         Inc(LFail);
       end;
     end;
@@ -1329,8 +1334,10 @@ begin
       tsFailed:
         begin
           WriteLn('  ', StatusDot(tsFailed), ' ', AnsiRed(LEntry.Name));
-          { Find the exception message from the last failure }
-          WriteLn('    ', AnsiDim('(assertion failed — see above)'));
+          if LLastFailMsg <> '' then
+            WriteLn('    ', AnsiDim(LLastFailMsg))
+          else
+            WriteLn('    ', AnsiDim('(assertion failed)'));
         end;
       tsSkipped:
         begin

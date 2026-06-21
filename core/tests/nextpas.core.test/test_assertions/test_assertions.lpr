@@ -87,7 +87,7 @@ begin
     CheckNotEqual('x', 'x');
     Halt(1);
   except
-    on E: EAssertionFailed do { expected };
+    on E: EAssertionFailed do Check(Pos('differ', E.Message) > 0, 'msg');
   end;
 end;
 
@@ -101,7 +101,7 @@ begin
     CheckTrue(False, 'should fail');
     Halt(1);
   except
-    on E: EAssertionFailed do { expected };
+    on E: EAssertionFailed do Check(Pos('should fail', E.Message) > 0, 'msg');
   end;
 end;
 
@@ -117,7 +117,7 @@ begin
     CheckNotNil(nil, 'should be non-nil');
     Halt(1);
   except
-    on E: EAssertionFailed do { expected };
+    on E: EAssertionFailed do Check(Pos('non-nil', LowerCase(E.Message)) > 0, 'msg');
   end;
 end;
 
@@ -129,7 +129,7 @@ begin
     CheckContains('hello', 'xyz');
     Halt(1);
   except
-    on E: EAssertionFailed do { expected };
+    on E: EAssertionFailed do Check(Pos('does not contain', E.Message) > 0, 'msg');
   end;
 end;
 
@@ -141,7 +141,7 @@ begin
     CheckStartsWith('hello', 'xyz');
     Halt(1);
   except
-    on E: EAssertionFailed do { expected };
+    on E: EAssertionFailed do Check(Pos('does not start', E.Message) > 0, 'msg');
   end;
 end;
 
@@ -156,7 +156,7 @@ begin
     CheckEndsWith('hello', 'xyz');
     Halt(1);
   except
-    on E: EAssertionFailed do { expected };
+    on E: EAssertionFailed do Check(Pos('does not end', E.Message) > 0, 'msg');
   end;
 end;
 
@@ -171,7 +171,7 @@ begin
     CheckSame(LP1, nil, 'should be same');
     Halt(1);
   except
-    on E: EAssertionFailed do { expected };
+    on E: EAssertionFailed do Check(Pos('should be same', E.Message) > 0, 'msg');
   end;
 end;
 
@@ -184,7 +184,7 @@ begin
     CheckInRange(0, 1, 10);
     Halt(1);
   except
-    on E: EAssertionFailed do { expected };
+    on E: EAssertionFailed do Check(Pos('not in range', E.Message) > 0, 'msg');
   end;
 end;
 
@@ -196,7 +196,7 @@ begin
     CheckLength(3, 5);
     Halt(1);
   except
-    on E: EAssertionFailed do { expected };
+    on E: EAssertionFailed do Check(Pos('Expected length', E.Message) > 0, 'msg');
   end;
 end;
 
