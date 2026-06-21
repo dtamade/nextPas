@@ -58,6 +58,14 @@ function x11_configure_event_height(const AEvent: TX11Event): Int32;
 { XClientMessageEvent sub-fields }
 function x11_client_message_l0(const AEvent: TX11Event): TX11Atom;
 
+{ Selection event sub-fields }
+function x11_selreq_requestor(const AEvent: TX11Event): TX11Window;
+function x11_selreq_selection(const AEvent: TX11Event): TX11Atom;
+function x11_selreq_target(const AEvent: TX11Event): TX11Atom;
+function x11_selreq_property(const AEvent: TX11Event): TX11Atom;
+function x11_selnotify_property(const AEvent: TX11Event): TX11Atom;
+function x11_selclear_selection(const AEvent: TX11Event): TX11Atom;
+
 implementation
 
 var
@@ -177,6 +185,34 @@ begin
   begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
   Pointer(XChangeProperty) := LPtr;
 
+  if platform_dl_sym(GLib, 'XSetSelectionOwner', LPtr) <> 0 then
+  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
+  Pointer(XSetSelectionOwner) := LPtr;
+
+  if platform_dl_sym(GLib, 'XConvertSelection', LPtr) <> 0 then
+  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
+  Pointer(XConvertSelection) := LPtr;
+
+  if platform_dl_sym(GLib, 'XGetWindowProperty', LPtr) <> 0 then
+  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
+  Pointer(XGetWindowProperty) := LPtr;
+
+  if platform_dl_sym(GLib, 'XDeleteProperty', LPtr) <> 0 then
+  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
+  Pointer(XDeleteProperty) := LPtr;
+
+  if platform_dl_sym(GLib, 'XSendEvent', LPtr) <> 0 then
+  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
+  Pointer(XSendEvent) := LPtr;
+
+  if platform_dl_sym(GLib, 'XFree', LPtr) <> 0 then
+  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
+  Pointer(XFree) := LPtr;
+
+  if platform_dl_sym(GLib, 'XGetSelectionOwner', LPtr) <> 0 then
+  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
+  Pointer(XGetSelectionOwner) := LPtr;
+
   GLoaded := True;
   GRefCount := 1;
   Result := X11_SUCCESS;
@@ -214,6 +250,13 @@ begin
   Pointer(XLookupString) := nil;
   Pointer(XkbKeycodeToKeysym) := nil;
   Pointer(XChangeProperty) := nil;
+  Pointer(XSetSelectionOwner) := nil;
+  Pointer(XConvertSelection) := nil;
+  Pointer(XGetWindowProperty) := nil;
+  Pointer(XDeleteProperty) := nil;
+  Pointer(XSendEvent) := nil;
+  Pointer(XFree) := nil;
+  Pointer(XGetSelectionOwner) := nil;
   platform_dl_close(GLib);
   GLoaded := False;
 end;
@@ -293,6 +336,38 @@ end;
 function x11_client_message_l0(const AEvent: TX11Event): TX11Atom;
 begin
   Result := PTX11Atom(@AEvent[X11_CLIENT_MESSAGE_DATA_OFFSET])^;
+end;
+
+{ --- Selection event helpers --- }
+
+function x11_selreq_requestor(const AEvent: TX11Event): TX11Window;
+begin
+  Result := PTX11Window(@AEvent[X11_SELREQ_REQUESTOR_OFFSET])^;
+end;
+
+function x11_selreq_selection(const AEvent: TX11Event): TX11Atom;
+begin
+  Result := PTX11Atom(@AEvent[X11_SELREQ_SELECTION_OFFSET])^;
+end;
+
+function x11_selreq_target(const AEvent: TX11Event): TX11Atom;
+begin
+  Result := PTX11Atom(@AEvent[X11_SELREQ_TARGET_OFFSET])^;
+end;
+
+function x11_selreq_property(const AEvent: TX11Event): TX11Atom;
+begin
+  Result := PTX11Atom(@AEvent[X11_SELREQ_PROPERTY_OFFSET])^;
+end;
+
+function x11_selnotify_property(const AEvent: TX11Event): TX11Atom;
+begin
+  Result := PTX11Atom(@AEvent[X11_SELNOTIFY_PROPERTY_OFFSET])^;
+end;
+
+function x11_selclear_selection(const AEvent: TX11Event): TX11Atom;
+begin
+  Result := PTX11Atom(@AEvent[X11_SELCLEAR_SELECTION_OFFSET])^;
 end;
 
 end.

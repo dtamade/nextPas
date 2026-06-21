@@ -200,6 +200,70 @@ begin
   Check(not x11_is_loaded, 'double unload is safe');
 end;
 
+{ Selection event type constants. }
+procedure TestSelectionConstants;
+begin
+  Check(X11_SELECTION_CLEAR = 29, 'SelectionClear = 29');
+  Check(X11_SELECTION_REQUEST = 30, 'SelectionRequest = 30');
+  Check(X11_SELECTION_NOTIFY = 31, 'SelectionNotify = 31');
+end;
+
+{ Selection request event field helpers: write/read at correct offsets. }
+procedure TestSelreqHelpers;
+var
+  LEv: TX11Event;
+begin
+  FillChar(LEv, SizeOf(LEv), 0);
+
+  PTX11Window(@LEv[X11_SELREQ_REQUESTOR_OFFSET])^ := $AAA;
+  Check(x11_selreq_requestor(LEv) = $AAA, 'selreq_requestor at offset 40');
+
+  PTX11Atom(@LEv[X11_SELREQ_SELECTION_OFFSET])^ := $BBB;
+  Check(x11_selreq_selection(LEv) = $BBB, 'selreq_selection at offset 48');
+
+  PTX11Atom(@LEv[X11_SELREQ_TARGET_OFFSET])^ := $CCC;
+  Check(x11_selreq_target(LEv) = $CCC, 'selreq_target at offset 56');
+
+  PTX11Atom(@LEv[X11_SELREQ_PROPERTY_OFFSET])^ := $DDD;
+  Check(x11_selreq_property(LEv) = $DDD, 'selreq_property at offset 64');
+end;
+
+{ Selection notify event field helpers. }
+procedure TestSelnotifyHelpers;
+var
+  LEv: TX11Event;
+begin
+  FillChar(LEv, SizeOf(LEv), 0);
+
+  PTX11Atom(@LEv[X11_SELNOTIFY_PROPERTY_OFFSET])^ := $EEE;
+  Check(x11_selnotify_property(LEv) = $EEE, 'selnotify_property at offset 56');
+end;
+
+{ Selection clear event field helpers. }
+procedure TestSelclearHelpers;
+var
+  LEv: TX11Event;
+begin
+  FillChar(LEv, SizeOf(LEv), 0);
+
+  PTX11Atom(@LEv[X11_SELCLEAR_SELECTION_OFFSET])^ := $FFF;
+  Check(x11_selclear_selection(LEv) = $FFF, 'selclear_selection at offset 40');
+end;
+
+{ Verify selection function pointers resolve when libX11 loads. }
+procedure TestLoadSelectionFunctions;
+begin
+  if x11_load <> 0 then Exit;
+  Check(@XSetSelectionOwner <> nil, 'XSetSelectionOwner resolved');
+  Check(@XConvertSelection <> nil, 'XConvertSelection resolved');
+  Check(@XGetWindowProperty <> nil, 'XGetWindowProperty resolved');
+  Check(@XDeleteProperty <> nil, 'XDeleteProperty resolved');
+  Check(@XSendEvent <> nil, 'XSendEvent resolved');
+  Check(@XFree <> nil, 'XFree resolved');
+  Check(@XGetSelectionOwner <> nil, 'XGetSelectionOwner resolved');
+  x11_unload;
+end;
+
 begin
   T := TTestRunner.Create('test_x11_ffi');
   T.Run('TypeSizes', @TestTypeSizes);
@@ -211,5 +275,10 @@ begin
   T.Run('LoadLibX11', @TestLoadLibX11);
   T.Run('DoubleLoadIdempotent', @TestDoubleLoadIdempotent);
   T.Run('UnloadSafeWhenNotLoaded', @TestUnloadSafeWhenNotLoaded);
+  T.Run('SelectionConstants', @TestSelectionConstants);
+  T.Run('SelreqHelpers', @TestSelreqHelpers);
+  T.Run('SelnotifyHelpers', @TestSelnotifyHelpers);
+  T.Run('SelclearHelpers', @TestSelclearHelpers);
+  T.Run('LoadSelectionFunctions', @TestLoadSelectionFunctions);
   T.Summary;
 end.

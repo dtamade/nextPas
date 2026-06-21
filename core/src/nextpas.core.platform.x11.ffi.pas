@@ -32,6 +32,7 @@ type
   PTX11KeySym = ^TX11KeySym;
   PTX11Atom = ^TX11Atom;
   PTX11Window = ^TX11Window;
+  PPByte = ^PByte;
 
   { XEvent buffer -- 192 bytes on x86_64, matches C union XEvent.
     C declares: long pad[24] = 24 * 8 = 192 bytes.
@@ -53,6 +54,9 @@ const
   X11_FOCUS_OUT      = 10;
   X11_EXPOSE         = 12;
   X11_CONFIGURE_NOTIFY = 22;
+  X11_SELECTION_CLEAR = 29;
+  X11_SELECTION_REQUEST = 30;
+  X11_SELECTION_NOTIFY = 31;
   X11_CLIENT_MESSAGE = 33;
 
   { X event masks }
@@ -107,6 +111,23 @@ const
 
   { XClientMessageEvent sub-record offsets (gcc verified: data=56) }
   X11_CLIENT_MESSAGE_DATA_OFFSET = 56;
+
+  { XSelectionRequestEvent offsets (gcc verified: requestor=40, selection=48,
+    target=56, property=64) }
+  X11_SELREQ_REQUESTOR_OFFSET = 40;
+  X11_SELREQ_SELECTION_OFFSET = 48;
+  X11_SELREQ_TARGET_OFFSET    = 56;
+  X11_SELREQ_PROPERTY_OFFSET  = 64;
+
+  { XSelectionEvent offsets (gcc verified: requestor=32, selection=40,
+    target=48, property=56) }
+  X11_SELNOTIFY_REQUESTOR_OFFSET = 32;
+  X11_SELNOTIFY_SELECTION_OFFSET = 40;
+  X11_SELNOTIFY_TARGET_OFFSET    = 48;
+  X11_SELNOTIFY_PROPERTY_OFFSET  = 56;
+
+  { XSelectionClearEvent offsets (gcc verified: selection=40) }
+  X11_SELCLEAR_SELECTION_OFFSET = 40;
 
   { X11 KeySym constants -- subset needed for terminal key mapping }
   XK_BACKSPACE   = $FF08;
@@ -232,6 +253,32 @@ type
   TXChangeProperty = function(ADisplay: TX11Display; AW: TX11Window;
     AProperty, AType: TX11Atom; AFormat, AMode: Int32;
     AData: PByte; AElements: Int32): Int32; cdecl;
+  { XSetSelectionOwner }
+  TXSetSelectionOwner = function(ADisplay: TX11Display;
+    ASelection: TX11Atom; AOwner: TX11Window; ATime: UInt64): Int32; cdecl;
+  { XConvertSelection }
+  TXConvertSelection = function(ADisplay: TX11Display;
+    ASelection, ATarget, AProperty: TX11Atom;
+    ARequestor: TX11Window; ATime: UInt64): Int32; cdecl;
+  { XGetWindowProperty }
+  TXGetWindowProperty = function(ADisplay: TX11Display; AW: TX11Window;
+    AProperty: TX11Atom; ALongOffset, ALongLength: Int64;
+    ADelete: Int32; AReqType: TX11Atom;
+    AActualType: PTX11Atom; AActualFormat: PInt32;
+    ANItems: PUInt64; ABytesAfter: PUInt64;
+    APropReturn: PPByte): Int32; cdecl;
+  { XDeleteProperty }
+  TXDeleteProperty = function(ADisplay: TX11Display;
+    AW: TX11Window; AProperty: TX11Atom): Int32; cdecl;
+  { XSendEvent }
+  TXSendEvent = function(ADisplay: TX11Display; AW: TX11Window;
+    APropagate: Int32; AEventMask: Int64;
+    var AEvent: TX11Event): Int32; cdecl;
+  { XFree }
+  TXFree = function(AData: Pointer): Int32; cdecl;
+  { XGetSelectionOwner }
+  TXGetSelectionOwner = function(ADisplay: TX11Display;
+    ASelection: TX11Atom): TX11Window; cdecl;
 
 var
   { Display management }
@@ -263,6 +310,15 @@ var
   XInternAtom: TXInternAtom;
   XSetWMProtocols: TXSetWMProtocols;
   XChangeProperty: TXChangeProperty;
+
+  { Selection protocol }
+  XSetSelectionOwner: TXSetSelectionOwner;
+  XConvertSelection: TXConvertSelection;
+  XGetWindowProperty: TXGetWindowProperty;
+  XDeleteProperty: TXDeleteProperty;
+  XSendEvent: TXSendEvent;
+  XFree: TXFree;
+  XGetSelectionOwner: TXGetSelectionOwner;
 
   { Key translation }
   XLookupString: TXLookupString;
