@@ -126,10 +126,41 @@ begin
   InterLockedIncrement(GSubTestsRun);
 end;
 
+procedure TestSubtestWithRealFailure(constref Ctx: ITestContext);
+begin
+  Ctx.Run('sub pass',
+    procedure
+    begin
+      Check(True);
+      InterLockedIncrement(GSubTestsRun);
+    end);
+  Ctx.Run('sub fail',
+    procedure
+    begin
+      Check(False, 'intentional subtest failure');
+    end);
+end;
+
+procedure TestSubtestSkip(constref Ctx: ITestContext);
+begin
+  Ctx.Run('sub pass',
+    procedure
+    begin
+      Check(True);
+      InterLockedIncrement(GSubTestsRun);
+    end);
+  Ctx.Run('sub skip',
+    procedure
+    begin
+      Skip('not ready');
+    end);
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
   LSuite: TTestSuite;
+  LFailSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('Subtest Integration');
 
@@ -139,6 +170,7 @@ begin
   LSuite.TestSubtest('nested subtests',    @TestNestedSubtests);
   LSuite.TestSubtest('empty subtest',      @TestEmptySubtest);
   LSuite.TestSubtest('ITestContext',       @TestITestContext);
+  LSuite.TestSubtest('subtest skip',       @TestSubtestSkip);
 
   if not LSuite.Run then
   begin
@@ -153,6 +185,21 @@ begin
   begin
     WriteLn(AnsiRed('FAIL: expected at least 10 subtests run, got '), GSubTestsRun);
     Halt(1);
+  end;
+
+  { ── Verify subtest failure propagation ────────────────────────────────────── }
+  { A suite containing a subtest with a real failure should report failure }
+  WriteLn;
+  WriteLn(AnsiBold('─── Failure Propagation ───'));
+  begin
+    LFailSuite := TTestSuite.Create('Failure Propagation');
+    LFailSuite.TestSubtest('real failure', @TestSubtestWithRealFailure);
+    if LFailSuite.Run then
+    begin
+      WriteLn(AnsiRed('FAIL: suite with failing subtest should report failure'));
+      Halt(1);
+    end;
+    WriteLn(AnsiGreen('  Failure propagation verified'));
   end;
 
   WriteLn;

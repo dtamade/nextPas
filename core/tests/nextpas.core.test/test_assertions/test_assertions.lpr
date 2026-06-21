@@ -237,6 +237,28 @@ begin
   end;
 end;
 
+procedure TestCheckNoRaiseSkipPassthrough;
+begin
+  { CheckNoRaise must NOT catch ETestSkipped — it's flow control }
+  try
+    CheckNoRaise(procedure begin Skip('flow control'); end);
+    Halt(1); { Should never reach here — Skip should propagate }
+  except
+    on E: ETestSkipped do { expected };
+  end;
+end;
+
+procedure TestCheckStartsWithEmptyPrefix;
+begin
+  { Empty pattern matches everything — consistent across Contains/StartsWith/EndsWith }
+  CheckStartsWith('hello', '');
+  CheckStartsWith('', '');
+  CheckContains('hello', '');
+  CheckContains('', '');
+  CheckEndsWith('hello', '');
+  CheckEndsWith('', '');
+end;
+
 procedure TestFail;
 begin
   try
@@ -284,6 +306,8 @@ begin
   LSuite.Test('CheckRaises',           @TestCheckRaises);
   LSuite.Test('CheckNoRaise',          @TestCheckNoRaise);
   LSuite.Test('CheckRaises+Skip',      @TestCheckRaisesSkipPassthrough);
+  LSuite.Test('CheckNoRaise+Skip',     @TestCheckNoRaiseSkipPassthrough);
+  LSuite.Test('StartsWith empty',      @TestCheckStartsWithEmptyPrefix);
   LSuite.Test('Fail',                  @TestFail);
   LSuite.Test('Skip',                  @TestSkip);
 

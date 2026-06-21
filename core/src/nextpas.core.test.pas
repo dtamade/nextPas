@@ -194,10 +194,11 @@ end;
 { Local Helpers                                                                }
 { ═════════════════════════════════════════════════════════════════════════════ }
 
-function StrStartsWith(const S, APrefix: string): Boolean; inline;
+function StrStartsWith(const S, APrefix: string): Boolean;
 begin
-  Result := (Length(APrefix) > 0) and
-            (Length(S) >= Length(APrefix)) and
+  if Length(APrefix) = 0 then
+    Exit(True); { empty prefix matches everything — consistent with Contains/EndsWith }
+  Result := (Length(S) >= Length(APrefix)) and
             (Copy(S, 1, Length(APrefix)) = APrefix);
 end;
 
@@ -426,6 +427,8 @@ end;
 
 procedure CheckContains(const AHaystack, ANeedle: string);
 begin
+  if (Length(ANeedle) = 0) then
+    Exit; { empty needle matches everything — consistent with StartsWith/EndsWith }
   if Pos(ANeedle, AHaystack) = 0 then
     InternalFail('"' + AHaystack + '" does not contain "' + ANeedle + '"');
 end;
@@ -505,6 +508,8 @@ begin
   try
     AProc;
   except
+    on E: ETestSkipped do
+      raise; { Skip is flow control, not a testable exception }
     on E: Exception do
     begin
       if AMessage <> '' then
@@ -633,6 +638,7 @@ begin
     if not LMatch then
       InternalFail('Expected "' + AExpected + '" but got "' + FStrValue + '"');
   end;
+  FNegated := False;
   Result := Self;
 end;
 
@@ -655,6 +661,7 @@ begin
       InternalFail('Expected ' + IntToStr(AExpected) +
         ' but got ' + IntToStr(FIntValue));
   end;
+  FNegated := False;
   Result := Self;
 end;
 
@@ -678,6 +685,7 @@ begin
     if not LMatch then
       InternalFail('Expected ' + LExpStr + ' but got ' + LActStr);
   end;
+  FNegated := False;
   Result := Self;
 end;
 
@@ -709,13 +717,29 @@ begin
       InternalFail('Expected nil but got $' +
         IntToHex(NativeUInt(FPtrValue), 16));
   end;
+  FNegated := False;
   Result := Self;
 end;
 
 function TExpectation.ToBeNotNil: IExpectation;
 begin
-  FNegated := not FNegated;
-  Result := ToBeNil;
+  if FKind <> ekPointer then
+    InternalFail('ToBeNotNil called on non-pointer expectation');
+  if FNegated then
+  begin
+    { Not_.ToBeNotNil = expect nil }
+    if FPtrValue <> nil then
+      InternalFail('Expected nil but got $' +
+        IntToHex(NativeUInt(FPtrValue), 16));
+  end
+  else
+  begin
+    { ToBeNotNil = expect non-nil }
+    if FPtrValue = nil then
+      InternalFail('Expected non-nil but got nil');
+  end;
+  FNegated := False;
+  Result := Self;
 end;
 
 function TExpectation.ToContain(const ASubstr: string): IExpectation;
@@ -724,7 +748,10 @@ var
 begin
   if FKind <> ekString then
     InternalFail('ToContain called on non-string expectation');
-  LFound := Pos(ASubstr, FStrValue) > 0;
+  if Length(ASubstr) = 0 then
+    LFound := True { empty substring matches everything }
+  else
+    LFound := Pos(ASubstr, FStrValue) > 0;
   if FNegated then
   begin
     if LFound then
@@ -735,6 +762,7 @@ begin
     if not LFound then
       InternalFail('"' + FStrValue + '" does not contain "' + ASubstr + '"');
   end;
+  FNegated := False;
   Result := Self;
 end;
 
@@ -755,6 +783,7 @@ begin
     if not LMatch then
       InternalFail('"' + FStrValue + '" does not start with "' + APrefix + '"');
   end;
+  FNegated := False;
   Result := Self;
 end;
 
@@ -781,6 +810,7 @@ begin
     if not LMatch then
       InternalFail('"' + FStrValue + '" does not end with "' + ASuffix + '"');
   end;
+  FNegated := False;
   Result := Self;
 end;
 
@@ -801,6 +831,7 @@ begin
     if not LMatch then
       InternalFail(IntToStr(FIntValue) + ' is not > ' + IntToStr(AExpected));
   end;
+  FNegated := False;
   Result := Self;
 end;
 
@@ -821,6 +852,7 @@ begin
     if not LMatch then
       InternalFail(IntToStr(FIntValue) + ' is not < ' + IntToStr(AExpected));
   end;
+  FNegated := False;
   Result := Self;
 end;
 
@@ -843,6 +875,7 @@ begin
       InternalFail(IntToStr(FIntValue) + ' not in [' +
         IntToStr(ALow) + '..' + IntToStr(AHigh) + ']');
   end;
+  FNegated := False;
   Result := Self;
 end;
 
@@ -861,6 +894,7 @@ begin
       InternalFail('Expected length ' + IntToStr(AExpected) +
         ' but got ' + IntToStr(Length(FStrValue)));
   end;
+  FNegated := False;
   Result := Self;
 end;
 
@@ -899,6 +933,7 @@ begin
       InternalFail('Expected ' + AExceptionClass.ClassName +
         ' but nothing raised');
   end;
+  FNegated := False;
   Result := Self;
 end;
 
@@ -1020,6 +1055,10 @@ begin
         LSubCtxI := LSubCtx;
         TSubtestProc(LEntry.Proc)(LSubCtxI);
         LSubCtx.ExecuteSubtests;
+        { Aggregate nested subtest counts into parent }
+        Inc(FSubPass, LSubCtx.FSubPass);
+        Inc(FSubFail, LSubCtx.FSubFail);
+        Inc(FSubSkip, LSubCtx.FSubSkip);
       end
       else
       begin
@@ -1052,6 +1091,9 @@ begin
     end;
     ReportLeakIfAny(LStatus);
   end;
+  { Propagate subtest failures to parent }
+  if FSubFail > 0 then
+    InternalFail(IntToStr(FSubFail) + ' subtest(s) failed in ' + FTestName);
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }
@@ -1240,7 +1282,8 @@ begin
           begin
             LStatus := tsError;
             Inc(LFail);
-            Dec(LPass);
+            if LPass > 0 then { Guard against negative count for subtests }
+              Dec(LPass);
           end;
         end;
       end;

@@ -181,6 +181,24 @@ begin
   end;
 end;
 
+procedure TestExpectNotToBeNotNil;
+begin
+  { Not_.ToBeNotNil on nil should pass (nil IS "not non-nil") }
+  ExpectPtr(nil).Not_.ToBeNotNil;
+  { ToBeNotNil on non-nil should pass }
+  ExpectPtr(@TestExpectNotToBeNotNil).ToBeNotNil;
+end;
+
+procedure TestExpectNotStateReset;
+var
+  E: IExpectation;
+begin
+  { FNegated should be reset after each To* call }
+  E := Expect('hello');
+  E.Not_.ToEqual('world');  { Not_ toggles True, ToEqual resets to False }
+  E.ToEqual('hello');       { FNegated was reset — should pass }
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -198,6 +216,8 @@ begin
   LSuite.Test('Expect Not_ ptr',         @TestExpectNotPtr);
   LSuite.Test('Expect proc raise',       @TestExpectProcRaise);
   LSuite.Test('Expect proc not raise',   @TestExpectProcNotRaise);
+  LSuite.Test('Not_.ToBeNotNil',         @TestExpectNotToBeNotNil);
+  LSuite.Test('Not_ state reset',        @TestExpectNotStateReset);
 
   { Failure path tests }
   LSuite.Test('Fail: ToEqual wrong',     @TestExpectStringFailToEqual);
