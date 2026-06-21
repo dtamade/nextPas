@@ -142,6 +142,23 @@ begin
   end;
 end;
 
+procedure TestAllocAlignedFast;
+var A: TLocalArena; P1, P2: Pointer;
+begin
+  A := TLocalArena.Create(512);
+  try
+    P1 := A.AllocAlignedFast(32, 64);
+    P2 := A.AllocAlignedFast(64, 128);
+    Check(P1 <> nil, 'fast aligned alloc 1');
+    Check(P2 <> nil, 'fast aligned alloc 2');
+    CheckEqual(Int64(0), Int64(PtrUInt(P1) mod 64), 'P1 should be 64-byte aligned');
+    CheckEqual(Int64(0), Int64(PtrUInt(P2) mod 128), 'P2 should be 128-byte aligned');
+    Check(PtrUInt(P2) >= PtrUInt(P1) + 32, 'sequential');
+  finally
+    A.Free;
+  end;
+end;
+
 procedure TestZeroSizeAlloc;
 var A: TLocalArena; P: Pointer;
 begin
@@ -197,6 +214,7 @@ begin
   T.Run('alloc aligned', @TestAllocAligned);
   T.Run('alloc zeroed', @TestAllocZeroed);
   T.Run('alloc fast', @TestAllocFast);
+  T.Run('alloc aligned fast', @TestAllocAlignedFast);
   T.Run('zero size alloc', @TestZeroSizeAlloc);
   {TLocalArena 没有 TotalAllocCount 和 PeakUsed 属性，此测试已删除}
   {T.Run('statistics', @TestStats);}
