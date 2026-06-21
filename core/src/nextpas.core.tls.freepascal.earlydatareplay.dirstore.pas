@@ -11,7 +11,7 @@ unit nextpas.core.tls.freepascal.earlydatareplay.dirstore;
 interface
 
 uses
-  SysUtils, Classes, nextpas.core.fs,
+  SysUtils, nextpas.core.system.classes, nextpas.core.fs,
   nextpas.core.tls.freepascal.session;
 
 type

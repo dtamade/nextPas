@@ -5,7 +5,7 @@ unit nextpas.core.tls.tls12.io;
 interface
 
 uses
-  nextpas.core.base, nextpas.core.text.conv, Classes,
+  nextpas.core.base, nextpas.core.text.conv, nextpas.core.system.classes,
   nextpas.core.io.intf;
 
 type

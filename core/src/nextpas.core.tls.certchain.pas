@@ -16,7 +16,7 @@ interface
 uses
   nextpas.core.exception,
   nextpas.core.base,
-  Classes,
+  nextpas.core.system.classes,
   nextpas.core.tls.base, nextpas.core.tls.crl, nextpas.core.tls.x509, nextpas.core.crypto.x509verify;
 
 type

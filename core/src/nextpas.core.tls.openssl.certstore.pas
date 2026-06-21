@@ -11,7 +11,7 @@ unit nextpas.core.tls.openssl.certstore;
 interface
 
 uses
-  SysUtils, Classes, nextpas.core.fs,
+  SysUtils, nextpas.core.system.classes, nextpas.core.fs,
   nextpas.core.tls.base,
   nextpas.core.tls.logging,  // P3-8: 添加日志支持
   nextpas.core.tls.openssl.base,

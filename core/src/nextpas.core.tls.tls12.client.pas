@@ -6,7 +6,7 @@ interface
 
 uses
   nextpas.core.exception, nextpas.core.text.conv, nextpas.core.base,
-  nextpas.core.base.utils, Classes,
+  nextpas.core.base.utils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.tls12.ciphersuite,
   nextpas.core.tls.x509;

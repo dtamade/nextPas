@@ -19,7 +19,7 @@ unit nextpas.core.tls.openssl.context;
 interface
 
 uses
-  SysUtils, Classes, nextpas.core.sync,
+  SysUtils, nextpas.core.system.classes, nextpas.core.sync,
   nextpas.core.base.utils,
   nextpas.core.fs,
   nextpas.core.io.intf,

@@ -34,7 +34,7 @@ interface
 uses
   nextpas.core.exception,
   nextpas.core.base,
-  SysUtils, Classes,
+  SysUtils, nextpas.core.system.classes,
   nextpas.core.fs,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,

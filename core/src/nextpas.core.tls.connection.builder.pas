@@ -23,7 +23,7 @@ interface
 
 uses
   nextpas.core.base.utils,
-  nextpas.core.exception, Classes,
+  nextpas.core.exception, nextpas.core.system.classes,
   nextpas.core.io,
   nextpas.core.tls.base,
   nextpas.core.tls.safety;

@@ -18,7 +18,7 @@ unit nextpas.core.tls.winssl.certstore;
 interface
 
 uses
-  Windows, SysUtils, Classes, nextpas.core.fs, nextpas.core.tls.base,
+  Windows, SysUtils, nextpas.core.system.classes, nextpas.core.fs, nextpas.core.tls.base,
   nextpas.core.tls.winssl.base,
   nextpas.core.tls.winssl.api,
   nextpas.core.tls.winssl.native_handle,

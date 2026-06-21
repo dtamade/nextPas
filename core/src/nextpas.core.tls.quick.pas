@@ -20,7 +20,7 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.exception, nextpas.core.text.conv, Classes,
+  nextpas.core.exception, nextpas.core.text.conv, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.logging,

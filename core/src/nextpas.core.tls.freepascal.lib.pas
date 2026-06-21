@@ -73,7 +73,7 @@ procedure UnregisterFreePascalBackend;
 implementation
 
 uses
-  Classes,
+  nextpas.core.system.classes,
   nextpas.core.io.stream_adapter,
   nextpas.core.io.util,
   nextpas.core.time,

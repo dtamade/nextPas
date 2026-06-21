@@ -12,7 +12,7 @@ interface
 
 uses
   nextpas.core.base.utils,
-  SysUtils, Classes, nextpas.core.fs,
+  SysUtils, nextpas.core.system.classes, nextpas.core.fs,
   nextpas.core.tls.base,
   nextpas.core.tls.freepascal.context.material,
   nextpas.core.tls.freepascal.earlydatareplay,

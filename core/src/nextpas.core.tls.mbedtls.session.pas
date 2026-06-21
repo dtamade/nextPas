@@ -19,7 +19,7 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.exception, nextpas.core.text.conv, Classes, DateUtils,
+  nextpas.core.exception, nextpas.core.text.conv, nextpas.core.system.classes, DateUtils,
   nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.base,

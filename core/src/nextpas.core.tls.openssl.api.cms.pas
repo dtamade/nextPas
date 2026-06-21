@@ -6,7 +6,7 @@ interface
 
 uses
   nextpas.core.base,
-   Classes,
+   nextpas.core.system.classes,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.platform.dl,

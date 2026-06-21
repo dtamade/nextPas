@@ -19,7 +19,7 @@ interface
 
   nextpas.core.base,
   nextpas.core.base.utils,
-  nextpas.core.text.conv, Classes,
+  nextpas.core.text.conv, nextpas.core.system.classes,
   nextpas.core.io.intf,
   nextpas.core.io.stream_adapter,
   nextpas.core.tls.base,

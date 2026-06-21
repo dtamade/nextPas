@@ -18,7 +18,7 @@ unit nextpas.core.tls.winssl.context;
 interface
 
 uses
-  Windows, SysUtils, Classes,
+  Windows, SysUtils, nextpas.core.system.classes,
   nextpas.core.base.utils,
   nextpas.core.fs,
   nextpas.core.text.conv,

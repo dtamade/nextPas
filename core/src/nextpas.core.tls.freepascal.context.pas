@@ -13,7 +13,7 @@ interface
 
 uses
   nextpas.core.base.utils,
-  Base64, SysUtils, Classes,
+  Base64, SysUtils, nextpas.core.system.classes,
   nextpas.core.fs,
   nextpas.core.text.conv,
   nextpas.core.io.intf,

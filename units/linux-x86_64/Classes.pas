@@ -31,6 +31,8 @@ type
     function Write(const Buffer; Count: LongInt): LongInt; virtual;
     function Seek(Offset: LongInt; Origin: Word): LongInt; virtual;
     function Seek64(const Offset: Int64; Origin: TSeekOrigin): Int64; virtual;
+    procedure ReadBuffer(var Buffer; Count: LongInt);
+    procedure WriteBuffer(const Buffer; Count: LongInt);
     function ReadByte: Byte;
     procedure WriteByte(B: Byte);
     function CopyFrom(Source: TStream; Count: Int64): Int64;
@@ -73,21 +75,19 @@ type
     property Items[Index: Integer]: IInterface read GetItem write SetItem; default;
   end;
 
-  TFileStream = class
+  TFileStream = class(TStream)
   private
     FHandle: File;
     FFileName: string;
-    function GetSize: LongInt;
+  protected
+    function GetSize64: Int64; override;
   public
     constructor Create(const AFileName: string; Mode: Word);
     destructor Destroy; override;
 
-    function Read(var Buffer; Count: LongInt): LongInt;
-    function Write(const Buffer; Count: LongInt): LongInt;
-    procedure ReadBuffer(var Buffer; Count: LongInt);
-    procedure WriteBuffer(const Buffer; Count: LongInt);
-    function Seek(Offset: LongInt; Origin: Word): LongInt;
-    property Size: LongInt read GetSize;
+    function Read(var Buffer; Count: LongInt): LongInt; override;
+    function Write(const Buffer; Count: LongInt): LongInt; override;
+    function Seek(Offset: LongInt; Origin: Word): LongInt; override;
   end;
 
   TStringList = class
@@ -164,6 +164,24 @@ end;
 procedure TStream.WriteByte(B: Byte);
 begin
   Write(B, 1);
+end;
+
+procedure TStream.ReadBuffer(var Buffer; Count: LongInt);
+var
+  N: LongInt;
+begin
+  N := Read(Buffer, Count);
+  if N <> Count then
+    raise Exception.Create('ReadBuffer: insufficient data');
+end;
+
+procedure TStream.WriteBuffer(const Buffer; Count: LongInt);
+var
+  N: LongInt;
+begin
+  N := Write(Buffer, Count);
+  if N <> Count then
+    raise Exception.Create('WriteBuffer: write failed');
 end;
 
 function TStream.GetPosition: Int64;
@@ -403,24 +421,6 @@ begin
     Result := 0;
 end;
 
-procedure TFileStream.ReadBuffer(var Buffer; Count: LongInt);
-var
-  BytesRead: LongInt;
-begin
-  BytesRead := Read(Buffer, Count);
-  if BytesRead <> Count then
-    raise Exception.Create('Read error');
-end;
-
-procedure TFileStream.WriteBuffer(const Buffer; Count: LongInt);
-var
-  BytesWritten: LongInt;
-begin
-  BytesWritten := Write(Buffer, Count);
-  if BytesWritten <> Count then
-    raise Exception.Create('Write error');
-end;
-
 function TFileStream.Seek(Offset: LongInt; Origin: Word): LongInt;
 begin
   {$I-}
@@ -431,7 +431,7 @@ begin
     Result := -1;
 end;
 
-function TFileStream.GetSize: LongInt;
+function TFileStream.GetSize64: Int64;
 begin
   {$I-}
   Result := FileSize(FHandle);

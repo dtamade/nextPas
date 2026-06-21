@@ -19,7 +19,7 @@ interface
 
 uses
   nextpas.core.base,
-  SysUtils, Classes, Base64,
+  SysUtils, nextpas.core.system.classes, Base64,
   nextpas.core.fs,
   nextpas.core.text.conv,
   nextpas.core.io.stream_adapter,

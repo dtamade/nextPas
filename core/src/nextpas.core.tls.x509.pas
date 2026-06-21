@@ -37,8 +37,11 @@ unit nextpas.core.tls.x509;
 interface
 
 uses
-  SysUtils, Classes,
+  nextpas.core.base,
+  nextpas.core.exception,
+  nextpas.core.system.classes,
   nextpas.core.text.conv,
+  nextpas.core.text.builder,
   nextpas.core.time,
   nextpas.core.tls.asn1;
 

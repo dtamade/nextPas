@@ -25,7 +25,7 @@ unit nextpas.core.tls.session.cache;
 interface
 
 uses
-  SysUtils, Classes, nextpas.core.fs, nextpas.core.sync,
+  SysUtils, nextpas.core.system.classes, nextpas.core.fs, nextpas.core.sync,
   nextpas.core.collections.hashmap,
   {$IFDEF UNIX}BaseUnix,{$ENDIF}
   nextpas.core.time,
@@ -481,7 +481,7 @@ begin
   FLock.Acquire;
   try
     try
-      Stream := TFileStream.Create(AFileName, Classes.fmCreate);
+      Stream := TFileStream.Create(AFileName, nextpas.core.system.classes.fmCreate);
       {$IFDEF UNIX}
       FpChmod(AFileName, &600);
       {$ENDIF}

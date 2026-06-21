@@ -17,7 +17,7 @@ unit nextpas.core.tls.mbedtls.certificate;
 interface
 
 uses
-  SysUtils, Classes,
+  SysUtils, nextpas.core.system.classes,
   nextpas.core.base.utils,
   nextpas.core.fs,
   nextpas.core.collections.vec,
