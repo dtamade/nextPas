@@ -20,7 +20,8 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.exception, nextpas.core.text.conv, nextpas.core.system.classes,
+  nextpas.core.exception, nextpas.core.text.conv,
+  nextpas.core.fs.stream,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.logging,
@@ -179,7 +180,6 @@ class function TSSLQuick.GenerateCertFiles(const ACommonName, ACertPath, AKeyPat
   AValidDays: Integer): Boolean;
 var
   LKeyPair: IKeyPairWithCertificate;
-  LCertFile, LKeyFile: TFileStream;
   LCertPEM, LKeyPEM: string;
 begin
   Result := False;
@@ -187,22 +187,12 @@ begin
     LKeyPair := GenerateSelfSigned(ACommonName, AValidDays);
     LCertPEM := LKeyPair.GetCertificate.ToPEM;
     LKeyPEM := LKeyPair.GetPrivateKey.ToPEM;
-    
+
     // Write certificate file
-    LCertFile := TFileStream.Create(ACertPath, fmCreate);
-    try
-      LCertFile.Write(LCertPEM[1], Length(LCertPEM));
-    finally
-      LCertFile.Free;
-    end;
-    
+    FsCreate(ACertPath).Write(LCertPEM[1], SizeUInt(Length(LCertPEM)));
+
     // Write private key file
-    LKeyFile := TFileStream.Create(AKeyPath, fmCreate);
-    try
-      LKeyFile.Write(LKeyPEM[1], Length(LKeyPEM));
-    finally
-      LKeyFile.Free;
-    end;
+    FsCreate(AKeyPath).Write(LKeyPEM[1], SizeUInt(Length(LKeyPEM)));
     
     Result := True;
   except

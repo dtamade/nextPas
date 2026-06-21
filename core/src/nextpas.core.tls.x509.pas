@@ -39,7 +39,9 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.exception,
-  nextpas.core.system.classes,
+  nextpas.core.io.intf,
+  nextpas.core.fs.base,
+  nextpas.core.fs.stream,
   nextpas.core.text.conv,
   nextpas.core.text.builder,
   nextpas.core.time,
@@ -248,7 +250,7 @@ type
     procedure LoadFromDER(const AData: TBytes);
     procedure LoadFromPEM(const APEMData: string);
     procedure LoadFromFile(const AFileName: string);
-    procedure LoadFromStream(AStream: TStream);
+    procedure LoadFromStream(AStream: IStream);
 
     // 基本信息
     property Version: TX509Version read FVersion;
@@ -571,18 +573,11 @@ begin
 end;
 
 procedure TX509Certificate.LoadFromFile(const AFileName: string);
-var
-  Stream: TFileStream;
 begin
-  Stream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
-  try
-    LoadFromStream(Stream);
-  finally
-    Stream.Free;
-  end;
+  LoadFromStream(FsOpen(AFileName, [fmRead]));
 end;
 
-procedure TX509Certificate.LoadFromStream(AStream: TStream);
+procedure TX509Certificate.LoadFromStream(AStream: IStream);
 var
   Data: TBytes;
   FirstByte: Byte;
@@ -591,7 +586,7 @@ begin
   SetLength(Data, AStream.Size);
   if AStream.Size > 0 then
   begin
-    AStream.ReadBuffer(Data[0], AStream.Size);
+    AStream.Read(Data[0], AStream.Size);
 
     // 检测格式
     FirstByte := Data[0];
@@ -1171,51 +1166,52 @@ end;
 function TX509Certificate.Dump: string;
 var
   I: Integer;
-  SB: TStringBuilder;
+  SB: TBufStringBuilder;
 begin
-  SB := TStringBuilder.Create;
+  SB.Init;
   try
-    SB.AppendLine('X.509 Certificate');
-    SB.AppendLine('=================');
-    SB.AppendLine('');
+    SB.AppendStr('X.509 Certificate' + LineEnding);
+    SB.AppendStr('=================' + LineEnding);
+    SB.AppendStr(LineEnding);
 
-    SB.AppendLine('Version: v' + IntToStr(Ord(FVersion) + 1));
-    SB.AppendLine('Serial Number: ' + SerialNumberAsHex);
-    SB.AppendLine('Signature Algorithm: ' + FSignatureAlgorithm.ToString);
-    SB.AppendLine('');
+    SB.AppendStr('Version: v' + IntToStr(Ord(FVersion) + 1) + LineEnding);
+    SB.AppendStr('Serial Number: ' + SerialNumberAsHex + LineEnding);
+    SB.AppendStr('Signature Algorithm: ' + FSignatureAlgorithm.ToString + LineEnding);
+    SB.AppendStr(LineEnding);
 
-    SB.AppendLine('Issuer: ' + FIssuer.ToString);
-    SB.AppendLine('Subject: ' + FSubject.ToString);
-    SB.AppendLine('');
+    SB.AppendStr('Issuer: ' + FIssuer.ToString + LineEnding);
+    SB.AppendStr('Subject: ' + FSubject.ToString + LineEnding);
+    SB.AppendStr(LineEnding);
 
-    SB.AppendLine('Validity:');
-    SB.AppendLine('  Not Before: ' + nextpas.core.time.DateTimeToStr(FValidity.NotBefore));
-    SB.AppendLine('  Not After: ' + nextpas.core.time.DateTimeToStr(FValidity.NotAfter));
-    SB.AppendLine('');
+    SB.AppendStr('Validity:' + LineEnding);
+    SB.AppendStr('  Not Before: ' + nextpas.core.time.DateTimeToStr(FValidity.NotBefore) + LineEnding);
+    SB.AppendStr('  Not After: ' + nextpas.core.time.DateTimeToStr(FValidity.NotAfter) + LineEnding);
+    SB.AppendStr(LineEnding);
 
-    SB.AppendLine('Public Key:');
-    SB.AppendLine('  Algorithm: ' + FPublicKeyInfo.Algorithm.ToString);
-    SB.AppendLine('  Key Type: ' + FPublicKeyInfo.KeyType);
-    SB.AppendLine('  Key Size: ' + IntToStr(FPublicKeyInfo.KeySize) + ' bits');
-    SB.AppendLine('');
+    SB.AppendStr('Public Key:' + LineEnding);
+    SB.AppendStr('  Algorithm: ' + FPublicKeyInfo.Algorithm.ToString + LineEnding);
+    SB.AppendStr('  Key Type: ' + FPublicKeyInfo.KeyType + LineEnding);
+    SB.AppendStr('  Key Size: ' + IntToStr(FPublicKeyInfo.KeySize) + ' bits' + LineEnding);
+    SB.AppendStr(LineEnding);
 
     if Length(FExtensions) > 0 then
     begin
-      SB.AppendLine('Extensions:');
+      SB.AppendStr('Extensions:' + LineEnding);
       for I := 0 to High(FExtensions) do
-        SB.AppendLine('  ' + FExtensions[I].ToString);
-      SB.AppendLine('');
+        SB.AppendStr('  ' + FExtensions[I].ToString + LineEnding);
+      SB.AppendStr(LineEnding);
     end;
 
     if Length(FSubjectAltNames) > 0 then
     begin
-      SB.AppendLine('Subject Alternative Names:');
+      SB.AppendStr('Subject Alternative Names:' + LineEnding);
       for I := 0 to High(FSubjectAltNames) do
-        SB.AppendLine('  ' + FSubjectAltNames[I].Value);
+        SB.AppendStr('  ' + FSubjectAltNames[I].Value + LineEnding);
     end;
 
     Result := SB.ToString;
   finally
+    SB.Done;
   end;
 end;
 
