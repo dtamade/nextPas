@@ -241,7 +241,7 @@ begin
   CheckLength(5, 5);
   CheckLength(0, 0);
   try
-    CheckLength(3, 5);
+    CheckLength(5, 3);
     Halt(1);
   except
     on E: EAssertionFailed do Check(Pos('Expected length', E.Message) > 0, 'msg');
@@ -341,14 +341,14 @@ end;
 procedure TestCheckNearPass;
 begin
   CheckNear(1.0, 1.0);
-  CheckNear(1.0, 1.0 + 1e-11, 1e-10);
-  CheckNear(0.0, 1e-12, 1e-10);
+  CheckNear(1.0 + 1e-11, 1.0, 1e-10);
+  CheckNear(1e-12, 0.0, 1e-10);
 end;
 
 procedure TestCheckNearFail;
 begin
   try
-    CheckNear(1.0, 2.0, 1e-10, 'should differ');
+    CheckNear(2.0, 1.0, 1e-10, 'should differ');
     WriteLn('ERROR: CheckNear did not raise');
     Halt(1);
   except
@@ -361,8 +361,8 @@ end;
 
 procedure TestCheckNotNearPass;
 begin
-  CheckNotNear(1.0, 2.0);
-  CheckNotNear(0.0, 1.0, 1e-10);
+  CheckNotNear(2.0, 1.0);
+  CheckNotNear(1.0, 0.0, 1e-10);
 end;
 
 procedure TestCheckNotNearFail;

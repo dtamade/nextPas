@@ -196,14 +196,13 @@ procedure CheckStartsWith(const AStr, APrefix: string);
 procedure CheckEndsWith(const AStr, ASuffix: string);
 procedure CheckSame(AExpected, AActual: Pointer; const AMessage: string = '');
 procedure CheckInRange(AValue, ALow, AHigh: Int64);
-procedure CheckLength(AValue: NativeInt; AExpected: NativeInt);
-  { Note: parameter order is (actual, expected), not (expected, actual) like CheckEqual }
+procedure CheckLength(AExpected, AActual: NativeInt);
 procedure CheckRaises(AExceptionClass: ExceptClass; AProc: TTestProc;
   const AMessage: string = '');
 procedure CheckNoRaise(AProc: TTestProc; const AMessage: string = '');
-procedure CheckNear(AActual, AExpected: Double;
+procedure CheckNear(AExpected, AActual: Double;
   AEpsilon: Double = 1e-10; const AMessage: string = '');
-procedure CheckNotNear(AActual, AExpected: Double;
+procedure CheckNotNear(AExpected, AActual: Double;
   AEpsilon: Double = 1e-10; const AMessage: string = '');
 procedure Fail(const AMessage: string);
 procedure Skip(const AReason: string = '');
@@ -520,11 +519,11 @@ begin
       IntToStr(ALow) + '..' + IntToStr(AHigh) + ']');
 end;
 
-procedure CheckLength(AValue: NativeInt; AExpected: NativeInt);
+procedure CheckLength(AExpected, AActual: NativeInt);
 begin
-  if AValue <> AExpected then
+  if AExpected <> AActual then
     InternalFail('Expected length ' + IntToStr(AExpected) +
-      ' but got ' + IntToStr(AValue));
+      ' but got ' + IntToStr(AActual));
 end;
 
 procedure CheckRaises(AExceptionClass: ExceptClass; AProc: TTestProc;
@@ -569,7 +568,7 @@ begin
   end;
 end;
 
-procedure CheckNear(AActual, AExpected: Double;
+procedure CheckNear(AExpected, AActual: Double;
   AEpsilon: Double; const AMessage: string);
 var
   LDiff: Double;
@@ -586,7 +585,7 @@ begin
   end;
 end;
 
-procedure CheckNotNear(AActual, AExpected: Double;
+procedure CheckNotNear(AExpected, AActual: Double;
   AEpsilon: Double; const AMessage: string);
 var
   LDiff: Double;
@@ -1694,10 +1693,7 @@ begin
   LStatus := tsPassed;
   LFailMsg := '';
   LSkipReason := '';
-  { Note: We intentionally do NOT call SetTestContext here.
-    SetTestContext allocates thread-local GExecState — each thread would get
-    its own copy, which is safe but unnecessary since parallel tests track
-    state locally via LStatus and the TThreadRec record. }
+  SetTestContext(R^.SuiteName, R^.Entry.Name);
 
   { Subtests are not supported in parallel mode — skip gracefully }
   if R^.Entry.Kind = ekSubtest then
@@ -1839,6 +1835,12 @@ begin
     else
       R^.Res^.Message := '';
     end;
+  end;
+
+  if GExecState <> nil then
+  begin
+    Dispose(GExecState);
+    GExecState := nil;
   end;
 end;
 
@@ -2086,9 +2088,13 @@ begin
 end;
 
 procedure TTestRunner.Add(var ASuite: TTestSuite);
-  { Note: ASuite is copied by value. After Add(), further modifications to the
-    original ASuite variable will NOT be reflected in the runner due to Pascal
-    dynamic-array copy-on-write semantics. Add all tests before calling Add. }
+  { IMPORTANT — Record value-copy semantics:
+    ASuite is passed by `var` only to avoid copying the entire record on the
+    call side. Internally the suite is *copied* into the Suites[] array via
+    Pascal assignment (record + dynamic-array copy-on-write).
+    After Add() returns, any further mutations to the caller's ASuite variable
+    (e.g. appending more tests) will NOT be visible to the runner.
+    Rule: register ALL tests before calling Add. }
 begin
   SetLength(Suites, Length(Suites) + 1);
   Suites[High(Suites)] := ASuite;
