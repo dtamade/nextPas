@@ -1,49 +1,47 @@
 unit nextpas.core.platform.x11.ffi;
 
 {$I nextpas.core.settings.inc}
+{$IF not defined(NEXTPAS_X86_64)}
+  {$ERROR 'X11 FFI event offsets are x86_64-only'}
+{$ENDIF}
 
 // X11 FFI type and function pointer declarations.
 //
 // Types, constants, and typed function pointer globals for the subset
 // of libX11 needed by nextPas/core window management. Zero implementation
 // logic -- the companion unit nextpas.core.platform.x11 handles loading.
+//
+// TX11Event is a flat 192-byte buffer matching C's union XEvent.
+// All event field access goes through byte-offset helpers in x11.pas.
+// This is the correct model for C unions in Pascal -- named fields
+// would create false precision since different event types reuse offsets.
 
 interface
 
 type
-  { Opaque X11 handles }
-  TX11Display = type Pointer;
-  TX11Window  = type UInt64;
-  TX11Colormap = type UInt64;
-  TX11Atom     = type UInt64;
-  TX11KeyCode  = type Byte;
-  TX11KeySym   = type UInt32;
+  { Opaque X11 handles. Sizes verified against gcc sizeof. }
+  TX11Display = type Pointer;   // 8 bytes
+  TX11Window  = type UInt64;    // 8 bytes (C unsigned long)
+  TX11Colormap = type UInt64;   // 8 bytes
+  TX11Atom     = type UInt64;   // 8 bytes (C unsigned long)
+  TX11KeyCode  = type UInt32;   // 4 bytes (C unsigned int in XKeyEvent.keycode)
+  TX11KeySym   = type UInt64;   // 8 bytes (C unsigned long KeySym)
   TX11Status   = type Int32;
 
-  { XEvent buffer -- 96 bytes on x86_64, matches C union XEvent.
-    Layout: type(4) + pad(4) + serial(8) + send_event(4) + pad(4) + display(8)
-            = 32 bytes before window(8), then 56 bytes rest. }
-  TX11Event = record
-    FType: Int32;
-    FPad: array[0..27] of Byte;  // pad(4) + serial(8) + send_event(4) + pad(4) + display(8)
-    FWindow: TX11Window;
-    FPad2: array[0..55] of Byte;
-  end;
+  { Pointer types used by function signatures }
+  PTX11KeySym = ^TX11KeySym;
+  PTX11Atom = ^TX11Atom;
 
-  { XSizeHints for WM_NORMAL_HINTS (partial). }
-  TX11SizeHints = record
-    Flags: Int64;
-    X, Y: Int32;
-    Width, Height: Int32;
-    MinWidth, MinHeight: Int32;
-    MaxWidth, MaxHeight: Int32;
-    WidthInc, HeightInc: Int32;
-    MinAspect, MaxAspect: record Num, Den: Int32; end;
-    BaseWidth, BaseHeight: Int32;
-    WinGravity: Int32;
-  end;
+  { XEvent buffer -- 192 bytes on x86_64, matches C union XEvent.
+    C declares: long pad[24] = 24 * 8 = 192 bytes.
+    We use a flat byte array; all field access goes through offset helpers.
+    Verified: gcc sizeof(XEvent) = 192, FPC SizeOf(TX11Event) = 192. }
+  TX11Event = array[0..191] of Byte;
 
 const
+  { Compile-time size assertion }
+  X11_EVENT_EXPECTED_SIZE = 192;
+
   { X event types }
   X11_KEY_PRESS      = 2;
   X11_KEY_RELEASE    = 3;
@@ -79,29 +77,35 @@ const
   X11_MOD4_MASK    = 1 shl 6;   // Super
 
   { X Event offsets (x86_64) -- relative to start of XEvent.
-    Verified with FPC sizeof/offsetof against C XKeyEvent layout. }
+    Verified with gcc offsetof against C X11 headers. }
   X11_EVENT_TYPE_OFFSET   = 0;
   X11_EVENT_WINDOW_OFFSET = 32;
+  X11_EVENT_TIME_OFFSET   = 56;  // XKeyEvent/XButtonEvent/XMotionEvent time
 
-  { XKeyEvent sub-record offsets }
+  { XKeyEvent sub-record offsets (gcc verified: state=80, keycode=84) }
   X11_KEY_EVENT_STATE_OFFSET   = 80;
   X11_KEY_EVENT_KEYCODE_OFFSET = 84;
 
-  { XButtonEvent sub-record offsets }
+  { XButtonEvent sub-record offsets (gcc verified: button=84, x=64, y=68) }
   X11_BUTTON_EVENT_BUTTON_OFFSET = 84;
   X11_BUTTON_EVENT_X_OFFSET      = 64;
   X11_BUTTON_EVENT_Y_OFFSET      = 68;
 
-  { XMotionEvent sub-record offsets (same as button: x, y at 64, 68) }
+  { XMotionEvent sub-record offsets (same layout as button x/y) }
   X11_MOTION_EVENT_X_OFFSET = 64;
   X11_MOTION_EVENT_Y_OFFSET = 68;
 
-  { XConfigureEvent sub-record offsets }
+  { XConfigureEvent sub-record offsets (gcc verified: event=32, window=40,
+    width=56, height=60). Note: XConfigureEvent has BOTH event(32) and
+    window(40) -- x11_event_window reads xany.window at 32 which is
+    the "event" field for ConfigureNotify. Use x11_configure_event_window
+    for the actual window id. }
+  X11_CONFIGURE_EVENT_WINDOW_OFFSET = 40;
   X11_CONFIGURE_EVENT_WIDTH_OFFSET  = 56;
   X11_CONFIGURE_EVENT_HEIGHT_OFFSET = 60;
 
-  { XClientMessageEvent sub-record offsets }
-  X11_CLIENT_MESSAGE_DATA_OFFSET = 52;
+  { XClientMessageEvent sub-record offsets (gcc verified: data=56) }
+  X11_CLIENT_MESSAGE_DATA_OFFSET = 56;
 
   { X11 KeySym constants -- subset needed for terminal key mapping }
   XK_BACKSPACE   = $FF08;
@@ -131,6 +135,24 @@ const
   XK_F11         = $FFC8;
   XK_F12         = $FFC9;
 
+  { Keypad KeySym constants }
+  XK_KP_ENTER    = $FF8D;
+  XK_KP_MULTIPLY = $FFAA;
+  XK_KP_ADD      = $FFAB;
+  XK_KP_SUBTRACT = $FFAD;
+  XK_KP_DECIMAL  = $FFAE;
+  XK_KP_DIVIDE   = $FFAF;
+  XK_KP_0        = $FFB0;
+  XK_KP_1        = $FFB1;
+  XK_KP_2        = $FFB2;
+  XK_KP_3        = $FFB3;
+  XK_KP_4        = $FFB4;
+  XK_KP_5        = $FFB5;
+  XK_KP_6        = $FFB6;
+  XK_KP_7        = $FFB7;
+  XK_KP_8        = $FFB8;
+  XK_KP_9        = $FFB9;
+
   { X11 protocol atoms }
   X11_XA_PRIMARY     = 1;
   X11_XA_STRING      = 31;
@@ -146,10 +168,6 @@ const
   X11_SUCCESS = 0;
 
 type
-  { Pointer types used by function signatures }
-  PTX11KeySym = ^TX11KeySym;
-  PTX11Atom = ^TX11Atom;
-
   { XOpenDisplay }
   TXOpenDisplay = function(AName: PAnsiChar): TX11Display; cdecl;
   { XCloseDisplay }
@@ -186,7 +204,7 @@ type
     AName: PAnsiChar): Int32; cdecl;
   { XSelectInput }
   TXSelectInput = function(ADisplay: TX11Display; AW: TX11Window;
-    AEventMask: Int64): Int32; cdecl;
+    AEventMask: UInt64): Int32; cdecl;
   { XNextEvent }
   TXNextEvent = function(ADisplay: TX11Display;
     var AEvent: TX11Event): Int32; cdecl;
