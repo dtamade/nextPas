@@ -7837,7 +7837,8 @@ begin
               AOwnerUnitId
             );
             if (ParentTypeId > 0) and
-              (not FModel.LookupConstValue(TypeChild.ChildAt(0).Text + '$size', SizeVal)) then
+              (not FModel.LookupConstValue(TypeChild.ChildAt(0).Text + '$size', SizeVal)) and
+              (TypeMetaSize(TypeChild.ChildAt(0).Text) <= 0) then
               ParentTypeId := 0;
             if (ParentTypeId = 0) and (Pos('<', TypeChild.ChildAt(0).Text) > 0) then
             begin
@@ -7904,12 +7905,12 @@ begin
             AliasLocalMeta.Size := AliasTargetMeta.Size;
             AliasLocalMeta.IsRecord := AliasTargetMeta.IsRecord;
             AliasLocalMeta.VmtCount := AliasTargetMeta.VmtCount;
-            AliasLocalMeta.ParentClassId := AliasTargetMeta.ParentClassId;
-            AliasLocalMeta.ParentClassName := AliasTargetMeta.ParentClassName;
+            AliasLocalMeta.ParentClassId := AliasTargetId;
+            if FModel.TypeAt(AliasTargetId - 1).Name <> '' then
+              AliasLocalMeta.ParentClassName := FModel.TypeAt(AliasTargetId - 1).Name;
           end;
           FModel.SetTypeMeta(TypeId, AliasLocalMeta);
-          if AliasHasTargetMeta and (AliasTargetMeta.ParentClassId > 0) then
-            FModel.SetTypeParent(TypeId, AliasTargetMeta.ParentClassId);
+          FModel.SetTypeParent(TypeId, AliasTargetId);
         end;
       end;
     end;
