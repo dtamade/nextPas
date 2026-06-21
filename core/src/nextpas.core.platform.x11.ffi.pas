@@ -5,11 +5,12 @@ unit nextpas.core.platform.x11.ffi;
   {$ERROR 'X11 FFI event offsets are x86_64-only'}
 {$ENDIF}
 
-// X11 FFI type and function pointer declarations.
+// X11 and GLX FFI type and function pointer declarations.
 //
 // Types, constants, and typed function pointer globals for the subset
-// of libX11 needed by nextPas/core window management. Zero implementation
-// logic -- the companion unit nextpas.core.platform.x11 handles loading.
+// of libX11 and GLX needed by nextPas/core window management and GL context
+// creation. Zero implementation logic -- the companion units
+// nextpas.core.platform.x11 and nextpas.core.gpu.gl handle loading.
 //
 // TX11Event is a flat 192-byte buffer matching C's union XEvent.
 // All event field access goes through byte-offset helpers in x11.pas.
@@ -33,6 +34,26 @@ type
   PTX11Atom = ^TX11Atom;
   PTX11Window = ^TX11Window;
   PPByte = ^PByte;
+
+  { GLX opaque handles. Sizes verified against gcc sizeof. }
+  TGLXContext   = type Pointer;  { 8 bytes }
+  TGLXFBConfig  = type Pointer;  { 8 bytes -- pointer to opaque struct }
+  PTGLXFBConfig = ^TGLXFBConfig;
+
+  { XVisualInfo pointer -- used by GLX to return matching visuals. }
+  PXVisualInfo = ^TXVisualInfo;
+  TXVisualInfo = record
+    Visual: Pointer;     { offset 0: XVisualInfo* visual }
+    VisualID: UInt64;    { offset 8: VisualID (C unsigned long) }
+    Screen: Int32;       { offset 16 }
+    Depth: Int32;        { offset 20 }
+    CClass: Int32;       { offset 24: C++ keyword guard -- maps to "class" in C }
+    RedMask: UInt64;     { offset 32 }
+    GreenMask: UInt64;   { offset 40 }
+    BlueMask: UInt64;    { offset 48 }
+    ColormapSize: Int32; { offset 56 }
+    BitsPerRGB: Int32;   { offset 60 }
+  end;                   { total 64 bytes, matches C XVisualInfo on x86_64 }
 
   { XEvent buffer -- 192 bytes on x86_64, matches C union XEvent.
     C declares: long pad[24] = 24 * 8 = 192 bytes.
@@ -189,6 +210,45 @@ const
   { X11 return codes }
   X11_SUCCESS = 0;
 
+  { --- GLX constants --- }
+
+  { glXChooseFBConfig attributes }
+  GLX_RGBA            = 4;
+  GLX_RENDER_TYPE     = $8011;
+  GLX_DRAWABLE_TYPE   = $8010;
+  GLX_X_VISUAL_TYPE   = $22;
+  GLX_RED_SIZE        = 8;
+  GLX_GREEN_SIZE      = 9;
+  GLX_BLUE_SIZE       = 10;
+  GLX_ALPHA_SIZE      = 11;
+  GLX_DEPTH_SIZE      = 12;
+  GLX_STENCIL_SIZE    = 13;
+  GLX_DOUBLEBUFFER    = 5;
+  GLX_SAMPLE_BUFFERS  = $186A0;
+  GLX_SAMPLES         = $186A1;
+
+  { glXChooseFBConfig attribute values }
+  GLX_RGBA_BIT        = $00000001;
+  GLX_WINDOW_BIT      = $00000001;
+  GLX_TRUE_COLOR      = $8002;
+  GLX_NONE            = $8000;
+
+  { glXGetFBConfigAttrib constant }
+  GLX_FBCONFIG_ID     = $8013;
+
+  { glXCreateContextAttribsARB attributes }
+  GLX_CONTEXT_MAJOR_VERSION_ARB = $2091;
+  GLX_CONTEXT_MINOR_VERSION_ARB = $2092;
+  GLX_CONTEXT_FLAGS_ARB         = $2094;
+  GLX_CONTEXT_PROFILE_MASK_ARB  = $9126;
+
+  { glXCreateContextAttribsARB attribute values }
+  GLX_CONTEXT_CORE_PROFILE_BIT_ARB         = $00000001;
+  GLX_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB   = $00000002;
+
+  { glXSwapIntervalEXT attributes }
+  GLX_MAX_SWAP_INTERVAL_EXT = $20F2;
+
 type
   { XOpenDisplay }
   TXOpenDisplay = function(AName: PAnsiChar): TX11Display; cdecl;
@@ -280,6 +340,38 @@ type
   TXGetSelectionOwner = function(ADisplay: TX11Display;
     ASelection: TX11Atom): TX11Window; cdecl;
 
+  { --- GLX function pointer types --- }
+
+  { glXChooseFBConfig }
+  TglXChooseFBConfig = function(ADisplay: TX11Display; AScreen: Int32;
+    AAttribList: PInt32; out ANElements: Int32): PTGLXFBConfig; cdecl;
+  { glXGetVisualFromFBConfig }
+  TglXGetVisualFromFBConfig = function(ADisplay: TX11Display;
+    AConfig: TGLXFBConfig): PXVisualInfo; cdecl;
+  { glXCreateContextAttribsARB }
+  TglXCreateContextAttribsARB = function(ADisplay: TX11Display;
+    AConfig: TGLXFBConfig; AShareContext: TGLXContext;
+    ADirect: Int32; AAttribList: PInt32): TGLXContext; cdecl;
+  { glXMakeCurrent }
+  TglXMakeCurrent = function(ADisplay: TX11Display; ADrawable: TX11Window;
+    AContext: TGLXContext): Int32; cdecl;
+  { glXSwapBuffers }
+  TglXSwapBuffers = procedure(ADisplay: TX11Display;
+    ADrawable: TX11Window); cdecl;
+  { glXDestroyContext }
+  TglXDestroyContext = procedure(ADisplay: TX11Display;
+    AContext: TGLXContext); cdecl;
+  { glXQueryExtension -- used to verify GLX is functional on the display }
+  TglXQueryExtension = function(ADisplay: TX11Display;
+    AErrorBase: PInt32; AEventBase: PInt32): Int32; cdecl;
+  { glXSwapIntervalEXT -- extension, resolved via glXGetProcAddress }
+  TglXSwapIntervalEXT = procedure(ADisplay: TX11Display;
+    ADrawable: TX11Window; AInterval: Int32); cdecl;
+  { glXGetProcAddress -- resolves GL and GLX extension function pointers.
+    Exported from libGL.so, NOT from libGLX.so. Always use this to resolve
+    GL extension functions; dlsym cannot resolve them on GLVND systems. }
+  TglXGetProcAddress = function(AProcName: PAnsiChar): Pointer; cdecl;
+
 var
   { Display management }
   XOpenDisplay: TXOpenDisplay;
@@ -323,6 +415,17 @@ var
   { Key translation }
   XLookupString: TXLookupString;
   XkbKeycodeToKeysym: TXkbKeycodeToKeysym;
+
+  { --- GLX function pointer globals --- }
+  glXChooseFBConfig: TglXChooseFBConfig;
+  glXGetVisualFromFBConfig: TglXGetVisualFromFBConfig;
+  glXCreateContextAttribsARB: TglXCreateContextAttribsARB;
+  glXMakeCurrent: TglXMakeCurrent;
+  glXSwapBuffers: TglXSwapBuffers;
+  glXDestroyContext: TglXDestroyContext;
+  glXQueryExtension: TglXQueryExtension;
+  glXSwapIntervalEXT: TglXSwapIntervalEXT;
+  glXGetProcAddress: TglXGetProcAddress;
 
 implementation
 

@@ -2,10 +2,14 @@ unit nextpas.core.platform.x11;
 
 {$I nextpas.core.settings.inc}
 
-// X11 runtime loader and convenience wrappers.
+// X11 and GLX runtime loader and convenience wrappers.
 //
 // Loads libX11.so.6 via dlopen/dlsym at runtime. Avoids hard link
 // dependency so binaries run on headless or Wayland-only systems.
+//
+// GLX loads libGL.so.1 separately. Most GLX symbols are resolved via
+// dlsym; GL extension functions are resolved via glXGetProcAddress at
+// runtime in the GPU layer.
 //
 // Event field helpers read from a flat 192-byte TX11Event buffer
 // using byte offsets verified against gcc offsetof(XKeyEvent, ...).
@@ -23,10 +27,18 @@ const
   X11_ERR_WINDOW      = -4;
   X11_ERR_ATOM        = -5;
 
+  GLX_ERR_LOAD_FAILED = -10;
+
 { Runtime load/unload of libX11. Returns 0 on success. }
 function x11_load: Int32;
 procedure x11_unload;
 function x11_is_loaded: Boolean;
+
+{ Runtime load/unload of libGL.so.1 (GLX symbols). Returns 0 on success.
+  Requires x11_load to have succeeded first. }
+function glx_load: Int32;
+procedure glx_unload;
+function glx_is_loaded: Boolean;
 
 { --- Event field helpers (byte-offset access into flat TX11Event) --- }
 
@@ -72,6 +84,9 @@ var
   GLib: TPlatformLibrary;
   GLoaded: Boolean = False;
   GRefCount: Int32 = 0;
+  GGLLib: TPlatformLibrary;
+  GGLLoaded: Boolean = False;
+  GGLRefCount: Int32 = 0;
 
 function x11_load: Int32;
 var
@@ -264,6 +279,93 @@ end;
 function x11_is_loaded: Boolean;
 begin
   Result := GLoaded;
+end;
+
+function glx_load: Int32;
+var
+  LPtr: Pointer;
+begin
+  if GGLLoaded then
+  begin
+    Inc(GGLRefCount);
+    Exit(X11_SUCCESS);
+  end;
+
+  if platform_dl_open('libGL.so.1', PLATFORM_DL_NOW, GGLLib) <> 0 then
+    Exit(GLX_ERR_LOAD_FAILED);
+
+  { Core GLX symbols -- all required. }
+  if platform_dl_sym(GGLLib, 'glXChooseFBConfig', LPtr) <> 0 then
+  begin glx_unload; Exit(GLX_ERR_LOAD_FAILED); end;
+  Pointer(glXChooseFBConfig) := LPtr;
+
+  if platform_dl_sym(GGLLib, 'glXGetVisualFromFBConfig', LPtr) <> 0 then
+  begin glx_unload; Exit(GLX_ERR_LOAD_FAILED); end;
+  Pointer(glXGetVisualFromFBConfig) := LPtr;
+
+  if platform_dl_sym(GGLLib, 'glXMakeCurrent', LPtr) <> 0 then
+  begin glx_unload; Exit(GLX_ERR_LOAD_FAILED); end;
+  Pointer(glXMakeCurrent) := LPtr;
+
+  if platform_dl_sym(GGLLib, 'glXSwapBuffers', LPtr) <> 0 then
+  begin glx_unload; Exit(GLX_ERR_LOAD_FAILED); end;
+  Pointer(glXSwapBuffers) := LPtr;
+
+  if platform_dl_sym(GGLLib, 'glXDestroyContext', LPtr) <> 0 then
+  begin glx_unload; Exit(GLX_ERR_LOAD_FAILED); end;
+  Pointer(glXDestroyContext) := LPtr;
+
+  if platform_dl_sym(GGLLib, 'glXQueryExtension', LPtr) <> 0 then
+  begin glx_unload; Exit(GLX_ERR_LOAD_FAILED); end;
+  Pointer(glXQueryExtension) := LPtr;
+
+  if platform_dl_sym(GGLLib, 'glXGetProcAddress', LPtr) <> 0 then
+  begin glx_unload; Exit(GLX_ERR_LOAD_FAILED); end;
+  Pointer(glXGetProcAddress) := LPtr;
+
+  { Extension: glXCreateContextAttribsARB -- resolved via GetProcAddress. }
+  if @glXGetProcAddress <> nil then
+  begin
+    Pointer(glXCreateContextAttribsARB) := glXGetProcAddress(
+      'glXCreateContextAttribsARB');
+    Pointer(glXSwapIntervalEXT) := glXGetProcAddress(
+      'glXSwapIntervalEXT');
+  end
+  else
+  begin
+    Pointer(glXCreateContextAttribsARB) := nil;
+    Pointer(glXSwapIntervalEXT) := nil;
+  end;
+
+  GGLLoaded := True;
+  GGLRefCount := 1;
+  Result := X11_SUCCESS;
+end;
+
+procedure glx_unload;
+begin
+  if not GGLLoaded then
+    Exit;
+  Dec(GGLRefCount);
+  if GGLRefCount > 0 then
+    Exit;
+
+  Pointer(glXChooseFBConfig) := nil;
+  Pointer(glXGetVisualFromFBConfig) := nil;
+  Pointer(glXCreateContextAttribsARB) := nil;
+  Pointer(glXMakeCurrent) := nil;
+  Pointer(glXSwapBuffers) := nil;
+  Pointer(glXDestroyContext) := nil;
+  Pointer(glXQueryExtension) := nil;
+  Pointer(glXSwapIntervalEXT) := nil;
+  Pointer(glXGetProcAddress) := nil;
+  platform_dl_close(GGLLib);
+  GGLLoaded := False;
+end;
+
+function glx_is_loaded: Boolean;
+begin
+  Result := GGLLoaded;
 end;
 
 { --- Event field helpers --- }
