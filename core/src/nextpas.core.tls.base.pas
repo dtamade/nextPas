@@ -971,7 +971,7 @@ type
     {** 从流加载证书
         @param AStream 包含证书数据的流
         @raises ESSLCertificateException 加载失败时 *}
-    procedure LoadCertificate(AStream: TStream); overload;
+    procedure LoadCertificate(AStream: IStream); overload;
 
     {** 从证书接口加载证书
         @param ACert 证书接口 *}
@@ -987,7 +987,7 @@ type
         @param AStream 包含私钥数据的流
         @param APassword 私钥密码（可选）
         @raises ESSLKeyException 加载失败时 *}
-    procedure LoadPrivateKey(AStream: TStream; const APassword: string = ''); overload;
+    procedure LoadPrivateKey(AStream: IStream; const APassword: string = ''); overload;
 
     {** 从 PEM 字符串直接加载证书（无需临时文件）
         @param APEM PEM 格式的证书字符串
@@ -1158,7 +1158,7 @@ type
     {** 从流创建 SSL 连接
         @param AStream 底层传输流
         @returns 新创建的连接接口 *}
-    function CreateConnection(AStream: TStream): ISSLConnection; overload;
+    function CreateConnection(AStream: IStream): ISSLConnection; overload;
 
     {** 检查上下文是否有效
         @returns True 如果上下文已正确初始化 *}
@@ -1907,13 +1907,13 @@ type
     
     // 加载和保存
     function LoadFromFile(const AFileName: string): Boolean;
-    function LoadFromStream(AStream: TStream): Boolean;
+    function LoadFromStream(AStream: IStream): Boolean;
     function LoadFromMemory(const AData: Pointer; ASize: Integer): Boolean;
     function LoadFromPEM(const APEM: string): Boolean;
     function LoadFromDER(const ADER: TBytes): Boolean;
     
     function SaveToFile(const AFileName: string): Boolean;
-    function SaveToStream(AStream: TStream): Boolean;
+    function SaveToStream(AStream: IStream): Boolean;
     function SaveToPEM: string;
     function SaveToDER: TBytes;
     

@@ -76,7 +76,7 @@ var
   LResult: Int32;
 begin
   EnsureOpen('sendto');
-  if platform_sockaddr_from_ipv4(AAddr.IP, AAddr.Port, LSa, LSaLen) <> 0 then
+  if platform_sockaddr_from_ipv4(platform_ipv4_parse(AAddr.IP), AAddr.Port, LSa, LSaLen) <> 0 then
     raise ENetworkError.Create('udp sendto: invalid address');
   LResult := platform_socket_sendto(FSocket, @ABuf, Int32(ACount), 0,
     @LSa, LSaLen, LSent);
@@ -91,6 +91,8 @@ var
   LSaLen: socklen_t;
   LRecvd: Int32;
   LResult: Int32;
+  LIP: UInt32;
+  LPort: UInt16;
 begin
   EnsureOpen('recvfrom');
   LSaLen := SizeOf(LSa);
@@ -98,7 +100,9 @@ begin
     @LSa, @LSaLen, LRecvd);
   if LResult <> 0 then
     raise ENetworkError.Create('udp recvfrom failed (' + IntToStr(LResult) + ')');
-  platform_sockaddr_to_ipv4(LSa, AAddr.IP, AAddr.Port);
+  platform_sockaddr_to_ipv4(LSa, LIP, LPort);
+  AAddr.IP := platform_ipv4_to_string(LIP);
+  AAddr.Port := LPort;
   AAddr.IsIPv6 := False;
   Result := SizeUInt(LRecvd);
 end;
@@ -133,7 +137,7 @@ begin
     raise ENetworkError.Create('udp bind: socket create failed');
   LOne := 1;
   platform_socket_setsockopt(LSock, PLATFORM_SOL_SOCKET, PLATFORM_SO_REUSEADDR, @LOne, SizeOf(LOne));
-  if platform_sockaddr_from_ipv4(AAddr, APort, LSa, LSaLen) <> 0 then
+  if platform_sockaddr_from_ipv4(platform_ipv4_parse(AAddr), APort, LSa, LSaLen) <> 0 then
   begin
     platform_socket_close(LSock);
     raise ENetworkError.Create('udp bind: invalid address');

@@ -45,7 +45,7 @@ type
     
     // Socket configuration
     function WithSocket(ASocket: THandle): ISSLConnectionBuilder;
-    function WithStream(AStream: TStream): ISSLConnectionBuilder;
+    function WithStream(AStream: IStream): ISSLConnectionBuilder;
     
     // Connection options
     function WithTimeout(AMs: Integer): ISSLConnectionBuilder; overload;
@@ -85,7 +85,7 @@ type
   private
     FContext: ISSLContext;
     FSocket: THandle;
-    FStream: TStream;
+    FStream: IStream;
     FTimeout: Integer;
     FBlocking: Boolean;
     FHostname: string;
@@ -99,7 +99,7 @@ type
     // ISSLConnectionBuilder
     function WithContext(AContext: ISSLContext): ISSLConnectionBuilder;
     function WithSocket(ASocket: THandle): ISSLConnectionBuilder;
-    function WithStream(AStream: TStream): ISSLConnectionBuilder;
+    function WithStream(AStream: IStream): ISSLConnectionBuilder;
     function WithTimeout(AMs: Integer): ISSLConnectionBuilder; overload;
     function WithTimeout(const ATimeout: TTimeoutDuration): ISSLConnectionBuilder; overload;
     function WithBlocking(ABlocking: Boolean): ISSLConnectionBuilder;
@@ -223,7 +223,7 @@ begin
   Result := Self;
 end;
 
-function TSSLConnectionBuilderImpl.WithStream(AStream: TStream): ISSLConnectionBuilder;
+function TSSLConnectionBuilderImpl.WithStream(AStream: IStream): ISSLConnectionBuilder;
 begin
   FStream := AStream;
   FSocket := 0;

@@ -27,8 +27,8 @@ type
     function IsComplete: Boolean;
     function FinishIStream: IStream;
     function TryFinishIStream(out AStream: IStream): TSSLOperationResult;
-    function FinishStream: TStream;
-    function TryFinishStream(out AStream: TStream): TSSLOperationResult;
+    function FinishStream: IStream;
+    function TryFinishStream(out AStream: IStream): TSSLOperationResult;
     procedure Cancel;
 
     property Connection: ISSLConnection read FConnection;
@@ -113,7 +113,7 @@ function TSSLPendingClientConnect.FinishIStream: IStream;
 begin
   if not FCompleted then
     raise ESSLException.Create('Handshake not complete');
-  Result := WrapTStream(TSSLStream.Create(FConnection), True);
+  Result := WrapIStream(TSSLStream.Create(FConnection), True);
 end;
 
 function TSSLPendingClientConnect.TryFinishIStream(out AStream: IStream): TSSLOperationResult;
@@ -121,16 +121,16 @@ begin
   AStream := nil;
   if not FCompleted then
     Exit(TSSLOperationResult.Err(sslErrHandshake, 'Handshake not complete'));
-  AStream := WrapTStream(TSSLStream.Create(FConnection), True);
+  AStream := WrapIStream(TSSLStream.Create(FConnection), True);
   Result := TSSLOperationResult.Ok;
 end;
 
-function TSSLPendingClientConnect.FinishStream: TStream;
+function TSSLPendingClientConnect.FinishStream: IStream;
 begin
   Result := WrapIStream(FinishIStream);
 end;
 
-function TSSLPendingClientConnect.TryFinishStream(out AStream: TStream): TSSLOperationResult;
+function TSSLPendingClientConnect.TryFinishStream(out AStream: IStream): TSSLOperationResult;
 var
   LIStream: IStream;
 begin

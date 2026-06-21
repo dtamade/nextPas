@@ -7,10 +7,10 @@ interface
 type
   TTypeKind = (
     tkUnknown, tkInteger, tkChar, tkEnumeration, tkFloat,
-    tkString, tkSet, tkClass, tkMethod, tkWChar, tkLString,
-    tkWString, tkVariant, tkArray, tkRecord, tkInterface,
+    tkSString, tkLString, tkAString, tkWString, tkSet, tkClass,
+    tkMethod, tkWChar, tkVariant, tkArray, tkRecord, tkInterface,
     tkInt64, tkDynArray, tkUString, tkUChar, tkBool, tkQWord,
-    tkProcedure
+    tkClassRef, tkPointer, tkProcVar
   );
   PPTypeInfo = ^PTypeInfo;
   PTypeInfo = ^TTypeInfo;

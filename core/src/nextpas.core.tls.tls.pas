@@ -5,7 +5,7 @@
     - 提供更贴近 rustls / tokio-rustls 的使用体验：
       * TSSLConnector：客户端连接器
       * TSSLAcceptor：服务端接收器
-      * TSSLStream：将 ISSLConnection 封装为 TStream
+      * IStream：将 ISSLConnection 封装为 TStream
 
   重要语义:
     - SNI/hostname 属于“连接级别”配置。
@@ -27,27 +27,29 @@ uses
   nextpas.core.base.utils,
   nextpas.core.exception,
   nextpas.core.base,
-  Classes,
-  nextpas.core.system.classes,
+  nextpas.core.io.base,
+  nextpas.core.io.intf,
   nextpas.core.tls.base,
   nextpas.core.tls.pending,
   nextpas.core.tls.safety,
   nextpas.core.tls.exceptions;
 
 type
-  { TSSLStream - 将 ISSLConnection 封装为 TStream }
-  TSSLStream = class(TStream)
+  { TSSLStream - 将 ISSLConnection 封装为 IStream }
+  TSSLStream = class(TInterfacedObject, IStream)
   private
     FConnection: ISSLConnection;
   public
     constructor Create(AConnection: ISSLConnection);
     destructor Destroy; override;
 
-    function Read(var Buffer; Count: Longint): Longint; override;
-    function Write(const Buffer; Count: Longint): Longint; override;
-    function Seek(const Offset: Int64; Origin: TSeekOrigin): Int64; override;
-
+    { IStream }
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
     procedure Close;
+    procedure Flush;
+
     procedure SetReadTimeout(AMs: Integer);
     procedure SetWriteTimeout(AMs: Integer);
     function GetSelectedALPN: string;
@@ -85,13 +87,13 @@ type
     function WithEarlyData(const AData: TBytes): TSSLConnector;
     function WithALPN(const AProtocols: string): TSSLConnector;
 
-    function ConnectSocket(ASocket: THandle; const AServerName: string): TSSLStream;
+    function ConnectSocket(ASocket: THandle; const AServerName: string): IStream;
     function TryConnectSocket(ASocket: THandle; const AServerName: string;
-      out AStream: TSSLStream): TSSLOperationResult;
+      out AStream: IStream): TSSLOperationResult;
 
-    function ConnectStream(ATransport: TStream; const AServerName: string): TSSLStream;
-    function TryConnectStream(ATransport: TStream; const AServerName: string;
-      out AStream: TSSLStream): TSSLOperationResult;
+    function ConnectStream(ATransport: IStream; const AServerName: string): IStream;
+    function TryConnectStream(ATransport: IStream; const AServerName: string;
+      out AStream: IStream): TSSLOperationResult;
 
     function BeginConnectSocket(ASocket: THandle; const AServerName: string): TSSLPendingClientConnect;
   end;
@@ -111,11 +113,11 @@ type
     function WithTimeout(const ATimeout: TTimeoutDuration): TSSLAcceptor; overload;
     function WithBlocking(ABlocking: Boolean): TSSLAcceptor;
 
-    function AcceptSocket(ASocket: THandle): TSSLStream;
-    function TryAcceptSocket(ASocket: THandle; out AStream: TSSLStream): TSSLOperationResult;
+    function AcceptSocket(ASocket: THandle): IStream;
+    function TryAcceptSocket(ASocket: THandle; out AStream: IStream): TSSLOperationResult;
 
-    function AcceptStream(ATransport: TStream): TSSLStream;
-    function TryAcceptStream(ATransport: TStream; out AStream: TSSLStream): TSSLOperationResult;
+    function AcceptStream(ATransport: IStream): IStream;
+    function TryAcceptStream(ATransport: IStream; out AStream: IStream): TSSLOperationResult;
   end;
 
 implementation
@@ -212,14 +214,14 @@ begin
   inherited Destroy;
 end;
 
-function TSSLStream.Read(var Buffer; Count: Longint): Longint;
+function TSSLStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 var
   R: Integer;
 begin
   if FConnection = nil then
     Exit(0);
 
-  R := FConnection.Read(Buffer, Count);
+  R := FConnection.Read(ABuf, ACount);
   if R < 0 then
     raise ESSLConnectionException.CreateWithContext(
       'TLS read failed',
@@ -229,14 +231,14 @@ begin
   Result := R;
 end;
 
-function TSSLStream.Write(const Buffer; Count: Longint): Longint;
+function TSSLStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 var
   R: Integer;
 begin
   if FConnection = nil then
     Exit(0);
 
-  R := FConnection.Write(Buffer, Count);
+  R := FConnection.Write(ABuf, ACount);
   if R < 0 then
     raise ESSLConnectionException.CreateWithContext(
       'TLS write failed',
@@ -246,11 +248,16 @@ begin
   Result := R;
 end;
 
-function TSSLStream.Seek(const Offset: Int64; Origin: TSeekOrigin): Int64;
+function TSSLStream.Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
 begin
   // TLS/SSL 连接是流式的，不支持 seek。
   Result := 0;
   raise EStreamError.Create('TLS stream is not seekable');
+end;
+
+procedure TSSLStream.Flush;
+begin
+  // TLS 连接是流式的，无缓冲需要 flush
 end;
 
 procedure TSSLStream.Close;
@@ -417,7 +424,7 @@ begin
 end;
 
 function TSSLConnector.TryConnectSocket(ASocket: THandle; const AServerName: string;
-  out AStream: TSSLStream): TSSLOperationResult;
+  out AStream: IStream): TSSLOperationResult;
 var
   Conn: ISSLConnection;
   QueueRes: TSSLOperationResult;
@@ -474,7 +481,7 @@ begin
   end;
 end;
 
-function TSSLConnector.ConnectSocket(ASocket: THandle; const AServerName: string): TSSLStream;
+function TSSLConnector.ConnectSocket(ASocket: THandle; const AServerName: string): IStream;
 var
   R: TSSLOperationResult;
 begin
@@ -487,8 +494,8 @@ begin
     );
 end;
 
-function TSSLConnector.TryConnectStream(ATransport: TStream; const AServerName: string;
-  out AStream: TSSLStream): TSSLOperationResult;
+function TSSLConnector.TryConnectStream(ATransport: IStream; const AServerName: string;
+  out AStream: IStream): TSSLOperationResult;
 var
   Conn: ISSLConnection;
   QueueRes: TSSLOperationResult;
@@ -545,7 +552,7 @@ begin
   end;
 end;
 
-function TSSLConnector.ConnectStream(ATransport: TStream; const AServerName: string): TSSLStream;
+function TSSLConnector.ConnectStream(ATransport: IStream; const AServerName: string): IStream;
 var
   R: TSSLOperationResult;
 begin
@@ -607,7 +614,7 @@ begin
   ApplyConnectionControlOverrides(AConn, FTimeout, FBlocking);
 end;
 
-function TSSLAcceptor.TryAcceptSocket(ASocket: THandle; out AStream: TSSLStream): TSSLOperationResult;
+function TSSLAcceptor.TryAcceptSocket(ASocket: THandle; out AStream: IStream): TSSLOperationResult;
 var
   Conn: ISSLConnection;
   VerifyRes: Integer;
@@ -653,7 +660,7 @@ begin
   end;
 end;
 
-function TSSLAcceptor.AcceptSocket(ASocket: THandle): TSSLStream;
+function TSSLAcceptor.AcceptSocket(ASocket: THandle): IStream;
 var
   R: TSSLOperationResult;
 begin
@@ -666,7 +673,7 @@ begin
     );
 end;
 
-function TSSLAcceptor.TryAcceptStream(ATransport: TStream; out AStream: TSSLStream): TSSLOperationResult;
+function TSSLAcceptor.TryAcceptStream(ATransport: IStream; out AStream: IStream): TSSLOperationResult;
 var
   Conn: ISSLConnection;
   VerifyRes: Integer;
@@ -712,7 +719,7 @@ begin
   end;
 end;
 
-function TSSLAcceptor.AcceptStream(ATransport: TStream): TSSLStream;
+function TSSLAcceptor.AcceptStream(ATransport: IStream): IStream;
 var
   R: TSSLOperationResult;
 begin

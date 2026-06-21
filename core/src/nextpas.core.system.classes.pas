@@ -1,7 +1,9 @@
 unit nextpas.core.system.classes;
 {**
- * @desc Minimal Classes compatibility facade for stream types consumed by
- *   framework modules that are migrating away from direct RTL imports.
+ * @desc Minimal Classes compatibility facade.
+ *   Re-exports nextpas.core.io types — no direct FPC RTL dependency.
+ *   Modules that need FPC TStream bridging should use
+ *   nextpas.core.io.stream_adapter directly.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -9,16 +11,14 @@ unit nextpas.core.system.classes;
 interface
 
 uses
-  Classes;
+  nextpas.core.io.base,
+  nextpas.core.io.intf;
 
 type
-  TStream = Classes.TStream;
-  THandleStream = Classes.THandleStream;
-  TMemoryStream = Classes.TMemoryStream;
-  TStringStream = Classes.TStringStream;
-  TSeekOrigin = Classes.TSeekOrigin;
-  TInterfacedObject = System.TInterfacedObject;
-  IInterface = System.IInterface;
+  TSeekOrigin = nextpas.core.io.base.TSeekOrigin;
+  IStream = nextpas.core.io.intf.IStream;
+  IReader = nextpas.core.io.intf.IReader;
+  IWriter = nextpas.core.io.intf.IWriter;
 
 implementation
 

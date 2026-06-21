@@ -5,6 +5,7 @@ unit nextpas.core.yaml.writer;
 interface
 
 uses
+  Math,
   nextpas.core.text.view,
   nextpas.core.text.builder,
   nextpas.core.yaml.types,

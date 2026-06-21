@@ -11,7 +11,7 @@ uses
 type
   TSSLDialResult = record
     Connection: ISSLConnection;
-    Stream: TSSLStream;
+    Stream: IStream;
     Error: TSSLOperationResult;
   end;
 
@@ -26,7 +26,7 @@ type
 
     function Dial(const AHost: string; APort: Word): TSSLDialResult;
     function TryDial(const AHost: string; APort: Word;
-      out AStream: TSSLStream; out AError: string): Boolean;
+      out AStream: IStream; out AError: string): Boolean;
     function WrapSocket(ASocket: THandle; const AHostname: string): TSSLDialResult;
 
     property TimeoutMs: Integer read FTimeoutMs write FTimeoutMs;
@@ -162,7 +162,7 @@ begin
       Exit;
     end;
 
-    Result.Stream := TSSLStream.Create(Result.Connection);
+    Result.Stream := IStream.Create(Result.Connection);
   except
     on E: Exception do
     begin
@@ -174,7 +174,7 @@ begin
 end;
 
 function TSSLDialer.TryDial(const AHost: string; APort: Word;
-  out AStream: TSSLStream; out AError: string): Boolean;
+  out AStream: IStream; out AError: string): Boolean;
 var
   LResult: TSSLDialResult;
 begin
@@ -210,7 +210,7 @@ begin
 
     Result.Error := LBuilder.TryBuildClient(Result.Connection);
     if Result.Error.IsOk then
-      Result.Stream := TSSLStream.Create(Result.Connection);
+      Result.Stream := IStream.Create(Result.Connection);
   except
     on E: Exception do
       Result.Error := TSSLOperationResult.Err(sslErrOther, E.Message);

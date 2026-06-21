@@ -95,7 +95,7 @@ end;
 
 procedure FillSockAddr(const AAddr: TNetAddress; out ASa: sockaddr_in; out ALen: Int32);
 begin
-  if platform_sockaddr_from_ipv4(AAddr.IP, AAddr.Port, ASa, ALen) <> 0 then
+  if platform_sockaddr_from_ipv4(platform_ipv4_parse(AAddr.IP), AAddr.Port, ASa, ALen) <> 0 then
   begin
     FillChar(ASa, SizeOf(ASa), 0);
     ALen := 0;
@@ -103,8 +103,13 @@ begin
 end;
 
 function AddrFromSockAddr(const ASa: sockaddr_in): TNetAddress;
+var
+  LIP: UInt32;
+  LPort: UInt16;
 begin
-  platform_sockaddr_to_ipv4(ASa, Result.IP, Result.Port);
+  platform_sockaddr_to_ipv4(ASa, LIP, LPort);
+  Result.IP := platform_ipv4_to_string(LIP);
+  Result.Port := LPort;
   Result.IsIPv6 := False;
 end;
 

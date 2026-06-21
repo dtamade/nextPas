@@ -220,7 +220,7 @@ type
     function EOF: Boolean;
   public
     constructor Create(const AData: TBytes); overload;
-    constructor Create(AStream: TStream); overload;
+    constructor Create(AStream: IStream); overload;
     destructor Destroy; override;
 
     // 解析整个数据
@@ -784,13 +784,13 @@ begin
   FPosition := 0;
 end;
 
-constructor TASN1Reader.Create(AStream: TStream);
+constructor TASN1Reader.Create(AStream: IStream);
 begin
   inherited Create;
   FDataLength := AStream.Size - AStream.Position;
   SetLength(FData, FDataLength);
   if FDataLength > 0 then
-    AStream.ReadBuffer(FData[0], FDataLength);
+    AStream.Read(FData[0], FDataLength);
   FPosition := 0;
 end;
 

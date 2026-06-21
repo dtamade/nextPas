@@ -99,10 +99,10 @@ type
 
     { ISSLContext - 证书和密钥管理 }
     procedure LoadCertificate(const AFileName: string); overload;
-    procedure LoadCertificate(AStream: TStream); overload;
+    procedure LoadCertificate(AStream: IStream); overload;
     procedure LoadCertificate(ACert: ISSLCertificate); overload;
     procedure LoadPrivateKey(const AFileName: string; const APassword: string = ''); overload;
-    procedure LoadPrivateKey(AStream: TStream; const APassword: string = ''); overload;
+    procedure LoadPrivateKey(AStream: IStream; const APassword: string = ''); overload;
     procedure LoadCertificatePEM(const APEM: string);
     procedure LoadPrivateKeyPEM(const APEM: string; const APassword: string = '');
     procedure LoadCAFile(const AFileName: string);
@@ -160,7 +160,7 @@ type
 
     { ISSLContext - 创建连接 }
     function CreateConnection(ASocket: THandle): ISSLConnection; overload;
-    function CreateConnection(AStream: TStream): ISSLConnection; overload;
+    function CreateConnection(AStream: IStream): ISSLConnection; overload;
 
     { ISSLContext - 状态查询 }
     function IsValid: Boolean;
@@ -466,7 +466,7 @@ begin
     raise ESSLCertError.CreateFmt('Failed to load certificate: %s', [AFileName]);
 end;
 
-procedure TMbedTLSContext.LoadCertificate(AStream: TStream);
+procedure TMbedTLSContext.LoadCertificate(AStream: IStream);
 var
   LData: TBytes;
   LReadData: TBytes;
@@ -477,7 +477,7 @@ begin
     raise ESSLCertError.Create('Stream is nil');
 
   LReadData := ReadLimitedStreamBytes(
-    WrapTStream(AStream, False),
+    WrapIStream(AStream, False),
     MAX_CERTIFICATE_SIZE,
     'Certificate stream'
   );
@@ -569,7 +569,7 @@ begin
     raise ESSLCertError.CreateFmt('Failed to load private key: %s', [AFileName]);
 end;
 
-procedure TMbedTLSContext.LoadPrivateKey(AStream: TStream; const APassword: string);
+procedure TMbedTLSContext.LoadPrivateKey(AStream: IStream; const APassword: string);
 var
   LData: TBytes;
   LReadData: TBytes;
@@ -582,7 +582,7 @@ begin
     raise ESSLCertError.Create('Stream is nil');
 
   LReadData := ReadLimitedStreamBytes(
-    WrapTStream(AStream, False),
+    WrapIStream(AStream, False),
     MAX_PRIVATE_KEY_SIZE,
     'Private key stream'
   );
@@ -1080,7 +1080,7 @@ begin
   end;
 end;
 
-function TMbedTLSContext.CreateConnection(AStream: TStream): ISSLConnection;
+function TMbedTLSContext.CreateConnection(AStream: IStream): ISSLConnection;
 begin
   RequireValidContext('CreateConnection');
 
@@ -1091,7 +1091,7 @@ begin
   ApplyCredentials;
 
   try
-    Result := TMbedTLSConnection.Create(Self as ISSLContext, FSSLConfig, WrapTStream(AStream, False));
+    Result := TMbedTLSConnection.Create(Self as ISSLContext, FSSLConfig, WrapIStream(AStream, False));
   except
     on E: ESSLException do
       raise;

@@ -22,7 +22,8 @@ unit nextpas.core.tls.random;
 interface
 
 uses
-  SysUtils, Classes, nextpas.core.fs
+  SysUtils, nextpas.core.base, nextpas.core.fs,
+  ctypes, nextpas.core.platform.posix.ffi
   {$IFDEF USE_RANDOM_POOL}
   , nextpas.core.tls.random.pool
   {$ENDIF}
@@ -159,24 +160,23 @@ end;
 // Linux/macOS implementation using /dev/urandom
 
 function SecureRandomBytes(ABuffer: PByte; ACount: Integer): Boolean;
+const
+  O_RDONLY = 0;
 var
-  LFile: TFileStream;
-  LBytesRead: Integer;
+  LFd: cint;
+  LBytesRead: cint;
 begin
   Result := False;
   if (ABuffer = nil) or (ACount <= 0) then
     Exit;
-
+  LFd := open('/dev/urandom', O_RDONLY, 0);
+  if LFd < 0 then
+    Exit;
   try
-    LFile := TFileStream.Create('/dev/urandom', fmOpenRead or fmShareDenyWrite);
-    try
-      LBytesRead := LFile.Read(ABuffer^, ACount);
-      Result := (LBytesRead = ACount);
-    finally
-      LFile.Free;
-    end;
-  except
-    Result := False;
+    LBytesRead := read(LFd, ABuffer, size_t(ACount));
+    Result := (LBytesRead = cint(ACount));
+  finally
+    close(LFd);
   end;
 end;
 

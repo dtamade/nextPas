@@ -101,7 +101,7 @@ type
     FCRLMaterial: TStringArray;
     FServerStapledOCSPResponse: TBytes;
 
-    function ReadStreamToBytes(AStream: TStream): TBytes;
+    function ReadStreamToBytes(AStream: IStream): TBytes;
     function ReadIStreamToBytes(const AStream: IStream; AMaxSize: Int64;
       const AContext: string): TBytes;
     function TicketKey(const ATicket: TBytes): string;
@@ -123,10 +123,10 @@ type
     function GetPreferredVersion: TSSLProtocolVersion;
 
     procedure LoadCertificate(const AFileName: string); overload;
-    procedure LoadCertificate(AStream: TStream); overload;
+    procedure LoadCertificate(AStream: IStream); overload;
     procedure LoadCertificate(ACert: ISSLCertificate); overload;
     procedure LoadPrivateKey(const AFileName: string; const APassword: string = ''); overload;
-    procedure LoadPrivateKey(AStream: TStream; const APassword: string = ''); overload;
+    procedure LoadPrivateKey(AStream: IStream; const APassword: string = ''); overload;
     procedure LoadCertificatePEM(const APEM: string);
     procedure LoadPrivateKeyPEM(const APEM: string; const APassword: string = '');
     procedure LoadCAFile(const AFileName: string);
@@ -189,7 +189,7 @@ type
     function ValidateCertificatePin(const ACertFingerprint: TBytes): Boolean;
 
     function CreateConnection(ASocket: THandle): ISSLConnection; overload;
-    function CreateConnection(AStream: TStream): ISSLConnection; overload;
+    function CreateConnection(AStream: IStream): ISSLConnection; overload;
 
     function IsValid: Boolean;
 
@@ -304,11 +304,11 @@ begin
   inherited Destroy;
 end;
 
-function TFreePascalContext.ReadStreamToBytes(AStream: TStream): TBytes;
+function TFreePascalContext.ReadStreamToBytes(AStream: IStream): TBytes;
 begin
   if AStream = nil then
     RaiseInvalidParameter('AStream');
-  Result := ReadIStreamToBytes(WrapTStream(AStream, False), High(Int64), 'AStream');
+  Result := ReadIStreamToBytes(WrapIStream(AStream, False), High(Int64), 'AStream');
 end;
 
 function TFreePascalContext.ReadIStreamToBytes(const AStream: IStream;
@@ -619,13 +619,13 @@ begin
   end;
 end;
 
-procedure TFreePascalContext.LoadCertificate(AStream: TStream);
+procedure TFreePascalContext.LoadCertificate(AStream: IStream);
 var
   LTransport: IStream;
 begin
   if AStream = nil then
     RaiseInvalidParameter('AStream');
-  LTransport := WrapTStream(AStream, False);
+  LTransport := WrapIStream(AStream, False);
   FCertificateData := ReadIStreamToBytes(LTransport, MAX_CERTIFICATE_SIZE, 'AStream');
 end;
 
@@ -671,13 +671,13 @@ begin
     DecryptPrivateKeyData(APassword, 'TFreePascalContext.LoadPrivateKey');
 end;
 
-procedure TFreePascalContext.LoadPrivateKey(AStream: TStream; const APassword: string);
+procedure TFreePascalContext.LoadPrivateKey(AStream: IStream; const APassword: string);
 var
   LTransport: IStream;
 begin
   if AStream = nil then
     RaiseInvalidParameter('AStream');
-  LTransport := WrapTStream(AStream, False);
+  LTransport := WrapIStream(AStream, False);
   FPrivateKeyData := ReadIStreamToBytes(LTransport, MAX_PRIVATE_KEY_SIZE, 'AStream');
   if APassword <> '' then
     DecryptPrivateKeyData(APassword, 'TFreePascalContext.LoadPrivateKey(AStream)');
@@ -1184,11 +1184,11 @@ begin
   Result := TFreePascalConnection.Create(Self as ISSLContext, ASocket);
 end;
 
-function TFreePascalContext.CreateConnection(AStream: TStream): ISSLConnection;
+function TFreePascalContext.CreateConnection(AStream: IStream): ISSLConnection;
 var
   LTransport: IStream;
 begin
-  LTransport := WrapTStream(AStream, False);
+  LTransport := WrapIStream(AStream, False);
   Result := TFreePascalConnection.Create(Self as ISSLContext, LTransport);
 end;
 
