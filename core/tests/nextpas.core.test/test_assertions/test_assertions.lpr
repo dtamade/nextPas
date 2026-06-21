@@ -149,6 +149,9 @@ procedure TestCheckEndsWith;
 begin
   CheckEndsWith('hello world', 'world');
   CheckEndsWith('abc', 'bc');
+  { Empty suffix matches everything (consistent with ToEndWith) }
+  CheckEndsWith('hello', '');
+  CheckEndsWith('', '');
   try
     CheckEndsWith('hello', 'xyz');
     Halt(1);
@@ -222,6 +225,18 @@ begin
   end;
 end;
 
+procedure TestCheckRaisesSkipPassthrough;
+begin
+  { CheckRaises must NOT catch ETestSkip — it's flow control, not a testable exception }
+  try
+    CheckRaises(EConvertError,
+      procedure begin Skip('flow control'); end);
+    Halt(1); { Should never reach here — Skip should propagate }
+  except
+    on E: ETestSkipped do { expected: Skip escaped CheckRaises };
+  end;
+end;
+
 procedure TestFail;
 begin
   try
@@ -268,6 +283,7 @@ begin
   LSuite.Test('CheckLength',           @TestCheckLength);
   LSuite.Test('CheckRaises',           @TestCheckRaises);
   LSuite.Test('CheckNoRaise',          @TestCheckNoRaise);
+  LSuite.Test('CheckRaises+Skip',      @TestCheckRaisesSkipPassthrough);
   LSuite.Test('Fail',                  @TestFail);
   LSuite.Test('Skip',                  @TestSkip);
 

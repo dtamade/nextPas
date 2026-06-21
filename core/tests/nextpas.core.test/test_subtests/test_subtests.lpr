@@ -69,6 +69,8 @@ begin
 
   Ctx.Run('this fails',
     procedure
+    var
+      LCaught: Boolean = False;
     begin
       try
         Check(False, 'subtest failure');
@@ -76,10 +78,11 @@ begin
       except
         on E: EAssertionFailed do
         begin
-          Check(Pos('subtest failure', E.Message) > 0);
-          InterLockedIncrement(GSubTestsRun);
+          LCaught := Pos('subtest failure', E.Message) > 0;
         end;
       end;
+      Check(LCaught, 'expected "subtest failure" in exception message');
+      InterLockedIncrement(GSubTestsRun);
     end);
 
   Ctx.Run('this also passes',

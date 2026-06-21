@@ -55,10 +55,12 @@ type
     constructor Create(const AReason: string);
   end;
 
+  TTestEntryKind = (ekTest, ekSubtest, ekSkipped);
+
   TTestEntry = record
     Name : string;
     Proc : TTestProc;
-    Kind : (ekTest, ekSubtest, ekSkipped);
+    Kind : TTestEntryKind;
     SkipReason: string;
   end;
 
@@ -71,6 +73,12 @@ type
     Teardown  : TTestProc;
     BeforeEach: TTestProc;
     AfterEach : TTestProc;
+    { Cached run results — set by Run/RunParallel }
+    FLastRunPassed: Boolean;
+    FHasRun       : Boolean;
+    FLastPass     : Integer;
+    FLastFail     : Integer;
+    FLastSkip     : Integer;
 
     class function Create(const AName: string): TTestSuite; static;
     procedure Test(const AName: string; AProc: TTestProc);
@@ -82,6 +90,8 @@ type
     procedure OnAfterEach(AProc: TTestProc);
     function  Run: Boolean;
     function  RunParallel(APool: IThreadPool): Boolean;
+      { Note: APool is currently unused — parallel mode uses direct platform_thread_create
+        to work around FPC closure capture semantics. Reserved for future thread pool integration. }
     procedure Summary;
     function  AllPassed: Boolean;
   end;
@@ -296,17 +306,13 @@ procedure SetTestContext(const ASuiteName, ATestName: string);
 begin
   GActiveTestName  := ATestName;
   GActiveSuiteName := ASuiteName;
-  GTestSkipped     := False;
-  GTestFailed      := False;
+  GTestSkipped     := False; { read by ReportLeakIfAny under HASHEAPTRACE }
+  GTestFailed      := False; { read by ReportLeakIfAny under HASHEAPTRACE }
   GSkipReason      := '';
 end;
 
 procedure ReportLeakIfAny(AStatus: TTestStatus);
 begin
-  { GTestFailed is read below under HASHEAPTRACE; the conditional read
-    also serves as explicit usage to suppress FPC's "assigned but never used" note. }
-  if GTestSkipped then { intentionally check flag to suppress note };
-  if GTestFailed then { intentionally check flag to suppress note };
   {$IFDEF HASHEAPTRACE}
   if (AStatus = tsPassed) and not GTestFailed and
      (GetFPCHeapStatus.CurrHeapUsed > 0) then
@@ -432,10 +438,12 @@ end;
 
 procedure CheckEndsWith(const AStr, ASuffix: string);
 var
-  LLen: Integer;
+  LLen: NativeInt;
 begin
   LLen := Length(ASuffix);
-  if (LLen = 0) or (Length(AStr) < LLen) or
+  if LLen = 0 then
+    Exit; { empty suffix matches everything (consistent with ToEndWith) }
+  if (Length(AStr) < LLen) or
      (Copy(AStr, Length(AStr) - LLen + 1, LLen) <> ASuffix) then
     InternalFail('"' + AStr + '" does not end with "' + ASuffix + '"');
 end;
@@ -475,6 +483,8 @@ begin
   try
     AProc;
   except
+    on E: ETestSkipped do
+      raise; { Skip is flow control, not a testable exception }
     on E: Exception do
     begin
       LRaised := True;
@@ -864,6 +874,8 @@ begin
   try
     FProcValue;
   except
+    on E: ETestSkipped do
+      raise; { Skip is flow control, not a testable exception }
     on E: Exception do
     begin
       LRaised := True;
@@ -1054,6 +1066,11 @@ begin
   Result.Teardown   := nil;
   Result.BeforeEach := nil;
   Result.AfterEach  := nil;
+  Result.FLastRunPassed := False;
+  Result.FHasRun        := False;
+  Result.FLastPass      := 0;
+  Result.FLastFail      := 0;
+  Result.FLastSkip      := 0;
 end;
 
 procedure TTestSuite.Test(const AName: string; AProc: TTestProc);
@@ -1218,6 +1235,7 @@ begin
       except
         on E: Exception do
         begin
+          WriteLn('  ', AnsiYellow('⚠ afterEach failed: '), E.Message);
           if LStatus = tsPassed then
           begin
             LStatus := tsError;
@@ -1265,7 +1283,12 @@ begin
     end;
   end;
 
-  Result := LFail = 0;
+  FHasRun        := True;
+  FLastRunPassed := LFail = 0;
+  FLastPass      := LPass;
+  FLastFail      := LFail;
+  FLastSkip      := LSkip;
+  Result         := FLastRunPassed;
   WriteLn(AnsiDim('  ') +
     IntToStr(LPass) + ' passed, ' +
     IntToStr(LFail) + ' failed, ' +
@@ -1295,7 +1318,9 @@ begin
   Result := nil;
   R := PThreadRec(AArg);
   LStatus := tsPassed;
-  SetTestContext(R^.SuiteName, R^.Entry.Name);
+  { Note: We intentionally do NOT call SetTestContext here.
+    SetTestContext writes to non-threadsafe global vars (GActiveTestName etc.)
+    and is only safe in serial mode. Parallel tests track state locally via LStatus. }
 
   if R^.Entry.Kind = ekSkipped then
   begin
@@ -1330,7 +1355,16 @@ begin
     try
       R^.After;
     except
-      if LStatus = tsPassed then LStatus := tsError;
+      on E: Exception do
+      begin
+        R^.Mtx.Acquire;
+        try
+          WriteLn('  ', AnsiYellow('⚠ afterEach failed: '), E.Message);
+        finally
+          R^.Mtx.Release;
+        end;
+        if LStatus = tsPassed then LStatus := tsError;
+      end;
     end;
   end;
 
@@ -1438,23 +1472,12 @@ begin
     end;
   end;
 
-  Result := LFail = 0;
-  WriteLn(AnsiDim('  ') +
-    IntToStr(LPass) + ' passed, ' +
-    IntToStr(LFail) + ' failed, ' +
-    IntToStr(LSkip) + ' skipped');
-
-  if Assigned(Teardown) then
-  begin
-    try
-      Teardown;
-    except
-      on E: Exception do
-        WriteLn('  ', AnsiYellow('⚠ teardown error: ') + E.Message);
-    end;
-  end;
-
-  Result := LFail = 0;
+  FHasRun        := True;
+  FLastRunPassed := LFail = 0;
+  FLastPass      := LPass;
+  FLastFail      := LFail;
+  FLastSkip      := LSkip;
+  Result         := FLastRunPassed;
   WriteLn(AnsiDim('  ') +
     IntToStr(LPass) + ' passed, ' +
     IntToStr(LFail) + ' failed, ' +
@@ -1469,7 +1492,10 @@ end;
 
 function TTestSuite.AllPassed: Boolean;
 begin
-  Result := Run;
+  if not FHasRun then
+    Result := Run
+  else
+    Result := FLastRunPassed;
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }
@@ -1499,10 +1525,17 @@ var
 begin
   WriteLn(AnsiBold('═══ ') + AnsiBold(Name) + AnsiBold(' ═══'));
   LAllPassed := True;
+  TotalPass := 0;
+  TotalFail := 0;
+  TotalSkip := 0;
+  TotalErr  := 0;
   for I := 0 to High(Suites) do
   begin
     if not Suites[I].Run then
       LAllPassed := False;
+    Inc(TotalPass, Suites[I].FLastPass);
+    Inc(TotalFail, Suites[I].FLastFail);
+    Inc(TotalSkip, Suites[I].FLastSkip);
   end;
   Result := LAllPassed;
 end;
@@ -1514,10 +1547,17 @@ var
 begin
   WriteLn(AnsiBold('═══ ') + AnsiBold(Name) + AnsiBold(' (parallel) ═══'));
   LAllPassed := True;
+  TotalPass := 0;
+  TotalFail := 0;
+  TotalSkip := 0;
+  TotalErr  := 0;
   for I := 0 to High(Suites) do
   begin
     if not Suites[I].RunParallel(APool) then
       LAllPassed := False;
+    Inc(TotalPass, Suites[I].FLastPass);
+    Inc(TotalFail, Suites[I].FLastFail);
+    Inc(TotalSkip, Suites[I].FLastSkip);
   end;
   Result := LAllPassed;
 end;
@@ -1527,11 +1567,17 @@ begin
   WriteLn;
   WriteLn(AnsiBold('═══ Summary ═══'));
   WriteLn('  Suites: ', Length(Suites));
+  WriteLn('  Passed: ', TotalPass,
+    ', Failed: ', TotalFail,
+    ', Skipped: ', TotalSkip);
 end;
 
 function TTestRunner.AllPassed: Boolean;
 begin
-  Result := RunAll;
+  if TotalPass + TotalFail + TotalSkip > 0 then
+    Result := TotalFail = 0
+  else
+    Result := RunAll;
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }

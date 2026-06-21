@@ -146,6 +146,11 @@ begin
     WriteLn(AnsiRed('FAIL: BeforeEach not called for each test'));
     Halt(1);
   end;
+  if GAfterEachCalled < 4 then
+  begin
+    WriteLn(AnsiRed('FAIL: AfterEach not called for each test'));
+    Halt(1);
+  end;
 
   if not LPass then
   begin
