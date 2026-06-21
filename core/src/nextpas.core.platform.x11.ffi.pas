@@ -28,9 +28,10 @@ type
   TX11KeySym   = type UInt64;   // 8 bytes (C unsigned long KeySym)
   TX11Status   = type Int32;
 
-  { Pointer types used by function signatures }
+  { Pointer types used by function signatures and event helpers }
   PTX11KeySym = ^TX11KeySym;
   PTX11Atom = ^TX11Atom;
+  PTX11Window = ^TX11Window;
 
   { XEvent buffer -- 192 bytes on x86_64, matches C union XEvent.
     C declares: long pad[24] = 24 * 8 = 192 bytes.
