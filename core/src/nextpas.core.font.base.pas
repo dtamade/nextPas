@@ -27,6 +27,14 @@ const
   TABLE_TAG_GLYF = $676C7966;   // 'glyf'
   TABLE_TAG_HMTX = $686D7478;   // 'hmtx'
   TABLE_TAG_OS2  = $4F532F32;   // 'OS/2'
+  TABLE_TAG_GPOS = $47504F53;   // 'GPOS'
+  TABLE_TAG_GSUB = $47535542;   // 'GSUB'
+
+  {** GPOS Lookup Type：Pair Adjustment（kern） }
+  GPOS_LOOKUP_PAIR_ADJUSTMENT = 2;
+
+  {** GSUB Lookup Type：Ligature Substitution }
+  GSUB_LOOKUP_LIGATURE = 4;
 
   {** cmap 平台 ID }
   CMAP_PLATFORM_UNICODE   = 0;
@@ -241,6 +249,26 @@ type
 
   {** 字体加载错误 }
   EFontError = class(Exception);
+
+  {** GPOS PairPos kern 子表（class-based，查询时解析） }
+  TFontPairPosSubtable = record
+    BaseOffset: Int32;       // 子表在文件中的偏移
+    CoverageOffset: Int32;   // Coverage 表偏移（相对文件）
+    ClassDef1Offset: Int32;  // ClassDef1 偏移（相对文件）
+    ClassDef2Offset: Int32;  // ClassDef2 偏移（相对文件）
+    Class2Count: Int32;      // class2 数量
+    ValueRecordSize: Int32;  // 每条 ValueRecord 的字节数
+    XAdvanceOffset: Int32;   // XAdvance 在 ValueRecord 中的字节偏移（-1 = 无）
+  end;
+  TFontPairPosSubtableArray = array of TFontPairPosSubtable;
+
+  {** GSUB 连字子表数据（查询时解析） }
+  TFontLigatureSubtable = record
+    BaseOffset: Int32;       // 子表在文件中的偏移
+    CoverageOffset: Int32;   // Coverage 表偏移（相对文件）
+    LigatureSetCount: Int32; // LigatureSet 数量
+  end;
+  TFontLigatureSubtableArray = array of TFontLigatureSubtable;
 
 {** 字形轮廓内存释放 }
 procedure FontGlyphOutlineClear(var AOutline: TFontGlyphOutline);

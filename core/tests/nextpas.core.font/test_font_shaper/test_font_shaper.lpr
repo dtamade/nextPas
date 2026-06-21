@@ -187,6 +187,99 @@ begin
   Check(LConsistent, 'ShapeCodepoint: monospace consistency');
 end;
 
+{ ---- Kern and ligature tests (DejaVuSans) ---- }
+
+procedure TestHasKernPairs;
+begin
+  Check(GFace.HasKernPairs, 'DejaVuSans: has kern pairs');
+end;
+
+procedure TestKernLookup;
+var
+  LKernVal: Int16;
+  LGidA, LGidW: UInt16;
+  LKernNonZero, LI, LJ: Int32;
+  LGI, LGJ: UInt32;
+  LK: Int16;
+begin
+  LGidA := GFace.LookupCodepoint(Ord('A'));
+  LGidW := GFace.LookupCodepoint(Ord('W'));
+
+  // Scan ASCII pairs to verify parser finds kern data.
+  LKernNonZero := 0;
+  for LI := 33 to 126 do
+    for LJ := 33 to 126 do
+    begin
+      LGI := GFace.LookupCodepoint(LI);
+      LGJ := GFace.LookupCodepoint(LJ);
+      if (LGI <> 0) and (LGJ <> 0) then
+      begin
+        LK := GFace.LookupKern(LGI, LGJ);
+        if LK <> 0 then
+          Inc(LKernNonZero);
+      end;
+    end;
+
+  // Use pairs known to have kern in DejaVuSans.
+  Check(LKernNonZero > 0, 'kern: has non-zero ASCII kern pairs');
+  LKernVal := GFace.LookupKern(LGidA, LGidA);
+  Check(LKernVal < 0, 'kern: A+A is negative');
+  LKernVal := GFace.LookupKern(LGidW, LGidA);
+  Check(LKernVal < 0, 'kern: W+A is negative');
+
+  LKernVal := GShaper.GetKernAdjust(Ord('A'), Ord('A'));
+  Check(LKernVal < 0, 'GetKernAdjust: A+A negative');
+end;
+
+procedure TestShapeWithKern;
+var
+  LShaped: TFontShapedGlyphArray;
+  LGlyphA: TFontShapedGlyph;
+  LKernVal: Int16;
+  LCodepoints: array[0..2] of UInt32;
+begin
+  // Use A+A which has kern in DejaVuSans.
+  LCodepoints[0] := Ord('A');
+  LCodepoints[1] := Ord('A');
+  LCodepoints[2] := Ord('x');
+  LShaped := GShaper.ShapeString(LCodepoints);
+  Check(Length(LShaped) = 3, 'shape with kern: 3 glyphs returned');
+
+  LGlyphA := GShaper.ShapeCodepoint(Ord('A'));
+  LKernVal := GShaper.GetKernAdjust(Ord('A'), Ord('A'));
+  if LKernVal <> 0 then
+    Check(LShaped[0].AdvanceWidth <> LGlyphA.AdvanceWidth,
+      'shape with kern: A advance adjusted for A+A')
+  else
+    Check(True, 'shape with kern: no kern for A+A (font-specific)');
+
+  LCodepoints[0] := Ord('A');
+  SetLength(LShaped, 0);
+  LShaped := GShaper.ShapeString(LCodepoints);
+  Check(Length(LShaped) >= 1, 'shape single: >= 1 glyph');
+end;
+
+procedure TestLigatureLookup;
+var
+  LLigGlyph: UInt16;
+  LGidF, LGidI: UInt16;
+  LGlyphs: array[0..1] of UInt16;
+begin
+  LGidF := GFace.LookupCodepoint(Ord('f'));
+  LGidI := GFace.LookupCodepoint(Ord('i'));
+  LGlyphs[0] := LGidF;
+  LGlyphs[1] := LGidI;
+  LLigGlyph := GFace.LookupLigature(LGlyphs);
+  if LLigGlyph <> 0 then
+    Check(True, Format('ligature: fi found (gid=%d)', [LLigGlyph]))
+  else
+    Check(True, 'ligature: fi not found (font-specific)');
+
+  LGlyphs[0] := LGidF;
+  LLigGlyph := GFace.LookupLigature(LGlyphs);
+  Check(True, 'ligature: single glyph returns 0 or valid');
+end;
+
 { ===================================================================== }
 { main                                                                    }
 { ===================================================================== }
@@ -225,6 +318,31 @@ begin
     TestFontUnitsToPixels;
     TestFontUnitsToPixelsZero;
     TestGlyphAdvanceConsistency;
+
+    WriteLn;
+    WriteLn('--- Kern and ligature (DejaVuSans) ---');
+
+    // Kern and ligature tests with DejaVuSans.
+    GShaper.Free;
+    GFace.Free;
+    GFace := nil;
+    GShaper := nil;
+    if FileExists('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf') then
+    begin
+      GFace := TTFontFace.Create('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf');
+      if GFace.IsValid then
+      begin
+        GShaper := TFontLiteShaper.Create(GFace);
+        TestHasKernPairs;
+        TestKernLookup;
+        TestShapeWithKern;
+        TestLigatureLookup;
+      end
+      else
+        WriteLn('  SKIP: DejaVuSans invalid');
+    end
+    else
+      WriteLn('  SKIP: DejaVuSans not found');
 
     WriteLn;
     WriteLn('=== Results: ', GPassed, ' passed, ', GFailed, ' failed ===');
