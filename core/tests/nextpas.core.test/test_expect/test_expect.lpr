@@ -600,6 +600,17 @@ begin
   end;
 end;
 
+{ ── F23: Not_.Not_ double negation ────────────────────────────────────────── }
+
+procedure TestNotNotDoubleNegation;
+begin
+  { Not_.Not_ should cancel out → normal assertion }
+  ExpectInt(1).Not_.Not_.ToEqualInt(1);
+  Expect('hello').Not_.Not_.ToEqual('hello');
+  ExpectBool(True).Not_.Not_.ToBeTrue;
+  ExpectPtr(@TestNotNotDoubleNegation).Not_.Not_.ToBeNotNil;
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -676,6 +687,9 @@ begin
   { F04: ToNotRaise }
   LSuite.Test('ToNotRaise pass',           @TestToNotRaisePass);
   LSuite.Test('ToNotRaise fail',           @TestToNotRaiseFail);
+
+  { F23: Not_.Not_ double negation }
+  LSuite.Test('Not_.Not_ double negation', @TestNotNotDoubleNegation);
 
   if not LSuite.Run then
   begin

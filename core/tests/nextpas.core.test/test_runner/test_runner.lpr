@@ -90,6 +90,16 @@ begin
   Halt(1); { Should never reach }
 end;
 
+procedure TestSimplePass;
+begin
+  Check(True);
+end;
+
+procedure TestSimplePass2;
+begin
+  Check(True);
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -378,6 +388,36 @@ begin
     Halt(1);
   end;
   WriteLn(AnsiGreen('  ✓ RunWithResult'));
+
+  { ── m15: Summary smoke test ───────────────────────────────────────────────── }
+  WriteLn;
+  WriteLn(AnsiBold('─── m15: Summary Smoke Test ───'));
+  LResultSuite := TTestSuite.Create('Summary Smoke');
+  LResultSuite.Test('pass', @TestSimplePass);
+  LResultSuite.Skip('skip', 'planned');
+  LResultSuite.Run;
+  LResultSuite.Summary;  { Should not crash }
+  WriteLn(AnsiGreen('  ✓ Summary'));
+
+  { ── M20: AllPassed caching ────────────────────────────────────────────────── }
+  WriteLn;
+  WriteLn(AnsiBold('─── M20: AllPassed Caching ───'));
+  LResultSuite := TTestSuite.Create('Cache Test');
+  LResultSuite.Test('pass1', @TestSimplePass);
+  LResultSuite.Test('pass2', @TestSimplePass2);
+  { First call triggers Run }
+  if not LResultSuite.AllPassed then
+  begin
+    WriteLn(AnsiRed('FAIL: AllPassed should be True on first call'));
+    Halt(1);
+  end;
+  { Second call should use cached result }
+  if not LResultSuite.AllPassed then
+  begin
+    WriteLn(AnsiRed('FAIL: AllPassed should be True on second call'));
+    Halt(1);
+  end;
+  WriteLn(AnsiGreen('  ✓ AllPassed caching'));
 
   WriteLn;
   WriteLn(AnsiGreen('ALL PASSED'));

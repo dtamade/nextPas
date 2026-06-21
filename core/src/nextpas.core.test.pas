@@ -68,8 +68,6 @@ type
 
 { ── Test Entry ────────────────────────────────────────────────────────────── }
 
-  TTestSkipReason = string;
-
   ETestSkipped = class(EAbort)
     constructor Create(const AReason: string);
   end;
@@ -291,16 +289,6 @@ function AnsiRed(const S: string): string;    begin Result := Wrap(C_RED, S); en
 function AnsiYellow(const S: string): string; begin Result := Wrap(C_YELLOW, S); end;
 function AnsiCyan(const S: string): string;   begin Result := Wrap(C_CYAN, S); end;
 function AnsiDim(const S: string): string;    begin Result := Wrap(C_DIM, S); end;
-
-function StatusStr(AStatus: TTestStatus): string;
-begin
-  case AStatus of
-    tsPassed:  Result := AnsiGreen('PASS');
-    tsFailed:  Result := AnsiRed('FAIL');
-    tsSkipped: Result := AnsiYellow('SKIP');
-    tsError:   Result := AnsiRed('ERR ');
-  end;
-end;
 
 function StatusDot(AStatus: TTestStatus): string;
 begin
@@ -1214,10 +1202,11 @@ procedure TTestSuite.Skip(const AName: string; const AReason: string);
 var
   LEntry: TTestEntry;
 begin
-  LEntry.Name       := AName;
-  LEntry.Proc       := nil;
-  LEntry.Kind       := ekSkipped;
-  LEntry.SkipReason := AReason;
+  LEntry.Name        := AName;
+  LEntry.Proc        := nil;
+  LEntry.SubtestProc := nil;
+  LEntry.Kind        := ekSkipped;
+  LEntry.SkipReason  := AReason;
   SetLength(Tests, Length(Tests) + 1);
   Tests[High(Tests)] := LEntry;
 end;

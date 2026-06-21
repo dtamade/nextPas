@@ -13,7 +13,7 @@
 - **Memory leak detection**: Built-in heap trace integration (serial mode only)
 - **Full lifecycle**: Setup/Teardown, BeforeEach/AfterEach hooks
 - **Multi-suite runner**: `TTestRunner` aggregates multiple suites
-- **Zero external dependencies**: Only uses `nextpas.core.*` modules
+- **Minimal dependencies**: Only uses FPC RTL (`SysUtils`, `Classes`) + `nextpas.core.*` modules
 
 ## Quick Start
 
@@ -126,6 +126,17 @@ ExpectProc(procedure begin StrToInt('bad'); end)
 | `tsError` | 3 | Unexpected exception | Any non-assertion, non-skip exception (e.g. `EConvertError`) |
 
 `tsError` and `tsFailed` are both counted as failures in `FLastFail`/`TotalFail`.
+
+### Execution Behavior
+
+**Continue on failure**: When a test fails, the suite continues executing the remaining tests.
+All tests run regardless of prior failures. The `Run`/`RunParallel` method returns `False` if
+any test failed, `True` if all passed. There is no stop-on-first-failure mode — this is
+intentional to maximize information from each test run.
+
+**Lifecycle hooks**: `BeforeEach`/`AfterEach` run for every non-skipped test. If `BeforeEach`
+raises, the test is marked `tsError` and `AfterEach` still runs (best-effort). If `Setup`
+raises, all tests in the suite are skipped.
 
 ### TTestSuite
 
@@ -336,7 +347,7 @@ done
 ## Architecture
 
 ```
-nextpas.core.test.pas           ← Single-unit framework (~1720 lines)
+nextpas.core.test.pas           ← Single-unit framework (~1860 lines)
   ├── TTestStatus               ← tsPassed/tsFailed/tsSkipped/tsError
   ├── TTestEntry                ← Name + Proc/SubtestProc + Kind
   ├── TTestSuite                ← Suite with lifecycle hooks (record)
