@@ -103,6 +103,9 @@ var
   LRunNestedS1, LRunNestedS2, LCacheSuite, LSummarySuite, LSumSuite3: TTestSuite;
   LRunNestedR, LSumRunner: TTestRunner;
   LRunCount: Integer;
+  { RunWithResult test }
+  LResultSuite: TTestSuite;
+  LResult: TTestRunResult;
 begin
   { Suite 1: lifecycle }
   LSuite1 := TTestSuite.Create('Lifecycle');
@@ -313,6 +316,68 @@ begin
     Halt(1);
   end;
   WriteLn(AnsiGreen('  ✓ Runner Summary'));
+
+  { Test: RunWithResult }
+  LResultSuite := TTestSuite.Create('Result Test');
+  LResultSuite.Test('will pass', procedure begin CheckTrue(True); end);
+  LResultSuite.Skip('will skip', 'reason');
+  LResultSuite.Test('will pass 2', procedure begin CheckTrue(True); end);
+  if not LResultSuite.RunWithResult(LResult) then
+  begin
+    WriteLn(AnsiRed('FAIL: RunWithResult should return True'));
+    Halt(1);
+  end;
+  if LResult.SuiteName <> 'Result Test' then
+  begin
+    WriteLn(AnsiRed('FAIL: SuiteName mismatch'));
+    Halt(1);
+  end;
+  if Length(LResult.Results) <> 3 then
+  begin
+    WriteLn(AnsiRed('FAIL: Expected 3 results, got '), Length(LResult.Results));
+    Halt(1);
+  end;
+  if LResult.Passed <> 2 then
+  begin
+    WriteLn(AnsiRed('FAIL: Expected 2 passed, got '), LResult.Passed);
+    Halt(1);
+  end;
+  if LResult.Skipped <> 1 then
+  begin
+    WriteLn(AnsiRed('FAIL: Expected 1 skipped, got '), LResult.Skipped);
+    Halt(1);
+  end;
+  if LResult.Failed <> 0 then
+  begin
+    WriteLn(AnsiRed('FAIL: Expected 0 failed, got '), LResult.Failed);
+    Halt(1);
+  end;
+  if not LResult.AllPassed then
+  begin
+    WriteLn(AnsiRed('FAIL: AllPassed should be True'));
+    Halt(1);
+  end;
+  if LResult.Results[0].Status <> tsPassed then
+  begin
+    WriteLn(AnsiRed('FAIL: Result[0] should be tsPassed'));
+    Halt(1);
+  end;
+  if LResult.Results[1].Status <> tsSkipped then
+  begin
+    WriteLn(AnsiRed('FAIL: Result[1] should be tsSkipped'));
+    Halt(1);
+  end;
+  if LResult.Results[1].Message <> 'reason' then
+  begin
+    WriteLn(AnsiRed('FAIL: Result[1] message should be "reason"'));
+    Halt(1);
+  end;
+  if LResult.Results[2].Status <> tsPassed then
+  begin
+    WriteLn(AnsiRed('FAIL: Result[2] should be tsPassed'));
+    Halt(1);
+  end;
+  WriteLn(AnsiGreen('  ✓ RunWithResult'));
 
   WriteLn;
   WriteLn(AnsiGreen('ALL PASSED'));

@@ -47,6 +47,24 @@ type
     tsError
   );
 
+{ ── Results ──────────────────────────────────────────────────────────────── }
+
+  TTestResult = record
+    Name    : string;
+    Status  : TTestStatus;
+    Message : string;  { fail message or skip reason }
+  end;
+
+  TTestRunResult = record
+    SuiteName : string;
+    Passed    : Integer;
+    Failed    : Integer;
+    Skipped   : Integer;
+    AllPassed : Boolean;
+    Results   : specialize TArray<TTestResult>;
+    class function Create(const ASuiteName: string): TTestRunResult; static;
+  end;
+
 { ── Test Entry ────────────────────────────────────────────────────────────── }
 
   TTestSkipReason = string;
@@ -90,6 +108,7 @@ type
     procedure OnBeforeEach(AProc: TTestProc);
     procedure OnAfterEach(AProc: TTestProc);
     function  Run: Boolean;
+    function  RunWithResult(out AResult: TTestRunResult): Boolean;
     function  RunParallel(APool: IThreadPool): Boolean;
       { Note: APool is currently unused — parallel mode uses direct platform_thread_create
         to work around FPC closure capture semantics. Reserved for future thread pool integration. }
@@ -1107,6 +1126,20 @@ begin
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }
+{ TTestRunResult                                                               }
+{ ═════════════════════════════════════════════════════════════════════════════ }
+
+class function TTestRunResult.Create(const ASuiteName: string): TTestRunResult;
+begin
+  Result.SuiteName := ASuiteName;
+  Result.Passed    := 0;
+  Result.Failed    := 0;
+  Result.Skipped   := 0;
+  Result.AllPassed := True;
+  Result.Results   := nil;
+end;
+
+{ ═════════════════════════════════════════════════════════════════════════════ }
 { TTestSuite                                                                   }
 { ═════════════════════════════════════════════════════════════════════════════ }
 
@@ -1185,6 +1218,13 @@ end;
 
 function TTestSuite.Run: Boolean;
 var
+  LResult: TTestRunResult;
+begin
+  Result := RunWithResult(LResult);
+end;
+
+function TTestSuite.RunWithResult(out AResult: TTestRunResult): Boolean;
+var
   I: Integer;
   LEntry: TTestEntry;
   LStatus: TTestStatus;
@@ -1192,7 +1232,9 @@ var
   LSubCtxI: ITestContext;
   LPass, LFail, LSkip: Integer;
   LLastFailMsg: string;
+  LTestResult: TTestResult;
 begin
+  AResult := TTestRunResult.Create(Name);
   LPass := 0;
   LFail := 0;
   LSkip := 0;
@@ -1215,8 +1257,16 @@ begin
         for I := 0 to High(Tests) do
         begin
           Inc(LSkip);
+          LTestResult.Name    := Tests[I].Name;
+          LTestResult.Status  := tsSkipped;
+          LTestResult.Message := 'setup failed: ' + E.Message;
+          SetLength(AResult.Results, Length(AResult.Results) + 1);
+          AResult.Results[High(AResult.Results)] := LTestResult;
           WriteLn('    ', StatusDot(tsSkipped), ' ', AnsiDim(Tests[I].Name));
         end;
+        AResult.Failed    := 1;
+        AResult.Skipped   := LSkip;
+        AResult.AllPassed := False;
         FHasRun        := True;
         FLastRunPassed := False;
         FLastPass      := 0;
@@ -1233,6 +1283,8 @@ begin
   begin
     LEntry := Tests[I];
     LStatus := tsPassed;
+    LTestResult.Name    := LEntry.Name;
+    LTestResult.Message := '';
     SetTestContext(Name, LEntry.Name);
 
     { Skip check BEFORE BeforeEach — skipped tests don't need hooks }
@@ -1240,6 +1292,10 @@ begin
     begin
       LStatus := tsSkipped;
       Inc(LSkip);
+      LTestResult.Status  := tsSkipped;
+      LTestResult.Message := LEntry.SkipReason;
+      SetLength(AResult.Results, Length(AResult.Results) + 1);
+      AResult.Results[High(AResult.Results)] := LTestResult;
       if LEntry.SkipReason <> '' then
         WriteLn('  ', StatusDot(tsSkipped), ' ', AnsiDim(LEntry.Name),
           ' — ', LEntry.SkipReason)
@@ -1258,6 +1314,11 @@ begin
         on E: Exception do
         begin
           LStatus := tsError;
+          LLastFailMsg := E.Message;
+          LTestResult.Status  := tsError;
+          LTestResult.Message := 'beforeEach failed: ' + E.Message;
+          SetLength(AResult.Results, Length(AResult.Results) + 1);
+          AResult.Results[High(AResult.Results)] := LTestResult;
           WriteLn('  ', StatusDot(tsError), ' ', LEntry.Name,
             ' — beforeEach failed: ', E.Message);
           Inc(LFail);
@@ -1278,11 +1339,13 @@ begin
           on E: EAssertionFailed do
           begin
             LStatus := tsFailed;
+            LLastFailMsg := E.Message;
             Inc(LFail);
           end;
           on E: Exception do
           begin
             LStatus := tsError;
+            LLastFailMsg := E.ClassName + ': ' + E.Message;
             Inc(LFail);
           end;
         end;
@@ -1324,6 +1387,7 @@ begin
           if LStatus = tsPassed then
           begin
             LStatus := tsError;
+            LLastFailMsg := 'afterEach failed: ' + E.Message;
             Inc(LFail);
             if LPass > 0 then { Guard against negative count for subtests }
               Dec(LPass);
@@ -1331,6 +1395,12 @@ begin
         end;
       end;
     end;
+
+    { Record test result }
+    LTestResult.Status  := LStatus;
+    LTestResult.Message := LLastFailMsg;
+    SetLength(AResult.Results, Length(AResult.Results) + 1);
+    AResult.Results[High(AResult.Results)] := LTestResult;
 
     { Output per-test }
     case LStatus of
@@ -1353,10 +1423,15 @@ begin
             WriteLn('  ', StatusDot(tsSkipped), ' ', AnsiDim(LEntry.Name));
         end;
       tsError:
-        WriteLn('  ', StatusDot(tsError), ' ', AnsiRed(LEntry.Name),
-          ' [unexpected exception]');
+        begin
+          WriteLn('  ', StatusDot(tsError), ' ', AnsiRed(LEntry.Name),
+            ' [unexpected exception]');
+          if LLastFailMsg <> '' then
+            WriteLn('    ', AnsiDim(LLastFailMsg));
+        end;
     end;
 
+    LLastFailMsg := '';
     ReportLeakIfAny(LStatus);
   end;
 
@@ -1371,8 +1446,13 @@ begin
     end;
   end;
 
+  AResult.Passed    := LPass;
+  AResult.Failed    := LFail;
+  AResult.Skipped   := LSkip;
+  AResult.AllPassed := LFail = 0;
+
   FHasRun        := True;
-  FLastRunPassed := LFail = 0;
+  FLastRunPassed := AResult.AllPassed;
   FLastPass      := LPass;
   FLastFail      := LFail;
   FLastSkip      := LSkip;
