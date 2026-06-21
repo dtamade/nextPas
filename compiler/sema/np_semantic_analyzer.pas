@@ -3325,7 +3325,9 @@ begin
         )) then
       begin
         if AHasTypeMismatchEvidence then
+        begin
           AResolutionFailureKind := 'type-mismatch';
+        end;
         Exit(False);
       end;
       RootSignatureMatchIndex := RootMatchIndex
@@ -5486,6 +5488,8 @@ end;
 
 function TSemanticAnalyzer.InferExpressionType(const ANode: TGreenNode): LongInt;
 var
+  LStrTypeId: LongInt;
+  RType: LongInt;
   SymId: LongInt;
   Sym: TSemanticSymbol;
 begin
@@ -5518,11 +5522,18 @@ begin
       begin
         if ANode.Text = '+' then
         begin
+          LStrTypeId := FModel.FindTypeByName('AnsiString');
           Result := InferExpressionType(ANode.ChildAt(0));
-          if Result = FModel.FindTypeByName('AnsiString') then
+          if Result = LStrTypeId then
             Exit;
+          RType := InferExpressionType(ANode.ChildAt(1));
+          if RType = LStrTypeId then
+          begin
+            Result := LStrTypeId;
+            Exit;
+          end;
           if Result = 0 then
-            Result := InferExpressionType(ANode.ChildAt(1));
+            Result := RType;
           if Result = 0 then
             Result := FModel.FindTypeByName('Integer');
         end
