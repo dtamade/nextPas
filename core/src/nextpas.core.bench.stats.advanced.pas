@@ -58,7 +58,6 @@ type
     FSortedData: TDoubleArray;
     FSorted: Boolean;
     procedure EnsureSorted;
-    class procedure QuickSort(var AArr: TDoubleArray; ALo, AHi: Integer); static;
   public
     {**
      * 创建统计分析器
@@ -171,51 +170,17 @@ begin
   Result.FSorted := False;
 end;
 
-class procedure TAdvancedStats.QuickSort(var AArr: TDoubleArray; ALo, AHi: Integer);
-var
-  LPivot: Double;
-  LTemp: Double;
-  I, J: Integer;
-begin
-  if ALo >= AHi then Exit;
-
-  LPivot := AArr[(ALo + AHi) div 2];
-  I := ALo;
-  J := AHi;
-
-  while I <= J do
-  begin
-    while AArr[I] < LPivot do Inc(I);
-    while AArr[J] > LPivot do Dec(J);
-
-    if I <= J then
-    begin
-      LTemp := AArr[I];
-      AArr[I] := AArr[J];
-      AArr[J] := LTemp;
-      Inc(I);
-      Dec(J);
-    end;
-  end;
-
-  if ALo < J then QuickSort(AArr, ALo, J);
-  if I < AHi then QuickSort(AArr, I, AHi);
-end;
-
 procedure TAdvancedStats.EnsureSorted;
 var
   I: Integer;
 begin
   if FSorted then Exit;
 
-  // 创建排序副本，不破坏原始数据
   SetLength(FSortedData, Length(FData));
   for I := 0 to High(FData) do
     FSortedData[I] := FData[I];
 
-  // 使用 QuickSort 排序副本
-  if Length(FSortedData) > 1 then
-    QuickSort(FSortedData, 0, High(FSortedData));
+  SortDoubleArray(FSortedData);
 
   FSorted := True;
 end;
@@ -425,8 +390,7 @@ begin
     LDeviations[I] := Abs(FData[I] - LMedian);
 
   // 使用 QuickSort 排序偏差
-  if Length(LDeviations) > 1 then
-    QuickSort(LDeviations, 0, High(LDeviations));
+  SortDoubleArray(LDeviations);
 
   if Length(LDeviations) mod 2 = 0 then
     LMAD := (LDeviations[Length(LDeviations) div 2 - 1] +
@@ -538,8 +502,7 @@ begin
   SetLength(LSortedMeans, LIterations);
   for LIterationIndex := 0 to LIterations - 1 do
     LSortedMeans[LIterationIndex] := LMeans[LIterationIndex];
-  if LIterations > 1 then
-    QuickSort(LSortedMeans, 0, LIterations - 1);
+  SortDoubleArray(LSortedMeans);
 
   LAlpha := (1.0 - ALevel) / 2.0;
   LLowerIndex := Trunc(LAlpha * LIterations);

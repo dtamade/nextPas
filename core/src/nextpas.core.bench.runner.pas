@@ -359,6 +359,10 @@ begin
   if (LValue <> '') and (LValue = '1') then
     FConfig.Quiet := True;
 
+  LValue := GetEnvironmentVariable(BENCH_ENV_NO_MEMTRACK);
+  if (LValue <> '') and (LValue = '1') then
+    FConfig.EnableMemoryTracking := False;
+
   FFilter := GetEnvironmentVariable(BENCH_ENV_FILTER);
 end;
 

@@ -133,6 +133,18 @@ begin
   until InterlockedCompareExchange64(ATarget, LNew, LOld) = LOld;
 end;
 
+{** CAS 循环更新峰值（只升不降） }
+procedure AtomicUpdatePeak(var ATarget: Int64; AValue: Int64);
+var
+  LOld: Int64;
+begin
+  repeat
+    LOld := ATarget;
+    if AValue <= LOld then
+      Exit;
+  until InterlockedCompareExchange64(ATarget, AValue, LOld) = LOld;
+end;
+
 { TMemoryTracker }
 
 function TrackingGetMem(Size: PtrUInt): Pointer;
@@ -207,9 +219,6 @@ begin
 end;
 
 procedure TMemoryTracker.RecordAlloc(ASize: Int64);
-var
-  LCurrentAllocs: Int64;
-  LCurrentBytes: Int64;
 begin
   if not FEnabled then Exit;
 
@@ -218,12 +227,8 @@ begin
   AtomicInc64(FStats.CurrentAllocs, 1);
   AtomicInc64(FStats.CurrentBytes, ASize);
 
-  LCurrentAllocs := FStats.CurrentAllocs;
-  if LCurrentAllocs > FStats.PeakAllocs then
-    FStats.PeakAllocs := LCurrentAllocs;
-  LCurrentBytes := FStats.CurrentBytes;
-  if LCurrentBytes > FStats.PeakBytes then
-    FStats.PeakBytes := LCurrentBytes;
+  AtomicUpdatePeak(FStats.PeakAllocs, FStats.CurrentAllocs);
+  AtomicUpdatePeak(FStats.PeakBytes, FStats.CurrentBytes);
 end;
 
 procedure TMemoryTracker.RecordFree(ASize: Int64);

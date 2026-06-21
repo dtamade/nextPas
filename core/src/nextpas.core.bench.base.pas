@@ -116,10 +116,6 @@ const
   BENCH_ENV_MIN_DURATION = 'NEXTPAS_BENCH_MIN_DURATION';
   BENCH_ENV_MIN_SAMPLES = 'NEXTPAS_BENCH_MIN_SAMPLES';
   BENCH_ENV_WARMUP = 'NEXTPAS_BENCH_WARMUP';
-  BENCH_ENV_OUTPUT = 'NEXTPAS_BENCH_OUTPUT';
-  BENCH_ENV_OUTPUT_DIR = 'NEXTPAS_BENCH_OUTPUT_DIR';
-  BENCH_ENV_BASELINE = 'NEXTPAS_BENCH_BASELINE';
-  BENCH_ENV_FAIL_ON_REGRESSION = 'NEXTPAS_BENCH_FAIL_ON_REGRESSION';
   BENCH_ENV_QUIET = 'NEXTPAS_BENCH_QUIET';
   BENCH_ENV_NO_MEMTRACK = 'NEXTPAS_BENCH_NO_MEMTRACK';
 
@@ -128,6 +124,44 @@ const
   Z_SCORE_99 = 2.576;
   OUTLIER_MULTIPLIER = 1.5;  // Tukey's Fences
 
+{** 对双精度浮点数组原地排序（QuickSort） }
+procedure SortDoubleArray(var AData: TDoubleArray);
+
 implementation
+
+procedure DoQuickSort(var AData: TDoubleArray; ALeft, ARight: Integer);
+var
+  LPivot, LTmp: Double;
+  I, J: Integer;
+begin
+  if ALeft >= ARight then
+    Exit;
+  LPivot := AData[(ALeft + ARight) div 2];
+  I := ALeft;
+  J := ARight;
+  while I <= J do
+  begin
+    while AData[I] < LPivot do Inc(I);
+    while AData[J] > LPivot do Dec(J);
+    if I <= J then
+    begin
+      LTmp := AData[I];
+      AData[I] := AData[J];
+      AData[J] := LTmp;
+      Inc(I);
+      Dec(J);
+    end;
+  end;
+  if ALeft < J then
+    DoQuickSort(AData, ALeft, J);
+  if I < ARight then
+    DoQuickSort(AData, I, ARight);
+end;
+
+procedure SortDoubleArray(var AData: TDoubleArray);
+begin
+  if Length(AData) > 1 then
+    DoQuickSort(AData, 0, High(AData));
+end;
 
 end.

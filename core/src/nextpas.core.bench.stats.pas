@@ -13,8 +13,6 @@ type
   {** 统计分析器实现 }
   TBenchStatsAnalyzer = class(TInterfacedObject, IBenchStatsAnalyzer)
   private
-    {** 快速排序（用于计算百分位数） }
-    procedure QuickSort(var AData: TDoubleArray; ALeft, ARight: Integer);
 
     {** Kahan 求和（减少浮点数累积误差） }
     function KahanSum(const AData: TDoubleArray): Double;
@@ -34,8 +32,11 @@ type
     {** Shapiro-Wilk 正态性检验辅助函数 }
     function ShapiroWilkStatistic(const ASorted: TDoubleArray): Double;
 
-    {** 计算 t 分布的临界值（近似） }
+    {** 计算 t 分布的临界值（95%，双侧） }
     function TInv0975(ADF: Double): Double;
+
+    {** 计算 t 分布的临界值（99%，双侧） }
+    function TInv0995(ADF: Double): Double;
 
   public
     {** 构造函数 }
@@ -83,41 +84,6 @@ begin
   inherited Create;
 end;
 
-procedure TBenchStatsAnalyzer.QuickSort(var AData: TDoubleArray; ALeft, ARight: Integer);
-var
-  LPivot, LTmp: Double;
-  I, J: Integer;
-begin
-  if ALeft >= ARight then
-    Exit;
-
-  LPivot := AData[(ALeft + ARight) div 2];
-  I := ALeft;
-  J := ARight;
-
-  while I <= J do
-  begin
-    while AData[I] < LPivot do
-      Inc(I);
-    while AData[J] > LPivot do
-      Dec(J);
-
-    if I <= J then
-    begin
-      LTmp := AData[I];
-      AData[I] := AData[J];
-      AData[J] := LTmp;
-      Inc(I);
-      Dec(J);
-    end;
-  end;
-
-  if ALeft < J then
-    QuickSort(AData, ALeft, J);
-  if I < ARight then
-    QuickSort(AData, I, ARight);
-end;
-
 function TBenchStatsAnalyzer.KahanSum(const AData: TDoubleArray): Double;
 var
   LSum, LCompensation, LNext, LTemp: Double;
@@ -155,7 +121,7 @@ begin
     Exit(0.0);
 
   LSorted := Copy(AData);
-  QuickSort(LSorted, 0, High(LSorted));
+  SortDoubleArray(LSorted);
 
   if LLen mod 2 = 1 then
     Result := LSorted[LLen div 2]
@@ -249,7 +215,7 @@ begin
   end;
 
   LSorted := Copy(ASamples);
-  QuickSort(LSorted, 0, High(LSorted));
+  SortDoubleArray(LSorted);
 
   LMean := Mean(ASamples);
 
@@ -271,7 +237,7 @@ begin
   if Length(ASamples) > 1 then
   begin
     LT95 := TInv0975(Length(ASamples) - 1);
-    LT99 := LT95 * 1.2; // 近似 99% 置信区间
+    LT99 := TInv0995(Length(ASamples) - 1);
     Result.Confidence95Low := LMean - LT95 * Result.StdDev / Sqrt(Length(ASamples));
     Result.Confidence95High := LMean + LT95 * Result.StdDev / Sqrt(Length(ASamples));
     Result.Confidence99Low := LMean - LT99 * Result.StdDev / Sqrt(Length(ASamples));
@@ -311,6 +277,34 @@ begin
     if LDF > 30 then
       LDF := 30;
     Result := TINV_TABLE[LDF];
+  end;
+end;
+
+function TBenchStatsAnalyzer.TInv0995(ADF: Double): Double;
+const
+  TINV99_TABLE: array[1..30] of Double = (
+    63.657, 9.925, 5.841, 4.604, 4.032,
+    3.707, 3.499, 3.355, 3.250, 3.169,
+    3.106, 3.055, 3.012, 2.977, 2.947,
+    2.921, 2.898, 2.878, 2.861, 2.845,
+    2.831, 2.819, 2.807, 2.797, 2.787,
+    2.779, 2.771, 2.763, 2.756, 2.750
+  );
+var
+  LDF: Integer;
+begin
+  if ADF < 1.0 then
+    Result := TINV99_TABLE[1]
+  else if ADF >= 30.0 then
+    Result := Z_SCORE_99
+  else
+  begin
+    LDF := Round(ADF);
+    if LDF < 1 then
+      LDF := 1;
+    if LDF > 30 then
+      LDF := 30;
+    Result := TINV99_TABLE[LDF];
   end;
 end;
 
@@ -415,7 +409,7 @@ begin
     Exit(True);  // 样本太少，无法判断
 
   LSorted := Copy(ASamples);
-  QuickSort(LSorted, 0, High(LSorted));
+  SortDoubleArray(LSorted);
 
   // Shapiro-Wilk 风格启发式
   LW := ShapiroWilkStatistic(LSorted);
@@ -427,8 +421,7 @@ end;
 
 procedure TBenchStatsAnalyzer.Sort(var AData: TDoubleArray);
 begin
-  if Length(AData) > 1 then
-    QuickSort(AData, 0, High(AData));
+  SortDoubleArray(AData);
 end;
 
 end.
