@@ -52,7 +52,7 @@ type
     function CheckDependencies(const AEntry: TBenchEntry): Boolean;
 
     {** 拓扑排序 }
-    function TopologicalSort: array of Integer;
+    function TopologicalSort: TInt64Array;
 
     {** 获取环境信息 }
     function GetEnvironment: TBenchEnvironment;
@@ -179,16 +179,15 @@ begin
   Result := True;
 end;
 
-function TBenchSuite.TopologicalSort: array of Integer;
+function TBenchSuite.TopologicalSort: TInt64Array;
 var
   LVisited: array of Boolean;
-  LSorted: array of Integer;
+  LSorted: TInt64Array;
   LSortedCount: Integer;
 
   procedure Visit(AIndex: Integer);
   var
     I, J: Integer;
-    LDepIndex: Integer;
   begin
     if LVisited[AIndex] then Exit;
     LVisited[AIndex] := True;
@@ -400,7 +399,7 @@ var
   LResults: array of TBenchResult;
   LResultCount: Integer;
   LEnvironment: TBenchEnvironment;
-  LSortedIndices: array of Integer;
+  LSortedIndices: TInt64Array;
   i, LIdx: Integer;
 begin
   // 配置运行器

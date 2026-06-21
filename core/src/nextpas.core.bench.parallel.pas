@@ -24,6 +24,11 @@ type
   TBenchParallelFunc = procedure(AThreadId: Integer; AIterations: Int64);
 
   {**
+   * 基准线程数组类型
+   *}
+  TBenchThreadArray = array of TBenchThread;
+
+  {**
    * 并行基准配置
    *}
   TParallelBenchConfig = record
@@ -58,7 +63,7 @@ type
     FConfig: TParallelBenchConfig;
     FFunc: TBenchParallelFunc;
     FResults: TParallelBenchResult;
-    function CreateThreads: array of TBenchThread;
+    function CreateThreads: TBenchThreadArray;
     procedure RunThread(AThreadId: Integer);
   public
     {**
@@ -161,7 +166,7 @@ begin
   Result.FResults := Default(TParallelBenchResult);
 end;
 
-function TParallelBenchmark.CreateThreads: array of TBenchThread;
+function TParallelBenchmark.CreateThreads: TBenchThreadArray;
 var
   I: Integer;
 begin
@@ -177,7 +182,7 @@ end;
 
 function TParallelBenchmark.Execute: TParallelBenchResult;
 var
-  LThreads: array of TBenchThread;
+  LThreads: TBenchThreadArray;
   I: Integer;
   LStartNs: UInt64;
   LEndNs: UInt64;

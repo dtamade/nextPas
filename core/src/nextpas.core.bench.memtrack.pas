@@ -127,7 +127,7 @@ begin
   Result := GOriginalMemoryManager.FreeMem(P);
 end;
 
-function TrackingReAllocMem(P: Pointer; Size: PtrUInt): Pointer;
+function TrackingReAllocMem(var P: Pointer; Size: PtrUInt): Pointer;
 begin
   if GTrackingEnabled then
   begin

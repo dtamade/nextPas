@@ -358,6 +358,7 @@ procedure TBaselineManager.LoadFromJSON(const AJSON: string);
 var
   LLines: TStringList;
   LLine: string;
+  LTrimmedLine: string;
   LPos: Integer;
   LName: string;
   LNsPerOp: Double;
@@ -376,13 +377,13 @@ begin
 
     for LLine in LLines do
     begin
-      LLine := Trim(LLine);
+      LTrimmedLine := Trim(LLine);
 
       // 查找 name 字段
-      if Pos('"name":', LLine) > 0 then
+      if Pos('"name":', LTrimmedLine) > 0 then
       begin
-        LPos := Pos('"name":', LLine);
-        LName := Copy(LLine, LPos + 7, MaxInt);
+        LPos := Pos('"name":', LTrimmedLine);
+        LName := Copy(LTrimmedLine, LPos + 7, MaxInt);
         LName := Trim(LName);
         // 移除引号和逗号
         if (Length(LName) > 0) and (LName[1] = '"') then
@@ -400,31 +401,31 @@ begin
       end
 
       // 查找 nsPerOp 字段
-      else if Pos('"nsPerOp":', LLine) > 0 then
+      else if Pos('"nsPerOp":', LTrimmedLine) > 0 then
       begin
-        LPos := Pos('"nsPerOp":', LLine);
-        LNsPerOp := StrToFloatDef(Copy(LLine, LPos + 10, MaxInt), 0);
+        LPos := Pos('"nsPerOp":', LTrimmedLine);
+        LNsPerOp := StrToFloatDef(Copy(LTrimmedLine, LPos + 10, MaxInt), 0);
       end
 
       // 查找 bytesPerOp 字段
-      else if Pos('"bytesPerOp":', LLine) > 0 then
+      else if Pos('"bytesPerOp":', LTrimmedLine) > 0 then
       begin
-        LPos := Pos('"bytesPerOp":', LLine);
-        LBytesPerOp := StrToInt64Def(Copy(LLine, LPos + 13, MaxInt), 0);
+        LPos := Pos('"bytesPerOp":', LTrimmedLine);
+        LBytesPerOp := StrToInt64Def(Copy(LTrimmedLine, LPos + 13, MaxInt), 0);
       end
 
       // 查找 allocsPerOp 字段
-      else if Pos('"allocsPerOp":', LLine) > 0 then
+      else if Pos('"allocsPerOp":', LTrimmedLine) > 0 then
       begin
-        LPos := Pos('"allocsPerOp":', LLine);
-        LAllocsPerOp := StrToInt64Def(Copy(LLine, LPos + 14, MaxInt), 0);
+        LPos := Pos('"allocsPerOp":', LTrimmedLine);
+        LAllocsPerOp := StrToInt64Def(Copy(LTrimmedLine, LPos + 14, MaxInt), 0);
       end
 
       // 查找 gitHash 字段
-      else if Pos('"gitHash":', LLine) > 0 then
+      else if Pos('"gitHash":', LTrimmedLine) > 0 then
       begin
-        LPos := Pos('"gitHash":', LLine);
-        LGitHash := Copy(LLine, LPos + 10, MaxInt);
+        LPos := Pos('"gitHash":', LTrimmedLine);
+        LGitHash := Copy(LTrimmedLine, LPos + 10, MaxInt);
         LGitHash := Trim(LGitHash);
         if (Length(LGitHash) > 0) and (LGitHash[1] = '"') then
           Delete(LGitHash, 1, 1);
@@ -434,10 +435,10 @@ begin
       end
 
       // 查找 notes 字段
-      else if Pos('"notes":', LLine) > 0 then
+      else if Pos('"notes":', LTrimmedLine) > 0 then
       begin
-        LPos := Pos('"notes":', LLine);
-        LNotes := Copy(LLine, LPos + 8, MaxInt);
+        LPos := Pos('"notes":', LTrimmedLine);
+        LNotes := Copy(LTrimmedLine, LPos + 8, MaxInt);
         LNotes := Trim(LNotes);
         if (Length(LNotes) > 0) and (LNotes[1] = '"') then
           Delete(LNotes, 1, 1);
@@ -447,7 +448,7 @@ begin
       end
 
       // 遇到 } 时保存基线
-      else if LLine = '}' then
+      else if LTrimmedLine = '}' then
       begin
         if LName <> '' then
         begin
