@@ -1217,7 +1217,12 @@ begin
           Inc(LSkip);
           WriteLn('    ', StatusDot(tsSkipped), ' ', AnsiDim(Tests[I].Name));
         end;
-        Result := False;
+        FHasRun        := True;
+        FLastRunPassed := False;
+        FLastPass      := 0;
+        FLastFail      := 1;
+        FLastSkip      := LSkip;
+        Result         := False;
         WriteLn(AnsiDim('  ') + IntToStr(LSkip) + ' skipped (setup failure)');
         Exit;
       end;

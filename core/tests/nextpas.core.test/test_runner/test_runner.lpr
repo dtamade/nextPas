@@ -96,6 +96,13 @@ var
   LSuite1, LSuite2: TTestSuite;
   LRunner: TTestRunner;
   LPass: Boolean;
+  { B5.3 lifecycle failure tests }
+  LFailSuite1, LFailSuite2, LFailSuite3: TTestSuite;
+  LBeforeEachCounter: Integer;
+  { B5.5/B5.6/B5.9 runner feature tests }
+  LRunNestedS1, LRunNestedS2, LCacheSuite, LSummarySuite, LSumSuite3: TTestSuite;
+  LRunNestedR, LSumRunner: TTestRunner;
+  LRunCount: Integer;
 begin
   { Suite 1: lifecycle }
   LSuite1 := TTestSuite.Create('Lifecycle');
@@ -158,6 +165,155 @@ begin
     WriteLn(AnsiRed('SOME TESTS FAILED'));
     Halt(1);
   end;
+
+  { ── B5.3: Lifecycle failure path tests ───────────────────────────────── }
+
+  { Test: Setup failure → Run returns False, all tests skipped }
+  WriteLn;
+  WriteLn(AnsiBold('─── B5.3: Lifecycle Failure Tests ───'));
+  LFailSuite1 := TTestSuite.Create('Setup Failure');
+  LFailSuite1.SetSetup(procedure begin
+    raise EConvertError.Create('setup boom');
+  end);
+  LFailSuite1.Test('test after bad setup', procedure begin
+    Halt(1); { should never run }
+  end);
+  if LFailSuite1.Run then
+  begin
+    WriteLn(AnsiRed('FAIL: Setup failure should cause Run=False'));
+    Halt(1);
+  end;
+  if LFailSuite1.FLastPass <> 0 then
+  begin
+    WriteLn(AnsiRed('FAIL: No tests should pass after setup failure'));
+    Halt(1);
+  end;
+  if not LFailSuite1.FHasRun then
+  begin
+    WriteLn(AnsiRed('FAIL: FHasRun should be True after Run'));
+    Halt(1);
+  end;
+  if LFailSuite1.FLastFail < 1 then
+  begin
+    WriteLn(AnsiRed('FAIL: Setup failure should count as failure'));
+    Halt(1);
+  end;
+  WriteLn(AnsiGreen('  ✓ Setup failure path'));
+
+  { Test: BeforeEach failure → test marked error }
+  LBeforeEachCounter := 0;
+  LFailSuite2 := TTestSuite.Create('BeforeEach Failure');
+  LFailSuite2.OnBeforeEach(procedure begin
+    Inc(LBeforeEachCounter);
+    if LBeforeEachCounter = 2 then
+      raise EConvertError.Create('beforeEach boom on test 2');
+  end);
+  LFailSuite2.Test('test 1 passes', procedure begin
+    CheckTrue(True);
+  end);
+  LFailSuite2.Test('test 2 fails (bad beforeEach)', procedure begin
+    Halt(1); { should never run — beforeEach raises first }
+  end);
+  LFailSuite2.Test('test 3 passes', procedure begin
+    CheckTrue(True);
+  end);
+  if LFailSuite2.Run then
+  begin
+    WriteLn(AnsiRed('FAIL: BeforeEach failure should cause Run=False'));
+    Halt(1);
+  end;
+  if LFailSuite2.FLastFail < 1 then
+  begin
+    WriteLn(AnsiRed('FAIL: At least 1 failure expected'));
+    Halt(1);
+  end;
+  WriteLn(AnsiGreen('  ✓ BeforeEach failure path'));
+
+  { Test: Teardown failure → warning output, test results preserved }
+  LFailSuite3 := TTestSuite.Create('Teardown Failure');
+  LFailSuite3.SetTeardown(procedure begin
+    raise EConvertError.Create('teardown boom');
+  end);
+  LFailSuite3.Test('passing test', procedure begin
+    CheckTrue(True);
+  end);
+  if not LFailSuite3.Run then
+  begin
+    WriteLn(AnsiRed('FAIL: Teardown failure should not fail tests'));
+    Halt(1);
+  end;
+  WriteLn(AnsiGreen('  ✓ Teardown failure path'));
+
+  { ── B5.5/B5.6/B5.9: Runner feature tests ────────────────────────────── }
+
+  { Test: RunAll aggregation — TTestRunner with multiple suites }
+  LRunNestedS1 := TTestSuite.Create('Suite A');
+  LRunNestedS1.Test('a1', procedure begin CheckTrue(True); end);
+  LRunNestedS2 := TTestSuite.Create('Suite B');
+  LRunNestedS2.Test('b1', procedure begin CheckTrue(True); end);
+  LRunNestedR := TTestRunner.Create('Multi-Suite Runner');
+  LRunNestedR.Add(LRunNestedS1);
+  LRunNestedR.Add(LRunNestedS2);
+  if not LRunNestedR.RunAll then
+  begin
+    WriteLn(AnsiRed('FAIL: RunAll aggregation should pass'));
+    Halt(1);
+  end;
+  if LRunNestedR.TotalPass <> 2 then
+  begin
+    WriteLn(AnsiRed('FAIL: Expected 2 passes, got '), LRunNestedR.TotalPass);
+    Halt(1);
+  end;
+  WriteLn(AnsiGreen('  ✓ RunAll aggregation'));
+
+  { Test: AllPassed caching — second call should not re-run }
+  LRunCount := 0;
+  LCacheSuite := TTestSuite.Create('Cache Test');
+  LCacheSuite.Test('counter', procedure begin
+    InterLockedIncrement(LRunCount);
+    CheckTrue(True);
+  end);
+  LCacheSuite.Run; { first run }
+  if LRunCount <> 1 then
+  begin
+    WriteLn(AnsiRed('FAIL: Expected 1 run, got '), LRunCount);
+    Halt(1);
+  end;
+  LCacheSuite.AllPassed; { should NOT re-run }
+  if LRunCount <> 1 then
+  begin
+    WriteLn(AnsiRed('FAIL: AllPassed should not re-run (count='), LRunCount, ')');
+    Halt(1);
+  end;
+  WriteLn(AnsiGreen('  ✓ AllPassed caching'));
+
+  { Test: Summary smoke }
+  LSummarySuite := TTestSuite.Create('Summary Smoke');
+  LSummarySuite.Test('pass', procedure begin CheckTrue(True); end);
+  LSummarySuite.Run;
+  LSummarySuite.Summary; { should not raise }
+  WriteLn(AnsiGreen('  ✓ Summary smoke'));
+
+  { Test: Runner Summary }
+  LSumSuite3 := TTestSuite.Create('Summary Suite');
+  LSumSuite3.Test('pass', procedure begin CheckTrue(True); end);
+  LSumSuite3.Skip('skipped', 'reason');
+  LSumRunner := TTestRunner.Create('Summary Runner');
+  LSumRunner.Add(LSumSuite3);
+  LSumRunner.RunAll;
+  LSumRunner.Summary; { should not raise }
+  if LSumRunner.TotalPass <> 1 then
+  begin
+    WriteLn(AnsiRed('FAIL: Expected 1 pass, got '), LSumRunner.TotalPass);
+    Halt(1);
+  end;
+  if LSumRunner.TotalSkip <> 1 then
+  begin
+    WriteLn(AnsiRed('FAIL: Expected 1 skip, got '), LSumRunner.TotalSkip);
+    Halt(1);
+  end;
+  WriteLn(AnsiGreen('  ✓ Runner Summary'));
+
   WriteLn;
   WriteLn(AnsiGreen('ALL PASSED'));
 end.

@@ -156,6 +156,44 @@ begin
     end);
 end;
 
+{ ── B5.7: 3-level nested failure propagation ────────────────────────────── }
+
+procedure LevelCProc(constref CCtx: ITestContext);
+begin
+  CCtx.Run('leaf fail',
+    procedure
+    begin
+      Check(False, 'deep failure');
+    end);
+end;
+
+procedure LevelBProc(constref BCtx: ITestContext);
+begin
+  BCtx.RunNested('level C', @LevelCProc);
+end;
+
+procedure TestLevel3Nested(constref Ctx: ITestContext);
+begin
+  Ctx.RunNested('level B', @LevelBProc);
+end;
+
+{ ── B5.5: RunNested API ──────────────────────────────────────────────────── }
+
+procedure NestedChildProc(constref ChildCtx: ITestContext);
+begin
+  ChildCtx.Run('leaf ok',
+    procedure
+    begin
+      Check(True);
+      InterLockedIncrement(GSubTestsRun);
+    end);
+end;
+
+procedure TestRunNestedApi(constref Ctx: ITestContext);
+begin
+  Ctx.RunNested('nested child', @NestedChildProc);
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -171,6 +209,7 @@ begin
   LSuite.TestSubtest('empty subtest',      @TestEmptySubtest);
   LSuite.TestSubtest('ITestContext',       @TestITestContext);
   LSuite.TestSubtest('subtest skip',       @TestSubtestSkip);
+  LSuite.TestSubtest('RunNested API',      @TestRunNestedApi);
 
   if not LSuite.Run then
   begin
@@ -200,6 +239,20 @@ begin
       Halt(1);
     end;
     WriteLn(AnsiGreen('  Failure propagation verified'));
+  end;
+
+  { ── B5.7: 3-level nested failure propagation ────────────────────────────── }
+  WriteLn;
+  WriteLn(AnsiBold('─── 3-Level Nested Failure ───'));
+  begin
+    LFailSuite := TTestSuite.Create('Deep Nested Failure');
+    LFailSuite.TestSubtest('3-level', @TestLevel3Nested);
+    if LFailSuite.Run then
+    begin
+      WriteLn(AnsiRed('FAIL: 3-level nested failure should propagate'));
+      Halt(1);
+    end;
+    WriteLn(AnsiGreen('  3-level failure propagation verified'));
   end;
 
   WriteLn;
