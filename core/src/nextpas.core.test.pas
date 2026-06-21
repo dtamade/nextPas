@@ -58,10 +58,11 @@ type
   TTestEntryKind = (ekTest, ekSubtest, ekSkipped);
 
   TTestEntry = record
-    Name : string;
-    Proc : TTestProc;
-    Kind : TTestEntryKind;
-    SkipReason: string;
+    Name       : string;
+    Proc       : TTestProc;
+    SubtestProc: TSubtestProc;  { used when Kind = ekSubtest }
+    Kind       : TTestEntryKind;
+    SkipReason : string;
   end;
 
 { ── Test Suite ────────────────────────────────────────────────────────────── }
@@ -104,7 +105,6 @@ type
     TotalPass: Integer;
     TotalFail: Integer;
     TotalSkip: Integer;
-    TotalErr : Integer;
 
     class function Create(const AName: string): TTestRunner; static;
     procedure Add(var ASuite: TTestSuite);
@@ -998,10 +998,11 @@ procedure TTestContext.Run(const AName: string; AProc: TTestProc);
 var
   LEntry: TTestEntry;
 begin
-  LEntry.Name      := FTestName + '/' + AName;
-  LEntry.Proc      := AProc;
-  LEntry.Kind      := ekTest;
-  LEntry.SkipReason:= '';
+  LEntry.Name        := FTestName + '/' + AName;
+  LEntry.Proc        := AProc;
+  LEntry.SubtestProc := nil;
+  LEntry.Kind        := ekTest;
+  LEntry.SkipReason  := '';
   SetLength(FSubtests, Length(FSubtests) + 1);
   FSubtests[High(FSubtests)] := LEntry;
 end;
@@ -1010,10 +1011,11 @@ procedure TTestContext.RunNested(const AName: string; AProc: Pointer);
 var
   LEntry: TTestEntry;
 begin
-  LEntry.Name      := FTestName + '/' + AName;
-  LEntry.Proc      := TTestProc(AProc);
-  LEntry.Kind      := ekSubtest;
-  LEntry.SkipReason:= '';
+  LEntry.Name        := FTestName + '/' + AName;
+  LEntry.Proc        := nil;
+  LEntry.SubtestProc := TSubtestProc(AProc);
+  LEntry.Kind        := ekSubtest;
+  LEntry.SkipReason  := '';
   SetLength(FSubtests, Length(FSubtests) + 1);
   FSubtests[High(FSubtests)] := LEntry;
 end;
@@ -1053,7 +1055,7 @@ begin
       begin
         LSubCtx := TTestContext.Create(LEntry.Name);
         LSubCtxI := LSubCtx;
-        TSubtestProc(LEntry.Proc)(LSubCtxI);
+        LEntry.SubtestProc(LSubCtxI);
         LSubCtx.ExecuteSubtests;
         { Aggregate nested subtest counts into parent }
         Inc(FSubPass, LSubCtx.FSubPass);
@@ -1119,9 +1121,10 @@ procedure TTestSuite.Test(const AName: string; AProc: TTestProc);
 var
   LEntry: TTestEntry;
 begin
-  LEntry.Name       := AName;
-  LEntry.Proc       := AProc;
-  LEntry.Kind       := ekTest;
+  LEntry.Name        := AName;
+  LEntry.Proc        := AProc;
+  LEntry.SubtestProc := nil;
+  LEntry.Kind        := ekTest;
   LEntry.SkipReason := '';
   SetLength(Tests, Length(Tests) + 1);
   Tests[High(Tests)] := LEntry;
@@ -1131,10 +1134,11 @@ procedure TTestSuite.TestSubtest(const AName: string; AProc: TSubtestProc);
 var
   LEntry: TTestEntry;
 begin
-  LEntry.Name       := AName;
-  LEntry.Proc       := TTestProc(AProc);
-  LEntry.Kind       := ekSubtest;
-  LEntry.SkipReason := '';
+  LEntry.Name        := AName;
+  LEntry.Proc        := nil;
+  LEntry.SubtestProc := AProc;
+  LEntry.Kind        := ekSubtest;
+  LEntry.SkipReason  := '';
   SetLength(Tests, Length(Tests) + 1);
   Tests[High(Tests)] := LEntry;
 end;
@@ -1216,7 +1220,21 @@ begin
     LStatus := tsPassed;
     SetTestContext(Name, LEntry.Name);
 
-    { BeforeEach }
+    { Skip check BEFORE BeforeEach — skipped tests don't need hooks }
+    if LEntry.Kind = ekSkipped then
+    begin
+      LStatus := tsSkipped;
+      Inc(LSkip);
+      if LEntry.SkipReason <> '' then
+        WriteLn('  ', StatusDot(tsSkipped), ' ', AnsiDim(LEntry.Name),
+          ' — ', LEntry.SkipReason)
+      else
+        WriteLn('  ', StatusDot(tsSkipped), ' ', AnsiDim(LEntry.Name));
+      ReportLeakIfAny(LStatus);
+      Continue;
+    end;
+
+    { BeforeEach (only for non-skipped tests) }
     if Assigned(BeforeEach) then
     begin
       try
@@ -1234,17 +1252,25 @@ begin
     end;
 
     try
-      if LEntry.Kind = ekSkipped then
-      begin
-        LStatus := tsSkipped;
-        Inc(LSkip);
-      end
-      else if LEntry.Kind = ekSubtest then
+      if LEntry.Kind = ekSubtest then
       begin
         LSubCtx := TTestContext.Create(LEntry.Name);
         LSubCtxI := LSubCtx;
-        TSubtestProc(LEntry.Proc)(LSubCtxI);
-        LSubCtx.ExecuteSubtests;
+        LEntry.SubtestProc(LSubCtxI);
+        try
+          LSubCtx.ExecuteSubtests;
+        except
+          on E: EAssertionFailed do
+          begin
+            LStatus := tsFailed;
+            Inc(LFail);
+          end;
+          on E: Exception do
+          begin
+            LStatus := tsError;
+            Inc(LFail);
+          end;
+        end;
       end
       else
       begin
@@ -1529,11 +1555,19 @@ end;
 
 procedure TTestSuite.Summary;
 begin
+  if not FHasRun then
+  begin
+    WriteLn(AnsiYellow('Warning: ') + Name + ' has not been run yet');
+    Exit;
+  end;
   WriteLn(AnsiBold('─── ') + AnsiCyan(Name) + AnsiBold(' ───'));
   WriteLn('  Total tests: ', Length(Tests));
+  WriteLn('  Passed: ', FLastPass, ', Failed: ', FLastFail, ', Skipped: ', FLastSkip);
 end;
 
 function TTestSuite.AllPassed: Boolean;
+  { Returns whether all tests passed. If Run/RunParallel has not been called yet,
+    this will automatically execute Run (serial mode) first. }
 begin
   if not FHasRun then
     Result := Run
@@ -1552,10 +1586,12 @@ begin
   Result.TotalPass := 0;
   Result.TotalFail := 0;
   Result.TotalSkip := 0;
-  Result.TotalErr  := 0;
 end;
 
 procedure TTestRunner.Add(var ASuite: TTestSuite);
+  { Note: ASuite is copied by value. After Add(), further modifications to the
+    original ASuite variable will NOT be reflected in the runner due to Pascal
+    dynamic-array copy-on-write semantics. Add all tests before calling Add. }
 begin
   SetLength(Suites, Length(Suites) + 1);
   Suites[High(Suites)] := ASuite;
@@ -1571,7 +1607,6 @@ begin
   TotalPass := 0;
   TotalFail := 0;
   TotalSkip := 0;
-  TotalErr  := 0;
   for I := 0 to High(Suites) do
   begin
     if not Suites[I].Run then
@@ -1593,7 +1628,6 @@ begin
   TotalPass := 0;
   TotalFail := 0;
   TotalSkip := 0;
-  TotalErr  := 0;
   for I := 0 to High(Suites) do
   begin
     if not Suites[I].RunParallel(APool) then
