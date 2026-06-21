@@ -176,6 +176,13 @@ function ExpectDouble(AValue: Double): IExpectation;
 function ExpectPtr(AValue: Pointer): IExpectation;
 function ExpectProc(AProc: TTestProc): IExpectation;
 
+{ ── Test Filter & Timeout ───────────────────────────────────────────────────── }
+
+procedure SetTestFilter(const APattern: string);
+function  GetTestFilter: string;
+procedure SetTestTimeout(AMillis: Integer);
+function  GetTestTimeout: Integer;
+
 { ── Check* (procedural) ───────────────────────────────────────────────────── }
 
 procedure Check(ACondition: Boolean; const AMessage: string = '');
@@ -268,6 +275,10 @@ var
   { ANSI capability — set once in initialization, read-only after }
   GAnsiEnabled: Boolean = False;
   GAnsiChecked: Boolean = False;
+  { Test filter — glob pattern(s), comma-separated }
+  GTestFilter: string = '';
+  { Test timeout in milliseconds, 0 = no timeout }
+  GTestTimeoutMs: Integer = 0;
 
 { ═════════════════════════════════════════════════════════════════════════════ }
 { ANSI Helpers                                                                 }
@@ -330,6 +341,209 @@ procedure SetAnsiEnabled(AEnabled: Boolean);
 begin
   GAnsiEnabled := AEnabled;
   GAnsiChecked := True; { prevent InitAnsi from overwriting }
+end;
+
+{ ═════════════════════════════════════════════════════════════════════════════ }
+{ Test Filter & Timeout (public API)                                          }
+{ ═════════════════════════════════════════════════════════════════════════════ }
+
+procedure SetTestFilter(const APattern: string);
+begin
+  GTestFilter := APattern;
+end;
+
+function GetTestFilter: string;
+begin
+  Result := GTestFilter;
+end;
+
+procedure SetTestTimeout(AMillis: Integer);
+begin
+  GTestTimeoutMs := AMillis;
+end;
+
+function GetTestTimeout: Integer;
+begin
+  Result := GTestTimeoutMs;
+end;
+
+{ ── Glob matching (internal) ───────────────────────────────────────────────── }
+
+function MatchesGlob(const AName, APattern: string): Boolean;
+var
+  I, J: Integer;
+begin
+  { Try matching pattern against name — iterative with recursive * backtracking }
+  I := 1; J := 1;
+  while (I <= Length(AName)) and (J <= Length(APattern)) do
+  begin
+    if APattern[J] = '*' then
+    begin
+      { Skip consecutive stars }
+      while (J <= Length(APattern)) and (APattern[J] = '*') do Inc(J);
+      if J > Length(APattern) then Exit(True); { trailing * matches rest }
+      { Try each possible match position for * }
+      while I <= Length(AName) do
+      begin
+        if MatchesGlob(Copy(AName, I, MaxInt), Copy(APattern, J, MaxInt)) then
+          Exit(True);
+        Inc(I);
+      end;
+      Exit(False);
+    end
+    else if (APattern[J] = '?') or (AName[I] = APattern[J]) then
+    begin
+      Inc(I); Inc(J);
+    end
+    else
+      Exit(False);
+  end;
+  { Skip trailing stars in pattern }
+  while (J <= Length(APattern)) and (APattern[J] = '*') do Inc(J);
+  Result := (I > Length(AName)) and (J > Length(APattern));
+end;
+
+function MatchesFilter(const AName: string): Boolean;
+var
+  LFilter, LPattern: string;
+  LComma: Integer;
+begin
+  if GTestFilter = '' then
+    Exit(True);
+  LFilter := GTestFilter;
+  while LFilter <> '' do
+  begin
+    LComma := Pos(',', LFilter);
+    if LComma > 0 then
+    begin
+      LPattern := Copy(LFilter, 1, LComma - 1);
+      Delete(LFilter, 1, LComma);
+    end
+    else
+    begin
+      LPattern := LFilter;
+      LFilter := '';
+    end;
+    { Trim whitespace }
+    while (LPattern <> '') and (LPattern[1] = ' ') do Delete(LPattern, 1, 1);
+    while (LPattern <> '') and (LPattern[Length(LPattern)] = ' ') do
+      SetLength(LPattern, Length(LPattern) - 1);
+    if LPattern = '' then
+      Continue;
+    { No wildcard → substring match; with wildcard → glob match }
+    if (Pos('*', LPattern) > 0) or (Pos('?', LPattern) > 0) then
+    begin
+      if MatchesGlob(AName, LPattern) then
+        Exit(True);
+    end
+    else
+    begin
+      if Pos(LPattern, AName) > 0 then
+        Exit(True);
+    end;
+  end;
+  Result := False;
+end;
+
+{ ── Timeout worker (internal) ──────────────────────────────────────────────── }
+
+type
+  TTimeoutRec = record
+    Proc    : TTestProc;
+    Done    : Boolean;
+    TimedOut: Boolean;
+    ErrorMsg: string;
+  end;
+  PTimeoutRec = ^TTimeoutRec;
+
+function TimeoutWorker(AArg: Pointer): Pointer; cdecl;
+var
+  R: PTimeoutRec;
+begin
+  Result := nil;
+  R := PTimeoutRec(AArg);
+  try
+    R^.Proc;
+    R^.Done := True;
+  except
+    on E: ETestSkipped do
+    begin
+      R^.ErrorMsg := #1 + E.Message; { prefix #1 = skip }
+      R^.Done := True;
+    end;
+    on E: EAssertionFailed do
+    begin
+      R^.ErrorMsg := E.Message;
+      R^.Done := True;
+    end;
+    on E: Exception do
+    begin
+      R^.ErrorMsg := #2 + E.ClassName + ': ' + E.Message; { prefix #2 = error }
+      R^.Done := True;
+    end;
+  end;
+end;
+
+function RunTestWithTimeout(AProc: TTestProc; ATimeoutMs: Integer;
+  out AStatus: TTestStatus; out AMsg: string): Boolean;
+{ Returns True if test completed (pass/fail/error/skip).
+  Returns False if timed out (AStatus = tsError, AMsg = 'timeout'). }
+var
+  LRec: TTimeoutRec;
+  LHandle: TPlatformThreadHandle;
+  LRetVal: Pointer;
+  LElapsed: Integer;
+begin
+  LRec.Proc := AProc;
+  LRec.Done := False;
+  LRec.TimedOut := False;
+  LRec.ErrorMsg := '';
+
+  platform_thread_create(LHandle, @TimeoutWorker, @LRec);
+
+  { Poll with sleep — cross-platform via platform_thread_sleep_ns }
+  LElapsed := 0;
+  while (LElapsed < ATimeoutMs) and (not LRec.Done) do
+  begin
+    platform_thread_sleep_ns(10 * 1000 * 1000); { 10 ms }
+    Inc(LElapsed, 10);
+  end;
+
+  if LRec.Done then
+  begin
+    { Test completed — determine status from error prefix }
+    platform_thread_join(LHandle, LRetVal);
+    if LRec.ErrorMsg = '' then
+    begin
+      AStatus := tsPassed;
+      AMsg := '';
+    end
+    else if LRec.ErrorMsg[1] = #1 then
+    begin
+      AStatus := tsSkipped;
+      AMsg := Copy(LRec.ErrorMsg, 2, MaxInt);
+    end
+    else if LRec.ErrorMsg[1] = #2 then
+    begin
+      AStatus := tsError;
+      AMsg := Copy(LRec.ErrorMsg, 2, MaxInt);
+    end
+    else
+    begin
+      AStatus := tsFailed;
+      AMsg := LRec.ErrorMsg;
+    end;
+    Result := True;
+  end
+  else
+  begin
+    { Timed out — thread is still running (cannot kill) }
+    AStatus := tsError;
+    AMsg := 'test timed out after ' + IntToStr(ATimeoutMs) + 'ms';
+    Result := False;
+    { Note: worker thread is leaked — cannot force-terminate Pascal threads.
+      This is a known limitation documented in the API. }
+  end;
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }
@@ -1620,6 +1834,19 @@ begin
     LTestResult.Message := '';
     SetTestContext(Name, LEntry.Name);
 
+    { Test filter — skip non-matching tests silently }
+    if (GTestFilter <> '') and not MatchesFilter(LEntry.Name) then
+    begin
+      { Not counted as pass/fail/skip — just invisible }
+      LTestResult.Name    := LEntry.Name;
+      LTestResult.Status  := tsSkipped;
+      LTestResult.Message := 'filtered out';
+      SetLength(AResult.Results, Length(AResult.Results) + 1);
+      AResult.Results[High(AResult.Results)] := LTestResult;
+      Inc(LSkip);
+      Continue;
+    end;
+
     { Skip check BEFORE BeforeEach — skipped tests don't need hooks }
     if LEntry.Kind = ekSkipped then
     begin
@@ -1698,8 +1925,25 @@ begin
       end
       else
       begin
-        LEntry.Proc;
-        Inc(LPass);
+        if (GTestTimeoutMs > 0) and (LEntry.Kind = ekTest) then
+        begin
+          { Timeout-enabled path — runs in watchdog thread }
+          if RunTestWithTimeout(LEntry.Proc, GTestTimeoutMs, LStatus, LLastFailMsg) then
+          begin
+            if LStatus = tsPassed then Inc(LPass)
+            else Inc(LFail);
+          end
+          else
+          begin
+            { Timed out — LStatus already set to tsError }
+            Inc(LFail);
+          end;
+        end
+        else
+        begin
+          LEntry.Proc;
+          Inc(LPass);
+        end;
       end;
     except
       on E: ETestSkipped do
@@ -2184,7 +2428,22 @@ var
   I: Integer;
   LAllPassed: Boolean;
   LSuiteResult: TTestRunResult;
+
+  function ParseFilterFromArgs: string;
+  var
+    K: Integer;
+  begin
+    Result := '';
+    for K := 1 to ParamCount do
+      if (ParamStr(K) = '--filter') and (K < ParamCount) then
+        Exit(ParamStr(K + 1));
+  end;
+
 begin
+  { Auto-detect --filter from command line if not already set programmatically }
+  if GTestFilter = '' then
+    GTestFilter := ParseFilterFromArgs;
+
   WriteLn(AnsiBold('═══ ') + AnsiBold(Name) + AnsiBold(' ═══'));
   LAllPassed := True;
   TotalPass := 0;
