@@ -160,15 +160,6 @@ begin
   Result.FResults := Default(TParallelBenchResult);
 end;
 
-function TParallelBenchmark.CreateThreads: TBenchThreadArray;
-var
-  I: Integer;
-begin
-  SetLength(Result, FConfig.ThreadCount);
-  for I := 0 to FConfig.ThreadCount - 1 do
-    Result[I] := TBenchThread.Create(I, FFunc, FConfig.IterationsPerThread);
-end;
-
 procedure TParallelBenchmark.RunThread(AThreadId: Integer);
 begin
   // This is handled by TBenchThread.Execute
