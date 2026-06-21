@@ -58,6 +58,7 @@ type
     FConfig: TParallelBenchConfig;
     FFunc: TBenchParallelFunc;
     FResults: TParallelBenchResult;
+    function CreateThreads: TBenchThreadArray;
     procedure RunThread(AThreadId: Integer);
   public
     {**
@@ -179,6 +180,15 @@ begin
   // This is handled by TBenchThread.Execute
 end;
 
+function TParallelBenchmark.CreateThreads: TBenchThreadArray;
+var
+  I: Integer;
+begin
+  SetLength(Result, FConfig.ThreadCount);
+  for I := 0 to FConfig.ThreadCount - 1 do
+    Result[I] := TBenchThread.Create(I, FFunc, FConfig.IterationsPerThread);
+end;
+
 function TParallelBenchmark.Execute: TParallelBenchResult;
 var
   LThreads: TBenchThreadArray;
@@ -196,9 +206,7 @@ begin
   end;
 
   // Create threads
-  SetLength(LThreads, FConfig.ThreadCount);
-  for I := 0 to FConfig.ThreadCount - 1 do
-    LThreads[I] := TBenchThread.Create(I, FFunc, FConfig.IterationsPerThread);
+  LThreads := CreateThreads;
 
   // Record start time using high-precision timer
   LStartNs := platform_monotonic_ns;
