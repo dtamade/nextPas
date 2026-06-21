@@ -119,7 +119,8 @@ type
 implementation
 
 uses
-  SysUtils, Classes;
+  SysUtils, Classes,
+  nextpas.core.bench.baseline;
 
 { TBenchSuite }
 
