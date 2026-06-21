@@ -16,6 +16,8 @@ unit nextpas.core.platform.freetype.ffi;
 
 interface
 
+{$PACKRECORDS 1}
+
 type
   { Opaque FreeType handles. }
   FT_Library  = type Pointer;
@@ -50,16 +52,19 @@ type
     VertAdvance: FT_Pos;
   end;
 
-  { Bitmap descriptor — 32 bytes, verified. }
+  { Bitmap descriptor — 40 bytes, gcc verified.
+    PACKRECORDS 1 requires explicit padding for pointer alignment. }
   FT_Bitmap = record
     Rows: UInt32;              { offset 0 }
     Width: UInt32;             { offset 4 }
     Pitch: Int32;              { offset 8 (signed, can be negative) }
+    _pad0: array[0..3] of Byte; { offset 12: padding for 8-byte alignment }
     Buffer: PByte;             { offset 16 }
-    NumGrays: UInt16;
-    PaletteMode: Byte;
-    PixelMode: Byte;
-    _pad: array[0..3] of Byte;
+    NumGrays: UInt16;          { offset 24 }
+    PaletteMode: Byte;         { offset 26 }
+    PixelMode: Byte;           { offset 27 }
+    _pad1: array[0..3] of Byte; { offset 28: padding for pointer alignment }
+    Palette: Pointer;          { offset 32 }
   end;
 
   FT_Generic = record
@@ -73,29 +78,28 @@ type
   PFT_Glyph_Metrics = ^FT_Glyph_Metrics;
 
   { FT_GlyphSlotRec — the glyph slot structure.
-    We only access a few key fields; the rest is padding.
-    Key fields and their offsets (gcc verified):
+    PACKRECORDS 1 requires explicit padding. All offsets gcc verified.
       library      @ 0   (8 bytes, Pointer)
       face         @ 8   (8 bytes, Pointer)
       next         @ 16  (8 bytes, Pointer)
-      glyph_index  @ 32  (4 bytes, FT_UInt)
-      metrics      @ 40  (40 bytes, FT_Glyph_Metrics)
-      bitmap       @ 152 (32 bytes, FT_Bitmap)
-      bitmap_left  @ 184 (4 bytes, FT_Int)
-      bitmap_top   @ 188 (4 bytes, FT_Int)
-      advance      @ 192 (16 bytes, FT_Vector)
+      glyph_index  @ 24  (4 bytes, FT_UInt)
+      metrics      @ 48  (64 bytes, FT_Glyph_Metrics)
+      advance      @ 128 (16 bytes, FT_Vector)
+      bitmap       @ 152 (40 bytes, FT_Bitmap)
+      bitmap_left  @ 192 (4 bytes, FT_Int)
+      bitmap_top   @ 196 (4 bytes, FT_Int)
   }
   FT_GlyphSlotRec = record
-    _pad0: array[0..31] of Byte;   { 0-31: library, face, next, reserved }
-    GlyphIndex: FT_UInt;           { offset 32 }
-    _pad1: array[0..3] of Byte;    { 36-39: padding }
-    Metrics: FT_Glyph_Metrics;     { offset 40 }
-    _pad2: array[0..71] of Byte;   { 80-151: padding to bitmap }
-    Bitmap: FT_Bitmap;             { offset 152 }
-    BitmapLeft: FT_Int;            { offset 184 }
-    BitmapTop: FT_Int;             { offset 188 }
-    _pad3: array[0..3] of Byte;    { padding }
-    Advance: FT_Vector;            { offset 192 }
+    _pad0: array[0..23] of Byte;   { 0-23: library, face, next }
+    GlyphIndex: FT_UInt;           { offset 24 }
+    _pad1: array[0..19] of Byte;   { 28-47: padding to metrics }
+    Metrics: FT_Glyph_Metrics;     { offset 48, 64 bytes }
+    _pad2: array[0..15] of Byte;   { 112-127: padding to advance }
+    Advance: FT_Vector;            { offset 128, 16 bytes }
+    _pad3: array[0..7] of Byte;    { 144-151: padding to bitmap }
+    Bitmap: FT_Bitmap;             { offset 152, 40 bytes }
+    BitmapLeft: FT_Int;            { offset 192 }
+    BitmapTop: FT_Int;             { offset 196 }
     { rest of struct is unused for rasterization }
   end;
 
