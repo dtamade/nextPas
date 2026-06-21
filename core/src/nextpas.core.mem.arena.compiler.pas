@@ -15,6 +15,12 @@ const
   {** 大对象阈值 (64KB)：>= 此值的对象直接 mmap }
   ARENA_LARGE_THRESHOLD = 64 * 1024;
 
+{$IFDEF NEXTPAS_ARENA_LEAK_CHECK}
+var
+  GArenaInstanceCount: Integer;
+  GArenaTotalMapped: SizeUInt;
+{$ENDIF}
+
 type
   {** Arena 标记：用于 SaveMark/RestoreToMark }
   TArenaMark = record
@@ -118,12 +124,23 @@ begin
   AArena.FLargeUsed := 0;
   AArena.FPeakUsed := 0;
   AArena.FAllocCount := 0;
+  {$IFDEF NEXTPAS_ARENA_LEAK_CHECK}
+  InterLockedIncrement(GArenaInstanceCount);
+  {$ENDIF}
 end;
 
 procedure TArena_Release(var AArena: TArena);
 var
   I: SizeInt;
 begin
+  {$IFDEF NEXTPAS_ARENA_LEAK_CHECK}
+  InterLockedDecrement(GArenaInstanceCount);
+  if GArenaTotalMapped >= AArena.FTotalAllocated then
+    Dec(GArenaTotalMapped, AArena.FTotalAllocated)
+  else
+    GArenaTotalMapped := 0;
+  {$ENDIF}
+
   for I := 0 to AArena.FChunkCount - 1 do
     platform_mmap_close(AArena.FChunks[I].Map);
   AArena.FChunks := nil;
@@ -202,6 +219,9 @@ begin
   FCurrentEnd := PByte(PtrUInt(LMap.Addr) + PtrUInt(LMap.Size));
   FCurrentPtr := FCurrentBase;
   Inc(FTotalAllocated, LMap.Size);
+  {$IFDEF NEXTPAS_ARENA_LEAK_CHECK}
+  Inc(GArenaTotalMapped, LMap.Size);
+  {$ENDIF}
   Result := True;
 end;
 
@@ -256,6 +276,9 @@ begin
     if FTotalUsed > FPeakUsed then
       FPeakUsed := FTotalUsed;
     Inc(FAllocCount);
+    {$IFDEF NEXTPAS_ARENA_LEAK_CHECK}
+    Inc(GArenaTotalMapped, aSize);
+    {$ENDIF}
     Exit(LMap.Addr);
   end;
 
@@ -404,6 +427,16 @@ function TArena.AllocCount: SizeUInt;
 begin
   Result := FAllocCount;
 end;
+
+{$IFDEF NEXTPAS_ARENA_LEAK_CHECK}
+initialization
+  GArenaInstanceCount := 0;
+  GArenaTotalMapped := 0;
+finalization
+  if GArenaInstanceCount <> 0 then
+    WriteLn(stderr, 'WARNING: Arena leak detected: ', GArenaInstanceCount,
+      ' instance(s) not released, ', GArenaTotalMapped, ' bytes mapped');
+{$ENDIF}
 
 {$POP}
 
