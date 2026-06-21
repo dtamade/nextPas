@@ -1,6 +1,6 @@
 { nextpas.core.test.check — Procedural Check* assertion API
   =========================================================
-  Depends on: nextpas.core.test.types }
+  Depends on: nextpas.core.test.base }
 
 unit nextpas.core.test.check;
 
@@ -10,7 +10,7 @@ interface
 
 uses
   SysUtils,
-  nextpas.core.test.types;
+  nextpas.core.test.base;
 
 procedure Check(ACondition: Boolean; const AMessage: string = '');
 procedure CheckEqual(const AExpected, AActual: string); overload;

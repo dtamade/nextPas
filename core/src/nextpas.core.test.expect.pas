@@ -1,6 +1,6 @@
 { nextpas.core.test.expect — Fluent IExpectation API
   =========================================================
-  Depends on: nextpas.core.test.types }
+  Depends on: nextpas.core.test.base }
 
 unit nextpas.core.test.expect;
 
@@ -10,7 +10,7 @@ interface
 
 uses
   SysUtils,
-  nextpas.core.test.types;
+  nextpas.core.test.base;
 
 { ── IExpectation (fluent) ─────────────────────────────────────────────────── }
 

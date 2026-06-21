@@ -1,6 +1,6 @@
 { nextpas.core.test.runner.parallel — Timeout worker + parallel thread worker
   =========================================================
-  Depends on: nextpas.core.test.types, nextpas.core.test.output,
+  Depends on: nextpas.core.test.base, nextpas.core.test.output,
               nextpas.core.platform.thread }
 
 unit nextpas.core.test.runner.parallel;
@@ -11,7 +11,7 @@ interface
 
 uses
   SysUtils,
-  nextpas.core.test.types,
+  nextpas.core.test.base,
   nextpas.core.test.output,
   nextpas.core.sync.intf,
   nextpas.core.platform.thread;
@@ -34,15 +34,17 @@ function RunTestWithTimeout(AProc: TTestProc; ATimeoutMs: Integer;
 
 type
   TThreadRec = record
-    Entry     : TTestEntry;
-    SuiteName : string;
-    Mtx       : IMutex;
-    Before    : TTestProc;
-    After     : TTestProc;
-    Pass      : PInteger;
-    Fail      : PInteger;
-    Skip      : PInteger;
-    Res       : ^TTestResult; { non-nil -> write per-test result here }
+    Entry          : TTestEntry;
+    SuiteName      : string;
+    Mtx            : IMutex;
+    Before         : TTestProc;
+    BeforeClosure  : TTestClosure;
+    After          : TTestProc;
+    AfterClosure   : TTestClosure;
+    Pass           : PInteger;
+    Fail           : PInteger;
+    Skip           : PInteger;
+    Res            : ^TTestResult; { non-nil -> write per-test result here }
   end;
   PThreadRec = ^TThreadRec;
 
@@ -188,9 +190,10 @@ begin
     Exit;
   end;
 
-  if Assigned(R^.Before) then
+  if Assigned(R^.Before) or Assigned(R^.BeforeClosure) then
   begin
-    try R^.Before;
+    try
+      if Assigned(R^.Before) then R^.Before else R^.BeforeClosure();
     except
       on E: ETestSkipped do
       begin
@@ -217,6 +220,8 @@ begin
     try
       if R^.Entry.Kind = ekTableTest then
         PTestCaseProc(R^.Entry.TableProc)^(PTestCase(R^.Entry.TableCase)^)
+      else if Assigned(R^.Entry.Closure) then
+        R^.Entry.Closure()
       else
         R^.Entry.Proc;
     except
@@ -238,10 +243,10 @@ begin
     end;
   end;
 
-  if Assigned(R^.After) then
+  if Assigned(R^.After) or Assigned(R^.AfterClosure) then
   begin
     try
-      R^.After;
+      if Assigned(R^.After) then R^.After else R^.AfterClosure();
     except
       on E: Exception do
       begin

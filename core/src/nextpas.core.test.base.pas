@@ -1,8 +1,8 @@
-{ nextpas.core.test.types — Test framework types, exceptions, and internal state
+{ nextpas.core.test.base — Test framework types, exceptions, and internal state
   =========================================================
   Foundation unit: no dependencies on other test.* units. }
 
-unit nextpas.core.test.types;
+unit nextpas.core.test.base;
 
 {$I nextpas.core.settings.inc}
 
@@ -17,6 +17,7 @@ uses
 
 type
   TTestProc = procedure;
+  TTestClosure = reference to procedure;
 
   ITestContext = interface
     ['{C4E8A57A-5B1D-4F3A-9C7E-2D8F1A6B3E90}']
@@ -88,6 +89,7 @@ type
   TTestEntry = record
     Name       : string;
     Proc       : TTestProc;
+    Closure    : TTestClosure;  { alternative to Proc for closure-based tests }
     SubtestProc: TSubtestProc;  { used when Kind = ekSubtest }
     Kind       : TTestEntryKind;
     SkipReason : string;

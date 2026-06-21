@@ -1,6 +1,6 @@
 { nextpas.core.test.runner — TTestSuite, TTestRunner, parallel execution
   =========================================================
-  Depends on: nextpas.core.test.types, nextpas.core.test.check, nextpas.core.test.output,
+  Depends on: nextpas.core.test.base, nextpas.core.test.check, nextpas.core.test.output,
               nextpas.core.test.runner.context, nextpas.core.test.runner.parallel }
 
 unit nextpas.core.test.runner;
@@ -12,7 +12,7 @@ interface
 uses
   SysUtils,
   Classes,
-  nextpas.core.test.types,
+  nextpas.core.test.base,
   nextpas.core.test.check,
   nextpas.core.test.output,
   nextpas.core.test.runner.context,
@@ -30,10 +30,14 @@ type
   TTestSuite = record
     Name      : string;
     Tests     : specialize TArray<TTestEntry>;
-    Setup     : TTestProc;
-    Teardown  : TTestProc;
-    BeforeEach: TTestProc;
-    AfterEach : TTestProc;
+    Setup       : TTestProc;
+    SetupClosure: TTestClosure;
+    Teardown       : TTestProc;
+    TeardownClosure: TTestClosure;
+    BeforeEach       : TTestProc;
+    BeforeEachClosure: TTestClosure;
+    AfterEach       : TTestProc;
+    AfterEachClosure : TTestClosure;
     { Cached run results — set by Run/RunParallel }
     LastRunPassed: Boolean;
     HasRun       : Boolean;
@@ -43,15 +47,20 @@ type
 
     class function Create(const AName: string): TTestSuite; static;
     procedure Test(const AName: string; AProc: TTestProc);
+    procedure Test(const AName: string; AProc: TTestClosure);
     procedure TestSubtest(const AName: string; AProc: TSubtestProc);
     procedure TestTable(const AName: string;
       ACases: specialize TArray<TTestCase>;
       AProc: TTestCaseProc);
     procedure Skip(const AName: string; const AReason: string = '');
     procedure SetSetup(AProc: TTestProc);
+    procedure SetSetup(AProc: TTestClosure);
     procedure SetTeardown(AProc: TTestProc);
+    procedure SetTeardown(AProc: TTestClosure);
     procedure OnBeforeEach(AProc: TTestProc);
+    procedure OnBeforeEach(AProc: TTestClosure);
     procedure OnAfterEach(AProc: TTestProc);
+    procedure OnAfterEach(AProc: TTestClosure);
     function  Run: Boolean;
     function  RunWithResult(out AResult: TTestRunResult): Boolean;
     function  RunParallel(APool: IThreadPool): Boolean;
@@ -95,10 +104,14 @@ class function TTestSuite.Create(const AName: string): TTestSuite;
 begin
   Result.Name       := AName;
   Result.Tests      := nil;
-  Result.Setup      := nil;
-  Result.Teardown   := nil;
-  Result.BeforeEach := nil;
-  Result.AfterEach  := nil;
+  Result.Setup       := nil;
+  Result.SetupClosure := nil;
+  Result.Teardown       := nil;
+  Result.TeardownClosure := nil;
+  Result.BeforeEach       := nil;
+  Result.BeforeEachClosure := nil;
+  Result.AfterEach       := nil;
+  Result.AfterEachClosure := nil;
   Result.LastRunPassed := False;
   Result.HasRun        := False;
   Result.LastPass      := 0;
@@ -112,9 +125,24 @@ var
 begin
   LEntry.Name        := AName;
   LEntry.Proc        := AProc;
+  LEntry.Closure     := nil;
   LEntry.SubtestProc := nil;
   LEntry.Kind        := ekTest;
   LEntry.SkipReason := '';
+  SetLength(Tests, Length(Tests) + 1);
+  Tests[High(Tests)] := LEntry;
+end;
+
+procedure TTestSuite.Test(const AName: string; AProc: TTestClosure);
+var
+  LEntry: TTestEntry;
+begin
+  LEntry.Name        := AName;
+  LEntry.Proc        := nil;
+  LEntry.Closure     := AProc;
+  LEntry.SubtestProc := nil;
+  LEntry.Kind        := ekTest;
+  LEntry.SkipReason  := '';
   SetLength(Tests, Length(Tests) + 1);
   Tests[High(Tests)] := LEntry;
 end;
@@ -177,21 +205,49 @@ end;
 procedure TTestSuite.SetSetup(AProc: TTestProc);
 begin
   Setup := AProc;
+  SetupClosure := nil;
+end;
+
+procedure TTestSuite.SetSetup(AProc: TTestClosure);
+begin
+  Setup := nil;
+  SetupClosure := AProc;
 end;
 
 procedure TTestSuite.SetTeardown(AProc: TTestProc);
 begin
   Teardown := AProc;
+  TeardownClosure := nil;
+end;
+
+procedure TTestSuite.SetTeardown(AProc: TTestClosure);
+begin
+  Teardown := nil;
+  TeardownClosure := AProc;
 end;
 
 procedure TTestSuite.OnBeforeEach(AProc: TTestProc);
 begin
   BeforeEach := AProc;
+  BeforeEachClosure := nil;
+end;
+
+procedure TTestSuite.OnBeforeEach(AProc: TTestClosure);
+begin
+  BeforeEach := nil;
+  BeforeEachClosure := AProc;
 end;
 
 procedure TTestSuite.OnAfterEach(AProc: TTestProc);
 begin
   AfterEach := AProc;
+  AfterEachClosure := nil;
+end;
+
+procedure TTestSuite.OnAfterEach(AProc: TTestClosure);
+begin
+  AfterEach := nil;
+  AfterEachClosure := AProc;
 end;
 
 function TTestSuite.Run: Boolean;
@@ -227,10 +283,10 @@ begin
     AnsiDim(' (' + IntToStr(Length(Tests)) + ' tests)'));
 
   { Suite-level setup }
-  if Assigned(Setup) then
+  if Assigned(Setup) or Assigned(SetupClosure) then
   begin
     try
-      Setup;
+      if Assigned(Setup) then Setup else SetupClosure();
     except
       on E: Exception do
       begin
@@ -302,10 +358,10 @@ begin
     end;
 
     { BeforeEach (only for non-skipped tests) }
-    if Assigned(BeforeEach) then
+    if Assigned(BeforeEach) or Assigned(BeforeEachClosure) then
     begin
       try
-        BeforeEach;
+        if Assigned(BeforeEach) then BeforeEach else BeforeEachClosure();
       except
         on E: ETestSkipped do
         begin
@@ -367,9 +423,9 @@ begin
       end
       else
       begin
-        if (LGTestTimeoutMs > 0) and (LEntry.Kind = ekTest) then
+        if (LGTestTimeoutMs > 0) and (LEntry.Kind = ekTest) and Assigned(LEntry.Proc) then
         begin
-          { Timeout-enabled path — runs in watchdog thread }
+          { Timeout-enabled path — runs in watchdog thread (only for TTestProc) }
           if RunTestWithTimeout(LEntry.Proc, LGTestTimeoutMs, LStatus, LLastFailMsg) then
           begin
             if LStatus = tsPassed then Inc(LPass)
@@ -383,7 +439,10 @@ begin
         end
         else
         begin
-          LEntry.Proc;
+          if Assigned(LEntry.Closure) then
+            LEntry.Closure()
+          else
+            LEntry.Proc;
           Inc(LPass);
         end;
       end;
@@ -408,10 +467,10 @@ begin
     end;
 
     { AfterEach }
-    if Assigned(AfterEach) then
+    if Assigned(AfterEach) or Assigned(AfterEachClosure) then
     begin
       try
-        AfterEach;
+        if Assigned(AfterEach) then AfterEach else AfterEachClosure();
       except
         on E: Exception do
         begin
@@ -471,10 +530,10 @@ begin
   end;
 
   { Suite-level teardown }
-  if Assigned(Teardown) then
+  if Assigned(Teardown) or Assigned(TeardownClosure) then
   begin
     try
-      Teardown;
+      if Assigned(Teardown) then Teardown else TeardownClosure();
     except
       on E: Exception do
         WriteLn('  ', AnsiYellow('WARNING teardown error: ') + E.Message);
@@ -537,10 +596,10 @@ begin
     AnsiDim(' (' + IntToStr(LTotal) + ' tests, parallel)'));
 
   { Suite-level setup (serial) }
-  if Assigned(Setup) then
+  if Assigned(Setup) or Assigned(SetupClosure) then
   begin
     try
-      Setup;
+      if Assigned(Setup) then Setup else SetupClosure();
     except
       on E: Exception do
       begin
@@ -576,7 +635,9 @@ begin
     LRecs[I].SuiteName := Name;
     LRecs[I].Mtx       := LMtx;
     LRecs[I].Before    := BeforeEach;
+    LRecs[I].BeforeClosure := BeforeEachClosure;
     LRecs[I].After     := AfterEach;
+    LRecs[I].AfterClosure  := AfterEachClosure;
     LRecs[I].Pass      := @LPass;
     LRecs[I].Fail      := @LFail;
     LRecs[I].Skip      := @LSkip;
@@ -590,10 +651,10 @@ begin
     platform_thread_join(LHandles[I], LRetVal);
 
   { Suite-level teardown }
-  if Assigned(Teardown) then
+  if Assigned(Teardown) or Assigned(TeardownClosure) then
   begin
     try
-      Teardown;
+      if Assigned(Teardown) then Teardown else TeardownClosure();
     except
       on E: Exception do
         WriteLn('  ', AnsiYellow('WARNING teardown error: ') + E.Message);

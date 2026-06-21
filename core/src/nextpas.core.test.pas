@@ -1,7 +1,7 @@
 { nextpas.core.test — Advanced Pascal Unit Testing Framework (facade)
   =========================================================
   Re-exports all public API from sub-modules:
-    test.types, test.check, test.expect, test.output, test.runner
+    test.base, test.check, test.expect, test.output, test.runner
   Dual API: procedural Check* + fluent IExpectation chain.
   Parallel execution, subtests, ANSI output, leak detection. }
 
@@ -12,7 +12,7 @@ unit nextpas.core.test;
 interface
 
 uses
-  nextpas.core.test.types,
+  nextpas.core.test.base,
   nextpas.core.test.check,
   nextpas.core.test.expect,
   nextpas.core.test.output,
@@ -21,28 +21,29 @@ uses
 { ── Re-exported types from test.types ─────────────────────────────────────── }
 
 type
-  ExceptClass = nextpas.core.test.types.ExceptClass;
-  TTestProc = nextpas.core.test.types.TTestProc;
-  ITestContext = nextpas.core.test.types.ITestContext;
-  TSubtestProc = nextpas.core.test.types.TSubtestProc;
-  TTestCase = nextpas.core.test.types.TTestCase;
-  TTestCaseProc = nextpas.core.test.types.TTestCaseProc;
-  TTestStatus = nextpas.core.test.types.TTestStatus;
-  TTestResult = nextpas.core.test.types.TTestResult;
-  TTestRunResult = nextpas.core.test.types.TTestRunResult;
-  ETestSkipped = nextpas.core.test.types.ETestSkipped;
-  TTestEntryKind = nextpas.core.test.types.TTestEntryKind;
-  TTestEntry = nextpas.core.test.types.TTestEntry;
+  ExceptClass = nextpas.core.test.base.ExceptClass;
+  TTestProc = nextpas.core.test.base.TTestProc;
+  TTestClosure = nextpas.core.test.base.TTestClosure;
+  ITestContext = nextpas.core.test.base.ITestContext;
+  TSubtestProc = nextpas.core.test.base.TSubtestProc;
+  TTestCase = nextpas.core.test.base.TTestCase;
+  TTestCaseProc = nextpas.core.test.base.TTestCaseProc;
+  TTestStatus = nextpas.core.test.base.TTestStatus;
+  TTestResult = nextpas.core.test.base.TTestResult;
+  TTestRunResult = nextpas.core.test.base.TTestRunResult;
+  ETestSkipped = nextpas.core.test.base.ETestSkipped;
+  TTestEntryKind = nextpas.core.test.base.TTestEntryKind;
+  TTestEntry = nextpas.core.test.base.TTestEntry;
 
 const
-  tsPassed  = nextpas.core.test.types.tsPassed;
-  tsFailed  = nextpas.core.test.types.tsFailed;
-  tsSkipped = nextpas.core.test.types.tsSkipped;
-  tsError   = nextpas.core.test.types.tsError;
-  ekTest    = nextpas.core.test.types.ekTest;
-  ekSubtest = nextpas.core.test.types.ekSubtest;
-  ekSkipped = nextpas.core.test.types.ekSkipped;
-  ekTableTest = nextpas.core.test.types.ekTableTest;
+  tsPassed  = nextpas.core.test.base.tsPassed;
+  tsFailed  = nextpas.core.test.base.tsFailed;
+  tsSkipped = nextpas.core.test.base.tsSkipped;
+  tsError   = nextpas.core.test.base.tsError;
+  ekTest    = nextpas.core.test.base.ekTest;
+  ekSubtest = nextpas.core.test.base.ekSubtest;
+  ekSkipped = nextpas.core.test.base.ekSkipped;
+  ekTableTest = nextpas.core.test.base.ekTableTest;
 
 { ── Re-exported types from test.expect ────────────────────────────────────── }
 
@@ -114,7 +115,7 @@ function WriteJUnitXML(const AResults: specialize TArray<TTestRunResult>;
   const AFileName: string; const ASuiteName: string = ''): Boolean;
 
 type
-  TTestResults = nextpas.core.test.types.TTestResults;
+  TTestResults = nextpas.core.test.base.TTestResults;
 
 implementation
 

@@ -1,6 +1,6 @@
 { nextpas.core.test.runner.context — TTestContext + TTestResultAppender (subtest execution)
   =========================================================
-  Depends on: nextpas.core.test.types, nextpas.core.test.output }
+  Depends on: nextpas.core.test.base, nextpas.core.test.output }
 
 unit nextpas.core.test.runner.context;
 
@@ -10,7 +10,7 @@ interface
 
 uses
   SysUtils,
-  nextpas.core.test.types,
+  nextpas.core.test.base,
   nextpas.core.test.output;
 
 { ── Subtest result callback type ───────────────────────────────────────────── }

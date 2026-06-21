@@ -1,6 +1,6 @@
 { nextpas.core.test.output — ANSI helpers, test filter, JUnit XML, StatusDot
   =========================================================
-  Depends on: nextpas.core.test.types }
+  Depends on: nextpas.core.test.base }
 
 unit nextpas.core.test.output;
 
@@ -11,7 +11,7 @@ interface
 uses
   SysUtils,
   Classes,
-  nextpas.core.test.types,
+  nextpas.core.test.base,
   nextpas.core.text.conv;
 
 { ── ANSI helpers ──────────────────────────────────────────────────────────── }
