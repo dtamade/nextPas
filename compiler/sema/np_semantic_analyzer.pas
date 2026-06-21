@@ -4315,6 +4315,9 @@ function TSemanticAnalyzer.MethodSymbolIdForExactClassTypeMember(
 var
   BodyCandidateCount: LongInt;
   BodyMatchCount: LongInt;
+  BestDist: LongInt;
+  BestSymbolId: LongInt;
+  Dist: LongInt;
   Index: LongInt;
   QualifiedName: string;
   Symbol: TSemanticSymbol;
@@ -4403,12 +4406,56 @@ begin
       SymbolId := SignatureSymbolId
     else if (not AHasArgSignature) or (SignatureMatchCount > 1) then
     begin
-      if SameText(
-        TypeSymbol.OwnerUnitId,
-        NormalizeUnitIdentity(FUnitGraph.RootName)
-      ) or OwnerUnitAllowsProjectSourceDiagnostic(TypeSymbol.OwnerUnitId) then
-        AResolutionFailureKind := 'ambiguous-overload';
-      Exit;
+      // When no signature info available, prefer the overload with
+      // ParamCount closest to AArgCount (most specific match).
+      if not AHasArgSignature then
+      begin
+        BestDist := MaxInt;
+        BestSymbolId := 0;
+        for Index := 0 to FModel.SymbolCount - 1 do
+        begin
+          Symbol := FModel.SymbolAt(Index);
+          if SameText(Symbol.Name, QualifiedName) and
+            (SameText(Symbol.Kind, 'method') or
+             SameText(Symbol.Kind, 'constructor') or
+             SameText(Symbol.Kind, 'destructor')) and
+            (AArgCount >= Symbol.MinParamCount) and
+            (AArgCount <= Symbol.ParamCount) then
+          begin
+            Dist := Symbol.ParamCount - AArgCount;
+            if Dist < 0 then Dist := -Dist;
+            if (Dist < BestDist) or
+              ((Dist = BestDist) and (BestSymbolId = 0)) then
+            begin
+              BestDist := Dist;
+              BestSymbolId := Symbol.SymbolId;
+            end;
+          end;
+        end;
+        if BestSymbolId > 0 then
+        begin
+          SymbolId := BestSymbolId;
+          // Continue to body check below
+        end
+        else
+        begin
+          if SameText(
+            TypeSymbol.OwnerUnitId,
+            NormalizeUnitIdentity(FUnitGraph.RootName)
+          ) or OwnerUnitAllowsProjectSourceDiagnostic(TypeSymbol.OwnerUnitId) then
+            AResolutionFailureKind := 'ambiguous-overload';
+          Exit;
+        end;
+      end
+      else
+      begin
+        if SameText(
+          TypeSymbol.OwnerUnitId,
+          NormalizeUnitIdentity(FUnitGraph.RootName)
+        ) or OwnerUnitAllowsProjectSourceDiagnostic(TypeSymbol.OwnerUnitId) then
+          AResolutionFailureKind := 'ambiguous-overload';
+        Exit;
+      end;
     end
     else if SignatureMatchCount = 0 then
     begin
