@@ -1,3 +1,6 @@
+{ DEPRECATED: Use nextpas.core.test instead.
+  This unit is kept for backward compatibility with existing callers. }
+
 unit nextpas.core.testing;
 
 {$I nextpas.core.settings.inc}
