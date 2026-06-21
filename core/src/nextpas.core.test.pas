@@ -207,7 +207,7 @@ procedure CheckNotNear(AExpected, AActual: Double;
 procedure Fail(const AMessage: string);
 procedure Skip(const AReason: string = '');
 
-{ ── ANSI helpers (exposed for benchmarks) ─────────────────────────────────── }
+{ ── ANSI helpers ──────────────────────────────────────────────────────────── }
 
 function AnsiBold(const S: string): string;
 function AnsiGreen(const S: string): string;
@@ -215,6 +215,14 @@ function AnsiRed(const S: string): string;
 function AnsiYellow(const S: string): string;
 function AnsiCyan(const S: string): string;
 function AnsiDim(const S: string): string;
+procedure SetAnsiEnabled(AEnabled: Boolean);
+
+{ ── JUnit XML output ─────────────────────────────────────────────────────── }
+
+function JUnitXML(const AResults: specialize TArray<TTestRunResult>;
+  const ASuiteName: string = ''): string;
+function WriteJUnitXML(const AResults: specialize TArray<TTestRunResult>;
+  const AFileName: string; const ASuiteName: string = ''): Boolean;
 
 implementation
 
@@ -280,6 +288,12 @@ begin
   if not GAnsiChecked then
   begin
     GAnsiChecked := True;
+    { Standard: https://no-color.org/ }
+    if GetEnvironmentVariable('NO_COLOR') <> '' then
+    begin
+      GAnsiEnabled := False;
+      Exit;
+    end;
     {$IFDEF NEXTPAS_LINUX}
     GAnsiEnabled := True;
     {$ELSE}
@@ -288,6 +302,11 @@ begin
                     (GetEnvironmentVariable('ConEmuANSI') = 'ON') or
                     (GetEnvironmentVariable('WT_SESSION') <> '');
     {$ENDIF}
+    { Override via NEXTPAS_COLOR: '1' forces on, '0' forces off }
+    if GetEnvironmentVariable('NEXTPAS_COLOR') = '1' then
+      GAnsiEnabled := True
+    else if GetEnvironmentVariable('NEXTPAS_COLOR') = '0' then
+      GAnsiEnabled := False;
   end;
 end;
 
@@ -306,6 +325,142 @@ function AnsiRed(const S: string): string;    begin Result := Wrap(C_RED, S); en
 function AnsiYellow(const S: string): string; begin Result := Wrap(C_YELLOW, S); end;
 function AnsiCyan(const S: string): string;   begin Result := Wrap(C_CYAN, S); end;
 function AnsiDim(const S: string): string;    begin Result := Wrap(C_DIM, S); end;
+
+procedure SetAnsiEnabled(AEnabled: Boolean);
+begin
+  GAnsiEnabled := AEnabled;
+  GAnsiChecked := True; { prevent InitAnsi from overwriting }
+end;
+
+{ ═════════════════════════════════════════════════════════════════════════════ }
+{ JUnit XML Output                                                            }
+{ ═════════════════════════════════════════════════════════════════════════════ }
+
+function XmlEscape(const S: string): string;
+var
+  LLen, I: Integer;
+  LCh: Char;
+begin
+  LLen := Length(S);
+  if LLen = 0 then
+  begin
+    Result := '';
+    Exit;
+  end;
+  Result := '';
+  for I := 1 to LLen do
+  begin
+    LCh := S[I];
+    case LCh of
+      '<':  Result := Result + '&lt;';
+      '>':  Result := Result + '&gt;';
+      '&':  Result := Result + '&amp;';
+      '"':  Result := Result + '&quot;';
+    else
+      Result := Result + LCh;
+    end;
+  end;
+end;
+
+function JUnitXML(const AResults: specialize TArray<TTestRunResult>;
+  const ASuiteName: string): string;
+var
+  LSb: TStringBuilder;
+  LRunResult: TTestRunResult;
+  LTestResult: TTestResult;
+  I, J: Integer;
+  LTotalTests, LTotalFailures, LTotalSkipped: Integer;
+  LSuiteName: string;
+begin
+  LSb := TStringBuilder.Create;
+  try
+    LSb.AppendLine('<?xml version="1.0" encoding="UTF-8"?>');
+
+    { Compute totals across all suites }
+    LTotalTests := 0;
+    LTotalFailures := 0;
+    LTotalSkipped := 0;
+    for I := 0 to High(AResults) do
+    begin
+      LRunResult := AResults[I];
+      LTotalTests := LTotalTests + LRunResult.Passed + LRunResult.Failed + LRunResult.Skipped;
+      LTotalFailures := LTotalFailures + LRunResult.Failed;
+      LTotalSkipped := LTotalSkipped + LRunResult.Skipped;
+    end;
+
+    LSb.AppendLine('<testsuites name="' + XmlEscape(ASuiteName) +
+      '" tests="' + IntToStr(LTotalTests) +
+      '" failures="' + IntToStr(LTotalFailures) +
+      '" skipped="' + IntToStr(LTotalSkipped) + '">');
+
+    for I := 0 to High(AResults) do
+    begin
+      LRunResult := AResults[I];
+      if LRunResult.SuiteName <> '' then
+        LSuiteName := LRunResult.SuiteName
+      else
+        LSuiteName := 'suite_' + IntToStr(I);
+
+      LSb.AppendLine('  <testsuite name="' + XmlEscape(LSuiteName) +
+        '" tests="' + IntToStr(LRunResult.Passed + LRunResult.Failed + LRunResult.Skipped) +
+        '" failures="' + IntToStr(LRunResult.Failed) +
+        '" skipped="' + IntToStr(LRunResult.Skipped) + '">');
+
+      for J := 0 to High(LRunResult.Results) do
+      begin
+        LTestResult := LRunResult.Results[J];
+        LSb.Append('    <testcase name="' + XmlEscape(LTestResult.Name) + '"');
+        case LTestResult.Status of
+          tsFailed, tsError:
+            begin
+              LSb.AppendLine('>');
+              LSb.AppendLine('      <failure message="' +
+                XmlEscape(LTestResult.Message) + '"/>');
+              LSb.AppendLine('    </testcase>');
+            end;
+          tsSkipped:
+            begin
+              LSb.AppendLine('>');
+              LSb.AppendLine('      <skipped/>');
+              LSb.AppendLine('    </testcase>');
+            end;
+        else
+          LSb.AppendLine('/>');
+        end;
+      end;
+
+      LSb.AppendLine('  </testsuite>');
+    end;
+
+    LSb.AppendLine('</testsuites>');
+    Result := LSb.ToString;
+  finally
+    LSb.Free;
+  end;
+end;
+
+function WriteJUnitXML(const AResults: specialize TArray<TTestRunResult>;
+  const AFileName: string; const ASuiteName: string): Boolean;
+var
+  LStream: TFileStream;
+  LXml: string;
+  LBytes: TBytes;
+begin
+  Result := False;
+  try
+    LXml := JUnitXML(AResults, ASuiteName);
+    LBytes := TEncoding.UTF8.GetBytes(LXml);
+    LStream := TFileStream.Create(AFileName, fmCreate);
+    try
+      LStream.WriteBuffer(LBytes[0], Length(LBytes));
+    finally
+      LStream.Free;
+    end;
+    Result := True;
+  except
+    { Return False on any I/O error }
+  end;
+end;
 
 function StatusDot(AStatus: TTestStatus): string;
 begin
@@ -1846,100 +2001,9 @@ end;
 
 function TTestSuite.RunParallel(APool: IThreadPool): Boolean;
 var
-  LTotal: Integer;
-  LPass, LFail, LSkip: Integer;
-  LMtx: IMutex;
-  I: Integer;
-var
-  LRecs: array of TThreadRec;
-  LHandles: array of TPlatformThreadHandle;
-  LRetVal: Pointer;
+  LResult: TTestRunResult;
 begin
-  LTotal := Length(Tests);
-  LPass := 0;
-  LFail := 0;
-  LSkip := 0;
-  LMtx := Mutex();
-
-  WriteLn;
-  WriteLn(AnsiBold('▸ ') + AnsiCyan(Name) +
-    AnsiDim(' (' + IntToStr(LTotal) + ' tests, parallel)'));
-
-  { Suite-level setup (serial) }
-  if Assigned(Setup) then
-  begin
-    try
-      Setup;
-    except
-      on E: Exception do
-      begin
-        WriteLn('  ', AnsiRed('✗ setup failed: ') + E.Message);
-        for I := 0 to High(Tests) do
-        begin
-          Inc(LSkip);
-          WriteLn('    ', StatusDot(tsSkipped), ' ', AnsiDim(Tests[I].Name));
-        end;
-        HasRun        := True;
-        LastRunPassed := False;
-        LastPass      := 0;
-        LastFail      := 1;
-        LastSkip      := LSkip;
-        Result         := False;
-        WriteLn(AnsiDim('  ') + IntToStr(LSkip) + ' skipped (setup failure)');
-        Exit;
-      end;
-    end;
-  end;
-
-  { ── Parallel dispatch ──────────────────────────────────────────────────────
-    Uses direct platform_thread_create/join to avoid FPC closure capture issues.
-    Each thread receives its own heap-allocated TThreadRec with the test entry. }
-
-  SetLength(LHandles, LTotal);
-  SetLength(LRecs, LTotal);
-
-  { Pre-fill records (all tests, including skipped) }
-  for I := 0 to High(Tests) do
-  begin
-    LRecs[I].Entry     := Tests[I];
-    LRecs[I].SuiteName := Name;
-    LRecs[I].Mtx       := LMtx;
-    LRecs[I].Before    := BeforeEach;
-    LRecs[I].After     := AfterEach;
-    LRecs[I].Pass      := @LPass;
-    LRecs[I].Fail      := @LFail;
-    LRecs[I].Skip      := @LSkip;
-  end;
-
-  { Spawn one thread per test }
-  for I := 0 to High(Tests) do
-    platform_thread_create(LHandles[I], @ParallelWorkerProc, @LRecs[I]);
-
-  { Wait for all threads — join provides happens-before guarantee }
-  for I := 0 to High(Tests) do
-    platform_thread_join(LHandles[I], LRetVal);
-
-  { Suite-level teardown }
-  if Assigned(Teardown) then
-  begin
-    try
-      Teardown;
-    except
-      on E: Exception do
-        WriteLn('  ', AnsiYellow('⚠ teardown error: ') + E.Message);
-    end;
-  end;
-
-  HasRun        := True;
-  LastRunPassed := LFail = 0;
-  LastPass      := LPass;
-  LastFail      := LFail;
-  LastSkip      := LSkip;
-  Result         := LastRunPassed;
-  WriteLn(AnsiDim('  ') +
-    IntToStr(LPass) + ' passed, ' +
-    IntToStr(LFail) + ' failed, ' +
-    IntToStr(LSkip) + ' skipped');
+  Result := RunParallelWithResult(APool, LResult);
 end;
 
 function TTestSuite.RunParallelWithResult(APool: IThreadPool;
@@ -2102,46 +2166,16 @@ end;
 
 function TTestRunner.RunAll: Boolean;
 var
-  I: Integer;
-  LAllPassed: Boolean;
+  LResults: specialize TArray<TTestRunResult>;
 begin
-  WriteLn(AnsiBold('═══ ') + AnsiBold(Name) + AnsiBold(' ═══'));
-  LAllPassed := True;
-  TotalPass := 0;
-  TotalFail := 0;
-  TotalSkip := 0;
-  for I := 0 to High(Suites) do
-  begin
-    if not Suites[I].Run then
-      LAllPassed := False;
-    Inc(TotalPass, Suites[I].LastPass);
-    Inc(TotalFail, Suites[I].LastFail);
-    Inc(TotalSkip, Suites[I].LastSkip);
-  end;
-  HasRun := True;
-  Result := LAllPassed;
+  Result := RunAllWithResult(LResults);
 end;
 
 function TTestRunner.RunAllParallel(APool: IThreadPool): Boolean;
 var
-  I: Integer;
-  LAllPassed: Boolean;
+  LResults: specialize TArray<TTestRunResult>;
 begin
-  WriteLn(AnsiBold('═══ ') + AnsiBold(Name) + AnsiBold(' (parallel) ═══'));
-  LAllPassed := True;
-  TotalPass := 0;
-  TotalFail := 0;
-  TotalSkip := 0;
-  for I := 0 to High(Suites) do
-  begin
-    if not Suites[I].RunParallel(APool) then
-      LAllPassed := False;
-    Inc(TotalPass, Suites[I].LastPass);
-    Inc(TotalFail, Suites[I].LastFail);
-    Inc(TotalSkip, Suites[I].LastSkip);
-  end;
-  HasRun := True;
-  Result := LAllPassed;
+  Result := RunAllParallelWithResult(APool, LResults);
 end;
 
 function TTestRunner.RunAllWithResult(
