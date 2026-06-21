@@ -94,6 +94,9 @@ ExpectProc(@Boom).ToRaise(EConvertError);
 | `ToHaveLength` | string |
 | `ToRaise(class, msg)` | proc |
 
+**Note**: `CheckRaises` and `ToRaise` intentionally do NOT catch `ETestSkip` —
+`Skip()` is flow control, not a testable exception.
+
 ### TTestSuite
 
 ```pascal
@@ -153,6 +156,21 @@ Results are collected thread-safely using a mutex.
 
 **Note**: FPC's `heaptrc` (`-gh`) is not thread-safe. Omit `-gh` when running
 parallel tests, or run serial tests with `-gh` and parallel tests without.
+
+### Thread Safety Requirements
+
+When using `RunParallel`:
+
+- **BeforeEach / AfterEach** must be thread-safe — they are called concurrently
+  from multiple threads. Avoid shared mutable state or protect with a mutex.
+- **Setup / Teardown** run serially (before/after all parallel tests) and are
+  safe to use shared state.
+- **Check\* assertions** work correctly in parallel tests — each thread catches
+  its own exceptions locally.
+- **Subtests** (`ITestContext.Run`) are a serial-only feature. Do not use
+  `TestSubtest` entries with `RunParallel`.
+- **Global test context** (`GActiveTestName` etc.) is intentionally NOT set in
+  parallel mode to avoid data races. Test names are passed via `TThreadRec`.
 
 ## Build & Test
 
