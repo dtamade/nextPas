@@ -27,7 +27,7 @@ uses
   nextpas.core.collections.vec,
   nextpas.core.io.intf,
   nextpas.core.exception,
-  nextpas.core.system.classes;
+  ;
 
 const
   // ========================================================================

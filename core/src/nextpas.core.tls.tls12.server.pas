@@ -6,7 +6,7 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.text.conv, nextpas.core.system.classes,
+  nextpas.core.text.conv, nextpas.core.io.intf,
   nextpas.core.tls.base,
   nextpas.core.tls.tls12.ciphersuite,
   nextpas.core.tls.x509;
@@ -52,7 +52,7 @@ type
   end;
 
 function TryTLS12ServerHandshake(
-  AStream: TStream;
+  AStream: IStream;
   const AConfig: TTLS12ServerConfig;
   out AState: TTLS12ServerState;
   out AError: string
@@ -168,7 +168,7 @@ begin
 end;
 
 function TryTLS12ServerHandshake(
-  AStream: TStream;
+  AStream: IStream;
   const AConfig: TTLS12ServerConfig;
   out AState: TTLS12ServerState;
   out AError: string

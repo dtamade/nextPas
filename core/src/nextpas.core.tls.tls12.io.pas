@@ -5,7 +5,7 @@ unit nextpas.core.tls.tls12.io;
 interface
 
 uses
-  nextpas.core.base, nextpas.core.text.conv, nextpas.core.system.classes,
+  nextpas.core.base, nextpas.core.text.conv, nextpas.core.io.intf,
   nextpas.core.io.intf;
 
 type
@@ -18,7 +18,7 @@ type
     FHasNonHandshake: Boolean;
   public
     constructor Create(AStream: IStream); overload;
-    constructor Create(AStream: TStream); overload;
+    constructor Create(AStream: IStream); overload;
     function ReadMessage(out AHandshakeType: Byte; out ABody: TBytes;
       out AFullMessage: TBytes; out AAlertDesc: string): Boolean;
     function HasPendingNonHandshake: Boolean;
@@ -30,22 +30,22 @@ procedure TLS12AppendTranscript(var ATranscript: TBytes; const AData: TBytes);
 
 function TLS12SendRecord(AStream: IStream; AContentType: Byte;
   const AData: TBytes): Boolean; overload;
-function TLS12SendRecord(AStream: TStream; AContentType: Byte;
+function TLS12SendRecord(AStream: IStream; AContentType: Byte;
   const AData: TBytes): Boolean; overload;
 
 function TLS12ReadExact(AStream: IStream; var ABuf: TBytes; AOffset,
   ACount: Integer): Boolean; overload;
-function TLS12ReadExact(AStream: TStream; var ABuf: TBytes; AOffset,
+function TLS12ReadExact(AStream: IStream; var ABuf: TBytes; AOffset,
   ACount: Integer): Boolean; overload;
 
 function TLS12ReadRecord(AStream: IStream; out AContentType: Byte;
   out AData: TBytes): Boolean; overload;
-function TLS12ReadRecord(AStream: TStream; out AContentType: Byte;
+function TLS12ReadRecord(AStream: IStream; out AContentType: Byte;
   out AData: TBytes): Boolean; overload;
 
 function TLS12ReadHandshakeMessage(AStream: IStream; out AHandshakeType: Byte;
   out ABody: TBytes; out AFullMessage: TBytes; out AError: string): Boolean; overload;
-function TLS12ReadHandshakeMessage(AStream: TStream; out AHandshakeType: Byte;
+function TLS12ReadHandshakeMessage(AStream: IStream; out AHandshakeType: Byte;
   out ABody: TBytes; out AFullMessage: TBytes; out AError: string): Boolean; overload;
 
 implementation
@@ -79,7 +79,7 @@ begin
     AStream.Write(AData[0], SizeUInt(Length(AData)));
 end;
 
-function TLS12SendRecord(AStream: TStream; AContentType: Byte;
+function TLS12SendRecord(AStream: IStream; AContentType: Byte;
   const AData: TBytes): Boolean;
 begin
   Result := TLS12SendRecord(WrapTStream(AStream, False), AContentType, AData);
@@ -99,7 +99,7 @@ begin
   Result := True;
 end;
 
-function TLS12ReadExact(AStream: TStream; var ABuf: TBytes; AOffset,
+function TLS12ReadExact(AStream: IStream; var ABuf: TBytes; AOffset,
   ACount: Integer): Boolean;
 begin
   Result := TLS12ReadExact(WrapTStream(AStream, False), ABuf, AOffset, ACount);
@@ -127,7 +127,7 @@ begin
   Result := True;
 end;
 
-function TLS12ReadRecord(AStream: TStream; out AContentType: Byte;
+function TLS12ReadRecord(AStream: IStream; out AContentType: Byte;
   out AData: TBytes): Boolean;
 begin
   Result := TLS12ReadRecord(WrapTStream(AStream, False), AContentType, AData);
@@ -204,7 +204,7 @@ begin
   end;
 end;
 
-function TLS12ReadHandshakeMessage(AStream: TStream; out AHandshakeType: Byte;
+function TLS12ReadHandshakeMessage(AStream: IStream; out AHandshakeType: Byte;
   out ABody: TBytes; out AFullMessage: TBytes; out AError: string): Boolean;
 begin
   Result := TLS12ReadHandshakeMessage(WrapTStream(AStream, False), AHandshakeType,
@@ -219,7 +219,7 @@ begin
   FHasNonHandshake := False;
 end;
 
-constructor TTLS12HandshakeReader.Create(AStream: TStream);
+constructor TTLS12HandshakeReader.Create(AStream: IStream);
 begin
   Create(WrapTStream(AStream, False));
 end;

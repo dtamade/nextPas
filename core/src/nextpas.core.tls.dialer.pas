@@ -6,7 +6,7 @@ interface
 
 uses
   nextpas.core.base, nextpas.core.tls.base, nextpas.core.tls.tls,
-  nextpas.core.text.conv, nextpas.core.system.classes;
+  nextpas.core.text.conv;
 
 type
   TSSLDialResult = record

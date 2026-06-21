@@ -6,7 +6,7 @@ interface
 
 uses
   nextpas.core.base,
-   nextpas.core.system.classes,
+   nextpas.core.io.intf,
   nextpas.core.io.intf,
   nextpas.core.tls.base;
 
@@ -35,7 +35,7 @@ type
     FIsClient: Boolean;
   public
     constructor Create(AStream: IStream; AIsClient: Boolean); overload;
-    constructor Create(AStream: TStream; AIsClient: Boolean); overload;
+    constructor Create(AStream: IStream; AIsClient: Boolean); overload;
     function SendText(const AText: string): Boolean;
     function SendBinary(const AData: TBytes): Boolean;
     function SendPing(const AData: TBytes): Boolean;
@@ -66,7 +66,7 @@ begin
   FIsClient := AIsClient;
 end;
 
-constructor TWebSocketConnection.Create(AStream: TStream; AIsClient: Boolean);
+constructor TWebSocketConnection.Create(AStream: IStream; AIsClient: Boolean);
 begin
   Create(WrapTStream(AStream, False), AIsClient);
 end;

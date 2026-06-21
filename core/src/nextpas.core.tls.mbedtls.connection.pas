@@ -20,7 +20,7 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.text.conv, nextpas.core.system.classes, Sockets,
+  nextpas.core.text.conv, nextpas.core.io.intf, Sockets,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.connection.base,
@@ -91,7 +91,7 @@ type
 
   public
     constructor Create(AContext: ISSLContext; ASSLConfig: Pmbedtls_ssl_config; ASocket: THandle); overload;
-    constructor Create(AContext: ISSLContext; ASSLConfig: Pmbedtls_ssl_config; AStream: TStream); overload;
+    constructor Create(AContext: ISSLContext; ASSLConfig: Pmbedtls_ssl_config; AStream: IStream); overload;
     constructor Create(AContext: ISSLContext; ASSLConfig: Pmbedtls_ssl_config; AStream: IStream); overload;
     destructor Destroy; override;
 
@@ -268,7 +268,7 @@ begin
   AllocateSSLContext;
 end;
 
-constructor TMbedTLSConnection.Create(AContext: ISSLContext; ASSLConfig: Pmbedtls_ssl_config; AStream: TStream);
+constructor TMbedTLSConnection.Create(AContext: ISSLContext; ASSLConfig: Pmbedtls_ssl_config; AStream: IStream);
 begin
   Create(AContext, ASSLConfig, WrapTStream(AStream, False));
 end;

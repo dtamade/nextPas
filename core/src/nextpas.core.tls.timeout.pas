@@ -5,7 +5,7 @@ unit nextpas.core.tls.timeout;
 interface
 
 uses
-   nextpas.core.system.classes,
+   nextpas.core.io.intf,
   nextpas.core.io.base,
   nextpas.core.io.intf;
 
@@ -21,7 +21,7 @@ type
   public
     constructor Create(AInner: IStream; AReadTimeoutMs: Integer = 30000;
       AWriteTimeoutMs: Integer = 30000); overload;
-    constructor Create(AInner: TStream; AReadTimeoutMs: Integer = 30000;
+    constructor Create(AInner: IStream; AReadTimeoutMs: Integer = 30000;
       AWriteTimeoutMs: Integer = 30000); overload;
     function Read(var Buffer; Count: Longint): Longint; overload;
     function Write(const Buffer; Count: Longint): Longint; overload;
@@ -62,7 +62,7 @@ begin
   FConnectTimeout := 10000;
 end;
 
-constructor TTimeoutStream.Create(AInner: TStream; AReadTimeoutMs: Integer;
+constructor TTimeoutStream.Create(AInner: IStream; AReadTimeoutMs: Integer;
   AWriteTimeoutMs: Integer);
 begin
   Create(WrapTStream(AInner, False), AReadTimeoutMs, AWriteTimeoutMs);

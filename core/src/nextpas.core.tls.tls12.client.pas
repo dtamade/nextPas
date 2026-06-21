@@ -6,7 +6,7 @@ interface
 
 uses
   nextpas.core.exception, nextpas.core.text.conv, nextpas.core.base,
-  nextpas.core.base.utils, nextpas.core.system.classes,
+  nextpas.core.base.utils, nextpas.core.io.intf,
   nextpas.core.tls.base,
   nextpas.core.tls.tls12.ciphersuite,
   nextpas.core.tls.x509;
@@ -49,7 +49,7 @@ type
   end;
 
 function TryTLS12ClientHandshake(
-  AStream: TStream;
+  AStream: IStream;
   const AServerName: string;
   const AALPNProtocols: array of string;
   const ACipherSuites: TTLS12CipherSuiteList;
@@ -58,7 +58,7 @@ function TryTLS12ClientHandshake(
 ): Boolean; overload;
 
 function TryTLS12ClientHandshake(
-  AStream: TStream;
+  AStream: IStream;
   const AServerName: string;
   const AALPNProtocols: array of string;
   out AState: TTLS12ClientState;
@@ -66,7 +66,7 @@ function TryTLS12ClientHandshake(
 ): Boolean; overload;
 
 function TryTLS12ClientHandshakeFromFallback(
-  AStream: TStream;
+  AStream: IStream;
   const AClientHelloHandshake: TBytes;
   const AClientRandom: TBytes;
   const AServerName: string;
@@ -75,7 +75,7 @@ function TryTLS12ClientHandshakeFromFallback(
 ): Boolean;
 
 function TryTLS12ClientHandshakeWithResume(
-  AStream: TStream;
+  AStream: IStream;
   const AServerName: string;
   const AALPNProtocols: array of string;
   const ACachedSession: TTLS12SessionCache;
@@ -84,7 +84,7 @@ function TryTLS12ClientHandshakeWithResume(
 ): Boolean; overload;
 
 function TryTLS12ClientHandshakeWithResume(
-  AStream: TStream;
+  AStream: IStream;
   const AServerName: string;
   const AALPNProtocols: array of string;
   const ACipherSuites: TTLS12CipherSuiteList;
@@ -112,7 +112,7 @@ uses
   nextpas.core.tls.random;
 
 function TLS12ClientFullHandshakeAfterServerHello(
-  AStream: TStream;
+  AStream: IStream;
   var ATranscript: TBytes;
   var AState: TTLS12ClientState;
   const AServerName: string;
@@ -192,7 +192,7 @@ begin
 end;
 
 function TLS12ClientFullHandshakeAfterServerHello(
-  AStream: TStream;
+  AStream: IStream;
   var ATranscript: TBytes;
   var AState: TTLS12ClientState;
   const AServerName: string;
@@ -663,7 +663,7 @@ begin
 end;
 
 function TryTLS12ClientHandshake(
-  AStream: TStream;
+  AStream: IStream;
   const AServerName: string;
   const AALPNProtocols: array of string;
   const ACipherSuites: TTLS12CipherSuiteList;
@@ -756,7 +756,7 @@ begin
 end;
 
 function TryTLS12ClientHandshake(
-  AStream: TStream;
+  AStream: IStream;
   const AServerName: string;
   const AALPNProtocols: array of string;
   out AState: TTLS12ClientState;
@@ -777,7 +777,7 @@ begin
 end;
 
 function TryTLS12ClientHandshakeWithResume(
-  AStream: TStream;
+  AStream: IStream;
   const AServerName: string;
   const AALPNProtocols: array of string;
   const ACipherSuites: TTLS12CipherSuiteList;
@@ -1013,7 +1013,7 @@ begin
 end;
 
 function TryTLS12ClientHandshakeWithResume(
-  AStream: TStream;
+  AStream: IStream;
   const AServerName: string;
   const AALPNProtocols: array of string;
   const ACachedSession: TTLS12SessionCache;
@@ -1036,7 +1036,7 @@ begin
 end;
 
 function TryTLS12ClientHandshakeFromFallback(
-  AStream: TStream;
+  AStream: IStream;
   const AClientHelloHandshake: TBytes;
   const AClientRandom: TBytes;
   const AServerName: string;

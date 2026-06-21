@@ -19,7 +19,7 @@ interface
 
   nextpas.core.base,
   nextpas.core.base.utils,
-  nextpas.core.text.conv, nextpas.core.system.classes,
+  nextpas.core.text.conv, nextpas.core.io.intf,
   nextpas.core.io.intf,
   nextpas.core.io.stream_adapter,
   nextpas.core.tls.base,
@@ -107,7 +107,7 @@ type
 
   public
     constructor Create(AContext: ISSLContext; ASocket: THandle); overload;
-    constructor Create(AContext: ISSLContext; AStream: TStream); overload;
+    constructor Create(AContext: ISSLContext; AStream: IStream); overload;
     constructor Create(AContext: ISSLContext; AStream: IStream); overload;
     destructor Destroy; override;
 
@@ -243,7 +243,7 @@ begin
   SetupALPN;
 end;
 
-constructor TWolfSSLConnection.Create(AContext: ISSLContext; AStream: TStream);
+constructor TWolfSSLConnection.Create(AContext: ISSLContext; AStream: IStream);
 begin
   Create(AContext, WrapTStream(AStream, False));
 end;

@@ -12,7 +12,7 @@ unit nextpas.core.tls.openssl.certificate;
 interface
 
 uses
-  SysUtils, nextpas.core.system.classes,
+  SysUtils, nextpas.core.io.intf,
   nextpas.core.base.utils,
   nextpas.core.fs,
   nextpas.core.tls.base,
@@ -49,12 +49,12 @@ type
     destructor Destroy; override;
     
     function LoadFromFile(const AFileName: string): Boolean;
-    function LoadFromStream(AStream: TStream): Boolean;
+    function LoadFromStream(AStream: IStream): Boolean;
     function LoadFromMemory(const AData: Pointer; ASize: Integer): Boolean;
     function LoadFromPEM(const APEM: string): Boolean;
     function LoadFromDER(const ADER: TBytes): Boolean;
     function SaveToFile(const AFileName: string): Boolean;
-    function SaveToStream(AStream: TStream): Boolean;
+    function SaveToStream(AStream: IStream): Boolean;
     function SaveToPEM: string;
     function SaveToDER: TBytes;
     function GetInfo: TSSLCertificateInfo;
@@ -421,7 +421,7 @@ begin
   end;
 end;
 
-function TOpenSSLCertificate.LoadFromStream(AStream: TStream): Boolean;
+function TOpenSSLCertificate.LoadFromStream(AStream: IStream): Boolean;
 var
   Data: TBytes;
   Size: Int64;
@@ -569,7 +569,7 @@ begin
   end;
 end;
 
-function TOpenSSLCertificate.SaveToStream(AStream: TStream): Boolean;
+function TOpenSSLCertificate.SaveToStream(AStream: IStream): Boolean;
 var
   Data: TBytes;
 begin

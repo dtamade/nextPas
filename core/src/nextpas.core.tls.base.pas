@@ -27,7 +27,8 @@ unit nextpas.core.tls.base;
 interface
 
 uses
-  nextpas.core.base, nextpas.core.system.classes;
+  nextpas.core.base,
+  nextpas.core.io.intf;
 
 type
   // ============================================================================
