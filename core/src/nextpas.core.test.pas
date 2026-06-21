@@ -1402,13 +1402,29 @@ function ParallelWorkerProc(AArg: Pointer): Pointer; cdecl;
 var
   R: PThreadRec;
   LStatus: TTestStatus;
+  LFailMsg: string;
 begin
   Result := nil;
   R := PThreadRec(AArg);
   LStatus := tsPassed;
+  LFailMsg := '';
   { Note: We intentionally do NOT call SetTestContext here.
     SetTestContext writes to non-threadsafe global vars (GActiveTestName etc.)
     and is only safe in serial mode. Parallel tests track state locally via LStatus. }
+
+  { Subtests are not supported in parallel mode — skip gracefully }
+  if R^.Entry.Kind = ekSubtest then
+  begin
+    R^.Mtx.Acquire;
+    try
+      R^.Skip^ := R^.Skip^ + 1;
+      WriteLn('  ', StatusDot(tsSkipped), ' ', AnsiDim(R^.Entry.Name),
+        ' — subtests not supported in parallel mode');
+    finally
+      R^.Mtx.Release;
+    end;
+    Exit;
+  end;
 
   if R^.Entry.Kind = ekSkipped then
   begin
@@ -1429,6 +1445,7 @@ begin
       on E: Exception do
       begin
         LStatus := tsError;
+        LFailMsg := E.Message;
         R^.Mtx.Acquire;
         try
           WriteLn('  ', StatusDot(tsError), ' ', R^.Entry.Name,
@@ -1446,8 +1463,16 @@ begin
       R^.Entry.Proc;
     except
       on E: ETestSkipped do LStatus := tsSkipped;
-      on E: EAssertionFailed do LStatus := tsFailed;
-      on E: Exception do LStatus := tsError;
+      on E: EAssertionFailed do
+      begin
+        LStatus := tsFailed;
+        LFailMsg := E.Message;
+      end;
+      on E: Exception do
+      begin
+        LStatus := tsError;
+        LFailMsg := E.ClassName + ': ' + E.Message;
+      end;
     end;
   end;
 
@@ -1481,6 +1506,10 @@ begin
         begin
           R^.Fail^ := R^.Fail^ + 1;
           WriteLn('  ', StatusDot(tsFailed), ' ', AnsiRed(R^.Entry.Name));
+          if LFailMsg <> '' then
+            WriteLn('    ', AnsiDim(LFailMsg))
+          else
+            WriteLn('    ', AnsiDim('(assertion failed)'));
         end;
       tsSkipped:
         begin
@@ -1491,6 +1520,8 @@ begin
         begin
           R^.Fail^ := R^.Fail^ + 1;
           WriteLn('  ', StatusDot(tsError), ' ', AnsiRed(R^.Entry.Name));
+          if LFailMsg <> '' then
+            WriteLn('    ', AnsiDim(LFailMsg));
         end;
     end;
   finally

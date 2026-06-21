@@ -294,11 +294,12 @@ after each test in serial mode.
 
 ### Limitations
 
-- **Serial mode only**: Leak detection uses `CurrHeapUsed` before/after each
-  test. This is not thread-safe and is disabled in parallel mode.
-- **Absolute value check**: Reports leaks when `CurrHeapUsed` after test >
-  `CurrHeapUsed` before test. Temporary allocations during exception handling
-  may show small false positives.
+- **Serial mode only**: Leak detection uses `GetFPCHeapStatus.CurrHeapUsed`
+  after each test. This is not thread-safe and is disabled in parallel mode.
+- **Absolute value check**: Reports leaks when `CurrHeapUsed > 0` after a
+  passed test — not a before/after delta. This means any non-zero heap usage
+  (including framework-internal allocations) triggers a warning. False positives
+  are possible; treat the warning as a prompt to investigate with `-gh`.
 - **Per-test granularity**: Leak detection is per-test, not per-assertion.
   A leak in a subtest is attributed to the parent test.
 - **heaptrc itself**: FPC's `heaptrc` unit adds overhead and is not compatible
