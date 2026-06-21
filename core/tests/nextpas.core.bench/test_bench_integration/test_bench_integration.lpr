@@ -10,6 +10,7 @@ uses
   cthreads,
   {$endif}
   SysUtils,
+  Classes,
   SyncObjs,
   nextpas.core.bench,
   nextpas.core.bench.base,
@@ -732,6 +733,105 @@ begin
   Check(not LResults.HasRegression(10.0), 'Large threshold does not flag regression');
 end;
 
+procedure TestTBenchResults_SaveToJSON;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+  LPath: string;
+  LContent: string;
+begin
+  WriteLn('TestTBenchResults_SaveToJSON:');
+
+  LSuite := CreateFastSuite('SaveJSONSuite');
+  LSuite.Add('Fast', @BenchFast);
+  LResults := LSuite.Run;
+
+  LPath := 'build/test_output_save.json';
+  LResults.SaveToJSON(LPath);
+
+  Check(FileExists(LPath), 'JSON file created');
+
+  // 验证文件内容
+  LContent := '';
+  with TStringList.Create do
+  try
+    LoadFromFile(LPath);
+    LContent := Text;
+  finally
+    Free;
+  end;
+  Check(Length(LContent) > 0, 'JSON file not empty');
+  Check(Pos('"version"', LContent) > 0, 'JSON contains version');
+
+  DeleteFile(LPath);
+end;
+
+procedure TestTBenchResults_SaveToHTML;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+  LPath: string;
+  LContent: string;
+begin
+  WriteLn('TestTBenchResults_SaveToHTML:');
+
+  LSuite := CreateFastSuite('SaveHTMLSuite');
+  LSuite.Add('Fast', @BenchFast);
+  LResults := LSuite.Run;
+
+  LPath := 'build/test_output_save.html';
+  LResults.SaveToHTML(LPath);
+
+  Check(FileExists(LPath), 'HTML file created');
+
+  // 验证文件内容
+  LContent := '';
+  with TStringList.Create do
+  try
+    LoadFromFile(LPath);
+    LContent := Text;
+  finally
+    Free;
+  end;
+  Check(Length(LContent) > 0, 'HTML file not empty');
+  Check(Pos('<!DOCTYPE html>', LContent) > 0, 'HTML contains DOCTYPE');
+
+  DeleteFile(LPath);
+end;
+
+procedure TestTBenchResults_SaveToTSV;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+  LPath: string;
+  LContent: string;
+begin
+  WriteLn('TestTBenchResults_SaveToTSV:');
+
+  LSuite := CreateFastSuite('SaveTSVSuite');
+  LSuite.Add('Fast', @BenchFast);
+  LResults := LSuite.Run;
+
+  LPath := 'build/test_output_save.tsv';
+  LResults.SaveToTSV(LPath);
+
+  Check(FileExists(LPath), 'TSV file created');
+
+  // 验证文件内容
+  LContent := '';
+  with TStringList.Create do
+  try
+    LoadFromFile(LPath);
+    LContent := Text;
+  finally
+    Free;
+  end;
+  Check(Length(LContent) > 0, 'TSV file not empty');
+  Check(Pos('name' + #9, LContent) > 0, 'TSV contains header');
+
+  DeleteFile(LPath);
+end;
+
 procedure TestTBenchSuite_FluentAPI;
 var
   LSuite: IBenchSuite;
@@ -805,6 +905,12 @@ begin
     TestTBenchResults_ToHTML;
     WriteLn;
     TestTBenchResults_HasRegression;
+    WriteLn;
+    TestTBenchResults_SaveToJSON;
+    WriteLn;
+    TestTBenchResults_SaveToHTML;
+    WriteLn;
+    TestTBenchResults_SaveToTSV;
     WriteLn;
     TestTBenchSuite_FluentAPI;
   finally

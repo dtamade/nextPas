@@ -128,7 +128,10 @@ type
 implementation
 
 uses
-  SysUtils, Math,
+  nextpas.core.text.conv,
+  nextpas.core.os.env,
+  nextpas.core.math.trig,
+  nextpas.core.math.scalar,
   nextpas.core.bench.memtrack,
   nextpas.core.bench.parallel;
 
@@ -323,11 +326,11 @@ begin
 
   LValue := GetEnvironmentVariable(BENCH_ENV_MIN_SAMPLES);
   if (LValue <> '') then
-    FConfig.MinSamples := StrToIntDef(LValue, BENCH_DEFAULT_MIN_SAMPLES);
+    FConfig.MinSamples := Integer(StrToIntDef(LValue, BENCH_DEFAULT_MIN_SAMPLES));
 
   LValue := GetEnvironmentVariable(BENCH_ENV_WARMUP);
   if (LValue <> '') then
-    FConfig.WarmupIterations := StrToIntDef(LValue, BENCH_DEFAULT_WARMUP_ITERATIONS);
+    FConfig.WarmupIterations := Integer(StrToIntDef(LValue, BENCH_DEFAULT_WARMUP_ITERATIONS));
 
   FFilter := GetEnvironmentVariable(BENCH_ENV_FILTER);
 end;

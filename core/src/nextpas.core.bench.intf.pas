@@ -68,7 +68,6 @@ type
     Setup: TBenchSetupFunc;
     Teardown: TBenchTeardownFunc;
     Condition: Boolean;
-    DependsOn: array of string;
     EnableParallel: Boolean;
     ParallelThreads: Integer;
   end;
@@ -182,14 +181,14 @@ type
     function CountOutliers(const ASorted: TDoubleArray;
       AQ1, AQ3, AMultiplier: Double): Integer;
 
-    {** 检测回归（两个分布是否有显著差异） }
-    function IsSignificantDifference(const A, B: TBenchStats): Boolean;
+    {** 检测回归启发式（不是正式显著性检验） }
+    function HasHeuristicDifference(const A, B: TBenchStats): Boolean;
 
-    {** 计算 p-value }
-    function ComputePValue(const A, B: TBenchStats): Double;
+    {** 计算近似 p-value（启发式） }
+    function ComputeApproximatePValue(const A, B: TBenchStats): Double;
 
-    {** 正态性检验（Shapiro-Wilk） }
-    function IsNormal(const ASamples: TDoubleArray): Boolean;
+    {** 正态性启发式（近似 Shapiro-Wilk） }
+    function LooksNormalHeuristic(const ASamples: TDoubleArray): Boolean;
 
     {** 计算均值 }
     function Mean(const AData: TDoubleArray): Double;

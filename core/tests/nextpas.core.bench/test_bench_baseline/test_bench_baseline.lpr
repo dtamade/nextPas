@@ -4,7 +4,9 @@ program test_bench_baseline;
 {$modeswitch advancedrecords}
 
 uses
-  SysUtils,
+  nextpas.core.exception,
+  nextpas.core.math.scalar,
+  nextpas.core.platform.time,
   nextpas.core.bench.base,
   nextpas.core.bench.baseline;
 
@@ -45,7 +47,7 @@ begin
   Result.NsPerOp := ANsPerOp;
   Result.BytesPerOp := ABytesPerOp;
   Result.AllocsPerOp := AAllocsPerOp;
-  Result.Timestamp := Now;
+  Result.TimestampNs := UInt64(platform_realtime_ns);
   Result.GitHash := 'abc123';
   Result.CompilerVersion := 'FPC 3.3.1';
   Result.Notes := 'Test baseline';
@@ -346,6 +348,35 @@ begin
   Check(Pos('2000', LJSON) > 0, 'JSON contains 2000');
 end;
 
+procedure Test_JSON_RoundTripPreservesNotesAndInvariantLocale;
+var
+  LManager: TBaselineManager;
+  LLoaded: TBaselineManager;
+  LBaseline: TBaselineData;
+  LJSON: string;
+begin
+  WriteLn('Test_JSON_RoundTripPreservesNotesAndInvariantLocale:');
+
+  LManager := TBaselineManager.Create(1.1);
+  LBaseline := CreateTestBaseline('RoundTrip', 1000.5, 64, 2);
+  LBaseline.Notes := 'line1' + LineEnding + 'line2 "quoted"';
+  LManager.AddBaseline(LBaseline);
+
+  LJSON := LManager.ToJSON;
+  Check(Pos('"nsPerOp":1000.5', LJSON) > 0, 'JSON keeps invariant decimal separator');
+  Check(Pos('line1\nline2 \"quoted\"', LJSON) > 0, 'JSON escapes multiline notes');
+
+  LLoaded := TBaselineManager.Create(1.1);
+  LLoaded.LoadFromJSON(LJSON);
+  LBaseline := LLoaded.GetBaseline('RoundTrip');
+
+  Check(LBaseline.NsPerOp > 1000.0, 'Round-trip keeps NsPerOp');
+  Check(LBaseline.BytesPerOp = 64, 'Round-trip keeps BytesPerOp');
+  Check(LBaseline.AllocsPerOp = 2, 'Round-trip keeps AllocsPerOp');
+  Check(LBaseline.Notes = 'line1' + LineEnding + 'line2 "quoted"',
+    'Round-trip keeps multiline notes');
+end;
+
 { === Run All Tests === }
 
 procedure RunAllTests;
@@ -367,6 +398,7 @@ begin
   Test_UpdateBaseline;
   Test_CustomThreshold;
   Test_JSON;
+  Test_JSON_RoundTripPreservesNotesAndInvariantLocale;
 end;
 
 begin

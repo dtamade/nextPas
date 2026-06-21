@@ -9,6 +9,9 @@ type
   {** 基准结果 - 单个基准测试的完整结果 }
   TBenchResult = record
     Name: string;
+    Executed: Boolean;
+    Skipped: Boolean;
+    SkipReason: string;
     Iterations: Int64;
     TotalNs: UInt64;
     NsPerOp: Double;
@@ -50,8 +53,9 @@ type
     BaselineNsPerOp: Double;
     CurrentNsPerOp: Double;
     Ratio: Double;
-    Significant: Boolean;
-    PValue: Double;
+    HasStatisticalTest: Boolean;
+    DifferenceHeuristic: Boolean;
+    ApproximatePValue: Double;
   end;
 
   {** 环境信息 - 运行环境描述 }

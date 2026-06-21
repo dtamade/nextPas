@@ -48,14 +48,14 @@ type
     function CountOutliers(const ASorted: TDoubleArray;
       AQ1, AQ3, AMultiplier: Double): Integer;
 
-    {** 检测回归（两个分布是否有显著差异） }
-    function IsSignificantDifference(const A, B: TBenchStats): Boolean;
+    {** 检测回归启发式（不是正式显著性检验） }
+    function HasHeuristicDifference(const A, B: TBenchStats): Boolean;
 
-    {** 计算 p-value（简化版本） }
-    function ComputePValue(const A, B: TBenchStats): Double;
+    {** 计算近似 p-value（简化版本） }
+    function ComputeApproximatePValue(const A, B: TBenchStats): Double;
 
-    {** 正态性检验（Shapiro-Wilk） }
-    function IsNormal(const ASamples: TDoubleArray): Boolean;
+    {** 正态性启发式（近似 Shapiro-Wilk） }
+    function LooksNormalHeuristic(const ASamples: TDoubleArray): Boolean;
 
     {** 计算均值 }
     function Mean(const AData: TDoubleArray): Double;
@@ -73,7 +73,8 @@ type
 implementation
 
 uses
-  SysUtils, Math;
+  nextpas.core.math.trig,
+  nextpas.core.math.scalar;
 
 { TBenchStatsAnalyzer }
 
@@ -204,8 +205,8 @@ begin
     Exit(ASorted[High(ASorted)]);
 
   LIndex := (APercent / 100.0) * (Length(ASorted) - 1);
-  LLower := Floor(LIndex);
-  LUpper := Ceil(LIndex);
+  LLower := Integer(Floor(LIndex));
+  LUpper := Integer(Ceil(LIndex));
 
   if LLower = LUpper then
     Result := ASorted[LLower]
@@ -298,7 +299,7 @@ begin
     Result := 2.5 + (10 - ADF) * 0.1;  // 小样本更保守
 end;
 
-function TBenchStatsAnalyzer.IsSignificantDifference(const A, B: TBenchStats): Boolean;
+function TBenchStatsAnalyzer.HasHeuristicDifference(const A, B: TBenchStats): Boolean;
 var
   LTStat: Double;
   LDF: Double;
@@ -314,21 +315,20 @@ begin
   if (LVarA + LVarB) < 1e-10 then
     Exit(False);
 
-  // Welch's t-test 统计量
+  // Welch's t-test 风格统计量，用于启发式比较
   LTStat := Abs(A.Mean - B.Mean) / Sqrt(LVarA + LVarB);
 
   // Welch-Satterthwaite 自由度
   LDF := Sqr(LVarA + LVarB) /
          (Sqr(LVarA) / (A.SampleCount - 1) + Sqr(LVarB) / (B.SampleCount - 1));
 
-  // 比较 t 统计量与临界值
+  // 比较 t 统计量与近似临界值
   Result := LTStat > TInv0975(LDF);
 end;
 
-function TBenchStatsAnalyzer.ComputePValue(const A, B: TBenchStats): Double;
+function TBenchStatsAnalyzer.ComputeApproximatePValue(const A, B: TBenchStats): Double;
 var
   LTStat: Double;
-  LDF: Double;
   LVarA, LVarB: Double;
 begin
   if (A.SampleCount <= 1) or (B.SampleCount <= 1) then
@@ -341,7 +341,7 @@ begin
   if (LVarA + LVarB) < 1e-10 then
     Exit(1.0);
 
-  // Welch's t-test 统计量
+  // Welch's t-test 风格统计量，用于近似评级
   LTStat := Abs(A.Mean - B.Mean) / Sqrt(LVarA + LVarB);
 
   // 简化的 p-value 计算（近似）
@@ -389,7 +389,7 @@ begin
   Result := Sqr(LSumWeighted) / LSumSq;
 end;
 
-function TBenchStatsAnalyzer.IsNormal(const ASamples: TDoubleArray): Boolean;
+function TBenchStatsAnalyzer.LooksNormalHeuristic(const ASamples: TDoubleArray): Boolean;
 var
   LSorted: TDoubleArray;
   LW: Double;
@@ -402,7 +402,7 @@ begin
   LSorted := Copy(ASamples);
   QuickSort(LSorted, 0, High(LSorted));
 
-  // Shapiro-Wilk 检验
+  // Shapiro-Wilk 风格启发式
   LW := ShapiroWilkStatistic(LSorted);
 
   // 简化的判断阈值（完整实现需要查表）

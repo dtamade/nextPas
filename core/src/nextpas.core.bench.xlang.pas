@@ -12,8 +12,7 @@ unit nextpas.core.bench.xlang;
 interface
 
 uses
-  SysUtils,
-  Classes,
+  nextpas.core.exception,
   nextpas.core.bench.base;
 
 type
@@ -25,10 +24,8 @@ type
    *}
   TXLangParser = (xlGo, xlRust, xlFPC);
 
-  {**
-   * 解析错误
-   *}
-  EParseError = class(Exception);
+  {** 解析错误（re-export 自 nextpas.core.exception） }
+  EParseError = nextpas.core.exception.EParseError;
 
   {**
    * 解析单行 Go bench 输出
@@ -71,7 +68,20 @@ type
 implementation
 
 uses
-  StrUtils;
+  nextpas.core.text.base,
+  nextpas.core.text.conv,
+  nextpas.core.text.strings;
+
+{ Helper: Split by line endings (#10 and #13) }
+
+function SplitLines(const AText: string): TStringArray;
+var
+  LNormalized: string;
+begin
+  LNormalized := StringReplace(AText, #13#10, #10, True);
+  LNormalized := StringReplace(LNormalized, #13, #10, True);
+  Result := StringsSplit(LNormalized, #10);
+end;
 
 { Helper: Trim and check empty }
 
@@ -113,7 +123,7 @@ var
   LUnit: string;
 begin
   Result := 0;
-  LParts := AStr.Split([' '], TStringSplitOptions.ExcludeEmpty);
+  LParts := StringsSplit(AStr, ' ', True);
   if Length(LParts) < 2 then Exit;
 
   LValue := StrToFloatDef(LParts[0], 0);
@@ -143,7 +153,7 @@ var
   LTimeStr: string;
 begin
   Result := Default(TBenchResult);
-  LParts := ALine.Split([' '], TStringSplitOptions.ExcludeEmpty);
+  LParts := StringsSplit(ALine, ' ', True);
   if Length(LParts) < 3 then
     raise EParseError.CreateFmt('Invalid Go bench line: %s', [ALine]);
 
@@ -202,11 +212,11 @@ var
   LList: array of TBenchResult;
 begin
   LList := nil;
-  LLines := AOutput.Split([#10, #13]);
+  LLines := SplitLines(AOutput);
   for LLine in LLines do
   begin
     if IsEmptyOrComment(LLine) then Continue;
-    if not LLine.StartsWith('Benchmark') then Continue;
+    if Pos('Benchmark', LLine) <> 1 then Continue;
 
     try
       SetLength(LList, Length(LList) + 1);
@@ -237,7 +247,7 @@ begin
   // Rust criterion format: "name    time:   [lower mean upper unit]"
   // Example: "BenchmarkFoo    time:   [1.234 us 1.256 us 1.279 us]"
   LLine := Trim(ALine);
-  if not LLine.Contains('time:') then
+  if Pos('time:', LLine) = 0 then
     raise EParseError.CreateFmt('Invalid Rust bench line: %s', [ALine]);
 
   // Extract name
@@ -245,7 +255,7 @@ begin
 
   // Extract time range
   LTimeStr := Copy(LLine, Pos('[', LLine) + 1, Pos(']', LLine) - Pos('[', LLine) - 1);
-  LParts := LTimeStr.Split([' '], TStringSplitOptions.ExcludeEmpty);
+  LParts := StringsSplit(LTimeStr, ' ', True);
   // Format: ["1.234", "us", "1.256", "us", "1.279", "us"]
   if Length(LParts) < 6 then
     raise EParseError.CreateFmt('Invalid Rust bench time range: %s', [LTimeStr]);
@@ -287,11 +297,11 @@ var
   LList: array of TBenchResult;
 begin
   LList := nil;
-  LLines := AOutput.Split([#10, #13]);
+  LLines := SplitLines(AOutput);
   for LLine in LLines do
   begin
     if IsEmptyOrComment(LLine) then Continue;
-    if not LLine.Contains('time:') then Continue;
+    if Pos('time:', LLine) = 0 then Continue;
 
     try
       SetLength(LList, Length(LList) + 1);
@@ -315,7 +325,7 @@ var
 begin
   Result := Default(TBenchResult);
 
-  if not ALine.Contains('NsPerOp') then
+  if Pos('NsPerOp', ALine) = 0 then
     raise EParseError.CreateFmt('Invalid FPC bench line: %s', [ALine]);
 
   LName := Trim(ExtractValue(ALine, 'Name'));
@@ -353,11 +363,11 @@ var
   LList: array of TBenchResult;
 begin
   LList := nil;
-  LLines := AOutput.Split([#10, #13]);
+  LLines := SplitLines(AOutput);
   for LLine in LLines do
   begin
     if IsEmptyOrComment(LLine) then Continue;
-    if not LLine.Contains('NsPerOp') then Continue;
+    if Pos('NsPerOp', LLine) = 0 then Continue;
 
     try
       SetLength(LList, Length(LList) + 1);

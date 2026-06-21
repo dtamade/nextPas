@@ -19,6 +19,7 @@ type
   TSeekOrigin = Classes.TSeekOrigin;
   TInterfacedObject = System.TInterfacedObject;
   IInterface = System.IInterface;
+  TThread = Classes.TThread;
 
 implementation
 

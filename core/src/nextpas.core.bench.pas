@@ -48,12 +48,6 @@ type
     FRunner: TBenchRunner;
     FReportGenerator: TBenchReportGenerator;
 
-    {** 检查依赖是否满足 }
-    function CheckDependencies(const AEntry: TBenchEntry): Boolean;
-
-    {** 拓扑排序 }
-    function TopologicalSort: TInt64Array;
-
     {** 获取环境信息 }
     function GetEnvironment: TBenchEnvironment;
 
@@ -120,7 +114,8 @@ implementation
 
 uses
   SysUtils, Classes,
-  nextpas.core.bench.baseline;
+  nextpas.core.bench.baseline,
+  nextpas.core.simd.cpuinfo;
 
 { TBenchSuite }
 
@@ -154,85 +149,17 @@ begin
   inherited Destroy;
 end;
 
-function TBenchSuite.CheckDependencies(const AEntry: TBenchEntry): Boolean;
-var
-  i, j: Integer;
-  LFound: Boolean;
-begin
-  if Length(AEntry.DependsOn) = 0 then
-    Exit(True);
-
-  for i := 0 to High(AEntry.DependsOn) do
-  begin
-    LFound := False;
-    for j := 0 to FEntryCount - 1 do
-    begin
-      if FEntries[j].Name = AEntry.DependsOn[i] then
-      begin
-        LFound := True;
-        Break;
-      end;
-    end;
-    if not LFound then
-      Exit(False);
-  end;
-
-  Result := True;
-end;
-
-function TBenchSuite.TopologicalSort: TInt64Array;
-var
-  LVisited: array of Boolean;
-  LSorted: TInt64Array;
-  LSortedCount: Integer;
-
-  procedure Visit(AIndex: Integer);
-  var
-    I, J: Integer;
-  begin
-    if LVisited[AIndex] then Exit;
-    LVisited[AIndex] := True;
-
-    // 先访问所有依赖
-    for I := 0 to High(FEntries[AIndex].DependsOn) do
-    begin
-      for J := 0 to FEntryCount - 1 do
-      begin
-        if FEntries[J].Name = FEntries[AIndex].DependsOn[I] then
-        begin
-          Visit(J);
-          Break;
-        end;
-      end;
-    end;
-
-    // 添加到排序结果
-    SetLength(LSorted, LSortedCount + 1);
-    LSorted[LSortedCount] := AIndex;
-    Inc(LSortedCount);
-  end;
-
-var
-  I: Integer;
-begin
-  SetLength(LVisited, FEntryCount);
-  for I := 0 to FEntryCount - 1 do
-    LVisited[I] := False;
-
-  LSortedCount := 0;
-  SetLength(LSorted, 0);
-
-  for I := 0 to FEntryCount - 1 do
-    Visit(I);
-
-  Result := LSorted;
-end;
-
 function TBenchSuite.GetEnvironment: TBenchEnvironment;
+var
+  LLogicalCores: Integer;
 begin
+  LLogicalCores := GetCPUInfo.LogicalCores;
   Result.OS := {$I %FPCTARGETOS%};
   Result.CPU := {$I %FPCTARGETCPU%};
-  Result.Cores := 4; // 默认值，后续可通过 SysUtils 获取
+  if LLogicalCores > 0 then
+    Result.Cores := LLogicalCores
+  else
+    Result.Cores := 0;
   Result.FPCVersion := {$I %FPCVERSION%};
   Result.Timestamp := FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', Now);
 end;
@@ -241,18 +168,15 @@ function TBenchSuite.Add(const AName: string; AFunc: TBenchFunc): IBenchSuite;
 var
   LEntry: TBenchEntry;
 begin
+  Result := Self;
+  LEntry := Default(TBenchEntry);
   LEntry.Name := AName;
   LEntry.Func := AFunc;
-  LEntry.Setup := nil;
-  LEntry.Teardown := nil;
   LEntry.Condition := True;
-  SetLength(LEntry.DependsOn, 0);
 
   Inc(FEntryCount);
   SetLength(FEntries, FEntryCount);
   FEntries[FEntryCount - 1] := LEntry;
-
-  Result := Self;
 end;
 
 function TBenchSuite.AddWithSetup(const AName: string; AFunc: TBenchFunc;
@@ -260,18 +184,17 @@ function TBenchSuite.AddWithSetup(const AName: string; AFunc: TBenchFunc;
 var
   LEntry: TBenchEntry;
 begin
+  Result := Self;
+  LEntry := Default(TBenchEntry);
   LEntry.Name := AName;
   LEntry.Func := AFunc;
   LEntry.Setup := ASetup;
   LEntry.Teardown := ATeardown;
   LEntry.Condition := True;
-  SetLength(LEntry.DependsOn, 0);
 
   Inc(FEntryCount);
   SetLength(FEntries, FEntryCount);
   FEntries[FEntryCount - 1] := LEntry;
-
-  Result := Self;
 end;
 
 function TBenchSuite.AddWhen(const AName: string; AFunc: TBenchFunc;
@@ -279,18 +202,15 @@ function TBenchSuite.AddWhen(const AName: string; AFunc: TBenchFunc;
 var
   LEntry: TBenchEntry;
 begin
+  Result := Self;
+  LEntry := Default(TBenchEntry);
   LEntry.Name := AName;
   LEntry.Func := AFunc;
-  LEntry.Setup := nil;
-  LEntry.Teardown := nil;
   LEntry.Condition := ACondition;
-  SetLength(LEntry.DependsOn, 0);
 
   Inc(FEntryCount);
   SetLength(FEntries, FEntryCount);
   FEntries[FEntryCount - 1] := LEntry;
-
-  Result := Self;
 end;
 
 function TBenchSuite.AddParallel(const AName: string; AFunc: TBenchFunc;
@@ -298,68 +218,73 @@ function TBenchSuite.AddParallel(const AName: string; AFunc: TBenchFunc;
 var
   LEntry: TBenchEntry;
 begin
+  Result := Self;
+  if AThreads <= 0 then
+    raise Exception.Create('TBenchSuite.AddParallel: thread count must be > 0');
+
+  LEntry := Default(TBenchEntry);
   LEntry.Name := AName;
   LEntry.Func := AFunc;
-  LEntry.Setup := nil;
-  LEntry.Teardown := nil;
   LEntry.Condition := True;
-  SetLength(LEntry.DependsOn, 0);
-
-  // 将并行配置绑定到单个 entry
   LEntry.EnableParallel := True;
   LEntry.ParallelThreads := AThreads;
 
   Inc(FEntryCount);
   SetLength(FEntries, FEntryCount);
   FEntries[FEntryCount - 1] := LEntry;
-
-  Result := Self;
 end;
 
 function TBenchSuite.SetMinDuration(ADuration: TDuration): IBenchSuite;
 begin
-  FConfig.MinDurationNs := ADuration.AsNanoseconds;
   Result := Self;
+  if ADuration.AsNanoseconds <= 0 then
+    raise Exception.Create('TBenchSuite.SetMinDuration: duration must be > 0');
+  FConfig.MinDurationNs := ADuration.AsNanoseconds;
 end;
 
 function TBenchSuite.SetMaxIterations(AIters: Int64): IBenchSuite;
 begin
-  FConfig.MaxIterations := AIters;
   Result := Self;
+  if AIters <= 0 then
+    raise Exception.Create('TBenchSuite.SetMaxIterations: iterations must be > 0');
+  FConfig.MaxIterations := AIters;
 end;
 
 function TBenchSuite.SetMinSamples(ACount: Integer): IBenchSuite;
 begin
-  FConfig.MinSamples := ACount;
   Result := Self;
+  if ACount <= 0 then
+    raise Exception.Create('TBenchSuite.SetMinSamples: sample count must be > 0');
+  FConfig.MinSamples := ACount;
 end;
 
 function TBenchSuite.SetWarmupIters(ACount: Integer): IBenchSuite;
 begin
-  FConfig.WarmupIterations := ACount;
   Result := Self;
+  if ACount < 0 then
+    raise Exception.Create('TBenchSuite.SetWarmupIters: warmup count must be >= 0');
+  FConfig.WarmupIterations := ACount;
 end;
 
 function TBenchSuite.EnableMemoryTracking: IBenchSuite;
 begin
-  FConfig.EnableMemoryTracking := True;
   Result := Self;
+  FConfig.EnableMemoryTracking := True;
 end;
 
 function TBenchSuite.DisableMemoryTracking: IBenchSuite;
 begin
-  FConfig.EnableMemoryTracking := False;
   Result := Self;
+  FConfig.EnableMemoryTracking := False;
 end;
 
 function TBenchSuite.AddBaseline(const AName: string; ANsPerOp: Double): IBenchSuite;
 begin
+  Result := Self;
   Inc(FBaselineCount);
   SetLength(FBaselines, FBaselineCount);
   FBaselines[FBaselineCount - 1].Name := AName;
   FBaselines[FBaselineCount - 1].NsPerOp := ANsPerOp;
-
-  Result := Self;
 end;
 
 function TBenchSuite.LoadBaseline(const APath: string): IBenchSuite;
@@ -368,60 +293,49 @@ var
   LBaselines: TBaselineArray;
   I: Integer;
 begin
-  LManager := TBaselineManager.Create;
-  try
-    LManager.LoadFromFile(APath);
-    LBaselines := LManager.GetAllBaselines;
-
-    // 将加载的基线添加到 suite
-    for I := 0 to High(LBaselines) do
-    begin
-      SetLength(FBaselines, FBaselineCount + 1);
-      FBaselines[FBaselineCount].Name := LBaselines[I].Name;
-      FBaselines[FBaselineCount].NsPerOp := LBaselines[I].NsPerOp;
-      Inc(FBaselineCount);
-    end;
-  except
-    on E: Exception do
-      WriteLn('Warning: Failed to load baseline from ', APath, ': ', E.Message);
-  end;
-
   Result := Self;
+  LManager := TBaselineManager.Create;
+  LManager.LoadFromFile(APath);
+  LBaselines := LManager.GetAllBaselines;
+
+  // 将加载的基线添加到 suite
+  for I := 0 to High(LBaselines) do
+  begin
+    SetLength(FBaselines, FBaselineCount + 1);
+    FBaselines[FBaselineCount].Name := LBaselines[I].Name;
+    FBaselines[FBaselineCount].NsPerOp := LBaselines[I].NsPerOp;
+    Inc(FBaselineCount);
+  end;
 end;
 
 function TBenchSuite.SetFilter(const AFilter: string): IBenchSuite;
 begin
-  FFilter := AFilter;
   Result := Self;
+  FFilter := AFilter;
 end;
 
 function TBenchSuite.Run: IBenchResults;
 var
   LResults: array of TBenchResult;
-  LResultCount: Integer;
   LEnvironment: TBenchEnvironment;
-  LSortedIndices: TInt64Array;
-  i, LIdx: Integer;
+  LRunResult: TBenchResult;
+  i: Integer;
 begin
-  // 配置运行器
   FRunner.SetConfig(FConfig);
   FRunner.SetFilter(FFilter);
+  FRunner.ClearResults;
 
-  // 使用拓扑排序确保依赖顺序
-  LSortedIndices := TopologicalSort;
-
-  // 运行所有基准
-  LResultCount := 0;
   SetLength(LResults, 0);
-
-  for i := 0 to High(LSortedIndices) do
+  for i := 0 to FEntryCount - 1 do
   begin
-    LIdx := LSortedIndices[i];
-    if FEntries[LIdx].Condition and CheckDependencies(FEntries[LIdx]) then
+    if not FEntries[i].Condition then
+      Continue;
+
+    LRunResult := FRunner.RunOne(FEntries[i]);
+    if LRunResult.Executed then
     begin
-      Inc(LResultCount);
-      SetLength(LResults, LResultCount);
-      LResults[LResultCount - 1] := FRunner.RunOne(FEntries[LIdx].Name, FEntries[LIdx].Func);
+      SetLength(LResults, Length(LResults) + 1);
+      LResults[High(LResults)] := LRunResult;
     end;
   end;
 
@@ -471,12 +385,8 @@ end;
 function TBenchResults.GenerateComparisons: TBenchComparisonArray;
 var
   LComparisons: array of TBenchComparison;
-  LStatsAnalyzer: IBenchStatsAnalyzer;
   i, j: Integer;
-  LCurrentStats, LBaselineStats: TBenchStats;
 begin
-  LStatsAnalyzer := TBenchStatsAnalyzer.Create;
-
   SetLength(LComparisons, 0);
 
   for i := 0 to FResultCount - 1 do
@@ -491,13 +401,14 @@ begin
         LComparisons[High(LComparisons)].CurrentNsPerOp := FResults[i].NsPerOp;
 
         if FBaselines[j].NsPerOp > 0 then
-          LComparisons[High(LComparisons)].Ratio := FBaselines[j].NsPerOp / FResults[i].NsPerOp
+          LComparisons[High(LComparisons)].Ratio := FResults[i].NsPerOp / FBaselines[j].NsPerOp
         else
           LComparisons[High(LComparisons)].Ratio := 1.0;
 
-        // TODO: 实现真正的统计显著性检验
-        LComparisons[High(LComparisons)].Significant := Abs(LComparisons[High(LComparisons)].Ratio - 1.0) > 0.05;
-        LComparisons[High(LComparisons)].PValue := 0.05;  // 占位
+        LComparisons[High(LComparisons)].HasStatisticalTest := False;
+        LComparisons[High(LComparisons)].DifferenceHeuristic :=
+          Abs(LComparisons[High(LComparisons)].Ratio - 1.0) > 0.05;
+        LComparisons[High(LComparisons)].ApproximatePValue := 0.05;
 
         Break;
       end;
@@ -516,7 +427,7 @@ function TBenchResults.GetByName(const AName: string): TBenchResult;
 var
   i: Integer;
 begin
-  FillChar(Result, SizeOf(Result), 0);
+  Result := Default(TBenchResult);
   Result.Name := AName;
 
   for i := 0 to FResultCount - 1 do
@@ -615,7 +526,7 @@ begin
 
   for i := 0 to High(LComparisons) do
   begin
-    if LComparisons[i].Significant and (LComparisons[i].Ratio < AThreshold) then
+    if LComparisons[i].DifferenceHeuristic and (LComparisons[i].Ratio > AThreshold) then
       Exit(True);
   end;
 

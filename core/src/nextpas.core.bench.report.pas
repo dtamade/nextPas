@@ -77,14 +77,10 @@ type
 implementation
 
 uses
-  SysUtils, StrUtils, Math;
-
-function CreateInvariantFormatSettings: TFormatSettings;
-begin
-  Result := DefaultFormatSettings;
-  Result.DecimalSeparator := '.';
-  Result.ThousandSeparator := ',';
-end;
+  nextpas.core.text.base,
+  nextpas.core.text.conv,
+  nextpas.core.text.format,
+  nextpas.core.math.scalar;
 
 { 辅助函数：添加字符串到数组 }
 procedure AddLine(var ALines: TStringArray; const ALine: string);
@@ -126,7 +122,7 @@ end;
 
 function TBenchReportGenerator.FormatNumber(AValue: Double; APrecision: Integer): string;
 begin
-  Result := FloatToStrF(AValue, ffFixed, 18, APrecision, CreateInvariantFormatSettings);
+  Result := FloatToStrF(AValue, APrecision);
 end;
 
 function TBenchReportGenerator.FormatLargeNumber(AValue: Int64): string;
@@ -173,20 +169,20 @@ end;
 function TBenchReportGenerator.EscapeJSON(const AStr: string): string;
 begin
   Result := AStr;
-  Result := StringReplace(Result, '\', '\\', [rfReplaceAll]);
-  Result := StringReplace(Result, '"', '\"', [rfReplaceAll]);
-  Result := StringReplace(Result, #10, '\n', [rfReplaceAll]);
-  Result := StringReplace(Result, #13, '\r', [rfReplaceAll]);
-  Result := StringReplace(Result, #9, '\t', [rfReplaceAll]);
+  Result := StringReplace(Result, '\', '\\', True);
+  Result := StringReplace(Result, '"', '\"', True);
+  Result := StringReplace(Result, #10, '\n', True);
+  Result := StringReplace(Result, #13, '\r', True);
+  Result := StringReplace(Result, #9, '\t', True);
 end;
 
 function TBenchReportGenerator.EscapeHTML(const AStr: string): string;
 begin
   Result := AStr;
-  Result := StringReplace(Result, '&', '&amp;', [rfReplaceAll]);
-  Result := StringReplace(Result, '<', '&lt;', [rfReplaceAll]);
-  Result := StringReplace(Result, '>', '&gt;', [rfReplaceAll]);
-  Result := StringReplace(Result, '"', '&quot;', [rfReplaceAll]);
+  Result := StringReplace(Result, '&', '&amp;', True);
+  Result := StringReplace(Result, '<', '&lt;', True);
+  Result := StringReplace(Result, '>', '&gt;', True);
+  Result := StringReplace(Result, '"', '&quot;', True);
 end;
 
 function TBenchReportGenerator.ToConsole: string;
@@ -211,16 +207,16 @@ begin
   AddLine(LLines, '');
 
   // 表头
-  AddLine(LLines, Format('  %-40s %10s %10s %10s %10s %10s',
+  AddLine(LLines, TextFormat('  %-40s %10s %10s %10s %10s %10s',
     ['Name', 'Iterations', 'ns/op', 'ops/s', 'StdDev', 'P99']));
-  AddLine(LLines, '  ' + StringOfChar('-', 100));
+  AddLine(LLines, '  ' + TextOfChar('-', 100));
 
   // 结果（只显示未跳过的）
   for i := 0 to FResultCount - 1 do
   begin
     if not FResults[i].Skipped then
     begin
-      AddLine(LLines, Format('  %-40s %10s %10s %10s %10s %10s',
+      AddLine(LLines, TextFormat('  %-40s %10s %10s %10s %10s %10s',
         [FResults[i].Name,
          FormatLargeNumber(FResults[i].Iterations),
          FormatNumber(FResults[i].NsPerOp, 1),
@@ -267,11 +263,11 @@ begin
       Break;
     AddLine(LLines, '');
     AddLine(LLines, FResults[i].Name + ':');
-    AddLine(LLines, Format('  Mean: %s  StdDev: %s  Median: %s',
+    AddLine(LLines, TextFormat('  Mean: %s  StdDev: %s  Median: %s',
       [FormatTime(FResults[i].NsPerOp),
        FormatTime(FResults[i].StdDev),
        FormatTime(FResults[i].Median)]));
-    AddLine(LLines, Format('  P95: %s  P99: %s  Outliers: %d/%d',
+    AddLine(LLines, TextFormat('  P95: %s  P99: %s  Outliers: %d/%d',
       [FormatTime(FResults[i].P95),
        FormatTime(FResults[i].P99),
        FResults[i].Outliers,
@@ -364,7 +360,7 @@ begin
   begin
     AddLine(LLines,
       FResults[i].Name + #9 +
-      IfThen(FResults[i].Skipped, 'skipped', 'ok') + #9 +
+      BoolToStr(FResults[i].Skipped, 'skipped', 'ok') + #9 +
       FResults[i].SkipReason + #9 +
       IntToStr(FResults[i].Iterations) + #9 +
       FormatNumber(FResults[i].NsPerOp, 2) + #9 +
@@ -434,18 +430,18 @@ begin
     LBarY := 236.0 - LBarHeight;
 
     AddLine(LLines,
-      Format('  <rect x="%s" y="%s" width="%s" height="%s" rx="8" fill="#4a7a6f"/>',
+      TextFormat('  <rect x="%s" y="%s" width="%s" height="%s" rx="8" fill="#4a7a6f"/>',
         [FormatNumber(LBarX, 2),
          FormatNumber(LBarY, 2),
          FormatNumber(Max(LBarWidth - 18.0, 14.0), 2),
          FormatNumber(LBarHeight, 2)]));
     AddLine(LLines,
-      Format('  <text x="%s" y="%s" class="chart-value">%s ns</text>',
+      TextFormat('  <text x="%s" y="%s" class="chart-value">%s ns</text>',
         [FormatNumber(LBarX, 2),
          FormatNumber(Max(LBarY - 8.0, 18.0), 2),
          EscapeHTML(FormatNumber(AResults[I].NsPerOp, 1))]));
     AddLine(LLines,
-      Format('  <text x="%s" y="254" class="chart-label">%s</text>',
+      TextFormat('  <text x="%s" y="254" class="chart-label">%s</text>',
         [FormatNumber(LBarX, 2),
          EscapeHTML(AResults[I].Name)]));
 
@@ -632,26 +628,34 @@ function TBenchReportGenerator.GenerateComparisonReport(
   const ABaselines: array of TBenchComparison): string;
 var
   LLines: TStringArray;
+  LStatus: string;
   i: Integer;
 begin
   SetLength(LLines, 0);
 
   AddLine(LLines, '=== Baseline Comparison ===');
   AddLine(LLines, '');
-  AddLine(LLines, Format('  %-40s %10s %10s %10s %10s',
+  AddLine(LLines, TextFormat('  %-40s %10s %10s %10s %10s',
     ['Benchmark', 'Current', 'Baseline', 'Ratio', 'Status']));
-  AddLine(LLines, '  ' + StringOfChar('-', 90));
+  AddLine(LLines, '  ' + TextOfChar('-', 90));
 
   for i := 0 to High(ABaselines) do
   begin
-    AddLine(LLines, Format('  %-40s %10s %10s %10s %10s',
+    if ABaselines[i].DifferenceHeuristic then
+    begin
+      if ABaselines[i].Ratio > 1.0 then
+        LStatus := '✓ faster'
+      else
+        LStatus := '✗ slower';
+    end
+    else
+      LStatus := '≈ same';
+    AddLine(LLines, TextFormat('  %-40s %10s %10s %10s %10s',
       [ABaselines[i].BaselineName,
        FormatTime(ABaselines[i].CurrentNsPerOp),
        FormatTime(ABaselines[i].BaselineNsPerOp),
        FormatNumber(ABaselines[i].Ratio, 2) + 'x',
-       IfThen(ABaselines[i].DifferenceHeuristic,
-         IfThen(ABaselines[i].Ratio > 1.0, '✓ faster', '✗ slower'),
-         '≈ same')]));
+       LStatus]));
   end;
 
   Result := '';

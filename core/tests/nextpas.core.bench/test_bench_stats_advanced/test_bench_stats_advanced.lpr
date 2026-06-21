@@ -229,10 +229,10 @@ begin
   // Normal-like data
   LData := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0]);
   LStats := TAdvancedStats.Create(LData);
-  LResult := LStats.TestNormality;
+  LResult := LStats.TestNormalityHeuristic;
 
   // Just check it returns a valid result
-  Check(LResult.PValue > 0, 'PValue > 0');
+  Check(LResult.ApproximatePValue > 0, 'ApproximatePValue > 0');
   Check(LResult.Method <> '', 'Method is set');
 end;
 
@@ -247,7 +247,7 @@ begin
   LData1 := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0]);
   LData2 := CreateTestData([2.0, 3.0, 4.0, 5.0, 6.0]);
   LStats := TAdvancedStats.Create(LData1);
-  LTStat := LStats.CompareWith(LData2);
+  LTStat := LStats.ApproximateWelchTScore(LData2);
 
   // Should be negative since LData1 mean < LData2 mean
   Check(LTStat < 0, 'T-statistic < 0');

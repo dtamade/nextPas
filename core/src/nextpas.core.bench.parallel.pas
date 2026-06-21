@@ -12,9 +12,7 @@ unit nextpas.core.bench.parallel;
 interface
 
 uses
-  SysUtils,
-  Classes,
-  SyncObjs,
+  nextpas.core.system.classes,
   nextpas.core.bench.base;
 
 type

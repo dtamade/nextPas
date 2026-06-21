@@ -266,8 +266,8 @@ begin
   LStatsA := GAnalyzer.ComputeStats(LA);
   LStatsB := GAnalyzer.ComputeStats(LB);
   // 相同分布不应该有显著差异
-  Check(not GAnalyzer.IsSignificantDifference(LStatsA, LStatsB),
-    'Same distribution no significant difference');
+  Check(not GAnalyzer.HasHeuristicDifference(LStatsA, LStatsB),
+    'Same distribution no heuristic difference');
 
   // 不同分布
   SetLength(LA, 100);
@@ -280,8 +280,8 @@ begin
   LStatsA := GAnalyzer.ComputeStats(LA);
   LStatsB := GAnalyzer.ComputeStats(LB);
   // 不同分布应该有显著差异
-  Check(GAnalyzer.IsSignificantDifference(LStatsA, LStatsB),
-    'Different distribution significant difference');
+  Check(GAnalyzer.HasHeuristicDifference(LStatsA, LStatsB),
+    'Different distribution heuristic difference');
 end;
 
 procedure TestIsNormal;
@@ -295,8 +295,8 @@ begin
   SetLength(LData, 1000);
   for i := 0 to 999 do
     LData[i] := 100.0 + Random * 10.0 + Random * 10.0;
-  Check(GAnalyzer.IsNormal(LData),
-    'Normal data passes test');
+  Check(GAnalyzer.LooksNormalHeuristic(LData),
+    'Normal data passes heuristic check');
 
   // 均匀分布数据
   SetLength(LData, 1000);
@@ -305,7 +305,7 @@ begin
   // 注意：简化的 Shapiro-Wilk 实现可能不够严格
   // 均匀分布可能通过检验，这是预期行为
   // 完整实现需要查表
-  if GAnalyzer.IsNormal(LData) then
+  if GAnalyzer.LooksNormalHeuristic(LData) then
     WriteLn('  ℹ Uniform distribution test: PASS')
   else
     WriteLn('  ℹ Uniform distribution test: FAIL');

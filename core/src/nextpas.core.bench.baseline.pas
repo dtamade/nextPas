@@ -12,9 +12,14 @@ unit nextpas.core.bench.baseline;
 interface
 
 uses
-  SysUtils,
-  Classes,
-  nextpas.core.bench.base;
+  nextpas.core.exception,
+  nextpas.core.text.conv,
+  nextpas.core.platform.time,
+  nextpas.core.fs.util,
+  nextpas.core.bench.base,
+  nextpas.core.json,
+  nextpas.core.json.writer,
+  nextpas.core.text.builder;
 
 type
   {** 从 base 模块 re-export 数组类型 }
@@ -27,7 +32,7 @@ type
     NsPerOp: Double;
     BytesPerOp: Int64;
     AllocsPerOp: Int64;
-    Timestamp: TDateTime;
+    TimestampNs: UInt64;
     GitHash: string;
     CompilerVersion: string;
     Notes: string;
@@ -144,9 +149,6 @@ type
 
 implementation
 
-uses
-  StrUtils;
-
 { TBaselineManager }
 
 class function TBaselineManager.Create(ARegressionThreshold: Double): TBaselineManager;
@@ -189,7 +191,7 @@ begin
   LBaseline.NsPerOp := AResult.NsPerOp;
   LBaseline.BytesPerOp := AResult.BytesPerOp;
   LBaseline.AllocsPerOp := AResult.AllocsPerOp;
-  LBaseline.Timestamp := Now;
+  LBaseline.TimestampNs := UInt64(platform_realtime_ns);
   LBaseline.GitHash := AGitHash;
   LBaseline.CompilerVersion := 'FPC ' + {$I %FPCVERSION%};
   LBaseline.Notes := ANotes;
@@ -304,169 +306,118 @@ begin
 end;
 
 procedure TBaselineManager.LoadFromFile(const AFileName: string);
-var
-  LJSON: string;
-  LFile: TextFile;
-  LLine: string;
 begin
-  LJSON := '';
-  AssignFile(LFile, AFileName);
-  Reset(LFile);
-  try
-    while not Eof(LFile) do
-    begin
-      ReadLn(LFile, LLine);
-      LJSON := LJSON + LLine;
-    end;
-  finally
-    CloseFile(LFile);
-  end;
-  LoadFromJSON(LJSON);
+  LoadFromJSON(FsReadFileText(AFileName));
 end;
 
 function TBaselineManager.ToJSON: string;
 var
   I: Integer;
-  LLines: TStringList;
+  LBuilder: TStringBuilder;
+  LWriter: TJsonWriter;
 begin
-  LLines := TStringList.Create;
+  LBuilder.Init(128 + Length(FBaselines) * 128);
   try
-    LLines.Add('{"baselines":[');
+    LWriter.Init(LBuilder);
+    LWriter.BeginObject;
+    LWriter.Key('baselines');
+    LWriter.BeginArray;
     for I := 0 to High(FBaselines) do
     begin
-      if I > 0 then
-        LLines.Add(',');
-      LLines.Add('{');
-      LLines.Add('"name":"' + FBaselines[I].Name + '",');
-      LLines.Add('"nsPerOp":' + FloatToStr(FBaselines[I].NsPerOp) + ',');
-      LLines.Add('"bytesPerOp":' + IntToStr(FBaselines[I].BytesPerOp) + ',');
-      LLines.Add('"allocsPerOp":' + IntToStr(FBaselines[I].AllocsPerOp) + ',');
-      LLines.Add('"timestamp":' + FloatToStr(FBaselines[I].Timestamp) + ',');
-      LLines.Add('"gitHash":"' + FBaselines[I].GitHash + '",');
-      LLines.Add('"compilerVersion":"' + FBaselines[I].CompilerVersion + '",');
-      LLines.Add('"notes":"' + FBaselines[I].Notes + '"');
-      LLines.Add('}');
+      LWriter.BeginObject;
+      LWriter.Key('name');
+      LWriter.Str(FBaselines[I].Name);
+      LWriter.Key('nsPerOp');
+      LWriter.Float(FBaselines[I].NsPerOp);
+      LWriter.Key('bytesPerOp');
+      LWriter.Int(FBaselines[I].BytesPerOp);
+      LWriter.Key('allocsPerOp');
+      LWriter.Int(FBaselines[I].AllocsPerOp);
+      LWriter.Key('timestampNs');
+      LWriter.Int(FBaselines[I].TimestampNs);
+      LWriter.Key('gitHash');
+      LWriter.Str(FBaselines[I].GitHash);
+      LWriter.Key('compilerVersion');
+      LWriter.Str(FBaselines[I].CompilerVersion);
+      LWriter.Key('notes');
+      LWriter.Str(FBaselines[I].Notes);
+      LWriter.EndObject;
     end;
-    LLines.Add(']}');
-    Result := LLines.Text;
+    LWriter.EndArray;
+    LWriter.EndObject;
+    Result := LBuilder.ToString;
   finally
-    LLines.Free;
+    LBuilder.Done;
   end;
 end;
 
 procedure TBaselineManager.LoadFromJSON(const AJSON: string);
 var
-  LLines: TStringList;
-  LLine: string;
-  LTrimmedLine: string;
-  LPos: Integer;
-  LName: string;
-  LNsPerOp: Double;
-  LBytesPerOp: Int64;
-  LAllocsPerOp: Int64;
-  LGitHash: string;
-  LNotes: string;
+  LDocument: IJsonDocument;
+  LRoot: TJsonValue;
+  LBaselines: TJsonValue;
+  LItem: TJsonValue;
+  LField: TJsonValue;
   LBaseline: TBaselineData;
+  I: UInt32;
 begin
   ClearBaselines;
 
-  // 简单的 JSON 解析 - 提取 baselines 数组中的对象
-  LLines := TStringList.Create;
-  try
-    LLines.Text := AJSON;
+  if Trim(AJSON) = '' then
+    Exit;
 
-    for LLine in LLines do
+  LDocument := JsonParse(AJSON);
+  if (LDocument = nil) or LDocument.HasError then
+    raise Exception.Create('Invalid baseline JSON');
+
+  LRoot := LDocument.Root;
+  LBaselines := LRoot.ObjectGet('baselines');
+  if not LBaselines.IsArray then
+    Exit;
+
+  for I := 0 to LBaselines.ArrayLen - 1 do
+  begin
+    LItem := LBaselines.ArrayGet(I);
+    if not LItem.IsObject then
+      Continue;
+
+    LBaseline := Default(TBaselineData);
+
+    LField := LItem.ObjectGet('name');
+    if LField.IsStr then
+      LBaseline.Name := LField.AsStr.ToString;
+
+    LField := LItem.ObjectGet('nsPerOp');
+    LBaseline.NsPerOp := LField.AsFloat;
+
+    LField := LItem.ObjectGet('bytesPerOp');
+    LBaseline.BytesPerOp := LField.AsInt;
+
+    LField := LItem.ObjectGet('allocsPerOp');
+    LBaseline.AllocsPerOp := LField.AsInt;
+
+    LField := LItem.ObjectGet('timestampNs');
+    if LField.IsInt then
+      LBaseline.TimestampNs := UInt64(LField.AsInt)
+    else
     begin
-      LTrimmedLine := Trim(LLine);
-
-      // 查找 name 字段
-      if Pos('"name":', LTrimmedLine) > 0 then
-      begin
-        LPos := Pos('"name":', LTrimmedLine);
-        LName := Copy(LTrimmedLine, LPos + 7, MaxInt);
-        LName := Trim(LName);
-        // 移除引号和逗号
-        if (Length(LName) > 0) and (LName[1] = '"') then
-          Delete(LName, 1, 1);
-        LPos := Pos('"', LName);
-        if LPos > 0 then
-          LName := Copy(LName, 1, LPos - 1);
-
-        // 初始化默认值
-        LNsPerOp := 0;
-        LBytesPerOp := 0;
-        LAllocsPerOp := 0;
-        LGitHash := '';
-        LNotes := '';
-      end
-
-      // 查找 nsPerOp 字段
-      else if Pos('"nsPerOp":', LTrimmedLine) > 0 then
-      begin
-        LPos := Pos('"nsPerOp":', LTrimmedLine);
-        LNsPerOp := StrToFloatDef(Copy(LTrimmedLine, LPos + 10, MaxInt), 0);
-      end
-
-      // 查找 bytesPerOp 字段
-      else if Pos('"bytesPerOp":', LTrimmedLine) > 0 then
-      begin
-        LPos := Pos('"bytesPerOp":', LTrimmedLine);
-        LBytesPerOp := StrToInt64Def(Copy(LTrimmedLine, LPos + 13, MaxInt), 0);
-      end
-
-      // 查找 allocsPerOp 字段
-      else if Pos('"allocsPerOp":', LTrimmedLine) > 0 then
-      begin
-        LPos := Pos('"allocsPerOp":', LTrimmedLine);
-        LAllocsPerOp := StrToInt64Def(Copy(LTrimmedLine, LPos + 14, MaxInt), 0);
-      end
-
-      // 查找 gitHash 字段
-      else if Pos('"gitHash":', LTrimmedLine) > 0 then
-      begin
-        LPos := Pos('"gitHash":', LTrimmedLine);
-        LGitHash := Copy(LTrimmedLine, LPos + 10, MaxInt);
-        LGitHash := Trim(LGitHash);
-        if (Length(LGitHash) > 0) and (LGitHash[1] = '"') then
-          Delete(LGitHash, 1, 1);
-        LPos := Pos('"', LGitHash);
-        if LPos > 0 then
-          LGitHash := Copy(LGitHash, 1, LPos - 1);
-      end
-
-      // 查找 notes 字段
-      else if Pos('"notes":', LTrimmedLine) > 0 then
-      begin
-        LPos := Pos('"notes":', LTrimmedLine);
-        LNotes := Copy(LTrimmedLine, LPos + 8, MaxInt);
-        LNotes := Trim(LNotes);
-        if (Length(LNotes) > 0) and (LNotes[1] = '"') then
-          Delete(LNotes, 1, 1);
-        LPos := Pos('"', LNotes);
-        if LPos > 0 then
-          LNotes := Copy(LNotes, 1, LPos - 1);
-      end
-
-      // 遇到 } 时保存基线
-      else if LTrimmedLine = '}' then
-      begin
-        if LName <> '' then
-        begin
-          LBaseline.Name := LName;
-          LBaseline.NsPerOp := LNsPerOp;
-          LBaseline.BytesPerOp := LBytesPerOp;
-          LBaseline.AllocsPerOp := LAllocsPerOp;
-          LBaseline.Timestamp := Now;
-          LBaseline.GitHash := LGitHash;
-          LBaseline.CompilerVersion := 'FPC ' + {$I %FPCVERSION%};
-          LBaseline.Notes := LNotes;
-          AddBaseline(LBaseline);
-          LName := '';
-        end;
-      end;
+      LField := LItem.ObjectGet('timestamp');
+      LBaseline.TimestampNs := 0;
     end;
-  finally
-    LLines.Free;
+
+    LField := LItem.ObjectGet('gitHash');
+    if LField.IsStr then
+      LBaseline.GitHash := LField.AsStr.ToString;
+
+    LField := LItem.ObjectGet('compilerVersion');
+    if LField.IsStr then
+      LBaseline.CompilerVersion := LField.AsStr.ToString;
+
+    LField := LItem.ObjectGet('notes');
+    if LField.IsStr then
+      LBaseline.Notes := LField.AsStr.ToString;
+
+    AddBaseline(LBaseline);
   end;
 end;
 

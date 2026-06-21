@@ -12,7 +12,6 @@ unit nextpas.core.bench.stats.advanced;
 interface
 
 uses
-  SysUtils,
   nextpas.core.bench.base;
 
 type
@@ -30,9 +29,9 @@ type
    *}
   TNormalityTest = record
     IsNormal: Boolean;
-    PValue: Double;
+    ApproximatePValue: Double;
     TestStatistic: Double;
-    Method: string; // e.g., 'Shapiro-Wilk'
+    Method: string; // e.g., 'Shapiro-Wilk-like heuristic'
   end;
 
   {**
@@ -127,14 +126,14 @@ type
     function ConfidenceInterval(ALevel: Double = 0.95): TConfidenceInterval;
 
     {**
-     * 正态性检验 (Shapiro-Wilk 简化版)
+     * 正态性启发式 (Shapiro-Wilk-like 简化版)
      *}
-    function TestNormality: TNormalityTest;
+    function TestNormalityHeuristic: TNormalityTest;
 
     {**
-     * 比较两个数据集 (Welch's t-test)
+     * 比较两个数据集 (Welch's t-style heuristic)
      *}
-    function CompareWith(const AOther: TDoubleArray): Double;
+    function ApproximateWelchTScore(const AOther: TDoubleArray): Double;
 
     {**
      * 计算效应大小 (Cohen's d)
@@ -155,7 +154,8 @@ type
 implementation
 
 uses
-  Math;
+  nextpas.core.math.trig,
+  nextpas.core.math.scalar;
 
 { TAdvancedStats }
 
@@ -478,7 +478,7 @@ begin
   Result.Level := ALevel;
 end;
 
-function TAdvancedStats.TestNormality: TNormalityTest;
+function TAdvancedStats.TestNormalityHeuristic: TNormalityTest;
 var
   LCount: Integer;
   LNormalityScore: Double;
@@ -490,7 +490,7 @@ begin
   if LCount < 3 then
   begin
     Result.IsNormal := True;
-    Result.PValue := 1.0;
+    Result.ApproximatePValue := 1.0;
     Result.TestStatistic := 1.0;
     Result.Method := 'Insufficient data';
     Exit;
@@ -507,21 +507,21 @@ begin
   if LNormalityScore > 0.8 then
   begin
     Result.IsNormal := True;
-    Result.PValue := 0.5;
+    Result.ApproximatePValue := 0.5;
   end
   else if LNormalityScore > 0.6 then
   begin
     Result.IsNormal := True;
-    Result.PValue := 0.1;
+    Result.ApproximatePValue := 0.1;
   end
   else
   begin
     Result.IsNormal := False;
-    Result.PValue := 0.01;
+    Result.ApproximatePValue := 0.01;
   end;
 end;
 
-function TAdvancedStats.CompareWith(const AOther: TDoubleArray): Double;
+function TAdvancedStats.ApproximateWelchTScore(const AOther: TDoubleArray): Double;
 var
   LMean1: Double;
   LMean2: Double;

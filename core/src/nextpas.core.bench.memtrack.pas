@@ -12,7 +12,7 @@ unit nextpas.core.bench.memtrack;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.system.memmanager;
 
 type
   {**
@@ -116,25 +116,58 @@ var
 function TrackingGetMem(Size: PtrUInt): Pointer;
 begin
   Result := GOriginalMemoryManager.GetMem(Size);
-  if GTrackingEnabled then
+  if GTrackingEnabled and (Result <> nil) then
+    GGlobalTracker.RecordAlloc(Size);
+end;
+
+function TrackingAllocMem(Size: PtrUInt): Pointer;
+begin
+  Result := GOriginalMemoryManager.AllocMem(Size);
+  if GTrackingEnabled and (Result <> nil) then
     GGlobalTracker.RecordAlloc(Size);
 end;
 
 function TrackingFreeMem(P: Pointer): PtrUInt;
+var
+  LSize: PtrUInt;
 begin
+  LSize := 0;
+  if GTrackingEnabled and (P <> nil) and Assigned(GOriginalMemoryManager.MemSize) then
+    LSize := GOriginalMemoryManager.MemSize(P);
   if GTrackingEnabled then
-    GGlobalTracker.RecordFree(0); // 简化：不跟踪具体大小
+    GGlobalTracker.RecordFree(LSize);
   Result := GOriginalMemoryManager.FreeMem(P);
 end;
 
-function TrackingReAllocMem(var P: Pointer; Size: PtrUInt): Pointer;
+function TrackingFreeMemSize(P: Pointer; Size: PtrUInt): PtrUInt;
+var
+  LSize: PtrUInt;
 begin
+  LSize := Size;
+  if (LSize = 0) and (P <> nil) and Assigned(GOriginalMemoryManager.MemSize) then
+    LSize := GOriginalMemoryManager.MemSize(P);
   if GTrackingEnabled then
+    GGlobalTracker.RecordFree(LSize);
+  if Assigned(GOriginalMemoryManager.FreeMemSize) then
+    Result := GOriginalMemoryManager.FreeMemSize(P, Size)
+  else
+    Result := GOriginalMemoryManager.FreeMem(P);
+end;
+
+function TrackingReAllocMem(var P: Pointer; Size: PtrUInt): Pointer;
+var
+  LOldSize: PtrUInt;
+begin
+  LOldSize := 0;
+  if GTrackingEnabled and (P <> nil) and Assigned(GOriginalMemoryManager.MemSize) then
+    LOldSize := GOriginalMemoryManager.MemSize(P);
+  Result := GOriginalMemoryManager.ReAllocMem(P, Size);
+  if GTrackingEnabled and (Result <> nil) then
   begin
-    GGlobalTracker.RecordFree(0);
+    if LOldSize > 0 then
+      GGlobalTracker.RecordFree(LOldSize);
     GGlobalTracker.RecordAlloc(Size);
   end;
-  Result := GOriginalMemoryManager.ReAllocMem(P, Size);
 end;
 
 var
@@ -223,11 +256,19 @@ begin
   GetMemoryManager(GOriginalMemoryManager);
 
   // 设置跟踪 memory manager
+  GTrackingMemoryManager := GOriginalMemoryManager;
   GTrackingMemoryManager.GetMem := @TrackingGetMem;
+  GTrackingMemoryManager.AllocMem := @TrackingAllocMem;
   GTrackingMemoryManager.FreeMem := @TrackingFreeMem;
+  GTrackingMemoryManager.FreeMemSize := @TrackingFreeMemSize;
   GTrackingMemoryManager.ReAllocMem := @TrackingReAllocMem;
 
   // 重置统计
+  if not GGlobalTrackerInitialized then
+  begin
+    GGlobalTracker := TMemoryTracker.Create(True);
+    GGlobalTrackerInitialized := True;
+  end;
   GGlobalTracker.Reset;
 
   // 启用跟踪
@@ -246,7 +287,10 @@ end;
 
 procedure ResetGlobalMemoryTracker;
 begin
-  GlobalMemoryTracker.Reset;
+  if not GGlobalTrackerInitialized then
+    GGlobalTracker := TMemoryTracker.Create(True);
+  GGlobalTrackerInitialized := True;
+  GGlobalTracker.Reset;
 end;
 
 function GetGlobalMemoryStats: TMemoryStats;

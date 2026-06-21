@@ -15,6 +15,9 @@ var
   GTestCount: Integer;
   GPassCount: Integer;
   GFailCount: Integer;
+  GInvocationCount: Int64;
+  GFirstObservedIteration: Int64;
+  GLastObservedIteration: Int64;
 
 procedure Check(ACondition: Boolean; const ATestName: string);
 begin
@@ -35,6 +38,21 @@ procedure CheckApprox(AActual, AExpected, AEpsilon: Double; const ATestName: str
 begin
   Check(Abs(AActual - AExpected) <= AEpsilon,
     ATestName + ' (expected: ' + FloatToStr(AExpected) + ', got: ' + FloatToStr(AActual) + ')');
+end;
+
+procedure ConfigureFastRunner(ARunner: TBenchRunner);
+var
+  LConfig: TBenchConfig;
+begin
+  LConfig := ARunner.GetConfig;
+  LConfig.MinDurationNs := TDuration.FromMilliseconds(5).AsNanoseconds;
+  LConfig.MaxIterations := 5000;
+  LConfig.MinSamples := 3;
+  LConfig.WarmupIterations := 1;
+  LConfig.EnableMemoryTracking := True;
+  LConfig.EnableParallel := False;
+  LConfig.ParallelThreads := 2;
+  ARunner.SetConfig(LConfig);
 end;
 
 { 基准函数：快速操作 }
@@ -82,6 +100,30 @@ begin
   end;
   for i := 1 to 100 do
     ;
+end;
+
+procedure BenchRecordsInvocations(const ACtx: IBenchContext);
+begin
+  Inc(GInvocationCount);
+  if ACtx <> nil then
+  begin
+    if GInvocationCount = 1 then
+      GFirstObservedIteration := ACtx.Iterations;
+    GLastObservedIteration := ACtx.Iterations;
+  end;
+end;
+
+procedure BenchSkips(const ACtx: IBenchContext);
+begin
+  if ACtx <> nil then
+    ACtx.Skip('Skip requested by benchmark');
+end;
+
+procedure BenchResetTimerOnly(const ACtx: IBenchContext);
+begin
+  Sleep(25);
+  if ACtx <> nil then
+    ACtx.ResetTimer;
 end;
 
 procedure TestTBenchContext;
@@ -137,6 +179,7 @@ begin
 
   LRunner := TBenchRunner.Create;
   try
+    ConfigureFastRunner(LRunner);
     // 测试快速操作
     LIters := LRunner.CalibrateIterations(@BenchFast);
     Check(LIters >= 100, 'Fast operation: iters >= 100');
@@ -165,6 +208,7 @@ begin
 
   LRunner := TBenchRunner.Create;
   try
+    ConfigureFastRunner(LRunner);
     // 测试快速操作
     LResult := LRunner.RunOne('Fast', @BenchFast);
     Check(LResult.Name = 'Fast', 'Result name correct');
@@ -185,6 +229,27 @@ begin
     // 测试带上下文的操作
     LResult := LRunner.RunOne('WithContext', @BenchWithContext);
     Check(LResult.Name = 'WithContext', 'WithContext result name correct');
+    Check(LResult.BytesPerOp = 1024, 'WithContext bytes propagated');
+    Check(LResult.AllocsPerOp = 2, 'WithContext allocs propagated');
+  finally
+    LRunner.Free;
+  end;
+end;
+
+procedure TestRunOneSkip;
+var
+  LRunner: TBenchRunner;
+  LResult: TBenchResult;
+begin
+  WriteLn('TestRunOneSkip:');
+
+  LRunner := TBenchRunner.Create;
+  try
+    ConfigureFastRunner(LRunner);
+    LResult := LRunner.RunOne('SkipMe', @BenchSkips);
+    Check(LResult.Executed, 'Skipped benchmark is reported as executed');
+    Check(LResult.Skipped, 'Skipped benchmark is marked skipped');
+    Check(LResult.SkipReason = 'Skip requested by benchmark', 'Skip reason propagated');
   finally
     LRunner.Free;
   end;
@@ -200,6 +265,7 @@ begin
 
   LRunner := TBenchRunner.Create;
   try
+    ConfigureFastRunner(LRunner);
     // 准备测试数据
     SetLength(LEntries, 3);
     LEntries[0].Name := 'Fast';
@@ -235,6 +301,7 @@ begin
 
   LRunner := TBenchRunner.Create;
   try
+    ConfigureFastRunner(LRunner);
     // 设置过滤器
     LRunner.SetFilter('Fast');
 
@@ -245,7 +312,8 @@ begin
     // 尝试运行不匹配的基准
     LResult := LRunner.RunOne('Slow', @BenchSlow);
     Check(LResult.Name = 'Slow', 'Non-matching result has name');
-    Check(LResult.Iterations = 0, 'Non-matching result has 0 iterations');
+    Check(not LResult.Executed, 'Non-matching result is not executed');
+    Check(not LResult.Skipped, 'Non-matching result is not benchmark-skipped');
   finally
     LRunner.Free;
   end;
@@ -293,6 +361,17 @@ begin
 
   LRunner := TBenchRunner.Create;
   try
+    ConfigureFastRunner(LRunner);
+    GInvocationCount := 0;
+    GFirstObservedIteration := 0;
+    GLastObservedIteration := 0;
+
+    LElapsed := LRunner.MeasureNs(@BenchRecordsInvocations, 25);
+    Check(LElapsed > 0, 'Invocation benchmark elapsed > 0');
+    Check(GInvocationCount = 25, 'Runner invokes callback once per iteration');
+    Check(GFirstObservedIteration = 1, 'First callback sees iteration 1');
+    Check(GLastObservedIteration = 25, 'Last callback sees final iteration index');
+
     // 测量快速操作
     LElapsed := LRunner.MeasureNs(@BenchFast, 100);
     Check(LElapsed > 0, 'Fast operation elapsed > 0');
@@ -302,6 +381,9 @@ begin
     LElapsed := LRunner.MeasureNs(@BenchMedium, 100);
     Check(LElapsed > 0, 'Medium operation elapsed > 0');
     Check(LElapsed < 1000000000, 'Medium operation elapsed < 1s');
+
+    LElapsed := LRunner.MeasureNs(@BenchResetTimerOnly, 1);
+    Check(LElapsed < 10000000, 'ResetTimer excludes pre-measurement sleep');
   finally
     LRunner.Free;
   end;
@@ -316,6 +398,7 @@ begin
 
   LRunner := TBenchRunner.Create;
   try
+    ConfigureFastRunner(LRunner);
     // 运行一个基准
     LResult := LRunner.RunOne('Fast', @BenchFast);
     Check(LRunner.GetResultCount = 1, 'Has 1 result');
@@ -341,6 +424,8 @@ begin
   TestCalibrateIterations;
   WriteLn;
   TestRunOne;
+  WriteLn;
+  TestRunOneSkip;
   WriteLn;
   TestRunAll;
   WriteLn;
