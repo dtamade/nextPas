@@ -209,12 +209,12 @@ end;
 
 #### 初始化
 ```pascal
-procedure TArena_Init(var AArena: TArena; AAlignment: SizeUInt = DEFAULT_ALIGNMENT);
+procedure TFastArena_Init(var AArena: TFastArena; AAlignment: SizeUInt = DEFAULT_ALIGNMENT);
 ```
-初始化 TArena。
+初始化 TFastArena。
 
 **参数：**
-- `AArena` - 要初始化的 TArena 记录
+- `AArena` - 要初始化的 TFastArena 记录
 - `AAlignment` - 对齐要求（默认 DEFAULT_ALIGNMENT）
 
 **示例：**
@@ -233,12 +233,12 @@ end;
 
 #### 释放
 ```pascal
-procedure TArena_Release(var AArena: TArena);
+procedure TFastArena_Release(var AArena: TFastArena);
 ```
-释放 TArena 所有资源。
+释放 TFastArena 所有资源。
 
 **参数：**
-- `AArena` - 要释放的 TArena 记录
+- `AArena` - 要释放的 TFastArena 记录
 
 #### 方法
 - `Alloc` - 分配内存

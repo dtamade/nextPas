@@ -61,6 +61,8 @@ end;
 - **GetMem 后备**：使用标准 GetMem 分配
 - **固定容量**：分配只前进，Reset 一次性释放全部
 - **IArena 接口**：实现 IArena 接口，支持引用计数
+- **快速路径**：AllocFast 和 AllocAlignedFast（无检查版本，极致性能）
+- **统计信息**：PeakUsed 和 TotalAllocCount
 
 ### TGrowableArena 设计
 - **段增长**：按需添加新段（几何或线性增长）

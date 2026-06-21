@@ -33,35 +33,26 @@
 - TGrowableArena 批量分配比 TFastArena 快 3.7x
 - 原因：TGrowableArena 使用 GetMem 后备，没有 mmap 开销
 
-### 与 Go/Rust 对照
+### 与 FPC RTL 对照
 
-#### Go 标准库
-```go
-// Go runtime allocator
-// 小对象: ~50ns
-// 中等对象: ~100ns
-// 大对象: ~200ns
 ```
+TLocalArena:
+- 小对象 (16B): 5.4ns (vs System.GetMem 31.3ns → 5.8x)
+- 中等对象 (64B): 4.7ns (vs System.GetMem 62.7ns → 13.3x)
+- 大对象 (256B): 4.2ns (vs System.GetMem 197.2ns → 46.9x)
 
-#### Rust 标准库
-```rust
-// Rust std::alloc
-// 小对象: ~40ns
-// 中等对象: ~80ns
-// 大对象: ~150ns
-```
-
-#### nextpas.core.mem
-```
 TFastArena:
-- 小对象 (16B): 48.9ns (接近 Rust)
-- 中等对象 (64B): 47.0ns (超越 Rust)
-- 大对象 (256B): 64.8ns (超越 Rust 和 Go)
+- 小对象 (16B): 49.5ns (vs System.GetMem 31.3ns → 0.6x 慢)
+- 中等对象 (64B): 52.7ns (vs System.GetMem 62.7ns → 1.2x)
+- 大对象 (256B): 68.6ns (vs System.GetMem 197.2ns → 2.9x)
 ```
 
 **结论：**
-- TFastArena 在中等和大对象上超越 Go 和 Rust 标准库
-- 小对象接近 Rust，但比 Go 慢（mmap 开销）
+- TLocalArena 在所有大小上都比 System.GetMem 快得多（5-47x）
+- TFastArena 在小对象上比 System.GetMem 慢（mmap 开销），但在中等和大对象上更快
+- TLocalArena 比 TFastArena 快得多（因为 TLocalArena 使用 GetMem，没有 mmap 开销）
+
+**注意：** Go 和 Rust 标准库的对比数据需要实测基准程序，当前只有 FPC RTL 对照。
 
 ## 内存使用效率
 
