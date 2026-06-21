@@ -207,14 +207,20 @@ end;
 { Internal State                                                               }
 { ═════════════════════════════════════════════════════════════════════════════ }
 
+type
+  { Thread-local execution state — allocated on first use, nil = uninitialized }
+  TTestExecState = record
+    SuiteName  : string;
+    TestName   : string;
+    Failed     : Boolean;
+    SkipReason : string;
+  end;
+  PTestExecState = ^TTestExecState;
+
+threadvar
+  GExecState: PTestExecState;
+
 var
-  { Context for active test — set by runner before each test }
-  GActiveTestName : string = '';
-  GActiveSuiteName: string = '';
-
-  { Flow control — set by InternalFail, read by ReportLeakIfAny }
-  GTestFailed    : Boolean = False;  // set true on Fail()/Check*
-
   { ANSI capability — set once in initialization, read-only after }
   GAnsiEnabled: Boolean = False;
   GAnsiChecked: Boolean = False;
@@ -291,31 +297,38 @@ end;
 
 procedure InternalFail(const AMessage: string);
 begin
-  GTestFailed := True;
+  if GExecState <> nil then
+    GExecState^.Failed := True;
   raise EAssertionFailed.Create(AMessage);
 end;
 
 procedure InternalSkip(const AReason: string);
 begin
+  if GExecState <> nil then
+    GExecState^.SkipReason := AReason;
   raise ETestSkipped.Create(AReason);
 end;
 
 procedure SetTestContext(const ASuiteName, ATestName: string);
 begin
-  GActiveTestName  := ATestName;
-  GActiveSuiteName := ASuiteName;
-  GTestFailed      := False; { read by ReportLeakIfAny under HASHEAPTRACE }
+  if GExecState = nil then
+    New(GExecState);
+  GExecState^.SuiteName  := ASuiteName;
+  GExecState^.TestName   := ATestName;
+  GExecState^.Failed     := False;
+  GExecState^.SkipReason := '';
 end;
 
 procedure ReportLeakIfAny(AStatus: TTestStatus);
 begin
   {$IFDEF HASHEAPTRACE}
-  if (AStatus = tsPassed) and not GTestFailed and
+  if (AStatus = tsPassed) and
+     ((GExecState = nil) or (not GExecState^.Failed)) and
      (GetFPCHeapStatus.CurrHeapUsed > 0) then
   begin
     WriteLn('  ', AnsiYellow('⚠ leak'), ': ',
       GetFPCHeapStatus.CurrHeapUsed, ' bytes not freed in ',
-      AnsiBold(GActiveTestName));
+      AnsiBold(GExecState^.TestName));
   end;
   {$ENDIF}
 end;
@@ -1037,7 +1050,7 @@ begin
   begin
     LEntry := FSubtests[I];
     LStatus := tsPassed;
-    SetTestContext(GActiveSuiteName, LEntry.Name);
+    SetTestContext(GExecState^.SuiteName, LEntry.Name);
     try
       if LEntry.Kind = ekSkipped then
       begin
@@ -1396,8 +1409,9 @@ begin
   LStatus := tsPassed;
   LFailMsg := '';
   { Note: We intentionally do NOT call SetTestContext here.
-    SetTestContext writes to process-global vars (GActiveTestName etc.)
-    which are not thread-safe. Parallel tests track state locally via LStatus. }
+    SetTestContext allocates thread-local GExecState — each thread would get
+    its own copy, which is safe but unnecessary since parallel tests track
+    state locally via LStatus and the TThreadRec record. }
 
   { Subtests are not supported in parallel mode — skip gracefully }
   if R^.Entry.Kind = ekSubtest then
@@ -1726,6 +1740,7 @@ initialization
   InitAnsi;
 
 finalization
-  { Cleanup }
+  if GExecState <> nil then
+    Dispose(GExecState);
 
 end.
