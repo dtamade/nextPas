@@ -24,6 +24,16 @@ type
   TBenchParallelFunc = procedure(AThreadId: Integer; AIterations: Int64);
 
   {**
+   * 基准线程类（前向声明）
+   *}
+  TBenchThread = class;
+
+  {**
+   * 基准线程数组类型
+   *}
+  TBenchThreadArray = array of TBenchThread;
+
+  {**
    * 并行基准配置
    *}
   TParallelBenchConfig = record
@@ -115,11 +125,6 @@ type
     property Iterations: Int64 read FIterations;
     property ElapsedNs: UInt64 read FElapsedNs;
   end;
-
-  {**
-   * 基准线程数组类型
-   *}
-  TBenchThreadArray = array of TBenchThread;
 
 { TBenchThread }
 
