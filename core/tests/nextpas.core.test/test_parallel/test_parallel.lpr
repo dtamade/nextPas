@@ -117,6 +117,11 @@ begin
     WriteLn(AnsiRed('FAIL: expected 2 skips from setup failure, got '), LSuite.LastSkip);
     Halt(1);
   end;
+  if LSuite.LastFail <> 1 then
+  begin
+    WriteLn(AnsiRed('FAIL: expected LastFail=1 for setup failure, got '), LSuite.LastFail);
+    Halt(1);
+  end;
   WriteLn(AnsiGreen('  ✓ Parallel setup failure'));
 end;
 

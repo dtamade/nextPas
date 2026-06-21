@@ -123,6 +123,7 @@ type
     TotalPass: Integer;
     TotalFail: Integer;
     TotalSkip: Integer;
+    HasRun   : Boolean;
 
     class function Create(const AName: string): TTestRunner; static;
     procedure Add(var ASuite: TTestSuite);
@@ -334,7 +335,7 @@ procedure ReportLeakIfAny(AStatus: TTestStatus);
 begin
   {$IFDEF HASHEAPTRACE}
   if (AStatus = tsPassed) and
-     ((GExecState = nil) or (not GExecState^.Failed)) and
+     (GExecState <> nil) and (not GExecState^.Failed) and
      (GetFPCHeapStatus.CurrHeapUsed > 0) then
   begin
     WriteLn('  ', AnsiYellow('⚠ leak'), ': ',
@@ -948,8 +949,12 @@ begin
     begin
       LRaised := True;
       if FNegated then
-        InternalFail('Expected no exception but got ' +
-          E.ClassName + ': ' + E.Message)
+      begin
+        if E is AExceptionClass then
+          InternalFail('Expected no ' + AExceptionClass.ClassName +
+            ' but got ' + E.ClassName + ': ' + E.Message);
+        raise; { Different exception class — re-raise to propagate }
+      end
       else
       begin
         if not (E is AExceptionClass) then
@@ -1342,6 +1347,18 @@ begin
       try
         BeforeEach;
       except
+        on E: ETestSkipped do
+        begin
+          LStatus := tsSkipped;
+          Inc(LSkip);
+          LTestResult.Status  := tsSkipped;
+          LTestResult.Message := E.Message;
+          SetLength(AResult.Results, Length(AResult.Results) + 1);
+          AResult.Results[High(AResult.Results)] := LTestResult;
+          WriteLn('  ', StatusDot(tsSkipped), ' ', AnsiDim(LEntry.Name),
+            ' — ', E.Message);
+          Continue;
+        end;
         on E: Exception do
         begin
           LStatus := tsError;
@@ -1419,9 +1436,12 @@ begin
           begin
             LStatus := tsError;
             LLastFailMsg := 'afterEach failed: ' + E.Message;
-            Inc(LFail);
-            if LPass > 0 then { Guard against negative count for subtests }
-              Dec(LPass);
+            if LEntry.Kind <> ekSubtest then
+            begin
+              Inc(LFail);
+              if LPass > 0 then
+                Dec(LPass);
+            end;
           end;
         end;
       end;
@@ -1556,6 +1576,11 @@ begin
   begin
     try R^.Before;
     except
+      on E: ETestSkipped do
+      begin
+        LStatus := tsSkipped;
+        LSkipReason := E.Message;
+      end;
       on E: Exception do
       begin
         LStatus := tsError;
@@ -1689,7 +1714,7 @@ begin
         HasRun        := True;
         LastRunPassed := False;
         LastPass      := 0;
-        LastFail      := 0;
+        LastFail      := 1;
         LastSkip      := LSkip;
         Result         := False;
         WriteLn(AnsiDim('  ') + IntToStr(LSkip) + ' skipped (setup failure)');
@@ -1782,6 +1807,7 @@ begin
   Result.TotalPass := 0;
   Result.TotalFail := 0;
   Result.TotalSkip := 0;
+  Result.HasRun    := False;
 end;
 
 procedure TTestRunner.Add(var ASuite: TTestSuite);
@@ -1811,6 +1837,7 @@ begin
     Inc(TotalFail, Suites[I].LastFail);
     Inc(TotalSkip, Suites[I].LastSkip);
   end;
+  HasRun := True;
   Result := LAllPassed;
 end;
 
@@ -1832,6 +1859,7 @@ begin
     Inc(TotalFail, Suites[I].LastFail);
     Inc(TotalSkip, Suites[I].LastSkip);
   end;
+  HasRun := True;
   Result := LAllPassed;
 end;
 
@@ -1847,7 +1875,7 @@ end;
 
 function TTestRunner.AllPassed: Boolean;
 begin
-  if TotalPass + TotalFail + TotalSkip > 0 then
+  if HasRun then
     Result := TotalFail = 0
   else
     Result := RunAll;

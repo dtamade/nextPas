@@ -61,7 +61,7 @@ begin
     end);
 end;
 
-procedure TestSubtestsWithFailure(constref Ctx: ITestContext);
+procedure TestSubtestWithCaughtAssertion(constref Ctx: ITestContext);
 begin
   Ctx.Run('pass',
     procedure
@@ -69,7 +69,7 @@ begin
       Check(True);
     end);
 
-  Ctx.Run('expected fail',
+  Ctx.Run('caught assertion',
     procedure
     begin
       try
@@ -98,6 +98,32 @@ end;
 procedure TestSimplePass2;
 begin
   Check(True);
+end;
+
+{ ── R2-F12: BeforeEach Skip test ───────────────────────────────────────────── }
+
+procedure TestBeforeEachSkip;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+begin
+  LSuite := TTestSuite.Create('BeforeEachSkip');
+  LSuite.OnBeforeEach(procedure begin Skip('skip from beforeEach'); end);
+  LSuite.Test('t1', @TestSimplePass);
+  LSuite.Test('t2', @TestSimplePass2);
+  { Both tests should be skipped, not errored }
+  LSuite.RunWithResult(LResult);
+  if LResult.Skipped <> 2 then
+  begin
+    WriteLn(AnsiRed('FAIL: expected 2 skipped, got '), LResult.Skipped);
+    Halt(1);
+  end;
+  if LResult.Failed <> 0 then
+  begin
+    WriteLn(AnsiRed('FAIL: expected 0 failed, got '), LResult.Failed);
+    Halt(1);
+  end;
+  WriteLn(AnsiGreen('  ✓ BeforeEach Skip'));
 end;
 
 { ── Main ──────────────────────────────────────────────────────────────────── }
@@ -132,7 +158,7 @@ begin
   { Suite 2: subtests + skip }
   LSuite2 := TTestSuite.Create('Subtests');
   LSuite2.TestSubtest('nested subtests',       @TestSubtests);
-  LSuite2.TestSubtest('subtests with failure',  @TestSubtestsWithFailure);
+  LSuite2.TestSubtest('subtests with failure',  @TestSubtestWithCaughtAssertion);
   LSuite2.Skip('planned feature', 'not yet implemented');
   LSuite2.Test('skip in suite',      @TestSkipInSuite);
 
@@ -418,6 +444,11 @@ begin
     Halt(1);
   end;
   WriteLn(AnsiGreen('  ✓ AllPassed caching'));
+
+  { ── R2-F12: BeforeEach Skip ────────────────────────────────────────────────── }
+  WriteLn;
+  WriteLn(AnsiBold('─── R2-F12: BeforeEach Skip ───'));
+  TestBeforeEachSkip;
 
   WriteLn;
   WriteLn(AnsiGreen('ALL PASSED'));

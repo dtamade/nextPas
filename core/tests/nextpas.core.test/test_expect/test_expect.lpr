@@ -359,7 +359,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('no exception', LowerCase(E.Message)) > 0, 'Not_ fail msg');
+      Check(Pos('EConvertError', E.Message) > 0, 'Not_ fail msg');
   end;
 end;
 
@@ -611,6 +611,45 @@ begin
   ExpectPtr(@TestNotNotDoubleNegation).Not_.Not_.ToBeNotNil;
 end;
 
+{ ── R2-F11: Not_.ToRaise semantic tests ────────────────────────────────────── }
+
+procedure TestNotToRaisePass;
+begin
+  { Not_.ToRaise(EConvertError) + no exception → pass }
+  ExpectProc(procedure begin end).Not_.ToRaise(EConvertError);
+end;
+
+procedure TestNotToRaiseFail;
+begin
+  { Not_.ToRaise(EConvertError) + EConvertError raised → fail }
+  try
+    ExpectProc(procedure begin StrToInt('bad'); end).Not_.ToRaise(EConvertError);
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(Pos('EConvertError', E.Message) > 0, 'Not_.ToRaise fail msg');
+  end;
+end;
+
+procedure TestNotToRaiseOtherException;
+var
+  LCaught: Boolean = False;
+begin
+  { Not_.ToRaise(EConvertError) + EAccessViolation → re-raise (not swallowed) }
+  try
+    ExpectProc(procedure begin raise EAccessViolation.Create('av'); end)
+      .Not_.ToRaise(EConvertError);
+  except
+    on E: EAccessViolation do
+      LCaught := True;
+  end;
+  if not LCaught then
+  begin
+    WriteLn(AnsiRed('FAIL: EAccessViolation should propagate through Not_.ToRaise'));
+    Halt(1);
+  end;
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -690,6 +729,11 @@ begin
 
   { F23: Not_.Not_ double negation }
   LSuite.Test('Not_.Not_ double negation', @TestNotNotDoubleNegation);
+
+  { R2-F11: Not_.ToRaise semantic }
+  LSuite.Test('Not_.ToRaise pass (no ex)',     @TestNotToRaisePass);
+  LSuite.Test('Not_.ToRaise fail (target ex)', @TestNotToRaiseFail);
+  LSuite.Test('Not_.ToRaise other ex propag',  @TestNotToRaiseOtherException);
 
   if not LSuite.Run then
   begin
