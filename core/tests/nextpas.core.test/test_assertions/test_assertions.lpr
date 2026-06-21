@@ -61,7 +61,8 @@ begin
     CheckEqual(True, False);
     Halt(1);
   except
-    on E: EAssertionFailed do { expected };
+    on E: EAssertionFailed do
+      Check(Pos('True', E.Message) > 0, 'msg contains True');
   end;
 end;
 
@@ -75,7 +76,8 @@ begin
     CheckEqual(nil, LP);
     Halt(1);
   except
-    on E: EAssertionFailed do { expected };
+    on E: EAssertionFailed do
+      Check(Pos('pointer', LowerCase(E.Message)) > 0, 'msg contains pointer');
   end;
 end;
 
@@ -209,7 +211,8 @@ begin
       procedure begin { does nothing } end);
     Halt(1);
   except
-    on E: EAssertionFailed do { expected };
+    on E: EAssertionFailed do
+      Check(Pos('EConvertError', E.Message) > 0, 'msg contains expected class');
   end;
 end;
 
@@ -221,7 +224,8 @@ begin
       procedure begin raise EConvertError.Create('oops'); end);
     Halt(1);
   except
-    on E: EAssertionFailed do { expected };
+    on E: EAssertionFailed do
+      Check(Pos('EConvertError', E.Message) > 0, 'msg contains class');
   end;
 end;
 

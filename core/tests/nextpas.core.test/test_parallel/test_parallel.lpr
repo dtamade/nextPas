@@ -198,6 +198,50 @@ begin
   end;
   WriteLn(AnsiGreen('  ✓ RunAllParallel'));
 
+  { ── F08: RunAllParallel aggregation ───────────────────────────────────── }
+  WriteLn;
+  WriteLn(AnsiBold('─── F08: RunAllParallel Aggregation ───'));
+  begin
+    LRunner := TTestRunner.Create('Aggregation Runner');
+    { Suite A: 3 pass + 1 skip + 1 fail = 5 }
+    LSkipSuite := TTestSuite.Create('Suite A');
+    LSkipSuite.Test('a1', @TestParallelPassA);
+    LSkipSuite.Test('a2', @TestParallelPassB);
+    LSkipSuite.Test('a3', @TestParallelSimple1);
+    LSkipSuite.Skip('a4', 'deferred');
+    LSkipSuite.Test('a5', @TestParallelFail);
+    LRunner.Add(LSkipSuite);
+    { Suite B: 2 pass = 2 }
+    LFailSuite := TTestSuite.Create('Suite B');
+    LFailSuite.Test('b1', @TestParallelSimple2);
+    LFailSuite.Test('b2', @TestParallelSimple3);
+    LRunner.Add(LFailSuite);
+    if LRunner.RunAllParallel(nil) then
+    begin
+      WriteLn(AnsiRed('FAIL: RunAllParallel should return False (suite A has failure)'));
+      Halt(1);
+    end;
+    { TotalPass should be 5 (3 from A + 2 from B) }
+    if LRunner.TotalPass <> 5 then
+    begin
+      WriteLn(AnsiRed('FAIL: Expected TotalPass=5, got '), LRunner.TotalPass);
+      Halt(1);
+    end;
+    { TotalFail should be 1 (from A) }
+    if LRunner.TotalFail <> 1 then
+    begin
+      WriteLn(AnsiRed('FAIL: Expected TotalFail=1, got '), LRunner.TotalFail);
+      Halt(1);
+    end;
+    { TotalSkip should be 1 (from A) }
+    if LRunner.TotalSkip <> 1 then
+    begin
+      WriteLn(AnsiRed('FAIL: Expected TotalSkip=1, got '), LRunner.TotalSkip);
+      Halt(1);
+    end;
+    WriteLn(AnsiGreen('  ✓ RunAllParallel aggregation'));
+  end;
+
   WriteLn;
   WriteLn(AnsiGreen('ALL PARALLEL TESTS PASSED'));
 
