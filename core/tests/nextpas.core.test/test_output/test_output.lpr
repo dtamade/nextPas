@@ -8,6 +8,7 @@ program test_output;
 {$mode objfpc}{$H+}{$J-}
 
 uses
+  cthreads,
   SysUtils,
   nextpas.core.test.base,
   nextpas.core.test.check,

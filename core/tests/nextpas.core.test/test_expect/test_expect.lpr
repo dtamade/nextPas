@@ -6,6 +6,7 @@ program test_expect;
 {$modeswitch functionreferences}
 
 uses
+  cthreads,
   SysUtils,
   nextpas.core.test;
 

@@ -9,6 +9,7 @@ program test_advanced;
 {$M+}
 
 uses
+  cthreads,
   SysUtils,
   nextpas.core.test.base,
   nextpas.core.test.check,

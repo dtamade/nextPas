@@ -11,6 +11,7 @@ program test_lifecycle;
 {$modeswitch functionreferences}
 
 uses
+  cthreads,
   SysUtils,
   nextpas.core.test.base,
   nextpas.core.test.check,

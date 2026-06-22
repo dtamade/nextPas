@@ -69,8 +69,9 @@ type
     function  Run: Boolean;
     function  RunWithResult(out AResult: TTestRunResult): Boolean;
     function  RunParallel(APool: IThreadPool): Boolean;
-      { Note: APool is currently unused — parallel mode uses direct platform_thread_create
-        to work around FPC closure capture semantics. Reserved for future thread pool integration. }
+      { Note: APool is currently unused — parallel mode uses BeginThread directly
+        to ensure FPC properly initializes per-thread state. Reserved for future
+        thread pool integration. }
     function  RunParallelWithResult(APool: IThreadPool;
       out AResult: TTestRunResult): Boolean;
     procedure Summary;
@@ -646,6 +647,16 @@ begin
   Result := RunParallelWithResult(APool, LResult);
 end;
 
+{ Wrapper to adapt ParallelWorkerProc (cdecl, returns Pointer) to
+  BeginThread's expected signature (register, returns PtrInt).
+  On x86-64 Linux calling conventions are compatible — both pass arg in
+  RDI and return in RAX. }
+function ParallelThreadEntry(AArg: Pointer): PtrInt;
+begin
+  ParallelWorkerProc(AArg);
+  Result := 0;
+end;
+
 function TTestSuite.RunParallelWithResult(APool: IThreadPool;
   out AResult: TTestRunResult): Boolean;
 var
@@ -654,8 +665,7 @@ var
   LMtx: IMutex;
   I: Integer;
   LRecs: array of TThreadRec;
-  LHandles: array of TPlatformThreadHandle;
-  LRetVal: Pointer;
+  LThreads: array of TThreadID;
   LResults: array of TTestResult;
 begin
   AResult := TTestRunResult.Create(Name);
@@ -698,7 +708,7 @@ begin
     end;
   end;
 
-  SetLength(LHandles, LTotal);
+  SetLength(LThreads, LTotal);
   SetLength(LRecs, LTotal);
   SetLength(LResults, LTotal);
 
@@ -725,11 +735,15 @@ begin
     end;
   end;
 
+  { Use BeginThread to ensure FPC properly initializes per-thread state
+    (exception handler chain, threadvar TLS, heap manager).
+    Previously platform_thread_create (direct pthread_create) was used,
+    which bypasses FPC init and caused intermittent SIGSEGV on thread exit. }
   for I := 0 to High(Tests) do
-    platform_thread_create(LHandles[I], @ParallelWorkerProc, @LRecs[I]);
+    LThreads[I] := BeginThread(@ParallelThreadEntry, @LRecs[I]);
 
   for I := 0 to High(Tests) do
-    platform_thread_join(LHandles[I], LRetVal);
+    WaitForThreadTerminate(LThreads[I], 0);
 
   { Suite-level teardown }
   if Assigned(Teardown) or Assigned(TeardownClosure) then

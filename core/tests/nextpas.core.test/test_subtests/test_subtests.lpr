@@ -6,6 +6,7 @@ program test_subtests;
 {$modeswitch functionreferences}
 
 uses
+  cthreads,
   SysUtils,
   nextpas.core.test;
 
