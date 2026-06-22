@@ -250,6 +250,18 @@ begin
     'add negative seconds');
 end;
 
+procedure TestDaysBetween;
+var
+  LA: TDateTime;
+  LB: TDateTime;
+begin
+  LA := 45000.75;
+  LB := LA - 2.5;
+
+  CheckEqual(2, DaysBetween(LA, LB), 'days between truncates fractional days');
+  CheckEqual(2, DaysBetween(LB, LA), 'days between uses absolute delta');
+end;
+
 procedure TestDateTimeToUnix;
 var
   LEpoch: TDateTime;
@@ -289,6 +301,7 @@ begin
   T.Run('DateTime now', @TestDateTimeNow);
   T.Run('DateTime UTC now', @TestDateTimeUtcNow);
   T.Run('DateTime math', @TestDateTimeMath);
+  T.Run('DaysBetween', @TestDaysBetween);
   T.Run('DateTimeToUnix/UnixToDateTime', @TestDateTimeToUnix);
   T.Summary;
 end.

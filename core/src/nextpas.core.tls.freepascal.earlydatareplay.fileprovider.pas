@@ -11,8 +11,11 @@ unit nextpas.core.tls.freepascal.earlydatareplay.fileprovider;
 interface
 
 uses
+  nextpas.core.io.intf,
   nextpas.core.base.utils,
-  SysUtils, nextpas.core.fs.stream, nextpas.core.fs,
+  nextpas.core.fs.stream, nextpas.core.fs, nextpas.core.path,
+  nextpas.core.platform.files.base,
+  nextpas.core.text.conv,
   nextpas.core.tls.base,
   nextpas.core.tls.freepascal.context.material,
   nextpas.core.tls.freepascal.earlydatareplay,
@@ -28,9 +31,9 @@ type
     function GetLockFileName: string;
     function GetBackupFileName: string;
     function ResolveReadableStoreFileName: string;
-    function OpenLockFileStream(out ALockStream: IStream): Boolean;
-    function AcquireStoreLock(out ALockStream: IStream): Boolean;
-    procedure ReleaseStoreLock(var ALockStream: IStream);
+    function OpenLockFileHandle(out ALockHandle: TPlatformFileHandle): Boolean;
+    function AcquireStoreLock(out ALockHandle: TPlatformFileHandle): Boolean;
+    procedure ReleaseStoreLock(var ALockHandle: TPlatformFileHandle);
   protected
     function FileExistsAt(const AFileName: string): Boolean; virtual;
     function DeleteFileAt(const AFileName: string): Boolean; virtual;
@@ -63,10 +66,8 @@ function InstallFileBackedReplayLedger(
 
 implementation
 
-{$IFDEF UNIX}
 uses
-  Unix;
-{$ENDIF}
+  nextpas.core.platform.files;
 
 const
   FREEPASCAL_FILE_REPLAY_PROVIDER_VERSION = 1;
@@ -81,32 +82,38 @@ type
     IFreePascalEarlyDataReplayStoreGuard)
   private
     FOwner: TFreePascalFileEarlyDataReplayStore;
-    FLockStream: IStream;
+    FLockHandle: TPlatformFileHandle;
   public
     constructor Create(
       AOwner: TFreePascalFileEarlyDataReplayStore;
-      ALockStream: IStream
+      const ALockHandle: TPlatformFileHandle
     );
     destructor Destroy; override;
   end;
 
+function LockHandleIsValid(const AHandle: TPlatformFileHandle): Boolean; inline;
+begin
+  Result := AHandle.Value <> PLATFORM_FILE_INVALID_HANDLE.Value;
+end;
+
 constructor TFreePascalFileEarlyDataReplayStoreGuard.Create(
   AOwner: TFreePascalFileEarlyDataReplayStore;
-  ALockStream: IStream
+  const ALockHandle: TPlatformFileHandle
 );
 begin
   inherited Create;
   FOwner := AOwner;
-  FLockStream := ALockStream;
+  FLockHandle := ALockHandle;
 end;
 
 destructor TFreePascalFileEarlyDataReplayStoreGuard.Destroy;
 begin
   if FOwner <> nil then
-    FOwner.ReleaseStoreLock(FLockStream)
-  else if FLockStream <> nil then
+    FOwner.ReleaseStoreLock(FLockHandle)
+  else if LockHandleIsValid(FLockHandle) then
   begin
-    FLockStream := nil;
+    platform_file_unlock(FLockHandle);
+    platform_file_close(FLockHandle);
   end;
 
   LeaveCriticalSection(GReplayFileProviderLock);
@@ -200,100 +207,78 @@ begin
     Result := '';
 end;
 
-function TFreePascalFileEarlyDataReplayStore.OpenLockFileStream(
-  out ALockStream: IStream
+function TFreePascalFileEarlyDataReplayStore.OpenLockFileHandle(
+  out ALockHandle: TPlatformFileHandle
 ): Boolean;
 var
   LLockFileName: string;
   LDir: string;
-  LCreateStream: IStream;
-  LAttempt: Integer;
 begin
   Result := False;
-  ALockStream := nil;
+  ALockHandle := PLATFORM_FILE_INVALID_HANDLE;
 
   LLockFileName := GetLockFileName;
   if LLockFileName = '' then
     Exit;
 
-  LDir := ExtractFileDir(LLockFileName);
+  LDir := PathDir(LLockFileName);
   if (LDir <> '') and (not nextpas.core.fs.MkdirAll(LDir)) then
     Exit;
 
-  for LAttempt := 1 to 2 do
-  begin
-    try
-      ALockStream := FsOpen(LLockFileName, [fmReadWrite]);
-      Exit(True);
-    except
-      if LAttempt = 2 then
-        Exit(False);
-    end;
-
-    try
-      LCreateStream := FsCreate(LLockFileName);
-      try
-      finally
-      end;
-    except
-      // A concurrent creator may have won the race; the second open attempt decides.
-    end;
-  end;
+  Result := platform_file_open_ex(PAnsiChar(LLockFileName),
+    fomReadWrite, fcmOpenOrCreate, False, False, UInt32(PermDefault),
+    ALockHandle) = 0;
 end;
 
 function TFreePascalFileEarlyDataReplayStore.AcquireStoreLock(
-  out ALockStream: IStream
+  out ALockHandle: TPlatformFileHandle
 ): Boolean;
 begin
   Result := False;
-  ALockStream := nil;
+  ALockHandle := PLATFORM_FILE_INVALID_HANDLE;
 
-  if not OpenLockFileStream(ALockStream) then
+  if not OpenLockFileHandle(ALockHandle) then
     Exit;
-  {$IFDEF UNIX}
-  if FpFlock(ALockStream.Handle, LOCK_EX or LOCK_NB) <> 0 then
+  if platform_file_trylock(ALockHandle, True) <> 0 then
   begin
-    ALockStream := nil;
+    platform_file_close(ALockHandle);
     Exit(False);
   end;
-  {$ENDIF}
   Result := True;
 end;
 
 procedure TFreePascalFileEarlyDataReplayStore.ReleaseStoreLock(
-  var ALockStream: IStream
+  var ALockHandle: TPlatformFileHandle
 );
 begin
-  if ALockStream = nil then
+  if not LockHandleIsValid(ALockHandle) then
     Exit;
-  {$IFDEF UNIX}
-  FpFlock(ALockStream.Handle, LOCK_UN);
-  {$ENDIF}
-  ALockStream := nil;
+  platform_file_unlock(ALockHandle);
+  platform_file_close(ALockHandle);
 end;
 
 function TFreePascalFileEarlyDataReplayStore.AcquireUpdateGuard(
   out AGuard: IFreePascalEarlyDataReplayStoreGuard
 ): Boolean;
 var
-  LLockStream: IStream;
+  LLockHandle: TPlatformFileHandle;
 begin
   Result := False;
   AGuard := nil;
-  LLockStream := nil;
+  LLockHandle := PLATFORM_FILE_INVALID_HANDLE;
 
   EnterCriticalSection(GReplayFileProviderLock);
-  if not AcquireStoreLock(LLockStream) then
+  if not AcquireStoreLock(LLockHandle) then
   begin
     LeaveCriticalSection(GReplayFileProviderLock);
     Exit;
   end;
 
   try
-    AGuard := TFreePascalFileEarlyDataReplayStoreGuard.Create(Self, LLockStream);
+    AGuard := TFreePascalFileEarlyDataReplayStoreGuard.Create(Self, LLockHandle);
     Result := AGuard <> nil;
   except
-    ReleaseStoreLock(LLockStream);
+    ReleaseStoreLock(LLockHandle);
     LeaveCriticalSection(GReplayFileProviderLock);
     raise;
   end;

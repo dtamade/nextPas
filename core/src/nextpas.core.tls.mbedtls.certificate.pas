@@ -17,7 +17,8 @@ unit nextpas.core.tls.mbedtls.certificate;
 interface
 
 uses
-  SysUtils, nextpas.core.io.intf, nextpas.core.fs.stream,
+  nextpas.core.base,
+  nextpas.core.io.intf, nextpas.core.fs.stream,
   nextpas.core.base.utils,
   nextpas.core.fs,
   nextpas.core.collections.vec,
@@ -157,7 +158,7 @@ type
 implementation
 
 uses
-  DateUtils,
+  nextpas.core.exception,
   nextpas.core.text.conv,
   nextpas.core.text.strings,
   nextpas.core.time,
@@ -173,12 +174,12 @@ const
 function NormalizeMbedTLSCertText(const AValue: string): string;
 begin
   Result := UpperCase(Trim(AValue));
-  Result := StringReplace(Result, ' , ', ',', [rfReplaceAll]);
-  Result := StringReplace(Result, ', ', ',', [rfReplaceAll]);
-  Result := StringReplace(Result, ' ,', ',', [rfReplaceAll]);
-  Result := StringReplace(Result, ' = ', '=', [rfReplaceAll]);
-  Result := StringReplace(Result, '= ', '=', [rfReplaceAll]);
-  Result := StringReplace(Result, ' =', '=', [rfReplaceAll]);
+  Result := StringReplace(Result, ' , ', ',', True);
+  Result := StringReplace(Result, ', ', ',', True);
+  Result := StringReplace(Result, ' ,', ',', True);
+  Result := StringReplace(Result, ' = ', '=', True);
+  Result := StringReplace(Result, '= ', '=', True);
+  Result := StringReplace(Result, ' =', '=', True);
 end;
 
 function NormalizeMbedTLSCertHex(const AValue: string): string;
@@ -1630,9 +1631,9 @@ end;
 function NormalizeMbedTLSCertFingerprint(const AValue: string): string;
 begin
   Result := UpperCase(Trim(AValue));
-  Result := StringReplace(Result, ':', '', [rfReplaceAll]);
-  Result := StringReplace(Result, '-', '', [rfReplaceAll]);
-  Result := StringReplace(Result, ' ', '', [rfReplaceAll]);
+  Result := StringReplace(Result, ':', '', True);
+  Result := StringReplace(Result, '-', '', True);
+  Result := StringReplace(Result, ' ', '', True);
 end;
 
 function TMbedTLSCertificateStore.AddCertificate(ACert: ISSLCertificate): Boolean;

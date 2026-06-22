@@ -17,7 +17,8 @@ unit nextpas.core.tls.mbedtls.context;
 interface
 
 uses
-  Base64, SysUtils, nextpas.core.fs, 
+  nextpas.core.base,
+  Base64, nextpas.core.fs,
   nextpas.core.io.intf,
   nextpas.core.io.util,
   nextpas.core.io.stream_adapter,
@@ -180,6 +181,7 @@ type
 implementation
 
 uses
+  nextpas.core.exception,
   nextpas.core.text.conv,
   nextpas.core.text.strings,
     nextpas.core.tls.mbedtls.lib,

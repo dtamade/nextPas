@@ -18,7 +18,8 @@ unit nextpas.core.tls.secure;
 interface
 
 uses
-  nextpas.core.exception, nextpas.core.base, nextpas.core.text.conv, SysUtils, nextpas.core.system.classes,
+  nextpas.core.exception, nextpas.core.base, nextpas.core.fs,
+  nextpas.core.text.conv, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.errors,
   nextpas.core.tls.logging,
@@ -820,14 +821,9 @@ begin
 end;
 
 function GetFileSizeByName(const AFileName: string): Int64;
-var
-  LSR: TSearchRec;
 begin
-  if FindFirst(AFileName, faAnyFile, LSR) = 0 then
-  begin
-    Result := LSR.Size;
-    FindClose(LSR);
-  end
+  if nextpas.core.fs.IsFile(AFileName) then
+    Result := nextpas.core.fs.FileSize(AFileName)
   else
     Result := -1;
 end;

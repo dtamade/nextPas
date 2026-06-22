@@ -10,8 +10,9 @@ unit nextpas.core.tls.freepascal.earlydatareplay;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.base.utils,
-  SysUtils, DateUtils, nextpas.core.fs, nextpas.core.time,
+  nextpas.core.fs, nextpas.core.text.conv, nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.freepascal.context.material,
   nextpas.core.tls.freepascal.session;
@@ -305,20 +306,24 @@ begin
   begin
     LHomeDirectory := Trim(nextpas.core.fs.GetEnv('HOME'));
     if LHomeDirectory <> '' then
-      LBaseDirectory := nextpas.core.fs.PathEnsureSep(nextpas.core.fs.PathAbs(LHomeDirectory)) +
-        '.local' + PathDelim + 'state';
+      LBaseDirectory := nextpas.core.fs.PathJoin([
+        nextpas.core.fs.PathAbs(LHomeDirectory),
+        '.local',
+        'state'
+      ]);
   end;
   {$ENDIF}
 
   if LBaseDirectory = '' then
-    LBaseDirectory := Trim(GetAppConfigDir(False));
-  if LBaseDirectory = '' then
-    LBaseDirectory := GetTempDir(False);
+    LBaseDirectory := nextpas.core.fs.GetTempDir;
 
   LBaseDirectory := NormalizeReplayStoreDirectory(LBaseDirectory);
-  Result := nextpas.core.fs.PathEnsureSep(LBaseDirectory) +
-    'fafafa.ssl' + PathDelim + 'freepascal' + PathDelim +
-    'early-data-replay';
+  Result := nextpas.core.fs.PathJoin([
+    LBaseDirectory,
+    'fafafa.ssl',
+    'freepascal',
+    'early-data-replay'
+  ]);
 end;
 
 procedure SetDefaultFreePascalEarlyDataReplayStoreDirectoryForTesting(

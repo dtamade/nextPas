@@ -193,11 +193,6 @@ type
 
 implementation
 
-{$IFDEF FAF_MEM_DEBUG}
-uses
-  SysUtils;
-{$ENDIF}
-
 {$PUSH}
 {$WARN 4055 OFF} // pointer/ordinal conversions in pool internals
 

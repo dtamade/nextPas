@@ -17,7 +17,8 @@ unit nextpas.core.tls.wolfssl.certificate;
 interface
 
 uses
-  SysUtils, nextpas.core.io.intf, nextpas.core.fs.stream,
+  nextpas.core.base,
+  nextpas.core.io.intf, nextpas.core.fs.stream,
   nextpas.core.base.utils,
   nextpas.core.fs,
   nextpas.core.collections.vec,
@@ -150,10 +151,11 @@ type
 implementation
 
 uses
-  DateUtils,
+  nextpas.core.exception,
   nextpas.core.text.conv,
   nextpas.core.text.strings,
   nextpas.core.time,
+  nextpas.core.fs.glob,
   nextpas.core.tls.utils,
   nextpas.core.crypto.hash,
   nextpas.core.tls.tls13.wire,
@@ -162,16 +164,16 @@ uses
 function NormalizeWolfCertText(const AValue: string): string;
 begin
   Result := Trim(UpperCase(AValue));
-  Result := StringReplace(Result, ',', '', [rfReplaceAll]);
-  Result := StringReplace(Result, ' ', '', [rfReplaceAll]);
+  Result := StringReplace(Result, ',', '', True);
+  Result := StringReplace(Result, ' ', '', True);
 end;
 
 function NormalizeWolfCertFingerprint(const AFingerprint: string): string;
 begin
   Result := Trim(UpperCase(AFingerprint));
-  Result := StringReplace(Result, ':', '', [rfReplaceAll]);
-  Result := StringReplace(Result, '-', '', [rfReplaceAll]);
-  Result := StringReplace(Result, ' ', '', [rfReplaceAll]);
+  Result := StringReplace(Result, ':', '', True);
+  Result := StringReplace(Result, '-', '', True);
+  Result := StringReplace(Result, ' ', '', True);
 end;
 
 function NormalizeWolfCertSerial(const ASerialNumber: string): string;
@@ -1633,37 +1635,24 @@ end;
 
 function TWolfSSLCertificateStore.LoadFromPath(const APath: string): Boolean;
 var
-  LSearchRec: TSearchRec;
+  LFiles: TStringArray;
   LCount: Integer;
+  I: Integer;
 begin
   Result := False;
   if not nextpas.core.fs.IsDir(APath) then Exit;
 
   LCount := 0;
-  if FindFirst(nextpas.core.fs.PathEnsureSep(APath) + '*.pem', faAnyFile, LSearchRec) = 0 then
-  begin
-    try
-      repeat
-        if LoadFromFile(nextpas.core.fs.PathEnsureSep(APath) + LSearchRec.Name) then
-          Inc(LCount);
-      until FindNext(LSearchRec) <> 0;
-    finally
-      FindClose(LSearchRec);
-    end;
-  end;
+  LFiles := FsGlob(APath, '*.pem');
+  for I := 0 to High(LFiles) do
+    if LoadFromFile(LFiles[I]) then
+      Inc(LCount);
 
   // 也加载 .crt 文件
-  if FindFirst(nextpas.core.fs.PathEnsureSep(APath) + '*.crt', faAnyFile, LSearchRec) = 0 then
-  begin
-    try
-      repeat
-        if LoadFromFile(nextpas.core.fs.PathEnsureSep(APath) + LSearchRec.Name) then
-          Inc(LCount);
-      until FindNext(LSearchRec) <> 0;
-    finally
-      FindClose(LSearchRec);
-    end;
-  end;
+  LFiles := FsGlob(APath, '*.crt');
+  for I := 0 to High(LFiles) do
+    if LoadFromFile(LFiles[I]) then
+      Inc(LCount);
 
   Result := LCount > 0;
 end;

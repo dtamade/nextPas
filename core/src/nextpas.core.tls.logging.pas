@@ -21,7 +21,8 @@ unit nextpas.core.tls.logging;
 interface
 
 uses
-  SysUtils, nextpas.core.system.classes,
+  nextpas.core.exception,
+  nextpas.core.system.classes,
   nextpas.core.base.utils,
   nextpas.core.fs,
   nextpas.core.text.conv,
@@ -261,7 +262,7 @@ function TBaseLogger.FormatMessage(ALevel: TSecurityEventLevel; const ACategory,
 var
   LTimeStr: string;
 begin
-  LTimeStr := FormatDateTime('yyyy-mm-dd hh:nn:ss.zzz', nextpas.core.time.DateTimeNow);
+  LTimeStr := FormatDateTime('%Y-%m-%d %H:%M:%S', nextpas.core.time.DateTimeNow);
   // Format: [Time] [Level] [Category] Message
   Result := nextpas.core.text.conv.Format(
     '[%s] [%s] [%s] %s',

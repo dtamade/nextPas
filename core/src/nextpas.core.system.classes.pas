@@ -11,6 +11,7 @@ interface
 
 uses
   Classes,
+  SysUtils,
   nextpas.core.io.intf;
 
 type
@@ -31,8 +32,8 @@ const
   fmOpenRead = Classes.fmOpenRead;
   fmOpenWrite = Classes.fmOpenWrite;
   fmOpenReadWrite = Classes.fmOpenReadWrite;
-  fmShareDenyNone = Classes.fmShareDenyNone;
-  fmShareDenyWrite = Classes.fmShareDenyWrite;
+  fmShareDenyNone = SysUtils.fmShareDenyNone;
+  fmShareDenyWrite = SysUtils.fmShareDenyWrite;
   dupIgnore = Classes.dupIgnore;
   dupAccept = Classes.dupAccept;
   dupError = Classes.dupError;

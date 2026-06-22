@@ -5,11 +5,11 @@ unit nextpas.core.io.stream_adapter;
 interface
 
 uses
-  Classes,
   nextpas.core.base,
   nextpas.core.io.base,
   nextpas.core.io.intf,
-  nextpas.core.io.util;
+  nextpas.core.io.util,
+  nextpas.core.system.classes;
 
 type
   TCoreSeekOrigin = nextpas.core.io.base.TSeekOrigin;
@@ -51,7 +51,8 @@ type
     constructor Create(const AStream: INextPasStream);
     function Read(var Buffer; Count: Longint): Longint; override;
     function Write(const Buffer; Count: Longint): Longint; override;
-    function Seek(const Offset: Int64; Origin: Classes.TSeekOrigin): Int64; override;
+    function Seek(const Offset: Int64;
+      Origin: nextpas.core.system.classes.TSeekOrigin): Int64; override;
     function CopyFrom(Source: TStream; Count: Int64): Int64; reintroduce;
     function ReadByte: Byte; reintroduce;
     procedure WriteByte(b: Byte); reintroduce;
@@ -68,36 +69,30 @@ function IoReadAllLimited(const ASrc: nextpas.core.io.intf.IReader;
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.base.utils,
   nextpas.core.errors;
 
 const
   STREAM_ADAPTER_COPY_BUF_SIZE = 32768;
 
-function ToClassesSeekOrigin(const AOrigin: TCoreSeekOrigin): Classes.TSeekOrigin;
+function ToClassesSeekOrigin(const AOrigin: TCoreSeekOrigin): nextpas.core.system.classes.TSeekOrigin;
 begin
-  case AOrigin of
-    nextpas.core.io.base.soBeginning: Result := Classes.soBeginning;
-    nextpas.core.io.base.soCurrent: Result := Classes.soCurrent;
-    nextpas.core.io.base.soEnd: Result := Classes.soEnd;
-  end;
+  Result := nextpas.core.system.classes.TSeekOrigin(Ord(AOrigin));
 end;
 
-function ToCoreSeekOrigin(const AOrigin: Classes.TSeekOrigin): TCoreSeekOrigin;
+function ToCoreSeekOrigin(
+  const AOrigin: nextpas.core.system.classes.TSeekOrigin): TCoreSeekOrigin;
 begin
-  case AOrigin of
-    Classes.soBeginning: Result := nextpas.core.io.base.soBeginning;
-    Classes.soCurrent: Result := nextpas.core.io.base.soCurrent;
-    Classes.soEnd: Result := nextpas.core.io.base.soEnd;
-  end;
+  Result := nextpas.core.io.base.TSeekOrigin(Ord(AOrigin));
 end;
 
-function SeekOriginFromWord(const AOrigin: Word): Classes.TSeekOrigin;
+function SeekOriginFromWord(
+  const AOrigin: Word): nextpas.core.system.classes.TSeekOrigin;
 begin
   case AOrigin of
-    0: Result := Classes.soBeginning;
-    1: Result := Classes.soCurrent;
-    2: Result := Classes.soEnd;
+    0: Result := ToClassesSeekOrigin(nextpas.core.io.base.soBeginning);
+    1: Result := ToClassesSeekOrigin(nextpas.core.io.base.soCurrent);
+    2: Result := ToClassesSeekOrigin(nextpas.core.io.base.soEnd);
   else
     raise EArgumentError.Create('TStreamFromIStream.Seek32: invalid origin');
   end;
@@ -259,7 +254,7 @@ begin
 end;
 
 function TStreamFromIStream.Seek(const Offset: Int64;
-  Origin: Classes.TSeekOrigin): Int64;
+  Origin: nextpas.core.system.classes.TSeekOrigin): Int64;
 begin
   if FInner = nil then
     Exit(0);

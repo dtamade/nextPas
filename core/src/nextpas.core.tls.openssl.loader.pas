@@ -25,8 +25,9 @@ unit nextpas.core.tls.openssl.loader;
 interface
 
 uses
-  SysUtils, nextpas.core.fs,
-  ctypes,  // culong, cint 等 C 类型
+  nextpas.core.fs,
+  nextpas.core.base,  // culong, cint 等 C 类型
+  nextpas.core.text.conv,
   nextpas.core.platform.dl;
 
 type
@@ -448,7 +449,9 @@ begin
   if LRoot = '' then
     Exit;
 
-  LLibDir := nextpas.core.fs.PathEnsureSep(LRoot) + 'lib' + PathDelim;
+  LLibDir := nextpas.core.fs.PathEnsureSep(
+    nextpas.core.fs.PathJoin([LRoot, 'lib'])
+  );
 
   case ALibType of
     osslLibCrypto:

@@ -34,7 +34,7 @@ interface
 uses
   nextpas.core.exception,
   nextpas.core.base,
-  SysUtils, nextpas.core.system.classes,
+  nextpas.core.system.classes,
   nextpas.core.fs,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
@@ -2064,10 +2064,10 @@ var
     s: string;
   begin
     s := Trim(ADN);
-    s := SysUtils.StringReplace(s, ' = ', '=', [rfReplaceAll]);
-    s := SysUtils.StringReplace(s, '= ', '=', [rfReplaceAll]);
-    s := SysUtils.StringReplace(s, ' =', '=', [rfReplaceAll]);
-    s := SysUtils.StringReplace(s, ', ', ',', [rfReplaceAll]);
+    s := StringReplace(s, ' = ', '=', True);
+    s := StringReplace(s, '= ', '=', True);
+    s := StringReplace(s, ' =', '=', True);
+    s := StringReplace(s, ', ', ',', True);
 
     if ACaseInsensitive then
       Result := LowerCase(s)

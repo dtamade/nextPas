@@ -7,7 +7,7 @@ unit nextpas.core.git.libgit2.ffi;
 interface
 
 uses
-ctypes;
+nextpas.core.base;
 
 const
   {$IFDEF MSWINDOWS}

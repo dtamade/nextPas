@@ -84,6 +84,10 @@ function TryBuildTLS13ServerCertificateHandshakeWithStapledOCSP(
 
 implementation
 
+uses
+  nextpas.core.errors,
+  nextpas.core.tls.pem,
+  nextpas.core.tls.tls13.wire;
 
 function BytesToAnsiString(const AData: TBytes): AnsiString;
 begin

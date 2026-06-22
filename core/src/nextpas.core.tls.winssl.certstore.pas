@@ -18,7 +18,7 @@ unit nextpas.core.tls.winssl.certstore;
 interface
 
 uses
-  Windows, SysUtils, nextpas.core.system.classes, nextpas.core.fs, nextpas.core.tls.base,
+  Windows, nextpas.core.system.classes, nextpas.core.fs, nextpas.core.tls.base,
   nextpas.core.tls.winssl.base,
   nextpas.core.tls.winssl.api,
   nextpas.core.tls.winssl.native_handle,
@@ -97,8 +97,10 @@ const
 implementation
 
 uses
+  nextpas.core.text.conv,
   nextpas.core.text.strings,
-    nextpas.core.tls.secure.compare;  // Phase 3.3 P1: 使用独立的常量时间比较模块
+  nextpas.core.fs.glob,
+  nextpas.core.tls.secure.compare;  // Phase 3.3 P1: 使用独立的常量时间比较模块
                                // 修复: 原来使用 nextpas.core.tls.secure 导致间接依赖 OpenSSL
                                // 现在使用不依赖 OpenSSL 的独立模块
 
@@ -205,12 +207,12 @@ end;
 function NormalizeCertificateStoreDN(const AValue: string): string;
 begin
   Result := UpperCase(Trim(AValue));
-  Result := StringReplace(Result, ' , ', ',', [rfReplaceAll]);
-  Result := StringReplace(Result, ', ', ',', [rfReplaceAll]);
-  Result := StringReplace(Result, ' ,', ',', [rfReplaceAll]);
-  Result := StringReplace(Result, ' = ', '=', [rfReplaceAll]);
-  Result := StringReplace(Result, '= ', '=', [rfReplaceAll]);
-  Result := StringReplace(Result, ' =', '=', [rfReplaceAll]);
+  Result := StringReplace(Result, ' , ', ',', True);
+  Result := StringReplace(Result, ', ', ',', True);
+  Result := StringReplace(Result, ' ,', ',', True);
+  Result := StringReplace(Result, ' = ', '=', True);
+  Result := StringReplace(Result, '= ', '=', True);
+  Result := StringReplace(Result, ' =', '=', True);
 end;
 
 function NormalizeCertificateStoreHex(const AValue: string): string;
@@ -526,9 +528,10 @@ end;
 
 function TWinSSLCertificateStore.LoadFromPath(const APath: string): Boolean;
 var
-  SearchRec: TSearchRec;
+  LFiles: TStringArray;
   FilePath: string;
   LoadedCount: Integer;
+  I: Integer;
 begin
   Result := False;
   LoadedCount := 0;
@@ -537,44 +540,29 @@ begin
     Exit;
 
   // 搜索路径中的证书文件
-  if FindFirst(nextpas.core.fs.PathEnsureSep(APath) + '*.cer', faAnyFile, SearchRec) = 0 then
+  LFiles := FsGlob(APath, '*.cer');
+  for I := 0 to High(LFiles) do
   begin
-    repeat
-      if (SearchRec.Attr and faDirectory) = 0 then
-      begin
-        FilePath := nextpas.core.fs.PathEnsureSep(APath) + SearchRec.Name;
-        if LoadFromFile(FilePath) then
-          Inc(LoadedCount);
-      end;
-    until FindNext(SearchRec) <> 0;
-    FindClose(SearchRec);
+    FilePath := LFiles[I];
+    if LoadFromFile(FilePath) then
+      Inc(LoadedCount);
   end;
 
   // 也搜索 .pem 和 .crt 文件
-  if FindFirst(nextpas.core.fs.PathEnsureSep(APath) + '*.pem', faAnyFile, SearchRec) = 0 then
+  LFiles := FsGlob(APath, '*.pem');
+  for I := 0 to High(LFiles) do
   begin
-    repeat
-      if (SearchRec.Attr and faDirectory) = 0 then
-      begin
-        FilePath := nextpas.core.fs.PathEnsureSep(APath) + SearchRec.Name;
-        if LoadFromFile(FilePath) then
-          Inc(LoadedCount);
-      end;
-    until FindNext(SearchRec) <> 0;
-    FindClose(SearchRec);
+    FilePath := LFiles[I];
+    if LoadFromFile(FilePath) then
+      Inc(LoadedCount);
   end;
 
-  if FindFirst(nextpas.core.fs.PathEnsureSep(APath) + '*.crt', faAnyFile, SearchRec) = 0 then
+  LFiles := FsGlob(APath, '*.crt');
+  for I := 0 to High(LFiles) do
   begin
-    repeat
-      if (SearchRec.Attr and faDirectory) = 0 then
-      begin
-        FilePath := nextpas.core.fs.PathEnsureSep(APath) + SearchRec.Name;
-        if LoadFromFile(FilePath) then
-          Inc(LoadedCount);
-      end;
-    until FindNext(SearchRec) <> 0;
-    FindClose(SearchRec);
+    FilePath := LFiles[I];
+    if LoadFromFile(FilePath) then
+      Inc(LoadedCount);
   end;
 
   Result := (LoadedCount > 0);
