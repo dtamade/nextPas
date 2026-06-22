@@ -204,7 +204,7 @@ end;
 
 class function TAdvancedStats.Create(const AData: TDoubleArray): TAdvancedStats;
 begin
-  Result.FData := AData;
+  Result.FData := Copy(AData);
   Result.FSorted := False;
   Result.FMeanCached := False;
 end;
@@ -369,8 +369,8 @@ begin
   LUpper := LQ3 + AFenceFactor * LIQR;
 
   LOutlierCount := 0;
-  SetLength(Result.Outliers, 0);
-  SetLength(Result.OutlierIndices, 0);
+  SetLength(Result.Outliers, Length(FData));
+  SetLength(Result.OutlierIndices, Length(FData));
   Result.Method := omTukey;
   Result.Threshold := AFenceFactor;
 
@@ -379,13 +379,13 @@ begin
   begin
     if (FData[I] < LLower) or (FData[I] > LUpper) then
     begin
+      Result.Outliers[LOutlierCount] := FData[I];
+      Result.OutlierIndices[LOutlierCount] := I;
       Inc(LOutlierCount);
-      SetLength(Result.Outliers, LOutlierCount);
-      SetLength(Result.OutlierIndices, LOutlierCount);
-      Result.Outliers[LOutlierCount - 1] := FData[I];
-      Result.OutlierIndices[LOutlierCount - 1] := I;
     end;
   end;
+  SetLength(Result.Outliers, LOutlierCount);
+  SetLength(Result.OutlierIndices, LOutlierCount);
 end;
 
 function TAdvancedStats.DetectOutliers_ZScore(AThreshold: Double): TOutlierDetection;
@@ -400,25 +400,30 @@ begin
   LStdDev := StdDev;
 
   LOutlierCount := 0;
-  SetLength(Result.Outliers, 0);
-  SetLength(Result.OutlierIndices, 0);
+  SetLength(Result.Outliers, Length(FData));
+  SetLength(Result.OutlierIndices, Length(FData));
   Result.Method := omZScore;
   Result.Threshold := AThreshold;
 
-  if LStdDev = 0 then Exit;
+  if LStdDev = 0 then
+  begin
+    SetLength(Result.Outliers, 0);
+    SetLength(Result.OutlierIndices, 0);
+    Exit;
+  end;
 
   for I := 0 to High(FData) do
   begin
     LZScore := Abs(FData[I] - LMean) / LStdDev;
     if LZScore > AThreshold then
     begin
+      Result.Outliers[LOutlierCount] := FData[I];
+      Result.OutlierIndices[LOutlierCount] := I;
       Inc(LOutlierCount);
-      SetLength(Result.Outliers, LOutlierCount);
-      SetLength(Result.OutlierIndices, LOutlierCount);
-      Result.Outliers[LOutlierCount - 1] := FData[I];
-      Result.OutlierIndices[LOutlierCount - 1] := I;
     end;
   end;
+  SetLength(Result.Outliers, LOutlierCount);
+  SetLength(Result.OutlierIndices, LOutlierCount);
 end;
 
 function TAdvancedStats.DetectOutliers_ModifiedZScore(AThreshold: Double): TOutlierDetection;
@@ -449,25 +454,30 @@ begin
     LMAD := LDeviations[Length(LDeviations) div 2];
 
   LOutlierCount := 0;
-  SetLength(Result.Outliers, 0);
-  SetLength(Result.OutlierIndices, 0);
+  SetLength(Result.Outliers, Length(FData));
+  SetLength(Result.OutlierIndices, Length(FData));
   Result.Method := omModifiedZScore;
   Result.Threshold := AThreshold;
 
-  if LMAD = 0 then Exit;
+  if LMAD = 0 then
+  begin
+    SetLength(Result.Outliers, 0);
+    SetLength(Result.OutlierIndices, 0);
+    Exit;
+  end;
 
   for I := 0 to High(FData) do
   begin
     LModifiedZ := 0.6745 * (FData[I] - LMedian) / LMAD;
     if Abs(LModifiedZ) > AThreshold then
     begin
+      Result.Outliers[LOutlierCount] := FData[I];
+      Result.OutlierIndices[LOutlierCount] := I;
       Inc(LOutlierCount);
-      SetLength(Result.Outliers, LOutlierCount);
-      SetLength(Result.OutlierIndices, LOutlierCount);
-      Result.Outliers[LOutlierCount - 1] := FData[I];
-      Result.OutlierIndices[LOutlierCount - 1] := I;
     end;
   end;
+  SetLength(Result.Outliers, LOutlierCount);
+  SetLength(Result.OutlierIndices, LOutlierCount);
 end;
 
 function TAdvancedStats.ConfidenceInterval(ALevel: Double): TConfidenceInterval;
@@ -511,7 +521,7 @@ function TAdvancedStats.BootstrapCI(AIterations: Integer;
 var
   LN: Integer;
   LIterations: Integer;
-  LMeans: array of Double;
+  LMeans: TDoubleArray;
   LSortedMeans: TDoubleArray;
   LIterationIndex: Integer;
   LSampleIndex: Integer;
