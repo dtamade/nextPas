@@ -13,6 +13,7 @@ uses
   nextpas.core.mem.arena.base,
   nextpas.core.mem.blockpool.concurrent,
   nextpas.core.mem.arena.concurrent,
+  nextpas.core.mem.mutex,
   nextpas.core.mem.pool.fixed,
   nextpas.core.mem.pool.slab.concurrent;
 
@@ -543,8 +544,148 @@ begin
   end;
 end;
 
+{**
+ * T-01: Direct TMemMutex unit test.
+ * T-01: TMemMutex 直接单元测试。
+ *}
+procedure TestMemMutexDirect;
+var
+  LMutex: TMemMutex;
+  LHitError: Boolean;
+begin
+  { Basic init/acquire/release/done cycle }
+  LMutex.Init;
+  LMutex.Acquire;
+  LMutex.Release;
+  LMutex.Done;
+
+  { Double init is a no-op }
+  LMutex.Init;
+  LMutex.Init;
+  LMutex.Acquire;
+  LMutex.Release;
+  LMutex.Done;
+
+  { Acquire on uninitialized mutex should raise }
+  FillChar(LMutex, SizeOf(LMutex), 0);
+  LHitError := False;
+  try
+    LMutex.Acquire;
+  except
+    on E: Exception do
+      LHitError := True;
+  end;
+  Check(LHitError, 'Acquire on uninitialized mutex should raise');
+
+  { Release on uninitialized mutex should raise }
+  LHitError := False;
+  try
+    LMutex.Release;
+  except
+    on E: Exception do
+      LHitError := True;
+  end;
+  Check(LHitError, 'Release on uninitialized mutex should raise');
+
+  { Done on uninitialized mutex is a no-op }
+  LMutex.Done;
+end;
+
+{**
+ * T-03: High-contention mutex stress test.
+ * Multiple threads hammer a shared counter protected by TMemMutex.
+ * T-03: 高竞争 mutex 压力测试。多线程竞争共享计数器。
+ *}
+type
+  PMemMutex = ^TMemMutex;
+
+  TMutexCounterWorker = class(TThread)
+  private
+    FMutex: PMemMutex;
+    FCounter: PInt64;
+    FStartFlag: PLongInt;
+    FFailure: string;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(AMutex: PMemMutex; ACounter: PInt64; AStartFlag: PLongInt);
+    property Failure: string read FFailure;
+  end;
+
+constructor TMutexCounterWorker.Create(AMutex: PMemMutex; ACounter: PInt64; AStartFlag: PLongInt);
+begin
+  inherited Create(True);
+  FreeOnTerminate := False;
+  FMutex := AMutex;
+  FCounter := ACounter;
+  FStartFlag := AStartFlag;
+end;
+
+procedure TMutexCounterWorker.Execute;
+var
+  LIndex: Integer;
+begin
+  while FStartFlag^ = 0 do
+    Sleep(0);
+
+  try
+    for LIndex := 0 to STRESS_ITERATION_COUNT - 1 do
+    begin
+      FMutex^.Acquire;
+      Inc(FCounter^);
+      FMutex^.Release;
+    end;
+  except
+    on E: Exception do
+      FFailure := E.Message;
+  end;
+end;
+
+procedure TestMemMutexHighContention;
+const
+  MUTEX_THREADS = 8;
+var
+  LMutex: TMemMutex;
+  LCounter: Int64;
+  LWorkers: array[0..MUTEX_THREADS - 1] of TMutexCounterWorker;
+  LStartFlag: LongInt;
+  LIndex: Integer;
+  LFailure: string;
+begin
+  LMutex.Init;
+  LCounter := 0;
+  try
+    LStartFlag := 0;
+    for LIndex := 0 to High(LWorkers) do
+    begin
+      LWorkers[LIndex] := TMutexCounterWorker.Create(@LMutex, @LCounter, @LStartFlag);
+      LWorkers[LIndex].Start;
+    end;
+
+    LStartFlag := 1;
+    for LIndex := 0 to High(LWorkers) do
+      LWorkers[LIndex].WaitFor;
+
+    LFailure := '';
+    for LIndex := 0 to High(LWorkers) do
+    begin
+      if (LFailure = '') and (LWorkers[LIndex].Failure <> '') then
+        LFailure := 'worker ' + IntToStr(LIndex) + ': ' + LWorkers[LIndex].Failure;
+      LWorkers[LIndex].Free;
+    end;
+
+    Check(LFailure = '', 'mutex contention should not fail: ' + LFailure);
+    CheckEqual(Int64(MUTEX_THREADS * STRESS_ITERATION_COUNT), LCounter,
+      'mutex-protected counter should be exact');
+  finally
+    LMutex.Done;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.mem.concurrent_wrappers');
+  T.Run('T-01 mutex direct', @TestMemMutexDirect);
+  T.Run('T-03 mutex high contention', @TestMemMutexHighContention);
   T.Run('blockpool wrapper basics', @TestBlockPoolConcurrentWrapper);
   T.Run('arena wrapper basics', @TestArenaConcurrentWrapper);
   T.Run('fixed-pool wrapper contention', @TestFixedPoolConcurrentContention);
