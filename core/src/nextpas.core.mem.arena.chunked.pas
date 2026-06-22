@@ -20,10 +20,6 @@ type
    *
    *  非线程安全。多线程环境请自行加锁。
    *}
-{ TODO: 几何扩容优化 — 需要引入 FSegmentCount 字段
-  当前 Length(FSegments) = count = capacity (线性增长)
-  几何扩容后 Length(FSegments) = capacity ≠ count
-  重构点: ~15 处 Length(FSegments) / High(FSegments) 引用改为 FSegmentCount }
   TChunkedArena = class(TInterfacedObject, IArena)
   private
     type
@@ -38,6 +34,7 @@ type
       PSegment = ^TSegment;
   private
     FSegments: array of TSegment;
+    FSegmentCount: SizeInt;
     FActive: SizeInt;
     FTotalSize: SizeUInt;
     FAlignment: SizeUInt;
@@ -114,7 +111,7 @@ end;
 
 function TChunkedArena.CurrentUsed: SizeUInt;
 begin
-  if (FActive < 0) or (FActive > High(FSegments)) then
+  if (FActive < 0) or (FActive >= FSegmentCount) then
     Exit(0);
   Result := FSegments[FActive].StartOffset + FSegments[FActive].Used;
 end;
@@ -146,7 +143,7 @@ var
   LThreshold: SizeUInt;
 begin
   aUpdateGrowthBase := True;
-  if Length(FSegments) = 0 then
+  if FSegmentCount = 0 then
   begin
     Result := aMinSize;
     Exit;
@@ -154,7 +151,7 @@ begin
 
   LGrowthBase := FGrowthBaseSize;
   if LGrowthBase = 0 then
-    LGrowthBase := FSegments[High(FSegments)].Size;
+    LGrowthBase := FSegments[FSegmentCount - 1].Size;
   case FGrowthKind of
     agkLinear:
       begin
@@ -221,7 +218,7 @@ begin
   if (FMaxSize <> 0) and (FTotalSize >= FMaxSize) then
     Exit(False);
 
-  if Length(FSegments) = 0 then
+  if FSegmentCount = 0 then
     LSegSize := aMinSize
   else
     LSegSize := CalcNextSegmentSize(aMinSize, LUpdateGrowthBase);
@@ -289,9 +286,17 @@ begin
   LSeg.Used := 0;
   LSeg.StartOffset := FTotalSize;
 
-  LIdx := Length(FSegments);
-  SetLength(FSegments, LIdx + 1);
+  LIdx := FSegmentCount;
+  if LIdx >= Length(FSegments) then
+  begin
+    { Geometric growth: 2x, minimum 8 }
+    if Length(FSegments) = 0 then
+      SetLength(FSegments, 8)
+    else
+      SetLength(FSegments, Length(FSegments) * 2);
+  end;
   FSegments[LIdx] := LSeg;
+  Inc(FSegmentCount);
   Inc(FTotalSize, LSegSize);
   if (LIdx = 0) or LUpdateGrowthBase then
     FGrowthBaseSize := LSegSize;
@@ -302,7 +307,7 @@ procedure TChunkedArena.FreeSegment(aIndex: SizeInt);
 var
   LRaw: Pointer;
 begin
-  if (aIndex < 0) or (aIndex > High(FSegments)) then
+  if (aIndex < 0) or (aIndex >= FSegmentCount) then
     Exit;
   LRaw := FSegments[aIndex].Raw;
   FSegments[aIndex].Raw := nil;
@@ -324,7 +329,7 @@ procedure TChunkedArena.CacheSegment(aIndex: SizeInt);
 var
   LSeg: TSegment;
 begin
-  if (aIndex < 0) or (aIndex > High(FSegments)) then
+  if (aIndex < 0) or (aIndex >= FSegmentCount) then
     Exit;
   if FFreeCount >= FCacheLimit then
   begin
@@ -369,9 +374,16 @@ begin
       { Add as new active segment }
       LSeg.Used := 0;
       LSeg.StartOffset := FTotalSize;
-      LIdx := Length(FSegments);
-      SetLength(FSegments, LIdx + 1);
+      LIdx := FSegmentCount;
+      if LIdx >= Length(FSegments) then
+      begin
+        if Length(FSegments) = 0 then
+          SetLength(FSegments, 8)
+        else
+          SetLength(FSegments, Length(FSegments) * 2);
+      end;
       FSegments[LIdx] := LSeg;
+      Inc(FSegmentCount);
       Inc(FTotalSize, LSeg.Size);
       FActive := LIdx;
       FGrowthBaseSize := LSeg.Size;
@@ -408,13 +420,14 @@ var
 begin
   if aCount < 0 then
     aCount := 0;
-  if aCount > Length(FSegments) then
+  if aCount > FSegmentCount then
     Exit;
 
-  for LIdx := High(FSegments) downto aCount do
+  for LIdx := FSegmentCount - 1 downto aCount do
     FreeSegment(LIdx);
 
   SetLength(FSegments, aCount);
+  FSegmentCount := aCount;
   if aCount = 0 then
   begin
     FTotalSize := 0;
@@ -422,16 +435,16 @@ begin
     Exit;
   end;
 
-  FTotalSize := FSegments[High(FSegments)].StartOffset + FSegments[High(FSegments)].Size;
-  if FActive > High(FSegments) then
-    FActive := High(FSegments);
+  FTotalSize := FSegments[FSegmentCount - 1].StartOffset + FSegments[FSegmentCount - 1].Size;
+  if FActive > FSegmentCount - 1 then
+    FActive := FSegmentCount - 1;
 end;
 
 procedure TChunkedArena.NormalizeState(aActiveIndex: SizeInt; aActiveUsed: SizeUInt);
 var
   LIndex: SizeInt;
 begin
-  if Length(FSegments) = 0 then
+  if FSegmentCount = 0 then
   begin
     FActive := -1;
     Exit;
@@ -439,8 +452,8 @@ begin
 
   if aActiveIndex < 0 then
     aActiveIndex := 0;
-  if aActiveIndex > High(FSegments) then
-    aActiveIndex := High(FSegments);
+  if aActiveIndex > FSegmentCount - 1 then
+    aActiveIndex := FSegmentCount - 1;
 
   for LIndex := 0 to aActiveIndex - 1 do
     FSegments[LIndex].Used := FSegments[LIndex].Size;
@@ -451,7 +464,7 @@ begin
 
   if FKeepSegments then
   begin
-    for LIndex := aActiveIndex + 1 to High(FSegments) do
+    for LIndex := aActiveIndex + 1 to FSegmentCount - 1 do
       FSegments[LIndex].Used := 0;
   end
   else
@@ -495,6 +508,7 @@ begin
   FAlignment := LAlign;
 
   SetLength(FSegments, 0);
+  FSegmentCount := 0;
   FActive := -1;
   FTotalSize := 0;
   FGrowthBaseSize := 0;
@@ -552,7 +566,7 @@ begin
   if not CalcRequiredMinSize(aSize, LAlign, LMinSegSize) then
     Exit;
 
-  if (FActive < 0) or (FActive > High(FSegments)) then
+  if (FActive < 0) or (FActive >= FSegmentCount) then
     Exit;
 
   while True do
@@ -575,7 +589,7 @@ begin
     end;
 
     LSegPtr^.Used := LSegPtr^.Size;
-    if FActive < High(FSegments) then
+    if FActive < FSegmentCount - 1 then
     begin
       Inc(FActive);
       Continue;
@@ -615,11 +629,11 @@ begin
   if LMark > FTotalSize then
     raise EAllocError.Create(aeInvalidLayout, 'TChunkedArena.RestoreToMark: marker out of range');
 
-  if Length(FSegments) = 0 then
+  if FSegmentCount = 0 then
     Exit;
 
   LLeft := 0;
-  LRight := High(FSegments);
+  LRight := FSegmentCount - 1;
   while LLeft < LRight do
   begin
     LMid := (LLeft + LRight) shr 1;
@@ -632,7 +646,7 @@ begin
 
   LActiveIdx := LLeft;
   LSegOffset := LMark - FSegments[LActiveIdx].StartOffset;
-  if (LSegOffset = FSegments[LActiveIdx].Size) and (LActiveIdx < High(FSegments)) then
+  if (LSegOffset = FSegments[LActiveIdx].Size) and (LActiveIdx < FSegmentCount - 1) then
   begin
     Inc(LActiveIdx);
     LSegOffset := 0;
@@ -644,15 +658,16 @@ procedure TChunkedArena.Reset;
 var
   LIdx: SizeInt;
 begin
-  if Length(FSegments) = 0 then
+  if FSegmentCount = 0 then
     Exit;
 
   if not FKeepSegments then
   begin
     { Cache all segments except the first for reuse }
-    for LIdx := High(FSegments) downto 1 do
+    for LIdx := FSegmentCount - 1 downto 1 do
       CacheSegment(LIdx);
     SetLength(FSegments, 1);
+    FSegmentCount := 1;
     FSegments[0].Used := 0;
     FSegments[0].StartOffset := 0;
     FTotalSize := FSegments[0].Size;
@@ -660,7 +675,7 @@ begin
     Exit;
   end;
 
-  for LIdx := 0 to High(FSegments) do
+  for LIdx := 0 to FSegmentCount - 1 do
     FSegments[LIdx].Used := 0;
   FActive := 0;
 end;
@@ -690,7 +705,7 @@ end;
 
 function TChunkedArena.SegmentCount: SizeUInt;
 begin
-  Result := SizeUInt(Length(FSegments));
+  Result := SizeUInt(FSegmentCount);
 end;
 
 {$POP}
