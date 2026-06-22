@@ -389,13 +389,24 @@ begin
       LBaseline.Name := LField.AsStr.ToString;
 
     LField := LItem.ObjectGet('nsPerOp');
-    LBaseline.NsPerOp := LField.AsFloat;
+    if LField.IsReal then
+      LBaseline.NsPerOp := LField.AsFloat
+    else if LField.IsInt then
+      LBaseline.NsPerOp := LField.AsInt
+    else
+      LBaseline.NsPerOp := 0;
 
     LField := LItem.ObjectGet('bytesPerOp');
-    LBaseline.BytesPerOp := LField.AsInt;
+    if LField.IsInt then
+      LBaseline.BytesPerOp := LField.AsInt
+    else
+      LBaseline.BytesPerOp := 0;
 
     LField := LItem.ObjectGet('allocsPerOp');
-    LBaseline.AllocsPerOp := LField.AsInt;
+    if LField.IsInt then
+      LBaseline.AllocsPerOp := LField.AsInt
+    else
+      LBaseline.AllocsPerOp := 0;
 
     LField := LItem.ObjectGet('timestampNs');
     if LField.IsInt then
