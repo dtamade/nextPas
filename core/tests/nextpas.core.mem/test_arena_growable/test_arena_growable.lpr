@@ -259,6 +259,206 @@ begin
   end;
 end;
 
+{ --- Edge-case tests --- }
+
+procedure TestChunkCacheReuse;
+var
+  LArena: TChunkedArena;
+  LSegsBefore, LSegsAfter: SizeUInt;
+begin
+  LArena := TChunkedArena.Create(1024);
+  try
+    { Force multiple segments }
+    while LArena.SegmentCount < 3 do
+      LArena.Alloc(512);
+    LSegsBefore := LArena.SegmentCount;
+    Check(LSegsBefore >= 3, 'cache reuse: should have multiple segments');
+
+    { Reset - segments should be cached }
+    LArena.Reset;
+    Check(LArena.UsedSize = 0, 'cache reuse: UsedSize 0 after reset');
+
+    { Allocate again - should reuse cached segments }
+    LArena.Alloc(512);
+    LSegsAfter := LArena.SegmentCount;
+    { After reset, segments are cached. Next alloc reuses from cache. }
+    Check(LSegsAfter >= 1, 'cache reuse: segment available after reset');
+  finally
+    LArena.Free;
+  end;
+end;
+
+procedure TestChunkCacheLimit;
+var
+  LConfig: TArenaConfig;
+  LArena: TChunkedArena;
+  I: Integer;
+  LSegCount: SizeUInt;
+begin
+  { KeepSegments=False so Reset uses chunk cache }
+  LConfig := TArenaConfig.Default(128);
+  LConfig.GrowthKind := agkLinear;
+  LConfig.GrowthStep := 128;
+  LConfig.KeepSegments := False;
+  LArena := TChunkedArena.Create(LConfig);
+  try
+    { Force many segments by allocating larger than segment size }
+    for I := 0 to 19 do
+      LArena.Alloc(128);
+    LSegCount := LArena.SegmentCount;
+    WriteLn('    (segments created: ', LSegCount, ')');
+
+    { Reset - should cache up to 8, free the rest }
+    LArena.Reset;
+    Check(LArena.UsedSize = 0, 'cache limit: UsedSize 0 after reset');
+
+    { Should still be able to allocate }
+    Check(LArena.Alloc(128) <> nil, 'cache limit: can alloc after reset');
+  finally
+    LArena.Free;
+  end;
+end;
+
+procedure TestMultipleResetCycles;
+var
+  LArena: TChunkedArena;
+  I, J: Integer;
+  LP: Pointer;
+  OK: Boolean;
+begin
+  LArena := TChunkedArena.Create(1024);
+  try
+    OK := True;
+    for I := 0 to 99 do
+    begin
+      for J := 0 to 99 do
+      begin
+        LP := LArena.Alloc(64);
+        if LP = nil then
+        begin
+          OK := False;
+          Break;
+        end;
+      end;
+      if not OK then
+        Break;
+      LArena.Reset;
+    end;
+    Check(OK, 'multiple resets 100x100: all succeeded');
+  finally
+    LArena.Free;
+  end;
+end;
+
+procedure TestAllocAlignedZeroAlign;
+var
+  LArena: TChunkedArena;
+begin
+  LArena := TChunkedArena.Create(4096);
+  try
+    Check(LArena.AllocAligned(64, 0) <> nil, 'aligned zero: should use default');
+  finally
+    LArena.Free;
+  end;
+end;
+
+procedure TestAllocAlignedInvalidAlign;
+var
+  LArena: TChunkedArena;
+begin
+  LArena := TChunkedArena.Create(4096);
+  try
+    Check(LArena.AllocAligned(64, 3) = nil, 'aligned 3: should return nil');
+    Check(LArena.AllocAligned(64, 7) = nil, 'aligned 7: should return nil');
+    Check(LArena.AllocAligned(64, 5) = nil, 'aligned 5: should return nil');
+  finally
+    LArena.Free;
+  end;
+end;
+
+procedure TestStatsMethods;
+var
+  LArena: TChunkedArena;
+  LStats: TArenaStats;
+begin
+  LArena := TChunkedArena.Create(4096);
+  try
+    LArena.Alloc(100);
+    LArena.Alloc(200);
+    LStats := LArena.Stats;
+    Check(LStats.TotalAllocated > 0, 'stats: TotalAllocated > 0');
+    Check(LStats.TotalUsed >= 300, 'stats: TotalUsed >= 300');
+    Check(LStats.PeakUsed >= 300, 'stats: PeakUsed >= 300');
+    Check(LStats.AllocCount >= 2, 'stats: AllocCount >= 2');
+  finally
+    LArena.Free;
+  end;
+end;
+
+procedure TestPeakUsedAcrossResets;
+var
+  LArena: TChunkedArena;
+begin
+  LArena := TChunkedArena.Create(4096);
+  try
+    LArena.Alloc(1000);
+    Check(LArena.PeakUsed >= 1000, 'peak: first alloc peak');
+    LArena.Reset;
+    { Peak should NOT reset }
+    Check(LArena.PeakUsed >= 1000, 'peak: peak preserved after reset');
+    LArena.Alloc(500);
+    Check(LArena.PeakUsed >= 1000, 'peak: peak still higher than current');
+  finally
+    LArena.Free;
+  end;
+end;
+
+procedure TestResetThenLargeAlloc;
+var
+  LArena: TChunkedArena;
+  LP: Pointer;
+begin
+  LArena := TChunkedArena.Create(1024);
+  try
+    LArena.Alloc(512);
+    LArena.Reset;
+    { Allocate something larger than initial segment }
+    LP := LArena.Alloc(2048);
+    Check(LP <> nil, 'reset+large: should grow to accommodate');
+  finally
+    LArena.Free;
+  end;
+end;
+
+procedure TestRemainingSize;
+var
+  LArena: TChunkedArena;
+  LBefore, LAfter: SizeUInt;
+begin
+  LArena := TChunkedArena.Create(4096);
+  try
+    LBefore := LArena.RemainingSize;
+    Check(LBefore > 0, 'remaining: initially > 0');
+    LArena.Alloc(1024);
+    LAfter := LArena.RemainingSize;
+    Check(LAfter < LBefore, 'remaining: decreased after alloc');
+  finally
+    LArena.Free;
+  end;
+end;
+
+procedure TestSegmentCountZero;
+var
+  LArena: TChunkedArena;
+begin
+  LArena := TChunkedArena.Create(4096);
+  try
+    Check(LArena.SegmentCount >= 1, 'segment count: at least 1 after create');
+  finally
+    LArena.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.mem.arena.chunked');
 
@@ -275,6 +475,18 @@ begin
   T.Run('max_size', @TestMaxSize);
   T.Run('iarena_interface', @TestIArenaInterface);
   T.Run('zero_size_alloc', @TestZeroSizeAlloc);
+
+  { Edge-case tests }
+  T.Run('chunk_cache_reuse', @TestChunkCacheReuse);
+  T.Run('chunk_cache_limit', @TestChunkCacheLimit);
+  T.Run('multiple_reset_cycles', @TestMultipleResetCycles);
+  T.Run('aligned_zero_align', @TestAllocAlignedZeroAlign);
+  T.Run('aligned_invalid_align', @TestAllocAlignedInvalidAlign);
+  T.Run('stats_methods', @TestStatsMethods);
+  T.Run('peak_used_across_resets', @TestPeakUsedAcrossResets);
+  T.Run('reset_then_large_alloc', @TestResetThenLargeAlloc);
+  T.Run('remaining_size', @TestRemainingSize);
+  T.Run('segment_count_initial', @TestSegmentCountZero);
 
   T.Summary;
 end.

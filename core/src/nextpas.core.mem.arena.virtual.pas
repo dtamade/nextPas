@@ -30,7 +30,8 @@ type
     { 预分配的虚拟地址空间 }
     FReservedBase: Pointer;
     FReservedSize: SizeUInt;
-    FCommittedSize: SizeUInt;
+    FFrontCommittedSize: SizeUInt;  { committed from front (base → base+size) }
+    FBackCommittedSize: SizeUInt;   { committed from back (end-size → end) }
 
     { 双向 bump pointer }
     FFrontPtr: PByte;
@@ -52,7 +53,8 @@ type
     FPeakUsed: SizeUInt;
     FAllocCount: SizeUInt;
 
-    function CommitRegion(aSize: SizeUInt): Boolean;
+    function CommitFrontRegion(aSize: SizeUInt): Boolean;
+    function CommitBackRegion(aSize: SizeUInt): Boolean;
     function TrackLargeBlock(const AMap: TPlatformMappedFile): Pointer;
   public
     {** 分配 ASize 字节（含指针对象），返回对齐后的指针；失败返回 nil }
@@ -111,7 +113,8 @@ begin
     raise EOutOfMemory.Create(aeOutOfMemory, 'TVirtualArena_Init: failed to reserve virtual address space');
 
   AArena.FReservedSize := ARENA_VIRTUAL_RESERVE;
-  AArena.FCommittedSize := 0;
+  AArena.FFrontCommittedSize := 0;
+  AArena.FBackCommittedSize := 0;
 
   AArena.FFrontPtr := PByte(AArena.FReservedBase);
   AArena.FFrontEnd := PByte(PtrUInt(AArena.FReservedBase) + PtrUInt(ARENA_VIRTUAL_RESERVE));
@@ -157,7 +160,8 @@ begin
   AArena.FLargeCount := 0;
 
   AArena.FReservedSize := 0;
-  AArena.FCommittedSize := 0;
+  AArena.FFrontCommittedSize := 0;
+  AArena.FBackCommittedSize := 0;
   AArena.FFrontPtr := nil;
   AArena.FFrontEnd := nil;
   AArena.FBackPtr := nil;
@@ -173,10 +177,11 @@ const
   { Minimum commit chunk size to amortize mmap syscall overhead }
   COMMIT_CHUNK_SIZE: SizeUInt = 2 * 1024 * 1024; { 2MB }
 
-function TVirtualArena.CommitRegion(aSize: SizeUInt): Boolean;
+function TVirtualArena.CommitFrontRegion(aSize: SizeUInt): Boolean;
 var
   LCommitSize: SizeUInt;
   LCommitPtr: PByte;
+  LMaxCommit: SizeUInt;
 begin
   Result := False;
 
@@ -186,15 +191,16 @@ begin
   if LCommitSize < COMMIT_CHUNK_SIZE then
     LCommitSize := COMMIT_CHUNK_SIZE;
 
-  if (FCommittedSize + LCommitSize) > FReservedSize then
+  LMaxCommit := FReservedSize - FBackCommittedSize;
+  if (FFrontCommittedSize + LCommitSize) > LMaxCommit then
   begin
-    { Fallback: try exact size if chunk exceeds reservation }
+    { Fallback: try exact size if chunk exceeds available }
     LCommitSize := (aSize + MEM_PAGE_SIZE - 1) and not (MEM_PAGE_SIZE - 1);
-    if (FCommittedSize + LCommitSize) > FReservedSize then
+    if (FFrontCommittedSize + LCommitSize) > LMaxCommit then
       Exit;
   end;
 
-  LCommitPtr := PByte(PtrUInt(FReservedBase) + FCommittedSize);
+  LCommitPtr := PByte(PtrUInt(FReservedBase) + FFrontCommittedSize);
   if not platform_virtual_commit(LCommitPtr, LCommitSize) then
     Exit;
 
@@ -202,7 +208,43 @@ begin
   if LCommitSize >= SizeUInt(2 * 1024 * 1024) then
     platform_madvise_thp(LCommitPtr, LCommitSize);
 
-  FCommittedSize := FCommittedSize + LCommitSize;
+  FFrontCommittedSize := FFrontCommittedSize + LCommitSize;
+  Result := True;
+end;
+
+function TVirtualArena.CommitBackRegion(aSize: SizeUInt): Boolean;
+var
+  LCommitSize: SizeUInt;
+  LCommitPtr: PByte;
+  LMaxCommit: SizeUInt;
+begin
+  Result := False;
+
+  { Round up to page boundary }
+  LCommitSize := (aSize + MEM_PAGE_SIZE - 1) and not (MEM_PAGE_SIZE - 1);
+  { Commit at least COMMIT_CHUNK_SIZE to amortize syscall overhead }
+  if LCommitSize < COMMIT_CHUNK_SIZE then
+    LCommitSize := COMMIT_CHUNK_SIZE;
+
+  LMaxCommit := FReservedSize - FFrontCommittedSize;
+  if (FBackCommittedSize + LCommitSize) > LMaxCommit then
+  begin
+    { Fallback: try exact size if chunk exceeds available }
+    LCommitSize := (aSize + MEM_PAGE_SIZE - 1) and not (MEM_PAGE_SIZE - 1);
+    if (FBackCommittedSize + LCommitSize) > LMaxCommit then
+      Exit;
+  end;
+
+  { Commit from the end of the reservation backward }
+  LCommitPtr := PByte(PtrUInt(FReservedBase) + FReservedSize - FBackCommittedSize - LCommitSize);
+  if not platform_virtual_commit(LCommitPtr, LCommitSize) then
+    Exit;
+
+  { Advise THP for large commits (>= 2MB) }
+  if LCommitSize >= SizeUInt(2 * 1024 * 1024) then
+    platform_madvise_thp(LCommitPtr, LCommitSize);
+
+  FBackCommittedSize := FBackCommittedSize + LCommitSize;
   Result := True;
 end;
 
@@ -260,9 +302,9 @@ begin
   end;
 
   LNeedCommit := (LAligned + PtrUInt(aSize)) - PtrUInt(FReservedBase);
-  if LNeedCommit > FCommittedSize then
+  if LNeedCommit > FFrontCommittedSize then
   begin
-    if not CommitRegion(LNeedCommit - FCommittedSize) then
+    if not CommitFrontRegion(LNeedCommit - FFrontCommittedSize) then
       Exit;
   end;
 
@@ -310,9 +352,9 @@ begin
   LAligned := PtrUInt(FBackPtr) and not LMask;
 
   LNeedCommit := PtrUInt(FReservedBase) + FReservedSize - LAligned;
-  if LNeedCommit > FCommittedSize then
+  if LNeedCommit > FBackCommittedSize then
   begin
-    if not CommitRegion(LNeedCommit - FCommittedSize) then
+    if not CommitBackRegion(LNeedCommit - FBackCommittedSize) then
     begin
       FBackPtr := PByte(PtrUInt(FBackPtr) + PtrUInt(aSize));
       Exit;
@@ -368,9 +410,9 @@ begin
   LAligned := (PtrUInt(FFrontPtr) + LMask) and not LMask;
 
   LNeedCommit := (LAligned + PtrUInt(aSize)) - PtrUInt(FReservedBase);
-  if LNeedCommit > FCommittedSize then
+  if LNeedCommit > FFrontCommittedSize then
   begin
-    if not CommitRegion(LNeedCommit - FCommittedSize) then
+    if not CommitFrontRegion(LNeedCommit - FFrontCommittedSize) then
       Exit;
   end;
 
@@ -415,9 +457,14 @@ end;
 procedure TVirtualArena.Reset;
 begin
   { Decommit physical pages; virtual address space stays reserved }
-  if FCommittedSize > 0 then
-    platform_virtual_decommit(FReservedBase, FCommittedSize);
-  FCommittedSize := 0;
+  if FFrontCommittedSize > 0 then
+    platform_virtual_decommit(FReservedBase, FFrontCommittedSize);
+  if FBackCommittedSize > 0 then
+    platform_virtual_decommit(
+      Pointer(PtrUInt(FReservedBase) + FReservedSize - FBackCommittedSize),
+      FBackCommittedSize);
+  FFrontCommittedSize := 0;
+  FBackCommittedSize := 0;
 
   FFrontPtr := PByte(FReservedBase);
   FBackPtr := PByte(PtrUInt(FReservedBase) + PtrUInt(FReservedSize));
