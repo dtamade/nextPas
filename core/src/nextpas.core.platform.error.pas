@@ -45,9 +45,6 @@ uses
   nextpas.core.platform.windows.base,
   nextpas.core.platform.windows.ffi
 {$ENDIF}
-{$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
-  SysUtils
-{$ENDIF}
   ;
 
 function CopyPlatformErrorMessage(const AMessage: PAnsiChar; ABuf: PAnsiChar;

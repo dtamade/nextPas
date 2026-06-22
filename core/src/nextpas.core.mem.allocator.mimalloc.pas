@@ -38,7 +38,8 @@ function TryGetMimallocUsableSize(aPtr: Pointer; out aSize: SizeUInt): Boolean;
 implementation
 
 uses
-  SysUtils;
+  nextpas.core.exception,
+  nextpas.core.text.conv;
 
 {$IFDEF NEXTPAS_CORE_MIMALLOC_STATIC}
   {$LINKLIB mimalloc}

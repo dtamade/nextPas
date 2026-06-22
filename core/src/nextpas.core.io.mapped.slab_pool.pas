@@ -72,7 +72,7 @@ type
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.base.utils,
   nextpas.core.mem.error,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files;

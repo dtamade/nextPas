@@ -31,7 +31,8 @@ type
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.os.env,
   nextpas.core.platform.time;
 
 const
