@@ -167,34 +167,12 @@ end;
 
 function TBenchStatsAnalyzer.StdDev(const AData: TDoubleArray): Double;
 var
-  LLen: Integer;
-  LSum, LSumSq, LMean, LVariance: Double;
-  I: Integer;
-  LVal: Double;
+  LMean: Double;
 begin
-  LLen := Length(AData);
-  if LLen <= 1 then
+  if Length(AData) <= 1 then
     Exit(0.0);
-
-  // 单次遍历计算均值和方差
-  LSum := 0;
-  LSumSq := 0;
-  for I := 0 to High(AData) do
-  begin
-    LVal := AData[I];
-    LSum += LVal;
-    LSumSq += LVal * LVal;
-  end;
-
-  LMean := LSum / LLen;
-  // 样本方差（除以 n-1）
-  LVariance := (LSumSq - LLen * LMean * LMean) / (LLen - 1);
-
-  // 防止浮点误差导致负方差
-  if LVariance < 0 then
-    LVariance := 0;
-
-  Result := Sqrt(LVariance);
+  LMean := Mean(AData);
+  Result := ComputeStdDev(AData, LMean);
 end;
 
 function TBenchStatsAnalyzer.Percentile(const ASorted: TDoubleArray; APercent: Double): Double;
