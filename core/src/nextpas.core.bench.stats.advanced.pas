@@ -207,17 +207,11 @@ begin
 end;
 
 procedure TAdvancedStats.EnsureSorted;
-var
-  I: Integer;
 begin
   if FSorted then Exit;
 
-  SetLength(FSortedData, Length(FData));
-  for I := 0 to High(FData) do
-    FSortedData[I] := FData[I];
-
+  FSortedData := Copy(FData);
   SortDoubleArray(FSortedData);
-
   FSorted := True;
 end;
 
