@@ -148,6 +148,9 @@ type
     ParamValue: Int64;
   end;
 
+{** 并行基准桥接数据（全局单例）
+ *  当前 TBenchSuite.Run 顺序遍历 entries，不存在并发 suite 调用。
+ *  若未来支持并发 suite 执行，需将此数据嵌入执行上下文。 }
 var
   GBridgeData: TParallelBridgeData;
 
