@@ -733,8 +733,6 @@ var
   LLines: TStringArray;
   LCount: Integer;
   LIndex: Integer;
-  LInnerIndex: Integer;
-  LKey: Double;
   LMin: Double;
   LMax: Double;
   LQ1: Double;
@@ -758,21 +756,8 @@ begin
   if LCount = 0 then
     Exit('');
 
-  SetLength(LSorted, LCount);
-  for LIndex := 0 to LCount - 1 do
-    LSorted[LIndex] := ASamples[LIndex];
-
-  for LIndex := 1 to LCount - 1 do
-  begin
-    LKey := LSorted[LIndex];
-    LInnerIndex := LIndex - 1;
-    while (LInnerIndex >= 0) and (LSorted[LInnerIndex] > LKey) do
-    begin
-      LSorted[LInnerIndex + 1] := LSorted[LInnerIndex];
-      Dec(LInnerIndex);
-    end;
-    LSorted[LInnerIndex + 1] := LKey;
-  end;
+  LSorted := Copy(ASamples);
+  SortDoubleArray(LSorted);
 
   LMin := LSorted[0];
   LMax := LSorted[LCount - 1];
