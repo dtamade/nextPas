@@ -39,51 +39,34 @@ begin
 end;
 
 procedure BenchMean100(const ACtx: IBenchContext);
-var
-  I: Integer;
 begin
-  for I := 1 to 1000 do
-    GAnalyzer.Mean(GData100);
-  ACtx.SetBytes(100 * SizeOf(Double) * 1000);
+  GAnalyzer.Mean(GData100);
 end;
 
 procedure BenchMean1000(const ACtx: IBenchContext);
-var
-  I: Integer;
 begin
-  for I := 1 to 100 do
-    GAnalyzer.Mean(GData1000);
-  ACtx.SetBytes(1000 * SizeOf(Double) * 100);
+  GAnalyzer.Mean(GData1000);
 end;
 
 procedure BenchMean10000(const ACtx: IBenchContext);
 begin
   GAnalyzer.Mean(GData10000);
-  ACtx.SetBytes(10000 * SizeOf(Double));
 end;
 
 procedure BenchMedian100(const ACtx: IBenchContext);
 var
   LData: TDoubleArray;
-  I: Integer;
 begin
-  for I := 1 to 1000 do
-  begin
-    LData := Copy(GData100);
-    GAnalyzer.Median(LData);
-  end;
+  LData := Copy(GData100);
+  GAnalyzer.Median(LData);
 end;
 
 procedure BenchMedian1000(const ACtx: IBenchContext);
 var
   LData: TDoubleArray;
-  I: Integer;
 begin
-  for I := 1 to 100 do
-  begin
-    LData := Copy(GData1000);
-    GAnalyzer.Median(LData);
-  end;
+  LData := Copy(GData1000);
+  GAnalyzer.Median(LData);
 end;
 
 procedure BenchMedian10000(const ACtx: IBenchContext);
@@ -95,19 +78,13 @@ begin
 end;
 
 procedure BenchStdDev100(const ACtx: IBenchContext);
-var
-  I: Integer;
 begin
-  for I := 1 to 1000 do
-    GAnalyzer.StdDev(GData100);
+  GAnalyzer.StdDev(GData100);
 end;
 
 procedure BenchStdDev1000(const ACtx: IBenchContext);
-var
-  I: Integer;
 begin
-  for I := 1 to 100 do
-    GAnalyzer.StdDev(GData1000);
+  GAnalyzer.StdDev(GData1000);
 end;
 
 procedure BenchStdDev10000(const ACtx: IBenchContext);
@@ -118,25 +95,17 @@ end;
 procedure BenchSort100(const ACtx: IBenchContext);
 var
   LData: TDoubleArray;
-  I: Integer;
 begin
-  for I := 1 to 1000 do
-  begin
-    LData := Copy(GData100);
-    GAnalyzer.Sort(LData);
-  end;
+  LData := Copy(GData100);
+  GAnalyzer.Sort(LData);
 end;
 
 procedure BenchSort1000(const ACtx: IBenchContext);
 var
   LData: TDoubleArray;
-  I: Integer;
 begin
-  for I := 1 to 100 do
-  begin
-    LData := Copy(GData1000);
-    GAnalyzer.Sort(LData);
-  end;
+  LData := Copy(GData1000);
+  GAnalyzer.Sort(LData);
 end;
 
 procedure BenchSort10000(const ACtx: IBenchContext);
@@ -148,19 +117,13 @@ begin
 end;
 
 procedure BenchComputeStats100(const ACtx: IBenchContext);
-var
-  I: Integer;
 begin
-  for I := 1 to 1000 do
-    GAnalyzer.ComputeStats(GData100);
+  GAnalyzer.ComputeStats(GData100);
 end;
 
 procedure BenchComputeStats1000(const ACtx: IBenchContext);
-var
-  I: Integer;
 begin
-  for I := 1 to 100 do
-    GAnalyzer.ComputeStats(GData1000);
+  GAnalyzer.ComputeStats(GData1000);
 end;
 
 procedure BenchComputeStats10000(const ACtx: IBenchContext);
@@ -171,33 +134,25 @@ end;
 procedure BenchPercentile100(const ACtx: IBenchContext);
 var
   LData: TDoubleArray;
-  I: Integer;
 begin
   LData := Copy(GData100);
   GAnalyzer.Sort(LData);
-  for I := 1 to 1000 do
-  begin
-    GAnalyzer.Percentile(LData, 25);
-    GAnalyzer.Percentile(LData, 50);
-    GAnalyzer.Percentile(LData, 75);
-    GAnalyzer.Percentile(LData, 95);
-  end;
+  GAnalyzer.Percentile(LData, 25);
+  GAnalyzer.Percentile(LData, 50);
+  GAnalyzer.Percentile(LData, 75);
+  GAnalyzer.Percentile(LData, 95);
 end;
 
 procedure BenchPercentile1000(const ACtx: IBenchContext);
 var
   LData: TDoubleArray;
-  I: Integer;
 begin
   LData := Copy(GData1000);
   GAnalyzer.Sort(LData);
-  for I := 1 to 100 do
-  begin
-    GAnalyzer.Percentile(LData, 25);
-    GAnalyzer.Percentile(LData, 50);
-    GAnalyzer.Percentile(LData, 75);
-    GAnalyzer.Percentile(LData, 95);
-  end;
+  GAnalyzer.Percentile(LData, 25);
+  GAnalyzer.Percentile(LData, 50);
+  GAnalyzer.Percentile(LData, 75);
+  GAnalyzer.Percentile(LData, 95);
 end;
 
 procedure BenchPercentile10000(const ACtx: IBenchContext);
