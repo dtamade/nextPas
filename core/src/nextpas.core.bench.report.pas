@@ -31,9 +31,6 @@ type
     {** 生成 HTML 样式 }
     function GenerateCSS: string;
 
-    {** 生成 HTML 脚本 }
-    function GenerateJS: string;
-
   public
     constructor Create;
     destructor Destroy; override;
@@ -490,11 +487,6 @@ begin
     '</style>';
 end;
 
-function TBenchReportGenerator.GenerateJS: string;
-begin
-  Result := '';
-end;
-
 function TBenchReportGenerator.ToHTML: string;
 var
   LHTML: TStringArray;
@@ -509,7 +501,6 @@ begin
   AddLine(LHTML, '  <title>nextpas.core.bench Report</title>');
   AddLine(LHTML, '  <meta charset="UTF-8">');
   AddLine(LHTML, '  ' + GenerateCSS);
-  AddLine(LHTML, '  ' + GenerateJS);
   AddLine(LHTML, '</head>');
   AddLine(LHTML, '<body>');
   AddLine(LHTML, '  <h1>nextpas.core.bench Report</h1>');
