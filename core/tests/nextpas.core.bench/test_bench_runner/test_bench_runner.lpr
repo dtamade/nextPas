@@ -157,6 +157,17 @@ begin
     LElapsed := LCtx.GetElapsed;
     Check(LElapsed.AsNanoseconds >= 0, 'ResetTimer resets elapsed');
 
+    // 测试 GetElapsed 时间递增
+    LCtx.ResetTimer;
+    TSleep.ForDuration(TDuration.FromMilliseconds(10));
+    LElapsed := LCtx.GetElapsed;
+    Check(LElapsed.AsNanoseconds > 0, 'GetElapsed returns positive after sleep');
+    Check(LElapsed.AsMilliseconds >= 5, 'GetElapsed reflects elapsed time (>= 5ms)');
+
+    // 测试 GetElapsed 多次调用递增
+    LElapsed := LCtx.GetElapsed;
+    Check(LElapsed.AsNanoseconds > 0, 'GetElapsed remains positive on second call');
+
     // 测试 Skip
     LCtx.Skip('Test reason');
     Check(LCtx.IsSkipped, 'Skip sets skipped flag');

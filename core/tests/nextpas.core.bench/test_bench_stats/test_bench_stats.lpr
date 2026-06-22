@@ -351,6 +351,55 @@ begin
     WriteLn('  ℹ Uniform distribution test: FAIL');
 end;
 
+procedure TestComputeApproximatePValue;
+var
+  LA, LB: TDoubleArray;
+  LStatsA, LStatsB: TBenchStats;
+  LPValue: Double;
+  i: Integer;
+begin
+  WriteLn('TestComputeApproximatePValue:');
+
+  // 相同分布 - p-value 应该较高（不显著）
+  SetLength(LA, 100);
+  SetLength(LB, 100);
+  for i := 0 to 99 do
+  begin
+    LA[i] := 100.0 + Random * 10.0;
+    LB[i] := 100.0 + Random * 10.0;
+  end;
+  LStatsA := GAnalyzer.ComputeStats(LA);
+  LStatsB := GAnalyzer.ComputeStats(LB);
+  LPValue := GAnalyzer.ComputeApproximatePValue(LStatsA, LStatsB);
+  Check(LPValue >= 0.0, 'Same distribution p-value >= 0');
+  Check(LPValue <= 1.0, 'Same distribution p-value <= 1');
+  Check(LPValue > 0.05, 'Same distribution p-value > 0.05 (not significant)');
+
+  // 不同分布 - p-value 应该较低（显著）
+  SetLength(LA, 100);
+  SetLength(LB, 100);
+  for i := 0 to 99 do
+  begin
+    LA[i] := 100.0 + Random * 2.0;
+    LB[i] := 200.0 + Random * 2.0;
+  end;
+  LStatsA := GAnalyzer.ComputeStats(LA);
+  LStatsB := GAnalyzer.ComputeStats(LB);
+  LPValue := GAnalyzer.ComputeApproximatePValue(LStatsA, LStatsB);
+  Check(LPValue >= 0.0, 'Different distribution p-value >= 0');
+  Check(LPValue <= 1.0, 'Different distribution p-value <= 1');
+  Check(LPValue < 0.05, 'Different distribution p-value < 0.05 (significant)');
+
+  // 完全相同的数据 - p-value 应该为 1.0
+  SetLength(LA, 50);
+  for i := 0 to 49 do
+    LA[i] := 100.0;
+  LStatsA := GAnalyzer.ComputeStats(LA);
+  LStatsB := LStatsA;
+  LPValue := GAnalyzer.ComputeApproximatePValue(LStatsA, LStatsB);
+  Check(LPValue = 1.0, 'Identical data p-value = 1.0');
+end;
+
 procedure TestSort;
 var
   LData: TDoubleArray;
@@ -395,6 +444,8 @@ begin
   TestComputeStats;
   WriteLn;
   TestSignificantDifference;
+  WriteLn;
+  TestComputeApproximatePValue;
   WriteLn;
   TestTInvLookup;
   WriteLn;
