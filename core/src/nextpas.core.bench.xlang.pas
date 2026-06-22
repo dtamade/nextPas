@@ -75,8 +75,8 @@ uses
   nextpas.core.text.conv,
   nextpas.core.text.strings;
 
-var
-  GLastParseSkippedCount: Integer = 0;
+threadvar
+  GLastParseSkippedCount: Integer;
 
 function GetLastParseSkippedCount: Integer;
 begin
@@ -169,9 +169,19 @@ begin
     raise EParseError.CreateFmt('Invalid Go bench line: %s', [ALine]);
 
   LName := LParts[0];
-  // Remove "-N" suffix (GOMAXPROCS)
-  if Pos('-', LName) > 0 then
-    LName := Copy(LName, 1, Pos('-', LName) - 1);
+  // Remove "-N" suffix (GOMAXPROCS) - scan from end to find last dash
+  I := Length(LName);
+  while (I > 1) and (LName[I] <> '-') do
+  begin
+    if not (LName[I] in ['0'..'9']) then
+    begin
+      I := 0;
+      Break;
+    end;
+    Dec(I);
+  end;
+  if (I > 1) and (I < Length(LName)) then
+    LName := Copy(LName, 1, I - 1);
 
   LIterations := StrToInt64Def(LParts[1], 0);
 
@@ -221,9 +231,13 @@ var
   LLines: TStringArray;
   LLine: string;
   LList: array of TBenchResult;
+  LCount: Integer;
+  LCapacity: Integer;
 begin
   GLastParseSkippedCount := 0;
   LList := nil;
+  LCount := 0;
+  LCapacity := 0;
   LLines := SplitLines(AOutput);
   for LLine in LLines do
   begin
@@ -231,12 +245,19 @@ begin
     if Pos('Benchmark', LLine) <> 1 then Continue;
 
     try
-      SetLength(LList, Length(LList) + 1);
-      LList[High(LList)] := ParseGoBenchLine(LLine);
+      if LCount >= LCapacity then
+      begin
+        if LCapacity = 0 then LCapacity := 8
+        else LCapacity := LCapacity * 2;
+        SetLength(LList, LCapacity);
+      end;
+      LList[LCount] := ParseGoBenchLine(LLine);
+      Inc(LCount);
     except
       Inc(GLastParseSkippedCount);
     end;
   end;
+  SetLength(LList, LCount);
   Result := LList;
 end;
 
@@ -317,9 +338,13 @@ var
   LLines: TStringArray;
   LLine: string;
   LList: array of TBenchResult;
+  LCount: Integer;
+  LCapacity: Integer;
 begin
   GLastParseSkippedCount := 0;
   LList := nil;
+  LCount := 0;
+  LCapacity := 0;
   LLines := SplitLines(AOutput);
   for LLine in LLines do
   begin
@@ -327,12 +352,19 @@ begin
     if Pos('time:', LLine) = 0 then Continue;
 
     try
-      SetLength(LList, Length(LList) + 1);
-      LList[High(LList)] := ParseRustBenchLine(LLine);
+      if LCount >= LCapacity then
+      begin
+        if LCapacity = 0 then LCapacity := 8
+        else LCapacity := LCapacity * 2;
+        SetLength(LList, LCapacity);
+      end;
+      LList[LCount] := ParseRustBenchLine(LLine);
+      Inc(LCount);
     except
       Inc(GLastParseSkippedCount);
     end;
   end;
+  SetLength(LList, LCount);
   Result := LList;
 end;
 
@@ -384,9 +416,13 @@ var
   LLines: TStringArray;
   LLine: string;
   LList: array of TBenchResult;
+  LCount: Integer;
+  LCapacity: Integer;
 begin
   GLastParseSkippedCount := 0;
   LList := nil;
+  LCount := 0;
+  LCapacity := 0;
   LLines := SplitLines(AOutput);
   for LLine in LLines do
   begin
@@ -394,12 +430,19 @@ begin
     if Pos('NsPerOp', LLine) = 0 then Continue;
 
     try
-      SetLength(LList, Length(LList) + 1);
-      LList[High(LList)] := ParseFPCBenchLine(LLine);
+      if LCount >= LCapacity then
+      begin
+        if LCapacity = 0 then LCapacity := 8
+        else LCapacity := LCapacity * 2;
+        SetLength(LList, LCapacity);
+      end;
+      LList[LCount] := ParseFPCBenchLine(LLine);
+      Inc(LCount);
     except
       Inc(GLastParseSkippedCount);
     end;
   end;
+  SetLength(LList, LCount);
   Result := LList;
 end;
 
