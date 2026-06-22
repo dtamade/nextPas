@@ -256,15 +256,25 @@ begin
   // Extract time range
   LTimeStr := Copy(LLine, Pos('[', LLine) + 1, Pos(']', LLine) - Pos('[', LLine) - 1);
   LParts := StringsSplit(LTimeStr, ' ', True);
-  // Format: ["1.234", "us", "1.256", "us", "1.279", "us"]
-  if Length(LParts) < 6 then
-    raise EParseError.CreateFmt('Invalid Rust bench time range: %s', [LTimeStr]);
 
-  // Parse values: lower, mean, upper
-  LLower := StrToFloatDef(LParts[0], 0);
-  LUnit := LParts[1];  // Unit for all values
-  LMean := StrToFloatDef(LParts[2], 0);
-  LUpper := StrToFloatDef(LParts[4], 0);
+  if Length(LParts) >= 6 then
+  begin
+    // 6-token format: ["1.234", "us", "1.256", "us", "1.279", "us"]
+    LLower := StrToFloatDef(LParts[0], 0);
+    LUnit := LParts[1];
+    LMean := StrToFloatDef(LParts[2], 0);
+    LUpper := StrToFloatDef(LParts[4], 0);
+  end
+  else if Length(LParts) >= 4 then
+  begin
+    // 4-token format: ["1.234", "1.256", "1.279", "us"]
+    LLower := StrToFloatDef(LParts[0], 0);
+    LMean := StrToFloatDef(LParts[1], 0);
+    LUpper := StrToFloatDef(LParts[2], 0);
+    LUnit := LParts[3];
+  end
+  else
+    raise EParseError.CreateFmt('Invalid Rust bench time range: %s', [LTimeStr]);
 
   // Convert to nanoseconds
   LMultiplier := 1;

@@ -135,6 +135,16 @@ begin
   Check(Abs(LResult.NsPerOp - 1256000) < 1000, 'NsPerOp ≈ 1256000 ns');
 end;
 
+procedure Test_RustBench_4TokenFormat;
+var
+  LResult: TBenchResult;
+begin
+  WriteLn('Test_RustBench_4TokenFormat:');
+  LResult := ParseRustBenchLine('BenchmarkSort    time:   [1.234 1.256 1.279 us]');
+  Check(Abs(LResult.NsPerOp - 1256.0) < 0.1, '4-token mean = 1256 ns');
+  Check(LResult.Name = 'BenchmarkSort', '4-token name');
+end;
+
 procedure Test_ParseRustBenchOutput_Multiple;
 var
   LResults: TBenchResultArray;
@@ -304,6 +314,7 @@ begin
   Test_ParseRustBenchLine_Basic;
   Test_ParseRustBenchLine_Nanoseconds;
   Test_ParseRustBenchLine_Milliseconds;
+  Test_RustBench_4TokenFormat;
   Test_ParseRustBenchOutput_Multiple;
 
   WriteLn('');
