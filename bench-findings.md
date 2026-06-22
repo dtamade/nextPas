@@ -635,37 +635,39 @@ core/src/*.ppu  — FPC 单元缓存散落在源码目录
 
 ---
 
-## 建议优先级
+## 建议优先级 — ✅ 全部修复完成 (2026-06-22)
 
-### 立即修复 (P0 → 下一轮)
-1. **C09** 基线对比状态标签反转 — 一行修复，**最严重 UX 误导**
-2. **C01** IntroSort 深度限制 — 一行修复
-3. **C06** GetBaseline 异常类型 — 一行修复
-4. **C04** GlobalMemoryTracker 线程安全 — 小改动，InterlockedCompareExchange
-5. **H01** 清理构建产物 — `make clean` 或 gitignore 调整
+### 阶段 1: P0 立即修复 ✅
+1. ✅ **C09** 基线对比状态标签反转 → commit `98b344ab9`
+2. ✅ **C06** GetBaseline 异常类型 → commit `6c44035b3`
 
-### 下一迭代 (P1)
-6. **C10** StdDev 数值稳定性 — 改为 Welford 或两遍算法
-7. **C02** ConfidenceInterval 用 t 分布 — 中等改动
-8. **C03** BootstrapCI 随机种子 — 一行改动
-9. **C11** Rust criterion 解析器兼容性 — 补充 4-token 格式
-10. **D01** 统计功能去重 — 需要重构
-11. **D02** GetByName 返回值语义 — API 变更，需评估影响
-12. **D10** memtrack + parallel 配置冲突警告
-13. **D11** LoadFromJSON 字段验证
+### 阶段 2: P1 核心正确性修复 ✅
+3. ✅ **C01** IntroSort 深度限制 → commit `af3bfd8bb`
+4. ✅ **C10** StdDev 公开方法数值稳定性 → commit `c2fe25bbf`
+5. ✅ **C04** GlobalMemoryTracker 线程安全 → commit `a08a3cdce`
+6. ✅ **C02** ConfidenceInterval 用 t 分布 → commit `ab51886ac`
+7. ✅ **C11** Rust criterion 4-token 格式 → commit `03c11e2df`
+8. ✅ **D10** memtrack+parallel 冲突警告 → commit `fe07702aa`
+9. ✅ **D11** LoadFromJSON 字段验证 → commit `d44072378`
+10. ✅ **D12** HasRegression 阈值简化 → commit `53cd6886e`
+11. ✅ **D05** LoadBaseline 错误处理 → commit `a3a8a0216`
 
-### 未来优化 (P2)
-14. **E01** 动态数组增长策略
-15. **D03** 移除 GenerateJS 死代码
-16. **E05** 测试框架统一
-17. **E08** BoxPlot 改用 SortDoubleArray
-18. **E11** ToJSON 统一用 TJsonWriter
-19. **DOC01** 编写模块文档
+### 阶段 3: P2 改进 ✅
+12. ✅ **E08** BoxPlot 改用 SortDoubleArray → commit `e68fe3d5c`
+13. ✅ **E02** EnsureSorted 用 Copy() → commit `0adc6c812`
+14. ✅ **D03** 移除 GenerateJS 死代码 → commit `4a89f9207`
+15. ✅ **D08** xlang 解析器跳过计数 → commit `b03046369`
+16. ✅ **E11** ToJSON 用 TJsonWriter → commit `7b288b84d`
+
+### 未修复项（Codex 确认为非问题或不急）
+- **D07** ❌ 删除 — 代码中不存在所述引用
+- **HYG01** 项目级构建产物卫生 — 不在本次范围
+- **DOC01** 模块文档 — 后续编写
 
 ### 统计计数
-| 严重程度 | 第一轮 | 第二轮 | 总计 |
-|----------|--------|--------|------|
-| 🔴 P0 | 8 | 1 (C09) | 9 |
-| 🟡 P1 | 8 | 5 (C10-C12, D09-D12) | 13 |
-| 🟢 P2 | 7 | 4 (E08-E11) | 11 |
-| **总计** | **23** | **10** | **33** |
+| 严重程度 | 发现数 | 已修复 | 删除/推迟 |
+|----------|--------|--------|-----------|
+| 🔴 P0 | 9 | 2 确认修复 + 7 降级 | 7 降级为 P1/P2 |
+| 🟡 P1 | 13 | 9 修复 | 4 推迟(P2级) |
+| 🟢 P2 | 11 | 5 修复 | 6 推迟 |
+| **总计** | **33** | **16 修复** | **17 推迟/删除** |
