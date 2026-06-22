@@ -17,7 +17,7 @@ var
 begin
   LA := TLocalArena.Create(1024);
   try
-    CheckEqual(Int64(1024), Int64(LA.TotalSize), 'total size');
+    CheckEqual(Int64(1024), Int64(LA.Capacity), 'total size');
     CheckEqual(Int64(0), Int64(LA.UsedSize), 'used size');
     CheckEqual(Int64(1024), Int64(LA.RemainingSize), 'remaining size');
   finally
@@ -167,14 +167,14 @@ end;
 procedure TestArenaMark;
 var
   LA: TLocalArena;
-  LMark: TArenaMarker;
+  LMark: TArenaMark;
   LP: Pointer;
 begin
   LA := TLocalArena.Create(256);
   try
     LA.Alloc(32);
     LMark := LA.SaveMark;
-    CheckEqual(Int64(32), Int64(LMark));
+    CheckEqual(Int64(32), Int64(LMark.FrontOffset), 'mark front offset');
 
     LA.Alloc(64);
     CheckEqual(Int64(96), Int64(LA.UsedSize));
@@ -192,7 +192,7 @@ end;
 procedure TestArenaMarkNested;
 var
   LA: TLocalArena;
-  LMark1, LMark2: TArenaMarker;
+  LMark1, LMark2: TArenaMark;
 begin
   LA := TLocalArena.Create(256);
   try

@@ -62,12 +62,12 @@ type
     function Alloc(aSize: SizeUInt): Pointer;
     function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
     function AllocZeroed(aSize: SizeUInt): Pointer;
-    function SaveMark: TArenaMarker;
-    procedure RestoreToMark(aMark: TArenaMarker);
+    function SaveMark: TArenaMark;
+    procedure RestoreToMark(aMark: TArenaMark);
     procedure Reset;
-    function TotalSize: SizeUInt;
     function UsedSize: SizeUInt;
     function RemainingSize: SizeUInt;
+    function Stats: TArenaStats;
 
     property Inner: IArena read FInner;
   end;
@@ -275,7 +275,7 @@ begin
   end;
 end;
 
-function TArenaConcurrent.SaveMark: TArenaMarker;
+function TArenaConcurrent.SaveMark: TArenaMark;
 begin
   FLock.Acquire;
   try
@@ -285,7 +285,7 @@ begin
   end;
 end;
 
-procedure TArenaConcurrent.RestoreToMark(aMark: TArenaMarker);
+procedure TArenaConcurrent.RestoreToMark(aMark: TArenaMark);
 begin
   FLock.Acquire;
   try
@@ -305,11 +305,6 @@ begin
   end;
 end;
 
-function TArenaConcurrent.TotalSize: SizeUInt;
-begin
-  Result := FInner.TotalSize;
-end;
-
 function TArenaConcurrent.UsedSize: SizeUInt;
 begin
   Result := FInner.UsedSize;
@@ -318,6 +313,16 @@ end;
 function TArenaConcurrent.RemainingSize: SizeUInt;
 begin
   Result := FInner.RemainingSize;
+end;
+
+function TArenaConcurrent.Stats: TArenaStats;
+begin
+  FLock.Acquire;
+  try
+    Result := FInner.Stats;
+  finally
+    FLock.Release;
+  end;
 end;
 
 end.

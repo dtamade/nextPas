@@ -32,7 +32,7 @@ type
   TVirtualArena = nextpas.core.mem.arena.virtual.TVirtualArena;
 
 {** 初始化 TVirtualArena }
-procedure TVirtualArena_Init(var AArena: TVirtualArena; AAlignment: SizeUInt = DEFAULT_ALIGNMENT);
+procedure TVirtualArena_Init(var AArena: TVirtualArena; AAlignment: SizeUInt = ARENA_DEFAULT_ALIGNMENT);
 {** 释放 TVirtualArena 所有资源 }
 procedure TVirtualArena_Release(var AArena: TVirtualArena);
 

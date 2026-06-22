@@ -51,6 +51,8 @@ type
     property PeakUsed: SizeUInt read FPeakUsed;
     {** 返回总分配次数。 }
     property TotalAllocCount: SizeUInt read FTotalAllocs;
+    {** 返回 Arena 总容量。 }
+    property Capacity: SizeUInt read FCapacity;
   end;
 
 implementation

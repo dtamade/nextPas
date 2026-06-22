@@ -34,8 +34,7 @@ interface
 uses
   nextpas.core.mem.base,
   nextpas.core.mem.pool.base,
-  nextpas.core.mem.error,
-  nextpas.core.mem.arena.types;
+  nextpas.core.mem.error;
 
 const
   {** IBlockPool 接口 GUID *}
@@ -43,9 +42,6 @@ const
 
   {** IBlockPoolBatch 接口 GUID *}
   GUID_IBLOCKPOOLBATCH = '{8E8C21F5-0F8B-4A85-AF16-0E10B3C0A1B2}';
-
-  {** IArena 接口 GUID (从 arena.types 重导出) *}
-  GUID_IARENA = nextpas.core.mem.arena.types.GUID_IARENA;
 
 type
   {**
@@ -76,9 +72,6 @@ type
     function AcquireN(out aPtrs: array of Pointer; aCount: Integer): Integer; // returns acquired count
     procedure ReleaseN(const aPtrs: array of Pointer; aCount: Integer);
   end;
-
-  {** IArena 线性分配器接口 (从 arena.types 重导出) *}
-  IArena = nextpas.core.mem.arena.types.IArena;
 
   {**
    * TBlockPool
