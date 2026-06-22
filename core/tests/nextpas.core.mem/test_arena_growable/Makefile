@@ -8,6 +8,7 @@ FPC_FLAGS := -MObjFPC -Sh -O2 -gl -gh -FU../../../build/projects/nextpas.core.me
 build: test_arena_growable
 
 test_arena_growable: test_arena_growable.lpr
+	@mkdir -p ../../../build/projects/nextpas.core.mem/test_arena_growable
 	$(FPC) $(FPC_FLAGS) test_arena_growable.lpr
 
 test: build

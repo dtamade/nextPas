@@ -9,7 +9,8 @@ uses
   nextpas.core.mem.error,
   nextpas.core.mem.arena.base,
   nextpas.core.mem.arena.intf,
-  nextpas.core.platform.mmap;
+  nextpas.core.platform.mmap,
+  nextpas.core.platform.memory;
 
 type
   {** TVirtualArena
@@ -97,9 +98,6 @@ var
 {$ENDIF}
 
 procedure TVirtualArena_Init(var AArena: TVirtualArena; AAlignment: SizeUInt);
-var
-  LMap: TPlatformMappedFile;
-  LErr: Int32;
 begin
   if (AAlignment = 0) or (not IsPowerOfTwo(AAlignment)) then
     AArena.FAlignment := DEFAULT_ALIGNMENT
@@ -108,18 +106,17 @@ begin
   else
     AArena.FAlignment := AAlignment;
 
-  LErr := platform_mmap_create_anonymous(UInt64(ARENA_VIRTUAL_RESERVE), pmaReadWrite, [pmfPrivate], LMap);
-  if LErr <> 0 then
+  AArena.FReservedBase := platform_virtual_reserve(ARENA_VIRTUAL_RESERVE);
+  if AArena.FReservedBase = nil then
     raise EOutOfMemory.Create(aeOutOfMemory, 'TVirtualArena_Init: failed to reserve virtual address space');
 
-  AArena.FReservedBase := LMap.Addr;
-  AArena.FReservedSize := LMap.Size;
+  AArena.FReservedSize := ARENA_VIRTUAL_RESERVE;
   AArena.FCommittedSize := 0;
 
-  AArena.FFrontPtr := PByte(LMap.Addr);
-  AArena.FFrontEnd := PByte(PtrUInt(LMap.Addr) + PtrUInt(LMap.Size));
-  AArena.FBackPtr := PByte(PtrUInt(LMap.Addr) + PtrUInt(LMap.Size));
-  AArena.FBackBase := PByte(LMap.Addr);
+  AArena.FFrontPtr := PByte(AArena.FReservedBase);
+  AArena.FFrontEnd := PByte(PtrUInt(AArena.FReservedBase) + PtrUInt(ARENA_VIRTUAL_RESERVE));
+  AArena.FBackPtr := PByte(PtrUInt(AArena.FReservedBase) + PtrUInt(ARENA_VIRTUAL_RESERVE));
+  AArena.FBackBase := PByte(AArena.FReservedBase);
 
   AArena.FLargeBlocks := nil;
   AArena.FLargeCount := 0;
@@ -139,7 +136,6 @@ end;
 procedure TVirtualArena_Release(var AArena: TVirtualArena);
 var
   I: SizeInt;
-  LMap: TPlatformMappedFile;
 begin
   {$IFDEF NEXTPAS_ARENA_LEAK_CHECK}
   InterLockedDecrement(GArenaInstanceCount);
@@ -151,10 +147,7 @@ begin
 
   if AArena.FReservedBase <> nil then
   begin
-    LMap.Addr := AArena.FReservedBase;
-    LMap.Size := AArena.FReservedSize;
-    LMap.IsOpen := True;
-    platform_mmap_close(LMap);
+    platform_virtual_release(AArena.FReservedBase, AArena.FReservedSize);
     AArena.FReservedBase := nil;
   end;
 
@@ -189,7 +182,12 @@ begin
     Exit;
 
   LCommitPtr := PByte(PtrUInt(FReservedBase) + FCommittedSize);
-  LCommitPtr^ := 0;
+  if not platform_virtual_commit(LCommitPtr, LCommitSize) then
+    Exit;
+
+  { Advise THP for large commits (>= 2MB) }
+  if LCommitSize >= SizeUInt(2 * 1024 * 1024) then
+    platform_madvise_thp(LCommitPtr, LCommitSize);
 
   FCommittedSize := FCommittedSize + LCommitSize;
   Result := True;
@@ -398,6 +396,11 @@ end;
 
 procedure TVirtualArena.Reset;
 begin
+  { Decommit physical pages; virtual address space stays reserved }
+  if FCommittedSize > 0 then
+    platform_virtual_decommit(FReservedBase, FCommittedSize);
+  FCommittedSize := 0;
+
   FFrontPtr := PByte(FReservedBase);
   FBackPtr := PByte(PtrUInt(FReservedBase) + PtrUInt(FReservedSize));
 

@@ -26,6 +26,54 @@ function platform_secure_zero_memory_backend: TPlatformSecureZeroBackend;
 function platform_secure_zero_memory_is_native: Boolean;
 procedure platform_secure_zero_memory(APtr: Pointer; ASize: SizeUInt);
 
+{**
+ * @desc Reserve virtual address space without committing physical pages
+ *
+ * @params
+ *   ASize  Size of the virtual address space to reserve (must be page-aligned)
+ *
+ * @return Base address of reserved region, or nil on failure
+ *}
+function platform_virtual_reserve(ASize: SizeUInt): Pointer;
+
+{**
+ * @desc Commit physical pages within a previously reserved region
+ *
+ * @params
+ *   APtr   Base address within a reserved region (must be page-aligned)
+ *   ASize  Size of the region to commit (must be page-aligned)
+ *
+ * @return True if pages were successfully committed
+ *}
+function platform_virtual_commit(APtr: Pointer; ASize: SizeUInt): Boolean;
+
+{**
+ * @desc Decommit physical pages while keeping virtual address space reserved
+ *
+ * @params
+ *   APtr   Base address within a committed region (must be page-aligned)
+ *   ASize  Size of the region to decommit (must be page-aligned)
+ *}
+procedure platform_virtual_decommit(APtr: Pointer; ASize: SizeUInt);
+
+{**
+ * @desc Release a reserved virtual address region (decommits + unreserves)
+ *
+ * @params
+ *   APtr   Base address returned by platform_virtual_reserve
+ *   ASize  Size of the reserved region
+ *}
+procedure platform_virtual_release(APtr: Pointer; ASize: SizeUInt);
+
+{**
+ * @desc Advise the kernel to use Transparent Huge Pages for a region
+ *
+ * @params
+ *   APtr   Base address of the region (must be page-aligned)
+ *   ASize  Size of the region (must be huge-page-aligned, typically 2MB)
+ *}
+procedure platform_madvise_thp(APtr: Pointer; ASize: SizeUInt);
+
 implementation
 
 {$IFDEF NEXTPAS_WINDOWS}
@@ -276,6 +324,87 @@ begin
   else
     Move(APtr^, Result^, ANewSize);
   platform_aligned_free(APtr);
+end;
+
+{ platform_virtual_reserve - reserve virtual address space without committing }
+
+function platform_virtual_reserve(ASize: SizeUInt): Pointer;
+begin
+  Result := nil;
+  if ASize = 0 then
+    Exit;
+{$IFDEF NEXTPAS_WINDOWS}
+  Result := nextpas.core.platform.windows.ffi.VirtualAlloc(
+    nil, PtrUInt(ASize), WINDOWS_MEM_RESERVE, WINDOWS_PAGE_READWRITE);
+{$ELSEIF defined(NEXTPAS_UNIX)}
+  Result := nextpas.core.platform.posix.ffi.mmap(
+    nil, PtrUInt(ASize),
+    PLATFORM_POSIX_PROT_NONE,
+    PLATFORM_POSIX_MAP_PRIVATE or PLATFORM_POSIX_MAP_ANONYMOUS or PLATFORM_POSIX_MAP_NORESERVE,
+    -1, 0);
+  if Result = Pointer(PLATFORM_POSIX_MAP_FAILED) then
+    Result := nil;
+{$ENDIF}
+end;
+
+{ platform_virtual_commit - commit physical pages in a reserved region }
+
+function platform_virtual_commit(APtr: Pointer; ASize: SizeUInt): Boolean;
+begin
+  Result := False;
+  if (APtr = nil) or (ASize = 0) then
+    Exit;
+{$IFDEF NEXTPAS_WINDOWS}
+  Result := nextpas.core.platform.windows.ffi.VirtualAlloc(
+    APtr, PtrUInt(ASize), WINDOWS_MEM_COMMIT, WINDOWS_PAGE_READWRITE) <> nil;
+{$ELSEIF defined(NEXTPAS_UNIX)}
+  { MAP_FIXED overwrites the existing mapping; pages become accessible }
+  Result := nextpas.core.platform.posix.ffi.mmap(
+    APtr, PtrUInt(ASize),
+    PLATFORM_POSIX_PROT_READ or PLATFORM_POSIX_PROT_WRITE,
+    PLATFORM_POSIX_MAP_PRIVATE or PLATFORM_POSIX_MAP_ANONYMOUS or PLATFORM_POSIX_MAP_FIXED,
+    -1, 0) <> Pointer(PLATFORM_POSIX_MAP_FAILED);
+{$ENDIF}
+end;
+
+{ platform_virtual_decommit - release physical pages, keep virtual reservation }
+
+procedure platform_virtual_decommit(APtr: Pointer; ASize: SizeUInt);
+begin
+  if (APtr = nil) or (ASize = 0) then
+    Exit;
+{$IFDEF NEXTPAS_WINDOWS}
+  nextpas.core.platform.windows.ffi.VirtualFree(APtr, PtrUInt(ASize), WINDOWS_MEM_DECOMMIT);
+{$ELSEIF defined(NEXTPAS_UNIX)}
+  { MADV_DONTNEED tells kernel pages can be reclaimed; address range stays mapped }
+  nextpas.core.platform.posix.ffi.madvise(APtr, size_t(ASize), MADV_DONTNEED);
+{$ENDIF}
+end;
+
+{ platform_virtual_release - release the entire virtual address reservation }
+
+procedure platform_virtual_release(APtr: Pointer; ASize: SizeUInt);
+begin
+  if (APtr = nil) or (ASize = 0) then
+    Exit;
+{$IFDEF NEXTPAS_WINDOWS}
+  { MEM_RELEASE frees the entire allocation; dwSize must be 0 }
+  nextpas.core.platform.windows.ffi.VirtualFree(APtr, 0, WINDOWS_MEM_RELEASE);
+{$ELSEIF defined(NEXTPAS_UNIX)}
+  nextpas.core.platform.posix.ffi.munmap(APtr, PtrUInt(ASize));
+{$ENDIF}
+end;
+
+{ platform_madvise_thp - advise kernel to use Transparent Huge Pages }
+
+procedure platform_madvise_thp(APtr: Pointer; ASize: SizeUInt);
+begin
+  if (APtr = nil) or (ASize = 0) then
+    Exit;
+{$IFDEF NEXTPAS_LINUX}
+  { best-effort; silently ignored if THP not available }
+  nextpas.core.platform.posix.ffi.madvise(APtr, size_t(ASize), MADV_HUGEPAGE);
+{$ENDIF}
 end;
 
 end.

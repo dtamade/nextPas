@@ -269,6 +269,13 @@ const
   CTRL_BREAK_EVENT = DWORD(1);
   ERROR_NOT_SUPPORTED = DWORD(50);
 
+  { Virtual memory allocation types }
+  WINDOWS_MEM_COMMIT  = DWORD($00001000);
+  WINDOWS_MEM_RESERVE = DWORD($00002000);
+  WINDOWS_MEM_DECOMMIT = DWORD($00004000);
+  WINDOWS_MEM_RELEASE = DWORD($00008000);
+  WINDOWS_PAGE_READWRITE = DWORD($00000004);
+
 { additional kernel32 types, error codes, and constants }
 {$I nextpas.core.platform.windows.base.kernel32.inc}
 

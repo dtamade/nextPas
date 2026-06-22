@@ -46,15 +46,22 @@ type
     FAllocator: IAllocator;
     FPeakUsed: SizeUInt;
     FTotalAllocs: QWord;
+    { Chunk cache: freed segments cached for reuse (Go-style reuse→ready→new) }
+    FFreeSegments: array of TSegment;
+    FFreeCount: SizeInt;
+    FCacheLimit: SizeInt;
   private
     function CurrentUsed: SizeUInt; inline;
     function AlignPtr(aPtr: PByte; aAlign: SizeUInt): PByte; inline;
     function CalcRequiredMinSize(aSize, aAlignment: SizeUInt; out aMinSize: SizeUInt): Boolean;
     function CalcNextSegmentSize(aMinSize: SizeUInt; out aUpdateGrowthBase: Boolean): SizeUInt;
     function AddSegment(aMinSize: SizeUInt): Boolean;
+    function TryReuseSegment(aMinSize: SizeUInt): Boolean;
     procedure FreeSegment(aIndex: SizeInt);
+    procedure CacheSegment(aIndex: SizeInt);
     procedure ShrinkToSegmentCount(aCount: SizeInt);
     procedure NormalizeState(aActiveIndex: SizeInt; aActiveUsed: SizeUInt);
+    procedure ClearCache;
   public
     constructor Create(const aConfig: TArenaConfig); overload;
     constructor Create(aInitialSize: SizeUInt; aMaxSize: SizeUInt = 0); overload;
@@ -82,6 +89,10 @@ implementation
 
 {$PUSH}
 {$WARN 4055 OFF} // pointer/ordinal conversions in arena internals
+
+const
+  { Max cached freed segments to reuse on next Reset (Go-style chunk cache) }
+  CHUNK_CACHE_LIMIT = 8;
 
 function TChunkedArena.AlignPtr(aPtr: PByte; aAlign: SizeUInt): PByte;
 var
@@ -199,6 +210,10 @@ begin
   if aMinSize = 0 then
     Exit(False);
 
+  { Try cache first (Go-style reuse→ready→new) }
+  if TryReuseSegment(aMinSize) then
+    Exit(True);
+
   if (FMaxSize <> 0) and (FTotalSize >= FMaxSize) then
     Exit(False);
 
@@ -299,6 +314,90 @@ begin
     FreeMem(LRaw);
 end;
 
+{ CacheSegment - move segment to free list for reuse instead of freeing }
+
+procedure TChunkedArena.CacheSegment(aIndex: SizeInt);
+var
+  LSeg: TSegment;
+begin
+  if (aIndex < 0) or (aIndex > High(FSegments)) then
+    Exit;
+  if FFreeCount >= FCacheLimit then
+  begin
+    FreeSegment(aIndex);
+    Exit;
+  end;
+  LSeg := FSegments[aIndex];
+  if LSeg.Raw = nil then
+    Exit;
+  { Reset used count for reuse }
+  LSeg.Used := 0;
+  LSeg.StartOffset := 0;
+  if FFreeCount >= Length(FFreeSegments) then
+    SetLength(FFreeSegments, FFreeCount + 4);
+  FFreeSegments[FFreeCount] := LSeg;
+  Inc(FFreeCount);
+  { Clear original slot }
+  FSegments[aIndex].Raw := nil;
+  FSegments[aIndex].Base := nil;
+  FSegments[aIndex].Size := 0;
+  FSegments[aIndex].Used := 0;
+  FSegments[aIndex].RawSize := 0;
+end;
+
+{ TryReuseSegment - find a cached segment large enough and reuse it }
+
+function TChunkedArena.TryReuseSegment(aMinSize: SizeUInt): Boolean;
+var
+  I: SizeInt;
+  LSeg: TSegment;
+  LIdx: SizeInt;
+begin
+  Result := False;
+  for I := FFreeCount - 1 downto 0 do
+  begin
+    if FFreeSegments[I].Size >= aMinSize then
+    begin
+      LSeg := FFreeSegments[I];
+      { Remove from cache (swap with last) }
+      FFreeSegments[I] := FFreeSegments[FFreeCount - 1];
+      Dec(FFreeCount);
+      { Add as new active segment }
+      LSeg.Used := 0;
+      LSeg.StartOffset := FTotalSize;
+      LIdx := Length(FSegments);
+      SetLength(FSegments, LIdx + 1);
+      FSegments[LIdx] := LSeg;
+      Inc(FTotalSize, LSeg.Size);
+      FActive := LIdx;
+      FGrowthBaseSize := LSeg.Size;
+      Result := True;
+      Exit;
+    end;
+  end;
+end;
+
+{ ClearCache - free all cached segments }
+
+procedure TChunkedArena.ClearCache;
+var
+  I: SizeInt;
+begin
+  for I := 0 to FFreeCount - 1 do
+  begin
+    if FFreeSegments[I].Raw <> nil then
+    begin
+      if FAllocator <> nil then
+        FAllocator.FreeMem(FFreeSegments[I].Raw)
+      else
+        FreeMem(FFreeSegments[I].Raw);
+    end;
+    FFreeSegments[I].Raw := nil;
+  end;
+  FFreeCount := 0;
+  SetLength(FFreeSegments, 0);
+end;
+
 procedure TChunkedArena.ShrinkToSegmentCount(aCount: SizeInt);
 var
   LIdx: SizeInt;
@@ -397,6 +496,9 @@ begin
   FGrowthBaseSize := 0;
   FPeakUsed := 0;
   FTotalAllocs := 0;
+  FFreeSegments := nil;
+  FFreeCount := 0;
+  FCacheLimit := CHUNK_CACHE_LIMIT;
 
   if not AddSegment(LInitSize) then
     raise EOutOfMemory.Create(aeOutOfMemory, 'TChunkedArena: failed to allocate initial segment');
@@ -414,6 +516,7 @@ end;
 
 destructor TChunkedArena.Destroy;
 begin
+  ClearCache;
   ShrinkToSegmentCount(0);
   inherited Destroy;
 end;
@@ -542,8 +645,13 @@ begin
 
   if not FKeepSegments then
   begin
-    ShrinkToSegmentCount(1);
+    { Cache all segments except the first for reuse }
+    for LIdx := High(FSegments) downto 1 do
+      CacheSegment(LIdx);
+    SetLength(FSegments, 1);
     FSegments[0].Used := 0;
+    FSegments[0].StartOffset := 0;
+    FTotalSize := FSegments[0].Size;
     FActive := 0;
     Exit;
   end;
