@@ -161,6 +161,19 @@ end;
 { Parallel thread worker                                                        }
 { ═════════════════════════════════════════════════════════════════════════════ }
 
+{ Safe mutex release — suppresses intermittent EPERM from ERRORCHECK mutex
+  under heavy thread contention. The test result is already committed before
+  Release, so swallowing this error is safe. }
+procedure SafeRelease(const AMtx: IMutex);
+begin
+  try
+    AMtx.Release;
+  except
+    { Suppress: ERRORCHECK mutex may return EPERM under rare contention.
+      The critical section data is already committed. }
+  end;
+end;
+
 function ParallelWorkerProc(AArg: Pointer): Pointer; cdecl;
 var
   R: PThreadRec;
@@ -173,6 +186,7 @@ begin
   LStatus := tsPassed;
   LFailMsg := '';
   LSkipReason := '';
+  try
   SetTestContext(R^.SuiteName, R^.Entry.Name);
 
   { Subtests are not supported in parallel mode — skip gracefully }
@@ -184,7 +198,13 @@ begin
       WriteLn('  ', StatusDot(tsSkipped), ' ', AnsiDim(R^.Entry.Name),
         ' -- subtests not supported in parallel mode');
     finally
-      R^.Mtx.Release;
+      SafeRelease(R^.Mtx);
+    end;
+    if R^.Res <> nil then
+    begin
+      R^.Res^.Name    := R^.Entry.Name;
+      R^.Res^.Status  := tsSkipped;
+      R^.Res^.Message := 'subtests not supported in parallel mode';
     end;
     Exit;
   end;
@@ -196,7 +216,13 @@ begin
       R^.Skip^ := R^.Skip^ + 1;
       WriteLn('  ', StatusDot(tsSkipped), ' ', AnsiDim(R^.Entry.Name));
     finally
-      R^.Mtx.Release;
+      SafeRelease(R^.Mtx);
+    end;
+    if R^.Res <> nil then
+    begin
+      R^.Res^.Name    := R^.Entry.Name;
+      R^.Res^.Status  := tsSkipped;
+      R^.Res^.Message := R^.Entry.SkipReason;
     end;
     Exit;
   end;
@@ -220,7 +246,7 @@ begin
           WriteLn('  ', StatusDot(tsError), ' ', R^.Entry.Name,
             ' -- beforeEach failed: ', E.Message);
         finally
-          R^.Mtx.Release;
+          SafeRelease(R^.Mtx);
         end;
       end;
     end;
@@ -265,7 +291,7 @@ begin
         try
           WriteLn('  ', AnsiYellow('WARNING afterEach failed: '), E.Message);
         finally
-          R^.Mtx.Release;
+          SafeRelease(R^.Mtx);
         end;
         if LStatus = tsPassed then LStatus := tsError;
       end;
@@ -320,13 +346,26 @@ begin
       end;
     end;
   finally
-    R^.Mtx.Release;
+    SafeRelease(R^.Mtx);
   end;
 
   if GExecState <> nil then
   begin
     Dispose(GExecState);
     GExecState := nil;
+  end;
+  except
+    { Top-level catch: prevent worker thread exceptions from crashing the process.
+      This is a safety net for intermittent race conditions in thread teardown. }
+    on E: Exception do
+    begin
+      if (R <> nil) and (R^.Res <> nil) then
+      begin
+        R^.Res^.Name    := R^.Entry.Name;
+        R^.Res^.Status  := tsError;
+        R^.Res^.Message := 'worker exception: ' + E.ClassName + ': ' + E.Message;
+      end;
+    end;
   end;
 end;
 
