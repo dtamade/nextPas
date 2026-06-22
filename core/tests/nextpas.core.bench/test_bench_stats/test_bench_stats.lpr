@@ -398,6 +398,16 @@ begin
   LStatsB := LStatsA;
   LPValue := GAnalyzer.ComputeApproximatePValue(LStatsA, LStatsB);
   Check(LPValue = 1.0, 'Identical data p-value = 1.0');
+
+  // 受控统计量 - 旧阶梯实现会错误返回 0.1
+  LStatsA.Mean := 0.0;
+  LStatsA.StdDev := 1.0;
+  LStatsA.SampleCount := 10;
+  LStatsB := LStatsA;
+  LStatsB.Mean := 0.5;
+  LPValue := GAnalyzer.ComputeApproximatePValue(LStatsA, LStatsB);
+  Check(LPValue > 0.2, 'Controlled t≈1.118 p-value > 0.2');
+  Check(LPValue < 0.35, 'Controlled t≈1.118 p-value < 0.35');
 end;
 
 procedure TestSort;

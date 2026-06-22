@@ -357,6 +357,11 @@ function TBenchStatsAnalyzer.ComputeApproximatePValue(const A, B: TBenchStats): 
 var
   LTStat: Double;
   LVarA, LVarB: Double;
+  LDF: Double;
+  LX: Double;
+  LT: Double;
+  LP: Double;
+  LK: Double;
 begin
   if (A.SampleCount <= 1) or (B.SampleCount <= 1) then
     Exit(1.0);
@@ -371,18 +376,31 @@ begin
   // Welch's t-test 风格统计量，用于近似评级
   LTStat := Abs(A.Mean - B.Mean) / Sqrt(LVarA + LVarB);
 
-  // 简化的 p-value 计算（近似）
-  // 对于大样本，t 分布接近正态分布
-  if LTStat < 1.0 then
-    Result := 0.5
-  else if LTStat < 2.0 then
-    Result := 0.1
-  else if LTStat < 2.5 then
-    Result := 0.05
-  else if LTStat < 3.0 then
-    Result := 0.01
+  // Welch-Satterthwaite 自由度
+  LDF := Sqr(LVarA + LVarB) /
+         (Sqr(LVarA) / (A.SampleCount - 1) + Sqr(LVarB) / (B.SampleCount - 1));
+
+  // 使用正态近似（df 较大时 t 分布接近正态）
+  // p-value ≈ 2 * (1 - Phi(|t|))，Phi 使用 Hastings 近似
+  LX := LTStat;
+  if LX > 6.0 then
+    Result := 0.001
+  else if LX < 0.01 then
+    Result := 1.0
   else
-    Result := 0.001;
+  begin
+    LT := 1.0 / (1.0 + 0.2316419 * LX);
+    LK := 0.3989422804014327 * Exp(-0.5 * LX * LX);
+    LP := LK * (LT * (0.319381530 + LT * (-0.356563782 + LT * (1.781477937 +
+          LT * (-1.821255978 + LT * 1.330274429)))));
+    if LDF < 30 then
+      LP := LP * (1.0 + 1.0 / (4.0 * LDF));
+    Result := 2.0 * LP;
+    if Result > 1.0 then
+      Result := 1.0;
+    if Result < 0.001 then
+      Result := 0.001;
+  end;
 end;
 
 function TBenchStatsAnalyzer.ShapiroWilkStatistic(const ASorted: TDoubleArray): Double;
