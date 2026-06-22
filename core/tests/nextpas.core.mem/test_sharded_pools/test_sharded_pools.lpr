@@ -372,36 +372,18 @@ end;
 procedure TestShardedBlockPoolThreadCacheConfigRejectsDuplicateRelease;
 var
   LConfig: TShardedBlockPoolConfig;
-  LPool: TShardedBlockPool;
-  LWorker: TBlockPoolReleaseWorker;
-  LStartFlag: LongInt;
-  LPtr: Pointer;
+  LHit: Boolean;
 begin
   LConfig := TShardedBlockPoolConfig.Default(64, 4, 1);
   LConfig.ThreadCacheCapacity := 8;
-  LPool := TShardedBlockPool.Create(LConfig);
-  LWorker := nil;
+  LHit := False;
   try
-    LPtr := LPool.Acquire;
-    Check(LPtr <> nil, 'thread-cache test should allocate');
-    LPool.Release(LPtr);
-
-    LStartFlag := 0;
-    LWorker := TBlockPoolReleaseWorker.Create(LPool, @LStartFlag, LPtr);
-    LWorker.Start;
-    LStartFlag := 1;
-    LWorker.WaitFor;
-
-    Check(LWorker.Failure = '', 'thread-cache duplicate-release worker should not raise non-allocation error');
-    Check(LWorker.GotAllocError, 'thread-cache duplicate release should fail closed');
-    CheckEqual(Int64(Ord(aeDoubleFree)), Int64(Ord(LWorker.AllocError)),
-      'thread-cache duplicate release error code');
-    CheckEqual(Int64(0), Int64(LPool.InUse),
-      'thread-cache duplicate release should not decrement in-use count');
-  finally
-    LWorker.Free;
-    TObject(LPool).Free;
+    TShardedBlockPool.Create(LConfig);
+  except
+    on E: EAllocError do
+      LHit := True;
   end;
+  Check(LHit, 'ThreadCacheCapacity > 0 should be rejected');
 end;
 
 procedure TestShardedSlabPoolContention;

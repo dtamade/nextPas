@@ -180,12 +180,22 @@ end;
 
 function TBlockPoolConcurrent.Available: SizeUInt;
 begin
-  Result := FInner.Available;
+  FLock.Acquire;
+  try
+    Result := FInner.Available;
+  finally
+    FLock.Release;
+  end;
 end;
 
 function TBlockPoolConcurrent.InUse: SizeUInt;
 begin
-  Result := FInner.InUse;
+  FLock.Acquire;
+  try
+    Result := FInner.InUse;
+  finally
+    FLock.Release;
+  end;
 end;
 
 end.

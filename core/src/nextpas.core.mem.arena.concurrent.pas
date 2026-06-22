@@ -160,12 +160,22 @@ end;
 
 function TArenaConcurrent.UsedSize: SizeUInt;
 begin
-  Result := FInner.UsedSize;
+  FLock.Acquire;
+  try
+    Result := FInner.UsedSize;
+  finally
+    FLock.Release;
+  end;
 end;
 
 function TArenaConcurrent.RemainingSize: SizeUInt;
 begin
-  Result := FInner.RemainingSize;
+  FLock.Acquire;
+  try
+    Result := FInner.RemainingSize;
+  finally
+    FLock.Release;
+  end;
 end;
 
 function TArenaConcurrent.Stats: TArenaStats;
