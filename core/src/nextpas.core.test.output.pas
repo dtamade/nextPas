@@ -132,10 +132,21 @@ end;
 
 function StatusDot(AStatus: TTestStatus): string;
 begin
+  if not GAnsiEnabled then
+  begin
+    case AStatus of
+      tsPassed:  Result := '+';
+      tsFailed:  Result := 'x';
+      tsSkipped: Result := 'o';
+      tsError:   Result := '!';
+    end;
+    Exit;
+  end;
+
   case AStatus of
-    tsPassed:  Result := AnsiGreen(#$2713);
-    tsFailed:  Result := AnsiRed(#$2717);
-    tsSkipped: Result := AnsiYellow(#$25CB);
+    tsPassed:  Result := AnsiGreen(#$E2#$9C#$93);
+    tsFailed:  Result := AnsiRed(#$E2#$9C#$97);
+    tsSkipped: Result := AnsiYellow(#$E2#$97#$8B);
     tsError:   Result := AnsiRed('!');
   end;
 end;

@@ -92,9 +92,22 @@ begin
   end;
 end;
 
+procedure TestStatusDotAsciiFallback;
+begin
+  Inc(GTestsRun);
+  SetAnsiEnabled(False);
+  try
+    CheckEqual(StatusDot(tsPassed), '+');
+    CheckEqual(StatusDot(tsFailed), 'x');
+    CheckEqual(StatusDot(tsSkipped), 'o');
+    CheckEqual(StatusDot(tsError), '!');
+  finally
+    SetAnsiEnabled(True);
+  end;
+end;
+
 procedure TestStatusDotDistinct;
 var
-  LDot: string;
   LPassed, LFailed, LSkipped, LError: string;
 begin
   Inc(GTestsRun);
@@ -362,6 +375,19 @@ begin
   CheckContains(LXml, '<failure message="segfault"');
 end;
 
+function MakeTempJUnitPath: string;
+var
+  LGuid: TGuid;
+  LName: string;
+begin
+  if CreateGUID(LGuid) = 0 then
+    LName := GUIDToString(LGuid)
+  else
+    LName := IntToStr(GetTickCount64);
+  Result := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+    'nextpas_test_junit_' + LName + '.xml';
+end;
+
 procedure TestWriteJUnitXML;
 var
   LResults: specialize TArray<TTestRunResult>;
@@ -371,7 +397,7 @@ var
   LF: TextFile;
 begin
   Inc(GTestsRun);
-  LPath := '/tmp/nextpas_test_junit_' + IntToStr(GetTickCount64) + '.xml';
+  LPath := MakeTempJUnitPath;
   try
     SetLength(LResults, 1);
     LResults[0] := TTestRunResult.Create('write_test');
@@ -430,6 +456,7 @@ begin
   Suite.Test('TestAnsiHelpersDisabled', @TestAnsiHelpersDisabled);
   Suite.Test('TestAnsiToggle', @TestAnsiToggle);
   Suite.Test('TestStatusDotAll', @TestStatusDotAll);
+  Suite.Test('TestStatusDotAsciiFallback', @TestStatusDotAsciiFallback);
   Suite.Test('TestStatusDotDistinct', @TestStatusDotDistinct);
   Suite.Test('TestFilterEmpty', @TestFilterEmpty);
   Suite.Test('TestFilterSubstring', @TestFilterSubstring);
