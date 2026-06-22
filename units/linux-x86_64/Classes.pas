@@ -16,28 +16,29 @@ const
   fmShareDenyWrite = $0020;
 
 type
+  TDuplicates = (dupIgnore, dupAccept, dupError);
+
+  EStreamError = class(Exception);
+
   TSeekOrigin = (soBeginning, soCurrent, soEnd);
 
   TStream = class
-  private
-    function GetPosition: Int64;
-    procedure SetPosition(const Pos: Int64);
-    function GetSize: Int64;
   protected
-    function GetSize64: Int64; virtual;
-    procedure SetSize64(const NewSize: Int64); virtual;
+    function GetPosition: Int64; virtual;
+    procedure SetPosition(const Pos: Int64); virtual;
+    function GetSize: Int64; virtual;
+    procedure SetSize(const NewSize: Int64); virtual;
   public
     function Read(var Buffer; Count: LongInt): LongInt; virtual;
     function Write(const Buffer; Count: LongInt): LongInt; virtual;
-    function Seek(Offset: LongInt; Origin: Word): LongInt; virtual;
-    function Seek64(const Offset: Int64; Origin: TSeekOrigin): Int64; virtual;
+    function Seek(const Offset: Int64; Origin: TSeekOrigin): Int64; virtual;
     procedure ReadBuffer(var Buffer; Count: LongInt);
     procedure WriteBuffer(const Buffer; Count: LongInt);
     function ReadByte: Byte;
     procedure WriteByte(B: Byte);
     function CopyFrom(Source: TStream; Count: Int64): Int64;
     property Position: Int64 read GetPosition write SetPosition;
-    property Size: Int64 read GetSize write SetSize64;
+    property Size: Int64 read GetSize write SetSize;
   end;
 
   TList = class
@@ -80,14 +81,14 @@ type
     FHandle: File;
     FFileName: string;
   protected
-    function GetSize64: Int64; override;
+    function GetSize: Int64; override;
   public
     constructor Create(const AFileName: string; Mode: Word);
     destructor Destroy; override;
 
     function Read(var Buffer; Count: LongInt): LongInt; override;
     function Write(const Buffer; Count: LongInt): LongInt; override;
-    function Seek(Offset: LongInt; Origin: Word): LongInt; override;
+    function Seek(const Offset: Int64; Origin: TSeekOrigin): Int64; override;
   end;
 
   TStringList = class
@@ -96,6 +97,10 @@ type
     FObjects: array of TObject;
     FCount: Integer;
     FSorted: Boolean;
+    FDelimiter: Char;
+    FQuoteChar: Char;
+    FDuplicates: TDuplicates;
+    FOwnsObjects: Boolean;
     FTextLineBreakStyle: Integer; // 0=LF, 1=CRLF
     function GetString(Index: Integer): string;
     procedure SetString(Index: Integer; const Value: string);
@@ -106,6 +111,8 @@ type
     function GetName(Index: Integer): string;
     function GetText: string;
     procedure SetText(const Value: string);
+    function GetDelimitedText: string;
+    procedure SetDelimitedText(const Value: string);
     procedure SetSorted(Value: Boolean);
   public
     constructor Create;
@@ -125,6 +132,11 @@ type
 
     property Count: Integer read FCount;
     property Sorted: Boolean read FSorted write SetSorted;
+    property Delimiter: Char read FDelimiter write FDelimiter;
+    property QuoteChar: Char read FQuoteChar write FQuoteChar;
+    property Duplicates: TDuplicates read FDuplicates write FDuplicates;
+    property DelimitedText: string read GetDelimitedText write SetDelimitedText;
+    property OwnsObjects: Boolean read FOwnsObjects write FOwnsObjects;
     property Strings[Index: Integer]: string read GetString write SetString; default;
     property Names[Index: Integer]: string read GetName;
     property Objects[Index: Integer]: TObject read GetObject write SetObject;
@@ -146,14 +158,9 @@ begin
   raise Exception.Create('TStream.Write not implemented');
 end;
 
-function TStream.Seek(Offset: LongInt; Origin: Word): LongInt;
+function TStream.Seek(const Offset: Int64; Origin: TSeekOrigin): Int64;
 begin
   raise Exception.Create('TStream.Seek not implemented');
-end;
-
-function TStream.Seek64(const Offset: Int64; Origin: TSeekOrigin): Int64;
-begin
-  raise Exception.Create('TStream.Seek64 not implemented');
 end;
 
 function TStream.ReadByte: Byte;
@@ -186,25 +193,24 @@ end;
 
 function TStream.GetPosition: Int64;
 begin
-  Result := Seek64(0, soCurrent);
+  Result := Seek(0, soCurrent);
 end;
 
 procedure TStream.SetPosition(const Pos: Int64);
 begin
-  Seek64(Pos, soBeginning);
+  Seek(Pos, soBeginning);
 end;
 
 function TStream.GetSize: Int64;
+var
+  LPos: Int64;
 begin
-  Result := GetSize64;
+  LPos := GetPosition;
+  Result := Seek(0, soEnd);
+  SetPosition(LPos);
 end;
 
-function TStream.GetSize64: Int64;
-begin
-  Result := 0;
-end;
-
-procedure TStream.SetSize64(const NewSize: Int64);
+procedure TStream.SetSize(const NewSize: Int64);
 begin
   // no-op
 end;
@@ -220,8 +226,8 @@ begin
   Result := 0;
   if Count = 0 then
   begin
-    Source.Position := 0;
-    Count := Source.Size;
+    Source.SetPosition(0);
+    Count := Source.GetSize;
   end;
   LRemain := Count;
   while LRemain > 0 do
@@ -421,17 +427,21 @@ begin
     Result := 0;
 end;
 
-function TFileStream.Seek(Offset: LongInt; Origin: Word): LongInt;
+function TFileStream.Seek(const Offset: Int64; Origin: TSeekOrigin): Int64;
 begin
   {$I-}
-  System.Seek(FHandle, Offset);
+  case Origin of
+    soBeginning: System.Seek(FHandle, Offset);
+    soEnd: System.Seek(FHandle, FileSize(FHandle) + Offset);
+    soCurrent: System.Seek(FHandle, FilePos(FHandle) + Offset);
+  end;
   Result := FilePos(FHandle);
   {$I+}
   if IOResult <> 0 then
     Result := -1;
 end;
 
-function TFileStream.GetSize64: Int64;
+function TFileStream.GetSize: Int64;
 begin
   {$I-}
   Result := FileSize(FHandle);
@@ -447,6 +457,9 @@ begin
   inherited Create;
   FCount := 0;
   SetLength(FItems, 0);
+  FDelimiter := ',';
+  FQuoteChar := '"';
+  FDuplicates := dupIgnore;
 end;
 
 destructor TStringList.Destroy;
@@ -693,6 +706,59 @@ begin
   if AList = nil then Exit;
   for I := 0 to AList.Count - 1 do
     Add(AList[I]);
+end;
+
+function TStringList.GetDelimitedText: string;
+var
+  I: Integer;
+  S: string;
+begin
+  Result := '';
+  for I := 0 to FCount - 1 do
+  begin
+    S := FItems[I];
+    if (FQuoteChar <> #0) and (Pos(FDelimiter, S) > 0) or (Pos(FQuoteChar, S) > 0) then
+      S := FQuoteChar + S + FQuoteChar;
+    if I > 0 then
+      Result := Result + FDelimiter;
+    Result := Result + S;
+  end;
+end;
+
+procedure TStringList.SetDelimitedText(const Value: string);
+var
+  I, L, Start: Integer;
+  InQuote: Boolean;
+begin
+  Clear;
+  if Value = '' then Exit;
+  I := 1;
+  L := Length(Value);
+  while I <= L do
+  begin
+    Start := I;
+    InQuote := False;
+    if (FQuoteChar <> #0) and (Value[I] = FQuoteChar) then
+    begin
+      InQuote := True;
+      Inc(I);
+      Start := I;
+      while (I <= L) and (Value[I] <> FQuoteChar) do
+        Inc(I);
+      Add(Copy(Value, Start, I - Start));
+      if (I <= L) and (Value[I] = FQuoteChar) then
+        Inc(I);
+      if (I <= L) and (Value[I] = FDelimiter) then
+        Inc(I);
+    end
+    else
+    begin
+      while (I <= L) and (Value[I] <> FDelimiter) do
+        Inc(I);
+      Add(Copy(Value, Start, I - Start));
+      Inc(I);
+    end;
+  end;
 end;
 
 end.

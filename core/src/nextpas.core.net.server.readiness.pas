@@ -11,7 +11,7 @@ function NewTcpReadinessServer(
 
 implementation
 
-uses nextpas.core.errors, nextpas.core.thread, nextpas.core.time.base, nextpas.core.time.deadline, nextpas.core.platform.io.base, nextpas.core.platform.io, nextpas.core.net.tcp, nextpas.core.net.server.runtime, nextpas.core.text.conv;
+uses SysUtils, nextpas.core.errors, nextpas.core.thread, nextpas.core.time.base, nextpas.core.time.deadline, nextpas.core.platform.io.base, nextpas.core.platform.io, nextpas.core.net.tcp, nextpas.core.net.server.runtime, nextpas.core.text.conv;
 
 type
   TTcpReadinessServer = class;

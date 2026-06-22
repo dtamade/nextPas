@@ -19,7 +19,7 @@ unit nextpas.core.tls.openssl.context;
 interface
 
 uses
-  SysUtils, nextpas.core.system.classes, nextpas.core.sync,
+  SysUtils, nextpas.core.io.intf, nextpas.core.fs.stream, nextpas.core.sync,
   nextpas.core.base.utils,
   nextpas.core.fs,
   nextpas.core.io.intf,
@@ -117,10 +117,10 @@ type
     
     { ISSLContext - 证书和密钥管理 }
     procedure LoadCertificate(const AFileName: string); overload;
-    procedure LoadCertificate(AStream: TStream); overload;
+    procedure LoadCertificate(AStream: IStream); overload;
     procedure LoadCertificate(ACert: ISSLCertificate); overload;
     procedure LoadPrivateKey(const AFileName: string; const APassword: string = ''); overload;
-    procedure LoadPrivateKey(AStream: TStream; const APassword: string = ''); overload;
+    procedure LoadPrivateKey(AStream: IStream; const APassword: string = ''); overload;
     procedure LoadCertificatePEM(const APEM: string);
     procedure LoadPrivateKeyPEM(const APEM: string; const APassword: string = '');
     procedure LoadCAFile(const AFileName: string);
@@ -196,7 +196,7 @@ type
     
     { ISSLContext - 创建连接 }
     function CreateConnection(ASocket: THandle): ISSLConnection; overload;
-    function CreateConnection(AStream: TStream): ISSLConnection; overload;
+    function CreateConnection(AStream: IStream): ISSLConnection; overload;
     
     { ISSLContext - 状态查询 }
     function IsValid: Boolean;
@@ -394,18 +394,17 @@ end;
 
 function ReadPrivateKeyFileBytes(const AFileName, AMethodName: string): TBytes;
 var
-  LStream: TFileStream;
+  LStream: IStream;
 begin
   SetLength(Result, 0);
 
   try
-    LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
+    LStream := FsOpen(AFileName, [fmRead]);
     try
       SetLength(Result, LStream.Size);
       if LStream.Size > 0 then
-        LStream.ReadBuffer(Result[0], LStream.Size);
+        LStream.Read(Result[0], LStream.Size);
     finally
-      LStream.Free;
     end;
   except
     on E: Exception do
@@ -419,12 +418,12 @@ begin
   end;
 end;
 
-function ReadPrivateKeyStreamBytes(AStream: TStream): TBytes;
+function ReadPrivateKeyStreamBytes(AStream: IStream): TBytes;
 begin
   Result := IoReadAll(WrapTStream(AStream, False));
 end;
 
-function ReadLimitedStreamBytes(AStream: TStream; const AMaxSize: Int64;
+function ReadLimitedStreamBytes(AStream: IStream; const AMaxSize: Int64;
   const ASubject: string): TBytes;
 var
   LReader: IReader;
@@ -1337,7 +1336,7 @@ begin
   TSecurityLog.Info('OpenSSL', nextpas.core.text.conv.Format('Loaded certificate from file: %s', [AFileName]));
 end;
 
-procedure TOpenSSLContext.LoadCertificate(AStream: TStream);
+procedure TOpenSSLContext.LoadCertificate(AStream: IStream);
 var
   Data: TBytes;
   BIO: PBIO;
@@ -1535,7 +1534,7 @@ begin
   TSecurityLog.Audit('OpenSSL', 'LoadPrivateKey', 'System', 'Private key loaded from file');
 end;
 
-procedure TOpenSSLContext.LoadPrivateKey(AStream: TStream; const APassword: string = '');
+procedure TOpenSSLContext.LoadPrivateKey(AStream: IStream; const APassword: string = '');
 var
   Data: TBytes;
   PKey: PEVP_PKEY;
@@ -2370,7 +2369,7 @@ begin
   end;
 end;
 
-function TOpenSSLContext.CreateConnection(AStream: TStream): ISSLConnection;
+function TOpenSSLContext.CreateConnection(AStream: IStream): ISSLConnection;
 var
   LEarlyDataContext: ISSLEarlyDataContext;
   LExposeEarlyData: Boolean;
@@ -2554,7 +2553,7 @@ end;
 
 procedure TOpenSSLContext.LoadServerStapledOCSPResponseFile(const AFileName: string);
 var
-  LStream: TFileStream;
+  LStream: IStream;
   LSize: Int64;
 begin
   RequireValidContext('LoadServerStapledOCSPResponseFile');
@@ -2567,7 +2566,7 @@ begin
     );
 
   try
-    LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
+    LStream := FsOpen(AFileName, [fmRead]);
     try
       LSize := LStream.Size;
       if LSize = 0 then
@@ -2584,13 +2583,12 @@ begin
         );
 
       SetLength(FServerStapledOCSPResponse, LSize);
-      LStream.ReadBuffer(FServerStapledOCSPResponse[0], LSize);
+      LStream.Read(FServerStapledOCSPResponse[0], LSize);
       ApplyServerOCSPStaplingConfiguration;
 
       TSecurityLog.Info('OpenSSL', nextpas.core.text.conv.Format('Loaded server stapled OCSP response from %s (%d bytes)',
         [AFileName, LSize]));
     finally
-      LStream.Free;
     end;
   except
     on E: ESSLException do

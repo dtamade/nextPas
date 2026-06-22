@@ -9,6 +9,7 @@ uses
   nextpas.core.base,
   nextpas.core.io.base,
   nextpas.core.io.intf,
+  nextpas.core.io.stream_adapter,
   nextpas.core.net.base,
   nextpas.core.net.intf,
   nextpas.core.time.deadline,
@@ -89,7 +90,7 @@ var
   LContext: ISSLContext;
   LTransport: TTcpStreamTransportStream;
   LConnector: TSSLConnector;
-  LTlsStream: TSSLStream;
+  LTlsStream: IStream;
 begin
   if AConn = nil then
     raise EArgumentError.Create('TLS client stream requires connection');
@@ -99,8 +100,8 @@ begin
     LConnector := TSSLConnector.FromContext(LContext);
     if AALPNProtocols <> '' then
       LConnector := LConnector.WithALPN(AALPNProtocols);
-    LTlsStream := LConnector.ConnectStream(LTransport, AServerName);
-    Result := TTlsTcpStream.Create(AConn, LTlsStream);
+    LTlsStream := LConnector.ConnectStream(WrapTStream(LTransport, False), AServerName);
+    Result := TTlsTcpStream.Create(AConn, LTlsStream as TSSLStream);
     LTransport := nil;
   finally
     LTransport.Free;
@@ -112,7 +113,7 @@ function NewTlsServerTcpStream(const AConn: ITcpStream;
 var
   LTransport: TTcpStreamTransportStream;
   LAcceptor: TSSLAcceptor;
-  LTlsStream: TSSLStream;
+  LTlsStream: IStream;
 begin
   if AConn = nil then
     raise EArgumentError.Create('TLS server stream requires connection');
@@ -121,8 +122,8 @@ begin
   LTransport := TTcpStreamTransportStream.Create(AConn);
   try
     LAcceptor := TSSLAcceptor.FromContext(AContext);
-    LTlsStream := LAcceptor.AcceptStream(LTransport);
-    Result := TTlsTcpStream.Create(AConn, LTlsStream);
+    LTlsStream := LAcceptor.AcceptStream(WrapTStream(LTransport, False));
+    Result := TTlsTcpStream.Create(AConn, LTlsStream as TSSLStream);
     LTransport := nil;
   finally
     LTransport.Free;
@@ -230,7 +231,7 @@ function TTlsTcpStream.Seek(const AOffset: Int64;
 begin
   if FStream = nil then
     Exit(0);
-  Result := FStream.Seek(AOffset, Classes.TSeekOrigin(AOrigin));
+  Result := FStream.Seek(AOffset, AOrigin);
 end;
 
 procedure TTlsTcpStream.Close;

@@ -102,7 +102,7 @@ begin
     end;
     AConnection := LResult.Connection;
     if LResult.Stream <> nil then
-      LResult.Stream.Free;
+      LResult.Stream := nil;
     Result := True;
   finally
     LDialer.Free;

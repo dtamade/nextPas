@@ -170,7 +170,7 @@ procedure TWinSSLCertificateStore.ClearCache;
 var
   i: Integer;
 begin
-  for i := 0 to Length(FCertificates) - 1 do
+  for i := 0 to FCertificates.Count - 1 do
     ISSLCertificate(FCertificates[i])._Release;
   FCertificates.Clear;
 end;
@@ -592,12 +592,12 @@ end;
 
 function TWinSSLCertificateStore.GetCount: Integer;
 begin
-  Result := Length(FCertificates);
+  Result := FCertificates.Count;
 end;
 
 function TWinSSLCertificateStore.GetCertificate(AIndex: Integer): ISSLCertificate;
 begin
-  if (AIndex >= 0) and (AIndex < Length(FCertificates)) then
+  if (AIndex >= 0) and (AIndex < FCertificates.Count) then
     Result := ISSLCertificate(FCertificates[AIndex])
   else
     Result := nil;
@@ -607,8 +607,8 @@ function TWinSSLCertificateStore.GetAllCertificates: TSSLCertificateArray;
 var
   i: Integer;
 begin
-  SetLength(Result, Length(FCertificates));
-  for i := 0 to Length(FCertificates) - 1 do
+  SetLength(Result, FCertificates.Count);
+  for i := 0 to FCertificates.Count - 1 do
     Result[i] := ISSLCertificate(FCertificates[i]);
 end;
 
@@ -634,7 +634,7 @@ begin
 
   // 基于缓存证书对象做归一化匹配，避免 WinSSL lane
   // 继续停留在 backend-native 的未归一化字符串搜索语义上。
-  for I := 0 to Length(FCertificates) - 1 do
+  for I := 0 to FCertificates.Count - 1 do
   begin
     Cert := ISSLCertificate(FCertificates[I]);
     LCandidate := NormalizeCertificateStoreDN(GetCertificateStoreDNText(Cert, False));
@@ -642,7 +642,7 @@ begin
       Exit(Cert);
   end;
 
-  for I := 0 to Length(FCertificates) - 1 do
+  for I := 0 to FCertificates.Count - 1 do
   begin
     Cert := ISSLCertificate(FCertificates[I]);
     LCandidate := NormalizeCertificateStoreDN(GetCertificateStoreDNText(Cert, False));
@@ -667,7 +667,7 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to Length(FCertificates) - 1 do
+  for I := 0 to FCertificates.Count - 1 do
   begin
     Cert := ISSLCertificate(FCertificates[I]);
     LCandidate := NormalizeCertificateStoreDN(GetCertificateStoreDNText(Cert, True));
@@ -675,7 +675,7 @@ begin
       Exit(Cert);
   end;
 
-  for I := 0 to Length(FCertificates) - 1 do
+  for I := 0 to FCertificates.Count - 1 do
   begin
     Cert := ISSLCertificate(FCertificates[I]);
     LCandidate := NormalizeCertificateStoreDN(GetCertificateStoreDNText(Cert, True));
@@ -695,7 +695,7 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to Length(FCertificates) - 1 do
+  for I := 0 to FCertificates.Count - 1 do
   begin
     Cert := ISSLCertificate(FCertificates[I]);
     if NormalizeCertificateStoreHex(Cert.GetSerialNumber) = LTarget then
@@ -718,7 +718,7 @@ begin
   if SearchFP = '' then
     Exit;
   
-  for I := 0 to Length(FCertificates) - 1 do
+  for I := 0 to FCertificates.Count - 1 do
   begin
     Cert := ISSLCertificate(FCertificates[I]);
     

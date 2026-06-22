@@ -18,7 +18,7 @@ unit nextpas.core.tls.winssl.certificate;
 interface
 
 uses
-  Windows, SysUtils, nextpas.core.system.classes,
+  Windows, SysUtils, nextpas.core.io.intf, nextpas.core.fs.stream,
   nextpas.core.base.utils,
   nextpas.core.fs,
   nextpas.core.time,
@@ -47,13 +47,13 @@ type
     
     { ISSLCertificate - 加载和保存 }
     function LoadFromFile(const AFileName: string): Boolean;
-    function LoadFromStream(AStream: TStream): Boolean;
+    function LoadFromStream(AStream: IStream): Boolean;
     function LoadFromMemory(const AData: Pointer; ASize: Integer): Boolean;
     function LoadFromPEM(const APEM: string): Boolean;
     function LoadFromDER(const ADER: TBytes): Boolean;
     
     function SaveToFile(const AFileName: string): Boolean;
-    function SaveToStream(AStream: TStream): Boolean;
+    function SaveToStream(AStream: IStream): Boolean;
     function SaveToPEM: string;
     function SaveToDER: TBytes;
     
@@ -424,10 +424,10 @@ end;
 
 function TWinSSLCertificate.LoadFromFile(const AFileName: string): Boolean;
 var
-  FileStream: TFileStream;
+  FileStream: IStream;
 begin
   try
-    FileStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
+    FileStream := FsOpen(AFileName, [fmRead]);
     try
       Result := LoadFromStream(FileStream);
     finally
@@ -437,7 +437,7 @@ begin
   end;
 end;
 
-function TWinSSLCertificate.LoadFromStream(AStream: TStream): Boolean;
+function TWinSSLCertificate.LoadFromStream(AStream: IStream): Boolean;
 var
   Data: TBytes;
   Size: Int64;
@@ -543,10 +543,10 @@ end;
 
 function TWinSSLCertificate.SaveToFile(const AFileName: string): Boolean;
 var
-  FileStream: TFileStream;
+  FileStream: IStream;
 begin
   try
-    FileStream := TFileStream.Create(AFileName, fmCreate);
+    FileStream := FsCreate(AFileName);
     try
       Result := SaveToStream(FileStream);
     finally
@@ -556,7 +556,7 @@ begin
   end;
 end;
 
-function TWinSSLCertificate.SaveToStream(AStream: TStream): Boolean;
+function TWinSSLCertificate.SaveToStream(AStream: IStream): Boolean;
 var
   Data: TBytes;
 begin

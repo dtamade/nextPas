@@ -11,7 +11,7 @@ unit nextpas.core.tls.freepascal.earlydatareplay.dirstore;
 interface
 
 uses
-  SysUtils, nextpas.core.system.classes, nextpas.core.fs,
+  SysUtils, nextpas.core.fs.stream, nextpas.core.fs,
   nextpas.core.tls.freepascal.session;
 
 type
@@ -21,11 +21,11 @@ type
     IFreePascalEarlyDataReplayStoreGuard)
   private
     FOwner: TFreePascalDirectoryEarlyDataReplayStore;
-    FLockStream: TFileStream;
+    FLockStream: IStream;
   public
     constructor Create(
       AOwner: TFreePascalDirectoryEarlyDataReplayStore;
-      ALockStream: TFileStream
+      ALockStream: IStream
     );
     destructor Destroy; override;
   end;
@@ -46,9 +46,9 @@ type
       const ADirectoryName: string;
       out AEntries: TFreePascalEarlyDataReplayStoreEntries
     ): Boolean;
-    function OpenLockFileStream(out ALockStream: TFileStream): Boolean;
-    function AcquireStoreLock(out ALockStream: TFileStream): Boolean;
-    procedure ReleaseStoreLock(var ALockStream: TFileStream);
+    function OpenLockFileStream(out ALockStream: IStream): Boolean;
+    function AcquireStoreLock(out ALockStream: IStream): Boolean;
+    procedure ReleaseStoreLock(var ALockStream: IStream);
     function WriteSnapshotDirectory(
       const ADirectoryName: string;
       const AEntries: TFreePascalEarlyDataReplayStoreEntries
@@ -111,7 +111,7 @@ end;
 
 constructor TFreePascalDirectoryEarlyDataReplayStoreGuard.Create(
   AOwner: TFreePascalDirectoryEarlyDataReplayStore;
-  ALockStream: TFileStream
+  ALockStream: IStream
 );
 begin
   inherited Create;
@@ -125,7 +125,6 @@ begin
     FOwner.ReleaseStoreLock(FLockStream)
   else if FLockStream <> nil then
   begin
-    FLockStream.Free;
     FLockStream := nil;
   end;
 
@@ -316,12 +315,12 @@ begin
 end;
 
 function TFreePascalDirectoryEarlyDataReplayStore.OpenLockFileStream(
-  out ALockStream: TFileStream
+  out ALockStream: IStream
 ): Boolean;
 var
   LLockFileName: string;
   LDir: string;
-  LCreateStream: TFileStream;
+  LCreateStream: IStream;
   LAttempt: Integer;
 begin
   Result := False;
@@ -338,7 +337,7 @@ begin
   for LAttempt := 1 to 2 do
   begin
     try
-      ALockStream := TFileStream.Create(LLockFileName, fmOpenReadWrite or fmShareDenyWrite);
+      ALockStream := FsOpen(LLockFileName, [fmReadWrite]);
       Exit(True);
     except
       if LAttempt = 2 then
@@ -346,10 +345,9 @@ begin
     end;
 
     try
-      LCreateStream := TFileStream.Create(LLockFileName, Ord(fmCreate));
+      LCreateStream := FsCreate(LLockFileName);
       try
       finally
-        LCreateStream.Free;
       end;
     except
       // A concurrent creator may have won the race; the second open attempt decides.
@@ -358,7 +356,7 @@ begin
 end;
 
 function TFreePascalDirectoryEarlyDataReplayStore.AcquireStoreLock(
-  out ALockStream: TFileStream
+  out ALockStream: IStream
 ): Boolean;
 begin
   Result := False;
@@ -369,7 +367,6 @@ begin
   {$IFDEF UNIX}
   if FpFlock(ALockStream.Handle, LOCK_EX or LOCK_NB) <> 0 then
   begin
-    ALockStream.Free;
     ALockStream := nil;
     Exit(False);
   end;
@@ -378,7 +375,7 @@ begin
 end;
 
 procedure TFreePascalDirectoryEarlyDataReplayStore.ReleaseStoreLock(
-  var ALockStream: TFileStream
+  var ALockStream: IStream
 );
 begin
   if ALockStream = nil then
@@ -386,7 +383,6 @@ begin
   {$IFDEF UNIX}
   FpFlock(ALockStream.Handle, LOCK_UN);
   {$ENDIF}
-  ALockStream.Free;
   ALockStream := nil;
 end;
 
@@ -438,7 +434,7 @@ function TFreePascalDirectoryEarlyDataReplayStore.WriteSnapshotDirectory(
   const AEntries: TFreePascalEarlyDataReplayStoreEntries
 ): Boolean;
 var
-  LStream: TFileStream;
+  LStream: IStream;
   LFileName: string;
   I: Integer;
   LVersion: Integer;
@@ -457,13 +453,12 @@ begin
 
       LFileName := nextpas.core.fs.PathEnsureSep(ADirectoryName) +
         EncodeKey(AEntries[I].Key) + DIRECTORY_REPLAY_ENTRY_SUFFIX;
-      LStream := TFileStream.Create(LFileName, Ord(fmCreate));
+      LStream := FsCreate(LFileName);
       try
         LVersion := FREEPASCAL_DIRECTORY_REPLAY_STORE_VERSION;
-        LStream.WriteBuffer(LVersion, SizeOf(Integer));
-        LStream.WriteBuffer(AEntries[I].ExpiresAt, SizeOf(TDateTime));
+        LStream.Write(LVersion, SizeOf(Integer));
+        LStream.Write(AEntries[I].ExpiresAt, SizeOf(TDateTime));
       finally
-        LStream.Free;
       end;
     end;
 
@@ -479,7 +474,7 @@ function TFreePascalDirectoryEarlyDataReplayStore.TryLoadEntry(
   out AEntry: TFreePascalEarlyDataReplayStoreEntry
 ): Boolean;
 var
-  LStream: TFileStream;
+  LStream: IStream;
   LVersion: Integer;
 begin
   Result := False;
@@ -492,19 +487,18 @@ begin
     Exit;
 
   try
-    LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
+    LStream := FsOpen(AFileName, [fmRead]);
     try
-      LStream.ReadBuffer(LVersion, SizeOf(Integer));
+      LStream.Read(LVersion, SizeOf(Integer));
       if LVersion <> FREEPASCAL_DIRECTORY_REPLAY_STORE_VERSION then
         Exit(False);
 
-      LStream.ReadBuffer(AEntry.ExpiresAt, SizeOf(TDateTime));
+      LStream.Read(AEntry.ExpiresAt, SizeOf(TDateTime));
       if LStream.Position <> LStream.Size then
         Exit(False);
 
       Result := True;
     finally
-      LStream.Free;
     end;
   except
     Result := False;
@@ -515,7 +509,7 @@ function TFreePascalDirectoryEarlyDataReplayStore.AcquireUpdateGuard(
   out AGuard: IFreePascalEarlyDataReplayStoreGuard
 ): Boolean;
 var
-  LLockStream: TFileStream;
+  LLockStream: IStream;
 begin
   Result := False;
   AGuard := nil;

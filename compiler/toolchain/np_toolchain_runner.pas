@@ -412,8 +412,8 @@ begin
   Result := False;
   if not SameText(AStep.ToolRole, 'assembler') then
     Exit;
-  if SameText(AStep.StepId, 'native-assemble') then
-    Exit;
+  // Allow native-assemble to be skipped when input .s is missing
+  // (e.g. facade units with empty implementation)
 
   for InputIndex := 0 to Length(AStep.Inputs) - 1 do
     if SameText(AStep.Inputs[InputIndex].Kind, 'assembly-text') and

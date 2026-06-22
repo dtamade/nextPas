@@ -44,7 +44,7 @@ function NewHttpServer(const AHandler: IHttpHandler;
 
 implementation
 
-uses nextpas.core.errors, nextpas.core.http.impl.registry;
+uses SysUtils, nextpas.core.errors, nextpas.core.http.impl.registry;
 
 type
   THttpConnHandler = class(TInterfacedObject, ITcpServerHandler,

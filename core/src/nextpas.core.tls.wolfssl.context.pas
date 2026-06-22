@@ -19,7 +19,7 @@ interface
 
 uses
   nextpas.core.base,
-  SysUtils, nextpas.core.system.classes, Base64,
+  SysUtils, nextpas.core.io.intf, nextpas.core.fs.stream, Base64,
   nextpas.core.fs,
   nextpas.core.text.conv,
   nextpas.core.io.stream_adapter,
@@ -107,10 +107,10 @@ type
 
     { ISSLContext - 证书和密钥管理 }
     procedure LoadCertificate(const AFileName: string); overload;
-    procedure LoadCertificate(AStream: TStream); overload;
+    procedure LoadCertificate(AStream: IStream); overload;
     procedure LoadCertificate(ACert: ISSLCertificate); overload;
     procedure LoadPrivateKey(const AFileName: string; const APassword: string = ''); overload;
-    procedure LoadPrivateKey(AStream: TStream; const APassword: string = ''); overload;
+    procedure LoadPrivateKey(AStream: IStream; const APassword: string = ''); overload;
     procedure LoadCertificatePEM(const APEM: string);
     procedure LoadPrivateKeyPEM(const APEM: string; const APassword: string = '');
     procedure LoadCAFile(const AFileName: string);
@@ -183,7 +183,7 @@ type
 
     { ISSLContext - 创建连接 }
     function CreateConnection(ASocket: THandle): ISSLConnection; overload;
-    function CreateConnection(AStream: TStream): ISSLConnection; overload;
+    function CreateConnection(AStream: IStream): ISSLConnection; overload;
 
     { ISSLContext - 状态查询 }
     function IsValid: Boolean;
@@ -539,7 +539,7 @@ begin
     raise ESSLCertError.CreateFmt('Failed to load certificate: %s', [AFileName]);
 end;
 
-procedure TWolfSSLContext.LoadCertificate(AStream: TStream);
+procedure TWolfSSLContext.LoadCertificate(AStream: IStream);
 var
   LBuffer: TBytes;
   LRet: Integer;
@@ -627,7 +627,7 @@ begin
     raise ESSLCertError.CreateFmt('Failed to load private key: %s', [AFileName]);
 end;
 
-procedure TWolfSSLContext.LoadPrivateKey(AStream: TStream; const APassword: string);
+procedure TWolfSSLContext.LoadPrivateKey(AStream: IStream; const APassword: string);
 var
   LBuffer: TBytes;
   LRet: Integer;
@@ -1081,7 +1081,7 @@ begin
     Result := nextpas.core.tls.wolfssl.connection.TWolfSSLConnection.Create(Self, ASocket);
 end;
 
-function TWolfSSLContext.CreateConnection(AStream: TStream): ISSLConnection;
+function TWolfSSLContext.CreateConnection(AStream: IStream): ISSLConnection;
 var
   LExposeEarlyData: Boolean;
   LExposeOCSP: Boolean;
@@ -1282,7 +1282,7 @@ end;
 
 procedure TWolfSSLContext.LoadServerStapledOCSPResponseFile(const AFileName: string);
 var
-  LStream: TFileStream;
+  LStream: IStream;
   LSize: Int64;
 begin
   RequireValidContext('LoadServerStapledOCSPResponseFile');
@@ -1295,7 +1295,7 @@ begin
     );
 
   try
-    LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
+    LStream := FsOpen(AFileName, [fmRead]);
     try
       LSize := LStream.Size;
       if LSize = 0 then
@@ -1312,9 +1312,8 @@ begin
         );
 
       SetLength(FServerStapledOCSPResponse, LSize);
-      LStream.ReadBuffer(FServerStapledOCSPResponse[0], LSize);
+      LStream.Read(FServerStapledOCSPResponse[0], LSize);
     finally
-      LStream.Free;
     end;
 
     ApplyOCSPStaplingConfiguration;

@@ -18,7 +18,7 @@ unit nextpas.core.tls.winssl.context;
 interface
 
 uses
-  Windows, SysUtils, nextpas.core.system.classes,
+  Windows, SysUtils, nextpas.core.io.intf, nextpas.core.fs.stream,
   nextpas.core.base.utils,
   nextpas.core.fs,
   nextpas.core.text.conv,
@@ -106,10 +106,10 @@ type
     
     { ISSLContext - 证书和密钥管理 }
     procedure LoadCertificate(const AFileName: string); overload;
-    procedure LoadCertificate(AStream: TStream); overload;
+    procedure LoadCertificate(AStream: IStream); overload;
     procedure LoadCertificate(ACert: ISSLCertificate); overload;
     procedure LoadPrivateKey(const AFileName: string; const APassword: string = ''); overload;
-    procedure LoadPrivateKey(AStream: TStream; const APassword: string = ''); overload;
+    procedure LoadPrivateKey(AStream: IStream; const APassword: string = ''); overload;
     procedure LoadCertificatePEM(const APEM: string);
     procedure LoadPrivateKeyPEM(const APEM: string; const APassword: string = '');
     procedure LoadCAFile(const AFileName: string);
@@ -168,7 +168,7 @@ type
 
     { ISSLContext - 创建连接 }
     function CreateConnection(ASocket: THandle): ISSLConnection; overload;
-    function CreateConnection(AStream: TStream): ISSLConnection; overload;
+    function CreateConnection(AStream: IStream): ISSLConnection; overload;
     
     { ISSLContext - 状态查询 }
     function IsValid: Boolean;
@@ -580,7 +580,7 @@ end;
 
 procedure TWinSSLContext.LoadCertificate(const AFileName: string);
 var
-  LFileStream: TFileStream;
+  LFileStream: IStream;
   LSize: Int64;
 begin
   if AFileName = '' then
@@ -599,15 +599,14 @@ begin
       'Certificate file exceeds maximum allowed size (%d > %d bytes): %s',
       [LSize, MAX_CERTIFICATE_SIZE, AFileName]);
 
-  LFileStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
+  LFileStream := FsOpen(AFileName, [fmRead]);
   try
     LoadCertificate(LFileStream);
   finally
-    LFileStream.Free;
   end;
 end;
 
-procedure TWinSSLContext.LoadCertificate(AStream: TStream);
+procedure TWinSSLContext.LoadCertificate(AStream: IStream);
 var
   LCertData: TBytes;
   Blob: CRYPT_DATA_BLOB;
@@ -727,7 +726,7 @@ end;
 
 procedure TWinSSLContext.LoadPrivateKey(const AFileName: string; const APassword: string);
 var
-  LFileStream: TFileStream;
+  LFileStream: IStream;
   LSize: Int64;
 begin
   if AFileName = '' then
@@ -746,15 +745,14 @@ begin
       'Private key file exceeds maximum allowed size (%d > %d bytes): %s',
       [LSize, MAX_PRIVATE_KEY_SIZE, AFileName]);
 
-  LFileStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
+  LFileStream := FsOpen(AFileName, [fmRead]);
   try
     LoadPrivateKey(LFileStream, APassword);
   finally
-    LFileStream.Free;
   end;
 end;
 
-procedure TWinSSLContext.LoadPrivateKey(AStream: TStream; const APassword: string);
+procedure TWinSSLContext.LoadPrivateKey(AStream: IStream; const APassword: string);
 var
   LCertData: TBytes;
   Blob: CRYPT_DATA_BLOB;
@@ -915,7 +913,7 @@ end;
 
 procedure TWinSSLContext.LoadCAFile(const AFileName: string);
 var
-  LFileStream: TFileStream;
+  LFileStream: IStream;
   LCertData: TBytes;
   LSize: Int64;
   LFileSize: Int64;
@@ -937,7 +935,7 @@ begin
       'CA file exceeds maximum allowed size (%d > %d bytes): %s',
       [LFileSize, MAX_CA_CHAIN_SIZE, AFileName]);
 
-  LFileStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
+  LFileStream := FsOpen(AFileName, [fmRead]);
   try
     LSize := LFileStream.Size;
     SetLength(LCertData, LSize);
@@ -998,7 +996,6 @@ begin
     // 释放临时证书上下文（存储中已有副本）
     CertFreeCertificateContext(LCertContext);
   finally
-    LFileStream.Free;
   end;
 end;
 
@@ -1354,7 +1351,7 @@ begin
   Result := TWinSSLConnection.Create(Self, ASocket);
 end;
 
-function TWinSSLContext.CreateConnection(AStream: TStream): ISSLConnection;
+function TWinSSLContext.CreateConnection(AStream: IStream): ISSLConnection;
 var
   LTransport: IStream;
 begin

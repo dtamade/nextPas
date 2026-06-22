@@ -49,6 +49,9 @@ type
     function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
     procedure Close;
     procedure Flush;
+    function GetSize: Int64;
+    function GetPosition: Int64;
+    procedure SetPosition(const AValue: Int64);
 
     procedure SetReadTimeout(AMs: Integer);
     procedure SetWriteTimeout(AMs: Integer);
@@ -252,12 +255,27 @@ function TSSLStream.Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int6
 begin
   // TLS/SSL 连接是流式的，不支持 seek。
   Result := 0;
-  raise EStreamError.Create('TLS stream is not seekable');
+  raise ENextPasError.Create('TLS stream is not seekable');
 end;
 
 procedure TSSLStream.Flush;
 begin
   // TLS 连接是流式的，无缓冲需要 flush
+end;
+
+function TSSLStream.GetSize: Int64;
+begin
+  Result := -1; // TLS stream 无固定大小
+end;
+
+function TSSLStream.GetPosition: Int64;
+begin
+  Result := 0; // TLS stream 无 seek 位置
+end;
+
+procedure TSSLStream.SetPosition(const AValue: Int64);
+begin
+  // TLS stream 不支持 seek，忽略
 end;
 
 procedure TSSLStream.Close;

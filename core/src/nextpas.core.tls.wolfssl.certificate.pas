@@ -17,7 +17,7 @@ unit nextpas.core.tls.wolfssl.certificate;
 interface
 
 uses
-  SysUtils, nextpas.core.system.classes,
+  SysUtils, nextpas.core.io.intf, nextpas.core.fs.stream,
   nextpas.core.base.utils,
   nextpas.core.fs,
   nextpas.core.collections.vec,
@@ -51,12 +51,12 @@ type
 
     { ISSLCertificate - 加载和保存 }
     function LoadFromFile(const AFileName: string): Boolean;
-    function LoadFromStream(AStream: TStream): Boolean;
+    function LoadFromStream(AStream: IStream): Boolean;
     function LoadFromMemory(const AData: Pointer; ASize: Integer): Boolean;
     function LoadFromPEM(const APEM: string): Boolean;
     function LoadFromDER(const ADER: TBytes): Boolean;
     function SaveToFile(const AFileName: string): Boolean;
-    function SaveToStream(AStream: TStream): Boolean;
+    function SaveToStream(AStream: IStream): Boolean;
     function SaveToPEM: string;
     function SaveToDER: TBytes;
 
@@ -591,19 +591,19 @@ function TWolfSSLCertificate.LoadFromFile(const AFileName: string): Boolean;
 var
   LRawBytes: TBytes;
   LText: string;
-  LStream: TFileStream;
+  LStream: IStream;
 begin
   Result := False;
   if not nextpas.core.fs.IsFile(AFileName) then Exit;
   ResetLoadedState;
 
   SetLength(LRawBytes, 0);
-  LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
+  LStream := FsOpen(AFileName, [fmRead]);
   try
     if LStream.Size > 0 then
     begin
       SetLength(LRawBytes, LStream.Size);
-      LStream.ReadBuffer(LRawBytes[0], Length(LRawBytes));
+      LStream.Read(LRawBytes[0], Length(LRawBytes));
     end;
   finally
   end;
@@ -645,7 +645,7 @@ begin
   Result := FX509 <> nil;
 end;
 
-function TWolfSSLCertificate.LoadFromStream(AStream: TStream): Boolean;
+function TWolfSSLCertificate.LoadFromStream(AStream: IStream): Boolean;
 var
   LData: TBytes;
   LText: string;
@@ -657,7 +657,7 @@ begin
   SetLength(LData, AStream.Size - AStream.Position);
   if Length(LData) = 0 then Exit;
 
-  AStream.ReadBuffer(LData[0], Length(LData));
+  AStream.Read(LData[0], Length(LData));
   SetString(LText, PAnsiChar(@LData[0]), Length(LData));
   if TSSLUtils.IsPEMFormat(LText) then
     Result := LoadFromPEM(LText)
@@ -719,13 +719,13 @@ end;
 
 function TWolfSSLCertificate.SaveToFile(const AFileName: string): Boolean;
 var
-  LStream: TFileStream;
+  LStream: IStream;
 begin
   Result := False;
   if FX509 = nil then Exit;
 
   try
-    LStream := TFileStream.Create(AFileName, fmCreate);
+    LStream := FsCreate(AFileName);
     try
       Result := SaveToStream(LStream);
     finally
@@ -735,7 +735,7 @@ begin
   end;
 end;
 
-function TWolfSSLCertificate.SaveToStream(AStream: TStream): Boolean;
+function TWolfSSLCertificate.SaveToStream(AStream: IStream): Boolean;
 var
   LPEM: string;
 begin
@@ -745,7 +745,7 @@ begin
   LPEM := SaveToPEM;
   if LPEM <> '' then
   begin
-    AStream.WriteBuffer(LPEM[1], Length(LPEM));
+    AStream.Write(LPEM[1], Length(LPEM));
     Result := True;
   end;
 end;

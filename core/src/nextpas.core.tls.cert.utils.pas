@@ -2084,7 +2084,7 @@ var
     AList.Sorted := True;
     AList.Duplicates := dupIgnore;
 
-    Components := ADN.Split([',']);
+    Components := nextpas.core.text.strings.StringsSplit(ADN, ',');
     for j := 0 to Length(Components) - 1 do
       AList.Add(Trim(Components[j]));
   end;

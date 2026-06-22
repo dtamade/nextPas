@@ -366,7 +366,7 @@ end;
 function ParserErrorStatus(const AParser: IH1Parser): THttpStatus; inline;
 begin
   case AParser.ErrorKind of
-    pekUnsupportedTransferCoding,
+    pekUnsupportedTransferCoding:
       Result := HTTP_STATUS_NOT_IMPLEMENTED;
   else
     Result := HTTP_STATUS_BAD_REQUEST;

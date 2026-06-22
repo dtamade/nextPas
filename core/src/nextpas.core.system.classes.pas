@@ -20,6 +20,7 @@ type
   TList = Classes.TList;
   TInterfaceList = Classes.TInterfaceList;
   TStringList = Classes.TStringList;
+  TDuplicates = Classes.TDuplicates;
 
   IStream = nextpas.core.io.intf.IStream;
   IReader = nextpas.core.io.intf.IReader;
@@ -32,6 +33,9 @@ const
   fmOpenReadWrite = Classes.fmOpenReadWrite;
   fmShareDenyNone = Classes.fmShareDenyNone;
   fmShareDenyWrite = Classes.fmShareDenyWrite;
+  dupIgnore = Classes.dupIgnore;
+  dupAccept = Classes.dupAccept;
+  dupError = Classes.dupError;
 
 implementation
 

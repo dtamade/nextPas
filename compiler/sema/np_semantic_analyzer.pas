@@ -7837,6 +7837,9 @@ begin
               AOwnerUnitId
             );
             if (ParentTypeId > 0) and
+              (not SameText(FModel.TypeAt(ParentTypeId - 1).Kind, 'class')) and
+              (not SameText(FModel.TypeAt(ParentTypeId - 1).Kind, 'interface')) and
+              (not SameText(FModel.TypeAt(ParentTypeId - 1).Kind, 'declared')) and
               (not FModel.LookupConstValue(TypeChild.ChildAt(0).Text + '$size', SizeVal)) and
               (TypeMetaSize(TypeChild.ChildAt(0).Text) <= 0) then
               ParentTypeId := 0;

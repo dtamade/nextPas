@@ -63,6 +63,7 @@ type
     constructor Create(const AWorkerCount: Integer);
     destructor Destroy; override;
     procedure Submit(const ATask: TThreadTask);
+    procedure SubmitDirect(AData: Pointer; AProc: TThreadProc);
     procedure Shutdown;
     procedure WaitAll;
     function GetWorkerCount: Integer;
@@ -211,6 +212,15 @@ begin
 
   FCondVar.Broadcast;
   FMutex.Release;
+end;
+
+procedure TWorkStealingPool.SubmitDirect(AData: Pointer; AProc: TThreadProc);
+begin
+  { Fallback: wrap in a closure. Full zero-alloc optimization is in TThreadPool. }
+  Submit(procedure
+  begin
+    AProc(AData);
+  end);
 end;
 
 procedure TWorkStealingPool.Shutdown;

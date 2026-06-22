@@ -203,6 +203,7 @@ procedure ResetH2ClientDialFuncForTests;
 implementation
 
 uses
+  SysUtils,
   nextpas.core.text.conv,
   nextpas.core.errors,
   nextpas.core.net,

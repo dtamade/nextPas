@@ -5,7 +5,7 @@ unit nextpas.core.tls.dialer;
 interface
 
 uses
-  nextpas.core.base, nextpas.core.tls.base, nextpas.core.tls.tls,
+  nextpas.core.base, nextpas.core.io.intf, nextpas.core.tls.base, nextpas.core.tls.tls,
   nextpas.core.text.conv;
 
 type
@@ -162,7 +162,7 @@ begin
       Exit;
     end;
 
-    Result.Stream := IStream.Create(Result.Connection);
+    Result.Stream := TSSLStream.Create(Result.Connection);
   except
     on E: Exception do
     begin
@@ -210,7 +210,7 @@ begin
 
     Result.Error := LBuilder.TryBuildClient(Result.Connection);
     if Result.Error.IsOk then
-      Result.Stream := IStream.Create(Result.Connection);
+      Result.Stream := TSSLStream.Create(Result.Connection);
   except
     on E: Exception do
       Result.Error := TSSLOperationResult.Err(sslErrOther, E.Message);

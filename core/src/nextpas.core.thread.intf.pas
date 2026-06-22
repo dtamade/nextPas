@@ -9,9 +9,13 @@ uses
   nextpas.core.thread.base;
 
 type
+  TThreadProc = procedure(AData: Pointer);
+
   IThreadPool = interface
     ['{A1B2C3D4-E5F6-7890-ABCD-111111000001}']
     procedure Submit(const ATask: TThreadTask);
+    { SubmitDirect: zero-closure submission. Caller ensures AData outlives the task. }
+    procedure SubmitDirect(AData: Pointer; AProc: TThreadProc);
     procedure Shutdown;
     procedure WaitAll;
     function GetWorkerCount: Integer;

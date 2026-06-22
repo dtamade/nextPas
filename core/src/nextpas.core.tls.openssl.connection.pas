@@ -206,11 +206,6 @@ begin
 end;
 
 constructor TOpenSSLConnection.Create(AContext: ISSLContext; AStream: IStream);
-begin
-  Create(AContext, WrapTStream(AStream, False));
-end;
-
-constructor TOpenSSLConnection.Create(AContext: ISSLContext; AStream: IStream);
 var
   Ctx: PSSL_CTX;
   LConstructed: Boolean;

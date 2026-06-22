@@ -8,7 +8,6 @@ uses
   nextpas.core.exception,
   nextpas.core.base,
   
-  Classes,
   nextpas.core.io.intf,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions;
@@ -113,7 +112,7 @@ function TSSLPendingClientConnect.FinishIStream: IStream;
 begin
   if not FCompleted then
     raise ESSLException.Create('Handshake not complete');
-  Result := WrapIStream(TSSLStream.Create(FConnection), True);
+  Result := TSSLStream.Create(FConnection);
 end;
 
 function TSSLPendingClientConnect.TryFinishIStream(out AStream: IStream): TSSLOperationResult;
@@ -121,23 +120,18 @@ begin
   AStream := nil;
   if not FCompleted then
     Exit(TSSLOperationResult.Err(sslErrHandshake, 'Handshake not complete'));
-  AStream := WrapIStream(TSSLStream.Create(FConnection), True);
+  AStream := TSSLStream.Create(FConnection);
   Result := TSSLOperationResult.Ok;
 end;
 
 function TSSLPendingClientConnect.FinishStream: IStream;
 begin
-  Result := WrapIStream(FinishIStream);
+  Result := FinishIStream;
 end;
 
 function TSSLPendingClientConnect.TryFinishStream(out AStream: IStream): TSSLOperationResult;
-var
-  LIStream: IStream;
 begin
-  AStream := nil;
-  Result := TryFinishIStream(LIStream);
-  if Result.IsOk then
-    AStream := WrapIStream(LIStream);
+  Result := TryFinishIStream(AStream);
 end;
 
 procedure TSSLPendingClientConnect.Cancel;

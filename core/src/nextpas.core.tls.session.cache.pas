@@ -25,7 +25,7 @@ unit nextpas.core.tls.session.cache;
 interface
 
 uses
-  SysUtils, nextpas.core.system.classes, nextpas.core.fs, nextpas.core.sync,
+  SysUtils, nextpas.core.fs.stream, nextpas.core.fs, nextpas.core.sync,
   nextpas.core.collections.hashmap,
   {$IFDEF UNIX}BaseUnix,{$ENDIF}
   nextpas.core.time,
@@ -468,7 +468,7 @@ end;
 
 function TSSLSessionCache.SaveToFile(const AFileName: string): Boolean;
 var
-  Stream: TFileStream;
+  Stream: IStream;
   I, Count, DataLen, WrittenCount: Integer;
   Key: string;
   Entry: TSessionCacheEntry;
@@ -481,19 +481,19 @@ begin
   FLock.Acquire;
   try
     try
-      Stream := TFileStream.Create(AFileName, nextpas.core.system.classes.fmCreate);
+      Stream := FsCreate(AFileName);
       {$IFDEF UNIX}
       FpChmod(AFileName, &600);
       {$ENDIF}
       try
         // 写入版本号 (v2 = HMAC protected)
         I := 2;
-        Stream.WriteBuffer(I, SizeOf(Integer));
+        Stream.Write(I, SizeOf(Integer));
 
         // 先写占位计数；真实条目数只统计实际写入的有效记录。
         CountPosition := Stream.Position;
         Count := 0;
-        Stream.WriteBuffer(Count, SizeOf(Integer));
+        Stream.Write(Count, SizeOf(Integer));
         WrittenCount := 0;
 
         // 写入每个条目
@@ -510,41 +510,40 @@ begin
 
           // 写入主机名
           DataLen := Length(Entry.HostName);
-          Stream.WriteBuffer(DataLen, SizeOf(Integer));
+          Stream.Write(DataLen, SizeOf(Integer));
           if DataLen > 0 then
-            Stream.WriteBuffer(Entry.HostName[1], DataLen);
+            Stream.Write(Entry.HostName[1], DataLen);
 
           // 写入端口
-          Stream.WriteBuffer(Entry.Port, SizeOf(Word));
+          Stream.Write(Entry.Port, SizeOf(Word));
 
           // 序列化会话数据
           SessionData := Entry.Session.Serialize;
           DataLen := Length(SessionData);
-          Stream.WriteBuffer(DataLen, SizeOf(Integer));
+          Stream.Write(DataLen, SizeOf(Integer));
           if DataLen > 0 then
-            Stream.WriteBuffer(SessionData[0], DataLen);
+            Stream.Write(SessionData[0], DataLen);
 
           // 写入时间戳
-          Stream.WriteBuffer(Entry.CreatedAt, SizeOf(TDateTime));
-          Stream.WriteBuffer(Entry.LastAccessedAt, SizeOf(TDateTime));
-          Stream.WriteBuffer(Entry.AccessCount, SizeOf(Integer));
+          Stream.Write(Entry.CreatedAt, SizeOf(TDateTime));
+          Stream.Write(Entry.LastAccessedAt, SizeOf(TDateTime));
+          Stream.Write(Entry.AccessCount, SizeOf(Integer));
           Inc(WrittenCount);
         end;
 
         Stream.Position := CountPosition;
-        Stream.WriteBuffer(WrittenCount, SizeOf(Integer));
+        Stream.Write(WrittenCount, SizeOf(Integer));
 
         // Append HMAC-SHA256 over entire file content
         Stream.Position := 0;
         SetLength(SessionData, Stream.Size);
-        Stream.ReadBuffer(SessionData[0], Stream.Size);
+        Stream.Read(SessionData[0], Stream.Size);
         SessionData := HMAC_SHA256(FIntegrityKey, SessionData);
         Stream.Position := Stream.Size;
-        Stream.WriteBuffer(SessionData[0], 32);
+        Stream.Write(SessionData[0], 32);
 
         Result := True;
       finally
-        Stream.Free;
       end;
     except
       Result := False;
@@ -556,7 +555,7 @@ end;
 
 function TSSLSessionCache.LoadFromFile(const AFileName: string): Boolean;
 var
-  Stream: TFileStream;
+  Stream: IStream;
   Version, Count, I, DataLen: Integer;
   HostName: string;
   Port: Word;
@@ -576,13 +575,13 @@ begin
     try
       FCache.Clear;
 
-      Stream := TFileStream.Create(AFileName, fmOpenRead);
+      Stream := FsOpen(AFileName, [fmRead]);
       try
         if Stream.Size < SizeOf(Integer) then
           Exit;
 
         // 读取版本号
-        Stream.ReadBuffer(Version, SizeOf(Integer));
+        Stream.Read(Version, SizeOf(Integer));
         if not (Version in [1, 2]) then
           Exit;
 
@@ -593,9 +592,9 @@ begin
             Exit;
           Stream.Position := 0;
           SetLength(LFileData, Stream.Size - 32);
-          Stream.ReadBuffer(LFileData[0], Length(LFileData));
+          Stream.Read(LFileData[0], Length(LFileData));
           SetLength(LStoredMAC, 32);
-          Stream.ReadBuffer(LStoredMAC[0], 32);
+          Stream.Read(LStoredMAC[0], 32);
           LComputedMAC := HMAC_SHA256(FIntegrityKey, LFileData);
           if TConstantTime.CompareBytes(LStoredMAC, LComputedMAC) <> 1 then
             Exit;
@@ -603,7 +602,7 @@ begin
         end;
 
         // 读取条目数
-        Stream.ReadBuffer(Count, SizeOf(Integer));
+        Stream.Read(Count, SizeOf(Integer));
         if (Count < 0) or (Count > 100000) then
           Exit;
 
@@ -611,32 +610,32 @@ begin
         for I := 0 to Count - 1 do
         begin
           // 读取主机名
-          Stream.ReadBuffer(DataLen, SizeOf(Integer));
+          Stream.Read(DataLen, SizeOf(Integer));
           if (DataLen < 0) or (DataLen > 65535) then
             Exit;
           SetLength(HostName, DataLen);
           if DataLen > 0 then
-            Stream.ReadBuffer(HostName[1], DataLen);
+            Stream.Read(HostName[1], DataLen);
 
           // 读取端口
-          Stream.ReadBuffer(Port, SizeOf(Word));
+          Stream.Read(Port, SizeOf(Word));
 
           // 读取会话数据
           SetLength(SessionData, 0);
-          Stream.ReadBuffer(DataLen, SizeOf(Integer));
+          Stream.Read(DataLen, SizeOf(Integer));
           if (DataLen < 0) or (DataLen > 1048576) then
             Exit;
           if DataLen > 0 then
           begin
             SetLength(SessionData, DataLen);
-            Stream.ReadBuffer(SessionData[0], DataLen);
+            Stream.Read(SessionData[0], DataLen);
           end;
 
           // 读取时间戳
           Entry := Default(TSessionCacheEntry);
-          Stream.ReadBuffer(Entry.CreatedAt, SizeOf(TDateTime));
-          Stream.ReadBuffer(Entry.LastAccessedAt, SizeOf(TDateTime));
-          Stream.ReadBuffer(Entry.AccessCount, SizeOf(Integer));
+          Stream.Read(Entry.CreatedAt, SizeOf(TDateTime));
+          Stream.Read(Entry.LastAccessedAt, SizeOf(TDateTime));
+          Stream.Read(Entry.AccessCount, SizeOf(Integer));
 
           // 检查会话是否过期
           if Entry.IsExpired(FDefaultTimeout) then
@@ -666,7 +665,6 @@ begin
         Result := True;
 
       finally
-        Stream.Free;
       end;
     except
       Result := False;

@@ -51,8 +51,7 @@ type
     constructor Create(const AStream: INextPasStream);
     function Read(var Buffer; Count: Longint): Longint; override;
     function Write(const Buffer; Count: Longint): Longint; override;
-    function Seek(Offset: Longint; Origin: Word): Longint; override; overload;
-    function Seek(const Offset: Int64; Origin: Classes.TSeekOrigin): Int64; override; overload;
+    function Seek(const Offset: Int64; Origin: Classes.TSeekOrigin): Int64; override;
     function CopyFrom(Source: TStream; Count: Int64): Int64; reintroduce;
     function ReadByte: Byte; reintroduce;
     procedure WriteByte(b: Byte); reintroduce;
@@ -257,16 +256,6 @@ begin
     Result := High(LongInt)
   else
     Result := LongInt(LWritten);
-end;
-
-function TStreamFromIStream.Seek(Offset: Longint; Origin: Word): Longint;
-var
-  LPosition: Int64;
-begin
-  LPosition := Seek(Int64(Offset), SeekOriginFromWord(Origin));
-  if (LPosition < Low(LongInt)) or (LPosition > High(LongInt)) then
-    raise EIOError.Create('TStreamFromIStream.Seek32: result exceeds 32-bit range');
-  Result := LongInt(LPosition);
 end;
 
 function TStreamFromIStream.Seek(const Offset: Int64;

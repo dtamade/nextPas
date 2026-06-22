@@ -115,6 +115,9 @@ function FormatDateTime(const Format: string; DateTime: TDateTime): string;
 // String formatting
 function Format(const Fmt: string; const Args: array of const): string;
 
+// Interface support
+function Supports(const AIntf: IInterface; const IID: TGUID; out Intf): Boolean;
+
 // Memory management
 procedure FreeAndNil(var Obj);
 
@@ -948,6 +951,16 @@ begin
   Temp := TObject(Obj);
   Pointer(Obj) := nil;
   Temp.Free;
+end;
+
+function Supports(const AIntf: IInterface; const IID: TGUID; out Intf): Boolean;
+var
+  LTemp: IInterface;
+begin
+  Pointer(Intf) := nil;
+  Result := (AIntf <> nil) and (AIntf.QueryInterface(IID, LTemp) = 0);
+  if Result then
+    Pointer(Intf) := Pointer(LTemp);
 end;
 
 end.
