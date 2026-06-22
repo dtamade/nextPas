@@ -534,8 +534,36 @@ examples/nextpas.core.time/    ← 模块示例目录
 
 ### 测试框架 & 基准框架
 
-- 初期零依赖（直接用 assert 或简单的 WriteLn 验证）
-- 后期随框架成熟，逐步依赖框架内部模块构建更完善的测试框架和基准框架
+- 所有 `core/` 内的单元测试 **必须** 使用 `nextpas.core.test` 框架（即 `uses nextpas.core.test`）。
+- 禁止使用旧的 `nextpas.core.testing`、裸 `assert`、或自行编写的 `WriteLn` 验证。
+- 测试程序入口为 `.lpr`，标准模式：
+
+```pascal
+program test_xxx;
+{$mode objfpc}{$H+}
+uses
+  nextpas.core.test;  { 唯一的测试框架入口 }
+
+var
+  LSuite: TTestSuite;
+  LRunner: TTestRunner;
+  LResults: specialize TArray<TTestRunResult>;
+begin
+  LSuite := TTestSuite.Create('xxx');
+  LSuite.Test('TestFoo', @TestFoo);
+  LSuite.Test('TestBar', @TestBar);
+  LRunner := TTestRunner.Create('main');
+  LRunner.Add(LSuite);
+  LRunner.RunAllWithResult(LResults);
+  if (Length(LResults) = 0) or (not LResults[0].AllPassed) then
+    Halt(1);
+end.
+```
+
+- 测试项目 Makefile 使用 `-Fu$(CORE_ROOT)/src` 引入框架单元，不手动列出每个依赖。
+- RTTI 自动发现（`TTestFixure` + `DiscoverTests`）用于需要大量测试方法的场景。
+- 参数化测试用 `Suite.TestTable(name, cases, proc)`。
+- 需要重试的 flaky 测试用 `Suite.Test(name, @proc, retryCount)`。
 - benchmarks 同 tests 结构，按模块分子目录，独立 .lpr 项目
 
 ### 基准测试要求
