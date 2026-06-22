@@ -111,7 +111,7 @@ var
   GOriginalMemoryManager: TMemoryManager;
   GTrackingEnabled: Boolean = False;
 
-procedure AtomicInc64(var ATarget: Int64; ADelta: Int64);
+function AtomicInc64(var ATarget: Int64; ADelta: Int64): Int64;
 var
   LOld: Int64;
   LNew: Int64;
@@ -120,9 +120,10 @@ begin
     LOld := ATarget;
     LNew := LOld + ADelta;
   until InterlockedCompareExchange64(ATarget, LNew, LOld) = LOld;
+  Result := LNew;
 end;
 
-procedure AtomicDec64(var ATarget: Int64; ADelta: Int64);
+function AtomicDec64(var ATarget: Int64; ADelta: Int64): Int64;
 var
   LOld: Int64;
   LNew: Int64;
@@ -131,6 +132,7 @@ begin
     LOld := ATarget;
     LNew := LOld - ADelta;
   until InterlockedCompareExchange64(ATarget, LNew, LOld) = LOld;
+  Result := LNew;
 end;
 
 {** CAS 循环更新峰值（只升不降） }
@@ -219,16 +221,18 @@ begin
 end;
 
 procedure TMemoryTracker.RecordAlloc(ASize: Int64);
+var
+  LNewAllocs, LNewBytes: Int64;
 begin
   if not FEnabled then Exit;
 
   AtomicInc64(FStats.AllocCount, 1);
   AtomicInc64(FStats.AllocBytes, ASize);
-  AtomicInc64(FStats.CurrentAllocs, 1);
-  AtomicInc64(FStats.CurrentBytes, ASize);
+  LNewAllocs := AtomicInc64(FStats.CurrentAllocs, 1);
+  LNewBytes := AtomicInc64(FStats.CurrentBytes, ASize);
 
-  AtomicUpdatePeak(FStats.PeakAllocs, FStats.CurrentAllocs);
-  AtomicUpdatePeak(FStats.PeakBytes, FStats.CurrentBytes);
+  AtomicUpdatePeak(FStats.PeakAllocs, LNewAllocs);
+  AtomicUpdatePeak(FStats.PeakBytes, LNewBytes);
 end;
 
 procedure TMemoryTracker.RecordFree(ASize: Int64);
