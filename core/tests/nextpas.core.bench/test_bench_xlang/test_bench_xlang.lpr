@@ -297,6 +297,35 @@ begin
   Check(LSuccess, 'Raises EParseError for unknown parser');
 end;
 
+
+procedure Test_GoBench_LargeOps;
+var
+  LResult: TBenchResult;
+begin
+  WriteLn('Test_GoBench_LargeOps:');
+  LResult := ParseGoBenchLine('BenchmarkBig-4   1000000   5.0 ns/op   10000000000 B/op   50 allocs/op');
+  Check(LResult.BytesPerOp = 10000000000, 'Large BytesPerOp');
+  Check(LResult.AllocsPerOp = 50, 'AllocsPerOp');
+end;
+
+procedure Test_GoBench_UsPerOp;
+var
+  LResult: TBenchResult;
+begin
+  WriteLn('Test_GoBench_UsPerOp:');
+  LResult := ParseGoBenchLine('BenchmarkMicro-1   5000000   1.50 us/op');
+  Check(Abs(LResult.NsPerOp - 1500.0) < 1.0, 'us/op conversion');
+end;
+
+procedure Test_GoBench_MsPerOp;
+var
+  LResult: TBenchResult;
+begin
+  WriteLn('Test_GoBench_MsPerOp:');
+  LResult := ParseGoBenchLine('BenchmarkSlow-1   100   25.00 ms/op');
+  Check(Abs(LResult.NsPerOp - 25000000.0) < 1.0, 'ms/op conversion');
+end;
+
 { === Run All Tests === }
 
 procedure RunAllTests;
@@ -308,6 +337,9 @@ begin
   Test_ParseGoBenchLine_Milliseconds;
   Test_ParseGoBenchOutput_Multiple;
   Test_ParseGoBenchOutput_WithComments;
+  Test_GoBench_LargeOps;
+  Test_GoBench_UsPerOp;
+  Test_GoBench_MsPerOp;
 
   WriteLn('');
   WriteLn('=== Rust Bench Parser Tests ===');
