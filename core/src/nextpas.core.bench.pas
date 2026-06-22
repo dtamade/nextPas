@@ -356,7 +356,12 @@ var
 begin
   Result := Self;
   LManager := TBaselineManager.Create;
-  LManager.LoadFromFile(APath);
+  try
+    LManager.LoadFromFile(APath);
+  except
+    on E: Exception do
+      raise EBenchError.CreateFmt('Failed to load baseline from "%s": %s', [APath, E.Message]);
+  end;
   LBaselines := LManager.GetAllBaselines;
 
   // 将加载的基线添加到 suite
