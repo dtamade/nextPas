@@ -281,7 +281,12 @@ begin
   LSum := 0;
   for I := 0 to High(FData) do
     LSum := LSum + Power((FData[I] - LMean) / LStdDev, 3);
-  Result := LSum / LCount;
+
+  // Fisher's g1: unbiased estimator
+  if LCount > 2 then
+    Result := (LSum / LCount) * Sqrt(LCount * (LCount - 1)) / (LCount - 2)
+  else
+    Result := LSum / LCount;
 end;
 
 function TAdvancedStats.Kurtosis: Double;
@@ -291,6 +296,7 @@ var
   LStdDev: Double;
   LSum: Double;
   LCount: Integer;
+  LRaw: Double;
 begin
   LCount := Length(FData);
   if LCount < 4 then Exit(0);
@@ -302,7 +308,13 @@ begin
   LSum := 0;
   for I := 0 to High(FData) do
     LSum := LSum + Power((FData[I] - LMean) / LStdDev, 4);
-  Result := (LSum / LCount) - 3; // Excess kurtosis
+
+  LRaw := LSum / LCount;
+  // Unbiased excess kurtosis correction
+  if (LCount > 3) and (LCount > 2) then
+    Result := ((LCount - 1) * ((LCount + 1) * LRaw - 3 * (LCount - 1)) / (LCount - 2) / (LCount - 3))
+  else
+    Result := LRaw - 3;
 end;
 
 function TAdvancedStats.Percentile(APercentile: Double): Double;
