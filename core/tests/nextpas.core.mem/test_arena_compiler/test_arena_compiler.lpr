@@ -749,6 +749,56 @@ begin
   end;
 end;
 
+procedure TestResetHard;
+var
+  LArena: TVirtualArena;
+  LP: Pointer;
+begin
+  TVirtualArena_Init(LArena);
+  try
+    LP := LArena.Alloc(4096);
+    Check(LP <> nil, 'reset hard: alloc before');
+    PByte(LP)[0] := $42;
+    Check(LArena.TotalUsed > 0, 'reset hard: used > 0');
+
+    LArena.ResetHard;
+    Check(LArena.TotalUsed = 0, 'reset hard: TotalUsed = 0');
+
+    LP := LArena.Alloc(4096);
+    Check(LP <> nil, 'reset hard: can alloc after');
+  finally
+    TVirtualArena_Release(LArena);
+  end;
+end;
+
+procedure TestAllocUnsafe;
+var
+  LArena: TVirtualArena;
+  LP1, LP2: Pointer;
+begin
+  TVirtualArena_Init(LArena);
+  try
+    { Pre-commit pages via Alloc, then Reset for clean Unsafe test }
+    LP1 := LArena.Alloc(4096);
+    Check(LP1 <> nil, 'unsafe: pre-commit alloc');
+    LArena.Reset;
+
+    { Now pages are committed — AllocUnsafe is safe }
+    LP1 := LArena.AllocUnsafe(64);
+    LP2 := LArena.AllocUnsafe(128);
+    Check(LP1 <> nil, 'unsafe: first alloc');
+    Check(LP2 <> nil, 'unsafe: second alloc');
+    Check(PtrUInt(LP2) >= PtrUInt(LP1) + 64, 'unsafe: sequential');
+    { Write and read back to verify memory is accessible }
+    PByte(LP1)[0] := $AA;
+    PByte(LP2)[0] := $BB;
+    Check(PByte(LP1)[0] = $AA, 'unsafe: data at LP1');
+    Check(PByte(LP2)[0] = $BB, 'unsafe: data at LP2');
+  finally
+    TVirtualArena_Release(LArena);
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.mem.arena.virtual');
 
@@ -795,6 +845,8 @@ begin
   T.Run('aligned_zero_align', @TestAllocAlignedZeroAlign);
   T.Run('aligned_non_power_of_two', @TestAllocAlignedNonPowerOfTwo);
   T.Run('multiple_resets', @TestMultipleResets);
+  T.Run('reset_hard', @TestResetHard);
+  T.Run('alloc_unsafe', @TestAllocUnsafe);
 
   T.Summary;
 end.

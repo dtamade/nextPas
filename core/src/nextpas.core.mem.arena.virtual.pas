@@ -187,7 +187,7 @@ end;
 
 const
   { Minimum commit chunk size to amortize mmap syscall overhead }
-  COMMIT_CHUNK_SIZE: SizeUInt = 2 * 1024 * 1024; { 2MB }
+  COMMIT_CHUNK_SIZE = 2 * 1024 * 1024; { 2MB — true const, compiler-inlined }
 
 function TVirtualArena.CommitFrontRegion(aSize: SizeUInt): Boolean;
 var
@@ -352,6 +352,8 @@ begin
   end;
 
   { Back-pointer bump (downward) }
+  if PtrUInt(aSize) > PtrUInt(FBackPtr) then
+    Exit;
   LNewBack := PtrUInt(FBackPtr) - PtrUInt(aSize);
   LAligned := LNewBack and not FAlignmentMask;
 
