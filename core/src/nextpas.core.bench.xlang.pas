@@ -65,12 +65,23 @@ type
    *}
   function ParseBenchOutput(const AOutput: string; AParser: TXLangParser): TBenchResultArray;
 
+  {** 获取上次解析时跳过的行数 }
+  function GetLastParseSkippedCount: Integer;
+
 implementation
 
 uses
   nextpas.core.text.base,
   nextpas.core.text.conv,
   nextpas.core.text.strings;
+
+var
+  GLastParseSkippedCount: Integer = 0;
+
+function GetLastParseSkippedCount: Integer;
+begin
+  Result := GLastParseSkippedCount;
+end;
 
 { Helper: Split by line endings (#10 and #13) }
 
@@ -211,6 +222,7 @@ var
   LLine: string;
   LList: array of TBenchResult;
 begin
+  GLastParseSkippedCount := 0;
   LList := nil;
   LLines := SplitLines(AOutput);
   for LLine in LLines do
@@ -222,7 +234,7 @@ begin
       SetLength(LList, Length(LList) + 1);
       LList[High(LList)] := ParseGoBenchLine(LLine);
     except
-      // Skip unparseable lines
+      Inc(GLastParseSkippedCount);
     end;
   end;
   Result := LList;
@@ -306,6 +318,7 @@ var
   LLine: string;
   LList: array of TBenchResult;
 begin
+  GLastParseSkippedCount := 0;
   LList := nil;
   LLines := SplitLines(AOutput);
   for LLine in LLines do
@@ -317,7 +330,7 @@ begin
       SetLength(LList, Length(LList) + 1);
       LList[High(LList)] := ParseRustBenchLine(LLine);
     except
-      // Skip unparseable lines
+      Inc(GLastParseSkippedCount);
     end;
   end;
   Result := LList;
@@ -372,6 +385,7 @@ var
   LLine: string;
   LList: array of TBenchResult;
 begin
+  GLastParseSkippedCount := 0;
   LList := nil;
   LLines := SplitLines(AOutput);
   for LLine in LLines do
@@ -383,7 +397,7 @@ begin
       SetLength(LList, Length(LList) + 1);
       LList[High(LList)] := ParseFPCBenchLine(LLine);
     except
-      // Skip unparseable lines
+      Inc(GLastParseSkippedCount);
     end;
   end;
   Result := LList;
