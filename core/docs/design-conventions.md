@@ -542,11 +542,50 @@ examples/nextpas.core.time/    ← 模块示例目录
 
 每个模块完成后必须提供基准测试，覆盖核心热路径操作：
 
+- **基准测试框架**：所有框架内基准测试必须使用 `nextpas.core.bench` 模块，禁止使用自定义计时或外部基准测试框架
 - 基准对照组：FPC RTL 同等功能（如有）、Go 标准库、Rust 标准库的公开 benchmark 数据
 - 基准项目放在 `benchmarks/nextpas.core.<module>/bench_<name>/bench_<name>.lpr`
 - 每个基准输出：操作名、迭代次数、总耗时、单次耗时（ns/op）、吞吐量（MB/s，如适用）
 - 基准必须在优化编译（`-O2`）下运行，禁止 debug 模式
 - 关键指标：不低于 FPC RTL 同等操作的性能；目标是接近或超越 Go/Rust 同等实现
+
+**为什么必须使用 nextpas.core.bench**：
+1. **统一测量方法**：确保所有基准测试使用相同的计时、统计和报告机制
+2. **公平对比**：避免因自定义实现导致的测量偏差（如内循环放大、计时精度差异）
+3. **可复现性**：框架提供标准化的校准、统计分析和异常值检测
+4. **与 Go/Rust 对齐**：遵循 Go `testing.B` 和 Rust `criterion` 的单次调用模式
+
+**示例**：
+```pascal
+program bench_mean;
+uses
+  nextpas.core.bench,
+  nextpas.core.bench.stats,
+  nextpas.core.bench.intf;
+
+procedure BenchMean100(const ACtx: IBenchContext);
+var
+  LData: TDoubleArray;
+begin
+  SetLength(LData, 100);
+  // ... 初始化数据
+  TBenchStatsAnalyzer.Create.Mean(LData);  // 单次调用，禁止内循环
+end;
+
+var
+  LSuite: IBenchSuite;
+begin
+  LSuite := TBenchSuite.Create('MeanBench');
+  LSuite.Add('Mean/100', @BenchMean100);
+  LSuite.Run;
+end.
+```
+
+**禁止事项**：
+- ❌ 使用 `GetTickCount64`、`clock_gettime` 等自定义计时
+- ❌ 在基准函数中使用内循环（如 `for I := 1 to 1000 do`）
+- ❌ 使用外部基准测试框架（如 Google Benchmark）
+- ❌ 手动计算统计指标（均值、标准差、百分位数）
 
 ---
 
