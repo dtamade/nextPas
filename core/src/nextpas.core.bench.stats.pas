@@ -114,7 +114,8 @@ begin
     Exit(0.0);
 
   // 快速路径：小数组使用简单求和（避免 KahanSum 开销）
-  if LLen <= 64 then
+  // 阈值设为 256，覆盖常见基准测试场景 (100, 1000)
+  if LLen <= 256 then
   begin
     LSum := 0;
     for I := 0 to High(AData) do
