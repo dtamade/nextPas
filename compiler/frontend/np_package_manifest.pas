@@ -5,8 +5,8 @@ unit np_package_manifest;
 interface
 
 uses
-  Classes, nextpas.core.base, nextpas.core.text.conv, nextpas.core.path,
-  nextpas.core.fs.util, nextpas.core.exception;
+  nextpas.core.base, nextpas.core.text.conv, nextpas.core.path,
+  nextpas.core.fs, nextpas.core.fs.util, nextpas.core.exception;
 
 type
   TPackageDependencyInfo = record
@@ -529,7 +529,7 @@ var
   EqPos: SizeInt;
   KeyName: string;
   LineIndex: LongInt;
-  Lines: TStringList;
+  Lines: TStringArray;
   DependencyInfo: TPackageDependencyInfo;
   ManifestDirectory: string;
   ManifestPath: string;
@@ -556,13 +556,11 @@ begin
   Result.ManifestPath := ManifestPath;
   ManifestDirectory := ExtractFileDir(ManifestPath);
   Result.PackageRootPath := ExpandFileName(ManifestDirectory);
-  Lines := TStringList.Create;
-  try
-    Lines.LoadFromFile(ManifestPath);
-    CurrentSection := '';
-    for LineIndex := 0 to Lines.Count - 1 do
-    begin
-      RawLine := StripTomlComment(Lines[LineIndex]);
+  Lines := ReadFileLines(ManifestPath);
+  CurrentSection := '';
+  for LineIndex := 0 to High(Lines) do
+  begin
+    RawLine := StripTomlComment(Lines[LineIndex]);
       TrimmedLine := Trim(RawLine);
       if TrimmedLine = '' then
         Continue;
@@ -625,10 +623,7 @@ begin
           AppendUniqueString(Result.SourceRoots, ResolvedRoot);
       end;
     end;
-  finally
-    Lines.Free;
   end;
-end;
 
 function TryLoadPackageManifestInfo(
   const AManifestPath: string;
@@ -668,7 +663,7 @@ var
   EqPos: SizeInt;
   KeyName: string;
   LineIndex: LongInt;
-  Lines: TStringList;
+  Lines: TStringArray;
   MemberEntries: TStringArray;
   MemberManifestPath: string;
   MemberRootPath: string;
@@ -688,13 +683,11 @@ begin
   if not FsExists(WorkspaceDescriptorPath) then
     Exit;
 
-  Lines := TStringList.Create;
-  try
-    Lines.LoadFromFile(WorkspaceDescriptorPath);
-    CurrentSection := '';
-    for LineIndex := 0 to Lines.Count - 1 do
-    begin
-      TrimmedLine := Trim(StripTomlComment(Lines[LineIndex]));
+  Lines := ReadFileLines(WorkspaceDescriptorPath);
+  CurrentSection := '';
+  for LineIndex := 0 to High(Lines) do
+  begin
+    TrimmedLine := Trim(StripTomlComment(Lines[LineIndex]));
       if TrimmedLine = '' then
         Continue;
 
@@ -734,10 +727,7 @@ begin
         AppendUniquePackageManifestInfo(Result, PackageInfo);
       end;
     end;
-  finally
-    Lines.Free;
   end;
-end;
 
 function ResolveWorkspaceMemberRootInfos(
   const AWorkspaceRootPath: string

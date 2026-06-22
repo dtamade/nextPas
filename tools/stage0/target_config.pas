@@ -5,7 +5,8 @@ unit target_config;
 interface
 
 uses
-  Classes, nextpas.core.exception, nextpas.core.path, nextpas.core.fs, nextpas.core.text.conv;
+  nextpas.core.base, nextpas.core.exception, nextpas.core.path, nextpas.core.fs,
+  nextpas.core.text.conv;
 
 type
   ETargetConfigError = class(Exception)
@@ -411,7 +412,7 @@ function LoadToolchainBinding(
 ): TToolchainBindingConfig;
 var
   CurrentSection: string;
-  Lines: TStringList;
+  Lines: TStringArray;
   Index: Integer;
 begin
   Result.BindingPath := ABindingPath;
@@ -420,15 +421,10 @@ begin
       'missing-toolchain-binding: ' + Result.BindingPath
     );
 
-  Lines := TStringList.Create;
-  try
-    Lines.LoadFromFile(Result.BindingPath);
-    CurrentSection := '';
-    for Index := 0 to Lines.Count - 1 do
-      ParseToolchainLine(Result, CurrentSection, Lines[Index]);
-  finally
-    Lines.Free;
-  end;
+  Lines := ReadFileLines(Result.BindingPath);
+  CurrentSection := '';
+  for Index := 0 to High(Lines) do
+    ParseToolchainLine(Result, CurrentSection, Lines[Index]);
 
   RequireField(Result.BindingId, 'binding_id');
   RequireField(Result.HostId, 'host');
@@ -475,7 +471,7 @@ function LoadTargetConfig(
 var
   Binding: TToolchainBindingConfig;
   HostId: string;
-  Lines: TStringList;
+  Lines: TStringArray;
   Index: Integer;
 begin
   Result.ConfigPath := ResolveConfigPath(TargetName, ExecutablePath);
@@ -483,14 +479,9 @@ begin
   if not FileExists(Result.ConfigPath) then
     raise ETargetConfigError.Create('unsupported target: ' + TargetName);
 
-  Lines := TStringList.Create;
-  try
-    Lines.LoadFromFile(Result.ConfigPath);
-    for Index := 0 to Lines.Count - 1 do
-      ParseConfigLine(Result, Lines[Index]);
-  finally
-    Lines.Free;
-  end;
+  Lines := ReadFileLines(Result.ConfigPath);
+  for Index := 0 to High(Lines) do
+    ParseConfigLine(Result, Lines[Index]);
 
   RequireField(Result.TargetId, 'target');
   RequireField(Result.HostOS, 'host_os');

@@ -5,7 +5,8 @@ unit nextpas_command_env;
 interface
 
 uses
-  Classes, nextpas.core.exception, nextpas.core.path, nextpas.core.fs, nextpas.core.text.conv,
+  nextpas.core.base, nextpas.core.exception, nextpas.core.path, nextpas.core.fs,
+  nextpas.core.text.conv,
   nextpas_projection_types, nextpas_command_envelope,
   nextpas_projection_json, nextpas_projection_text, nextpas_projection_context,
   np_workspace_model, target_config;
@@ -186,20 +187,15 @@ function ReadEnvSelectionSidecar(
 ): Boolean;
 var
   Index: Integer;
-  Lines: TStringList;
+  Lines: TStringArray;
 begin
   ClearEnvSelectionSidecar(AInfo);
   if not FileExists(SelectionPath) then
     Exit(False);
 
-  Lines := TStringList.Create;
-  try
-    Lines.LoadFromFile(SelectionPath);
-    for Index := 0 to Lines.Count - 1 do
-      ParseEnvSelectionLine(AInfo, Lines[Index]);
-  finally
-    Lines.Free;
-  end;
+  Lines := ReadFileLines(SelectionPath);
+  for Index := 0 to High(Lines) do
+    ParseEnvSelectionLine(AInfo, Lines[Index]);
 
   Result := True;
 end;
@@ -259,7 +255,7 @@ procedure WriteEnvSelectionSidecar(
   const TargetConfig: TTargetConfig
 );
 var
-  Lines: TStringList;
+  Lines: TStringArray;
   SelectionDir: string;
 begin
   SelectionDir := ExtractFileDir(SelectionPath);
@@ -267,24 +263,18 @@ begin
     raise Exception.Create('env-selection-directory-create-failed: ' +
       SelectionDir);
 
-  Lines := TStringList.Create;
-  try
-    Lines.Add('# nextPas workspace-local environment selection');
-    Lines.Add('target = ' + QuoteSidecarString(TargetConfig.TargetId));
-    Lines.Add(
-      'toolchain_binding = ' +
-      QuoteSidecarString(TargetConfig.ToolchainBindingId)
-    );
-    Lines.Add(
-      'toolchain_binding_path = ' +
-      QuoteSidecarString(TargetConfig.ToolchainBindingPath)
-    );
-    Lines.Add('backend_family = ' + QuoteSidecarString(TargetConfig.BackendFamily));
-    Lines.Add('runtime_sdk = ' + QuoteSidecarString(TargetConfig.RuntimeSdkId));
-    Lines.SaveToFile(SelectionPath);
-  finally
-    Lines.Free;
-  end;
+  SetLength(Lines, 6);
+  Lines[0] := '# nextPas workspace-local environment selection';
+  Lines[1] := 'target = ' + QuoteSidecarString(TargetConfig.TargetId);
+  Lines[2] :=
+    'toolchain_binding = ' +
+    QuoteSidecarString(TargetConfig.ToolchainBindingId);
+  Lines[3] :=
+    'toolchain_binding_path = ' +
+    QuoteSidecarString(TargetConfig.ToolchainBindingPath);
+  Lines[4] := 'backend_family = ' + QuoteSidecarString(TargetConfig.BackendFamily);
+  Lines[5] := 'runtime_sdk = ' + QuoteSidecarString(TargetConfig.RuntimeSdkId);
+  WriteFileLines(SelectionPath, Lines);
 end;
 
 procedure WriteEnvResolutionSidecar(
@@ -295,98 +285,89 @@ procedure WriteEnvResolutionSidecar(
 );
 var
   ExistedBefore: Boolean;
-  ExistingLines: TStringList;
-  Lines: TStringList;
+  ExistingLines: TStringArray;
+  Lines: TStringArray;
+  ExistingText: string;
+  NewText: string;
+  I: SizeInt;
 begin
   ExistedBefore := FileExists(ResolutionPath);
   if not ForceDirectories(ExtractFileDir(ResolutionPath)) then
     raise Exception.Create('env-resolution-directory-create-failed: ' +
       ExtractFileDir(ResolutionPath));
 
-  Lines := TStringList.Create;
-  try
-    Lines.Add('# nextPas workspace-local environment resolution');
-    Lines.Add('target = ' + QuoteSidecarString(TargetConfig.TargetId));
-    Lines.Add(
-      'selection_path = ' + QuoteSidecarString(EnvironmentContext.SelectionPath)
-    );
-    Lines.Add(
-      'selection_status = ' + QuoteSidecarString(EnvironmentContext.SelectionStatus)
-    );
-    Lines.Add(
-      'selection_target = ' + QuoteSidecarString(EnvironmentContext.SelectionTarget)
-    );
-    Lines.Add(
-      'selection_toolchain_binding_id = ' +
-      QuoteSidecarString(EnvironmentContext.SelectionToolchainBindingId)
-    );
-    Lines.Add(
-      'toolchain_binding_path = ' +
-      QuoteSidecarString(EnvironmentContext.ToolchainBindingPath)
-    );
-    Lines.Add(
-      'toolchain_binding_id = ' + QuoteSidecarString(TargetConfig.ToolchainBindingId)
-    );
-    Lines.Add('backend_family = ' + QuoteSidecarString(TargetConfig.BackendFamily));
-    Lines.Add('runtime_sdk = ' + QuoteSidecarString(TargetConfig.RuntimeSdkId));
-    Lines.Add(
-      'distribution_bin_dir = ' +
-      QuoteSidecarString(EnvironmentContext.DistributionBinDir)
-    );
-    Lines.Add(
-      'distribution_lib_dir = ' +
-      QuoteSidecarString(EnvironmentContext.DistributionLibDir)
-    );
-    Lines.Add(
-      'distribution_share_dir = ' +
-      QuoteSidecarString(EnvironmentContext.DistributionShareDir)
-    );
-    Lines.Add('runtime_root = ' + QuoteSidecarString(EnvironmentContext.RuntimeRootPath));
-    Lines.Add('runtime_libc = ' + QuoteSidecarString(EnvironmentContext.RuntimeLibcPath));
-    Lines.Add(
-      'runtime_libc_present = ' + BoolSidecarString(EnvironmentContext.RuntimeLibcPresent)
-    );
-    Lines.Add(
-      'environment_readiness = ' +
-      QuoteSidecarString(EnvironmentContext.EnvironmentReadiness)
-    );
-    Lines.Add(
-      'environment_status = ' + QuoteSidecarString(EnvironmentContext.EnvironmentStatus)
-    );
-    Lines.Add(
-      'runtime_sdk_status = ' + QuoteSidecarString(EnvironmentContext.RuntimeSdkStatus)
-    );
-    Lines.Add(
-      'toolchain_binding_status = ' +
-      QuoteSidecarString(EnvironmentContext.ToolchainBindingStatus)
-    );
-    Lines.Add(
-      'distribution_status = ' + QuoteSidecarString(EnvironmentContext.DistributionStatus)
-    );
+  SetLength(Lines, 20);
+  Lines[0] := '# nextPas workspace-local environment resolution';
+  Lines[1] := 'target = ' + QuoteSidecarString(TargetConfig.TargetId);
+  Lines[2] :=
+    'selection_path = ' + QuoteSidecarString(EnvironmentContext.SelectionPath);
+  Lines[3] :=
+    'selection_status = ' + QuoteSidecarString(EnvironmentContext.SelectionStatus);
+  Lines[4] :=
+    'selection_target = ' + QuoteSidecarString(EnvironmentContext.SelectionTarget);
+  Lines[5] :=
+    'selection_toolchain_binding_id = ' +
+    QuoteSidecarString(EnvironmentContext.SelectionToolchainBindingId);
+  Lines[6] :=
+    'toolchain_binding_path = ' +
+    QuoteSidecarString(EnvironmentContext.ToolchainBindingPath);
+  Lines[7] :=
+    'toolchain_binding_id = ' + QuoteSidecarString(TargetConfig.ToolchainBindingId);
+  Lines[8] := 'backend_family = ' + QuoteSidecarString(TargetConfig.BackendFamily);
+  Lines[9] := 'runtime_sdk = ' + QuoteSidecarString(TargetConfig.RuntimeSdkId);
+  Lines[10] :=
+    'distribution_bin_dir = ' +
+    QuoteSidecarString(EnvironmentContext.DistributionBinDir);
+  Lines[11] :=
+    'distribution_lib_dir = ' +
+    QuoteSidecarString(EnvironmentContext.DistributionLibDir);
+  Lines[12] :=
+    'distribution_share_dir = ' +
+    QuoteSidecarString(EnvironmentContext.DistributionShareDir);
+  Lines[13] := 'runtime_root = ' + QuoteSidecarString(EnvironmentContext.RuntimeRootPath);
+  Lines[14] := 'runtime_libc = ' + QuoteSidecarString(EnvironmentContext.RuntimeLibcPath);
+  Lines[15] :=
+    'runtime_libc_present = ' + BoolSidecarString(EnvironmentContext.RuntimeLibcPresent);
+  Lines[16] :=
+    'environment_readiness = ' +
+    QuoteSidecarString(EnvironmentContext.EnvironmentReadiness);
+  Lines[17] :=
+    'environment_status = ' + QuoteSidecarString(EnvironmentContext.EnvironmentStatus);
+  Lines[18] :=
+    'runtime_sdk_status = ' + QuoteSidecarString(EnvironmentContext.RuntimeSdkStatus);
+  Lines[19] :=
+    'toolchain_binding_status = ' +
+    QuoteSidecarString(EnvironmentContext.ToolchainBindingStatus);
 
-    if ExistedBefore then
+  if ExistedBefore then
+  begin
+    ExistingLines := ReadFileLines(ResolutionPath);
+    ExistingText := '';
+    for I := 0 to High(ExistingLines) do
     begin
-      ExistingLines := TStringList.Create;
-      try
-        ExistingLines.LoadFromFile(ResolutionPath);
-        if ExistingLines.Text = Lines.Text then
-        begin
-          SyncChange := 'unchanged';
-          Exit;
-        end;
-      finally
-        ExistingLines.Free;
-      end;
+      if I > 0 then
+        ExistingText := ExistingText + LineEnding;
+      ExistingText := ExistingText + ExistingLines[I];
     end;
-
-    Lines.SaveToFile(ResolutionPath);
-    if ExistedBefore then
-      SyncChange := 'updated'
-    else
-      SyncChange := 'materialized';
-  finally
-    Lines.Free;
+    NewText := '';
+    for I := 0 to High(Lines) do
+    begin
+      if I > 0 then
+        NewText := NewText + LineEnding;
+      NewText := NewText + Lines[I];
+    end;
+    if ExistingText = NewText then
+    begin
+      SyncChange := 'unchanged';
+      Exit;
+    end;
   end;
+
+  WriteFileLines(ResolutionPath, Lines);
+  if ExistedBefore then
+    SyncChange := 'updated'
+  else
+    SyncChange := 'materialized';
 end;
 
 procedure RunEnvStatus(

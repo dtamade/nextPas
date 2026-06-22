@@ -5,8 +5,8 @@ unit np_toolchain_runner;
 interface
 
 uses
-  Classes, Process,
-  nextpas.core.text.conv, nextpas.core.path, nextpas.core.fs.util,
+  Process,
+  nextpas.core.text.conv, nextpas.core.path, nextpas.core.fs, nextpas.core.fs.util,
   nextpas.core.fs.dir, nextpas.core.fs.base, nextpas.core.os.env,
   nextpas.core.exception,
   np_toolchain_plan;
@@ -119,17 +119,9 @@ begin
 end;
 
 procedure WriteTextFile(const APath: string; const AText: string);
-var
-  Stream: TFileStream;
 begin
   EnsureParentDirectory(APath, 'toolchain.sidecar-parent-invalid');
-  Stream := TFileStream.Create(APath, Classes.fmCreate);
-  try
-    if Length(AText) > 0 then
-      Stream.WriteBuffer(AText[1], Length(AText));
-  finally
-    Stream.Free;
-  end;
+  WriteFileText(APath, AText);
 end;
 
 function LocalFileSearch(const AName, ASearchPath: string): string;

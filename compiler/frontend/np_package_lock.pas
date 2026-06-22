@@ -5,8 +5,8 @@ unit np_package_lock;
 interface
 
 uses
-  Classes, nextpas.core.text.conv, nextpas.core.path, nextpas.core.fs.util,
-  nextpas.core.exception;
+  nextpas.core.base, nextpas.core.text.conv, nextpas.core.path, nextpas.core.fs,
+  nextpas.core.fs.util, nextpas.core.exception;
 
 type
   TPackageLockEntryInfo = record
@@ -244,7 +244,7 @@ var
   FormatVersionFound: Boolean;
   Key: string;
   LineIndex: LongInt;
-  Lines: TStringList;
+  Lines: TStringArray;
   LineText: string;
   ParsedFormatVersion: LongInt;
   RawLineText: string;
@@ -358,12 +358,10 @@ begin
   ClearCurrentEntry;
   ClearCurrentSnapshot;
 
-  Lines := TStringList.Create;
-  try
-    Lines.LoadFromFile(Result.LockfilePath);
-    for LineIndex := 0 to Lines.Count - 1 do
-    begin
-      RawLineText := Lines[LineIndex];
+  Lines := ReadFileLines(Result.LockfilePath);
+  for LineIndex := 0 to High(Lines) do
+  begin
+    RawLineText := Lines[LineIndex];
       LineText := Trim(StripTomlComment(RawLineText));
       if LineText = '' then
         Continue;
@@ -453,9 +451,6 @@ begin
       end;
     end;
     FinalizeCurrentLockEntries;
-  finally
-    Lines.Free;
-  end;
 
   if not FormatVersionFound then
     AddPackageLockIssue(
