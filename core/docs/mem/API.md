@@ -84,17 +84,17 @@ end;
 
 ##### SaveMark
 ```pascal
-function SaveMark: TArenaMarker;
+function SaveMark: TArenaMark;
 ```
 保存当前分配位置的标记。
 
 **返回值：**
-- TArenaMarker 记录
+- TArenaMark 记录
 
 **示例：**
 ```pascal
 var
-  LMark: TArenaMarker;
+  LMark: TArenaMark;
 begin
   LMark := LArena.SaveMark;
   // 分配一些内存...
@@ -104,7 +104,7 @@ end;
 
 ##### RestoreToMark
 ```pascal
-procedure RestoreToMark(aMark: TArenaMarker);
+procedure RestoreToMark(aMark: TArenaMark);
 ```
 恢复到之前保存的标记位置。
 

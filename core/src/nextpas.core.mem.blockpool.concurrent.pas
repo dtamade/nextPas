@@ -19,6 +19,16 @@ type
    *}
   TBlockPoolConcurrent = class(TInterfacedObject, IBlockPool, IBlockPoolBatch)
   private
+    {**
+     * Lock ordering: TBlockPoolConcurrent uses a single mutex (FLock).
+     * No nesting with other locks — safe to call from any context.
+     * Lockless reads: BlockSize, Capacity (immutable after construction).
+     * Locked reads: Available, InUse, Acquire, Release, Reset.
+     *
+     * 锁顺序：单锁（FLock），不与其他锁嵌套。
+     * 不可变字段（BlockSize/Capacity）无需加锁。
+     * 可变状态（Available/InUse/Acquire/Release/Reset）均在 FLock 下操作。
+     *}
     FInner: IBlockPool;
     FLock: TMemMutex;
   public

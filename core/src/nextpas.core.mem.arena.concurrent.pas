@@ -47,6 +47,14 @@ type
    *}
   TArenaConcurrent = class(TInterfacedObject, IArena)
   private
+    {**
+     * Lock ordering: TArenaConcurrent uses a single mutex (FLock).
+     * No nesting with other locks — safe to call from any context.
+     *
+     * 锁顺序：单锁（FLock），不与其他锁嵌套，可在任意上下文调用。
+     * All IArena methods (Alloc/SaveMark/RestoreToMark/Reset/UsedSize/
+     * RemainingSize/Stats) are serialized under FLock.
+     *}
     FInner: IArena;
     FLock: TMemMutex;
   public

@@ -165,6 +165,14 @@ type
    *}
   TFixedPoolConcurrent = class(TInterfacedObject, IPool)
   private
+    {**
+     * Lock ordering: Single mutex (FLock). No nesting with other locks.
+     * BlockSize, Capacity are immutable (lockless reads).
+     * AllocatedCount, Acquire, Release, Reset are under FLock.
+     *
+     * 锁顺序：单锁（FLock），不与其他锁嵌套。
+     * BlockSize/Capacity 不可变（无需加锁）；其余操作在 FLock 下。
+     *}
     FInner: TFixedPool;
     FLock: TMemMutex;
     function GetBlockSize: SizeUInt; inline;

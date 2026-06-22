@@ -24,6 +24,12 @@ type
    *}
   TSlabPoolConcurrent = class(TInterfacedObject, IMemoryPool, IAllocator)
   private
+    {**
+     * Lock ordering: Single mutex (FLock). No nesting with other locks.
+     * All IMemoryPool/IAllocator operations are serialized under FLock.
+     *
+     * 锁顺序：单锁（FLock），不与其他锁嵌套，所有操作在 FLock 下串行。
+     *}
     FInner: TSlabPool;
     FLock: TMemMutex;
   public

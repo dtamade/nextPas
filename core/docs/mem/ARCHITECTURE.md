@@ -33,7 +33,7 @@
 - `nextpas.core.mem.arena.pas` — 纯 facade, re-export 核心类型
 
 ### L2: 分配器包装
-- `nextpas.core.mem.allocator.arena` — TFastArenaAllocator/TVirtualArenaAllocator (IAllocator 包装)
+- `nextpas.core.mem.allocator.arena` — TVirtualArenaAllocator (IAllocator 包装)
 - `nextpas.core.mem.allocator.tracking` — TTrackingAllocator (泄漏检测)
 - `nextpas.core.mem.allocator.leak_check` — RunTestWithLeakCheck (测试便利)
 - `nextpas.core.mem.allocator.mimalloc` — TMimallocAllocator (mimalloc FFI)
