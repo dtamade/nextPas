@@ -10,7 +10,8 @@ uses
   nextpas.core.mem.arena.local,
   nextpas.core.mem.arena.chunked,
   nextpas.core.mem.arena.virtual,
-  nextpas.core.mem.arena.concurrent;
+  nextpas.core.mem.arena.concurrent,
+  nextpas.core.mem.arena.thread;
 
 type
   {** Arena 标记 }
@@ -34,10 +35,19 @@ type
   {** 线程安全 Arena 包装 }
   TArenaConcurrent = nextpas.core.mem.arena.concurrent.TArenaConcurrent;
 
+  {** Thread-Local Arena 配置 }
+  TThreadArenaConfig = nextpas.core.mem.arena.thread.TThreadArenaConfig;
+  {** Thread-Local Arena 管理器 }
+  TThreadArenaManager = nextpas.core.mem.arena.thread.TThreadArenaManager;
+  {** Thread-Local Arena 轻量句柄 }
+  TThreadArena = nextpas.core.mem.arena.thread.TThreadArena;
+
 {** 初始化 TVirtualArena }
 procedure TVirtualArena_Init(var AArena: TVirtualArena; AAlignment: SizeUInt = ARENA_DEFAULT_ALIGNMENT);
 {** 释放 TVirtualArena 所有资源 }
 procedure TVirtualArena_Release(var AArena: TVirtualArena);
+{** 返回默认 Thread-Local Arena 配置 }
+function DefaultThreadArenaConfig: TThreadArenaConfig; inline;
 
 implementation
 
@@ -49,6 +59,11 @@ end;
 procedure TVirtualArena_Release(var AArena: TVirtualArena);
 begin
   nextpas.core.mem.arena.virtual.TVirtualArena_Release(AArena);
+end;
+
+function DefaultThreadArenaConfig: TThreadArenaConfig;
+begin
+  Result := nextpas.core.mem.arena.thread.DefaultThreadArenaConfig;
 end;
 
 end.
