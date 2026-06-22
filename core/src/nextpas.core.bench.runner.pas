@@ -441,7 +441,9 @@ begin
 
   if AEntry.EnableParallel and (AEntry.ParallelThreads > 1) then
   begin
-    // 并行基准自动跳过内存跟踪（不抛出异常）
+    // 并行基准自动跳过内存跟踪
+    if ATrackMemory and (not FConfig.Quiet) then
+      WriteLn('  WARNING: Memory tracking disabled for parallel benchmark "', AEntry.Name, '"');
     ATrackMemory := False;
 
     LPerThreadIterations := AIters div AEntry.ParallelThreads;
