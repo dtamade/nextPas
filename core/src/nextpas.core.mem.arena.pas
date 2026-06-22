@@ -9,7 +9,8 @@ uses
   nextpas.core.mem.arena.intf,
   nextpas.core.mem.arena.local,
   nextpas.core.mem.arena.chunked,
-  nextpas.core.mem.arena.virtual;
+  nextpas.core.mem.arena.virtual,
+  nextpas.core.mem.arena.concurrent;
 
 type
   {** Arena 标记 }
@@ -30,6 +31,8 @@ type
   TChunkedArena = nextpas.core.mem.arena.chunked.TChunkedArena;
   {** 预留虚拟地址空间 Arena }
   TVirtualArena = nextpas.core.mem.arena.virtual.TVirtualArena;
+  {** 线程安全 Arena 包装 }
+  TArenaConcurrent = nextpas.core.mem.arena.concurrent.TArenaConcurrent;
 
 {** 初始化 TVirtualArena }
 procedure TVirtualArena_Init(var AArena: TVirtualArena; AAlignment: SizeUInt = ARENA_DEFAULT_ALIGNMENT);

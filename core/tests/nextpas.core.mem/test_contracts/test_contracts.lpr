@@ -9,18 +9,13 @@ uses
   nextpas.core.mem.utils,
   nextpas.core.mem.allocator,
   nextpas.core.mem.allocator.base,
-  nextpas.core.mem.allocator.mimalloc,
-  nextpas.core.mem.aligned;
+  nextpas.core.mem.allocator.mimalloc;
 
 const
-  MEM_ALIGNED_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.aligned.pas';
-  MEM_ALIGNED_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.aligned.pas';
   MEM_BASE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.base.pas';
   MEM_BASE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.base.pas';
-  MEM_BLOCKPOOL_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.blockpool.pas';
-  MEM_BLOCKPOOL_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.blockpool.pas';
-  MEM_BLOCKPOOL_CONCURRENT_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.blockpool.concurrent.pas';
-  MEM_BLOCKPOOL_CONCURRENT_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.blockpool.concurrent.pas';
+  MEM_ARENA_CONCURRENT_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.arena.concurrent.pas';
+  MEM_ARENA_CONCURRENT_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.arena.concurrent.pas';
   MEM_ARENA_CHUNKED_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.arena.chunked.pas';
   MEM_ARENA_CHUNKED_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.arena.chunked.pas';
   MEM_BLOCKPOOL_GROWABLE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.blockpool.growable.pas';
@@ -232,60 +227,6 @@ begin
   end;
 end;
 
-procedure TestAlignedCompatShimSmoke;
-var
-  LPtr: Pointer;
-begin
-  LPtr := nextpas.core.mem.aligned.AllocAligned(64, 32);
-  try
-    Check(LPtr <> nil, 'aligned compat shim should allocate');
-    CheckEqual(Int64(0), Int64(PtrUInt(LPtr) mod 32),
-      'aligned compat shim should honor requested alignment');
-    PByte(LPtr)^ := $4D;
-    CheckEqual(Int64($4D), Int64(PByte(LPtr)^),
-      'aligned compat shim should return writable memory');
-  finally
-    nextpas.core.mem.aligned.FreeAligned(LPtr);
-  end;
-end;
-
-procedure TestAlignedCompatShimDelegatesToCanonicalAllocator;
-var
-  LSource: string;
-begin
-  LSource := ReadSourceText(ResolveSourcePath(
-    MEM_ALIGNED_SOURCE_PATH_FROM_TEST,
-    MEM_ALIGNED_SOURCE_PATH_FROM_ROOT));
-  CheckContains(LSource, '{$warning ''nextpas.core.mem.aligned is deprecated',
-    'aligned compat shim should publish a deprecation warning');
-  CheckContains(LSource,
-    'deprecated ''use nextpas.core.mem.default.defaultallocator.allocaligned instead''',
-    'aligned compat alloc surface should be deprecated');
-  CheckContains(LSource,
-    'deprecated ''use nextpas.core.mem.default.defaultallocator.freealigned instead''',
-    'aligned compat free surface should be deprecated');
-  CheckContains(LSource, 'nextpas.core.mem.default',
-    'aligned compat shim should depend on the canonical default allocator');
-  CheckContains(LSource, 'nextpas.core.mem.intf',
-    'aligned compat shim should reference the canonical allocator contract');
-  CheckContains(LSource, 'lallocator := nextpas.core.mem.default.defaultallocator;',
-    'aligned compat shim should obtain the canonical allocator');
-  CheckContains(LSource, 'result := lallocator.allocaligned(asize, aalignment);',
-    'aligned compat alloc should delegate to the canonical allocator');
-  CheckContains(LSource, 'lallocator.freealigned(aptr);',
-    'aligned compat free should delegate to the canonical allocator');
-  CheckNotContains(LSource, '_aligned_malloc',
-    'aligned compat shim should not own a windows allocation path');
-  CheckNotContains(LSource, 'posix_memalign',
-    'aligned compat shim should not own a unix allocation path');
-  CheckNotContains(LSource, 'libc_free',
-    'aligned compat shim should not own a unix free path');
-  CheckNotContains(LSource, 'sysgetmem',
-    'aligned compat shim should not own a raw rtl fallback path');
-  CheckNotContains(LSource, 'sysfreemem',
-    'aligned compat shim should not own a raw rtl free path');
-end;
-
 procedure TestGrowableAllocatorsUseCanonicalAllocatorContract;
 var
   LArenaSource: string;
@@ -334,26 +275,11 @@ end;
 
 procedure TestArenaUnitsUseExplicitArenaApi;
 var
-  LBlockPoolSource: string;
   LConcurrentSource: string;
 begin
-  LBlockPoolSource := ReadSourceText(ResolveSourcePath(
-    MEM_BLOCKPOOL_SOURCE_PATH_FROM_TEST,
-    MEM_BLOCKPOOL_SOURCE_PATH_FROM_ROOT));
-  CheckContains(LBlockPoolSource, 'function alloc(asize: sizeuint): pointer;',
-    'blockpool IArena should expose explicit-size allocation');
-  CheckContains(LBlockPoolSource, 'function allocaligned(asize, aalignment: sizeuint): pointer;',
-    'blockpool IArena should expose explicit aligned allocation');
-  CheckContains(LBlockPoolSource, 'function alloczeroed(asize: sizeuint): pointer;',
-    'blockpool IArena should expose explicit zeroed allocation');
-  CheckNotContains(LBlockPoolSource, 'function alloc(const alayout: tmemlayout)',
-    'blockpool IArena should not expose layout-based allocation');
-  CheckNotContains(LBlockPoolSource, 'function alloczeroed(const alayout: tmemlayout)',
-    'blockpool IArena should not expose layout-based zeroed allocation');
-
   LConcurrentSource := ReadSourceText(ResolveSourcePath(
-    MEM_BLOCKPOOL_CONCURRENT_SOURCE_PATH_FROM_TEST,
-    MEM_BLOCKPOOL_CONCURRENT_SOURCE_PATH_FROM_ROOT));
+    MEM_ARENA_CONCURRENT_SOURCE_PATH_FROM_TEST,
+    MEM_ARENA_CONCURRENT_SOURCE_PATH_FROM_ROOT));
   CheckContains(LConcurrentSource, 'function alloc(asize: sizeuint): pointer;',
     'concurrent arena wrapper should expose explicit-size allocation');
   CheckContains(LConcurrentSource, 'function allocaligned(asize, aalignment: sizeuint): pointer;',
@@ -542,9 +468,6 @@ begin
   T.Run('callback allocator supports canonical interface', @TestCallbackAllocatorSupportsCanonicalInterface);
   T.Run('rtl allocator zero init traits and aligned alloc', @TestRtlAllocatorZeroInitTraitsAndAlignedAlloc);
   T.Run('rtl allocator aligned alloc rejects size overflow', @TestRtlAllocatorAlignedAllocRejectsSizeOverflow);
-  T.Run('aligned compat shim smoke', @TestAlignedCompatShimSmoke);
-  T.Run('aligned compat shim delegates to canonical allocator',
-    @TestAlignedCompatShimDelegatesToCanonicalAllocator);
   T.Run('growable allocators use canonical allocator contract',
     @TestGrowableAllocatorsUseCanonicalAllocatorContract);
   T.Run('arena units use explicit arena api', @TestArenaUnitsUseExplicitArenaApi);
