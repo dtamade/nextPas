@@ -30,7 +30,7 @@ begin
   ALines[High(ALines)] := ALine;
 end;
 
-{ Escape a string for JSON (minimal: quotes, backslash, control chars) }
+{ Escape a string for JSON (quotes, backslash, control chars) }
 function JsonEscape(const S: string): string;
 var
   I: Integer;
@@ -44,11 +44,16 @@ begin
     case C of
       '"':  LOut := LOut + '\"';
       '\':  LOut := LOut + '\\';
-      #10:  LOut := LOut + '\n';
-      #13:  LOut := LOut + '\r';
+      #8:   LOut := LOut + '\b';
       #9:   LOut := LOut + '\t';
+      #10:  LOut := LOut + '\n';
+      #12:  LOut := LOut + '\f';
+      #13:  LOut := LOut + '\r';
     else
-      LOut := LOut + C;
+      if Ord(C) < 32 then
+        LOut := LOut + '\u00' + IntToHex(Ord(C), 2)
+      else
+        LOut := LOut + C;
     end;
   end;
   Result := LOut;

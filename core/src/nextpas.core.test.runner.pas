@@ -75,6 +75,8 @@ type
       out AResult: TTestRunResult): Boolean;
     procedure Summary;
     function  AllPassed: Boolean;
+    { Free heap-allocated table test pointers (TableCase, TableProc) }
+    procedure CleanupTableAllocations;
   end;
 
 { ── Test Runner (multi-suite) ─────────────────────────────────────────────── }
@@ -373,12 +375,6 @@ begin
     if (GetTestFilter <> '') and not MatchesFilter(LEntry.Name) then
     begin
       { Not counted as pass/fail/skip — just invisible }
-      LTestResult.Name    := LEntry.Name;
-      LTestResult.Status  := tsSkipped;
-      LTestResult.Message := 'filtered out';
-      SetLength(AResult.Results, Length(AResult.Results) + 1);
-      AResult.Results[High(AResult.Results)] := LTestResult;
-      Inc(LSkip);
       Continue;
     end;
 
@@ -623,6 +619,9 @@ begin
   end;
   LAppender.Free;
 
+  { Free heap-allocated table test pointers }
+  CleanupTableAllocations;
+
   AResult.Passed    := LPass;
   AResult.Failed    := LFail;
   AResult.Skipped   := LSkip;
@@ -736,6 +735,9 @@ begin
     end;
   end;
 
+  { Free heap-allocated table test pointers }
+  CleanupTableAllocations;
+
   { Collect results from all threads }
   SetLength(AResult.Results, LTotal);
   for I := 0 to High(Tests) do
@@ -778,6 +780,28 @@ begin
     Result := Run
   else
     Result := LastRunPassed;
+end;
+
+procedure TTestSuite.CleanupTableAllocations;
+var
+  I: Integer;
+begin
+  for I := 0 to High(Tests) do
+  begin
+    if Tests[I].Kind = ekTableTest then
+    begin
+      if Tests[I].TableCase <> nil then
+      begin
+        Dispose(PTestCase(Tests[I].TableCase));
+        Tests[I].TableCase := nil;
+      end;
+      if Tests[I].TableProc <> nil then
+      begin
+        Dispose(PTestCaseProc(Tests[I].TableProc));
+        Tests[I].TableProc := nil;
+      end;
+    end;
+  end;
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }

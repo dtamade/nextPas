@@ -1,10 +1,13 @@
-{ nextpas.core.test.mock — Interface-based mock objects
+{ nextpas.core.test.mock — Manual mock helper
   =========================================================
-  Mock any interface, record calls, configure return values, verify expectations.
+  String-based call recorder with configurable return values and
+  call-count verification.  Not an interface proxy — callers record
+  calls manually and retrieve configured return values.
   Usage:
-    LMock := TMock.Create<IFoo>;
+    LMock := TMock.Create;
     LMock.Setup('Bar').Returns('hello');
-    CheckEqual('hello', (LMock.Instance as IFoo).Bar);
+    LMock.RecordCall('Bar', []);
+    CheckEqual('hello', LMock.GetReturn('Bar'));
     LMock.Verify('Bar').CalledExactly(1);
   Depends on: nextpas.core.test.base }
 
@@ -350,12 +353,13 @@ begin
   LVal := FState.GetReturn(AMethodName);
   if LVal = '' then
     Exit(0);
-  Result := StrToInt64(LVal);
+  if not TryStrToInt64(LVal, Result) then
+    Result := 0;
 end;
 
 function TMock.GetReturnBool(const AMethodName: string): Boolean;
 begin
-  Result := FState.GetReturn(AMethodName) = 'true';
+  Result := SameText(FState.GetReturn(AMethodName), 'true');
 end;
 
 function TMock.CallCount(const AMethodName: string): Integer;

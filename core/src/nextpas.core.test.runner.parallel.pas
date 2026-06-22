@@ -83,6 +83,9 @@ begin
       R^.Done := True;
     end;
   end;
+  { If main thread marked us as timed out, we own the record and must dispose }
+  if R^.TimedOut then
+    Dispose(R);
 end;
 
 function RunTestWithTimeout(AProc: TTestProc; ATimeoutMs: Integer;
@@ -90,51 +93,54 @@ function RunTestWithTimeout(AProc: TTestProc; ATimeoutMs: Integer;
 { Returns True if test completed (pass/fail/error/skip).
   Returns False if timed out (AStatus = tsError, AMsg = 'timeout'). }
 var
-  LRec: TTimeoutRec;
+  LRec: PTimeoutRec;
   LHandle: TPlatformThreadHandle;
   LRetVal: Pointer;
   LElapsed: Integer;
 begin
-  LRec.Proc := AProc;
-  LRec.Done := False;
-  LRec.TimedOut := False;
-  LRec.ErrorMsg := '';
+  New(LRec);
+  LRec^.Proc := AProc;
+  LRec^.Done := False;
+  LRec^.TimedOut := False;
+  LRec^.ErrorMsg := '';
 
-  platform_thread_create(LHandle, @TimeoutWorker, @LRec);
+  platform_thread_create(LHandle, @TimeoutWorker, LRec);
 
   { Poll with sleep — cross-platform via platform_thread_sleep_ns }
   LElapsed := 0;
-  while (LElapsed < ATimeoutMs) and (not LRec.Done) do
+  while (LElapsed < ATimeoutMs) and (not LRec^.Done) do
   begin
     platform_thread_sleep_ns(10 * 1000 * 1000); { 10 ms }
     Inc(LElapsed, 10);
   end;
 
-  if LRec.Done then
+  if LRec^.Done then
   begin
     { Test completed — determine status from error prefix }
     platform_thread_join(LHandle, LRetVal);
-    if LRec.ErrorMsg = '' then
+    if LRec^.ErrorMsg = '' then
     begin
       AStatus := tsPassed;
       AMsg := '';
     end
-    else if LRec.ErrorMsg[1] = #1 then
+    else if LRec^.ErrorMsg[1] = #1 then
     begin
       AStatus := tsSkipped;
-      AMsg := Copy(LRec.ErrorMsg, 2, MaxInt);
+      AMsg := Copy(LRec^.ErrorMsg, 2, MaxInt);
     end
-    else if LRec.ErrorMsg[1] = #2 then
+    else if LRec^.ErrorMsg[1] = #2 then
     begin
       AStatus := tsError;
-      AMsg := Copy(LRec.ErrorMsg, 2, MaxInt);
+      AMsg := Copy(LRec^.ErrorMsg, 2, MaxInt);
     end
     else
     begin
       AStatus := tsFailed;
-      AMsg := LRec.ErrorMsg;
+      AMsg := LRec^.ErrorMsg;
     end;
     Result := True;
+    { Join path: we own the record, dispose here }
+    Dispose(LRec);
   end
   else
   begin
@@ -142,6 +148,10 @@ begin
     AStatus := tsError;
     AMsg := 'test timed out after ' + IntToStr(ATimeoutMs) + 'ms';
     Result := False;
+    { Mark timed-out so the worker thread disposes the record when it finishes.
+      x86_64 TSO guarantees the store order: TimedOut visible to worker after
+      we observe Done=False. }
+    LRec^.TimedOut := True;
     { Note: worker thread is leaked — cannot force-terminate Pascal threads.
       This is a known limitation documented in the API. }
   end;
@@ -296,21 +306,21 @@ begin
             WriteLn('    ', AnsiDim(LFailMsg));
         end;
     end;
+    { Write per-test result inside mutex for safety }
+    if R^.Res <> nil then
+    begin
+      R^.Res^.Name    := R^.Entry.Name;
+      R^.Res^.Status  := LStatus;
+      case LStatus of
+        tsSkipped: R^.Res^.Message := LSkipReason;
+        tsFailed:  R^.Res^.Message := LFailMsg;
+        tsError:   R^.Res^.Message := LFailMsg;
+      else
+        R^.Res^.Message := '';
+      end;
+    end;
   finally
     R^.Mtx.Release;
-  end;
-  { Write per-test result if caller requested it }
-  if R^.Res <> nil then
-  begin
-    R^.Res^.Name    := R^.Entry.Name;
-    R^.Res^.Status  := LStatus;
-    case LStatus of
-      tsSkipped: R^.Res^.Message := LSkipReason;
-      tsFailed:  R^.Res^.Message := LFailMsg;
-      tsError:   R^.Res^.Message := LFailMsg;
-    else
-      R^.Res^.Message := '';
-    end;
   end;
 
   if GExecState <> nil then
