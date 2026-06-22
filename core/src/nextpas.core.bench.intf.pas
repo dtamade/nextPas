@@ -9,9 +9,19 @@ interface
 
 uses
   nextpas.core.bench.base,
-  nextpas.core.time.base;
+  nextpas.core.time.base,
+  nextpas.core.exception;
 
 type
+  {** 基准框架异常基类 }
+  EBenchError = class(ENextPasError);
+
+  {** 参数无效异常 }
+  EBenchInvalidParam = class(EBenchError);
+
+  {** 基线未找到异常 }
+  EBenchBaselineNotFound = class(EBenchError);
+
   {** 前向声明 }
   IBenchResults = interface;
 

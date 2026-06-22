@@ -232,7 +232,7 @@ var
 begin
   Result := Self;
   if AThreads <= 0 then
-    raise Exception.Create('TBenchSuite.AddParallel: thread count must be > 0');
+    raise EBenchInvalidParam.Create('TBenchSuite.AddParallel: thread count must be > 0');
 
   LEntry := Default(TBenchEntry);
   LEntry.Name := AName;
@@ -287,7 +287,7 @@ function TBenchSuite.SetMinDuration(ADuration: TDuration): IBenchSuite;
 begin
   Result := Self;
   if ADuration.AsNanoseconds <= 0 then
-    raise Exception.Create('TBenchSuite.SetMinDuration: duration must be > 0');
+    raise EBenchInvalidParam.Create('TBenchSuite.SetMinDuration: duration must be > 0');
   FConfig.MinDurationNs := ADuration.AsNanoseconds;
 end;
 
@@ -295,7 +295,7 @@ function TBenchSuite.SetMaxIterations(AIters: Int64): IBenchSuite;
 begin
   Result := Self;
   if AIters <= 0 then
-    raise Exception.Create('TBenchSuite.SetMaxIterations: iterations must be > 0');
+    raise EBenchInvalidParam.Create('TBenchSuite.SetMaxIterations: iterations must be > 0');
   FConfig.MaxIterations := AIters;
 end;
 
@@ -303,7 +303,7 @@ function TBenchSuite.SetMinSamples(ACount: Integer): IBenchSuite;
 begin
   Result := Self;
   if ACount <= 0 then
-    raise Exception.Create('TBenchSuite.SetMinSamples: sample count must be > 0');
+    raise EBenchInvalidParam.Create('TBenchSuite.SetMinSamples: sample count must be > 0');
   FConfig.MinSamples := ACount;
 end;
 
@@ -311,7 +311,7 @@ function TBenchSuite.SetWarmupIters(ACount: Integer): IBenchSuite;
 begin
   Result := Self;
   if ACount < 0 then
-    raise Exception.Create('TBenchSuite.SetWarmupIters: warmup count must be >= 0');
+    raise EBenchInvalidParam.Create('TBenchSuite.SetWarmupIters: warmup count must be >= 0');
   FConfig.WarmupIterations := ACount;
 end;
 
@@ -378,6 +378,7 @@ end;
 function TBenchSuite.Run: IBenchResults;
 var
   LResults: array of TBenchResult;
+  LResultCount: Integer;
   LEnvironment: TBenchEnvironment;
   LRunResult: TBenchResult;
   i: Integer;
@@ -386,7 +387,10 @@ begin
   FRunner.SetFilter(FFilter);
   FRunner.ClearResults;
 
-  SetLength(LResults, 0);
+  // 预分配最大可能长度
+  SetLength(LResults, FEntryCount);
+  LResultCount := 0;
+
   for i := 0 to FEntryCount - 1 do
   begin
     if not FEntries[i].Condition then
@@ -395,10 +399,13 @@ begin
     LRunResult := FRunner.RunOne(FEntries[i]);
     if LRunResult.Executed then
     begin
-      SetLength(LResults, Length(LResults) + 1);
-      LResults[High(LResults)] := LRunResult;
+      LResults[LResultCount] := LRunResult;
+      Inc(LResultCount);
     end;
   end;
+
+  // 截断到实际长度
+  SetLength(LResults, LResultCount);
 
   // 获取环境信息
   LEnvironment := GetEnvironment;
@@ -446,9 +453,16 @@ end;
 function TBenchResults.GenerateComparisons: TBenchComparisonArray;
 var
   LComparisons: array of TBenchComparison;
+  LCount: Integer;
+  LIdx: Integer;
   i, j: Integer;
 begin
-  SetLength(LComparisons, 0);
+  // 预分配最大可能长度（结果数和基线数的较小值）
+  if FResultCount < FBaselineCount then
+    SetLength(LComparisons, FResultCount)
+  else
+    SetLength(LComparisons, FBaselineCount);
+  LCount := 0;
 
   for i := 0 to FResultCount - 1 do
   begin
@@ -456,26 +470,29 @@ begin
     begin
       if FResults[i].Name = FBaselines[j].Name then
       begin
-        SetLength(LComparisons, Length(LComparisons) + 1);
-        LComparisons[High(LComparisons)].BaselineName := FBaselines[j].Name;
-        LComparisons[High(LComparisons)].BaselineNsPerOp := FBaselines[j].NsPerOp;
-        LComparisons[High(LComparisons)].CurrentNsPerOp := FResults[i].NsPerOp;
+        LIdx := LCount;
+        LComparisons[LIdx].BaselineName := FBaselines[j].Name;
+        LComparisons[LIdx].BaselineNsPerOp := FBaselines[j].NsPerOp;
+        LComparisons[LIdx].CurrentNsPerOp := FResults[i].NsPerOp;
 
         if FBaselines[j].NsPerOp > 0 then
-          LComparisons[High(LComparisons)].Ratio := FResults[i].NsPerOp / FBaselines[j].NsPerOp
+          LComparisons[LIdx].Ratio := FResults[i].NsPerOp / FBaselines[j].NsPerOp
         else
-          LComparisons[High(LComparisons)].Ratio := 1.0;
+          LComparisons[LIdx].Ratio := 1.0;
 
-        LComparisons[High(LComparisons)].HasStatisticalTest := False;
-        LComparisons[High(LComparisons)].DifferenceHeuristic :=
-          Abs(LComparisons[High(LComparisons)].Ratio - 1.0) > 0.05;
-        LComparisons[High(LComparisons)].ApproximatePValue := 0.05;
+        LComparisons[LIdx].HasStatisticalTest := False;
+        LComparisons[LIdx].DifferenceHeuristic :=
+          Abs(LComparisons[LIdx].Ratio - 1.0) > 0.05;
+        LComparisons[LIdx].ApproximatePValue := 0.05;
 
+        Inc(LCount);
         Break;
       end;
     end;
   end;
 
+  // 截断到实际长度
+  SetLength(LComparisons, LCount);
   Result := LComparisons;
 end;
 
