@@ -348,6 +348,7 @@ begin
   LLastFailMsg := '';
   LAppender := TTestResultAppender.Create;
   LGTestTimeoutMs := GetTestTimeout;
+  try
 
   WriteLn;
   WriteLn(AnsiBold('> ') + AnsiCyan(Name) +
@@ -382,7 +383,6 @@ begin
         LastFail      := 1;
         LastSkip      := LSkip;
         Result         := False;
-        LAppender.Free;
         WriteLn(AnsiDim('  ') + IntToStr(LSkip) + ' skipped (setup failure)');
         Exit;
       end;
@@ -643,7 +643,10 @@ begin
     SetLength(AResult.Results, Length(AResult.Results) + 1);
     AResult.Results[High(AResult.Results)] := LAppender.FResults[J];
   end;
-  LAppender.Free;
+
+  finally
+    LAppender.Free;
+  end;
 
   { Free heap-allocated table test pointers }
   CleanupTableAllocations;
@@ -681,6 +684,10 @@ begin
   ParallelWorkerProc(AArg);
   Result := 0;
 end;
+
+{ TODO: RunWithResult and RunParallelWithResult share setup-failure, teardown,
+  result-counting, and HasRun/LastRunPassed-update logic.  Extract shared
+  helpers (e.g. RunSetup, RunTeardown, FinalizeResults) to reduce duplication. }
 
 function TTestSuite.RunParallelWithResult(APool: IThreadPool;
   out AResult: TTestRunResult): Boolean;
@@ -757,6 +764,7 @@ begin
       LResults[I].Name    := Tests[I].Name;
       LResults[I].Status  := tsSkipped;
       LResults[I].Message := 'subtests not supported in parallel mode';
+      Inc(LSkip);
     end;
   end;
 
@@ -887,12 +895,9 @@ begin
 end;
 
 procedure TTestRunner.Add(var ASuite: TTestSuite);
-  { IMPORTANT — Record value-copy semantics:
-    ASuite is passed by `var` only to avoid copying the entire record on the
-    call side. Internally the suite is *copied* into the Suites[] array via
-    Pascal assignment (record + dynamic-array copy-on-write).
-    After Add() returns, any further mutations to the caller's ASuite variable
-    (e.g. appending more tests) will NOT be visible to the runner.
+  { var avoids copying the entire record on the call side.
+    Internally the suite IS copied into Suites[] via Pascal assignment.
+    Mutations to the caller's ASuite after Add() are NOT visible to the runner.
     Rule: register ALL tests before calling Add. }
 begin
   SetLength(Suites, Length(Suites) + 1);

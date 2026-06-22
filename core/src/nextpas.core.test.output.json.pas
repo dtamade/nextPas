@@ -33,30 +33,55 @@ end;
 { Escape a string for JSON (quotes, backslash, control chars) }
 function JsonEscape(const S: string): string;
 var
-  I: Integer;
+  I, LLen, LPos, LExtra: Integer;
   C: Char;
-  LOut: string;
 begin
-  LOut := '';
-  for I := 1 to Length(S) do
+  LLen := Length(S);
+  if LLen = 0 then
+  begin
+    Result := '';
+    Exit;
+  end;
+  { Pre-calculate output length }
+  LExtra := 0;
+  for I := 1 to LLen do
   begin
     C := S[I];
     case C of
-      '"':  LOut := LOut + '\"';
-      '\':  LOut := LOut + '\\';
-      #8:   LOut := LOut + '\b';
-      #9:   LOut := LOut + '\t';
-      #10:  LOut := LOut + '\n';
-      #12:  LOut := LOut + '\f';
-      #13:  LOut := LOut + '\r';
+      '"', '\':        Inc(LExtra, 1);  { 2 - 1 }
+      #8, #9, #10, #12, #13: Inc(LExtra, 1);  { 2 - 1 }
     else
-      if Ord(C) < 32 then
-        LOut := LOut + '\u00' + IntToHex(Ord(C), 2)
-      else
-        LOut := LOut + C;
+      if Ord(C) < 32 then Inc(LExtra, 5);  { \u00XX = 6 chars - 1 }
     end;
   end;
-  Result := LOut;
+  SetLength(Result, LLen + LExtra);
+  LPos := 1;
+  for I := 1 to LLen do
+  begin
+    C := S[I];
+    case C of
+      '"':  begin Result[LPos] := '\'; Result[LPos+1] := '"';  Inc(LPos, 2); end;
+      '\':  begin Result[LPos] := '\'; Result[LPos+1] := '\';  Inc(LPos, 2); end;
+      #8:   begin Result[LPos] := '\'; Result[LPos+1] := 'b';  Inc(LPos, 2); end;
+      #9:   begin Result[LPos] := '\'; Result[LPos+1] := 't';  Inc(LPos, 2); end;
+      #10:  begin Result[LPos] := '\'; Result[LPos+1] := 'n';  Inc(LPos, 2); end;
+      #12:  begin Result[LPos] := '\'; Result[LPos+1] := 'f';  Inc(LPos, 2); end;
+      #13:  begin Result[LPos] := '\'; Result[LPos+1] := 'r';  Inc(LPos, 2); end;
+    else
+      if Ord(C) < 32 then
+      begin
+        Move('\u00'[1], Result[LPos], 4);
+        Move(IntToHex(Ord(C), 2)[1], Result[LPos+4], 2);
+        Inc(LPos, 6);
+      end
+      else
+      begin
+        Result[LPos] := C;
+        Inc(LPos);
+      end;
+    end;
+  end;
+  SetLength(Result, LPos - 1);
 end;
 
 function StatusName(AStatus: TTestStatus): string;

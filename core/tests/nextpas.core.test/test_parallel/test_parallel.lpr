@@ -13,51 +13,9 @@ uses
 var
   GTestCounter: Integer = 0;
 
-procedure TestParallelSimple1;
+procedure TestParallelSimple;
 begin
-  Check(True, 'test 1 passed');
-  InterLockedIncrement(GTestCounter);
-end;
-
-procedure TestParallelSimple2;
-begin
-  Check(True, 'test 2 passed');
-  InterLockedIncrement(GTestCounter);
-end;
-
-procedure TestParallelSimple3;
-begin
-  Check(True, 'test 3 passed');
-  InterLockedIncrement(GTestCounter);
-end;
-
-procedure TestParallelSimple4;
-begin
-  Check(True, 'test 4 passed');
-  InterLockedIncrement(GTestCounter);
-end;
-
-procedure TestParallelSimple5;
-begin
-  Check(True, 'test 5 passed');
-  InterLockedIncrement(GTestCounter);
-end;
-
-procedure TestParallelSimple6;
-begin
-  Check(True, 'test 6 passed');
-  InterLockedIncrement(GTestCounter);
-end;
-
-procedure TestParallelSimple7;
-begin
-  Check(True, 'test 7 passed');
-  InterLockedIncrement(GTestCounter);
-end;
-
-procedure TestParallelSimple8;
-begin
-  Check(True, 'test 8 passed');
+  Check(True, 'simple parallel pass');
   InterLockedIncrement(GTestCounter);
 end;
 
@@ -132,14 +90,14 @@ var
   LRunner: TTestRunner;
 begin
   LSuite := TTestSuite.Create('Parallel Tests');
-  LSuite.Test('p1', @TestParallelSimple1);
-  LSuite.Test('p2', @TestParallelSimple2);
-  LSuite.Test('p3', @TestParallelSimple3);
-  LSuite.Test('p4', @TestParallelSimple4);
-  LSuite.Test('p5', @TestParallelSimple5);
-  LSuite.Test('p6', @TestParallelSimple6);
-  LSuite.Test('p7', @TestParallelSimple7);
-  LSuite.Test('p8', @TestParallelSimple8);
+  LSuite.Test('p1', @TestParallelSimple);
+  LSuite.Test('p2', @TestParallelSimple);
+  LSuite.Test('p3', @TestParallelSimple);
+  LSuite.Test('p4', @TestParallelSimple);
+  LSuite.Test('p5', @TestParallelSimple);
+  LSuite.Test('p6', @TestParallelSimple);
+  LSuite.Test('p7', @TestParallelSimple);
+  LSuite.Test('p8', @TestParallelSimple);
 
   if not LSuite.RunParallel(nil) then
   begin
@@ -213,14 +171,14 @@ begin
     LSkipSuite := TTestSuite.Create('Suite A');
     LSkipSuite.Test('a1', @TestParallelPassA);
     LSkipSuite.Test('a2', @TestParallelPassB);
-    LSkipSuite.Test('a3', @TestParallelSimple1);
+    LSkipSuite.Test('a3', @TestParallelSimple);
     LSkipSuite.Skip('a4', 'deferred');
     LSkipSuite.Test('a5', @TestParallelFail);
     LRunner.Add(LSkipSuite);
     { Suite B: 2 pass = 2 }
     LFailSuite := TTestSuite.Create('Suite B');
-    LFailSuite.Test('b1', @TestParallelSimple2);
-    LFailSuite.Test('b2', @TestParallelSimple3);
+    LFailSuite.Test('b1', @TestParallelSimple);
+    LFailSuite.Test('b2', @TestParallelSimple);
     LRunner.Add(LFailSuite);
     if LRunner.RunAllParallel(nil) then
     begin

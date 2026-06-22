@@ -182,37 +182,40 @@ end;
 { ── Glob matching (internal) ───────────────────────────────────────────────── }
 
 function MatchesGlob(const AName, APattern: string): Boolean;
+{ Iterative backtracking glob matcher — no Copy() allocations.
+  On '*', save positions and advance; on mismatch, backtrack. }
 var
-  I, J: Integer;
+  I, J, LStarI, LStarJ: Integer;
 begin
-  { Try matching pattern against name — iterative with recursive * backtracking }
   I := 1; J := 1;
-  while (I <= Length(AName)) and (J <= Length(APattern)) do
+  LStarI := 0; LStarJ := 0;
+  while I <= Length(AName) do
   begin
-    if APattern[J] = '*' then
+    if (J <= Length(APattern)) and (APattern[J] = '*') then
     begin
-      { Skip consecutive stars }
-      while (J <= Length(APattern)) and (APattern[J] = '*') do Inc(J);
-      if J > Length(APattern) then Exit(True); { trailing * matches rest }
-      { Try each possible match position for * }
-      while I <= Length(AName) do
-      begin
-        if MatchesGlob(Copy(AName, I, MaxInt), Copy(APattern, J, MaxInt)) then
-          Exit(True);
-        Inc(I);
-      end;
-      Exit(False);
+      { Save backtrack point: star matches zero characters initially }
+      LStarI := I;
+      LStarJ := J;
+      Inc(J); { skip the star in pattern }
     end
-    else if (APattern[J] = '?') or (AName[I] = APattern[J]) then
+    else if (J <= Length(APattern)) and
+            ((APattern[J] = '?') or (AName[I] = APattern[J])) then
     begin
       Inc(I); Inc(J);
+    end
+    else if LStarJ > 0 then
+    begin
+      { Backtrack: let the star match one more character }
+      Inc(LStarI);
+      I := LStarI;
+      J := LStarJ + 1; { pattern after the star }
     end
     else
       Exit(False);
   end;
-  { Skip trailing stars in pattern }
+  { Skip remaining stars in pattern }
   while (J <= Length(APattern)) and (APattern[J] = '*') do Inc(J);
-  Result := (I > Length(AName)) and (J > Length(APattern));
+  Result := J > Length(APattern);
 end;
 
 function MatchesFilter(const AName: string): Boolean;
@@ -263,7 +266,7 @@ end;
 
 function XmlEscape(const S: string): string;
 var
-  LLen, I: Integer;
+  LLen, I, LPos, LExtra: Integer;
   LCh: Char;
 begin
   LLen := Length(S);
@@ -272,22 +275,44 @@ begin
     Result := '';
     Exit;
   end;
-  Result := '';
+  { Pre-calculate output length }
+  LExtra := 0;
   for I := 1 to LLen do
   begin
     LCh := S[I];
     case LCh of
-      '<':  Result := Result + '&lt;';
-      '>':  Result := Result + '&gt;';
-      '&':  Result := Result + '&amp;';
-      '"':  Result := Result + '&quot;';
-    else
-      if (Ord(LCh) < 32) and (LCh <> #9) and (LCh <> #10) and (LCh <> #13) then
-        Result := Result + ' '  { XML 1.0 forbids most control chars }
-      else
-        Result := Result + LCh;
+      '<':  Inc(LExtra, 3);  { &lt;  = 4 chars, input = 1 }
+      '>':  Inc(LExtra, 3);
+      '&':  Inc(LExtra, 4);  { &amp; = 5 chars }
+      '"':  Inc(LExtra, 5);  { &quot; = 6 chars }
     end;
   end;
+  SetLength(Result, LLen + LExtra);
+  LPos := 1;
+  for I := 1 to LLen do
+  begin
+    LCh := S[I];
+    case LCh of
+      '<':
+        begin Move('&lt;'[1], Result[LPos], 4); Inc(LPos, 4); end;
+      '>':
+        begin Move('&gt;'[1], Result[LPos], 4); Inc(LPos, 4); end;
+      '&':
+        begin Move('&amp;'[1], Result[LPos], 5); Inc(LPos, 5); end;
+      '"':
+        begin Move('&quot;'[1], Result[LPos], 6); Inc(LPos, 6); end;
+    else
+      if (Ord(LCh) < 32) and (LCh <> #9) and (LCh <> #10) and (LCh <> #13) then
+      begin
+        Result[LPos] := ' '; Inc(LPos);
+      end
+      else
+      begin
+        Result[LPos] := LCh; Inc(LPos);
+      end;
+    end;
+  end;
+  SetLength(Result, LPos - 1);
 end;
 
 function JUnitXML(const AResults: specialize TArray<TTestRunResult>;
