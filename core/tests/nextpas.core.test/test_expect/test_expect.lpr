@@ -664,6 +664,15 @@ begin
   ExpectDouble(0.0).ToNotBeNear(1.0, 1e-10);
 end;
 
+procedure TestExpectDoubleNotNearDoesNotMutateExpectation;
+var
+  LExpectation: IExpectation;
+begin
+  LExpectation := ExpectDouble(1.0);
+  LExpectation.ToNotBeNear(2.0, 1e-10);
+  LExpectation.ToBeNear(1.0, 1e-10);
+end;
+
 procedure TestExpectDoubleFailToBeNear;
 begin
   try
@@ -800,6 +809,7 @@ begin
   { R2-F23: Float/Double assertions }
   LSuite.Test('Double ToBeNear',               @TestExpectDouble);
   LSuite.Test('Double ToNotBeNear',            @TestExpectDoubleNotNear);
+  LSuite.Test('Double ToNotBeNear no mutation', @TestExpectDoubleNotNearDoesNotMutateExpectation);
   LSuite.Test('Fail: ToBeNear too far',        @TestExpectDoubleFailToBeNear);
   LSuite.Test('Fail: ToNotBeNear too close',   @TestExpectDoubleFailNotToBeNear);
   LSuite.Test('Double Not_ negation',          @TestExpectDoubleNotNegation);

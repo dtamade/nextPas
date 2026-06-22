@@ -519,8 +519,7 @@ end;
 function TExpectation.ToNotBeNear(AExpected: Double;
   AEpsilon: Double): IExpectation;
 begin
-  FNegated := not FNegated;
-  Result := ToBeNear(AExpected, AEpsilon);
+  Result := Not_.ToBeNear(AExpected, AEpsilon);
 end;
 
 { ── Expect factories ──────────────────────────────────────────────────────── }
