@@ -258,6 +258,16 @@ function TBaselineManager.CompareWithBaseline(const AResult: TBenchResult): TBas
 var
   LBaseline: TBaselineData;
 begin
+  if not HasBaseline(AResult.Name) then
+  begin
+    Result := Default(TBaselineComparison);
+    Result.Current := AResult;
+    Result.Ratio := 1.0;
+    Result.Baseline.Name := AResult.Name;
+    Result.Baseline.NsPerOp := AResult.NsPerOp;
+    Exit;
+  end;
+
   LBaseline := GetBaseline(AResult.Name);
 
   Result.Baseline := LBaseline;
@@ -323,12 +333,14 @@ var
 begin
   LJSON := ToJSON;
   AssignFile(LFile, AFileName);
-  Rewrite(LFile);
   try
+    Rewrite(LFile);
     Write(LFile, LJSON);
-  finally
-    CloseFile(LFile);
+  except
+    on E: Exception do
+      raise EBenchError.CreateFmt('Failed to save baseline to "%s": %s', [AFileName, E.Message]);
   end;
+  CloseFile(LFile);
 end;
 
 procedure TBaselineManager.LoadFromFile(const AFileName: string);
