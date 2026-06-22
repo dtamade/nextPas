@@ -5,7 +5,7 @@ unit nextpas_projection_text;
 interface
 
 uses
-  SysUtils, nextpas_projection_types, nextpas_json_helpers;
+  nextpas.core.text.conv, nextpas_projection_types, nextpas_json_helpers;
 
 procedure WriteProjectionLine(
   const UseStdErr: Boolean;

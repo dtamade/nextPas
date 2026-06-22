@@ -5,7 +5,8 @@ unit nextpas_projection_context;
 interface
 
 uses
-  SysUtils, nextpas_projection_types, nextpas_json_helpers,
+  nextpas.core.path, nextpas.core.fs, nextpas.core.text.conv,
+  nextpas_projection_types, nextpas_json_helpers,
   np_compilation_session, np_workspace_model, np_package_workflow,
   np_package_manifest, np_package_lock,
   np_toolchain_profiles, target_config;

@@ -11,7 +11,7 @@ program nextpas;
 {$UNITPATH ../../compiler/targets}
 
 uses
-  SysUtils, nextpas_projection_types, nextpas_command_envelope,
+  nextpas_projection_types, nextpas_command_envelope,
   nextpas_command_build, nextpas_command_test, nextpas_command_env,
   nextpas_command_doctor, nextpas_command_query, nextpas_command_pkg,
   nextpas_projection_context;

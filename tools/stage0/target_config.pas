@@ -5,7 +5,7 @@ unit target_config;
 interface
 
 uses
-  Classes, SysUtils;
+  Classes, nextpas.core.exception, nextpas.core.path, nextpas.core.fs, nextpas.core.text.conv;
 
 type
   ETargetConfigError = class(Exception)

@@ -38,6 +38,17 @@ function PathHasExt(const APath: string): Boolean;
 function PathWithoutExt(const APath: string): string;
 
 { SysUtils-compatible aliases }
+
+const
+  {** 平台目录分隔符（Linux: '/', Windows: '\'） *}
+  {$IFDEF NEXTPAS_WINDOWS}
+  DirectorySeparator = '\';
+  LineEnding = #13#10;
+  {$ELSE}
+  DirectorySeparator = '/';
+  LineEnding = #10;
+  {$ENDIF}
+
 {** @desc 提取文件路径的目录部分（SysUtils 兼容，末尾带分隔符） *}
 function ExtractFilePath(const AFileName: string): string;
 {** @desc 提取文件路径的目录部分（SysUtils 兼容）。
@@ -48,6 +59,8 @@ function ExtractFileDir(const AFileName: string): string;
 function ExtractFileName(const AFileName: string): string; inline;
 {** @desc 提取文件扩展名（SysUtils 兼容） *}
 function ExtractFileExt(const AFileName: string): string; inline;
+{** @desc 提取驱动器号（SysUtils 兼容，Linux 总返回空） *}
+function ExtractFileDrive(const AFileName: string): string;
 {** @desc 替换文件扩展名（SysUtils 兼容） *}
 function ChangeFileExt(const AFileName, AExt: string): string; inline;
 {** @desc 确保路径末尾有路径分隔符（SysUtils 兼容） *}
@@ -167,6 +180,18 @@ end;
 function ExtractFileExt(const AFileName: string): string;
 begin
   Result := FsPathExt(AFileName);
+end;
+
+function ExtractFileDrive(const AFileName: string): string;
+begin
+  {$IFDEF NEXTPAS_WINDOWS}
+  if (Length(AFileName) >= 2) and (AFileName[2] = ':') then
+    Result := Copy(AFileName, 1, 2)
+  else
+    Result := '';
+  {$ELSE}
+  Result := '';
+  {$ENDIF}
 end;
 
 function ChangeFileExt(const AFileName, AExt: string): string;

@@ -5,7 +5,7 @@ unit nextpas_command_envelope;
 interface
 
 uses
-  SysUtils, nextpas_projection_types, nextpas_projection_json,
+  nextpas_projection_types, nextpas_projection_json,
   nextpas_projection_text;
 
 const

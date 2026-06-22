@@ -5,7 +5,8 @@ unit nextpas_command_env;
 interface
 
 uses
-  Classes, SysUtils, nextpas_projection_types, nextpas_command_envelope,
+  Classes, nextpas.core.exception, nextpas.core.path, nextpas.core.fs, nextpas.core.text.conv,
+  nextpas_projection_types, nextpas_command_envelope,
   nextpas_projection_json, nextpas_projection_text, nextpas_projection_context,
   np_workspace_model, target_config;
 
@@ -46,8 +47,8 @@ type
 
 function QuoteSidecarString(const Value: string): string;
 begin
-  Result := StringReplace(Value, '\', '\\', [rfReplaceAll]);
-  Result := StringReplace(Result, '"', '\"', [rfReplaceAll]);
+  Result := StringReplace(Value, '\', '\\', True);
+  Result := StringReplace(Result, '"', '\"', True);
   Result := '"' + Result + '"';
 end;
 
