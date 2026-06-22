@@ -1,0 +1,468 @@
+{ test_output.lpr — nextpas.core.test.output API coverage
+  =========================================================
+  Covers: ANSI helpers, StatusDot, SetTestFilter/MatchesFilter,
+          SetTestTimeout/GetTestTimeout, JUnitXML, WriteJUnitXML }
+
+program test_output;
+
+{$mode objfpc}{$H+}{$J-}
+
+uses
+  SysUtils,
+  nextpas.core.test.base,
+  nextpas.core.test.check,
+  nextpas.core.test.output,
+  nextpas.core.test.runner;
+
+var
+  GTestsRun: Integer = 0;
+
+{ ── ANSI helpers ───────────────────────────────────────────────────────────── }
+
+procedure TestAnsiHelpersEnabled;
+var
+  LOut: string;
+begin
+  Inc(GTestsRun);
+  SetAnsiEnabled(True);
+  LOut := AnsiBold('hello');
+  CheckContains(LOut, #27'[1m');
+  CheckContains(LOut, 'hello');
+  CheckContains(LOut, #27'[0m');
+  LOut := AnsiGreen('ok');
+  CheckContains(LOut, #27'[32m');
+  LOut := AnsiRed('fail');
+  CheckContains(LOut, #27'[31m');
+  LOut := AnsiYellow('warn');
+  CheckContains(LOut, #27'[33m');
+  LOut := AnsiCyan('info');
+  CheckContains(LOut, #27'[36m');
+  LOut := AnsiDim('dim');
+  CheckContains(LOut, #27'[2m');
+end;
+
+procedure TestAnsiHelpersDisabled;
+var
+  LOut: string;
+begin
+  Inc(GTestsRun);
+  SetAnsiEnabled(False);
+  try
+    LOut := AnsiBold('hello');
+    CheckEqual(LOut, 'hello');
+    LOut := AnsiRed('fail');
+    CheckEqual(LOut, 'fail');
+  finally
+    SetAnsiEnabled(True);
+  end;
+end;
+
+procedure TestAnsiToggle;
+begin
+  Inc(GTestsRun);
+  SetAnsiEnabled(False);
+  CheckEqual(AnsiGreen('x'), 'x');
+  SetAnsiEnabled(True);
+  CheckContains(AnsiGreen('x'), #27'[');
+  SetAnsiEnabled(False);
+  CheckEqual(AnsiGreen('x'), 'x');
+  SetAnsiEnabled(True);
+end;
+
+{ ── StatusDot ──────────────────────────────────────────────────────────────── }
+
+procedure TestStatusDotAll;
+var
+  LDot: string;
+begin
+  Inc(GTestsRun);
+  SetAnsiEnabled(False);
+  try
+    LDot := StatusDot(tsPassed);
+    CheckTrue(Length(LDot) > 0, 'StatusDot(tsPassed) should not be empty');
+    LDot := StatusDot(tsFailed);
+    CheckTrue(Length(LDot) > 0, 'StatusDot(tsFailed) should not be empty');
+    LDot := StatusDot(tsSkipped);
+    CheckTrue(Length(LDot) > 0, 'StatusDot(tsSkipped) should not be empty');
+    LDot := StatusDot(tsError);
+    CheckTrue(Length(LDot) > 0, 'StatusDot(tsError) should not be empty');
+  finally
+    SetAnsiEnabled(True);
+  end;
+end;
+
+procedure TestStatusDotDistinct;
+var
+  LDot: string;
+  LPassed, LFailed, LSkipped, LError: string;
+begin
+  Inc(GTestsRun);
+  { StatusDot always calls AnsiGreen/AnsiRed/AnsiYellow/AnsiRed,
+    which wrap with color codes. Each status type is structurally different. }
+  LPassed  := StatusDot(tsPassed);
+  LFailed  := StatusDot(tsFailed);
+  LSkipped := StatusDot(tsSkipped);
+  LError   := StatusDot(tsError);
+  { All should be non-empty }
+  CheckTrue(Length(LPassed) > 0, 'tsPassed dot non-empty');
+  CheckTrue(Length(LFailed) > 0, 'tsFailed dot non-empty');
+  CheckTrue(Length(LSkipped) > 0, 'tsSkipped dot non-empty');
+  CheckTrue(Length(LError) > 0, 'tsError dot non-empty');
+end;
+
+{ ── Test Filter ────────────────────────────────────────────────────────────── }
+
+procedure TestFilterEmpty;
+begin
+  Inc(GTestsRun);
+  SetTestFilter('');
+  CheckTrue(MatchesFilter('anything'), 'Empty filter should match everything');
+  CheckTrue(MatchesFilter(''), 'Empty filter should match empty string');
+end;
+
+procedure TestFilterSubstring;
+begin
+  Inc(GTestsRun);
+  SetTestFilter('hello');
+  CheckTrue(MatchesFilter('hello'), 'Exact match');
+  CheckTrue(MatchesFilter('say hello world'), 'Substring match');
+  CheckTrue(MatchesFilter('hello_world'), 'Prefix match');
+  CheckFalse(MatchesFilter('goodbye'), 'No match');
+  CheckFalse(MatchesFilter('hell'), 'Partial should not match');
+  SetTestFilter('');
+end;
+
+procedure TestFilterGlobStar;
+begin
+  Inc(GTestsRun);
+  SetTestFilter('test_*');
+  CheckTrue(MatchesFilter('test_foo'), '* matches suffix');
+  CheckTrue(MatchesFilter('test_'), '* matches empty suffix');
+  CheckFalse(MatchesFilter('my_test_foo'), 'Prefix required');
+  SetTestFilter('');
+end;
+
+procedure TestFilterGlobQuestion;
+begin
+  Inc(GTestsRun);
+  SetTestFilter('ab?d');
+  CheckTrue(MatchesFilter('abcd'), '? matches single char');
+  CheckTrue(MatchesFilter('abxd'), '? matches any char');
+  CheckFalse(MatchesFilter('abd'), '? requires exactly one char');
+  CheckFalse(MatchesFilter('abcde'), '? does not match two chars');
+  SetTestFilter('');
+end;
+
+procedure TestFilterCommaSeparated;
+begin
+  Inc(GTestsRun);
+  SetTestFilter('foo, bar, baz');
+  CheckTrue(MatchesFilter('test_foo'), 'Comma-separated: foo');
+  CheckTrue(MatchesFilter('test_bar'), 'Comma-separated: bar');
+  CheckTrue(MatchesFilter('test_baz'), 'Comma-separated: baz');
+  CheckFalse(MatchesFilter('test_qux'), 'Comma-separated: no match');
+  SetTestFilter('');
+end;
+
+procedure TestFilterGlobCommaCombined;
+begin
+  Inc(GTestsRun);
+  SetTestFilter('test_*,check_*');
+  CheckTrue(MatchesFilter('test_alpha'), 'Glob + comma: test_');
+  CheckTrue(MatchesFilter('check_beta'), 'Glob + comma: check_');
+  CheckFalse(MatchesFilter('verify_gamma'), 'Glob + comma: no match');
+  SetTestFilter('');
+end;
+
+procedure TestFilterWildcardOnly;
+begin
+  Inc(GTestsRun);
+  SetTestFilter('*');
+  CheckTrue(MatchesFilter('anything'), '* matches everything');
+  CheckTrue(MatchesFilter(''), '* matches empty');
+  SetTestFilter('');
+end;
+
+procedure TestGetSetFilter;
+begin
+  Inc(GTestsRun);
+  SetTestFilter('my_pattern');
+  CheckEqual(GetTestFilter, 'my_pattern');
+  SetTestFilter('');
+  CheckEqual(GetTestFilter, '');
+end;
+
+{ ── Test Timeout ───────────────────────────────────────────────────────────── }
+
+procedure TestGetSetTimeout;
+begin
+  Inc(GTestsRun);
+  SetTestTimeout(5000);
+  CheckEqual(GetTestTimeout, 5000);
+  SetTestTimeout(0);
+  CheckEqual(GetTestTimeout, 0);
+end;
+
+{ ── JUnit XML ──────────────────────────────────────────────────────────────── }
+
+procedure TestJUnitXMLBasic;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LXml: string;
+begin
+  Inc(GTestsRun);
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('suite1');
+  LResults[0].Passed := 2;
+  LResults[0].Failed := 1;
+  LResults[0].Skipped := 0;
+  SetLength(LResults[0].Results, 3);
+  LResults[0].Results[0].Name := 'test_a';
+  LResults[0].Results[0].Status := tsPassed;
+  LResults[0].Results[1].Name := 'test_b';
+  LResults[0].Results[1].Status := tsPassed;
+  LResults[0].Results[2].Name := 'test_c';
+  LResults[0].Results[2].Status := tsFailed;
+  LResults[0].Results[2].Message := 'expected X';
+
+  LXml := JUnitXML(LResults, 'my_run');
+  CheckContains(LXml, '<?xml version');
+  CheckContains(LXml, '<testsuites');
+  CheckContains(LXml, 'tests="3"');
+  CheckContains(LXml, 'failures="1"');
+  CheckContains(LXml, '<testsuite name="suite1"');
+  CheckContains(LXml, '<testcase name="test_a"');
+  CheckContains(LXml, '<failure message="expected X"');
+end;
+
+procedure TestJUnitXMLMultipleSuites;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LXml: string;
+begin
+  Inc(GTestsRun);
+  SetLength(LResults, 2);
+  LResults[0] := TTestRunResult.Create('alpha');
+  LResults[0].Passed := 1;
+  LResults[0].Failed := 0;
+  LResults[0].Skipped := 0;
+  SetLength(LResults[0].Results, 1);
+  LResults[0].Results[0].Name := 'a1';
+  LResults[0].Results[0].Status := tsPassed;
+
+  LResults[1] := TTestRunResult.Create('beta');
+  LResults[1].Passed := 0;
+  LResults[1].Failed := 0;
+  LResults[1].Skipped := 2;
+  SetLength(LResults[1].Results, 2);
+  LResults[1].Results[0].Name := 'b1';
+  LResults[1].Results[0].Status := tsSkipped;
+  LResults[1].Results[1].Name := 'b2';
+  LResults[1].Results[1].Status := tsSkipped;
+
+  LXml := JUnitXML(LResults);
+  CheckContains(LXml, '<testsuite name="alpha"');
+  CheckContains(LXml, '<testsuite name="beta"');
+  CheckContains(LXml, 'tests="3"');
+  CheckContains(LXml, 'failures="0"');
+  CheckContains(LXml, 'skipped="2"');
+  CheckContains(LXml, '<skipped/>');
+end;
+
+procedure TestJUnitXMLXmlEscape;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LXml: string;
+begin
+  Inc(GTestsRun);
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('test<>esc');
+  LResults[0].Passed := 1;
+  LResults[0].Failed := 0;
+  LResults[0].Skipped := 0;
+  SetLength(LResults[0].Results, 1);
+  LResults[0].Results[0].Name := 'a & b "c"';
+  LResults[0].Results[0].Status := tsPassed;
+
+  LXml := JUnitXML(LResults);
+  CheckContains(LXml, 'test&lt;&gt;esc');
+  CheckContains(LXml, 'a &amp; b &quot;c&quot;');
+end;
+
+procedure TestJUnitXMLEmpty;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LXml: string;
+begin
+  Inc(GTestsRun);
+  SetLength(LResults, 0);
+  LXml := JUnitXML(LResults, 'empty');
+  CheckContains(LXml, 'tests="0"');
+  CheckContains(LXml, 'failures="0"');
+  CheckContains(LXml, 'skipped="0"');
+end;
+
+procedure TestJUnitXMLDefaultSuiteName;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LXml: string;
+begin
+  Inc(GTestsRun);
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('');
+  LResults[0].Passed := 1;
+  LResults[0].Failed := 0;
+  LResults[0].Skipped := 0;
+  SetLength(LResults[0].Results, 1);
+  LResults[0].Results[0].Name := 'x';
+  LResults[0].Results[0].Status := tsPassed;
+
+  LXml := JUnitXML(LResults);
+  CheckContains(LXml, 'name="suite_0"');
+end;
+
+procedure TestJUnitXMLSkippedTestCase;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LXml: string;
+begin
+  Inc(GTestsRun);
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('s');
+  LResults[0].Passed := 0;
+  LResults[0].Failed := 0;
+  LResults[0].Skipped := 1;
+  SetLength(LResults[0].Results, 1);
+  LResults[0].Results[0].Name := 'sk';
+  LResults[0].Results[0].Status := tsSkipped;
+  LResults[0].Results[0].Message := 'not ready';
+
+  LXml := JUnitXML(LResults);
+  CheckContains(LXml, '<skipped/>');
+end;
+
+procedure TestJUnitXMLErrorTestCase;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LXml: string;
+begin
+  Inc(GTestsRun);
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('s');
+  LResults[0].Passed := 0;
+  LResults[0].Failed := 1;
+  LResults[0].Skipped := 0;
+  SetLength(LResults[0].Results, 1);
+  LResults[0].Results[0].Name := 'err';
+  LResults[0].Results[0].Status := tsError;
+  LResults[0].Results[0].Message := 'segfault';
+
+  LXml := JUnitXML(LResults);
+  CheckContains(LXml, '<failure message="segfault"');
+end;
+
+procedure TestWriteJUnitXML;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LPath: string;
+  LSuccess: Boolean;
+  LContent, LLine: string;
+  LF: TextFile;
+begin
+  Inc(GTestsRun);
+  LPath := '/tmp/nextpas_test_junit_' + IntToStr(GetTickCount64) + '.xml';
+  try
+    SetLength(LResults, 1);
+    LResults[0] := TTestRunResult.Create('write_test');
+    LResults[0].Passed := 1;
+    LResults[0].Failed := 0;
+    LResults[0].Skipped := 0;
+    SetLength(LResults[0].Results, 1);
+    LResults[0].Results[0].Name := 'ok';
+    LResults[0].Results[0].Status := tsPassed;
+
+    LSuccess := WriteJUnitXML(LResults, LPath, 'run1');
+    CheckTrue(LSuccess, 'WriteJUnitXML should succeed');
+    CheckTrue(FileExists(LPath), 'File should exist after WriteJUnitXML');
+
+    LContent := '';
+    AssignFile(LF, LPath);
+    Reset(LF);
+    while not Eof(LF) do
+    begin
+      ReadLn(LF, LLine);
+      LContent := LContent + LLine + LineEnding;
+    end;
+    CloseFile(LF);
+    CheckContains(LContent, '<?xml');
+    CheckContains(LContent, 'write_test');
+  finally
+    if FileExists(LPath) then
+      DeleteFile(LPath);
+  end;
+end;
+
+procedure TestWriteJUnitXMLBadPath;
+var
+  LResults: specialize TArray<TTestRunResult>;
+begin
+  Inc(GTestsRun);
+  SetLength(LResults, 0);
+  CheckFalse(WriteJUnitXML(LResults, '/nonexistent/dir/file.xml'),
+    'WriteJUnitXML should return False on bad path');
+end;
+
+{ ── Main ───────────────────────────────────────────────────────────────────── }
+
+var
+  Suite: TTestSuite;
+  Runner: TTestRunner;
+  LResults: specialize TArray<TTestRunResult>;
+  LSuccess: Boolean;
+begin
+  WriteLn('=== test_output ===');
+  { Reset global filter/timeout to defaults before running }
+  SetTestFilter('');
+  SetTestTimeout(0);
+  Suite := TTestSuite.Create('output');
+  Suite.Test('TestAnsiHelpersEnabled', @TestAnsiHelpersEnabled);
+  Suite.Test('TestAnsiHelpersDisabled', @TestAnsiHelpersDisabled);
+  Suite.Test('TestAnsiToggle', @TestAnsiToggle);
+  Suite.Test('TestStatusDotAll', @TestStatusDotAll);
+  Suite.Test('TestStatusDotDistinct', @TestStatusDotDistinct);
+  Suite.Test('TestFilterEmpty', @TestFilterEmpty);
+  Suite.Test('TestFilterSubstring', @TestFilterSubstring);
+  Suite.Test('TestFilterGlobStar', @TestFilterGlobStar);
+  Suite.Test('TestFilterGlobQuestion', @TestFilterGlobQuestion);
+  Suite.Test('TestFilterCommaSeparated', @TestFilterCommaSeparated);
+  Suite.Test('TestFilterGlobCommaCombined', @TestFilterGlobCommaCombined);
+  Suite.Test('TestFilterWildcardOnly', @TestFilterWildcardOnly);
+  Suite.Test('TestGetSetFilter', @TestGetSetFilter);
+  Suite.Test('TestGetSetTimeout', @TestGetSetTimeout);
+  Suite.Test('TestJUnitXMLBasic', @TestJUnitXMLBasic);
+  Suite.Test('TestJUnitXMLMultipleSuites', @TestJUnitXMLMultipleSuites);
+  Suite.Test('TestJUnitXMLXmlEscape', @TestJUnitXMLXmlEscape);
+  Suite.Test('TestJUnitXMLEmpty', @TestJUnitXMLEmpty);
+  Suite.Test('TestJUnitXMLDefaultSuiteName', @TestJUnitXMLDefaultSuiteName);
+  Suite.Test('TestJUnitXMLSkippedTestCase', @TestJUnitXMLSkippedTestCase);
+  Suite.Test('TestJUnitXMLErrorTestCase', @TestJUnitXMLErrorTestCase);
+  Suite.Test('TestWriteJUnitXML', @TestWriteJUnitXML);
+  Suite.Test('TestWriteJUnitXMLBadPath', @TestWriteJUnitXMLBadPath);
+
+  Runner := TTestRunner.Create('output-tests');
+  Runner.Add(Suite);
+  LSuccess := Runner.RunAllWithResult(LResults);
+  WriteLn;
+  Runner.Summary;
+
+  CheckTrue(GTestsRun >= 23, 'Expected at least 23 tests, got ' + IntToStr(GTestsRun));
+  CheckTrue(LSuccess, 'All output tests should pass');
+
+  if Runner.AllPassed then
+    WriteLn('ALL PASSED')
+  else
+  begin
+    WriteLn('SOME FAILED');
+    Halt(1);
+  end;
+end.
