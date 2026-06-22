@@ -58,6 +58,18 @@ begin
   end;
 end;
 
+function Utf8SafeStart(const S: string; APos: Integer): Integer;
+{ Adjust APos backward to avoid starting in the middle of a multi-byte UTF-8 sequence.
+  In UTF-8, continuation bytes have the form 10xxxxxx ($80-$BF). }
+begin
+  Result := APos;
+  if Result < 1 then
+    Result := 1;
+  { Scan backward past any continuation bytes }
+  while (Result > 1) and (Ord(S[Result]) >= $80) and (Ord(S[Result]) <= $BF) do
+    Dec(Result);
+end;
+
 function StringDiff(const AExpected, AActual: string): string;
 var
   I, LMin, LStart, LEnd: Integer;
@@ -71,8 +83,7 @@ begin
   if I > LMin then
     I := LMin; { difference is purely in length }
   { Extract context around first difference }
-  LStart := I - 10;
-  if LStart < 1 then LStart := 1;
+  LStart := Utf8SafeStart(AExpected, I - 10);
   LEnd := I + 20;
   if LEnd > Length(AExpected) then LEnd := Length(AExpected);
   Result := 'Strings differ at position ' + IntToStr(I) + ':' + #10 +

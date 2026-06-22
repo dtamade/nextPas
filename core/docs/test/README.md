@@ -303,7 +303,7 @@ WriteLn(GetTestFilter);       { Read current filter }
 SetTestFilter('');             { Clear filter (run all) }
 ```
 
-Filter matching is case-insensitive substring match on the test name.
+Filter matching is case-sensitive substring match on the test name.
 
 ### Test Timeout
 
@@ -426,7 +426,7 @@ after each test in serial mode.
 make -C core/tests/nextpas.core.test/test_assertions clean test
 
 # All nextpas.core.test tests
-for t in test_assertions test_expect test_runner test_parallel test_subtests; do
+for t in test_assertions test_expect test_runner test_parallel test_subtests test_advanced test_lifecycle test_output; do
   make -C core/tests/nextpas.core.test/$t clean test
 done
 ```
@@ -434,28 +434,40 @@ done
 ## Architecture
 
 ```
-nextpas.core.test.pas               <- Facade: pure re-export (265 lines)
+nextpas.core.test.pas               <- Facade: pure re-export (315 lines)
   uses:
-    nextpas.core.test.base           <- Types + GExecState + InternalFail/Skip (192 lines)
+    nextpas.core.test.base           <- Types + GExecState + InternalFail/Skip (193 lines)
       TTestStatus, TTestEntry, TTestResult, TTestRunResult
       ETestSkipped, TTestProc, TTestClosure, TTestCase, TTestCaseProc
       ITestContext, TSubtestProc
       threadvar GExecState (thread-local execution state)
-    nextpas.core.test.check          <- 20 Check*/Fail/Skip procedures (333 lines)
-    nextpas.core.test.expect         <- IExpectation + TExpectation factory+methods (557 lines)
-    nextpas.core.test.output         <- ANSI color + JUnitXML + Filter + Timeout (393 lines)
-    nextpas.core.test.runner         <- TTestSuite + TTestRunner (834 lines)
+    nextpas.core.test.check          <- 20 Check*/Fail/Skip procedures (334 lines)
+    nextpas.core.test.expect         <- IExpectation + TExpectation factory+methods (558 lines)
+    nextpas.core.test.discovery      <- RTTI discovery (156 lines)
+    nextpas.core.test.mock           <- Manual mock helper (375 lines)
+    nextpas.core.test.output         <- ANSI color + JUnitXML + Filter + Timeout (435 lines)
       uses:
-        nextpas.core.test.runner.context   <- TTestContext + SubtestResult (207 lines)
-        nextpas.core.test.runner.parallel  <- ParallelWorker + TimeoutWorker (322 lines)
+        nextpas.core.test.output.tap       <- TAP v13 output (108 lines)
+        nextpas.core.test.output.json      <- JSON output (154 lines)
+    nextpas.core.test.runner         <- TTestSuite + TTestRunner (933 lines)
+      uses:
+        nextpas.core.test.runner.context   <- TTestContext + SubtestResult (208 lines)
+        nextpas.core.test.runner.parallel  <- ParallelWorker + TimeoutWorker (156 lines)
 
 Dependency graph:
-  test.base  <--  test.check, test.expect, test.output
-                     \              |              /
-                      \             |             /
-                       +---->  test.runner  <----+
-                                 |
-                            test.pas (facade)
+  test.base  <--  test.check, test.expect, test.output, test.discovery, test.mock
+                     \              |              /         |              |
+                      \             |             /          |              |
+                       +---->  test.runner  <----+           |              |
+                                 |                           |              |
+                            test.pas (facade)                |              |
+                                                             |              |
+  test.base  <--  test.output.tap, test.output.json          |              |
+                      \                    /                  |              |
+                       +--> test.output <--+                  |              |
+                                                             |              |
+  test.base, test.runner  <--  test.discovery                |              |
+  test.base            <--  test.mock   <--------------------+
 ```
 
 ## Dependencies

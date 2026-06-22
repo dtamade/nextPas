@@ -7,6 +7,8 @@
 program test_lifecycle;
 
 {$mode objfpc}{$H+}{$J-}
+{$modeswitch anonymousfunctions}
+{$modeswitch functionreferences}
 
 uses
   SysUtils,

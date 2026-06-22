@@ -271,7 +271,10 @@ begin
       '&':  Result := Result + '&amp;';
       '"':  Result := Result + '&quot;';
     else
-      Result := Result + LCh;
+      if (Ord(LCh) < 32) and (LCh <> #9) and (LCh <> #10) and (LCh <> #13) then
+        Result := Result + ' '  { XML 1.0 forbids most control chars }
+      else
+        Result := Result + LCh;
     end;
   end;
 end;

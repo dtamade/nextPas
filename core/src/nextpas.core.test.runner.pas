@@ -716,6 +716,13 @@ begin
     LRecs[I].Fail      := @LFail;
     LRecs[I].Skip      := @LSkip;
     LRecs[I].Res       := @LResults[I];
+    { Pre-fill result for subtest entries — worker skips them without writing }
+    if Tests[I].Kind = ekSubtest then
+    begin
+      LResults[I].Name    := Tests[I].Name;
+      LResults[I].Status  := tsSkipped;
+      LResults[I].Message := 'subtests not supported in parallel mode';
+    end;
   end;
 
   for I := 0 to High(Tests) do
