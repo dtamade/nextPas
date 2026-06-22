@@ -153,6 +153,12 @@ end;
 
 function TLocalArena.AllocFast(ASize: SizeUInt): Pointer;
 begin
+  {$IFDEF DEBUG}
+  Assert(FBacking <> nil, 'AllocFast: FBacking is nil');
+  Assert(ASize > 0, 'AllocFast: ASize = 0');
+  Assert(FOffset <= FCapacity, 'AllocFast: FOffset > FCapacity');
+  Assert(ASize <= FCapacity - FOffset, 'AllocFast: ASize exceeds remaining capacity');
+  {$ENDIF}
   Result := Pointer(PtrUInt(FBacking) + FOffset);
   Inc(FOffset, ASize);
 end;
@@ -163,6 +169,13 @@ var
   LAligned: SizeUInt;
   LMask: SizeUInt;
 begin
+  {$IFDEF DEBUG}
+  Assert(FBacking <> nil, 'AllocAlignedFast: FBacking is nil');
+  Assert(ASize > 0, 'AllocAlignedFast: ASize = 0');
+  Assert(AAlign > 0, 'AllocAlignedFast: AAlign = 0');
+  Assert(IsPowerOfTwo(AAlign), 'AllocAlignedFast: AAlign is not power of two');
+  Assert(FOffset <= FCapacity, 'AllocAlignedFast: FOffset > FCapacity');
+  {$ENDIF}
   LCurrent := PtrUInt(FBacking) + FOffset;
   LMask := AAlign - 1;
   LAligned := (LCurrent + LMask) and not LMask;

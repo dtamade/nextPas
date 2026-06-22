@@ -144,6 +144,33 @@ begin
   end;
 end;
 
+procedure TestAllocFastSourceContract;
+{$IFDEF DEBUG}
+var
+  A: TLocalArena;
+  Hit: Boolean;
+begin
+  Hit := False;
+  A := TLocalArena.Create(32);
+  try
+    A.AllocFast(16);
+    try
+      A.AllocFast(64); // exceeds remaining — should trigger assert in DEBUG
+    except
+      on E: EAssertionFailed do
+        Hit := True;
+    end;
+    Check(Hit, 'DEBUG assert guards AllocFast bounds');
+  finally
+    A.Free;
+  end;
+end;
+{$ELSE}
+begin
+  { Release builds skip the assertion test — expected }
+end;
+{$ENDIF}
+
 procedure TestAllocAlignedFast;
 var A: TLocalArena; P1, P2: Pointer;
 begin
@@ -160,6 +187,33 @@ begin
     A.Free;
   end;
 end;
+
+procedure TestAllocAlignedFastSourceContract;
+{$IFDEF DEBUG}
+var
+  A: TLocalArena;
+  Hit: Boolean;
+begin
+  Hit := False;
+  A := TLocalArena.Create(64);
+  try
+    A.AllocAlignedFast(8, 16);
+    try
+      A.AllocAlignedFast(8, 3); // non-power-of-two — should trigger assert
+    except
+      on E: EAssertionFailed do
+        Hit := True;
+    end;
+    Check(Hit, 'DEBUG assert guards AllocAlignedFast alignment');
+  finally
+    A.Free;
+  end;
+end;
+{$ELSE}
+begin
+  { Release builds skip the assertion test — expected }
+end;
+{$ENDIF}
 
 procedure TestZeroSizeAlloc;
 var A: TLocalArena; P: Pointer;
@@ -364,7 +418,9 @@ begin
   T.Run('alloc aligned', @TestAllocAligned);
   T.Run('alloc zeroed', @TestAllocZeroed);
   T.Run('alloc fast', @TestAllocFast);
+  T.Run('alloc fast source contract', @TestAllocFastSourceContract);
   T.Run('alloc aligned fast', @TestAllocAlignedFast);
+  T.Run('alloc aligned fast source contract', @TestAllocAlignedFastSourceContract);
   T.Run('zero size alloc', @TestZeroSizeAlloc);
   T.Run('statistics', @TestStats);
   T.Run('legacy TArena alias', @TestArenaClassLegacyAlias);
