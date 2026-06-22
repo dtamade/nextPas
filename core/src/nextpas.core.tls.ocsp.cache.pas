@@ -24,7 +24,7 @@ uses
   nextpas.core.base.utils,
   nextpas.core.collections.hashmap,
   nextpas.core.collections.hashmap.intf,
-   nextpas.core.sync, DateUtils;
+   nextpas.core.sync;
 
 const
   SHARD_COUNT = 16;  // 分片数量 (2的幂次方,便于位运算)

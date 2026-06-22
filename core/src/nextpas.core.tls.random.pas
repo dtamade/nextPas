@@ -23,7 +23,7 @@ interface
 
 uses
   nextpas.core.base, nextpas.core.exception, nextpas.core.fs,
-  ctypes, nextpas.core.platform.posix.ffi
+  nextpas.core.platform.posix.ffi
   {$IFDEF USE_RANDOM_POOL}
   , nextpas.core.tls.random.pool
   {$ENDIF}

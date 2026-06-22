@@ -12,7 +12,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.base.utils,
-  DateUtils, nextpas.core.fs, nextpas.core.text.conv, nextpas.core.time,
+  nextpas.core.fs, nextpas.core.text.conv, nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.freepascal.context.material,
   nextpas.core.tls.freepascal.session;

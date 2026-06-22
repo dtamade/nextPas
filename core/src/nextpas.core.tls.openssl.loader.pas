@@ -26,7 +26,7 @@ interface
 
 uses
   nextpas.core.fs,
-  ctypes,  // culong, cint 等 C 类型
+  nextpas.core.base,  // culong, cint 等 C 类型
   nextpas.core.text.conv,
   nextpas.core.platform.dl;
 
