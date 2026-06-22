@@ -13,6 +13,7 @@
 
 **汇总**: 12 findings (1 Medium, 6 Low, 5 Info)
 **亮点**: Critical 为零，框架核心已相当稳固。
+**修复状态**: R5-01 之前已修复, R5-02~07 已修复 (67be519e2), R5-08~12 Info 级别保留观察。
 
 ### 纠正 Round 3/4 已修复项
 
@@ -26,18 +27,18 @@
 
 | ID | 文件 | 问题 | 建议 |
 |----|------|------|------|
-| R5-01 | expect.pas L479-492 | **`ToNotRaise` 不处理 `ETestSkipped`**：`Skip()` 在 `ToNotRaise` 被捕获为意外异常而非流控制传播。`ToRaise` (L447) 正确 re-raise `ETestSkipped`，但 `ToNotRaise` 缺少此处理。`ExpectProc(@Skip).ToNotRaise` 会误报失败。 | 添加 `on E: ETestSkipped do raise;` 与 `ToRaise` 保持一致。一行修复。 |
+| R5-01 | expect.pas L479-492 | **`ToNotRaise` 不处理 `ETestSkipped`**：`Skip()` 在 `ToNotRaise` 被捕获为意外异常而非流控制传播。`ToRaise` (L447) 正确 re-raise `ETestSkipped`，但 `ToNotRaise` 缺少此处理。`ExpectProc(@Skip).ToNotRaise` 会误报失败。 | ✅ 之前已修复 — Round 3 Batch 7 已添加 `on E: ETestSkipped do raise;` |
 
 ### Low
 
 | ID | 文件 | 问题 | 建议 |
 |----|------|------|------|
-| R5-02 | runner.pas L742-744 | `RunParallelWithResult` 对 subtest 条目不写 `LResults[I]`（`ParallelWorkerProc` 直接 Exit），导致结果数组中对应 slot 包含零初始化数据（`tsPassed` + 空消息），掩盖了"subtest 未运行"的事实。 | 在 pre-fill loop (L706-718) 中初始化 `LResults[I].Status := tsSkipped; LResults[I].Message := 'subtests not supported in parallel mode';` |
-| R5-03 | test_lifecycle.lpr | 缺少 `{$modeswitch anonymousfunctions}` 和 `{$modeswitch functionreferences}`——其他 7 个测试文件均有。虽然当前代码只用命名过程所以不报错，但风格不一致，未来添加匿名函数时会困惑。 | 补齐 modeswitch 声明，保持一致。 |
-| R5-04 | README.md L306 | 声称 filter 是 "case-insensitive substring match" 但代码 (`output.pas` L242) 用 `Pos(LPattern, AName)` 即 case-sensitive。文档与实现不符。 | 修正文档为 "case-sensitive substring match"，或改代码为 `AnsiPos`。 |
-| R5-05 | README.md L437-458 | 架构图只列出 8 个模块，遗漏 `test.output.tap` (108 行) 和 `test.output.json` (154 行)。行数也有多处过时：`output` 实际 435 行 (文档写 393)、`runner` 实际 933 行 (文档写 834)。 | 更新架构图，补全 tap/json 模块和正确行数。 |
-| R5-06 | check.pas L62-85 | `StringDiff` 用字符位置而非字节位置——对多字节 UTF-8 字符串，`Copy(S, LStart, ...)` 可能截断多字节序列导致乱码输出。 | 改用字节安全的截取方式，或在差异行前后找完整字符边界。 |
-| R5-07 | output.pas L253-277 | `XmlEscape` 不转义控制字符 (#0-#31)——`JsonEscape` 已处理但 `XmlEscape` 没有。包含 tab/newline 的错误消息会产生畸形 XML。 | 统一 `XmlEscape` 与 `JsonEscape` 的控制字符处理策略。 |
+| R5-02 | runner.pas L742-744 | `RunParallelWithResult` 对 subtest 条目不写 `LResults[I]`（`ParallelWorkerProc` 直接 Exit），导致结果数组中对应 slot 包含零初始化数据（`tsPassed` + 空消息），掩盖了"subtest 未运行"的事实。 | ✅ 已修复 (67be519e2) — pre-fill loop 中初始化 tsSkipped + 原因消息 |
+| R5-03 | test_lifecycle.lpr | 缺少 `{$modeswitch anonymousfunctions}` 和 `{$modeswitch functionreferences}`——其他 7 个测试文件均有。虽然当前代码只用命名过程所以不报错，但风格不一致，未来添加匿名函数时会困惑。 | ✅ 已修复 (67be519e2) — 补齐 modeswitch 声明 |
+| R5-04 | README.md L306 | 声称 filter 是 "case-insensitive substring match" 但代码 (`output.pas` L242) 用 `Pos(LPattern, AName)` 即 case-sensitive。文档与实现不符。 | ✅ 已修复 (67be519e2) — 改为 "case-sensitive" |
+| R5-05 | README.md L437-458 | 架构图只列出 8 个模块，遗漏 `test.output.tap` (108 行) 和 `test.output.json` (154 行)。行数也有多处过时：`output` 实际 435 行 (文档写 393)、`runner` 实际 933 行 (文档写 834)。 | ✅ 已修复 (67be519e2) — 更新架构图 + 补全 tap/json/discovery/mock + 修正行数 + 补全 Build & Test 循环 |
+| R5-06 | check.pas L62-85 | `StringDiff` 用字符位置而非字节位置——对多字节 UTF-8 字符串，`Copy(S, LStart, ...)` 可能截断多字节序列导致乱码输出。 | ✅ 已修复 (67be519e2) — 添加 `Utf8SafeStart` 辅助函数，扫描回退续行字节 |
+| R5-07 | output.pas L253-277 | `XmlEscape` 不转义控制字符 (#0-#31)——`JsonEscape` 已处理但 `XmlEscape` 没有。包含 tab/newline 的错误消息会产生畸形 XML。 | ✅ 已修复 (67be519e2) — 控制字符替换为空格（保留 #9/#10/#13） |
 
 ### Info
 
