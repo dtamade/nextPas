@@ -5,7 +5,7 @@ unit np_toolchain_runner;
 interface
 
 uses
-  Process,
+  nextpas.core.process,
   nextpas.core.text.conv, nextpas.core.path, nextpas.core.fs, nextpas.core.fs.util,
   nextpas.core.fs.dir, nextpas.core.fs.base, nextpas.core.os.env,
   nextpas.core.exception,
@@ -418,22 +418,13 @@ function ExecuteStep(
   const AResolvedPath: string
 ): LongInt;
 var
-  ArgIndex: LongInt;
-  Proc: TProcess;
+  LOutput: TProcessOutput;
 begin
-  Proc := TProcess.Create(nil);
-  try
-    Proc.Executable := AResolvedPath;
-    if AStep.WorkingDirectory <> '' then
-      Proc.CurrentDirectory := ExpandFileName(AStep.WorkingDirectory);
-    Proc.Options := [poWaitOnExit];
-    for ArgIndex := 0 to Length(AStep.Argv) - 1 do
-      Proc.Parameters.Add(AStep.Argv[ArgIndex]);
-    Proc.Execute;
-    Result := Proc.ExitStatus;
-  finally
-    Proc.Free;
-  end;
+  if AStep.WorkingDirectory <> '' then
+    LOutput := RunIn(AResolvedPath, AStep.Argv, ExpandFileName(AStep.WorkingDirectory))
+  else
+    LOutput := Run(AResolvedPath, AStep.Argv);
+  Result := LOutput.ExitCode;
 end;
 
 constructor TToolchainRunResult.Create;
