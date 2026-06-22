@@ -254,3 +254,82 @@ end;
 - **SIMD 后**: 可能超越 Go (利用 AVX2/AVX-512)
 
 **建议**: 优先实现 SIMD 优化，预计可提升 5-10x 性能。
+
+---
+
+## 优化实施记录 (2026-06-22)
+
+### 已实施优化
+
+#### 1. IntroSort 优化小数组排序 ✅
+```pascal
+const
+  INSERTION_SORT_THRESHOLD = 16;
+
+// 小数组使用插入排序
+if (ARight - ALeft + 1) < INSERTION_SORT_THRESHOLD then
+begin
+  DoInsertionSort(AData, ALeft, ARight);
+  Exit;
+end;
+
+// 三数取中 pivot 选择
+LPivot := MedianOfThree(AData, ALeft, ARight);
+
+// IntroSort depth limit
+DoQuickSort(AData, 0, High(AData), 2 * LLen);
+```
+
+**预期效果**: Sort/100 提升 100x（插入排序 vs QuickSort）
+
+#### 2. Mean 快速路径 ✅
+```pascal
+// 小数组使用简单求和（避免 KahanSum 函数调用开销）
+if LLen <= 64 then
+begin
+  LSum := 0;
+  for I := 0 to High(AData) do
+    LSum += AData[I];
+  Result := LSum / LLen;
+end
+else
+  // 大数组使用 Kahan 求和保证精度
+  Result := KahanSum(AData) / LLen;
+```
+
+**预期效果**: Mean/100 提升 5x
+
+#### 3. StdDev 单次遍历 ✅
+```pascal
+// 单次遍历计算均值和方差
+LSum := 0;
+LSumSq := 0;
+for I := 0 to High(AData) do
+begin
+  LVal := AData[I];
+  LSum += LVal;
+  LSumSq += LVal * LVal;
+end;
+
+LMean := LSum / LLen;
+// 样本方差（除以 n-1）
+LVariance := (LSumSq - LLen * LMean * LMean) / (LLen - 1);
+```
+
+**预期效果**: StdDev/100 提升 3x
+
+### 待实施优化
+
+#### 4. SIMD 优化 (nextpas.core.simd)
+- 使用 SSE2/AVX2 向量化 Mean/StdDev
+- 预计再提升 4-8x
+
+#### 5. 更激进的内联
+- 使用 `{$inline on}` 强制内联关键函数
+
+### Git 提交
+- `5e72fa21e` perf(bench): optimize stats computation with IntroSort and fast paths
+
+### 测试验证
+- ✅ 所有 12 个测试套件通过
+- ✅ 0 内存泄漏
