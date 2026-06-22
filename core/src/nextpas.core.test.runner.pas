@@ -663,9 +663,7 @@ begin
   LPass := 0;
   LFail := 0;
   LSkip := 0;
-  { Use FutexMutex (no ownership check) for parallel worker synchronization.
-    Avoids intermittent EPERM from ERRORCHECK pthread mutex under contention. }
-  LMtx := FutexMutex();
+  LMtx := Mutex();
 
   WriteLn;
   WriteLn(AnsiBold('> ') + AnsiCyan(Name) +
