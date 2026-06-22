@@ -9,7 +9,8 @@ unit nextpas.core.test.runner.context;
 interface
 
 uses
-  SysUtils,
+  SysUtils,          { Exception, EAbort, EAssertionFailed — FPC built-in }
+  nextpas.core.text.conv,
   nextpas.core.test.base,
   nextpas.core.test.output;
 

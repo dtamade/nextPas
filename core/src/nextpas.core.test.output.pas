@@ -9,10 +9,11 @@ unit nextpas.core.test.output;
 interface
 
 uses
-  SysUtils,
-  Classes,
+  SysUtils,          { GetEnvironmentVariable — platform env, no project alternative }
   nextpas.core.test.base,
-  nextpas.core.text.conv;
+  nextpas.core.text.conv,
+  nextpas.core.text.builder,
+  nextpas.core.fs;
 
 { ── ANSI helpers ──────────────────────────────────────────────────────────── }
 
@@ -272,16 +273,16 @@ end;
 function JUnitXML(const AResults: specialize TArray<TTestRunResult>;
   const ASuiteName: string): string;
 var
-  LSb: TStringBuilder;
+  LSb: TBufStringBuilder;
   LRunResult: TTestRunResult;
   LTestResult: TTestResult;
   I, J: Integer;
   LTotalTests, LTotalFailures, LTotalSkipped: Integer;
   LSuiteName: string;
 begin
-  LSb := TStringBuilder.Create;
+  LSb.Init;
   try
-    LSb.AppendLine('<?xml version="1.0" encoding="UTF-8"?>');
+    LSb.AppendStr('<?xml version="1.0" encoding="UTF-8"?>' + LineEnding);
 
     { Compute totals across all suites }
     LTotalTests := 0;
@@ -295,10 +296,10 @@ begin
       LTotalSkipped := LTotalSkipped + LRunResult.Skipped;
     end;
 
-    LSb.AppendLine('<testsuites name="' + XmlEscape(ASuiteName) +
+    LSb.AppendStr('<testsuites name="' + XmlEscape(ASuiteName) +
       '" tests="' + IntToStr(LTotalTests) +
       '" failures="' + IntToStr(LTotalFailures) +
-      '" skipped="' + IntToStr(LTotalSkipped) + '">');
+      '" skipped="' + IntToStr(LTotalSkipped) + '">' + LineEnding);
 
     for I := 0 to High(AResults) do
     begin
@@ -308,61 +309,50 @@ begin
       else
         LSuiteName := 'suite_' + IntToStr(I);
 
-      LSb.AppendLine('  <testsuite name="' + XmlEscape(LSuiteName) +
+      LSb.AppendStr('  <testsuite name="' + XmlEscape(LSuiteName) +
         '" tests="' + IntToStr(LRunResult.Passed + LRunResult.Failed + LRunResult.Skipped) +
         '" failures="' + IntToStr(LRunResult.Failed) +
-        '" skipped="' + IntToStr(LRunResult.Skipped) + '">');
+        '" skipped="' + IntToStr(LRunResult.Skipped) + '">' + LineEnding);
 
       for J := 0 to High(LRunResult.Results) do
       begin
         LTestResult := LRunResult.Results[J];
-        LSb.Append('    <testcase name="' + XmlEscape(LTestResult.Name) + '"');
+        LSb.AppendStr('    <testcase name="' + XmlEscape(LTestResult.Name) + '"');
         case LTestResult.Status of
           tsFailed, tsError:
             begin
-              LSb.AppendLine('>');
-              LSb.AppendLine('      <failure message="' +
-                XmlEscape(LTestResult.Message) + '"/>');
-              LSb.AppendLine('    </testcase>');
+              LSb.AppendStr('>' + LineEnding);
+              LSb.AppendStr('      <failure message="' +
+                XmlEscape(LTestResult.Message) + '"/>' + LineEnding);
+              LSb.AppendStr('    </testcase>' + LineEnding);
             end;
           tsSkipped:
             begin
-              LSb.AppendLine('>');
-              LSb.AppendLine('      <skipped/>');
-              LSb.AppendLine('    </testcase>');
+              LSb.AppendStr('>' + LineEnding);
+              LSb.AppendStr('      <skipped/>' + LineEnding);
+              LSb.AppendStr('    </testcase>' + LineEnding);
             end;
         else
-          LSb.AppendLine('/>');
+          LSb.AppendStr('/>' + LineEnding);
         end;
       end;
 
-      LSb.AppendLine('  </testsuite>');
+      LSb.AppendStr('  </testsuite>' + LineEnding);
     end;
 
-    LSb.AppendLine('</testsuites>');
+    LSb.AppendStr('</testsuites>' + LineEnding);
     Result := LSb.ToString;
   finally
-    LSb.Free;
+    LSb.Done;
   end;
 end;
 
 function WriteJUnitXML(const AResults: specialize TArray<TTestRunResult>;
   const AFileName: string; const ASuiteName: string): Boolean;
-var
-  LStream: TFileStream;
-  LXml: string;
-  LBytes: TBytes;
 begin
   Result := False;
   try
-    LXml := JUnitXML(AResults, ASuiteName);
-    LBytes := TEncoding.UTF8.GetBytes(LXml);
-    LStream := TFileStream.Create(AFileName, fmCreate);
-    try
-      LStream.WriteBuffer(LBytes[0], Length(LBytes));
-    finally
-      LStream.Free;
-    end;
+    WriteFileText(AFileName, JUnitXML(AResults, ASuiteName));
     Result := True;
   except
     { Return False on any I/O error }

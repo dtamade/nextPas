@@ -9,7 +9,7 @@ unit nextpas.core.test.base;
 interface
 
 uses
-  SysUtils,
+  SysUtils,          { ExceptClass, EAbort, EAssertionFailed — FPC built-in, irreplaceable }
   nextpas.core.errors;
 
 { ── Test Context (for subtests) ───────────────────────────────────────────── }

@@ -10,8 +10,8 @@ unit nextpas.core.test.runner;
 interface
 
 uses
-  SysUtils,
-  Classes,
+  SysUtils,          { Exception — FPC built-in, irreplaceable }
+  nextpas.core.text.conv,
   nextpas.core.test.base,
   nextpas.core.test.check,
   nextpas.core.test.output,

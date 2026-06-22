@@ -10,7 +10,8 @@ unit nextpas.core.test.runner.parallel;
 interface
 
 uses
-  SysUtils,
+  SysUtils,          { Exception, EAbort, EAssertionFailed — FPC built-in }
+  nextpas.core.text.conv,
   nextpas.core.test.base,
   nextpas.core.test.output,
   nextpas.core.sync.intf,

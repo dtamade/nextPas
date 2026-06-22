@@ -9,7 +9,8 @@ unit nextpas.core.test.check;
 interface
 
 uses
-  SysUtils,
+  SysUtils,          { ExceptClass, EAbort, EAssertionFailed — FPC built-in, irreplaceable }
+  nextpas.core.text.conv,
   nextpas.core.test.base;
 
 procedure Check(ACondition: Boolean; const AMessage: string = '');
