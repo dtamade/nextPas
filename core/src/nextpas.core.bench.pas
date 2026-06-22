@@ -604,7 +604,7 @@ begin
 
   for i := 0 to High(LComparisons) do
   begin
-    if LComparisons[i].DifferenceHeuristic and (LComparisons[i].Ratio > AThreshold) then
+    if LComparisons[i].Ratio > AThreshold then
       Exit(True);
   end;
 
