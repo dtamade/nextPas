@@ -19,11 +19,10 @@ interface
 
 uses
   nextpas.core.base,
-  SysUtils, nextpas.core.io.intf, nextpas.core.fs.stream, Base64,
+  nextpas.core.io.intf, nextpas.core.fs.stream, Base64,
   nextpas.core.fs,
   nextpas.core.text.conv,
   nextpas.core.io.stream_adapter,
-  nextpas.core.io.intf,
   nextpas.core.io.util,
   nextpas.core.tls.base,
   nextpas.core.tls.errors,
@@ -219,6 +218,7 @@ type
 implementation
 
 uses
+  nextpas.core.exception,
   nextpas.core.tls.wolfssl.connection;
 
 const

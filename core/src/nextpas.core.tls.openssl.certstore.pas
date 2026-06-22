@@ -11,7 +11,7 @@ unit nextpas.core.tls.openssl.certstore;
 interface
 
 uses
-  SysUtils, nextpas.core.system.classes, nextpas.core.fs,
+  nextpas.core.system.classes, nextpas.core.fs,
   nextpas.core.tls.base,
   nextpas.core.tls.logging,  // P3-8: 添加日志支持
   nextpas.core.tls.openssl.base,
@@ -68,9 +68,11 @@ type
 implementation
 
 uses
+  nextpas.core.exception,
   nextpas.core.text.conv,
   nextpas.core.text.strings,
-    nextpas.core.tls.certchain,
+  nextpas.core.fs.glob,
+  nextpas.core.tls.certchain,
   nextpas.core.tls.openssl.api.err,
   nextpas.core.tls.secure;
 
@@ -134,12 +136,12 @@ end;
 function NormalizeCertificateStoreDN(const AValue: string): string;
 begin
   Result := UpperCase(Trim(AValue));
-  Result := SysUtils.StringReplace(Result, ' , ', ',', [rfReplaceAll]);
-  Result := SysUtils.StringReplace(Result, ', ', ',', [rfReplaceAll]);
-  Result := SysUtils.StringReplace(Result, ' ,', ',', [rfReplaceAll]);
-  Result := SysUtils.StringReplace(Result, ' = ', '=', [rfReplaceAll]);
-  Result := SysUtils.StringReplace(Result, '= ', '=', [rfReplaceAll]);
-  Result := SysUtils.StringReplace(Result, ' =', '=', [rfReplaceAll]);
+  Result := StringReplace(Result, ' , ', ',', True);
+  Result := StringReplace(Result, ', ', ',', True);
+  Result := StringReplace(Result, ' ,', ',', True);
+  Result := StringReplace(Result, ' = ', '=', True);
+  Result := StringReplace(Result, '= ', '=', True);
+  Result := StringReplace(Result, ' =', '=', True);
 end;
 
 function NormalizeCertificateStoreHex(const AValue: string): string;
@@ -517,51 +519,31 @@ end;
 
 function TOpenSSLCertificateStore.LoadFromPath(const APath: string): Boolean;
 var
-  SR: TSearchRec;
+  LFiles: TStringArray;
   FilePath: string;
   Count: Integer;
-  SearchPath: string;
-  FindResult: Integer;
+  I: Integer;
 begin
   Result := False;
   Count := 0;
   
   try
-    // 确保路径有正确的分隔符
-    SearchPath := nextpas.core.fs.PathEnsureSep(APath);
-    
-    
     // 扫描目录中的所有 .pem 文件
-    // Rust-quality: 使用 try-finally 确保 FindClose 在异常路径也被调用
-    FindResult := FindFirst(SearchPath + '*.pem', faAnyFile, SR);
-    if FindResult = 0 then
-    try
-      repeat
-        if (SR.Attr and faDirectory) = 0 then
-        begin
-          FilePath := SearchPath + SR.Name;
-          if LoadFromFile(FilePath) then
-            Inc(Count);
-        end;
-      until FindNext(SR) <> 0;
-    finally
-      FindClose(SR);
+    LFiles := FsGlob(APath, '*.pem');
+    for I := 0 to High(LFiles) do
+    begin
+      FilePath := LFiles[I];
+      if LoadFromFile(FilePath) then
+        Inc(Count);
     end;
 
     // 扫描目录中的所有 .crt 文件
-    FindResult := FindFirst(SearchPath + '*.crt', faAnyFile, SR);
-    if FindResult = 0 then
-    try
-      repeat
-        if (SR.Attr and faDirectory) = 0 then
-        begin
-          FilePath := SearchPath + SR.Name;
-          if LoadFromFile(FilePath) then
-            Inc(Count);
-        end;
-      until FindNext(SR) <> 0;
-    finally
-      FindClose(SR);
+    LFiles := FsGlob(APath, '*.crt');
+    for I := 0 to High(LFiles) do
+    begin
+      FilePath := LFiles[I];
+      if LoadFromFile(FilePath) then
+        Inc(Count);
     end;
     
     Result := (Count > 0);

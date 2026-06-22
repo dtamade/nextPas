@@ -34,8 +34,8 @@ function LoadCapabilitiesFromFile(const AFileName: string): TSSLBackendCapabilit
 implementation
 
 uses
-  SysUtils,
-  nextpas.core.exception;
+  nextpas.core.exception,
+  nextpas.core.path;
 
 { Local helper: StringsSplit (text.strings PPU has loading issues) }
 function StringsSplit(const AStr: string; ASep: Char; ARemoveEmpty: Boolean): TStringArray;
@@ -926,11 +926,11 @@ var
   function XMLUnescape(const S: string): string;
   begin
     Result := S;
-    Result := StringReplace(Result, '&lt;', '<', [rfReplaceAll]);
-    Result := StringReplace(Result, '&gt;', '>', [rfReplaceAll]);
-    Result := StringReplace(Result, '&quot;', '"', [rfReplaceAll]);
-    Result := StringReplace(Result, '&apos;', '''', [rfReplaceAll]);
-    Result := StringReplace(Result, '&amp;', '&', [rfReplaceAll]);
+    Result := StringReplace(Result, '&lt;', '<', True);
+    Result := StringReplace(Result, '&gt;', '>', True);
+    Result := StringReplace(Result, '&quot;', '"', True);
+    Result := StringReplace(Result, '&apos;', '''', True);
+    Result := StringReplace(Result, '&amp;', '&', True);
   end;
 
   function ExtractXMLValue(const AName: string; out AOutValue: string): Boolean;

@@ -67,6 +67,8 @@ function TryParseTLS13KeyUpdate(
 
 implementation
 
+uses
+  nextpas.core.tls.tls13.wire;
 
 function ReadUInt32BE(const AData: TBytes; AOffset: Integer): Cardinal;
 begin

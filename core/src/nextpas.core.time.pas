@@ -43,6 +43,7 @@ function DateTimeNow: TDateTime;
 function DateTimeUtcNow: TDateTime;
 function DateTimeSecondsBetween(const ANewer, AOlder: TDateTime): Int64;
 function DateTimeMillisecondsBetween(const ANewer, AOlder: TDateTime): Int64;
+function DaysBetween(const ANewer, AOlder: TDateTime): Integer;
 function DateTimeAddSeconds(const AValue: TDateTime; const ASeconds: Int64): TDateTime;
 function ParseISO8601Date(const AStr: string): nextpas.core.time.date.TDate; inline;
 function TryParseISO8601Date(const AStr: string; out ADate: nextpas.core.time.date.TDate): Boolean; inline;
@@ -114,6 +115,11 @@ end;
 function DateTimeMillisecondsBetween(const ANewer, AOlder: TDateTime): Int64;
 begin
   Result := Trunc((ANewer - AOlder) * 86400000.0);
+end;
+
+function DaysBetween(const ANewer, AOlder: TDateTime): Integer;
+begin
+  Result := Abs(Trunc(ANewer - AOlder));
 end;
 
 function DateTimeAddSeconds(const AValue: TDateTime; const ASeconds: Int64): TDateTime;

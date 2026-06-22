@@ -25,7 +25,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.exception,
-  SysUtils, nextpas.core.sync,
+  nextpas.core.sync,
   nextpas.core.platform.thread,
   nextpas.core.fs, nextpas.core.text.conv, nextpas.core.time,
   nextpas.core.tls.base, nextpas.core.tls.errors, nextpas.core.tls.logging, nextpas.core.tls.exceptions;
@@ -153,6 +153,7 @@ type
 
 implementation
 
+uses
   nextpas.core.math,
   nextpas.core.base.utils,
   nextpas.core.tls.utils,
@@ -186,17 +187,25 @@ end;
 
 function TCertificateRotationManager.GetFileModTime(const AFilePath: string): TDateTime;
 var
-  SearchRec: TSearchRec;
+  LInfo: TFileInfo;
+  LSeconds: Int64;
+  LRemainingNs: Int64;
 begin
   Result := 0;
-  if FindFirst(AFilePath, faAnyFile, SearchRec) = 0 then
+  if not nextpas.core.fs.IsFile(AFilePath) then
+    Exit;
+
+  LInfo := nextpas.core.fs.Stat(AFilePath);
+  LSeconds := LInfo.ModTime div 1000000000;
+  LRemainingNs := LInfo.ModTime mod 1000000000;
+  if LRemainingNs < 0 then
   begin
-    try
-      Result := SearchRec.TimeStamp;
-    finally
-      FindClose(SearchRec);
-    end;
+    Dec(LSeconds);
+    Inc(LRemainingNs, 1000000000);
   end;
+
+  Result := nextpas.core.time.UnixToDateTime(LSeconds) +
+    (LRemainingNs / 86400000000000.0);
 end;
 
 function TCertificateRotationManager.CheckCertificateExpiry(
@@ -245,7 +254,7 @@ begin
         [FConfig.CertificatePath,
         nextpas.core.time.DateTimeToStr(NotAfter),
         ADaysRemaining,
-        BoolToStr(Result, True)]));
+        BoolToStr(Result, 'True', 'False')]));
   except
     on E: Exception do
     begin
@@ -363,7 +372,7 @@ begin
 
     // Sleep for check interval
     // Sleep for check interval (NOTE: Stop() may block up to this duration)
-    Sleep(FConfig.CheckIntervalSeconds * 1000);
+    platform_thread_sleep_ns(UInt64(FConfig.CheckIntervalSeconds) * 1000000000);
   end;
 end;
 

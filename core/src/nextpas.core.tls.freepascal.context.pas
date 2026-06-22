@@ -12,8 +12,9 @@ unit nextpas.core.tls.freepascal.context;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.base.utils,
-  Base64, SysUtils, nextpas.core.fs.stream,
+  Base64, nextpas.core.fs.stream,
   nextpas.core.fs,
   nextpas.core.text.conv,
   nextpas.core.io.intf,
@@ -343,10 +344,10 @@ begin
   Result := UpperCase(Trim(AName));
   if Pos('TLS_', Result) = 1 then
     Delete(Result, 1, 4);
-  Result := StringReplace(Result, '_', '-', [rfReplaceAll]);
-  Result := StringReplace(Result, '-WITH-', '-', []);
-  Result := StringReplace(Result, 'AES-128', 'AES128', []);
-  Result := StringReplace(Result, 'AES-256', 'AES256', []);
+  Result := StringReplace(Result, '_', '-', True);
+  Result := StringReplace(Result, '-WITH-', '-', False);
+  Result := StringReplace(Result, 'AES-128', 'AES128', False);
+  Result := StringReplace(Result, 'AES-256', 'AES256', False);
 end;
 
 function TryAppendUniqueCipherSuite(

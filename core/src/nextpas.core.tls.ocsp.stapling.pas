@@ -22,7 +22,17 @@ unit nextpas.core.tls.ocsp.stapling;
 
 interface
 
-uses nextpas.core.sync, nextpas.core.base, nextpas.core.platform.thread, nextpas.core.tls.base, nextpas.core.tls.ocsp, nextpas.core.tls.ocsp.cache, nextpas.core.tls.x509, nextpas.core.crypto.hash;
+uses
+  nextpas.core.sync,
+  nextpas.core.base,
+  nextpas.core.text.conv,
+  nextpas.core.platform.thread,
+  nextpas.core.tls.base,
+  nextpas.core.tls.ocsp,
+  nextpas.core.tls.ocsp.cache,
+  nextpas.core.tls.x509,
+  nextpas.core.crypto.hash,
+  nextpas.core.errors;
 
 type
   // ========================================================================
@@ -618,7 +628,7 @@ begin
         Inc(Retry);
         if Retry >= FConfig.MaxRetries then
           raise;
-        Sleep(1000 * Retry);  // 指数退避
+        platform_thread_sleep_ns(UInt64(1000 * Retry) * 1000000);  // 指数退避
       end;
     end;
     

@@ -12,7 +12,8 @@ unit nextpas.core.tls.openssl.certificate;
 interface
 
 uses
-  SysUtils, nextpas.core.io.intf,
+  nextpas.core.base,
+  nextpas.core.io.intf,
   nextpas.core.base.utils,
   nextpas.core.fs,
   nextpas.core.tls.base,
@@ -96,6 +97,7 @@ type
 implementation
 
 uses
+  nextpas.core.exception,
   nextpas.core.text.conv,
   nextpas.core.time,
   nextpas.core.tls.utils,  // Phase 3.2 - StringsToArray 统一实现

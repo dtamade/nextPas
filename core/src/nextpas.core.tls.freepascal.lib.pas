@@ -11,7 +11,7 @@ unit nextpas.core.tls.freepascal.lib;
 interface
 
 uses
-  SysUtils, nextpas.core.fs,
+  nextpas.core.fs,
   nextpas.core.io.intf,
   nextpas.core.tls.base;
 
@@ -74,6 +74,9 @@ implementation
 
 uses
   nextpas.core.system.classes,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
+  nextpas.core.fs.glob,
   nextpas.core.io.stream_adapter,
   nextpas.core.io.util,
   nextpas.core.time,
@@ -223,9 +226,9 @@ end;
 function TFreePascalCertificate.HexNormalize(const AValue: string): string;
 begin
   Result := UpperCase(AValue);
-  Result := StringReplace(Result, ':', '', [rfReplaceAll]);
-  Result := StringReplace(Result, '-', '', [rfReplaceAll]);
-  Result := StringReplace(Result, ' ', '', [rfReplaceAll]);
+  Result := StringReplace(Result, ':', '', True);
+  Result := StringReplace(Result, '-', '', True);
+  Result := StringReplace(Result, ' ', '', True);
 end;
 
 function TFreePascalCertificate.CopyBytes(const AData: TBytes): TBytes;
@@ -1038,9 +1041,9 @@ end;
 function TFreePascalCertificateStore.NormalizeFingerprint(const AFingerprint: string): string;
 begin
   Result := UpperCase(AFingerprint);
-  Result := StringReplace(Result, ':', '', [rfReplaceAll]);
-  Result := StringReplace(Result, '-', '', [rfReplaceAll]);
-  Result := StringReplace(Result, ' ', '', [rfReplaceAll]);
+  Result := StringReplace(Result, ':', '', True);
+  Result := StringReplace(Result, '-', '', True);
+  Result := StringReplace(Result, ' ', '', True);
 end;
 
 function TFreePascalCertificateStore.AddCertificate(ACert: ISSLCertificate): Boolean;
@@ -1165,31 +1168,25 @@ function TFreePascalCertificateStore.LoadFromPath(const APath: string): Boolean;
     Result := False;
   end;
 var
-  LSearch: TSearchRec;
+  LFiles: TStringArray;
   LFileName: string;
   LLoadedCount: Integer;
+  I: Integer;
 begin
   Result := False;
   if not nextpas.core.fs.IsDir(APath) then
     Exit;
 
   LLoadedCount := 0;
-  if FindFirst(nextpas.core.fs.PathEnsureSep(APath) + '*', faAnyFile, LSearch) = 0 then
+  LFiles := FsGlob(APath, '*');
+  for I := 0 to High(LFiles) do
   begin
-    repeat
-      if (LSearch.Name = '.') or (LSearch.Name = '..') then
-        Continue;
-      if (LSearch.Attr and faDirectory) <> 0 then
-        Continue;
-      if not IsCertificateCandidateFile(LSearch.Name) then
-        Continue;
+    LFileName := LFiles[I];
+    if not IsCertificateCandidateFile(nextpas.core.fs.PathBase(LFileName)) then
+      Continue;
 
-      LFileName := nextpas.core.fs.PathEnsureSep(APath) + LSearch.Name;
-      if LoadFromFile(LFileName) then
-        Inc(LLoadedCount);
-    until FindNext(LSearch) <> 0;
-
-    FindClose(LSearch);
+    if LoadFromFile(LFileName) then
+      Inc(LLoadedCount);
   end;
 
   Result := LLoadedCount > 0;
@@ -1213,12 +1210,12 @@ end;
 function NormalizeCertificateStoreDN(const AValue: string): string;
 begin
   Result := UpperCase(Trim(AValue));
-  Result := StringReplace(Result, ' , ', ',', [rfReplaceAll]);
-  Result := StringReplace(Result, ', ', ',', [rfReplaceAll]);
-  Result := StringReplace(Result, ' ,', ',', [rfReplaceAll]);
-  Result := StringReplace(Result, ' = ', '=', [rfReplaceAll]);
-  Result := StringReplace(Result, '= ', '=', [rfReplaceAll]);
-  Result := StringReplace(Result, ' =', '=', [rfReplaceAll]);
+  Result := StringReplace(Result, ' , ', ',', True);
+  Result := StringReplace(Result, ', ', ',', True);
+  Result := StringReplace(Result, ' ,', ',', True);
+  Result := StringReplace(Result, ' = ', '=', True);
+  Result := StringReplace(Result, '= ', '=', True);
+  Result := StringReplace(Result, ' =', '=', True);
 end;
 
 function TFreePascalCertificateStore.FindBySubject(const ASubject: string): ISSLCertificate;

@@ -19,10 +19,9 @@ unit nextpas.core.tls.openssl.context;
 interface
 
 uses
-  SysUtils, nextpas.core.io.intf, nextpas.core.fs.stream, nextpas.core.sync,
+  nextpas.core.base, nextpas.core.io.intf, nextpas.core.fs.stream, nextpas.core.sync,
   nextpas.core.base.utils,
   nextpas.core.fs,
-  nextpas.core.io.intf,
   nextpas.core.io.stream_adapter,
   nextpas.core.io.util,
   nextpas.core.tls.base,
@@ -226,6 +225,7 @@ type
 implementation
 
 uses
+  nextpas.core.exception,
   nextpas.core.text.conv,
   nextpas.core.time,
   nextpas.core.tls.openssl.connection,

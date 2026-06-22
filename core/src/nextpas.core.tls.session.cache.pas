@@ -25,9 +25,11 @@ unit nextpas.core.tls.session.cache;
 interface
 
 uses
-  SysUtils, nextpas.core.fs.stream, nextpas.core.fs, nextpas.core.sync,
+  nextpas.core.base,
+  nextpas.core.fs.stream, nextpas.core.fs, nextpas.core.sync,
   nextpas.core.collections.hashmap,
   {$IFDEF UNIX}BaseUnix,{$ENDIF}
+  nextpas.core.text.conv,
   nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.random,

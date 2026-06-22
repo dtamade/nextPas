@@ -19,10 +19,11 @@ unit nextpas.core.tls.openssl.connection;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.sync,
   nextpas.core.base.utils,
-  SysUtils, nextpas.core.io.intf, ctypes,
   nextpas.core.io.intf,
+  ctypes,
   nextpas.core.io.stream_adapter,
   nextpas.core.io.util,
   nextpas.core.text.conv,
@@ -121,7 +122,6 @@ type
 
   public
     constructor Create(AContext: ISSLContext; ASocket: THandle); overload;
-    constructor Create(AContext: ISSLContext; AStream: IStream); overload;
     constructor Create(AContext: ISSLContext; AStream: IStream); overload;
     destructor Destroy; override;
 
