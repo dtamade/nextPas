@@ -46,8 +46,13 @@ type
     LastSkip     : Integer;
 
     class function Create(const AName: string): TTestSuite; static;
-    procedure Test(const AName: string; AProc: TTestProc);
-    procedure Test(const AName: string; AProc: TTestClosure);
+    procedure Test(const AName: string; AProc: TTestProc); overload;
+    procedure Test(const AName: string; AProc: TTestClosure); overload;
+    { Retry overloads: ARetryCount > 0 retries that many times before failing }
+    procedure Test(const AName: string; AProc: TTestProc;
+      ARetryCount: Integer); overload;
+    procedure Test(const AName: string; AProc: TTestClosure;
+      ARetryCount: Integer); overload;
     procedure TestSubtest(const AName: string; AProc: TSubtestProc);
     procedure TestTable(const AName: string;
       ACases: specialize TArray<TTestCase>;
@@ -128,7 +133,8 @@ begin
   LEntry.Closure     := nil;
   LEntry.SubtestProc := nil;
   LEntry.Kind        := ekTest;
-  LEntry.SkipReason := '';
+  LEntry.SkipReason  := '';
+  LEntry.RetryCount  := 0;
   SetLength(Tests, Length(Tests) + 1);
   Tests[High(Tests)] := LEntry;
 end;
@@ -143,6 +149,39 @@ begin
   LEntry.SubtestProc := nil;
   LEntry.Kind        := ekTest;
   LEntry.SkipReason  := '';
+  LEntry.RetryCount  := 0;
+  SetLength(Tests, Length(Tests) + 1);
+  Tests[High(Tests)] := LEntry;
+end;
+
+procedure TTestSuite.Test(const AName: string; AProc: TTestProc;
+  ARetryCount: Integer);
+var
+  LEntry: TTestEntry;
+begin
+  LEntry.Name        := AName;
+  LEntry.Proc        := AProc;
+  LEntry.Closure     := nil;
+  LEntry.SubtestProc := nil;
+  LEntry.Kind        := ekTest;
+  LEntry.SkipReason  := '';
+  LEntry.RetryCount  := ARetryCount;
+  SetLength(Tests, Length(Tests) + 1);
+  Tests[High(Tests)] := LEntry;
+end;
+
+procedure TTestSuite.Test(const AName: string; AProc: TTestClosure;
+  ARetryCount: Integer);
+var
+  LEntry: TTestEntry;
+begin
+  LEntry.Name        := AName;
+  LEntry.Proc        := nil;
+  LEntry.Closure     := AProc;
+  LEntry.SubtestProc := nil;
+  LEntry.Kind        := ekTest;
+  LEntry.SkipReason  := '';
+  LEntry.RetryCount  := ARetryCount;
   SetLength(Tests, Length(Tests) + 1);
   Tests[High(Tests)] := LEntry;
 end;
@@ -156,6 +195,7 @@ begin
   LEntry.SubtestProc := AProc;
   LEntry.Kind        := ekSubtest;
   LEntry.SkipReason  := '';
+  LEntry.RetryCount  := 0;
   SetLength(Tests, Length(Tests) + 1);
   Tests[High(Tests)] := LEntry;
 end;
@@ -182,6 +222,7 @@ begin
     LEntry.SubtestProc := nil;
     LEntry.Kind       := ekTableTest;
     LEntry.SkipReason := '';
+    LEntry.RetryCount := 0;
     LEntry.TableCase  := LPCase;
     LEntry.TableProc  := LPProc;
     SetLength(Tests, Length(Tests) + 1);
@@ -198,6 +239,7 @@ begin
   LEntry.SubtestProc := nil;
   LEntry.Kind        := ekSkipped;
   LEntry.SkipReason  := AReason;
+  LEntry.RetryCount  := 0;
   SetLength(Tests, Length(Tests) + 1);
   Tests[High(Tests)] := LEntry;
 end;
@@ -269,6 +311,7 @@ var
   LTestResult: TTestResult;
   LAppender: TTestResultAppender;
   LGTestTimeoutMs: Integer;
+  LRetriesLeft: Integer;
 begin
   AResult := TTestRunResult.Create(Name);
   LPass := 0;
@@ -423,28 +466,60 @@ begin
       end
       else
       begin
-        if (LGTestTimeoutMs > 0) and (LEntry.Kind = ekTest) and Assigned(LEntry.Proc) then
-        begin
-          { Timeout-enabled path — runs in watchdog thread (only for TTestProc) }
-          if RunTestWithTimeout(LEntry.Proc, LGTestTimeoutMs, LStatus, LLastFailMsg) then
-          begin
-            if LStatus = tsPassed then Inc(LPass)
-            else Inc(LFail);
-          end
-          else
-          begin
-            { Timed out — LStatus already set to tsError }
-            Inc(LFail);
+        { Run with retry support: if test fails and retries remain, re-run. }
+        LRetriesLeft := LEntry.RetryCount;
+        repeat
+          LStatus := tsPassed;
+          LLastFailMsg := '';
+          try
+            if (LGTestTimeoutMs > 0) and (LEntry.Kind = ekTest) and Assigned(LEntry.Proc) then
+            begin
+              { Timeout-enabled path — runs in watchdog thread (only for TTestProc) }
+              if RunTestWithTimeout(LEntry.Proc, LGTestTimeoutMs, LStatus, LLastFailMsg) then
+              begin
+                if LStatus = tsPassed then { ok }
+                else { LStatus already set }
+              end
+              else
+                { Timed out — LStatus already set to tsError };
+            end
+            else
+            begin
+              if Assigned(LEntry.Closure) then
+                LEntry.Closure()
+              else
+                LEntry.Proc;
+            end;
+          except
+            on E: ETestSkipped do
+            begin
+              LStatus := tsSkipped;
+              LLastFailMsg := E.Message;
+            end;
+            on E: EAssertionFailed do
+            begin
+              LStatus := tsFailed;
+              LLastFailMsg := E.Message;
+            end;
+            on E: Exception do
+            begin
+              LStatus := tsError;
+              LLastFailMsg := E.ClassName + ': ' + E.Message;
+            end;
           end;
-        end
-        else
-        begin
-          if Assigned(LEntry.Closure) then
-            LEntry.Closure()
-          else
-            LEntry.Proc;
-          Inc(LPass);
-        end;
+
+          if (LStatus = tsPassed) or (LStatus = tsSkipped) or (LRetriesLeft <= 0) then
+            Break;
+
+          { Retry: print hint and loop }
+          Dec(LRetriesLeft);
+          WriteLn('  ', AnsiYellow('retrying'), ' (',
+            LEntry.RetryCount - LRetriesLeft, '/', LEntry.RetryCount, ')...');
+        until False;
+
+        if LStatus = tsPassed then Inc(LPass)
+        else if LStatus = tsSkipped then Inc(LSkip)
+        else Inc(LFail);
       end;
     except
       on E: ETestSkipped do

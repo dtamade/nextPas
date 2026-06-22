@@ -1,9 +1,11 @@
 { nextpas.core.test — Advanced Pascal Unit Testing Framework (facade)
   =========================================================
   Re-exports all public API from sub-modules:
-    test.base, test.check, test.expect, test.output, test.runner
+    test.base, test.check, test.expect, test.output, test.runner,
+    test.output.tap, test.output.json, test.discovery, test.mock
   Dual API: procedural Check* + fluent IExpectation chain.
-  Parallel execution, subtests, ANSI output, leak detection. }
+  Parallel execution, subtests, ANSI output, leak detection,
+  RTTI discovery, retry, TAP/JSON output, mock framework. }
 
 unit nextpas.core.test;
 
@@ -16,7 +18,11 @@ uses
   nextpas.core.test.check,
   nextpas.core.test.expect,
   nextpas.core.test.output,
-  nextpas.core.test.runner;
+  nextpas.core.test.output.tap,
+  nextpas.core.test.output.json,
+  nextpas.core.test.runner,
+  nextpas.core.test.discovery,
+  nextpas.core.test.mock;
 
 { ── Re-exported types from test.types ─────────────────────────────────────── }
 
@@ -116,6 +122,32 @@ function WriteJUnitXML(const AResults: specialize TArray<TTestRunResult>;
 
 type
   TTestResults = nextpas.core.test.base.TTestResults;
+
+{ ── Re-exported types from test.discovery ──────────────────────────────────── }
+
+type
+  TTestFixure = nextpas.core.test.discovery.TTestFixure;
+
+function DiscoverTests(AFixture: TTestFixure;
+  const ASuiteName: string = ''): TTestSuite;
+
+{ ── Re-exported from test.output.tap ──────────────────────────────────────── }
+
+function TAPReport(const AResults: specialize TArray<TTestRunResult>;
+  const ASuiteName: string = ''): string;
+
+{ ── Re-exported from test.output.json ─────────────────────────────────────── }
+
+function JSONReport(const AResults: specialize TArray<TTestRunResult>;
+  const ASuiteName: string = ''): string;
+
+{ ── Re-exported types from test.mock ──────────────────────────────────────── }
+
+type
+  TMock = nextpas.core.test.mock.TMock;
+  TMockState = nextpas.core.test.mock.TMockState;
+  IMockSetup = nextpas.core.test.mock.IMockSetup;
+  IMockVerify = nextpas.core.test.mock.IMockVerify;
 
 implementation
 
@@ -261,5 +293,23 @@ begin Result := nextpas.core.test.output.JUnitXML(AResults, ASuiteName); end;
 function WriteJUnitXML(const AResults: specialize TArray<TTestRunResult>;
   const AFileName: string; const ASuiteName: string): Boolean;
 begin Result := nextpas.core.test.output.WriteJUnitXML(AResults, AFileName, ASuiteName); end;
+
+{ ── Forward to test.discovery ──────────────────────────────────────────────── }
+
+function DiscoverTests(AFixture: TTestFixure;
+  const ASuiteName: string): TTestSuite;
+begin Result := nextpas.core.test.discovery.DiscoverTests(AFixture, ASuiteName); end;
+
+{ ── Forward to test.output.tap ─────────────────────────────────────────────── }
+
+function TAPReport(const AResults: specialize TArray<TTestRunResult>;
+  const ASuiteName: string): string;
+begin Result := nextpas.core.test.output.tap.TAPReport(AResults, ASuiteName); end;
+
+{ ── Forward to test.output.json ────────────────────────────────────────────── }
+
+function JSONReport(const AResults: specialize TArray<TTestRunResult>;
+  const ASuiteName: string): string;
+begin Result := nextpas.core.test.output.json.JSONReport(AResults, ASuiteName); end;
 
 end.

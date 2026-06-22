@@ -51,6 +51,12 @@ function WriteJUnitXML(const AResults: specialize TArray<TTestRunResult>;
 
 procedure ReportLeakIfAny(AStatus: TTestStatus);
 
+{ ── Utility helpers ───────────────────────────────────────────────────────── }
+
+function JoinLines(const ALines: specialize TArray<string>): string;
+function CountFailed(const AResults: specialize TArray<TTestRunResult>): Integer;
+function CountSkipped(const AResults: specialize TArray<TTestRunResult>): Integer;
+
 implementation
 
 { ═════════════════════════════════════════════════════════════════════════════ }
@@ -375,6 +381,52 @@ begin
       AnsiBold(GExecState^.TestName));
   end;
   {$ENDIF}
+end;
+
+{ ═════════════════════════════════════════════════════════════════════════════ }
+{ Utility Helpers                                                              }
+{ ═════════════════════════════════════════════════════════════════════════════ }
+
+function JoinLines(const ALines: specialize TArray<string>): string;
+var
+  I, LLen, LPos: Integer;
+begin
+  LLen := 0;
+  for I := 0 to High(ALines) do
+    Inc(LLen, Length(ALines[I]) + 1); { +1 for newline }
+  SetLength(Result, LLen);
+  LPos := 1;
+  for I := 0 to High(ALines) do
+  begin
+    if I > 0 then
+    begin
+      Result[LPos] := #10;
+      Inc(LPos);
+    end;
+    if Length(ALines[I]) > 0 then
+    begin
+      Move(ALines[I][1], Result[LPos], Length(ALines[I]));
+      Inc(LPos, Length(ALines[I]));
+    end;
+  end;
+end;
+
+function CountFailed(const AResults: specialize TArray<TTestRunResult>): Integer;
+var
+  I: Integer;
+begin
+  Result := 0;
+  for I := 0 to High(AResults) do
+    Inc(Result, AResults[I].Failed);
+end;
+
+function CountSkipped(const AResults: specialize TArray<TTestRunResult>): Integer;
+var
+  I: Integer;
+begin
+  Result := 0;
+  for I := 0 to High(AResults) do
+    Inc(Result, AResults[I].Skipped);
 end;
 
 initialization

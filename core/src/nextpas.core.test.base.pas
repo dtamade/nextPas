@@ -93,6 +93,7 @@ type
     SubtestProc: TSubtestProc;  { used when Kind = ekSubtest }
     Kind       : TTestEntryKind;
     SkipReason : string;
+    RetryCount : Integer;  { >0 means retry this many times before failing }
     { Table-driven test fields (used when Kind = ekTableTest) }
     TableCase  : Pointer;       { PTestCase, heap-allocated }
     TableProc  : Pointer;       { PTestCaseProc, heap-allocated }
