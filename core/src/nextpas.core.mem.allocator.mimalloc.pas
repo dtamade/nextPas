@@ -7,7 +7,6 @@ interface
 uses
   nextpas.core.os.env,
   nextpas.core.errors,
-  nextpas.core.path,
   nextpas.core.mem.allocator.base
   {$IFNDEF NEXTPAS_CORE_MIMALLOC_STATIC}
   ,nextpas.core.platform.dl

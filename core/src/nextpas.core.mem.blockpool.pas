@@ -150,7 +150,8 @@ type
   end;
 
 
-  { 向后兼容的基类（已废弃，仅用于接口兼容） }
+  { 向后兼容的基类（已废弃，仅用于接口兼容）
+    TODO: FPC 不支持 class 声明上的 deprecated 指令，待编译器支持后添加 }
   TBlockPoolBase = class(TInterfacedObject, IBlockPool)
   protected
     FBlockSize: SizeUInt;

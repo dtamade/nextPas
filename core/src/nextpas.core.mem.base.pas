@@ -22,7 +22,7 @@ type
     akMimalloc
   );
 
-  TArenaMarker = SizeUInt;
+  TArenaMarker = SizeUInt deprecated 'use TArenaMark from arena.base';
 
 { Bit-manipulation utilities shared across mem subsystem. }
 
