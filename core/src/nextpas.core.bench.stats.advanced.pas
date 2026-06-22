@@ -526,6 +526,7 @@ begin
   // 使用固定种子保证可复现性（类似 scipy.stats.bootstrap 的 random_state）。
   // 真正的 bootstrap 质量取决于迭代次数，而非种子随机性。
   LSeed := 12345;
+  // 预分配 bootstrap 均值数组，避免循环内重新分配
   SetLength(LMeans, LIterations);
   for LIterationIndex := 0 to LIterations - 1 do
   begin
@@ -539,6 +540,7 @@ begin
     LMeans[LIterationIndex] := LSum / LN;
   end;
 
+  // 预分配排序数组，避免 SortDoubleArray 内部 realloc
   SetLength(LSortedMeans, LIterations);
   for LIterationIndex := 0 to LIterations - 1 do
     LSortedMeans[LIterationIndex] := LMeans[LIterationIndex];
