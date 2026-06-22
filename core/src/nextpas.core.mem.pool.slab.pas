@@ -281,7 +281,7 @@ begin
   if aSize = 0 then Exit(SizeOf(Pointer));
   LMinSize := SizeUInt(1) shl FMinShift;
   if aSize <= LMinSize then Exit(LMinSize);
-  LPageSize := SizeUInt(1) shl FSegments[0].PageShift;
+  LPageSize := SizeUInt(1) shl 12; { PageShift is constant 12 }
   if aSize >= (LPageSize shr 1) then Exit(LPageSize);
   Result := NextPow2(aSize);
 end;
@@ -744,7 +744,8 @@ end;
 
 function TSlabPool.PageKeyOf(aPtr: Pointer): PtrUInt; inline;
 begin
-  Result := PtrUInt(aPtr) shr TFixedSlabPool(FSegments[0]).PageShift;
+  { PageShift is a fixed constant (12) for all segments — avoid FSegments[0] access }
+  Result := PtrUInt(aPtr) shr 12;
 end;
 
 procedure TSlabPool.PageMapInit(aMinCapacity: SizeUInt);
