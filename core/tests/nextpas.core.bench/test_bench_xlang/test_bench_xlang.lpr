@@ -326,6 +326,28 @@ begin
   Check(Abs(LResult.NsPerOp - 25000000.0) < 1.0, 'ms/op conversion');
 end;
 
+procedure TestMultipleDashes;
+var
+  LResult: TBenchResult;
+begin
+  WriteLn('TestMultipleDashes:');
+
+  // Standard underscore name with GOMAXPROCS suffix
+  LResult := ParseGoBenchLine('BenchmarkFoo_Bar-8    1000    1234 ns/op');
+  Check(LResult.Name = 'BenchmarkFoo_Bar', 'Foo_Bar-8: name = BenchmarkFoo_Bar (not BenchmarkFoo_Bar-8)');
+  Check(LResult.NsPerOp = 1234, 'Foo_Bar-8: NsPerOp = 1234');
+
+  // Internal dash preserved, trailing -N stripped
+  LResult := ParseGoBenchLine('BenchmarkFoo-Bar_Baz-4    500    2000 ns/op');
+  Check(LResult.Name = 'BenchmarkFoo-Bar_Baz', 'Foo-Bar_Baz-4: internal dash preserved');
+  Check(LResult.NsPerOp = 2000, 'Foo-Bar_Baz-4: NsPerOp = 2000');
+
+  // Single dash before GOMAXPROCS number
+  LResult := ParseGoBenchLine('BenchmarkSingleDash-2    100    5000 ns/op');
+  Check(LResult.Name = 'BenchmarkSingleDash', 'SingleDash-2: name = BenchmarkSingleDash');
+  Check(LResult.NsPerOp = 5000, 'SingleDash-2: NsPerOp = 5000');
+end;
+
 { === Run All Tests === }
 
 procedure RunAllTests;
@@ -340,6 +362,7 @@ begin
   Test_GoBench_LargeOps;
   Test_GoBench_UsPerOp;
   Test_GoBench_MsPerOp;
+  TestMultipleDashes;
 
   WriteLn('');
   WriteLn('=== Rust Bench Parser Tests ===');
