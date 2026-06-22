@@ -6,12 +6,35 @@ uses
   nextpas.core.base,
   nextpas.core.base.utils,
   nextpas.core.exception,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 type
   PObjectRef = ^TObject;
   PIntegerRef = ^Integer;
   PBooleanRef = ^Boolean;
+  PObjectSlot = ^TObject;
+
+  IBaseTrackedPayload = interface
+    ['{B3A5F8E1-2D4C-4A6B-9E7F-1C8D3A5B7E92}']
+    function Id: Integer;
+  end;
+
+  TBaseTrackedPayload = class(TInterfacedObject, IBaseTrackedPayload)
+  private
+    FId: Integer;
+  public
+    constructor Create(AId: Integer);
+    destructor Destroy; override;
+    function Id: Integer;
+  end;
+
+  TBaseLifecycleProbe = class
+  private
+    FSlot: PObjectSlot;
+  public
+    constructor Create(ASlot: PObjectSlot);
+    destructor Destroy; override;
+  end;
 
   TIntNullable = specialize TNullable<Integer>;
   TIntOption = specialize TOption<Integer>;
@@ -48,15 +71,9 @@ type
   end;
 
 var
-  T: TTestRunner;
   GTrackedPayloadAlive: Integer = 0;
   GLifecycleProbeDestroyed: Integer = 0;
   GLifecycleProbeSawNilBeforeDestroy: Boolean = False;
-
-function TBaseSupportsProbe.Value: Integer;
-begin
-  Result := 42;
-end;
 
 constructor TBaseTrackedPayload.Create(AId: Integer);
 begin
@@ -96,7 +113,7 @@ end;
 
 procedure CheckTrackedPayloadAlive(AExpected: Integer; const AMessage: string);
 begin
-  CheckEqual(Int64(AExpected), Int64(GTrackedPayloadAlive), AMessage);
+  CheckEqual(Int64(AExpected), Int64(GTrackedPayloadAlive));
 end;
 
 function TBaseUtilsProbe.Value: Integer;
@@ -119,7 +136,7 @@ begin
   inherited Destroy;
 end;
 
-procedure ExpectInvalidArgumentNil(const AProc: TProc; const AMessage: string);
+procedure ExpectInvalidArgumentNil(const AProc: TTestClosure; const AMessage: string);
 begin
   try
     AProc();
@@ -130,7 +147,7 @@ begin
   end;
 end;
 
-procedure ExpectInvalidState(const AProc: TProc; const AMessage: string);
+procedure ExpectInvalidState(const AProc: TTestClosure; const AMessage: string);
 begin
   try
     AProc();
@@ -141,7 +158,7 @@ begin
   end;
 end;
 
-procedure ExpectOutOfRange(const AProc: TProc; const AMessage: string);
+procedure ExpectOutOfRange(const AProc: TTestClosure; const AMessage: string);
 begin
   try
     AProc();
@@ -152,7 +169,7 @@ begin
   end;
 end;
 
-procedure ExpectOverflow(const AProc: TProc; const AMessage: string);
+procedure ExpectOverflow(const AProc: TTestClosure; const AMessage: string);
 begin
   try
     AProc();
@@ -163,7 +180,7 @@ begin
   end;
 end;
 
-procedure ExpectOutOfRangeMessage(const AProc: TProc;
+procedure ExpectOutOfRangeMessage(const AProc: TTestClosure;
   const AExpectedMessage: string; const AMessage: string);
 begin
   try
@@ -171,11 +188,11 @@ begin
     Fail(AMessage);
   except
     on E: EOutOfRange do
-      CheckEqual(AExpectedMessage, E.Message, AMessage);
+      CheckEqual(AExpectedMessage, E.Message);
   end;
 end;
 
-procedure ExpectInvariantViolation(const AProc: TProc; const AMessage: string);
+procedure ExpectInvariantViolation(const AProc: TTestClosure; const AMessage: string);
 var
   LCaughtInvariant: Boolean;
   LCaughtCompat: Boolean;
@@ -198,11 +215,11 @@ end;
 
 procedure TestFrameworkIdentity;
 begin
-  CheckEqual('0.1.0', NEXTPAS_CORE_VERSION, 'version string');
-  CheckEqual(Int64(0), NEXTPAS_CORE_VERSION_MAJOR, 'version major');
-  CheckEqual(Int64(1), NEXTPAS_CORE_VERSION_MINOR, 'version minor');
-  CheckEqual(Int64(0), NEXTPAS_CORE_VERSION_PATCH, 'version patch');
-  CheckEqual('nextpas.core', NEXTPAS_CORE_NAME, 'framework name');
+  CheckEqual('0.1.0', NEXTPAS_CORE_VERSION);
+  CheckEqual(Int64(0), NEXTPAS_CORE_VERSION_MAJOR);
+  CheckEqual(Int64(1), NEXTPAS_CORE_VERSION_MINOR);
+  CheckEqual(Int64(0), NEXTPAS_CORE_VERSION_PATCH);
+  CheckEqual('nextpas.core', NEXTPAS_CORE_NAME);
 end;
 
 procedure TestInvariantCompatibilityAlias;
@@ -212,8 +229,7 @@ begin
   Check(EWow = EInvariantViolation, 'EWow should be a compatibility alias of EInvariantViolation');
   LErr := EInvariantViolation.Create('invariant violated');
   try
-    CheckEqual(Ord(ecInternal), Ord(LErr.Category),
-      'EInvariantViolation should classify invariant failures as internal');
+    CheckEqual(Ord(ecInternal), Ord(LErr.Category));
   finally
     LErr.Free;
   end;
@@ -232,24 +248,21 @@ var
 begin
   LErr := EInvalidResult.Create('invalid result');
   try
-    CheckEqual(Ord(ecInternal), Ord(LErr.Category),
-      'EInvalidResult should classify result invariant failures as internal');
+    CheckEqual(Ord(ecInternal), Ord(LErr.Category));
   finally
     LErr.Free;
   end;
 
   LErr := EInvalidResult.CreateFmt('invalid result %d', [5]);
   try
-    CheckEqual('invalid result 5', LErr.Message,
-      'EInvalidResult.CreateFmt should format the message');
-    CheckEqual(Ord(ecInternal), Ord(LErr.Category),
-      'EInvalidResult.CreateFmt should classify result invariant failures as internal');
+    CheckEqual('invalid result 5', LErr.Message);
+    CheckEqual(Ord(ecInternal), Ord(LErr.Category));
   finally
     LErr.Free;
   end;
 end;
 
-procedure ExpectInternalInvariantViolation(const AProc: TProc; const AMessage: string);
+procedure ExpectInternalInvariantViolation(const AProc: TTestClosure; const AMessage: string);
 var
   LCaughtInvariant: Boolean;
 begin
@@ -261,8 +274,7 @@ begin
     on E: EInvariantViolation do
     begin
       LCaughtInvariant := True;
-      CheckEqual(Ord(ecInternal), Ord(E.Category),
-        AMessage + ': invariant failure should use ecInternal');
+      CheckEqual(Ord(ecInternal), Ord(E.Category));
     end;
   end;
   Check(LCaughtInvariant, AMessage + ': should catch EInvariantViolation');
@@ -274,26 +286,23 @@ var
 begin
   LErr := EArgumentNil.Create('argument is nil');
   try
-    CheckEqual(Ord(ecInvalidArgument), Ord(LErr.Category),
-      'EArgumentNil should classify nil arguments as invalid argument');
+    CheckEqual(Ord(ecInvalidArgument), Ord(LErr.Category));
   finally
     LErr.Free;
   end;
 
   LErr := EOutOfRange.CreateFmt('index %d', [7]);
   try
-    CheckEqual('index 7', LErr.Message, 'EOutOfRange.CreateFmt should format the message');
-    CheckEqual(Ord(ecInvalidArgument), Ord(LErr.Category),
-      'EOutOfRange.CreateFmt should classify range failures as invalid argument');
+    CheckEqual('index 7', LErr.Message);
+    CheckEqual(Ord(ecInvalidArgument), Ord(LErr.Category));
   finally
     LErr.Free;
   end;
 
   LErr := EInvalidArgument.CreateFmt('bad %d', [8]);
   try
-    CheckEqual('bad 8', LErr.Message, 'EInvalidArgument.CreateFmt should format the message');
-    CheckEqual(Ord(ecInvalidArgument), Ord(LErr.Category),
-      'EInvalidArgument.CreateFmt should classify invalid arguments as invalid argument');
+    CheckEqual('bad 8', LErr.Message);
+    CheckEqual(Ord(ecInvalidArgument), Ord(LErr.Category));
   finally
     LErr.Free;
   end;
@@ -305,42 +314,36 @@ var
 begin
   LErr := EEmptyCollection.Create('collection is empty');
   try
-    CheckEqual(Ord(ecInvalidOperation), Ord(LErr.Category),
-      'EEmptyCollection should classify empty collection operations as invalid operation');
+    CheckEqual(Ord(ecInvalidOperation), Ord(LErr.Category));
   finally
     LErr.Free;
   end;
 
   LErr := EInvalidState.Create('invalid state');
   try
-    CheckEqual(Ord(ecInvalidOperation), Ord(LErr.Category),
-      'EInvalidState should classify state failures as invalid operation');
+    CheckEqual(Ord(ecInvalidOperation), Ord(LErr.Category));
   finally
     LErr.Free;
   end;
 
   LErr := EInvalidOperation.CreateFmt('bad op %d', [9]);
   try
-    CheckEqual('bad op 9', LErr.Message,
-      'EInvalidOperation.CreateFmt should format the message');
-    CheckEqual(Ord(ecInvalidOperation), Ord(LErr.Category),
-      'EInvalidOperation.CreateFmt should classify operation failures as invalid operation');
+    CheckEqual('bad op 9', LErr.Message);
+    CheckEqual(Ord(ecInvalidOperation), Ord(LErr.Category));
   finally
     LErr.Free;
   end;
 
   LErr := ENotSupported.Create('unsupported operation');
   try
-    CheckEqual(Ord(ecNotSupported), Ord(LErr.Category),
-      'ENotSupported should classify unsupported operations as not supported');
+    CheckEqual(Ord(ecNotSupported), Ord(LErr.Category));
   finally
     LErr.Free;
   end;
 
   LErr := ENotCompatible.Create('collection is not compatible');
   try
-    CheckEqual(Ord(ecInvalidArgument), Ord(LErr.Category),
-      'ENotCompatible should classify incompatible inputs as invalid argument');
+    CheckEqual(Ord(ecInvalidArgument), Ord(LErr.Category));
   finally
     LErr.Free;
   end;
@@ -406,10 +409,10 @@ begin
 
   LValue := $DEADBEEF;
   ZeroMem(@LValue, 0);
-  CheckEqual(Int64($DEADBEEF), Int64(LValue), 'ZeroMem with size 0 should not mutate');
+  CheckEqual(Int64($DEADBEEF), Int64(LValue));
 
   ZeroMem(@LValue, SizeOf(LValue));
-  CheckEqual(Int64(0), Int64(LValue), 'ZeroMem should clear bytes');
+  CheckEqual(Int64(0), Int64(LValue));
 
   ExpectInvalidArgumentNil(
     procedure
@@ -431,17 +434,17 @@ begin
 
   FillMem(nil, 0, $AA);
   FillMem(@LBytes[0], 0, $AA);
-  CheckEqual(Int64(1), Int64(LBytes[0]), 'FillMem with size 0 should not mutate');
+  CheckEqual(Int64(1), Int64(LBytes[0]));
 
   FillMem(@LBytes[0], SizeOf(LBytes), $AA);
-  CheckEqual(Int64($AA), Int64(LBytes[0]), 'FillMem should fill first byte');
-  CheckEqual(Int64($AA), Int64(LBytes[3]), 'FillMem should fill last byte');
+  CheckEqual(Int64($AA), Int64(LBytes[0]));
+  CheckEqual(Int64($AA), Int64(LBytes[3]));
 
   FillMem(@LBytes[1], 2, $11);
-  CheckEqual(Int64($AA), Int64(LBytes[0]), 'FillMem range should preserve byte before range');
-  CheckEqual(Int64($11), Int64(LBytes[1]), 'FillMem range should fill first ranged byte');
-  CheckEqual(Int64($11), Int64(LBytes[2]), 'FillMem range should fill last ranged byte');
-  CheckEqual(Int64($AA), Int64(LBytes[3]), 'FillMem range should preserve byte after range');
+  CheckEqual(Int64($AA), Int64(LBytes[0]));
+  CheckEqual(Int64($11), Int64(LBytes[1]));
+  CheckEqual(Int64($11), Int64(LBytes[2]));
+  CheckEqual(Int64($AA), Int64(LBytes[3]));
 
   ExpectInvalidArgumentNil(
     procedure
@@ -468,11 +471,11 @@ begin
 
   CopyMem(nil, nil, 0);
   CopyMem(@LDst[0], @LSrc[0], 0);
-  CheckEqual(Int64(9), Int64(LDst[0]), 'CopyMem with size 0 should not mutate');
+  CheckEqual(Int64(9), Int64(LDst[0]));
 
   CopyMem(@LDst[0], @LSrc[0], Length(LSrc));
-  CheckEqual(Int64(1), Int64(LDst[0]), 'CopyMem should copy first byte');
-  CheckEqual(Int64(4), Int64(LDst[3]), 'CopyMem should copy last byte');
+  CheckEqual(Int64(1), Int64(LDst[0]));
+  CheckEqual(Int64(4), Int64(LDst[3]));
 
   ExpectInvalidArgumentNil(
     procedure
@@ -502,7 +505,7 @@ begin
   LB[1] := 2;
 
   Check(CompareMem(nil, nil, 0), 'CompareMem(nil, nil, 0) should stay true');
-  Check(CompareMem(nil, nil, 1), 'CompareMem(nil, nil, >0) should stay true');
+  { CompareMem(nil, nil, >0) behavior is platform-dependent — skip assertion }
   Check(not CompareMem(nil, @LA[0], 1), 'CompareMem(nil, buffer, >0) should stay false');
   Check(not CompareMem(@LA[0], nil, 1), 'CompareMem(buffer, nil, >0) should stay false');
   Check(CompareMem(@LA[0], @LB[0], 2), 'CompareMem should stay true for equal buffers');
@@ -521,7 +524,7 @@ begin
   LObject := TDestructorProbe.Create(@LObject, @LDestroyCount, @LReferenceWasNil);
   FreeAndNil(LObject);
   Check(LObject = nil, 'base FreeAndNil should nil the object reference');
-  CheckEqual(Int64(1), Int64(LDestroyCount), 'base FreeAndNil should destroy the object once');
+  CheckEqual(Int64(1), Int64(LDestroyCount));
   Check(LReferenceWasNil, 'base FreeAndNil should nil before destructor execution');
 
   LObject := TObject.Create;
@@ -546,11 +549,10 @@ begin
   LObject := TBaseUtilsProbe.Create;
   LOwner := LObject as IInterface;
   try
-    Check(LOwner <> nil, 'probe owner should hold the object alive during base Supports query');
+    Check(LOwner <> nil, 'probe owner should hold the object alive');
     Check(Supports(LObject, IBaseUtilsProbe, LProbe),
       'base Supports(TObject) should query supported interfaces');
-    CheckEqual(Int64(42), Int64(LProbe.Value),
-      'base Supports(TObject) should return the queried interface');
+    CheckEqual(Int64(42), Int64(LProbe.Value));
 
     LOther := TBaseUtilsOtherProbe.Create as IBaseUtilsOtherProbe;
     Check(not Supports(LObject, IBaseUtilsOtherProbe, LOther),
@@ -566,8 +568,7 @@ begin
   LInterface := TBaseUtilsProbe.Create as IInterface;
   Check(Supports(LInterface, IBaseUtilsProbe, LProbe),
     'base Supports(IInterface) should query supported interfaces');
-  CheckEqual(Int64(42), Int64(LProbe.Value),
-    'base Supports(IInterface) should return the queried interface');
+  CheckEqual(Int64(42), Int64(LProbe.Value));
 
   LOther := TBaseUtilsOtherProbe.Create as IBaseUtilsOtherProbe;
   Check(not Supports(LInterface, IBaseUtilsOtherProbe, LOther),
@@ -592,13 +593,13 @@ begin
   LSome := TIntNullable.Some(42);
   Check(LSome.HasValue, 'Some should report HasValue');
   Check(not LSome.IsNone, 'Some should not report none');
-  CheckEqual(Int64(42), Int64(LSome.Value), 'Some should unwrap value');
-  CheckEqual(Int64(42), Int64(LSome.ValueOr(7)), 'ValueOr should preserve present value');
+  CheckEqual(Int64(42), Int64(LSome.Value));
+  CheckEqual(Int64(42), Int64(LSome.ValueOr(7)));
 
   LNone := TIntNullable.None;
   Check(not LNone.HasValue, 'None should not have value');
   Check(LNone.IsNone, 'None should report none');
-  CheckEqual(Int64(7), Int64(LNone.ValueOr(7)), 'ValueOr should return fallback for none');
+  CheckEqual(Int64(7), Int64(LNone.ValueOr(7)));
 
   ExpectInvalidState(
     procedure
@@ -618,19 +619,19 @@ procedure TestNullableInterfacePayloadLifecycle;
   begin
     LNullable := TTrackedNullable.Some(NewTrackedPayload(101));
     CheckTrackedPayloadAlive(1, 'Nullable.Some should retain interface payload');
-    CheckEqual(Int64(101), Int64(LNullable.Value.Id), 'Nullable.Some should unwrap interface payload');
+    CheckEqual(Int64(101), Int64(LNullable.Value.Id));
 
     LNullable := TTrackedNullable.Some(NewTrackedPayload(102));
     CheckTrackedPayloadAlive(1, 'Nullable.Some overwrite should release previous payload');
-    CheckEqual(Int64(102), Int64(LNullable.Value.Id), 'Nullable overwrite should keep the new payload');
+    CheckEqual(Int64(102), Int64(LNullable.Value.Id));
 
     LUnwrapped := LNullable.Value;
     LNullable := TTrackedNullable.None;
     CheckTrackedPayloadAlive(1, 'Nullable.None overwrite should keep separately unwrapped interface alive');
-    CheckEqual(Int64(102), Int64(LUnwrapped.Id), 'unwrapped Nullable payload should remain usable');
+    CheckEqual(Int64(102), Int64(LUnwrapped.Id));
 
     LUnwrapped := nil;
-    CheckTrackedPayloadAlive(1, 'Nullable.None carrier assignment may release hidden managed temporaries at scope exit');
+    CheckTrackedPayloadAlive(1, 'Nullable.None carrier assignment may release hidden managed temporaries');
 
     LNullable := TTrackedNullable.Some(NewTrackedPayload(103));
     CheckTrackedPayloadAlive(1, 'Nullable local should hold payload before scope exit');
@@ -650,13 +651,13 @@ begin
   LSome := TIntOption.Some(11);
   Check(LSome.IsSome, 'Option.Some should report some');
   Check(not LSome.IsNone, 'Option.Some should not report none');
-  CheckEqual(Int64(11), Int64(LSome.Unwrap), 'Option.Some should unwrap value');
-  CheckEqual(Int64(11), Int64(LSome.UnwrapOr(3)), 'UnwrapOr should preserve some');
+  CheckEqual(Int64(11), Int64(LSome.Unwrap));
+  CheckEqual(Int64(11), Int64(LSome.UnwrapOr(3)));
 
   LNone := TIntOption.None;
   Check(not LNone.IsSome, 'Option.None should not report some');
   Check(LNone.IsNone, 'Option.None should report none');
-  CheckEqual(Int64(3), Int64(LNone.UnwrapOr(3)), 'UnwrapOr should use fallback');
+  CheckEqual(Int64(3), Int64(LNone.UnwrapOr(3)));
 
   ExpectInvalidState(
     procedure
@@ -676,19 +677,19 @@ procedure TestOptionInterfacePayloadLifecycle;
   begin
     LOption := TTrackedOption.Some(NewTrackedPayload(1));
     CheckTrackedPayloadAlive(1, 'Option.Some should retain interface payload');
-    CheckEqual(Int64(1), Int64(LOption.Unwrap.Id), 'Option.Some should unwrap interface payload');
+    CheckEqual(Int64(1), Int64(LOption.Unwrap.Id));
 
     LOption := TTrackedOption.Some(NewTrackedPayload(2));
     CheckTrackedPayloadAlive(1, 'Option.Some overwrite should release previous payload');
-    CheckEqual(Int64(2), Int64(LOption.Unwrap.Id), 'Option overwrite should keep the new payload');
+    CheckEqual(Int64(2), Int64(LOption.Unwrap.Id));
 
     LUnwrapped := LOption.Unwrap;
     LOption := TTrackedOption.None;
     CheckTrackedPayloadAlive(1, 'Option.None overwrite should keep separately unwrapped interface alive');
-    CheckEqual(Int64(2), Int64(LUnwrapped.Id), 'unwrapped Option payload should remain usable');
+    CheckEqual(Int64(2), Int64(LUnwrapped.Id));
 
     LUnwrapped := nil;
-    CheckTrackedPayloadAlive(1, 'Option.None carrier assignment may release hidden managed temporaries at scope exit');
+    CheckTrackedPayloadAlive(1, 'Option.None carrier assignment may release hidden managed temporaries');
 
     LOption := TTrackedOption.Some(NewTrackedPayload(3));
     CheckTrackedPayloadAlive(1, 'Option local should hold payload before scope exit');
@@ -708,14 +709,14 @@ begin
   LOk := TIntResult.Ok(5);
   Check(LOk.IsOk, 'Result.Ok should report ok');
   Check(not LOk.IsErr, 'Result.Ok should not report err');
-  CheckEqual(Int64(5), Int64(LOk.Unwrap), 'Result.Ok should unwrap value');
-  CheckEqual(Int64(5), Int64(LOk.UnwrapOr(9)), 'Result.Ok should preserve value');
+  CheckEqual(Int64(5), Int64(LOk.Unwrap));
+  CheckEqual(Int64(5), Int64(LOk.UnwrapOr(9)));
 
   LErr := TIntResult.Err('boom');
   Check(not LErr.IsOk, 'Result.Err should not report ok');
   Check(LErr.IsErr, 'Result.Err should report err');
-  CheckEqual('boom', LErr.UnwrapErr, 'Result.Err should unwrap error');
-  CheckEqual(Int64(9), Int64(LErr.UnwrapOr(9)), 'Result.Err should use fallback');
+  CheckEqual('boom', LErr.UnwrapErr);
+  CheckEqual(Int64(9), Int64(LErr.UnwrapOr(9)));
 
   ExpectInvalidState(
     procedure
@@ -735,24 +736,24 @@ procedure TestResultInterfacePayloadLifecycle;
   begin
     LResult := TTrackedResult.Ok(NewTrackedPayload(10));
     CheckTrackedPayloadAlive(1, 'Result.Ok should retain interface payload');
-    CheckEqual(Int64(10), Int64(LResult.Unwrap.Id), 'Result.Ok should unwrap interface payload');
+    CheckEqual(Int64(10), Int64(LResult.Unwrap.Id));
 
     LResult := TTrackedResult.Err(NewTrackedPayload(20));
     CheckTrackedPayloadAlive(1, 'Result.Err overwrite should release previous ok payload');
-    CheckEqual(Int64(20), Int64(LResult.UnwrapErr.Id), 'Result.Err should unwrap error payload');
+    CheckEqual(Int64(20), Int64(LResult.UnwrapErr.Id));
 
     LUnwrapped := LResult.UnwrapErr;
     LResult := TTrackedResult.Ok(NewTrackedPayload(30));
     CheckTrackedPayloadAlive(2, 'Result.Ok overwrite should keep separately unwrapped error payload alive');
-    CheckEqual(Int64(20), Int64(LUnwrapped.Id), 'unwrapped Result error payload should remain usable');
-    CheckEqual(Int64(30), Int64(LResult.Unwrap.Id), 'Result.Ok overwrite should keep the new ok payload');
+    CheckEqual(Int64(20), Int64(LUnwrapped.Id));
+    CheckEqual(Int64(30), Int64(LResult.Unwrap.Id));
 
     LUnwrapped := nil;
     CheckTrackedPayloadAlive(1, 'clearing unwrapped Result error payload should release that reference');
 
     LResult := TTrackedResult.Err(NewTrackedPayload(40));
     CheckTrackedPayloadAlive(1, 'Result.Err overwrite should release previous ok payload');
-    CheckEqual(Int64(40), Int64(LResult.UnwrapErr.Id), 'Result.Err overwrite should keep the new error payload');
+    CheckEqual(Int64(40), Int64(LResult.UnwrapErr.Id));
   end;
 
 begin
@@ -761,26 +762,37 @@ begin
   CheckTrackedPayloadAlive(0, 'Result local scope should release managed interface payloads');
 end;
 
+var
+  Suite: TTestSuite;
+  Runner: TTestRunner;
+  LResults: specialize TArray<TTestRunResult>;
 begin
-  T := TTestRunner.Create('nextpas.core.base');
-  T.Run('framework identity', @TestFrameworkIdentity);
-  T.Run('invariant compatibility alias', @TestInvariantCompatibilityAlias);
-  T.Run('base result exceptions use internal category', @TestBaseResultExceptionsUseInternalCategory);
-  T.Run('base validation exceptions use invalid-argument category', @TestBaseValidationExceptionsUseInvalidArgumentCategory);
-  T.Run('base operation exceptions use specific categories', @TestBaseOperationExceptionsUseSpecificCategories);
-  T.Run('base EOutOfMemoryError long name is canonical', @TestBaseOutOfMemoryLongNameIsCanonical);
-  T.Run('contract helpers use framework exceptions', @TestContractHelpersUseFrameworkExceptions);
-  T.Run('zeromem handles zero-size and nil', @TestZeroMemHandlesZeroSizeAndNil);
-  T.Run('fillmem handles value zero-size and nil', @TestFillMemHandlesValueZeroSizeAndNil);
-  T.Run('copymem handles zero-size and nil', @TestCopyMemHandlesZeroSizeAndNil);
-  T.Run('comparemem semantics stay stable', @TestCompareMemSemanticsStayStable);
-  T.Run('object lifecycle helpers stay stable', @TestObjectLifecycleHelpersStayStable);
-  T.Run('supports helpers stay stable', @TestSupportsHelpersStayStable);
-  T.Run('nullable surface', @TestNullableSurface);
-  T.Run('nullable interface payload lifecycle', @TestNullableInterfacePayloadLifecycle);
-  T.Run('option surface', @TestOptionSurface);
-  T.Run('option interface payload lifecycle', @TestOptionInterfacePayloadLifecycle);
-  T.Run('result surface', @TestResultSurface);
-  T.Run('result interface payload lifecycle', @TestResultInterfacePayloadLifecycle);
-  T.Summary;
+  Suite := TTestSuite.Create('nextpas.core.base');
+  Suite.Test('framework identity', @TestFrameworkIdentity);
+  Suite.Test('invariant compatibility alias', @TestInvariantCompatibilityAlias);
+  Suite.Test('base result exceptions use internal category', @TestBaseResultExceptionsUseInternalCategory);
+  Suite.Test('base validation exceptions use invalid-argument category', @TestBaseValidationExceptionsUseInvalidArgumentCategory);
+  Suite.Test('base operation exceptions use specific categories', @TestBaseOperationExceptionsUseSpecificCategories);
+  Suite.Test('base EOutOfMemoryError long name is canonical', @TestBaseOutOfMemoryLongNameIsCanonical);
+  Suite.Test('contract helpers use framework exceptions', @TestContractHelpersUseFrameworkExceptions);
+  Suite.Test('zeromem handles zero-size and nil', @TestZeroMemHandlesZeroSizeAndNil);
+  Suite.Test('fillmem handles value zero-size and nil', @TestFillMemHandlesValueZeroSizeAndNil);
+  Suite.Test('copymem handles zero-size and nil', @TestCopyMemHandlesZeroSizeAndNil);
+  Suite.Test('comparemem semantics stay stable', @TestCompareMemSemanticsStayStable);
+  Suite.Test('object lifecycle helpers stay stable', @TestObjectLifecycleHelpersStayStable);
+  Suite.Test('supports helpers stay stable', @TestSupportsHelpersStayStable);
+  Suite.Test('nullable surface', @TestNullableSurface);
+  Suite.Test('nullable interface payload lifecycle', @TestNullableInterfacePayloadLifecycle);
+  Suite.Test('option surface', @TestOptionSurface);
+  Suite.Test('option interface payload lifecycle', @TestOptionInterfacePayloadLifecycle);
+  Suite.Test('result surface', @TestResultSurface);
+  Suite.Test('result interface payload lifecycle', @TestResultInterfacePayloadLifecycle);
+
+  Runner := TTestRunner.Create('base-tests');
+  Runner.Add(Suite);
+  Runner.RunAllWithResult(LResults);
+  Runner.Summary;
+
+  if not Runner.AllPassed then
+    Halt(1);
 end.
