@@ -179,6 +179,12 @@ else Result := 0.001;
 
 **建议**: 统一到一个实现，让 advanced 成为 analyzer 的扩展。
 
+**Codex 决策 (2026-06-22)**: 保持两套实现，理由：
+1. `TBenchStatsAnalyzer` 是 class/interface 实现，通过 DI 使用，runner 走这条路径
+2. `TAdvancedStats` 是 record，轻量级直接使用，适合独立工具场景
+3. 两者的算法选择不同（analyzer 用 KahanSum，advanced 用简单求和）
+4. 统一需要大量 API 迁移，收益有限
+
 ---
 
 ### D02. GetByName 返回默认值而非指示"未找到"
