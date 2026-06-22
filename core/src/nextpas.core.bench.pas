@@ -478,7 +478,7 @@ begin
   LEnvironment := GetEnvironment;
 
   // 创建结果对象
-  Result := TBenchResults.Create(LResults, LEnvironment, FBaselines);
+  Result := TBenchResults.Create(LResults, LEnvironment, Copy(FBaselines, 0, FBaselineCount));
 end;
 
 { TBenchResults }
@@ -642,9 +642,11 @@ begin
   try
     Rewrite(LFile);
     WriteLn(LFile, ToJSON);
-  finally
-    CloseFile(LFile);
+  except
+    on E: Exception do
+      raise EBenchError.CreateFmt('Failed to save JSON to "%s": %s', [APath, E.Message]);
   end;
+  CloseFile(LFile);
 end;
 
 procedure TBenchResults.SaveToHTML(const APath: string);
@@ -655,9 +657,11 @@ begin
   try
     Rewrite(LFile);
     WriteLn(LFile, ToHTML);
-  finally
-    CloseFile(LFile);
+  except
+    on E: Exception do
+      raise EBenchError.CreateFmt('Failed to save HTML to "%s": %s', [APath, E.Message]);
   end;
+  CloseFile(LFile);
 end;
 
 procedure TBenchResults.SaveToTSV(const APath: string);
@@ -668,9 +672,11 @@ begin
   try
     Rewrite(LFile);
     WriteLn(LFile, ToTSV);
-  finally
-    CloseFile(LFile);
+  except
+    on E: Exception do
+      raise EBenchError.CreateFmt('Failed to save TSV to "%s": %s', [APath, E.Message]);
   end;
+  CloseFile(LFile);
 end;
 
 function TBenchResults.CompareWithBaseline: TBenchComparisonArray;
