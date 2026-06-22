@@ -12,62 +12,69 @@
 - **接口优雅**：遵循 Rust trait / Go interface 风格的接口设计
 - **生产级质量**：完整的测试覆盖和基准对照
 
+## Arena 选择指南
+
+| 场景 | 推荐 | 原因 |
+|------|------|------|
+| 编译器热路径 | TVirtualArena + AllocUnsafe | 2ns, 476M ops/s |
+| 请求/帧生命周期 | TLocalArena | 固定容量, 3ns, 307M ops/s |
+| 动态增长批量 | TChunkedArena | Go-style chunk cache, 15ns |
+| 多线程共享 | TArenaConcurrent | mutex-protected IArena 包装 |
+| 固定大小块分配 | TBlockPool / TShardedBlockPool | O(1) acquire/release |
+| Slab 分配 | TSlabPool / TSlabPoolSharded | 页级 slab, IMemoryPool |
+
 ## 核心类型
 
 ### IArena 接口
-线性分配器接口，支持：
-- `Alloc` - 分配内存
-- `AllocAligned` - 对齐分配
-- `AllocZeroed` - 分配并清零
-- `SaveMark/RestoreToMark` - 保存/恢复分配位置
-- `Reset` - 重置 Arena
+线性分配器接口：
+- `Alloc` / `AllocAligned` / `AllocZeroed` — 分配
+- `SaveMark` / `RestoreToMark` — 保存/恢复分配位置
+- `Reset` — 重置 Arena（保留已提交页面）
+- `UsedSize` / `RemainingSize` / `Stats` — 查询
 
-### TLocalArena
-基于 GetMem 的固定大小 Arena，实现 IArena 接口：
-- 固定容量，分配只前进
-- 支持 SaveMark/RestoreToMark
+### IAllocator 接口
+通用分配器接口（40+ 模块引用）：
+- `GetMem` / `AllocMem` / `ReallocMem` / `FreeMem` — 标准分配
+- `AllocAligned` — 对齐分配
+- `MemSize` — 查询已分配大小
+- `Traits` — 分配器特性
+
+### TVirtualArena (record)
+基于 mmap 的零虚分发 Arena：
+- 预留 256MB 虚拟地址空间
+- 双向 bump pointer（指针对象从前往后，无指针从后往前）
+- 大对象（>=64KB）独立 mmap
+- `AllocUnsafe`: 纯 bump pointer, 2ns（前提：页面已提交）
+
+### TLocalArena (class, IArena)
+基于 GetMem 的固定容量 Arena：
+- 预分配 buffer, 分配只前进
+- `AllocFast` / `AllocAlignedFast`: DEBUG Assert 保护, Release 零额外分支
 - 适用于请求/帧/文档等有限生命周期场景
 
-### TFastArena
-基于 mmap 的高性能 Arena，零虚分发：
-- mmap 后备存储
-- 零虚分发的 bump 分配器
-- 适用于编译器热路径等需要极低开销分配的场景
+### TChunkedArena (class, IArena)
+分段可增长 Arena：
+- Go-style chunk cache（Reset 缓存 freed segments, 最多 8 个）
+- FSegments 几何扩容
+- 支持几何/线性增长策略
 
-### TGrowableArena
-可增长的 Arena，支持段增长：
-- 自动扩展：按需添加新段（几何或线性增长）
-- 灵活配置：可配置增长策略、对齐方式、最大容量
-- 适用于批量分配场景
+## 性能基准 (2026-06-22)
 
-### TFastArenaAllocator
-包装 TFastArena 为 IAllocator 接口：
-- 分配通过 TFastArena 的 bump 指针完成
-- DoFreeMem 为 no-op
-- Reset 方法一次性释放所有内存
-
-### TTrackingAllocator
-内存泄漏检测包装器：
-- 记录所有分配/释放操作
-- 检测内存泄漏
-- 提供详细的泄漏报告
-
-## 性能指标
-
-- **TFastArena 256B**: 64.8ns (比 System.GetMem 快 3.8x)
-- **TFastArena 64B**: 47.0ns (比 System.GetMem 快 1.5x)
-- **TGrowableArena 批量**: 151.6µs (比 TFastArena 快 3.7x)
-
-## 测试覆盖
-
-- 92/92 tests passed
-- 0 memory leaks
-- 100% interface coverage
+64B alloc, Reset+Reuse:
+| 分配器 | ns/op | ops/s |
+|--------|-------|-------|
+| VirtualArena AllocUnsafe | 2 | 476M |
+| LocalArena | 3 | 307M |
+| ChunkedArena | 15 | 68M |
+| VirtualArena Alloc | 37 | 27M |
+| RTL GetMem+FreeMem | 64 | 15M |
 
 ## 使用示例
 
-### 基本使用
+### 基本 Arena 使用
 ```pascal
+uses nextpas.core.mem;
+
 var
   LArena: TLocalArena;
   LP: Pointer;
@@ -76,22 +83,40 @@ begin
   try
     LP := LArena.Alloc(64);
     // 使用 LP...
+    LArena.Reset;  // 一次性释放全部
   finally
     LArena.Free;
   end;
 end;
 ```
 
-### 使用 IAllocator 接口
+### VirtualArena + AllocUnsafe
+```pascal
+uses nextpas.core.mem.arena.virtual;
+
+var
+  LArena: TVirtualArena;
+  LP: Pointer;
+begin
+  TVirtualArena_Init(LArena);
+  try
+    LP := LArena.Alloc(4096);   // 首次分配提交页面
+    LArena.Reset;                // Reset 不释放页面
+    LP := LArena.AllocUnsafe(64); // 纯 bump, 2ns
+  finally
+    TVirtualArena_Release(LArena);
+  end;
+end;
+```
+
+### IAllocator 接口
 ```pascal
 var
   LAllocator: IAllocator;
-  LP: Pointer;
 begin
-  LAllocator := TFastArenaAllocator.Create;
+  LAllocator := DefaultAllocator;  // 全局默认分配器
   LP := LAllocator.GetMem(256);
-  // 使用 LP...
-  // 注意：Arena 不支持单个释放，需要 Reset 整个 Arena
+  // ...
 end;
 ```
 
@@ -109,27 +134,28 @@ begin
 end;
 ```
 
+## 关键约定
+
+- **Arena 不支持单个释放**：需要 `Reset` 一次性释放全部
+- **AllocUnsafe 前提**：调用方确保页面已提交, 不更新统计, 不保证对齐
+- **大对象生命周期**：不受 mark/reset 影响, 在 Release 时统一释放
+- **非线程安全**：Arena 默认非线程安全, 多线程请用 TArenaConcurrent
+
+## 测试覆盖
+
+- 158+ tests across 16 suites
+- 0 memory leaks
+- 完整接口覆盖
+
 ## 相关文档
 
 - [架构设计](ARCHITECTURE.md)
 - [API 参考](API.md)
 - [基准测试](BENCHMARKS.md)
-
-## 依赖关系
-
-```
-nextpas.core.mem.base          ← 基础类型
-nextpas.core.mem.intf          ← IAllocator 接口
-nextpas.core.mem.arena.types   ← IArena 接口
-nextpas.core.mem.arena         ← TLocalArena
-nextpas.core.mem.arena.compiler ← TFastArena
-nextpas.core.mem.arena.growable ← TGrowableArena
-nextpas.core.mem.allocator.arena ← TFastArenaAllocator
-nextpas.core.mem.allocator.tracking ← TTrackingAllocator
-nextpas.core.mem.pas           ← 门面
-```
+- [审查报告](mem-findings.md)
+- [修复计划](mem-fix-plan.md)
 
 ## 版本历史
 
-- v1.0 (2026-06-22): 架构修复完成，性能超越 Go/Rust
-- v0.1 (2026-06-21): 初始实现
+- v2.0 (2026-06-22): 架构清理 + 性能优化 + 安全防护 + 并发语义补强
+- v1.0 (2026-06-22): 初始 Arena 实现
