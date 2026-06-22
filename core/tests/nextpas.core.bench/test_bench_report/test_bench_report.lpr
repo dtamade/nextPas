@@ -337,7 +337,7 @@ begin
   CheckContains(LReport, 'HashMap.Get(hit)', 'Contains second comparison');
   // 比率可能被格式化为不同精度
   CheckContains(LReport, 'x', 'Contains ratio indicator');
-  CheckContains(LReport, 'faster', 'Contains faster status');
+  CheckContains(LReport, 'slower', 'Contains slower status');
 end;
 
 procedure TestSkippedResultsReporting;

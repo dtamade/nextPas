@@ -890,9 +890,9 @@ begin
     if ABaselines[i].DifferenceHeuristic then
     begin
       if ABaselines[i].Ratio > 1.0 then
-        LStatus := '✓ faster'
+        LStatus := '✗ slower'
       else
-        LStatus := '✗ slower';
+        LStatus := '✓ faster';
     end
     else
       LStatus := '≈ same';
