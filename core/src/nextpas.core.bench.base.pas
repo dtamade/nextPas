@@ -85,6 +85,7 @@ type
     ParallelThreads: Integer;
     CollectRawSamples: Boolean;
     Quiet: Boolean;
+    SuiteName: string;
   end;
 
   {** 基准结果数组 }

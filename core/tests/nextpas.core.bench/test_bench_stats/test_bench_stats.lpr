@@ -219,6 +219,7 @@ var
   i: Integer;
 begin
   WriteLn('TestComputeStats:');
+  RandSeed := 42;
 
   // 准备测试数据
   SetLength(LSamples, 100);
@@ -255,6 +256,7 @@ var
   i: Integer;
 begin
   WriteLn('TestSignificantDifference:');
+  RandSeed := 42;
 
   // 相同分布
   SetLength(LA, 100);
@@ -359,6 +361,7 @@ var
   i: Integer;
 begin
   WriteLn('TestComputeApproximatePValue:');
+  RandSeed := 42;
 
   // 相同分布 - p-value 应该较高（不显著）
   SetLength(LA, 100);

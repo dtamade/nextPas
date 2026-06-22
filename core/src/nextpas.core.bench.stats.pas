@@ -147,15 +147,22 @@ end;
 
 function TBenchStatsAnalyzer.ComputeVariance(const AData: TDoubleArray; AMean: Double): Double;
 var
-  LSumSq: Double;
+  LSumSq, LCompensation, LNext, LTemp: Double;
   i: Integer;
 begin
   if Length(AData) <= 1 then
     Exit(0.0);
 
+  // Kahan compensated summation for Sqr(x - mean)
   LSumSq := 0.0;
+  LCompensation := 0.0;
   for i := 0 to High(AData) do
-    LSumSq += Sqr(AData[i] - AMean);
+  begin
+    LNext := Sqr(AData[i] - AMean) - LCompensation;
+    LTemp := LSumSq + LNext;
+    LCompensation := (LTemp - LSumSq) - LNext;
+    LSumSq := LTemp;
+  end;
 
   Result := LSumSq / (Length(AData) - 1);  // 样本方差（除以 n-1）
 end;

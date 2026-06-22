@@ -169,7 +169,7 @@ begin
   if ANs < 1000 then
     Result := FormatNumber(ANs, 1) + ' ns'
   else if ANs < 1000000 then
-    Result := FormatNumber(ANs / 1000.0, 2) + ' µs'
+    Result := FormatNumber(ANs / 1000.0, 2) + ' us'
   else if ANs < 1000000000 then
     Result := FormatNumber(ANs / 1000000.0, 2) + ' ms'
   else
