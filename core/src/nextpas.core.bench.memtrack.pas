@@ -107,7 +107,7 @@ implementation
 
 var
   GGlobalTracker: TMemoryTracker;
-  GGlobalTrackerInitialized: Boolean = False;
+  GGlobalTrackerInitialized: Integer = 0;  // 0=未初始化, 1=已初始化
   GOriginalMemoryManager: TMemoryManager;
   GTrackingEnabled: Boolean = False;
 
@@ -271,11 +271,8 @@ end;
 
 function GlobalMemoryTracker: TMemoryTracker;
 begin
-  if not GGlobalTrackerInitialized then
-  begin
+  if InterlockedCompareExchange(GGlobalTrackerInitialized, 1, 0) = 0 then
     GGlobalTracker := TMemoryTracker.Create(True);
-    GGlobalTrackerInitialized := True;
-  end;
   Result := GGlobalTracker;
 end;
 
@@ -295,11 +292,8 @@ begin
   GTrackingMemoryManager.ReAllocMem := @TrackingReAllocMem;
 
   // 重置统计
-  if not GGlobalTrackerInitialized then
-  begin
+  if InterlockedCompareExchange(GGlobalTrackerInitialized, 1, 0) = 0 then
     GGlobalTracker := TMemoryTracker.Create(True);
-    GGlobalTrackerInitialized := True;
-  end;
   GGlobalTracker.Reset;
 
   // 启用跟踪
@@ -318,9 +312,11 @@ end;
 
 procedure ResetGlobalMemoryTracker;
 begin
-  if not GGlobalTrackerInitialized then
-    GGlobalTracker := TMemoryTracker.Create(True);
-  GGlobalTrackerInitialized := True;
+  if GGlobalTrackerInitialized = 0 then
+  begin
+    if InterlockedCompareExchange(GGlobalTrackerInitialized, 1, 0) = 0 then
+      GGlobalTracker := TMemoryTracker.Create(True);
+  end;
   GGlobalTracker.Reset;
 end;
 
