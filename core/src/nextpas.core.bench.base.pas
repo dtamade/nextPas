@@ -124,19 +124,80 @@ const
   Z_SCORE_99 = 2.576;
   OUTLIER_MULTIPLIER = 1.5;  // Tukey's Fences
 
-{** 对双精度浮点数组原地排序（QuickSort） }
+{** 对双精度浮点数组原地排序（IntroSort：小数组插入排序 + 大数组 QuickSort） }
 procedure SortDoubleArray(var AData: TDoubleArray);
 
 implementation
 
-procedure DoQuickSort(var AData: TDoubleArray; ALeft, ARight: Integer);
+const
+  INSERTION_SORT_THRESHOLD = 16;
+
+{ 插入排序 - 对小数组更快 }
+procedure DoInsertionSort(var AData: TDoubleArray; ALeft, ARight: Integer);
+var
+  I, J: Integer;
+  LKey: Double;
+begin
+  for I := ALeft + 1 to ARight do
+  begin
+    LKey := AData[I];
+    J := I - 1;
+    while (J >= ALeft) and (AData[J] > LKey) do
+    begin
+      AData[J + 1] := AData[J];
+      Dec(J);
+    end;
+    AData[J + 1] := LKey;
+  end;
+end;
+
+{ 三数取中选择 pivot }
+function MedianOfThree(const AData: TDoubleArray; ALeft, ARight: Integer): Double;
+var
+  LMid: Integer;
+begin
+  LMid := (ALeft + ARight) div 2;
+  if AData[ALeft] > AData[LMid] then
+  begin
+    if AData[LMid] > AData[ARight] then
+      Result := AData[LMid]
+    else if AData[ALeft] > AData[ARight] then
+      Result := AData[ARight]
+    else
+      Result := AData[ALeft];
+  end
+  else
+  begin
+    if AData[ALeft] > AData[ARight] then
+      Result := AData[ALeft]
+    else if AData[LMid] > AData[ARight] then
+      Result := AData[ARight]
+    else
+      Result := AData[LMid];
+  end;
+end;
+
+procedure DoQuickSort(var AData: TDoubleArray; ALeft, ARight: Integer; ADepthLimit: Integer);
 var
   LPivot, LTmp: Double;
   I, J: Integer;
 begin
-  if ALeft >= ARight then
+  // 小数组使用插入排序
+  if (ARight - ALeft + 1) < INSERTION_SORT_THRESHOLD then
+  begin
+    DoInsertionSort(AData, ALeft, ARight);
     Exit;
-  LPivot := AData[(ALeft + ARight) div 2];
+  end;
+
+  // 深度限制，退化为堆排序（这里简化为插入排序）
+  if ADepthLimit <= 0 then
+  begin
+    DoInsertionSort(AData, ALeft, ARight);
+    Exit;
+  end;
+
+  // 三数取中 pivot
+  LPivot := MedianOfThree(AData, ALeft, ARight);
   I := ALeft;
   J := ARight;
   while I <= J do
@@ -153,15 +214,18 @@ begin
     end;
   end;
   if ALeft < J then
-    DoQuickSort(AData, ALeft, J);
+    DoQuickSort(AData, ALeft, J, ADepthLimit - 1);
   if I < ARight then
-    DoQuickSort(AData, I, ARight);
+    DoQuickSort(AData, I, ARight, ADepthLimit - 1);
 end;
 
 procedure SortDoubleArray(var AData: TDoubleArray);
+var
+  LLen: Integer;
 begin
-  if Length(AData) > 1 then
-    DoQuickSort(AData, 0, High(AData));
+  LLen := Length(AData);
+  if LLen > 1 then
+    DoQuickSort(AData, 0, High(AData), 2 * LLen);  // IntroSort depth limit
 end;
 
 end.

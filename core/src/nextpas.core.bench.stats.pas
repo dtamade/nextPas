@@ -104,11 +104,26 @@ begin
 end;
 
 function TBenchStatsAnalyzer.Mean(const AData: TDoubleArray): Double;
+var
+  LLen: Integer;
+  LSum: Double;
+  I: Integer;
 begin
-  if Length(AData) = 0 then
+  LLen := Length(AData);
+  if LLen = 0 then
     Exit(0.0);
 
-  Result := KahanSum(AData) / Length(AData);
+  // 快速路径：小数组使用简单求和（避免 KahanSum 开销）
+  if LLen <= 64 then
+  begin
+    LSum := 0;
+    for I := 0 to High(AData) do
+      LSum += AData[I];
+    Result := LSum / LLen;
+  end
+  else
+    // 大数组使用 Kahan 求和保证精度
+    Result := KahanSum(AData) / LLen;
 end;
 
 function TBenchStatsAnalyzer.Median(var AData: TDoubleArray): Double;
@@ -151,10 +166,34 @@ end;
 
 function TBenchStatsAnalyzer.StdDev(const AData: TDoubleArray): Double;
 var
-  LMean: Double;
+  LLen: Integer;
+  LSum, LSumSq, LMean, LVariance: Double;
+  I: Integer;
+  LVal: Double;
 begin
-  LMean := Mean(AData);
-  Result := ComputeStdDev(AData, LMean);
+  LLen := Length(AData);
+  if LLen <= 1 then
+    Exit(0.0);
+
+  // 单次遍历计算均值和方差
+  LSum := 0;
+  LSumSq := 0;
+  for I := 0 to High(AData) do
+  begin
+    LVal := AData[I];
+    LSum += LVal;
+    LSumSq += LVal * LVal;
+  end;
+
+  LMean := LSum / LLen;
+  // 样本方差（除以 n-1）
+  LVariance := (LSumSq - LLen * LMean * LMean) / (LLen - 1);
+
+  // 防止浮点误差导致负方差
+  if LVariance < 0 then
+    LVariance := 0;
+
+  Result := Sqrt(LVariance);
 end;
 
 function TBenchStatsAnalyzer.Percentile(const ASorted: TDoubleArray; APercent: Double): Double;
