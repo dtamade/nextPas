@@ -3,7 +3,6 @@ program test_semantic_scalar_facts;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   np_ast_facade,
   np_diagnostics_sink,
   np_green_tree,

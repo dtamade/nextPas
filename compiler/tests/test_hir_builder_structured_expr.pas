@@ -3,7 +3,7 @@ program test_hir_builder_structured_expr;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, np_semantic_model, np_hir_builder, np_hir_model;
+  nextpas.core.text.conv, np_semantic_model, np_hir_builder, np_hir_model;
 
 var
   Model: TSemanticModel;

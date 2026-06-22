@@ -3,7 +3,7 @@ program test_semantic_hir_expr_producer;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   np_ast_facade,
   np_diagnostics_sink,
   np_green_tree,

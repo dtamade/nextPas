@@ -3,7 +3,7 @@ program test_hir_builder_expr_fallback;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, np_semantic_model, np_hir_builder, np_hir_model, np_hir_types;
+  np_semantic_model, np_hir_builder, np_hir_model, np_hir_types;
 
 function AddTypeWithFact(const AModel: TSemanticModel; const AName: string;
   const AKind: TSemanticScalarKind; const ABitWidth: LongInt;
