@@ -20,8 +20,8 @@ type
     SkipReason: string;
     Iterations: Int64;
     TotalNs: UInt64;
-    NsPerOp: Double;
-    OpsPerSec: Double;
+    NsPerOp: Double;        // 纳秒/操作
+    OpsPerSec: Double;      // 操作/秒
     BytesPerOp: Int64;
     AllocsPerOp: Int64;
     StdDev: Double;
@@ -96,7 +96,7 @@ type
   {** 基线数据 }
   TBenchBaseline = record
     Name: string;
-    NsPerOp: Double;
+    NsPerOp: Double;        // 纳秒/操作
   end;
 
   {** 基线数组 }
