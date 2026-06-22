@@ -38,6 +38,9 @@ type
     BeforeEachClosure: TTestClosure;
     AfterEach       : TTestProc;
     AfterEachClosure : TTestClosure;
+    { Heap-allocated stubs from DiscoverTests — disposed by CleanupTableAllocations.
+      Raw Pointers because discovery.pas uses PMethodStub which runner.pas cannot see. }
+    StubAllocations: specialize TArray<Pointer>;
     { Cached run results — set by Run/RunParallel }
     LastRunPassed: Boolean;
     HasRun       : Boolean;
@@ -102,7 +105,18 @@ type
     function  AllPassed: Boolean;
   end;
 
+{ Register a heap-allocated method stub for later disposal.
+  Adds to both the suite's per-instance list and a global safety-net registry. }
+procedure RegisterStub(var ASuite: TTestSuite; APtr: Pointer);
+
 implementation
+
+{ Global registry of all heap-allocated method stubs from DiscoverTests.
+  Stubs are disposed here in finalization as a safety net for suites that
+  are created but never run (and thus never call CleanupTableAllocations). }
+var
+  GStubRegistry: specialize TArray<Pointer>;
+  LStubCleanupI: Integer;
 
 { ═════════════════════════════════════════════════════════════════════════════ }
 { TTestSuite                                                                   }
@@ -120,11 +134,22 @@ begin
   Result.BeforeEachClosure := nil;
   Result.AfterEach       := nil;
   Result.AfterEachClosure := nil;
+  Result.StubAllocations := nil;
   Result.LastRunPassed := False;
   Result.HasRun        := False;
   Result.LastPass      := 0;
   Result.LastFail      := 0;
   Result.LastSkip      := 0;
+end;
+
+procedure RegisterStub(var ASuite: TTestSuite; APtr: Pointer);
+begin
+  { Per-suite tracking — disposed by CleanupTableAllocations when suite runs }
+  SetLength(ASuite.StubAllocations, Length(ASuite.StubAllocations) + 1);
+  ASuite.StubAllocations[High(ASuite.StubAllocations)] := APtr;
+  { Global safety-net — disposed in finalization for suites that never run }
+  SetLength(GStubRegistry, Length(GStubRegistry) + 1);
+  GStubRegistry[High(GStubRegistry)] := APtr;
 end;
 
 procedure TTestSuite.Test(const AName: string; AProc: TTestProc);
@@ -803,6 +828,19 @@ begin
     Result := LastRunPassed;
 end;
 
+{ Nil-out a specific pointer value in a dynamic array (for double-free prevention) }
+procedure NilPointerInArray(var AArr: specialize TArray<Pointer>; APtr: Pointer);
+var
+  I: Integer;
+begin
+  for I := 0 to High(AArr) do
+    if AArr[I] = APtr then
+    begin
+      AArr[I] := nil;
+      Exit;
+    end;
+end;
+
 procedure TTestSuite.CleanupTableAllocations;
 var
   I: Integer;
@@ -823,6 +861,15 @@ begin
       end;
     end;
   end;
+  { Dispose heap-allocated method stubs from DiscoverTests }
+  for I := 0 to High(StubAllocations) do
+    if StubAllocations[I] <> nil then
+    begin
+      FreeMem(StubAllocations[I]);
+      { Nil-out in global registry so finalization won't double-free }
+      NilPointerInArray(GStubRegistry, StubAllocations[I]);
+    end;
+  StubAllocations := nil;
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }
@@ -950,5 +997,13 @@ begin
   else
     Result := RunAll;
 end;
+
+finalization
+  { Safety net: dispose any method stubs that were not cleaned up by
+    CleanupTableAllocations (e.g. suites created but never run). }
+  for LStubCleanupI := 0 to High(GStubRegistry) do
+    if GStubRegistry[LStubCleanupI] <> nil then
+      FreeMem(GStubRegistry[LStubCleanupI]);
+  GStubRegistry := nil;
 
 end.

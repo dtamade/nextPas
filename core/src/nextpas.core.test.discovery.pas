@@ -139,6 +139,9 @@ begin
     LPStub^.CodeAddr := LAddr;
 
     Result.Test(string(LNamePtr^), MakeMethodClosure(LPStub));
+
+    { Track stub for disposal after suite finishes running }
+    RegisterStub(Result, Pointer(LPStub));
   end;
 
   { Auto-free the fixture when the suite finishes }
@@ -147,10 +150,5 @@ begin
     AFixture.Free;
   end);
 end;
-
-finalization
-  { LPStub memory is intentionally leaked on finalization.
-    Each discovery call allocates one PMethodStub per published method.
-    In practice this is negligible and the process is shutting down. }
 
 end.

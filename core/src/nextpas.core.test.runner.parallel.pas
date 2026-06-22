@@ -188,6 +188,7 @@ begin
   LSkipReason := '';
   try
   SetTestContext(R^.SuiteName, R^.Entry.Name);
+  try
 
   { Subtests are not supported in parallel mode — skip gracefully }
   if R^.Entry.Kind = ekSubtest then
@@ -349,10 +350,14 @@ begin
     SafeRelease(R^.Mtx);
   end;
 
-  if GExecState <> nil then
-  begin
-    Dispose(GExecState);
-    GExecState := nil;
+  finally
+    { Always dispose thread-local GExecState — even on early Exit paths
+      (ekSubtest, ekSkipped) that skip the normal cleanup below. }
+    if GExecState <> nil then
+    begin
+      Dispose(GExecState);
+      GExecState := nil;
+    end;
   end;
   except
     { Top-level catch: prevent worker thread exceptions from crashing the process.
