@@ -177,6 +177,17 @@ begin
   end;
 end;
 
+{ 整数 log2，用于 IntroSort 深度限制 }
+function IntLog2(AValue: Integer): Integer;
+begin
+  Result := 0;
+  while AValue > 1 do
+  begin
+    AValue := AValue shr 1;
+    Inc(Result);
+  end;
+end;
+
 procedure DoQuickSort(var AData: TDoubleArray; ALeft, ARight: Integer; ADepthLimit: Integer);
 var
   LPivot, LTmp: Double;
@@ -189,7 +200,7 @@ begin
     Exit;
   end;
 
-  // 深度限制，退化为堆排序（这里简化为插入排序）
+  // 深度耗尽，退化为插入排序（简化版 IntroSort）
   if ADepthLimit <= 0 then
   begin
     DoInsertionSort(AData, ALeft, ARight);
@@ -225,7 +236,7 @@ var
 begin
   LLen := Length(AData);
   if LLen > 1 then
-    DoQuickSort(AData, 0, High(AData), 2 * LLen);  // IntroSort depth limit
+    DoQuickSort(AData, 0, High(AData), 2 * IntLog2(LLen));  // IntroSort depth limit
 end;
 
 end.
