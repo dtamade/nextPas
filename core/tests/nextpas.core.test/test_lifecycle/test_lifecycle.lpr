@@ -33,22 +33,6 @@ begin
   Result.Data := AData;
 end;
 
-procedure DisposeTableEntries(var ASuite: TTestSuite);
-var
-  I: Integer;
-begin
-  for I := 0 to High(ASuite.Tests) do
-  begin
-    if ASuite.Tests[I].Kind = ekTableTest then
-    begin
-      if ASuite.Tests[I].TableCase <> nil then
-        Dispose(PTestCase(ASuite.Tests[I].TableCase));
-      if ASuite.Tests[I].TableProc <> nil then
-        Dispose(PTestCaseProc(ASuite.Tests[I].TableProc));
-    end;
-  end;
-end;
-
 { ── TestTable (parameterized tests) ────────────────────────────────────────── }
 
 procedure TestTableBasicProc(const ACase: TTestCase);
@@ -357,7 +341,6 @@ begin
   Suite.RunWithResult(LResult);
   CheckTrue(LResult.Passed = 5, 'Expected 5 table tests');
   CheckTrue(LResult.AllPassed, 'All table tests should pass');
-  DisposeTableEntries(Suite);
 end;
 
 procedure TestTableParallel;
@@ -376,7 +359,6 @@ begin
   LSuccess := Suite.RunParallelWithResult(nil, LResult);
   CheckTrue(LSuccess, 'Parallel table should pass');
   CheckTrue(LResult.Passed = 2, 'Expected 2 parallel table passes');
-  DisposeTableEntries(Suite);
 end;
 
 { ── Closure + Parallel integration ─────────────────────────────────────────── }
