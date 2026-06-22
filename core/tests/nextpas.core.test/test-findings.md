@@ -1,14 +1,42 @@
 # nextpas.core.test — 全面审查 findings
 
 审查日期: 2026-06-21
-分支: feat-core-test-framework
+分支: feat/core-test-framework
 审查范围: 11 个源文件 + 8 个测试套件
+
+## 修复状态
+
+| ID | 状态 | 说明 |
+|----|------|------|
+| F01 | ✅ 已修 | `ToNotBeNear` 改用 `Not_.ToBeNear` 创建副本 (7401b68f9) |
+| F02 | ⏭ 保留 | `ParallelThreadEntry` 可移植性 — 当前 Linux x86-64 唯一目标 |
+| F03 | ✅ 已修 | `DisposeTableEntries` 删除，由框架统一负责 (788783854) |
+| F04 | ✅ 简化 | 保留双注册机制（设计合理），添加文档 |
+| F05 | ⏭ 保留 | `TTestEntry` 空间浪费 — 低优先级优化点 |
+| F06 | ✅ TODO | 添加了 TODO 注释标记代码重复 |
+| F07 | ⏭ 保留 | TAP/JSON 测试覆盖 — 后续单独添加 |
+| F08 | ⏭ 保留 | Mock 测试覆盖 — 后续单独添加 |
+| F09 | ✅ 已修 | 并行 subtest skip 现计入 LSkip 统计 |
+| F10 | ⚠️ 不可行 | FPC 循环前向引用阻止类型化，已添加文档说明 |
+| F11 | ✅ 已修 | `MatchesGlob` 重写为迭代式（零 Copy 分配） |
+| F12 | ✅ 已修 | `XmlEscape`/`JsonEscape` 预分配避免 O(n²) |
+| F13 | ⏭ 保留 | `AddLine` 重复 — 低优先级提取 |
+| F14 | ⏭ 保留 | `for-in` FPC 3.x — 当前使用 trunk 无影响 |
+| F15 | ⏭ 保留 | epsilon 默认值 — 设计偏好 |
+| F16 | ⏭ 保留 | Check API 扩展 — 后续按需添加 |
+| F17 | ✅ 已修 | 8 个重复过程合并为 1 个共享过程 |
+| F18 | ✅ 已修 | `Add` var 参数语义说明精简 |
+| F19 | ✅ 已修 | `LAppender.Free` 用 try/finally 保护 |
+| F20 | ✅ 已修 | 临时文件路径用 `GetTempDir` + `CreateGUID` (5f0b0f4e0) |
+| F21 | ✅ 已修 | `StatusDot` 非 ANSI 时回退 ASCII (5f0b0f4e0) |
+
+统计: ✅ 12 已修 / ⏭ 8 保留 / ⚠️ 1 不可行 / 总 21
 
 ---
 
 ## P0 — 正确性 Bug (必须修复)
 
-### F01: `ToNotBeNear` 状态污染 — `IExpectation` 链式调用会得到错误结果
+### F01: `ToNotBeNear` 状态污染 — `IExpectation` 链式调用会得到错误结果 ✅ 已修
 
 **文件**: `expect.pas:519-524`
 **严重度**: 高 — 真实 Bug
@@ -52,7 +80,7 @@ end;
 
 ---
 
-### F03: `DisposeTableEntries` 和 `CleanupTableAllocations` 双重释放风险
+### F03: `DisposeTableEntries` 和 `CleanupTableAllocations` 双重释放风险 ✅ 已修
 
 **文件**: `test_lifecycle.pas:36-50`
 **严重度**: 中 — 测试代码中的真实 Bug
@@ -70,7 +98,7 @@ TestTableSerial → Suite.RunWithResult → CleanupTableAllocations (释放指�
 
 ## P1 — 设计债务 (应尽快清理)
 
-### F04: Stub 双重注册机制过度复杂
+### F04: Stub 双重注册机制过度复杂 ✅ 已文档化
 
 **文件**: `runner.pas:114-153, 844-873, 1001-1007`
 **严重度**: 中 — 设计债务
@@ -114,7 +142,7 @@ end;
 
 ---
 
-### F06: `RunWithResult` 和 `RunParallelWithResult` 代码重复
+### F06: `RunWithResult` ✅ TODO 和 `RunParallelWithResult` 代码重复
 
 **文件**: `runner.pas:330-666 vs 685-807`
 **严重度**: 中 — 维护性
@@ -147,7 +175,7 @@ Setup 失败处理、结果计数、HasRun/LastRunPassed 更新、Summary 输出
 
 ---
 
-### F09: Parallel 模式静默跳过 Subtest
+### F09: Parallel 模式静默跳过 Subtest ✅ 已修
 
 **文件**: `runner.pas:754-759`
 **严重度**: 中 — 语义不明确
@@ -167,7 +195,7 @@ end;
 
 ---
 
-### F10: `ITestContext` 接口公开了 `RunNested(AProc: Pointer)`
+### F10: `ITestContext` ⚠️ 不可行 (FPC 循环引用) 接口公开了 `RunNested(AProc: Pointer)`
 
 **文件**: `base.pas:25`
 **严重度**: 低 — API 设计
@@ -184,7 +212,7 @@ procedure RunNested(const AName: string; AProc: Pointer);
 
 ## P2 — 代码质量 (择机修复)
 
-### F11: Glob 匹配器递归 + 字符串分配
+### F11: Glob 匹配器递归 ✅ 已修 + 字符串分配
 
 **文件**: `output.pas:173-205`
 **严重度**: 低 — 性能
@@ -195,7 +223,7 @@ procedure RunNested(const AName: string; AProc: Pointer);
 
 ---
 
-### F12: `XmlEscape` / `JsonEscape` 重复字符串拼接
+### F12: `XmlEscape` / `JsonEscape` ✅ 已修 重复字符串拼接
 
 **文件**: `output.pas:253-280`, `output.json.pas:34-60`
 **严重度**: 低 — 性能
@@ -246,7 +274,7 @@ TAP 和 JSON 输出使用 `for LSuite in AResults` / `for LRes in LSuite.Results
 
 ---
 
-### F17: `test_parallel.lpr` 8 个几乎相同的过程
+### F17: `test_parallel.lpr` ✅ 已修 8 个几乎相同的过程
 
 **文件**: `test_parallel.lpr:16-61`
 **严重度**: 低 — 测试代码质量
@@ -255,7 +283,7 @@ TAP 和 JSON 输出使用 `for LSuite in AResults` / `for LRes in LSuite.Results
 
 ---
 
-### F18: TTestRunner.Add 的 var 参数语义
+### F18: TTestRunner.Add ✅ 已修 的 var 参数语义
 
 **文件**: `runner.pas:889-900`
 **严重度**: 低 — API 陷阱
@@ -270,7 +298,7 @@ procedure TTestRunner.Add(var ASuite: TTestSuite);
 
 ---
 
-### F19: `RunWithResult` 的 `LAppender.Free` 在 setup failure 路径
+### F19: `RunWithResult` 的 `LAppender ✅ 已修.Free` 在 setup failure 路径
 
 **文件**: `runner.pas:385`
 **严重度**: 低 — 资源管理
@@ -281,7 +309,7 @@ Setup 失败时 `LAppender.Free` 在 `Exit` 前被调用 — 正确。但如果�
 
 ---
 
-### F20: `test_output.lpr` 用 `/tmp` 路径写文件
+### F20: `test_output.lpr` ✅ 已修 (5f0b0f4e0) 用 `/tmp` 路径写文件
 
 **文件**: `test_output.lpr:374`
 **严重度**: 低 — 测试可移植性
@@ -296,7 +324,7 @@ LPath := '/tmp/nextpas_test_junit_' + IntToStr(GetTickCount64) + '.xml';
 
 ---
 
-### F21: `StatusDot` 字符依赖 Unicode 字体支持
+### F21: `StatusDot` ✅ 已修 (5f0b0f4e0) 字符依赖 Unicode 字体支持
 
 **文件**: `output.pas:133-141`
 **严重度**: 低 — 兼容性
