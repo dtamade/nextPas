@@ -45,6 +45,8 @@ type
 
     { 配置 }
     FAlignment: SizeUInt;
+    FAlignmentMask: PtrUInt;  { cached: FAlignment - 1, avoids per-call subtraction }
+    FIsDefaultAlign: Boolean; { cached: FAlignment <= SizeOf(Pointer), skip alignment entirely }
 
     { 统计信息（增量更新） }
     FTotalAllocated: SizeUInt;
@@ -65,12 +67,16 @@ type
     function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
     {** 分配 ASize 字节并清零 }
     function AllocZeroed(aSize: SizeUInt): Pointer;
+    {** 极速分配（跳过所有检查，调用方保证容量足够且 aSize > 0）。仅限热路径。 }
+    function AllocUnsafe(aSize: SizeUInt): Pointer; inline;
     {** 保存当前分配位置 }
     function SaveMark: TArenaMark;
     {** 恢复到标记位置 }
     procedure RestoreToMark(AMark: TArenaMark);
-    {** 重置 Arena（保留虚拟地址空间，从头开始分配） }
+    {** 重置 Arena（保留虚拟地址空间和已 commit 页面，从头开始分配） }
     procedure Reset;
+    {** 重置 Arena 并释放物理内存（decommit 所有页面） }
+    procedure ResetHard;
     {** 释放所有资源 }
     procedure Release;
     {** 总 mmap 分配字节数 }
@@ -115,6 +121,9 @@ begin
   AArena.FReservedSize := ARENA_VIRTUAL_RESERVE;
   AArena.FFrontCommittedSize := 0;
   AArena.FBackCommittedSize := 0;
+
+  AArena.FAlignmentMask := AArena.FAlignment - 1;
+  AArena.FIsDefaultAlign := AArena.FAlignment <= SizeOf(Pointer);
 
   AArena.FFrontPtr := PByte(AArena.FReservedBase);
   AArena.FFrontEnd := PByte(PtrUInt(AArena.FReservedBase) + PtrUInt(ARENA_VIRTUAL_RESERVE));
@@ -166,6 +175,9 @@ begin
   AArena.FFrontEnd := nil;
   AArena.FBackPtr := nil;
   AArena.FBackBase := nil;
+  AArena.FAlignment := 0;
+  AArena.FAlignmentMask := 0;
+  AArena.FIsDefaultAlign := False;
   AArena.FTotalAllocated := 0;
   AArena.FTotalUsed := 0;
   AArena.FLargeUsed := 0;
@@ -267,15 +279,14 @@ end;
 
 function TVirtualArena.Alloc(aSize: SizeUInt): Pointer;
 var
+  LNewEnd: PtrUInt;
   LAligned: PtrUInt;
-  LMask: PtrUInt;
-  LNeedCommit: SizeUInt;
   LMap: TPlatformMappedFile;
 begin
   Result := nil;
-  if aSize = 0 then
-    Exit;
+  if aSize = 0 then Exit;
 
+  { Large objects: direct mmap, independent lifecycle }
   if aSize >= ARENA_LARGE_THRESHOLD then
   begin
     if platform_mmap_create_anonymous(UInt64(aSize), pmaReadWrite, [pmfPrivate], LMap) <> 0 then
@@ -284,8 +295,7 @@ begin
     Inc(FTotalAllocated, aSize);
     Inc(FLargeUsed, aSize);
     Inc(FTotalUsed, aSize);
-    if FTotalUsed > FPeakUsed then
-      FPeakUsed := FTotalUsed;
+    if FTotalUsed > FPeakUsed then FPeakUsed := FTotalUsed;
     Inc(FAllocCount);
     {$IFDEF NEXTPAS_ARENA_LEAK_CHECK}
     Inc(GArenaTotalMapped, aSize);
@@ -293,28 +303,24 @@ begin
     Exit(LMap.Addr);
   end;
 
-  { Fast path: default alignment (already guaranteed aligned by Init) }
-  LAligned := PtrUInt(FFrontPtr);
-  if FAlignment > SizeOf(Pointer) then
-  begin
-    LMask := PtrUInt(FAlignment - 1);
-    LAligned := (LAligned + LMask) and not LMask;
-  end;
+  { Hot path: compute aligned pointer }
+  if FIsDefaultAlign then
+    LAligned := PtrUInt(FFrontPtr)
+  else
+    LAligned := (PtrUInt(FFrontPtr) + FAlignmentMask) and not FAlignmentMask;
 
-  LNeedCommit := (LAligned + PtrUInt(aSize)) - PtrUInt(FReservedBase);
-  if LNeedCommit > FFrontCommittedSize then
-  begin
-    if not CommitFrontRegion(LNeedCommit - FFrontCommittedSize) then
-      Exit;
-  end;
+  LNewEnd := LAligned + PtrUInt(aSize);
 
-  if (LAligned + PtrUInt(aSize)) > PtrUInt(FFrontEnd) then
-    Exit;
+  { Capacity check first (fail fast, no syscall) }
+  if LNewEnd > PtrUInt(FFrontEnd) then Exit;
 
-  FFrontPtr := PByte(LAligned + PtrUInt(aSize));
+  { Commit check — only call method when actually needed }
+  if LNewEnd - PtrUInt(FReservedBase) > FFrontCommittedSize then
+    if not CommitFrontRegion(LNewEnd - PtrUInt(FReservedBase) - FFrontCommittedSize) then Exit;
+
+  FFrontPtr := PByte(LNewEnd);
   Inc(FTotalUsed, aSize);
-  if FTotalUsed > FPeakUsed then
-    FPeakUsed := FTotalUsed;
+  if FTotalUsed > FPeakUsed then FPeakUsed := FTotalUsed;
   Inc(FAllocCount);
   Result := Pointer(LAligned);
 end;
@@ -322,14 +328,13 @@ end;
 function TVirtualArena.AllocNoPointer(aSize: SizeUInt): Pointer;
 var
   LAligned: PtrUInt;
-  LMask: PtrUInt;
-  LNeedCommit: SizeUInt;
+  LNewBack: PtrUInt;
   LMap: TPlatformMappedFile;
 begin
   Result := nil;
-  if aSize = 0 then
-    Exit;
+  if aSize = 0 then Exit;
 
+  { Large objects: direct mmap }
   if aSize >= ARENA_LARGE_THRESHOLD then
   begin
     if platform_mmap_create_anonymous(UInt64(aSize), pmaReadWrite, [pmfPrivate], LMap) <> 0 then
@@ -338,8 +343,7 @@ begin
     Inc(FTotalAllocated, aSize);
     Inc(FLargeUsed, aSize);
     Inc(FTotalUsed, aSize);
-    if FTotalUsed > FPeakUsed then
-      FPeakUsed := FTotalUsed;
+    if FTotalUsed > FPeakUsed then FPeakUsed := FTotalUsed;
     Inc(FAllocCount);
     {$IFDEF NEXTPAS_ARENA_LEAK_CHECK}
     Inc(GArenaTotalMapped, aSize);
@@ -347,29 +351,22 @@ begin
     Exit(LMap.Addr);
   end;
 
-  LMask := PtrUInt(FAlignment - 1);
-  FBackPtr := PByte(PtrUInt(FBackPtr) - PtrUInt(aSize));
-  LAligned := PtrUInt(FBackPtr) and not LMask;
+  { Back-pointer bump (downward) }
+  LNewBack := PtrUInt(FBackPtr) - PtrUInt(aSize);
+  LAligned := LNewBack and not FAlignmentMask;
 
-  LNeedCommit := PtrUInt(FReservedBase) + FReservedSize - LAligned;
-  if LNeedCommit > FBackCommittedSize then
-  begin
-    if not CommitBackRegion(LNeedCommit - FBackCommittedSize) then
-    begin
-      FBackPtr := PByte(PtrUInt(FBackPtr) + PtrUInt(aSize));
-      Exit;
-    end;
-  end;
-
+  { Capacity check first }
   if LAligned < PtrUInt(FFrontPtr) then
-  begin
-    FBackPtr := PByte(PtrUInt(FBackPtr) + PtrUInt(aSize));
     Exit;
-  end;
 
+  { Commit check — only when actually needed }
+  if PtrUInt(FReservedBase) + FReservedSize - LAligned > FBackCommittedSize then
+    if not CommitBackRegion(PtrUInt(FReservedBase) + FReservedSize - LAligned - FBackCommittedSize) then
+      Exit;
+
+  FBackPtr := PByte(LAligned);
   Inc(FTotalUsed, aSize);
-  if FTotalUsed > FPeakUsed then
-    FPeakUsed := FTotalUsed;
+  if FTotalUsed > FPeakUsed then FPeakUsed := FTotalUsed;
   Inc(FAllocCount);
   Result := Pointer(LAligned);
 end;
@@ -377,18 +374,16 @@ end;
 function TVirtualArena.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
 var
   LAligned: PtrUInt;
+  LNewEnd: PtrUInt;
   LMask: PtrUInt;
-  LNeedCommit: SizeUInt;
   LMap: TPlatformMappedFile;
 begin
   Result := nil;
-  if aSize = 0 then
-    Exit;
-  if (aAlignment = 0) or (not IsPowerOfTwo(aAlignment)) then
-    Exit;
-  if aAlignment < SizeOf(Pointer) then
-    aAlignment := SizeOf(Pointer);
+  if aSize = 0 then Exit;
+  if (aAlignment = 0) or (not IsPowerOfTwo(aAlignment)) then Exit;
+  if aAlignment < SizeOf(Pointer) then aAlignment := SizeOf(Pointer);
 
+  { Large objects: direct mmap }
   if aSize >= ARENA_LARGE_THRESHOLD then
   begin
     if platform_mmap_create_anonymous(UInt64(aSize), pmaReadWrite, [pmfPrivate], LMap) <> 0 then
@@ -397,8 +392,7 @@ begin
     Inc(FTotalAllocated, aSize);
     Inc(FLargeUsed, aSize);
     Inc(FTotalUsed, aSize);
-    if FTotalUsed > FPeakUsed then
-      FPeakUsed := FTotalUsed;
+    if FTotalUsed > FPeakUsed then FPeakUsed := FTotalUsed;
     Inc(FAllocCount);
     {$IFDEF NEXTPAS_ARENA_LEAK_CHECK}
     Inc(GArenaTotalMapped, aSize);
@@ -408,21 +402,18 @@ begin
 
   LMask := PtrUInt(aAlignment - 1);
   LAligned := (PtrUInt(FFrontPtr) + LMask) and not LMask;
+  LNewEnd := LAligned + PtrUInt(aSize);
 
-  LNeedCommit := (LAligned + PtrUInt(aSize)) - PtrUInt(FReservedBase);
-  if LNeedCommit > FFrontCommittedSize then
-  begin
-    if not CommitFrontRegion(LNeedCommit - FFrontCommittedSize) then
-      Exit;
-  end;
+  { Capacity check first }
+  if LNewEnd > PtrUInt(FFrontEnd) then Exit;
 
-  if (LAligned + PtrUInt(aSize)) > PtrUInt(FFrontEnd) then
-    Exit;
+  { Commit check — inline fast path }
+  if LNewEnd - PtrUInt(FReservedBase) > FFrontCommittedSize then
+    if not CommitFrontRegion(LNewEnd - PtrUInt(FReservedBase) - FFrontCommittedSize) then Exit;
 
-  FFrontPtr := PByte(LAligned + PtrUInt(aSize));
+  FFrontPtr := PByte(LNewEnd);
   Inc(FTotalUsed, aSize);
-  if FTotalUsed > FPeakUsed then
-    FPeakUsed := FTotalUsed;
+  if FTotalUsed > FPeakUsed then FPeakUsed := FTotalUsed;
   Inc(FAllocCount);
   Result := Pointer(LAligned);
 end;
@@ -432,6 +423,15 @@ begin
   Result := Alloc(aSize);
   if Result <> nil then
     FillChar(Result^, aSize, 0);
+end;
+
+function TVirtualArena.AllocUnsafe(aSize: SizeUInt): Pointer;
+var
+  LNewEnd: PtrUInt;
+begin
+  LNewEnd := PtrUInt(FFrontPtr) + PtrUInt(aSize);
+  Result := Pointer(FFrontPtr);
+  FFrontPtr := PByte(LNewEnd);
 end;
 
 function TVirtualArena.SaveMark: TArenaMark;
@@ -456,7 +456,21 @@ end;
 
 procedure TVirtualArena.Reset;
 begin
-  { Decommit physical pages; virtual address space stays reserved }
+  { Fast reset: keep committed pages, only reset bump pointers.
+    Pages stay warm for the next allocation cycle (same strategy as Go arena).
+    Use ResetHard() if you need to release physical memory under pressure. }
+
+  FFrontPtr := PByte(FReservedBase);
+  FBackPtr := PByte(PtrUInt(FReservedBase) + PtrUInt(FReservedSize));
+
+  FTotalUsed := FLargeUsed;
+  FAllocCount := 0;
+end;
+
+procedure TVirtualArena.ResetHard;
+begin
+  { Decommit all physical pages, then reset bump pointers.
+    Use when under memory pressure — trades restart speed for memory savings. }
   if FFrontCommittedSize > 0 then
     platform_virtual_decommit(FReservedBase, FFrontCommittedSize);
   if FBackCommittedSize > 0 then

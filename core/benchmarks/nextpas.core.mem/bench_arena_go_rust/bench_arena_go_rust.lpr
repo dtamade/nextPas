@@ -141,6 +141,31 @@ begin
   Result.OpsPerSec := 1e9 / Result.NsPerOp;
 end;
 
+function BenchVirtualArenaUnsafeReuse: TBenchResult;
+var
+  I, J: Integer;
+  T0, T1: Int64;
+  Arena: TVirtualArena;
+begin
+  Result.Name := 'VirtualArena AllocUnsafe 64B reset+reuse';
+  TVirtualArena_Init(Arena);
+  { Warm up: first cycle triggers commit }
+  for J := 0 to BATCH_COUNT - 1 do
+    Arena.Alloc(SMALL_SIZE);
+  Arena.Reset;
+  T0 := NowNs;
+  for I := 0 to 99 do
+  begin
+    for J := 0 to BATCH_COUNT - 1 do
+      Arena.AllocUnsafe(SMALL_SIZE);
+    Arena.Reset;
+  end;
+  T1 := NowNs;
+  Result.NsPerOp := Double(T1 - T0) / Double(100 * BATCH_COUNT);
+  Result.OpsPerSec := 1e9 / Result.NsPerOp;
+  Arena.Release;
+end;
+
 { ===== Reset+Reuse cycle cost ===== }
 
 function BenchLocalArenaReuse: TBenchResult;
@@ -207,7 +232,7 @@ begin
 end;
 
 var
-  Results: array[0..8] of TBenchResult;
+  Results: array[0..9] of TBenchResult;
   R: TBenchResult;
   I: Integer;
 
@@ -229,7 +254,8 @@ begin
   Results[5] := BenchLocalArenaReuse;
   Results[6] := BenchChunkedArenaReuse;
   Results[7] := BenchVirtualArenaReuse;
-  for I := 5 to 7 do
+  Results[8] := BenchVirtualArenaUnsafeReuse;
+  for I := 5 to 8 do
     PrintResult(Results[I]);
 
   WriteLn;
