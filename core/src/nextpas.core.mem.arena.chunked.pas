@@ -20,6 +20,10 @@ type
    *
    *  非线程安全。多线程环境请自行加锁。
    *}
+{ TODO: 几何扩容优化 — 需要引入 FSegmentCount 字段
+  当前 Length(FSegments) = count = capacity (线性增长)
+  几何扩容后 Length(FSegments) = capacity ≠ count
+  重构点: ~15 处 Length(FSegments) / High(FSegments) 引用改为 FSegmentCount }
   TChunkedArena = class(TInterfacedObject, IArena)
   private
     type
