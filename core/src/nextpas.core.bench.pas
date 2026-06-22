@@ -104,6 +104,7 @@ type
     {** IBenchResults 实现 }
     function GetAll: TBenchResultArray;
     function GetByName(const AName: string): TBenchResult;
+    function TryGetByName(const AName: string; out AResult: TBenchResult): Boolean;
     function GetCount: Integer;
     function ToConsole: string;
     function ToJSON: string;
@@ -521,6 +522,22 @@ begin
       Exit;
     end;
   end;
+end;
+
+function TBenchResults.TryGetByName(const AName: string; out AResult: TBenchResult): Boolean;
+var
+  i: Integer;
+begin
+  for i := 0 to FResultCount - 1 do
+  begin
+    if FResults[i].Name = AName then
+    begin
+      AResult := FResults[i];
+      Exit(True);
+    end;
+  end;
+  Result := False;
+  AResult := Default(TBenchResult);
 end;
 
 function TBenchResults.GetCount: Integer;

@@ -165,6 +165,9 @@ type
     {** 获取单个结果（按名称） }
     function GetByName(const AName: string): TBenchResult;
 
+    {** 尝试获取单个结果（按名称），返回是否找到 }
+    function TryGetByName(const AName: string; out AResult: TBenchResult): Boolean;
+
     {** 获取结果数量 }
     function GetCount: Integer;
 
