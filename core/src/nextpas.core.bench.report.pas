@@ -89,7 +89,9 @@ uses
   nextpas.core.text.base,
   nextpas.core.text.conv,
   nextpas.core.text.format,
-  nextpas.core.math.scalar;
+  nextpas.core.math.scalar,
+  nextpas.core.json.writer,
+  nextpas.core.text.builder;
 
 { 辅助函数：添加字符串到数组 }
 procedure AddLine(var ALines: TStringArray; const ALine: string);
@@ -293,63 +295,115 @@ end;
 
 function TBenchReportGenerator.ToJSON: string;
 var
-  LJSON: TStringArray;
-  i: Integer;
+  I: Integer;
+  J: Integer;
+  LBuilder: TStringBuilder;
+  LFormattedBuilder: TStringBuilder;
+  LInString: Boolean;
+  LEscaped: Boolean;
+  LJSON: string;
+  LWriter: TJsonWriter;
 begin
-  SetLength(LJSON, 0);
-
-  AddLine(LJSON, '{');
-  AddLine(LJSON, '  "version": "1.0",');
-  AddLine(LJSON, '  "timestamp": "' + FEnvironment.Timestamp + '",');
-  AddLine(LJSON, '  "environment": {');
-  AddLine(LJSON, '    "os": "' + EscapeJSON(FEnvironment.OS) + '",');
-  AddLine(LJSON, '    "cpu": "' + EscapeJSON(FEnvironment.CPU) + '",');
-  AddLine(LJSON, '    "cores": ' + IntToStr(FEnvironment.Cores) + ',');
-  AddLine(LJSON, '    "fpc_version": "' + EscapeJSON(FEnvironment.FPCVersion) + '"');
-  AddLine(LJSON, '  },');
-  AddLine(LJSON, '  "benchmarks": [');
-
-  for i := 0 to FResultCount - 1 do
-  begin
-    AddLine(LJSON, '    {');
-    AddLine(LJSON, '      "name": "' + EscapeJSON(FResults[i].Name) + '",');
-    if FResults[i].Skipped then
+  LBuilder.Init(256 + FResultCount * 256);
+  try
+    LWriter.Init(LBuilder);
+    LWriter.BeginObject;
+    LWriter.Key('version');
+    LWriter.Str('1.0');
+    LWriter.Key('timestamp');
+    LWriter.Str(FEnvironment.Timestamp);
+    LWriter.Key('environment');
+    LWriter.BeginObject;
+    LWriter.Key('os');
+    LWriter.Str(FEnvironment.OS);
+    LWriter.Key('cpu');
+    LWriter.Str(FEnvironment.CPU);
+    LWriter.Key('cores');
+    LWriter.Int(FEnvironment.Cores);
+    LWriter.Key('fpc_version');
+    LWriter.Str(FEnvironment.FPCVersion);
+    LWriter.EndObject;
+    LWriter.Key('benchmarks');
+    LWriter.BeginArray;
+    for I := 0 to FResultCount - 1 do
     begin
-      AddLine(LJSON, '      "status": "skipped",');
-      AddLine(LJSON, '      "skip_reason": "' + EscapeJSON(FResults[i].SkipReason) + '",');
-    end
-    else
-    begin
-      AddLine(LJSON, '      "status": "ok",');
+      LWriter.BeginObject;
+      LWriter.Key('name');
+      LWriter.Str(FResults[I].Name);
+      if FResults[I].Skipped then
+      begin
+        LWriter.Key('status');
+        LWriter.Str('skipped');
+        LWriter.Key('skip_reason');
+        LWriter.Str(FResults[I].SkipReason);
+      end
+      else
+      begin
+        LWriter.Key('status');
+        LWriter.Str('ok');
+      end;
+      LWriter.Key('iterations');
+      LWriter.Int(FResults[I].Iterations);
+      LWriter.Key('ns_per_op');
+      LWriter.Float(FResults[I].NsPerOp);
+      LWriter.Key('ops_per_sec');
+      LWriter.Float(FResults[I].OpsPerSec);
+      LWriter.Key('bytes_per_op');
+      LWriter.Int(FResults[I].BytesPerOp);
+      LWriter.Key('allocs_per_op');
+      LWriter.Int(FResults[I].AllocsPerOp);
+      LWriter.Key('statistics');
+      LWriter.BeginObject;
+      LWriter.Key('stddev');
+      LWriter.Float(FResults[I].StdDev);
+      LWriter.Key('median');
+      LWriter.Float(FResults[I].Median);
+      LWriter.Key('p95');
+      LWriter.Float(FResults[I].P95);
+      LWriter.Key('p99');
+      LWriter.Float(FResults[I].P99);
+      LWriter.Key('outliers');
+      LWriter.Int(FResults[I].Outliers);
+      LWriter.Key('sample_count');
+      LWriter.Int(FResults[I].SampleCount);
+      LWriter.EndObject;
+      LWriter.EndObject;
     end;
-    AddLine(LJSON, '      "iterations": ' + IntToStr(FResults[i].Iterations) + ',');
-    AddLine(LJSON, '      "ns_per_op": ' + FormatNumber(FResults[i].NsPerOp, 2) + ',');
-    AddLine(LJSON, '      "ops_per_sec": ' + FormatNumber(FResults[i].OpsPerSec, 0) + ',');
-    AddLine(LJSON, '      "bytes_per_op": ' + IntToStr(FResults[i].BytesPerOp) + ',');
-    AddLine(LJSON, '      "allocs_per_op": ' + IntToStr(FResults[i].AllocsPerOp) + ',');
-    AddLine(LJSON, '      "statistics": {');
-    AddLine(LJSON, '        "stddev": ' + FormatNumber(FResults[i].StdDev, 2) + ',');
-    AddLine(LJSON, '        "median": ' + FormatNumber(FResults[i].Median, 2) + ',');
-    AddLine(LJSON, '        "p95": ' + FormatNumber(FResults[i].P95, 2) + ',');
-    AddLine(LJSON, '        "p99": ' + FormatNumber(FResults[i].P99, 2) + ',');
-    AddLine(LJSON, '        "outliers": ' + IntToStr(FResults[i].Outliers) + ',');
-    AddLine(LJSON, '        "sample_count": ' + IntToStr(FResults[i].SampleCount));
-    AddLine(LJSON, '      }');
-    if i < FResultCount - 1 then
-      AddLine(LJSON, '    },')
-    else
-      AddLine(LJSON, '    }');
+    LWriter.EndArray;
+    LWriter.EndObject;
+    LJSON := LBuilder.ToString;
+  finally
+    LBuilder.Done;
   end;
 
-  AddLine(LJSON, '  ]');
-  AddLine(LJSON, '}');
-
-  Result := '';
-  for i := 0 to High(LJSON) do
-  begin
-    if i > 0 then
-      Result := Result + LineEnding;
-    Result := Result + LJSON[i];
+  LFormattedBuilder.Init(Length(LJSON) + 32);
+  try
+    LInString := False;
+    LEscaped := False;
+    for J := 1 to Length(LJSON) do
+    begin
+      LFormattedBuilder.AppendChar(LJSON[J]);
+      if LEscaped then
+      begin
+        LEscaped := False;
+        Continue;
+      end;
+      if LJSON[J] = '"' then
+      begin
+        LInString := not LInString;
+        Continue;
+      end;
+      if LInString and (LJSON[J] = '\') then
+      begin
+        LEscaped := True;
+        Continue;
+      end;
+      if (not LInString) and (LJSON[J] = ':') then
+        LFormattedBuilder.AppendChar(' ');
+    end;
+    Result := LFormattedBuilder.ToString;
+  finally
+    LFormattedBuilder.Done;
   end;
 end;
 
