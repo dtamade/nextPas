@@ -34,7 +34,6 @@ type
       PSegment = ^TSegment;
   private
     FSegments: array of TSegment;
-    FSegmentCapacity: SizeInt;  { allocated capacity (geometric growth) }
     FActive: SizeInt;
     FTotalSize: SizeUInt;
     FAlignment: SizeUInt;
@@ -287,14 +286,7 @@ begin
   LSeg.StartOffset := FTotalSize;
 
   LIdx := Length(FSegments);
-  if LIdx >= FSegmentCapacity then
-  begin
-    if FSegmentCapacity < 4 then
-      FSegmentCapacity := 4
-    else
-      FSegmentCapacity := FSegmentCapacity * 2;
-    SetLength(FSegments, FSegmentCapacity);
-  end;
+  SetLength(FSegments, LIdx + 1);
   FSegments[LIdx] := LSeg;
   Inc(FTotalSize, LSegSize);
   if (LIdx = 0) or LUpdateGrowthBase then
@@ -374,14 +366,7 @@ begin
       LSeg.Used := 0;
       LSeg.StartOffset := FTotalSize;
       LIdx := Length(FSegments);
-      if LIdx >= FSegmentCapacity then
-      begin
-        if FSegmentCapacity < 4 then
-          FSegmentCapacity := 4
-        else
-          FSegmentCapacity := FSegmentCapacity * 2;
-        SetLength(FSegments, FSegmentCapacity);
-      end;
+      SetLength(FSegments, LIdx + 1);
       FSegments[LIdx] := LSeg;
       Inc(FTotalSize, LSeg.Size);
       FActive := LIdx;
@@ -506,7 +491,6 @@ begin
   FAlignment := LAlign;
 
   SetLength(FSegments, 0);
-  FSegmentCapacity := 0;
   FActive := -1;
   FTotalSize := 0;
   FGrowthBaseSize := 0;

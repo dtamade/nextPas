@@ -175,6 +175,7 @@ begin
   Assert(AAlign > 0, 'AllocAlignedFast: AAlign = 0');
   Assert(IsPowerOfTwo(AAlign), 'AllocAlignedFast: AAlign is not power of two');
   Assert(FOffset <= FCapacity, 'AllocAlignedFast: FOffset > FCapacity');
+  Assert(ASize + (AAlign - 1) <= FCapacity - FOffset, 'AllocAlignedFast: aligned size exceeds remaining capacity');
   {$ENDIF}
   LCurrent := PtrUInt(FBacking) + FOffset;
   LMask := AAlign - 1;
