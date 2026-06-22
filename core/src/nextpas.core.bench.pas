@@ -43,10 +43,12 @@ type
   private
     FEntries: array of TBenchEntry;
     FEntryCount: Integer;
+    FEntryCapacity: Integer;
     FConfig: TBenchConfig;
     FFilter: string;
     FBaselines: array of TBenchBaseline;
     FBaselineCount: Integer;
+    FBaselineCapacity: Integer;
     FRunner: TBenchRunner;
     FReportGenerator: TBenchReportGenerator;
 
@@ -90,6 +92,7 @@ type
     FEnvironment: TBenchEnvironment;
     FBaselines: array of TBenchBaseline;
     FBaselineCount: Integer;
+    FBaselineCapacity: Integer;
     FReportGenerator: TBenchReportGenerator;
 
     {** 生成基线对比 }
@@ -134,8 +137,10 @@ constructor TBenchSuite.Create(const ASuiteName: string);
 begin
   inherited Create;
   FEntryCount := 0;
+  FEntryCapacity := 0;
   SetLength(FEntries, 0);
   FBaselineCount := 0;
+  FBaselineCapacity := 0;
   SetLength(FBaselines, 0);
 
   // 初始化默认配置
@@ -187,9 +192,16 @@ begin
   LEntry.Func := AFunc;
   LEntry.Condition := True;
 
+  if FEntryCount >= FEntryCapacity then
+  begin
+    if FEntryCapacity = 0 then
+      FEntryCapacity := 8
+    else
+      FEntryCapacity := FEntryCapacity * 2;
+    SetLength(FEntries, FEntryCapacity);
+  end;
+  FEntries[FEntryCount] := LEntry;
   Inc(FEntryCount);
-  SetLength(FEntries, FEntryCount);
-  FEntries[FEntryCount - 1] := LEntry;
 end;
 
 function TBenchSuite.AddWithSetup(const AName: string; AFunc: TBenchFunc;
@@ -205,9 +217,16 @@ begin
   LEntry.Teardown := ATeardown;
   LEntry.Condition := True;
 
+  if FEntryCount >= FEntryCapacity then
+  begin
+    if FEntryCapacity = 0 then
+      FEntryCapacity := 8
+    else
+      FEntryCapacity := FEntryCapacity * 2;
+    SetLength(FEntries, FEntryCapacity);
+  end;
+  FEntries[FEntryCount] := LEntry;
   Inc(FEntryCount);
-  SetLength(FEntries, FEntryCount);
-  FEntries[FEntryCount - 1] := LEntry;
 end;
 
 function TBenchSuite.AddWhen(const AName: string; AFunc: TBenchFunc;
@@ -221,9 +240,16 @@ begin
   LEntry.Func := AFunc;
   LEntry.Condition := ACondition;
 
+  if FEntryCount >= FEntryCapacity then
+  begin
+    if FEntryCapacity = 0 then
+      FEntryCapacity := 8
+    else
+      FEntryCapacity := FEntryCapacity * 2;
+    SetLength(FEntries, FEntryCapacity);
+  end;
+  FEntries[FEntryCount] := LEntry;
   Inc(FEntryCount);
-  SetLength(FEntries, FEntryCount);
-  FEntries[FEntryCount - 1] := LEntry;
 end;
 
 function TBenchSuite.AddParallel(const AName: string; AFunc: TBenchFunc;
@@ -242,9 +268,16 @@ begin
   LEntry.EnableParallel := True;
   LEntry.ParallelThreads := AThreads;
 
+  if FEntryCount >= FEntryCapacity then
+  begin
+    if FEntryCapacity = 0 then
+      FEntryCapacity := 8
+    else
+      FEntryCapacity := FEntryCapacity * 2;
+    SetLength(FEntries, FEntryCapacity);
+  end;
+  FEntries[FEntryCount] := LEntry;
   Inc(FEntryCount);
-  SetLength(FEntries, FEntryCount);
-  FEntries[FEntryCount - 1] := LEntry;
 end;
 
 function TBenchSuite.AddRange(const AName: string; AFunc: TBenchParamFunc;
@@ -262,9 +295,16 @@ begin
     LEntry.ParamValue := AParams[LIndex];
     LEntry.Condition := True;
 
+    if FEntryCount >= FEntryCapacity then
+    begin
+      if FEntryCapacity = 0 then
+        FEntryCapacity := 8
+      else
+        FEntryCapacity := FEntryCapacity * 2;
+      SetLength(FEntries, FEntryCapacity);
+    end;
+    FEntries[FEntryCount] := LEntry;
     Inc(FEntryCount);
-    SetLength(FEntries, FEntryCount);
-    FEntries[FEntryCount - 1] := LEntry;
   end;
 end;
 
@@ -279,9 +319,16 @@ begin
   LEntry.IsLoop := True;
   LEntry.LoopFunc := AFunc;
 
+  if FEntryCount >= FEntryCapacity then
+  begin
+    if FEntryCapacity = 0 then
+      FEntryCapacity := 8
+    else
+      FEntryCapacity := FEntryCapacity * 2;
+    SetLength(FEntries, FEntryCapacity);
+  end;
+  FEntries[FEntryCount] := LEntry;
   Inc(FEntryCount);
-  SetLength(FEntries, FEntryCount);
-  FEntries[FEntryCount - 1] := LEntry;
 end;
 
 function TBenchSuite.SetMinDuration(ADuration: TDuration): IBenchSuite;
@@ -343,10 +390,17 @@ end;
 function TBenchSuite.AddBaseline(const AName: string; ANsPerOp: Double): IBenchSuite;
 begin
   Result := Self;
+  if FBaselineCount >= FBaselineCapacity then
+  begin
+    if FBaselineCapacity = 0 then
+      FBaselineCapacity := 8
+    else
+      FBaselineCapacity := FBaselineCapacity * 2;
+    SetLength(FBaselines, FBaselineCapacity);
+  end;
+  FBaselines[FBaselineCount].Name := AName;
+  FBaselines[FBaselineCount].NsPerOp := ANsPerOp;
   Inc(FBaselineCount);
-  SetLength(FBaselines, FBaselineCount);
-  FBaselines[FBaselineCount - 1].Name := AName;
-  FBaselines[FBaselineCount - 1].NsPerOp := ANsPerOp;
 end;
 
 function TBenchSuite.LoadBaseline(const APath: string): IBenchSuite;
@@ -368,7 +422,14 @@ begin
   // 将加载的基线添加到 suite
   for I := 0 to High(LBaselines) do
   begin
-    SetLength(FBaselines, FBaselineCount + 1);
+    if FBaselineCount >= FBaselineCapacity then
+    begin
+      if FBaselineCapacity = 0 then
+        FBaselineCapacity := 8
+      else
+        FBaselineCapacity := FBaselineCapacity * 2;
+      SetLength(FBaselines, FBaselineCapacity);
+    end;
     FBaselines[FBaselineCount].Name := LBaselines[I].Name;
     FBaselines[FBaselineCount].NsPerOp := LBaselines[I].NsPerOp;
     Inc(FBaselineCount);

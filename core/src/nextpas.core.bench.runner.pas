@@ -55,6 +55,7 @@ type
     FStatsAnalyzer: IBenchStatsAnalyzer;
     FResults: array of TBenchResult;
     FResultCount: Integer;
+    FResultCapacity: Integer;
     FParallelBridgeFunc: TBenchFunc;
     FParallelContexts: array of IBenchContext;
     FParallelContextsInitialized: Boolean;
@@ -291,6 +292,7 @@ begin
   inherited Create;
   FStatsAnalyzer := TBenchStatsAnalyzer.Create;
   FResultCount := 0;
+  FResultCapacity := 0;
   FParallelBridgeFunc := nil;
   FParallelContextsInitialized := False;
   SetLength(FResults, 0);
@@ -657,9 +659,16 @@ end;
 
 procedure TBenchRunner.AddResult(const AResult: TBenchResult);
 begin
+  if FResultCount >= FResultCapacity then
+  begin
+    if FResultCapacity = 0 then
+      FResultCapacity := 8
+    else
+      FResultCapacity := FResultCapacity * 2;
+    SetLength(FResults, FResultCapacity);
+  end;
+  FResults[FResultCount] := AResult;
   Inc(FResultCount);
-  SetLength(FResults, FResultCount);
-  FResults[FResultCount - 1] := AResult;
 end;
 
 function TBenchRunner.RunOne(const AName: string; AFunc: TBenchFunc): TBenchResult;
@@ -777,6 +786,7 @@ end;
 procedure TBenchRunner.ClearResults;
 begin
   FResultCount := 0;
+  FResultCapacity := 0;
   SetLength(FResults, 0);
 end;
 

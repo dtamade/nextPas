@@ -67,6 +67,8 @@ type
   TBaselineManager = record
   private
     FBaselines: TBaselineArray;
+    FBaselineCount: Integer;
+    FBaselineCapacity: Integer;
     FRegressionThreshold: Double; // e.g., 1.1 for 10% regression
     function FindBaseline(const AName: string): Integer;
   public
@@ -155,6 +157,8 @@ implementation
 class function TBaselineManager.Create(ARegressionThreshold: Double): TBaselineManager;
 begin
   Result.FBaselines := nil;
+  Result.FBaselineCount := 0;
+  Result.FBaselineCapacity := 0;
   Result.FRegressionThreshold := ARegressionThreshold;
 end;
 
@@ -162,7 +166,7 @@ function TBaselineManager.FindBaseline(const AName: string): Integer;
 var
   I: Integer;
 begin
-  for I := 0 to High(FBaselines) do
+  for I := 0 to FBaselineCount - 1 do
     if FBaselines[I].Name = AName then
       Exit(I);
   Result := -1;
@@ -177,8 +181,16 @@ begin
     FBaselines[LIdx] := ABaseline
   else
   begin
-    SetLength(FBaselines, Length(FBaselines) + 1);
-    FBaselines[High(FBaselines)] := ABaseline;
+    if FBaselineCount >= FBaselineCapacity then
+    begin
+      if FBaselineCapacity = 0 then
+        FBaselineCapacity := 8
+      else
+        FBaselineCapacity := FBaselineCapacity * 2;
+      SetLength(FBaselines, FBaselineCapacity);
+    end;
+    FBaselines[FBaselineCount] := ABaseline;
+    Inc(FBaselineCount);
   end;
 end;
 
@@ -212,7 +224,8 @@ end;
 
 function TBaselineManager.GetAllBaselines: TBaselineArray;
 begin
-  Result := FBaselines;
+  SetLength(Result, FBaselineCount);
+  Move(FBaselines[0], Result[0], FBaselineCount * SizeOf(TBaselineData));
 end;
 
 function TBaselineManager.HasBaseline(const AName: string): Boolean;
@@ -228,15 +241,17 @@ begin
   LIdx := FindBaseline(AName);
   if LIdx >= 0 then
   begin
-    for I := LIdx to High(FBaselines) - 1 do
+    for I := LIdx to FBaselineCount - 2 do
       FBaselines[I] := FBaselines[I + 1];
-    SetLength(FBaselines, Length(FBaselines) - 1);
+    Dec(FBaselineCount);
   end;
 end;
 
 procedure TBaselineManager.ClearBaselines;
 begin
   FBaselines := nil;
+  FBaselineCount := 0;
+  FBaselineCapacity := 0;
 end;
 
 function TBaselineManager.CompareWithBaseline(const AResult: TBenchResult): TBaselineComparison;
@@ -265,17 +280,27 @@ end;
 function TBaselineManager.CompareAllWithBaselines(const AResults: TBenchResultArray): TBaselineComparisonArray;
 var
   I: Integer;
+  LCount: Integer;
   LResults: array of TBaselineComparison;
 begin
   LResults := nil;
+  LCount := 0;
   for I := 0 to High(AResults) do
   begin
     if HasBaseline(AResults[I].Name) then
     begin
-      SetLength(LResults, Length(LResults) + 1);
-      LResults[High(LResults)] := CompareWithBaseline(AResults[I]);
+      if LCount >= Length(LResults) then
+      begin
+        if LCount = 0 then
+          SetLength(LResults, 8)
+        else
+          SetLength(LResults, LCount * 2);
+      end;
+      LResults[LCount] := CompareWithBaseline(AResults[I]);
+      Inc(LCount);
     end;
   end;
+  SetLength(LResults, LCount);
   Result := LResults;
 end;
 
@@ -323,7 +348,7 @@ begin
     LWriter.BeginObject;
     LWriter.Key('baselines');
     LWriter.BeginArray;
-    for I := 0 to High(FBaselines) do
+    for I := 0 to FBaselineCount - 1 do
     begin
       LWriter.BeginObject;
       LWriter.Key('name');
