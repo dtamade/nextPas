@@ -10,9 +10,12 @@ unit nextpas.core.font.ttface;
 interface
 
 uses
-  SysUtils,
-  Classes,
   nextpas.core.base,
+  nextpas.core.exception,
+  nextpas.core.io.intf,
+  nextpas.core.fs.base,
+  nextpas.core.fs.stream,
+  nextpas.core.fs.util,
   nextpas.core.font.base;
 
 type
@@ -128,8 +131,8 @@ end;
 
 constructor TTFontFace.Create(const AFilePath: string);
 var
-  LStream: TFileStream;
-  LSize: Int32;
+  LStream: IStream;
+  LSize: Int64;
 begin
   inherited Create;
   FValid := False;
@@ -137,20 +140,20 @@ begin
   FHasFmt12 := False;
   FLastError := '';
 
-  if not FileExists(AFilePath) then
+  if not FsExists(AFilePath) then
     Exit;
 
   try
-    LStream := TFileStream.Create(AFilePath, fmOpenRead or fmShareDenyNone);
+    LStream := FsOpen(AFilePath, [fmRead]);
     try
-      LSize := LStream.Size;
+      LSize := LStream.GetSize;
       if LSize < 12 then
         Exit;
       SetLength(FData, LSize);
       FDataLength := LSize;
-      LStream.ReadBuffer(FData[0], LSize);
+      LStream.Read(FData[0], LSize);
     finally
-      LStream.Free;
+      LStream := nil;
     end;
   except
     Exit;
