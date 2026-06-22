@@ -18,6 +18,7 @@ uses
   nextpas.core.fs.base,
   nextpas.core.bench,
   nextpas.core.bench.base,
+  nextpas.core.bench.intf,
   nextpas.core.simd.cpuinfo;
 
 var
@@ -975,6 +976,51 @@ begin
   Check(LResults.GetByName('Medium').Name = 'Medium', 'Second result name correct');
 end;
 
+procedure TestSaveErrorHandling;
+const
+  INVALID_PATH = '/nonexistent/dir/test.json';
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+  LRaised: Boolean;
+begin
+  WriteLn('TestSaveErrorHandling:');
+
+  LSuite := CreateFastSuite('ErrorSuite');
+  LSuite.Add('Fast', @BenchFast);
+  LResults := LSuite.Run;
+
+  // SaveToJSON with invalid path
+  LRaised := False;
+  try
+    LResults.SaveToJSON(INVALID_PATH);
+  except
+    on E: EBenchError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'SaveToJSON raises EBenchError for invalid path');
+
+  // SaveToHTML with invalid path
+  LRaised := False;
+  try
+    LResults.SaveToHTML('/nonexistent/dir/test.html');
+  except
+    on E: EBenchError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'SaveToHTML raises EBenchError for invalid path');
+
+  // SaveToTSV with invalid path
+  LRaised := False;
+  try
+    LResults.SaveToTSV('/nonexistent/dir/test.tsv');
+  except
+    on E: EBenchError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'SaveToTSV raises EBenchError for invalid path');
+end;
+
 begin
   WriteLn('=== nextpas.core.bench Integration Tests ===');
   WriteLn;
@@ -1037,6 +1083,8 @@ begin
     TestTBenchResults_SaveToTSV;
     WriteLn;
     TestTBenchSuite_FluentAPI;
+    WriteLn;
+    TestSaveErrorHandling;
   finally
     GParallelLock.Free;
   end;
