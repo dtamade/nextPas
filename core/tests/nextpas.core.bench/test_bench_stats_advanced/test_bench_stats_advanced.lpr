@@ -59,6 +59,8 @@ begin
   LData := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0]);
   LStats := TAdvancedStats.Create(LData);
   Check(Abs(LStats.Mean - 3.0) < 0.001, 'Mean = 3.0');
+  LData[0] := 101.0;
+  Check(Abs(LStats.Mean - 3.0) < 0.001, 'Mean cache survives source mutation');
 end;
 
 procedure Test_Median;

@@ -57,6 +57,8 @@ type
     FData: TDoubleArray;
     FSortedData: TDoubleArray;
     FSorted: Boolean;
+    FCachedMean: Double;
+    FMeanCached: Boolean;
     procedure EnsureSorted;
   public
     {**
@@ -204,6 +206,7 @@ class function TAdvancedStats.Create(const AData: TDoubleArray): TAdvancedStats;
 begin
   Result.FData := AData;
   Result.FSorted := False;
+  Result.FMeanCached := False;
 end;
 
 procedure TAdvancedStats.EnsureSorted;
@@ -220,12 +223,17 @@ var
   I: Integer;
   LSum: Double;
 begin
-  if Length(FData) = 0 then Exit(0);
+  if FMeanCached then
+    Exit(FCachedMean);
+  if Length(FData) = 0 then
+    Exit(0);
 
   LSum := 0;
   for I := 0 to High(FData) do
     LSum := LSum + FData[I];
-  Result := LSum / Length(FData);
+  FCachedMean := LSum / Length(FData);
+  FMeanCached := True;
+  Result := FCachedMean;
 end;
 
 function TAdvancedStats.Median: Double;
