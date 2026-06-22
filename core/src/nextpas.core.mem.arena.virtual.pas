@@ -169,6 +169,10 @@ begin
   AArena.FAllocCount := 0;
 end;
 
+const
+  { Minimum commit chunk size to amortize mmap syscall overhead }
+  COMMIT_CHUNK_SIZE: SizeUInt = 2 * 1024 * 1024; { 2MB }
+
 function TVirtualArena.CommitRegion(aSize: SizeUInt): Boolean;
 var
   LCommitSize: SizeUInt;
@@ -176,10 +180,19 @@ var
 begin
   Result := False;
 
+  { Round up to page boundary }
   LCommitSize := (aSize + MEM_PAGE_SIZE - 1) and not (MEM_PAGE_SIZE - 1);
+  { Commit at least COMMIT_CHUNK_SIZE to amortize syscall overhead }
+  if LCommitSize < COMMIT_CHUNK_SIZE then
+    LCommitSize := COMMIT_CHUNK_SIZE;
 
   if (FCommittedSize + LCommitSize) > FReservedSize then
-    Exit;
+  begin
+    { Fallback: try exact size if chunk exceeds reservation }
+    LCommitSize := (aSize + MEM_PAGE_SIZE - 1) and not (MEM_PAGE_SIZE - 1);
+    if (FCommittedSize + LCommitSize) > FReservedSize then
+      Exit;
+  end;
 
   LCommitPtr := PByte(PtrUInt(FReservedBase) + FCommittedSize);
   if not platform_virtual_commit(LCommitPtr, LCommitSize) then
@@ -238,8 +251,13 @@ begin
     Exit(LMap.Addr);
   end;
 
-  LMask := PtrUInt(FAlignment - 1);
-  LAligned := (PtrUInt(FFrontPtr) + LMask) and not LMask;
+  { Fast path: default alignment (already guaranteed aligned by Init) }
+  LAligned := PtrUInt(FFrontPtr);
+  if FAlignment > SizeOf(Pointer) then
+  begin
+    LMask := PtrUInt(FAlignment - 1);
+    LAligned := (LAligned + LMask) and not LMask;
+  end;
 
   LNeedCommit := (LAligned + PtrUInt(aSize)) - PtrUInt(FReservedBase);
   if LNeedCommit > FCommittedSize then
