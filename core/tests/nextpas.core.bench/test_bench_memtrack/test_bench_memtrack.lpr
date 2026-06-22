@@ -8,6 +8,7 @@ uses
   cthreads,
   {$endif}
   nextpas.core.math.scalar,
+  nextpas.core.system.classes,
   nextpas.core.bench.memtrack,
   nextpas.core.bench.parallel;
 
@@ -218,6 +219,116 @@ begin
     GParallelTracker.RecordFree(1);
 end;
 
+type
+  PMemoryTracker = ^TMemoryTracker;
+
+  TAllocThread = class(TThread)
+  private
+    FTracker: PMemoryTracker;
+    FBlockPtr: PPointer;
+    FCount: Integer;
+    FBlockSize: Integer;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(ATracker: PMemoryTracker; ABlockPtr: PPointer;
+      ACount, ABlockSize: Integer);
+  end;
+
+constructor TAllocThread.Create(ATracker: PMemoryTracker; ABlockPtr: PPointer;
+  ACount, ABlockSize: Integer);
+begin
+  inherited Create(True);
+  FreeOnTerminate := False;
+  FTracker := ATracker;
+  FBlockPtr := ABlockPtr;
+  FCount := ACount;
+  FBlockSize := ABlockSize;
+end;
+
+procedure TAllocThread.Execute;
+var
+  I: Integer;
+begin
+  for I := 0 to FCount - 1 do
+  begin
+    FBlockPtr[I] := GetMem(FBlockSize);
+    FTracker^.RecordAlloc(FBlockSize);
+  end;
+end;
+
+procedure ParallelAllocBlocks(ATracker: PMemoryTracker;
+  ABlocks: array of Pointer; AThreadCount, AAllocsPerThread, ABlockSize: Integer);
+var
+  LThreads: array of TAllocThread;
+  LThread: Integer;
+begin
+  SetLength(LThreads, AThreadCount);
+  for LThread := 0 to AThreadCount - 1 do
+    LThreads[LThread] := TAllocThread.Create(ATracker,
+      PPointer(ABlocks[LThread]), AAllocsPerThread, ABlockSize);
+
+  for LThread := 0 to AThreadCount - 1 do
+    LThreads[LThread].Start;
+
+  for LThread := 0 to AThreadCount - 1 do
+  begin
+    LThreads[LThread].WaitFor;
+    LThreads[LThread].Free;
+  end;
+end;
+
+procedure TestMultiThreadPeakTracking;
+const
+  THREAD_COUNT = 4;
+  ALLOCS_PER_THREAD = 100;
+  BLOCK_SIZE = 1024;
+var
+  LTracker: TMemoryTracker;
+  LStats: TMemoryStats;
+  LBlocks: array[0..3] of array of Pointer;
+  LArgs: array[0..3] of Pointer;
+  LThread, LAlloc: Integer;
+begin
+  WriteLn('TestMultiThreadPeakTracking:');
+
+  LTracker := TMemoryTracker.Create(True);
+  LTracker.Reset;
+
+  // Allocate storage for thread blocks
+  for LThread := 0 to THREAD_COUNT - 1 do
+  begin
+    SetLength(LBlocks[LThread], ALLOCS_PER_THREAD);
+    LArgs[LThread] := @LBlocks[LThread][0];
+  end;
+
+  // Spawn 4 threads, each allocating 100 blocks of 1024 bytes
+  ParallelAllocBlocks(@LTracker, LArgs, THREAD_COUNT, ALLOCS_PER_THREAD, BLOCK_SIZE);
+
+  // Verify totals after all allocs
+  LStats := LTracker.GetStats;
+  Check(LStats.AllocCount = THREAD_COUNT * ALLOCS_PER_THREAD, 'AllocCount = 400');
+  Check(LStats.AllocBytes = THREAD_COUNT * ALLOCS_PER_THREAD * BLOCK_SIZE, 'AllocBytes = 400*1024');
+
+  // Free all blocks from main thread
+  for LThread := 0 to THREAD_COUNT - 1 do
+    for LAlloc := 0 to ALLOCS_PER_THREAD - 1 do
+    begin
+      FreeMem(LBlocks[LThread][LAlloc]);
+      LTracker.RecordFree(BLOCK_SIZE);
+    end;
+
+  LStats := LTracker.GetStats;
+
+  // Key invariant: Peak was captured and is not underestimated
+  Check(LStats.PeakAllocs >= LStats.CurrentAllocs,
+    'PeakAllocs >= CurrentAllocs (peak captured)');
+  Check(LStats.PeakAllocs > 0, 'PeakAllocs > 0');
+  Check(LStats.PeakBytes > 0, 'PeakBytes > 0');
+  Check(LStats.CurrentAllocs = 0, 'CurrentAllocs = 0 after freeing all');
+  Check(LStats.CurrentBytes = 0, 'CurrentBytes = 0 after freeing all');
+end;
+
 procedure Test_ParallelThreadSafety;
 const
   THREAD_COUNT = 8;
@@ -263,6 +374,7 @@ begin
   Test_BytesPerOp;
   Test_AllocsPerOp;
   Test_ParallelThreadSafety;
+  TestMultiThreadPeakTracking;
 end;
 
 begin
