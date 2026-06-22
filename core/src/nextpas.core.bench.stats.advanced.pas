@@ -133,7 +133,7 @@ type
     {**
      * 正态性启发式 (Shapiro-Wilk-like 简化版)
      *}
-    function TestNormalityHeuristic: TNormalityTest;
+    function TestNormalityByMoments: TNormalityTest;
 
     {**
      * 比较两个数据集 (Welch's t-style heuristic)
@@ -559,7 +559,7 @@ begin
   Result.Level := ALevel;
 end;
 
-function TAdvancedStats.TestNormalityHeuristic: TNormalityTest;
+function TAdvancedStats.TestNormalityByMoments: TNormalityTest;
 var
   LCount: Integer;
   LNormalityScore: Double;
@@ -582,7 +582,7 @@ begin
   LNormalityScore := 1.0 - (Abs(Skewness) + Abs(Kurtosis)) / 2;
 
   Result.TestStatistic := LNormalityScore;
-  Result.Method := 'Simplified heuristic (skewness+kurtosis)';
+  Result.Method := 'Moments-based heuristic (skewness+kurtosis)';
 
   // 简化的决策规则
   if LNormalityScore > 0.8 then

@@ -249,7 +249,7 @@ begin
   // Normal-like data
   LData := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0]);
   LStats := TAdvancedStats.Create(LData);
-  LResult := LStats.TestNormalityHeuristic;
+  LResult := LStats.TestNormalityByMoments;
 
   // Just check it returns a valid result
   Check(LResult.ApproximatePValue > 0, 'ApproximatePValue > 0');
