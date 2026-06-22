@@ -26,7 +26,7 @@ uses
   {$ELSE}
   Sockets,
   {$ENDIF}
-  nextpas.core.exception, nextpas.core.text.conv, nextpas.core.sync, DateUtils,
+  nextpas.core.exception, nextpas.core.text.conv, nextpas.core.sync, nextpas.core.time,
   nextpas.core.io.intf,
   nextpas.core.io.stream_adapter,
   nextpas.core.tls.base,
@@ -297,7 +297,7 @@ constructor TWinSSLSession.Create;
 begin
   inherited Create;
   FID := '';
-  FCreationTime := Now;
+  FCreationTime := DateTimeNow;
   FTimeout := SSL_DEFAULT_SESSION_TIMEOUT;
   FProtocolVersion := sslProtocolTLS12;
   FCipherName := '';
@@ -413,7 +413,7 @@ end;
 
 function TWinSSLSession.IsValid: Boolean;
 begin
-  Result := (FID <> '') and ((Now - FCreationTime) * 86400 < FTimeout);
+  Result := (FID <> '') and ((DateTimeNow - FCreationTime) * 86400 < FTimeout);
 end;
 
 function TWinSSLSession.IsResumable: Boolean;
@@ -1956,7 +1956,7 @@ begin
   LSession := TWinSSLSession.Create;
   UpdateSessionReuseTruthFromContext(LSessionID);
   if LSessionID = '' then
-    LSessionID := FormatDateTime('yyyymmddhhnnsszzz', Now);
+    LSessionID := FormatDateTime('%Y%m%d%H%M%S%z', DateTimeNow);
   LSession.SetSessionMetadata(LSessionID, DoGetProtocolVersion,
     DoGetCipherName, FSessionReused);
 
