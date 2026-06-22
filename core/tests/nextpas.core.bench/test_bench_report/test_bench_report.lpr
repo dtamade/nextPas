@@ -433,7 +433,7 @@ begin
   WriteLn('TestFormatTime:');
 
   // 测试时间格式化
-  Check(GGenerator.FormatTime(1000.0) = '1.00 µs', 'FormatTime 1µs');
+  Check(GGenerator.FormatTime(1000.0) = '1.00 us', 'FormatTime 1us');
   Check(GGenerator.FormatTime(1000000.0) = '1.00 ms', 'FormatTime 1ms');
   Check(GGenerator.FormatTime(1000000000.0) = '1.000 s', 'FormatTime 1s');
   Check(GGenerator.FormatTime(500.0) = '500.0 ns', 'FormatTime 500ns');
