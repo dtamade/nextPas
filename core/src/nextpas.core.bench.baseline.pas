@@ -17,6 +17,7 @@ uses
   nextpas.core.platform.time,
   nextpas.core.fs.util,
   nextpas.core.bench.base,
+  nextpas.core.bench.intf,
   nextpas.core.json,
   nextpas.core.json.writer,
   nextpas.core.text.builder;
@@ -206,7 +207,7 @@ begin
   if LIdx >= 0 then
     Result := FBaselines[LIdx]
   else
-    raise Exception.CreateFmt('Baseline not found: %s', [AName]);
+    raise EBenchBaselineNotFound.CreateFmt('Baseline not found: %s', [AName]);
 end;
 
 function TBaselineManager.GetAllBaselines: TBaselineArray;

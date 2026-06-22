@@ -8,7 +8,8 @@ uses
   nextpas.core.math.scalar,
   nextpas.core.platform.time,
   nextpas.core.bench.base,
-  nextpas.core.bench.baseline;
+  nextpas.core.bench.baseline,
+  nextpas.core.bench.intf;
 
 var
   GTestsPassed: Integer = 0;
@@ -125,7 +126,7 @@ begin
   try
     LManager.GetBaseline('NonExistent');
   except
-    on E: Exception do
+    on E: EBenchBaselineNotFound do
       LSuccess := True;
   end;
   Check(LSuccess, 'Raises exception for missing baseline');
