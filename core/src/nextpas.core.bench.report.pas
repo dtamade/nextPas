@@ -24,11 +24,13 @@ type
     FResults: array of TBenchResult;
     FResultCount: Integer;
     FEnvironment: TBenchEnvironment;
+    FCachedCSS: string; { PF-19: cached CSS string }
+    FCSSCached: Boolean;
 
     {** 生成 HTML 图表 }
     function GenerateChart(const AResults: array of TBenchResult): string;
 
-    {** 生成 HTML 样式 }
+    {** 生成 HTML 样式 (cached) }
     function GenerateCSS: string;
 
   public
@@ -119,9 +121,17 @@ function BufferToString(const ABuf: TLineBuffer): string;
 var
   I: Integer;
   LBuilder: TStringBuilder;
+  LTotalLen: Integer;
 begin
   if ABuf.Count = 0 then Exit('');
-  LBuilder.Init(ABuf.Count * 80);
+
+  // PF-20: estimate actual content size instead of count * 80
+  LTotalLen := 0;
+  for I := 0 to ABuf.Count - 1 do
+    Inc(LTotalLen, Length(ABuf.Lines[I]));
+  Inc(LTotalLen, ABuf.Count * Length(LineEnding));
+
+  LBuilder.Init(LTotalLen + 256);
   try
     for I := 0 to ABuf.Count - 1 do
     begin
@@ -178,6 +188,8 @@ begin
   inherited Create;
   FResultCount := 0;
   SetLength(FResults, 0);
+  FCSSCached := False;
+  FCachedCSS := '';
 end;
 
 destructor TBenchReportGenerator.Destroy;
@@ -256,7 +268,7 @@ begin
   if ANs < 1000 then
     Result := FormatNumber(ANs, 1) + ' ns'
   else if ANs < 1000000 then
-    Result := FormatNumber(ANs / 1000.0, 2) + ' us'
+    Result := FormatNumber(ANs / 1000.0, 2) + ' µs' { ST-19: Unicode micro sign }
   else if ANs < 1000000000 then
     Result := FormatNumber(ANs / 1000000.0, 2) + ' ms'
   else
@@ -617,7 +629,10 @@ end;
 
 function TBenchReportGenerator.GenerateCSS: string;
 begin
-  Result :=
+  // PF-19: cache CSS since it's static (doesn't depend on results)
+  if FCSSCached then
+    Exit(FCachedCSS);
+  FCachedCSS :=
     '<style>' + LineEnding +
     '  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 20px; }' + LineEnding +
     '  h1 { color: #333; }' + LineEnding +
@@ -633,6 +648,8 @@ begin
     '  .chart-label { font: 11px sans-serif; fill: #27403a; }' + LineEnding +
     '  .chart-value { font: 11px sans-serif; fill: #5b6470; }' + LineEnding +
     '</style>';
+  FCSSCached := True;
+  Result := FCachedCSS;
 end;
 
 function TBenchReportGenerator.ToHTML: string;
