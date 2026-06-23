@@ -288,7 +288,8 @@ begin
   CheckContains(LXml, 'failures="1"');
   CheckContains(LXml, '<testsuite name="suite1"');
   CheckContains(LXml, '<testcase name="test_a"');
-  CheckContains(LXml, '<failure message="expected X"');
+  CheckContains(LXml, 'time="');
+  CheckContains(LXml, '<failure type="AssertionFailure" message="expected X"');
 end;
 
 procedure TestJUnitXMLMultipleSuites;
@@ -414,7 +415,7 @@ begin
   LResults[0].Results[0].Message := 'segfault';
 
   LXml := JUnitXML(LResults);
-  CheckContains(LXml, '<failure message="segfault"');
+  CheckContains(LXml, '<failure type="Error" message="segfault"');
 end;
 
 function MakeTempJUnitPath: string;

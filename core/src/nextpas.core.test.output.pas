@@ -372,12 +372,20 @@ begin
       for J := 0 to High(LRunResult.Results) do
       begin
         LTestResult := LRunResult.Results[J];
-        LSb.AppendStr('    <testcase name="' + XmlEscape(LTestResult.Name) + '"');
+        LSb.AppendStr('    <testcase name="' + XmlEscape(LTestResult.Name) +
+          '" time="' + Format('%.3f', [LTestResult.Duration / 1000.0]) + '"');
         case LTestResult.Status of
-          tsFailed, tsError:
+          tsFailed:
             begin
               LSb.AppendStr('>' + LineEnding);
-              LSb.AppendStr('      <failure message="' +
+              LSb.AppendStr('      <failure type="AssertionFailure" message="' +
+                XmlEscape(LTestResult.Message) + '"/>' + LineEnding);
+              LSb.AppendStr('    </testcase>' + LineEnding);
+            end;
+          tsError:
+            begin
+              LSb.AppendStr('>' + LineEnding);
+              LSb.AppendStr('      <failure type="Error" message="' +
                 XmlEscape(LTestResult.Message) + '"/>' + LineEnding);
               LSb.AppendStr('    </testcase>' + LineEnding);
             end;
