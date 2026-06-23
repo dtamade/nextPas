@@ -1055,6 +1055,33 @@ begin
   Check(LResult.Name = '', 'TryGetByName non-existent entry returns default result');
 end;
 
+{ === TG-11: GetAll Order Consistency === }
+
+procedure TestTBenchResults_GetAllOrder;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+  LAll: TBenchResultArray;
+begin
+  WriteLn('TestTBenchResults_GetAllOrder:');
+
+  LSuite := CreateFastSuite('GetAllOrderSuite');
+  LSuite.Add('Alpha', @BenchFast);
+  LSuite.Add('Beta', @BenchMedium);
+  LSuite.Add('Gamma', @BenchFast);
+
+  LResults := LSuite.Run;
+  LAll := LResults.GetAll;
+
+  Check(Length(LAll) = 3, 'GetAll returns 3 results');
+  Check(LAll[0].Name = 'Alpha', 'GetAll[0] = Alpha (insertion order)');
+  Check(LAll[1].Name = 'Beta', 'GetAll[1] = Beta (insertion order)');
+  Check(LAll[2].Name = 'Gamma', 'GetAll[2] = Gamma (insertion order)');
+  Check(LAll[0].Executed, 'GetAll[0] is executed');
+  Check(LAll[1].Executed, 'GetAll[1] is executed');
+  Check(LAll[2].Executed, 'GetAll[2] is executed');
+end;
+
 begin
   WriteLn('=== nextpas.core.bench Integration Tests ===');
   WriteLn;
@@ -1121,6 +1148,9 @@ begin
     TestSaveErrorHandling;
     WriteLn;
     TestTBenchResults_TryGetByName;
+    WriteLn;
+    WriteLn('=== GetAll Order Consistency (TG-11) ===');
+    TestTBenchResults_GetAllOrder;
   finally
     GParallelLock.Free;
   end;

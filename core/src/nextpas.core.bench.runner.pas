@@ -22,6 +22,7 @@ type
     FBytesPerOp: Int64;
     FAllocsPerOp: Int64;
     FStartNs: UInt64;
+    FElapsedNs: UInt64;
     FSkipped: Boolean;
     FSkipReason: string;
 
@@ -45,6 +46,10 @@ type
     function IsSkipped: Boolean;
     function GetSkipReason: string;
     function GetStartNs: UInt64;
+
+    {** 记录并获取经过的时间（纳秒）—— CR-10: 并行桥接逐线程计时 }
+    procedure RecordElapsed;
+    function GetElapsedNs: UInt64;
   end;
 
   {** 基准执行器 }
@@ -157,6 +162,10 @@ type
 var
   GBridgeData: TParallelBridgeData;
 
+{** 并行基准桥接函数
+ *
+ *  CR-10 修复：记录线程起始/结束时间（通过 RecordElapsed），
+ *  并传播到 FParallelContexts 以便 RunOne 计算精确的 NsPerOp。 }
 procedure ParallelBenchBridge(AThreadId: Integer; AIterations: Int64);
 var
   LContext: IBenchContext;
@@ -182,6 +191,9 @@ begin
       Break;
   end;
 
+  // CR-10: Record wall-clock elapsed time for this thread
+  LContextObj.RecordElapsed;
+
   if LRunner.FParallelContextsInitialized and
      (AThreadId >= 0) and
      (AThreadId < Length(LRunner.FParallelContexts)) then
@@ -192,6 +204,8 @@ begin
     (LRunner.FParallelContexts[AThreadId] as TBenchContext).SetAllocs(LContextObj.GetAllocsPerOp);
     if LContextObj.IsSkipped then
       (LRunner.FParallelContexts[AThreadId] as TBenchContext).Skip(LContextObj.GetSkipReason);
+    // CR-10: Propagate elapsed ns from bridge context to parallel context
+    (LRunner.FParallelContexts[AThreadId] as TBenchContext).FElapsedNs := LContextObj.GetElapsedNs;
   end;
 end;
 
@@ -204,6 +218,7 @@ begin
   FBytesPerOp := 0;
   FAllocsPerOp := 0;
   FStartNs := platform_monotonic_ns;
+  FElapsedNs := 0;
   FSkipped := False;
   FSkipReason := '';
 end;
@@ -260,6 +275,7 @@ begin
   FBytesPerOp := 0;
   FAllocsPerOp := 0;
   FStartNs := platform_monotonic_ns;
+  FElapsedNs := 0;
   FSkipped := False;
   FSkipReason := '';
 end;
@@ -287,6 +303,22 @@ end;
 function TBenchContext.GetStartNs: UInt64;
 begin
   Result := FStartNs;
+end;
+
+procedure TBenchContext.RecordElapsed;
+var
+  LCurrentNs: UInt64;
+begin
+  LCurrentNs := platform_monotonic_ns;
+  if LCurrentNs >= FStartNs then
+    FElapsedNs := LCurrentNs - FStartNs
+  else
+    FElapsedNs := 0;
+end;
+
+function TBenchContext.GetElapsedNs: UInt64;
+begin
+  Result := FElapsedNs;
 end;
 
 { TBenchRunner }
@@ -401,6 +433,7 @@ var
   LMemoryStats: TMemoryStats;
   LParallelResult: TParallelBenchResult;
   LPerThreadIterations: Int64;
+  LMaxThreadElapsedNs: UInt64;
   I: Int64;
 begin
   Result := Default(TBenchResult);
@@ -410,6 +443,10 @@ begin
   if AIters <= 0 then
     Exit;
 
+  { CR-13 Known Limitation: Loop path (TBenchLoopFunc) does not support IBenchContext.
+  *  TBenchLoopFunc takes only (AIters: Int64) — no context parameter is available.
+  *  Therefore, loop benchmarks cannot use SetBytes/SetAllocs/Skip/ResetTimer.
+  *  Use the regular TBenchFunc path if context operations are needed. }
   if AEntry.IsLoop and Assigned(AEntry.LoopFunc) then
   begin
     LContext := TBenchContext.Create;
@@ -484,11 +521,14 @@ begin
       Result.Iterations := LPerThreadIterations * AEntry.ParallelThreads;
       Result.TotalNs := LParallelResult.TotalNs;
 
-      // 从所有线程聚合 BytesPerOp, AllocsPerOp
+      // CR-10: 从并行上下文聚合逐线程耗时，使用最大值
+      LMaxThreadElapsedNs := 0;
       for I := 0 to High(FParallelContexts) do
       begin
         if Assigned(FParallelContexts[I]) then
         begin
+          if (FParallelContexts[I] as TBenchContext).GetElapsedNs > LMaxThreadElapsedNs then
+            LMaxThreadElapsedNs := (FParallelContexts[I] as TBenchContext).GetElapsedNs;
           if (FParallelContexts[I] as TBenchContext).GetBytesPerOp > Result.BytesPerOp then
             Result.BytesPerOp := (FParallelContexts[I] as TBenchContext).GetBytesPerOp;
           if (FParallelContexts[I] as TBenchContext).GetAllocsPerOp > Result.AllocsPerOp then

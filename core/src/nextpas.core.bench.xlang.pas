@@ -322,6 +322,12 @@ begin
   else if LUnit = 'ms' then LMultiplier := 1000000
   else if LUnit = 's' then LMultiplier := 1000000000;
 
+  // Validate mean > 0 after unit conversion (TG-15)
+  // A zero or negative mean indicates invalid/meaningless benchmark data.
+  // Raising EParseError causes the output parser to count it as skipped.
+  if LMean * LMultiplier <= 0 then
+    raise EParseError.CreateFmt('Rust bench mean is zero or negative: %s', [ALine]);
+
   Result.Name := LName;
   Result.NsPerOp := LMean * LMultiplier;
   Result.Median := Result.NsPerOp;

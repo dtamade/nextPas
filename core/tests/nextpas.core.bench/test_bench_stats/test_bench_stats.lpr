@@ -278,6 +278,110 @@ begin
   CheckApprox(LData[4], 5.0, 0.001, 'Sort[4] = 5.0');
 end;
 
+{ === TG-03: SortDoubleArray Edge Cases === }
+
+procedure TestSort_EmptyArray;
+var
+  LData: TDoubleArray;
+  LNoCrash: Boolean;
+begin
+  WriteLn('TestSort_EmptyArray:');
+  LNoCrash := True;
+  SetLength(LData, 0);
+  try
+    GAnalyzer.Sort(LData);
+  except
+    LNoCrash := False;
+  end;
+  Check(LNoCrash, 'Sort empty array does not crash');
+  Check(Length(LData) = 0, 'Empty array remains length 0');
+end;
+
+procedure TestSort_SingleElement;
+var
+  LData: TDoubleArray;
+begin
+  WriteLn('TestSort_SingleElement:');
+  SetLength(LData, 1);
+  LData[0] := 42.0;
+  GAnalyzer.Sort(LData);
+  CheckApprox(LData[0], 42.0, 0.001, 'Single element unchanged');
+end;
+
+procedure TestSort_ReverseOrder;
+var
+  LData: TDoubleArray;
+  i: Integer;
+begin
+  WriteLn('TestSort_ReverseOrder:');
+  SetLength(LData, 10);
+  for i := 0 to 9 do
+    LData[i] := 10.0 - i;
+  GAnalyzer.Sort(LData);
+  for i := 0 to 9 do
+    CheckApprox(LData[i], i + 1, 0.001, 'ReverseSort[' + IntToStr(i) + '] = ' + IntToStr(i + 1));
+end;
+
+procedure TestSort_AllEqual;
+var
+  LData: TDoubleArray;
+  i: Integer;
+begin
+  WriteLn('TestSort_AllEqual:');
+  SetLength(LData, 10);
+  for i := 0 to 9 do
+    LData[i] := 7.0;
+  GAnalyzer.Sort(LData);
+  for i := 0 to 9 do
+    CheckApprox(LData[i], 7.0, 0.001, 'AllEqual[' + IntToStr(i) + '] = 7.0');
+end;
+
+{ === TG-04: TInvLookup Edge Cases === }
+
+procedure TestTInvLookup_KnownValues;
+begin
+  WriteLn('TestTInvLookup_KnownValues:');
+
+  { df=10, p=0.05 (two-tailed 95%) => t ≈ 2.228
+    TInvLookup(10, TINV95_DATA, Z_SCORE_95) should return TINV95_DATA[9] = 2.228 }
+  CheckApprox(TInvLookup(10, TINV95_DATA, Z_SCORE_95), 2.228, 0.001,
+    'TInv 95% df=10 = 2.228');
+
+  { df=5, p=0.05 => t ≈ 2.571 }
+  CheckApprox(TInvLookup(5, TINV95_DATA, Z_SCORE_95), 2.571, 0.001,
+    'TInv 95% df=5 = 2.571');
+
+  { df=1, p=0.05 => t ≈ 12.706 }
+  CheckApprox(TInvLookup(1, TINV95_DATA, Z_SCORE_95), 12.706, 0.001,
+    'TInv 95% df=1 = 12.706');
+
+  { df=10, p=0.01 (two-tailed 99%) => t ≈ 3.169 }
+  CheckApprox(TInvLookup(10, TINV99_DATA, Z_SCORE_99), 3.169, 0.001,
+    'TInv 99% df=10 = 3.169');
+end;
+
+procedure TestTInvLookup_ExtremeDf;
+begin
+  WriteLn('TestTInvLookup_ExtremeDf:');
+
+  { df < 1 should clamp to table[0] }
+  CheckApprox(TInvLookup(0.5, TINV95_DATA, Z_SCORE_95), 12.706, 0.001,
+    'TInv df=0.5 clamps to df=1');
+
+  CheckApprox(TInvLookup(0.1, TINV95_DATA, Z_SCORE_95), 12.706, 0.001,
+    'TInv df=0.1 clamps to df=1');
+
+  { df >= 30 should converge to z-score }
+  CheckApprox(TInvLookup(30, TINV95_DATA, Z_SCORE_95), Z_SCORE_95, 0.001,
+    'TInv df=30 = z-score 1.96');
+
+  CheckApprox(TInvLookup(100, TINV95_DATA, Z_SCORE_95), Z_SCORE_95, 0.001,
+    'TInv df=100 = z-score 1.96');
+
+  CheckApprox(TInvLookup(1000, TINV95_DATA, Z_SCORE_95), Z_SCORE_95, 0.001,
+    'TInv df=1000 = z-score 1.96');
+end;
+
 { === TG-05: NaN/Infinity Input Tests === }
 { These verify that NaN/Infinity inputs do not cause segfaults or infinite loops.
   Raising a managed exception is acceptable; crashing is not. }
@@ -361,6 +465,14 @@ begin
   TestTInvLookup; WriteLn;
   TestIsNormal; WriteLn;
   TestSort; WriteLn;
+  WriteLn('=== SortDoubleArray Edge Cases (TG-03) ===');
+  TestSort_EmptyArray; WriteLn;
+  TestSort_SingleElement; WriteLn;
+  TestSort_ReverseOrder; WriteLn;
+  TestSort_AllEqual; WriteLn;
+  WriteLn('=== TInvLookup Edge Cases (TG-04) ===');
+  TestTInvLookup_KnownValues; WriteLn;
+  TestTInvLookup_ExtremeDf; WriteLn;
   WriteLn('=== NaN/Infinity Input Tests (TG-05) ===');
   TestMean_NaNInfinity; WriteLn;
   TestStdDev_NaNInfinity; WriteLn;

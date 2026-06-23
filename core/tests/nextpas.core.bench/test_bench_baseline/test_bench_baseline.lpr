@@ -469,6 +469,49 @@ begin
   Check(not LManager.HasBaseline('anything'), 'No baselines loaded after failed LoadFromFile');
 end;
 
+{ === TG-13: CompareAllWithBaselines comparison field verification === }
+
+procedure Test_CompareAllWithBaselines_Fields;
+var
+  LManager: TBaselineManager;
+  LResults: TBenchResultArray;
+  LComparisons: TBaselineComparisonArray;
+begin
+  WriteLn('Test_CompareAllWithBaselines_Fields:');
+  LManager := TBaselineManager.Create(1.1);
+
+  LManager.AddBaseline(CreateTestBaseline('Sort', 1000));
+  LManager.AddBaseline(CreateTestBaseline('Hash', 2000));
+  LManager.AddBaseline(CreateTestBaseline('Fast', 500));
+
+  SetLength(LResults, 3);
+  LResults[0] := CreateTestResult('Sort', 1200);  // 20% slower => regression
+  LResults[1] := CreateTestResult('Hash', 1800);   // 10% faster => improvement
+  LResults[2] := CreateTestResult('Fast', 510);    // 2% slower => no regression, no improvement
+
+  LComparisons := LManager.CompareAllWithBaselines(LResults);
+
+  Check(Length(LComparisons) = 3, 'TG-13: Found 3 comparisons');
+
+  // Sort: 1200 / 1000 = 1.2, regression (> 1.1)
+  Check(Abs(LComparisons[0].Ratio - 1.2) < 0.001, 'Sort Ratio = 1.2');
+  Check(LComparisons[0].IsRegression, 'Sort IsRegression = true');
+  Check(not LComparisons[0].IsImprovement, 'Sort IsImprovement = false');
+  Check(Abs(LComparisons[0].PercentChange - 20.0) < 0.1, 'Sort PercentChange = 20%');
+
+  // Hash: 1800 / 2000 = 0.9, improvement (< 1/1.1 = 0.909...)
+  Check(Abs(LComparisons[1].Ratio - 0.9) < 0.001, 'Hash Ratio = 0.9');
+  Check(not LComparisons[1].IsRegression, 'Hash IsRegression = false');
+  Check(LComparisons[1].IsImprovement, 'Hash IsImprovement = true');
+  Check(Abs(LComparisons[1].PercentChange - (-10.0)) < 0.1, 'Hash PercentChange = -10%');
+
+  // Fast: 510 / 500 = 1.02, no regression, no improvement
+  Check(Abs(LComparisons[2].Ratio - 1.02) < 0.001, 'Fast Ratio = 1.02');
+  Check(not LComparisons[2].IsRegression, 'Fast IsRegression = false');
+  Check(not LComparisons[2].IsImprovement, 'Fast IsImprovement = false');
+  Check(Abs(LComparisons[2].PercentChange - 2.0) < 0.1, 'Fast PercentChange = 2%');
+end;
+
 { === Run All Tests === }
 
 procedure RunAllTests;
@@ -497,6 +540,9 @@ begin
   WriteLn('');
   WriteLn('=== LoadFromFile Error Tests (TG-14) ===');
   Test_LoadFromFile_NotFound;
+  WriteLn('');
+  WriteLn('=== CompareAllWithBaselines Field Verification (TG-13) ===');
+  Test_CompareAllWithBaselines_Fields;
 end;
 
 begin

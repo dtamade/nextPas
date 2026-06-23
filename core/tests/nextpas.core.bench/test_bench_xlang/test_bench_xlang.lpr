@@ -432,6 +432,41 @@ begin
   Check(Length(LResults) = 0, 'FPC empty input returns empty array');
 end;
 
+{ === TG-15: Rust Parser mean=0 Validation === }
+
+procedure Test_ParseRustBenchLine_MeanZero;
+var
+  LSuccess: Boolean;
+begin
+  WriteLn('Test_ParseRustBenchLine_MeanZero:');
+  LSuccess := False;
+  try
+    ParseRustBenchLine('BenchmarkBad    time:   [0 ns 0 ns 0 ns]');
+  except
+    on E: EParseError do
+      LSuccess := True;
+  end;
+  Check(LSuccess, 'Rust bench line with mean=0 raises EParseError');
+end;
+
+procedure Test_ParseRustBenchOutput_MeanZeroSkipped;
+var
+  LResults: TBenchResultArray;
+  LSkipped: Integer;
+begin
+  WriteLn('Test_ParseRustBenchOutput_MeanZeroSkipped:');
+  LResults := ParseRustBenchOutput(
+    'BenchmarkGood    time:   [100 ns 105 ns 110 ns]' + #10 +
+    'BenchmarkZero    time:   [0 ns 0 ns 0 ns]' + #10 +
+    'BenchmarkGood2   time:   [200 ns 205 ns 210 ns]' + #10
+  );
+  LSkipped := GetLastParseSkippedCount;
+  Check(Length(LResults) = 2, 'Rust mean=0 line is excluded from results');
+  Check(LSkipped = 1, 'Rust mean=0 line counted as skipped');
+  Check(LResults[0].Name = 'BenchmarkGood', 'First valid result preserved');
+  Check(LResults[1].Name = 'BenchmarkGood2', 'Second valid result preserved');
+end;
+
 { === Run All Tests === }
 
 procedure RunAllTests;
@@ -482,6 +517,11 @@ begin
   Test_ParseGoBenchOutput_NewlineOnly;
   Test_ParseRustBenchOutput_Empty;
   Test_ParseFPCBenchOutput_Empty;
+
+  WriteLn('');
+  WriteLn('=== Rust Parser mean=0 Validation (TG-15) ===');
+  Test_ParseRustBenchLine_MeanZero;
+  Test_ParseRustBenchOutput_MeanZeroSkipped;
 end;
 
 begin

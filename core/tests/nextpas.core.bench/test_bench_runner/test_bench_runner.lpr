@@ -497,6 +497,65 @@ begin
   end;
 end;
 
+{ === TG-12: RunAll Statistics Completeness === }
+
+procedure TestRunAll_StatisticsComplete;
+var
+  LRunner: TBenchRunner;
+  LEntries: array of TBenchEntry;
+  LResults: array of TBenchResult;
+  LConfig: TBenchConfig;
+begin
+  WriteLn('TestRunAll_StatisticsComplete:');
+
+  LRunner := TBenchRunner.Create;
+  try
+    LConfig := LRunner.GetConfig;
+    LConfig.MinDurationNs := TDuration.FromMilliseconds(10).AsNanoseconds;
+    LConfig.MaxIterations := 5000;
+    LConfig.MinSamples := 5;
+    LConfig.WarmupIterations := 1;
+    LConfig.EnableMemoryTracking := False;
+    LConfig.Quiet := True;
+    LRunner.SetConfig(LConfig);
+
+    SetLength(LEntries, 2);
+    LEntries[0].Name := 'Fast';
+    LEntries[0].Func := @BenchFast;
+    LEntries[0].Condition := True;
+    LEntries[1].Name := 'Medium';
+    LEntries[1].Func := @BenchMedium;
+    LEntries[1].Condition := True;
+
+    LRunner.RunAll(LEntries);
+    LResults := LRunner.GetResults;
+
+    Check(LRunner.GetResultCount = 2, 'TG-12 result count = 2');
+
+    // Verify Fast statistics completeness
+    Check(LResults[0].StdDev > 0, 'Fast StdDev > 0');
+    Check(LResults[0].Median > 0, 'Fast Median > 0');
+    Check(LResults[0].P95 > 0, 'Fast P95 > 0');
+    Check(LResults[0].P99 > 0, 'Fast P99 > 0');
+    Check(LResults[0].SampleCount >= 5, 'Fast SampleCount >= 5');
+
+    // Verify Medium statistics completeness
+    Check(LResults[1].StdDev > 0, 'Medium StdDev > 0');
+    Check(LResults[1].Median > 0, 'Medium Median > 0');
+    Check(LResults[1].P95 > 0, 'Medium P95 > 0');
+    Check(LResults[1].P99 > 0, 'Medium P99 > 0');
+    Check(LResults[1].SampleCount >= 5, 'Medium SampleCount >= 5');
+
+    // Cross-field ordering checks
+    Check(LResults[0].Median <= LResults[0].P95, 'Fast Median <= P95');
+    Check(LResults[0].P95 <= LResults[0].P99, 'Fast P95 <= P99');
+    Check(LResults[1].Median <= LResults[1].P95, 'Medium Median <= P95');
+    Check(LResults[1].P95 <= LResults[1].P99, 'Medium P95 <= P99');
+  finally
+    LRunner.Free;
+  end;
+end;
+
 begin
   WriteLn('=== nextpas.core.bench.runner Unit Tests ===');
   WriteLn;
@@ -526,6 +585,9 @@ begin
   TestMeasureNs;
   WriteLn;
   TestClearResults;
+  WriteLn;
+  WriteLn('=== RunAll Statistics Completeness (TG-12) ===');
+  TestRunAll_StatisticsComplete;
 
   WriteLn;
   WriteLn('=== Test Summary ===');

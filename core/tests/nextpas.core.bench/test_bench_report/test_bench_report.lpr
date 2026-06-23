@@ -464,6 +464,73 @@ begin
   Check(GGenerator.EscapeHTML('hello & world') = 'hello &amp; world', 'EscapeHTML ampersand');
 end;
 
+{ === TG-09: GenerateBoxPlot Edge Cases === }
+
+procedure TestGenerateBoxPlot_EmptyData;
+var
+  LSamples: TDoubleArray;
+  LSVG: string;
+  LNoCrash: Boolean;
+begin
+  WriteLn('TestGenerateBoxPlot_EmptyData:');
+  LNoCrash := True;
+
+  SetLength(LSamples, 0);
+  try
+    LSVG := GGenerator.GenerateBoxPlot(LSamples, 'Empty');
+  except
+    LNoCrash := False;
+  end;
+  Check(LNoCrash, 'GenerateBoxPlot with empty data does not crash');
+  Check(LSVG = '', 'GenerateBoxPlot with empty data returns empty string');
+end;
+
+procedure TestGenerateBoxPlot_SingleElement;
+var
+  LSamples: TDoubleArray;
+  LSVG: string;
+  LNoCrash: Boolean;
+begin
+  WriteLn('TestGenerateBoxPlot_SingleElement:');
+  LNoCrash := True;
+
+  SetLength(LSamples, 1);
+  LSamples[0] := 42.0;
+  try
+    LSVG := GGenerator.GenerateBoxPlot(LSamples, 'Single');
+  except
+    LNoCrash := False;
+  end;
+  Check(LNoCrash, 'GenerateBoxPlot with single element does not crash');
+  Check(Length(LSVG) > 0, 'GenerateBoxPlot with single element produces SVG');
+  CheckContains(LSVG, '<svg', 'Single element BoxPlot contains SVG');
+  CheckContains(LSVG, 'Boxplot Single', 'Single element BoxPlot contains name');
+end;
+
+procedure TestGenerateBoxPlot_ConstantData;
+var
+  LSamples: TDoubleArray;
+  LSVG: string;
+  LNoCrash: Boolean;
+  i: Integer;
+begin
+  WriteLn('TestGenerateBoxPlot_ConstantData:');
+  LNoCrash := True;
+
+  SetLength(LSamples, 10);
+  for i := 0 to 9 do
+    LSamples[i] := 5.0;
+  try
+    LSVG := GGenerator.GenerateBoxPlot(LSamples, 'Constant');
+  except
+    LNoCrash := False;
+  end;
+  Check(LNoCrash, 'GenerateBoxPlot with constant data does not crash');
+  Check(Length(LSVG) > 0, 'GenerateBoxPlot with constant data produces SVG');
+  CheckContains(LSVG, '<svg', 'Constant data BoxPlot contains SVG');
+  CheckContains(LSVG, 'Boxplot Constant', 'Constant data BoxPlot contains name');
+end;
+
 { === TG-08: Empty Results Set Report Generation === }
 
 procedure Test_EmptyResults_ToJSON;
@@ -576,6 +643,13 @@ begin
     TestEscapeJSON;
     WriteLn;
     TestEscapeHTML;
+    WriteLn;
+    WriteLn('=== GenerateBoxPlot Edge Cases (TG-09) ===');
+    TestGenerateBoxPlot_EmptyData;
+    WriteLn;
+    TestGenerateBoxPlot_SingleElement;
+    WriteLn;
+    TestGenerateBoxPlot_ConstantData;
     WriteLn;
     WriteLn('=== Empty Results Set Tests (TG-08) ===');
     Test_EmptyResults_ToJSON;
