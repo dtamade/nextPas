@@ -164,6 +164,71 @@ property Alignment: SizeUInt;
 - `KeepSegments=True` 时，`Reset` 保留现有 segments
 - `KeepSegments=False` 时，`Reset` 会把多余 segments 放进 chunk cache，后续再复用
 
+## `TLocalBlockPool`
+
+`TLocalBlockPool` 是最小化的 class-based 固定块池。
+
+公开方法：
+
+```pascal
+constructor Create(const ABlockSize: SizeUInt; const ABlockCount: SizeUInt);
+function Acquire: Pointer;
+function TryAcquire(out APtr: Pointer): Boolean;
+procedure Release(const APtr: Pointer);
+procedure Reset;
+function BlockSize: SizeUInt;
+function Capacity: SizeUInt;
+function Available: SizeUInt;
+function InUse: SizeUInt;
+function IsFull: Boolean;
+function IsEmpty: Boolean;
+function Owns(const APtr: Pointer): Boolean;
+```
+
+选择建议：
+
+- 单线程、单 owner、不会跨模块暴露 pool contract：优先 `TLocalBlockPool`
+- 只需要最直接的固定块 acquire/release，不需要 interface、批量 API 或自定义对齐：优先 `TLocalBlockPool`
+
+## `IBlockPool`、`IBlockPoolBatch` 和 `TBlockPool`
+
+`TBlockPool` 是带 interface contract 的固定块池实现，public surface 比 `TLocalBlockPool` 更完整。
+
+核心 contract：
+
+```pascal
+type
+  IBlockPool = interface
+    function Acquire: Pointer;
+    function TryAcquire(out APtr: Pointer): Boolean;
+    procedure Release(APtr: Pointer);
+    procedure Reset;
+    function BlockSize: SizeUInt;
+    function Capacity: SizeUInt;
+    function Available: SizeUInt;
+    function InUse: SizeUInt;
+  end;
+
+  IBlockPoolBatch = interface(IBlockPool)
+    function AcquireN(out APtrs: array of Pointer; ACount: Integer): Integer;
+    procedure ReleaseN(const APtrs: array of Pointer; ACount: Integer);
+  end;
+```
+
+`TBlockPool` 额外提供：
+
+- `Alignment`
+- `AcquireUnchecked` / `ReleaseUnchecked`
+- `Owns`
+- `GetRange`
+- `AcquireN` / `ReleaseN`
+
+选择建议：
+
+- 需要 `IBlockPool` / `IBlockPoolBatch` 作为模块边界 contract：选 `TBlockPool`
+- 需要显式对齐、批量接口、ownership/range 诊断：选 `TBlockPool`
+- 未来要平滑切到 `TShardedBlockPool`、并发包装器或其他 interface consumer：选 `TBlockPool`
+
 ## `TVirtualArena`
 
 `TVirtualArena` 是 record-based arena，不实现 `IArena`。它直接暴露更低层、更偏性能导向的 API。

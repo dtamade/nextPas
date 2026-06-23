@@ -20,6 +20,7 @@
 | 请求/帧生命周期 | TLocalArena                    | 固定容量, 3ns, 307M ops/s   |
 | 动态增长批量    | TChunkedArena                  | Go-style chunk cache, 15ns  |
 | 多线程共享      | TArenaConcurrent               | mutex-protected IArena 包装 |
+| 单线程固定块池  | TLocalBlockPool                | class-only, 最小 surface    |
 | 固定大小块分配  | TBlockPool / TShardedBlockPool | O(1) acquire/release        |
 | Slab 分配       | TSlabPool / TSlabPoolSharded   | 页级 slab, IMemoryPool      |
 
@@ -67,6 +68,12 @@
 - Go-style chunk cache（Reset 缓存 freed segments, 最多 8 个）
 - FSegments 几何扩容
 - 支持几何/线性增长策略
+
+## BlockPool 选择指南
+
+- `TLocalBlockPool`：单线程、单 owner、调用点就在本模块内时选它。它是 class-only 固定块池，surface 最小，只保留 `Acquire/Release/Reset` 和基础容量查询。
+- `TBlockPool`：需要把固定块池作为公共 contract 暴露出去，或者需要 `IBlockPool` / `IBlockPoolBatch`、显式对齐、批量 `AcquireN/ReleaseN`、`Owns/GetRange` 之类诊断能力时选它。
+- 如果后续已经确定会走 shard/concurrent 变体，优先从 `TBlockPool` 这条接口面进入，避免先写一套 `TLocalBlockPool` 局部调用再补一层适配。
 
 ## 性能基准 (2026-06-22)
 
