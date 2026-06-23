@@ -72,9 +72,6 @@ type
 
     {** 计算标准差 }
     function StdDev(const AData: TDoubleArray): Double;
-
-    {** 排序数组 }
-    procedure Sort(var AData: TDoubleArray);
   end;
 
 implementation
@@ -439,13 +436,6 @@ begin
   // 简化的判断阈值（完整实现需要查表）
   // W 接近 1 表示正态分布
   Result := LW > 0.9;
-end;
-
-{** DS-07: Convenience wrapper over SortDoubleArray for IBenchStatsAnalyzer interface.
- *  Kept so callers that only have the interface don't need to import base.pas directly. }
-procedure TBenchStatsAnalyzer.Sort(var AData: TDoubleArray);
-begin
-  SortDoubleArray(AData);
 end;
 
 end.

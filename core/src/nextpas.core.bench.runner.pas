@@ -85,6 +85,14 @@ type
     function ExecuteEntry(const AEntry: TBenchEntry; AIters: Int64;
       ATrackMemory: Boolean): TBenchResult;
 
+    {** PF-11: ExecuteEntry 拆分为三个独立路径 }
+    function ExecuteLoopEntry(const AEntry: TBenchEntry; AIters: Int64;
+      ATrackMemory: Boolean): TBenchResult;
+    function ExecuteParallelEntry(const AEntry: TBenchEntry; AIters: Int64;
+      ATrackMemory: Boolean): TBenchResult;
+    function ExecuteSequentialEntry(const AEntry: TBenchEntry; AIters: Int64;
+      ATrackMemory: Boolean): TBenchResult;
+
     {** 校准条目迭代次数 }
     function CalibrateEntryIterations(const AEntry: TBenchEntry): Int64;
 
@@ -471,14 +479,6 @@ end;
 
 function TBenchRunner.ExecuteEntry(const AEntry: TBenchEntry; AIters: Int64;
   ATrackMemory: Boolean): TBenchResult;
-var
-  LContext: IBenchContext;
-  LContextObj: TBenchContext;
-  LMemoryStats: TMemoryStats;
-  LParallelResult: TParallelBenchResult;
-  LPerThreadIterations: Int64;
-  LMaxThreadElapsedNs: UInt64;
-  I: Int64;
 begin
   Result := Default(TBenchResult);
   Result.Executed := True;
@@ -492,118 +492,150 @@ begin
   *  Therefore, loop benchmarks cannot use SetBytes/SetAllocs/Skip/ResetTimer.
   *  Use the regular TBenchFunc path if context operations are needed. }
   if AEntry.IsLoop and Assigned(AEntry.LoopFunc) then
-  begin
-    LContext := TBenchContext.Create;
-    LContextObj := LContext as TBenchContext;
-    LContextObj.SetName(AEntry.Name); { ST-03 }
-    try
-      if ATrackMemory then
-      begin
-        EnableGlobalMemoryTracking;
-        ResetGlobalMemoryTracker;
-      end;
-      try
-        LContextObj.Reset;
-        LContextObj.SetIterations(AIters);
-        AEntry.LoopFunc(AIters);
+    Result := ExecuteLoopEntry(AEntry, AIters, ATrackMemory)
+  else if AEntry.EnableParallel and (AEntry.ParallelThreads > 1) then
+    Result := ExecuteParallelEntry(AEntry, AIters, ATrackMemory)
+  else
+    Result := ExecuteSequentialEntry(AEntry, AIters, ATrackMemory);
+end;
 
-        Result.Iterations := AIters;
-        Result.TotalNs := platform_monotonic_ns - LContextObj.GetStartNs;
-        Result.Skipped := LContextObj.IsSkipped;
-        Result.SkipReason := LContextObj.GetSkipReason;
+function TBenchRunner.ExecuteLoopEntry(const AEntry: TBenchEntry; AIters: Int64;
+  ATrackMemory: Boolean): TBenchResult;
+var
+  LContext: IBenchContext;
+  LContextObj: TBenchContext;
+  LMemoryStats: TMemoryStats;
+begin
+  Result := Default(TBenchResult);
+  Result.Executed := True;
+  Result.Name := AEntry.Name;
 
-        if ATrackMemory then
-        begin
-          LMemoryStats := GetGlobalMemoryStats;
-          if Result.Iterations > 0 then
-          begin
-            // PF-12: unconditional assignment (BytesPerOp/AllocsPerOp always 0 at this point)
-            Result.BytesPerOp := Ceil(LMemoryStats.AllocBytes / Result.Iterations);
-            Result.AllocsPerOp := Ceil(LMemoryStats.AllocCount / Result.Iterations);
-          end;
-        end;
-      finally
-        if ATrackMemory then
-          DisableGlobalMemoryTracking;
-      end;
-    finally
-      LContext := nil;
-    end;
-    Exit;
-  end;
-
-  if AEntry.EnableParallel and (AEntry.ParallelThreads > 1) then
-  begin
-    // 并行基准自动跳过内存跟踪
-    if ATrackMemory and (not FConfig.Quiet) then
-      WriteLn('  WARNING: Memory tracking disabled for parallel benchmark "', AEntry.Name, '"');
-    ATrackMemory := False;
-
-    LPerThreadIterations := AIters div AEntry.ParallelThreads;
-    if (AIters mod AEntry.ParallelThreads) <> 0 then
-      Inc(LPerThreadIterations);
-    if LPerThreadIterations < 1 then
-      LPerThreadIterations := 1;
-
-    // 初始化并行上下文收集
-    InitParallelContexts(AEntry.ParallelThreads);
-    try
-      FParallelBridgeFunc := AEntry.Func;
-      GBridgeData.Runner := Self;
-      GBridgeData.Func := FParallelBridgeFunc;
-      GBridgeData.ParamFunc := AEntry.ParamFunc;
-      GBridgeData.ParamValue := AEntry.ParamValue;
-      try
-        LParallelResult := RunParallelBench(@ParallelBenchBridge,
-          AEntry.ParallelThreads, LPerThreadIterations);
-      finally
-        GBridgeData.Func := nil;
-        GBridgeData.ParamFunc := nil;
-        GBridgeData.ParamValue := 0;
-        GBridgeData.Runner := nil;
-        FParallelBridgeFunc := nil;
-      end;
-
-      // 聚合并行上下文数据
-      Result.Iterations := LPerThreadIterations * AEntry.ParallelThreads;
-      Result.TotalNs := LParallelResult.TotalNs;
-
-      // CR-10: 从并行上下文聚合逐线程耗时，使用最大值
-      LMaxThreadElapsedNs := 0;
-      for I := 0 to High(FParallelContexts) do
-      begin
-        if Assigned(FParallelContexts[I]) then
-        begin
-          if (FParallelContexts[I] as TBenchContext).GetElapsedNs > LMaxThreadElapsedNs then
-            LMaxThreadElapsedNs := (FParallelContexts[I] as TBenchContext).GetElapsedNs;
-          if (FParallelContexts[I] as TBenchContext).GetBytesPerOp > Result.BytesPerOp then
-            Result.BytesPerOp := (FParallelContexts[I] as TBenchContext).GetBytesPerOp;
-          if (FParallelContexts[I] as TBenchContext).GetAllocsPerOp > Result.AllocsPerOp then
-            Result.AllocsPerOp := (FParallelContexts[I] as TBenchContext).GetAllocsPerOp;
-        end;
-      end;
-
-      // 检查是否有任何线程跳过了
-      for I := 0 to High(FParallelContexts) do
-      begin
-        if Assigned(FParallelContexts[I]) and (FParallelContexts[I] as TBenchContext).IsSkipped then
-        begin
-          Result.Skipped := True;
-          Result.SkipReason := (FParallelContexts[I] as TBenchContext).GetSkipReason;
-          Result.Iterations := (FParallelContexts[I] as TBenchContext).GetIterations * AEntry.ParallelThreads;
-          Break;
-        end;
-      end;
-    finally
-      FinalizeParallelContexts;
-    end;
-    Exit;
-  end;
-
-  // 通过接口创建，refcount 正确管理
   LContext := TBenchContext.Create;
   LContextObj := LContext as TBenchContext;
-  LContextObj.SetName(AEntry.Name); { ST-03 }
+  LContextObj.SetName(AEntry.Name);
+  try
+    if ATrackMemory then
+    begin
+      EnableGlobalMemoryTracking;
+      ResetGlobalMemoryTracker;
+    end;
+    try
+      LContextObj.Reset;
+      LContextObj.SetIterations(AIters);
+      AEntry.LoopFunc(AIters);
+
+      Result.Iterations := AIters;
+      Result.TotalNs := platform_monotonic_ns - LContextObj.GetStartNs;
+      Result.Skipped := LContextObj.IsSkipped;
+      Result.SkipReason := LContextObj.GetSkipReason;
+
+      if ATrackMemory then
+      begin
+        LMemoryStats := GetGlobalMemoryStats;
+        if Result.Iterations > 0 then
+        begin
+          Result.BytesPerOp := Ceil(LMemoryStats.AllocBytes / Result.Iterations);
+          Result.AllocsPerOp := Ceil(LMemoryStats.AllocCount / Result.Iterations);
+        end;
+      end;
+    finally
+      if ATrackMemory then
+        DisableGlobalMemoryTracking;
+    end;
+  finally
+    LContext := nil;
+  end;
+end;
+
+function TBenchRunner.ExecuteParallelEntry(const AEntry: TBenchEntry; AIters: Int64;
+  ATrackMemory: Boolean): TBenchResult;
+var
+  LParallelResult: TParallelBenchResult;
+  LPerThreadIterations: Int64;
+  LMaxThreadElapsedNs: UInt64;
+  I: Int64;
+begin
+  Result := Default(TBenchResult);
+  Result.Executed := True;
+  Result.Name := AEntry.Name;
+
+  // 并行基准自动跳过内存跟踪
+  if ATrackMemory and (not FConfig.Quiet) then
+    WriteLn('  WARNING: Memory tracking disabled for parallel benchmark "', AEntry.Name, '"');
+
+  LPerThreadIterations := AIters div AEntry.ParallelThreads;
+  if (AIters mod AEntry.ParallelThreads) <> 0 then
+    Inc(LPerThreadIterations);
+  if LPerThreadIterations < 1 then
+    LPerThreadIterations := 1;
+
+  InitParallelContexts(AEntry.ParallelThreads);
+  try
+    FParallelBridgeFunc := AEntry.Func;
+    GBridgeData.Runner := Self;
+    GBridgeData.Func := FParallelBridgeFunc;
+    GBridgeData.ParamFunc := AEntry.ParamFunc;
+    GBridgeData.ParamValue := AEntry.ParamValue;
+    try
+      LParallelResult := RunParallelBench(@ParallelBenchBridge,
+        AEntry.ParallelThreads, LPerThreadIterations);
+    finally
+      GBridgeData.Func := nil;
+      GBridgeData.ParamFunc := nil;
+      GBridgeData.ParamValue := 0;
+      GBridgeData.Runner := nil;
+      FParallelBridgeFunc := nil;
+    end;
+
+    Result.Iterations := LPerThreadIterations * AEntry.ParallelThreads;
+    Result.TotalNs := LParallelResult.TotalNs;
+
+    // CR-10: 从并行上下文聚合逐线程耗时，使用最大值
+    LMaxThreadElapsedNs := 0;
+    for I := 0 to High(FParallelContexts) do
+    begin
+      if Assigned(FParallelContexts[I]) then
+      begin
+        if (FParallelContexts[I] as TBenchContext).GetElapsedNs > LMaxThreadElapsedNs then
+          LMaxThreadElapsedNs := (FParallelContexts[I] as TBenchContext).GetElapsedNs;
+        if (FParallelContexts[I] as TBenchContext).GetBytesPerOp > Result.BytesPerOp then
+          Result.BytesPerOp := (FParallelContexts[I] as TBenchContext).GetBytesPerOp;
+        if (FParallelContexts[I] as TBenchContext).GetAllocsPerOp > Result.AllocsPerOp then
+          Result.AllocsPerOp := (FParallelContexts[I] as TBenchContext).GetAllocsPerOp;
+      end;
+    end;
+
+    // 检查是否有任何线程跳过了
+    for I := 0 to High(FParallelContexts) do
+    begin
+      if Assigned(FParallelContexts[I]) and (FParallelContexts[I] as TBenchContext).IsSkipped then
+      begin
+        Result.Skipped := True;
+        Result.SkipReason := (FParallelContexts[I] as TBenchContext).GetSkipReason;
+        Result.Iterations := (FParallelContexts[I] as TBenchContext).GetIterations * AEntry.ParallelThreads;
+        Break;
+      end;
+    end;
+  finally
+    FinalizeParallelContexts;
+  end;
+end;
+
+function TBenchRunner.ExecuteSequentialEntry(const AEntry: TBenchEntry; AIters: Int64;
+  ATrackMemory: Boolean): TBenchResult;
+var
+  LContext: IBenchContext;
+  LContextObj: TBenchContext;
+  LMemoryStats: TMemoryStats;
+  I: Int64;
+begin
+  Result := Default(TBenchResult);
+  Result.Executed := True;
+  Result.Name := AEntry.Name;
+
+  LContext := TBenchContext.Create;
+  LContextObj := LContext as TBenchContext;
+  LContextObj.SetName(AEntry.Name);
   try
     if ATrackMemory then
     begin

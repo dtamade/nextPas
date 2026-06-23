@@ -270,9 +270,6 @@ type
 
     {** 计算百分位数 }
     function Percentile(const ASorted: TDoubleArray; APercent: Double): Double;
-
-    {** 排序数组 }
-    procedure Sort(var AData: TDoubleArray);
   end;
 
 implementation

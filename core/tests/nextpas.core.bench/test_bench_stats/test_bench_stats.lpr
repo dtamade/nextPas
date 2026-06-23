@@ -285,7 +285,7 @@ begin
   WriteLn('TestSort:');
   SetLength(LData, 5);
   LData[0] := 5.0; LData[1] := 3.0; LData[2] := 1.0; LData[3] := 4.0; LData[4] := 2.0;
-  GAnalyzer.Sort(LData);
+  SortDoubleArray(LData);
   CheckApprox(LData[0], 1.0, 0.001, 'Sort[0] = 1.0');
   CheckApprox(LData[1], 2.0, 0.001, 'Sort[1] = 2.0');
   CheckApprox(LData[2], 3.0, 0.001, 'Sort[2] = 3.0');
@@ -304,7 +304,7 @@ begin
   LNoCrash := True;
   SetLength(LData, 0);
   try
-    GAnalyzer.Sort(LData);
+    SortDoubleArray(LData);
   except
     LNoCrash := False;
   end;
@@ -319,7 +319,7 @@ begin
   WriteLn('TestSort_SingleElement:');
   SetLength(LData, 1);
   LData[0] := 42.0;
-  GAnalyzer.Sort(LData);
+  SortDoubleArray(LData);
   CheckApprox(LData[0], 42.0, 0.001, 'Single element unchanged');
 end;
 
@@ -332,7 +332,7 @@ begin
   SetLength(LData, 10);
   for i := 0 to 9 do
     LData[i] := 10.0 - i;
-  GAnalyzer.Sort(LData);
+  SortDoubleArray(LData);
   for i := 0 to 9 do
     CheckApprox(LData[i], i + 1, 0.001, 'ReverseSort[' + IntToStr(i) + '] = ' + IntToStr(i + 1));
 end;
@@ -346,7 +346,7 @@ begin
   SetLength(LData, 10);
   for i := 0 to 9 do
     LData[i] := 7.0;
-  GAnalyzer.Sort(LData);
+  SortDoubleArray(LData);
   for i := 0 to 9 do
     CheckApprox(LData[i], 7.0, 0.001, 'AllEqual[' + IntToStr(i) + '] = 7.0');
 end;
