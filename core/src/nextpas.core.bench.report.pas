@@ -79,8 +79,10 @@ type
 
     {** 生成基线对比报告 }
     function GenerateComparisonReport(
+      const ABaselines: array of TBenchComparison): string; overload;
+    function GenerateComparisonReport(
       const AResults: array of TBenchResult;
-      const ABaselines: array of TBenchComparison): string;
+      const ABaselines: array of TBenchComparison): string; overload;
   end;
 
 implementation
@@ -129,6 +131,25 @@ begin
     Result := LBuilder.ToString;
   finally
     LBuilder.Done;
+  end;
+end;
+
+procedure SortCrossLangEntriesByName(var AEntries: TCrossLangEntryArray);
+var
+  I: Integer;
+  J: Integer;
+  LEntry: TCrossLangEntry;
+begin
+  for I := 1 to High(AEntries) do
+  begin
+    LEntry := AEntries[I];
+    J := I - 1;
+    while (J >= 0) and (AEntries[J].Name > LEntry.Name) do
+    begin
+      AEntries[J + 1] := AEntries[J];
+      Dec(J);
+    end;
+    AEntries[J + 1] := LEntry;
   end;
 end;
 
@@ -182,7 +203,7 @@ end;
 
 function TBenchReportGenerator.FormatNumber(AValue: Double; APrecision: Integer): string;
 begin
-  Result := FloatToStrF(AValue, APrecision);
+  Result := nextpas.core.text.conv.FloatToStrF(AValue, APrecision);
 end;
 
 function TBenchReportGenerator.FormatLargeNumber(AValue: Int64): string;
@@ -739,16 +760,20 @@ end;
 function TBenchReportGenerator.ToCrossLanguageHTML(
   const AEntries: TCrossLangEntryArray): string;
 var
+  LEntries: TCrossLangEntryArray;
   LHTML: TLineBuffer;
   LCurrentName: string;
   LMaxNsPerOp: Double;
   LBarWidth: Double;
   I: Integer;
 begin
+  LEntries := Copy(AEntries);
+  SortCrossLangEntriesByName(LEntries);
+
   LMaxNsPerOp := 0.0;
-  for I := 0 to High(AEntries) do
-    if AEntries[I].NsPerOp > LMaxNsPerOp then
-      LMaxNsPerOp := AEntries[I].NsPerOp;
+  for I := 0 to High(LEntries) do
+    if LEntries[I].NsPerOp > LMaxNsPerOp then
+      LMaxNsPerOp := LEntries[I].NsPerOp;
   if LMaxNsPerOp <= 0.0 then
     LMaxNsPerOp := 1.0;
 
@@ -772,16 +797,16 @@ begin
   BufferAddLine(LHTML, '  <h1>Cross-Language Benchmark Comparison</h1>');
 
   LCurrentName := '';
-  for I := 0 to High(AEntries) do
+  for I := 0 to High(LEntries) do
   begin
-    if AEntries[I].Name <> LCurrentName then
+    if LEntries[I].Name <> LCurrentName then
     begin
       if LCurrentName <> '' then
       begin
         BufferAddLine(LHTML, '    </tbody>');
         BufferAddLine(LHTML, '  </table>');
       end;
-      LCurrentName := AEntries[I].Name;
+      LCurrentName := LEntries[I].Name;
       BufferAddLine(LHTML, '  <h2>' + EscapeHTML(LCurrentName) + '</h2>');
       BufferAddLine(LHTML, '  <table>');
       BufferAddLine(LHTML, '    <thead>');
@@ -790,10 +815,10 @@ begin
       BufferAddLine(LHTML, '    <tbody>');
     end;
 
-    LBarWidth := (AEntries[I].NsPerOp / LMaxNsPerOp) * 100.0;
+    LBarWidth := (LEntries[I].NsPerOp / LMaxNsPerOp) * 100.0;
     BufferAddLine(LHTML, '      <tr>');
-    BufferAddLine(LHTML, '        <td>' + EscapeHTML(AEntries[I].Language) + '</td>');
-    BufferAddLine(LHTML, '        <td class="value">' + FormatNumber(AEntries[I].NsPerOp, 1) + '</td>');
+    BufferAddLine(LHTML, '        <td>' + EscapeHTML(LEntries[I].Language) + '</td>');
+    BufferAddLine(LHTML, '        <td class="value">' + FormatNumber(LEntries[I].NsPerOp, 1) + '</td>');
     BufferAddLine(LHTML,
       '        <td><div class="bar-track"><div class="bar-fill" style="width: ' +
       FormatNumber(LBarWidth, 1) + '%"></div></div></td>');
@@ -855,9 +880,26 @@ begin
   end
   else
   begin
-    LQ1 := LSorted[0];
-    LMedian := LSorted[LCount div 2];
-    LQ3 := LSorted[LCount - 1];
+    case LCount of
+      1:
+        begin
+          LQ1 := LSorted[0];
+          LMedian := LSorted[0];
+          LQ3 := LSorted[0];
+        end;
+      2:
+        begin
+          LQ1 := LSorted[0];
+          LMedian := (LSorted[0] + LSorted[1]) / 2.0;
+          LQ3 := LSorted[1];
+        end;
+    else
+      begin
+        LQ1 := LSorted[0];
+        LMedian := LSorted[1];
+        LQ3 := LSorted[2];
+      end;
+    end;
   end;
 
   LIQR := LQ3 - LQ1;
@@ -935,7 +977,6 @@ begin
 end;
 
 function TBenchReportGenerator.GenerateComparisonReport(
-  const AResults: array of TBenchResult;
   const ABaselines: array of TBenchComparison): string;
 var
   LLines: TLineBuffer;
@@ -956,8 +997,10 @@ begin
     begin
       if ABaselines[i].Ratio > 1.0 then
         LStatus := '✗ slower'
+      else if ABaselines[i].Ratio < 1.0 then
+        LStatus := '✓ faster'
       else
-        LStatus := '✓ faster';
+        LStatus := '≈ same';
     end
     else
       LStatus := '≈ same';
@@ -970,6 +1013,13 @@ begin
   end;
 
   Result := BufferToString(LLines);
+end;
+
+function TBenchReportGenerator.GenerateComparisonReport(
+  const AResults: array of TBenchResult;
+  const ABaselines: array of TBenchComparison): string;
+begin
+  Result := GenerateComparisonReport(ABaselines);
 end;
 
 end.

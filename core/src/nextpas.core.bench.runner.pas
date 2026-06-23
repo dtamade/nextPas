@@ -566,6 +566,28 @@ var
   LMaxIters: Int64;
   LTargetNs: UInt64;
   LProbe: TBenchResult;
+  LProjectedIters: Double;
+  LReachedMaxIters: Boolean;
+  function ScaleIterationsByTen(const AValue, AMaxValue: Int64;
+    out AReachedMaxValue: Boolean): Int64;
+  begin
+    if AValue >= AMaxValue then
+    begin
+      Result := AMaxValue;
+      AReachedMaxValue := True;
+      Exit;
+    end;
+
+    if AValue > (AMaxValue div 10) then
+    begin
+      Result := AMaxValue;
+      AReachedMaxValue := True;
+      Exit;
+    end;
+
+    Result := AValue * 10;
+    AReachedMaxValue := False;
+  end;
 begin
   LTargetNs := FConfig.MinDurationNs;
   LMaxIters := FConfig.MaxIterations;
@@ -580,11 +602,27 @@ begin
     LElapsed := LProbe.TotalNs;
 
     if LElapsed = 0 then
-      LIters := LIters * 10
+    begin
+      LIters := ScaleIterationsByTen(LIters, LMaxIters, LReachedMaxIters);
+      if LReachedMaxIters then
+        Break;
+    end
     else if LElapsed < LTargetNs div 10 then
-      LIters := LIters * 10
+    begin
+      LIters := ScaleIterationsByTen(LIters, LMaxIters, LReachedMaxIters);
+      if LReachedMaxIters then
+        Break;
+    end
     else if LElapsed < LTargetNs then
-      LIters := Int64((Double(LIters) * Double(LTargetNs)) / Double(LElapsed))
+    begin
+      LProjectedIters := (Double(LIters) * Double(LTargetNs)) / Double(LElapsed);
+      if LProjectedIters >= Double(LMaxIters) then
+      begin
+        LIters := LMaxIters;
+        Break;
+      end;
+      LIters := Int64(LProjectedIters);
+    end
     else
       Break;
 
