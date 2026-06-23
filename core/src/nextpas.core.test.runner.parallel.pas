@@ -23,6 +23,7 @@ uses
 type
   TTimeoutRec = record
     Proc    : TTestProc;
+    Closure : TTestClosure;
     Done    : Boolean;
     ErrorMsg: string;
     Status  : TTestStatus;
@@ -30,6 +31,8 @@ type
   PTimeoutRec = ^TTimeoutRec;
 
 function RunTestWithTimeout(AProc: TTestProc; ATimeoutMs: Integer;
+  out AStatus: TTestStatus; out AMsg: string): Boolean;
+function RunTestWithTimeout(AClosure: TTestClosure; ATimeoutMs: Integer;
   out AStatus: TTestStatus; out AMsg: string): Boolean;
 
 { ── Parallel thread worker (internal) ──────────────────────────────────────── }
@@ -65,7 +68,10 @@ begin
   Result := nil;
   R := PTimeoutRec(AArg);
   try
-    R^.Proc;
+    if Assigned(R^.Closure) then
+      R^.Closure()
+    else
+      R^.Proc;
     WriteBarrier;
     R^.Done := True;
   except
@@ -94,7 +100,8 @@ begin
   { Main thread always joins and disposes the record — no dispose here. }
 end;
 
-function RunTestWithTimeout(AProc: TTestProc; ATimeoutMs: Integer;
+function RunTestWithTimeout_internal(AProc: TTestProc; AClosure: TTestClosure;
+  ATimeoutMs: Integer;
   out AStatus: TTestStatus; out AMsg: string): Boolean;
 { Returns True if test completed (pass/fail/error/skip).
   Returns False if timed out (AStatus = tsError, AMsg = 'timeout'). }
@@ -108,6 +115,7 @@ var
 begin
   New(LRec);
   LRec^.Proc := AProc;
+  LRec^.Closure := AClosure;
   LRec^.Done := False;
   LRec^.ErrorMsg := '';
   LRec^.Status := tsPassed;
@@ -196,6 +204,18 @@ begin
     Dispose(LRec);
 end;
 
+function RunTestWithTimeout(AProc: TTestProc; ATimeoutMs: Integer;
+  out AStatus: TTestStatus; out AMsg: string): Boolean;
+begin
+  Result := RunTestWithTimeout_internal(AProc, nil, ATimeoutMs, AStatus, AMsg);
+end;
+
+function RunTestWithTimeout(AClosure: TTestClosure; ATimeoutMs: Integer;
+  out AStatus: TTestStatus; out AMsg: string): Boolean;
+begin
+  Result := RunTestWithTimeout_internal(nil, AClosure, ATimeoutMs, AStatus, AMsg);
+end;
+
 { ═════════════════════════════════════════════════════════════════════════════ }
 { Parallel thread worker                                                        }
 { ═════════════════════════════════════════════════════════════════════════════ }
@@ -227,6 +247,7 @@ var
   LResultWritten: Boolean;
   LRetriesLeft: Integer;
   LSkippedByBeforeEach: Boolean;
+  LTimeoutMs: Integer;
 begin
   Result := nil;
   R := PThreadRec(AArg);
@@ -236,6 +257,7 @@ begin
   LStartMs := 0;
   LResultWritten := False;
   LSkippedByBeforeEach := False;
+  LTimeoutMs := GetTestTimeout;
   try
   SetTestContext(R^.SuiteName, R^.Entry.Name);
   try
@@ -324,7 +346,34 @@ begin
       LFailMsg := '';
       LStartMs := GetTickCount64;
       try
-        if R^.Entry.Kind = ekTableTest then
+        if (LTimeoutMs > 0) and (R^.Entry.Kind = ekTest) and
+           (Assigned(R^.Entry.Proc) or Assigned(R^.Entry.Closure)) then
+        begin
+          { Timeout-enabled path — spawns watchdog sub-thread }
+          if Assigned(R^.Entry.Closure) then
+          begin
+            if RunTestWithTimeout(R^.Entry.Closure, LTimeoutMs,
+              LStatus, LFailMsg) then
+            begin
+              if LStatus = tsPassed then { ok }
+              else { LStatus already set }
+            end
+            else
+              { Timed out — LStatus already set to tsError };
+          end
+          else
+          begin
+            if RunTestWithTimeout(R^.Entry.Proc, LTimeoutMs,
+              LStatus, LFailMsg) then
+            begin
+              if LStatus = tsPassed then { ok }
+              else { LStatus already set }
+            end
+            else
+              { Timed out — LStatus already set to tsError };
+          end;
+        end
+        else if R^.Entry.Kind = ekTableTest then
           PTestCaseProc(R^.Entry.TableProc)^(PTestCase(R^.Entry.TableCase)^)
         else if Assigned(R^.Entry.Closure) then
           R^.Entry.Closure()
