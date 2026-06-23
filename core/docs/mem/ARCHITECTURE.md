@@ -47,6 +47,7 @@ Allocator 侧常用单元：
 - `nextpas.core.mem.allocator.tracking`
 - `nextpas.core.mem.allocator.leak_check`
 - `nextpas.core.mem.allocator.fallback`
+- `nextpas.core.mem.allocator.mimalloc.loader`
 - `nextpas.core.mem.allocator.mimalloc`
 
 Pool 侧常用单元：
@@ -191,6 +192,13 @@ type
 - `Reset` 一次性回退整个底层 arena
 
 `TFastArenaAllocator` 现在只是它的兼容性别名。
+
+## mimalloc loader boundary
+
+- `nextpas.core.mem.allocator.mimalloc` 保留 mimalloc FFI 绑定、symbol 解析和 allocator 语义
+- `nextpas.core.mem.allocator.mimalloc.loader` owns mimalloc path discovery and search order.
+- Search order: env override -> executable-relative `lib/<cpu-os>/` -> system loader fallback.
+- 环境变量覆盖名保持现状：Windows 用 `NEXTPAS_MIMALLOC_DLL`，其他宿主用 `NEXTPAS_MIMALLOC_SO`
 
 ## 门面怎么用
 

@@ -105,6 +105,11 @@ require_token "docs/platform/runtime-truth-matrix.md" "AsyncRead/AsyncWrite file
 require_token "docs/mem/README.md" '`nextpas.core.mem.mapped_slab_pool` owns only the anonymous mapping allocator surface.'
 require_token "docs/mem/README.md" '`nextpas.core.io.mapped.slab_pool` is the fixed owner for file-backed and shared-memory slab pools.'
 require_token "docs/mem/README.md" 'must not grow `CreateFile`, `OpenFile`, `CreateShared`, `OpenShared`, or `nextpas.core.platform.files` dependencies.'
+require_token "docs/mem/ARCHITECTURE.md" '`nextpas.core.mem.allocator.mimalloc.loader` owns mimalloc path discovery and search order.'
+require_token "docs/mem/ARCHITECTURE.md" 'Search order: env override -> executable-relative `lib/<cpu-os>/` -> system loader fallback.'
+require_token "src/nextpas.core.mem.allocator.mimalloc.pas" "nextpas.core.mem.allocator.mimalloc.loader"
+reject_token "src/nextpas.core.mem.allocator.mimalloc.pas" "nextpas.core.os.env"
+reject_token "src/nextpas.core.mem.allocator.mimalloc.pas" "nextpas.core.path"
 reject_token "docs/mem/README.md" "still mixes"
 reject_token "docs/mem/README.md" 'mapped_slab_pool` file/shared manager path is future migration surface'
 reject_token "docs/mem/README.md" "docs/mem/mapped-family-ownership-decision.md"
@@ -123,8 +128,8 @@ ALLOWED_L0_TOP_MODULES=(
 )
 
 KNOWN_L0_DEPENDENCY_DEBT=(
-  "src/nextpas.core.mem.allocator.mimalloc.pas|nextpas.core.os.env"
-  "src/nextpas.core.mem.allocator.mimalloc.pas|nextpas.core.path"
+  "src/nextpas.core.mem.allocator.mimalloc.loader.pas|nextpas.core.os.env"
+  "src/nextpas.core.mem.allocator.mimalloc.loader.pas|nextpas.core.path"
   "src/nextpas.core.mem.mapped_ring_buffer.pas|nextpas.core.io.mapped.ring_buffer"
   "src/nextpas.core.mem.mapped_ring_buffer.sharded.pas|nextpas.core.io.mapped.ring_buffer.sharded"
   "src/nextpas.core.simd.cpuinfo.lazy.pas|nextpas.core.os.env"

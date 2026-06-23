@@ -111,12 +111,12 @@
   ],
   "l0_dependency_allowlist": [
     {
-      "path": "src/nextpas.core.mem.allocator.mimalloc.pas",
+      "path": "src/nextpas.core.mem.allocator.mimalloc.loader.pas",
       "unit": "nextpas.core.os.env",
       "reason": "known mimalloc environment override debt pending platform-owned loader"
     },
     {
-      "path": "src/nextpas.core.mem.allocator.mimalloc.pas",
+      "path": "src/nextpas.core.mem.allocator.mimalloc.loader.pas",
       "unit": "nextpas.core.path",
       "reason": "known mimalloc path helper debt pending platform-owned loader"
     },
