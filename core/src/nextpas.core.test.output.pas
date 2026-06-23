@@ -291,10 +291,11 @@ begin
   begin
     LCh := S[I];
     case LCh of
-      '<':  Inc(LExtra, 3);  { &lt;  = 4 chars, input = 1 }
+      '<':  Inc(LExtra, 3);  { &lt;   = 4 chars, input = 1 }
       '>':  Inc(LExtra, 3);
-      '&':  Inc(LExtra, 4);  { &amp; = 5 chars }
+      '&':  Inc(LExtra, 4);  { &amp;  = 5 chars }
       '"':  Inc(LExtra, 5);  { &quot; = 6 chars }
+      '''': Inc(LExtra, 5);  { &apos; = 6 chars }
     end;
   end;
   SetLength(Result, LLen + LExtra);
@@ -311,6 +312,8 @@ begin
         begin Move('&amp;'[1], Result[LPos], 5); Inc(LPos, 5); end;
       '"':
         begin Move('&quot;'[1], Result[LPos], 6); Inc(LPos, 6); end;
+      '''':
+        begin Move('&apos;'[1], Result[LPos], 6); Inc(LPos, 6); end;
     else
       if (Ord(LCh) < 32) and (LCh <> #9) and (LCh <> #10) and (LCh <> #13) then
       begin

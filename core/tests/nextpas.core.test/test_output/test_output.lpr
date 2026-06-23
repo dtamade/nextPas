@@ -338,12 +338,12 @@ begin
   LResults[0].Failed := 0;
   LResults[0].Skipped := 0;
   SetLength(LResults[0].Results, 1);
-  LResults[0].Results[0].Name := 'a & b "c"';
+  LResults[0].Results[0].Name := 'a & b "c" d''e';
   LResults[0].Results[0].Status := tsPassed;
 
   LXml := JUnitXML(LResults);
   CheckContains(LXml, 'test&lt;&gt;esc');
-  CheckContains(LXml, 'a &amp; b &quot;c&quot;');
+  CheckContains(LXml, 'a &amp; b &quot;c&quot; d&apos;e');
 end;
 
 procedure TestJUnitXMLEmpty;
