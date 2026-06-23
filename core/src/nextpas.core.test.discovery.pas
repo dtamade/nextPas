@@ -144,11 +144,11 @@ begin
     RegisterStub(Result, Pointer(LPStub));
   end;
 
-  { Auto-free the fixture when the suite finishes }
-  Result.SetTeardown(procedure
-  begin
-    AFixture.Free;
-  end);
+  { R6-05: Register the fixture for safety-net disposal.
+    CleanupTableAllocations (called by FinalizeResults after each run) frees
+    the fixture and nils the GFixtureRegistry entry to prevent double-free.
+    If the suite is never run, finalization frees any remaining entries. }
+  RegisterFixture(Result, AFixture);
 end;
 
 end.

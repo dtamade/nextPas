@@ -41,6 +41,9 @@ type
       Stores GStubRegistry indices for O(1) cleanup (R4-10).
       Raw pointers because discovery.pas uses PMethodStub which runner.pas cannot see. }
     StubAllocations: specialize TArray<Integer>;
+    { R6-05: GFixtureRegistry indices for fixtures registered by DiscoverTests.
+      Freed by CleanupTableAllocations when suite runs, or by finalization if not. }
+    FixtureAllocations: specialize TArray<Integer>;
     { Cached run results — set by Run/RunParallel }
     LastRunPassed: Boolean;
     HasRun       : Boolean;
@@ -114,6 +117,10 @@ type
 { Register a heap-allocated method stub for later disposal.
   Adds to both the suite's per-instance list and a global safety-net registry. }
 procedure RegisterStub(var ASuite: TTestSuite; APtr: Pointer);
+{ R6-05: Register a fixture object for safety-net disposal.
+  Records the GFixtureRegistry index in the suite for cleanup.
+  Only call once per fixture (from DiscoverTests). }
+procedure RegisterFixture(var ASuite: TTestSuite; AFixture: TObject);
 
 implementation
 
@@ -126,6 +133,10 @@ uses
   are created but never run (and thus never call CleanupTableAllocations). }
 var
   GStubRegistry: specialize TArray<Pointer>;
+  { Parallel array tracking fixture objects from DiscoverTests.
+    Only non-nil for stubs registered by discovery. Freed in finalization
+    as safety net for suites that are created but never run. }
+  GFixtureRegistry: specialize TArray<TObject>;
   LStubCleanupI: Integer;
 
 { ── Command-line helpers ──────────────────────────────────────────────────── }
@@ -162,6 +173,7 @@ begin
   Result.AfterEach       := nil;
   Result.AfterEachClosure := nil;
   Result.StubAllocations := nil;
+  Result.FixtureAllocations := nil;
   Result.LastRunPassed := False;
   Result.HasRun        := False;
   Result.LastPass      := 0;
@@ -177,6 +189,16 @@ begin
   { Per-suite tracking — stores GStubRegistry index for O(1) cleanup (R4-10) }
   SetLength(ASuite.StubAllocations, Length(ASuite.StubAllocations) + 1);
   ASuite.StubAllocations[High(ASuite.StubAllocations)] := High(GStubRegistry);
+end;
+
+procedure RegisterFixture(var ASuite: TTestSuite; AFixture: TObject);
+begin
+  { Global safety-net — disposed in finalization for suites that never run }
+  SetLength(GFixtureRegistry, Length(GFixtureRegistry) + 1);
+  GFixtureRegistry[High(GFixtureRegistry)] := AFixture;
+  { Per-suite tracking — stores GFixtureRegistry index for O(1) cleanup }
+  SetLength(ASuite.FixtureAllocations, Length(ASuite.FixtureAllocations) + 1);
+  ASuite.FixtureAllocations[High(ASuite.FixtureAllocations)] := High(GFixtureRegistry);
 end;
 
 procedure TTestSuite.Test(const AName: string; AProc: TTestProc);
@@ -939,6 +961,16 @@ begin
       GStubRegistry[StubAllocations[I]] := nil;
     end;
   StubAllocations := nil;
+  { R6-05: Dispose fixture objects registered by DiscoverTests.
+    Nil-out in GFixtureRegistry to prevent finalization double-free. }
+  for I := 0 to High(FixtureAllocations) do
+    if GFixtureRegistry[FixtureAllocations[I]] <> nil then
+    begin
+      GFixtureRegistry[FixtureAllocations[I]].Free;
+      GFixtureRegistry[FixtureAllocations[I]] := nil;
+    end;
+  FixtureAllocations := nil;
+  StubAllocations := nil;
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }
@@ -1060,11 +1092,17 @@ begin
 end;
 
 finalization
-  { Safety net: dispose any method stubs that were not cleaned up by
-    CleanupTableAllocations (e.g. suites created but never run). }
+  { Safety net: dispose any method stubs and fixture objects that were not
+    cleaned up by CleanupTableAllocations (e.g. suites created but never run). }
   for LStubCleanupI := 0 to High(GStubRegistry) do
+  begin
     if GStubRegistry[LStubCleanupI] <> nil then
       FreeMem(GStubRegistry[LStubCleanupI]);
+    if LStubCleanupI <= High(GFixtureRegistry) then
+      if GFixtureRegistry[LStubCleanupI] <> nil then
+        GFixtureRegistry[LStubCleanupI].Free;
+  end;
   GStubRegistry := nil;
+  GFixtureRegistry := nil;
 
 end.
