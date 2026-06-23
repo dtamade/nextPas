@@ -87,6 +87,7 @@ begin
       R^.Done := True;
     end;
   end;
+  { Main thread always joins and disposes the record — no dispose here. }
 end;
 
 function RunTestWithTimeout(AProc: TTestProc; ATimeoutMs: Integer;
@@ -117,7 +118,7 @@ begin
 
   if LRec^.Done then
   begin
-    { Test completed — determine status from Status field }
+    { Test completed — join thread, read results, dispose. }
     platform_thread_join(LHandle, LRetVal);
     AStatus := LRec^.Status;
     AMsg := LRec^.ErrorMsg;
@@ -125,8 +126,10 @@ begin
   end
   else
   begin
-    { Timed out — wait for worker to finish, then dispose.
-      We still own the record and join the thread for clean resource release. }
+    { Timed out — join thread, then dispose.
+      If the worker is truly stuck (deadlock/infinite loop), this will block
+      indefinitely. This is an inherent limitation: Pascal has no safe way to
+      force-terminate a thread. Blocking is better than leaking. }
     AStatus := tsError;
     AMsg := 'test timed out after ' + IntToStr(ATimeoutMs) + 'ms';
     Result := False;
@@ -165,6 +168,7 @@ var
   LFailMsg: string;
   LSkipReason: string;
   LStartMs: Int64;
+  LResultWritten: Boolean;
 begin
   Result := nil;
   R := PThreadRec(AArg);
@@ -172,6 +176,7 @@ begin
   LFailMsg := '';
   LSkipReason := '';
   LStartMs := 0;
+  LResultWritten := False;
   try
   SetTestContext(R^.SuiteName, R^.Entry.Name);
   try
@@ -230,11 +235,19 @@ begin
       begin
         LStatus := tsError;
         LFailMsg := E.Message;
-        LStartMs := 0; { beforeEach failed — no test ran, Duration stays 0 }
         R^.Mtx.Acquire;
         try
           WriteLn('  ', StatusDot(tsError), ' ', R^.Entry.Name,
             ' -- beforeEach failed: ', E.Message);
+          { Set Duration to 0 directly — no test ran, don't use GetTickCount64 }
+          if R^.Res <> nil then
+          begin
+            R^.Res^.Name     := R^.Entry.Name;
+            R^.Res^.Status   := tsError;
+            R^.Res^.Duration := 0;
+            R^.Res^.Message  := E.Message;
+            LResultWritten := True;
+          end;
         finally
           SafeRelease(R^.Mtx);
         end;
@@ -327,8 +340,9 @@ begin
             WriteLn('    ', AnsiDim(LFailMsg));
         end;
     end;
-    { Write per-test result inside mutex for safety }
-    if R^.Res <> nil then
+    { Write per-test result inside mutex for safety (skip if already written
+      by beforeEach failure path, which sets Duration = 0 directly) }
+    if (R^.Res <> nil) and (not LResultWritten) then
     begin
       R^.Res^.Name     := R^.Entry.Name;
       R^.Res^.Status   := LStatus;
