@@ -952,7 +952,7 @@
 
 ## 修复进度追踪
 
-> **更新日期**: 2026-06-23
+> **更新日期**: 2026-06-23 (Round 3)
 
 | 优先级 | 总数 | 已修复 | 已知限制 | 不修/推迟 | 剩余 |
 |--------|------|--------|----------|-----------|------|
@@ -960,10 +960,10 @@
 | P1 正确性 (CR-03~CR-26) | 24 | 21 | 3 | 0 | 0 |
 | P1 测试覆盖 (TG-01~TG-15) | 15 | 15 | 0 | 0 | 0 |
 | P2 性能 (PF-01~PF-20) | 20 | 8 | 3 | 9 | 0 |
-| P2 设计 (DS-01~DS-14) | 14 | 8 | 0 | 6 | 0 |
-| P2 测试改进 (TG-16~TG-30) | 15 | 5 | 0 | 10 | 0 |
-| P3 风格/设计/文档 (ST-01~ST-27) | 27 | 12 | 0 | 15 | 0 |
-| **总计** | **124** | **78** | **6** | **40** | **0** |
+| P2 设计 (DS-01~DS-14) | 14 | **10** | 0 | **4** | 0 |
+| P2 测试改进 (TG-16~TG-30) | 15 | **8** | 0 | **7** | 0 |
+| P3 风格/设计/文档 (ST-01~ST-27) | 27 | **15** | 0 | **12** | 0 |
+| **总计** | **124** | **91 (73%)** | **6 (5%)** | **27 (22%)** | **0** |
 
 ### 已知限制（不修）
 - **CR-04**: PValue/HeuristicDifference 接口归属（设计决策）
@@ -981,16 +981,36 @@
 - **PF-11**: ExecuteEntry 160 行拆分（重构成本 > 收益）
 - **PF-13**: Sequential 虚拟调度（微优化，影响 < 1%）
 - **PF-18**: 校准循环 0-time cap（已有 MaxIterations 兜底）
-- **DS-01~DS-08, DS-11~DS-14**: 设计层面改进（接口扩展、线程安全等）
-- **TG-17~TG-21, TG-22, TG-24**: Flaky/弱断言（已优化但属测试环境问题）
-- **ST-01~ST-14, ST-18, ST-22~ST-27**: API 命名/设计/文档（重构范围过大）
+- **DS-06**: TAdvancedStats record→class（破坏性类型变更）
+- **DS-08**: BENCH_ENV_NO_MEMTRACK 命名（改名破坏 CI 配置）
+- **DS-11**: SaveTo* IStream 抽象（大重构）
+- **DS-13**: TBenchRunner 线程安全（大重构）
+- **TG-17**: TestSignificantDifference 已加 RandSeed（剩余 flaky 属统计固有属性）
+- **TG-18**: GetElapsed 10ms 阈值（已足够宽松）
+- **TG-19**: Parallel observation timing-dependent（已用小值）
+- **TG-21**: BenchResetTimerOnly 10ms 阈值（已足够宽松）
+- **TG-22**: Parallel memtrack deallocate 时机（线程生命周期固有限制）
+- **TG-24**: Parallel skip Iterations=8（已正确，skip 行为确定性）
+- **TG-25**: /tmp 路径已用 PID 唯一化
+- **ST-01**: ToConsole 命名（重命名破坏接口）
+- **ST-02**: TBenchEntry 暴露内部（破坏性变更）
+- **ST-04**: Run 超时机制（新功能，中等工作量）
+- **ST-05**: AddBaseline TDuration 参数（破坏性变更）
+- **ST-07**: Iterations UInt64 类型（破坏性变更）
+- **ST-08**: AddLoop/Add 状态约束（设计决策）
+- **ST-09**: SaveToFile/LoadFromFile 命名（破坏性变更）
+- **ST-10**: DifferenceHeuristic 字段命名（破坏性变更）
+- **ST-18**: Console vs HTML 列不一致（需同步更新测试）
+- **ST-22**: ToHTML 拆分（重构成本 > 收益）
+- **ST-23**: TLineBuffer→TStringBuilder（大重构）
+- **ST-25**: Go 名称 dash-strip（已验证代码正确）
 
 ### Commits
 ```
+aeec89068 fix+refactor(bench): P2/P3 batch — 13 items: BoxPlot constant, BootstrapCI tighten, EBenchInvalidParam verify, config constructor, timestamp fallback, docs
 9bd6c3141 fix+test(bench): P2 source fixes — Cohen's d weighted pooled, thread leak, Percentile validation
 3cf554ef2 refactor(bench): P2 design/style — env parsing, thread cache, JSON skipped, save dedup
 2deff298e perf+style(bench): P2 report improvements — CSS cache, BufferToString sizing, µs
 4dc0d54de feat(bench): API extensions — GetName, AddBytes, Clear, RemoveByName, AddRange+setup, AddBaselines, HasHeuristicDifferenceAt
 1f506dd7f fix(bench): ST-14 boolean env vars accept 'true'/'yes'/'on'
 ```
-5. TG-01~TG-15 (公共 API 完全未测试)
