@@ -369,11 +369,11 @@ begin
   BufferAddLine(LLines, 'Benchmark Results:');
   BufferAddLine(LLines, '');
 
-  // header
-  BufferAddLine(LLines, TextFormat('  %-40s %10s %10s %10s %10s %10s',
-    ['Name', 'Iterations', 'ns/op', 'ops/s', 'StdDev', 'P99']));
-  // ST-17: separator width matches content columns (40+10+10+10+10+10+5 spaces = 95)
-  BufferAddLine(LLines, '  ' + TextOfChar('-', 95));
+  // ST-18: columns match HTML (Name, Iterations, ns/op, ops/s, StdDev, Median, P95, P99)
+  BufferAddLine(LLines, TextFormat('  %-40s %10s %10s %10s %10s %10s %10s %10s',
+    ['Name', 'Iterations', 'ns/op', 'ops/s', 'StdDev', 'Median', 'P95', 'P99']));
+  // ST-17: separator width matches content columns (40+8×10+7 spaces = 127)
+  BufferAddLine(LLines, '  ' + TextOfChar('-', 127));
 
   // results (non-skipped only) + count skipped in one pass (ST-16)
   LSkippedCount := 0;
@@ -381,12 +381,15 @@ begin
   begin
     if not FResults[i].Skipped then
     begin
-      BufferAddLine(LLines, TextFormat('  %-40s %10s %10s %10s %10s %10s',
+      // ST-18: columns match HTML header
+      BufferAddLine(LLines, TextFormat('  %-40s %10s %10s %10s %10s %10s %10s %10s',
         [FResults[i].Name,
          FormatLargeNumber(FResults[i].Iterations),
          FormatNumber(FResults[i].NsPerOp, 1),
          FormatLargeNumber(Min(Int64(FResults[i].OpsPerSec), High(Int64))),
          FormatNumber(FResults[i].StdDev, 1),
+         FormatNumber(FResults[i].Median, 1),
+         FormatNumber(FResults[i].P95, 1),
          FormatNumber(FResults[i].P99, 1)]));
     end
     else
