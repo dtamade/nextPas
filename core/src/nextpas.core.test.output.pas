@@ -527,7 +527,8 @@ begin
     Result := True;
   except
     on E: Exception do
-      WriteLn(StdErr, 'WriteJUnitXML failed: ', E.Message);
+      ResolveErrSink(DefaultConfig).WriteLn(
+        'WriteJUnitXML failed: ' + E.Message);
   end;
 end;
 

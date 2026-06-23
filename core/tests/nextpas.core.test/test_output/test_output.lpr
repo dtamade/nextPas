@@ -302,6 +302,7 @@ var
   LConfig: TTestConfig;
 begin
   Inc(GTestsRun);
+  ResetDefaultConfig;
   LConfig := DefaultConfig;
   CheckEqual(LConfig.FilterPattern, '');
   CheckEqual(Int64(LConfig.TimeoutMs), Int64(0));
@@ -563,6 +564,25 @@ begin
   SetLength(LResults, 0);
   CheckFalse(WriteJUnitXML(LResults, '/nonexistent/dir/file.xml'),
     'WriteJUnitXML should return False on bad path');
+end;
+
+procedure TestWriteJUnitXMLBadPathUsesErrSink;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LErrSink: TBufferSink;
+begin
+  Inc(GTestsRun);
+  SetLength(LResults, 0);
+  ResetDefaultConfig;
+  LErrSink := TBufferSink.Create;
+  SetDefaultErrSink(LErrSink);
+  try
+    CheckFalse(WriteJUnitXML(LResults, '/nonexistent/dir/file.xml'),
+      'WriteJUnitXML should return False on bad path');
+    CheckContains(LErrSink.GetOutput, 'WriteJUnitXML failed:');
+  finally
+    ResetDefaultConfig;
+  end;
 end;
 
 { TAP renderer tests }
@@ -1019,6 +1039,7 @@ begin
   Suite.Test('TestJUnitXMLErrorTestCase', @TestJUnitXMLErrorTestCase);
   Suite.Test('TestWriteJUnitXML', @TestWriteJUnitXML);
   Suite.Test('TestWriteJUnitXMLBadPath', @TestWriteJUnitXMLBadPath);
+  Suite.Test('TestWriteJUnitXMLBadPathUsesErrSink', @TestWriteJUnitXMLBadPathUsesErrSink);
   Suite.Test('TestTAPReportBasic', @TestTAPReportBasic);
   Suite.Test('TestTAPReportSkipped', @TestTAPReportSkipped);
   Suite.Test('TestTAPReportEmpty', @TestTAPReportEmpty);
