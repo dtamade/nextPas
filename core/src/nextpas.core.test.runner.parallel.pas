@@ -214,6 +214,7 @@ var
   LStartMs: Int64;
   LResultWritten: Boolean;
   LRetriesLeft: Integer;
+  LSkippedByBeforeEach: Boolean;
 begin
   Result := nil;
   R := PThreadRec(AArg);
@@ -222,6 +223,7 @@ begin
   LSkipReason := '';
   LStartMs := 0;
   LResultWritten := False;
+  LSkippedByBeforeEach := False;
   try
   SetTestContext(R^.SuiteName, R^.Entry.Name);
   try
@@ -275,6 +277,7 @@ begin
       begin
         LStatus := tsSkipped;
         LSkipReason := E.Message;
+        LSkippedByBeforeEach := True;
       end;
       on E: Exception do
       begin
@@ -348,7 +351,8 @@ begin
     until False;
   end;
 
-  if Assigned(R^.After) or Assigned(R^.AfterClosure) then
+  if (not LSkippedByBeforeEach) and
+     (Assigned(R^.After) or Assigned(R^.AfterClosure)) then
   begin
     try
       if Assigned(R^.After) then R^.After else R^.AfterClosure();
