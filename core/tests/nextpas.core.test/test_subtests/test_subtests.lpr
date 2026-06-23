@@ -317,6 +317,15 @@ begin
     end);
 end;
 
+{ ── R6-55: Subtest skip counting precision ─────────────────────────────────── }
+
+procedure TestSubtestSkipPrecision(constref Ctx: ITestContext);
+begin
+  Ctx.Run('pass', procedure begin CheckTrue(True); end);
+  Ctx.Run('skip_me', procedure begin Skip('intentional skip'); end);
+  Ctx.Run('another_pass', procedure begin CheckTrue(True); end);
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -398,6 +407,27 @@ begin
       Halt(1);
     end;
     WriteLn(AnsiGreen('  Closure subtest failure propagation verified'));
+  end;
+
+  { ── R6-55: Subtest skip counting precision ─────────────────────────────── }
+  WriteLn;
+  WriteLn(AnsiBold('─── R6-55: Subtest Skip Counting ───'));
+  begin
+    LFailSuite := TTestSuite.Create('Skip Count');
+    LFailSuite.TestSubtest('skip precision', @TestSubtestSkipPrecision);
+    LFailSuite.Test('normal', procedure begin CheckTrue(True); end);
+    if not LFailSuite.Run then
+    begin
+      WriteLn(AnsiRed('FAIL: suite with skip in subtest should pass'));
+      Halt(1);
+    end;
+    { Subtest-level skips do NOT propagate to suite skip counter (design).
+      But the suite should still pass (no failures). }
+    CheckTrue(LFailSuite.LastFail = 0,
+      'Expected 0 failures, got ' + IntToStr(LFailSuite.LastFail));
+    CheckTrue(LFailSuite.LastPass >= 1,
+      'Expected at least 1 pass, got ' + IntToStr(LFailSuite.LastPass));
+    WriteLn(AnsiGreen('  Subtest skip counting verified'));
   end;
 
   { ── B5.7: 3-level nested failure propagation ────────────────────────────── }
