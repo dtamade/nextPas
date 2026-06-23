@@ -438,12 +438,14 @@ begin
   end;
 
   LValue := GetEnvironmentVariable(BENCH_ENV_QUIET);
-  if (LValue <> '') and (LValue = '1') then
-    FConfig.Quiet := True;
+  if LValue <> '' then
+    if (LValue = '1') or (LowerCase(LValue) = 'true') or (LowerCase(LValue) = 'yes') then
+      FConfig.Quiet := True;
 
   LValue := GetEnvironmentVariable(BENCH_ENV_NO_MEMTRACK);
-  if (LValue <> '') and (LValue = '1') then
-    FConfig.EnableMemoryTracking := False;
+  if LValue <> '' then
+    if (LValue = '1') or (LowerCase(LValue) = 'true') or (LowerCase(LValue) = 'yes') then
+      FConfig.EnableMemoryTracking := False;
 
   FFilter := GetEnvironmentVariable(BENCH_ENV_FILTER);
   FFilterLower := LowerCase(FFilter); { PF-08 }
