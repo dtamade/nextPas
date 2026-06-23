@@ -338,6 +338,9 @@ begin
   // 比率可能被格式化为不同精度
   CheckContains(LReport, 'x', 'Contains ratio indicator');
   CheckContains(LReport, 'slower', 'Contains slower status');
+  // 验证两个 comparison 都出现（报告不应只显示一个）
+  Check(Pos('HashMap.Put', LReport) < Pos('HashMap.Get(hit)', LReport),
+    'First comparison appears before second');
 end;
 
 procedure TestSkippedResultsReporting;

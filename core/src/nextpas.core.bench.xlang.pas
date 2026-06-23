@@ -97,8 +97,13 @@ end;
 { Helper: Trim and check empty }
 
 function IsEmptyOrComment(const ALine: string): Boolean;
+var
+  LTrimmed: string;
 begin
-  Result := (Trim(ALine) = '') or (Trim(ALine)[1] = '#');
+  LTrimmed := Trim(ALine);
+  if LTrimmed = '' then
+    Exit(True);
+  Result := LTrimmed[1] = '#';
 end;
 
 { Helper: Parse "key=value" pairs }

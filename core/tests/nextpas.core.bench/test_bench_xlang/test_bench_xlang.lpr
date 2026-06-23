@@ -297,6 +297,24 @@ begin
   Check(LSuccess, 'Raises EParseError for unknown parser');
 end;
 
+procedure Test_GetLastParseSkippedCount;
+var
+  LResults: TBenchResultArray;
+  LSkipped: Integer;
+begin
+  WriteLn('Test_GetLastParseSkippedCount:');
+  // Mix valid lines with a line too short to parse (< 3 parts after split)
+  // "BenchmarkBad" alone has < 3 parts → raises EParseError → counted as skipped
+  LResults := ParseGoBenchOutput(
+    'BenchmarkGood-4   1000   100.0 ns/op' + #10 +
+    'BenchmarkBad' + #10 +
+    'BenchmarkGood2-4  2000   200.0 ns/op' + #10
+  );
+  LSkipped := GetLastParseSkippedCount;
+  Check(LSkipped = 1, 'Skipped count = 1 (one unparseable benchmark line)');
+  Check(Length(LResults) = 2, 'Parsed 2 valid results');
+end;
+
 
 procedure Test_GoBench_LargeOps;
 var
@@ -390,6 +408,7 @@ begin
   Test_ParseRustBenchLine_Invalid;
   Test_ParseFPCBenchLine_Invalid;
   Test_ParseBenchOutput_Unknown;
+  Test_GetLastParseSkippedCount;
 end;
 
 begin

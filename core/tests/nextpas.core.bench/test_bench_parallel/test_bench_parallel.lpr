@@ -129,7 +129,9 @@ begin
   LResult := RunParallelBench(@BenchSharedCounter, 4, 10000);
 
   // With more iterations and proper locking, we should see the expected count
-  Check(GCounter > 0, 'Counter > 0 (some increments completed)');
+  // Default warmup = 1000, so total = 4 threads × (10000 + 1000 warmup) = 44000
+  WriteLn('  Counter value: ', GCounter, ' (expected 44000)');
+  Check(GCounter = 44000, 'Counter = 44000 (4 threads x 11000 including warmup)');
   Check(LResult.TotalNs > 0, 'TotalNs > 0');
 end;
 

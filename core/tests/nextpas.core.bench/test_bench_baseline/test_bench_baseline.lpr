@@ -86,6 +86,7 @@ procedure Test_AddBaselineFromResult;
 var
   LManager: TBaselineManager;
   LResult: TBenchResult;
+  LBaseline: TBaselineData;
 begin
   WriteLn('Test_AddBaselineFromResult:');
   LManager := TBaselineManager.Create(1.1);
@@ -95,8 +96,9 @@ begin
 
   Check(LManager.HasBaseline('Sort'), 'Has baseline Sort');
 
-  LManager.GetBaseline('Sort');
-  Check(True, 'Can retrieve baseline');
+  LBaseline := LManager.GetBaseline('Sort');
+  Check(LBaseline.Name = 'Sort', 'Retrieved baseline name');
+  Check(LBaseline.NsPerOp = 1000, 'Retrieved baseline NsPerOp');
 end;
 
 procedure Test_GetBaseline;

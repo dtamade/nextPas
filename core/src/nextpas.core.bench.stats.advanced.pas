@@ -279,32 +279,38 @@ function TAdvancedStats.Kurtosis: Double;
 var
   I: Integer;
   LMean: Double;
-  LStdDev: Double;
-  LSum: Double;
+  LSum2: Double;
+  LSum4: Double;
+  LDiff: Double;
   LCount: Integer;
-  LRaw: Double;
-  LZ: Double;
+  Lk2: Double;
+  Lk4: Double;
+  LRatio: Double;
 begin
   LCount := Length(FData);
   if LCount < 4 then Exit(0);
 
   LMean := Mean;
-  LStdDev := StdDev;
-  if LStdDev = 0 then Exit(0);
 
-  LSum := 0;
+  LSum2 := 0;
+  LSum4 := 0;
   for I := 0 to High(FData) do
   begin
-    LZ := (FData[I] - LMean) / LStdDev;
-    LSum := LSum + LZ * LZ * LZ * LZ;
+    LDiff := FData[I] - LMean;
+    LSum2 := LSum2 + LDiff * LDiff;
+    LSum4 := LSum4 + LDiff * LDiff * LDiff * LDiff;
   end;
 
-  LRaw := LSum / LCount;
-  // Unbiased excess kurtosis correction
-  if (LCount > 3) and (LCount > 2) then
-    Result := ((LCount - 1) * ((LCount + 1) * LRaw - 3 * (LCount - 1)) / (LCount - 2) / (LCount - 3))
-  else
-    Result := LRaw - 3;
+  if LSum2 = 0 then Exit(0);
+
+  // Population central moments
+  Lk2 := LSum2 / LCount;
+  Lk4 := LSum4 / LCount;
+  LRatio := Lk4 / (Lk2 * Lk2);
+
+  // Unbiased sample excess kurtosis (Fisher's G2)
+  Result := (LCount - 1) * ((LCount + 1) * LRatio - 3 * (LCount - 1))
+            / ((LCount - 2) * (LCount - 3));
 end;
 
 function TAdvancedStats.Percentile(APercentile: Double): Double;

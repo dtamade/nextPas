@@ -123,11 +123,12 @@ var
   LStats: TAdvancedStats;
 begin
   WriteLn('Test_Kurtosis:');
-  // Normal-like data should have kurtosis near 0
+  // Uniform data [1..5] has negative excess kurtosis (platykurtic)
   LData := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0]);
   LStats := TAdvancedStats.Create(LData);
-  // Just check it's a valid number
-  Check(LStats.Kurtosis <> 0, 'Kurtosis is computed');
+  Check(LStats.Kurtosis < 0, 'Uniform data has negative kurtosis (platykurtic)');
+  // Excess kurtosis of discrete uniform 1..5 ≈ -1.3
+  Check(Abs(LStats.Kurtosis - (-1.3)) < 0.2, 'Kurtosis ≈ -1.3 for uniform 1..5');
 end;
 
 procedure Test_Percentile;
@@ -177,16 +178,22 @@ var
   LData: TDoubleArray;
   LStats: TAdvancedStats;
   LResult: TOutlierDetection;
+  LFound100: Boolean;
+  I: Integer;
 begin
   WriteLn('Test_DetectOutliers_ZScore:');
-  // Data with outlier
+  // With threshold=3, small samples inflate stddev (masking effect).
+  // Use threshold=1.5 so 100 (z≈2.04) is detected.
   LData := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0, 100.0]);
   LStats := TAdvancedStats.Create(LData);
-  LResult := LStats.DetectOutliers_ZScore;
+  LResult := LStats.DetectOutliers_ZScore(1.5);
 
-  // Z-Score might not detect outliers with small sample size
-  Check(Length(LResult.Outliers) >= 0, 'Outliers detected or none');
   Check(LResult.Method = omZScore, 'Method = ZScore');
+  LFound100 := False;
+  for I := 0 to High(LResult.Outliers) do
+    if LResult.Outliers[I] = 100.0 then
+      LFound100 := True;
+  Check(LFound100, 'Value 100.0 detected as outlier with threshold=1.5');
 end;
 
 procedure Test_DetectOutliers_ModifiedZScore;
