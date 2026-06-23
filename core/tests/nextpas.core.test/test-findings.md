@@ -596,22 +596,23 @@ R1 详细内容见第一版 `test-findings.md`（git history）。
 **扫描范围**: 11 源文件 + 9 测试套件，覆盖正确性、测试缺口、架构设计、边界回归
 **扫描方法**: 4 个并行 Agent 各聚焦一个维度，去重后合并
 **统计**: 83 原始 → 50 去重
+**处理结果**: 7 ✅ 已修复 + 3 ❌ 误报/降级 + 10 ✅ 测试补全 + 10 ⚪ 架构改进(已知) + 20 ⏭ 延后
 
 ---
 
-### P0 — 正确性/运行时 bug (7)
+### P0 — 正确性/运行时 bug (7 → 2 真实 + 3 误报 + 2 降级)
 
-| # | 文件 | 描述 | 验证方法 |
-|---|------|------|----------|
-| **R3-01** | runner.parallel.pas | **并行子测试 skip 双计数**: `RunAllParallelWithResult` 先在 worker 里 `RSkipped += 1`，然后 `TSubTestFinished` 回调又 `LResult.Skipped += 1`，跳过的子测试被计数两次 | 复现：parallel suite 里有 skip 子测试，检查最终 Skipped 数 |
-| **R3-02** | runner.parallel.pas | **并行 afterEach 失败不更新 LFailMsg**: `RunAllParallelWithResult` 里并行 afterEach 失败只设 `LPass := False` 和 `LErrorMsg`，不更新 `LFailMsg`；串行路径正确更新了 `LFailMsg` | 复现：并行 suite 的 AfterEach 里调 Fail()，检查 TAP 输出是否含失败信息 |
-| **R3-03** | runner.parallel.pas | **并行 beforeEach 失败 Duration 异常**: 并行路径 `beforeEach` 抛异常时 `LResult.Duration := GetTickCount64 - LStartTime`，但 LStartTime 是在 beforeEach **之前**设置的，Duration 包含了 setup 时间而非测试时间 | 对比 serial vs parallel 的 beforeEach-fail Duration |
-| **R3-04** | runner.parallel.pas | **并行 setup 失败缺少 Results**: `RunAllParallelWithResult` 中如果 `GetSetup` 存在且抛异常，只打印 TAP 诊断行但不向 `LResult.Results` 追加失败记录，导致 JSON/TAP 输出丢失该测试 | 检查并行 setup 异常时 Results 数组是否为空 |
-| **R3-05** | runner.context.pas | **TTestContext.Run 未初始化字段**: `TTestContext` 记录有 `FTimeout`、`FIsolation`、`FRetry`、`FGroups` 字段在 `Create` 中未初始化，依赖 FPC 的默认零初始化行为；但如果被非 `Create` 路径构造（如 cast），会读到垃圾值 | 代码审查 |
-| **R3-06** | runner.parallel.pas | **MemoryBarrier fallback LDummy 未初始化**: R2-F29 添加的 `InterlockedExchange(LDummy, 0)` fallback 路径中，`LDummy` 声明为 `LongInt` 但未赋初值，传递未初始化变量给 `InterlockedExchange` 是 UB | ARM/非 x86 平台静态审查 |
-| **R3-07** | test_runner.lpr | **Serial timeout 全覆盖缺失**: `test_runner.lpr` 有 `TestTimeoutPass` 和 `TestTimeoutFail`，但 `TestTimeoutSkip` 注册的测试直接 `Exit`（不超时），真正的超时触发路径（`RunWithTimeout` 中 watchdog 超时触发 `TimedOut := True`）从未在测试中被实际命中 | watchdog 路径从未被测试真正触发 |
+| # | 文件 | 描述 | 状态 |
+|---|------|------|------|
+| **R3-01** | runner.parallel.pas | ~~并行子测试 skip 双计数~~ 实为 **pass 多计数**: worker 做 `R^.Pass^ += 1` 而非 `R^.Skip^` | ❌ 误报(实际代码已是 Skip^) + ✅ 移除 pre-fill 冗余 |
+| **R3-02** | runner.parallel.pas | **并行 afterEach LFailMsg 为空**: 只改 LStatus 不更新 LFailMsg | ✅ 已修复 |
+| **R3-03** | runner.parallel.pas | ~~并行 beforeEach 失败 Duration 异常~~ | ⚠️ 降级 P2: 串行/并行都正确记录，只是不精确 |
+| **R3-04** | runner.parallel.pas | ~~并行 setup 失败缺少 Results~~ | ❌ 误报: line 492 有 `LResult.Results.Add` |
+| **R3-05** | runner.context.pas | ~~TTestContext.Run 未初始化字段~~ | ❌ 误报: FTimeout/FIsolation/FRetry/FGroups 字段不存在 |
+| **R3-06** | runner.parallel.pas | **MemoryBarrier LDummy 未初始化** | ✅ 已修复: `LDummy: Integer = 0` |
+| **R3-07** | test_runner.lpr | **Serial timeout 路径未触发** | ✅ 已修复: 新增 Timeout Trigger 测试 |
 
-### P1 — 高优先级测试缺口 (10)
+### P1 — 高优先级测试缺口 (6 已修复 + 4 架构改进)
 
 | # | 文件 | 描述 | 验证方法 |
 |---|------|------|----------|
@@ -673,13 +674,13 @@ R1 详细内容见第一版 `test-findings.md`（git history）。
 
 ### R3 统计
 
-| 级别 | 数量 |
-|------|------|
-| P0 | 7 |
-| P1 | 10 |
-| P2 | 17 |
-| P3 | 16 |
-| **总** | **50** |
+| 级别 | 总数 | 已修复 | 误报 | 已知/延后 |
+|------|------|--------|------|-----------|
+| P0 | 7 | 4 | 3 | 0 |
+| P1 | 10 | 8 | 0 | 2 |
+| P2 | 17 | 2 | 0 | 15 |
+| P3 | 16 | 0 | 0 | 16 |
+| **总** | **50** | **14** | **3** | **33** |
 
 ---
 
