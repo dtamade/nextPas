@@ -93,11 +93,43 @@ uses
   nextpas.core.json.writer,
   nextpas.core.text.builder;
 
-{ 辅助函数：添加字符串到数组 }
-procedure AddLine(var ALines: TStringArray; const ALine: string);
+{ 辅助函数：行缓冲区（capacity 翻倍策略）}
+type
+  TLineBuffer = record
+    Lines: TStringArray;
+    Count: Integer;
+    Capacity: Integer;
+  end;
+
+procedure BufferAddLine(var ABuf: TLineBuffer; const ALine: string);
 begin
-  SetLength(ALines, Length(ALines) + 1);
-  ALines[High(ALines)] := ALine;
+  if ABuf.Count >= ABuf.Capacity then
+  begin
+    if ABuf.Capacity = 0 then ABuf.Capacity := 16
+    else ABuf.Capacity := ABuf.Capacity * 2;
+    SetLength(ABuf.Lines, ABuf.Capacity);
+  end;
+  ABuf.Lines[ABuf.Count] := ALine;
+  Inc(ABuf.Count);
+end;
+
+function BufferToString(const ABuf: TLineBuffer): string;
+var
+  I: Integer;
+  LBuilder: TStringBuilder;
+begin
+  if ABuf.Count = 0 then Exit('');
+  LBuilder.Init(ABuf.Count * 80);
+  try
+    for I := 0 to ABuf.Count - 1 do
+    begin
+      if I > 0 then LBuilder.AppendStr(LineEnding);
+      LBuilder.AppendStr(ABuf.Lines[I]);
+    end;
+    Result := LBuilder.ToString;
+  finally
+    LBuilder.Done;
+  end;
 end;
 
 { TBenchReportGenerator }
@@ -138,17 +170,33 @@ end;
 function TBenchReportGenerator.FormatLargeNumber(AValue: Int64): string;
 var
   LStr: string;
-  LLen, i: Integer;
+  LLen, I, LFirstGroup: Integer;
+  LBuilder: TStringBuilder;
 begin
-  LStr := IntToStr(AValue);
+  if AValue = 0 then Exit('0');
+  LStr := IntToStr(Abs(AValue));
   LLen := Length(LStr);
-  Result := '';
-
-  for i := 1 to LLen do
-  begin
-    if (i > 1) and ((LLen - i + 1) mod 3 = 0) then
-      Result := Result + ',';
-    Result := Result + LStr[i];
+  LBuilder.Init(LLen + LLen div 3 + 2);
+  try
+    if AValue < 0 then LBuilder.AppendChar('-');
+    LFirstGroup := LLen mod 3;
+    if LFirstGroup = 0 then LFirstGroup := 3;
+    // 第一组
+    for I := 1 to LFirstGroup do
+      LBuilder.AppendChar(LStr[I]);
+    // 后续每 3 位一组
+    I := LFirstGroup + 1;
+    while I <= LLen do
+    begin
+      LBuilder.AppendChar(',');
+      LBuilder.AppendChar(LStr[I]);
+      LBuilder.AppendChar(LStr[I+1]);
+      LBuilder.AppendChar(LStr[I+2]);
+      Inc(I, 3);
+    end;
+    Result := LBuilder.ToString;
+  finally
+    LBuilder.Done;
   end;
 end;
 
@@ -177,56 +225,86 @@ begin
 end;
 
 function TBenchReportGenerator.EscapeJSON(const AStr: string): string;
+var
+  I: Integer;
+  LBuilder: TStringBuilder;
 begin
-  Result := AStr;
-  Result := StringReplace(Result, '\', '\\', True);
-  Result := StringReplace(Result, '"', '\"', True);
-  Result := StringReplace(Result, #10, '\n', True);
-  Result := StringReplace(Result, #13, '\r', True);
-  Result := StringReplace(Result, #9, '\t', True);
+  LBuilder.Init(Length(AStr) + 16);
+  try
+    for I := 1 to Length(AStr) do
+    begin
+      case AStr[I] of
+        '\': LBuilder.AppendStr('\\');
+        '"': LBuilder.AppendStr('\"');
+        #10: LBuilder.AppendStr('\n');
+        #13: LBuilder.AppendStr('\r');
+        #9: LBuilder.AppendStr('\t');
+      else
+        LBuilder.AppendChar(AStr[I]);
+      end;
+    end;
+    Result := LBuilder.ToString;
+  finally
+    LBuilder.Done;
+  end;
 end;
 
 function TBenchReportGenerator.EscapeHTML(const AStr: string): string;
+var
+  I: Integer;
+  LBuilder: TStringBuilder;
 begin
-  Result := AStr;
-  Result := StringReplace(Result, '&', '&amp;', True);
-  Result := StringReplace(Result, '<', '&lt;', True);
-  Result := StringReplace(Result, '>', '&gt;', True);
-  Result := StringReplace(Result, '"', '&quot;', True);
+  LBuilder.Init(Length(AStr) + 16);
+  try
+    for I := 1 to Length(AStr) do
+    begin
+      case AStr[I] of
+        '&': LBuilder.AppendStr('&amp;');
+        '<': LBuilder.AppendStr('&lt;');
+        '>': LBuilder.AppendStr('&gt;');
+        '"': LBuilder.AppendStr('&quot;');
+      else
+        LBuilder.AppendChar(AStr[I]);
+      end;
+    end;
+    Result := LBuilder.ToString;
+  finally
+    LBuilder.Done;
+  end;
 end;
 
 function TBenchReportGenerator.ToConsole: string;
 var
-  LLines: TStringArray;
+  LLines: TLineBuffer;
   LSkippedCount: Integer;
   i: Integer;
 begin
-  SetLength(LLines, 0);
+  LLines := Default(TLineBuffer);
 
-  // 标题
-  AddLine(LLines, '=== nextpas.core.bench v1.0 ===');
-  AddLine(LLines, '');
-  AddLine(LLines, 'Environment:');
-  AddLine(LLines, '  OS: ' + FEnvironment.OS);
-  AddLine(LLines, '  CPU: ' + FEnvironment.CPU);
-  AddLine(LLines, '  Cores: ' + IntToStr(FEnvironment.Cores));
-  AddLine(LLines, '  FPC: ' + FEnvironment.FPCVersion);
-  AddLine(LLines, '  Time: ' + FEnvironment.Timestamp);
-  AddLine(LLines, '');
-  AddLine(LLines, 'Benchmark Results:');
-  AddLine(LLines, '');
+  // title
+  BufferAddLine(LLines, '=== nextpas.core.bench v1.0 ===');
+  BufferAddLine(LLines, '');
+  BufferAddLine(LLines, 'Environment:');
+  BufferAddLine(LLines, '  OS: ' + FEnvironment.OS);
+  BufferAddLine(LLines, '  CPU: ' + FEnvironment.CPU);
+  BufferAddLine(LLines, '  Cores: ' + IntToStr(FEnvironment.Cores));
+  BufferAddLine(LLines, '  FPC: ' + FEnvironment.FPCVersion);
+  BufferAddLine(LLines, '  Time: ' + FEnvironment.Timestamp);
+  BufferAddLine(LLines, '');
+  BufferAddLine(LLines, 'Benchmark Results:');
+  BufferAddLine(LLines, '');
 
-  // 表头
-  AddLine(LLines, TextFormat('  %-40s %10s %10s %10s %10s %10s',
+  // header
+  BufferAddLine(LLines, TextFormat('  %-40s %10s %10s %10s %10s %10s',
     ['Name', 'Iterations', 'ns/op', 'ops/s', 'StdDev', 'P99']));
-  AddLine(LLines, '  ' + TextOfChar('-', 100));
+  BufferAddLine(LLines, '  ' + TextOfChar('-', 100));
 
-  // 结果（只显示未跳过的）
+  // results (non-skipped only)
   for i := 0 to FResultCount - 1 do
   begin
     if not FResults[i].Skipped then
     begin
-      AddLine(LLines, TextFormat('  %-40s %10s %10s %10s %10s %10s',
+      BufferAddLine(LLines, TextFormat('  %-40s %10s %10s %10s %10s %10s',
         [FResults[i].Name,
          FormatLargeNumber(FResults[i].Iterations),
          FormatNumber(FResults[i].NsPerOp, 1),
@@ -236,7 +314,7 @@ begin
     end;
   end;
 
-  // 跳过的基准
+  // skipped benchmarks
   LSkippedCount := 0;
   for i := 0 to FResultCount - 1 do
     if FResults[i].Skipped then
@@ -244,23 +322,23 @@ begin
 
   if LSkippedCount > 0 then
   begin
-    AddLine(LLines, '');
-    AddLine(LLines, 'Skipped Benchmarks:');
-    AddLine(LLines, '');
+    BufferAddLine(LLines, '');
+    BufferAddLine(LLines, 'Skipped Benchmarks:');
+    BufferAddLine(LLines, '');
     for i := 0 to FResultCount - 1 do
     begin
       if FResults[i].Skipped then
       begin
-        AddLine(LLines, '  ' + FResults[i].Name);
-        AddLine(LLines, '    Reason: ' + FResults[i].SkipReason);
+        BufferAddLine(LLines, '  ' + FResults[i].Name);
+        BufferAddLine(LLines, '    Reason: ' + FResults[i].SkipReason);
       end;
     end;
   end;
 
-  AddLine(LLines, '');
-  AddLine(LLines, '=== Statistics ===');
+  BufferAddLine(LLines, '');
+  BufferAddLine(LLines, '=== Statistics ===');
 
-  // 详细统计（只显示前 5 个未跳过的结果）
+  // detailed statistics (top 5 non-skipped)
   LSkippedCount := 0;
   for i := 0 to FResultCount - 1 do
   begin
@@ -271,26 +349,20 @@ begin
     end;
     if i - LSkippedCount >= 5 then
       Break;
-    AddLine(LLines, '');
-    AddLine(LLines, FResults[i].Name + ':');
-    AddLine(LLines, TextFormat('  Mean: %s  StdDev: %s  Median: %s',
+    BufferAddLine(LLines, '');
+    BufferAddLine(LLines, FResults[i].Name + ':');
+    BufferAddLine(LLines, TextFormat('  Mean: %s  StdDev: %s  Median: %s',
       [FormatTime(FResults[i].NsPerOp),
        FormatTime(FResults[i].StdDev),
        FormatTime(FResults[i].Median)]));
-    AddLine(LLines, TextFormat('  P95: %s  P99: %s  Outliers: %d/%d',
+    BufferAddLine(LLines, TextFormat('  P95: %s  P99: %s  Outliers: %d/%d',
       [FormatTime(FResults[i].P95),
        FormatTime(FResults[i].P99),
        FResults[i].Outliers,
        FResults[i].SampleCount]));
   end;
 
-  Result := '';
-  for i := 0 to High(LLines) do
-  begin
-    if i > 0 then
-      Result := Result + LineEnding;
-    Result := Result + LLines[i];
-  end;
+  Result := BufferToString(LLines);
 end;
 
 function TBenchReportGenerator.ToJSON: string;
@@ -409,18 +481,18 @@ end;
 
 function TBenchReportGenerator.ToTSV: string;
 var
-  LLines: TStringArray;
+  LLines: TLineBuffer;
   i: Integer;
 begin
-  SetLength(LLines, 0);
+  LLines := Default(TLineBuffer);
 
-  // 表头
-  AddLine(LLines, 'name' + #9 + 'status' + #9 + 'skip_reason' + #9 + 'iterations' + #9 + 'ns_per_op' + #9 + 'ops_per_sec' + #9 + 'stddev' + #9 + 'median' + #9 + 'p95' + #9 + 'p99' + #9 + 'outliers' + #9 + 'samples');
+  // header
+  BufferAddLine(LLines, 'name' + #9 + 'status' + #9 + 'skip_reason' + #9 + 'iterations' + #9 + 'ns_per_op' + #9 + 'ops_per_sec' + #9 + 'stddev' + #9 + 'median' + #9 + 'p95' + #9 + 'p99' + #9 + 'outliers' + #9 + 'samples');
 
-  // 数据
+  // data
   for i := 0 to FResultCount - 1 do
   begin
-    AddLine(LLines,
+    BufferAddLine(LLines,
       FResults[i].Name + #9 +
       BoolToStr(FResults[i].Skipped, 'skipped', 'ok') + #9 +
       FResults[i].SkipReason + #9 +
@@ -435,18 +507,12 @@ begin
       IntToStr(FResults[i].SampleCount));
   end;
 
-  Result := '';
-  for i := 0 to High(LLines) do
-  begin
-    if i > 0 then
-      Result := Result + LineEnding;
-    Result := Result + LLines[i];
-  end;
+  Result := BufferToString(LLines);
 end;
 
 function TBenchReportGenerator.GenerateChart(const AResults: array of TBenchResult): string;
 var
-  LLines: TStringArray;
+  LLines: TLineBuffer;
   LMaxNsPerOp: Double;
   LBarWidth: Double;
   LBarHeight: Double;
@@ -457,7 +523,7 @@ var
   LIndex: Integer;
   I: Integer;
 begin
-  // 计算未跳过的数量
+  // count non-skipped
   LCount := 0;
   for I := 0 to High(AResults) do
     if not AResults[I].Skipped then
@@ -473,11 +539,11 @@ begin
   if LMaxNsPerOp <= 0 then
     LMaxNsPerOp := 1.0;
 
-  SetLength(LLines, 0);
-  AddLine(LLines, '<svg class="bench-chart" viewBox="0 0 820 280" role="img" aria-label="Benchmark ns per op chart">');
-  AddLine(LLines, '  <rect x="0" y="0" width="820" height="280" rx="18" fill="#fbfcfd"/>');
-  AddLine(LLines, '  <line x1="64" y1="236" x2="784" y2="236" stroke="#cfd7de" stroke-width="1"/>');
-  AddLine(LLines, '  <line x1="64" y1="24" x2="64" y2="236" stroke="#cfd7de" stroke-width="1"/>');
+  LLines := Default(TLineBuffer);
+  BufferAddLine(LLines, '<svg class="bench-chart" viewBox="0 0 820 280" role="img" aria-label="Benchmark ns per op chart">');
+  BufferAddLine(LLines, '  <rect x="0" y="0" width="820" height="280" rx="18" fill="#fbfcfd"/>');
+  BufferAddLine(LLines, '  <line x1="64" y1="236" x2="784" y2="236" stroke="#cfd7de" stroke-width="1"/>');
+  BufferAddLine(LLines, '  <line x1="64" y1="24" x2="64" y2="236" stroke="#cfd7de" stroke-width="1"/>');
 
   LBarWidth := 720.0 / Max(LCount, 1);
   LIndex := 0;
@@ -491,18 +557,18 @@ begin
     LBarX := 76.0 + LIndex * LBarWidth;
     LBarY := 236.0 - LBarHeight;
 
-    AddLine(LLines,
+    BufferAddLine(LLines,
       TextFormat('  <rect x="%s" y="%s" width="%s" height="%s" rx="8" fill="#4a7a6f"/>',
         [FormatNumber(LBarX, 2),
          FormatNumber(LBarY, 2),
          FormatNumber(Max(LBarWidth - 18.0, 14.0), 2),
          FormatNumber(LBarHeight, 2)]));
-    AddLine(LLines,
+    BufferAddLine(LLines,
       TextFormat('  <text x="%s" y="%s" class="chart-value">%s ns</text>',
         [FormatNumber(LBarX, 2),
          FormatNumber(Max(LBarY - 8.0, 18.0), 2),
          EscapeHTML(FormatNumber(AResults[I].NsPerOp, 1))]));
-    AddLine(LLines,
+    BufferAddLine(LLines,
       TextFormat('  <text x="%s" y="254" class="chart-label">%s</text>',
         [FormatNumber(LBarX, 2),
          EscapeHTML(AResults[I].Name)]));
@@ -510,15 +576,9 @@ begin
     Inc(LIndex);
   end;
 
-  AddLine(LLines, '</svg>');
+  BufferAddLine(LLines, '</svg>');
 
-  Result := '';
-  for I := 0 to High(LLines) do
-  begin
-    if I > 0 then
-      Result := Result + LineEnding;
-    Result := Result + LLines[I];
-  end;
+  Result := BufferToString(LLines);
 end;
 
 function TBenchReportGenerator.GenerateCSS: string;
@@ -543,74 +603,74 @@ end;
 
 function TBenchReportGenerator.ToHTML: string;
 var
-  LHTML: TStringArray;
+  LHTML: TLineBuffer;
   LSkippedCount: Integer;
   i: Integer;
 begin
-  SetLength(LHTML, 0);
+  LHTML := Default(TLineBuffer);
 
-  AddLine(LHTML, '<!DOCTYPE html>');
-  AddLine(LHTML, '<html>');
-  AddLine(LHTML, '<head>');
-  AddLine(LHTML, '  <title>nextpas.core.bench Report</title>');
-  AddLine(LHTML, '  <meta charset="UTF-8">');
-  AddLine(LHTML, '  ' + GenerateCSS);
-  AddLine(LHTML, '</head>');
-  AddLine(LHTML, '<body>');
-  AddLine(LHTML, '  <h1>nextpas.core.bench Report</h1>');
-  AddLine(LHTML, '');
-  AddLine(LHTML, '  <div class="stats">');
-  AddLine(LHTML, '    <h2>Environment</h2>');
-  AddLine(LHTML, '    <p><strong>OS:</strong> ' + EscapeHTML(FEnvironment.OS) + '</p>');
-  AddLine(LHTML, '    <p><strong>CPU:</strong> ' + EscapeHTML(FEnvironment.CPU) + '</p>');
-  AddLine(LHTML, '    <p><strong>Cores:</strong> ' + IntToStr(FEnvironment.Cores) + '</p>');
-  AddLine(LHTML, '    <p><strong>FPC:</strong> ' + EscapeHTML(FEnvironment.FPCVersion) + '</p>');
-  AddLine(LHTML, '    <p><strong>Time:</strong> ' + EscapeHTML(FEnvironment.Timestamp) + '</p>');
-  AddLine(LHTML, '  </div>');
-  AddLine(LHTML, '');
-  AddLine(LHTML, '  <div class="chart-container">');
-  AddLine(LHTML, '    <h2>Performance Chart</h2>');
-  AddLine(LHTML, '    ' + GenerateChart(FResults));
-  AddLine(LHTML, '  </div>');
-  AddLine(LHTML, '');
-  AddLine(LHTML, '  <h2>Benchmark Results</h2>');
-  AddLine(LHTML, '  <table>');
-  AddLine(LHTML, '    <thead>');
-  AddLine(LHTML, '      <tr>');
-  AddLine(LHTML, '        <th>Name</th>');
-  AddLine(LHTML, '        <th>Iterations</th>');
-  AddLine(LHTML, '        <th>ns/op</th>');
-  AddLine(LHTML, '        <th>ops/s</th>');
-  AddLine(LHTML, '        <th>StdDev</th>');
-  AddLine(LHTML, '        <th>Median</th>');
-  AddLine(LHTML, '        <th>P95</th>');
-  AddLine(LHTML, '        <th>P99</th>');
-  AddLine(LHTML, '        <th>Outliers</th>');
-  AddLine(LHTML, '      </tr>');
-  AddLine(LHTML, '    </thead>');
-  AddLine(LHTML, '    <tbody>');
+  BufferAddLine(LHTML, '<!DOCTYPE html>');
+  BufferAddLine(LHTML, '<html>');
+  BufferAddLine(LHTML, '<head>');
+  BufferAddLine(LHTML, '  <title>nextpas.core.bench Report</title>');
+  BufferAddLine(LHTML, '  <meta charset="UTF-8">');
+  BufferAddLine(LHTML, '  ' + GenerateCSS);
+  BufferAddLine(LHTML, '</head>');
+  BufferAddLine(LHTML, '<body>');
+  BufferAddLine(LHTML, '  <h1>nextpas.core.bench Report</h1>');
+  BufferAddLine(LHTML, '');
+  BufferAddLine(LHTML, '  <div class="stats">');
+  BufferAddLine(LHTML, '    <h2>Environment</h2>');
+  BufferAddLine(LHTML, '    <p><strong>OS:</strong> ' + EscapeHTML(FEnvironment.OS) + '</p>');
+  BufferAddLine(LHTML, '    <p><strong>CPU:</strong> ' + EscapeHTML(FEnvironment.CPU) + '</p>');
+  BufferAddLine(LHTML, '    <p><strong>Cores:</strong> ' + IntToStr(FEnvironment.Cores) + '</p>');
+  BufferAddLine(LHTML, '    <p><strong>FPC:</strong> ' + EscapeHTML(FEnvironment.FPCVersion) + '</p>');
+  BufferAddLine(LHTML, '    <p><strong>Time:</strong> ' + EscapeHTML(FEnvironment.Timestamp) + '</p>');
+  BufferAddLine(LHTML, '  </div>');
+  BufferAddLine(LHTML, '');
+  BufferAddLine(LHTML, '  <div class="chart-container">');
+  BufferAddLine(LHTML, '    <h2>Performance Chart</h2>');
+  BufferAddLine(LHTML, '    ' + GenerateChart(FResults));
+  BufferAddLine(LHTML, '  </div>');
+  BufferAddLine(LHTML, '');
+  BufferAddLine(LHTML, '  <h2>Benchmark Results</h2>');
+  BufferAddLine(LHTML, '  <table>');
+  BufferAddLine(LHTML, '    <thead>');
+  BufferAddLine(LHTML, '      <tr>');
+  BufferAddLine(LHTML, '        <th>Name</th>');
+  BufferAddLine(LHTML, '        <th>Iterations</th>');
+  BufferAddLine(LHTML, '        <th>ns/op</th>');
+  BufferAddLine(LHTML, '        <th>ops/s</th>');
+  BufferAddLine(LHTML, '        <th>StdDev</th>');
+  BufferAddLine(LHTML, '        <th>Median</th>');
+  BufferAddLine(LHTML, '        <th>P95</th>');
+  BufferAddLine(LHTML, '        <th>P99</th>');
+  BufferAddLine(LHTML, '        <th>Outliers</th>');
+  BufferAddLine(LHTML, '      </tr>');
+  BufferAddLine(LHTML, '    </thead>');
+  BufferAddLine(LHTML, '    <tbody>');
 
   for i := 0 to FResultCount - 1 do
   begin
     if FResults[i].Skipped then
       Continue;
-    AddLine(LHTML, '      <tr>');
-    AddLine(LHTML, '        <td class="benchmark-name">' + EscapeHTML(FResults[i].Name) + '</td>');
-    AddLine(LHTML, '        <td>' + FormatLargeNumber(FResults[i].Iterations) + '</td>');
-    AddLine(LHTML, '        <td>' + FormatNumber(FResults[i].NsPerOp, 1) + '</td>');
-    AddLine(LHTML, '        <td>' + FormatLargeNumber(Int64(FResults[i].OpsPerSec)) + '</td>');
-    AddLine(LHTML, '        <td>' + FormatNumber(FResults[i].StdDev, 1) + '</td>');
-    AddLine(LHTML, '        <td>' + FormatNumber(FResults[i].Median, 1) + '</td>');
-    AddLine(LHTML, '        <td>' + FormatNumber(FResults[i].P95, 1) + '</td>');
-    AddLine(LHTML, '        <td>' + FormatNumber(FResults[i].P99, 1) + '</td>');
-    AddLine(LHTML, '        <td>' + IntToStr(FResults[i].Outliers) + '</td>');
-    AddLine(LHTML, '      </tr>');
+    BufferAddLine(LHTML, '      <tr>');
+    BufferAddLine(LHTML, '        <td class="benchmark-name">' + EscapeHTML(FResults[i].Name) + '</td>');
+    BufferAddLine(LHTML, '        <td>' + FormatLargeNumber(FResults[i].Iterations) + '</td>');
+    BufferAddLine(LHTML, '        <td>' + FormatNumber(FResults[i].NsPerOp, 1) + '</td>');
+    BufferAddLine(LHTML, '        <td>' + FormatLargeNumber(Int64(FResults[i].OpsPerSec)) + '</td>');
+    BufferAddLine(LHTML, '        <td>' + FormatNumber(FResults[i].StdDev, 1) + '</td>');
+    BufferAddLine(LHTML, '        <td>' + FormatNumber(FResults[i].Median, 1) + '</td>');
+    BufferAddLine(LHTML, '        <td>' + FormatNumber(FResults[i].P95, 1) + '</td>');
+    BufferAddLine(LHTML, '        <td>' + FormatNumber(FResults[i].P99, 1) + '</td>');
+    BufferAddLine(LHTML, '        <td>' + IntToStr(FResults[i].Outliers) + '</td>');
+    BufferAddLine(LHTML, '      </tr>');
   end;
 
-  AddLine(LHTML, '    </tbody>');
-  AddLine(LHTML, '  </table>');
+  BufferAddLine(LHTML, '    </tbody>');
+  BufferAddLine(LHTML, '  </table>');
 
-  // 跳过的基准
+  // skipped benchmarks
   LSkippedCount := 0;
   for i := 0 to FResultCount - 1 do
     if FResults[i].Skipped then
@@ -618,35 +678,35 @@ begin
 
   if LSkippedCount > 0 then
   begin
-    AddLine(LHTML, '');
-    AddLine(LHTML, '  <h2>Skipped Benchmarks</h2>');
-    AddLine(LHTML, '  <table>');
-    AddLine(LHTML, '    <thead>');
-    AddLine(LHTML, '      <tr>');
-    AddLine(LHTML, '        <th>Name</th>');
-    AddLine(LHTML, '        <th>Reason</th>');
-    AddLine(LHTML, '      </tr>');
-    AddLine(LHTML, '    </thead>');
-    AddLine(LHTML, '    <tbody>');
+    BufferAddLine(LHTML, '');
+    BufferAddLine(LHTML, '  <h2>Skipped Benchmarks</h2>');
+    BufferAddLine(LHTML, '  <table>');
+    BufferAddLine(LHTML, '    <thead>');
+    BufferAddLine(LHTML, '      <tr>');
+    BufferAddLine(LHTML, '        <th>Name</th>');
+    BufferAddLine(LHTML, '        <th>Reason</th>');
+    BufferAddLine(LHTML, '      </tr>');
+    BufferAddLine(LHTML, '    </thead>');
+    BufferAddLine(LHTML, '    <tbody>');
     for i := 0 to FResultCount - 1 do
     begin
       if FResults[i].Skipped then
       begin
-        AddLine(LHTML, '      <tr>');
-        AddLine(LHTML, '        <td class="benchmark-name">' + EscapeHTML(FResults[i].Name) + '</td>');
-        AddLine(LHTML, '        <td>' + EscapeHTML(FResults[i].SkipReason) + '</td>');
-        AddLine(LHTML, '      </tr>');
+        BufferAddLine(LHTML, '      <tr>');
+        BufferAddLine(LHTML, '        <td class="benchmark-name">' + EscapeHTML(FResults[i].Name) + '</td>');
+        BufferAddLine(LHTML, '        <td>' + EscapeHTML(FResults[i].SkipReason) + '</td>');
+        BufferAddLine(LHTML, '      </tr>');
       end;
     end;
-    AddLine(LHTML, '    </tbody>');
-    AddLine(LHTML, '  </table>');
+    BufferAddLine(LHTML, '    </tbody>');
+    BufferAddLine(LHTML, '  </table>');
   end;
 
-  AddLine(LHTML, '');
-  AddLine(LHTML, '  <div class="stats">');
-  AddLine(LHTML, '    <h2>Detailed Statistics</h2>');
+  BufferAddLine(LHTML, '');
+  BufferAddLine(LHTML, '  <div class="stats">');
+  BufferAddLine(LHTML, '    <h2>Detailed Statistics</h2>');
 
-  // 显示前 5 个未跳过结果的详细统计
+  // top 5 non-skipped detailed stats
   LSkippedCount := 0;
   for i := 0 to FResultCount - 1 do
   begin
@@ -657,42 +717,36 @@ begin
     end;
     if i - LSkippedCount >= 5 then
       Break;
-    AddLine(LHTML, '    <h3>' + EscapeHTML(FResults[i].Name) + '</h3>');
-    AddLine(LHTML, '    <p>Mean: ' + FormatTime(FResults[i].NsPerOp) + '</p>');
-    AddLine(LHTML, '    <p>StdDev: ' + FormatTime(FResults[i].StdDev) + '</p>');
-    AddLine(LHTML, '    <p>Median: ' + FormatTime(FResults[i].Median) + '</p>');
-    AddLine(LHTML, '    <p>P95: ' + FormatTime(FResults[i].P95) + '</p>');
-    AddLine(LHTML, '    <p>P99: ' + FormatTime(FResults[i].P99) + '</p>');
-    AddLine(LHTML, '    <p>Outliers: ' + IntToStr(FResults[i].Outliers) + '/' + IntToStr(FResults[i].SampleCount) + '</p>');
+    BufferAddLine(LHTML, '    <h3>' + EscapeHTML(FResults[i].Name) + '</h3>');
+    BufferAddLine(LHTML, '    <p>Mean: ' + FormatTime(FResults[i].NsPerOp) + '</p>');
+    BufferAddLine(LHTML, '    <p>StdDev: ' + FormatTime(FResults[i].StdDev) + '</p>');
+    BufferAddLine(LHTML, '    <p>Median: ' + FormatTime(FResults[i].Median) + '</p>');
+    BufferAddLine(LHTML, '    <p>P95: ' + FormatTime(FResults[i].P95) + '</p>');
+    BufferAddLine(LHTML, '    <p>P99: ' + FormatTime(FResults[i].P99) + '</p>');
+    BufferAddLine(LHTML, '    <p>Outliers: ' + IntToStr(FResults[i].Outliers) + '/' + IntToStr(FResults[i].SampleCount) + '</p>');
   end;
 
-  AddLine(LHTML, '  </div>');
+  BufferAddLine(LHTML, '  </div>');
   for i := 0 to FResultCount - 1 do
   begin
     if (not FResults[i].Skipped) and (Length(FResults[i].RawSamples) > 0) then
     begin
-      AddLine(LHTML, '  <div class="chart-container">');
-      AddLine(LHTML, '    <h3>' + EscapeHTML(FResults[i].Name) + ' - Sample Distribution</h3>');
-      AddLine(LHTML, '    ' + GenerateBoxPlot(FResults[i].RawSamples, FResults[i].Name));
-      AddLine(LHTML, '  </div>');
+      BufferAddLine(LHTML, '  <div class="chart-container">');
+      BufferAddLine(LHTML, '    <h3>' + EscapeHTML(FResults[i].Name) + ' - Sample Distribution</h3>');
+      BufferAddLine(LHTML, '    ' + GenerateBoxPlot(FResults[i].RawSamples, FResults[i].Name));
+      BufferAddLine(LHTML, '  </div>');
     end;
   end;
-  AddLine(LHTML, '</body>');
-  AddLine(LHTML, '</html>');
+  BufferAddLine(LHTML, '</body>');
+  BufferAddLine(LHTML, '</html>');
 
-  Result := '';
-  for i := 0 to High(LHTML) do
-  begin
-    if i > 0 then
-      Result := Result + LineEnding;
-    Result := Result + LHTML[i];
-  end;
+  Result := BufferToString(LHTML);
 end;
 
 function TBenchReportGenerator.ToCrossLanguageHTML(
   const AEntries: TCrossLangEntryArray): string;
 var
-  LHTML: TStringArray;
+  LHTML: TLineBuffer;
   LCurrentName: string;
   LMaxNsPerOp: Double;
   LBarWidth: Double;
@@ -705,24 +759,24 @@ begin
   if LMaxNsPerOp <= 0.0 then
     LMaxNsPerOp := 1.0;
 
-  SetLength(LHTML, 0);
-  AddLine(LHTML, '<!DOCTYPE html>');
-  AddLine(LHTML, '<html>');
-  AddLine(LHTML, '<head>');
-  AddLine(LHTML, '  <meta charset="UTF-8">');
-  AddLine(LHTML, '  <title>nextpas.core.bench Cross-Language Report</title>');
-  AddLine(LHTML, '  <style>');
-  AddLine(LHTML, '    body { font-family: sans-serif; margin: 24px; color: #23313a; }');
-  AddLine(LHTML, '    h1, h2 { color: #1a4b5a; }');
-  AddLine(LHTML, '    table { width: 100%; border-collapse: collapse; margin: 16px 0 28px; }');
-  AddLine(LHTML, '    th, td { border-bottom: 1px solid #d9e1e5; padding: 10px 8px; text-align: left; }');
-  AddLine(LHTML, '    .value { white-space: nowrap; }');
-  AddLine(LHTML, '    .bar-track { background: #edf3f5; border-radius: 999px; height: 12px; overflow: hidden; }');
-  AddLine(LHTML, '    .bar-fill { background: linear-gradient(90deg, #4a7a6f, #6ca38c); height: 12px; }');
-  AddLine(LHTML, '  </style>');
-  AddLine(LHTML, '</head>');
-  AddLine(LHTML, '<body>');
-  AddLine(LHTML, '  <h1>Cross-Language Benchmark Comparison</h1>');
+  LHTML := Default(TLineBuffer);
+  BufferAddLine(LHTML, '<!DOCTYPE html>');
+  BufferAddLine(LHTML, '<html>');
+  BufferAddLine(LHTML, '<head>');
+  BufferAddLine(LHTML, '  <meta charset="UTF-8">');
+  BufferAddLine(LHTML, '  <title>nextpas.core.bench Cross-Language Report</title>');
+  BufferAddLine(LHTML, '  <style>');
+  BufferAddLine(LHTML, '    body { font-family: sans-serif; margin: 24px; color: #23313a; }');
+  BufferAddLine(LHTML, '    h1, h2 { color: #1a4b5a; }');
+  BufferAddLine(LHTML, '    table { width: 100%; border-collapse: collapse; margin: 16px 0 28px; }');
+  BufferAddLine(LHTML, '    th, td { border-bottom: 1px solid #d9e1e5; padding: 10px 8px; text-align: left; }');
+  BufferAddLine(LHTML, '    .value { white-space: nowrap; }');
+  BufferAddLine(LHTML, '    .bar-track { background: #edf3f5; border-radius: 999px; height: 12px; overflow: hidden; }');
+  BufferAddLine(LHTML, '    .bar-fill { background: linear-gradient(90deg, #4a7a6f, #6ca38c); height: 12px; }');
+  BufferAddLine(LHTML, '  </style>');
+  BufferAddLine(LHTML, '</head>');
+  BufferAddLine(LHTML, '<body>');
+  BufferAddLine(LHTML, '  <h1>Cross-Language Benchmark Comparison</h1>');
 
   LCurrentName := '';
   for I := 0 to High(AEntries) do
@@ -731,51 +785,45 @@ begin
     begin
       if LCurrentName <> '' then
       begin
-        AddLine(LHTML, '    </tbody>');
-        AddLine(LHTML, '  </table>');
+        BufferAddLine(LHTML, '    </tbody>');
+        BufferAddLine(LHTML, '  </table>');
       end;
       LCurrentName := AEntries[I].Name;
-      AddLine(LHTML, '  <h2>' + EscapeHTML(LCurrentName) + '</h2>');
-      AddLine(LHTML, '  <table>');
-      AddLine(LHTML, '    <thead>');
-      AddLine(LHTML, '      <tr><th>Language</th><th>ns/op</th><th>Relative</th></tr>');
-      AddLine(LHTML, '    </thead>');
-      AddLine(LHTML, '    <tbody>');
+      BufferAddLine(LHTML, '  <h2>' + EscapeHTML(LCurrentName) + '</h2>');
+      BufferAddLine(LHTML, '  <table>');
+      BufferAddLine(LHTML, '    <thead>');
+      BufferAddLine(LHTML, '      <tr><th>Language</th><th>ns/op</th><th>Relative</th></tr>');
+      BufferAddLine(LHTML, '    </thead>');
+      BufferAddLine(LHTML, '    <tbody>');
     end;
 
     LBarWidth := (AEntries[I].NsPerOp / LMaxNsPerOp) * 100.0;
-    AddLine(LHTML, '      <tr>');
-    AddLine(LHTML, '        <td>' + EscapeHTML(AEntries[I].Language) + '</td>');
-    AddLine(LHTML, '        <td class="value">' + FormatNumber(AEntries[I].NsPerOp, 1) + '</td>');
-    AddLine(LHTML,
+    BufferAddLine(LHTML, '      <tr>');
+    BufferAddLine(LHTML, '        <td>' + EscapeHTML(AEntries[I].Language) + '</td>');
+    BufferAddLine(LHTML, '        <td class="value">' + FormatNumber(AEntries[I].NsPerOp, 1) + '</td>');
+    BufferAddLine(LHTML,
       '        <td><div class="bar-track"><div class="bar-fill" style="width: ' +
       FormatNumber(LBarWidth, 1) + '%"></div></div></td>');
-    AddLine(LHTML, '      </tr>');
+    BufferAddLine(LHTML, '      </tr>');
   end;
 
   if Length(AEntries) > 0 then
   begin
-    AddLine(LHTML, '    </tbody>');
-    AddLine(LHTML, '  </table>');
+    BufferAddLine(LHTML, '    </tbody>');
+    BufferAddLine(LHTML, '  </table>');
   end;
 
-  AddLine(LHTML, '</body>');
-  AddLine(LHTML, '</html>');
+  BufferAddLine(LHTML, '</body>');
+  BufferAddLine(LHTML, '</html>');
 
-  Result := '';
-  for I := 0 to High(LHTML) do
-  begin
-    if I > 0 then
-      Result := Result + LineEnding;
-    Result := Result + LHTML[I];
-  end;
+  Result := BufferToString(LHTML);
 end;
 
 function TBenchReportGenerator.GenerateBoxPlot(
   const ASamples: TDoubleArray; const AName: string): string;
 var
   LSorted: TDoubleArray;
-  LLines: TStringArray;
+  LLines: TLineBuffer;
   LCount: Integer;
   LIndex: Integer;
   LMin: Double;
@@ -855,25 +903,25 @@ begin
   LScaledMedian := LBaseX + (LMedian - LMin) * LScale;
   LScaledQ3 := LBaseX + (LQ3 - LMin) * LScale;
 
-  SetLength(LLines, 0);
-  AddLine(LLines,
+  LLines := Default(TLineBuffer);
+  BufferAddLine(LLines,
     '<svg viewBox="0 0 300 60" role="img" aria-label="Boxplot ' +
     EscapeHTML(AName) + '">');
-  AddLine(LLines, '  <rect x="0" y="0" width="300" height="60" fill="#fbfcfd"/>');
-  AddLine(LLines,
+  BufferAddLine(LLines, '  <rect x="0" y="0" width="300" height="60" fill="#fbfcfd"/>');
+  BufferAddLine(LLines,
     '  <line x1="' + FormatNumber(LScaledWhiskerLow, 1) + '" y1="30" x2="' +
     FormatNumber(LScaledWhiskerHigh, 1) + '" y2="30" stroke="#666" stroke-width="1"/>');
-  AddLine(LLines,
+  BufferAddLine(LLines,
     '  <line x1="' + FormatNumber(LScaledWhiskerLow, 1) + '" y1="24" x2="' +
     FormatNumber(LScaledWhiskerLow, 1) + '" y2="36" stroke="#666" stroke-width="1"/>');
-  AddLine(LLines,
+  BufferAddLine(LLines,
     '  <line x1="' + FormatNumber(LScaledWhiskerHigh, 1) + '" y1="24" x2="' +
     FormatNumber(LScaledWhiskerHigh, 1) + '" y2="36" stroke="#666" stroke-width="1"/>');
-  AddLine(LLines,
+  BufferAddLine(LLines,
     '  <rect x="' + FormatNumber(LScaledQ1, 1) + '" y="18" width="' +
     FormatNumber(LScaledQ3 - LScaledQ1, 1) +
     '" height="24" fill="#4a7a6f" stroke="#333" stroke-width="1"/>');
-  AddLine(LLines,
+  BufferAddLine(LLines,
     '  <line x1="' + FormatNumber(LScaledMedian, 1) + '" y1="18" x2="' +
     FormatNumber(LScaledMedian, 1) + '" y2="42" stroke="#ff6600" stroke-width="2"/>');
 
@@ -882,38 +930,32 @@ begin
     if (LSorted[LIndex] < LWhiskerLow) or (LSorted[LIndex] > LWhiskerHigh) then
     begin
       LScaledOutlier := LBaseX + (LSorted[LIndex] - LMin) * LScale;
-      AddLine(LLines,
+      BufferAddLine(LLines,
         '  <circle cx="' + FormatNumber(LScaledOutlier, 1) +
         '" cy="30" r="2" fill="#cc0000"/>');
     end;
   end;
 
-  AddLine(LLines, '</svg>');
+  BufferAddLine(LLines, '</svg>');
 
-  Result := '';
-  for LIndex := 0 to High(LLines) do
-  begin
-    if LIndex > 0 then
-      Result := Result + LineEnding;
-    Result := Result + LLines[LIndex];
-  end;
+  Result := BufferToString(LLines);
 end;
 
 function TBenchReportGenerator.GenerateComparisonReport(
   const AResults: array of TBenchResult;
   const ABaselines: array of TBenchComparison): string;
 var
-  LLines: TStringArray;
+  LLines: TLineBuffer;
   LStatus: string;
   i: Integer;
 begin
-  SetLength(LLines, 0);
+  LLines := Default(TLineBuffer);
 
-  AddLine(LLines, '=== Baseline Comparison ===');
-  AddLine(LLines, '');
-  AddLine(LLines, TextFormat('  %-40s %10s %10s %10s %10s',
+  BufferAddLine(LLines, '=== Baseline Comparison ===');
+  BufferAddLine(LLines, '');
+  BufferAddLine(LLines, TextFormat('  %-40s %10s %10s %10s %10s',
     ['Benchmark', 'Current', 'Baseline', 'Ratio', 'Status']));
-  AddLine(LLines, '  ' + TextOfChar('-', 90));
+  BufferAddLine(LLines, '  ' + TextOfChar('-', 90));
 
   for i := 0 to High(ABaselines) do
   begin
@@ -926,7 +968,7 @@ begin
     end
     else
       LStatus := '≈ same';
-    AddLine(LLines, TextFormat('  %-40s %10s %10s %10s %10s',
+    BufferAddLine(LLines, TextFormat('  %-40s %10s %10s %10s %10s',
       [ABaselines[i].BaselineName,
        FormatTime(ABaselines[i].CurrentNsPerOp),
        FormatTime(ABaselines[i].BaselineNsPerOp),
@@ -934,13 +976,7 @@ begin
        LStatus]));
   end;
 
-  Result := '';
-  for i := 0 to High(LLines) do
-  begin
-    if i > 0 then
-      Result := Result + LineEnding;
-    Result := Result + LLines[i];
-  end;
+  Result := BufferToString(LLines);
 end;
 
 end.

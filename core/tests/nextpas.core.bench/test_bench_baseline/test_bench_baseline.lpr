@@ -4,6 +4,7 @@ program test_bench_baseline;
 {$modeswitch advancedrecords}
 
 uses
+  SysUtils,
   nextpas.core.exception,
   nextpas.core.math.scalar,
   nextpas.core.platform.time,
@@ -389,6 +390,62 @@ begin
     'Round-trip keeps multiline notes');
 end;
 
+procedure Test_FileRoundTrip;
+var
+  LManager1, LManager2: TBaselineManager;
+  LPath: string;
+  LB: TBaselineData;
+begin
+  WriteLn('Test_FileRoundTrip:');
+  LPath := '/tmp/nextpas_bench_test_' + IntToStr(GetProcessID) + '.json';
+  LManager1 := TBaselineManager.Create;
+  LB := Default(TBaselineData);
+  LB.Name := 'TestBench';
+  LB.NsPerOp := 123.456;
+  LB.Notes := 'round-trip test';
+  LManager1.AddBaseline(LB);
+
+  LManager1.SaveToFile(LPath);
+  LManager2 := TBaselineManager.Create;
+  LManager2.LoadFromFile(LPath);
+
+  Check(LManager2.HasBaseline('TestBench'), 'FileRoundTrip: baseline exists after load');
+  Check(Abs(LManager2.GetBaseline('TestBench').NsPerOp - 123.456) < 0.001, 'FileRoundTrip: NsPerOp matches');
+  Check(LManager2.GetBaseline('TestBench').Notes = 'round-trip test', 'FileRoundTrip: Notes matches');
+
+  DeleteFile(LPath);
+end;
+
+procedure Test_LoadFromJSON_Errors;
+var
+  LManager: TBaselineManager;
+  LFailed: Boolean;
+begin
+  WriteLn('Test_LoadFromJSON_Errors:');
+  LManager := TBaselineManager.Create;
+
+  // invalid JSON
+  LFailed := False;
+  try
+    LManager.LoadFromJSON('not json at all');
+  except
+    LFailed := True;
+  end;
+  Check(LFailed, 'LoadFromJSON_Errors: invalid JSON raises exception');
+
+  // empty JSON - should not crash
+  LManager.LoadFromJSON('');
+  Check(not LManager.HasBaseline('anything'), 'LoadFromJSON_Errors: empty string yields empty');
+
+  // missing baselines key
+  LManager.LoadFromJSON('{"other": 123}');
+  Check(not LManager.HasBaseline('anything'), 'LoadFromJSON_Errors: missing baselines key yields empty');
+
+  // baselines is not array
+  LManager.LoadFromJSON('{"baselines": "not array"}');
+  Check(not LManager.HasBaseline('anything'), 'LoadFromJSON_Errors: non-array baselines yields empty');
+end;
+
 { === Run All Tests === }
 
 procedure RunAllTests;
@@ -412,6 +469,8 @@ begin
   Test_CustomThreshold;
   Test_JSON;
   Test_JSON_RoundTripPreservesNotesAndInvariantLocale;
+  Test_FileRoundTrip;
+  Test_LoadFromJSON_Errors;
 end;
 
 begin
