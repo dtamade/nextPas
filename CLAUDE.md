@@ -72,18 +72,20 @@ nextpas.core.<module>.<impl>.pas   ← 实现子模块
 
 ### 双编译器架构（核心设计原则）
 
-`nextpas.core.*` 是编译器内核和运行时的**唯一实现层**。同一份源码，双编译器兼容：
+`nextpas.core.*` 是编译器内核和运行时的**唯一实现层**。内核模块自身同时支持 FPC 和 nextPas：
 
-- **FPC 编译时**：`uses SysUtils` 等自动路由到 FPC 真实 RTL（FPC 的 `-Fu` 路径自然解析到 FPC 自带的 SysUtils/Classes/System 等单元）
-- **nextPas 编译时**：走 nextPas 自己的内核实现（通过 resolver 解析到 `nextpas.core.*` 内部实现或 runtime SDK 中的兼容映射）
+- **FPC 编译时**：内核模块通过 `{$IFDEF FPC}` 或内部抽象层路由到 FPC 的实现（SysUtils/Classes/System 等）
+- **nextPas 编译时**：内核模块使用自己的内核实现（`nextpas.core.*` 内部单元）
+
+**路由发生在模块内部**，不是编译器 resolver。每个内核模块自己知道如何在两个编译器下工作。
 
 **这意味着**：
-- `nextpas.core` 内的模块可以 `uses SysUtils`、`uses Classes` 等 FPC 单元名 — 这是**设计如此**，不是债务
-- FPC 编译时这些引用自然解析到 FPC RTL，不需要 shim
-- nextPas 编译时通过 runtime SDK（`units/<target>/`）中的映射文件路由到 nextPas 内核实现
-- `units/<target>/` 目录中的 FPC 兼容文件（SysUtils.pas 等）是**临时映射层**，最终目标是 nextPas resolver 原生支持 FPC 单元名路由
+- `nextpas.core` 内的模块 `uses SysUtils` 等 FPC 单元名是**设计如此**，不是债务
+- `units/<target>/` 中的 FPC 兼容文件（SysUtils.pas 等）是**临时映射层**，为尚不具备内核实现的模块提供过渡
+- 最终目标：所有内核模块都有完整的 nextPas 内核实现路径，不再需要 shim
+- 所有运行时能力必须在 `nextpas.core` 内实现，禁止外部独立兼容层
 
-**禁止**：在 `nextpas.core` 之外创建独立的 FPC 兼容层；所有运行时能力必须在 `nextpas.core` 内实现。
+**禁止**：在 `nextpas.core` 之外创建独立的 FPC 兼容层。
 
 ## nextpas.core.system 模块专项
 
