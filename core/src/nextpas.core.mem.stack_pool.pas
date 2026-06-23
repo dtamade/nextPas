@@ -348,13 +348,14 @@ function CreateDebugStackPolicy: TStackPoolPolicy; deprecated 'Use TStackPoolPol
 implementation
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.math;
 
 constructor TStackPool.Create(const aConfig: TStackPoolConfig);
 begin
   Create(aConfig.TotalSize, aConfig.Allocator);
   if aConfig.ZeroOnAlloc and (FBuffer <> nil) then
-    FillChar(FBuffer^, FSize, 0);
+    ZeroMem(FBuffer, FSize);
 end;
 
 { TStackPool }
@@ -684,7 +685,7 @@ begin
   inherited Create(aSize, aAllocator);
 
   FPolicy := aPolicy;
-  FillChar(FStatistics, SizeOf(FStatistics), 0);
+  ZeroMem(@FStatistics, SizeOf(FStatistics));
 
   if FPolicy.EnableScopeTracking then
     FScopeManager := TStackPoolScopeManager.Create(Self)
@@ -782,7 +783,7 @@ function TScopedStackPool.AllocZeroed(aSize: SizeUInt; aAlignment: SizeUInt): Po
 begin
   Result := Alloc(aSize, aAlignment);
   if Result <> nil then
-    FillChar(Result^, aSize, 0);
+    ZeroMem(Result, aSize);
 end;
 
 function TScopedStackPool.AllocString(aLength: SizeUInt): PChar;
@@ -814,7 +815,7 @@ end;
 
 procedure TScopedStackPool.ResetStatistics;
 begin
-  FillChar(FStatistics, SizeOf(FStatistics), 0);
+  ZeroMem(@FStatistics, SizeOf(FStatistics));
 end;
 
 function TScopedStackPool.GetFragmentation: Double;
@@ -887,7 +888,7 @@ begin
   // 复制现有数据
   LOldUsedSize := UsedSize;
   if LOldUsedSize > 0 then
-    Move(FBuffer^, LNewBuffer^, LOldUsedSize);
+    CopyMem(LNewBuffer, FBuffer, LOldUsedSize);
 
   // 释放旧缓冲区
   FBaseAllocator.FreeMem(FBuffer);

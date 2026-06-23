@@ -13,6 +13,7 @@ unit nextpas.core.mem.blockpool.growable;
 interface
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.math,              // ✅ Math facade (for trunc)
   nextpas.core.mem.base,
   nextpas.core.mem.blockpool,
@@ -388,7 +389,7 @@ begin
   LWordLen := (aBlocks + 63) shr 6;
   SetLength(LSeg.FreeBits, SizeInt(LWordLen));
   if LWordLen > 0 then
-    FillChar(LSeg.FreeBits[0], LWordLen * SizeOf(QWord), $FF);
+    FillMem(@LSeg.FreeBits[0], LWordLen * SizeOf(QWord), $FF);
 
   // append segment then keep array sorted by Base
   LIdx := Length(FSegments);
@@ -454,7 +455,7 @@ begin
   begin
     LLen := Length(FSegments[LSegIndex].FreeBits);
     if LLen > 0 then
-      FillChar(FSegments[LSegIndex].FreeBits[0], SizeUInt(LLen) * SizeOf(QWord), $FF);
+      FillMem(@FSegments[LSegIndex].FreeBits[0], SizeUInt(LLen) * SizeOf(QWord), $FF);
 
     if (FSegments[LSegIndex].Base = nil) or (FSegments[LSegIndex].Blocks = 0) then
       Continue;
@@ -726,7 +727,7 @@ begin
     raise EAllocError.Create(aeDoubleFree, 'TGrowingBlockPool.Release: double free detected');
 
   {$IFDEF FAF_MEM_DEBUG}
-  FillChar((PByte(LSeg.Base) + LIdx * FBlockSize)^, FBlockSize, $A5);
+  FillMem((PByte(LSeg.Base) + LIdx * FBlockSize), FBlockSize, $A5);
   {$ENDIF}
 
   SetFreeBit(LSegIndex, LIdx);

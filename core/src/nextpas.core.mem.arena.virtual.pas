@@ -10,6 +10,7 @@ uses
   nextpas.core.mem.arena.base,
   nextpas.core.mem.arena.intf,
   nextpas.core.platform.mmap,
+  nextpas.core.base.utils,
   nextpas.core.platform.memory;
 
 type
@@ -424,7 +425,7 @@ function TVirtualArena.AllocZeroed(aSize: SizeUInt): Pointer;
 begin
   Result := Alloc(aSize);
   if Result <> nil then
-    FillChar(Result^, aSize, 0);
+    ZeroMem(Result, aSize);
 end;
 
 function TVirtualArena.AllocUnsafe(aSize: SizeUInt): Pointer;

@@ -334,7 +334,7 @@ begin
   Create(aConfig.BlockSize, aConfig.Capacity, aConfig.Alignment, aConfig.Allocator);
   FZeroOnAlloc := aConfig.ZeroOnAlloc;
   if aConfig.ZeroOnAlloc and (FBuffer <> nil) and (FTotalSize > 0) then
-    FillChar(FBuffer^, FTotalSize, 0);
+    ZeroMem(FBuffer, FTotalSize);
 end;
 
 destructor TFixedPool.Destroy;
@@ -369,7 +369,7 @@ begin
 
   LPtr := Pointer(PByte(FBuffer) + SizeUInt(LIdx) * FBlockSize);
   if FZeroOnAlloc and (FBlockSize > 0) then
-    FillChar(LPtr^, FBlockSize, 0);
+    ZeroMem(LPtr, FBlockSize);
   if FAllocatedCount > FPeakAllocated then
     FPeakAllocated := FAllocatedCount;
   Inc(FTotalAllocCalls);
@@ -427,7 +427,7 @@ begin
 
   {$IFDEF FAF_MEM_DEBUG}
   // 污化已释放内存，提升 UAF 暴露率
-  FillChar(PByte(FBuffer)[SizeUInt(LIdx)*FBlockSize], FBlockSize, $A5);
+  FillMem(PByte(FBuffer)[SizeUInt(LIdx)*FBlockSize], FBlockSize, $A5);
   {$ENDIF}
   FIsFree[LIdx] := True;
   Dec(FAllocatedCount);

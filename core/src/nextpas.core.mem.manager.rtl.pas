@@ -25,6 +25,7 @@ function IsRtlMemoryManagerInstalled: Boolean;
 implementation
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.mem.mutex;
 
 var
@@ -47,7 +48,7 @@ begin
   begin
     Result := GOldManager.GetMem(Size);
     if Result <> nil then
-      FillChar(Result^, Size, 0);
+      ZeroMem(Result, Size);
   end;
 end;
 
@@ -90,7 +91,7 @@ begin
   if Assigned(GOldManager.GetHeapStatus) then
     Result := GOldManager.GetHeapStatus()
   else
-    FillChar(Result, SizeOf(Result), 0);
+    ZeroMem(@Result, SizeOf(Result));
 end;
 
 function MM_GetFPCHeapStatus: TFPCHeapStatus;
@@ -98,7 +99,7 @@ begin
   if Assigned(GOldManager.GetFPCHeapStatus) then
     Result := GOldManager.GetFPCHeapStatus()
   else
-    FillChar(Result, SizeOf(Result), 0);
+    ZeroMem(@Result, SizeOf(Result));
 end;
 
 const

@@ -13,6 +13,7 @@ uses
   nextpas.core.mem.pool.memory_pool,
   nextpas.core.mem.allocator,
   nextpas.core.mem.intf,
+  nextpas.core.base.utils,
   nextpas.core.mem.error;
 
 type
@@ -234,7 +235,7 @@ type
 procedure ngx_slab_junk(p: Pointer; size: SizeUInt); inline;
 begin
   if (p <> nil) and (size > 0) then
-    FillChar(p^, size, $A5);
+    FillMem(p, size, $A5);
 end;
 {$ELSE}
 procedure ngx_slab_junk(p: Pointer; size: SizeUInt); inline;
@@ -331,7 +332,7 @@ begin
   Inc(p, n * SizeOf(ngx_slab_page_t));
 
   pool^.stats := Pngx_slab_stat_t(p);
-  FillChar(pool^.stats^, n * SizeOf(ngx_slab_stat_t), 0);
+  ZeroMem(pool^.stats, n * SizeOf(ngx_slab_stat_t));
 
   Inc(p, n * SizeOf(ngx_slab_stat_t));
 
@@ -340,7 +341,7 @@ begin
   pages := size div (ngx_pagesize + SizeOf(ngx_slab_page_t));
 
   pool^.pages := Pngx_slab_page_t(p);
-  FillChar(pool^.pages^, pages * SizeOf(ngx_slab_page_t), 0);
+  ZeroMem(pool^.pages, pages * SizeOf(ngx_slab_page_t));
 
   page := pool^.pages;
 
@@ -449,7 +450,7 @@ begin
   Dec(pages);
 
   if pages > 0 then
-    FillChar(page[1], pages * SizeOf(ngx_slab_page_t), 0);
+    ZeroMem(@page[1], pages * SizeOf(ngx_slab_page_t));
 
   if page^.next <> nil then
   begin
@@ -1482,13 +1483,13 @@ begin
   core := Pngx_slab_pool_t(FCore);
   if core = nil then
   begin
-    FillChar(Result, SizeOf(Result), 0);
+    ZeroMem(Result, SizeOf(Result));
     Exit;
   end;
   n := NGX_SLAB_PAGE_SHIFT - core^.min_shift;
   if Index >= n then
   begin
-    FillChar(Result, SizeOf(Result), 0);
+    ZeroMem(Result, SizeOf(Result));
     Exit;
   end;
   Result.total := core^.stats[Index].total;
@@ -1588,7 +1589,7 @@ function TFixedSlabPool.AllocMem(aSize: SizeUInt): Pointer;
 begin
   Result := GetMem(aSize);
   if Result <> nil then
-    FillChar(Result^, aSize, 0);
+    ZeroMem(Result, aSize);
 end;
 
 function TFixedSlabPool.ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
@@ -1614,7 +1615,7 @@ begin
   {$ENDIF}
 
   if copySize > 0 then
-    Move(aDst^, p^, copySize);
+    CopyMem(p, aDst, copySize);
 
   FreeMem(aDst);
   Result := p;

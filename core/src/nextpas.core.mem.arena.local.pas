@@ -8,6 +8,7 @@ uses
   nextpas.core.mem.base,
   nextpas.core.mem.error,
   nextpas.core.mem.arena.base,
+  nextpas.core.base.utils,
   nextpas.core.mem.arena.intf;
 
 type
@@ -148,7 +149,7 @@ function TLocalArena.AllocZeroed(ASize: SizeUInt): Pointer;
 begin
   Result := Alloc(ASize);
   if Result <> nil then
-    FillChar(Result^, ASize, 0);
+    ZeroMem(Result, ASize);
 end;
 
 function TLocalArena.AllocFast(ASize: SizeUInt): Pointer;

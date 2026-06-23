@@ -32,7 +32,8 @@ implementation
 uses
   nextpas.core.mem.allocator.crt,
   nextpas.core.mem.allocator.base,
-  nextpas.core.mem.mutex;
+  nextpas.core.mem.mutex,
+  nextpas.core.base.utils;
 
 var
   GOldManager: TMemoryManager;
@@ -81,12 +82,12 @@ procedure MM_RelocateHeap; begin end;
 
 function MM_GetHeapStatus: THeapStatus;
 begin
-  FillChar(Result, SizeOf(Result), 0);
+  ZeroMem(@Result, SizeOf(Result));
 end;
 
 function MM_GetFPCHeapStatus: TFPCHeapStatus;
 begin
-  FillChar(Result, SizeOf(Result), 0);
+  ZeroMem(@Result, SizeOf(Result));
 end;
 
 const

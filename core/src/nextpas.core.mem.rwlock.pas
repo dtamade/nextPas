@@ -24,6 +24,7 @@ type
 implementation
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.errors;
 
 procedure RaiseRwLockError(const AOperation: string; const AError: Int32); inline;
@@ -37,7 +38,7 @@ var
 begin
   if FInitialized then
     Exit;
-  FillChar(FHandle, SizeOf(FHandle), 0);
+  ZeroMem(@FHandle, SizeOf(FHandle));
   LResult := platform_rwlock_init(FHandle);
   if LResult <> 0 then
     RaiseRwLockError('Init', LResult);
@@ -49,7 +50,7 @@ begin
   if not FInitialized then
     Exit;
   platform_rwlock_destroy(FHandle);
-  FillChar(FHandle, SizeOf(FHandle), 0);
+  ZeroMem(@FHandle, SizeOf(FHandle));
   FInitialized := False;
 end;
 

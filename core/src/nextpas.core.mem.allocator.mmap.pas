@@ -39,6 +39,7 @@ function CreateAnonymousMemoryMapAllocator(aReservationSize: UInt64): IAllocator
 implementation
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.mem.error;
 
 const
@@ -273,7 +274,7 @@ begin
   try
     Result := AllocateLocked(aSize);
     if Result <> nil then
-      FillChar(Result^, aSize, 0);
+      ZeroMem(Result, aSize);
   finally
     LeaveCriticalSection(FLock);
   end;
@@ -306,7 +307,7 @@ begin
 
     LCopySize := MinSizeUInt(LOldBlock^.RequestedSize, aSize);
     if LCopySize > 0 then
-      Move(aDst^, Result^, LCopySize);
+      CopyMem(Result, aDst, LCopySize);
     FreeLocked(aDst);
   finally
     LeaveCriticalSection(FLock);

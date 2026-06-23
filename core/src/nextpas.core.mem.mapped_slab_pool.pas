@@ -240,7 +240,7 @@ begin
   LHeader^.TotalFrees := 0;
   LHeader^.FailedAllocs := 0;
   LHeader^.ResetGeneration := 1;
-  FillChar(LHeader^.Reserved, SizeOf(LHeader^.Reserved), 0);
+  ZeroMem(@LHeader^.Reserved, SizeOf(LHeader^.Reserved));
 end;
 
 function TMappedSlabAllocator.ValidateHeader: Boolean;
@@ -268,7 +268,7 @@ begin
   FPages := Pointer(PByte(FHeader) + HEADER_SIZE);
   FDataArea := Pointer(PByte(FPages) + LPageDescriptorSize);
   FSlabData := FDataArea;
-  FillChar(FPages^, LPageDescriptorSize, 0);
+  ZeroMem(FPages, LPageDescriptorSize);
 end;
 
 procedure TMappedSlabAllocator.Close;
@@ -351,7 +351,7 @@ begin
   if not LFound then
   begin
     LPageUsable := PageUsableSize(LChosenPageIndex);
-    FillChar(LChosenPage^, SizeOf(TMappedSlabPage), 0);
+    ZeroMem(LChosenPage, SizeOf(TMappedSlabPage));
     LChosenPage^.BlockSize := LBlockSize;
     LChosenPage^.BlockCapacity := LPageUsable div LBlockBytes;
     LChosenPage^.FreeHeadOffset := NO_FREE_OFFSET;
@@ -503,7 +503,7 @@ begin
   if FPages <> nil then
   begin
     LPageDescriptorSize := UInt64(LHeader^.TotalPages) * SizeOf(TMappedSlabPage);
-    FillChar(FPages^, LPageDescriptorSize, 0);
+    ZeroMem(FPages, LPageDescriptorSize);
   end;
 end;
 

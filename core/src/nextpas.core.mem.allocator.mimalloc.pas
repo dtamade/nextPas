@@ -37,6 +37,7 @@ function TryGetMimallocUsableSize(aPtr: Pointer; out aSize: SizeUInt): Boolean;
 implementation
 
 uses
+  nextpas.core.base.utils,
   SysUtils;
 
 {$IFDEF NEXTPAS_CORE_MIMALLOC_STATIC}
@@ -76,7 +77,7 @@ uses
   var
     FullPath: string;
   begin
-    FillChar(Result, SizeOf(Result), 0);
+    ZeroMem(@Result, SizeOf(Result));
     FullPath := aBasePath + aLibName;
     platform_dl_open(PAnsiChar(AnsiString(FullPath)), PLATFORM_DL_NOW, Result);
   end;
@@ -94,7 +95,7 @@ uses
   var
     EnvPath, ExePath, LibSubdir: AnsiString;
   begin
-    FillChar(Result, SizeOf(Result), 0);
+    ZeroMem(@Result, SizeOf(Result));
 
     // 1. 环境变量优先（用户可完全控制）
     {$IFDEF MSWINDOWS}

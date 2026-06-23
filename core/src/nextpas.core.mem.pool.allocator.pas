@@ -348,7 +348,7 @@ begin
 
   Result := GetMem(aSize);
   if Result <> nil then
-    FillChar(Result^, aSize, 0);
+    ZeroMem(Result, aSize);
 end;
 
 function TPoolAllocator.ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
@@ -379,7 +379,7 @@ begin
       else
         LCopySize := LAlloc.Size;
       if LCopySize > 0 then
-        Move(aDst^, Result^, LCopySize);
+        CopyMem(Result, aDst, LCopySize);
       FreeMem(aDst);
     end;
     Exit;
@@ -395,7 +395,7 @@ begin
       else
         LCopySize := LAlloc.Size;
       if LCopySize > 0 then
-        Move(aDst^, Result^, LCopySize);
+        CopyMem(Result, aDst, LCopySize);
       FreeAligned(aDst);
     end;
   end

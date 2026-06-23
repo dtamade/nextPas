@@ -39,6 +39,9 @@ function  AllocatorFaults_ShouldFailNow: Boolean; inline;
 
 implementation
 
+uses
+  nextpas.core.base.utils;
+
 {$IFDEF NEXTPAS_CORE_ALLOCATOR_INSTRUMENTATION}
 var
   GStats: TAllocatorStats;
@@ -50,7 +53,7 @@ var
 procedure AllocatorStats_Reset; inline;
 begin
   {$IFDEF NEXTPAS_CORE_ALLOCATOR_INSTRUMENTATION}
-  FillChar(GStats, SizeOf(GStats), 0);
+  ZeroMem(@GStats, SizeOf(GStats));
   {$ELSE}
   // no-op
   {$ENDIF}
@@ -61,7 +64,7 @@ begin
   {$IFDEF NEXTPAS_CORE_ALLOCATOR_INSTRUMENTATION}
   S := GStats;
   {$ELSE}
-  FillChar(S, SizeOf(TAllocatorStats), 0);
+  ZeroMem(@S, SizeOf(TAllocatorStats));
   {$ENDIF}
 end;
 

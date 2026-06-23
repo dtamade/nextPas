@@ -813,7 +813,7 @@ function TSlabPoolSharded.AllocMem(aSize: SizeUInt): Pointer;
 begin
   Result := GetMem(aSize);
   if Result <> nil then
-    FillChar(Result^, aSize, 0);
+    ZeroMem(Result, aSize);
 end;
 
 function TSlabPoolSharded.ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
@@ -1016,7 +1016,7 @@ var
   LIdx: Integer;
   LInner: TSlabPerfCounters;
 begin
-  FillChar(Result, SizeOf(Result), 0);
+  ZeroMem(@Result, SizeOf(Result));
   for LIdx := 0 to High(FShards) do
   begin
     if FShards[LIdx].Pool = nil then

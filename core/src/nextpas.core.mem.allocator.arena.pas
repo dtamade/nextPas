@@ -8,6 +8,7 @@ uses
   nextpas.core.mem.base,
   nextpas.core.mem.intf,
   nextpas.core.mem.allocator.base,
+  nextpas.core.base.utils,
   nextpas.core.mem.arena.virtual;
 
 type
@@ -77,7 +78,7 @@ begin
   if (Result <> nil) and (aDst <> nil) then
   begin
     { Arena 不跟踪单个分配大小，保守复制 aSize 字节。 }
-    Move(aDst^, Result^, aSize);
+    CopyMem(Result, aDst, aSize);
   end;
 end;
 

@@ -68,22 +68,23 @@
 
 ## Phase 4: SIMD memset/memcpy 优化
 
-**目标**: SSE2/SSSE3 加速内存操作，热路径直接收益。
+**状态**: 已推迟 — Codex 架构审查结论 (2026-06-21)
 
-**设计**:
-- `core/src/nextpas.core.mem.simd.pas` — SIMD 内存操作
-  - `SimdFillChar(P, Count, Value)` — SSE2 零填充 (64B/次)
-  - `SimdMove(Src, Dst, Count)` — SSE2 拷贝 (前向/后向)
-  - `SimdCompare(A, B, Count): Boolean` — SSE2 比较
-  - 运行时 CPUID 检测，non-SSE2 fallback 到 RTL
-- 集成到 TVirtualArena.AllocZeroed / TLocalArena.AllocZeroed
-- Prefetch hints 在 arena 批量分配时使用
+**结论**: 不在 mem 模块内创建独立 SIMD 模块。
 
-**文件**:
-- `core/src/nextpas.core.mem.simd.pas`
-- `core/tests/nextpas.core.mem/test_mem_simd/...`
+理由:
+1. FPC `FillChar`/`Move` 已高度优化 (REP STOSB / SSE2/AVX2 内联)，mem.simd 无法做得更好
+2. Arena `AllocZeroed` 热路径没有额外 SIMD 优化空间
+3. `nextpas.core.simd.memutils` 已有 `AlignedMemFill`/`AlignedMemCopy`/`Prefetch`
+4. 自建 CPUID 违反不重复原则 (`simd.cpuinfo` 已完整覆盖 x86/ARM/RISC-V)
+5. mem 和 simd 同属 L0，单向依赖合法，但 simd.memutils 当前 API 不匹配 Arena 场景
 
-**依赖**: platform.info (CPUID detection), base (TBytes/Pointer)
+**未来路线**:
+- `nextpas.core.simd.memutils` 增加 `SimdFillZero(ptr, size)` (不带 alignment 参数)
+- 大块清零 (>L2 cache) 用 non-temporal store
+- mem 模块作为消费者调用
+
+**依赖**: 未来 nextpas.core.simd.memutils 扩展
 
 ---
 
@@ -91,10 +92,10 @@
 
 | Phase | 预估工作量 | 依赖 |
 |-------|-----------|------|
-| 1. Thread-Local Arena | ~3h | 无 |
-| 2. Size-Class Slab | ~3h | 无 |
-| 3. Fallback Chain | ~2h | Phase 1+2 可选集成 |
-| 4. SIMD memset | ~3h | platform.simd 已有 SSE2 |
+| 1. Thread-Local Arena ✅ | done | 无 |
+| 2. Size-Class Slab ✅ | done | 无 |
+| 3. Fallback Chain ✅ | done | Phase 1+2 可选集成 |
+| 4. SIMD memset | **推迟** | 等 simd.memutils 扩展 |
 
 ## 测试策略
 

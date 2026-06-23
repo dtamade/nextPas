@@ -31,6 +31,7 @@ uses
   nextpas.core.mem.interfaces,
   nextpas.core.mem.blockpool,
   nextpas.core.mem.layout,
+  nextpas.core.base.utils,
   nextpas.core.mem.error;
 
 type
@@ -341,7 +342,7 @@ function TStackPoolToArenaAdapter.AllocZeroed(const aLayout: TMemLayout): TAlloc
 begin
   Result := Alloc(aLayout);
   if Result.IsOk and (Result.Ptr <> nil) then
-    FillChar(Result.Ptr^, aLayout.Size, 0);
+    ZeroMem(Result.Ptr, aLayout.Size);
 end;
 
 function TStackPoolToArenaAdapter.SaveMark: TArenaMarker;

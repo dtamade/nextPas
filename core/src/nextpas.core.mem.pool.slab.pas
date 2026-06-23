@@ -15,6 +15,7 @@ uses
   nextpas.core.mem.intf,
   nextpas.core.mem.pool.memory_pool,
   nextpas.core.mem.pool.fixed_slab,
+  nextpas.core.base.utils,
   nextpas.core.mem.error;        // EAllocError, TAllocError
 
 type
@@ -915,7 +916,7 @@ begin
 
 
   FInitialCapacity:=aCapacity; FMinShift:=aMinShift; FActive:=0;
-  FillChar(FPerf, SizeOf(FPerf), 0);
+  ZeroMem(@FPerf, SizeOf(FPerf));
   SetLength(FSegments,1);
   LSegment:=TFixedSlabPool.Create(aCapacity,FAllocator,aMinShift);
   FSegments[0]:=LSegment;
@@ -1113,7 +1114,7 @@ begin
 end;
 
 function TSlabPool.AllocMem(aSize: SizeUInt): Pointer;
-begin Result:=GetMem(aSize); if Result<>nil then FillChar(Result^,aSize,0); end;
+begin Result:=GetMem(aSize); if Result<>nil then ZeroMem(Result, aSize); end;
 
 function TSlabPool.ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
 var
@@ -1135,7 +1136,7 @@ begin
     if Result=nil then Exit(nil);
     LOldSize := FSegments[LIndex].MemSizeOf(aDst);
     if LOldSize > aSize then LCopySize := aSize else LCopySize := LOldSize;
-    if LCopySize>0 then Move(aDst^, Result^, LCopySize);
+    if LCopySize>0 then CopyMem(Result, aDst, LCopySize);
     FSegments[LIndex].FreeMem(aDst);
     Exit;
   end;
@@ -1148,7 +1149,7 @@ begin
   if LNew = nil then Exit(nil); // 失败时不修改原指针
 
   if LAlloc.Size > aSize then LCopySize := aSize else LCopySize := LAlloc.Size;
-  if LCopySize > 0 then Move(aDst^, LNew^, LCopySize);
+  if LCopySize > 0 then CopyMem(LNew, aDst, LCopySize);
 
   // 释放旧块并移除 tracking（注意：先分配成功再销毁旧块）
   if TryUntrackFallbackAlloc(aDst, LAlloc) then

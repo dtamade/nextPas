@@ -34,6 +34,7 @@ interface
 uses
   nextpas.core.mem.base,
   nextpas.core.mem.pool.base,
+  nextpas.core.base.utils,
   nextpas.core.mem.error;
 
 const
@@ -244,7 +245,7 @@ begin
 
   LBitLen := Length(FFreeBits);
   if LBitLen > 0 then
-    FillChar(FFreeBits[0], SizeUInt(LBitLen) * SizeOf(QWord), $FF);
+    FillMem(@FFreeBits[0], SizeUInt(LBitLen) * SizeOf(QWord), $FF);
 
   if (FBuffer = nil) or (FCapacity = 0) then
     Exit;
@@ -473,7 +474,7 @@ begin
 
   {$IFDEF FAF_MEM_DEBUG}
   // 污化已释放内存，提升 UAF 暴露率
-  FillChar((PByte(FBuffer) + LIdx * FBlockSize)^, FBlockSize, $A5);
+  FillMem((PByte(FBuffer) + LIdx * FBlockSize), FBlockSize, $A5);
   {$ENDIF}
 
   SetFreeBit(LIdx);

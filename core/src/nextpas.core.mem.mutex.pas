@@ -34,6 +34,7 @@ type
 implementation
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.errors;
 
 procedure RaiseMutexError(const AOperation: string; const AError: Int32); inline;
@@ -47,7 +48,7 @@ var
 begin
   if FInitialized then
     Exit;
-  FillChar(FHandle, SizeOf(FHandle), 0);
+  ZeroMem(@FHandle, SizeOf(FHandle));
   LResult := platform_mutex_init(FHandle, PLATFORM_MUTEX_ERRORCHECK);
   if LResult <> 0 then
     RaiseMutexError('Init', LResult);
@@ -59,7 +60,7 @@ begin
   if not FInitialized then
     Exit;
   platform_mutex_destroy(FHandle);
-  FillChar(FHandle, SizeOf(FHandle), 0);
+  ZeroMem(@FHandle, SizeOf(FHandle));
   FInitialized := False;
 end;
 

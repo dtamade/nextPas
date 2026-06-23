@@ -4,7 +4,8 @@ unit nextpas.core.mem.memory_map;
 
 interface
 
-uses nextpas.core.platform.mmap;
+uses nextpas.core.platform.mmap,
+  nextpas.core.base.utils;
 
 type
   TMemoryMapAccess = (
@@ -345,10 +346,10 @@ begin
   if (aOffset > FSize) or (LNeed > FSize - aOffset) then Exit;
 
   LPtr := PByte(PByte(FBaseAddress) + aOffset);
-  Move(LLen, LPtr^, SizeOf(LLen));
+  CopyMem(LPtr, @LLen, SizeOf(LLen));
   Inc(LPtr, SizeOf(LLen));
   if LLen > 0 then
-    Move(aBuf[1], LPtr^, LLen);
+    CopyMem(LPtr, @aBuf[1], LLen);
   Result := True;
 end;
 
@@ -364,14 +365,14 @@ begin
   if (aOffset > FSize) or (UInt64(SizeOf(LLen)) > FSize - aOffset) then Exit;
 
   LPtr := PByte(PByte(FBaseAddress) + aOffset);
-  Move(LPtr^, LLen, SizeOf(LLen));
+  CopyMem(@LLen, LPtr, SizeOf(LLen));
   LNeed := SizeOf(LLen) + UInt64(LLen);
   if LNeed > FSize - aOffset then Exit;
 
   Inc(LPtr, SizeOf(LLen));
   SetLength(aBuf, LLen);
   if LLen > 0 then
-    Move(LPtr^, aBuf[1], LLen);
+    CopyMem(@aBuf[1], LPtr, LLen);
   Result := True;
 end;
 

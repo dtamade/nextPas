@@ -10,6 +10,7 @@ uses
   nextpas.core.mem.error,
   nextpas.core.mem.intf,
   nextpas.core.mem.arena.base,
+  nextpas.core.base.utils,
   nextpas.core.mem.arena.intf;
 
 type
@@ -605,7 +606,7 @@ function TChunkedArena.AllocZeroed(aSize: SizeUInt): Pointer;
 begin
   Result := Alloc(aSize);
   if Result <> nil then
-    FillChar(Result^, aSize, 0);
+    ZeroMem(Result, aSize);
 end;
 
 function TChunkedArena.SaveMark: TArenaMark;

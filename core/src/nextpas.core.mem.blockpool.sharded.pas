@@ -888,7 +888,7 @@ begin
   GetMem(LNode, LAllocSize);
   if LNode = nil then
     Exit(nil);
-  FillChar(LNode^, LAllocSize, 0);
+  ZeroMem(LNode, LAllocSize);
   LNode^.PoolPtr := Pointer(Self);
   LNode^.PoolId := FPoolId;
   LNode^.Epoch := FCacheEpoch;
@@ -914,7 +914,7 @@ begin
   aNode^.Epoch := FCacheEpoch;
   aNode^.Shard := ChooseShardIndex;
   if (aNode^.RemoteBufs <> nil) and (aNode^.RemoteBufLen > 0) then
-    FillChar(PByte(aNode^.RemoteBufs)^, SizeUInt(aNode^.RemoteBufLen) * SizeUInt(SizeOf(TRemoteFreeBuf)), 0);
+    ZeroMem(PByte(aNode^.RemoteBufs), SizeUInt(aNode^.RemoteBufLen) * SizeUInt(SizeOf(TRemoteFreeBuf)));
 end;
 
 procedure TShardedBlockPool.FlushThreadCacheLocked(aShard: Integer; aNode: PThreadCacheNode; aFlushCount: Integer);

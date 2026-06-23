@@ -5,6 +5,7 @@ unit nextpas.core.mem.arena.growable;
 interface
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.math,              // ✅ Math facade (for trunc)
   nextpas.core.mem.base,
   nextpas.core.mem.blockpool,
@@ -578,7 +579,7 @@ function TGrowingArena.AllocZeroed(aSize: SizeUInt): Pointer;
 begin
   Result := Alloc(aSize);
   if Result <> nil then
-    FillChar(Result^, aSize, 0);
+    ZeroMem(Result, aSize);
 end;
 
 function TGrowingArena.SaveMark: TArenaMarker;

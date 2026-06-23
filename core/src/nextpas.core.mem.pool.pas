@@ -10,6 +10,7 @@ uses
   nextpas.core.mem.intf,
   nextpas.core.mem.pool.base,
   nextpas.core.mem.pool.memory_pool,
+  nextpas.core.base.utils,
   nextpas.core.mem.pool.fixed_slab;
 
 type
@@ -142,12 +143,12 @@ begin
   FBacking := GetMem(LTotalSize);
   if FBacking = nil then
     raise EOutOfMemory.Create(aeOutOfMemory, 'TLocalBlockPool.Create: out of memory');
-  FillChar(FBacking^, LTotalSize, 0);
+  ZeroMem(FBacking, LTotalSize);
 
   { 初始化位图：所有块标记为 free（位=1） }
   LBitWords := (ABlockCount + 63) shr 6;
   SetLength(FFreeBits, LBitWords);
-  FillChar(FFreeBits[0], LBitWords * SizeOf(QWord), $FF);
+  FillMem(@FFreeBits[0], LBitWords * SizeOf(QWord), $FF);
 
   FFreeStack := nil;
   for LI := 0 to ABlockCount - 1 do
@@ -240,7 +241,7 @@ begin
   end;
   { 重置位图：所有块标记为 free }
   LBitWords := (FBlockCount + 63) shr 6;
-  FillChar(FFreeBits[0], LBitWords * SizeOf(QWord), $FF);
+  FillMem(@FFreeBits[0], LBitWords * SizeOf(QWord), $FF);
 end;
 
 function TLocalBlockPool.BlockSize: SizeUInt;

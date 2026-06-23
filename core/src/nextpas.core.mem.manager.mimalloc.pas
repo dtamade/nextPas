@@ -22,7 +22,8 @@ interface
 {$IFDEF NEXTPAS_CORE_MIMALLOC_ALLOCATOR}
 uses
   nextpas.core.mem.allocator.mimalloc,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.allocator.base,
+  nextpas.core.base.utils;
 
 procedure InstallMimallocMemoryManager;
 procedure UninstallMimallocMemoryManager;
@@ -82,12 +83,12 @@ procedure MM_RelocateHeap; begin end;
 
 function MM_GetHeapStatus: THeapStatus;
 begin
-  FillChar(Result, SizeOf(Result), 0);
+  ZeroMem(@Result, SizeOf(Result));
 end;
 
 function MM_GetFPCHeapStatus: TFPCHeapStatus;
 begin
-  FillChar(Result, SizeOf(Result), 0);
+  ZeroMem(@Result, SizeOf(Result));
 end;
 
 const
