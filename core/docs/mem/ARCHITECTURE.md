@@ -185,6 +185,7 @@ type
 - decommit 已提交页面
 - 保留 reserved virtual range
 - 大对象仍然不在这里释放，只有 `Release` 才统一释放
+- `FLargeBlocks` 只是 direct-mmap large object metadata；entry 生命周期与对应对象映射完全一致，`SaveMark` / `RestoreToMark` / `Reset` / `ResetHard` 都不会回收，只有 `Release` 才统一关闭
 
 ## allocator wrapper 的角色
 

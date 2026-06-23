@@ -393,6 +393,9 @@ function TVirtualArena.TrackLargeBlock(const AMap: TPlatformMappedFile): Pointer
 var
   LNewCapacity: SizeInt;
 begin
+  // FLargeBlocks stores metadata for direct-mmap large objects. The metadata
+  // lifetime matches the mapped object lifetime exactly: mark/reset/reset-hard
+  // never rewind these entries, and Release is the point that closes them all.
   if FLargeCount >= Length(FLargeBlocks) then
   begin
     if Length(FLargeBlocks) = 0 then
@@ -417,7 +420,8 @@ begin
   FLastAllocFailure := vaafNone;
   if aSize = 0 then Exit;
 
-  { Large objects: direct mmap, independent lifecycle }
+  { Large objects: direct mmap, independent lifecycle.
+    Their FLargeBlocks metadata stays live until Release closes the mapping. }
   if aSize >= ARENA_LARGE_THRESHOLD then
   begin
     if VirtualArenaMmapAnonymous(UInt64(aSize), pmaReadWrite, [pmfPrivate], LMap) <> 0 then
@@ -483,7 +487,8 @@ begin
   FLastAllocFailure := vaafNone;
   if aSize = 0 then Exit;
 
-  { Large objects: direct mmap }
+  { Large objects: direct mmap.
+    Their FLargeBlocks metadata stays live until Release closes the mapping. }
   if aSize >= ARENA_LARGE_THRESHOLD then
   begin
     if VirtualArenaMmapAnonymous(UInt64(aSize), pmaReadWrite, [pmfPrivate], LMap) <> 0 then
@@ -552,7 +557,8 @@ begin
   end;
   if aAlignment < SizeOf(Pointer) then aAlignment := SizeOf(Pointer);
 
-  { Large objects: direct mmap }
+  { Large objects: direct mmap.
+    Their FLargeBlocks metadata stays live until Release closes the mapping. }
   if aSize >= ARENA_LARGE_THRESHOLD then
   begin
     if VirtualArenaMmapAnonymous(UInt64(aSize), pmaReadWrite, [pmfPrivate], LMap) <> 0 then
