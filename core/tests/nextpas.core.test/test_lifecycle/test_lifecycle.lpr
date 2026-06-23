@@ -383,6 +383,28 @@ begin
   CheckTrue(LResult.Passed = 3, 'Expected 3 parallel closures');
 end;
 
+{ ── R6-57: Setup failure → Teardown not called ────────────────────────────── }
+
+var
+  GSetupFailTeardownCalled: Integer = 0;
+
+procedure R657SetupFailTeardown;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+begin
+  Inc(GTestsRun);
+  GSetupFailTeardownCalled := 0;
+  LSuite := TTestSuite.Create('setup-fail-teardown');
+  LSuite.SetSetup(procedure begin raise EConvertError.Create('setup boom'); end);
+  LSuite.SetTeardown(procedure begin Inc(GSetupFailTeardownCalled); end);
+  LSuite.Test('after bad setup', @SimpleTrue);
+  LSuite.RunWithResult(LResult);
+  { When Setup fails, Teardown should NOT run (no teardown for partial init) }
+  CheckEqual(GSetupFailTeardownCalled, 0);
+  CheckTrue(LResult.Failed >= 1, 'Setup failure should count as failure');
+end;
+
 { ── Facade completeness ───────────────────────────────────────────────────── }
 
 procedure TestFacadeSymbols;
@@ -447,6 +469,7 @@ begin
   Suite.Test('TestSuiteSkip', @TestSuiteSkip);
   Suite.Test('TestClosureParallel', @TestClosureParallel);
   Suite.Test('TestFacadeSymbols', @TestFacadeSymbols);
+  Suite.Test('R657SetupFailTeardown', @R657SetupFailTeardown);
 
   Runner := TTestRunner.Create('lifecycle-tests');
   Runner.Add(Suite);
@@ -454,7 +477,7 @@ begin
   WriteLn;
   Runner.Summary;
 
-  CheckTrue(GTestsRun >= 13, 'Expected at least 13 tests, got ' + IntToStr(GTestsRun));
+  CheckTrue(GTestsRun >= 14, 'Expected at least 14 tests, got ' + IntToStr(GTestsRun));
   CheckTrue(LSuccess, 'All lifecycle tests should pass');
 
   if Runner.AllPassed then
