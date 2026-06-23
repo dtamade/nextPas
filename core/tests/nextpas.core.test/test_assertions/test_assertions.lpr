@@ -422,6 +422,85 @@ begin
   end;
 end;
 
+{ R6-40: Empty string semantics for Contains/StartsWith/EndsWith }
+
+procedure TestR640CheckContainsEmptyNeedle;
+begin
+  { Empty needle is a substring of any string }
+  CheckContains('abc', '');
+  CheckContains('', '');
+end;
+
+procedure TestR640CheckStartsWithEmptyPrefix;
+begin
+  { Empty prefix matches any string }
+  CheckStartsWith('abc', '');
+  CheckStartsWith('', '');
+end;
+
+procedure TestR640CheckEndsWithEmptySuffix;
+begin
+  { Confirm empty suffix matches; complements existing TestCheckEndsWith }
+  CheckEndsWith('abc', '');
+  CheckEndsWith('', '');
+end;
+
+{ R6-41: CheckInRange boundary equality values }
+
+procedure TestCheckInRangeLowerBoundEqual;
+begin
+  { Value equal to ALow should pass }
+  CheckInRange(5, 5, 10);
+end;
+
+procedure TestCheckInRangeUpperBoundEqual;
+begin
+  { Value equal to AHigh should pass }
+  CheckInRange(10, 5, 10);
+end;
+
+{ R6-42: CheckGreaterThan/CheckLessThan equal values should fail }
+
+procedure TestCheckGreaterThanEqualFail;
+var
+  LCaught: Boolean = False;
+begin
+  try
+    CheckGreaterThan(5, 5);
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      LCaught := True;
+  end;
+  CheckTrue(LCaught, 'CheckGreaterThan(5,5) should fail');
+end;
+
+procedure TestCheckLessThanEqualFail;
+var
+  LCaught: Boolean = False;
+begin
+  try
+    CheckLessThan(5, 5);
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      LCaught := True;
+  end;
+  CheckTrue(LCaught, 'CheckLessThan(5,5) should fail');
+end;
+
+{ R6-43: CheckRaises catches child exception with parent class }
+
+type
+  ETestChildException = class(Exception);
+
+procedure TestCheckRaisesCatchesChildWithParent;
+begin
+  { CheckRaises(EException) should catch a child exception class }
+  CheckRaises(Exception,
+    procedure begin raise ETestChildException.Create('child'); end);
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -460,6 +539,22 @@ begin
   LSuite.Test('CheckNear (fail)',      @TestCheckNearFail);
   LSuite.Test('CheckNotNear (pass)',   @TestCheckNotNearPass);
   LSuite.Test('CheckNotNear (fail)',   @TestCheckNotNearFail);
+
+  { R6-40: Empty string semantics }
+  LSuite.Test('Contains empty needle',        @TestR640CheckContainsEmptyNeedle);
+  LSuite.Test('StartsWith empty prefix',      @TestR640CheckStartsWithEmptyPrefix);
+  LSuite.Test('EndsWith empty suffix',        @TestR640CheckEndsWithEmptySuffix);
+
+  { R6-41: CheckInRange boundary equality }
+  LSuite.Test('InRange lower bound equal',    @TestCheckInRangeLowerBoundEqual);
+  LSuite.Test('InRange upper bound equal',    @TestCheckInRangeUpperBoundEqual);
+
+  { R6-42: GreaterThan/LessThan equal values fail }
+  LSuite.Test('GreaterThan equal fails',      @TestCheckGreaterThanEqualFail);
+  LSuite.Test('LessThan equal fails',         @TestCheckLessThanEqualFail);
+
+  { R6-43: CheckRaises parent catches child }
+  LSuite.Test('Raises parent catches child',  @TestCheckRaisesCatchesChildWithParent);
 
   if not LSuite.Run then
   begin
