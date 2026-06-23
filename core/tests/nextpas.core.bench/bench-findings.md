@@ -960,10 +960,10 @@
 | P1 正确性 (CR-03~CR-26) | 24 | 21 | 3 | 0 | 0 |
 | P1 测试覆盖 (TG-01~TG-15) | 15 | 15 | 0 | 0 | 0 |
 | P2 性能 (PF-01~PF-20) | 20 | 8 | 3 | 9 | 0 |
-| P2 设计 (DS-01~DS-14) | 14 | 2 | 0 | 12 | 0 |
+| P2 设计 (DS-01~DS-14) | 14 | 8 | 0 | 6 | 0 |
 | P2 测试改进 (TG-16~TG-30) | 15 | 5 | 0 | 10 | 0 |
-| P3 风格/设计/文档 (ST-01~ST-27) | 27 | 8 | 0 | 19 | 0 |
-| **总计** | **124** | **68** | **6** | **50** | **0** |
+| P3 风格/设计/文档 (ST-01~ST-27) | 27 | 12 | 0 | 15 | 0 |
+| **总计** | **124** | **78** | **6** | **40** | **0** |
 
 ### 已知限制（不修）
 - **CR-04**: PValue/HeuristicDifference 接口归属（设计决策）
@@ -990,5 +990,7 @@
 9bd6c3141 fix+test(bench): P2 source fixes — Cohen's d weighted pooled, thread leak, Percentile validation
 3cf554ef2 refactor(bench): P2 design/style — env parsing, thread cache, JSON skipped, save dedup
 2deff298e perf+style(bench): P2 report improvements — CSS cache, BufferToString sizing, µs
+4dc0d54de feat(bench): API extensions — GetName, AddBytes, Clear, RemoveByName, AddRange+setup, AddBaselines, HasHeuristicDifferenceAt
+1f506dd7f fix(bench): ST-14 boolean env vars accept 'true'/'yes'/'on'
 ```
 5. TG-01~TG-15 (公共 API 完全未测试)
