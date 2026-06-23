@@ -24,7 +24,6 @@ type
   TTimeoutRec = record
     Proc    : TTestProc;
     Done    : Boolean;
-    TimedOut: Boolean;
     ErrorMsg: string;
     Status  : TTestStatus;
   end;
@@ -54,27 +53,6 @@ type
 function ParallelWorkerProc(AArg: Pointer): Pointer; cdecl;
 
 implementation
-
-{ ── Cross-platform memory barrier ───────────────────────────────────────────── }
-
-{$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-procedure MemoryBarrier; assembler; nostackframe;
-asm
-  mfence
-end;
-{$ELSEIF DEFINED(CPUAARCH64) OR DEFINED(CPUARM)}
-procedure MemoryBarrier; assembler; nostackframe;
-asm
-  dmb ish
-end;
-{$ELSE}
-procedure MemoryBarrier;
-var
-  LDummy: Integer = 0;
-begin
-  LDummy := InterlockedExchange(LDummy, 0);
-end;
-{$ENDIF}
 
 { ═════════════════════════════════════════════════════════════════════════════ }
 { Timeout worker                                                                }
@@ -109,9 +87,6 @@ begin
       R^.Done := True;
     end;
   end;
-  { If main thread marked us as timed out, we own the record and must dispose }
-  if R^.TimedOut then
-    Dispose(R);
 end;
 
 function RunTestWithTimeout(AProc: TTestProc; ATimeoutMs: Integer;
@@ -127,7 +102,6 @@ begin
   New(LRec);
   LRec^.Proc := AProc;
   LRec^.Done := False;
-  LRec^.TimedOut := False;
   LRec^.ErrorMsg := '';
   LRec^.Status := tsPassed;
 
@@ -148,25 +122,19 @@ begin
     AStatus := LRec^.Status;
     AMsg := LRec^.ErrorMsg;
     Result := True;
-    { Join path: we own the record, dispose here }
-    Dispose(LRec);
   end
   else
   begin
-    { Timed out — thread is still running (cannot kill) }
+    { Timed out — wait for worker to finish, then dispose.
+      We still own the record and join the thread for clean resource release. }
     AStatus := tsError;
     AMsg := 'test timed out after ' + IntToStr(ATimeoutMs) + 'ms';
     Result := False;
-    { Memory barrier ensures TimedOut is visible to worker thread on
-      weak-memory architectures (ARM, PowerPC). x86_64 TSO is already safe. }
-    MemoryBarrier;
-    LRec^.TimedOut := True;
-    WriteLn('  ', AnsiYellow('WARNING'), ': test timed out - worker thread is ',
-      'leaked (cannot force-terminate Pascal threads). Consider raising ',
-      'SetTestTimeout or reviewing the test for infinite loops.');
-    { Note: worker thread is leaked — cannot force-terminate Pascal threads.
-      This is a known limitation documented in the API. }
+    WriteLn('  ', AnsiYellow('WARNING'), ': test timed out after ',
+      ATimeoutMs, 'ms — waiting for worker to finish');
+    platform_thread_join(LHandle, LRetVal);
   end;
+  Dispose(LRec);
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }
