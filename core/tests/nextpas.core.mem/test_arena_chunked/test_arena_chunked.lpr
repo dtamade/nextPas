@@ -1,4 +1,4 @@
-program test_arena_growable;
+program test_arena_chunked;
 
 {$I nextpas.core.settings.inc}
 
