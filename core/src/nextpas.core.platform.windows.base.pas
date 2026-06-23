@@ -25,7 +25,7 @@ type
   LPWSTR = PWideChar;
   LPDWORD = ^DWORD;
   PLONG = ^LONG;
-  PINT64 = ^Int64;
+  PINT64 = System.PInt64;
   LPBYTE = ^BYTE;
   PLPSTR = ^LPSTR;
   PLPWSTR = ^LPWSTR;
