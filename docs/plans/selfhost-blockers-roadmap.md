@@ -143,6 +143,22 @@ fixture 即误报 `sema.c6h4-owned-string-return-deferred-consumer`（build 失�
 
 **意义**：`core/src/` 现在 0 直接 SysUtils 依赖，为后续 Phase B（移除 `units/linux-x86_64/SysUtils.pas` stub）铺路。
 
+### Phase C: stub 降级 — ✅ 已完成（2026-06-24）
+
+**目标**：`units/linux-x86_64/SysUtils.pas` stub 中的 Exception 相关符号改为从 nextpas.core 获取。
+
+**核心改动**（commit `bcd9a2f4e`）：
+- SysUtils.pas stub 添加 `uses nextpas.core.exception`
+- `Exception`/`ExceptClass`/`EConvertError`/`EAssertionFailed` 改为 re-export
+- 移除独立的 Exception 构造器实现
+- Stub 减少 22 行（966→944 行）
+
+**验证结果**：
+- rebuild-compiler: ✓ (160773 lines)
+- self-compile 18/19: ✓ (np_lexer pre-existing issue)
+
+**意义**：Exception 类型统一，stub 降级为纯名称桥接，不再有独立实现。
+
 ---
 
 ## 阶段 2：Sema 攻坚（4-6 周）
