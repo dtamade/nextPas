@@ -366,6 +366,72 @@ begin
   Check(LResult.NsPerOp = 5000, 'SingleDash-2: NsPerOp = 5000');
 end;
 
+{ === TG-07: Empty Input / Newline Tests === }
+
+procedure Test_ParseGoBenchOutput_Empty;
+var
+  LResults: TBenchResultArray;
+  LNoCrash: Boolean;
+begin
+  WriteLn('Test_ParseGoBenchOutput_Empty:');
+  LNoCrash := True;
+  try
+    LResults := ParseGoBenchOutput('');
+  except
+    LNoCrash := False;
+  end;
+  Check(LNoCrash, 'Go empty input does not raise exception');
+  Check(Length(LResults) = 0, 'Go empty input returns empty array');
+end;
+
+procedure Test_ParseGoBenchOutput_NewlineOnly;
+var
+  LResults: TBenchResultArray;
+  LNoCrash: Boolean;
+begin
+  WriteLn('Test_ParseGoBenchOutput_NewlineOnly:');
+  LNoCrash := True;
+  try
+    LResults := ParseGoBenchOutput(#10);
+  except
+    LNoCrash := False;
+  end;
+  Check(LNoCrash, 'Go newline-only input does not raise exception');
+  Check(Length(LResults) = 0, 'Go newline-only input returns empty array');
+end;
+
+procedure Test_ParseRustBenchOutput_Empty;
+var
+  LResults: TBenchResultArray;
+  LNoCrash: Boolean;
+begin
+  WriteLn('Test_ParseRustBenchOutput_Empty:');
+  LNoCrash := True;
+  try
+    LResults := ParseRustBenchOutput('');
+  except
+    LNoCrash := False;
+  end;
+  Check(LNoCrash, 'Rust empty input does not raise exception');
+  Check(Length(LResults) = 0, 'Rust empty input returns empty array');
+end;
+
+procedure Test_ParseFPCBenchOutput_Empty;
+var
+  LResults: TBenchResultArray;
+  LNoCrash: Boolean;
+begin
+  WriteLn('Test_ParseFPCBenchOutput_Empty:');
+  LNoCrash := True;
+  try
+    LResults := ParseFPCBenchOutput('');
+  except
+    LNoCrash := False;
+  end;
+  Check(LNoCrash, 'FPC empty input does not raise exception');
+  Check(Length(LResults) = 0, 'FPC empty input returns empty array');
+end;
+
 { === Run All Tests === }
 
 procedure RunAllTests;
@@ -409,6 +475,13 @@ begin
   Test_ParseFPCBenchLine_Invalid;
   Test_ParseBenchOutput_Unknown;
   Test_GetLastParseSkippedCount;
+
+  WriteLn('');
+  WriteLn('=== Empty Input / Newline Tests (TG-07) ===');
+  Test_ParseGoBenchOutput_Empty;
+  Test_ParseGoBenchOutput_NewlineOnly;
+  Test_ParseRustBenchOutput_Empty;
+  Test_ParseFPCBenchOutput_Empty;
 end;
 
 begin

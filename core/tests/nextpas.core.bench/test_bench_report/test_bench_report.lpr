@@ -464,6 +464,77 @@ begin
   Check(GGenerator.EscapeHTML('hello & world') = 'hello &amp; world', 'EscapeHTML ampersand');
 end;
 
+{ === TG-08: Empty Results Set Report Generation === }
+
+procedure Test_EmptyResults_ToJSON;
+var
+  LResults: TBenchResultArray;
+  LJSON: string;
+  LNoCrash: Boolean;
+begin
+  WriteLn('Test_EmptyResults_ToJSON:');
+  LNoCrash := True;
+
+  SetLength(LResults, 0);
+  GGenerator.SetResults(LResults);
+  GGenerator.SetEnvironment(CreateTestEnvironment);
+
+  try
+    LJSON := GGenerator.ToJSON;
+    Check(Length(LJSON) > 0, 'Empty results JSON is non-empty (structural)');
+    CheckContains(LJSON, '"version"', 'Empty JSON contains version');
+    CheckContains(LJSON, '"benchmarks"', 'Empty JSON contains benchmarks key');
+  except
+    LNoCrash := False;
+  end;
+  Check(LNoCrash, 'ToJSON with empty results does not raise exception');
+end;
+
+procedure Test_EmptyResults_ToHTML;
+var
+  LResults: TBenchResultArray;
+  LHTML: string;
+  LNoCrash: Boolean;
+begin
+  WriteLn('Test_EmptyResults_ToHTML:');
+  LNoCrash := True;
+
+  SetLength(LResults, 0);
+  GGenerator.SetResults(LResults);
+  GGenerator.SetEnvironment(CreateTestEnvironment);
+
+  try
+    LHTML := GGenerator.ToHTML;
+    CheckContains(LHTML, '<!DOCTYPE html>', 'Empty HTML contains DOCTYPE');
+    CheckContains(LHTML, '<h1>', 'Empty HTML contains heading');
+  except
+    LNoCrash := False;
+  end;
+  Check(LNoCrash, 'ToHTML with empty results does not raise exception');
+end;
+
+procedure Test_EmptyResults_ToConsole;
+var
+  LResults: TBenchResultArray;
+  LConsole: string;
+  LNoCrash: Boolean;
+begin
+  WriteLn('Test_EmptyResults_ToConsole:');
+  LNoCrash := True;
+
+  SetLength(LResults, 0);
+  GGenerator.SetResults(LResults);
+  GGenerator.SetEnvironment(CreateTestEnvironment);
+
+  try
+    LConsole := GGenerator.ToConsole;
+    CheckContains(LConsole, 'nextpas.core.bench v1.0', 'Empty console contains version');
+  except
+    LNoCrash := False;
+  end;
+  Check(LNoCrash, 'ToConsole with empty results does not raise exception');
+end;
+
 begin
   WriteLn('=== nextpas.core.bench.report Unit Tests ===');
   WriteLn;
@@ -505,6 +576,13 @@ begin
     TestEscapeJSON;
     WriteLn;
     TestEscapeHTML;
+    WriteLn;
+    WriteLn('=== Empty Results Set Tests (TG-08) ===');
+    Test_EmptyResults_ToJSON;
+    WriteLn;
+    Test_EmptyResults_ToHTML;
+    WriteLn;
+    Test_EmptyResults_ToConsole;
 
     WriteLn;
     WriteLn('=== Test Summary ===');

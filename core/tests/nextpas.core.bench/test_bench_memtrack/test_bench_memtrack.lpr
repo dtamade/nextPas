@@ -359,6 +359,86 @@ begin
   Check(LStats.CurrentBytes = 0, 'Parallel CurrentBytes returns to 0');
 end;
 
+{ === TG-01: GlobalMemoryTracker API Tests === }
+
+procedure Test_GlobalMemoryTracking_EnableDisable;
+var
+  LStatsBefore, LStatsAfter: TMemoryStats;
+  LPtr: Pointer;
+  LAllocCountBeforeDisable: Int64;
+begin
+  WriteLn('Test_GlobalMemoryTracking_EnableDisable:');
+
+  // Disable first to ensure clean state
+  DisableGlobalMemoryTracking;
+  ResetGlobalMemoryTracker;
+
+  // Enable tracking
+  EnableGlobalMemoryTracking;
+  Check(True, 'EnableGlobalMemoryTracking does not crash');
+
+  // Perform a known allocation
+  LPtr := GetMem(256);
+  LStatsBefore := GetGlobalMemoryStats;
+  Check(LStatsBefore.AllocCount > 0, 'GetGlobalMemoryStats shows AllocCount > 0 after alloc');
+  Check(LStatsBefore.AllocBytes >= 256, 'GetGlobalMemoryStats shows AllocBytes >= 256');
+
+  FreeMem(LPtr);
+  LAllocCountBeforeDisable := GetGlobalMemoryStats.AllocCount;
+
+  // Disable tracking
+  DisableGlobalMemoryTracking;
+  Check(True, 'DisableGlobalMemoryTracking does not crash');
+
+  // After disabling, further allocations should not be tracked
+  LPtr := GetMem(512);
+  LStatsAfter := GetGlobalMemoryStats;
+  Check(LStatsAfter.AllocCount = LAllocCountBeforeDisable,
+    'Disabled tracking: alloc count frozen after disable');
+  FreeMem(LPtr);
+end;
+
+procedure Test_GlobalMemoryTracker_Reset;
+var
+  LStats: TMemoryStats;
+begin
+  WriteLn('Test_GlobalMemoryTracker_Reset:');
+
+  EnableGlobalMemoryTracking;
+  GetMem(128);
+
+  ResetGlobalMemoryTracker;
+  LStats := GetGlobalMemoryStats;
+  Check(LStats.AllocCount = 0, 'ResetGlobalMemoryTracker resets AllocCount to 0');
+  Check(LStats.FreeCount = 0, 'ResetGlobalMemoryTracker resets FreeCount to 0');
+  Check(LStats.AllocBytes = 0, 'ResetGlobalMemoryTracker resets AllocBytes to 0');
+  Check(LStats.FreeBytes = 0, 'ResetGlobalMemoryTracker resets FreeBytes to 0');
+  Check(LStats.PeakAllocs = 0, 'ResetGlobalMemoryTracker resets PeakAllocs to 0');
+  Check(LStats.PeakBytes = 0, 'ResetGlobalMemoryTracker resets PeakBytes to 0');
+
+  DisableGlobalMemoryTracking;
+end;
+
+procedure Test_GetGlobalMemoryStats;
+var
+  LStats: TMemoryStats;
+begin
+  WriteLn('Test_GetGlobalMemoryStats:');
+
+  ResetGlobalMemoryTracker;
+  EnableGlobalMemoryTracking;
+
+  // Get stats - should have reasonable structure
+  LStats := GetGlobalMemoryStats;
+  // After reset+enable, current allocs should be >= 0 (may have internal allocs)
+  Check(LStats.AllocCount >= 0, 'GetGlobalMemoryStats: AllocCount >= 0');
+  Check(LStats.FreeCount >= 0, 'GetGlobalMemoryStats: FreeCount >= 0');
+  Check(LStats.PeakAllocs >= 0, 'GetGlobalMemoryStats: PeakAllocs >= 0');
+  Check(LStats.PeakBytes >= 0, 'GetGlobalMemoryStats: PeakBytes >= 0');
+
+  DisableGlobalMemoryTracking;
+end;
+
 { === Run All Tests === }
 
 procedure RunAllTests;
@@ -375,6 +455,12 @@ begin
   Test_AllocsPerOp;
   Test_ParallelThreadSafety;
   TestMultiThreadPeakTracking;
+
+  WriteLn('');
+  WriteLn('=== GlobalMemoryTracker API Tests (TG-01) ===');
+  Test_GlobalMemoryTracking_EnableDisable;
+  Test_GlobalMemoryTracker_Reset;
+  Test_GetGlobalMemoryStats;
 end;
 
 begin

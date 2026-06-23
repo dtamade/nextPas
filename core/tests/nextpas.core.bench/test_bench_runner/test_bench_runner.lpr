@@ -269,6 +269,48 @@ begin
   end;
 end;
 
+procedure TestRunOneTBenchEntry;
+var
+  LRunner: TBenchRunner;
+  LEntry: TBenchEntry;
+  LResult: TBenchResult;
+begin
+  WriteLn('TestRunOneTBenchEntry:');
+
+  LRunner := TBenchRunner.Create;
+  try
+    ConfigureFastRunner(LRunner);
+
+    // 构造 TBenchEntry record
+    LEntry := Default(TBenchEntry);
+    LEntry.Name := 'EntryFast';
+    LEntry.Func := @BenchFast;
+    LEntry.Condition := True;
+
+    // 通过 RunOne(TBenchEntry) 重载执行
+    LResult := LRunner.RunOne(LEntry);
+
+    Check(LResult.Name = 'EntryFast', 'TBenchEntry RunOne result name correct');
+    Check(LResult.Iterations >= 100, 'TBenchEntry RunOne iterations >= 100');
+    Check(LResult.NsPerOp > 0, 'TBenchEntry RunOne NsPerOp > 0');
+    Check(LResult.OpsPerSec > 0, 'TBenchEntry RunOne OpsPerSec > 0');
+    Check(LResult.SampleCount > 0, 'TBenchEntry RunOne SampleCount > 0');
+
+    // 测试带上下文的 TBenchEntry
+    LEntry := Default(TBenchEntry);
+    LEntry.Name := 'EntryWithCtx';
+    LEntry.Func := @BenchWithContext;
+    LEntry.Condition := True;
+
+    LResult := LRunner.RunOne(LEntry);
+    Check(LResult.Name = 'EntryWithCtx', 'TBenchEntry context name correct');
+    Check(LResult.BytesPerOp = 1024, 'TBenchEntry context bytes propagated');
+    Check(LResult.AllocsPerOp = 2, 'TBenchEntry context allocs propagated');
+  finally
+    LRunner.Free;
+  end;
+end;
+
 procedure TestRunAll;
 var
   LRunner: TBenchRunner;
@@ -470,6 +512,8 @@ begin
   TestRunOne;
   WriteLn;
   TestRunOneSkip;
+  WriteLn;
+  TestRunOneTBenchEntry;
   WriteLn;
   TestRunAll;
   WriteLn;

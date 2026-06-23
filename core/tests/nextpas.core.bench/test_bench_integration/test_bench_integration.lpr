@@ -1021,6 +1021,40 @@ begin
   Check(LRaised, 'SaveToTSV raises EBenchError for invalid path');
 end;
 
+{ === TG-10: TryGetByName Tests === }
+
+procedure TestTBenchResults_TryGetByName;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+  LResult: TBenchResult;
+  LFound: Boolean;
+begin
+  WriteLn('TestTBenchResults_TryGetByName:');
+
+  LSuite := CreateFastSuite('TryGetByNameSuite');
+  LSuite.Add('Fast', @BenchFast);
+  LSuite.Add('Medium', @BenchMedium);
+
+  LResults := LSuite.Run;
+
+  // 存在条目 → 返回 True
+  LFound := LResults.TryGetByName('Fast', LResult);
+  Check(LFound, 'TryGetByName finds existing entry "Fast"');
+  Check(LResult.Name = 'Fast', 'TryGetByName returns correct result for "Fast"');
+  Check(LResult.NsPerOp > 0, 'TryGetByName existing entry NsPerOp > 0');
+
+  // 存在条目 → 返回 True (second entry)
+  LFound := LResults.TryGetByName('Medium', LResult);
+  Check(LFound, 'TryGetByName finds existing entry "Medium"');
+  Check(LResult.Name = 'Medium', 'TryGetByName returns correct result for "Medium"');
+
+  // 不存在条目 → 返回 False
+  LFound := LResults.TryGetByName('NonExistent', LResult);
+  Check(not LFound, 'TryGetByName returns False for non-existent entry');
+  Check(LResult.Name = '', 'TryGetByName non-existent entry returns default result');
+end;
+
 begin
   WriteLn('=== nextpas.core.bench Integration Tests ===');
   WriteLn;
@@ -1085,6 +1119,8 @@ begin
     TestTBenchSuite_FluentAPI;
     WriteLn;
     TestSaveErrorHandling;
+    WriteLn;
+    TestTBenchResults_TryGetByName;
   finally
     GParallelLock.Free;
   end;

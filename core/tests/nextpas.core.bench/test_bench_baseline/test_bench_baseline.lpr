@@ -448,6 +448,27 @@ begin
   Check(not LManager.HasBaseline('anything'), 'LoadFromJSON_Errors: non-array baselines yields empty');
 end;
 
+{ === TG-14: LoadFromFile File Not Found Test === }
+
+procedure Test_LoadFromFile_NotFound;
+var
+  LManager: TBaselineManager;
+  LRaised: Boolean;
+begin
+  WriteLn('Test_LoadFromFile_NotFound:');
+  LManager := TBaselineManager.Create;
+  LRaised := False;
+
+  try
+    LManager.LoadFromFile('/tmp/nonexistent_bench_baseline_file_12345.json');
+  except
+    on E: Exception do
+      LRaised := True;
+  end;
+  Check(LRaised, 'LoadFromFile raises exception for non-existent file');
+  Check(not LManager.HasBaseline('anything'), 'No baselines loaded after failed LoadFromFile');
+end;
+
 { === Run All Tests === }
 
 procedure RunAllTests;
@@ -473,6 +494,9 @@ begin
   Test_JSON_RoundTripPreservesNotesAndInvariantLocale;
   Test_FileRoundTrip;
   Test_LoadFromJSON_Errors;
+  WriteLn('');
+  WriteLn('=== LoadFromFile Error Tests (TG-14) ===');
+  Test_LoadFromFile_NotFound;
 end;
 
 begin
