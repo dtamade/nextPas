@@ -14,6 +14,7 @@ uses
   nextpas.core.test.base,
   nextpas.core.test.check,
   nextpas.core.test.output,
+  { 白盒测试：直接验证独立 TAP/JSON renderer 与 discovery/runner 集成。 }
   nextpas.core.test.output.tap,
   nextpas.core.test.output.json,
   nextpas.core.test.runner,
@@ -38,11 +39,15 @@ type
     procedure TestOne;
   end;
 
+  TReportOutcome = (roPass, roFail, roSkip, roError);
+
 var
   GDiscoveryAlphaCalled: Boolean = False;
   GDiscoveryBetaCalled: Boolean = False;
   GRetryCount: Integer = 0;
   GTeardownFixtureFreeCalled: Boolean = False;
+  GReportFailureMessage: string = '';
+  GReportErrorMessage: string = '';
 
 procedure TDiscoveryFixture.TestAlpha;
 begin
@@ -62,6 +67,21 @@ end;
 procedure TTeardownFixture.TestOne;
 begin
   CheckTrue(True);
+end;
+
+procedure ReportPassProc;
+begin
+  CheckTrue(True);
+end;
+
+procedure ReportFailProc;
+begin
+  CheckTrue(False, GReportFailureMessage);
+end;
+
+procedure ReportErrorProc;
+begin
+  raise Exception.Create(GReportErrorMessage);
 end;
 
 { ── RTTI Discovery Tests ──────────────────────────────────────────────────── }
@@ -109,7 +129,8 @@ begin
   LFixture := TDiscoveryFixture.Create;
   LSuite := DiscoverTests(LFixture);  { default name = ClassName }
   CheckEqual('TDiscoveryFixture', LSuite.Name);
-  LFixture.Free;  { teardown hasn't run, free manually }
+  { White-box ownership note: published-method fixtures are registered for
+    discovery cleanup, so this test must not free manually. }
 end;
 
 procedure TestDiscoverNoPublished;
@@ -120,6 +141,8 @@ begin
   LFixture := TEmptyFixture.Create;
   LSuite := DiscoverTests(LFixture);
   CheckEqual(0, Length(LSuite.Tests));
+  { White-box ownership note: the zero-published-method early-exit happens
+    before RegisterFixture, so caller ownership remains here. }
   LFixture.Free;
 end;
 
@@ -184,26 +207,30 @@ begin
 end;
 
 function RunSuiteAndGetResults(const ASuiteName, ATestName: string;
-  ATest: TTestClosure): specialize TArray<TTestRunResult>; overload;
+  AOutcome: TReportOutcome; const AMessage: string = ''): specialize TArray<TTestRunResult>;
 var
   LSuite: TTestSuite;
   LRunner: TTestRunner;
 begin
   LSuite := TTestSuite.Create(ASuiteName);
-  LSuite.Test(ATestName, ATest);
+  case AOutcome of
+    roPass:
+      LSuite.Test(ATestName, @ReportPassProc);
+    roFail:
+      begin
+        GReportFailureMessage := AMessage;
+        LSuite.Test(ATestName, @ReportFailProc);
+      end;
+    roSkip:
+      LSuite.Skip(ATestName, AMessage);
+    roError:
+      begin
+        GReportErrorMessage := AMessage;
+        LSuite.Test(ATestName, @ReportErrorProc);
+      end;
+  end;
   LRunner := TTestRunner.Create(ASuiteName + 'Runner');
-  LRunner.RunAllWithResult(Result);
-end;
-
-function RunSuiteAndGetResults(const ASuiteName, ATestName,
-  ASkipReason: string): specialize TArray<TTestRunResult>; overload;
-var
-  LSuite: TTestSuite;
-  LRunner: TTestRunner;
-begin
-  LSuite := TTestSuite.Create(ASuiteName);
-  LSuite.Skip(ATestName, ASkipReason);
-  LRunner := TTestRunner.Create(ASuiteName + 'Runner');
+  LRunner.Add(LSuite);
   LRunner.RunAllWithResult(Result);
 end;
 
@@ -214,11 +241,7 @@ var
   LResults: specialize TArray<TTestRunResult>;
   LTAP: string;
 begin
-  LResults := RunSuiteAndGetResults('MySuite', 'TestFoo',
-    procedure
-    begin
-      CheckTrue(True);
-    end);
+  LResults := RunSuiteAndGetResults('MySuite', 'TestFoo', roPass);
   LTAP := TAPReport(LResults, 'MyTests');
   CheckContains(LTAP, 'TAP version 13');
   CheckContains(LTAP, '1..1');
@@ -232,11 +255,8 @@ var
   LResults: specialize TArray<TTestRunResult>;
   LTAP: string;
 begin
-  LResults := RunSuiteAndGetResults('FailSuite', 'TestBar',
-    procedure
-    begin
-      CheckTrue(False, 'expected 5 got 3');
-    end);
+  LResults := RunSuiteAndGetResults('FailSuite', 'TestBar', roFail,
+    'expected 5 got 3');
   LTAP := TAPReport(LResults);
   CheckContains(LTAP, 'not ok 1 - FailSuite / TestBar');
   CheckContains(LTAP, 'message: |-');
@@ -249,7 +269,7 @@ var
   LResults: specialize TArray<TTestRunResult>;
   LTAP: string;
 begin
-  LResults := RunSuiteAndGetResults('SkipSuite', 'TestSkipped',
+  LResults := RunSuiteAndGetResults('SkipSuite', 'TestSkipped', roSkip,
     'platform not supported');
   LTAP := TAPReport(LResults);
   CheckContains(LTAP, 'ok 1 - SkipSuite / TestSkipped # skip platform not supported');
@@ -263,11 +283,7 @@ var
   LResults: specialize TArray<TTestRunResult>;
   LJSON: string;
 begin
-  LResults := RunSuiteAndGetResults('JsonSuite', 'TestX',
-    procedure
-    begin
-      CheckTrue(True);
-    end);
+  LResults := RunSuiteAndGetResults('JsonSuite', 'TestX', roPass);
   LJSON := JSONReport(LResults, 'JsonTests');
   CheckContains(LJSON, '"totalPassed": 1');
   CheckContains(LJSON, '"totalFailed": 0');
@@ -282,11 +298,8 @@ var
   LResults: specialize TArray<TTestRunResult>;
   LJSON: string;
 begin
-  LResults := RunSuiteAndGetResults('JsonFail', 'TestFail',
-    procedure
-    begin
-      CheckTrue(False, 'assert failed');
-    end);
+  LResults := RunSuiteAndGetResults('JsonFail', 'TestFail', roFail,
+    'assert failed');
   LJSON := JSONReport(LResults);
   CheckContains(LJSON, '"status": "failed"');
   CheckContains(LJSON, '"message": "assert failed"');
@@ -299,11 +312,8 @@ var
   LResults: specialize TArray<TTestRunResult>;
   LJSON: string;
 begin
-  LResults := RunSuiteAndGetResults('Esc"ape', 'Test"Quote',
-    procedure
-    begin
-      raise Exception.Create('line1' + #10 + 'line2');
-    end);
+  LResults := RunSuiteAndGetResults('Esc"ape', 'Test"Quote', roError,
+    'line1' + #10 + 'line2');
   LJSON := JSONReport(LResults);
   CheckContains(LJSON, 'Esc\"ape');
   CheckContains(LJSON, 'Test\"Quote');
@@ -320,7 +330,8 @@ var
   LResults: specialize TArray<TTestRunResult>;
 begin
   { R6-53: RTTI discovery + run, verifying fixture method dispatch works.
-    NOTE: DiscoverTests does NOT auto-free the fixture; caller owns it.
+    White-box ownership note: the suite/runner cleanup path owns the fixture
+    after DiscoverTests registration; never-run cases fall back to finalization.
     TODO: verify teardown hook is called when DiscoverTests supports it. }
   LFixture := TTeardownFixture.Create;
   LSuite := DiscoverTests(LFixture, 'TeardownTest');
