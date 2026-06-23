@@ -138,10 +138,10 @@ fixture 即误报 `sema.c6h4-owned-string-return-deferred-consumer`（build 失�
 
 **验证结果**：
 - rebuild-compiler: ✓ (160773 lines)
-- compiler-pass 15/15: ✓ all pass
-- self-compile 18/19: ✓ (np_lexer pre-existing issue, unrelated)
+- compiler-pass 16/16: ✓ all pass
+- self-compile 18/19: ✓ (np_lexer pre-existing issue)
 
-**意义**：`core/src/` 现在 0 直接 SysUtils 依赖，为后续 Phase B（移除 `units/linux-x86_64/SysUtils.pas` stub）铺路。
+**意义**：`core/src/` 现在 0 直接 SysUtils 依赖。
 
 ### Phase C: stub 降级 — ✅ 已完成（2026-06-24）
 
@@ -155,9 +155,29 @@ fixture 即误报 `sema.c6h4-owned-string-return-deferred-consumer`（build 失�
 
 **验证结果**：
 - rebuild-compiler: ✓ (160773 lines)
-- self-compile 18/19: ✓ (np_lexer pre-existing issue)
+- compiler-pass 16/16: ✓ all pass
 
-**意义**：Exception 类型统一，stub 降级为纯名称桥接，不再有独立实现。
+**意义**：Exception 类型统一，stub 降级为纯名称桥接。
+
+### Phase D: nextpas_core_pass 测试 — ✅ 已完成（2026-06-24）
+
+**目标**：创建使用 `nextpas.core.*` 的编译器测试，验证标准库编译能力。
+
+**核心改动**：
+- 新增 `tests/compiler/pass/nextpas_core_pass.pas`
+- 使用 `nextpas.core.text.conv` + `nextpas.core.path` 替代 SysUtils
+- 测试字符串函数（Trim/LowerCase/UpperCase/SameText/IntToStr/StrToInt/StringReplace）
+- 测试路径函数（ExtractFileName/ExtractFileDir/ExtractFileExt）
+
+**配套修复**：
+- `np_toolchain_plan.pas`：修复 `ChangeFileExt` 双重应用导致 linker 失败（commit `eae676f8f`）
+- `nextpas.core.path.pas`：`ExtractFileDir` 去除尾部分隔符，FPC 兼容（commit `37184f072`）
+
+**验证结果**：
+- compiler-pass 16/16: ✓ all pass
+- smoke test 10/10: ✓ all pass
+
+**意义**：验证 nextpas.core 作为标准库的编译能力，Phase D 目标达成。
 
 ---
 
