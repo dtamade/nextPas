@@ -560,8 +560,10 @@ begin
   LAlign := aAlignment;
   if LAlign = 0 then
     LAlign := MEM_DEFAULT_ALIGN;
-  if (LAlign < MEM_DEFAULT_ALIGN) or ((LAlign and (LAlign - 1)) <> 0) then
+  if (LAlign and (LAlign - 1)) <> 0 then
     Exit;
+  if LAlign < SizeOf(Pointer) then
+    LAlign := SizeOf(Pointer);
 
   if not CalcRequiredMinSize(aSize, LAlign, LMinSegSize) then
     Exit;

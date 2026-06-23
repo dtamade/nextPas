@@ -54,6 +54,14 @@ begin
     LP := LArena.AllocAligned(32, 16);
     Check(LP <> nil, '16-byte aligned alloc');
     Check(SizeUInt(LP) mod 16 = 0, 'pointer should be 16-byte aligned');
+
+    LP := LArena.AllocAligned(24, 1);
+    Check(LP <> nil, 'small alignment should be promoted');
+    Check(SizeUInt(LP) mod SizeOf(Pointer) = 0, 'small alignment should use pointer alignment');
+
+    LP := LArena.AllocAligned(24, 2);
+    Check(LP <> nil, '2-byte alignment should be promoted');
+    Check(SizeUInt(LP) mod SizeOf(Pointer) = 0, '2-byte alignment should use pointer alignment');
   finally
     TVirtualArena_Release(LArena);
   end;
