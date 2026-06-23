@@ -974,13 +974,13 @@
 - **PF-14/PF-15**: 并行定时包含调度延迟（wall-clock 测量固有限制）
 
 ### 不修/推迟（设计层面改进，非 bug）
-- **PF-01**: ComputeStats 双遍历（影响极小，单遍改进需重写接口）
-- **PF-04**: WelchTScore/EffectSize 重复方差（API 设计如此）
-- **PF-07**: GBridgeData 无锁（已文档化约束，当前无并发 suite）
-- **PF-09**: TotalNs 从 mean*iters 反推（设计选择，样本估计更准确）
-- **PF-11**: ExecuteEntry 160 行拆分（重构成本 > 收益）
-- **PF-13**: Sequential 虚拟调度（微优化，影响 < 1%）
-- **PF-18**: 校准循环 0-time cap（已有 MaxIterations 兜底）
+- **PF-01**: ComputeStats 双遍历（影响极小，单遍改进需重写接口；bench 统计非热点）
+- **PF-04**: WelchTScore/EffectSize 重复方差（API 设计如此，两者独立计算更清晰）
+- **PF-07**: GBridgeData 无锁（已文档化约束，当前无并发 suite；加锁引入复杂度）
+- **PF-09**: TotalNs 从 mean*iters 反推（设计选择，样本估计比单次测量更准确）
+- **PF-11**: ExecuteEntry 160 行拆分（已做过 dispatcher 拆分；剩余内联优化收益 <1%）
+- **PF-13**: Sequential 虚拟调度（微优化，影响 < 1%，虚调用开销可忽略）
+- **PF-18**: 校准循环 0-time cap（已有 MaxIterations 兜底，极端 case 不影响结果）
 - **DS-08**: BENCH_ENV_NO_MEMTRACK 命名（改名破坏 CI 配置）
 - **DS-11**: SaveTo* IStream 抽象（大重构）
 - **DS-13**: TBenchRunner 线程安全（大重构）
