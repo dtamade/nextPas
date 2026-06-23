@@ -99,6 +99,8 @@ var
   LHandle: TPlatformThreadHandle;
   LRetVal: Pointer;
   LElapsed: Integer;
+  LJoinTimeoutMs: Int64;
+  LJoinResult: Int32;
 begin
   New(LRec);
   LRec^.Proc := AProc;
@@ -116,28 +118,67 @@ begin
     Inc(LElapsed, 10);
   end;
 
+  { Secondary join timeout: after detecting a timeout, give the worker extra
+    time to finish cleanup. Use max(2x original, 5s) to handle short timeouts
+    where the worker might just be slow, not truly stuck. }
   if LRec^.Done then
+    LJoinTimeoutMs := 5000  { normal path: 5s grace for thread teardown }
+  else
   begin
-    { Test completed — join thread, read results, dispose. }
-    platform_thread_join(LHandle, LRetVal);
+    LJoinTimeoutMs := Int64(ATimeoutMs) * 2;
+    if LJoinTimeoutMs < 5000 then
+      LJoinTimeoutMs := 5000;
+  end;
+
+  LJoinResult := platform_thread_timedjoin(LHandle, LJoinTimeoutMs, LRetVal);
+
+  if LJoinResult = 0 then
+  begin
+    { Thread finished — read results and dispose }
+    AStatus := LRec^.Status;
+    AMsg := LRec^.ErrorMsg;
+    if not LRec^.Done then
+    begin
+      { Worker finished but didn't set Done — unusual, treat as error }
+      AStatus := tsError;
+      AMsg := 'worker exited without completing';
+      Result := False;
+    end
+    else if LElapsed >= ATimeoutMs then
+    begin
+      { Worker finished, but we detected a timeout first.
+        Report as timeout — the test was too slow. }
+      AStatus := tsError;
+      AMsg := 'test timed out after ' + IntToStr(ATimeoutMs) + 'ms';
+      Result := False;
+    end
+    else
+      Result := True;
+  end
+  else if LRec^.Done then
+  begin
+    { Worker finished (Done=True) but timed join didn't complete in 5s —
+      extremely unlikely; treat as success with potential stale data. }
     AStatus := LRec^.Status;
     AMsg := LRec^.ErrorMsg;
     Result := True;
+    { Detach to prevent handle leak — worker is done, thread is exiting }
+    platform_thread_detach(LHandle);
+    WriteLn(StdErr, 'WARNING: timed-join failed after worker completed — handle detached');
   end
   else
   begin
-    { Timed out — join thread, then dispose.
-      If the worker is truly stuck (deadlock/infinite loop), this will block
-      indefinitely. This is an inherent limitation: Pascal has no safe way to
-      force-terminate a thread. Blocking is better than leaking. }
+    { Truly stuck worker — timed join also expired. Detach and warn.
+      LRec will leak because we can't safely access it after detach. }
     AStatus := tsError;
     AMsg := 'test timed out after ' + IntToStr(ATimeoutMs) + 'ms';
     Result := False;
+    platform_thread_detach(LHandle);
     WriteLn('  ', AnsiYellow('WARNING'), ': test timed out after ',
-      ATimeoutMs, 'ms — waiting for worker to finish');
-    platform_thread_join(LHandle, LRetVal);
+      ATimeoutMs, 'ms — worker thread stuck, detached (LRec leaked)');
   end;
-  Dispose(LRec);
+  if LJoinResult = 0 then
+    Dispose(LRec);
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }

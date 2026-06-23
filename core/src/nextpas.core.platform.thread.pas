@@ -16,6 +16,9 @@ type
 { Thread lifecycle }
 function platform_thread_create(out AHandle: TPlatformThreadHandle; AProc: TPlatformThreadProc; AArg: Pointer): Int32;
 function platform_thread_join(const AHandle: TPlatformThreadHandle; out ARetVal: Pointer): Int32;
+{ Timed join: returns 0 on success, 1 on timeout, <0 on error.
+  ATimeoutMs > 0: wait up to ATimeoutMs milliseconds. }
+function platform_thread_timedjoin(const AHandle: TPlatformThreadHandle; ATimeoutMs: Int64; out ARetVal: Pointer): Int32;
 function platform_thread_detach(const AHandle: TPlatformThreadHandle): Int32;
 function platform_thread_self: TPlatformThreadToken;
 function platform_thread_id: UInt64;
@@ -142,6 +145,57 @@ begin
   Result := pthread_detach(PPThreadToken(@AState^.Thread[0])^);
   Dispose(AState);
 end;
+
+{ GNU extension — available since glibc 2.24 (2016). PTHREAD_TIMEOUT_CLOCK_ID
+  defaults to CLOCK_MONOTONIC on modern kernels. }
+{$IFDEF NEXTPAS_LINUX}
+function pthread_timedjoin_np(thread: pthread_t; retval: PPointer;
+  abstime: PTimeSpec): Int32; cdecl; external 'c' name 'pthread_timedjoin_np';
+
+function platform_thread_timedjoin(const AHandle: TPlatformThreadHandle;
+  ATimeoutMs: Int64; out ARetVal: Pointer): Int32;
+var
+  LState: PPlatformPThreadState;
+  LNow: TTimeSpec;
+  LAbsTime: TTimeSpec;
+begin
+  ARetVal := nil;
+  LState := PPlatformPThreadState(AHandle);
+  if LState = nil then
+    Exit(-1);
+
+  clock_gettime(CLOCK_REALTIME, @LNow);
+  LAbsTime.tv_sec  := LNow.tv_sec + (ATimeoutMs div 1000);
+  LAbsTime.tv_nsec := LNow.tv_nsec + (ATimeoutMs mod 1000) * 1000000;
+  if LAbsTime.tv_nsec >= 1000000000 then
+  begin
+    Inc(LAbsTime.tv_sec);
+    Dec(LAbsTime.tv_nsec, 1000000000);
+  end;
+
+  Result := pthread_timedjoin_np(PPThreadToken(@LState^.Thread[0])^, @ARetVal, @LAbsTime);
+  if Result = 0 then
+  begin
+    { Thread finished — clean up state }
+    Dispose(LState);
+  end
+  else if Result = 110 then { ETIMEDOUT }
+  begin
+    Result := 1; { Caller decides: detach or re-try }
+  end
+  else
+  begin
+    Result := -1; { Unexpected error }
+  end;
+end;
+{$ELSE}
+{ macOS/Android/FreeBSD: fall back to blocking join (no timed join available). }
+function platform_thread_timedjoin(const AHandle: TPlatformThreadHandle;
+  ATimeoutMs: Int64; out ARetVal: Pointer): Int32;
+begin
+  Result := platform_thread_join(AHandle, ARetVal);
+end;
+{$ENDIF}
 
 function platform_thread_host_self_token_u64: UInt64; inline;
 begin
@@ -500,6 +554,32 @@ begin
   Result := platform_thread_windows_state_detach(LState);
 end;
 
+function platform_thread_timedjoin(const AHandle: TPlatformThreadHandle;
+  ATimeoutMs: Int64; out ARetVal: Pointer): Int32;
+var
+  LState: PPlatformWindowsThreadState;
+  LWaitResult: DWORD;
+begin
+  ARetVal := nil;
+  LState := PPlatformWindowsThreadState(AHandle);
+  if LState = nil then
+    Exit(-1);
+
+  LWaitResult := WaitForSingleObject(LState^.Handle, DWORD(ATimeoutMs));
+  if LWaitResult = WAIT_OBJECT_0 then
+  begin
+    ARetVal := LState^.ReturnValue;
+    platform_thread_windows_close_handle(LState^.Handle);
+    LState^.Handle := nil;
+    platform_thread_windows_state_release(LState);
+    Result := 0;
+  end
+  else if LWaitResult = WAIT_TIMEOUT then
+    Result := 1
+  else
+    Result := -1;
+end;
+
 function platform_thread_self: TPlatformThreadToken;
 begin
   Result := TPlatformThreadToken(GetCurrentThreadId);
@@ -562,6 +642,7 @@ end;
 {$IFNDEF NEXTPAS_UNIX}{$IFNDEF NEXTPAS_WINDOWS}
 function platform_thread_create(out AHandle: TPlatformThreadHandle; AProc: TPlatformThreadProc; AArg: Pointer): Int32; begin AHandle := nil; Result := -1; end;
 function platform_thread_join(const AHandle: TPlatformThreadHandle; out ARetVal: Pointer): Int32; begin ARetVal := nil; Result := -1; end;
+function platform_thread_timedjoin(const AHandle: TPlatformThreadHandle; ATimeoutMs: Int64; out ARetVal: Pointer): Int32; begin ARetVal := nil; Result := -1; end;
 function platform_thread_detach(const AHandle: TPlatformThreadHandle): Int32; begin Result := -1; end;
 function platform_thread_self: TPlatformThreadToken; begin Result := 0; end;
 function platform_thread_id: UInt64; begin Result := 0; end;
