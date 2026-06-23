@@ -98,6 +98,9 @@ type
     {** 生成基线对比 }
     function GenerateComparisons: TBenchComparisonArray;
 
+    {** ST-27: 通用文件保存辅助方法 }
+    procedure SaveStringToFile(const APath, AContent, AFormat: string);
+
   public
     constructor Create(const AResults: array of TBenchResult;
       const AEnvironment: TBenchEnvironment;
@@ -634,7 +637,7 @@ begin
   Result := FReportGenerator.ToHTML;
 end;
 
-procedure TBenchResults.SaveToJSON(const APath: string);
+procedure TBenchResults.SaveStringToFile(const APath, AContent, AFormat: string);
 var
   LFile: TextFile;
   LOpened: Boolean;
@@ -645,59 +648,30 @@ begin
     try
       Rewrite(LFile);
       LOpened := True;
-      WriteLn(LFile, ToJSON);
+      WriteLn(LFile, AContent);
     except
       on E: Exception do
-        raise EBenchError.CreateFmt('Failed to save JSON to "%s": %s', [APath, E.Message]);
+        raise EBenchError.CreateFmt('Failed to save %s to "%s": %s', [AFormat, APath, E.Message]);
     end;
   finally
     if LOpened then
       CloseFile(LFile);
   end;
+end;
+
+procedure TBenchResults.SaveToJSON(const APath: string);
+begin
+  SaveStringToFile(APath, ToJSON, 'JSON');
 end;
 
 procedure TBenchResults.SaveToHTML(const APath: string);
-var
-  LFile: TextFile;
-  LOpened: Boolean;
 begin
-  LOpened := False;
-  AssignFile(LFile, APath);
-  try
-    try
-      Rewrite(LFile);
-      LOpened := True;
-      WriteLn(LFile, ToHTML);
-    except
-      on E: Exception do
-        raise EBenchError.CreateFmt('Failed to save HTML to "%s": %s', [APath, E.Message]);
-    end;
-  finally
-    if LOpened then
-      CloseFile(LFile);
-  end;
+  SaveStringToFile(APath, ToHTML, 'HTML');
 end;
 
 procedure TBenchResults.SaveToTSV(const APath: string);
-var
-  LFile: TextFile;
-  LOpened: Boolean;
 begin
-  LOpened := False;
-  AssignFile(LFile, APath);
-  try
-    try
-      Rewrite(LFile);
-      LOpened := True;
-      WriteLn(LFile, ToTSV);
-    except
-      on E: Exception do
-        raise EBenchError.CreateFmt('Failed to save TSV to "%s": %s', [APath, E.Message]);
-    end;
-  finally
-    if LOpened then
-      CloseFile(LFile);
-  end;
+  SaveStringToFile(APath, ToTSV, 'TSV');
 end;
 
 function TBenchResults.CompareWithBaseline: TBenchComparisonArray;

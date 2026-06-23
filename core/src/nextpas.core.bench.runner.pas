@@ -57,6 +57,7 @@ type
   private
     FConfig: TBenchConfig;
     FFilter: string;
+    FFilterLower: string; { PF-08: cached lowercase filter }
     FStatsAnalyzer: IBenchStatsAnalyzer;
     FResults: array of TBenchResult;
     FResultCount: Integer;
@@ -366,8 +367,9 @@ end;
 procedure TBenchRunner.LoadConfigFromEnv;
 var
   LValue: string;
+  LTmp: Int64;
 begin
-  // 加载配置
+  // 加载默认配置
   FConfig.MinDurationNs := BENCH_DEFAULT_MIN_DURATION_NS;
   FConfig.MaxIterations := BENCH_DEFAULT_MAX_ITERATIONS;
   FConfig.MinSamples := BENCH_DEFAULT_MIN_SAMPLES;
@@ -378,23 +380,37 @@ begin
   FConfig.CollectRawSamples := False;
   FConfig.Quiet := False;
 
-  // 从环境变量覆盖
+  // DS-09/DS-10: unified TryStrToInt64 parsing with range validation
+
   LValue := GetEnvironmentVariable(BENCH_ENV_MAX_ITERS);
-  if (LValue <> '') and TryStrToInt64(LValue, FConfig.MaxIterations) then
-    if FConfig.MaxIterations < 100 then
-      FConfig.MaxIterations := 100;
+  if (LValue <> '') and TryStrToInt64(LValue, LTmp) then
+  begin
+    if LTmp < 100 then LTmp := 100;
+    FConfig.MaxIterations := LTmp;
+  end;
 
   LValue := GetEnvironmentVariable(BENCH_ENV_MIN_DURATION);
-  if (LValue <> '') then
-    FConfig.MinDurationNs := StrToInt64Def(LValue, BENCH_DEFAULT_MIN_DURATION_NS);
+  if (LValue <> '') and TryStrToInt64(LValue, LTmp) then
+  begin
+    if LTmp < 1 then LTmp := 1;
+    FConfig.MinDurationNs := UInt64(LTmp);
+  end;
 
   LValue := GetEnvironmentVariable(BENCH_ENV_MIN_SAMPLES);
-  if (LValue <> '') then
-    FConfig.MinSamples := Integer(StrToIntDef(LValue, BENCH_DEFAULT_MIN_SAMPLES));
+  if (LValue <> '') and TryStrToInt64(LValue, LTmp) then
+  begin
+    if LTmp < 1 then LTmp := 1;
+    if LTmp > 100000 then LTmp := 100000;
+    FConfig.MinSamples := Integer(LTmp);
+  end;
 
   LValue := GetEnvironmentVariable(BENCH_ENV_WARMUP);
-  if (LValue <> '') then
-    FConfig.WarmupIterations := Integer(StrToIntDef(LValue, BENCH_DEFAULT_WARMUP_ITERATIONS));
+  if (LValue <> '') and TryStrToInt64(LValue, LTmp) then
+  begin
+    if LTmp < 0 then LTmp := 0;
+    if LTmp > 100000 then LTmp := 100000;
+    FConfig.WarmupIterations := Integer(LTmp);
+  end;
 
   LValue := GetEnvironmentVariable(BENCH_ENV_QUIET);
   if (LValue <> '') and (LValue = '1') then
@@ -405,6 +421,7 @@ begin
     FConfig.EnableMemoryTracking := False;
 
   FFilter := GetEnvironmentVariable(BENCH_ENV_FILTER);
+  FFilterLower := LowerCase(FFilter); { PF-08 }
 end;
 
 function TBenchRunner.MeasureNs(AFunc: TBenchFunc; AIters: Int64): UInt64;
@@ -744,8 +761,8 @@ end;
 
 function TBenchRunner.ShouldRun(const AName: string): Boolean;
 begin
-  Result := (FFilter = '') or
-    (Pos(LowerCase(FFilter), LowerCase(AName)) > 0);
+  Result := (FFilterLower = '') or
+    (Pos(FFilterLower, LowerCase(AName)) > 0); { PF-08: use cached lowercase }
 end;
 
 procedure TBenchRunner.AddResult(const AResult: TBenchResult);
@@ -894,6 +911,7 @@ end;
 procedure TBenchRunner.SetFilter(const AFilter: string);
 begin
   FFilter := AFilter;
+  FFilterLower := LowerCase(AFilter); { PF-08: cache lowercase }
 end;
 
 end.

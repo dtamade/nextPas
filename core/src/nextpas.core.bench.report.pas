@@ -341,9 +341,11 @@ begin
   // header
   BufferAddLine(LLines, TextFormat('  %-40s %10s %10s %10s %10s %10s',
     ['Name', 'Iterations', 'ns/op', 'ops/s', 'StdDev', 'P99']));
-  BufferAddLine(LLines, '  ' + TextOfChar('-', 100));
+  // ST-17: separator width matches content columns (40+10+10+10+10+10+5 spaces = 95)
+  BufferAddLine(LLines, '  ' + TextOfChar('-', 95));
 
-  // results (non-skipped only)
+  // results (non-skipped only) + count skipped in one pass (ST-16)
+  LSkippedCount := 0;
   for i := 0 to FResultCount - 1 do
   begin
     if not FResults[i].Skipped then
@@ -355,14 +357,10 @@ begin
          FormatLargeNumber(Min(Int64(FResults[i].OpsPerSec), High(Int64))),
          FormatNumber(FResults[i].StdDev, 1),
          FormatNumber(FResults[i].P99, 1)]));
-    end;
-  end;
-
-  // skipped benchmarks
-  LSkippedCount := 0;
-  for i := 0 to FResultCount - 1 do
-    if FResults[i].Skipped then
+    end
+    else
       Inc(LSkippedCount);
+  end;
 
   if LSkippedCount > 0 then
   begin
@@ -414,7 +412,6 @@ function TBenchReportGenerator.ToJSON: string;
 var
   I: Integer;
   LBuilder: TStringBuilder;
-  LJSON: string;
   LWriter: TJsonWriter;
 begin
   LBuilder.Init(256 + FResultCount * 256);
@@ -445,6 +442,7 @@ begin
       LWriter.Str(FResults[I].Name);
       if FResults[I].Skipped then
       begin
+        // ST-20: skipped entries omit numerical fields
         LWriter.Key('status');
         LWriter.Str('skipped');
         LWriter.Key('skip_reason');
@@ -454,42 +452,40 @@ begin
       begin
         LWriter.Key('status');
         LWriter.Str('ok');
+        LWriter.Key('iterations');
+        LWriter.Int(FResults[I].Iterations);
+        LWriter.Key('ns_per_op');
+        LWriter.Float(FResults[I].NsPerOp);
+        LWriter.Key('ops_per_sec');
+        LWriter.Float(FResults[I].OpsPerSec);
+        LWriter.Key('bytes_per_op');
+        LWriter.Int(FResults[I].BytesPerOp);
+        LWriter.Key('allocs_per_op');
+        LWriter.Int(FResults[I].AllocsPerOp);
+        LWriter.Key('statistics');
+        LWriter.BeginObject;
+        LWriter.Key('stddev');
+        LWriter.Float(FResults[I].StdDev);
+        LWriter.Key('median');
+        LWriter.Float(FResults[I].Median);
+        LWriter.Key('p95');
+        LWriter.Float(FResults[I].P95);
+        LWriter.Key('p99');
+        LWriter.Float(FResults[I].P99);
+        LWriter.Key('outliers');
+        LWriter.Int(FResults[I].Outliers);
+        LWriter.Key('sample_count');
+        LWriter.Int(FResults[I].SampleCount);
+        LWriter.EndObject;
       end;
-      LWriter.Key('iterations');
-      LWriter.Int(FResults[I].Iterations);
-      LWriter.Key('ns_per_op');
-      LWriter.Float(FResults[I].NsPerOp);
-      LWriter.Key('ops_per_sec');
-      LWriter.Float(FResults[I].OpsPerSec);
-      LWriter.Key('bytes_per_op');
-      LWriter.Int(FResults[I].BytesPerOp);
-      LWriter.Key('allocs_per_op');
-      LWriter.Int(FResults[I].AllocsPerOp);
-      LWriter.Key('statistics');
-      LWriter.BeginObject;
-      LWriter.Key('stddev');
-      LWriter.Float(FResults[I].StdDev);
-      LWriter.Key('median');
-      LWriter.Float(FResults[I].Median);
-      LWriter.Key('p95');
-      LWriter.Float(FResults[I].P95);
-      LWriter.Key('p99');
-      LWriter.Float(FResults[I].P99);
-      LWriter.Key('outliers');
-      LWriter.Int(FResults[I].Outliers);
-      LWriter.Key('sample_count');
-      LWriter.Int(FResults[I].SampleCount);
-      LWriter.EndObject;
       LWriter.EndObject;
     end;
     LWriter.EndArray;
     LWriter.EndObject;
-    LJSON := LBuilder.ToString;
+    Result := LBuilder.ToString;
   finally
     LBuilder.Done;
   end;
-
-  Result := LJSON;
 end;
 
 function TBenchReportGenerator.ToTSV: string;
