@@ -16,6 +16,7 @@ interface
 uses
   nextpas.core.test.base,
   nextpas.core.test.check,
+  nextpas.core.test.config,
   nextpas.core.test.expect,
   nextpas.core.test.output,
   nextpas.core.test.output.tap,
@@ -40,6 +41,13 @@ type
   ETestSkipped = nextpas.core.test.base.ETestSkipped;
   TTestEntryKind = nextpas.core.test.base.TTestEntryKind;
   TTestEntry = nextpas.core.test.base.TTestEntry;
+  TAnsiMode = nextpas.core.test.config.TAnsiMode;
+  IOutputSink = nextpas.core.test.config.IOutputSink;
+  TStringLines = nextpas.core.test.config.TStringLines;
+  TStdoutSink = nextpas.core.test.config.TStdoutSink;
+  TStderrSink = nextpas.core.test.config.TStderrSink;
+  TBufferSink = nextpas.core.test.config.TBufferSink;
+  TTestConfig = nextpas.core.test.config.TTestConfig;
 
 const
   tsPassed  = nextpas.core.test.base.tsPassed;
@@ -50,6 +58,9 @@ const
   ekSubtest = nextpas.core.test.base.ekSubtest;
   ekSkipped = nextpas.core.test.base.ekSkipped;
   ekTableTest = nextpas.core.test.base.ekTableTest;
+  amAuto = nextpas.core.test.config.amAuto;
+  amOn = nextpas.core.test.config.amOn;
+  amOff = nextpas.core.test.config.amOff;
 
 { ── Re-exported types from test.expect ────────────────────────────────────── }
 
@@ -124,6 +135,7 @@ function JUnitXML(const AResults: specialize TArray<TTestRunResult>;
   const ASuiteName: string = ''): string;
 function WriteJUnitXML(const AResults: specialize TArray<TTestRunResult>;
   const AFileName: string; const ASuiteName: string = ''): Boolean;
+function DefaultConfig: TTestConfig;
 
 type
   TTestResults = nextpas.core.test.base.TTestResults;
@@ -313,6 +325,9 @@ begin Result := nextpas.core.test.output.JUnitXML(AResults, ASuiteName); end;
 function WriteJUnitXML(const AResults: specialize TArray<TTestRunResult>;
   const AFileName: string; const ASuiteName: string): Boolean;
 begin Result := nextpas.core.test.output.WriteJUnitXML(AResults, AFileName, ASuiteName); end;
+
+function DefaultConfig: TTestConfig;
+begin Result := nextpas.core.test.config.DefaultConfig; end;
 
 { ── Forward to test.discovery ──────────────────────────────────────────────── }
 

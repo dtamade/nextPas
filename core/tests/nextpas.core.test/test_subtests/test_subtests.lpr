@@ -8,8 +8,7 @@ program test_subtests;
 uses
   cthreads,
   SysUtils,
-  nextpas.core.test,
-  nextpas.core.test.config;
+  nextpas.core.test;
 
 var
   GSubTestsRun: Integer = 0;

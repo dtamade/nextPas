@@ -8,8 +8,7 @@ program test_parallel;
 uses
   cthreads,
   SysUtils,
-  nextpas.core.test,
-  nextpas.core.test.config;
+  nextpas.core.test;
 
 var
   GTestCounter: Integer = 0;
