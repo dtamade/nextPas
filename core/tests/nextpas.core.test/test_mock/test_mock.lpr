@@ -494,6 +494,41 @@ begin
   end;
 end;
 
+procedure TestStateGetReturnInt64FromTypedSetup;
+var
+  LM: TMock;
+  LValue: TMockValue;
+begin
+  LM := TMock.Create;
+  try
+    LM.Setup('Count').ReturnsInt(42);
+    LValue := LM.State.GetReturnTyped('Count', []);
+    CheckTrue(LValue.Kind = mvInt64, 'typed int return kind');
+    CheckEqual(Int64(42), LValue.IntVal);
+    CheckEqual(Int64(42), LM.State.GetReturnInt64('Count', ['legacy']));
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestStateGetReturnBoolFromTypedSetup;
+var
+  LM: TMock;
+  LValue: TMockValue;
+begin
+  LM := TMock.Create;
+  try
+    LM.Setup('Flag').ReturnsBool(True);
+    LValue := LM.State.GetReturnTyped('Flag', []);
+    CheckTrue(LValue.Kind = mvBool, 'typed bool return kind');
+    CheckTrue(LValue.BoolVal, 'typed bool return value');
+    CheckTrue(LM.State.GetReturnBool('Flag', ['legacy']),
+      'state typed bool getter');
+  finally
+    LM.Free;
+  end;
+end;
+
 { R6-46: Verify expects 1 but called 2 times → should fail }
 
 procedure TestVerifyCalledExactlyOverCall;
@@ -591,6 +626,10 @@ begin
     @TestRecordCallTypedPreservesLegacyArgs);
   Suite.Test('TestGetReturnTypedFromStringSetup',
     @TestGetReturnTypedFromStringSetup);
+  Suite.Test('TestStateGetReturnInt64FromTypedSetup',
+    @TestStateGetReturnInt64FromTypedSetup);
+  Suite.Test('TestStateGetReturnBoolFromTypedSetup',
+    @TestStateGetReturnBoolFromTypedSetup);
   Suite.Test('TestGetReturnIntNonNumeric', @TestGetReturnIntNonNumeric);
 
   { R6-46: Verify over-call }

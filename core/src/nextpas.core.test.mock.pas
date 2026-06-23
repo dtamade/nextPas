@@ -87,6 +87,8 @@ type
   private
     FCalls   : TMockCalls;
     FSetups  : specialize TArray<TMockCall>;
+    procedure SetTypedReturnValue(const AMethodName: string;
+      const AValue: TMockValue);
   public
     constructor Create;
     destructor Destroy; override;
@@ -99,6 +101,10 @@ type
     function GetReturn(const AMethodName: string): string;
     function GetReturnTyped(const AMethodName: string;
       const AArgs: array of TMockValue): TMockValue;
+    function GetReturnInt64(const AMethodName: string;
+      const AArgs: array of string): Int64;
+    function GetReturnBool(const AMethodName: string;
+      const AArgs: array of string): Boolean;
     { Configure a return value }
     procedure SetReturn(const AMethodName, AValue: string);
     { Get call count for a method }
@@ -215,6 +221,16 @@ begin
   end;
 end;
 
+procedure BuildTypedStringArgs(const AArgs: array of string;
+  out ATypedArgs: TMockValues);
+var
+  I: Integer;
+begin
+  SetLength(ATypedArgs, Length(AArgs));
+  for I := 0 to High(AArgs) do
+    ATypedArgs[I] := MockStr(AArgs[I]);
+end;
+
 { ── TMockState ────────────────────────────────────────────────────────────── }
 
 constructor TMockState.Create;
@@ -300,6 +316,39 @@ begin
   Result := MockUnsetValue;
 end;
 
+function TMockState.GetReturnInt64(const AMethodName: string;
+  const AArgs: array of string): Int64;
+var
+  LTypedArgs: TMockValues;
+  LTyped: TMockValue;
+  LValue: string;
+begin
+  BuildTypedStringArgs(AArgs, LTypedArgs);
+  LTyped := GetReturnTyped(AMethodName, LTypedArgs);
+  if LTyped.Kind = mvInt64 then
+    Exit(LTyped.IntVal);
+
+  LValue := GetReturn(AMethodName);
+  if LValue = '' then
+    Exit(0);
+  if not TryStrToInt64(LValue, Result) then
+    Result := 0;
+end;
+
+function TMockState.GetReturnBool(const AMethodName: string;
+  const AArgs: array of string): Boolean;
+var
+  LTypedArgs: TMockValues;
+  LTyped: TMockValue;
+begin
+  BuildTypedStringArgs(AArgs, LTypedArgs);
+  LTyped := GetReturnTyped(AMethodName, LTypedArgs);
+  if LTyped.Kind = mvBool then
+    Exit(LTyped.BoolVal);
+
+  Result := SameText(GetReturn(AMethodName), 'true');
+end;
+
 procedure TMockState.SetReturn(const AMethodName, AValue: string);
 var
   LSetup: TMockCall;
@@ -323,6 +372,31 @@ begin
   LSetup.HasResult        := True;
   LSetup.Args             := nil;
   LSetup.TypedArgs        := nil;
+  SetLength(FSetups, Length(FSetups) + 1);
+  FSetups[High(FSetups)] := LSetup;
+end;
+
+procedure TMockState.SetTypedReturnValue(const AMethodName: string;
+  const AValue: TMockValue);
+var
+  LSetup: TMockCall;
+  I: Integer;
+begin
+  for I := 0 to High(FSetups) do
+  begin
+    if FSetups[I].MethodName = AMethodName then
+    begin
+      FSetups[I].TypedReturnValue := AValue;
+      Exit;
+    end;
+  end;
+
+  LSetup.MethodName       := AMethodName;
+  LSetup.Args             := nil;
+  LSetup.TypedArgs        := nil;
+  LSetup.HasResult        := True;
+  LSetup.ResultValue      := MockValueToString(AValue);
+  LSetup.TypedReturnValue := AValue;
   SetLength(FSetups, Length(FSetups) + 1);
   FSetups[High(FSetups)] := LSetup;
 end;
@@ -372,6 +446,7 @@ end;
 function TMockSetup.ReturnsInt(AValue: Int64): IMockSetup;
 begin
   FState.SetReturn(FMethod, IntToStr(AValue));
+  FState.SetTypedReturnValue(FMethod, MockInt(AValue));
   Result := Self;
 end;
 
@@ -381,6 +456,7 @@ begin
     FState.SetReturn(FMethod, 'true')
   else
     FState.SetReturn(FMethod, 'false');
+  FState.SetTypedReturnValue(FMethod, MockBool(AValue));
   Result := Self;
 end;
 
@@ -486,19 +562,13 @@ begin
 end;
 
 function TMock.GetReturnInt(const AMethodName: string): Int64;
-var
-  LVal: string;
 begin
-  LVal := FState.GetReturn(AMethodName);
-  if LVal = '' then
-    Exit(0);
-  if not TryStrToInt64(LVal, Result) then
-    Result := 0;
+  Result := FState.GetReturnInt64(AMethodName, []);
 end;
 
 function TMock.GetReturnBool(const AMethodName: string): Boolean;
 begin
-  Result := SameText(FState.GetReturn(AMethodName), 'true');
+  Result := FState.GetReturnBool(AMethodName, []);
 end;
 
 function TMock.CallCount(const AMethodName: string): Integer;
