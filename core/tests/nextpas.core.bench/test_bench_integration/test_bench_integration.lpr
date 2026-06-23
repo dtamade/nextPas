@@ -1227,6 +1227,53 @@ begin
   Check(GTeardownCallCount >= 2, 'DS-02: Teardown called for each entry');
 end;
 
+{ === ST-04: Run Timeout Test === }
+
+procedure BenchSleep20ms(const ACtx: IBenchContext);
+begin
+  TSleep.ForDuration(TDuration.FromMilliseconds(20));
+end;
+
+procedure BenchSleep5ms(const ACtx: IBenchContext);
+begin
+  TSleep.ForDuration(TDuration.FromMilliseconds(5));
+end;
+
+procedure TestTBenchSuite_Timeout;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+  LSkippedCount: Integer;
+  I: Integer;
+begin
+  WriteLn('TestTBenchSuite_Timeout:');
+  LSuite := TBenchSuite.Create('timeout-test');
+  LSuite.Add('Sleep20ms', @BenchSleep20ms);
+  LSuite.Add('Sleep5ms_1', @BenchSleep5ms);
+  LSuite.Add('Sleep5ms_2', @BenchSleep5ms);
+  LSuite.Add('Sleep5ms_3', @BenchSleep5ms);
+  // ST-04: 15ms 超时 — Sleep20ms 本身就会超时，后续条目应被 skip
+  LSuite.SetTimeout(15);
+  LSuite.SetQuiet(True);
+  LResults := LSuite.Run;
+  Check(LResults.Count = 4, 'ST-04: All 4 entries present');
+  LSkippedCount := 0;
+  for I := 0 to LResults.Count - 1 do
+    if LResults.GetAll[I].Skipped then
+      Inc(LSkippedCount);
+  Check(LSkippedCount >= 1, 'ST-04: At least 1 entry skipped due to timeout');
+  // 验证 skip reason 包含 "Timeout"
+  for I := 0 to LResults.Count - 1 do
+  begin
+    if LResults.GetAll[I].Skipped then
+    begin
+      Check(Pos('Timeout', LResults.GetAll[I].SkipReason) > 0,
+        'ST-04: Skip reason contains "Timeout"');
+      Break;
+    end;
+  end;
+end;
+
 begin
   WriteLn('=== nextpas.core.bench Integration Tests ===');
   WriteLn;
@@ -1303,6 +1350,9 @@ begin
     TestNewAPI_Clear; WriteLn;
     TestNewAPI_RemoveByName; WriteLn;
     TestNewAPI_AddRangeWithSetup;
+    WriteLn;
+    WriteLn('=== Timeout Test (ST-04) ===');
+    TestTBenchSuite_Timeout;
   finally
     GParallelLock.Free;
   end;
