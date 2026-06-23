@@ -153,20 +153,20 @@ begin
   GGenerator.SetEnvironment(LEnvironment);
   LJSON := GGenerator.ToJSON;
 
-  CheckContains(LJSON, '"version": "1.0"', 'Contains version');
-  CheckContains(LJSON, '"os": "linux"', 'Contains OS');
-  CheckContains(LJSON, '"cpu": "x86_64"', 'Contains CPU');
-  CheckContains(LJSON, '"cores": 16', 'Contains cores');
-  CheckContains(LJSON, '"fpc_version": "3.3.1"', 'Contains FPC version');
-  CheckContains(LJSON, '"name": "HashMap.Put"', 'Contains first benchmark');
-  CheckContains(LJSON, '"iterations": 1000000', 'Contains iterations');
-  CheckContains(LJSON, '"ns_per_op": 245.3', 'Contains NsPerOp');
-  CheckContains(LJSON, '"ops_per_sec": 4080000', 'Contains OpsPerSec');
-  CheckContains(LJSON, '"stddev": 12.3', 'Contains StdDev');
-  CheckContains(LJSON, '"median": 243.1', 'Contains Median');
-  CheckContains(LJSON, '"p95": 268.4', 'Contains P95');
-  CheckContains(LJSON, '"p99": 289.2', 'Contains P99');
-  CheckContains(LJSON, '"outliers": 3', 'Contains Outliers');
+  CheckContains(LJSON, '"version":"1.0"', 'Contains version');
+  CheckContains(LJSON, '"os":"linux"', 'Contains OS');
+  CheckContains(LJSON, '"cpu":"x86_64"', 'Contains CPU');
+  CheckContains(LJSON, '"cores":16', 'Contains cores');
+  CheckContains(LJSON, '"fpc_version":"3.3.1"', 'Contains FPC version');
+  CheckContains(LJSON, '"name":"HashMap.Put"', 'Contains first benchmark');
+  CheckContains(LJSON, '"iterations":1000000', 'Contains iterations');
+  CheckContains(LJSON, '"ns_per_op":245.3', 'Contains NsPerOp');
+  CheckContains(LJSON, '"ops_per_sec":4080000', 'Contains OpsPerSec');
+  CheckContains(LJSON, '"stddev":12.3', 'Contains StdDev');
+  CheckContains(LJSON, '"median":243.1', 'Contains Median');
+  CheckContains(LJSON, '"p95":268.4', 'Contains P95');
+  CheckContains(LJSON, '"p99":289.2', 'Contains P99');
+  CheckContains(LJSON, '"outliers":3', 'Contains Outliers');
 end;
 
 procedure TestToTSV;
@@ -362,8 +362,8 @@ begin
   CheckContains(LConsole, 'SIMD extension unavailable', 'Console shows skip reason');
 
   LJSON := GGenerator.ToJSON;
-  CheckContains(LJSON, '"status": "skipped"', 'JSON shows skipped status');
-  CheckContains(LJSON, '"skip_reason": "SIMD extension unavailable"', 'JSON shows skip reason');
+  CheckContains(LJSON, '"status":"skipped"', 'JSON shows skipped status');
+  CheckContains(LJSON, '"skip_reason":"SIMD extension unavailable"', 'JSON shows skip reason');
 
   LTSV := GGenerator.ToTSV;
   CheckContains(LTSV, 'status' + #9 + 'skip_reason', 'TSV header includes skip columns');
@@ -402,8 +402,8 @@ begin
   GGenerator.SetResults(LResults);
   GGenerator.SetEnvironment(LEnvironment);
   LJSON := GGenerator.ToJSON;
-  CheckContains(LJSON, '"ns_per_op": 245.3', 'JSON keeps invariant decimal separator');
-  CheckNotContains(LJSON, '"ns_per_op": 245,3', 'JSON does not emit locale decimal separator');
+  CheckContains(LJSON, '"ns_per_op":245.3', 'JSON keeps invariant decimal separator');
+  CheckNotContains(LJSON, '"ns_per_op":245,3', 'JSON does not emit locale decimal separator');
 end;
 
 procedure TestFormatLargeNumber;

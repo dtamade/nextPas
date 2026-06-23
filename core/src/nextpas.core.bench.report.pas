@@ -368,11 +368,7 @@ end;
 function TBenchReportGenerator.ToJSON: string;
 var
   I: Integer;
-  J: Integer;
   LBuilder: TStringBuilder;
-  LFormattedBuilder: TStringBuilder;
-  LInString: Boolean;
-  LEscaped: Boolean;
   LJSON: string;
   LWriter: TJsonWriter;
 begin
@@ -448,35 +444,7 @@ begin
     LBuilder.Done;
   end;
 
-  LFormattedBuilder.Init(Length(LJSON) + 32);
-  try
-    LInString := False;
-    LEscaped := False;
-    for J := 1 to Length(LJSON) do
-    begin
-      LFormattedBuilder.AppendChar(LJSON[J]);
-      if LEscaped then
-      begin
-        LEscaped := False;
-        Continue;
-      end;
-      if LJSON[J] = '"' then
-      begin
-        LInString := not LInString;
-        Continue;
-      end;
-      if LInString and (LJSON[J] = '\') then
-      begin
-        LEscaped := True;
-        Continue;
-      end;
-      if (not LInString) and (LJSON[J] = ':') then
-        LFormattedBuilder.AppendChar(' ');
-    end;
-    Result := LFormattedBuilder.ToString;
-  finally
-    LFormattedBuilder.Done;
-  end;
+  Result := LJSON;
 end;
 
 function TBenchReportGenerator.ToTSV: string;

@@ -23,26 +23,10 @@ uses
   nextpas.core.text.builder;
 
 type
-  {** 从 base 模块 re-export 数组类型 }
+  {** 从 base 模块 re-export 类型 }
   TBenchResultArray = nextpas.core.bench.base.TBenchResultArray;
-  {**
-   * 基线数据
-   *}
-  TBaselineData = record
-    Name: string;
-    NsPerOp: Double;
-    BytesPerOp: Int64;
-    AllocsPerOp: Int64;
-    TimestampNs: UInt64;
-    GitHash: string;
-    CompilerVersion: string;
-    Notes: string;
-  end;
-
-  {**
-   * 基线数组
-   *}
-  TBaselineArray = array of TBaselineData;
+  TBaselineData = nextpas.core.bench.base.TBaselineData;
+  TBaselineArray = nextpas.core.bench.base.TBaselineArray;
 
   {**
    * 基线比较结果

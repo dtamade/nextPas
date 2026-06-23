@@ -24,7 +24,7 @@ type
   TBenchEnvironment = nextpas.core.bench.base.TBenchEnvironment;
   TBenchConfig = nextpas.core.bench.base.TBenchConfig;
   TDoubleArray = nextpas.core.bench.base.TDoubleArray;
-  TBenchBaseline = nextpas.core.bench.base.TBenchBaseline;
+  TBenchBaseline = nextpas.core.bench.base.TBaselineData;
 
   IBenchContext = nextpas.core.bench.intf.IBenchContext;
   IBenchSuite = nextpas.core.bench.intf.IBenchSuite;

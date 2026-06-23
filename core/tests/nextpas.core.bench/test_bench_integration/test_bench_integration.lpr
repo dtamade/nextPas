@@ -790,8 +790,8 @@ begin
   LJSON := LResults.ToJSON;
 
   Check(Length(LJSON) > 0, 'JSON output not empty');
-  Check(Pos('"version": "1.0"', LJSON) > 0, 'Contains version');
-  Check(Pos('"name": "Fast"', LJSON) > 0, 'Contains benchmark name');
+  Check(Pos('"version":"1.0"', LJSON) > 0, 'Contains version');
+  Check(Pos('"name":"Fast"', LJSON) > 0, 'Contains benchmark name');
   Check(Pos('"ns_per_op"', LJSON) > 0, 'Contains NsPerOp');
 end;
 

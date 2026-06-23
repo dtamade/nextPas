@@ -278,59 +278,13 @@ begin
 end;
 
 function TBenchStatsAnalyzer.TInv0975(ADF: Double): Double;
-const
-  TINV_TABLE: array[1..30] of Double = (
-    12.706, 4.303, 3.182, 2.776, 2.571,
-    2.447, 2.365, 2.306, 2.262, 2.228,
-    2.201, 2.179, 2.160, 2.145, 2.131,
-    2.120, 2.110, 2.101, 2.093, 2.086,
-    2.080, 2.074, 2.069, 2.064, 2.060,
-    2.056, 2.052, 2.048, 2.045, 2.042
-  );
-var
-  LDF: Integer;
 begin
-  if ADF < 1.0 then
-    Result := TINV_TABLE[1]
-  else if ADF >= 30.0 then
-    Result := Z_SCORE_95
-  else
-  begin
-    LDF := Round(ADF);
-    if LDF < 1 then
-      LDF := 1;
-    if LDF > 30 then
-      LDF := 30;
-    Result := TINV_TABLE[LDF];
-  end;
+  Result := TInvLookup(ADF, TINV95_DATA, Z_SCORE_95);
 end;
 
 function TBenchStatsAnalyzer.TInv0995(ADF: Double): Double;
-const
-  TINV99_TABLE: array[1..30] of Double = (
-    63.657, 9.925, 5.841, 4.604, 4.032,
-    3.707, 3.499, 3.355, 3.250, 3.169,
-    3.106, 3.055, 3.012, 2.977, 2.947,
-    2.921, 2.898, 2.878, 2.861, 2.845,
-    2.831, 2.819, 2.807, 2.797, 2.787,
-    2.779, 2.771, 2.763, 2.756, 2.750
-  );
-var
-  LDF: Integer;
 begin
-  if ADF < 1.0 then
-    Result := TINV99_TABLE[1]
-  else if ADF >= 30.0 then
-    Result := Z_SCORE_99
-  else
-  begin
-    LDF := Round(ADF);
-    if LDF < 1 then
-      LDF := 1;
-    if LDF > 30 then
-      LDF := 30;
-    Result := TINV99_TABLE[LDF];
-  end;
+  Result := TInvLookup(ADF, TINV99_DATA, Z_SCORE_99);
 end;
 
 function TBenchStatsAnalyzer.HasHeuristicDifference(const A, B: TBenchStats): Boolean;

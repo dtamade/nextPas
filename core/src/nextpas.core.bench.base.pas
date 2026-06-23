@@ -94,14 +94,20 @@ type
   {** 基准比较数组 }
   TBenchComparisonArray = array of TBenchComparison;
 
-  {** 基线数据 }
-  TBenchBaseline = record
+  {** 基线数据（统一类型，替代原 TBenchBaseline） }
+  TBaselineData = record
     Name: string;
     NsPerOp: Double;        // 纳秒/操作
+    BytesPerOp: Int64;
+    AllocsPerOp: Int64;
+    TimestampNs: UInt64;
+    GitHash: string;
+    CompilerVersion: string;
+    Notes: string;
   end;
 
   {** 基线数组 }
-  TBenchBaselineArray = array of TBenchBaseline;
+  TBaselineArray = array of TBaselineData;
 
 const
   {** 默认配置值 }
@@ -125,10 +131,49 @@ const
   Z_SCORE_99 = 2.576;
   OUTLIER_MULTIPLIER = 1.5;  // Tukey's Fences
 
+  {** t 分布临界值查找表 (0-based, df=1..30) }
+  TINV95_DATA: array[0..29] of Double = (
+    12.706, 4.303, 3.182, 2.776, 2.571,
+    2.447, 2.365, 2.306, 2.262, 2.228,
+    2.201, 2.179, 2.160, 2.145, 2.131,
+    2.120, 2.110, 2.101, 2.093, 2.086,
+    2.080, 2.074, 2.069, 2.064, 2.060,
+    2.056, 2.052, 2.048, 2.045, 2.042
+  );
+
+  TINV99_DATA: array[0..29] of Double = (
+    63.657, 9.925, 5.841, 4.604, 4.032,
+    3.707, 3.499, 3.355, 3.250, 3.169,
+    3.106, 3.055, 3.012, 2.977, 2.947,
+    2.921, 2.898, 2.878, 2.861, 2.845,
+    2.831, 2.819, 2.807, 2.797, 2.787,
+    2.779, 2.771, 2.763, 2.756, 2.750
+  );
+
+{** 从查找表获取 t 临界值（通用 helper，0-based 表，df 1-based） }
+function TInvLookup(ADF: Double; const ATable: array of Double; AZScore: Double): Double;
+
 {** 对双精度浮点数组原地排序（IntroSort：小数组插入排序 + 大数组 QuickSort） }
 procedure SortDoubleArray(var AData: TDoubleArray);
 
 implementation
+
+function TInvLookup(ADF: Double; const ATable: array of Double; AZScore: Double): Double;
+var
+  LDF: Integer;
+begin
+  if ADF < 1.0 then
+    Result := ATable[0]
+  else if ADF >= 30.0 then
+    Result := AZScore
+  else
+  begin
+    LDF := Round(ADF);
+    if LDF < 1 then LDF := 1;
+    if LDF > 30 then LDF := 30;
+    Result := ATable[LDF - 1];  // 0-based table, LDF is 1-based
+  end;
+end;
 
 const
   INSERTION_SORT_THRESHOLD = 16;
@@ -189,6 +234,48 @@ begin
   end;
 end;
 
+{ HeapSort - 深度耗尽时的 O(n log n) 保底排序 }
+procedure DoHeapSort(var AData: TDoubleArray; ALeft, ARight: Integer);
+
+  procedure SiftDown(AStart, AEnd: Integer);
+  var
+    LRoot, LChild: Integer;
+    LVal: Double;
+  begin
+    LRoot := AStart;
+    while True do
+    begin
+      LChild := 2 * LRoot + 1;
+      if LChild > AEnd then Break;
+      if (LChild + 1 <= AEnd) and (AData[LChild] < AData[LChild + 1]) then
+        Inc(LChild);
+      if AData[LRoot] < AData[LChild] then
+      begin
+        LVal := AData[LRoot];
+        AData[LRoot] := AData[LChild];
+        AData[LChild] := LVal;
+        LRoot := LChild;
+      end
+      else
+        Break;
+    end;
+  end;
+
+var
+  I: Integer;
+  LVal: Double;
+begin
+  for I := (ALeft + ARight) div 2 downto ALeft do
+    SiftDown(I, ARight);
+  for I := ARight downto ALeft + 1 do
+  begin
+    LVal := AData[ALeft];
+    AData[ALeft] := AData[I];
+    AData[I] := LVal;
+    SiftDown(ALeft, I - 1);
+  end;
+end;
+
 procedure DoQuickSort(var AData: TDoubleArray; ALeft, ARight: Integer; ADepthLimit: Integer);
 var
   LPivot, LTmp: Double;
@@ -201,10 +288,10 @@ begin
     Exit;
   end;
 
-  // 深度耗尽，退化为插入排序（简化版 IntroSort）
+  // 深度耗尽，退化为 HeapSort（O(n log n) 保底）
   if ADepthLimit <= 0 then
   begin
-    DoInsertionSort(AData, ALeft, ARight);
+    DoHeapSort(AData, ALeft, ARight);
     Exit;
   end;
 
