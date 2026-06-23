@@ -18,6 +18,9 @@ type
     Executed: Boolean;
     Skipped: Boolean;
     SkipReason: string;
+    {** ST-07: Iterations kept as Int64 (not UInt64) because FPC for-loops
+     *  require ordinal types and UInt64 is not supported as loop variable.
+     *  Runtime validation ensures non-negative values. }
     Iterations: Int64;
     TotalNs: UInt64;
     NsPerOp: Double;        // 纳秒/操作
@@ -127,9 +130,10 @@ const
   BENCH_ENV_MIN_SAMPLES = 'NEXTPAS_BENCH_MIN_SAMPLES';
   BENCH_ENV_WARMUP = 'NEXTPAS_BENCH_WARMUP';
   BENCH_ENV_QUIET = 'NEXTPAS_BENCH_QUIET';
-  {** DS-08: 注意此变量语义是"禁用内存跟踪"（反向命名）。
-   *  设置 =1 / true / yes 时禁用内存跟踪。其他布尔环境变量使用正向语义。 }
-  BENCH_ENV_NO_MEMTRACK = 'NEXTPAS_BENCH_NO_MEMTRACK';
+  {** DS-08: 正向命名的内存跟踪环境变量。
+   *  设置 =1 / true / yes 时启用内存跟踪（默认启用）。
+   *  设置 =0 / false / no 时禁用内存跟踪。 }
+  BENCH_ENV_MEMTRACK = 'NEXTPAS_BENCH_MEMTRACK';
 
   {** 统计常量 }
   Z_SCORE_95 = 1.96;

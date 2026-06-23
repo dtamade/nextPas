@@ -53,9 +53,14 @@ type
     FBaselineCapacity: Integer;
     FRunner: TBenchRunner;
     FReportGenerator: TBenchReportGenerator;
+    {** ST-08: prevents mutation after Run has been called }
+    FHasRun: Boolean;
 
     {** 获取环境信息 }
     function GetEnvironment: TBenchEnvironment;
+
+    {** ST-08: guard against post-Run mutation }
+    procedure GuardNotRun;
 
   public
     constructor Create(const ASuiteName: string);
@@ -172,6 +177,7 @@ begin
 
   FRunner := TBenchRunner.Create;
   FReportGenerator := TBenchReportGenerator.Create;
+  FHasRun := False;
 end;
 
 {** ST-11: 使用自定义配置创建，跳过环境变量加载 }
@@ -190,6 +196,7 @@ begin
 
   FRunner := TBenchRunner.Create;
   FReportGenerator := TBenchReportGenerator.Create;
+  FHasRun := False;
 end;
 
 destructor TBenchSuite.Destroy;
@@ -216,10 +223,18 @@ begin
   Result.Timestamp := FormatDateTime('yyyy-mm-ddThh:nn:ss', TOffsetDateTime.Now);
 end;
 
+{** ST-08: guard against mutation after Run }
+procedure TBenchSuite.GuardNotRun;
+begin
+  if FHasRun then
+    raise EBenchError.Create('Cannot modify suite after Run has been called');
+end;
+
 function TBenchSuite.Add(const AName: string; AFunc: TBenchFunc): IBenchSuite;
 var
   LEntry: TBenchEntry;
 begin
+  GuardNotRun;
   Result := Self;
   LEntry := Default(TBenchEntry);
   LEntry.Name := AName;
@@ -243,6 +258,7 @@ function TBenchSuite.AddWithSetup(const AName: string; AFunc: TBenchFunc;
 var
   LEntry: TBenchEntry;
 begin
+  GuardNotRun;
   Result := Self;
   LEntry := Default(TBenchEntry);
   LEntry.Name := AName;
@@ -268,6 +284,7 @@ function TBenchSuite.AddWhen(const AName: string; AFunc: TBenchFunc;
 var
   LEntry: TBenchEntry;
 begin
+  GuardNotRun;
   Result := Self;
   LEntry := Default(TBenchEntry);
   LEntry.Name := AName;
@@ -291,6 +308,7 @@ function TBenchSuite.AddParallel(const AName: string; AFunc: TBenchFunc;
 var
   LEntry: TBenchEntry;
 begin
+  GuardNotRun;
   Result := Self;
   if AThreads <= 0 then
     raise EBenchInvalidParam.Create('TBenchSuite.AddParallel: thread count must be > 0');
@@ -320,6 +338,7 @@ var
   LEntry: TBenchEntry;
   LIndex: Integer;
 begin
+  GuardNotRun;
   Result := Self;
   for LIndex := 0 to High(AParams) do
   begin
@@ -347,6 +366,7 @@ var
   LEntry: TBenchEntry;
   LIndex: Integer;
 begin
+  GuardNotRun;
   Result := Self;
   for LIndex := 0 to High(AParams) do
   begin
@@ -373,6 +393,7 @@ function TBenchSuite.AddLoop(const AName: string; AFunc: TBenchLoopFunc): IBench
 var
   LEntry: TBenchEntry;
 begin
+  GuardNotRun;
   Result := Self;
   LEntry := Default(TBenchEntry);
   LEntry.Name := AName;
@@ -394,6 +415,7 @@ end;
 
 function TBenchSuite.Clear: IBenchSuite;
 begin
+  GuardNotRun;
   Result := Self;
   FEntryCount := 0;
   SetLength(FEntries, 0);
@@ -404,6 +426,7 @@ function TBenchSuite.RemoveByName(const AName: string): IBenchSuite;
 var
   I, J: Integer;
 begin
+  GuardNotRun;
   Result := Self;
   for I := 0 to FEntryCount - 1 do
   begin
@@ -610,6 +633,8 @@ begin
 
   // 创建结果对象
   Result := TBenchResults.Create(LResults, LEnvironment, Copy(FBaselines, 0, FBaselineCount));
+  { ST-08: mark suite as having been run }
+  FHasRun := True;
 end;
 
 { TBenchResults }

@@ -187,13 +187,14 @@ var
   i: Integer;
 begin
   WriteLn('TestSignificantDifference:');
+  { TG-17: use large sample (1000+) with fixed seed to reduce false positives }
   RandSeed := 42;
-  SetLength(LA, 100); SetLength(LB, 100);
-  for i := 0 to 99 do begin LA[i] := 100.0 + Random * 10.0; LB[i] := 100.0 + Random * 10.0; end;
+  SetLength(LA, 1000); SetLength(LB, 1000);
+  for i := 0 to 999 do begin LA[i] := 100.0 + Random * 10.0; LB[i] := 100.0 + Random * 10.0; end;
   LStatsA := GAnalyzer.ComputeStats(LA); LStatsB := GAnalyzer.ComputeStats(LB);
   Check(not GAnalyzer.HasHeuristicDifference(LStatsA, LStatsB), 'Same distribution no heuristic difference');
-  SetLength(LA, 100); SetLength(LB, 100);
-  for i := 0 to 99 do begin LA[i] := 100.0 + Random * 10.0; LB[i] := 200.0 + Random * 10.0; end;
+  SetLength(LA, 1000); SetLength(LB, 1000);
+  for i := 0 to 999 do begin LA[i] := 100.0 + Random * 10.0; LB[i] := 200.0 + Random * 10.0; end;
   LStatsA := GAnalyzer.ComputeStats(LA); LStatsB := GAnalyzer.ComputeStats(LB);
   Check(GAnalyzer.HasHeuristicDifference(LStatsA, LStatsB), 'Different distribution heuristic difference');
 end;

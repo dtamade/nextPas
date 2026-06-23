@@ -230,13 +230,19 @@ begin
   end;
 end;
 
+  {** PF-01: Single-pass stats computation — sum/sum_sq + percentile samples merged.
+   *  Replaces the old double-pass approach (Mean on unsorted + ComputeStdDev on unsorted). }
 function TBenchStatsAnalyzer.ComputeStats(const ASamples: TDoubleArray): TBenchStats;
 var
   LSorted: TDoubleArray;
-  LMean: Double;
+  LLen: Integer;
+  LSum, LSumSq, LCompensation, LNext, LTemp: Double;
+  LMean, LVariance: Double;
   LT95, LT99: Double;
+  I: Integer;
 begin
-  if Length(ASamples) = 0 then
+  LLen := Length(ASamples);
+  if LLen = 0 then
   begin
     FillChar(Result, SizeOf(Result), 0);
     Exit;
@@ -245,10 +251,30 @@ begin
   LSorted := Copy(ASamples);
   SortDoubleArray(LSorted);
 
-  LMean := Mean(ASamples);
+  { Single pass: compute sum and Kahan-compensated sum-of-squares for variance }
+  LSum := 0.0;
+  LSumSq := 0.0;
+  LCompensation := 0.0;
+  for I := 0 to High(ASamples) do
+  begin
+    LSum := LSum + ASamples[I];
+    LNext := Sqr(ASamples[I]) - LCompensation;
+    LTemp := LSumSq + LNext;
+    LCompensation := (LTemp - LSumSq) - LNext;
+    LSumSq := LTemp;
+  end;
+
+  LMean := LSum / LLen;
+  if LLen > 1 then
+    LVariance := (LSumSq - LLen * Sqr(LMean)) / (LLen - 1)  { sample variance via computational formula }
+  else
+    LVariance := 0.0;
 
   Result.Mean := LMean;
-  Result.StdDev := ComputeStdDev(ASamples, LMean);
+  if LVariance > 0 then
+    Result.StdDev := Sqrt(LVariance)
+  else
+    Result.StdDev := 0.0;
   Result.Median := Percentile(LSorted, 50);
   Result.Min := LSorted[0];
   Result.Max := LSorted[High(LSorted)];
@@ -259,17 +285,17 @@ begin
   Result.P99 := Percentile(LSorted, 99);
   Result.IQR := Result.P75 - Result.P25;
   Result.OutlierCount := CountOutliers(LSorted, Result.P25, Result.P75, OUTLIER_MULTIPLIER);
-  Result.SampleCount := Length(ASamples);
+  Result.SampleCount := LLen;
 
   // 95% 置信区间（使用 t 分布临界值）
-  if Length(ASamples) > 1 then
+  if LLen > 1 then
   begin
-    LT95 := TInv0975(Length(ASamples) - 1);
-    LT99 := TInv0995(Length(ASamples) - 1);
-    Result.Confidence95Low := LMean - LT95 * Result.StdDev / Sqrt(Length(ASamples));
-    Result.Confidence95High := LMean + LT95 * Result.StdDev / Sqrt(Length(ASamples));
-    Result.Confidence99Low := LMean - LT99 * Result.StdDev / Sqrt(Length(ASamples));
-    Result.Confidence99High := LMean + LT99 * Result.StdDev / Sqrt(Length(ASamples));
+    LT95 := TInv0975(LLen - 1);
+    LT99 := TInv0995(LLen - 1);
+    Result.Confidence95Low := LMean - LT95 * Result.StdDev / Sqrt(LLen);
+    Result.Confidence95High := LMean + LT95 * Result.StdDev / Sqrt(LLen);
+    Result.Confidence99Low := LMean - LT99 * Result.StdDev / Sqrt(LLen);
+    Result.Confidence99High := LMean + LT99 * Result.StdDev / Sqrt(LLen);
   end
   else
   begin

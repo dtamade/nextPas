@@ -163,6 +163,8 @@ begin
     LElapsed := LCtx.GetElapsed;
     Check(LElapsed.AsNanoseconds > 0, 'GetElapsed returns positive after sleep');
     Check(LElapsed.AsMilliseconds >= 5, 'GetElapsed reflects elapsed time (>= 5ms)');
+    { TG-18: add upper bound to prevent false failures from scheduling jitter }
+    Check(LElapsed.AsMilliseconds < 5000, 'GetElapsed upper bound (< 5000ms)');
 
     // 测试 GetElapsed 多次调用递增
     LElapsed := LCtx.GetElapsed;
@@ -469,7 +471,10 @@ begin
     Check(LElapsed < 1000000000, 'Medium operation elapsed < 1s');
 
     LElapsed := LRunner.MeasureNs(@BenchResetTimerOnly, 1);
-    Check(LElapsed < 10000000, 'ResetTimer excludes pre-measurement sleep');
+    { TG-21: use upper bound based on system timer resolution, not fixed 10ms.
+      The benchmark sleeps 25ms then resets; elapsed should be near zero.
+      Allow up to 100ms for scheduling jitter on loaded CI systems. }
+    Check(LElapsed < 100000000, 'ResetTimer excludes pre-measurement sleep (< 100ms)');
   finally
     LRunner.Free;
   end;

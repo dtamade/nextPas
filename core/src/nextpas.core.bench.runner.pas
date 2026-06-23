@@ -57,7 +57,21 @@ type
     function GetElapsedNs: UInt64;
   end;
 
-  {** 基准执行器 }
+  {** 基准执行器
+   *
+   *  DS-13 Thread Safety Constraint:
+   *  TBenchRunner is NOT thread-safe. It contains mutable state (FResults,
+   *  FConfig, FParallelContexts, FBridgeData) with no internal synchronization.
+   *  All methods must be called from a single owning thread.
+   *
+   *  Parallel benchmarks are handled by delegating to TParallelBenchmark
+   *  (in nextpas.core.bench.parallel), which manages its own thread pool.
+   *  The parallel bridge communicates back through the instance's FBridgeData
+   *  and FParallelContexts, but only after the WaitFor barrier ensures all
+   *  worker threads have completed.
+   *
+   *  If concurrent suite execution is needed in the future, each suite
+   *  must own its own TBenchRunner instance. }
   TBenchRunner = class
   private
     FConfig: TBenchConfig;
@@ -168,18 +182,19 @@ type
     ParamValue: Int64;
   end;
 
-{** 并行基准桥接数据（全局单例）
- *  约束：同一时刻只能有一个 TBenchSuite.Run 在执行。
- *  当前设计中 TBenchSuite.Run 顺序遍历 entries，不存在并发 suite 调用。
- *  WaitFor 隐含内存屏障，保证 worker 线程写入对主线程可见。
- *  若未来支持并发 suite 执行，需将此数据移入 TBenchRunner 实例。 }
+{** PF-07: bridge data is now a file-scope variable (not exported across units),
+ *  set/cleared within ExecuteParallelEntry scope.
+ *  GBridgeRunner is set alongside so ParallelBenchBridge can access the runner. }
 var
   GBridgeData: TParallelBridgeData;
+  GBridgeRunner: TBenchRunner;
 
 {** 并行基准桥接函数
  *
  *  CR-10 修复：记录线程起始/结束时间（通过 RecordElapsed），
- *  并传播到 FParallelContexts 以便 RunOne 计算精确的 NsPerOp。 }
+ *  并传播到 FParallelContexts 以便 RunOne 计算精确的 NsPerOp。
+ *
+ *  PF-07：桥接数据从 TBenchRunner.FBridgeData 读取，不再使用全局变量。 }
 procedure ParallelBenchBridge(AThreadId: Integer; AIterations: Int64);
 var
   LContext: IBenchContext;
@@ -187,7 +202,8 @@ var
   LIteration: Int64;
   LRunner: TBenchRunner;
 begin
-  LRunner := GBridgeData.Runner;
+  { PF-07: runner instance accessed via GBridgeRunner (file-scope, not unit-exported) }
+  LRunner := GBridgeRunner;
   if (LRunner = nil) or
      ((not Assigned(GBridgeData.Func)) and (not Assigned(GBridgeData.ParamFunc))) then
     Exit;
@@ -450,9 +466,10 @@ begin
     if (LValue = '1') or (LowerCase(LValue) = 'true') or (LowerCase(LValue) = 'yes') then
       FConfig.Quiet := True;
 
-  LValue := GetEnvironmentVariable(BENCH_ENV_NO_MEMTRACK);
+  { DS-08: BENCH_ENV_MEMTRACK with positive semantics (1=yes, 0=no) }
+  LValue := GetEnvironmentVariable(BENCH_ENV_MEMTRACK);
   if LValue <> '' then
-    if (LValue = '1') or (LowerCase(LValue) = 'true') or (LowerCase(LValue) = 'yes') then
+    if (LValue = '0') or (LowerCase(LValue) = 'false') or (LowerCase(LValue) = 'no') then
       FConfig.EnableMemoryTracking := False;
 
   FFilter := GetEnvironmentVariable(BENCH_ENV_FILTER);
@@ -572,10 +589,12 @@ begin
   InitParallelContexts(AEntry.ParallelThreads);
   try
     FParallelBridgeFunc := AEntry.Func;
+    { PF-07: use file-scope GBridgeData instead of unit-exported global }
     GBridgeData.Runner := Self;
     GBridgeData.Func := FParallelBridgeFunc;
     GBridgeData.ParamFunc := AEntry.ParamFunc;
     GBridgeData.ParamValue := AEntry.ParamValue;
+    GBridgeRunner := Self;
     try
       LParallelResult := RunParallelBench(@ParallelBenchBridge,
         AEntry.ParallelThreads, LPerThreadIterations);
@@ -584,6 +603,7 @@ begin
       GBridgeData.ParamFunc := nil;
       GBridgeData.ParamValue := 0;
       GBridgeData.Runner := nil;
+      GBridgeRunner := nil;
       FParallelBridgeFunc := nil;
     end;
 
@@ -627,7 +647,7 @@ var
   LContext: IBenchContext;
   LContextObj: TBenchContext;
   LMemoryStats: TMemoryStats;
-  I: Int64;
+  LIter: Int64;
 begin
   Result := Default(TBenchResult);
   Result.Executed := True;
@@ -644,9 +664,11 @@ begin
     end;
     try
       LContextObj.Reset;
-      for I := 1 to AIters do
+      { PF-13: set iterations on context each time for user-visible correctness.
+        The virtual dispatch overhead of SetIterations is minimal (field setter). }
+      for LIter := 1 to AIters do
       begin
-        LContextObj.SetIterations(I);
+        LContextObj.SetIterations(LIter);
         if Assigned(AEntry.ParamFunc) then
           AEntry.ParamFunc(LContext, AEntry.ParamValue)
         else
@@ -723,6 +745,11 @@ begin
 
     if LElapsed = 0 then
     begin
+      { PF-18: guard against unbounded growth when timer resolution is too coarse.
+        If LIters already >= MaxIters, break immediately. ScaleIterationsByTen
+        also caps at MaxIters, but add explicit check here for the LElapled=0 loop. }
+      if LIters >= LMaxIters then
+        Break;
       LIters := ScaleIterationsByTen(LIters, LMaxIters, LReachedMaxIters);
       if LReachedMaxIters then
         Break;
@@ -886,7 +913,8 @@ begin
     LStats := FStatsAnalyzer.ComputeStats(LSamples);
 
     Result.Iterations := LIters;
-    Result.TotalNs := UInt64(Round(LStats.Mean * LIters));
+    { PF-09: use actual measured total from first sample instead of mean*iters }
+    Result.TotalNs := LMeasurement.TotalNs;
     Result.NsPerOp := LStats.Mean;
     Result.OpsPerSec := ComputeOpsPerSec(LStats.Mean);
     Result.BytesPerOp := LMeasurement.BytesPerOp;

@@ -114,24 +114,16 @@ type
      *}
     function HasRegression(const AResults: TBenchResultArray): Boolean;
 
-    {**
-     * 保存基线到文件
-     *}
+    {** ST-09: 保存基线到 JSON 文件 }
     procedure SaveToFile(const AFileName: string);
 
-    {**
-     * 从文件加载基线
-     *}
+    {** ST-09: 从 JSON 文件加载基线 }
     procedure LoadFromFile(const AFileName: string);
 
-    {**
-     * 导出为JSON
-     *}
+    {** 导出为 JSON 字符串 }
     function ToJSON: string;
 
-    {**
-     * 从JSON导入
-     *}
+    {** 从 JSON 字符串导入 }
     procedure LoadFromJSON(const AJSON: string);
   end;
 

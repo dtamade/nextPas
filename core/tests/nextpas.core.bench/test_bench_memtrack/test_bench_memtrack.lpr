@@ -343,6 +343,8 @@ begin
   LBench := TParallelBenchmark.Create(@ParallelRecordAlloc, THREAD_COUNT,
     ITERS_PER_THREAD, 0);
   LBench.Execute;
+  { TG-22: all threads have joined at this point (Execute blocks on WaitFor),
+    so stats are fully visible }
   LStats := GParallelTracker.GetStats;
   Check(LStats.AllocCount = THREAD_COUNT * ITERS_PER_THREAD, 'Parallel AllocCount exact');
   Check(LStats.AllocBytes = THREAD_COUNT * ITERS_PER_THREAD, 'Parallel AllocBytes exact');
@@ -352,6 +354,7 @@ begin
   LBench := TParallelBenchmark.Create(@ParallelRecordFree, THREAD_COUNT,
     ITERS_PER_THREAD, 0);
   LBench.Execute;
+  { TG-22: all threads have joined; free stats are now fully visible }
   LStats := GParallelTracker.GetStats;
   Check(LStats.FreeCount = THREAD_COUNT * ITERS_PER_THREAD, 'Parallel FreeCount exact');
   Check(LStats.FreeBytes = THREAD_COUNT * ITERS_PER_THREAD, 'Parallel FreeBytes exact');

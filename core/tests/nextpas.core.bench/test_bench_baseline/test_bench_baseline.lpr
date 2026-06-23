@@ -455,13 +455,16 @@ procedure Test_LoadFromFile_NotFound;
 var
   LManager: TBaselineManager;
   LRaised: Boolean;
+  LPath: string;
 begin
   WriteLn('Test_LoadFromFile_NotFound:');
   LManager := TBaselineManager.Create;
   LRaised := False;
+  { TG-25: use XidNew to generate unique path instead of /tmp hardcoded }
+  LPath := '/tmp/nonexistent_bench_baseline_' + XidNew + '.json';
 
   try
-    LManager.LoadFromFile('/tmp/nonexistent_bench_baseline_file_12345.json');
+    LManager.LoadFromFile(LPath);
   except
     on E: Exception do
       LRaised := True;

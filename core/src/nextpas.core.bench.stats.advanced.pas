@@ -60,6 +60,9 @@ type
     FCachedMean: Double;
     FMeanCached: Boolean;
     procedure EnsureSorted;
+    {** PF-04: compute mean + variance of external array in a single pass }
+    class procedure ComputeMeanVariance(const AData: TDoubleArray;
+      out AMean, AVariance: Double); static;
   public
     {**
      * 创建统计分析器
@@ -636,84 +639,84 @@ begin
   end;
 end;
 
+{** PF-04: single-pass mean + variance for external data arrays }
+class procedure TAdvancedStats.ComputeMeanVariance(const AData: TDoubleArray;
+  out AMean, AVariance: Double);
+var
+  LCount: Integer;
+  LSum, LSumSq, LDiff: Double;
+  I: Integer;
+begin
+  LCount := Length(AData);
+  if LCount = 0 then
+  begin
+    AMean := 0;
+    AVariance := 0;
+    Exit;
+  end;
+
+  LSum := 0;
+  for I := 0 to High(AData) do
+    LSum := LSum + AData[I];
+  AMean := LSum / LCount;
+
+  if LCount > 1 then
+  begin
+    LSumSq := 0;
+    for I := 0 to High(AData) do
+    begin
+      LDiff := AData[I] - AMean;
+      LSumSq := LSumSq + LDiff * LDiff;
+    end;
+    AVariance := LSumSq / (LCount - 1);
+  end
+  else
+    AVariance := 0;
+end;
+
 function TAdvancedStats.ApproximateWelchTScore(const AOther: TDoubleArray): Double;
 var
   LMean1: Double;
-  LMean2: Double;
   LVar1: Double;
-  LVar2: Double;
   LN1: Integer;
   LN2: Integer;
   LSE: Double;
-  LTStat: Double;
-  I: Integer;
-  LSum: Double;
+  LMean2, LVar2: Double;
 begin
-  LMean1 := Mean;
-  LMean2 := 0;
-  if Length(AOther) > 0 then
-  begin
-    for I := 0 to High(AOther) do
-      LMean2 := LMean2 + AOther[I];
-    LMean2 := LMean2 / Length(AOther);
-  end;
-
-  LVar1 := Variance;
-  LVar2 := 0;
-  if Length(AOther) > 1 then
-  begin
-    LSum := 0.0;
-    for I := 0 to High(AOther) do
-      LSum := LSum + Sqr(AOther[I] - LMean2);
-    LVar2 := LSum / (Length(AOther) - 1);
-  end;
-
   LN1 := Length(FData);
   LN2 := Length(AOther);
+
+  LMean1 := Mean;
+  LVar1 := Variance;
+
+  { PF-04: compute mean + variance of AOther in a single pass }
+  ComputeMeanVariance(AOther, LMean2, LVar2);
 
   // Welch's t-test
   if (LN1 > 0) and (LN2 > 0) then
   begin
     LSE := Sqrt(LVar1 / LN1 + LVar2 / LN2);
     if LSE > 0 then
-      LTStat := (LMean1 - LMean2) / LSE
+      Result := (LMean1 - LMean2) / LSE
     else
-      LTStat := 0;
+      Result := 0;
   end
   else
-    LTStat := 0;
-
-  Result := LTStat;
+    Result := 0;
 end;
 
 function TAdvancedStats.EffectSize(const AOther: TDoubleArray): Double;
 var
   LMean1: Double;
-  LMean2: Double;
   LVar1: Double;
-  LVar2: Double;
   LPooledStdDev: Double;
-  I: Integer;
-  LSum: Double;
+  LMean2, LVar2: Double;
 begin
   LMean1 := Mean;
-  LMean2 := 0;
-  if Length(AOther) > 0 then
-  begin
-    for I := 0 to High(AOther) do
-      LMean2 := LMean2 + AOther[I];
-    LMean2 := LMean2 / Length(AOther);
-  end;
-
   LVar1 := Variance;
-  LVar2 := 0;
-  if Length(AOther) > 1 then
-  begin
-    LSum := 0.0;
-    for I := 0 to High(AOther) do
-      LSum := LSum + Sqr(AOther[I] - LMean2);
-    LVar2 := LSum / (Length(AOther) - 1);
-  end;
+
+  { PF-04: compute mean + variance of AOther in a single pass }
+  ComputeMeanVariance(AOther, LMean2, LVar2);
 
   // Cohen's d — weighted pooled stddev (PF-05)
   if (Length(FData) > 1) and (Length(AOther) > 1) then

@@ -174,18 +174,13 @@ begin
     raise EParseError.CreateFmt('Invalid Go bench line: %s', [ALine]);
 
   LName := LParts[0];
-  // Remove "-N" suffix (GOMAXPROCS) - scan from end to find last dash
+  { ST-25: Remove "-N" GOMAXPROCS suffix by scanning from end for pattern -\d+$ }
   I := Length(LName);
-  while (I > 1) and (LName[I] <> '-') do
-  begin
-    if not (LName[I] in ['0'..'9']) then
-    begin
-      I := 0;
-      Break;
-    end;
+  { Skip trailing digits }
+  while (I > 1) and (LName[I] in ['0'..'9']) do
     Dec(I);
-  end;
-  if (I > 1) and (I < Length(LName)) then
+  { Check if we stopped at a dash and there were digits after it }
+  if (I >= 1) and (I < Length(LName)) and (LName[I] = '-') then
     LName := Copy(LName, 1, I - 1);
 
   LIterations := StrToInt64Def(LParts[1], 0);
