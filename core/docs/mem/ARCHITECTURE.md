@@ -57,6 +57,8 @@ Pool 侧常用单元：
 - `nextpas.core.mem.blockpool`
 - `nextpas.core.mem.blockpool.sharded`
 - `nextpas.core.mem.stack_pool`
+- `nextpas.core.mem.memory_map`
+- `nextpas.core.mem.mapped_slab_pool`
 
 ### L3：门面
 
@@ -199,6 +201,21 @@ type
 - `nextpas.core.mem.allocator.mimalloc.loader` owns mimalloc path discovery and search order.
 - Search order: env override -> executable-relative `lib/<cpu-os>/` -> system loader fallback.
 - 环境变量覆盖名保持现状：Windows 用 `NEXTPAS_MIMALLOC_DLL`，其他宿主用 `NEXTPAS_MIMALLOC_SO`
+
+## mapped memory primitives stay in mem
+
+`TMemoryMap` 和 `TMappedSlabAllocator` 继续保留在 `mem`，因为这里的 owner truth 是
+page-backed address space primitive，而不是文件系统或共享内存业务语义。
+
+- `TMemoryMap` 是 `platform.mmap` 的低层包装：地址空间映射、flush、lock、resize、anonymous/file/shared 映射句柄生命周期都还是 raw memory primitive
+- `TMappedSlabAllocator` 只消费 anonymous mapping；它要解决的是“大块匿名映射上的 allocator/page metadata 管理”，这仍然属于 mem
+- `mapped_ring_buffer*` 已经是迁移 wrapper，因为 ring buffer contract 本身更偏 io；但 slab allocator 这里的 owner 仍是 page allocator，而不是 stream/buffer protocol
+
+稳定边界：
+
+- `nextpas.core.mem.mapped_slab_pool` owns only the anonymous mapping allocator surface.
+- `nextpas.core.io.mapped.slab_pool` is the fixed owner for file-backed and shared-memory slab pools.
+- mem 侧 mapped slab surface must not grow `CreateFile`, `OpenFile`, `CreateShared`, `OpenShared`, or `nextpas.core.platform.files` dependencies.
 
 ## 门面怎么用
 

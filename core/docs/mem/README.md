@@ -161,6 +161,9 @@ end;
 - **AllocUnsafe 前提**：调用方确保页面已提交, 不更新统计, 不保证对齐
 - **大对象生命周期**：不受 mark/reset 影响, 在 Release 时统一释放
 - **非线程安全**：Arena 默认非线程安全, 多线程请用 TArenaConcurrent
+- `nextpas.core.mem.mapped_slab_pool` owns only the anonymous mapping allocator surface.
+- `nextpas.core.io.mapped.slab_pool` is the fixed owner for file-backed and shared-memory slab pools.
+- mem 侧 mapped slab API must not grow `CreateFile`, `OpenFile`, `CreateShared`, `OpenShared`, or `nextpas.core.platform.files` dependencies.
 
 ## 测试覆盖
 
