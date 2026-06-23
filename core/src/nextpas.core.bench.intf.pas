@@ -169,8 +169,12 @@ type
     {** 设置安静模式 }
     function SetQuiet(AQuiet: Boolean): IBenchSuite;
 
-    {** 添加基线（用于对比） }
+    {** 添加基线（ns/op，Double 精度） }
     function AddBaseline(const AName: string; ANsPerOp: Double): IBenchSuite;
+
+    {** 添加基线（TDuration 便利重载，ST-05）。
+     *  内部转换为 Double ns/op，与 Double 版本共存。 }
+    function AddBaseline(const AName: string; ANsPerOp: TDuration): IBenchSuite;
 
     {** 批量添加基线 (ST-06) }
     function AddBaselines(const ABaselines: array of TBaselineData): IBenchSuite;

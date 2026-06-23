@@ -88,6 +88,7 @@ type
     function CollectRawSamples: IBenchSuite;
     function SetQuiet(AQuiet: Boolean): IBenchSuite;
     function AddBaseline(const AName: string; ANsPerOp: Double): IBenchSuite;
+    function AddBaseline(const AName: string; ANsPerOp: TDuration): IBenchSuite;
     function AddBaselines(const ABaselines: array of TBenchBaseline): IBenchSuite;
     function LoadBaseline(const APath: string): IBenchSuite;
     function SetFilter(const AFilter: string): IBenchSuite;
@@ -487,6 +488,12 @@ begin
   FBaselines[FBaselineCount].Name := AName;
   FBaselines[FBaselineCount].NsPerOp := ANsPerOp;
   Inc(FBaselineCount);
+end;
+
+{** ST-05: TDuration 便利重载 }
+function TBenchSuite.AddBaseline(const AName: string; ANsPerOp: TDuration): IBenchSuite;
+begin
+  Result := AddBaseline(AName, Double(ANsPerOp.AsNanoseconds));
 end;
 
 function TBenchSuite.AddBaselines(const ABaselines: array of TBenchBaseline): IBenchSuite;
