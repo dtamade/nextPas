@@ -66,15 +66,29 @@ P2（Sema 能力）排在 P1（FPC RTL 清零）前面，因为 P2 修一个方�
 
 ---
 
-### P2-2: 类继承链 Create 解析（1 周）
+### P2-2: 类继承链 Create 解析 — ✅ 已验证通过（2026-06-23）
 
-**解锁模块**: config, compress, props, multipart（4+ 模块）
+**解锁模块**: config, compress, props, multipart（4+ 模块）— 已全部 status=success
 
-根因：`NextClassAncestorName` 已存在（line 309/4170），但 `Create` 重载解析没遍历继承链。
+**状态**: 旧根因描述过时。原假设"`Create` 重载解析没遍历继承链"经核查不成立：当前
+`MethodSymbolIdForClassTypeMember`（`compiler/sema/np_semantic_analyzer.pas:4614`）
+已通过 `NextClassAncestorName` 正确遍历 `ParentTypeId` 继承链，包括父类来自
+`uses` 导入单元的跨单元场景。6 个曾"被阻塞"的模块（config/config.builder/
+compress.deflate/props/multipart）当前全部编译通过，self-compile-modules 19/19 全绿。
 
-方案：
-- 在 `LookupOverload`（line 252/3178）中，当找不到当前类的 `Create` 时，递归向上查 `NextClassAncestorName` 直到 `TObject`
-- 核心改动 <100 行
+**回归测试固化**（commit 5ee32ca75 + 后续）：
+- `tests/compiler/pass/inherited_create_pass.pas` — 单文件三层继承 Create + 多态
+- `tests/compiler/pass/inherited_create_xunit_pass.pas` (+ `_xunit_parent.pas`) —
+  跨单元继承 Create，覆盖"父类来自导入单元"场景
+- `tests/compiler/pass/implicit_tobject_create_pass.pas` — 无显式父类时隐式
+  `TObject.Create` fallback（与 FPC 3.3.1 行为一致）
+- `tests/compiler/fail/inherited_create_shadow_no_fallback_fail.pas` (+ snapshot) —
+  子类同名 `Create` 签名不匹配时**禁止回退父类**，须诊断 `sema.wrong-argument-count`
+  （保护 wrong-argument-count/type-mismatch 诊断语义，与 FPC 行为一致）
+
+**剩余工作**: 仅维护现有回归测试，无需修改 sema。原"在 LookupOverload 中递归向上查"
+方案不再适用——动它会破坏 wrong-argument-count 诊断语义（已被 shadow-no-fallback
+测试固化）。
 
 ---
 
