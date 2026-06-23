@@ -13,6 +13,7 @@ uses
   nextpas.core.test.base,
   nextpas.core.test.check,
   nextpas.core.test.output,
+  { 白盒测试：直接断言 TAP/JSON renderer 与 runner 输出细节。 }
   nextpas.core.test.output.tap,
   nextpas.core.test.output.json,
   nextpas.core.test.runner;

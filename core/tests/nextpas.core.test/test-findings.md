@@ -1384,7 +1384,7 @@ end;
 | R6-66 | test_advanced TAP/JSON 重复 | ✅ | 提取 RunSuiteAndGetResults，输出测试共用真实 runner 路径 |
 | R6-67 | JUnit/JSON 输出弱断言 | ✅ | 新增 XML/JSON 计数提取 helper，断言精确匹配总数 |
 | R6-68 | test_runner 弱断言 Count > 0 | ✅ | 新增强精确值断言 |
-| R6-69 | 测试直接访问内部实现 | 🔲 | 未实施（大重构） |
+| R6-69 | 测试直接访问内部实现 | ✅ | 在 runner/context/output/discovery 白盒测试处补注意图注释 |
 | R6-70 | 手动 LTotal/LPass/LFail 同步 | ⏭️ | FinalizeResults 已缓解 |
 
 ### R6 统计

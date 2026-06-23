@@ -17,6 +17,7 @@ uses
   nextpas.core.test.check,
   nextpas.core.test.expect,
   nextpas.core.test.runner,
+  { 白盒测试：直接覆盖 runner.context 的结果收集边界。 }
   nextpas.core.test.runner.context;
 
 var

@@ -9,6 +9,7 @@ uses
   cthreads,
   SysUtils,
   nextpas.core.test,
+  { 白盒测试：直接验证 runner 内部 helper，而不是仅通过 facade 间接覆盖。 }
   nextpas.core.test.runner,
   nextpas.core.test.output;
 
