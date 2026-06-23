@@ -66,24 +66,28 @@ begin
   R := PTimeoutRec(AArg);
   try
     R^.Proc;
+    WriteBarrier;
     R^.Done := True;
   except
     on E: ETestSkipped do
     begin
       R^.Status := tsSkipped;
       R^.ErrorMsg := E.Message;
+      WriteBarrier;
       R^.Done := True;
     end;
     on E: EAssertionFailed do
     begin
       R^.Status := tsFailed;
       R^.ErrorMsg := E.Message;
+      WriteBarrier;
       R^.Done := True;
     end;
     on E: Exception do
     begin
       R^.Status := tsError;
       R^.ErrorMsg := E.ClassName + ': ' + E.Message;
+      WriteBarrier;
       R^.Done := True;
     end;
   end;
@@ -112,11 +116,14 @@ begin
 
   { Poll with sleep — cross-platform via platform_thread_sleep_ns }
   LElapsed := 0;
-  while (LElapsed < ATimeoutMs) and (not LRec^.Done) do
-  begin
+  repeat
     platform_thread_sleep_ns(10 * 1000 * 1000); { 10 ms }
     Inc(LElapsed, 10);
-  end;
+    { R6-07: ReadBarrier ensures we see the worker's writes to Status/ErrorMsg
+      when Done becomes true. On weakly-ordered architectures (ARM/AArch64)
+      the worker's WriteBarrier pairs with this ReadBarrier. }
+    ReadBarrier;
+  until (LElapsed >= ATimeoutMs) or LRec^.Done;
 
   { Secondary join timeout: after detecting a timeout, give the worker extra
     time to finish cleanup. Use max(2x original, 5s) to handle short timeouts
@@ -131,6 +138,11 @@ begin
   end;
 
   LJoinResult := platform_thread_timedjoin(LHandle, LJoinTimeoutMs, LRetVal);
+
+  { R6-07: ReadBarrier before reading results — join provides happens-before
+    on success path, but on failure path we need an explicit barrier to see
+    the worker's writes to Status/ErrorMsg/Done. }
+  ReadBarrier;
 
   if LJoinResult = 0 then
   begin
