@@ -524,6 +524,7 @@ end;
 
 function TBenchReportGenerator.GenerateChart(const AResults: array of TBenchResult): string;
 var
+  LCopy: array of TBenchResult;
   LLines: TLineBuffer;
   LMaxNsPerOp: Double;
   LBarWidth: Double;
@@ -531,40 +532,64 @@ var
   LBarX: Double;
   LBarY: Double;
   LHeightRatio: Double;
+  LMaxNameLen: Integer;
+  LChartWidth: Double;
+  LChartRight: Double;
   LCount: Integer;
   LIndex: Integer;
   I: Integer;
 begin
+  // snapshot the open-array to a local copy (CR-20)
+  SetLength(LCopy, Length(AResults));
+  for I := 0 to High(AResults) do
+    LCopy[I] := AResults[I];
+
   // count non-skipped
   LCount := 0;
-  for I := 0 to High(AResults) do
-    if not AResults[I].Skipped then
+  for I := 0 to High(LCopy) do
+    if not LCopy[I].Skipped then
       Inc(LCount);
 
   if LCount = 0 then
     Exit('<svg class="bench-chart" viewBox="0 0 820 280" role="img" aria-label="No benchmark data"></svg>');
 
   LMaxNsPerOp := 0.0;
-  for I := 0 to High(AResults) do
-    if (not AResults[I].Skipped) and (AResults[I].NsPerOp > LMaxNsPerOp) then
-      LMaxNsPerOp := AResults[I].NsPerOp;
+  for I := 0 to High(LCopy) do
+    if (not LCopy[I].Skipped) and (LCopy[I].NsPerOp > LMaxNsPerOp) then
+      LMaxNsPerOp := LCopy[I].NsPerOp;
   if LMaxNsPerOp <= 0 then
     LMaxNsPerOp := 1.0;
 
+  // compute longest name for dynamic viewBox width (CR-21)
+  LMaxNameLen := 0;
+  for I := 0 to High(LCopy) do
+    if not LCopy[I].Skipped then
+      if Length(LCopy[I].Name) > LMaxNameLen then
+        LMaxNameLen := Length(LCopy[I].Name);
+
+  LChartWidth := Max(820.0, 140.0 + LMaxNameLen * 8.0);
+  LChartRight := LChartWidth - 36.0;
+
   LLines := Default(TLineBuffer);
-  BufferAddLine(LLines, '<svg class="bench-chart" viewBox="0 0 820 280" role="img" aria-label="Benchmark ns per op chart">');
-  BufferAddLine(LLines, '  <rect x="0" y="0" width="820" height="280" rx="18" fill="#fbfcfd"/>');
-  BufferAddLine(LLines, '  <line x1="64" y1="236" x2="784" y2="236" stroke="#cfd7de" stroke-width="1"/>');
+  BufferAddLine(LLines,
+    TextFormat('  <svg class="bench-chart" viewBox="%s" role="img" aria-label="Benchmark ns per op chart">',
+      [TextFormat('0 0 %s 280', [FormatNumber(LChartWidth, 0)])]));
+  BufferAddLine(LLines,
+    TextFormat('  <rect x="0" y="0" width="%s" height="280" rx="18" fill="#fbfcfd"/>',
+      [FormatNumber(LChartWidth, 0)]));
+  BufferAddLine(LLines,
+    TextFormat('  <line x1="64" y1="236" x2="%s" y2="236" stroke="#cfd7de" stroke-width="1"/>',
+      [FormatNumber(LChartRight, 0)]));
   BufferAddLine(LLines, '  <line x1="64" y1="24" x2="64" y2="236" stroke="#cfd7de" stroke-width="1"/>');
 
-  LBarWidth := 720.0 / Max(LCount, 1);
+  LBarWidth := (LChartRight - 64.0) / Max(LCount, 1);
   LIndex := 0;
-  for I := 0 to High(AResults) do
+  for I := 0 to High(LCopy) do
   begin
-    if AResults[I].Skipped then
+    if LCopy[I].Skipped then
       Continue;
 
-    LHeightRatio := AResults[I].NsPerOp / LMaxNsPerOp;
+    LHeightRatio := LCopy[I].NsPerOp / LMaxNsPerOp;
     LBarHeight := 184.0 * LHeightRatio;
     LBarX := 76.0 + LIndex * LBarWidth;
     LBarY := 236.0 - LBarHeight;
@@ -579,11 +604,11 @@ begin
       TextFormat('  <text x="%s" y="%s" class="chart-value">%s ns</text>',
         [FormatNumber(LBarX, 2),
          FormatNumber(Max(LBarY - 8.0, 18.0), 2),
-         EscapeHTML(FormatNumber(AResults[I].NsPerOp, 1))]));
+         EscapeHTML(FormatNumber(LCopy[I].NsPerOp, 1))]));
     BufferAddLine(LLines,
       TextFormat('  <text x="%s" y="254" class="chart-label">%s</text>',
         [FormatNumber(LBarX, 2),
-         EscapeHTML(AResults[I].Name)]));
+         EscapeHTML(LCopy[I].Name)]));
 
     Inc(LIndex);
   end;
@@ -763,19 +788,14 @@ var
   LEntries: TCrossLangEntryArray;
   LHTML: TLineBuffer;
   LCurrentName: string;
-  LMaxNsPerOp: Double;
+  LGroupMaxNsPerOp: Double;
   LBarWidth: Double;
   I: Integer;
+  J: Integer;
+  K: Integer;
 begin
   LEntries := Copy(AEntries);
   SortCrossLangEntriesByName(LEntries);
-
-  LMaxNsPerOp := 0.0;
-  for I := 0 to High(LEntries) do
-    if LEntries[I].NsPerOp > LMaxNsPerOp then
-      LMaxNsPerOp := LEntries[I].NsPerOp;
-  if LMaxNsPerOp <= 0.0 then
-    LMaxNsPerOp := 1.0;
 
   LHTML := Default(TLineBuffer);
   BufferAddLine(LHTML, '<!DOCTYPE html>');
@@ -796,39 +816,42 @@ begin
   BufferAddLine(LHTML, '<body>');
   BufferAddLine(LHTML, '  <h1>Cross-Language Benchmark Comparison</h1>');
 
-  LCurrentName := '';
-  for I := 0 to High(LEntries) do
+  I := 0;
+  while I <= High(LEntries) do
   begin
-    if LEntries[I].Name <> LCurrentName then
+    LCurrentName := LEntries[I].Name;
+    LGroupMaxNsPerOp := 0.0;
+    J := I;
+    while (J <= High(LEntries)) and (LEntries[J].Name = LCurrentName) do
     begin
-      if LCurrentName <> '' then
-      begin
-        BufferAddLine(LHTML, '    </tbody>');
-        BufferAddLine(LHTML, '  </table>');
-      end;
-      LCurrentName := LEntries[I].Name;
-      BufferAddLine(LHTML, '  <h2>' + EscapeHTML(LCurrentName) + '</h2>');
-      BufferAddLine(LHTML, '  <table>');
-      BufferAddLine(LHTML, '    <thead>');
-      BufferAddLine(LHTML, '      <tr><th>Language</th><th>ns/op</th><th>Relative</th></tr>');
-      BufferAddLine(LHTML, '    </thead>');
-      BufferAddLine(LHTML, '    <tbody>');
+      if LEntries[J].NsPerOp > LGroupMaxNsPerOp then
+        LGroupMaxNsPerOp := LEntries[J].NsPerOp;
+      Inc(J);
     end;
+    if LGroupMaxNsPerOp <= 0.0 then
+      LGroupMaxNsPerOp := 1.0;
 
-    LBarWidth := (LEntries[I].NsPerOp / LMaxNsPerOp) * 100.0;
-    BufferAddLine(LHTML, '      <tr>');
-    BufferAddLine(LHTML, '        <td>' + EscapeHTML(LEntries[I].Language) + '</td>');
-    BufferAddLine(LHTML, '        <td class="value">' + FormatNumber(LEntries[I].NsPerOp, 1) + '</td>');
-    BufferAddLine(LHTML,
-      '        <td><div class="bar-track"><div class="bar-fill" style="width: ' +
-      FormatNumber(LBarWidth, 1) + '%"></div></div></td>');
-    BufferAddLine(LHTML, '      </tr>');
-  end;
-
-  if Length(AEntries) > 0 then
-  begin
+    BufferAddLine(LHTML, '  <h2>' + EscapeHTML(LCurrentName) + '</h2>');
+    BufferAddLine(LHTML, '  <table>');
+    BufferAddLine(LHTML, '    <thead>');
+    BufferAddLine(LHTML, '      <tr><th>Language</th><th>ns/op</th><th>Relative</th></tr>');
+    BufferAddLine(LHTML, '    </thead>');
+    BufferAddLine(LHTML, '    <tbody>');
+    for K := I to J - 1 do
+    begin
+      LBarWidth := (LEntries[K].NsPerOp / LGroupMaxNsPerOp) * 100.0;
+      BufferAddLine(LHTML, '      <tr>');
+      BufferAddLine(LHTML, '        <td>' + EscapeHTML(LEntries[K].Language) + '</td>');
+      BufferAddLine(LHTML, '        <td class="value">' + FormatNumber(LEntries[K].NsPerOp, 1) + '</td>');
+      BufferAddLine(LHTML,
+        '        <td><div class="bar-track"><div class="bar-fill" style="width: ' +
+        FormatNumber(LBarWidth, 1) + '%"></div></div></td>');
+      BufferAddLine(LHTML, '      </tr>');
+    end;
     BufferAddLine(LHTML, '    </tbody>');
     BufferAddLine(LHTML, '  </table>');
+
+    I := J;
   end;
 
   BufferAddLine(LHTML, '</body>');
