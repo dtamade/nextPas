@@ -114,22 +114,22 @@ end;
 procedure TestBeforeEachSkip;
 var
   LSuite: TTestSuite;
-  LResult: TTestRunResult;
+  LSkipResult: TTestRunResult;
 begin
   LSuite := TTestSuite.Create('BeforeEachSkip');
   LSuite.OnBeforeEach(procedure begin Skip('skip from beforeEach'); end);
   LSuite.Test('t1', @TestSimplePass);
   LSuite.Test('t2', @TestSimplePass2);
   { Both tests should be skipped, not errored }
-  LSuite.RunWithResult(LResult);
-  if LResult.Skipped <> 2 then
+  LSuite.RunWithResult(LSkipResult);
+  if LSkipResult.Skipped <> 2 then
   begin
-    WriteLn(AnsiRed('FAIL: expected 2 skipped, got '), LResult.Skipped);
+    WriteLn(AnsiRed('FAIL: expected 2 skipped, got '), LSkipResult.Skipped);
     Halt(1);
   end;
-  if LResult.Failed <> 0 then
+  if LSkipResult.Failed <> 0 then
   begin
-    WriteLn(AnsiRed('FAIL: expected 0 failed, got '), LResult.Failed);
+    WriteLn(AnsiRed('FAIL: expected 0 failed, got '), LSkipResult.Failed);
     Halt(1);
   end;
   WriteLn(AnsiGreen('OK: BeforeEach Skip'));
@@ -150,8 +150,11 @@ var
   LRunCount: Integer;
   { RunWithResult test }
   LResultSuite: TTestSuite;
-  LResult: TTestRunResult;
-  LRunAllResults: specialize TArray<TTestRunResult>;
+  LRunWithResultResult: TTestRunResult;
+  LSubtestResults: TTestRunResult;
+  LParallelResult: TTestRunResult;
+  LTimeoutResult: TTestRunResult;
+  LRunAllSuiteResults: specialize TArray<TTestRunResult>;
   { R6-59: AddLine/JoinLines test variables }
   LLines59: specialize TArray<string>;
   LJoined59: string;
@@ -377,57 +380,57 @@ begin
   LResultSuite.Test('will pass', procedure begin CheckTrue(True); end);
   LResultSuite.Skip('will skip', 'reason');
   LResultSuite.Test('will pass 2', procedure begin CheckTrue(True); end);
-  if not LResultSuite.RunWithResult(LResult) then
+  if not LResultSuite.RunWithResult(LRunWithResultResult) then
   begin
     WriteLn(AnsiRed('FAIL: RunWithResult should return True'));
     Halt(1);
   end;
-  if LResult.SuiteName <> 'Result Test' then
+  if LRunWithResultResult.SuiteName <> 'Result Test' then
   begin
     WriteLn(AnsiRed('FAIL: SuiteName mismatch'));
     Halt(1);
   end;
-  if Length(LResult.Results) <> 3 then
+  if Length(LRunWithResultResult.Results) <> 3 then
   begin
-    WriteLn(AnsiRed('FAIL: Expected 3 results, got '), Length(LResult.Results));
+    WriteLn(AnsiRed('FAIL: Expected 3 results, got '), Length(LRunWithResultResult.Results));
     Halt(1);
   end;
-  if LResult.Passed <> 2 then
+  if LRunWithResultResult.Passed <> 2 then
   begin
-    WriteLn(AnsiRed('FAIL: Expected 2 passed, got '), LResult.Passed);
+    WriteLn(AnsiRed('FAIL: Expected 2 passed, got '), LRunWithResultResult.Passed);
     Halt(1);
   end;
-  if LResult.Skipped <> 1 then
+  if LRunWithResultResult.Skipped <> 1 then
   begin
-    WriteLn(AnsiRed('FAIL: Expected 1 skipped, got '), LResult.Skipped);
+    WriteLn(AnsiRed('FAIL: Expected 1 skipped, got '), LRunWithResultResult.Skipped);
     Halt(1);
   end;
-  if LResult.Failed <> 0 then
+  if LRunWithResultResult.Failed <> 0 then
   begin
-    WriteLn(AnsiRed('FAIL: Expected 0 failed, got '), LResult.Failed);
+    WriteLn(AnsiRed('FAIL: Expected 0 failed, got '), LRunWithResultResult.Failed);
     Halt(1);
   end;
-  if not LResult.AllPassed then
+  if not LRunWithResultResult.AllPassed then
   begin
     WriteLn(AnsiRed('FAIL: AllPassed should be True'));
     Halt(1);
   end;
-  if LResult.Results[0].Status <> tsPassed then
+  if LRunWithResultResult.Results[0].Status <> tsPassed then
   begin
     WriteLn(AnsiRed('FAIL: Result[0] should be tsPassed'));
     Halt(1);
   end;
-  if LResult.Results[1].Status <> tsSkipped then
+  if LRunWithResultResult.Results[1].Status <> tsSkipped then
   begin
     WriteLn(AnsiRed('FAIL: Result[1] should be tsSkipped'));
     Halt(1);
   end;
-  if LResult.Results[1].Message <> 'reason' then
+  if LRunWithResultResult.Results[1].Message <> 'reason' then
   begin
     WriteLn(AnsiRed('FAIL: Result[1] message should be "reason"'));
     Halt(1);
   end;
-  if LResult.Results[2].Status <> tsPassed then
+  if LRunWithResultResult.Results[2].Status <> tsPassed then
   begin
     WriteLn(AnsiRed('FAIL: Result[2] should be tsPassed'));
     Halt(1);
@@ -476,33 +479,33 @@ begin
     LResultSuite := TTestSuite.Create('Subtest Results');
     LResultSuite.TestSubtest('subtests', @TestSubtests);
     LResultSuite.Test('plain pass', @TestSimplePass);
-    LResultSuite.RunWithResult(LResult);
+    LResultSuite.RunWithResult(LSubtestResults);
     { TestSubtests registers 3 subtests + 1 plain = 5 results total
       (3 sub + 1 subtest parent entry + 1 plain) }
-    if Length(LResult.Results) <> 5 then
+    if Length(LSubtestResults.Results) <> 5 then
     begin
       WriteLn(AnsiRed('FAIL: Expected 5 results (3 sub + 1 parent + 1 plain), got '),
-        Length(LResult.Results));
+        Length(LSubtestResults.Results));
       Halt(1);
     end;
     { Check subtest results are individually tracked
       Order: [0]=subtests(parent), [1]=plain pass, [2..4]=sub results }
-    if LResult.Results[0].Name <> 'subtests' then
+    if LSubtestResults.Results[0].Name <> 'subtests' then
     begin
       WriteLn(AnsiRed('FAIL: Result[0] name should be "subtests", got '),
-        LResult.Results[0].Name);
+        LSubtestResults.Results[0].Name);
       Halt(1);
     end;
-    if LResult.Results[2].Status <> tsPassed then
+    if LSubtestResults.Results[2].Status <> tsPassed then
     begin
       WriteLn(AnsiRed('FAIL: Subtest result[2] should be tsPassed, got '),
-        Ord(LResult.Results[2].Status));
+        Ord(LSubtestResults.Results[2].Status));
       Halt(1);
     end;
-    if Pos('subtests/', LResult.Results[2].Name) = 0 then
+    if Pos('subtests/', LSubtestResults.Results[2].Name) = 0 then
     begin
       WriteLn(AnsiRed('FAIL: Subtest result name should contain "subtests/", got '),
-        LResult.Results[2].Name);
+        LSubtestResults.Results[2].Name);
       Halt(1);
     end;
     WriteLn(AnsiGreen('OK: Subtest results collected'));
@@ -516,23 +519,23 @@ begin
     LResultSuite.Test('p1', @TestSimplePass);
     LResultSuite.Test('p2', @TestSimplePass2);
     LResultSuite.Skip('sk1', 'reason');
-    LResultSuite.RunParallelWithResult(nil, LResult);
-    if Length(LResult.Results) <> 3 then
+    LResultSuite.RunParallelWithResult(nil, LParallelResult);
+    if Length(LParallelResult.Results) <> 3 then
     begin
-      WriteLn(AnsiRed('FAIL: Expected 3 results, got '), Length(LResult.Results));
+      WriteLn(AnsiRed('FAIL: Expected 3 results, got '), Length(LParallelResult.Results));
       Halt(1);
     end;
-    if LResult.Passed <> 2 then
+    if LParallelResult.Passed <> 2 then
     begin
-      WriteLn(AnsiRed('FAIL: Expected 2 passed, got '), LResult.Passed);
+      WriteLn(AnsiRed('FAIL: Expected 2 passed, got '), LParallelResult.Passed);
       Halt(1);
     end;
-    if LResult.Skipped <> 1 then
+    if LParallelResult.Skipped <> 1 then
     begin
-      WriteLn(AnsiRed('FAIL: Expected 1 skipped, got '), LResult.Skipped);
+      WriteLn(AnsiRed('FAIL: Expected 1 skipped, got '), LParallelResult.Skipped);
       Halt(1);
     end;
-    if not LResult.AllPassed then
+    if not LParallelResult.AllPassed then
     begin
       WriteLn(AnsiRed('FAIL: AllPassed should be True'));
       Halt(1);
@@ -552,24 +555,24 @@ begin
     LRunNestedR := TTestRunner.Create('WithResult Runner');
     LRunNestedR.Add(LRunNestedS1);
     LRunNestedR.Add(LRunNestedS2);
-    if not LRunNestedR.RunAllWithResult(LRunAllResults) then
+    if not LRunNestedR.RunAllWithResult(LRunAllSuiteResults) then
     begin
       WriteLn(AnsiRed('FAIL: RunAllWithResult should return True'));
       Halt(1);
     end;
-    if Length(LRunAllResults) <> 2 then
+    if Length(LRunAllSuiteResults) <> 2 then
     begin
-      WriteLn(AnsiRed('FAIL: Expected 2 suite results, got '), Length(LRunAllResults));
+      WriteLn(AnsiRed('FAIL: Expected 2 suite results, got '), Length(LRunAllSuiteResults));
       Halt(1);
     end;
-    if LRunAllResults[0].SuiteName <> 'SuiteX' then
+    if LRunAllSuiteResults[0].SuiteName <> 'SuiteX' then
     begin
       WriteLn(AnsiRed('FAIL: First suite name should be SuiteX'));
       Halt(1);
     end;
-    if LRunAllResults[1].Passed <> 1 then
+    if LRunAllSuiteResults[1].Passed <> 1 then
     begin
-      WriteLn(AnsiRed('FAIL: SuiteY should have 1 pass, got '), LRunAllResults[1].Passed);
+      WriteLn(AnsiRed('FAIL: SuiteY should have 1 pass, got '), LRunAllSuiteResults[1].Passed);
       Halt(1);
     end;
     WriteLn(AnsiGreen('OK: RunAllWithResult'));
@@ -582,21 +585,21 @@ begin
     LResultSuite := TTestSuite.Create('Timeout Trigger');
     LResultSuite.Test('slow', procedure begin Sleep(500); end);
     SetTestTimeout(10); { 10ms — much less than the 500ms Sleep }
-    LResultSuite.RunWithResult(LResult);
+    LResultSuite.RunWithResult(LTimeoutResult);
     SetTestTimeout(0);
-    if LResult.AllPassed then
+    if LTimeoutResult.AllPassed then
     begin
       WriteLn(AnsiRed('FAIL: timed-out test should not be AllPassed'));
       Halt(1);
     end;
-    if Length(LResult.Results) <> 1 then
+    if Length(LTimeoutResult.Results) <> 1 then
     begin
-      WriteLn(AnsiRed('FAIL: Expected 1 result, got '), Length(LResult.Results));
+      WriteLn(AnsiRed('FAIL: Expected 1 result, got '), Length(LTimeoutResult.Results));
       Halt(1);
     end;
-    if LResult.Results[0].Status <> tsError then
+    if LTimeoutResult.Results[0].Status <> tsError then
     begin
-      WriteLn(AnsiRed('FAIL: Expected tsError status, got '), Ord(LResult.Results[0].Status));
+      WriteLn(AnsiRed('FAIL: Expected tsError status, got '), Ord(LTimeoutResult.Results[0].Status));
       Halt(1);
     end;
     WriteLn(AnsiGreen('OK: Timeout trigger verified'));
