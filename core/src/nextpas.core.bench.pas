@@ -139,6 +139,7 @@ implementation
 
 uses
   nextpas.core.exception,
+  nextpas.core.fs,
   nextpas.core.text.conv,
   nextpas.core.time.format,
   nextpas.core.time.offsetdatetime,
@@ -758,24 +759,12 @@ begin
 end;
 
 procedure TBenchResults.SaveStringToFile(const APath, AContent, AFormat: string);
-var
-  LFile: TextFile;
-  LOpened: Boolean;
 begin
-  LOpened := False;
-  AssignFile(LFile, APath);
   try
-    try
-      Rewrite(LFile);
-      LOpened := True;
-      WriteLn(LFile, AContent);
-    except
-      on E: Exception do
-        raise EBenchError.CreateFmt('Failed to save %s to "%s": %s', [AFormat, APath, E.Message]);
-    end;
-  finally
-    if LOpened then
-      CloseFile(LFile);
+    WriteFileText(APath, AContent, PermDefault);
+  except
+    on E: Exception do
+      raise EBenchError.CreateFmt('Failed to save %s to "%s": %s', [AFormat, APath, E.Message]);
   end;
 end;
 

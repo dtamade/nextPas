@@ -13,6 +13,7 @@ interface
 
 uses
   nextpas.core.exception,
+  nextpas.core.fs,
   nextpas.core.text.conv,
   nextpas.core.platform.time,
   nextpas.core.fs.util,
@@ -313,26 +314,12 @@ begin
 end;
 
 procedure TBaselineManager.SaveToFile(const AFileName: string);
-var
-  LJSON: string;
-  LFile: TextFile;
-  LOpened: Boolean;
 begin
-  LOpened := False;
-  LJSON := ToJSON;
-  AssignFile(LFile, AFileName);
   try
-    try
-      Rewrite(LFile);
-      LOpened := True;
-      Write(LFile, LJSON);
-    except
-      on E: Exception do
-        raise EBenchError.CreateFmt('Failed to save baseline to "%s": %s', [AFileName, E.Message]);
-    end;
-  finally
-    if LOpened then
-      CloseFile(LFile);
+    WriteFileText(AFileName, ToJSON, PermDefault);
+  except
+    on E: Exception do
+      raise EBenchError.CreateFmt('Failed to save baseline to "%s": %s', [AFileName, E.Message]);
   end;
 end;
 
