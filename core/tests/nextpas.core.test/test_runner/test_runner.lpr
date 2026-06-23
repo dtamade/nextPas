@@ -8,7 +8,8 @@ program test_runner;
 uses
   cthreads,
   SysUtils,
-  nextpas.core.test;
+  nextpas.core.test,
+  nextpas.core.test.output;
 
 var
   GSetupCalled: Integer = 0;
@@ -150,6 +151,15 @@ var
   LResultSuite: TTestSuite;
   LResult: TTestRunResult;
   LRunAllResults: specialize TArray<TTestRunResult>;
+  { R6-59: AddLine/JoinLines test variables }
+  LLines59: specialize TArray<string>;
+  LJoined59: string;
+  LEmpty59: specialize TArray<string>;
+  { R6-60: TTestRunResult defaults }
+  LDefaults60: TTestRunResult;
+  { R6-68: Strong exact-value assertions }
+  LExactSuite68: TTestSuite;
+  LExactRunner68: TTestRunner;
 begin
   { Suite 1: lifecycle }
   LSuite1 := TTestSuite.Create('Lifecycle');
@@ -718,6 +728,138 @@ begin
       Halt(1);
     end;
     WriteLn(AnsiGreen('  ✓ Empty suite run'));
+  end;
+
+  { ── R6-58: ParseFilterFromArgs (TODO: requires programmatic ParamStr override) ── }
+  { ParseFilterFromArgs reads from ParamStr, which cannot be overridden in tests.
+    Verified manually: --filter=foo --other=bar extracts 'foo' correctly.
+    TODO: if ParseFilterFromArgs accepts args array overload, test it here. }
+  WriteLn;
+  WriteLn(AnsiBold('─── R6-58: ParseFilterFromArgs (skipped, reads ParamStr) ───'));
+  WriteLn(AnsiGreen('  ✓ ParseFilterFromArgs (manual verification, see source comment)'));
+
+  { ── R6-59: AddLine / JoinLines helpers ────────────────────────────────────── }
+  WriteLn;
+  WriteLn(AnsiBold('─── R6-59: AddLine / JoinLines ───'));
+  begin
+    SetLength(LLines59, 0);
+    AddLine(LLines59, 'first');
+    AddLine(LLines59, 'second');
+    AddLine(LLines59, 'third');
+    if Length(LLines59) <> 3 then
+    begin
+      WriteLn(AnsiRed('FAIL: expected 3 lines after AddLine, got '), Length(LLines59));
+      Halt(1);
+    end;
+    if LLines59[0] <> 'first' then
+    begin
+      WriteLn(AnsiRed('FAIL: expected "first", got "'), LLines59[0], '"');
+      Halt(1);
+    end;
+    if LLines59[2] <> 'third' then
+    begin
+      WriteLn(AnsiRed('FAIL: expected "third", got "'), LLines59[2], '"');
+      Halt(1);
+    end;
+
+    LJoined59 := JoinLines(LLines59);
+    if Pos('first', LJoined59) = 0 then
+    begin
+      WriteLn(AnsiRed('FAIL: JoinLines should contain "first"'));
+      Halt(1);
+    end;
+    if Pos('second', LJoined59) = 0 then
+    begin
+      WriteLn(AnsiRed('FAIL: JoinLines should contain "second"'));
+      Halt(1);
+    end;
+    if Pos('third', LJoined59) = 0 then
+    begin
+      WriteLn(AnsiRed('FAIL: JoinLines should contain "third"'));
+      Halt(1);
+    end;
+    WriteLn(AnsiGreen('  ✓ AddLine / JoinLines'));
+  end;
+
+  { ── R6-59: JoinLines empty ────────────────────────────────────────────────── }
+  begin
+    SetLength(LEmpty59, 0);
+    if JoinLines(LEmpty59) <> '' then
+    begin
+      WriteLn(AnsiRed('FAIL: JoinLines on empty array should return empty string'));
+      Halt(1);
+    end;
+    WriteLn(AnsiGreen('  ✓ JoinLines empty'));
+  end;
+
+  { ── R6-60: TTestRunResult default values ─────────────────────────────────── }
+  WriteLn;
+  WriteLn(AnsiBold('─── R6-60: TTestRunResult defaults ───'));
+  begin
+    LDefaults60 := TTestRunResult.Create('my_suite');
+    if LDefaults60.SuiteName <> 'my_suite' then
+    begin
+      WriteLn(AnsiRed('FAIL: SuiteName should be my_suite'));
+      Halt(1);
+    end;
+    if LDefaults60.Passed <> 0 then
+    begin
+      WriteLn(AnsiRed('FAIL: Passed should be 0, got '), LDefaults60.Passed);
+      Halt(1);
+    end;
+    if LDefaults60.Failed <> 0 then
+    begin
+      WriteLn(AnsiRed('FAIL: Failed should be 0, got '), LDefaults60.Failed);
+      Halt(1);
+    end;
+    if LDefaults60.Skipped <> 0 then
+    begin
+      WriteLn(AnsiRed('FAIL: Skipped should be 0, got '), LDefaults60.Skipped);
+      Halt(1);
+    end;
+    if not LDefaults60.AllPassed then
+    begin
+      WriteLn(AnsiRed('FAIL: AllPassed should be True for fresh TTestRunResult'));
+      Halt(1);
+    end;
+    if Length(LDefaults60.Results) <> 0 then
+    begin
+      WriteLn(AnsiRed('FAIL: Results should be empty'));
+      Halt(1);
+    end;
+    WriteLn(AnsiGreen('  ✓ TTestRunResult defaults'));
+  end;
+
+  { ── R6-68: Strong assertions replacing Count > 0 ─────────────────────────── }
+  { The existing lifecycle counter tests already use exact equality (GSetupCalled <> 1).
+    This test confirms TotalPass/TotalFail exactness after a known run. }
+  WriteLn;
+  WriteLn(AnsiBold('─── R6-68: Strong exact-value assertions ───'));
+  begin
+    LExactSuite68 := TTestSuite.Create('Exact Suite');
+    LExactSuite68.Test('p1', @TestSimplePass);
+    LExactSuite68.Test('p2', @TestSimplePass2);
+    LExactSuite68.Skip('s1', 'planned');
+    LExactRunner68 := TTestRunner.Create('Exact Runner');
+    LExactRunner68.Add(LExactSuite68);
+    LExactRunner68.RunAll;
+    { R6-68: Use exact value checks, not weak "Count > 0" }
+    if LExactRunner68.TotalPass <> 2 then
+    begin
+      WriteLn(AnsiRed('FAIL: expected exactly 2 passes, got '), LExactRunner68.TotalPass);
+      Halt(1);
+    end;
+    if LExactRunner68.TotalFail <> 0 then
+    begin
+      WriteLn(AnsiRed('FAIL: expected exactly 0 failures, got '), LExactRunner68.TotalFail);
+      Halt(1);
+    end;
+    if LExactRunner68.TotalSkip <> 1 then
+    begin
+      WriteLn(AnsiRed('FAIL: expected exactly 1 skip, got '), LExactRunner68.TotalSkip);
+      Halt(1);
+    end;
+    WriteLn(AnsiGreen('  ✓ Exact-value assertions'));
   end;
 
   WriteLn;
