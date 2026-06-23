@@ -24,12 +24,12 @@
 
 ## Finding 分流
 
-| 分流 | 数量 | 说明 |
-|---|---:|---|
-| 直接代码修复/补测试 | 21 | 真 bug、真缺口，应该落代码或 focused test |
-| 文档/契约冻结 | 11 | 当前实现更像有意语义，但缺文档或 contract test |
-| `main` 收敛 / 架构决策 | 13 | 先和 `main` 对齐，再决定是否继续清理 |
-| 建议关闭 / 降级 | 7 | 当前分支已过时、证据不足，或不值得在本轮动刀 |
+| 分流                   | 数量 | 说明                                           |
+| ---------------------- | ---: | ---------------------------------------------- |
+| 直接代码修复/补测试    |   21 | 真 bug、真缺口，应该落代码或 focused test      |
+| 文档/契约冻结          |   11 | 当前实现更像有意语义，但缺文档或 contract test |
+| `main` 收敛 / 架构决策 |   13 | 先和 `main` 对齐，再决定是否继续清理           |
+| 建议关闭 / 降级        |    7 | 当前分支已过时、证据不足，或不值得在本轮动刀   |
 
 ## 推荐批次
 
@@ -379,7 +379,7 @@
 
 **验证**
 
-- `make focused FOCUS=core/tests/nextpas.core.mem/test_arena_growable`
+- `make focused FOCUS=core/tests/nextpas.core.mem/test_arena_chunked`
 - `make focused FOCUS=core/tests/nextpas.core.mem/test_stack_pool`
 - `make -C core/benchmarks/nextpas.core.mem/bench_alloc run`
 - `make -C core/benchmarks/nextpas.core.mem/bench_arena_vs_rtl run`
@@ -444,73 +444,73 @@
 
 ## Findings 判定矩阵
 
-| ID | 判定 | 处理建议 | 难度 | 批次 |
-|---|---|---|---|---|
-| A-01 | 真实，但属于 `main` 收敛差异 | replay / 对齐 11 个 `main` surface，再决定删留 | 中 | Batch 2 |
-| A-02 | 真实 | 先定门面策略，再更新 contract/test | 中 | Batch 2 |
-| A-03 | 真实 | 删除旧 `mem.mimalloc*` 死代码 | 低 | Batch 3 |
-| A-04 | 部分真实 | 删 `nextpas.core.path` 死导入；`os.env` 先保留 | 低 | Batch 3 |
-| A-05 | 已过时 | 关闭；`IMemoryPool` 当前有多实现者 | 低 | 关闭 |
-| A-06 | 部分真实 | 不删；补“无生产 consumer、但有 tests”说明 | 低 | Batch 8 |
-| A-07 | 真实 | 先记录 duplication，暂不在本轮强行合并实现 | 中 | Batch 2 |
-| A-08 | 部分真实 | 保留 `manager.*`，补命名/定位说明 | 低 | Batch 8 |
-| A-09 | 真实 | 删除 `TArenaMarker` 死别名 | 低 | Batch 3 |
-| A-10 | 真实 | API 文档明确 `IPool` / `IBlockPool` 差异 | 低 | Batch 6 |
-| A-11 | 真实观察项 | 不在本轮 mem lane 处理 | 低 | 观察 |
-| A-12 | 真实观察项 | 按现有 owner doc 保持不动 | 低 | 观察 |
-| A-13 | 真实 debt | 记录到后续 L0 debt，不混入当前批次 | 中 | 后续 |
-| A-14 | 部分真实 | wrapper 仍有 mem 内部 consumer，先不删 | 低 | Batch 8 |
-| A-15 | 真实 style debt | 仅记债，不做大规模 rename | 低 | Batch 8 |
-| B-01 | 真实 | 文档化“构造失败抛异常 / 分配失败返回 nil” | 低 | Batch 4 / 8 |
-| B-02 | 真实且有意 | 文档+test 固化，不改 Release 行为 | 低 | Batch 4 |
-| B-03 | 真实且有意 | 文档+test 固化 large-object lifecycle | 中 | Batch 4 |
-| B-04 | 真实 | 文档明确 `Reset` / `ResetHard` 差异 | 低 | Batch 4 |
-| B-05 | 真实 | 文档说明 `IAllocator` vs `IArena` 命名定位 | 低 | Batch 8 |
-| B-06 | 不建议本轮处理 | 关闭为“API parity 愿望”，不是 bug | 低 | 关闭 |
-| B-07 | 真实且有意 | 文档说明 `TVirtualArena` record 不实现接口的原因 | 低 | Batch 8 |
-| B-08 | 真实 style debt | 不做大规模 rename，只在 touched files 顺手统一 | 低 | Batch 8 |
-| S-01 | 真实 P0 | DEBUG assert + focused test + benchmark | 低 | Batch 1 |
-| S-02 | 真实 P0 | DEBUG assert + focused test + benchmark | 低 | Batch 1 |
-| R-01 | 真实 | 给 `UsedSize` / `RemainingSize` 补锁 | 低 | Batch 5 |
-| R-02 | 真实 | 给 `Available` / `InUse` 补锁 | 低 | Batch 5 |
-| R-03 | 证据不足 | 改为 stress test + 锁序注释，不先改实现 | 中 | Batch 5 |
-| R-04 | 真实 | 文档化单线程 init 前提，必要时加 debug assert | 低 | Batch 5 |
-| M-01 | 真实且有意 | 文档+test 固化，不改 public 语义 | 中 | Batch 4 |
-| M-02 | 真实 | 给 `AllocNoPointer` 加下溢前置检查 | 低 | Batch 4 |
-| M-03 | 真实 | 显式拒绝 `ThreadCacheCapacity > 0` 或删死路径 | 中 | Batch 5 |
-| M-04 | 真实 | `PageKeyOf` 改为不依赖 `FSegments[0]` | 低 | Batch 6 |
-| T-01 | 大体真实 | 补 direct tests，优先 callback/mutex/rwlock | 中 | Batch 6 |
-| T-02 | 部分真实 | `AllocUnsafe` / `ResetHard` 补测；`AllocFast*` 已有测试 | 低 | Batch 4 |
-| T-03 | 真实 | 加高竞争 stress test | 中 | Batch 6 |
-| T-04 | 真实 | 补 arena/slab/mmap 失败路径测试 | 中 | Batch 6 |
-| P-01 | 真实 | `FSegments` / cache 几何扩容 | 低 | Batch 7 |
-| P-02 | 真实 | 短期做饱和返回，不改 public type | 中 | Batch 7 |
-| P-03 | 真实 | `TLocalArena` 缓存 alignment mask | 低 | Batch 7 |
-| P-04 | 真实 | `pow2 capacity` 走位与快速路径 | 中 | Batch 7 |
-| P-05 | 低价值观察项 | 关闭；先看 benchmark，不为 inline 而 inline | 低 | 关闭 |
-| Q-01 | 真实 | typed const 改真正 `const` | 低 | Batch 4 |
-| Q-02 | 真实但暂不处理 | 不加上限；先靠文档说明 large-object 行为 | 中 | 观察 |
-| Q-03 | 不成立 | 当前 `Resize` 路径不存在实际除零 | 低 | 关闭 |
-| Q-04 | 真实且有意 | 文档写清前提，不加 Release guard | 低 | Batch 4 |
-| Q-05 | 真实 | 先文档化；错误码 API 另起设计 | 中 | Batch 4 |
-| Q-06 | debug-only 观察项 | 不作为当前批次目标 | 低 | 观察 |
-| Q-07 | 真实 | `deprecated` 关键字补齐 | 低 | Batch 3 |
-| D-01 | 真实 | 重写 `ARCHITECTURE.md` | 低 | Batch 8 |
-| D-02 | 真实 | 重写 `API.md` | 低 | Batch 8 |
-| D-03 | 真实 | README 补使用指南与 owner boundary | 低 | Batch 8 |
+| ID   | 判定                         | 处理建议                                                | 难度 | 批次        |
+| ---- | ---------------------------- | ------------------------------------------------------- | ---- | ----------- |
+| A-01 | 真实，但属于 `main` 收敛差异 | replay / 对齐 11 个 `main` surface，再决定删留          | 中   | Batch 2     |
+| A-02 | 真实                         | 先定门面策略，再更新 contract/test                      | 中   | Batch 2     |
+| A-03 | 真实                         | 删除旧 `mem.mimalloc*` 死代码                           | 低   | Batch 3     |
+| A-04 | 部分真实                     | 删 `nextpas.core.path` 死导入；`os.env` 先保留          | 低   | Batch 3     |
+| A-05 | 已过时                       | 关闭；`IMemoryPool` 当前有多实现者                      | 低   | 关闭        |
+| A-06 | 部分真实                     | 不删；补“无生产 consumer、但有 tests”说明               | 低   | Batch 8     |
+| A-07 | 真实                         | 先记录 duplication，暂不在本轮强行合并实现              | 中   | Batch 2     |
+| A-08 | 部分真实                     | 保留 `manager.*`，补命名/定位说明                       | 低   | Batch 8     |
+| A-09 | 真实                         | 删除 `TArenaMarker` 死别名                              | 低   | Batch 3     |
+| A-10 | 真实                         | API 文档明确 `IPool` / `IBlockPool` 差异                | 低   | Batch 6     |
+| A-11 | 真实观察项                   | 不在本轮 mem lane 处理                                  | 低   | 观察        |
+| A-12 | 真实观察项                   | 按现有 owner doc 保持不动                               | 低   | 观察        |
+| A-13 | 真实 debt                    | 记录到后续 L0 debt，不混入当前批次                      | 中   | 后续        |
+| A-14 | 部分真实                     | wrapper 仍有 mem 内部 consumer，先不删                  | 低   | Batch 8     |
+| A-15 | 真实 style debt              | 仅记债，不做大规模 rename                               | 低   | Batch 8     |
+| B-01 | 真实                         | 文档化“构造失败抛异常 / 分配失败返回 nil”               | 低   | Batch 4 / 8 |
+| B-02 | 真实且有意                   | 文档+test 固化，不改 Release 行为                       | 低   | Batch 4     |
+| B-03 | 真实且有意                   | 文档+test 固化 large-object lifecycle                   | 中   | Batch 4     |
+| B-04 | 真实                         | 文档明确 `Reset` / `ResetHard` 差异                     | 低   | Batch 4     |
+| B-05 | 真实                         | 文档说明 `IAllocator` vs `IArena` 命名定位              | 低   | Batch 8     |
+| B-06 | 不建议本轮处理               | 关闭为“API parity 愿望”，不是 bug                       | 低   | 关闭        |
+| B-07 | 真实且有意                   | 文档说明 `TVirtualArena` record 不实现接口的原因        | 低   | Batch 8     |
+| B-08 | 真实 style debt              | 不做大规模 rename，只在 touched files 顺手统一          | 低   | Batch 8     |
+| S-01 | 真实 P0                      | DEBUG assert + focused test + benchmark                 | 低   | Batch 1     |
+| S-02 | 真实 P0                      | DEBUG assert + focused test + benchmark                 | 低   | Batch 1     |
+| R-01 | 真实                         | 给 `UsedSize` / `RemainingSize` 补锁                    | 低   | Batch 5     |
+| R-02 | 真实                         | 给 `Available` / `InUse` 补锁                           | 低   | Batch 5     |
+| R-03 | 证据不足                     | 改为 stress test + 锁序注释，不先改实现                 | 中   | Batch 5     |
+| R-04 | 真实                         | 文档化单线程 init 前提，必要时加 debug assert           | 低   | Batch 5     |
+| M-01 | 真实且有意                   | 文档+test 固化，不改 public 语义                        | 中   | Batch 4     |
+| M-02 | 真实                         | 给 `AllocNoPointer` 加下溢前置检查                      | 低   | Batch 4     |
+| M-03 | 真实                         | 显式拒绝 `ThreadCacheCapacity > 0` 或删死路径           | 中   | Batch 5     |
+| M-04 | 真实                         | `PageKeyOf` 改为不依赖 `FSegments[0]`                   | 低   | Batch 6     |
+| T-01 | 大体真实                     | 补 direct tests，优先 callback/mutex/rwlock             | 中   | Batch 6     |
+| T-02 | 部分真实                     | `AllocUnsafe` / `ResetHard` 补测；`AllocFast*` 已有测试 | 低   | Batch 4     |
+| T-03 | 真实                         | 加高竞争 stress test                                    | 中   | Batch 6     |
+| T-04 | 真实                         | 补 arena/slab/mmap 失败路径测试                         | 中   | Batch 6     |
+| P-01 | 真实                         | `FSegments` / cache 几何扩容                            | 低   | Batch 7     |
+| P-02 | 真实                         | 短期做饱和返回，不改 public type                        | 中   | Batch 7     |
+| P-03 | 真实                         | `TLocalArena` 缓存 alignment mask                       | 低   | Batch 7     |
+| P-04 | 真实                         | `pow2 capacity` 走位与快速路径                          | 中   | Batch 7     |
+| P-05 | 低价值观察项                 | 关闭；先看 benchmark，不为 inline 而 inline             | 低   | 关闭        |
+| Q-01 | 真实                         | typed const 改真正 `const`                              | 低   | Batch 4     |
+| Q-02 | 真实但暂不处理               | 不加上限；先靠文档说明 large-object 行为                | 中   | 观察        |
+| Q-03 | 不成立                       | 当前 `Resize` 路径不存在实际除零                        | 低   | 关闭        |
+| Q-04 | 真实且有意                   | 文档写清前提，不加 Release guard                        | 低   | Batch 4     |
+| Q-05 | 真实                         | 先文档化；错误码 API 另起设计                           | 中   | Batch 4     |
+| Q-06 | debug-only 观察项            | 不作为当前批次目标                                      | 低   | 观察        |
+| Q-07 | 真实                         | `deprecated` 关键字补齐                                 | 低   | Batch 3     |
+| D-01 | 真实                         | 重写 `ARCHITECTURE.md`                                  | 低   | Batch 8     |
+| D-02 | 真实                         | 重写 `API.md`                                           | 低   | Batch 8     |
+| D-03 | 真实                         | README 补使用指南与 owner boundary                      | 低   | Batch 8     |
 
 ## 总体排期建议
 
-| 批次 | 预估 |
-|---|---:|
-| Batch 1 | 0.5 天 |
-| Batch 2 | 1.0 - 1.5 天 |
-| Batch 3 | 0.5 - 1.0 天 |
-| Batch 4 | 1.0 天 |
-| Batch 5 | 1.0 天 |
-| Batch 6 | 1.0 - 1.5 天 |
-| Batch 7 | 1.0 天 |
-| Batch 8 | 0.5 - 1.0 天 |
+| 批次     |             预估 |
+| -------- | ---------------: |
+| Batch 1  |           0.5 天 |
+| Batch 2  |     1.0 - 1.5 天 |
+| Batch 3  |     0.5 - 1.0 天 |
+| Batch 4  |           1.0 天 |
+| Batch 5  |           1.0 天 |
+| Batch 6  |     1.0 - 1.5 天 |
+| Batch 7  |           1.0 天 |
+| Batch 8  |     0.5 - 1.0 天 |
 | **合计** | **6.5 - 8.5 天** |
 
 ## 推荐执行顺序

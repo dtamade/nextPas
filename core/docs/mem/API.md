@@ -1,437 +1,298 @@
 # nextpas.core.mem API 参考
 
-## 接口
+## 先看这两个核心契约
 
-### IArena
-线性分配器接口。
+### `IArena`
 
-#### 方法
+`IArena` 是 class-based arena 的最小公共接口。当前实现方是 `TLocalArena`、`TChunkedArena`，以及包装器 `TArenaConcurrent`。
 
-##### Alloc
 ```pascal
-function Alloc(aSize: SizeUInt): Pointer;
-```
-分配 `aSize` 字节的内存。
-
-**参数：**
-- `aSize` - 要分配的字节数
-
-**返回值：**
-- 成功：分配的内存指针
-- 失败：nil（空间不足）
-
-**示例：**
-```pascal
-var
-  LArena: IArena;
-  LP: Pointer;
-begin
-  LArena := TLocalArena.Create(1024);
-  LP := LArena.Alloc(64);
-  if LP <> nil then
-    WriteLn('分配成功');
-end;
+type
+  IArena = interface
+    function Alloc(ASize: SizeUInt): Pointer;
+    function AllocAligned(ASize, AAlign: SizeUInt): Pointer;
+    function AllocZeroed(ASize: SizeUInt): Pointer;
+    function SaveMark: TArenaMark;
+    procedure RestoreToMark(AMark: TArenaMark);
+    procedure Reset;
+    function UsedSize: SizeUInt;
+    function RemainingSize: SizeUInt;
+    function Stats: TArenaStats;
+  end;
 ```
 
-##### AllocAligned
+要点：
+
+- 构造或初始化失败走异常，例如 `EOutOfMemory`、`EAllocError`
+- `Alloc*` 失败返回 `nil`
+- `IArena` 故意不暴露 `TotalSize`；总容量和底层保留字节数是实现细节
+
+### `IAllocator`
+
+`IAllocator` 是更稳定的通用分配器接口。`nextpas.core.mem` 的默认分配器、tracking wrapper、fallback wrapper、arena allocator 都围绕它工作。
+
 ```pascal
-function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
-```
-分配 `aSize` 字节的内存，按 `aAlignment` 对齐。
-
-**参数：**
-- `aSize` - 要分配的字节数
-- `aAlignment` - 对齐要求（必须是 2 的幂）
-
-**返回值：**
-- 成功：对齐的内存指针
-- 失败：nil（空间不足或对齐无效）
-
-**示例：**
-```pascal
-var
-  LP: Pointer;
-begin
-  LP := LArena.AllocAligned(64, 16);
-  if LP <> nil then
-    WriteLn('对齐分配成功，地址：', PtrUInt(LP) mod 16 = 0);
-end;
-```
-
-##### AllocZeroed
-```pascal
-function AllocZeroed(aSize: SizeUInt): Pointer;
-```
-分配 `aSize` 字节的内存并清零。
-
-**参数：**
-- `aSize` - 要分配的字节数
-
-**返回值：**
-- 成功：清零的内存指针
-- 失败：nil（空间不足）
-
-**示例：**
-```pascal
-var
-  LP: PByte;
-begin
-  LP := LArena.AllocZeroed(64);
-  if LP <> nil then
-    WriteLn('第一个字节：', LP^); // 输出 0
-end;
+type
+  IAllocator = interface
+    function GetMem(ASize: SizeUInt): Pointer;
+    function AllocMem(ASize: SizeUInt): Pointer;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(ADst: Pointer);
+    function MemSize(APtr: Pointer): SizeUInt;
+    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
+    procedure FreeAligned(APtr: Pointer);
+    function Traits: TAllocatorTraits;
+  end;
 ```
 
-##### SaveMark
+要点：
+
+- `AllocMem` 语义是 zero-initialized allocation
+- `FreeMem` 当前是 `procedure`，不返回释放字节数
+- `AllocAligned` / `FreeAligned` 是和普通分配分开的显式 contract
+
+## 共享 arena 类型
+
+### `TArenaMark`
+
 ```pascal
+type
+  TArenaMark = record
+    FrontOffset: SizeUInt;
+    BackOffset: SizeUInt;
+    TotalUsed: SizeUInt;
+  end;
+```
+
+`SaveMark` / `RestoreToMark` 通过这个记录表达“回退到某个分配位置”。
+
+### `TArenaStats`
+
+```pascal
+type
+  TArenaStats = record
+    TotalAllocated: SizeUInt;
+    TotalUsed: SizeUInt;
+    PeakUsed: SizeUInt;
+    AllocCount: QWord;
+  end;
+```
+
+### `TArenaConfig`
+
+```pascal
+type
+  TArenaConfig = record
+    InitialSize: SizeUInt;
+    MaxSize: SizeUInt;
+    GrowthKind: TArenaGrowthKind;
+    GrowthFactor: Double;
+    GrowthStep: SizeUInt;
+    Alignment: SizeUInt;
+    KeepSegments: Boolean;
+
+    class function Default(AInitialSize: SizeUInt): TArenaConfig; static;
+  end;
+```
+
+这套配置目前只给 `TChunkedArena` 使用。
+
+## `TLocalArena`
+
+`TLocalArena` 是固定容量、class-based 的 bump arena，实现了 `IArena`。
+
+### 构造函数
+
+```pascal
+constructor Create(const ACapacity: SizeUInt); overload;
+constructor Create(const ACapacity: SizeUInt; const AAllocator: IAllocator); overload;
+```
+
+### 公开方法
+
+```pascal
+function Alloc(ASize: SizeUInt): Pointer;
+function AllocAligned(ASize, AAlign: SizeUInt): Pointer;
+function AllocZeroed(ASize: SizeUInt): Pointer;
 function SaveMark: TArenaMark;
-```
-保存当前分配位置的标记。
-
-**返回值：**
-- TArenaMark 记录
-
-**示例：**
-```pascal
-var
-  LMark: TArenaMark;
-begin
-  LMark := LArena.SaveMark;
-  // 分配一些内存...
-  LArena.RestoreToMark(LMark); // 恢复到标记位置
-end;
-```
-
-##### RestoreToMark
-```pascal
-procedure RestoreToMark(aMark: TArenaMark);
-```
-恢复到之前保存的标记位置。
-
-**参数：**
-- `aMark` - SaveMark 返回的标记
-
-**示例：**
-```pascal
-begin
-  LArena.RestoreToMark(LMark);
-end;
-```
-
-##### Reset
-```pascal
+procedure RestoreToMark(AMark: TArenaMark);
 procedure Reset;
-```
-重置 Arena，所有已分配内存可重新使用。
-
-**示例：**
-```pascal
-begin
-  LArena.Reset;
-  // 现在可以重新分配内存
-end;
-```
-
-##### TotalSize
-```pascal
-function TotalSize: SizeUInt;
-```
-返回后备内存总字节数。
-
-**返回值：**
-- 总字节数
-
-##### UsedSize
-```pascal
 function UsedSize: SizeUInt;
-```
-返回已分配字节数。
-
-**返回值：**
-- 已分配字节数
-
-##### RemainingSize
-```pascal
 function RemainingSize: SizeUInt;
+function Stats: TArenaStats;
+
+function AllocFast(ASize: SizeUInt): Pointer;
+function AllocAlignedFast(ASize, AAlign: SizeUInt): Pointer;
 ```
-返回剩余可用字节数。
 
-**返回值：**
-- 剩余可用字节数
+### 诊断属性
 
----
+- `Capacity`
+- `PeakUsed`
+- `TotalAllocCount`
 
-## 类型
+### 行为说明
 
-### TLocalArena
-基于 GetMem 的固定大小 Arena。
+- `Reset` 只把 offset 归零，不释放后备 buffer
+- `AllocFast` / `AllocAlignedFast` 只适合调用方已经证明边界安全的热路径
 
-#### 构造函数
+## `TChunkedArena`
+
+`TChunkedArena` 是分段增长的 class-based arena，实现了 `IArena`。
+
+### 构造函数
+
 ```pascal
-constructor Create(const ACapacity: SizeUInt);
+constructor Create(const AConfig: TArenaConfig); overload;
+constructor Create(AInitialSize: SizeUInt; AMaxSize: SizeUInt = 0); overload;
 ```
-创建 Arena 并分配 `ACapacity` 字节的后备内存。
 
-**参数：**
-- `ACapacity` - Arena 容量（字节数）
+### 公开方法
 
-**示例：**
+`TChunkedArena` 完整实现 `IArena`，并额外提供：
+
 ```pascal
-var
-  LArena: TLocalArena;
-begin
-  LArena := TLocalArena.Create(1024);
-  try
-    // 使用 Arena...
-  finally
-    LArena.Free;
+function SegmentCount: SizeUInt;
+property PeakUsed: SizeUInt;
+property TotalAllocCount: QWord;
+property Alignment: SizeUInt;
+```
+
+### 行为说明
+
+- `GrowthKind` 支持几何增长和线性增长
+- `KeepSegments=True` 时，`Reset` 保留现有 segments
+- `KeepSegments=False` 时，`Reset` 会把多余 segments 放进 chunk cache，后续再复用
+
+## `TVirtualArena`
+
+`TVirtualArena` 是 record-based arena，不实现 `IArena`。它直接暴露更低层、更偏性能导向的 API。
+
+### 初始化和释放
+
+```pascal
+procedure TVirtualArena_Init(var AArena: TVirtualArena; AAlignment: SizeUInt = DEFAULT_ALIGNMENT);
+procedure TVirtualArena_Release(var AArena: TVirtualArena);
+```
+
+### 公开方法
+
+```pascal
+function Alloc(ASize: SizeUInt): Pointer;
+function AllocNoPointer(ASize: SizeUInt): Pointer;
+function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
+function AllocZeroed(ASize: SizeUInt): Pointer;
+function AllocUnsafe(ASize: SizeUInt): Pointer;
+function SaveMark: TArenaMark;
+procedure RestoreToMark(AMark: TArenaMark);
+procedure Reset;
+procedure ResetHard;
+procedure Release;
+function TotalAllocated: SizeUInt;
+function TotalUsed: SizeUInt;
+function PeakUsed: SizeUInt;
+function AllocCount: SizeUInt;
+```
+
+### 行为说明
+
+- `Alloc` 从前向 bump pointer 分配
+- `AllocNoPointer` 从后向 bump pointer 分配，适合 pointer-free payload
+- `AllocUnsafe` 跳过安全检查，不更新统计，也不保证对齐
+- `Reset` 保留 reserved range 和已经 committed 的页面
+- `ResetHard` 会 decommit 已提交页面，但保留 reserved virtual address range
+- 大对象（`>= ARENA_LARGE_THRESHOLD`）走独立 mmap，`Reset` / `RestoreToMark` 不回收，只有 `Release` 才统一释放
+
+## `TVirtualArenaAllocator`、`TFastArenaAllocator` 和 `TArenaAllocator`
+
+`TVirtualArenaAllocator` 把 `TVirtualArena` 包成 `IAllocator`。
+
+```pascal
+type
+  TVirtualArenaAllocator = class(TAllocator)
+  public
+    constructor Create(AAlignment: SizeUInt = DEFAULT_ALIGNMENT);
+    procedure Reset;
+    property Arena: TVirtualArena read FArena;
   end;
-end;
+
+  TFastArenaAllocator = TVirtualArenaAllocator;
 ```
 
-#### 方法
-- `Alloc` - 分配内存
-- `AllocAligned` - 对齐分配
-- `AllocZeroed` - 分配并清零
-- `AllocFast` - 快速分配（无检查版本）
-- `AllocAlignedFast` - 快速对齐分配（无检查版本）
-- `Reset` - 重置 Arena
-- `SaveMark` - 保存标记
-- `RestoreToMark` - 恢复到标记
-- `TotalSize` - 总大小
-- `UsedSize` - 已使用大小
-- `RemainingSize` - 剩余大小
+在门面 `nextpas.core.mem` 里，`TArenaAllocator` 也是同一个兼容别名链：
 
----
-
-### TFastArena
-基于 mmap 的高性能 Arena，零虚分发。
-
-#### 初始化
 ```pascal
-procedure TFastArena_Init(var AArena: TFastArena; AAlignment: SizeUInt = DEFAULT_ALIGNMENT);
+TArenaAllocator = nextpas.core.mem.allocator.arena.TFastArenaAllocator;
 ```
-初始化 TFastArena。
 
-**参数：**
-- `AArena` - 要初始化的 TFastArena 记录
-- `AAlignment` - 对齐要求（默认 DEFAULT_ALIGNMENT）
+行为说明：
 
-**示例：**
+- `GetMem` / `AllocMem` 最终走 `TVirtualArena`
+- 单块 `FreeMem` 不会真正回收 arena 内存
+- `Reset` 一次性回退整个 arena
+
+## 线程本地 arena surface
+
+### `TThreadArenaConfig`
+
 ```pascal
-var
-  LArena: TFastArena;
-begin
-  TFastArena_Init(LArena);
-  try
-    // 使用 Arena...
-  finally
-    TFastArena_Release(LArena);
+type
+  TThreadArenaConfig = record
+    ArenaCapacity: SizeUInt;
+    MaxPoolSize: Integer;
   end;
-end;
 ```
 
-#### 释放
+### `TThreadArenaManager`
+
 ```pascal
-procedure TFastArena_Release(var AArena: TFastArena);
+constructor Create(const AConfig: TThreadArenaConfig);
+function Get: TLocalArena;
+procedure DrainTLS;
+function HasArena: Boolean;
+function PoolSize: Integer;
+function TotalCreated: Integer;
+function TotalRecycled: Integer;
 ```
-释放 TFastArena 所有资源。
 
-**参数：**
-- `AArena` - 要释放的 TFastArena 记录
+### `TThreadArena`
 
-#### 方法
-- `Alloc` - 分配内存
-- `AllocAligned` - 对齐分配
-- `AllocZeroed` - 分配并清零
-- `SaveMark` - 保存标记
-- `RestoreToMark` - 恢复到标记
-- `Reset` - 重置 Arena（保留 mmap 映射）
-- `Release` - 释放所有 mmap 映射
-- `TotalAllocated` - 总 mmap 分配字节数
-- `TotalUsed` - 实际使用字节数
-- `PeakUsed` - 峰值使用字节数
-- `AllocCount` - 分配次数
-
----
-
-### TGrowableArena
-可增长的 Arena，支持段增长。
-
-#### 构造函数
 ```pascal
-constructor Create(const AConfig: TGrowableArenaConfig);
+class function Create(AArena: TLocalArena): TThreadArena; static;
+function Alloc(ASize: SizeUInt): Pointer;
+function AllocZeroed(ASize: SizeUInt): Pointer;
+function AllocAligned(ASize, AAlign: SizeUInt): Pointer;
+function AllocFast(ASize: SizeUInt): Pointer;
+function AllocAlignedFast(ASize, AAlign: SizeUInt): Pointer;
+function SaveMark: TArenaMark;
+procedure RestoreToMark(AMark: TArenaMark);
+procedure Reset;
+function UsedSize: SizeUInt;
+function RemainingSize: SizeUInt;
+function PeakUsed: SizeUInt;
+property Arena: TLocalArena read FArena;
 ```
-创建可增长 Arena。
 
-**参数：**
-- `AConfig` - 配置记录
+行为说明：
 
-**示例：**
+- 当前实现通过 `threadvar` 缓存每线程 arena
+- 线程结束前需要显式调用 `DrainTLS`
+- 当前代码没有自动 threadvar cleanup hook
+
+## 门面 helper
+
+门面 `nextpas.core.mem` 还提供这几个常用 helper：
+
 ```pascal
-var
-  LConfig: TGrowableArenaConfig;
-  LArena: TGrowableArena;
-begin
-  LConfig := TGrowableArenaConfig.Default(4096);
-  LConfig.GrowthKind := agkGeometric;
-  LConfig.GrowthFactor := 2.0;
-  LArena := TGrowableArena.Create(LConfig);
-  try
-    // 使用 Arena...
-  finally
-    LArena.Free;
-  end;
-end;
+function DefaultAllocator: IAllocator;
+function AllocZeroed(const AAllocator: IAllocator; const ASize: SizeUInt): Pointer;
+function AllocArray(const AAllocator: IAllocator; const ACount, AElemSize: SizeUInt): Pointer;
 ```
 
-#### 配置
-```pascal
-TGrowableArenaConfig = record
-  InitialSize: SizeUInt;
-  MaxSize: SizeUInt;
-  GrowthKind: TArenaGrowthKind;
-  GrowthFactor: Double;
-  GrowthStep: SizeUInt;
-  Alignment: SizeUInt;
-  Allocator: IAllocator;
-  KeepSegments: Boolean;
-end;
-```
+## 选择建议
 
----
-
-### TFastArenaAllocator
-包装 TFastArena 为 IAllocator 接口。
-
-#### 构造函数
-```pascal
-constructor Create(AChunkSize: SizeUInt = ARENA_INITIAL_CHUNK_SIZE;
-  AAlignment: SizeUInt = DEFAULT_ALIGNMENT);
-```
-创建 TFastArenaAllocator。
-
-**参数：**
-- `AChunkSize` - 初始 chunk 大小
-- `AAlignment` - 对齐要求
-
-**示例：**
-```pascal
-var
-  LAllocator: IAllocator;
-begin
-  LAllocator := TFastArenaAllocator.Create;
-  // 使用 LAllocator...
-end;
-```
-
-#### 方法
-- `GetMem` - 分配内存
-- `AllocMem` - 分配并清零
-- `ReallocMem` - 重新分配
-- `FreeMem` - 释放内存（no-op）
-- `Reset` - 重置 Arena
-- `Traits` - 返回特性
-
----
-
-### TTrackingAllocator
-内存泄漏检测包装器。
-
-#### 构造函数
-```pascal
-constructor Create(const AInner: IAllocator);
-```
-创建 TTrackingAllocator。
-
-**参数：**
-- `AInner` - 内部分配器
-
-**示例：**
-```pascal
-var
-  LAllocator: IAllocator;
-  LTracker: TTrackingAllocator;
-begin
-  LAllocator := TFastArenaAllocator.Create;
-  LTracker := TTrackingAllocator.Create(LAllocator);
-  try
-    // 使用 LTracker...
-  finally
-    LTracker.Free;
-  end;
-end;
-```
-
-#### 方法
-- `GetMem` - 分配内存并记录
-- `AllocMem` - 分配并清零并记录
-- `ReallocMem` - 重新分配并记录
-- `FreeMem` - 释放内存并记录
-- `ActiveAllocCount` - 当前活跃分配数
-- `ActiveAllocBytes` - 当前活跃分配字节数
-- `HasLeaks` - 是否有泄漏
-- `ReportLeaks` - 生成泄漏报告
-
----
-
-### TLeakCheckResult
-泄漏检测结果。
-
-#### 字段
-- `LeakCount` - 泄漏数量
-- `LeakBytes` - 泄漏字节数
-- `MaxLeakSize` - 最大泄漏大小
-- `LeakDetails` - 泄漏详情
-
----
-
-### RunTestWithLeakCheck
-运行测试并检查泄漏。
-
-#### 函数签名
-```pascal
-function RunTestWithLeakCheck(const ATest: TAllocatorTestProc): TLeakCheckResult;
-```
-
-**参数：**
-- `ATest` - 测试过程
-
-**返回值：**
-- TLeakCheckResult 记录
-
-**示例：**
-```pascal
-var
-  LResult: TLeakCheckResult;
-begin
-  LResult := RunTestWithLeakCheck(procedure(AAllocator: IAllocator)
-  begin
-    // 测试代码...
-  end);
-  if LResult.LeakCount > 0 then
-    WriteLn('Memory leaks detected!');
-end;
-```
-
----
-
-## 常量
-
-### ARENA_INITIAL_CHUNK_SIZE
-```pascal
-ARENA_INITIAL_CHUNK_SIZE = 64 * 1024; // 64KB
-```
-初始 chunk 大小。
-
-### ARENA_LARGE_THRESHOLD
-```pascal
-ARENA_LARGE_THRESHOLD = 64 * 1024; // 64KB
-```
-大对象阈值：>= 此值的对象直接 mmap。
-
-### DEFAULT_ALIGNMENT
-```pascal
-DEFAULT_ALIGNMENT = 16;
-```
-默认对齐要求。
+- 需要固定容量、最简单的 `IArena`：`TLocalArena`
+- 需要增长能力、又想保留 `IArena` 接口：`TChunkedArena`
+- 需要预留大块虚拟地址空间、前后双向 bump、手工控制 `Reset` / `ResetHard`：`TVirtualArena`
+- 需要把 `TVirtualArena` 接到 `IAllocator` consumer 上：`TVirtualArenaAllocator` / `TFastArenaAllocator`
+- 需要每线程零锁热路径：`TThreadArenaManager` + `TThreadArena`

@@ -14,46 +14,56 @@
 
 ## Arena 选择指南
 
-| 场景 | 推荐 | 原因 |
-|------|------|------|
-| 编译器热路径 | TVirtualArena + AllocUnsafe | 2ns, 476M ops/s |
-| 请求/帧生命周期 | TLocalArena | 固定容量, 3ns, 307M ops/s |
-| 动态增长批量 | TChunkedArena | Go-style chunk cache, 15ns |
-| 多线程共享 | TArenaConcurrent | mutex-protected IArena 包装 |
-| 固定大小块分配 | TBlockPool / TShardedBlockPool | O(1) acquire/release |
-| Slab 分配 | TSlabPool / TSlabPoolSharded | 页级 slab, IMemoryPool |
+| 场景            | 推荐                           | 原因                        |
+| --------------- | ------------------------------ | --------------------------- |
+| 编译器热路径    | TVirtualArena + AllocUnsafe    | 2ns, 476M ops/s             |
+| 请求/帧生命周期 | TLocalArena                    | 固定容量, 3ns, 307M ops/s   |
+| 动态增长批量    | TChunkedArena                  | Go-style chunk cache, 15ns  |
+| 多线程共享      | TArenaConcurrent               | mutex-protected IArena 包装 |
+| 固定大小块分配  | TBlockPool / TShardedBlockPool | O(1) acquire/release        |
+| Slab 分配       | TSlabPool / TSlabPoolSharded   | 页级 slab, IMemoryPool      |
 
 ## 核心类型
 
 ### IArena 接口
+
 线性分配器接口：
+
 - `Alloc` / `AllocAligned` / `AllocZeroed` — 分配
 - `SaveMark` / `RestoreToMark` — 保存/恢复分配位置
 - `Reset` — 重置 Arena（保留已提交页面）
 - `UsedSize` / `RemainingSize` / `Stats` — 查询
 
 ### IAllocator 接口
+
 通用分配器接口（40+ 模块引用）：
+
 - `GetMem` / `AllocMem` / `ReallocMem` / `FreeMem` — 标准分配
 - `AllocAligned` — 对齐分配
 - `MemSize` — 查询已分配大小
 - `Traits` — 分配器特性
 
 ### TVirtualArena (record)
+
 基于 mmap 的零虚分发 Arena：
+
 - 预留 256MB 虚拟地址空间
 - 双向 bump pointer（指针对象从前往后，无指针从后往前）
 - 大对象（>=64KB）独立 mmap
 - `AllocUnsafe`: 纯 bump pointer, 2ns（前提：页面已提交）
 
 ### TLocalArena (class, IArena)
+
 基于 GetMem 的固定容量 Arena：
+
 - 预分配 buffer, 分配只前进
 - `AllocFast` / `AllocAlignedFast`: DEBUG Assert 保护, Release 零额外分支
 - 适用于请求/帧/文档等有限生命周期场景
 
 ### TChunkedArena (class, IArena)
+
 分段可增长 Arena：
+
 - Go-style chunk cache（Reset 缓存 freed segments, 最多 8 个）
 - FSegments 几何扩容
 - 支持几何/线性增长策略
@@ -72,6 +82,7 @@
 ## 使用示例
 
 ### 基本 Arena 使用
+
 ```pascal
 uses nextpas.core.mem;
 
@@ -91,6 +102,7 @@ end;
 ```
 
 ### VirtualArena + AllocUnsafe
+
 ```pascal
 uses nextpas.core.mem.arena.virtual;
 
@@ -110,6 +122,7 @@ end;
 ```
 
 ### IAllocator 接口
+
 ```pascal
 var
   LAllocator: IAllocator;
@@ -121,6 +134,7 @@ end;
 ```
 
 ### 泄漏检测
+
 ```pascal
 var
   LResult: TLeakCheckResult;
@@ -143,7 +157,7 @@ end;
 
 ## 测试覆盖
 
-- 324+ tests across 24+ suites
+- 29 test projects with a static count of 289 `T.Run` cases
 - 0 memory leaks
 - 完整接口覆盖
 
