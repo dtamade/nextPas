@@ -54,6 +54,8 @@ const
   MEM_MANAGER_MIMALLOC_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.manager.mimalloc.pas';
   MEM_MIMALLOC_BINDING_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.mimalloc.binding.pas';
   MEM_MIMALLOC_BINDING_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.mimalloc.binding.pas';
+  MEM_RING_BUFFER_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.ring_buffer.pas';
+  MEM_RING_BUFFER_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.ring_buffer.pas';
   MEM_MUTEX_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.mutex.pas';
   MEM_MUTEX_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.mutex.pas';
   MEM_RWLOCK_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.rwlock.pas';
@@ -787,6 +789,46 @@ begin
     CheckEqual(Int64(0), Int64(LBytes[I]), 'Zero should clear each byte');
 end;
 
+procedure TestRingBufferAdvanceIndexFastPathContract;
+var
+  LSource: string;
+begin
+  LSource := ReadSourceText(ResolveSourcePath(
+    MEM_RING_BUFFER_SOURCE_PATH_FROM_TEST,
+    MEM_RING_BUFFER_SOURCE_PATH_FROM_ROOT));
+
+  CheckContains(LSource,
+    'function advanceindex(aindex, adelta: sizeuint): sizeuint;',
+    'ring buffer declares advance-index helper');
+  CheckContains(LSource,
+    'result := (aindex + adelta) and (fcapacity - 1);',
+    'advance-index helper uses pow2 fast path');
+  CheckContains(LSource,
+    'ftail := advanceindex(ftail, ltowrite);',
+    'bulk push uses advance-index helper');
+  CheckContains(LSource,
+    'fhead := advanceindex(fhead, ltoread);',
+    'bulk pop uses advance-index helper');
+  CheckContains(LSource,
+    'lindex := advanceindex(fhead, aoffset);',
+    'peek uses advance-index helper');
+  CheckContains(LSource,
+    'ftail := advanceindex(0, fcount)',
+    'resize uses advance-index helper');
+  CheckContains(LSource,
+    'lindex := advanceindex(fhead, i);',
+    'find uses advance-index helper');
+  CheckContains(LSource,
+    'lindex := advanceindex(fhead, aindex);',
+    'setelementat uses advance-index helper');
+  CheckContains(LSource,
+    'fhead := advanceindex(fhead, ltodrop);',
+    'dropelements uses advance-index helper');
+  CheckNotContains(LSource,
+    ' mod fcapacity',
+    'ring buffer bulk/index paths avoid raw modulo');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.mem.contracts');
   T.Run('callback allocator compatibility methods', @TestCallbackAllocatorCompatibilityMethods);
@@ -819,5 +861,6 @@ begin
   T.Run('mem.utils no-op and overlap contract', @TestMemUtilsNoOpAndOverlapContract);
   T.Run('mem.utils copy unchecked handles overlap', @TestMemUtilsCopyUncheckedHandlesOverlap);
   T.Run('mem.utils fill and zero helpers', @TestMemUtilsFillAndZeroHelpers);
+  T.Run('ring buffer advance-index fast path contract', @TestRingBufferAdvanceIndexFastPathContract);
   T.Summary;
 end.

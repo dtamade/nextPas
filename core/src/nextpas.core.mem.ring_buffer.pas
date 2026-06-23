@@ -72,6 +72,7 @@ type
     FIsPow2Capacity: Boolean;
 
     function GetElementPtr(aIndex: SizeUInt): Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function AdvanceIndex(AIndex, ADelta: SizeUInt): SizeUInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function GetNextIndex(aIndex: SizeUInt): SizeUInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
   public
@@ -304,23 +305,31 @@ begin
   Result := Pointer(PtrUInt(FBuffer) + (aIndex * FElementSize));
 end;
 
-function TRingBuffer.GetNextIndex(aIndex: SizeUInt): SizeUInt;
-var
-  LNext: SizeUInt;
+function TRingBuffer.AdvanceIndex(AIndex, ADelta: SizeUInt): SizeUInt;
 begin
-  // 优化环增：容量为2的幂时用位与；否则用边界分支避免取模
+  // All current callers advance by at most one logical wrap, so we can keep
+  // the non-pow2 path branch-based and reserve modulo for no caller.
   if FIsPow2Capacity then
   begin
-    Result := (aIndex + 1) and (FCapacity - 1);
-  end
-  else
-  begin
-    LNext := aIndex + 1;
-    if LNext >= FCapacity then
-      Result := 0
-    else
-      Result := LNext;
+    Result := (AIndex + ADelta) and (FCapacity - 1);
+    Exit;
   end;
+
+  if ADelta = 0 then
+  begin
+    Result := AIndex;
+    Exit;
+  end;
+
+  if ADelta >= (FCapacity - AIndex) then
+    Result := ADelta - (FCapacity - AIndex)
+  else
+    Result := AIndex + ADelta;
+end;
+
+function TRingBuffer.GetNextIndex(aIndex: SizeUInt): SizeUInt;
+begin
+  Result := AdvanceIndex(aIndex, 1);
 end;
 
 function TRingBuffer.Push(aData: Pointer): Boolean;
@@ -371,7 +380,7 @@ begin
   if LSecond > 0 then
     nextpas.core.mem.utils.CopyNonOverlap(Pointer(PtrUInt(aData) + (LFirst * FElementSize)), FBuffer, LSecond * FElementSize);
 
-  FTail := (FTail + LToWrite) mod FCapacity;
+  FTail := AdvanceIndex(FTail, LToWrite);
   Inc(FCount, LToWrite);
 
   aPushed := LToWrite;
@@ -426,7 +435,7 @@ begin
   if LSecond > 0 then
     nextpas.core.mem.utils.CopyNonOverlap(FBuffer, Pointer(PtrUInt(aData) + (LFirst * FElementSize)), LSecond * FElementSize);
 
-  FHead := (FHead + LToRead) mod FCapacity;
+  FHead := AdvanceIndex(FHead, LToRead);
   Dec(FCount, LToRead);
 
   aPopped := LToRead;
@@ -441,7 +450,7 @@ begin
   if aData = nil then Exit;
   if aOffset >= FCount then Exit;
 
-  LIndex := (FHead + aOffset) mod FCapacity;
+  LIndex := AdvanceIndex(FHead, aOffset);
   nextpas.core.mem.utils.Copy(GetElementPtr(LIndex), aData, FElementSize);
 
   Result := True;
@@ -526,7 +535,7 @@ begin
   FIsPow2Capacity := nextpas.core.mem.utils.IsPowerOfTwo(FCapacity);
   FHead := 0;
   if FCapacity > 0 then
-    FTail := FCount mod FCapacity
+    FTail := AdvanceIndex(0, FCount)
   else
     FTail := 0;
 
@@ -601,7 +610,7 @@ begin
 
   for i := 0 to FCount - 1 do
   begin
-    LIndex := (FHead + i) mod FCapacity;
+    LIndex := AdvanceIndex(FHead, i);
     LElementPtr := GetElementPtr(LIndex);
 
     if Assigned(aCompareFunc) then
@@ -643,7 +652,7 @@ begin
   if aData = nil then Exit;
   if aIndex >= FCount then Exit;
 
-  LIndex := (FHead + aIndex) mod FCapacity;
+  LIndex := AdvanceIndex(FHead, aIndex);
   LElementPtr := GetElementPtr(LIndex);
   nextpas.core.mem.utils.Copy(aData, LElementPtr, FElementSize);
   Result := True;
@@ -661,7 +670,7 @@ begin
   else
     LToDrop := aCount;
 
-  FHead := (FHead + LToDrop) mod FCapacity;
+  FHead := AdvanceIndex(FHead, LToDrop);
   Dec(FCount, LToDrop);
   Result := LToDrop;
 end;
