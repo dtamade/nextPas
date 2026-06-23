@@ -12,7 +12,7 @@
 
 ## 总体策略
 
-**P0 → P1-Math → P2 → P1-SysUtils → P3 → P1-Classes → P1-平台绑定**
+**P0 → P1-Math → P2 → P1-SysUtils → P3 → ~~P1-Classes~~ ✅ → P1-平台绑定**
 
 P2（Sema 能力）排在 P1（FPC RTL 清零）前面，因为 P2 修一个方法解锁多个模块，投入产出比更高。
 
@@ -116,7 +116,7 @@ fixture 即误报 `sema.c6h4-owned-string-return-deferred-consumer`（build 失�
 解析为 String），在 pre-register 阶段类型信息未就绪时注册失败 → 测试空跑、删 handler 不回归。
 必须用顶层赋值（或 `WriteLn(F())` 走 `WriteArgumentOwnsStringReturn`）才能稳定触发注册。
 
-**历史迁移**：见 commits 0bb352198/abd3e6dc6/b70999215/c41ce7c1b/285d34d76（compiler SysUtils/Classes/Process → 框架内替代）。
+**历史迁移**：见 commits 0bb352198/abd3e6dc6/b70999215/c41ce7c1b/285d34d76（compiler SysUtils/Classes/Process → 框架内替代）。P1-Classes 清零：commit `aa8645dea`（http.impl.tls.stream TStream→IStream）。
 剩余的 SysUtils 残留面在 core 框架（见 FOUNDATION P1）与测试/shim 层，不在本 lane。
 
 ---
@@ -175,11 +175,16 @@ fixture 即误报 `sema.c6h4-owned-string-return-deferred-consumer`（build 失�
 
 ## 阶段 3：RTL 清零（4-6 周）
 
-### P1-Classes: TStream → IStream 迁移（2 周）
+### P1-Classes: core/src 清零 — ✅ 已完成（2026-06-23）
 
-- `TStream` → `nextpas.core.io.intf.IStream`
-- TLS 模块（18+ 文件）大量用 `TStream`，需逐个迁移
-- 建议先做 TLS 之外的模块（crypto.hash, http.impl, io.stream_adapter）
+**状态**：编译器生产代码 0 引用 Classes（从未有过）。core/src 中唯一的直接 Classes 引用
+（`nextpas.core.http.impl.tls.stream.pas`）已消除：`TStream`-based `TTcpStreamTransportStream`
+替换为 `IStream`-based `TTlsTransportStream`，移除 `WrapTStream` 中间层（commit `aa8645dea`）。
+
+剩余 Classes 消费者（不在清零范围）：
+- `nextpas.core.system.classes.pas` — 桥接层，设计保留
+- `units/linux-x86_64/Process.pas` — shim，留 Phase 9 前置
+- `rtl/core/` + `core/tests/` — 宿主 FPC 编译，不受影响
 
 ### P1-平台绑定: 通过 platform 抽象层（2 周）
 
