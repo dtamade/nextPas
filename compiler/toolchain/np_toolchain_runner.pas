@@ -12,7 +12,7 @@ uses
   np_toolchain_plan;
 
 type
-  EToolchainRunnerError = class(Exception)
+  EToolchainRunnerError = class(ENextPasError)
   end;
 
   TToolchainExecutedSidecar = record

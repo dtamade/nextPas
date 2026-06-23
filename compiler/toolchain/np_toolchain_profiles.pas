@@ -9,7 +9,7 @@ uses
   nextpas.core.fs, nextpas.core.fs.util, nextpas.core.exception;
 
 type
-  EToolProfileError = class(Exception)
+  EToolProfileError = class(ENextPasError)
   end;
 
   THostCompilerProfile = record

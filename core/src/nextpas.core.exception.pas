@@ -7,15 +7,25 @@ unit nextpas.core.exception;
 
 interface
 
-uses
-  SysUtils;
-
 type
-  { Re-export base Exception from RTL so consumers do not need SysUtils. }
-  Exception = SysUtils.Exception;
-  ExceptClass = SysUtils.ExceptClass;
-  EConvertError = SysUtils.EConvertError;
-  EAssertionFailed = SysUtils.EAssertionFailed;
+  { Base Exception class — owned by nextpas.core, not re-exported from FPC SysUtils.
+    Field layout is FPC-compatible (fmessage/fhelpcontext) for ABI safety. }
+  Exception = class(TObject)
+  private
+    fmessage: string;
+    fhelpcontext: longint;
+  public
+    constructor Create(const msg: string);
+    constructor CreateFmt(const msg: string; const args: array of const);
+    property HelpContext: longint read fhelpcontext write fhelpcontext;
+    property Message: string read fmessage write fmessage;
+  end;
+
+  ExceptClass = class of Exception;
+
+  EConvertError = class(Exception);
+
+  EAssertionFailed = class(Exception);
 
   TErrorCategory = (
     ecNone,
@@ -197,6 +207,104 @@ function ErrorCategoryToString(const ACategory: TErrorCategory): string;
 
 implementation
 
+{ Exception }
+
+{ Internal format helper — self-contained, no SysUtils dependency.
+  Supports %s (string), %d (integer), %% (literal percent). }
+function FormatStr(const AFmt: string; const AArgs: array of const): string;
+var
+  LI, LArgIdx, LPos: Integer;
+  LBuf: array[0..4095] of Char;
+
+  procedure AppendChar(C: Char);
+  begin
+    if LPos < High(LBuf) then
+    begin
+      LBuf[LPos] := C;
+      Inc(LPos);
+    end;
+  end;
+
+  procedure AppendStr(const S: string);
+  var
+    K: Integer;
+  begin
+    for K := 1 to Length(S) do
+      AppendChar(S[K]);
+  end;
+
+  procedure AppendInt(V: Int64);
+  var
+    S: string;
+  begin
+    Str(V, S);
+    AppendStr(S);
+  end;
+
+begin
+  LPos := 0;
+  LArgIdx := 0;
+  LI := 1;
+  while LI <= Length(AFmt) do
+  begin
+    if (AFmt[LI] = '%') and (LI < Length(AFmt)) then
+    begin
+      Inc(LI);
+      case AFmt[LI] of
+        's': begin
+          if LArgIdx <= High(AArgs) then
+          begin
+            case AArgs[LArgIdx].VType of
+              vtAnsiString: AppendStr(string(AArgs[LArgIdx].VAnsiString));
+              vtUnicodeString: AppendStr(string(AArgs[LArgIdx].VUnicodeString));
+              vtString: AppendStr(AArgs[LArgIdx].VString^);
+              vtChar: AppendChar(AArgs[LArgIdx].VChar);
+              vtPChar: AppendStr(string(AArgs[LArgIdx].VPChar));
+              vtWideChar: AppendChar(Char(AArgs[LArgIdx].VWideChar));
+            else
+              AppendStr('???');
+            end;
+            Inc(LArgIdx);
+          end;
+        end;
+        'd': begin
+          if LArgIdx <= High(AArgs) then
+          begin
+            case AArgs[LArgIdx].VType of
+              vtInteger: AppendInt(AArgs[LArgIdx].VInteger);
+              vtInt64: AppendInt(AArgs[LArgIdx].VInt64^);
+              vtBoolean: AppendInt(Ord(AArgs[LArgIdx].VBoolean));
+            else
+              AppendStr('0');
+            end;
+            Inc(LArgIdx);
+          end;
+        end;
+        '%': AppendChar('%');
+      else
+        AppendChar('%');
+        AppendChar(AFmt[LI]);
+      end;
+    end
+    else
+      AppendChar(AFmt[LI]);
+    Inc(LI);
+  end;
+  SetString(Result, LBuf, LPos);
+end;
+
+constructor Exception.Create(const msg: string);
+begin
+  inherited Create;
+  fmessage := msg;
+  fhelpcontext := 0;
+end;
+
+constructor Exception.CreateFmt(const msg: string; const args: array of const);
+begin
+  Create(FormatStr(msg, args));
+end;
+
 function ErrorCategoryToString(const ACategory: TErrorCategory): string;
 begin
   Result := 'internal';
@@ -264,7 +372,7 @@ constructor ENextPasError.CreateFmt(const AMessage: string;
 var
   LMsg: string;
 begin
-  LMsg := Format(AMessage, AArgs);
+  LMsg := FormatStr(AMessage, AArgs);
   Create(LMsg);
 end;
 
@@ -273,7 +381,7 @@ constructor ENextPasError.CreateFmt(const AMessage: string;
 var
   LMsg: string;
 begin
-  LMsg := Format(AMessage, AArgs);
+  LMsg := FormatStr(AMessage, AArgs);
   Create(LMsg, ACategory);
 end;
 
@@ -284,7 +392,7 @@ var
   LMessage: string;
 begin
   try
-    LMessage := Format(AMessage, AArgs);
+    LMessage := FormatStr(AMessage, AArgs);
   except
     if AOwnsInner and (AInner <> nil) then
       AInner.Free;
@@ -456,7 +564,7 @@ constructor EResourceExhaustedError.CreateFmt(const AMessage: string;
 var
   LMsg: string;
 begin
-  LMsg := Format(AMessage, AArgs);
+  LMsg := FormatStr(AMessage, AArgs);
   inherited Create(LMsg);
 end;
 
