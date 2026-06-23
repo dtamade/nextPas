@@ -139,7 +139,7 @@ var
     as safety net for suites that are created but never run.
     R6-08: NOT thread-safe — all access must be from the main thread only. }
   GFixtureRegistry: specialize TArray<TObject>;
-  LStubCleanupI: Integer;
+  GStubCleanupI: Integer;
 
 { ── Command-line helpers ──────────────────────────────────────────────────── }
 
@@ -1117,13 +1117,13 @@ end;
 finalization
   { Safety net: dispose any method stubs and fixture objects that were not
     cleaned up by CleanupTableAllocations (e.g. suites created but never run). }
-  for LStubCleanupI := 0 to High(GStubRegistry) do
+  for GStubCleanupI := 0 to High(GStubRegistry) do
   begin
-    if GStubRegistry[LStubCleanupI] <> nil then
-      FreeMem(GStubRegistry[LStubCleanupI]);
-    if LStubCleanupI <= High(GFixtureRegistry) then
-      if GFixtureRegistry[LStubCleanupI] <> nil then
-        GFixtureRegistry[LStubCleanupI].Free;
+    if GStubRegistry[GStubCleanupI] <> nil then
+      FreeMem(GStubRegistry[GStubCleanupI]);
+    if GStubCleanupI <= High(GFixtureRegistry) then
+      if GFixtureRegistry[GStubCleanupI] <> nil then
+        GFixtureRegistry[GStubCleanupI].Free;
   end;
   GStubRegistry := nil;
   GFixtureRegistry := nil;
