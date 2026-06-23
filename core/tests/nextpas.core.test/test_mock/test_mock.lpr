@@ -529,6 +529,50 @@ begin
   end;
 end;
 
+procedure TestTypedAndLegacyStringReturnCoexist;
+var
+  LM: TMock;
+  LValue: TMockValue;
+begin
+  LM := TMock.Create;
+  try
+    LM.State.SetReturn('LegacyInt', '42');
+    LM.State.SetReturn('LegacyFlag', 'true');
+
+    LValue := LM.State.GetReturnTyped('LegacyInt', [MockStr('legacy')]);
+    CheckTrue(LValue.Kind = mvString, 'legacy int typed kind');
+    CheckEqual('42', LValue.StrVal);
+    CheckEqual('42', LM.GetReturn('LegacyInt'));
+    CheckEqual(Int64(42), LM.State.GetReturnInt64('LegacyInt', ['legacy']));
+
+    LValue := LM.State.GetReturnTyped('LegacyFlag', [MockStr('legacy')]);
+    CheckTrue(LValue.Kind = mvString, 'legacy bool typed kind');
+    CheckEqual('true', LValue.StrVal);
+    CheckTrue(LM.State.GetReturnBool('LegacyFlag', ['legacy']),
+      'legacy bool fallback');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestUnsetTypedReturnDefaults;
+var
+  LM: TMock;
+  LValue: TMockValue;
+begin
+  LM := TMock.Create;
+  try
+    LValue := LM.State.GetReturnTyped('Missing', []);
+    CheckTrue(LValue.Kind = mvUnset, 'unset typed kind');
+    CheckEqual('', LM.GetReturn('Missing'));
+    CheckEqual(Int64(0), LM.State.GetReturnInt64('Missing', []));
+    CheckFalse(LM.State.GetReturnBool('Missing', []),
+      'unset bool should be false');
+  finally
+    LM.Free;
+  end;
+end;
+
 { R6-46: Verify expects 1 but called 2 times → should fail }
 
 procedure TestVerifyCalledExactlyOverCall;
@@ -630,6 +674,10 @@ begin
     @TestStateGetReturnInt64FromTypedSetup);
   Suite.Test('TestStateGetReturnBoolFromTypedSetup',
     @TestStateGetReturnBoolFromTypedSetup);
+  Suite.Test('TestTypedAndLegacyStringReturnCoexist',
+    @TestTypedAndLegacyStringReturnCoexist);
+  Suite.Test('TestUnsetTypedReturnDefaults',
+    @TestUnsetTypedReturnDefaults);
   Suite.Test('TestGetReturnIntNonNumeric', @TestGetReturnIntNonNumeric);
 
   { R6-46: Verify over-call }
