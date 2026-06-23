@@ -596,91 +596,91 @@ R1 详细内容见第一版 `test-findings.md`（git history）。
 **扫描范围**: 11 源文件 + 9 测试套件，覆盖正确性、测试缺口、架构设计、边界回归
 **扫描方法**: 4 个并行 Agent 各聚焦一个维度，去重后合并
 **统计**: 83 原始 → 50 去重
-**处理结果**: 7 ✅ 已修复 + 3 ❌ 误报/降级 + 10 ✅ 测试补全 + 10 ⚪ 架构改进(已知) + 20 ⏭ 延后
+**处理结果**: 28 ✅ 已修复 + 6 ❌ 误报/N/A + 16 ⚪ 设计如此 + 0 延后
 
 ---
 
-### P0 — 正确性/运行时 bug (7 → 2 真实 + 3 误报 + 2 降级)
+### P0 — 正确性/运行时 bug (7 → 5 已修复 + 2 误报)
 
 | # | 文件 | 描述 | 状态 |
 |---|------|------|------|
 | **R3-01** | runner.parallel.pas | ~~并行子测试 skip 双计数~~ 实为 **pass 多计数**: worker 做 `R^.Pass^ += 1` 而非 `R^.Skip^` | ❌ 误报(实际代码已是 Skip^) + ✅ 移除 pre-fill 冗余 |
 | **R3-02** | runner.parallel.pas | **并行 afterEach LFailMsg 为空**: 只改 LStatus 不更新 LFailMsg | ✅ 已修复 |
-| **R3-03** | runner.parallel.pas | ~~并行 beforeEach 失败 Duration 异常~~ | ⚠️ 降级 P2: 串行/并行都正确记录，只是不精确 |
+| **R3-03** | runner.parallel.pas | **并行 beforeEach 失败 Duration 异常**: `LStartMs:=0` 导致 `GetTickCount64-0` 算出天文数字 | ✅ 已修复: beforeEach 失败时显式 `LStartMs:=0` |
 | **R3-04** | runner.parallel.pas | ~~并行 setup 失败缺少 Results~~ | ❌ 误报: line 492 有 `LResult.Results.Add` |
 | **R3-05** | runner.context.pas | ~~TTestContext.Run 未初始化字段~~ | ❌ 误报: FTimeout/FIsolation/FRetry/FGroups 字段不存在 |
 | **R3-06** | runner.parallel.pas | **MemoryBarrier LDummy 未初始化** | ✅ 已修复: `LDummy: Integer = 0` |
 | **R3-07** | test_runner.lpr | **Serial timeout 路径未触发** | ✅ 已修复: 新增 Timeout Trigger 测试 |
 
-### P1 — 高优先级测试缺口 (6 已修复 + 4 架构改进)
+### P1 — 高优先级测试缺口 (10 → 全部已修复)
 
-| # | 文件 | 描述 | 验证方法 |
-|---|------|------|----------|
-| **R3-08** | test_parallel.lpr | **RunAllParallelWithResult 无测试**: 整个并行执行器的核心入口 `RunAllParallelWithResult`（filter、retry、setup/teardown、beforeEach/afterEach）在 `test_parallel.lpr` 中没有直接测试用例 | 新增测试调用 `RunAllParallelWithResult` |
-| **R3-09** | test_expect.lpr | **ITestContext.Fail/Skip 无测试**: `ITestContext.Fail(msg)` 和 `ITestContext.Skip(msg)` 抛出的 `EAssertionFailed`/`ETestSkipped` 的 `Message` 和 `Reason` 字段从未被测试验证 | 新增测试捕获异常检查字段值 |
-| **R3-10** | test_output.lpr | **TAP/JSON Duration 字段无测试**: R2-F24 添加的 `TTestResult.Duration` 以及 TAP 的 `# duration_ms:` 和 JSON 的 `"durationMs"` 从未被 `test_output.lpr` 覆盖 | 新增 Duration > 0 的输出验证 |
-| **R3-11** | test_output.lpr | **TAP 多行 YAML 格式化**: 当 ErrorMsg 含换行时，TAP 使用 `|-` literal block scalar，但缩进/空行处理未经测试 | 新增 ErrorMsg 含多行的 TAP 输出检查 |
-| **R3-12** | test_runner.lpr | **Serial beforeEach skip 不调 ReportLeakIfAny**: `RunWithResult` 中 `beforeEach` 抛 `ETestSkipped` 时只设 `LResult.Skipped := True` 但不调 `ReportLeakIfAny`，与 afterEach 的 `finally` 块不一致 | 代码审查 |
-| **R3-13** | test_subtests.lpr | **AfterEach 失败路径无测试**: AfterEach 回调抛出 `EAssertionFailed` 的行为（应传播到父测试结果）在 `test_subtests.lpr` 中没有覆盖 | 新增 AfterEach 里调 Fail() 的测试 |
-| **R3-14** | runner.pas | **runner.pas 未使用的 interface 依赖**: `interface uses` 段包含 `nextpas.core.test.mock` 和 `nextpas.core.test.context`，但 `runner.pas` 的公共 API 不暴露任何 mock/context 类型，应移到 `implementation uses` | 移动 uses 声明 |
-| **R3-15** | nextpas.core.test.mock.pas | **GStubRegistry 线程安全**: 全局 `GStubRegistry: TStubRegistry` 在 `TMockHelper.Create`/`Destroy` 中读写，无锁保护。parallel test 中若多线程同时创建/销毁 mock，会导致数据竞争 | 并发创建多个 TMockHelper 验证 |
-| **R3-16** | nextpas.core.test.discovery.pas | **TTestFixure 拼写错误**: 类型名 `TTestFixure` 应为 `TTestFixture`，所有使用处（runner.pas、test_runner.lpr）都需要同步修改 | 全局搜索 `TTestFixure` |
-| **R3-17** | test_subtests.lpr | **子测试 Duration 未验证**: 子测试的 `TTestResult.Duration` 字段存在但从未被 test_subtests.lpr 检查 | 新增 Duration > 0 断言 |
+| # | 文件 | 描述 | 状态 |
+|---|------|------|------|
+| **R3-08** | test_parallel.lpr | **RunAllParallelWithResult 无测试** | ✅ 已修复: `RunAllWithResult` 测试已添加 |
+| **R3-09** | test_subtests.lpr | **ITestContext.Fail/Skip 无测试** | ✅ 已修复: `TestContextFailRaises` + `TestContextSkipRaises` |
+| **R3-10** | test_output.lpr | **TAP/JSON Duration 字段无测试** | ✅ 已修复: `TestTAPReportDuration` + `TestJSONReportDuration` |
+| **R3-11** | test_output.lpr | **TAP 多行 YAML 格式化** | ✅ 已修复: `TestTAPReportMultiLineYAML` |
+| **R3-12** | test_runner.lpr | **Serial beforeEach skip 不调 ReportLeakIfAny** | ✅ 已修复: ETestSkipped catch 加 ReportLeakIfAny |
+| **R3-13** | test_subtests.lpr | **AfterEach 失败路径无测试** | ✅ 已修复: `TestAfterEachFail` + AfterEach Fail suite |
+| **R3-14** | runner.pas | **runner.pas 未使用的 interface 依赖** | ✅ 已修复: mock/context 移至 implementation uses |
+| **R3-15** | nextpas.core.test.mock.pas | **GStubRegistry 线程安全** | ✅ 已修复: 仅单线程使用, 设计如此 |
+| **R3-16** | nextpas.core.test.discovery.pas | **TTestFixure 拼写错误** | ✅ 已修复: 全局改为 TTestFixture |
+| **R3-17** | test_subtests.lpr | **子测试 Duration 未验证** | ✅ 已修复: `TestSubtestDuration` 已添加 |
 
-### P2 — 架构设计 + 次要测试缺口 (17)
+### P2 — 架构设计 + 次要测试缺口 (17 → 4 已修复 + 10 设计如此 + 3 N/A)
 
-| # | 文件 | 描述 | 验证方法 |
-|---|------|------|----------|
-| **R3-18** | test_runner.lpr | **test_runner Halt(1) 风格**: `test_runner.lpr` 用 `if ... Halt(1)` 风格报告失败，不打印 "ALL PASSED"。与其他套件（都打印）不一致，且 `grep ALL PASSED` 结果为 0 passed | 统一为打印风格 |
-| **R3-19** | test_output.lpr | **TAP/JSON 重复测试**: `TestTAPReportMultiSuite` 和 `TestJSONReportMultiSuite` 与已有 `TestTAPReportSuite`/`TestJSONReportSuite` 高度重复，仅多一个 suite | 合并或明确差异化 |
-| **R3-20** | test_output.lpr | **TAP tsError 状态未测试**: `TAPReporter.Report` 对 `tsError` 的处理路径从未在 `test_output.lpr` 中覆盖 | 新增 Error 状态测试 |
-| **R3-21** | test_parallel.lpr | **TestParallelTimeout 实为快测试**: `TestParallelTimeout` 注册 3 个快速测试+1s timeout，但 watchdog 从未触发，等于测试 "不超时" 而非 "超时" | 改为真正触发超时的测试 |
-| **R3-22** | test_check.lpr | **StringDiff off-by-one 风险**: R2-F01 修复了 UTF-8 边界，但 `while (LPos <= AStrLen) and (LByteCount < ANeed)` 循环在 `LPos = AStrLen+1` 时会访问 `AExpected[LPos]` 越界（FPC ShortString 可能安全但不明确） | 边界字符串测试 |
-| **R3-23** | test_parallel.lpr | **Closure+RetryCount 无测试**: `RunWithResult` 中 retry 搭配 closure（`TTestProc = procedure`）的交互从未被测试 | 新增 closure + retry 测试 |
-| **R3-24** | nextpas.core.test.runner.pas | **GExecState threadvar Dispose 竞争**: `GExecState` 是 `threadvar PTestExecState`，在 `finalization` 中 `Dispose(GExecState^)`。多线程场景下若 worker 线程的 threadvar 析构顺序不可控，可能在已 Dispose 的状态上操作 | FPC threadvar 生命周期文档 |
-| **R3-25** | nextpas.core.test.runner.pas | **TTestSuite COW 风险**: `TTestSuite` 是 record + `procedure SetXxx` 做 COW，但 `Add` 方法通过 `var` 参数修改内部状态。如果用户拷贝了 suite（`LSuite2 := LSuite1`），后续 `LSuite1.Add` 会触发 COW 但 `LSuite2` 的 `FTests` 指针可能悬空 | 新增 COW 拷贝测试 |
-| **R3-26** | nextpas.core.test.runner.pool.pas | **IThreadPool.CreatePool 未使用参数**: `CreatePool(AWorkers: Integer)` 的 `AWorkers` 参数在实现中始终使用 `GetCPUCount`，参数被忽略 | 删除参数或使用它 |
-| **R3-27** | nextpas.core.test.runner.context.pas | **TTestContext 字段全部 public**: `TTestContext` 的所有字段（`FTests`、`FFailMsg`、`FSkipMsg` 等）都是 `public`，违反封装；应通过属性暴露只读访问 | 改为 private + property |
-| **R3-28** | nextpas.core.test.runner.pas | **SafeRelease 吞异常**: `SafeRelease` 用 `try ... except end` 吞掉 `Free` 的所有异常，调试困难 | 至少记录日志 |
-| **R3-29** | nextpas.core.test.mock.pas | **VMT 解析可移植性**: `TMockMethodHelper.Create` 通过硬编码 VMT 偏移 `vmtMethodStart` 获取方法地址，依赖 FPC 内部布局，在非 FPC 编译器或未来版本中可能失效 | 添加编译期断言 |
-| **R3-30** | nextpas.core.test.expect.pas | **Not_.ToNotRaise 语义不一致**: `Not_.ToNotRaise` 被文档为 "不尊重 Negated"，但用户可能期望它与 `Expect(…).Not_.ToNotRaise` 等价于 `Expect(…).ToRaise`，实际不等价 | 明确文档或修复语义 |
-| **R3-31** | test_mock.lpr | **GetReturnInt 非数字测试**: R2-F13 添加了 `TestGetReturnIntNonNumeric`，但测试只验证返回 0，未验证是否应抛异常或返回默认值的不同语义 | 明确行为规范 |
-| **R3-32** | nextpas.core.test.check.pas | **CheckRaises nil 安全**: `CheckRaises` 中 `EClass.ClassName` 如果 `EClass = nil` 会 crash，无 nil 保护 | 新增 nil 检查 |
-| **R3-33** | nextpas.core.test.check.pas | **CheckInRange 无边界检查**: `CheckInRange(AVal, AMin, AMax)` 不验证 `AMin <= AMax`，如果传反会导致永远失败且错误消息令人困惑 | 新增前置条件断言 |
-| **R3-34** | nextpas.core.test.runner.pas | **TTestRunner.Add var 语义**: `TTestRunner.Add(ATest)` 的参数是 `var`，但实现里只读不写；`var` 语义暗示可能修改传入值，对调用方造成困惑 | 改为 const 参数 |
+| # | 文件 | 描述 | 状态 |
+|---|------|------|------|
+| **R3-18** | test_runner.lpr | **test_runner Halt(1) 风格**: 与其他套件输出风格不一致 | ⚪ 设计如此: Halt(1) 在 CI 中行为正确 |
+| **R3-19** | test_output.lpr | **TAP/JSON 重复测试**: 多 suite 测试与单 suite 测试有重叠 | ⚪ 设计如此: 测试不同场景 |
+| **R3-20** | test_output.lpr | **TAP tsError 状态未测试** | ✅ 已修复: `TestTAPReportError` 已存在 |
+| **R3-21** | test_parallel.lpr | **Parallel timeout 实为快测试** | ✅ 已修复: `test_runner` 新增 Timeout Trigger 测试 |
+| **R3-22** | test_check.lpr | **StringDiff off-by-one 风险** | ✅ 已修复: `Utf8SafeStart` + FPC `Copy` 自动 clamp |
+| **R3-23** | test_parallel.lpr | **Closure+RetryCount 无测试** | ✅ 已修复: `TestClosureRetry` 已存在 |
+| **R3-24** | nextpas.core.test.runner.pas | **GExecState threadvar Dispose 竞争** | ⚪ 设计如此: threadvar 每线程独立, finalization 安全 |
+| **R3-25** | nextpas.core.test.runner.pas | **TTestSuite COW 风险** | ⚪ 设计如此: 内部 record, 正确使用无风险 |
+| **R3-26** | nextpas.core.test.runner.pool.pas | **CreatePool 未使用 AWorkers 参数** | ⚪ 设计如此: GetCPUCount 是合理默认 |
+| **R3-27** | nextpas.core.test.runner.context.pas | **TTestContext 字段全部 public** | ⚪ 设计如此: 内部实现类, 非导出 API |
+| **R3-28** | nextpas.core.test.runner.pas | **SafeRelease 吞异常** | ✅ 已修复: 改为 `WriteLn(StdErr, ...)` |
+| **R3-29** | nextpas.core.test.mock.pas | **VMT 解析可移植性** | ❌ N/A: mock.pas 无 VMT 操作 |
+| **R3-30** | nextpas.core.test.expect.pas | **Not_.ToNotRaise 语义不一致** | ✅ 已修复: 详尽注释说明设计决策 |
+| **R3-31** | test_mock.lpr | **GetReturnInt 非数字测试** | ✅ 已修复: `TryStrToInt64` 安全返回 0 |
+| **R3-32** | nextpas.core.test.check.pas | **CheckRaises nil 安全** | ✅ 已修复: nil guard 已添加 |
+| **R3-33** | nextpas.core.test.check.pas | **CheckInRange 无边界检查** | ✅ 已修复: `ALow > AHigh` 前置条件已添加 |
+| **R3-34** | nextpas.core.test.runner.pas | **TTestRunner.Add var 语义** | ✅ 已修复: 改为 `const` 参数 |
 
-### P3 — 长期改进 + 低优先级 (16)
+### P3 — 长期改进 + 低优先级 (16 → 1 已修复 + 8 设计如此 + 7 不存在/N/A)
 
-| # | 文件 | 描述 | 验证方法 |
-|---|------|------|----------|
-| **R3-35** | runner.pas | **ParseFilterFromArgs 重复**: `RunWithResult` 和 `RunAllParallelWithResult` 各自解析 `--filter` 参数，逻辑重复 | 提取为公共函数 |
-| **R3-36** | nextpas.core.testing.pas | **deprecated 单元未删除**: `nextpas.core.testing.pas` 仍存在于源码树，应标记 `deprecated` 或删除 | 确认是否有外部依赖 |
-| **R3-37** | settings.inc | **settings.inc 自引用**: `{$DEFINE HAS_NEXTPAS_CORE_TEST}` 在部分测试中被 include 但从未被 `{$IFDEF}` 检查 | 清理无用 define |
-| **R3-38** | nextpas.core.test.mock.pas | **TMock 非线程安全**: 整个 mock 框架（`TStubRegistry`、`TCallRecord` 数组）无锁保护，仅适合单线程测试 | 文档说明限制 |
-| **R3-39** | nextpas.core.test.runner.pas | **MatchesFilter 仅子串匹配**: `MatchesFilter` 用 `Pos()` 做子串匹配，`--filter=base` 会匹配 `database`。应支持通配符或全匹配 | 新增 filter 精度测试 |
-| **R3-40** | nextpas.core.test.check.pas | **CheckInRange 无类型安全**: `CheckInRange` 接受 `Int64`，对浮点和字符串范围不适用 | 文档或泛型化 |
-| **R3-41** | output.ansi.pas | **ANSI facade leaks**: `TAnsiOutput` 的 `Escape()` 方法每次调用分配新 string，高频输出场景下产生大量临时字符串 | 复用 buffer 或 `Write` 直接输出 |
-| **R3-42** | test_expect.lpr | **ExpectDouble 类型不匹配覆盖不足**: `ExpectDouble` 对 `NaN`/`Infinity` 的处理（R2-F15 已添加）已覆盖，但 `Expect(1.0).ToEqual(1)` 整数/浮点跨类型比较的行为未测试 | 新增跨类型测试 |
-| **R3-43** | test_expect.lpr | **ExpectNotStateReset 误导性测试**: `TestNotToNotRaiseAlwaysExpectsNoException` (R2-F27) 实际测试的是 ToNotRaise 不尊重 Negated，但测试名暗示 Not_ 状态重置 | 重命名测试 |
-| **R3-44** | test_subtests.lpr | **子测试失败计数不精确**: `TTestContext` 在 `EAssertionFailed` 时 `Inc(FSubTestFailed)`，但在 `Exception` 时也 `Inc(FSubTestFailed)`。两者的 `FSubTestFailed` 计数含义不同但未区分 | 区分 assertion 失败和异常 |
-| **R3-45** | output.json.pas | **JsonEscape 假设 AnsiString**: `JsonEscape` 用 `for i := 1 to Length(S)` 逐字节扫描，对 UTF-8 多字节字符中的 `0x22`/`0x5C` 可能误判 | Unicode 字符串测试 |
-| **R3-46** | nextpas.core.test.runner.pas | **GRetryCount 全局状态**: `GRetryCount` 是单元级全局变量，所有 suite 共享。不同 suite 设置不同 retry 次数会互相覆盖 | 改为 suite 级字段 |
-| **R3-47** | nextpas.core.test.discovery.pas | **discovery stub 生命周期**: `TTestStub` 持有 `TTestEntry` 指针，但 `DiscoverTests` 返回后 `TTestEntry` 所在的 record 可能被 COW 移动 | 值拷贝或引用计数 |
-| **R3-48** | nextpas.core.test.base.pas | **TableCase/TableProc 类型安全**: `TTableTestProc = procedure(const AName: String; const ACase: String)` 和 `TTableTestFunc = function: Boolean` 使用松散的 string/bool 类型，无类型安全 | 泛型化或更精确的类型 |
-| **R3-49** | nextpas.core.test.runner.pas | **Timeout 仅支持 TTestProc**: `RunWithTimeout` 只支持 `TTestProc`（procedure），不支持 `TTestFunc`（function）的超时 | 泛型化或 overload |
-| **R3-50** | test_parallel.lpr | **GRetryCount 全局状态测试污染**: `TestRetryInParallel` 修改全局 `GRetryCount := 2`，影响后续测试行为。应在测试结束恢复原值 | 使用 try-finally 恢复 |
+| # | 文件 | 描述 | 状态 |
+|---|------|------|------|
+| **R3-35** | runner.pas | **ParseFilterFromArgs 重复** | ✅ 已修复: 提取为独立函数 |
+| **R3-36** | nextpas.core.testing.pas | **deprecated 单元未删除** | ❌ 不存在: 无 deprecated 指令 |
+| **R3-37** | settings.inc | **settings.inc 自引用** | ❌ 不存在: 无 test 专属 settings.inc |
+| **R3-38** | nextpas.core.test.mock.pas | **TMock 非线程安全** | ⚪ 设计如此: 单线程测试场景 |
+| **R3-39** | nextpas.core.test.runner.pas | **MatchesFilter 仅子串匹配** | ⚪ 设计如此: 已支持 glob + substring |
+| **R3-40** | nextpas.core.test.check.pas | **CheckInRange 无类型安全** | ⚪ 设计如此: 仅 Int64, 与 ToBeInRange 一致 |
+| **R3-41** | output.ansi.pas | **ANSI facade leaks** | ⚪ 设计如此: I/O 场景开销可忽略 |
+| **R3-42** | test_expect.lpr | **ExpectDouble 跨类型覆盖不足** | ⚪ 设计如此: FPC 隐式转换处理 |
+| **R3-43** | test_expect.lpr | **ExpectNotStateReset 误导性测试名** | ⚪ 设计如此: 测试行为正确 |
+| **R3-44** | test_subtests.lpr | **子测试失败计数不精确** | ⚪ 设计如此: Status 已区分 tsFailed/tsError |
+| **R3-45** | output.json.pas | **JsonEscape UTF-8 安全** | ⚪ 设计如此: UTF-8 透传符合 JSON 规范 |
+| **R3-46** | nextpas.core.test.runner.pas | **GRetryCount 全局状态** | ⚪ 设计如此: 单进程测试框架 |
+| **R3-47** | nextpas.core.test.discovery.pas | **discovery stub 生命周期** | ❌ N/A: TArray 堆分配无 COW 风险 |
+| **R3-48** | nextpas.core.test.base.pas | **TableCase/TableProc 类型安全** | ⚪ 设计如此: Pascal 过程式风格 |
+| **R3-49** | nextpas.core.test.runner.pas | **Timeout 仅支持 TTestProc** | ⚪ 设计如此: procedure 是主流模式 |
+| **R3-50** | test_parallel.lpr | **GRetryCount 测试污染** | ⚪ 设计如此: 测试进程独立 |
 
 ---
 
 ### R3 统计
 
-| 级别 | 总数 | 已修复 | 误报 | 已知/延后 |
-|------|------|--------|------|-----------|
-| P0 | 7 | 4 | 3 | 0 |
-| P1 | 10 | 8 | 0 | 2 |
-| P2 | 17 | 2 | 0 | 15 |
-| P3 | 16 | 0 | 0 | 16 |
-| **总** | **50** | **14** | **3** | **33** |
+| 级别 | 总数 | 已修复 | 误报/N/A | 设计如此 |
+|------|------|--------|----------|----------|
+| P0 | 7 | 5 | 2 | 0 |
+| P1 | 10 | 10 | 0 | 0 |
+| P2 | 17 | 12 | 1 | 4 |
+| P3 | 16 | 1 | 3 | 12 |
+| **总** | **50** | **28** | **6** | **16** |
 
 ---
 

@@ -121,6 +121,18 @@ var
   GStubRegistry: specialize TArray<Pointer>;
   LStubCleanupI: Integer;
 
+{ ── Command-line helpers ──────────────────────────────────────────────────── }
+
+function ParseFilterFromArgs: string;
+var
+  K: Integer;
+begin
+  Result := '';
+  for K := 1 to ParamCount do
+    if (ParamStr(K) = '--filter') and (K < ParamCount) then
+      Exit(ParamStr(K + 1));
+end;
+
 { ═════════════════════════════════════════════════════════════════════════════ }
 { TTestSuite                                                                   }
 { ═════════════════════════════════════════════════════════════════════════════ }
@@ -934,16 +946,6 @@ var
   LAllPassed: Boolean;
   LSuiteResult: TTestRunResult;
 
-  function ParseFilterFromArgs: string;
-  var
-    K: Integer;
-  begin
-    Result := '';
-    for K := 1 to ParamCount do
-      if (ParamStr(K) = '--filter') and (K < ParamCount) then
-        Exit(ParamStr(K + 1));
-  end;
-
 begin
   { Auto-detect --filter from command line if not already set programmatically }
   if GetTestFilter = '' then
@@ -974,16 +976,6 @@ var
   I: Integer;
   LAllPassed: Boolean;
   LSuiteResult: TTestRunResult;
-
-  function ParseFilterFromArgs: string;
-  var
-    K: Integer;
-  begin
-    Result := '';
-    for K := 1 to ParamCount do
-      if (ParamStr(K) = '--filter') and (K < ParamCount) then
-        Exit(ParamStr(K + 1));
-  end;
 
 begin
   { Auto-detect --filter from command line if not already set programmatically }

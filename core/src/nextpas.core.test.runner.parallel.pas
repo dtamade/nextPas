@@ -262,6 +262,7 @@ begin
       begin
         LStatus := tsError;
         LFailMsg := E.Message;
+        LStartMs := 0; { beforeEach failed — no test ran, Duration stays 0 }
         R^.Mtx.Acquire;
         try
           WriteLn('  ', StatusDot(tsError), ' ', R^.Entry.Name,
