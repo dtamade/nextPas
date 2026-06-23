@@ -42,6 +42,10 @@ const
   MEM_MANAGER_MIMALLOC_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.manager.mimalloc.pas';
   MEM_MIMALLOC_BINDING_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.mimalloc.binding.pas';
   MEM_MIMALLOC_BINDING_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.mimalloc.binding.pas';
+  MEM_MUTEX_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.mutex.pas';
+  MEM_MUTEX_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.mutex.pas';
+  MEM_RWLOCK_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.rwlock.pas';
+  MEM_RWLOCK_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.rwlock.pas';
 
 type
   TByteArray = array[0..5] of Byte;
@@ -112,6 +116,13 @@ end;
 procedure CheckNotContains(const ASource, AToken, AMessage: string);
 begin
   Check(Pos(LowerCase(AToken), ASource) = 0, AMessage + ': ' + AToken);
+end;
+
+procedure CheckContainsAtomicCAS(const ASource: string; const AMessage: string);
+begin
+  Check((Pos('interlockedcompareexchange', ASource) > 0) or
+    (Pos('atomic_compare_exchange', ASource) > 0),
+    AMessage);
 end;
 
 procedure ResetAllocatorCounters;
@@ -482,6 +493,52 @@ begin
     'mem.error should drop TAllocResult.ExpectPtr');
 end;
 
+procedure TestMemLockWrappersUseAtomicInitState;
+var
+  LMutexSource: string;
+  LMutexInitSection: string;
+  LMutexDoneSection: string;
+  LRwLockSource: string;
+  LRwLockInitSection: string;
+  LRwLockDoneSection: string;
+begin
+  LMutexSource := ReadSourceText(ResolveSourcePath(
+    MEM_MUTEX_SOURCE_PATH_FROM_TEST,
+    MEM_MUTEX_SOURCE_PATH_FROM_ROOT));
+  CheckNotContains(LMutexSource, 'finitialized: boolean;',
+    'mem.mutex should not use a Boolean initialization flag');
+  LMutexInitSection := ExtractSourceSection(LMutexSource,
+    'procedure tmemmutex.init;',
+    'procedure tmemmutex.done;');
+  Check(LMutexInitSection <> '', 'mem.mutex init section should be readable');
+  CheckContainsAtomicCAS(LMutexInitSection,
+    'mem.mutex Init should use an atomic once-only state transition');
+  LMutexDoneSection := ExtractSourceSection(LMutexSource,
+    'procedure tmemmutex.done;',
+    'procedure tmemmutex.acquire;');
+  Check(LMutexDoneSection <> '', 'mem.mutex done section should be readable');
+  CheckContainsAtomicCAS(LMutexDoneSection,
+    'mem.mutex Done should use an atomic state transition');
+
+  LRwLockSource := ReadSourceText(ResolveSourcePath(
+    MEM_RWLOCK_SOURCE_PATH_FROM_TEST,
+    MEM_RWLOCK_SOURCE_PATH_FROM_ROOT));
+  CheckNotContains(LRwLockSource, 'finitialized: boolean;',
+    'mem.rwlock should not use a Boolean initialization flag');
+  LRwLockInitSection := ExtractSourceSection(LRwLockSource,
+    'procedure tmemrwlock.init;',
+    'procedure tmemrwlock.done;');
+  Check(LRwLockInitSection <> '', 'mem.rwlock init section should be readable');
+  CheckContainsAtomicCAS(LRwLockInitSection,
+    'mem.rwlock Init should use an atomic once-only state transition');
+  LRwLockDoneSection := ExtractSourceSection(LRwLockSource,
+    'procedure tmemrwlock.done;',
+    'procedure tmemrwlock.acquireread;');
+  Check(LRwLockDoneSection <> '', 'mem.rwlock done section should be readable');
+  CheckContainsAtomicCAS(LRwLockDoneSection,
+    'mem.rwlock Done should use an atomic state transition');
+end;
+
 procedure TestCanonicalAllocatorSurface;
 var
   LAllocator: nextpas.core.mem.intf.IAllocator;
@@ -636,6 +693,8 @@ begin
   T.Run('legacy allocator files removed', @TestLegacyAllocatorFilesRemoved);
   T.Run('mem.base owns constants and mem.error drops alloc result',
     @TestBaseOwnsMemConstantsAndErrorDropsAllocResult);
+  T.Run('mem lock wrappers use atomic init state',
+    @TestMemLockWrappersUseAtomicInitState);
   T.Run('canonical allocator surface', @TestCanonicalAllocatorSurface);
   T.Run('allocator aliases are canonical', @TestAllocatorAliasesAreCanonical);
   T.Run('mimalloc usable-size capability fallback', @TestMimallocUsableSizeCapabilityFallback);

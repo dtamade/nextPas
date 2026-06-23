@@ -14,6 +14,7 @@ uses
   nextpas.core.mem.blockpool.concurrent,
   nextpas.core.mem.arena.concurrent,
   nextpas.core.mem.mutex,
+  nextpas.core.mem.rwlock,
   nextpas.core.mem.pool.fixed,
   nextpas.core.mem.pool.slab.concurrent,
   nextpas.core.platform.thread;
@@ -526,6 +527,13 @@ begin
   LMutex.Acquire;
   LMutex.Release;
   LMutex.Done;
+  LMutex.Done;
+
+  { Re-init after Done should still work }
+  LMutex.Init;
+  LMutex.Acquire;
+  LMutex.Release;
+  LMutex.Done;
 
   { Acquire on uninitialized mutex should raise }
   FillChar(LMutex, SizeOf(LMutex), 0);
@@ -550,6 +558,80 @@ begin
 
   { Done on uninitialized mutex is a no-op }
   LMutex.Done;
+end;
+
+procedure TestMemRwLockDirect;
+var
+  LRwLock: TMemRwLock;
+  LHitError: Boolean;
+begin
+  { Basic init/read/write/release/done cycle }
+  LRwLock.Init;
+  LRwLock.AcquireRead;
+  LRwLock.ReleaseRead;
+  LRwLock.AcquireWrite;
+  LRwLock.ReleaseWrite;
+  LRwLock.Done;
+
+  { Double init is a no-op and double Done stays safe }
+  LRwLock.Init;
+  LRwLock.Init;
+  LRwLock.AcquireRead;
+  LRwLock.ReleaseRead;
+  LRwLock.AcquireWrite;
+  LRwLock.ReleaseWrite;
+  LRwLock.Done;
+  LRwLock.Done;
+
+  { Re-init after Done should still work }
+  LRwLock.Init;
+  LRwLock.AcquireWrite;
+  LRwLock.ReleaseWrite;
+  LRwLock.Done;
+
+  { AcquireRead on uninitialized rwlock should raise }
+  FillChar(LRwLock, SizeOf(LRwLock), 0);
+  LHitError := False;
+  try
+    LRwLock.AcquireRead;
+  except
+    on E: Exception do
+      LHitError := True;
+  end;
+  Check(LHitError, 'AcquireRead on uninitialized rwlock should raise');
+
+  { ReleaseRead on uninitialized rwlock should raise }
+  LHitError := False;
+  try
+    LRwLock.ReleaseRead;
+  except
+    on E: Exception do
+      LHitError := True;
+  end;
+  Check(LHitError, 'ReleaseRead on uninitialized rwlock should raise');
+
+  { AcquireWrite on uninitialized rwlock should raise }
+  LHitError := False;
+  try
+    LRwLock.AcquireWrite;
+  except
+    on E: Exception do
+      LHitError := True;
+  end;
+  Check(LHitError, 'AcquireWrite on uninitialized rwlock should raise');
+
+  { ReleaseWrite on uninitialized rwlock should raise }
+  LHitError := False;
+  try
+    LRwLock.ReleaseWrite;
+  except
+    on E: Exception do
+      LHitError := True;
+  end;
+  Check(LHitError, 'ReleaseWrite on uninitialized rwlock should raise');
+
+  { Done on uninitialized rwlock is a no-op }
+  LRwLock.Done;
 end;
 
 {**
@@ -638,6 +720,7 @@ end;
 begin
   T := TTestRunner.Create('nextpas.core.mem.concurrent_wrappers');
   T.Run('T-01 mutex direct', @TestMemMutexDirect);
+  T.Run('T-02 rwlock direct', @TestMemRwLockDirect);
   T.Run('T-03 mutex high contention', @TestMemMutexHighContention);
   T.Run('blockpool wrapper basics', @TestBlockPoolConcurrentWrapper);
   T.Run('arena wrapper basics', @TestArenaConcurrentWrapper);
