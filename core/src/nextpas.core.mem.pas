@@ -26,6 +26,8 @@ uses
   nextpas.core.mem.allocator.fallback,
   nextpas.core.mem.pool.sizeclass,
   nextpas.core.mem.blockpool,
+  nextpas.core.mem.blockpool.sharded,
+  nextpas.core.mem.stack_pool,
   nextpas.core.mem.pool;
 
 type
@@ -64,6 +66,11 @@ type
   TLocalBlockPool = nextpas.core.mem.pool.TLocalBlockPool;
   TPool = nextpas.core.mem.pool.TPool;
   TSizeClassPool = nextpas.core.mem.pool.sizeclass.TSizeClassPool;
+  IBlockPool = nextpas.core.mem.blockpool.IBlockPool;
+  IBlockPoolBatch = nextpas.core.mem.blockpool.IBlockPoolBatch;
+  TBlockPool = nextpas.core.mem.blockpool.TBlockPool;
+  TShardedBlockPool = nextpas.core.mem.blockpool.sharded.TShardedBlockPool;
+  TStackPool = nextpas.core.mem.stack_pool.TStackPool;
 
 function DefaultAllocator: IAllocator; inline;
 

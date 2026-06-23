@@ -207,8 +207,18 @@ begin
 
   LEntry := FindEntry(APtr);
   if LEntry <> nil then
-    { 来自 fallback }
-    Result := FFallback.ReallocMem(APtr, ASize)
+  begin
+    { 来自 fallback — Realloc 后更新记录 }
+    Result := FFallback.ReallocMem(APtr, ASize);
+    if Result <> nil then
+    begin
+      LEntry^.Ptr := Result;
+      LEntry^.Size := ASize;
+    end
+    else
+      { ReallocMem 失败，原指针仍有效，保留原记录 }
+      Result := APtr;
+  end
   else
     Result := FPrimary.ReallocMem(APtr, ASize);
 end;

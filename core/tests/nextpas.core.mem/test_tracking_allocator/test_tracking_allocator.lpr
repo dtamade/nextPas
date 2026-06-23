@@ -386,6 +386,56 @@ begin
   end;
 end;
 
+procedure TestAllocAlignedInvalidAlign;
+var
+  LTracker: TTrackingAllocator;
+  LP: Pointer;
+begin
+  LTracker := TTrackingAllocator.Create(GetRtlAllocator);
+  try
+    { 非 2 的幂对齐应返回 nil }
+    LP := LTracker.AllocAligned(64, 3);
+    Check(LP = nil, 'non-power-of-two alignment should return nil');
+
+    { 对齐值过小 (小于 SizeOf(Pointer)) 应返回 nil }
+    LP := LTracker.AllocAligned(64, 1);
+    Check(LP = nil, 'alignment=1 should return nil');
+
+    { size=0 应返回 nil }
+    LP := LTracker.AllocAligned(0, 16);
+    Check(LP = nil, 'size=0 should return nil');
+
+    Check(LTracker.ActiveAllocCount = 0, 'no allocations from invalid calls');
+  finally
+    LTracker.Free;
+  end;
+end;
+
+procedure TestTrackingMemSizeDelegates;
+var
+  LTracker: TTrackingAllocator;
+  LP: Pointer;
+  LSize: SizeUInt;
+begin
+  LTracker := TTrackingAllocator.Create(GetRtlAllocator);
+  try
+    LP := LTracker.GetMem(128);
+    Check(LP <> nil, 'alloc should succeed');
+    { MemSize 应委托给 inner 分配器 (RTL 分配器 DoMemSize 默认返回 0) }
+    LSize := LTracker.MemSize(LP);
+    { 结果应与直接调用 inner.MemSize 一致 }
+    Check(LSize = LTracker.Inner.MemSize(LP),
+      'MemSize should match inner.MemSize (got ' + IntToStr(LSize) + ')');
+
+    { nil 应返回 0 }
+    Check(LTracker.MemSize(nil) = 0, 'MemSize(nil) should be 0');
+
+    LTracker.FreeMem(LP);
+  finally
+    LTracker.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.mem.allocator.tracking');
 
@@ -416,6 +466,10 @@ begin
   T.Run('realloc_nil_is_getmem', @TestReallocNilIsGetMem);
   T.Run('realloc_to_zero_is_free', @TestReallocToZeroIsFree);
   T.Run('report_no_leaks', @TestReportNoLeaks);
+
+  { AllocAligned + MemSize edge case tests }
+  T.Run('alloc_aligned_invalid_align', @TestAllocAlignedInvalidAlign);
+  T.Run('memsize_delegates', @TestTrackingMemSizeDelegates);
 
   T.Summary;
 end.

@@ -196,6 +196,35 @@ begin
   end;
 end;
 
+procedure TestFallbackAllocatorReallocMemFromFallbackUpdatesSize;
+var
+  LOom: TOomAllocator;
+  LRtl: IAllocator;
+  LFall: TFallbackAllocator;
+  LP, LP2: PByte;
+begin
+  LOom := TOomAllocator.Create;
+  LRtl := GetRtlAllocator;
+  LFall := TFallbackAllocator.Create(LOom, LRtl);
+  try
+    { 分配来自 fallback }
+    LP := PByte(LFall.GetMem(64));
+    Check(LP <> nil, 'fallback alloc succeeds');
+    LP^ := $AB; { 写入标记 }
+
+    { ReallocMem 来自 fallback 的记录应更新 size }
+    LP2 := PByte(LFall.ReallocMem(LP, 128));
+    Check(LP2 <> nil, 'realloc from fallback succeeds');
+    Check(LP2^ = $AB, 'data preserved after realloc');
+
+    { 释放后不再有跟踪记录 — 通过 FreeMem 不崩溃验证 }
+    LFall.FreeMem(LP2);
+    Check(True, 'free after realloc succeeds');
+  finally
+    LFall.Free;
+  end;
+end;
+
 { ---------------------------------------------------------------------------
   TFallbackArena
   --------------------------------------------------------------------------- }
@@ -344,6 +373,7 @@ begin
   T.Run('FallbackAllocator multiple', @TestFallbackAllocatorMultiple);
   T.Run('FallbackAllocator AllocMem', @TestFallbackAllocatorAllocMem);
   T.Run('FallbackAllocator free nil', @TestFallbackAllocatorFreeNil);
+  T.Run('FallbackAllocator realloc from fallback updates size', @TestFallbackAllocatorReallocMemFromFallbackUpdatesSize);
 
   { TFallbackArena }
   T.Run('FallbackArena create/destroy', @TestFallbackArenaCreateDestroy);

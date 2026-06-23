@@ -151,25 +151,6 @@ type
   end;
 
 
-  { 向后兼容的基类（已废弃，仅用于接口兼容）
-    TODO: FPC 不支持 class 声明上的 deprecated 指令，待编译器支持后添加 }
-  TBlockPoolBase = class(TInterfacedObject, IBlockPool)
-  protected
-    FBlockSize: SizeUInt;
-    FCapacity: SizeUInt;
-  public
-    constructor Create(aBlockSize, aCapacity: SizeUInt); virtual;
-    function Acquire: Pointer; virtual; abstract;
-    function TryAcquire(out aPtr: Pointer): Boolean; virtual; abstract;
-    procedure Release(aPtr: Pointer); virtual; abstract;
-    procedure Reset; virtual; abstract;
-    function BlockSize: SizeUInt; virtual;
-    function Capacity: SizeUInt; virtual;
-    function Available: SizeUInt; virtual; abstract;
-    function InUse: SizeUInt; virtual;
-  end;
-
-
 implementation
 
 {$PUSH}
@@ -551,32 +532,6 @@ procedure TBlockPool.GetRange(out aBase: Pointer; out aSize: SizeUInt);
 begin
   aBase := FBuffer;
   aSize := FTotalSize;
-end;
-
-{ ============================================================================ }
-{ TBlockPoolBase (向后兼容) }
-{ ============================================================================ }
-
-constructor TBlockPoolBase.Create(aBlockSize, aCapacity: SizeUInt);
-begin
-  inherited Create;
-  FBlockSize := aBlockSize;
-  FCapacity := aCapacity;
-end;
-
-function TBlockPoolBase.BlockSize: SizeUInt;
-begin
-  Result := FBlockSize;
-end;
-
-function TBlockPoolBase.Capacity: SizeUInt;
-begin
-  Result := FCapacity;
-end;
-
-function TBlockPoolBase.InUse: SizeUInt;
-begin
-  Result := FCapacity - Available;
 end;
 
 {$POP}

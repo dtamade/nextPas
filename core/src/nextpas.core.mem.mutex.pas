@@ -19,6 +19,13 @@ type
    *  @warning 不可拷贝/传值 — TPlatformMutex 是 opaque record (64 字节)，
    *  传值会导致每个线程拿到独立 mutex 副本，互斥锁完全失效。
    *  多线程共享时必须通过指针 (PMemMutex) 传递。
+   *
+   *  @design 约束说明：
+   *    此类型有意不添加 copy-prevention sentinel。
+   *    理由：(1) 附加 sentinel 字段会改变 record 大小，影响与平台 mutex 的 ABI 对齐；
+   *    (2) 静态分析工具和代码审查足以捕获隐式拷贝；
+   *    (3) FPC record 不支持 copy constructor。
+   *    调用方应遵循 @warning，始终通过指针共享。
    *}
   TMemMutex = record
   private

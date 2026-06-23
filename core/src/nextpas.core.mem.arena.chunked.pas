@@ -5,7 +5,6 @@ unit nextpas.core.mem.arena.chunked;
 interface
 
 uses
-  nextpas.core.math,
   nextpas.core.mem.base,
   nextpas.core.mem.error,
   nextpas.core.mem.intf,
