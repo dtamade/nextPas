@@ -20,6 +20,42 @@ uses
 var
   GTestsRun: Integer = 0;
 
+function ExtractXmlAttributeInt(const AXml, AAttribute: string): Integer;
+var
+  LAttrPos: Integer;
+  LValueStart: Integer;
+  LValueEnd: Integer;
+  LNeedle: string;
+begin
+  LNeedle := AAttribute + '="';
+  LAttrPos := Pos(LNeedle, AXml);
+  CheckTrue(LAttrPos > 0, 'Missing XML attribute: ' + AAttribute);
+  LValueStart := LAttrPos + Length(LNeedle);
+  LValueEnd := LValueStart;
+  while (LValueEnd <= Length(AXml)) and (AXml[LValueEnd] <> '"') do
+    Inc(LValueEnd);
+  Result := StrToInt(Copy(AXml, LValueStart, LValueEnd - LValueStart));
+end;
+
+function ExtractJSONInt(const AJson, AKey: string): Integer;
+var
+  LKeyPos: Integer;
+  LValueStart: Integer;
+  LValueEnd: Integer;
+  LNeedle: string;
+begin
+  LNeedle := '"' + AKey + '":';
+  LKeyPos := Pos(LNeedle, AJson);
+  CheckTrue(LKeyPos > 0, 'Missing JSON key: ' + AKey);
+  LValueStart := LKeyPos + Length(LNeedle);
+  while (LValueStart <= Length(AJson)) and (AJson[LValueStart] = ' ') do
+    Inc(LValueStart);
+  LValueEnd := LValueStart;
+  while (LValueEnd <= Length(AJson)) and (AJson[LValueEnd] in ['0'..'9', '-']) do
+    Inc(LValueEnd);
+  Result := StrToInt(Copy(AJson, LValueStart, LValueEnd - LValueStart));
+end;
+
 { ── ANSI helpers ───────────────────────────────────────────────────────────── }
 
 procedure TestAnsiHelpersEnabled;
@@ -265,6 +301,8 @@ procedure TestJUnitXMLBasic;
 var
   LResults: specialize TArray<TTestRunResult>;
   LXml: string;
+  LTotalTests: Integer;
+  LTotalFailures: Integer;
 begin
   Inc(GTestsRun);
   SetLength(LResults, 1);
@@ -282,10 +320,13 @@ begin
   LResults[0].Results[2].Message := 'expected X';
 
   LXml := JUnitXML(LResults, 'my_run');
+  LTotalTests := ExtractXmlAttributeInt(LXml, 'tests');
+  LTotalFailures := ExtractXmlAttributeInt(LXml, 'failures');
   CheckContains(LXml, '<?xml version');
   CheckContains(LXml, '<testsuites');
-  CheckContains(LXml, 'tests="3"');
-  CheckContains(LXml, 'failures="1"');
+  CheckEqual(3, LTotalTests);
+  CheckTrue(LTotalTests > 0, 'tests attribute should be > 0');
+  CheckEqual(1, LTotalFailures);
   CheckContains(LXml, '<testsuite name="suite1"');
   CheckContains(LXml, '<testcase name="test_a"');
   CheckContains(LXml, 'time="');
@@ -296,6 +337,9 @@ procedure TestJUnitXMLMultipleSuites;
 var
   LResults: specialize TArray<TTestRunResult>;
   LXml: string;
+  LTotalTests: Integer;
+  LTotalFailures: Integer;
+  LTotalSkipped: Integer;
 begin
   Inc(GTestsRun);
   SetLength(LResults, 2);
@@ -318,11 +362,15 @@ begin
   LResults[1].Results[1].Status := tsSkipped;
 
   LXml := JUnitXML(LResults);
+  LTotalTests := ExtractXmlAttributeInt(LXml, 'tests');
+  LTotalFailures := ExtractXmlAttributeInt(LXml, 'failures');
+  LTotalSkipped := ExtractXmlAttributeInt(LXml, 'skipped');
   CheckContains(LXml, '<testsuite name="alpha"');
   CheckContains(LXml, '<testsuite name="beta"');
-  CheckContains(LXml, 'tests="3"');
-  CheckContains(LXml, 'failures="0"');
-  CheckContains(LXml, 'skipped="2"');
+  CheckEqual(3, LTotalTests);
+  CheckTrue(LTotalTests > 0, 'tests attribute should be > 0');
+  CheckEqual(0, LTotalFailures);
+  CheckEqual(2, LTotalSkipped);
   CheckContains(LXml, '<skipped/>');
 end;
 
@@ -354,9 +402,9 @@ begin
   Inc(GTestsRun);
   SetLength(LResults, 0);
   LXml := JUnitXML(LResults, 'empty');
-  CheckContains(LXml, 'tests="0"');
-  CheckContains(LXml, 'failures="0"');
-  CheckContains(LXml, 'skipped="0"');
+  CheckEqual(0, ExtractXmlAttributeInt(LXml, 'tests'));
+  CheckEqual(0, ExtractXmlAttributeInt(LXml, 'failures'));
+  CheckEqual(0, ExtractXmlAttributeInt(LXml, 'skipped'));
 end;
 
 procedure TestJUnitXMLDefaultSuiteName;
@@ -549,6 +597,9 @@ procedure TestJSONReportBasic;
 var
   LResults: specialize TArray<TTestRunResult>;
   LOut: string;
+  LTotalPassed: Integer;
+  LTotalFailed: Integer;
+  LTotalSkipped: Integer;
 begin
   Inc(GTestsRun);
   SetLength(LResults, 1);
@@ -565,10 +616,14 @@ begin
   LResults[0].Results[1].Message := 'boom';
 
   LOut := JSONReport(LResults);
+  LTotalPassed := ExtractJSONInt(LOut, 'totalPassed');
+  LTotalFailed := ExtractJSONInt(LOut, 'totalFailed');
+  LTotalSkipped := ExtractJSONInt(LOut, 'totalSkipped');
   CheckContains(LOut, '"name": "JsBasic"');
-  CheckContains(LOut, '"totalPassed": 1');
-  CheckContains(LOut, '"totalFailed": 1');
-  CheckContains(LOut, '"totalSkipped": 0');
+  CheckEqual(1, LTotalPassed);
+  CheckTrue(LTotalPassed > 0, 'totalPassed should be > 0');
+  CheckEqual(1, LTotalFailed);
+  CheckEqual(0, LTotalSkipped);
   CheckContains(LOut, '"name": "js_pass"');
   CheckContains(LOut, '"name": "js_fail"');
   CheckContains(LOut, '"status": "failed"');
@@ -583,9 +638,9 @@ begin
   Inc(GTestsRun);
   SetLength(LResults, 0);
   LOut := JSONReport(LResults, 'Empty');
-  CheckContains(LOut, '"totalPassed": 0');
-  CheckContains(LOut, '"totalFailed": 0');
-  CheckContains(LOut, '"totalSkipped": 0');
+  CheckEqual(0, ExtractJSONInt(LOut, 'totalPassed'));
+  CheckEqual(0, ExtractJSONInt(LOut, 'totalFailed'));
+  CheckEqual(0, ExtractJSONInt(LOut, 'totalSkipped'));
   CheckContains(LOut, '"suites": [');
 end;
 
@@ -621,6 +676,8 @@ procedure TestJSONReportMultiSuite;
 var
   LResults: specialize TArray<TTestRunResult>;
   LOut: string;
+  LTotalPassed: Integer;
+  LTotalSkipped: Integer;
 begin
   Inc(GTestsRun);
   SetLength(LResults, 2);
@@ -641,10 +698,13 @@ begin
   LResults[1].Results[0].Status := tsSkipped;
 
   LOut := JSONReport(LResults);
+  LTotalPassed := ExtractJSONInt(LOut, 'totalPassed');
+  LTotalSkipped := ExtractJSONInt(LOut, 'totalSkipped');
   CheckContains(LOut, '"name": "JsSuiteA"');
   CheckContains(LOut, '"name": "JsSuiteB"');
-  CheckContains(LOut, '"totalPassed": 2');
-  CheckContains(LOut, '"totalSkipped": 1');
+  CheckEqual(2, LTotalPassed);
+  CheckTrue(LTotalPassed > 0, 'totalPassed should be > 0');
+  CheckEqual(1, LTotalSkipped);
 end;
 
 procedure TestJSONReportSkipped;
