@@ -360,7 +360,7 @@ begin
   end;
 
   { Back-pointer bump (downward) }
-  if PtrUInt(aSize) > PtrUInt(FBackPtr) then
+  if PtrUInt(aSize) > (PtrUInt(FBackPtr) - PtrUInt(FBackBase)) then
     Exit;
   LNewBack := PtrUInt(FBackPtr) - PtrUInt(aSize);
   LAligned := LNewBack and not FAlignmentMask;

@@ -1,571 +1,732 @@
 # mem 模块全面审查报告
 
-> 扫描时间：2026-06-21
+> 扫描时间：2026-06-23
+> 上次审查：2026-06-21
 > 分支：feat/arena-allocator
-> 范围：core/src/nextpas.core.mem*.pas (51 文件)
-> 来源：人工扫描 + 3 个专项 agent（架构/性能/安全）
+> 基线变更：`fdfd70a70`, `f93a7ca47`, `381e89f62`
+> 当前范围：`core/src/nextpas.core.mem*.pas`（64 文件）+ `core/tests/nextpas.core.mem/*`（29 项目，静态计数 286 个 `T.Run`）+ `core/docs/mem/*`
+> 方法：旧 findings 回归核对 + `git log -3 --stat` / `git show` + 全量静态扫描 + 测试/文档对照
 
 ---
 
 ## 一、架构与依赖
 
-### A-01 ⚠️ Breaking Changes: 11 个 main 上文件被删除
+### A-01 [FIXED] 11 个兼容文件删除风险已消失
 
-**P1 | 文件：11 个**
-
-feat-arena-allocator 删除了 main 上存在的 11 个文件，其中 4 个有外部引用（测试/契约）。
-
-| 被删文件 | main 外部引用 | 影响 |
-|----------|-------------|------|
-| `mem.adapters.pas` | 0 | 无 |
-| `mem.aligned.pas` | 1 (test_contracts) | 测试需更新 |
-| `mem.allocator.instrumentation.pas` | 0 | 无 |
-| `mem.allocator.numa.pas` | 1 (test_numa_allocator) | 测试已删 |
-| `mem.interfaces.pas` | 0 | 无 |
-| `mem.mapped_ring_buffer.pas` | 4 (2 tests + 2 contracts) | 测试/契约需更新 |
-| `mem.mapped_ring_buffer.sharded.pas` | 3 (1 test + 2 contracts) | 测试/契约需更新 |
-| `mem.mem_pool.pas` | 0 | 无 |
-| `mem.pool.adapter.pas` | 0 | 无 |
-| `mem.stack_scope_helpers.pas` | 0 | 无 |
-| `mem.stats.pas` | 0 | 无 |
-
-**建议**：合并 main 时需同步更新 test_contracts、architecture_contract_registry.json、check_core_architecture_contracts.sh。
+旧报告提到的 11 个文件当前都已回到源码树；`mapped_ring_buffer*` 也已经以 deprecated compatibility wrapper 形式保留，原先的“删文件导致主线契约断裂”不再成立。
 
 ---
 
-### A-02 ⚠️ 门面导出严重不完整
+### A-02 [FIXED] 门面导出已从“严重不完整”降为受控有限导出
 
-**P1 | 文件：core/src/nextpas.core.mem.pas**
-
-门面仅导出 16 个类型别名，但子模块中存在约 100+ 公开类型。
-- **已 uses 但未 re-export** (19 个类型): `TAllocatorTraits`, `TAllocError`, `EAllocError`, `EOutOfMemory`, `IBlockPool`, `IBlockPoolBatch`, `TBlockPool`, `IPool`, `IMemoryPool`, `IFixedSlabPool` 等
-- **完全未引用的子模块** (37 个): 整个 pool 子系统、blockpool 子系统、具体分配器、并发原语、utility
-
-**建议**：明确门面设计策略——只暴露核心 Arena + 默认分配器，在门面头部注释中说明"高级子模块需直接 uses 对应单元"。
+`381e89f62` 为 `nextpas.core.mem.pas` 补导出了 `IBlockPool` / `IBlockPoolBatch` / `TBlockPool` / `TShardedBlockPool` / `TStackPool`。当前门面仍不是全量 re-export，但已经不再是旧报告里的 P1 级缺口；剩余高级子模块更像“有意不经门面暴露”的设计选择。
 
 ---
 
-### A-03 ⚠️ 双重 mimalloc 实现
+### A-03 [FIXED] 双重 mimalloc 实现已清掉
 
-**P1 | 文件：mem.mimalloc.pas + mem.allocator.mimalloc.pas**
+当前树里只剩：
+- `nextpas.core.mem.allocator.mimalloc`
+- `nextpas.core.mem.manager.mimalloc`
 
-- `mem.mimalloc.pas`：简单版，直接 FFI 绑定，单例模式，**全仓库零引用**（死代码）
-- `mem.allocator.mimalloc.pas`：完整版，动态加载/静态链接/路径搜索，被 facade 引用
-- `mem.mimalloc.ffi.pas` 也只被旧版引用，同样是孤立的
-
-**建议**：删除 `mem.mimalloc.pas` 和 `mem.mimalloc.ffi.pas`。
+旧报告里的 `mem.mimalloc.pas` / `mem.mimalloc.ffi.pas` 已不在树中；`test_contracts` 也在检查旧 binding 文件应当不存在。
 
 ---
 
-### A-04 ⚠️ L2 层依赖违规 — mimalloc 引用跨层模块
+### A-04 ⚠️ mimalloc 动态加载策略仍把 env/path 发现逻辑留在 mem 层
 
-**P1 | 文件：core/src/nextpas.core.mem.allocator.mimalloc.pas**
+**P2 | 文件：`core/src/nextpas.core.mem.allocator.mimalloc.pas`**
 
-`mem` 模块属于 L1，但 `allocator.mimalloc` 引用了：
-- `nextpas.core.os.env` (L1，间接依赖 L2 text)
-- `nextpas.core.path` (**死导入**，从未调用)
-- `nextpas.core.errors` (L0，OK)
+复核后确认：
+- `nextpas.core.path` **不是**死导入；当前确实用它提供 `ExtractFilePath` / 路径分隔符语义
+- 但 `allocator.mimalloc` 仍直接依赖 `nextpas.core.os.env` + `nextpas.core.path` 实现以下策略：
+  - 环境变量覆盖
+  - 可执行文件相对 `lib/<platform>/` 搜索
+  - 系统路径回退
 
-**建议**：移除 `nextpas.core.path` 死导入。`os.env` 可考虑改用 FPC `SysUtils.GetEnvironmentVariable`。
+这不是立即的行为 bug，但确实让“部署路径发现策略”留在 mem allocator 单元里，继续扩大了 mem 层的职责面。`f93a7ca47` 虽然清掉了 `SysUtils`，但没有进一步收紧这块 owner boundary。
 
----
-
-### A-05 ⚠️ pool.memory_pool.pas 孤立接口
-
-**P2 | 文件：core/src/nextpas.core.mem.pool.memory_pool.pas (28 行)**
-
-`IMemoryPool` 接口无任何实现，无外部引用。
-
-**建议**：删除或标记 `deprecated`。
+**建议**：
+- 若保留动态加载策略，至少在架构/部署文档里明确搜索顺序
+- 若目标是收紧 owner boundary，可把路径/环境发现下沉到专门的 loader helper
 
 ---
 
-### A-06 ⚠️ ring_buffer.pas / stack_pool.pas 无外部引用
+### A-05 [FIXED] `IMemoryPool` 不再是孤立接口
 
-**P2 | 文件：ring_buffer.pas (726 行), stack_pool.pas (944 行)**
+**已验证实现方**：
+- `TFixedSlabPool`
+- `TSlabPool`
+- `TSlabPoolConcurrent`
+- `TSlabPoolSharded`
 
-两个大文件零外部引用，仅内部使用。
-
-**建议**：确认是否为死代码。如有用处，应暴露公共 API。
-
----
-
-### A-07 ⚠️ TLocalBlockPool 与 TBlockPool 职责重叠
-
-**P2 | 文件：pool.pas vs blockpool.pas**
-
-两个类实现几乎完全相同的功能（固定大小块池、位图、freelist），但 `TLocalBlockPool` 不实现 `IBlockPool` 接口。门面只导出 `TLocalBlockPool`。
-
-**建议**：评估是否可以统一为一个实现。
+旧报告中“`pool.memory_pool.pas` 无实现”的判断已不成立。
 
 ---
 
-### A-08 ⚠️ manager.* 与 allocator.* 职责重叠
+### A-06 [FIXED] `ring_buffer` / `stack_pool` 不再是“零外部引用”
 
-**P2 | 文件：mem.manager.crt/rtl/mimalloc vs mem.allocator.crt/rtl/mimalloc**
+当前状态：
+- `ring_buffer` 有 `test_oom` 等测试引用
+- `stack_pool` 有独立测试项目，且已由门面 `nextpas.core.mem` re-export `TStackPool`
 
-`manager.*` 是 FPC MemoryManager 安装器，`allocator.*` 是 IAllocator 实现。`manager.*` 零外部引用。
-
-**建议**：重命名为 `mem.fpc_mm.*` 或标记 `deprecated`。
-
----
-
-### A-09 ⚠️ TArenaMarker vs TArenaMark 名称混淆
-
-**P2 | 文件：mem.base.pas:25 vs mem.arena.base.pas:12**
-
-- `TArenaMarker = SizeUInt`（简单别名，全仓库零引用）
-- `TArenaMark = record`（含 FrontOffset/BackOffset/TotalUsed，广泛使用）
-
-**建议**：删除 `TArenaMarker`（死类型）。
+因此旧报告里的“可能死代码”结论不再成立。
 
 ---
 
-### A-10 ⚠️ IPool vs IBlockPool 接口签名冲突
+### A-07 ⚠️ `TLocalBlockPool` 与 `TBlockPool` 仍存在表面重叠
 
-**P2 | 文件：pool.base.pas vs blockpool.pas**
+**P3 | 文件：`core/src/nextpas.core.mem.pool.pas`, `core/src/nextpas.core.mem.blockpool.pas`**
 
-- `IPool.Acquire(out aPtr: Pointer): Boolean` — out 参数 + Boolean
-- `IBlockPool.Acquire: Pointer` — 直接返回 Pointer
+两者仍然都提供固定块分配语义，但定位不同：
+- `TLocalBlockPool`：class-only，本地简单池
+- `TBlockPool`：`IBlockPool` / `IBlockPoolBatch` 接口面，带对齐/批量/范围查询
 
-两种"获取"操作用完全不同的签名模式。
+这已不算严重设计错误，但模块外观仍然重复，API 选择成本偏高。
 
-**建议**：在架构文档中说明设计区分理由。
-
----
-
-### A-11 ⚠️ mem 模块零编译器引用
-
-**P2 | 描述**
-
-整个 `compiler/` 目录中没有任何文件引用 `nextpas.core.mem.*`。编译器必须使用 `nextpas.core.*`，但当前完全未使用 mem 模块。
-
-**建议**：确认编译器的内存管理策略。
+**建议**：在模块文档里明确“何时选 local class，何时选 interface blockpool”。
 
 ---
 
-### A-12 ⚠️ memory_map / mapped_slab_pool 属于 io 模块
+### A-08 [FIXED] `manager.*` 与 `allocator.*` 的职责区分已经清晰
 
-**P3 | 文件：mem.memory_map.pas, mem.mapped_slab_pool.pas**
+复核当前代码后，`manager.*` 与 `allocator.*` 的边界已经可以自洽：
+- `allocator.*`：`IAllocator` 实现
+- `manager.*`：FPC 全局 `TMemoryManager` 安装器
 
-被 `io.mapped` 模块引用，不属于 mem 分配器范畴。
-
-**建议**：长期迁移到 `io.mapped` 模块。当前保留不动。
-
----
-
-### A-13 ⚠️ SysUtils 直接依赖
-
-**P3 | 文件：allocator.mimalloc, allocator.tracking, pool.fixed**
-
-3 个文件在 implementation uses 中直接引用 FPC SysUtils。根据 R6 迁移策略应逐步替换。
-
-**建议**：记录到技术债清单。
+其中 `manager.crt` / `manager.rtl` 也已有对应测试/编译门。
 
 ---
 
-### A-14 ⚠️ mutex/rwlock 极薄包装
+### A-09 [FIXED] `TArenaMarker` 现在是明确的 deprecated 兼容别名
 
-**P3 | 文件：mem.mutex.pas, mem.rwlock.pas**
-
-几乎是 `platform.sync` 的 1:1 包装。`TMemMutex` 仅 1 个外部引用，`TMemRwLock` 零外部引用。
-
-**建议**：考虑直接使用 `TPlatformMutex`/`TPlatformRwLock`。
+`nextpas.core.mem.base` 与门面 `nextpas.core.mem` 都把 `TArenaMarker` 标成 deprecated alias，旧报告里的“名称混淆”已经被压缩成兼容债，而不是当前行为问题。
 
 ---
 
-### A-15 ⚠️ 文件名下划线 vs 点号不一致
+### A-10 [FIXED] `IPool` / `IBlockPool` 的历史分叉已有代码内说明
 
-**P3 | 8 个文件使用下划线**
+`core/src/nextpas.core.mem.pool.memory_pool.pas` 现在明确写明：
+- `IMemoryPool` 继承自历史 `IPool`
+- `Acquire/TryAcquire` 属于旧“单位块”语义
+- 可变大小分配应优先走 `GetMem/AllocMem/ReallocMem/FreeMem`
 
-`allocator.leak_check`, `mapped_slab_pool`, `memory_map`, `pool.fixed_slab`, `pool.memory_pool`, `pool.object_pool`, `ring_buffer`, `stack_pool`
+旧报告里的“完全无设计说明”已不成立。
 
-**建议**：低优先级，可留待批量治理。
+---
+
+### A-11 [FIXED] “编译器零引用”不再单列为 mem 模块缺陷
+
+当前 `compiler/` 仍未直接引用 `nextpas.core.mem.*`，但这更像上层采用策略，而不是 mem 模块自身正确性问题。本轮不再把它作为 mem 缺陷跟踪。
+
+---
+
+### A-12 ⚠️ `memory_map` / `mapped_*` 仍处在 mem 与 io 之间的迁移带
+
+**P3 | 文件：`core/src/nextpas.core.mem.memory_map.pas`, `core/src/nextpas.core.mem.mapped_slab_pool.pas`, `core/src/nextpas.core.mem.mapped_ring_buffer*.pas`**
+
+这批单元的归属仍不纯：
+- `mapped_ring_buffer*` 已经是 deprecated wrapper，目标是 `io.mapped.*`
+- `memory_map` / `mapped_slab_pool` 仍保留在 mem 命名空间
+
+**建议**：继续把 mapped-family 当成迁移面，不要再向 mem 侧扩张新 API。
+
+---
+
+### A-13 [FIXED] 旧报告中的 `SysUtils` 直接依赖已清理
+
+`f93a7ca47` 已把旧报告点名的 `allocator.mimalloc` / `allocator.tracking` / `pool.fixed` 上的 `SysUtils` 依赖移除。
+
+---
+
+### A-14 ⚠️ `mutex` / `rwlock` 仍是很薄的包装层
+
+**P3 | 文件：`core/src/nextpas.core.mem.mutex.pas`, `core/src/nextpas.core.mem.rwlock.pas`**
+
+这两个单元仍基本只转发到 `platform.sync`。其中 `mutex` 有基础测试，但 `rwlock` 仍缺直接 focused gate；整体上它们仍增加了一层额外 public surface。
+
+**建议**：文档明确这是 mem 层兼容包装，而不是新并发原语层。
+
+---
+
+### A-15 ⚠️ 文件命名仍混用下划线与点号风格
+
+**P3**
+
+当前仍有多处下划线命名保留，例如：
+- `allocator.leak_check`
+- `mapped_slab_pool`
+- `memory_map`
+- `pool.fixed_slab`
+- `pool.memory_pool`
+- `pool.object_pool`
+- `ring_buffer`
+- `stack_pool`
+
+这是持续性的命名治理债。
+
+---
+
+### A-16 ⚠️ `mem.pool.adapter` 已经脱离当前接口，属于失活兼容层
+
+**P1 | 文件：`core/src/nextpas.core.mem.pool.adapter.pas`**
+
+当前源码存在三类硬失真：
+- `uses nextpas.core.mem.layout`，但该单元当前树中不存在
+- 仍以旧接口实现 `IArena.Alloc(const aLayout: TMemLayout): TAllocResult`
+- 仍调用现行 `IArena` 不存在的 `TotalSize`
+
+同时：
+- 全仓库无当前消费者
+- `core/tests/nextpas.core.mem/*` 无编译/行为覆盖
+
+这不是“未使用也没关系”的兼容层，而是已经与当前接口面断裂的休眠代码。
+
+**建议**：
+- 要么补 compile gate 并修到当前接口
+- 要么明确归档/删除，避免继续留在活跃源码树制造假表面
+
+---
+
+### A-17 ⚠️ 多个 public 兼容/实验单元处于“零消费 + 零验证”状态
+
+**P2 | 文件组**：
+- `nextpas.core.mem.aligned`
+- `nextpas.core.mem.allocator.instrumentation`
+- `nextpas.core.mem.allocator.numa`
+- `nextpas.core.mem.manager.mimalloc`
+- `nextpas.core.mem.stats`
+- `nextpas.core.mem.adapters`
+- `nextpas.core.mem.interfaces`
+- `nextpas.core.mem.stack_scope_helpers`
+
+这些单元要么全仓库零消费者，要么只有非常边缘的文档/兼容角色；当前也没有 focused test。它们共同抬高了表面积，但没有验证成本与之匹配。
+
+**建议**：把它们拆成“保留兼容层”和“实验/待归档”两组，分别加 compile gate 或显式归档策略。
+
+---
+
+### A-18 ⚠️ `mem.arena.growable` 已经是不可编译的失活 public unit
+
+**P1 | 文件：`core/src/nextpas.core.mem.arena.growable.pas`**
+
+这不是普通的“零消费者旧代码”，而是当前源码树里一个可直接复现的坏表面：
+- 全仓库没有 live consumer
+- 单元仍声明 `TGrowingArena = class(TInterfacedObject, IArena)`，却没有 `uses nextpas.core.mem.arena.intf`
+- 仍保留旧式 `TArenaMarker` / `TotalSize` 语义
+- 直接编译探针 `uses nextpas.core.mem.arena.growable;` 当前失败：`Identifier not found "IArena"`
+
+这意味着源码树里仍挂着一个 public unit，但当前既不被真实代码消费，也不被任何 focused gate 编译。
+
+**建议**：
+- 要么修回现行 `IArena` / `TArenaMark` 体系并补 compile gate
+- 要么明确归档/删除，不要继续让文档和测试制造“它仍然可用”的错觉
 
 ---
 
 ## 二、API 设计
 
-### B-01 ⚠️ 错误处理不一致
+### B-01 ⚠️ Arena 错误契约仍没有在 canonical API 文档里说清
 
-**P1 | 文件：所有 Arena 模块**
+**P2 | 文件：`core/src/nextpas.core.mem.arena.intf.pas`, `core/docs/mem/API.md`**
 
-构造失败抛异常，分配失败返回 nil。有意设计但缺少文档说明。
+当前用户需要自己推断两套行为：
+- 构造/初始化失败：抛异常
+- `Alloc*` 失败：返回 `nil`
 
-**建议**：在 IArena 接口文档中明确约定。
+源码里这套规则大致稳定，但 `core/docs/mem/API.md` 仍没把它作为总约定写清。
 
----
-
-### B-02 ⚠️ AllocUnsafe 不更新统计 + 不保证对齐
-
-**P2 | 文件：arena.virtual.pas:330**
-
-- 不更新 `FTotalUsed`/`FPeakUsed`/`FAllocCount`
-- 不保证对齐（如果前一次 aSize 不是 FAlignment 倍数）
-
-**建议**：文档明确说明安全使用前提：aSize 必须是 FAlignment 倍数，统计不保证准确。
+**建议**：在 API 文档或 `IArena` 顶部注释中集中说明“构造失败抛异常，分配失败返回 nil”。
 
 ---
 
-### B-03 ⚠️ TVirtualArena.Reset 不释放大对象
+### B-02 [FIXED] `AllocUnsafe` 的统计/对齐前提已有明确说明
 
-**P1 | 文件：arena.virtual.pas:457-468**
+当前至少三处已明确写出：
+- `core/src/nextpas.core.mem.arena.virtual.pas`
+- `core/docs/mem/README.md`
+- `core/docs/mem/ARCHITECTURE.md`
 
-`Reset` 设置 `FTotalUsed := FLargeUsed`，但不释放 FLargeBlocks 中的 mmap 映射。大对象只有 `Release` 才会清理。`SaveMark/RestoreToMark` 同样不管理大对象生命周期。
-
-**建议**：在 API 中明确标注"大对象不受 Reset 影响，需调用 Release 释放"。
-
----
-
-### B-04 ⚠️ TVirtualArena.Reset vs ResetHard 语义差异
-
-**P2 | 文件：arena.virtual.pas**
-
-IArena 只定义 `Reset`，没有 `ResetHard`。三种 Arena 的 Reset 语义不同。
-
-**建议**：在 IArena 文档中说明差异。
+同时 `test_arena_compiler` 已补上 `AllocUnsafe` 测试。
 
 ---
 
-### B-05 ⚠️ IAllocator 与 IArena 方法命名不一致
+### B-03 [FIXED] `Reset` 不释放大对象这件事已经显式文档化
 
-**P2 | 文件：mem.intf.pas, mem.arena.intf.pas**
-
-两种接口用不同动词表示相同概念（GetMem vs Alloc, AllocMem vs AllocZeroed）。
-
-**建议**：文档说明定位差异。
+`f93a7ca47` 在 `arena.virtual` 的 `Reset` 注释中补上了说明；`README.md` / `ARCHITECTURE.md` 也同步写明大对象不受 mark/reset 影响。
 
 ---
 
-### B-06 ⚠️ TChunkedArena 缺少 AllocUnsafe
+### B-04 ⚠️ `Reset` / `ResetHard` / 各 Arena 语义差异仍未在 canonical API 文档同步
 
-**P2 | 文件：arena.chunked.pas**
+**P2 | 文件：`core/docs/mem/API.md`, `core/src/nextpas.core.mem.arena.intf.pas`**
 
-TVirtualArena 有 AllocUnsafe，但 TChunkedArena 和 TLocalArena 没有。无法统一调用。
+当前真实行为：
+- `IArena` 只有 `Reset`
+- `TVirtualArena` 还有 `ResetHard`
+- `TLocalArena` / `TChunkedArena` / `TVirtualArena` 的 reset 代价和资源语义并不相同
 
-**建议**：添加 AllocUnsafe 或在文档中说明使用策略。
-
----
-
-### B-07 ⚠️ TVirtualArena 无 IArena 实现
-
-**P2 | 文件：arena.virtual.pas**
-
-record 类型不实现接口，无法用 IArena 统一操作所有 Arena。
-
-**建议**：文档说明有意设计（record 避免 vtable 开销）。
+但 canonical API 文档仍停留在旧版类型/方法描述，外部读者很难从文档层看出差异。
 
 ---
 
-### B-08 ⚠️ 接口参数命名不一致
+### B-05 [FIXED] `IAllocator` 与 `IArena` 的动词差异已可视为有意设计
 
-**P3 | 多个文件**
+复核当前代码后，这两套接口表达的是不同资源模型：
+- `IAllocator`：heap-style `GetMem/AllocMem/ReallocMem/FreeMem`
+- `IArena`：linear `Alloc/AllocAligned/AllocZeroed/Reset`
 
-- IArena 用大写 `A` 前缀，其他接口用小写 `a`
-- `AllocAligned` 参数名 `AAlign` vs `aAlignment`
-- `FreeMem(aDst)` vs `FreeAligned(aPtr)` 参数名混用
-
-**建议**：统一为小写 `a` 前缀 + 完整参数名。
+旧报告里把它当成“同一概念的命名不一致”已经过重。
 
 ---
 
-## 三、安全（P0）
+### B-06 [FIXED] `TChunkedArena` 缺少 `AllocUnsafe` 不再单列为缺陷
 
-### S-01 🔴 AllocFast 无边界检查，可越界写入
-
-**P0 | 文件：arena.local.pas:154-171**
-
-`AllocFast` 和 `AllocAlignedFast` 完全跳过所有检查。如果 Arena 容量已满或 FBacking 为 nil：
-- 对 nil 指针做偏移运算并返回非法地址
-- 越界写入后备内存后方
-- 未定义行为/段错误
-
-**建议**：至少在 DEBUG 模式下加入 Assert。Release 模式保留零开销。
+当前代码和文档都没有承诺“所有 arena 都应提供统一 unsafe fast path”。`AllocUnsafe` 现在是 `TVirtualArena` 的特化能力，不再按对称性单列为缺陷。
 
 ---
 
-### S-02 🔴 AllocAlignedFast AAlign=0 掩码溢出
+### B-07 [FIXED] `TVirtualArena` 非 `IArena` 设计已经明确写进文档
 
-**P0 | 文件：arena.local.pas:160-171`
+`README.md` / `ARCHITECTURE.md` 已把它描述为 record + zero-dispatch arena，旧报告里的“为什么不实现 `IArena`”现在有明确解释。
 
-`AllocAlignedFast` 计算 `LMask := AAlign - 1`。AAlign=0 时 LMask = High(SizeUInt)，后续计算产生错误结果，`Inc(FOffset)` 可能溢出导致 FOffset 指向非法位置。
+---
 
-**建议**：添加 `Assert(AAlign > 0)` 或文档要求 AAlign >= 1。
+### B-08 ⚠️ 参数命名风格仍混杂
+
+**P3**
+
+当前 public API 仍同时存在：
+- `ASize` / `AAlign` / `AMark`
+- `aSize` / `aAlignment` / `aDst`
+
+属于纯风格债，不影响行为，但和 `core/docs/design-conventions.md` 的一致性要求还有距离。
+
+---
+
+### B-09 ⚠️ `IArena.AllocAligned` 在不同实现间的“小对齐值”语义不一致
+
+**P2 | 文件**：
+- `core/src/nextpas.core.mem.arena.local.pas`
+- `core/src/nextpas.core.mem.arena.chunked.pas`
+- `core/src/nextpas.core.mem.arena.virtual.pas`
+
+当前三种实现对小对齐值的处理不同：
+- `TLocalArena.AllocAligned`：接受任意 2 的幂，包括 `< SizeOf(Pointer)` 的值
+- `TChunkedArena.AllocAligned`：`< MEM_DEFAULT_ALIGN` 直接返回 `nil`
+- `TVirtualArena.AllocAligned`：把 `< SizeOf(Pointer)` 的值抬到 `SizeOf(Pointer)`
+
+同一个 `IArena` 方法名，对齐契约却不一致，而且文档没有写清。
+
+**建议**：统一成“全部拒绝”或“全部提升到最小对齐”之一，并把规则写进 `IArena` 文档。
+
+---
+
+## 三、安全（P0/P1）
+
+### S-01 [FIXED] `AllocFast` 已有 DEBUG 边界断言
+
+`core/src/nextpas.core.mem.arena.local.pas` 当前在 DEBUG 下断言：
+- `FBacking <> nil`
+- `ASize > 0`
+- `FOffset <= FCapacity`
+- `ASize <= FCapacity - FOffset`
+
+`test_arena_class` 也补了 source-contract 测试。
+
+---
+
+### S-02 [FIXED] `AllocAlignedFast` 已有 DEBUG 对齐断言
+
+当前 DEBUG 断言覆盖：
+- `AAlign > 0`
+- `IsPowerOfTwo(AAlign)`
+- 剩余容量检查
+
+旧报告里的“完全无防护”结论已不成立。
+
+---
+
+### S-03 ⚠️ `TCallbackAllocator` 在 non-contract 构建下可接受 `nil` 回调，后续会直接跳空函数指针
+
+**P1 | 文件：`core/src/nextpas.core.mem.allocator.callback.pas`**
+
+当前构造函数只在 `NEXTPAS_CORE_CONTRACTS` 打开时抛 `EArgumentNil`。如果 contracts 关闭：
+- `nil` 回调会被保存到字段
+- 后续 `DoGetMem` / `DoAllocMem` / `DoReallocMem` / `DoFreeMem` 会直接调用这些 `nil` 函数指针
+
+这会把输入校验缺失直接升级成运行时崩溃。
+
+**测试现状**：
+- `test_contracts` 覆盖了正常回调路径
+- 没有覆盖 “`nil` 回调 + contracts off” 负路径
+
+**建议**：无条件校验回调非 `nil`，不要把安全性绑定到 contracts 编译开关。
 
 ---
 
 ## 四、竞态条件
 
-### R-01 ⚠️ TArenaConcurrent 读方法无锁
+### R-01 [FIXED] `TArenaConcurrent` 读路径已全部持锁
 
-**P1 | 文件：arena.concurrent.pas:161-169**
-
-`UsedSize` 和 `RemainingSize` 无锁读取，但所有写入路径持锁。与 `Stats`（有锁）形成不一致的锁策略。
-
-**建议**：加锁或文档化为"近似值"。
+当前 `UsedSize` / `RemainingSize` / `Stats` 都在 `FLock` 下访问，旧报告里的“读方法无锁”已修复。
 
 ---
 
-### R-02 ⚠️ TBlockPoolConcurrent 读方法无锁
+### R-02 [FIXED] `TBlockPoolConcurrent` 读路径已全部持锁
 
-**P2 | 文件：blockpool.concurrent.pas:171-189`
-
-`Available` 和 `InUse` 涉及热路径中频繁修改的字段，高并发下可能返回过期值。
-
-**建议**：加读锁或标注为"近似值"。
+当前 `Available` / `InUse` 也都在 `FLock` 下访问，旧报告里的“热字段无锁读取”已修复。
 
 ---
 
-### R-03 ⚠️ TShardedBlockPool Reset 与 Acquire 潜在死锁
+### R-03 [FIXED] `TShardedBlockPool Reset/Acquire` 的旧死锁怀疑本轮未复现
 
-**P2 | 文件：blockpool.sharded.pas:1219-1260**
+复核当前实现后：
+- `TryRoute` 在拿 shard 锁前就释放 route 读锁
+- `Reset` 明确先拿 shard 锁，再重建 route
+- thread cache 旧路径已被禁用并有测试覆盖
 
-Reset 先锁所有 shard 再锁路由写锁，Acquire 先锁单个 shard 再调含路由写锁的函数。两者锁顺序一致但 Reset 持有多个 shard 锁时可能形成循环等待。
-
-**建议**：Reset 应先获取路由写锁，再获取 shard 锁。
+旧报告里的死锁说法在当前实现上证据不足，本轮不再继续作为开放问题跟踪。
 
 ---
 
-### R-04 ⚠️ TMemMutex.Init 不是线程安全的
+### R-04 ⚠️ `TMemMutex.Init/Done` 仍不是线程安全的一次性初始化
 
-**P2 | 文件：mem.mutex.pas:32-43`
+**P2 | 文件：`core/src/nextpas.core.mem.mutex.pas`**
 
-`Init` 检查 `FInitialized` 然后初始化——两个线程可能同时看到 False 然后都初始化。TMemMutex 是 record 类型，无构造函数保证。
+`Init` / `Done` 只靠 `FInitialized` 布尔字段判断，没有 CAS/once 语义。两个线程同时初始化同一个 record 时，仍可能双初始化或 init/done 交叉。
 
-**建议**：文档说明 Init 必须在单线程上下文中调用。
+当前测试只覆盖“未初始化直接 Acquire/Release 抛错”和普通高竞争使用，没有覆盖竞态初始化。
+
+---
+
+### R-05 ⚠️ `TMemRwLock.Init/Done` 复制了同样的竞态初始化模式
+
+**P2 | 文件：`core/src/nextpas.core.mem.rwlock.pas`**
+
+`TMemRwLock` 与 `TMemMutex` 一样：
+- `FInitialized` 非原子
+- 没有一次性初始化保护
+- 没有相关测试
+
+这是旧报告没有覆盖到的同类问题。
+
+---
+
+### R-06 ⚠️ `manager.mimalloc` 全局安装/卸载缺少锁保护
+
+**P1 | 文件：`core/src/nextpas.core.mem.manager.mimalloc.pas`**
+
+对比：
+- `manager.crt`：有 `GManagerLock`
+- `manager.rtl`：有 `GManagerLock`
+- `manager.mimalloc`：直接读写 `GInstalled` / `GOldManager` / `GAlloc`，无锁
+
+这意味着多线程并发调用安装/卸载时，可能发生全局 `TMemoryManager` 状态竞争。更糟的是，当前 `core/tests/nextpas.core.mem` 没有任何针对 `InstallMimallocMemoryManager` 的 focused gate。
 
 ---
 
 ## 五、内存安全
 
-### M-01 ⚠️ TVirtualArena.SaveMark/RestoreToMark 不管理大对象
+### M-01 ⚠️ 大对象与 `SaveMark/RestoreToMark` 的关系仍然容易误用
 
-**P1 | 文件：arena.virtual.pas:437-455`
+**P2 | 文件：`core/src/nextpas.core.mem.arena.virtual.pas`**
 
-SaveMark 后分配的大对象在 RestoreToMark 时不会被释放，导致 mmap 泄漏。
+当前真实语义仍是：
+- `SaveMark/RestoreToMark` 只回退 bump pointer
+- 已分配的大对象 mmap 不会被回收
 
-**建议**：在 RestoreToMark 中释放超出标记的大对象，或文档明确说明。
-
----
-
-### M-02 ⚠️ AllocNoPointer 向下减法可能下溢
-
-**P2 | 文件：arena.virtual.pas:328-372`
-
-`LNewBack := PtrUInt(FBackPtr) - PtrUInt(aSize)`。当 aSize > FBackPtr - FBackBase 时，LNewBack 会 wrap around 成巨大地址，可能绕过 `LAligned < FFrontPtr` 检查。
-
-**建议**：在减法前添加 `if aSize > PtrUInt(FBackPtr) - PtrUInt(FBackBase) then Exit`。
+虽然 README/ARCHITECTURE 已经写出“大对象不受 mark/reset 影响”，但源码方法级注释和 API.md 仍没有把这个行为贴到 `SaveMark/RestoreToMark` 上，外部调用方仍然很容易把它当成真正的 rollback。
 
 ---
 
-### M-03 ⚠️ TShardedBlockPool thread cache 内存泄漏
+### M-02 ⚠️ `AllocNoPointer` 的下溢保护仍然不正确
 
-**P2 | 文件：blockpool.sharded.pas:850-908`
+**P1 | 文件：`core/src/nextpas.core.mem.arena.virtual.pas`**
 
-`GetThreadCacheNode` 通过 GetMem 分配节点链入 threadvar 链表。线程退出时 threadvar 自动清零，节点永不释放。当前 FThreadCacheCapacity=0 禁用了此路径，但代码仍存在。
+当前保护代码是：
+- `if PtrUInt(aSize) > PtrUInt(FBackPtr) then Exit;`
 
-**建议**：彻底移除 thread cache 分配路径直到有清理机制。
+这比较的是“请求大小 vs 当前绝对地址”，而不是“请求大小 vs 当前 back 区剩余空间”。随后仍会执行：
+- `LNewBack := PtrUInt(FBackPtr) - PtrUInt(aSize);`
+
+正确的边界应当基于 `FBackPtr - FBackBase` 或与 `FFrontPtr` 的剩余距离来判断。当前写法不能证明这段减法在所有情况下都不会越过 reservation 边界。
 
 ---
 
-### M-04 ⚠️ TSlabPool.PageKeyOf 无条件访问 FSegments[0]
+### M-03 [FIXED] `thread cache` 泄漏路径已被硬禁用
 
-**P2 | 文件：pool.slab.pas:745-748`
+当前 `TShardedBlockPool.Create` 在 `ThreadCacheCapacity > 0` 时直接抛错，并且 `test_sharded_pools` 专门验证了这个拒绝路径。
 
-直接访问 `TFixedSlabPool(FSegments[0]).PageShift`，不检查 FSegments 是否为空。
+旧报告里的“代码仍可走到泄漏路径”不再成立。
 
-**建议**：入口检查 `Length(FSegments) > 0` 或存储 FPageShift 独立字段。
+---
+
+### M-04 [FIXED] `TSlabPool.PageKeyOf` 不再访问 `FSegments[0]`
+
+当前实现已改成固定 page shift 路径，不再依赖 `FSegments[0]`。
 
 ---
 
 ## 六、测试覆盖
 
-### T-01 ⚠️ 8 个源文件无对应测试
+### T-01 ⚠️ 当前缺的不是“总量”，而是几个 public/dormant surface 没有 focused gate
 
-**P1 | 多个文件**
+**P1 | 现状**
 
-allocator.callback, allocator.crt, allocator.foundation, manager.mimalloc, mimalloc.ffi, mutex, rwlock, pool.memory_pool
+当前 mem 测试量并不小：
+- 29 个测试项目
+- 静态计数 286 个 `T.Run`
 
-**建议**：优先补充 allocator.callback、mutex、rwlock 测试。
-
----
-
-### T-02 ⚠️ ResetHard / AllocUnsafe 无测试
-
-**P2 | 文件：test_arena_compiler/**
-
-新增的 ResetHard 和 AllocUnsafe 方法无任何测试。
-
-**建议**：添加基本测试覆盖。
+但仍有几块 public surface 没有 focused 保护：
+- `manager.mimalloc`：无安装/卸载测试
+- `pool.adapter`：无 compile gate，且当前已与现行接口脱节
+- `arena.growable`：无 compile gate，且当前单元已不能独立编译
+- `allocator.callback`：无 `nil` 回调负路径测试
+- `allocator.crt` / `allocator.foundation`：只有间接覆盖，没有直接 surface gate
 
 ---
 
-### T-03 ⚠️ TBlockPool 缺少高竞争并发测试
+### T-02 [FIXED] `ResetHard` / `AllocUnsafe` 已有测试
 
-**P2 | 文件：test_concurrent_wrappers/**
-
-当前只用 8 线程 x 32 迭代。无压力测试。
-
-**建议**：添加 32+ 线程 x 10000+ 迭代测试。
+`core/tests/nextpas.core.mem/test_arena_compiler/test_arena_compiler.lpr` 已覆盖：
+- `TestResetHard`
+- `TestAllocUnsafe`
 
 ---
 
-### T-04 ⚠️ Arena OOM 测试不足
+### T-03 [FIXED] 并发压力验证已不再缺失在关键并发面
 
-**P3 | 文件：test_oom/**
+虽然 plain `TBlockPool` 本身不是线程安全类型，但当前已经有：
+- `test_concurrent_wrappers`
+- `test_sharded_pools`
 
-未覆盖 VirtualArena 虚拟地址空间耗尽、ChunkedArena OOM、大对象 mmap 失败。
+覆盖真正需要的高竞争路径，因此旧报告里“缺少高竞争并发测试”的表述不再精确。
+
+---
+
+### T-04 ⚠️ OOM 负路径仍缺少 VirtualArena 的 reserve/commit/mmap 失败注入
+
+**P2 | 文件：`core/tests/nextpas.core.mem/test_oom/test_oom.lpr`**
+
+当前 OOM 套件已覆盖：
+- `TLocalArena`
+- `TChunkedArena`
+- fixed/growable pool
+- `ring_buffer`
+- `stack_pool`
+
+但仍没覆盖：
+- `TVirtualArena_Init` 的 `platform_virtual_reserve` 失败
+- `CommitFrontRegion/CommitBackRegion` 失败
+- 大对象 `platform_mmap_create_anonymous` 失败
+
+这意味着 VirtualArena 最危险的宿主内存失败路径仍靠人工阅读证明。
+
+---
+
+### T-05 ⚠️ `test_arena_growable` 并没有覆盖 `mem.arena.growable`
+
+**P1 | 文件：`core/tests/nextpas.core.mem/test_arena_growable/*`, `core/src/nextpas.core.mem.arena.growable.pas`**
+
+当前 `test_arena_growable` 套件名会误导读者：
+- 测试程序实际 `uses nextpas.core.mem.arena.chunked`
+- 所有 case 都在实例化 `TChunkedArena`
+- 没有任何一行引用 `nextpas.core.mem.arena.growable` / `TGrowingArena`
+
+结果是：
+- public unit `mem.arena.growable` 已经编译失败
+- 测试名却仍然暗示“growable arena 已被覆盖”
+
+**建议**：
+- 要么把该套件重命名为 `test_arena_chunked`
+- 要么补一个真正编译/行为覆盖 `mem.arena.growable` 的 gate
 
 ---
 
 ## 七、性能
 
-### P-01 ⚠️ TChunkedArena.FSegments 频繁 SetLength
+### P-01 [FIXED] `TChunkedArena.FSegments` 已改为几何扩容
 
-**P2 | 文件：arena.chunked.pas:288-294`
+当前 `AddSegment` / `TryReuseSegment` 都是：
+- 初始 8
+- 之后 2x 扩容
 
-AddSegment 每次增长 FSegments 只加 1，频繁触发 realloc。
-
-**建议**：采用几何增长策略（`SetLength(FSegments, Max(LIdx+1, Length*2))`）。
-
----
-
-### P-02 ⚠️ TChunkedArena.Stats.AllocCount 截断 QWord 到 SizeUInt
-
-**P2 | 文件：arena.chunked.pas:684`
-
-`FTotalAllocs` 是 QWord，但 Stats 返回 `SizeUInt(FTotalAllocs)`。32 位平台上会截断。
-
-**建议**：TArenaStats.AllocCount 改为 QWord 或饱和处理。
+旧报告里的逐次 `SetLength +1` 已修复。
 
 ---
 
-### P-03 ⚠️ TLocalArena.AllocAligned 每次调用 IsPowerOfTwo
+### P-02 [FIXED] `TChunkedArena.Stats.AllocCount` 截断已修复
 
-**P2 | 文件：arena.local.pas:119`
-
-**建议**：添加 FAlignmentMask 缓存字段。
+`f93a7ca47` 已把 `TArenaStats.AllocCount` 改成 `QWord`，`TChunkedArena` / `TLocalArena` 的统计也已同步。
 
 ---
 
-### P-04 ⚠️ TRingBuffer mod 运算未使用快速路径
+### P-03 ⚠️ `TLocalArena.AllocAligned` 仍在每次调用重新做 `IsPowerOfTwo`
 
-**P3 | 文件：ring_buffer.pas:374,429,444,604,664`
+**P3 | 文件：`core/src/nextpas.core.mem.arena.local.pas`**
 
-批量方法中使用 `mod FCapacity`，未复用 `GetNextIndex` 的 2 幂位与优化。
+这是很小的热路径损耗，不影响正确性，但和 `TVirtualArena` 的 cached alignment 策略相比仍不一致。
 
 ---
 
-### P-05 ⚠️ TVirtualArena.CommitFrontRegion 非 inline
+### P-04 ⚠️ `TRingBuffer` 的批量路径仍大量使用 `% FCapacity`
 
-**P3 | 文件：arena.virtual.pas:188`
+**P3 | 文件：`core/src/nextpas.core.mem.ring_buffer.pas`**
 
-record 方法无法 inline。热路径已优化。记录为已知限制。
+当前 `Push/Pop/Peek/Find/SetElementAt/DropElements` 的多元素路径仍直接用 `mod FCapacity`，没有复用 `GetNextIndex` + 2 幂容量快速路径。
+
+这是纯性能债，不是正确性问题。
+
+---
+
+### P-05 [FIXED] `CommitFrontRegion inline` 不再作为当前问题跟踪
+
+当前实现已经把真正热路径中的 syscall 判断压缩到最少；继续纠结 record method 是否 inline 的收益很低，本轮不再保留该条。
 
 ---
 
 ## 八、代码质量
 
-### Q-01 ⚠️ COMMIT_CHUNK_SIZE 可变常量
+### Q-01 [FIXED] `COMMIT_CHUNK_SIZE` 已是正常 `const`
 
-**P2 | 文件：arena.virtual.pas:190`
-
-typed constant（可变），应改为真正的 const。
+旧报告里的 typed constant 问题已不存在。
 
 ---
 
-### Q-02 ⚠️ 大对象 FLargeBlocks 数组无上限
+### Q-02 ⚠️ `FLargeBlocks` 仍然是无上限增长数组
 
-**P2 | 文件：arena.virtual.pas:43`
+**P3 | 文件：`core/src/nextpas.core.mem.arena.virtual.pas`**
 
-每次翻倍扩展，无上限。
-
----
-
-### Q-03 ⚠️ TRingBuffer.Resize 中 mod FCapacity 潜在除零
-
-**P2 | 文件：ring_buffer.pas:529`
-
-极端情况下 FCapacity 可能为 0。
+大对象跟踪仍按 2x 动态数组扩容，没有回收策略或上限。对于极端“大量独立大对象 + 长生命周期 arena”场景，metadata 会持续增长。
 
 ---
 
-### Q-04 ⚠️ AllocUnsafe 未对齐
+### Q-03 [FIXED] `TRingBuffer.Resize` 的除零怀疑本轮未成立
 
-**P2 | 文件：arena.virtual.pas:428-435`
-
-直接 bump pointer，不保证对齐。ARM 上可能触发硬件异常。
-
-**建议**：文档说明 aSize 必须是 FAlignment 倍数。
+当前 `Resize` 对 `aNewCapacity = 0` 提前返回，`FTail := FCount mod FCapacity` 前也做了 `if FCapacity > 0` 判断，旧报告里的该条不再成立。
 
 ---
 
-### Q-05 ⚠️ mmap 失败时无错误码
+### Q-04 [FIXED] `AllocUnsafe` 未对齐已转为显式契约说明
 
-**P2 | 文件：arena.virtual.pas:292-293`
-
-大对象 mmap 失败返回 nil，调用方无法区分容量不足还是 syscall 失败。
+README / ARCHITECTURE 已写明 `AllocUnsafe` 不保证对齐，这条不再单列为“隐藏行为问题”。
 
 ---
 
-### Q-06 ⚠️ GArenaInstanceCount/GArenaTotalMapped 无保护
+### Q-05 ⚠️ VirtualArena 大对象 / commit 失败仍只有 `nil`，没有原因分层
 
-**P3 | 文件：arena.virtual.pas`
+**P2 | 文件：`core/src/nextpas.core.mem.arena.virtual.pas`**
 
-调试变量，读取时无保护。
+当前这些失败路径都只能返回 `nil`：
+- 大对象 mmap 失败
+- front/back commit 失败
+
+调用方无法区分：
+- 容量不足
+- 宿主 syscall 失败
+- 地址空间/commit 失败
+
+对于调试和日志定位都不友好。
 
 ---
 
-### Q-07 ⚠️ TBlockPoolBase 标记废弃但无 deprecated 关键字
+### Q-06 ⚠️ `NEXTPAS_ARENA_LEAK_CHECK` 统计量仍是半原子状态
 
-**P3 | 文件：blockpool.pas:154`
+**P3 | 文件：`core/src/nextpas.core.mem.arena.virtual.pas`**
 
-注释说"已废弃"，但类型声明没有 `deprecated`。
+当前：
+- `GArenaInstanceCount` 用 `InterLockedIncrement/Decrement`
+- `GArenaTotalMapped` 仍有普通 `Inc/Dec`
+
+这只影响 debug leak-check 统计，不影响生产分配语义，但读数并非严格线程安全。
+
+---
+
+### Q-07 [FIXED] `TBlockPoolBase` 已删除
+
+`381e89f62` 已直接删除旧的废弃基类，原条目关闭。
 
 ---
 
 ## 九、文档
 
-### D-01 ⚠️ ARCHITECTURE.md 过时
+### D-01 ⚠️ `ARCHITECTURE.md` 虽然明显改善，但仍存在关键失真
 
-**P1 | 文件：core/docs/mem/ARCHITECTURE.md**
+**P1 | 文件：`core/docs/mem/ARCHITECTURE.md`**
 
-未反映最新架构（arena.concurrent、AllocUnsafe、ResetHard、47 文件结构）。
+这份文档已经比上次好很多，确实补上了：
+- `arena.concurrent`
+- `AllocUnsafe`
+- 大对象生命周期
+- “高级子模块需直接 uses”的门面策略
+
+但它仍有会误导读者的关键旧事实：
+- 仍把 `nextpas.core.mem.arena.growable` 描述为活跃 L1 单元；而该 unit 当前直接编译探针就报 `Identifier not found "IArena"`
+- `IAllocator` 代码片段仍写旧签名 `FreeMem(aPtr): SizeUInt`，与现行 `procedure FreeMem(aDst)` / `FreeAligned` 能力不一致
+
+所以它已经不再是“最滞后”的文档，但也还不能算已同步完成。
 
 ---
 
-### D-02 ⚠️ API.md 可能过时
+### D-02 ⚠️ `API.md` 仍然是当前最失真的 mem 文档
 
-**P2 | 文件：core/docs/mem/API.md**
+**P1 | 文件：`core/docs/mem/API.md`**
+
+当前仍在写不存在或已变形的接口面：
+- `IArena.TotalSize`
+- `TFastArena`
+- `TGrowableArena`
+- `TFastArenaAllocator` 包装旧 `TFastArena`
+
+而真实代码已经是：
+- `TVirtualArena`
+- `TChunkedArena`
+- 现行 `IArena` 不含 `TotalSize`
+
+这是当前 mem 文档里最需要优先修的文件。
 
 ---
 
-### D-03 ⚠️ 缺少使用指南
+### D-03 ⚠️ `README.md` / `BENCHMARKS.md` / `ROADMAP-EXTENSION.md` 与当前代码不同步
 
-**P3 | 文件：core/docs/mem/README.md**
+**P1 | 文件组**：
+- `core/docs/mem/README.md`
+- `core/docs/mem/BENCHMARKS.md`
+- `core/docs/mem/ROADMAP-EXTENSION.md`
 
-缺少 Arena 选择指南、IAllocator vs IArena 使用场景、AllocUnsafe 安全前提。
+已确认的漂移点：
+- `README.md` 仍写 `324+ tests across 24+ suites`，而当前树是 29 个测试项目、静态计数 286 个 `T.Run`
+- `BENCHMARKS.md` 仍写 `Reset: madvise(MADV_DONTNEED) 归还物理页`，但实际代码是 `Reset` 保留 committed pages，`ResetHard` 才 decommit
+- `ROADMAP-EXTENSION.md` 写“线程退出自动回收 / 自动 DrainTLS: 支持 FPC threadvar cleanup hook”，而当前 `arena.thread` 仍要求调用方显式 `DrainTLS`
+
+这些不是措辞问题，而是会误导使用者的行为级失真。
 
 ---
 
 ## 十、汇总
 
-### 按优先级统计
+### 状态统计
 
-| 优先级 | 数量 | 关键问题 |
-|--------|------|---------|
-| **P0** | **2** | AllocFast 越界写入、AllocAlignedFast 掩码溢出 |
-| **P1** | **10** | Breaking changes、facade 不完整、mimalloc 重复、大对象生命周期、并发读无锁、测试覆盖 |
-| **P2** | **22** | API 一致性、死代码、性能、竞态条件、内存安全 |
-| **P3** | **12** | 命名规范、文档、边缘场景 |
+| 状态 | 数量 | 说明 |
+|------|------|------|
+| **[FIXED] / 关闭** | **31** | 包含真实修复项，以及本轮复核后不再成立/不再作为缺陷跟踪的旧条目 |
+| **仍然开放** | **29** | 当前树上仍能被代码、测试或文档直接证明的问题 |
+| **新增** | **8** | 本轮新增：`A-16`、`A-17`、`A-18`、`B-09`、`S-03`、`R-05`、`R-06`、`T-05` |
 
-### 建议处理顺序
+### 当前最高优先级（建议先处理）
 
-1. **🔴 P0-01/02**：AllocFast/AllocAlignedFast 添加 DEBUG Assert（安全漏洞）
-2. **P1-03/04**：删除 mimalloc 死代码 + 移除死导入
-3. **P1-01**：记录 breaking changes，准备合并迁移清单
-4. **P1-02**：补全 facade 导出 + 添加设计说明注释
-5. **P1-03**：VirtualArena 大对象生命周期文档
-6. **R-01**：TArenaConcurrent 读方法加锁
-7. **P2 类**：按影响面逐个处理
-8. **P3 类**：按需处理
+1. **A-18 / P1**：`mem.arena.growable` 是当前源码树里可复现的不可编译 public unit
+2. **A-16 / P1**：`mem.pool.adapter` 已与当前接口脱节，且无任何 compile gate
+3. **S-03 / P1**：`allocator.callback` 在 non-contract 构建下允许 `nil` 回调并会直接跳空函数指针
+4. **R-06 / P1**：`manager.mimalloc` 缺少安装锁，直接并发改全局 `TMemoryManager`
+5. **M-02 / P1**：`TVirtualArena.AllocNoPointer` 的下溢保护条件不正确
+6. **D-01 / D-02 / D-03 / T-05 / P1**：架构/API/测试名仍在制造过时或错误的 public surface 认知
+
+### 处理建议顺序
+
+1. 先处理 **已经失活且会误导外部读者的源码树单元**：`mem.arena.growable`、`mem.pool.adapter`
+2. 再处理 **会导致运行时崩溃或全局状态竞争的 public surface**：`allocator.callback`、`manager.mimalloc`
+3. 然后处理 **VirtualArena 的真实边界问题**：`AllocNoPointer`、大对象 mark/restore 契约、失败原因表达
+4. 同步修 **canonical 文档与测试名**：先 `ARCHITECTURE.md` / `API.md`，再 `README/BENCHMARKS/ROADMAP`，最后处理 `test_arena_growable` 命名或真实覆盖
+5. 最后收拾 **低优先级外观债**：命名、薄包装、重复表面、热路径小优化

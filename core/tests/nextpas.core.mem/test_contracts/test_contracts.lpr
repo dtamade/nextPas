@@ -18,8 +18,12 @@ const
   MEM_ARENA_CONCURRENT_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.arena.concurrent.pas';
   MEM_ARENA_CHUNKED_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.arena.chunked.pas';
   MEM_ARENA_CHUNKED_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.arena.chunked.pas';
+  MEM_ARENA_VIRTUAL_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.arena.virtual.pas';
+  MEM_ARENA_VIRTUAL_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.arena.virtual.pas';
   MEM_ARENA_GROWABLE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.arena.growable.pas';
   MEM_ARENA_GROWABLE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.arena.growable.pas';
+  MEM_ALLOCATOR_CALLBACK_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.allocator.callback.pas';
+  MEM_ALLOCATOR_CALLBACK_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.allocator.callback.pas';
   MEM_BLOCKPOOL_GROWABLE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.blockpool.growable.pas';
   MEM_BLOCKPOOL_GROWABLE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.blockpool.growable.pas';
   MEM_ERROR_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.error.pas';
@@ -32,6 +36,8 @@ const
   MEM_POOL_ADAPTER_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.pool.adapter.pas';
   MEM_LAYOUT_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.layout.pas';
   MEM_LAYOUT_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.layout.pas';
+  MEM_MANAGER_MIMALLOC_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.manager.mimalloc.pas';
+  MEM_MANAGER_MIMALLOC_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.manager.mimalloc.pas';
   MEM_MIMALLOC_BINDING_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.mimalloc.binding.pas';
   MEM_MIMALLOC_BINDING_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.mimalloc.binding.pas';
 
@@ -79,6 +85,21 @@ end;
 function SourceExists(const APathFromTest, APathFromRoot: string): Boolean;
 begin
   Result := FileExistsByStat(PAnsiChar(APathFromTest)) or FileExistsByStat(PAnsiChar(APathFromRoot));
+end;
+
+function ExtractSourceSection(const ASource, AStartToken, AEndToken: string): string;
+var
+  LStartPos: SizeInt;
+  LEndPos: SizeInt;
+begin
+  Result := '';
+  LStartPos := Pos(LowerCase(AStartToken), ASource);
+  if LStartPos = 0 then
+    Exit;
+  LEndPos := Pos(LowerCase(AEndToken), ASource);
+  if (LEndPos = 0) or (LEndPos <= LStartPos) then
+    LEndPos := Length(ASource) + 1;
+  Result := System.Copy(ASource, LStartPos, LEndPos - LStartPos);
 end;
 
 procedure CheckContains(const ASource, AToken, AMessage: string);
@@ -294,6 +315,83 @@ begin
     'concurrent arena wrapper should not depend on the removed layout unit');
 end;
 
+procedure TestCallbackAllocatorRejectsNilCallbacksWithoutContractGuard;
+var
+  LSource: string;
+  LSection: string;
+begin
+  LSource := ReadSourceText(ResolveSourcePath(
+    MEM_ALLOCATOR_CALLBACK_SOURCE_PATH_FROM_TEST,
+    MEM_ALLOCATOR_CALLBACK_SOURCE_PATH_FROM_ROOT));
+  LSection := ExtractSourceSection(LSource,
+    'constructor tcallbackallocator.init',
+    'fgetmemcallback     := agetmem;');
+  Check(LSection <> '', 'callback allocator constructor section should be readable');
+  CheckContains(LSection, 'raise eargumentnil.create',
+    'callback allocator should reject nil callbacks');
+  CheckNotContains(LSection, '{$ifdef nextpas_core_contracts}',
+    'callback allocator nil-check should not depend on contract define');
+  CheckNotContains(LSection, '{$endif}',
+    'callback allocator nil-check should not be wrapped by conditional compilation');
+end;
+
+procedure TestMimallocManagerUsesInstallationLock;
+var
+  LSource: string;
+  LInstallSection: string;
+  LUninstallSection: string;
+begin
+  LSource := ReadSourceText(ResolveSourcePath(
+    MEM_MANAGER_MIMALLOC_SOURCE_PATH_FROM_TEST,
+    MEM_MANAGER_MIMALLOC_SOURCE_PATH_FROM_ROOT));
+  CheckContains(LSource, 'gmanagerlock: tmemmutex;',
+    'mimalloc manager should define a manager lock');
+  CheckContains(LSource, 'initialization',
+    'mimalloc manager should initialize the manager lock');
+  CheckContains(LSource, 'gmanagerlock.init;',
+    'mimalloc manager should initialize the manager lock');
+  CheckContains(LSource, 'finalization',
+    'mimalloc manager should finalize the manager lock');
+  CheckContains(LSource, 'gmanagerlock.done;',
+    'mimalloc manager should finalize the manager lock');
+
+  LInstallSection := ExtractSourceSection(LSource,
+    'procedure installmimallocmemorymanager;' + #10 + 'begin',
+    'procedure uninstallmimallocmemorymanager;');
+  Check(LInstallSection <> '', 'mimalloc manager install section should be readable');
+  CheckContains(LInstallSection, 'gmanagerlock.acquire;',
+    'mimalloc manager install should acquire the manager lock');
+  CheckContains(LInstallSection, 'gmanagerlock.release;',
+    'mimalloc manager install should release the manager lock');
+
+  LUninstallSection := ExtractSourceSection(LSource,
+    'procedure uninstallmimallocmemorymanager;' + #10 + 'begin',
+    'function ismimallocmemorymanagerinstalled: boolean;');
+  Check(LUninstallSection <> '', 'mimalloc manager uninstall section should be readable');
+  CheckContains(LUninstallSection, 'gmanagerlock.acquire;',
+    'mimalloc manager uninstall should acquire the manager lock');
+  CheckContains(LUninstallSection, 'gmanagerlock.release;',
+    'mimalloc manager uninstall should release the manager lock');
+end;
+
+procedure TestVirtualArenaAllocNoPointerGuardsAgainstBackUnderflow;
+var
+  LSource: string;
+  LSection: string;
+begin
+  LSource := ReadSourceText(ResolveSourcePath(
+    MEM_ARENA_VIRTUAL_SOURCE_PATH_FROM_TEST,
+    MEM_ARENA_VIRTUAL_SOURCE_PATH_FROM_ROOT));
+  LSection := ExtractSourceSection(LSource,
+    'function tvirtualarena.allocnopointer(asize: sizeuint): pointer;',
+    'function tvirtualarena.allocaligned');
+  Check(LSection <> '', 'virtual arena AllocNoPointer section should be readable');
+  CheckContains(LSection, 'if ptruint(asize) > (ptruint(fbackptr) - ptruint(fbackbase)) then',
+    'AllocNoPointer should guard against back-pointer underflow with remaining back capacity');
+  CheckNotContains(LSection, 'if ptruint(asize) > ptruint(fbackptr) then',
+    'AllocNoPointer should not compare requested size against the absolute back pointer');
+end;
+
 procedure TestLegacyAllocatorFilesRemoved;
 begin
   Check(not SourceExists(MEM_ARENA_GROWABLE_SOURCE_PATH_FROM_TEST, MEM_ARENA_GROWABLE_SOURCE_PATH_FROM_ROOT),
@@ -478,6 +576,11 @@ begin
   T.Run('chunked arena and growable block pool use canonical allocator contract',
     @TestChunkedArenaAndGrowableBlockPoolUseCanonicalAllocatorContract);
   T.Run('arena units use explicit arena api', @TestArenaUnitsUseExplicitArenaApi);
+  T.Run('callback allocator rejects nil callbacks without contract guard',
+    @TestCallbackAllocatorRejectsNilCallbacksWithoutContractGuard);
+  T.Run('mimalloc manager uses installation lock', @TestMimallocManagerUsesInstallationLock);
+  T.Run('virtual arena AllocNoPointer guards against back underflow',
+    @TestVirtualArenaAllocNoPointerGuardsAgainstBackUnderflow);
   T.Run('legacy allocator files removed', @TestLegacyAllocatorFilesRemoved);
   T.Run('mem.base owns constants and mem.error drops alloc result',
     @TestBaseOwnsMemConstantsAndErrorDropsAllocResult);

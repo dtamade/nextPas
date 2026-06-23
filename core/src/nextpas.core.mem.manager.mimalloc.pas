@@ -23,7 +23,8 @@ interface
 uses
   nextpas.core.mem.allocator.mimalloc,
   nextpas.core.mem.allocator.base,
-  nextpas.core.base.utils;
+  nextpas.core.base.utils,
+  nextpas.core.mem.mutex;
 
 procedure InstallMimallocMemoryManager;
 procedure UninstallMimallocMemoryManager;
@@ -40,6 +41,7 @@ var
   GOldManager: TMemoryManager;
   GInstalled : Boolean = False;
   GAlloc     : nextpas.core.mem.allocator.base.IAllocator;
+  GManagerLock: TMemMutex;
 
 function MM_GetMem(Size: SizeUInt): Pointer;
 begin
@@ -109,25 +111,42 @@ const
 
 procedure InstallMimallocMemoryManager;
 begin
-  if GInstalled then Exit;
-  // prepare allocator
-  GAlloc := GetMimallocAllocator;
-  System.GetMemoryManager(GOldManager);
-  System.SetMemoryManager(GMimallocManager);
-  GInstalled := True;
+  GManagerLock.Acquire;
+  try
+    if GInstalled then
+      Exit;
+    GAlloc := GetMimallocAllocator;
+    System.GetMemoryManager(GOldManager);
+    System.SetMemoryManager(GMimallocManager);
+    GInstalled := True;
+  finally
+    GManagerLock.Release;
+  end;
 end;
 
 procedure UninstallMimallocMemoryManager;
 begin
-  if not GInstalled then Exit;
-  System.SetMemoryManager(GOldManager);
-  GInstalled := False;
+  GManagerLock.Acquire;
+  try
+    if not GInstalled then
+      Exit;
+    System.SetMemoryManager(GOldManager);
+    GInstalled := False;
+  finally
+    GManagerLock.Release;
+  end;
 end;
 
 function IsMimallocMemoryManagerInstalled: Boolean;
 begin
   Result := GInstalled;
 end;
+
+initialization
+  GManagerLock.Init;
+
+finalization
+  GManagerLock.Done;
 
 {$ENDIF} // NEXTPAS_CORE_MIMALLOC_ALLOCATOR
 
