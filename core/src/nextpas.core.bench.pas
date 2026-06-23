@@ -36,7 +36,6 @@ type
   TBenchLoopFunc = nextpas.core.bench.intf.TBenchLoopFunc;
   TBenchSetupFunc = nextpas.core.bench.intf.TBenchSetupFunc;
   TBenchTeardownFunc = nextpas.core.bench.intf.TBenchTeardownFunc;
-  TBenchEntry = nextpas.core.bench.intf.TBenchEntry;
 
   {** ST-12: 重新导出跨语言报告类型 }
   TCrossLangEntry = nextpas.core.bench.report.TCrossLangEntry;
