@@ -179,7 +179,19 @@ end;
 procedure TMockState.SetReturn(const AMethodName, AValue: string);
 var
   LSetup: TMockCall;
+  I: Integer;
 begin
+  { R6-20: Override existing setup for the same method instead of appending }
+  for I := 0 to High(FSetups) do
+  begin
+    if FSetups[I].MethodName = AMethodName then
+    begin
+      FSetups[I].ResultValue := AValue;
+      FSetups[I].HasResult   := True;
+      Exit;
+    end;
+  end;
+  { No existing setup found — append new slot }
   LSetup.MethodName  := AMethodName;
   LSetup.ResultValue := AValue;
   LSetup.HasResult   := True;
