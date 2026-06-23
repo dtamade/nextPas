@@ -9,6 +9,7 @@ uses
   cthreads,
   SysUtils,
   nextpas.core.test,
+  nextpas.core.test.config,
   { 白盒测试：直接验证 runner 内部 helper，而不是仅通过 facade 间接覆盖。 }
   nextpas.core.test.runner,
   nextpas.core.test.output;
@@ -134,6 +135,102 @@ begin
     Halt(1);
   end;
   WriteLn(AnsiGreen('OK: BeforeEach Skip'));
+end;
+
+procedure TestRunnerConfigIsolation;
+var
+  LSuiteA: TTestSuite;
+  LSuiteB: TTestSuite;
+  LRunnerA: TTestRunner;
+  LRunnerB: TTestRunner;
+  LResultsA: specialize TArray<TTestRunResult>;
+  LResultsB: specialize TArray<TTestRunResult>;
+  LOutA: TBufferSink;
+  LOutB: TBufferSink;
+  LOutputA: string;
+  LOutputB: string;
+begin
+  LOutA := TBufferSink.Create;
+  LOutB := TBufferSink.Create;
+
+  LSuiteA := TTestSuite.Create('Suite A');
+  LSuiteA.Config.OutSink := LOutA;
+  LSuiteA.Config.ErrSink := LOutA;
+  LSuiteA.Config.AnsiMode := amOff;
+  LSuiteA.Config.FilterPattern := 'alpha-only';
+  LSuiteA.Test('alpha-only', @TestSimplePass);
+  LSuiteA.Test('alpha-hidden', @TestSimplePass2);
+
+  LSuiteB := TTestSuite.Create('Suite B');
+  LSuiteB.Config.OutSink := LOutB;
+  LSuiteB.Config.ErrSink := LOutB;
+  LSuiteB.Config.AnsiMode := amOff;
+  LSuiteB.Config.FilterPattern := 'beta-only';
+  LSuiteB.Test('beta-hidden', @TestSimplePass);
+  LSuiteB.Test('beta-only', @TestSimplePass2);
+
+  LRunnerA := TTestRunner.Create('Runner A');
+  LRunnerA.Add(LSuiteA);
+  LRunnerB := TTestRunner.Create('Runner B');
+  LRunnerB.Add(LSuiteB);
+
+  if not LRunnerA.RunAllWithResult(LResultsA) then
+  begin
+    WriteLn(AnsiRed('FAIL: runner A should pass'));
+    Halt(1);
+  end;
+  if not LRunnerB.RunAllWithResult(LResultsB) then
+  begin
+    WriteLn(AnsiRed('FAIL: runner B should pass'));
+    Halt(1);
+  end;
+
+  if (Length(LResultsA) <> 1) or (LResultsA[0].Passed <> 1) then
+  begin
+    WriteLn(AnsiRed('FAIL: runner A should record exactly one passed test'));
+    Halt(1);
+  end;
+  if (Length(LResultsB) <> 1) or (LResultsB[0].Passed <> 1) then
+  begin
+    WriteLn(AnsiRed('FAIL: runner B should record exactly one passed test'));
+    Halt(1);
+  end;
+
+  LOutputA := LOutA.GetOutput;
+  LOutputB := LOutB.GetOutput;
+  if Pos('alpha-only', LOutputA) = 0 then
+  begin
+    WriteLn(AnsiRed('FAIL: runner A output should contain alpha-only'));
+    Halt(1);
+  end;
+  if Pos('alpha-hidden', LOutputA) > 0 then
+  begin
+    WriteLn(AnsiRed('FAIL: runner A output should not contain alpha-hidden'));
+    Halt(1);
+  end;
+  if Pos('beta-only', LOutputA) > 0 then
+  begin
+    WriteLn(AnsiRed('FAIL: runner A output should not contain runner B tests'));
+    Halt(1);
+  end;
+
+  if Pos('beta-only', LOutputB) = 0 then
+  begin
+    WriteLn(AnsiRed('FAIL: runner B output should contain beta-only'));
+    Halt(1);
+  end;
+  if Pos('beta-hidden', LOutputB) > 0 then
+  begin
+    WriteLn(AnsiRed('FAIL: runner B output should not contain beta-hidden'));
+    Halt(1);
+  end;
+  if Pos('alpha-only', LOutputB) > 0 then
+  begin
+    WriteLn(AnsiRed('FAIL: runner B output should not contain runner A tests'));
+    Halt(1);
+  end;
+
+  WriteLn(AnsiGreen('OK: Runner config isolation'));
 end;
 
 { ── Main ──────────────────────────────────────────────────────────────────── }
@@ -881,6 +978,10 @@ begin
     end;
     WriteLn(AnsiGreen('OK: Exact-value assertions'));
   end;
+
+  WriteLn;
+  WriteLn(AnsiBold('─── R2-F23: Runner config isolation ───'));
+  TestRunnerConfigIsolation;
 
   WriteLn;
   WriteLn(AnsiGreen('OK: test_runner'));

@@ -59,6 +59,8 @@ type
 
 function DefaultConfig: TTestConfig;
 function ResolveConfig(const AConfig: TTestConfig): TTestConfig;
+function ResolveOutSink(const AConfig: TTestConfig): IOutputSink;
+function ResolveErrSink(const AConfig: TTestConfig): IOutputSink;
 procedure ResetDefaultConfig;
 procedure SetDefaultFilterPattern(const APattern: string);
 procedure SetDefaultTimeoutMs(ATimeoutMs: UInt64);
@@ -105,6 +107,16 @@ begin
     Result.ErrSink := LDefaults.ErrSink;
   if Result.RetryCount = 0 then
     Result.RetryCount := LDefaults.RetryCount;
+end;
+
+function ResolveOutSink(const AConfig: TTestConfig): IOutputSink;
+begin
+  Result := ResolveConfig(AConfig).OutSink;
+end;
+
+function ResolveErrSink(const AConfig: TTestConfig): IOutputSink;
+begin
+  Result := ResolveConfig(AConfig).ErrSink;
 end;
 
 procedure ResetDefaultConfig;

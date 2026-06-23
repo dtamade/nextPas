@@ -13,6 +13,7 @@ uses
   SysUtils,          { Exception, EAbort, EAssertionFailed — FPC built-in }
   nextpas.core.text.conv,
   nextpas.core.test.base,
+  nextpas.core.test.config,
   nextpas.core.test.output,
   nextpas.core.sync.intf,
   nextpas.core.platform.thread,
@@ -31,9 +32,11 @@ type
   PTimeoutRec = ^TTimeoutRec;
 
 function RunTestWithTimeout(AProc: TTestProc; ATimeoutMs: Integer;
-  out AStatus: TTestStatus; out AMsg: string): Boolean;
+  const AConfig: TTestConfig; out AStatus: TTestStatus;
+  out AMsg: string): Boolean;
 function RunTestWithTimeout(AClosure: TTestClosure; ATimeoutMs: Integer;
-  out AStatus: TTestStatus; out AMsg: string): Boolean;
+  const AConfig: TTestConfig; out AStatus: TTestStatus;
+  out AMsg: string): Boolean;
 
 { ── Parallel thread worker (internal) ──────────────────────────────────────── }
 
@@ -101,7 +104,7 @@ begin
 end;
 
 function RunTestWithTimeout_internal(AProc: TTestProc; AClosure: TTestClosure;
-  ATimeoutMs: Integer;
+  ATimeoutMs: Integer; const AConfig: TTestConfig;
   out AStatus: TTestStatus; out AMsg: string): Boolean;
 { Returns True if test completed (pass/fail/error/skip).
   Returns False if timed out (AStatus = tsError, AMsg = 'timeout'). }
@@ -187,7 +190,8 @@ begin
     Dispose(LRec);
     { Detach to prevent handle leak — worker is done, thread is exiting }
     platform_thread_detach(LHandle);
-    WriteLn(StdErr, 'WARNING: timed-join failed after worker completed — handle detached');
+    ResolveErrSink(AConfig).WriteLn(
+      'WARNING: timed-join failed after worker completed - handle detached');
   end
   else
   begin
@@ -197,23 +201,29 @@ begin
     AMsg := 'test timed out after ' + IntToStr(ATimeoutMs) + 'ms';
     Result := False;
     platform_thread_detach(LHandle);
-    WriteLn('  ', AnsiYellow('WARNING'), ': test timed out after ',
-      ATimeoutMs, 'ms — worker thread stuck, detached (LRec leaked)');
+    ResolveErrSink(AConfig).WriteLn(
+      '  ' + AnsiYellow('WARNING', AConfig) + ': test timed out after ' +
+      IntToStr(ATimeoutMs) +
+      'ms - worker thread stuck, detached (LRec leaked)');
   end;
   if LJoinResult = 0 then
     Dispose(LRec);
 end;
 
 function RunTestWithTimeout(AProc: TTestProc; ATimeoutMs: Integer;
-  out AStatus: TTestStatus; out AMsg: string): Boolean;
+  const AConfig: TTestConfig; out AStatus: TTestStatus;
+  out AMsg: string): Boolean;
 begin
-  Result := RunTestWithTimeout_internal(AProc, nil, ATimeoutMs, AStatus, AMsg);
+  Result := RunTestWithTimeout_internal(
+    AProc, nil, ATimeoutMs, AConfig, AStatus, AMsg);
 end;
 
 function RunTestWithTimeout(AClosure: TTestClosure; ATimeoutMs: Integer;
-  out AStatus: TTestStatus; out AMsg: string): Boolean;
+  const AConfig: TTestConfig; out AStatus: TTestStatus;
+  out AMsg: string): Boolean;
 begin
-  Result := RunTestWithTimeout_internal(nil, AClosure, ATimeoutMs, AStatus, AMsg);
+  Result := RunTestWithTimeout_internal(
+    nil, AClosure, ATimeoutMs, AConfig, AStatus, AMsg);
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }
@@ -353,7 +363,7 @@ begin
           if Assigned(R^.Entry.Closure) then
           begin
             if RunTestWithTimeout(R^.Entry.Closure, LTimeoutMs,
-              LStatus, LFailMsg) then
+              DefaultConfig, LStatus, LFailMsg) then
             begin
               if LStatus = tsPassed then { ok }
               else { LStatus already set }
@@ -364,7 +374,7 @@ begin
           else
           begin
             if RunTestWithTimeout(R^.Entry.Proc, LTimeoutMs,
-              LStatus, LFailMsg) then
+              DefaultConfig, LStatus, LFailMsg) then
             begin
               if LStatus = tsPassed then { ok }
               else { LStatus already set }

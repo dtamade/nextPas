@@ -14,6 +14,7 @@ uses
   nextpas.core.text.conv,
   nextpas.core.test.base,
   nextpas.core.test.check,
+  nextpas.core.test.config,
   nextpas.core.test.output,
   nextpas.core.atomic,
   nextpas.core.sync,
@@ -28,6 +29,7 @@ uses
 type
   TTestSuite = record
     Name      : string;
+    Config    : TTestConfig;
     Tests     : specialize TArray<TTestEntry>;
     Setup       : TTestProc;
     SetupClosure: TTestClosure;
@@ -85,10 +87,11 @@ type
     { Free heap-allocated table test pointers (TableCase, TableProc) }
     procedure CleanupTableAllocations;
     { Shared helpers for RunWithResult/RunParallelWithResult (R4-03) }
-    function  RunSetup(out ASkipCount: Integer;
+    function  RunSetup(const AConfig: TTestConfig; out ASkipCount: Integer;
                 out AErrorMsg: string): Boolean;
-    procedure RunTeardown;
-    procedure FinalizeResults(var AResult: TTestRunResult;
+    procedure RunTeardown(const AConfig: TTestConfig);
+    procedure FinalizeResults(const AConfig: TTestConfig;
+                var AResult: TTestRunResult;
                 APass, AFail, ASkip: Integer);
   end;
 
@@ -169,6 +172,14 @@ begin
   end;
 end;
 
+function RunnerConfig(const ARunner: TTestRunner): TTestConfig;
+begin
+  if Length(ARunner.Suites) > 0 then
+    Result := ResolveConfig(ARunner.Suites[0].Config)
+  else
+    Result := ResolveConfig(DefaultConfig);
+end;
+
 { ═════════════════════════════════════════════════════════════════════════════ }
 { TTestSuite                                                                   }
 { ═════════════════════════════════════════════════════════════════════════════ }
@@ -176,6 +187,7 @@ end;
 class function TTestSuite.Create(const AName: string): TTestSuite;
 begin
   Result.Name       := AName;
+  Result.Config     := DefaultConfig;
   Result.Tests      := nil;
   Result.Setup       := nil;
   Result.SetupClosure := nil;
@@ -410,7 +422,11 @@ var
   LLastFailMsg: string;
   LTestResult: TTestResult;
   LAppender: TTestResultAppender;
+  LConfig: TTestConfig;
+  LOutSink: IOutputSink;
+  LErrSink: IOutputSink;
   LGTestTimeoutMs: Integer;
+  LTotalRetries: Integer;
   LRetriesLeft: Integer;
   LStartMs: Int64;
 begin
@@ -420,15 +436,20 @@ begin
   LSkip := 0;
   LLastFailMsg := '';
   LAppender := TTestResultAppender.Create;
-  LGTestTimeoutMs := GetTestTimeout;
+  LConfig := ResolveConfig(Config);
+  LOutSink := ResolveOutSink(LConfig);
+  LErrSink := ResolveErrSink(LConfig);
+  LGTestTimeoutMs := GetTestTimeout(LConfig);
   try
 
-  WriteLn;
-  WriteLn(AnsiBold('> ') + AnsiCyan(Name) +
-    AnsiDim(' (' + IntToStr(Length(Tests)) + ' tests)'));
+  LOutSink.WriteLn('');
+  LOutSink.WriteLn(
+    AnsiBold('> ', LConfig) +
+    AnsiCyan(Name, LConfig) +
+    AnsiDim(' (' + IntToStr(Length(Tests)) + ' tests)', LConfig));
 
   { Suite-level setup (uses shared helper) }
-  if not RunSetup(LSkip, LLastFailMsg) then
+  if not RunSetup(LConfig, LSkip, LLastFailMsg) then
   begin
     { All tests skipped — populate results with skipped entries }
     for I := 0 to High(Tests) do
@@ -439,7 +460,9 @@ begin
       LTestResult.Duration := 0;
       SetLength(AResult.Results, Length(AResult.Results) + 1);
       AResult.Results[High(AResult.Results)] := LTestResult;
-      WriteLn('    ', StatusDot(tsSkipped), ' ', AnsiDim(Tests[I].Name));
+      LOutSink.WriteLn(
+        '    ' + StatusDot(tsSkipped, LConfig) + ' ' +
+        AnsiDim(Tests[I].Name, LConfig));
     end;
     AResult.Failed    := 1;
     AResult.Skipped   := LSkip;
@@ -450,7 +473,8 @@ begin
     LastFail      := 1;
     LastSkip      := LSkip;
     Result         := False;
-    WriteLn(AnsiDim('  ') + IntToStr(LSkip) + ' skipped (setup failure)');
+    LOutSink.WriteLn(
+      AnsiDim('  ' + IntToStr(LSkip) + ' skipped (setup failure)', LConfig));
     Exit;
   end;
 
@@ -463,7 +487,7 @@ begin
     SetTestContext(Name, LEntry.Name);
 
     { Test filter — skip non-matching tests silently }
-    if (GetTestFilter <> '') and not MatchesFilter(LEntry.Name) then
+    if not MatchesFilter(LEntry.Name, LConfig) then
     begin
       { Not counted as pass/fail/skip — just invisible }
       Continue;
@@ -480,11 +504,14 @@ begin
       SetLength(AResult.Results, Length(AResult.Results) + 1);
       AResult.Results[High(AResult.Results)] := LTestResult;
       if LEntry.SkipReason <> '' then
-        WriteLn('  ', StatusDot(tsSkipped), ' ', AnsiDim(LEntry.Name),
-          ' -- ', LEntry.SkipReason)
+        LOutSink.WriteLn(
+          '  ' + StatusDot(tsSkipped, LConfig) + ' ' +
+          AnsiDim(LEntry.Name, LConfig) + ' -- ' + LEntry.SkipReason)
       else
-        WriteLn('  ', StatusDot(tsSkipped), ' ', AnsiDim(LEntry.Name));
-      ReportLeakIfAny(LStatus);
+        LOutSink.WriteLn(
+          '  ' + StatusDot(tsSkipped, LConfig) + ' ' +
+          AnsiDim(LEntry.Name, LConfig));
+      ReportLeakIfAny(LStatus, LConfig);
       Continue;
     end;
 
@@ -503,9 +530,10 @@ begin
           LTestResult.Duration := 0;
           SetLength(AResult.Results, Length(AResult.Results) + 1);
           AResult.Results[High(AResult.Results)] := LTestResult;
-          WriteLn('  ', StatusDot(tsSkipped), ' ', AnsiDim(LEntry.Name),
-            ' -- ', E.Message);
-          ReportLeakIfAny(LStatus);
+          LOutSink.WriteLn(
+            '  ' + StatusDot(tsSkipped, LConfig) + ' ' +
+            AnsiDim(LEntry.Name, LConfig) + ' -- ' + E.Message);
+          ReportLeakIfAny(LStatus, LConfig);
           Continue;
         end;
         on E: Exception do
@@ -517,8 +545,9 @@ begin
           LTestResult.Duration := 0;
           SetLength(AResult.Results, Length(AResult.Results) + 1);
           AResult.Results[High(AResult.Results)] := LTestResult;
-          WriteLn('  ', StatusDot(tsError), ' ', LEntry.Name,
-            ' -- beforeEach failed: ', E.Message);
+          LOutSink.WriteLn(
+            '  ' + StatusDot(tsError, LConfig) + ' ' + LEntry.Name +
+            ' -- beforeEach failed: ' + E.Message);
           Inc(LFail);
           Continue;
         end;
@@ -559,7 +588,10 @@ begin
       else
       begin
         { Run with retry support: if test fails and retries remain, re-run. }
-        LRetriesLeft := LEntry.RetryCount;
+        LTotalRetries := LEntry.RetryCount;
+        if LTotalRetries = 0 then
+          LTotalRetries := LConfig.RetryCount;
+        LRetriesLeft := LTotalRetries;
         repeat
           LStatus := tsPassed;
           LLastFailMsg := '';
@@ -567,7 +599,8 @@ begin
             if (LGTestTimeoutMs > 0) and (LEntry.Kind = ekTest) and Assigned(LEntry.Proc) then
             begin
               { Timeout-enabled path — runs in watchdog thread (only for TTestProc) }
-              if RunTestWithTimeout(LEntry.Proc, LGTestTimeoutMs, LStatus, LLastFailMsg) then
+              if RunTestWithTimeout(LEntry.Proc, LGTestTimeoutMs, LConfig,
+                LStatus, LLastFailMsg) then
               begin
                 if LStatus = tsPassed then { ok }
                 else { LStatus already set }
@@ -605,8 +638,10 @@ begin
 
           { Retry: print hint and loop }
           Dec(LRetriesLeft);
-          WriteLn('  ', AnsiYellow('retrying'), ' (',
-            LEntry.RetryCount - LRetriesLeft, '/', LEntry.RetryCount, ')...');
+          LOutSink.WriteLn(
+            '  ' + AnsiYellow('retrying', LConfig) + ' (' +
+            IntToStr(LTotalRetries - LRetriesLeft) + '/' +
+            IntToStr(LTotalRetries) + ')...');
         until False;
 
         if LStatus = tsPassed then Inc(LPass)
@@ -641,7 +676,9 @@ begin
       except
         on E: Exception do
         begin
-          WriteLn('  ', AnsiYellow('WARNING afterEach failed: '), E.Message);
+          LErrSink.WriteLn(
+            '  ' + AnsiYellow('WARNING afterEach failed: ', LConfig) +
+            E.Message);
           if LStatus = tsPassed then
           begin
             LStatus := tsError;
@@ -674,39 +711,45 @@ begin
     { Output per-test }
     case LStatus of
       tsPassed:
-        WriteLn('  ', StatusDot(tsPassed), ' ', LEntry.Name);
+        LOutSink.WriteLn('  ' + StatusDot(tsPassed, LConfig) + ' ' + LEntry.Name);
       tsFailed:
         begin
-          WriteLn('  ', StatusDot(tsFailed), ' ', AnsiRed(LEntry.Name));
+          LOutSink.WriteLn(
+            '  ' + StatusDot(tsFailed, LConfig) + ' ' +
+            AnsiRed(LEntry.Name, LConfig));
           if LLastFailMsg <> '' then
-            WriteLn('    ', AnsiDim(LLastFailMsg))
+            LOutSink.WriteLn('    ' + AnsiDim(LLastFailMsg, LConfig))
           else
-            WriteLn('    ', AnsiDim('(assertion failed)'));
+            LOutSink.WriteLn('    ' + AnsiDim('(assertion failed)', LConfig));
         end;
       tsSkipped:
         begin
           if LEntry.SkipReason <> '' then
-            WriteLn('  ', StatusDot(tsSkipped), ' ', AnsiDim(LEntry.Name),
-              ' -- ', LEntry.SkipReason)
+            LOutSink.WriteLn(
+              '  ' + StatusDot(tsSkipped, LConfig) + ' ' +
+              AnsiDim(LEntry.Name, LConfig) + ' -- ' + LEntry.SkipReason)
           else
-            WriteLn('  ', StatusDot(tsSkipped), ' ', AnsiDim(LEntry.Name));
+            LOutSink.WriteLn(
+              '  ' + StatusDot(tsSkipped, LConfig) + ' ' +
+              AnsiDim(LEntry.Name, LConfig));
         end;
       tsError:
         begin
-          WriteLn('  ', StatusDot(tsError), ' ', AnsiRed(LEntry.Name),
-            ' [unexpected exception]');
+          LOutSink.WriteLn(
+            '  ' + StatusDot(tsError, LConfig) + ' ' +
+            AnsiRed(LEntry.Name, LConfig) + ' [unexpected exception]');
           if LLastFailMsg <> '' then
-            WriteLn('    ', AnsiDim(LLastFailMsg));
+            LOutSink.WriteLn('    ' + AnsiDim(LLastFailMsg, LConfig));
         end;
     end;
 
     LLastFailMsg := '';
-    ReportLeakIfAny(LStatus);
+    ReportLeakIfAny(LStatus, LConfig);
   end;
 
   { Suite-level teardown }
   { Suite-level teardown (uses shared helper) }
-  RunTeardown;
+  RunTeardown(LConfig);
 
   { Merge subtest-level results from appender }
   for J := 0 to High(LAppender.Results) do
@@ -719,7 +762,7 @@ begin
     LAppender.Free;
   end;
 
-  FinalizeResults(AResult, LPass, LFail, LSkip);
+  FinalizeResults(LConfig, AResult, LPass, LFail, LSkip);
   Result := LastRunPassed;
 end;
 
@@ -745,7 +788,7 @@ end;
   helpers (e.g. RunSetup, RunTeardown, FinalizeResults) to reduce duplication.
   R4-03: setup/teardown/finalize helpers now extracted below. }
 
-function TTestSuite.RunSetup(out ASkipCount: Integer;
+function TTestSuite.RunSetup(const AConfig: TTestConfig; out ASkipCount: Integer;
   out AErrorMsg: string): Boolean;
 { Runs suite-level setup. Returns True on success, False on exception.
   On failure, prints the error and sets ASkipCount/AErrorMsg for the caller. }
@@ -760,7 +803,8 @@ begin
   except
     on E: Exception do
     begin
-      WriteLn('  ', AnsiRed('X setup failed: ') + E.Message);
+      ResolveErrSink(AConfig).WriteLn(
+        '  ' + AnsiRed('X setup failed: ', AConfig) + E.Message);
       ASkipCount := Length(Tests);
       AErrorMsg := E.Message;
       Result := False;
@@ -768,7 +812,7 @@ begin
   end;
 end;
 
-procedure TTestSuite.RunTeardown;
+procedure TTestSuite.RunTeardown(const AConfig: TTestConfig);
 begin
   if not (Assigned(Teardown) or Assigned(TeardownClosure)) then
     Exit;
@@ -776,7 +820,8 @@ begin
     if Assigned(Teardown) then Teardown else TeardownClosure();
   except
     on E: Exception do
-      WriteLn('  ', AnsiYellow('WARNING teardown error: ') + E.Message);
+      ResolveErrSink(AConfig).WriteLn(
+        '  ' + AnsiYellow('WARNING teardown error: ', AConfig) + E.Message);
   end;
   { R4-12: Nil-out after execution to prevent double-free if the same
     suite is run twice on the same runner (e.g. fixture teardown that frees
@@ -786,7 +831,7 @@ begin
   TeardownClosure := nil;
 end;
 
-procedure TTestSuite.FinalizeResults(
+procedure TTestSuite.FinalizeResults(const AConfig: TTestConfig;
   var AResult: TTestRunResult; APass, AFail, ASkip: Integer);
 begin
   CleanupTableAllocations;
@@ -799,10 +844,11 @@ begin
   LastPass      := APass;
   LastFail      := AFail;
   LastSkip      := ASkip;
-  WriteLn(AnsiDim('  ') +
-    IntToStr(APass) + ' passed, ' +
-    IntToStr(AFail) + ' failed, ' +
-    IntToStr(ASkip) + ' skipped');
+  ResolveOutSink(AConfig).WriteLn(
+    AnsiDim(
+      '  ' + IntToStr(APass) + ' passed, ' +
+      IntToStr(AFail) + ' failed, ' +
+      IntToStr(ASkip) + ' skipped', AConfig));
 end;
 
 function TTestSuite.RunParallelWithResult(APool: IThreadPool;
@@ -816,6 +862,8 @@ var
   LRecs: array of TThreadRec;
   LThreads: array of TThreadID;
   LResults: array of TTestResult;
+  LConfig: TTestConfig;
+  LOutSink: IOutputSink;
 begin
   AResult := TTestRunResult.Create(Name);
   LTotal := Length(Tests);
@@ -823,16 +871,22 @@ begin
   LFail := 0;
   LSkip := 0;
   LMtx := Mutex();
+  LConfig := ResolveConfig(Config);
+  LOutSink := ResolveOutSink(LConfig);
 
-  WriteLn;
-  WriteLn(AnsiBold('> ') + AnsiCyan(Name) +
-    AnsiDim(' (' + IntToStr(LTotal) + ' tests, parallel)'));
+  LOutSink.WriteLn('');
+  LOutSink.WriteLn(
+    AnsiBold('> ', LConfig) +
+    AnsiCyan(Name, LConfig) +
+    AnsiDim(' (' + IntToStr(LTotal) + ' tests, parallel)', LConfig));
 
   { Suite-level setup (serial, uses shared helper) }
-  if not RunSetup(LSkip, LErrorMsg) then
+  if not RunSetup(LConfig, LSkip, LErrorMsg) then
   begin
     for I := 0 to High(Tests) do
-      WriteLn('    ', StatusDot(tsSkipped), ' ', AnsiDim(Tests[I].Name));
+      LOutSink.WriteLn(
+        '    ' + StatusDot(tsSkipped, LConfig) + ' ' +
+        AnsiDim(Tests[I].Name, LConfig));
     AResult.Failed    := 1;
     AResult.Skipped   := LSkip;
     AResult.AllPassed := False;
@@ -842,7 +896,8 @@ begin
     LastFail      := 1;
     LastSkip      := LSkip;
     Result         := False;
-    WriteLn(AnsiDim('  ') + IntToStr(LSkip) + ' skipped (setup failure)');
+    LOutSink.WriteLn(
+      AnsiDim('  ' + IntToStr(LSkip) + ' skipped (setup failure)', LConfig));
     Exit;
   end;
 
@@ -855,7 +910,7 @@ begin
   begin
     { Test filter — skip non-matching tests silently (same as serial mode:
       filtered tests are invisible, not counted as pass/fail/skip) }
-    if (GetTestFilter <> '') and not MatchesFilter(Tests[I].Name) then
+    if not MatchesFilter(Tests[I].Name, LConfig) then
     begin
       LThreads[I] := 0;  { no thread for this slot — also marks filter-excluded }
       Continue;
@@ -883,7 +938,7 @@ begin
   for I := 0 to High(Tests) do
   begin
     { Skip filtered-out tests — LRecs[I] is uninitialized for them }
-    if (GetTestFilter <> '') and not MatchesFilter(Tests[I].Name) then
+    if not MatchesFilter(Tests[I].Name, LConfig) then
     begin
       LThreads[I] := 0;
       Continue;
@@ -909,7 +964,7 @@ begin
       CloseThread(LThreads[I]);
 
   { Suite-level teardown (uses shared helper) }
-  RunTeardown;
+  RunTeardown(LConfig);
 
   { Collect results from threads that actually ran.
     Filter-excluded slots have LThreads[I]=0 and no result data.
@@ -923,20 +978,30 @@ begin
       AResult.Results[High(AResult.Results)] := LResults[I];
     end;
 
-  FinalizeResults(AResult, LPass, LFail, LSkip);
+  FinalizeResults(LConfig, AResult, LPass, LFail, LSkip);
   Result := LastRunPassed;
 end;
 
 procedure TTestSuite.Summary;
+var
+  LConfig: TTestConfig;
 begin
+  LConfig := ResolveConfig(Config);
   if not HasRun then
   begin
-    WriteLn(AnsiYellow('Warning: ') + Name + ' has not been run yet');
+    ResolveErrSink(LConfig).WriteLn(
+      AnsiYellow('Warning: ', LConfig) + Name + ' has not been run yet');
     Exit;
   end;
-  WriteLn(AnsiBold('--- ') + AnsiCyan(Name) + AnsiBold(' ---'));
-  WriteLn('  Total tests: ', Length(Tests));
-  WriteLn('  Passed: ', LastPass, ', Failed: ', LastFail, ', Skipped: ', LastSkip);
+  ResolveOutSink(LConfig).WriteLn(
+    AnsiBold('--- ', LConfig) +
+    AnsiCyan(Name, LConfig) +
+    AnsiBold(' ---', LConfig));
+  ResolveOutSink(LConfig).WriteLn('  Total tests: ' + IntToStr(Length(Tests)));
+  ResolveOutSink(LConfig).WriteLn(
+    '  Passed: ' + IntToStr(LastPass) +
+    ', Failed: ' + IntToStr(LastFail) +
+    ', Skipped: ' + IntToStr(LastSkip));
 end;
 
 function TTestSuite.AllPassed: Boolean;
@@ -1051,13 +1116,18 @@ var
   I: Integer;
   LAllPassed: Boolean;
   LSuiteResult: TTestRunResult;
+  LConfig: TTestConfig;
 
 begin
   { Auto-detect --filter from command line if not already set programmatically }
   if GetTestFilter = '' then
     SetTestFilter(ParseFilterFromArgs);
+  LConfig := RunnerConfig(Self);
 
-  WriteLn(AnsiBold('=== ') + AnsiBold(Name) + AnsiBold(' ==='));
+  ResolveOutSink(LConfig).WriteLn(
+    AnsiBold('=== ', LConfig) +
+    AnsiBold(Name, LConfig) +
+    AnsiBold(' ===', LConfig));
   LAllPassed := True;
   TotalPass := 0;
   TotalFail := 0;
@@ -1082,13 +1152,18 @@ var
   I: Integer;
   LAllPassed: Boolean;
   LSuiteResult: TTestRunResult;
+  LConfig: TTestConfig;
 
 begin
   { Auto-detect --filter from command line if not already set programmatically }
   if GetTestFilter = '' then
     SetTestFilter(ParseFilterFromArgs);
+  LConfig := RunnerConfig(Self);
 
-  WriteLn(AnsiBold('=== ') + AnsiBold(Name) + AnsiBold(' (parallel) ==='));
+  ResolveOutSink(LConfig).WriteLn(
+    AnsiBold('=== ', LConfig) +
+    AnsiBold(Name, LConfig) +
+    AnsiBold(' (parallel) ===', LConfig));
   LAllPassed := True;
   TotalPass := 0;
   TotalFail := 0;
@@ -1108,13 +1183,17 @@ begin
 end;
 
 procedure TTestRunner.Summary;
+var
+  LConfig: TTestConfig;
 begin
-  WriteLn;
-  WriteLn(AnsiBold('=== Summary ==='));
-  WriteLn('  Suites: ', Length(Suites));
-  WriteLn('  Passed: ', TotalPass,
-    ', Failed: ', TotalFail,
-    ', Skipped: ', TotalSkip);
+  LConfig := RunnerConfig(Self);
+  ResolveOutSink(LConfig).WriteLn('');
+  ResolveOutSink(LConfig).WriteLn(AnsiBold('=== Summary ===', LConfig));
+  ResolveOutSink(LConfig).WriteLn('  Suites: ' + IntToStr(Length(Suites)));
+  ResolveOutSink(LConfig).WriteLn(
+    '  Passed: ' + IntToStr(TotalPass) +
+    ', Failed: ' + IntToStr(TotalFail) +
+    ', Skipped: ' + IntToStr(TotalSkip));
 end;
 
 function TTestRunner.AllPassed: Boolean;

@@ -11,34 +11,45 @@ interface
 uses
   SysUtils,          { GetEnvironmentVariable — platform env, no project alternative }
   nextpas.core.test.base,
+  nextpas.core.test.config,
   nextpas.core.text.conv,
   nextpas.core.text.builder,
   nextpas.core.fs;
 
 { ── ANSI helpers ──────────────────────────────────────────────────────────── }
 
-function AnsiBold(const S: string): string;
-function AnsiGreen(const S: string): string;
-function AnsiRed(const S: string): string;
-function AnsiYellow(const S: string): string;
-function AnsiCyan(const S: string): string;
-function AnsiDim(const S: string): string;
+function AnsiBold(const S: string): string; overload;
+function AnsiBold(const S: string; const AConfig: TTestConfig): string; overload;
+function AnsiGreen(const S: string): string; overload;
+function AnsiGreen(const S: string; const AConfig: TTestConfig): string; overload;
+function AnsiRed(const S: string): string; overload;
+function AnsiRed(const S: string; const AConfig: TTestConfig): string; overload;
+function AnsiYellow(const S: string): string; overload;
+function AnsiYellow(const S: string; const AConfig: TTestConfig): string; overload;
+function AnsiCyan(const S: string): string; overload;
+function AnsiCyan(const S: string; const AConfig: TTestConfig): string; overload;
+function AnsiDim(const S: string): string; overload;
+function AnsiDim(const S: string; const AConfig: TTestConfig): string; overload;
 procedure SetAnsiEnabled(AEnabled: Boolean);
 
 { ── StatusDot ─────────────────────────────────────────────────────────────── }
 
-function StatusDot(AStatus: TTestStatus): string;
+function StatusDot(AStatus: TTestStatus): string; overload;
+function StatusDot(AStatus: TTestStatus; const AConfig: TTestConfig): string; overload;
 
 { ── Test Filter ───────────────────────────────────────────────────────────── }
 
 procedure SetTestFilter(const APattern: string);
-function  GetTestFilter: string;
-function  MatchesFilter(const AName: string): Boolean;
+function  GetTestFilter: string; overload;
+function  GetTestFilter(const AConfig: TTestConfig): string; overload;
+function  MatchesFilter(const AName: string): Boolean; overload;
+function  MatchesFilter(const AName: string; const AConfig: TTestConfig): Boolean; overload;
 
 { ── Test Timeout ──────────────────────────────────────────────────────────── }
 
 procedure SetTestTimeout(AMillis: Integer);
-function  GetTestTimeout: Integer;
+function  GetTestTimeout: Integer; overload;
+function  GetTestTimeout(const AConfig: TTestConfig): Integer; overload;
 
 { ── JUnit XML output ─────────────────────────────────────────────────────── }
 
@@ -49,7 +60,8 @@ function WriteJUnitXML(const AResults: specialize TArray<TTestRunResult>;
 
 { ── Leak reporting ────────────────────────────────────────────────────────── }
 
-procedure ReportLeakIfAny(AStatus: TTestStatus);
+procedure ReportLeakIfAny(AStatus: TTestStatus); overload;
+procedure ReportLeakIfAny(AStatus: TTestStatus; const AConfig: TTestConfig); overload;
 
 { ── Utility helpers ───────────────────────────────────────────────────────── }
 
@@ -108,35 +120,109 @@ begin
   end;
 end;
 
-function Wrap(const ACode, S: string): string;
+function UseAnsi(const AConfig: TTestConfig): Boolean;
+var
+  LConfig: TTestConfig;
 begin
+  LConfig := ResolveConfig(AConfig);
+  case LConfig.AnsiMode of
+    amOn: Exit(True);
+    amOff: Exit(False);
+  end;
   InitAnsi;
-  if GAnsiEnabled then
+  Result := GAnsiEnabled;
+end;
+
+function Wrap(const ACode, S: string; const AConfig: TTestConfig): string; overload;
+begin
+  if UseAnsi(AConfig) then
     Result := ACode + S + C_RESET
   else
     Result := S;
 end;
 
-function AnsiBold(const S: string): string;  begin Result := Wrap(C_BOLD, S); end;
-function AnsiGreen(const S: string): string;  begin Result := Wrap(C_GREEN, S); end;
-function AnsiRed(const S: string): string;    begin Result := Wrap(C_RED, S); end;
-function AnsiYellow(const S: string): string; begin Result := Wrap(C_YELLOW, S); end;
-function AnsiCyan(const S: string): string;   begin Result := Wrap(C_CYAN, S); end;
-function AnsiDim(const S: string): string;    begin Result := Wrap(C_DIM, S); end;
+function Wrap(const ACode, S: string): string; overload;
+begin
+  Result := Wrap(ACode, S, DefaultConfig);
+end;
+
+function AnsiBold(const S: string): string;
+begin
+  Result := Wrap(C_BOLD, S);
+end;
+
+function AnsiBold(const S: string; const AConfig: TTestConfig): string;
+begin
+  Result := Wrap(C_BOLD, S, AConfig);
+end;
+
+function AnsiGreen(const S: string): string;
+begin
+  Result := Wrap(C_GREEN, S);
+end;
+
+function AnsiGreen(const S: string; const AConfig: TTestConfig): string;
+begin
+  Result := Wrap(C_GREEN, S, AConfig);
+end;
+
+function AnsiRed(const S: string): string;
+begin
+  Result := Wrap(C_RED, S);
+end;
+
+function AnsiRed(const S: string; const AConfig: TTestConfig): string;
+begin
+  Result := Wrap(C_RED, S, AConfig);
+end;
+
+function AnsiYellow(const S: string): string;
+begin
+  Result := Wrap(C_YELLOW, S);
+end;
+
+function AnsiYellow(const S: string; const AConfig: TTestConfig): string;
+begin
+  Result := Wrap(C_YELLOW, S, AConfig);
+end;
+
+function AnsiCyan(const S: string): string;
+begin
+  Result := Wrap(C_CYAN, S);
+end;
+
+function AnsiCyan(const S: string; const AConfig: TTestConfig): string;
+begin
+  Result := Wrap(C_CYAN, S, AConfig);
+end;
+
+function AnsiDim(const S: string): string;
+begin
+  Result := Wrap(C_DIM, S);
+end;
+
+function AnsiDim(const S: string; const AConfig: TTestConfig): string;
+begin
+  Result := Wrap(C_DIM, S, AConfig);
+end;
 
 procedure SetAnsiEnabled(AEnabled: Boolean);
 begin
   GAnsiEnabled := AEnabled;
   GAnsiChecked := True; { prevent InitAnsi from overwriting }
+  if AEnabled then
+    SetDefaultAnsiMode(amOn)
+  else
+    SetDefaultAnsiMode(amOff);
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }
 { StatusDot                                                                    }
 { ═════════════════════════════════════════════════════════════════════════════ }
 
-function StatusDot(AStatus: TTestStatus): string;
+function StatusDot(AStatus: TTestStatus; const AConfig: TTestConfig): string;
 begin
-  if not GAnsiEnabled then
+  if not UseAnsi(AConfig) then
   begin
     case AStatus of
       tsPassed:  Result := '+';
@@ -148,45 +234,59 @@ begin
   end;
 
   case AStatus of
-    tsPassed:  Result := AnsiGreen(#$E2#$9C#$93);
-    tsFailed:  Result := AnsiRed(#$E2#$9C#$97);
-    tsSkipped: Result := AnsiYellow(#$E2#$97#$8B);
-    tsError:   Result := AnsiRed('!');
+    tsPassed:  Result := AnsiGreen(#$E2#$9C#$93, AConfig);
+    tsFailed:  Result := AnsiRed(#$E2#$9C#$97, AConfig);
+    tsSkipped: Result := AnsiYellow(#$E2#$97#$8B, AConfig);
+    tsError:   Result := AnsiRed('!', AConfig);
   end;
+end;
+
+function StatusDot(AStatus: TTestStatus): string;
+begin
+  Result := StatusDot(AStatus, DefaultConfig);
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }
 { Test Filter & Timeout (public API)                                          }
 { ═════════════════════════════════════════════════════════════════════════════ }
 
-var
-  { Thread-safety: SetTestFilter/SetTestTimeout must be called BEFORE spawning
-    worker threads. After that, GTestFilter (read in MatchesFilter) and
-    GTestTimeoutMs (read in RunWithResult) are only read concurrently.
-    GTestFilter is a string = reference-counted type; reading it concurrently
-    while the main thread never writes is safe because the reference count
-    only changes on write. }
-  GTestFilter: string = '';
-  GTestTimeoutMs: Integer = 0;
-
 procedure SetTestFilter(const APattern: string);
 begin
-  GTestFilter := APattern;
+  SetDefaultFilterPattern(APattern);
 end;
 
 function GetTestFilter: string;
 begin
-  Result := GTestFilter;
+  Result := GetTestFilter(DefaultConfig);
+end;
+
+function GetTestFilter(const AConfig: TTestConfig): string;
+begin
+  Result := ResolveConfig(AConfig).FilterPattern;
 end;
 
 procedure SetTestTimeout(AMillis: Integer);
 begin
-  GTestTimeoutMs := AMillis;
+  if AMillis < 0 then
+    SetDefaultTimeoutMs(0)
+  else
+    SetDefaultTimeoutMs(UInt64(AMillis));
 end;
 
 function GetTestTimeout: Integer;
 begin
-  Result := GTestTimeoutMs;
+  Result := GetTestTimeout(DefaultConfig);
+end;
+
+function GetTestTimeout(const AConfig: TTestConfig): Integer;
+var
+  LTimeoutMs: UInt64;
+begin
+  LTimeoutMs := ResolveConfig(AConfig).TimeoutMs;
+  if LTimeoutMs > UInt64(High(Integer)) then
+    Result := High(Integer)
+  else
+    Result := Integer(LTimeoutMs);
 end;
 
 { ── Glob matching (internal) ───────────────────────────────────────────────── }
@@ -228,14 +328,14 @@ begin
   Result := J > Length(APattern);
 end;
 
-function MatchesFilter(const AName: string): Boolean;
+function MatchesFilter(const AName: string; const AConfig: TTestConfig): Boolean;
 var
   LFilter, LPattern: string;
   LComma: Integer;
 begin
-  if GTestFilter = '' then
+  LFilter := GetTestFilter(AConfig);
+  if LFilter = '' then
     Exit(True);
-  LFilter := GTestFilter;
   while LFilter <> '' do
   begin
     LComma := Pos(',', LFilter);
@@ -268,6 +368,11 @@ begin
     end;
   end;
   Result := False;
+end;
+
+function MatchesFilter(const AName: string): Boolean;
+begin
+  Result := MatchesFilter(AName, DefaultConfig);
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }
@@ -430,18 +535,24 @@ end;
 { Leak Reporting                                                               }
 { ═════════════════════════════════════════════════════════════════════════════ }
 
-procedure ReportLeakIfAny(AStatus: TTestStatus);
+procedure ReportLeakIfAny(AStatus: TTestStatus; const AConfig: TTestConfig);
 begin
   {$IFDEF HASHEAPTRACE}
   if (AStatus = tsPassed) and
      (GExecState <> nil) and (not GExecState^.Failed) and
      (GetFPCHeapStatus.CurrHeapUsed > 0) then
   begin
-    WriteLn('  ', AnsiYellow('WARNING leak'), ': ',
-      GetFPCHeapStatus.CurrHeapUsed, ' bytes not freed in ',
-      AnsiBold(GExecState^.TestName));
+    ResolveOutSink(AConfig).WriteLn(
+      '  ' + AnsiYellow('WARNING leak', AConfig) + ': ' +
+      IntToStr(GetFPCHeapStatus.CurrHeapUsed) + ' bytes not freed in ' +
+      AnsiBold(GExecState^.TestName, AConfig));
   end;
   {$ENDIF}
+end;
+
+procedure ReportLeakIfAny(AStatus: TTestStatus);
+begin
+  ReportLeakIfAny(AStatus, DefaultConfig);
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }
