@@ -62,7 +62,7 @@ type
     function Mean(const AData: TDoubleArray): Double;
 
     {** 计算中位数 }
-    function Median(var AData: TDoubleArray): Double;
+    function Median(const AData: TDoubleArray): Double;
 
     {** 计算标准差 }
     function StdDev(const AData: TDoubleArray): Double;
@@ -127,7 +127,7 @@ begin
     Result := KahanSum(AData) / LLen;
 end;
 
-function TBenchStatsAnalyzer.Median(var AData: TDoubleArray): Double;
+function TBenchStatsAnalyzer.Median(const AData: TDoubleArray): Double;
 var
   LSorted: TDoubleArray;
   LLen: Integer;

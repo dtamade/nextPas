@@ -230,7 +230,7 @@ type
     function Mean(const AData: TDoubleArray): Double;
 
     {** 计算中位数 }
-    function Median(var AData: TDoubleArray): Double;
+    function Median(const AData: TDoubleArray): Double;
 
     {** 计算标准差 }
     function StdDev(const AData: TDoubleArray): Double;

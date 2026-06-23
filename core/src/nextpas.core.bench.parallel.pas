@@ -259,6 +259,8 @@ function RunParallelBench(AFunc: TBenchParallelFunc;
 var
   LBench: TParallelBenchmark;
 begin
+  if AThreadCount < 1 then
+    AThreadCount := 1;
   LBench := TParallelBenchmark.Create(AFunc, AThreadCount, AIterationsPerThread);
   Result := LBench.Execute;
 end;

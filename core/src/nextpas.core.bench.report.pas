@@ -132,6 +132,24 @@ begin
   end;
 end;
 
+
+{ TSV 辅助：将 Tab/换行替换为空格，防止破坏 TSV 结构 }
+function SanitizeTSVField(const AStr: string): string;
+var
+  I: Integer;
+  LBuf: array of Char;
+begin
+  SetLength(LBuf, Length(AStr));
+  for I := 1 to Length(AStr) do
+  begin
+    if AStr[I] in [#9, #10, #13] then
+      LBuf[I - 1] := ' '
+    else
+      LBuf[I - 1] := AStr[I];
+  end;
+  SetString(Result, PChar(LBuf), Length(AStr));
+end;
+
 { TBenchReportGenerator }
 
 constructor TBenchReportGenerator.Create;
@@ -236,7 +254,10 @@ begin
       case AStr[I] of
         '\': LBuilder.AppendStr('\\');
         '"': LBuilder.AppendStr('\"');
+        #0: LBuilder.AppendStr('\u0000');
+        #8: LBuilder.AppendStr('\b');
         #10: LBuilder.AppendStr('\n');
+        #12: LBuilder.AppendStr('\f');
         #13: LBuilder.AppendStr('\r');
         #9: LBuilder.AppendStr('\t');
       else
@@ -277,6 +298,7 @@ function TBenchReportGenerator.ToConsole: string;
 var
   LLines: TLineBuffer;
   LSkippedCount: Integer;
+  LMaxDetail: Integer;
   i: Integer;
 begin
   LLines := Default(TLineBuffer);
@@ -308,7 +330,7 @@ begin
         [FResults[i].Name,
          FormatLargeNumber(FResults[i].Iterations),
          FormatNumber(FResults[i].NsPerOp, 1),
-         FormatLargeNumber(Int64(FResults[i].OpsPerSec)),
+         FormatLargeNumber(Min(Int64(FResults[i].OpsPerSec), High(Int64))),
          FormatNumber(FResults[i].StdDev, 1),
          FormatNumber(FResults[i].P99, 1)]));
     end;
@@ -338,8 +360,9 @@ begin
   BufferAddLine(LLines, '');
   BufferAddLine(LLines, '=== Statistics ===');
 
-  // detailed statistics (top 5 non-skipped)
+  // detailed statistics (non-skipped, up to LMaxDetail)
   LSkippedCount := 0;
+  LMaxDetail := Min(FResultCount, 5);
   for i := 0 to FResultCount - 1 do
   begin
     if FResults[i].Skipped then
@@ -347,7 +370,7 @@ begin
       Inc(LSkippedCount);
       Continue;
     end;
-    if i - LSkippedCount >= 5 then
+    if i - LSkippedCount >= LMaxDetail then
       Break;
     BufferAddLine(LLines, '');
     BufferAddLine(LLines, FResults[i].Name + ':');
@@ -461,9 +484,9 @@ begin
   for i := 0 to FResultCount - 1 do
   begin
     BufferAddLine(LLines,
-      FResults[i].Name + #9 +
+      SanitizeTSVField(FResults[i].Name) + #9 +
       BoolToStr(FResults[i].Skipped, 'skipped', 'ok') + #9 +
-      FResults[i].SkipReason + #9 +
+      SanitizeTSVField(FResults[i].SkipReason) + #9 +
       IntToStr(FResults[i].Iterations) + #9 +
       FormatNumber(FResults[i].NsPerOp, 2) + #9 +
       FormatNumber(FResults[i].OpsPerSec, 0) + #9 +
@@ -573,6 +596,7 @@ function TBenchReportGenerator.ToHTML: string;
 var
   LHTML: TLineBuffer;
   LSkippedCount: Integer;
+  LMaxDetail: Integer;
   i: Integer;
 begin
   LHTML := Default(TLineBuffer);
@@ -626,7 +650,7 @@ begin
     BufferAddLine(LHTML, '        <td class="benchmark-name">' + EscapeHTML(FResults[i].Name) + '</td>');
     BufferAddLine(LHTML, '        <td>' + FormatLargeNumber(FResults[i].Iterations) + '</td>');
     BufferAddLine(LHTML, '        <td>' + FormatNumber(FResults[i].NsPerOp, 1) + '</td>');
-    BufferAddLine(LHTML, '        <td>' + FormatLargeNumber(Int64(FResults[i].OpsPerSec)) + '</td>');
+    BufferAddLine(LHTML, '        <td>' + FormatLargeNumber(Min(Int64(FResults[i].OpsPerSec), High(Int64))) + '</td>');
     BufferAddLine(LHTML, '        <td>' + FormatNumber(FResults[i].StdDev, 1) + '</td>');
     BufferAddLine(LHTML, '        <td>' + FormatNumber(FResults[i].Median, 1) + '</td>');
     BufferAddLine(LHTML, '        <td>' + FormatNumber(FResults[i].P95, 1) + '</td>');
@@ -674,8 +698,9 @@ begin
   BufferAddLine(LHTML, '  <div class="stats">');
   BufferAddLine(LHTML, '    <h2>Detailed Statistics</h2>');
 
-  // top 5 non-skipped detailed stats
+  // detailed stats (non-skipped, up to LMaxDetail)
   LSkippedCount := 0;
+  LMaxDetail := Min(FResultCount, 5);
   for i := 0 to FResultCount - 1 do
   begin
     if FResults[i].Skipped then
@@ -683,7 +708,7 @@ begin
       Inc(LSkippedCount);
       Continue;
     end;
-    if i - LSkippedCount >= 5 then
+    if i - LSkippedCount >= LMaxDetail then
       Break;
     BufferAddLine(LHTML, '    <h3>' + EscapeHTML(FResults[i].Name) + '</h3>');
     BufferAddLine(LHTML, '    <p>Mean: ' + FormatTime(FResults[i].NsPerOp) + '</p>');

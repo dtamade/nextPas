@@ -239,6 +239,8 @@ var
   LCurrentNs: UInt64;
 begin
   LCurrentNs := platform_monotonic_ns;
+  if LCurrentNs < FStartNs then
+    Exit(TDuration.FromNanoseconds(0));
   Result := TDuration.FromNanoseconds(LCurrentNs - FStartNs);
 end;
 
