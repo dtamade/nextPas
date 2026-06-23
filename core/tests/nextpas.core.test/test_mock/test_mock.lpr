@@ -448,6 +448,52 @@ begin
   end;
 end;
 
+procedure TestRecordCallTypedPreservesLegacyArgs;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.State.RecordCallTyped('TypedCall', [
+      MockStr('alpha'),
+      MockInt(42),
+      MockBool(True)
+    ]);
+    CheckEqual(1, LM.CallCount('TypedCall'));
+    CheckEqual(3, Length(LM.State.Calls[0].TypedArgs));
+    CheckTrue(LM.State.Calls[0].TypedArgs[0].Kind = mvString,
+      'typed string arg kind');
+    CheckEqual('alpha', LM.State.Calls[0].TypedArgs[0].StrVal);
+    CheckTrue(LM.State.Calls[0].TypedArgs[1].Kind = mvInt64,
+      'typed int arg kind');
+    CheckEqual(Int64(42), LM.State.Calls[0].TypedArgs[1].IntVal);
+    CheckTrue(LM.State.Calls[0].TypedArgs[2].Kind = mvBool,
+      'typed bool arg kind');
+    CheckTrue(LM.State.Calls[0].TypedArgs[2].BoolVal, 'typed bool arg value');
+    CheckEqual('alpha', LM.State.Calls[0].Args[0]);
+    CheckEqual('42', LM.State.Calls[0].Args[1]);
+    CheckEqual('true', LM.State.Calls[0].Args[2]);
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestGetReturnTypedFromStringSetup;
+var
+  LM: TMock;
+  LValue: TMockValue;
+begin
+  LM := TMock.Create;
+  try
+    LM.Setup('Echo').Returns('typed');
+    LValue := LM.State.GetReturnTyped('Echo', [MockStr('ignored')]);
+    CheckTrue(LValue.Kind = mvString, 'typed return kind');
+    CheckEqual('typed', LValue.StrVal);
+  finally
+    LM.Free;
+  end;
+end;
+
 { R6-46: Verify expects 1 but called 2 times → should fail }
 
 procedure TestVerifyCalledExactlyOverCall;
@@ -541,6 +587,10 @@ begin
   Suite.Test('TestStateCallsDirectAccess', @TestStateCallsDirectAccess);
   Suite.Test('TestStateCallsTypedArgsMirrorStrings',
     @TestStateCallsTypedArgsMirrorStrings);
+  Suite.Test('TestRecordCallTypedPreservesLegacyArgs',
+    @TestRecordCallTypedPreservesLegacyArgs);
+  Suite.Test('TestGetReturnTypedFromStringSetup',
+    @TestGetReturnTypedFromStringSetup);
   Suite.Test('TestGetReturnIntNonNumeric', @TestGetReturnIntNonNumeric);
 
   { R6-46: Verify over-call }

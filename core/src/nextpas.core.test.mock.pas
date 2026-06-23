@@ -93,8 +93,12 @@ type
     { Record a call }
     procedure RecordCall(const AMethodName: string;
       const AArgs: array of string);
+    procedure RecordCallTyped(const AMethodName: string;
+      const AArgs: array of TMockValue);
     { Get return value for a method, or '' if not configured }
     function GetReturn(const AMethodName: string): string;
+    function GetReturnTyped(const AMethodName: string;
+      const AArgs: array of TMockValue): TMockValue;
     { Configure a return value }
     procedure SetReturn(const AMethodName, AValue: string);
     { Get call count for a method }
@@ -192,6 +196,25 @@ begin
   Result.DblVal  := AValue;
 end;
 
+function MockValueToString(const AValue: TMockValue): string;
+begin
+  case AValue.Kind of
+    mvString:
+      Result := AValue.StrVal;
+    mvInt64:
+      Result := IntToStr(AValue.IntVal);
+    mvBool:
+      if AValue.BoolVal then
+        Result := 'true'
+      else
+        Result := 'false';
+    mvDouble:
+      Result := FloatToStr(AValue.DblVal);
+  else
+    Result := '';
+  end;
+end;
+
 { ── TMockState ────────────────────────────────────────────────────────────── }
 
 constructor TMockState.Create;
@@ -230,6 +253,28 @@ begin
   FCalls[High(FCalls)] := LCall;
 end;
 
+procedure TMockState.RecordCallTyped(const AMethodName: string;
+  const AArgs: array of TMockValue);
+var
+  LCall: TMockCall;
+  I: Integer;
+begin
+  LCall.MethodName := AMethodName;
+  LCall.HasResult  := False;
+  LCall.ResultValue := '';
+  LCall.TypedReturnValue := MockUnsetValue;
+  SetLength(LCall.Args, Length(AArgs));
+  SetLength(LCall.TypedArgs, Length(AArgs));
+  for I := 0 to High(AArgs) do
+  begin
+    LCall.TypedArgs[I] := AArgs[I];
+    LCall.Args[I] := MockValueToString(AArgs[I]);
+  end;
+
+  SetLength(FCalls, Length(FCalls) + 1);
+  FCalls[High(FCalls)] := LCall;
+end;
+
 function TMockState.GetReturn(const AMethodName: string): string;
 var
   I: Integer;
@@ -242,6 +287,19 @@ begin
   Result := '';
 end;
 
+function TMockState.GetReturnTyped(const AMethodName: string;
+  const AArgs: array of TMockValue): TMockValue;
+var
+  I: Integer;
+begin
+  for I := High(FSetups) downto 0 do
+  begin
+    if FSetups[I].MethodName = AMethodName then
+      Exit(FSetups[I].TypedReturnValue);
+  end;
+  Result := MockUnsetValue;
+end;
+
 procedure TMockState.SetReturn(const AMethodName, AValue: string);
 var
   LSetup: TMockCall;
@@ -252,18 +310,19 @@ begin
   begin
     if FSetups[I].MethodName = AMethodName then
     begin
-      FSetups[I].ResultValue := AValue;
-      FSetups[I].HasResult   := True;
+      FSetups[I].ResultValue      := AValue;
+      FSetups[I].TypedReturnValue := MockStr(AValue);
+      FSetups[I].HasResult        := True;
       Exit;
     end;
   end;
   { No existing setup found — append new slot }
   LSetup.MethodName       := AMethodName;
   LSetup.ResultValue      := AValue;
+  LSetup.TypedReturnValue := MockStr(AValue);
   LSetup.HasResult        := True;
   LSetup.Args             := nil;
   LSetup.TypedArgs        := nil;
-  LSetup.TypedReturnValue := MockUnsetValue;
   SetLength(FSetups, Length(FSetups) + 1);
   FSetups[High(FSetups)] := LSetup;
 end;
