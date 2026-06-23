@@ -813,9 +813,7 @@ begin
     'function atomic_notify_all(var aObj: Int32): Int32;',
     'function atomic_notify_all(var aObj: UInt32): Int32;');
   LPlatformWaitAddress64WindowsSection := ExtractImplementationSection(LPlatformSyncSource,
-    'function platform_wait_address64(AAddr: PInt64; const AExpected: Int64; const ATimeoutNs: Int64): Int32;' + LineEnding +
-    'var' + LineEnding +
-    '  LExpected: Int64;',
+    'function platform_wait_address64(AAddr: PInt64; const AExpected: Int64; const ATimeoutNs: Int64): Int32;',
     'function platform_wake_address_one64(AAddr: PInt64): Int32;');
   LCompatFacadeTestSection := ExtractSection(LAtomicTestSource,
     'procedure TestAtomicCompatFacade;' + LineEnding +
@@ -2623,10 +2621,14 @@ begin
     'platform.sync must declare the 64-bit wait-address primitive');
   CheckContains(LPlatformSyncSource, 'function platform_posix_wait_address_fallback64(',
     'platform.sync must keep the POSIX 64-bit wait-address fallback');
-  CheckContains(LPlatformWaitAddress64WindowsSection, 'WaitOnAddress(',
-    'Windows 64-bit wait-address path must use native WaitOnAddress');
-  CheckContains(LPlatformWaitAddress64WindowsSection, 'SizeOf(LExpected)',
-    'Windows 64-bit WaitOnAddress path must compare the full expected value size');
+  CheckContains(LPlatformSyncSource, 'function platform_sync_windows_wait_address_i64(',
+    'platform.sync must provide a 64-bit lazy-load wait-address helper');
+  CheckContains(LPlatformSyncSource, '_WaitOnAddress(',
+    'platform.sync 64-bit helper must use lazy-loaded WaitOnAddress pointer');
+  CheckContains(LPlatformSyncSource, 'function platform_sync_windows_wake_address_one64(',
+    'platform.sync must provide a 64-bit lazy-load wake-one helper');
+  CheckContains(LPlatformSyncSource, 'function platform_sync_windows_wake_address_all64(',
+    'platform.sync must provide a 64-bit lazy-load wake-all helper');
   CheckContains(LAtomicFlagTestAndSetSection, 'atomic_exchange(PInt32(@aFlag)^, 1, mo_seq_cst)',
     'atomic_flag_test_and_set must set and return the previous flag state');
   CheckContains(LAtomicFlagTestSection, 'atomic_load(PInt32(@aFlag)^, mo_seq_cst)',
