@@ -113,10 +113,13 @@ function AnsiYellow(const S: string): string;
 function AnsiCyan(const S: string): string;
 function AnsiDim(const S: string): string;
 procedure SetAnsiEnabled(AEnabled: Boolean);
+function  StatusDot(AStatus: TTestStatus): string;
 procedure SetTestFilter(const APattern: string);
 function  GetTestFilter: string;
+function  MatchesFilter(const AName: string): Boolean;
 procedure SetTestTimeout(AMillis: Integer);
 function  GetTestTimeout: Integer;
+procedure ReportLeakIfAny(AStatus: TTestStatus);
 function JUnitXML(const AResults: specialize TArray<TTestRunResult>;
   const ASuiteName: string = ''): string;
 function WriteJUnitXML(const AResults: specialize TArray<TTestRunResult>;
@@ -282,17 +285,26 @@ begin Result := nextpas.core.test.output.AnsiDim(S); end;
 procedure SetAnsiEnabled(AEnabled: Boolean);
 begin nextpas.core.test.output.SetAnsiEnabled(AEnabled); end;
 
+function StatusDot(AStatus: TTestStatus): string;
+begin Result := nextpas.core.test.output.StatusDot(AStatus); end;
+
 procedure SetTestFilter(const APattern: string);
 begin nextpas.core.test.output.SetTestFilter(APattern); end;
 
 function GetTestFilter: string;
 begin Result := nextpas.core.test.output.GetTestFilter; end;
 
+function MatchesFilter(const AName: string): Boolean;
+begin Result := nextpas.core.test.output.MatchesFilter(AName); end;
+
 procedure SetTestTimeout(AMillis: Integer);
 begin nextpas.core.test.output.SetTestTimeout(AMillis); end;
 
 function GetTestTimeout: Integer;
 begin Result := nextpas.core.test.output.GetTestTimeout; end;
+
+procedure ReportLeakIfAny(AStatus: TTestStatus);
+begin nextpas.core.test.output.ReportLeakIfAny(AStatus); end;
 
 function JUnitXML(const AResults: specialize TArray<TTestRunResult>;
   const ASuiteName: string): string;
