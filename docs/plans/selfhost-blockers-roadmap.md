@@ -121,6 +121,30 @@ fixture 即误报 `sema.c6h4-owned-string-return-deferred-consumer`（build 失�
 
 ---
 
+### Phase A: Exception 自给自足 — ✅ 已完成（2026-06-24）
+
+**目标**：`nextpas.core.exception` 不再依赖 `SysUtils`，定义自己的 Exception 基类。
+
+**核心改动**（commit `cfe9e1061`）：
+- `nextpas.core.exception.pas`：移除 `uses SysUtils`，定义自包含 Exception 基类
+  - 字段布局与 FPC ABI 兼容（`fmessage: string; fhelpcontext: longint`）
+  - 内置 `FormatStr()` 替代 `SysUtils.Format`（支持 `%s`/`%d`/`%%`）
+  - `ExceptClass`、`EConvertError`、`EAssertionFailed` 本地定义
+- 编译器异常类修正：
+  - `EToolchainRunnerError = class(ENextPasError)` 替代 `class(Exception)`
+  - `EWorkspaceModelError = class(ENextPasError)` 替代 `class(Exception)`
+  - `EToolProfileError = class(ENextPasError)` 替代 `class(Exception)`
+  - 解决 nextPas sema "ambiguous overload for Create" 问题
+
+**验证结果**：
+- rebuild-compiler: ✓ (160773 lines)
+- compiler-pass 15/15: ✓ all pass
+- self-compile 18/19: ✓ (np_lexer pre-existing issue, unrelated)
+
+**意义**：`core/src/` 现在 0 直接 SysUtils 依赖，为后续 Phase B（移除 `units/linux-x86_64/SysUtils.pas` stub）铺路。
+
+---
+
 ## 阶段 2：Sema 攻坚（4-6 周）
 
 ### P2-1: 泛型构造器传播（2 周）
