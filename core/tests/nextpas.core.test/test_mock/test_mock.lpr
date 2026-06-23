@@ -379,6 +379,62 @@ begin
   end;
 end;
 
+{ R6-46: Verify expects 1 but called 2 times → should fail }
+
+procedure TestVerifyCalledExactlyOverCall;
+var
+  LM: TMock;
+  LCaught: Boolean = False;
+begin
+  LM := TMock.Create;
+  try
+    LM.Setup('Foo').Returns('1');
+    LM.RecordCall('Foo', []);
+    LM.RecordCall('Foo', []);
+    try
+      LM.Verify('Foo').CalledExactly(1);
+      Halt(1);
+    except
+      on E: EAssertionFailed do
+        LCaught := True;
+    end;
+    CheckTrue(LCaught, 'Verify(1) should fail when called 2 times');
+  finally
+    LM.Free;
+  end;
+end;
+
+{ R6-47: Duplicate Setup overwrites previous return value }
+
+procedure TestSetupDuplicateOverwrite;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.Setup('Foo').Returns('1');
+    LM.Setup('Foo').Returns('2');
+    CheckEqual('2', LM.GetReturn('Foo'));
+  finally
+    LM.Free;
+  end;
+end;
+
+{ R6-48: GetReturnInt negative return value }
+
+procedure TestGetReturnIntNegative;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.Setup('Foo').Returns('-42');
+    CheckEqual(Int64(-42), LM.GetReturnInt('Foo'));
+  finally
+    LM.Free;
+  end;
+end;
+
 { ── Register Tests ───────────────────────────────────────────────────────────── }
 
 var
@@ -411,6 +467,13 @@ begin
   Suite.Test('TestResetCallsPreservesSetup', @TestResetCallsPreservesSetup);
   Suite.Test('TestStateCallsDirectAccess', @TestStateCallsDirectAccess);
   Suite.Test('TestGetReturnIntNonNumeric', @TestGetReturnIntNonNumeric);
+
+  { R6-46: Verify over-call }
+  Suite.Test('TestVerifyCalledExactlyOverCall', @TestVerifyCalledExactlyOverCall);
+  { R6-47: Duplicate Setup overwrite }
+  Suite.Test('TestSetupDuplicateOverwrite', @TestSetupDuplicateOverwrite);
+  { R6-48: GetReturnInt negative }
+  Suite.Test('TestGetReturnIntNegative', @TestGetReturnIntNegative);
 
   Runner := TTestRunner.Create('mock-tests');
   Runner.Add(Suite);
