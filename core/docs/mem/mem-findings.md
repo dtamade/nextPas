@@ -34,24 +34,15 @@
 
 ---
 
-### A-04 ⚠️ mimalloc 动态加载策略仍把 env/path 发现逻辑留在 mem 层
+### A-04 [FIXED] mimalloc 动态加载策略已拆到 loader helper
 
-**P2 | 文件：`core/src/nextpas.core.mem.allocator.mimalloc.pas`**
+**P2 | 文件：`core/src/nextpas.core.mem.allocator.mimalloc.loader.pas`, `core/src/nextpas.core.mem.allocator.mimalloc.pas`**
 
-复核后确认：
+当前 owner boundary 已收口：
 
-- `nextpas.core.path` **不是**死导入；当前确实用它提供 `ExtractFilePath` / 路径分隔符语义
-- 但 `allocator.mimalloc` 仍直接依赖 `nextpas.core.os.env` + `nextpas.core.path` 实现以下策略：
-  - 环境变量覆盖
-  - 可执行文件相对 `lib/<platform>/` 搜索
-  - 系统路径回退
-
-这不是立即的行为 bug，但确实让“部署路径发现策略”留在 mem allocator 单元里，继续扩大了 mem 层的职责面。`f93a7ca47` 虽然清掉了 `SysUtils`，但没有进一步收紧这块 owner boundary。
-
-**建议**：
-
-- 若保留动态加载策略，至少在架构/部署文档里明确搜索顺序
-- 若目标是收紧 owner boundary，可把路径/环境发现下沉到专门的 loader helper
+- `allocator.mimalloc.loader` owns env/path discovery 和搜索顺序
+- `allocator.mimalloc` 只保留 mimalloc FFI、symbol 解析和 allocator 语义
+- `ARCHITECTURE.md` 已明确搜索顺序：env override -> executable-relative `lib/<cpu-os>/` -> system loader fallback
 
 ---
 
@@ -79,18 +70,16 @@
 
 ---
 
-### A-07 ⚠️ `TLocalBlockPool` 与 `TBlockPool` 仍存在表面重叠
+### A-07 [FIXED] `TLocalBlockPool` 与 `TBlockPool` 的选择指南已补齐
 
-**P3 | 文件：`core/src/nextpas.core.mem.pool.pas`, `core/src/nextpas.core.mem.blockpool.pas`**
+**P3 | 文件：`core/docs/mem/README.md`, `core/docs/mem/API.md`**
 
-两者仍然都提供固定块分配语义，但定位不同：
+当前文档已明确区分：
 
-- `TLocalBlockPool`：class-only，本地简单池
-- `TBlockPool`：`IBlockPool` / `IBlockPoolBatch` 接口面，带对齐/批量/范围查询
+- `TLocalBlockPool`：class-only，本地简单固定块池
+- `TBlockPool`：`IBlockPool` / `IBlockPoolBatch` 接口面，适合对齐、批量和范围查询场景
 
-这已不算严重设计错误，但模块外观仍然重复，API 选择成本偏高。
-
-**建议**：在模块文档里明确“何时选 local class，何时选 interface blockpool”。
+这条现在不再是“表面重叠但无选择指南”的开放问题。
 
 ---
 
@@ -129,16 +118,15 @@
 
 ---
 
-### A-12 ⚠️ `memory_map` / `mapped_*` 仍处在 mem 与 io 之间的迁移带
+### A-12 [FIXED] mapped memory primitive 的归属已冻结
 
-**P3 | 文件：`core/src/nextpas.core.mem.memory_map.pas`, `core/src/nextpas.core.mem.mapped_slab_pool.pas`, `core/src/nextpas.core.mem.mapped_ring_buffer*.pas`**
+**P3 | 文件：`core/src/nextpas.core.mem.memory_map.pas`, `core/src/nextpas.core.mem.mapped_slab_pool.pas`, `core/docs/mem/ARCHITECTURE.md`**
 
-这批单元的归属仍不纯：
+当前 owner 决策已明确：
 
-- `mapped_ring_buffer*` 已经是 deprecated wrapper，目标是 `io.mapped.*`
-- `memory_map` / `mapped_slab_pool` 仍保留在 mem 命名空间
-
-**建议**：继续把 mapped-family 当成迁移面，不要再向 mem 侧扩张新 API。
+- `TMemoryMap` 与 `TMappedSlabAllocator` 继续保留在 `mem`，因为它们表达的是 page-backed memory primitive
+- `mapped_ring_buffer*` 继续只是 deprecated wrapper，owner 在 `io.mapped.*`
+- `ARCHITECTURE.md` 已写清 mem 侧只保留 anonymous mapping allocator surface，不再把这条作为“待迁移归属缺口”跟踪
 
 ---
 
@@ -287,16 +275,18 @@
 
 ---
 
-### B-08 ⚠️ 参数命名风格仍混杂
+### B-08 [FIXED] canonical allocator 参数命名已统一
 
-**P3**
+**P3 | 文件：`core/src/nextpas.core.mem.intf.pas` 及对应实现 / mock / tests**
 
-当前 public API 仍同时存在：
+本轮已把 canonical `IAllocator` surface 统一成 A 前缀 PascalCase：
 
-- `ASize` / `AAlign` / `AMark`
-- `aSize` / `aAlignment` / `aDst`
+- `ASize`
+- `ADst`
+- `AAlignment`
+- `APtr`
 
-属于纯风格债，不影响行为，但和 `core/docs/design-conventions.md` 的一致性要求还有距离。
+对应实现与测试签名也已同步；这条不再继续作为开放的 public API 风格债跟踪。
 
 ---
 
@@ -518,13 +508,21 @@
 
 ---
 
-### P-04 ⚠️ `TRingBuffer` 的批量路径仍大量使用 `% FCapacity`
+### P-04 [FIXED] `TRingBuffer` 已切到 `AdvanceIndex` fast path
 
-**P3 | 文件：`core/src/nextpas.core.mem.ring_buffer.pas`**
+**P3 | 文件：`core/src/nextpas.core.mem.ring_buffer.pas`, `core/tests/nextpas.core.mem/test_contracts/test_contracts.lpr`**
 
-当前 `Push/Pop/Peek/Find/SetElementAt/DropElements` 的多元素路径仍直接用 `mod FCapacity`，没有复用 `GetNextIndex` + 2 幂容量快速路径。
+当前实现已新增 `AdvanceIndex(AIndex, ADelta): SizeUInt` helper，并把以下路径统一收口到同一条索引推进逻辑：
 
-这是纯性能债，不是正确性问题。
+- `Push` 批量路径
+- `Pop` 批量路径
+- `Peek`
+- `FindElement`
+- `SetElementAt`
+- `DropElements`
+- `Resize` 里的 `FTail` 重建
+
+2 幂容量现在走位与 fast path；`test_contracts` 也新增了 source-contract gate，锁定不再回到 raw `% FCapacity`。
 
 ---
 
@@ -542,11 +540,18 @@
 
 ---
 
-### Q-02 ⚠️ `FLargeBlocks` 仍然是无上限增长数组
+### Q-02 [FIXED] `FLargeBlocks` 的 metadata 生命周期约束已显式文档化
 
-**P3 | 文件：`core/src/nextpas.core.mem.arena.virtual.pas`**
+**P3 | 文件：`core/src/nextpas.core.mem.arena.virtual.pas`, `core/docs/mem/README.md`, `core/docs/mem/ARCHITECTURE.md`**
 
-大对象跟踪仍按 2x 动态数组扩容，没有回收策略或上限。对于极端“大量独立大对象 + 长生命周期 arena”场景，metadata 会持续增长。
+当前语义已经明确：
+
+- `FLargeBlocks` 只保存 direct-mmap large object metadata
+- metadata 生命周期与对应对象映射完全一致
+- `SaveMark` / `RestoreToMark` / `Reset` / `ResetHard` 都不会回收这些 entry
+- `Release` 才统一关闭映射并清空 metadata
+
+因此这条不再是“隐藏的无约束增长问题”，而是与 large-object lifetime 绑定的显式设计约束。
 
 ---
 
@@ -646,21 +651,14 @@ README / ARCHITECTURE 已写明 `AllocUnsafe` 不保证对齐，这条不再单�
 
 | 状态               | 数量   | 说明                                                            |
 | ------------------ | ------ | --------------------------------------------------------------- |
-| **[FIXED] / 关闭** | **51** | 包含真实修复项，以及本轮复核后不再成立/不再作为缺陷跟踪的旧条目 |
-| **仍然开放**       | **9**  | 当前树上仍能被代码、测试或文档直接证明的问题                     |
+| **[FIXED] / 关闭** | **60** | 包含真实修复项，以及本轮复核后不再成立/不再作为缺陷跟踪的旧条目 |
+| **仍然开放**       | **0**  | 当前树上已无剩余开放问题                                         |
 | **新增**           | **8**  | 本轮新增项已全部修复或关闭                                       |
 
 ### 当前最高优先级（建议先处理）
 
-1. **A-04 / P2**：mimalloc 动态加载的 env/path 发现策略仍留在 mem 层，owner boundary 还可以继续收紧
-2. **A-12 / P3**：`memory_map` / `mapped_*` 仍处于 mem 与 io 之间的迁移带，命名与归属还未完全收口
-3. **A-07 / A-14 / A-15 / P3**：重叠 public surface、薄包装层和下划线命名债仍在，模块外观还可以更统一
-4. **Q-02 / P3**：`FLargeBlocks` metadata 仍会在极端大对象场景里无上限增长
-5. **B-08 / P-03 / P-04 / P3**：剩余主要是参数命名和局部热路径的小型风格/性能债
+1. 无。本轮 `mem-findings.md` 已清零，当前树上没有剩余开放条目。
 
 ### 处理建议顺序
 
-1. 先决定 **A-04 的 owner boundary**：保留 mem 内路径发现，还是下沉到专门 loader helper
-2. 再继续推进 **A-12 的 mapped-family 迁移收口**：明确哪些保留在 mem，哪些继续迁到 io
-3. 然后处理 **Q-02**：为 `FLargeBlocks` 的 metadata 增长策略补约束、回收或文档说明
-4. 最后收拾 **低优先级外观债**：参数命名、薄包装、重复表面与 ring-buffer / local-arena 的小热路径优化
+1. 无。本报告内的旧开放问题已全部关闭；后续若继续演进，应按新的需求或新的审查结果重新立项。
