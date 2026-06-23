@@ -224,6 +224,8 @@ end;
 
 function TBaselineManager.GetAllBaselines: TBaselineArray;
 begin
+  if FBaselineCount = 0 then
+    Exit(nil);
   SetLength(Result, FBaselineCount);
   Move(FBaselines[0], Result[0], FBaselineCount * SizeOf(TBaselineData));
 end;
@@ -330,17 +332,24 @@ procedure TBaselineManager.SaveToFile(const AFileName: string);
 var
   LJSON: string;
   LFile: TextFile;
+  LOpened: Boolean;
 begin
+  LOpened := False;
   LJSON := ToJSON;
   AssignFile(LFile, AFileName);
   try
-    Rewrite(LFile);
-    Write(LFile, LJSON);
-  except
-    on E: Exception do
-      raise EBenchError.CreateFmt('Failed to save baseline to "%s": %s', [AFileName, E.Message]);
+    try
+      Rewrite(LFile);
+      LOpened := True;
+      Write(LFile, LJSON);
+    except
+      on E: Exception do
+        raise EBenchError.CreateFmt('Failed to save baseline to "%s": %s', [AFileName, E.Message]);
+    end;
+  finally
+    if LOpened then
+      CloseFile(LFile);
   end;
-  CloseFile(LFile);
 end;
 
 procedure TBaselineManager.LoadFromFile(const AFileName: string);

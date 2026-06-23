@@ -292,6 +292,17 @@ begin
   Check(Length(LBaselines) = 3, 'Found 3 baselines');
 end;
 
+procedure Test_GetAllBaselines_Empty;
+var
+  LManager: TBaselineManager;
+  LBaselines: TBaselineArray;
+begin
+  WriteLn('Test_GetAllBaselines_Empty:');
+  LManager := TBaselineManager.Create(1.1);
+  LBaselines := LManager.GetAllBaselines;
+  Check(Length(LBaselines) = 0, 'GetAllBaselines_Empty: length should be 0');
+end;
+
 procedure Test_UpdateBaseline;
 var
   LManager: TBaselineManager;
@@ -396,6 +407,7 @@ begin
   Test_CompareAllWithBaselines;
   Test_HasRegression;
   Test_GetAllBaselines;
+  Test_GetAllBaselines_Empty;
   Test_UpdateBaseline;
   Test_CustomThreshold;
   Test_JSON;

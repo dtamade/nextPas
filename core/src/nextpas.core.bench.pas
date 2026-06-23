@@ -637,46 +637,67 @@ end;
 procedure TBenchResults.SaveToJSON(const APath: string);
 var
   LFile: TextFile;
+  LOpened: Boolean;
 begin
+  LOpened := False;
   AssignFile(LFile, APath);
   try
-    Rewrite(LFile);
-    WriteLn(LFile, ToJSON);
-  except
-    on E: Exception do
-      raise EBenchError.CreateFmt('Failed to save JSON to "%s": %s', [APath, E.Message]);
+    try
+      Rewrite(LFile);
+      LOpened := True;
+      WriteLn(LFile, ToJSON);
+    except
+      on E: Exception do
+        raise EBenchError.CreateFmt('Failed to save JSON to "%s": %s', [APath, E.Message]);
+    end;
+  finally
+    if LOpened then
+      CloseFile(LFile);
   end;
-  CloseFile(LFile);
 end;
 
 procedure TBenchResults.SaveToHTML(const APath: string);
 var
   LFile: TextFile;
+  LOpened: Boolean;
 begin
+  LOpened := False;
   AssignFile(LFile, APath);
   try
-    Rewrite(LFile);
-    WriteLn(LFile, ToHTML);
-  except
-    on E: Exception do
-      raise EBenchError.CreateFmt('Failed to save HTML to "%s": %s', [APath, E.Message]);
+    try
+      Rewrite(LFile);
+      LOpened := True;
+      WriteLn(LFile, ToHTML);
+    except
+      on E: Exception do
+        raise EBenchError.CreateFmt('Failed to save HTML to "%s": %s', [APath, E.Message]);
+    end;
+  finally
+    if LOpened then
+      CloseFile(LFile);
   end;
-  CloseFile(LFile);
 end;
 
 procedure TBenchResults.SaveToTSV(const APath: string);
 var
   LFile: TextFile;
+  LOpened: Boolean;
 begin
+  LOpened := False;
   AssignFile(LFile, APath);
   try
-    Rewrite(LFile);
-    WriteLn(LFile, ToTSV);
-  except
-    on E: Exception do
-      raise EBenchError.CreateFmt('Failed to save TSV to "%s": %s', [APath, E.Message]);
+    try
+      Rewrite(LFile);
+      LOpened := True;
+      WriteLn(LFile, ToTSV);
+    except
+      on E: Exception do
+        raise EBenchError.CreateFmt('Failed to save TSV to "%s": %s', [APath, E.Message]);
+    end;
+  finally
+    if LOpened then
+      CloseFile(LFile);
   end;
-  CloseFile(LFile);
 end;
 
 function TBenchResults.CompareWithBaseline: TBenchComparisonArray;
