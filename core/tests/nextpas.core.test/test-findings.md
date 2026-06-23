@@ -1381,7 +1381,7 @@ end;
 | R6-63 | test_runner LResult 变量复用 | ✅ | 结果变量改为语义化命名，按场景拆分 |
 | R6-64 | test_lifecycle 直接访问 FResults | ✅ | runner.context 明确只读 getter，lifecycle 白盒测试走 Results property |
 | R6-65 | test_output ANSI 状态未恢复 | ✅ | try-finally 包裹 |
-| R6-66 | test_advanced TAP/JSON 重复 | 🔲 | 未实施（大重构） |
+| R6-66 | test_advanced TAP/JSON 重复 | ✅ | 提取 RunSuiteAndGetResults，输出测试共用真实 runner 路径 |
 | R6-67 | JUnit/JSON 输出弱断言 | 🔲 | 未实施（大重构） |
 | R6-68 | test_runner 弱断言 Count > 0 | ✅ | 新增强精确值断言 |
 | R6-69 | 测试直接访问内部实现 | 🔲 | 未实施（大重构） |

@@ -183,26 +183,42 @@ begin
   CheckEqual(1, LResults[0].Failed);
 end;
 
+function RunSuiteAndGetResults(const ASuiteName, ATestName: string;
+  ATest: TTestClosure): specialize TArray<TTestRunResult>; overload;
+var
+  LSuite: TTestSuite;
+  LRunner: TTestRunner;
+begin
+  LSuite := TTestSuite.Create(ASuiteName);
+  LSuite.Test(ATestName, ATest);
+  LRunner := TTestRunner.Create(ASuiteName + 'Runner');
+  LRunner.RunAllWithResult(Result);
+end;
+
+function RunSuiteAndGetResults(const ASuiteName, ATestName,
+  ASkipReason: string): specialize TArray<TTestRunResult>; overload;
+var
+  LSuite: TTestSuite;
+  LRunner: TTestRunner;
+begin
+  LSuite := TTestSuite.Create(ASuiteName);
+  LSuite.Skip(ATestName, ASkipReason);
+  LRunner := TTestRunner.Create(ASuiteName + 'Runner');
+  LRunner.RunAllWithResult(Result);
+end;
+
 { ── TAP Output Tests ──────────────────────────────────────────────────────── }
 
 procedure TestTAPAllPassed;
 var
   LResults: specialize TArray<TTestRunResult>;
-  LSuite: TTestRunResult;
-  LRes: TTestResult;
   LTAP: string;
 begin
-  LSuite := TTestRunResult.Create('MySuite');
-  LRes.Name := 'TestFoo';
-  LRes.Status := tsPassed;
-  LRes.Message := '';
-  SetLength(LSuite.Results, 1);
-  LSuite.Results[0] := LRes;
-  LSuite.Passed := 1;
-  LSuite.AllPassed := True;
-  SetLength(LResults, 1);
-  LResults[0] := LSuite;
-
+  LResults := RunSuiteAndGetResults('MySuite', 'TestFoo',
+    procedure
+    begin
+      CheckTrue(True);
+    end);
   LTAP := TAPReport(LResults, 'MyTests');
   CheckContains(LTAP, 'TAP version 13');
   CheckContains(LTAP, '1..1');
@@ -214,21 +230,13 @@ end;
 procedure TestTAPWithFailure;
 var
   LResults: specialize TArray<TTestRunResult>;
-  LSuite: TTestRunResult;
-  LRes: TTestResult;
   LTAP: string;
 begin
-  LSuite := TTestRunResult.Create('FailSuite');
-  LRes.Name := 'TestBar';
-  LRes.Status := tsFailed;
-  LRes.Message := 'expected 5 got 3';
-  SetLength(LSuite.Results, 1);
-  LSuite.Results[0] := LRes;
-  LSuite.Failed := 1;
-  LSuite.AllPassed := False;
-  SetLength(LResults, 1);
-  LResults[0] := LSuite;
-
+  LResults := RunSuiteAndGetResults('FailSuite', 'TestBar',
+    procedure
+    begin
+      CheckTrue(False, 'expected 5 got 3');
+    end);
   LTAP := TAPReport(LResults);
   CheckContains(LTAP, 'not ok 1 - FailSuite / TestBar');
   CheckContains(LTAP, 'message: |-');
@@ -239,20 +247,10 @@ end;
 procedure TestTAPWithSkipped;
 var
   LResults: specialize TArray<TTestRunResult>;
-  LSuite: TTestRunResult;
-  LRes: TTestResult;
   LTAP: string;
 begin
-  LSuite := TTestRunResult.Create('SkipSuite');
-  LRes.Name := 'TestSkipped';
-  LRes.Status := tsSkipped;
-  LRes.Message := 'platform not supported';
-  SetLength(LSuite.Results, 1);
-  LSuite.Results[0] := LRes;
-  LSuite.Skipped := 1;
-  SetLength(LResults, 1);
-  LResults[0] := LSuite;
-
+  LResults := RunSuiteAndGetResults('SkipSuite', 'TestSkipped',
+    'platform not supported');
   LTAP := TAPReport(LResults);
   CheckContains(LTAP, 'ok 1 - SkipSuite / TestSkipped # skip platform not supported');
   CheckContains(LTAP, '# skipped: 1');
@@ -263,21 +261,13 @@ end;
 procedure TestJSONAllPassed;
 var
   LResults: specialize TArray<TTestRunResult>;
-  LSuite: TTestRunResult;
-  LRes: TTestResult;
   LJSON: string;
 begin
-  LSuite := TTestRunResult.Create('JsonSuite');
-  LRes.Name := 'TestX';
-  LRes.Status := tsPassed;
-  LRes.Message := '';
-  SetLength(LSuite.Results, 1);
-  LSuite.Results[0] := LRes;
-  LSuite.Passed := 1;
-  LSuite.AllPassed := True;
-  SetLength(LResults, 1);
-  LResults[0] := LSuite;
-
+  LResults := RunSuiteAndGetResults('JsonSuite', 'TestX',
+    procedure
+    begin
+      CheckTrue(True);
+    end);
   LJSON := JSONReport(LResults, 'JsonTests');
   CheckContains(LJSON, '"totalPassed": 1');
   CheckContains(LJSON, '"totalFailed": 0');
@@ -290,21 +280,13 @@ end;
 procedure TestJSONWithFailure;
 var
   LResults: specialize TArray<TTestRunResult>;
-  LSuite: TTestRunResult;
-  LRes: TTestResult;
   LJSON: string;
 begin
-  LSuite := TTestRunResult.Create('JsonFail');
-  LRes.Name := 'TestFail';
-  LRes.Status := tsFailed;
-  LRes.Message := 'assert failed';
-  SetLength(LSuite.Results, 1);
-  LSuite.Results[0] := LRes;
-  LSuite.Failed := 1;
-  LSuite.AllPassed := False;
-  SetLength(LResults, 1);
-  LResults[0] := LSuite;
-
+  LResults := RunSuiteAndGetResults('JsonFail', 'TestFail',
+    procedure
+    begin
+      CheckTrue(False, 'assert failed');
+    end);
   LJSON := JSONReport(LResults);
   CheckContains(LJSON, '"status": "failed"');
   CheckContains(LJSON, '"message": "assert failed"');
@@ -315,19 +297,13 @@ end;
 procedure TestJSONEscapesQuotes;
 var
   LResults: specialize TArray<TTestRunResult>;
-  LSuite: TTestRunResult;
-  LRes: TTestResult;
   LJSON: string;
 begin
-  LSuite := TTestRunResult.Create('Esc"ape');
-  LRes.Name := 'Test"Quote';
-  LRes.Status := tsError;
-  LRes.Message := 'line1' + #10 + 'line2';
-  SetLength(LSuite.Results, 1);
-  LSuite.Results[0] := LRes;
-  SetLength(LResults, 1);
-  LResults[0] := LSuite;
-
+  LResults := RunSuiteAndGetResults('Esc"ape', 'Test"Quote',
+    procedure
+    begin
+      raise Exception.Create('line1' + #10 + 'line2');
+    end);
   LJSON := JSONReport(LResults);
   CheckContains(LJSON, 'Esc\"ape');
   CheckContains(LJSON, 'Test\"Quote');
