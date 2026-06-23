@@ -1,3 +1,3 @@
-error: semantic-analysis-failed
+error: wrong argument count
 fixture: tests/compiler/fail/inherited_create_shadow_no_fallback_fail.pas
 classification: expected-compile-failure

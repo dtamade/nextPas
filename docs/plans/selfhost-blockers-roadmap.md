@@ -72,8 +72,10 @@ P2（Sema 能力）排在 P1（FPC RTL 清零）前面，因为 P2 修一个方�
 
 **状态**: 旧根因描述过时。原假设"`Create` 重载解析没遍历继承链"经核查不成立：当前
 `MethodSymbolIdForClassTypeMember`（`compiler/sema/np_semantic_analyzer.pas:4614`）
-已通过 `NextClassAncestorName` 正确遍历 `ParentTypeId` 继承链，包括父类来自
-`uses` 导入单元的跨单元场景。6 个曾"被阻塞"的模块（config/config.builder/
+在 `while (CurrentTypeId > 0) and (Depth < 32)` 循环中遍历 `ParentTypeId` 继承链
+（`:4690`），每层调用 `MethodSymbolIdForExactClassTypeMember` 精确匹配成员；
+当某层命中 `MethodNameFound`（`:4685`）即停止向上——这正是子类同名成员阴影、
+不回退父类的语义所在。6 个曾"被阻塞"的模块（config/config.builder/
 compress.deflate/props/multipart）当前全部编译通过，self-compile-modules 19/19 全绿。
 
 **回归测试固化**（commit 5ee32ca75 + 后续）：
