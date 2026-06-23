@@ -3,7 +3,6 @@ program test_arena_class;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.testing,
   nextpas.core.mem,
   nextpas.core.mem.arena.local,

@@ -3,7 +3,6 @@ program bench_arena_go_rust;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.mem.base,
   nextpas.core.mem.error,
   nextpas.core.mem.arena.base,

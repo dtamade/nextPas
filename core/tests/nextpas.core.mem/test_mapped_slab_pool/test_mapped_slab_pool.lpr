@@ -3,7 +3,6 @@ program test_mapped_slab_pool;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.testing,
   nextpas.core.mem.error,
   nextpas.core.mem.mapped_slab_pool;

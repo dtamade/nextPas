@@ -51,6 +51,7 @@ function platform_mmap_unlock(var AMap: TPlatformMappedFile; AOffset: UInt64;
   ASize: UInt64): Int32;
 function platform_mmap_close(var AMap: TPlatformMappedFile): Int32;
 function platform_mmap_page_size: UInt64;
+function FileExistsByStat(const APath: PAnsiChar): Boolean;
 
 function platform_shm_create(const AName: PAnsiChar; ASize: UInt64;
   AAccess: TPlatformMapAccess; out AMap: TPlatformMappedFile): Int32;

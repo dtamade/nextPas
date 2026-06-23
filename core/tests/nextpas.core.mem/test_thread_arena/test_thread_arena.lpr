@@ -6,14 +6,15 @@ uses
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
-  Classes,
-  SysUtils,
+  nextpas.core.errors,
+  nextpas.core.text.conv,
   nextpas.core.testing,
   nextpas.core.mem.base,
   nextpas.core.mem.error,
   nextpas.core.mem.arena.base,
   nextpas.core.mem.arena.local,
-  nextpas.core.mem.arena.thread;
+  nextpas.core.mem.arena.thread,
+  nextpas.core.platform.thread;
 
 const
   THREAD_COUNT = 8;
@@ -341,46 +342,32 @@ end;
   --------------------------------------------------------------------------- }
 
 type
-  TThreadArenaWorker = class(TThread)
-  private
-    FManager: TThreadArenaManager;
-    FStartFlag: PLongInt;
-    FIterCount: Integer;
-    FFailure: string;
-  protected
-    procedure Execute; override;
-  public
-    constructor Create(AManager: TThreadArenaManager; AStartFlag: PLongInt;
-      AIterCount: Integer);
-    property Failure: string read FFailure;
+  PThreadArenaWorkerData = ^TThreadArenaWorkerData;
+  TThreadArenaWorkerData = record
+    Manager: TThreadArenaManager;
+    StartFlag: PLongInt;
+    IterCount: Integer;
+    Failure: string;
   end;
 
-constructor TThreadArenaWorker.Create(AManager: TThreadArenaManager;
-  AStartFlag: PLongInt; AIterCount: Integer);
-begin
-  inherited Create(False);
-  FreeOnTerminate := False;
-  FManager := AManager;
-  FStartFlag := AStartFlag;
-  FIterCount := AIterCount;
-  FFailure := '';
-end;
-
-procedure TThreadArenaWorker.Execute;
+function ThreadArenaWorkerProc(AArg: Pointer): Pointer; cdecl;
 var
+  LData: PThreadArenaWorkerData;
   LArena: TLocalArena;
   LP: PInteger;
   I, J: Integer;
 begin
+  LData := PThreadArenaWorkerData(AArg);
   { 等待所有线程就绪 }
-  while FStartFlag^ = 0 do
-    Sleep(0);
+  while LData^.StartFlag^ = 0 do
+    platform_thread_yield;
 
   try
-    for I := 1 to FIterCount do begin
-      LArena := FManager.Get;
+    for I := 1 to LData^.IterCount do begin
+      LArena := LData^.Manager.Get;
       if LArena = nil then begin
-        FFailure := 'Get returned nil';
+        LData^.Failure := 'Get returned nil';
+        Result := nil;
         Exit;
       end;
 
@@ -388,7 +375,8 @@ begin
       for J := 1 to 10 do begin
         LP := PInteger(LArena.AllocFast(SizeOf(Integer)));
         if LP = nil then begin
-          FFailure := 'AllocFast returned nil at iter ' + IntToStr(I) + ' j=' + IntToStr(J);
+          LData^.Failure := 'AllocFast returned nil at iter ' + IntToStr(I) + ' j=' + IntToStr(J);
+          Result := nil;
           Exit;
         end;
         LP^ := I * 1000 + J;
@@ -398,11 +386,12 @@ begin
       LArena.Reset;
     end;
 
-    FManager.DrainTLS;
+    LData^.Manager.DrainTLS;
   except
     on E: Exception do
-      FFailure := E.ClassName + ': ' + E.Message;
+      LData^.Failure := E.ClassName + ': ' + E.Message;
   end;
+  Result := nil;
 end;
 
 procedure TestPoolOverflow;
@@ -411,7 +400,8 @@ var
   LMgr: TThreadArenaManager;
   LConfig: TThreadArenaConfig;
   LStartFlag: LongInt;
-  LWorkers: array[0..2] of TThreadArenaWorker;
+  LWorkers: array[0..2] of TPlatformThreadRecord;
+  LWorkerData: array[0..2] of TThreadArenaWorkerData;
   I: Integer;
 begin
   LConfig.ArenaCapacity := 1024;
@@ -420,12 +410,17 @@ begin
   try
     LStartFlag := 0;
     for I := 0 to 2 do
-      LWorkers[I] := TThreadArenaWorker.Create(LMgr, @LStartFlag, 1);
+    begin
+      LWorkerData[I].Manager := LMgr;
+      LWorkerData[I].StartFlag := @LStartFlag;
+      LWorkerData[I].IterCount := 1;
+      LWorkerData[I].Failure := '';
+      platform_thread_spawn(LWorkers[I], @ThreadArenaWorkerProc, @LWorkerData[I]);
+    end;
     InterLockedExchange(LStartFlag, 1);
     for I := 0 to 2 do begin
-      LWorkers[I].WaitFor;
-      Check(LWorkers[I].Failure = '', 'worker ' + IntToStr(I) + ' ok');
-      LWorkers[I].Free;
+      platform_thread_wait(LWorkers[I]);
+      Check(LWorkerData[I].Failure = '', 'worker ' + IntToStr(I) + ' ok');
     end;
     CheckEqual(Int64(3), Int64(LMgr.TotalCreated), 'three arenas created');
     Check(LMgr.PoolSize <= 2, 'pool capped at MaxPoolSize');
@@ -439,7 +434,8 @@ procedure TestMultiThreadIsolation;
 var
   LMgr: TThreadArenaManager;
   LConfig: TThreadArenaConfig;
-  LWorkers: array[0..THREAD_COUNT - 1] of TThreadArenaWorker;
+  LWorkers: array[0..THREAD_COUNT - 1] of TPlatformThreadRecord;
+  LWorkerData: array[0..THREAD_COUNT - 1] of TThreadArenaWorkerData;
   LStartFlag: LongInt;
   I: Integer;
   LFailCount: Integer;
@@ -451,7 +447,13 @@ begin
     LStartFlag := 0;
 
     for I := 0 to THREAD_COUNT - 1 do
-      LWorkers[I] := TThreadArenaWorker.Create(LMgr, @LStartFlag, STRESS_ITERATIONS);
+    begin
+      LWorkerData[I].Manager := LMgr;
+      LWorkerData[I].StartFlag := @LStartFlag;
+      LWorkerData[I].IterCount := STRESS_ITERATIONS;
+      LWorkerData[I].Failure := '';
+      platform_thread_spawn(LWorkers[I], @ThreadArenaWorkerProc, @LWorkerData[I]);
+    end;
 
     { 启动所有线程 }
     InterLockedExchange(LStartFlag, 1);
@@ -459,12 +461,11 @@ begin
     { 等待完成 }
     LFailCount := 0;
     for I := 0 to THREAD_COUNT - 1 do begin
-      LWorkers[I].WaitFor;
-      if LWorkers[I].Failure <> '' then begin
-        WriteLn('  Thread ', I, ' failure: ', LWorkers[I].Failure);
+      platform_thread_wait(LWorkers[I]);
+      if LWorkerData[I].Failure <> '' then begin
+        WriteLn('  Thread ', I, ' failure: ', LWorkerData[I].Failure);
         Inc(LFailCount);
       end;
-      LWorkers[I].Free;
     end;
 
     CheckEqual(Int64(0), Int64(LFailCount), 'no thread failures');
@@ -479,7 +480,8 @@ procedure TestMultiThreadPoolRecycle;
 var
   LMgr: TThreadArenaManager;
   LConfig: TThreadArenaConfig;
-  LWorkers: array[0..THREAD_COUNT - 1] of TThreadArenaWorker;
+  LWorkers: array[0..THREAD_COUNT - 1] of TPlatformThreadRecord;
+  LWorkerData: array[0..THREAD_COUNT - 1] of TThreadArenaWorkerData;
   LStartFlag: LongInt;
   I: Integer;
 begin
@@ -491,13 +493,18 @@ begin
     LStartFlag := 0;
 
     for I := 0 to THREAD_COUNT - 1 do
-      LWorkers[I] := TThreadArenaWorker.Create(LMgr, @LStartFlag, STRESS_ITERATIONS);
+    begin
+      LWorkerData[I].Manager := LMgr;
+      LWorkerData[I].StartFlag := @LStartFlag;
+      LWorkerData[I].IterCount := STRESS_ITERATIONS;
+      LWorkerData[I].Failure := '';
+      platform_thread_spawn(LWorkers[I], @ThreadArenaWorkerProc, @LWorkerData[I]);
+    end;
 
     InterLockedExchange(LStartFlag, 1);
 
     for I := 0 to THREAD_COUNT - 1 do begin
-      LWorkers[I].WaitFor;
-      LWorkers[I].Free;
+      platform_thread_wait(LWorkers[I]);
     end;
 
     Check(LMgr.PoolSize <= 2, 'pool capped at MaxPoolSize');
@@ -511,7 +518,8 @@ procedure TestMainThreadPlusWorker;
 var
   LMgr: TThreadArenaManager;
   LConfig: TThreadArenaConfig;
-  LWorker: TThreadArenaWorker;
+  LWorker: TPlatformThreadRecord;
+  LWorkerData: TThreadArenaWorkerData;
   LStartFlag: LongInt;
   LMainArena: TLocalArena;
   LP: PInteger;
@@ -528,11 +536,14 @@ begin
 
     { 启动一个 worker }
     LStartFlag := 0;
-    LWorker := TThreadArenaWorker.Create(LMgr, @LStartFlag, 100);
+    LWorkerData.Manager := LMgr;
+    LWorkerData.StartFlag := @LStartFlag;
+    LWorkerData.IterCount := 100;
+    LWorkerData.Failure := '';
+    platform_thread_spawn(LWorker, @ThreadArenaWorkerProc, @LWorkerData);
     InterLockedExchange(LStartFlag, 1);
-    LWorker.WaitFor;
-    Check(LWorker.Failure = '', 'worker no failure: ' + LWorker.Failure);
-    LWorker.Free;
+    platform_thread_wait(LWorker);
+    Check(LWorkerData.Failure = '', 'worker no failure: ' + LWorkerData.Failure);
 
     { 主线程 Arena 不受影响 }
     Check(LP^ = 42, 'main thread data intact');

@@ -6,7 +6,7 @@ uses
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
-  SysUtils,
+  nextpas.core.text.conv,
   Classes,
   nextpas.core.testing,
   nextpas.core.mem.base,

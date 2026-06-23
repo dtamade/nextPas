@@ -6,8 +6,8 @@ uses
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
-  Classes,
-  SysUtils,
+  nextpas.core.errors,
+  nextpas.core.text.conv,
   nextpas.core.testing,
   nextpas.core.mem.error,
   nextpas.core.mem.arena.base,
@@ -15,7 +15,8 @@ uses
   nextpas.core.mem.arena.concurrent,
   nextpas.core.mem.mutex,
   nextpas.core.mem.pool.fixed,
-  nextpas.core.mem.pool.slab.concurrent;
+  nextpas.core.mem.pool.slab.concurrent,
+  nextpas.core.platform.thread;
 
 const
   THREAD_COUNT = 8;
@@ -24,166 +25,126 @@ const
   STRESS_ITERATION_COUNT = 1000;
 
 type
-  TPoolWorker = class(TThread)
-  private
-    FPool: TFixedPoolConcurrent;
-    FStartFlag: PLongInt;
-    FFailure: string;
-  protected
-    procedure Execute; override;
-  public
-    constructor Create(APool: TFixedPoolConcurrent; AStartFlag: PLongInt);
-    property Failure: string read FFailure;
+  PPoolWorkerData = ^TPoolWorkerData;
+  TPoolWorkerData = record
+    Pool: TFixedPoolConcurrent;
+    StartFlag: PLongInt;
+    Failure: string;
   end;
 
-  TSlabWorker = class(TThread)
-  private
-    FPool: TSlabPoolConcurrent;
-    FStartFlag: PLongInt;
-    FFailure: string;
-  protected
-    procedure Execute; override;
-  public
-    constructor Create(APool: TSlabPoolConcurrent; AStartFlag: PLongInt);
-    property Failure: string read FFailure;
+  PSlabWorkerData = ^TSlabWorkerData;
+  TSlabWorkerData = record
+    Pool: TSlabPoolConcurrent;
+    StartFlag: PLongInt;
+    Failure: string;
   end;
 
-  TFixedPoolNegativeWorker = class(TThread)
-  private
-    FPool: TFixedPoolConcurrent;
-    FStartFlag: PLongInt;
-    FFailure: string;
-  protected
-    procedure Execute; override;
-  public
-    constructor Create(APool: TFixedPoolConcurrent; AStartFlag: PLongInt);
-    property Failure: string read FFailure;
+  PFixedPoolNegativeWorkerData = ^TFixedPoolNegativeWorkerData;
+  TFixedPoolNegativeWorkerData = record
+    Pool: TFixedPoolConcurrent;
+    StartFlag: PLongInt;
+    Failure: string;
   end;
 
   { Stress test: Reset vs Alloc contention }
-  TArenaAllocStressWorker = class(TThread)
-  private
-    FArena: TArenaConcurrent;
-    FStartFlag: PLongInt;
-    FAllocCount: Integer;
-    FFailure: string;
-  protected
-    procedure Execute; override;
-  public
-    constructor Create(AArena: TArenaConcurrent; AStartFlag: PLongInt);
-    property AllocCount: Integer read FAllocCount;
-    property Failure: string read FFailure;
+  PArenaAllocStressWorkerData = ^TArenaAllocStressWorkerData;
+  TArenaAllocStressWorkerData = record
+    Arena: TArenaConcurrent;
+    StartFlag: PLongInt;
+    AllocCount: Integer;
+    Failure: string;
   end;
 
-  TArenaResetStressWorker = class(TThread)
-  private
-    FArena: TArenaConcurrent;
-    FStartFlag: PLongInt;
-    FResetCount: Integer;
-    FFailure: string;
-  protected
-    procedure Execute; override;
-  public
-    constructor Create(AArena: TArenaConcurrent; AStartFlag: PLongInt);
-    property ResetCount: Integer read FResetCount;
-    property Failure: string read FFailure;
+  PArenaResetStressWorkerData = ^TArenaResetStressWorkerData;
+  TArenaResetStressWorkerData = record
+    Arena: TArenaConcurrent;
+    StartFlag: PLongInt;
+    ResetCount: Integer;
+    Failure: string;
   end;
 
 var
   T: TTestRunner;
 
-constructor TPoolWorker.Create(APool: TFixedPoolConcurrent; AStartFlag: PLongInt);
+procedure WaitForStartFlag(AStartFlag: PLongInt); inline;
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
-  FPool := APool;
-  FStartFlag := AStartFlag;
+  while AStartFlag^ = 0 do
+    platform_thread_yield;
 end;
 
-procedure TPoolWorker.Execute;
+function PoolWorkerProc(AArg: Pointer): Pointer; cdecl;
 var
+  LData: PPoolWorkerData;
   LIndex: Integer;
   LPtr: Pointer;
 begin
-  while FStartFlag^ = 0 do
-    Sleep(0);
+  LData := PPoolWorkerData(AArg);
+  WaitForStartFlag(LData^.StartFlag);
 
   try
     for LIndex := 0 to ITERATION_COUNT - 1 do
     begin
-      if not FPool.Acquire(LPtr) then
+      if not LData^.Pool.Acquire(LPtr) then
         raise Exception.Create('TFixedPoolConcurrent.Acquire returned false');
       if LPtr = nil then
         raise Exception.Create('TFixedPoolConcurrent.Acquire returned nil');
       PByte(LPtr)^ := Byte(LIndex);
-      FPool.Release(LPtr);
+      LData^.Pool.Release(LPtr);
     end;
   except
     on E: Exception do
-      FFailure := E.Message;
+      LData^.Failure := E.Message;
   end;
+  Result := nil;
 end;
 
-constructor TSlabWorker.Create(APool: TSlabPoolConcurrent; AStartFlag: PLongInt);
-begin
-  inherited Create(True);
-  FreeOnTerminate := False;
-  FPool := APool;
-  FStartFlag := AStartFlag;
-end;
-
-procedure TSlabWorker.Execute;
+function SlabWorkerProc(AArg: Pointer): Pointer; cdecl;
 var
+  LData: PSlabWorkerData;
   LIndex: Integer;
   LPtr: Pointer;
 begin
-  while FStartFlag^ = 0 do
-    Sleep(0);
+  LData := PSlabWorkerData(AArg);
+  WaitForStartFlag(LData^.StartFlag);
 
   try
     for LIndex := 1 to ITERATION_COUNT do
     begin
-      LPtr := FPool.GetMem(16 + (LIndex mod 32));
+      LPtr := LData^.Pool.GetMem(16 + (LIndex mod 32));
       if LPtr = nil then
         raise Exception.Create('TSlabPoolConcurrent.GetMem returned nil');
       PByte(LPtr)^ := Byte(LIndex);
-      FPool.FreeMem(LPtr);
+      LData^.Pool.FreeMem(LPtr);
     end;
   except
     on E: Exception do
-      FFailure := E.Message;
+      LData^.Failure := E.Message;
   end;
+  Result := nil;
 end;
 
-constructor TFixedPoolNegativeWorker.Create(APool: TFixedPoolConcurrent; AStartFlag: PLongInt);
-begin
-  inherited Create(True);
-  FreeOnTerminate := False;
-  FPool := APool;
-  FStartFlag := AStartFlag;
-end;
-
-procedure TFixedPoolNegativeWorker.Execute;
+function FixedPoolNegativeWorkerProc(AArg: Pointer): Pointer; cdecl;
 var
+  LData: PFixedPoolNegativeWorkerData;
   LIndex: Integer;
   LPtr: Pointer;
   LLocal: Byte;
 begin
-  while FStartFlag^ = 0 do
-    Sleep(0);
+  LData := PFixedPoolNegativeWorkerData(AArg);
+  WaitForStartFlag(LData^.StartFlag);
 
   try
     for LIndex := 0 to NEGATIVE_ITERATION_COUNT - 1 do
     begin
-      if not FPool.Acquire(LPtr) then
+      if not LData^.Pool.Acquire(LPtr) then
         raise Exception.Create('negative worker Acquire returned false');
       if LPtr = nil then
         raise Exception.Create('negative worker Acquire returned nil');
       PByte(LPtr)^ := Byte(LIndex);
-      FPool.Release(LPtr);
+      LData^.Pool.Release(LPtr);
 
       try
-        FPool.Release(@LLocal);
+        LData^.Pool.Release(@LLocal);
         raise Exception.Create('external pointer Release should fail');
       except
         on E: EAllocError do
@@ -195,74 +156,59 @@ begin
     end;
   except
     on E: Exception do
-      FFailure := E.Message;
+      LData^.Failure := E.Message;
   end;
+  Result := nil;
 end;
 
 { TArenaAllocStressWorker }
-
-constructor TArenaAllocStressWorker.Create(AArena: TArenaConcurrent; AStartFlag: PLongInt);
-begin
-  inherited Create(True);
-  FreeOnTerminate := False;
-  FArena := AArena;
-  FStartFlag := AStartFlag;
-  FAllocCount := 0;
-end;
-
-procedure TArenaAllocStressWorker.Execute;
+function ArenaAllocStressWorkerProc(AArg: Pointer): Pointer; cdecl;
 var
+  LData: PArenaAllocStressWorkerData;
   LIndex: Integer;
   LPtr: Pointer;
 begin
-  while FStartFlag^ = 0 do
-    Sleep(0);
+  LData := PArenaAllocStressWorkerData(AArg);
+  WaitForStartFlag(LData^.StartFlag);
 
   try
     for LIndex := 0 to STRESS_ITERATION_COUNT - 1 do
     begin
-      LPtr := FArena.Alloc(32);
+      LPtr := LData^.Arena.Alloc(32);
       if LPtr <> nil then
       begin
         PByte(LPtr)^ := Byte(LIndex);
-        Inc(FAllocCount);
+        Inc(LData^.AllocCount);
       end;
       { Reset may have happened — either Alloc succeeds or returns nil, both are valid }
     end;
   except
     on E: Exception do
-      FFailure := E.Message;
+      LData^.Failure := E.Message;
   end;
+  Result := nil;
 end;
 
 { TArenaResetStressWorker }
-
-constructor TArenaResetStressWorker.Create(AArena: TArenaConcurrent; AStartFlag: PLongInt);
-begin
-  inherited Create(True);
-  FreeOnTerminate := False;
-  FArena := AArena;
-  FStartFlag := AStartFlag;
-  FResetCount := 0;
-end;
-
-procedure TArenaResetStressWorker.Execute;
+function ArenaResetStressWorkerProc(AArg: Pointer): Pointer; cdecl;
 var
+  LData: PArenaResetStressWorkerData;
   LIndex: Integer;
 begin
-  while FStartFlag^ = 0 do
-    Sleep(0);
+  LData := PArenaResetStressWorkerData(AArg);
+  WaitForStartFlag(LData^.StartFlag);
 
   try
     for LIndex := 0 to STRESS_ITERATION_COUNT div 4 - 1 do
     begin
-      FArena.Reset;
-      Inc(FResetCount);
+      LData^.Arena.Reset;
+      Inc(LData^.ResetCount);
     end;
   except
     on E: Exception do
-      FFailure := E.Message;
+      LData^.Failure := E.Message;
   end;
+  Result := nil;
 end;
 
 procedure TestBlockPoolConcurrentWrapper;
@@ -304,7 +250,8 @@ end;
 procedure TestFixedPoolConcurrentContention;
 var
   LPool: TFixedPoolConcurrent;
-  LThreads: array[0..THREAD_COUNT - 1] of TPoolWorker;
+  LThreads: array[0..THREAD_COUNT - 1] of TPlatformThreadRecord;
+  LThreadData: array[0..THREAD_COUNT - 1] of TPoolWorkerData;
   LStartFlag: LongInt;
   LIndex: Integer;
 begin
@@ -313,19 +260,18 @@ begin
     LStartFlag := 0;
     for LIndex := 0 to High(LThreads) do
     begin
-      LThreads[LIndex] := TPoolWorker.Create(LPool, @LStartFlag);
-      LThreads[LIndex].Start;
+      LThreadData[LIndex].Pool := LPool;
+      LThreadData[LIndex].StartFlag := @LStartFlag;
+      LThreadData[LIndex].Failure := '';
+      platform_thread_spawn(LThreads[LIndex], @PoolWorkerProc, @LThreadData[LIndex]);
     end;
 
     LStartFlag := 1;
     for LIndex := 0 to High(LThreads) do
-      LThreads[LIndex].WaitFor;
+      platform_thread_wait(LThreads[LIndex]);
 
     for LIndex := 0 to High(LThreads) do
-    begin
-      Check(LThreads[LIndex].Failure = '', 'fixed-pool worker should not fail');
-      LThreads[LIndex].Free;
-    end;
+      Check(LThreadData[LIndex].Failure = '', 'fixed-pool worker should not fail');
     Check(LPool.AllocatedCount = 0, 'all blocks should be released');
   finally
     TObject(LPool).Free;
@@ -335,7 +281,8 @@ end;
 procedure TestFixedPoolConcurrentRejectsInvalidReleaseAfterContention;
 var
   LPool: TFixedPoolConcurrent;
-  LThreads: array[0..THREAD_COUNT - 1] of TFixedPoolNegativeWorker;
+  LThreads: array[0..THREAD_COUNT - 1] of TPlatformThreadRecord;
+  LThreadData: array[0..THREAD_COUNT - 1] of TFixedPoolNegativeWorkerData;
   LStartFlag: LongInt;
   LIndex: Integer;
   LPtr: Pointer;
@@ -346,20 +293,22 @@ begin
     LStartFlag := 0;
     for LIndex := 0 to High(LThreads) do
     begin
-      LThreads[LIndex] := TFixedPoolNegativeWorker.Create(LPool, @LStartFlag);
-      LThreads[LIndex].Start;
+      LThreadData[LIndex].Pool := LPool;
+      LThreadData[LIndex].StartFlag := @LStartFlag;
+      LThreadData[LIndex].Failure := '';
+      platform_thread_spawn(LThreads[LIndex], @FixedPoolNegativeWorkerProc,
+        @LThreadData[LIndex]);
     end;
 
     LStartFlag := 1;
     for LIndex := 0 to High(LThreads) do
-      LThreads[LIndex].WaitFor;
+      platform_thread_wait(LThreads[LIndex]);
 
     LFailure := '';
     for LIndex := 0 to High(LThreads) do
     begin
-      if (LFailure = '') and (LThreads[LIndex].Failure <> '') then
-        LFailure := LThreads[LIndex].Failure;
-      LThreads[LIndex].Free;
+      if (LFailure = '') and (LThreadData[LIndex].Failure <> '') then
+        LFailure := LThreadData[LIndex].Failure;
     end;
 
     Check(LFailure = '', 'fixed-pool negative worker should not fail: ' + LFailure);
@@ -383,7 +332,8 @@ end;
 procedure TestSlabPoolConcurrentContention;
 var
   LPool: TSlabPoolConcurrent;
-  LThreads: array[0..THREAD_COUNT - 1] of TSlabWorker;
+  LThreads: array[0..THREAD_COUNT - 1] of TPlatformThreadRecord;
+  LThreadData: array[0..THREAD_COUNT - 1] of TSlabWorkerData;
   LStartFlag: LongInt;
   LIndex: Integer;
 begin
@@ -392,19 +342,18 @@ begin
     LStartFlag := 0;
     for LIndex := 0 to High(LThreads) do
     begin
-      LThreads[LIndex] := TSlabWorker.Create(LPool, @LStartFlag);
-      LThreads[LIndex].Start;
+      LThreadData[LIndex].Pool := LPool;
+      LThreadData[LIndex].StartFlag := @LStartFlag;
+      LThreadData[LIndex].Failure := '';
+      platform_thread_spawn(LThreads[LIndex], @SlabWorkerProc, @LThreadData[LIndex]);
     end;
 
     LStartFlag := 1;
     for LIndex := 0 to High(LThreads) do
-      LThreads[LIndex].WaitFor;
+      platform_thread_wait(LThreads[LIndex]);
 
     for LIndex := 0 to High(LThreads) do
-    begin
-      Check(LThreads[LIndex].Failure = '', 'slab worker should not fail');
-      LThreads[LIndex].Free;
-    end;
+      Check(LThreadData[LIndex].Failure = '', 'slab worker should not fail');
     Check(LPool.Stats.FallbackAllocCount = 0, 'small contention path should stay in slab fast path');
   finally
     TObject(LPool).Free;
@@ -428,8 +377,10 @@ const
   STRESS_ARENA_SIZE = 128 * 1024; { 128KB — enough for all allocs between resets }
 var
   LArena: TArenaConcurrent;
-  LAllocWorkers: array[0..ALLOC_THREADS - 1] of TArenaAllocStressWorker;
-  LResetWorkers: array[0..RESET_THREADS - 1] of TArenaResetStressWorker;
+  LAllocWorkers: array[0..ALLOC_THREADS - 1] of TPlatformThreadRecord;
+  LAllocWorkerData: array[0..ALLOC_THREADS - 1] of TArenaAllocStressWorkerData;
+  LResetWorkers: array[0..RESET_THREADS - 1] of TPlatformThreadRecord;
+  LResetWorkerData: array[0..RESET_THREADS - 1] of TArenaResetStressWorkerData;
   LStartFlag: LongInt;
   LIndex: Integer;
   LTotalAllocs: Integer;
@@ -442,40 +393,46 @@ begin
 
     for LIndex := 0 to High(LAllocWorkers) do
     begin
-      LAllocWorkers[LIndex] := TArenaAllocStressWorker.Create(LArena, @LStartFlag);
-      LAllocWorkers[LIndex].Start;
+      LAllocWorkerData[LIndex].Arena := LArena;
+      LAllocWorkerData[LIndex].StartFlag := @LStartFlag;
+      LAllocWorkerData[LIndex].AllocCount := 0;
+      LAllocWorkerData[LIndex].Failure := '';
+      platform_thread_spawn(LAllocWorkers[LIndex], @ArenaAllocStressWorkerProc,
+        @LAllocWorkerData[LIndex]);
     end;
 
     for LIndex := 0 to High(LResetWorkers) do
     begin
-      LResetWorkers[LIndex] := TArenaResetStressWorker.Create(LArena, @LStartFlag);
-      LResetWorkers[LIndex].Start;
+      LResetWorkerData[LIndex].Arena := LArena;
+      LResetWorkerData[LIndex].StartFlag := @LStartFlag;
+      LResetWorkerData[LIndex].ResetCount := 0;
+      LResetWorkerData[LIndex].Failure := '';
+      platform_thread_spawn(LResetWorkers[LIndex], @ArenaResetStressWorkerProc,
+        @LResetWorkerData[LIndex]);
     end;
 
     LStartFlag := 1;
 
     for LIndex := 0 to High(LAllocWorkers) do
-      LAllocWorkers[LIndex].WaitFor;
+      platform_thread_wait(LAllocWorkers[LIndex]);
     for LIndex := 0 to High(LResetWorkers) do
-      LResetWorkers[LIndex].WaitFor;
+      platform_thread_wait(LResetWorkers[LIndex]);
 
     LTotalAllocs := 0;
     LFailure := '';
     for LIndex := 0 to High(LAllocWorkers) do
     begin
-      if (LFailure = '') and (LAllocWorkers[LIndex].Failure <> '') then
-        LFailure := 'alloc worker ' + IntToStr(LIndex) + ': ' + LAllocWorkers[LIndex].Failure;
-      LTotalAllocs := LTotalAllocs + LAllocWorkers[LIndex].AllocCount;
-      LAllocWorkers[LIndex].Free;
+      if (LFailure = '') and (LAllocWorkerData[LIndex].Failure <> '') then
+        LFailure := 'alloc worker ' + IntToStr(LIndex) + ': ' + LAllocWorkerData[LIndex].Failure;
+      LTotalAllocs := LTotalAllocs + LAllocWorkerData[LIndex].AllocCount;
     end;
 
     LTotalResets := 0;
     for LIndex := 0 to High(LResetWorkers) do
     begin
-      if (LFailure = '') and (LResetWorkers[LIndex].Failure <> '') then
-        LFailure := 'reset worker ' + IntToStr(LIndex) + ': ' + LResetWorkers[LIndex].Failure;
-      LTotalResets := LTotalResets + LResetWorkers[LIndex].ResetCount;
-      LResetWorkers[LIndex].Free;
+      if (LFailure = '') and (LResetWorkerData[LIndex].Failure <> '') then
+        LFailure := 'reset worker ' + IntToStr(LIndex) + ': ' + LResetWorkerData[LIndex].Failure;
+      LTotalResets := LTotalResets + LResetWorkerData[LIndex].ResetCount;
     end;
 
     Check(LFailure = '', 'Reset vs Alloc contention should not crash: ' + LFailure);
@@ -502,7 +459,8 @@ const
   STRESS_ARENA_SIZE = 128 * 1024;
 var
   LArena: TArenaConcurrent;
-  LAllocWorkers: array[0..ALLOC_THREADS - 1] of TArenaAllocStressWorker;
+  LAllocWorkers: array[0..ALLOC_THREADS - 1] of TPlatformThreadRecord;
+  LAllocWorkerData: array[0..ALLOC_THREADS - 1] of TArenaAllocStressWorkerData;
   LStartFlag: LongInt;
   LIndex: Integer;
   LMark: TArenaMark;
@@ -514,26 +472,29 @@ begin
 
     for LIndex := 0 to High(LAllocWorkers) do
     begin
-      LAllocWorkers[LIndex] := TArenaAllocStressWorker.Create(LArena, @LStartFlag);
-      LAllocWorkers[LIndex].Start;
+      LAllocWorkerData[LIndex].Arena := LArena;
+      LAllocWorkerData[LIndex].StartFlag := @LStartFlag;
+      LAllocWorkerData[LIndex].AllocCount := 0;
+      LAllocWorkerData[LIndex].Failure := '';
+      platform_thread_spawn(LAllocWorkers[LIndex], @ArenaAllocStressWorkerProc,
+        @LAllocWorkerData[LIndex]);
     end;
 
     LStartFlag := 1;
 
     { Let alloc workers run a bit, then save mark and restore }
-    Sleep(1);
+    platform_thread_sleep_ns(1000000);
     LMark := LArena.SaveMark;
     LArena.RestoreToMark(LMark);
 
     for LIndex := 0 to High(LAllocWorkers) do
-      LAllocWorkers[LIndex].WaitFor;
+      platform_thread_wait(LAllocWorkers[LIndex]);
 
     LFailure := '';
     for LIndex := 0 to High(LAllocWorkers) do
     begin
-      if (LFailure = '') and (LAllocWorkers[LIndex].Failure <> '') then
-        LFailure := 'alloc worker ' + IntToStr(LIndex) + ': ' + LAllocWorkers[LIndex].Failure;
-      LAllocWorkers[LIndex].Free;
+      if (LFailure = '') and (LAllocWorkerData[LIndex].Failure <> '') then
+        LFailure := 'alloc worker ' + IntToStr(LIndex) + ': ' + LAllocWorkerData[LIndex].Failure;
     end;
 
     Check(LFailure = '', 'mark vs alloc contention should not crash: ' + LFailure);
@@ -599,46 +560,34 @@ end;
 type
   PMemMutex = ^TMemMutex;
 
-  TMutexCounterWorker = class(TThread)
-  private
-    FMutex: PMemMutex;
-    FCounter: PInt64;
-    FStartFlag: PLongInt;
-    FFailure: string;
-  protected
-    procedure Execute; override;
-  public
-    constructor Create(AMutex: PMemMutex; ACounter: PInt64; AStartFlag: PLongInt);
-    property Failure: string read FFailure;
+  PMutexCounterWorkerData = ^TMutexCounterWorkerData;
+  TMutexCounterWorkerData = record
+    Mutex: PMemMutex;
+    Counter: PInt64;
+    StartFlag: PLongInt;
+    Failure: string;
   end;
 
-constructor TMutexCounterWorker.Create(AMutex: PMemMutex; ACounter: PInt64; AStartFlag: PLongInt);
-begin
-  inherited Create(True);
-  FreeOnTerminate := False;
-  FMutex := AMutex;
-  FCounter := ACounter;
-  FStartFlag := AStartFlag;
-end;
-
-procedure TMutexCounterWorker.Execute;
+function MutexCounterWorkerProc(AArg: Pointer): Pointer; cdecl;
 var
+  LData: PMutexCounterWorkerData;
   LIndex: Integer;
 begin
-  while FStartFlag^ = 0 do
-    Sleep(0);
+  LData := PMutexCounterWorkerData(AArg);
+  WaitForStartFlag(LData^.StartFlag);
 
   try
     for LIndex := 0 to STRESS_ITERATION_COUNT - 1 do
     begin
-      FMutex^.Acquire;
-      Inc(FCounter^);
-      FMutex^.Release;
+      LData^.Mutex^.Acquire;
+      Inc(LData^.Counter^);
+      LData^.Mutex^.Release;
     end;
   except
     on E: Exception do
-      FFailure := E.Message;
+      LData^.Failure := E.Message;
   end;
+  Result := nil;
 end;
 
 procedure TestMemMutexHighContention;
@@ -647,7 +596,8 @@ const
 var
   LMutex: TMemMutex;
   LCounter: Int64;
-  LWorkers: array[0..MUTEX_THREADS - 1] of TMutexCounterWorker;
+  LWorkers: array[0..MUTEX_THREADS - 1] of TPlatformThreadRecord;
+  LWorkerData: array[0..MUTEX_THREADS - 1] of TMutexCounterWorkerData;
   LStartFlag: LongInt;
   LIndex: Integer;
   LFailure: string;
@@ -658,20 +608,23 @@ begin
     LStartFlag := 0;
     for LIndex := 0 to High(LWorkers) do
     begin
-      LWorkers[LIndex] := TMutexCounterWorker.Create(@LMutex, @LCounter, @LStartFlag);
-      LWorkers[LIndex].Start;
+      LWorkerData[LIndex].Mutex := @LMutex;
+      LWorkerData[LIndex].Counter := @LCounter;
+      LWorkerData[LIndex].StartFlag := @LStartFlag;
+      LWorkerData[LIndex].Failure := '';
+      platform_thread_spawn(LWorkers[LIndex], @MutexCounterWorkerProc,
+        @LWorkerData[LIndex]);
     end;
 
     LStartFlag := 1;
     for LIndex := 0 to High(LWorkers) do
-      LWorkers[LIndex].WaitFor;
+      platform_thread_wait(LWorkers[LIndex]);
 
     LFailure := '';
     for LIndex := 0 to High(LWorkers) do
     begin
-      if (LFailure = '') and (LWorkers[LIndex].Failure <> '') then
-        LFailure := 'worker ' + IntToStr(LIndex) + ': ' + LWorkers[LIndex].Failure;
-      LWorkers[LIndex].Free;
+      if (LFailure = '') and (LWorkerData[LIndex].Failure <> '') then
+        LFailure := 'worker ' + IntToStr(LIndex) + ': ' + LWorkerData[LIndex].Failure;
     end;
 
     Check(LFailure = '', 'mutex contention should not fail: ' + LFailure);

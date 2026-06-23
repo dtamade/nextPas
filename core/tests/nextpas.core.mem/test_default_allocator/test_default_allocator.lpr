@@ -6,66 +6,55 @@ uses
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
-  Classes,
-  SysUtils,
+  nextpas.core.errors,
   nextpas.core.testing,
-  nextpas.core.mem;
+  nextpas.core.mem,
+  nextpas.core.platform.thread;
 
 const
   THREAD_COUNT = 12;
   ITERATION_COUNT = 64;
 
 type
-  TDefaultAllocatorThread = class(TThread)
-  private
-    FAllocator: IAllocator;
-    FFailed: Boolean;
-    FStartFlag: PLongInt;
-  protected
-    procedure Execute; override;
-  public
-    constructor Create(AStartFlag: PLongInt);
-    property Allocator: IAllocator read FAllocator;
-    property Failed: Boolean read FFailed;
+  PDefaultAllocatorThreadData = ^TDefaultAllocatorThreadData;
+  TDefaultAllocatorThreadData = record
+    Allocator: IAllocator;
+    Failed: Boolean;
+    StartFlag: PLongInt;
   end;
 
 var
   T: TTestRunner;
 
-constructor TDefaultAllocatorThread.Create(AStartFlag: PLongInt);
-begin
-  inherited Create(True);
-  FreeOnTerminate := False;
-  FStartFlag := AStartFlag;
-  FFailed := False;
-end;
-
-procedure TDefaultAllocatorThread.Execute;
+function DefaultAllocatorThreadProc(AArg: Pointer): Pointer; cdecl;
 var
+  LData: PDefaultAllocatorThreadData;
   LIndex: Integer;
   LPtr: Pointer;
 begin
-  while FStartFlag^ = 0 do
-    Sleep(0);
+  LData := PDefaultAllocatorThreadData(AArg);
+  while LData^.StartFlag^ = 0 do
+    platform_thread_yield;
 
   try
-    FAllocator := DefaultAllocator;
+    LData^.Allocator := DefaultAllocator;
     for LIndex := 0 to ITERATION_COUNT - 1 do
     begin
-      LPtr := FAllocator.GetMem(32);
+      LPtr := LData^.Allocator.GetMem(32);
       if LPtr = nil then
         raise Exception.Create('DefaultAllocator.GetMem returned nil');
       PByte(LPtr)^ := Byte(LIndex);
-      LPtr := FAllocator.ReallocMem(LPtr, 64);
+      LPtr := LData^.Allocator.ReallocMem(LPtr, 64);
       if LPtr = nil then
         raise Exception.Create('DefaultAllocator.ReallocMem returned nil');
       if PByte(LPtr)^ <> Byte(LIndex) then
         raise Exception.Create('DefaultAllocator.ReallocMem did not preserve prefix');
-      FAllocator.FreeMem(LPtr);
+      LData^.Allocator.FreeMem(LPtr);
     end;
   except
-    FFailed := True;
+    LData^.Failed := True;
   end;
+  Result := nil;
 end;
 
 procedure TestDefaultAllocatorSingletonSingleThread;
@@ -83,7 +72,8 @@ end;
 
 procedure TestDefaultAllocatorConcurrentStart;
 var
-  LThreads: array[0..THREAD_COUNT - 1] of TDefaultAllocatorThread;
+  LThreads: array[0..THREAD_COUNT - 1] of TPlatformThreadRecord;
+  LThreadData: array[0..THREAD_COUNT - 1] of TDefaultAllocatorThreadData;
   LStartFlag: LongInt;
   LIndex: Integer;
   LFirst: IAllocator;
@@ -91,26 +81,24 @@ begin
   LStartFlag := 0;
   for LIndex := 0 to High(LThreads) do
   begin
-    LThreads[LIndex] := TDefaultAllocatorThread.Create(@LStartFlag);
-    LThreads[LIndex].Start;
+    LThreadData[LIndex].StartFlag := @LStartFlag;
+    LThreadData[LIndex].Failed := False;
+    LThreadData[LIndex].Allocator := nil;
+    platform_thread_spawn(LThreads[LIndex], @DefaultAllocatorThreadProc,
+      @LThreadData[LIndex]);
   end;
 
   LStartFlag := 1;
   for LIndex := 0 to High(LThreads) do
-    LThreads[LIndex].WaitFor;
+    platform_thread_wait(LThreads[LIndex]);
 
-  LFirst := LThreads[0].Allocator;
-  try
-    Check(LFirst <> nil, 'first worker should publish an allocator');
-    for LIndex := 0 to High(LThreads) do
-    begin
-      Check(not LThreads[LIndex].Failed, 'worker should not fail');
-      Check(LThreads[LIndex].Allocator <> nil, 'worker allocator should be assigned');
-      Check(LThreads[LIndex].Allocator = LFirst, 'all workers should see the same allocator identity');
-    end;
-  finally
-    for LIndex := 0 to High(LThreads) do
-      LThreads[LIndex].Free;
+  LFirst := LThreadData[0].Allocator;
+  Check(LFirst <> nil, 'first worker should publish an allocator');
+  for LIndex := 0 to High(LThreads) do
+  begin
+    Check(not LThreadData[LIndex].Failed, 'worker should not fail');
+    Check(LThreadData[LIndex].Allocator <> nil, 'worker allocator should be assigned');
+    Check(LThreadData[LIndex].Allocator = LFirst, 'all workers should see the same allocator identity');
   end;
 end;
 

@@ -3,7 +3,7 @@ program test_blockpool;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.testing,
   nextpas.core.mem.error,
   nextpas.core.mem.blockpool;

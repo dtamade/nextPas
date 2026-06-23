@@ -3,7 +3,6 @@ program test_platform_virtual;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.platform.memory;
 
 const

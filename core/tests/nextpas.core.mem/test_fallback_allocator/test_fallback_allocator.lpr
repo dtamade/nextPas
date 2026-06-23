@@ -3,7 +3,7 @@ program test_fallback_allocator;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.testing,
   nextpas.core.mem.base,
   nextpas.core.mem.intf,

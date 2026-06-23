@@ -3,13 +3,13 @@ program test_contracts;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.testing,
   nextpas.core.mem.intf,
   nextpas.core.mem.utils,
   nextpas.core.mem.allocator,
   nextpas.core.mem.allocator.base,
-  nextpas.core.mem.allocator.mimalloc;
+  nextpas.core.mem.allocator.mimalloc,
+  nextpas.core.platform.mmap;
 
 const
   MEM_BASE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.base.pas';
@@ -65,16 +65,16 @@ end;
 
 function ResolveSourcePath(const APathFromTest, APathFromRoot: string): string;
 begin
-  if FileExists(APathFromTest) then
+  if FileExistsByStat(PAnsiChar(APathFromTest)) then
     Exit(APathFromTest);
-  if FileExists(APathFromRoot) then
+  if FileExistsByStat(PAnsiChar(APathFromRoot)) then
     Exit(APathFromRoot);
   Result := APathFromTest;
 end;
 
 function SourceExists(const APathFromTest, APathFromRoot: string): Boolean;
 begin
-  Result := FileExists(APathFromTest) or FileExists(APathFromRoot);
+  Result := FileExistsByStat(PAnsiChar(APathFromTest)) or FileExistsByStat(PAnsiChar(APathFromRoot));
 end;
 
 procedure CheckContains(const ASource, AToken, AMessage: string);
@@ -374,8 +374,7 @@ begin
       try
         LPtr := LAllocator.GetMem(33);
       except
-        on E: Exception do
-          LPtr := nil;
+        LPtr := nil;
       end;
 
       if LPtr <> nil then

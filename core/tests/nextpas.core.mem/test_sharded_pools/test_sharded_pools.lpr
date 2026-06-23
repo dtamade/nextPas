@@ -6,8 +6,7 @@ uses
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
-  Classes,
-  SysUtils,
+  nextpas.core.errors,
   nextpas.core.testing,
   nextpas.core.mem.error,
   nextpas.core.mem.blockpool.sharded,
@@ -21,77 +20,46 @@ const
 type
   TExceptionProc = procedure;
 
-  TBlockPoolWorker = class(TThread)
-  private
-    FPool: TShardedBlockPool;
-    FStartFlag: PLongInt;
-    FFailure: string;
-  protected
-    procedure Execute; override;
-  public
-    constructor Create(APool: TShardedBlockPool; AStartFlag: PLongInt);
-    property Failure: string read FFailure;
+  PBlockPoolWorkerData = ^TBlockPoolWorkerData;
+  TBlockPoolWorkerData = record
+    Pool: TShardedBlockPool;
+    StartFlag: PLongInt;
+    Failure: string;
   end;
 
-  TBlockPoolAcquireWorker = class(TThread)
-  private
-    FPool: TShardedBlockPool;
-    FStartFlag: PLongInt;
-    FPtr: Pointer;
-    FShard: Integer;
-    FFailure: string;
-  protected
-    procedure Execute; override;
-  public
-    constructor Create(APool: TShardedBlockPool; AStartFlag: PLongInt);
-    property Ptr: Pointer read FPtr;
-    property Shard: Integer read FShard;
-    property Failure: string read FFailure;
+  PBlockPoolAcquireWorkerData = ^TBlockPoolAcquireWorkerData;
+  TBlockPoolAcquireWorkerData = record
+    Pool: TShardedBlockPool;
+    StartFlag: PLongInt;
+    Ptr: Pointer;
+    Shard: Integer;
+    Failure: string;
   end;
 
-  TBlockPoolReleaseWorker = class(TThread)
-  private
-    FPool: TShardedBlockPool;
-    FStartFlag: PLongInt;
-    FPtr: Pointer;
-    FGotAllocError: Boolean;
-    FAllocError: TAllocError;
-    FFailure: string;
-  protected
-    procedure Execute; override;
-  public
-    constructor Create(APool: TShardedBlockPool; AStartFlag: PLongInt; APtr: Pointer);
-    property GotAllocError: Boolean read FGotAllocError;
-    property AllocError: TAllocError read FAllocError;
-    property Failure: string read FFailure;
+  PBlockPoolReleaseWorkerData = ^TBlockPoolReleaseWorkerData;
+  TBlockPoolReleaseWorkerData = record
+    Pool: TShardedBlockPool;
+    StartFlag: PLongInt;
+    Ptr: Pointer;
+    GotAllocError: Boolean;
+    AllocError: TAllocError;
+    Failure: string;
   end;
 
-  TSlabPoolWorker = class(TThread)
-  private
-    FPool: TSlabPoolSharded;
-    FStartFlag: PLongInt;
-    FFailure: string;
-  protected
-    procedure Execute; override;
-  public
-    constructor Create(APool: TSlabPoolSharded; AStartFlag: PLongInt);
-    property Failure: string read FFailure;
+  PSlabPoolWorkerData = ^TSlabPoolWorkerData;
+  TSlabPoolWorkerData = record
+    Pool: TSlabPoolSharded;
+    StartFlag: PLongInt;
+    Failure: string;
   end;
 
-  TSlabPoolAcquireWorker = class(TThread)
-  private
-    FPool: TSlabPoolSharded;
-    FStartFlag: PLongInt;
-    FPtr: Pointer;
-    FShard: Integer;
-    FFailure: string;
-  protected
-    procedure Execute; override;
-  public
-    constructor Create(APool: TSlabPoolSharded; AStartFlag: PLongInt);
-    property Ptr: Pointer read FPtr;
-    property Shard: Integer read FShard;
-    property Failure: string read FFailure;
+  PSlabPoolAcquireWorkerData = ^TSlabPoolAcquireWorkerData;
+  TSlabPoolAcquireWorkerData = record
+    Pool: TSlabPoolSharded;
+    StartFlag: PLongInt;
+    Ptr: Pointer;
+    Shard: Integer;
+    Failure: string;
   end;
 
 var
@@ -139,153 +107,126 @@ begin
     GSlabPool.FreeMem(LNewPtr);
 end;
 
-constructor TBlockPoolWorker.Create(APool: TShardedBlockPool; AStartFlag: PLongInt);
+procedure WaitForStartFlag(AStartFlag: PLongInt); inline;
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
-  FPool := APool;
-  FStartFlag := AStartFlag;
+  while AStartFlag^ = 0 do
+    platform_thread_yield;
 end;
 
-procedure TBlockPoolWorker.Execute;
+function BlockPoolWorkerProc(AArg: Pointer): Pointer; cdecl;
 var
+  LData: PBlockPoolWorkerData;
   LIndex: Integer;
   LPtr: Pointer;
 begin
-  while FStartFlag^ = 0 do
-    Sleep(0);
+  LData := PBlockPoolWorkerData(AArg);
+  WaitForStartFlag(LData^.StartFlag);
 
   try
     for LIndex := 0 to ITERATION_COUNT - 1 do
     begin
-      LPtr := FPool.Acquire;
+      LPtr := LData^.Pool.Acquire;
       if LPtr = nil then
         raise Exception.Create('TShardedBlockPool.Acquire returned nil');
       PByte(LPtr)^ := Byte(LIndex);
-      FPool.Release(LPtr);
+      LData^.Pool.Release(LPtr);
     end;
   except
     on E: Exception do
-      FFailure := E.Message;
+      LData^.Failure := E.Message;
   end;
+  Result := nil;
 end;
 
-constructor TBlockPoolAcquireWorker.Create(APool: TShardedBlockPool; AStartFlag: PLongInt);
+function BlockPoolAcquireWorkerProc(AArg: Pointer): Pointer; cdecl;
+var
+  LData: PBlockPoolAcquireWorkerData;
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
-  FPool := APool;
-  FStartFlag := AStartFlag;
-  FPtr := nil;
-  FShard := -1;
-end;
-
-procedure TBlockPoolAcquireWorker.Execute;
-begin
-  while FStartFlag^ = 0 do
-    Sleep(0);
+  LData := PBlockPoolAcquireWorkerData(AArg);
+  WaitForStartFlag(LData^.StartFlag);
 
   try
-    FShard := TestShardIndex(FPool.ShardCount);
-    FPtr := FPool.Acquire;
-    if FPtr = nil then
+    LData^.Shard := TestShardIndex(LData^.Pool.ShardCount);
+    LData^.Ptr := LData^.Pool.Acquire;
+    if LData^.Ptr = nil then
       raise Exception.Create('TShardedBlockPool.Acquire returned nil');
   except
     on E: Exception do
-      FFailure := E.Message;
+      LData^.Failure := E.Message;
   end;
+  Result := nil;
 end;
 
-constructor TBlockPoolReleaseWorker.Create(APool: TShardedBlockPool; AStartFlag: PLongInt; APtr: Pointer);
+function BlockPoolReleaseWorkerProc(AArg: Pointer): Pointer; cdecl;
+var
+  LData: PBlockPoolReleaseWorkerData;
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
-  FPool := APool;
-  FStartFlag := AStartFlag;
-  FPtr := APtr;
-  FGotAllocError := False;
-  FAllocError := aeNone;
-end;
-
-procedure TBlockPoolReleaseWorker.Execute;
-begin
-  while FStartFlag^ = 0 do
-    Sleep(0);
+  LData := PBlockPoolReleaseWorkerData(AArg);
+  WaitForStartFlag(LData^.StartFlag);
 
   try
-    FPool.Release(FPtr);
+    LData^.Pool.Release(LData^.Ptr);
   except
     on E: EAllocError do
     begin
-      FGotAllocError := True;
-      FAllocError := E.Error;
+      LData^.GotAllocError := True;
+      LData^.AllocError := E.Error;
     end;
     on E: Exception do
-      FFailure := E.Message;
+      LData^.Failure := E.Message;
   end;
+  Result := nil;
 end;
 
-constructor TSlabPoolWorker.Create(APool: TSlabPoolSharded; AStartFlag: PLongInt);
-begin
-  inherited Create(True);
-  FreeOnTerminate := False;
-  FPool := APool;
-  FStartFlag := AStartFlag;
-end;
-
-procedure TSlabPoolWorker.Execute;
+function SlabPoolWorkerProc(AArg: Pointer): Pointer; cdecl;
 var
+  LData: PSlabPoolWorkerData;
   LIndex: Integer;
   LPtr: Pointer;
 begin
-  while FStartFlag^ = 0 do
-    Sleep(0);
+  LData := PSlabPoolWorkerData(AArg);
+  WaitForStartFlag(LData^.StartFlag);
 
   try
     for LIndex := 1 to ITERATION_COUNT do
     begin
-      LPtr := FPool.GetMem(16 + (LIndex mod 32));
+      LPtr := LData^.Pool.GetMem(16 + (LIndex mod 32));
       if LPtr = nil then
         raise Exception.Create('TSlabPoolSharded.GetMem returned nil');
       PByte(LPtr)^ := Byte(LIndex);
-      FPool.FreeMem(LPtr);
+      LData^.Pool.FreeMem(LPtr);
     end;
   except
     on E: Exception do
-      FFailure := E.Message;
+      LData^.Failure := E.Message;
   end;
+  Result := nil;
 end;
 
-constructor TSlabPoolAcquireWorker.Create(APool: TSlabPoolSharded; AStartFlag: PLongInt);
+function SlabPoolAcquireWorkerProc(AArg: Pointer): Pointer; cdecl;
+var
+  LData: PSlabPoolAcquireWorkerData;
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
-  FPool := APool;
-  FStartFlag := AStartFlag;
-  FPtr := nil;
-  FShard := -1;
-end;
-
-procedure TSlabPoolAcquireWorker.Execute;
-begin
-  while FStartFlag^ = 0 do
-    Sleep(0);
+  LData := PSlabPoolAcquireWorkerData(AArg);
+  WaitForStartFlag(LData^.StartFlag);
 
   try
-    FShard := TestShardIndex(FPool.ShardCount);
-    FPtr := FPool.GetMem(64);
-    if FPtr = nil then
+    LData^.Shard := TestShardIndex(LData^.Pool.ShardCount);
+    LData^.Ptr := LData^.Pool.GetMem(64);
+    if LData^.Ptr = nil then
       raise Exception.Create('TSlabPoolSharded.GetMem returned nil');
   except
     on E: Exception do
-      FFailure := E.Message;
+      LData^.Failure := E.Message;
   end;
+  Result := nil;
 end;
 
 procedure TestShardedBlockPoolContention;
 var
   LPool: TShardedBlockPool;
-  LThreads: array[0..THREAD_COUNT - 1] of TBlockPoolWorker;
+  LThreads: array[0..THREAD_COUNT - 1] of TPlatformThreadRecord;
+  LThreadData: array[0..THREAD_COUNT - 1] of TBlockPoolWorkerData;
   LStartFlag: LongInt;
   LIndex: Integer;
 begin
@@ -294,19 +235,18 @@ begin
     LStartFlag := 0;
     for LIndex := 0 to High(LThreads) do
     begin
-      LThreads[LIndex] := TBlockPoolWorker.Create(LPool, @LStartFlag);
-      LThreads[LIndex].Start;
+      LThreadData[LIndex].Pool := LPool;
+      LThreadData[LIndex].StartFlag := @LStartFlag;
+      LThreadData[LIndex].Failure := '';
+      platform_thread_spawn(LThreads[LIndex], @BlockPoolWorkerProc, @LThreadData[LIndex]);
     end;
 
     LStartFlag := 1;
     for LIndex := 0 to High(LThreads) do
-      LThreads[LIndex].WaitFor;
+      platform_thread_wait(LThreads[LIndex]);
 
     for LIndex := 0 to High(LThreads) do
-    begin
-      Check(LThreads[LIndex].Failure = '', 'sharded blockpool worker should not fail');
-      LThreads[LIndex].Free;
-    end;
+      Check(LThreadData[LIndex].Failure = '', 'sharded blockpool worker should not fail');
     Check(LPool.InUse = 0, 'all sharded blockpool blocks should be released');
     Check(LPool.BlockSize = 64, 'block size should stay visible');
   finally
@@ -316,7 +256,8 @@ end;
 
 procedure TestShardedBlockPoolRejectsDuplicateRemoteRelease;
 var
-  LThreads: array[0..THREAD_COUNT - 1] of TBlockPoolAcquireWorker;
+  LThreads: array[0..THREAD_COUNT - 1] of TPlatformThreadRecord;
+  LThreadData: array[0..THREAD_COUNT - 1] of TBlockPoolAcquireWorkerData;
   LStartFlag: LongInt;
   LIndex: Integer;
   LMainShard: Integer;
@@ -329,24 +270,29 @@ begin
     LStartFlag := 0;
     for LIndex := 0 to High(LThreads) do
     begin
-      LThreads[LIndex] := TBlockPoolAcquireWorker.Create(GBlockPool, @LStartFlag);
-      LThreads[LIndex].Start;
+      LThreadData[LIndex].Pool := GBlockPool;
+      LThreadData[LIndex].StartFlag := @LStartFlag;
+      LThreadData[LIndex].Ptr := nil;
+      LThreadData[LIndex].Shard := -1;
+      LThreadData[LIndex].Failure := '';
+      platform_thread_spawn(LThreads[LIndex], @BlockPoolAcquireWorkerProc, @LThreadData[LIndex]);
     end;
 
     LStartFlag := 1;
     for LIndex := 0 to High(LThreads) do
-      LThreads[LIndex].WaitFor;
+      platform_thread_wait(LThreads[LIndex]);
 
     for LIndex := 0 to High(LThreads) do
     begin
-      Check(LThreads[LIndex].Failure = '', 'remote-release setup worker should not fail');
-      if (LSelected < 0) and (LThreads[LIndex].Ptr <> nil) and (LThreads[LIndex].Shard <> LMainShard) then
+      Check(LThreadData[LIndex].Failure = '', 'remote-release setup worker should not fail');
+      if (LSelected < 0) and (LThreadData[LIndex].Ptr <> nil) and
+        (LThreadData[LIndex].Shard <> LMainShard) then
         LSelected := LIndex;
     end;
 
     Check(LSelected >= 0, 'test setup should find a worker on a non-local shard');
-    GBlockPtr := LThreads[LSelected].Ptr;
-    LThreads[LSelected].FPtr := nil;
+    GBlockPtr := LThreadData[LSelected].Ptr;
+    LThreadData[LSelected].Ptr := nil;
 
     GBlockPool.Release(GBlockPtr);
     CheckRaisesAllocError(@ReleaseDuplicateRemoteShardedBlockPointer, aeDoubleFree,
@@ -356,11 +302,9 @@ begin
   finally
     for LIndex := 0 to High(LThreads) do
     begin
-      if LThreads[LIndex] <> nil then
+      if LThreadData[LIndex].Ptr <> nil then
       begin
-        if LThreads[LIndex].Ptr <> nil then
-          GBlockPool.Release(LThreads[LIndex].Ptr);
-        LThreads[LIndex].Free;
+        GBlockPool.Release(LThreadData[LIndex].Ptr);
       end;
     end;
     GBlockPtr := nil;
@@ -389,7 +333,8 @@ end;
 procedure TestShardedSlabPoolContention;
 var
   LPool: TSlabPoolSharded;
-  LThreads: array[0..THREAD_COUNT - 1] of TSlabPoolWorker;
+  LThreads: array[0..THREAD_COUNT - 1] of TPlatformThreadRecord;
+  LThreadData: array[0..THREAD_COUNT - 1] of TSlabPoolWorkerData;
   LStartFlag: LongInt;
   LIndex: Integer;
 begin
@@ -398,19 +343,18 @@ begin
     LStartFlag := 0;
     for LIndex := 0 to High(LThreads) do
     begin
-      LThreads[LIndex] := TSlabPoolWorker.Create(LPool, @LStartFlag);
-      LThreads[LIndex].Start;
+      LThreadData[LIndex].Pool := LPool;
+      LThreadData[LIndex].StartFlag := @LStartFlag;
+      LThreadData[LIndex].Failure := '';
+      platform_thread_spawn(LThreads[LIndex], @SlabPoolWorkerProc, @LThreadData[LIndex]);
     end;
 
     LStartFlag := 1;
     for LIndex := 0 to High(LThreads) do
-      LThreads[LIndex].WaitFor;
+      platform_thread_wait(LThreads[LIndex]);
 
     for LIndex := 0 to High(LThreads) do
-    begin
-      Check(LThreads[LIndex].Failure = '', 'sharded slab worker should not fail');
-      LThreads[LIndex].Free;
-    end;
+      Check(LThreadData[LIndex].Failure = '', 'sharded slab worker should not fail');
     Check(LPool.Stats.FallbackAllocCount = 0, 'small contention path should stay in slab fast path');
     Check(LPool.ShardCount = 4, 'requested shard count should stay visible');
   finally
@@ -466,7 +410,8 @@ end;
 procedure TestShardedSlabRemoteReleaseClearsDiagnostics;
 var
   LPool: TSlabPoolSharded;
-  LThreads: array[0..THREAD_COUNT - 1] of TSlabPoolAcquireWorker;
+  LThreads: array[0..THREAD_COUNT - 1] of TPlatformThreadRecord;
+  LThreadData: array[0..THREAD_COUNT - 1] of TSlabPoolAcquireWorkerData;
   LStartFlag: LongInt;
   LIndex: Integer;
   LMainShard: Integer;
@@ -480,24 +425,29 @@ begin
     LStartFlag := 0;
     for LIndex := 0 to High(LThreads) do
     begin
-      LThreads[LIndex] := TSlabPoolAcquireWorker.Create(LPool, @LStartFlag);
-      LThreads[LIndex].Start;
+      LThreadData[LIndex].Pool := LPool;
+      LThreadData[LIndex].StartFlag := @LStartFlag;
+      LThreadData[LIndex].Ptr := nil;
+      LThreadData[LIndex].Shard := -1;
+      LThreadData[LIndex].Failure := '';
+      platform_thread_spawn(LThreads[LIndex], @SlabPoolAcquireWorkerProc, @LThreadData[LIndex]);
     end;
 
     LStartFlag := 1;
     for LIndex := 0 to High(LThreads) do
-      LThreads[LIndex].WaitFor;
+      platform_thread_wait(LThreads[LIndex]);
 
     for LIndex := 0 to High(LThreads) do
     begin
-      Check(LThreads[LIndex].Failure = '', 'remote slab setup worker should not fail');
-      if (LSelected < 0) and (LThreads[LIndex].Ptr <> nil) and (LThreads[LIndex].Shard <> LMainShard) then
+      Check(LThreadData[LIndex].Failure = '', 'remote slab setup worker should not fail');
+      if (LSelected < 0) and (LThreadData[LIndex].Ptr <> nil) and
+        (LThreadData[LIndex].Shard <> LMainShard) then
         LSelected := LIndex;
     end;
 
     Check(LSelected >= 0, 'test setup should find a worker on a non-local slab shard');
-    LPtr := LThreads[LSelected].Ptr;
-    LThreads[LSelected].FPtr := nil;
+    LPtr := LThreadData[LSelected].Ptr;
+    LThreadData[LSelected].Ptr := nil;
 
     LPool.FreeMem(LPtr);
     Check(not LPool.Owns(LPtr), 'remote slab FreeMem should clear ownership diagnostics immediately');
@@ -506,11 +456,9 @@ begin
   finally
     for LIndex := 0 to High(LThreads) do
     begin
-      if LThreads[LIndex] <> nil then
+      if LThreadData[LIndex].Ptr <> nil then
       begin
-        if LThreads[LIndex].Ptr <> nil then
-          LPool.FreeMem(LThreads[LIndex].Ptr);
-        LThreads[LIndex].Free;
+        LPool.FreeMem(LThreadData[LIndex].Ptr);
       end;
     end;
     TObject(LPool).Free;

@@ -3,7 +3,7 @@ program test_sizeclass_pool;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.testing,
   nextpas.core.mem.base,
   nextpas.core.mem.error,

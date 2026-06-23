@@ -3,7 +3,7 @@ program test_stack_pool;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.testing,
   nextpas.core.base,
   nextpas.core.mem.stack_pool;
@@ -42,7 +42,7 @@ begin
   except
     on E: EInvalidArgument do
       Exit;
-    on E: Exception do
+    on E: ECore do
       Fail(AName + ': expected EInvalidArgument, got ' + E.ClassName);
   end;
 end;

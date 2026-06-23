@@ -3,7 +3,7 @@ program test_arena_growable;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.testing,
   nextpas.core.mem.arena.base,
   nextpas.core.mem.arena.chunked,
