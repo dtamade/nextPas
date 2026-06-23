@@ -26,14 +26,26 @@ const
   MEM_ARENA_GROWABLE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.arena.growable.pas';
   MEM_ALLOCATOR_CALLBACK_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.allocator.callback.pas';
   MEM_ALLOCATOR_CALLBACK_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.allocator.callback.pas';
+  MEM_ALIGNED_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.aligned.pas';
+  MEM_ALIGNED_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.aligned.pas';
+  MEM_ALLOCATOR_INSTRUMENTATION_SOURCE_PATH_FROM_TEST =
+    '../../../src/nextpas.core.mem.allocator.instrumentation.pas';
+  MEM_ALLOCATOR_INSTRUMENTATION_SOURCE_PATH_FROM_ROOT =
+    'core/src/nextpas.core.mem.allocator.instrumentation.pas';
+  MEM_ALLOCATOR_NUMA_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.allocator.numa.pas';
+  MEM_ALLOCATOR_NUMA_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.allocator.numa.pas';
   MEM_BLOCKPOOL_GROWABLE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.blockpool.growable.pas';
   MEM_BLOCKPOOL_GROWABLE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.blockpool.growable.pas';
+  MEM_ADAPTERS_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.adapters.pas';
+  MEM_ADAPTERS_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.adapters.pas';
   MEM_ERROR_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.error.pas';
   MEM_ERROR_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.error.pas';
   MEM_ALLOC_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.alloc.pas';
   MEM_ALLOC_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.alloc.pas';
   MEM_ADAPTER_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.adapter.pas';
   MEM_ADAPTER_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.adapter.pas';
+  MEM_INTERFACES_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.interfaces.pas';
+  MEM_INTERFACES_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.interfaces.pas';
   MEM_POOL_ADAPTER_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.pool.adapter.pas';
   MEM_POOL_ADAPTER_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.pool.adapter.pas';
   MEM_LAYOUT_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.layout.pas';
@@ -46,6 +58,10 @@ const
   MEM_MUTEX_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.mutex.pas';
   MEM_RWLOCK_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.rwlock.pas';
   MEM_RWLOCK_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.rwlock.pas';
+  MEM_STACK_SCOPE_HELPERS_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.stack_scope_helpers.pas';
+  MEM_STACK_SCOPE_HELPERS_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.stack_scope_helpers.pas';
+  MEM_STATS_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.stats.pas';
+  MEM_STATS_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.stats.pas';
 
 type
   TByteArray = array[0..5] of Byte;
@@ -484,6 +500,28 @@ begin
     'mem.mimalloc.binding should be removed');
 end;
 
+procedure TestZeroConsumerCompatibilityUnitsRemoved;
+begin
+  Check(not SourceExists(MEM_ALIGNED_SOURCE_PATH_FROM_TEST, MEM_ALIGNED_SOURCE_PATH_FROM_ROOT),
+    'mem.aligned should be removed');
+  Check(not SourceExists(MEM_ALLOCATOR_INSTRUMENTATION_SOURCE_PATH_FROM_TEST,
+    MEM_ALLOCATOR_INSTRUMENTATION_SOURCE_PATH_FROM_ROOT),
+    'mem.allocator.instrumentation should be removed');
+  Check(not SourceExists(MEM_ALLOCATOR_NUMA_SOURCE_PATH_FROM_TEST, MEM_ALLOCATOR_NUMA_SOURCE_PATH_FROM_ROOT),
+    'mem.allocator.numa should be removed');
+  Check(not SourceExists(MEM_STATS_SOURCE_PATH_FROM_TEST, MEM_STATS_SOURCE_PATH_FROM_ROOT),
+    'mem.stats should be removed');
+  Check(not SourceExists(MEM_ADAPTERS_SOURCE_PATH_FROM_TEST, MEM_ADAPTERS_SOURCE_PATH_FROM_ROOT),
+    'mem.adapters should be removed');
+  Check(not SourceExists(MEM_INTERFACES_SOURCE_PATH_FROM_TEST, MEM_INTERFACES_SOURCE_PATH_FROM_ROOT),
+    'mem.interfaces should be removed');
+  Check(not SourceExists(MEM_STACK_SCOPE_HELPERS_SOURCE_PATH_FROM_TEST,
+    MEM_STACK_SCOPE_HELPERS_SOURCE_PATH_FROM_ROOT),
+    'mem.stack_scope_helpers should be removed');
+  Check(SourceExists(MEM_MANAGER_MIMALLOC_SOURCE_PATH_FROM_TEST, MEM_MANAGER_MIMALLOC_SOURCE_PATH_FROM_ROOT),
+    'mem.manager.mimalloc should remain available');
+end;
+
 procedure TestBaseOwnsMemConstantsAndErrorDropsAllocResult;
 var
   LBaseSource: string;
@@ -766,6 +804,7 @@ begin
   T.Run('virtual arena AllocNoPointer guards against back underflow',
     @TestVirtualArenaAllocNoPointerGuardsAgainstBackUnderflow);
   T.Run('legacy allocator files removed', @TestLegacyAllocatorFilesRemoved);
+  T.Run('zero-consumer compatibility units removed', @TestZeroConsumerCompatibilityUnitsRemoved);
   T.Run('mem.base owns constants and mem.error drops alloc result',
     @TestBaseOwnsMemConstantsAndErrorDropsAllocResult);
   T.Run('mem lock wrappers use atomic init state',
