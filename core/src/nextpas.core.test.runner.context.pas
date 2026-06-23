@@ -44,6 +44,7 @@ type
     FFailedNames: specialize TArray<string>;
     constructor Create(const ATestName: string);
     procedure Run(const AName: string; AProc: TTestProc);
+    procedure Run(const AName: string; AProc: TTestClosure);
     procedure RunNested(const AName: string; AProc: Pointer);
     procedure Fail(const AMessage: string);
     procedure Skip(const AReason: string = '');
@@ -83,6 +84,22 @@ var
 begin
   LEntry.Name        := FTestName + '/' + AName;
   LEntry.Proc        := AProc;
+  LEntry.Closure     := nil;
+  LEntry.SubtestProc := nil;
+  LEntry.Kind        := ekTest;
+  LEntry.SkipReason  := '';
+  LEntry.RetryCount  := 0;
+  SetLength(FSubtests, Length(FSubtests) + 1);
+  FSubtests[High(FSubtests)] := LEntry;
+end;
+
+procedure TTestContext.Run(const AName: string; AProc: TTestClosure);
+var
+  LEntry: TTestEntry;
+begin
+  LEntry.Name        := FTestName + '/' + AName;
+  LEntry.Proc        := nil;
+  LEntry.Closure     := AProc;
   LEntry.SubtestProc := nil;
   LEntry.Kind        := ekTest;
   LEntry.SkipReason  := '';
@@ -174,7 +191,10 @@ begin
       end
       else
       begin
-        LEntry.Proc;
+        if Assigned(LEntry.Closure) then
+          LEntry.Closure()
+        else
+          LEntry.Proc;
         WriteLn('    ', StatusDot(tsPassed), ' ', LEntry.Name);
         Inc(FSubPass);
       end;

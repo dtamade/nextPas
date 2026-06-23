@@ -7,6 +7,6 @@ Compiling /home/dtamade/projects/nextPas/core/src/nextpas.core.tls.winssl.utils.
 nextpas.core.tls.winssl.utils.pas(273,15) Warning: Symbol "Format" is deprecated: "Use nextpas.core.text.format.TextFormat or nextpas.core.text.TextFormat"
 nextpas.core.tls.winssl.utils.pas(277,22) Warning: Symbol "Format" is deprecated: "Use nextpas.core.text.format.TextFormat or nextpas.core.text.TextFormat"
 nextpas.core.tls.winssl.utils.pas(301,15) Warning: Symbol "Format" is deprecated: "Use nextpas.core.text.format.TextFormat or nextpas.core.text.TextFormat"
-651 lines compiled, 0.1 sec
+651 lines compiled, 0.2 sec
 3 warning(s) issued
 2 hint(s) issued

@@ -282,6 +282,41 @@ begin
     end);
 end;
 
+{ ── R6-12/13/14: Closure subtest support ─────────────────────────────────── }
+
+procedure TestClosureSubtest(constref Ctx: ITestContext);
+begin
+  Ctx.Run('closure pass',
+    procedure
+    begin
+      CheckEqual(Int64(6), Int64(2 * 3));
+      InterLockedIncrement(GSubTestsRun);
+    end);
+
+  Ctx.Run('closure string',
+    procedure
+    begin
+      CheckEqual('abc', 'a' + 'bc');
+      InterLockedIncrement(GSubTestsRun);
+    end);
+end;
+
+procedure TestClosureSubtestWithFailure(constref Ctx: ITestContext);
+begin
+  Ctx.Run('closure ok',
+    procedure
+    begin
+      Check(True);
+      InterLockedIncrement(GSubTestsRun);
+    end);
+
+  Ctx.Run('closure fail',
+    procedure
+    begin
+      Check(False, 'closure subtest failure');
+    end);
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -305,6 +340,7 @@ begin
   LSuite.TestSubtest('ITestContext.Fail',    @TestContextFailRaises);
   LSuite.TestSubtest('ITestContext.Skip',    @TestContextSkipRaises);
   LSuite.TestSubtest('subtest duration',     @TestSubtestDuration);
+  LSuite.TestSubtest('closure subtest',      @TestClosureSubtest);
 
   if not LSuite.Run then
   begin
@@ -324,14 +360,14 @@ begin
   WriteLn(AnsiBold('BeforeEach count: '), GBeforeEachCount);
   WriteLn(AnsiBold('AfterEach count: '), GAfterEachCount);
   { BeforeEach/AfterEach should have been called exactly once per registered test }
-  if GBeforeEachCount <> 12 then
+  if GBeforeEachCount <> 13 then
   begin
-    WriteLn(AnsiRed('FAIL: expected exactly 12 BeforeEach calls, got '), GBeforeEachCount);
+    WriteLn(AnsiRed('FAIL: expected exactly 13 BeforeEach calls, got '), GBeforeEachCount);
     Halt(1);
   end;
-  if GAfterEachCount <> 12 then
+  if GAfterEachCount <> 13 then
   begin
-    WriteLn(AnsiRed('FAIL: expected exactly 12 AfterEach calls, got '), GAfterEachCount);
+    WriteLn(AnsiRed('FAIL: expected exactly 13 AfterEach calls, got '), GAfterEachCount);
     Halt(1);
   end;
 
@@ -348,6 +384,20 @@ begin
       Halt(1);
     end;
     WriteLn(AnsiGreen('  Failure propagation verified'));
+  end;
+
+  { ── R6-12/13/14: Closure subtest failure propagation ───────────────────── }
+  WriteLn;
+  WriteLn(AnsiBold('─── Closure Subtest Failure ───'));
+  begin
+    LFailSuite := TTestSuite.Create('Closure Failure');
+    LFailSuite.TestSubtest('closure failure', @TestClosureSubtestWithFailure);
+    if LFailSuite.Run then
+    begin
+      WriteLn(AnsiRed('FAIL: closure subtest failure should propagate'));
+      Halt(1);
+    end;
+    WriteLn(AnsiGreen('  Closure subtest failure propagation verified'));
   end;
 
   { ── B5.7: 3-level nested failure propagation ────────────────────────────── }

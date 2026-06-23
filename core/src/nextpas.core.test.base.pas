@@ -22,6 +22,7 @@ type
   ITestContext = interface
     ['{C4E8A57A-5B1D-4F3A-9C7E-2D8F1A6B3E90}']
     procedure Run(const AName: string; AProc: TTestProc);
+    procedure Run(const AName: string; AProc: TTestClosure);
     procedure RunNested(const AName: string; AProc: Pointer);
       { AProc is TSubtestProc — typed as Pointer to break FPC circular
         forward-reference between ITestContext and TSubtestProc. }
