@@ -802,6 +802,66 @@ begin
   end;
 end;
 
+{ R6-44: Type mismatch edge cases — verify EAssertionFailed with type hint }
+
+procedure TestExpectIntToBeNearTypeMismatch;
+begin
+  { ExpectInt creates ekInt, ToBeNear requires ekDouble → type mismatch }
+  try
+    ExpectInt(42).ToBeNear(42.0, 1.0);
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(Pos('non-double', LowerCase(E.Message)) > 0, 'type mismatch for ToBeNear on int');
+  end;
+end;
+
+procedure TestExpectPtrToEqualIntTypeMismatch;
+begin
+  { ExpectPtr creates ekPtr, ToEqualInt requires ekInt → type mismatch }
+  try
+    ExpectPtr(nil).ToEqualInt(0);
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(Pos('non-integer', LowerCase(E.Message)) > 0, 'type mismatch for ToEqualInt on ptr');
+  end;
+end;
+
+{ R6-45: Not_.ToBeNear combination }
+
+procedure TestNotToBeNearWithinEpsilonShouldFail;
+begin
+  { Value is within epsilon → Not_ should negate to fail }
+  try
+    ExpectDouble(1.0).Not_.ToBeNear(1.0, 0.01);
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(Pos('not', LowerCase(E.Message)) > 0, 'Not_.ToBeNear should fail when within epsilon');
+  end;
+end;
+
+procedure TestNotToBeNearOutsideEpsilonShouldPass;
+begin
+  { Value outside epsilon → Not_ should negate to pass }
+  ExpectDouble(1.0).Not_.ToBeNear(2.0, 0.01);
+end;
+
+procedure TestNotToNotBeNearCombination;
+begin
+  { Not_.ToNotBeNear: value is near → ToNotBeNear would fail → Not_ inverts → pass }
+  ExpectDouble(1.0).Not_.ToNotBeNear(1.0, 0.01);
+  { Not_.ToNotBeNear: value is not near → ToNotBeNear would pass → Not_ inverts → fail }
+  try
+    ExpectDouble(1.0).Not_.ToNotBeNear(100.0, 0.01);
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(True, 'expected failure from Not_.ToNotBeNear outside epsilon');
+  end;
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -905,6 +965,15 @@ begin
   LSuite.Test('Double NaN not near',           @TestExpectDoubleNaN);
   LSuite.Test('Double Infinity near',          @TestExpectDoubleInfinity);
   LSuite.Test('Int64 max/min boundary',        @TestExpectIntMaxMin);
+
+  { R6-44: Type mismatch edge cases }
+  LSuite.Test('Type: Int→ToBeNear',            @TestExpectIntToBeNearTypeMismatch);
+  LSuite.Test('Type: Ptr→ToEqualInt',          @TestExpectPtrToEqualIntTypeMismatch);
+
+  { R6-45: Not_.ToBeNear combination }
+  LSuite.Test('Not_.ToBeNear in eps → fail',   @TestNotToBeNearWithinEpsilonShouldFail);
+  LSuite.Test('Not_.ToBeNear out eps → pass',  @TestNotToBeNearOutsideEpsilonShouldPass);
+  LSuite.Test('Not_.ToNotBeNear combo',        @TestNotToNotBeNearCombination);
 
   if not LSuite.Run then
   begin
