@@ -441,6 +441,8 @@ begin
   Result := LW > 0.9;
 end;
 
+{** DS-07: Convenience wrapper over SortDoubleArray for IBenchStatsAnalyzer interface.
+ *  Kept so callers that only have the interface don't need to import base.pas directly. }
 procedure TBenchStatsAnalyzer.Sort(var AData: TDoubleArray);
 begin
   SortDoubleArray(AData);

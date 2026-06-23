@@ -671,16 +671,24 @@ end;
 procedure TestTBenchSuite_InvalidParameters;
 var
   LRaised: Boolean;
+  LCorrectType: Boolean;
   LSuite: IBenchSuite;
 begin
   WriteLn('TestTBenchSuite_InvalidParameters:');
 
+  { TG-27: verify exception type is EBenchInvalidParam, not just "any exception" }
   LRaised := False;
+  LCorrectType := False;
   LSuite := TBenchSuite.Create('Invalid');
   try
     try
       LSuite.SetMinDuration(TDuration.FromNanoseconds(0));
     except
+      on E: EBenchInvalidParam do
+      begin
+        LRaised := True;
+        LCorrectType := True;
+      end;
       on E: Exception do
         LRaised := True;
     end;
@@ -688,13 +696,20 @@ begin
     LSuite := nil;
   end;
   Check(LRaised, 'SetMinDuration rejects zero');
+  Check(LCorrectType, 'SetMinDuration raises EBenchInvalidParam');
 
   LRaised := False;
+  LCorrectType := False;
   LSuite := TBenchSuite.Create('Invalid');
   try
     try
       LSuite.SetMaxIterations(0);
     except
+      on E: EBenchInvalidParam do
+      begin
+        LRaised := True;
+        LCorrectType := True;
+      end;
       on E: Exception do
         LRaised := True;
     end;
@@ -702,13 +717,20 @@ begin
     LSuite := nil;
   end;
   Check(LRaised, 'SetMaxIterations rejects zero');
+  Check(LCorrectType, 'SetMaxIterations raises EBenchInvalidParam');
 
   LRaised := False;
+  LCorrectType := False;
   LSuite := TBenchSuite.Create('Invalid');
   try
     try
       LSuite.SetMinSamples(0);
     except
+      on E: EBenchInvalidParam do
+      begin
+        LRaised := True;
+        LCorrectType := True;
+      end;
       on E: Exception do
         LRaised := True;
     end;
@@ -716,13 +738,20 @@ begin
     LSuite := nil;
   end;
   Check(LRaised, 'SetMinSamples rejects zero');
+  Check(LCorrectType, 'SetMinSamples raises EBenchInvalidParam');
 
   LRaised := False;
+  LCorrectType := False;
   LSuite := TBenchSuite.Create('Invalid');
   try
     try
       LSuite.AddParallel('BadParallel', @BenchFast, 0);
     except
+      on E: EBenchInvalidParam do
+      begin
+        LRaised := True;
+        LCorrectType := True;
+      end;
       on E: Exception do
         LRaised := True;
     end;
@@ -730,6 +759,7 @@ begin
     LSuite := nil;
   end;
   Check(LRaised, 'AddParallel rejects zero threads');
+  Check(LCorrectType, 'AddParallel raises EBenchInvalidParam');
 end;
 
 procedure TestTBenchSuite_LoadBaselineRaises;
@@ -894,9 +924,9 @@ begin
   // 创建套件
   LSuite := CreateFastSuite('TestSuite');
 
-  // 添加基线（比当前快）- 基线是 500 ns/op，当前是 ~700 ns/op
-  // Ratio = Current/Baseline = 700/500 = 1.4 > 1.1
-  LSuite.AddBaseline('Fast', 500.0);
+  { TG-20: 使用极低基线确保 ratio 远超 1.1，消除性能波动引起的 flaky }
+  // 基线 100 ns/op vs 实际 ~700 ns/op → ratio ≈ 7 >> 1.1
+  LSuite.AddBaseline('Fast', 100.0);
 
   // 添加基准
   LSuite.Add('Fast', @BenchFast);
@@ -904,8 +934,8 @@ begin
   // 运行
   LResults := LSuite.Run;
 
-  Check(LResults.HasRegression(1.1), 'Regression detected when current is slower than 1.1x baseline');
-  Check(not LResults.HasRegression(10.0), 'Large threshold does not flag regression');
+  Check(LResults.HasRegression(1.1), 'Regression detected when current is much slower than baseline');
+  Check(not LResults.HasRegression(100.0), 'Very large threshold does not flag regression');
 end;
 
 procedure TestTBenchResults_SaveToJSON;

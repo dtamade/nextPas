@@ -35,6 +35,11 @@ begin
   else begin Inc(GTestsFailed); WriteLn('  ✗ ', ATestName); end;
 end;
 
+procedure CheckApprox(AActual, AExpected, AEpsilon: Double; const ATestName: string);
+begin
+  Check(Abs(AActual - AExpected) <= AEpsilon, ATestName);
+end;
+
 function CreateTestData(AValues: array of Double): TDoubleArray;
 var
   I: Integer;
@@ -180,10 +185,10 @@ begin WriteLn('Test_BootstrapCI:');
   LData := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]);
   LStats := TAdvancedStats.Create(LData);
   LCI := LStats.BootstrapCI(10000, 0.95);
-  Check(LCI.Lower < 5.5, 'Bootstrap CI lower < 5.5');
-  Check(LCI.Upper > 5.5, 'Bootstrap CI upper > 5.5');
-  Check(LCI.Upper - LCI.Lower > 1.0, 'Bootstrap CI width > 1.0');
-  Check(LCI.Upper - LCI.Lower < 8.0, 'Bootstrap CI width < 8.0');
+  { TG-23: Fixed seed (12345) makes BootstrapCI fully deterministic }
+  CheckApprox(LCI.Lower, 3.7, 0.15, 'Bootstrap CI lower ≈ 3.7');
+  CheckApprox(LCI.Upper, 7.3, 0.15, 'Bootstrap CI upper ≈ 7.3');
+  CheckApprox(LCI.Upper - LCI.Lower, 3.6, 0.3, 'Bootstrap CI width ≈ 3.6');
   Check(Abs(LCI.Level - 0.95) < 0.01, 'Bootstrap CI level = 0.95');
 end;
 

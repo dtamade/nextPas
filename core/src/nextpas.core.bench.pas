@@ -60,6 +60,8 @@ type
 
   public
     constructor Create(const ASuiteName: string);
+    {** ST-11: 使用自定义配置创建基准套件 }
+    constructor CreateWithConfig(const ASuiteName: string; const AConfig: TBenchConfig);
     destructor Destroy; override;
 
     {** IBenchSuite 实现 }
@@ -165,6 +167,24 @@ begin
   FConfig.ParallelThreads := BENCH_DEFAULT_PARALLEL_THREADS;
   FConfig.CollectRawSamples := False;
   FConfig.Quiet := False;
+
+  FRunner := TBenchRunner.Create;
+  FReportGenerator := TBenchReportGenerator.Create;
+end;
+
+{** ST-11: 使用自定义配置创建，跳过环境变量加载 }
+constructor TBenchSuite.CreateWithConfig(const ASuiteName: string; const AConfig: TBenchConfig);
+begin
+  inherited Create;
+  FEntryCount := 0;
+  FEntryCapacity := 0;
+  SetLength(FEntries, 0);
+  FBaselineCount := 0;
+  FBaselineCapacity := 0;
+  SetLength(FBaselines, 0);
+
+  FConfig := AConfig;
+  FConfig.SuiteName := ASuiteName;
 
   FRunner := TBenchRunner.Create;
   FReportGenerator := TBenchReportGenerator.Create;

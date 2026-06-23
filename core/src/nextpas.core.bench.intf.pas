@@ -121,11 +121,17 @@ type
     function AddParallel(const AName: string; AFunc: TBenchFunc;
       AThreads: Integer): IBenchSuite;
 
-    {** 添加参数化基准测试（自动生成多个子基准） }
+    {** 添加参数化基准测试（自动生成多个子基准）。
+     *  AName: 基准名称模板，参数值自动追加为 "/<value>" 后缀。
+     *         例如 AName='Sort' + AParams=[100,1000] → 条目 "Sort/100", "Sort/1000"。
+     *  AFunc: 参数化基准函数，接收上下文和当前参数值。
+     *  AParams: 参数值数组，每个值生成一个独立的基准条目。 }
     function AddRange(const AName: string; AFunc: TBenchParamFunc;
       const AParams: array of Int64): IBenchSuite;
 
-    {** 添加参数化基准测试（带 setup/teardown） (DS-02) }
+    {** 添加参数化基准测试（带 setup/teardown） (DS-02)。
+     *  与 AddRange 相同，但每个参数化条目共享同一对 setup/teardown 回调。
+     *  Setup 在校准和采样前调用，Teardown 在采样后调用。 }
     function AddRange(const AName: string; AFunc: TBenchParamFunc;
       const AParams: array of Int64;
       ASetup: TBenchSetupFunc; ATeardown: TBenchTeardownFunc): IBenchSuite;

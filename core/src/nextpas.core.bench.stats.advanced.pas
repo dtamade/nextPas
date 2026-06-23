@@ -500,6 +500,9 @@ begin
   else if ALevel >= 0.90 then
     LTCritical := TInvLookup(LCount - 1, TINV90_DATA, 1.645)
   else
+    // DS-05: <90% level has no lookup table; conservatively use 95% critical value.
+    // This gives a wider interval than requested, which is safe (not anti-conservative).
+    // Callers needing precise <90% CIs should use BootstrapCI instead.
     LTCritical := TInvLookup(LCount - 1, TINV95_DATA, 1.96);
 
   LMargin := LTCritical * (LStdDev / Sqrt(LCount));

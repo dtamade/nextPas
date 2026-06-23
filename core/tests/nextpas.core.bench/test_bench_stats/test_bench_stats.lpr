@@ -232,6 +232,7 @@ var
   i: Integer;
 begin
   WriteLn('TestIsNormal:');
+  RandSeed := 42; { TG-16: fixed seed for deterministic test data }
   SetLength(LData, 1000);
   for i := 0 to 999 do LData[i] := 100.0 + Random * 10.0 + Random * 10.0;
   Check(GAnalyzer.LooksNormalHeuristic(LData), 'Normal-like data passes heuristic check');

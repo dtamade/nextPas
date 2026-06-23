@@ -443,8 +443,12 @@ begin
       LBaseline.TimestampNs := UInt64(LField.AsInt)
     else
     begin
+      // ST-26: fallback to legacy "timestamp" field (seconds → nanoseconds)
       LField := LItem.ObjectGet('timestamp');
-      LBaseline.TimestampNs := 0;
+      if LField.IsInt then
+        LBaseline.TimestampNs := UInt64(LField.AsInt) * 1000000000
+      else
+        LBaseline.TimestampNs := 0;
     end;
 
     LField := LItem.ObjectGet('gitHash');

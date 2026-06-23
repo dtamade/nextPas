@@ -964,9 +964,23 @@ begin
   end;
 
   if Abs(LMax - LMin) < 1e-10 then
-    LScale := 1.0
-  else
-    LScale := 200.0 / (LMax - LMin);
+  begin
+    // ST-24: Constant data — render a visible center marker instead of invisible 0-width box
+    LLines := Default(TLineBuffer);
+    BufferAddLine(LLines,
+      '<svg viewBox="0 0 300 60" role="img" aria-label="Boxplot ' +
+      EscapeHTML(AName) + ' (constant)">');
+    BufferAddLine(LLines, '  <rect x="0" y="0" width="300" height="60" fill="#fbfcfd"/>');
+    BufferAddLine(LLines,
+      '  <line x1="100" y1="20" x2="100" y2="40" stroke="#ff6600" stroke-width="3"/>');
+    BufferAddLine(LLines,
+      '  <text x="120" y="35" class="chart-label">' +
+      EscapeHTML(FormatNumber(LMin, 2)) + ' (constant)</text>');
+    BufferAddLine(LLines, '</svg>');
+    Result := BufferToString(LLines);
+    Exit;
+  end;
+  LScale := 200.0 / (LMax - LMin);
 
   LBaseX := 50.0;
   LScaledWhiskerLow := LBaseX + (LWhiskerLow - LMin) * LScale;
