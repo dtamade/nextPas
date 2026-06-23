@@ -623,6 +623,13 @@ begin
           begin
             LStatus := tsError;
             LLastFailMsg := 'afterEach failed: ' + E.Message;
+            { R6-04 analysis: ekSubtest AfterEach failure is intentionally
+              non-fatal (design decision). Subtests use LAppender for result
+              collection and do not Inc(LPass) at the parent level, so
+              Dec(LPass) would underflow. Inc(LFail) alone would also be
+              inconsistent. Keeping this as WARNING-only matches the contract
+              tested by test_subtests: 'subtest AfterEach failure should be
+              non-fatal'. }
             if LEntry.Kind <> ekSubtest then
             begin
               Inc(LFail);
