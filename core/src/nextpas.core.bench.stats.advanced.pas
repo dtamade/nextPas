@@ -252,6 +252,7 @@ var
   LStdDev: Double;
   LSum: Double;
   LCount: Integer;
+  LZ: Double;
 begin
   LCount := Length(FData);
   if LCount < 3 then Exit(0);
@@ -262,7 +263,10 @@ begin
 
   LSum := 0;
   for I := 0 to High(FData) do
-    LSum := LSum + Power((FData[I] - LMean) / LStdDev, 3);
+  begin
+    LZ := (FData[I] - LMean) / LStdDev;
+    LSum := LSum + LZ * LZ * LZ;
+  end;
 
   // Fisher's g1: unbiased estimator
   if LCount > 2 then
@@ -279,6 +283,7 @@ var
   LSum: Double;
   LCount: Integer;
   LRaw: Double;
+  LZ: Double;
 begin
   LCount := Length(FData);
   if LCount < 4 then Exit(0);
@@ -289,7 +294,10 @@ begin
 
   LSum := 0;
   for I := 0 to High(FData) do
-    LSum := LSum + Power((FData[I] - LMean) / LStdDev, 4);
+  begin
+    LZ := (FData[I] - LMean) / LStdDev;
+    LSum := LSum + LZ * LZ * LZ * LZ;
+  end;
 
   LRaw := LSum / LCount;
   // Unbiased excess kurtosis correction

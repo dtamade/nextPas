@@ -61,7 +61,7 @@ type
      * 创建并行基准执行器
      *}
     class function Create(AFunc: TBenchParallelFunc;
-                         AThreadCount: Integer = 4;
+                         AThreadCount: Integer = BENCH_DEFAULT_PARALLEL_THREADS;
                          AIterationsPerThread: Int64 = 1000000;
                          AWarmupIterations: Int64 = 1000): TParallelBenchmark; static;
 
@@ -80,7 +80,7 @@ type
    * 执行并行基准测试
    *}
   function RunParallelBench(AFunc: TBenchParallelFunc;
-                           AThreadCount: Integer = 4;
+                           AThreadCount: Integer = BENCH_DEFAULT_PARALLEL_THREADS;
                            AIterationsPerThread: Int64 = 1000000): TParallelBenchResult;
 
 implementation
