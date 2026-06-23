@@ -21,6 +21,24 @@ uses
   SysUtils,
   nextpas.core.test.base;
 
+{ ── Typed Mock Values ──────────────────────────────────────────────────────── }
+
+type
+  TMockValueKind = (mvUnset, mvString, mvInt64, mvBool, mvDouble);
+
+  TMockValue = record
+    Kind   : TMockValueKind;
+    StrVal : string;
+    IntVal : Int64;
+    BoolVal: Boolean;
+    DblVal : Double;
+  end;
+
+function MockStr(const AValue: string): TMockValue;
+function MockInt(AValue: Int64): TMockValue;
+function MockBool(AValue: Boolean): TMockValue;
+function MockDouble(AValue: Double): TMockValue;
+
 { ── Call Record ───────────────────────────────────────────────────────────── }
 
 type
@@ -130,6 +148,44 @@ implementation
 
 uses
   nextpas.core.text.conv;
+
+{ ── TMockValue helpers ─────────────────────────────────────────────────────── }
+
+function MockStr(const AValue: string): TMockValue;
+begin
+  Result.Kind    := mvString;
+  Result.StrVal  := AValue;
+  Result.IntVal  := 0;
+  Result.BoolVal := False;
+  Result.DblVal  := 0.0;
+end;
+
+function MockInt(AValue: Int64): TMockValue;
+begin
+  Result.Kind    := mvInt64;
+  Result.StrVal  := '';
+  Result.IntVal  := AValue;
+  Result.BoolVal := False;
+  Result.DblVal  := 0.0;
+end;
+
+function MockBool(AValue: Boolean): TMockValue;
+begin
+  Result.Kind    := mvBool;
+  Result.StrVal  := '';
+  Result.IntVal  := 0;
+  Result.BoolVal := AValue;
+  Result.DblVal  := 0.0;
+end;
+
+function MockDouble(AValue: Double): TMockValue;
+begin
+  Result.Kind    := mvDouble;
+  Result.StrVal  := '';
+  Result.IntVal  := 0;
+  Result.BoolVal := False;
+  Result.DblVal  := AValue;
+end;
 
 { ── TMockState ────────────────────────────────────────────────────────────── }
 

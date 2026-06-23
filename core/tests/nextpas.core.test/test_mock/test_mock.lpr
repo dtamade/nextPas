@@ -14,6 +14,56 @@ uses
   nextpas.core.test.check,
   nextpas.core.test.mock;
 
+{ ── TMockValue constructors ────────────────────────────────────────────────── }
+
+procedure TestMockStrConstructor;
+var
+  LValue: TMockValue;
+begin
+  LValue := MockStr('hello');
+  CheckTrue(LValue.Kind = mvString, 'MockStr kind');
+  CheckEqual('hello', LValue.StrVal);
+  CheckEqual(Int64(0), LValue.IntVal);
+  CheckFalse(LValue.BoolVal, 'MockStr bool default');
+  CheckNear(0.0, LValue.DblVal, 0.0, 'MockStr double default');
+end;
+
+procedure TestMockIntConstructor;
+var
+  LValue: TMockValue;
+begin
+  LValue := MockInt(42);
+  CheckTrue(LValue.Kind = mvInt64, 'MockInt kind');
+  CheckEqual('', LValue.StrVal);
+  CheckEqual(Int64(42), LValue.IntVal);
+  CheckFalse(LValue.BoolVal, 'MockInt bool default');
+  CheckNear(0.0, LValue.DblVal, 0.0, 'MockInt double default');
+end;
+
+procedure TestMockBoolConstructor;
+var
+  LValue: TMockValue;
+begin
+  LValue := MockBool(True);
+  CheckTrue(LValue.Kind = mvBool, 'MockBool kind');
+  CheckEqual('', LValue.StrVal);
+  CheckEqual(Int64(0), LValue.IntVal);
+  CheckTrue(LValue.BoolVal, 'MockBool value');
+  CheckNear(0.0, LValue.DblVal, 0.0, 'MockBool double default');
+end;
+
+procedure TestMockDoubleConstructor;
+var
+  LValue: TMockValue;
+begin
+  LValue := MockDouble(3.25);
+  CheckTrue(LValue.Kind = mvDouble, 'MockDouble kind');
+  CheckEqual('', LValue.StrVal);
+  CheckEqual(Int64(0), LValue.IntVal);
+  CheckFalse(LValue.BoolVal, 'MockDouble bool default');
+  CheckNear(3.25, LValue.DblVal, 1e-12, 'MockDouble value');
+end;
+
 { ── Setup + GetReturn ──────────────────────────────────────────────────────── }
 
 procedure TestSetupReturns;
@@ -445,6 +495,10 @@ var
 begin
   WriteLn('=== test_mock ===');
   Suite := TTestSuite.Create('mock');
+  Suite.Test('TestMockStrConstructor', @TestMockStrConstructor);
+  Suite.Test('TestMockIntConstructor', @TestMockIntConstructor);
+  Suite.Test('TestMockBoolConstructor', @TestMockBoolConstructor);
+  Suite.Test('TestMockDoubleConstructor', @TestMockDoubleConstructor);
   Suite.Test('TestSetupReturns', @TestSetupReturns);
   Suite.Test('TestSetupChained', @TestSetupChained);
   Suite.Test('TestSetupMultipleMethods', @TestSetupMultipleMethods);
