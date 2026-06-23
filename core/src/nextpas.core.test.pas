@@ -75,13 +75,13 @@ function ExpectProc(AProc: TTestProc): IExpectation;
 
 procedure Check(ACondition: Boolean; const AMessage: string = '');
 procedure CheckEqual(const AExpected, AActual: string); overload;
-procedure CheckEqual(AExpected, AActual: Int64); overload;
-procedure CheckEqual(AExpected, AActual: Boolean); overload;
-procedure CheckEqual(AExpected, AActual: Pointer); overload;
+procedure CheckEqual(const AExpected, AActual: Int64); overload;
+procedure CheckEqual(const AExpected, AActual: Boolean); overload;
+procedure CheckEqual(const AExpected, AActual: Pointer); overload;
 procedure CheckNotEqual(const AExpected, AActual: string); overload;
-procedure CheckNotEqual(AExpected, AActual: Int64); overload;
-procedure CheckNotEqual(AExpected, AActual: Boolean); overload;
-procedure CheckNotEqual(AExpected, AActual: Pointer); overload;
+procedure CheckNotEqual(const AExpected, AActual: Int64); overload;
+procedure CheckNotEqual(const AExpected, AActual: Boolean); overload;
+procedure CheckNotEqual(const AExpected, AActual: Pointer); overload;
 procedure CheckTrue(AValue: Boolean; const AMessage: string = '');
 procedure CheckFalse(AValue: Boolean; const AMessage: string = '');
 procedure CheckNil(AValue: Pointer; const AMessage: string = '');
@@ -184,25 +184,25 @@ begin nextpas.core.test.check.Check(ACondition, AMessage); end;
 procedure CheckEqual(const AExpected, AActual: string);
 begin nextpas.core.test.check.CheckEqual(AExpected, AActual); end;
 
-procedure CheckEqual(AExpected, AActual: Int64);
+procedure CheckEqual(const AExpected, AActual: Int64);
 begin nextpas.core.test.check.CheckEqual(AExpected, AActual); end;
 
-procedure CheckEqual(AExpected, AActual: Boolean);
+procedure CheckEqual(const AExpected, AActual: Boolean);
 begin nextpas.core.test.check.CheckEqual(AExpected, AActual); end;
 
-procedure CheckEqual(AExpected, AActual: Pointer);
+procedure CheckEqual(const AExpected, AActual: Pointer);
 begin nextpas.core.test.check.CheckEqual(AExpected, AActual); end;
 
 procedure CheckNotEqual(const AExpected, AActual: string);
 begin nextpas.core.test.check.CheckNotEqual(AExpected, AActual); end;
 
-procedure CheckNotEqual(AExpected, AActual: Int64);
+procedure CheckNotEqual(const AExpected, AActual: Int64);
 begin nextpas.core.test.check.CheckNotEqual(AExpected, AActual); end;
 
-procedure CheckNotEqual(AExpected, AActual: Boolean);
+procedure CheckNotEqual(const AExpected, AActual: Boolean);
 begin nextpas.core.test.check.CheckNotEqual(AExpected, AActual); end;
 
-procedure CheckNotEqual(AExpected, AActual: Pointer);
+procedure CheckNotEqual(const AExpected, AActual: Pointer);
 begin nextpas.core.test.check.CheckNotEqual(AExpected, AActual); end;
 
 procedure CheckTrue(AValue: Boolean; const AMessage: string);

@@ -15,13 +15,13 @@ uses
 
 procedure Check(ACondition: Boolean; const AMessage: string = '');
 procedure CheckEqual(const AExpected, AActual: string); overload;
-procedure CheckEqual(AExpected, AActual: Int64); overload;
-procedure CheckEqual(AExpected, AActual: Boolean); overload;
-procedure CheckEqual(AExpected, AActual: Pointer); overload;
+procedure CheckEqual(const AExpected, AActual: Int64); overload;
+procedure CheckEqual(const AExpected, AActual: Boolean); overload;
+procedure CheckEqual(const AExpected, AActual: Pointer); overload;
 procedure CheckNotEqual(const AExpected, AActual: string); overload;
-procedure CheckNotEqual(AExpected, AActual: Int64); overload;
-procedure CheckNotEqual(AExpected, AActual: Boolean); overload;
-procedure CheckNotEqual(AExpected, AActual: Pointer); overload;
+procedure CheckNotEqual(const AExpected, AActual: Int64); overload;
+procedure CheckNotEqual(const AExpected, AActual: Boolean); overload;
+procedure CheckNotEqual(const AExpected, AActual: Pointer); overload;
 procedure CheckTrue(AValue: Boolean; const AMessage: string = '');
 procedure CheckFalse(AValue: Boolean; const AMessage: string = '');
 procedure CheckNil(AValue: Pointer; const AMessage: string = '');
@@ -114,20 +114,20 @@ begin
   end;
 end;
 
-procedure CheckEqual(AExpected, AActual: Int64);
+procedure CheckEqual(const AExpected, AActual: Int64);
 begin
   if AExpected <> AActual then
     InternalFail('Expected ' + IntToStr(AExpected) + ' but got ' + IntToStr(AActual));
 end;
 
-procedure CheckEqual(AExpected, AActual: Boolean);
+procedure CheckEqual(const AExpected, AActual: Boolean);
 begin
   if AExpected <> AActual then
     InternalFail('Expected ' + BoolToStr(AExpected, 'True', 'False') +
       ' but got ' + BoolToStr(AActual, 'True', 'False'));
 end;
 
-procedure CheckEqual(AExpected, AActual: Pointer);
+procedure CheckEqual(const AExpected, AActual: Pointer);
 begin
   if AExpected <> AActual then
     InternalFail('Expected pointer $' + IntToHex(NativeUInt(AExpected), 16) +
@@ -146,20 +146,20 @@ begin
   end;
 end;
 
-procedure CheckNotEqual(AExpected, AActual: Int64);
+procedure CheckNotEqual(const AExpected, AActual: Int64);
 begin
   if AExpected = AActual then
     InternalFail('Expected values to differ but both are ' + IntToStr(AActual));
 end;
 
-procedure CheckNotEqual(AExpected, AActual: Boolean);
+procedure CheckNotEqual(const AExpected, AActual: Boolean);
 begin
   if AExpected = AActual then
     InternalFail('Expected values to differ but both are ' +
       BoolToStr(AActual, 'True', 'False'));
 end;
 
-procedure CheckNotEqual(AExpected, AActual: Pointer);
+procedure CheckNotEqual(const AExpected, AActual: Pointer);
 begin
   if AExpected = AActual then
     InternalFail('Expected values to differ but both are $' +
