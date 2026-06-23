@@ -130,12 +130,14 @@ uses
 
 { Global registry of all heap-allocated method stubs from DiscoverTests.
   Stubs are disposed here in finalization as a safety net for suites that
-  are created but never run (and thus never call CleanupTableAllocations). }
+  are created but never run (and thus never call CleanupTableAllocations).
+  R6-08: NOT thread-safe — all access must be from the main thread only. }
 var
   GStubRegistry: specialize TArray<Pointer>;
   { Parallel array tracking fixture objects from DiscoverTests.
     Only non-nil for stubs registered by discovery. Freed in finalization
-    as safety net for suites that are created but never run. }
+    as safety net for suites that are created but never run.
+    R6-08: NOT thread-safe — all access must be from the main thread only. }
   GFixtureRegistry: specialize TArray<TObject>;
   LStubCleanupI: Integer;
 
@@ -182,6 +184,11 @@ begin
 end;
 
 procedure RegisterStub(var ASuite: TTestSuite; APtr: Pointer);
+  { Note: RegisterStub must be called from the main thread only.
+    GStubRegistry is not thread-safe — it uses plain dynamic arrays
+    with no synchronization. Current usage is safe: registration and
+    cleanup both occur on the main thread during discovery and suite
+    finalization. }
 begin
   { Global safety-net — disposed in finalization for suites that never run }
   SetLength(GStubRegistry, Length(GStubRegistry) + 1);
@@ -192,6 +199,11 @@ begin
 end;
 
 procedure RegisterFixture(var ASuite: TTestSuite; AFixture: TObject);
+  { Note: RegisterFixture must be called from the main thread only.
+    GFixtureRegistry is not thread-safe — it uses plain dynamic arrays
+    with no synchronization. Current usage is safe: registration and
+    cleanup both occur on the main thread during discovery and suite
+    finalization. }
 begin
   { Global safety-net — disposed in finalization for suites that never run }
   SetLength(GFixtureRegistry, Length(GFixtureRegistry) + 1);
@@ -940,6 +952,10 @@ begin
 end;
 
 procedure TTestSuite.CleanupTableAllocations;
+  { Note: Must be called from the main thread only. Accesses GStubRegistry
+    and GFixtureRegistry which are not thread-safe. Current usage is safe:
+    called from FinalizeResults which runs on the main thread after all
+    parallel worker threads have joined. }
 var
   I: Integer;
 begin
