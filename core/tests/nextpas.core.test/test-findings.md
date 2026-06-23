@@ -14,23 +14,23 @@
 | F04 | ✅ 简化 | 保留双注册机制（设计合理），添加文档 |
 | F05 | ⏭ 保留 | `TTestEntry` 空间浪费 — 低优先级优化点 |
 | F06 | ✅ TODO | 添加了 TODO 注释标记代码重复 |
-| F07 | ⏭ 保留 | TAP/JSON 测试覆盖 — 后续单独添加 |
-| F08 | ⏭ 保留 | Mock 测试覆盖 — 后续单独添加 |
+| F07 | ✅ 已修 | TAP/JSON 测试覆盖 — 3 TAP + 2 JSON 测试 |
+| F08 | ✅ 已修 | Mock 测试覆盖 — 16 测试，Setup/Record/Verify/Returns 全覆盖 |
 | F09 | ✅ 已修 | 并行 subtest skip 现计入 LSkip 统计 |
 | F10 | ⚠️ 不可行 | FPC 循环前向引用阻止类型化，已添加文档说明 |
 | F11 | ✅ 已修 | `MatchesGlob` 重写为迭代式（零 Copy 分配） |
 | F12 | ✅ 已修 | `XmlEscape`/`JsonEscape` 预分配避免 O(n²) |
-| F13 | ⏭ 保留 | `AddLine` 重复 — 低优先级提取 |
+| F13 | ✅ 已修 | `AddLine` 提取到 `output.pas` 接口区供 TAP/JSON 共用 |
 | F14 | ⏭ 保留 | `for-in` FPC 3.x — 当前使用 trunk 无影响 |
 | F15 | ⏭ 保留 | epsilon 默认值 — 设计偏好 |
-| F16 | ⏭ 保留 | Check API 扩展 — 后续按需添加 |
+| F16 | ✅ 已修 | `CheckGreaterThan`/`CheckLessThan` 已添加到 `check.pas` |
 | F17 | ✅ 已修 | 8 个重复过程合并为 1 个共享过程 |
 | F18 | ✅ 已修 | `Add` var 参数语义说明精简 |
 | F19 | ✅ 已修 | `LAppender.Free` 用 try/finally 保护 |
 | F20 | ✅ 已修 | 临时文件路径用 `GetTempDir` + `CreateGUID` (5f0b0f4e0) |
 | F21 | ✅ 已修 | `StatusDot` 非 ANSI 时回退 ASCII (5f0b0f4e0) |
 
-统计: ✅ 12 已修 / ⏭ 8 保留 / ⚠️ 1 不可行 / 总 21
+统计: ✅ 16 已修 / ⏭ 4 保留 / ⚠️ 1 不可行 / 总 21
 
 ---
 

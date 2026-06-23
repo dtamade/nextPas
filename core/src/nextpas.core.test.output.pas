@@ -53,6 +53,7 @@ procedure ReportLeakIfAny(AStatus: TTestStatus);
 
 { ── Utility helpers ───────────────────────────────────────────────────────── }
 
+procedure AddLine(var ALines: specialize TArray<string>; const ALine: string);
 function JoinLines(const ALines: specialize TArray<string>): string;
 function CountFailed(const AResults: specialize TArray<TTestRunResult>): Integer;
 function CountSkipped(const AResults: specialize TArray<TTestRunResult>): Integer;
@@ -425,6 +426,12 @@ end;
 { ═════════════════════════════════════════════════════════════════════════════ }
 { Utility Helpers                                                              }
 { ═════════════════════════════════════════════════════════════════════════════ }
+
+procedure AddLine(var ALines: specialize TArray<string>; const ALine: string);
+begin
+  SetLength(ALines, Length(ALines) + 1);
+  ALines[High(ALines)] := ALine;
+end;
 
 function JoinLines(const ALines: specialize TArray<string>): string;
 var

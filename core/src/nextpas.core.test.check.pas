@@ -31,6 +31,8 @@ procedure CheckStartsWith(const AStr, APrefix: string);
 procedure CheckEndsWith(const AStr, ASuffix: string);
 procedure CheckSame(AExpected, AActual: Pointer; const AMessage: string = '');
 procedure CheckInRange(AValue, ALow, AHigh: Int64);
+procedure CheckGreaterThan(AValue, AExpected: Int64);
+procedure CheckLessThan(AValue, AExpected: Int64);
 procedure CheckLength(AExpected, AActual: NativeInt);
 procedure CheckRaises(AExceptionClass: ExceptClass; AProc: TTestProc;
   const AMessage: string = '');
@@ -247,6 +249,20 @@ begin
   if (AValue < ALow) or (AValue > AHigh) then
     InternalFail(IntToStr(AValue) + ' not in range [' +
       IntToStr(ALow) + '..' + IntToStr(AHigh) + ']');
+end;
+
+procedure CheckGreaterThan(AValue, AExpected: Int64);
+begin
+  if AValue <= AExpected then
+    InternalFail('Expected ' + IntToStr(AValue) + ' > ' +
+      IntToStr(AExpected));
+end;
+
+procedure CheckLessThan(AValue, AExpected: Int64);
+begin
+  if AValue >= AExpected then
+    InternalFail('Expected ' + IntToStr(AValue) + ' < ' +
+      IntToStr(AExpected));
 end;
 
 procedure CheckLength(AExpected, AActual: NativeInt);

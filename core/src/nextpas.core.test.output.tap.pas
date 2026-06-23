@@ -24,12 +24,6 @@ function TAPReport(const AResults: specialize TArray<TTestRunResult>;
 
 implementation
 
-procedure AddLine(var ALines: specialize TArray<string>; const ALine: string);
-begin
-  SetLength(ALines, Length(ALines) + 1);
-  ALines[High(ALines)] := ALine;
-end;
-
 function TAPReport(const AResults: specialize TArray<TTestRunResult>;
   const ASuiteName: string): string;
 var

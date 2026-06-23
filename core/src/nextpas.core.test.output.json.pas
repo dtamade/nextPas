@@ -24,12 +24,6 @@ function JSONReport(const AResults: specialize TArray<TTestRunResult>;
 
 implementation
 
-procedure AddLine(var ALines: specialize TArray<string>; const ALine: string);
-begin
-  SetLength(ALines, Length(ALines) + 1);
-  ALines[High(ALines)] := ALine;
-end;
-
 { Escape a string for JSON (quotes, backslash, control chars) }
 function JsonEscape(const S: string): string;
 var

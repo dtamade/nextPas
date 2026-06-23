@@ -13,6 +13,8 @@ uses
   nextpas.core.test.base,
   nextpas.core.test.check,
   nextpas.core.test.output,
+  nextpas.core.test.output.tap,
+  nextpas.core.test.output.json,
   nextpas.core.test.runner;
 
 var
@@ -439,6 +441,112 @@ begin
     'WriteJUnitXML should return False on bad path');
 end;
 
+{ TAP renderer tests }
+
+procedure TestTAPReportBasic;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+begin
+  Inc(GTestsRun);
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('TapBasic');
+  LResults[0].Passed  := 1;
+  LResults[0].Failed  := 1;
+  LResults[0].Skipped := 0;
+  SetLength(LResults[0].Results, 2);
+  LResults[0].Results[0].Name := 'pass';
+  LResults[0].Results[0].Status := tsPassed;
+  LResults[0].Results[1].Name := 'fail';
+  LResults[0].Results[1].Status := tsFailed;
+  LResults[0].Results[1].Message := 'bad';
+
+  LOut := TAPReport(LResults);
+  CheckContains(LOut, 'TAP version 13');
+  CheckContains(LOut, 'ok 1 - TapBasic / pass');
+  CheckContains(LOut, 'not ok 2 - TapBasic / fail');
+  CheckContains(LOut, 'message: bad');
+end;
+
+procedure TestTAPReportSkipped;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+begin
+  Inc(GTestsRun);
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('TapSkip');
+  LResults[0].Passed  := 1;
+  LResults[0].Skipped := 1;
+  SetLength(LResults[0].Results, 2);
+  LResults[0].Results[0].Name := 'ok';
+  LResults[0].Results[0].Status := tsPassed;
+  LResults[0].Results[1].Name := 'skip';
+  LResults[0].Results[1].Status := tsSkipped;
+
+  LOut := TAPReport(LResults);
+  CheckContains(LOut, 'ok 1 - TapSkip / ok');
+  CheckContains(LOut, 'ok 2 - TapSkip / skip # skip');
+end;
+
+procedure TestTAPReportEmpty;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+begin
+  Inc(GTestsRun);
+  SetLength(LResults, 0);
+  LOut := TAPReport(LResults, 'Empty');
+  CheckContains(LOut, 'TAP version 13');
+  CheckContains(LOut, '1..0');
+end;
+
+{ JSON renderer tests }
+
+procedure TestJSONReportBasic;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+begin
+  Inc(GTestsRun);
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('JsBasic');
+  LResults[0].Passed    := 1;
+  LResults[0].Failed    := 1;
+  LResults[0].Skipped   := 0;
+  LResults[0].AllPassed := False;
+  SetLength(LResults[0].Results, 2);
+  LResults[0].Results[0].Name := 'js_pass';
+  LResults[0].Results[0].Status := tsPassed;
+  LResults[0].Results[1].Name := 'js_fail';
+  LResults[0].Results[1].Status := tsFailed;
+  LResults[0].Results[1].Message := 'boom';
+
+  LOut := JSONReport(LResults);
+  CheckContains(LOut, '"name": "JsBasic"');
+  CheckContains(LOut, '"totalPassed": 1');
+  CheckContains(LOut, '"totalFailed": 1');
+  CheckContains(LOut, '"totalSkipped": 0');
+  CheckContains(LOut, '"name": "js_pass"');
+  CheckContains(LOut, '"name": "js_fail"');
+  CheckContains(LOut, '"status": "failed"');
+  CheckContains(LOut, '"message": "boom"');
+end;
+
+procedure TestJSONReportEmpty;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+begin
+  Inc(GTestsRun);
+  SetLength(LResults, 0);
+  LOut := JSONReport(LResults, 'Empty');
+  CheckContains(LOut, '"totalPassed": 0');
+  CheckContains(LOut, '"totalFailed": 0');
+  CheckContains(LOut, '"totalSkipped": 0');
+  CheckContains(LOut, '"suites": [');
+end;
+
 { ── Main ───────────────────────────────────────────────────────────────────── }
 
 var
@@ -476,6 +584,11 @@ begin
   Suite.Test('TestJUnitXMLErrorTestCase', @TestJUnitXMLErrorTestCase);
   Suite.Test('TestWriteJUnitXML', @TestWriteJUnitXML);
   Suite.Test('TestWriteJUnitXMLBadPath', @TestWriteJUnitXMLBadPath);
+  Suite.Test('TestTAPReportBasic', @TestTAPReportBasic);
+  Suite.Test('TestTAPReportSkipped', @TestTAPReportSkipped);
+  Suite.Test('TestTAPReportEmpty', @TestTAPReportEmpty);
+  Suite.Test('TestJSONReportBasic', @TestJSONReportBasic);
+  Suite.Test('TestJSONReportEmpty', @TestJSONReportEmpty);
 
   Runner := TTestRunner.Create('output-tests');
   Runner.Add(Suite);
@@ -483,7 +596,7 @@ begin
   WriteLn;
   Runner.Summary;
 
-  CheckTrue(GTestsRun >= 23, 'Expected at least 23 tests, got ' + IntToStr(GTestsRun));
+  CheckTrue(GTestsRun >= 28, 'Expected at least 28 tests, got ' + IntToStr(GTestsRun));
   CheckTrue(LSuccess, 'All output tests should pass');
 
   if Runner.AllPassed then
