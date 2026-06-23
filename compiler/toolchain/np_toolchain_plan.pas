@@ -885,21 +885,16 @@ constructor TToolchainPlanner.Create(
   const ATargetFacts: TTargetFactsView;
   const ASourcePath: string
 );
-var
-  EmptyAssemblyBaseNames: TStringArray;
-  EmptyRoots: TStringArray;
 begin
-  SetLength(EmptyAssemblyBaseNames, 0);
-  SetLength(EmptyRoots, 0);
-  Create(
-    ABackendPlan,
-    ATargetFacts,
-    ASourcePath,
-    '',
-    EmptyRoots,
-    EmptyRoots,
-    EmptyAssemblyBaseNames
-  );
+  inherited Create;
+  FBackendPlan := ABackendPlan;
+  FTargetFacts := ATargetFacts;
+  FSourcePath := ASourcePath;
+  FArtifactRootPath := '';
+  SetLength(FProjectUnitRoots, 0);
+  SetLength(FExplicitUnitRoots, 0);
+  SetLength(FAdditionalAssemblyBaseNames, 0);
+  FPlan := TToolchainPlan.Create;
 end;
 
 constructor TToolchainPlanner.Create(
@@ -1032,8 +1027,8 @@ begin
   for Index := 0 to FBackendPlan.LogicalLibraryRequestCount - 1 do
   begin
     LibraryRequest := FBackendPlan.LogicalLibraryRequestAt(Index);
-    if not SameText(LibraryRequest.LogicalId, 'c') or
-      not SameText(LibraryRequest.LinkageKind, 'shared') then
+    if not nextpas.core.text.SameText(LibraryRequest.LogicalId, 'c') or
+      not nextpas.core.text.SameText(LibraryRequest.LinkageKind, 'shared') then
     begin
       FPlan.MarkFailure(
         'toolchain.import-library-resolution-failed',
@@ -1046,8 +1041,8 @@ begin
     end;
 
     LibraryPath := IncludeTrailingPathDelimiter(RuntimeRootPath) + 'libc.so';
-    if not SameText(FTargetFacts.SysrootMode, 'runtime-sdk') or
-      not SameText(FTargetFacts.RuntimeRootKind, 'distribution-runtime-root') or
+    if not nextpas.core.text.SameText(FTargetFacts.SysrootMode, 'runtime-sdk') or
+      not nextpas.core.text.SameText(FTargetFacts.RuntimeRootKind, 'distribution-runtime-root') or
       (RuntimeRootPath = '') or not FsExists(LibraryPath) then
     begin
       FPlan.MarkFailure(
@@ -1261,7 +1256,7 @@ begin
     Exit;
   end;
 
-  if SameText(FBackendPlan.BackendFamily, 'llvm') then
+  if nextpas.core.text.SameText(FBackendPlan.BackendFamily, 'llvm') then
     PlanLlvmIrOptObjectLink
   else
     PlanBootstrapNativeAssembleLink;
@@ -1555,7 +1550,7 @@ begin
   OutputKindValue := 'executable';
   if (FBackendPlan <> nil) and (FBackendPlan.OutputKind <> '') then
     OutputKindValue := FBackendPlan.OutputKind;
-  RequiresLink := SameText(OutputKindValue, 'executable');
+  RequiresLink := nextpas.core.text.SameText(OutputKindValue, 'executable');
   if RequiresLink then
   begin
     PlanFamilyId := 'bootstrap-native-assemble-link';
@@ -1627,7 +1622,7 @@ begin
     );
     if Trim(AdditionalBaseName) = '' then
       Continue;
-    if SameText(AdditionalBaseName, ChangeFileExt(ExtractFileName(FSourcePath), '')) then
+    if nextpas.core.text.SameText(AdditionalBaseName, ChangeFileExt(ExtractFileName(FSourcePath), '')) then
       Continue;
     AdditionalAssemblyPath := IncludeTrailingPathDelimiter(BackendCacheRoot) +
       AdditionalBaseName + '.s';
@@ -1674,7 +1669,7 @@ begin
     );
     if Trim(AdditionalBaseName) = '' then
       Continue;
-    if SameText(AdditionalBaseName, ChangeFileExt(ExtractFileName(FSourcePath), '')) then
+    if nextpas.core.text.SameText(AdditionalBaseName, ChangeFileExt(ExtractFileName(FSourcePath), '')) then
       Continue;
     AdditionalAssemblyPath := IncludeTrailingPathDelimiter(BackendCacheRoot) +
       AdditionalBaseName + '.s';
@@ -1724,7 +1719,7 @@ begin
   end;
 
   LinkerExecutable := FirstStringOrDefault(LinkerProfile.DriverCandidates, 'ld');
-  if SameText(LinkerProfile.ToolFlavor, 'gnu-ld') then
+  if nextpas.core.text.SameText(LinkerProfile.ToolFlavor, 'gnu-ld') then
     LinkerExecutable := 'ld.bfd';
   StepIndex := FPlan.AddStep(
     'native-link',
@@ -1749,7 +1744,7 @@ begin
   { Override FPC's default interpreter path (/lib/ld64.so.1) with the
     system's actual dynamic linker. FPC hardcodes /lib/ld64.so.1 for
     Linux x86_64, but many modern systems use /lib64/ld-linux-x86-64.so.2. }
-  if SameText(FTargetFacts.TargetId, 'linux-x86_64') then
+  if nextpas.core.text.SameText(FTargetFacts.TargetId, 'linux-x86_64') then
   begin
     FPlan.AddStepArg(StepIndex, '--dynamic-linker');
     FPlan.AddStepArg(StepIndex, '/lib64/ld-linux-x86-64.so.2');
