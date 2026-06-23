@@ -3,8 +3,8 @@
 > 扫描时间：2026-06-23
 > 上次审查：2026-06-21
 > 分支：feat/arena-allocator
-> 基线变更：`fdfd70a70`, `f93a7ca47`, `381e89f62`
-> 当前范围：`core/src/nextpas.core.mem*.pas`（64 文件）+ `core/tests/nextpas.core.mem/*`（29 项目，静态计数 289 个 `T.Run`）+ `core/docs/mem/*`
+> 基线变更：`bd9b14c97`, `d9d75726c`, `30adb8262`, `c6e8be8d2`
+> 当前范围：`core/src/nextpas.core.mem*.pas`（55 文件）+ `core/tests/nextpas.core.mem/*`（32 项目，静态计数 304 个 `T.Run`）+ `core/docs/mem/*`
 > 方法：旧 findings 回归核对 + `git log -3 --stat` / `git show` + 全量静态扫描 + 测试/文档对照
 
 ---
@@ -183,22 +183,20 @@
 
 ---
 
-### A-17 ⚠️ 多个 public 兼容/实验单元处于“零消费 + 零验证”状态
+### A-17 [FIXED] 零消费兼容单元已完成分类收敛
 
-**P2 | 文件组**：
+本轮已在 `core/src`、`core/tests`、`compiler`、`tests` 范围内复核引用后完成处理：
 
-- `nextpas.core.mem.aligned`
-- `nextpas.core.mem.allocator.instrumentation`
-- `nextpas.core.mem.allocator.numa`
-- `nextpas.core.mem.manager.mimalloc`
-- `nextpas.core.mem.stats`
-- `nextpas.core.mem.adapters`
-- `nextpas.core.mem.interfaces`
-- `nextpas.core.mem.stack_scope_helpers`
-
-这些单元要么全仓库零消费者，要么只有非常边缘的文档/兼容角色；当前也没有 focused test。它们共同抬高了表面积，但没有验证成本与之匹配。
-
-**建议**：把它们拆成“保留兼容层”和“实验/待归档”两组，分别加 compile gate 或显式归档策略。
+- 已删除零消费兼容单元：
+  - `nextpas.core.mem.aligned`
+  - `nextpas.core.mem.allocator.instrumentation`
+  - `nextpas.core.mem.allocator.numa`
+  - `nextpas.core.mem.stats`
+  - `nextpas.core.mem.adapters`
+  - `nextpas.core.mem.interfaces`
+  - `nextpas.core.mem.stack_scope_helpers`
+- `nextpas.core.mem.manager.mimalloc` 保留，并由 `test_memory_manager_mimalloc_compile_gate` 持续提供 compile-only gate
+- `test_contracts` 现已把“上述 7 个兼容单元应当不存在、mimalloc manager 应当保留”固化为 source-contract
 
 ---
 
@@ -358,27 +356,28 @@
 
 ---
 
-### R-04 ⚠️ `TMemMutex.Init/Done` 仍不是线程安全的一次性初始化
+### R-04 [FIXED] `TMemMutex.Init/Done` 已切到线程安全的一次性初始化语义
 
-**P2 | 文件：`core/src/nextpas.core.mem.mutex.pas`**
+当前 `core/src/nextpas.core.mem.mutex.pas` 已改为基于 `InterlockedCompareExchange` 的状态机：
 
-`Init` / `Done` 只靠 `FInitialized` 布尔字段判断，没有 CAS/once 语义。两个线程同时初始化同一个 record 时，仍可能双初始化或 init/done 交叉。
+- `Init` 只允许一次真正初始化
+- `Done` 只允许一次真正销毁
+- 并发 `Init` / `Done` / `Acquire` / `Release` 都先校验状态
 
-当前测试只覆盖“未初始化直接 Acquire/Release 抛错”和普通高竞争使用，没有覆盖竞态初始化。
+验证也已补齐：
+
+- `test_concurrent_wrappers` 覆盖 double init / double done / re-init / 未初始化保护
+- `test_contracts` 用 source-contract 固化 “不再使用 `FInitialized: Boolean`，且 `Init/Done` 必须带原子 CAS”
 
 ---
 
-### R-05 ⚠️ `TMemRwLock.Init/Done` 复制了同样的竞态初始化模式
+### R-05 [FIXED] `TMemRwLock.Init/Done` 已同步切到线程安全的一次性初始化语义
 
-**P2 | 文件：`core/src/nextpas.core.mem.rwlock.pas`**
+`core/src/nextpas.core.mem.rwlock.pas` 已与 `TMemMutex` 对齐：
 
-`TMemRwLock` 与 `TMemMutex` 一样：
-
-- `FInitialized` 非原子
-- 没有一次性初始化保护
-- 没有相关测试
-
-这是旧报告没有覆盖到的同类问题。
+- `Init` / `Done` 使用 `InterlockedCompareExchange` 做 once-only 状态跃迁
+- 未初始化时的 read/write acquire/release 都有显式保护
+- `test_concurrent_wrappers` 与 `test_contracts` 已同步覆盖 rwlock 的 lifecycle 语义
 
 ---
 
@@ -390,16 +389,14 @@
 
 ## 五、内存安全
 
-### M-01 ⚠️ 大对象与 `SaveMark/RestoreToMark` 的关系仍然容易误用
+### M-01 [FIXED] `SaveMark/RestoreToMark` 已把大对象语义贴到方法级注释和测试上
 
-**P2 | 文件：`core/src/nextpas.core.mem.arena.virtual.pas`**
+`core/src/nextpas.core.mem.arena.virtual.pas` 现在已经在方法注释里明确写出：
 
-当前真实语义仍是：
+- `SaveMark/RestoreToMark` 只回退 front/back bump pointer
+- direct mmap 的大对象不会被 rewound，会一直存活到 `Release`
 
-- `SaveMark/RestoreToMark` 只回退 bump pointer
-- 已分配的大对象 mmap 不会被回收
-
-虽然 README/ARCHITECTURE 已经写出“大对象不受 mark/reset 影响”，但源码方法级注释和 API.md 仍没有把这个行为贴到 `SaveMark/RestoreToMark` 上，外部调用方仍然很容易把它当成真正的 rollback。
+同时本轮还顺手修正了 `RestoreToMark` 的大对象统计语义，避免 restore 后把 `LargeUsed` 错误从 `TotalUsed` 中抹掉；`test_arena_compiler` 已新增 `TestRestoreToMarkKeepsLargeObjectUsage` 锁定该行为。
 
 ---
 
@@ -425,20 +422,16 @@
 
 ## 六、测试覆盖
 
-### T-01 ⚠️ 当前缺的不是“总量”，而是几个 public/dormant surface 没有 focused gate
+### T-01 [FIXED] 本轮补齐了剩余 public surface 的 focused gate
 
-**P1 | 现状**
+当前已补齐：
 
-当前 mem 测试量并不小：
+- `allocator.callback`：`test_contracts` 新增 `nil` 回调负路径测试，且覆盖 contracts-on / contracts-off 两条路径
+- `allocator.crt`：已有独立 focused gate `test_allocator_crt`
+- `allocator.foundation`：已有独立 focused gate `test_allocator_foundation`
+- `manager.mimalloc`：在当前宿主条件下保留 compile-only gate `test_memory_manager_mimalloc_compile_gate`
 
-- 29 个测试项目
-- 静态计数 289 个 `T.Run`
-
-但仍有几块 public surface 没有 focused 保护：
-
-- `manager.mimalloc`：无安装/卸载测试
-- `allocator.callback`：无 `nil` 回调负路径测试
-- `allocator.crt` / `allocator.foundation`：只有间接覆盖，没有直接 surface gate
+这批 surface 现在都已有明确的 focused verification 入口。
 
 ---
 
@@ -462,25 +455,15 @@
 
 ---
 
-### T-04 ⚠️ OOM 负路径仍缺少 VirtualArena 的 reserve/commit/mmap 失败注入
+### T-04 [FIXED] VirtualArena 的 reserve/commit/mmap 失败路径已进入 OOM 套件
 
-**P2 | 文件：`core/tests/nextpas.core.mem/test_oom/test_oom.lpr`**
+`core/tests/nextpas.core.mem/test_oom/test_oom.lpr` 现在已覆盖：
 
-当前 OOM 套件已覆盖：
-
-- `TLocalArena`
-- `TChunkedArena`
-- fixed/growable pool
-- `ring_buffer`
-- `stack_pool`
-
-但仍没覆盖：
-
-- `TVirtualArena_Init` 的 `platform_virtual_reserve` 失败
-- `CommitFrontRegion/CommitBackRegion` 失败
+- `TVirtualArena_Init` reserve 失败
+- front/back commit 失败
 - 大对象 `platform_mmap_create_anonymous` 失败
 
-这意味着 VirtualArena 最危险的宿主内存失败路径仍靠人工阅读证明。
+同时 suite 还会断言 `LastAllocFailure` 的细分结果，避免只验证 “返回 nil” 而不验证失败分类。
 
 ---
 
@@ -561,35 +544,33 @@ README / ARCHITECTURE 已写明 `AllocUnsafe` 不保证对齐，这条不再单�
 
 ---
 
-### Q-05 ⚠️ VirtualArena 大对象 / commit 失败仍只有 `nil`，没有原因分层
+### Q-05 [FIXED] VirtualArena 现在保留 `nil` 返回，同时补上可查询的失败原因分层
 
-**P2 | 文件：`core/src/nextpas.core.mem.arena.virtual.pas`**
+`core/src/nextpas.core.mem.arena.virtual.pas` 本轮新增了：
 
-当前这些失败路径都只能返回 `nil`：
+- `TVirtualArenaAllocFailure`
+- `TVirtualArena.LastAllocFailure`
 
-- 大对象 mmap 失败
-- front/back commit 失败
+当前已能区分：
 
-调用方无法区分：
+- `vaafCapacityExhausted`
+- `vaafFrontCommitFailed`
+- `vaafBackCommitFailed`
+- `vaafLargeObjectMapFailed`
+- `vaafInvalidAlignment`
 
-- 容量不足
-- 宿主 syscall 失败
-- 地址空间/commit 失败
-
-对于调试和日志定位都不友好。
+也就是说，`Alloc*` 仍按既有 contract 返回 `nil`，但调用方已可在失败后查询更细分的原因。
 
 ---
 
-### Q-06 ⚠️ `NEXTPAS_ARENA_LEAK_CHECK` 统计量仍是半原子状态
+### Q-06 [FIXED] `NEXTPAS_ARENA_LEAK_CHECK` 的 `GArenaTotalMapped` 已切到原子更新
 
-**P3 | 文件：`core/src/nextpas.core.mem.arena.virtual.pas`**
+当前实现已移除普通 `Inc/Dec`，改为：
 
-当前：
+- `ArenaLeakMappedAdd` -> `InterlockedExchangeAdd64`
+- `ArenaLeakMappedSubtractSaturating` -> `InterlockedCompareExchange64` CAS loop
 
-- `GArenaInstanceCount` 用 `InterLockedIncrement/Decrement`
-- `GArenaTotalMapped` 仍有普通 `Inc/Dec`
-
-这只影响 debug leak-check 统计，不影响生产分配语义，但读数并非严格线程安全。
+`test_contracts` 也会专门检查 `GArenaTotalMapped` 不再走普通 `Inc/Dec`。
 
 ---
 
@@ -647,23 +628,21 @@ README / ARCHITECTURE 已写明 `AllocUnsafe` 不保证对齐，这条不再单�
 
 | 状态               | 数量   | 说明                                                            |
 | ------------------ | ------ | --------------------------------------------------------------- |
-| **[FIXED] / 关闭** | **43** | 包含真实修复项，以及本轮复核后不再成立/不再作为缺陷跟踪的旧条目 |
-| **仍然开放**       | **17** | 当前树上仍能被代码、测试或文档直接证明的问题                    |
-| **新增**           | **8**  | 本轮新增项里仍开放的是 `A-17`、`R-05`；其余已在本轮修复         |
+| **[FIXED] / 关闭** | **51** | 包含真实修复项，以及本轮复核后不再成立/不再作为缺陷跟踪的旧条目 |
+| **仍然开放**       | **9**  | 当前树上仍能被代码、测试或文档直接证明的问题                     |
+| **新增**           | **8**  | 本轮新增项已全部修复或关闭                                       |
 
 ### 当前最高优先级（建议先处理）
 
-1. **T-01 / P1**：剩余几块 public surface 仍缺 focused gate，尤其是 `manager.mimalloc`、`allocator.callback` 负路径、`allocator.crt` / `allocator.foundation`
-2. **T-04 / P2**：VirtualArena 的 reserve/commit/mmap 失败注入仍缺测试证明
-3. **M-01 / P2**：大对象与 `SaveMark/RestoreToMark` 的方法级语义仍然容易误用
-4. **R-04 / R-05 / P2**：`TMemMutex` / `TMemRwLock` 的 init/done 仍没有一次性初始化语义
-5. **A-17 / P2**：剩余零消费、零验证的 public 兼容/实验单元仍需要分类处理
-6. **Q-05 / Q-06 / P2-P3**：VirtualArena 的失败原因表达和 leak-check 统计质量仍偏弱
+1. **A-04 / P2**：mimalloc 动态加载的 env/path 发现策略仍留在 mem 层，owner boundary 还可以继续收紧
+2. **A-12 / P3**：`memory_map` / `mapped_*` 仍处于 mem 与 io 之间的迁移带，命名与归属还未完全收口
+3. **A-07 / A-14 / A-15 / P3**：重叠 public surface、薄包装层和下划线命名债仍在，模块外观还可以更统一
+4. **Q-02 / P3**：`FLargeBlocks` metadata 仍会在极端大对象场景里无上限增长
+5. **B-08 / P-03 / P-04 / P3**：剩余主要是参数命名和局部热路径的小型风格/性能债
 
 ### 处理建议顺序
 
-1. 先补 **剩余 public surface 的 focused gate**：`manager.mimalloc`、`allocator.callback` 负路径、`allocator.crt` / `allocator.foundation`
-2. 再处理 **并发初始化语义**：`TMemMutex`、`TMemRwLock`
-3. 然后处理 **VirtualArena 的剩余边界说明与失败注入**：大对象 mark/restore、reserve/commit/mmap 失败路径、失败原因表达
-4. 对 **`A-17` 这批零消费 public 单元** 做分类：保留并补 gate，或明确归档
-5. 最后收拾 **低优先级外观债**：命名、薄包装、重复表面、热路径小优化
+1. 先决定 **A-04 的 owner boundary**：保留 mem 内路径发现，还是下沉到专门 loader helper
+2. 再继续推进 **A-12 的 mapped-family 迁移收口**：明确哪些保留在 mem，哪些继续迁到 io
+3. 然后处理 **Q-02**：为 `FLargeBlocks` 的 metadata 增长策略补约束、回收或文档说明
+4. 最后收拾 **低优先级外观债**：参数命名、薄包装、重复表面与 ring-buffer / local-arena 的小热路径优化
