@@ -102,6 +102,20 @@ compress.deflate/props/multipart）当前全部编译通过，self-compile-modul
 处理），非导入。编译器自身已可被 nextPas 编译且不依赖 FPC SysUtils（self-compile-modules 19/19
 全绿即为佐证）。`compiler/tests/*.pas` 是宿主 fpc 测试文件，允许使用 SysUtils，不在清零范围。
 
+**C6-H4 task #90 收尾（2026-06-23）**：`gnkExitStatement` handler 由 `faba9ae1b` 落地
+（`np_semantic_analyzer.pas` `NodeConsumesOwnedStringReturnDeferred` 内，`Exit(F())` 视为 safe
+context）。专项回归测试 `tests/compiler/pass/exit_owned_string_return_pass.pas` 固化该 handler：
+采用**顶层 warmup 赋值**（`GWarmup := F()`，走 `ScanTopLevelOwnedStringReturnConsumers` +
+`AssignmentOwnsTopLevelStringReturn` 鲁棒注册路由，不依赖局部变量类型解析）登记 MakeGreeting/ExpandFileName
+为 owned-string-return 函数，使 `Exit(F())` 真正进入 C6-H4 检查路径。自检确认：删除 handler 块后
+fixture 即误报 `sema.c6h4-owned-string-return-deferred-consumer`（build 失败），证明 Pattern 1/2
+（local/imported）为 handler 硬保护，删之必回归。task #90 关闭。
+
+**注意**：测试的 registered-producer 路径选择很关键。早期版本用函数内 `LWarmup := F()` warmup，
+走 `AssignmentOwnsStringReturn → IsSupportedOwnedStringReturnIdentifierTarget`（依赖局部变量 TypeId
+解析为 String），在 pre-register 阶段类型信息未就绪时注册失败 → 测试空跑、删 handler 不回归。
+必须用顶层赋值（或 `WriteLn(F())` 走 `WriteArgumentOwnsStringReturn`）才能稳定触发注册。
+
 **历史迁移**：见 commits 0bb352198/abd3e6dc6/b70999215/c41ce7c1b/285d34d76（compiler SysUtils/Classes/Process → 框架内替代）。
 剩余的 SysUtils 残留面在 core 框架（见 FOUNDATION P1）与测试/shim 层，不在本 lane。
 
