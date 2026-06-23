@@ -16,7 +16,8 @@ uses
   nextpas.core.test.base,
   nextpas.core.test.check,
   nextpas.core.test.expect,
-  nextpas.core.test.runner;
+  nextpas.core.test.runner,
+  nextpas.core.test.runner.context;
 
 var
   GTestsRun: Integer = 0;
@@ -446,6 +447,28 @@ begin
   CheckTrue(LExcept <> nil);
 end;
 
+procedure TestResultAppenderResultsProperty;
+var
+  LAppender: TTestResultAppender;
+  LCollectedResult: TTestResult;
+begin
+  Inc(GTestsRun);
+  { 白盒测试：验证 runner.context 通过只读 Results property 暴露收集结果。 }
+  LAppender := TTestResultAppender.Create;
+  try
+    LCollectedResult.Name := 'subtest';
+    LCollectedResult.Status := tsPassed;
+    LCollectedResult.Message := '';
+    LCollectedResult.Duration := 7;
+    LAppender.Append(LCollectedResult);
+    CheckEqual(1, Length(LAppender.Results));
+    CheckEqual('subtest', LAppender.Results[0].Name);
+    CheckEqual(Ord(tsPassed), Ord(LAppender.Results[0].Status));
+  finally
+    LAppender.Free;
+  end;
+end;
+
 { ── Main ───────────────────────────────────────────────────────────────────── }
 
 var
@@ -469,6 +492,7 @@ begin
   Suite.Test('TestSuiteSkip', @TestSuiteSkip);
   Suite.Test('TestClosureParallel', @TestClosureParallel);
   Suite.Test('TestFacadeSymbols', @TestFacadeSymbols);
+  Suite.Test('TestResultAppenderResultsProperty', @TestResultAppenderResultsProperty);
   Suite.Test('R657SetupFailTeardown', @R657SetupFailTeardown);
 
   Runner := TTestRunner.Create('lifecycle-tests');
@@ -477,7 +501,7 @@ begin
   WriteLn;
   Runner.Summary;
 
-  CheckTrue(GTestsRun >= 14, 'Expected at least 14 tests, got ' + IntToStr(GTestsRun));
+  CheckTrue(GTestsRun >= 15, 'Expected at least 15 tests, got ' + IntToStr(GTestsRun));
   CheckTrue(LSuccess, 'All lifecycle tests should pass');
 
   if Runner.AllPassed then

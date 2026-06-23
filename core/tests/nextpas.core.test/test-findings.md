@@ -1379,7 +1379,7 @@ end;
 |----|------|------|------|
 | R6-62 | test_runner WriteLn('PASS') 模式 | ✅ | 自举测试成功输出统一为 OK: test_name |
 | R6-63 | test_runner LResult 变量复用 | ✅ | 结果变量改为语义化命名，按场景拆分 |
-| R6-64 | test_lifecycle 直接访问 FResults | 🔲 | 未实施（大重构） |
+| R6-64 | test_lifecycle 直接访问 FResults | ✅ | runner.context 明确只读 getter，lifecycle 白盒测试走 Results property |
 | R6-65 | test_output ANSI 状态未恢复 | ✅ | try-finally 包裹 |
 | R6-66 | test_advanced TAP/JSON 重复 | 🔲 | 未实施（大重构） |
 | R6-67 | JUnit/JSON 输出弱断言 | 🔲 | 未实施（大重构） |

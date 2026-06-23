@@ -25,9 +25,10 @@ type
   TTestResultAppender = class
   private
     FResults: specialize TArray<TTestResult>;
+    function GetResults: specialize TArray<TTestResult>;
   public
     procedure Append(const AResult: TTestResult);
-    property Results: specialize TArray<TTestResult> read FResults;
+    property Results: specialize TArray<TTestResult> read GetResults;
   end;
 
 { ── TTestContext (for subtest execution) ───────────────────────────────────── }
@@ -62,6 +63,11 @@ procedure TTestResultAppender.Append(const AResult: TTestResult);
 begin
   SetLength(FResults, Length(FResults) + 1);
   FResults[High(FResults)] := AResult;
+end;
+
+function TTestResultAppender.GetResults: specialize TArray<TTestResult>;
+begin
+  Result := FResults;
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }
