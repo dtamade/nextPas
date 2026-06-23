@@ -72,31 +72,18 @@ nextpas.core.<module>.<impl>.pas   ← 实现子模块
 
 ### 双编译器架构（核心设计原则）
 
-`nextpas.core.system` 是编译器内核和运行时的**唯一内核模块**。所有与编译器相关的定义和内核实现都在 `system` 下面，通过 `fpc`/`nextpas` 子域名区分两个编译器的实现：
+`nextpas.core.*` 是编译器内核和运行时的**唯一实现层**，拥有自己的类型体系（IStream、nextpas.core.text.conv 等），**不提供 FPC RTL 兼容层**（不包装 TStream、SysUtils 函数等遗留类型）。
 
-```
-nextpas.core.system.pas              ← 门面：纯委托，不含 {$IFDEF}
-nextpas.core.system.fpc.pas          ← FPC 适配器（uses FPC 单元：SysUtils/Classes/System 等）
-nextpas.core.system.nextpas.pas      ← nextPas 适配器（用 nextpas.core.* 内核实现）
-nextpas.core.system.fpc.*.pas        ← FPC 子模块（按功能拆分）
-nextpas.core.system.nextpas.*.pas    ← nextPas 子模块（按功能拆分）
-```
+**唯一目标：FPC 能编译 nextpas.core 源码。**
 
-- **FPC 编译时**：门面委托给 `system.fpc.*`，路由到 FPC 的实现
-- **nextPas 编译时**：门面委托给 `system.nextpas.*`，使用内核实现
+- **FPC 编译时**：源码中的 `uses SysUtils` 等通过 FPC 自带的搜索路径自然解析到 FPC 真实 RTL
+- **nextPas 编译时**：源码中的 `uses SysUtils` 等通过 `units/<target>/` 中的 stub 文件解析（stub 仅提供名称桥接，不是兼容层）
+- **方向**：逐步让 nextpas.core 模块用自己的类型替代 FPC 类型（如 Exception 基类自定义），最终消除对 FPC 单元名的引用，stub 自然废弃
 
-**路由通过分离的适配器单元完成**，不在模块内部用 `{$IFDEF}`，不在编译器 resolver 层。
-
-**命名规则**：编译器内核相关定义统一在 `nextpas.core.system` 下，用 `fpc`/`nextpas` 子域名区分。不在其他模块（如 `nextpas.core.exception`）下分叉。
-
-**这意味着**：
-- `uses SysUtils` 等 FPC 单元名只出现在 `system.fpc.*` 中，是**设计如此**
-- 门面层和 `system.nextpas.*` 不依赖任何 FPC 单元
-- `units/<target>/` 中的 FPC 兼容文件是**临时映射层**，为尚不具备适配器的模块提供过渡
-- 最终目标：所有内核定义都有完整的适配器对（`system.fpc.*` + `system.nextpas.*`），不再需要 shim
-- 所有运行时能力必须在 `nextpas.core.system` 内实现，禁止外部独立兼容层
-
-**禁止**：在 `nextpas.core.system` 之外创建编译器内核兼容层；在门面层使用 `{$IFDEF}`。
+**禁止**：
+- 在 `nextpas.core` 中包装/ re-export FPC RTL 类型（TStream、SysUtils 函数等）作为长期方案
+- 在 `nextpas.core` 之外创建独立的 FPC 兼容层
+- 用 `{$IFDEF}` 在模块内部分叉编译器路径
 
 ## nextpas.core.system 模块专项
 
