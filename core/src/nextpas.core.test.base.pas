@@ -23,8 +23,8 @@ type
     ['{C4E8A57A-5B1D-4F3A-9C7E-2D8F1A6B3E90}']
     procedure Run(const AName: string; AProc: TTestProc);
     procedure RunNested(const AName: string; AProc: Pointer);
-      { AProc is TSubtestProc — typed as Pointer to break circular reference
-        between ITestContext and TSubtestProc declarations. }
+      { AProc is TSubtestProc — typed as Pointer to break FPC circular
+        forward-reference between ITestContext and TSubtestProc. }
     procedure Fail(const AMessage: string);
     procedure Skip(const AReason: string = '');
     function  GetTestName: string;
