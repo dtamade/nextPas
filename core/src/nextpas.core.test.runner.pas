@@ -805,11 +805,7 @@ begin
       filtered tests are invisible, not counted as pass/fail/skip) }
     if (GetTestFilter <> '') and not MatchesFilter(Tests[I].Name) then
     begin
-      LResults[I].Name     := Tests[I].Name;
-      LResults[I].Status   := tsSkipped;
-      LResults[I].Message  := 'filtered out';
-      LResults[I].Duration := 0;
-      LThreads[I]          := 0;  { no thread for this slot }
+      LThreads[I] := 0;  { no thread for this slot — also marks filter-excluded }
       Continue;
     end;
 
@@ -863,10 +859,17 @@ begin
   { Suite-level teardown (uses shared helper) }
   RunTeardown;
 
-  { Collect results from all threads }
-  SetLength(AResult.Results, LTotal);
+  { Collect results from threads that actually ran.
+    Filter-excluded slots have LThreads[I]=0 and no result data.
+    BeginThread-failed slots also have LThreads[I]=0 but have result data
+    written directly (tsError + 'BeginThread failed'). }
   for I := 0 to High(Tests) do
-    AResult.Results[I] := LResults[I];
+    if (LThreads[I] <> 0) or (LResults[I].Status <> tsPassed) or
+       (LResults[I].Name <> '') then
+    begin
+      SetLength(AResult.Results, Length(AResult.Results) + 1);
+      AResult.Results[High(AResult.Results)] := LResults[I];
+    end;
 
   FinalizeResults(AResult, LPass, LFail, LSkip);
   Result := LastRunPassed;
