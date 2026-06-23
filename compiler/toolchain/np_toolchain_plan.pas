@@ -1616,10 +1616,7 @@ begin
   );
   for Index := 0 to Length(FAdditionalAssemblyBaseNames) - 1 do
   begin
-    AdditionalBaseName := ChangeFileExt(
-      ExtractFileName(FAdditionalAssemblyBaseNames[Index]),
-      ''
-    );
+    AdditionalBaseName := FAdditionalAssemblyBaseNames[Index];
     if Trim(AdditionalBaseName) = '' then
       Continue;
     if nextpas.core.text.SameText(AdditionalBaseName, ChangeFileExt(ExtractFileName(FSourcePath), '')) then
@@ -1663,10 +1660,7 @@ begin
   );
   for Index := 0 to Length(FAdditionalAssemblyBaseNames) - 1 do
   begin
-    AdditionalBaseName := ChangeFileExt(
-      ExtractFileName(FAdditionalAssemblyBaseNames[Index]),
-      ''
-    );
+    AdditionalBaseName := FAdditionalAssemblyBaseNames[Index];
     if Trim(AdditionalBaseName) = '' then
       Continue;
     if nextpas.core.text.SameText(AdditionalBaseName, ChangeFileExt(ExtractFileName(FSourcePath), '')) then
