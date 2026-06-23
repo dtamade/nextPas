@@ -14,6 +14,13 @@ uses
   nextpas.core.platform.memory;
 
 type
+  {$IFDEF NEXTPAS_TESTING}
+  TVirtualArenaReserveHook = function(ASize: SizeUInt): Pointer;
+  TVirtualArenaCommitHook = function(APtr: Pointer; ASize: SizeUInt): Boolean;
+  TVirtualArenaMmapHook = function(ASize: UInt64; AAccess: TPlatformMapAccess;
+    AFlags: TPlatformMapFlags; out AMap: TPlatformMappedFile): Int32;
+  {$ENDIF}
+
   {** TVirtualArena
    *
    *  预留虚拟地址空间的 bump 分配器，使用 mmap 预分配虚拟地址空间。
@@ -95,6 +102,13 @@ procedure TVirtualArena_Init(var AArena: TVirtualArena; AAlignment: SizeUInt = D
 {** 释放 TVirtualArena 所有资源 }
 procedure TVirtualArena_Release(var AArena: TVirtualArena);
 
+{$IFDEF NEXTPAS_TESTING}
+procedure VirtualArenaTestResetHooks;
+procedure VirtualArenaTestSetReserveHook(AHook: TVirtualArenaReserveHook);
+procedure VirtualArenaTestSetCommitHook(AHook: TVirtualArenaCommitHook);
+procedure VirtualArenaTestSetMmapHook(AHook: TVirtualArenaMmapHook);
+{$ENDIF}
+
 implementation
 
 {$PUSH}
@@ -106,6 +120,65 @@ var
   GArenaTotalMapped: SizeUInt;
 {$ENDIF}
 
+{$IFDEF NEXTPAS_TESTING}
+var
+  GVirtualArenaReserveHook: TVirtualArenaReserveHook = nil;
+  GVirtualArenaCommitHook: TVirtualArenaCommitHook = nil;
+  GVirtualArenaMmapHook: TVirtualArenaMmapHook = nil;
+{$ENDIF}
+
+function VirtualArenaReserve(ASize: SizeUInt): Pointer; inline;
+begin
+  {$IFDEF NEXTPAS_TESTING}
+  if Assigned(GVirtualArenaReserveHook) then
+    Exit(GVirtualArenaReserveHook(ASize));
+  {$ENDIF}
+  Result := platform_virtual_reserve(ASize);
+end;
+
+function VirtualArenaCommit(APtr: Pointer; ASize: SizeUInt): Boolean; inline;
+begin
+  {$IFDEF NEXTPAS_TESTING}
+  if Assigned(GVirtualArenaCommitHook) then
+    Exit(GVirtualArenaCommitHook(APtr, ASize));
+  {$ENDIF}
+  Result := platform_virtual_commit(APtr, ASize);
+end;
+
+function VirtualArenaMmapAnonymous(ASize: UInt64; AAccess: TPlatformMapAccess;
+  AFlags: TPlatformMapFlags; out AMap: TPlatformMappedFile): Int32; inline;
+begin
+  {$IFDEF NEXTPAS_TESTING}
+  if Assigned(GVirtualArenaMmapHook) then
+    Exit(GVirtualArenaMmapHook(ASize, AAccess, AFlags, AMap));
+  {$ENDIF}
+  Result := platform_mmap_create_anonymous(ASize, AAccess, AFlags, AMap);
+end;
+
+{$IFDEF NEXTPAS_TESTING}
+procedure VirtualArenaTestResetHooks;
+begin
+  GVirtualArenaReserveHook := nil;
+  GVirtualArenaCommitHook := nil;
+  GVirtualArenaMmapHook := nil;
+end;
+
+procedure VirtualArenaTestSetReserveHook(AHook: TVirtualArenaReserveHook);
+begin
+  GVirtualArenaReserveHook := AHook;
+end;
+
+procedure VirtualArenaTestSetCommitHook(AHook: TVirtualArenaCommitHook);
+begin
+  GVirtualArenaCommitHook := AHook;
+end;
+
+procedure VirtualArenaTestSetMmapHook(AHook: TVirtualArenaMmapHook);
+begin
+  GVirtualArenaMmapHook := AHook;
+end;
+{$ENDIF}
+
 procedure TVirtualArena_Init(var AArena: TVirtualArena; AAlignment: SizeUInt);
 begin
   if (AAlignment = 0) or (not IsPowerOfTwo(AAlignment)) then
@@ -115,7 +188,7 @@ begin
   else
     AArena.FAlignment := AAlignment;
 
-  AArena.FReservedBase := platform_virtual_reserve(ARENA_VIRTUAL_RESERVE);
+  AArena.FReservedBase := VirtualArenaReserve(ARENA_VIRTUAL_RESERVE);
   if AArena.FReservedBase = nil then
     raise EOutOfMemory.Create(aeOutOfMemory, 'TVirtualArena_Init: failed to reserve virtual address space');
 
@@ -214,7 +287,7 @@ begin
   end;
 
   LCommitPtr := PByte(PtrUInt(FReservedBase) + FFrontCommittedSize);
-  if not platform_virtual_commit(LCommitPtr, LCommitSize) then
+  if not VirtualArenaCommit(LCommitPtr, LCommitSize) then
     Exit;
 
   { Advise THP for large commits (>= 2MB) }
@@ -250,7 +323,7 @@ begin
 
   { Commit from the end of the reservation backward }
   LCommitPtr := PByte(PtrUInt(FReservedBase) + FReservedSize - FBackCommittedSize - LCommitSize);
-  if not platform_virtual_commit(LCommitPtr, LCommitSize) then
+  if not VirtualArenaCommit(LCommitPtr, LCommitSize) then
     Exit;
 
   { Advise THP for large commits (>= 2MB) }
@@ -291,7 +364,7 @@ begin
   { Large objects: direct mmap, independent lifecycle }
   if aSize >= ARENA_LARGE_THRESHOLD then
   begin
-    if platform_mmap_create_anonymous(UInt64(aSize), pmaReadWrite, [pmfPrivate], LMap) <> 0 then
+    if VirtualArenaMmapAnonymous(UInt64(aSize), pmaReadWrite, [pmfPrivate], LMap) <> 0 then
       Exit;
     TrackLargeBlock(LMap);
     Inc(FTotalAllocated, aSize);
@@ -345,7 +418,7 @@ begin
   { Large objects: direct mmap }
   if aSize >= ARENA_LARGE_THRESHOLD then
   begin
-    if platform_mmap_create_anonymous(UInt64(aSize), pmaReadWrite, [pmfPrivate], LMap) <> 0 then
+    if VirtualArenaMmapAnonymous(UInt64(aSize), pmaReadWrite, [pmfPrivate], LMap) <> 0 then
       Exit;
     TrackLargeBlock(LMap);
     Inc(FTotalAllocated, aSize);
@@ -397,7 +470,7 @@ begin
   { Large objects: direct mmap }
   if aSize >= ARENA_LARGE_THRESHOLD then
   begin
-    if platform_mmap_create_anonymous(UInt64(aSize), pmaReadWrite, [pmfPrivate], LMap) <> 0 then
+    if VirtualArenaMmapAnonymous(UInt64(aSize), pmaReadWrite, [pmfPrivate], LMap) <> 0 then
       Exit;
     TrackLargeBlock(LMap);
     Inc(FTotalAllocated, aSize);

@@ -3,6 +3,8 @@ program test_contracts;
 {$I nextpas.core.settings.inc}
 
 uses
+  SysUtils,
+  nextpas.core.base,
   nextpas.core.testing,
   nextpas.core.mem.intf,
   nextpas.core.mem.utils,
@@ -203,6 +205,54 @@ begin
 
   LAllocator.FreeMem(LPtr);
   CheckEqual(Int64(1), Int64(GFreeMemCalls), 'FreeMem should route through FreeMem');
+end;
+
+procedure ExpectNilCallbackRejected(const AName: string;
+  AGetMem: TGetMemCallback;
+  AAllocMem: TAllocMemCallback;
+  AReallocMem: TReallocMemCallback;
+  AFreeMem: TFreeMemCallback);
+var
+  LRaised: Boolean;
+  LAllocator: nextpas.core.mem.allocator.IAllocator;
+begin
+  LRaised := False;
+  LAllocator := nil;
+  try
+    LAllocator := CreateCallbackAllocator(AGetMem, AAllocMem, AReallocMem, AFreeMem);
+  except
+    on E: nextpas.core.base.EArgumentNil do
+      LRaised := True;
+    on E: Exception do
+      Fail(AName + ': expected EArgumentNil, got ' + E.ClassName + ': ' + E.Message);
+  end;
+
+  Check(LRaised, AName + ': nil callback should be rejected');
+  Check(LAllocator = nil, AName + ': allocator should not be created');
+end;
+
+procedure TestCallbackAllocatorRejectsNilCallbacksAtRuntime;
+begin
+  ExpectNilCallbackRejected('nil GetMem callback',
+    nil,
+    @CallbackAllocMem,
+    @CallbackReallocMem,
+    @CallbackFreeMem);
+  ExpectNilCallbackRejected('nil AllocMem callback',
+    @CallbackGetMem,
+    nil,
+    @CallbackReallocMem,
+    @CallbackFreeMem);
+  ExpectNilCallbackRejected('nil ReallocMem callback',
+    @CallbackGetMem,
+    @CallbackAllocMem,
+    nil,
+    @CallbackFreeMem);
+  ExpectNilCallbackRejected('nil FreeMem callback',
+    @CallbackGetMem,
+    @CallbackAllocMem,
+    @CallbackReallocMem,
+    nil);
 end;
 
 procedure TestRtlAllocatorZeroInitTraitsAndAlignedAlloc;
@@ -571,6 +621,8 @@ begin
   T := TTestRunner.Create('nextpas.core.mem.contracts');
   T.Run('callback allocator compatibility methods', @TestCallbackAllocatorCompatibilityMethods);
   T.Run('callback allocator supports canonical interface', @TestCallbackAllocatorSupportsCanonicalInterface);
+  T.Run('callback allocator rejects nil callbacks at runtime',
+    @TestCallbackAllocatorRejectsNilCallbacksAtRuntime);
   T.Run('rtl allocator zero init traits and aligned alloc', @TestRtlAllocatorZeroInitTraitsAndAlignedAlloc);
   T.Run('rtl allocator aligned alloc rejects size overflow', @TestRtlAllocatorAlignedAllocRejectsSizeOverflow);
   T.Run('chunked arena and growable block pool use canonical allocator contract',
