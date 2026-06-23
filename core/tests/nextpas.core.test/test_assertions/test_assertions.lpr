@@ -330,6 +330,22 @@ begin
   end;
 end;
 
+{ R4-09: CheckRaises with nil proc — FPC raises EAccessViolation when
+  calling a nil procedure pointer, which CheckRaises catches as a
+  non-matching exception class. Verify this doesn't crash the test runner. }
+procedure TestCheckRaisesNil;
+begin
+  try
+    CheckRaises(EAbort, nil);
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(True, 'nil proc raised EAssertionFailed (expected class mismatch)');
+    on E: Exception do
+      Check(True, 'nil proc raised ' + E.ClassName + ' (not a crash)');
+  end;
+end;
+
 procedure TestCheckStartsWithEmptyPrefix;
 begin
   { Empty pattern matches everything — consistent across Contains/StartsWith/EndsWith }
@@ -436,6 +452,7 @@ begin
   LSuite.Test('CheckNoRaise',          @TestCheckNoRaise);
   LSuite.Test('CheckRaises+Skip',      @TestCheckRaisesSkipPassthrough);
   LSuite.Test('CheckNoRaise+Skip',     @TestCheckNoRaiseSkipPassthrough);
+  LSuite.Test('CheckRaises nil',        @TestCheckRaisesNil); { R4-09 }
   LSuite.Test('StartsWith empty',      @TestCheckStartsWithEmptyPrefix);
   LSuite.Test('Fail',                  @TestFail);
   LSuite.Test('Skip',                  @TestSkip);

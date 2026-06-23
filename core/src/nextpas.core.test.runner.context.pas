@@ -86,6 +86,7 @@ begin
   LEntry.SubtestProc := nil;
   LEntry.Kind        := ekTest;
   LEntry.SkipReason  := '';
+  LEntry.RetryCount  := 0;
   SetLength(FSubtests, Length(FSubtests) + 1);
   FSubtests[High(FSubtests)] := LEntry;
 end;
@@ -99,6 +100,7 @@ begin
   LEntry.SubtestProc := TSubtestProc(AProc);
   LEntry.Kind        := ekSubtest;
   LEntry.SkipReason  := '';
+  LEntry.RetryCount  := 0;
   SetLength(FSubtests, Length(FSubtests) + 1);
   FSubtests[High(FSubtests)] := LEntry;
 end;

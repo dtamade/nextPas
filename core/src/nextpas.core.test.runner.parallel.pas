@@ -157,11 +157,14 @@ begin
   end
   else if LRec^.Done then
   begin
-    { Worker finished (Done=True) but timed join didn't complete in 5s —
-      extremely unlikely; treat as success with potential stale data. }
+    { Worker finished (Done=True) but timed join didn't complete —
+      extremely unlikely; treat as success with potential stale data.
+      Dispose LRec here: worker is done so no concurrent access,
+      and LJoinResult ≠ 0 means the Dispose below won't run. }
     AStatus := LRec^.Status;
     AMsg := LRec^.ErrorMsg;
     Result := True;
+    Dispose(LRec);
     { Detach to prevent handle leak — worker is done, thread is exiting }
     platform_thread_detach(LHandle);
     WriteLn(StdErr, 'WARNING: timed-join failed after worker completed — handle detached');
@@ -210,6 +213,7 @@ var
   LSkipReason: string;
   LStartMs: Int64;
   LResultWritten: Boolean;
+  LRetriesLeft: Integer;
 begin
   Result := nil;
   R := PThreadRec(AArg);
@@ -298,31 +302,50 @@ begin
 
   if LStatus = tsPassed then
   begin
-    LStartMs := GetTickCount64;
-    try
-      if R^.Entry.Kind = ekTableTest then
-        PTestCaseProc(R^.Entry.TableProc)^(PTestCase(R^.Entry.TableCase)^)
-      else if Assigned(R^.Entry.Closure) then
-        R^.Entry.Closure()
-      else
-        R^.Entry.Proc;
-    except
-      on E: ETestSkipped do
-      begin
-        LStatus := tsSkipped;
-        LSkipReason := E.Message;
+    { R4-04: Retry loop — mirrors serial RunWithResult retry logic }
+    LRetriesLeft := R^.Entry.RetryCount;
+    repeat
+      LStatus := tsPassed;
+      LFailMsg := '';
+      LStartMs := GetTickCount64;
+      try
+        if R^.Entry.Kind = ekTableTest then
+          PTestCaseProc(R^.Entry.TableProc)^(PTestCase(R^.Entry.TableCase)^)
+        else if Assigned(R^.Entry.Closure) then
+          R^.Entry.Closure()
+        else
+          R^.Entry.Proc;
+      except
+        on E: ETestSkipped do
+        begin
+          LStatus := tsSkipped;
+          LSkipReason := E.Message;
+        end;
+        on E: EAssertionFailed do
+        begin
+          LStatus := tsFailed;
+          LFailMsg := E.Message;
+        end;
+        on E: Exception do
+        begin
+          LStatus := tsError;
+          LFailMsg := E.ClassName + ': ' + E.Message;
+        end;
       end;
-      on E: EAssertionFailed do
-      begin
-        LStatus := tsFailed;
-        LFailMsg := E.Message;
+
+      if (LStatus = tsPassed) or (LStatus = tsSkipped) or (LRetriesLeft <= 0) then
+        Break;
+
+      { Retry: print hint (within mutex) and loop }
+      Dec(LRetriesLeft);
+      R^.Mtx.Acquire;
+      try
+        WriteLn('  ', AnsiYellow('retrying'), ' (',
+          R^.Entry.RetryCount - LRetriesLeft, '/', R^.Entry.RetryCount, ')...');
+      finally
+        SafeRelease(R^.Mtx);
       end;
-      on E: Exception do
-      begin
-        LStatus := tsError;
-        LFailMsg := E.ClassName + ': ' + E.Message;
-      end;
-    end;
+    until False;
   end;
 
   if Assigned(R^.After) or Assigned(R^.AfterClosure) then

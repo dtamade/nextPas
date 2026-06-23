@@ -61,12 +61,24 @@ var
   LSuite: TTestSuite;
   LRunner: TTestRunner;
   LResults: specialize TArray<TTestRunResult>;
+  LFoundAlpha, LFoundBeta: Boolean;
+  I: Integer;
 begin
   LFixture := TDiscoveryFixture.Create;
   LSuite := DiscoverTests(LFixture, 'DiscoveryTest');
   CheckEqual(2, Length(LSuite.Tests));
-  CheckEqual('TestAlpha', LSuite.Tests[0].Name);
-  CheckEqual('TestBeta', LSuite.Tests[1].Name);
+
+  { Verify both methods discovered (order-independent — VMT table ordering
+    is an FPC implementation detail, not a language guarantee) }
+  LFoundAlpha := False;
+  LFoundBeta  := False;
+  for I := 0 to High(LSuite.Tests) do
+  begin
+    if LSuite.Tests[I].Name = 'TestAlpha' then LFoundAlpha := True;
+    if LSuite.Tests[I].Name = 'TestBeta'  then LFoundBeta  := True;
+  end;
+  CheckTrue(LFoundAlpha, 'TestAlpha not discovered');
+  CheckTrue(LFoundBeta,  'TestBeta not discovered');
 
   { Actually run them to verify dispatch works }
   LRunner := TTestRunner.Create('DiscoveryRunner');

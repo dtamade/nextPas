@@ -684,4 +684,601 @@ R1 详细内容见第一版 `test-findings.md`（git history）。
 
 ---
 
+## R4 全面审计扫描
+
+**扫描日期**: 2026-06-21
+**扫描范围**: 13 源文件 + 9 测试套件（含 R2/R3 新增的文件和测试）
+**扫描方法**: 全文件逐行审查，聚焦 R2/R3 未覆盖的正确性、架构债务、测试缺口
+**统计**: 12 新发现（2 P0 + 3 P1 + 7 P2）
+
+---
+
+### P0 — 正确性 Bug（2 项）
+
+#### R4-01: `RunTestWithTimeout` — `LRec` 泄漏（timed-join 失败 + worker 已完成）✅ 已修
+
+**文件**: `runner.parallel.pas:158-181`
+**严重度**: P0 — 内存泄漏
+
+```pascal
+  else if LRec^.Done then
+  begin
+    AStatus := LRec^.Status;
+    AMsg := LRec^.ErrorMsg;
+    Result := True;
+    platform_thread_detach(LHandle);
+    WriteLn(StdErr, 'WARNING: timed-join failed after worker completed ...');
+    { ← LRec is leaked — Dispose(LRec) only runs when LJoinResult = 0 }
+  end
+  else
+  begin
+    { Truly stuck — LRec leak is documented and unavoidable }
+    ...
+  end;
+  if LJoinResult = 0 then    { ← only successful join disposes LRec }
+    Dispose(LRec);
+```
+
+`Dispose(LRec)` 仅在 `LJoinResult = 0`（join 成功）时执行。当 join 失败且 worker 已完成（`LRec^.Done = True`）时，`LRec` 泄漏。与"truly stuck"分支不同（worker 仍在运行，`LRec` 不可安全释放），此分支中 worker 已退出、句柄已 detach，`LRec` 可以安全释放。
+
+**建议修复**: 在 `else if LRec^.Done then` 分支 detach 前加 `Dispose(LRec);`：
+```pascal
+  else if LRec^.Done then
+  begin
+    AStatus := LRec^.Status;
+    AMsg := LRec^.ErrorMsg;
+    Result := True;
+    Dispose(LRec);           { safe: worker done, no concurrent access }
+    platform_thread_detach(LHandle);
+    WriteLn(StdErr, 'WARNING: ...');
+  end
+```
+
+**预估工作量**: 极小（1 行）
+
+---
+
+#### R4-02: macOS/Android/FreeBSD 上超时机制完全失效 ✅ 已加文档
+
+**文件**: `platform.thread.pas:192-197`
+**严重度**: P0 — 功能失效
+
+```pascal
+{ macOS/Android/FreeBSD: fall back to blocking join (no timed join available). }
+function platform_thread_timedjoin(...): Int32;
+begin
+  Result := platform_thread_join(AHandle, ARetVal);  { blocks forever! }
+end;
+```
+
+非 Linux/Windows 平台上，`platform_thread_timedjoin` 忽略 `ATimeoutMs`，执行无限阻塞 join。当 `RunTestWithTimeout` 检测到超时后调用 timed-join，整个进程会被永久挂起。
+
+**建议修复**（按复杂度递增）:
+1. 最小：文档化为已知限制，在 CI 中对非 Linux/Windows 跳过超时测试
+2. 中等：在 macOS 上用 `pthread_cancel`（需 `pthread_setcancelstate` 配合）
+3. 完整：改为子进程模型（可强制 kill）
+
+**预估工作量**: 小型（文档）~ 大型（子进程）
+
+---
+
+### P1 — 架构/设计债务（3 项）
+
+#### R4-03: `RunWithResult`/`RunParallelWithResult` 重复逻辑未提取 ✅ 已修
+
+**文件**: `runner.pas:711-713`
+**严重度**: P1 — 维护性
+
+```pascal
+{ TODO: RunWithResult and RunParallelWithResult share setup-failure, teardown,
+  result-counting, and HasRun/LastRunPassed-update logic.  Extract shared
+  helpers (e.g. RunSetup, RunTeardown, FinalizeResults) to reduce duplication. }
+```
+
+R2-F04 标记"✅ 已修"，但 TODO 仍在。两函数共享的逻辑包括：
+- setup-failure 路径（~30 行完全相同）
+- teardown try/except（~8 行）
+- HasRun/LastRunPassed/LastPass/LastFail/LastSkip 更新（~10 行）
+- Result 对象填充（~10 行）
+
+**建议修复**: 提取 `RunSetup`、`RunTeardown`、`FinalizeResults` 辅助方法。
+
+**预估工作量**: 中等（~50 行重组）
+
+---
+
+#### R4-04: 并行模式不支持 retry ✅ 已修
+
+**文件**: `runner.parallel.pas` (ParallelWorkerProc)
+**严重度**: P1 — 功能缺口
+
+Serial `RunWithResult` 支持 `RetryCount > 0`（line 513-561），但 `ParallelWorkerProc` 只执行一次，无重试逻辑。用户设置的 retry 在并行模式下被静默忽略。
+
+**建议修复**: 在 `ParallelWorkerProc` 中加 retry 循环（mutex 外重试，mutex 内只更新计数器），或文档化为已知限制。
+
+**预估工作量**: 中等（~30 行 + 测试）
+
+---
+
+#### R4-05: `GParallelRetryCount` 无保护读取 ✅ 已修
+
+**文件**: `test_parallel/test_parallel.lpr:93`
+**严重度**: P1 — 可移植性（ARM/PowerPC）
+
+```pascal
+InterLockedIncrement(GParallelRetryCount);  { 原子写 }
+if GParallelRetryCount < 3 then             { 非原子读 — ARM 上可能不可见 }
+  raise EAssertionFailed.Create('flaky');
+```
+
+x86-64 TSO 下安全，但 ARM 弱内存模型下另一线程的增量可能不可见。
+
+**建议修复**: 改用原子读（如 `InterLockedExchangeAdd(0)`）或加注释说明单写者假设。
+
+**预估工作量**: 极小（1 行）
+
+---
+
+### P2 — 测试覆盖缺口 + 设计改进（7 项）
+
+#### R4-06: `test_runner` 断言使用 `< N` 而非精确 `= N` ✅ 已修
+
+**文件**: `test_runner/test_runner.lpr:185-200`
+**严重度**: P2 — 测试质量
+
+```pascal
+if GTeardownCalled < 1 then     { 应为 = 1 — 多调也会通过 }
+if GBeforeEachCalled < 4 then   { 应为 = 4 }
+if GAfterEachCalled < 4 then    { 应为 = 4 }
+```
+
+当前断言只检查下限。如果 BeforeEach 因 bug 多调一次，测试不会发现。
+
+**建议修复**: 改为 `CheckEqual(4, GBeforeEachCalled)` 精确匹配。
+
+**预估工作量**: 极小（3 行）
+
+---
+
+#### R4-07: `CheckNear` 使用绝对 epsilon，大值场景失效 ✅ 已加文档
+
+**文件**: `check.pas:325-340`
+**严重度**: P2 — 设计局限
+
+默认 `AEpsilon = 1e-10`，对 `CheckNear(1e15, 1e15 + 100)` 会失败（差值 100 远大于 1e-10）。IEEE 754 的 `Double` 在 `1e15` 附近精度约 0.125，所以 `+100` 在 ULP 意义上是显著差异。当前设计对小值测试够用，但文档未说明此限制。
+
+**建议**: 在注释/文档中说明绝对 epsilon 语义，或提供 `CheckNearRel` 变体。
+
+**预估工作量**: 小型（文档或新函数 ~10 行）
+
+---
+
+#### R4-08: 无空套件运行测试 ✅ 已修
+
+**文件**: 测试覆盖
+**严重度**: P2 — 边界覆盖
+
+无测试验证"空 suite（0 tests）运行后 Result 对象状态"。setup/teardown 在空 suite 中是否执行？`AllPassed` 是否为 True？
+
+**建议**: 添加 `TestEmptySuiteRun`。
+
+**预估工作量**: 极小（~15 行）
+
+---
+
+#### R4-09: `CheckRaises(nil)` 路径无测试 ✅ 已修
+
+**文件**: 测试覆盖
+**严重度**: P2 — 边界覆盖
+
+R3-32 添加了 nil guard，但无测试验证 `CheckRaises(nil, EAbort, '')` 的行为。
+
+**建议**: 添加 `TestCheckRaisesNil`。
+
+**预估工作量**: 极小（~10 行）
+
+---
+
+#### R4-10: `GStubRegistry` finalization 清理为 O(n²) ✅ 已修
+
+**文件**: `runner.pas:873-900, 1022-1028`
+**严重度**: P2 — 性能
+
+`CleanupTableAllocations` 中对每个 stub 调用 `NilPointerInArray(GStubRegistry, ...)` 做线性查找置 nil，N 个 stub → O(n²)。当前规模（< 100 stubs）无实际影响。
+
+**建议**: 改用 HashMap 或在注册时记录 index 直接置 nil。
+
+**预估工作量**: 中等（~30 行）
+
+---
+
+#### R4-11: 无测试模块 README.md ✅ 已修
+
+**文件**: `core/tests/nextpas.core.test/`
+**严重度**: P2 — 可维护性
+
+9 个测试套件无统一文档说明各自的覆盖范围、运行方式和约定。
+
+**建议**: 添加 ~30 行 README。
+
+**预估工作量**: 小型
+
+---
+
+#### R4-12: `TTestSuite` 多次运行同一 runner 时 teardown 重复执行 ✅ 已修
+
+**文件**: `runner.pas`
+**严重度**: P2 — 边界行为
+
+```pascal
+LSuite.SetTeardown(procedure begin AFixture.Free; end);
+LRunner.Add(LSuite);
+LRunner.RunAllWithResult(...);  { teardown 释放 fixture ✓ }
+LRunner.RunAllWithResult(...);  { teardown 再次释放 → 悬空指针 }
+```
+
+`CleanupTableAllocations` nil-out table case/stub 指针，但不清理 teardown 闭包。第二次运行时闭包仍持有已释放对象的引用。
+
+**建议**: 在 teardown 执行后置 `Teardown := nil; TeardownClosure := nil;`。
+
+**预估工作量**: 小型（~5 行）
+
+---
+
+### R4 统计
+
+| 优先级 | 数量 | 状态 |
+|--------|------|------|
+| P0 | 2 | ✅ 1 已修 + 1 已加文档 |
+| P1 | 3 | ✅ 全部已修 |
+| P2 | 7 | ✅ 全部已修 |
+| **合计** | **12** | **11 ✅ + 1 已加文档** |
+
+---
+
 ## 建议优先处理顺序
+
+### 第 1 批：P0 正确性修复
+1. **R4-01**: LRec 泄漏（1 行修复）
+2. **R4-02**: macOS 超时失效（至少加文档说明）
+
+### 第 2 批：P1 架构债务
+3. **R4-03**: RunWithResult/RunParallelWithResult 提取共享逻辑
+4. **R4-04**: 并行 retry 支持或文档化
+5. **R4-05**: 原子读保护
+
+### 第 3 批：P2 测试覆盖
+6. **R4-06 ~ R4-09**: 小型测试补全（~50 行合计）
+7. **R4-10 ~ R4-12**: 设计改进（可并行处理）
+
+---
+
+## R5 全面审计扫描
+
+**扫描日期**: 2026-06-23
+**扫描范围**: 13 源文件 + 9 测试套件（含 R2/R3/R4 修复后的最新代码）
+**扫描方法**: 2 个并行 Agent 全文件逐行审查（源码 + 测试），去重 R1-R4 已有发现后合并
+**统计**: 13 新发现（2 P0 + 4 P1 + 7 P2）
+
+---
+
+### P0 — 正确性 Bug（2 项）
+
+#### R5-01: `--filter` 在并行模式下完全失效 ✅ 已修
+
+**文件**: `runner.pas:415-416` vs `runner.pas:751`
+**严重度**: P0 — 功能失效
+
+`RunWithResult`（串行模式）在 line 415-416 检查 `MatchesFilter`，跳过不匹配的测试。但 `RunParallelWithResult`（line 751）没有此检查——所有测试直接分发到线程。
+
+```pascal
+{ RunWithResult — 有 filter ✓ }
+for I := 0 to High(Tests) do
+begin
+  if (GetTestFilter <> '') and not MatchesFilter(LEntry.Name) then
+    Continue;   { ← 跳过不匹配 }
+  ...
+end;
+
+{ RunParallelWithResult — 无 filter ✗ }
+for I := 0 to High(Tests) do
+begin
+  LRecs[I].Entry := Tests[I];  { ← 全部分发，无 filter 检查 }
+  ...
+end;
+```
+
+**影响**: 用户运行 `--filter MyTest` 时，串行模式只跑匹配的测试，但并行模式跑全部测试。对 CI 环境（常用 `--filter` 跳过慢测试）影响显著。
+
+**建议修复**: 在 `RunParallelWithResult` 的分发循环中加入 filter 检查，不匹配的测试标记为 tsSkipped 或从 LRecs 中剔除。
+
+**预估工作量**: 小型（~10 行）
+
+---
+
+#### R5-02: 子测试 `TTestEntry.RetryCount` 未初始化 ✅ 已修
+
+**文件**: `runner.context.pas:80-104`
+**严重度**: P0 — 未定义行为
+
+```pascal
+procedure TTestContext.Run(const AName: string; AProc: TTestProc);
+var
+  LEntry: TTestEntry;   { ← record，栈上垃圾值 }
+begin
+  LEntry.Name        := FTestName + '/' + AName;
+  LEntry.Proc        := AProc;
+  LEntry.SubtestProc := nil;
+  LEntry.Kind        := ekTest;
+  LEntry.SkipReason  := '';
+  { ← RetryCount 未赋值，含栈垃圾 }
+  SetLength(FSubtests, Length(FSubtests) + 1);
+  FSubtests[High(FSubtests)] := LEntry;
+end;
+```
+
+`TTestEntry` 是 record，局部变量 `LEntry` 不会自动初始化。`RetryCount` 字段保持栈垃圾值。`ExecuteSubtests` 当前不使用 `RetryCount`，所以实际无害——但属于未定义行为，未来代码改动可能触发隐患。
+
+**建议修复**: 在 `Run`/`RunNested` 中加 `LEntry.RetryCount := 0;`。
+
+**预估工作量**: 极小（2 行）
+
+---
+
+### P1 — 设计缺陷（4 项）
+
+#### R5-03: `ParseFilterFromArgs` 不支持 `--filter=value` 语法 ✅ 已修
+
+**文件**: `runner.pas:133-141`
+**严重度**: P1 — 易用性
+
+```pascal
+function ParseFilterFromArgs: string;
+var
+  K: Integer;
+begin
+  Result := '';
+  for K := 1 to ParamCount do
+    if (ParamStr(K) = '--filter') and (K < ParamCount) then
+      Exit(ParamStr(K + 1));
+end;
+```
+
+只接受 `--filter value`（空格分隔），不识别 `--filter=value`（等号连接）。CLI 通行做法是两者都支持，用户写 `--filter=MyTest` 会被静默忽略。
+
+**建议修复**: 增加 `--filter=` 前缀匹配：
+```pascal
+if Copy(ParamStr(K), 1, 9) = '--filter=' then
+  Exit(Copy(ParamStr(K), 10, MaxInt));
+```
+
+**预估工作量**: 极小（3 行）
+
+---
+
+#### R5-04: `BeginThread` 返回值未校验 ✅ 已修
+
+**文件**: `runner.pas:818-819`
+**严重度**: P1 — 健壮性
+
+```pascal
+for I := 0 to High(Tests) do
+  LThreads[I] := BeginThread(@ParallelThreadEntry, @LRecs[I]);
+
+for I := 0 to High(Tests) do
+  WaitForThreadTerminate(LThreads[I], 0);  { ← 若 handle=0，行为未定义 }
+
+for I := 0 to High(Tests) do
+  CloseThread(LThreads[I]);               { ← 同上 }
+```
+
+`BeginThread` 失败时返回 0（无效句柄）。后续 `WaitForThreadTerminate` 和 `CloseThread` 对无效句柄操作，行为平台相关。资源耗尽时（大量并行测试）可能触发。
+
+**建议修复**: 检查 `BeginThread` 返回值，失败时设置该测试结果为 tsError 并继续。
+
+**预估工作量**: 小型（~8 行）
+
+---
+
+#### R5-05: `ToBeInRange` 与 `CheckInRange` 行为不一致 ✅ 已修
+
+**文件**: `expect.pas:397-417` vs `check.pas:252-260`
+**严重度**: P1 — API 一致性
+
+`CheckInRange` 校验 `ALow > AHigh` 并报错：
+```pascal
+procedure CheckInRange(AValue, ALow, AHigh: Int64);
+begin
+  if ALow > AHigh then
+    InternalFail('CheckInRange: ALow (' + IntToStr(ALow) +
+      ') > AHigh (' + IntToStr(AHigh) + ')');
+  ...
+end;
+```
+
+`ToBeInRange` 无此校验，反转范围静默失败：
+```pascal
+function TExpectation.ToBeInRange(ALow, AHigh: Int64): IExpectation;
+begin
+  LMatch := (FIntValue >= ALow) and (FIntValue <= AHigh);
+  { ← ALow > AHigh 时 LMatch 永远为 False，报 "5 not in [10..1]" }
+  ...
+end;
+```
+
+同一功能的两种 API 给出不同行为，违反最小惊奇原则。
+
+**建议修复**: 在 `ToBeInRange` 开头加入与 `CheckInRange` 相同的 `ALow > AHigh` 校验。
+
+**预估工作量**: 极小（3 行）
+
+---
+
+#### R5-06: `ToNotBeNear` 创建临时 TExpectation 对象 ✅ 已修
+
+**文件**: `expect.pas:531-534`
+**严重度**: P1 — 性能/设计
+
+```pascal
+function TExpectation.ToNotBeNear(AExpected: Double;
+  AEpsilon: Double): IExpectation;
+begin
+  Result := Not_.ToBeNear(AExpected, AEpsilon);
+  { ← Not_ 创建新的 TExpectation 副本，只为翻转 FNegated }
+end;
+```
+
+`Not_` 分配一个全新的 `TExpectation` 对象（通过 `Create*`），仅为翻转 `FNegated` 标志。虽然 `TInterfacedObject` 的引用计数会自动回收，但每次 `ToNotBeNear` 调用都产生一次堆分配。
+
+**建议修复**: 直接翻转 `FNegated`，调用 `ToBeNear`，再翻转回来：
+```pascal
+function TExpectation.ToNotBeNear(...): IExpectation;
+begin
+  FNegated := not FNegated;
+  try
+    Result := ToBeNear(AExpected, AEpsilon);
+  finally
+    FNegated := not FNegated;
+  end;
+end;
+```
+
+**预估工作量**: 极小（5 行）
+
+---
+
+### P2 — 测试覆盖缺口 + 代码卫生（7 项）
+
+#### R5-07: Discovery 测试依赖 VMT 方法表顺序 ✅ 已修
+
+**文件**: `test_advanced/test_advanced.lpr:68-69`
+**严重度**: P2 — 脆弱测试
+
+```pascal
+CheckEqual('TestAlpha', LSuite.Tests[0].Name);
+CheckEqual('TestBeta', LSuite.Tests[1].Name);
+```
+
+断言测试发现结果的顺序与源码声明顺序一致。FPC 当前按声明顺序排放 VMT 方法表，但这是实现细节而非语言规范保证。未来 FPC 版本如果改变排序策略，此测试会误报失败。
+
+**建议**: 改为不依赖顺序的断言（如排序后比较，或用 `CheckTrue` 检查集合包含关系）。
+
+**预估工作量**: 极小（~5 行）
+
+---
+
+#### R5-08: `--filter` 功能零测试覆盖 ✅ 已修
+
+**文件**: 测试覆盖
+**严重度**: P2 — 测试覆盖缺失
+
+`ParseFilterFromArgs`、`SetTestFilter`、`MatchesFilter` 以及 `RunWithResult` 中的 filter 跳过逻辑没有任何测试。R5-01 的 bug 之所以长期存在，正是因为没有 filter 测试能暴露它。
+
+**建议**: 添加 filter 测试（至少覆盖：filter 匹配、filter 不匹配、空 filter、并行+filter）。
+
+**预估工作量**: 中等（~50 行）
+
+---
+
+#### R5-09: 空 filter 结果行为未测试 ✅ 已修
+
+**文件**: 测试覆盖
+**严重度**: P2 — 边界覆盖
+
+当 `--filter` 模式不匹配任何测试时，预期行为是什么？全部 skip？报错？当前代码会静默跳过所有测试，最终报告显示 "0 passed, 0 failed, N skipped"。此行为未被测试验证。
+
+**建议**: 添加 `TestFilterNoMatch` 测试。
+
+**预估工作量**: 极小（~15 行）
+
+---
+
+#### R5-10: `TMock.Create`（无 name）重载未测试 ❌ 误报
+
+**文件**: `test_mock/test_mock.lpr`
+**严重度**: P2 — ~~测试覆盖~~ 误报
+
+`TMock` 只有一个无参 `Create`，不存在带 name 的重载。现有测试已广泛使用 `TMock.Create`。
+
+---
+
+#### R5-11: `ToBeInRange` 反转范围未测试 ✅ 已修
+
+**文件**: `test_expect/test_expect.lpr`
+**严重度**: P2 — 边界覆盖
+
+无测试验证 `ExpectInt(5).ToBeInRange(10, 1)` 的行为（目前会给出误导性错误消息 "5 not in [10..1]" 而非 "invalid range"）。修复 R5-05 后需同步添加此测试。
+
+**建议**: 添加 `TestToBeInRangeInverted` 测试。
+
+**预估工作量**: 极小（~10 行）
+
+---
+
+#### R5-12: Facade 注释引用不存在的模块名 ✅ 已修
+
+**文件**: `nextpas.core.test.pas:27`
+**严重度**: P2 — 代码卫生
+
+```pascal
+{ ── Re-exported types from test.types ────────────────────────────── }
+```
+
+应为 `test.base`。不存在名为 `test.types` 的单元。
+
+**预估工作量**: 极小（1 行）
+
+---
+
+#### R5-13: deprecated `nextpas.core.testing.pas` 中 `GCurrentTest` 死代码 ✅ 已修
+
+**文件**: `nextpas.core.testing.pas:39, 106`
+**严重度**: P2 — 代码卫生
+
+```pascal
+var
+  GCurrentTest: string = '';     { line 39: 声明 }
+
+procedure TTestRunner.Run(const AName: string; AProc: TTestProc);
+begin
+  GCurrentTest := AName;         { line 106: 赋值 }
+  { ← 全文无任何读取 }
+end;
+```
+
+`GCurrentTest` 被赋值但从未读取。整个 `nextpas.core.testing` 单元已标记为 deprecated（line 1），此变量是旧 runner 遗留的死代码。
+
+**建议**: 删除 `GCurrentTest` 变量声明和赋值，或在 deprecated 单元清理时一并处理。
+
+**预估工作量**: 极小（2 行删除）
+
+---
+
+### R5 统计
+
+| 优先级 | 数量 | 状态 |
+|--------|------|------|
+| P0 | 2 | ✅ 全部已修 |
+| P1 | 4 | ✅ 全部已修 |
+| P2 | 7 | ✅ 6 已修 + 1 误报(R5-10) |
+| **合计** | **13** | **11 ✅ + 1 ❌ 误报 + 1 误报跳过** |
+
+---
+
+## 建议优先处理顺序（R5）
+
+### 第 1 批：P0 正确性修复
+1. **R5-01**: `--filter` 并行模式失效（~10 行）
+2. **R5-02**: 子测试 RetryCount 未初始化（2 行）
+
+### 第 2 批：P1 设计缺陷
+3. **R5-05**: `ToBeInRange` 反转范围校验（3 行）
+4. **R5-03**: `--filter=value` 语法支持（3 行）
+5. **R5-04**: `BeginThread` 返回值校验（~8 行）
+6. **R5-06**: `ToNotBeNear` 去临时分配（5 行）
+
+### 第 3 批：P2 测试覆盖 + 代码卫生
+7. **R5-08**: filter 测试覆盖（~50 行，含 R5-09）
+8. **R5-10 ~ R5-11**: 边界测试补全（~20 行）
+9. **R5-07**: discovery 测试顺序无关化（~5 行）
+10. **R5-12 ~ R5-13**: 注释/死代码清理（3 行）

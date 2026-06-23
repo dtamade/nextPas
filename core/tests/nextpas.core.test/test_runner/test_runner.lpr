@@ -15,6 +15,12 @@ var
   GTeardownCalled: Integer = 0;
   GBeforeEachCalled: Integer = 0;
   GAfterEachCalled: Integer = 0;
+  { R4-08: empty suite test variables }
+  LEmptySuite: TTestSuite;
+  LEmptyResult: TTestRunResult;
+  { R5-08: filter test variables }
+  LFilterSuite: TTestSuite;
+  LFilterResult: TTestRunResult;
 
 { ── Lifecycle tests ──────────────────────────────────────────────────────── }
 
@@ -179,24 +185,24 @@ begin
   WriteLn('  BeforeEach called:', GBeforeEachCalled);
   WriteLn('  AfterEach called: ', GAfterEachCalled);
 
-  if GSetupCalled < 1 then
+  if GSetupCalled <> 1 then
   begin
-    WriteLn(AnsiRed('FAIL: Setup not called enough'));
+    WriteLn(AnsiRed('FAIL: Setup not called exactly once, got ' + IntToStr(GSetupCalled)));
     Halt(1);
   end;
-  if GTeardownCalled < 1 then
+  if GTeardownCalled <> 1 then
   begin
-    WriteLn(AnsiRed('FAIL: Teardown not called enough'));
+    WriteLn(AnsiRed('FAIL: Teardown not called exactly once, got ' + IntToStr(GTeardownCalled)));
     Halt(1);
   end;
-  if GBeforeEachCalled < 4 then
+  if GBeforeEachCalled <> 4 then
   begin
-    WriteLn(AnsiRed('FAIL: BeforeEach not called for each test'));
+    WriteLn(AnsiRed('FAIL: BeforeEach not called exactly 4 times, got ' + IntToStr(GBeforeEachCalled)));
     Halt(1);
   end;
-  if GAfterEachCalled < 4 then
+  if GAfterEachCalled <> 4 then
   begin
-    WriteLn(AnsiRed('FAIL: AfterEach not called for each test'));
+    WriteLn(AnsiRed('FAIL: AfterEach not called exactly 4 times, got ' + IntToStr(GAfterEachCalled)));
     Halt(1);
   end;
 
@@ -583,6 +589,135 @@ begin
       Halt(1);
     end;
     WriteLn(AnsiGreen('  ✓ Timeout trigger verified'));
+  end;
+
+  { ── R5-08/R5-09: Test filter coverage ──────────────────────────────────────── }
+  begin
+    { Test 1: filter matches a specific test — only that test runs.
+      Filtered tests are invisible (not counted as pass/fail/skip). }
+    LFilterSuite := TTestSuite.Create('FilterMatch');
+    LFilterSuite.Test('aaa', @TestSimplePass);
+    LFilterSuite.Test('bbb', @TestSimplePass);
+    LFilterSuite.Test('ccc', @TestSimplePass);
+    SetTestFilter('bbb');
+    if not LFilterSuite.RunWithResult(LFilterResult) then
+    begin
+      WriteLn(AnsiRed('FAIL: filter match should pass'));
+      Halt(1);
+    end;
+    if LFilterResult.Passed <> 1 then
+    begin
+      WriteLn(AnsiRed('FAIL: filter match expected 1 passed, got '), LFilterResult.Passed);
+      Halt(1);
+    end;
+    if LFilterResult.Skipped <> 0 then
+    begin
+      WriteLn(AnsiRed('FAIL: filter match expected 0 skipped (filtered=invisible), got '), LFilterResult.Skipped);
+      Halt(1);
+    end;
+    SetTestFilter('');
+    WriteLn(AnsiGreen('  ✓ Filter matches specific test'));
+  end;
+
+  begin
+    { Test 2: filter matches nothing — all tests invisible, 0/0/0 }
+    LFilterSuite := TTestSuite.Create('FilterNone');
+    LFilterSuite.Test('aaa', @TestSimplePass);
+    LFilterSuite.Test('bbb', @TestSimplePass);
+    SetTestFilter('zzz_nonexistent');
+    if not LFilterSuite.RunWithResult(LFilterResult) then
+    begin
+      WriteLn(AnsiRed('FAIL: filter no-match should still return True'));
+      Halt(1);
+    end;
+    if LFilterResult.Passed <> 0 then
+    begin
+      WriteLn(AnsiRed('FAIL: filter no-match expected 0 passed, got '), LFilterResult.Passed);
+      Halt(1);
+    end;
+    if LFilterResult.Skipped <> 0 then
+    begin
+      WriteLn(AnsiRed('FAIL: filter no-match expected 0 skipped, got '), LFilterResult.Skipped);
+      Halt(1);
+    end;
+    SetTestFilter('');
+    WriteLn(AnsiGreen('  ✓ Filter matches nothing → all invisible'));
+  end;
+
+  begin
+    { Test 3: empty filter runs everything (no filtering) }
+    LFilterSuite := TTestSuite.Create('FilterEmpty');
+    LFilterSuite.Test('aaa', @TestSimplePass);
+    LFilterSuite.Test('bbb', @TestSimplePass);
+    SetTestFilter('');
+    if not LFilterSuite.RunWithResult(LFilterResult) then
+    begin
+      WriteLn(AnsiRed('FAIL: empty filter should pass'));
+      Halt(1);
+    end;
+    if LFilterResult.Passed <> 2 then
+    begin
+      WriteLn(AnsiRed('FAIL: empty filter expected 2 passed, got '), LFilterResult.Passed);
+      Halt(1);
+    end;
+    if LFilterResult.Skipped <> 0 then
+    begin
+      WriteLn(AnsiRed('FAIL: empty filter expected 0 skipped, got '), LFilterResult.Skipped);
+      Halt(1);
+    end;
+    WriteLn(AnsiGreen('  ✓ Empty filter runs everything'));
+  end;
+
+  begin
+    { Test 4: glob filter — asterisk wildcard }
+    LFilterSuite := TTestSuite.Create('FilterGlob');
+    LFilterSuite.Test('alpha', @TestSimplePass);
+    LFilterSuite.Test('beta',  @TestSimplePass);
+    LFilterSuite.Test('gamma', @TestSimplePass);
+    SetTestFilter('b*');
+    if not LFilterSuite.RunWithResult(LFilterResult) then
+    begin
+      WriteLn(AnsiRed('FAIL: glob filter should pass'));
+      Halt(1);
+    end;
+    if LFilterResult.Passed <> 1 then
+    begin
+      WriteLn(AnsiRed('FAIL: glob b* expected 1 passed, got '), LFilterResult.Passed);
+      Halt(1);
+    end;
+    if LFilterResult.Skipped <> 0 then
+    begin
+      WriteLn(AnsiRed('FAIL: glob b* expected 0 skipped, got '), LFilterResult.Skipped);
+      Halt(1);
+    end;
+    SetTestFilter('');
+    WriteLn(AnsiGreen('  ✓ Glob filter (b* matches beta)'));
+  end;
+
+  { ── R4-08: Empty suite run ───────────────────────────────────────────────── }
+  begin
+    LEmptySuite := TTestSuite.Create('Empty');
+    if not LEmptySuite.RunWithResult(LEmptyResult) then
+    begin
+      WriteLn(AnsiRed('FAIL: Empty suite should return True (AllPassed)'));
+      Halt(1);
+    end;
+    if not LEmptyResult.AllPassed then
+    begin
+      WriteLn(AnsiRed('FAIL: Empty suite AllPassed should be True'));
+      Halt(1);
+    end;
+    if LEmptyResult.Passed <> 0 then
+    begin
+      WriteLn(AnsiRed('FAIL: Empty suite Passed should be 0'));
+      Halt(1);
+    end;
+    if LEmptyResult.Skipped <> 0 then
+    begin
+      WriteLn(AnsiRed('FAIL: Empty suite Skipped should be 0'));
+      Halt(1);
+    end;
+    WriteLn(AnsiGreen('  ✓ Empty suite run'));
   end;
 
   WriteLn;

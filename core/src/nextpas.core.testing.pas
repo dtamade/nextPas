@@ -35,9 +35,6 @@ procedure Fail(const AMessage: string);
 
 implementation
 
-var
-  GCurrentTest: string = '';
-
 procedure Check(const ACondition: Boolean; const AMessage: string);
 begin
   if not ACondition then
@@ -103,7 +100,6 @@ end;
 procedure TTestRunner.Run(const AName: string; AProc: TTestProc);
 begin
   Inc(FTotal);
-  GCurrentTest := AName;
   try
     AProc;
     Inc(FPassed);

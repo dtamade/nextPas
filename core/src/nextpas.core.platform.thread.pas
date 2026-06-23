@@ -189,7 +189,12 @@ begin
   end;
 end;
 {$ELSE}
-{ macOS/Android/FreeBSD: fall back to blocking join (no timed join available). }
+{ macOS/Android/FreeBSD: fall back to blocking join (no timed join available).
+  KNOWN LIMITATION: ATimeoutMs is ignored — this blocks until the thread exits.
+  Impact on RunTestWithTimeout: the poll loop will detect the timeout and call
+  this function, which then blocks forever. A hung test will hang the process.
+  Workaround: run timeout-sensitive tests only on Linux/Windows, or implement
+  a subprocess-based timeout (heavier but portable). }
 function platform_thread_timedjoin(const AHandle: TPlatformThreadHandle;
   ATimeoutMs: Int64; out ARetVal: Pointer): Int32;
 begin

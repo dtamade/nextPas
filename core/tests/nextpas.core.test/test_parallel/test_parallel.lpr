@@ -89,8 +89,9 @@ end;
 
 procedure ParallelFlakyThenPass;
 begin
-  InterLockedIncrement(GParallelRetryCount);
-  if GParallelRetryCount < 3 then
+  { R4-05: Use InterLockedIncrement return value (atomic read) instead of
+    non-atomic re-read of GParallelRetryCount — safe on ARM weak memory. }
+  if InterLockedIncrement(GParallelRetryCount) < 3 then
     CheckTrue(False, 'intentional flaky');
 end;
 
@@ -123,16 +124,15 @@ begin
   LSuite := TTestSuite.Create('RetryParallel');
   LSuite.Test('flaky', @ParallelFlakyThenPass, 5);
   LSuite.Test('stable', @TestParallelPassA);
-  { Note: RunParallel does not support retries (each test runs once in its
-    thread). Use serial Run to exercise the retry mechanism. }
-  LSuite.Run;
+  { R4-04: RunParallel now supports retries }
+  LSuite.RunParallel(nil);
   { flaky should eventually pass on 3rd try }
   if LSuite.LastFail > 0 then
   begin
     WriteLn(AnsiRed('FAIL: flaky test should have passed after retries'));
     Halt(1);
   end;
-  WriteLn(AnsiGreen('  ✓ Retry (serial within parallel suite)'));
+  WriteLn(AnsiGreen('  ✓ Retry in parallel'));
 end;
 
 procedure TestSubtestSkipInParallel;
@@ -171,8 +171,8 @@ begin
   LSuite.Test('flaky-closure',
     procedure
     begin
-      InterLockedIncrement(GClosureRetryCount);
-      if GClosureRetryCount < 3 then
+      { R4-05: atomic read via return value }
+      if InterLockedIncrement(GClosureRetryCount) < 3 then
         Check(False, 'not yet');
     end,
     5);

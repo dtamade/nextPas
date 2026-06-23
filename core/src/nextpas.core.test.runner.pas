@@ -38,8 +38,9 @@ type
     AfterEach       : TTestProc;
     AfterEachClosure : TTestClosure;
     { Heap-allocated stubs from DiscoverTests — disposed by CleanupTableAllocations.
-      Raw Pointers because discovery.pas uses PMethodStub which runner.pas cannot see. }
-    StubAllocations: specialize TArray<Pointer>;
+      Stores GStubRegistry indices for O(1) cleanup (R4-10).
+      Raw pointers because discovery.pas uses PMethodStub which runner.pas cannot see. }
+    StubAllocations: specialize TArray<Integer>;
     { Cached run results — set by Run/RunParallel }
     LastRunPassed: Boolean;
     HasRun       : Boolean;
@@ -80,6 +81,12 @@ type
     function  AllPassed: Boolean;
     { Free heap-allocated table test pointers (TableCase, TableProc) }
     procedure CleanupTableAllocations;
+    { Shared helpers for RunWithResult/RunParallelWithResult (R4-03) }
+    function  RunSetup(out ASkipCount: Integer;
+                out AErrorMsg: string): Boolean;
+    procedure RunTeardown;
+    procedure FinalizeResults(var AResult: TTestRunResult;
+                APass, AFail, ASkip: Integer);
   end;
 
 { ── Test Runner (multi-suite) ─────────────────────────────────────────────── }
@@ -129,8 +136,13 @@ var
 begin
   Result := '';
   for K := 1 to ParamCount do
+  begin
+    { Support both --filter value and --filter=value syntax }
+    if Copy(ParamStr(K), 1, 9) = '--filter=' then
+      Exit(Copy(ParamStr(K), 10, MaxInt));
     if (ParamStr(K) = '--filter') and (K < ParamCount) then
       Exit(ParamStr(K + 1));
+  end;
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }
@@ -159,12 +171,12 @@ end;
 
 procedure RegisterStub(var ASuite: TTestSuite; APtr: Pointer);
 begin
-  { Per-suite tracking — disposed by CleanupTableAllocations when suite runs }
-  SetLength(ASuite.StubAllocations, Length(ASuite.StubAllocations) + 1);
-  ASuite.StubAllocations[High(ASuite.StubAllocations)] := APtr;
   { Global safety-net — disposed in finalization for suites that never run }
   SetLength(GStubRegistry, Length(GStubRegistry) + 1);
   GStubRegistry[High(GStubRegistry)] := APtr;
+  { Per-suite tracking — stores GStubRegistry index for O(1) cleanup (R4-10) }
+  SetLength(ASuite.StubAllocations, Length(ASuite.StubAllocations) + 1);
+  ASuite.StubAllocations[High(ASuite.StubAllocations)] := High(GStubRegistry);
 end;
 
 procedure TTestSuite.Test(const AName: string; AProc: TTestProc);
@@ -370,40 +382,31 @@ begin
   WriteLn(AnsiBold('> ') + AnsiCyan(Name) +
     AnsiDim(' (' + IntToStr(Length(Tests)) + ' tests)'));
 
-  { Suite-level setup }
-  if Assigned(Setup) or Assigned(SetupClosure) then
+  { Suite-level setup (uses shared helper) }
+  if not RunSetup(LSkip, LLastFailMsg) then
   begin
-    try
-      if Assigned(Setup) then Setup else SetupClosure();
-    except
-      on E: Exception do
-      begin
-        WriteLn('  ', AnsiRed('X setup failed: ') + E.Message);
-        { All tests skipped }
-        for I := 0 to High(Tests) do
-        begin
-          Inc(LSkip);
-          LTestResult.Name     := Tests[I].Name;
-          LTestResult.Status   := tsSkipped;
-          LTestResult.Message  := 'setup failed: ' + E.Message;
-          LTestResult.Duration := 0;
-          SetLength(AResult.Results, Length(AResult.Results) + 1);
-          AResult.Results[High(AResult.Results)] := LTestResult;
-          WriteLn('    ', StatusDot(tsSkipped), ' ', AnsiDim(Tests[I].Name));
-        end;
-        AResult.Failed    := 1;
-        AResult.Skipped   := LSkip;
-        AResult.AllPassed := False;
-        HasRun        := True;
-        LastRunPassed := False;
-        LastPass      := 0;
-        LastFail      := 1;
-        LastSkip      := LSkip;
-        Result         := False;
-        WriteLn(AnsiDim('  ') + IntToStr(LSkip) + ' skipped (setup failure)');
-        Exit;
-      end;
+    { All tests skipped — populate results with skipped entries }
+    for I := 0 to High(Tests) do
+    begin
+      LTestResult.Name     := Tests[I].Name;
+      LTestResult.Status   := tsSkipped;
+      LTestResult.Message  := 'setup failed: ' + LLastFailMsg;
+      LTestResult.Duration := 0;
+      SetLength(AResult.Results, Length(AResult.Results) + 1);
+      AResult.Results[High(AResult.Results)] := LTestResult;
+      WriteLn('    ', StatusDot(tsSkipped), ' ', AnsiDim(Tests[I].Name));
     end;
+    AResult.Failed    := 1;
+    AResult.Skipped   := LSkip;
+    AResult.AllPassed := False;
+    HasRun        := True;
+    LastRunPassed := False;
+    LastPass      := 0;
+    LastFail      := 1;
+    LastSkip      := LSkip;
+    Result         := False;
+    WriteLn(AnsiDim('  ') + IntToStr(LSkip) + ' skipped (setup failure)');
+    Exit;
   end;
 
   for I := 0 to High(Tests) do
@@ -650,15 +653,8 @@ begin
   end;
 
   { Suite-level teardown }
-  if Assigned(Teardown) or Assigned(TeardownClosure) then
-  begin
-    try
-      if Assigned(Teardown) then Teardown else TeardownClosure();
-    except
-      on E: Exception do
-        WriteLn('  ', AnsiYellow('WARNING teardown error: ') + E.Message);
-    end;
-  end;
+  { Suite-level teardown (uses shared helper) }
+  RunTeardown;
 
   { Merge subtest-level results from appender }
   for J := 0 to High(LAppender.Results) do
@@ -671,24 +667,8 @@ begin
     LAppender.Free;
   end;
 
-  { Free heap-allocated table test pointers }
-  CleanupTableAllocations;
-
-  AResult.Passed    := LPass;
-  AResult.Failed    := LFail;
-  AResult.Skipped   := LSkip;
-  AResult.AllPassed := LFail = 0;
-
-  HasRun        := True;
-  LastRunPassed := AResult.AllPassed;
-  LastPass      := LPass;
-  LastFail      := LFail;
-  LastSkip      := LSkip;
-  Result         := LastRunPassed;
-  WriteLn(AnsiDim('  ') +
-    IntToStr(LPass) + ' passed, ' +
-    IntToStr(LFail) + ' failed, ' +
-    IntToStr(LSkip) + ' skipped');
+  FinalizeResults(AResult, LPass, LFail, LSkip);
+  Result := LastRunPassed;
 end;
 
 function TTestSuite.RunParallel(APool: IThreadPool): Boolean;
@@ -710,7 +690,68 @@ end;
 
 { TODO: RunWithResult and RunParallelWithResult share setup-failure, teardown,
   result-counting, and HasRun/LastRunPassed-update logic.  Extract shared
-  helpers (e.g. RunSetup, RunTeardown, FinalizeResults) to reduce duplication. }
+  helpers (e.g. RunSetup, RunTeardown, FinalizeResults) to reduce duplication.
+  R4-03: setup/teardown/finalize helpers now extracted below. }
+
+function TTestSuite.RunSetup(out ASkipCount: Integer;
+  out AErrorMsg: string): Boolean;
+{ Runs suite-level setup. Returns True on success, False on exception.
+  On failure, prints the error and sets ASkipCount/AErrorMsg for the caller. }
+begin
+  Result := True;
+  ASkipCount := 0;
+  AErrorMsg := '';
+  if not (Assigned(Setup) or Assigned(SetupClosure)) then
+    Exit;
+  try
+    if Assigned(Setup) then Setup else SetupClosure();
+  except
+    on E: Exception do
+    begin
+      WriteLn('  ', AnsiRed('X setup failed: ') + E.Message);
+      ASkipCount := Length(Tests);
+      AErrorMsg := E.Message;
+      Result := False;
+    end;
+  end;
+end;
+
+procedure TTestSuite.RunTeardown;
+begin
+  if not (Assigned(Teardown) or Assigned(TeardownClosure)) then
+    Exit;
+  try
+    if Assigned(Teardown) then Teardown else TeardownClosure();
+  except
+    on E: Exception do
+      WriteLn('  ', AnsiYellow('WARNING teardown error: ') + E.Message);
+  end;
+  { R4-12: Nil-out after execution to prevent double-free if the same
+    suite is run twice on the same runner (e.g. fixture teardown that frees
+    an object). Without this, the second run would call the closure again
+    on an already-freed object. }
+  Teardown := nil;
+  TeardownClosure := nil;
+end;
+
+procedure TTestSuite.FinalizeResults(
+  var AResult: TTestRunResult; APass, AFail, ASkip: Integer);
+begin
+  CleanupTableAllocations;
+  AResult.Passed    := APass;
+  AResult.Failed    := AFail;
+  AResult.Skipped   := ASkip;
+  AResult.AllPassed := AFail = 0;
+  HasRun        := True;
+  LastRunPassed := AResult.AllPassed;
+  LastPass      := APass;
+  LastFail      := AFail;
+  LastSkip      := ASkip;
+  WriteLn(AnsiDim('  ') +
+    IntToStr(APass) + ' passed, ' +
+    IntToStr(AFail) + ' failed, ' +
+    IntToStr(ASkip) + ' skipped');
+end;
 
 function TTestSuite.RunParallelWithResult(APool: IThreadPool;
   out AResult: TTestRunResult): Boolean;
@@ -719,6 +760,7 @@ var
   LPass, LFail, LSkip: Integer;
   LMtx: IMutex;
   I: Integer;
+  LErrorMsg: string;
   LRecs: array of TThreadRec;
   LThreads: array of TThreadID;
   LResults: array of TTestResult;
@@ -734,33 +776,22 @@ begin
   WriteLn(AnsiBold('> ') + AnsiCyan(Name) +
     AnsiDim(' (' + IntToStr(LTotal) + ' tests, parallel)'));
 
-  { Suite-level setup (serial) }
-  if Assigned(Setup) or Assigned(SetupClosure) then
+  { Suite-level setup (serial, uses shared helper) }
+  if not RunSetup(LSkip, LErrorMsg) then
   begin
-    try
-      if Assigned(Setup) then Setup else SetupClosure();
-    except
-      on E: Exception do
-      begin
-        WriteLn('  ', AnsiRed('X setup failed: ') + E.Message);
-        for I := 0 to High(Tests) do
-        begin
-          Inc(LSkip);
-          WriteLn('    ', StatusDot(tsSkipped), ' ', AnsiDim(Tests[I].Name));
-        end;
-        AResult.Failed    := 1;
-        AResult.Skipped   := LSkip;
-        AResult.AllPassed := False;
-        HasRun        := True;
-        LastRunPassed := False;
-        LastPass      := 0;
-        LastFail      := 1;
-        LastSkip      := LSkip;
-        Result         := False;
-        WriteLn(AnsiDim('  ') + IntToStr(LSkip) + ' skipped (setup failure)');
-        Exit;
-      end;
-    end;
+    for I := 0 to High(Tests) do
+      WriteLn('    ', StatusDot(tsSkipped), ' ', AnsiDim(Tests[I].Name));
+    AResult.Failed    := 1;
+    AResult.Skipped   := LSkip;
+    AResult.AllPassed := False;
+    HasRun        := True;
+    LastRunPassed := False;
+    LastPass      := 0;
+    LastFail      := 1;
+    LastSkip      := LSkip;
+    Result         := False;
+    WriteLn(AnsiDim('  ') + IntToStr(LSkip) + ' skipped (setup failure)');
+    Exit;
   end;
 
   SetLength(LThreads, LTotal);
@@ -770,6 +801,18 @@ begin
   { Pre-fill records — each thread gets its own result slot }
   for I := 0 to High(Tests) do
   begin
+    { Test filter — skip non-matching tests silently (same as serial mode:
+      filtered tests are invisible, not counted as pass/fail/skip) }
+    if (GetTestFilter <> '') and not MatchesFilter(Tests[I].Name) then
+    begin
+      LResults[I].Name     := Tests[I].Name;
+      LResults[I].Status   := tsSkipped;
+      LResults[I].Message  := 'filtered out';
+      LResults[I].Duration := 0;
+      LThreads[I]          := 0;  { no thread for this slot }
+      Continue;
+    end;
+
     LRecs[I].Entry     := Tests[I];
     LRecs[I].SuiteName := Name;
     LRecs[I].Mtx       := LMtx;
@@ -790,49 +833,43 @@ begin
     Previously platform_thread_create (direct pthread_create) was used,
     which bypasses FPC init and caused intermittent SIGSEGV on thread exit. }
   for I := 0 to High(Tests) do
-    LThreads[I] := BeginThread(@ParallelThreadEntry, @LRecs[I]);
-
-  for I := 0 to High(Tests) do
-    WaitForThreadTerminate(LThreads[I], 0);
-
-  { Close thread handles — required on Windows to avoid kernel handle leak }
-  for I := 0 to High(Tests) do
-    CloseThread(LThreads[I]);
-
-  { Suite-level teardown }
-  if Assigned(Teardown) or Assigned(TeardownClosure) then
   begin
-    try
-      if Assigned(Teardown) then Teardown else TeardownClosure();
-    except
-      on E: Exception do
-        WriteLn('  ', AnsiYellow('WARNING teardown error: ') + E.Message);
+    { Skip filtered-out tests — LRecs[I] is uninitialized for them }
+    if (GetTestFilter <> '') and not MatchesFilter(Tests[I].Name) then
+    begin
+      LThreads[I] := 0;
+      Continue;
+    end;
+    LThreads[I] := BeginThread(@ParallelThreadEntry, @LRecs[I]);
+    if LThreads[I] = 0 then
+    begin
+      LResults[I].Name     := Tests[I].Name;
+      LResults[I].Status   := tsError;
+      LResults[I].Message  := 'BeginThread failed';
+      LResults[I].Duration := 0;
+      Inc(LFail);
     end;
   end;
 
-  { Free heap-allocated table test pointers }
-  CleanupTableAllocations;
+  for I := 0 to High(Tests) do
+    if LThreads[I] <> 0 then
+      WaitForThreadTerminate(LThreads[I], 0);
+
+  { Close thread handles — required on Windows to avoid kernel handle leak }
+  for I := 0 to High(Tests) do
+    if LThreads[I] <> 0 then
+      CloseThread(LThreads[I]);
+
+  { Suite-level teardown (uses shared helper) }
+  RunTeardown;
 
   { Collect results from all threads }
   SetLength(AResult.Results, LTotal);
   for I := 0 to High(Tests) do
     AResult.Results[I] := LResults[I];
 
-  AResult.Passed    := LPass;
-  AResult.Failed    := LFail;
-  AResult.Skipped   := LSkip;
-  AResult.AllPassed := LFail = 0;
-
-  HasRun        := True;
-  LastRunPassed := AResult.AllPassed;
-  LastPass      := LPass;
-  LastFail      := LFail;
-  LastSkip      := LSkip;
-  Result         := LastRunPassed;
-  WriteLn(AnsiDim('  ') +
-    IntToStr(LPass) + ' passed, ' +
-    IntToStr(LFail) + ' failed, ' +
-    IntToStr(LSkip) + ' skipped');
+  FinalizeResults(AResult, LPass, LFail, LSkip);
+  Result := LastRunPassed;
 end;
 
 procedure TTestSuite.Summary;
@@ -890,13 +927,13 @@ begin
       end;
     end;
   end;
-  { Dispose heap-allocated method stubs from DiscoverTests }
+  { Dispose heap-allocated method stubs from DiscoverTests.
+    R4-10: StubAllocations stores GStubRegistry indices for O(1) cleanup. }
   for I := 0 to High(StubAllocations) do
-    if StubAllocations[I] <> nil then
+    if GStubRegistry[StubAllocations[I]] <> nil then
     begin
-      FreeMem(StubAllocations[I]);
-      { Nil-out in global registry so finalization won't double-free }
-      NilPointerInArray(GStubRegistry, StubAllocations[I]);
+      FreeMem(GStubRegistry[StubAllocations[I]]);
+      GStubRegistry[StubAllocations[I]] := nil;
     end;
   StubAllocations := nil;
 end;

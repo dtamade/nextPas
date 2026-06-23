@@ -400,6 +400,9 @@ var
 begin
   if FKind <> ekInt64 then
     InternalFail('ToBeInRange called on non-integer expectation');
+  if ALow > AHigh then
+    InternalFail('ToBeInRange: ALow (' + IntToStr(ALow) +
+      ') > AHigh (' + IntToStr(AHigh) + ')');
   LMatch := (FIntValue >= ALow) and (FIntValue <= AHigh);
   if FNegated then
   begin
@@ -531,7 +534,15 @@ end;
 function TExpectation.ToNotBeNear(AExpected: Double;
   AEpsilon: Double): IExpectation;
 begin
-  Result := Not_.ToBeNear(AExpected, AEpsilon);
+  { Flip negated flag in-place to avoid allocating a temporary TExpectation
+    copy via Not_.  The try/finally ensures the flag is restored even if
+    ToBeNear raises. }
+  FNegated := not FNegated;
+  try
+    Result := ToBeNear(AExpected, AEpsilon);
+  finally
+    FNegated := not FNegated;
+  end;
 end;
 
 { ── Expect factories ──────────────────────────────────────────────────────── }

@@ -37,6 +37,10 @@ procedure CheckLength(AExpected, AActual: NativeInt);
 procedure CheckRaises(AExceptionClass: ExceptClass; AProc: TTestProc;
   const AMessage: string = '');
 procedure CheckNoRaise(AProc: TTestProc; const AMessage: string = '');
+{ Check that AActual is within AEpsilon of AExpected (absolute difference).
+  R4-07: Uses absolute epsilon — for large values (e.g. 1e15), the default
+  1e-10 is too tight. Callers should pass a larger AEpsilon or use a
+  relative-epsilon variant for magnitude-spanning comparisons. }
 procedure CheckNear(AExpected, AActual: Double;
   AEpsilon: Double = 1e-10; const AMessage: string = '');
 procedure CheckNotNear(AExpected, AActual: Double;

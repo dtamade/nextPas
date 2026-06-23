@@ -171,6 +171,18 @@ begin
   end;
 end;
 
+procedure TestExpectRangeInverted;
+begin
+  { R5-11: ToBeInRange must validate ALow > AHigh (consistent with CheckInRange) }
+  try
+    ExpectInt(5).ToBeInRange(10, 1);
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(Pos('ALow', E.Message) > 0, 'inverted range should mention ALow');
+  end;
+end;
+
 procedure TestExpectRaiseFail;
 begin
   try
@@ -818,6 +830,7 @@ begin
   LSuite.Test('Fail: ToBeNil on ptr',      @TestExpectPtrFailToBeNil);
   LSuite.Test('Fail: ToContain miss',      @TestExpectContainFail);
   LSuite.Test('Fail: ToBeInRange OOB',     @TestExpectRangeFail);
+  LSuite.Test('Fail: ToBeInRange inverted', @TestExpectRangeInverted);
   LSuite.Test('Fail: ToRaise no raise',    @TestExpectRaiseFail);
   LSuite.Test('Fail: ToStartWith wrong',   @TestFailToStartWith);
   LSuite.Test('Fail: ToEndWith wrong',     @TestFailToEndWith);

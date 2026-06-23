@@ -24,7 +24,7 @@ uses
   nextpas.core.test.discovery,
   nextpas.core.test.mock;
 
-{ ── Re-exported types from test.types ─────────────────────────────────────── }
+{ ── Re-exported types from test.base ─────────────────────────────────────── }
 
 type
   ExceptClass = nextpas.core.test.base.ExceptClass;
