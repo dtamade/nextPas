@@ -170,6 +170,9 @@ end;
 function ExtractFileDir(const AFileName: string): string;
 begin
   Result := ExtractFilePath(AFileName);
+  { FPC ExtractFileDir removes trailing separator, ExtractFilePath keeps it }
+  if (Result <> '') and (Result[Length(Result)] = '/') then
+    SetLength(Result, Length(Result) - 1);
 end;
 
 function ExtractFileName(const AFileName: string): string;
