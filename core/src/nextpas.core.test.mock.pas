@@ -42,11 +42,15 @@ function MockDouble(AValue: Double): TMockValue;
 { ── Call Record ───────────────────────────────────────────────────────────── }
 
 type
+  TMockValues = specialize TArray<TMockValue>;
+
   TMockCall = record
-    MethodName : string;
-    Args       : specialize TArray<string>;
-    HasResult  : Boolean;
-    ResultValue: string;
+    MethodName      : string;
+    Args            : specialize TArray<string>;
+    TypedArgs       : TMockValues;
+    HasResult       : Boolean;
+    ResultValue     : string;
+    TypedReturnValue: TMockValue;
   end;
 
   TMockCalls = specialize TArray<TMockCall>;
@@ -151,39 +155,40 @@ uses
 
 { ── TMockValue helpers ─────────────────────────────────────────────────────── }
 
-function MockStr(const AValue: string): TMockValue;
+function MockUnsetValue: TMockValue;
 begin
-  Result.Kind    := mvString;
-  Result.StrVal  := AValue;
+  Result.Kind    := mvUnset;
+  Result.StrVal  := '';
   Result.IntVal  := 0;
   Result.BoolVal := False;
   Result.DblVal  := 0.0;
+end;
+
+function MockStr(const AValue: string): TMockValue;
+begin
+  Result         := MockUnsetValue;
+  Result.Kind    := mvString;
+  Result.StrVal  := AValue;
 end;
 
 function MockInt(AValue: Int64): TMockValue;
 begin
+  Result         := MockUnsetValue;
   Result.Kind    := mvInt64;
-  Result.StrVal  := '';
   Result.IntVal  := AValue;
-  Result.BoolVal := False;
-  Result.DblVal  := 0.0;
 end;
 
 function MockBool(AValue: Boolean): TMockValue;
 begin
+  Result         := MockUnsetValue;
   Result.Kind    := mvBool;
-  Result.StrVal  := '';
-  Result.IntVal  := 0;
   Result.BoolVal := AValue;
-  Result.DblVal  := 0.0;
 end;
 
 function MockDouble(AValue: Double): TMockValue;
 begin
+  Result         := MockUnsetValue;
   Result.Kind    := mvDouble;
-  Result.StrVal  := '';
-  Result.IntVal  := 0;
-  Result.BoolVal := False;
   Result.DblVal  := AValue;
 end;
 
@@ -212,9 +217,14 @@ begin
   LCall.MethodName := AMethodName;
   LCall.HasResult  := False;
   LCall.ResultValue := '';
+  LCall.TypedReturnValue := MockUnsetValue;
   SetLength(LCall.Args, Length(AArgs));
+  SetLength(LCall.TypedArgs, Length(AArgs));
   for I := 0 to High(AArgs) do
+  begin
     LCall.Args[I] := AArgs[I];
+    LCall.TypedArgs[I] := MockStr(AArgs[I]);
+  end;
 
   SetLength(FCalls, Length(FCalls) + 1);
   FCalls[High(FCalls)] := LCall;
@@ -248,10 +258,12 @@ begin
     end;
   end;
   { No existing setup found — append new slot }
-  LSetup.MethodName  := AMethodName;
-  LSetup.ResultValue := AValue;
-  LSetup.HasResult   := True;
-  LSetup.Args        := nil;
+  LSetup.MethodName       := AMethodName;
+  LSetup.ResultValue      := AValue;
+  LSetup.HasResult        := True;
+  LSetup.Args             := nil;
+  LSetup.TypedArgs        := nil;
+  LSetup.TypedReturnValue := MockUnsetValue;
   SetLength(FSetups, Length(FSetups) + 1);
   FSetups[High(FSetups)] := LSetup;
 end;

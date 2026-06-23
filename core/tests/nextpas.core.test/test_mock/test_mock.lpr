@@ -429,6 +429,25 @@ begin
   end;
 end;
 
+procedure TestStateCallsTypedArgsMirrorStrings;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.RecordCall('Mirror', ['left', 'right']);
+    CheckEqual(2, Length(LM.State.Calls[0].TypedArgs));
+    CheckTrue(LM.State.Calls[0].TypedArgs[0].Kind = mvString,
+      'first typed arg kind');
+    CheckEqual('left', LM.State.Calls[0].TypedArgs[0].StrVal);
+    CheckTrue(LM.State.Calls[0].TypedArgs[1].Kind = mvString,
+      'second typed arg kind');
+    CheckEqual('right', LM.State.Calls[0].TypedArgs[1].StrVal);
+  finally
+    LM.Free;
+  end;
+end;
+
 { R6-46: Verify expects 1 but called 2 times → should fail }
 
 procedure TestVerifyCalledExactlyOverCall;
@@ -520,6 +539,8 @@ begin
   Suite.Test('TestGetReturnUnconfigured', @TestGetReturnUnconfigured);
   Suite.Test('TestResetCallsPreservesSetup', @TestResetCallsPreservesSetup);
   Suite.Test('TestStateCallsDirectAccess', @TestStateCallsDirectAccess);
+  Suite.Test('TestStateCallsTypedArgsMirrorStrings',
+    @TestStateCallsTypedArgsMirrorStrings);
   Suite.Test('TestGetReturnIntNonNumeric', @TestGetReturnIntNonNumeric);
 
   { R6-46: Verify over-call }
