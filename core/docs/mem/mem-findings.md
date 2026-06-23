@@ -148,13 +148,22 @@
 
 ---
 
-### A-14 ⚠️ `mutex` / `rwlock` 仍是很薄的包装层
+### A-14 [FIXED] `mutex` / `rwlock` 的定位已收口为 mem 兼容包装
 
 **P3 | 文件：`core/src/nextpas.core.mem.mutex.pas`, `core/src/nextpas.core.mem.rwlock.pas`**
 
-这两个单元仍基本只转发到 `platform.sync`。其中 `mutex` 有基础测试，但 `rwlock` 仍缺直接 focused gate；整体上它们仍增加了一层额外 public surface。
+这两个单元仍基本只转发到 `platform.sync`，但当前文档定位已经明确：
 
-**建议**：文档明确这是 mem 层兼容包装，而不是新并发原语层。
+- 它们是 mem-local compatibility wrapper
+- 真实宿主锁语义继续归 `platform.sync`
+- 这不是新的并发原语层
+
+同时旧描述里的 “`rwlock` 缺直接 focused gate” 也不再成立：
+
+- `test_concurrent_wrappers` 已覆盖 rwlock lifecycle
+- `test_contracts` 已覆盖 source-contract truth
+
+因此这条现在关闭；剩余只是有意保留的一层兼容 public surface，而不是未解释或未验证的设计债。
 
 ---
 

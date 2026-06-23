@@ -25,6 +25,11 @@
 
 这里放的是基础类型、对齐 helper、错误类型，以及 `IAllocator` 这种更稳定的底层 contract。
 
+`nextpas.core.mem.mutex` / `nextpas.core.mem.rwlock` 也继续留在这里，但它们的定位是
+mem-local compatibility wrapper：给 allocator / arena / pool 这类 mem consumer 一个稳定的
+lock surface，同时把真实宿主原语继续收敛在 `platform.sync`。它们不是新的并发原语层，也不负责
+定义 monitor、semaphore、channel 或 scheduler 语义。
+
 ### L1：arena family
 
 - `nextpas.core.mem.arena.base`
