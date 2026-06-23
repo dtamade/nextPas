@@ -1377,7 +1377,7 @@ end;
 
 | ID | 问题 | 状态 | 说明 |
 |----|------|------|------|
-| R6-62 | test_runner WriteLn('PASS') 模式 | 🔲 | 新测试用正确模式，旧测试未重构 |
+| R6-62 | test_runner WriteLn('PASS') 模式 | ✅ | 自举测试成功输出统一为 OK: test_name |
 | R6-63 | test_runner LResult 变量复用 | 🔲 | 未实施（大重构） |
 | R6-64 | test_lifecycle 直接访问 FResults | 🔲 | 未实施（大重构） |
 | R6-65 | test_output ANSI 状态未恢复 | ✅ | try-finally 包裹 |

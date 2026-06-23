@@ -132,7 +132,7 @@ begin
     WriteLn(AnsiRed('FAIL: expected 0 failed, got '), LResult.Failed);
     Halt(1);
   end;
-  WriteLn(AnsiGreen('  ✓ BeforeEach Skip'));
+  WriteLn(AnsiGreen('OK: BeforeEach Skip'));
 end;
 
 { ── Main ──────────────────────────────────────────────────────────────────── }
@@ -256,7 +256,7 @@ begin
     WriteLn(AnsiRed('FAIL: Setup failure should count as failure'));
     Halt(1);
   end;
-  WriteLn(AnsiGreen('  ✓ Setup failure path'));
+  WriteLn(AnsiGreen('OK: Setup failure path'));
 
   { Test: BeforeEach failure → test marked error }
   LBeforeEachCounter := 0;
@@ -285,7 +285,7 @@ begin
     WriteLn(AnsiRed('FAIL: At least 1 failure expected'));
     Halt(1);
   end;
-  WriteLn(AnsiGreen('  ✓ BeforeEach failure path'));
+  WriteLn(AnsiGreen('OK: BeforeEach failure path'));
 
   { Test: Teardown failure → warning output, test results preserved }
   LFailSuite3 := TTestSuite.Create('Teardown Failure');
@@ -300,7 +300,7 @@ begin
     WriteLn(AnsiRed('FAIL: Teardown failure should not fail tests'));
     Halt(1);
   end;
-  WriteLn(AnsiGreen('  ✓ Teardown failure path'));
+  WriteLn(AnsiGreen('OK: Teardown failure path'));
 
   { ── B5.5/B5.6/B5.9: Runner feature tests ────────────────────────────── }
 
@@ -322,7 +322,7 @@ begin
     WriteLn(AnsiRed('FAIL: Expected 2 passes, got '), LRunNestedR.TotalPass);
     Halt(1);
   end;
-  WriteLn(AnsiGreen('  ✓ RunAll aggregation'));
+  WriteLn(AnsiGreen('OK: RunAll aggregation'));
 
   { Test: AllPassed caching — second call should not re-run }
   LRunCount := 0;
@@ -343,14 +343,14 @@ begin
     WriteLn(AnsiRed('FAIL: AllPassed should not re-run (count='), LRunCount, ')');
     Halt(1);
   end;
-  WriteLn(AnsiGreen('  ✓ AllPassed caching'));
+  WriteLn(AnsiGreen('OK: AllPassed caching'));
 
   { Test: Summary smoke }
   LSummarySuite := TTestSuite.Create('Summary Smoke');
   LSummarySuite.Test('pass', procedure begin CheckTrue(True); end);
   LSummarySuite.Run;
   LSummarySuite.Summary; { should not raise }
-  WriteLn(AnsiGreen('  ✓ Summary smoke'));
+  WriteLn(AnsiGreen('OK: Summary smoke'));
 
   { Test: Runner Summary }
   LSumSuite3 := TTestSuite.Create('Summary Suite');
@@ -370,7 +370,7 @@ begin
     WriteLn(AnsiRed('FAIL: Expected 1 skip, got '), LSumRunner.TotalSkip);
     Halt(1);
   end;
-  WriteLn(AnsiGreen('  ✓ Runner Summary'));
+  WriteLn(AnsiGreen('OK: Runner Summary'));
 
   { Test: RunWithResult }
   LResultSuite := TTestSuite.Create('Result Test');
@@ -432,7 +432,7 @@ begin
     WriteLn(AnsiRed('FAIL: Result[2] should be tsPassed'));
     Halt(1);
   end;
-  WriteLn(AnsiGreen('  ✓ RunWithResult'));
+  WriteLn(AnsiGreen('OK: RunWithResult'));
 
   { ── m15: Summary smoke test ───────────────────────────────────────────────── }
   WriteLn;
@@ -442,7 +442,7 @@ begin
   LResultSuite.Skip('skip', 'planned');
   LResultSuite.Run;
   LResultSuite.Summary;  { Should not crash }
-  WriteLn(AnsiGreen('  ✓ Summary'));
+  WriteLn(AnsiGreen('OK: Summary'));
 
   { ── M20: AllPassed caching ────────────────────────────────────────────────── }
   WriteLn;
@@ -462,7 +462,7 @@ begin
     WriteLn(AnsiRed('FAIL: AllPassed should be True on second call'));
     Halt(1);
   end;
-  WriteLn(AnsiGreen('  ✓ AllPassed caching'));
+  WriteLn(AnsiGreen('OK: AllPassed caching'));
 
   { ── R2-F12: BeforeEach Skip ────────────────────────────────────────────────── }
   WriteLn;
@@ -505,7 +505,7 @@ begin
         LResult.Results[2].Name);
       Halt(1);
     end;
-    WriteLn(AnsiGreen('  ✓ Subtest results collected'));
+    WriteLn(AnsiGreen('OK: Subtest results collected'));
   end;
 
   { ── R2-F02: RunParallelWithResult ────────────────────────────────────────── }
@@ -537,7 +537,7 @@ begin
       WriteLn(AnsiRed('FAIL: AllPassed should be True'));
       Halt(1);
     end;
-    WriteLn(AnsiGreen('  ✓ RunParallelWithResult'));
+    WriteLn(AnsiGreen('OK: RunParallelWithResult'));
   end;
 
   { ── R2-F02: RunAllWithResult ─────────────────────────────────────────────── }
@@ -572,7 +572,7 @@ begin
       WriteLn(AnsiRed('FAIL: SuiteY should have 1 pass, got '), LRunAllResults[1].Passed);
       Halt(1);
     end;
-    WriteLn(AnsiGreen('  ✓ RunAllWithResult'));
+    WriteLn(AnsiGreen('OK: RunAllWithResult'));
   end;
 
   { ── R3-F17: Timeout trigger (watchdog actually fires) ───────────────────── }
@@ -599,7 +599,7 @@ begin
       WriteLn(AnsiRed('FAIL: Expected tsError status, got '), Ord(LResult.Results[0].Status));
       Halt(1);
     end;
-    WriteLn(AnsiGreen('  ✓ Timeout trigger verified'));
+    WriteLn(AnsiGreen('OK: Timeout trigger verified'));
   end;
 
   { ── R5-08/R5-09: Test filter coverage ──────────────────────────────────────── }
@@ -627,7 +627,7 @@ begin
       Halt(1);
     end;
     SetTestFilter('');
-    WriteLn(AnsiGreen('  ✓ Filter matches specific test'));
+    WriteLn(AnsiGreen('OK: Filter matches specific test'));
   end;
 
   begin
@@ -652,7 +652,7 @@ begin
       Halt(1);
     end;
     SetTestFilter('');
-    WriteLn(AnsiGreen('  ✓ Filter matches nothing → all invisible'));
+    WriteLn(AnsiGreen('OK: Filter matches nothing -> all invisible'));
   end;
 
   begin
@@ -676,7 +676,7 @@ begin
       WriteLn(AnsiRed('FAIL: empty filter expected 0 skipped, got '), LFilterResult.Skipped);
       Halt(1);
     end;
-    WriteLn(AnsiGreen('  ✓ Empty filter runs everything'));
+    WriteLn(AnsiGreen('OK: Empty filter runs everything'));
   end;
 
   begin
@@ -702,7 +702,7 @@ begin
       Halt(1);
     end;
     SetTestFilter('');
-    WriteLn(AnsiGreen('  ✓ Glob filter (b* matches beta)'));
+    WriteLn(AnsiGreen('OK: Glob filter (b* matches beta)'));
   end;
 
   { ── R4-08: Empty suite run ───────────────────────────────────────────────── }
@@ -728,7 +728,7 @@ begin
       WriteLn(AnsiRed('FAIL: Empty suite Skipped should be 0'));
       Halt(1);
     end;
-    WriteLn(AnsiGreen('  ✓ Empty suite run'));
+    WriteLn(AnsiGreen('OK: Empty suite run'));
   end;
 
   { ── R6-58: ParseFilter helper (white-box) ─────────────────────────────────── }
@@ -751,7 +751,7 @@ begin
       WriteLn(AnsiRed('FAIL: ParseFilter should preserve embedded equals'));
       Halt(1);
     end;
-    WriteLn(AnsiGreen('  ✓ ParseFilter helper'));
+    WriteLn(AnsiGreen('OK: ParseFilter helper'));
   end;
 
   { ── R6-59: AddLine / JoinLines helpers ────────────────────────────────────── }
@@ -794,7 +794,7 @@ begin
       WriteLn(AnsiRed('FAIL: JoinLines should contain "third"'));
       Halt(1);
     end;
-    WriteLn(AnsiGreen('  ✓ AddLine / JoinLines'));
+    WriteLn(AnsiGreen('OK: AddLine / JoinLines'));
   end;
 
   { ── R6-59: JoinLines empty ────────────────────────────────────────────────── }
@@ -805,7 +805,7 @@ begin
       WriteLn(AnsiRed('FAIL: JoinLines on empty array should return empty string'));
       Halt(1);
     end;
-    WriteLn(AnsiGreen('  ✓ JoinLines empty'));
+    WriteLn(AnsiGreen('OK: JoinLines empty'));
   end;
 
   { ── R6-60: TTestRunResult default values ─────────────────────────────────── }
@@ -843,7 +843,7 @@ begin
       WriteLn(AnsiRed('FAIL: Results should be empty'));
       Halt(1);
     end;
-    WriteLn(AnsiGreen('  ✓ TTestRunResult defaults'));
+    WriteLn(AnsiGreen('OK: TTestRunResult defaults'));
   end;
 
   { ── R6-68: Strong assertions replacing Count > 0 ─────────────────────────── }
@@ -875,9 +875,9 @@ begin
       WriteLn(AnsiRed('FAIL: expected exactly 1 skip, got '), LExactRunner68.TotalSkip);
       Halt(1);
     end;
-    WriteLn(AnsiGreen('  ✓ Exact-value assertions'));
+    WriteLn(AnsiGreen('OK: Exact-value assertions'));
   end;
 
   WriteLn;
-  WriteLn(AnsiGreen('ALL PASSED'));
+  WriteLn(AnsiGreen('OK: test_runner'));
 end.
