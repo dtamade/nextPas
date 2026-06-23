@@ -18,11 +18,10 @@ type
 
   TCrossLangEntryArray = array of TCrossLangEntry;
 
-  {** 行缓冲区（capacity 翻倍策略）}
+  {** 行缓冲区（直接字符串追加，消除中间数组）}
   TLineBuffer = record
-    Lines: array of string;
-    Count: Integer;
-    Capacity: Integer;
+    Content: string;
+    IsEmpty: Boolean;
   end;
 
   {** 报告生成器 }
@@ -115,7 +114,6 @@ type
 implementation
 
 uses
-  nextpas.core.text.base,
   nextpas.core.text.conv,
   nextpas.core.text.format,
   nextpas.core.math.scalar,
@@ -126,41 +124,19 @@ uses
 
 procedure BufferAddLine(var ABuf: TLineBuffer; const ALine: string);
 begin
-  if ABuf.Count >= ABuf.Capacity then
+  if ABuf.IsEmpty then
   begin
-    if ABuf.Capacity = 0 then ABuf.Capacity := 16
-    else ABuf.Capacity := ABuf.Capacity * 2;
-    SetLength(ABuf.Lines, ABuf.Capacity);
-  end;
-  ABuf.Lines[ABuf.Count] := ALine;
-  Inc(ABuf.Count);
+    ABuf.Content := ALine;
+    ABuf.IsEmpty := False;
+  end
+  else
+    ABuf.Content := ABuf.Content + LineEnding + ALine;
 end;
 
 function BufferToString(const ABuf: TLineBuffer): string;
-var
-  I: Integer;
-  LBuilder: TStringBuilder;
-  LTotalLen: Integer;
 begin
-  if ABuf.Count = 0 then Exit('');
-
-  // PF-20: estimate actual content size instead of count * 80
-  LTotalLen := 0;
-  for I := 0 to ABuf.Count - 1 do
-    Inc(LTotalLen, Length(ABuf.Lines[I]));
-  Inc(LTotalLen, ABuf.Count * Length(LineEnding));
-
-  LBuilder.Init(LTotalLen + 256);
-  try
-    for I := 0 to ABuf.Count - 1 do
-    begin
-      if I > 0 then LBuilder.AppendStr(LineEnding);
-      LBuilder.AppendStr(ABuf.Lines[I]);
-    end;
-    Result := LBuilder.ToString;
-  finally
-    LBuilder.Done;
-  end;
+  if ABuf.IsEmpty then Exit('');
+  Result := ABuf.Content;
 end;
 
 procedure SortCrossLangEntriesByName(var AEntries: TCrossLangEntryArray);
