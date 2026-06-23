@@ -44,6 +44,7 @@ type
   TThreadRec = record
     Entry          : TTestEntry;
     SuiteName      : string;
+    Config         : TTestConfig;
     Mtx            : IMutex;
     Before         : TTestProc;
     BeforeClosure  : TTestClosure;
@@ -233,7 +234,7 @@ end;
 { Safe mutex release — suppresses intermittent EPERM from ERRORCHECK mutex
   under heavy thread contention. The test result is already committed before
   Release, so swallowing this error is safe. }
-procedure SafeRelease(const AMtx: IMutex);
+procedure SafeRelease(const AMtx: IMutex; const AConfig: TTestConfig);
 begin
   try
     AMtx.Release;
@@ -242,7 +243,7 @@ begin
     begin
       { Suppress: ERRORCHECK mutex may return EPERM under rare contention.
         The critical section data is already committed. }
-      WriteLn(StdErr, 'SafeRelease: ', E.Message);
+      ResolveErrSink(AConfig).WriteLn('SafeRelease: ' + E.Message);
     end;
   end;
 end;
@@ -250,6 +251,7 @@ end;
 function ParallelWorkerProc(AArg: Pointer): Pointer; cdecl;
 var
   R: PThreadRec;
+  LConfig: TTestConfig;
   LStatus: TTestStatus;
   LFailMsg: string;
   LSkipReason: string;
@@ -258,16 +260,21 @@ var
   LRetriesLeft: Integer;
   LSkippedByBeforeEach: Boolean;
   LTimeoutMs: Integer;
+  LOutSink: IOutputSink;
+  LErrSink: IOutputSink;
 begin
   Result := nil;
   R := PThreadRec(AArg);
+  LConfig := ResolveConfig(R^.Config);
+  LOutSink := ResolveOutSink(LConfig);
+  LErrSink := ResolveErrSink(LConfig);
   LStatus := tsPassed;
   LFailMsg := '';
   LSkipReason := '';
   LStartMs := 0;
   LResultWritten := False;
   LSkippedByBeforeEach := False;
-  LTimeoutMs := GetTestTimeout;
+  LTimeoutMs := GetTestTimeout(LConfig);
   try
   SetTestContext(R^.SuiteName, R^.Entry.Name);
   try
@@ -278,10 +285,12 @@ begin
     R^.Mtx.Acquire;
     try
       R^.Skip^ := R^.Skip^ + 1;
-      WriteLn('  ', StatusDot(tsSkipped), ' ', AnsiDim(R^.Entry.Name),
+      LOutSink.WriteLn(
+        '  ' + StatusDot(tsSkipped, LConfig) + ' ' +
+        AnsiDim(R^.Entry.Name, LConfig) +
         ' -- subtests not supported in parallel mode');
     finally
-      SafeRelease(R^.Mtx);
+      SafeRelease(R^.Mtx, LConfig);
     end;
     if R^.Res <> nil then
     begin
@@ -298,9 +307,11 @@ begin
     R^.Mtx.Acquire;
     try
       R^.Skip^ := R^.Skip^ + 1;
-      WriteLn('  ', StatusDot(tsSkipped), ' ', AnsiDim(R^.Entry.Name));
+      LOutSink.WriteLn(
+        '  ' + StatusDot(tsSkipped, LConfig) + ' ' +
+        AnsiDim(R^.Entry.Name, LConfig));
     finally
-      SafeRelease(R^.Mtx);
+      SafeRelease(R^.Mtx, LConfig);
     end;
     if R^.Res <> nil then
     begin
@@ -329,8 +340,9 @@ begin
         LFailMsg := E.Message;
         R^.Mtx.Acquire;
         try
-          WriteLn('  ', StatusDot(tsError), ' ', R^.Entry.Name,
-            ' -- beforeEach failed: ', E.Message);
+          LOutSink.WriteLn(
+            '  ' + StatusDot(tsError, LConfig) + ' ' +
+            R^.Entry.Name + ' -- beforeEach failed: ' + E.Message);
           { Set Duration to 0 directly — no test ran, don't use GetTickCount64 }
           if R^.Res <> nil then
           begin
@@ -341,7 +353,7 @@ begin
             LResultWritten := True;
           end;
         finally
-          SafeRelease(R^.Mtx);
+          SafeRelease(R^.Mtx, LConfig);
         end;
       end;
     end;
@@ -363,7 +375,7 @@ begin
           if Assigned(R^.Entry.Closure) then
           begin
             if RunTestWithTimeout(R^.Entry.Closure, LTimeoutMs,
-              DefaultConfig, LStatus, LFailMsg) then
+              LConfig, LStatus, LFailMsg) then
             begin
               if LStatus = tsPassed then { ok }
               else { LStatus already set }
@@ -374,7 +386,7 @@ begin
           else
           begin
             if RunTestWithTimeout(R^.Entry.Proc, LTimeoutMs,
-              DefaultConfig, LStatus, LFailMsg) then
+              LConfig, LStatus, LFailMsg) then
             begin
               if LStatus = tsPassed then { ok }
               else { LStatus already set }
@@ -414,10 +426,12 @@ begin
       Dec(LRetriesLeft);
       R^.Mtx.Acquire;
       try
-        WriteLn('  ', AnsiYellow('retrying'), ' (',
-          R^.Entry.RetryCount - LRetriesLeft, '/', R^.Entry.RetryCount, ')...');
+        LOutSink.WriteLn(
+          '  ' + AnsiYellow('retrying', LConfig) + ' (' +
+          IntToStr(R^.Entry.RetryCount - LRetriesLeft) + '/' +
+          IntToStr(R^.Entry.RetryCount) + ')...');
       finally
-        SafeRelease(R^.Mtx);
+        SafeRelease(R^.Mtx, LConfig);
       end;
     until False;
   end;
@@ -432,9 +446,11 @@ begin
       begin
         R^.Mtx.Acquire;
         try
-          WriteLn('  ', AnsiYellow('WARNING afterEach failed: '), E.Message);
+          LErrSink.WriteLn(
+            '  ' + AnsiYellow('WARNING afterEach failed: ', LConfig) +
+            E.Message);
         finally
-          SafeRelease(R^.Mtx);
+          SafeRelease(R^.Mtx, LConfig);
         end;
         if LStatus = tsPassed then
         begin
@@ -451,32 +467,40 @@ begin
       tsPassed:
         begin
           R^.Pass^ := R^.Pass^ + 1;
-          WriteLn('  ', StatusDot(tsPassed), ' ', R^.Entry.Name);
+          LOutSink.WriteLn(
+            '  ' + StatusDot(tsPassed, LConfig) + ' ' + R^.Entry.Name);
         end;
       tsFailed:
         begin
           R^.Fail^ := R^.Fail^ + 1;
-          WriteLn('  ', StatusDot(tsFailed), ' ', AnsiRed(R^.Entry.Name));
+          LOutSink.WriteLn(
+            '  ' + StatusDot(tsFailed, LConfig) + ' ' +
+            AnsiRed(R^.Entry.Name, LConfig));
           if LFailMsg <> '' then
-            WriteLn('    ', AnsiDim(LFailMsg))
+            LOutSink.WriteLn('    ' + AnsiDim(LFailMsg, LConfig))
           else
-            WriteLn('    ', AnsiDim('(assertion failed)'));
+            LOutSink.WriteLn('    ' + AnsiDim('(assertion failed)', LConfig));
         end;
       tsSkipped:
         begin
           R^.Skip^ := R^.Skip^ + 1;
           if LSkipReason <> '' then
-            WriteLn('  ', StatusDot(tsSkipped), ' ', AnsiDim(R^.Entry.Name),
-              ' -- ', LSkipReason)
+            LOutSink.WriteLn(
+              '  ' + StatusDot(tsSkipped, LConfig) + ' ' +
+              AnsiDim(R^.Entry.Name, LConfig) + ' -- ' + LSkipReason)
           else
-            WriteLn('  ', StatusDot(tsSkipped), ' ', AnsiDim(R^.Entry.Name));
+            LOutSink.WriteLn(
+              '  ' + StatusDot(tsSkipped, LConfig) + ' ' +
+              AnsiDim(R^.Entry.Name, LConfig));
         end;
       tsError:
         begin
           R^.Fail^ := R^.Fail^ + 1;
-          WriteLn('  ', StatusDot(tsError), ' ', AnsiRed(R^.Entry.Name));
+          LOutSink.WriteLn(
+            '  ' + StatusDot(tsError, LConfig) + ' ' +
+            AnsiRed(R^.Entry.Name, LConfig));
           if LFailMsg <> '' then
-            WriteLn('    ', AnsiDim(LFailMsg));
+            LOutSink.WriteLn('    ' + AnsiDim(LFailMsg, LConfig));
         end;
     end;
     { Write per-test result inside mutex for safety (skip if already written
@@ -495,7 +519,7 @@ begin
       end;
     end;
   finally
-    SafeRelease(R^.Mtx);
+    SafeRelease(R^.Mtx, LConfig);
   end;
 
   finally
@@ -517,10 +541,15 @@ begin
         R^.Mtx.Acquire;
         try
           R^.Fail^ := R^.Fail^ + 1;
-          WriteLn('  ', StatusDot(tsError), ' ', AnsiRed(R^.Entry.Name));
-          WriteLn('    ', AnsiDim('worker exception: ' + E.ClassName + ': ' + E.Message));
+          LOutSink.WriteLn(
+            '  ' + StatusDot(tsError, LConfig) + ' ' +
+            AnsiRed(R^.Entry.Name, LConfig));
+          LOutSink.WriteLn(
+            '    ' + AnsiDim(
+              'worker exception: ' + E.ClassName + ': ' + E.Message,
+              LConfig));
         finally
-          SafeRelease(R^.Mtx);
+          SafeRelease(R^.Mtx, LConfig);
         end;
         if R^.Res <> nil then
         begin

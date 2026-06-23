@@ -8,7 +8,8 @@ program test_parallel;
 uses
   cthreads,
   SysUtils,
-  nextpas.core.test;
+  nextpas.core.test,
+  nextpas.core.test.config;
 
 var
   GTestCounter: Integer = 0;
@@ -242,6 +243,42 @@ begin
   WriteLn(AnsiGreen('  ✓ Table parallel result name uniqueness'));
 end;
 
+procedure TestParallelSinkInjection;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  LOutSink: TBufferSink;
+  LErrSink: TBufferSink;
+  LOutput: string;
+begin
+  LOutSink := TBufferSink.Create;
+  LErrSink := TBufferSink.Create;
+  LSuite := TTestSuite.Create('Parallel Sink');
+  LSuite.Config.OutSink := LOutSink;
+  LSuite.Config.ErrSink := LErrSink;
+  LSuite.Config.AnsiMode := amOff;
+  LSuite.Test('sink_pass', @TestParallelPassA);
+  LSuite.Skip('sink_skip', 'planned');
+  LSuite.RunParallelWithResult(nil, LResult);
+  LOutput := LOutSink.GetOutput;
+  if Pos('sink_pass', LOutput) = 0 then
+  begin
+    WriteLn(AnsiRed('FAIL: parallel sink should capture sink_pass output'));
+    Halt(1);
+  end;
+  if Pos('sink_skip', LOutput) = 0 then
+  begin
+    WriteLn(AnsiRed('FAIL: parallel sink should capture sink_skip output'));
+    Halt(1);
+  end;
+  if LErrSink.GetOutput <> '' then
+  begin
+    WriteLn(AnsiRed('FAIL: parallel sink error output should stay empty for clean run'));
+    Halt(1);
+  end;
+  WriteLn(AnsiGreen('  ✓ Parallel sink injection'));
+end;
+
 var
   LSuite: TTestSuite;
   LFailSuite, LSkipSuite: TTestSuite;
@@ -386,6 +423,7 @@ begin
   WriteLn(AnsiBold('─── R6-54/R6-56: Parallel Coverage ───'));
   TestParallelSubtestSkip;
   TestTableParallelNameUniqueness;
+  TestParallelSinkInjection;
 
   WriteLn;
   WriteLn(AnsiGreen('ALL LIFECYCLE TESTS PASSED'));

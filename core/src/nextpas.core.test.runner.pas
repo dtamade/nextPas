@@ -918,6 +918,7 @@ begin
 
     LRecs[I].Entry     := Tests[I];
     LRecs[I].SuiteName := Name;
+    LRecs[I].Config    := LConfig;
     LRecs[I].Mtx       := LMtx;
     LRecs[I].Before    := BeforeEach;
     LRecs[I].BeforeClosure := BeforeEachClosure;
