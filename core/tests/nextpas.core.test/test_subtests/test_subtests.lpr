@@ -323,15 +323,15 @@ begin
 
   WriteLn(AnsiBold('BeforeEach count: '), GBeforeEachCount);
   WriteLn(AnsiBold('AfterEach count: '), GAfterEachCount);
-  { BeforeEach/AfterEach should have been called for each registered test }
-  if GBeforeEachCount < 9 then
+  { BeforeEach/AfterEach should have been called exactly once per registered test }
+  if GBeforeEachCount <> 12 then
   begin
-    WriteLn(AnsiRed('FAIL: expected at least 9 BeforeEach calls, got '), GBeforeEachCount);
+    WriteLn(AnsiRed('FAIL: expected exactly 12 BeforeEach calls, got '), GBeforeEachCount);
     Halt(1);
   end;
-  if GAfterEachCount < 9 then
+  if GAfterEachCount <> 12 then
   begin
-    WriteLn(AnsiRed('FAIL: expected at least 9 AfterEach calls, got '), GAfterEachCount);
+    WriteLn(AnsiRed('FAIL: expected exactly 12 AfterEach calls, got '), GAfterEachCount);
     Halt(1);
   end;
 

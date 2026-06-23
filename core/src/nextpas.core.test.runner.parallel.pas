@@ -414,12 +414,23 @@ begin
       This is a safety net for intermittent race conditions in thread teardown. }
     on E: Exception do
     begin
-      if (R <> nil) and (R^.Res <> nil) then
+      if R <> nil then
       begin
-        R^.Res^.Name     := R^.Entry.Name;
-        R^.Res^.Status   := tsError;
-        R^.Res^.Message  := 'worker exception: ' + E.ClassName + ': ' + E.Message;
-        R^.Res^.Duration := 0;
+        R^.Mtx.Acquire;
+        try
+          R^.Fail^ := R^.Fail^ + 1;
+          WriteLn('  ', StatusDot(tsError), ' ', AnsiRed(R^.Entry.Name));
+          WriteLn('    ', AnsiDim('worker exception: ' + E.ClassName + ': ' + E.Message));
+        finally
+          SafeRelease(R^.Mtx);
+        end;
+        if R^.Res <> nil then
+        begin
+          R^.Res^.Name     := R^.Entry.Name;
+          R^.Res^.Status   := tsError;
+          R^.Res^.Message  := 'worker exception: ' + E.ClassName + ': ' + E.Message;
+          R^.Res^.Duration := 0;
+        end;
       end;
     end;
   end;

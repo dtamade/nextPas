@@ -284,7 +284,6 @@ begin
   if AExceptionClass = nil then
   begin
     InternalFail('CheckRaises: AExceptionClass is nil');
-    Exit;
   end;
   try
     AProc;

@@ -24,6 +24,29 @@ function TAPReport(const AResults: specialize TArray<TTestRunResult>;
 
 implementation
 
+{ Add a YAML block scalar (|-) to LLines, indenting every line of AMessage. }
+procedure AddYAMLBlockScalar(var ALines: specialize TArray<string>;
+  const AKey, AMessage: string);
+var
+  LStart, LEnd, LLen: Integer;
+begin
+  AddLine(ALines, '  ' + AKey + ': |-');
+  LLen := Length(AMessage);
+  LStart := 1;
+  while LStart <= LLen do
+  begin
+    LEnd := LStart;
+    while (LEnd <= LLen) and (AMessage[LEnd] <> #10) and (AMessage[LEnd] <> #13) do
+      Inc(LEnd);
+    AddLine(ALines, '    ' + Copy(AMessage, LStart, LEnd - LStart));
+    if (LEnd <= LLen) and (AMessage[LEnd] = #13) then
+      Inc(LEnd);
+    if (LEnd <= LLen) and (AMessage[LEnd] = #10) then
+      Inc(LEnd);
+    LStart := LEnd;
+  end;
+end;
+
 function TAPReport(const AResults: specialize TArray<TTestRunResult>;
   const ASuiteName: string): string;
 var
@@ -64,8 +87,7 @@ begin
             LSuite.SuiteName + ' / ' + LRes.Name;
           AddLine(LLines, LLine);
           AddLine(LLines, '  ---');
-          AddLine(LLines, '  message: |-');
-          AddLine(LLines, '    ' + LRes.Message);
+          AddYAMLBlockScalar(LLines, 'message', LRes.Message);
           AddLine(LLines, '  severity: fail');
           AddLine(LLines, '  ...');
         end;
@@ -75,8 +97,7 @@ begin
             LSuite.SuiteName + ' / ' + LRes.Name;
           AddLine(LLines, LLine);
           AddLine(LLines, '  ---');
-          AddLine(LLines, '  message: |-');
-          AddLine(LLines, '    ' + LRes.Message);
+          AddYAMLBlockScalar(LLines, 'message', LRes.Message);
           AddLine(LLines, '  severity: error');
           AddLine(LLines, '  ...');
         end;

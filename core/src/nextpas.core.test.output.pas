@@ -410,7 +410,8 @@ begin
     WriteFileText(AFileName, JUnitXML(AResults, ASuiteName));
     Result := True;
   except
-    { Return False on any I/O error }
+    on E: Exception do
+      WriteLn(StdErr, 'WriteJUnitXML failed: ', E.Message);
   end;
 end;
 

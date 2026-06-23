@@ -149,8 +149,7 @@ begin
       AddLine(LLines, '          "status": "' + StatusName(LRes.Status) + '"');
       if LRes.Message <> '' then
         AddLine(LLines, '          ,"message": "' + JsonEscape(LRes.Message) + '"');
-      if LRes.Duration > 0 then
-        AddLine(LLines, '          ,"durationMs": ' + IntToStr(LRes.Duration));
+      AddLine(LLines, '          ,"durationMs": ' + IntToStr(LRes.Duration));
       AddLine(LLines, '        },');
     end;
 
