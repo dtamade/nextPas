@@ -12,6 +12,7 @@ uses
   SysUtils,
   nextpas.core.test.base,
   nextpas.core.test.check,
+  nextpas.core.test.config,
   nextpas.core.test.output,
   { 白盒测试：直接断言 TAP/JSON renderer 与 runner 输出细节。 }
   nextpas.core.test.output.tap,
@@ -294,6 +295,39 @@ begin
   CheckEqual(GetTestTimeout, 5000);
   SetTestTimeout(0);
   CheckEqual(GetTestTimeout, 0);
+end;
+
+procedure TestDefaultConfigValues;
+var
+  LConfig: TTestConfig;
+begin
+  Inc(GTestsRun);
+  LConfig := DefaultConfig;
+  CheckEqual(LConfig.FilterPattern, '');
+  CheckEqual(Int64(LConfig.TimeoutMs), Int64(0));
+  CheckTrue(LConfig.AnsiMode = amAuto, 'Default ANSI mode should be auto');
+  CheckTrue(LConfig.OutSink <> nil, 'Default stdout sink should be assigned');
+  CheckTrue(LConfig.ErrSink <> nil, 'Default stderr sink should be assigned');
+  CheckEqual(LConfig.RetryCount, 0);
+end;
+
+procedure TestBufferSinkCapture;
+var
+  LSink: TBufferSink;
+begin
+  Inc(GTestsRun);
+  LSink := TBufferSink.Create;
+  try
+    LSink.Write('alpha');
+    LSink.Write(' beta');
+    LSink.WriteLn(' gamma');
+    LSink.WriteLn('delta');
+    CheckEqual(LSink.GetOutput, 'alpha beta gamma' + LineEnding + 'delta');
+    LSink.Clear;
+    CheckEqual(LSink.GetOutput, '');
+  finally
+    LSink.Free;
+  end;
 end;
 
 { ── JUnit XML ──────────────────────────────────────────────────────────────── }
@@ -974,6 +1008,8 @@ begin
   Suite.Test('TestFilterWildcardOnly', @TestFilterWildcardOnly);
   Suite.Test('TestGetSetFilter', @TestGetSetFilter);
   Suite.Test('TestGetSetTimeout', @TestGetSetTimeout);
+  Suite.Test('TestDefaultConfigValues', @TestDefaultConfigValues);
+  Suite.Test('TestBufferSinkCapture', @TestBufferSinkCapture);
   Suite.Test('TestJUnitXMLBasic', @TestJUnitXMLBasic);
   Suite.Test('TestJUnitXMLMultipleSuites', @TestJUnitXMLMultipleSuites);
   Suite.Test('TestJUnitXMLXmlEscape', @TestJUnitXMLXmlEscape);
@@ -1010,7 +1046,7 @@ begin
   WriteLn;
   Runner.Summary;
 
-  CheckTrue(GTestsRun >= 44, 'Expected at least 44 tests, got ' + IntToStr(GTestsRun));
+  CheckTrue(GTestsRun >= 46, 'Expected at least 46 tests, got ' + IntToStr(GTestsRun));
   CheckTrue(LSuccess, 'All output tests should pass');
 
   if Runner.AllPassed then
