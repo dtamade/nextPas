@@ -26,7 +26,7 @@ type
     TotalAllocated: SizeUInt;  // 总分配字节数
     TotalUsed: SizeUInt;       // 实际使用字节数
     PeakUsed: SizeUInt;        // 峰值使用字节数
-    AllocCount: SizeUInt;      // 分配次数
+    AllocCount: QWord;        // 分配次数（QWord 避免 32 位平台截断）
   end;
 
   {** Arena 配置 }

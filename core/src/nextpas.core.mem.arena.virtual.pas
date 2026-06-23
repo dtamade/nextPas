@@ -282,6 +282,7 @@ function TVirtualArena.Alloc(aSize: SizeUInt): Pointer;
 var
   LNewEnd: PtrUInt;
   LAligned: PtrUInt;
+  LPad: SizeUInt;
   LMap: TPlatformMappedFile;
 begin
   Result := nil;
@@ -306,9 +307,15 @@ begin
 
   { Hot path: compute aligned pointer }
   if FIsDefaultAlign then
-    LAligned := PtrUInt(FFrontPtr)
+  begin
+    LAligned := PtrUInt(FFrontPtr);
+    LPad := 0;
+  end
   else
+  begin
     LAligned := (PtrUInt(FFrontPtr) + FAlignmentMask) and not FAlignmentMask;
+    LPad := LAligned - PtrUInt(FFrontPtr);
+  end;
 
   LNewEnd := LAligned + PtrUInt(aSize);
 
@@ -320,7 +327,7 @@ begin
     if not CommitFrontRegion(LNewEnd - PtrUInt(FReservedBase) - FFrontCommittedSize) then Exit;
 
   FFrontPtr := PByte(LNewEnd);
-  Inc(FTotalUsed, aSize);
+  Inc(FTotalUsed, LPad + aSize);
   if FTotalUsed > FPeakUsed then FPeakUsed := FTotalUsed;
   Inc(FAllocCount);
   Result := Pointer(LAligned);
@@ -379,6 +386,7 @@ var
   LAligned: PtrUInt;
   LNewEnd: PtrUInt;
   LMask: PtrUInt;
+  LPad: SizeUInt;
   LMap: TPlatformMappedFile;
 begin
   Result := nil;
@@ -405,6 +413,7 @@ begin
 
   LMask := PtrUInt(aAlignment - 1);
   LAligned := (PtrUInt(FFrontPtr) + LMask) and not LMask;
+  LPad := SizeUInt(LAligned - PtrUInt(FFrontPtr));
   LNewEnd := LAligned + PtrUInt(aSize);
 
   { Capacity check first }
@@ -415,7 +424,7 @@ begin
     if not CommitFrontRegion(LNewEnd - PtrUInt(FReservedBase) - FFrontCommittedSize) then Exit;
 
   FFrontPtr := PByte(LNewEnd);
-  Inc(FTotalUsed, aSize);
+  Inc(FTotalUsed, LPad + aSize);
   if FTotalUsed > FPeakUsed then FPeakUsed := FTotalUsed;
   Inc(FAllocCount);
   Result := Pointer(LAligned);
@@ -461,7 +470,11 @@ procedure TVirtualArena.Reset;
 begin
   { Fast reset: keep committed pages, only reset bump pointers.
     Pages stay warm for the next allocation cycle (same strategy as Go arena).
-    Use ResetHard() if you need to release physical memory under pressure. }
+    Use ResetHard() if you need to release physical memory under pressure.
+
+    NOTE: Reset does NOT release large objects (>= 64KB) backed by mmap.
+    Large blocks persist across reset cycles. Only Release() frees all
+    memory including large object mmap mappings. }
 
   FFrontPtr := PByte(FReservedBase);
   FBackPtr := PByte(PtrUInt(FReservedBase) + PtrUInt(FReservedSize));

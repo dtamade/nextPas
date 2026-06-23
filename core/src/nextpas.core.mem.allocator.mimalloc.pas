@@ -38,7 +38,8 @@ implementation
 
 uses
   nextpas.core.base.utils,
-  SysUtils;
+  nextpas.core.path,
+  nextpas.core.mem.error;
 
 {$IFDEF NEXTPAS_CORE_MIMALLOC_STATIC}
   {$LINKLIB mimalloc}
@@ -67,10 +68,19 @@ uses
     _mi_malloc_usable_size: function(aPtr: Pointer): SizeUInt; cdecl = nil;
     GLoadLock: TRTLCriticalSection;
 
+  function AsciiLower(const S: string): string;
+  var
+    I: Integer;
+  begin
+    Result := S;
+    for I := 1 to Length(Result) do
+      if (Result[I] >= 'A') and (Result[I] <= 'Z') then
+        Result[I] := Chr(Ord(Result[I]) + 32);
+  end;
+
   function GetPlatformLibSubdir: string;
   begin
-    // 使用 FPC 内置的目标平台常量，与 lazbuild 输出目录一致
-    Result := LowerCase({$I %FPCTARGETCPU%}) + '-' + LowerCase({$I %FPCTARGETOS%});
+    Result := AsciiLower({$I %FPCTARGETCPU%}) + '-' + AsciiLower({$I %FPCTARGETOS%});
   end;
 
   function TryLoadFromPath(const aBasePath, aLibName: string): TPlatformLibrary;
@@ -197,21 +207,21 @@ end;
 function TMimallocAllocator.DoGetMem(aSize: SizeUInt): Pointer;
 begin
   if not EnsureMimallocLoaded then
-    raise Exception.Create('mimalloc not available: cannot load library');
+    raise EAllocError.Create(aeInternalError, 'mimalloc not available: cannot load library');
   Result := _mi_malloc(aSize);
 end;
 
 function TMimallocAllocator.DoAllocMem(aSize: SizeUInt): Pointer;
 begin
   if not EnsureMimallocLoaded then
-    raise Exception.Create('mimalloc not available: cannot load library');
+    raise EAllocError.Create(aeInternalError, 'mimalloc not available: cannot load library');
   Result := _mi_calloc(1, aSize);
 end;
 
 function TMimallocAllocator.DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
 begin
   if not EnsureMimallocLoaded then
-    raise Exception.Create('mimalloc not available: cannot load library');
+    raise EAllocError.Create(aeInternalError, 'mimalloc not available: cannot load library');
   Result := _mi_realloc(aDst, aSize);
 end;
 

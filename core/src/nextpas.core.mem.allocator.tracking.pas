@@ -45,6 +45,7 @@ type
     function DoAllocMem(aSize: SizeUInt): Pointer; override;
     function DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer; override;
     procedure DoFreeMem(aDst: Pointer); override;
+    function DoMemSize(aPtr: Pointer): SizeUInt; override;
   public
     constructor Create(aInner: IAllocator);
     destructor Destroy; override;
@@ -64,9 +65,6 @@ type
   end;
 
 implementation
-
-uses
-  SysUtils;
 
 { TTrackingAllocator }
 
@@ -209,6 +207,11 @@ begin
   end;
 end;
 
+function TTrackingAllocator.DoMemSize(aPtr: Pointer): SizeUInt;
+begin
+  Result := FInner.MemSize(aPtr);
+end;
+
 function TTrackingAllocator.ActiveAllocCount: SizeInt;
 begin
   EnterCriticalSection(FLock);
@@ -238,28 +241,40 @@ begin
   Result := ActiveAllocCount > 0;
 end;
 
+function PtrToHexString(AValue: PtrUInt): string;
+const
+  HexDigits: array[0..15] of AnsiChar = '0123456789ABCDEF';
+var
+  LBuf: array[0..SizeOf(Pointer) * 2 - 1] of AnsiChar;
+  LIdx: Integer;
+begin
+  for LIdx := High(LBuf) downto 0 do
+  begin
+    LBuf[LIdx] := HexDigits[AValue and $F];
+    AValue := AValue shr 4;
+  end;
+  SetString(Result, PAnsiChar(@LBuf[0]), Length(LBuf));
+end;
+
 function TTrackingAllocator.ReportLeaks: string;
 var
   I: SizeInt;
-  LSb: TStringBuilder;
+  LLine: string;
+  LCountStr: string;
 begin
   EnterCriticalSection(FLock);
   try
     if FCount = 0 then
       Exit('No leaks detected.');
-    LSb := TStringBuilder.Create;
-    try
-      LSb.AppendLine('Leak report: ' + IntToStr(FCount) + ' block(s) not freed:');
-      for I := 0 to FCount - 1 do
-      begin
-        LSb.Append('  [' + IntToStr(FRecords[I].AllocId) + '] ');
-        LSb.Append('$' + IntToHex(PtrUInt(FRecords[I].Ptr), SizeOf(Pointer) * 2));
-        LSb.Append(' size=' + IntToStr(FRecords[I].Size));
-        LSb.AppendLine;
-      end;
-      Result := LSb.ToString;
-    finally
-      LSb.Free;
+    Str(FCount, LCountStr);
+    Result := 'Leak report: ' + LCountStr + ' block(s) not freed:' + #10;
+    for I := 0 to FCount - 1 do
+    begin
+      Str(FRecords[I].AllocId, LLine);
+      Result := Result + '  [' + LLine + '] $';
+      Result := Result + PtrToHexString(PtrUInt(FRecords[I].Ptr));
+      Str(FRecords[I].Size, LLine);
+      Result := Result + ' size=' + LLine + #10;
     end;
   finally
     LeaveCriticalSection(FLock);
@@ -270,7 +285,7 @@ function TTrackingAllocator.Traits: TAllocatorTraits;
 begin
   Result.ZeroInitialized := False;
   Result.ThreadSafe      := True;
-  Result.HasMemSize      := True;
+  Result.HasMemSize      := FInner.Traits.HasMemSize;
   Result.SupportsAligned := False;
 end;
 

@@ -242,7 +242,8 @@ begin
   try
     LTrackerTraits := LTracker.Traits;
     Check(LTrackerTraits.ThreadSafe = True, 'Tracker should be ThreadSafe');
-    Check(LTrackerTraits.HasMemSize = True, 'Tracker should report HasMemSize');
+    Check(LTrackerTraits.HasMemSize = LInner.Traits.HasMemSize,
+      'Tracker HasMemSize should delegate to inner');
 
     LP := LTracker.GetMem(128);
     Check(LP <> nil, 'should succeed through inner allocator');

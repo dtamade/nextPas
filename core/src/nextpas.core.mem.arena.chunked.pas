@@ -701,7 +701,7 @@ begin
   Result.TotalAllocated := FTotalSize;
   Result.TotalUsed := CurrentUsed;
   Result.PeakUsed := FPeakUsed;
-  Result.AllocCount := SizeUInt(FTotalAllocs);
+  Result.AllocCount := FTotalAllocs;
 end;
 
 function TChunkedArena.SegmentCount: SizeUInt;

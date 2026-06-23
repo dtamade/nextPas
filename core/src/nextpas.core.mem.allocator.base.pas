@@ -6,8 +6,7 @@ interface
 
 uses
   nextpas.core.mem.base,
-  nextpas.core.mem.intf,
-  nextpas.core.contracts
+  nextpas.core.mem.intf
   {$IFDEF NEXTPAS_CORE_STRICT_NULL_FREE}
   , nextpas.core.base
   {$ENDIF}
@@ -131,7 +130,7 @@ var
 begin
   if aSize = 0 then Exit(nil);
   if (aAlignment < SizeOf(Pointer)) or (not IsPowerOfTwo(aAlignment)) then
-    ContractsRequire(False, 'AllocAligned: alignment must be power of two and >= pointer size');
+    Exit(nil);
   // Over-allocate and store the original pointer just before the aligned block
   LAlignMask := aAlignment - 1;
   LExtra := LAlignMask + SizeOf(Pointer);

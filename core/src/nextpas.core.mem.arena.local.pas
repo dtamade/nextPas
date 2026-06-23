@@ -25,7 +25,7 @@ type
     FCapacity: SizeUInt;
     FOffset: SizeUInt;
     FPeakUsed: SizeUInt;
-    FTotalAllocs: SizeUInt;
+    FTotalAllocs: QWord;
   public
     {** 创建 Arena 并分配 ACapacity 字节的后备内存。ACapacity=0 时不做分配。 }
     constructor Create(const ACapacity: SizeUInt);
@@ -51,7 +51,7 @@ type
     {** 返回峰值使用量。 }
     property PeakUsed: SizeUInt read FPeakUsed;
     {** 返回总分配次数。 }
-    property TotalAllocCount: SizeUInt read FTotalAllocs;
+    property TotalAllocCount: QWord read FTotalAllocs;
     {** 返回 Arena 总容量。 }
     property Capacity: SizeUInt read FCapacity;
   end;
