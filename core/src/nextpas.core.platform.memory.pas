@@ -78,6 +78,7 @@ implementation
 
 {$IFDEF NEXTPAS_WINDOWS}
 uses
+  nextpas.core.platform.windows.base,
   nextpas.core.platform.windows.ffi;
 {$ELSEIF defined(NEXTPAS_UNIX)}
 uses
