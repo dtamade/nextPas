@@ -56,16 +56,16 @@ type
     function GetAllocatedCount: Integer;
     function GetCapacity: Integer;
     function GetAvailable: Integer;
-    function IsPoolRange(aPtr: Pointer): Boolean;
-    function IsPoolBlockStart(aPtr: Pointer): Boolean;
-    function FindAlloc(aPtr: Pointer): Integer;
-    function TryGetAlloc(aPtr: Pointer; out aAlloc: TPoolAllocatorAlloc): Boolean;
-    procedure TrackAlloc(aPtr: Pointer; aSize, aAlignment: SizeUInt; aOwner: TPoolAllocatorOwner; aAligned: Boolean);
-    function UntrackAlloc(aPtr: Pointer; out aAlloc: TPoolAllocatorAlloc): Boolean;
-    procedure UpdateTrackedAlloc(aOldPtr, aNewPtr: Pointer; aSize, aAlignment: SizeUInt; aAligned: Boolean);
-    function AllocFallback(aSize, aAlignment: SizeUInt; aAligned: Boolean): Pointer;
+    function IsPoolRange(APtr: Pointer): Boolean;
+    function IsPoolBlockStart(APtr: Pointer): Boolean;
+    function FindAlloc(APtr: Pointer): Integer;
+    function TryGetAlloc(APtr: Pointer; out aAlloc: TPoolAllocatorAlloc): Boolean;
+    procedure TrackAlloc(APtr: Pointer; ASize, AAlignment: SizeUInt; aOwner: TPoolAllocatorOwner; aAligned: Boolean);
+    function UntrackAlloc(APtr: Pointer; out aAlloc: TPoolAllocatorAlloc): Boolean;
+    procedure UpdateTrackedAlloc(aOldPtr, aNewPtr: Pointer; ASize, AAlignment: SizeUInt; aAligned: Boolean);
+    function AllocFallback(ASize, AAlignment: SizeUInt; aAligned: Boolean): Pointer;
     procedure FreeTrackedFallbackAllocs;
-    procedure RaiseUnknownPointer(aPtr: Pointer; const aOperation: string);
+    procedure RaiseUnknownPointer(APtr: Pointer; const aOperation: string);
   public
     {**
      * Create
@@ -78,18 +78,18 @@ type
     destructor Destroy; override;
 
     // IAllocator
-    function GetMem(aSize: SizeUInt): Pointer;
-    function AllocMem(aSize: SizeUInt): Pointer;
-    function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
-    procedure FreeMem(aDst: Pointer);
-    function MemSize(aPtr: Pointer): SizeUInt;
-    function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
-    procedure FreeAligned(aPtr: Pointer);
+    function GetMem(ASize: SizeUInt): Pointer;
+    function AllocMem(ASize: SizeUInt): Pointer;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(ADst: Pointer);
+    function MemSize(APtr: Pointer): SizeUInt;
+    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
+    procedure FreeAligned(APtr: Pointer);
     function Traits: TAllocatorTraits;
     // 扩展方法（非 IAllocator 接口，仅 TPoolAllocator 提供）
-    function GetMemSize(aPtr: Pointer): SizeUInt;
-    function TryGetMem(aSize: SizeUInt; out aPtr: Pointer): Boolean;
-    function TryAllocMem(aSize: SizeUInt; out aPtr: Pointer): Boolean;
+    function GetMemSize(APtr: Pointer): SizeUInt;
+    function TryGetMem(ASize: SizeUInt; out APtr: Pointer): Boolean;
+    function TryAllocMem(ASize: SizeUInt; out APtr: Pointer): Boolean;
 
     // 统计
     property BlockSize: SizeUInt read FBlockSize;
@@ -145,44 +145,44 @@ begin
   inherited Destroy;
 end;
 
-function TPoolAllocator.IsPoolRange(aPtr: Pointer): Boolean;
+function TPoolAllocator.IsPoolRange(APtr: Pointer): Boolean;
 begin
-  Result := FPool.Owns(aPtr);
+  Result := FPool.Owns(APtr);
 end;
 
-function TPoolAllocator.IsPoolBlockStart(aPtr: Pointer): Boolean;
+function TPoolAllocator.IsPoolBlockStart(APtr: Pointer): Boolean;
 var
   LBase: Pointer;
   LSize: SizeUInt;
   LDiff: SizeUInt;
 begin
   Result := False;
-  if (aPtr = nil) or (FPool = nil) then
+  if (APtr = nil) or (FPool = nil) then
     Exit;
 
   FPool.GetArenaRange(LBase, LSize);
-  if (LBase = nil) or (aPtr < LBase) or (aPtr >= Pointer(PByte(LBase) + LSize)) then
+  if (LBase = nil) or (APtr < LBase) or (APtr >= Pointer(PByte(LBase) + LSize)) then
     Exit;
 
-  LDiff := SizeUInt(PByte(aPtr) - PByte(LBase));
+  LDiff := SizeUInt(PByte(APtr) - PByte(LBase));
   Result := (FBlockSize <> 0) and ((LDiff mod FBlockSize) = 0);
 end;
 
-function TPoolAllocator.FindAlloc(aPtr: Pointer): Integer;
+function TPoolAllocator.FindAlloc(APtr: Pointer): Integer;
 var
   LIndex: Integer;
 begin
   for LIndex := 0 to High(FAllocs) do
-    if FAllocs[LIndex].Ptr = aPtr then
+    if FAllocs[LIndex].Ptr = APtr then
       Exit(LIndex);
   Result := -1;
 end;
 
-function TPoolAllocator.TryGetAlloc(aPtr: Pointer; out aAlloc: TPoolAllocatorAlloc): Boolean;
+function TPoolAllocator.TryGetAlloc(APtr: Pointer; out aAlloc: TPoolAllocatorAlloc): Boolean;
 var
   LIndex: Integer;
 begin
-  LIndex := FindAlloc(aPtr);
+  LIndex := FindAlloc(APtr);
   Result := LIndex >= 0;
   if Result then
     aAlloc := FAllocs[LIndex]
@@ -196,34 +196,34 @@ begin
   end;
 end;
 
-procedure TPoolAllocator.TrackAlloc(aPtr: Pointer; aSize, aAlignment: SizeUInt;
+procedure TPoolAllocator.TrackAlloc(APtr: Pointer; ASize, AAlignment: SizeUInt;
   aOwner: TPoolAllocatorOwner; aAligned: Boolean);
 var
   LIndex: Integer;
 begin
-  if aPtr = nil then
+  if APtr = nil then
     Exit;
 
-  LIndex := FindAlloc(aPtr);
+  LIndex := FindAlloc(APtr);
   if LIndex < 0 then
   begin
     LIndex := Length(FAllocs);
     SetLength(FAllocs, LIndex + 1);
   end;
 
-  FAllocs[LIndex].Ptr := aPtr;
-  FAllocs[LIndex].Size := aSize;
-  FAllocs[LIndex].Alignment := aAlignment;
+  FAllocs[LIndex].Ptr := APtr;
+  FAllocs[LIndex].Size := ASize;
+  FAllocs[LIndex].Alignment := AAlignment;
   FAllocs[LIndex].Owner := aOwner;
   FAllocs[LIndex].Aligned := aAligned;
 end;
 
-function TPoolAllocator.UntrackAlloc(aPtr: Pointer; out aAlloc: TPoolAllocatorAlloc): Boolean;
+function TPoolAllocator.UntrackAlloc(APtr: Pointer; out aAlloc: TPoolAllocatorAlloc): Boolean;
 var
   LIndex: Integer;
   LLast: Integer;
 begin
-  LIndex := FindAlloc(aPtr);
+  LIndex := FindAlloc(APtr);
   Result := LIndex >= 0;
   if not Result then
   begin
@@ -241,8 +241,8 @@ begin
   SetLength(FAllocs, LLast);
 end;
 
-procedure TPoolAllocator.UpdateTrackedAlloc(aOldPtr, aNewPtr: Pointer; aSize,
-  aAlignment: SizeUInt; aAligned: Boolean);
+procedure TPoolAllocator.UpdateTrackedAlloc(aOldPtr, aNewPtr: Pointer; ASize,
+  AAlignment: SizeUInt; aAligned: Boolean);
 var
   LIndex: Integer;
 begin
@@ -250,26 +250,26 @@ begin
   if LIndex < 0 then
     raise EAllocError.Create(aeInvalidPointer, 'TPoolAllocator: pointer is not tracked');
   FAllocs[LIndex].Ptr := aNewPtr;
-  FAllocs[LIndex].Size := aSize;
-  FAllocs[LIndex].Alignment := aAlignment;
+  FAllocs[LIndex].Size := ASize;
+  FAllocs[LIndex].Alignment := AAlignment;
   FAllocs[LIndex].Owner := paoFallback;
   FAllocs[LIndex].Aligned := aAligned;
 end;
 
-function TPoolAllocator.AllocFallback(aSize, aAlignment: SizeUInt; aAligned: Boolean): Pointer;
+function TPoolAllocator.AllocFallback(ASize, AAlignment: SizeUInt; aAligned: Boolean): Pointer;
 begin
-  if aSize = 0 then
+  if ASize = 0 then
     Exit(nil);
 
   if aAligned then
-    Result := FFallback.AllocAligned(aSize, aAlignment)
+    Result := FFallback.AllocAligned(ASize, AAlignment)
   else
-    Result := FFallback.GetMem(aSize);
+    Result := FFallback.GetMem(ASize);
 
   if Result <> nil then
   begin
     try
-      TrackAlloc(Result, aSize, aAlignment, paoFallback, aAligned);
+      TrackAlloc(Result, ASize, AAlignment, paoFallback, aAligned);
     except
       if aAligned then
         FFallback.FreeAligned(Result)
@@ -295,9 +295,9 @@ begin
   SetLength(FAllocs, 0);
 end;
 
-procedure TPoolAllocator.RaiseUnknownPointer(aPtr: Pointer; const aOperation: string);
+procedure TPoolAllocator.RaiseUnknownPointer(APtr: Pointer; const aOperation: string);
 begin
-  if IsPoolRange(aPtr) and not IsPoolBlockStart(aPtr) then
+  if IsPoolRange(APtr) and not IsPoolBlockStart(APtr) then
     raise EAllocError.Create(aeInvalidPointer, 'TPoolAllocator.' + aOperation + ': pointer is not a pool block start');
   raise EAllocError.Create(aeInvalidPointer, 'TPoolAllocator.' + aOperation + ': pointer is not tracked');
 end;
@@ -317,18 +317,18 @@ begin
   Result := FPool.Available;
 end;
 
-function TPoolAllocator.GetMem(aSize: SizeUInt): Pointer;
+function TPoolAllocator.GetMem(ASize: SizeUInt): Pointer;
 begin
-  if aSize = 0 then
+  if ASize = 0 then
     Exit(nil);
 
-  if aSize <= FBlockSize then
+  if ASize <= FBlockSize then
   begin
     // 从池分配
     if FPool.TryAlloc(Result) then
     begin
       try
-        TrackAlloc(Result, aSize, 16, paoPool, False);
+        TrackAlloc(Result, ASize, 16, paoPool, False);
       except
         FPool.ReleasePtr(Result);
         raise;
@@ -338,116 +338,116 @@ begin
   end;
 
   // 池满或大小超出，使用后备分配器
-  Result := AllocFallback(aSize, 0, False);
+  Result := AllocFallback(ASize, 0, False);
 end;
 
-function TPoolAllocator.AllocMem(aSize: SizeUInt): Pointer;
+function TPoolAllocator.AllocMem(ASize: SizeUInt): Pointer;
 begin
-  if aSize = 0 then
+  if ASize = 0 then
     Exit(nil);
 
-  Result := GetMem(aSize);
+  Result := GetMem(ASize);
   if Result <> nil then
-    ZeroMem(Result, aSize);
+    ZeroMem(Result, ASize);
 end;
 
-function TPoolAllocator.ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+function TPoolAllocator.ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
 var
   LAlloc: TPoolAllocatorAlloc;
   LCopySize: SizeUInt;
 begin
-  if aDst = nil then
-    Exit(GetMem(aSize));
+  if ADst = nil then
+    Exit(GetMem(ASize));
 
-  if aSize = 0 then
+  if ASize = 0 then
   begin
-    FreeMem(aDst);
+    FreeMem(ADst);
     Exit(nil);
   end;
 
-  if not TryGetAlloc(aDst, LAlloc) then
-    RaiseUnknownPointer(aDst, 'ReallocMem');
+  if not TryGetAlloc(ADst, LAlloc) then
+    RaiseUnknownPointer(ADst, 'ReallocMem');
 
   if LAlloc.Owner = paoPool then
   begin
     // Pool allocations are fixed-size; realloc uses allocate-copy-release.
-    Result := GetMem(aSize);
+    Result := GetMem(ASize);
     if Result <> nil then
     begin
-      if LAlloc.Size > aSize then
-        LCopySize := aSize
+      if LAlloc.Size > ASize then
+        LCopySize := ASize
       else
         LCopySize := LAlloc.Size;
       if LCopySize > 0 then
-        CopyMem(Result, aDst, LCopySize);
-      FreeMem(aDst);
+        CopyMem(Result, ADst, LCopySize);
+      FreeMem(ADst);
     end;
     Exit;
   end
 
   else if LAlloc.Aligned then
   begin
-    Result := AllocFallback(aSize, LAlloc.Alignment, True);
+    Result := AllocFallback(ASize, LAlloc.Alignment, True);
     if Result <> nil then
     begin
-      if LAlloc.Size > aSize then
-        LCopySize := aSize
+      if LAlloc.Size > ASize then
+        LCopySize := ASize
       else
         LCopySize := LAlloc.Size;
       if LCopySize > 0 then
-        CopyMem(Result, aDst, LCopySize);
-      FreeAligned(aDst);
+        CopyMem(Result, ADst, LCopySize);
+      FreeAligned(ADst);
     end;
   end
 
   else
   begin
-    Result := FFallback.ReallocMem(aDst, aSize);
+    Result := FFallback.ReallocMem(ADst, ASize);
     if Result <> nil then
-      UpdateTrackedAlloc(aDst, Result, aSize, 0, False);
+      UpdateTrackedAlloc(ADst, Result, ASize, 0, False);
   end;
 end;
 
-procedure TPoolAllocator.FreeMem(aDst: Pointer);
+procedure TPoolAllocator.FreeMem(ADst: Pointer);
 var
   LAlloc: TPoolAllocatorAlloc;
 begin
-  if aDst = nil then
+  if ADst = nil then
     Exit;
 
-  if not UntrackAlloc(aDst, LAlloc) then
-    RaiseUnknownPointer(aDst, 'FreeMem');
+  if not UntrackAlloc(ADst, LAlloc) then
+    RaiseUnknownPointer(ADst, 'FreeMem');
 
   if LAlloc.Owner = paoPool then
-    FPool.ReleasePtr(aDst)
+    FPool.ReleasePtr(ADst)
   else if LAlloc.Aligned then
-    FFallback.FreeAligned(aDst)
+    FFallback.FreeAligned(ADst)
   else
-    FFallback.FreeMem(aDst);
+    FFallback.FreeMem(ADst);
 end;
 
-function TPoolAllocator.MemSize(aPtr: Pointer): SizeUInt;
+function TPoolAllocator.MemSize(APtr: Pointer): SizeUInt;
 begin
-  Result := GetMemSize(aPtr);
+  Result := GetMemSize(APtr);
 end;
 
-function TPoolAllocator.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
+function TPoolAllocator.AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
 begin
-  if aSize = 0 then
+  if ASize = 0 then
     Exit(nil);
-  if (aAlignment = 0) or ((aAlignment and (aAlignment - 1)) <> 0) then
+  if (AAlignment = 0) or ((AAlignment and (AAlignment - 1)) <> 0) then
     raise EAllocError.Create(aeAlignmentNotSupported, 'TPoolAllocator.AllocAligned: alignment must be power of two');
-  if aAlignment < SizeOf(Pointer) then
-    aAlignment := SizeOf(Pointer);
+  if AAlignment < SizeOf(Pointer) then
+    AAlignment := SizeOf(Pointer);
 
   // 池分配器的块已经是 16 字节对齐的
   // 如果请求的对齐 <= 16，直接使用池分配
-  if (aAlignment <= 16) and (aSize <= FBlockSize) then
+  if (AAlignment <= 16) and (ASize <= FBlockSize) then
   begin
     if FPool.TryAlloc(Result) then
     begin
       try
-        TrackAlloc(Result, aSize, 16, paoPool, True);
+        TrackAlloc(Result, ASize, 16, paoPool, True);
       except
         FPool.ReleasePtr(Result);
         raise;
@@ -457,25 +457,25 @@ begin
   end;
 
   // 否则使用后备分配器
-  Result := AllocFallback(aSize, aAlignment, True);
+  Result := AllocFallback(ASize, AAlignment, True);
 end;
 
-procedure TPoolAllocator.FreeAligned(aPtr: Pointer);
+procedure TPoolAllocator.FreeAligned(APtr: Pointer);
 var
   LAlloc: TPoolAllocatorAlloc;
 begin
-  if aPtr = nil then
+  if APtr = nil then
     Exit;
 
-  if not UntrackAlloc(aPtr, LAlloc) then
-    RaiseUnknownPointer(aPtr, 'FreeAligned');
+  if not UntrackAlloc(APtr, LAlloc) then
+    RaiseUnknownPointer(APtr, 'FreeAligned');
 
   if LAlloc.Owner = paoPool then
-    FPool.ReleasePtr(aPtr)
+    FPool.ReleasePtr(APtr)
   else if LAlloc.Aligned then
-    FFallback.FreeAligned(aPtr)
+    FFallback.FreeAligned(APtr)
   else
-    FFallback.FreeMem(aPtr);
+    FFallback.FreeMem(APtr);
 end;
 
 function TPoolAllocator.Traits: TAllocatorTraits;
@@ -488,28 +488,28 @@ end;
 
 // 扩展方法（非 IAllocator 接口，仅 TPoolAllocator 提供）
 
-function TPoolAllocator.GetMemSize(aPtr: Pointer): SizeUInt;
+function TPoolAllocator.GetMemSize(APtr: Pointer): SizeUInt;
 var
   LAlloc: TPoolAllocatorAlloc;
 begin
-  if aPtr = nil then
+  if APtr = nil then
     Exit(0);
-  if TryGetAlloc(aPtr, LAlloc) then
+  if TryGetAlloc(APtr, LAlloc) then
     Result := LAlloc.Size
   else
     Result := 0;
 end;
 
-function TPoolAllocator.TryGetMem(aSize: SizeUInt; out aPtr: Pointer): Boolean;
+function TPoolAllocator.TryGetMem(ASize: SizeUInt; out APtr: Pointer): Boolean;
 begin
-  aPtr := GetMem(aSize);
-  Result := (aPtr <> nil) or (aSize = 0);
+  APtr := GetMem(ASize);
+  Result := (APtr <> nil) or (ASize = 0);
 end;
 
-function TPoolAllocator.TryAllocMem(aSize: SizeUInt; out aPtr: Pointer): Boolean;
+function TPoolAllocator.TryAllocMem(ASize: SizeUInt; out APtr: Pointer): Boolean;
 begin
-  aPtr := AllocMem(aSize);
-  Result := (aPtr <> nil) or (aSize = 0);
+  APtr := AllocMem(ASize);
+  Result := (APtr <> nil) or (ASize = 0);
 end;
 
 { Factory function }

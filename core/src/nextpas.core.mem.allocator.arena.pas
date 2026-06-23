@@ -24,10 +24,10 @@ type
   private
     FArena: TVirtualArena;
   protected
-    function DoGetMem(aSize: SizeUInt): Pointer; override;
-    function DoAllocMem(aSize: SizeUInt): Pointer; override;
-    function DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(aDst: Pointer); override;
+    function DoGetMem(ASize: SizeUInt): Pointer; override;
+    function DoAllocMem(ASize: SizeUInt): Pointer; override;
+    function DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
+    procedure DoFreeMem(ADst: Pointer); override;
   public
     {** 创建 TVirtualArenaAllocator }
     constructor Create(AAlignment: SizeUInt = DEFAULT_ALIGNMENT);
@@ -62,27 +62,27 @@ begin
   inherited;
 end;
 
-function TVirtualArenaAllocator.DoGetMem(aSize: SizeUInt): Pointer;
+function TVirtualArenaAllocator.DoGetMem(ASize: SizeUInt): Pointer;
 begin
-  Result := FArena.Alloc(aSize);
+  Result := FArena.Alloc(ASize);
 end;
 
-function TVirtualArenaAllocator.DoAllocMem(aSize: SizeUInt): Pointer;
+function TVirtualArenaAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
 begin
-  Result := FArena.AllocZeroed(aSize);
+  Result := FArena.AllocZeroed(ASize);
 end;
 
-function TVirtualArenaAllocator.DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+function TVirtualArenaAllocator.DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
 begin
-  Result := FArena.Alloc(aSize);
-  if (Result <> nil) and (aDst <> nil) then
+  Result := FArena.Alloc(ASize);
+  if (Result <> nil) and (ADst <> nil) then
   begin
-    { Arena 不跟踪单个分配大小，保守复制 aSize 字节。 }
-    CopyMem(Result, aDst, aSize);
+    { Arena 不跟踪单个分配大小，保守复制 ASize 字节。 }
+    CopyMem(Result, ADst, ASize);
   end;
 end;
 
-procedure TVirtualArenaAllocator.DoFreeMem(aDst: Pointer);
+procedure TVirtualArenaAllocator.DoFreeMem(ADst: Pointer);
 begin
   { Arena 不支持单个释放 — no-op }
 end;

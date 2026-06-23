@@ -17,15 +17,15 @@ type
     FFreeHeadOffset: UInt64;
     FLock: TRTLCriticalSection;
 
-    function AllocateLocked(aSize: SizeUInt): Pointer;
-    procedure FreeLocked(aPtr: Pointer);
-    function FindBlockForPayload(aPtr: Pointer; out aBlock: Pointer; out aHeaderOffset: UInt64): Boolean;
-    function PointerToOffset(aPtr: Pointer; out aOffset: UInt64): Boolean;
+    function AllocateLocked(ASize: SizeUInt): Pointer;
+    procedure FreeLocked(APtr: Pointer);
+    function FindBlockForPayload(APtr: Pointer; out aBlock: Pointer; out aHeaderOffset: UInt64): Boolean;
+    function PointerToOffset(APtr: Pointer; out aOffset: UInt64): Boolean;
   protected
-    function DoGetMem(aSize: SizeUInt): Pointer; override;
-    function DoAllocMem(aSize: SizeUInt): Pointer; override;
-    function DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(aDst: Pointer); override;
+    function DoGetMem(ASize: SizeUInt): Pointer; override;
+    function DoAllocMem(ASize: SizeUInt): Pointer; override;
+    function DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
+    procedure DoFreeMem(ADst: Pointer); override;
   public
     constructor CreateAnonymous(aReservationSize: UInt64);
     destructor Destroy; override;
@@ -76,24 +76,24 @@ begin
     Result := aRight;
 end;
 
-function TMemoryMapAllocator.PointerToOffset(aPtr: Pointer; out aOffset: UInt64): Boolean;
+function TMemoryMapAllocator.PointerToOffset(APtr: Pointer; out aOffset: UInt64): Boolean;
 var
   LBase: PtrUInt;
   LPtr: PtrUInt;
 begin
   Result := False;
   aOffset := 0;
-  if (aPtr = nil) or (FBase = nil) then Exit;
+  if (APtr = nil) or (FBase = nil) then Exit;
 
   LBase := PtrUInt(FBase);
-  LPtr := PtrUInt(aPtr);
+  LPtr := PtrUInt(APtr);
   if LPtr < LBase then Exit;
 
   aOffset := UInt64(LPtr - LBase);
   Result := aOffset < FReservationSize;
 end;
 
-function TMemoryMapAllocator.FindBlockForPayload(aPtr: Pointer; out aBlock: Pointer;
+function TMemoryMapAllocator.FindBlockForPayload(APtr: Pointer; out aBlock: Pointer;
   out aHeaderOffset: UInt64): Boolean;
 var
   LPayloadOffset: UInt64;
@@ -103,7 +103,7 @@ begin
   Result := False;
   aBlock := nil;
   aHeaderOffset := 0;
-  if (not PointerToOffset(aPtr, LPayloadOffset)) or (LPayloadOffset < HeaderSize) then Exit;
+  if (not PointerToOffset(APtr, LPayloadOffset)) or (LPayloadOffset < HeaderSize) then Exit;
 
   LCurrentOffset := 0;
   while LCurrentOffset < FReservationSize do
@@ -128,7 +128,7 @@ begin
   end;
 end;
 
-function TMemoryMapAllocator.AllocateLocked(aSize: SizeUInt): Pointer;
+function TMemoryMapAllocator.AllocateLocked(ASize: SizeUInt): Pointer;
 var
   LNeeded: SizeUInt;
   LPrevOffset: UInt64;
@@ -140,10 +140,10 @@ var
   LSplit: PMemoryMapBlockHeader;
 begin
   Result := nil;
-  if aSize = 0 then Exit;
+  if ASize = 0 then Exit;
 
-  LNeeded := AlignUp(HeaderSize + aSize, SizeOf(Pointer));
-  if LNeeded < aSize then Exit;
+  LNeeded := AlignUp(HeaderSize + ASize, SizeOf(Pointer));
+  if LNeeded < ASize then Exit;
 
   LPrevOffset := NO_FREE_OFFSET;
   LCurrentOffset := FFreeHeadOffset;
@@ -181,7 +181,7 @@ begin
       end;
 
       LBlock^.State := MAP_BLOCK_USED;
-      LBlock^.RequestedSize := aSize;
+      LBlock^.RequestedSize := ASize;
       LBlock^.NextFreeOffset := NO_FREE_OFFSET;
       Exit(Pointer(PByte(LBlock) + HeaderSize));
     end;
@@ -191,14 +191,14 @@ begin
   end;
 end;
 
-procedure TMemoryMapAllocator.FreeLocked(aPtr: Pointer);
+procedure TMemoryMapAllocator.FreeLocked(APtr: Pointer);
 var
   LHeaderOffset: UInt64;
   LBlockPtr: Pointer;
   LBlock: PMemoryMapBlockHeader;
 begin
-  if aPtr = nil then Exit;
-  if not FindBlockForPayload(aPtr, LBlockPtr, LHeaderOffset) then
+  if APtr = nil then Exit;
+  if not FindBlockForPayload(APtr, LBlockPtr, LHeaderOffset) then
     raise EAllocError.Create(aeInvalidPointer, 'TMemoryMapAllocator.FreeMem: pointer not owned');
   LBlock := PMemoryMapBlockHeader(LBlockPtr);
   if LBlock^.State = MAP_BLOCK_FREE then
@@ -258,29 +258,29 @@ begin
   inherited Destroy;
 end;
 
-function TMemoryMapAllocator.DoGetMem(aSize: SizeUInt): Pointer;
+function TMemoryMapAllocator.DoGetMem(ASize: SizeUInt): Pointer;
 begin
   EnterCriticalSection(FLock);
   try
-    Result := AllocateLocked(aSize);
+    Result := AllocateLocked(ASize);
   finally
     LeaveCriticalSection(FLock);
   end;
 end;
 
-function TMemoryMapAllocator.DoAllocMem(aSize: SizeUInt): Pointer;
+function TMemoryMapAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
 begin
   EnterCriticalSection(FLock);
   try
-    Result := AllocateLocked(aSize);
+    Result := AllocateLocked(ASize);
     if Result <> nil then
-      ZeroMem(Result, aSize);
+      ZeroMem(Result, ASize);
   finally
     LeaveCriticalSection(FLock);
   end;
 end;
 
-function TMemoryMapAllocator.DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+function TMemoryMapAllocator.DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
 var
   LHeaderOffset: UInt64;
   LOldBlockPtr: Pointer;
@@ -289,36 +289,36 @@ var
 begin
   EnterCriticalSection(FLock);
   try
-    if not FindBlockForPayload(aDst, LOldBlockPtr, LHeaderOffset) then
+    if not FindBlockForPayload(ADst, LOldBlockPtr, LHeaderOffset) then
       raise EAllocError.Create(aeInvalidPointer, 'TMemoryMapAllocator.ReallocMem: pointer not owned');
 
     LOldBlock := PMemoryMapBlockHeader(LOldBlockPtr);
     if LOldBlock^.State <> MAP_BLOCK_USED then
       raise EAllocError.Create(aeInvalidPointer, 'TMemoryMapAllocator.ReallocMem: invalid block');
 
-    if aSize <= (LOldBlock^.TotalSize - HeaderSize) then
+    if ASize <= (LOldBlock^.TotalSize - HeaderSize) then
     begin
-      LOldBlock^.RequestedSize := aSize;
-      Exit(aDst);
+      LOldBlock^.RequestedSize := ASize;
+      Exit(ADst);
     end;
 
-    Result := AllocateLocked(aSize);
+    Result := AllocateLocked(ASize);
     if Result = nil then Exit;
 
-    LCopySize := MinSizeUInt(LOldBlock^.RequestedSize, aSize);
+    LCopySize := MinSizeUInt(LOldBlock^.RequestedSize, ASize);
     if LCopySize > 0 then
-      CopyMem(Result, aDst, LCopySize);
-    FreeLocked(aDst);
+      CopyMem(Result, ADst, LCopySize);
+    FreeLocked(ADst);
   finally
     LeaveCriticalSection(FLock);
   end;
 end;
 
-procedure TMemoryMapAllocator.DoFreeMem(aDst: Pointer);
+procedure TMemoryMapAllocator.DoFreeMem(ADst: Pointer);
 begin
   EnterCriticalSection(FLock);
   try
-    FreeLocked(aDst);
+    FreeLocked(ADst);
   finally
     LeaveCriticalSection(FLock);
   end;

@@ -20,11 +20,11 @@ type
    *}
   TMimallocAllocator = class(TAllocator)
   protected
-    function  DoGetMem(aSize: SizeUInt): Pointer; override;
-    function  DoAllocMem(aSize: SizeUInt): Pointer; override;
-    function  DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(aDst: Pointer); override;
-    function  DoMemSize(aPtr: Pointer): SizeUInt; override;
+    function  DoGetMem(ASize: SizeUInt): Pointer; override;
+    function  DoAllocMem(ASize: SizeUInt): Pointer; override;
+    function  DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
+    procedure DoFreeMem(ADst: Pointer); override;
+    function  DoMemSize(APtr: Pointer): SizeUInt; override;
   public
     function  Traits: TAllocatorTraits; override;
   end;
@@ -32,7 +32,7 @@ type
 function TryGetMimallocAllocator(out A: IAllocator): Boolean;
 function GetMimallocAllocator: IAllocator;
 function MimallocUsableSizeAvailable: Boolean;
-function TryGetMimallocUsableSize(aPtr: Pointer; out aSize: SizeUInt): Boolean;
+function TryGetMimallocUsableSize(APtr: Pointer; out ASize: SizeUInt): Boolean;
 
 implementation
 
@@ -45,11 +45,11 @@ uses
     {$LINKLIB c}
   {$ENDIF}
   // Static link/import: bind directly at link time
-  function _mi_malloc(aSize: SizeUInt): Pointer; cdecl; external name 'mi_malloc';
-  function _mi_calloc(aCount, aSize: SizeUInt): Pointer; cdecl; external name 'mi_calloc';
-  function _mi_realloc(aPtr: Pointer; aNewSize: SizeUInt): Pointer; cdecl; external name 'mi_realloc';
-  procedure _mi_free(aPtr: Pointer); cdecl; external name 'mi_free';
-  function _mi_malloc_usable_size(aPtr: Pointer): SizeUInt; cdecl; external name 'mi_malloc_usable_size';
+  function _mi_malloc(ASize: SizeUInt): Pointer; cdecl; external name 'mi_malloc';
+  function _mi_calloc(aCount, ASize: SizeUInt): Pointer; cdecl; external name 'mi_calloc';
+  function _mi_realloc(APtr: Pointer; aNewSize: SizeUInt): Pointer; cdecl; external name 'mi_realloc';
+  procedure _mi_free(APtr: Pointer); cdecl; external name 'mi_free';
+  function _mi_malloc_usable_size(APtr: Pointer): SizeUInt; cdecl; external name 'mi_malloc_usable_size';
   function EnsureMimallocLoaded: Boolean; inline;
   begin
     Result := True;
@@ -59,11 +59,11 @@ uses
   var
     _miLib: TPlatformLibrary;
     _miLoaded: Boolean = False;
-    _mi_malloc: function(aSize: SizeUInt): Pointer; cdecl = nil;
-    _mi_calloc: function(aCount, aSize: SizeUInt): Pointer; cdecl = nil;
-    _mi_realloc: function(aPtr: Pointer; aNewSize: SizeUInt): Pointer; cdecl = nil;
-    _mi_free: procedure(aPtr: Pointer); cdecl = nil;
-    _mi_malloc_usable_size: function(aPtr: Pointer): SizeUInt; cdecl = nil;
+    _mi_malloc: function(ASize: SizeUInt): Pointer; cdecl = nil;
+    _mi_calloc: function(aCount, ASize: SizeUInt): Pointer; cdecl = nil;
+    _mi_realloc: function(APtr: Pointer; aNewSize: SizeUInt): Pointer; cdecl = nil;
+    _mi_free: procedure(APtr: Pointer); cdecl = nil;
+    _mi_malloc_usable_size: function(APtr: Pointer): SizeUInt; cdecl = nil;
     GLoadLock: TRTLCriticalSection;
 
   function IsLibValid(const ALib: TPlatformLibrary): Boolean; inline;
@@ -120,48 +120,48 @@ begin
   {$ENDIF}
 end;
 
-function TryGetMimallocUsableSize(aPtr: Pointer; out aSize: SizeUInt): Boolean;
+function TryGetMimallocUsableSize(APtr: Pointer; out ASize: SizeUInt): Boolean;
 begin
-  aSize := 0;
-  if aPtr = nil then
+  ASize := 0;
+  if APtr = nil then
     Exit(False);
   if not MimallocUsableSizeAvailable then
     Exit(False);
-  aSize := _mi_malloc_usable_size(aPtr);
+  ASize := _mi_malloc_usable_size(APtr);
   Result := True;
 end;
 
-function TMimallocAllocator.DoGetMem(aSize: SizeUInt): Pointer;
+function TMimallocAllocator.DoGetMem(ASize: SizeUInt): Pointer;
 begin
   if not EnsureMimallocLoaded then
     raise EAllocError.Create(aeInternalError, 'mimalloc not available: cannot load library');
-  Result := _mi_malloc(aSize);
+  Result := _mi_malloc(ASize);
 end;
 
-function TMimallocAllocator.DoAllocMem(aSize: SizeUInt): Pointer;
+function TMimallocAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
 begin
   if not EnsureMimallocLoaded then
     raise EAllocError.Create(aeInternalError, 'mimalloc not available: cannot load library');
-  Result := _mi_calloc(1, aSize);
+  Result := _mi_calloc(1, ASize);
 end;
 
-function TMimallocAllocator.DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+function TMimallocAllocator.DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
 begin
   if not EnsureMimallocLoaded then
     raise EAllocError.Create(aeInternalError, 'mimalloc not available: cannot load library');
-  Result := _mi_realloc(aDst, aSize);
+  Result := _mi_realloc(ADst, ASize);
 end;
 
-procedure TMimallocAllocator.DoFreeMem(aDst: Pointer);
+procedure TMimallocAllocator.DoFreeMem(ADst: Pointer);
 begin
   if not EnsureMimallocLoaded then
     Exit; // free path when library missing: nothing to do
-  _mi_free(aDst);
+  _mi_free(ADst);
 end;
 
-function TMimallocAllocator.DoMemSize(aPtr: Pointer): SizeUInt;
+function TMimallocAllocator.DoMemSize(APtr: Pointer): SizeUInt;
 begin
-  if not TryGetMimallocUsableSize(aPtr, Result) then
+  if not TryGetMimallocUsableSize(APtr, Result) then
     Result := 0;
 end;
 

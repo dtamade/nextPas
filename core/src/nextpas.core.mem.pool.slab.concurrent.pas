@@ -38,32 +38,32 @@ type
     destructor Destroy; override;
   public
     // IPool
-    function Acquire(out aPtr: Pointer): Boolean;
-    function TryAcquire(out aPtr: Pointer): Boolean;
+    function Acquire(out APtr: Pointer): Boolean;
+    function TryAcquire(out APtr: Pointer): Boolean;
     function AcquireN(out aUnits: array of Pointer; aCount: Integer): Integer;
-    procedure Release(aPtr: Pointer);
+    procedure Release(APtr: Pointer);
     procedure ReleaseN(const aUnits: array of Pointer; aCount: Integer);
     procedure Reset;
     // IMemoryPool
-    function GetMem(aSize: SizeUInt): Pointer;
-    function AllocMem(aSize: SizeUInt): Pointer;
-    function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
-    procedure FreeMem(aDst: Pointer);
-    function MemSize(aPtr: Pointer): SizeUInt;
+    function GetMem(ASize: SizeUInt): Pointer;
+    function AllocMem(ASize: SizeUInt): Pointer;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(ADst: Pointer);
+    function MemSize(APtr: Pointer): SizeUInt;
     // IAllocator aligned allocation
-    function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
-    procedure FreeAligned(aPtr: Pointer);
+    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
+    procedure FreeAligned(APtr: Pointer);
     // IAllocator capability
     function Traits: TAllocatorTraits;
   public
     // Compatibility helpers (same semantics as inner)
-    function Alloc(aSize: SizeUInt): Pointer; inline;
-    procedure Free(aPtr: Pointer); inline;
-    procedure ReleasePtr(aPtr: Pointer); inline;
+    function Alloc(ASize: SizeUInt): Pointer; inline;
+    procedure Free(APtr: Pointer); inline;
+    procedure ReleasePtr(APtr: Pointer); inline;
     function Warmup(aUnitSize: SizeUInt; aMinPages: SizeUInt): SizeUInt;
     // Diagnostics forwarding
-    function Owns(aPtr: Pointer): Boolean;
-    function MemSizeOf(aPtr: Pointer): SizeUInt;
+    function Owns(APtr: Pointer): Boolean;
+    function MemSizeOf(APtr: Pointer): SizeUInt;
     function Stats: TSlabPoolStats;
     function GetPerfCounters: TSlabPerfCounters;
     function SegmentCount: Integer;
@@ -100,21 +100,21 @@ begin
   inherited Destroy;
 end;
 
-function TSlabPoolConcurrent.Acquire(out aPtr: Pointer): Boolean;
+function TSlabPoolConcurrent.Acquire(out APtr: Pointer): Boolean;
 begin
   FLock.Acquire;
   try
-    Result := FInner.Acquire(aPtr);
+    Result := FInner.Acquire(APtr);
   finally
     FLock.Release;
   end;
 end;
 
-function TSlabPoolConcurrent.TryAcquire(out aPtr: Pointer): Boolean;
+function TSlabPoolConcurrent.TryAcquire(out APtr: Pointer): Boolean;
 begin
   FLock.Acquire;
   try
-    Result := FInner.TryAcquire(aPtr);
+    Result := FInner.TryAcquire(APtr);
   finally
     FLock.Release;
   end;
@@ -130,11 +130,11 @@ begin
   end;
 end;
 
-procedure TSlabPoolConcurrent.Release(aPtr: Pointer);
+procedure TSlabPoolConcurrent.Release(APtr: Pointer);
 begin
   FLock.Acquire;
   try
-    FInner.Release(aPtr);
+    FInner.Release(APtr);
   finally
     FLock.Release;
   end;
@@ -160,71 +160,71 @@ begin
   end;
 end;
 
-function TSlabPoolConcurrent.GetMem(aSize: SizeUInt): Pointer;
+function TSlabPoolConcurrent.GetMem(ASize: SizeUInt): Pointer;
 begin
   FLock.Acquire;
   try
-    Result := FInner.GetMem(aSize);
+    Result := FInner.GetMem(ASize);
   finally
     FLock.Release;
   end;
 end;
 
-function TSlabPoolConcurrent.AllocMem(aSize: SizeUInt): Pointer;
+function TSlabPoolConcurrent.AllocMem(ASize: SizeUInt): Pointer;
 begin
   FLock.Acquire;
   try
-    Result := FInner.AllocMem(aSize);
+    Result := FInner.AllocMem(ASize);
   finally
     FLock.Release;
   end;
 end;
 
-function TSlabPoolConcurrent.ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+function TSlabPoolConcurrent.ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
 begin
   FLock.Acquire;
   try
-    Result := FInner.ReallocMem(aDst, aSize);
+    Result := FInner.ReallocMem(ADst, ASize);
   finally
     FLock.Release;
   end;
 end;
 
-procedure TSlabPoolConcurrent.FreeMem(aDst: Pointer);
+procedure TSlabPoolConcurrent.FreeMem(ADst: Pointer);
 begin
   FLock.Acquire;
   try
-    FInner.FreeMem(aDst);
+    FInner.FreeMem(ADst);
   finally
     FLock.Release;
   end;
 end;
 
-function TSlabPoolConcurrent.MemSize(aPtr: Pointer): SizeUInt;
+function TSlabPoolConcurrent.MemSize(APtr: Pointer): SizeUInt;
 begin
   FLock.Acquire;
   try
-    Result := FInner.MemSize(aPtr);
+    Result := FInner.MemSize(APtr);
   finally
     FLock.Release;
   end;
 end;
 
-function TSlabPoolConcurrent.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
+function TSlabPoolConcurrent.AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
 begin
   FLock.Acquire;
   try
-    Result := FInner.AllocAligned(aSize, aAlignment);
+    Result := FInner.AllocAligned(ASize, AAlignment);
   finally
     FLock.Release;
   end;
 end;
 
-procedure TSlabPoolConcurrent.FreeAligned(aPtr: Pointer);
+procedure TSlabPoolConcurrent.FreeAligned(APtr: Pointer);
 begin
   FLock.Acquire;
   try
-    FInner.FreeAligned(aPtr);
+    FInner.FreeAligned(APtr);
   finally
     FLock.Release;
   end;
@@ -236,19 +236,19 @@ begin
   Result.ThreadSafe := True;
 end;
 
-function TSlabPoolConcurrent.Alloc(aSize: SizeUInt): Pointer; inline;
+function TSlabPoolConcurrent.Alloc(ASize: SizeUInt): Pointer; inline;
 begin
-  Result := GetMem(aSize);
+  Result := GetMem(ASize);
 end;
 
-procedure TSlabPoolConcurrent.Free(aPtr: Pointer); inline;
+procedure TSlabPoolConcurrent.Free(APtr: Pointer); inline;
 begin
-  FreeMem(aPtr);
+  FreeMem(APtr);
 end;
 
-procedure TSlabPoolConcurrent.ReleasePtr(aPtr: Pointer); inline;
+procedure TSlabPoolConcurrent.ReleasePtr(APtr: Pointer); inline;
 begin
-  FreeMem(aPtr);
+  FreeMem(APtr);
 end;
 
 function TSlabPoolConcurrent.Warmup(aUnitSize: SizeUInt; aMinPages: SizeUInt): SizeUInt;
@@ -261,21 +261,21 @@ begin
   end;
 end;
 
-function TSlabPoolConcurrent.Owns(aPtr: Pointer): Boolean;
+function TSlabPoolConcurrent.Owns(APtr: Pointer): Boolean;
 begin
   FLock.Acquire;
   try
-    Result := FInner.Owns(aPtr);
+    Result := FInner.Owns(APtr);
   finally
     FLock.Release;
   end;
 end;
 
-function TSlabPoolConcurrent.MemSizeOf(aPtr: Pointer): SizeUInt;
+function TSlabPoolConcurrent.MemSizeOf(APtr: Pointer): SizeUInt;
 begin
   FLock.Acquire;
   try
-    Result := FInner.MemSizeOf(aPtr);
+    Result := FInner.MemSizeOf(APtr);
   finally
     FLock.Release;
   end;

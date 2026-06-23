@@ -10,10 +10,10 @@ uses
 
 type
   // 自定义分配器的回调类型（与回调分配器同域，避免 base 膨胀）
-  TGetMemCallback     = function(aSize: SizeUInt): Pointer;
-  TAllocMemCallback   = function(aSize: SizeUInt): Pointer;
-  TReallocMemCallback = function(aDst: Pointer; aSize: SizeUInt): Pointer;
-  TFreeMemCallback    = procedure(aDst: Pointer);
+  TGetMemCallback     = function(ASize: SizeUInt): Pointer;
+  TAllocMemCallback   = function(ASize: SizeUInt): Pointer;
+  TReallocMemCallback = function(ADst: Pointer; ASize: SizeUInt): Pointer;
+  TFreeMemCallback    = procedure(ADst: Pointer);
 
   {**
    * TCallbackAllocator
@@ -26,10 +26,10 @@ type
     FReallocMemCallback: TReallocMemCallback;
     FFreeMemCallback:    TFreeMemCallback;
   protected
-    function  DoGetMem(aSize: SizeUInt): Pointer; override;
-    function  DoAllocMem(aSize: SizeUInt): Pointer; override;
-    function  DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(aDst: Pointer); override;
+    function  DoGetMem(ASize: SizeUInt): Pointer; override;
+    function  DoAllocMem(ASize: SizeUInt): Pointer; override;
+    function  DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
+    procedure DoFreeMem(ADst: Pointer); override;
   public
     constructor Init(aGetMem: TGetMemCallback; aAllocMem: TAllocMemCallback; aReallocMem: TReallocMemCallback; aFreeMem: TFreeMemCallback);
   end;
@@ -52,24 +52,24 @@ begin
   FFreeMemCallback    := aFreeMem;
 end;
 
-function TCallbackAllocator.DoGetMem(aSize: SizeUInt): Pointer;
+function TCallbackAllocator.DoGetMem(ASize: SizeUInt): Pointer;
 begin
-  Result := FGetMemCallback(aSize)
+  Result := FGetMemCallback(ASize)
 end;
 
-function TCallbackAllocator.DoAllocMem(aSize: SizeUInt): Pointer;
+function TCallbackAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
 begin
-  Result := FAllocMemCallback(aSize)
+  Result := FAllocMemCallback(ASize)
 end;
 
-function TCallbackAllocator.DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+function TCallbackAllocator.DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
 begin
-  Result := FReallocMemCallback(aDst, aSize)
+  Result := FReallocMemCallback(ADst, ASize)
 end;
 
-procedure TCallbackAllocator.DoFreeMem(aDst: Pointer);
+procedure TCallbackAllocator.DoFreeMem(ADst: Pointer);
 begin
-  FFreeMemCallback(aDst)
+  FFreeMemCallback(ADst)
 end;
 
 function CreateCallbackAllocator(aGetMem: TGetMemCallback;

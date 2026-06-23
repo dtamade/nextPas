@@ -164,28 +164,28 @@ begin
   GFreeMemCalls := 0;
 end;
 
-function CallbackGetMem(aSize: SizeUInt): Pointer;
+function CallbackGetMem(ASize: SizeUInt): Pointer;
 begin
   Inc(GGetMemCalls);
-  Result := System.GetMem(aSize);
+  Result := System.GetMem(ASize);
 end;
 
-function CallbackAllocMem(aSize: SizeUInt): Pointer;
+function CallbackAllocMem(ASize: SizeUInt): Pointer;
 begin
   Inc(GAllocMemCalls);
-  Result := System.AllocMem(aSize);
+  Result := System.AllocMem(ASize);
 end;
 
-function CallbackReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+function CallbackReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
 begin
   Inc(GReallocMemCalls);
-  Result := System.ReallocMem(aDst, aSize);
+  Result := System.ReallocMem(ADst, ASize);
 end;
 
-procedure CallbackFreeMem(aDst: Pointer);
+procedure CallbackFreeMem(ADst: Pointer);
 begin
   Inc(GFreeMemCalls);
-  System.FreeMem(aDst);
+  System.FreeMem(ADst);
 end;
 
 procedure TestCallbackAllocatorCompatibilityMethods;

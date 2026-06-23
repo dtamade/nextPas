@@ -136,17 +136,17 @@ type
     FPageHighShift: SizeUInt;     // 64 - log2(capacity)
     FPageCount: SizeUInt;         // number of occupied entries
   private
-    function TryAllocFromSeg(const aIdx: Integer; const aSize: SizeUInt): Pointer; inline;
+    function TryAllocFromSeg(const aIdx: Integer; const ASize: SizeUInt): Pointer; inline;
     function PopAvail(out aIdx: Integer): Boolean; inline;
     procedure PushAvail(const aIdx: Integer); inline;
     function NewSegmentCapacity: SizeUInt; inline;
-    function FindOwnerSegment(aPtr: Pointer): Integer; inline; // fallback scan
-    function IsOversize(const aSize: SizeUInt): Boolean; inline;
-    function ShouldUseFallback(const aSize: SizeUInt): Boolean; inline;
-    function NaturalAlignmentForSize(const aSize: SizeUInt): SizeUInt; inline;
-    function AllocFallback(const aSize, aAlignment: SizeUInt): Pointer;
-    function TryGetFallbackAlloc(const aPtr: Pointer; out aAlloc: TSlabFallbackAlloc): Boolean; inline;
-    function TryUntrackFallbackAlloc(const aPtr: Pointer; out aAlloc: TSlabFallbackAlloc): Boolean;
+    function FindOwnerSegment(APtr: Pointer): Integer; inline; // fallback scan
+    function IsOversize(const ASize: SizeUInt): Boolean; inline;
+    function ShouldUseFallback(const ASize: SizeUInt): Boolean; inline;
+    function NaturalAlignmentForSize(const ASize: SizeUInt): SizeUInt; inline;
+    function AllocFallback(const ASize, AAlignment: SizeUInt): Pointer;
+    function TryGetFallbackAlloc(const APtr: Pointer; out aAlloc: TSlabFallbackAlloc): Boolean; inline;
+    function TryUntrackFallbackAlloc(const APtr: Pointer; out aAlloc: TSlabFallbackAlloc): Boolean;
     procedure FreeAllFallbackAllocs;
     function GetFallbackAllocCount: Integer; inline;
     // fallback map helpers
@@ -154,12 +154,12 @@ type
     procedure FbMapClear;
     procedure FbMapRehash(aNewCapacity: SizeUInt);
     procedure FbMapGrowIfNeeded(aNeedMore: SizeUInt);
-    procedure FbMapInsert(aUserPtr, aRawPtr: Pointer; aSize, aAlignment: SizeUInt);
-    function FbMapLookup(aUserPtr: Pointer; out aRawPtr: Pointer; out aSize, aAlignment: SizeUInt): Boolean; inline;
-    function FbMapDelete(aUserPtr: Pointer; out aRawPtr: Pointer; out aSize, aAlignment: SizeUInt): Boolean;
+    procedure FbMapInsert(aUserPtr, aRawPtr: Pointer; ASize, AAlignment: SizeUInt);
+    function FbMapLookup(aUserPtr: Pointer; out aRawPtr: Pointer; out ASize, AAlignment: SizeUInt): Boolean; inline;
+    function FbMapDelete(aUserPtr: Pointer; out aRawPtr: Pointer; out ASize, AAlignment: SizeUInt): Boolean;
     function GetSegmentCount: Integer; inline;
     // page map helpers
-    function PageKeyOf(aPtr: Pointer): PtrUInt; inline;
+    function PageKeyOf(APtr: Pointer): PtrUInt; inline;
     procedure PageMapInit(aMinCapacity: SizeUInt);
     procedure PageMapClear;
     procedure PageMapGrowIfNeeded(aNeedMore: SizeUInt);
@@ -171,37 +171,37 @@ type
     constructor Create(aCapacity: SizeUInt; const aConfig: TSlabConfig; aAllocator: IAllocator = nil); overload;
     destructor Destroy; override;
     // IPool
-    function Acquire(out aPtr: Pointer): Boolean;
-    function TryAcquire(out aPtr: Pointer): Boolean; inline;
+    function Acquire(out APtr: Pointer): Boolean;
+    function TryAcquire(out APtr: Pointer): Boolean; inline;
     function AcquireN(out aUnits: array of Pointer; aCount: Integer): Integer;
-    procedure Release(aPtr: Pointer);
+    procedure Release(APtr: Pointer);
     procedure ReleaseN(const aUnits: array of Pointer; aCount: Integer);
     procedure Reset;
     // IAllocator aligned allocation
-    function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
-    procedure FreeAligned(aPtr: Pointer);
+    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
+    procedure FreeAligned(APtr: Pointer);
     // IMemoryPool + IAllocator
     // Compatibility helpers for older tests
-    function Alloc(aSize: SizeUInt): Pointer; inline;
-    procedure Free(aPtr: Pointer); overload; inline;
-    procedure ReleasePtr(aPtr: Pointer); inline;
+    function Alloc(ASize: SizeUInt): Pointer; inline;
+    procedure Free(APtr: Pointer); overload; inline;
+    procedure ReleasePtr(APtr: Pointer); inline;
     function Warmup(aUnitSize: SizeUInt; aMinPages: SizeUInt): SizeUInt;
     // 诊断/自省 helpers
-    function Owns(aPtr: Pointer): Boolean; inline;
-    function MemSizeOf(aPtr: Pointer): SizeUInt;
+    function Owns(APtr: Pointer): Boolean; inline;
+    function MemSizeOf(APtr: Pointer): SizeUInt;
     function Stats: TSlabPoolStats;
     // 性能计数器快照（只读）
     function GetPerfCounters: TSlabPerfCounters; inline;
     function GetSegmentRegion(aIndex: Integer; out aStart, aEnd: PByte; out aPageShift: SizeUInt): Boolean;
-    function TryGetFallbackAllocInfo(aPtr: Pointer; out aSize, aAlignment: SizeUInt): Boolean;
+    function TryGetFallbackAllocInfo(APtr: Pointer; out ASize, AAlignment: SizeUInt): Boolean;
     property SegmentCount: Integer read GetSegmentCount;
     property FallbackAllocCount: Integer read GetFallbackAllocCount;
 
-    function GetMem(aSize: SizeUInt): Pointer;
-    function AllocMem(aSize: SizeUInt): Pointer;
-    function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
-    procedure FreeMem(aDst: Pointer);
-    function MemSize(aPtr: Pointer): SizeUInt;
+    function GetMem(ASize: SizeUInt): Pointer;
+    function AllocMem(ASize: SizeUInt): Pointer;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(ADst: Pointer);
+    function MemSize(APtr: Pointer): SizeUInt;
     // 兼容统计
     property TotalAllocs: SizeUInt read FTotalAllocs;
     property TotalFrees : SizeUInt read FTotalFrees;
@@ -242,18 +242,18 @@ begin
   Result.EnablePageMerging := True;
 end;
 
-function TSlabPool.IsOversize(const aSize: SizeUInt): Boolean; inline;
+function TSlabPool.IsOversize(const ASize: SizeUInt): Boolean; inline;
 begin
   // 兼容字段：仅用于“硬限制”单次分配的最大尺寸
-  Result := (aSize <> 0) and (FConfig.MaxAllocSize > 0) and (aSize > FConfig.MaxAllocSize);
+  Result := (ASize <> 0) and (FConfig.MaxAllocSize > 0) and (ASize > FConfig.MaxAllocSize);
 end;
 
-function AlignUpPtrLocal(aPtr: Pointer; aAlignment: SizeUInt): Pointer; inline;
+function AlignUpPtrLocal(APtr: Pointer; AAlignment: SizeUInt): Pointer; inline;
 var
   LAddr, LMask: PtrUInt;
 begin
-  LAddr := PtrUInt(aPtr);
-  LMask := PtrUInt(aAlignment - 1);
+  LAddr := PtrUInt(APtr);
+  LMask := PtrUInt(AAlignment - 1);
   Result := Pointer((LAddr + LMask) and not LMask);
 end;
 
@@ -268,23 +268,23 @@ begin
   Result := LResult;
 end;
 
-function TSlabPool.ShouldUseFallback(const aSize: SizeUInt): Boolean; inline;
+function TSlabPool.ShouldUseFallback(const ASize: SizeUInt): Boolean; inline;
 begin
   // 专业策略：大对象不进入 slab（避免一次性大申请导致 segment 巨大扩容）
-  Result := aSize > FInitialCapacity;
+  Result := ASize > FInitialCapacity;
 end;
 
-function TSlabPool.NaturalAlignmentForSize(const aSize: SizeUInt): SizeUInt; inline;
+function TSlabPool.NaturalAlignmentForSize(const ASize: SizeUInt): SizeUInt; inline;
 var
   LMinSize, LPageSize: SizeUInt;
 begin
   // nginx slab：小对象按 2^k chunk；大对象按 page 分配
-  if aSize = 0 then Exit(SizeOf(Pointer));
+  if ASize = 0 then Exit(SizeOf(Pointer));
   LMinSize := SizeUInt(1) shl FMinShift;
-  if aSize <= LMinSize then Exit(LMinSize);
+  if ASize <= LMinSize then Exit(LMinSize);
   LPageSize := SizeUInt(1) shl 12; { PageShift is constant 12 }
-  if aSize >= (LPageSize shr 1) then Exit(LPageSize);
-  Result := NextPow2(aSize);
+  if ASize >= (LPageSize shr 1) then Exit(LPageSize);
+  Result := NextPow2(ASize);
 end;
 
 function TSlabPool.GetFallbackAllocCount: Integer; inline;
@@ -436,7 +436,7 @@ begin
   FbMapRehash((FFbMask + 1) shl 1);
 end;
 
-procedure TSlabPool.FbMapInsert(aUserPtr, aRawPtr: Pointer; aSize, aAlignment: SizeUInt);
+procedure TSlabPool.FbMapInsert(aUserPtr, aRawPtr: Pointer; ASize, AAlignment: SizeUInt);
 var
   LKey: PtrUInt;
   LPos, LTomb: SizeUInt;
@@ -464,9 +464,9 @@ begin
       else
         FFbBytes := 0;
       FFbRawPtrs[LPos] := aRawPtr;
-      FFbSizes[LPos] := aSize;
-      FFbAlignments[LPos] := aAlignment;
-      Inc(FFbBytes, aSize);
+      FFbSizes[LPos] := ASize;
+      FFbAlignments[LPos] := AAlignment;
+      Inc(FFbBytes, ASize);
       Exit;
     end;
     if (LTomb = High(SizeUInt)) and (FFbKeys[LPos] = FB_TOMBSTONE) then
@@ -481,21 +481,21 @@ begin
 
   FFbKeys[LPos] := LKey;
   FFbRawPtrs[LPos] := aRawPtr;
-  FFbSizes[LPos] := aSize;
-  FFbAlignments[LPos] := aAlignment;
+  FFbSizes[LPos] := ASize;
+  FFbAlignments[LPos] := AAlignment;
   Inc(FFbCount);
-  Inc(FFbBytes, aSize);
+  Inc(FFbBytes, ASize);
 end;
 
-function TSlabPool.FbMapLookup(aUserPtr: Pointer; out aRawPtr: Pointer; out aSize, aAlignment: SizeUInt): Boolean; inline;
+function TSlabPool.FbMapLookup(aUserPtr: Pointer; out aRawPtr: Pointer; out ASize, AAlignment: SizeUInt): Boolean; inline;
 var
   LKey: PtrUInt;
   LPos: SizeUInt;
   LHash: QWord;
 begin
   aRawPtr := nil;
-  aSize := 0;
-  aAlignment := 0;
+  ASize := 0;
+  AAlignment := 0;
 
   if aUserPtr = nil then Exit(False);
   if Length(FFbKeys) = 0 then Exit(False);
@@ -511,23 +511,23 @@ begin
     if FFbKeys[LPos] = LKey then
     begin
       aRawPtr := FFbRawPtrs[LPos];
-      aSize := FFbSizes[LPos];
-      aAlignment := FFbAlignments[LPos];
+      ASize := FFbSizes[LPos];
+      AAlignment := FFbAlignments[LPos];
       Exit(True);
     end;
     LPos := (LPos + 1) and FFbMask;
   end;
 end;
 
-function TSlabPool.FbMapDelete(aUserPtr: Pointer; out aRawPtr: Pointer; out aSize, aAlignment: SizeUInt): Boolean;
+function TSlabPool.FbMapDelete(aUserPtr: Pointer; out aRawPtr: Pointer; out ASize, AAlignment: SizeUInt): Boolean;
 var
   LKey: PtrUInt;
   LPos: SizeUInt;
   LHash: QWord;
 begin
   aRawPtr := nil;
-  aSize := 0;
-  aAlignment := 0;
+  ASize := 0;
+  AAlignment := 0;
   Result := False;
 
   if aUserPtr = nil then Exit(False);
@@ -544,8 +544,8 @@ begin
     if FFbKeys[LPos] = LKey then
     begin
       aRawPtr := FFbRawPtrs[LPos];
-      aSize := FFbSizes[LPos];
-      aAlignment := FFbAlignments[LPos];
+      ASize := FFbSizes[LPos];
+      AAlignment := FFbAlignments[LPos];
 
       FFbKeys[LPos] := FB_TOMBSTONE;
       FFbRawPtrs[LPos] := nil;
@@ -554,8 +554,8 @@ begin
 
       if FFbCount > 0 then
         Dec(FFbCount);
-      if aSize <= FFbBytes then
-        Dec(FFbBytes, aSize)
+      if ASize <= FFbBytes then
+        Dec(FFbBytes, ASize)
       else
         FFbBytes := 0;
       Result := True;
@@ -565,7 +565,7 @@ begin
   end;
 end;
 
-function TSlabPool.TryGetFallbackAlloc(const aPtr: Pointer; out aAlloc: TSlabFallbackAlloc): Boolean; inline;
+function TSlabPool.TryGetFallbackAlloc(const APtr: Pointer; out aAlloc: TSlabFallbackAlloc): Boolean; inline;
 var
   LRaw: Pointer;
   LSize, LAlign: SizeUInt;
@@ -575,17 +575,17 @@ begin
   aAlloc.Size := 0;
   aAlloc.Alignment := 0;
 
-  Result := FbMapLookup(aPtr, LRaw, LSize, LAlign);
+  Result := FbMapLookup(APtr, LRaw, LSize, LAlign);
   if Result then
   begin
-    aAlloc.UserPtr := aPtr;
+    aAlloc.UserPtr := APtr;
     aAlloc.RawPtr := LRaw;
     aAlloc.Size := LSize;
     aAlloc.Alignment := LAlign;
   end;
 end;
 
-function TSlabPool.TryUntrackFallbackAlloc(const aPtr: Pointer; out aAlloc: TSlabFallbackAlloc): Boolean;
+function TSlabPool.TryUntrackFallbackAlloc(const APtr: Pointer; out aAlloc: TSlabFallbackAlloc): Boolean;
 var
   LRaw: Pointer;
   LSize, LAlign: SizeUInt;
@@ -595,10 +595,10 @@ begin
   aAlloc.Size := 0;
   aAlloc.Alignment := 0;
 
-  Result := FbMapDelete(aPtr, LRaw, LSize, LAlign);
+  Result := FbMapDelete(APtr, LRaw, LSize, LAlign);
   if Result then
   begin
-    aAlloc.UserPtr := aPtr;
+    aAlloc.UserPtr := APtr;
     aAlloc.RawPtr := LRaw;
     aAlloc.Size := LSize;
     aAlloc.Alignment := LAlign;
@@ -621,32 +621,32 @@ begin
   FbMapClear;
 end;
 
-function TSlabPool.AllocFallback(const aSize, aAlignment: SizeUInt): Pointer;
+function TSlabPool.AllocFallback(const ASize, AAlignment: SizeUInt): Pointer;
 var
   LAlign, LNeeded: SizeUInt;
   LRaw, LUser: Pointer;
 begin
   Result := nil;
-  if (aSize = 0) or (FAllocator = nil) then Exit(nil);
+  if (ASize = 0) or (FAllocator = nil) then Exit(nil);
 
-  LAlign := aAlignment;
+  LAlign := AAlignment;
   if LAlign = 0 then
     LAlign := 16;
   if LAlign < SizeOf(Pointer) then
     LAlign := SizeOf(Pointer);
   if not IsPowerOfTwo(LAlign) then
-    raise EInvalidArgument.Create('TSlabPool.AllocFallback: aAlignment must be power of two and >= pointer size');
+    raise EInvalidArgument.Create('TSlabPool.AllocFallback: AAlignment must be power of two and >= pointer size');
 
   // over-allocate for alignment; raw pointer is tracked out-of-band
-  if aSize > High(SizeUInt) - (LAlign - 1) then
+  if ASize > High(SizeUInt) - (LAlign - 1) then
     Exit(nil);
-  LNeeded := aSize + (LAlign - 1);
+  LNeeded := ASize + (LAlign - 1);
   LRaw := FAllocator.GetMem(LNeeded);
   if LRaw = nil then Exit(nil);
 
   LUser := AlignUpPtrLocal(LRaw, LAlign);
   try
-    FbMapInsert(LUser, LRaw, aSize, LAlign);
+    FbMapInsert(LUser, LRaw, ASize, LAlign);
   except
     // strong exception safety: do not leak raw pointer
     FAllocator.FreeMem(LRaw);
@@ -660,28 +660,28 @@ begin
   Result := Length(FSegments);
 end;
 
-function TSlabPool.Owns(aPtr: Pointer): Boolean; inline;
+function TSlabPool.Owns(APtr: Pointer): Boolean; inline;
 var
   LSegIdx: Integer;
   LAlloc: TSlabFallbackAlloc;
 begin
-  if aPtr = nil then Exit(False);
-  LSegIdx := FindOwnerSegment(aPtr);
+  if APtr = nil then Exit(False);
+  LSegIdx := FindOwnerSegment(APtr);
   if LSegIdx >= 0 then
-    Exit(FSegments[LSegIdx].Owns(aPtr));
-  Result := TryGetFallbackAlloc(aPtr, LAlloc);
+    Exit(FSegments[LSegIdx].Owns(APtr));
+  Result := TryGetFallbackAlloc(APtr, LAlloc);
 end;
 
-function TSlabPool.MemSizeOf(aPtr: Pointer): SizeUInt;
+function TSlabPool.MemSizeOf(APtr: Pointer): SizeUInt;
 var
   LSegIdx: Integer;
   LAlloc: TSlabFallbackAlloc;
 begin
-  if aPtr = nil then Exit(0);
-  LSegIdx := FindOwnerSegment(aPtr);
+  if APtr = nil then Exit(0);
+  LSegIdx := FindOwnerSegment(APtr);
   if LSegIdx >= 0 then
-    Exit(FSegments[LSegIdx].MemSizeOf(aPtr));
-  if TryGetFallbackAlloc(aPtr, LAlloc) then
+    Exit(FSegments[LSegIdx].MemSizeOf(APtr));
+  if TryGetFallbackAlloc(APtr, LAlloc) then
     Exit(LAlloc.Size);
   Result := 0;
 end;
@@ -729,24 +729,24 @@ begin
   Result := (aStart <> nil) and (aEnd <> nil);
 end;
 
-function TSlabPool.TryGetFallbackAllocInfo(aPtr: Pointer; out aSize, aAlignment: SizeUInt): Boolean;
+function TSlabPool.TryGetFallbackAllocInfo(APtr: Pointer; out ASize, AAlignment: SizeUInt): Boolean;
 var
   LAlloc: TSlabFallbackAlloc;
 begin
-  aSize := 0;
-  aAlignment := 0;
-  Result := TryGetFallbackAlloc(aPtr, LAlloc);
+  ASize := 0;
+  AAlignment := 0;
+  Result := TryGetFallbackAlloc(APtr, LAlloc);
   if Result then
   begin
-    aSize := LAlloc.Size;
-    aAlignment := LAlloc.Alignment;
+    ASize := LAlloc.Size;
+    AAlignment := LAlloc.Alignment;
   end;
 end;
 
-function TSlabPool.PageKeyOf(aPtr: Pointer): PtrUInt; inline;
+function TSlabPool.PageKeyOf(APtr: Pointer): PtrUInt; inline;
 begin
   { PageShift is a fixed constant (12) for all segments — avoid FSegments[0] access }
-  Result := PtrUInt(aPtr) shr 12;
+  Result := PtrUInt(APtr) shr 12;
 end;
 
 procedure TSlabPool.PageMapInit(aMinCapacity: SizeUInt);
@@ -943,19 +943,19 @@ begin
   Create(aCapacity, aAllocator, FConfig.MinShift);
 end;
 
-function TSlabPool.Alloc(aSize: SizeUInt): Pointer; inline;
+function TSlabPool.Alloc(ASize: SizeUInt): Pointer; inline;
 begin
-  Result := GetMem(aSize);
+  Result := GetMem(ASize);
 end;
 
-procedure TSlabPool.Free(aPtr: Pointer); inline;
+procedure TSlabPool.Free(APtr: Pointer); inline;
 begin
-  FreeMem(aPtr);
+  FreeMem(APtr);
 end;
 
-procedure TSlabPool.ReleasePtr(aPtr: Pointer); inline;
+procedure TSlabPool.ReleasePtr(APtr: Pointer); inline;
 begin
-  FreeMem(aPtr);
+  FreeMem(APtr);
 end;
 
 
@@ -996,9 +996,9 @@ begin
   inherited Destroy;
 end;
 
-function TSlabPool.TryAllocFromSeg(const aIdx: Integer; const aSize: SizeUInt): Pointer; inline;
+function TSlabPool.TryAllocFromSeg(const aIdx: Integer; const ASize: SizeUInt): Pointer; inline;
 begin
-  if (aIdx>=0) and (aIdx<=High(FSegments)) and (FSegments[aIdx]<>nil) then Result:=FSegments[aIdx].GetMem(aSize)
+  if (aIdx>=0) and (aIdx<=High(FSegments)) and (FSegments[aIdx]<>nil) then Result:=FSegments[aIdx].GetMem(ASize)
   else Result:=nil;
 end;
 
@@ -1036,49 +1036,49 @@ begin
   Result:=LCurrent shl 1;
 end;
 
-function TSlabPool.FindOwnerSegment(aPtr: Pointer): Integer;
+function TSlabPool.FindOwnerSegment(APtr: Pointer): Integer;
 var
   LKey: PtrUInt;
   LSeg: Integer;
 begin
-  if aPtr=nil then Exit(-1);
-  LKey := PageKeyOf(aPtr);
+  if APtr=nil then Exit(-1);
+  LKey := PageKeyOf(APtr);
   if PageMapLookup(LKey, LSeg) then Exit(LSeg) else Exit(-1);
 end;
 
-function TSlabPool.Acquire(out aPtr: Pointer): Boolean;
+function TSlabPool.Acquire(out APtr: Pointer): Boolean;
 var
   LUnitSize: SizeUInt;
 begin
   LUnitSize := SizeUInt(1) shl FMinShift;
   if LUnitSize < SizeOf(Pointer) then
     LUnitSize := SizeOf(Pointer);
-  aPtr := GetMem(LUnitSize);
-  Result := aPtr <> nil;
+  APtr := GetMem(LUnitSize);
+  Result := APtr <> nil;
 end;
 
-procedure TSlabPool.Release(aPtr: Pointer);
-begin FreeMem(aPtr); end;
+procedure TSlabPool.Release(APtr: Pointer);
+begin FreeMem(APtr); end;
 
-function TSlabPool.GetMem(aSize: SizeUInt): Pointer;
+function TSlabPool.GetMem(ASize: SizeUInt): Pointer;
 var
   LIndex: Integer;
   LPtr: Pointer;
   LNewSeg: TFixedSlabPool;
   LPerfEnabled: Boolean;
 begin
-  if aSize=0 then Exit(nil);
+  if ASize=0 then Exit(nil);
   LPerfEnabled := FConfig.EnablePerfMonitoring;
   if LPerfEnabled then
     Inc(FPerf.AllocCalls);
-  if IsOversize(aSize) then Exit(nil);
-  if ShouldUseFallback(aSize) then
+  if IsOversize(ASize) then Exit(nil);
+  if ShouldUseFallback(ASize) then
   begin
-    Result := AllocFallback(aSize, 16);
+    Result := AllocFallback(ASize, 16);
     if Result <> nil then Inc(FTotalAllocs);
     Exit;
   end;
-  LPtr:=TryAllocFromSeg(FActive,aSize);
+  LPtr:=TryAllocFromSeg(FActive,ASize);
   if LPtr<>nil then
   begin
     Inc(FTotalAllocs);
@@ -1086,7 +1086,7 @@ begin
   end;
   while PopAvail(LIndex) do
   begin
-    LPtr:=TryAllocFromSeg(LIndex,aSize);
+    LPtr:=TryAllocFromSeg(LIndex,ASize);
     if LPtr<>nil then
     begin
       FActive:=LIndex;
@@ -1109,74 +1109,74 @@ begin
   FSegments[LIndex] := LNewSeg;
   IndexSegmentPages(LIndex);
   FActive:=LIndex;
-  Result:=FSegments[LIndex].GetMem(aSize);
+  Result:=FSegments[LIndex].GetMem(ASize);
   if Result<>nil then Inc(FTotalAllocs);
 end;
 
-function TSlabPool.AllocMem(aSize: SizeUInt): Pointer;
-begin Result:=GetMem(aSize); if Result<>nil then ZeroMem(Result, aSize); end;
+function TSlabPool.AllocMem(ASize: SizeUInt): Pointer;
+begin Result:=GetMem(ASize); if Result<>nil then ZeroMem(Result, ASize); end;
 
-function TSlabPool.ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+function TSlabPool.ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
 var
   LIndex: Integer;
   LOldSize, LCopySize: SizeUInt;
   LAlloc: TSlabFallbackAlloc;
   LNew: Pointer;
 begin
-  if aDst=nil then Exit(GetMem(aSize));
-  if aSize=0 then begin FreeMem(aDst); Exit(nil); end;
-  if IsOversize(aSize) then Exit(nil);
-  LIndex:=FindOwnerSegment(aDst);
+  if ADst=nil then Exit(GetMem(ASize));
+  if ASize=0 then begin FreeMem(ADst); Exit(nil); end;
+  if IsOversize(ASize) then Exit(nil);
+  LIndex:=FindOwnerSegment(ADst);
   if LIndex>=0 then
   begin
-    Result:=FSegments[LIndex].ReallocMem(aDst,aSize);
+    Result:=FSegments[LIndex].ReallocMem(ADst,ASize);
     if Result<>nil then Exit;
     // 跨段：安全拷贝再释放旧指针
-    Result := GetMem(aSize);
+    Result := GetMem(ASize);
     if Result=nil then Exit(nil);
-    LOldSize := FSegments[LIndex].MemSizeOf(aDst);
-    if LOldSize > aSize then LCopySize := aSize else LCopySize := LOldSize;
-    if LCopySize>0 then CopyMem(Result, aDst, LCopySize);
-    FSegments[LIndex].FreeMem(aDst);
+    LOldSize := FSegments[LIndex].MemSizeOf(ADst);
+    if LOldSize > ASize then LCopySize := ASize else LCopySize := LOldSize;
+    if LCopySize>0 then CopyMem(Result, ADst, LCopySize);
+    FSegments[LIndex].FreeMem(ADst);
     Exit;
   end;
   // Fallback 路径：只有本池创建的 fallback 指针才允许被 Realloc
-  if not TryGetFallbackAlloc(aDst, LAlloc) then
+  if not TryGetFallbackAlloc(ADst, LAlloc) then
     raise ESlabPoolCorruption.Create(aeInvalidPointer, 'Pointer does not belong to this pool');
 
   // 尽可能保持对齐语义（复用原分配时的 Alignment）
-  LNew := AllocAligned(aSize, LAlloc.Alignment);
+  LNew := AllocAligned(ASize, LAlloc.Alignment);
   if LNew = nil then Exit(nil); // 失败时不修改原指针
 
-  if LAlloc.Size > aSize then LCopySize := aSize else LCopySize := LAlloc.Size;
-  if LCopySize > 0 then CopyMem(LNew, aDst, LCopySize);
+  if LAlloc.Size > ASize then LCopySize := ASize else LCopySize := LAlloc.Size;
+  if LCopySize > 0 then CopyMem(LNew, ADst, LCopySize);
 
   // 释放旧块并移除 tracking（注意：先分配成功再销毁旧块）
-  if TryUntrackFallbackAlloc(aDst, LAlloc) then
+  if TryUntrackFallbackAlloc(ADst, LAlloc) then
     if (FAllocator <> nil) and (LAlloc.RawPtr <> nil) then
       FAllocator.FreeMem(LAlloc.RawPtr);
 
   Result := LNew;
 end;
 
-procedure TSlabPool.FreeMem(aDst: Pointer);
+procedure TSlabPool.FreeMem(ADst: Pointer);
 var
   LIndex: Integer;
   LAlloc: TSlabFallbackAlloc;
   LPerfEnabled: Boolean;
 begin
-  if aDst=nil then Exit;
+  if ADst=nil then Exit;
   LPerfEnabled := FConfig.EnablePerfMonitoring;
   if LPerfEnabled then
     Inc(FPerf.FreeCalls);
-  LIndex:=FindOwnerSegment(aDst);
+  LIndex:=FindOwnerSegment(ADst);
   if LIndex>=0 then
   begin
-    FSegments[LIndex].FreeMem(aDst);
+    FSegments[LIndex].FreeMem(ADst);
     PushAvail(LIndex);
     Inc(FTotalFrees);
   end
-  else if TryUntrackFallbackAlloc(aDst, LAlloc) then
+  else if TryUntrackFallbackAlloc(ADst, LAlloc) then
   begin
     if (FAllocator <> nil) and (LAlloc.RawPtr <> nil) then
       FAllocator.FreeMem(LAlloc.RawPtr);
@@ -1186,9 +1186,9 @@ begin
     raise ESlabPoolCorruption.Create(aeInvalidPointer, 'Pointer does not belong to this pool');
 end;
 
-function TSlabPool.MemSize(aPtr: Pointer): SizeUInt;
+function TSlabPool.MemSize(APtr: Pointer): SizeUInt;
 begin
-  Result := MemSizeOf(aPtr);
+  Result := MemSizeOf(APtr);
 end;
 
 procedure TSlabPool.Reset;
@@ -1206,9 +1206,9 @@ begin
       IndexSegmentPages(LIndex);
 end;
 
-function TSlabPool.TryAcquire(out aPtr: Pointer): Boolean;
+function TSlabPool.TryAcquire(out APtr: Pointer): Boolean;
 begin
-  Result := Acquire(aPtr);
+  Result := Acquire(APtr);
 end;
 
 function TSlabPool.AcquireN(out aUnits: array of Pointer; aCount: Integer): Integer;
@@ -1238,46 +1238,46 @@ begin
   end;
 end;
 
-function TSlabPool.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
+function TSlabPool.AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
 var
   LNaturalAlign: SizeUInt;
   LPerfEnabled: Boolean;
 begin
-  if aSize = 0 then Exit(nil);
-  if IsOversize(aSize) then Exit(nil);
+  if ASize = 0 then Exit(nil);
+  if IsOversize(ASize) then Exit(nil);
 
   LPerfEnabled := FConfig.EnablePerfMonitoring;
 
-  if aAlignment < SizeOf(Pointer) then
-    aAlignment := SizeOf(Pointer);
-  if not IsPowerOfTwo(aAlignment) then
-    raise EInvalidArgument.Create('TSlabPool.AllocAligned: aAlignment must be power of two and >= pointer size');
+  if AAlignment < SizeOf(Pointer) then
+    AAlignment := SizeOf(Pointer);
+  if not IsPowerOfTwo(AAlignment) then
+    raise EInvalidArgument.Create('TSlabPool.AllocAligned: AAlignment must be power of two and >= pointer size');
 
-  if ShouldUseFallback(aSize) then
+  if ShouldUseFallback(ASize) then
   begin
     if LPerfEnabled then
       Inc(FPerf.AllocCalls);
-    Result := AllocFallback(aSize, aAlignment);
+    Result := AllocFallback(ASize, AAlignment);
     if Result <> nil then Inc(FTotalAllocs);
     Exit;
   end;
 
-  LNaturalAlign := NaturalAlignmentForSize(aSize);
-  if aAlignment <= LNaturalAlign then
-    Result := GetMem(aSize)
+  LNaturalAlign := NaturalAlignmentForSize(ASize);
+  if AAlignment <= LNaturalAlign then
+    Result := GetMem(ASize)
   else
   begin
     if LPerfEnabled then
       Inc(FPerf.AllocCalls);
-    Result := AllocFallback(aSize, aAlignment);
+    Result := AllocFallback(ASize, AAlignment);
     if Result <> nil then Inc(FTotalAllocs);
   end;
 end;
 
-procedure TSlabPool.FreeAligned(aPtr: Pointer);
+procedure TSlabPool.FreeAligned(APtr: Pointer);
 begin
   // 与 FreeMem 语义保持一致：只要是本池分配的指针（slab / fallback）都可安全释放
-  FreeMem(aPtr);
+  FreeMem(APtr);
 end;
 
 {$POP}

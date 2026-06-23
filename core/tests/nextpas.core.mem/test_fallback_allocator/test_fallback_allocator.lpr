@@ -18,29 +18,29 @@ type
   {** 总是返回 nil 的分配器 (模拟 OOM) }
   TOomAllocator = class(TInterfacedObject, IAllocator)
   public
-    function GetMem(aSize: SizeUInt): Pointer;
-    function AllocMem(aSize: SizeUInt): Pointer;
-    function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
-    procedure FreeMem(aDst: Pointer);
-    procedure FreeAligned(aPtr: Pointer);
-    function MemSize(aPtr: Pointer): SizeUInt;
-    function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
+    function GetMem(ASize: SizeUInt): Pointer;
+    function AllocMem(ASize: SizeUInt): Pointer;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(ADst: Pointer);
+    procedure FreeAligned(APtr: Pointer);
+    function MemSize(APtr: Pointer): SizeUInt;
+    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
     function Traits: TAllocatorTraits;
   end;
 
-function TOomAllocator.GetMem(aSize: SizeUInt): Pointer;
+function TOomAllocator.GetMem(ASize: SizeUInt): Pointer;
 begin Result := nil; end;
-function TOomAllocator.AllocMem(aSize: SizeUInt): Pointer;
+function TOomAllocator.AllocMem(ASize: SizeUInt): Pointer;
 begin Result := nil; end;
-function TOomAllocator.ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+function TOomAllocator.ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
 begin Result := nil; end;
-procedure TOomAllocator.FreeMem(aDst: Pointer);
+procedure TOomAllocator.FreeMem(ADst: Pointer);
 begin end;
-procedure TOomAllocator.FreeAligned(aPtr: Pointer);
+procedure TOomAllocator.FreeAligned(APtr: Pointer);
 begin end;
-function TOomAllocator.MemSize(aPtr: Pointer): SizeUInt;
+function TOomAllocator.MemSize(APtr: Pointer): SizeUInt;
 begin Result := 0; end;
-function TOomAllocator.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
+function TOomAllocator.AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
 begin Result := nil; end;
 function TOomAllocator.Traits: TAllocatorTraits;
 begin FillChar(Result, SizeOf(Result), 0); end;

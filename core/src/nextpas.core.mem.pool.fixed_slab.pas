@@ -98,15 +98,15 @@ type
     function GetCapacity: SizeUInt;
     function GetUsed: SizeUInt;
 
-    function GetMem(aSize: SizeUInt): Pointer;
-    function AllocMem(aSize: SizeUInt): Pointer;
-    function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
-    procedure FreeMem(aDst: Pointer);
-    function MemSize(aPtr: Pointer): SizeUInt;
+    function GetMem(ASize: SizeUInt): Pointer;
+    function AllocMem(ASize: SizeUInt): Pointer;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(ADst: Pointer);
+    function MemSize(APtr: Pointer): SizeUInt;
 
     // IAllocator aligned allocation (fallback to GetMem with size class alignment)
-    function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
-    procedure FreeAligned(aPtr: Pointer);
+    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
+    procedure FreeAligned(APtr: Pointer);
 
     // IAllocator capability
     function Traits: TAllocatorTraits;
@@ -115,7 +115,7 @@ type
     function MemSizeOf(APtr: Pointer): SizeUInt;
 
     // Helpers for segment management
-    function Owns(aPtr: Pointer): Boolean;
+    function Owns(APtr: Pointer): Boolean;
     function PageShift: SizeUInt; inline;
     function RegionStart: PByte; inline;
     function RegionEnd: PByte; inline;
@@ -1517,11 +1517,11 @@ begin
   Result := ChunkSizeOf(APtr);
 end;
 
-function TFixedSlabPool.Owns(aPtr: Pointer): Boolean;
+function TFixedSlabPool.Owns(APtr: Pointer): Boolean;
 var
   LSize: SizeUInt;
 begin
-  Result := IsLiveChunkStart(aPtr, LSize);
+  Result := IsLiveChunkStart(APtr, LSize);
 end;
 
 function TFixedSlabPool.PageShift: SizeUInt;
@@ -1562,19 +1562,19 @@ begin
     Result := 0;
 end;
 
-function TFixedSlabPool.MemSize(aPtr: Pointer): SizeUInt;
+function TFixedSlabPool.MemSize(APtr: Pointer): SizeUInt;
 begin
-  Result := MemSizeOf(aPtr);
+  Result := MemSizeOf(APtr);
 end;
 
-function TFixedSlabPool.GetMem(aSize: SizeUInt): Pointer;
+function TFixedSlabPool.GetMem(ASize: SizeUInt): Pointer;
 var
   LChunkSize: SizeUInt;
 begin
-  if aSize = 0 then Exit(nil);
+  if ASize = 0 then Exit(nil);
   if FCore = nil then Exit(nil);
   OwnershipGrowIfNeeded;
-  Result := ngx_slab_alloc_locked(Pngx_slab_pool_t(FCore), aSize);
+  Result := ngx_slab_alloc_locked(Pngx_slab_pool_t(FCore), ASize);
   if Result = nil then
     Exit;
   if not IsLiveChunkStart(Result, LChunkSize) then
@@ -1585,60 +1585,60 @@ begin
   TrackAllocated(Result, LChunkSize);
 end;
 
-function TFixedSlabPool.AllocMem(aSize: SizeUInt): Pointer;
+function TFixedSlabPool.AllocMem(ASize: SizeUInt): Pointer;
 begin
-  Result := GetMem(aSize);
+  Result := GetMem(ASize);
   if Result <> nil then
-    ZeroMem(Result, aSize);
+    ZeroMem(Result, ASize);
 end;
 
-function TFixedSlabPool.ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+function TFixedSlabPool.ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
 var
   p: Pointer;
   oldSize, copySize: SizeUInt;
 begin
-  if aDst = nil then Exit(GetMem(aSize));
-  if aSize = 0 then
+  if ADst = nil then Exit(GetMem(ASize));
+  if ASize = 0 then
   begin
-    FreeMem(aDst);
+    FreeMem(ADst);
     Exit(nil);
   end;
 
-  ValidateTrackedLivePointer(aDst, 'ReallocMem', oldSize);
-  p := GetMem(aSize);
+  ValidateTrackedLivePointer(ADst, 'ReallocMem', oldSize);
+  p := GetMem(ASize);
   if p = nil then Exit(nil);
 
-  if oldSize > aSize then copySize := aSize else copySize := oldSize;
+  if oldSize > ASize then copySize := ASize else copySize := oldSize;
 
   {$IFDEF NEXTPAS_SLAB_TESTGUARD}
-  WriteLn('[Realloc] aDst=', PtrUInt(aDst):16, ', aSize=', aSize, ', oldSize=', oldSize, ', copySize=', copySize);
+  WriteLn('[Realloc] ADst=', PtrUInt(ADst):16, ', ASize=', ASize, ', oldSize=', oldSize, ', copySize=', copySize);
   {$ENDIF}
 
   if copySize > 0 then
-    CopyMem(p, aDst, copySize);
+    CopyMem(p, ADst, copySize);
 
-  FreeMem(aDst);
+  FreeMem(ADst);
   Result := p;
 end;
 
-procedure TFixedSlabPool.FreeMem(aDst: Pointer);
+procedure TFixedSlabPool.FreeMem(ADst: Pointer);
 var
   LIndex: SizeUInt;
   LSize: SizeUInt;
 begin
-  if aDst = nil then Exit;
+  if ADst = nil then Exit;
   if FCore = nil then
     raise EAllocError.Create(aeInvalidPointer, 'TFixedSlabPool.FreeMem: pool is not initialized');
-  ValidateTrackedLivePointer(aDst, 'FreeMem', LSize);
-  ngx_slab_free_locked(Pngx_slab_pool_t(FCore), aDst);
-  if OwnershipLookup(PtrUInt(aDst), LIndex) then
+  ValidateTrackedLivePointer(ADst, 'FreeMem', LSize);
+  ngx_slab_free_locked(Pngx_slab_pool_t(FCore), ADst);
+  if OwnershipLookup(PtrUInt(ADst), LIndex) then
   begin
     FOwnStates[LIndex] := FIXED_SLAB_OWNERSHIP_RELEASED;
     FOwnSizes[LIndex] := LSize;
   end;
 end;
 
-function TFixedSlabPool.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
+function TFixedSlabPool.AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
 begin
   // Slab pool size classes provide natural alignment based on size class:
   // - 8B blocks are 8-byte aligned
@@ -1646,31 +1646,31 @@ begin
   // - etc.
   // For alignment requests ≤ size class alignment, GetMem works directly.
   // For larger alignment, fall back to underlying allocator if available.
-  if (aAlignment <= 8) or (aAlignment <= aSize) then
-    Result := GetMem(aSize)
+  if (AAlignment <= 8) or (AAlignment <= ASize) then
+    Result := GetMem(ASize)
   else if FAllocator <> nil then
   begin
-    Result := FAllocator.AllocAligned(aSize, aAlignment);
+    Result := FAllocator.AllocAligned(ASize, AAlignment);
     TrackAlignedFallback(Result);
   end
   else
     Result := nil; // Cannot satisfy alignment request without backing allocator
 end;
 
-procedure TFixedSlabPool.FreeAligned(aPtr: Pointer);
+procedure TFixedSlabPool.FreeAligned(APtr: Pointer);
 var
   LIndex: Integer;
   LSize: SizeUInt;
 begin
-  if aPtr = nil then Exit;
-  if Owns(aPtr) then
-    FreeMem(aPtr)
+  if APtr = nil then Exit;
+  if Owns(APtr) then
+    FreeMem(APtr)
   else
   begin
-    if AlignedFallbackIndexOf(aPtr) < 0 then
-      ValidateTrackedLivePointer(aPtr, 'FreeAligned', LSize);
-    LIndex := ValidateAlignedFallbackPointer(aPtr, 'FreeAligned');
-    FAllocator.FreeAligned(aPtr);
+    if AlignedFallbackIndexOf(APtr) < 0 then
+      ValidateTrackedLivePointer(APtr, 'FreeAligned', LSize);
+    LIndex := ValidateAlignedFallbackPointer(APtr, 'FreeAligned');
+    FAllocator.FreeAligned(APtr);
     FAlignedFallbackStates[LIndex] := FIXED_SLAB_ALIGNED_RELEASED;
   end;
 end;

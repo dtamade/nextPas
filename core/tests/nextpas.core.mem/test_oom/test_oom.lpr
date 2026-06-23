@@ -24,10 +24,10 @@ type
 
   TFailAllocator = class(nextpas.core.mem.allocator.TAllocator)
   protected
-    function DoGetMem(aSize: SizeUInt): Pointer; override;
-    function DoAllocMem(aSize: SizeUInt): Pointer; override;
-    function DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(aDst: Pointer); override;
+    function DoGetMem(ASize: SizeUInt): Pointer; override;
+    function DoAllocMem(ASize: SizeUInt): Pointer; override;
+    function DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
+    procedure DoFreeMem(ADst: Pointer); override;
   end;
 
 var
@@ -36,22 +36,22 @@ var
   GFailVirtualCommit: Boolean = False;
   GFailVirtualMmap: Boolean = False;
 
-function TFailAllocator.DoGetMem(aSize: SizeUInt): Pointer;
+function TFailAllocator.DoGetMem(ASize: SizeUInt): Pointer;
 begin
   Result := nil;
 end;
 
-function TFailAllocator.DoAllocMem(aSize: SizeUInt): Pointer;
+function TFailAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
 begin
   Result := nil;
 end;
 
-function TFailAllocator.DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+function TFailAllocator.DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
 begin
   Result := nil;
 end;
 
-procedure TFailAllocator.DoFreeMem(aDst: Pointer);
+procedure TFailAllocator.DoFreeMem(ADst: Pointer);
 begin
 end;
 

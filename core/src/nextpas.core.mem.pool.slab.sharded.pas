@@ -69,7 +69,7 @@ type
   private
     function NormalizeShardCount(aShardCount: Integer): Integer;
     function ChooseShardIndex: Integer; inline;
-    function PageKeyOf(aPtr: Pointer): PtrUInt; inline;
+    function PageKeyOf(APtr: Pointer): PtrUInt; inline;
 
     procedure PageMapInit(aMinCapacity: SizeUInt);
     procedure PageMapClear;
@@ -81,46 +81,46 @@ type
     procedure FbMapClear;
     procedure FbMapRehash(aNewCapacity: SizeUInt);
     procedure FbMapGrowIfNeeded(aNeedMore: SizeUInt);
-    procedure FbMapInsert(aPtr: Pointer; aShard: Integer);
-    function FbMapLookup(aPtr: Pointer; out aShard: Integer): Boolean; inline;
-    function FbMapDelete(aPtr: Pointer): Boolean;
+    procedure FbMapInsert(APtr: Pointer; aShard: Integer);
+    function FbMapLookup(APtr: Pointer; out aShard: Integer): Boolean; inline;
+    function FbMapDelete(APtr: Pointer): Boolean;
 
     procedure IndexShardNewSegmentsLocked(aShard: Integer);
     procedure IndexSegmentPagesLocked(aShard: Integer; aSegIndex: Integer);
 
-    function NaturalAlignmentForSize(const aSize: SizeUInt): SizeUInt; inline;
-    function ShouldUseFallback(const aSize: SizeUInt): Boolean; inline;
-    function TryRouteShardIndex(aPtr: Pointer; out aShard: Integer; out aIsFallback: Boolean): Boolean;
+    function NaturalAlignmentForSize(const ASize: SizeUInt): SizeUInt; inline;
+    function ShouldUseFallback(const ASize: SizeUInt): Boolean; inline;
+    function TryRouteShardIndex(APtr: Pointer; out aShard: Integer; out aIsFallback: Boolean): Boolean;
   public
     constructor Create(aCapacity: SizeUInt; aShardCount: Integer = 0; aAllocator: IAllocator = nil; aMinShift: SizeUInt = 3); overload;
     constructor Create(aCapacity: SizeUInt; const aConfig: TSlabConfig; aShardCount: Integer = 0; aAllocator: IAllocator = nil); overload;
     destructor Destroy; override;
   public
     // IPool
-    function Acquire(out aPtr: Pointer): Boolean;
-    function TryAcquire(out aPtr: Pointer): Boolean; inline;
+    function Acquire(out APtr: Pointer): Boolean;
+    function TryAcquire(out APtr: Pointer): Boolean; inline;
     function AcquireN(out aUnits: array of Pointer; aCount: Integer): Integer;
-    procedure Release(aPtr: Pointer);
+    procedure Release(APtr: Pointer);
     procedure ReleaseN(const aUnits: array of Pointer; aCount: Integer);
     procedure Reset;
 
     // IMemoryPool
-    function GetMem(aSize: SizeUInt): Pointer;
-    function AllocMem(aSize: SizeUInt): Pointer;
-    function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
-    procedure FreeMem(aDst: Pointer);
-    function MemSize(aPtr: Pointer): SizeUInt;
+    function GetMem(ASize: SizeUInt): Pointer;
+    function AllocMem(ASize: SizeUInt): Pointer;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(ADst: Pointer);
+    function MemSize(APtr: Pointer): SizeUInt;
 
     // IAllocator aligned allocation
-    function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
-    procedure FreeAligned(aPtr: Pointer);
+    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
+    procedure FreeAligned(APtr: Pointer);
 
     // IAllocator capability
     function Traits: TAllocatorTraits;
   public
     // Diagnostics
-    function Owns(aPtr: Pointer): Boolean;
-    function MemSizeOf(aPtr: Pointer): SizeUInt;
+    function Owns(APtr: Pointer): Boolean;
+    function MemSizeOf(APtr: Pointer): SizeUInt;
     function Stats: TSlabPoolStats;
     function GetPerfCounters: TSlabPerfCounters;
     function ShardCount: Integer; inline;
@@ -176,9 +176,9 @@ begin
   Result := Integer(MulHash64(LId) and QWord(FShardMask));
 end;
 
-function TSlabPoolSharded.PageKeyOf(aPtr: Pointer): PtrUInt; inline;
+function TSlabPoolSharded.PageKeyOf(APtr: Pointer): PtrUInt; inline;
 begin
-  Result := PtrUInt(aPtr) shr FPageShift;
+  Result := PtrUInt(APtr) shr FPageShift;
 end;
 
 procedure TSlabPoolSharded.PageMapInit(aMinCapacity: SizeUInt);
@@ -411,14 +411,14 @@ begin
   FbMapRehash((FFbMask + 1) shl 1);
 end;
 
-procedure TSlabPoolSharded.FbMapInsert(aPtr: Pointer; aShard: Integer);
+procedure TSlabPoolSharded.FbMapInsert(APtr: Pointer; aShard: Integer);
 var
   LKey: PtrUInt;
   LPos, LTomb: SizeUInt;
   LHash: QWord;
 begin
-  if aPtr = nil then Exit;
-  LKey := PtrUInt(aPtr);
+  if APtr = nil then Exit;
+  LKey := PtrUInt(APtr);
   if (LKey = 0) or (LKey = FB_TOMBSTONE) then
     raise EInvalidArgument.Create('TSlabPoolSharded.FbMapInsert: invalid pointer key');
 
@@ -449,14 +449,14 @@ begin
   Inc(FFbCount);
 end;
 
-function TSlabPoolSharded.FbMapLookup(aPtr: Pointer; out aShard: Integer): Boolean; inline;
+function TSlabPoolSharded.FbMapLookup(APtr: Pointer; out aShard: Integer): Boolean; inline;
 var
   LKey: PtrUInt;
   LPos: SizeUInt;
   LHash: QWord;
 begin
-  if aPtr = nil then Exit(False);
-  LKey := PtrUInt(aPtr);
+  if APtr = nil then Exit(False);
+  LKey := PtrUInt(APtr);
   if (LKey = 0) or (LKey = FB_TOMBSTONE) then Exit(False);
 
   LHash := MulHash64(LKey);
@@ -473,15 +473,15 @@ begin
   end;
 end;
 
-function TSlabPoolSharded.FbMapDelete(aPtr: Pointer): Boolean;
+function TSlabPoolSharded.FbMapDelete(APtr: Pointer): Boolean;
 var
   LKey: PtrUInt;
   LPos: SizeUInt;
   LHash: QWord;
 begin
   Result := False;
-  if aPtr = nil then Exit(False);
-  LKey := PtrUInt(aPtr);
+  if APtr = nil then Exit(False);
+  LKey := PtrUInt(APtr);
   if (LKey = 0) or (LKey = FB_TOMBSTONE) then Exit(False);
 
   LHash := MulHash64(LKey);
@@ -553,36 +553,36 @@ begin
   end;
 end;
 
-function TSlabPoolSharded.NaturalAlignmentForSize(const aSize: SizeUInt): SizeUInt; inline;
+function TSlabPoolSharded.NaturalAlignmentForSize(const ASize: SizeUInt): SizeUInt; inline;
 var
   LMinSize, LPageSize: SizeUInt;
 begin
-  if aSize = 0 then Exit(SizeOf(Pointer));
+  if ASize = 0 then Exit(SizeOf(Pointer));
   LMinSize := SizeUInt(1) shl FMinShift;
-  if aSize <= LMinSize then Exit(LMinSize);
+  if ASize <= LMinSize then Exit(LMinSize);
   LPageSize := SizeUInt(1) shl FPageShift;
-  if aSize >= (LPageSize shr 1) then Exit(LPageSize);
-  Result := NextPow2Size(aSize);
+  if ASize >= (LPageSize shr 1) then Exit(LPageSize);
+  Result := NextPow2Size(ASize);
 end;
 
-function TSlabPoolSharded.ShouldUseFallback(const aSize: SizeUInt): Boolean; inline;
+function TSlabPoolSharded.ShouldUseFallback(const ASize: SizeUInt): Boolean; inline;
 begin
-  Result := aSize > FInitialCapacity;
+  Result := ASize > FInitialCapacity;
 end;
 
-function TSlabPoolSharded.TryRouteShardIndex(aPtr: Pointer; out aShard: Integer; out aIsFallback: Boolean): Boolean;
+function TSlabPoolSharded.TryRouteShardIndex(APtr: Pointer; out aShard: Integer; out aIsFallback: Boolean): Boolean;
 var
   LKey: PtrUInt;
 begin
   Result := False;
   aIsFallback := False;
-  if aPtr = nil then Exit(False);
+  if APtr = nil then Exit(False);
 
   FRoutingLock.AcquireRead;
   try
-    LKey := PageKeyOf(aPtr);
+    LKey := PageKeyOf(APtr);
     if PageMapLookup(LKey, aShard) then Exit(True);
-    if FbMapLookup(aPtr, aShard) then
+    if FbMapLookup(APtr, aShard) then
     begin
       aIsFallback := True;
       Exit(True);
@@ -699,20 +699,20 @@ begin
   inherited Destroy;
 end;
 
-function TSlabPoolSharded.Acquire(out aPtr: Pointer): Boolean;
+function TSlabPoolSharded.Acquire(out APtr: Pointer): Boolean;
 var
   LUnitSize: SizeUInt;
 begin
   LUnitSize := SizeUInt(1) shl FMinShift;
   if LUnitSize < SizeOf(Pointer) then
     LUnitSize := SizeOf(Pointer);
-  aPtr := GetMem(LUnitSize);
-  Result := aPtr <> nil;
+  APtr := GetMem(LUnitSize);
+  Result := APtr <> nil;
 end;
 
-function TSlabPoolSharded.TryAcquire(out aPtr: Pointer): Boolean;
+function TSlabPoolSharded.TryAcquire(out APtr: Pointer): Boolean;
 begin
-  Result := Acquire(aPtr);
+  Result := Acquire(APtr);
 end;
 
 function TSlabPoolSharded.AcquireN(out aUnits: array of Pointer; aCount: Integer): Integer;
@@ -730,9 +730,9 @@ begin
   end;
 end;
 
-procedure TSlabPoolSharded.Release(aPtr: Pointer);
+procedure TSlabPoolSharded.Release(APtr: Pointer);
 begin
-  FreeMem(aPtr);
+  FreeMem(APtr);
 end;
 
 procedure TSlabPoolSharded.ReleaseN(const aUnits: array of Pointer; aCount: Integer);
@@ -780,21 +780,21 @@ begin
   end;
 end;
 
-function TSlabPoolSharded.GetMem(aSize: SizeUInt): Pointer;
+function TSlabPoolSharded.GetMem(ASize: SizeUInt): Pointer;
 var
   LShard: Integer;
 begin
-  if aSize = 0 then Exit(nil);
+  if ASize = 0 then Exit(nil);
   LShard := ChooseShardIndex;
   FShards[LShard].Lock.Acquire;
   try
-    Result := FShards[LShard].Pool.GetMem(aSize);
+    Result := FShards[LShard].Pool.GetMem(ASize);
     if Result <> nil then
     begin
       // update segment routing if needed (new segments are rare)
       IndexShardNewSegmentsLocked(LShard);
       // track fallback pointers for exact routing
-      if ShouldUseFallback(aSize) then
+      if ShouldUseFallback(ASize) then
       begin
         FRoutingLock.AcquireWrite;
         try
@@ -809,14 +809,14 @@ begin
   end;
 end;
 
-function TSlabPoolSharded.AllocMem(aSize: SizeUInt): Pointer;
+function TSlabPoolSharded.AllocMem(ASize: SizeUInt): Pointer;
 begin
-  Result := GetMem(aSize);
+  Result := GetMem(ASize);
   if Result <> nil then
-    ZeroMem(Result, aSize);
+    ZeroMem(Result, ASize);
 end;
 
-function TSlabPoolSharded.ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+function TSlabPoolSharded.ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
 var
   LShard: Integer;
   LIsFallback: Boolean;
@@ -824,21 +824,21 @@ var
   LNewAlign: SizeUInt;
   LNewIsFallback: Boolean;
 begin
-  if aDst = nil then Exit(GetMem(aSize));
-  if aSize = 0 then
+  if ADst = nil then Exit(GetMem(ASize));
+  if ASize = 0 then
   begin
-    FreeMem(aDst);
+    FreeMem(ADst);
     Exit(nil);
   end;
 
-  if not TryRouteShardIndex(aDst, LShard, LIsFallback) then
+  if not TryRouteShardIndex(ADst, LShard, LIsFallback) then
     raise ESlabPoolCorruption.Create(aeInvalidPointer, 'Pointer does not belong to this pool');
 
   FShards[LShard].Lock.Acquire;
   try
-    if (not LIsFallback) and (not FShards[LShard].Pool.Owns(aDst)) then
+    if (not LIsFallback) and (not FShards[LShard].Pool.Owns(ADst)) then
       raise ESlabPoolCorruption.Create(aeInvalidPointer, 'Pointer does not belong to this pool');
-    Result := FShards[LShard].Pool.ReallocMem(aDst, aSize);
+    Result := FShards[LShard].Pool.ReallocMem(ADst, ASize);
     if Result <> nil then
     begin
       IndexShardNewSegmentsLocked(LShard);
@@ -848,7 +848,7 @@ begin
         FRoutingLock.AcquireWrite;
         try
           if LIsFallback then
-            FbMapDelete(aDst);
+            FbMapDelete(ADst);
           if LNewIsFallback then
             FbMapInsert(Result, LShard);
         finally
@@ -861,27 +861,27 @@ begin
   end;
 end;
 
-procedure TSlabPoolSharded.FreeMem(aDst: Pointer);
+procedure TSlabPoolSharded.FreeMem(ADst: Pointer);
 var
   LShard: Integer;
   LIsFallback: Boolean;
 begin
-  if aDst = nil then Exit;
+  if ADst = nil then Exit;
 
-  if not TryRouteShardIndex(aDst, LShard, LIsFallback) then
+  if not TryRouteShardIndex(ADst, LShard, LIsFallback) then
     raise ESlabPoolCorruption.Create(aeInvalidPointer, 'Pointer does not belong to this pool');
 
   FShards[LShard].Lock.Acquire;
   try
-    if (not LIsFallback) and (not FShards[LShard].Pool.Owns(aDst)) then
+    if (not LIsFallback) and (not FShards[LShard].Pool.Owns(ADst)) then
       raise ESlabPoolCorruption.Create(aeInvalidPointer, 'Pointer does not belong to this pool');
 
-    FShards[LShard].Pool.FreeMem(aDst);
+    FShards[LShard].Pool.FreeMem(ADst);
     if LIsFallback then
     begin
       FRoutingLock.AcquireWrite;
       try
-        FbMapDelete(aDst);
+        FbMapDelete(ADst);
       finally
         FRoutingLock.ReleaseWrite;
       end;
@@ -891,35 +891,35 @@ begin
   end;
 end;
 
-function TSlabPoolSharded.MemSize(aPtr: Pointer): SizeUInt;
+function TSlabPoolSharded.MemSize(APtr: Pointer): SizeUInt;
 begin
-  Result := MemSizeOf(aPtr);
+  Result := MemSizeOf(APtr);
 end;
 
-function TSlabPoolSharded.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
+function TSlabPoolSharded.AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
 var
   LShard: Integer;
   LNeedFallback: Boolean;
   LNatural: SizeUInt;
 begin
-  if aSize = 0 then Exit(nil);
-  if aAlignment < SizeOf(Pointer) then
-    aAlignment := SizeOf(Pointer);
-  if not IsPowerOfTwo(aAlignment) then
-    raise EInvalidArgument.Create('TSlabPoolSharded.AllocAligned: aAlignment must be power of two and >= pointer size');
+  if ASize = 0 then Exit(nil);
+  if AAlignment < SizeOf(Pointer) then
+    AAlignment := SizeOf(Pointer);
+  if not IsPowerOfTwo(AAlignment) then
+    raise EInvalidArgument.Create('TSlabPoolSharded.AllocAligned: AAlignment must be power of two and >= pointer size');
 
   LShard := ChooseShardIndex;
   FShards[LShard].Lock.Acquire;
   try
-    Result := FShards[LShard].Pool.AllocAligned(aSize, aAlignment);
+    Result := FShards[LShard].Pool.AllocAligned(ASize, AAlignment);
     if Result <> nil then
     begin
       IndexShardNewSegmentsLocked(LShard);
-      LNeedFallback := ShouldUseFallback(aSize);
+      LNeedFallback := ShouldUseFallback(ASize);
       if not LNeedFallback then
       begin
-        LNatural := NaturalAlignmentForSize(aSize);
-        LNeedFallback := aAlignment > LNatural;
+        LNatural := NaturalAlignmentForSize(ASize);
+        LNeedFallback := AAlignment > LNatural;
       end;
       if LNeedFallback then
       begin
@@ -936,9 +936,9 @@ begin
   end;
 end;
 
-procedure TSlabPoolSharded.FreeAligned(aPtr: Pointer);
+procedure TSlabPoolSharded.FreeAligned(APtr: Pointer);
 begin
-  FreeMem(aPtr);
+  FreeMem(APtr);
 end;
 
 function TSlabPoolSharded.Traits: TAllocatorTraits;
@@ -950,35 +950,35 @@ begin
   Result.SupportsAligned := False;
 end;
 
-function TSlabPoolSharded.Owns(aPtr: Pointer): Boolean;
+function TSlabPoolSharded.Owns(APtr: Pointer): Boolean;
 var
   LShard: Integer;
   LIsFallback: Boolean;
 begin
-  if not TryRouteShardIndex(aPtr, LShard, LIsFallback) then
+  if not TryRouteShardIndex(APtr, LShard, LIsFallback) then
     Exit(False);
   if LIsFallback then
     Exit(True);
 
   FShards[LShard].Lock.Acquire;
   try
-    Result := FShards[LShard].Pool.Owns(aPtr);
+    Result := FShards[LShard].Pool.Owns(APtr);
   finally
     FShards[LShard].Lock.Release;
   end;
 end;
 
-function TSlabPoolSharded.MemSizeOf(aPtr: Pointer): SizeUInt;
+function TSlabPoolSharded.MemSizeOf(APtr: Pointer): SizeUInt;
 var
   LShard: Integer;
   LIsFallback: Boolean;
 begin
-  if aPtr = nil then Exit(0);
-  if not TryRouteShardIndex(aPtr, LShard, LIsFallback) then Exit(0);
+  if APtr = nil then Exit(0);
+  if not TryRouteShardIndex(APtr, LShard, LIsFallback) then Exit(0);
 
   FShards[LShard].Lock.Acquire;
   try
-    Result := FShards[LShard].Pool.MemSizeOf(aPtr);
+    Result := FShards[LShard].Pool.MemSizeOf(APtr);
   finally
     FShards[LShard].Lock.Release;
   end;

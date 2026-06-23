@@ -28,13 +28,13 @@ type
     FReallocateCalls: SizeUInt;
   public
     constructor Create(const AFailOnReallocateCall: SizeUInt);
-    function GetMem(aSize: SizeUInt): Pointer;
-    function AllocMem(aSize: SizeUInt): Pointer;
-    function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
-    procedure FreeMem(aDst: Pointer);
-    function MemSize(aPtr: Pointer): SizeUInt;
-    function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
-    procedure FreeAligned(aPtr: Pointer);
+    function GetMem(ASize: SizeUInt): Pointer;
+    function AllocMem(ASize: SizeUInt): Pointer;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(ADst: Pointer);
+    function MemSize(APtr: Pointer): SizeUInt;
+    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
+    procedure FreeAligned(APtr: Pointer);
     function Traits: TAllocatorTraits;
   end;
 
@@ -44,13 +44,13 @@ type
     FAllocateCalls: SizeUInt;
   public
     constructor Create(const AFailOnAllocateCall: SizeUInt);
-    function GetMem(aSize: SizeUInt): Pointer;
-    function AllocMem(aSize: SizeUInt): Pointer;
-    function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
-    procedure FreeMem(aDst: Pointer);
-    function MemSize(aPtr: Pointer): SizeUInt;
-    function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
-    procedure FreeAligned(aPtr: Pointer);
+    function GetMem(ASize: SizeUInt): Pointer;
+    function AllocMem(ASize: SizeUInt): Pointer;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(ADst: Pointer);
+    function MemSize(APtr: Pointer): SizeUInt;
+    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
+    procedure FreeAligned(APtr: Pointer);
     function Traits: TAllocatorTraits;
   end;
 
@@ -59,13 +59,13 @@ type
     FAllocations: SizeUInt;
     FDeallocations: SizeUInt;
   public
-    function GetMem(aSize: SizeUInt): Pointer;
-    function AllocMem(aSize: SizeUInt): Pointer;
-    function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
-    procedure FreeMem(aDst: Pointer);
-    function MemSize(aPtr: Pointer): SizeUInt;
-    function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
-    procedure FreeAligned(aPtr: Pointer);
+    function GetMem(ASize: SizeUInt): Pointer;
+    function AllocMem(ASize: SizeUInt): Pointer;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(ADst: Pointer);
+    function MemSize(APtr: Pointer): SizeUInt;
+    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
+    procedure FreeAligned(APtr: Pointer);
     function Traits: TAllocatorTraits;
     function OutstandingAllocations: SizeUInt;
   end;
@@ -77,55 +77,55 @@ begin
   FReallocateCalls := 0;
 end;
 
-function TFailingReallocateAllocator.GetMem(aSize: SizeUInt): Pointer;
+function TFailingReallocateAllocator.GetMem(ASize: SizeUInt): Pointer;
 begin
-  if aSize = 0 then
+  if ASize = 0 then
     Exit(nil);
-  Result := System.GetMem(aSize);
+  Result := System.GetMem(ASize);
 end;
 
-function TFailingReallocateAllocator.AllocMem(aSize: SizeUInt): Pointer;
+function TFailingReallocateAllocator.AllocMem(ASize: SizeUInt): Pointer;
 begin
-  if aSize = 0 then
+  if ASize = 0 then
     Exit(nil);
-  Result := System.AllocMem(aSize);
+  Result := System.AllocMem(ASize);
 end;
 
-function TFailingReallocateAllocator.ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+function TFailingReallocateAllocator.ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
 begin
-  if aSize = 0 then
+  if ASize = 0 then
   begin
-    FreeMem(aDst);
+    FreeMem(ADst);
     Exit(nil);
   end;
-  if aDst = nil then
-    Exit(GetMem(aSize));
+  if ADst = nil then
+    Exit(GetMem(ASize));
   Inc(FReallocateCalls);
   if (FFailOnReallocateCall > 0) and (FReallocateCalls = FFailOnReallocateCall) then
     Exit(nil);
-  Result := System.ReallocMem(aDst, aSize);
+  Result := System.ReallocMem(ADst, ASize);
 end;
 
-procedure TFailingReallocateAllocator.FreeMem(aDst: Pointer);
+procedure TFailingReallocateAllocator.FreeMem(ADst: Pointer);
 begin
-  if aDst <> nil then
-    System.FreeMem(aDst);
+  if ADst <> nil then
+    System.FreeMem(ADst);
 end;
 
-function TFailingReallocateAllocator.MemSize(aPtr: Pointer): SizeUInt;
+function TFailingReallocateAllocator.MemSize(APtr: Pointer): SizeUInt;
 begin
   Result := 0;
 end;
 
-function TFailingReallocateAllocator.AllocAligned(aSize,
-  aAlignment: SizeUInt): Pointer;
+function TFailingReallocateAllocator.AllocAligned(ASize,
+  AAlignment: SizeUInt): Pointer;
 begin
-  Result := GetMem(aSize);
+  Result := GetMem(ASize);
 end;
 
-procedure TFailingReallocateAllocator.FreeAligned(aPtr: Pointer);
+procedure TFailingReallocateAllocator.FreeAligned(APtr: Pointer);
 begin
-  FreeMem(aPtr);
+  FreeMem(APtr);
 end;
 
 function TFailingReallocateAllocator.Traits: TAllocatorTraits;
@@ -143,58 +143,58 @@ begin
   FAllocateCalls := 0;
 end;
 
-function TFailingAllocateAllocator.GetMem(aSize: SizeUInt): Pointer;
+function TFailingAllocateAllocator.GetMem(ASize: SizeUInt): Pointer;
 begin
-  if aSize = 0 then
+  if ASize = 0 then
     Exit(nil);
   Inc(FAllocateCalls);
   if (FFailOnAllocateCall > 0) and (FAllocateCalls = FFailOnAllocateCall) then
     Exit(nil);
-  Result := System.GetMem(aSize);
+  Result := System.GetMem(ASize);
 end;
 
-function TFailingAllocateAllocator.AllocMem(aSize: SizeUInt): Pointer;
+function TFailingAllocateAllocator.AllocMem(ASize: SizeUInt): Pointer;
 begin
-  if aSize = 0 then
+  if ASize = 0 then
     Exit(nil);
   Inc(FAllocateCalls);
   if (FFailOnAllocateCall > 0) and (FAllocateCalls = FFailOnAllocateCall) then
     Exit(nil);
-  Result := System.AllocMem(aSize);
+  Result := System.AllocMem(ASize);
 end;
 
-function TFailingAllocateAllocator.ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+function TFailingAllocateAllocator.ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
 begin
-  if aSize = 0 then
+  if ASize = 0 then
   begin
-    FreeMem(aDst);
+    FreeMem(ADst);
     Exit(nil);
   end;
-  if aDst = nil then
-    Exit(GetMem(aSize));
-  Result := System.ReallocMem(aDst, aSize);
+  if ADst = nil then
+    Exit(GetMem(ASize));
+  Result := System.ReallocMem(ADst, ASize);
 end;
 
-procedure TFailingAllocateAllocator.FreeMem(aDst: Pointer);
+procedure TFailingAllocateAllocator.FreeMem(ADst: Pointer);
 begin
-  if aDst <> nil then
-    System.FreeMem(aDst);
+  if ADst <> nil then
+    System.FreeMem(ADst);
 end;
 
-function TFailingAllocateAllocator.MemSize(aPtr: Pointer): SizeUInt;
+function TFailingAllocateAllocator.MemSize(APtr: Pointer): SizeUInt;
 begin
   Result := 0;
 end;
 
-function TFailingAllocateAllocator.AllocAligned(aSize,
-  aAlignment: SizeUInt): Pointer;
+function TFailingAllocateAllocator.AllocAligned(ASize,
+  AAlignment: SizeUInt): Pointer;
 begin
-  Result := GetMem(aSize);
+  Result := GetMem(ASize);
 end;
 
-procedure TFailingAllocateAllocator.FreeAligned(aPtr: Pointer);
+procedure TFailingAllocateAllocator.FreeAligned(APtr: Pointer);
 begin
-  FreeMem(aPtr);
+  FreeMem(APtr);
 end;
 
 function TFailingAllocateAllocator.Traits: TAllocatorTraits;
@@ -205,56 +205,56 @@ begin
   Result.SupportsAligned := False;
 end;
 
-function TCountingAllocator.GetMem(aSize: SizeUInt): Pointer;
+function TCountingAllocator.GetMem(ASize: SizeUInt): Pointer;
 begin
-  if aSize = 0 then
+  if ASize = 0 then
     Exit(nil);
-  Result := System.GetMem(aSize);
+  Result := System.GetMem(ASize);
   Inc(FAllocations);
 end;
 
-function TCountingAllocator.AllocMem(aSize: SizeUInt): Pointer;
+function TCountingAllocator.AllocMem(ASize: SizeUInt): Pointer;
 begin
-  if aSize = 0 then
+  if ASize = 0 then
     Exit(nil);
-  Result := System.AllocMem(aSize);
+  Result := System.AllocMem(ASize);
   Inc(FAllocations);
 end;
 
-function TCountingAllocator.ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+function TCountingAllocator.ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
 begin
-  if aSize = 0 then
+  if ASize = 0 then
   begin
-    FreeMem(aDst);
+    FreeMem(ADst);
     Exit(nil);
   end;
-  if aDst = nil then
-    Exit(GetMem(aSize));
-  Result := System.ReallocMem(aDst, aSize);
+  if ADst = nil then
+    Exit(GetMem(ASize));
+  Result := System.ReallocMem(ADst, ASize);
 end;
 
-procedure TCountingAllocator.FreeMem(aDst: Pointer);
+procedure TCountingAllocator.FreeMem(ADst: Pointer);
 begin
-  if aDst <> nil then
+  if ADst <> nil then
   begin
-    System.FreeMem(aDst);
+    System.FreeMem(ADst);
     Inc(FDeallocations);
   end;
 end;
 
-function TCountingAllocator.MemSize(aPtr: Pointer): SizeUInt;
+function TCountingAllocator.MemSize(APtr: Pointer): SizeUInt;
 begin
   Result := 0;
 end;
 
-function TCountingAllocator.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
+function TCountingAllocator.AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
 begin
-  Result := GetMem(aSize);
+  Result := GetMem(ASize);
 end;
 
-procedure TCountingAllocator.FreeAligned(aPtr: Pointer);
+procedure TCountingAllocator.FreeAligned(APtr: Pointer);
 begin
-  FreeMem(aPtr);
+  FreeMem(APtr);
 end;
 
 function TCountingAllocator.Traits: TAllocatorTraits;

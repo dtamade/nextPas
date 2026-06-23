@@ -20,13 +20,13 @@ type
   public
     GetCalls: Integer;
     FreeCalls: Integer;
-    function GetMem(aSize: SizeUInt): Pointer;
-    function AllocMem(aSize: SizeUInt): Pointer;
-    function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
-    procedure FreeMem(aDst: Pointer);
-    function MemSize(aPtr: Pointer): SizeUInt;
-    function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
-    procedure FreeAligned(aPtr: Pointer);
+    function GetMem(ASize: SizeUInt): Pointer;
+    function AllocMem(ASize: SizeUInt): Pointer;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(ADst: Pointer);
+    function MemSize(APtr: Pointer): SizeUInt;
+    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
+    procedure FreeAligned(APtr: Pointer);
     function Traits: TAllocatorTraits;
   end;
 
@@ -47,38 +47,38 @@ begin
   end;
 end;
 
-function TFixedPoolRecordingAllocator.GetMem(aSize: SizeUInt): Pointer;
+function TFixedPoolRecordingAllocator.GetMem(ASize: SizeUInt): Pointer;
 begin
   Inc(GetCalls);
   Result := nil;
 end;
 
-function TFixedPoolRecordingAllocator.AllocMem(aSize: SizeUInt): Pointer;
+function TFixedPoolRecordingAllocator.AllocMem(ASize: SizeUInt): Pointer;
 begin
-  Result := GetMem(aSize);
+  Result := GetMem(ASize);
 end;
 
-function TFixedPoolRecordingAllocator.ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+function TFixedPoolRecordingAllocator.ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
 begin
   Result := nil;
 end;
 
-procedure TFixedPoolRecordingAllocator.FreeMem(aDst: Pointer);
+procedure TFixedPoolRecordingAllocator.FreeMem(ADst: Pointer);
 begin
   Inc(FreeCalls);
 end;
 
-function TFixedPoolRecordingAllocator.MemSize(aPtr: Pointer): SizeUInt;
+function TFixedPoolRecordingAllocator.MemSize(APtr: Pointer): SizeUInt;
 begin
   Result := 0;
 end;
 
-function TFixedPoolRecordingAllocator.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
+function TFixedPoolRecordingAllocator.AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
 begin
-  Result := GetMem(aSize);
+  Result := GetMem(ASize);
 end;
 
-procedure TFixedPoolRecordingAllocator.FreeAligned(aPtr: Pointer);
+procedure TFixedPoolRecordingAllocator.FreeAligned(APtr: Pointer);
 begin
   Inc(FreeCalls);
 end;

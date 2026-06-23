@@ -15,19 +15,19 @@ type
   TFixedSlabRecordingAllocator = class(TInterfacedObject, IAllocator)
   private
     FPtrs: array of Pointer;
-    function IndexOf(aPtr: Pointer): Integer;
-    procedure Track(aPtr: Pointer);
-    function Untrack(aPtr: Pointer): Boolean;
+    function IndexOf(APtr: Pointer): Integer;
+    procedure Track(APtr: Pointer);
+    function Untrack(APtr: Pointer): Boolean;
   public
     GetCalls: Integer;
     FreeAlignedCalls: Integer;
-    function GetMem(aSize: SizeUInt): Pointer;
-    function AllocMem(aSize: SizeUInt): Pointer;
-    function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
-    procedure FreeMem(aDst: Pointer);
-    function MemSize(aPtr: Pointer): SizeUInt;
-    function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
-    procedure FreeAligned(aPtr: Pointer);
+    function GetMem(ASize: SizeUInt): Pointer;
+    function AllocMem(ASize: SizeUInt): Pointer;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(ADst: Pointer);
+    function MemSize(APtr: Pointer): SizeUInt;
+    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
+    procedure FreeAligned(APtr: Pointer);
     function Traits: TAllocatorTraits;
   end;
 
@@ -50,33 +50,33 @@ begin
   end;
 end;
 
-function TFixedSlabRecordingAllocator.IndexOf(aPtr: Pointer): Integer;
+function TFixedSlabRecordingAllocator.IndexOf(APtr: Pointer): Integer;
 var
   LIndex: Integer;
 begin
   for LIndex := 0 to High(FPtrs) do
-    if FPtrs[LIndex] = aPtr then
+    if FPtrs[LIndex] = APtr then
       Exit(LIndex);
   Result := -1;
 end;
 
-procedure TFixedSlabRecordingAllocator.Track(aPtr: Pointer);
+procedure TFixedSlabRecordingAllocator.Track(APtr: Pointer);
 var
   LCount: Integer;
 begin
-  if aPtr = nil then
+  if APtr = nil then
     Exit;
   LCount := Length(FPtrs);
   SetLength(FPtrs, LCount + 1);
-  FPtrs[LCount] := aPtr;
+  FPtrs[LCount] := APtr;
 end;
 
-function TFixedSlabRecordingAllocator.Untrack(aPtr: Pointer): Boolean;
+function TFixedSlabRecordingAllocator.Untrack(APtr: Pointer): Boolean;
 var
   LIndex: Integer;
   LLast: Integer;
 begin
-  LIndex := IndexOf(aPtr);
+  LIndex := IndexOf(APtr);
   Result := LIndex >= 0;
   if not Result then
     Exit;
@@ -85,73 +85,73 @@ begin
   SetLength(FPtrs, LLast);
 end;
 
-function TFixedSlabRecordingAllocator.GetMem(aSize: SizeUInt): Pointer;
+function TFixedSlabRecordingAllocator.GetMem(ASize: SizeUInt): Pointer;
 begin
-  if aSize = 0 then Exit(nil);
+  if ASize = 0 then Exit(nil);
   Inc(GetCalls);
-  Result := System.GetMem(aSize);
+  Result := System.GetMem(ASize);
   Track(Result);
 end;
 
-function TFixedSlabRecordingAllocator.AllocMem(aSize: SizeUInt): Pointer;
+function TFixedSlabRecordingAllocator.AllocMem(ASize: SizeUInt): Pointer;
 begin
-  if aSize = 0 then Exit(nil);
-  Result := System.AllocMem(aSize);
+  if ASize = 0 then Exit(nil);
+  Result := System.AllocMem(ASize);
   Track(Result);
 end;
 
-function TFixedSlabRecordingAllocator.ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+function TFixedSlabRecordingAllocator.ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
 var
   LIndex: Integer;
 begin
-  if aSize = 0 then
+  if ASize = 0 then
   begin
-    FreeMem(aDst);
+    FreeMem(ADst);
     Exit(nil);
   end;
-  if aDst = nil then
-    Exit(GetMem(aSize));
-  LIndex := IndexOf(aDst);
+  if ADst = nil then
+    Exit(GetMem(ASize));
+  LIndex := IndexOf(ADst);
   if LIndex < 0 then
     Exit(nil);
-  Result := System.ReallocMem(aDst, aSize);
+  Result := System.ReallocMem(ADst, ASize);
   FPtrs[LIndex] := Result;
 end;
 
-procedure TFixedSlabRecordingAllocator.FreeMem(aDst: Pointer);
+procedure TFixedSlabRecordingAllocator.FreeMem(ADst: Pointer);
 begin
-  if aDst = nil then Exit;
-  if Untrack(aDst) then
-    System.FreeMem(aDst);
+  if ADst = nil then Exit;
+  if Untrack(ADst) then
+    System.FreeMem(ADst);
 end;
 
-function TFixedSlabRecordingAllocator.MemSize(aPtr: Pointer): SizeUInt;
+function TFixedSlabRecordingAllocator.MemSize(APtr: Pointer): SizeUInt;
 begin
   Result := 0;
 end;
 
-function TFixedSlabRecordingAllocator.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
+function TFixedSlabRecordingAllocator.AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
 var
   LRaw: Pointer;
   LNeeded: SizeUInt;
   LMask: PtrUInt;
 begin
-  if aSize = 0 then Exit(nil);
-  LNeeded := aSize + aAlignment - 1 + SizeOf(Pointer);
+  if ASize = 0 then Exit(nil);
+  LNeeded := ASize + AAlignment - 1 + SizeOf(Pointer);
   LRaw := GetMem(LNeeded);
   if LRaw = nil then Exit(nil);
-  LMask := PtrUInt(aAlignment - 1);
+  LMask := PtrUInt(AAlignment - 1);
   Result := Pointer((PtrUInt(LRaw) + SizeOf(Pointer) + LMask) and not LMask);
   PPointer(PtrUInt(Result) - SizeOf(Pointer))^ := LRaw;
 end;
 
-procedure TFixedSlabRecordingAllocator.FreeAligned(aPtr: Pointer);
+procedure TFixedSlabRecordingAllocator.FreeAligned(APtr: Pointer);
 var
   LRaw: Pointer;
 begin
-  if aPtr = nil then Exit;
+  if APtr = nil then Exit;
   Inc(FreeAlignedCalls);
-  LRaw := PPointer(PtrUInt(aPtr) - SizeOf(Pointer))^;
+  LRaw := PPointer(PtrUInt(APtr) - SizeOf(Pointer))^;
   FreeMem(LRaw);
 end;
 

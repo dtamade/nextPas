@@ -36,16 +36,16 @@ type
     FCapacity: SizeInt;
     FNextAllocId: QWord;
     FLock: TRTLCriticalSection;
-    function FindRecordIndex(aPtr: Pointer): SizeInt;
-    procedure AddRecord(aPtr: Pointer; aSize: SizeUInt);
-    procedure RemoveRecord(aPtr: Pointer);
+    function FindRecordIndex(APtr: Pointer): SizeInt;
+    procedure AddRecord(APtr: Pointer; ASize: SizeUInt);
+    procedure RemoveRecord(APtr: Pointer);
     procedure UpdateRecord(aOldPtr, aNewPtr: Pointer; aNewSize: SizeUInt);
   protected
-    function DoGetMem(aSize: SizeUInt): Pointer; override;
-    function DoAllocMem(aSize: SizeUInt): Pointer; override;
-    function DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(aDst: Pointer); override;
-    function DoMemSize(aPtr: Pointer): SizeUInt; override;
+    function DoGetMem(ASize: SizeUInt): Pointer; override;
+    function DoAllocMem(ASize: SizeUInt): Pointer; override;
+    function DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
+    procedure DoFreeMem(ADst: Pointer); override;
+    function DoMemSize(APtr: Pointer): SizeUInt; override;
   public
     constructor Create(aInner: IAllocator);
     destructor Destroy; override;
@@ -88,21 +88,21 @@ begin
   inherited;
 end;
 
-function TTrackingAllocator.FindRecordIndex(aPtr: Pointer): SizeInt;
+function TTrackingAllocator.FindRecordIndex(APtr: Pointer): SizeInt;
 var
   I: SizeInt;
 begin
   for I := 0 to FCount - 1 do
-    if FRecords[I].Ptr = aPtr then
+    if FRecords[I].Ptr = APtr then
       Exit(I);
   Result := -1;
 end;
 
-procedure TTrackingAllocator.AddRecord(aPtr: Pointer; aSize: SizeUInt);
+procedure TTrackingAllocator.AddRecord(APtr: Pointer; ASize: SizeUInt);
 var
   LNewCapacity: SizeInt;
 begin
-  if aPtr = nil then
+  if APtr = nil then
     Exit;
   if FCount >= FCapacity then
   begin
@@ -113,20 +113,20 @@ begin
     SetLength(FRecords, LNewCapacity);
     FCapacity := LNewCapacity;
   end;
-  FRecords[FCount].Ptr := aPtr;
-  FRecords[FCount].Size := aSize;
+  FRecords[FCount].Ptr := APtr;
+  FRecords[FCount].Size := ASize;
   FRecords[FCount].AllocId := FNextAllocId;
   Inc(FNextAllocId);
   Inc(FCount);
 end;
 
-procedure TTrackingAllocator.RemoveRecord(aPtr: Pointer);
+procedure TTrackingAllocator.RemoveRecord(APtr: Pointer);
 var
   LIdx: SizeInt;
 begin
-  if aPtr = nil then
+  if APtr = nil then
     Exit;
-  LIdx := FindRecordIndex(aPtr);
+  LIdx := FindRecordIndex(APtr);
   if LIdx >= 0 then
   begin
     { 用最后一个元素覆盖被删除的元素 }
@@ -153,41 +153,41 @@ begin
   end;
 end;
 
-function TTrackingAllocator.DoGetMem(aSize: SizeUInt): Pointer;
+function TTrackingAllocator.DoGetMem(ASize: SizeUInt): Pointer;
 begin
-  Result := FInner.GetMem(aSize);
+  Result := FInner.GetMem(ASize);
   EnterCriticalSection(FLock);
   try
-    AddRecord(Result, aSize);
+    AddRecord(Result, ASize);
   finally
     LeaveCriticalSection(FLock);
   end;
 end;
 
-function TTrackingAllocator.DoAllocMem(aSize: SizeUInt): Pointer;
+function TTrackingAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
 begin
-  Result := FInner.AllocMem(aSize);
+  Result := FInner.AllocMem(ASize);
   EnterCriticalSection(FLock);
   try
-    AddRecord(Result, aSize);
+    AddRecord(Result, ASize);
   finally
     LeaveCriticalSection(FLock);
   end;
 end;
 
-function TTrackingAllocator.DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+function TTrackingAllocator.DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
 begin
-  Result := FInner.ReallocMem(aDst, aSize);
+  Result := FInner.ReallocMem(ADst, ASize);
   EnterCriticalSection(FLock);
   try
     if Result <> nil then
     begin
-      if aDst <> nil then
-        UpdateRecord(aDst, Result, aSize)
+      if ADst <> nil then
+        UpdateRecord(ADst, Result, ASize)
       else
-        AddRecord(Result, aSize);
+        AddRecord(Result, ASize);
     end
-    else if aDst <> nil then
+    else if ADst <> nil then
     begin
       { ReallocMem 失败：原指针仍有效 }
     end;
@@ -196,20 +196,20 @@ begin
   end;
 end;
 
-procedure TTrackingAllocator.DoFreeMem(aDst: Pointer);
+procedure TTrackingAllocator.DoFreeMem(ADst: Pointer);
 begin
-  FInner.FreeMem(aDst);
+  FInner.FreeMem(ADst);
   EnterCriticalSection(FLock);
   try
-    RemoveRecord(aDst);
+    RemoveRecord(ADst);
   finally
     LeaveCriticalSection(FLock);
   end;
 end;
 
-function TTrackingAllocator.DoMemSize(aPtr: Pointer): SizeUInt;
+function TTrackingAllocator.DoMemSize(APtr: Pointer): SizeUInt;
 begin
-  Result := FInner.MemSize(aPtr);
+  Result := FInner.MemSize(APtr);
 end;
 
 function TTrackingAllocator.ActiveAllocCount: SizeInt;

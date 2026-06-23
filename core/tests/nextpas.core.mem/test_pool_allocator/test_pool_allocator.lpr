@@ -14,19 +14,19 @@ type
   TRecordingFallback = class(TAllocator)
   private
     FPtrs: array of Pointer;
-    function IndexOf(aPtr: Pointer): Integer;
-    procedure Track(aPtr: Pointer);
-    function Untrack(aPtr: Pointer): Boolean;
+    function IndexOf(APtr: Pointer): Integer;
+    procedure Track(APtr: Pointer);
+    function Untrack(APtr: Pointer): Boolean;
   public
     GetCalls: Integer;
     AllocCalls: Integer;
     ReallocCalls: Integer;
     FreeCalls: Integer;
   protected
-    function DoGetMem(aSize: SizeUInt): Pointer; override;
-    function DoAllocMem(aSize: SizeUInt): Pointer; override;
-    function DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(aDst: Pointer); override;
+    function DoGetMem(ASize: SizeUInt): Pointer; override;
+    function DoAllocMem(ASize: SizeUInt): Pointer; override;
+    function DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
+    procedure DoFreeMem(ADst: Pointer); override;
   end;
 
 var
@@ -37,33 +37,33 @@ var
   GPtr: Pointer = nil;
   GForeignByte: Byte = 0;
 
-function TRecordingFallback.IndexOf(aPtr: Pointer): Integer;
+function TRecordingFallback.IndexOf(APtr: Pointer): Integer;
 var
   LIndex: Integer;
 begin
   for LIndex := 0 to High(FPtrs) do
-    if FPtrs[LIndex] = aPtr then
+    if FPtrs[LIndex] = APtr then
       Exit(LIndex);
   Result := -1;
 end;
 
-procedure TRecordingFallback.Track(aPtr: Pointer);
+procedure TRecordingFallback.Track(APtr: Pointer);
 var
   LCount: Integer;
 begin
-  if aPtr = nil then
+  if APtr = nil then
     Exit;
   LCount := Length(FPtrs);
   SetLength(FPtrs, LCount + 1);
-  FPtrs[LCount] := aPtr;
+  FPtrs[LCount] := APtr;
 end;
 
-function TRecordingFallback.Untrack(aPtr: Pointer): Boolean;
+function TRecordingFallback.Untrack(APtr: Pointer): Boolean;
 var
   LIndex: Integer;
   LLast: Integer;
 begin
-  LIndex := IndexOf(aPtr);
+  LIndex := IndexOf(APtr);
   Result := LIndex >= 0;
   if not Result then
     Exit;
@@ -72,41 +72,41 @@ begin
   SetLength(FPtrs, LLast);
 end;
 
-function TRecordingFallback.DoGetMem(aSize: SizeUInt): Pointer;
+function TRecordingFallback.DoGetMem(ASize: SizeUInt): Pointer;
 begin
   Inc(GetCalls);
-  Result := System.GetMem(aSize);
+  Result := System.GetMem(ASize);
   Track(Result);
 end;
 
-function TRecordingFallback.DoAllocMem(aSize: SizeUInt): Pointer;
+function TRecordingFallback.DoAllocMem(ASize: SizeUInt): Pointer;
 begin
   Inc(AllocCalls);
-  Result := System.AllocMem(aSize);
+  Result := System.AllocMem(ASize);
   Track(Result);
 end;
 
-function TRecordingFallback.DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+function TRecordingFallback.DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
 var
   LIndex: Integer;
 begin
   Inc(ReallocCalls);
-  if aDst = nil then
-    Exit(DoGetMem(aSize));
+  if ADst = nil then
+    Exit(DoGetMem(ASize));
 
-  LIndex := IndexOf(aDst);
+  LIndex := IndexOf(ADst);
   if LIndex < 0 then
     Exit(nil);
 
-  Result := System.ReallocMem(aDst, aSize);
+  Result := System.ReallocMem(ADst, ASize);
   FPtrs[LIndex] := Result;
 end;
 
-procedure TRecordingFallback.DoFreeMem(aDst: Pointer);
+procedure TRecordingFallback.DoFreeMem(ADst: Pointer);
 begin
   Inc(FreeCalls);
-  if Untrack(aDst) then
-    System.FreeMem(aDst);
+  if Untrack(ADst) then
+    System.FreeMem(ADst);
 end;
 
 procedure CheckRaisesAllocError(AProc: TExceptionProc; AExpected: TAllocError; const AName: string);
