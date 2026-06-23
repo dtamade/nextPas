@@ -9,17 +9,25 @@
 - **编译器**: Lexer 1652 行基本完整，Sema 15436 行单文件（607 方法），HIR LLVM emitter 1743 行
 - **FPC stubs**: 14 个临时 stub 文件在 `units/linux-x86_64/`
 - **性能**: 无增量缓存，67 单元 6.4s，158 单元 16s
-- **Phase A+C+D**: ✅ 已完成（2026-06-24）
-  - `core/src/` 0 直接 SysUtils 依赖
+- **Phase A+C+D+E**: ✅ 已完成（2026-06-24）
+  - `core/src/` 0 直接 SysUtils/Classes/System 依赖
   - Exception 类型统一（core + stub 都指向 nextpas.core.exception）
+  - 平台类型自足（SizeInt/SizeUInt 等由 nextpas.core.base 定义）
   - compiler-pass 16/16，smoke test 10/10 全部通过
   - nextpas.core 作为标准库的编译能力验证通过
 
 ## 总体策略
 
-**P0 → P1-Math → P2 → P1-SysUtils → P3 → ~~P1-Classes~~ ✅ → P1-平台绑定**
+**P0 → P1-Math → P2 → P1-SysUtils → P3 → ~~P1-Classes~~ ✅ → P1-平台绑定 → ~~Phase A+C+D+E~~ ✅**
 
 P2（Sema 能力）排在 P1（FPC RTL 清零）前面，因为 P2 修一个方法解锁多个模块，投入产出比更高。
+
+**Phase A+C+D+E 完成**（2026-06-24）：
+- Phase A: Exception 自给自足
+- Phase C: SysUtils stub 降级
+- Phase D: nextpas_core_pass 测试
+- Phase E: System 类型自足
+- 结果：`core/src/` 0 直接 FPC RTL 依赖，nextpas.core 完全自足
 
 ---
 
@@ -183,6 +191,23 @@ fixture 即误报 `sema.c6h4-owned-string-return-deferred-consumer`（build 失�
 - smoke test 10/10: ✓ all pass
 
 **意义**：验证 nextpas.core 作为标准库的编译能力，Phase D 目标达成。
+
+### Phase E: System 类型自足 — ✅ 已完成（2026-06-24）
+
+**目标**：`nextpas.core.system.pas` 中的 `System.SizeInt` 等引用改为 nextpas.core 自定义。
+
+**核心改动**（commit `9377e2ae0`）：
+- `nextpas.core.base.pas`：定义平台相关类型
+  - `SizeInt`/`SizeUInt`/`PtrInt`/`PtrUInt`/`NativeInt`/`NativeUInt`
+  - 使用 `{$IFDEF CPU64}` 条件编译
+- `nextpas.core.system.pas`：从 nextpas.core.base re-export，不再引用 FPC System
+
+**验证结果**：
+- rebuild-compiler: ✓ (160873 lines)
+- compiler-pass 16/16: ✓ all pass
+- smoke test 10/10: ✓ all pass
+
+**意义**：`core/src/` 现在 0 直接 FPC System 类型引用，完全自足。
 
 ---
 
