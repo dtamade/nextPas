@@ -3,7 +3,7 @@
 
 set -e
 
-NEXTPAS="./.sisyphus/tmp/stage0-bootstrap-debug/nextpas"
+NEXTPAS="./build/stage0-bootstrap/nextpas"
 TARGET="linux-x86_64"
 WORKSPACE="."
 RUNTIME_SDK="units/linux-x86_64"
@@ -40,7 +40,7 @@ MODULES=(
   "compiler/toolchain/np_toolchain_runner.pas"
 
   # IR
-  "compiler/ir/np_mir_model.pas"
+  "compiler/ir/np_hir_model.pas"
 
   # Backend
   "compiler/backend/np_backend_plan.pas"

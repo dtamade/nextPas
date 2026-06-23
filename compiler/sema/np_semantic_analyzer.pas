@@ -161,7 +161,8 @@ type
     function IsSupportedOwnedStringReturnConcatOperand(
       const ANode: TGreenNode; out AFuncName: string): Boolean;
     function ConcatExpressionConsumesOwnedStringReturnDeferred(
-      const ANode: TGreenNode): Boolean;
+      const ANode: TGreenNode;
+      const AInsideDirectOwnedAssignmentRhs: Boolean): Boolean;
     function CompareOperandOwnsStringReturn(
       const ANode: TGreenNode; out AFuncName: string): Boolean;
     function IsSupportedOwnedStringReturnCompareOperand(
@@ -919,6 +920,8 @@ function TSemanticAnalyzer.StringReturnFunctionNameFromNode(
   const ANode: TGreenNode; out AName: string): Boolean;
 var
   BodyNode, DeclNode: TGreenNode;
+  SymbolId, TypeId: LongInt;
+  TypeName: string;
 begin
   AName := '';
   Result := False;
@@ -930,10 +933,28 @@ begin
     AName := ANode.Text;
   if AName = '' then
     Exit;
-  if (not LookupProcedureBody(AName, BodyNode, DeclNode)) or
-    (not DeclReturnsString(DeclNode)) then
+  if LookupProcedureBody(AName, BodyNode, DeclNode) and
+    DeclReturnsString(DeclNode) then
+    Exit(True);
+  { Fallback: check semantic model for imported functions }
+  SymbolId := FModel.LookupSymbol(AName, FCurrentScopeId);
+  if SymbolId <= 0 then
+    SymbolId := FModel.FindSymbolByName(AName);
+  if SymbolId <= 0 then
     Exit;
-  Result := True;
+  { Only accept actual function/procedure symbols — not parameters,
+    variables, constants, or fields. }
+  if not SameText(FModel.SymbolAt(SymbolId - 1).Kind, 'function') and
+    not SameText(FModel.SymbolAt(SymbolId - 1).Kind, 'procedure') then
+    Exit;
+  TypeId := FModel.SymbolTypeId(SymbolId);
+  if (TypeId > 0) and (TypeId <= FModel.TypeCount) then
+  begin
+    TypeName := FModel.TypeAt(TypeId - 1).Name;
+    Result := SameText(TypeName, 'String') or SameText(TypeName, 'AnsiString') or
+      SameText(TypeName, 'ShortString') or SameText(TypeName, 'WideString') or
+      SameText(TypeName, 'UnicodeString');
+  end;
 end;
 
 function TSemanticAnalyzer.FunctionCallReturnsString(
@@ -953,6 +974,10 @@ begin
   if SymbolId <= 0 then
     SymbolId := FModel.FindSymbolByName(ANode.Text);
   if SymbolId <= 0 then
+    Exit;
+  { Only accept actual function/procedure symbols }
+  if not SameText(FModel.SymbolAt(SymbolId - 1).Kind, 'function') and
+    not SameText(FModel.SymbolAt(SymbolId - 1).Kind, 'procedure') then
     Exit;
   TypeId := FModel.SymbolTypeId(SymbolId);
   if (TypeId <= 0) or (TypeId > FModel.TypeCount) then
@@ -1487,7 +1512,7 @@ begin
 end;
 
 function TSemanticAnalyzer.ConcatExpressionConsumesOwnedStringReturnDeferred(
-  const ANode: TGreenNode): Boolean;
+  const ANode: TGreenNode; const AInsideDirectOwnedAssignmentRhs: Boolean): Boolean;
 var
   I: LongInt;
   Child: TGreenNode;
@@ -1503,12 +1528,14 @@ begin
     for I := 0 to ANode.ChildCount - 1 do
     begin
       Child := ANode.ChildAt(I);
-      if ConcatExpressionConsumesOwnedStringReturnDeferred(Child) then
+      if ConcatExpressionConsumesOwnedStringReturnDeferred(Child,
+        AInsideDirectOwnedAssignmentRhs) then
         Exit(True);
     end;
     Exit(False);
   end;
-  Result := NodeConsumesOwnedStringReturnDeferred(ANode, False);
+  Result := NodeConsumesOwnedStringReturnDeferred(ANode,
+    AInsideDirectOwnedAssignmentRhs);
 end;
 
 function TSemanticAnalyzer.CompareOperandOwnsStringReturn(
@@ -1646,8 +1673,10 @@ begin
     ((ANode.Text <> '=') and (ANode.Text <> '<>')) or
     (ANode.ChildCount < 2) then
   begin
+    { In compare expressions (if/while conditions), all sub-expressions are
+      consumed immediately. Temporaries from owned string returns are safe. }
     for I := 0 to ANode.ChildCount - 1 do
-      if NodeConsumesOwnedStringReturnDeferred(ANode.ChildAt(I), False) then
+      if NodeConsumesOwnedStringReturnDeferred(ANode.ChildAt(I), True) then
         Exit(True);
     Exit(False);
   end;
@@ -1739,7 +1768,8 @@ begin
         IsRuntimeStrVar(DestNode.Text) and
         (SourceNode <> nil) and (SourceNode.NodeKind = gnkBinaryExpression) and
         (SourceNode.Text = '+') then
-        Exit(ConcatExpressionConsumesOwnedStringReturnDeferred(SourceNode));
+        Exit(ConcatExpressionConsumesOwnedStringReturnDeferred(SourceNode,
+          True));
       Exit(NodeConsumesOwnedStringReturnDeferred(
         SourceNode, {AInsideDirectOwnedAssignmentRhs=}True));
     end;
@@ -1806,13 +1836,35 @@ begin
   if MemberCallReturnsString(ANode) and
     (not AInsideDirectOwnedAssignmentRhs) then
     Exit(True);
-  if FunctionCallReturnsString(ANode) and
-    (not AInsideDirectOwnedAssignmentRhs) then
-    Exit(True);
+  { Note: FunctionCallReturnsString catch-all intentionally removed.
+    It was too broad — flagging ALL string-returning functions, not just
+    registered owned string return functions. The StringReturnFunctionNameFromNode
+    + IsOwnedStringReturnFunc check above correctly limits to registered
+    functions. }
   if DirectOwnedStringReturnAssignmentNode(ANode) and
     StringReturnFunctionNameFromNode(ANode.ChildAt(1), SourceName) and
     HasOverload(SourceName) then
     Exit(True);
+
+  { Exit(Expr) is equivalent to Result := Expr — the temporary lives for
+    the entire function scope. Treat as safe context.
+    Without this guard, Exit(F()) patterns where F is an imported function
+    (like ExpandFileName from nextpas.core.fs) would fall through to the
+    for-loop below, where the F() child would be flagged as a deferred
+    owned-string return. }
+  if ANode.NodeKind = gnkExitStatement then
+  begin
+    for I := 0 to ANode.ChildCount - 1 do
+    begin
+      Child := ANode.ChildAt(I);
+      if Child = nil then Continue;
+      { The owned string temporary from F() in Exit(F()) lives for the
+        entire duration of Exit — treat as safe context. }
+      if NodeConsumesOwnedStringReturnDeferred(Child, True) then
+        Exit(True);
+    end;
+    Exit(False);
+  end;
 
   for I := 0 to ANode.ChildCount - 1 do
   begin
@@ -1823,6 +1875,13 @@ begin
       outer call has overloads (preventing IsSupportedOwnedStringReturnArgument
       from applying). Mark argument positions (I >= 1) as safe contexts. }
     if (ANode.NodeKind = gnkFunctionCall) and (I >= 1) then
+    begin
+      if NodeConsumesOwnedStringReturnDeferred(Child, True) then
+        Exit(True);
+    end
+    { Concatenation operands are safe: temporaries live for the entire
+      expression evaluation. }
+    else if (ANode.NodeKind = gnkBinaryExpression) and (ANode.Text = '+') then
     begin
       if NodeConsumesOwnedStringReturnDeferred(Child, True) then
         Exit(True);
@@ -2634,6 +2693,13 @@ begin
     (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
     (SameText(ANode.ChildAt(0).Text, 'LowerCase') or
      SameText(ANode.ChildAt(0).Text, 'UpperCase')) then
+    Exit(True);
+  { Any function call returning a string is safe as a compare operand —
+    temporaries live for the entire comparison evaluation. This covers
+    imported functions like Trim, Copy, etc. that are not registered as
+    owned string return functions but still create safe temporaries. }
+  if AAllowOwnedStringReturn and (ANode.NodeKind = gnkFunctionCall) and
+    FunctionCallReturnsString(ANode) then
     Exit(True);
 end;
 

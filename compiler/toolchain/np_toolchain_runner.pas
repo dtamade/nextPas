@@ -7,7 +7,7 @@ interface
 uses
   nextpas.core.process,
   nextpas.core.text.conv, nextpas.core.path, nextpas.core.fs, nextpas.core.fs.util,
-  nextpas.core.fs.dir, nextpas.core.fs.base, nextpas.core.os.env,
+  nextpas.core.fs.dir, nextpas.core.fs.base,
   nextpas.core.exception,
   np_toolchain_plan;
 
