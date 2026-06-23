@@ -34,6 +34,23 @@ const
 { ============================================================ }
 
 type
+  { Platform-dependent integer types — nextpas owns these, not FPC System }
+  {$IFDEF CPU64}
+  SizeInt   = Int64;
+  SizeUInt  = UInt64;
+  PtrInt    = Int64;
+  PtrUInt   = UInt64;
+  NativeInt = Int64;
+  NativeUInt = UInt64;
+  {$ELSE}
+  SizeInt   = LongInt;
+  SizeUInt  = LongWord;
+  PtrInt    = LongInt;
+  PtrUInt   = LongWord;
+  NativeInt = LongInt;
+  NativeUInt = LongWord;
+  {$ENDIF}
+
   TBytes = array of Byte;
   TStringArray = array of string;
 
