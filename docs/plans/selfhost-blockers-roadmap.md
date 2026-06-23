@@ -9,6 +9,11 @@
 - **编译器**: Lexer 1652 行基本完整，Sema 15436 行单文件（607 方法），HIR LLVM emitter 1743 行
 - **FPC stubs**: 14 个临时 stub 文件在 `units/linux-x86_64/`
 - **性能**: 无增量缓存，67 单元 6.4s，158 单元 16s
+- **Phase A+C+D**: ✅ 已完成（2026-06-24）
+  - `core/src/` 0 直接 SysUtils 依赖
+  - Exception 类型统一（core + stub 都指向 nextpas.core.exception）
+  - compiler-pass 16/16，smoke test 10/10 全部通过
+  - nextpas.core 作为标准库的编译能力验证通过
 
 ## 总体策略
 
