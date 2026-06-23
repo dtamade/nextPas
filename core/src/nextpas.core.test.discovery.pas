@@ -17,9 +17,9 @@ uses
 
 { ── Test Fixture Base Class ───────────────────────────────────────────────── }
 
-{ Inherit from TTestFixure and put test methods in published section:
+{ Inherit from TTestFixture and put test methods in published section:
     type
-      TMyTests = class(TTestFixure)
+      TMyTests = class(TTestFixture)
       published
         procedure TestSomething;
         procedure TestOther;
@@ -29,17 +29,17 @@ uses
   Methods MUST be parameterless. }
 
 type
-  TTestFixure = class(TObject)
+  TTestFixture = class(TObject)
   end;
 
-  TTestFixureClass = class of TTestFixure;
+  TTestFixtureClass = class of TTestFixture;
 
 { ── Discovery ─────────────────────────────────────────────────────────────── }
 
 { Create a TTestSuite from a fixture class instance. Published methods are
   discovered via VMT method table. ASuiteName: optional override (default: ClassName).
   The suite's Teardown frees the fixture automatically. }
-function DiscoverTests(AFixture: TTestFixure;
+function DiscoverTests(AFixture: TTestFixture;
   const ASuiteName: string = ''): TTestSuite;
 
 implementation
@@ -93,7 +93,7 @@ const
   CCountSize   = SizeOf(DWord);                  { 4 bytes for count }
   CEntriesOff  = CCountSize;                     { entries start right after count }
 
-function DiscoverTests(AFixture: TTestFixure;
+function DiscoverTests(AFixture: TTestFixture;
   const ASuiteName: string): TTestSuite;
 var
   LTable: PByte;

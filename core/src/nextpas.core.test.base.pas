@@ -66,6 +66,7 @@ type
     Name    : string;
     Status  : TTestStatus;
     Message : string;  { fail message or skip reason }
+    Duration: Int64;   { milliseconds, 0 if not measured }
   end;
 
   TTestResults = array of TTestResult;
@@ -96,7 +97,12 @@ type
     Kind       : TTestEntryKind;
     SkipReason : string;
     RetryCount : Integer;  { >0 means retry this many times before failing }
-    { Table-driven test fields (used when Kind = ekTableTest) }
+    { Table-driven test fields (used when Kind = ekTableTest).
+      Heap-allocated via New() in TestTable, disposed via CleanupTableAllocations()
+      in runner.pas. Caller MUST ensure CleanupTableAllocations is called after
+      Run/RunParallel completes — the record has no managed finalization for raw
+      pointers. Safety net: GStubRegistry in finalization catches suites that
+      never run. }
     TableCase  : Pointer;       { PTestCase, heap-allocated }
     TableProc  : Pointer;       { PTestCaseProc, heap-allocated }
   end;

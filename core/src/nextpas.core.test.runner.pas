@@ -15,14 +15,13 @@ uses
   nextpas.core.test.base,
   nextpas.core.test.check,
   nextpas.core.test.output,
-  nextpas.core.test.runner.context,
-  nextpas.core.test.runner.parallel,
   nextpas.core.atomic,
   nextpas.core.sync,
   nextpas.core.thread.base,
   nextpas.core.thread.intf,
   nextpas.core.collections.base,
-  nextpas.core.platform.thread;
+  nextpas.core.platform.thread,
+  nextpas.core.time.cpu;
 
 { ── Test Suite ────────────────────────────────────────────────────────────── }
 
@@ -94,7 +93,7 @@ type
     HasRun   : Boolean;
 
     class function Create(const AName: string): TTestRunner; static;
-    procedure Add(var ASuite: TTestSuite);
+    procedure Add(const ASuite: TTestSuite);
     function  RunAll: Boolean;
     function  RunAllWithResult(
       out AResults: specialize TArray<TTestRunResult>): Boolean;
@@ -110,6 +109,10 @@ type
 procedure RegisterStub(var ASuite: TTestSuite; APtr: Pointer);
 
 implementation
+
+uses
+  nextpas.core.test.runner.context,
+  nextpas.core.test.runner.parallel;
 
 { Global registry of all heap-allocated method stubs from DiscoverTests.
   Stubs are disposed here in finalization as a safety net for suites that
@@ -340,6 +343,7 @@ var
   LAppender: TTestResultAppender;
   LGTestTimeoutMs: Integer;
   LRetriesLeft: Integer;
+  LStartMs: Int64;
 begin
   AResult := TTestRunResult.Create(Name);
   LPass := 0;
@@ -367,9 +371,10 @@ begin
         for I := 0 to High(Tests) do
         begin
           Inc(LSkip);
-          LTestResult.Name    := Tests[I].Name;
-          LTestResult.Status  := tsSkipped;
-          LTestResult.Message := 'setup failed: ' + E.Message;
+          LTestResult.Name     := Tests[I].Name;
+          LTestResult.Status   := tsSkipped;
+          LTestResult.Message  := 'setup failed: ' + E.Message;
+          LTestResult.Duration := 0;
           SetLength(AResult.Results, Length(AResult.Results) + 1);
           AResult.Results[High(AResult.Results)] := LTestResult;
           WriteLn('    ', StatusDot(tsSkipped), ' ', AnsiDim(Tests[I].Name));
@@ -409,8 +414,9 @@ begin
     begin
       LStatus := tsSkipped;
       Inc(LSkip);
-      LTestResult.Status  := tsSkipped;
-      LTestResult.Message := LEntry.SkipReason;
+      LTestResult.Status   := tsSkipped;
+      LTestResult.Message  := LEntry.SkipReason;
+      LTestResult.Duration := 0;
       SetLength(AResult.Results, Length(AResult.Results) + 1);
       AResult.Results[High(AResult.Results)] := LTestResult;
       if LEntry.SkipReason <> '' then
@@ -432,20 +438,23 @@ begin
         begin
           LStatus := tsSkipped;
           Inc(LSkip);
-          LTestResult.Status  := tsSkipped;
-          LTestResult.Message := E.Message;
+          LTestResult.Status   := tsSkipped;
+          LTestResult.Message  := E.Message;
+          LTestResult.Duration := 0;
           SetLength(AResult.Results, Length(AResult.Results) + 1);
           AResult.Results[High(AResult.Results)] := LTestResult;
           WriteLn('  ', StatusDot(tsSkipped), ' ', AnsiDim(LEntry.Name),
             ' -- ', E.Message);
+          ReportLeakIfAny(LStatus);
           Continue;
         end;
         on E: Exception do
         begin
           LStatus := tsError;
           LLastFailMsg := E.Message;
-          LTestResult.Status  := tsError;
-          LTestResult.Message := 'beforeEach failed: ' + E.Message;
+          LTestResult.Status   := tsError;
+          LTestResult.Message  := 'beforeEach failed: ' + E.Message;
+          LTestResult.Duration := 0;
           SetLength(AResult.Results, Length(AResult.Results) + 1);
           AResult.Results[High(AResult.Results)] := LTestResult;
           WriteLn('  ', StatusDot(tsError), ' ', LEntry.Name,
@@ -456,6 +465,7 @@ begin
       end;
     end;
 
+    LStartMs := GetTickCount64;
     try
       if LEntry.Kind = ekSubtest then
       begin
@@ -588,8 +598,9 @@ begin
     end;
 
     { Record test result }
-    LTestResult.Status  := LStatus;
-    LTestResult.Message := LLastFailMsg;
+    LTestResult.Status   := LStatus;
+    LTestResult.Message  := LLastFailMsg;
+    LTestResult.Duration := GetTickCount64 - LStartMs;
     SetLength(AResult.Results, Length(AResult.Results) + 1);
     AResult.Results[High(AResult.Results)] := LTestResult;
 
@@ -638,10 +649,10 @@ begin
   end;
 
   { Merge subtest-level results from appender }
-  for J := 0 to High(LAppender.FResults) do
+  for J := 0 to High(LAppender.Results) do
   begin
     SetLength(AResult.Results, Length(AResult.Results) + 1);
-    AResult.Results[High(AResult.Results)] := LAppender.FResults[J];
+    AResult.Results[High(AResult.Results)] := LAppender.Results[J];
   end;
 
   finally
@@ -758,14 +769,8 @@ begin
     LRecs[I].Fail      := @LFail;
     LRecs[I].Skip      := @LSkip;
     LRecs[I].Res       := @LResults[I];
-    { Pre-fill result for subtest entries — worker skips them without writing }
-    if Tests[I].Kind = ekSubtest then
-    begin
-      LResults[I].Name    := Tests[I].Name;
-      LResults[I].Status  := tsSkipped;
-      LResults[I].Message := 'subtests not supported in parallel mode';
-      Inc(LSkip);
-    end;
+    { Subtest/ekSkipped results and counters are handled entirely by the worker
+      to avoid double-counting. See ParallelWorkerProc. }
   end;
 
   { Use BeginThread to ensure FPC properly initializes per-thread state
@@ -777,6 +782,10 @@ begin
 
   for I := 0 to High(Tests) do
     WaitForThreadTerminate(LThreads[I], 0);
+
+  { Close thread handles — required on Windows to avoid kernel handle leak }
+  for I := 0 to High(Tests) do
+    CloseThread(LThreads[I]);
 
   { Suite-level teardown }
   if Assigned(Teardown) or Assigned(TeardownClosure) then
@@ -894,11 +903,11 @@ begin
   Result.HasRun    := False;
 end;
 
-procedure TTestRunner.Add(var ASuite: TTestSuite);
-  { var avoids copying the entire record on the call side.
-    Internally the suite IS copied into Suites[] via Pascal assignment.
-    Mutations to the caller's ASuite after Add() are NOT visible to the runner.
-    Rule: register ALL tests before calling Add. }
+procedure TTestRunner.Add(const ASuite: TTestSuite);
+  { const avoids copying the entire record on the call side (same as var for
+    structured types). Internally the suite IS copied into Suites[] via Pascal
+    assignment. Mutations to the caller's ASuite after Add() are NOT visible
+    to the runner. Rule: register ALL tests before calling Add. }
 begin
   SetLength(Suites, Length(Suites) + 1);
   Suites[High(Suites)] := ASuite;
@@ -965,7 +974,22 @@ var
   I: Integer;
   LAllPassed: Boolean;
   LSuiteResult: TTestRunResult;
+
+  function ParseFilterFromArgs: string;
+  var
+    K: Integer;
+  begin
+    Result := '';
+    for K := 1 to ParamCount do
+      if (ParamStr(K) = '--filter') and (K < ParamCount) then
+        Exit(ParamStr(K + 1));
+  end;
+
 begin
+  { Auto-detect --filter from command line if not already set programmatically }
+  if GetTestFilter = '' then
+    SetTestFilter(ParseFilterFromArgs);
+
   WriteLn(AnsiBold('=== ') + AnsiBold(Name) + AnsiBold(' (parallel) ==='));
   LAllPassed := True;
   TotalPass := 0;

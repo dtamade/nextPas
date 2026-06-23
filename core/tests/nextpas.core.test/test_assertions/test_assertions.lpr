@@ -237,6 +237,32 @@ begin
   end;
 end;
 
+procedure TestCheckGreaterThan;
+begin
+  CheckGreaterThan(10, 5);
+  CheckGreaterThan(1, 0);
+  try
+    CheckGreaterThan(5, 10);
+    Halt(1);
+  except
+    on E: EAssertionFailed do Check(Pos('>', E.Message) > 0, 'gt fail msg');
+    on E: Exception do Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+  end;
+end;
+
+procedure TestCheckLessThan;
+begin
+  CheckLessThan(5, 10);
+  CheckLessThan(0, 1);
+  try
+    CheckLessThan(10, 5);
+    Halt(1);
+  except
+    on E: EAssertionFailed do Check(Pos('<', E.Message) > 0, 'lt fail msg');
+    on E: Exception do Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+  end;
+end;
+
 procedure TestCheckLength;
 begin
   CheckLength(5, 5);
@@ -403,6 +429,8 @@ begin
   LSuite.Test('CheckEndsWith',         @TestCheckEndsWith);
   LSuite.Test('CheckSame',             @TestCheckSame);
   LSuite.Test('CheckInRange',          @TestCheckInRange);
+  LSuite.Test('CheckGreaterThan',      @TestCheckGreaterThan);
+  LSuite.Test('CheckLessThan',         @TestCheckLessThan);
   LSuite.Test('CheckLength',           @TestCheckLength);
   LSuite.Test('CheckRaises',           @TestCheckRaises);
   LSuite.Test('CheckNoRaise',          @TestCheckNoRaise);

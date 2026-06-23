@@ -15,7 +15,8 @@ uses
   nextpas.core.test.base,
   nextpas.core.test.output,
   nextpas.core.sync.intf,
-  nextpas.core.platform.thread;
+  nextpas.core.platform.thread,
+  nextpas.core.time.cpu;
 
 { ── Timeout worker (internal) ──────────────────────────────────────────────── }
 
@@ -25,6 +26,7 @@ type
     Done    : Boolean;
     TimedOut: Boolean;
     ErrorMsg: string;
+    Status  : TTestStatus;
   end;
   PTimeoutRec = ^TTimeoutRec;
 
@@ -53,6 +55,27 @@ function ParallelWorkerProc(AArg: Pointer): Pointer; cdecl;
 
 implementation
 
+{ ── Cross-platform memory barrier ───────────────────────────────────────────── }
+
+{$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
+procedure MemoryBarrier; assembler; nostackframe;
+asm
+  mfence
+end;
+{$ELSEIF DEFINED(CPUAARCH64) OR DEFINED(CPUARM)}
+procedure MemoryBarrier; assembler; nostackframe;
+asm
+  dmb ish
+end;
+{$ELSE}
+procedure MemoryBarrier;
+var
+  LDummy: Integer = 0;
+begin
+  LDummy := InterlockedExchange(LDummy, 0);
+end;
+{$ENDIF}
+
 { ═════════════════════════════════════════════════════════════════════════════ }
 { Timeout worker                                                                }
 { ═════════════════════════════════════════════════════════════════════════════ }
@@ -69,17 +92,20 @@ begin
   except
     on E: ETestSkipped do
     begin
-      R^.ErrorMsg := #1 + E.Message; { prefix #1 = skip }
+      R^.Status := tsSkipped;
+      R^.ErrorMsg := E.Message;
       R^.Done := True;
     end;
     on E: EAssertionFailed do
     begin
+      R^.Status := tsFailed;
       R^.ErrorMsg := E.Message;
       R^.Done := True;
     end;
     on E: Exception do
     begin
-      R^.ErrorMsg := #2 + E.ClassName + ': ' + E.Message; { prefix #2 = error }
+      R^.Status := tsError;
+      R^.ErrorMsg := E.ClassName + ': ' + E.Message;
       R^.Done := True;
     end;
   end;
@@ -103,6 +129,7 @@ begin
   LRec^.Done := False;
   LRec^.TimedOut := False;
   LRec^.ErrorMsg := '';
+  LRec^.Status := tsPassed;
 
   platform_thread_create(LHandle, @TimeoutWorker, LRec);
 
@@ -116,28 +143,10 @@ begin
 
   if LRec^.Done then
   begin
-    { Test completed — determine status from error prefix }
+    { Test completed — determine status from Status field }
     platform_thread_join(LHandle, LRetVal);
-    if LRec^.ErrorMsg = '' then
-    begin
-      AStatus := tsPassed;
-      AMsg := '';
-    end
-    else if LRec^.ErrorMsg[1] = #1 then
-    begin
-      AStatus := tsSkipped;
-      AMsg := Copy(LRec^.ErrorMsg, 2, MaxInt);
-    end
-    else if LRec^.ErrorMsg[1] = #2 then
-    begin
-      AStatus := tsError;
-      AMsg := Copy(LRec^.ErrorMsg, 2, MaxInt);
-    end
-    else
-    begin
-      AStatus := tsFailed;
-      AMsg := LRec^.ErrorMsg;
-    end;
+    AStatus := LRec^.Status;
+    AMsg := LRec^.ErrorMsg;
     Result := True;
     { Join path: we own the record, dispose here }
     Dispose(LRec);
@@ -148,10 +157,13 @@ begin
     AStatus := tsError;
     AMsg := 'test timed out after ' + IntToStr(ATimeoutMs) + 'ms';
     Result := False;
-    { Mark timed-out so the worker thread disposes the record when it finishes.
-      x86_64 TSO guarantees the store order: TimedOut visible to worker after
-      we observe Done=False. }
+    { Memory barrier ensures TimedOut is visible to worker thread on
+      weak-memory architectures (ARM, PowerPC). x86_64 TSO is already safe. }
+    MemoryBarrier;
     LRec^.TimedOut := True;
+    WriteLn('  ', AnsiYellow('WARNING'), ': test timed out - worker thread is ',
+      'leaked (cannot force-terminate Pascal threads). Consider raising ',
+      'SetTestTimeout or reviewing the test for infinite loops.');
     { Note: worker thread is leaked — cannot force-terminate Pascal threads.
       This is a known limitation documented in the API. }
   end;
@@ -169,8 +181,12 @@ begin
   try
     AMtx.Release;
   except
-    { Suppress: ERRORCHECK mutex may return EPERM under rare contention.
-      The critical section data is already committed. }
+    on E: Exception do
+    begin
+      { Suppress: ERRORCHECK mutex may return EPERM under rare contention.
+        The critical section data is already committed. }
+      WriteLn(StdErr, 'SafeRelease: ', E.Message);
+    end;
   end;
 end;
 
@@ -180,12 +196,14 @@ var
   LStatus: TTestStatus;
   LFailMsg: string;
   LSkipReason: string;
+  LStartMs: Int64;
 begin
   Result := nil;
   R := PThreadRec(AArg);
   LStatus := tsPassed;
   LFailMsg := '';
   LSkipReason := '';
+  LStartMs := 0;
   try
   SetTestContext(R^.SuiteName, R^.Entry.Name);
   try
@@ -203,9 +221,10 @@ begin
     end;
     if R^.Res <> nil then
     begin
-      R^.Res^.Name    := R^.Entry.Name;
-      R^.Res^.Status  := tsSkipped;
-      R^.Res^.Message := 'subtests not supported in parallel mode';
+      R^.Res^.Name     := R^.Entry.Name;
+      R^.Res^.Status   := tsSkipped;
+      R^.Res^.Message  := 'subtests not supported in parallel mode';
+      R^.Res^.Duration := 0;
     end;
     Exit;
   end;
@@ -221,9 +240,10 @@ begin
     end;
     if R^.Res <> nil then
     begin
-      R^.Res^.Name    := R^.Entry.Name;
-      R^.Res^.Status  := tsSkipped;
-      R^.Res^.Message := R^.Entry.SkipReason;
+      R^.Res^.Name     := R^.Entry.Name;
+      R^.Res^.Status   := tsSkipped;
+      R^.Res^.Message  := R^.Entry.SkipReason;
+      R^.Res^.Duration := 0;
     end;
     Exit;
   end;
@@ -255,6 +275,7 @@ begin
 
   if LStatus = tsPassed then
   begin
+    LStartMs := GetTickCount64;
     try
       if R^.Entry.Kind = ekTableTest then
         PTestCaseProc(R^.Entry.TableProc)^(PTestCase(R^.Entry.TableCase)^)
@@ -294,7 +315,11 @@ begin
         finally
           SafeRelease(R^.Mtx);
         end;
-        if LStatus = tsPassed then LStatus := tsError;
+        if LStatus = tsPassed then
+        begin
+          LStatus := tsError;
+          LFailMsg := 'afterEach failed: ' + E.Message;
+        end;
       end;
     end;
   end;
@@ -336,8 +361,9 @@ begin
     { Write per-test result inside mutex for safety }
     if R^.Res <> nil then
     begin
-      R^.Res^.Name    := R^.Entry.Name;
-      R^.Res^.Status  := LStatus;
+      R^.Res^.Name     := R^.Entry.Name;
+      R^.Res^.Status   := LStatus;
+      R^.Res^.Duration := GetTickCount64 - LStartMs;
       case LStatus of
         tsSkipped: R^.Res^.Message := LSkipReason;
         tsFailed:  R^.Res^.Message := LFailMsg;
@@ -366,9 +392,10 @@ begin
     begin
       if (R <> nil) and (R^.Res <> nil) then
       begin
-        R^.Res^.Name    := R^.Entry.Name;
-        R^.Res^.Status  := tsError;
-        R^.Res^.Message := 'worker exception: ' + E.ClassName + ': ' + E.Message;
+        R^.Res^.Name     := R^.Entry.Name;
+        R^.Res^.Status   := tsError;
+        R^.Res^.Message  := 'worker exception: ' + E.ClassName + ': ' + E.Message;
+        R^.Res^.Duration := 0;
       end;
     end;
   end;

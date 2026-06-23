@@ -54,6 +54,8 @@ begin
         begin
           LLine := 'ok ' + IntToStr(LCount) + ' - ' +
             LSuite.SuiteName + ' / ' + LRes.Name;
+          if LRes.Duration > 0 then
+            LLine := LLine + ' # duration_ms: ' + IntToStr(LRes.Duration);
           AddLine(LLines, LLine);
         end;
         tsFailed:
@@ -62,7 +64,8 @@ begin
             LSuite.SuiteName + ' / ' + LRes.Name;
           AddLine(LLines, LLine);
           AddLine(LLines, '  ---');
-          AddLine(LLines, '  message: ' + LRes.Message);
+          AddLine(LLines, '  message: |-');
+          AddLine(LLines, '    ' + LRes.Message);
           AddLine(LLines, '  severity: fail');
           AddLine(LLines, '  ...');
         end;
@@ -72,7 +75,8 @@ begin
             LSuite.SuiteName + ' / ' + LRes.Name;
           AddLine(LLines, LLine);
           AddLine(LLines, '  ---');
-          AddLine(LLines, '  message: ' + LRes.Message);
+          AddLine(LLines, '  message: |-');
+          AddLine(LLines, '    ' + LRes.Message);
           AddLine(LLines, '  severity: error');
           AddLine(LLines, '  ...');
         end;

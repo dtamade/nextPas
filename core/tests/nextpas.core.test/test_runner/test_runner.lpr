@@ -558,6 +558,33 @@ begin
     WriteLn(AnsiGreen('  ✓ RunAllWithResult'));
   end;
 
+  { ── R3-F17: Timeout trigger (watchdog actually fires) ───────────────────── }
+  WriteLn;
+  WriteLn(AnsiBold('─── R3-F17: Timeout Trigger ───'));
+  begin
+    LResultSuite := TTestSuite.Create('Timeout Trigger');
+    LResultSuite.Test('slow', procedure begin Sleep(500); end);
+    SetTestTimeout(10); { 10ms — much less than the 500ms Sleep }
+    LResultSuite.RunWithResult(LResult);
+    SetTestTimeout(0);
+    if LResult.AllPassed then
+    begin
+      WriteLn(AnsiRed('FAIL: timed-out test should not be AllPassed'));
+      Halt(1);
+    end;
+    if Length(LResult.Results) <> 1 then
+    begin
+      WriteLn(AnsiRed('FAIL: Expected 1 result, got '), Length(LResult.Results));
+      Halt(1);
+    end;
+    if LResult.Results[0].Status <> tsError then
+    begin
+      WriteLn(AnsiRed('FAIL: Expected tsError status, got '), Ord(LResult.Results[0].Status));
+      Halt(1);
+    end;
+    WriteLn(AnsiGreen('  ✓ Timeout trigger verified'));
+  end;
+
   WriteLn;
   WriteLn(AnsiGreen('ALL PASSED'));
 end.

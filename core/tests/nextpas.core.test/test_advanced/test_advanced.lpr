@@ -17,19 +17,18 @@ uses
   nextpas.core.test.output.tap,
   nextpas.core.test.output.json,
   nextpas.core.test.runner,
-  nextpas.core.test.discovery,
-  nextpas.core.test.mock;
+  nextpas.core.test.discovery;
 
 { ── Fixtures and globals ──────────────────────────────────────────────────── }
 
 type
-  TDiscoveryFixture = class(TTestFixure)
+  TDiscoveryFixture = class(TTestFixture)
   published
     procedure TestAlpha;
     procedure TestBeta;
   end;
 
-  TEmptyFixture = class(TTestFixure)
+  TEmptyFixture = class(TTestFixture)
   public
     procedure NotPublished;
   end;
@@ -209,7 +208,8 @@ begin
 
   LTAP := TAPReport(LResults);
   CheckContains(LTAP, 'not ok 1 - FailSuite / TestBar');
-  CheckContains(LTAP, 'message: expected 5 got 3');
+  CheckContains(LTAP, 'message: |-');
+  CheckContains(LTAP, '    expected 5 got 3');
   CheckContains(LTAP, 'severity: fail');
 end;
 
@@ -311,109 +311,6 @@ begin
   CheckContains(LJSON, '\n');
 end;
 
-{ ── Mock Tests ────────────────────────────────────────────────────────────── }
-
-procedure TestMockSetupReturns;
-var
-  LMock: TMock;
-begin
-  LMock := TMock.Create;
-  try
-    LMock.Setup('Foo').Returns('bar');
-    CheckEqual('bar', LMock.GetReturn('Foo'));
-    CheckEqual('', LMock.GetReturn('Unknown'));
-  finally
-    LMock.Free;
-  end;
-end;
-
-procedure TestMockSetupReturnsInt;
-var
-  LMock: TMock;
-begin
-  LMock := TMock.Create;
-  try
-    LMock.Setup('Count').ReturnsInt(42);
-    CheckEqual(42, LMock.GetReturnInt('Count'));
-  finally
-    LMock.Free;
-  end;
-end;
-
-procedure TestMockSetupReturnsBool;
-var
-  LMock: TMock;
-begin
-  LMock := TMock.Create;
-  try
-    LMock.Setup('IsValid').ReturnsBool(True);
-    CheckTrue(LMock.GetReturnBool('IsValid'));
-    LMock.Setup('IsClosed').ReturnsBool(False);
-    CheckFalse(LMock.GetReturnBool('IsClosed'));
-  finally
-    LMock.Free;
-  end;
-end;
-
-procedure TestMockRecordAndVerify;
-var
-  LMock: TMock;
-begin
-  LMock := TMock.Create;
-  try
-    LMock.RecordCall('Foo', []);
-    LMock.RecordCall('Bar', ['arg1']);
-    LMock.RecordCall('Foo', []);
-
-    CheckEqual(2, LMock.CallCount('Foo'));
-    CheckEqual(1, LMock.CallCount('Bar'));
-    CheckEqual(0, LMock.CallCount('Baz'));
-
-    LMock.Verify('Foo').CalledExactly(2);
-    LMock.Verify('Bar').CalledOnce;
-    LMock.Verify('Baz').CalledNever;
-  finally
-    LMock.Free;
-  end;
-end;
-
-procedure TestMockVerifyAtLeast;
-var
-  LMock: TMock;
-begin
-  LMock := TMock.Create;
-  try
-    LMock.RecordCall('Foo', []);
-    LMock.RecordCall('Foo', []);
-    LMock.RecordCall('Foo', []);
-    LMock.Verify('Foo').CalledAtLeast(2);
-    LMock.Verify('Foo').CalledAtMost(5);
-  finally
-    LMock.Free;
-  end;
-end;
-
-procedure TestMockResetCalls;
-var
-  LMock: TMock;
-begin
-  LMock := TMock.Create;
-  try
-    LMock.Setup('Foo').Returns('bar');
-    LMock.RecordCall('Foo', []);
-    LMock.RecordCall('Foo', []);
-    CheckEqual(2, LMock.CallCount('Foo'));
-
-    LMock.ResetCalls;
-    CheckEqual(0, LMock.CallCount('Foo'));
-
-    { Setup is preserved after ResetCalls }
-    CheckEqual('bar', LMock.GetReturn('Foo'));
-  finally
-    LMock.Free;
-  end;
-end;
-
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -442,14 +339,6 @@ begin
   LSuite.Test('JSONAllPassed', @TestJSONAllPassed);
   LSuite.Test('JSONWithFailure', @TestJSONWithFailure);
   LSuite.Test('JSONEscapesQuotes', @TestJSONEscapesQuotes);
-
-  { Mock }
-  LSuite.Test('MockSetupReturns', @TestMockSetupReturns);
-  LSuite.Test('MockSetupReturnsInt', @TestMockSetupReturnsInt);
-  LSuite.Test('MockSetupReturnsBool', @TestMockSetupReturnsBool);
-  LSuite.Test('MockRecordAndVerify', @TestMockRecordAndVerify);
-  LSuite.Test('MockVerifyAtLeast', @TestMockVerifyAtLeast);
-  LSuite.Test('MockResetCalls', @TestMockResetCalls);
 
   LRunner := TTestRunner.Create('main');
   LRunner.Add(LSuite);

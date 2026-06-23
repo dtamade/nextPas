@@ -7,6 +7,7 @@ program test_mock;
 {$I nextpas.core.settings.inc}
 
 uses
+  cthreads,
   SysUtils,
   nextpas.core.test.base,
   nextpas.core.test.runner,
@@ -241,6 +242,122 @@ begin
   end;
 end;
 
+{ ── Verify fail paths ───────────────────────────────────────────────────── }
+
+procedure TestVerifyCalledExactlyFail;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.RecordCall('Foo', []);
+    try
+      LM.Verify('Foo').CalledExactly(3);
+      Halt(1);
+    except
+      on E: EAssertionFailed do
+        Check(Pos('exactly', LowerCase(E.Message)) > 0, 'exactly fail msg');
+    end;
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestVerifyCalledNeverFail;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.RecordCall('Foo', []);
+    try
+      LM.Verify('Foo').CalledNever;
+      Halt(1);
+    except
+      on E: EAssertionFailed do
+        Check(Pos('exactly', LowerCase(E.Message)) > 0, 'never fail msg');
+    end;
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestVerifyCalledOnceFail;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.RecordCall('Foo', []);
+    LM.RecordCall('Foo', []);
+    try
+      LM.Verify('Foo').CalledOnce;
+      Halt(1);
+    except
+      on E: EAssertionFailed do
+        Check(Pos('exactly', LowerCase(E.Message)) > 0, 'once fail msg');
+    end;
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestVerifyCalledAtLeastFail;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.RecordCall('Foo', []);
+    try
+      LM.Verify('Foo').CalledAtLeast(5);
+      Halt(1);
+    except
+      on E: EAssertionFailed do
+        Check(Pos('at least', LowerCase(E.Message)) > 0, 'at least fail msg');
+    end;
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestVerifyCalledAtMostFail;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.RecordCall('Foo', []);
+    LM.RecordCall('Foo', []);
+    LM.RecordCall('Foo', []);
+    try
+      LM.Verify('Foo').CalledAtMost(1);
+      Halt(1);
+    except
+      on E: EAssertionFailed do
+        Check(Pos('at most', LowerCase(E.Message)) > 0, 'at most fail msg');
+    end;
+  finally
+    LM.Free;
+  end;
+end;
+
+{ ── GetReturnInt non-numeric ────────────────────────────────────────────── }
+
+procedure TestGetReturnIntNonNumeric;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.Setup('Val').Returns('not_a_number');
+    { GetReturnInt on non-numeric string should return 0 }
+    CheckEqual(0, LM.GetReturnInt('Val'));
+  finally
+    LM.Free;
+  end;
+end;
+
 { ── State.Calls direct access ──────────────────────────────────────────────── }
 
 procedure TestStateCallsDirectAccess;
@@ -282,12 +399,18 @@ begin
   Suite.Test('TestVerifyCalledOnce', @TestVerifyCalledOnce);
   Suite.Test('TestVerifyCalledAtLeast', @TestVerifyCalledAtLeast);
   Suite.Test('TestVerifyCalledAtMost', @TestVerifyCalledAtMost);
+  Suite.Test('TestVerifyCalledExactlyFail', @TestVerifyCalledExactlyFail);
+  Suite.Test('TestVerifyCalledNeverFail', @TestVerifyCalledNeverFail);
+  Suite.Test('TestVerifyCalledOnceFail', @TestVerifyCalledOnceFail);
+  Suite.Test('TestVerifyCalledAtLeastFail', @TestVerifyCalledAtLeastFail);
+  Suite.Test('TestVerifyCalledAtMostFail', @TestVerifyCalledAtMostFail);
   Suite.Test('TestReturnsInt', @TestReturnsInt);
   Suite.Test('TestReturnsBoolTrue', @TestReturnsBoolTrue);
   Suite.Test('TestReturnsBoolFalse', @TestReturnsBoolFalse);
   Suite.Test('TestGetReturnUnconfigured', @TestGetReturnUnconfigured);
   Suite.Test('TestResetCallsPreservesSetup', @TestResetCallsPreservesSetup);
   Suite.Test('TestStateCallsDirectAccess', @TestStateCallsDirectAccess);
+  Suite.Test('TestGetReturnIntNonNumeric', @TestGetReturnIntNonNumeric);
 
   Runner := TTestRunner.Create('mock-tests');
   Runner.Add(Suite);

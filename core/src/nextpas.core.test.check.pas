@@ -93,7 +93,8 @@ begin
   LEnd := I + 20;
   if LEnd > Length(AActual) then LEnd := Length(AActual);
   Result := Result +
-    '  actual:   ...' + Copy(AActual, LStart, LEnd - LStart + 1) + '...' + #10 +
+    '  actual:   ...' + Copy(AActual, Utf8SafeStart(AActual, I - 10),
+      LEnd - Utf8SafeStart(AActual, I - 10) + 1) + '...' + #10 +
     '  (lengths: ' + IntToStr(Length(AExpected)) + ' vs ' + IntToStr(Length(AActual)) + ')';
 end;
 
@@ -246,6 +247,9 @@ end;
 
 procedure CheckInRange(AValue, ALow, AHigh: Int64);
 begin
+  if ALow > AHigh then
+    InternalFail('CheckInRange: ALow (' + IntToStr(ALow) +
+      ') > AHigh (' + IntToStr(AHigh) + ')');
   if (AValue < ALow) or (AValue > AHigh) then
     InternalFail(IntToStr(AValue) + ' not in range [' +
       IntToStr(ALow) + '..' + IntToStr(AHigh) + ']');
@@ -277,6 +281,11 @@ procedure CheckRaises(AExceptionClass: ExceptClass; AProc: TTestProc;
 var
   LRaised: Boolean = False;
 begin
+  if AExceptionClass = nil then
+  begin
+    InternalFail('CheckRaises: AExceptionClass is nil');
+    Exit;
+  end;
   try
     AProc;
   except

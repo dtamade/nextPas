@@ -8,6 +8,7 @@ program test_expect;
 uses
   cthreads,
   SysUtils,
+  Math,
   nextpas.core.test;
 
 { ── Test procedures ──────────────────────────────────────────────────────── }
@@ -721,6 +722,74 @@ begin
   end;
 end;
 
+{ ── R2-F15: NaN/Infinity/Int64 boundary ────────────────────────────────────── }
+
+procedure TestExpectDoubleNaN;
+var
+  LNaN: Double;
+  LOldMask: TFPUExceptionMask;
+begin
+  LNaN := 0.0;
+  { Generate NaN and evaluate near-ness without triggering EInvalidOp }
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exZeroDivide, exOverflow, exUnderflow, exPrecision, exDenormalized]);
+  LNaN := 0.0/0.0;
+  ExpectDouble(LNaN).Not_.ToBeNear(0.0, 1e-10);
+  ExpectDouble(LNaN).Not_.ToBeNear(1.0, 1e-10);
+  SetExceptionMask(LOldMask);
+end;
+
+procedure TestExpectDoubleInfinity;
+var
+  LInf: Double;
+  LOldMask: TFPUExceptionMask;
+begin
+  LInf := 1.0;
+  { Generate +Inf and evaluate near-ness without triggering EInvalidOp }
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exZeroDivide, exOverflow, exUnderflow, exPrecision, exDenormalized]);
+  LInf := 1.0/0.0;
+  { +Inf is near +Inf (same value) }
+  ExpectDouble(LInf).ToBeNear(LInf, 0.0);
+  { +Inf is not near any finite value }
+  ExpectDouble(LInf).Not_.ToBeNear(1e308, 1e308);
+  SetExceptionMask(LOldMask);
+end;
+
+procedure TestExpectIntMaxMin;
+begin
+  { Int64 boundary values }
+  ExpectInt(High(Int64)).ToEqualInt(High(Int64));
+  ExpectInt(Low(Int64)).ToEqualInt(Low(Int64));
+  ExpectInt(High(Int64)).Not_.ToEqualInt(Low(Int64));
+  ExpectInt(High(Int64)).ToBeGreaterThan(High(Int64) - 1);
+  ExpectInt(Low(Int64)).ToBeLessThan(Low(Int64) + 1);
+end;
+
+{ ── R2-F27: ToNotRaise / Not_.ToNotRaise semantics ────────────────────────── }
+{ NOTE: ToNotRaise does NOT honor FNegated.  Not_.ToNotRaise behaves identically
+  to ToNotRaise (both assert "no exception").  These tests verify this limitation. }
+
+procedure TestNotToNotRaiseSameAsToNotRaise;
+begin
+  { Not_.ToNotRaise should behave the same as ToNotRaise when no exception:
+    both pass. }
+  ExpectProc(procedure begin end).Not_.ToNotRaise;
+end;
+
+procedure TestNotToNotRaiseAlwaysExpectsNoException;
+begin
+  { Not_.ToNotRaise + exception raised → still fails (same as ToNotRaise).
+    This verifies the FNegated flag is ignored. }
+  try
+    ExpectProc(procedure begin StrToInt('bad'); end).Not_.ToNotRaise;
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(Pos('no exception', E.Message) > 0, 'should mention no exception');
+  end;
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -806,6 +875,10 @@ begin
   LSuite.Test('Not_.ToRaise fail (target ex)', @TestNotToRaiseFail);
   LSuite.Test('Not_.ToRaise other ex propag',  @TestNotToRaiseOtherException);
 
+  { R2-F27: ToNotRaise / Not_.ToNotRaise }
+  LSuite.Test('Not_.ToNotRaise same as ToNotRaise', @TestNotToNotRaiseSameAsToNotRaise);
+  LSuite.Test('Not_.ToNotRaise ignores Not_',       @TestNotToNotRaiseAlwaysExpectsNoException);
+
   { R2-F23: Float/Double assertions }
   LSuite.Test('Double ToBeNear',               @TestExpectDouble);
   LSuite.Test('Double ToNotBeNear',            @TestExpectDoubleNotNear);
@@ -814,6 +887,11 @@ begin
   LSuite.Test('Fail: ToNotBeNear too close',   @TestExpectDoubleFailNotToBeNear);
   LSuite.Test('Double Not_ negation',          @TestExpectDoubleNotNegation);
   LSuite.Test('Type: Double→ToEqualInt',       @TestExpectDoubleTypeMismatch);
+
+  { R2-F15: NaN/Infinity/Int64 boundary }
+  LSuite.Test('Double NaN not near',           @TestExpectDoubleNaN);
+  LSuite.Test('Double Infinity near',          @TestExpectDoubleInfinity);
+  LSuite.Test('Int64 max/min boundary',        @TestExpectIntMaxMin);
 
   if not LSuite.Run then
   begin

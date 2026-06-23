@@ -75,6 +75,9 @@ const
   C_DIM   = ESC + '2m';
 
 var
+  { Thread-safety: SetAnsiEnabled must be called BEFORE spawning worker threads.
+    After that, GAnsiEnabled/GAnsiChecked are only read (via InitAnsi/Wrap).
+    No synchronization needed for Boolean reads under x86-64 TSO. }
   GAnsiEnabled: Boolean = False;
   GAnsiChecked: Boolean = False;
 
@@ -157,6 +160,12 @@ end;
 { ═════════════════════════════════════════════════════════════════════════════ }
 
 var
+  { Thread-safety: SetTestFilter/SetTestTimeout must be called BEFORE spawning
+    worker threads. After that, GTestFilter (read in MatchesFilter) and
+    GTestTimeoutMs (read in RunWithResult) are only read concurrently.
+    GTestFilter is a string = reference-counted type; reading it concurrently
+    while the main thread never writes is safe because the reference count
+    only changes on write. }
   GTestFilter: string = '';
   GTestTimeoutMs: Integer = 0;
 
@@ -435,26 +444,13 @@ end;
 
 function JoinLines(const ALines: specialize TArray<string>): string;
 var
-  I, LLen, LPos: Integer;
+  I: Integer;
 begin
-  LLen := 0;
-  for I := 0 to High(ALines) do
-    Inc(LLen, Length(ALines[I]) + 1); { +1 for newline }
-  SetLength(Result, LLen);
-  LPos := 1;
-  for I := 0 to High(ALines) do
-  begin
-    if I > 0 then
-    begin
-      Result[LPos] := #10;
-      Inc(LPos);
-    end;
-    if Length(ALines[I]) > 0 then
-    begin
-      Move(ALines[I][1], Result[LPos], Length(ALines[I]));
-      Inc(LPos, Length(ALines[I]));
-    end;
-  end;
+  if Length(ALines) = 0 then
+    Exit('');
+  Result := ALines[0];
+  for I := 1 to High(ALines) do
+    Result := Result + LineEnding + ALines[I];
 end;
 
 function CountFailed(const AResults: specialize TArray<TTestRunResult>): Integer;

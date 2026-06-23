@@ -72,6 +72,46 @@ begin
   SetAnsiEnabled(True);
 end;
 
+{ ── R2-F17: ANSI content structure verification ───────────────────────────── }
+
+procedure TestAnsiBoldContainsContent;
+var
+  LOut: string;
+begin
+  Inc(GTestsRun);
+  SetAnsiEnabled(True);
+  LOut := AnsiBold('my text');
+  { The ANSI wrapper should contain the actual text }
+  CheckContains(LOut, 'my text');
+  { Should start with ESC[ and end with reset }
+  CheckTrue(LOut[1] = #27, 'should start with ESC');
+  CheckTrue(Pos(#27'[0m', LOut) > 0, 'should contain reset sequence');
+end;
+
+procedure TestAnsiGreenContainsContent;
+var
+  LOut: string;
+begin
+  Inc(GTestsRun);
+  SetAnsiEnabled(True);
+  LOut := AnsiGreen('pass');
+  CheckContains(LOut, 'pass');
+  CheckContains(LOut, #27'[32m');
+  CheckContains(LOut, #27'[0m');
+end;
+
+procedure TestAnsiRedContainsContent;
+var
+  LOut: string;
+begin
+  Inc(GTestsRun);
+  SetAnsiEnabled(True);
+  LOut := AnsiRed('fail');
+  CheckContains(LOut, 'fail');
+  CheckContains(LOut, #27'[31m');
+  CheckContains(LOut, #27'[0m');
+end;
+
 { ── StatusDot ──────────────────────────────────────────────────────────────── }
 
 procedure TestStatusDotAll;
@@ -465,7 +505,8 @@ begin
   CheckContains(LOut, 'TAP version 13');
   CheckContains(LOut, 'ok 1 - TapBasic / pass');
   CheckContains(LOut, 'not ok 2 - TapBasic / fail');
-  CheckContains(LOut, 'message: bad');
+  CheckContains(LOut, 'message: |-');
+  CheckContains(LOut, '    bad');
 end;
 
 procedure TestTAPReportSkipped;
@@ -547,7 +588,162 @@ begin
   CheckContains(LOut, '"suites": [');
 end;
 
+{ ── R2-F18: TAP/JSON multi-suite / JSON skip ──────────────────────────────── }
+
+procedure TestTAPReportMultiSuite;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+begin
+  Inc(GTestsRun);
+  SetLength(LResults, 2);
+  LResults[0] := TTestRunResult.Create('SuiteA');
+  LResults[0].Passed := 1;
+  SetLength(LResults[0].Results, 1);
+  LResults[0].Results[0].Name := 'a1';
+  LResults[0].Results[0].Status := tsPassed;
+
+  LResults[1] := TTestRunResult.Create('SuiteB');
+  LResults[1].Failed := 1;
+  SetLength(LResults[1].Results, 1);
+  LResults[1].Results[0].Name := 'b1';
+  LResults[1].Results[0].Status := tsFailed;
+  LResults[1].Results[0].Message := 'boom';
+
+  LOut := TAPReport(LResults);
+  CheckContains(LOut, '1..2');
+  CheckContains(LOut, 'ok 1 - SuiteA / a1');
+  CheckContains(LOut, 'not ok 2 - SuiteB / b1');
+end;
+
+procedure TestJSONReportMultiSuite;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+begin
+  Inc(GTestsRun);
+  SetLength(LResults, 2);
+  LResults[0] := TTestRunResult.Create('JsSuiteA');
+  LResults[0].Passed := 2;
+  LResults[0].AllPassed := True;
+  SetLength(LResults[0].Results, 2);
+  LResults[0].Results[0].Name := 'j1';
+  LResults[0].Results[0].Status := tsPassed;
+  LResults[0].Results[1].Name := 'j2';
+  LResults[0].Results[1].Status := tsPassed;
+
+  LResults[1] := TTestRunResult.Create('JsSuiteB');
+  LResults[1].Skipped := 1;
+  LResults[1].AllPassed := True;
+  SetLength(LResults[1].Results, 1);
+  LResults[1].Results[0].Name := 'j3';
+  LResults[1].Results[0].Status := tsSkipped;
+
+  LOut := JSONReport(LResults);
+  CheckContains(LOut, '"name": "JsSuiteA"');
+  CheckContains(LOut, '"name": "JsSuiteB"');
+  CheckContains(LOut, '"totalPassed": 2');
+  CheckContains(LOut, '"totalSkipped": 1');
+end;
+
+procedure TestJSONReportSkipped;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+begin
+  Inc(GTestsRun);
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('JsSkip');
+  LResults[0].Skipped := 1;
+  LResults[0].AllPassed := True;
+  SetLength(LResults[0].Results, 1);
+  LResults[0].Results[0].Name := 'skipped_test';
+  LResults[0].Results[0].Status := tsSkipped;
+  LResults[0].Results[0].Message := 'not ready';
+
+  LOut := JSONReport(LResults);
+  CheckContains(LOut, '"status": "skipped"');
+  CheckContains(LOut, '"totalSkipped": 1');
+  CheckContains(LOut, 'not ready');
+end;
+
 { ── Main ───────────────────────────────────────────────────────────────────── }
+
+procedure TestTAPReportDuration;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+begin
+  Inc(GTestsRun);
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('TapDur');
+  LResults[0].Passed := 1;
+  SetLength(LResults[0].Results, 1);
+  LResults[0].Results[0].Name     := 'fast';
+  LResults[0].Results[0].Status   := tsPassed;
+  LResults[0].Results[0].Duration := 42;
+
+  LOut := TAPReport(LResults);
+  CheckContains(LOut, '# duration_ms: 42');
+end;
+
+procedure TestJSONReportDuration;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+begin
+  Inc(GTestsRun);
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('JsDur');
+  LResults[0].Passed := 1;
+  SetLength(LResults[0].Results, 1);
+  LResults[0].Results[0].Name     := 'fast';
+  LResults[0].Results[0].Status   := tsPassed;
+  LResults[0].Results[0].Duration := 99;
+
+  LOut := JSONReport(LResults);
+  CheckContains(LOut, '"durationMs": 99');
+end;
+
+procedure TestTAPReportMultiLineYAML;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+begin
+  Inc(GTestsRun);
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('TapMulti');
+  LResults[0].Failed := 1;
+  SetLength(LResults[0].Results, 1);
+  LResults[0].Results[0].Name    := 'ml';
+  LResults[0].Results[0].Status  := tsFailed;
+  LResults[0].Results[0].Message := 'line1' + LineEnding + 'line2';
+
+  LOut := TAPReport(LResults);
+  CheckContains(LOut, 'message: |-');
+  { Multi-line message is embedded as-is; first line is indented }
+  CheckContains(LOut, '    line1');
+  CheckContains(LOut, 'line2');
+end;
+
+procedure TestTAPReportError;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+begin
+  Inc(GTestsRun);
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('TapErr');
+  LResults[0].Failed := 1;
+  SetLength(LResults[0].Results, 1);
+  LResults[0].Results[0].Name    := 'err';
+  LResults[0].Results[0].Status  := tsError;
+  LResults[0].Results[0].Message := 'EAccessViolation';
+
+  LOut := TAPReport(LResults);
+  CheckContains(LOut, 'not ok');
+  CheckContains(LOut, 'EAccessViolation');
+end;
 
 var
   Suite: TTestSuite;
@@ -563,6 +759,9 @@ begin
   Suite.Test('TestAnsiHelpersEnabled', @TestAnsiHelpersEnabled);
   Suite.Test('TestAnsiHelpersDisabled', @TestAnsiHelpersDisabled);
   Suite.Test('TestAnsiToggle', @TestAnsiToggle);
+  Suite.Test('TestAnsiBoldContainsContent', @TestAnsiBoldContainsContent);
+  Suite.Test('TestAnsiGreenContainsContent', @TestAnsiGreenContainsContent);
+  Suite.Test('TestAnsiRedContainsContent', @TestAnsiRedContainsContent);
   Suite.Test('TestStatusDotAll', @TestStatusDotAll);
   Suite.Test('TestStatusDotAsciiFallback', @TestStatusDotAsciiFallback);
   Suite.Test('TestStatusDotDistinct', @TestStatusDotDistinct);
@@ -589,6 +788,13 @@ begin
   Suite.Test('TestTAPReportEmpty', @TestTAPReportEmpty);
   Suite.Test('TestJSONReportBasic', @TestJSONReportBasic);
   Suite.Test('TestJSONReportEmpty', @TestJSONReportEmpty);
+  Suite.Test('TestTAPReportMultiSuite', @TestTAPReportMultiSuite);
+  Suite.Test('TestJSONReportMultiSuite', @TestJSONReportMultiSuite);
+  Suite.Test('TestJSONReportSkipped', @TestJSONReportSkipped);
+  Suite.Test('TestTAPReportDuration', @TestTAPReportDuration);
+  Suite.Test('TestJSONReportDuration', @TestJSONReportDuration);
+  Suite.Test('TestTAPReportMultiLineYAML', @TestTAPReportMultiLineYAML);
+  Suite.Test('TestTAPReportError', @TestTAPReportError);
 
   Runner := TTestRunner.Create('output-tests');
   Runner.Add(Suite);
@@ -596,7 +802,7 @@ begin
   WriteLn;
   Runner.Summary;
 
-  CheckTrue(GTestsRun >= 28, 'Expected at least 28 tests, got ' + IntToStr(GTestsRun));
+  CheckTrue(GTestsRun >= 38, 'Expected at least 38 tests, got ' + IntToStr(GTestsRun));
   CheckTrue(LSuccess, 'All output tests should pass');
 
   if Runner.AllPassed then

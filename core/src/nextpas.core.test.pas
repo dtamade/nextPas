@@ -91,6 +91,8 @@ procedure CheckStartsWith(const AStr, APrefix: string);
 procedure CheckEndsWith(const AStr, ASuffix: string);
 procedure CheckSame(AExpected, AActual: Pointer; const AMessage: string = '');
 procedure CheckInRange(AValue, ALow, AHigh: Int64);
+procedure CheckGreaterThan(AValue, AExpected: Int64);
+procedure CheckLessThan(AValue, AExpected: Int64);
 procedure CheckLength(AExpected, AActual: NativeInt);
 procedure CheckRaises(AExceptionClass: ExceptClass; AProc: TTestProc;
   const AMessage: string = '');
@@ -126,9 +128,9 @@ type
 { ── Re-exported types from test.discovery ──────────────────────────────────── }
 
 type
-  TTestFixure = nextpas.core.test.discovery.TTestFixure;
+  TTestFixture = nextpas.core.test.discovery.TTestFixture;
 
-function DiscoverTests(AFixture: TTestFixure;
+function DiscoverTests(AFixture: TTestFixture;
   const ASuiteName: string = ''): TTestSuite;
 
 { ── Re-exported from test.output.tap ──────────────────────────────────────── }
@@ -227,6 +229,12 @@ begin nextpas.core.test.check.CheckSame(AExpected, AActual, AMessage); end;
 procedure CheckInRange(AValue, ALow, AHigh: Int64);
 begin nextpas.core.test.check.CheckInRange(AValue, ALow, AHigh); end;
 
+procedure CheckGreaterThan(AValue, AExpected: Int64);
+begin nextpas.core.test.check.CheckGreaterThan(AValue, AExpected); end;
+
+procedure CheckLessThan(AValue, AExpected: Int64);
+begin nextpas.core.test.check.CheckLessThan(AValue, AExpected); end;
+
 procedure CheckLength(AExpected, AActual: NativeInt);
 begin nextpas.core.test.check.CheckLength(AExpected, AActual); end;
 
@@ -296,7 +304,7 @@ begin Result := nextpas.core.test.output.WriteJUnitXML(AResults, AFileName, ASui
 
 { ── Forward to test.discovery ──────────────────────────────────────────────── }
 
-function DiscoverTests(AFixture: TTestFixure;
+function DiscoverTests(AFixture: TTestFixture;
   const ASuiteName: string): TTestSuite;
 begin Result := nextpas.core.test.discovery.DiscoverTests(AFixture, ASuiteName); end;
 

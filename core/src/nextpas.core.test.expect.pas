@@ -476,6 +476,18 @@ begin
   Result := Self;
 end;
 
+{ ToNotRaise — asserts that the proc does NOT raise any exception.
+
+  NOTE: ToNotRaise does NOT honor the Not_ (FNegated) flag.
+  Not_.ToNotRaise behaves identically to ToNotRaise — it still asserts that
+  no exception is raised.  The Not_ token is silently ignored.
+
+  If you need to assert that a proc DOES raise, use
+    ExpectProc(...).ToRaise(SpecificException)
+  which properly supports Not_.ToRaise(EClass) for negative assertions.
+
+  Implementation: ToNotRaise runs the proc; if any exception (other than
+  ETestSkipped) escapes, it calls InternalFail.  FNegated is never checked. }
 function TExpectation.ToNotRaise: IExpectation;
 begin
   if FKind <> ekProc then

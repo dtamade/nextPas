@@ -23,9 +23,11 @@ type
 
 type
   TTestResultAppender = class
-  public
+  private
     FResults: specialize TArray<TTestResult>;
+  public
     procedure Append(const AResult: TTestResult);
+    property Results: specialize TArray<TTestResult> read FResults;
   end;
 
 { ── TTestContext (for subtest execution) ───────────────────────────────────── }
@@ -39,6 +41,7 @@ type
     FSubFail  : Integer;
     FSubSkip  : Integer;
     FOnResult : TOnSubtestResult;
+    FFailedNames: specialize TArray<string>;
     constructor Create(const ATestName: string);
     procedure Run(const AName: string; AProc: TTestProc);
     procedure RunNested(const AName: string; AProc: Pointer);
@@ -124,6 +127,9 @@ var
   LSubCtx: TTestContext;
   LSubCtxI: ITestContext;
   LTestResult: TTestResult;
+  LNames: string;
+  K: Integer;
+  J: Integer;
 begin
   for I := 0 to High(FSubtests) do
   begin
@@ -151,6 +157,12 @@ begin
         Inc(FSubPass, LSubCtx.FSubPass);
         Inc(FSubFail, LSubCtx.FSubFail);
         Inc(FSubSkip, LSubCtx.FSubSkip);
+        { Propagate nested failed names to parent }
+        for J := 0 to High(LSubCtx.FFailedNames) do
+        begin
+          SetLength(FFailedNames, Length(FFailedNames) + 1);
+          FFailedNames[High(FFailedNames)] := LSubCtx.FFailedNames[J];
+        end;
       end
       else if LEntry.Kind = ekTableTest then
       begin
@@ -179,6 +191,8 @@ begin
         WriteLn('    ', StatusDot(tsFailed), ' ', AnsiRed(LEntry.Name));
         WriteLn('      ', AnsiDim(E.Message));
         Inc(FSubFail);
+        SetLength(FFailedNames, Length(FFailedNames) + 1);
+        FFailedNames[High(FFailedNames)] := LEntry.Name;
       end;
       on E: Exception do
       begin
@@ -188,6 +202,8 @@ begin
           ' [', E.ClassName, ']');
         WriteLn('      ', AnsiDim(E.Message));
         Inc(FSubFail);
+        SetLength(FFailedNames, Length(FFailedNames) + 1);
+        FFailedNames[High(FFailedNames)] := LEntry.Name;
       end;
     end;
     ReportLeakIfAny(LStatus);
@@ -202,7 +218,15 @@ begin
   end;
   { Propagate subtest failures to parent }
   if FSubFail > 0 then
-    InternalFail(IntToStr(FSubFail) + ' subtest(s) failed in ' + FTestName);
+  begin
+    LNames := '';
+    for K := 0 to High(FFailedNames) do
+    begin
+      if K > 0 then LNames := LNames + ', ';
+      LNames := LNames + FFailedNames[K];
+    end;
+    InternalFail(IntToStr(FSubFail) + ' subtest(s) failed in ' + FTestName + ': ' + LNames);
+  end;
 end;
 
 end.
