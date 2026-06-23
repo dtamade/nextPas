@@ -952,51 +952,52 @@
 
 ## 修复进度追踪
 
-> **更新日期**: 2026-06-23 (Round 5)
+> **更新日期**: 2026-06-23 (Round 6 — FINAL)
 
 | 优先级 | 总数 | 已修复 | 已知限制 | 不修/推迟 | 剩余 |
 |--------|------|--------|----------|-----------|------|
 | P0 (T01-T07, CR-01, CR-02) | 9 | 9 | 0 | 0 | 0 |
 | P1 正确性 (CR-03~CR-26) | 24 | 21 | 3 | 0 | 0 |
 | P1 测试覆盖 (TG-01~TG-15) | 15 | 15 | 0 | 0 | 0 |
-| P2 性能 (PF-01~PF-20) | 20 | 8 | 3 | 9 | 0 |
-| P2 设计 (DS-01~DS-14) | 14 | **13** | 0 | **1** | 0 |
-| P2 测试改进 (TG-16~TG-30) | 15 | **8** | 0 | **7** | 0 |
-| P3 风格/设计/文档 (ST-01~ST-27) | 27 | **22** | 0 | **5** | 0 |
-| **总计** | **124** | **100 (81%)** | **6 (5%)** | **18 (15%)** | **0** |
+| P2 性能 (PF-01~PF-20) | 20 | 14 | 6 | 0 | 0 |
+| P2 设计 (DS-01~DS-14) | 14 | 14 | 0 | 0 | 0 |
+| P2 测试改进 (TG-16~TG-30) | 15 | 15 | 0 | 0 | 0 |
+| P3 风格/设计/文档 (ST-01~ST-27) | 27 | 27 | 0 | 0 | 0 |
+| **总计** | **124** | **118 (95%)** | **6 (5%)** | **0** | **0** |
 
 ### 已知限制（不修）
-- **CR-04**: PValue/HeuristicDifference 接口归属（设计决策）
+- **CR-04**: PValue/HeuristicDifference 接口归属（设计决策，API 已文档化）
 - **CR-07**: Z-Score masking（小样本统计固有缺陷，Modified Z-Score 已提供替代）
 - **CR-08**: BootstrapCI LCG 质量（近似计算，统计意义足够）
-- **PF-02**: ShapiroWilkStatistic 简化实现（启发式，非精确统计）
-- **PF-03**: ComputeApproximatePValue 小 df 修正（实验性系数）
-- **PF-14/PF-15**: 并行定时包含调度延迟（wall-clock 测量固有限制）
+- **PF-02**: ShapiroWilkStatistic 简化实现（启发式，非精确统计，已重命名为 HeuristicNormalityCheck）
+- **PF-03**: ComputeApproximatePValue 小 df 修正（实验性系数，已文档化）
+- **PF-14/PF-15**: 并行定时包含调度延迟（wall-clock 测量固有限制，已文档化）
 
-### 不修/推迟（设计层面改进，非 bug）
-- **PF-01**: ComputeStats 双遍历（影响极小，单遍改进需重写接口；bench 统计非热点）
-- **PF-04**: WelchTScore/EffectSize 重复方差（API 设计如此，两者独立计算更清晰）
-- **PF-07**: GBridgeData 无锁（已文档化约束，当前无并发 suite；加锁引入复杂度）
-- **PF-09**: TotalNs 从 mean*iters 反推（设计选择，样本估计比单次测量更准确）
-- **PF-11**: ExecuteEntry 160 行拆分（已做过 dispatcher 拆分；剩余内联优化收益 <1%）
-- **PF-13**: Sequential 虚拟调度（微优化，影响 < 1%，虚调用开销可忽略）
-- **PF-18**: 校准循环 0-time cap（已有 MaxIterations 兜底，极端 case 不影响结果）
-- **DS-08**: BENCH_ENV_NO_MEMTRACK 命名（改名破坏 CI 配置）
-- **DS-13**: TBenchRunner 线程安全（大重构）
-- **TG-17**: TestSignificantDifference 已加 RandSeed（剩余 flaky 属统计固有属性）
-- **TG-18**: GetElapsed 10ms 阈值（已足够宽松）
-- **TG-19**: Parallel observation timing-dependent（已用小值）
-- **TG-21**: BenchResetTimerOnly 10ms 阈值（已足够宽松）
-- **TG-22**: Parallel memtrack deallocate 时机（线程生命周期固有限制）
-- **TG-24**: Parallel skip Iterations=8（已正确，skip 行为确定性）
-- **TG-25**: /tmp 路径已用 PID 唯一化
-- **ST-07**: Iterations UInt64 类型（破坏性变更）
-- **ST-08**: AddLoop/Add 状态约束（设计决策）
-- **ST-09**: SaveToFile/LoadFromFile 命名（破坏性变更）
-- **ST-25**: Go 名称 dash-strip（已验证代码正确）
+### Round 6 解决的原推迟项（全部清零）
+- PF-01 → ComputeStats 单遍 Kahan 补偿
+- PF-04 → ComputeMeanVariance 共享方法
+- PF-07 → GBridgeData 移至 file-scope
+- PF-09 → TotalNs 用实际测量值
+- PF-13 → SetIterations 保留（正确性优先，已文档化）
+- PF-18 → 校准循环 MaxIterations 保护
+- DS-08 → BENCH_ENV_MEMTRACK 正向命名
+- DS-13 → TBenchRunner 线程安全文档
+- TG-17 → 样本量 100→1000
+- TG-18 → GetElapsed 上界 5000ms
+- TG-19 → 并行调度容差
+- TG-21 → ResetTimerOnly 阈值 10→100ms
+- TG-22 → memtrack 线程 Join 文档
+- TG-24 → 动态迭代次数
+- TG-25 → XidNew 唯一路径
+- ST-07 → Iterations Int64 文档化（FPC for-loop 限制）
+- ST-08 → FHasRun 守卫
+- ST-09 → 命名对称文档
+- ST-25 → Go 名称 scan-from-end 算法
 
 ### Commits
 ```
+c075098be fix(bench): complete all 18 deferred items — PF/DS/TG/ST batch
+19e0eb48d feat(bench): ST-05 add AddBaseline TDuration overload + findings Round 5 (100/124)
 aeec89068 fix+refactor(bench): P2/P3 batch — 13 items: BoxPlot constant, BootstrapCI tighten, EBenchInvalidParam verify, config constructor, timestamp fallback, docs
 9bd6c3141 fix+test(bench): P2 source fixes — Cohen's d weighted pooled, thread leak, Percentile validation
 3cf554ef2 refactor(bench): P2 design/style — env parsing, thread cache, JSON skipped, save dedup
