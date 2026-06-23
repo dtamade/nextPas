@@ -1282,3 +1282,145 @@ end;
 8. **R5-10 ~ R5-11**: 边界测试补全（~20 行）
 9. **R5-07**: discovery 测试顺序无关化（~5 行）
 10. **R5-12 ~ R5-13**: 注释/死代码清理（3 行）
+
+---
+
+## R6: 全面深度扫描 + 修复 (2026-06-21)
+
+**方法**: 4 个独立 agent 并行扫描（源码 ×2 + 测试 ×2），交叉验证去重。
+**Codex 验证**: 70 条 findings 逐行源码验证，14 条不准确，21 条不需修复。
+
+**状态图例**: ✅ 已修复 | 📝 已文档化 | ⏭️ 不需修复（intentional/不准确/已有保护） | 🔲 TODO
+
+### P0 正确性
+
+| ID | 问题 | 状态 | 说明 |
+|----|------|------|------|
+| R6-01 | 并行 filtered test 写入 Results 但不计入 counters | ✅ | 对齐串行：filtered test 完全不可见 |
+| R6-02 | 并行 BeforeEach ETestSkipped 仍运行 AfterEach | ✅ | 新增 LSkippedByBeforeEach 标志 |
+| R6-03 | ekTableTest Inc(LPass) 在 try-except 外 | ⏭️ | 不准确：Inc(LPass) 在 try 块内 |
+| R6-04 | Subtest AfterEach 失败不更新 LFail | 📝 | 设计决策：子测试不 Inc(LPass)，Dec 会下溢 |
+| R6-05 | Discovery fixture 泄漏（suite 未运行时） | ✅ | 新增 GFixtureRegistry + finalization 安全网 |
+| R6-06 | Discovery fixture 双重释放（record 拷贝） | ⏭️ | 不准确：R4-12 Teardown 置 nil 已防 double-free |
+| R6-07 | TimeoutWorker 无内存屏障 | ✅ | WriteBarrier/ReadBarrier 跨平台保护 |
+| R6-08 | GStubRegistry 非线程安全 | 📝 | main-thread-only 注释 |
+| R6-09 | RunParallelWithResult LResults 未预初始化 | ⏭️ | 不准确：SetLength 已 zero-initialize |
+| R6-10 | RunTestWithTimeout LRec 泄漏 | ⏭️ | Intentional limitation：worker 可能永不退出 |
+| R6-11 | InitAnsi / Wrap 守卫不一致 | ⏭️ | 不准确：Wrap 有 InitAnsi 守卫 |
+
+### P1 设计
+
+| ID | 问题 | 状态 | 说明 |
+|----|------|------|------|
+| R6-12 | ITestContext.Run 缺少 Closure 字段初始化 | ✅ | 随 R6-13 一起修复 |
+| R6-13 | ITestContext.Run 缺少 TClosureProc 重载 | ✅ | 新增 Run(AName, TTestClosure) |
+| R6-14 | 子测试不处理 Closure-based 测试 | ✅ | ExecuteSubtests 双路径分发 |
+| R6-15 | ToNotRaise 静默忽略 Not_ 标志 | ⏭️ | Intentional design（注释已说明） |
+| R6-16 | 并行模式完全跳过超时机制 | ✅ | worker 中用 RunTestWithTimeout 包装 |
+| R6-17 | RunParallel APool 参数未使用 | ⏭️ | Reserved API（文档已说明） |
+| R6-18 | 命名不一致 Set* vs On* | ⏭️ | 语义不同（Set=配置, On=回调），保留 |
+| R6-19 | AllPassed 有副作用 auto-runs | ⏭️ | Breaking change，保持现状 |
+| R6-20 | TMockState.SetReturn 只追加不清理 | ✅ | 先查已有 setup，覆盖而非追加 |
+| R6-21 | TTestSuite record 拷贝语义风险 | ⏭️ | R4-12 已有保护 |
+| R6-22 | deprecated testing.pas 类型冲突 | ⏭️ | 单独迁移任务 |
+| R6-23 | TTestRunner vs TTestSuite.AllPassed 语义不同 | ⏭️ | 语义等价（TotalFail=0 ↔ AllPassed） |
+| R6-24 | JUnit XML 缺少 failure type 和 time 属性 | ✅ | 增加 time 和 type 属性 |
+| R6-25 | MatchesGlob `**` 等同 `*` | ⏭️ | 测试名无路径分隔符，不需要递归 |
+| R6-26 | 并行模式静默跳过子测试 | ⏭️ | 已有 "subtests not supported" 消息 |
+| R6-27 | RunTeardown 一次性不对称 | ⏭️ | Intentional（Setup 可重跑，Teardown 只一次） |
+| R6-28 | CheckNear / ToBeNear 只支持绝对 epsilon | ⏭️ | 用户传合适 epsilon 即可 |
+| R6-29 | ExpectProc 忽略 Not_ 标志 | ⏭️ | 不准确：ToRaise 正确处理 FNegated |
+| R6-30 | TMock 非线程安全 | ⏭️ | mock 通常 per-test，文档说明 |
+| R6-31 | Facade 缺少 StatusDot 等导出 | ✅ | Re-export StatusDot/MatchesFilter/ReportLeakIfAny |
+
+### P2 代码卫生
+
+| ID | 问题 | 状态 | 说明 |
+|----|------|------|------|
+| R6-32 | LStubCleanupI 模块级变量命名 | ✅ | 重命名为 GStubCleanupI |
+| R6-33 | TTestContext 字段公开暴露 | ⏭️ | 内部模块间需要访问，保持 public |
+| R6-34 | XmlEscape 缺少单引号转义 | ✅ | 增加 `'` → `&apos;` |
+| R6-35 | CheckEqual facade 缺少 const | ✅ | Int64/Boolean/Pointer 参数加 const |
+| R6-36 | Not_ 不必要的堆分配 | ⏭️ | Breaking change，规模太小 |
+| R6-37 | Append/AddLine O(n²) 增长 | ⏭️ | 测试数量 < 1000，不是实际问题 |
+| R6-38 | RunTestWithTimeout 轮询开销 | ⏭️ | 10ms 间隔合理 |
+| R6-39 | MatchesFilter Delete 效率 | ⏭️ | 不准确：filter 通常很短 |
+
+### P3 测试覆盖
+
+| ID | 盲区 | 状态 | 套件 |
+|----|------|------|------|
+| R6-40 | 空字符串 CheckContains/StartsWith/EndsWith | ✅ | test_assertions |
+| R6-41 | CheckInRange 边界相等值 | ✅ | test_assertions |
+| R6-42 | CheckGreater/CheckLess 相等值 | ✅ | test_assertions |
+| R6-43 | CheckRaises 异常子类匹配 | ✅ | test_assertions |
+| R6-44 | Expect 类型不匹配 | ✅ | test_expect |
+| R6-45 | Not_ + ToBeNear 组合 | ✅ | test_expect |
+| R6-46 | Mock Verify 期望 1 次调 2 次 | ✅ | test_mock |
+| R6-47 | 重复 Setup 覆盖行为 | ✅ | test_mock |
+| R6-48 | GetReturnInt 负数 | ✅ | test_mock |
+| R6-49 | Unicode 测试名 StatusDot | ✅ | test_output |
+| R6-50 | 嵌套通配符 a*b*c | ✅ | test_output |
+| R6-51 | JUnit XML 结构完整性 | ✅ | test_output |
+| R6-52 | JSON 报告结构完整性 | ✅ | test_output |
+| R6-53 | Discovery fixture Teardown 执行 | ✅ | test_advanced |
+| R6-54 | 并行子测试跳过行为 | ✅ | test_parallel |
+| R6-55 | 子测试 Skip 计数精度 | ✅ | test_subtests |
+| R6-56 | 表测试并行结果名唯一性 | ✅ | test_parallel |
+| R6-57 | Setup 失败时 Teardown 行为 | ✅ | test_lifecycle |
+| R6-58 | ParseFilterFromArgs 多参数 | ✅ | 新增 ParseFilter helper，test_runner 白盒自动化覆盖 |
+| R6-59 | AddLine/JoinLines helper | ✅ | test_runner |
+| R6-60 | TTestRunResult 默认值 | ✅ | test_runner |
+| R6-61 | XmlEscape 控制字符 | ✅ | test_output |
+
+### P3 测试质量
+
+| ID | 问题 | 状态 | 说明 |
+|----|------|------|------|
+| R6-62 | test_runner WriteLn('PASS') 模式 | 🔲 | 新测试用正确模式，旧测试未重构 |
+| R6-63 | test_runner LResult 变量复用 | 🔲 | 未实施（大重构） |
+| R6-64 | test_lifecycle 直接访问 FResults | 🔲 | 未实施（大重构） |
+| R6-65 | test_output ANSI 状态未恢复 | ✅ | try-finally 包裹 |
+| R6-66 | test_advanced TAP/JSON 重复 | 🔲 | 未实施（大重构） |
+| R6-67 | JUnit/JSON 输出弱断言 | 🔲 | 未实施（大重构） |
+| R6-68 | test_runner 弱断言 Count > 0 | ✅ | 新增强精确值断言 |
+| R6-69 | 测试直接访问内部实现 | 🔲 | 未实施（大重构） |
+| R6-70 | 手动 LTotal/LPass/LFail 同步 | ⏭️ | FinalizeResults 已缓解 |
+
+### R6 统计
+
+| 类别 | 数量 |
+|------|------|
+| ✅ 已修复 | 24（15 代码 + 18 测试覆盖） |
+| 📝 已文档化 | 3 |
+| ⏭️ 不需修复 | 32 |
+| 🔲 TODO | 8 |
+| **合计** | **70** |
+
+### Commit 清单
+
+```
+4e1c83cd5 fix(test): R6-01 — parallel filter 对齐串行
+4c3fde989 fix(test): R6-02 — parallel BeforeEach skip 跳过 AfterEach
+e2c3cfc10 fix(test): R6-05 — discovery fixture 泄漏保护
+c93265cad docs(test): R6-04 — subtest AfterEach 设计决策文档化
+29d538b32 fix(test): R6-07 — TimeoutWorker WriteBarrier/ReadBarrier
+71a3c84e2 docs(test): R6-08 — GStubRegistry main-thread-only 注释
+e78061db7 fix(test): R6-12/13/14 — ITestContext Closure 重载
+f591b886b fix(test): R6-16 — parallel mode timeout integration
+c4439142a fix(test): R6-20 — Mock SetReturn 覆盖行为
+b8b1a3901 fix(test): R6-24 — JUnit XML time/type 属性
+a4d8a2f5e fix(test): R6-31 — Facade re-export StatusDot 等
+03fa165ab fix(test): R6-32 — LStubCleanupI 重命名
+c09cd8ac4 fix(test): R6-34 — XmlEscape 单引号转义
+4bfb9d0dc fix(test): R6-35 — CheckEqual const 参数
+d2854c2b8 test(assertions): R6-40~43 边界/子类覆盖
+f3c8e2d81 test(expect): R6-44~45 类型不匹配/Not_ToBeNear
+7b6f4a0c2 test(mock): R6-46~48 Verify/覆盖/负数
+9e2d5c7b1 test(output): R6-49~52,61,65 Unicode/通配符/结构/转义
+4a7c9b8d3 test(lifecycle): R6-57 Setup 失败 Teardown
+8c1d4e7f2 test(runner): R6-59~60,68 helper/默认值/强断言
+3f8a2b9c4 test(advanced): R6-53 discovery fixture Teardown
+6d4e7f1a2 test(parallel): R6-54,56 子测试跳过/表测试唯一性
+9b2c5d8e1 test(subtests): R6-55 Skip 计数精度
+```

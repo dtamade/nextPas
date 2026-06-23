@@ -121,6 +121,8 @@ procedure RegisterStub(var ASuite: TTestSuite; APtr: Pointer);
   Records the GFixtureRegistry index in the suite for cleanup.
   Only call once per fixture (from DiscoverTests). }
 procedure RegisterFixture(var ASuite: TTestSuite; AFixture: TObject);
+{ White-box helper for test_runner: parse --filter=value form from one argv item. }
+function ParseFilter(const AArg: string): string;
 
 implementation
 
@@ -143,16 +145,25 @@ var
 
 { ── Command-line helpers ──────────────────────────────────────────────────── }
 
+function ParseFilter(const AArg: string): string;
+begin
+  if Copy(AArg, 1, 9) = '--filter=' then
+    Exit(Copy(AArg, 10, MaxInt));
+  Result := '';
+end;
+
 function ParseFilterFromArgs: string;
 var
   K: Integer;
+  LFilter: string;
 begin
   Result := '';
   for K := 1 to ParamCount do
   begin
     { Support both --filter value and --filter=value syntax }
-    if Copy(ParamStr(K), 1, 9) = '--filter=' then
-      Exit(Copy(ParamStr(K), 10, MaxInt));
+    LFilter := ParseFilter(ParamStr(K));
+    if LFilter <> '' then
+      Exit(LFilter);
     if (ParamStr(K) = '--filter') and (K < ParamCount) then
       Exit(ParamStr(K + 1));
   end;

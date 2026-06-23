@@ -9,6 +9,7 @@ uses
   cthreads,
   SysUtils,
   nextpas.core.test,
+  nextpas.core.test.runner,
   nextpas.core.test.output;
 
 var
@@ -730,13 +731,28 @@ begin
     WriteLn(AnsiGreen('  ✓ Empty suite run'));
   end;
 
-  { ── R6-58: ParseFilterFromArgs (TODO: requires programmatic ParamStr override) ── }
-  { ParseFilterFromArgs reads from ParamStr, which cannot be overridden in tests.
-    Verified manually: --filter=foo --other=bar extracts 'foo' correctly.
-    TODO: if ParseFilterFromArgs accepts args array overload, test it here. }
+  { ── R6-58: ParseFilter helper (white-box) ─────────────────────────────────── }
   WriteLn;
-  WriteLn(AnsiBold('─── R6-58: ParseFilterFromArgs (skipped, reads ParamStr) ───'));
-  WriteLn(AnsiGreen('  ✓ ParseFilterFromArgs (manual verification, see source comment)'));
+  WriteLn(AnsiBold('─── R6-58: ParseFilter helper ───'));
+  begin
+    { 白盒测试：直接验证 runner 内部命令行解析 helper。 }
+    if nextpas.core.test.runner.ParseFilter('--filter=alpha') <> 'alpha' then
+    begin
+      WriteLn(AnsiRed('FAIL: ParseFilter should extract alpha'));
+      Halt(1);
+    end;
+    if nextpas.core.test.runner.ParseFilter('--other=beta') <> '' then
+    begin
+      WriteLn(AnsiRed('FAIL: ParseFilter should ignore unrelated args'));
+      Halt(1);
+    end;
+    if nextpas.core.test.runner.ParseFilter('--filter=foo=bar') <> 'foo=bar' then
+    begin
+      WriteLn(AnsiRed('FAIL: ParseFilter should preserve embedded equals'));
+      Halt(1);
+    end;
+    WriteLn(AnsiGreen('  ✓ ParseFilter helper'));
+  end;
 
   { ── R6-59: AddLine / JoinLines helpers ────────────────────────────────────── }
   WriteLn;
