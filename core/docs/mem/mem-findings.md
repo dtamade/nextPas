@@ -507,11 +507,14 @@
 
 ---
 
-### P-03 ⚠️ `TLocalArena.AllocAligned` 仍在每次调用重新做 `IsPowerOfTwo`
+### P-03 [WONTFIX] `TLocalArena.AllocAligned` 仍在每次调用重新做 `IsPowerOfTwo`
 
 **P3 | 文件：`core/src/nextpas.core.mem.arena.local.pas`**
 
-这是很小的热路径损耗，不影响正确性，但和 `TVirtualArena` 的 cached alignment 策略相比仍不一致。
+这条本轮不做收敛。原因有两点：
+
+- 这里的额外判断是极小热路径损耗，不影响正确性，也没有证据表明它已成为真实瓶颈
+- `TLocalArena` 与 `TVirtualArena` 的对齐模型本来就不同；为了表面一致而强行共用缓存策略，收益很低，反而会放大实现复杂度
 
 ---
 
