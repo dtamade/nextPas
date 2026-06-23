@@ -39,6 +39,12 @@ type
     {** 设置每操作内存分配次数 }
     procedure SetAllocs(AAllocs: Int64);
 
+    {** 累加每操作字节数（多次迭代分段报告场景） }
+    procedure AddBytes(ABytes: Int64);
+
+    {** 累加每操作内存分配次数 }
+    procedure AddAllocs(AAllocs: Int64);
+
     {** 重置计时器（排除 setup 时间） }
     procedure ResetTimer;
 
@@ -57,11 +63,15 @@ type
     {** 获取每操作内存分配次数 }
     function GetAllocsPerOp: Int64;
 
+    {** 获取当前基准名称 (ST-03) }
+    function GetName: string;
+
     {** 属性访问 }
     property Iterations: Int64 read GetIterations;
     property Elapsed: TDuration read GetElapsed;
     property BytesPerOp: Int64 read GetBytesPerOp;
     property AllocsPerOp: Int64 read GetAllocsPerOp;
+    property Name: string read GetName;
   end;
 
   {** 基准函数类型 - 简单版本 }
@@ -115,8 +125,19 @@ type
     function AddRange(const AName: string; AFunc: TBenchParamFunc;
       const AParams: array of Int64): IBenchSuite;
 
+    {** 添加参数化基准测试（带 setup/teardown） (DS-02) }
+    function AddRange(const AName: string; AFunc: TBenchParamFunc;
+      const AParams: array of Int64;
+      ASetup: TBenchSetupFunc; ATeardown: TBenchTeardownFunc): IBenchSuite;
+
     {** 添加用户控制循环的基准测试 }
     function AddLoop(const AName: string; AFunc: TBenchLoopFunc): IBenchSuite;
+
+    {** 清空所有已注册条目 (DS-03) }
+    function Clear: IBenchSuite;
+
+    {** 按名称移除条目 (DS-03) }
+    function RemoveByName(const AName: string): IBenchSuite;
 
     {** 设置最小基准持续时间 }
     function SetMinDuration(ADuration: TDuration): IBenchSuite;
@@ -144,6 +165,9 @@ type
 
     {** 添加基线（用于对比） }
     function AddBaseline(const AName: string; ANsPerOp: Double): IBenchSuite;
+
+    {** 批量添加基线 (ST-06) }
+    function AddBaselines(const ABaselines: array of TBaselineData): IBenchSuite;
 
     {** 加载基线文件 }
     function LoadBaseline(const APath: string): IBenchSuite;
@@ -219,6 +243,9 @@ type
 
     {** 检测回归启发式（不是正式显著性检验） }
     function HasHeuristicDifference(const A, B: TBenchStats): Boolean;
+
+    {** 检测回归启发式（自定义显著性水平） (DS-04) }
+    function HasHeuristicDifferenceAt(const A, B: TBenchStats; AAlpha: Double): Boolean;
 
     {** 计算近似 p-value（启发式） }
     function ComputeApproximatePValue(const A, B: TBenchStats): Double;

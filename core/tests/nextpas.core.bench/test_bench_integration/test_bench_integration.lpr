@@ -33,6 +33,7 @@ var
   GParallelLock: TMutex;
   GActiveParallelCalls: Integer;
   GMaxParallelCalls: Integer;
+  GGotName: Boolean; { ST-03 }
 
 procedure Check(ACondition: Boolean; const ATestName: string);
 begin
@@ -208,6 +209,42 @@ begin
   LSum := 0;
   for LIteration := 1 to AN do
     LSum := LSum + LIteration;
+end;
+
+{ New API test benchmarks }
+
+procedure BenchNameCheck(const ACtx: IBenchContext);
+begin
+  GGotName := ACtx.Name = 'NameCheck';
+end;
+
+procedure BenchAddBytesAllocs(const ACtx: IBenchContext);
+begin
+  ACtx.AddBytes(100);
+  ACtx.AddBytes(200);
+  ACtx.AddAllocs(5);
+  ACtx.AddAllocs(3);
+end;
+
+procedure BenchNoOp(const ACtx: IBenchContext);
+begin
+  // intentionally empty
+end;
+
+procedure BenchRangeSetupParam(const ACtx: IBenchContext; AParam: Int64);
+begin
+  // intentionally empty
+end;
+
+function SetupCounter: Pointer;
+begin
+  Inc(GSetupCallCount);
+  Result := nil;
+end;
+
+procedure TeardownCounter(AData: Pointer);
+begin
+  Inc(GTeardownCallCount);
 end;
 
 procedure TestTBenchSuite_Basic;
@@ -1082,6 +1119,84 @@ begin
   Check(LAll[2].Executed, 'GetAll[2] is executed');
 end;
 
+{ === DS-02/03/04 + ST-03 + DS-14: New API Tests === }
+
+procedure TestNewAPI_GetName;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+begin
+  WriteLn('TestNewAPI_GetName:');
+  GGotName := False;
+  LSuite := TBenchSuite.Create('api-test');
+  LSuite.Add('NameCheck', @BenchNameCheck);
+  LResults := LSuite.SetQuiet(True).Run;
+  Check(GGotName, 'ST-03: IBenchContext.GetName returns entry name');
+end;
+
+procedure TestNewAPI_AddBytesAllocs;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+begin
+  WriteLn('TestNewAPI_AddBytesAllocs:');
+  LSuite := TBenchSuite.Create('addbytes-test');
+  LSuite.Add('AddBytesCheck', @BenchAddBytesAllocs);
+  LResults := LSuite.SetQuiet(True).Run;
+  // AddBytes accumulates: 100+200=300 per iteration. With warmup+calibration,
+  // the final value reflects multiple iterations accumulated.
+  Check(LResults.GetAll[0].BytesPerOp >= 300, 'DS-14: AddBytes accumulates (>= 300)');
+  Check(LResults.GetAll[0].AllocsPerOp >= 8, 'DS-14: AddAllocs accumulates (>= 8)');
+end;
+
+procedure TestNewAPI_Clear;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+begin
+  WriteLn('TestNewAPI_Clear:');
+  LSuite := TBenchSuite.Create('clear-test');
+  LSuite.Add('A', @BenchNoOp);
+  LSuite.Add('B', @BenchNoOp);
+  LSuite.Clear;
+  LResults := LSuite.SetQuiet(True).Run;
+  Check(LResults.Count = 0, 'DS-03: Clear removes all entries');
+end;
+
+procedure TestNewAPI_RemoveByName;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+begin
+  WriteLn('TestNewAPI_RemoveByName:');
+  LSuite := TBenchSuite.Create('remove-test');
+  LSuite.Add('Keep', @BenchNoOp);
+  LSuite.Add('Remove', @BenchNoOp);
+  LSuite.Add('AlsoKeep', @BenchNoOp);
+  LSuite.RemoveByName('Remove');
+  LResults := LSuite.SetQuiet(True).Run;
+  Check(LResults.Count = 2, 'DS-03: RemoveByName reduces count');
+  Check(LResults.GetAll[0].Name = 'Keep', 'DS-03: RemoveByName preserves order [0]');
+  Check(LResults.GetAll[1].Name = 'AlsoKeep', 'DS-03: RemoveByName preserves order [1]');
+end;
+
+procedure TestNewAPI_AddRangeWithSetup;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+begin
+  WriteLn('TestNewAPI_AddRangeWithSetup:');
+  GSetupCallCount := 0;
+  GTeardownCallCount := 0;
+  LSuite := TBenchSuite.Create('range-setup-test');
+  LSuite.AddRange('RangeSetup', @BenchRangeSetupParam, [100, 200],
+    @SetupCounter, @TeardownCounter);
+  LResults := LSuite.SetQuiet(True).Run;
+  Check(LResults.Count = 2, 'DS-02: AddRange with setup/teardown creates 2 entries');
+  Check(GSetupCallCount >= 2, 'DS-02: Setup called for each entry');
+  Check(GTeardownCallCount >= 2, 'DS-02: Teardown called for each entry');
+end;
+
 begin
   WriteLn('=== nextpas.core.bench Integration Tests ===');
   WriteLn;
@@ -1151,6 +1266,13 @@ begin
     WriteLn;
     WriteLn('=== GetAll Order Consistency (TG-11) ===');
     TestTBenchResults_GetAllOrder;
+    WriteLn;
+    WriteLn('=== New API Tests (DS-02/03/04 + ST-03 + DS-14) ===');
+    TestNewAPI_GetName; WriteLn;
+    TestNewAPI_AddBytesAllocs; WriteLn;
+    TestNewAPI_Clear; WriteLn;
+    TestNewAPI_RemoveByName; WriteLn;
+    TestNewAPI_AddRangeWithSetup;
   finally
     GParallelLock.Free;
   end;

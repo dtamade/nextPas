@@ -25,6 +25,7 @@ type
     FElapsedNs: UInt64;
     FSkipped: Boolean;
     FSkipReason: string;
+    FName: string; { ST-03: benchmark name }
 
   public
     constructor Create;
@@ -32,17 +33,21 @@ type
     {** IBenchContext 实现 }
     procedure SetBytes(ABytes: Int64);
     procedure SetAllocs(AAllocs: Int64);
+    procedure AddBytes(ABytes: Int64); { DS-14 }
+    procedure AddAllocs(AAllocs: Int64); { DS-14 }
     procedure ResetTimer;
     procedure Skip(const AReason: string);
     function GetIterations: Int64;
     function GetElapsed: TDuration;
     function GetBytesPerOp: Int64;
     function GetAllocsPerOp: Int64;
+    function GetName: string; { ST-03 }
 
     {** 内部方法 }
     procedure Reset;
     procedure IncrementIterations;
     procedure SetIterations(AValue: Int64);
+    procedure SetName(const AName: string); { ST-03 }
     function IsSkipped: Boolean;
     function GetSkipReason: string;
     function GetStartNs: UInt64;
@@ -234,6 +239,16 @@ begin
   FAllocsPerOp := AAllocs;
 end;
 
+procedure TBenchContext.AddBytes(ABytes: Int64);
+begin
+  Inc(FBytesPerOp, ABytes);
+end;
+
+procedure TBenchContext.AddAllocs(AAllocs: Int64);
+begin
+  Inc(FAllocsPerOp, AAllocs);
+end;
+
 procedure TBenchContext.ResetTimer;
 begin
   FStartNs := platform_monotonic_ns;
@@ -268,6 +283,16 @@ end;
 function TBenchContext.GetAllocsPerOp: Int64;
 begin
   Result := FAllocsPerOp;
+end;
+
+function TBenchContext.GetName: string;
+begin
+  Result := FName;
+end;
+
+procedure TBenchContext.SetName(const AName: string);
+begin
+  FName := AName;
 end;
 
 procedure TBenchContext.Reset;
@@ -468,6 +493,7 @@ begin
   begin
     LContext := TBenchContext.Create;
     LContextObj := LContext as TBenchContext;
+    LContextObj.SetName(AEntry.Name); { ST-03 }
     try
       if ATrackMemory then
       begin
@@ -575,6 +601,7 @@ begin
   // 通过接口创建，refcount 正确管理
   LContext := TBenchContext.Create;
   LContextObj := LContext as TBenchContext;
+  LContextObj.SetName(AEntry.Name); { ST-03 }
   try
     if ATrackMemory then
     begin

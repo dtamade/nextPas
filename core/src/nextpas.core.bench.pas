@@ -38,6 +38,9 @@ type
   TBenchTeardownFunc = nextpas.core.bench.intf.TBenchTeardownFunc;
   TBenchEntry = nextpas.core.bench.intf.TBenchEntry;
 
+  {** ST-12: 重新导出跨语言报告类型 }
+  TCrossLangEntry = nextpas.core.bench.report.TCrossLangEntry;
+
   {** 基准套件 - Fluent Builder 实现 }
   TBenchSuite = class(TInterfacedObject, IBenchSuite)
   private
@@ -69,7 +72,12 @@ type
       AThreads: Integer): IBenchSuite;
     function AddRange(const AName: string; AFunc: TBenchParamFunc;
       const AParams: array of Int64): IBenchSuite;
+    function AddRange(const AName: string; AFunc: TBenchParamFunc;
+      const AParams: array of Int64;
+      ASetup: TBenchSetupFunc; ATeardown: TBenchTeardownFunc): IBenchSuite;
     function AddLoop(const AName: string; AFunc: TBenchLoopFunc): IBenchSuite;
+    function Clear: IBenchSuite;
+    function RemoveByName(const AName: string): IBenchSuite;
     function SetMinDuration(ADuration: TDuration): IBenchSuite;
     function SetMaxIterations(AIters: Int64): IBenchSuite;
     function SetMinSamples(ACount: Integer): IBenchSuite;
@@ -79,6 +87,7 @@ type
     function CollectRawSamples: IBenchSuite;
     function SetQuiet(AQuiet: Boolean): IBenchSuite;
     function AddBaseline(const AName: string; ANsPerOp: Double): IBenchSuite;
+    function AddBaselines(const ABaselines: array of TBenchBaseline): IBenchSuite;
     function LoadBaseline(const APath: string): IBenchSuite;
     function SetFilter(const AFilter: string): IBenchSuite;
     function Run: IBenchResults;
@@ -300,10 +309,37 @@ begin
 
     if FEntryCount >= FEntryCapacity then
     begin
-      if FEntryCapacity = 0 then
-        FEntryCapacity := 8
-      else
-        FEntryCapacity := FEntryCapacity * 2;
+      if FEntryCapacity = 0 then FEntryCapacity := 8
+      else FEntryCapacity := FEntryCapacity * 2;
+      SetLength(FEntries, FEntryCapacity);
+    end;
+    FEntries[FEntryCount] := LEntry;
+    Inc(FEntryCount);
+  end;
+end;
+
+function TBenchSuite.AddRange(const AName: string; AFunc: TBenchParamFunc;
+  const AParams: array of Int64;
+  ASetup: TBenchSetupFunc; ATeardown: TBenchTeardownFunc): IBenchSuite;
+var
+  LEntry: TBenchEntry;
+  LIndex: Integer;
+begin
+  Result := Self;
+  for LIndex := 0 to High(AParams) do
+  begin
+    LEntry := Default(TBenchEntry);
+    LEntry.Name := AName + '/' + IntToStr(AParams[LIndex]);
+    LEntry.ParamFunc := AFunc;
+    LEntry.ParamValue := AParams[LIndex];
+    LEntry.Setup := ASetup;
+    LEntry.Teardown := ATeardown;
+    LEntry.Condition := True;
+
+    if FEntryCount >= FEntryCapacity then
+    begin
+      if FEntryCapacity = 0 then FEntryCapacity := 8
+      else FEntryCapacity := FEntryCapacity * 2;
       SetLength(FEntries, FEntryCapacity);
     end;
     FEntries[FEntryCount] := LEntry;
@@ -332,6 +368,32 @@ begin
   end;
   FEntries[FEntryCount] := LEntry;
   Inc(FEntryCount);
+end;
+
+function TBenchSuite.Clear: IBenchSuite;
+begin
+  Result := Self;
+  FEntryCount := 0;
+  SetLength(FEntries, 0);
+  FEntryCapacity := 0;
+end;
+
+function TBenchSuite.RemoveByName(const AName: string): IBenchSuite;
+var
+  I, J: Integer;
+begin
+  Result := Self;
+  for I := 0 to FEntryCount - 1 do
+  begin
+    if FEntries[I].Name = AName then
+    begin
+      // shift remaining entries left
+      for J := I to FEntryCount - 2 do
+        FEntries[J] := FEntries[J + 1];
+      Dec(FEntryCount);
+      Exit;
+    end;
+  end;
 end;
 
 function TBenchSuite.SetMinDuration(ADuration: TDuration): IBenchSuite;
@@ -404,6 +466,15 @@ begin
   FBaselines[FBaselineCount].Name := AName;
   FBaselines[FBaselineCount].NsPerOp := ANsPerOp;
   Inc(FBaselineCount);
+end;
+
+function TBenchSuite.AddBaselines(const ABaselines: array of TBenchBaseline): IBenchSuite;
+var
+  I: Integer;
+begin
+  Result := Self;
+  for I := 0 to High(ABaselines) do
+    AddBaseline(ABaselines[I].Name, ABaselines[I].NsPerOp);
 end;
 
 function TBenchSuite.LoadBaseline(const APath: string): IBenchSuite;

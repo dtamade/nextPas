@@ -38,6 +38,9 @@ type
     {** 计算 t 分布的临界值（99%，双侧） }
     function TInv0995(ADF: Double): Double;
 
+    {** 计算 t 分布的临界值（自定义 alpha，双侧） (DS-04) }
+    function TInvAlpha(ADF, AAlpha: Double): Double;
+
   public
     {** 构造函数 }
     constructor Create;
@@ -51,6 +54,9 @@ type
 
     {** 检测回归启发式（不是正式显著性检验） }
     function HasHeuristicDifference(const A, B: TBenchStats): Boolean;
+
+    {** 检测回归启发式（自定义显著性水平） (DS-04) }
+    function HasHeuristicDifferenceAt(const A, B: TBenchStats; AAlpha: Double): Boolean;
 
     {** 计算近似 p-value（简化版本） }
     function ComputeApproximatePValue(const A, B: TBenchStats): Double;
@@ -287,7 +293,26 @@ begin
   Result := TInvLookup(ADF, TINV99_DATA, Z_SCORE_99);
 end;
 
+function TBenchStatsAnalyzer.TInvAlpha(ADF, AAlpha: Double): Double;
+begin
+  // DS-04: map common alpha values to lookup tables; fallback to 95%
+  if AAlpha <= 0.01 then
+    Result := TInvLookup(ADF, TINV99_DATA, Z_SCORE_99)
+  else if AAlpha <= 0.05 then
+    Result := TInvLookup(ADF, TINV95_DATA, Z_SCORE_95)
+  else
+    // alpha > 0.05: use 95% critical value (conservative)
+    Result := TInvLookup(ADF, TINV95_DATA, Z_SCORE_95);
+end;
+
 function TBenchStatsAnalyzer.HasHeuristicDifference(const A, B: TBenchStats): Boolean;
+begin
+  // 默认 95% 置信水平 (alpha = 0.05)
+  Result := HasHeuristicDifferenceAt(A, B, 0.05);
+end;
+
+function TBenchStatsAnalyzer.HasHeuristicDifferenceAt(const A, B: TBenchStats;
+  AAlpha: Double): Boolean;
 var
   LTStat: Double;
   LDF: Double;
@@ -310,8 +335,8 @@ begin
   LDF := Sqr(LVarA + LVarB) /
          (Sqr(LVarA) / (A.SampleCount - 1) + Sqr(LVarB) / (B.SampleCount - 1));
 
-  // 比较 t 统计量与近似临界值
-  Result := LTStat > TInv0975(LDF);
+  // 比较 t 统计量与指定 alpha 的临界值
+  Result := LTStat > TInvAlpha(LDF, AAlpha);
 end;
 
 function TBenchStatsAnalyzer.ComputeApproximatePValue(const A, B: TBenchStats): Double;

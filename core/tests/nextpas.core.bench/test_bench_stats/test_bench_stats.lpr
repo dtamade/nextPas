@@ -462,6 +462,31 @@ begin
   Check(LHandled, 'Percentile survives Positive Infinity without segfault');
 end;
 
+{ === DS-04: HasHeuristicDifferenceAt === }
+
+procedure TestHasHeuristicDifferenceAt;
+var
+  LA, LB: TDoubleArray;
+  LSa, LSb: TBenchStats;
+  LI: Integer;
+begin
+  WriteLn('TestHasHeuristicDifferenceAt:');
+  RandSeed := 42;
+  SetLength(LA, 100); SetLength(LB, 100);
+  for LI := 0 to 99 do begin LA[LI] := 100.0 + Random * 10.0; LB[LI] := 200.0 + Random * 10.0; end;
+  LSa := GAnalyzer.ComputeStats(LA); LSb := GAnalyzer.ComputeStats(LB);
+  Check(GAnalyzer.HasHeuristicDifferenceAt(LSa, LSb, 0.05),
+    'DS-04: alpha=0.05 detects large difference');
+  Check(GAnalyzer.HasHeuristicDifferenceAt(LSa, LSb, 0.01),
+    'DS-04: alpha=0.01 still detects large difference');
+
+  RandSeed := 42;
+  for LI := 0 to 99 do begin LA[LI] := 100.0 + Random * 10.0; LB[LI] := 100.0 + Random * 10.0; end;
+  LSa := GAnalyzer.ComputeStats(LA); LSb := GAnalyzer.ComputeStats(LB);
+  Check(not GAnalyzer.HasHeuristicDifferenceAt(LSa, LSb, 0.05),
+    'DS-04: alpha=0.05 same distribution no difference');
+end;
+
 begin
   WriteLn('=== nextpas.core.bench.stats Unit Tests ===');
   WriteLn;
@@ -490,9 +515,11 @@ begin
   WriteLn('=== NaN/Infinity Input Tests (TG-05) ===');
   TestMean_NaNInfinity; WriteLn;
   TestStdDev_NaNInfinity; WriteLn;
-  TestPercentile_NaNInfinity;
+  TestPercentile_NaNInfinity; WriteLn;
 
-  WriteLn;
+  WriteLn('=== HasHeuristicDifferenceAt (DS-04) ===');
+  TestHasHeuristicDifferenceAt; WriteLn;
+
   WriteLn('=== Test Summary ===');
   WriteLn('Total: ', GTestCount);
   WriteLn('Passed: ', GPassCount);
