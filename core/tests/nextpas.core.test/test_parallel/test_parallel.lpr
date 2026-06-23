@@ -185,6 +185,63 @@ begin
   WriteLn(AnsiGreen('  ✓ Closure + Retry'));
 end;
 
+{ ── R6-54: Parallel subtest skip behavior ────────────────────────────────── }
+
+procedure TestParallelSubtestSkip;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+begin
+  { In parallel mode, subtests (TestSubtest) should get tsSkipped
+    since they cannot run in parallel workers. }
+  LSuite := TTestSuite.Create('ParSubtestSkip');
+  LSuite.Test('normal_pass', @TestParallelPassA);
+  LSuite.TestSubtest('subtest_entry',
+    procedure(constref Ctx: ITestContext)
+    begin
+      Ctx.Run('sub1', procedure begin CheckTrue(True); end);
+    end);
+  LSuite.RunParallelWithResult(nil, LResult);
+  { The normal test should pass }
+  CheckTrue(LResult.Passed >= 1, 'At least 1 normal test should pass');
+  { Subtests in parallel mode get skipped — verify they don't crash the suite }
+  CheckTrue(LResult.Failed = 0, 'No tests should fail');
+  WriteLn(AnsiGreen('  ✓ Parallel subtest skip'));
+end;
+
+{ ── R6-56: Table test parallel result name uniqueness ────────────────────── }
+
+procedure R656TableProc(const ACase: TTestCase);
+begin
+  CheckTrue(True);
+end;
+
+procedure TestTableParallelNameUniqueness;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  LSuccess: Boolean;
+  LCases: specialize TArray<TTestCase>;
+  I, J: Integer;
+begin
+  LSuite := TTestSuite.Create('TableParallelUnique');
+  SetLength(LCases, 4);
+  LCases[0].Name := 'case_a'; LCases[0].Data := '1';
+  LCases[1].Name := 'case_b'; LCases[1].Data := '2';
+  LCases[2].Name := 'case_c'; LCases[2].Data := '3';
+  LCases[3].Name := 'case_d'; LCases[3].Data := '4';
+  LSuite.TestTable('params', LCases, @R656TableProc);
+  LSuccess := LSuite.RunParallelWithResult(nil, LResult);
+  CheckTrue(LSuccess, 'Table parallel should pass');
+  CheckTrue(LResult.Passed = 4, 'Expected 4 table cases to pass');
+  { Verify result names are unique }
+  for I := 0 to High(LResult.Results) do
+    for J := I + 1 to High(LResult.Results) do
+      if LResult.Results[I].Name = LResult.Results[J].Name then
+        Fail('Duplicate result name: ' + LResult.Results[I].Name);
+  WriteLn(AnsiGreen('  ✓ Table parallel result name uniqueness'));
+end;
+
 var
   LSuite: TTestSuite;
   LFailSuite, LSkipSuite: TTestSuite;
@@ -323,6 +380,12 @@ begin
   TestRetryInParallel;
   TestSubtestSkipInParallel;
   TestClosureRetry;
+
+  { ── R6-54/R6-56: New parallel coverage tests ───────────────────────────── }
+  WriteLn;
+  WriteLn(AnsiBold('─── R6-54/R6-56: Parallel Coverage ───'));
+  TestParallelSubtestSkip;
+  TestTableParallelNameUniqueness;
 
   WriteLn;
   WriteLn(AnsiGreen('ALL LIFECYCLE TESTS PASSED'));
