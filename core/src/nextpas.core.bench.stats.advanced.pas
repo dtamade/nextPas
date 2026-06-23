@@ -50,9 +50,9 @@ type
   end;
 
   {**
-   * 高级统计分析器
+   * 高级统计分析器 (DS-06: class 避免 record 隐式拷贝共享缓存)
    *}
-  TAdvancedStats = record
+  TAdvancedStats = class
   private
     FData: TDoubleArray;
     FSortedData: TDoubleArray;
@@ -64,7 +64,12 @@ type
     {**
      * 创建统计分析器
      *}
-    class function Create(const AData: TDoubleArray): TAdvancedStats; static;
+    constructor Create(const AData: TDoubleArray);
+
+    {**
+     * 释放资源
+     *}
+    destructor Destroy; override;
 
     {**
      * 计算均值
@@ -176,11 +181,19 @@ const
 
 { TAdvancedStats }
 
-class function TAdvancedStats.Create(const AData: TDoubleArray): TAdvancedStats;
+constructor TAdvancedStats.Create(const AData: TDoubleArray);
 begin
-  Result.FData := Copy(AData);
-  Result.FSorted := False;
-  Result.FMeanCached := False;
+  inherited Create;
+  FData := Copy(AData);
+  FSorted := False;
+  FMeanCached := False;
+end;
+
+destructor TAdvancedStats.Destroy;
+begin
+  SetLength(FData, 0);
+  SetLength(FSortedData, 0);
+  inherited Destroy;
 end;
 
 procedure TAdvancedStats.EnsureSorted;

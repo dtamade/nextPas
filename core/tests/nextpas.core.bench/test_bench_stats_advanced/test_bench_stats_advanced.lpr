@@ -56,6 +56,7 @@ begin WriteLn('Test_Create:');
   LData := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0]);
   LStats := TAdvancedStats.Create(LData);
   Check(LStats.Count = 5, 'Count = 5');
+  LStats.Free;
 end;
 
 procedure Test_Mean;
@@ -66,6 +67,7 @@ begin WriteLn('Test_Mean:');
   Check(Abs(LStats.Mean - 3.0) < 0.001, 'Mean = 3.0');
   LData[0] := 101.0;
   Check(Abs(LStats.Mean - 3.0) < 0.001, 'Mean cache survives source mutation');
+  LStats.Free;
 end;
 
 procedure Test_Median;
@@ -74,9 +76,11 @@ begin WriteLn('Test_Median:');
   LData := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0]);
   LStats := TAdvancedStats.Create(LData);
   Check(Abs(LStats.Median - 3.0) < 0.001, 'Median = 3.0');
+  LStats.Free;
   LData := CreateTestData([1.0, 2.0, 3.0, 4.0]);
   LStats := TAdvancedStats.Create(LData);
   Check(Abs(LStats.Median - 2.5) < 0.001, 'Median = 2.5');
+  LStats.Free;
 end;
 
 procedure Test_StdDev;
@@ -85,6 +89,7 @@ begin WriteLn('Test_StdDev:');
   LData := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0]);
   LStats := TAdvancedStats.Create(LData);
   Check(Abs(LStats.StdDev - 1.5811) < 0.01, 'StdDev ≈ 1.5811');
+  LStats.Free;
 end;
 
 procedure Test_Variance;
@@ -93,6 +98,7 @@ begin WriteLn('Test_Variance:');
   LData := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0]);
   LStats := TAdvancedStats.Create(LData);
   Check(Abs(LStats.Variance - 2.5) < 0.01, 'Variance ≈ 2.5');
+  LStats.Free;
 end;
 
 procedure Test_Skewness;
@@ -101,9 +107,11 @@ begin WriteLn('Test_Skewness:');
   LData := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0]);
   LStats := TAdvancedStats.Create(LData);
   Check(Abs(LStats.Skewness) < 0.1, 'Skewness ≈ 0');
+  LStats.Free;
   LData := CreateTestData([1.0, 1.0, 1.0, 1.0, 10.0]);
   LStats := TAdvancedStats.Create(LData);
   Check(LStats.Skewness > 0, 'Skewness > 0');
+  LStats.Free;
 end;
 
 procedure Test_Kurtosis;
@@ -113,6 +121,7 @@ begin WriteLn('Test_Kurtosis:');
   LStats := TAdvancedStats.Create(LData);
   Check(LStats.Kurtosis < 0, 'Uniform data has negative kurtosis (platykurtic)');
   Check(Abs(LStats.Kurtosis - (-1.3)) < 0.2, 'Kurtosis ≈ -1.3 for uniform 1..5');
+  LStats.Free;
 end;
 
 procedure Test_Percentile;
@@ -123,6 +132,7 @@ begin WriteLn('Test_Percentile:');
   Check(Abs(LStats.Percentile(0) - 1.0) < 0.001, 'P0 = 1.0');
   Check(Abs(LStats.Percentile(50) - 3.0) < 0.001, 'P50 = 3.0');
   Check(Abs(LStats.Percentile(100) - 5.0) < 0.001, 'P100 = 5.0');
+  LStats.Free;
 end;
 
 procedure Test_IQR;
@@ -131,6 +141,7 @@ begin WriteLn('Test_IQR:');
   LData := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0]);
   LStats := TAdvancedStats.Create(LData);
   Check(Abs(LStats.IQR - 2.0) < 0.01, 'IQR = 2.0');
+  LStats.Free;
 end;
 
 procedure Test_DetectOutliers_Tukey;
@@ -142,6 +153,7 @@ begin WriteLn('Test_DetectOutliers_Tukey:');
   Check(Length(LResult.Outliers) = 1, 'Found 1 outlier');
   Check(LResult.Outliers[0] = 100.0, 'Outlier = 100.0');
   Check(LResult.OutlierIndices[0] = 5, 'Outlier index = 5');
+  LStats.Free;
 end;
 
 procedure Test_DetectOutliers_ZScore;
@@ -156,6 +168,7 @@ begin WriteLn('Test_DetectOutliers_ZScore:');
   for I := 0 to High(LResult.Outliers) do
     if LResult.Outliers[I] = 100.0 then LFound100 := True;
   Check(LFound100, 'Value 100.0 detected as outlier with threshold=1.5');
+  LStats.Free;
 end;
 
 procedure Test_DetectOutliers_ModifiedZScore;
@@ -166,6 +179,7 @@ begin WriteLn('Test_DetectOutliers_ModifiedZScore:');
   LResult := LStats.DetectOutliers_ModifiedZScore;
   Check(Length(LResult.Outliers) >= 1, 'Found at least 1 outlier');
   Check(LResult.Method = omModifiedZScore, 'Method = ModifiedZScore');
+  LStats.Free;
 end;
 
 procedure Test_ConfidenceInterval;
@@ -177,6 +191,7 @@ begin WriteLn('Test_ConfidenceInterval:');
   Check(Abs(LCI.Level - 0.95) < 0.01, 'Level ≈ 0.95');
   Check(LCI.Lower < 3.0, 'Lower < 3.0');
   Check(LCI.Upper > 3.0, 'Upper > 3.0');
+  LStats.Free;
 end;
 
 procedure Test_BootstrapCI;
@@ -190,6 +205,7 @@ begin WriteLn('Test_BootstrapCI:');
   CheckApprox(LCI.Upper, 7.3, 0.15, 'Bootstrap CI upper ≈ 7.3');
   CheckApprox(LCI.Upper - LCI.Lower, 3.6, 0.3, 'Bootstrap CI width ≈ 3.6');
   Check(Abs(LCI.Level - 0.95) < 0.01, 'Bootstrap CI level = 0.95');
+  LStats.Free;
 end;
 
 procedure Test_TestNormality;
@@ -200,6 +216,7 @@ begin WriteLn('Test_TestNormality:');
   LResult := LStats.TestNormalityByMoments;
   Check(LResult.ApproximatePValue > 0, 'ApproximatePValue > 0');
   Check(LResult.Method <> '', 'Method is set');
+  LStats.Free;
 end;
 
 procedure Test_CompareWith;
@@ -210,6 +227,7 @@ begin WriteLn('Test_CompareWith:');
   LStats := TAdvancedStats.Create(LData1);
   LTStat := LStats.ApproximateWelchTScore(LData2);
   Check(LTStat < 0, 'T-statistic < 0');
+  LStats.Free;
 end;
 
 procedure Test_EffectSize;
@@ -220,6 +238,7 @@ begin WriteLn('Test_EffectSize:');
   LStats := TAdvancedStats.Create(LData1);
   LD := LStats.EffectSize(LData2);
   Check(LD < 0, 'Effect size < 0');
+  LStats.Free;
 end;
 
 procedure Test_EmptyData;
@@ -231,6 +250,7 @@ begin WriteLn('Test_EmptyData:');
   Check(LStats.Mean = 0, 'Mean = 0');
   Check(LStats.Median = 0, 'Median = 0');
   Check(LStats.StdDev = 0, 'StdDev = 0');
+  LStats.Free;
 end;
 
 procedure Test_SingleValue;
@@ -242,6 +262,7 @@ begin WriteLn('Test_SingleValue:');
   Check(LStats.Mean = 42.0, 'Mean = 42.0');
   Check(LStats.Median = 42.0, 'Median = 42.0');
   Check(LStats.StdDev = 0, 'StdDev = 0');
+  LStats.Free;
 end;
 
 { === TG-06: NaN/Infinity Input Tests === }
