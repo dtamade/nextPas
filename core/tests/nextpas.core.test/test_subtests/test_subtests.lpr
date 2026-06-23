@@ -8,7 +8,8 @@ program test_subtests;
 uses
   cthreads,
   SysUtils,
-  nextpas.core.test;
+  nextpas.core.test,
+  nextpas.core.test.config;
 
 var
   GSubTestsRun: Integer = 0;
@@ -326,11 +327,28 @@ begin
   Ctx.Run('another_pass', procedure begin CheckTrue(True); end);
 end;
 
+procedure TestSubtestSinkPropagation(constref Ctx: ITestContext);
+begin
+  Ctx.Run('captured_pass',
+    procedure
+    begin
+      CheckTrue(True);
+    end);
+  Ctx.Run('captured_skip',
+    procedure
+    begin
+      Skip('planned');
+    end);
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
   LSuite: TTestSuite;
   LFailSuite: TTestSuite;
+  LOutSink: TBufferSink;
+  LErrSink: TBufferSink;
+  LOutput: string;
 begin
   LSuite := TTestSuite.Create('Subtest Integration');
 
@@ -458,6 +476,41 @@ begin
       Halt(1);
     end;
     WriteLn(AnsiGreen('  AfterEach failure treated as WARNING (non-fatal)'));
+  end;
+
+  { ── R2-F25: Subtest output should inherit suite sink/config ────────────── }
+  WriteLn;
+  WriteLn(AnsiBold('─── Subtest Sink Propagation ───'));
+  begin
+    LOutSink := TBufferSink.Create;
+    LErrSink := TBufferSink.Create;
+    LFailSuite := TTestSuite.Create('Subtest Sink');
+    LFailSuite.Config.OutSink := LOutSink;
+    LFailSuite.Config.ErrSink := LErrSink;
+    LFailSuite.Config.AnsiMode := amOff;
+    LFailSuite.TestSubtest('parent', @TestSubtestSinkPropagation);
+    if not LFailSuite.Run then
+    begin
+      WriteLn(AnsiRed('FAIL: subtest sink suite should pass'));
+      Halt(1);
+    end;
+    LOutput := LOutSink.GetOutput;
+    if Pos('parent/captured_pass', LOutput) = 0 then
+    begin
+      WriteLn(AnsiRed('FAIL: expected captured_pass in subtest output sink'));
+      Halt(1);
+    end;
+    if Pos('parent/captured_skip', LOutput) = 0 then
+    begin
+      WriteLn(AnsiRed('FAIL: expected captured_skip in subtest output sink'));
+      Halt(1);
+    end;
+    if LErrSink.GetOutput <> '' then
+    begin
+      WriteLn(AnsiRed('FAIL: subtest sink err output should stay empty'));
+      Halt(1);
+    end;
+    WriteLn(AnsiGreen('  Subtest sink propagation verified'));
   end;
 
   WriteLn;

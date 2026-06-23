@@ -12,6 +12,7 @@ uses
   SysUtils,          { Exception, EAbort, EAssertionFailed — FPC built-in }
   nextpas.core.text.conv,
   nextpas.core.test.base,
+  nextpas.core.test.config,
   nextpas.core.test.output;
 
 { ── Subtest result callback type ───────────────────────────────────────────── }
@@ -37,13 +38,14 @@ type
   TTestContext = class(TInterfacedObject, ITestContext)
   public
     FTestName : string;
+    FConfig   : TTestConfig;
     FSubtests : specialize TArray<TTestEntry>;
     FSubPass  : Integer;
     FSubFail  : Integer;
     FSubSkip  : Integer;
     FOnResult : TOnSubtestResult;
     FFailedNames: specialize TArray<string>;
-    constructor Create(const ATestName: string);
+    constructor Create(const ATestName: string; const AConfig: TTestConfig);
     procedure Run(const AName: string; AProc: TTestProc);
     procedure Run(const AName: string; AProc: TTestClosure);
     procedure RunNested(const AName: string; AProc: Pointer);
@@ -74,10 +76,12 @@ end;
 { TTestContext                                                                  }
 { ═════════════════════════════════════════════════════════════════════════════ }
 
-constructor TTestContext.Create(const ATestName: string);
+constructor TTestContext.Create(const ATestName: string;
+  const AConfig: TTestConfig);
 begin
   inherited Create;
   FTestName := ATestName;
+  FConfig   := ResolveConfig(AConfig);
   FSubPass  := 0;
   FSubFail  := 0;
   FSubSkip  := 0;
@@ -167,13 +171,14 @@ begin
       begin
         LStatus := tsSkipped;
         LMsg    := LEntry.SkipReason;
-        WriteLn('    ', StatusDot(tsSkipped), ' ', AnsiDim(LEntry.Name),
-          ' -- ', LEntry.SkipReason);
+        ResolveOutSink(FConfig).WriteLn(
+          '    ' + StatusDot(tsSkipped, FConfig) + ' ' +
+          AnsiDim(LEntry.Name, FConfig) + ' -- ' + LEntry.SkipReason);
         Inc(FSubSkip);
       end
       else if LEntry.Kind = ekSubtest then
       begin
-        LSubCtx := TTestContext.Create(LEntry.Name);
+        LSubCtx := TTestContext.Create(LEntry.Name, FConfig);
         LSubCtx.FOnResult := FOnResult; { propagate result callback }
         LSubCtxI := LSubCtx;
         LEntry.SubtestProc(LSubCtxI);
@@ -192,7 +197,8 @@ begin
       else if LEntry.Kind = ekTableTest then
       begin
         PTestCaseProc(LEntry.TableProc)^(PTestCase(LEntry.TableCase)^);
-        WriteLn('    ', StatusDot(tsPassed), ' ', LEntry.Name);
+        ResolveOutSink(FConfig).WriteLn(
+          '    ' + StatusDot(tsPassed, FConfig) + ' ' + LEntry.Name);
         Inc(FSubPass);
       end
       else
@@ -201,7 +207,8 @@ begin
           LEntry.Closure()
         else
           LEntry.Proc;
-        WriteLn('    ', StatusDot(tsPassed), ' ', LEntry.Name);
+        ResolveOutSink(FConfig).WriteLn(
+          '    ' + StatusDot(tsPassed, FConfig) + ' ' + LEntry.Name);
         Inc(FSubPass);
       end;
     except
@@ -209,15 +216,20 @@ begin
       begin
         LStatus := tsSkipped;
         LMsg    := E.Message;
-        WriteLn('    ', StatusDot(tsSkipped), ' ', AnsiDim(LEntry.Name));
+        ResolveOutSink(FConfig).WriteLn(
+          '    ' + StatusDot(tsSkipped, FConfig) + ' ' +
+          AnsiDim(LEntry.Name, FConfig));
         Inc(FSubSkip);
       end;
       on E: EAssertionFailed do
       begin
         LStatus := tsFailed;
         LMsg    := E.Message;
-        WriteLn('    ', StatusDot(tsFailed), ' ', AnsiRed(LEntry.Name));
-        WriteLn('      ', AnsiDim(E.Message));
+        ResolveOutSink(FConfig).WriteLn(
+          '    ' + StatusDot(tsFailed, FConfig) + ' ' +
+          AnsiRed(LEntry.Name, FConfig));
+        ResolveOutSink(FConfig).WriteLn(
+          '      ' + AnsiDim(E.Message, FConfig));
         Inc(FSubFail);
         SetLength(FFailedNames, Length(FFailedNames) + 1);
         FFailedNames[High(FFailedNames)] := LEntry.Name;
@@ -226,15 +238,17 @@ begin
       begin
         LStatus := tsError;
         LMsg    := E.ClassName + ': ' + E.Message;
-        WriteLn('    ', StatusDot(tsError), ' ', AnsiRed(LEntry.Name),
-          ' [', E.ClassName, ']');
-        WriteLn('      ', AnsiDim(E.Message));
+        ResolveOutSink(FConfig).WriteLn(
+          '    ' + StatusDot(tsError, FConfig) + ' ' +
+          AnsiRed(LEntry.Name, FConfig) + ' [' + E.ClassName + ']');
+        ResolveOutSink(FConfig).WriteLn(
+          '      ' + AnsiDim(E.Message, FConfig));
         Inc(FSubFail);
         SetLength(FFailedNames, Length(FFailedNames) + 1);
         FFailedNames[High(FFailedNames)] := LEntry.Name;
       end;
     end;
-    ReportLeakIfAny(LStatus);
+    ReportLeakIfAny(LStatus, FConfig);
     { Collect subtest result via callback if caller requested it }
     if (LEntry.Kind <> ekSubtest) and Assigned(FOnResult) then
     begin

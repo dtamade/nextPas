@@ -558,7 +558,7 @@ begin
     try
       if LEntry.Kind = ekSubtest then
       begin
-        LSubCtx := TTestContext.Create(LEntry.Name);
+        LSubCtx := TTestContext.Create(LEntry.Name, LConfig);
         LSubCtx.FOnResult := @LAppender.Append;
         LSubCtxI := LSubCtx;
         LEntry.SubtestProc(LSubCtxI);
