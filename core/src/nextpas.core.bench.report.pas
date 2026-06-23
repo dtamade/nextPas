@@ -18,6 +18,13 @@ type
 
   TCrossLangEntryArray = array of TCrossLangEntry;
 
+  {** 行缓冲区（capacity 翻倍策略）}
+  TLineBuffer = record
+    Lines: array of string;
+    Count: Integer;
+    Capacity: Integer;
+  end;
+
   {** 报告生成器 }
   TBenchReportGenerator = class
   private
@@ -32,6 +39,24 @@ type
 
     {** 生成 HTML 样式 (cached) }
     function GenerateCSS: string;
+
+    {** 生成 HTML 报告头部（head + body 开头 + environment div + chart div + 表头） }
+    procedure GenerateHTMLHeader(var ABuf: TLineBuffer);
+
+    {** 生成 HTML 结果表格行 }
+    procedure GenerateHTMLResultRows(var ABuf: TLineBuffer);
+
+    {** 生成 HTML 跳过的基准测试段落 }
+    procedure GenerateHTMLSkippedSection(var ABuf: TLineBuffer);
+
+    {** 生成 HTML 详细统计段落 }
+    procedure GenerateHTMLDetailedStats(var ABuf: TLineBuffer);
+
+    {** 生成 HTML 箱线图 div }
+    procedure GenerateHTMLBoxPlots(var ABuf: TLineBuffer);
+
+    {** 生成 HTML 页脚（closing body + html 标签） }
+    procedure GenerateHTMLFooter(var ABuf: TLineBuffer);
 
   public
     constructor Create;
@@ -97,13 +122,7 @@ uses
   nextpas.core.json.writer,
   nextpas.core.text.builder;
 
-{ 辅助函数：行缓冲区（capacity 翻倍策略）}
-type
-  TLineBuffer = record
-    Lines: TStringArray;
-    Count: Integer;
-    Capacity: Integer;
-  end;
+{ 辅助函数：行缓冲区操作 }
 
 procedure BufferAddLine(var ABuf: TLineBuffer; const ALine: string);
 begin
@@ -652,77 +671,79 @@ begin
   Result := FCachedCSS;
 end;
 
-function TBenchReportGenerator.ToHTML: string;
+procedure TBenchReportGenerator.GenerateHTMLHeader(var ABuf: TLineBuffer);
+begin
+  BufferAddLine(ABuf, '<!DOCTYPE html>');
+  BufferAddLine(ABuf, '<html>');
+  BufferAddLine(ABuf, '<head>');
+  BufferAddLine(ABuf, '  <title>nextpas.core.bench Report</title>');
+  BufferAddLine(ABuf, '  <meta charset="UTF-8">');
+  BufferAddLine(ABuf, '  ' + GenerateCSS);
+  BufferAddLine(ABuf, '</head>');
+  BufferAddLine(ABuf, '<body>');
+  BufferAddLine(ABuf, '  <h1>nextpas.core.bench Report</h1>');
+  BufferAddLine(ABuf, '');
+  BufferAddLine(ABuf, '  <div class="stats">');
+  BufferAddLine(ABuf, '    <h2>Environment</h2>');
+  BufferAddLine(ABuf, '    <p><strong>OS:</strong> ' + EscapeHTML(FEnvironment.OS) + '</p>');
+  BufferAddLine(ABuf, '    <p><strong>CPU:</strong> ' + EscapeHTML(FEnvironment.CPU) + '</p>');
+  BufferAddLine(ABuf, '    <p><strong>Cores:</strong> ' + IntToStr(FEnvironment.Cores) + '</p>');
+  BufferAddLine(ABuf, '    <p><strong>FPC:</strong> ' + EscapeHTML(FEnvironment.FPCVersion) + '</p>');
+  BufferAddLine(ABuf, '    <p><strong>Time:</strong> ' + EscapeHTML(FEnvironment.Timestamp) + '</p>');
+  BufferAddLine(ABuf, '  </div>');
+  BufferAddLine(ABuf, '');
+  BufferAddLine(ABuf, '  <div class="chart-container">');
+  BufferAddLine(ABuf, '    <h2>Performance Chart</h2>');
+  BufferAddLine(ABuf, '    ' + GenerateChart(FResults));
+  BufferAddLine(ABuf, '  </div>');
+  BufferAddLine(ABuf, '');
+  BufferAddLine(ABuf, '  <h2>Benchmark Results</h2>');
+  BufferAddLine(ABuf, '  <table>');
+  BufferAddLine(ABuf, '    <thead>');
+  BufferAddLine(ABuf, '      <tr>');
+  BufferAddLine(ABuf, '        <th>Name</th>');
+  BufferAddLine(ABuf, '        <th>Iterations</th>');
+  BufferAddLine(ABuf, '        <th>ns/op</th>');
+  BufferAddLine(ABuf, '        <th>ops/s</th>');
+  BufferAddLine(ABuf, '        <th>StdDev</th>');
+  BufferAddLine(ABuf, '        <th>Median</th>');
+  BufferAddLine(ABuf, '        <th>P95</th>');
+  BufferAddLine(ABuf, '        <th>P99</th>');
+  BufferAddLine(ABuf, '        <th>Outliers</th>');
+  BufferAddLine(ABuf, '      </tr>');
+  BufferAddLine(ABuf, '    </thead>');
+  BufferAddLine(ABuf, '    <tbody>');
+end;
+
+procedure TBenchReportGenerator.GenerateHTMLResultRows(var ABuf: TLineBuffer);
 var
-  LHTML: TLineBuffer;
-  LSkippedCount: Integer;
-  LMaxDetail: Integer;
   i: Integer;
 begin
-  LHTML := Default(TLineBuffer);
-
-  BufferAddLine(LHTML, '<!DOCTYPE html>');
-  BufferAddLine(LHTML, '<html>');
-  BufferAddLine(LHTML, '<head>');
-  BufferAddLine(LHTML, '  <title>nextpas.core.bench Report</title>');
-  BufferAddLine(LHTML, '  <meta charset="UTF-8">');
-  BufferAddLine(LHTML, '  ' + GenerateCSS);
-  BufferAddLine(LHTML, '</head>');
-  BufferAddLine(LHTML, '<body>');
-  BufferAddLine(LHTML, '  <h1>nextpas.core.bench Report</h1>');
-  BufferAddLine(LHTML, '');
-  BufferAddLine(LHTML, '  <div class="stats">');
-  BufferAddLine(LHTML, '    <h2>Environment</h2>');
-  BufferAddLine(LHTML, '    <p><strong>OS:</strong> ' + EscapeHTML(FEnvironment.OS) + '</p>');
-  BufferAddLine(LHTML, '    <p><strong>CPU:</strong> ' + EscapeHTML(FEnvironment.CPU) + '</p>');
-  BufferAddLine(LHTML, '    <p><strong>Cores:</strong> ' + IntToStr(FEnvironment.Cores) + '</p>');
-  BufferAddLine(LHTML, '    <p><strong>FPC:</strong> ' + EscapeHTML(FEnvironment.FPCVersion) + '</p>');
-  BufferAddLine(LHTML, '    <p><strong>Time:</strong> ' + EscapeHTML(FEnvironment.Timestamp) + '</p>');
-  BufferAddLine(LHTML, '  </div>');
-  BufferAddLine(LHTML, '');
-  BufferAddLine(LHTML, '  <div class="chart-container">');
-  BufferAddLine(LHTML, '    <h2>Performance Chart</h2>');
-  BufferAddLine(LHTML, '    ' + GenerateChart(FResults));
-  BufferAddLine(LHTML, '  </div>');
-  BufferAddLine(LHTML, '');
-  BufferAddLine(LHTML, '  <h2>Benchmark Results</h2>');
-  BufferAddLine(LHTML, '  <table>');
-  BufferAddLine(LHTML, '    <thead>');
-  BufferAddLine(LHTML, '      <tr>');
-  BufferAddLine(LHTML, '        <th>Name</th>');
-  BufferAddLine(LHTML, '        <th>Iterations</th>');
-  BufferAddLine(LHTML, '        <th>ns/op</th>');
-  BufferAddLine(LHTML, '        <th>ops/s</th>');
-  BufferAddLine(LHTML, '        <th>StdDev</th>');
-  BufferAddLine(LHTML, '        <th>Median</th>');
-  BufferAddLine(LHTML, '        <th>P95</th>');
-  BufferAddLine(LHTML, '        <th>P99</th>');
-  BufferAddLine(LHTML, '        <th>Outliers</th>');
-  BufferAddLine(LHTML, '      </tr>');
-  BufferAddLine(LHTML, '    </thead>');
-  BufferAddLine(LHTML, '    <tbody>');
-
   for i := 0 to FResultCount - 1 do
   begin
     if FResults[i].Skipped then
       Continue;
-    BufferAddLine(LHTML, '      <tr>');
-    BufferAddLine(LHTML, '        <td class="benchmark-name">' + EscapeHTML(FResults[i].Name) + '</td>');
-    BufferAddLine(LHTML, '        <td>' + FormatLargeNumber(FResults[i].Iterations) + '</td>');
-    BufferAddLine(LHTML, '        <td>' + FormatNumber(FResults[i].NsPerOp, 1) + '</td>');
-    BufferAddLine(LHTML, '        <td>' + FormatLargeNumber(Min(Int64(FResults[i].OpsPerSec), High(Int64))) + '</td>');
-    BufferAddLine(LHTML, '        <td>' + FormatNumber(FResults[i].StdDev, 1) + '</td>');
-    BufferAddLine(LHTML, '        <td>' + FormatNumber(FResults[i].Median, 1) + '</td>');
-    BufferAddLine(LHTML, '        <td>' + FormatNumber(FResults[i].P95, 1) + '</td>');
-    BufferAddLine(LHTML, '        <td>' + FormatNumber(FResults[i].P99, 1) + '</td>');
-    BufferAddLine(LHTML, '        <td>' + IntToStr(FResults[i].Outliers) + '</td>');
-    BufferAddLine(LHTML, '      </tr>');
+    BufferAddLine(ABuf, '      <tr>');
+    BufferAddLine(ABuf, '        <td class="benchmark-name">' + EscapeHTML(FResults[i].Name) + '</td>');
+    BufferAddLine(ABuf, '        <td>' + FormatLargeNumber(FResults[i].Iterations) + '</td>');
+    BufferAddLine(ABuf, '        <td>' + FormatNumber(FResults[i].NsPerOp, 1) + '</td>');
+    BufferAddLine(ABuf, '        <td>' + FormatLargeNumber(Min(Int64(FResults[i].OpsPerSec), High(Int64))) + '</td>');
+    BufferAddLine(ABuf, '        <td>' + FormatNumber(FResults[i].StdDev, 1) + '</td>');
+    BufferAddLine(ABuf, '        <td>' + FormatNumber(FResults[i].Median, 1) + '</td>');
+    BufferAddLine(ABuf, '        <td>' + FormatNumber(FResults[i].P95, 1) + '</td>');
+    BufferAddLine(ABuf, '        <td>' + FormatNumber(FResults[i].P99, 1) + '</td>');
+    BufferAddLine(ABuf, '        <td>' + IntToStr(FResults[i].Outliers) + '</td>');
+    BufferAddLine(ABuf, '      </tr>');
   end;
+  BufferAddLine(ABuf, '    </tbody>');
+  BufferAddLine(ABuf, '  </table>');
+end;
 
-  BufferAddLine(LHTML, '    </tbody>');
-  BufferAddLine(LHTML, '  </table>');
-
-  // skipped benchmarks
+procedure TBenchReportGenerator.GenerateHTMLSkippedSection(var ABuf: TLineBuffer);
+var
+  LSkippedCount: Integer;
+  i: Integer;
+begin
   LSkippedCount := 0;
   for i := 0 to FResultCount - 1 do
     if FResults[i].Skipped then
@@ -730,35 +751,41 @@ begin
 
   if LSkippedCount > 0 then
   begin
-    BufferAddLine(LHTML, '');
-    BufferAddLine(LHTML, '  <h2>Skipped Benchmarks</h2>');
-    BufferAddLine(LHTML, '  <table>');
-    BufferAddLine(LHTML, '    <thead>');
-    BufferAddLine(LHTML, '      <tr>');
-    BufferAddLine(LHTML, '        <th>Name</th>');
-    BufferAddLine(LHTML, '        <th>Reason</th>');
-    BufferAddLine(LHTML, '      </tr>');
-    BufferAddLine(LHTML, '    </thead>');
-    BufferAddLine(LHTML, '    <tbody>');
+    BufferAddLine(ABuf, '');
+    BufferAddLine(ABuf, '  <h2>Skipped Benchmarks</h2>');
+    BufferAddLine(ABuf, '  <table>');
+    BufferAddLine(ABuf, '    <thead>');
+    BufferAddLine(ABuf, '      <tr>');
+    BufferAddLine(ABuf, '        <th>Name</th>');
+    BufferAddLine(ABuf, '        <th>Reason</th>');
+    BufferAddLine(ABuf, '      </tr>');
+    BufferAddLine(ABuf, '    </thead>');
+    BufferAddLine(ABuf, '    <tbody>');
     for i := 0 to FResultCount - 1 do
     begin
       if FResults[i].Skipped then
       begin
-        BufferAddLine(LHTML, '      <tr>');
-        BufferAddLine(LHTML, '        <td class="benchmark-name">' + EscapeHTML(FResults[i].Name) + '</td>');
-        BufferAddLine(LHTML, '        <td>' + EscapeHTML(FResults[i].SkipReason) + '</td>');
-        BufferAddLine(LHTML, '      </tr>');
+        BufferAddLine(ABuf, '      <tr>');
+        BufferAddLine(ABuf, '        <td class="benchmark-name">' + EscapeHTML(FResults[i].Name) + '</td>');
+        BufferAddLine(ABuf, '        <td>' + EscapeHTML(FResults[i].SkipReason) + '</td>');
+        BufferAddLine(ABuf, '      </tr>');
       end;
     end;
-    BufferAddLine(LHTML, '    </tbody>');
-    BufferAddLine(LHTML, '  </table>');
+    BufferAddLine(ABuf, '    </tbody>');
+    BufferAddLine(ABuf, '  </table>');
   end;
+end;
 
-  BufferAddLine(LHTML, '');
-  BufferAddLine(LHTML, '  <div class="stats">');
-  BufferAddLine(LHTML, '    <h2>Detailed Statistics</h2>');
+procedure TBenchReportGenerator.GenerateHTMLDetailedStats(var ABuf: TLineBuffer);
+var
+  LSkippedCount: Integer;
+  LMaxDetail: Integer;
+  i: Integer;
+begin
+  BufferAddLine(ABuf, '');
+  BufferAddLine(ABuf, '  <div class="stats">');
+  BufferAddLine(ABuf, '    <h2>Detailed Statistics</h2>');
 
-  // detailed stats (non-skipped, up to LMaxDetail)
   LSkippedCount := 0;
   LMaxDetail := Min(FResultCount, 5);
   for i := 0 to FResultCount - 1 do
@@ -770,29 +797,51 @@ begin
     end;
     if i - LSkippedCount >= LMaxDetail then
       Break;
-    BufferAddLine(LHTML, '    <h3>' + EscapeHTML(FResults[i].Name) + '</h3>');
-    BufferAddLine(LHTML, '    <p>Mean: ' + FormatTime(FResults[i].NsPerOp) + '</p>');
-    BufferAddLine(LHTML, '    <p>StdDev: ' + FormatTime(FResults[i].StdDev) + '</p>');
-    BufferAddLine(LHTML, '    <p>Median: ' + FormatTime(FResults[i].Median) + '</p>');
-    BufferAddLine(LHTML, '    <p>P95: ' + FormatTime(FResults[i].P95) + '</p>');
-    BufferAddLine(LHTML, '    <p>P99: ' + FormatTime(FResults[i].P99) + '</p>');
-    BufferAddLine(LHTML, '    <p>Outliers: ' + IntToStr(FResults[i].Outliers) + '/' + IntToStr(FResults[i].SampleCount) + '</p>');
+    BufferAddLine(ABuf, '    <h3>' + EscapeHTML(FResults[i].Name) + '</h3>');
+    BufferAddLine(ABuf, '    <p>Mean: ' + FormatTime(FResults[i].NsPerOp) + '</p>');
+    BufferAddLine(ABuf, '    <p>StdDev: ' + FormatTime(FResults[i].StdDev) + '</p>');
+    BufferAddLine(ABuf, '    <p>Median: ' + FormatTime(FResults[i].Median) + '</p>');
+    BufferAddLine(ABuf, '    <p>P95: ' + FormatTime(FResults[i].P95) + '</p>');
+    BufferAddLine(ABuf, '    <p>P99: ' + FormatTime(FResults[i].P99) + '</p>');
+    BufferAddLine(ABuf, '    <p>Outliers: ' + IntToStr(FResults[i].Outliers) + '/' + IntToStr(FResults[i].SampleCount) + '</p>');
   end;
 
-  BufferAddLine(LHTML, '  </div>');
+  BufferAddLine(ABuf, '  </div>');
+end;
+
+procedure TBenchReportGenerator.GenerateHTMLBoxPlots(var ABuf: TLineBuffer);
+var
+  i: Integer;
+begin
   for i := 0 to FResultCount - 1 do
   begin
     if (not FResults[i].Skipped) and (Length(FResults[i].RawSamples) > 0) then
     begin
-      BufferAddLine(LHTML, '  <div class="chart-container">');
-      BufferAddLine(LHTML, '    <h3>' + EscapeHTML(FResults[i].Name) + ' - Sample Distribution</h3>');
-      BufferAddLine(LHTML, '    ' + GenerateBoxPlot(FResults[i].RawSamples, FResults[i].Name));
-      BufferAddLine(LHTML, '  </div>');
+      BufferAddLine(ABuf, '  <div class="chart-container">');
+      BufferAddLine(ABuf, '    <h3>' + EscapeHTML(FResults[i].Name) + ' - Sample Distribution</h3>');
+      BufferAddLine(ABuf, '    ' + GenerateBoxPlot(FResults[i].RawSamples, FResults[i].Name));
+      BufferAddLine(ABuf, '  </div>');
     end;
   end;
-  BufferAddLine(LHTML, '</body>');
-  BufferAddLine(LHTML, '</html>');
+end;
 
+procedure TBenchReportGenerator.GenerateHTMLFooter(var ABuf: TLineBuffer);
+begin
+  BufferAddLine(ABuf, '</body>');
+  BufferAddLine(ABuf, '</html>');
+end;
+
+function TBenchReportGenerator.ToHTML: string;
+var
+  LHTML: TLineBuffer;
+begin
+  LHTML := Default(TLineBuffer);
+  GenerateHTMLHeader(LHTML);
+  GenerateHTMLResultRows(LHTML);
+  GenerateHTMLSkippedSection(LHTML);
+  GenerateHTMLDetailedStats(LHTML);
+  GenerateHTMLBoxPlots(LHTML);
+  GenerateHTMLFooter(LHTML);
   Result := BufferToString(LHTML);
 end;
 
