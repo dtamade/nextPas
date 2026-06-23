@@ -18,6 +18,8 @@ const
   MEM_ARENA_CONCURRENT_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.arena.concurrent.pas';
   MEM_ARENA_CHUNKED_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.arena.chunked.pas';
   MEM_ARENA_CHUNKED_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.arena.chunked.pas';
+  MEM_ARENA_GROWABLE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.arena.growable.pas';
+  MEM_ARENA_GROWABLE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.arena.growable.pas';
   MEM_BLOCKPOOL_GROWABLE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.blockpool.growable.pas';
   MEM_BLOCKPOOL_GROWABLE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.blockpool.growable.pas';
   MEM_ERROR_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.error.pas';
@@ -26,6 +28,8 @@ const
   MEM_ALLOC_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.alloc.pas';
   MEM_ADAPTER_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.adapter.pas';
   MEM_ADAPTER_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.adapter.pas';
+  MEM_POOL_ADAPTER_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.pool.adapter.pas';
+  MEM_POOL_ADAPTER_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.pool.adapter.pas';
   MEM_LAYOUT_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.layout.pas';
   MEM_LAYOUT_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.layout.pas';
   MEM_MIMALLOC_BINDING_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.mimalloc.binding.pas';
@@ -227,7 +231,7 @@ begin
   end;
 end;
 
-procedure TestGrowableAllocatorsUseCanonicalAllocatorContract;
+procedure TestChunkedArenaAndGrowableBlockPoolUseCanonicalAllocatorContract;
 var
   LArenaSource: string;
   LBlockPoolSource: string;
@@ -236,23 +240,23 @@ begin
     MEM_ARENA_CHUNKED_SOURCE_PATH_FROM_TEST,
     MEM_ARENA_CHUNKED_SOURCE_PATH_FROM_ROOT));
   CheckContains(LArenaSource, 'nextpas.core.mem.intf',
-    'growable arena should depend on the canonical allocator contract');
+    'chunked arena should depend on the canonical allocator contract');
   CheckNotContains(LArenaSource, 'nextpas.core.mem.alloc',
-    'growable arena should not depend on the removed legacy allocator contract');
+    'chunked arena should not depend on the removed legacy allocator contract');
   CheckNotContains(LArenaSource, 'nextpas.core.mem.layout',
-    'growable arena should not depend on the removed layout unit');
+    'chunked arena should not depend on the removed layout unit');
   CheckContains(LArenaSource, 'allocator: iallocator',
-    'growable arena config should expose iallocator');
+    'chunked arena config should expose iallocator');
   CheckContains(LArenaSource, 'fallocator: iallocator',
-    'growable arena field should store iallocator');
+    'chunked arena field should store iallocator');
   CheckContains(LArenaSource, 'function alloc(asize: sizeuint): pointer;',
-    'growable arena should expose explicit-size allocation');
+    'chunked arena should expose explicit-size allocation');
   CheckContains(LArenaSource, 'function allocaligned(asize, aalignment: sizeuint): pointer;',
-    'growable arena should expose explicit aligned allocation');
+    'chunked arena should expose explicit aligned allocation');
   CheckContains(LArenaSource, 'lraw := fallocator.getmem(lallocsize);',
-    'growable arena should allocate segments via iallocator.getmem');
+    'chunked arena should allocate segments via iallocator.getmem');
   CheckContains(LArenaSource, 'fallocator.freemem(lraw)',
-    'growable arena should release segments via iallocator.freemem');
+    'chunked arena should release segments via iallocator.freemem');
 
   LBlockPoolSource := ReadSourceText(ResolveSourcePath(
     MEM_BLOCKPOOL_GROWABLE_SOURCE_PATH_FROM_TEST,
@@ -292,10 +296,14 @@ end;
 
 procedure TestLegacyAllocatorFilesRemoved;
 begin
+  Check(not SourceExists(MEM_ARENA_GROWABLE_SOURCE_PATH_FROM_TEST, MEM_ARENA_GROWABLE_SOURCE_PATH_FROM_ROOT),
+    'mem.arena.growable should be removed');
   Check(not SourceExists(MEM_ALLOC_SOURCE_PATH_FROM_TEST, MEM_ALLOC_SOURCE_PATH_FROM_ROOT),
     'mem.alloc should be removed');
   Check(not SourceExists(MEM_ADAPTER_SOURCE_PATH_FROM_TEST, MEM_ADAPTER_SOURCE_PATH_FROM_ROOT),
     'mem.adapter should be removed');
+  Check(not SourceExists(MEM_POOL_ADAPTER_SOURCE_PATH_FROM_TEST, MEM_POOL_ADAPTER_SOURCE_PATH_FROM_ROOT),
+    'mem.pool.adapter should be removed');
   Check(not SourceExists(MEM_LAYOUT_SOURCE_PATH_FROM_TEST, MEM_LAYOUT_SOURCE_PATH_FROM_ROOT),
     'mem.layout should be removed');
   Check(not SourceExists(MEM_MIMALLOC_BINDING_SOURCE_PATH_FROM_TEST, MEM_MIMALLOC_BINDING_SOURCE_PATH_FROM_ROOT),
@@ -467,8 +475,8 @@ begin
   T.Run('callback allocator supports canonical interface', @TestCallbackAllocatorSupportsCanonicalInterface);
   T.Run('rtl allocator zero init traits and aligned alloc', @TestRtlAllocatorZeroInitTraitsAndAlignedAlloc);
   T.Run('rtl allocator aligned alloc rejects size overflow', @TestRtlAllocatorAlignedAllocRejectsSizeOverflow);
-  T.Run('growable allocators use canonical allocator contract',
-    @TestGrowableAllocatorsUseCanonicalAllocatorContract);
+  T.Run('chunked arena and growable block pool use canonical allocator contract',
+    @TestChunkedArenaAndGrowableBlockPoolUseCanonicalAllocatorContract);
   T.Run('arena units use explicit arena api', @TestArenaUnitsUseExplicitArenaApi);
   T.Run('legacy allocator files removed', @TestLegacyAllocatorFilesRemoved);
   T.Run('mem.base owns constants and mem.error drops alloc result',

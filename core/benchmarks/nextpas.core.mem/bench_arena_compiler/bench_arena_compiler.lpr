@@ -5,7 +5,7 @@ program bench_arena_compiler;
 uses
   nextpas.core.bench,
   nextpas.core.mem.arena.compiler,
-  nextpas.core.mem.arena.growable,
+  nextpas.core.mem.arena.chunked,
   nextpas.core.mem.base;
 
 var
@@ -104,7 +104,7 @@ begin
   end;
 end;
 
-{ --- TFastArena.Alloc vs TGrowableArena.Alloc --- }
+{ --- TFastArena.Alloc vs TChunkedArena.Alloc --- }
 
 procedure BenchTFastArenaBatch(aIters: Int64);
 var
@@ -129,14 +129,14 @@ begin
   end;
 end;
 
-procedure BenchTGrowableArenaBatch(aIters: Int64);
+procedure BenchTChunkedArenaBatch(aIters: Int64);
 var
   LIt: Int64;
   I: Integer;
-  LArena: TGrowableArena;
+  LArena: TChunkedArena;
   LP: Pointer;
 begin
-  LArena := TGrowableArena.Create(65536);
+  LArena := TChunkedArena.Create(65536);
   try
     for LIt := 1 to aIters do
     begin
@@ -164,9 +164,9 @@ begin
   B.Run('System.GetMem_256B',  @BenchGetMem256);
 
   WriteLn;
-  WriteLn('--- TFastArena vs TGrowableArena (batch 10000 x 64B) ---');
+  WriteLn('--- TFastArena vs TChunkedArena (batch 10000 x 64B) ---');
   B.Run('TFastArena_batch_10000x64B',       @BenchTFastArenaBatch);
-  B.Run('TGrowableArena_batch_10000x64B', @BenchTGrowableArenaBatch);
+  B.Run('TChunkedArena_batch_10000x64B', @BenchTChunkedArenaBatch);
 
   B.Summary;
 end.
