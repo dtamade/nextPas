@@ -6,8 +6,9 @@ uses
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
-  Classes,
-  SysUtils,
+  Classes,             // TThread
+  nextpas.core.exception,
+  nextpas.core.platform.thread,
   nextpas.core.testing,
   nextpas.core.mem.error,
   nextpas.core.mem.blockpool.concurrent,
@@ -73,7 +74,7 @@ var
   LPtr: Pointer;
 begin
   while FStartFlag^ = 0 do
-    Sleep(0);
+    platform_thread_yield;
 
   try
     for LIndex := 0 to ITERATION_COUNT - 1 do
@@ -105,7 +106,7 @@ var
   LPtr: Pointer;
 begin
   while FStartFlag^ = 0 do
-    Sleep(0);
+    platform_thread_yield;
 
   try
     for LIndex := 1 to ITERATION_COUNT do
@@ -137,7 +138,7 @@ var
   LLocal: Byte;
 begin
   while FStartFlag^ = 0 do
-    Sleep(0);
+    platform_thread_yield;
 
   try
     for LIndex := 0 to NEGATIVE_ITERATION_COUNT - 1 do

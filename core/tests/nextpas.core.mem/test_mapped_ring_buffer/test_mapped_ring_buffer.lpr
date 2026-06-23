@@ -3,7 +3,10 @@ program test_mapped_ring_buffer;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.base.utils,
+  nextpas.core.text.conv,
+  nextpas.core.fs,
+  nextpas.core.path,
   nextpas.core.testing,
   nextpas.core.mem.mapped_ring_buffer,
   nextpas.core.platform.files;
@@ -13,7 +16,7 @@ var
 
 function MappedRingBufferTestPath: string;
 begin
-  Result := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  Result := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas_mapped_ring_buffer_' + IntToStr(GetProcessID) + '.dat';
 end;
 

@@ -3,7 +3,6 @@ program test_numa_allocator;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.testing,
   nextpas.core.mem.intf,
   nextpas.core.mem.allocator.numa;

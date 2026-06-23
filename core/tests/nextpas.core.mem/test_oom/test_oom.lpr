@@ -3,7 +3,6 @@ program test_oom;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.exception,
   nextpas.core.testing,
   nextpas.core.mem.error,

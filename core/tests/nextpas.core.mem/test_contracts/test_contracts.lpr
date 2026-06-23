@@ -3,7 +3,8 @@ program test_contracts;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.exception,
+  nextpas.core.fs,
   nextpas.core.testing,
   nextpas.core.mem.intf,
   nextpas.core.mem.utils,
@@ -70,16 +71,16 @@ end;
 
 function ResolveSourcePath(const APathFromTest, APathFromRoot: string): string;
 begin
-  if FileExists(APathFromTest) then
+  if Exists(APathFromTest) then
     Exit(APathFromTest);
-  if FileExists(APathFromRoot) then
+  if Exists(APathFromRoot) then
     Exit(APathFromRoot);
   Result := APathFromTest;
 end;
 
 function SourceExists(const APathFromTest, APathFromRoot: string): Boolean;
 begin
-  Result := FileExists(APathFromTest) or FileExists(APathFromRoot);
+  Result := Exists(APathFromTest) or Exists(APathFromRoot);
 end;
 
 procedure CheckContains(const ASource, AToken, AMessage: string);

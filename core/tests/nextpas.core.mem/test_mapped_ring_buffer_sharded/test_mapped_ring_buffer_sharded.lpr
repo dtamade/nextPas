@@ -3,7 +3,7 @@ program test_mapped_ring_buffer_sharded;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.testing,
   nextpas.core.mem.mapped_ring_buffer,
   nextpas.core.mem.mapped_ring_buffer.sharded;
