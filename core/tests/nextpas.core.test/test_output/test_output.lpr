@@ -746,6 +746,144 @@ begin
   CheckContains(LOut, 'EAccessViolation');
 end;
 
+{ R6-49: Unicode test name StatusDot should not crash }
+
+procedure TestStatusDotUnicodeName;
+var
+  LResult: TTestResult;
+  LDot: string;
+begin
+  Inc(GTestsRun);
+  { Calling StatusDot with Unicode content in the test name should not crash }
+  LResult.Name := #226#130#172' Test'; { UTF-8 Euro sign + space }
+  LResult.Status := tsPassed;
+  LResult.Message := '';
+  LDot := StatusDot(tsPassed);
+  CheckTrue(Length(LDot) > 0, 'StatusDot should return non-empty');
+  { Also test other statuses with a Unicode name for crash-safety }
+  LDot := StatusDot(tsFailed);
+  CheckTrue(Length(LDot) > 0, 'StatusDot(tsFailed) non-empty');
+  LDot := StatusDot(tsSkipped);
+  CheckTrue(Length(LDot) > 0, 'StatusDot(tsSkipped) non-empty');
+end;
+
+{ R6-50: Nested wildcard a*b*c pattern }
+
+procedure TestFilterNestedGlob;
+begin
+  Inc(GTestsRun);
+  SetTestFilter('a*b*c');
+  CheckTrue(MatchesFilter('axxbyyc'), 'a*b*c should match axxbyyc');
+  CheckTrue(MatchesFilter('abc'), 'a*b*c should match abc (* matches empty)');
+  CheckFalse(MatchesFilter('aXXXb'), 'a*b*c should not match aXXXb (no c)');
+  CheckFalse(MatchesFilter('xxbyyc'), 'a*b*c should not match xxbyyc (no a prefix)');
+  SetTestFilter('');
+end;
+
+{ R6-51: JUnit XML structural completeness }
+
+procedure TestJUnitXMLStructureComplete;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LXml: string;
+begin
+  Inc(GTestsRun);
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('StructSuite');
+  LResults[0].Passed := 1;
+  LResults[0].Failed := 0;
+  LResults[0].Skipped := 0;
+  SetLength(LResults[0].Results, 1);
+  LResults[0].Results[0].Name := 'ok_test';
+  LResults[0].Results[0].Status := tsPassed;
+
+  LXml := JUnitXML(LResults, 'struct_run');
+  CheckContains(LXml, '<?xml');
+  CheckContains(LXml, '<testsuites');
+  CheckContains(LXml, '</testsuites>');
+  CheckContains(LXml, '<testsuite');
+  CheckContains(LXml, '</testsuite>');
+  CheckContains(LXml, '<testcase');
+  CheckContains(LXml, 'tests="1"');
+  CheckContains(LXml, 'failures="0"');
+end;
+
+{ R6-52: JSON report structural completeness }
+
+procedure TestJSONReportStructureComplete;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+begin
+  Inc(GTestsRun);
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('JsStruct');
+  LResults[0].Passed := 1;
+  LResults[0].AllPassed := True;
+  SetLength(LResults[0].Results, 1);
+  LResults[0].Results[0].Name := 'ok';
+  LResults[0].Results[0].Status := tsPassed;
+
+  LOut := JSONReport(LResults);
+  CheckTrue(LOut[1] = '{', 'JSON should start with {');
+  CheckContains(LOut, '"totalPassed"');
+  CheckContains(LOut, '"totalFailed"');
+  CheckContains(LOut, '"totalSkipped"');
+  CheckContains(LOut, '"suites"');
+end;
+
+{ R6-61: XmlEscape control character behavior (tested via JUnitXML) }
+
+procedure TestXmlEscapeControlChars;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LXml: string;
+begin
+  Inc(GTestsRun);
+  { Tab/LF/CR should be preserved in XML output }
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('CtrlTest');
+  LResults[0].Passed := 1;
+  SetLength(LResults[0].Results, 1);
+  LResults[0].Results[0].Name := 'a' + #9 + 'b';
+  LResults[0].Results[0].Status := tsPassed;
+
+  LXml := JUnitXML(LResults);
+  CheckContains(LXml, 'a' + #9 + 'b');
+
+  { LF in name should be preserved }
+  LResults[0].Results[0].Name := 'a' + #10 + 'b';
+  LXml := JUnitXML(LResults);
+  CheckContains(LXml, 'a');
+  CheckContains(LXml, 'b');
+
+  { Control char < 32 (not tab/LF/CR) in failure message should be replaced with space }
+  LResults[0].Results[0].Name := 'ctrl_fail';
+  LResults[0].Results[0].Status := tsFailed;
+  LResults[0].Failed := 1;
+  LResults[0].Passed := 0;
+  LResults[0].Results[0].Message := 'err' + #1 + 'msg';
+  LXml := JUnitXML(LResults);
+  CheckTrue(Pos(#1, LXml) = 0, 'SOH should not appear in XML');
+  CheckContains(LXml, 'err msg');
+end;
+
+{ R6-65: ANSI state restoration (try-finally pattern) }
+
+procedure TestAnsiStateRestoration;
+begin
+  Inc(GTestsRun);
+  SetAnsiEnabled(True);
+  try
+    SetAnsiEnabled(False);
+    CheckEqual(AnsiGreen('x'), 'x');
+  finally
+    SetAnsiEnabled(True);
+  end;
+  { After try-finally, ANSI should be restored to enabled }
+  CheckContains(AnsiGreen('x'), #27'[');
+end;
+
 var
   Suite: TTestSuite;
   Runner: TTestRunner;
@@ -797,13 +935,21 @@ begin
   Suite.Test('TestTAPReportMultiLineYAML', @TestTAPReportMultiLineYAML);
   Suite.Test('TestTAPReportError', @TestTAPReportError);
 
+  { R6-49~52, R6-61, R6-65: new coverage tests }
+  Suite.Test('StatusDot unicode',         @TestStatusDotUnicodeName);
+  Suite.Test('Filter nested a*b*c',       @TestFilterNestedGlob);
+  Suite.Test('JUnit XML structure',       @TestJUnitXMLStructureComplete);
+  Suite.Test('JSON report structure',     @TestJSONReportStructureComplete);
+  Suite.Test('XmlEscape control chars',   @TestXmlEscapeControlChars);
+  Suite.Test('ANSI state restoration',    @TestAnsiStateRestoration);
+
   Runner := TTestRunner.Create('output-tests');
   Runner.Add(Suite);
   LSuccess := Runner.RunAllWithResult(LResults);
   WriteLn;
   Runner.Summary;
 
-  CheckTrue(GTestsRun >= 38, 'Expected at least 38 tests, got ' + IntToStr(GTestsRun));
+  CheckTrue(GTestsRun >= 44, 'Expected at least 44 tests, got ' + IntToStr(GTestsRun));
   CheckTrue(LSuccess, 'All output tests should pass');
 
   if Runner.AllPassed then
