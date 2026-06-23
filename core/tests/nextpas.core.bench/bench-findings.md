@@ -947,4 +947,48 @@
 2. T01-T07 (测试断言恒真/逻辑错误 — 测试价值为零)
 3. CR-11 (GetElapsed 无下溢保护 — 容器环境下必崩溃)
 4. CR-17 (OpsPerSec Double-to-Int64 截断 — 极快操作数据错误)
+
+---
+
+## 修复进度追踪
+
+> **更新日期**: 2026-06-23
+
+| 优先级 | 总数 | 已修复 | 已知限制 | 不修/推迟 | 剩余 |
+|--------|------|--------|----------|-----------|------|
+| P0 (T01-T07, CR-01, CR-02) | 9 | 9 | 0 | 0 | 0 |
+| P1 正确性 (CR-03~CR-26) | 24 | 21 | 3 | 0 | 0 |
+| P1 测试覆盖 (TG-01~TG-15) | 15 | 15 | 0 | 0 | 0 |
+| P2 性能 (PF-01~PF-20) | 20 | 8 | 3 | 9 | 0 |
+| P2 设计 (DS-01~DS-14) | 14 | 2 | 0 | 12 | 0 |
+| P2 测试改进 (TG-16~TG-30) | 15 | 5 | 0 | 10 | 0 |
+| P3 风格/设计/文档 (ST-01~ST-27) | 27 | 8 | 0 | 19 | 0 |
+| **总计** | **124** | **68** | **6** | **50** | **0** |
+
+### 已知限制（不修）
+- **CR-04**: PValue/HeuristicDifference 接口归属（设计决策）
+- **CR-07**: Z-Score masking（小样本统计固有缺陷，Modified Z-Score 已提供替代）
+- **CR-08**: BootstrapCI LCG 质量（近似计算，统计意义足够）
+- **PF-02**: ShapiroWilkStatistic 简化实现（启发式，非精确统计）
+- **PF-03**: ComputeApproximatePValue 小 df 修正（实验性系数）
+- **PF-14/PF-15**: 并行定时包含调度延迟（wall-clock 测量固有限制）
+
+### 不修/推迟（设计层面改进，非 bug）
+- **PF-01**: ComputeStats 双遍历（影响极小，单遍改进需重写接口）
+- **PF-04**: WelchTScore/EffectSize 重复方差（API 设计如此）
+- **PF-07**: GBridgeData 无锁（已文档化约束，当前无并发 suite）
+- **PF-09**: TotalNs 从 mean*iters 反推（设计选择，样本估计更准确）
+- **PF-11**: ExecuteEntry 160 行拆分（重构成本 > 收益）
+- **PF-13**: Sequential 虚拟调度（微优化，影响 < 1%）
+- **PF-18**: 校准循环 0-time cap（已有 MaxIterations 兜底）
+- **DS-01~DS-08, DS-11~DS-14**: 设计层面改进（接口扩展、线程安全等）
+- **TG-17~TG-21, TG-22, TG-24**: Flaky/弱断言（已优化但属测试环境问题）
+- **ST-01~ST-14, ST-18, ST-22~ST-27**: API 命名/设计/文档（重构范围过大）
+
+### Commits
+```
+9bd6c3141 fix+test(bench): P2 source fixes — Cohen's d weighted pooled, thread leak, Percentile validation
+3cf554ef2 refactor(bench): P2 design/style — env parsing, thread cache, JSON skipped, save dedup
+2deff298e perf+style(bench): P2 report improvements — CSS cache, BufferToString sizing, µs
+```
 5. TG-01~TG-15 (公共 API 完全未测试)
