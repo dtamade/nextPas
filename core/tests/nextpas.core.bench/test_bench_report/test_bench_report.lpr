@@ -319,7 +319,7 @@ begin
   LComparisons[0].CurrentNsPerOp := 245.3;
   LComparisons[0].Ratio := 1.019;
   LComparisons[0].HasStatisticalTest := False;
-  LComparisons[0].DifferenceHeuristic := True;
+  LComparisons[0].IsSignificant := True;
   LComparisons[0].ApproximatePValue := 0.05;
 
   LComparisons[1].BaselineName := 'HashMap.Get(hit)';
@@ -327,7 +327,7 @@ begin
   LComparisons[1].CurrentNsPerOp := 89.2;
   LComparisons[1].Ratio := 1.033;
   LComparisons[1].HasStatisticalTest := False;
-  LComparisons[1].DifferenceHeuristic := True;
+  LComparisons[1].IsSignificant := True;
   LComparisons[1].ApproximatePValue := 0.05;
 
   LReport := GGenerator.GenerateComparisonReport(LResults, LComparisons);

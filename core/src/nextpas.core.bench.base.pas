@@ -61,7 +61,7 @@ type
     CurrentNsPerOp: Double;
     Ratio: Double;
     HasStatisticalTest: Boolean;
-    DifferenceHeuristic: Boolean;
+    IsSignificant: Boolean; { ST-10: renamed from DifferenceHeuristic for clarity }
     ApproximatePValue: Double;
   end;
 
@@ -87,6 +87,8 @@ type
     CollectRawSamples: Boolean;
     Quiet: Boolean;
     SuiteName: string;
+    {** ST-04: 整体超时（毫秒），0=不超时。超时后跳过剩余 benchmark。 }
+    TimeoutMs: Cardinal;
   end;
 
   {** 基准结果数组 }
@@ -125,6 +127,8 @@ const
   BENCH_ENV_MIN_SAMPLES = 'NEXTPAS_BENCH_MIN_SAMPLES';
   BENCH_ENV_WARMUP = 'NEXTPAS_BENCH_WARMUP';
   BENCH_ENV_QUIET = 'NEXTPAS_BENCH_QUIET';
+  {** DS-08: 注意此变量语义是"禁用内存跟踪"（反向命名）。
+   *  设置 =1 / true / yes 时禁用内存跟踪。其他布尔环境变量使用正向语义。 }
   BENCH_ENV_NO_MEMTRACK = 'NEXTPAS_BENCH_NO_MEMTRACK';
 
   {** 统计常量 }

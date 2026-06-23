@@ -1044,7 +1044,7 @@ begin
 
   for i := 0 to High(ABaselines) do
   begin
-    if ABaselines[i].DifferenceHeuristic then
+    if ABaselines[i].IsSignificant then
     begin
       if ABaselines[i].Ratio > 1.0 then
         LStatus := '✗ slower'

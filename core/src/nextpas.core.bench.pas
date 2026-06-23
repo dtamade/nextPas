@@ -92,6 +92,7 @@ type
     function AddBaselines(const ABaselines: array of TBenchBaseline): IBenchSuite;
     function LoadBaseline(const APath: string): IBenchSuite;
     function SetFilter(const AFilter: string): IBenchSuite;
+    function SetTimeout(ATimeoutMs: Cardinal): IBenchSuite;
     function Run: IBenchResults;
   end;
 
@@ -536,17 +537,32 @@ begin
   FFilter := AFilter;
 end;
 
+function TBenchSuite.SetTimeout(ATimeoutMs: Cardinal): IBenchSuite;
+begin
+  Result := Self;
+  FConfig.TimeoutMs := ATimeoutMs;
+end;
+
 function TBenchSuite.Run: IBenchResults;
 var
   LResults: array of TBenchResult;
   LResultCount: Integer;
   LEnvironment: TBenchEnvironment;
   LRunResult: TBenchResult;
+  LStartNs: UInt64;
+  LTimeoutNs: UInt64;
   i: Integer;
 begin
   FRunner.SetConfig(FConfig);
   FRunner.SetFilter(FFilter);
   FRunner.ClearResults;
+
+  // ST-04: 超时检查初始化
+  LTimeoutNs := UInt64(FConfig.TimeoutMs) * 1000000;
+  if LTimeoutNs > 0 then
+    LStartNs := platform_monotonic_ns
+  else
+    LStartNs := 0;
 
   // 预分配最大可能长度
   SetLength(LResults, FEntryCount);
@@ -556,6 +572,20 @@ begin
   begin
     if not FEntries[i].Condition then
       Continue;
+
+    // ST-04: 条目间超时检查
+    if (LTimeoutNs > 0) and (platform_monotonic_ns - LStartNs >= LTimeoutNs) then
+    begin
+      // 剩余条目标记为 skipped
+      LRunResult := Default(TBenchResult);
+      LRunResult.Name := FEntries[i].Name;
+      LRunResult.Executed := True;
+      LRunResult.Skipped := True;
+      LRunResult.SkipReason := 'Timeout exceeded';
+      LResults[LResultCount] := LRunResult;
+      Inc(LResultCount);
+      Continue;
+    end;
 
     LRunResult := FRunner.RunOne(FEntries[i]);
     if LRunResult.Executed then
@@ -642,7 +672,7 @@ begin
           LComparisons[LIdx].Ratio := 1.0;
 
         LComparisons[LIdx].HasStatisticalTest := False;
-        LComparisons[LIdx].DifferenceHeuristic :=
+        LComparisons[LIdx].IsSignificant :=
           Abs(LComparisons[LIdx].Ratio - 1.0) > 0.05;
         LComparisons[LIdx].ApproximatePValue := 0.05;
 

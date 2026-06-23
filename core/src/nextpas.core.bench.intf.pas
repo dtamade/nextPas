@@ -181,6 +181,10 @@ type
     {** 设置过滤条件 }
     function SetFilter(const AFilter: string): IBenchSuite;
 
+    {** 设置整体超时（毫秒），超时后跳过剩余 benchmark (ST-04)。
+     *  0 = 不超时（默认）。超时在 benchmark 条目之间检查，不中断正在执行的条目。 }
+    function SetTimeout(ATimeoutMs: Cardinal): IBenchSuite;
+
     {** 运行基准测试 }
     function Run: IBenchResults;
   end;
