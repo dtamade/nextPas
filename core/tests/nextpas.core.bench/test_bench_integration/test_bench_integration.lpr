@@ -51,25 +51,8 @@ begin
 end;
 
 function ReadFileToString(const APath: string): string;
-var
-  LFile: TextFile;
-  LLine: string;
 begin
-  Result := '';
-  AssignFile(LFile, APath);
-  Reset(LFile);
-  try
-    while not Eof(LFile) do
-    begin
-      ReadLn(LFile, LLine);
-      if Result <> '' then
-        Result := Result + LineEnding + LLine
-      else
-        Result := LLine;
-    end;
-  finally
-    CloseFile(LFile);
-  end;
+  Result := ReadFileText(APath);
 end;
 
 function CreateFastSuite(const ASuiteName: string): IBenchSuite;
@@ -764,7 +747,6 @@ end;
 
 procedure TestTBenchSuite_LoadBaselineRaises;
 var
-  LFile: TextFile;
   LPath: string;
   LRaised: Boolean;
   LSuite: IBenchSuite;
@@ -787,13 +769,7 @@ begin
 
   LPath := 'build/invalid-baseline.json';
   nextpas.core.fs.MkdirAll('build', PermDefault);
-  AssignFile(LFile, LPath);
-  Rewrite(LFile);
-  try
-    Write(LFile, '{invalid');
-  finally
-    CloseFile(LFile);
-  end;
+  WriteFileText(LPath, '{invalid', PermDefault);
 
   LRaised := False;
   LSuite := CreateFastSuite('BaselineErrorSuite');

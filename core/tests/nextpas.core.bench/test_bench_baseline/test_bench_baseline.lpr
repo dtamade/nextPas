@@ -4,10 +4,11 @@ program test_bench_baseline;
 {$modeswitch advancedrecords}
 
 uses
-  SysUtils,
   nextpas.core.exception,
+  nextpas.core.fs,
   nextpas.core.math.scalar,
   nextpas.core.platform.time,
+  nextpas.core.id.xid,
   nextpas.core.bench.base,
   nextpas.core.bench.baseline,
   nextpas.core.bench.intf;
@@ -399,7 +400,7 @@ var
   LB: TBaselineData;
 begin
   WriteLn('Test_FileRoundTrip:');
-  LPath := '/tmp/nextpas_bench_test_' + IntToStr(GetProcessID) + '.json';
+  LPath := '/tmp/nextpas_bench_test_' + XidNew + '.json';
   LManager1 := TBaselineManager.Create;
   LB := Default(TBaselineData);
   LB.Name := 'TestBench';
@@ -415,7 +416,7 @@ begin
   Check(Abs(LManager2.GetBaseline('TestBench').NsPerOp - 123.456) < 0.001, 'FileRoundTrip: NsPerOp matches');
   Check(LManager2.GetBaseline('TestBench').Notes = 'round-trip test', 'FileRoundTrip: Notes matches');
 
-  DeleteFile(LPath);
+  Remove(LPath);
 end;
 
 procedure Test_LoadFromJSON_Errors;
