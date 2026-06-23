@@ -115,11 +115,11 @@ end;
 
 procedure RaiseBlockPoolArenaAllocationOverflow;
 var
-  LArena: nextpas.core.mem.blockpool.TArena;
+  LArena: nextpas.core.mem.blockpool.TFixedArena;
 begin
   LArena := nil;
   try
-    LArena := nextpas.core.mem.blockpool.TArena.Create(High(SizeUInt));
+    LArena := nextpas.core.mem.blockpool.TFixedArena.Create(High(SizeUInt));
   finally
     LArena.Free;
   end;

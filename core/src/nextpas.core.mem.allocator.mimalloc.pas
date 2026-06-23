@@ -7,7 +7,6 @@ interface
 uses
   nextpas.core.os.env,
   nextpas.core.errors,
-  nextpas.core.path,
   nextpas.core.mem.allocator.base
   {$IFNDEF NEXTPAS_CORE_MIMALLOC_STATIC}
   ,nextpas.core.platform.dl
@@ -37,8 +36,28 @@ function TryGetMimallocUsableSize(aPtr: Pointer; out aSize: SizeUInt): Boolean;
 
 implementation
 
-uses
-  SysUtils;
+  { ASCII-only LowerCase for CPU/OS identifiers — avoids SysUtils dependency.
+    L0 cannot depend on L1 (nextpas.core.text.conv). }
+  function LowerCaseAscii(const S: string): string;
+  var
+    I: Integer;
+  begin
+    Result := S;
+    for I := 1 to Length(Result) do
+      if (Result[I] >= 'A') and (Result[I] <= 'Z') then
+        Result[I] := Chr(Ord(Result[I]) + 32);
+  end;
+
+  { Extract directory part of a file path — avoids SysUtils dependency. }
+  function ExtractFilePathLocal(const APath: string): string;
+  var
+    I: Integer;
+  begin
+    for I := Length(APath) downto 1 do
+      if (APath[I] = '/') or (APath[I] = '\') then
+        Exit(Copy(APath, 1, I));
+    Result := '';
+  end;
 
 {$IFDEF NEXTPAS_CORE_MIMALLOC_STATIC}
   {$LINKLIB mimalloc}
@@ -70,7 +89,7 @@ uses
   function GetPlatformLibSubdir: string;
   begin
     // 使用 FPC 内置的目标平台常量，与 lazbuild 输出目录一致
-    Result := LowerCase({$I %FPCTARGETCPU%}) + '-' + LowerCase({$I %FPCTARGETOS%});
+    Result := LowerCaseAscii({$I %FPCTARGETCPU%}) + '-' + LowerCaseAscii({$I %FPCTARGETOS%});
   end;
 
   function TryLoadFromPath(const aBasePath, aLibName: string): TPlatformLibrary;
@@ -110,7 +129,7 @@ uses
     end;
 
     // 2. 程序目录下的 lib/<platform>/ 目录
-    ExePath := ExtractFilePath(ParamStr(0));
+    ExePath := ExtractFilePathLocal(ParamStr(0));
     LibSubdir := GetPlatformLibSubdir;
     if LibSubdir <> '' then
     begin

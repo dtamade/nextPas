@@ -48,14 +48,23 @@ end;
 
 function NextPowerOfTwo(const AValue: SizeUInt): SizeUInt;
 begin
+  if AValue <= 1 then
+    Exit(1);
+  if AValue > (SizeUInt(1) shl (SizeUInt(SizeOf(SizeUInt) * 8 - 1))) then
+    Exit(AValue); // 无法表示更大的 2 的幂，返回原值 (CS-002)
   Result := 1;
   while Result < AValue do
     Result := Result shl 1;
 end;
 
 function AlignUp(const AValue, AAlignment: SizeUInt): SizeUInt;
+var
+  LPad: SizeUInt;
 begin
-  Result := (AValue + AAlignment - 1) and not (AAlignment - 1);
+  // AAlignment 必须是 2 的幂（调用方保证）
+  // 用 (-AValue) and mask 计算补齐量，全程无溢出 (CS-003)
+  LPad := (not AValue + 1) and (AAlignment - 1);
+  Result := AValue + LPad;
 end;
 
 function NormalizeAlignment(const AAlignment: SizeUInt): SizeUInt;
