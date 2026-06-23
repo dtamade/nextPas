@@ -21,6 +21,20 @@ type
     AFlags: TPlatformMapFlags; out AMap: TPlatformMappedFile): Int32;
   {$ENDIF}
 
+  {** VirtualArena 分配失败分类。
+   *
+   *  Alloc* 仍按现有契约返回 nil；调用方可通过 LastAllocFailure
+   *  区分容量耗尽与宿主 reserve/commit/mmap 失败。
+   *}
+  TVirtualArenaAllocFailure = (
+    vaafNone = 0,
+    vaafCapacityExhausted,
+    vaafFrontCommitFailed,
+    vaafBackCommitFailed,
+    vaafLargeObjectMapFailed,
+    vaafInvalidAlignment
+  );
+
   {** TVirtualArena
    *
    *  预留虚拟地址空间的 bump 分配器，使用 mmap 预分配虚拟地址空间。
@@ -62,6 +76,7 @@ type
     FLargeUsed: SizeUInt;
     FPeakUsed: SizeUInt;
     FAllocCount: SizeUInt;
+    FLastAllocFailure: TVirtualArenaAllocFailure;
 
     function CommitFrontRegion(aSize: SizeUInt): Boolean;
     function CommitBackRegion(aSize: SizeUInt): Boolean;
@@ -77,9 +92,18 @@ type
     function AllocZeroed(aSize: SizeUInt): Pointer;
     {** 极速分配（跳过所有检查，调用方保证容量足够且 aSize > 0）。仅限热路径。 }
     function AllocUnsafe(aSize: SizeUInt): Pointer; inline;
-    {** 保存当前分配位置 }
+    {** 保存当前分配位置。
+     *
+     *  Large objects allocated through the direct mmap path stay live and are
+     *  not rewound by SaveMark/RestoreToMark. Only the bump-pointer state is
+     *  captured here.
+     *}
     function SaveMark: TArenaMark;
-    {** 恢复到标记位置 }
+    {** 恢复到标记位置。
+     *
+     *  RestoreToMark only rewinds the front/back bump pointers. Large objects
+     *  allocated via direct mmap are not rewound and remain live until Release.
+     *}
     procedure RestoreToMark(AMark: TArenaMark);
     {** 重置 Arena（保留虚拟地址空间和已 commit 页面，从头开始分配） }
     procedure Reset;
@@ -95,6 +119,8 @@ type
     function PeakUsed: SizeUInt;
     {** 分配次数 }
     function AllocCount: SizeUInt;
+    {** 返回最近一次 Alloc* 返回 nil 的原因；成功分配后清零。 }
+    function LastAllocFailure: TVirtualArenaAllocFailure;
   end;
 
 {** 初始化 TVirtualArena }
@@ -117,7 +143,7 @@ implementation
 {$IFDEF NEXTPAS_ARENA_LEAK_CHECK}
 var
   GArenaInstanceCount: Integer;
-  GArenaTotalMapped: SizeUInt;
+  GArenaTotalMapped: UInt64;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_TESTING}
@@ -179,6 +205,36 @@ begin
 end;
 {$ENDIF}
 
+{$IFDEF NEXTPAS_ARENA_LEAK_CHECK}
+procedure ArenaLeakMappedAdd(const ABytes: UInt64); inline;
+begin
+  InterlockedExchangeAdd64(PInt64(@GArenaTotalMapped)^, Int64(ABytes));
+end;
+
+procedure ArenaLeakMappedSubtractSaturating(const ABytes: UInt64); inline;
+var
+  LExpected: UInt64;
+  LDesired: UInt64;
+begin
+  while True do
+  begin
+    LExpected := UInt64(InterlockedCompareExchange64(
+      PInt64(@GArenaTotalMapped)^,
+      0,
+      0));
+    if LExpected <= ABytes then
+      LDesired := 0
+    else
+      LDesired := LExpected - ABytes;
+    if UInt64(InterlockedCompareExchange64(
+      PInt64(@GArenaTotalMapped)^,
+      Int64(LDesired),
+      Int64(LExpected))) = LExpected then
+      Exit;
+  end;
+end;
+{$ENDIF}
+
 procedure TVirtualArena_Init(var AArena: TVirtualArena; AAlignment: SizeUInt);
 begin
   if (AAlignment = 0) or (not IsPowerOfTwo(AAlignment)) then
@@ -212,10 +268,11 @@ begin
   AArena.FLargeUsed := 0;
   AArena.FPeakUsed := 0;
   AArena.FAllocCount := 0;
+  AArena.FLastAllocFailure := vaafNone;
 
   {$IFDEF NEXTPAS_ARENA_LEAK_CHECK}
   InterLockedIncrement(GArenaInstanceCount);
-  Inc(GArenaTotalMapped, ARENA_VIRTUAL_RESERVE);
+  ArenaLeakMappedAdd(ARENA_VIRTUAL_RESERVE);
   {$ENDIF}
 end;
 
@@ -225,10 +282,7 @@ var
 begin
   {$IFDEF NEXTPAS_ARENA_LEAK_CHECK}
   InterLockedDecrement(GArenaInstanceCount);
-  if GArenaTotalMapped >= AArena.FTotalAllocated then
-    Dec(GArenaTotalMapped, AArena.FTotalAllocated)
-  else
-    GArenaTotalMapped := 0;
+  ArenaLeakMappedSubtractSaturating(AArena.FTotalAllocated);
   {$ENDIF}
 
   if AArena.FReservedBase <> nil then
@@ -257,6 +311,7 @@ begin
   AArena.FLargeUsed := 0;
   AArena.FPeakUsed := 0;
   AArena.FAllocCount := 0;
+  AArena.FLastAllocFailure := vaafNone;
 end;
 
 const
@@ -359,13 +414,17 @@ var
   LMap: TPlatformMappedFile;
 begin
   Result := nil;
+  FLastAllocFailure := vaafNone;
   if aSize = 0 then Exit;
 
   { Large objects: direct mmap, independent lifecycle }
   if aSize >= ARENA_LARGE_THRESHOLD then
   begin
     if VirtualArenaMmapAnonymous(UInt64(aSize), pmaReadWrite, [pmfPrivate], LMap) <> 0 then
+    begin
+      FLastAllocFailure := vaafLargeObjectMapFailed;
       Exit;
+    end;
     TrackLargeBlock(LMap);
     Inc(FTotalAllocated, aSize);
     Inc(FLargeUsed, aSize);
@@ -373,7 +432,7 @@ begin
     if FTotalUsed > FPeakUsed then FPeakUsed := FTotalUsed;
     Inc(FAllocCount);
     {$IFDEF NEXTPAS_ARENA_LEAK_CHECK}
-    Inc(GArenaTotalMapped, aSize);
+    ArenaLeakMappedAdd(aSize);
     {$ENDIF}
     Exit(LMap.Addr);
   end;
@@ -393,11 +452,19 @@ begin
   LNewEnd := LAligned + PtrUInt(aSize);
 
   { Capacity check first (fail fast, no syscall) }
-  if LNewEnd > PtrUInt(FFrontEnd) then Exit;
+  if LNewEnd > PtrUInt(FFrontEnd) then
+  begin
+    FLastAllocFailure := vaafCapacityExhausted;
+    Exit;
+  end;
 
   { Commit check — only call method when actually needed }
   if LNewEnd - PtrUInt(FReservedBase) > FFrontCommittedSize then
-    if not CommitFrontRegion(LNewEnd - PtrUInt(FReservedBase) - FFrontCommittedSize) then Exit;
+    if not CommitFrontRegion(LNewEnd - PtrUInt(FReservedBase) - FFrontCommittedSize) then
+    begin
+      FLastAllocFailure := vaafFrontCommitFailed;
+      Exit;
+    end;
 
   FFrontPtr := PByte(LNewEnd);
   Inc(FTotalUsed, LPad + aSize);
@@ -413,13 +480,17 @@ var
   LMap: TPlatformMappedFile;
 begin
   Result := nil;
+  FLastAllocFailure := vaafNone;
   if aSize = 0 then Exit;
 
   { Large objects: direct mmap }
   if aSize >= ARENA_LARGE_THRESHOLD then
   begin
     if VirtualArenaMmapAnonymous(UInt64(aSize), pmaReadWrite, [pmfPrivate], LMap) <> 0 then
+    begin
+      FLastAllocFailure := vaafLargeObjectMapFailed;
       Exit;
+    end;
     TrackLargeBlock(LMap);
     Inc(FTotalAllocated, aSize);
     Inc(FLargeUsed, aSize);
@@ -427,25 +498,34 @@ begin
     if FTotalUsed > FPeakUsed then FPeakUsed := FTotalUsed;
     Inc(FAllocCount);
     {$IFDEF NEXTPAS_ARENA_LEAK_CHECK}
-    Inc(GArenaTotalMapped, aSize);
+    ArenaLeakMappedAdd(aSize);
     {$ENDIF}
     Exit(LMap.Addr);
   end;
 
   { Back-pointer bump (downward) }
   if PtrUInt(aSize) > (PtrUInt(FBackPtr) - PtrUInt(FBackBase)) then
+  begin
+    FLastAllocFailure := vaafCapacityExhausted;
     Exit;
+  end;
   LNewBack := PtrUInt(FBackPtr) - PtrUInt(aSize);
   LAligned := LNewBack and not FAlignmentMask;
 
   { Capacity check first }
   if LAligned < PtrUInt(FFrontPtr) then
+  begin
+    FLastAllocFailure := vaafCapacityExhausted;
     Exit;
+  end;
 
   { Commit check — only when actually needed }
   if PtrUInt(FReservedBase) + FReservedSize - LAligned > FBackCommittedSize then
     if not CommitBackRegion(PtrUInt(FReservedBase) + FReservedSize - LAligned - FBackCommittedSize) then
+    begin
+      FLastAllocFailure := vaafBackCommitFailed;
       Exit;
+    end;
 
   FBackPtr := PByte(LAligned);
   Inc(FTotalUsed, aSize);
@@ -463,15 +543,23 @@ var
   LMap: TPlatformMappedFile;
 begin
   Result := nil;
+  FLastAllocFailure := vaafNone;
   if aSize = 0 then Exit;
-  if (aAlignment = 0) or (not IsPowerOfTwo(aAlignment)) then Exit;
+  if (aAlignment = 0) or (not IsPowerOfTwo(aAlignment)) then
+  begin
+    FLastAllocFailure := vaafInvalidAlignment;
+    Exit;
+  end;
   if aAlignment < SizeOf(Pointer) then aAlignment := SizeOf(Pointer);
 
   { Large objects: direct mmap }
   if aSize >= ARENA_LARGE_THRESHOLD then
   begin
     if VirtualArenaMmapAnonymous(UInt64(aSize), pmaReadWrite, [pmfPrivate], LMap) <> 0 then
+    begin
+      FLastAllocFailure := vaafLargeObjectMapFailed;
       Exit;
+    end;
     TrackLargeBlock(LMap);
     Inc(FTotalAllocated, aSize);
     Inc(FLargeUsed, aSize);
@@ -479,7 +567,7 @@ begin
     if FTotalUsed > FPeakUsed then FPeakUsed := FTotalUsed;
     Inc(FAllocCount);
     {$IFDEF NEXTPAS_ARENA_LEAK_CHECK}
-    Inc(GArenaTotalMapped, aSize);
+    ArenaLeakMappedAdd(aSize);
     {$ENDIF}
     Exit(LMap.Addr);
   end;
@@ -490,11 +578,19 @@ begin
   LNewEnd := LAligned + PtrUInt(aSize);
 
   { Capacity check first }
-  if LNewEnd > PtrUInt(FFrontEnd) then Exit;
+  if LNewEnd > PtrUInt(FFrontEnd) then
+  begin
+    FLastAllocFailure := vaafCapacityExhausted;
+    Exit;
+  end;
 
   { Commit check — inline fast path }
   if LNewEnd - PtrUInt(FReservedBase) > FFrontCommittedSize then
-    if not CommitFrontRegion(LNewEnd - PtrUInt(FReservedBase) - FFrontCommittedSize) then Exit;
+    if not CommitFrontRegion(LNewEnd - PtrUInt(FReservedBase) - FFrontCommittedSize) then
+    begin
+      FLastAllocFailure := vaafFrontCommitFailed;
+      Exit;
+    end;
 
   FFrontPtr := PByte(LNewEnd);
   Inc(FTotalUsed, LPad + aSize);
@@ -524,19 +620,25 @@ begin
   Result.FrontOffset := SizeUInt(PtrUInt(FFrontPtr) - PtrUInt(FReservedBase));
   Result.BackOffset := SizeUInt(PtrUInt(FBackPtr) - PtrUInt(FReservedBase));
   Result.TotalUsed := FTotalUsed;
+  Result.LargeUsed := FLargeUsed;
 end;
 
 procedure TVirtualArena.RestoreToMark(AMark: TArenaMark);
 var
   LNewFront: PByte;
   LNewBack: PByte;
+  LNormalUsedAtMark: SizeUInt;
 begin
   LNewFront := PByte(PtrUInt(FReservedBase) + AMark.FrontOffset);
   LNewBack := PByte(PtrUInt(FReservedBase) + AMark.BackOffset);
 
   FFrontPtr := LNewFront;
   FBackPtr := LNewBack;
-  FTotalUsed := AMark.TotalUsed;
+  if AMark.TotalUsed >= AMark.LargeUsed then
+    LNormalUsedAtMark := AMark.TotalUsed - AMark.LargeUsed
+  else
+    LNormalUsedAtMark := 0;
+  FTotalUsed := LNormalUsedAtMark + FLargeUsed;
 end;
 
 procedure TVirtualArena.Reset;
@@ -554,6 +656,7 @@ begin
 
   FTotalUsed := FLargeUsed;
   FAllocCount := 0;
+  FLastAllocFailure := vaafNone;
 end;
 
 procedure TVirtualArena.ResetHard;
@@ -574,6 +677,7 @@ begin
 
   FTotalUsed := FLargeUsed;
   FAllocCount := 0;
+  FLastAllocFailure := vaafNone;
 end;
 
 procedure TVirtualArena.Release;
@@ -599,6 +703,11 @@ end;
 function TVirtualArena.AllocCount: SizeUInt;
 begin
   Result := FAllocCount;
+end;
+
+function TVirtualArena.LastAllocFailure: TVirtualArenaAllocFailure;
+begin
+  Result := FLastAllocFailure;
 end;
 
 {$IFDEF NEXTPAS_ARENA_LEAK_CHECK}

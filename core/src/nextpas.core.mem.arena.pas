@@ -32,6 +32,7 @@ type
   TChunkedArena = nextpas.core.mem.arena.chunked.TChunkedArena;
   {** 预留虚拟地址空间 Arena }
   TVirtualArena = nextpas.core.mem.arena.virtual.TVirtualArena;
+  TVirtualArenaAllocFailure = nextpas.core.mem.arena.virtual.TVirtualArenaAllocFailure;
   {** 线程安全 Arena 包装 }
   TArenaConcurrent = nextpas.core.mem.arena.concurrent.TArenaConcurrent;
 

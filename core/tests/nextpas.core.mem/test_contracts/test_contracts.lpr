@@ -125,6 +125,21 @@ begin
     AMessage);
 end;
 
+procedure CheckContainsAtomicAdd64(const ASource: string; const AMessage: string);
+begin
+  Check((Pos('interlockedexchangeadd64', ASource) > 0) or
+    (Pos('atomic_fetch_add_64', ASource) > 0),
+    AMessage);
+end;
+
+procedure CheckContainsAtomicCAS64(const ASource: string; const AMessage: string);
+begin
+  Check((Pos('interlockedcompareexchange64', ASource) > 0) or
+    (Pos('atomic_compare_exchange_strong_64', ASource) > 0) or
+    (Pos('atomic_compare_exchange_64', ASource) > 0),
+    AMessage);
+end;
+
 procedure ResetAllocatorCounters;
 begin
   GGetMemCalls := 0;
@@ -539,6 +554,66 @@ begin
     'mem.rwlock Done should use an atomic state transition');
 end;
 
+procedure TestVirtualArenaDocumentsLargeObjectMarkSemantics;
+var
+  LSource: string;
+  LInterfaceSection: string;
+begin
+  LSource := ReadSourceText(ResolveSourcePath(
+    MEM_ARENA_VIRTUAL_SOURCE_PATH_FROM_TEST,
+    MEM_ARENA_VIRTUAL_SOURCE_PATH_FROM_ROOT));
+  LInterfaceSection := ExtractSourceSection(LSource,
+    'function savemark: tarenamark;',
+    'procedure reset;');
+  Check(LInterfaceSection <> '', 'virtual arena SaveMark/RestoreToMark section should be readable');
+  CheckContains(LInterfaceSection, 'large objects',
+    'virtual arena SaveMark/RestoreToMark should document large-object persistence');
+  CheckContains(LInterfaceSection, 'not rewound',
+    'virtual arena SaveMark/RestoreToMark should explain that large objects are not rewound');
+end;
+
+procedure TestVirtualArenaExposesFailureReasonAndAtomicMappedCounter;
+var
+  LSource: string;
+  LAllocSection: string;
+begin
+  LSource := ReadSourceText(ResolveSourcePath(
+    MEM_ARENA_VIRTUAL_SOURCE_PATH_FROM_TEST,
+    MEM_ARENA_VIRTUAL_SOURCE_PATH_FROM_ROOT));
+  CheckContains(LSource, 'tvirtualarenaallocfailure = (',
+    'virtual arena should define a typed allocation failure classification');
+  CheckContains(LSource, 'function lastallocfailure: tvirtualarenaallocfailure;',
+    'virtual arena should expose the last allocation failure reason');
+  CheckContains(LSource, 'vaafcapacityexhausted',
+    'virtual arena failure classification should expose capacity exhaustion');
+  CheckContains(LSource, 'vaaffrontcommitfailed',
+    'virtual arena failure classification should expose front commit failure');
+  CheckContains(LSource, 'vaafbackcommitfailed',
+    'virtual arena failure classification should expose back commit failure');
+  CheckContains(LSource, 'vaaflargeobjectmapfailed',
+    'virtual arena failure classification should expose large-object mmap failure');
+
+  LAllocSection := ExtractSourceSection(LSource,
+    'function tvirtualarena.alloc(asize: sizeuint): pointer;',
+    'function tvirtualarena.allocnopointer');
+  Check(LAllocSection <> '', 'virtual arena Alloc section should be readable');
+  CheckContains(LAllocSection, 'flastallocfailure := vaafcapacityexhausted;',
+    'virtual arena Alloc should classify capacity exhaustion');
+  CheckContains(LAllocSection, 'flastallocfailure := vaaffrontcommitfailed;',
+    'virtual arena Alloc should classify front commit failure');
+  CheckContains(LAllocSection, 'flastallocfailure := vaaflargeobjectmapfailed;',
+    'virtual arena Alloc should classify large-object mmap failure');
+
+  CheckNotContains(LSource, 'inc(garenatotalmapped',
+    'virtual arena leak counter should not use plain Inc');
+  CheckNotContains(LSource, 'dec(garenatotalmapped',
+    'virtual arena leak counter should not use plain Dec');
+  CheckContainsAtomicAdd64(LSource,
+    'virtual arena leak counter should use an atomic 64-bit add');
+  CheckContainsAtomicCAS64(LSource,
+    'virtual arena leak counter should use an atomic 64-bit compare-and-swap for bounded subtract');
+end;
+
 procedure TestCanonicalAllocatorSurface;
 var
   LAllocator: nextpas.core.mem.intf.IAllocator;
@@ -695,6 +770,10 @@ begin
     @TestBaseOwnsMemConstantsAndErrorDropsAllocResult);
   T.Run('mem lock wrappers use atomic init state',
     @TestMemLockWrappersUseAtomicInitState);
+  T.Run('virtual arena documents large-object mark semantics',
+    @TestVirtualArenaDocumentsLargeObjectMarkSemantics);
+  T.Run('virtual arena exposes failure reason and atomic mapped counter',
+    @TestVirtualArenaExposesFailureReasonAndAtomicMappedCounter);
   T.Run('canonical allocator surface', @TestCanonicalAllocatorSurface);
   T.Run('allocator aliases are canonical', @TestAllocatorAliasesAreCanonical);
   T.Run('mimalloc usable-size capability fallback', @TestMimallocUsableSizeCapabilityFallback);

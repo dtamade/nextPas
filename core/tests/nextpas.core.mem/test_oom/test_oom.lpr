@@ -303,11 +303,19 @@ begin
   FillChar(LArena, SizeOf(LArena), 0);
   TVirtualArena_Init(LArena);
   try
+    CheckEqual(Int64(Ord(vaafNone)), Int64(Ord(LArena.LastAllocFailure)),
+      'LastAllocFailure should start clear');
     ResetVirtualArenaHooks;
     VirtualArenaTestSetCommitHook(@TestVirtualCommit);
     GFailVirtualCommit := True;
     Check(LArena.Alloc(32) = nil, 'Alloc should return nil when front commit fails');
+    CheckEqual(Int64(Ord(vaafFrontCommitFailed)),
+      Int64(Ord(LArena.LastAllocFailure)),
+      'Alloc should expose front commit failure');
     Check(LArena.AllocNoPointer(32) = nil, 'AllocNoPointer should return nil when back commit fails');
+    CheckEqual(Int64(Ord(vaafBackCommitFailed)),
+      Int64(Ord(LArena.LastAllocFailure)),
+      'AllocNoPointer should expose back commit failure');
   finally
     ResetVirtualArenaHooks;
     TVirtualArena_Release(LArena);
@@ -326,10 +334,19 @@ begin
     GFailVirtualMmap := True;
     Check(LArena.Alloc(ARENA_LARGE_THRESHOLD) = nil,
       'Alloc should return nil when large-object mmap fails');
+    CheckEqual(Int64(Ord(vaafLargeObjectMapFailed)),
+      Int64(Ord(LArena.LastAllocFailure)),
+      'Alloc should expose large-object mmap failure');
     Check(LArena.AllocNoPointer(ARENA_LARGE_THRESHOLD) = nil,
       'AllocNoPointer should return nil when large-object mmap fails');
+    CheckEqual(Int64(Ord(vaafLargeObjectMapFailed)),
+      Int64(Ord(LArena.LastAllocFailure)),
+      'AllocNoPointer should expose large-object mmap failure');
     Check(LArena.AllocAligned(ARENA_LARGE_THRESHOLD, 64) = nil,
       'AllocAligned should return nil when large-object mmap fails');
+    CheckEqual(Int64(Ord(vaafLargeObjectMapFailed)),
+      Int64(Ord(LArena.LastAllocFailure)),
+      'AllocAligned should expose large-object mmap failure');
   finally
     ResetVirtualArenaHooks;
     TVirtualArena_Release(LArena);

@@ -615,6 +615,7 @@ begin
   Result.FrontOffset := CurrentUsed;
   Result.BackOffset := 0;
   Result.TotalUsed := CurrentUsed;
+  Result.LargeUsed := 0;
 end;
 
 procedure TChunkedArena.RestoreToMark(aMark: TArenaMark);

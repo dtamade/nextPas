@@ -13,6 +13,7 @@ type
     FrontOffset: SizeUInt;  // 含指针对象的偏移
     BackOffset: SizeUInt;   // 无指针对象的偏移
     TotalUsed: SizeUInt;    // 标记时的 TotalUsed
+    LargeUsed: SizeUInt;    // 仅 TVirtualArena 使用：标记时仍存活的大对象字节数
   end;
 
   {** Arena 增长策略 }

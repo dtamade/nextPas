@@ -666,6 +666,31 @@ begin
   end;
 end;
 
+procedure TestRestoreToMarkKeepsLargeObjectUsage;
+var
+  LArena: TVirtualArena;
+  LMark: TArenaMark;
+  LLarge: Pointer;
+  LExpectedUsed: SizeUInt;
+begin
+  TVirtualArena_Init(LArena);
+  try
+    Check(LArena.Alloc(64) <> nil, 'large mark: baseline alloc');
+    LMark := LArena.SaveMark;
+    LLarge := LArena.Alloc(ARENA_LARGE_THRESHOLD);
+    Check(LLarge <> nil, 'large mark: large alloc');
+    LExpectedUsed := LMark.TotalUsed + ARENA_LARGE_THRESHOLD;
+    CheckEqual(Int64(LExpectedUsed), Int64(LArena.TotalUsed),
+      'large mark: large alloc should grow TotalUsed');
+
+    LArena.RestoreToMark(LMark);
+    CheckEqual(Int64(LExpectedUsed), Int64(LArena.TotalUsed),
+      'large mark: RestoreToMark should keep large-object usage');
+  finally
+    TVirtualArena_Release(LArena);
+  end;
+end;
+
 procedure TestStatsMethods;
 var
   LArena: TVirtualArena;
@@ -849,6 +874,8 @@ begin
   T.Run('multiple_init_release_cycles', @TestMultipleInitReleaseCycles);
   T.Run('reset_after_partial_use', @TestResetAfterPartialUse);
   T.Run('save_mark_front_back', @TestSaveMarkFrontBack);
+  T.Run('restore_to_mark_keeps_large_object_usage',
+    @TestRestoreToMarkKeepsLargeObjectUsage);
   T.Run('stats_methods', @TestStatsMethods);
   T.Run('aligned_zero_align', @TestAllocAlignedZeroAlign);
   T.Run('aligned_non_power_of_two', @TestAllocAlignedNonPowerOfTwo);

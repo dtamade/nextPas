@@ -48,6 +48,7 @@ type
   TLocalArena = nextpas.core.mem.arena.local.TLocalArena;
   TChunkedArena = nextpas.core.mem.arena.chunked.TChunkedArena;
   TVirtualArena = nextpas.core.mem.arena.virtual.TVirtualArena;
+  TVirtualArenaAllocFailure = nextpas.core.mem.arena.virtual.TVirtualArenaAllocFailure;
   TArenaConcurrent = nextpas.core.mem.arena.concurrent.TArenaConcurrent;
 
   // === Thread-Local Arena ===

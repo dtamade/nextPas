@@ -207,6 +207,7 @@ begin
   Result.FrontOffset := FOffset;
   Result.BackOffset := 0;
   Result.TotalUsed := FOffset;
+  Result.LargeUsed := 0;
 end;
 
 procedure TLocalArena.RestoreToMark(AMark: TArenaMark);
