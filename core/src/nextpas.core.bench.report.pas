@@ -305,6 +305,7 @@ begin
         '<': LBuilder.AppendStr('&lt;');
         '>': LBuilder.AppendStr('&gt;');
         '"': LBuilder.AppendStr('&quot;');
+        '''': LBuilder.AppendStr('&apos;');
       else
         LBuilder.AppendChar(AStr[I]);
       end;

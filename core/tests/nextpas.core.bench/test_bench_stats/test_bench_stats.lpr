@@ -115,6 +115,20 @@ begin
   CheckApprox(GAnalyzer.Percentile(LSorted, 75), 7.75, 0.001, 'P75 correct');
   CheckApprox(GAnalyzer.Percentile(LSorted, 95), 9.55, 0.01, 'P95 correct');
   CheckApprox(GAnalyzer.Percentile(LSorted, 99), 9.91, 0.01, 'P99 correct');
+
+  // TG-26: Single element Percentile
+  SetLength(LSorted, 1);
+  LSorted[0] := 42.0;
+  CheckApprox(GAnalyzer.Percentile(LSorted, 50), 42.0, 0.001, 'Single element P50 = 42.0');
+  CheckApprox(GAnalyzer.Percentile(LSorted, 0), 42.0, 0.001, 'Single element P0 = 42.0');
+  CheckApprox(GAnalyzer.Percentile(LSorted, 100), 42.0, 0.001, 'Single element P100 = 42.0');
+
+  // TG-26: Two element Percentile
+  SetLength(LSorted, 2);
+  LSorted[0] := 10.0; LSorted[1] := 20.0;
+  CheckApprox(GAnalyzer.Percentile(LSorted, 0), 10.0, 0.001, 'Two element P0 = 10.0');
+  CheckApprox(GAnalyzer.Percentile(LSorted, 50), 15.0, 0.001, 'Two element P50 = 15.0');
+  CheckApprox(GAnalyzer.Percentile(LSorted, 100), 20.0, 0.001, 'Two element P100 = 20.0');
 end;
 
 procedure TestOutliers;

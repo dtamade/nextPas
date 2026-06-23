@@ -173,75 +173,75 @@ begin
       FFunc(I, FConfig.WarmupIterations);
   end;
 
-  // Create threads
+  // Create threads (PF-16: try-finally to prevent thread object leak)
   SetLength(LThreads, FConfig.ThreadCount);
-  for I := 0 to FConfig.ThreadCount - 1 do
-    LThreads[I] := TBenchThread.Create(I, FFunc, FConfig.IterationsPerThread);
+  try
+    for I := 0 to FConfig.ThreadCount - 1 do
+      LThreads[I] := TBenchThread.Create(I, FFunc, FConfig.IterationsPerThread);
 
-  // Record start time using high-precision timer
-  LStartNs := platform_monotonic_ns;
+    // Record start time using high-precision timer
+    LStartNs := platform_monotonic_ns;
 
-  // Start all threads
-  for I := 0 to High(LThreads) do
-    LThreads[I].Start;
+    // Start all threads
+    for I := 0 to High(LThreads) do
+      LThreads[I].Start;
 
-  // Wait for all threads to complete
-  for I := 0 to High(LThreads) do
-    LThreads[I].WaitFor;
+    // Wait for all threads to complete
+    for I := 0 to High(LThreads) do
+      LThreads[I].WaitFor;
 
-  // Record end time
-  LEndNs := platform_monotonic_ns;
+    // Record end time
+    LEndNs := platform_monotonic_ns;
 
-  // Collect results
-  LTotalIterations := 0;
-  SetLength(FResults.ThreadResults, Length(LThreads));
+    // Collect results
+    LTotalIterations := 0;
+    SetLength(FResults.ThreadResults, Length(LThreads));
 
-  for I := 0 to High(LThreads) do
-  begin
-    FResults.ThreadResults[I].ThreadId := LThreads[I].BenchThreadId;
-    FResults.ThreadResults[I].Iterations := LThreads[I].Iterations;
-    FResults.ThreadResults[I].ElapsedNs := LThreads[I].ElapsedNs;
-    if LThreads[I].Iterations > 0 then
-      FResults.ThreadResults[I].NsPerOp := LThreads[I].ElapsedNs / LThreads[I].Iterations
+    for I := 0 to High(LThreads) do
+    begin
+      FResults.ThreadResults[I].ThreadId := LThreads[I].BenchThreadId;
+      FResults.ThreadResults[I].Iterations := LThreads[I].Iterations;
+      FResults.ThreadResults[I].ElapsedNs := LThreads[I].ElapsedNs;
+      if LThreads[I].Iterations > 0 then
+        FResults.ThreadResults[I].NsPerOp := LThreads[I].ElapsedNs / LThreads[I].Iterations
+      else
+        FResults.ThreadResults[I].NsPerOp := 0;
+      Inc(LTotalIterations, LThreads[I].Iterations);
+    end;
+
+    // Calculate total results
+    FResults.Config := FConfig;
+    FResults.TotalNs := LEndNs - LStartNs;
+    if LTotalIterations > 0 then
+      FResults.NsPerOp := FResults.TotalNs / LTotalIterations
     else
-      FResults.ThreadResults[I].NsPerOp := 0;
-    Inc(LTotalIterations, LThreads[I].Iterations);
+      FResults.NsPerOp := 0;
+
+    if FResults.NsPerOp > 0 then
+      FResults.OpsPerSec := 1000000000 / FResults.NsPerOp
+    else
+      FResults.OpsPerSec := 0;
+
+    // Calculate speedup and efficiency
+    LSequentialNs := 0;
+    for I := 0 to High(FResults.ThreadResults) do
+      LSequentialNs := LSequentialNs + FResults.ThreadResults[I].ElapsedNs;
+
+    if FResults.TotalNs > 0 then
+      FResults.Speedup := LSequentialNs / FResults.TotalNs
+    else
+      FResults.Speedup := 1;
+
+    if FConfig.ThreadCount > 0 then
+      FResults.Efficiency := FResults.Speedup / FConfig.ThreadCount
+    else
+      FResults.Efficiency := 1;
+  finally
+    // Cleanup — always free thread objects (PF-16)
+    for I := 0 to High(LThreads) do
+      LThreads[I].Free;
+    SetLength(LThreads, 0);
   end;
-
-  // Calculate total results
-  FResults.Config := FConfig;
-  FResults.TotalNs := LEndNs - LStartNs;
-  if LTotalIterations > 0 then
-    FResults.NsPerOp := FResults.TotalNs / LTotalIterations
-  else
-    FResults.NsPerOp := 0;
-
-  if FResults.NsPerOp > 0 then
-    FResults.OpsPerSec := 1000000000 / FResults.NsPerOp
-  else
-    FResults.OpsPerSec := 0;
-
-  // Calculate speedup and efficiency
-  // Speedup = Sequential time / Parallel time
-  // For now, we estimate sequential time as sum of thread times
-  LSequentialNs := 0;
-  for I := 0 to High(FResults.ThreadResults) do
-    LSequentialNs := LSequentialNs + FResults.ThreadResults[I].ElapsedNs;
-
-  if FResults.TotalNs > 0 then
-    FResults.Speedup := LSequentialNs / FResults.TotalNs
-  else
-    FResults.Speedup := 1;
-
-  if FConfig.ThreadCount > 0 then
-    FResults.Efficiency := FResults.Speedup / FConfig.ThreadCount
-  else
-    FResults.Efficiency := 1;
-
-  // Cleanup
-  for I := 0 to High(LThreads) do
-    LThreads[I].Free;
-  SetLength(LThreads, 0);
 
   Result := FResults;
 end;

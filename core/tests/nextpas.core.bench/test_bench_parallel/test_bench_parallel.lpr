@@ -114,9 +114,9 @@ begin
   LResult1 := RunParallelBench(@BenchSimple, 1, 100000);
   LResult2 := RunParallelBench(@BenchSimple, 2, 100000);
 
-  // With 2 threads, we should see some speedup
-  // (though it depends on CPU cores available and timer resolution)
+  // TG-28: tighter range assertions for speedup
   Check(LResult2.Speedup >= 0, 'Speedup >= 0');
+  Check(LResult2.Speedup <= LResult2.Config.ThreadCount * 2.0, 'Speedup <= 2x thread count');
   Check(LResult2.Efficiency >= 0, 'Efficiency >= 0');
 end;
 

@@ -323,6 +323,10 @@ begin
   LCount := Length(FData);
   if LCount = 0 then Exit(0);
 
+  // PF-06: Validate input range
+  if APercentile < 0 then APercentile := 0;
+  if APercentile > 100 then APercentile := 100;
+
   EnsureSorted;
 
   LIndex := (APercentile / 100) * (LCount - 1);
@@ -695,8 +699,14 @@ begin
     LVar2 := LSum / (Length(AOther) - 1);
   end;
 
-  // Cohen's d
-  LPooledStdDev := Sqrt((LVar1 + LVar2) / 2);
+  // Cohen's d — weighted pooled stddev (PF-05)
+  if (Length(FData) > 1) and (Length(AOther) > 1) then
+    LPooledStdDev := Sqrt(((Length(FData) - 1) * LVar1 + (Length(AOther) - 1) * LVar2) /
+                          (Length(FData) + Length(AOther) - 2))
+  else if LVar1 > 0 then
+    LPooledStdDev := Sqrt(LVar1)
+  else
+    LPooledStdDev := Sqrt(LVar2);
   if LPooledStdDev > 0 then
     Result := (LMean1 - LMean2) / LPooledStdDev
   else

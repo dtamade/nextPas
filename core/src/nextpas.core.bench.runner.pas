@@ -470,10 +470,12 @@ begin
         if ATrackMemory then
         begin
           LMemoryStats := GetGlobalMemoryStats;
-          if (Result.Iterations > 0) and (Result.BytesPerOp = 0) then
+          if Result.Iterations > 0 then
+          begin
+            // PF-12: unconditional assignment (BytesPerOp/AllocsPerOp always 0 at this point)
             Result.BytesPerOp := Ceil(LMemoryStats.AllocBytes / Result.Iterations);
-          if (Result.Iterations > 0) and (Result.AllocsPerOp = 0) then
             Result.AllocsPerOp := Ceil(LMemoryStats.AllocCount / Result.Iterations);
+          end;
         end;
       finally
         if ATrackMemory then
@@ -691,12 +693,19 @@ function TBenchRunner.CollectEntrySamples(const AEntry: TBenchEntry; AIters: Int
 var
   LSamples: TDoubleArray;
   LMeasurement: TBenchResult;
+  LMinSamples: Integer;
   i: Integer;
 begin
   AFirstSample := Default(TBenchResult);
-  SetLength(LSamples, FConfig.MinSamples);
 
-  for i := 0 to FConfig.MinSamples - 1 do
+  // PF-17: enforce MinSamples >= 1 to prevent empty arrays
+  LMinSamples := FConfig.MinSamples;
+  if LMinSamples < 1 then
+    LMinSamples := 1;
+
+  SetLength(LSamples, LMinSamples);
+
+  for i := 0 to LMinSamples - 1 do
   begin
     LMeasurement := ExecuteEntry(AEntry, AIters, FConfig.EnableMemoryTracking and (i = 0));
     if i = 0 then

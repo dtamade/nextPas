@@ -418,6 +418,14 @@ begin
   Check(GGenerator.FormatLargeNumber(1000) = '1,000', 'FormatLargeNumber 1K');
   Check(GGenerator.FormatLargeNumber(100) = '100', 'FormatLargeNumber 100');
   Check(GGenerator.FormatLargeNumber(0) = '0', 'FormatLargeNumber 0');
+
+  // TG-30: additional boundary values
+  Check(GGenerator.FormatLargeNumber(-999) = '-999', 'FormatLargeNumber -999');
+  Check(GGenerator.FormatLargeNumber(-1000) = '-1,000', 'FormatLargeNumber -1000');
+  Check(GGenerator.FormatLargeNumber(1) = '1', 'FormatLargeNumber 1');
+  Check(GGenerator.FormatLargeNumber(999) = '999', 'FormatLargeNumber 999');
+  Check(GGenerator.FormatLargeNumber(1000000000) = '1,000,000,000', 'FormatLargeNumber 1B');
+  Check(GGenerator.FormatLargeNumber(-1234567) = '-1,234,567', 'FormatLargeNumber -1.2M');
 end;
 
 procedure TestFormatBytes;
@@ -440,6 +448,13 @@ begin
   Check(GGenerator.FormatTime(1000000.0) = '1.00 ms', 'FormatTime 1ms');
   Check(GGenerator.FormatTime(1000000000.0) = '1.000 s', 'FormatTime 1s');
   Check(GGenerator.FormatTime(500.0) = '500.0 ns', 'FormatTime 500ns');
+
+  // TG-29: boundary values
+  Check(GGenerator.FormatTime(0.0) = '0.0 ns', 'FormatTime 0ns');
+  Check(GGenerator.FormatTime(1.0) = '1.0 ns', 'FormatTime 1ns');
+  Check(GGenerator.FormatTime(999.0) = '999.0 ns', 'FormatTime 999ns');
+  Check(GGenerator.FormatTime(999999.0) = '1000.00 us', 'FormatTime 999999ns = 1000us');
+  Check(GGenerator.FormatTime(60000000000.0) = '60.000 s', 'FormatTime 60s');
 end;
 
 procedure TestEscapeJSON;
