@@ -94,16 +94,16 @@ compress.deflate/props/multipart）当前全部编译通过，self-compile-modul
 
 ---
 
-### P1-SysUtils: 编译器自身清零（1 周）
+### P1-SysUtils: 编译器自身清零 — ✅ 已完成（2026-06-23 复核）
 
-**仅清零编译器模块**，不处理 core 框架。
+**状态**：编译器生产单元（`compiler/frontend|syntax|sema|toolchain|targets|ir|backend|diagnostics/*.pas`）
+已无 `uses ... SysUtils` / `Classes` 导入（grep 核实）。`compiler/sema/np_semantic_analyzer.pas`
+中残留的 `SysUtils` 字样仅是注释（行 1168/2148，描述 C6-H4 对外部单元 owned string return 的
+处理），非导入。编译器自身已可被 nextPas 编译且不依赖 FPC SysUtils（self-compile-modules 19/19
+全绿即为佐证）。`compiler/tests/*.pas` 是宿主 fpc 测试文件，允许使用 SysUtils，不在清零范围。
 
-编译器用到的 SysUtils 符号：
-- `IntToStr`/`Format` → `nextpas.core.text.conv`
-- `ExtractFileName`/`FileExists` → `nextpas.core.fs`
-- `SysErrorMessage` → `nextpas.core.platform`
-
-目标：编译器自身可被 nextPas 编译（不依赖 FPC SysUtils）
+**历史迁移**：见 commits 0bb352198/abd3e6dc6/b70999215/c41ce7c1b/285d34d76（compiler SysUtils/Classes/Process → 框架内替代）。
+剩余的 SysUtils 残留面在 core 框架（见 FOUNDATION P1）与测试/shim 层，不在本 lane。
 
 ---
 
