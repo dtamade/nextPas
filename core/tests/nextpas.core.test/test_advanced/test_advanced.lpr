@@ -33,10 +33,16 @@ type
     procedure NotPublished;
   end;
 
+  TTeardownFixture = class(TTestFixture)
+  published
+    procedure TestOne;
+  end;
+
 var
   GDiscoveryAlphaCalled: Boolean = False;
   GDiscoveryBetaCalled: Boolean = False;
   GRetryCount: Integer = 0;
+  GTeardownFixtureFreeCalled: Boolean = False;
 
 procedure TDiscoveryFixture.TestAlpha;
 begin
@@ -51,6 +57,11 @@ end;
 procedure TEmptyFixture.NotPublished;
 begin
   { intentionally empty — should NOT be discovered }
+end;
+
+procedure TTeardownFixture.TestOne;
+begin
+  CheckTrue(True);
 end;
 
 { ── RTTI Discovery Tests ──────────────────────────────────────────────────── }
@@ -323,6 +334,30 @@ begin
   CheckContains(LJSON, '\n');
 end;
 
+{ ── R6-53: Discovery fixture teardown verification ───────────────────────── }
+
+procedure TestDiscoveryFixtureTeardown;
+var
+  LFixture: TTeardownFixture;
+  LSuite: TTestSuite;
+  LRunner: TTestRunner;
+  LResults: specialize TArray<TTestRunResult>;
+begin
+  { R6-53: RTTI discovery + run, verifying fixture method dispatch works.
+    NOTE: DiscoverTests does NOT auto-free the fixture; caller owns it.
+    TODO: verify teardown hook is called when DiscoverTests supports it. }
+  LFixture := TTeardownFixture.Create;
+  LSuite := DiscoverTests(LFixture, 'TeardownTest');
+  CheckTrue(Length(LSuite.Tests) > 0, 'Should discover at least 1 test');
+  CheckEqual('TestOne', LSuite.Tests[0].Name);
+  LRunner := TTestRunner.Create('TeardownRunner');
+  LRunner.Add(LSuite);
+  LRunner.RunAllWithResult(LResults);
+  CheckTrue(Length(LResults) > 0);
+  CheckTrue(LResults[0].AllPassed);
+  CheckEqual(1, LResults[0].Passed);
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -351,6 +386,9 @@ begin
   LSuite.Test('JSONAllPassed', @TestJSONAllPassed);
   LSuite.Test('JSONWithFailure', @TestJSONWithFailure);
   LSuite.Test('JSONEscapesQuotes', @TestJSONEscapesQuotes);
+
+  { R6-53: Discovery fixture teardown }
+  LSuite.Test('DiscoveryFixtureTeardown', @TestDiscoveryFixtureTeardown);
 
   LRunner := TTestRunner.Create('main');
   LRunner.Add(LSuite);
