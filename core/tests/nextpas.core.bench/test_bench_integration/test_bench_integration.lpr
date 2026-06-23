@@ -811,13 +811,13 @@ begin
   Check(LRaised, 'LoadBaseline raises for invalid JSON');
 end;
 
-procedure TestTBenchResults_ToConsole;
+procedure TestTBenchResults_PrintToConsole;
 var
   LSuite: IBenchSuite;
   LResults: IBenchResults;
   LConsole: string;
 begin
-  WriteLn('TestTBenchResults_ToConsole:');
+  WriteLn('TestTBenchResults_PrintToConsole:');
 
   // 创建套件
   LSuite := CreateFastSuite('TestSuite');
@@ -829,7 +829,7 @@ begin
   LResults := LSuite.Run;
 
   // 生成控制台报告
-  LConsole := LResults.ToConsole;
+  LConsole := LResults.PrintToConsole;
 
   Check(Length(LConsole) > 0, 'Console output not empty');
   Check(Pos('nextpas.core.bench v1.0', LConsole) > 0, 'Contains version');
@@ -1272,7 +1272,7 @@ begin
     WriteLn;
     TestTBenchSuite_LoadBaselineRaises;
     WriteLn;
-    TestTBenchResults_ToConsole;
+    TestTBenchResults_PrintToConsole;
     WriteLn;
     TestTBenchResults_ToJSON;
     WriteLn;

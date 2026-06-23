@@ -124,7 +124,7 @@ type
     function GetByName(const AName: string): TBenchResult;
     function TryGetByName(const AName: string; out AResult: TBenchResult): Boolean;
     function GetCount: Integer;
-    function ToConsole: string;
+    function PrintToConsole: string;
     function ToJSON: string;
     function ToTSV: string;
     function ToHTML: string;
@@ -730,11 +730,11 @@ begin
   Result := FResultCount;
 end;
 
-function TBenchResults.ToConsole: string;
+function TBenchResults.PrintToConsole: string;
 begin
   FReportGenerator.SetResults(FResults);
   FReportGenerator.SetEnvironment(FEnvironment);
-  Result := FReportGenerator.ToConsole;
+  Result := FReportGenerator.PrintToConsole;
 end;
 
 function TBenchResults.ToJSON: string;

@@ -109,20 +109,20 @@ begin
   Result[High(Result)].SkipReason := 'SIMD extension unavailable';
 end;
 
-procedure TestToConsole;
+procedure TestPrintToConsole;
 var
   LResults: array of TBenchResult;
   LEnvironment: TBenchEnvironment;
   LConsole: string;
 begin
-  WriteLn('TestToConsole:');
+  WriteLn('TestPrintToConsole:');
 
   LResults := CreateTestResults;
   LEnvironment := CreateTestEnvironment;
 
   GGenerator.SetResults(LResults);
   GGenerator.SetEnvironment(LEnvironment);
-  LConsole := GGenerator.ToConsole;
+  LConsole := GGenerator.PrintToConsole;
 
   CheckContains(LConsole, 'nextpas.core.bench v1.0', 'Contains version');
   CheckContains(LConsole, 'Environment:', 'Contains environment header');
@@ -360,7 +360,7 @@ begin
   GGenerator.SetResults(LResults);
   GGenerator.SetEnvironment(LEnvironment);
 
-  LConsole := GGenerator.ToConsole;
+  LConsole := GGenerator.PrintToConsole;
   CheckContains(LConsole, 'Skipped Benchmarks', 'Console shows skipped section');
   CheckContains(LConsole, 'SIMD extension unavailable', 'Console shows skip reason');
 
@@ -595,13 +595,13 @@ begin
   Check(LNoCrash, 'ToHTML with empty results does not raise exception');
 end;
 
-procedure Test_EmptyResults_ToConsole;
+procedure Test_EmptyResults_PrintToConsole;
 var
   LResults: TBenchResultArray;
   LConsole: string;
   LNoCrash: Boolean;
 begin
-  WriteLn('Test_EmptyResults_ToConsole:');
+  WriteLn('Test_EmptyResults_PrintToConsole:');
   LNoCrash := True;
 
   SetLength(LResults, 0);
@@ -609,12 +609,12 @@ begin
   GGenerator.SetEnvironment(CreateTestEnvironment);
 
   try
-    LConsole := GGenerator.ToConsole;
+    LConsole := GGenerator.PrintToConsole;
     CheckContains(LConsole, 'nextpas.core.bench v1.0', 'Empty console contains version');
   except
     LNoCrash := False;
   end;
-  Check(LNoCrash, 'ToConsole with empty results does not raise exception');
+  Check(LNoCrash, 'PrintToConsole with empty results does not raise exception');
 end;
 
 begin
@@ -627,7 +627,7 @@ begin
   GGenerator := TBenchReportGenerator.Create;
 
   try
-    TestToConsole;
+    TestPrintToConsole;
     WriteLn;
     TestToJSON;
     WriteLn;
@@ -671,7 +671,7 @@ begin
     WriteLn;
     Test_EmptyResults_ToHTML;
     WriteLn;
-    Test_EmptyResults_ToConsole;
+    Test_EmptyResults_PrintToConsole;
 
     WriteLn;
     WriteLn('=== Test Summary ===');

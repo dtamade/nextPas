@@ -87,7 +87,7 @@ type
     procedure SetEnvironment(const AEnvironment: TBenchEnvironment);
 
     {** 生成控制台报告 }
-    function ToConsole: string;
+    function PrintToConsole: string;
 
     {** 生成 JSON 报告 }
     function ToJSON: string;
@@ -347,7 +347,7 @@ begin
   end;
 end;
 
-function TBenchReportGenerator.ToConsole: string;
+function TBenchReportGenerator.PrintToConsole: string;
 var
   LLines: TLineBuffer;
   LSkippedCount: Integer;
