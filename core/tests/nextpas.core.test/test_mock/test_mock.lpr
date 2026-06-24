@@ -629,6 +629,192 @@ begin
   end;
 end;
 
+{ ── Phase 3: Times / InOrder / CalledBefore / CalledAfter ──────────────────── }
+
+procedure TestTimesSuccess;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.RecordCall('Foo', []);
+    LM.RecordCall('Foo', []);
+    LM.RecordCall('Foo', []);
+    { Times(3) should not raise }
+    LM.Verify('Foo').Times(3);
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestTimesFail;
+var
+  LM: TMock;
+  LCaught: Boolean = False;
+begin
+  LM := TMock.Create;
+  try
+    LM.RecordCall('Foo', []);
+    try
+      LM.Verify('Foo').Times(5);
+      Halt(1);
+    except
+      on E: EAssertionFailed do
+        LCaught := True;
+    end;
+    CheckTrue(LCaught, 'Times(5) should fail when called once');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestInOrderSetup;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    { InOrder is a fluent marker — should not raise }
+    LM.Setup('Foo').InOrder.Returns('bar');
+    CheckEqual('bar', LM.GetReturn('Foo'));
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestCallOrderTracking;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.RecordCall('A', []);
+    LM.RecordCall('B', []);
+    LM.RecordCall('C', []);
+    LM.RecordCall('A', []);
+    CheckEqual(4, Length(LM.State.CallOrder));
+    CheckEqual('A', LM.State.CallOrder[0]);
+    CheckEqual('B', LM.State.CallOrder[1]);
+    CheckEqual('C', LM.State.CallOrder[2]);
+    CheckEqual('A', LM.State.CallOrder[3]);
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestCalledBeforeSuccess;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.RecordCall('Setup', []);
+    LM.RecordCall('Execute', []);
+    LM.RecordCall('Cleanup', []);
+    { Setup was called before Execute — should not raise }
+    LM.Verify('Setup').CalledBefore('Execute');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestCalledBeforeFail;
+var
+  LM: TMock;
+  LCaught: Boolean = False;
+begin
+  LM := TMock.Create;
+  try
+    LM.RecordCall('Execute', []);
+    LM.RecordCall('Setup', []);
+    try
+      LM.Verify('Setup').CalledBefore('Execute');
+      Halt(1);
+    except
+      on E: EAssertionFailed do
+        LCaught := True;
+    end;
+    CheckTrue(LCaught, 'CalledBefore should fail when order is reversed');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestCalledAfterSuccess;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.RecordCall('Setup', []);
+    LM.RecordCall('Execute', []);
+    LM.RecordCall('Cleanup', []);
+    { Cleanup was called after Execute — should not raise }
+    LM.Verify('Cleanup').CalledAfter('Execute');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestCalledAfterFail;
+var
+  LM: TMock;
+  LCaught: Boolean = False;
+begin
+  LM := TMock.Create;
+  try
+    LM.RecordCall('Cleanup', []);
+    LM.RecordCall('Execute', []);
+    try
+      LM.Verify('Cleanup').CalledAfter('Execute');
+      Halt(1);
+    except
+      on E: EAssertionFailed do
+        LCaught := True;
+    end;
+    CheckTrue(LCaught, 'CalledAfter should fail when order is reversed');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestCalledBeforeNeverCalled;
+var
+  LM: TMock;
+  LCaught: Boolean = False;
+begin
+  LM := TMock.Create;
+  try
+    LM.RecordCall('Foo', []);
+    try
+      LM.Verify('Foo').CalledBefore('Bar');
+      Halt(1);
+    except
+      on E: EAssertionFailed do
+        LCaught := True;
+    end;
+    CheckTrue(LCaught, 'CalledBefore should fail when other method never called');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestCallOrderReset;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.RecordCall('A', []);
+    LM.RecordCall('B', []);
+    CheckEqual(2, Length(LM.State.CallOrder));
+    LM.ResetCalls;
+    CheckEqual(0, Length(LM.State.CallOrder));
+  finally
+    LM.Free;
+  end;
+end;
+
 { ── Register Tests ───────────────────────────────────────────────────────────── }
 
 var
@@ -686,6 +872,18 @@ begin
   Suite.Test('TestSetupDuplicateOverwrite', @TestSetupDuplicateOverwrite);
   { R6-48: GetReturnInt negative }
   Suite.Test('TestGetReturnIntNegative', @TestGetReturnIntNegative);
+
+  { Phase 3: Times / InOrder / CalledBefore / CalledAfter }
+  Suite.Test('TestTimesSuccess', @TestTimesSuccess);
+  Suite.Test('TestTimesFail', @TestTimesFail);
+  Suite.Test('TestInOrderSetup', @TestInOrderSetup);
+  Suite.Test('TestCallOrderTracking', @TestCallOrderTracking);
+  Suite.Test('TestCalledBeforeSuccess', @TestCalledBeforeSuccess);
+  Suite.Test('TestCalledBeforeFail', @TestCalledBeforeFail);
+  Suite.Test('TestCalledAfterSuccess', @TestCalledAfterSuccess);
+  Suite.Test('TestCalledAfterFail', @TestCalledAfterFail);
+  Suite.Test('TestCalledBeforeNeverCalled', @TestCalledBeforeNeverCalled);
+  Suite.Test('TestCallOrderReset', @TestCallOrderReset);
 
   Runner := TTestRunner.Create('mock-tests');
   Runner.Add(Suite);

@@ -137,6 +137,8 @@ function  StatusDot(AStatus: TTestStatus): string;
 procedure SetTestFilter(const APattern: string);
 function  GetTestFilter: string;
 function  MatchesFilter(const AName: string): Boolean;
+procedure SetTagFilter(const APattern: string);
+function  GetTagFilter: string;
 procedure SetTestTimeout(AMillis: Integer);
 function  GetTestTimeout: Integer;
 procedure ReportLeakIfAny(AStatus: TTestStatus);
@@ -333,6 +335,12 @@ begin Result := nextpas.core.test.output.GetTestFilter; end;
 
 function MatchesFilter(const AName: string): Boolean;
 begin Result := nextpas.core.test.output.MatchesFilter(AName); end;
+
+procedure SetTagFilter(const APattern: string);
+begin nextpas.core.test.output.SetTagFilter(APattern); end;
+
+function GetTagFilter: string;
+begin Result := nextpas.core.test.output.GetTagFilter; end;
 
 procedure SetTestTimeout(AMillis: Integer);
 begin nextpas.core.test.output.SetTestTimeout(AMillis); end;

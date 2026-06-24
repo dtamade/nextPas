@@ -66,6 +66,8 @@ type
     function ReturnsInt(AValue: Int64): IMockSetup;
     { Configure the return value as Boolean }
     function ReturnsBool(AValue: Boolean): IMockSetup;
+    { Mark this setup for ordered verification (InOrder) }
+    function InOrder: IMockSetup;
   end;
 
 { ── Verify (assert call expectations) ─────────────────────────────────────── }
@@ -78,6 +80,12 @@ type
     procedure CalledAtMost(ACount: Integer);
     procedure CalledNever;
     procedure CalledOnce;
+    { Times(N) — synonym for CalledExactly(N), more fluent API }
+    function  Times(N: Integer): IMockVerify;
+    { Verify this method was called before AOtherMethod (by call order) }
+    function  CalledBefore(const AOtherMethod: string): IMockVerify;
+    { Verify this method was called after AOtherMethod (by call order) }
+    function  CalledAfter(const AOtherMethod: string): IMockVerify;
   end;
 
 { ── Mock State ────────────────────────────────────────────────────────────── }
@@ -87,6 +95,7 @@ type
   private
     FCalls   : TMockCalls;
     FSetups  : specialize TArray<TMockCall>;
+    FCallOrder: specialize TArray<string>;  { records method names in call order }
     procedure SetTypedReturnValue(const AMethodName: string;
       const AValue: TMockValue);
   public
@@ -111,6 +120,8 @@ type
     function CallCount(const AMethodName: string): Integer;
     { Get all recorded calls }
     property Calls: TMockCalls read FCalls;
+    { Get the recorded call order (method names in sequence) }
+    property CallOrder: specialize TArray<string> read FCallOrder;
     { Clear all recorded calls }
     procedure Reset;
   end;
@@ -238,12 +249,14 @@ begin
   inherited Create;
   FCalls  := nil;
   FSetups := nil;
+  FCallOrder := nil;
 end;
 
 destructor TMockState.Destroy;
 begin
   FCalls  := nil;
   FSetups := nil;
+  FCallOrder := nil;
   inherited Destroy;
 end;
 
@@ -267,6 +280,9 @@ begin
 
   SetLength(FCalls, Length(FCalls) + 1);
   FCalls[High(FCalls)] := LCall;
+  { Track call order }
+  SetLength(FCallOrder, Length(FCallOrder) + 1);
+  FCallOrder[High(FCallOrder)] := AMethodName;
 end;
 
 procedure TMockState.RecordCallTyped(const AMethodName: string;
@@ -289,6 +305,9 @@ begin
 
   SetLength(FCalls, Length(FCalls) + 1);
   FCalls[High(FCalls)] := LCall;
+  { Track call order }
+  SetLength(FCallOrder, Length(FCallOrder) + 1);
+  FCallOrder[High(FCallOrder)] := AMethodName;
 end;
 
 function TMockState.GetReturn(const AMethodName: string): string;
@@ -414,6 +433,7 @@ end;
 procedure TMockState.Reset;
 begin
   FCalls := nil;
+  FCallOrder := nil;
 end;
 
 { ── IMockSetup implementation ──────────────────────────────────────────────── }
@@ -428,6 +448,7 @@ type
     function Returns(const AValue: string): IMockSetup;
     function ReturnsInt(AValue: Int64): IMockSetup;
     function ReturnsBool(AValue: Boolean): IMockSetup;
+    function InOrder: IMockSetup;
   end;
 
 constructor TMockSetup.Create(AState: TMockState; const AMethod: string);
@@ -460,6 +481,14 @@ begin
   Result := Self;
 end;
 
+function TMockSetup.InOrder: IMockSetup;
+begin
+  { InOrder is a marker — call order tracking is always on.
+    This method exists for fluent API readability:
+      Mock.Setup('Foo').InOrder.Returns('x'); }
+  Result := Self;
+end;
+
 { ── IMockVerify implementation ─────────────────────────────────────────────── }
 
 type
@@ -474,6 +503,9 @@ type
     procedure CalledAtMost(ACount: Integer);
     procedure CalledNever;
     procedure CalledOnce;
+    function  Times(N: Integer): IMockVerify;
+    function  CalledBefore(const AOtherMethod: string): IMockVerify;
+    function  CalledAfter(const AOtherMethod: string): IMockVerify;
   end;
 
 constructor TMockVerifier.Create(AState: TMockState; const AMethod: string);
@@ -524,6 +556,72 @@ end;
 procedure TMockVerifier.CalledOnce;
 begin
   CalledExactly(1);
+end;
+
+function TMockVerifier.Times(N: Integer): IMockVerify;
+begin
+  CalledExactly(N);
+  Result := Self;
+end;
+
+function TMockVerifier.CalledBefore(const AOtherMethod: string): IMockVerify;
+var
+  I, LSelfIdx, LOtherIdx: Integer;
+begin
+  LSelfIdx := -1;
+  LOtherIdx := -1;
+  for I := 0 to High(FState.CallOrder) do
+  begin
+    { Find first occurrence of each method }
+    if (LSelfIdx < 0) and (FState.CallOrder[I] = FMethod) then
+      LSelfIdx := I;
+    if (LOtherIdx < 0) and (FState.CallOrder[I] = AOtherMethod) then
+      LOtherIdx := I;
+    if (LSelfIdx >= 0) and (LOtherIdx >= 0) then
+      Break;
+  end;
+  if LSelfIdx < 0 then
+    InternalFail('Expected ' + FMethod + ' called before ' +
+      AOtherMethod + ', but ' + FMethod + ' was never called');
+  if LOtherIdx < 0 then
+    InternalFail('Expected ' + FMethod + ' called before ' +
+      AOtherMethod + ', but ' + AOtherMethod + ' was never called');
+  if LSelfIdx >= LOtherIdx then
+    InternalFail('Expected ' + FMethod + ' called before ' +
+      AOtherMethod + ', but ' + FMethod + ' was called at index ' +
+      IntToStr(LSelfIdx) + ' (after ' + AOtherMethod + ' at index ' +
+      IntToStr(LOtherIdx) + ')');
+  Result := Self;
+end;
+
+function TMockVerifier.CalledAfter(const AOtherMethod: string): IMockVerify;
+var
+  I, LSelfIdx, LOtherIdx: Integer;
+begin
+  LSelfIdx := -1;
+  LOtherIdx := -1;
+  for I := 0 to High(FState.CallOrder) do
+  begin
+    { Find first occurrence of each method }
+    if (LSelfIdx < 0) and (FState.CallOrder[I] = FMethod) then
+      LSelfIdx := I;
+    if (LOtherIdx < 0) and (FState.CallOrder[I] = AOtherMethod) then
+      LOtherIdx := I;
+    if (LSelfIdx >= 0) and (LOtherIdx >= 0) then
+      Break;
+  end;
+  if LSelfIdx < 0 then
+    InternalFail('Expected ' + FMethod + ' called after ' +
+      AOtherMethod + ', but ' + FMethod + ' was never called');
+  if LOtherIdx < 0 then
+    InternalFail('Expected ' + FMethod + ' called after ' +
+      AOtherMethod + ', but ' + AOtherMethod + ' was never called');
+  if LSelfIdx <= LOtherIdx then
+    InternalFail('Expected ' + FMethod + ' called after ' +
+      AOtherMethod + ', but ' + FMethod + ' was called at index ' +
+      IntToStr(LSelfIdx) + ' (before ' + AOtherMethod + ' at index ' +
+      IntToStr(LOtherIdx) + ')');
+  Result := Self;
 end;
 
 { ── TMock ─────────────────────────────────────────────────────────────────── }

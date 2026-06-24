@@ -88,6 +88,8 @@ begin
           AddLine(LLines, LLine);
           AddLine(LLines, '  ---');
           AddYAMLBlockScalar(LLines, 'message', LRes.Message);
+          if Length(LRes.CapturedLog) > 0 then
+            AddYAMLBlockScalar(LLines, 'log', JoinLines(LRes.CapturedLog));
           AddLine(LLines, '  severity: fail');
           AddLine(LLines, '  ...');
         end;
@@ -98,6 +100,8 @@ begin
           AddLine(LLines, LLine);
           AddLine(LLines, '  ---');
           AddYAMLBlockScalar(LLines, 'message', LRes.Message);
+          if Length(LRes.CapturedLog) > 0 then
+            AddYAMLBlockScalar(LLines, 'log', JoinLines(LRes.CapturedLog));
           AddLine(LLines, '  severity: error');
           AddLine(LLines, '  ...');
         end;

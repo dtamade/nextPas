@@ -99,6 +99,7 @@ var
   LLines: specialize TArray<string>;
   LFirst: Boolean;
   LIndent: string;
+  LI: Integer;
 begin
   LTotalPassed  := 0;
   LTotalFailed  := 0;
@@ -150,6 +151,18 @@ begin
       if LRes.Message <> '' then
         AddLine(LLines, '          ,"message": "' + JsonEscape(LRes.Message) + '"');
       AddLine(LLines, '          ,"durationMs": ' + IntToStr(LRes.Duration));
+      if Length(LRes.CapturedLog) > 0 then
+      begin
+        AddLine(LLines, '          ,"capturedLog": [');
+        for LI := 0 to High(LRes.CapturedLog) do
+        begin
+          if LI < High(LRes.CapturedLog) then
+            AddLine(LLines, '            "' + JsonEscape(LRes.CapturedLog[LI]) + '",')
+          else
+            AddLine(LLines, '            "' + JsonEscape(LRes.CapturedLog[LI]) + '"');
+        end;
+        AddLine(LLines, '          ]');
+      end;
       AddLine(LLines, '        },');
     end;
 

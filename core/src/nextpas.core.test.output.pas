@@ -45,6 +45,12 @@ function  GetTestFilter(const AConfig: TTestConfig): string; overload;
 function  MatchesFilter(const AName: string): Boolean; overload;
 function  MatchesFilter(const AName: string; const AConfig: TTestConfig): Boolean; overload;
 
+{ ── Tag Filter ───────────────────────────────────────────────────────────── }
+
+procedure SetTagFilter(const APattern: string);
+function  GetTagFilter: string; overload;
+function  GetTagFilter(const AConfig: TTestConfig): string; overload;
+
 { ── Test Timeout ──────────────────────────────────────────────────────────── }
 
 procedure SetTestTimeout(AMillis: Integer);
@@ -376,6 +382,25 @@ begin
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }
+{ Tag Filter                                                                   }
+{ ═════════════════════════════════════════════════════════════════════════════ }
+
+procedure SetTagFilter(const APattern: string);
+begin
+  SetDefaultTagFilter(APattern);
+end;
+
+function GetTagFilter: string;
+begin
+  Result := GetTagFilter(DefaultConfig);
+end;
+
+function GetTagFilter(const AConfig: TTestConfig): string;
+begin
+  Result := ResolveConfig(AConfig).TagFilter;
+end;
+
+{ ═════════════════════════════════════════════════════════════════════════════ }
 { JUnit XML Output                                                            }
 { ═════════════════════════════════════════════════════════════════════════════ }
 
@@ -505,20 +530,38 @@ begin
             begin
               LSb.AppendStr('>' + LineEnding);
               LSb.AppendStr('      <failure type="AssertionFailure" message="' +
-                XmlEscape(LTestResult.Message) + '"/>' + LineEnding);
+                XmlEscape(LTestResult.Message) + '">');
+              if Length(LTestResult.CapturedLog) > 0 then
+              begin
+                LSb.AppendStr(LineEnding);
+                LSb.AppendStr(XmlEscape(JoinLines(LTestResult.CapturedLog)));
+                LSb.AppendStr(LineEnding + '      ');
+              end;
+              LSb.AppendStr('</failure>' + LineEnding);
               LSb.AppendStr('    </testcase>' + LineEnding);
             end;
           tsError:
             begin
               LSb.AppendStr('>' + LineEnding);
               LSb.AppendStr('      <error type="Error" message="' +
-                XmlEscape(LTestResult.Message) + '"/>' + LineEnding);
+                XmlEscape(LTestResult.Message) + '">');
+              if Length(LTestResult.CapturedLog) > 0 then
+              begin
+                LSb.AppendStr(LineEnding);
+                LSb.AppendStr(XmlEscape(JoinLines(LTestResult.CapturedLog)));
+                LSb.AppendStr(LineEnding + '      ');
+              end;
+              LSb.AppendStr('</error>' + LineEnding);
               LSb.AppendStr('    </testcase>' + LineEnding);
             end;
           tsSkipped:
             begin
               LSb.AppendStr('>' + LineEnding);
-              LSb.AppendStr('      <skipped/>' + LineEnding);
+              if LTestResult.Message <> '' then
+                LSb.AppendStr('      <skipped message="' +
+                  XmlEscape(LTestResult.Message) + '"/>' + LineEnding)
+              else
+                LSb.AppendStr('      <skipped/>' + LineEnding);
               LSb.AppendStr('    </testcase>' + LineEnding);
             end;
         else

@@ -61,6 +61,21 @@ type
       ARetryCount: Integer); overload;
     procedure Test(const AName: string; AProc: TTestClosure;
       ARetryCount: Integer); overload;
+    { Tag overloads: ATags for tag-based filtering }
+    procedure Test(const AName: string; AProc: TTestProc;
+      const ATags: array of string); overload;
+    procedure Test(const AName: string; AProc: TTestClosure;
+      const ATags: array of string); overload;
+    { DisplayName + Tags overloads }
+    procedure Test(const AName: string; AProc: TTestProc;
+      const ADisplayName: string; const ATags: array of string); overload;
+    procedure Test(const AName: string; AProc: TTestClosure;
+      const ADisplayName: string; const ATags: array of string); overload;
+    { Repeat overloads: ARepeatCount > 1 runs the test N times }
+    procedure TestRepeat(const AName: string; AProc: TTestProc;
+      ARepeatCount: Integer);
+    procedure TestRepeat(const AName: string; AProc: TTestClosure;
+      ARepeatCount: Integer);
     procedure TestSubtest(const AName: string; AProc: TSubtestProc);
     procedure TestTable(const AName: string;
       ACases: specialize TArray<TTestCase>;
@@ -135,6 +150,11 @@ procedure RegisterStub(var ASuite: TTestSuite; APtr: Pointer);
 procedure RegisterFixture(var ASuite: TTestSuite; AFixture: TObject);
 { White-box helper for test_runner: parse --filter=value form from one argv item. }
 function ParseFilter(const AArg: string): string;
+{ Check if a test entry matches a tag filter. Empty filter = match all. }
+function MatchesTagFilter(const AEntryTags: specialize TArray<string>;
+  const ATagFilter: string): Boolean;
+{ Get effective display name: DisplayName if non-empty, else Name. }
+function GetDisplayName(const AEntry: TTestEntry): string;
 
 implementation
 
@@ -162,6 +182,54 @@ begin
   if Copy(AArg, 1, 9) = '--filter=' then
     Exit(Copy(AArg, 10, MaxInt));
   Result := '';
+end;
+
+function MatchesTagFilter(const AEntryTags: specialize TArray<string>;
+  const ATagFilter: string): Boolean;
+{ Check if a test entry matches a tag filter.
+  Empty filter = match all. Comma-separated tags = OR match.
+  A test matches if it has ANY of the listed tags. }
+var
+  LFilter, LTag: string;
+  LComma, I: Integer;
+begin
+  if ATagFilter = '' then
+    Exit(True);
+  if Length(AEntryTags) = 0 then
+    Exit(False);
+  LFilter := ATagFilter;
+  while LFilter <> '' do
+  begin
+    LComma := Pos(',', LFilter);
+    if LComma > 0 then
+    begin
+      LTag := Copy(LFilter, 1, LComma - 1);
+      Delete(LFilter, 1, LComma);
+    end
+    else
+    begin
+      LTag := LFilter;
+      LFilter := '';
+    end;
+    { Trim whitespace }
+    while (LTag <> '') and (LTag[1] = ' ') do Delete(LTag, 1, 1);
+    while (LTag <> '') and (LTag[Length(LTag)] = ' ') do
+      SetLength(LTag, Length(LTag) - 1);
+    if LTag = '' then
+      Continue;
+    for I := 0 to High(AEntryTags) do
+      if SameText(AEntryTags[I], LTag) then
+        Exit(True);
+  end;
+  Result := False;
+end;
+
+function GetDisplayName(const AEntry: TTestEntry): string;
+begin
+  if AEntry.DisplayName <> '' then
+    Result := AEntry.DisplayName
+  else
+    Result := AEntry.Name;
 end;
 
 function ParseFilterFromArgs: string;
@@ -256,6 +324,9 @@ begin
   LEntry.Kind        := ekTest;
   LEntry.SkipReason  := '';
   LEntry.RetryCount  := 0;
+  LEntry.DisplayName := '';
+  LEntry.Tags        := nil;
+  LEntry.RepeatCount := 0;
   SetLength(Tests, Length(Tests) + 1);
   Tests[High(Tests)] := LEntry;
 end;
@@ -271,6 +342,9 @@ begin
   LEntry.Kind        := ekTest;
   LEntry.SkipReason  := '';
   LEntry.RetryCount  := 0;
+  LEntry.DisplayName := '';
+  LEntry.Tags        := nil;
+  LEntry.RepeatCount := 0;
   SetLength(Tests, Length(Tests) + 1);
   Tests[High(Tests)] := LEntry;
 end;
@@ -287,6 +361,9 @@ begin
   LEntry.Kind        := ekTest;
   LEntry.SkipReason  := '';
   LEntry.RetryCount  := ARetryCount;
+  LEntry.DisplayName := '';
+  LEntry.Tags        := nil;
+  LEntry.RepeatCount := 0;
   SetLength(Tests, Length(Tests) + 1);
   Tests[High(Tests)] := LEntry;
 end;
@@ -303,6 +380,135 @@ begin
   LEntry.Kind        := ekTest;
   LEntry.SkipReason  := '';
   LEntry.RetryCount  := ARetryCount;
+  LEntry.DisplayName := '';
+  LEntry.Tags        := nil;
+  LEntry.RepeatCount := 0;
+  SetLength(Tests, Length(Tests) + 1);
+  Tests[High(Tests)] := LEntry;
+end;
+
+procedure TTestSuite.Test(const AName: string; AProc: TTestProc;
+  const ATags: array of string);
+var
+  LEntry: TTestEntry;
+  I: Integer;
+begin
+  LEntry.Name        := AName;
+  LEntry.Proc        := AProc;
+  LEntry.Closure     := nil;
+  LEntry.SubtestProc := nil;
+  LEntry.Kind        := ekTest;
+  LEntry.SkipReason  := '';
+  LEntry.RetryCount  := 0;
+  LEntry.DisplayName := '';
+  LEntry.RepeatCount := 0;
+  SetLength(LEntry.Tags, Length(ATags));
+  for I := 0 to High(ATags) do
+    LEntry.Tags[I] := ATags[I];
+  SetLength(Tests, Length(Tests) + 1);
+  Tests[High(Tests)] := LEntry;
+end;
+
+procedure TTestSuite.Test(const AName: string; AProc: TTestClosure;
+  const ATags: array of string);
+var
+  LEntry: TTestEntry;
+  I: Integer;
+begin
+  LEntry.Name        := AName;
+  LEntry.Proc        := nil;
+  LEntry.Closure     := AProc;
+  LEntry.SubtestProc := nil;
+  LEntry.Kind        := ekTest;
+  LEntry.SkipReason  := '';
+  LEntry.RetryCount  := 0;
+  LEntry.DisplayName := '';
+  LEntry.RepeatCount := 0;
+  SetLength(LEntry.Tags, Length(ATags));
+  for I := 0 to High(ATags) do
+    LEntry.Tags[I] := ATags[I];
+  SetLength(Tests, Length(Tests) + 1);
+  Tests[High(Tests)] := LEntry;
+end;
+
+procedure TTestSuite.Test(const AName: string; AProc: TTestProc;
+  const ADisplayName: string; const ATags: array of string);
+var
+  LEntry: TTestEntry;
+  I: Integer;
+begin
+  LEntry.Name        := AName;
+  LEntry.Proc        := AProc;
+  LEntry.Closure     := nil;
+  LEntry.SubtestProc := nil;
+  LEntry.Kind        := ekTest;
+  LEntry.SkipReason  := '';
+  LEntry.RetryCount  := 0;
+  LEntry.DisplayName := ADisplayName;
+  LEntry.RepeatCount := 0;
+  SetLength(LEntry.Tags, Length(ATags));
+  for I := 0 to High(ATags) do
+    LEntry.Tags[I] := ATags[I];
+  SetLength(Tests, Length(Tests) + 1);
+  Tests[High(Tests)] := LEntry;
+end;
+
+procedure TTestSuite.Test(const AName: string; AProc: TTestClosure;
+  const ADisplayName: string; const ATags: array of string);
+var
+  LEntry: TTestEntry;
+  I: Integer;
+begin
+  LEntry.Name        := AName;
+  LEntry.Proc        := nil;
+  LEntry.Closure     := AProc;
+  LEntry.SubtestProc := nil;
+  LEntry.Kind        := ekTest;
+  LEntry.SkipReason  := '';
+  LEntry.RetryCount  := 0;
+  LEntry.DisplayName := ADisplayName;
+  LEntry.RepeatCount := 0;
+  SetLength(LEntry.Tags, Length(ATags));
+  for I := 0 to High(ATags) do
+    LEntry.Tags[I] := ATags[I];
+  SetLength(Tests, Length(Tests) + 1);
+  Tests[High(Tests)] := LEntry;
+end;
+
+procedure TTestSuite.TestRepeat(const AName: string; AProc: TTestProc;
+  ARepeatCount: Integer);
+var
+  LEntry: TTestEntry;
+begin
+  LEntry.Name        := AName;
+  LEntry.Proc        := AProc;
+  LEntry.Closure     := nil;
+  LEntry.SubtestProc := nil;
+  LEntry.Kind        := ekTest;
+  LEntry.SkipReason  := '';
+  LEntry.RetryCount  := 0;
+  LEntry.DisplayName := '';
+  LEntry.Tags        := nil;
+  LEntry.RepeatCount := ARepeatCount;
+  SetLength(Tests, Length(Tests) + 1);
+  Tests[High(Tests)] := LEntry;
+end;
+
+procedure TTestSuite.TestRepeat(const AName: string; AProc: TTestClosure;
+  ARepeatCount: Integer);
+var
+  LEntry: TTestEntry;
+begin
+  LEntry.Name        := AName;
+  LEntry.Proc        := nil;
+  LEntry.Closure     := AProc;
+  LEntry.SubtestProc := nil;
+  LEntry.Kind        := ekTest;
+  LEntry.SkipReason  := '';
+  LEntry.RetryCount  := 0;
+  LEntry.DisplayName := '';
+  LEntry.Tags        := nil;
+  LEntry.RepeatCount := ARepeatCount;
   SetLength(Tests, Length(Tests) + 1);
   Tests[High(Tests)] := LEntry;
 end;
@@ -317,6 +523,9 @@ begin
   LEntry.Kind        := ekSubtest;
   LEntry.SkipReason  := '';
   LEntry.RetryCount  := 0;
+  LEntry.DisplayName := '';
+  LEntry.Tags        := nil;
+  LEntry.RepeatCount := 0;
   SetLength(Tests, Length(Tests) + 1);
   Tests[High(Tests)] := LEntry;
 end;
@@ -344,6 +553,9 @@ begin
     LEntry.Kind       := ekTableTest;
     LEntry.SkipReason := '';
     LEntry.RetryCount := 0;
+    LEntry.DisplayName := '';
+    LEntry.Tags       := nil;
+    LEntry.RepeatCount := 0;
     LEntry.TableCase  := LPCase;
     LEntry.TableProc  := LPProc;
     SetLength(Tests, Length(Tests) + 1);
@@ -361,6 +573,9 @@ begin
   LEntry.Kind        := ekSkipped;
   LEntry.SkipReason  := AReason;
   LEntry.RetryCount  := 0;
+  LEntry.DisplayName := '';
+  LEntry.Tags        := nil;
+  LEntry.RepeatCount := 0;
   SetLength(Tests, Length(Tests) + 1);
   Tests[High(Tests)] := LEntry;
 end;
@@ -500,6 +715,10 @@ var
   LTotalRetries: Integer;
   LRetriesLeft: Integer;
   LStartMs: Int64;
+  LRepeatCount: Integer;
+  LRepeatI: Integer;
+  LTagFilter: string;
+  LDisplayName: string;
 begin
   AResult := TTestRunResult.Create(Name);
   LPass := 0;
@@ -511,6 +730,7 @@ begin
   LOutSink := ResolveOutSink(LConfig);
   LErrSink := ResolveErrSink(LConfig);
   LGTestTimeoutMs := GetTestTimeout(LConfig);
+  LTagFilter := GetTagFilter(LConfig);
   try
 
   LOutSink.WriteLn('');
@@ -563,6 +783,12 @@ begin
     if not MatchesFilter(LEntry.Name, LConfig) then
     begin
       { Not counted as pass/fail/skip — just invisible }
+      Continue;
+    end;
+
+    { Tag filter — skip tests that don't match the tag filter }
+    if not MatchesTagFilter(LEntry.Tags, LTagFilter) then
+    begin
       Continue;
     end;
 
@@ -628,6 +854,12 @@ begin
     end;
 
     LStartMs := GetTickCount64;
+    LDisplayName := GetDisplayName(LEntry);
+    { RepeatCount: 0 means 1 run. >1 means repeat N times. }
+    if LEntry.RepeatCount > 1 then
+      LRepeatCount := LEntry.RepeatCount
+    else
+      LRepeatCount := 1;
     try
       if LEntry.Kind = ekSubtest then
       begin
@@ -666,6 +898,10 @@ begin
       end
       else
       begin
+        { Run with retry support + repeat support: if RepeatCount > 1, run
+          the test that many times and report the last result. }
+        for LRepeatI := 1 to LRepeatCount do
+        begin
         { Run with retry support: if test fails and retries remain, re-run. }
         LTotalRetries := LEntry.RetryCount;
         if LTotalRetries = 0 then
@@ -726,6 +962,7 @@ begin
             IntToStr(LTotalRetries - LRetriesLeft) + '/' +
             IntToStr(LTotalRetries) + ')...');
         until False;
+        end; { end repeat loop }
 
         if LStatus = tsPassed then Inc(LPass)
         else if LStatus = tsSkipped then Inc(LSkip)
@@ -792,18 +1029,24 @@ begin
     LTestResult.Status   := LStatus;
     LTestResult.Message  := LLastFailMsg;
     LTestResult.Duration := GetTickCount64 - LStartMs;
+    { Copy captured log lines on failure/error for report output }
+    if (LStatus in [tsFailed, tsError]) and (LSubCtx <> nil) and
+       (Length(LSubCtx.FLogLines) > 0) then
+      LTestResult.CapturedLog := LSubCtx.FLogLines
+    else
+      LTestResult.CapturedLog := nil;
     SetLength(AResult.Results, Length(AResult.Results) + 1);
     AResult.Results[High(AResult.Results)] := LTestResult;
 
-    { Output per-test }
+    { Output per-test — use DisplayName }
     case LStatus of
       tsPassed:
-        LOutSink.WriteLn('  ' + StatusDot(tsPassed, LConfig) + ' ' + LEntry.Name);
+        LOutSink.WriteLn('  ' + StatusDot(tsPassed, LConfig) + ' ' + LDisplayName);
       tsFailed:
         begin
           LOutSink.WriteLn(
             '  ' + StatusDot(tsFailed, LConfig) + ' ' +
-            AnsiRed(LEntry.Name, LConfig));
+            AnsiRed(LDisplayName, LConfig));
           if LLastFailMsg <> '' then
             LOutSink.WriteLn('    ' + AnsiDim(LLastFailMsg, LConfig))
           else
@@ -814,17 +1057,17 @@ begin
           if LEntry.SkipReason <> '' then
             LOutSink.WriteLn(
               '  ' + StatusDot(tsSkipped, LConfig) + ' ' +
-              AnsiDim(LEntry.Name, LConfig) + ' -- ' + LEntry.SkipReason)
+              AnsiDim(LDisplayName, LConfig) + ' -- ' + LEntry.SkipReason)
           else
             LOutSink.WriteLn(
               '  ' + StatusDot(tsSkipped, LConfig) + ' ' +
-              AnsiDim(LEntry.Name, LConfig));
+              AnsiDim(LDisplayName, LConfig));
         end;
       tsError:
         begin
           LOutSink.WriteLn(
             '  ' + StatusDot(tsError, LConfig) + ' ' +
-            AnsiRed(LEntry.Name, LConfig) + ' [unexpected exception]');
+            AnsiRed(LDisplayName, LConfig) + ' [unexpected exception]');
           if LLastFailMsg <> '' then
             LOutSink.WriteLn('    ' + AnsiDim(LLastFailMsg, LConfig));
         end;
@@ -953,6 +1196,7 @@ var
   LResults: array of TTestResult;
   LConfig: TTestConfig;
   LOutSink: IOutputSink;
+  LTagFilter: string;
 begin
   AResult := TTestRunResult.Create(Name);
   LTotal := Length(Tests);
@@ -962,6 +1206,7 @@ begin
   LMtx := Mutex();
   LConfig := ResolveConfig(Config);
   LOutSink := ResolveOutSink(LConfig);
+  LTagFilter := GetTagFilter(LConfig);
 
   LOutSink.WriteLn('');
   LOutSink.WriteLn(
@@ -1004,6 +1249,12 @@ begin
       LThreads[I] := 0;  { no thread for this slot — also marks filter-excluded }
       Continue;
     end;
+    { Tag filter }
+    if not MatchesTagFilter(Tests[I].Tags, LTagFilter) then
+    begin
+      LThreads[I] := 0;
+      Continue;
+    end;
 
     LRecs[I].Entry     := Tests[I];
     LRecs[I].SuiteName := Name;
@@ -1029,6 +1280,11 @@ begin
   begin
     { Skip filtered-out tests — LRecs[I] is uninitialized for them }
     if not MatchesFilter(Tests[I].Name, LConfig) then
+    begin
+      LThreads[I] := 0;
+      Continue;
+    end;
+    if not MatchesTagFilter(Tests[I].Tags, LTagFilter) then
     begin
       LThreads[I] := 0;
       Continue;

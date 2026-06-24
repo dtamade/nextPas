@@ -50,6 +50,7 @@ type
 
   TTestConfig = record
     FilterPattern: string;
+    TagFilter: string;  { comma-separated tag filter; empty = no tag filter }
     TimeoutMs: UInt64;
     AnsiMode: TAnsiMode;
     OutSink: IOutputSink;
@@ -63,6 +64,7 @@ function ResolveOutSink(const AConfig: TTestConfig): IOutputSink;
 function ResolveErrSink(const AConfig: TTestConfig): IOutputSink;
 procedure ResetDefaultConfig;
 procedure SetDefaultFilterPattern(const APattern: string);
+procedure SetDefaultTagFilter(const APattern: string);
 procedure SetDefaultTimeoutMs(ATimeoutMs: UInt64);
 procedure SetDefaultAnsiMode(AAnsiMode: TAnsiMode);
 procedure SetDefaultOutSink(const ASink: IOutputSink);
@@ -77,6 +79,7 @@ var
 function CreateDefaultConfig: TTestConfig;
 begin
   Result.FilterPattern := '';
+  Result.TagFilter := '';
   Result.TimeoutMs := 0;
   Result.AnsiMode := amAuto;
   Result.OutSink := TStdoutSink.Create;
@@ -97,6 +100,8 @@ begin
   LDefaults := DefaultConfig;
   if Result.FilterPattern = '' then
     Result.FilterPattern := LDefaults.FilterPattern;
+  if Result.TagFilter = '' then
+    Result.TagFilter := LDefaults.TagFilter;
   if Result.TimeoutMs = 0 then
     Result.TimeoutMs := LDefaults.TimeoutMs;
   if Result.AnsiMode = amAuto then
@@ -127,6 +132,11 @@ end;
 procedure SetDefaultFilterPattern(const APattern: string);
 begin
   GDefaultConfig.FilterPattern := APattern;
+end;
+
+procedure SetDefaultTagFilter(const APattern: string);
+begin
+  GDefaultConfig.TagFilter := APattern;
 end;
 
 procedure SetDefaultTimeoutMs(ATimeoutMs: UInt64);

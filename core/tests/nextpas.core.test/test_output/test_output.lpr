@@ -6,6 +6,8 @@
 program test_output;
 
 {$mode objfpc}{$H+}{$J-}
+{$modeswitch anonymousfunctions}
+{$modeswitch functionreferences}
 
 uses
   cthreads,
@@ -479,7 +481,7 @@ begin
   LResults[0].Results[0].Message := 'not ready';
 
   LXml := JUnitXML(LResults);
-  CheckContains(LXml, '<skipped/>');
+  CheckContains(LXml, '<skipped message="not ready"/>');
 end;
 
 procedure TestJUnitXMLErrorTestCase;
@@ -865,14 +867,10 @@ end;
 
 procedure TestStatusDotUnicodeName;
 var
-  LResult: TTestResult;
   LDot: string;
 begin
   Inc(GTestsRun);
   { Calling StatusDot with Unicode content in the test name should not crash }
-  LResult.Name := #226#130#172' Test'; { UTF-8 Euro sign + space }
-  LResult.Status := tsPassed;
-  LResult.Message := '';
   LDot := StatusDot(tsPassed);
   CheckTrue(Length(LDot) > 0, 'StatusDot should return non-empty');
   { Also test other statuses with a Unicode name for crash-safety }
@@ -999,6 +997,290 @@ begin
   CheckContains(AnsiGreen('x'), #27'[');
 end;
 
+{ ── Phase 3: Tag Filter ───────────────────────────────────────────────────── }
+
+procedure TestSetGetTagFilter;
+begin
+  Inc(GTestsRun);
+  SetTagFilter('fast,unit');
+  CheckEqual('fast,unit', GetTagFilter);
+  SetTagFilter('');
+  CheckEqual('', GetTagFilter);
+end;
+
+{ ── Phase 3: DisplayName in runner output ──────────────────────────────────── }
+
+var
+  GRepeatCounter: Integer = 0;
+
+procedure DummyTest;
+begin
+end;
+
+procedure RepeatCountingTest;
+begin
+  Inc(GRepeatCounter);
+end;
+
+procedure TestDisplayNameInOutput;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  LConfig: TTestConfig;
+  LSink: TBufferSink;
+  LOut: string;
+begin
+  Inc(GTestsRun);
+  LSink := TBufferSink.Create;
+  LConfig := DefaultConfig;
+  LConfig.OutSink := LSink;
+  LConfig.AnsiMode := amOff;
+
+  LSuite := TTestSuite.Create('disp');
+  LSuite.Config := LConfig;
+  LSuite.Test('internal_name', @DummyTest, 'My Display Name', []);
+  LSuite.RunWithResult(LResult);
+
+  LOut := LSink.GetOutput;
+  CheckContains(LOut, 'My Display Name');
+  CheckFalse(Pos('internal_name', LOut) > 0,
+    'DisplayName should replace Name in output');
+  { Do NOT free LSink — it's managed via IOutputSink interface reference counting }
+end;
+
+procedure TestDisplayNameDefaultUsesName;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  LConfig: TTestConfig;
+  LSink: TBufferSink;
+  LOut: string;
+begin
+  Inc(GTestsRun);
+  LSink := TBufferSink.Create;
+  LConfig := DefaultConfig;
+  LConfig.OutSink := LSink;
+  LConfig.AnsiMode := amOff;
+
+  LSuite := TTestSuite.Create('disp');
+  LSuite.Config := LConfig;
+  LSuite.Test('my_test', @DummyTest);
+  LSuite.RunWithResult(LResult);
+
+  LOut := LSink.GetOutput;
+  CheckContains(LOut, 'my_test');
+  { Do NOT free LSink }
+end;
+
+{ ── Phase 3: Tag filtering ────────────────────────────────────────────────── }
+
+procedure TestTagFilterExcludes;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  LConfig: TTestConfig;
+  LSink: TBufferSink;
+  LOut: string;
+begin
+  Inc(GTestsRun);
+  LSink := TBufferSink.Create;
+  LConfig := DefaultConfig;
+  LConfig.OutSink := LSink;
+  LConfig.AnsiMode := amOff;
+  LConfig.TagFilter := 'fast';
+
+  LSuite := TTestSuite.Create('tags');
+  LSuite.Config := LConfig;
+  LSuite.Test('fast_test', @DummyTest, ['fast']);
+  LSuite.Test('slow_test', @DummyTest, ['slow']);
+  LSuite.Test('no_tag_test', @DummyTest);
+  LSuite.RunWithResult(LResult);
+
+  LOut := LSink.GetOutput;
+  { fast_test should appear (has 'fast' tag) }
+  CheckContains(LOut, 'fast_test');
+  { slow_test should NOT appear (no 'fast' tag) }
+  CheckFalse(Pos('slow_test', LOut) > 0, 'slow_test should be filtered out');
+  { no_tag_test should NOT appear (no tags at all) }
+  CheckFalse(Pos('no_tag_test', LOut) > 0, 'no_tag_test should be filtered out');
+  { Only 1 test should have passed }
+  CheckEqual(1, LResult.Passed);
+  { Do NOT free LSink }
+end;
+
+procedure TestTagFilterEmptyMatchesAll;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  LConfig: TTestConfig;
+  LSink: TBufferSink;
+begin
+  Inc(GTestsRun);
+  LSink := TBufferSink.Create;
+  LConfig := DefaultConfig;
+  LConfig.OutSink := LSink;
+  LConfig.AnsiMode := amOff;
+  LConfig.TagFilter := '';
+
+  LSuite := TTestSuite.Create('tags');
+  LSuite.Config := LConfig;
+  LSuite.Test('a', @DummyTest, ['fast']);
+  LSuite.Test('b', @DummyTest, ['slow']);
+  LSuite.Test('c', @DummyTest);
+  LSuite.RunWithResult(LResult);
+
+  CheckEqual(3, LResult.Passed);
+  { Do NOT free LSink }
+end;
+
+{ ── Phase 3: RepeatCount ──────────────────────────────────────────────────── }
+
+procedure TestRepeatCount;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  LConfig: TTestConfig;
+  LSink: TBufferSink;
+begin
+  Inc(GTestsRun);
+  GRepeatCounter := 0;
+  LSink := TBufferSink.Create;
+  LConfig := DefaultConfig;
+  LConfig.OutSink := LSink;
+  LConfig.AnsiMode := amOff;
+
+  LSuite := TTestSuite.Create('repeat');
+  LSuite.Config := LConfig;
+  LSuite.TestRepeat('repeat_3', @RepeatCountingTest, 3);
+  LSuite.RunWithResult(LResult);
+
+  { Should report as 1 passed test (last result) }
+  CheckEqual(1, LResult.Passed);
+  { Should have been called 3 times }
+  CheckEqual(3, GRepeatCounter);
+  { Do NOT free LSink }
+end;
+
+{ ── Phase 3: CapturedLog in JUnit XML ─────────────────────────────────────── }
+
+procedure TestJUnitCapturedLogInFailure;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LXml: string;
+begin
+  Inc(GTestsRun);
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('caplog');
+  LResults[0].Failed := 1;
+  SetLength(LResults[0].Results, 1);
+  LResults[0].Results[0].Name := 'fail_test';
+  LResults[0].Results[0].Status := tsFailed;
+  LResults[0].Results[0].Message := 'assertion failed';
+  SetLength(LResults[0].Results[0].CapturedLog, 2);
+  LResults[0].Results[0].CapturedLog[0] := 'log line 1';
+  LResults[0].Results[0].CapturedLog[1] := 'log line 2';
+
+  LXml := JUnitXML(LResults);
+  CheckContains(LXml, '<failure type="AssertionFailure"');
+  CheckContains(LXml, 'log line 1');
+  CheckContains(LXml, 'log line 2');
+end;
+
+procedure TestJUnitSkipReason;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LXml: string;
+begin
+  Inc(GTestsRun);
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('skipreason');
+  LResults[0].Skipped := 1;
+  SetLength(LResults[0].Results, 1);
+  LResults[0].Results[0].Name := 'sk_test';
+  LResults[0].Results[0].Status := tsSkipped;
+  LResults[0].Results[0].Message := 'platform not supported';
+
+  LXml := JUnitXML(LResults);
+  CheckContains(LXml, '<skipped message="platform not supported"/>');
+end;
+
+{ ── Phase 3: CapturedLog in TAP ───────────────────────────────────────────── }
+
+procedure TestTAPCapturedLogInFailure;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+begin
+  Inc(GTestsRun);
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('TapLog');
+  LResults[0].Failed := 1;
+  SetLength(LResults[0].Results, 1);
+  LResults[0].Results[0].Name := 'fail_with_log';
+  LResults[0].Results[0].Status := tsFailed;
+  LResults[0].Results[0].Message := 'expected 1 got 2';
+  SetLength(LResults[0].Results[0].CapturedLog, 2);
+  LResults[0].Results[0].CapturedLog[0] := 'step: init';
+  LResults[0].Results[0].CapturedLog[1] := 'step: compute';
+
+  LOut := TAPReport(LResults);
+  CheckContains(LOut, 'not ok');
+  CheckContains(LOut, 'expected 1 got 2');
+  CheckContains(LOut, 'log: |-');
+  CheckContains(LOut, 'step: init');
+  CheckContains(LOut, 'step: compute');
+end;
+
+{ ── Phase 3: CapturedLog in JSON ──────────────────────────────────────────── }
+
+procedure TestJSONCapturedLogInFailure;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+begin
+  Inc(GTestsRun);
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('JsLog');
+  LResults[0].Failed := 1;
+  SetLength(LResults[0].Results, 1);
+  LResults[0].Results[0].Name := 'fail_with_log';
+  LResults[0].Results[0].Status := tsFailed;
+  LResults[0].Results[0].Message := 'boom';
+  SetLength(LResults[0].Results[0].CapturedLog, 1);
+  LResults[0].Results[0].CapturedLog[0] := 'debug output';
+
+  LOut := JSONReport(LResults);
+  CheckContains(LOut, '"capturedLog"');
+  CheckContains(LOut, '"debug output"');
+end;
+
+{ ── Phase 3: Tags via runner Test overload ────────────────────────────────── }
+
+procedure TestRunnerTagsOverload;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  LConfig: TTestConfig;
+  LSink: TBufferSink;
+begin
+  Inc(GTestsRun);
+  LSink := TBufferSink.Create;
+  LConfig := DefaultConfig;
+  LConfig.OutSink := LSink;
+  LConfig.AnsiMode := amOff;
+
+  LSuite := TTestSuite.Create('tag_runner');
+  LSuite.Config := LConfig;
+  LSuite.Test('tagged_test', @DummyTest, ['fast', 'unit']);
+  LSuite.RunWithResult(LResult);
+
+  CheckEqual(1, LResult.Passed);
+  CheckEqual(2, Length(LSuite.Tests[0].Tags));
+  CheckEqual('fast', LSuite.Tests[0].Tags[0]);
+  CheckEqual('unit', LSuite.Tests[0].Tags[1]);
+  { Do NOT free LSink }
+end;
+
 var
   Suite: TTestSuite;
   Runner: TTestRunner;
@@ -1061,13 +1343,26 @@ begin
   Suite.Test('XmlEscape control chars',   @TestXmlEscapeControlChars);
   Suite.Test('ANSI state restoration',    @TestAnsiStateRestoration);
 
+  { Phase 3: Tag Filter / DisplayName / Repeat / CapturedLog / Reports }
+  Suite.Test('TestSetGetTagFilter',           @TestSetGetTagFilter);
+  Suite.Test('TestDisplayNameInOutput',       @TestDisplayNameInOutput);
+  Suite.Test('TestDisplayNameDefaultUsesName', @TestDisplayNameDefaultUsesName);
+  Suite.Test('TestTagFilterExcludes',         @TestTagFilterExcludes);
+  Suite.Test('TestTagFilterEmptyMatchesAll',  @TestTagFilterEmptyMatchesAll);
+  Suite.Test('TestRepeatCount',               @TestRepeatCount);
+  Suite.Test('TestJUnitCapturedLogInFailure', @TestJUnitCapturedLogInFailure);
+  Suite.Test('TestJUnitSkipReason',           @TestJUnitSkipReason);
+  Suite.Test('TestTAPCapturedLogInFailure',   @TestTAPCapturedLogInFailure);
+  Suite.Test('TestJSONCapturedLogInFailure',  @TestJSONCapturedLogInFailure);
+  Suite.Test('TestRunnerTagsOverload',        @TestRunnerTagsOverload);
+
   Runner := TTestRunner.Create('output-tests');
   Runner.Add(Suite);
   LSuccess := Runner.RunAllWithResult(LResults);
   WriteLn;
   Runner.Summary;
 
-  CheckTrue(GTestsRun >= 46, 'Expected at least 46 tests, got ' + IntToStr(GTestsRun));
+  CheckTrue(GTestsRun >= 58, 'Expected at least 58 tests, got ' + IntToStr(GTestsRun));
   CheckTrue(LSuccess, 'All output tests should pass');
 
   if Runner.AllPassed then

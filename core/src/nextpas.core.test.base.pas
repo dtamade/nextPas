@@ -72,6 +72,7 @@ type
     Status  : TTestStatus;
     Message : string;  { fail message or skip reason }
     Duration: Int64;   { milliseconds, 0 if not measured }
+    CapturedLog: specialize TArray<string>;  { Ctx.Log output, populated on failure }
   end;
 
   TTestResults = array of TTestResult;
@@ -102,6 +103,9 @@ type
     Kind       : TTestEntryKind;
     SkipReason : string;
     RetryCount : Integer;  { >0 means retry this many times before failing }
+    DisplayName: string;  { empty = use Name for output }
+    Tags       : specialize TArray<string>;  { used for tag-based filtering }
+    RepeatCount: Integer;  { >1 = repeat this test N times, report last result }
     { Table-driven test fields (used when Kind = ekTableTest).
       Heap-allocated via New() in TestTable, disposed via CleanupTableAllocations()
       in runner.pas. Caller MUST ensure CleanupTableAllocations is called after
