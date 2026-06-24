@@ -4,7 +4,7 @@ PROJECTS := test_bench_baseline test_bench_stats test_bench_stats_advanced \
             test_bench_parallel_memtrack_heaptrc test_bench_memtrack \
             test_bench_xlang test_bench_invalid_parameters_heaptrc
 
-.PHONY: test clean $(PROJECTS)
+.PHONY: test clean bench $(PROJECTS)
 
 test:
 	@status=0; \
@@ -17,10 +17,14 @@ test:
 	done; \
 	exit $$status
 
+bench:
+	@$(MAKE) -C ../../benchmarks/nextpas.core.bench test
+
 clean:
 	@for project in $(PROJECTS); do \
 		[ ! -d "$$project" ] || $(MAKE) -C $$project clean; \
 	done
+	@$(MAKE) -C ../../benchmarks/nextpas.core.bench clean 2>/dev/null || true
 
 $(PROJECTS):
 	$(MAKE) -C $@ test

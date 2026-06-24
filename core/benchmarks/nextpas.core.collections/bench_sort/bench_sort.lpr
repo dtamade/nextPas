@@ -1,10 +1,17 @@
+{
+  bench_sort.lpr — nextPas Vec.Sort Benchmark
+  Migrated from TBenchRunner to TBenchSuite fluent API.
+  Demonstrates TBenchSuite + TBenchFunc usage as a reference implementation.
+}
 program bench_sort;
 
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.bench,
+  nextpas.core.bench.base,
+  nextpas.core.bench.intf,
+  nextpas.core.time.base,
   nextpas.core.collections.vec;
 
 type
@@ -19,7 +26,6 @@ var
   GReversedData: array[0..N-1] of Integer;
   GAllSameData: array[0..N-1] of Integer;
   GVec: TIntVec;
-  B: TBenchRunner;
 
 procedure InitData;
 var
@@ -35,54 +41,56 @@ begin
   end;
 end;
 
-procedure ReloadAndSort(aData: PInteger; aIters: Int64);
+{ TBenchFunc: 每次调用执行一次操作，框架负责循环 }
+procedure BenchSort_Random(const ACtx: IBenchContext);
+begin
+  GVec.WriteUnchecked(0, @GRandomData[0], N);
+  GVec.Sort;
+  ACtx.SetBytes(N * SizeOf(Integer));
+end;
+
+procedure BenchSort_Sorted(const ACtx: IBenchContext);
+begin
+  GVec.WriteUnchecked(0, @GSortedData[0], N);
+  GVec.Sort;
+  ACtx.SetBytes(N * SizeOf(Integer));
+end;
+
+procedure BenchSort_Reversed(const ACtx: IBenchContext);
+begin
+  GVec.WriteUnchecked(0, @GReversedData[0], N);
+  GVec.Sort;
+  ACtx.SetBytes(N * SizeOf(Integer));
+end;
+
+procedure BenchSort_AllSame(const ACtx: IBenchContext);
+begin
+  GVec.WriteUnchecked(0, @GAllSameData[0], N);
+  GVec.Sort;
+  ACtx.SetBytes(N * SizeOf(Integer));
+end;
+
 var
-  it: Int64;
-begin
-  for it := 1 to aIters do
-  begin
-    GVec.WriteUnchecked(0, aData, N);
-    GVec.Sort;
-  end;
-end;
-
-procedure BenchRandom(aIters: Int64);
-begin
-  ReloadAndSort(@GRandomData[0], aIters);
-end;
-
-procedure BenchSorted(aIters: Int64);
-begin
-  ReloadAndSort(@GSortedData[0], aIters);
-end;
-
-procedure BenchReversed(aIters: Int64);
-begin
-  ReloadAndSort(@GReversedData[0], aIters);
-end;
-
-procedure BenchAllSame(aIters: Int64);
-begin
-  ReloadAndSort(@GAllSameData[0], aIters);
-end;
-
+  LResults: IBenchResults;
 begin
   InitData;
   GVec := TIntVec.Create(N);
   GVec.Resize(N);
   try
-    WriteLn('=== nextPas Vec.Sort Benchmark (N=', N, ') ===');
+    LResults := TBenchSuite.Create('Vec.Sort')
+      .SetMinDuration(TDuration.FromMilliseconds(5))
+      .SetMaxIterations(5000)
+      .SetMinSamples(3)
+      .SetWarmupIters(1)
+      .Add('random/10000', @BenchSort_Random)
+      .Add('sorted/10000', @BenchSort_Sorted)
+      .Add('reversed/10000', @BenchSort_Reversed)
+      .Add('all-same/10000', @BenchSort_AllSame)
+      .Run;
+
+    WriteLn(LResults.PrintToConsole);
     WriteLn;
-    B := TBenchRunner.Create;
-    try
-      B.Run('Vec.Sort/random', @BenchRandom);
-      B.Run('Vec.Sort/sorted', @BenchSorted);
-      B.Run('Vec.Sort/reversed', @BenchReversed);
-      B.Run('Vec.Sort/all-same', @BenchAllSame);
-      B.Summary;
-    finally
-      B.Free;
-    end;
+    WriteLn(LResults.ToBenchstat);
   finally
     GVec.Free;
   end;

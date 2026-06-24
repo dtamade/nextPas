@@ -219,6 +219,31 @@ begin
   CheckContains(LHTML, '<h2>Detailed Statistics</h2>', 'Contains statistics header');
 end;
 
+procedure TestToBenchstat;
+var
+  LResults: array of TBenchResult;
+  LBenchstat: string;
+begin
+  WriteLn('TestToBenchstat:');
+
+  LResults := CreateTestResults;
+
+  GGenerator.SetResults(LResults);
+  LBenchstat := GGenerator.ToBenchstat;
+
+  CheckContains(LBenchstat, 'name', 'Contains header name');
+  CheckContains(LBenchstat, 'ns/op', 'Contains header ns/op');
+  CheckContains(LBenchstat, '+- %', 'Contains header +- %');
+  CheckContains(LBenchstat, 'B/op', 'Contains header B/op');
+  CheckContains(LBenchstat, 'allocs/op', 'Contains header allocs/op');
+  CheckContains(LBenchstat, 'HashMap.Put', 'Contains first benchmark');
+  CheckContains(LBenchstat, '245.3', 'Contains NsPerOp value');
+  CheckContains(LBenchstat, 'HashMap.Get(hit)', 'Contains second benchmark');
+  CheckContains(LBenchstat, '89.2', 'Contains second NsPerOp');
+  CheckContains(LBenchstat, 'Bytes.Compare', 'Contains third benchmark');
+  CheckContains(LBenchstat, '1024', 'Contains BytesPerOp');
+end;
+
 procedure TestToCrossLanguageHTML;
 var
   LEntries: TCrossLangEntryArray;
@@ -634,6 +659,8 @@ begin
     TestToTSV;
     WriteLn;
     TestToHTML;
+    WriteLn;
+    TestToBenchstat;
     WriteLn;
     TestToCrossLanguageHTML;
     WriteLn;

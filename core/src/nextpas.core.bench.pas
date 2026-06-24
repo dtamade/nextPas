@@ -81,6 +81,7 @@ type
     function AddRange(const AName: string; AFunc: TBenchParamFunc;
       const AParams: array of Int64;
       ASetup: TBenchSetupFunc; ATeardown: TBenchTeardownFunc): IBenchSuite;
+    {** [Experimental] 用户控制循环 — TBenchLoopFunc 不支持 IBenchContext }
     function AddLoop(const AName: string; AFunc: TBenchLoopFunc): IBenchSuite;
     function Clear: IBenchSuite;
     function RemoveByName(const AName: string): IBenchSuite;
@@ -133,6 +134,7 @@ type
     function ToJSON: string;
     function ToTSV: string;
     function ToHTML: string;
+    function ToBenchstat: string;
     procedure SaveToJSON(const APath: string);
     procedure SaveToHTML(const APath: string);
     procedure SaveToTSV(const APath: string);
@@ -800,6 +802,12 @@ begin
   FReportGenerator.SetResults(FResults);
   FReportGenerator.SetEnvironment(FEnvironment);
   Result := FReportGenerator.ToHTML;
+end;
+
+function TBenchResults.ToBenchstat: string;
+begin
+  FReportGenerator.SetResults(FResults);
+  Result := FReportGenerator.ToBenchstat;
 end;
 
 procedure TBenchResults.SaveStringToFile(const APath, AContent, AFormat: string);

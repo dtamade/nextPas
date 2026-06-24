@@ -136,7 +136,7 @@ type
       const AParams: array of Int64;
       ASetup: TBenchSetupFunc; ATeardown: TBenchTeardownFunc): IBenchSuite;
 
-    {** 添加用户控制循环的基准测试 }
+    {** [Experimental] 添加用户控制循环的基准测试 — TBenchLoopFunc 不支持 IBenchContext }
     function AddLoop(const AName: string; AFunc: TBenchLoopFunc): IBenchSuite;
 
     {** 清空所有已注册条目 (DS-03) }
@@ -220,6 +220,9 @@ type
 
     {** 生成 HTML 报告 }
     function ToHTML: string;
+
+    {** 生成 benchstat 兼容格式 (Go benchstat 工具可直接解析) }
+    function ToBenchstat: string;
 
     {** 导出到 JSON 文件 }
     procedure SaveToJSON(const APath: string);

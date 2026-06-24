@@ -106,6 +106,9 @@ type
     {** 生成基线对比报告 }
     function GenerateComparisonReport(
       const ABaselines: array of TBenchComparison): string;
+
+    {** 生成 benchstat 兼容格式 (Go benchstat 工具可直接解析) }
+    function ToBenchstat: string;
   end;
 
 implementation
@@ -1086,6 +1089,49 @@ begin
        FormatTime(ABaselines[i].BaselineNsPerOp),
        FormatNumber(ABaselines[i].Ratio, 2) + 'x',
        LStatus]));
+  end;
+
+  Result := BufferToString(LLines);
+end;
+
+function TBenchReportGenerator.ToBenchstat: string;
+var
+  LLines: TLineBuffer;
+  LPct: Double;
+  LBytes, LAllocs: string;
+  I: Integer;
+begin
+  LLines := Default(TLineBuffer);
+
+  { benchstat 兼容的 tab-separated 表头 }
+  BufferAddLine(LLines, TextFormat('%-40s %12s %8s %12s %10s',
+    ['name', 'ns/op', '+- %', 'B/op', 'allocs/op']));
+
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Skipped then
+      Continue;
+
+    if FResults[I].NsPerOp > 0 then
+      LPct := (FResults[I].StdDev / FResults[I].NsPerOp) * 100.0
+    else
+      LPct := 0;
+
+    if FResults[I].BytesPerOp > 0 then
+      LBytes := IntToStr(FResults[I].BytesPerOp)
+    else
+      LBytes := '-';
+    if FResults[I].AllocsPerOp > 0 then
+      LAllocs := IntToStr(FResults[I].AllocsPerOp)
+    else
+      LAllocs := '-';
+
+    BufferAddLine(LLines, TextFormat('%-40s %12s %7s%% %12s %10s',
+      [FResults[I].Name,
+       FormatNumber(FResults[I].NsPerOp, 1),
+       FormatNumber(LPct, 0),
+       LBytes,
+       LAllocs]));
   end;
 
   Result := BufferToString(LLines);
