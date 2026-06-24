@@ -341,8 +341,8 @@ begin
   end;
 end;
 
-function AnalyzeSourceHasAnyError(
-  const ASource: string; const ACodeA, ACodeB: string): Boolean;
+function AnalyzeSourceHasError(
+  const ASource, ACode: string): Boolean;
 var
   Diagnostics: TDiagnosticsSink;
   Lexer: TLexerResult;
@@ -371,7 +371,7 @@ begin
     if Diagnostics.HasErrors then
     begin
       Code := Diagnostics.LastDiagnosticCode;
-      Result := SameText(Code, ACodeA) or SameText(Code, ACodeB);
+      Result := SameText(Code, ACode);
     end;
   finally
     Analyzer.Free;
@@ -443,27 +443,45 @@ begin
   end;
 end;
 
-procedure RequireAnalyzeDeferredError(const ASource, AMessage: string);
-const
-  C6H4Code = 'sema.c6h4-owned-string-return-deferred-consumer';
-  C6H5Code = 'sema.c6h5-owned-string-temp-unsupported-consumer';
+procedure RequireAnalyzeError(const ASource, ACode, AMessage: string);
 begin
-  if not AnalyzeSourceHasAnyError(ASource, C6H4Code, C6H5Code) then
+  if not AnalyzeSourceHasError(ASource, ACode) then
     Fail(AMessage);
 end;
 
-procedure AssertDeferredConsumersFailClosed;
+procedure RequireAnalyzeReady(const ASource, AMessagePrefix: string);
+var
+  Model: TSemanticModel;
 begin
-  RequireAnalyzeDeferredError(VarParamOwnedArgumentSource,
-    'var-param-owned-string-temp-consumer-must-fail-closed');
-  RequireAnalyzeDeferredError(OutParamOwnedArgumentSource,
-    'out-param-owned-string-temp-consumer-must-fail-closed');
-  RequireAnalyzeDeferredError(VirtualOwnedArgumentSource,
+  Model := BuildModel(ASource);
+  try
+    if Model = nil then
+      Fail(AMessagePrefix + '-model-nil');
+    if not SameText(Model.Status, 'ready') then
+      Fail(AMessagePrefix + '-must-pass-sema');
+  finally
+    Model.Free;
+  end;
+end;
+
+procedure AssertDeferredConsumersFailClosed;
+const
+  DeferredCode = 'sema.c6h4-owned-string-return-deferred-consumer';
+begin
+  RequireAnalyzeError(VirtualOwnedArgumentSource, DeferredCode,
     'virtual-owned-string-temp-consumer-must-fail-closed');
-  RequireAnalyzeDeferredError(InterfaceOwnedArgumentSource,
+  RequireAnalyzeError(InterfaceOwnedArgumentSource, DeferredCode,
     'interface-owned-string-temp-consumer-must-fail-closed');
-  RequireAnalyzeDeferredError(ExternalOwnedArgumentSource,
-    'external-owned-string-temp-consumer-must-fail-closed');
+end;
+
+procedure AssertImmediateConsumersNowSupported;
+begin
+  RequireAnalyzeReady(VarParamOwnedArgumentSource,
+    'var-param-owned-string-temp-consumer');
+  RequireAnalyzeReady(OutParamOwnedArgumentSource,
+    'out-param-owned-string-temp-consumer');
+  RequireAnalyzeReady(ExternalOwnedArgumentSource,
+    'external-owned-string-temp-consumer');
 end;
 
 procedure AssertFieldOwnedConsumerNowSupported;
@@ -1030,6 +1048,7 @@ begin
   AssertConcatTempOwnershipNodes;
   AssertCompareTempOwnershipNodes;
   AssertFieldOwnedConsumerNowSupported;
+  AssertImmediateConsumersNowSupported;
   AssertDeferredConsumersFailClosed;
   WriteLn('hir-string-call-argument-ownership-contract-status=pass');
 end.
