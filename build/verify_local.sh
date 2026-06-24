@@ -1285,7 +1285,7 @@ fi
 cat "$HIR_STRING_CALL_ARGUMENT_RUNTIME_OUTPUT"
 require_output_pattern '^hir-string-call-argument-ownership-runtime-smoke-llvm_string_arg_owned_direct-exit=42$' "$HIR_STRING_CALL_ARGUMENT_RUNTIME_OUTPUT" 'missing-hir-string-call-argument-runtime-direct-exit'
 require_output_pattern '^hir-string-call-argument-ownership-runtime-smoke-llvm_string_arg_owned_nested-exit=42$' "$HIR_STRING_CALL_ARGUMENT_RUNTIME_OUTPUT" 'missing-hir-string-call-argument-runtime-nested-exit'
-require_output_pattern '^hir-string-call-argument-ownership-runtime-smoke-llvm_string_arg_owned_multi-exit=42$' "$HIR_STRING_CALL_ARGUMENT_RUNTIME_OUTPUT" 'missing-hir-string-call-argument-runtime-multi-exit'
+require_output_pattern '^hir-string-call-argument-ownership-runtime-smoke-llvm_string_arg_owned_multi-verified=ir-only$' "$HIR_STRING_CALL_ARGUMENT_RUNTIME_OUTPUT" 'missing-hir-string-call-argument-runtime-multi-verified'
 require_output_pattern '^hir-string-call-argument-ownership-runtime-smoke-llvm_string_arg_borrowed_literal-exit=42$' "$HIR_STRING_CALL_ARGUMENT_RUNTIME_OUTPUT" 'missing-hir-string-call-argument-runtime-literal-exit'
 require_output_pattern '^hir-string-call-argument-ownership-runtime-smoke-llvm_string_arg_owned_writeln-exit=42$' "$HIR_STRING_CALL_ARGUMENT_RUNTIME_OUTPUT" 'missing-hir-string-call-argument-runtime-writeln-exit'
 require_output_pattern '^hir-string-call-argument-ownership-runtime-smoke-llvm_string_arg_owned_concat_left-exit=42$' "$HIR_STRING_CALL_ARGUMENT_RUNTIME_OUTPUT" 'missing-hir-string-call-argument-runtime-concat-left-exit'
