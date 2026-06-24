@@ -66,6 +66,8 @@ type
     function ReturnsInt(AValue: Int64): IMockSetup;
     { Configure the return value as Boolean }
     function ReturnsBool(AValue: Boolean): IMockSetup;
+    { Configure the return value as Double }
+    function ReturnsDouble(const AValue: Double): IMockSetup;
     { Mark this setup for ordered verification (InOrder) }
     function InOrder: IMockSetup;
   end;
@@ -148,16 +150,22 @@ type
       Example: Mock.RecordCall('Foo', ['arg1', 'arg2']); }
     procedure RecordCall(const AMethodName: string;
       const AArgs: array of string);
+    procedure RecordCallTyped(const AMethodName: string;
+      const AArgs: array of TMockValue);
 
     { Get the configured return value for a method.
       Returns '' if not configured. }
     function GetReturn(const AMethodName: string): string;
 
     { Get the configured return value as Int64. Returns 0 if not configured. }
-    function GetReturnInt(const AMethodName: string): Int64;
+    function GetReturnInt(const AMethodName: string): Int64; overload;
+    function GetReturnInt(const AMethodName: string;
+      const AArgs: array of string): Int64; overload;
 
     { Get the configured return value as Boolean. Returns False if not configured. }
-    function GetReturnBool(const AMethodName: string): Boolean;
+    function GetReturnBool(const AMethodName: string): Boolean; overload;
+    function GetReturnBool(const AMethodName: string;
+      const AArgs: array of string): Boolean; overload;
 
     { Get call count for a method }
     function CallCount(const AMethodName: string): Integer;
@@ -448,6 +456,7 @@ type
     function Returns(const AValue: string): IMockSetup;
     function ReturnsInt(AValue: Int64): IMockSetup;
     function ReturnsBool(AValue: Boolean): IMockSetup;
+    function ReturnsDouble(const AValue: Double): IMockSetup;
     function InOrder: IMockSetup;
   end;
 
@@ -478,6 +487,13 @@ begin
   else
     FState.SetReturn(FMethod, 'false');
   FState.SetTypedReturnValue(FMethod, MockBool(AValue));
+  Result := Self;
+end;
+
+function TMockSetup.ReturnsDouble(const AValue: Double): IMockSetup;
+begin
+  FState.SetReturn(FMethod, FloatToStr(AValue));
+  FState.SetTypedReturnValue(FMethod, MockDouble(AValue));
   Result := Self;
 end;
 
@@ -654,6 +670,12 @@ begin
   FState.RecordCall(AMethodName, AArgs);
 end;
 
+procedure TMock.RecordCallTyped(const AMethodName: string;
+  const AArgs: array of TMockValue);
+begin
+  FState.RecordCallTyped(AMethodName, AArgs);
+end;
+
 function TMock.GetReturn(const AMethodName: string): string;
 begin
   Result := FState.GetReturn(AMethodName);
@@ -664,9 +686,21 @@ begin
   Result := FState.GetReturnInt64(AMethodName, []);
 end;
 
+function TMock.GetReturnInt(const AMethodName: string;
+  const AArgs: array of string): Int64;
+begin
+  Result := FState.GetReturnInt64(AMethodName, AArgs);
+end;
+
 function TMock.GetReturnBool(const AMethodName: string): Boolean;
 begin
   Result := FState.GetReturnBool(AMethodName, []);
+end;
+
+function TMock.GetReturnBool(const AMethodName: string;
+  const AArgs: array of string): Boolean;
+begin
+  Result := FState.GetReturnBool(AMethodName, AArgs);
 end;
 
 function TMock.CallCount(const AMethodName: string): Integer;

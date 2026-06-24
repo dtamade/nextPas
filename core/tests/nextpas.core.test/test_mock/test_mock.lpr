@@ -255,6 +255,38 @@ begin
   end;
 end;
 
+procedure TestReturnsDouble;
+var
+  LM: TMock;
+  LValue: TMockValue;
+begin
+  LM := TMock.Create;
+  try
+    LM.Setup('Pi').ReturnsDouble(3.14);
+    LValue := LM.State.GetReturnTyped('Pi', []);
+    CheckTrue(LValue.Kind = mvDouble, 'expected mvDouble return kind');
+    CheckNear(3.14, LValue.DblVal, 1e-12, 'expected 3.14 typed return');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestGetTypedReturnOverloadsWithArgs;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.Setup('Count').ReturnsInt(7);
+    LM.Setup('Flag').ReturnsBool(True);
+    CheckEqual(Int64(7), LM.GetReturnInt('Count', ['legacy']));
+    CheckTrue(LM.GetReturnBool('Flag', ['legacy']),
+      'bool overload with args should preserve configured value');
+  finally
+    LM.Free;
+  end;
+end;
+
 { ── Unconfigured return defaults ───────────────────────────────────────────── }
 
 procedure TestGetReturnUnconfigured;
@@ -473,6 +505,28 @@ begin
     CheckEqual('alpha', LM.State.Calls[0].Args[0]);
     CheckEqual('42', LM.State.Calls[0].Args[1]);
     CheckEqual('true', LM.State.Calls[0].Args[2]);
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestRecordCallTypedOnMock;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.RecordCallTyped('Foo', [MockStr('a'), MockInt(42)]);
+    CheckEqual(1, LM.CallCount('Foo'));
+    CheckEqual(1, Length(LM.State.Calls));
+    CheckEqual('Foo', LM.State.Calls[0].MethodName);
+    CheckEqual(2, Length(LM.State.Calls[0].TypedArgs));
+    CheckTrue(LM.State.Calls[0].TypedArgs[0].Kind = mvString,
+      'typed string arg kind');
+    CheckEqual('a', LM.State.Calls[0].TypedArgs[0].StrVal);
+    CheckTrue(LM.State.Calls[0].TypedArgs[1].Kind = mvInt64,
+      'typed int arg kind');
+    CheckEqual(Int64(42), LM.State.Calls[0].TypedArgs[1].IntVal);
   finally
     LM.Free;
   end;
@@ -847,6 +901,9 @@ begin
   Suite.Test('TestReturnsInt', @TestReturnsInt);
   Suite.Test('TestReturnsBoolTrue', @TestReturnsBoolTrue);
   Suite.Test('TestReturnsBoolFalse', @TestReturnsBoolFalse);
+  Suite.Test('TestReturnsDouble', @TestReturnsDouble);
+  Suite.Test('TestGetTypedReturnOverloadsWithArgs',
+    @TestGetTypedReturnOverloadsWithArgs);
   Suite.Test('TestGetReturnUnconfigured', @TestGetReturnUnconfigured);
   Suite.Test('TestResetCallsPreservesSetup', @TestResetCallsPreservesSetup);
   Suite.Test('TestStateCallsDirectAccess', @TestStateCallsDirectAccess);
@@ -854,6 +911,7 @@ begin
     @TestStateCallsTypedArgsMirrorStrings);
   Suite.Test('TestRecordCallTypedPreservesLegacyArgs',
     @TestRecordCallTypedPreservesLegacyArgs);
+  Suite.Test('TestRecordCallTypedOnMock', @TestRecordCallTypedOnMock);
   Suite.Test('TestGetReturnTypedFromStringSetup',
     @TestGetReturnTypedFromStringSetup);
   Suite.Test('TestStateGetReturnInt64FromTypedSetup',

@@ -111,6 +111,12 @@ begin
   Check(True);
 end;
 
+procedure TestRegularLogFailure;
+begin
+  nextpas.core.test.runner.Ctx.Log('hello');
+  Fail('regular test failure');
+end;
+
 { ── R2-F12: BeforeEach Skip test ───────────────────────────────────────────── }
 
 procedure TestBeforeEachSkip;
@@ -252,7 +258,9 @@ var
   LSubtestResults: TTestRunResult;
   LParallelResult: TTestRunResult;
   LTimeoutResult: TTestRunResult;
+  LRegularLogResult: TTestRunResult;
   LRunAllSuiteResults: specialize TArray<TTestRunResult>;
+  LTimeoutSleepMs: Integer;
   { R6-59: AddLine/JoinLines test variables }
   LLines59: specialize TArray<string>;
   LJoined59: string;
@@ -678,10 +686,11 @@ begin
 
   { ── R3-F17: Timeout trigger (watchdog actually fires) ───────────────────── }
   WriteLn;
-  WriteLn(AnsiBold('─── R3-F17: Timeout Trigger ───'));
+  WriteLn(AnsiBold('─── R3-F17: Timeout Trigger (Closure) ───'));
   begin
     LResultSuite := TTestSuite.Create('Timeout Trigger');
-    LResultSuite.Test('slow', procedure begin Sleep(500); end);
+    LTimeoutSleepMs := 500;
+    LResultSuite.Test('slow closure', procedure begin Sleep(LTimeoutSleepMs); end);
     SetTestTimeout(10); { 10ms — much less than the 500ms Sleep }
     LResultSuite.RunWithResult(LTimeoutResult);
     SetTestTimeout(0);
@@ -698,6 +707,12 @@ begin
     if LTimeoutResult.Results[0].Status <> tsError then
     begin
       WriteLn(AnsiRed('FAIL: Expected tsError status, got '), Ord(LTimeoutResult.Results[0].Status));
+      Halt(1);
+    end;
+    if Pos('timed out', LowerCase(LTimeoutResult.Results[0].Message)) = 0 then
+    begin
+      WriteLn(AnsiRed('FAIL: Expected timeout message, got '),
+        LTimeoutResult.Results[0].Message);
       Halt(1);
     end;
     WriteLn(AnsiGreen('OK: Timeout trigger verified'));
@@ -853,6 +868,27 @@ begin
       Halt(1);
     end;
     WriteLn(AnsiGreen('OK: ParseFilter helper'));
+  end;
+
+  WriteLn;
+  WriteLn(AnsiBold('─── R6-58b: ParseTag helper ───'));
+  begin
+    if nextpas.core.test.runner.ParseTag('--tag=fast') <> 'fast' then
+    begin
+      WriteLn(AnsiRed('FAIL: ParseTag should extract fast'));
+      Halt(1);
+    end;
+    if nextpas.core.test.runner.ParseTag('--other=fast') <> '' then
+    begin
+      WriteLn(AnsiRed('FAIL: ParseTag should ignore unrelated args'));
+      Halt(1);
+    end;
+    if nextpas.core.test.runner.ParseTag('--tag=core-http') <> 'core-http' then
+    begin
+      WriteLn(AnsiRed('FAIL: ParseTag should preserve hyphenated values'));
+      Halt(1);
+    end;
+    WriteLn(AnsiGreen('OK: ParseTag helper'));
   end;
 
   { ── R6-59: AddLine / JoinLines helpers ────────────────────────────────────── }
@@ -1037,6 +1073,43 @@ begin
       Halt(1);
     end;
     WriteLn(AnsiGreen('OK: Mixed API compatibility'));
+  end;
+
+  WriteLn;
+  WriteLn(AnsiBold('─── R6-69: Regular Test CapturedLog ───'));
+  begin
+    LResultSuite := TTestSuite.Create('Regular Log');
+    LResultSuite.Test('log and fail', @TestRegularLogFailure);
+    if LResultSuite.RunWithResult(LRegularLogResult) then
+    begin
+      WriteLn(AnsiRed('FAIL: logged failure test should return False'));
+      Halt(1);
+    end;
+    if Length(LRegularLogResult.Results) <> 1 then
+    begin
+      WriteLn(AnsiRed('FAIL: expected 1 logged result, got '),
+        Length(LRegularLogResult.Results));
+      Halt(1);
+    end;
+    if LRegularLogResult.Results[0].Status <> tsFailed then
+    begin
+      WriteLn(AnsiRed('FAIL: logged result should be tsFailed, got '),
+        Ord(LRegularLogResult.Results[0].Status));
+      Halt(1);
+    end;
+    if Length(LRegularLogResult.Results[0].CapturedLog) <> 1 then
+    begin
+      WriteLn(AnsiRed('FAIL: expected exactly 1 captured log line, got '),
+        Length(LRegularLogResult.Results[0].CapturedLog));
+      Halt(1);
+    end;
+    if LRegularLogResult.Results[0].CapturedLog[0] <> 'hello' then
+    begin
+      WriteLn(AnsiRed('FAIL: captured log mismatch, got '),
+        LRegularLogResult.Results[0].CapturedLog[0]);
+      Halt(1);
+    end;
+    WriteLn(AnsiGreen('OK: Regular test captured log'));
   end;
 
   WriteLn;

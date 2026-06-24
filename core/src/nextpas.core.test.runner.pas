@@ -150,11 +150,15 @@ procedure RegisterStub(var ASuite: TTestSuite; APtr: Pointer);
 procedure RegisterFixture(var ASuite: TTestSuite; AFixture: TObject);
 { White-box helper for test_runner: parse --filter=value form from one argv item. }
 function ParseFilter(const AArg: string): string;
+{ White-box helper for test_runner: parse --tag=value form from one argv item. }
+function ParseTag(const AArg: string): string;
 { Check if a test entry matches a tag filter. Empty filter = match all. }
 function MatchesTagFilter(const AEntryTags: specialize TArray<string>;
   const ATagFilter: string): Boolean;
 { Get effective display name: DisplayName if non-empty, else Name. }
 function GetDisplayName(const AEntry: TTestEntry): string;
+{ Active test context for the currently executing test. }
+function Ctx: ITestContext;
 
 implementation
 
@@ -175,6 +179,9 @@ var
   GFixtureRegistry: specialize TArray<TObject>;
   GStubCleanupI: Integer;
 
+threadvar
+  GCurrentTestContextObj: TObject;
+
 { ── Command-line helpers ──────────────────────────────────────────────────── }
 
 function ParseFilter(const AArg: string): string;
@@ -182,6 +189,25 @@ begin
   if Copy(AArg, 1, 9) = '--filter=' then
     Exit(Copy(AArg, 10, MaxInt));
   Result := '';
+end;
+
+function ParseTag(const AArg: string): string;
+begin
+  if Copy(AArg, 1, 6) = '--tag=' then
+    Exit(Copy(AArg, 7, MaxInt));
+  Result := '';
+end;
+
+procedure SetCurrentTestContext(AContext: TObject);
+begin
+  GCurrentTestContextObj := AContext;
+end;
+
+function Ctx: ITestContext;
+begin
+  if (GCurrentTestContextObj = nil) or
+     (not Supports(GCurrentTestContextObj, ITestContext, Result)) then
+    raise Exception.Create('No active test context');
 end;
 
 function MatchesTagFilter(const AEntryTags: specialize TArray<string>;
@@ -245,6 +271,22 @@ begin
     if LFilter <> '' then
       Exit(LFilter);
     if (ParamStr(K) = '--filter') and (K < ParamCount) then
+      Exit(ParamStr(K + 1));
+  end;
+end;
+
+function ParseTagFromArgs: string;
+var
+  K: Integer;
+  LTag: string;
+begin
+  Result := '';
+  for K := 1 to ParamCount do
+  begin
+    LTag := ParseTag(ParamStr(K));
+    if LTag <> '' then
+      Exit(LTag);
+    if (ParamStr(K) = '--tag') and (K < ParamCount) then
       Exit(ParamStr(K + 1));
   end;
 end;
@@ -519,6 +561,7 @@ var
 begin
   LEntry.Name        := AName;
   LEntry.Proc        := nil;
+  LEntry.Closure     := nil;
   LEntry.SubtestProc := AProc;
   LEntry.Kind        := ekSubtest;
   LEntry.SkipReason  := '';
@@ -775,6 +818,7 @@ begin
     LStatus := tsPassed;
     LSubCtxI := nil;
     LSubCtx := nil;
+    SetCurrentTestContext(nil);
     LTestResult.Name    := LEntry.Name;
     LTestResult.Message := '';
     SetTestContext(Name, LEntry.Name);
@@ -855,6 +899,12 @@ begin
 
     LStartMs := GetTickCount64;
     LDisplayName := GetDisplayName(LEntry);
+    if LEntry.Kind = ekTest then
+    begin
+      LSubCtx := TTestContext.Create(LEntry.Name, LConfig);
+      LSubCtxI := LSubCtx;
+      SetCurrentTestContext(LSubCtx);
+    end;
     { RepeatCount: 0 means 1 run. >1 means repeat N times. }
     if LEntry.RepeatCount > 1 then
       LRepeatCount := LEntry.RepeatCount
@@ -866,6 +916,7 @@ begin
         LSubCtx := TTestContext.Create(LEntry.Name, LConfig);
         LSubCtx.FOnResult := @LAppender.Append;
         LSubCtxI := LSubCtx;
+        SetCurrentTestContext(LSubCtx);
         LEntry.SubtestProc(LSubCtxI);
         try
           LSubCtx.ExecuteSubtests;
@@ -887,8 +938,6 @@ begin
             Inc(LFail);
           end;
         end;
-        LSubCtxI := nil;
-        LSubCtx := nil;
       end
       else if LEntry.Kind = ekTableTest then
       begin
@@ -911,17 +960,26 @@ begin
           LStatus := tsPassed;
           LLastFailMsg := '';
           try
-            if (LGTestTimeoutMs > 0) and (LEntry.Kind = ekTest) and Assigned(LEntry.Proc) then
+            if (LGTestTimeoutMs > 0) and (LEntry.Kind = ekTest) and
+               (Assigned(LEntry.Proc) or Assigned(LEntry.Closure)) then
             begin
-              { Timeout-enabled path — runs in watchdog thread (only for TTestProc) }
-              if RunTestWithTimeout(LEntry.Proc, LGTestTimeoutMs, LConfig,
-                LStatus, LLastFailMsg) then
+              if Assigned(LEntry.Closure) then
               begin
-                if LStatus = tsPassed then { ok }
-                else { LStatus already set }
+                if not RunTestWithTimeout(LEntry.Closure, LGTestTimeoutMs,
+                  LConfig, LStatus, LLastFailMsg) then
+                  { Timed out — LStatus already set to tsError };
               end
               else
-                { Timed out — LStatus already set to tsError };
+              begin
+                if RunTestWithTimeout(LEntry.Proc, LGTestTimeoutMs, LConfig,
+                  LStatus, LLastFailMsg) then
+                begin
+                  if LStatus = tsPassed then { ok }
+                  else { LStatus already set }
+                end
+                else
+                  { Timed out — LStatus already set to tsError };
+              end;
             end
             else
             begin
@@ -1075,6 +1133,9 @@ begin
 
     LLastFailMsg := '';
     ReportLeakIfAny(LStatus, LConfig);
+    SetCurrentTestContext(nil);
+    LSubCtxI := nil;
+    LSubCtx := nil;
   end;
 
   { Suite-level teardown }
@@ -1115,10 +1176,7 @@ begin
   Result := 0;
 end;
 
-{ TODO: RunWithResult and RunParallelWithResult share setup-failure, teardown,
-  result-counting, and HasRun/LastRunPassed-update logic.  Extract shared
-  helpers (e.g. RunSetup, RunTeardown, FinalizeResults) to reduce duplication.
-  R4-03: setup/teardown/finalize helpers now extracted below. }
+{ R4-03: shared setup/teardown/finalize helpers extracted below. }
 
 function TTestSuite.RunSetup(const AConfig: TTestConfig; out ASkipCount: Integer;
   out AErrorMsg: string): Boolean;
@@ -1468,6 +1526,8 @@ begin
   { Auto-detect --filter from command line if not already set programmatically }
   if GetTestFilter = '' then
     SetTestFilter(ParseFilterFromArgs);
+  if GetTagFilter = '' then
+    SetTagFilter(ParseTagFromArgs);
   LConfig := RunnerConfig(Self);
 
   ResolveOutSink(LConfig).WriteLn(
@@ -1504,6 +1564,8 @@ begin
   { Auto-detect --filter from command line if not already set programmatically }
   if GetTestFilter = '' then
     SetTestFilter(ParseFilterFromArgs);
+  if GetTagFilter = '' then
+    SetTagFilter(ParseTagFromArgs);
   LConfig := RunnerConfig(Self);
 
   ResolveOutSink(LConfig).WriteLn(
