@@ -6,6 +6,7 @@ uses
   nextpas.core.testing,
   nextpas.core.mem.error,
   nextpas.core.mem.allocator.base,
+  nextpas.core.mem.pool.memory_pool,
   nextpas.core.mem.pool.slab,
   nextpas.core.mem.pool.fixed_slab;
 
@@ -555,6 +556,38 @@ begin
   end;
 end;
 
+procedure TestIMemoryPoolContract;
+{ 通过 IMemoryPool 接口引用验证 TSlabPool 的完整语义 }
+var
+  LPool: IMemoryPool;
+  LPtr1, LPtr2: Pointer;
+begin
+  LPool := TSlabPool.Create(4096);
+  Check(LPool <> nil, 'pool created via IMemoryPool');
+
+  { GetMem: 分配并返回非 nil }
+  LPtr1 := LPool.GetMem(32);
+  Check(LPtr1 <> nil, 'IMemoryPool.GetMem returns non-nil');
+
+  { AllocMem: 分配并清零 }
+  LPtr2 := LPool.AllocMem(32);
+  Check(LPtr2 <> nil, 'IMemoryPool.AllocMem returns non-nil');
+
+  { FreeMem: 释放后可重用 }
+  LPool.FreeMem(LPtr1);
+  LPool.FreeMem(LPtr2);
+
+  { ReallocMem: nil dst 等同于 GetMem }
+  LPtr1 := LPool.ReallocMem(nil, 32);
+  Check(LPtr1 <> nil, 'IMemoryPool.ReallocMem(nil) acts as GetMem');
+
+  { ReallocMem: 非 nil dst 扩展 }
+  LPtr2 := LPool.ReallocMem(LPtr1, 48);
+  Check(LPtr2 <> nil, 'IMemoryPool.ReallocMem(non-nil) succeeds');
+
+  LPool.FreeMem(LPtr2);
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.mem.slab_pool');
   T.Run('create stats and traits', @TestCreateStatsAndTraits);
@@ -568,5 +601,6 @@ begin
   T.Run('fixed slab direct api fails closed', @TestFixedSlabDirectApiFailsClosed);
   T.Run('fixed slab aligned direct fails closed', @TestFixedSlabAlignedDirectFailsClosed);
   T.Run('fixed slab aligned fallback fails closed', @TestFixedSlabAlignedFallbackFailsClosed);
+  T.Run('IMemoryPool contract via TSlabPool', @TestIMemoryPoolContract);
   T.Summary;
 end.

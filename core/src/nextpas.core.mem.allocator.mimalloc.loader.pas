@@ -1,3 +1,12 @@
+{
+  nextpas.core.mem.allocator.mimalloc.loader
+
+  Mimalloc 动态库加载辅助模块。
+  从 allocator.mimalloc.pas 拆分，职责单一：路径发现 + dlopen。
+
+  测试覆盖路径：test_allocator_mimalloc → allocator.mimalloc.pas → 本模块。
+  无独立测试（dlopen 需 mock，成本高），通过 mimalloc allocator 测试间接覆盖。
+}
 unit nextpas.core.mem.allocator.mimalloc.loader;
 
 {$I nextpas.core.settings.inc}
