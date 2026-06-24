@@ -983,6 +983,62 @@ begin
   WriteLn(AnsiBold('─── R2-F23: Runner config isolation ───'));
   TestRunnerConfigIsolation;
 
+  { ── Phase 2: With* builder pattern ───────────────────────────────────────── }
+  WriteLn;
+  WriteLn(AnsiBold('─── Phase 2: With* Builder Pattern ───'));
+  begin
+    LRunCount := 0;
+    LBeforeEachCounter := 0;
+    LResultSuite := TTestSuite.Create('WithChain')
+      .WithSetup(procedure begin Inc(GSetupCalled); end)
+      .WithTeardown(procedure begin Inc(GTeardownCalled); end)
+      .WithBeforeEach(procedure begin Inc(LBeforeEachCounter); end)
+      .WithAfterEach(procedure begin Inc(GAfterEachCalled); end);
+    LResultSuite.Test('chained pass', procedure begin
+      InterLockedIncrement(LRunCount);
+      CheckTrue(True);
+    end);
+    LResultSuite.Test('chained pass 2', procedure begin
+      InterLockedIncrement(LRunCount);
+      CheckTrue(True);
+    end);
+    if not LResultSuite.Run then
+    begin
+      WriteLn(AnsiRed('FAIL: With* chain should pass'));
+      Halt(1);
+    end;
+    if LRunCount <> 2 then
+    begin
+      WriteLn(AnsiRed('FAIL: expected 2 tests run, got '), LRunCount);
+      Halt(1);
+    end;
+    WriteLn(AnsiGreen('OK: With* builder pattern'));
+  end;
+
+  { ── Phase 2: With* preserves existing API ────────────────────────────────── }
+  WriteLn;
+  WriteLn(AnsiBold('─── Phase 2: SetSetup + WithConfig ───'));
+  begin
+    LRunCount := 0;
+    LResultSuite := TTestSuite.Create('Mixed API');
+    LResultSuite.SetSetup(procedure begin Inc(GSetupCalled); end);
+    LResultSuite.Test('mixed test', procedure begin
+      InterLockedIncrement(LRunCount);
+      CheckTrue(True);
+    end);
+    if not LResultSuite.Run then
+    begin
+      WriteLn(AnsiRed('FAIL: mixed API should pass'));
+      Halt(1);
+    end;
+    if LRunCount <> 1 then
+    begin
+      WriteLn(AnsiRed('FAIL: expected 1 test run, got '), LRunCount);
+      Halt(1);
+    end;
+    WriteLn(AnsiGreen('OK: Mixed API compatibility'));
+  end;
+
   WriteLn;
   WriteLn(AnsiGreen('OK: test_runner'));
 end.

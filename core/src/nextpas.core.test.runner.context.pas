@@ -45,6 +45,8 @@ type
     FSubSkip  : Integer;
     FOnResult : TOnSubtestResult;
     FFailedNames: specialize TArray<string>;
+    FLogLines : specialize TArray<string>;
+    FCleanups : specialize TArray<TTestClosure>;
     constructor Create(const ATestName: string; const AConfig: TTestConfig);
     procedure Run(const AName: string; AProc: TTestProc);
     procedure Run(const AName: string; AProc: TTestClosure);
@@ -52,7 +54,14 @@ type
     procedure Fail(const AMessage: string);
     procedure Skip(const AReason: string = '');
     function  GetTestName: string;
+    procedure Log(const AMessage: string);
+    procedure LogF(const AFormat: string; const AArgs: array of const);
+    procedure OnCleanup(AProc: TTestProc);
+    procedure OnCleanup(AProc: TTestClosure);
+    procedure ClearLog;
+    property  LogLines: specialize TArray<string> read FLogLines;
     procedure ExecuteSubtests;
+    procedure RunCleanups;
   end;
 
 implementation
@@ -147,6 +156,40 @@ begin
   Result := FTestName;
 end;
 
+procedure TTestContext.Log(const AMessage: string);
+begin
+  SetLength(FLogLines, Length(FLogLines) + 1);
+  FLogLines[High(FLogLines)] := AMessage;
+end;
+
+procedure TTestContext.LogF(const AFormat: string; const AArgs: array of const);
+begin
+  Log(Format(AFormat, AArgs));
+end;
+
+procedure TTestContext.OnCleanup(AProc: TTestProc);
+var
+  LProc: TTestProc;
+begin
+  LProc := AProc;
+  SetLength(FCleanups, Length(FCleanups) + 1);
+  FCleanups[High(FCleanups)] := procedure
+  begin
+    LProc;
+  end;
+end;
+
+procedure TTestContext.OnCleanup(AProc: TTestClosure);
+begin
+  SetLength(FCleanups, Length(FCleanups) + 1);
+  FCleanups[High(FCleanups)] := AProc;
+end;
+
+procedure TTestContext.ClearLog;
+begin
+  FLogLines := nil;
+end;
+
 procedure TTestContext.ExecuteSubtests;
 var
   I: Integer;
@@ -165,6 +208,7 @@ begin
     LEntry := FSubtests[I];
     LStatus := tsPassed;
     LMsg    := '';
+    ClearLog;
     SetTestContext(GExecState^.SuiteName, LEntry.Name);
     try
       if LEntry.Kind = ekSkipped then
@@ -193,6 +237,8 @@ begin
           SetLength(FFailedNames, Length(FFailedNames) + 1);
           FFailedNames[High(FFailedNames)] := LSubCtx.FFailedNames[J];
         end;
+        LSubCtxI := nil;
+        LSubCtx := nil;
       end
       else if LEntry.Kind = ekTableTest then
       begin
@@ -233,6 +279,10 @@ begin
           AnsiRed(LEntry.Name, FConfig));
         ResolveOutSink(FConfig).WriteLn(
           '      ' + AnsiDim(LMsg, FConfig));
+        { Output captured log lines on failure }
+        for J := 0 to High(FLogLines) do
+          ResolveOutSink(FConfig).WriteLn(
+            '        ' + AnsiDim(FLogLines[J], FConfig));
         Inc(FSubFail);
         SetLength(FFailedNames, Length(FFailedNames) + 1);
         FFailedNames[High(FFailedNames)] := LEntry.Name;
@@ -249,6 +299,10 @@ begin
           AnsiRed(LEntry.Name, FConfig) + ' [' + E.ClassName + ']');
         ResolveOutSink(FConfig).WriteLn(
           '      ' + AnsiDim(E.Message, FConfig));
+        { Output captured log lines on error }
+        for J := 0 to High(FLogLines) do
+          ResolveOutSink(FConfig).WriteLn(
+            '        ' + AnsiDim(FLogLines[J], FConfig));
         Inc(FSubFail);
         SetLength(FFailedNames, Length(FFailedNames) + 1);
         FFailedNames[High(FFailedNames)] := LEntry.Name;
@@ -264,6 +318,11 @@ begin
       FOnResult(LTestResult);
     end;
   end;
+  { Execute cleanup callbacks in reverse order before propagating failures }
+  RunCleanups;
+  { Clear subtests to break reference cycles: subtest closures may capture
+    the ITestContext that owns this FSubtests array. }
+  FSubtests := nil;
   { Propagate subtest failures to parent }
   if FSubFail > 0 then
   begin
@@ -275,6 +334,23 @@ begin
     end;
     InternalFail(IntToStr(FSubFail) + ' subtest(s) failed in ' + FTestName + ': ' + LNames);
   end;
+end;
+
+procedure TTestContext.RunCleanups;
+var
+  LIdx: Integer;
+begin
+  for LIdx := High(FCleanups) downto 0 do
+  begin
+    try
+      FCleanups[LIdx]();
+    except
+      on E: Exception do
+        ResolveErrSink(FConfig).WriteLn(
+          '    ' + AnsiYellow('WARNING cleanup error: ', FConfig) + E.Message);
+    end;
+  end;
+  FCleanups := nil;
 end;
 
 end.

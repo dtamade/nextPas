@@ -30,6 +30,10 @@ type
     procedure Skip(const AReason: string = '');
     function  GetTestName: string;
     property  TestName: string read GetTestName;
+    procedure Log(const AMessage: string);
+    procedure LogF(const AFormat: string; const AArgs: array of const);
+    procedure OnCleanup(AProc: TTestProc);
+    procedure OnCleanup(AProc: TTestClosure);
   end;
 
   TSubtestProc = procedure(constref Ctx: ITestContext);

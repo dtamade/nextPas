@@ -340,6 +340,73 @@ begin
     end);
 end;
 
+{ ── Phase 2: Log capture ───────────────────────────────────────────────────── }
+
+procedure TestLogCapture(constref Ctx: ITestContext);
+begin
+  Ctx.Run('log and pass',
+    procedure
+    begin
+      Ctx.Log('hello from subtest');
+      Ctx.Logf('value = %d', [42]);
+      CheckTrue(True);
+    end);
+  Ctx.Run('log and fail',
+    procedure
+    begin
+      Ctx.Log('debug info line 1');
+      Ctx.Logf('computed %d + %d = %d', [1, 2, 3]);
+      CheckFalse(True, 'intentional log failure');
+    end);
+end;
+
+{ ── Phase 2: Cleanup callbacks ─────────────────────────────────────────────── }
+
+var
+  GCleanupOrder: specialize TArray<string>;
+
+procedure TestCleanupBasic(constref Ctx: ITestContext);
+begin
+  Ctx.OnCleanup(procedure begin
+    SetLength(GCleanupOrder, Length(GCleanupOrder) + 1);
+    GCleanupOrder[High(GCleanupOrder)] := 'cleanup-A';
+  end);
+  Ctx.OnCleanup(procedure begin
+    SetLength(GCleanupOrder, Length(GCleanupOrder) + 1);
+    GCleanupOrder[High(GCleanupOrder)] := 'cleanup-B';
+  end);
+  Ctx.Run('pass',
+    procedure
+    begin
+      CheckTrue(True);
+    end);
+end;
+
+procedure TestCleanupOnFailure(constref Ctx: ITestContext);
+begin
+  Ctx.OnCleanup(procedure begin
+    SetLength(GCleanupOrder, Length(GCleanupOrder) + 1);
+    GCleanupOrder[High(GCleanupOrder)] := 'failure-cleanup';
+  end);
+  Ctx.Run('fail',
+    procedure
+    begin
+      CheckFalse(True, 'intentional cleanup failure test');
+    end);
+end;
+
+procedure TestCleanupExceptionSwallowed(constref Ctx: ITestContext);
+begin
+  Ctx.OnCleanup(procedure begin
+    raise EAssertionFailed.Create('cleanup boom');
+  end);
+  Ctx.Run('pass',
+    procedure
+    begin
+      CheckTrue(True);
+    end);
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -510,6 +577,122 @@ begin
       Halt(1);
     end;
     WriteLn(AnsiGreen('  Subtest sink propagation verified'));
+  end;
+
+  { ── Phase 2: Cleanup order verification ──────────────────────────────── }
+  WriteLn;
+  WriteLn(AnsiBold('─── Cleanup Callbacks ───'));
+  begin
+    GCleanupOrder := nil;
+    LFailSuite := TTestSuite.Create('Cleanup Order');
+    LFailSuite.Config.OutSink := TBufferSink.Create;
+    LFailSuite.Config.ErrSink := TBufferSink.Create;
+    LFailSuite.Config.AnsiMode := amOff;
+    LFailSuite.TestSubtest('cleanup basic', @TestCleanupBasic);
+    if not LFailSuite.Run then
+    begin
+      WriteLn(AnsiRed('FAIL: cleanup basic should pass'));
+      Halt(1);
+    end;
+    { Cleanup should be called in reverse order: B first, then A }
+    if Length(GCleanupOrder) <> 2 then
+    begin
+      WriteLn(AnsiRed('FAIL: expected 2 cleanup calls, got '), Length(GCleanupOrder));
+      Halt(1);
+    end;
+    if GCleanupOrder[0] <> 'cleanup-B' then
+    begin
+      WriteLn(AnsiRed('FAIL: first cleanup should be B (reverse), got '), GCleanupOrder[0]);
+      Halt(1);
+    end;
+    if GCleanupOrder[1] <> 'cleanup-A' then
+    begin
+      WriteLn(AnsiRed('FAIL: second cleanup should be A (reverse), got '), GCleanupOrder[1]);
+      Halt(1);
+    end;
+    WriteLn(AnsiGreen('  Cleanup reverse order verified'));
+  end;
+
+  { ── Phase 2: Cleanup on failure ──────────────────────────────────────── }
+  begin
+    GCleanupOrder := nil;
+    LFailSuite := TTestSuite.Create('Cleanup On Failure');
+    LFailSuite.Config.OutSink := TBufferSink.Create;
+    LFailSuite.Config.ErrSink := TBufferSink.Create;
+    LFailSuite.Config.AnsiMode := amOff;
+    LFailSuite.TestSubtest('cleanup failure', @TestCleanupOnFailure);
+    if LFailSuite.Run then
+    begin
+      WriteLn(AnsiRed('FAIL: suite with failing subtest should report failure'));
+      Halt(1);
+    end;
+    if Length(GCleanupOrder) <> 1 then
+    begin
+      WriteLn(AnsiRed('FAIL: expected 1 cleanup call, got '), Length(GCleanupOrder));
+      Halt(1);
+    end;
+    if GCleanupOrder[0] <> 'failure-cleanup' then
+    begin
+      WriteLn(AnsiRed('FAIL: cleanup should run even on failure, got '), GCleanupOrder[0]);
+      Halt(1);
+    end;
+    WriteLn(AnsiGreen('  Cleanup on failure verified'));
+  end;
+
+  { ── Phase 2: Cleanup exception swallowed ─────────────────────────────── }
+  begin
+    LFailSuite := TTestSuite.Create('Cleanup Swallow');
+    LOutSink := TBufferSink.Create;
+    LErrSink := TBufferSink.Create;
+    LFailSuite.Config.OutSink := LOutSink;
+    LFailSuite.Config.ErrSink := LErrSink;
+    LFailSuite.Config.AnsiMode := amOff;
+    LFailSuite.TestSubtest('cleanup exception', @TestCleanupExceptionSwallowed);
+    if not LFailSuite.Run then
+    begin
+      WriteLn(AnsiRed('FAIL: cleanup exception should be swallowed'));
+      Halt(1);
+    end;
+    LOutput := LErrSink.GetOutput;
+    if Pos('WARNING cleanup error', LOutput) = 0 then
+    begin
+      WriteLn(AnsiRed('FAIL: expected WARNING cleanup error in stderr'));
+      Halt(1);
+    end;
+    WriteLn(AnsiGreen('  Cleanup exception swallowed verified'));
+  end;
+
+  { ── Phase 2: Log output on failure ───────────────────────────────────── }
+  begin
+    LFailSuite := TTestSuite.Create('Log On Failure');
+    LOutSink := TBufferSink.Create;
+    LErrSink := TBufferSink.Create;
+    LFailSuite.Config.OutSink := LOutSink;
+    LFailSuite.Config.ErrSink := LErrSink;
+    LFailSuite.Config.AnsiMode := amOff;
+    LFailSuite.TestSubtest('log test', @TestLogCapture);
+    if LFailSuite.Run then
+    begin
+      WriteLn(AnsiRed('FAIL: suite with failing subtest should report failure'));
+      Halt(1);
+    end;
+    LOutput := LOutSink.GetOutput;
+    if Pos('debug info line 1', LOutput) = 0 then
+    begin
+      WriteLn(AnsiRed('FAIL: expected "debug info line 1" in output'));
+      Halt(1);
+    end;
+    if Pos('computed 1 + 2 = 3', LOutput) = 0 then
+    begin
+      WriteLn(AnsiRed('FAIL: expected "computed 1 + 2 = 3" in output'));
+      Halt(1);
+    end;
+    if Pos('hello from subtest', LOutput) > 0 then
+    begin
+      WriteLn(AnsiRed('FAIL: passing subtest log should not appear in output'));
+      Halt(1);
+    end;
+    WriteLn(AnsiGreen('  Log output on failure verified'));
   end;
 
   WriteLn;

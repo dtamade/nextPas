@@ -74,6 +74,15 @@ type
     procedure OnBeforeEach(AProc: TTestClosure);
     procedure OnAfterEach(AProc: TTestProc);
     procedure OnAfterEach(AProc: TTestClosure);
+    function  WithConfig(const AConfig: TTestConfig): TTestSuite;
+    function  WithSetup(AProc: TTestProc): TTestSuite; overload;
+    function  WithSetup(AProc: TTestClosure): TTestSuite; overload;
+    function  WithTeardown(AProc: TTestProc): TTestSuite; overload;
+    function  WithTeardown(AProc: TTestClosure): TTestSuite; overload;
+    function  WithBeforeEach(AProc: TTestProc): TTestSuite; overload;
+    function  WithBeforeEach(AProc: TTestClosure): TTestSuite; overload;
+    function  WithAfterEach(AProc: TTestProc): TTestSuite; overload;
+    function  WithAfterEach(AProc: TTestClosure): TTestSuite; overload;
     function  Run: Boolean;
     function  RunWithResult(out AResult: TTestRunResult): Boolean;
     function  RunParallel(APool: IThreadPool): Boolean;
@@ -404,6 +413,68 @@ begin
   AfterEachClosure := AProc;
 end;
 
+function TTestSuite.WithConfig(const AConfig: TTestConfig): TTestSuite;
+begin
+  Result := Self;
+  Result.Config := AConfig;
+end;
+
+function TTestSuite.WithSetup(AProc: TTestProc): TTestSuite;
+begin
+  Result := Self;
+  Result.Setup := AProc;
+  Result.SetupClosure := nil;
+end;
+
+function TTestSuite.WithSetup(AProc: TTestClosure): TTestSuite;
+begin
+  Result := Self;
+  Result.Setup := nil;
+  Result.SetupClosure := AProc;
+end;
+
+function TTestSuite.WithTeardown(AProc: TTestProc): TTestSuite;
+begin
+  Result := Self;
+  Result.Teardown := AProc;
+  Result.TeardownClosure := nil;
+end;
+
+function TTestSuite.WithTeardown(AProc: TTestClosure): TTestSuite;
+begin
+  Result := Self;
+  Result.Teardown := nil;
+  Result.TeardownClosure := AProc;
+end;
+
+function TTestSuite.WithBeforeEach(AProc: TTestProc): TTestSuite;
+begin
+  Result := Self;
+  Result.BeforeEach := AProc;
+  Result.BeforeEachClosure := nil;
+end;
+
+function TTestSuite.WithBeforeEach(AProc: TTestClosure): TTestSuite;
+begin
+  Result := Self;
+  Result.BeforeEach := nil;
+  Result.BeforeEachClosure := AProc;
+end;
+
+function TTestSuite.WithAfterEach(AProc: TTestProc): TTestSuite;
+begin
+  Result := Self;
+  Result.AfterEach := AProc;
+  Result.AfterEachClosure := nil;
+end;
+
+function TTestSuite.WithAfterEach(AProc: TTestClosure): TTestSuite;
+begin
+  Result := Self;
+  Result.AfterEach := nil;
+  Result.AfterEachClosure := AProc;
+end;
+
 function TTestSuite.Run: Boolean;
 var
   LResult: TTestRunResult;
@@ -482,6 +553,8 @@ begin
   begin
     LEntry := Tests[I];
     LStatus := tsPassed;
+    LSubCtxI := nil;
+    LSubCtx := nil;
     LTestResult.Name    := LEntry.Name;
     LTestResult.Message := '';
     SetTestContext(Name, LEntry.Name);
@@ -582,6 +655,8 @@ begin
             Inc(LFail);
           end;
         end;
+        LSubCtxI := nil;
+        LSubCtx := nil;
       end
       else if LEntry.Kind = ekTableTest then
       begin
@@ -771,6 +846,8 @@ begin
   end;
 
   finally
+    LSubCtxI := nil;
+    LSubCtx := nil;
     LAppender.Free;
   end;
 
