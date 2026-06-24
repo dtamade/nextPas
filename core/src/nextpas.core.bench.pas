@@ -150,9 +150,7 @@ uses
   nextpas.core.time.format,
   nextpas.core.time.offsetdatetime,
   nextpas.core.bench.baseline,
-  nextpas.core.simd.cpuinfo,
-  nextpas.core.os.env,
-  nextpas.core.platform.time;
+  nextpas.core.simd.cpuinfo;
 
 { TBenchSuite }
 

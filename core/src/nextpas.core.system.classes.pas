@@ -11,7 +11,6 @@ interface
 
 uses
   Classes,
-  SysUtils,
   nextpas.core.io.intf;
 
 type
@@ -22,21 +21,11 @@ type
   TInterfaceList = Classes.TInterfaceList;
   TStringList = Classes.TStringList;
   TDuplicates = Classes.TDuplicates;
+  TThread = Classes.TThread;
 
   IStream = nextpas.core.io.intf.IStream;
   IReader = nextpas.core.io.intf.IReader;
   IWriter = nextpas.core.io.intf.IWriter;
-
-const
-  fmCreate = Classes.fmCreate;
-  fmOpenRead = Classes.fmOpenRead;
-  fmOpenWrite = Classes.fmOpenWrite;
-  fmOpenReadWrite = Classes.fmOpenReadWrite;
-  fmShareDenyNone = SysUtils.fmShareDenyNone;
-  fmShareDenyWrite = SysUtils.fmShareDenyWrite;
-  dupIgnore = Classes.dupIgnore;
-  dupAccept = Classes.dupAccept;
-  dupError = Classes.dupError;
 
 implementation
 
