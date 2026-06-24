@@ -1,0 +1,10 @@
+[archiver_profile]
+id = "gnu-ar"
+tool_flavor = "gnu-ar"
+driver_candidates = ["ar"]
+add_file_mode = "batch-files"
+create_mode = "implicit-on-add"
+finish_mode = "separate-index-pass"
+script_mode = "optional-mri-script"
+archive_format = "gnu-ar"
+index_policy = "write-symbol-index"

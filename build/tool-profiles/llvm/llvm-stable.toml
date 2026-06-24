@@ -1,0 +1,10 @@
+[llvm_executable_set]
+id = "llvm-stable"
+tool_root_kind = "distribution-helper-root"
+clang_driver = "clang"
+llc = "llc"
+opt = "opt"
+lld = "ld.lld"
+llvm_ar = "llvm-ar"
+suffix_policy = "shared-llvmutilssuffix"
+version_contract = "same-major-series"

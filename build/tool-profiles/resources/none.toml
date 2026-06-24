@@ -1,0 +1,12 @@
+[resource_tool_profile]
+id = "none"
+pipeline_kind = "disabled"
+rc_driver_candidates = []
+res_driver_candidates = []
+rc_command_template_kind = "none"
+res_command_template_kind = "none"
+input_suffixes = []
+output_suffixes = []
+intermediate_asset_kind = "none"
+single_stage_fallback = "none"
+arch_parameter_mode = "none"

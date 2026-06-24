@@ -1,0 +1,10 @@
+Hint: Start of reading config file /home/dtamade/.fpc.cfg
+Hint: End of reading config file /home/dtamade/.fpc.cfg
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Win64 for x64
+Compiling /home/dtamade/projects/nextPas/core/src/nextpas.core.tls.winssl.native_handle.pas
+nextpas.core.tls.winssl.native_handle.pas(8,6) Hint: Unit "nextpas.core.base" not used in nextpas.core.tls.winssl.native_handle
+nextpas.core.tls.winssl.native_handle.pas(8,73) Hint: Unit "nextpas.core.tls.errors" not used in nextpas.core.tls.winssl.native_handle
+74 lines compiled, 0.1 sec
+4 hint(s) issued

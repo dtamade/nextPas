@@ -1,0 +1,28 @@
+Hint: Start of reading config file /home/dtamade/.fpc.cfg
+Hint: End of reading config file /home/dtamade/.fpc.cfg
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Win64 for x64
+Compiling /home/dtamade/projects/nextPas/core/src/nextpas.core.tls.winssl.session.pas
+Compiling /home/dtamade/projects/nextPas/core/src/nextpas.core.tls.winssl.connection.pas
+Compiling /home/dtamade/projects/nextPas/core/src/nextpas.core.tls.winssl.context.pas
+Compiling /home/dtamade/projects/nextPas/core/src/nextpas.core.tls.cert.pinning.pas
+Compiling /home/dtamade/projects/nextPas/core/src/nextpas.core.tls.openssl.api.evp.pas
+Compiling /home/dtamade/projects/nextPas/core/src/nextpas.core.tls.openssl.loader.pas
+Compiling /home/dtamade/projects/nextPas/core/src/nextpas.core.fs.pas
+Compiling /home/dtamade/projects/nextPas/core/src/nextpas.core.fs.util.pas
+Compiling /home/dtamade/projects/nextPas/core/src/nextpas.core.text.utf8.pas
+Compiling /home/dtamade/projects/nextPas/core/src/nextpas.core.simd.dispatch.pas
+Compiling /home/dtamade/projects/nextPas/core/src/nextpas.core.simd.cpuinfo.pas
+Compiling /home/dtamade/projects/nextPas/core/src/nextpas.core.atomic.pas
+Compiling /home/dtamade/projects/nextPas/core/src/nextpas.core.atomic.types.pas
+Compiling /home/dtamade/projects/nextPas/core/src/nextpas.core.platform.sync.pas
+nextpas.core.platform.sync.pas(1117,46) Hint: Parameter "AMutex" not used
+nextpas.core.platform.sync.pas(1148,47) Hint: Parameter "ARwLock" not used
+nextpas.core.platform.sync.pas(1199,48) Hint: Parameter "ACondVar" not used
+nextpas.core.platform.sync.pas(63,10) Error: Forward declaration not solved "platform_wait_address64(PInt64;const Int64;const Int64):System.LongInt;"
+nextpas.core.platform.sync.pas(64,10) Error: Forward declaration not solved "platform_wake_address_one64(PInt64):System.LongInt;"
+nextpas.core.platform.sync.pas(65,10) Error: Forward declaration not solved "platform_wake_address_all64(PInt64):System.LongInt;"
+nextpas.core.platform.sync.pas(1534) Fatal: There were 3 errors compiling module, stopping
+Fatal: Compilation aborted
+Error: /opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 returned an error exitcode

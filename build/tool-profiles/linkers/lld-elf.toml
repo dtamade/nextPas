@@ -1,0 +1,14 @@
+[linker_profile]
+id = "lld-elf"
+tool_flavor = "lld-elf"
+driver_kind = "direct-linker"
+driver_candidates = ["ld.lld"]
+executable_kinds = ["executable", "shared-library"]
+command_template_kind = "elf-lld"
+response_file_mode = "auto"
+script_asset_kind = "gnu-link-script"
+dynamic_linker_policy = "target-default-with-override"
+library_search_flag = "-L"
+shared_flag = "-shared"
+map_file_support = "flag"
+ordered_symbols_support = "sidecar-file"

@@ -1,0 +1,12 @@
+[resource_tool_profile]
+id = "windres+fpcres-coff"
+pipeline_kind = "optional-rc-plus-res"
+rc_driver_candidates = ["windres"]
+res_driver_candidates = ["fpcres"]
+rc_command_template_kind = "gnu-windres"
+res_command_template_kind = "fpcres-coff"
+input_suffixes = [".rc", ".res"]
+output_suffixes = [".res", ".o"]
+intermediate_asset_kind = "binary-resource"
+single_stage_fallback = "reuse-res-driver"
+arch_parameter_mode = "target-arch-token"
