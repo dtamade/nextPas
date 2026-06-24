@@ -21,7 +21,7 @@ unit nextpas.core.tls.wolfssl.api;
 interface
 
 uses
-   nextpas.core.platform.dl, ctypes,
+   nextpas.core.platform.dl, nextpas.core.base,
   nextpas.core.tls.wolfssl.base;
 
 type

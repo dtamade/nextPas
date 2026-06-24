@@ -12,8 +12,9 @@ unit nextpas.core.tls.freepascal.context;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.base.utils,
-  Base64, SysUtils, Classes,
+  Base64, nextpas.core.fs.stream,
   nextpas.core.fs,
   nextpas.core.text.conv,
   nextpas.core.io.intf,
@@ -101,7 +102,7 @@ type
     FCRLMaterial: TStringArray;
     FServerStapledOCSPResponse: TBytes;
 
-    function ReadStreamToBytes(AStream: TStream): TBytes;
+    function ReadStreamToBytes(AStream: IStream): TBytes;
     function ReadIStreamToBytes(const AStream: IStream; AMaxSize: Int64;
       const AContext: string): TBytes;
     function TicketKey(const ATicket: TBytes): string;
@@ -123,10 +124,10 @@ type
     function GetPreferredVersion: TSSLProtocolVersion;
 
     procedure LoadCertificate(const AFileName: string); overload;
-    procedure LoadCertificate(AStream: TStream); overload;
+    procedure LoadCertificate(AStream: IStream); overload;
     procedure LoadCertificate(ACert: ISSLCertificate); overload;
     procedure LoadPrivateKey(const AFileName: string; const APassword: string = ''); overload;
-    procedure LoadPrivateKey(AStream: TStream; const APassword: string = ''); overload;
+    procedure LoadPrivateKey(AStream: IStream; const APassword: string = ''); overload;
     procedure LoadCertificatePEM(const APEM: string);
     procedure LoadPrivateKeyPEM(const APEM: string; const APassword: string = '');
     procedure LoadCAFile(const AFileName: string);
@@ -189,7 +190,7 @@ type
     function ValidateCertificatePin(const ACertFingerprint: TBytes): Boolean;
 
     function CreateConnection(ASocket: THandle): ISSLConnection; overload;
-    function CreateConnection(AStream: TStream): ISSLConnection; overload;
+    function CreateConnection(AStream: IStream): ISSLConnection; overload;
 
     function IsValid: Boolean;
 
@@ -304,11 +305,11 @@ begin
   inherited Destroy;
 end;
 
-function TFreePascalContext.ReadStreamToBytes(AStream: TStream): TBytes;
+function TFreePascalContext.ReadStreamToBytes(AStream: IStream): TBytes;
 begin
   if AStream = nil then
     RaiseInvalidParameter('AStream');
-  Result := ReadIStreamToBytes(WrapTStream(AStream, False), High(Int64), 'AStream');
+  Result := ReadIStreamToBytes(WrapIStream(AStream, False), High(Int64), 'AStream');
 end;
 
 function TFreePascalContext.ReadIStreamToBytes(const AStream: IStream;
@@ -343,10 +344,10 @@ begin
   Result := UpperCase(Trim(AName));
   if Pos('TLS_', Result) = 1 then
     Delete(Result, 1, 4);
-  Result := StringReplace(Result, '_', '-', [rfReplaceAll]);
-  Result := StringReplace(Result, '-WITH-', '-', []);
-  Result := StringReplace(Result, 'AES-128', 'AES128', []);
-  Result := StringReplace(Result, 'AES-256', 'AES256', []);
+  Result := StringReplace(Result, '_', '-', True);
+  Result := StringReplace(Result, '-WITH-', '-', False);
+  Result := StringReplace(Result, 'AES-128', 'AES128', False);
+  Result := StringReplace(Result, 'AES-256', 'AES256', False);
 end;
 
 function TryAppendUniqueCipherSuite(
@@ -590,7 +591,7 @@ end;
 
 procedure TFreePascalContext.LoadCertificate(const AFileName: string);
 var
-  LStream: TFileStream;
+  LStream: IStream;
   LSize: Int64;
 begin
   if AFileName = '' then
@@ -611,7 +612,7 @@ begin
       'Certificate file exceeds maximum allowed size (%d > %d bytes): %s',
       [LSize, MAX_CERTIFICATE_SIZE, AFileName]);
 
-  LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
+  LStream := FsOpen(AFileName, [fmRead]);
   try
     FCertificateData := ReadStreamToBytes(LStream);
     FCertificateFile := AFileName;
@@ -619,13 +620,13 @@ begin
   end;
 end;
 
-procedure TFreePascalContext.LoadCertificate(AStream: TStream);
+procedure TFreePascalContext.LoadCertificate(AStream: IStream);
 var
   LTransport: IStream;
 begin
   if AStream = nil then
     RaiseInvalidParameter('AStream');
-  LTransport := WrapTStream(AStream, False);
+  LTransport := WrapIStream(AStream, False);
   FCertificateData := ReadIStreamToBytes(LTransport, MAX_CERTIFICATE_SIZE, 'AStream');
 end;
 
@@ -638,7 +639,7 @@ end;
 
 procedure TFreePascalContext.LoadPrivateKey(const AFileName: string; const APassword: string);
 var
-  LStream: TFileStream;
+  LStream: IStream;
   LSize: Int64;
 begin
   if AFileName = '' then
@@ -659,25 +660,24 @@ begin
       'Private key file exceeds maximum allowed size (%d > %d bytes): %s',
       [LSize, MAX_PRIVATE_KEY_SIZE, AFileName]);
 
-  LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
+  LStream := FsOpen(AFileName, [fmRead]);
   try
     FPrivateKeyData := ReadStreamToBytes(LStream);
     FPrivateKeyFile := AFileName;
   finally
-    LStream.Free;
   end;
 
   if APassword <> '' then
     DecryptPrivateKeyData(APassword, 'TFreePascalContext.LoadPrivateKey');
 end;
 
-procedure TFreePascalContext.LoadPrivateKey(AStream: TStream; const APassword: string);
+procedure TFreePascalContext.LoadPrivateKey(AStream: IStream; const APassword: string);
 var
   LTransport: IStream;
 begin
   if AStream = nil then
     RaiseInvalidParameter('AStream');
-  LTransport := WrapTStream(AStream, False);
+  LTransport := WrapIStream(AStream, False);
   FPrivateKeyData := ReadIStreamToBytes(LTransport, MAX_PRIVATE_KEY_SIZE, 'AStream');
   if APassword <> '' then
     DecryptPrivateKeyData(APassword, 'TFreePascalContext.LoadPrivateKey(AStream)');
@@ -1184,11 +1184,11 @@ begin
   Result := TFreePascalConnection.Create(Self as ISSLContext, ASocket);
 end;
 
-function TFreePascalContext.CreateConnection(AStream: TStream): ISSLConnection;
+function TFreePascalContext.CreateConnection(AStream: IStream): ISSLConnection;
 var
   LTransport: IStream;
 begin
-  LTransport := WrapTStream(AStream, False);
+  LTransport := WrapIStream(AStream, False);
   Result := TFreePascalConnection.Create(Self as ISSLContext, LTransport);
 end;
 
@@ -1333,7 +1333,7 @@ end;
 
 procedure TFreePascalContext.LoadServerStapledOCSPResponseFile(const AFileName: string);
 var
-  LStream: TFileStream;
+  LStream: IStream;
   LSize: Int64;
 begin
   if not nextpas.core.fs.IsFile(AFileName) then
@@ -1345,7 +1345,7 @@ begin
       sslFreePascal
     );
 
-  LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
+  LStream := FsOpen(AFileName, [fmRead]);
   try
     LSize := LStream.Size;
     if LSize = 0 then

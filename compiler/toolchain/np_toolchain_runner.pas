@@ -5,14 +5,14 @@ unit np_toolchain_runner;
 interface
 
 uses
-  Classes, Process,
-  nextpas.core.text.conv, nextpas.core.path, nextpas.core.fs.util,
-  nextpas.core.fs.dir, nextpas.core.fs.base, nextpas.core.os.env,
+  nextpas.core.process,
+  nextpas.core.text.conv, nextpas.core.path, nextpas.core.fs, nextpas.core.fs.util,
+  nextpas.core.fs.dir, nextpas.core.fs.base,
   nextpas.core.exception,
   np_toolchain_plan;
 
 type
-  EToolchainRunnerError = class(Exception)
+  EToolchainRunnerError = class(ENextPasError)
   end;
 
   TToolchainExecutedSidecar = record
@@ -119,17 +119,9 @@ begin
 end;
 
 procedure WriteTextFile(const APath: string; const AText: string);
-var
-  Stream: TFileStream;
 begin
   EnsureParentDirectory(APath, 'toolchain.sidecar-parent-invalid');
-  Stream := TFileStream.Create(APath, Classes.fmCreate);
-  try
-    if Length(AText) > 0 then
-      Stream.WriteBuffer(AText[1], Length(AText));
-  finally
-    Stream.Free;
-  end;
+  WriteFileText(APath, AText);
 end;
 
 function LocalFileSearch(const AName, ASearchPath: string): string;
@@ -412,8 +404,8 @@ begin
   Result := False;
   if not SameText(AStep.ToolRole, 'assembler') then
     Exit;
-  if SameText(AStep.StepId, 'native-assemble') then
-    Exit;
+  // Allow native-assemble to be skipped when input .s is missing
+  // (e.g. facade units with empty implementation)
 
   for InputIndex := 0 to Length(AStep.Inputs) - 1 do
     if SameText(AStep.Inputs[InputIndex].Kind, 'assembly-text') and
@@ -426,22 +418,13 @@ function ExecuteStep(
   const AResolvedPath: string
 ): LongInt;
 var
-  ArgIndex: LongInt;
-  Proc: TProcess;
+  LOutput: TProcessOutput;
 begin
-  Proc := TProcess.Create(nil);
-  try
-    Proc.Executable := AResolvedPath;
-    if AStep.WorkingDirectory <> '' then
-      Proc.CurrentDirectory := ExpandFileName(AStep.WorkingDirectory);
-    Proc.Options := [poWaitOnExit];
-    for ArgIndex := 0 to Length(AStep.Argv) - 1 do
-      Proc.Parameters.Add(AStep.Argv[ArgIndex]);
-    Proc.Execute;
-    Result := Proc.ExitStatus;
-  finally
-    Proc.Free;
-  end;
+  if AStep.WorkingDirectory <> '' then
+    LOutput := RunIn(AResolvedPath, AStep.Argv, ExpandFileName(AStep.WorkingDirectory))
+  else
+    LOutput := Run(AResolvedPath, AStep.Argv);
+  Result := LOutput.ExitCode;
 end;
 
 constructor TToolchainRunResult.Create;

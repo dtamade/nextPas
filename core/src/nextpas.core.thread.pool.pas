@@ -19,11 +19,17 @@ uses
   nextpas.core.sync.condvar,
   nextpas.core.platform.thread;
 
+const
+  CNodePoolSize = 64;
+
 type
   PTaskNode = ^TTaskNode;
   TTaskNode = record
     Task: TThreadTask;
+    DirectData: Pointer;
+    DirectProc: TThreadProc;
     Next: PTaskNode;
+    PoolIndex: Integer;  { >=0: slot in pre-allocated pool; -1: heap-allocated }
   end;
 
   TThreadPool = class(TInterfacedObject, IThreadPool)
@@ -37,10 +43,16 @@ type
     FWorkers: array of TPlatformThreadHandle;
     FShutdown: Boolean;
     FPendingTasks: Integer;
+    { Pre-allocated node pool: GetMem block that never moves }
+    FPoolNodes: PTaskNode;     { pointer to array[0..CNodePoolSize-1] of TTaskNode }
+    FPoolFreeCount: Integer;   { nodes [0..FPoolFreeCount-1] are available }
+    function AcquireNode: PTaskNode;
+    procedure ReturnNode(ANode: PTaskNode);
   public
     constructor Create(const AWorkerCount: Integer);
     destructor Destroy; override;
     procedure Submit(const ATask: TThreadTask);
+    procedure SubmitDirect(AData: Pointer; AProc: TThreadProc);
     procedure Shutdown;
     procedure WaitAll;
     function GetWorkerCount: Integer;
@@ -51,6 +63,8 @@ var
   LPool: TThreadPool;
   LNode: PTaskNode;
   LTask: TThreadTask;
+  LDirectProc: TThreadProc;
+  LDirectData: Pointer;
 begin
   Result := nil;
   LPool := TThreadPool(AArg);
@@ -75,16 +89,35 @@ begin
 
     LPool.FMutex.Release;
 
-    // Transfer ownership without triggering refcount (avoid race)
-    Pointer(LTask) := Pointer(LNode^.Task);
-    Pointer(LNode^.Task) := nil;
-    Dispose(LNode);
-
-    try
-      LTask();
-    except
+    { Snapshot task info before returning node to pool }
+    LDirectProc := LNode^.DirectProc;
+    LDirectData := LNode^.DirectData;
+    if Assigned(LDirectProc) then
+    begin
+      { Direct path: no refcounted closure. Clear and return node. }
+      Pointer(LNode^.Task) := nil;
+      LNode^.DirectProc := nil;
+      LNode^.DirectData := nil;
+      LPool.ReturnNode(LNode);
+      try
+        LDirectProc(LDirectData);
+      except
+      end;
+    end
+    else
+    begin
+      { Closure path: transfer ownership without triggering refcount (avoid race) }
+      Pointer(LTask) := Pointer(LNode^.Task);
+      Pointer(LNode^.Task) := nil;
+      LNode^.DirectProc := nil;
+      LNode^.DirectData := nil;
+      LPool.ReturnNode(LNode);
+      try
+        LTask();
+      except
+      end;
+      LTask := nil;
     end;
-    LTask := nil;
 
     LPool.FMutex.Acquire;
     Dec(LPool.FPendingTasks);
@@ -95,6 +128,50 @@ begin
 end;
 
 { TThreadPool }
+
+function TThreadPool.AcquireNode: PTaskNode;
+begin
+  { Caller must hold FMutex }
+  if FPoolFreeCount > 0 then
+  begin
+    Dec(FPoolFreeCount);
+    Result := @FPoolNodes[FPoolFreeCount];
+    Result^.PoolIndex := FPoolFreeCount;
+  end
+  else
+  begin
+    New(Result);
+    Result^.PoolIndex := -1;
+  end;
+  Pointer(Result^.Task) := nil;
+  Result^.DirectProc := nil;
+  Result^.DirectData := nil;
+  Result^.Next := nil;
+end;
+
+procedure TThreadPool.ReturnNode(ANode: PTaskNode);
+begin
+  { Called by worker after task execution, outside mutex }
+  if ANode^.PoolIndex >= 0 then
+  begin
+    FMutex.Acquire;
+    { Place back into pool: swap into free region }
+    if FPoolFreeCount < CNodePoolSize then
+    begin
+      FPoolNodes[FPoolFreeCount] := ANode^;
+      FPoolNodes[FPoolFreeCount].PoolIndex := FPoolFreeCount;
+      FPoolNodes[FPoolFreeCount].Next := nil;
+      Inc(FPoolFreeCount);
+    end;
+    FMutex.Release;
+  end
+  else
+  begin
+    { Heap-allocated node (pool was exhausted at submit time) }
+    Pointer(ANode^.Task) := nil;
+    Dispose(ANode);
+  end;
+end;
 
 constructor TThreadPool.Create(const AWorkerCount: Integer);
 var
@@ -119,6 +196,11 @@ begin
   FWorkerCount := LCount;
   SetLength(FWorkers, LCount);
 
+  { Pre-allocate node pool: GetMem block, never moves, no refcount overhead }
+  GetMem(FPoolNodes, CNodePoolSize * SizeOf(TTaskNode));
+  FillChar(FPoolNodes^, CNodePoolSize * SizeOf(TTaskNode), 0);
+  FPoolFreeCount := CNodePoolSize;
+
   for LI := 0 to LCount - 1 do
     platform_thread_create(FWorkers[LI], @WorkerProc, Self);
 end;
@@ -126,6 +208,11 @@ end;
 destructor TThreadPool.Destroy;
 begin
   Shutdown;
+  if FPoolNodes <> nil then
+  begin
+    FreeMem(FPoolNodes);
+    FPoolNodes := nil;
+  end;
   FDoneCondVar := nil;
   FCondVar := nil;
   FMutex := nil;
@@ -144,9 +231,35 @@ begin
     Exit;
   end;
 
-  New(LNode);
+  LNode := AcquireNode;
   LNode^.Task := ATask;
-  LNode^.Next := nil;
+
+  if FTail <> nil then
+    FTail^.Next := LNode
+  else
+    FHead := LNode;
+  FTail := LNode;
+  Inc(FPendingTasks);
+
+  FMutex.Release;
+  FCondVar.Signal;
+end;
+
+procedure TThreadPool.SubmitDirect(AData: Pointer; AProc: TThreadProc);
+var
+  LNode: PTaskNode;
+begin
+  FMutex.Acquire;
+
+  if FShutdown then
+  begin
+    FMutex.Release;
+    Exit;
+  end;
+
+  LNode := AcquireNode;
+  LNode^.DirectData := AData;
+  LNode^.DirectProc := AProc;
 
   if FTail <> nil then
     FTail^.Next := LNode

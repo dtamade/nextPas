@@ -76,7 +76,6 @@ implementation
 
 uses
   nextpas.core.text.strings,
-  Math,
   nextpas.core.tls.errors;
 
 

@@ -3,7 +3,9 @@ program test_installed_target_unit_call_binding;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.fs,
+  nextpas.core.path,
+  nextpas.core.text.conv,
   np_compilation_session,
   np_target_facts,
   np_workspace_model;

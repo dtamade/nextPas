@@ -1288,8 +1288,10 @@ begin
               ((ASourceText[StartIndex] = '+') or (ASourceText[StartIndex] = '-')) then
               Inc(StartIndex);
             if (StartIndex <= Length(ASourceText)) and IsDigit(ASourceText[StartIndex]) then
+            begin
               while (StartIndex <= Length(ASourceText)) and IsDigit(ASourceText[StartIndex]) do
-                Inc(StartIndex)
+                Inc(StartIndex);
+            end
             else
               StartIndex := ExponentSaveIndex;
           end;

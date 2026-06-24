@@ -233,6 +233,9 @@ const
 function GetSectionSuffix(const AKey, APrefix: string; out ASuffix: string): Boolean;
 var
   LPrefixLen: Integer;
+  LKeyPrefix: string;
+  LAKeyCopy: string;
+  LAKeyLower: string;
 begin
   ASuffix := '';
   if AKey = '' then
@@ -249,10 +252,13 @@ begin
     Exit(False);
   if AKey[LPrefixLen + 1] <> '.' then
     Exit(False);
-  if LowerCase(Copy(AKey, 1, LPrefixLen)) <> LowerCase(APrefix) then
+  LKeyPrefix := LowerCase(Copy(AKey, 1, LPrefixLen));
+  LAKeyLower := LowerCase(APrefix);
+  if LKeyPrefix <> LAKeyLower then
     Exit(False);
 
-  ASuffix := Copy(AKey, LPrefixLen + 2, Length(AKey) - LPrefixLen - 1);
+  LAKeyCopy := Copy(AKey, LPrefixLen + 2, Length(AKey) - LPrefixLen - 1);
+  ASuffix := LAKeyCopy;
   Result := ASuffix <> '';
 end;
 
@@ -328,11 +334,15 @@ function StringArrayContains(const AItems: TStringArray; const ACount: Integer;
 var
   LI: Integer;
   LLower: string;
+  LItemLower: string;
 begin
   LLower := LowerCase(AValue);
   for LI := 0 to ACount - 1 do
-    if LowerCase(AItems[LI]) = LLower then
+  begin
+    LItemLower := LowerCase(AItems[LI]);
+    if LItemLower = LLower then
       Exit(True);
+  end;
   Result := False;
 end;
 

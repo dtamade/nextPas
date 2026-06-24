@@ -19,7 +19,7 @@ function Argon2Verify(const APassword: TBytes; const AEncodedHash: string): Bool
 implementation
 
 uses
-  Math, nextpas.core.crypto.hash;
+  nextpas.core.math, nextpas.core.crypto.hash;
 
 function Blake2bLong(const AInput: TBytes; AOutLen: Integer): TBytes;
 var

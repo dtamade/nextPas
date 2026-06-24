@@ -1,4 +1,4 @@
-unit nextpas.core.text.unicode.&case;
+unit nextpas.core.text.unicode.casefold;
 
 {$I nextpas.core.settings.inc}
 

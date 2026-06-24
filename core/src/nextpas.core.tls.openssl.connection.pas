@@ -19,9 +19,9 @@ unit nextpas.core.tls.openssl.connection;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.sync,
   nextpas.core.base.utils,
-  SysUtils, nextpas.core.system.classes, ctypes,
   nextpas.core.io.intf,
   nextpas.core.io.stream_adapter,
   nextpas.core.io.util,
@@ -121,7 +121,6 @@ type
 
   public
     constructor Create(AContext: ISSLContext; ASocket: THandle); overload;
-    constructor Create(AContext: ISSLContext; AStream: TStream); overload;
     constructor Create(AContext: ISSLContext; AStream: IStream); overload;
     destructor Destroy; override;
 
@@ -203,11 +202,6 @@ begin
     RaiseFunctionNotAvailable('SSL_set_fd');
 
   SSL_set_fd(FSSL, ASocket);
-end;
-
-constructor TOpenSSLConnection.Create(AContext: ISSLContext; AStream: TStream);
-begin
-  Create(AContext, WrapTStream(AStream, False));
 end;
 
 constructor TOpenSSLConnection.Create(AContext: ISSLContext; AStream: IStream);
@@ -433,7 +427,7 @@ begin
   Result := -1;
   if FSSL = nil then Exit;
 
-  // Stream-based blocking read using BIO <-> TStream bridge
+  // Stream-based blocking read using BIO <-> IStream bridge
   if HasStreamTransport then
   begin
     // Ensure handshake completed
@@ -521,7 +515,7 @@ begin
   Result := -1;
   if FSSL = nil then Exit;
 
-  // Stream-based blocking write using BIO <-> TStream bridge
+  // Stream-based blocking write using BIO <-> IStream bridge
   if HasStreamTransport then
   begin
     // Ensure handshake completed

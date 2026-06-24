@@ -3,7 +3,8 @@ program test_process_lifecycle;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, np_semantic_model, np_hir_builder, np_hir_model, np_hir_types;
+  nextpas.core.exception, np_semantic_model, np_hir_builder, np_hir_model,
+  np_hir_types;
 
 function HasCallTarget(const AFunc: THIRFunction;
   const ATarget: string): Boolean;

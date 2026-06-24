@@ -5,7 +5,8 @@ unit nextpas_command_build;
 interface
 
 uses
-  SysUtils, nextpas_projection_types, nextpas_command_envelope,
+  nextpas.core.exception, nextpas.core.path, nextpas.core.fs, nextpas.core.text.conv,
+  nextpas_projection_types, nextpas_command_envelope,
   nextpas_projection_json, nextpas_projection_text, nextpas_projection_context,
   np_compilation_session, np_target_facts, np_workspace_model,
   np_toolchain_runner, target_config;

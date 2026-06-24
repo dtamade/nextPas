@@ -66,7 +66,6 @@ type
 implementation
 
 uses
-  SysUtils,
   nextpas.core.atomic,
   nextpas.core.platform.windows.ffi;
 

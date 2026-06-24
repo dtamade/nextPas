@@ -11,7 +11,10 @@ unit nextpas.core.tls.freepascal.earlydatareplay.dirstore;
 interface
 
 uses
-  SysUtils, Classes, nextpas.core.fs,
+  nextpas.core.base,
+  nextpas.core.io.intf,
+  nextpas.core.fs.stream, nextpas.core.fs, nextpas.core.fs.glob,
+  nextpas.core.platform.files.base,
   nextpas.core.tls.freepascal.session;
 
 type
@@ -21,11 +24,11 @@ type
     IFreePascalEarlyDataReplayStoreGuard)
   private
     FOwner: TFreePascalDirectoryEarlyDataReplayStore;
-    FLockStream: TFileStream;
+    FLockHandle: TPlatformFileHandle;
   public
     constructor Create(
       AOwner: TFreePascalDirectoryEarlyDataReplayStore;
-      ALockStream: TFileStream
+      const ALockHandle: TPlatformFileHandle
     );
     destructor Destroy; override;
   end;
@@ -46,9 +49,9 @@ type
       const ADirectoryName: string;
       out AEntries: TFreePascalEarlyDataReplayStoreEntries
     ): Boolean;
-    function OpenLockFileStream(out ALockStream: TFileStream): Boolean;
-    function AcquireStoreLock(out ALockStream: TFileStream): Boolean;
-    procedure ReleaseStoreLock(var ALockStream: TFileStream);
+    function OpenLockFileHandle(out ALockHandle: TPlatformFileHandle): Boolean;
+    function AcquireStoreLock(out ALockHandle: TPlatformFileHandle): Boolean;
+    procedure ReleaseStoreLock(var ALockHandle: TPlatformFileHandle);
     function WriteSnapshotDirectory(
       const ADirectoryName: string;
       const AEntries: TFreePascalEarlyDataReplayStoreEntries
@@ -80,10 +83,10 @@ type
 
 implementation
 
-{$IFDEF UNIX}
 uses
-  Unix;
-{$ENDIF}
+  nextpas.core.exception,
+  nextpas.core.text.conv,
+  nextpas.core.platform.files;
 
 const
   FREEPASCAL_DIRECTORY_REPLAY_STORE_VERSION = 1;
@@ -109,24 +112,29 @@ begin
   end;
 end;
 
+function LockHandleIsValid(const AHandle: TPlatformFileHandle): Boolean; inline;
+begin
+  Result := AHandle.Value <> PLATFORM_FILE_INVALID_HANDLE.Value;
+end;
+
 constructor TFreePascalDirectoryEarlyDataReplayStoreGuard.Create(
   AOwner: TFreePascalDirectoryEarlyDataReplayStore;
-  ALockStream: TFileStream
+  const ALockHandle: TPlatformFileHandle
 );
 begin
   inherited Create;
   FOwner := AOwner;
-  FLockStream := ALockStream;
+  FLockHandle := ALockHandle;
 end;
 
 destructor TFreePascalDirectoryEarlyDataReplayStoreGuard.Destroy;
 begin
   if FOwner <> nil then
-    FOwner.ReleaseStoreLock(FLockStream)
-  else if FLockStream <> nil then
+    FOwner.ReleaseStoreLock(FLockHandle)
+  else if LockHandleIsValid(FLockHandle) then
   begin
-    FLockStream.Free;
-    FLockStream := nil;
+    platform_file_unlock(FLockHandle);
+    platform_file_close(FLockHandle);
   end;
 
   LeaveCriticalSection(GReplayDirectoryStoreLock);
@@ -260,11 +268,12 @@ function TFreePascalDirectoryEarlyDataReplayStore.LoadEntriesFromDirectory(
   out AEntries: TFreePascalEarlyDataReplayStoreEntries
 ): Boolean;
 var
-  LSearchRec: TSearchRec;
+  LDirectoryEntries: TDirEntryArray;
+  LEntryFiles: TStringArray;
   LEntry: TFreePascalEarlyDataReplayStoreEntry;
   LEntryPath: string;
   LEncodedKey: string;
-  LEntryCount: Integer;
+  I: Integer;
 begin
   Result := False;
   SetLength(AEntries, 0);
@@ -274,128 +283,92 @@ begin
   if not nextpas.core.fs.IsDir(ADirectoryName) then
     Exit(False);
 
-  LEntryCount := 0;
-  if FindFirst(nextpas.core.fs.PathEnsureSep(ADirectoryName) + '*', faAnyFile, LSearchRec) <> 0 then
+  LDirectoryEntries := nextpas.core.fs.ReadDir(ADirectoryName);
+  LEntryFiles := FsGlob(ADirectoryName, '*');
+  if Length(LEntryFiles) <> Length(LDirectoryEntries) then
+    Exit(False);
+  if Length(LEntryFiles) > MAX_REPLAY_PROVIDER_ENTRY_COUNT then
     Exit(False);
 
-  try
-    repeat
-      if (LSearchRec.Name = '.') or (LSearchRec.Name = '..') then
-        Continue;
-      if (LSearchRec.Attr and faDirectory) <> 0 then
-        Exit(False);
-      if (Length(LSearchRec.Name) <= Length(DIRECTORY_REPLAY_ENTRY_SUFFIX)) or
-        (Copy(
-            LSearchRec.Name,
-            Length(LSearchRec.Name) - Length(DIRECTORY_REPLAY_ENTRY_SUFFIX) + 1,
-            Length(DIRECTORY_REPLAY_ENTRY_SUFFIX)
-          ) <> DIRECTORY_REPLAY_ENTRY_SUFFIX) then
-        Exit(False);
+  SetLength(AEntries, Length(LEntryFiles));
+  for I := 0 to High(LEntryFiles) do
+  begin
+    LEntryPath := LEntryFiles[I];
+    LEncodedKey := nextpas.core.fs.PathBase(LEntryPath);
+    if (Length(LEncodedKey) <= Length(DIRECTORY_REPLAY_ENTRY_SUFFIX)) or
+      (Copy(
+          LEncodedKey,
+          Length(LEncodedKey) - Length(DIRECTORY_REPLAY_ENTRY_SUFFIX) + 1,
+          Length(DIRECTORY_REPLAY_ENTRY_SUFFIX)
+        ) <> DIRECTORY_REPLAY_ENTRY_SUFFIX) then
+      Exit(False);
 
-      Inc(LEntryCount);
-      if LEntryCount > MAX_REPLAY_PROVIDER_ENTRY_COUNT then
-        Exit(False);
-
-      LEncodedKey := Copy(
-        LSearchRec.Name,
-        1,
-        Length(LSearchRec.Name) - Length(DIRECTORY_REPLAY_ENTRY_SUFFIX)
-      );
-      LEntryPath := nextpas.core.fs.PathEnsureSep(ADirectoryName) + LSearchRec.Name;
-      if not TryLoadEntry(LEntryPath, LEncodedKey, LEntry) then
-        Exit(False);
-
-      SetLength(AEntries, LEntryCount);
-      AEntries[LEntryCount - 1] := LEntry;
-    until FindNext(LSearchRec) <> 0;
-  finally
-    FindClose(LSearchRec);
+    LEncodedKey := Copy(
+      LEncodedKey,
+      1,
+      Length(LEncodedKey) - Length(DIRECTORY_REPLAY_ENTRY_SUFFIX)
+    );
+    if not TryLoadEntry(LEntryPath, LEncodedKey, LEntry) then
+      Exit(False);
+    AEntries[I] := LEntry;
   end;
 
   Result := True;
 end;
 
-function TFreePascalDirectoryEarlyDataReplayStore.OpenLockFileStream(
-  out ALockStream: TFileStream
+function TFreePascalDirectoryEarlyDataReplayStore.OpenLockFileHandle(
+  out ALockHandle: TPlatformFileHandle
 ): Boolean;
 var
   LLockFileName: string;
   LDir: string;
-  LCreateStream: TFileStream;
-  LAttempt: Integer;
 begin
   Result := False;
-  ALockStream := nil;
+  ALockHandle := PLATFORM_FILE_INVALID_HANDLE;
 
   LLockFileName := GetLockFileName;
   if LLockFileName = '' then
     Exit;
 
-  LDir := ExtractFileDir(LLockFileName);
+  LDir := nextpas.core.fs.PathDir(LLockFileName);
   if (LDir <> '') and (not nextpas.core.fs.MkdirAll(LDir)) then
     Exit;
 
-  for LAttempt := 1 to 2 do
-  begin
-    try
-      ALockStream := TFileStream.Create(LLockFileName, fmOpenReadWrite or fmShareDenyWrite);
-      Exit(True);
-    except
-      if LAttempt = 2 then
-        Exit(False);
-    end;
-
-    try
-      LCreateStream := TFileStream.Create(LLockFileName, Ord(fmCreate));
-      try
-      finally
-        LCreateStream.Free;
-      end;
-    except
-      // A concurrent creator may have won the race; the second open attempt decides.
-    end;
-  end;
+  Result := platform_file_open_ex(PAnsiChar(LLockFileName),
+    fomReadWrite, fcmOpenOrCreate, False, False, UInt32(PermDefault),
+    ALockHandle) = 0;
 end;
 
 function TFreePascalDirectoryEarlyDataReplayStore.AcquireStoreLock(
-  out ALockStream: TFileStream
+  out ALockHandle: TPlatformFileHandle
 ): Boolean;
 begin
   Result := False;
-  ALockStream := nil;
+  ALockHandle := PLATFORM_FILE_INVALID_HANDLE;
 
-  if not OpenLockFileStream(ALockStream) then
+  if not OpenLockFileHandle(ALockHandle) then
     Exit;
-  {$IFDEF UNIX}
-  if FpFlock(ALockStream.Handle, LOCK_EX or LOCK_NB) <> 0 then
+  if platform_file_trylock(ALockHandle, True) <> 0 then
   begin
-    ALockStream.Free;
-    ALockStream := nil;
+    platform_file_close(ALockHandle);
     Exit(False);
   end;
-  {$ENDIF}
   Result := True;
 end;
 
 procedure TFreePascalDirectoryEarlyDataReplayStore.ReleaseStoreLock(
-  var ALockStream: TFileStream
+  var ALockHandle: TPlatformFileHandle
 );
 begin
-  if ALockStream = nil then
+  if not LockHandleIsValid(ALockHandle) then
     Exit;
-  {$IFDEF UNIX}
-  FpFlock(ALockStream.Handle, LOCK_UN);
-  {$ENDIF}
-  ALockStream.Free;
-  ALockStream := nil;
+  platform_file_unlock(ALockHandle);
+  platform_file_close(ALockHandle);
 end;
 
 function TFreePascalDirectoryEarlyDataReplayStore.RemovePathTree(
   const APath: string
 ): Boolean;
-var
-  LSearchRec: TSearchRec;
-  LEntryPath: string;
 begin
   Result := False;
 
@@ -405,24 +378,7 @@ begin
     Exit(nextpas.core.fs.Remove(APath));
   if not nextpas.core.fs.IsDir(APath) then
     Exit(True);
-
-  if FindFirst(nextpas.core.fs.PathEnsureSep(APath) + '*', faAnyFile, LSearchRec) = 0 then
-  begin
-    repeat
-      if (LSearchRec.Name = '.') or (LSearchRec.Name = '..') then
-        Continue;
-
-      LEntryPath := nextpas.core.fs.PathEnsureSep(APath) + LSearchRec.Name;
-      if not RemovePathTree(LEntryPath) then
-      begin
-        FindClose(LSearchRec);
-        Exit(False);
-      end;
-    until FindNext(LSearchRec) <> 0;
-    FindClose(LSearchRec);
-  end;
-
-  Result := RemoveDir(APath);
+  Result := nextpas.core.fs.RemoveAll(APath);
 end;
 
 function TFreePascalDirectoryEarlyDataReplayStore.RenamePathAt(
@@ -438,7 +394,7 @@ function TFreePascalDirectoryEarlyDataReplayStore.WriteSnapshotDirectory(
   const AEntries: TFreePascalEarlyDataReplayStoreEntries
 ): Boolean;
 var
-  LStream: TFileStream;
+  LStream: IStream;
   LFileName: string;
   I: Integer;
   LVersion: Integer;
@@ -457,13 +413,12 @@ begin
 
       LFileName := nextpas.core.fs.PathEnsureSep(ADirectoryName) +
         EncodeKey(AEntries[I].Key) + DIRECTORY_REPLAY_ENTRY_SUFFIX;
-      LStream := TFileStream.Create(LFileName, Ord(fmCreate));
+      LStream := FsCreate(LFileName);
       try
         LVersion := FREEPASCAL_DIRECTORY_REPLAY_STORE_VERSION;
-        LStream.WriteBuffer(LVersion, SizeOf(Integer));
-        LStream.WriteBuffer(AEntries[I].ExpiresAt, SizeOf(TDateTime));
+        LStream.Write(LVersion, SizeOf(Integer));
+        LStream.Write(AEntries[I].ExpiresAt, SizeOf(TDateTime));
       finally
-        LStream.Free;
       end;
     end;
 
@@ -479,7 +434,7 @@ function TFreePascalDirectoryEarlyDataReplayStore.TryLoadEntry(
   out AEntry: TFreePascalEarlyDataReplayStoreEntry
 ): Boolean;
 var
-  LStream: TFileStream;
+  LStream: IStream;
   LVersion: Integer;
 begin
   Result := False;
@@ -492,19 +447,18 @@ begin
     Exit;
 
   try
-    LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
+    LStream := FsOpen(AFileName, [fmRead]);
     try
-      LStream.ReadBuffer(LVersion, SizeOf(Integer));
+      LStream.Read(LVersion, SizeOf(Integer));
       if LVersion <> FREEPASCAL_DIRECTORY_REPLAY_STORE_VERSION then
         Exit(False);
 
-      LStream.ReadBuffer(AEntry.ExpiresAt, SizeOf(TDateTime));
+      LStream.Read(AEntry.ExpiresAt, SizeOf(TDateTime));
       if LStream.Position <> LStream.Size then
         Exit(False);
 
       Result := True;
     finally
-      LStream.Free;
     end;
   except
     Result := False;
@@ -515,27 +469,27 @@ function TFreePascalDirectoryEarlyDataReplayStore.AcquireUpdateGuard(
   out AGuard: IFreePascalEarlyDataReplayStoreGuard
 ): Boolean;
 var
-  LLockStream: TFileStream;
+  LLockHandle: TPlatformFileHandle;
 begin
   Result := False;
   AGuard := nil;
-  LLockStream := nil;
+  LLockHandle := PLATFORM_FILE_INVALID_HANDLE;
 
   if FDirectoryName = '' then
     Exit;
 
   EnterCriticalSection(GReplayDirectoryStoreLock);
-  if not AcquireStoreLock(LLockStream) then
+  if not AcquireStoreLock(LLockHandle) then
   begin
     LeaveCriticalSection(GReplayDirectoryStoreLock);
     Exit;
   end;
 
   try
-    AGuard := TFreePascalDirectoryEarlyDataReplayStoreGuard.Create(Self, LLockStream);
+    AGuard := TFreePascalDirectoryEarlyDataReplayStoreGuard.Create(Self, LLockHandle);
     Result := AGuard <> nil;
   except
-    ReleaseStoreLock(LLockStream);
+    ReleaseStoreLock(LLockHandle);
     LeaveCriticalSection(GReplayDirectoryStoreLock);
     raise;
   end;
@@ -572,7 +526,7 @@ begin
   if Length(AEntries) > MAX_REPLAY_PROVIDER_ENTRY_COUNT then
     Exit;
 
-  LParentDirectory := ExtractFileDir(FDirectoryName);
+  LParentDirectory := nextpas.core.fs.PathDir(FDirectoryName);
   if (LParentDirectory <> '') and (not nextpas.core.fs.MkdirAll(LParentDirectory)) then
     Exit;
 

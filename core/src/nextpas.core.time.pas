@@ -19,7 +19,8 @@ uses
   nextpas.core.time.timer,
   nextpas.core.time.ticker,
   nextpas.core.time.period,
-  nextpas.core.time.format;
+  nextpas.core.time.format,
+  nextpas.core.time.cpu;
 
 type
   TDuration = nextpas.core.time.base.TDuration;
@@ -42,6 +43,7 @@ function DateTimeNow: TDateTime;
 function DateTimeUtcNow: TDateTime;
 function DateTimeSecondsBetween(const ANewer, AOlder: TDateTime): Int64;
 function DateTimeMillisecondsBetween(const ANewer, AOlder: TDateTime): Int64;
+function DaysBetween(const ANewer, AOlder: TDateTime): Integer;
 function DateTimeAddSeconds(const AValue: TDateTime; const ASeconds: Int64): TDateTime;
 function ParseISO8601Date(const AStr: string): nextpas.core.time.date.TDate; inline;
 function TryParseISO8601Date(const AStr: string; out ADate: nextpas.core.time.date.TDate): Boolean; inline;
@@ -51,6 +53,7 @@ function ParseISO8601DateTime(const AStr: string): nextpas.core.time.datetime.TN
 function TryParseISO8601DateTime(const AStr: string; out ADT: nextpas.core.time.datetime.TNaiveDateTime): Boolean; inline;
 function FormatDateTime(const APattern: string; const ADT: TDateTime): string; inline;
 function DateTimeToStr(const ADT: TDateTime): string; inline;
+function GetTickCount64: UInt64; inline;
 function DateToStr(const ADT: TDateTime): string; inline;
 function EncodeDate(const AYear, AMonth, ADay: Word): TDateTime;
 function EncodeTime(const AHour, AMinute, ASecond, AMSec: Word): TDateTime;
@@ -114,6 +117,11 @@ begin
   Result := Trunc((ANewer - AOlder) * 86400000.0);
 end;
 
+function DaysBetween(const ANewer, AOlder: TDateTime): Integer;
+begin
+  Result := Abs(Trunc(ANewer - AOlder));
+end;
+
 function DateTimeAddSeconds(const AValue: TDateTime; const ASeconds: Int64): TDateTime;
 begin
   Result := AValue + (ASeconds / 86400.0);
@@ -162,6 +170,11 @@ end;
 function DateToStr(const ADT: TDateTime): string;
 begin
   Result := FormatDateTime('yyyy-mm-dd', ADT);
+end;
+
+function GetTickCount64: UInt64;
+begin
+  Result := nextpas.core.time.cpu.GetTickCount64;
 end;
 
 function EncodeDate(const AYear, AMonth, ADay: Word): TDateTime;

@@ -192,6 +192,20 @@ function GetEnv(const AName: string): string; inline;
 {** @desc 获取系统临时目录路径（末尾带分隔符） *}
 function GetTempDir: string;
 
+{ SysUtils-compatible aliases }
+{** @desc 检查文件是否存在（SysUtils FileExists 兼容） *}
+function FileExists(const APath: string): Boolean; inline;
+{** @desc 检查目录是否存在（SysUtils DirectoryExists 兼容） *}
+function DirectoryExists(const APath: string): Boolean; inline;
+{** @desc 递归创建目录（SysUtils ForceDirectories 兼容） *}
+function ForceDirectories(const APath: string): Boolean; inline;
+{** @desc 删除文件（SysUtils DeleteFile 兼容） *}
+function DeleteFile(const APath: string): Boolean; inline;
+{** @desc 获取当前工作目录（SysUtils GetCurrentDir 兼容） *}
+function GetCurrentDir: string; inline;
+{** @desc 获取环境变量（SysUtils GetEnvironmentVariable 兼容） *}
+function GetEnvironmentVariable(const AName: string): string; inline;
+
 implementation
 
 function Utf8TextToBytes(const AText: string): TBytes;
@@ -518,6 +532,38 @@ begin
   if Result = '' then Result := '/tmp';
   {$ENDIF}
   Result := PathEnsureSep(Result);
+end;
+
+{ SysUtils-compatible aliases }
+
+function FileExists(const APath: string): Boolean;
+begin
+  Result := IsFile(APath);
+end;
+
+function DirectoryExists(const APath: string): Boolean;
+begin
+  Result := IsDir(APath);
+end;
+
+function ForceDirectories(const APath: string): Boolean;
+begin
+  Result := MkdirAll(APath);
+end;
+
+function DeleteFile(const APath: string): Boolean;
+begin
+  Result := Remove(APath);
+end;
+
+function GetCurrentDir: string;
+begin
+  Result := GetCwd;
+end;
+
+function GetEnvironmentVariable(const AName: string): string;
+begin
+  Result := GetEnv(AName);
 end;
 
 end.

@@ -3,7 +3,7 @@ program test_hir_builder_structured_address;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   np_hir_builder,
   np_hir_model,
   np_hir_types,

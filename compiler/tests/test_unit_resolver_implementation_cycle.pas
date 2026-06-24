@@ -3,7 +3,9 @@ program test_unit_resolver_implementation_cycle;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.fs,
+  nextpas.core.path,
+  nextpas.core.text.conv,
   np_ast_facade,
   np_diagnostics_sink,
   np_green_tree,

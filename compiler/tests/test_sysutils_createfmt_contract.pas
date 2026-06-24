@@ -3,7 +3,8 @@ program test_sysutils_createfmt_contract;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils;
+  nextpas.core.exception,
+  nextpas.core.text.conv;
 
 var
   ExceptionClass: ExceptClass;

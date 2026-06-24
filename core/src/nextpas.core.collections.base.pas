@@ -5,7 +5,7 @@ unit nextpas.core.collections.base;
 interface
 
 uses
-  nextpas.core.system.typinfo, variants,
+  nextpas.core.system.typinfo,
   nextpas.core.text.conv,
   nextpas.core.base,
   nextpas.core.math,
@@ -848,32 +848,8 @@ end;
 
 
 function compare_variant(const aLeft, aRight: Variant): SizeInt;
-var
-  LLeftString, LRightString: string;
 begin
-  try
-    case VarCompareValue(aLeft, aRight) of
-      vrGreaterThan:
-        Exit(1);
-      vrLessThan:
-        Exit(-1);
-      vrEqual:
-        Exit(0);
-      vrNotEqual:
-        if VarIsEmpty(aLeft) or VarIsNull(aLeft) then
-          Exit(1)
-        else
-          Exit(-1);
-    end;
-  except
-    try
-      LLeftString  := aLeft;
-      LRightString := aRight;
-      Result := CompareStr(LLeftString, LRightString);
-    except
-      Result := CompareMemRange(@aLeft, @aRight, SizeOf(System.Variant));
-    end;
-  end;
+  Result := CompareMemRange(@aLeft, @aRight, SizeOf(System.Variant));
 end;
 
 function compare_string(const aLeft, aRight: string): SizeInt;
@@ -1072,7 +1048,7 @@ end;
 
 function equals_variant(const aLeft, aRight: Variant): Boolean;
 begin
-  Result := (VarCompareValue(aLeft, aRight) = vrEqual);
+  Result := (CompareMemRange(@aLeft, @aRight, SizeOf(System.Variant)) = 0);
 end;
 
 function equals_string(const aLeft, aRight: string): Boolean;

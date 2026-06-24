@@ -161,7 +161,8 @@ type
     function IsSupportedOwnedStringReturnConcatOperand(
       const ANode: TGreenNode; out AFuncName: string): Boolean;
     function ConcatExpressionConsumesOwnedStringReturnDeferred(
-      const ANode: TGreenNode): Boolean;
+      const ANode: TGreenNode;
+      const AInsideDirectOwnedAssignmentRhs: Boolean): Boolean;
     function CompareOperandOwnsStringReturn(
       const ANode: TGreenNode; out AFuncName: string): Boolean;
     function IsSupportedOwnedStringReturnCompareOperand(
@@ -757,10 +758,25 @@ end;
 function TSemanticAnalyzer.IsRuntimeStrVar(const AName: string): Boolean;
 var
   Idx: LongInt;
+  SymId: LongInt;
+  TypeId: LongInt;
+  TypeName: string;
 begin
   for Idx := 0 to Length(FRuntimeStrVarNames) - 1 do
     if SameText(FRuntimeStrVarNames[Idx], AName) then
       Exit(True);
+  { Also accept any string-typed variable — they hold safe string values }
+  SymId := FModel.FindSymbolByName(AName);
+  if SymId > 0 then
+  begin
+    TypeId := FModel.SymbolAt(SymId - 1).TypeId;
+    if TypeId > 0 then
+    begin
+      TypeName := FModel.TypeAt(TypeId - 1).Name;
+      if SameText(TypeName, 'String') or SameText(TypeName, 'AnsiString') then
+        Exit(True);
+    end;
+  end;
   Result := False;
 end;
 
@@ -904,6 +920,8 @@ function TSemanticAnalyzer.StringReturnFunctionNameFromNode(
   const ANode: TGreenNode; out AName: string): Boolean;
 var
   BodyNode, DeclNode: TGreenNode;
+  SymbolId, TypeId: LongInt;
+  TypeName: string;
 begin
   AName := '';
   Result := False;
@@ -915,10 +933,28 @@ begin
     AName := ANode.Text;
   if AName = '' then
     Exit;
-  if (not LookupProcedureBody(AName, BodyNode, DeclNode)) or
-    (not DeclReturnsString(DeclNode)) then
+  if LookupProcedureBody(AName, BodyNode, DeclNode) and
+    DeclReturnsString(DeclNode) then
+    Exit(True);
+  { Fallback: check semantic model for imported functions }
+  SymbolId := FModel.LookupSymbol(AName, FCurrentScopeId);
+  if SymbolId <= 0 then
+    SymbolId := FModel.FindSymbolByName(AName);
+  if SymbolId <= 0 then
     Exit;
-  Result := True;
+  { Only accept actual function/procedure symbols — not parameters,
+    variables, constants, or fields. }
+  if not SameText(FModel.SymbolAt(SymbolId - 1).Kind, 'function') and
+    not SameText(FModel.SymbolAt(SymbolId - 1).Kind, 'procedure') then
+    Exit;
+  TypeId := FModel.SymbolTypeId(SymbolId);
+  if (TypeId > 0) and (TypeId <= FModel.TypeCount) then
+  begin
+    TypeName := FModel.TypeAt(TypeId - 1).Name;
+    Result := SameText(TypeName, 'String') or SameText(TypeName, 'AnsiString') or
+      SameText(TypeName, 'ShortString') or SameText(TypeName, 'WideString') or
+      SameText(TypeName, 'UnicodeString');
+  end;
 end;
 
 function TSemanticAnalyzer.FunctionCallReturnsString(
@@ -938,6 +974,10 @@ begin
   if SymbolId <= 0 then
     SymbolId := FModel.FindSymbolByName(ANode.Text);
   if SymbolId <= 0 then
+    Exit;
+  { Only accept actual function/procedure symbols }
+  if not SameText(FModel.SymbolAt(SymbolId - 1).Kind, 'function') and
+    not SameText(FModel.SymbolAt(SymbolId - 1).Kind, 'procedure') then
     Exit;
   TypeId := FModel.SymbolTypeId(SymbolId);
   if (TypeId <= 0) or (TypeId > FModel.TypeCount) then
@@ -1472,7 +1512,7 @@ begin
 end;
 
 function TSemanticAnalyzer.ConcatExpressionConsumesOwnedStringReturnDeferred(
-  const ANode: TGreenNode): Boolean;
+  const ANode: TGreenNode; const AInsideDirectOwnedAssignmentRhs: Boolean): Boolean;
 var
   I: LongInt;
   Child: TGreenNode;
@@ -1488,12 +1528,14 @@ begin
     for I := 0 to ANode.ChildCount - 1 do
     begin
       Child := ANode.ChildAt(I);
-      if ConcatExpressionConsumesOwnedStringReturnDeferred(Child) then
+      if ConcatExpressionConsumesOwnedStringReturnDeferred(Child,
+        AInsideDirectOwnedAssignmentRhs) then
         Exit(True);
     end;
     Exit(False);
   end;
-  Result := NodeConsumesOwnedStringReturnDeferred(ANode, False);
+  Result := NodeConsumesOwnedStringReturnDeferred(ANode,
+    AInsideDirectOwnedAssignmentRhs);
 end;
 
 function TSemanticAnalyzer.CompareOperandOwnsStringReturn(
@@ -1631,8 +1673,10 @@ begin
     ((ANode.Text <> '=') and (ANode.Text <> '<>')) or
     (ANode.ChildCount < 2) then
   begin
+    { In compare expressions (if/while conditions), all sub-expressions are
+      consumed immediately. Temporaries from owned string returns are safe. }
     for I := 0 to ANode.ChildCount - 1 do
-      if NodeConsumesOwnedStringReturnDeferred(ANode.ChildAt(I), False) then
+      if NodeConsumesOwnedStringReturnDeferred(ANode.ChildAt(I), True) then
         Exit(True);
     Exit(False);
   end;
@@ -1724,7 +1768,8 @@ begin
         IsRuntimeStrVar(DestNode.Text) and
         (SourceNode <> nil) and (SourceNode.NodeKind = gnkBinaryExpression) and
         (SourceNode.Text = '+') then
-        Exit(ConcatExpressionConsumesOwnedStringReturnDeferred(SourceNode));
+        Exit(ConcatExpressionConsumesOwnedStringReturnDeferred(SourceNode,
+          True));
       Exit(NodeConsumesOwnedStringReturnDeferred(
         SourceNode, {AInsideDirectOwnedAssignmentRhs=}True));
     end;
@@ -1791,13 +1836,35 @@ begin
   if MemberCallReturnsString(ANode) and
     (not AInsideDirectOwnedAssignmentRhs) then
     Exit(True);
-  if FunctionCallReturnsString(ANode) and
-    (not AInsideDirectOwnedAssignmentRhs) then
-    Exit(True);
+  { Note: FunctionCallReturnsString catch-all intentionally removed.
+    It was too broad — flagging ALL string-returning functions, not just
+    registered owned string return functions. The StringReturnFunctionNameFromNode
+    + IsOwnedStringReturnFunc check above correctly limits to registered
+    functions. }
   if DirectOwnedStringReturnAssignmentNode(ANode) and
     StringReturnFunctionNameFromNode(ANode.ChildAt(1), SourceName) and
     HasOverload(SourceName) then
     Exit(True);
+
+  { Exit(Expr) is equivalent to Result := Expr — the temporary lives for
+    the entire function scope. Treat as safe context.
+    Without this guard, Exit(F()) patterns where F is an imported function
+    (like ExpandFileName from nextpas.core.fs) would fall through to the
+    for-loop below, where the F() child would be flagged as a deferred
+    owned-string return. }
+  if ANode.NodeKind = gnkExitStatement then
+  begin
+    for I := 0 to ANode.ChildCount - 1 do
+    begin
+      Child := ANode.ChildAt(I);
+      if Child = nil then Continue;
+      { The owned string temporary from F() in Exit(F()) lives for the
+        entire duration of Exit — treat as safe context. }
+      if NodeConsumesOwnedStringReturnDeferred(Child, True) then
+        Exit(True);
+    end;
+    Exit(False);
+  end;
 
   for I := 0 to ANode.ChildCount - 1 do
   begin
@@ -1808,6 +1875,13 @@ begin
       outer call has overloads (preventing IsSupportedOwnedStringReturnArgument
       from applying). Mark argument positions (I >= 1) as safe contexts. }
     if (ANode.NodeKind = gnkFunctionCall) and (I >= 1) then
+    begin
+      if NodeConsumesOwnedStringReturnDeferred(Child, True) then
+        Exit(True);
+    end
+    { Concatenation operands are safe: temporaries live for the entire
+      expression evaluation. }
+    else if (ANode.NodeKind = gnkBinaryExpression) and (ANode.Text = '+') then
     begin
       if NodeConsumesOwnedStringReturnDeferred(Child, True) then
         Exit(True);
@@ -2600,6 +2674,10 @@ begin
     Exit;
   if (ANode.NodeKind = gnkIdentifier) and IsRuntimeStrVar(ANode.Text) then
     Exit(True);
+  { Any identifier can safely participate in string comparisons —
+    comparisons don't hold references to owned string returns. }
+  if (ANode.NodeKind = gnkIdentifier) and (AAllowOwnedStringReturn) then
+    Exit(True);
   if ANode.NodeKind = gnkStringLiteral then
     Exit(True);
   if AAllowOwnedStringReturn and (ANode.NodeKind = gnkBinaryExpression) and
@@ -2608,6 +2686,20 @@ begin
     Exit(True);
   if AAllowOwnedStringReturn and
     IsSupportedOwnedStringReturnCompareOperand(ANode, SourceName) then
+    Exit(True);
+  { LowerCase/UpperCase are safe for comparisons even when overloaded }
+  if AAllowOwnedStringReturn and (ANode.NodeKind = gnkFunctionCall) and
+    (ANode.ChildCount >= 2) and (ANode.ChildAt(0) <> nil) and
+    (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
+    (SameText(ANode.ChildAt(0).Text, 'LowerCase') or
+     SameText(ANode.ChildAt(0).Text, 'UpperCase')) then
+    Exit(True);
+  { Any function call returning a string is safe as a compare operand —
+    temporaries live for the entire comparison evaluation. This covers
+    imported functions like Trim, Copy, etc. that are not registered as
+    owned string return functions but still create safe temporaries. }
+  if AAllowOwnedStringReturn and (ANode.NodeKind = gnkFunctionCall) and
+    FunctionCallReturnsString(ANode) then
     Exit(True);
 end;
 
@@ -2939,11 +3031,31 @@ function TSemanticAnalyzer.DeclParamSignatureMatchesArgs(
   const AArgCount: LongInt
 ): Boolean;
 var
+  I: LongInt;
   ParamSignature: string;
 begin
   ParamSignature := GetParamSignature(ADecl);
-  Result := (AArgCount >= 0) and (Length(ParamSignature) >= AArgCount) and
-    SameText(Copy(ParamSignature, 1, AArgCount), AArgSignature);
+  if (AArgCount >= 0) and (Length(ParamSignature) >= AArgCount) and
+    SameText(Copy(ParamSignature, 1, AArgCount), AArgSignature) then
+    Exit(True);
+  { Char → String promotion: 'i' arg matches 's' param }
+  if (AArgCount > 0) and (Length(ParamSignature) >= AArgCount) then
+  begin
+    Result := True;
+    for I := 1 to AArgCount do
+    begin
+      if (ParamSignature[I] = 's') and (I <= Length(AArgSignature)) and
+        (AArgSignature[I] = 'i') then
+        Continue;
+      if (I <= Length(AArgSignature)) and
+        SameText(ParamSignature[I], AArgSignature[I]) then
+        Continue;
+      Result := False;
+      Break;
+    end;
+  end
+  else
+    Result := False;
 end;
 
 function TSemanticAnalyzer.GetParamSignature(const ADecl: TGreenNode): string;
@@ -3325,7 +3437,9 @@ begin
         )) then
       begin
         if AHasTypeMismatchEvidence then
+        begin
           AResolutionFailureKind := 'type-mismatch';
+        end;
         Exit(False);
       end;
       RootSignatureMatchIndex := RootMatchIndex
@@ -4315,6 +4429,9 @@ function TSemanticAnalyzer.MethodSymbolIdForExactClassTypeMember(
 var
   BodyCandidateCount: LongInt;
   BodyMatchCount: LongInt;
+  BestDist: LongInt;
+  BestSymbolId: LongInt;
+  Dist: LongInt;
   Index: LongInt;
   QualifiedName: string;
   Symbol: TSemanticSymbol;
@@ -4344,8 +4461,7 @@ begin
     if SameText(Symbol.Name, QualifiedName) and
       (SameText(Symbol.Kind, 'method') or
        SameText(Symbol.Kind, 'constructor') or
-       SameText(Symbol.Kind, 'destructor')) and
-      SameText(Symbol.OwnerUnitId, TypeSymbol.OwnerUnitId) then
+       SameText(Symbol.Kind, 'destructor')) then
     begin
       AMethodNameFound := True;
       SetLength(ACandidates, Length(ACandidates) + 1);
@@ -4404,12 +4520,56 @@ begin
       SymbolId := SignatureSymbolId
     else if (not AHasArgSignature) or (SignatureMatchCount > 1) then
     begin
-      if SameText(
-        TypeSymbol.OwnerUnitId,
-        NormalizeUnitIdentity(FUnitGraph.RootName)
-      ) or OwnerUnitAllowsProjectSourceDiagnostic(TypeSymbol.OwnerUnitId) then
-        AResolutionFailureKind := 'ambiguous-overload';
-      Exit;
+      // When no signature info available, prefer the overload with
+      // ParamCount closest to AArgCount (most specific match).
+      if not AHasArgSignature then
+      begin
+        BestDist := MaxInt;
+        BestSymbolId := 0;
+        for Index := 0 to FModel.SymbolCount - 1 do
+        begin
+          Symbol := FModel.SymbolAt(Index);
+          if SameText(Symbol.Name, QualifiedName) and
+            (SameText(Symbol.Kind, 'method') or
+             SameText(Symbol.Kind, 'constructor') or
+             SameText(Symbol.Kind, 'destructor')) and
+            (AArgCount >= Symbol.MinParamCount) and
+            (AArgCount <= Symbol.ParamCount) then
+          begin
+            Dist := Symbol.ParamCount - AArgCount;
+            if Dist < 0 then Dist := -Dist;
+            if (Dist < BestDist) or
+              ((Dist = BestDist) and (BestSymbolId = 0)) then
+            begin
+              BestDist := Dist;
+              BestSymbolId := Symbol.SymbolId;
+            end;
+          end;
+        end;
+        if BestSymbolId > 0 then
+        begin
+          SymbolId := BestSymbolId;
+          // Continue to body check below
+        end
+        else
+        begin
+          if SameText(
+            TypeSymbol.OwnerUnitId,
+            NormalizeUnitIdentity(FUnitGraph.RootName)
+          ) or OwnerUnitAllowsProjectSourceDiagnostic(TypeSymbol.OwnerUnitId) then
+            AResolutionFailureKind := 'ambiguous-overload';
+          Exit;
+        end;
+      end
+      else
+      begin
+        if SameText(
+          TypeSymbol.OwnerUnitId,
+          NormalizeUnitIdentity(FUnitGraph.RootName)
+        ) or OwnerUnitAllowsProjectSourceDiagnostic(TypeSymbol.OwnerUnitId) then
+          AResolutionFailureKind := 'ambiguous-overload';
+        Exit;
+      end;
     end
     else if SignatureMatchCount = 0 then
     begin
@@ -5391,7 +5551,9 @@ begin
   if (FCurrentScopeId > 0) and (AName <> '') then
   begin
     Existing := FModel.FindSymbolInScope(AName, FCurrentScopeId);
-    if Existing > 0 then
+    if (Existing > 0) and
+      not (SameText(AKind, 'type') and
+           SameText(FModel.SymbolAt(Existing - 1).Kind, 'type')) then
     begin
       EmitSemaError(
         'sema.duplicate-declaration',
@@ -5438,6 +5600,8 @@ end;
 
 function TSemanticAnalyzer.InferExpressionType(const ANode: TGreenNode): LongInt;
 var
+  LStrTypeId: LongInt;
+  RType: LongInt;
   SymId: LongInt;
   Sym: TSemanticSymbol;
 begin
@@ -5470,11 +5634,18 @@ begin
       begin
         if ANode.Text = '+' then
         begin
+          LStrTypeId := FModel.FindTypeByName('AnsiString');
           Result := InferExpressionType(ANode.ChildAt(0));
-          if Result = FModel.FindTypeByName('AnsiString') then
+          if Result = LStrTypeId then
             Exit;
+          RType := InferExpressionType(ANode.ChildAt(1));
+          if RType = LStrTypeId then
+          begin
+            Result := LStrTypeId;
+            Exit;
+          end;
           if Result = 0 then
-            Result := InferExpressionType(ANode.ChildAt(1));
+            Result := RType;
           if Result = 0 then
             Result := FModel.FindTypeByName('Integer');
         end
@@ -5726,7 +5897,9 @@ begin
         (SymI.Kind <> 'method') and (SymJ.Kind <> 'method') and
         (SymI.Kind <> 'field') and (SymJ.Kind <> 'field') and
         (SymI.Kind <> 'function') and (SymJ.Kind <> 'function') and
-        (SymI.Kind <> 'procedure') and (SymJ.Kind <> 'procedure') then
+        (SymI.Kind <> 'procedure') and (SymJ.Kind <> 'procedure') and
+        { 允许 type 的前向声明后重新声明 (如 TConfig = class; → TConfig = class ... end) }
+        not (SameText(SymI.Kind, 'type') and SameText(SymJ.Kind, 'type')) then
       begin
         EmitSemaError(
           'sema.duplicate-declaration',
@@ -7730,7 +7903,11 @@ begin
               AOwnerUnitId
             );
             if (ParentTypeId > 0) and
-              (not FModel.LookupConstValue(TypeChild.ChildAt(0).Text + '$size', SizeVal)) then
+              (not SameText(FModel.TypeAt(ParentTypeId - 1).Kind, 'class')) and
+              (not SameText(FModel.TypeAt(ParentTypeId - 1).Kind, 'interface')) and
+              (not SameText(FModel.TypeAt(ParentTypeId - 1).Kind, 'declared')) and
+              (not FModel.LookupConstValue(TypeChild.ChildAt(0).Text + '$size', SizeVal)) and
+              (TypeMetaSize(TypeChild.ChildAt(0).Text) <= 0) then
               ParentTypeId := 0;
             if (ParentTypeId = 0) and (Pos('<', TypeChild.ChildAt(0).Text) > 0) then
             begin
@@ -7797,12 +7974,12 @@ begin
             AliasLocalMeta.Size := AliasTargetMeta.Size;
             AliasLocalMeta.IsRecord := AliasTargetMeta.IsRecord;
             AliasLocalMeta.VmtCount := AliasTargetMeta.VmtCount;
-            AliasLocalMeta.ParentClassId := AliasTargetMeta.ParentClassId;
-            AliasLocalMeta.ParentClassName := AliasTargetMeta.ParentClassName;
+            AliasLocalMeta.ParentClassId := AliasTargetId;
+            if FModel.TypeAt(AliasTargetId - 1).Name <> '' then
+              AliasLocalMeta.ParentClassName := FModel.TypeAt(AliasTargetId - 1).Name;
           end;
           FModel.SetTypeMeta(TypeId, AliasLocalMeta);
-          if AliasHasTargetMeta and (AliasTargetMeta.ParentClassId > 0) then
-            FModel.SetTypeParent(TypeId, AliasTargetMeta.ParentClassId);
+          FModel.SetTypeParent(TypeId, AliasTargetId);
         end;
       end;
     end;

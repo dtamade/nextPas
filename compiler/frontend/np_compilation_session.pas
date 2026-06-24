@@ -578,7 +578,7 @@ var
 begin
   for Index := High(FToolStatusEvents) downto 0 do
     if (FToolStatusEvents[Index].ResolvedPath <> '') and
-      SameText(FToolStatusEvents[Index].StepId, PrimaryToolStepId) then
+      nextpas.core.text.SameText(FToolStatusEvents[Index].StepId, PrimaryToolStepId) then
       Exit(FToolStatusEvents[Index].ResolvedPath);
 
   if FToolchainPlan <> nil then
@@ -609,7 +609,7 @@ var
     if Trim(ABaseName) = '' then
       Exit;
     for ExistingIndex := 0 to Length(Result) - 1 do
-      if SameText(Result[ExistingIndex], ABaseName) then
+      if nextpas.core.text.SameText(Result[ExistingIndex], ABaseName) then
         Exit;
     NextIndex := Length(Result);
     SetLength(Result, NextIndex + 1);
@@ -619,7 +619,7 @@ begin
   SetLength(Result, 0);
   if FUnitGraph = nil then
     Exit;
-  if SameText(AstRootKindName, 'unit') then
+  if nextpas.core.text.SameText(AstRootKindName, 'unit') then
     Exit;
 
   ResolvedSourcePath := ExpandFileName(FOptions.BuildContext.ResolvedSourcePath);
@@ -628,9 +628,9 @@ begin
     ResolvedUnit := FUnitGraph.ResolvedUnitAt(Index);
     if Trim(ResolvedUnit.SourcePath) = '' then
       Continue;
-    if SameText(ResolvedUnit.OriginClass, 'implicit-runtime') then
+    if nextpas.core.text.SameText(ResolvedUnit.OriginClass, 'implicit-runtime') then
       Continue;
-    if SameText(ExpandFileName(ResolvedUnit.SourcePath), ResolvedSourcePath) then
+    if nextpas.core.text.SameText(ExpandFileName(ResolvedUnit.SourcePath), ResolvedSourcePath) then
       Continue;
     CandidateBaseName := ChangeFileExt(
       ExtractFileName(ResolvedUnit.SourcePath),
@@ -664,7 +664,7 @@ begin
     Exit;
 
   for Index := 0 to FToolchainPlan.ToolInvocationCount - 1 do
-    if SameText(FToolchainPlan.StepAt(Index).StepId, AStepId) then
+    if nextpas.core.text.SameText(FToolchainPlan.StepAt(Index).StepId, AStepId) then
       Exit(FToolchainPlan.StepAt(Index));
 end;
 
@@ -732,7 +732,7 @@ begin
       'sidecars',
       BuildExecutedSidecarArrayJson(ExecutedStep.Sidecars)
     );
-    if SameText(ExecutedStep.StepId, AFailedStepId) then
+    if nextpas.core.text.SameText(ExecutedStep.StepId, AFailedStepId) then
       AppendJsonField(
         StepFields,
         'diagnosticRefs',

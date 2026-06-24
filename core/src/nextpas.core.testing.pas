@@ -1,3 +1,6 @@
+{ DEPRECATED: Use nextpas.core.test instead.
+  This unit is kept for backward compatibility with existing callers. }
+
 unit nextpas.core.testing;
 
 {$I nextpas.core.settings.inc}
@@ -31,9 +34,6 @@ procedure CheckEqual(const AExpected, AActual: Boolean; const AMessage: string =
 procedure Fail(const AMessage: string);
 
 implementation
-
-var
-  GCurrentTest: string = '';
 
 procedure Check(const ACondition: Boolean; const AMessage: string);
 begin
@@ -100,7 +100,6 @@ end;
 procedure TTestRunner.Run(const AName: string; AProc: TTestProc);
 begin
   Inc(FTotal);
-  GCurrentTest := AName;
   try
     AProc;
     Inc(FPassed);

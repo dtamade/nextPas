@@ -17,7 +17,8 @@ unit nextpas.core.tls.mbedtls.certificate;
 interface
 
 uses
-  SysUtils, Classes,
+  nextpas.core.base,
+  nextpas.core.io.intf, nextpas.core.fs.stream,
   nextpas.core.base.utils,
   nextpas.core.fs,
   nextpas.core.collections.vec,
@@ -55,12 +56,12 @@ type
 
     { ISSLCertificate - 加载和保存 }
     function LoadFromFile(const AFileName: string): Boolean;
-    function LoadFromStream(AStream: TStream): Boolean;
+    function LoadFromStream(AStream: IStream): Boolean;
     function LoadFromMemory(const AData: Pointer; ASize: Integer): Boolean;
     function LoadFromPEM(const APEM: string): Boolean;
     function LoadFromDER(const ADER: TBytes): Boolean;
     function SaveToFile(const AFileName: string): Boolean;
-    function SaveToStream(AStream: TStream): Boolean;
+    function SaveToStream(AStream: IStream): Boolean;
     function SaveToPEM: string;
     function SaveToDER: TBytes;
 
@@ -157,7 +158,7 @@ type
 implementation
 
 uses
-  DateUtils,
+  nextpas.core.exception,
   nextpas.core.text.conv,
   nextpas.core.text.strings,
   nextpas.core.time,
@@ -173,12 +174,12 @@ const
 function NormalizeMbedTLSCertText(const AValue: string): string;
 begin
   Result := UpperCase(Trim(AValue));
-  Result := StringReplace(Result, ' , ', ',', [rfReplaceAll]);
-  Result := StringReplace(Result, ', ', ',', [rfReplaceAll]);
-  Result := StringReplace(Result, ' ,', ',', [rfReplaceAll]);
-  Result := StringReplace(Result, ' = ', '=', [rfReplaceAll]);
-  Result := StringReplace(Result, '= ', '=', [rfReplaceAll]);
-  Result := StringReplace(Result, ' =', '=', [rfReplaceAll]);
+  Result := StringReplace(Result, ' , ', ',', True);
+  Result := StringReplace(Result, ', ', ',', True);
+  Result := StringReplace(Result, ' ,', ',', True);
+  Result := StringReplace(Result, ' = ', '=', True);
+  Result := StringReplace(Result, '= ', '=', True);
+  Result := StringReplace(Result, ' =', '=', True);
 end;
 
 function NormalizeMbedTLSCertHex(const AValue: string): string;
@@ -482,7 +483,7 @@ begin
     FreeCertificate;
 end;
 
-function TMbedTLSCertificate.LoadFromStream(AStream: TStream): Boolean;
+function TMbedTLSCertificate.LoadFromStream(AStream: IStream): Boolean;
 var
   LData: TBytes;
 begin
@@ -493,7 +494,7 @@ begin
   SetLength(LData, AStream.Size - AStream.Position);
   if Length(LData) = 0 then Exit;
 
-  AStream.ReadBuffer(LData[0], Length(LData));
+  AStream.Read(LData[0], Length(LData));
   Result := LoadFromMemory(@LData[0], Length(LData));
 end;
 
@@ -564,13 +565,13 @@ end;
 
 function TMbedTLSCertificate.SaveToFile(const AFileName: string): Boolean;
 var
-  LStream: TFileStream;
+  LStream: IStream;
 begin
   Result := False;
   if FX509Crt = nil then Exit;
 
   try
-    LStream := TFileStream.Create(AFileName, fmCreate);
+    LStream := FsCreate(AFileName);
     try
       Result := SaveToStream(LStream);
     finally
@@ -580,7 +581,7 @@ begin
   end;
 end;
 
-function TMbedTLSCertificate.SaveToStream(AStream: TStream): Boolean;
+function TMbedTLSCertificate.SaveToStream(AStream: IStream): Boolean;
 var
   LPEM: string;
 begin
@@ -590,7 +591,7 @@ begin
   LPEM := SaveToPEM;
   if LPEM <> '' then
   begin
-    AStream.WriteBuffer(LPEM[1], Length(LPEM));
+    AStream.Write(LPEM[1], Length(LPEM));
     Result := True;
   end;
 end;
@@ -1630,9 +1631,9 @@ end;
 function NormalizeMbedTLSCertFingerprint(const AValue: string): string;
 begin
   Result := UpperCase(Trim(AValue));
-  Result := StringReplace(Result, ':', '', [rfReplaceAll]);
-  Result := StringReplace(Result, '-', '', [rfReplaceAll]);
-  Result := StringReplace(Result, ' ', '', [rfReplaceAll]);
+  Result := StringReplace(Result, ':', '', True);
+  Result := StringReplace(Result, '-', '', True);
+  Result := StringReplace(Result, ' ', '', True);
 end;
 
 function TMbedTLSCertificateStore.AddCertificate(ACert: ISSLCertificate): Boolean;

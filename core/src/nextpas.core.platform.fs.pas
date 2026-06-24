@@ -63,6 +63,7 @@ function platform_fs_read_file(const APath: PAnsiChar;
 function platform_fs_read_file_into(const APath: PAnsiChar;
   ABuf: Pointer; ABufCapacity: PtrUInt; out ALen: PtrUInt): Int32;
 procedure platform_fs_free_buf(AData: Pointer);
+function platform_fs_is_executable(const APath: PAnsiChar): Boolean;
 function platform_fs_walk(const ARoot: PAnsiChar;
   ACallback: TPlatformWalkCallback; AUserData: Pointer;
   AFollowSymlinks: Boolean): Int32;
@@ -148,6 +149,15 @@ begin
   Result := platform_file_stat(APath, LStat);
   if Result = 0 then
     ASize := LStat.Size;
+end;
+
+function platform_fs_is_executable(const APath: PAnsiChar): Boolean;
+var
+  LStat: TPlatformFileStat;
+begin
+  if platform_file_stat(APath, LStat) <> 0 then
+    Exit(False);
+  Result := (LStat.Mode and $49) <> 0; { S_IXUSR | S_IXGRP | S_IXOTH }
 end;
 
 function platform_fs_temp_dir(ABuf: PAnsiChar; ABufLen: Int32): Int32;

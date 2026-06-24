@@ -70,6 +70,21 @@ nextpas.core.<module>.<impl>.pas   ← 实现子模块
 
 依赖方向：`base ← intf ← 实现 ← 门面`
 
+### 双编译器架构（核心设计原则）
+
+`nextpas.core.*` 是编译器内核和运行时的**唯一实现层**，拥有自己的类型体系（IStream、nextpas.core.text.conv 等），**不提供 FPC RTL 兼容层**（不包装 TStream、SysUtils 函数等遗留类型）。
+
+**唯一目标：FPC 能编译 nextpas.core 源码。**
+
+- **FPC 编译时**：源码中的 `uses SysUtils` 等通过 FPC 自带的搜索路径自然解析到 FPC 真实 RTL
+- **nextPas 编译时**：源码中的 `uses SysUtils` 等通过 `units/<target>/` 中的 stub 文件解析（stub 仅提供名称桥接，不是兼容层）
+- **方向**：逐步让 nextpas.core 模块用自己的类型替代 FPC 类型（如 Exception 基类自定义），最终消除对 FPC 单元名的引用，stub 自然废弃
+
+**禁止**：
+- 在 `nextpas.core` 中包装/ re-export FPC RTL 类型（TStream、SysUtils 函数等）作为长期方案
+- 在 `nextpas.core` 之外创建独立的 FPC 兼容层
+- 用 `{$IFDEF}` 在模块内部分叉编译器路径
+
 ## nextpas.core.system 模块专项
 
 ### 模块定位

@@ -5,13 +5,13 @@ unit nextpas.core.tls.dialer;
 interface
 
 uses
-  nextpas.core.base, nextpas.core.tls.base, nextpas.core.tls.tls,
-  nextpas.core.text.conv, nextpas.core.system.classes;
+  nextpas.core.base, nextpas.core.io.intf, nextpas.core.tls.base, nextpas.core.tls.tls,
+  nextpas.core.text.conv;
 
 type
   TSSLDialResult = record
     Connection: ISSLConnection;
-    Stream: TSSLStream;
+    Stream: IStream;
     Error: TSSLOperationResult;
   end;
 
@@ -26,7 +26,7 @@ type
 
     function Dial(const AHost: string; APort: Word): TSSLDialResult;
     function TryDial(const AHost: string; APort: Word;
-      out AStream: TSSLStream; out AError: string): Boolean;
+      out AStream: IStream; out AError: string): Boolean;
     function WrapSocket(ASocket: THandle; const AHostname: string): TSSLDialResult;
 
     property TimeoutMs: Integer read FTimeoutMs write FTimeoutMs;
@@ -174,7 +174,7 @@ begin
 end;
 
 function TSSLDialer.TryDial(const AHost: string; APort: Word;
-  out AStream: TSSLStream; out AError: string): Boolean;
+  out AStream: IStream; out AError: string): Boolean;
 var
   LResult: TSSLDialResult;
 begin

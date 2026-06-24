@@ -17,6 +17,8 @@ type
   cfloat = Single;
   cdouble = Double;
   cbool = Boolean;
+  cint64 = Int64;
+  cuint64 = UInt64;
   pchar = System.PChar;
   pcint = ^cint;
   pcuint = ^cuint;

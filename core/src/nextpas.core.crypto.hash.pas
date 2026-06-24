@@ -36,7 +36,7 @@ unit nextpas.core.crypto.hash;
 interface
 
 uses
-  nextpas.core.base, Classes;
+  nextpas.core.base, nextpas.core.io.intf;
 
 type
   // ========================================================================
@@ -57,7 +57,7 @@ type
   public
     procedure Update(const AData: TBytes); overload; virtual; abstract;
     procedure Update(const AData: string); overload;
-    procedure Update(AStream: TStream); overload;
+    procedure Update(AStream: IStream); overload;
     function Final: TBytes; virtual; abstract;
     procedure Reset; virtual; abstract;
 
@@ -216,10 +216,10 @@ begin
   Update(StringToBytes(AData));
 end;
 
-procedure THashContext.Update(AStream: TStream);
+procedure THashContext.Update(AStream: IStream);
 var
   Buffer: TBytes;
-  BytesRead: Integer;
+  BytesRead: SizeUInt;
 begin
   SetLength(Buffer, 8192);
   repeat

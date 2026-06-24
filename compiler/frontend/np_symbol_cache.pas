@@ -49,7 +49,7 @@ function ComputeSourceFingerprintFromFile(const ASourcePath: string): UInt32;
 implementation
 
 uses
-  SysUtils;
+  nextpas.core.fs, nextpas.core.text.conv;
 
 { FNV-1a hash — same algorithm as SwissTable.HashStr }
 
@@ -182,7 +182,7 @@ begin
   Assign(LFile, LPath);
   Reset(LFile, 1);
   try
-    if FileSize(LFile) < 16 then
+    if System.FileSize(LFile) < 16 then
       Exit;
 
     BlockRead(LFile, LMagic, 4);
