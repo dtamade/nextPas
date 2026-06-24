@@ -19,7 +19,7 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.text.conv, DateUtils, ctypes,
+  nextpas.core.text.conv,
   nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.wolfssl.base,

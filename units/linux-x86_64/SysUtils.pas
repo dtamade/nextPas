@@ -4,6 +4,9 @@ unit SysUtils;
 
 interface
 
+uses
+  nextpas.core.exception;
+
 const
   PathDelim = '/';
   DirectorySeparator = '/';
@@ -28,16 +31,11 @@ type
     Pattern: string; { stored by FindFirst, used by FindNext to filter }
   end;
 
-  Exception = class
-  private
-    FMessage: string;
-  public
-    constructor Create(const Msg: string);
-    constructor CreateFmt(const Msg: string; const Args: array of const);
-    property Message: string read FMessage;
-  end;
-
-  ExceptClass = class of Exception;
+  { Re-export Exception from nextpas.core.exception — no independent definition }
+  Exception = nextpas.core.exception.Exception;
+  ExceptClass = nextpas.core.exception.ExceptClass;
+  EConvertError = nextpas.core.exception.EConvertError;
+  EAssertionFailed = nextpas.core.exception.EAssertionFailed;
 
   EHeapMemoryError = class(Exception)
   end;
@@ -48,12 +46,6 @@ type
   end;
 
   EOutOfMemory = class(EHeapMemoryError)
-  end;
-
-  EConvertError = class(Exception)
-  end;
-
-  EAssertionFailed = class(Exception)
   end;
 
 // String operations
@@ -115,6 +107,9 @@ function FormatDateTime(const Format: string; DateTime: TDateTime): string;
 // String formatting
 function Format(const Fmt: string; const Args: array of const): string;
 
+// Interface support
+function Supports(const AIntf: IInterface; const IID: TGUID; out Intf): Boolean;
+
 // Memory management
 procedure FreeAndNil(var Obj);
 
@@ -129,20 +124,6 @@ function np_close(fd: LongInt): LongInt; cdecl; external 'c' name 'close';
 function readlink(path: PChar; buf: PChar; bufsiz: SizeUInt): SizeInt; cdecl; external 'c' name 'readlink';
 function np_stat(path: PChar; buf: Pointer): LongInt; cdecl; external 'c' name 'stat';
 function np_realpath(path: PChar; resolved: PChar): PChar; cdecl; external 'c' name 'realpath';
-
-{ Exception }
-
-constructor Exception.Create(const Msg: string);
-begin
-  inherited Create;
-  FMessage := Msg;
-end;
-
-constructor Exception.CreateFmt(const Msg: string;
-  const Args: array of const);
-begin
-  Create(Format(Msg, Args));
-end;
 
 { String operations }
 
@@ -948,6 +929,16 @@ begin
   Temp := TObject(Obj);
   Pointer(Obj) := nil;
   Temp.Free;
+end;
+
+function Supports(const AIntf: IInterface; const IID: TGUID; out Intf): Boolean;
+var
+  LTemp: IInterface;
+begin
+  Pointer(Intf) := nil;
+  Result := (AIntf <> nil) and (AIntf.QueryInterface(IID, LTemp) = 0);
+  if Result then
+    Pointer(Intf) := Pointer(LTemp);
 end;
 
 end.

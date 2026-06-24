@@ -34,8 +34,42 @@ const
 { ============================================================ }
 
 type
+  { Platform-dependent integer types — nextpas owns these, not FPC System }
+  {$IFDEF CPU64}
+  SizeInt   = Int64;
+  SizeUInt  = UInt64;
+  PtrInt    = Int64;
+  PtrUInt   = UInt64;
+  NativeInt = Int64;
+  NativeUInt = UInt64;
+  {$ELSE}
+  SizeInt   = LongInt;
+  SizeUInt  = LongWord;
+  PtrInt    = LongInt;
+  PtrUInt   = LongWord;
+  NativeInt = LongInt;
+  NativeUInt = LongWord;
+  {$ENDIF}
+
   TBytes = array of Byte;
   TStringArray = array of string;
+
+  { C ABI types — nextpas owns these definitions, not FPC ctypes }
+  cint    = LongInt;
+  cuint   = LongWord;
+  cshort  = SmallInt;
+  cushort = Word;
+  clong   = LongInt;
+  culong  = LongWord;
+  cchar   = Char;
+  cschar  = ShortInt;
+  cuchar  = Byte;
+  cfloat  = Single;
+  cdouble = Double;
+  cbool   = Boolean;
+  cint64  = Int64;
+  cuint64 = UInt64;
+  csize_t = SizeUInt;
   ECore = nextpas.core.exception.ENextPasError;
   EInvariantViolation = class(ECore)
   protected

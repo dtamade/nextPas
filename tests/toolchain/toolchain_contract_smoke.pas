@@ -888,7 +888,7 @@ begin
   BootstrapFacts.CompilerExecutable := EmitScriptPath;
   SetLength(EmptyRoots, 0);
   SetLength(AdditionalAssemblyBaseNames, 1);
-  AdditionalAssemblyBaseNames[0] := MissingAdditionalAssemblyPath;
+  AdditionalAssemblyBaseNames[0] := 'bootstrap_extra';
 
   BackendPlan := TBackendPlan.Create;
   try

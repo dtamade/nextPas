@@ -1114,7 +1114,20 @@ begin
 end;
 
 function TSlabPool.AllocMem(ASize: SizeUInt): Pointer;
-begin Result:=GetMem(ASize); if Result<>nil then ZeroMem(Result, ASize); end;
+var
+  LActualSize: SizeUInt;
+begin
+  Result := GetMem(ASize);
+  if Result <> nil then
+  begin
+    // 清零实际分配块大小（而非仅请求大小），防止旧数据泄露 (CS-006)
+    LActualSize := MemSizeOf(Result);
+    if LActualSize > 0 then
+      FillChar(Result^, LActualSize, 0)
+    else
+      FillChar(Result^, ASize, 0); // fallback: MemSizeOf 不可用时清零请求大小
+  end;
+end;
 
 function TSlabPool.ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
 var

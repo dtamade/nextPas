@@ -391,9 +391,9 @@ begin
   try
     if Model = nil then
       Fail('string-field-model-nil');
-    if not FindFirstNodeByKind(Model, 'assign-str-field-load-runtime', Node) then
+    if not FindFirstNodeByKind(Model, 'assign-tstring-field-load-runtime', Node) then
       Fail('missing-string-field-load-node');
-    if not FindFirstNodeByKind(Model, 'field-store-str-runtime', Node) then
+    if not FindFirstNodeByKind(Model, 'field-store-tstring-runtime', Node) then
       Fail('missing-string-field-store-node');
     LlvmText := EmitLlvm(Model);
     if Pos('call {ptr, i64} @np_str_concat(', LlvmText) = 0 then

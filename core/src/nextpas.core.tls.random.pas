@@ -22,8 +22,8 @@ unit nextpas.core.tls.random;
 interface
 
 uses
-  SysUtils, nextpas.core.base, nextpas.core.fs,
-  ctypes, nextpas.core.platform.posix.ffi
+  nextpas.core.base, nextpas.core.exception, nextpas.core.fs,
+  nextpas.core.platform.posix.ffi
   {$IFDEF USE_RANDOM_POOL}
   , nextpas.core.tls.random.pool
   {$ENDIF}
@@ -173,7 +173,7 @@ begin
   if LFd < 0 then
     Exit;
   try
-    LBytesRead := read(LFd, ABuffer, size_t(ACount));
+    LBytesRead := read(LFd, ABuffer, csize_t(ACount));
     Result := (LBytesRead = cint(ACount));
   finally
     close(LFd);

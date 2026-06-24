@@ -206,6 +206,7 @@ const
 
   { X11 CW masks for XCreateWindow }
   X11_CW_EVENT_MASK = 1 shl 11;
+  X11_CW_COLORMAP   = 1 shl 23;
 
   { X11 return codes }
   X11_SUCCESS = 0;
@@ -230,8 +231,13 @@ const
   { glXChooseFBConfig attribute values }
   GLX_RGBA_BIT        = $00000001;
   GLX_WINDOW_BIT      = $00000001;
+  GLX_PBUFFER_BIT     = $00000004;
   GLX_TRUE_COLOR      = $8002;
   GLX_NONE            = $8000;
+
+  { glXCreatePbuffer attributes }
+  GLX_PBUFFER_WIDTH   = $8041;
+  GLX_PBUFFER_HEIGHT  = $8042;
 
   { glXGetFBConfigAttrib constant }
   GLX_FBCONFIG_ID     = $8013;
@@ -339,6 +345,12 @@ type
   { XGetSelectionOwner }
   TXGetSelectionOwner = function(ADisplay: TX11Display;
     ASelection: TX11Atom): TX11Window; cdecl;
+  { XCreateColormap }
+  TXCreateColormap = function(ADisplay: TX11Display; AW: TX11Window;
+    AVisual: Pointer; AAlloc: Int32): TX11Colormap; cdecl;
+  { XFreeColormap }
+  TXFreeColormap = function(ADisplay: TX11Display;
+    AColormap: TX11Colormap): Int32; cdecl;
 
   { --- GLX function pointer types --- }
 
@@ -367,6 +379,13 @@ type
   { glXSwapIntervalEXT -- extension, resolved via glXGetProcAddress }
   TglXSwapIntervalEXT = procedure(ADisplay: TX11Display;
     ADrawable: TX11Window; AInterval: Int32); cdecl;
+  { glXCreatePbuffer -- creates an off-screen pbuffer for GL rendering.
+    Returns GLX drawable handle, or 0 on failure. }
+  TglXCreatePbuffer = function(ADisplay: TX11Display; AConfig: TGLXFBConfig;
+    AAttribList: PInt32): TX11Window; cdecl;
+  { glXDestroyPbuffer -- destroys a pbuffer created by glXCreatePbuffer. }
+  TglXDestroyPbuffer = procedure(ADisplay: TX11Display;
+    APBuffer: TX11Window); cdecl;
   { glXGetProcAddress -- resolves GL and GLX extension function pointers.
     Exported from libGL.so, NOT from libGLX.so. Always use this to resolve
     GL extension functions; dlsym cannot resolve them on GLVND systems. }
@@ -412,6 +431,10 @@ var
   XFree: TXFree;
   XGetSelectionOwner: TXGetSelectionOwner;
 
+  { Colormap management }
+  XCreateColormap: TXCreateColormap;
+  XFreeColormap: TXFreeColormap;
+
   { Key translation }
   XLookupString: TXLookupString;
   XkbKeycodeToKeysym: TXkbKeycodeToKeysym;
@@ -425,6 +448,8 @@ var
   glXDestroyContext: TglXDestroyContext;
   glXQueryExtension: TglXQueryExtension;
   glXSwapIntervalEXT: TglXSwapIntervalEXT;
+  glXCreatePbuffer: TglXCreatePbuffer;
+  glXDestroyPbuffer: TglXDestroyPbuffer;
   glXGetProcAddress: TglXGetProcAddress;
 
 implementation

@@ -3,8 +3,9 @@ program test_contracts;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.base,
+  nextpas.core.exception,
+  nextpas.core.fs,
   nextpas.core.testing,
   nextpas.core.mem.intf,
   nextpas.core.mem.utils,
@@ -99,16 +100,16 @@ end;
 
 function ResolveSourcePath(const APathFromTest, APathFromRoot: string): string;
 begin
-  if FileExistsByStat(PAnsiChar(APathFromTest)) then
+  if Exists(APathFromTest) then
     Exit(APathFromTest);
-  if FileExistsByStat(PAnsiChar(APathFromRoot)) then
+  if Exists(APathFromRoot) then
     Exit(APathFromRoot);
   Result := APathFromTest;
 end;
 
 function SourceExists(const APathFromTest, APathFromRoot: string): Boolean;
 begin
-  Result := FileExistsByStat(PAnsiChar(APathFromTest)) or FileExistsByStat(PAnsiChar(APathFromRoot));
+  Result := Exists(APathFromTest) or Exists(APathFromRoot);
 end;
 
 function ExtractSourceSection(const ASource, AStartToken, AEndToken: string): string;

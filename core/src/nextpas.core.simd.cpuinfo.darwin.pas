@@ -12,7 +12,7 @@ implementation
 
 uses
   BaseUnix,
-  ctypes;
+  nextpas.core.base;
 
 function sysctlbyname(Name: PAnsiChar; oldp: Pointer; oldlenp: psize_t; newp: Pointer;
   newlen: size_t): cint; cdecl; external name 'sysctlbyname';

@@ -60,7 +60,7 @@ type
 
 implementation
 
-uses nextpas.core.system.classes; constructor TSSLMemoryTransport.Create(ACapacity: Integer);
+uses ; constructor TSSLMemoryTransport.Create(ACapacity: Integer);
 begin
   inherited Create;
   SetLength(FBuffer, ACapacity);

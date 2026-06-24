@@ -38,7 +38,7 @@ interface
 
 uses
   nextpas.core.system,
-  nextpas.core.system.classes,
+  nextpas.core.io.intf, nextpas.core.fs.stream,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.errors,
@@ -428,7 +428,7 @@ type
      * 计算SHA-256哈希（Stream输入）
      * 适用于大文件，流式处理
      *}
-    class function SHA256(AStream: TStream): TBytes; overload; static;
+    class function SHA256(AStream: IStream): TBytes; overload; static;
     
     {**
      * 计算文件的SHA-256哈希
@@ -451,7 +451,7 @@ type
     {** SHA-512 系列方法（与SHA-256相同的重载模式） *}
     class function SHA512(const AData: TBytes): TBytes; overload; static;
     class function SHA512(const AData: string): TBytes; overload; static;
-    class function SHA512(AStream: TStream): TBytes; overload; static;
+    class function SHA512(AStream: IStream): TBytes; overload; static;
     class function SHA512File(const AFileName: string): TBytes; static;
     class function SHA512Hex(const AData: TBytes): string; overload; static;
     class function SHA512Hex(const AData: string): string; overload; static;
@@ -1420,7 +1420,7 @@ begin
   Result := SHA256(LBytes);
 end;
 
-class function TCryptoUtils.SHA256(AStream: TStream): TBytes;
+class function TCryptoUtils.SHA256(AStream: IStream): TBytes;
 var
   LCtx: PEVP_MD_CTX;
   LBuffer: array[0..STREAM_BUFFER_SIZE-1] of Byte;
@@ -1467,16 +1467,15 @@ end;
 
 class function TCryptoUtils.SHA256File(const AFileName: string): TBytes;
 var
-  LStream: TFileStream;
+  LStream: IStream;
 begin
   if not FileExists(AFileName) then
     RaiseLoadError(AFileName);
     
-  LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
+  LStream := FsOpen(AFileName, [fmRead]);
   try
     Result := SHA256(LStream);
   finally
-    LStream.Free;
   end;
 end;
 
@@ -1534,7 +1533,7 @@ begin
   Result := SHA512(LBytes);
 end;
 
-class function TCryptoUtils.SHA512(AStream: TStream): TBytes;
+class function TCryptoUtils.SHA512(AStream: IStream): TBytes;
 var
   LCtx: PEVP_MD_CTX;
   LBuffer: array[0..STREAM_BUFFER_SIZE-1] of Byte;
@@ -1563,13 +1562,12 @@ end;
 
 class function TCryptoUtils.SHA512File(const AFileName: string): TBytes;
 var
-  LStream: TFileStream;
+  LStream: IStream;
 begin
-  LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
+  LStream := FsOpen(AFileName, [fmRead]);
   try
     Result := SHA512(LStream);
   finally
-    LStream.Free;
   end;
 end;
 

@@ -3,6 +3,7 @@ program test_stack_pool;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.exception,
   nextpas.core.text.conv,
   nextpas.core.testing,
   nextpas.core.base,

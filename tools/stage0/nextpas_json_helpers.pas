@@ -5,7 +5,7 @@ unit nextpas_json_helpers;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.text.conv;
 
 function JsonEscape(const Value: string): string;
 function JsonString(const Value: string): string;

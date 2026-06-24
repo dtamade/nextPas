@@ -5,6 +5,7 @@ unit nextpas.core.mem.allocator.mmap;
 interface
 
 uses
+  nextpas.core.mem.base,          // AlignUp (QA-003: 去重)
   nextpas.core.mem.allocator.base,
   nextpas.core.mem.memory_map;
 
@@ -61,11 +62,6 @@ type
 function HeaderSize: SizeUInt; inline;
 begin
   Result := (SizeOf(TMemoryMapBlockHeader) + SizeOf(Pointer) - 1) and not (SizeOf(Pointer) - 1);
-end;
-
-function AlignUp(aValue, aAlign: SizeUInt): SizeUInt; inline;
-begin
-  Result := (aValue + aAlign - 1) and not (aAlign - 1);
 end;
 
 function MinSizeUInt(aLeft, aRight: SizeUInt): SizeUInt; inline;

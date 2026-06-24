@@ -5,7 +5,7 @@ PROGRAM := bench_alloc
 SOURCE := bench_alloc.lpr
 EXTRA_FLAGS ?=
 FPC_FLAGS := -MObjFPC -Sh -O2 $(EXTRA_FLAGS)
-FPC_FLAGS += -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src -Fu$(CORE_ROOT)/build/lib
+FPC_FLAGS += -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src
 
 .PHONY: build run clean
 

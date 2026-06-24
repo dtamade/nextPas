@@ -155,11 +155,11 @@ end;
 { TFixedArena 已删除，此测试不再适用 }
 {procedure RaiseBlockPoolArenaAllocationOverflow;
 var
-  LArena: TLocalArena;
+  LArena: nextpas.core.mem.blockpool.TFixedArena;
 begin
   LArena := nil;
   try
-    LArena := TLocalArena.Create(High(SizeUInt));
+    LArena := nextpas.core.mem.blockpool.TFixedArena.Create(High(SizeUInt));
   finally
     LArena.Free;
   end;

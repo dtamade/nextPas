@@ -16,8 +16,8 @@ uses
   nextpas.core.base.utils,
   nextpas.core.math,              // ✅ Math facade (for trunc)
   nextpas.core.mem.base,
+  nextpas.core.mem.pool.base,     // DefaultAcquireN / DefaultReleaseN (CS-001)
   nextpas.core.mem.blockpool,
-  nextpas.core.mem.pool.base,
   nextpas.core.mem.intf,
   nextpas.core.mem.error;
 

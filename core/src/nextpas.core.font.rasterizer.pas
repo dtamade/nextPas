@@ -170,14 +170,14 @@ begin
         if AOutline.Points[LIdx2].OnCurve then
         begin
           FontFlattenQuadraticBezier(LX0, LY0, LX1, LY1, LX2, LY2,
-            RASTERIZER_FLATNESS_PX, ALines, LCount);
+            RASTERIZER_FLATNESS_PX, ALines, LCount, 0);
           Inc(LJ, 2);
         end
         else
         begin
           FontFlattenQuadraticBezier(LX0, LY0, LX1, LY1,
             (LX1 + LX2) * 0.5, (LY1 + LY2) * 0.5,
-            RASTERIZER_FLATNESS_PX, ALines, LCount);
+            RASTERIZER_FLATNESS_PX, ALines, LCount, 0);
           Inc(LJ);
         end;
       end
@@ -199,7 +199,7 @@ begin
           FontFlattenQuadraticBezier(
             (LX0 + LX1) * 0.5, (LY0 + LY1) * 0.5,
             LX1, LY1, LX2, LY2,
-            RASTERIZER_FLATNESS_PX, ALines, LCount);
+            RASTERIZER_FLATNESS_PX, ALines, LCount, 0);
           Inc(LJ, 2);
         end
         else
@@ -208,7 +208,7 @@ begin
             (LX0 + LX1) * 0.5, (LY0 + LY1) * 0.5,
             LX1, LY1,
             (LX1 + LX2) * 0.5, (LY1 + LY2) * 0.5,
-            RASTERIZER_FLATNESS_PX, ALines, LCount);
+            RASTERIZER_FLATNESS_PX, ALines, LCount, 0);
           Inc(LJ);
         end;
       end

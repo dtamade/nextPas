@@ -1586,10 +1586,19 @@ begin
 end;
 
 function TFixedSlabPool.AllocMem(ASize: SizeUInt): Pointer;
+var
+  LActualSize: SizeUInt;
 begin
   Result := GetMem(ASize);
   if Result <> nil then
-    ZeroMem(Result, ASize);
+  begin
+    // 清零实际分配块大小（而非仅请求大小），防止旧数据泄露 (CS-005)
+    LActualSize := MemSizeOf(Result);
+    if LActualSize > 0 then
+      FillChar(Result^, LActualSize, 0)
+    else
+      FillChar(Result^, ASize, 0); // fallback: MemSizeOf 不可用时清零请求大小
+  end;
 end;
 
 function TFixedSlabPool.ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;

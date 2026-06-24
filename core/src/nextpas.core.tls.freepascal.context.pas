@@ -12,8 +12,9 @@ unit nextpas.core.tls.freepascal.context;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.base.utils,
-  Base64, SysUtils, Classes,
+  Base64, nextpas.core.fs.stream,
   nextpas.core.fs,
   nextpas.core.text.conv,
   nextpas.core.io.intf,
@@ -343,10 +344,10 @@ begin
   Result := UpperCase(Trim(AName));
   if Pos('TLS_', Result) = 1 then
     Delete(Result, 1, 4);
-  Result := StringReplace(Result, '_', '-', [rfReplaceAll]);
-  Result := StringReplace(Result, '-WITH-', '-', []);
-  Result := StringReplace(Result, 'AES-128', 'AES128', []);
-  Result := StringReplace(Result, 'AES-256', 'AES256', []);
+  Result := StringReplace(Result, '_', '-', True);
+  Result := StringReplace(Result, '-WITH-', '-', False);
+  Result := StringReplace(Result, 'AES-128', 'AES128', False);
+  Result := StringReplace(Result, 'AES-256', 'AES256', False);
 end;
 
 function TryAppendUniqueCipherSuite(
@@ -590,7 +591,7 @@ end;
 
 procedure TFreePascalContext.LoadCertificate(const AFileName: string);
 var
-  LStream: TFileStream;
+  LStream: IStream;
   LSize: Int64;
 begin
   if AFileName = '' then
@@ -611,7 +612,7 @@ begin
       'Certificate file exceeds maximum allowed size (%d > %d bytes): %s',
       [LSize, MAX_CERTIFICATE_SIZE, AFileName]);
 
-  LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
+  LStream := FsOpen(AFileName, [fmRead]);
   try
     FCertificateData := ReadStreamToBytes(LStream);
     FCertificateFile := AFileName;
@@ -638,7 +639,7 @@ end;
 
 procedure TFreePascalContext.LoadPrivateKey(const AFileName: string; const APassword: string);
 var
-  LStream: TFileStream;
+  LStream: IStream;
   LSize: Int64;
 begin
   if AFileName = '' then
@@ -659,12 +660,11 @@ begin
       'Private key file exceeds maximum allowed size (%d > %d bytes): %s',
       [LSize, MAX_PRIVATE_KEY_SIZE, AFileName]);
 
-  LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
+  LStream := FsOpen(AFileName, [fmRead]);
   try
     FPrivateKeyData := ReadStreamToBytes(LStream);
     FPrivateKeyFile := AFileName;
   finally
-    LStream.Free;
   end;
 
   if APassword <> '' then
@@ -1333,7 +1333,7 @@ end;
 
 procedure TFreePascalContext.LoadServerStapledOCSPResponseFile(const AFileName: string);
 var
-  LStream: TFileStream;
+  LStream: IStream;
   LSize: Int64;
 begin
   if not nextpas.core.fs.IsFile(AFileName) then
@@ -1345,7 +1345,7 @@ begin
       sslFreePascal
     );
 
-  LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
+  LStream := FsOpen(AFileName, [fmRead]);
   try
     LSize := LStream.Size;
     if LSize = 0 then

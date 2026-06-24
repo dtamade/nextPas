@@ -533,7 +533,7 @@ begin
   if HasExistingUnit and
     ((ResolvedUnit.SourcePath <> '') or (RequestedUnitId <> 'system')) and
     (not ((RequestedUnitId = 'system') and
-      SameText(ResolvedUnit.OriginClass, 'implicit-runtime'))) then
+      nextpas.core.text.SameText(ResolvedUnit.OriginClass, 'implicit-runtime'))) then
   begin
     FUnitGraph.AddEdge(AEdgeKind, ASourceUnitId, ResolvedUnit.UnitId);
     Exit(True);

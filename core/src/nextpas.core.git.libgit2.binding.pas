@@ -11,7 +11,7 @@ interface
   {$ENDIF}
 {$ENDIF}
 
-uses ctypes, nextpas.core.exception, nextpas.core.git.libgit2.ffi;
+uses nextpas.core.base, nextpas.core.exception, nextpas.core.git.libgit2.ffi;
 
 // Basic library functions
 // Runtime loader contract

@@ -9,12 +9,25 @@
 - **编译器**: Lexer 1652 行基本完整，Sema 15436 行单文件（607 方法），HIR LLVM emitter 1743 行
 - **FPC stubs**: 14 个临时 stub 文件在 `units/linux-x86_64/`
 - **性能**: 无增量缓存，67 单元 6.4s，158 单元 16s
+- **Phase A+C+D+E**: ✅ 已完成（2026-06-24）
+  - `core/src/` 0 直接 SysUtils/Classes/System 依赖
+  - Exception 类型统一（core + stub 都指向 nextpas.core.exception）
+  - 平台类型自足（SizeInt/SizeUInt 等由 nextpas.core.base 定义）
+  - compiler-pass 16/16，smoke test 10/10 全部通过
+  - nextpas.core 作为标准库的编译能力验证通过
 
 ## 总体策略
 
-**P0 → P1-Math → P2 → P1-SysUtils → P3 → P1-Classes → P1-平台绑定**
+**P0 → P1-Math → P2 → P1-SysUtils → P3 → ~~P1-Classes~~ ✅ → P1-平台绑定 → ~~Phase A+C+D+E~~ ✅**
 
 P2（Sema 能力）排在 P1（FPC RTL 清零）前面，因为 P2 修一个方法解锁多个模块，投入产出比更高。
+
+**Phase A+C+D+E 完成**（2026-06-24）：
+- Phase A: Exception 自给自足
+- Phase C: SysUtils stub 降级
+- Phase D: nextpas_core_pass 测试
+- Phase E: System 类型自足
+- 结果：`core/src/` 0 直接 FPC RTL 依赖，nextpas.core 完全自足
 
 ---
 
@@ -66,28 +79,135 @@ P2（Sema 能力）排在 P1（FPC RTL 清零）前面，因为 P2 修一个方�
 
 ---
 
-### P2-2: 类继承链 Create 解析（1 周）
+### P2-2: 类继承链 Create 解析 — ✅ 已验证通过（2026-06-23）
 
-**解锁模块**: config, compress, props, multipart（4+ 模块）
+**解锁模块**: config, compress, props, multipart（4+ 模块）— 已全部 status=success
 
-根因：`NextClassAncestorName` 已存在（line 309/4170），但 `Create` 重载解析没遍历继承链。
+**状态**: 旧根因描述过时。原假设"`Create` 重载解析没遍历继承链"经核查不成立：当前
+`MethodSymbolIdForClassTypeMember`（`compiler/sema/np_semantic_analyzer.pas:4614`）
+在 `while (CurrentTypeId > 0) and (Depth < 32)` 循环中遍历 `ParentTypeId` 继承链
+（`:4690`），每层调用 `MethodSymbolIdForExactClassTypeMember` 精确匹配成员；
+当某层命中 `MethodNameFound`（`:4685`）即停止向上——这正是子类同名成员阴影、
+不回退父类的语义所在。6 个曾"被阻塞"的模块（config/config.builder/
+compress.deflate/props/multipart）当前全部编译通过，self-compile-modules 19/19 全绿。
 
-方案：
-- 在 `LookupOverload`（line 252/3178）中，当找不到当前类的 `Create` 时，递归向上查 `NextClassAncestorName` 直到 `TObject`
-- 核心改动 <100 行
+**回归测试固化**（commit 5ee32ca75 + 后续）：
+- `tests/compiler/pass/inherited_create_pass.pas` — 单文件三层继承 Create + 多态
+- `tests/compiler/pass/inherited_create_xunit_pass.pas` (+ `_xunit_parent.pas`) —
+  跨单元继承 Create，覆盖"父类来自导入单元"场景
+- `tests/compiler/pass/implicit_tobject_create_pass.pas` — 无显式父类时隐式
+  `TObject.Create` fallback（与 FPC 3.3.1 行为一致）
+- `tests/compiler/fail/inherited_create_shadow_no_fallback_fail.pas` (+ snapshot) —
+  子类同名 `Create` 签名不匹配时**禁止回退父类**，须诊断 `sema.wrong-argument-count`
+  （保护 wrong-argument-count/type-mismatch 诊断语义，与 FPC 行为一致）
+
+**剩余工作**: 仅维护现有回归测试，无需修改 sema。原"在 LookupOverload 中递归向上查"
+方案不再适用——动它会破坏 wrong-argument-count 诊断语义（已被 shadow-no-fallback
+测试固化）。
 
 ---
 
-### P1-SysUtils: 编译器自身清零（1 周）
+### P1-SysUtils: 编译器自身清零 — ✅ 已完成（2026-06-23 复核）
 
-**仅清零编译器模块**，不处理 core 框架。
+**状态**：编译器生产单元（`compiler/frontend|syntax|sema|toolchain|targets|ir|backend|diagnostics/*.pas`）
+已无 `uses ... SysUtils` / `Classes` 导入（grep 核实）。`compiler/sema/np_semantic_analyzer.pas`
+中残留的 `SysUtils` 字样仅是注释（行 1168/2148，描述 C6-H4 对外部单元 owned string return 的
+处理），非导入。编译器自身已可被 nextPas 编译且不依赖 FPC SysUtils（self-compile-modules 19/19
+全绿即为佐证）。`compiler/tests/*.pas` 是宿主 fpc 测试文件，允许使用 SysUtils，不在清零范围。
 
-编译器用到的 SysUtils 符号：
-- `IntToStr`/`Format` → `nextpas.core.text.conv`
-- `ExtractFileName`/`FileExists` → `nextpas.core.fs`
-- `SysErrorMessage` → `nextpas.core.platform`
+**C6-H4 task #90 收尾（2026-06-23）**：`gnkExitStatement` handler 由 `faba9ae1b` 落地
+（`np_semantic_analyzer.pas` `NodeConsumesOwnedStringReturnDeferred` 内，`Exit(F())` 视为 safe
+context）。专项回归测试 `tests/compiler/pass/exit_owned_string_return_pass.pas` 固化该 handler：
+采用**顶层 warmup 赋值**（`GWarmup := F()`，走 `ScanTopLevelOwnedStringReturnConsumers` +
+`AssignmentOwnsTopLevelStringReturn` 鲁棒注册路由，不依赖局部变量类型解析）登记 MakeGreeting/ExpandFileName
+为 owned-string-return 函数，使 `Exit(F())` 真正进入 C6-H4 检查路径。自检确认：删除 handler 块后
+fixture 即误报 `sema.c6h4-owned-string-return-deferred-consumer`（build 失败），证明 Pattern 1/2
+（local/imported）为 handler 硬保护，删之必回归。task #90 关闭。
 
-目标：编译器自身可被 nextPas 编译（不依赖 FPC SysUtils）
+**注意**：测试的 registered-producer 路径选择很关键。早期版本用函数内 `LWarmup := F()` warmup，
+走 `AssignmentOwnsStringReturn → IsSupportedOwnedStringReturnIdentifierTarget`（依赖局部变量 TypeId
+解析为 String），在 pre-register 阶段类型信息未就绪时注册失败 → 测试空跑、删 handler 不回归。
+必须用顶层赋值（或 `WriteLn(F())` 走 `WriteArgumentOwnsStringReturn`）才能稳定触发注册。
+
+**历史迁移**：见 commits 0bb352198/abd3e6dc6/b70999215/c41ce7c1b/285d34d76（compiler SysUtils/Classes/Process → 框架内替代）。P1-Classes 清零：commit `aa8645dea`（http.impl.tls.stream TStream→IStream）。
+剩余的 SysUtils 残留面在 core 框架（见 FOUNDATION P1）与测试/shim 层，不在本 lane。
+
+---
+
+### Phase A: Exception 自给自足 — ✅ 已完成（2026-06-24）
+
+**目标**：`nextpas.core.exception` 不再依赖 `SysUtils`，定义自己的 Exception 基类。
+
+**核心改动**（commit `cfe9e1061`）：
+- `nextpas.core.exception.pas`：移除 `uses SysUtils`，定义自包含 Exception 基类
+  - 字段布局与 FPC ABI 兼容（`fmessage: string; fhelpcontext: longint`）
+  - 内置 `FormatStr()` 替代 `SysUtils.Format`（支持 `%s`/`%d`/`%%`）
+  - `ExceptClass`、`EConvertError`、`EAssertionFailed` 本地定义
+- 编译器异常类修正：
+  - `EToolchainRunnerError = class(ENextPasError)` 替代 `class(Exception)`
+  - `EWorkspaceModelError = class(ENextPasError)` 替代 `class(Exception)`
+  - `EToolProfileError = class(ENextPasError)` 替代 `class(Exception)`
+  - 解决 nextPas sema "ambiguous overload for Create" 问题
+
+**验证结果**：
+- rebuild-compiler: ✓ (160773 lines)
+- compiler-pass 16/16: ✓ all pass
+- self-compile 18/19: ✓ (np_lexer pre-existing issue)
+
+**意义**：`core/src/` 现在 0 直接 SysUtils 依赖。
+
+### Phase C: stub 降级 — ✅ 已完成（2026-06-24）
+
+**目标**：`units/linux-x86_64/SysUtils.pas` stub 中的 Exception 相关符号改为从 nextpas.core 获取。
+
+**核心改动**（commit `bcd9a2f4e`）：
+- SysUtils.pas stub 添加 `uses nextpas.core.exception`
+- `Exception`/`ExceptClass`/`EConvertError`/`EAssertionFailed` 改为 re-export
+- 移除独立的 Exception 构造器实现
+- Stub 减少 22 行（966→944 行）
+
+**验证结果**：
+- rebuild-compiler: ✓ (160773 lines)
+- compiler-pass 16/16: ✓ all pass
+
+**意义**：Exception 类型统一，stub 降级为纯名称桥接。
+
+### Phase D: nextpas_core_pass 测试 — ✅ 已完成（2026-06-24）
+
+**目标**：创建使用 `nextpas.core.*` 的编译器测试，验证标准库编译能力。
+
+**核心改动**：
+- 新增 `tests/compiler/pass/nextpas_core_pass.pas`
+- 使用 `nextpas.core.text.conv` + `nextpas.core.path` 替代 SysUtils
+- 测试字符串函数（Trim/LowerCase/UpperCase/SameText/IntToStr/StrToInt/StringReplace）
+- 测试路径函数（ExtractFileName/ExtractFileDir/ExtractFileExt）
+
+**配套修复**：
+- `np_toolchain_plan.pas`：修复 `ChangeFileExt` 双重应用导致 linker 失败（commit `eae676f8f`）
+- `nextpas.core.path.pas`：`ExtractFileDir` 去除尾部分隔符，FPC 兼容（commit `37184f072`）
+
+**验证结果**：
+- compiler-pass 16/16: ✓ all pass
+- smoke test 10/10: ✓ all pass
+
+**意义**：验证 nextpas.core 作为标准库的编译能力，Phase D 目标达成。
+
+### Phase E: System 类型自足 — ✅ 已完成（2026-06-24）
+
+**目标**：`nextpas.core.system.pas` 中的 `System.SizeInt` 等引用改为 nextpas.core 自定义。
+
+**核心改动**（commit `9377e2ae0`）：
+- `nextpas.core.base.pas`：定义平台相关类型
+  - `SizeInt`/`SizeUInt`/`PtrInt`/`PtrUInt`/`NativeInt`/`NativeUInt`
+  - 使用 `{$IFDEF CPU64}` 条件编译
+- `nextpas.core.system.pas`：从 nextpas.core.base re-export，不再引用 FPC System
+
+**验证结果**：
+- rebuild-compiler: ✓ (160873 lines)
+- compiler-pass 16/16: ✓ all pass
+- smoke test 10/10: ✓ all pass
+
+**意义**：`core/src/` 现在 0 直接 FPC System 类型引用，完全自足。
 
 ---
 
@@ -145,11 +265,16 @@ P2（Sema 能力）排在 P1（FPC RTL 清零）前面，因为 P2 修一个方�
 
 ## 阶段 3：RTL 清零（4-6 周）
 
-### P1-Classes: TStream → IStream 迁移（2 周）
+### P1-Classes: core/src 清零 — ✅ 已完成（2026-06-23）
 
-- `TStream` → `nextpas.core.io.intf.IStream`
-- TLS 模块（18+ 文件）大量用 `TStream`，需逐个迁移
-- 建议先做 TLS 之外的模块（crypto.hash, http.impl, io.stream_adapter）
+**状态**：编译器生产代码 0 引用 Classes（从未有过）。core/src 中唯一的直接 Classes 引用
+（`nextpas.core.http.impl.tls.stream.pas`）已消除：`TStream`-based `TTcpStreamTransportStream`
+替换为 `IStream`-based `TTlsTransportStream`，移除 `WrapTStream` 中间层（commit `aa8645dea`）。
+
+剩余 Classes 消费者（不在清零范围）：
+- `nextpas.core.system.classes.pas` — 桥接层，设计保留
+- `units/linux-x86_64/Process.pas` — shim，留 Phase 9 前置
+- `rtl/core/` + `core/tests/` — 宿主 FPC 编译，不受影响
 
 ### P1-平台绑定: 通过 platform 抽象层（2 周）
 

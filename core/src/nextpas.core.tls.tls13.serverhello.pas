@@ -45,6 +45,9 @@ function BuildTLS13ServerHelloRecordWithSelectedPSK(
 
 implementation
 
+uses
+  nextpas.core.tls.errors,
+  nextpas.core.tls.random;
 
 function BuildExtensionHeader(AType: Word; const AData: TBytes): TBytes;
 begin

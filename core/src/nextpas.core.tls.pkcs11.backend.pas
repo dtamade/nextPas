@@ -133,7 +133,13 @@ type
 
 implementation
 
-uses SysUtils, nextpas.core.tls.openssl.api.provider, nextpas.core.tls.openssl.api.engine, nextpas.core.tls.openssl.api.store, nextpas.core.tls.pkcs11.provider, nextpas.core.tls.pkcs11.engine;
+uses
+  nextpas.core.fs,
+  nextpas.core.tls.openssl.api.provider,
+  nextpas.core.tls.openssl.api.engine,
+  nextpas.core.tls.openssl.api.store,
+  nextpas.core.tls.pkcs11.provider,
+  nextpas.core.tls.pkcs11.engine;
 
 { TPKCS11BackendFactory }
 
@@ -208,7 +214,7 @@ begin
   if AConfig.ModulePath = '' then
     raise EPKCS11Exception.Create('PKCS#11 module path not specified', CKR_ARGUMENTS_BAD);
   
-  if not FileExists(AConfig.ModulePath) then
+  if not nextpas.core.fs.IsFile(AConfig.ModulePath) then
     raise EPKCS11Exception.Create('PKCS#11 module not found: ' + AConfig.ModulePath, CKR_GENERAL_ERROR);
   
   if (AConfig.TokenLabel = '') and (AConfig.SlotID < 0) then

@@ -5,7 +5,8 @@ unit nextpas_command_test;
 interface
 
 uses
-  SysUtils, process, nextpas_projection_types, nextpas_command_envelope;
+  nextpas.core.path, nextpas.core.fs, process, nextpas_projection_types,
+  nextpas_command_envelope;
 
 procedure RunTest(
   var AState: TNextPasState;

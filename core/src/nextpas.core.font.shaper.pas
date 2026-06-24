@@ -10,7 +10,6 @@ unit nextpas.core.font.shaper;
 interface
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.exception,
   nextpas.core.font.base,

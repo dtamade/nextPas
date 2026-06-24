@@ -7,6 +7,7 @@ uses
   cthreads,
   {$ENDIF}
   nextpas.core.errors,
+  nextpas.core.exception,
   nextpas.core.testing,
   nextpas.core.mem.error,
   nextpas.core.mem.blockpool.sharded,

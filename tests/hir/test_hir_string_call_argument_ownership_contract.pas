@@ -477,7 +477,7 @@ begin
       Fail('field-owned-string-temp-consumer-model-nil');
     if not SameText(Model.Status, 'ready') then
       Fail('field-owned-string-temp-consumer-must-pass-sema');
-    if not FindFirstNodeByKind(Model, 'field-store-str-owned-runtime', Node) then
+    if not FindFirstNodeByKind(Model, 'field-store-tstring-runtime', Node) then
       Fail('missing-field-owned-string-store-node');
   finally
     Model.Free;
@@ -574,7 +574,7 @@ begin
     InnerReleaseIndex := FindNodeIndexByKindAndDisplayName(Model,
       'string-temp-release-runtime', 'MakeText');
     OuterAssignIndex := FindNodeIndexByKindAndDisplayName(Model,
-      'assign-str-owned-call-runtime', 'S');
+      'assign-tstring-call-runtime', 'S');
     if InnerReleaseIndex < 0 then
       Fail('missing-nested-string-temp-release-runtime');
     if OuterAssignIndex < 0 then
@@ -609,7 +609,7 @@ begin
     if Pos('alloc_size', Node.Operand) = 0 then
       Fail('concat-left-string-temp-owned-runtime-missing-alloc-size-field');
     if not FindFirstNodeByKindAndDisplayName(Model,
-      'assign-str-owned-concat-runtime', 'S', Node) then
+      'assign-tstring-concat-runtime', 'S', Node) then
       Fail('missing-concat-left-assign-str-owned-concat-runtime');
     if not FindFirstNodeByKindAndDisplayName(Model,
       'string-temp-release-runtime', 'MakeText', Node) then
@@ -618,7 +618,7 @@ begin
     OwnedIndex := FindNodeIndexByKindAndDisplayName(Model,
       'string-temp-owned-runtime', 'MakeText');
     ConcatIndex := FindNodeIndexByKindAndDisplayName(Model,
-      'assign-str-owned-concat-runtime', 'S');
+      'assign-tstring-concat-runtime', 'S');
     ReleaseIndex := FindNodeIndexByKindAndDisplayName(Model,
       'string-temp-release-runtime', 'MakeText');
     if (OwnedIndex < 0) or (ConcatIndex < 0) or (ReleaseIndex < 0) then
@@ -639,7 +639,7 @@ begin
       'string-temp-owned-runtime', 'MakeText', Node) then
       Fail('missing-concat-right-string-temp-owned-runtime');
     if not FindFirstNodeByKindAndDisplayName(Model,
-      'assign-str-owned-concat-runtime', 'S', Node) then
+      'assign-tstring-concat-runtime', 'S', Node) then
       Fail('missing-concat-right-assign-str-owned-concat-runtime');
     if not FindFirstNodeByKindAndDisplayName(Model,
       'string-temp-release-runtime', 'MakeText', Node) then
@@ -657,7 +657,7 @@ begin
     MakeBIndex := FindNodeIndexByKindAndDisplayName(Model,
       'string-temp-owned-runtime', 'MakeB');
     ConcatIndex := FindNodeIndexByKindAndDisplayName(Model,
-      'assign-str-owned-concat-runtime', 'S');
+      'assign-tstring-concat-runtime', 'S');
     ReleaseAIndex := FindNodeIndexByKindAndDisplayName(Model,
       'string-temp-release-runtime', 'MakeA');
     ReleaseBIndex := FindNodeIndexByKindAndDisplayName(Model,
@@ -734,7 +734,7 @@ begin
     OwnedIndex := FindNodeIndexByKindAndDisplayName(Model,
       'string-temp-owned-runtime', 'MakeText');
     ConcatIndex := FindNodeIndexByKindAndDisplayNamePrefix(Model,
-      'assign-str-owned-concat-runtime', '$str_wrt_cat_tmp_');
+      'assign-tstring-concat-runtime', '$str_wrt_cat_tmp_');
     WriteIndex := FindNodeIndexByKindAndDisplayName(Model,
       'write-str-var-runtime', 'Write');
     ConcatReleaseIndex := FindNodeIndexByKindAndDisplayNamePrefix(Model,
@@ -899,7 +899,7 @@ begin
     OwnedIndex := FindNodeIndexByKindAndDisplayName(Model,
       'string-temp-owned-runtime', 'MakeText');
     ConcatIndex := FindNodeIndexByKindAndDisplayNamePrefix(Model,
-      'assign-str-owned-concat-runtime', '$str_cmp_cat_tmp_');
+      'assign-tstring-concat-runtime', '$str_cmp_cat_tmp_');
     CompareIndex := FindNodeIndexByKindAndDisplayName(Model,
       'cond-br-runtime', 'if');
     ConcatReleaseIndex := FindNodeIndexByKindAndDisplayNamePrefix(Model,

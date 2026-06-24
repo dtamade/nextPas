@@ -4,6 +4,7 @@ program test_mem_secure;
 
 uses
   nextpas.core.base,
+  nextpas.core.fs,
   nextpas.core.testing,
   nextpas.core.mem.secure,
   nextpas.core.platform.mmap;
@@ -42,9 +43,9 @@ end;
 
 function ResolveSourcePath(const APathFromTest, APathFromRoot: string): string;
 begin
-  if FileExistsByStat(PAnsiChar(APathFromTest)) then
+  if Exists(APathFromTest) then
     Exit(APathFromTest);
-  if FileExistsByStat(PAnsiChar(APathFromRoot)) then
+  if Exists(APathFromRoot) then
     Exit(APathFromRoot);
   Result := APathFromTest;
 end;
