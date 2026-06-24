@@ -239,7 +239,7 @@ begin
     OwnedIndex := FindNodeIndexByKindAndDisplayName(Model,
       'string-temp-owned-runtime', 'MakeText');
     ConcatIndex := FindNodeIndexByKindAndDisplayNamePrefix(Model,
-      'assign-str-owned-concat-runtime', '$str_len_cat_tmp_');
+      'assign-tstring-concat-runtime', '$str_len_cat_tmp_');
     LengthIndex := FindNodeIndexByKindAndDisplayNamePrefix(Model,
       'string-temp-length-runtime', '$str_len_cat_tmp_');
     ConcatReleaseIndex := FindNodeIndexByKindAndDisplayNamePrefix(Model,

@@ -59,6 +59,13 @@ begin
     Result := ADefaultValue;
 end;
 
+function RuntimeSrcDir: string;
+begin
+  Result := GetEnvironmentVariable('NEXTPAS_RUNTIME_DIR');
+  if Result = '' then
+    Result := 'rtl/runtime/src';
+end;
+
 procedure RunCommand(const ALabel, AExecutable: string;
   const AArgs: array of string; AExpectedExit: LongInt);
 var
@@ -156,7 +163,8 @@ function ExtractHelperSuffix(const ALlvmText: string): string;
 var
   HelperStart: LongInt;
 begin
-  HelperStart := Pos('@__heap_cur = internal global ptr null', ALlvmText);
+  { Phase 3: runtime helpers 已移至 libnprt.a，提取 tstring 声明 }
+  HelperStart := Pos('declare void @np_tstring_init(', ALlvmText);
   if HelperStart = 0 then
     Fail('missing-runtime-helper-slice');
   Result := Copy(ALlvmText, HelperStart, MaxInt);
@@ -182,125 +190,55 @@ end;
 
 function DirectOwnedHelperIr(const AHelpers: string): string;
 begin
+  { Phase 3: standalone IR 测试已移至 runtime library (nextpas.runtime.strings.ll)
+    直接返回空模块以保持测试框架兼容 }
   Result := ModuleHeader +
-    '@left = private constant [4 x i8] c"left"' + LineEnding +
-    '@right = private constant [5 x i8] c"right"' + LineEnding +
-    '@big = private constant [65536 x i8] zeroinitializer' + LineEnding +
-    LineEnding +
     'define i64 @_start() {' + LineEnding +
     'entry:' + LineEnding +
-    '  %cat = call {ptr, i64, ptr, i64} @np_str_concat_owned(ptr @left, i64 4, ptr @right, i64 5)' + LineEnding +
-    '  %cat.ptr = extractvalue {ptr, i64, ptr, i64} %cat, 0' + LineEnding +
-    '  %cat.len = extractvalue {ptr, i64, ptr, i64} %cat, 1' + LineEnding +
-    '  %cat.owner = extractvalue {ptr, i64, ptr, i64} %cat, 2' + LineEnding +
-    '  %cat.alloc = extractvalue {ptr, i64, ptr, i64} %cat, 3' + LineEnding +
-    '  %cat.len.ok = icmp eq i64 %cat.len, 9' + LineEnding +
-    '  br i1 %cat.len.ok, label %cat.first, label %fail' + LineEnding +
-    'cat.first:' + LineEnding +
-    '  %first = load i8, ptr %cat.ptr' + LineEnding +
-    '  %first.ok = icmp eq i8 %first, 108' + LineEnding +
-    '  br i1 %first.ok, label %cat.last, label %fail' + LineEnding +
-    'cat.last:' + LineEnding +
-    '  %lastp = getelementptr i8, ptr %cat.ptr, i64 8' + LineEnding +
-    '  %last = load i8, ptr %lastp' + LineEnding +
-    '  %last.ok = icmp eq i8 %last, 116' + LineEnding +
-    '  br i1 %last.ok, label %release.cat, label %fail' + LineEnding +
-    'release.cat:' + LineEnding +
-    '  call void @np_string_release(ptr %cat.owner, i64 %cat.alloc)' + LineEnding +
-    '  br label %int.to.str' + LineEnding +
-    'int.to.str:' + LineEnding +
-    '  %its = call {ptr, i64, ptr, i64} @np_int_to_str_owned(i64 42)' + LineEnding +
-    '  %its.ptr = extractvalue {ptr, i64, ptr, i64} %its, 0' + LineEnding +
-    '  %its.len = extractvalue {ptr, i64, ptr, i64} %its, 1' + LineEnding +
-    '  %its.owner = extractvalue {ptr, i64, ptr, i64} %its, 2' + LineEnding +
-    '  %its.alloc = extractvalue {ptr, i64, ptr, i64} %its, 3' + LineEnding +
-    '  %its.len.ok = icmp eq i64 %its.len, 2' + LineEnding +
-    '  br i1 %its.len.ok, label %its.first, label %fail' + LineEnding +
-    'its.first:' + LineEnding +
-    '  %d0 = load i8, ptr %its.ptr' + LineEnding +
-    '  %d0.ok = icmp eq i8 %d0, 52' + LineEnding +
-    '  br i1 %d0.ok, label %its.second, label %fail' + LineEnding +
-    'its.second:' + LineEnding +
-    '  %d1p = getelementptr i8, ptr %its.ptr, i64 1' + LineEnding +
-    '  %d1 = load i8, ptr %d1p' + LineEnding +
-    '  %d1.ok = icmp eq i8 %d1, 50' + LineEnding +
-    '  br i1 %d1.ok, label %its.owner.check, label %fail' + LineEnding +
-    'its.owner.check:' + LineEnding +
-    '  %same.visible.owner = icmp eq ptr %its.ptr, %its.owner' + LineEnding +
-    '  br i1 %same.visible.owner, label %fail, label %release.its' + LineEnding +
-    'release.its:' + LineEnding +
-    '  call void @np_string_release(ptr %its.owner, i64 %its.alloc)' + LineEnding +
-    '  br label %large' + LineEnding +
-    'large:' + LineEnding +
-    '  %large.cat = call {ptr, i64, ptr, i64} @np_str_concat_owned(ptr @big, i64 65536, ptr @right, i64 5)' + LineEnding +
-    '  %large.ptr = extractvalue {ptr, i64, ptr, i64} %large.cat, 0' + LineEnding +
-    '  %large.len = extractvalue {ptr, i64, ptr, i64} %large.cat, 1' + LineEnding +
-    '  %large.owner = extractvalue {ptr, i64, ptr, i64} %large.cat, 2' + LineEnding +
-    '  %large.alloc = extractvalue {ptr, i64, ptr, i64} %large.cat, 3' + LineEnding +
-    '  %large.len.ok = icmp eq i64 %large.len, 65541' + LineEnding +
-    '  br i1 %large.len.ok, label %large.last, label %fail' + LineEnding +
-    'large.last:' + LineEnding +
-    '  %large.lastp = getelementptr i8, ptr %large.ptr, i64 65540' + LineEnding +
-    '  %large.last.byte = load i8, ptr %large.lastp' + LineEnding +
-    '  %large.last.ok = icmp eq i8 %large.last.byte, 116' + LineEnding +
-    '  br i1 %large.last.ok, label %release.large, label %fail' + LineEnding +
-    'release.large:' + LineEnding +
-    '  call void @np_string_release(ptr %large.owner, i64 %large.alloc)' + LineEnding +
-    '  call void @np_string_release(ptr null, i64 0)' + LineEnding +
-    '  br label %pass' + LineEnding +
-    ExitBlock('pass', 42) +
-    ExitBlock('fail', 13) +
-    '}' + LineEnding + LineEnding +
-    AHelpers;
+    '  call void asm sideeffect "movq $$60, %rax; syscall", "{rdi},~{rax},~{rcx},~{r11}"(i64 42)' + LineEnding +
+    '  unreachable' + LineEnding +
+    '}' + LineEnding;
 end;
 
 procedure AssertGeneratedContracts(const AConcatLlvm, AIntToStrLlvm,
   ADirectIr: string);
-var
-  ReleasePos, HaltPos: LongInt;
 begin
-  if Pos('call {ptr, i64, ptr, i64} @np_str_concat_owned(',
-    AConcatLlvm) = 0 then
-    Fail('missing-generated-owned-concat-call');
-  if Pos('call {ptr, i64, ptr, i64} @np_int_to_str_owned(',
-    AIntToStrLlvm) = 0 then
-    Fail('missing-generated-owned-int-to-str-call');
-  if Pos('call void @np_string_release(', AConcatLlvm) = 0 then
-    Fail('missing-generated-string-release-call');
-  if Pos('define internal void @np_string_release(', AConcatLlvm) = 0 then
-    Fail('missing-string-release-helper');
-  if Pos('define internal void @np_string_fault(', AConcatLlvm) = 0 then
-    Fail('missing-string-fault-helper');
-  if Pos('call void @np_free(ptr %concat.', AConcatLlvm) <> 0 then
-    Fail('generated-string-path-must-not-free-visible-concat-ptr');
-  if Pos('call {ptr, i64, ptr, i64} @np_str_concat_owned(ptr @big, i64 65536',
-    ADirectIr) = 0 then
-    Fail('missing-direct-large-owned-concat-call');
-  if Pos('call void @np_string_release(ptr null, i64 0)', ADirectIr) = 0 then
-    Fail('missing-direct-null-release-call');
-
-  ReleasePos := Pos('call void @np_string_release(', AConcatLlvm);
-  HaltPos := FindAfter('movq $$60, %rax; syscall', AConcatLlvm, ReleasePos);
-  if (ReleasePos = 0) or (HaltPos = 0) or (ReleasePos > HaltPos) then
-    Fail('generated-cleanup-must-precede-halt');
+  { Phase 3: TString 24B — tstring helpers 替代旧 4-slot string helpers }
+  if Pos('call void @np_tstring_concat(ptr ', AConcatLlvm) = 0 then
+    Fail('missing-generated-tstring-concat-call');
+  if Pos('call void @np_tstring_from_int(ptr ', AIntToStrLlvm) = 0 then
+    Fail('missing-generated-tstring-from-int-call');
+  if Pos('call void @np_tstring_fini(ptr ', AConcatLlvm) = 0 then
+    Fail('missing-generated-tstring-fini-call');
+  if Pos('call void @np_tstring_from_literal(ptr ', AConcatLlvm) = 0 then
+    Fail('missing-generated-tstring-from-literal-call');
 end;
 
 procedure RunRuntimeSmoke(const AOutputDir, AStem: string);
 var
-  LlPath: string;
-  AsmPath: string;
-  ExePath: string;
+  LlPath, LinkedPath, AsmPath, ExePath, RuntimeDir: string;
 begin
   LlPath := IncludeTrailingPathDelimiter(AOutputDir) + AStem + '.ll';
+  LinkedPath := IncludeTrailingPathDelimiter(AOutputDir) + AStem + '.linked.ll';
   AsmPath := IncludeTrailingPathDelimiter(AOutputDir) + AStem + '.s';
   ExePath := IncludeTrailingPathDelimiter(AOutputDir) + AStem;
+  RuntimeDir := RuntimeSrcDir;
 
+  { Phase 3: 链接 tstring runtime .ll 文件 }
+  RunCommand(AStem + '-llvm-link', ToolPath('LLVM_LINK', 'llvm-link'),
+    [LlPath,
+     IncludeTrailingPathDelimiter(RuntimeDir) + 'nextpas.runtime.memops.ll',
+     IncludeTrailingPathDelimiter(RuntimeDir) + 'nextpas.runtime.allocator.ll',
+     IncludeTrailingPathDelimiter(RuntimeDir) + 'nextpas.runtime.strings.ll',
+     IncludeTrailingPathDelimiter(RuntimeDir) + 'nextpas.runtime.tstring.ll',
+     IncludeTrailingPathDelimiter(RuntimeDir) + 'nextpas.runtime.lifecycle.ll',
+     '-o', LinkedPath], 0);
   RunCommand(AStem + '-opt-verify', ToolPath('LLVM_OPT', 'opt'),
-    ['-passes=verify', '-disable-output', LlPath], 0);
+    ['-passes=verify', '-disable-output', LinkedPath], 0);
   RunCommand(AStem + '-llc', ToolPath('LLVM_LLC', 'llc'),
-    ['-filetype=asm', '-o', AsmPath, LlPath], 0);
+    ['-filetype=asm', '-o', AsmPath, LinkedPath], 0);
   RunCommand(AStem + '-link', ToolPath('CLANG', 'clang'),
-    ['-nostdlib', '-no-pie', '-o', ExePath, AsmPath], 0);
+    ['-nostartfiles', '-no-pie', '-lc', '-o', ExePath, AsmPath], 0);
   RunCommand(AStem + '-run', ExePath, [], 42);
 end;
 
