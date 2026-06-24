@@ -105,10 +105,7 @@ type
 
     {** 生成基线对比报告 }
     function GenerateComparisonReport(
-      const ABaselines: array of TBenchComparison): string; overload;
-    function GenerateComparisonReport(
-      const AResults: array of TBenchResult;
-      const ABaselines: array of TBenchComparison): string; overload;
+      const ABaselines: array of TBenchComparison): string;
   end;
 
 implementation
@@ -1092,13 +1089,6 @@ begin
   end;
 
   Result := BufferToString(LLines);
-end;
-
-function TBenchReportGenerator.GenerateComparisonReport(
-  const AResults: array of TBenchResult;
-  const ABaselines: array of TBenchComparison): string;
-begin
-  Result := GenerateComparisonReport(ABaselines);
 end;
 
 end.

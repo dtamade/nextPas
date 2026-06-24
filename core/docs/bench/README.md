@@ -56,7 +56,7 @@ end.
 | `AddWhen(Name, Func, Condition)` | 条件添加 |
 | `AddParallel(Name, Func, Threads)` | 并行基准 |
 | `AddRange(Name, Func, Params)` | 参数化基准（自动生成子基准） |
-| `AddLoop(Name, Func)` | 用户控制循环 |
+| `AddLoop(Name, Func)` | 用户控制循环（见下方限制） |
 | `SetMinDuration(Duration)` | 最小持续时间 |
 | `MaxIterations(N)` | 最大迭代次数 |
 | `MinSamples(N)` | 最小采样数 |
@@ -79,6 +79,10 @@ end.
 | `Skip(Reason)` | 跳过当前基准 |
 | `Iterations` | 当前迭代次数 |
 | `Elapsed` | 当前已用时间 |
+
+> **注意**: `AddLoop` 的回调签名是 `TBenchLoopFunc = procedure(AN: Int64)`，不接收 `IBenchContext`。
+> 因此 loop 基准无法使用 `SetBytes`/`SetAllocs`/`Skip`/`ResetTimer`。
+> 如需上下文控制，请使用 `Add` 或 `AddWithSetup`。
 
 ## 统计流水线
 

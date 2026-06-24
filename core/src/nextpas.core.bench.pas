@@ -443,6 +443,7 @@ end;
 
 function TBenchSuite.SetMinDuration(ADuration: TDuration): IBenchSuite;
 begin
+  GuardNotRun;
   Result := Self;
   if ADuration.AsNanoseconds <= 0 then
     raise EBenchInvalidParam.Create('TBenchSuite.SetMinDuration: duration must be > 0');
@@ -451,6 +452,7 @@ end;
 
 function TBenchSuite.SetMaxIterations(AIters: Int64): IBenchSuite;
 begin
+  GuardNotRun;
   Result := Self;
   if AIters <= 0 then
     raise EBenchInvalidParam.Create('TBenchSuite.SetMaxIterations: iterations must be > 0');
@@ -459,6 +461,7 @@ end;
 
 function TBenchSuite.SetMinSamples(ACount: Integer): IBenchSuite;
 begin
+  GuardNotRun;
   Result := Self;
   if ACount <= 0 then
     raise EBenchInvalidParam.Create('TBenchSuite.SetMinSamples: sample count must be > 0');
@@ -467,6 +470,7 @@ end;
 
 function TBenchSuite.SetWarmupIters(ACount: Integer): IBenchSuite;
 begin
+  GuardNotRun;
   Result := Self;
   if ACount < 0 then
     raise EBenchInvalidParam.Create('TBenchSuite.SetWarmupIters: warmup count must be >= 0');
@@ -475,30 +479,35 @@ end;
 
 function TBenchSuite.EnableMemoryTracking: IBenchSuite;
 begin
+  GuardNotRun;
   Result := Self;
   FConfig.EnableMemoryTracking := True;
 end;
 
 function TBenchSuite.DisableMemoryTracking: IBenchSuite;
 begin
+  GuardNotRun;
   Result := Self;
   FConfig.EnableMemoryTracking := False;
 end;
 
 function TBenchSuite.CollectRawSamples: IBenchSuite;
 begin
+  GuardNotRun;
   Result := Self;
   FConfig.CollectRawSamples := True;
 end;
 
 function TBenchSuite.SetQuiet(AQuiet: Boolean): IBenchSuite;
 begin
+  GuardNotRun;
   Result := Self;
   FConfig.Quiet := AQuiet;
 end;
 
 function TBenchSuite.AddBaseline(const AName: string; ANsPerOp: Double): IBenchSuite;
 begin
+  GuardNotRun;
   Result := Self;
   if FBaselineCount >= FBaselineCapacity then
   begin
@@ -534,6 +543,7 @@ var
   LBaselines: TBaselineArray;
   I: Integer;
 begin
+  GuardNotRun;
   Result := Self;
   LManager := TBaselineManager.Create;
   try
@@ -563,12 +573,14 @@ end;
 
 function TBenchSuite.SetFilter(const AFilter: string): IBenchSuite;
 begin
+  GuardNotRun;
   Result := Self;
   FFilter := AFilter;
 end;
 
 function TBenchSuite.SetTimeout(ATimeoutMs: Cardinal): IBenchSuite;
 begin
+  GuardNotRun;
   Result := Self;
   FConfig.TimeoutMs := ATimeoutMs;
 end;
