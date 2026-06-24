@@ -334,17 +334,6 @@ type
     property Active: Boolean read FActive;
   end;
 
-  // 向后兼容别名 (deprecated, will be removed in v3.0)
-  TEnhancedStackPool = TScopedStackPool deprecated 'Use TScopedStackPool instead';
-  TStackScope = TStackPoolScope deprecated 'Use TStackPoolScope instead';
-  TAutoStackScope = TAutoStackPoolScope deprecated 'Use TAutoStackPoolScope instead';
-  TStackScopeManager = TStackPoolScopeManager deprecated 'Use TStackPoolScopeManager instead';
-
-// 向后兼容辅助函数 (deprecated)
-function CreateDefaultStackPolicy: TStackPoolPolicy; deprecated 'Use TStackPoolPolicy.Default instead';
-function CreateHighPerformanceStackPolicy: TStackPoolPolicy; deprecated 'Use TStackPoolPolicy.HighPerformance instead';
-function CreateDebugStackPolicy: TStackPoolPolicy; deprecated 'Use TStackPoolPolicy.Debug instead';
-
 implementation
 
 uses
@@ -512,21 +501,6 @@ begin
   Result.GrowthFactor := 1.5; // 更保守的增长
 end;
 
-// 向后兼容辅助函数
-function CreateDefaultStackPolicy: TStackPoolPolicy;
-begin
-  Result := TStackPoolPolicy.Default;
-end;
-
-function CreateHighPerformanceStackPolicy: TStackPoolPolicy;
-begin
-  Result := TStackPoolPolicy.HighPerformance;
-end;
-
-function CreateDebugStackPolicy: TStackPoolPolicy;
-begin
-  Result := TStackPoolPolicy.Debug;
-end;
 
 // ============================================================================
 // TStackPoolScope

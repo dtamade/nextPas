@@ -51,8 +51,6 @@ const
   MEM_POOL_ADAPTER_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.pool.adapter.pas';
   MEM_LAYOUT_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.layout.pas';
   MEM_LAYOUT_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.layout.pas';
-  MEM_MANAGER_MIMALLOC_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.manager.mimalloc.pas';
-  MEM_MANAGER_MIMALLOC_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.manager.mimalloc.pas';
   MEM_MIMALLOC_BINDING_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.mimalloc.binding.pas';
   MEM_MIMALLOC_BINDING_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.mimalloc.binding.pas';
   MEM_RING_BUFFER_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.ring_buffer.pas';
@@ -430,45 +428,6 @@ begin
     'callback allocator nil-check should not be wrapped by conditional compilation');
 end;
 
-procedure TestMimallocManagerUsesInstallationLock;
-var
-  LSource: string;
-  LInstallSection: string;
-  LUninstallSection: string;
-begin
-  LSource := ReadSourceText(ResolveSourcePath(
-    MEM_MANAGER_MIMALLOC_SOURCE_PATH_FROM_TEST,
-    MEM_MANAGER_MIMALLOC_SOURCE_PATH_FROM_ROOT));
-  CheckContains(LSource, 'gmanagerlock: tmemmutex;',
-    'mimalloc manager should define a manager lock');
-  CheckContains(LSource, 'initialization',
-    'mimalloc manager should initialize the manager lock');
-  CheckContains(LSource, 'gmanagerlock.init;',
-    'mimalloc manager should initialize the manager lock');
-  CheckContains(LSource, 'finalization',
-    'mimalloc manager should finalize the manager lock');
-  CheckContains(LSource, 'gmanagerlock.done;',
-    'mimalloc manager should finalize the manager lock');
-
-  LInstallSection := ExtractSourceSection(LSource,
-    'procedure installmimallocmemorymanager;' + #10 + 'begin',
-    'procedure uninstallmimallocmemorymanager;');
-  Check(LInstallSection <> '', 'mimalloc manager install section should be readable');
-  CheckContains(LInstallSection, 'gmanagerlock.acquire;',
-    'mimalloc manager install should acquire the manager lock');
-  CheckContains(LInstallSection, 'gmanagerlock.release;',
-    'mimalloc manager install should release the manager lock');
-
-  LUninstallSection := ExtractSourceSection(LSource,
-    'procedure uninstallmimallocmemorymanager;' + #10 + 'begin',
-    'function ismimallocmemorymanagerinstalled: boolean;');
-  Check(LUninstallSection <> '', 'mimalloc manager uninstall section should be readable');
-  CheckContains(LUninstallSection, 'gmanagerlock.acquire;',
-    'mimalloc manager uninstall should acquire the manager lock');
-  CheckContains(LUninstallSection, 'gmanagerlock.release;',
-    'mimalloc manager uninstall should release the manager lock');
-end;
-
 procedure TestVirtualArenaAllocNoPointerGuardsAgainstBackUnderflow;
 var
   LSource: string;
@@ -521,8 +480,9 @@ begin
   Check(not SourceExists(MEM_STACK_SCOPE_HELPERS_SOURCE_PATH_FROM_TEST,
     MEM_STACK_SCOPE_HELPERS_SOURCE_PATH_FROM_ROOT),
     'mem.stack_scope_helpers should be removed');
-  Check(SourceExists(MEM_MANAGER_MIMALLOC_SOURCE_PATH_FROM_TEST, MEM_MANAGER_MIMALLOC_SOURCE_PATH_FROM_ROOT),
-    'mem.manager.mimalloc should remain available');
+  Check(not SourceExists('../../../src/nextpas.core.mem.manager.mimalloc.pas',
+    'core/src/nextpas.core.mem.manager.mimalloc.pas'),
+    'mem.manager.mimalloc should be removed');
 end;
 
 procedure TestBaseOwnsMemConstantsAndErrorDropsAllocResult;
@@ -843,7 +803,6 @@ begin
   T.Run('arena units use explicit arena api', @TestArenaUnitsUseExplicitArenaApi);
   T.Run('callback allocator rejects nil callbacks without contract guard',
     @TestCallbackAllocatorRejectsNilCallbacksWithoutContractGuard);
-  T.Run('mimalloc manager uses installation lock', @TestMimallocManagerUsesInstallationLock);
   T.Run('virtual arena AllocNoPointer guards against back underflow',
     @TestVirtualArenaAllocNoPointerGuardsAgainstBackUnderflow);
   T.Run('legacy allocator files removed', @TestLegacyAllocatorFilesRemoved);

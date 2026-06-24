@@ -22,8 +22,6 @@ type
     akMimalloc
   );
 
-  TArenaMarker = SizeUInt deprecated 'use TArenaMark from arena.base';
-
 { Bit-manipulation utilities shared across mem subsystem. }
 
 {** Return True if AValue is a positive power of two. }
