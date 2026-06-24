@@ -1303,6 +1303,8 @@ begin
   Emit('; ModuleID = ''' + FModule.ModuleName + '''');
   Emit('target triple = "' + FLlvmTriple + '"');
   Emit('target datalayout = "' + FLlvmDataLayout + '"');
+  Emit('');
+  Emit('%TString = type [24 x i8]');
 
   for I := 0 to FModule.GlobalCount - 1 do
   begin
@@ -1501,7 +1503,6 @@ procedure THIRLlvmEmitter.EmitTStringHelpers;
 begin
   { TString 24B runtime — all functions operate on ptr to 24-byte record }
   Emit('');
-  Emit('%TString = type [24 x i8]');
   Emit('declare void @np_tstring_init(ptr %s)');
   Emit('declare void @np_tstring_fini(ptr %s)');
   Emit('declare void @np_tstring_assign(ptr %dst, ptr %src)');
