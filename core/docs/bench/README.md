@@ -56,7 +56,7 @@ end.
 | `AddWhen(Name, Func, Condition)` | 条件添加 |
 | `AddParallel(Name, Func, Threads)` | 并行基准 |
 | `AddRange(Name, Func, Params)` | 参数化基准（自动生成子基准） |
-| `AddLoop(Name, Func)` | 用户控制循环（见下方限制） |
+| `AddLoop(Name, Func)` | [Experimental] 用户控制循环（见下方限制） |
 | `SetMinDuration(Duration)` | 最小持续时间 |
 | `MaxIterations(N)` | 最大迭代次数 |
 | `MinSamples(N)` | 最小采样数 |
@@ -84,6 +84,19 @@ end.
 > 因此 loop 基准无法使用 `SetBytes`/`SetAllocs`/`Skip`/`ResetTimer`。
 > 如需上下文控制，请使用 `Add` 或 `AddWithSetup`。
 
+### IBenchResults 输出方法
+
+| 方法 | 说明 |
+|------|------|
+| `PrintToConsole` | 控制台表格（Name/Iterations/ns/op/ops/s/StdDev/Median/P95/P99） |
+| `ToBenchstat` | Go benchstat 兼容格式（tab-separated，可直接用 `benchstat` 分析） |
+| `ToJSON` | JSON 格式（含环境信息、统计详情） |
+| `ToTSV` | TSV 格式（含状态/跳过原因） |
+| `ToHTML` | 自包含 HTML（内联 CSS/SVG 图表/箱线图） |
+| `SaveToJSON(Path)` | 保存 JSON 到文件 |
+| `SaveToHTML(Path)` | 保存 HTML 到文件 |
+| `SaveToTSV(Path)` | 保存 TSV 到文件 |
+
 ## 统计流水线
 
 ```
@@ -100,7 +113,7 @@ end.
   → IntroSort 排序 → Percentile/P50/P95/P99
 
 输出 (TBenchResults)
-  → Console/JSON/TSV/HTML/SVG
+  → Console/JSON/TSV/HTML/SVG/Benchstat
   → 基线对比 (Ratio + Welch's t-test)
 ```
 
@@ -124,6 +137,13 @@ end.
 ## 测试
 
 ```bash
+# 全量测试（12 个 suite）
+make -C core/tests/nextpas.core.bench test
+
+# 运行 bench 模块自身的基准测试
+make -C core/tests/nextpas.core.bench bench
+
+# 单个 suite
 make -C core/tests/nextpas.core.bench/test_bench_stats clean test
 make -C core/tests/nextpas.core.bench/test_bench_stats_advanced clean test
 make -C core/tests/nextpas.core.bench/test_bench_runner clean test
