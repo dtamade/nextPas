@@ -225,11 +225,14 @@ begin
       begin
         LStatus := tsFailed;
         LMsg    := E.Message;
+        { Append file:line from stack trace if available }
+        if GLastTestTrace <> '' then
+          LMsg := LMsg + ' [' + GLastTestTrace + ']';
         ResolveOutSink(FConfig).WriteLn(
           '    ' + StatusDot(tsFailed, FConfig) + ' ' +
           AnsiRed(LEntry.Name, FConfig));
         ResolveOutSink(FConfig).WriteLn(
-          '      ' + AnsiDim(E.Message, FConfig));
+          '      ' + AnsiDim(LMsg, FConfig));
         Inc(FSubFail);
         SetLength(FFailedNames, Length(FFailedNames) + 1);
         FFailedNames[High(FFailedNames)] := LEntry.Name;
@@ -238,6 +241,9 @@ begin
       begin
         LStatus := tsError;
         LMsg    := E.ClassName + ': ' + E.Message;
+        { Append file:line from stack trace if available }
+        if GLastTestTrace <> '' then
+          LMsg := LMsg + ' [' + GLastTestTrace + ']';
         ResolveOutSink(FConfig).WriteLn(
           '    ' + StatusDot(tsError, FConfig) + ' ' +
           AnsiRed(LEntry.Name, FConfig) + ' [' + E.ClassName + ']');

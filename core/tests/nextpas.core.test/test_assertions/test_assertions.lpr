@@ -402,6 +402,51 @@ begin
   end;
 end;
 
+{ CheckEqual(Double) / CheckNotEqual(Double) }
+
+procedure TestCheckEqualDoublePass;
+begin
+  CheckEqual(1.0, 1.0);
+  CheckEqual(3.14159, 3.14159);
+  CheckEqual(0.0, 0.0);
+  CheckEqual(-1.0, -1.0);
+  { With epsilon }
+  CheckEqual(1.0, 1.0 + 1e-11, 1e-10);
+  CheckEqual(1.0, 1.0 - 1e-11, 1e-10);
+end;
+
+procedure TestCheckEqualDoubleFail;
+begin
+  try
+    CheckEqual(1.0, 2.0, 1e-10);
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(Pos('Expected', E.Message) > 0, 'should contain Expected');
+    on E: Exception do
+      Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+  end;
+end;
+
+procedure TestCheckNotEqualDoublePass;
+begin
+  CheckNotEqual(1.0, 2.0);
+  CheckNotEqual(0.0, 1.0, 1e-10);
+end;
+
+procedure TestCheckNotEqualDoubleFail;
+begin
+  try
+    CheckNotEqual(1.0, 1.0);
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(Pos('differ', E.Message) > 0, 'should contain differ');
+    on E: Exception do
+      Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+  end;
+end;
+
 procedure TestCheckNotNearPass;
 begin
   CheckNotNear(2.0, 1.0);
@@ -555,6 +600,12 @@ begin
 
   { R6-43: CheckRaises parent catches child }
   LSuite.Test('Raises parent catches child',  @TestCheckRaisesCatchesChildWithParent);
+
+  { Phase 1: CheckEqual(Double) / CheckNotEqual(Double) }
+  LSuite.Test('CheckEqual (double pass)',     @TestCheckEqualDoublePass);
+  LSuite.Test('CheckEqual (double fail)',     @TestCheckEqualDoubleFail);
+  LSuite.Test('CheckNotEqual (double pass)',  @TestCheckNotEqualDoublePass);
+  LSuite.Test('CheckNotEqual (double fail)',  @TestCheckNotEqualDoubleFail);
 
   if not LSuite.Run then
   begin

@@ -411,11 +411,15 @@ begin
         begin
           LStatus := tsFailed;
           LFailMsg := E.Message;
+          if GLastTestTrace <> '' then
+            LFailMsg := LFailMsg + ' [' + GLastTestTrace + ']';
         end;
         on E: Exception do
         begin
           LStatus := tsError;
           LFailMsg := E.ClassName + ': ' + E.Message;
+          if GLastTestTrace <> '' then
+            LFailMsg := LFailMsg + ' [' + GLastTestTrace + ']';
         end;
       end;
 
@@ -498,7 +502,7 @@ begin
           R^.Fail^ := R^.Fail^ + 1;
           LOutSink.WriteLn(
             '  ' + StatusDot(tsError, LConfig) + ' ' +
-            AnsiRed(R^.Entry.Name, LConfig));
+            AnsiRed(R^.Entry.Name, LConfig) + ' [unexpected error]');
           if LFailMsg <> '' then
             LOutSink.WriteLn('    ' + AnsiDim(LFailMsg, LConfig));
         end;

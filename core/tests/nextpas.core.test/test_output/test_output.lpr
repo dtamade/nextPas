@@ -499,7 +499,7 @@ begin
   LResults[0].Results[0].Message := 'segfault';
 
   LXml := JUnitXML(LResults);
-  CheckContains(LXml, '<failure type="Error" message="segfault"');
+  CheckContains(LXml, '<error type="Error" message="segfault"');
 end;
 
 function MakeTempJUnitPath: string;

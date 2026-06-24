@@ -440,8 +440,9 @@ var
   LRunResult: TTestRunResult;
   LTestResult: TTestResult;
   I, J: Integer;
-  LTotalTests, LTotalFailures, LTotalSkipped: Integer;
+  LTotalTests, LTotalFailures, LTotalErrors, LTotalSkipped: Integer;
   LSuiteName: string;
+  LSuiteErrors: Integer;
 begin
   LSb.Init;
   try
@@ -450,6 +451,7 @@ begin
     { Compute totals across all suites }
     LTotalTests := 0;
     LTotalFailures := 0;
+    LTotalErrors := 0;
     LTotalSkipped := 0;
     for I := 0 to High(AResults) do
     begin
@@ -459,9 +461,18 @@ begin
       LTotalSkipped := LTotalSkipped + LRunResult.Skipped;
     end;
 
+    { Count errors (tsError) across all results for top-level attribute }
+    for I := 0 to High(AResults) do
+      for J := 0 to High(AResults[I].Results) do
+        if AResults[I].Results[J].Status = tsError then
+          Inc(LTotalErrors);
+    { Subtract errors from failures count — they were counted in Failed by runner }
+    LTotalFailures := LTotalFailures - LTotalErrors;
+
     LSb.AppendStr('<testsuites name="' + XmlEscape(ASuiteName) +
       '" tests="' + IntToStr(LTotalTests) +
       '" failures="' + IntToStr(LTotalFailures) +
+      '" errors="' + IntToStr(LTotalErrors) +
       '" skipped="' + IntToStr(LTotalSkipped) + '">' + LineEnding);
 
     for I := 0 to High(AResults) do
@@ -472,9 +483,16 @@ begin
       else
         LSuiteName := 'suite_' + IntToStr(I);
 
+      { Count per-suite errors }
+      LSuiteErrors := 0;
+      for J := 0 to High(LRunResult.Results) do
+        if LRunResult.Results[J].Status = tsError then
+          Inc(LSuiteErrors);
+
       LSb.AppendStr('  <testsuite name="' + XmlEscape(LSuiteName) +
         '" tests="' + IntToStr(LRunResult.Passed + LRunResult.Failed + LRunResult.Skipped) +
-        '" failures="' + IntToStr(LRunResult.Failed) +
+        '" failures="' + IntToStr(LRunResult.Failed - LSuiteErrors) +
+        '" errors="' + IntToStr(LSuiteErrors) +
         '" skipped="' + IntToStr(LRunResult.Skipped) + '">' + LineEnding);
 
       for J := 0 to High(LRunResult.Results) do
@@ -493,7 +511,7 @@ begin
           tsError:
             begin
               LSb.AppendStr('>' + LineEnding);
-              LSb.AppendStr('      <failure type="Error" message="' +
+              LSb.AppendStr('      <error type="Error" message="' +
                 XmlEscape(LTestResult.Message) + '"/>' + LineEnding);
               LSb.AppendStr('    </testcase>' + LineEnding);
             end;

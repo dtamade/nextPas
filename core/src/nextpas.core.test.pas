@@ -89,10 +89,14 @@ procedure CheckEqual(const AExpected, AActual: string); overload;
 procedure CheckEqual(const AExpected, AActual: Int64); overload;
 procedure CheckEqual(const AExpected, AActual: Boolean); overload;
 procedure CheckEqual(const AExpected, AActual: Pointer); overload;
+procedure CheckEqual(const AExpected, AActual: Double;
+  AEpsilon: Double = 1e-10); overload;
 procedure CheckNotEqual(const AExpected, AActual: string); overload;
 procedure CheckNotEqual(const AExpected, AActual: Int64); overload;
 procedure CheckNotEqual(const AExpected, AActual: Boolean); overload;
 procedure CheckNotEqual(const AExpected, AActual: Pointer); overload;
+procedure CheckNotEqual(const AExpected, AActual: Double;
+  AEpsilon: Double = 1e-10); overload;
 procedure CheckTrue(AValue: Boolean; const AMessage: string = '');
 procedure CheckFalse(AValue: Boolean; const AMessage: string = '');
 procedure CheckNil(AValue: Pointer; const AMessage: string = '');
@@ -114,6 +118,11 @@ procedure CheckNotNear(AExpected, AActual: Double;
   AEpsilon: Double = 1e-10; const AMessage: string = '');
 procedure Fail(const AMessage: string);
 procedure Skip(const AReason: string = '');
+
+{ ── Re-exported from test.base (stack trace) ─────────────────────────────── }
+
+function  GetLastTestTrace: string;
+function  FormatTestLocation(APrefix: string = ''): string;
 
 { ── Re-exported functions from test.output ────────────────────────────────── }
 
@@ -205,6 +214,10 @@ begin nextpas.core.test.check.CheckEqual(AExpected, AActual); end;
 procedure CheckEqual(const AExpected, AActual: Pointer);
 begin nextpas.core.test.check.CheckEqual(AExpected, AActual); end;
 
+procedure CheckEqual(const AExpected, AActual: Double;
+  AEpsilon: Double);
+begin nextpas.core.test.check.CheckEqual(AExpected, AActual, AEpsilon); end;
+
 procedure CheckNotEqual(const AExpected, AActual: string);
 begin nextpas.core.test.check.CheckNotEqual(AExpected, AActual); end;
 
@@ -216,6 +229,10 @@ begin nextpas.core.test.check.CheckNotEqual(AExpected, AActual); end;
 
 procedure CheckNotEqual(const AExpected, AActual: Pointer);
 begin nextpas.core.test.check.CheckNotEqual(AExpected, AActual); end;
+
+procedure CheckNotEqual(const AExpected, AActual: Double;
+  AEpsilon: Double);
+begin nextpas.core.test.check.CheckNotEqual(AExpected, AActual, AEpsilon); end;
 
 procedure CheckTrue(AValue: Boolean; const AMessage: string);
 begin nextpas.core.test.check.CheckTrue(AValue, AMessage); end;
@@ -273,6 +290,14 @@ begin nextpas.core.test.check.Fail(AMessage); end;
 
 procedure Skip(const AReason: string);
 begin nextpas.core.test.check.Skip(AReason); end;
+
+{ ── Forward to test.base (stack trace) ───────────────────────────────────── }
+
+function GetLastTestTrace: string;
+begin Result := nextpas.core.test.base.GetLastTestTrace; end;
+
+function FormatTestLocation(APrefix: string): string;
+begin Result := nextpas.core.test.base.FormatTestLocation(APrefix); end;
 
 { ── Forward to test.output ────────────────────────────────────────────────── }
 

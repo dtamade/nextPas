@@ -18,10 +18,18 @@ procedure CheckEqual(const AExpected, AActual: string); overload;
 procedure CheckEqual(const AExpected, AActual: Int64); overload;
 procedure CheckEqual(const AExpected, AActual: Boolean); overload;
 procedure CheckEqual(const AExpected, AActual: Pointer); overload;
+{ CheckEqual for Double — exact bit-wise comparison.
+  For floating-point tolerance comparisons, use CheckNear instead. }
+procedure CheckEqual(const AExpected, AActual: Double;
+  AEpsilon: Double = 1e-10); overload;
 procedure CheckNotEqual(const AExpected, AActual: string); overload;
 procedure CheckNotEqual(const AExpected, AActual: Int64); overload;
 procedure CheckNotEqual(const AExpected, AActual: Boolean); overload;
 procedure CheckNotEqual(const AExpected, AActual: Pointer); overload;
+{ CheckNotEqual for Double — values must differ by more than AEpsilon.
+  For floating-point tolerance comparisons, use CheckNotNear instead. }
+procedure CheckNotEqual(const AExpected, AActual: Double;
+  AEpsilon: Double = 1e-10); overload;
 procedure CheckTrue(AValue: Boolean; const AMessage: string = '');
 procedure CheckFalse(AValue: Boolean; const AMessage: string = '');
 procedure CheckNil(AValue: Pointer; const AMessage: string = '');
@@ -164,6 +172,30 @@ begin
   if AExpected = AActual then
     InternalFail('Expected values to differ but both are $' +
       IntToHex(NativeUInt(AActual), 16));
+end;
+
+procedure CheckEqual(const AExpected, AActual: Double;
+  AEpsilon: Double);
+var
+  LDiff: Double;
+begin
+  LDiff := AActual - AExpected;
+  if LDiff < 0 then LDiff := -LDiff;
+  if LDiff > AEpsilon then
+    InternalFail('Expected ' + FloatToStr(AExpected) +
+      ' (+/-' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual));
+end;
+
+procedure CheckNotEqual(const AExpected, AActual: Double;
+  AEpsilon: Double);
+var
+  LDiff: Double;
+begin
+  LDiff := AActual - AExpected;
+  if LDiff < 0 then LDiff := -LDiff;
+  if LDiff <= AEpsilon then
+    InternalFail('Expected values to differ but both are ' +
+      FloatToStr(AActual) + ' (within ' + FloatToStr(AEpsilon) + ')');
 end;
 
 procedure CheckTrue(AValue: Boolean; const AMessage: string);

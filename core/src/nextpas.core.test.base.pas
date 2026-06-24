@@ -122,6 +122,20 @@ type
 
 threadvar
   GExecState: PTestExecState;
+  GLastTestTrace: string;
+
+{ ── Stack Trace Capture ──────────────────────────────────────────────────── }
+{ Captures the call-site of a test failure, filtering out framework frames.
+  Uses FPC's ExceptProc hook to walk the exception stack on every exception,
+  storing the filtered result in a threadvar. Runner code calls GetLastTestTrace
+  after catching EAssertionFailed to extract the user-facing file:line. }
+
+function GetLastTestTrace: string;
+  { Returns the most recently captured (and filtered) stack trace.
+    Empty if no trace has been captured yet on this thread. }
+function FormatTestLocation(APrefix: string = ''): string;
+  { Returns the first non-empty frame from GLastTestTrace, prefixed with APrefix.
+    Returns '' if no useful frame was captured. }
 
 { ── Internal Helpers (exported for use by other test.* units) ─────────────── }
 
@@ -153,6 +167,84 @@ begin
   Result.Skipped   := 0;
   Result.AllPassed := True;
   Result.Results   := nil;
+end;
+
+{ ═════════════════════════════════════════════════════════════════════════════ }
+{ Stack Trace Capture                                                         }
+{ ═════════════════════════════════════════════════════════════════════════════ }
+
+{ Thread-local trace storage — set by ExceptProc hook, read by GetLastTestTrace.
+  threadvar ensures parallel tests don't interfere. }
+var
+  GTestExceptProcHooked: Boolean;
+  GPrevExceptProc: TExceptProc;
+
+function IsFrameworkFrame(const AFrameStr: string): Boolean;
+{ Returns True if the frame belongs to the test framework and should be hidden
+  from the user-facing output. Matches unit name prefixes:
+    nextpas.core.test.  (any sub-unit of the test framework)
+    sysutils             (FPC exception machinery)
+    system               (FPC runtime) }
+var
+  LLower: string;
+begin
+  LLower := LowerCase(AFrameStr);
+  Result := (Pos('nextpas.core.test.', LLower) > 0) or
+            (Pos('nextpas.core.test,', LLower) > 0) or
+            (Pos('nextpas.core.test ', LLower) > 0) or
+            (Pos('nextpas.core.test'#10, LLower) > 0);
+  if not Result then
+    { Also filter sysutils/system frames that appear in exception stack }
+    Result := (Pos('sysutils', LLower) > 0) or
+              (Pos('system,', LLower) > 0) or
+              (Pos('system ', LLower) > 0);
+end;
+
+procedure TestExceptProc(Obj: TObject; Addr: CodePointer;
+  FrameCount: LongInt; Frame: PCodePointer);
+{ ExceptProc hook: captures a filtered stack trace on every exception.
+  Stores first non-framework frame in GLastTestTrace. }
+var
+  I: Integer;
+  LFrameStr: string;
+begin
+  GLastTestTrace := '';
+  if FrameCount > 0 then
+  begin
+    for I := 0 to FrameCount - 1 do
+    begin
+      if Frame[I] = nil then Continue;
+      LFrameStr := BackTraceStrFunc(Frame[I]);
+      if LFrameStr = '' then Continue;
+      if not IsFrameworkFrame(LFrameStr) then
+      begin
+        { First non-framework frame is the most useful for the user }
+        GLastTestTrace := LFrameStr;
+        Break;
+      end;
+    end;
+  end;
+  { Chain to previous handler if one was installed }
+  if Assigned(GPrevExceptProc) then
+    GPrevExceptProc(Obj, Addr, FrameCount, Frame);
+end;
+
+function GetLastTestTrace: string;
+begin
+  Result := GLastTestTrace;
+end;
+
+function FormatTestLocation(APrefix: string): string;
+var
+  LTrace: string;
+begin
+  LTrace := GLastTestTrace;
+  if LTrace = '' then
+    Exit('');
+  if APrefix <> '' then
+    Result := APrefix + ' ' + LTrace
+  else
+    Result := LTrace;
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }
@@ -195,7 +287,20 @@ begin
   GExecState^.SkipReason := '';
 end;
 
+initialization
+  { Install ExceptProc hook for stack trace capture.
+    Save previous handler so we can chain to it. }
+  GPrevExceptProc := ExceptProc;
+  ExceptProc := @TestExceptProc;
+  GTestExceptProcHooked := True;
+
 finalization
+  { Restore previous ExceptProc handler }
+  if GTestExceptProcHooked then
+  begin
+    ExceptProc := GPrevExceptProc;
+    GTestExceptProcHooked := False;
+  end;
   if GExecState <> nil then
     Dispose(GExecState);
 

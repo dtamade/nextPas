@@ -569,12 +569,16 @@ begin
           begin
             LStatus := tsFailed;
             LLastFailMsg := E.Message;
+            if GLastTestTrace <> '' then
+              LLastFailMsg := LLastFailMsg + ' [' + GLastTestTrace + ']';
             Inc(LFail);
           end;
           on E: Exception do
           begin
             LStatus := tsError;
             LLastFailMsg := E.ClassName + ': ' + E.Message;
+            if GLastTestTrace <> '' then
+              LLastFailMsg := LLastFailMsg + ' [' + GLastTestTrace + ']';
             Inc(LFail);
           end;
         end;
@@ -625,11 +629,15 @@ begin
             begin
               LStatus := tsFailed;
               LLastFailMsg := E.Message;
+              if GLastTestTrace <> '' then
+                LLastFailMsg := LLastFailMsg + ' [' + GLastTestTrace + ']';
             end;
             on E: Exception do
             begin
               LStatus := tsError;
               LLastFailMsg := E.ClassName + ': ' + E.Message;
+              if GLastTestTrace <> '' then
+                LLastFailMsg := LLastFailMsg + ' [' + GLastTestTrace + ']';
             end;
           end;
 
@@ -658,12 +666,16 @@ begin
       begin
         LStatus := tsFailed;
         LLastFailMsg := E.Message;
+        if GLastTestTrace <> '' then
+          LLastFailMsg := LLastFailMsg + ' [' + GLastTestTrace + ']';
         Inc(LFail);
       end;
       on E: Exception do
       begin
         LStatus := tsError;
         LLastFailMsg := E.ClassName + ': ' + E.Message;
+        if GLastTestTrace <> '' then
+          LLastFailMsg := LLastFailMsg + ' [' + GLastTestTrace + ']';
         Inc(LFail);
       end;
     end;
