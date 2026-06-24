@@ -330,7 +330,7 @@ begin
   LComparisons[1].IsSignificant := True;
   LComparisons[1].ApproximatePValue := 0.05;
 
-  LReport := GGenerator.GenerateComparisonReport(LResults, LComparisons);
+  LReport := GGenerator.GenerateComparisonReport(LComparisons);
 
   CheckContains(LReport, 'Baseline Comparison', 'Contains header');
   CheckContains(LReport, 'HashMap.Put', 'Contains first comparison');

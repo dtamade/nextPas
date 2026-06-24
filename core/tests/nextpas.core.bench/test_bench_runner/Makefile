@@ -6,11 +6,16 @@ SRC_DIR = $(CORE_ROOT)/src
 
 SRCS = $(PROGRAM).lpr \
        $(SRC_DIR)/nextpas.core.bench.base.pas \
+       $(SRC_DIR)/nextpas.core.bench.baseline.pas \
        $(SRC_DIR)/nextpas.core.bench.intf.pas \
-       $(SRC_DIR)/nextpas.core.bench.stats.pas \
-       $(SRC_DIR)/nextpas.core.bench.runner.pas \
+       $(SRC_DIR)/nextpas.core.bench.memtrack.pas \
+       $(SRC_DIR)/nextpas.core.bench.parallel.pas \
+       $(SRC_DIR)/nextpas.core.bench.pas \
        $(SRC_DIR)/nextpas.core.bench.report.pas \
-       $(SRC_DIR)/nextpas.core.bench.pas
+       $(SRC_DIR)/nextpas.core.bench.runner.pas \
+       $(SRC_DIR)/nextpas.core.bench.stats.pas \
+       $(SRC_DIR)/nextpas.core.bench.stats.advanced.pas \
+       $(SRC_DIR)/nextpas.core.bench.xlang.pas
 
 BUILD_DIR = build
 BIN_DIR = $(BUILD_DIR)/bin
