@@ -18,7 +18,7 @@ unit nextpas.core.tls.winssl.certstore;
 interface
 
 uses
-  Windows, SysUtils, Classes, nextpas.core.fs, nextpas.core.tls.base,
+  Windows, nextpas.core.system.classes, nextpas.core.fs, nextpas.core.tls.base,
   nextpas.core.tls.winssl.base,
   nextpas.core.tls.winssl.api,
   nextpas.core.tls.winssl.native_handle,
@@ -97,8 +97,10 @@ const
 implementation
 
 uses
+  nextpas.core.text.conv,
   nextpas.core.text.strings,
-    nextpas.core.tls.secure.compare;  // Phase 3.3 P1: 使用独立的常量时间比较模块
+  nextpas.core.fs.glob,
+  nextpas.core.tls.secure.compare;  // Phase 3.3 P1: 使用独立的常量时间比较模块
                                // 修复: 原来使用 nextpas.core.tls.secure 导致间接依赖 OpenSSL
                                // 现在使用不依赖 OpenSSL 的独立模块
 
@@ -170,7 +172,7 @@ procedure TWinSSLCertificateStore.ClearCache;
 var
   i: Integer;
 begin
-  for i := 0 to Length(FCertificates) - 1 do
+  for i := 0 to FCertificates.Count - 1 do
     ISSLCertificate(FCertificates[i])._Release;
   FCertificates.Clear;
 end;
@@ -205,12 +207,12 @@ end;
 function NormalizeCertificateStoreDN(const AValue: string): string;
 begin
   Result := UpperCase(Trim(AValue));
-  Result := StringReplace(Result, ' , ', ',', [rfReplaceAll]);
-  Result := StringReplace(Result, ', ', ',', [rfReplaceAll]);
-  Result := StringReplace(Result, ' ,', ',', [rfReplaceAll]);
-  Result := StringReplace(Result, ' = ', '=', [rfReplaceAll]);
-  Result := StringReplace(Result, '= ', '=', [rfReplaceAll]);
-  Result := StringReplace(Result, ' =', '=', [rfReplaceAll]);
+  Result := StringReplace(Result, ' , ', ',', True);
+  Result := StringReplace(Result, ', ', ',', True);
+  Result := StringReplace(Result, ' ,', ',', True);
+  Result := StringReplace(Result, ' = ', '=', True);
+  Result := StringReplace(Result, '= ', '=', True);
+  Result := StringReplace(Result, ' =', '=', True);
 end;
 
 function NormalizeCertificateStoreHex(const AValue: string): string;
@@ -526,9 +528,10 @@ end;
 
 function TWinSSLCertificateStore.LoadFromPath(const APath: string): Boolean;
 var
-  SearchRec: TSearchRec;
+  LFiles: TStringArray;
   FilePath: string;
   LoadedCount: Integer;
+  I: Integer;
 begin
   Result := False;
   LoadedCount := 0;
@@ -537,44 +540,29 @@ begin
     Exit;
 
   // 搜索路径中的证书文件
-  if FindFirst(nextpas.core.fs.PathEnsureSep(APath) + '*.cer', faAnyFile, SearchRec) = 0 then
+  LFiles := FsGlob(APath, '*.cer');
+  for I := 0 to High(LFiles) do
   begin
-    repeat
-      if (SearchRec.Attr and faDirectory) = 0 then
-      begin
-        FilePath := nextpas.core.fs.PathEnsureSep(APath) + SearchRec.Name;
-        if LoadFromFile(FilePath) then
-          Inc(LoadedCount);
-      end;
-    until FindNext(SearchRec) <> 0;
-    FindClose(SearchRec);
+    FilePath := LFiles[I];
+    if LoadFromFile(FilePath) then
+      Inc(LoadedCount);
   end;
 
   // 也搜索 .pem 和 .crt 文件
-  if FindFirst(nextpas.core.fs.PathEnsureSep(APath) + '*.pem', faAnyFile, SearchRec) = 0 then
+  LFiles := FsGlob(APath, '*.pem');
+  for I := 0 to High(LFiles) do
   begin
-    repeat
-      if (SearchRec.Attr and faDirectory) = 0 then
-      begin
-        FilePath := nextpas.core.fs.PathEnsureSep(APath) + SearchRec.Name;
-        if LoadFromFile(FilePath) then
-          Inc(LoadedCount);
-      end;
-    until FindNext(SearchRec) <> 0;
-    FindClose(SearchRec);
+    FilePath := LFiles[I];
+    if LoadFromFile(FilePath) then
+      Inc(LoadedCount);
   end;
 
-  if FindFirst(nextpas.core.fs.PathEnsureSep(APath) + '*.crt', faAnyFile, SearchRec) = 0 then
+  LFiles := FsGlob(APath, '*.crt');
+  for I := 0 to High(LFiles) do
   begin
-    repeat
-      if (SearchRec.Attr and faDirectory) = 0 then
-      begin
-        FilePath := nextpas.core.fs.PathEnsureSep(APath) + SearchRec.Name;
-        if LoadFromFile(FilePath) then
-          Inc(LoadedCount);
-      end;
-    until FindNext(SearchRec) <> 0;
-    FindClose(SearchRec);
+    FilePath := LFiles[I];
+    if LoadFromFile(FilePath) then
+      Inc(LoadedCount);
   end;
 
   Result := (LoadedCount > 0);
@@ -592,12 +580,12 @@ end;
 
 function TWinSSLCertificateStore.GetCount: Integer;
 begin
-  Result := Length(FCertificates);
+  Result := FCertificates.Count;
 end;
 
 function TWinSSLCertificateStore.GetCertificate(AIndex: Integer): ISSLCertificate;
 begin
-  if (AIndex >= 0) and (AIndex < Length(FCertificates)) then
+  if (AIndex >= 0) and (AIndex < FCertificates.Count) then
     Result := ISSLCertificate(FCertificates[AIndex])
   else
     Result := nil;
@@ -607,8 +595,8 @@ function TWinSSLCertificateStore.GetAllCertificates: TSSLCertificateArray;
 var
   i: Integer;
 begin
-  SetLength(Result, Length(FCertificates));
-  for i := 0 to Length(FCertificates) - 1 do
+  SetLength(Result, FCertificates.Count);
+  for i := 0 to FCertificates.Count - 1 do
     Result[i] := ISSLCertificate(FCertificates[i]);
 end;
 
@@ -634,7 +622,7 @@ begin
 
   // 基于缓存证书对象做归一化匹配，避免 WinSSL lane
   // 继续停留在 backend-native 的未归一化字符串搜索语义上。
-  for I := 0 to Length(FCertificates) - 1 do
+  for I := 0 to FCertificates.Count - 1 do
   begin
     Cert := ISSLCertificate(FCertificates[I]);
     LCandidate := NormalizeCertificateStoreDN(GetCertificateStoreDNText(Cert, False));
@@ -642,7 +630,7 @@ begin
       Exit(Cert);
   end;
 
-  for I := 0 to Length(FCertificates) - 1 do
+  for I := 0 to FCertificates.Count - 1 do
   begin
     Cert := ISSLCertificate(FCertificates[I]);
     LCandidate := NormalizeCertificateStoreDN(GetCertificateStoreDNText(Cert, False));
@@ -667,7 +655,7 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to Length(FCertificates) - 1 do
+  for I := 0 to FCertificates.Count - 1 do
   begin
     Cert := ISSLCertificate(FCertificates[I]);
     LCandidate := NormalizeCertificateStoreDN(GetCertificateStoreDNText(Cert, True));
@@ -675,7 +663,7 @@ begin
       Exit(Cert);
   end;
 
-  for I := 0 to Length(FCertificates) - 1 do
+  for I := 0 to FCertificates.Count - 1 do
   begin
     Cert := ISSLCertificate(FCertificates[I]);
     LCandidate := NormalizeCertificateStoreDN(GetCertificateStoreDNText(Cert, True));
@@ -695,7 +683,7 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to Length(FCertificates) - 1 do
+  for I := 0 to FCertificates.Count - 1 do
   begin
     Cert := ISSLCertificate(FCertificates[I]);
     if NormalizeCertificateStoreHex(Cert.GetSerialNumber) = LTarget then
@@ -718,7 +706,7 @@ begin
   if SearchFP = '' then
     Exit;
   
-  for I := 0 to Length(FCertificates) - 1 do
+  for I := 0 to FCertificates.Count - 1 do
   begin
     Cert := ISSLCertificate(FCertificates[I]);
     

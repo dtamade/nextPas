@@ -888,7 +888,7 @@ begin
   GetMem(LNode, LAllocSize);
   if LNode = nil then
     Exit(nil);
-  FillChar(LNode^, LAllocSize, 0);
+  ZeroMem(LNode, LAllocSize);
   LNode^.PoolPtr := Pointer(Self);
   LNode^.PoolId := FPoolId;
   LNode^.Epoch := FCacheEpoch;
@@ -914,7 +914,7 @@ begin
   aNode^.Epoch := FCacheEpoch;
   aNode^.Shard := ChooseShardIndex;
   if (aNode^.RemoteBufs <> nil) and (aNode^.RemoteBufLen > 0) then
-    FillChar(PByte(aNode^.RemoteBufs)^, SizeUInt(aNode^.RemoteBufLen) * SizeUInt(SizeOf(TRemoteFreeBuf)), 0);
+    ZeroMem(PByte(aNode^.RemoteBufs), SizeUInt(aNode^.RemoteBufLen) * SizeUInt(SizeOf(TRemoteFreeBuf)));
 end;
 
 procedure TShardedBlockPool.FlushThreadCacheLocked(aShard: Integer; aNode: PThreadCacheNode; aFlushCount: Integer);
@@ -962,6 +962,9 @@ var
   // Disable the old per-thread cache until it has generation ownership and
   // thread-exit cleanup. Otherwise duplicate frees can be hidden in TLS state
   // and cache nodes leak after pool destruction.
+  if aConfig.ThreadCacheCapacity > 0 then
+    raise EAllocError.Create(aeInvalidLayout,
+      'TShardedBlockPool: ThreadCacheCapacity > 0 not supported (missing thread-exit cleanup)');
   FThreadCacheCapacity := 0;
   FThreadCacheCheckDoubleFree := aConfig.ThreadCacheCheckDoubleFree;
   FTrackInUse := aConfig.TrackInUse;

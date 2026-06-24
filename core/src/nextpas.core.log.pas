@@ -110,7 +110,7 @@ procedure LogError(const AMsg: string);
 implementation
 
 uses
-  nextpas.core.text.conv, Math,
+  nextpas.core.text.conv,
   nextpas.core.errors,
   nextpas.core.fs.util,
   nextpas.core.platform.files,

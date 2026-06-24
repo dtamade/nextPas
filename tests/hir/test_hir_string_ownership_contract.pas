@@ -169,32 +169,6 @@ begin
   Result := False;
 end;
 
-function FindAfter(const ANeedle, AText: string; AStart: LongInt): LongInt;
-var
-  Offset: LongInt;
-begin
-  if AStart < 1 then
-    AStart := 1;
-  Offset := Pos(ANeedle, Copy(AText, AStart, MaxInt));
-  if Offset = 0 then
-    Exit(0);
-  Result := AStart + Offset - 1;
-end;
-
-function ExtractDefinitionSlice(const AText, AHeaderNeedle: string): string;
-var
-  StartPos, EndPos: LongInt;
-begin
-  Result := '';
-  StartPos := Pos(AHeaderNeedle, AText);
-  if StartPos = 0 then
-    Exit;
-  EndPos := FindAfter(LineEnding + '}', AText, StartPos);
-  if EndPos = 0 then
-    Exit;
-  Result := Copy(AText, StartPos, EndPos - StartPos + Length(LineEnding + '}'));
-end;
-
 procedure AssertOwnedBorrowedContract;
 var
   Model: TSemanticModel;
@@ -205,35 +179,28 @@ begin
   try
     if Model = nil then
       Fail('owned-borrowed-model-nil');
+    { TString 24B: 参数和局部变量都是 var-decl-tstring-runtime }
     if not FindFirstNodeByKindAndDisplayName(Model,
-      'var-decl-str-borrowed-runtime', 'P', Node) then
+      'var-decl-tstring-runtime', 'P', Node) then
       Fail('missing-borrowed-param-node');
     if not FindFirstNodeByKindAndDisplayName(Model,
-      'var-decl-str-owned-runtime', 'S', Node) then
+      'var-decl-tstring-runtime', 'S', Node) then
       Fail('missing-owned-local-node');
-    if FindFirstNodeByKindAndDisplayName(Model, 'string-cleanup-runtime',
+    if FindFirstNodeByKindAndDisplayName(Model, 'tstring-cleanup-runtime',
       'P', Node) then
       Fail('borrowed-param-must-not-cleanup');
-    if not FindFirstNodeByKindAndDisplayName(Model, 'string-cleanup-runtime',
+    if not FindFirstNodeByKindAndDisplayName(Model, 'tstring-cleanup-runtime',
       'S', Node) then
       Fail('missing-owned-string-cleanup');
     if not FindFirstNodeByKindAndDisplayName(Model,
-      'assign-str-owned-concat-runtime', 'S', Node) then
+      'assign-tstring-concat-runtime', 'S', Node) then
       Fail('missing-owned-concat-node');
 
     LlvmText := EmitLlvm(Model);
-    if Pos('S$owner', LlvmText) = 0 then
-      Fail('missing-owned-sidecar-owner');
-    if Pos('S$alloc_size', LlvmText) = 0 then
-      Fail('missing-owned-sidecar-alloc-size');
-    if Pos('call void @np_string_release(', LlvmText) = 0 then
-      Fail('missing-string-release-call');
-    if Pos('call {ptr, i64, ptr, i64} @np_str_concat_owned(', LlvmText) = 0 then
-      Fail('missing-owned-concat-helper-call');
-    if Pos('define internal void @np_string_release(', LlvmText) = 0 then
-      Fail('missing-string-release-helper');
-    if Pos('define internal void @np_string_fault(', LlvmText) = 0 then
-      Fail('missing-string-fault-helper');
+    if Pos('call void @np_tstring_fini(ptr ', LlvmText) = 0 then
+      Fail('missing-tstring-fini-call');
+    if Pos('call void @np_tstring_concat(ptr ', LlvmText) = 0 then
+      Fail('missing-tstring-concat-call');
   finally
     Model.Free;
   end;
@@ -249,17 +216,16 @@ begin
   try
     if Model = nil then
       Fail('alias-model-nil');
-    if not FindFirstNodeByKind(Model, 'assign-str-copy-runtime', Node) then
+    if not FindFirstNodeByKind(Model, 'assign-tstring-literal-runtime', Node) and
+      not FindFirstNodeByKind(Model, 'assign-tstring-copy-runtime', Node) then
       Fail('missing-shallow-copy-node');
-    if not FindFirstNodeByKind(Model, 'copy-str-runtime', Node) then
+    if not FindFirstNodeByKind(Model, 'tstring-copy-runtime', Node) then
       Fail('missing-copy-alias-node');
     LlvmText := EmitLlvm(Model);
-    if Pos('A$owner', LlvmText) = 0 then
-      Fail('missing-global-owner-sidecar');
-    if Pos('store ptr null, ptr ', LlvmText) = 0 then
-      Fail('missing-alias-owner-clear');
-    if Pos('call void @np_free(ptr %concat.', LlvmText) <> 0 then
-      Fail('string-path-must-not-free-visible-concat-ptr');
+    if Pos('call void @np_tstring_fini(ptr ', LlvmText) = 0 then
+      Fail('missing-tstring-fini-call');
+    if Pos('call void @np_tstring_assign(ptr ', LlvmText) = 0 then
+      Fail('missing-tstring-assign-call');
   finally
     Model.Free;
   end;
@@ -276,13 +242,11 @@ begin
     if Model = nil then
       Fail('int-to-str-model-nil');
     if not FindFirstNodeByKindAndDisplayName(Model,
-      'int-to-str-owned-runtime', 'S', Node) then
+      'tstring-from-int-runtime', 'S', Node) then
       Fail('missing-owned-int-to-str-node');
     LlvmText := EmitLlvm(Model);
-    if Pos('call {ptr, i64, ptr, i64} @np_int_to_str_owned(', LlvmText) = 0 then
-      Fail('missing-owned-int-to-str-helper-call');
-    if Pos('call void @np_free(ptr %digits.', LlvmText) <> 0 then
-      Fail('int-to-str-must-not-free-visible-interior-pointer');
+    if Pos('call void @np_tstring_from_int(ptr ', LlvmText) = 0 then
+      Fail('missing-tstring-from-int-helper-call');
   finally
     Model.Free;
   end;
@@ -297,16 +261,16 @@ begin
   try
     if Model = nil then
       Fail('return-model-nil');
-    if (not FindFirstNodeByKind(Model, 'ret-str-runtime', Node)) and
-      (not FindFirstNodeByKind(Model, 'ret-str-owned-runtime', Node)) then
+    if (not FindFirstNodeByKind(Model, 'ret-tstring-runtime', Node)) and
+      (not FindFirstNodeByKind(Model, 'ret-tstring-runtime', Node)) then
       Fail('missing-string-return-node');
     if (not FindFirstNodeByKindAndDisplayName(Model,
-      'assign-str-call-runtime', 'S', Node)) and
+      'assign-tstring-call-runtime', 'S', Node)) and
       (not FindFirstNodeByKindAndDisplayName(Model,
-      'assign-str-owned-call-runtime', 'S', Node)) then
+      'assign-tstring-copy-runtime', 'S', Node)) then
       Fail('missing-return-call-assignment-node');
     if FindFirstNodeByKindAndDisplayName(Model,
-      'assign-str-owned-concat-runtime', 'S', Node) then
+      'assign-tstring-concat-runtime', 'S', Node) then
       Fail('return-assignment-must-not-be-owned-concat');
   finally
     Model.Free;
@@ -318,20 +282,16 @@ var
   FieldModel: TSemanticModel;
   FreeModel: TSemanticModel;
   Node: TTypedHirNode;
-  LlvmText, ReleaseSlice: string;
+  LlvmText: string;
 begin
   FieldModel := BuildModel(StringFieldSource);
   try
     if FieldModel = nil then
       Fail('string-field-model-nil');
-    if not FindFirstNodeByKind(FieldModel, 'assign-str-field-load-runtime',
-      Node) then
-      Fail('missing-string-field-load-node');
-    if not FindFirstNodeByKind(FieldModel, 'field-store-str-runtime', Node) then
-      Fail('missing-string-field-store-node');
-    LlvmText := EmitLlvm(FieldModel);
-    if Pos('call {ptr, i64} @np_str_concat(', LlvmText) = 0 then
-      Fail('string-field-concat-must-stay-visible-abi');
+    if not FindFirstNodeByKind(FieldModel, 'assign-tstring-copy-runtime', Node) then
+      Fail('missing-string-field-copy-node');
+    if not FindFirstNodeByKind(FieldModel, 'assign-tstring-concat-runtime', Node) then
+      Fail('missing-string-field-concat-node');
   finally
     FieldModel.Free;
   end;
@@ -341,12 +301,9 @@ begin
     if FreeModel = nil then
       Fail('object-free-model-nil');
     LlvmText := EmitLlvm(FreeModel);
-    ReleaseSlice := ExtractDefinitionSlice(LlvmText,
-      'define internal void @np_object_free_release(ptr %obj)');
-    if ReleaseSlice = '' then
-      Fail('missing-object-free-release-helper');
-    if Pos('np_object_string_cleanup', ReleaseSlice) <> 0 then
-      Fail('object-free-release-must-stay-field-agnostic');
+    { Phase 3: np_object_free_release 已移至 libnprt.a runtime 模块 }
+    if Pos('declare void @np_object_free_release(ptr %obj)', LlvmText) = 0 then
+      Fail('missing-object-free-release-helper-decl');
     if Pos('define internal void @np_object_string_cleanup_TStringBox(ptr %', LlvmText) = 0 then
       Fail('missing-object-string-cleanup-helper');
     if Pos('call void @np_object_string_cleanup_TStringBox(ptr %', LlvmText) = 0 then

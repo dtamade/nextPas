@@ -1,211 +1,186 @@
-# nextpas.core.mem
+# nextpas.core.mem - 内存管理模块
 
-`nextpas.core.mem` is the L0 allocation foundation for nextPas core. Its job is
-to expose small, honest allocation contracts and a few reusable local ownership
-primitives without pulling in higher-layer runtime policy by accident.
+## 概述
 
-## Stable Surface
+`nextpas.core.mem` 是 nextPas 框架的内存管理模块，提供高性能的内存分配器抽象和实现。
 
-The only canonical public allocator contract is `IAllocator`:
+## 设计目标
 
-- `nextpas.core.mem.intf.IAllocator` is the canonical allocator contract and
-  the only primary public allocator interface in `nextpas.core.mem`.
-- `nextpas.core.mem.allocator` and `nextpas.core.mem.allocator.base` keep
-  compatibility aliases to that same contract.
-- `nextpas.core.mem.DefaultAllocator` returns the process-wide default
-  allocator facade.
-- Allocation-specific exceptions stay in `nextpas.core.mem.error`, with
-  canonical OOM behavior owned by `nextpas.core.mem.error.EOutOfMemory`.
+- **高性能**：超越 Go/Rust 标准库的内存分配性能
+- **零碎片**：Arena 分配器消除内存碎片
+- **零泄漏**：完善的内存泄漏检测机制
+- **接口优雅**：遵循 Rust trait / Go interface 风格的接口设计
+- **生产级质量**：完整的测试覆盖和基准对照
 
-The facade unit `nextpas.core.mem` also re-exports the current local record
-types:
+## Arena 选择指南
 
-- `TLocalArena` with `TArena` as a compatibility alias
-- `TLocalBlockPool` with `TPool` as a compatibility alias
+| 场景            | 推荐                           | 原因                        |
+| --------------- | ------------------------------ | --------------------------- |
+| 编译器热路径    | TVirtualArena + AllocUnsafe    | 2ns, 476M ops/s             |
+| 请求/帧生命周期 | TLocalArena                    | 固定容量, 3ns, 307M ops/s   |
+| 动态增长批量    | TChunkedArena                  | Go-style chunk cache, 15ns  |
+| 多线程共享      | TArenaConcurrent               | mutex-protected IArena 包装 |
+| 单线程固定块池  | TLocalBlockPool                | class-only, 最小 surface    |
+| 固定大小块分配  | TBlockPool / TShardedBlockPool | O(1) acquire/release        |
+| Slab 分配       | TSlabPool / TSlabPoolSharded   | 页级 slab, IMemoryPool      |
 
-These names are intended to make ownership and lifecycle shape visible in call
-sites without forcing downstream code to migrate all at once.
+## 核心类型
 
-The class-based arena surface also stays explicit and small:
+### IArena 接口
 
-- `nextpas.core.mem.blockpool.IArena` uses explicit `size/alignment`
-  parameters instead of layout/result compatibility records.
-- `Alloc` and `AllocZeroed` return `Pointer`, and failure returns `nil`.
-- `AllocAligned` is the aligned-allocation escape hatch for arena-backed call
-  sites that need it.
+线性分配器接口：
 
-The remaining compatibility and owner shims stay deliberately thin:
+- `Alloc` / `AllocAligned` / `AllocZeroed` — 分配
+- `SaveMark` / `RestoreToMark` — 保存/恢复分配位置
+- `Reset` — 重置 Arena（保留已提交页面）
+- `UsedSize` / `RemainingSize` / `Stats` — 查询
 
-- `nextpas.core.mem.aligned` is a deprecated shim over
-  `DefaultAllocator.AllocAligned` and `DefaultAllocator.FreeAligned`.
-- `nextpas.core.mem.secure` keeps the public secure-zero helpers, but the
-  backend delegates to `nextpas.core.platform.memory`.
-- `nextpas.core.mem.mapped_ring_buffer*` are deprecated compatibility wrappers
-  over `nextpas.core.io.mapped.ring_buffer*`.
-- `nextpas.core.mem.mapped_slab_pool` owns the anonymous-only mapped slab
-  allocator surface through `TMappedSlabAllocator.CreateAnonymous`;
-  `TMappedSlabPool` stays as a deprecated compatibility alias.
+### IAllocator 接口
 
-The current internal L0 helper surface also includes `nextpas.core.mem.mutex`
-and `nextpas.core.mem.rwlock`, which keep concurrent mem units on
-platform-owned sync primitives instead of routing through the broader L1 sync
-module.
+通用分配器接口（40+ 模块引用）：
 
-## Module Shape
+- `GetMem` / `AllocMem` / `ReallocMem` / `FreeMem` — 标准分配
+- `AllocAligned` — 对齐分配
+- `MemSize` — 查询已分配大小
+- `Traits` — 分配器特性
 
-The mem tree currently contains four practical families:
+### TVirtualArena (record)
 
-- Allocator contracts and facades: `mem.intf`, `mem.allocator*`, `mem.default`
-- Local ownership primitives: `mem.arena`, `mem.pool`, `mem.blockpool`
-- Backend allocators: default RTL allocator, memory-map allocator, mimalloc
-  bindings, NUMA provider facade
-- Specialized pools and mapped structures: slab pool, stack pool, mapped slab,
-  mapped ring buffer
+基于 mmap 的零虚分发 Arena：
 
-At L0, correctness and ownership truth are more important than breadth. A mem
-unit should either be an honest allocation primitive or move out of the L0 core.
+- 预留 256MB 虚拟地址空间
+- 双向 bump pointer（指针对象从前往后，无指针从后往前）
+- 大对象（>=64KB）独立 mmap
+- `AllocUnsafe`: 纯 bump pointer, 2ns（前提：页面已提交）
 
-## Focused Gates
+### TLocalArena (class, IArena)
 
-Recommended focused verification for the current mem surface:
+基于 GetMem 的固定容量 Arena：
 
-```sh
-make -C core/tests/nextpas.core.mem/test_contracts clean test
-make -C core/tests/nextpas.core.mem/test_mem clean test
-make -C core/tests/nextpas.core.mem/test_arena clean test
-make -C core/tests/nextpas.core.mem/test_arena_class clean test
-make -C core/tests/nextpas.core.mem/test_pool clean test
-make -C core/tests/nextpas.core.mem/test_blockpool clean test
-make -C core/tests/nextpas.core.mem/test_slab_pool clean test
-make -C core/tests/nextpas.core.mem/test_concurrent_wrappers clean test
-make -C core/tests/nextpas.core.mem/test_default_allocator clean test
-make -C core/tests/nextpas.core.mem/test_memory_map_allocator clean test
-make -C core/tests/nextpas.core.mem/test_memory_map_compile_gate clean test
-make -C core/tests/nextpas.core.mem/test_memory_manager_rtl clean test
-make -C core/tests/nextpas.core.mem/test_memory_manager_crt_compile_gate clean test
-make -C core/tests/nextpas.core.mem/test_mapped_ring_buffer clean test
-make -C core/tests/nextpas.core.mem/test_mapped_ring_buffer_sharded clean test
-make -C core/tests/nextpas.core.mem/test_mapped_slab_pool clean test
-make -C core/tests/nextpas.core.mem/test_stack_pool clean test
-make -C core/tests/nextpas.core.mem/test_oom clean test
-make -C core/tests/nextpas.core.mem/test_numa_allocator clean test
-make -C core/tests/nextpas.core.mem/test_l0_dependency_boundaries test
+- 预分配 buffer, 分配只前进
+- `AllocFast` / `AllocAlignedFast`: DEBUG Assert 保护, Release 零额外分支
+- 适用于请求/帧/文档等有限生命周期场景
+
+### TChunkedArena (class, IArena)
+
+分段可增长 Arena：
+
+- Go-style chunk cache（Reset 缓存 freed segments, 最多 8 个）
+- FSegments 几何扩容
+- 支持几何/线性增长策略
+
+## BlockPool 选择指南
+
+- `TLocalBlockPool`：单线程、单 owner、调用点就在本模块内时选它。它是 class-only 固定块池，surface 最小，只保留 `Acquire/Release/Reset` 和基础容量查询。
+- `TBlockPool`：需要把固定块池作为公共 contract 暴露出去，或者需要 `IBlockPool` / `IBlockPoolBatch`、显式对齐、批量 `AcquireN/ReleaseN`、`Owns/GetRange` 之类诊断能力时选它。
+- 如果后续已经确定会走 shard/concurrent 变体，优先从 `TBlockPool` 这条接口面进入，避免先写一套 `TLocalBlockPool` 局部调用再补一层适配。
+
+## 性能基准 (2026-06-22)
+
+64B alloc, Reset+Reuse:
+| 分配器 | ns/op | ops/s |
+|--------|-------|-------|
+| VirtualArena AllocUnsafe | 2 | 476M |
+| LocalArena | 3 | 307M |
+| ChunkedArena | 15 | 68M |
+| VirtualArena Alloc | 37 | 27M |
+| RTL GetMem+FreeMem | 64 | 15M |
+
+## 使用示例
+
+### 基本 Arena 使用
+
+```pascal
+uses nextpas.core.mem;
+
+var
+  LArena: TLocalArena;
+  LP: Pointer;
+begin
+  LArena := TLocalArena.Create(1024);
+  try
+    LP := LArena.Alloc(64);
+    // 使用 LP...
+    LArena.Reset;  // 一次性释放全部
+  finally
+    LArena.Free;
+  end;
+end;
 ```
 
-The L0 boundary contract is source-based. It does not prove the architecture is
-finished; it only prevents the known debt from spreading silently.
+### VirtualArena + AllocUnsafe
 
-## Current L0 Boundary Truth
+```pascal
+uses nextpas.core.mem.arena.virtual;
 
-What is already aligned with the L0 direction:
+var
+  LArena: TVirtualArena;
+  LP: Pointer;
+begin
+  TVirtualArena_Init(LArena);
+  try
+    LP := LArena.Alloc(4096);   // 首次分配提交页面
+    LArena.Reset;                // Reset 不释放页面
+    LP := LArena.AllocUnsafe(64); // 纯 bump, 2ns
+  finally
+    TVirtualArena_Release(LArena);
+  end;
+end;
+```
 
-- The canonical allocator contract lives in `mem.intf`.
-- `DefaultAllocator` stays small and delegates to the RTL allocator singleton.
-- `TMemoryMapAllocator` gives mem an allocator backend without forcing file or
-  shared-memory policy into the default path.
-- `nextpas.core.mem.memory_map` and the mapped-family units no longer use
-  `nextpas.core.fs.util` or `nextpas.core.text.conv` where they were previously
-  avoidable; file existence checks now go through platform file stat helpers.
-- `nextpas.core.mem.aligned` is now only a deprecated shim. Aligned-allocation
-  policy lives on the allocator contract and `DefaultAllocator`, not on a side
-  surface.
-- `nextpas.core.mem.mapped_ring_buffer.sharded` now uses `nextpas.core.mem.mutex`
-  instead of `SyncObjs`, so the concurrent wrapper stays inside the mem-local
-  sync surface rather than pulling in a broader host-only unit.
-- `nextpas.core.mem.pool.fixed` no longer depends on `nextpas.core.text.conv`;
-  the debug-only `Format` path was moved behind a narrow `{$IFDEF FAF_MEM_DEBUG}`
-  implementation guard.
-- `nextpas.core.mem.secure` now delegates secure zeroing to `nextpas.core.platform.memory`, so backend truth and future host promotion stay under the platform owner.
-- `nextpas.core.mem.mapped_slab_pool` is now an anonymous-only allocator
-  surface. File-backed and shared-memory lifecycle entrypoints stay owned by
-  `nextpas.core.io.mapped.slab_pool`.
-- `mem.blockpool.concurrent`, `mem.pool.fixed.concurrent`, and
-  `mem.pool.slab.concurrent` no longer depend on `nextpas.core.sync`; they use
-  the local `TMemMutex` helper backed by `nextpas.core.platform.sync`.
-- `mem.blockpool.sharded` no longer depends on `nextpas.core.sync` or
-  `nextpas.core.time.cpu`; it now uses `TMemMutex` plus
-  `nextpas.core.platform.thread` for its local contention paths.
-- `mem.pool.slab.sharded` no longer depends on `nextpas.core.sync` or
-  `nextpas.core.time.cpu`; it now uses `TMemMutex`, `TMemRwLock`, and
-  `nextpas.core.platform.thread`.
-- `mem.manager.rtl` no longer depends on `nextpas.core.sync`, and its install
-  path delegates directly to the previously active RTL memory manager instead
-  of recursing through `GetRtlAllocator`.
-- `mem.manager.crt` no longer depends on `nextpas.core.sync`; the guarded CRT
-  manager path now has a focused compile gate so the optional macro branch
-  cannot silently rot.
-- `TLocalArena` now fails closed on invalid alignment, capacity exhaustion, and
-  pointer-arithmetic overflow paths, with focused regression coverage for
-  marker/restore and capacity preservation.
-- `TStackPool` and `TScopedStackPool` now reject invalid aligned-allocation
-  requests, keep state/scope restore paths explicit, and only allow auto-grow
-  when relocation cannot invalidate outstanding pointers.
-- NUMA remains an explicit optional capability, with a no-op default provider
-  instead of silent best-effort behavior.
-- Raw mapping and shared-memory host ownership have moved behind the
-  platform-owned mmap facade; `mem.memory_map` remains a compatibility wrapper
-  and `TMemoryMapAllocator` stays on the anonymous mapping-backed allocator
-  path.
+### IAllocator 接口
 
-## Known Debt
+```pascal
+var
+  LAllocator: IAllocator;
+begin
+  LAllocator := DefaultAllocator;  // 全局默认分配器
+  LP := LAllocator.GetMem(256);
+  // ...
+end;
+```
 
-The live dependency-boundary gate now reports **0 allowlisted debt entries**.
+### 泄漏检测
 
-That means mem currently has no known new helper or host-unit boundary
-regressions, but it does **not** mean mapped-family ownership was already
-settled. The debt gate only proves known source-boundary violations have been
-removed.
+```pascal
+var
+  LResult: TLeakCheckResult;
+begin
+  LResult := RunTestWithLeakCheck(procedure(AAllocator: IAllocator)
+  begin
+    // 测试代码...
+  end);
+  if LResult.LeakCount > 0 then
+    WriteLn('Memory leaks detected!');
+end;
+```
 
-The broader core architecture registry is a separate contract. It still carries
-explicit allowlist entries for the deprecated `mem.mapped_ring_buffer*` wrapper
-edges and the mimalloc loader debt, even though the mem-local boundary gate is
-currently at zero allowlisted entries.
+## 关键约定
 
-The ownership decision is now explicit:
-
-- `nextpas.core.mem.memory_map` stays in L0 mem for now.
-- `nextpas.core.mem.allocator.memory_map_allocator` stays in L0 mem for now.
+- **Arena 不支持单个释放**：需要 `Reset` 一次性释放全部
+- **AllocUnsafe 前提**：调用方确保页面已提交, 不更新统计, 不保证对齐
+- **大对象生命周期**：不受 mark/reset 影响；`FLargeBlocks` metadata 与对象映射同生命周期，只在 `Release` 时统一释放/关闭
+- **非线程安全**：Arena 默认非线程安全, 多线程请用 TArenaConcurrent
 - `nextpas.core.mem.mapped_slab_pool` owns only the anonymous mapping allocator surface.
 - `nextpas.core.io.mapped.slab_pool` is the fixed owner for file-backed and shared-memory slab pools.
-- `nextpas.core.io.mapped.ring_buffer` and
-  `nextpas.core.io.mapped.ring_buffer.sharded` are the fixed owners for mapped
-  ring buffer behavior.
-- The mem allocator surface must not grow `CreateFile`, `OpenFile`, `CreateShared`, `OpenShared`, or `nextpas.core.platform.files` dependencies.
-- `nextpas.core.mem.mapped_ring_buffer*` are thin deprecated compatibility wrappers only.
+- mem 侧 mapped slab API must not grow `CreateFile`, `OpenFile`, `CreateShared`, `OpenShared`, or `nextpas.core.platform.files` dependencies.
 
-See `src/nextpas.core.mem.mapped_slab_pool.pas` and `src/nextpas.core.io.mapped.slab_pool.pas` for the current owner split.
+## 测试覆盖
 
-Additional architecture debt that remains:
+- 29 test projects with a static count of 289 `T.Run` cases
+- 0 memory leaks
+- 完整接口覆盖
 
-- `nextpas.core.mem.mapped_ring_buffer*` remain in `mem` only as deprecated
-  wrappers. Keep them thin and do not grow new behavior there.
-- `mem.secure` now relies on the `nextpas.core.platform.memory` secure-zero seam; future host upgrades should evolve that owner instead of reintroducing raw imports into `mem`.
+## 相关文档
 
-## Follow-Up Route
+- [架构设计](ARCHITECTURE.md)
+- [API 参考](API.md)
+- [基准测试](BENCHMARKS.md)
+- [审查报告](mem-findings.md)
+- [修复计划](mem-fix-plan.md)
 
-Already completed in the current shape:
+## 版本历史
 
-1. The mapped ring buffer owner split landed. `nextpas.core.io.mapped.ring_buffer*`
-   own the behavior, and `nextpas.core.mem.mapped_ring_buffer*` stay as thin
-   deprecated wrappers.
-2. The secure-zero owner handoff landed. `mem.secure` remains the public helper
-   surface, while backend selection lives in `nextpas.core.platform.memory`.
-3. The local primitive hardening landed. `TLocalArena`, `TStackPool`, and
-   `TScopedStackPool` now fail closed on the key alignment, overflow, restore,
-   and relocation hazards that were previously soft spots.
-
-Still open:
-
-1. Keep the `mapped_slab_pool` split stable: anonymous allocator work stays in
-   `mem`, and file/shared lifecycle work stays in
-   `nextpas.core.io.mapped.slab_pool`.
-2. Treat `memory_map` as temporary L0 surface, not permanent stable surface;
-   always replay `nextpas.core.io.mapped` before changing `memory_map`
-   ownership.
-3. Revisit `nextpas.core.platform.memory` only if a later platform slice
-   promotes a native Windows secure-zero owner.
-4. Keep allocator-manager behavior narrow and explicit: `rtl` already has a
-   runtime regression test for installation safety, while optional guarded
-   backends such as CRT still need at least compile truth before wider rollout.
-5. Keep deprecated compatibility shims thin so traits, ownership, and fallback
-   behavior remain verifiable and unsurprising.
+- v2.1 (2026-06-23): TLA + SizeClass Slab + Fallback Chain + FPC FillChar/Move 清理
+- v2.0 (2026-06-22): 架构清理 + 性能优化 + 安全防护 + 并发语义补强
+- v1.0 (2026-06-22): 初始 Arena 实现

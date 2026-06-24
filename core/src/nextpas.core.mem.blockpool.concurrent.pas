@@ -19,6 +19,16 @@ type
    *}
   TBlockPoolConcurrent = class(TInterfacedObject, IBlockPool, IBlockPoolBatch)
   private
+    {**
+     * Lock ordering: TBlockPoolConcurrent uses a single mutex (FLock).
+     * No nesting with other locks — safe to call from any context.
+     * Lockless reads: BlockSize, Capacity (immutable after construction).
+     * Locked reads: Available, InUse, Acquire, Release, Reset.
+     *
+     * 锁顺序：单锁（FLock），不与其他锁嵌套。
+     * 不可变字段（BlockSize/Capacity）无需加锁。
+     * 可变状态（Available/InUse/Acquire/Release/Reset）均在 FLock 下操作。
+     *}
     FInner: IBlockPool;
     FLock: TMemMutex;
   public
@@ -41,34 +51,6 @@ type
     procedure ReleaseN(const aPtrs: array of Pointer; aCount: Integer);
 
     property Inner: IBlockPool read FInner;
-  end;
-
-  {**
-   * TArenaConcurrent
-   *
-   * @desc Thread-safe wrapper for IArena (mutex-protected).
-   *}
-  TArenaConcurrent = class(TInterfacedObject, IArena)
-  private
-    FInner: IArena;
-    FLock: TMemMutex;
-  public
-    constructor Create(aInner: IArena); overload;
-    constructor Create(aTotalSize: SizeUInt); overload;
-    destructor Destroy; override;
-
-    { IArena }
-    function Alloc(aSize: SizeUInt): Pointer;
-    function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
-    function AllocZeroed(aSize: SizeUInt): Pointer;
-    function SaveMark: TArenaMarker;
-    procedure RestoreToMark(aMark: TArenaMarker);
-    procedure Reset;
-    function TotalSize: SizeUInt;
-    function UsedSize: SizeUInt;
-    function RemainingSize: SizeUInt;
-
-    property Inner: IArena read FInner;
   end;
 
 implementation
@@ -208,115 +190,22 @@ end;
 
 function TBlockPoolConcurrent.Available: SizeUInt;
 begin
-  Result := FInner.Available;
+  FLock.Acquire;
+  try
+    Result := FInner.Available;
+  finally
+    FLock.Release;
+  end;
 end;
 
 function TBlockPoolConcurrent.InUse: SizeUInt;
 begin
-  Result := FInner.InUse;
-end;
-
-{ TArenaConcurrent }
-
-constructor TArenaConcurrent.Create(aInner: IArena);
-begin
-  inherited Create;
-  if aInner = nil then
-    raise EAllocError.Create(aeInvalidLayout, 'TArenaConcurrent: inner arena cannot be nil');
-  FLock.Init;
-  FInner := aInner;
-end;
-
-constructor TArenaConcurrent.Create(aTotalSize: SizeUInt);
-begin
-  Create(TFixedArena.Create(aTotalSize));
-end;
-
-destructor TArenaConcurrent.Destroy;
-begin
   FLock.Acquire;
   try
-    FInner := nil;
+    Result := FInner.InUse;
   finally
     FLock.Release;
   end;
-  FLock.Done;
-  inherited Destroy;
-end;
-
-function TArenaConcurrent.Alloc(aSize: SizeUInt): Pointer;
-begin
-  FLock.Acquire;
-  try
-    Result := FInner.Alloc(aSize);
-  finally
-    FLock.Release;
-  end;
-end;
-
-function TArenaConcurrent.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
-begin
-  FLock.Acquire;
-  try
-    Result := FInner.AllocAligned(aSize, aAlignment);
-  finally
-    FLock.Release;
-  end;
-end;
-
-function TArenaConcurrent.AllocZeroed(aSize: SizeUInt): Pointer;
-begin
-  FLock.Acquire;
-  try
-    Result := FInner.AllocZeroed(aSize);
-  finally
-    FLock.Release;
-  end;
-end;
-
-function TArenaConcurrent.SaveMark: TArenaMarker;
-begin
-  FLock.Acquire;
-  try
-    Result := FInner.SaveMark;
-  finally
-    FLock.Release;
-  end;
-end;
-
-procedure TArenaConcurrent.RestoreToMark(aMark: TArenaMarker);
-begin
-  FLock.Acquire;
-  try
-    FInner.RestoreToMark(aMark);
-  finally
-    FLock.Release;
-  end;
-end;
-
-procedure TArenaConcurrent.Reset;
-begin
-  FLock.Acquire;
-  try
-    FInner.Reset;
-  finally
-    FLock.Release;
-  end;
-end;
-
-function TArenaConcurrent.TotalSize: SizeUInt;
-begin
-  Result := FInner.TotalSize;
-end;
-
-function TArenaConcurrent.UsedSize: SizeUInt;
-begin
-  Result := FInner.UsedSize;
-end;
-
-function TArenaConcurrent.RemainingSize: SizeUInt;
-begin
-  Result := FInner.RemainingSize;
 end;
 
 end.

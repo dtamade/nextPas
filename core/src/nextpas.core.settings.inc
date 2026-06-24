@@ -34,6 +34,9 @@
   {$S+}
 {$ENDIF}
 
+{-- Arena leak check --}
+{.$DEFINE NEXTPAS_ARENA_LEAK_CHECK}  // 默认关闭，手动开启
+
 { Platform detection }
 {$IF defined(NEXTPAS_FORCE_HOST_WINDOWS)}
   {$DEFINE NEXTPAS_WINDOWS}

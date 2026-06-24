@@ -3,7 +3,6 @@ program test_hir_builder_structured_casts;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   np_hir_builder,
   np_hir_llvm_emitter,
   np_hir_model,

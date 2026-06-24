@@ -546,13 +546,13 @@ begin
       Fail('direct-return-model-nil');
     if not FindFirstNodeByKind(Model, 'ret-str-owned-runtime', Node) then
       Fail('missing-owned-string-return-node');
-    if FindFirstNodeByKind(Model, 'ret-str-runtime', Node) then
+    if FindFirstNodeByKind(Model, 'ret-tstring-runtime', Node) then
       Fail('legacy-string-return-node-must-be-replaced');
     if not FindFirstNodeByKindAndDisplayName(Model,
-      'var-decl-str-owned-runtime', 'MakeText', Node) then
+      'var-decl-tstring-runtime', 'MakeText', Node) then
       Fail('missing-owned-function-name-result-slot');
     if not FindFirstNodeByKindAndDisplayName(Model,
-      'assign-str-owned-concat-runtime', 'MakeText', Node) then
+      'assign-tstring-concat-runtime', 'MakeText', Node) then
       Fail('missing-owned-concat-to-result-node');
 
     LlvmText := EmitLlvm(Model);
@@ -585,7 +585,7 @@ begin
     if Model = nil then
       Fail('int-to-str-return-model-nil');
     if not FindFirstNodeByKindAndDisplayName(Model,
-      'int-to-str-owned-runtime', 'MakeText', Node) then
+      'tstring-from-int-runtime', 'MakeText', Node) then
       Fail('missing-owned-int-to-str-result-node');
     LlvmText := EmitLlvm(Model);
     RequireContains(LlvmText,
@@ -604,7 +604,7 @@ begin
     if not FindFirstNodeByKindAndDisplayName(Model,
       'assign-str-literal-runtime', 'LiteralText', Node) then
       Fail('missing-literal-return-assignment-node');
-    if not FindFirstNodeByKindAndDisplayName(Model, 'copy-str-runtime',
+    if not FindFirstNodeByKindAndDisplayName(Model, 'tstring-copy-runtime',
       'SliceText', Node) then
       Fail('missing-copy-alias-return-node');
     LlvmText := EmitLlvm(Model);
@@ -628,7 +628,7 @@ begin
     if Model = nil then
       Fail('caller-consume-model-nil');
     if not FindFirstNodeByKindAndDisplayName(Model,
-      'assign-str-owned-call-runtime', 'S', Node) then
+      'assign-tstring-call-runtime', 'S', Node) then
       Fail('missing-owned-call-assignment-node');
     LlvmText := EmitLlvm(Model);
     RequireContains(LlvmText, ' = call {ptr, i64, ptr, i64} @MakeText(',
@@ -674,7 +674,7 @@ begin
     if Model = nil then
       Fail('chained-return-model-nil');
     if not FindFirstNodeByKindAndDisplayName(Model,
-      'assign-str-owned-call-runtime', 'OuterText', Node) then
+      'assign-tstring-call-runtime', 'OuterText', Node) then
       Fail('missing-owned-call-into-result-slot');
     LlvmText := EmitLlvm(Model);
     RequireContains(LlvmText, ' = call {ptr, i64, ptr, i64} @InnerText(',
@@ -703,7 +703,7 @@ begin
     if Model = nil then
       Fail('borrowed-param-boundary-model-nil');
     if not FindFirstNodeByKindAndDisplayName(Model,
-      'var-decl-str-borrowed-runtime', 'P', Node) then
+      'var-decl-tstring-runtime', 'P', Node) then
       Fail('string-param-must-remain-borrowed');
     LlvmText := EmitLlvm(Model);
     EchoCallLine := FindLineContaining(LlvmText, '@Echo(');
@@ -726,7 +726,7 @@ begin
   try
     if Model = nil then
       Fail('field-boundary-model-nil');
-    if not FindFirstNodeByKind(Model, 'field-store-str-runtime', Node) then
+    if not FindFirstNodeByKind(Model, 'field-store-tstring-runtime', Node) then
       Fail('string-field-store-node-must-remain-visible');
     LlvmText := EmitLlvm(Model);
     RejectContains(LlvmText, '$owner',
@@ -787,7 +787,7 @@ begin
       Fail('class-field-owned-store-model-nil');
     if not SameText(Model.Status, 'ready') then
       Fail('class-field-owned-store-must-pass-sema');
-    if not FindFirstNodeByKind(Model, 'field-store-str-owned-runtime', Node) then
+    if not FindFirstNodeByKind(Model, 'field-store-tstring-runtime', Node) then
       Fail('missing-class-field-owned-store-node');
     LlvmText := EmitLlvm(Model);
     if LlvmText = '' then
@@ -804,7 +804,7 @@ begin
       Fail('self-field-owned-store-model-nil');
     if not SameText(Model.Status, 'ready') then
       Fail('self-field-owned-store-must-pass-sema');
-    if not FindFirstNodeByKind(Model, 'field-store-str-owned-runtime', Node) then
+    if not FindFirstNodeByKind(Model, 'field-store-tstring-runtime', Node) then
       Fail('missing-self-field-owned-store-node');
     LlvmText := EmitLlvm(Model);
     if LlvmText = '' then

@@ -341,8 +341,8 @@ begin
   end;
 end;
 
-function AnalyzeSourceHasAnyError(
-  const ASource: string; const ACodeA, ACodeB: string): Boolean;
+function AnalyzeSourceHasError(
+  const ASource, ACode: string): Boolean;
 var
   Diagnostics: TDiagnosticsSink;
   Lexer: TLexerResult;
@@ -371,7 +371,7 @@ begin
     if Diagnostics.HasErrors then
     begin
       Code := Diagnostics.LastDiagnosticCode;
-      Result := SameText(Code, ACodeA) or SameText(Code, ACodeB);
+      Result := SameText(Code, ACode);
     end;
   finally
     Analyzer.Free;
@@ -443,27 +443,45 @@ begin
   end;
 end;
 
-procedure RequireAnalyzeDeferredError(const ASource, AMessage: string);
-const
-  C6H4Code = 'sema.c6h4-owned-string-return-deferred-consumer';
-  C6H5Code = 'sema.c6h5-owned-string-temp-unsupported-consumer';
+procedure RequireAnalyzeError(const ASource, ACode, AMessage: string);
 begin
-  if not AnalyzeSourceHasAnyError(ASource, C6H4Code, C6H5Code) then
+  if not AnalyzeSourceHasError(ASource, ACode) then
     Fail(AMessage);
 end;
 
-procedure AssertDeferredConsumersFailClosed;
+procedure RequireAnalyzeReady(const ASource, AMessagePrefix: string);
+var
+  Model: TSemanticModel;
 begin
-  RequireAnalyzeDeferredError(VarParamOwnedArgumentSource,
-    'var-param-owned-string-temp-consumer-must-fail-closed');
-  RequireAnalyzeDeferredError(OutParamOwnedArgumentSource,
-    'out-param-owned-string-temp-consumer-must-fail-closed');
-  RequireAnalyzeDeferredError(VirtualOwnedArgumentSource,
+  Model := BuildModel(ASource);
+  try
+    if Model = nil then
+      Fail(AMessagePrefix + '-model-nil');
+    if not SameText(Model.Status, 'ready') then
+      Fail(AMessagePrefix + '-must-pass-sema');
+  finally
+    Model.Free;
+  end;
+end;
+
+procedure AssertDeferredConsumersFailClosed;
+const
+  DeferredCode = 'sema.c6h4-owned-string-return-deferred-consumer';
+begin
+  RequireAnalyzeError(VirtualOwnedArgumentSource, DeferredCode,
     'virtual-owned-string-temp-consumer-must-fail-closed');
-  RequireAnalyzeDeferredError(InterfaceOwnedArgumentSource,
+  RequireAnalyzeError(InterfaceOwnedArgumentSource, DeferredCode,
     'interface-owned-string-temp-consumer-must-fail-closed');
-  RequireAnalyzeDeferredError(ExternalOwnedArgumentSource,
-    'external-owned-string-temp-consumer-must-fail-closed');
+end;
+
+procedure AssertImmediateConsumersNowSupported;
+begin
+  RequireAnalyzeReady(VarParamOwnedArgumentSource,
+    'var-param-owned-string-temp-consumer');
+  RequireAnalyzeReady(OutParamOwnedArgumentSource,
+    'out-param-owned-string-temp-consumer');
+  RequireAnalyzeReady(ExternalOwnedArgumentSource,
+    'external-owned-string-temp-consumer');
 end;
 
 procedure AssertFieldOwnedConsumerNowSupported;
@@ -477,7 +495,7 @@ begin
       Fail('field-owned-string-temp-consumer-model-nil');
     if not SameText(Model.Status, 'ready') then
       Fail('field-owned-string-temp-consumer-must-pass-sema');
-    if not FindFirstNodeByKind(Model, 'field-store-str-owned-runtime', Node) then
+    if not FindFirstNodeByKind(Model, 'field-store-tstring-runtime', Node) then
       Fail('missing-field-owned-string-store-node');
   finally
     Model.Free;
@@ -574,7 +592,7 @@ begin
     InnerReleaseIndex := FindNodeIndexByKindAndDisplayName(Model,
       'string-temp-release-runtime', 'MakeText');
     OuterAssignIndex := FindNodeIndexByKindAndDisplayName(Model,
-      'assign-str-owned-call-runtime', 'S');
+      'assign-tstring-call-runtime', 'S');
     if InnerReleaseIndex < 0 then
       Fail('missing-nested-string-temp-release-runtime');
     if OuterAssignIndex < 0 then
@@ -609,7 +627,7 @@ begin
     if Pos('alloc_size', Node.Operand) = 0 then
       Fail('concat-left-string-temp-owned-runtime-missing-alloc-size-field');
     if not FindFirstNodeByKindAndDisplayName(Model,
-      'assign-str-owned-concat-runtime', 'S', Node) then
+      'assign-tstring-concat-runtime', 'S', Node) then
       Fail('missing-concat-left-assign-str-owned-concat-runtime');
     if not FindFirstNodeByKindAndDisplayName(Model,
       'string-temp-release-runtime', 'MakeText', Node) then
@@ -618,7 +636,7 @@ begin
     OwnedIndex := FindNodeIndexByKindAndDisplayName(Model,
       'string-temp-owned-runtime', 'MakeText');
     ConcatIndex := FindNodeIndexByKindAndDisplayName(Model,
-      'assign-str-owned-concat-runtime', 'S');
+      'assign-tstring-concat-runtime', 'S');
     ReleaseIndex := FindNodeIndexByKindAndDisplayName(Model,
       'string-temp-release-runtime', 'MakeText');
     if (OwnedIndex < 0) or (ConcatIndex < 0) or (ReleaseIndex < 0) then
@@ -639,7 +657,7 @@ begin
       'string-temp-owned-runtime', 'MakeText', Node) then
       Fail('missing-concat-right-string-temp-owned-runtime');
     if not FindFirstNodeByKindAndDisplayName(Model,
-      'assign-str-owned-concat-runtime', 'S', Node) then
+      'assign-tstring-concat-runtime', 'S', Node) then
       Fail('missing-concat-right-assign-str-owned-concat-runtime');
     if not FindFirstNodeByKindAndDisplayName(Model,
       'string-temp-release-runtime', 'MakeText', Node) then
@@ -657,7 +675,7 @@ begin
     MakeBIndex := FindNodeIndexByKindAndDisplayName(Model,
       'string-temp-owned-runtime', 'MakeB');
     ConcatIndex := FindNodeIndexByKindAndDisplayName(Model,
-      'assign-str-owned-concat-runtime', 'S');
+      'assign-tstring-concat-runtime', 'S');
     ReleaseAIndex := FindNodeIndexByKindAndDisplayName(Model,
       'string-temp-release-runtime', 'MakeA');
     ReleaseBIndex := FindNodeIndexByKindAndDisplayName(Model,
@@ -734,7 +752,7 @@ begin
     OwnedIndex := FindNodeIndexByKindAndDisplayName(Model,
       'string-temp-owned-runtime', 'MakeText');
     ConcatIndex := FindNodeIndexByKindAndDisplayNamePrefix(Model,
-      'assign-str-owned-concat-runtime', '$str_wrt_cat_tmp_');
+      'assign-tstring-concat-runtime', '$str_wrt_cat_tmp_');
     WriteIndex := FindNodeIndexByKindAndDisplayName(Model,
       'write-str-var-runtime', 'Write');
     ConcatReleaseIndex := FindNodeIndexByKindAndDisplayNamePrefix(Model,
@@ -899,7 +917,7 @@ begin
     OwnedIndex := FindNodeIndexByKindAndDisplayName(Model,
       'string-temp-owned-runtime', 'MakeText');
     ConcatIndex := FindNodeIndexByKindAndDisplayNamePrefix(Model,
-      'assign-str-owned-concat-runtime', '$str_cmp_cat_tmp_');
+      'assign-tstring-concat-runtime', '$str_cmp_cat_tmp_');
     CompareIndex := FindNodeIndexByKindAndDisplayName(Model,
       'cond-br-runtime', 'if');
     ConcatReleaseIndex := FindNodeIndexByKindAndDisplayNamePrefix(Model,
@@ -1030,6 +1048,7 @@ begin
   AssertConcatTempOwnershipNodes;
   AssertCompareTempOwnershipNodes;
   AssertFieldOwnedConsumerNowSupported;
+  AssertImmediateConsumersNowSupported;
   AssertDeferredConsumersFailClosed;
   WriteLn('hir-string-call-argument-ownership-contract-status=pass');
 end.

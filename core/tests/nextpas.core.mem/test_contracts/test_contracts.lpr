@@ -3,38 +3,66 @@ program test_contracts;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.base,
+  nextpas.core.exception,
+  nextpas.core.fs,
   nextpas.core.testing,
   nextpas.core.mem.intf,
   nextpas.core.mem.utils,
   nextpas.core.mem.allocator,
   nextpas.core.mem.allocator.base,
   nextpas.core.mem.allocator.mimalloc,
-  nextpas.core.mem.aligned;
+  nextpas.core.platform.mmap;
 
 const
-  MEM_ALIGNED_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.aligned.pas';
-  MEM_ALIGNED_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.aligned.pas';
   MEM_BASE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.base.pas';
   MEM_BASE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.base.pas';
-  MEM_BLOCKPOOL_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.blockpool.pas';
-  MEM_BLOCKPOOL_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.blockpool.pas';
-  MEM_BLOCKPOOL_CONCURRENT_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.blockpool.concurrent.pas';
-  MEM_BLOCKPOOL_CONCURRENT_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.blockpool.concurrent.pas';
+  MEM_ARENA_CONCURRENT_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.arena.concurrent.pas';
+  MEM_ARENA_CONCURRENT_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.arena.concurrent.pas';
+  MEM_ARENA_CHUNKED_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.arena.chunked.pas';
+  MEM_ARENA_CHUNKED_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.arena.chunked.pas';
+  MEM_ARENA_VIRTUAL_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.arena.virtual.pas';
+  MEM_ARENA_VIRTUAL_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.arena.virtual.pas';
   MEM_ARENA_GROWABLE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.arena.growable.pas';
   MEM_ARENA_GROWABLE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.arena.growable.pas';
+  MEM_ALLOCATOR_CALLBACK_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.allocator.callback.pas';
+  MEM_ALLOCATOR_CALLBACK_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.allocator.callback.pas';
+  MEM_ALIGNED_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.aligned.pas';
+  MEM_ALIGNED_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.aligned.pas';
+  MEM_ALLOCATOR_INSTRUMENTATION_SOURCE_PATH_FROM_TEST =
+    '../../../src/nextpas.core.mem.allocator.instrumentation.pas';
+  MEM_ALLOCATOR_INSTRUMENTATION_SOURCE_PATH_FROM_ROOT =
+    'core/src/nextpas.core.mem.allocator.instrumentation.pas';
+  MEM_ALLOCATOR_NUMA_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.allocator.numa.pas';
+  MEM_ALLOCATOR_NUMA_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.allocator.numa.pas';
   MEM_BLOCKPOOL_GROWABLE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.blockpool.growable.pas';
   MEM_BLOCKPOOL_GROWABLE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.blockpool.growable.pas';
+  MEM_ADAPTERS_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.adapters.pas';
+  MEM_ADAPTERS_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.adapters.pas';
   MEM_ERROR_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.error.pas';
   MEM_ERROR_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.error.pas';
   MEM_ALLOC_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.alloc.pas';
   MEM_ALLOC_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.alloc.pas';
   MEM_ADAPTER_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.adapter.pas';
   MEM_ADAPTER_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.adapter.pas';
+  MEM_INTERFACES_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.interfaces.pas';
+  MEM_INTERFACES_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.interfaces.pas';
+  MEM_POOL_ADAPTER_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.pool.adapter.pas';
+  MEM_POOL_ADAPTER_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.pool.adapter.pas';
   MEM_LAYOUT_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.layout.pas';
   MEM_LAYOUT_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.layout.pas';
   MEM_MIMALLOC_BINDING_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.mimalloc.binding.pas';
   MEM_MIMALLOC_BINDING_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.mimalloc.binding.pas';
+  MEM_RING_BUFFER_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.ring_buffer.pas';
+  MEM_RING_BUFFER_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.ring_buffer.pas';
+  MEM_MUTEX_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.mutex.pas';
+  MEM_MUTEX_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.mutex.pas';
+  MEM_RWLOCK_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.rwlock.pas';
+  MEM_RWLOCK_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.rwlock.pas';
+  MEM_STACK_SCOPE_HELPERS_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.stack_scope_helpers.pas';
+  MEM_STACK_SCOPE_HELPERS_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.stack_scope_helpers.pas';
+  MEM_STATS_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.stats.pas';
+  MEM_STATS_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.stats.pas';
 
 type
   TByteArray = array[0..5] of Byte;
@@ -70,16 +98,31 @@ end;
 
 function ResolveSourcePath(const APathFromTest, APathFromRoot: string): string;
 begin
-  if FileExists(APathFromTest) then
+  if Exists(APathFromTest) then
     Exit(APathFromTest);
-  if FileExists(APathFromRoot) then
+  if Exists(APathFromRoot) then
     Exit(APathFromRoot);
   Result := APathFromTest;
 end;
 
 function SourceExists(const APathFromTest, APathFromRoot: string): Boolean;
 begin
-  Result := FileExists(APathFromTest) or FileExists(APathFromRoot);
+  Result := Exists(APathFromTest) or Exists(APathFromRoot);
+end;
+
+function ExtractSourceSection(const ASource, AStartToken, AEndToken: string): string;
+var
+  LStartPos: SizeInt;
+  LEndPos: SizeInt;
+begin
+  Result := '';
+  LStartPos := Pos(LowerCase(AStartToken), ASource);
+  if LStartPos = 0 then
+    Exit;
+  LEndPos := Pos(LowerCase(AEndToken), ASource);
+  if (LEndPos = 0) or (LEndPos <= LStartPos) then
+    LEndPos := Length(ASource) + 1;
+  Result := System.Copy(ASource, LStartPos, LEndPos - LStartPos);
 end;
 
 procedure CheckContains(const ASource, AToken, AMessage: string);
@@ -92,6 +135,28 @@ begin
   Check(Pos(LowerCase(AToken), ASource) = 0, AMessage + ': ' + AToken);
 end;
 
+procedure CheckContainsAtomicCAS(const ASource: string; const AMessage: string);
+begin
+  Check((Pos('interlockedcompareexchange', ASource) > 0) or
+    (Pos('atomic_compare_exchange', ASource) > 0),
+    AMessage);
+end;
+
+procedure CheckContainsAtomicAdd64(const ASource: string; const AMessage: string);
+begin
+  Check((Pos('interlockedexchangeadd64', ASource) > 0) or
+    (Pos('atomic_fetch_add_64', ASource) > 0),
+    AMessage);
+end;
+
+procedure CheckContainsAtomicCAS64(const ASource: string; const AMessage: string);
+begin
+  Check((Pos('interlockedcompareexchange64', ASource) > 0) or
+    (Pos('atomic_compare_exchange_strong_64', ASource) > 0) or
+    (Pos('atomic_compare_exchange_64', ASource) > 0),
+    AMessage);
+end;
+
 procedure ResetAllocatorCounters;
 begin
   GGetMemCalls := 0;
@@ -100,28 +165,28 @@ begin
   GFreeMemCalls := 0;
 end;
 
-function CallbackGetMem(aSize: SizeUInt): Pointer;
+function CallbackGetMem(ASize: SizeUInt): Pointer;
 begin
   Inc(GGetMemCalls);
-  Result := System.GetMem(aSize);
+  Result := System.GetMem(ASize);
 end;
 
-function CallbackAllocMem(aSize: SizeUInt): Pointer;
+function CallbackAllocMem(ASize: SizeUInt): Pointer;
 begin
   Inc(GAllocMemCalls);
-  Result := System.AllocMem(aSize);
+  Result := System.AllocMem(ASize);
 end;
 
-function CallbackReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+function CallbackReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
 begin
   Inc(GReallocMemCalls);
-  Result := System.ReallocMem(aDst, aSize);
+  Result := System.ReallocMem(ADst, ASize);
 end;
 
-procedure CallbackFreeMem(aDst: Pointer);
+procedure CallbackFreeMem(ADst: Pointer);
 begin
   Inc(GFreeMemCalls);
-  System.FreeMem(aDst);
+  System.FreeMem(ADst);
 end;
 
 procedure TestCallbackAllocatorCompatibilityMethods;
@@ -185,6 +250,54 @@ begin
   CheckEqual(Int64(1), Int64(GFreeMemCalls), 'FreeMem should route through FreeMem');
 end;
 
+procedure ExpectNilCallbackRejected(const AName: string;
+  AGetMem: TGetMemCallback;
+  AAllocMem: TAllocMemCallback;
+  AReallocMem: TReallocMemCallback;
+  AFreeMem: TFreeMemCallback);
+var
+  LRaised: Boolean;
+  LAllocator: nextpas.core.mem.allocator.IAllocator;
+begin
+  LRaised := False;
+  LAllocator := nil;
+  try
+    LAllocator := CreateCallbackAllocator(AGetMem, AAllocMem, AReallocMem, AFreeMem);
+  except
+    on E: nextpas.core.base.EArgumentNil do
+      LRaised := True;
+    on E: Exception do
+      Fail(AName + ': expected EArgumentNil, got ' + E.ClassName + ': ' + E.Message);
+  end;
+
+  Check(LRaised, AName + ': nil callback should be rejected');
+  Check(LAllocator = nil, AName + ': allocator should not be created');
+end;
+
+procedure TestCallbackAllocatorRejectsNilCallbacksAtRuntime;
+begin
+  ExpectNilCallbackRejected('nil GetMem callback',
+    nil,
+    @CallbackAllocMem,
+    @CallbackReallocMem,
+    @CallbackFreeMem);
+  ExpectNilCallbackRejected('nil AllocMem callback',
+    @CallbackGetMem,
+    nil,
+    @CallbackReallocMem,
+    @CallbackFreeMem);
+  ExpectNilCallbackRejected('nil ReallocMem callback',
+    @CallbackGetMem,
+    @CallbackAllocMem,
+    nil,
+    @CallbackFreeMem);
+  ExpectNilCallbackRejected('nil FreeMem callback',
+    @CallbackGetMem,
+    @CallbackAllocMem,
+    @CallbackReallocMem,
+    nil);
+end;
+
 procedure TestRtlAllocatorZeroInitTraitsAndAlignedAlloc;
 var
   LAllocator: nextpas.core.mem.allocator.IAllocator;
@@ -232,86 +345,32 @@ begin
   end;
 end;
 
-procedure TestAlignedCompatShimSmoke;
-var
-  LPtr: Pointer;
-begin
-  LPtr := nextpas.core.mem.aligned.AllocAligned(64, 32);
-  try
-    Check(LPtr <> nil, 'aligned compat shim should allocate');
-    CheckEqual(Int64(0), Int64(PtrUInt(LPtr) mod 32),
-      'aligned compat shim should honor requested alignment');
-    PByte(LPtr)^ := $4D;
-    CheckEqual(Int64($4D), Int64(PByte(LPtr)^),
-      'aligned compat shim should return writable memory');
-  finally
-    nextpas.core.mem.aligned.FreeAligned(LPtr);
-  end;
-end;
-
-procedure TestAlignedCompatShimDelegatesToCanonicalAllocator;
-var
-  LSource: string;
-begin
-  LSource := ReadSourceText(ResolveSourcePath(
-    MEM_ALIGNED_SOURCE_PATH_FROM_TEST,
-    MEM_ALIGNED_SOURCE_PATH_FROM_ROOT));
-  CheckContains(LSource, '{$warning ''nextpas.core.mem.aligned is deprecated',
-    'aligned compat shim should publish a deprecation warning');
-  CheckContains(LSource,
-    'deprecated ''use nextpas.core.mem.default.defaultallocator.allocaligned instead''',
-    'aligned compat alloc surface should be deprecated');
-  CheckContains(LSource,
-    'deprecated ''use nextpas.core.mem.default.defaultallocator.freealigned instead''',
-    'aligned compat free surface should be deprecated');
-  CheckContains(LSource, 'nextpas.core.mem.default',
-    'aligned compat shim should depend on the canonical default allocator');
-  CheckContains(LSource, 'nextpas.core.mem.intf',
-    'aligned compat shim should reference the canonical allocator contract');
-  CheckContains(LSource, 'lallocator := nextpas.core.mem.default.defaultallocator;',
-    'aligned compat shim should obtain the canonical allocator');
-  CheckContains(LSource, 'result := lallocator.allocaligned(asize, aalignment);',
-    'aligned compat alloc should delegate to the canonical allocator');
-  CheckContains(LSource, 'lallocator.freealigned(aptr);',
-    'aligned compat free should delegate to the canonical allocator');
-  CheckNotContains(LSource, '_aligned_malloc',
-    'aligned compat shim should not own a windows allocation path');
-  CheckNotContains(LSource, 'posix_memalign',
-    'aligned compat shim should not own a unix allocation path');
-  CheckNotContains(LSource, 'libc_free',
-    'aligned compat shim should not own a unix free path');
-  CheckNotContains(LSource, 'sysgetmem',
-    'aligned compat shim should not own a raw rtl fallback path');
-  CheckNotContains(LSource, 'sysfreemem',
-    'aligned compat shim should not own a raw rtl free path');
-end;
-
-procedure TestGrowableAllocatorsUseCanonicalAllocatorContract;
+procedure TestChunkedArenaAndGrowableBlockPoolUseCanonicalAllocatorContract;
 var
   LArenaSource: string;
   LBlockPoolSource: string;
 begin
   LArenaSource := ReadSourceText(ResolveSourcePath(
-    MEM_ARENA_GROWABLE_SOURCE_PATH_FROM_TEST,
-    MEM_ARENA_GROWABLE_SOURCE_PATH_FROM_ROOT));
+    MEM_ARENA_CHUNKED_SOURCE_PATH_FROM_TEST,
+    MEM_ARENA_CHUNKED_SOURCE_PATH_FROM_ROOT));
   CheckContains(LArenaSource, 'nextpas.core.mem.intf',
-    'growable arena should depend on the canonical allocator contract');
+    'chunked arena should depend on the canonical allocator contract');
   CheckNotContains(LArenaSource, 'nextpas.core.mem.alloc',
-    'growable arena should not depend on the removed legacy allocator contract');
+    'chunked arena should not depend on the removed legacy allocator contract');
   CheckNotContains(LArenaSource, 'nextpas.core.mem.layout',
-    'growable arena should not depend on the removed layout unit');
+    'chunked arena should not depend on the removed layout unit');
   CheckContains(LArenaSource, 'allocator: iallocator',
-    'growable arena config should expose iallocator');
+    'chunked arena config should expose iallocator');
   CheckContains(LArenaSource, 'fallocator: iallocator',
-    'growable arena field should store iallocator');
+    'chunked arena field should store iallocator');
   CheckContains(LArenaSource, 'function alloc(asize: sizeuint): pointer;',
-    'growable arena should expose explicit-size allocation');
+    'chunked arena should expose explicit-size allocation');
   CheckContains(LArenaSource, 'function allocaligned(asize, aalignment: sizeuint): pointer;',
-    'growable arena should expose explicit aligned allocation');
+    'chunked arena should expose explicit aligned allocation');
   CheckContains(LArenaSource, 'lraw := fallocator.getmem(lallocsize);',
-    'growable arena should allocate segments via iallocator.getmem');
+    'chunked arena should allocate segments via iallocator.getmem');
   CheckContains(LArenaSource, 'fallocator.freemem(lraw)',
-    'growable arena should release segments via iallocator.freemem');
+    'chunked arena should release segments via iallocator.freemem');
 
   LBlockPoolSource := ReadSourceText(ResolveSourcePath(
     MEM_BLOCKPOOL_GROWABLE_SOURCE_PATH_FROM_TEST,
@@ -334,26 +393,11 @@ end;
 
 procedure TestArenaUnitsUseExplicitArenaApi;
 var
-  LBlockPoolSource: string;
   LConcurrentSource: string;
 begin
-  LBlockPoolSource := ReadSourceText(ResolveSourcePath(
-    MEM_BLOCKPOOL_SOURCE_PATH_FROM_TEST,
-    MEM_BLOCKPOOL_SOURCE_PATH_FROM_ROOT));
-  CheckContains(LBlockPoolSource, 'function alloc(asize: sizeuint): pointer;',
-    'blockpool IArena should expose explicit-size allocation');
-  CheckContains(LBlockPoolSource, 'function allocaligned(asize, aalignment: sizeuint): pointer;',
-    'blockpool IArena should expose explicit aligned allocation');
-  CheckContains(LBlockPoolSource, 'function alloczeroed(asize: sizeuint): pointer;',
-    'blockpool IArena should expose explicit zeroed allocation');
-  CheckNotContains(LBlockPoolSource, 'function alloc(const alayout: tmemlayout)',
-    'blockpool IArena should not expose layout-based allocation');
-  CheckNotContains(LBlockPoolSource, 'function alloczeroed(const alayout: tmemlayout)',
-    'blockpool IArena should not expose layout-based zeroed allocation');
-
   LConcurrentSource := ReadSourceText(ResolveSourcePath(
-    MEM_BLOCKPOOL_CONCURRENT_SOURCE_PATH_FROM_TEST,
-    MEM_BLOCKPOOL_CONCURRENT_SOURCE_PATH_FROM_ROOT));
+    MEM_ARENA_CONCURRENT_SOURCE_PATH_FROM_TEST,
+    MEM_ARENA_CONCURRENT_SOURCE_PATH_FROM_ROOT));
   CheckContains(LConcurrentSource, 'function alloc(asize: sizeuint): pointer;',
     'concurrent arena wrapper should expose explicit-size allocation');
   CheckContains(LConcurrentSource, 'function allocaligned(asize, aalignment: sizeuint): pointer;',
@@ -364,16 +408,81 @@ begin
     'concurrent arena wrapper should not depend on the removed layout unit');
 end;
 
+procedure TestCallbackAllocatorRejectsNilCallbacksWithoutContractGuard;
+var
+  LSource: string;
+  LSection: string;
+begin
+  LSource := ReadSourceText(ResolveSourcePath(
+    MEM_ALLOCATOR_CALLBACK_SOURCE_PATH_FROM_TEST,
+    MEM_ALLOCATOR_CALLBACK_SOURCE_PATH_FROM_ROOT));
+  LSection := ExtractSourceSection(LSource,
+    'constructor tcallbackallocator.init',
+    'fgetmemcallback     := agetmem;');
+  Check(LSection <> '', 'callback allocator constructor section should be readable');
+  CheckContains(LSection, 'raise eargumentnil.create',
+    'callback allocator should reject nil callbacks');
+  CheckNotContains(LSection, '{$ifdef nextpas_core_contracts}',
+    'callback allocator nil-check should not depend on contract define');
+  CheckNotContains(LSection, '{$endif}',
+    'callback allocator nil-check should not be wrapped by conditional compilation');
+end;
+
+procedure TestVirtualArenaAllocNoPointerGuardsAgainstBackUnderflow;
+var
+  LSource: string;
+  LSection: string;
+begin
+  LSource := ReadSourceText(ResolveSourcePath(
+    MEM_ARENA_VIRTUAL_SOURCE_PATH_FROM_TEST,
+    MEM_ARENA_VIRTUAL_SOURCE_PATH_FROM_ROOT));
+  LSection := ExtractSourceSection(LSource,
+    'function tvirtualarena.allocnopointer(asize: sizeuint): pointer;',
+    'function tvirtualarena.allocaligned');
+  Check(LSection <> '', 'virtual arena AllocNoPointer section should be readable');
+  CheckContains(LSection, 'if ptruint(asize) > (ptruint(fbackptr) - ptruint(fbackbase)) then',
+    'AllocNoPointer should guard against back-pointer underflow with remaining back capacity');
+  CheckNotContains(LSection, 'if ptruint(asize) > ptruint(fbackptr) then',
+    'AllocNoPointer should not compare requested size against the absolute back pointer');
+end;
+
 procedure TestLegacyAllocatorFilesRemoved;
 begin
+  Check(not SourceExists(MEM_ARENA_GROWABLE_SOURCE_PATH_FROM_TEST, MEM_ARENA_GROWABLE_SOURCE_PATH_FROM_ROOT),
+    'mem.arena.growable should be removed');
   Check(not SourceExists(MEM_ALLOC_SOURCE_PATH_FROM_TEST, MEM_ALLOC_SOURCE_PATH_FROM_ROOT),
     'mem.alloc should be removed');
   Check(not SourceExists(MEM_ADAPTER_SOURCE_PATH_FROM_TEST, MEM_ADAPTER_SOURCE_PATH_FROM_ROOT),
     'mem.adapter should be removed');
+  Check(not SourceExists(MEM_POOL_ADAPTER_SOURCE_PATH_FROM_TEST, MEM_POOL_ADAPTER_SOURCE_PATH_FROM_ROOT),
+    'mem.pool.adapter should be removed');
   Check(not SourceExists(MEM_LAYOUT_SOURCE_PATH_FROM_TEST, MEM_LAYOUT_SOURCE_PATH_FROM_ROOT),
     'mem.layout should be removed');
   Check(not SourceExists(MEM_MIMALLOC_BINDING_SOURCE_PATH_FROM_TEST, MEM_MIMALLOC_BINDING_SOURCE_PATH_FROM_ROOT),
     'mem.mimalloc.binding should be removed');
+end;
+
+procedure TestZeroConsumerCompatibilityUnitsRemoved;
+begin
+  Check(not SourceExists(MEM_ALIGNED_SOURCE_PATH_FROM_TEST, MEM_ALIGNED_SOURCE_PATH_FROM_ROOT),
+    'mem.aligned should be removed');
+  Check(not SourceExists(MEM_ALLOCATOR_INSTRUMENTATION_SOURCE_PATH_FROM_TEST,
+    MEM_ALLOCATOR_INSTRUMENTATION_SOURCE_PATH_FROM_ROOT),
+    'mem.allocator.instrumentation should be removed');
+  Check(not SourceExists(MEM_ALLOCATOR_NUMA_SOURCE_PATH_FROM_TEST, MEM_ALLOCATOR_NUMA_SOURCE_PATH_FROM_ROOT),
+    'mem.allocator.numa should be removed');
+  Check(not SourceExists(MEM_STATS_SOURCE_PATH_FROM_TEST, MEM_STATS_SOURCE_PATH_FROM_ROOT),
+    'mem.stats should be removed');
+  Check(not SourceExists(MEM_ADAPTERS_SOURCE_PATH_FROM_TEST, MEM_ADAPTERS_SOURCE_PATH_FROM_ROOT),
+    'mem.adapters should be removed');
+  Check(not SourceExists(MEM_INTERFACES_SOURCE_PATH_FROM_TEST, MEM_INTERFACES_SOURCE_PATH_FROM_ROOT),
+    'mem.interfaces should be removed');
+  Check(not SourceExists(MEM_STACK_SCOPE_HELPERS_SOURCE_PATH_FROM_TEST,
+    MEM_STACK_SCOPE_HELPERS_SOURCE_PATH_FROM_ROOT),
+    'mem.stack_scope_helpers should be removed');
+  Check(not SourceExists('../../../src/nextpas.core.mem.manager.mimalloc.pas',
+    'core/src/nextpas.core.mem.manager.mimalloc.pas'),
+    'mem.manager.mimalloc should be removed');
 end;
 
 procedure TestBaseOwnsMemConstantsAndErrorDropsAllocResult;
@@ -398,6 +507,112 @@ begin
     'mem.error should drop TAllocResult');
   CheckNotContains(LErrorSource, 'expectptr',
     'mem.error should drop TAllocResult.ExpectPtr');
+end;
+
+procedure TestMemLockWrappersUseAtomicInitState;
+var
+  LMutexSource: string;
+  LMutexInitSection: string;
+  LMutexDoneSection: string;
+  LRwLockSource: string;
+  LRwLockInitSection: string;
+  LRwLockDoneSection: string;
+begin
+  LMutexSource := ReadSourceText(ResolveSourcePath(
+    MEM_MUTEX_SOURCE_PATH_FROM_TEST,
+    MEM_MUTEX_SOURCE_PATH_FROM_ROOT));
+  CheckNotContains(LMutexSource, 'finitialized: boolean;',
+    'mem.mutex should not use a Boolean initialization flag');
+  LMutexInitSection := ExtractSourceSection(LMutexSource,
+    'procedure tmemmutex.init;',
+    'procedure tmemmutex.done;');
+  Check(LMutexInitSection <> '', 'mem.mutex init section should be readable');
+  CheckContainsAtomicCAS(LMutexInitSection,
+    'mem.mutex Init should use an atomic once-only state transition');
+  LMutexDoneSection := ExtractSourceSection(LMutexSource,
+    'procedure tmemmutex.done;',
+    'procedure tmemmutex.acquire;');
+  Check(LMutexDoneSection <> '', 'mem.mutex done section should be readable');
+  CheckContainsAtomicCAS(LMutexDoneSection,
+    'mem.mutex Done should use an atomic state transition');
+
+  LRwLockSource := ReadSourceText(ResolveSourcePath(
+    MEM_RWLOCK_SOURCE_PATH_FROM_TEST,
+    MEM_RWLOCK_SOURCE_PATH_FROM_ROOT));
+  CheckNotContains(LRwLockSource, 'finitialized: boolean;',
+    'mem.rwlock should not use a Boolean initialization flag');
+  LRwLockInitSection := ExtractSourceSection(LRwLockSource,
+    'procedure tmemrwlock.init;',
+    'procedure tmemrwlock.done;');
+  Check(LRwLockInitSection <> '', 'mem.rwlock init section should be readable');
+  CheckContainsAtomicCAS(LRwLockInitSection,
+    'mem.rwlock Init should use an atomic once-only state transition');
+  LRwLockDoneSection := ExtractSourceSection(LRwLockSource,
+    'procedure tmemrwlock.done;',
+    'procedure tmemrwlock.acquireread;');
+  Check(LRwLockDoneSection <> '', 'mem.rwlock done section should be readable');
+  CheckContainsAtomicCAS(LRwLockDoneSection,
+    'mem.rwlock Done should use an atomic state transition');
+end;
+
+procedure TestVirtualArenaDocumentsLargeObjectMarkSemantics;
+var
+  LSource: string;
+  LInterfaceSection: string;
+begin
+  LSource := ReadSourceText(ResolveSourcePath(
+    MEM_ARENA_VIRTUAL_SOURCE_PATH_FROM_TEST,
+    MEM_ARENA_VIRTUAL_SOURCE_PATH_FROM_ROOT));
+  LInterfaceSection := ExtractSourceSection(LSource,
+    'function savemark: tarenamark;',
+    'procedure reset;');
+  Check(LInterfaceSection <> '', 'virtual arena SaveMark/RestoreToMark section should be readable');
+  CheckContains(LInterfaceSection, 'large objects',
+    'virtual arena SaveMark/RestoreToMark should document large-object persistence');
+  CheckContains(LInterfaceSection, 'not rewound',
+    'virtual arena SaveMark/RestoreToMark should explain that large objects are not rewound');
+end;
+
+procedure TestVirtualArenaExposesFailureReasonAndAtomicMappedCounter;
+var
+  LSource: string;
+  LAllocSection: string;
+begin
+  LSource := ReadSourceText(ResolveSourcePath(
+    MEM_ARENA_VIRTUAL_SOURCE_PATH_FROM_TEST,
+    MEM_ARENA_VIRTUAL_SOURCE_PATH_FROM_ROOT));
+  CheckContains(LSource, 'tvirtualarenaallocfailure = (',
+    'virtual arena should define a typed allocation failure classification');
+  CheckContains(LSource, 'function lastallocfailure: tvirtualarenaallocfailure;',
+    'virtual arena should expose the last allocation failure reason');
+  CheckContains(LSource, 'vaafcapacityexhausted',
+    'virtual arena failure classification should expose capacity exhaustion');
+  CheckContains(LSource, 'vaaffrontcommitfailed',
+    'virtual arena failure classification should expose front commit failure');
+  CheckContains(LSource, 'vaafbackcommitfailed',
+    'virtual arena failure classification should expose back commit failure');
+  CheckContains(LSource, 'vaaflargeobjectmapfailed',
+    'virtual arena failure classification should expose large-object mmap failure');
+
+  LAllocSection := ExtractSourceSection(LSource,
+    'function tvirtualarena.alloc(asize: sizeuint): pointer;',
+    'function tvirtualarena.allocnopointer');
+  Check(LAllocSection <> '', 'virtual arena Alloc section should be readable');
+  CheckContains(LAllocSection, 'flastallocfailure := vaafcapacityexhausted;',
+    'virtual arena Alloc should classify capacity exhaustion');
+  CheckContains(LAllocSection, 'flastallocfailure := vaaffrontcommitfailed;',
+    'virtual arena Alloc should classify front commit failure');
+  CheckContains(LAllocSection, 'flastallocfailure := vaaflargeobjectmapfailed;',
+    'virtual arena Alloc should classify large-object mmap failure');
+
+  CheckNotContains(LSource, 'inc(garenatotalmapped',
+    'virtual arena leak counter should not use plain Inc');
+  CheckNotContains(LSource, 'dec(garenatotalmapped',
+    'virtual arena leak counter should not use plain Dec');
+  CheckContainsAtomicAdd64(LSource,
+    'virtual arena leak counter should use an atomic 64-bit add');
+  CheckContainsAtomicCAS64(LSource,
+    'virtual arena leak counter should use an atomic 64-bit compare-and-swap for bounded subtract');
 end;
 
 procedure TestCanonicalAllocatorSurface;
@@ -448,8 +663,7 @@ begin
       try
         LPtr := LAllocator.GetMem(33);
       except
-        on E: Exception do
-          LPtr := nil;
+        LPtr := nil;
       end;
 
       if LPtr <> nil then
@@ -536,26 +750,77 @@ begin
     CheckEqual(Int64(0), Int64(LBytes[I]), 'Zero should clear each byte');
 end;
 
+procedure TestRingBufferAdvanceIndexFastPathContract;
+var
+  LSource: string;
+begin
+  LSource := ReadSourceText(ResolveSourcePath(
+    MEM_RING_BUFFER_SOURCE_PATH_FROM_TEST,
+    MEM_RING_BUFFER_SOURCE_PATH_FROM_ROOT));
+
+  CheckContains(LSource,
+    'function advanceindex(aindex, adelta: sizeuint): sizeuint;',
+    'ring buffer declares advance-index helper');
+  CheckContains(LSource,
+    'result := (aindex + adelta) and (fcapacity - 1);',
+    'advance-index helper uses pow2 fast path');
+  CheckContains(LSource,
+    'ftail := advanceindex(ftail, ltowrite);',
+    'bulk push uses advance-index helper');
+  CheckContains(LSource,
+    'fhead := advanceindex(fhead, ltoread);',
+    'bulk pop uses advance-index helper');
+  CheckContains(LSource,
+    'lindex := advanceindex(fhead, aoffset);',
+    'peek uses advance-index helper');
+  CheckContains(LSource,
+    'ftail := advanceindex(0, fcount)',
+    'resize uses advance-index helper');
+  CheckContains(LSource,
+    'lindex := advanceindex(fhead, i);',
+    'find uses advance-index helper');
+  CheckContains(LSource,
+    'lindex := advanceindex(fhead, aindex);',
+    'setelementat uses advance-index helper');
+  CheckContains(LSource,
+    'fhead := advanceindex(fhead, ltodrop);',
+    'dropelements uses advance-index helper');
+  CheckNotContains(LSource,
+    ' mod fcapacity',
+    'ring buffer bulk/index paths avoid raw modulo');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.mem.contracts');
   T.Run('callback allocator compatibility methods', @TestCallbackAllocatorCompatibilityMethods);
   T.Run('callback allocator supports canonical interface', @TestCallbackAllocatorSupportsCanonicalInterface);
+  T.Run('callback allocator rejects nil callbacks at runtime',
+    @TestCallbackAllocatorRejectsNilCallbacksAtRuntime);
   T.Run('rtl allocator zero init traits and aligned alloc', @TestRtlAllocatorZeroInitTraitsAndAlignedAlloc);
   T.Run('rtl allocator aligned alloc rejects size overflow', @TestRtlAllocatorAlignedAllocRejectsSizeOverflow);
-  T.Run('aligned compat shim smoke', @TestAlignedCompatShimSmoke);
-  T.Run('aligned compat shim delegates to canonical allocator',
-    @TestAlignedCompatShimDelegatesToCanonicalAllocator);
-  T.Run('growable allocators use canonical allocator contract',
-    @TestGrowableAllocatorsUseCanonicalAllocatorContract);
+  T.Run('chunked arena and growable block pool use canonical allocator contract',
+    @TestChunkedArenaAndGrowableBlockPoolUseCanonicalAllocatorContract);
   T.Run('arena units use explicit arena api', @TestArenaUnitsUseExplicitArenaApi);
+  T.Run('callback allocator rejects nil callbacks without contract guard',
+    @TestCallbackAllocatorRejectsNilCallbacksWithoutContractGuard);
+  T.Run('virtual arena AllocNoPointer guards against back underflow',
+    @TestVirtualArenaAllocNoPointerGuardsAgainstBackUnderflow);
   T.Run('legacy allocator files removed', @TestLegacyAllocatorFilesRemoved);
+  T.Run('zero-consumer compatibility units removed', @TestZeroConsumerCompatibilityUnitsRemoved);
   T.Run('mem.base owns constants and mem.error drops alloc result',
     @TestBaseOwnsMemConstantsAndErrorDropsAllocResult);
+  T.Run('mem lock wrappers use atomic init state',
+    @TestMemLockWrappersUseAtomicInitState);
+  T.Run('virtual arena documents large-object mark semantics',
+    @TestVirtualArenaDocumentsLargeObjectMarkSemantics);
+  T.Run('virtual arena exposes failure reason and atomic mapped counter',
+    @TestVirtualArenaExposesFailureReasonAndAtomicMappedCounter);
   T.Run('canonical allocator surface', @TestCanonicalAllocatorSurface);
   T.Run('allocator aliases are canonical', @TestAllocatorAliasesAreCanonical);
   T.Run('mimalloc usable-size capability fallback', @TestMimallocUsableSizeCapabilityFallback);
   T.Run('mem.utils no-op and overlap contract', @TestMemUtilsNoOpAndOverlapContract);
   T.Run('mem.utils copy unchecked handles overlap', @TestMemUtilsCopyUncheckedHandlesOverlap);
   T.Run('mem.utils fill and zero helpers', @TestMemUtilsFillAndZeroHelpers);
+  T.Run('ring buffer advance-index fast path contract', @TestRingBufferAdvanceIndexFastPathContract);
   T.Summary;
 end.

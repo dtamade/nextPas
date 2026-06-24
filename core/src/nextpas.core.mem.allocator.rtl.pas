@@ -15,10 +15,10 @@ type
    *}
   TRtlAllocator = class(TAllocator)
   protected
-    function  DoGetMem(aSize: SizeUInt): Pointer; override;
-    function  DoAllocMem(aSize: SizeUInt): Pointer; override;
-    function  DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(aDst: Pointer); override;
+    function  DoGetMem(ASize: SizeUInt): Pointer; override;
+    function  DoAllocMem(ASize: SizeUInt): Pointer; override;
+    function  DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
+    procedure DoFreeMem(ADst: Pointer); override;
   public
     function  Traits: TAllocatorTraits; override;
   end;
@@ -33,24 +33,24 @@ var
   _RTLAllocatorIntf: IAllocator = nil;
   GRtlAllocLock: TRTLCriticalSection;
 
-function TRtlAllocator.DoGetMem(aSize: SizeUInt): Pointer;
+function TRtlAllocator.DoGetMem(ASize: SizeUInt): Pointer;
 begin
-  Result := System.GetMem(aSize);
+  Result := System.GetMem(ASize);
 end;
 
-function TRtlAllocator.DoAllocMem(aSize: SizeUInt): Pointer;
+function TRtlAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
 begin
-  Result := System.AllocMem(aSize);
+  Result := System.AllocMem(ASize);
 end;
 
-function TRtlAllocator.DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+function TRtlAllocator.DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
 begin
-  Result := System.ReallocMem(aDst, aSize);
+  Result := System.ReallocMem(ADst, ASize);
 end;
 
-procedure TRtlAllocator.DoFreeMem(aDst: Pointer);
+procedure TRtlAllocator.DoFreeMem(ADst: Pointer);
 begin
-  System.FreeMem(aDst);
+  System.FreeMem(ADst);
 end;
 
 function TRtlAllocator.Traits: TAllocatorTraits;

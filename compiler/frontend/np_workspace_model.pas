@@ -10,7 +10,7 @@ uses
   np_package_manifest;
 
 type
-  EWorkspaceModelError = class(Exception)
+  EWorkspaceModelError = class(ENextPasError)
   end;
 
   TPackageRef = record

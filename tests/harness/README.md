@@ -101,6 +101,26 @@ snapshot-bearing groups 还会为每个 fixture 额外输出：
 - 如果缺少 snapshot，会把 evidence 写到 `tests/snapshots/*.diff.txt`
 - 如果 snapshot 与实际文本不一致，也会把 diff evidence 写到同一路径
 
+### canonical 映射约定（新增 fail fixture 时务必遵循）
+
+当一个 `compiler-fail`/`diagnostics` fixture 的目的是**守护某个具体的诊断语义**
+（如「子类同名 Create 签名不匹配时必须报 `sema.wrong-argument-count`，禁止回退父类」），
+canonical summary 必须**精确到该诊断类**，而不能退化为通用的 `failure-kind`
+（如 `semantic-analysis-failed`）。
+
+canonical summary 由 `CanonicalFailureSummary`（`tests/harness/runner.pas`）决定。
+它对少量 `diagnostic-code=` 值有 code→summary 特例映射（如
+`sema.duplicate-declaration → 'duplicate unit import'`、
+`sema.missing-external-symbol-name → 'missing external symbol name'`、
+`sema.wrong-argument-count → 'wrong argument count'`）；**未命中特例的 sema 码会
+退化为 `failure-kind` 值**（粗粒度），这样快照会被同一类下的其它失败"误通过"，
+削弱回归保护。
+
+因此：新增一个守护特定诊断类的 fail fixture 时，先确认它的 `diagnostic-code=`
+在 `CanonicalFailureSummary` 里有特例映射；若没有，就**同步补一条映射**（仅在确有
+harness 快照依赖该码时补，YAGNI；`tests/fixtures/*` 走 `verify_local.sh` 显式
+`require_output_pattern` 锁定诊断码，不经快照路径，不需要补映射）。
+
 `smoke` 视角当前会为每个 group 输出一条：
 
 - `smoke-group=<group> result=<...> expectation=<...> fixtures=<n> executed=<n> snapshot=<...>`

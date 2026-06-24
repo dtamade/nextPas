@@ -165,6 +165,14 @@ type
    *}
   TFixedPoolConcurrent = class(TInterfacedObject, IPool)
   private
+    {**
+     * Lock ordering: Single mutex (FLock). No nesting with other locks.
+     * BlockSize, Capacity are immutable (lockless reads).
+     * AllocatedCount, Acquire, Release, Reset are under FLock.
+     *
+     * 锁顺序：单锁（FLock），不与其他锁嵌套。
+     * BlockSize/Capacity 不可变（无需加锁）；其余操作在 FLock 下。
+     *}
     FInner: TFixedPool;
     FLock: TMemMutex;
     function GetBlockSize: SizeUInt; inline;
@@ -192,11 +200,6 @@ type
   end;
 
 implementation
-
-{$IFDEF FAF_MEM_DEBUG}
-uses
-  SysUtils;
-{$ENDIF}
 
 {$PUSH}
 {$WARN 4055 OFF} // pointer/ordinal conversions in pool internals
@@ -326,7 +329,7 @@ begin
   Create(aConfig.BlockSize, aConfig.Capacity, aConfig.Alignment, aConfig.Allocator);
   FZeroOnAlloc := aConfig.ZeroOnAlloc;
   if aConfig.ZeroOnAlloc and (FBuffer <> nil) and (FTotalSize > 0) then
-    FillChar(FBuffer^, FTotalSize, 0);
+    ZeroMem(FBuffer, FTotalSize);
 end;
 
 destructor TFixedPool.Destroy;
@@ -361,7 +364,7 @@ begin
 
   LPtr := Pointer(PByte(FBuffer) + SizeUInt(LIdx) * FBlockSize);
   if FZeroOnAlloc and (FBlockSize > 0) then
-    FillChar(LPtr^, FBlockSize, 0);
+    ZeroMem(LPtr, FBlockSize);
   if FAllocatedCount > FPeakAllocated then
     FPeakAllocated := FAllocatedCount;
   Inc(FTotalAllocCalls);
@@ -419,7 +422,7 @@ begin
 
   {$IFDEF FAF_MEM_DEBUG}
   // 污化已释放内存，提升 UAF 暴露率
-  FillChar(PByte(FBuffer)[SizeUInt(LIdx)*FBlockSize], FBlockSize, $A5);
+  FillMem(PByte(FBuffer)[SizeUInt(LIdx)*FBlockSize], FBlockSize, $A5);
   {$ENDIF}
   FIsFree[LIdx] := True;
   Dec(FAllocatedCount);

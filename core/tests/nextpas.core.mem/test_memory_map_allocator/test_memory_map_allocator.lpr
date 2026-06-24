@@ -3,7 +3,6 @@ program test_memory_map_allocator;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.testing,
   nextpas.core.mem.error,
   nextpas.core.mem.allocator,

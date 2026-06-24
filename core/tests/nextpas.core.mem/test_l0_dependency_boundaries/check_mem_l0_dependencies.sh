@@ -11,6 +11,7 @@ FORBIDDEN_UNITS=(
   "nextpas.core.time.cpu"
   "nextpas.core.text.conv"
   "nextpas.core.fs.util"
+  "SysUtils"
   "Windows"
   "BaseUnix"
   "Unix"

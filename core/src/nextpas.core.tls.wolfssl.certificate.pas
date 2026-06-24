@@ -17,7 +17,8 @@ unit nextpas.core.tls.wolfssl.certificate;
 interface
 
 uses
-  SysUtils, Classes,
+  nextpas.core.base,
+  nextpas.core.io.intf, nextpas.core.fs.stream,
   nextpas.core.base.utils,
   nextpas.core.fs,
   nextpas.core.collections.vec,
@@ -51,12 +52,12 @@ type
 
     { ISSLCertificate - 加载和保存 }
     function LoadFromFile(const AFileName: string): Boolean;
-    function LoadFromStream(AStream: TStream): Boolean;
+    function LoadFromStream(AStream: IStream): Boolean;
     function LoadFromMemory(const AData: Pointer; ASize: Integer): Boolean;
     function LoadFromPEM(const APEM: string): Boolean;
     function LoadFromDER(const ADER: TBytes): Boolean;
     function SaveToFile(const AFileName: string): Boolean;
-    function SaveToStream(AStream: TStream): Boolean;
+    function SaveToStream(AStream: IStream): Boolean;
     function SaveToPEM: string;
     function SaveToDER: TBytes;
 
@@ -150,10 +151,11 @@ type
 implementation
 
 uses
-  DateUtils,
+  nextpas.core.exception,
   nextpas.core.text.conv,
   nextpas.core.text.strings,
   nextpas.core.time,
+  nextpas.core.fs.glob,
   nextpas.core.tls.utils,
   nextpas.core.crypto.hash,
   nextpas.core.tls.tls13.wire,
@@ -162,16 +164,16 @@ uses
 function NormalizeWolfCertText(const AValue: string): string;
 begin
   Result := Trim(UpperCase(AValue));
-  Result := StringReplace(Result, ',', '', [rfReplaceAll]);
-  Result := StringReplace(Result, ' ', '', [rfReplaceAll]);
+  Result := StringReplace(Result, ',', '', True);
+  Result := StringReplace(Result, ' ', '', True);
 end;
 
 function NormalizeWolfCertFingerprint(const AFingerprint: string): string;
 begin
   Result := Trim(UpperCase(AFingerprint));
-  Result := StringReplace(Result, ':', '', [rfReplaceAll]);
-  Result := StringReplace(Result, '-', '', [rfReplaceAll]);
-  Result := StringReplace(Result, ' ', '', [rfReplaceAll]);
+  Result := StringReplace(Result, ':', '', True);
+  Result := StringReplace(Result, '-', '', True);
+  Result := StringReplace(Result, ' ', '', True);
 end;
 
 function NormalizeWolfCertSerial(const ASerialNumber: string): string;
@@ -591,19 +593,19 @@ function TWolfSSLCertificate.LoadFromFile(const AFileName: string): Boolean;
 var
   LRawBytes: TBytes;
   LText: string;
-  LStream: TFileStream;
+  LStream: IStream;
 begin
   Result := False;
   if not nextpas.core.fs.IsFile(AFileName) then Exit;
   ResetLoadedState;
 
   SetLength(LRawBytes, 0);
-  LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
+  LStream := FsOpen(AFileName, [fmRead]);
   try
     if LStream.Size > 0 then
     begin
       SetLength(LRawBytes, LStream.Size);
-      LStream.ReadBuffer(LRawBytes[0], Length(LRawBytes));
+      LStream.Read(LRawBytes[0], Length(LRawBytes));
     end;
   finally
   end;
@@ -645,7 +647,7 @@ begin
   Result := FX509 <> nil;
 end;
 
-function TWolfSSLCertificate.LoadFromStream(AStream: TStream): Boolean;
+function TWolfSSLCertificate.LoadFromStream(AStream: IStream): Boolean;
 var
   LData: TBytes;
   LText: string;
@@ -657,7 +659,7 @@ begin
   SetLength(LData, AStream.Size - AStream.Position);
   if Length(LData) = 0 then Exit;
 
-  AStream.ReadBuffer(LData[0], Length(LData));
+  AStream.Read(LData[0], Length(LData));
   SetString(LText, PAnsiChar(@LData[0]), Length(LData));
   if TSSLUtils.IsPEMFormat(LText) then
     Result := LoadFromPEM(LText)
@@ -719,13 +721,13 @@ end;
 
 function TWolfSSLCertificate.SaveToFile(const AFileName: string): Boolean;
 var
-  LStream: TFileStream;
+  LStream: IStream;
 begin
   Result := False;
   if FX509 = nil then Exit;
 
   try
-    LStream := TFileStream.Create(AFileName, fmCreate);
+    LStream := FsCreate(AFileName);
     try
       Result := SaveToStream(LStream);
     finally
@@ -735,7 +737,7 @@ begin
   end;
 end;
 
-function TWolfSSLCertificate.SaveToStream(AStream: TStream): Boolean;
+function TWolfSSLCertificate.SaveToStream(AStream: IStream): Boolean;
 var
   LPEM: string;
 begin
@@ -745,7 +747,7 @@ begin
   LPEM := SaveToPEM;
   if LPEM <> '' then
   begin
-    AStream.WriteBuffer(LPEM[1], Length(LPEM));
+    AStream.Write(LPEM[1], Length(LPEM));
     Result := True;
   end;
 end;
@@ -1633,37 +1635,24 @@ end;
 
 function TWolfSSLCertificateStore.LoadFromPath(const APath: string): Boolean;
 var
-  LSearchRec: TSearchRec;
+  LFiles: TStringArray;
   LCount: Integer;
+  I: Integer;
 begin
   Result := False;
   if not nextpas.core.fs.IsDir(APath) then Exit;
 
   LCount := 0;
-  if FindFirst(nextpas.core.fs.PathEnsureSep(APath) + '*.pem', faAnyFile, LSearchRec) = 0 then
-  begin
-    try
-      repeat
-        if LoadFromFile(nextpas.core.fs.PathEnsureSep(APath) + LSearchRec.Name) then
-          Inc(LCount);
-      until FindNext(LSearchRec) <> 0;
-    finally
-      FindClose(LSearchRec);
-    end;
-  end;
+  LFiles := FsGlob(APath, '*.pem');
+  for I := 0 to High(LFiles) do
+    if LoadFromFile(LFiles[I]) then
+      Inc(LCount);
 
   // 也加载 .crt 文件
-  if FindFirst(nextpas.core.fs.PathEnsureSep(APath) + '*.crt', faAnyFile, LSearchRec) = 0 then
-  begin
-    try
-      repeat
-        if LoadFromFile(nextpas.core.fs.PathEnsureSep(APath) + LSearchRec.Name) then
-          Inc(LCount);
-      until FindNext(LSearchRec) <> 0;
-    finally
-      FindClose(LSearchRec);
-    end;
-  end;
+  LFiles := FsGlob(APath, '*.crt');
+  for I := 0 to High(LFiles) do
+    if LoadFromFile(LFiles[I]) then
+      Inc(LCount);
 
   Result := LCount > 0;
 end;

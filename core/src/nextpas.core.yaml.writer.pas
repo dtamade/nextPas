@@ -5,6 +5,7 @@ unit nextpas.core.yaml.writer;
 interface
 
 uses
+  nextpas.core.math,
   nextpas.core.text.view,
   nextpas.core.text.builder,
   nextpas.core.yaml.types,
@@ -17,7 +18,7 @@ function YamlStringifyPretty(var ADoc: TYamlDocument; ANodeIdx: UInt32;
 implementation
 
 uses
-  Math, nextpas.core.text.conv;
+  nextpas.core.text.conv;
 
 const
   HEX_CHARS: array[0..15] of Char = '0123456789abcdef';

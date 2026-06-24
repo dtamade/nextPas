@@ -14,8 +14,8 @@ uses
   nextpas.core.fs.util, nextpas.core.fs.dir, nextpas.core.fs.base,
   nextpas.core.time,
   np_ast_facade, np_diagnostics_sink, np_green_tree, np_lexer,
-  np_package_manifest, np_preprocessor, np_source_database, np_target_facts,
-  np_text_primitives, np_toolchain_profiles, np_unit_graph;
+  np_package_manifest, np_preprocessor, np_source_database,
+  np_target_facts, np_text_primitives, np_toolchain_profiles, np_unit_graph;
 
 type
   TSearchIndexEntry = record
@@ -533,7 +533,7 @@ begin
   if HasExistingUnit and
     ((ResolvedUnit.SourcePath <> '') or (RequestedUnitId <> 'system')) and
     (not ((RequestedUnitId = 'system') and
-      SameText(ResolvedUnit.OriginClass, 'implicit-runtime'))) then
+      nextpas.core.text.SameText(ResolvedUnit.OriginClass, 'implicit-runtime'))) then
   begin
     FUnitGraph.AddEdge(AEdgeKind, ASourceUnitId, ResolvedUnit.UnitId);
     Exit(True);

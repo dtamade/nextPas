@@ -13,13 +13,10 @@ uses
   nextpas.core.async.timer,
   nextpas.core.async.loop,
   nextpas.core.async.task,
-  nextpas.core.io.base,
   nextpas.core.io.poller;
 
 type
   TAsyncCallback = nextpas.core.async.base.TAsyncCallback;
-  TAsyncCallbackRef = nextpas.core.async.base.TAsyncCallbackRef;
-  TAsyncCallbackMethod = nextpas.core.async.base.TAsyncCallbackMethod;
   TAsyncTimerHandle = nextpas.core.async.base.TAsyncTimerHandle;
   TTimerHeap = nextpas.core.async.timer.TTimerHeap;
   TAsyncLoop = nextpas.core.async.loop.TAsyncLoop;
@@ -27,9 +24,7 @@ type
   TAsyncTaskState = nextpas.core.async.base.TAsyncTaskState;
   PAsyncTask = nextpas.core.async.task.PAsyncTask;
   TAsyncTask = nextpas.core.async.task.TAsyncTask;
-  TIoCompletion = nextpas.core.io.base.TIoCompletion;
-  TIoCompletionRef = nextpas.core.io.base.TIoCompletionRef;
-  TIoCompletionMethod = nextpas.core.io.base.TIoCompletionMethod;
+  TIoCompletion = nextpas.core.io.poller.TIoCompletion;
 
 const
   atsIdle: TAsyncTaskStatus = nextpas.core.async.base.atsIdle;

@@ -1,0 +1,12 @@
+[package]
+name = "stats-bench"
+version = "0.1.0"
+edition = "2021"
+
+[[bench]]
+name = "stats_bench"
+harness = false
+
+[dependencies]
+criterion = "0.5"
+rand = "0.8"

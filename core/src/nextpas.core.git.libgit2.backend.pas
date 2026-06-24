@@ -14,7 +14,7 @@ unit nextpas.core.git.libgit2.backend;
 interface
 
 uses
-  SysUtils,DateUtils, ctypes,
+  nextpas.core.base, nextpas.core.text.conv, nextpas.core.time,
   nextpas.core.git.libgit2.ffi, nextpas.core.git.libgit2.binding,
   nextpas.core.git.base;
 
@@ -352,7 +352,7 @@ var
   GitTime: git_time;
   Tm: TGitTime;
 begin
-  GitTime.time := DateTimeToUnix(Now);
+  GitTime.time := DateTimeToUnix(DateTimeNow);
   GitTime.offset := 0;
   GitTime.sign := Ord('+');
   Tm := CreateGitTimeFromGitTime(GitTime);

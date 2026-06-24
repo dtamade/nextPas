@@ -20,7 +20,7 @@ function PBKDF2_SHA1(const APassword, ASalt: TBytes; AIterations, AKeyLen: Integ
 implementation
 
 uses
-  Math,
+  nextpas.core.math,
   nextpas.core.hash.intf,
   nextpas.core.crypto.hmac;
 

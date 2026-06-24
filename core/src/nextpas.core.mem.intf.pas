@@ -23,13 +23,13 @@ type
    *}
   IAllocator = interface
     ['{1CEB691D-D538-48D2-A5C4-A4F0A1B98928}']
-    function GetMem(aSize: SizeUInt): Pointer;
-    function AllocMem(aSize: SizeUInt): Pointer;
-    function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
-    procedure FreeMem(aDst: Pointer);
-    function MemSize(aPtr: Pointer): SizeUInt;
-    function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
-    procedure FreeAligned(aPtr: Pointer);
+    function GetMem(ASize: SizeUInt): Pointer;
+    function AllocMem(ASize: SizeUInt): Pointer;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(ADst: Pointer);
+    function MemSize(APtr: Pointer): SizeUInt;
+    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
+    procedure FreeAligned(APtr: Pointer);
     function Traits: TAllocatorTraits;
   end;
 

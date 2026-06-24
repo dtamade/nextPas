@@ -3,10 +3,11 @@ program test_mem_secure;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.base,
+  nextpas.core.fs,
   nextpas.core.testing,
-  nextpas.core.mem.secure;
+  nextpas.core.mem.secure,
+  nextpas.core.platform.mmap;
 
 const
   PLATFORM_SECURE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.secure.pas';
@@ -42,9 +43,9 @@ end;
 
 function ResolveSourcePath(const APathFromTest, APathFromRoot: string): string;
 begin
-  if FileExists(APathFromTest) then
+  if Exists(APathFromTest) then
     Exit(APathFromTest);
-  if FileExists(APathFromRoot) then
+  if Exists(APathFromRoot) then
     Exit(APathFromRoot);
   Result := APathFromTest;
 end;

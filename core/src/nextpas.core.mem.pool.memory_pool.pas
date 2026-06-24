@@ -17,10 +17,10 @@ type
   // - 实际使用：可变大小分配请优先使用 GetMem/AllocMem/ReallocMem/FreeMem；Acquire 系列仅用于兼容层/极简场景。
   IMemoryPool = interface(IPool)
     ['{6F6B4299-3B29-4C6F-917D-8D6B4B5E0E99}']
-    function GetMem(aSize: SizeUInt): Pointer;
-    function AllocMem(aSize: SizeUInt): Pointer;
-    function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
-    procedure FreeMem(aDst: Pointer);
+    function GetMem(ASize: SizeUInt): Pointer;
+    function AllocMem(ASize: SizeUInt): Pointer;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(ADst: Pointer);
   end;
 
 implementation

@@ -5,6 +5,7 @@ unit nextpas.core.mem.pool.fixed.growable;
 interface
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.math,              // ✅ Math facade (for trunc)
   nextpas.core.mem.error,
   nextpas.core.mem.pool.base,     // IPool (decoupled)
@@ -160,7 +161,7 @@ begin
   LLen := Length(FArenas[aArenaIndex].AllocBits);
   if LLen <= 0 then
     Exit;
-  FillChar(FArenas[aArenaIndex].AllocBits[0], SizeUInt(LLen) * SizeOf(QWord), 0);
+  ZeroMem(@FArenas[aArenaIndex].AllocBits[0], SizeUInt(LLen) * SizeOf(QWord));
 end;
 
 
@@ -258,10 +259,10 @@ begin
   LWordLen := (aBlocks + 63) shr 6;
   SetLength(LArena.AllocBits, LWordLen);
   if LWordLen > 0 then
-    FillChar(LArena.AllocBits[0], LWordLen * SizeOf(QWord), 0);
+    ZeroMem(@LArena.AllocBits[0], LWordLen * SizeOf(QWord));
 
   if FConfig.ZeroOnInit then
-    FillChar(LArena.Base^, LArena.Size, 0);
+    ZeroMem(LArena.Base, LArena.Size);
 
   // append arena
   SetLength(FArenas, Length(FArenas) + 1);

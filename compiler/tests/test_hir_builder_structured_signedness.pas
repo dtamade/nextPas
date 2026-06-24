@@ -3,7 +3,6 @@ program test_hir_builder_structured_signedness;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   np_hir_builder,
   np_hir_llvm_emitter,
   np_semantic_model;

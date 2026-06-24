@@ -34,7 +34,7 @@ interface
 uses
   nextpas.core.exception,
   nextpas.core.base,
-  SysUtils, Classes,
+  nextpas.core.system.classes,
   nextpas.core.fs,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
@@ -2064,10 +2064,10 @@ var
     s: string;
   begin
     s := Trim(ADN);
-    s := SysUtils.StringReplace(s, ' = ', '=', [rfReplaceAll]);
-    s := SysUtils.StringReplace(s, '= ', '=', [rfReplaceAll]);
-    s := SysUtils.StringReplace(s, ' =', '=', [rfReplaceAll]);
-    s := SysUtils.StringReplace(s, ', ', ',', [rfReplaceAll]);
+    s := StringReplace(s, ' = ', '=', True);
+    s := StringReplace(s, '= ', '=', True);
+    s := StringReplace(s, ' =', '=', True);
+    s := StringReplace(s, ', ', ',', True);
 
     if ACaseInsensitive then
       Result := LowerCase(s)
@@ -2084,7 +2084,7 @@ var
     AList.Sorted := True;
     AList.Duplicates := dupIgnore;
 
-    Components := ADN.Split([',']);
+    Components := nextpas.core.text.strings.StringsSplit(ADN, ',');
     for j := 0 to Length(Components) - 1 do
       AList.Add(Trim(Components[j]));
   end;

@@ -208,9 +208,9 @@ begin
   try
     if Model = nil then
       Fail('string-model-nil');
-    if not FindFirstNodeByKind(Model, 'assign-str-copy-runtime', Node) then
+    if not FindFirstNodeByKind(Model, 'assign-tstring-copy-runtime', Node) then
       Fail('missing-string-copy-node');
-    if not FindFirstNodeByKind(Model, 'assign-str-owned-concat-runtime',
+    if not FindFirstNodeByKind(Model, 'assign-tstring-concat-runtime',
       Node) then
       Fail('missing-owned-string-concat-node');
     LlvmText := EmitLlvm(Model);

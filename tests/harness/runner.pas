@@ -770,6 +770,9 @@ begin
   if DiagnosticCode = 'sema.missing-external-symbol-name' then
     Exit('missing external symbol name');
 
+  if DiagnosticCode = 'sema.wrong-argument-count' then
+    Exit('wrong argument count');
+
   if (AGroup = hgDiagnostics) and (CompilerMessage <> '') then
   begin
     if Pos('Unexpected end of file', CompilerMessage) > 0 then

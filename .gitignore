@@ -81,3 +81,4 @@ core/tests/nextpas.core.simd/bench_dispatch_overhead
 core/tests/nextpas.core.simd/nextpas.core.simd.test
 core/tests/nextpas.core.simd/test_algorithms/nextpas.core.settings.inc
 core/tests/nextpas.core.simd/test_algorithms/nextpas.core.simd.settings.inc
+build/

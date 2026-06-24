@@ -212,7 +212,7 @@ var
       Exit(True);
 
     for SnapshotIndex := 0 to Length(ALockTruth.Snapshots) - 1 do
-      if SameText(ALockTruth.Snapshots[SnapshotIndex].Target, ATargetId) then
+      if nextpas.core.text.SameText(ALockTruth.Snapshots[SnapshotIndex].Target, ATargetId) then
         Exit(True);
 
     Result := False;

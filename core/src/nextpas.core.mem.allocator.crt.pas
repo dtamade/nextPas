@@ -15,10 +15,10 @@ type
    *}
   TCrtAllocator = class(TAllocator)
   protected
-    function  DoGetMem(aSize: SizeUInt): Pointer; override;
-    function  DoAllocMem(aSize: SizeUInt): Pointer; override;
-    function  DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(aDst: Pointer); override;
+    function  DoGetMem(ASize: SizeUInt): Pointer; override;
+    function  DoAllocMem(ASize: SizeUInt): Pointer; override;
+    function  DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
+    procedure DoFreeMem(ADst: Pointer); override;
   public
     function  Traits: TAllocatorTraits; override;
   end;
@@ -28,34 +28,34 @@ function TryGetCrtAllocator(out A: IAllocator): Boolean;
 
 implementation
 
-function  crt_malloc(aSize: SizeUInt): Pointer; cdecl external {$IFDEF MSWINDOWS}'msvcrt.dll'{$ELSE}'c'{$ENDIF} name 'malloc';
-function  crt_calloc(aNum, aSize: SizeUInt): Pointer; cdecl external {$IFDEF MSWINDOWS}'msvcrt.dll'{$ELSE}'c'{$ENDIF} name 'calloc';
-function  crt_realloc(aPtr: Pointer; aSize: SizeUInt): Pointer; cdecl external {$IFDEF MSWINDOWS}'msvcrt.dll'{$ELSE}'c'{$ENDIF} name 'realloc';
-procedure crt_free(aPtr: Pointer); cdecl external {$IFDEF MSWINDOWS}'msvcrt.dll'{$ELSE}'c'{$ENDIF} name 'free';
+function  crt_malloc(ASize: SizeUInt): Pointer; cdecl external {$IFDEF MSWINDOWS}'msvcrt.dll'{$ELSE}'c'{$ENDIF} name 'malloc';
+function  crt_calloc(aNum, ASize: SizeUInt): Pointer; cdecl external {$IFDEF MSWINDOWS}'msvcrt.dll'{$ELSE}'c'{$ENDIF} name 'calloc';
+function  crt_realloc(APtr: Pointer; ASize: SizeUInt): Pointer; cdecl external {$IFDEF MSWINDOWS}'msvcrt.dll'{$ELSE}'c'{$ENDIF} name 'realloc';
+procedure crt_free(APtr: Pointer); cdecl external {$IFDEF MSWINDOWS}'msvcrt.dll'{$ELSE}'c'{$ENDIF} name 'free';
 
 var
   _CrtAllocatorObj: TAllocator = nil;
   _CrtAllocatorIntf: IAllocator = nil;
   GCrtAllocLock: TRTLCriticalSection;
 
-function TCrtAllocator.DoGetMem(aSize: SizeUInt): Pointer;
+function TCrtAllocator.DoGetMem(ASize: SizeUInt): Pointer;
 begin
-  Result := crt_malloc(aSize);
+  Result := crt_malloc(ASize);
 end;
 
-function TCrtAllocator.DoAllocMem(aSize: SizeUInt): Pointer;
+function TCrtAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
 begin
-  Result := crt_calloc(1, aSize);
+  Result := crt_calloc(1, ASize);
 end;
 
-function TCrtAllocator.DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+function TCrtAllocator.DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
 begin
-  Result := crt_realloc(aDst, aSize);
+  Result := crt_realloc(ADst, ASize);
 end;
 
-procedure TCrtAllocator.DoFreeMem(aDst: Pointer);
+procedure TCrtAllocator.DoFreeMem(ADst: Pointer);
 begin
-  crt_free(aDst);
+  crt_free(ADst);
 end;
 
 function TCrtAllocator.Traits: TAllocatorTraits;
