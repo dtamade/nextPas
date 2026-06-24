@@ -3,7 +3,8 @@ program test_stack_pool;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
   nextpas.core.testing,
   nextpas.core.base,
   nextpas.core.mem.stack_pool;

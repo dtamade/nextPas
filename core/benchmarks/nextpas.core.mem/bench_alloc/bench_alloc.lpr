@@ -3,110 +3,130 @@ program bench_alloc;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.bench,
-  nextpas.core.mem;
+  nextpas.core.mem,
+  nextpas.core.text.conv,
+  nextpas.core.text.format,
+  nextpas.core.platform.time;
+
+const
+  WARMUP_ITERS = 1000;
+  BENCH_ITERS  = 100000;
 
 var
-  B: TBenchRunner;
   GSink: Pointer;
 
-procedure BenchAlloc64_Default(aIters: Int64);
+procedure Report(const AName: string; AIterations: Integer;
+  AElapsedNs: TPlatformTimeNanoseconds);
 var
-  LIt: Int64;
-  LA: IAllocator;
-  LP: Pointer;
+  LNsPerOp: Double;
+  LOpsPerSec: Double;
 begin
-  LA := DefaultAllocator;
-  for LIt := 1 to aIters do
-  begin
-    LP := LA.Allocate(64);
-    LA.Deallocate(LP);
-  end;
-  GSink := LP;
+  LNsPerOp := AElapsedNs / AIterations;
+  LOpsPerSec := AIterations / (AElapsedNs / 1e9);
+  WriteLn(TextFormat('  %-40s %10.1f ns/op  %12.0f ops/s',
+    [AName, LNsPerOp, LOpsPerSec]));
 end;
 
-procedure BenchAlloc256_Default(aIters: Int64);
+procedure BenchAllocator_GetMem(ASize: SizeUInt);
 var
-  LIt: Int64;
   LA: IAllocator;
+  LStart, LEnd: TPlatformTimeNanoseconds;
   LP: Pointer;
+  I: Integer;
+  LName: string;
 begin
   LA := DefaultAllocator;
-  for LIt := 1 to aIters do
+
+  { Warmup }
+  for I := 0 to WARMUP_ITERS - 1 do
   begin
-    LP := LA.Allocate(256);
-    LA.Deallocate(LP);
+    LP := LA.GetMem(ASize);
+    LA.FreeMem(LP);
   end;
+
+  LStart := platform_monotonic_ns;
+  for I := 0 to BENCH_ITERS - 1 do
+  begin
+    LP := LA.GetMem(ASize);
+    LA.FreeMem(LP);
+  end;
+  LEnd := platform_monotonic_ns;
   GSink := LP;
+
+  LName := 'IAllocator.GetMem(' + IntToStr(ASize) + ')';
+  Report(LName, BENCH_ITERS, LEnd - LStart);
 end;
 
-procedure BenchAlloc4K_Default(aIters: Int64);
+procedure BenchRaw_GetMem(ASize: SizeUInt);
 var
-  LIt: Int64;
-  LA: IAllocator;
+  LStart, LEnd: TPlatformTimeNanoseconds;
   LP: Pointer;
+  I: Integer;
+  LName: string;
 begin
-  LA := DefaultAllocator;
-  for LIt := 1 to aIters do
+  { Warmup }
+  for I := 0 to WARMUP_ITERS - 1 do
   begin
-    LP := LA.Allocate(4096);
-    LA.Deallocate(LP);
-  end;
-  GSink := LP;
-end;
-
-procedure BenchAllocZeroed64(aIters: Int64);
-var
-  LIt: Int64;
-  LA: IAllocator;
-  LP: Pointer;
-begin
-  LA := DefaultAllocator;
-  for LIt := 1 to aIters do
-  begin
-    LP := AllocZeroed(LA, 64);
-    LA.Deallocate(LP);
-  end;
-  GSink := LP;
-end;
-
-procedure BenchRawGetMem64(aIters: Int64);
-var
-  LIt: Int64;
-  LP: Pointer;
-begin
-  for LIt := 1 to aIters do
-  begin
-    LP := GetMem(64);
+    LP := GetMem(ASize);
     FreeMem(LP);
   end;
-  GSink := LP;
-end;
 
-procedure BenchRawGetMem4K(aIters: Int64);
-var
-  LIt: Int64;
-  LP: Pointer;
-begin
-  for LIt := 1 to aIters do
+  LStart := platform_monotonic_ns;
+  for I := 0 to BENCH_ITERS - 1 do
   begin
-    LP := GetMem(4096);
+    LP := GetMem(ASize);
     FreeMem(LP);
   end;
+  LEnd := platform_monotonic_ns;
   GSink := LP;
+
+  LName := 'Raw GetMem(' + IntToStr(ASize) + ') baseline';
+  Report(LName, BENCH_ITERS, LEnd - LStart);
+end;
+
+procedure BenchAllocator_AllocZeroed(ASize: SizeUInt);
+var
+  LA: IAllocator;
+  LStart, LEnd: TPlatformTimeNanoseconds;
+  LP: Pointer;
+  I: Integer;
+  LName: string;
+begin
+  LA := DefaultAllocator;
+
+  { Warmup }
+  for I := 0 to WARMUP_ITERS - 1 do
+  begin
+    LP := AllocZeroed(LA, ASize);
+    LA.FreeMem(LP);
+  end;
+
+  LStart := platform_monotonic_ns;
+  for I := 0 to BENCH_ITERS - 1 do
+  begin
+    LP := AllocZeroed(LA, ASize);
+    LA.FreeMem(LP);
+  end;
+  LEnd := platform_monotonic_ns;
+  GSink := LP;
+
+  LName := 'AllocZeroed(' + IntToStr(ASize) + ')';
+  Report(LName, BENCH_ITERS, LEnd - LStart);
 end;
 
 begin
-  B := TBenchRunner.Create;
-  WriteLn('=== nextpas.core.mem benchmark ===');
+  WriteLn('=== nextpas.core.mem allocator benchmark ===');
   WriteLn;
-  B.Run('IAllocator.GetMem(64)', @BenchAlloc64_Default);
-  B.Run('IAllocator.GetMem(256)', @BenchAlloc256_Default);
-  B.Run('IAllocator.GetMem(4096)', @BenchAlloc4K_Default);
-  B.Run('AllocZeroed(64)', @BenchAllocZeroed64);
-  B.Run('Raw GetMem(64) baseline', @BenchRawGetMem64);
-  B.Run('Raw GetMem(4096) baseline', @BenchRawGetMem4K);
+
+  BenchAllocator_GetMem(64);
+  BenchAllocator_GetMem(256);
+  BenchAllocator_GetMem(4096);
   WriteLn;
-  B.Summary;
-  B.Free;
+  BenchAllocator_AllocZeroed(64);
+  WriteLn;
+  BenchRaw_GetMem(64);
+  BenchRaw_GetMem(4096);
+
+  WriteLn;
+  WriteLn('Done.');
 end.

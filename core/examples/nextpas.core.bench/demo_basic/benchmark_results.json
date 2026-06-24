@@ -1,0 +1,44 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-06-21T07:36:14",
+  "environment": {
+    "os": "linux",
+    "cpu": "x86_64",
+    "cores": 4,
+    "fpc_version": "3.3.1"
+  },
+  "benchmarks": [
+    {
+      "name": "StringConcat",
+      "iterations": 1000000,
+      "ns_per_op": 0.10,
+      "ops_per_sec": 10055243508,
+      "bytes_per_op": 0,
+      "allocs_per_op": 0,
+      "statistics": {
+        "stddev": 0.02,
+        "median": 0.09,
+        "p95": 0.15,
+        "p99": 0.16,
+        "outliers": 6,
+        "sample_count": 30
+      }
+    },
+    {
+      "name": "ArraySum",
+      "iterations": 1000000,
+      "ns_per_op": 0.00,
+      "ops_per_sec": 703548228231,
+      "bytes_per_op": 0,
+      "allocs_per_op": 0,
+      "statistics": {
+        "stddev": 0.00,
+        "median": 0.00,
+        "p95": 0.00,
+        "p99": 0.00,
+        "outliers": 0,
+        "sample_count": 30
+      }
+    }
+  ]
+}

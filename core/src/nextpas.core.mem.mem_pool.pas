@@ -1,8 +1,8 @@
 {
   nextpas.core.mem.mem_pool - Fixed-size Memory Pool (Facade Alias)
 
-  This unit provides TMemPool as an alias for TFixedPool for facade compatibility.
-  For new code, prefer using nextpas.core.mem.pool.fixed directly.
+  DEPRECATED: This unit is a compatibility alias.
+  For new code, use nextpas.core.mem.pool.fixed directly.
 }
 unit nextpas.core.mem.mem_pool;
 
@@ -14,14 +14,17 @@ uses
   nextpas.core.mem.pool.fixed;
 
 type
-  // 门面兼容别名 - 新代码建议直接使用 TFixedPool
-  TMemPool = TFixedPool;
-  TMemPoolConfig = TFixedPoolConfig;
+  TMemPool = TFixedPool
+    deprecated 'Use TFixedPool from nextpas.core.mem.pool.fixed';
+  TMemPoolConfig = TFixedPoolConfig
+    deprecated 'Use TFixedPoolConfig';
 
-  // 异常类型别名
-  EMemPoolError = EMemFixedPoolError;
-  EMemPoolInvalidPointer = EMemFixedPoolInvalidPointer;
-  EMemPoolDoubleFree = EMemFixedPoolDoubleFree;
+  EMemPoolError = EMemFixedPoolError
+    deprecated 'Use EMemFixedPoolError';
+  EMemPoolInvalidPointer = EMemFixedPoolInvalidPointer
+    deprecated 'Use EMemFixedPoolInvalidPointer';
+  EMemPoolDoubleFree = EMemFixedPoolDoubleFree
+    deprecated 'Use EMemFixedPoolDoubleFree';
 
 implementation
 

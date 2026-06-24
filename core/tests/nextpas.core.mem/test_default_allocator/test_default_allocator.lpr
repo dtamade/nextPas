@@ -6,8 +6,9 @@ uses
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
-  Classes,
-  SysUtils,
+  Classes,             // TThread
+  nextpas.core.exception,
+  nextpas.core.platform.thread,
   nextpas.core.testing,
   nextpas.core.mem;
 
@@ -46,7 +47,7 @@ var
   LPtr: Pointer;
 begin
   while FStartFlag^ = 0 do
-    Sleep(0);
+    platform_thread_yield;
 
   try
     FAllocator := DefaultAllocator;

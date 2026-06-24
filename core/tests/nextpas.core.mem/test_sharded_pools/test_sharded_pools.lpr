@@ -6,8 +6,8 @@ uses
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
-  Classes,
-  SysUtils,
+  Classes,             // TThread
+  nextpas.core.exception,
   nextpas.core.testing,
   nextpas.core.mem.error,
   nextpas.core.mem.blockpool.sharded,
@@ -153,7 +153,7 @@ var
   LPtr: Pointer;
 begin
   while FStartFlag^ = 0 do
-    Sleep(0);
+    platform_thread_yield;
 
   try
     for LIndex := 0 to ITERATION_COUNT - 1 do
@@ -183,7 +183,7 @@ end;
 procedure TBlockPoolAcquireWorker.Execute;
 begin
   while FStartFlag^ = 0 do
-    Sleep(0);
+    platform_thread_yield;
 
   try
     FShard := TestShardIndex(FPool.ShardCount);
@@ -210,7 +210,7 @@ end;
 procedure TBlockPoolReleaseWorker.Execute;
 begin
   while FStartFlag^ = 0 do
-    Sleep(0);
+    platform_thread_yield;
 
   try
     FPool.Release(FPtr);
@@ -239,7 +239,7 @@ var
   LPtr: Pointer;
 begin
   while FStartFlag^ = 0 do
-    Sleep(0);
+    platform_thread_yield;
 
   try
     for LIndex := 1 to ITERATION_COUNT do
@@ -269,7 +269,7 @@ end;
 procedure TSlabPoolAcquireWorker.Execute;
 begin
   while FStartFlag^ = 0 do
-    Sleep(0);
+    platform_thread_yield;
 
   try
     FShard := TestShardIndex(FPool.ShardCount);
