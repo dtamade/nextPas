@@ -30,7 +30,7 @@ type
 function IsPowerOfTwo(const AValue: SizeUInt): Boolean; inline;
 
 {** Return the smallest power of two >= AValue. Returns 1 for AValue <= 1. }
-function NextPowerOfTwo(const AValue: SizeUInt): SizeUInt; inline;
+function NextPowerOfTwo(const AValue: SizeUInt): SizeUInt;
 
 {** Round AValue up to the next multiple of AAlignment (must be power of two). }
 function AlignUp(const AValue, AAlignment: SizeUInt): SizeUInt; inline;

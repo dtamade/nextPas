@@ -1,13 +1,12 @@
 FPC ?= fpc
 CORE_ROOT := ../../..
-BUILD_DIR ?= $(CORE_ROOT)/build/projects/nextpas.core.mem/bench_alloc
-PROGRAM := bench_alloc
-SOURCE := bench_alloc.lpr
-EXTRA_FLAGS ?=
-FPC_FLAGS := -MObjFPC -Sh -O2 $(EXTRA_FLAGS)
+BUILD_DIR ?= $(CORE_ROOT)/build/projects/nextpas.core.mem/test_mem_stats
+PROGRAM := test_mem_stats
+SOURCE := $(PROGRAM).lpr
+FPC_FLAGS ?= -MObjFPC -Sh -O2 -gl -gh
 FPC_FLAGS += -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src
 
-.PHONY: build run clean
+.PHONY: build run test clean
 
 build:
 	@mkdir -p $(BUILD_DIR)
@@ -15,6 +14,8 @@ build:
 
 run: build
 	$(BUILD_DIR)/$(PROGRAM)
+
+test: run
 
 clean:
 	rm -rf $(BUILD_DIR)
