@@ -58,10 +58,6 @@ type
     property BaseAddress: Pointer read GetBaseAddress;
   end;
 
-  { TMappedSlabPool is deprecated: use TMappedSlabAllocator }
-  TMappedSlabPool = TMappedSlabAllocator;
-  {$WARNING 'TMappedSlabPool is deprecated: use TMappedSlabAllocator'}
-
 implementation
 
 uses
