@@ -115,25 +115,49 @@ nextPas parser 不支持 `AArgs[i].VType`（`array of const` 的 variant record 
 
 ---
 
-## 下一步
+## Gap #4：FPC Str() 格式说明符语法
 
-1. **最高优先级**：修复 Gap #1（unit cycle）
-   - 修改 `units/linux-x86_64/SysUtils.pas`：移除 `uses nextpas.core.exception`
-   - 在 SysUtils stub 中内联定义 Exception 类层次
-   - 验证：nextPas 可编译 nextpas.core.base
-2. **次高优先级**：修复 Gap #2（parser syntax）
-   - 分析具体语法错误位置
-   - 可能需要扩展 parser 支持默认参数值
-3. **低优先级**：修复 Gap #3（search path）
-   - 分析 workspace/package 配置
-   - 确保 core/ 源码路径正确配置
+**症状：**
+```
+Syntax error, "statement" expected but "," found
+```
+
+**位置：** `core/src/nextpas.core.text.conv.pas` byte offset 3579, 3938
+
+**根因：** FPC 的 `Str` 过程支持格式说明符语法：
+```pascal
+Str(AValue:0:ADecimals, Result);
+```
+
+nextPas parser 不支持 `:width:decimals` 格式说明符。
+
+**影响范围：**
+- `nextpas.core.text.conv` 直接受影响（FloatToStrF, FormatFloat）
+- 依赖 text.conv 的模块间接受影响
+
+**状态：** 🔴 需要 parser 扩展
 
 ---
+
+## 当前进展
+
+### 已修复
+- Gap #1: unit cycle（SysUtils stub 自给自足）
+- Gap #2: string keyword type cast（parser 扩展）
+
+### 已验证编译成功
+- ✅ nextpas.core.exception
+- ✅ nextpas.core.base
+- ✅ nextpas.core.errors
+
+### 待修复
+- Gap #4: FPC Str() 格式说明符语法（阻塞 text.conv）
 
 ## 状态
 
 | Gap | 状态 | 优先级 |
 |-----|------|--------|
 | #1 unit cycle | ✅ 已修复 | 最高 |
-| #2 parser syntax | 🔴 分析中 | 最高 |
+| #2 parser syntax (array of const) | ✅ 已修复 | 最高 |
 | #3 search path | 🔴 未分析 | 低 |
+| #4 FPC Str() 语法 | 🔴 未修复 | 高 |
