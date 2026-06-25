@@ -651,9 +651,10 @@ README / ARCHITECTURE 已写明 `AllocUnsafe` 不保证对齐，这条不再单�
 
 | 状态               | 数量   | 说明                                                            |
 | ------------------ | ------ | --------------------------------------------------------------- |
-| **[FIXED] / 关闭** | **69** | 含第一轮 60 条 + 第二轮 9 条新增项                              |
+| **[FIXED] / 关闭** | **73** | 含第一轮 60 条 + 第二轮 9 条 + 第三轮 4 条             |
 | **仍然开放**       | **0**  | 当前树上已无剩余开放问题                                         |
 | **新增 (第二轮)**  | **9**  | 全部已修复                                                      |
+| **新增 (第三轮)**  | **4**  | 全部已修复                                                      |
 
 ### 当前最高优先级（建议先处理）
 
@@ -756,3 +757,43 @@ README / ARCHITECTURE 已写明 `AllocUnsafe` 不保证对齐，这条不再单�
 ### R-09 [NOT BUG] TChunkedArena.RemainingSize
 
 Agent 报告"多段时返回虚假剩余空间"。经验证 `CurrentUsed = StartOffset + Used` 是跨段累计值，`FTotalSize - CurrentUsed` 正确反映活跃段剩余空间。**不成立，关闭。**
+
+---
+
+### R-10 [FIXED] VirtualArena 大对象路径重复
+
+**P3 | 文件：`core/src/nextpas.core.mem.arena.virtual.pas`**
+
+`Alloc`/`AllocNoPointer`/`AllocAligned` 三处内联相同的大对象 mmap+track+stats 代码（各 ~15 行）。
+
+**修复**：提取 `AllocLargeObject(aSize)` 私有方法，三处改为 `Exit(AllocLargeObject(aSize))`。净减 10 行。
+
+---
+
+### R-11 [FIXED] AllocNoPointer back bump padding 不计入 FTotalUsed
+
+**P2 | 文件：`core/src/nextpas.core.mem.arena.virtual.pas`**
+
+front bump 统计 `FTotalUsed += LPad + aSize`（含对齐 padding），back bump 只统计 `FTotalUsed += aSize`（不含 padding）。padding 字节被消耗但不计入统计。
+
+**修复**：改为 `FTotalUsed += LOldBack - LAligned`（= aSize + padding）。
+
+---
+
+### R-12 [FIXED] EAllocError.Create aeNone 无防御
+
+**P3 | 文件：`core/src/nextpas.core.mem.error.pas`**
+
+`EAllocError.Create(aeNone)` 生成消息 "Success" + category ecNone，逻辑矛盾。
+
+**修复**：构造函数加 `Assert(aError <> aeNone)`。EOutOfMemory.Create 同步。
+
+---
+
+### R-13 [FIXED] TVirtualArena 缺 Stats 方法
+
+**P3 | 文件：`core/src/nextpas.core.mem.arena.virtual.pas`**
+
+`TLocalArena`/`TChunkedArena` 都有 `Stats: TArenaStats` 方法，`TVirtualArena` 没有。
+
+**修复**：补 `Stats` 方法，返回 `TotalAllocated/TotalUsed/PeakUsed/AllocCount`。
