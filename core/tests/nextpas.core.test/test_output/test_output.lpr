@@ -60,6 +60,14 @@ begin
   Result := StrToInt(Copy(AJson, LValueStart, LValueEnd - LValueStart));
 end;
 
+function CompactJson(const AJson: string): string;
+begin
+  Result := StringReplace(AJson, ' ', '', [rfReplaceAll]);
+  Result := StringReplace(Result, #9, '', [rfReplaceAll]);
+  Result := StringReplace(Result, #13, '', [rfReplaceAll]);
+  Result := StringReplace(Result, #10, '', [rfReplaceAll]);
+end;
+
 { ── ANSI helpers ───────────────────────────────────────────────────────────── }
 
 procedure TestAnsiHelpersEnabled;
@@ -701,6 +709,40 @@ begin
   CheckContains(LOut, '"suites": [');
 end;
 
+procedure TestJSONValidStructure;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+  LCompact: string;
+begin
+  Inc(GTestsRun);
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('json_valid_suite');
+  LResults[0].Passed := 1;
+  LResults[0].Failed := 1;
+  LResults[0].Skipped := 0;
+  SetLength(LResults[0].Results, 2);
+  LResults[0].Results[0].Name := 'pass_case';
+  LResults[0].Results[0].Status := tsPassed;
+  LResults[0].Results[1].Name := 'fail_case';
+  LResults[0].Results[1].Status := tsFailed;
+  LResults[0].Results[1].Message := 'boom';
+
+  LOut := JSONReport(LResults, 'json_run');
+  LCompact := CompactJson(LOut);
+  CheckTrue((Length(LCompact) > 0) and (LCompact[1] = '{'),
+    'JSON should start with opening brace');
+  CheckTrue((Length(LCompact) > 0) and
+    (LCompact[Length(LCompact)] = '}'),
+    'JSON should end with closing brace');
+  CheckContains(LCompact, '"suites":[{');
+  CheckContains(LCompact, '"tests":[{');
+  CheckFalse(Pos(',]', LCompact) > 0,
+    'JSON should not contain trailing commas before ]');
+  CheckFalse(Pos(',}', LCompact) > 0,
+    'JSON should not contain trailing commas before }');
+end;
+
 { ── R2-F18: TAP/JSON multi-suite / JSON skip ──────────────────────────────── }
 
 procedure TestTAPReportMultiSuite;
@@ -1327,6 +1369,7 @@ begin
   Suite.Test('TestTAPReportEmpty', @TestTAPReportEmpty);
   Suite.Test('TestJSONReportBasic', @TestJSONReportBasic);
   Suite.Test('TestJSONReportEmpty', @TestJSONReportEmpty);
+  Suite.Test('TestJSONValidStructure', @TestJSONValidStructure);
   Suite.Test('TestTAPReportMultiSuite', @TestTAPReportMultiSuite);
   Suite.Test('TestJSONReportMultiSuite', @TestJSONReportMultiSuite);
   Suite.Test('TestJSONReportSkipped', @TestJSONReportSkipped);
@@ -1362,7 +1405,7 @@ begin
   WriteLn;
   Runner.Summary;
 
-  CheckTrue(GTestsRun >= 58, 'Expected at least 58 tests, got ' + IntToStr(GTestsRun));
+  CheckTrue(GTestsRun >= 59, 'Expected at least 59 tests, got ' + IntToStr(GTestsRun));
   CheckTrue(LSuccess, 'All output tests should pass');
 
   if Runner.AllPassed then

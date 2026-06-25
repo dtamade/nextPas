@@ -45,6 +45,8 @@ procedure CheckLength(AExpected, AActual: NativeInt);
 procedure CheckRaises(AExceptionClass: ExceptClass; AProc: TTestProc;
   const AMessage: string = '');
 procedure CheckNoRaise(AProc: TTestProc; const AMessage: string = '');
+procedure CheckGreaterOrEqual(AValue, AExpected: Int64);
+procedure CheckLessOrEqual(AValue, AExpected: Int64);
 { Check that AActual is within AEpsilon of AExpected (absolute difference).
   R4-07: Uses absolute epsilon — for large values (e.g. 1e15), the default
   1e-10 is too tight. Callers should pass a larger AEpsilon or use a
@@ -302,6 +304,20 @@ procedure CheckLessThan(AValue, AExpected: Int64);
 begin
   if AValue >= AExpected then
     InternalFail('Expected ' + IntToStr(AValue) + ' < ' +
+      IntToStr(AExpected));
+end;
+
+procedure CheckGreaterOrEqual(AValue, AExpected: Int64);
+begin
+  if AValue < AExpected then
+    InternalFail('Expected ' + IntToStr(AValue) + ' >= ' +
+      IntToStr(AExpected));
+end;
+
+procedure CheckLessOrEqual(AValue, AExpected: Int64);
+begin
+  if AValue > AExpected then
+    InternalFail('Expected ' + IntToStr(AValue) + ' <= ' +
       IntToStr(AExpected));
 end;
 

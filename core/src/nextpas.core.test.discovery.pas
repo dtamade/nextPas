@@ -88,7 +88,7 @@ end;
   Each entry is 16 bytes (SizeOf(Pointer) * 2). }
 
 const
-  { Offtings into the VMT method table }
+  { Offsets into the VMT method table }
   CEntrySize   = SizeOf(Pointer) * 2;           { 16 bytes per entry }
   CCountSize   = SizeOf(DWord);                  { 4 bytes for count }
   CEntriesOff  = CCountSize;                     { entries start right after count }

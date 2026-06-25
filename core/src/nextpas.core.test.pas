@@ -108,6 +108,8 @@ procedure CheckSame(AExpected, AActual: Pointer; const AMessage: string = '');
 procedure CheckInRange(AValue, ALow, AHigh: Int64);
 procedure CheckGreaterThan(AValue, AExpected: Int64);
 procedure CheckLessThan(AValue, AExpected: Int64);
+procedure CheckGreaterOrEqual(AValue, AExpected: Int64);
+procedure CheckLessOrEqual(AValue, AExpected: Int64);
 procedure CheckLength(AExpected, AActual: NativeInt);
 procedure CheckRaises(AExceptionClass: ExceptClass; AProc: TTestProc;
   const AMessage: string = '');
@@ -268,6 +270,12 @@ begin nextpas.core.test.check.CheckGreaterThan(AValue, AExpected); end;
 
 procedure CheckLessThan(AValue, AExpected: Int64);
 begin nextpas.core.test.check.CheckLessThan(AValue, AExpected); end;
+
+procedure CheckGreaterOrEqual(AValue, AExpected: Int64);
+begin nextpas.core.test.check.CheckGreaterOrEqual(AValue, AExpected); end;
+
+procedure CheckLessOrEqual(AValue, AExpected: Int64);
+begin nextpas.core.test.check.CheckLessOrEqual(AValue, AExpected); end;
 
 procedure CheckLength(AExpected, AActual: NativeInt);
 begin nextpas.core.test.check.CheckLength(AExpected, AActual); end;

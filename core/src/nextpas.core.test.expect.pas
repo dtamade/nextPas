@@ -31,6 +31,8 @@ type
     function ToEndWith(const ASuffix: string): IExpectation;
     function ToBeGreaterThan(AExpected: Int64): IExpectation;
     function ToBeLessThan(AExpected: Int64): IExpectation;
+    function ToBeGreaterOrEqual(AExpected: Int64): IExpectation;
+    function ToBeLessOrEqual(AExpected: Int64): IExpectation;
     function ToBeInRange(ALow, AHigh: Int64): IExpectation;
     function ToHaveLength(AExpected: NativeInt): IExpectation;
     function ToRaise(AExceptionClass: ExceptClass;
@@ -40,6 +42,16 @@ type
       AEpsilon: Double = 1e-10): IExpectation;
     function ToNotBeNear(AExpected: Double;
       AEpsilon: Double = 1e-10): IExpectation;
+    { Double comparison }
+    function ToBeGreaterThanD(AExpected: Double): IExpectation;
+    function ToBeLessThanD(AExpected: Double): IExpectation;
+    function ToBeGreaterOrEqualD(AExpected: Double): IExpectation;
+    function ToBeLessOrEqualD(AExpected: Double): IExpectation;
+    function ToBeInRangeD(ALow, AHigh: Double): IExpectation;
+    { Case-insensitive string matching }
+    function ToContainCI(const ASubstr: string): IExpectation;
+    function ToStartWithCI(const APrefix: string): IExpectation;
+    function ToEndWithCI(const ASuffix: string): IExpectation;
   end;
 
 { ── Expect (fluent factory) ───────────────────────────────────────────────── }
@@ -94,6 +106,8 @@ type
     function ToEndWith(const ASuffix: string): IExpectation;
     function ToBeGreaterThan(AExpected: Int64): IExpectation;
     function ToBeLessThan(AExpected: Int64): IExpectation;
+    function ToBeGreaterOrEqual(AExpected: Int64): IExpectation;
+    function ToBeLessOrEqual(AExpected: Int64): IExpectation;
     function ToBeInRange(ALow, AHigh: Int64): IExpectation;
     function ToHaveLength(AExpected: NativeInt): IExpectation;
     function ToRaise(AExceptionClass: ExceptClass;
@@ -103,6 +117,16 @@ type
       AEpsilon: Double = 1e-10): IExpectation;
     function ToNotBeNear(AExpected: Double;
       AEpsilon: Double = 1e-10): IExpectation;
+    { Double comparison }
+    function ToBeGreaterThanD(AExpected: Double): IExpectation;
+    function ToBeLessThanD(AExpected: Double): IExpectation;
+    function ToBeGreaterOrEqualD(AExpected: Double): IExpectation;
+    function ToBeLessOrEqualD(AExpected: Double): IExpectation;
+    function ToBeInRangeD(ALow, AHigh: Double): IExpectation;
+    { Case-insensitive string matching }
+    function ToContainCI(const ASubstr: string): IExpectation;
+    function ToStartWithCI(const APrefix: string): IExpectation;
+    function ToEndWithCI(const ASuffix: string): IExpectation;
   end;
 
 constructor TExpectation.CreateStr(const AValue: string);
@@ -543,6 +567,219 @@ begin
   finally
     FNegated := not FNegated;
   end;
+end;
+
+{ ── TExpectation: >= / <= for Int64 ────────────────────────────────────────── }
+
+function TExpectation.ToBeGreaterOrEqual(AExpected: Int64): IExpectation;
+var
+  LMatch: Boolean;
+begin
+  if FKind <> ekInt64 then
+    InternalFail('ToBeGreaterOrEqual called on non-integer expectation');
+  LMatch := FIntValue >= AExpected;
+  if FNegated then
+  begin
+    if LMatch then
+      InternalFail(IntToStr(FIntValue) + ' should not be >= ' + IntToStr(AExpected));
+  end
+  else
+  begin
+    if not LMatch then
+      InternalFail(IntToStr(FIntValue) + ' is not >= ' + IntToStr(AExpected));
+  end;
+  Result := Self;
+end;
+
+function TExpectation.ToBeLessOrEqual(AExpected: Int64): IExpectation;
+var
+  LMatch: Boolean;
+begin
+  if FKind <> ekInt64 then
+    InternalFail('ToBeLessOrEqual called on non-integer expectation');
+  LMatch := FIntValue <= AExpected;
+  if FNegated then
+  begin
+    if LMatch then
+      InternalFail(IntToStr(FIntValue) + ' should not be <= ' + IntToStr(AExpected));
+  end
+  else
+  begin
+    if not LMatch then
+      InternalFail(IntToStr(FIntValue) + ' is not <= ' + IntToStr(AExpected));
+  end;
+  Result := Self;
+end;
+
+{ ── TExpectation: Double comparison ────────────────────────────────────────── }
+
+function TExpectation.ToBeGreaterThanD(AExpected: Double): IExpectation;
+var
+  LMatch: Boolean;
+begin
+  if FKind <> ekDouble then
+    InternalFail('ToBeGreaterThanD called on non-double expectation');
+  LMatch := FDoubleValue > AExpected;
+  if FNegated then
+  begin
+    if LMatch then
+      InternalFail(FloatToStr(FDoubleValue) + ' should not be > ' + FloatToStr(AExpected));
+  end
+  else
+  begin
+    if not LMatch then
+      InternalFail(FloatToStr(FDoubleValue) + ' is not > ' + FloatToStr(AExpected));
+  end;
+  Result := Self;
+end;
+
+function TExpectation.ToBeLessThanD(AExpected: Double): IExpectation;
+var
+  LMatch: Boolean;
+begin
+  if FKind <> ekDouble then
+    InternalFail('ToBeLessThanD called on non-double expectation');
+  LMatch := FDoubleValue < AExpected;
+  if FNegated then
+  begin
+    if LMatch then
+      InternalFail(FloatToStr(FDoubleValue) + ' should not be < ' + FloatToStr(AExpected));
+  end
+  else
+  begin
+    if not LMatch then
+      InternalFail(FloatToStr(FDoubleValue) + ' is not < ' + FloatToStr(AExpected));
+  end;
+  Result := Self;
+end;
+
+function TExpectation.ToBeGreaterOrEqualD(AExpected: Double): IExpectation;
+var
+  LMatch: Boolean;
+begin
+  if FKind <> ekDouble then
+    InternalFail('ToBeGreaterOrEqualD called on non-double expectation');
+  LMatch := FDoubleValue >= AExpected;
+  if FNegated then
+  begin
+    if LMatch then
+      InternalFail(FloatToStr(FDoubleValue) + ' should not be >= ' + FloatToStr(AExpected));
+  end
+  else
+  begin
+    if not LMatch then
+      InternalFail(FloatToStr(FDoubleValue) + ' is not >= ' + FloatToStr(AExpected));
+  end;
+  Result := Self;
+end;
+
+function TExpectation.ToBeLessOrEqualD(AExpected: Double): IExpectation;
+var
+  LMatch: Boolean;
+begin
+  if FKind <> ekDouble then
+    InternalFail('ToBeLessOrEqualD called on non-double expectation');
+  LMatch := FDoubleValue <= AExpected;
+  if FNegated then
+  begin
+    if LMatch then
+      InternalFail(FloatToStr(FDoubleValue) + ' should not be <= ' + FloatToStr(AExpected));
+  end
+  else
+  begin
+    if not LMatch then
+      InternalFail(FloatToStr(FDoubleValue) + ' is not <= ' + FloatToStr(AExpected));
+  end;
+  Result := Self;
+end;
+
+function TExpectation.ToBeInRangeD(ALow, AHigh: Double): IExpectation;
+var
+  LMatch: Boolean;
+begin
+  if FKind <> ekDouble then
+    InternalFail('ToBeInRangeD called on non-double expectation');
+  if ALow > AHigh then
+    InternalFail('ToBeInRangeD: low (' + FloatToStr(ALow) + ') > high (' + FloatToStr(AHigh) + ')');
+  LMatch := (FDoubleValue >= ALow) and (FDoubleValue <= AHigh);
+  if FNegated then
+  begin
+    if LMatch then
+      InternalFail(FloatToStr(FDoubleValue) + ' should not be in [' +
+        FloatToStr(ALow) + '..' + FloatToStr(AHigh) + ']');
+  end
+  else
+  begin
+    if not LMatch then
+      InternalFail(FloatToStr(FDoubleValue) + ' is not in [' +
+        FloatToStr(ALow) + '..' + FloatToStr(AHigh) + ']');
+  end;
+  Result := Self;
+end;
+
+{ ── TExpectation: Case-insensitive string ──────────────────────────────────── }
+
+function TExpectation.ToContainCI(const ASubstr: string): IExpectation;
+var
+  LMatch: Boolean;
+begin
+  if FKind <> ekString then
+    InternalFail('ToContainCI called on non-string expectation');
+  LMatch := Pos(LowerCase(ASubstr), LowerCase(FStrValue)) > 0;
+  if FNegated then
+  begin
+    if LMatch then
+      InternalFail('"' + FStrValue + '" should not contain (ci) "' + ASubstr + '"');
+  end
+  else
+  begin
+    if not LMatch then
+      InternalFail('"' + FStrValue + '" does not contain (ci) "' + ASubstr + '"');
+  end;
+  Result := Self;
+end;
+
+function TExpectation.ToStartWithCI(const APrefix: string): IExpectation;
+var
+  LMatch: Boolean;
+begin
+  if FKind <> ekString then
+    InternalFail('ToStartWithCI called on non-string expectation');
+  LMatch := (Length(FStrValue) >= Length(APrefix)) and
+            (LowerCase(Copy(FStrValue, 1, Length(APrefix))) = LowerCase(APrefix));
+  if FNegated then
+  begin
+    if LMatch then
+      InternalFail('"' + FStrValue + '" should not start with (ci) "' + APrefix + '"');
+  end
+  else
+  begin
+    if not LMatch then
+      InternalFail('"' + FStrValue + '" does not start with (ci) "' + APrefix + '"');
+  end;
+  Result := Self;
+end;
+
+function TExpectation.ToEndWithCI(const ASuffix: string): IExpectation;
+var
+  LMatch: Boolean;
+begin
+  if FKind <> ekString then
+    InternalFail('ToEndWithCI called on non-string expectation');
+  LMatch := (Length(FStrValue) >= Length(ASuffix)) and
+            (LowerCase(Copy(FStrValue, Length(FStrValue) - Length(ASuffix) + 1,
+             Length(ASuffix))) = LowerCase(ASuffix));
+  if FNegated then
+  begin
+    if LMatch then
+      InternalFail('"' + FStrValue + '" should not end with (ci) "' + ASuffix + '"');
+  end
+  else
+  begin
+    if not LMatch then
+      InternalFail('"' + FStrValue + '" does not end with (ci) "' + ASuffix + '"');
+  end;
+  Result := Self;
 end;
 
 { ── Expect factories ──────────────────────────────────────────────────────── }

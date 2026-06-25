@@ -66,6 +66,8 @@ type
     function ReturnsInt(AValue: Int64): IMockSetup;
     { Configure the return value as Boolean }
     function ReturnsBool(AValue: Boolean): IMockSetup;
+    { Configure the return value as Double }
+    function ReturnsDouble(const AValue: Double): IMockSetup;
     { Mark this setup for ordered verification (InOrder) }
     function InOrder: IMockSetup;
   end;
@@ -86,6 +88,11 @@ type
     function  CalledBefore(const AOtherMethod: string): IMockVerify;
     { Verify this method was called after AOtherMethod (by call order) }
     function  CalledAfter(const AOtherMethod: string): IMockVerify;
+    { Verify at least one call was made with matching arguments }
+    function  CalledWith(const AArgs: array of string): IMockVerify;
+    { Verify exactly N calls were made with matching arguments }
+    function  CalledExactlyWith(ACount: Integer;
+      const AArgs: array of string): IMockVerify;
   end;
 
 { ── Mock State ────────────────────────────────────────────────────────────── }
@@ -118,6 +125,9 @@ type
     procedure SetReturn(const AMethodName, AValue: string);
     { Get call count for a method }
     function CallCount(const AMethodName: string): Integer;
+    { Get call count for a method with matching arguments }
+    function MatchingCallCount(const AMethodName: string;
+      const AArgs: array of string): Integer;
     { Get all recorded calls }
     property Calls: TMockCalls read FCalls;
     { Get the recorded call order (method names in sequence) }
@@ -148,16 +158,22 @@ type
       Example: Mock.RecordCall('Foo', ['arg1', 'arg2']); }
     procedure RecordCall(const AMethodName: string;
       const AArgs: array of string);
+    procedure RecordCallTyped(const AMethodName: string;
+      const AArgs: array of TMockValue);
 
     { Get the configured return value for a method.
       Returns '' if not configured. }
     function GetReturn(const AMethodName: string): string;
 
     { Get the configured return value as Int64. Returns 0 if not configured. }
-    function GetReturnInt(const AMethodName: string): Int64;
+    function GetReturnInt(const AMethodName: string): Int64; overload;
+    function GetReturnInt(const AMethodName: string;
+      const AArgs: array of string): Int64; overload;
 
     { Get the configured return value as Boolean. Returns False if not configured. }
-    function GetReturnBool(const AMethodName: string): Boolean;
+    function GetReturnBool(const AMethodName: string): Boolean; overload;
+    function GetReturnBool(const AMethodName: string;
+      const AArgs: array of string): Boolean; overload;
 
     { Get call count for a method }
     function CallCount(const AMethodName: string): Integer;
@@ -430,6 +446,31 @@ begin
       Inc(Result);
 end;
 
+function TMockState.MatchingCallCount(const AMethodName: string;
+  const AArgs: array of string): Integer;
+var
+  I, J: Integer;
+  LMatch: Boolean;
+begin
+  Result := 0;
+  for I := 0 to High(FCalls) do
+  begin
+    if FCalls[I].MethodName <> AMethodName then
+      Continue;
+    if Length(FCalls[I].Args) <> Length(AArgs) then
+      Continue;
+    LMatch := True;
+    for J := 0 to High(AArgs) do
+      if FCalls[I].Args[J] <> AArgs[J] then
+      begin
+        LMatch := False;
+        Break;
+      end;
+    if LMatch then
+      Inc(Result);
+  end;
+end;
+
 procedure TMockState.Reset;
 begin
   FCalls := nil;
@@ -448,6 +489,7 @@ type
     function Returns(const AValue: string): IMockSetup;
     function ReturnsInt(AValue: Int64): IMockSetup;
     function ReturnsBool(AValue: Boolean): IMockSetup;
+    function ReturnsDouble(const AValue: Double): IMockSetup;
     function InOrder: IMockSetup;
   end;
 
@@ -481,6 +523,13 @@ begin
   Result := Self;
 end;
 
+function TMockSetup.ReturnsDouble(const AValue: Double): IMockSetup;
+begin
+  FState.SetReturn(FMethod, FloatToStr(AValue));
+  FState.SetTypedReturnValue(FMethod, MockDouble(AValue));
+  Result := Self;
+end;
+
 function TMockSetup.InOrder: IMockSetup;
 begin
   { InOrder is a marker — call order tracking is always on.
@@ -506,6 +555,9 @@ type
     function  Times(N: Integer): IMockVerify;
     function  CalledBefore(const AOtherMethod: string): IMockVerify;
     function  CalledAfter(const AOtherMethod: string): IMockVerify;
+    function  CalledWith(const AArgs: array of string): IMockVerify;
+    function  CalledExactlyWith(ACount: Integer;
+      const AArgs: array of string): IMockVerify;
   end;
 
 constructor TMockVerifier.Create(AState: TMockState; const AMethod: string);
@@ -624,6 +676,31 @@ begin
   Result := Self;
 end;
 
+function TMockVerifier.CalledWith(const AArgs: array of string): IMockVerify;
+var
+  LCount: Integer;
+begin
+  LCount := FState.MatchingCallCount(FMethod, AArgs);
+  if LCount = 0 then
+    InternalFail('Expected ' + FMethod + ' called with matching args, ' +
+      'but no matching call found (total calls: ' +
+      IntToStr(FState.CallCount(FMethod)) + ')');
+  Result := Self;
+end;
+
+function TMockVerifier.CalledExactlyWith(ACount: Integer;
+  const AArgs: array of string): IMockVerify;
+var
+  LCount: Integer;
+begin
+  LCount := FState.MatchingCallCount(FMethod, AArgs);
+  if LCount <> ACount then
+    InternalFail('Expected ' + FMethod + ' called exactly ' +
+      IntToStr(ACount) + ' times with matching args, but was called ' +
+      IntToStr(LCount) + ' times');
+  Result := Self;
+end;
+
 { ── TMock ─────────────────────────────────────────────────────────────────── }
 
 constructor TMock.Create;
@@ -654,6 +731,12 @@ begin
   FState.RecordCall(AMethodName, AArgs);
 end;
 
+procedure TMock.RecordCallTyped(const AMethodName: string;
+  const AArgs: array of TMockValue);
+begin
+  FState.RecordCallTyped(AMethodName, AArgs);
+end;
+
 function TMock.GetReturn(const AMethodName: string): string;
 begin
   Result := FState.GetReturn(AMethodName);
@@ -664,9 +747,21 @@ begin
   Result := FState.GetReturnInt64(AMethodName, []);
 end;
 
+function TMock.GetReturnInt(const AMethodName: string;
+  const AArgs: array of string): Int64;
+begin
+  Result := FState.GetReturnInt64(AMethodName, AArgs);
+end;
+
 function TMock.GetReturnBool(const AMethodName: string): Boolean;
 begin
   Result := FState.GetReturnBool(AMethodName, []);
+end;
+
+function TMock.GetReturnBool(const AMethodName: string;
+  const AArgs: array of string): Boolean;
+begin
+  Result := FState.GetReturnBool(AMethodName, AArgs);
 end;
 
 function TMock.CallCount(const AMethodName: string): Integer;
