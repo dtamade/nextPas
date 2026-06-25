@@ -605,6 +605,7 @@ begin
   Result.BackOffset := SizeUInt(PtrUInt(FBackPtr) - PtrUInt(FReservedBase));
   Result.TotalUsed := FTotalUsed;
   Result.LargeUsed := FLargeUsed;
+  Result.AllocCount := FAllocCount;
 end;
 
 procedure TVirtualArena.RestoreToMark(AMark: TArenaMark);
@@ -623,6 +624,7 @@ begin
   else
     LNormalUsedAtMark := 0;
   FTotalUsed := LNormalUsedAtMark + FLargeUsed;
+  FAllocCount := AMark.AllocCount;
 end;
 
 procedure TVirtualArena.Reset;

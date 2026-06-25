@@ -205,6 +205,12 @@ begin
   if APtr = nil then
     Exit(GetMem(ASize));
 
+  if ASize = 0 then
+  begin
+    FreeMem(APtr);
+    Exit(nil);
+  end;
+
   LEntry := FindEntry(APtr);
   if LEntry <> nil then
   begin
@@ -215,9 +221,7 @@ begin
       LEntry^.Ptr := Result;
       LEntry^.Size := ASize;
     end
-    else
-      { ReallocMem 失败，原指针仍有效，保留原记录 }
-      Result := APtr;
+    { ReallocMem 失败时 Result = nil，原指针仍有效，保留原记录 }
   end
   else
     Result := FPrimary.ReallocMem(APtr, ASize);
