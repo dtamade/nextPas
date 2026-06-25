@@ -1305,6 +1305,26 @@ begin
       end;
       MatchTokenSilent(ALexer, ACursor, tkRParen);
     end
+    else if (ACursor < ALexer.TokenCount) and
+      (CurrentToken(ALexer, ACursor).Kind = tkDot) then
+    begin
+      Inc(ACursor);
+      if (ACursor < ALexer.TokenCount) and
+        IsMethodNameToken(CurrentToken(ALexer, ACursor).Kind) then
+      begin
+        Operand := TGreenNode.Create(gnkDotAccess, Result.ByteOffset, 0,
+          CurrentToken(ALexer, ACursor).Lexeme);
+        Operand.AppendChild(Result);
+        Operand.AppendChild(TGreenNode.Create(gnkIdentifier,
+          CurrentToken(ALexer, ACursor).ByteOffset,
+          Length(CurrentToken(ALexer, ACursor).Lexeme),
+          CurrentToken(ALexer, ACursor).Lexeme));
+        Result := Operand;
+        Inc(ACursor);
+      end
+      else
+        Break;
+    end
     else
       Break;
   end;
