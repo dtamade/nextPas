@@ -287,6 +287,23 @@ begin
   SetTestFilter('');
 end;
 
+procedure TestFilterEmptyBoundary; { L-20: empty string boundary }
+begin
+  Inc(GTestsRun);
+  { Empty filter = match everything }
+  SetTestFilter('');
+  CheckTrue(MatchesFilter(''), 'empty filter matches empty name');
+  CheckTrue(MatchesFilter('anything'), 'empty filter matches any name');
+  { Empty name with various patterns }
+  SetTestFilter('*');
+  CheckTrue(MatchesFilter(''), '* matches empty name');
+  SetTestFilter('**');
+  CheckTrue(MatchesFilter(''), '** matches empty name');
+  SetTestFilter('a*');
+  CheckFalse(MatchesFilter(''), 'a* does not match empty name');
+  SetTestFilter('');
+end;
+
 procedure TestGetSetFilter;
 begin
   Inc(GTestsRun);
@@ -1350,6 +1367,7 @@ begin
   Suite.Test('TestFilterCommaSeparated', @TestFilterCommaSeparated);
   Suite.Test('TestFilterGlobCommaCombined', @TestFilterGlobCommaCombined);
   Suite.Test('TestFilterWildcardOnly', @TestFilterWildcardOnly);
+  Suite.Test('TestFilterEmptyBoundary', @TestFilterEmptyBoundary);
   Suite.Test('TestGetSetFilter', @TestGetSetFilter);
   Suite.Test('TestGetSetTimeout', @TestGetSetTimeout);
   Suite.Test('TestDefaultConfigValues', @TestDefaultConfigValues);
