@@ -167,7 +167,7 @@ end;
 
 ## 测试覆盖
 
-- 29 test projects with a static count of 289 `T.Run` cases
+- 29 test projects with a static count of 291 `T.Run` cases
 - 0 memory leaks
 - 完整接口覆盖
 
@@ -181,6 +181,7 @@ end;
 
 ## 版本历史
 
+- v2.2 (2026-06-25): 9 项打磨 — nil 安全、TLS 多实例隔离、AllocMem 路径、DEBUG 防护、门面补全
 - v2.1 (2026-06-23): TLA + SizeClass Slab + Fallback Chain + FPC FillChar/Move 清理
 - v2.0 (2026-06-22): 架构清理 + 性能优化 + 安全防护 + 并发语义补强
 - v1.0 (2026-06-22): 初始 Arena 实现

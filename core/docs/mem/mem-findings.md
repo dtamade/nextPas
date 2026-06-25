@@ -647,18 +647,112 @@ README / ARCHITECTURE 已写明 `AllocUnsafe` 不保证对齐，这条不再单�
 
 ## 十、汇总
 
-### 状态统计
+### 状态统计（截止 2026-06-25 第二轮）
 
 | 状态               | 数量   | 说明                                                            |
 | ------------------ | ------ | --------------------------------------------------------------- |
-| **[FIXED] / 关闭** | **60** | 包含真实修复项，以及本轮复核后不再成立/不再作为缺陷跟踪的旧条目 |
+| **[FIXED] / 关闭** | **69** | 含第一轮 60 条 + 第二轮 9 条新增项                              |
 | **仍然开放**       | **0**  | 当前树上已无剩余开放问题                                         |
-| **新增**           | **8**  | 本轮新增项已全部修复或关闭                                       |
+| **新增 (第二轮)**  | **9**  | 全部已修复                                                      |
 
 ### 当前最高优先级（建议先处理）
 
-1. 无。本轮 `mem-findings.md` 已清零，当前树上没有剩余开放条目。
+1. 无。两轮 `mem-findings.md` 已清零。
 
 ### 处理建议顺序
 
-1. 无。本报告内的旧开放问题已全部关闭；后续若继续演进，应按新的需求或新的审查结果重新立项。
+1. 无。
+
+---
+
+## 十一、第二轮审查 (2026-06-25)
+
+> 方法：4 Agent 并行全量源码审查 + 逐条验证 + 修复 + 测试回归
+
+### R-01 [FIXED] Compare8/Equal nil 硬崩溃
+
+**P0 | 文件：`core/src/nextpas.core.mem.utils.pas`**
+
+`Fill8`/`Copy`/`Zero` 有完整的 nil 检查并抛 `EArgumentNil`，但 `Compare8(aPtr1, aPtr2: Pointer; aCount: SizeInt)` 完全没有 nil 检查，nil + count > 0 时直接 SIGSEGV 硬崩溃。
+
+**修复**：入口加 `aCount = 0` 快速返回 + nil 指针检查抛 `EArgumentNil`，与 `Fill8` 对称。
+
+**验证**：`test_mem_utils` 新增 `TestCompareNilRaises` + `TestFillNilRaises`，28/28 通过。
+
+---
+
+### R-02 [FIXED] ThreadArena threadvar 全局共享
+
+**P0 | 文件：`core/src/nextpas.core.mem.arena.thread.pas`**
+
+`threadvar TLSCurrentArena: TLocalArena` 是全局变量，多个 `TThreadArenaManager` 实例共享同一 TLS。线程用 ManagerA.Get 后再用 ManagerB.Get 会错误返回 ManagerA 的 Arena。
+
+**修复**：新增 `threadvar TLSCurrentManager: Pointer`，`Get` 时校验 manager 匹配；不匹配时自动归还旧 Arena 到原 manager 池。新增 `DrainArenaOnly` 内部方法。
+
+**验证**：`test_thread_arena` 新增 `TestMultiManagerIsolation`，26/26 通过。
+
+---
+
+### R-03 [FIXED] AllocZeroed/AllocArray 绕过 AllocMem
+
+**P1 | 文件：`core/src/nextpas.core.mem.pas`**
+
+`AllocZeroed` 用 `GetMem + ZeroMem`，绕过了 `IAllocator.AllocMem`（各实现可能有更优零初始化路径如 calloc）。
+
+**修复**：改为 `AAllocator.AllocMem(ASize)`，删除手动 `ZeroMem`。
+
+---
+
+### R-04 [FIXED] TVirtualArena.FAllocCount 32 位溢出
+
+**P1 | 文件：`core/src/nextpas.core.mem.arena.virtual.pas`**
+
+`FAllocCount: SizeUInt` 在 32 位平台是 32 位，高频分配场景下会溢出。`TLocalArena`/`TChunkedArena` 已用 `QWord`，`TArenaStats.AllocCount` 也是 `QWord`。
+
+**修复**：字段和 `AllocCount` 方法均改为 `QWord`。
+
+---
+
+### R-05 [FIXED] AllocUnsafe 连 DEBUG Assert 都没有
+
+**P1 | 文件：`core/src/nextpas.core.mem.arena.virtual.pas`**
+
+`AllocUnsafe` 无任何检查。`TLocalArena.AllocFast` 有 `{$IFDEF DEBUG} Assert` 保护，`AllocUnsafe` 连 DEBUG 都没有。
+
+**修复**：加 `Assert(aSize > 0)` + `Assert(FFrontPtr <> nil)`。
+
+---
+
+### R-06 [FIXED] TArenaConcurrent.AllocZeroed 的 ZeroMem 在锁内
+
+**P1 | 文件：`core/src/nextpas.core.mem.arena.concurrent.pas`**
+
+`AllocZeroed` 获取锁后调用 `FInner.AllocZeroed`（alloc + ZeroMem 都在锁内），大缓冲区清零时其他线程被阻塞。
+
+**修复**：改为 `FInner.Alloc` 在锁内，`FillChar` 在锁外。Arena bump pointer 保证新分配只有当前线程持有。
+
+---
+
+### R-07 [FIXED] 门面缺导出异常子类和 TAllocatorTraits
+
+**P2 | 文件：`core/src/nextpas.core.mem.pas`**
+
+门面只导出 `EAllocError`/`EOutOfMemory`，缺 `EInvalidLayout`/`EInvalidPointer`/`EDoubleFree`/`TAllocatorTraits`。
+
+**修复**：全部补导出。
+
+---
+
+### R-08 [FIXED] TArenaMarker deprecated alias 清理
+
+**P2 | 文件：`core/src/nextpas.core.mem.pas`**
+
+`TArenaMarker = TArenaMark` 仅靠注释标记 deprecated，全仓库零引用。
+
+**修复**：直接删除。
+
+---
+
+### R-09 [NOT BUG] TChunkedArena.RemainingSize
+
+Agent 报告"多段时返回虚假剩余空间"。经验证 `CurrentUsed = StartOffset + Used` 是跨段累计值，`FTotalSize - CurrentUsed` 正确反映活跃段剩余空间。**不成立，关闭。**
