@@ -1371,6 +1371,8 @@ begin
     ExecutableSet.Id,
     BuildSysrootRef
   );
+  if FTargetFacts.LlvmOptLevel <> '' then
+    FPlan.AddStepArg(LlvmStep, '-' + FTargetFacts.LlvmOptLevel);
   FPlan.AddStepArg(LlvmStep, '-o');
   FPlan.AddStepArg(LlvmStep, ExpandFileName(BitcodeArtifactPath));
   FPlan.AddStepArg(LlvmStep, ExpandFileName(IrArtifactPath));

@@ -48,10 +48,12 @@
 | **C2** | 债务1 骨架：结构化表达式表 `TSemanticHirExpr` + `TTypedHirNode.ExprId` + builder `LowerExpr` 双轨入口（blob fallback）          | C1    | ✅ 2026-06-01      |
 | **C3** | 债务1 第一批迁移：常量/变量/算术/比较/not-and-or/cond-br/ret/halt/write-int                                                     | C2    | ✅ 2026-06-02      |
 | **C4** | 债务2 核心：真实 scalar 宽度（i8/16/32/64/u*/f32/f64/i1）+ cast 指令 + signedness（sdiv/udiv/icmp s*u\*）；提升/截断规则放 sema | C3    | ✅ 2026-06-02      |
-| **C5** | 债务1 第二批：lvalue/address 模型（EmitAddress vs EmitValue）→ 修 `P^.Field`、`@Arr[i]`、array/record/class field               | C4    | 🚧 2026-06-03 C5-O |
-| **C6** | 债务4 allocator：freestanding malloc/free（mmap + free list + coalesce），object/string/dynarray 真实释放                       | C5    | ⬜                 |
-| **C7** | 债务3 深化（target runtime profile/callconv/layout、多目标 IR smoke）+ 债务4 优化（LLVM O2/LTO 可配置）                         | C5,C6 | ⬜                 |
-| **C8** | 自举探针：用 nextPas 编译 `core/` 一个真实中等模块，产出"自举差距清单"                                                          | C5,C6 | 🏁 里程碑          |
+| **C5** | 债务1 第二批：lvalue/address 模型（EmitAddress vs EmitValue）→ 修 `P^.Field`、`@Arr[i]`、array/record/class field               | C4    | ✅ 2026-06-25      |
+| **C6-A** | 债务4 allocator：freestanding malloc/free（mmap + free list + coalesce）                                                      | C5    | ⬜                 |
+| **C6-B** | string ownership 收尾：record/array element string store, string field cleanup on object free                                | C5,C6-A | ⬜ (C6-H7~H17 部分完成) |
+| **C7** | 债务3 深化（target runtime profile/callconv/layout、多目标 IR smoke）+ 债务4 优化（LLVM O2/LTO 可配置）                         | C5,C6-A | ⬜                 |
+| **C8-prep** | 自举探针：用 nextPas 编译 `core/` 一个真实中等模块，产出"自举差距清单"                                                          | C6-A | 🏁 里程碑          |
+| **C8** | 根据差距清单逐一修复，直到自举成功                                                                                              | C8-prep | 🏁 里程碑          |
 
 **关键路径** = C2 + C3 + C4 + C5 + C6（allocator）。优化与多目标可延后。
 
@@ -491,3 +493,18 @@
   Box.Text := MakeTextC(); Box.Free;` 通过 LLVM verify/llc/link/run，exit 42；
   直接 IR probe `np_object_string_cleanup_TStringPair` 证明 cleanup 后两个 string field
   的 ptr/len/owner/alloc 均归零，再经 `np_object_free_release` 释放对象，exit 42。
+- 2026-06-25 C5 收口 (Q+R)：完成 C5 exit criteria 审计（`docs/plans/2026-06-25-c5-exit-criteria.md`）。
+  C5-A~P 的 structured call contract（`shekCall`/`shekVirtualCall`/`shekInterfaceCall`）、
+  lvalue chain（field/array/deref）和 dual-track fallback 均建立并工作。
+  编译器重编译通过（43404 lines），LLVM smoke 全绿。
+  已知问题：`test_semantic_hir_expr_producer` exit=102（C6 工作期间引入的回归，待修复）。
+  剩余 special-case（`class-new-runtime`、`assign-tstring-*`、`record-copy-runtime`）已审计，
+  明确留给 C6-A/C6-B。
+- 2026-06-25 路线图修订：C6 拆分为 C6-A（allocator）和 C6-B（string ownership 收尾）；
+  C8 拆分为 C8-prep（自举探针）和 C8（自举修复）。关键路径：
+  C5收口 → C6-A → C8-prep → C8。详见 `docs/plans/2026-06-25-roadmap-revision.md`。
+- 2026-06-25 bug fix：class field TString store/load 使用 field-specific HIR nodes
+  (`field-store-tstring-runtime`、`assign-tstring-field-load-runtime`)，
+  修复方法体内隐式 Self 的类字段字符串赋值生成错误 HIR 节点的问题。
+- 2026-06-25 bug fix (sret codegen)：TString-returning 函数缺少 sret_ptr 参数，
+  导致 LLVM emitter 签名与实际调用不匹配。

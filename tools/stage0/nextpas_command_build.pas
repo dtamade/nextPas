@@ -61,7 +61,8 @@ begin
     TargetConfig.ResponseFilePolicy,
     TargetConfig.LinkScriptPolicy,
     TargetConfig.LlvmEnabled,
-    TargetConfig.LlvmExecutableSetId
+    TargetConfig.LlvmExecutableSetId,
+    TargetConfig.LlvmOptLevel
   );
 end;
 

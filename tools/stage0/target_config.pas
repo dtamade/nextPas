@@ -74,6 +74,7 @@ type
     LinkScriptPolicy: string;
     LlvmEnabled: Boolean;
     LlvmExecutableSetId: string;
+    LlvmOptLevel: string;
   end;
 
 function LoadTargetConfig(
@@ -250,6 +251,8 @@ begin
     Config.LlvmTriple := Value
   else if Key = 'llvm_data_layout' then
     Config.LlvmDataLayout := Value
+  else if Key = 'llvm_opt_level' then
+    Config.LlvmOptLevel := Value
   else if Key = 'toolchain_binding' then
     Config.ToolchainBindingPath := Value;
 end;
@@ -553,6 +556,8 @@ begin
   Result.LinkScriptPolicy := Binding.LinkScriptPolicy;
   Result.LlvmEnabled := Binding.LlvmEnabled;
   Result.LlvmExecutableSetId := Binding.LlvmExecutableSetId;
+  if Result.LlvmOptLevel = '' then
+    Result.LlvmOptLevel := 'O2';
 end;
 
 end.

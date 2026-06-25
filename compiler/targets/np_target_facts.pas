@@ -37,6 +37,7 @@ type
     LinkScriptPolicy: string;
     LlvmEnabled: Boolean;
     LlvmExecutableSetId: string;
+    LlvmOptLevel: string;
   end;
 
 function BuildTargetFactsView(
@@ -70,7 +71,8 @@ function BuildTargetFactsView(
   const AResponseFilePolicy: string;
   const ALinkScriptPolicy: string;
   const ALlvmEnabled: Boolean;
-  const ALlvmExecutableSetId: string
+  const ALlvmExecutableSetId: string;
+  const ALlvmOptLevel: string
 ): TTargetFactsView;
 
 implementation
@@ -106,7 +108,8 @@ function BuildTargetFactsView(
   const AResponseFilePolicy: string;
   const ALinkScriptPolicy: string;
   const ALlvmEnabled: Boolean;
-  const ALlvmExecutableSetId: string
+  const ALlvmExecutableSetId: string;
+  const ALlvmOptLevel: string
 ): TTargetFactsView;
 begin
   Result.TargetId := ATargetId;
@@ -140,6 +143,7 @@ begin
   Result.LinkScriptPolicy := ALinkScriptPolicy;
   Result.LlvmEnabled := ALlvmEnabled;
   Result.LlvmExecutableSetId := ALlvmExecutableSetId;
+  Result.LlvmOptLevel := ALlvmOptLevel;
 end;
 
 end.
