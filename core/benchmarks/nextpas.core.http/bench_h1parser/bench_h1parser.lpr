@@ -15,19 +15,11 @@ uses
   nextpas.core.http.impl.h1.llhttp;
 
 type
-  TH1ParserBenchRunner = class(TBenchRunner)
-  private
-    FFilter: string;
-    FMatchedRows: Integer;
-    function ShouldRunRow(const AName: string): Boolean;
-  public
-    constructor Create;
-    procedure Run(const AName: string; AProc: TBenchProc);
-    function HasNoMatchingFilter: Boolean;
-  end;
+  TBenchProc = procedure(aIters: Int64);
 
 var
-  B: TH1ParserBenchRunner;
+  LResults: IBenchResults;
+  LFilter: string;
   GSink: SizeUInt;
   GCallbackSink: SizeUInt;
 
@@ -66,34 +58,6 @@ var
   GBody1K: AnsiString;
   GReqPost1K: AnsiString;
   GPipeline: AnsiString;
-
-{ TH1ParserBenchRunner }
-
-constructor TH1ParserBenchRunner.Create;
-begin
-  inherited Create;
-  FFilter := Trim(GetEnvironmentVariable('NEXTPAS_BENCH_FILTER'));
-  FMatchedRows := 0;
-end;
-
-function TH1ParserBenchRunner.ShouldRunRow(const AName: string): Boolean;
-begin
-  Result := (FFilter = '') or
-    (Pos(LowerCase(FFilter), LowerCase(AName)) > 0);
-end;
-
-procedure TH1ParserBenchRunner.Run(const AName: string; AProc: TBenchProc);
-begin
-  if not ShouldRunRow(AName) then
-    Exit;
-  Inc(FMatchedRows);
-  inherited Run(AName, AProc);
-end;
-
-function TH1ParserBenchRunner.HasNoMatchingFilter: Boolean;
-begin
-  Result := (FFilter <> '') and (FMatchedRows = 0);
-end;
 
 procedure InitData;
 var
@@ -1025,7 +989,7 @@ end;
 
 begin
   InitData;
-  B := TH1ParserBenchRunner.Create;
+  LFilter := Trim(GetEnvironmentVariable('NEXTPAS_BENCH_FILTER'));
   WriteLn('=== nextpas.core.http H1 parser benchmark ===');
   WriteLn('operation=http.h1parser');
   WriteLn('  Simple GET: ', Length(REQ_SIMPLE), ' bytes');
@@ -1033,80 +997,52 @@ begin
   WriteLn('  POST 1KB:   ', Length(GReqPost1K), ' bytes');
   WriteLn('  Pipeline:   ', Length(GPipeline), ' bytes (10 requests)');
   WriteLn;
-  WriteLn('--- raw translated llhttp (no callbacks) ---');
-  B.Run('raw llhttp: simple GET (~60B)', @BenchRawLlhttpSimpleGET);
-  B.Run('raw llhttp: 10 headers (~400B)', @BenchRawLlhttp10Headers);
-  B.Run('raw llhttp: POST 1KB body', @BenchRawLlhttpPost1K);
-  B.Run('raw llhttp: pipeline pause-only (10 reqs)', @BenchRawLlhttpPipelinePauseOnly);
-  WriteLn;
-  WriteLn('--- translated llhttp with no-op callbacks ---');
-  B.Run('noop cb: simple GET (~60B)', @BenchNoopLlhttpSimpleGET);
-  B.Run('noop cb: 10 headers (~400B)', @BenchNoopLlhttp10Headers);
-  B.Run('noop cb: POST 1KB body', @BenchNoopLlhttpPost1K);
-  B.Run('noop cb: pipeline (10 reqs)', @BenchNoopLlhttpPipeline10);
-  WriteLn;
-  WriteLn('--- adapter materialization costs ---');
-  B.Run('adapter cost: span append 10 headers', @BenchAdapterSpanAppend10Headers);
-  B.Run('adapter cost: header add 10 headers', @BenchAdapterHeaderAdd10Headers);
-  B.Run('adapter cost: header span add 10 headers', @BenchAdapterHeaderSpanAdd10Headers);
-  B.Run('adapter cost: body copy 1KB', @BenchAdapterBodyCopy1K);
-  B.Run('adapter cost: url parse generic origin-form',
-    @BenchAdapterUrlParseGenericOriginForm);
-  B.Run('adapter cost: url parse request-target origin-form',
-    @BenchAdapterUrlParseRequestTargetOriginForm);
-  B.Run('adapter cost: request create eager url parse',
-    @BenchAdapterRequestCreateEagerUrlParse);
-  B.Run('adapter cost: request create lazy target',
-    @BenchAdapterRequestCreateLazyTarget);
-  B.Run('adapter cost: request lazy Url.Path access',
-    @BenchAdapterRequestLazyUrlPathAccess);
-  B.Run('adapter cost: request direct Path access',
-    @BenchAdapterRequestDirectPathAccess);
-  B.Run('adapter cost: request direct RawQuery access',
-    @BenchAdapterRequestDirectRawQueryAccess);
-  B.Run('adapter cost: request direct Path+RawQuery access',
-    @BenchAdapterRequestDirectPathAndRawQueryAccess);
-  B.Run('adapter cost: request metadata legacy expect+cl',
-    @BenchAdapterRequestMetadataLegacyExpectCl);
-  B.Run('adapter cost: request metadata cached expect+cl',
-    @BenchAdapterRequestMetadataCachedExpectCl);
-  B.Run('adapter cost: fast headers get host only',
-    @BenchFastHeadersGetHostOnly);
-  B.Run('adapter cost: fast headers count all',
-    @BenchFastHeadersCountAll);
-  B.Run('adapter cost: fast headers has accept',
-    @BenchFastHeadersHasAccept);
-  B.Run('adapter cost: fast headers get all accept',
-    @BenchFastHeadersGetAllAccept);
-  B.Run('adapter cost: fast headers foreach all',
-    @BenchFastHeadersForEachAll);
-  B.Run('adapter no-url: metadata 3 headers',
-    @BenchAdapterNoUrlMetadata3Headers);
-  B.Run('adapter no-url: legacy double parse explicit keep-alive',
-    @BenchAdapterNoUrlLegacyDoubleParseExplicitKeepAlive);
-  B.Run('adapter no-url: llhttp direct only',
-    @BenchParseAdapterNoUrl);
-  B.Run('adapter no-url: fast parse only',
-    @BenchFastParseAdapterNoUrl);
-  WriteLn;
-  WriteLn('--- llhttp ---');
-  B.Run('llhttp: simple GET (~60B)', @BenchParseSimpleGET);
-  B.Run('llhttp: 10 headers (~400B)', @BenchParse10Headers);
-  B.Run('llhttp: POST 1KB body', @BenchParsePost1K);
-  B.Run('llhttp: pipeline (10 reqs)', @BenchParsePipeline10);
-  WriteLn;
-  WriteLn('--- fast path (SIMD) ---');
-  B.Run('fast: simple GET (~60B)', @BenchFastParseSimpleGET);
-  B.Run('fast: 10 headers (~400B)', @BenchFastParse10Headers);
-  B.Run('fast: POST 1KB body', @BenchFastParsePost1K);
-  B.Run('fast: pipeline (10 reqs)', @BenchFastParsePipeline10);
-  WriteLn;
-  B.Summary;
-  if B.HasNoMatchingFilter then
+  LResults := TBenchSuite.Create('H1Parser')
+    .SetFilter(LFilter)
+    .AddLoop('raw llhttp: simple GET (~60B)', @BenchRawLlhttpSimpleGET)
+    .AddLoop('raw llhttp: 10 headers (~400B)', @BenchRawLlhttp10Headers)
+    .AddLoop('raw llhttp: POST 1KB body', @BenchRawLlhttpPost1K)
+    .AddLoop('raw llhttp: pipeline pause-only (10 reqs)', @BenchRawLlhttpPipelinePauseOnly)
+    .AddLoop('noop cb: simple GET (~60B)', @BenchNoopLlhttpSimpleGET)
+    .AddLoop('noop cb: 10 headers (~400B)', @BenchNoopLlhttp10Headers)
+    .AddLoop('noop cb: POST 1KB body', @BenchNoopLlhttpPost1K)
+    .AddLoop('noop cb: pipeline (10 reqs)', @BenchNoopLlhttpPipeline10)
+    .AddLoop('adapter cost: span append 10 headers', @BenchAdapterSpanAppend10Headers)
+    .AddLoop('adapter cost: header add 10 headers', @BenchAdapterHeaderAdd10Headers)
+    .AddLoop('adapter cost: header span add 10 headers', @BenchAdapterHeaderSpanAdd10Headers)
+    .AddLoop('adapter cost: body copy 1KB', @BenchAdapterBodyCopy1K)
+    .AddLoop('adapter cost: url parse generic origin-form', @BenchAdapterUrlParseGenericOriginForm)
+    .AddLoop('adapter cost: url parse request-target origin-form', @BenchAdapterUrlParseRequestTargetOriginForm)
+    .AddLoop('adapter cost: request create eager url parse', @BenchAdapterRequestCreateEagerUrlParse)
+    .AddLoop('adapter cost: request create lazy target', @BenchAdapterRequestCreateLazyTarget)
+    .AddLoop('adapter cost: request lazy Url.Path access', @BenchAdapterRequestLazyUrlPathAccess)
+    .AddLoop('adapter cost: request direct Path access', @BenchAdapterRequestDirectPathAccess)
+    .AddLoop('adapter cost: request direct RawQuery access', @BenchAdapterRequestDirectRawQueryAccess)
+    .AddLoop('adapter cost: request direct Path+RawQuery access', @BenchAdapterRequestDirectPathAndRawQueryAccess)
+    .AddLoop('adapter cost: request metadata legacy expect+cl', @BenchAdapterRequestMetadataLegacyExpectCl)
+    .AddLoop('adapter cost: request metadata cached expect+cl', @BenchAdapterRequestMetadataCachedExpectCl)
+    .AddLoop('adapter cost: fast headers get host only', @BenchFastHeadersGetHostOnly)
+    .AddLoop('adapter cost: fast headers count all', @BenchFastHeadersCountAll)
+    .AddLoop('adapter cost: fast headers has accept', @BenchFastHeadersHasAccept)
+    .AddLoop('adapter cost: fast headers get all accept', @BenchFastHeadersGetAllAccept)
+    .AddLoop('adapter cost: fast headers foreach all', @BenchFastHeadersForEachAll)
+    .AddLoop('adapter no-url: metadata 3 headers', @BenchAdapterNoUrlMetadata3Headers)
+    .AddLoop('adapter no-url: legacy double parse explicit keep-alive', @BenchAdapterNoUrlLegacyDoubleParseExplicitKeepAlive)
+    .AddLoop('adapter no-url: llhttp direct only', @BenchParseAdapterNoUrl)
+    .AddLoop('adapter no-url: fast parse only', @BenchFastParseAdapterNoUrl)
+    .AddLoop('llhttp: simple GET (~60B)', @BenchParseSimpleGET)
+    .AddLoop('llhttp: 10 headers (~400B)', @BenchParse10Headers)
+    .AddLoop('llhttp: POST 1KB body', @BenchParsePost1K)
+    .AddLoop('llhttp: pipeline (10 reqs)', @BenchParsePipeline10)
+    .AddLoop('fast: simple GET (~60B)', @BenchFastParseSimpleGET)
+    .AddLoop('fast: 10 headers (~400B)', @BenchFastParse10Headers)
+    .AddLoop('fast: POST 1KB body', @BenchFastParsePost1K)
+    .AddLoop('fast: pipeline (10 reqs)', @BenchFastParsePipeline10)
+    .Run;
+  if (LFilter <> '') and (LResults.Count = 0) then
   begin
     WriteLn('No matching H1 parser benchmark rows.');
-    B.Free;
     Halt(1);
   end;
-  B.Free;
+  WriteLn(LResults.PrintToConsole);
 end.
