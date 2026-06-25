@@ -56,6 +56,9 @@ type
     OutSink: IOutputSink;
     ErrSink: IOutputSink;
     RetryCount: Integer;
+    MaxParallelWorkers: Integer;
+      { 0 = unlimited (current behavior, one OS thread per test)
+        >0 = max concurrent OS threads in parallel mode (batch dispatch) }
   end;
 
 function DefaultConfig: TTestConfig;
@@ -70,6 +73,7 @@ procedure SetDefaultAnsiMode(AAnsiMode: TAnsiMode);
 procedure SetDefaultOutSink(const ASink: IOutputSink);
 procedure SetDefaultErrSink(const ASink: IOutputSink);
 procedure SetDefaultRetryCount(ARetryCount: Integer);
+procedure SetDefaultMaxParallelWorkers(AMaxWorkers: Integer);
 
 implementation
 
@@ -85,6 +89,7 @@ begin
   Result.OutSink := TStdoutSink.Create;
   Result.ErrSink := TStderrSink.Create;
   Result.RetryCount := 0;
+  Result.MaxParallelWorkers := 0; { unlimited by default }
 end;
 
 function DefaultConfig: TTestConfig;
@@ -112,6 +117,8 @@ begin
     Result.ErrSink := LDefaults.ErrSink;
   if Result.RetryCount = 0 then
     Result.RetryCount := LDefaults.RetryCount;
+  if Result.MaxParallelWorkers = 0 then
+    Result.MaxParallelWorkers := LDefaults.MaxParallelWorkers;
 end;
 
 function ResolveOutSink(const AConfig: TTestConfig): IOutputSink;
@@ -168,6 +175,11 @@ end;
 procedure SetDefaultRetryCount(ARetryCount: Integer);
 begin
   GDefaultConfig.RetryCount := ARetryCount;
+end;
+
+procedure SetDefaultMaxParallelWorkers(AMaxWorkers: Integer);
+begin
+  GDefaultConfig.MaxParallelWorkers := AMaxWorkers;
 end;
 
 procedure TStdoutSink.Write(const AText: string);

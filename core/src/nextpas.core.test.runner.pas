@@ -1255,6 +1255,8 @@ var
   LConfig: TTestConfig;
   LOutSink: IOutputSink;
   LTagFilter: string;
+  LMaxWorkers: Integer;
+  LBatchStart, LSpawned, LFirstEligible: Integer;
 begin
   AResult := TTestRunResult.Create(Name);
   LTotal := Length(Tests);
@@ -1333,39 +1335,67 @@ begin
   { Use BeginThread to ensure FPC properly initializes per-thread state
     (exception handler chain, threadvar TLS, heap manager).
     Previously platform_thread_create (direct pthread_create) was used,
-    which bypasses FPC init and caused intermittent SIGSEGV on thread exit. }
-  for I := 0 to High(Tests) do
+    which bypasses FPC init and caused intermittent SIGSEGV on thread exit.
+
+    Batch dispatch: when MaxParallelWorkers > 0, spawn at most that many
+    threads per batch. This avoids OS thread exhaustion on large suites.
+    MaxParallelWorkers = 0 means unlimited (one thread per test). }
+  LMaxWorkers := LConfig.MaxParallelWorkers;
+  if LMaxWorkers <= 0 then
+    LMaxWorkers := LTotal; { unlimited: spawn all in one batch }
+
+  LBatchStart := 0;
+  while LBatchStart < LTotal do
   begin
-    { Skip filtered-out tests — LRecs[I] is uninitialized for them }
-    if not MatchesFilter(Tests[I].Name, LConfig) then
+    { Find the first eligible test at or after LBatchStart }
+    LFirstEligible := -1;
+    for I := LBatchStart to High(Tests) do
     begin
-      LThreads[I] := 0;
-      Continue;
+      if MatchesFilter(Tests[I].Name, LConfig) and
+         MatchesTagFilter(Tests[I].Tags, LTagFilter) then
+      begin
+        LFirstEligible := I;
+        Break;
+      end;
     end;
-    if not MatchesTagFilter(Tests[I].Tags, LTagFilter) then
+    if LFirstEligible < 0 then
+      Break; { no more eligible tests }
+
+    LSpawned := 0;
+    for I := LFirstEligible to High(Tests) do
     begin
-      LThreads[I] := 0;
-      Continue;
+      if LSpawned >= LMaxWorkers then
+        Break;
+      if not MatchesFilter(Tests[I].Name, LConfig) then
+        Continue;
+      if not MatchesTagFilter(Tests[I].Tags, LTagFilter) then
+        Continue;
+      LThreads[I] := BeginThread(@ParallelThreadEntry, @LRecs[I]);
+      if LThreads[I] = 0 then
+      begin
+        LResults[I].Name     := Tests[I].Name;
+        LResults[I].Status   := tsError;
+        LResults[I].Message  := 'BeginThread failed';
+        LResults[I].Duration := 0;
+        Inc(LFail);
+      end;
+      Inc(LSpawned);
+      LBatchStart := I + 1;
     end;
-    LThreads[I] := BeginThread(@ParallelThreadEntry, @LRecs[I]);
-    if LThreads[I] = 0 then
-    begin
-      LResults[I].Name     := Tests[I].Name;
-      LResults[I].Status   := tsError;
-      LResults[I].Message  := 'BeginThread failed';
-      LResults[I].Duration := 0;
-      Inc(LFail);
-    end;
+
+    { Join this batch before spawning the next }
+    for I := 0 to High(Tests) do
+      if LThreads[I] <> 0 then
+        WaitForThreadTerminate(LThreads[I], 0);
+
+    { Close thread handles — required on Windows to avoid kernel handle leak }
+    for I := 0 to High(Tests) do
+      if LThreads[I] <> 0 then
+        CloseThread(LThreads[I]);
+
+    { Clear handles for reuse in next batch }
+    FillChar(LThreads[0], Length(LThreads) * SizeOf(TThreadID), 0);
   end;
-
-  for I := 0 to High(Tests) do
-    if LThreads[I] <> 0 then
-      WaitForThreadTerminate(LThreads[I], 0);
-
-  { Close thread handles — required on Windows to avoid kernel handle leak }
-  for I := 0 to High(Tests) do
-    if LThreads[I] <> 0 then
-      CloseThread(LThreads[I]);
 
   { Suite-level teardown (uses shared helper) }
   RunTeardown(LConfig);

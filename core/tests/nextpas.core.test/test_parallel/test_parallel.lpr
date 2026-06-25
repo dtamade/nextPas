@@ -13,6 +13,8 @@ uses
 var
   GTestCounter: Integer = 0;
   GParallelRetryCount: Integer = 0;
+  GConcurrentCount: Integer = 0;
+  GMaxConcurrent: Integer = 0;
 
 procedure TestParallelSimple;
 begin
@@ -278,6 +280,58 @@ begin
   WriteLn(AnsiGreen('  ✓ Parallel sink injection'));
 end;
 
+{ ── v3.1: MaxParallelWorkers batch dispatch ────────────────────────────────── }
+
+procedure TestBatchedWorkerProc;
+var
+  LCount: Integer;
+begin
+  LCount := InterLockedIncrement(GConcurrentCount);
+  { Update max concurrent — InterlockedExchange if new max }
+  if LCount > GMaxConcurrent then
+    InterlockedExchange(GMaxConcurrent, LCount);
+  Sleep(50); { hold the slot briefly to ensure overlap detection }
+  InterLockedDecrement(GConcurrentCount);
+end;
+
+procedure TestMaxParallelWorkers;
+var
+  LSuite: TTestSuite;
+  LRunner: TTestRunner;
+  LResults: specialize TArray<TTestRunResult>;
+  I: Integer;
+begin
+  GConcurrentCount := 0;
+  GMaxConcurrent := 0;
+  LSuite := TTestSuite.Create('BatchDispatch');
+  LSuite.Config.MaxParallelWorkers := 2;
+  for I := 1 to 8 do
+    LSuite.Test('batch_' + IntToStr(I), @TestBatchedWorkerProc);
+  LRunner := TTestRunner.Create('batch_test');
+  LRunner.Add(LSuite);
+  LRunner.RunAllWithResult(LResults);
+  if Length(LResults) = 0 then
+  begin
+    WriteLn(AnsiRed('FAIL: no results from batch dispatch'));
+    Halt(1);
+  end;
+  if not LResults[0].AllPassed then
+  begin
+    WriteLn(AnsiRed('FAIL: batch dispatch tests failed'));
+    Halt(1);
+  end;
+  { MaxConcurrent should be <= 2 (the configured limit).
+    Due to timing, it could occasionally be 1 if a batch finishes
+    before the next starts, but never >2. }
+  if GMaxConcurrent > 2 then
+  begin
+    WriteLn(AnsiRed('FAIL: MaxConcurrent='), GMaxConcurrent,
+            AnsiRed(', expected <= 2'));
+    Halt(1);
+  end;
+  WriteLn(AnsiGreen('  ✓ MaxParallelWorkers batch dispatch'));
+end;
+
 var
   LSuite: TTestSuite;
   LFailSuite, LSkipSuite: TTestSuite;
@@ -426,4 +480,12 @@ begin
 
   WriteLn;
   WriteLn(AnsiGreen('ALL LIFECYCLE TESTS PASSED'));
+
+  { ── v3.1: MaxParallelWorkers batch dispatch ──────────────────────────────── }
+  WriteLn;
+  WriteLn(AnsiBold('─── v3.1: MaxParallelWorkers Batch Dispatch ───'));
+  TestMaxParallelWorkers;
+
+  WriteLn;
+  WriteLn(AnsiGreen('ALL PARALLEL TESTS PASSED'));
 end.

@@ -869,6 +869,78 @@ begin
   end;
 end;
 
+{ ── v3.1: CalledWith / CalledExactlyWith ────────────────────────────────────── }
+
+procedure TestCalledWithSuccess;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.RecordCall('Foo', ['bar', 'baz']);
+    LM.RecordCall('Foo', ['other', 'args']);
+    LM.Verify('Foo').CalledWith(['bar', 'baz']);
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestCalledWithFail;
+var
+  LM: TMock;
+  LCaught: Boolean = False;
+begin
+  LM := TMock.Create;
+  try
+    LM.RecordCall('Foo', ['bar']);
+    try
+      LM.Verify('Foo').CalledWith(['nonexistent']);
+    except
+      on E: EAssertionFailed do
+        LCaught := True;
+    end;
+    CheckTrue(LCaught, 'CalledWith should fail when no matching args');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestCalledExactlyWithSuccess;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.RecordCall('Foo', ['a']);
+    LM.RecordCall('Foo', ['b']);
+    LM.RecordCall('Foo', ['a']);
+    LM.Verify('Foo').CalledExactlyWith(2, ['a']);
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestCalledExactlyWithFail;
+var
+  LM: TMock;
+  LCaught: Boolean = False;
+begin
+  LM := TMock.Create;
+  try
+    LM.RecordCall('Foo', ['a']);
+    LM.RecordCall('Foo', ['b']);
+    try
+      LM.Verify('Foo').CalledExactlyWith(2, ['a']);
+    except
+      on E: EAssertionFailed do
+        LCaught := True;
+    end;
+    CheckTrue(LCaught, 'CalledExactlyWith should fail on count mismatch');
+  finally
+    LM.Free;
+  end;
+end;
+
 { ── Register Tests ───────────────────────────────────────────────────────────── }
 
 var
@@ -942,6 +1014,12 @@ begin
   Suite.Test('TestCalledAfterFail', @TestCalledAfterFail);
   Suite.Test('TestCalledBeforeNeverCalled', @TestCalledBeforeNeverCalled);
   Suite.Test('TestCallOrderReset', @TestCallOrderReset);
+
+  { v3.1: CalledWith / CalledExactlyWith }
+  Suite.Test('TestCalledWithSuccess', @TestCalledWithSuccess);
+  Suite.Test('TestCalledWithFail', @TestCalledWithFail);
+  Suite.Test('TestCalledExactlyWithSuccess', @TestCalledExactlyWithSuccess);
+  Suite.Test('TestCalledExactlyWithFail', @TestCalledExactlyWithFail);
 
   Runner := TTestRunner.Create('mock-tests');
   Runner.Add(Suite);

@@ -862,6 +862,147 @@ begin
   end;
 end;
 
+{ ── v3.1: New Expect API tests ─────────────────────────────────────────────── }
+
+procedure TestExpectGreaterOrEqual;
+begin
+  ExpectInt(5).ToBeGreaterOrEqual(5);
+  ExpectInt(5).ToBeGreaterOrEqual(4);
+  try
+    ExpectInt(4).ToBeGreaterOrEqual(5);
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(Pos('is not >=', E.Message) > 0, 'expected >= fail message');
+  end;
+end;
+
+procedure TestExpectLessOrEqual;
+begin
+  ExpectInt(5).ToBeLessOrEqual(5);
+  ExpectInt(4).ToBeLessOrEqual(5);
+  try
+    ExpectInt(5).ToBeLessOrEqual(4);
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(Pos('is not <=', E.Message) > 0, 'expected <= fail message');
+  end;
+end;
+
+procedure TestExpectDoubleGreaterThan;
+begin
+  ExpectDouble(5.5).ToBeGreaterThanD(5.0);
+  try
+    ExpectDouble(5.0).ToBeGreaterThanD(5.0);
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(True, 'expected > fail');
+  end;
+end;
+
+procedure TestExpectDoubleLessThan;
+begin
+  ExpectDouble(4.5).ToBeLessThanD(5.0);
+  try
+    ExpectDouble(5.0).ToBeLessThanD(5.0);
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(True, 'expected < fail');
+  end;
+end;
+
+procedure TestExpectDoubleGreaterOrEqual;
+begin
+  ExpectDouble(5.0).ToBeGreaterOrEqualD(5.0);
+  ExpectDouble(5.1).ToBeGreaterOrEqualD(5.0);
+  try
+    ExpectDouble(4.9).ToBeGreaterOrEqualD(5.0);
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(True, 'expected >= fail');
+  end;
+end;
+
+procedure TestExpectDoubleLessOrEqual;
+begin
+  ExpectDouble(5.0).ToBeLessOrEqualD(5.0);
+  ExpectDouble(4.9).ToBeLessOrEqualD(5.0);
+  try
+    ExpectDouble(5.1).ToBeLessOrEqualD(5.0);
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(True, 'expected <= fail');
+  end;
+end;
+
+procedure TestExpectDoubleInRange;
+begin
+  ExpectDouble(5.0).ToBeInRangeD(1.0, 10.0);
+  ExpectDouble(1.0).ToBeInRangeD(1.0, 10.0);
+  ExpectDouble(10.0).ToBeInRangeD(1.0, 10.0);
+  try
+    ExpectDouble(11.0).ToBeInRangeD(1.0, 10.0);
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(True, 'expected range fail');
+  end;
+end;
+
+procedure TestExpectContainCI;
+begin
+  Expect('Hello World').ToContainCI('hello');
+  Expect('Hello World').ToContainCI('WORLD');
+  try
+    Expect('Hello').ToContainCI('xyz');
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(True, 'expected contain CI fail');
+  end;
+end;
+
+procedure TestExpectStartWithCI;
+begin
+  Expect('Hello World').ToStartWithCI('hello');
+  try
+    Expect('Hello World').ToStartWithCI('world');
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(True, 'expected start CI fail');
+  end;
+end;
+
+procedure TestExpectEndWithCI;
+begin
+  Expect('Hello World').ToEndWithCI('WORLD');
+  try
+    Expect('Hello World').ToEndWithCI('hello');
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(True, 'expected end CI fail');
+  end;
+end;
+
+procedure TestExpectGreaterOrEqualNot;
+begin
+  ExpectInt(4).Not_.ToBeGreaterOrEqual(5);
+  try
+    ExpectInt(5).Not_.ToBeGreaterOrEqual(5);
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(True, 'expected Not_ >= fail');
+  end;
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -974,6 +1115,19 @@ begin
   LSuite.Test('Not_.ToBeNear in eps → fail',   @TestNotToBeNearWithinEpsilonShouldFail);
   LSuite.Test('Not_.ToBeNear out eps → pass',  @TestNotToBeNearOutsideEpsilonShouldPass);
   LSuite.Test('Not_.ToNotBeNear combo',        @TestNotToNotBeNearCombination);
+
+  { v3.1: New comparison and string methods }
+  LSuite.Test('ToBeGreaterOrEqual',           @TestExpectGreaterOrEqual);
+  LSuite.Test('ToBeLessOrEqual',              @TestExpectLessOrEqual);
+  LSuite.Test('Double ToBeGreaterThanD',      @TestExpectDoubleGreaterThan);
+  LSuite.Test('Double ToBeLessThanD',         @TestExpectDoubleLessThan);
+  LSuite.Test('Double ToBeGreaterOrEqualD',   @TestExpectDoubleGreaterOrEqual);
+  LSuite.Test('Double ToBeLessOrEqualD',      @TestExpectDoubleLessOrEqual);
+  LSuite.Test('Double ToBeInRangeD',          @TestExpectDoubleInRange);
+  LSuite.Test('ToContainCI',                  @TestExpectContainCI);
+  LSuite.Test('ToStartWithCI',               @TestExpectStartWithCI);
+  LSuite.Test('ToEndWithCI',                 @TestExpectEndWithCI);
+  LSuite.Test('Not_.ToBeGreaterOrEqual',      @TestExpectGreaterOrEqualNot);
 
   if not LSuite.Run then
   begin

@@ -88,6 +88,11 @@ type
     function  CalledBefore(const AOtherMethod: string): IMockVerify;
     { Verify this method was called after AOtherMethod (by call order) }
     function  CalledAfter(const AOtherMethod: string): IMockVerify;
+    { Verify at least one call was made with matching arguments }
+    function  CalledWith(const AArgs: array of string): IMockVerify;
+    { Verify exactly N calls were made with matching arguments }
+    function  CalledExactlyWith(ACount: Integer;
+      const AArgs: array of string): IMockVerify;
   end;
 
 { ── Mock State ────────────────────────────────────────────────────────────── }
@@ -120,6 +125,9 @@ type
     procedure SetReturn(const AMethodName, AValue: string);
     { Get call count for a method }
     function CallCount(const AMethodName: string): Integer;
+    { Get call count for a method with matching arguments }
+    function MatchingCallCount(const AMethodName: string;
+      const AArgs: array of string): Integer;
     { Get all recorded calls }
     property Calls: TMockCalls read FCalls;
     { Get the recorded call order (method names in sequence) }
@@ -438,6 +446,31 @@ begin
       Inc(Result);
 end;
 
+function TMockState.MatchingCallCount(const AMethodName: string;
+  const AArgs: array of string): Integer;
+var
+  I, J: Integer;
+  LMatch: Boolean;
+begin
+  Result := 0;
+  for I := 0 to High(FCalls) do
+  begin
+    if FCalls[I].MethodName <> AMethodName then
+      Continue;
+    if Length(FCalls[I].Args) <> Length(AArgs) then
+      Continue;
+    LMatch := True;
+    for J := 0 to High(AArgs) do
+      if FCalls[I].Args[J] <> AArgs[J] then
+      begin
+        LMatch := False;
+        Break;
+      end;
+    if LMatch then
+      Inc(Result);
+  end;
+end;
+
 procedure TMockState.Reset;
 begin
   FCalls := nil;
@@ -522,6 +555,9 @@ type
     function  Times(N: Integer): IMockVerify;
     function  CalledBefore(const AOtherMethod: string): IMockVerify;
     function  CalledAfter(const AOtherMethod: string): IMockVerify;
+    function  CalledWith(const AArgs: array of string): IMockVerify;
+    function  CalledExactlyWith(ACount: Integer;
+      const AArgs: array of string): IMockVerify;
   end;
 
 constructor TMockVerifier.Create(AState: TMockState; const AMethod: string);
@@ -637,6 +673,31 @@ begin
       AOtherMethod + ', but ' + FMethod + ' was called at index ' +
       IntToStr(LSelfIdx) + ' (before ' + AOtherMethod + ' at index ' +
       IntToStr(LOtherIdx) + ')');
+  Result := Self;
+end;
+
+function TMockVerifier.CalledWith(const AArgs: array of string): IMockVerify;
+var
+  LCount: Integer;
+begin
+  LCount := FState.MatchingCallCount(FMethod, AArgs);
+  if LCount = 0 then
+    InternalFail('Expected ' + FMethod + ' called with matching args, ' +
+      'but no matching call found (total calls: ' +
+      IntToStr(FState.CallCount(FMethod)) + ')');
+  Result := Self;
+end;
+
+function TMockVerifier.CalledExactlyWith(ACount: Integer;
+  const AArgs: array of string): IMockVerify;
+var
+  LCount: Integer;
+begin
+  LCount := FState.MatchingCallCount(FMethod, AArgs);
+  if LCount <> ACount then
+    InternalFail('Expected ' + FMethod + ' called exactly ' +
+      IntToStr(ACount) + ' times with matching args, but was called ' +
+      IntToStr(LCount) + ' times');
   Result := Self;
 end;
 

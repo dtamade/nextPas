@@ -45,9 +45,9 @@
 | ID | 文件 | 问题 |
 |----|------|------|
 | R5-08 | base.pas L83 | `ETestSkipped = class(EAbort)`——任何 `EAbort`（包括用户代码抛出的）都会被框架视为 Skip。这是有意设计但可能导致非预期行为。 |
-| R5-09 | runner.parallel.pas | `RunParallelWithResult` 不检查 `GetTestFilter`——并行模式下 filter 不生效，被 filter 排除的测试仍会并行执行。与 serial 模式行为不一致。 |
+| R5-09 | runner.parallel.pas | `RunParallelWithResult` 不检查 `GetTestFilter`——并行模式下 filter 不生效，被 filter 排除的测试仍会并行执行。与 serial 模式行为不一致。 | ✅ v3.1 验证确认：dispatch 层已检查 `MatchesFilter` + `MatchesTagFilter`，filter 在并行模式下正常工作 |
 | R5-10 | discovery.pas | `DiscoverTests` 的 `New(LPStub)` 在 finalization 中有文档化的有意泄漏。对大规模 test suite（数千 published 方法），内存累积可能显著。 |
-| R5-11 | runner.pas L700-718 | `RunParallelWithResult` 为每个测试创建一个 OS 线程——无上限。1000+ 测试的 suite 可能触发 OS 线程限制。 |
+| R5-11 | runner.pas L700-718 | `RunParallelWithResult` 为每个测试创建一个 OS 线程——无上限。1000+ 测试的 suite 可能触发 OS 线程限制。 | ✅ v3.1 已修复 — 批次调度：`MaxParallelWorkers` 配置项控制并发上限，默认 0（无限），>0 时分批 spawn+join |
 | R5-12 | test_advanced.lpr L89 | `TestDiscoverDefaultSuiteName` 手动 `LFixture.Free`——如果将来添加 `LSuite.Run`，teardown 会 double-free。与 R4-10 同类。 |
 
 ---
@@ -132,7 +132,7 @@
 |----|------|------|----------|
 | L-01 | check.pas | `CheckFalse` 消息写 "expected false" 而非 "expected condition to be false" | 未修复 |
 | L-02 | check.pas | `CheckSame` 使用 `Pointer` 比较，跨平台可能有对齐问题 | 未修复 |
-| L-03 | expect.pas | `ToBeGreaterThan` 等比较方法无 `ToBeGreaterOrEqual` 等变体 | 未修复 |
+| L-03 | expect.pas | `ToBeGreaterThan` 等比较方法无 `ToBeGreaterOrEqual` 等变体 | ✅ v3.1 已修复 — 新增 ToBeGreaterOrEqual/ToBeLessOrEqual (Int64) + 6 个 Double 比较方法 + 3 个大小写不敏感字符串方法 |
 | L-04 | expect.pas | `ToMatch` 正则每次调用都重新编译 | 未修复 |
 | L-05 | expect.pas | `ToContain` 对字符串的子串检查区分大小写 | 未修复 |
 | L-06 | expect.pas | `ToStartWith` / `ToEndWith` 只支持字符串，不支持 `TBytes` | 未修复 |
@@ -147,7 +147,7 @@
 | L-15 | expect.pas | `ToBeType` / `NotToBeType` 中 `TTypeInfo` 比较只比较 Kind，不比较 Name | 未修复 |
 | L-16 | runner.pas | `RunWithResult` 的 `--filter` 不支持通配符 | 未修复 |
 | L-17 | output.pas | ANSI 输出在非 TTY 环境下仍输出颜色码 | 未修复 |
-| L-18 | mock.pas | `TMockMethodStub` 的 `WithArgs` 验证只比较第一个参数 | 未修复 |
+| L-18 | mock.pas | `TMockMethodStub` 的 `WithArgs` 验证只比较第一个参数 | ✅ v3.1 已修复 — 新增 `CalledWith`/`CalledExactlyWith` 方法，比较所有参数 |
 | L-19 | test_runner.pas | 5 个 `CheckEqual(Int64, Int64)` 可以用 `CheckSame` 测试引用类型 | Won't fix |
 | L-20 | test_output.pas | `TestMatchesGlob` 缺少空字符串输入的边界测试 | 未修复 |
 | L-21 | test_output.pas | ANSI 测试的 `Pos(#27, ...)` 只检查 ESC 字符存在，不验证完整序列 | 未修复 |

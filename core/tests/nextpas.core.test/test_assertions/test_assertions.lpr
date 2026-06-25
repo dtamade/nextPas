@@ -546,6 +546,50 @@ begin
     procedure begin raise ETestChildException.Create('child'); end);
 end;
 
+{ ── v3.1: CheckGreaterOrEqual / CheckLessOrEqual ───────────────────────────── }
+
+procedure TestCheckGreaterOrEqualPass;
+begin
+  CheckGreaterOrEqual(5, 5);
+  CheckGreaterOrEqual(6, 5);
+end;
+
+procedure TestCheckGreaterOrEqualFail;
+var
+  LCaught: Boolean = False;
+begin
+  try
+    CheckGreaterOrEqual(4, 5);
+  except
+    on E: EAssertionFailed do
+    begin
+      LCaught := Pos('>=', E.Message) > 0;
+    end;
+  end;
+  CheckTrue(LCaught, 'CheckGreaterOrEqual(4,5) should fail with >= message');
+end;
+
+procedure TestCheckLessOrEqualPass;
+begin
+  CheckLessOrEqual(5, 5);
+  CheckLessOrEqual(4, 5);
+end;
+
+procedure TestCheckLessOrEqualFail;
+var
+  LCaught: Boolean = False;
+begin
+  try
+    CheckLessOrEqual(6, 5);
+  except
+    on E: EAssertionFailed do
+    begin
+      LCaught := Pos('<=', E.Message) > 0;
+    end;
+  end;
+  CheckTrue(LCaught, 'CheckLessOrEqual(6,5) should fail with <= message');
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -606,6 +650,12 @@ begin
   LSuite.Test('CheckEqual (double fail)',     @TestCheckEqualDoubleFail);
   LSuite.Test('CheckNotEqual (double pass)',  @TestCheckNotEqualDoublePass);
   LSuite.Test('CheckNotEqual (double fail)',  @TestCheckNotEqualDoubleFail);
+
+  { v3.1: CheckGreaterOrEqual / CheckLessOrEqual }
+  LSuite.Test('GreaterOrEqual pass',         @TestCheckGreaterOrEqualPass);
+  LSuite.Test('GreaterOrEqual fail',         @TestCheckGreaterOrEqualFail);
+  LSuite.Test('LessOrEqual pass',            @TestCheckLessOrEqualPass);
+  LSuite.Test('LessOrEqual fail',            @TestCheckLessOrEqualFail);
 
   if not LSuite.Run then
   begin
