@@ -181,6 +181,7 @@ end;
 
 ## 版本历史
 
+- v2.3 (2026-06-25): 4 项深审修复 — AcquireUnchecked 统计、TObjectPool 边界、FixedPool DEBUG 指针、Slab SupportsAligned
 - v2.2 (2026-06-25): 9 项打磨 — nil 安全、TLS 多实例隔离、AllocMem 路径、DEBUG 防护、门面补全
 - v2.1 (2026-06-23): TLA + SizeClass Slab + Fallback Chain + FPC FillChar/Move 清理
 - v2.0 (2026-06-22): 架构清理 + 性能优化 + 安全防护 + 并发语义补强

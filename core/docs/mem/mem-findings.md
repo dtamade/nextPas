@@ -647,18 +647,19 @@ README / ARCHITECTURE 已写明 `AllocUnsafe` 不保证对齐，这条不再单�
 
 ## 十、汇总
 
-### 状态统计（截止 2026-06-25 第二轮）
+### 状态统计（截止 2026-06-25 第四轮）
 
 | 状态               | 数量   | 说明                                                            |
 | ------------------ | ------ | --------------------------------------------------------------- |
-| **[FIXED] / 关闭** | **73** | 含第一轮 60 条 + 第二轮 9 条 + 第三轮 4 条             |
+| **[FIXED] / 关闭** | **77** | 含第一轮 60 条 + 第二轮 9 条 + 第三轮 4 条 + 第四轮 4 条   |
 | **仍然开放**       | **0**  | 当前树上已无剩余开放问题                                         |
 | **新增 (第二轮)**  | **9**  | 全部已修复                                                      |
 | **新增 (第三轮)**  | **4**  | 全部已修复                                                      |
+| **新增 (第四轮)**  | **4**  | 全部已修复                                                      |
 
 ### 当前最高优先级（建议先处理）
 
-1. 无。两轮 `mem-findings.md` 已清零。
+1. 无。四轮 `mem-findings.md` 已清零。
 
 ### 处理建议顺序
 
@@ -797,3 +798,39 @@ front bump 统计 `FTotalUsed += LPad + aSize`（含对齐 padding），back bum
 `TLocalArena`/`TChunkedArena` 都有 `Stats: TArenaStats` 方法，`TVirtualArena` 没有。
 
 **修复**：补 `Stats` 方法，返回 `TotalAllocated/TotalUsed/PeakUsed/AllocCount`。
+
+---
+
+## 第四轮（深审 Agent 并行扫描 — 行为正确性 + 边界条件）
+
+### R-14 [FIXED] TBlockPool.AcquireUnchecked 缺少 FTotalAllocs 统计
+
+**P3 | 文件：`core/src/nextpas.core.mem.blockpool.pas`**
+
+`Acquire` 路径有 `Inc(FTotalAllocs)`，但 `AcquireUnchecked` 路径遗漏，导致统计永久欠计。
+
+**修复**：在 `AcquireUnchecked` 中 `Inc(FAllocCount)` 之后补 `Inc(FTotalAllocs)`。
+
+### R-15 [FIXED] TObjectPool MaxSize 边界后永远无法创建新对象
+
+**P3 | 文件：`core/src/nextpas.core.mem.pool.object_pool.pas`**
+
+当 pool 已满且 `TrackObjectLifetime=True` 时，`ReleaseObject` 会销毁对象（`aObject.Free`），但不减 `FTotalCreated`。`FTotalCreated` 只增不减，卡在 MaxSize 后永久拒绝 `AcquireObject`。
+
+**修复**：销毁对象后 `Dec(FTotalCreated)`，允许后续重新创建。
+
+### R-16 [FIXED] TFixedPool.ReleasePtr DEBUG FillMem 参数类型错误
+
+**P3 | 文件：`core/src/nextpas.core.mem.pool.fixed.pas`**
+
+`{$IFDEF FAF_MEM_DEBUG}` 块中 `FillMem(PByte(FBuffer)[SizeUInt(LIdx)*FBlockSize], ...)` — `PByte[]` 返回 `Byte` 值而非 `Pointer`，编译器隐式转换导致地址截断/错误污化。
+
+**修复**：改为 `FillMem(Pointer(PByte(FBuffer) + SizeUInt(LIdx) * FBlockSize), ...)` 正确指针算术。
+
+### R-17 [FIXED] Slab Pool Traits.SupportsAligned 误报 False
+
+**P3 | 文件：`core/src/nextpas.core.mem.pool.slab.pas`、`slab.sharded.pas`、`fixed_slab.pas`**
+
+三个 Slab Pool 类型的 `Traits.SupportsAligned` 声明为 `False`，但它们都实现了 `AllocAligned`（通过 fallback 路径：GetMem + 上对齐 + 前缀保存）。调用方查询 Traits 会误判不支持对齐分配。
+
+**修复**：三处 `SupportsAligned := False` → `True`，同步更新 `test_slab_pool` 断言。
