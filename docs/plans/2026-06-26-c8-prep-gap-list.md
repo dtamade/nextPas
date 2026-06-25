@@ -144,14 +144,28 @@ nextPas parser 不支持 `:width:decimals` 格式说明符。
 ### 已修复
 - Gap #1: unit cycle（SysUtils stub 自给自足）
 - Gap #2: string keyword type cast（parser 扩展）
+- Gap #4: FPC Str() 格式说明符语法（支持变量标识符）
 
-### 已验证编译成功
+### 已验证编译成功（15 个模块）
 - ✅ nextpas.core.exception
 - ✅ nextpas.core.base
 - ✅ nextpas.core.errors
+- ✅ nextpas.core.text.conv
+- ✅ nextpas.core.text.utils
+- ✅ nextpas.core.text.format
+- ✅ nextpas.core.mem
+- ✅ nextpas.core.log.intf
+- ✅ nextpas.core.sync.intf
+- ✅ nextpas.core.base.utils
+- ✅ nextpas.core.path
+- ✅ nextpas.core.fs.intf
+- ✅ nextpas.core.fs.util
+- ✅ nextpas.core.fs.glob
+- ✅ nextpas.core.collections.intf
 
 ### 待修复
-- Gap #4: FPC Str() 格式说明符语法（阻塞 text.conv）
+- nextpas.core.collections.arr: "IMPLEMENTATION expected but BEGIN found"
+- nextpas.core.collections.hashmap: "statement expected but ; found"
 
 ## 状态
 
@@ -160,4 +174,5 @@ nextPas parser 不支持 `:width:decimals` 格式说明符。
 | #1 unit cycle | ✅ 已修复 | 最高 |
 | #2 parser syntax (array of const) | ✅ 已修复 | 最高 |
 | #3 search path | 🔴 未分析 | 低 |
-| #4 FPC Str() 语法 | 🔴 未修复 | 高 |
+| #4 FPC Str() 语法 | ✅ 已修复 | 高 |
+| #5 collections parser errors | 🔴 未修复 | 中 |
