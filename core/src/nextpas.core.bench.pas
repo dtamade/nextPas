@@ -40,6 +40,9 @@ type
   {** ST-12: 重新导出跨语言报告类型 }
   TCrossLangEntry = nextpas.core.bench.report.TCrossLangEntry;
 
+  {** 重新导出执行器（旧 API 兼容：TBenchRunner.Run + Summary） }
+  TBenchRunner = nextpas.core.bench.runner.TBenchRunner;
+
   {** 基准套件 - Fluent Builder 实现 }
   TBenchSuite = class(TInterfacedObject, IBenchSuite)
   private

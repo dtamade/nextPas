@@ -158,6 +158,13 @@ type
     function GetConfig: TBenchConfig;
     procedure SetFilter(const AFilter: string);
 
+    {** 便利方法：运行单个基准并累积结果（旧 API 兼容）。
+     *  AFunc 是 TBenchLoopFunc，内部循环由框架控制。 }
+    procedure Run(const AName: string; AFunc: TBenchLoopFunc);
+
+    {** 便利方法：打印所有已累积结果的摘要 }
+    procedure Summary;
+
     {** 属性访问 }
     property Config: TBenchConfig read GetConfig write SetConfig;
     property Filter: string read FFilter write SetFilter;
@@ -1001,6 +1008,38 @@ procedure TBenchRunner.SetFilter(const AFilter: string);
 begin
   FFilter := AFilter;
   FFilterLower := LowerCase(AFilter); { PF-08: cache lowercase }
+end;
+
+procedure TBenchRunner.Run(const AName: string; AFunc: TBenchLoopFunc);
+var
+  LEntry: TBenchEntry;
+begin
+  LEntry := Default(TBenchEntry);
+  LEntry.Name := AName;
+  LEntry.LoopFunc := AFunc;
+  LEntry.IsLoop := True;
+  LEntry.Condition := True;
+  RunOne(LEntry);
+end;
+
+procedure TBenchRunner.Summary;
+var
+  I: Integer;
+begin
+  if FResultCount = 0 then
+    Exit;
+
+  WriteLn;
+  WriteLn('=== Summary ===');
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Skipped then
+      WriteLn('  ', FResults[I].Name:40, '  SKIPPED: ', FResults[I].SkipReason)
+    else
+      WriteLn('  ', FResults[I].Name:40,
+        FResults[I].NsPerOp:10:1, ' ns/op',
+        FResults[I].OpsPerSec:14:0, ' ops/s');
+  end;
 end;
 
 end.
