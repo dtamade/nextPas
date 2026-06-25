@@ -4498,6 +4498,29 @@ var
           else
             Result := False;
         end;
+      tkLParen:
+        begin
+          { parenthesized expression as statement: (expr)^.field := value }
+          StmtNode := TGreenNode.Create(gnkProcedureCallStatement,
+            Token.ByteOffset, 0, '');
+          RHS := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+          if RHS <> nil then
+            StmtNode.AppendChild(RHS);
+          if (ACursor < ALexer.TokenCount) and
+            (CurrentToken(ALexer, ACursor).Kind = tkAssign) then
+          begin
+            { assignment: (expr)^.field := value }
+            StmtNode.FText := 'assign';
+            Inc(ACursor);
+            RHS := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+            if RHS <> nil then
+              StmtNode.AppendChild(RHS);
+          end;
+          List.AppendChild(StmtNode);
+          Inc(ATree.FNodeCount);
+          MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+          Result := True;
+        end;
     else
       Result := False;
     end;
