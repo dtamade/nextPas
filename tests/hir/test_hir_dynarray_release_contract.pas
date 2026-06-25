@@ -157,11 +157,13 @@ begin
       Fail('missing-owned-local-cleanup');
 
     LlvmText := EmitLlvm(Model);
-    if Pos('define internal ptr @np_dynarray_resize(', LlvmText) = 0 then
+    { Runtime helpers are now external (linked via llvm-link), not embedded.
+      Verify the declare signatures and call sites are present. }
+    if Pos('declare ptr @np_dynarray_resize(', LlvmText) = 0 then
       Fail('missing-dynarray-resize-helper');
-    if Pos('define internal void @np_dynarray_release(', LlvmText) = 0 then
+    if Pos('declare void @np_dynarray_release(', LlvmText) = 0 then
       Fail('missing-dynarray-release-helper');
-    if Pos('define internal void @np_dynarray_fault(', LlvmText) = 0 then
+    if Pos('declare void @np_dynarray_fault(', LlvmText) = 0 then
       Fail('missing-dynarray-fault-helper');
     if Pos('call ptr @np_dynarray_resize(', LlvmText) = 0 then
       Fail('missing-owned-resize-call');
@@ -214,7 +216,8 @@ begin
       Node) then
       Fail('missing-owned-string-concat-node');
     LlvmText := EmitLlvm(Model);
-    if Pos('call {ptr, i64, ptr, i64} @np_str_concat_owned(', LlvmText) = 0 then
+    { sret model: concat uses np_tstring_concat, not old 4-field np_str_concat_owned }
+    if Pos('call void @np_tstring_concat(', LlvmText) = 0 then
       Fail('missing-owned-string-concat-helper-call');
   finally
     Model.Free;

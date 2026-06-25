@@ -3643,11 +3643,13 @@ begin
       FCurrentFuncId := FModule.AddFunction(FuncName, GetStringType);
       FModule.SetFunctionOwnedStringReturnAbi(FCurrentFuncId, True);
       FModule.SetFunctionTStringReturnAbi(FCurrentFuncId, True);
+      FModule.AddFunctionParam(FCurrentFuncId, 'sret_ptr', GetPtrType, False, False);
     end
     else if Rest = 's' then
     begin
       FCurrentFuncId := FModule.AddFunction(FuncName, GetStringType);
       FModule.SetFunctionTStringReturnAbi(FCurrentFuncId, True);
+      FModule.AddFunctionParam(FCurrentFuncId, 'sret_ptr', GetPtrType, False, False);
     end
     else if Rest = 'p' then
       FCurrentFuncId := FModule.AddFunction(FuncName, GetPtrType)
@@ -3688,7 +3690,8 @@ begin
     FAllocaCount := 0;
     FGlobalRefCount := 0;
     FBlockCount := 0;
-    if (Length(Rest) > 1) and (Rest[1] = 'r') then
+    if ((Length(Rest) > 1) and (Rest[1] = 'r')) or
+       (Rest = 'so') or (Rest = 's') then
     begin
       FPendingParamCount := ParamCount;
       FPendingParamLlvmIdx := 1;

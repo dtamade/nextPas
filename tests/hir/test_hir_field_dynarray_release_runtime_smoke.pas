@@ -210,7 +210,9 @@ function ExtractHelperSuffix(const ALlvmText: string): string;
 var
   HelperStart: LongInt;
 begin
-  HelperStart := Pos('@__heap_cur = internal global ptr null', ALlvmText);
+  { Runtime helpers are now external (linked via llvm-link).
+    Extract the declare block which contains all runtime function signatures. }
+  HelperStart := Pos('declare void @np_process_init()', ALlvmText);
   if HelperStart = 0 then
     Fail('missing-runtime-helper-slice');
   Result := Copy(ALlvmText, HelperStart, MaxInt);
@@ -373,15 +375,17 @@ var
   FreeWorkerLlvm, FreeBaseRefLlvm: string;
   DestroyPos, CleanupPos, ReleasePos: LongInt;
 begin
-  if Pos('define internal ptr @np_dynarray_resize(', ASourceLlvm) = 0 then
+  { Runtime helpers are now external (linked via llvm-link), not embedded. }
+  if Pos('declare ptr @np_dynarray_resize(', ASourceLlvm) = 0 then
     Fail('missing-dynarray-resize-helper');
-  if Pos('define internal void @np_dynarray_release(', ASourceLlvm) = 0 then
+  if Pos('declare void @np_dynarray_release(', ASourceLlvm) = 0 then
     Fail('missing-dynarray-release-helper');
-  if Pos('define internal ptr @np_object_alloc(i64 %size)', ASourceLlvm) = 0 then
+  { Runtime helpers are now external (linked via llvm-link), not embedded. }
+  if Pos('declare ptr @np_object_alloc(', ASourceLlvm) = 0 then
     Fail('missing-object-alloc-helper');
-  if Pos('define internal void @np_object_free_release(ptr %obj)', ASourceLlvm) = 0 then
+  if Pos('declare void @np_object_free_release(', ASourceLlvm) = 0 then
     Fail('missing-object-free-release-helper');
-  if Pos('define internal void @np_object_dynarray_cleanup_TWorker(ptr ',
+  if Pos('@np_object_dynarray_cleanup_TWorker(ptr ',
     ASourceLlvm) = 0 then
     Fail('missing-worker-field-cleanup-helper');
   if Pos('define internal void @np_object_dynarray_cleanup_TBase(ptr ',
@@ -445,22 +449,42 @@ begin
     Fail('missing-generated-e2e-object-release-call');
 end;
 
+function RuntimeSrcDir: string;
+begin
+  Result := GetEnvironmentVariable('NEXTPAS_RUNTIME_DIR');
+  if Result = '' then
+    Result := 'rtl/runtime/src';
+end;
+
 procedure RunRuntimeSmoke(const AOutputDir, AStem: string);
 var
   LlPath: string;
+  LinkedPath: string;
   AsmPath: string;
   ExePath: string;
+  RuntimeDir: string;
 begin
   LlPath := IncludeTrailingPathDelimiter(AOutputDir) + AStem + '.ll';
+  LinkedPath := IncludeTrailingPathDelimiter(AOutputDir) + AStem + '.linked.ll';
   AsmPath := IncludeTrailingPathDelimiter(AOutputDir) + AStem + '.s';
   ExePath := IncludeTrailingPathDelimiter(AOutputDir) + AStem;
+  RuntimeDir := RuntimeSrcDir;
 
+  { Link runtime .ll files }
+  RunCommand(AStem + '-llvm-link', ToolPath('LLVM_LINK', 'llvm-link'),
+    [LlPath,
+     IncludeTrailingPathDelimiter(RuntimeDir) + 'nextpas.runtime.memops.ll',
+     IncludeTrailingPathDelimiter(RuntimeDir) + 'nextpas.runtime.allocator.ll',
+     IncludeTrailingPathDelimiter(RuntimeDir) + 'nextpas.runtime.dynarray.ll',
+     IncludeTrailingPathDelimiter(RuntimeDir) + 'nextpas.runtime.lifecycle.ll',
+     IncludeTrailingPathDelimiter(RuntimeDir) + 'nextpas.runtime.objects.ll',
+     '-o', LinkedPath], 0);
   RunCommand(AStem + '-opt-verify', ToolPath('LLVM_OPT', 'opt'),
-    ['-passes=verify', '-disable-output', LlPath], 0);
+    ['-passes=verify', '-disable-output', LinkedPath], 0);
   RunCommand(AStem + '-llc', ToolPath('LLVM_LLC', 'llc'),
-    ['-filetype=asm', '-o', AsmPath, LlPath], 0);
+    ['-filetype=asm', '-o', AsmPath, LinkedPath], 0);
   RunCommand(AStem + '-link', ToolPath('CLANG', 'clang'),
-    ['-nostdlib', '-no-pie', '-o', ExePath, AsmPath], 0);
+    ['-nostartfiles', '-no-pie', '-lc', '-o', ExePath, AsmPath], 0);
   RunCommand(AStem + '-run', ExePath, [], 42);
 end;
 

@@ -40,16 +40,33 @@ begin
 end;
 
 procedure RunCommand(const ALabel, AExecutable: string;
-  const AArgs: array of string; AExpectedExit: LongInt);
+  const AArgs: array of string; AExpectedExit: LongInt;
+  ASuppressStderr: Boolean = False);
 var
   Proc: TProcess;
   I: LongInt;
+  CmdLine: string;
 begin
   Proc := TProcess.Create(nil);
   try
-    Proc.Executable := AExecutable;
-    for I := Low(AArgs) to High(AArgs) do
-      Proc.Parameters.Add(AArgs[I]);
+    if ASuppressStderr then
+    begin
+      { Use shell to redirect stderr to /dev/null, avoiding stdout corruption.
+        Quote arguments to handle paths with spaces. }
+      CmdLine := '"' + AExecutable + '"';
+      for I := Low(AArgs) to High(AArgs) do
+        CmdLine := CmdLine + ' "' + AArgs[I] + '"';
+      CmdLine := CmdLine + ' 2>/dev/null';
+      Proc.Executable := '/bin/sh';
+      Proc.Parameters.Add('-c');
+      Proc.Parameters.Add(CmdLine);
+    end
+    else
+    begin
+      Proc.Executable := AExecutable;
+      for I := Low(AArgs) to High(AArgs) do
+        Proc.Parameters.Add(AArgs[I]);
+    end;
     Proc.Options := [poWaitOnExit];
     Proc.Execute;
     if Proc.ExitStatus <> AExpectedExit then
@@ -115,7 +132,9 @@ begin
     Emitter.EmitModule;
     LlvmText := Emitter.AsText;
 
-    HelperStart := Pos('@__heap_cur = internal global ptr null', LlvmText);
+    { Runtime helpers are now external (linked via llvm-link).
+      Extract the declare block. Use np_alloc as marker for hand-built models. }
+    HelperStart := Pos('declare ptr @np_alloc(', LlvmText);
     if HelperStart = 0 then
       Fail('missing-allocator-helper-ir');
 
@@ -270,22 +289,41 @@ begin
     Fail('missing-large-object-release-call');
 end;
 
+function RuntimeSrcDir: string;
+begin
+  Result := GetEnvironmentVariable('NEXTPAS_RUNTIME_DIR');
+  if Result = '' then
+    Result := 'rtl/runtime/src';
+end;
+
 procedure RunRuntimeSmoke(const AOutputDir, AStem: string);
 var
   LlPath: string;
+  LinkedPath: string;
   AsmPath: string;
   ExePath: string;
+  RuntimeDir: string;
 begin
   LlPath := IncludeTrailingPathDelimiter(AOutputDir) + AStem + '.ll';
+  LinkedPath := IncludeTrailingPathDelimiter(AOutputDir) + AStem + '.linked.ll';
   AsmPath := IncludeTrailingPathDelimiter(AOutputDir) + AStem + '.s';
   ExePath := IncludeTrailingPathDelimiter(AOutputDir) + AStem;
+  RuntimeDir := RuntimeSrcDir;
 
+  { Link runtime .ll files }
+  RunCommand(AStem + '-llvm-link', ToolPath('LLVM_LINK', 'llvm-link'),
+    [LlPath,
+     IncludeTrailingPathDelimiter(RuntimeDir) + 'nextpas.runtime.memops.ll',
+     IncludeTrailingPathDelimiter(RuntimeDir) + 'nextpas.runtime.allocator.ll',
+     IncludeTrailingPathDelimiter(RuntimeDir) + 'nextpas.runtime.lifecycle.ll',
+     IncludeTrailingPathDelimiter(RuntimeDir) + 'nextpas.runtime.objects.ll',
+     '-o', LinkedPath], 0, True);
   RunCommand(AStem + '-opt-verify', ToolPath('LLVM_OPT', 'opt'),
-    ['-passes=verify', '-disable-output', LlPath], 0);
+    ['-passes=verify', '-disable-output', LinkedPath], 0);
   RunCommand(AStem + '-llc', ToolPath('LLVM_LLC', 'llc'),
-    ['-filetype=asm', '-o', AsmPath, LlPath], 0);
+    ['-filetype=asm', '-o', AsmPath, LinkedPath], 0);
   RunCommand(AStem + '-link', ToolPath('CLANG', 'clang'),
-    ['-nostdlib', '-no-pie', '-o', ExePath, AsmPath], 0);
+    ['-nostartfiles', '-no-pie', '-lc', '-o', ExePath, AsmPath], 0);
   RunCommand(AStem + '-run', ExePath, [], 42);
 end;
 

@@ -4434,6 +4434,8 @@ var
   Dist: LongInt;
   Index: LongInt;
   QualifiedName: string;
+  SameOwnerCount: LongInt;
+  SameOwnerSymbolId: LongInt;
   Symbol: TSemanticSymbol;
   SignatureMatchCount: LongInt;
   SignatureSymbolId: LongInt;
@@ -4518,12 +4520,47 @@ begin
   begin
     if AHasArgSignature and (SignatureMatchCount = 1) then
       SymbolId := SignatureSymbolId
-    else if (not AHasArgSignature) or (SignatureMatchCount > 1) then
+    else if AHasArgSignature and (SignatureMatchCount > 1) then
     begin
-      // When no signature info available, prefer the overload with
-      // ParamCount closest to AArgCount (most specific match).
-      if not AHasArgSignature then
+      // Multiple symbols with matching signature — prefer the one from
+      // the same owner unit as the receiver type. If exactly one matches
+      // the owner unit, use it (local definition wins over imported
+      // duplicate). If more than one matches the same owner unit, it is
+      // a genuine ambiguous overload within the same unit.
+      SameOwnerCount := 0;
+      SameOwnerSymbolId := 0;
+      for Index := 0 to FModel.SymbolCount - 1 do
       begin
+        Symbol := FModel.SymbolAt(Index);
+        if SameText(Symbol.Name, QualifiedName) and
+          (SameText(Symbol.Kind, 'method') or
+           SameText(Symbol.Kind, 'constructor') or
+           SameText(Symbol.Kind, 'destructor')) and
+          (AArgCount >= Symbol.MinParamCount) and
+          (AArgCount <= Symbol.ParamCount) and
+          AHasArgSignature and
+          SameText(Copy(Symbol.ParamSignature, 1, Length(AArgSignature)), AArgSignature) and
+          SameText(Symbol.OwnerUnitId, TypeSymbol.OwnerUnitId) then
+        begin
+          Inc(SameOwnerCount);
+          if SameOwnerSymbolId = 0 then
+            SameOwnerSymbolId := Symbol.SymbolId;
+        end;
+      end;
+      if SameOwnerCount = 1 then
+        SymbolId := SameOwnerSymbolId
+      else
+      begin
+        if SameText(
+          TypeSymbol.OwnerUnitId,
+          NormalizeUnitIdentity(FUnitGraph.RootName)
+        ) or OwnerUnitAllowsProjectSourceDiagnostic(TypeSymbol.OwnerUnitId) then
+          AResolutionFailureKind := 'ambiguous-overload';
+        Exit;
+      end;
+    end
+    else if not AHasArgSignature then
+    begin
         BestDist := MaxInt;
         BestSymbolId := 0;
         for Index := 0 to FModel.SymbolCount - 1 do
@@ -4561,16 +4598,6 @@ begin
           Exit;
         end;
       end
-      else
-      begin
-        if SameText(
-          TypeSymbol.OwnerUnitId,
-          NormalizeUnitIdentity(FUnitGraph.RootName)
-        ) or OwnerUnitAllowsProjectSourceDiagnostic(TypeSymbol.OwnerUnitId) then
-          AResolutionFailureKind := 'ambiguous-overload';
-        Exit;
-      end;
-    end
     else if SignatureMatchCount = 0 then
     begin
       if AAllowNoMatchingOverloadDiagnostic and AHasTypeMismatchEvidence and
@@ -4579,6 +4606,15 @@ begin
           OwnerUnitAllowsProjectSourceDiagnostic(TypeSymbol.OwnerUnitId)
         ) then
         AResolutionFailureKind := 'no-matching-overload';
+      Exit;
+    end
+    else
+    begin
+      if SameText(
+        TypeSymbol.OwnerUnitId,
+        NormalizeUnitIdentity(FUnitGraph.RootName)
+      ) or OwnerUnitAllowsProjectSourceDiagnostic(TypeSymbol.OwnerUnitId) then
+        AResolutionFailureKind := 'ambiguous-overload';
       Exit;
     end;
   end;

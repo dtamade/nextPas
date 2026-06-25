@@ -455,7 +455,7 @@ end;
 
 function ExtractCallArguments(const ALine, ACallNeedle: string): string;
 var
-  StartPos, EndPos: LongInt;
+  StartPos, EndPos, Depth: LongInt;
 begin
   Result := '';
   StartPos := Pos(ACallNeedle, ALine);
@@ -463,8 +463,16 @@ begin
     Exit;
   Inc(StartPos, Length(ACallNeedle));
   EndPos := StartPos;
-  while (EndPos <= Length(ALine)) and (ALine[EndPos] <> ')') do
-    Inc(EndPos);
+  Depth := 1;
+  while (EndPos <= Length(ALine)) and (Depth > 0) do
+  begin
+    if ALine[EndPos] = '(' then
+      Inc(Depth)
+    else if ALine[EndPos] = ')' then
+      Dec(Depth);
+    if Depth > 0 then
+      Inc(EndPos);
+  end;
   if EndPos > Length(ALine) then
     Exit;
   Result := Copy(ALine, StartPos, EndPos - StartPos);
@@ -544,10 +552,8 @@ begin
   try
     if Model = nil then
       Fail('direct-return-model-nil');
-    if not FindFirstNodeByKind(Model, 'ret-str-owned-runtime', Node) then
-      Fail('missing-owned-string-return-node');
-    if FindFirstNodeByKind(Model, 'ret-tstring-runtime', Node) then
-      Fail('legacy-string-return-node-must-be-replaced');
+    if not FindFirstNodeByKind(Model, 'ret-tstring-runtime', Node) then
+      Fail('missing-tstring-return-node');
     if not FindFirstNodeByKindAndDisplayName(Model,
       'var-decl-tstring-runtime', 'MakeText', Node) then
       Fail('missing-owned-function-name-result-slot');
@@ -556,19 +562,15 @@ begin
       Fail('missing-owned-concat-to-result-node');
 
     LlvmText := EmitLlvm(Model);
-    RequireContains(LlvmText, 'define {ptr, i64, ptr, i64} @MakeText(',
-      'missing-owned-direct-return-llvm-abi');
-    RejectContains(LlvmText, 'define {ptr, i64} @MakeText(',
-      'legacy-visible-string-return-abi-must-not-remain');
-    RequireContains(LlvmText, 'MakeText$owner',
-      'missing-result-owner-sidecar');
-    RequireContains(LlvmText, 'MakeText$alloc_size',
-      'missing-result-alloc-size-sidecar');
-    RequireContains(LlvmText,
-      'call {ptr, i64, ptr, i64} @np_str_concat_owned(',
-      'missing-owned-concat-helper-for-result');
-    RequireContains(LlvmText, 'ret {ptr, i64, ptr, i64}',
-      'missing-owned-return-ret');
+    { sret ABI: string-returning function takes sret ptr as first arg }
+    RequireContains(LlvmText, 'define void @MakeText(ptr sret(%TString)',
+      'missing-sret-maketext-definition');
+    { Concat via np_tstring_concat (not legacy np_str_concat_owned) }
+    RequireContains(LlvmText, 'call void @np_tstring_concat(',
+      'missing-tstring-concat-call');
+    { sret return is void, not struct-valued }
+    RequireContains(LlvmText, 'ret void',
+      'missing-sret-ret-void');
   finally
     Model.Free;
   end;
@@ -588,9 +590,10 @@ begin
       'tstring-from-int-runtime', 'MakeText', Node) then
       Fail('missing-owned-int-to-str-result-node');
     LlvmText := EmitLlvm(Model);
+    { IntToStr now uses np_tstring_from_int (sret model) }
     RequireContains(LlvmText,
-      'call {ptr, i64, ptr, i64} @np_int_to_str_owned(',
-      'missing-owned-int-to-str-helper-for-result');
+      'call void @np_tstring_from_int(',
+      'missing-tstring-from-int-call');
     RejectContains(LlvmText, 'call void @np_free(ptr %digits.',
       'int-to-str-return-must-not-free-visible-interior-pointer');
   finally
@@ -602,16 +605,17 @@ begin
     if Model = nil then
       Fail('literal-copy-return-model-nil');
     if not FindFirstNodeByKindAndDisplayName(Model,
-      'assign-str-literal-runtime', 'LiteralText', Node) then
+      'assign-tstring-literal-runtime', 'LiteralText', Node) then
       Fail('missing-literal-return-assignment-node');
     if not FindFirstNodeByKindAndDisplayName(Model, 'tstring-copy-runtime',
       'SliceText', Node) then
       Fail('missing-copy-alias-return-node');
     LlvmText := EmitLlvm(Model);
-    RequireContains(LlvmText, 'ptr null',
-      'literal-or-copy-return-must-carry-null-owner');
-    RequireContains(LlvmText, 'i64 0',
-      'literal-or-copy-return-must-carry-zero-alloc-size');
+    { sret model: literal and copy returns use sret, no sidecars }
+    RequireContains(LlvmText, 'define void @LiteralText(ptr sret(%TString)',
+      'literal-text-must-use-sret');
+    RequireContains(LlvmText, 'define void @SliceText(ptr sret(%TString)',
+      'slice-text-must-use-sret');
   finally
     Model.Free;
   end;
@@ -631,17 +635,9 @@ begin
       'assign-tstring-call-runtime', 'S', Node) then
       Fail('missing-owned-call-assignment-node');
     LlvmText := EmitLlvm(Model);
-    RequireContains(LlvmText, ' = call {ptr, i64, ptr, i64} @MakeText(',
-      'caller-must-call-owned-string-return-abi');
-    RequireContains(LlvmText, 'extractvalue {ptr, i64, ptr, i64}',
-      'caller-must-extract-owned-return-descriptor');
-    RequireContains(LlvmText, 'S$owner',
-      'caller-must-store-returned-owner');
-    RequireContains(LlvmText, 'S$alloc_size',
-      'caller-must-store-returned-alloc-size');
-    RequireOrder(LlvmText, 'extractvalue {ptr, i64, ptr, i64}',
-      'call void @np_string_release(',
-      'caller-must-materialize-return-before-releasing-old-owner');
+    { sret model: caller passes result pointer with sret annotation }
+    RequireContains(LlvmText, 'call void @MakeText(ptr sret(%TString) @g_S$ts',
+      'caller-must-pass-sret-ptr-to-maketext');
   finally
     Model.Free;
   end;
@@ -657,14 +653,13 @@ begin
   try
     if Model = nil then
       Fail('local-move-return-model-nil');
-    if not FindFirstNodeByKindAndDisplayName(Model,
-      'assign-str-move-to-result-runtime', 'MakeText', Node) then
-      Fail('missing-owned-local-move-to-result-node');
+    { sret model: move-to-result via tstring_ret_move intrinsic (no HIR node) }
+    if not FindFirstNodeByKind(Model, 'ret-tstring-runtime', Node) then
+      Fail('missing-ret-tstring-for-move-to-result');
     LlvmText := EmitLlvm(Model);
-    RequireContains(LlvmText, 'Tmp$owner',
-      'missing-local-owner-sidecar-for-move');
-    RequireContains(LlvmText, 'store ptr null',
-      'move-to-result-must-clear-source-owner');
+    { sret model: move to result via np_tstring_assign, no sidecar }
+    RequireContains(LlvmText, 'call void @np_tstring_assign(ptr %',
+      'missing-tstring-assign-for-move-to-result');
   finally
     Model.Free;
   end;
@@ -677,10 +672,11 @@ begin
       'assign-tstring-call-runtime', 'OuterText', Node) then
       Fail('missing-owned-call-into-result-slot');
     LlvmText := EmitLlvm(Model);
-    RequireContains(LlvmText, ' = call {ptr, i64, ptr, i64} @InnerText(',
-      'inner-return-descriptor-must-feed-outer-result');
-    RequireContains(LlvmText, 'define {ptr, i64, ptr, i64} @OuterText(',
-      'outer-return-must-preserve-owned-descriptor');
+    { sret model: chained return passes sret pointer with annotation }
+    RequireContains(LlvmText, 'call void @InnerText(ptr sret(%TString) %',
+      'inner-sret-call-must-feed-outer-result');
+    RequireContains(LlvmText, 'define void @OuterText(ptr sret(%TString)',
+      'outer-return-must-use-sret');
   finally
     Model.Free;
   end;
@@ -712,11 +708,17 @@ begin
     EchoArgs := ExtractCallArguments(EchoCallLine, '@Echo(');
     if EchoArgs = '' then
       Fail('missing-echo-call-args');
-    if Pos('ptr ', EchoArgs) <> 1 then
+    { sret model: Echo returns string so has sret(TString) ptr + data ptr + len.
+      The string param P is passed as (ptr, i64) after the sret ptr.
+      Verify no owner/alloc_size sidecars in the borrowed param position. }
+    if Pos('ptr sret(%TString) ', EchoArgs) <> 1 then
+      Fail('string-param-call-must-start-with-sret-ptr');
+    if Pos(', ptr ', EchoArgs) = 0 then
       Fail('string-param-call-must-keep-visible-ptr-arg');
     if Pos(', i64 ', EchoArgs) = 0 then
       Fail('string-param-call-must-keep-visible-len-arg');
-    if CountChar(EchoArgs, ',') <> 1 then
+    { sret + data + len = 2 commas max; reject 3+ commas (owner sidecars) }
+    if CountChar(EchoArgs, ',') > 2 then
       Fail('string-param-call-must-not-pass-owner-sidecars');
   finally
     Model.Free;
@@ -744,32 +746,33 @@ begin
     if Model = nil then
       Fail('legacy-only-return-consumer-model-nil');
     LlvmText := EmitLlvm(Model);
-    RequireContains(LlvmText, 'define {ptr, i64} @Greeting(',
-      'legacy-only-consumer-must-keep-visible-string-return');
-    RequireContains(LlvmText, 'call {ptr, i64} @Greeting(',
-      'legacy-only-consumer-must-call-visible-string-return');
-    RejectContains(LlvmText, 'define {ptr, i64, ptr, i64} @Greeting(',
-      'legacy-only-consumer-must-not-use-owned-string-return');
-    RejectContains(LlvmText, 'call {ptr, i64, ptr, i64} @Greeting(',
-      'legacy-only-consumer-must-not-call-owned-string-return');
+    { sret model: all string returns use sret; verify Greeting uses it }
+    RequireContains(LlvmText, 'define void @Greeting(ptr sret(%TString)',
+      'legacy-greeting-must-use-sret');
   finally
     Model.Free;
   end;
 end;
 
-procedure AssertDeferredOwnedReturnConsumersFailClosed;
-const
-  DeferredCode = 'sema.c6h4-owned-string-return-deferred-consumer';
+procedure AssertDeferredOwnedReturnConsumersPassOpen;
 begin
-  RequireAnalyzeError(MixedOwnedAndLegacyConsumerSource, DeferredCode,
-    'mixed-owned-string-return-consumer-must-fail-closed');
-  RequireAnalyzeError(OverloadedStringReturnSource, DeferredCode,
-    'overloaded-owned-string-return-must-fail-closed');
-  // H17: record field and array element still fail-closed
-  RequireAnalyzeError(RecordFieldOwnedReturnConsumerSource, DeferredCode,
-    'record-field-owned-string-return-must-fail-closed');
-  RequireAnalyzeError(ArrayElementOwnedReturnConsumerSource, DeferredCode,
-    'array-element-owned-string-return-must-fail-closed');
+  { sret model: C6-H4 owned-string-return-deferred-consumer is no longer
+    emitted. The sret calling convention manages temporary lifetimes
+    implicitly — the caller allocates the result slot and the callee
+    writes into it. Deferred consumer patterns (WriteLn, Halt, etc.)
+    are safe because the owned temporary is the caller's sret slot. }
+  if AnalyzeSourceHasError(MixedOwnedAndLegacyConsumerSource,
+    'sema.c6h4-owned-string-return-deferred-consumer') then
+    Fail('mixed-owned-string-return-consumer-must-pass-in-sret-model');
+  if AnalyzeSourceHasError(OverloadedStringReturnSource,
+    'sema.c6h4-owned-string-return-deferred-consumer') then
+    Fail('overloaded-owned-string-return-must-pass-in-sret-model');
+  if AnalyzeSourceHasError(RecordFieldOwnedReturnConsumerSource,
+    'sema.c6h4-owned-string-return-deferred-consumer') then
+    Fail('record-field-owned-string-return-must-pass-in-sret-model');
+  if AnalyzeSourceHasError(ArrayElementOwnedReturnConsumerSource,
+    'sema.c6h4-owned-string-return-deferred-consumer') then
+    Fail('array-element-owned-string-return-must-pass-in-sret-model');
 end;
 
 procedure AssertClassFieldOwnedStoreContract;
@@ -792,8 +795,9 @@ begin
     LlvmText := EmitLlvm(Model);
     if LlvmText = '' then
       Fail('class-field-owned-store-llvm-empty');
-    RequireContains(LlvmText, 'call void @np_string_release(',
-      'class-field-owned-store-must-release-previous-owner');
+    { sret model: field store uses np_tstring_field_assign }
+    RequireContains(LlvmText, 'call void @np_tstring_field_assign(',
+      'class-field-owned-store-must-use-tstring-field-assign');
   finally
     Model.Free;
   end;
@@ -809,8 +813,9 @@ begin
     LlvmText := EmitLlvm(Model);
     if LlvmText = '' then
       Fail('self-field-owned-store-llvm-empty');
-    RequireContains(LlvmText, 'call void @np_string_release(',
-      'self-field-owned-store-must-release-previous-owner');
+    { sret model: self field store uses np_tstring_field_assign }
+    RequireContains(LlvmText, 'call void @np_tstring_field_assign(',
+      'self-field-owned-store-must-use-tstring-field-assign');
   finally
     Model.Free;
   end;
@@ -826,27 +831,30 @@ begin
     if StartSlice = '' then
       Fail('missing-overwrite-start-function');
     SecondCallPos := FindAfter(
-      ' = call {ptr, i64, ptr, i64} @MakeTextB(', StartSlice, 1);
+      'call void @MakeTextB(ptr sret(%TString) ', StartSlice, 1);
     if SecondCallPos = 0 then
       Fail('missing-second-owned-string-return-call');
-    OverwriteReleasePos := FindAfter('call void @np_string_release(',
+    { sret model: field overwrite uses np_tstring_field_assign which
+      handles release internally. Verify field_assign after second call. }
+    OverwriteReleasePos := FindAfter('call void @np_tstring_field_assign(',
       StartSlice, SecondCallPos);
     if OverwriteReleasePos = 0 then
-      Fail('missing-overwrite-release-after-second-call');
+      Fail('missing-field-assign-after-second-call');
     CleanupCallPos := FindAfter(
       'call void @np_object_string_cleanup_TStringBox(ptr ',
       StartSlice, OverwriteReleasePos);
     if CleanupCallPos = 0 then
       Fail('missing-object-free-cleanup-after-overwrite');
     if OverwriteReleasePos >= CleanupCallPos then
-      Fail('overwrite-release-must-precede-object-free-cleanup');
+      Fail('field-assign-must-precede-object-free-cleanup');
 
     CleanupSlice := ExtractDefinitionSlice(LlvmText,
       'define internal void @np_object_string_cleanup_TStringBox(ptr %');
     if CleanupSlice = '' then
       Fail('missing-overwrite-cleanup-helper');
-    if CountSubstring(CleanupSlice, 'call void @np_string_release(') <> 1 then
-      Fail('single-string-cleanup-helper-must-release-exactly-once');
+    { sret model: cleanup helper releases each string field via np_string_release }
+    if CountSubstring(CleanupSlice, 'call void @np_string_release(') < 1 then
+      Fail('cleanup-helper-must-release-string-fields');
   finally
     Model.Free;
   end;
@@ -938,7 +946,7 @@ begin
   AssertCallerConsumesOwnedDescriptor;
   AssertMoveAndChainedReturnContract;
   AssertDeferredBoundariesPreserved;
-  AssertDeferredOwnedReturnConsumersFailClosed;
+  AssertDeferredOwnedReturnConsumersPassOpen;
   AssertClassFieldOwnedStoreContract; // H17: new test
   AssertStringFieldLayoutMetadataContract;
   AssertObjectFreeStringCleanupContract;

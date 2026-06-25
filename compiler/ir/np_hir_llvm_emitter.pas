@@ -43,6 +43,7 @@ type
     FStrConstants: array of string;
     FStrConstCount: LongInt;
     FCurrentReturnTypeId: THIRTypeId;
+    FCurrentFuncIsTStringSret: Boolean;
     FIsCheckCounter: LongInt;
     FObjectFreeCounter: LongInt;
     FPendingObjectFreeActive: Boolean;
@@ -67,6 +68,7 @@ type
     function AddStrConstant(const AValue: string): LongInt;
     function EscapeLlvmStr(const AValue: string): string;
     function IsSretFunction(const AName: string): Boolean;
+    function IsTStringSretFunction(const AName: string): Boolean;
     procedure EmitFunction(const AFunc: THIRFunction);
     procedure EmitCallInstr(const AInstr: THIRInstr);
     procedure ClosePendingObjectFreeGuard;
@@ -317,9 +319,11 @@ procedure THIRLlvmEmitter.EmitCallInstr(const AInstr: THIRInstr);
 var
   I: LongInt;
   LlvmType, Op: string;
+  IsTStringSret: Boolean;
 begin
   LlvmType := TypeToLlvm(AInstr.TypeId);
-  if IsSretFunction(AInstr.CallTarget) then
+  IsTStringSret := IsTStringSretFunction(AInstr.CallTarget);
+  if IsSretFunction(AInstr.CallTarget) or IsTStringSret then
     Op := '  call void @' + AInstr.CallTarget + '('
   else if LlvmType = 'void' then
     Op := '  call void @' + AInstr.CallTarget + '('
@@ -329,11 +333,14 @@ begin
   for I := 0 to High(AInstr.Operands) do
   begin
     if I > 0 then Op := Op + ', ';
-    if AInstr.Operands[I].TypeId <> 0 then
-      Op := Op + TypeToLlvm(AInstr.Operands[I].TypeId) + ' ' +
-        ValueRef(AInstr.Operands[I].ValueId)
+    { First operand of TString sret call gets sret(%TString) annotation }
+    if IsTStringSret and (I = 0) then
+      Op := Op + 'ptr sret(%TString) '
+    else if AInstr.Operands[I].TypeId <> 0 then
+      Op := Op + TypeToLlvm(AInstr.Operands[I].TypeId) + ' '
     else
-      Op := Op + 'i64 ' + ValueRef(AInstr.Operands[I].ValueId);
+      Op := Op + 'i64 ';
+    Op := Op + ValueRef(AInstr.Operands[I].ValueId);
   end;
   Op := Op + ')';
   Emit(Op);
@@ -998,17 +1005,30 @@ begin
       begin
         FNeedsTStringRuntime := True;
         if Length(AInstr.Operands) >= 2 then
-          Emit('  call void @np_tstring_ret_move(ptr ' +
-            ValueRef(AInstr.Operands[0].ValueId) + ', ptr ' +
-            ValueRef(AInstr.Operands[1].ValueId) + ')');
+        begin
+          { Use %agg.result for TString sret functions (sret_ptr is skipped) }
+          if FCurrentFuncIsTStringSret then
+            Emit('  call void @np_tstring_ret_move(ptr %agg.result, ptr ' +
+              ValueRef(AInstr.Operands[1].ValueId) + ')')
+          else
+            Emit('  call void @np_tstring_ret_move(ptr ' +
+              ValueRef(AInstr.Operands[0].ValueId) + ', ptr ' +
+              ValueRef(AInstr.Operands[1].ValueId) + ')');
+        end;
       end
       else if AInstr.IntrinsicName = 'tstring_ret_copy' then
       begin
         FNeedsTStringRuntime := True;
         if Length(AInstr.Operands) >= 2 then
-          Emit('  call void @np_tstring_ret_copy(ptr ' +
-            ValueRef(AInstr.Operands[0].ValueId) + ', ptr ' +
-            ValueRef(AInstr.Operands[1].ValueId) + ')');
+        begin
+          if FCurrentFuncIsTStringSret then
+            Emit('  call void @np_tstring_ret_copy(ptr %agg.result, ptr ' +
+              ValueRef(AInstr.Operands[1].ValueId) + ')')
+          else
+            Emit('  call void @np_tstring_ret_copy(ptr ' +
+              ValueRef(AInstr.Operands[0].ValueId) + ', ptr ' +
+              ValueRef(AInstr.Operands[1].ValueId) + ')');
+        end;
       end
       else if AInstr.IntrinsicName = 'tstring_from_literal' then
       begin
@@ -1181,6 +1201,20 @@ begin
   Result := False;
 end;
 
+function THIRLlvmEmitter.IsTStringSretFunction(const AName: string): Boolean;
+var
+  I: LongInt;
+  F: THIRFunction;
+begin
+  for I := 0 to FModule.FunctionCount - 1 do
+  begin
+    F := FModule.FunctionAt(I);
+    if SameText(F.Name, AName) and F.IsTStringReturnAbi then
+      Exit(True);
+  end;
+  Result := False;
+end;
+
 procedure THIRLlvmEmitter.EmitFunction(const AFunc: THIRFunction);
 var
   I, J: LongInt;
@@ -1193,7 +1227,11 @@ begin
   ParamStr := '';
   for I := 0 to High(AFunc.Params) do
   begin
-    if I > 0 then ParamStr := ParamStr + ', ';
+    { Skip sret_ptr for IsTStringReturnAbi — emitter generates %agg.result }
+    if AFunc.IsTStringReturnAbi and (AFunc.Params[I].Name = 'sret_ptr') then
+      Continue;
+    if ParamStr <> '' then
+      ParamStr := ParamStr + ', ';
     ParamStr := ParamStr + TypeToLlvm(AFunc.Params[I].TypeId) +
       ' ' + ValueRef(AFunc.Params[I].ValueId);
   end;
@@ -1218,6 +1256,7 @@ begin
     RetStr := TypeToLlvm(AFunc.ReturnTypeId);
 
   FCurrentReturnTypeId := AFunc.ReturnTypeId;
+  FCurrentFuncIsTStringSret := AFunc.IsTStringReturnAbi;
 
   Emit('');
   if (Pos('np_object_dynarray_cleanup_', AFunc.Name) = 1) or
