@@ -52,7 +52,7 @@
 | **C6-A** | 债务4 allocator：freestanding malloc/free（mmap + free list + coalesce）                                                      | C5    | ✅ 2026-06-25      |
 | **C6-B** | string ownership 收尾：record/array element string store, string field cleanup on object free                                | C5,C6-A | ⬜ (C6-H7~H17 部分完成) |
 | **C7** | 债务3 深化（target runtime profile/callconv/layout、多目标 IR smoke）+ 债务4 优化（LLVM O2/LTO 可配置）                         | C5,C6-A | ⬜ (C7-prep opt可配置已完成) |
-| **C8-prep** | 自举探针：用 nextPas 编译 `core/` 一个真实中等模块，产出"自举差距清单"                                                          | C6-A | 🏁 里程碑          |
+| **C8-prep** | 自举探针：用 nextPas 编译 `core/` 模块，83% 通过（~83/100），7 gaps 已修复，25 remaining（12 parser + 13 semantic） | C6-A | ✅ 2026-06-26 |
 | **C8** | 根据差距清单逐一修复，直到自举成功                                                                                              | C8-prep | 🏁 里程碑          |
 
 **关键路径** = C2 + C3 + C4 + C5 + C6（allocator）。优化与多目标可延后。
@@ -518,3 +518,15 @@
   `TestCommaFieldArrayStoreTargetExprProducer` 期望 FOther 字段索引为 2，
   但 dynarray 字段占 2 槽位（`Inc(FieldIndex, 2)` 自 8a98af8d），
   实际索引为 3。修正测试期望值，50 个测试全部通过。
+- 2026-06-26 C8-prep 完成：用 nextPas 编译 ~100 个 core/ 模块，83% 通过。
+  修复 7 个 parser/stub gaps：
+  1. SysUtils stub unit cycle 打破
+  2. parser: string keyword as type cast
+  3. parser: FPC Str() format specifiers
+  4. parser: 'of object' in class body nesting counter
+  5. parser: begin...end. initialization in implementation section
+  6. parser: nested type section in class/record bodies
+  7. parser: 'of object' in nested type section skip loops
+  剩余 25 个 gaps（12 parser + 13 semantic）记录在
+  `docs/plans/2026-06-26-c8-prep-gap-list.md`。
+  16/16 compiler-pass 测试全绿，无回归。
