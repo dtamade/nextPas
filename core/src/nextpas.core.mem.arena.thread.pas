@@ -65,6 +65,8 @@ type
     FTotalRecycled: Integer;
     function PopFromPool: TLocalArena;
     procedure PushToPool(AArena: TLocalArena);
+    {** 只归还 Arena 到池, 不清 TLS manager (供跨 manager 切换时调用) }
+    procedure DrainArenaOnly;
   public
     constructor Create(const AConfig: TThreadArenaConfig);
     destructor Destroy; override;
@@ -137,6 +139,7 @@ const
 
 threadvar
   TLSCurrentArena: TLocalArena;
+  TLSCurrentManager: Pointer;  { TThreadArenaManager 实例, 用于检测 manager 切换 }
 
 function DefaultThreadArenaConfig: TThreadArenaConfig;
 begin
@@ -224,16 +227,25 @@ end;
 
 function TThreadArenaManager.Get: TLocalArena;
 begin
-  { 热路径: TLS 命中 }
-  Result := TLSCurrentArena;
-  if Result <> nil then
-    Exit;
+  { 热路径: TLS 命中 且 manager 匹配 }
+  if TLSCurrentManager = Pointer(Self) then begin
+    Result := TLSCurrentArena;
+    if Result <> nil then
+      Exit;
+  end;
 
-  { 冷路径: 从池中取 }
+  { 冷路径: manager 不匹配或无 Arena → 先归还旧 Arena }
+  if TLSCurrentArena <> nil then begin
+    if TLSCurrentManager <> nil then
+      TThreadArenaManager(TLSCurrentManager).DrainArenaOnly;
+  end;
+
+  { 从池中取 }
   Result := PopFromPool;
   if Result <> nil then begin
     Result.Reset;
     TLSCurrentArena := Result;
+    TLSCurrentManager := Pointer(Self);
     Exit;
   end;
 
@@ -241,14 +253,30 @@ begin
   Result := TLocalArena.Create(FConfig.ArenaCapacity);
   InterLockedIncrement(FTotalCreated);
   TLSCurrentArena := Result;
+  TLSCurrentManager := Pointer(Self);
 end;
 
 procedure TThreadArenaManager.DrainTLS;
 var
   LArena: TLocalArena;
 begin
+  if TLSCurrentManager <> Pointer(Self) then
+    Exit;
   LArena := TLSCurrentArena;
   TLSCurrentArena := nil;
+  TLSCurrentManager := nil;
+  if LArena = nil then
+    Exit;
+  PushToPool(LArena);
+end;
+
+procedure TThreadArenaManager.DrainArenaOnly;
+var
+  LArena: TLocalArena;
+begin
+  LArena := TLSCurrentArena;
+  TLSCurrentArena := nil;
+  TLSCurrentManager := nil;
   if LArena = nil then
     Exit;
   PushToPool(LArena);
@@ -256,7 +284,7 @@ end;
 
 function TThreadArenaManager.HasArena: Boolean;
 begin
-  Result := TLSCurrentArena <> nil;
+  Result := (TLSCurrentManager = Pointer(Self)) and (TLSCurrentArena <> nil);
 end;
 
 function TThreadArenaManager.PoolSize: Integer;

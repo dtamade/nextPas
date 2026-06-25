@@ -662,6 +662,44 @@ begin
 end;
 
 { ---------------------------------------------------------------------------
+  多 Manager 实例隔离
+  --------------------------------------------------------------------------- }
+
+procedure TestMultiManagerIsolation;
+var
+  LMgrA, LMgrB: TThreadArenaManager;
+  LArenaA, LArenaB: TLocalArena;
+begin
+  { 两个 Manager 实例应返回不同的 Arena }
+  LMgrA := TThreadArenaManager.Create(DefaultThreadArenaConfig);
+  LMgrB := TThreadArenaManager.Create(DefaultThreadArenaConfig);
+  try
+    LArenaA := LMgrA.Get;
+    Check(LArenaA <> nil, 'MgrA returns arena');
+    Check(LMgrA.HasArena, 'MgrA has arena');
+    Check(not LMgrB.HasArena, 'MgrB should not see MgrA arena');
+
+    { 切换到 MgrB — MgrA 的 Arena 应归还池 }
+    LArenaB := LMgrB.Get;
+    Check(LArenaB <> nil, 'MgrB returns arena');
+    Check(LArenaA <> LArenaB, 'MgrA and MgrB have different arenas');
+    Check(not LMgrA.HasArena, 'MgrA lost arena after MgrB.Get');
+    Check(LMgrB.HasArena, 'MgrB has arena');
+
+    { 切换回 MgrA — MgrB 的 Arena 应归还 }
+    LArenaA := LMgrA.Get;
+    Check(LMgrA.HasArena, 'MgrA re-acquired arena');
+    Check(not LMgrB.HasArena, 'MgrB lost arena after MgrA.Get');
+
+    LMgrA.DrainTLS;
+    LMgrB.DrainTLS;
+  finally
+    LMgrA.Free;
+    LMgrB.Free;
+  end;
+end;
+
+{ ---------------------------------------------------------------------------
   Runner
   --------------------------------------------------------------------------- }
 
@@ -707,6 +745,9 @@ begin
   T.Run('Zero size alloc', @TestZeroSizeAlloc);
   T.Run('Write/read through thread arena', @TestWriteReadThroughThreadArena);
   T.Run('Alloc stress', @TestAllocStress);
+
+  { 多 Manager 隔离 }
+  T.Run('Multi-manager isolation', @TestMultiManagerIsolation);
 
   T.Summary;
 end.

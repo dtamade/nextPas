@@ -33,11 +33,14 @@ uses
 type
   // === 基础类型 ===
   TAllocatorKind = nextpas.core.mem.base.TAllocatorKind;
-  TArenaMarker = TArenaMark; // deprecated: use TArenaMark directly
+  TAllocatorTraits = nextpas.core.mem.intf.TAllocatorTraits;
   IAllocator = nextpas.core.mem.intf.IAllocator;
   TAllocError = nextpas.core.mem.error.TAllocError;
   EAllocError = nextpas.core.mem.error.EAllocError;
   EOutOfMemory = nextpas.core.mem.error.EOutOfMemory;
+  EInvalidLayout = nextpas.core.mem.error.EInvalidLayout;
+  EInvalidPointer = nextpas.core.mem.error.EInvalidPointer;
+  EDoubleFree = nextpas.core.mem.error.EDoubleFree;
 
   // === Arena 子系统 ===
   IArena = nextpas.core.mem.arena.intf.IArena;
@@ -87,9 +90,7 @@ end;
 
 function AllocZeroed(const AAllocator: IAllocator; const ASize: SizeUInt): Pointer;
 begin
-  Result := AAllocator.GetMem(ASize);
-  if Result <> nil then
-    ZeroMem(Result, ASize);
+  Result := AAllocator.AllocMem(ASize);
 end;
 
 function AllocArray(const AAllocator: IAllocator; const ACount, AElemSize: SizeUInt): Pointer;
@@ -100,9 +101,7 @@ begin
   LTotal := ACount * AElemSize;
   if (LTotal div AElemSize) <> ACount then
     raise EOutOfMemory.Create(aeOutOfMemory, 'AllocArray: size overflow');
-  Result := AAllocator.GetMem(LTotal);
-  if Result <> nil then
-    ZeroMem(Result, LTotal);
+  Result := AAllocator.AllocMem(LTotal);
 end;
 
 end.

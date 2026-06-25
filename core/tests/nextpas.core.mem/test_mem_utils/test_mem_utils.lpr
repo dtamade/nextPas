@@ -4,6 +4,7 @@ program test_mem_utils;
 
 uses
   nextpas.core.base,
+  nextpas.core.exception,
   nextpas.core.text.conv,
   nextpas.core.testing,
   nextpas.core.mem.utils;
@@ -306,6 +307,47 @@ begin
   WriteLn('PASS: Fill zero-count');
 end;
 
+procedure TestCompareNilRaises;
+var
+  LBuf: array[0..7] of Byte;
+  LCaught: Boolean;
+begin
+  LCaught := False;
+  FillChar(LBuf, SizeOf(LBuf), $AA);
+  try
+    Compare8(nil, @LBuf[0], SizeInt(8));
+  except
+    on EArgumentNil do LCaught := True;
+  end;
+  Check(LCaught, 'Compare8(nil, ptr, count>0) should raise EArgumentNil');
+
+  LCaught := False;
+  try
+    Compare8(@LBuf[0], nil, SizeInt(8));
+  except
+    on EArgumentNil do LCaught := True;
+  end;
+  Check(LCaught, 'Compare8(ptr, nil, count>0) should raise EArgumentNil');
+
+  { count=0 不应抛 }
+  CheckEqual(Int64(0), Int64(Compare8(nil, nil, SizeInt(0))), 'Compare8(nil, nil, 0) = 0');
+  WriteLn('PASS: Compare nil raises');
+end;
+
+procedure TestFillNilRaises;
+var
+  LCaught: Boolean;
+begin
+  LCaught := False;
+  try
+    Fill8(nil, SizeInt(8), $FF);
+  except
+    on EArgumentNil do LCaught := True;
+  end;
+  Check(LCaught, 'Fill8(nil, count>0) should raise EArgumentNil');
+  WriteLn('PASS: Fill nil raises');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.mem.utils');
   T.Run('IsOverlap no-overlap', @TestIsOverlapNoOverlap);
@@ -334,5 +376,7 @@ begin
   T.Run('AlignUpUnChecked', @TestAlignUpUnChecked);
   T.Run('IsPowerOfTwo', @TestIsPowerOfTwo);
   T.Run('Fill zero-count', @TestFillZeroCount);
+  T.Run('Compare nil raises', @TestCompareNilRaises);
+  T.Run('Fill nil raises', @TestFillNilRaises);
   T.Summary;
 end.

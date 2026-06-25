@@ -1158,6 +1158,12 @@ end;
 
 function Compare8(aPtr1, aPtr2: Pointer; aCount: SizeInt): Integer;
 begin
+  if aCount = 0 then
+    Exit(0);
+
+  if (aPtr1 = nil) or (aPtr2 = nil) then
+    raise EArgumentNil.Create('nextpas.core.mem.utils.Compare8: nil pointer');
+
   Result := System.CompareByte(aPtr1^, aPtr2^, aCount);
 end;
 

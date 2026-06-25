@@ -75,7 +75,7 @@ type
     FTotalUsed: SizeUInt;
     FLargeUsed: SizeUInt;
     FPeakUsed: SizeUInt;
-    FAllocCount: SizeUInt;
+    FAllocCount: QWord;
     FLastAllocFailure: TVirtualArenaAllocFailure;
 
     function CommitFrontRegion(aSize: SizeUInt): Boolean;
@@ -118,7 +118,7 @@ type
     {** 峰值使用字节数 }
     function PeakUsed: SizeUInt;
     {** 分配次数 }
-    function AllocCount: SizeUInt;
+    function AllocCount: QWord;
     {** 返回最近一次 Alloc* 返回 nil 的原因；成功分配后清零。 }
     function LastAllocFailure: TVirtualArenaAllocFailure;
   end;
@@ -616,6 +616,10 @@ function TVirtualArena.AllocUnsafe(aSize: SizeUInt): Pointer;
 var
   LNewEnd: PtrUInt;
 begin
+  {$IFDEF DEBUG}
+  Assert(aSize > 0, 'AllocUnsafe: aSize must be > 0');
+  Assert(FFrontPtr <> nil, 'AllocUnsafe: arena not initialized');
+  {$ENDIF}
   LNewEnd := PtrUInt(FFrontPtr) + PtrUInt(aSize);
   Result := Pointer(FFrontPtr);
   FFrontPtr := PByte(LNewEnd);
@@ -706,7 +710,7 @@ begin
   Result := FPeakUsed;
 end;
 
-function TVirtualArena.AllocCount: SizeUInt;
+function TVirtualArena.AllocCount: QWord;
 begin
   Result := FAllocCount;
 end;
