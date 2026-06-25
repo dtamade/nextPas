@@ -4612,7 +4612,20 @@ begin
   Result := ParseBlockDeclarations(
     ALexer, ACursor, ImplementationNode, ATree, ADiagnostics, ARootFileId);
 
+  { handle begin...end. initialization block (FPC syntax without 'initialization' keyword) }
   if (ACursor < ALexer.TokenCount) and
+    (CurrentToken(ALexer, ACursor).Kind = tkBeginKeyword) then
+  begin
+    LInitNode := TGreenNode.Create(
+      gnkInitializationSection,
+      CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
+    Inc(ACursor);
+    ParseStatementList(ALexer, ACursor, LInitNode,
+      [tkEndKeyword, tkEOF],
+      ATree, ADiagnostics, ARootFileId);
+    ImplementationNode.AppendChild(LInitNode);
+  end
+  else if (ACursor < ALexer.TokenCount) and
     (CurrentToken(ALexer, ACursor).Kind = tkInitializationKeyword) then
   begin
     LInitNode := TGreenNode.Create(
