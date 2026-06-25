@@ -2556,8 +2556,10 @@ begin
               (CurrentToken(ALexer, ACursor).Kind <> tkEOF) and
               not ((I = 0) and (CurrentToken(ALexer, ACursor).Kind = tkEndKeyword)) do
             begin
-              if CurrentToken(ALexer, ACursor).Kind in
-                [tkRecordKeyword, tkObjectKeyword] then
+              if (CurrentToken(ALexer, ACursor).Kind in
+                [tkRecordKeyword, tkObjectKeyword]) and
+                ((ACursor <= 0) or
+                 (ALexer.TokenAt(ACursor - 1).Kind <> tkOfKeyword)) then
                 Inc(I)
               else if (CurrentToken(ALexer, ACursor).Kind = tkEndKeyword) and (I > 0) then
               begin
@@ -2845,8 +2847,10 @@ begin
                     not ((I = 0) and (CurrentToken(ALexer, ACursor).Kind in
                       [tkSemicolon, tkEndKeyword, tkEOF])) do
                   begin
-                    if CurrentToken(ALexer, ACursor).Kind in
-                      [tkRecordKeyword, tkObjectKeyword] then
+                    if (CurrentToken(ALexer, ACursor).Kind in
+                      [tkRecordKeyword, tkObjectKeyword]) and
+                      ((ACursor <= 0) or
+                       (ALexer.TokenAt(ACursor - 1).Kind <> tkOfKeyword)) then
                       Inc(I)
                     else if (CurrentToken(ALexer, ACursor).Kind = tkEndKeyword) and
                       (I > 0) then
