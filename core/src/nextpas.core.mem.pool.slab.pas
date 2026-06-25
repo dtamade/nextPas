@@ -931,7 +931,7 @@ begin
   Result.ZeroInitialized := True;   // AllocMem 保证零填充
   Result.ThreadSafe      := False;  // 当前未加锁
   Result.HasMemSize      := True;   // 通过 ChunkSizeOf/MemSizeOf
-  Result.SupportsAligned := False;  // 未提供对齐 API
+  Result.SupportsAligned := True;   // AllocAligned 通过 fallback 路径实现
 end;
 
 constructor TSlabPool.Create(aCapacity: SizeUInt; const aConfig: TSlabConfig; aAllocator: IAllocator);

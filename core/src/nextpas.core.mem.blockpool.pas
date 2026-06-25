@@ -403,6 +403,7 @@ begin
   {$ENDIF}
   ClearFreeBit(LIdx);
   Inc(FAllocCount);
+  Inc(FTotalAllocs);
   Result := LPtr;
 end;
 

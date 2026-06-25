@@ -254,7 +254,7 @@ begin
     CheckEqual(True, LTraits.ZeroInitialized, 'AllocMem should promise zero initialization');
     CheckEqual(False, LTraits.ThreadSafe, 'plain slab pool should not claim thread safety');
     CheckEqual(True, LTraits.HasMemSize, 'slab pool should expose mem size');
-    CheckEqual(False, LTraits.SupportsAligned, 'slab pool should not claim generic aligned support');
+    CheckEqual(True, LTraits.SupportsAligned, 'slab pool supports aligned via fallback path');
 
     LPerf := LPool.GetPerfCounters;
     CheckEqual(Int64(0), Int64(LPerf.AllocCalls), 'initial alloc calls');

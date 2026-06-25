@@ -947,7 +947,7 @@ begin
   Result.ZeroInitialized := True;
   Result.ThreadSafe := True;
   Result.HasMemSize := True;
-  Result.SupportsAligned := False;
+  Result.SupportsAligned := True;   // AllocAligned 通过 fallback 路径实现
 end;
 
 function TSlabPoolSharded.Owns(APtr: Pointer): Boolean;

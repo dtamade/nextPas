@@ -452,9 +452,9 @@ begin
   end
   else
   begin
-    // Pool is full, destroy object
+    // Pool is full, destroy object and allow re-creation
     aObject.Free;
-    // 注意：TotalCreated 不减少，因为对象确实被创建过
+    Dec(FTotalCreated);
   end;
 end;
 

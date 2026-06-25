@@ -422,7 +422,7 @@ begin
 
   {$IFDEF FAF_MEM_DEBUG}
   // 污化已释放内存，提升 UAF 暴露率
-  FillMem(PByte(FBuffer)[SizeUInt(LIdx)*FBlockSize], FBlockSize, $A5);
+  FillMem(Pointer(PByte(FBuffer) + SizeUInt(LIdx) * FBlockSize), FBlockSize, $A5);
   {$ENDIF}
   FIsFree[LIdx] := True;
   Dec(FAllocatedCount);
