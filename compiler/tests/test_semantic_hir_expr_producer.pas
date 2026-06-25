@@ -2191,7 +2191,7 @@ begin
       'assign-arr-elem-runtime', 'add', Node) then
       Halt(92);
     AssertFieldArrayElementStoreTargetExpr(Model, Node, 'FOther', 'i',
-      'Integer', 2, 93);
+      'Integer', 3, 93);
     AssertRuntimeBinaryExpr(Model, Node, '+', 117);
   finally
     Model.Free;
