@@ -49,9 +49,9 @@
 | **C3** | 债务1 第一批迁移：常量/变量/算术/比较/not-and-or/cond-br/ret/halt/write-int                                                     | C2    | ✅ 2026-06-02      |
 | **C4** | 债务2 核心：真实 scalar 宽度（i8/16/32/64/u*/f32/f64/i1）+ cast 指令 + signedness（sdiv/udiv/icmp s*u\*）；提升/截断规则放 sema | C3    | ✅ 2026-06-02      |
 | **C5** | 债务1 第二批：lvalue/address 模型（EmitAddress vs EmitValue）→ 修 `P^.Field`、`@Arr[i]`、array/record/class field               | C4    | ✅ 2026-06-25      |
-| **C6-A** | 债务4 allocator：freestanding malloc/free（mmap + free list + coalesce）                                                      | C5    | ⬜                 |
+| **C6-A** | 债务4 allocator：freestanding malloc/free（mmap + free list + coalesce）                                                      | C5    | ✅ 2026-06-25      |
 | **C6-B** | string ownership 收尾：record/array element string store, string field cleanup on object free                                | C5,C6-A | ⬜ (C6-H7~H17 部分完成) |
-| **C7** | 债务3 深化（target runtime profile/callconv/layout、多目标 IR smoke）+ 债务4 优化（LLVM O2/LTO 可配置）                         | C5,C6-A | ⬜                 |
+| **C7** | 债务3 深化（target runtime profile/callconv/layout、多目标 IR smoke）+ 债务4 优化（LLVM O2/LTO 可配置）                         | C5,C6-A | ⬜ (C7-prep opt可配置已完成) |
 | **C8-prep** | 自举探针：用 nextPas 编译 `core/` 一个真实中等模块，产出"自举差距清单"                                                          | C6-A | 🏁 里程碑          |
 | **C8** | 根据差距清单逐一修复，直到自举成功                                                                                              | C8-prep | 🏁 里程碑          |
 
@@ -508,3 +508,13 @@
   修复方法体内隐式 Self 的类字段字符串赋值生成错误 HIR 节点的问题。
 - 2026-06-25 bug fix (sret codegen)：TString-returning 函数缺少 sret_ptr 参数，
   导致 LLVM emitter 签名与实际调用不匹配。
+- 2026-06-25 C7-prep 完成：LLVM opt level 从硬编码改为 toml/target-facts 驱动。
+  TTargetFactsView 新增 LlvmOptLevel 字段，toolchain plan 在 llvm-opt-bitcode 步骤
+  传入 `-O2`（可配置）。~10 文件改动，LLVM smoke 全绿。
+- 2026-06-25 C6-A 确认完成：allocator 已在 `rtl/runtime/src/nextpas.runtime.allocator.ll`
+  完整实现（mmap + free list + coalesce），objects/tstring/dynarray 释放路径已接入。
+  目标树 C6-A 状态更新为 ✅。
+- 2026-06-25 bug fix (exit=102)：`test_semantic_hir_expr_producer` 的
+  `TestCommaFieldArrayStoreTargetExprProducer` 期望 FOther 字段索引为 2，
+  但 dynarray 字段占 2 槽位（`Inc(FieldIndex, 2)` 自 8a98af8d），
+  实际索引为 3。修正测试期望值，50 个测试全部通过。
