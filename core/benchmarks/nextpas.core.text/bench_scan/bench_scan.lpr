@@ -122,7 +122,7 @@ begin
   WriteLn(Format('    %-36s %8.2f GiB/s', [AName + ' throughput', LGiBPerSec]));
 end;
 
-procedure PrintFocusThroughput(const AName: string; const ADataLen: SizeUInt; const AProc: TBenchProc);
+procedure PrintFocusThroughput(const AName: string; const ADataLen: SizeUInt; const AProc: TBenchLoopFunc);
 const
   MEASURE_ITERS = 200000;
 var
