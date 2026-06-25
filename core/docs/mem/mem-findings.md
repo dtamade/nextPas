@@ -647,19 +647,20 @@ README / ARCHITECTURE 已写明 `AllocUnsafe` 不保证对齐，这条不再单�
 
 ## 十、汇总
 
-### 状态统计（截止 2026-06-25 第四轮）
+### 状态统计（截止 2026-06-25 第五轮）
 
 | 状态               | 数量   | 说明                                                            |
 | ------------------ | ------ | --------------------------------------------------------------- |
-| **[FIXED] / 关闭** | **77** | 含第一轮 60 条 + 第二轮 9 条 + 第三轮 4 条 + 第四轮 4 条   |
+| **[FIXED] / 关闭** | **81** | 含第一轮 60 条 + 第二轮 9 条 + 第三轮 4 条 + 第四轮 4 条 + 第五轮 4 条 |
 | **仍然开放**       | **0**  | 当前树上已无剩余开放问题                                         |
 | **新增 (第二轮)**  | **9**  | 全部已修复                                                      |
 | **新增 (第三轮)**  | **4**  | 全部已修复                                                      |
 | **新增 (第四轮)**  | **4**  | 全部已修复                                                      |
+| **新增 (第五轮)**  | **4**  | 全部已修复                                                      |
 
 ### 当前最高优先级（建议先处理）
 
-1. 无。四轮 `mem-findings.md` 已清零。
+1. 无。五轮 `mem-findings.md` 已清零。
 
 ### 处理建议顺序
 
@@ -834,3 +835,41 @@ front bump 统计 `FTotalUsed += LPad + aSize`（含对齐 padding），back bum
 三个 Slab Pool 类型的 `Traits.SupportsAligned` 声明为 `False`，但它们都实现了 `AllocAligned`（通过 fallback 路径：GetMem + 上对齐 + 前缀保存）。调用方查询 Traits 会误判不支持对齐分配。
 
 **修复**：三处 `SupportsAligned := False` → `True`，同步更新 `test_slab_pool` 断言。
+
+---
+
+## 第五轮（4 Agent 并行深度审查 — 边界条件/并发/API 契约）
+
+### R-18 [FIXED] VirtualArena SaveMark/RestoreToMark 不保存分配计数
+
+**P2 | 文件：`core/src/nextpas.core.mem.arena.base.pas`、`arena.virtual.pas`、`arena.local.pas`、`arena.chunked.pas`**
+
+`TArenaMark` 不含 `AllocCount` 字段。`TVirtualArena.Reset` 清零 `FAllocCount` 但保留 `FLargeUsed`（大对象跨 reset 存活），导致 `Stats` 报告 `AllocCount=0` 但 `TotalUsed>0`。`RestoreToMark` 也不回退 `FAllocCount`，restore 后分配计数只增不减。
+
+**修复**：`TArenaMark` 增加 `AllocCount: QWord` 字段。`TVirtualArena.SaveMark` 保存 `FAllocCount`，`RestoreToMark` 恢复。其他 arena（Local/Chunked）初始化 `AllocCount := 0`。
+
+### R-19 [FIXED] ChunkedArena Reset(KeepSegments=True) 不重置跨段偏移
+
+**P2 | 文件：`core/src/nextpas.core.mem.arena.chunked.pas`**
+
+`FKeepSegments=True` 时 `Reset` 只清零各段 `Used`，不清零非首段的 `StartOffset`，也不重置 `FTotalSize`。后续使用多段时 `CurrentUsed = StartOffset + Used` 包含旧偏移，`PeakUsed` 和 `RemainingSize` 报告错误值。
+
+**修复**：Reset(KeepSegments=True) 将非首段 `StartOffset` 清零（AddSegment 时按需重算），`FTotalSize` 重置为 `FSegments[0].Size`。
+
+### R-20 [FIXED] SlabPoolSharded.AllocMem 只清零请求大小，padding 泄露旧数据
+
+**P2 | 文件：`core/src/nextpas.core.mem.pool.slab.sharded.pas`**
+
+`TSlabPoolSharded.AllocMem` 调用 `ZeroMem(Result, ASize)` 只清零请求字节数，但 slab size-class 实际分配块可能更大（如 AllocMem(20) 返回 32 字节 slot）。`TSlabPool.AllocMem` 正确清零 `MemSizeOf(Result)`。`Traits.ZeroInitialized = True` 的承诺被违反。
+
+**修复**：改为 `FillChar(Result^, MemSizeOf(Result), 0)`，与 `TSlabPool.AllocMem` 一致。
+
+### R-21 [FIXED] FallbackAllocator.ReallocMem(ptr, 0) 泄露 tracking entry + 失败语义违反
+
+**P1 | 文件：`core/src/nextpas.core.mem.allocator.fallback.pas`**
+
+两个问题：
+1. `ReallocMem(nonNilPtr, 0)` 无 ASize=0 早返回。底层 `ReallocMem(ptr, 0)` 释放内存返回 nil，但 `LEntry^.Ptr` 被设为 nil，stale entry 永远无法被 FindEntry 匹配和移除。
+2. `FFallback.ReallocMem` 失败返回 nil 时，代码返回原指针 `APtr` 而非 nil，违反 `ReallocMem` 契约（失败应返回 nil）。
+
+**修复**：增加 `ASize=0` 早返回路径（调用 `FreeMem` + 返回 nil）。失败时不再覆盖 `Result`，保留 nil。
