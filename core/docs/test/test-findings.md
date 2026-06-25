@@ -130,17 +130,17 @@
 
 | ID | 文件 | 问题 | 修复状态 |
 |----|------|------|----------|
-| L-01 | check.pas | `CheckFalse` 消息写 "expected false" 而非 "expected condition to be false" | 未修复 |
+| L-01 | check.pas | `CheckFalse` 消息写 "expected false" 而非 "expected condition to be false" | ✅ 已修复 — 消息改为 "Expected condition to be True/False but got ..." |
 | L-02 | check.pas | `CheckSame` 使用 `Pointer` 比较，跨平台可能有对齐问题 | 未修复 |
 | L-03 | expect.pas | `ToBeGreaterThan` 等比较方法无 `ToBeGreaterOrEqual` 等变体 | ✅ v3.1 已修复 — 新增 ToBeGreaterOrEqual/ToBeLessOrEqual (Int64) + 6 个 Double 比较方法 + 3 个大小写不敏感字符串方法 |
 | L-04 | expect.pas | `ToMatch` 正则每次调用都重新编译 | 未修复 |
-| L-05 | expect.pas | `ToContain` 对字符串的子串检查区分大小写 | 未修复 |
-| L-06 | expect.pas | `ToStartWith` / `ToEndWith` 只支持字符串，不支持 `TBytes` | 未修复 |
+| L-05 | expect.pas | `ToContain` 对字符串的子串检查区分大小写 | ✅ v3.1 已修复 — 新增 `ToContainCI` 方法 |
+| L-06 | expect.pas | `ToStartWith` / `ToEndWith` 只支持字符串，不支持 `TBytes` | 未修复 — 低优先级 |
 | L-07 | output.pas | `MatchesGlob` 不支持 `{a,b}` brace expansion | 未修复 |
 | L-08 | output.pas | `MakeValidUtf8` 替换策略激进，合法 UTF-8 边缘情况可能误替换 | 未修复 |
 | L-09 | runner.context.pas | `RunSubTests` 不支持嵌套子测试（只支持一层） | ✅ 不成立 (R5 纠正) — `RunNested` + 递归已支持 |
 | L-10 | runner.parallel.pas | 并行模式下 `AfterEach` 在 worker 线程执行，可能有线程安全问题 | 未修复 |
-| L-11 | base.pas | `TTestEntry.Fixture` 字段从未被使用 | 未修复 |
+| L-11 | base.pas | `TTestEntry.Fixture` 字段从未被使用 | ✅ 已移除 — 字段已不存在 |
 | L-12 | discovery.pas | `TTestFixure` 拼写错误（应为 `TTestFixture`） | ✅ 已修复 — 现为 `TTestFixture` |
 | L-13 | check.pas | `CheckNear` 默认 epsilon 1e-6 对 `Single` 类型可能太严格 | 未修复 |
 | L-14 | check.pas | `CheckContains` 对空 needle 的行为未定义 | ✅ 已修复 (R5 纠正) — L197-198 显式处理 + 6 测试覆盖 |
@@ -149,7 +149,7 @@
 | L-17 | output.pas | ANSI 输出在非 TTY 环境下仍输出颜色码 | 未修复 |
 | L-18 | mock.pas | `TMockMethodStub` 的 `WithArgs` 验证只比较第一个参数 | ✅ v3.1 已修复 — 新增 `CalledWith`/`CalledExactlyWith` 方法，比较所有参数 |
 | L-19 | test_runner.pas | 5 个 `CheckEqual(Int64, Int64)` 可以用 `CheckSame` 测试引用类型 | Won't fix |
-| L-20 | test_output.pas | `TestMatchesGlob` 缺少空字符串输入的边界测试 | 未修复 |
+| L-20 | test_output.pas | `TestMatchesGlob` 缺少空字符串输入的边界测试 | ✅ 已修复 — TestFilterEmptyBoundary 测试空 filter、空 name + 各种 glob 模式 |
 | L-21 | test_output.pas | ANSI 测试的 `Pos(#27, ...)` 只检查 ESC 字符存在，不验证完整序列 | 未修复 |
 | L-22 | output.json.pas | `FormatJsonTime` 输出 ms 精度但输入是秒，截断可能丢失精度 | 未修复 |
 

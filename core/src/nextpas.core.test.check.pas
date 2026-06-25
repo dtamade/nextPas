@@ -207,7 +207,7 @@ begin
     if AMessage <> '' then
       InternalFail(AMessage)
     else
-      InternalFail('Expected True but got False');
+      InternalFail('Expected condition to be True but got False');
   end;
 end;
 
@@ -218,7 +218,7 @@ begin
     if AMessage <> '' then
       InternalFail(AMessage)
     else
-      InternalFail('Expected False but got True');
+      InternalFail('Expected condition to be False but got True');
   end;
 end;
 
