@@ -63,29 +63,44 @@ unit cycle detected: nextpas.core.exception -> sysutils -> nextpas.core.exceptio
 
 ---
 
-## Gap #2：parser syntax error（text.conv）
+## Gap #2：parser 不支持 array of const 成员访问
 
 **症状：**
 ```
-Syntax error, "statement" expected but "," found
+Syntax error, "statement" expected but ")" found
 ```
 
-**位置：** `core/src/nextpas.core.text.conv.pas` byte offset 3579, 3938
+**位置：** `core/src/nextpas.core.exception.pas` byte offset 7038, 7119, 7300
 
-**可能原因：** 默认参数值语法 `AAll: Boolean = False`（FPC 扩展语法）
-
-**影响范围：** 未知，需进一步分析
-
-**验证方法：**
-```bash
-# 找到语法错误位置对应的行
-python3 -c "
-with open('core/src/nextpas.core.text.conv.pas','rb') as f:
-    f.seek(3579)
-    ctx = f.read(200)
-    print(ctx[:200])
-"
+**根因：** `FormatStr` 函数使用 `array of const` 的特殊语法：
+```pascal
+case AArgs[LArgIdx].VType of
+  vtAnsiString: AppendStr(string(AArgs[LArgIdx].VAnsiString));
+  vtUnicodeString: AppendStr(string(AArgs[LArgIdx].VUnicodeString));
+  ...
 ```
+
+nextPas parser 不支持 `AArgs[i].VType`（`array of const` 的 variant record 字段访问）。
+
+**影响范围：**
+- `nextpas.core.exception` 直接受影响（FormatStr + CreateFmt）
+- 所有依赖 `nextpas.core.base` -> `nextpas.core.exception` 的模块间接受影响
+- 这包括几乎所有 core 模块
+
+**修复选项：**
+
+| 选项 | 方案 | 代价 |
+|------|------|------|
+| A | 扩展 parser 支持 `array of const` 成员访问 | 需要 parser 和 sema 改动 |
+| B | 在 exception.pas 中移除 `FormatStr`，用其他方式处理格式化 | 可能破坏 FPC 兼容性 |
+| C | 暂时 stub 掉 FormatStr，用简单的字符串拼接替代 | 临时方案，功能受限 |
+
+**推荐：选项 A（扩展 parser）**
+- `array of const` 是 FPC 核心语法特性
+- 自举必须支持此语法
+- 这是 parser 的已知 gap，应该在 C8-prep 阶段修复
+
+**状态：** 🔴 需要 parser 和 sema 改动
 
 ---
 
@@ -119,6 +134,6 @@ with open('core/src/nextpas.core.text.conv.pas','rb') as f:
 
 | Gap | 状态 | 优先级 |
 |-----|------|--------|
-| #1 unit cycle | 🔴 未修复 | 最高 |
-| #2 parser syntax | 🔴 未分析 | 次高 |
+| #1 unit cycle | ✅ 已修复 | 最高 |
+| #2 parser syntax | 🔴 分析中 | 最高 |
 | #3 search path | 🔴 未分析 | 低 |

@@ -4,9 +4,6 @@ unit SysUtils;
 
 interface
 
-uses
-  nextpas.core.exception;
-
 const
   PathDelim = '/';
   DirectorySeparator = '/';
@@ -31,11 +28,23 @@ type
     Pattern: string; { stored by FindFirst, used by FindNext to filter }
   end;
 
-  { Re-export Exception from nextpas.core.exception — no independent definition }
-  Exception = nextpas.core.exception.Exception;
-  ExceptClass = nextpas.core.exception.ExceptClass;
-  EConvertError = nextpas.core.exception.EConvertError;
-  EAssertionFailed = nextpas.core.exception.EAssertionFailed;
+  { Self-contained Exception types — no dependency on nextpas.core.exception.
+    This breaks the unit cycle for nextPas compilation.
+    FPC compilation uses FPC's own SysUtils.Exception (not this stub). }
+  Exception = class(TObject)
+  private
+    fmessage: string;
+    fhelpcontext: LongInt;
+  public
+    constructor Create(const AMsg: string);
+    property Message: string read fmessage write fmessage;
+    property HelpContext: LongInt read fhelpcontext write fhelpcontext;
+  end;
+
+  ExceptClass = class of Exception;
+
+  EConvertError = class(Exception);
+  EAssertionFailed = class(Exception);
 
   EHeapMemoryError = class(Exception)
   end;
@@ -114,6 +123,14 @@ function Supports(const AIntf: IInterface; const IID: TGUID; out Intf): Boolean;
 procedure FreeAndNil(var Obj);
 
 implementation
+
+{ Exception constructor }
+
+constructor Exception.Create(const AMsg: string);
+begin
+  fmessage := AMsg;
+  fhelpcontext := 0;
+end;
 
 { External C functions }
 function getenv(name: PChar): PChar; cdecl; external 'c' name 'getenv';
