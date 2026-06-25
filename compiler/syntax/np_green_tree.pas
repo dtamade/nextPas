@@ -1470,7 +1470,7 @@ begin
               Inc(ACursor);
               if (ACursor < ALexer.TokenCount) and
                 (CurrentToken(ALexer, ACursor).Kind in
-                  [tkMinus, tkPlus, tkIntegerLiteral]) then
+                  [tkMinus, tkPlus, tkIntegerLiteral, tkIdentifier]) then
                 Inc(ACursor);
               if (ACursor < ALexer.TokenCount) and
                 (CurrentToken(ALexer, ACursor).Kind = tkColon) then
@@ -1478,7 +1478,7 @@ begin
                 Inc(ACursor);
                 if (ACursor < ALexer.TokenCount) and
                   (CurrentToken(ALexer, ACursor).Kind in
-                    [tkMinus, tkPlus, tkIntegerLiteral]) then
+                    [tkMinus, tkPlus, tkIntegerLiteral, tkIdentifier]) then
                   Inc(ACursor);
               end;
             end;
@@ -1496,7 +1496,7 @@ begin
                 Inc(ACursor);
                 if (ACursor < ALexer.TokenCount) and
                   (CurrentToken(ALexer, ACursor).Kind in
-                    [tkMinus, tkPlus, tkIntegerLiteral]) then
+                    [tkMinus, tkPlus, tkIntegerLiteral, tkIdentifier]) then
                   Inc(ACursor);
                 if (ACursor < ALexer.TokenCount) and
                   (CurrentToken(ALexer, ACursor).Kind = tkColon) then
@@ -1504,7 +1504,7 @@ begin
                   Inc(ACursor);
                   if (ACursor < ALexer.TokenCount) and
                     (CurrentToken(ALexer, ACursor).Kind in
-                      [tkMinus, tkPlus, tkIntegerLiteral]) then
+                      [tkMinus, tkPlus, tkIntegerLiteral, tkIdentifier]) then
                     Inc(ACursor);
                 end;
               end;
