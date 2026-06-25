@@ -8,15 +8,16 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 
 | 套件 | 覆盖范围 | 测试数 |
 |------|---------|--------|
-| `test_assertions` | Check* 过程式断言 API | 31 |
-| `test_expect` | IExpectation 流式断言 API | 75 |
+| `test_assertions` | Check* 过程式断言 API | 47 |
+| `test_expect` | IExpectation 流式断言 API | 92 |
+| `test_mock` | TMock 录制/验证/返回值/参数匹配 | 53 |
+| `test_output` | ANSI、StatusDot、filter、timeout、JUnit/TAP/JSON 格式化 | 60 |
 | `test_runner` | TTestRunner 多 suite、lifecycle、subtest、timeout、空 suite | ~25 |
 | `test_lifecycle` | TestTable、TTestClosure、lifecycle 组合、facade 符号完整性 | 13 |
+| `test_parallel` | 并行执行、lifecycle、retry、skip、MaxParallelWorkers 批次调度 | ~15 |
+| `test_diagnostics` | 错误诊断、stack trace、Double 比较、Error vs Failure | 17 |
 | `test_advanced` | RTTI discovery、retry、TAP/JSON 输出格式 | 12 |
-| `test_mock` | TMock 录制/验证/返回值 | 22 |
-| `test_output` | ANSI、StatusDot、filter、timeout、JUnit/TAP/JSON 格式化 | 39 |
-| `test_parallel` | 并行执行、并行 lifecycle、并行 retry、并行 skip | ~15 |
-| `test_subtests` | 子测试嵌套、ITestContext、failure 传播、AfterEach 失败 | 12 |
+| `test_subtests` | 子测试嵌套、ITestContext、failure 传播、AfterEach 失败、cleanup | 19 |
 
 ## 运行方式
 
@@ -41,11 +42,12 @@ make -C core/tests/nextpas.core.test/test_runner test
 ```
 core/src/nextpas.core.test.pas              ← Facade（re-export）
 core/src/nextpas.core.test.base.pas         ← 基础类型
+core/src/nextpas.core.test.config.pas       ← TTestConfig + 解析
 core/src/nextpas.core.test.check.pas        ← Check* 断言
 core/src/nextpas.core.test.expect.pas       ← IExpectation 流式断言
 core/src/nextpas.core.test.discovery.pas    ← RTTI 测试发现
 core/src/nextpas.core.test.mock.pas         ← TMock
-core/src/nextpas.core.test.runner.pas       ← TTestSuite/TTestRunner
+core/src/nextpas.core.test.runner.pas       ← TTestSuite/TTestRunner + 批次调度
 core/src/nextpas.core.test.runner.parallel.pas ← 超时+并行 worker
 core/src/nextpas.core.test.runner.context.pas  ← 子测试 ITestContext
 core/src/nextpas.core.test.output.pas       ← ANSI/filter/JUnit
@@ -56,4 +58,10 @@ core/src/nextpas.core.testing.pas           ← v1 兼容层（deprecated）
 
 ## 审计记录
 
-`test-findings.md` 记录了 R1-R4 四轮审计发现及修复状态。
+`test-findings.md` 记录了 R1-R5 五轮审计发现及修复状态。
+
+## v3.1 新特性
+
+- **批次调度**: `MaxParallelWorkers` 配置并行上限，分批 spawn+join
+- **Expect API 扩展**: `ToBeGreaterOrEqual`/`ToBeLessOrEqual` (Int64)、5 个 Double 比较方法、3 个大小写不敏感字符串方法
+- **Mock 参数验证**: `CalledWith`/`CalledExactlyWith` 比较所有调用参数

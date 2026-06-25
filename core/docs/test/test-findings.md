@@ -114,17 +114,17 @@
 
 | ID | 文件 | 问题 | 修复状态 |
 |----|------|------|----------|
-| M-01 | check.pas | `CheckMethodCalled` / `CheckMethodNotCalled` 未验证 `AMethod <> nil` | 未修复 — P2 |
-| M-02 | runner.pas | `CleanupTableAllocations` 未处理 `SubTests` 字段 | 未修复 — P2 |
+| M-01 | check.pas | `CheckMethodCalled` / `CheckMethodNotCalled` 未验证 `AMethod <> nil` | ✅ 不再适用 — v3.0 重构后 API 改为 `Verify().CalledExactly()`，`CheckMethodCalled` 已移除 |
+| M-02 | runner.pas | `CleanupTableAllocations` 未处理 `SubTests` 字段 | ✅ 不再适用 — SubTests 由 TTestContext 管理，不存储在 TTestEntry 中 |
 | M-03 | runner.pas | `RunParallelWithResult` 不调用 `CleanupTableAllocations`，TestTable 泄漏 | ✅ 已修复 (R5 纠正) — L739 已有调用 |
 | M-04 | discovery.pas | `DiscoverTests` 每次创建新 suite 而非复用，大项目有分配压力 | 未修复 — P3 |
-| M-05 | runner.context.pas | `Execute` 内 `LIsSubTest` 变量声明但从未使用 | 未修复 — P2 |
+| M-05 | runner.context.pas | `Execute` 内 `LIsSubTest` 变量声明但从未使用 | ✅ 已修复 — 变量已移除 |
 | M-06 | output.pas | `JsonEscape` 不处理控制字符 (#0-#31) | ✅ 已修复 — 添加 `\b`, `\f`, `\r`, `\u00XX` 处理 |
 | M-07 | mock.pas | `GetReturnInt` 用 `StrToInt64` 无 try-except，无效输入抛异常 | ✅ 已修复 — 改为 `TryStrToInt64` |
 | M-08 | mock.pas | `GetReturnBool` 大小写敏感比较，`'True'` 返回 false | ✅ 已修复 — 改为 `SameText` |
 | M-09 | output.tap.pas | TAP 计划行格式 `1..N` 可能在有 skip 时与实际不符 | 未修复 — P3 |
 | M-10 | runner.pas | `CleanupTableAllocations` 的 nil-before-Dispose 模式增加复杂度 | Won't fix — 有文档说明原因 |
-| M-11 | runner.parallel.pas | `TimeoutWorker` 的 `Sleep(10)` 粒度太细，CPU 浪费 | 未修复 — P3 |
+| M-11 | runner.parallel.pas | `TimeoutWorker` 的 `Sleep(10)` 粒度太细，CPU 浪费 | ✅ 不再适用 — TimeoutWorker 已重写为 RunTestWithTimeout，不再使用 Sleep 循环 |
 
 ### Low
 
@@ -141,11 +141,11 @@
 | L-09 | runner.context.pas | `RunSubTests` 不支持嵌套子测试（只支持一层） | ✅ 不成立 (R5 纠正) — `RunNested` + 递归已支持 |
 | L-10 | runner.parallel.pas | 并行模式下 `AfterEach` 在 worker 线程执行，可能有线程安全问题 | 未修复 |
 | L-11 | base.pas | `TTestEntry.Fixture` 字段从未被使用 | 未修复 |
-| L-12 | discovery.pas | `TTestFixure` 拼写错误（应为 `TTestFixture`） | 未修复 — breaking change |
+| L-12 | discovery.pas | `TTestFixure` 拼写错误（应为 `TTestFixture`） | ✅ 已修复 — 现为 `TTestFixture` |
 | L-13 | check.pas | `CheckNear` 默认 epsilon 1e-6 对 `Single` 类型可能太严格 | 未修复 |
 | L-14 | check.pas | `CheckContains` 对空 needle 的行为未定义 | ✅ 已修复 (R5 纠正) — L197-198 显式处理 + 6 测试覆盖 |
 | L-15 | expect.pas | `ToBeType` / `NotToBeType` 中 `TTypeInfo` 比较只比较 Kind，不比较 Name | 未修复 |
-| L-16 | runner.pas | `RunWithResult` 的 `--filter` 不支持通配符 | 未修复 |
+| L-16 | runner.pas | `RunWithResult` 的 `--filter` 不支持通配符 | ✅ 已修复 — MatchesFilter 已支持 `*`/`?` glob 模式 + 逗号分隔多模式 |
 | L-17 | output.pas | ANSI 输出在非 TTY 环境下仍输出颜色码 | 未修复 |
 | L-18 | mock.pas | `TMockMethodStub` 的 `WithArgs` 验证只比较第一个参数 | ✅ v3.1 已修复 — 新增 `CalledWith`/`CalledExactlyWith` 方法，比较所有参数 |
 | L-19 | test_runner.pas | 5 个 `CheckEqual(Int64, Int64)` 可以用 `CheckSame` 测试引用类型 | Won't fix |
@@ -162,7 +162,7 @@
 | I-03 | output.pas | `JUnitTime` 只输出秒，Jenkins 等工具可能期望 ms |
 | I-04 | runner.pas | `RunWithResult` 的 finally 块中 `RestoreConsoleMode` 可能在非 Windows 上是 no-op |
 | I-05 | base.pas | `TTestEntry.Status` 字段是 public，外部可直接修改跳过状态机 |
-| I-06 | runner.parallel.pas | 并行 worker 数量硬编码为 `CPUCount`，无用户配置选项 |
+| I-06 | runner.parallel.pas | 并行 worker 数量硬编码为 `CPUCount`，无用户配置选项 | ✅ v3.1 已修复 — `MaxParallelWorkers` 配置项 |
 | I-07 | test_runner.pas | 测试中用 `Sleep(50)` 等待重试，CI 慢机器上可能不够 |
 | I-08 | discovery.pas | `DiscoverTests` 只扫描 published 方法，不支持 class procedure |
 | I-09 | check.pas | `CheckIs` / `CheckNotIs` 不支持接口类型检查 |
