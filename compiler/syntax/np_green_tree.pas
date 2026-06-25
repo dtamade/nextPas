@@ -2236,6 +2236,7 @@ var
   FieldGroupStart, I, K: LongInt;
   FieldNode: TGreenNode;
   UsedOriginalTypeNode: Boolean;
+  Nesting: LongInt;
 
   function CloneTypeNode(const ANode: TGreenNode): TGreenNode;
   var
@@ -2447,6 +2448,29 @@ begin
                   MatchTokenSilent(ALexer, ACursor, tkSemicolon);
                 end;
               end
+              else if CurrentToken(ALexer, ACursor).Kind = tkTypeKeyword then
+              begin
+                { skip nested type section in record: may contain multiple decls }
+                Inc(ACursor);
+                Nesting := 0;
+                while (ACursor < ALexer.TokenCount) and
+                  (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+                begin
+                  if (Nesting = 0) and
+                    (CurrentToken(ALexer, ACursor).Kind in
+                      [tkPublicKeyword, tkPrivateKeyword, tkProtectedKeyword,
+                       tkPublishedKeyword, tkEndKeyword]) then
+                    Break;
+                  if CurrentToken(ALexer, ACursor).Kind in
+                    [tkRecordKeyword, tkObjectKeyword,
+                     tkClassKeyword, tkInterfaceKeyword] then
+                    Inc(Nesting)
+                  else if (CurrentToken(ALexer, ACursor).Kind = tkEndKeyword) and
+                    (Nesting > 0) then
+                    Dec(Nesting);
+                  Inc(ACursor);
+                end;
+              end
               else
                 Inc(ACursor);
             end;
@@ -2578,6 +2602,29 @@ begin
                 TypeNode.AppendChild(ElementNode);
                 Inc(ATree.FNodeCount);
                 Inc(ACursor);
+              end
+              else if CurrentToken(ALexer, ACursor).Kind = tkTypeKeyword then
+              begin
+                { skip nested type section: may contain multiple decls }
+                Inc(ACursor);
+                Nesting := 0;
+                while (ACursor < ALexer.TokenCount) and
+                  (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+                begin
+                  if (Nesting = 0) and
+                    (CurrentToken(ALexer, ACursor).Kind in
+                      [tkPublicKeyword, tkPrivateKeyword, tkProtectedKeyword,
+                       tkPublishedKeyword, tkEndKeyword]) then
+                    Break;
+                  if CurrentToken(ALexer, ACursor).Kind in
+                    [tkRecordKeyword, tkObjectKeyword,
+                     tkClassKeyword, tkInterfaceKeyword] then
+                    Inc(Nesting)
+                  else if (CurrentToken(ALexer, ACursor).Kind = tkEndKeyword) and
+                    (Nesting > 0) then
+                    Dec(Nesting);
+                  Inc(ACursor);
+                end;
               end
               else if CurrentToken(ALexer, ACursor).Kind in
                 [tkProcedureKeyword, tkFunctionKeyword,
