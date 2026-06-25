@@ -1269,6 +1269,45 @@ begin
   end
   else
     Result := ParsePrimaryExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+  { postfix ^ dereference and (...) function call chains }
+  while Result <> nil do
+  begin
+    if (ACursor < ALexer.TokenCount) and
+      (CurrentToken(ALexer, ACursor).Kind = tkCaret) then
+    begin
+      Operand := TGreenNode.Create(gnkDereference, Result.ByteOffset, 0, '');
+      Operand.AppendChild(Result);
+      Result := Operand;
+      Inc(ACursor);
+    end
+    else if (ACursor < ALexer.TokenCount) and
+      (CurrentToken(ALexer, ACursor).Kind = tkLParen) then
+    begin
+      Inc(ACursor);
+      Operand := TGreenNode.Create(gnkFunctionCall, Result.ByteOffset, 0,
+        Result.Text);
+      Operand.AppendChild(Result);
+      Result := Operand;
+      if (ACursor < ALexer.TokenCount) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkRParen) then
+      begin
+        Operand := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+        if Operand <> nil then
+          Result.AppendChild(Operand);
+        while (ACursor < ALexer.TokenCount) and
+          (CurrentToken(ALexer, ACursor).Kind = tkComma) do
+        begin
+          Inc(ACursor);
+          Operand := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+          if Operand <> nil then
+            Result.AppendChild(Operand);
+        end;
+      end;
+      MatchTokenSilent(ALexer, ACursor, tkRParen);
+    end
+    else
+      Break;
+  end;
 end;
 
 function ParseMulExpression(
