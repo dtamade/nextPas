@@ -2461,9 +2461,11 @@ begin
                       [tkPublicKeyword, tkPrivateKeyword, tkProtectedKeyword,
                        tkPublishedKeyword, tkEndKeyword]) then
                     Break;
-                  if CurrentToken(ALexer, ACursor).Kind in
+                  if (CurrentToken(ALexer, ACursor).Kind in
                     [tkRecordKeyword, tkObjectKeyword,
-                     tkClassKeyword, tkInterfaceKeyword] then
+                     tkClassKeyword, tkInterfaceKeyword]) and
+                    ((ACursor <= 0) or
+                     (ALexer.TokenAt(ACursor - 1).Kind <> tkOfKeyword)) then
                     Inc(Nesting)
                   else if (CurrentToken(ALexer, ACursor).Kind = tkEndKeyword) and
                     (Nesting > 0) then
@@ -2616,9 +2618,11 @@ begin
                       [tkPublicKeyword, tkPrivateKeyword, tkProtectedKeyword,
                        tkPublishedKeyword, tkEndKeyword]) then
                     Break;
-                  if CurrentToken(ALexer, ACursor).Kind in
+                  if (CurrentToken(ALexer, ACursor).Kind in
                     [tkRecordKeyword, tkObjectKeyword,
-                     tkClassKeyword, tkInterfaceKeyword] then
+                     tkClassKeyword, tkInterfaceKeyword]) and
+                    ((ACursor <= 0) or
+                     (ALexer.TokenAt(ACursor - 1).Kind <> tkOfKeyword)) then
                     Inc(Nesting)
                   else if (CurrentToken(ALexer, ACursor).Kind = tkEndKeyword) and
                     (Nesting > 0) then
