@@ -112,7 +112,9 @@ begin
     LPool.FMutex.Acquire;
     Dec(LPool.FPendingTasks);
     if LPool.FPendingTasks = 0 then
-      LPool.FDoneCondVar.Broadcast;
+      LPool.FDoneCondVar.Broadcast
+    else if LPool.FHead <> nil then
+      LPool.FCondVar.Signal;
     LPool.FMutex.Release;
   end;
 end;
