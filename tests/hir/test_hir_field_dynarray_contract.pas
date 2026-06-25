@@ -391,18 +391,20 @@ begin
   try
     if Model = nil then
       Fail('string-field-model-nil');
-    { sret model: class field string ops use assign-tstring-copy-runtime and
-      assign-tstring-concat-runtime HIR nodes. The field-specific load/store
-      nodes (assign-tstring-field-load-runtime, field-store-tstring-runtime)
-      are no longer emitted — the compiler uses unified tstring nodes.
-      Note: LLVM emission for class field string ops is a known work-in-progress;
-      the HIR nodes are correctly generated but LLVM codegen may be incomplete. }
-    if not FindFirstNodeByKind(Model, 'assign-tstring-copy-runtime', Node) then
-      Fail('missing-string-field-copy-node');
+    { Class field string ops use field-store-tstring-runtime and
+      assign-tstring-field-load-runtime for field-to-field copy,
+      and assign-tstring-concat-runtime for concat into a temp.
+      LLVM emission for class field TString ops is now complete. }
+    if not FindFirstNodeByKind(Model, 'field-store-tstring-runtime', Node) then
+      Fail('missing-field-store-tstring-node');
+    if not FindFirstNodeByKind(Model, 'assign-tstring-field-load-runtime', Node) then
+      Fail('missing-field-load-tstring-node');
     if not FindFirstNodeByKind(Model, 'assign-tstring-concat-runtime', Node) then
       Fail('missing-string-field-concat-node');
-    { Known WIP: LLVM emission for class field TString ops is incomplete.
-      Only verify the HIR nodes exist; skip LLVM concat call check for now. }
+    { Verify LLVM IR contains tstring_field_assign intrinsic calls }
+    LlvmText := EmitLlvm(Model);
+    if Pos('@np_tstring_field_assign(', LlvmText) = 0 then
+      Fail('missing-tstring-field-assign-in-llvm');
   finally
     Model.Free;
   end;

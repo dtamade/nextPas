@@ -33,7 +33,7 @@ uses
 type
   // === 基础类型 ===
   TAllocatorKind = nextpas.core.mem.base.TAllocatorKind;
-  TArenaMarker = nextpas.core.mem.base.TArenaMarker; // deprecated: use TArenaMark
+  TArenaMarker = TArenaMark; // deprecated: use TArenaMark directly
   IAllocator = nextpas.core.mem.intf.IAllocator;
   TAllocError = nextpas.core.mem.error.TAllocError;
   EAllocError = nextpas.core.mem.error.EAllocError;

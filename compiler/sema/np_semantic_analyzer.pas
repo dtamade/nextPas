@@ -12840,7 +12840,7 @@ begin
                 0, 0, FuncName);
               FModel.AddTypedHirNode('assign-tstring-field-load-runtime',
                 FuncName, 0, 0,
-                FuncName + #9 + Arg.ChildAt(0).Text + #9 +
+                Arg.ChildAt(0).Text + #9 +
                 IntToStr(TypeMetaFieldIndex(
                   LookupClassVar(Arg.ChildAt(0).Text), Arg.ChildAt(1).Text)));
               FModel.AddTypedHirNode(
@@ -13113,6 +13113,114 @@ begin
       end;
       if Arg <> nil then
       begin
+        { Check if destination is a class field — must use field-store,
+          not assign-tstring-copy, because fields have no local alloca }
+        if FNoFold and (FCurrentMethodClass <> '') and
+          TypeMetaFieldIsStr(FCurrentMethodClass, Decoded) then
+        begin
+          Value := TypeMetaFieldIndex(FCurrentMethodClass, Decoded);
+          if Arg.NodeKind = gnkStringLiteral then
+            FModel.AddTypedHirNode(
+              'field-store-tstring-runtime', Decoded, 0, 0,
+              'self' + #9 +
+              IntToStr(Value) + #9 + 'lit ' +
+              DecodePascalStringLiteral(Arg.Text)
+            )
+          else if EvaluateStringConstant(Arg, StringValue) then
+            FModel.AddTypedHirNode(
+              'field-store-tstring-runtime', Decoded, 0, 0,
+              'self' + #9 +
+              IntToStr(Value) + #9 + 'lit ' + StringValue
+            )
+          else if (Arg.NodeKind = gnkIdentifier) and
+            IsRuntimeStrVar(Arg.Text) then
+          begin
+            { Check if source is also a class field — needs temp + field-load }
+            if (FCurrentMethodClass <> '') and
+              TypeMetaFieldIsStr(FCurrentMethodClass, Arg.Text) then
+            begin
+              Inc(FBlockLabelCounter);
+              FuncName := '$str_field_tmp_' + IntToStr(FBlockLabelCounter);
+              RegisterRuntimeVar(FuncName);
+              RegisterRuntimeStrVar(FuncName);
+              FModel.AddTypedHirNode('var-decl-tstring-runtime', FuncName,
+                0, 0, FuncName);
+              FModel.AddTypedHirNode('assign-tstring-field-load-runtime',
+                FuncName, 0, 0,
+                'self' + #9 +
+                IntToStr(TypeMetaFieldIndex(FCurrentMethodClass, Arg.Text)));
+              FModel.AddTypedHirNode(
+                'field-store-tstring-runtime', Decoded, 0, 0,
+                'self' + #9 +
+                IntToStr(Value) + #9 + 'var ' + FuncName
+              );
+            end
+            else
+              FModel.AddTypedHirNode(
+                'field-store-tstring-runtime', Decoded, 0, 0,
+                'self' + #9 +
+                IntToStr(Value) + #9 + 'var ' + Arg.Text
+              );
+          end
+          else if (Arg.NodeKind = gnkDotAccess) and
+            (Arg.ChildCount >= 2) and (Arg.ChildAt(0) <> nil) and
+            (Arg.ChildAt(1) <> nil) and
+            (Arg.ChildAt(0).NodeKind = gnkIdentifier) and
+            (Arg.ChildAt(1).NodeKind = gnkIdentifier) and
+            (LookupClassVar(Arg.ChildAt(0).Text) <> '') and
+            TypeMetaFieldIsStr(LookupClassVar(Arg.ChildAt(0).Text),
+              Arg.ChildAt(1).Text) then
+          begin
+            Inc(FBlockLabelCounter);
+            FuncName := '$str_field_tmp_' + IntToStr(FBlockLabelCounter);
+            RegisterRuntimeVar(FuncName);
+            RegisterRuntimeStrVar(FuncName);
+            FModel.AddTypedHirNode('var-decl-tstring-runtime', FuncName,
+              0, 0, FuncName);
+            FModel.AddTypedHirNode('assign-tstring-field-load-runtime',
+              FuncName, 0, 0,
+              Arg.ChildAt(0).Text + #9 +
+              IntToStr(TypeMetaFieldIndex(
+                LookupClassVar(Arg.ChildAt(0).Text), Arg.ChildAt(1).Text)));
+            FModel.AddTypedHirNode(
+              'field-store-tstring-runtime', Decoded, 0, 0,
+              'self' + #9 +
+              IntToStr(Value) + #9 + 'var ' + FuncName
+            );
+          end
+          else if (Arg.NodeKind = gnkBinaryExpression) and
+            (Arg.Text = '+') and (Arg.ChildCount >= 2) and
+            (Arg.ChildAt(0) <> nil) and (Arg.ChildAt(1) <> nil) then
+          begin
+            { String concat into a class field: load operands to temps,
+              concat into result temp, then field-store }
+            StringValue := EmitStrConcatOperand(Arg.ChildAt(0), Decoded);
+            if StringValue <> '' then
+            begin
+              Operand := EmitStrConcatOperand(Arg.ChildAt(1), Decoded);
+              if Operand <> '' then
+              begin
+                Inc(FBlockLabelCounter);
+                FuncName := '$str_field_concat_tmp_' + IntToStr(FBlockLabelCounter);
+                RegisterRuntimeVar(FuncName);
+                RegisterRuntimeStrVar(FuncName);
+                FModel.AddTypedHirNode('var-decl-tstring-runtime', FuncName,
+                  0, 0, FuncName);
+                FModel.AddTypedHirNode(
+                  'assign-tstring-concat-runtime', FuncName, 0, 0,
+                  FuncName + #9 + StringValue + #9 + Operand
+                );
+                EmitPendingStringTempReleases;
+                FModel.AddTypedHirNode(
+                  'field-store-tstring-runtime', Decoded, 0, 0,
+                  'self' + #9 +
+                  IntToStr(Value) + #9 + 'var ' + FuncName
+                );
+              end;
+            end;
+          end;
+          Continue;
+        end;
         if FNoFold and IsRuntimeStrVar(Decoded) then
         begin
           if (Arg.NodeKind = gnkStringLiteral) then

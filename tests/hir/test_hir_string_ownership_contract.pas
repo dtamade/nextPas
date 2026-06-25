@@ -288,8 +288,10 @@ begin
   try
     if FieldModel = nil then
       Fail('string-field-model-nil');
-    if not FindFirstNodeByKind(FieldModel, 'assign-tstring-copy-runtime', Node) then
-      Fail('missing-string-field-copy-node');
+    if not FindFirstNodeByKind(FieldModel, 'field-store-tstring-runtime', Node) then
+      Fail('missing-field-store-tstring-node');
+    if not FindFirstNodeByKind(FieldModel, 'assign-tstring-field-load-runtime', Node) then
+      Fail('missing-field-load-tstring-node');
     if not FindFirstNodeByKind(FieldModel, 'assign-tstring-concat-runtime', Node) then
       Fail('missing-string-field-concat-node');
   finally
