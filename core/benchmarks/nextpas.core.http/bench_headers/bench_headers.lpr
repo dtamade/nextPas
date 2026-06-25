@@ -8,7 +8,7 @@ uses
   nextpas.core.http.headers;
 
 var
-  B: TBenchRunner;
+  LResults: IBenchResults;
   GSink: string;
 
 procedure BenchSetGet_5Headers(aIters: Int64);
@@ -161,20 +161,19 @@ begin
 end;
 
 begin
-  B := TBenchRunner.Create;
   WriteLn('=== nextpas.core.http.headers benchmark ===');
   WriteLn('operation=http.headers');
   WriteLn;
-  B.Run('Set+Get 5 headers', @BenchSetGet_5Headers);
-  B.Run('Set+Get 15 headers', @BenchSetGet_15Headers);
-  B.Run('Add 15 headers', @BenchAdd_15Headers);
-  B.Run('Get miss (3 headers)', @BenchGet_Miss);
-  B.Run('GetAll miss (5 headers)', @BenchGetAll_Miss);
-  B.Run('Get hit (5 headers, last)', @BenchGet_Hit);
-  B.Run('Get hit uppercase (5 headers, last)', @BenchGet_HitUppercase);
-  B.Run('Has (3 headers)', @BenchHas);
-  B.Run('Clone 10 headers', @BenchClone_10Headers);
-  WriteLn;
-  B.Summary;
-  B.Free;
+  LResults := TBenchSuite.Create('Set+Get 5 headers')
+    .AddLoop('Set+Get 5 headers', @BenchSetGet_5Headers)
+    .AddLoop('Set+Get 15 headers', @BenchSetGet_15Headers)
+    .AddLoop('Add 15 headers', @BenchAdd_15Headers)
+    .AddLoop('Get miss (3 headers)', @BenchGet_Miss)
+    .AddLoop('GetAll miss (5 headers)', @BenchGetAll_Miss)
+    .AddLoop('Get hit (5 headers, last)', @BenchGet_Hit)
+    .AddLoop('Get hit uppercase (5 headers, last)', @BenchGet_HitUppercase)
+    .AddLoop('Has (3 headers)', @BenchHas)
+    .AddLoop('Clone 10 headers', @BenchClone_10Headers)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
 end.

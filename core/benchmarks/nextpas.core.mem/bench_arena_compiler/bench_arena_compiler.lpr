@@ -9,7 +9,7 @@ uses
   nextpas.core.mem.base;
 
 var
-  B: TBenchRunner;
+  LResults: IBenchResults;
   GSink: Pointer;
 
 { --- TFastArena.Alloc vs System.GetMem (small objects 16B-256B) --- }
@@ -153,20 +153,17 @@ begin
 end;
 
 begin
-  B := TBenchRunner.Create;
 
   WriteLn('--- TFastArena vs System.GetMem (single alloc) ---');
-  B.Run('TFastArena.Alloc_16B',    @BenchArenaAlloc16);
-  B.Run('System.GetMem_16B',   @BenchGetMem16);
-  B.Run('TFastArena.Alloc_64B',    @BenchArenaAlloc64);
-  B.Run('System.GetMem_64B',   @BenchGetMem64);
-  B.Run('TFastArena.Alloc_256B',   @BenchArenaAlloc256);
-  B.Run('System.GetMem_256B',  @BenchGetMem256);
-
-  WriteLn;
-  WriteLn('--- TFastArena vs TChunkedArena (batch 10000 x 64B) ---');
-  B.Run('TFastArena_batch_10000x64B',       @BenchTFastArenaBatch);
-  B.Run('TChunkedArena_batch_10000x64B', @BenchTChunkedArenaBatch);
-
-  B.Summary;
+  LResults := TBenchSuite.Create('TFastArena')
+    .AddLoop('TFastArena.Alloc_16B', @BenchArenaAlloc16)
+    .AddLoop('System.GetMem_16B', @BenchGetMem16)
+    .AddLoop('TFastArena.Alloc_64B', @BenchArenaAlloc64)
+    .AddLoop('System.GetMem_64B', @BenchGetMem64)
+    .AddLoop('TFastArena.Alloc_256B', @BenchArenaAlloc256)
+    .AddLoop('System.GetMem_256B', @BenchGetMem256)
+    .AddLoop('TFastArena_batch_10000x64B', @BenchTFastArenaBatch)
+    .AddLoop('TChunkedArena_batch_10000x64B', @BenchTChunkedArenaBatch)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
 end.

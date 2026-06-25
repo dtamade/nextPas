@@ -15,7 +15,7 @@ uses
   nextpas.core.websocket.base;
 
 var
-  B: TBenchRunner;
+  LResults: IBenchResults;
 
 { ===== Cookie benchmarks ===== }
 
@@ -312,7 +312,6 @@ end;
 { ===== Main ===== }
 
 begin
-  B := TBenchRunner.Create;
   try
     InitMultipartData;
     InitWsData;
@@ -321,39 +320,26 @@ begin
     WriteLn;
 
     WriteLn('--- Cookie ---');
-    B.Run('ParseCookieHeader (5 cookies)', @BenchParseCookieHeader);
-    B.Run('BuildSetCookie (all attrs)', @BenchBuildSetCookie);
-    B.Run('ParseCookieHeader (10 cookies)', @BenchParseCookieHeader10);
-    WriteLn;
-
-    WriteLn('--- SSE ---');
-    B.Run('SseParseEvent (single)', @BenchSseParseEvent);
-    B.Run('SseParseOne (fast path)', @BenchSseParseOne);
-    B.Run('SseParseStream (100 events)', @BenchSseParseStream);
-    B.Run('SseFeed (10KB incremental)', @BenchSseFeed);
-    WriteLn;
-
-    WriteLn('--- Multipart ---');
-    B.Run('MultipartParse (3 fields, 1KB)', @BenchMultipartParse);
-    B.Run('MultipartExtractBoundary', @BenchMultipartExtractBoundary);
-    B.Run('MultipartLarge (10KB file)', @BenchMultipartLarge);
-    WriteLn;
-
-    WriteLn('--- WebSocket (client/masked) ---');
-    B.Run('WsEncodeSmall (64B, masked)', @BenchWsEncodeSmall);
-    B.Run('WsDecodeSmall (64B, masked)', @BenchWsDecodeSmall);
-    B.Run('WsEncodeLarge (4KB, masked)', @BenchWsEncodeLarge);
-    B.Run('WsMask (4KB payload)', @BenchWsMask);
-    B.Run('WsAcceptKey (SHA1+Base64)', @BenchWsAcceptKey);
-    WriteLn;
-
-    WriteLn('--- WebSocket (server/unmasked) ---');
-    B.Run('WsEncodeSmall (64B, unmasked)', @BenchWsEncodeSmallServer);
-    B.Run('WsDecodeSmall (64B, unmasked)', @BenchWsDecodeSmallServer);
-    WriteLn;
-
-    B.Summary;
+    LResults := TBenchSuite.Create('ParseCookieHeader (5 cookies)')
+      .AddLoop('ParseCookieHeader (5 cookies)', @BenchParseCookieHeader)
+      .AddLoop('BuildSetCookie (all attrs)', @BenchBuildSetCookie)
+      .AddLoop('ParseCookieHeader (10 cookies)', @BenchParseCookieHeader10)
+      .AddLoop('SseParseEvent (single)', @BenchSseParseEvent)
+      .AddLoop('SseParseOne (fast path)', @BenchSseParseOne)
+      .AddLoop('SseParseStream (100 events)', @BenchSseParseStream)
+      .AddLoop('SseFeed (10KB incremental)', @BenchSseFeed)
+      .AddLoop('MultipartParse (3 fields, 1KB)', @BenchMultipartParse)
+      .AddLoop('MultipartExtractBoundary', @BenchMultipartExtractBoundary)
+      .AddLoop('MultipartLarge (10KB file)', @BenchMultipartLarge)
+      .AddLoop('WsEncodeSmall (64B, masked)', @BenchWsEncodeSmall)
+      .AddLoop('WsDecodeSmall (64B, masked)', @BenchWsDecodeSmall)
+      .AddLoop('WsEncodeLarge (4KB, masked)', @BenchWsEncodeLarge)
+      .AddLoop('WsMask (4KB payload)', @BenchWsMask)
+      .AddLoop('WsAcceptKey (SHA1+Base64)', @BenchWsAcceptKey)
+      .AddLoop('WsEncodeSmall (64B, unmasked)', @BenchWsEncodeSmallServer)
+      .AddLoop('WsDecodeSmall (64B, unmasked)', @BenchWsDecodeSmallServer)
+      .Run;
+    WriteLn(LResults.PrintToConsole);
   finally
-    B.Free;
   end;
 end.

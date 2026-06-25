@@ -15,7 +15,7 @@ uses
   nextpas.core.test;
 
 var
-  B: TBenchRunner;
+  LResults: IBenchResults;
   GSink: Boolean;
 
 { ── Assertion benchmarks ─────────────────────────────────────────────────── }
@@ -102,21 +102,20 @@ end;
 { ── Main ─────────────────────────────────────────────────────────────────── }
 
 begin
-  B := TBenchRunner.Create;
   try
     WriteLn('nextpas.core.test assertion benchmarks');
     WriteLn(StringOfChar('-', 76));
 
-    B.Run('Check(True)',                  @BenchCheckTrue);
-    B.Run('CheckEqual(Int64)',            @BenchCheckEqualInt64);
-    B.Run('CheckEqual(string)',           @BenchCheckEqualString);
-    B.Run('CheckNear(Double)',            @BenchCheckNear);
-    B.Run('ExpectInt.ToEqualInt',         @BenchExpectIntFluent);
-    B.Run('ExpectDouble.ToBeNear',        @BenchExpectDoubleNear);
-    B.Run('Suite RunWithResult (100)',    @BenchSuiteRun100);
-
-    B.Summary;
+    LResults := TBenchSuite.Create('Check(True)')
+      .AddLoop('Check(True)', @BenchCheckTrue)
+      .AddLoop('CheckEqual(Int64)', @BenchCheckEqualInt64)
+      .AddLoop('CheckEqual(string)', @BenchCheckEqualString)
+      .AddLoop('CheckNear(Double)', @BenchCheckNear)
+      .AddLoop('ExpectInt.ToEqualInt', @BenchExpectIntFluent)
+      .AddLoop('ExpectDouble.ToBeNear', @BenchExpectDoubleNear)
+      .AddLoop('Suite RunWithResult (100)', @BenchSuiteRun100)
+      .Run;
+    WriteLn(LResults.PrintToConsole);
   finally
-    B.Free;
   end;
 end.

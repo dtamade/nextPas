@@ -15,7 +15,7 @@ const
   CAP = 1000;
 
 var
-  B: TBenchRunner;
+  LResults: IBenchResults;
   GCache: TIntCache;
   GSink: Int64;
   i: Integer;
@@ -81,16 +81,13 @@ begin
 
   WriteLn('=== nextPas TLruCache<Integer,Integer> Benchmark (Cap=', CAP, ', N=', N, ') ===');
   WriteLn;
-  B := TBenchRunner.Create;
-  try
-    B.Run('LruCache.Put (fill+evict)/N=10000', @BenchPut);
-    B.Run('LruCache.Get(hit)/N=1000', @BenchGetHit);
-    B.Run('LruCache.Get(miss)/N=1000', @BenchGetMiss);
-    B.Run('LruCache.Eviction pressure/N=20000', @BenchEviction);
-    B.Summary;
-  finally
-    B.Free;
-  end;
+  LResults := TBenchSuite.Create('LruCache.Put (fill+evict)')
+    .AddLoop('LruCache.Put (fill+evict)/N=10000', @BenchPut)
+    .AddLoop('LruCache.Get(hit)/N=1000', @BenchGetHit)
+    .AddLoop('LruCache.Get(miss)/N=1000', @BenchGetMiss)
+    .AddLoop('LruCache.Eviction pressure/N=20000', @BenchEviction)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
   GCache.Free;
   if GSink = -1 then WriteLn(GSink);
 end.

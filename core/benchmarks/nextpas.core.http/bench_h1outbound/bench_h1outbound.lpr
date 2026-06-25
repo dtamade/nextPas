@@ -36,7 +36,7 @@ type
   end;
 
 var
-  B: TBenchRunner;
+  LResults: IBenchResults;
   GPayload: array[0..1023] of Byte;
   GBytesDrained: SizeUInt;
 
@@ -167,14 +167,12 @@ end;
 
 begin
   InitPayload;
-  B := TBenchRunner.Create;
   WriteLn('=== nextpas.core.http.h1outbound benchmark ===');
   WriteLn('operation=http.h1outbound.drain');
   WriteLn;
-  B.Run('buffer write+drain 1KB', @BenchBufferWriteDrain1KB);
-  B.Run('buffer trydrain runtime 1KB chunk128',
-    @BenchBufferTryDrainRuntime1KBChunk128);
-  WriteLn;
-  B.Summary;
-  B.Free;
+  LResults := TBenchSuite.Create('buffer write+drain 1KB')
+    .AddLoop('buffer write+drain 1KB', @BenchBufferWriteDrain1KB)
+    .AddLoop('buffer trydrain runtime 1KB chunk128', @BenchBufferTryDrainRuntime1KBChunk128)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
 end.

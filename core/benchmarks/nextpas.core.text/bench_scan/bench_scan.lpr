@@ -22,7 +22,7 @@ type
   TJsonPlainBuffer = array[0..JSON_PLAIN_LEN - 1] of AnsiChar;
 
 var
-  B: TBenchRunner;
+  LResults: IBenchResults;
   GSink: PtrInt;
   GSizeSink: SizeUInt;
   GErrorSink: TUnescapeError;
@@ -295,50 +295,45 @@ begin
   InitSubstringBuffer;
   InitJsonSamples;
 
-  B := TBenchRunner.Create;
   WriteLn('=== nextpas.core.text scan + escape benchmark ===');
   WriteLn;
 
   WriteLn('--- ScanFindByte ---');
-  B.Run('ScanFindByte small 32B', @BenchFindByteSmall);
-  B.Run('ScanFindByte medium 256B', @BenchFindByteMedium);
-  B.Run('ScanFindByte large 4096B', @BenchFindByteLarge);
+  LResults := TBenchSuite.Create('ScanFindByte small 32B')
+    .AddLoop('ScanFindByte small 32B', @BenchFindByteSmall)
+    .AddLoop('ScanFindByte medium 256B', @BenchFindByteMedium)
+    .AddLoop('ScanFindByte large 4096B', @BenchFindByteLarge)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
   PrintFocusThroughput('ScanFindByte small 32B', SMALL_FIND_LEN, @BenchFindByteSmall);
   PrintFocusThroughput('ScanFindByte medium 256B', MEDIUM_FIND_LEN, @BenchFindByteMedium);
   PrintFocusThroughput('ScanFindByte large 4096B', LARGE_FIND_LEN, @BenchFindByteLarge);
   WriteLn;
 
   WriteLn('--- ScanSkipWhitespace ---');
-  B.Run('ScanSkipWhitespace small 32B', @BenchSkipWhitespaceSmall);
-  B.Run('ScanSkipWhitespace medium 256B', @BenchSkipWhitespaceMedium);
-  B.Run('ScanSkipWhitespace large 4096B', @BenchSkipWhitespaceLarge);
+  LResults := TBenchSuite.Create('ScanSkipWhitespace small 32B')
+    .AddLoop('ScanSkipWhitespace small 32B', @BenchSkipWhitespaceSmall)
+    .AddLoop('ScanSkipWhitespace medium 256B', @BenchSkipWhitespaceMedium)
+    .AddLoop('ScanSkipWhitespace large 4096B', @BenchSkipWhitespaceLarge)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
   PrintFocusThroughput('ScanSkipWhitespace small 32B', SMALL_FIND_LEN, @BenchSkipWhitespaceSmall);
   PrintFocusThroughput('ScanSkipWhitespace medium 256B', MEDIUM_FIND_LEN, @BenchSkipWhitespaceMedium);
   PrintFocusThroughput('ScanSkipWhitespace large 4096B', LARGE_FIND_LEN, @BenchSkipWhitespaceLarge);
   WriteLn;
 
   WriteLn('--- ScanFindSubstring ---');
-  B.Run('ScanFindSubstring 4096B haystack', @BenchFindSubstring);
-  WriteLn;
-
-  WriteLn('--- JsonEscapeToBuffer ---');
-  B.Run('JsonEscapeToBuffer ASCII', @BenchJsonEscapeAscii);
-  B.Run('JsonEscapeToBuffer control chars', @BenchJsonEscapeControl);
-  B.Run('JsonEscapeToBuffer Unicode UTF-8', @BenchJsonEscapeUnicode);
-  WriteLn;
-
-  WriteLn('--- JsonUnescapeToBuffer ---');
-  B.Run('JsonUnescapeToBuffer ASCII', @BenchJsonUnescapeAscii);
-  B.Run('JsonUnescapeToBuffer control chars', @BenchJsonUnescapeControl);
-  B.Run('JsonUnescapeToBuffer Unicode escapes', @BenchJsonUnescapeUnicode);
-  WriteLn;
-
-  WriteLn('--- JsonFindStringEnd ---');
-  B.Run('JsonFindStringEnd ASCII', @BenchJsonFindEndAscii);
-  B.Run('JsonFindStringEnd escaped', @BenchJsonFindEndEscaped);
-  B.Run('JsonFindStringEnd Unicode UTF-8', @BenchJsonFindEndUnicode);
-  WriteLn;
-
-  B.Summary;
-  B.Free;
+  LResults := TBenchSuite.Create('ScanFindSubstring 4096B haystack')
+    .AddLoop('ScanFindSubstring 4096B haystack', @BenchFindSubstring)
+    .AddLoop('JsonEscapeToBuffer ASCII', @BenchJsonEscapeAscii)
+    .AddLoop('JsonEscapeToBuffer control chars', @BenchJsonEscapeControl)
+    .AddLoop('JsonEscapeToBuffer Unicode UTF-8', @BenchJsonEscapeUnicode)
+    .AddLoop('JsonUnescapeToBuffer ASCII', @BenchJsonUnescapeAscii)
+    .AddLoop('JsonUnescapeToBuffer control chars', @BenchJsonUnescapeControl)
+    .AddLoop('JsonUnescapeToBuffer Unicode escapes', @BenchJsonUnescapeUnicode)
+    .AddLoop('JsonFindStringEnd ASCII', @BenchJsonFindEndAscii)
+    .AddLoop('JsonFindStringEnd escaped', @BenchJsonFindEndEscaped)
+    .AddLoop('JsonFindStringEnd Unicode UTF-8', @BenchJsonFindEndUnicode)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
 end.

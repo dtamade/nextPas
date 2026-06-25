@@ -254,7 +254,7 @@ begin
 end;
 
 var
-  LBench: TBenchRunner;
+  LResults: IBenchResults;
   GArena: IAllocator;
 
 procedure BenchMediumArena(AIters: Int64);
@@ -302,16 +302,16 @@ begin
   WriteLn('LongString:  ', Length(GLongStringToml):5, ' bytes (10KB string + escaped)');
   WriteLn;
 
-  LBench := TBenchRunner.Create;
-  LBench.Run('parse/small (10 keys)', @BenchSmallParse);
-  LBench.Run('parse/medium (~50 keys)', @BenchMediumParse);
-  LBench.Run('parse/large (~700 keys)', @BenchLargeParse);
-  LBench.Run('parse/string-heavy (100 strings)', @BenchStringHeavy);
-  LBench.Run('parse/long-string (10KB value)', @BenchLongString);
-  LBench.Run('facade/small (parse+interface)', @BenchSmallFacade);
-  LBench.Run('access/medium (3 lookups)', @BenchMediumAccess);
-  LBench.Run('arena/medium (~50 keys)', @BenchMediumArena);
-  LBench.Run('arena/large (~700 keys)', @BenchLargeArena);
-  LBench.Summary;
-  LBench.Free;
+  LResults := TBenchSuite.Create('parse')
+    .AddLoop('parse/small (10 keys)', @BenchSmallParse)
+    .AddLoop('parse/medium (~50 keys)', @BenchMediumParse)
+    .AddLoop('parse/large (~700 keys)', @BenchLargeParse)
+    .AddLoop('parse/string-heavy (100 strings)', @BenchStringHeavy)
+    .AddLoop('parse/long-string (10KB value)', @BenchLongString)
+    .AddLoop('facade/small (parse+interface)', @BenchSmallFacade)
+    .AddLoop('access/medium (3 lookups)', @BenchMediumAccess)
+    .AddLoop('arena/medium (~50 keys)', @BenchMediumArena)
+    .AddLoop('arena/large (~700 keys)', @BenchLargeArena)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
 end.

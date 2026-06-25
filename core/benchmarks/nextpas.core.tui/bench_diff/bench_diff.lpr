@@ -27,7 +27,7 @@ begin
 end;
 
 var
-  Runner: TBenchRunner;
+  LResults: IBenchResults;
   I: Integer;
 begin
   Prev := TBuffer.CreateEmpty(TRect.Make(0, 0, 200, 50));
@@ -40,10 +40,10 @@ begin
   for I := 0 to 9 do
     Curr.SetString(I * 15, I + 1, 'changed!', StyleDefault.WithFg(TUI_RED));
 
-  Runner := TBenchRunner.Create;
-  Runner.Run('DiffInto 200x50 (10 changed rows)', @BenchDiffChanged);
-  Runner.Run('DiffInto 200x50 (identical)', @BenchDiffIdentical);
-  Runner.Summary;
-
+  LResults := TBenchSuite.Create('DiffInto 200x50 (10 changed rows)')
+    .AddLoop('DiffInto 200x50 (10 changed rows)', @BenchDiffChanged)
+    .AddLoop('DiffInto 200x50 (identical)', @BenchDiffIdentical)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
   Prev.Free; Curr.Free; Same.Free;
 end.

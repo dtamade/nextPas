@@ -7,7 +7,7 @@ uses
   nextpas.core.text;
 
 var
-  B: TBenchRunner;
+  LResults: IBenchResults;
   GSizeSink: SizeUInt;
   GStringSink: string;
 
@@ -91,15 +91,14 @@ begin
 end;
 
 begin
-  B := TBenchRunner.Create;
   WriteLn('=== nextpas.core.text builder ops benchmark ===');
   WriteLn;
-  B.Run('IStringBuilder.AppendStr', @BenchAppendStr);
-  B.Run('IStringBuilder.AppendInt', @BenchAppendInt);
-  B.Run('IStringBuilder.AppendFloat', @BenchAppendFloat);
-  B.Run('IStringBuilder.ToString', @BenchToString);
-  B.Run('IStringBuilder.AppendStr loop 10000x', @BenchAppendLoop10000);
-  WriteLn;
-  B.Summary;
-  B.Free;
+  LResults := TBenchSuite.Create('IStringBuilder')
+    .AddLoop('IStringBuilder.AppendStr', @BenchAppendStr)
+    .AddLoop('IStringBuilder.AppendInt', @BenchAppendInt)
+    .AddLoop('IStringBuilder.AppendFloat', @BenchAppendFloat)
+    .AddLoop('IStringBuilder.ToString', @BenchToString)
+    .AddLoop('IStringBuilder.AppendStr loop 10000x', @BenchAppendLoop10000)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
 end.

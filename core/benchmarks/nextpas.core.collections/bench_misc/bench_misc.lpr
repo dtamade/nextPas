@@ -26,7 +26,7 @@ const
   N = 10000;
 
 var
-  B: TBenchRunner;
+  LResults: IBenchResults;
   GSink: Int64;
 
 function CmpInt(const A, B: Integer; aData: Pointer): SizeInt;
@@ -136,20 +136,17 @@ end;
 begin
   WriteLn('=== Misc Containers Benchmark (N=', N, ') ===');
   WriteLn;
-  B := TBenchRunner.Create;
-  try
-    B.Run('SkipList.Put/N=10000', @BenchSkipListPut);
-    B.Run('SkipList.Get/N=10000', @BenchSkipListGet);
-    B.Run('TreeMap.Put/N=10000', @BenchTreeMapPut);
-    B.Run('TreeMap.Get/N=10000', @BenchTreeMapGet);
-    B.Run('Trie.Put(string)/N=10000', @BenchTriePut);
-    B.Run('SmallVec.Push/N=10000', @BenchSmallVecPush);
-    B.Run('CircularBuffer.Push/N=10000', @BenchCircularBufferPush);
-    B.Run('MultiMap.Add/N=10000', @BenchMultiMapAdd);
-    B.Run('MultiSet.Add/N=10000', @BenchMultiSetAdd);
-    B.Summary;
-  finally
-    B.Free;
-  end;
+  LResults := TBenchSuite.Create('SkipList.Put')
+    .AddLoop('SkipList.Put/N=10000', @BenchSkipListPut)
+    .AddLoop('SkipList.Get/N=10000', @BenchSkipListGet)
+    .AddLoop('TreeMap.Put/N=10000', @BenchTreeMapPut)
+    .AddLoop('TreeMap.Get/N=10000', @BenchTreeMapGet)
+    .AddLoop('Trie.Put(string)/N=10000', @BenchTriePut)
+    .AddLoop('SmallVec.Push/N=10000', @BenchSmallVecPush)
+    .AddLoop('CircularBuffer.Push/N=10000', @BenchCircularBufferPush)
+    .AddLoop('MultiMap.Add/N=10000', @BenchMultiMapAdd)
+    .AddLoop('MultiSet.Add/N=10000', @BenchMultiSetAdd)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
   if GSink = -1 then WriteLn(GSink);
 end.

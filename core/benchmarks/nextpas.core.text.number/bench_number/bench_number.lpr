@@ -7,7 +7,7 @@ uses
   nextpas.core.text.number;
 
 var
-  B: TBenchRunner;
+  LResults: IBenchResults;
   GSink: Int64;
   GBuf: array[0..63] of AnsiChar;
 
@@ -116,21 +116,20 @@ begin
 end;
 
 begin
-  B := TBenchRunner.Create;
   WriteLn('=== nextpas.core.text.number benchmark ===');
   WriteLn;
-  B.Run('IntToBuffer(42)', @BenchIntToBuffer_Small);
-  B.Run('IntToBuffer(1234567890)', @BenchIntToBuffer_Medium);
-  B.Run('IntToBuffer(MaxInt64)', @BenchIntToBuffer_Large);
-  B.Run('IntToBuffer(-1234567890)', @BenchIntToBuffer_Negative);
-  B.Run('UIntToBuffer(MaxUInt64)', @BenchUIntToBuffer);
-  B.Run('ParseInt64("42")', @BenchParseInt64_Small);
-  B.Run('ParseInt64("1234567890")', @BenchParseInt64_Medium);
-  B.Run('ParseInt64(MaxInt64)', @BenchParseInt64_Large);
-  B.Run('FloatToBuffer(pi)', @BenchFloatToBuffer);
-  B.Run('ParseDouble("3.14...")', @BenchParseDouble);
-  B.Run('IntToHexBuffer', @BenchIntToHex);
-  WriteLn;
-  B.Summary;
-  B.Free;
+  LResults := TBenchSuite.Create('IntToBuffer(42)')
+    .AddLoop('IntToBuffer(42)', @BenchIntToBuffer_Small)
+    .AddLoop('IntToBuffer(1234567890)', @BenchIntToBuffer_Medium)
+    .AddLoop('IntToBuffer(MaxInt64)', @BenchIntToBuffer_Large)
+    .AddLoop('IntToBuffer(-1234567890)', @BenchIntToBuffer_Negative)
+    .AddLoop('UIntToBuffer(MaxUInt64)', @BenchUIntToBuffer)
+    .AddLoop('ParseInt64("42")', @BenchParseInt64_Small)
+    .AddLoop('ParseInt64("1234567890")', @BenchParseInt64_Medium)
+    .AddLoop('ParseInt64(MaxInt64)', @BenchParseInt64_Large)
+    .AddLoop('FloatToBuffer(pi)', @BenchFloatToBuffer)
+    .AddLoop('ParseDouble("3.14...")', @BenchParseDouble)
+    .AddLoop('IntToHexBuffer', @BenchIntToHex)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
 end.

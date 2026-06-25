@@ -40,13 +40,14 @@ begin
 end;
 
 var
-  Runner: TBenchRunner;
+  LResults: IBenchResults;
 begin
   Area := TRect.Make(0, 0, 200, 60);
-  Runner := TBenchRunner.Create;
-  Runner.Run('VerticalSplit 3 constraints', @BenchVertical3);
-  Runner.Run('HorizontalSplit 5 constraints', @BenchHorizontal5);
-  Runner.Run('Grid 4x4 uniform', @BenchGrid4x4);
-  Runner.Run('Grid 8x8 uniform', @BenchGrid8x8);
-  Runner.Summary;
+  LResults := TBenchSuite.Create('VerticalSplit 3 constraints')
+    .AddLoop('VerticalSplit 3 constraints', @BenchVertical3)
+    .AddLoop('HorizontalSplit 5 constraints', @BenchHorizontal5)
+    .AddLoop('Grid 4x4 uniform', @BenchGrid4x4)
+    .AddLoop('Grid 8x8 uniform', @BenchGrid8x8)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
 end.

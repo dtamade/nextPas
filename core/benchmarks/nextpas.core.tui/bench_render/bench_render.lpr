@@ -69,16 +69,16 @@ begin
 end;
 
 var
-  Runner: TBenchRunner;
+  LResults: IBenchResults;
 begin
   Buf := TBuffer.CreateEmpty(TRect.Make(0, 0, 120, 40));
   SetupWidgets;
 
-  Runner := TBenchRunner.Create;
-  Runner.Run('Full render 120x40 (block+list+para+gauge)', @BenchFullRender);
-  Runner.Run('Block only 120x40', @BenchBlockOnly);
-  Runner.Run('SetString 120x40 (40 rows)', @BenchSetString);
-  Runner.Summary;
-
+  LResults := TBenchSuite.Create('Full render 120x40 (block+list+para+gauge)')
+    .AddLoop('Full render 120x40 (block+list+para+gauge)', @BenchFullRender)
+    .AddLoop('Block only 120x40', @BenchBlockOnly)
+    .AddLoop('SetString 120x40 (40 rows)', @BenchSetString)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
   Buf.Free;
 end.

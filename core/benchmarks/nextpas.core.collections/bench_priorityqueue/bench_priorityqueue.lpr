@@ -20,7 +20,7 @@ begin
 end;
 
 var
-  B: TBenchRunner;
+  LResults: IBenchResults;
   GSink: Int64;
   GRandomData: array[0..N-1] of Integer;
 
@@ -88,14 +88,11 @@ begin
   InitData;
   WriteLn('=== nextPas TPriorityQueue<Integer> Benchmark (N=', N, ') ===');
   WriteLn;
-  B := TBenchRunner.Create;
-  try
-    B.Run('PQ.Push/N=100000', @BenchPush);
-    B.Run('PQ.Pop/N=100000', @BenchPop);
-    B.Run('PQ.PushPop interleaved/N=100000', @BenchPushPop);
-    B.Summary;
-  finally
-    B.Free;
-  end;
+  LResults := TBenchSuite.Create('PQ.Push')
+    .AddLoop('PQ.Push/N=100000', @BenchPush)
+    .AddLoop('PQ.Pop/N=100000', @BenchPop)
+    .AddLoop('PQ.PushPop interleaved/N=100000', @BenchPushPop)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
   if GSink = -1 then WriteLn(GSink);
 end.

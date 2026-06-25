@@ -8,7 +8,7 @@ uses
   nextpas.core.text.view;
 
 var
-  B: TBenchRunner;
+  LResults: IBenchResults;
   GSink: SizeUInt;
 
 procedure BenchAppendStr_Short(aIters: Int64);
@@ -131,17 +131,16 @@ begin
 end;
 
 begin
-  B := TBenchRunner.Create;
   WriteLn('=== nextpas.core.text.builder benchmark ===');
   WriteLn;
-  B.Run('AppendStr short (3x)', @BenchAppendStr_Short);
-  B.Run('AppendStr 100x "abcdefghij"', @BenchAppendStr_100x);
-  B.Run('AppendChar 1000x', @BenchAppendChar_1000);
-  B.Run('AppendInt 100x', @BenchAppendInt_100);
-  B.Run('AppendMixed (HTTP header)', @BenchAppendMixed);
-  B.Run('ToString (43 bytes)', @BenchToString);
-  B.Run('Grow from 16 to 800 bytes', @BenchPreallocGrow);
-  WriteLn;
-  B.Summary;
-  B.Free;
+  LResults := TBenchSuite.Create('AppendStr short (3x)')
+    .AddLoop('AppendStr short (3x)', @BenchAppendStr_Short)
+    .AddLoop('AppendStr 100x "abcdefghij"', @BenchAppendStr_100x)
+    .AddLoop('AppendChar 1000x', @BenchAppendChar_1000)
+    .AddLoop('AppendInt 100x', @BenchAppendInt_100)
+    .AddLoop('AppendMixed (HTTP header)', @BenchAppendMixed)
+    .AddLoop('ToString (43 bytes)', @BenchToString)
+    .AddLoop('Grow from 16 to 800 bytes', @BenchPreallocGrow)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
 end.

@@ -7,7 +7,7 @@ uses
   nextpas.core.args;
 
 var
-  B: TBenchRunner;
+  LResults: IBenchResults;
 
 procedure BenchParseEmpty(aIters: Int64);
 var
@@ -141,17 +141,16 @@ begin
 end;
 
 begin
-  B := TBenchRunner.Create;
   WriteLn('=== nextpas.core.args benchmark ===');
   WriteLn;
-  B.Run('ParseEmpty', @BenchParseEmpty);
-  B.Run('ParseFlags(5)', @BenchParseFlags);
-  B.Run('ParseMixed(compiler-like)', @BenchParseMixed);
-  B.Run('ParseStringList(10x-I)', @BenchParseStringList);
-  B.Run('ParseCluster(-vdfO3)', @BenchParseCluster);
-  B.Run('SubcommandDispatch(10cmds)', @BenchSubcommand);
-  B.Run('HelpGeneration', @BenchHelpGen);
-  WriteLn;
-  B.Summary;
-  B.Free;
+  LResults := TBenchSuite.Create('ParseEmpty')
+    .AddLoop('ParseEmpty', @BenchParseEmpty)
+    .AddLoop('ParseFlags(5)', @BenchParseFlags)
+    .AddLoop('ParseMixed(compiler-like)', @BenchParseMixed)
+    .AddLoop('ParseStringList(10x-I)', @BenchParseStringList)
+    .AddLoop('ParseCluster(-vdfO3)', @BenchParseCluster)
+    .AddLoop('SubcommandDispatch(10cmds)', @BenchSubcommand)
+    .AddLoop('HelpGeneration', @BenchHelpGen)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
 end.

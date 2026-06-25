@@ -7,7 +7,7 @@ uses
   nextpas.core.time.base;
 
 var
-  B: TBenchRunner;
+  LResults: IBenchResults;
   GSink: UInt64;
 
 procedure BenchInstantNow(aIters: Int64);
@@ -70,15 +70,14 @@ begin
 end;
 
 begin
-  B := TBenchRunner.Create;
   WriteLn('=== nextpas.core.time benchmark ===');
   WriteLn;
-  B.Run('TInstant.Now', @BenchInstantNow);
-  B.Run('TInstant.Elapsed', @BenchInstantElapsed);
-  B.Run('TDuration arithmetic', @BenchDurationAdd);
-  B.Run('TDuration.FromMilliseconds', @BenchDurationFromMs);
-  B.Run('Deadline check (Now + compare)', @BenchDeadlineCheck);
-  WriteLn;
-  B.Summary;
-  B.Free;
+  LResults := TBenchSuite.Create('TInstant')
+    .AddLoop('TInstant.Now', @BenchInstantNow)
+    .AddLoop('TInstant.Elapsed', @BenchInstantElapsed)
+    .AddLoop('TDuration arithmetic', @BenchDurationAdd)
+    .AddLoop('TDuration.FromMilliseconds', @BenchDurationFromMs)
+    .AddLoop('Deadline check (Now + compare)', @BenchDeadlineCheck)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
 end.
