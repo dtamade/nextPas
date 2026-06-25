@@ -152,6 +152,7 @@ end;
 
 constructor EAllocError.Create(aError: TAllocError; const aMsg: string);
 begin
+  Assert(aError <> aeNone, 'EAllocError.Create: aeNone is not a valid error code');
   FError := aError;
   if aMsg <> '' then
     inherited Create(aMsg + ': ' + ERROR_MESSAGES[aError], AllocErrorCategory(aError))
@@ -163,6 +164,7 @@ end;
 
 constructor EOutOfMemory.Create(aError: TAllocError; const aMsg: string);
 begin
+  Assert(aError <> aeNone, 'EOutOfMemory.Create: aeNone is not a valid error code');
   FError := aError;
   if aMsg <> '' then
     inherited Create(aMsg + ': ' + ERROR_MESSAGES[aError])

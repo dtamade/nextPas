@@ -602,8 +602,14 @@ begin
     'virtual arena Alloc should classify capacity exhaustion');
   CheckContains(LAllocSection, 'flastallocfailure := vaaffrontcommitfailed;',
     'virtual arena Alloc should classify front commit failure');
-  CheckContains(LAllocSection, 'flastallocfailure := vaaflargeobjectmapfailed;',
-    'virtual arena Alloc should classify large-object mmap failure');
+  CheckContains(LAllocSection, 'alloclargeobject(aSize)',
+    'virtual arena Alloc should delegate large objects to AllocLargeObject');
+
+  { AllocLargeObject owns the mmap failure path after DRY refactor }
+  CheckContains(LSource, 'function tvirtualarena.alloclargeobject',
+    'virtual arena should define AllocLargeObject helper');
+  CheckContains(LSource, 'flastallocfailure := vaaflargeobjectmapfailed;',
+    'AllocLargeObject should classify mmap failure');
 
   CheckNotContains(LSource, 'inc(garenatotalmapped',
     'virtual arena leak counter should not use plain Inc');
