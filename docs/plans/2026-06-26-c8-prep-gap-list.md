@@ -1,6 +1,6 @@
 # C8-prep 自举差距清单
 
-> 2026-06-26 首次探测结果
+> 2026-06-26 全面探测结果（第二轮）
 > 目标：用 nextPas 编译 `core/` 真实模块，记录所有差距
 
 ---
@@ -15,164 +15,147 @@
 
 ---
 
-## Gap #1：unit cycle（阻塞所有 core 模块）
+## 总结
 
-**症状：**
-```
-unit cycle detected: nextpas.core.exception -> sysutils -> nextpas.core.exception
-```
-
-**根因：**
-- `nextpas.core.exception.pas` 第 14 行 `uses SysUtils`，继承 `SysUtils.Exception`
-- `units/linux-x86_64/SysUtils.pas` 第 6 行 `uses nextpas.core.exception`，re-export Exception 类型
-- 当 nextPas 编译时，两个 stub 互相引用形成 cycle
-
-**历史：**
-- Phase A（cfe9e1061）：Exception 改为 `class(TObject)`，自给自足
-- Phase A 回退（7b0787506）：FPC 的 `raise` 要求 `SysUtils.Exception` 后代
-- Phase C（bcd9a2f4e）：SysUtils stub re-export Exception → 引入 cycle
-
-**影响范围：**
-- `nextpas.core.base` → `nextpas.core.exception` → SysUtils → cycle
-- 所有 core 模块最终都依赖 `nextpas.core.base`，因此全部受影响
-- compiler-pass 测试中 6/16 失败（unit-resolution-failed）
-
-**修复选项：**
-
-| 选项 | 方案 | 代价 |
+| 类别 | 数量 | 说明 |
 |------|------|------|
-| A | Phase A 重做：Exception 不继承 SysUtils.Exception | FPC 编译的代码 `raise` 失败 |
-| B | SysUtils stub 不导入 nextpas.core.exception | Exception 类型分裂（两个独立层次） |
-| C | SysUtils stub 内联定义 Exception（不引用 core） | 类型分裂 + 维护双份定义 |
-| D | nextpas.core.exception 消除 SysUtils 依赖 + FPC 侧用 wrapper | 最干净但工作量大 |
-
-**推荐：选项 D**
-1. nextpas.core.exception 重新自给自足（Phase A 方案）
-2. FPC 编译路径：`{$IFDEF FPC}` 在 exception.pas 顶层加 `uses SysUtils`？
-   — 但 CLAUDE.md 禁止 `{$IFDEF}` 分叉
-3. **替代方案**：FPC 编译路径不经过 stub，直接用 FPC 的 SysUtils。
-   问题：FPC 的搜索路径和 nextPas 的搜索路径不同。
-   FPC 编译时 `uses SysUtils` → FPC 自带 SysUtils（无 cycle）
-   nextPas 编译时 `uses SysUtils` → stub SysUtils（有 cycle）
-   所以只需要在 stub 路径上打破 cycle。
-
-**实际推荐：选项 B+C 混合**
-- SysUtils stub 定义自己的 Exception 类（不导入 nextpas.core.exception）
-- nextpas.core.exception 保持 `uses SysUtils`（FPC 兼容）
-- 类型分裂是已知限制，可在 C8 阶段处理
+| ✅ 语法通过 | ~45 | parser + sema + codegen 全绿 |
+| 🔴 Parser 语法错误 | ~14 | 需要 parser 增强 |
+| 🟡 语义错误 | ~15 | 缺少 builtins/overload 解析 |
+| ⚪ 缺少源文件 | ~8 | 文件名不存在（非编译器问题） |
 
 ---
 
-## Gap #2：parser 不支持 array of const 成员访问
+## 已修复 Gaps（本轮）
 
-**症状：**
-```
-Syntax error, "statement" expected but ")" found
-```
+### Gap #1：unit cycle ✅
+- SysUtils stub 改为自定义 Exception，打破 cycle
 
-**位置：** `core/src/nextpas.core.exception.pas` byte offset 7038, 7119, 7300
+### Gap #2：parser string keyword ✅
+- `ParsePrimaryExpression` 添加 `tkStringKeyword`
 
-**根因：** `FormatStr` 函数使用 `array of const` 的特殊语法：
-```pascal
-case AArgs[LArgIdx].VType of
-  vtAnsiString: AppendStr(string(AArgs[LArgIdx].VAnsiString));
-  vtUnicodeString: AppendStr(string(AArgs[LArgIdx].VUnicodeString));
-  ...
-```
+### Gap #3：FPC Str() 格式说明符 ✅
+- 格式说明符解析支持变量标识符（`tkIdentifier`）
 
-nextPas parser 不支持 `AArgs[i].VType`（`array of const` 的 variant record 字段访问）。
-
-**影响范围：**
-- `nextpas.core.exception` 直接受影响（FormatStr + CreateFmt）
-- 所有依赖 `nextpas.core.base` -> `nextpas.core.exception` 的模块间接受影响
-- 这包括几乎所有 core 模块
-
-**修复选项：**
-
-| 选项 | 方案 | 代价 |
-|------|------|------|
-| A | 扩展 parser 支持 `array of const` 成员访问 | 需要 parser 和 sema 改动 |
-| B | 在 exception.pas 中移除 `FormatStr`，用其他方式处理格式化 | 可能破坏 FPC 兼容性 |
-| C | 暂时 stub 掉 FormatStr，用简单的字符串拼接替代 | 临时方案，功能受限 |
-
-**推荐：选项 A（扩展 parser）**
-- `array of const` 是 FPC 核心语法特性
-- 自举必须支持此语法
-- 这是 parser 的已知 gap，应该在 C8-prep 阶段修复
-
-**状态：** 🔴 需要 parser 和 sema 改动
+### Gap #4：class body 'of object' ✅
+- 类体解析器嵌套计数器 `I` 在 `procedure(...) of object` 处误增
+- 修复：检查前一个 token 不是 `of` 才递增
 
 ---
 
-## Gap #3：search path 配置
+## 🔴 Parser 语法错误（需增强）
 
-**症状：** core 模块编译时 `searchPathCount=0`
+### Gap P1：表达式链式调用
+**症状：** `"statement" expected but "." found`
+**位置：** `collections.arr` — `(Self as TCollection).TryLoadFrom(...)`
+**根因：** 表达式解析器不支持括号表达式后的 `.` 方法调用
 
-**原因：** `probe_self_compile_module.sh` 使用 `--workspace` 指定根目录，
-但 search path 可能未正确配置 core/ 的源码路径。
+### Gap P2：函数指针调用
+**症状：** `"statement" expected but "(" found`
+**位置：** `collections.base`, `toml.parser` — `TEqualsFunc(aEquals^)(aLeft, aRight)`
+**根因：** 类型转换后的函数调用 `TFunc(ptr)(args)` 不被识别
 
-**影响：** 即使打破 cycle，依赖解析也可能失败。
+### Gap P3：statement expected but ";" found
+**症状：** `"statement" expected but ";" found`
+**位置：** `collections.hashmap`, `collections.skiplist`
+
+### Gap P4：END expected but BEGIN found
+**症状：** `"END" expected but "BEGIN" found`
+**位置：** `collections.circularbuffer`, `collections.element_manager`, `collections.hashset`, `collections.list`, `collections.tree_set`
+**可能根因：** `begin...end` 嵌套在类型声明或类体中的处理
+
+### Gap P5：IMPLEMENTATION expected but END found
+**症状：** `"IMPLEMENTATION" expected but "END" found`
+**位置：** `bench.parallel`, `collections.smallvec`
+
+### Gap P6：identifier expected but "." found
+**症状：** `"identifier" expected but "." found`
+**位置：** `fs.dir` — uses 子句或限定名
+
+### Gap P7：非法字符
+**症状：** `illegal character "�" (byte $A8) in source`
+**位置：** `collections.vec` — 源文件含非 ASCII 字符
+
+### Gap P8：statement expected but END found
+**症状：** `"statement" expected but "END" found`
+**位置：** `bench.runner`
 
 ---
 
-## Gap #4：FPC Str() 格式说明符语法
+## 🟡 语义错误（需 builtins/解析增强）
 
-**症状：**
-```
-Syntax error, "statement" expected but "," found
-```
+### Gap S1：unknown callable
+- `SetString` — `config.env`
+- `SiftDown` — `bench.base`（可能是泛型实例化问题）
+- `InterlockedCompareExchange` — `bench.memtrack`
+- `SizeUInt` — `bytes.base`（当作 callable）
 
-**位置：** `core/src/nextpas.core.text.conv.pas` byte offset 3579, 3938
+### Gap S2：ambiguous overload
+- `atomic_thread_fence` — `atomic.types`
+- `FormatDateTime` — `bench`
+- `Create` — `collections.forward_list`, `collections`
+- `Max` — `collections.btree`
 
-**根因：** FPC 的 `Str` 过程支持格式说明符语法：
-```pascal
-Str(AValue:0:ADecimals, Result);
-```
+### Gap S3：wrong number of arguments
+- `MkdirAll` — `fs`
+- `Send` — `http.client`
+- `Shutdown` — `http.server`
+- `Truncate` — `collections.vecdeque`
 
-nextPas parser 不支持 `:width:decimals` 格式说明符。
+### Gap S4：argument type mismatch
+- `TextOfChar` — `bench.report`
+- `StringsSplit` — `bench.xlang`
 
-**影响范围：**
-- `nextpas.core.text.conv` 直接受影响（FloatToStrF, FormatFloat）
-- 依赖 text.conv 的模块间接受影响
+### Gap S5：interface not implemented
+- `TBitSet does not implement IBitSet.AppendTo` — `collections.bitset`
 
-**状态：** 🔴 需要 parser 扩展
+### Gap S6：MIR lowering
+- `TBitSet does not implement IBitSet.AppendTo` — `collections.bitset`
 
 ---
 
-## 当前进展
+## ✅ 已通过模块（部分列表）
 
-### 已修复
-- Gap #1: unit cycle（SysUtils stub 自给自足）
-- Gap #2: string keyword type cast（parser 扩展）
-- Gap #4: FPC Str() 格式说明符语法（支持变量标识符）
+### L0 层
+nextpas.core.base, nextpas.core.errors, nextpas.core.exception,
+nextpas.core.mem, nextpas.core.log.intf, nextpas.core.base.utils
 
-### 已验证编译成功（15 个模块）
-- ✅ nextpas.core.exception
-- ✅ nextpas.core.base
-- ✅ nextpas.core.errors
-- ✅ nextpas.core.text.conv
-- ✅ nextpas.core.text.utils
-- ✅ nextpas.core.text.format
-- ✅ nextpas.core.mem
-- ✅ nextpas.core.log.intf
-- ✅ nextpas.core.sync.intf
-- ✅ nextpas.core.base.utils
-- ✅ nextpas.core.path
-- ✅ nextpas.core.fs.intf
-- ✅ nextpas.core.fs.util
-- ✅ nextpas.core.fs.glob
-- ✅ nextpas.core.collections.intf
+### L1 层
+nextpas.core.text.conv, nextpas.core.text.utils, nextpas.core.text.format,
+nextpas.core.sync, nextpas.core.sync.semaphore, nextpas.core.sync.event,
+nextpas.core.sync.once, nextpas.core.sync.spinlock,
+nextpas.core.collections.intf, nextpas.core.collections.arr.base,
+nextpas.core.collections.arr.intf, nextpas.core.collections.arr.sort,
+nextpas.core.collections.hashmap.base, nextpas.core.collections.hashmap.swiss,
+nextpas.core.collections.hashmap.swiss.i32, nextpas.core.collections.hashmap.swiss.str,
+nextpas.core.collections.linkedhashmap.intf,
+nextpas.core.async, nextpas.core.async.base, nextpas.core.async.loop,
+nextpas.core.async.task, nextpas.core.async.timer,
+nextpas.core.bytes.pas(?), nextpas.core.atomic.pas(?)
 
-### 待修复
-- nextpas.core.collections.arr: "IMPLEMENTATION expected but BEGIN found"
-- nextpas.core.collections.hashmap: "statement expected but ; found"
+### L2 层
+nextpas.core.path, nextpas.core.fs.intf, nextpas.core.fs.util,
+nextpas.core.fs.glob, nextpas.core.fs.path, nextpas.core.fs.stream,
+nextpas.core.net.base, nextpas.core.net.intf, nextpas.core.net,
+nextpas.core.net.resolve, nextpas.core.net.server.base,
+nextpas.core.tls.base, nextpas.core.tls.asn1, nextpas.core.tls.base64,
+nextpas.core.json, nextpas.core.json.builder, nextpas.core.json.parser,
+nextpas.core.json.reader, nextpas.core.json.marshal,
+nextpas.core.yaml, nextpas.core.toml, nextpas.core.toml.base,
+nextpas.core.toml.value, nextpas.core.toml.builder, nextpas.core.toml.writer,
+nextpas.core.config, nextpas.core.config.builder, nextpas.core.config.flatten,
+nextpas.core.config.export, nextpas.core.math
 
-## 状态
+### L3 层
+nextpas.core.process, nextpas.core.process.base,
+nextpas.core.tui.base, nextpas.core.http.base, nextpas.core.websocket
 
-| Gap | 状态 | 优先级 |
-|-----|------|--------|
-| #1 unit cycle | ✅ 已修复 | 最高 |
-| #2 parser syntax (array of const) | ✅ 已修复 | 最高 |
-| #3 search path | 🔴 未分析 | 低 |
-| #4 FPC Str() 语法 | ✅ 已修复 | 高 |
-| #5 collections parser errors | 🔴 未修复 | 中 |
+---
+
+## 优先级建议
+
+1. **P1-P2（表达式链式调用）** — 影响多个核心模块，表达式能力系统性不足
+2. **P4（嵌套 begin/end）** — 影响 5 个 collections 模块
+3. **S2（overload 歧义）** — 影响 5 个模块，可能是 overload 解析规则不完整
+4. **S1（unknown callable）** — 需要注册更多 FPC builtins
+5. 其余为边角问题
