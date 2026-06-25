@@ -969,9 +969,9 @@ begin
           Result := nil;
       end;
     tkIdentifier, tkNameKeyword, tkMessageKeyword, tkFileKeyword,
-      tkInheritedKeyword, tkContainsKeyword, tkRequiresKeyword,
-      tkOnKeyword, tkIsKeyword, tkAsKeyword, tkInKeyword,
-      tkInlineKeyword, tkOverloadKeyword:
+      tkStringKeyword, tkInheritedKeyword, tkContainsKeyword,
+      tkRequiresKeyword, tkOnKeyword, tkIsKeyword, tkAsKeyword,
+      tkInKeyword, tkInlineKeyword, tkOverloadKeyword:
       begin
         Inc(ACursor);
         if (Token.Kind = tkInheritedKeyword) and (ACursor < ALexer.TokenCount) and
