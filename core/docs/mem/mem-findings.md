@@ -647,21 +647,22 @@ README / ARCHITECTURE 已写明 `AllocUnsafe` 不保证对齐，这条不再单�
 
 ## 十、汇总
 
-### 状态统计（截止 2026-06-25 第六轮）
+### 状态统计（截止 2026-06-25 第七轮）
 
 | 状态               | 数量   | 说明                                                            |
 | ------------------ | ------ | --------------------------------------------------------------- |
-| **[FIXED] / 关闭** | **83** | 含第一轮 60 条 + 第二轮 9 条 + 第三轮 4 条 + 第四轮 4 条 + 第五轮 4 条 + 第六轮 2 条 |
+| **[FIXED] / 关闭** | **84** | 含第一轮 60 条 + 第二轮 9 条 + 第三轮 4 条 + 第四轮 4 条 + 第五轮 4 条 + 第六轮 2 条 + 第七轮 1 条 |
 | **仍然开放**       | **0**  | 当前树上已无剩余开放问题                                         |
 | **新增 (第二轮)**  | **9**  | 全部已修复                                                      |
 | **新增 (第三轮)**  | **4**  | 全部已修复                                                      |
 | **新增 (第四轮)**  | **4**  | 全部已修复                                                      |
 | **新增 (第五轮)**  | **4**  | 全部已修复                                                      |
 | **新增 (第六轮)**  | **2**  | 全部已修复                                                      |
+| **新增 (第七轮)**  | **1**  | 全部已修复                                                      |
 
 ### 当前最高优先级（建议先处理）
 
-1. 无。六轮 `mem-findings.md` 已清零。
+1. 无。七轮 `mem-findings.md` 已清零。
 
 ### 处理建议顺序
 
@@ -894,3 +895,15 @@ front bump 统计 `FTotalUsed += LPad + aSize`（含对齐 padding），back bum
 `TLocalArena.AllocAligned(0)` 静默返回 nil（`IsPowerOfTwo(0) = False`），`TVirtualArena` 将 0 视为无效对齐设置失败原因。只有 `TChunkedArena` 将 0 归一化为 `MEM_DEFAULT_ALIGN`。三种实现行为不统一。
 
 **修复**：`TLocalArena` 和 `TVirtualArena` 均将 `AAlign=0` 归一化为 `MEM_DEFAULT_ALIGN`（`SizeOf(Pointer)`），与 `TChunkedArena` 一致。
+
+---
+
+## 第七轮（自举规划 + 回归测试补全）
+
+### R-24 [FIXED] TBlockPool.AcquireUnchecked 缺少 PeakAlloc 更新
+
+**P3 | 文件：`core/src/nextpas.core.mem.blockpool.pas`**
+
+`Acquire` 方法在 `Inc(FAllocCount)` 后有 `if FAllocCount > FPeakAlloc then FPeakAlloc := FAllocCount`，但 `AcquireUnchecked` 缺少此更新。通过 Unchecked 路径分配时 `PeakAlloc` 永远为 0。
+
+**修复**：在 `AcquireUnchecked` 中 `Inc(FTotalAllocs)` 之后补 `if FAllocCount > FPeakAlloc then FPeakAlloc := FAllocCount`。
