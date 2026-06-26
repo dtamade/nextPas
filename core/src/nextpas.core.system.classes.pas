@@ -27,6 +27,11 @@ type
   IReader = nextpas.core.io.intf.IReader;
   IWriter = nextpas.core.io.intf.IWriter;
 
+const
+  dupIgnore = Classes.dupIgnore;
+  dupError = Classes.dupError;
+  dupAccept = Classes.dupAccept;
+
 implementation
 
 end.

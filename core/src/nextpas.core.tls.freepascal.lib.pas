@@ -359,17 +359,22 @@ end;
 
 function TFreePascalCertificate.LoadFromFile(const AFileName: string): Boolean;
 var
-  LStream: TFileStream;
+  LBytes: TBytes;
+  LText: string;
 begin
   Result := False;
   if not nextpas.core.fs.IsFile(AFileName) then
     Exit;
 
-  LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
   try
-    Result := LoadFromStream(LStream);
-  finally
-    LStream.Free;
+    LBytes := nextpas.core.fs.ReadFile(AFileName);
+    if Length(LBytes) = 0 then
+      Exit;
+
+    SetString(LText, PAnsiChar(@LBytes[0]), Length(LBytes));
+    Result := LoadFromPEM(LText);
+  except
+    Result := False;
   end;
 end;
 

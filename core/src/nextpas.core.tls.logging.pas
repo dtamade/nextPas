@@ -369,12 +369,7 @@ begin
   if nextpas.core.fs.IsFile(FFileName) then
   begin
     try
-      with TFileStream.Create(FFileName, fmOpenRead or fmShareDenyWrite) do
-      try
-        FCurrentSize := Size;
-      finally
-        Free;
-      end;
+      FCurrentSize := nextpas.core.fs.FileSize(FFileName);
     except
       FCurrentSize := 0;
     end;
