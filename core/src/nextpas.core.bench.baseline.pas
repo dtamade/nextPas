@@ -200,11 +200,14 @@ begin
 end;
 
 function TBaselineManager.GetAllBaselines: TBaselineArray;
+var
+  I: Integer;
 begin
   if FBaselineCount = 0 then
     Exit(nil);
   SetLength(Result, FBaselineCount);
-  Move(FBaselines[0], Result[0], FBaselineCount * SizeOf(TBaselineData));
+  for I := 0 to FBaselineCount - 1 do
+    Result[I] := FBaselines[I];
 end;
 
 function TBaselineManager.HasBaseline(const AName: string): Boolean;
@@ -235,9 +238,10 @@ end;
 
 function TBaselineManager.CompareWithBaseline(const AResult: TBenchResult): TBaselineComparison;
 var
-  LBaseline: TBaselineData;
+  LIdx: Integer;
 begin
-  if not HasBaseline(AResult.Name) then
+  LIdx := FindBaseline(AResult.Name);
+  if LIdx < 0 then
   begin
     Result := Default(TBaselineComparison);
     Result.Current := AResult;
@@ -247,21 +251,19 @@ begin
     Exit;
   end;
 
-  LBaseline := GetBaseline(AResult.Name);
-
-  Result.Baseline := LBaseline;
+  Result.Baseline := FBaselines[LIdx];
   Result.Current := AResult;
 
-  if LBaseline.NsPerOp > 0 then
-    Result.Ratio := AResult.NsPerOp / LBaseline.NsPerOp
+  if FBaselines[LIdx].NsPerOp > 0 then
+    Result.Ratio := AResult.NsPerOp / FBaselines[LIdx].NsPerOp
   else
     Result.Ratio := 1;
 
   Result.IsRegression := Result.Ratio > FRegressionThreshold;
   Result.IsImprovement := Result.Ratio < (1 / FRegressionThreshold);
 
-  if LBaseline.NsPerOp > 0 then
-    Result.PercentChange := ((AResult.NsPerOp - LBaseline.NsPerOp) / LBaseline.NsPerOp) * 100
+  if FBaselines[LIdx].NsPerOp > 0 then
+    Result.PercentChange := ((AResult.NsPerOp - FBaselines[LIdx].NsPerOp) / FBaselines[LIdx].NsPerOp) * 100
   else
     Result.PercentChange := 0;
 end;
@@ -276,7 +278,7 @@ begin
   LCount := 0;
   for I := 0 to High(AResults) do
   begin
-    if HasBaseline(AResults[I].Name) then
+    if FindBaseline(AResults[I].Name) >= 0 then
     begin
       if LCount >= Length(LResults) then
       begin

@@ -90,14 +90,14 @@ end;
 function TBenchStatsAnalyzer.KahanSum(const AData: TDoubleArray): Double;
 var
   LSum, LCompensation, LNext, LTemp: Double;
-  i: Integer;
+  I: Integer;
 begin
   LSum := 0.0;
   LCompensation := 0.0;
 
-  for i := 0 to High(AData) do
+  for I := 0 to High(AData) do
   begin
-    LNext := AData[i] - LCompensation;
+    LNext := AData[I] - LCompensation;
     LTemp := LSum + LNext;
     LCompensation := (LTemp - LSum) - LNext;
     LSum := LTemp;
@@ -151,7 +151,7 @@ end;
 function TBenchStatsAnalyzer.ComputeVariance(const AData: TDoubleArray; AMean: Double): Double;
 var
   LSumSq, LCompensation, LNext, LTemp: Double;
-  i: Integer;
+  I: Integer;
 begin
   if Length(AData) <= 1 then
     Exit(0.0);
@@ -159,9 +159,9 @@ begin
   // Kahan compensated summation for Sqr(x - mean)
   LSumSq := 0.0;
   LCompensation := 0.0;
-  for i := 0 to High(AData) do
+  for I := 0 to High(AData) do
   begin
-    LNext := Sqr(AData[i] - AMean) - LCompensation;
+    LNext := Sqr(AData[I] - AMean) - LCompensation;
     LTemp := LSumSq + LNext;
     LCompensation := (LTemp - LSumSq) - LNext;
     LSumSq := LTemp;
@@ -217,15 +217,15 @@ function TBenchStatsAnalyzer.CountOutliers(const ASorted: TDoubleArray;
   AQ1, AQ3, AMultiplier: Double): Integer;
 var
   LLower, LUpper: Double;
-  i: Integer;
+  I: Integer;
 begin
   LLower := AQ1 - AMultiplier * (AQ3 - AQ1);
   LUpper := AQ3 + AMultiplier * (AQ3 - AQ1);
 
   Result := 0;
-  for i := 0 to High(ASorted) do
+  for I := 0 to High(ASorted) do
   begin
-    if (ASorted[i] < LLower) or (ASorted[i] > LUpper) then
+    if (ASorted[I] < LLower) or (ASorted[I] > LUpper) then
       Inc(Result);
   end;
 end;
@@ -417,7 +417,7 @@ var
   LN: Integer;
   LMean: Double;
   LSumSq, LSumWeighted: Double;
-  i: Integer;
+  I: Integer;
 begin
   // 简化的 Shapiro-Wilk 统计量计算
   // 完整实现需要查表，这里使用简化版本
@@ -430,11 +430,11 @@ begin
   LSumWeighted := 0.0;
 
   // 计算加权平方和
-  for i := 0 to LN - 1 do
+  for I := 0 to LN - 1 do
   begin
-    LSumSq += Sqr(ASorted[i] - LMean);
+    LSumSq += Sqr(ASorted[I] - LMean);
     // 简化的权重计算（近似正态分布的顺序统计量期望）
-    LSumWeighted += (ASorted[i] - LMean) * (LN - 1 - 2 * i) / (LN - 1);
+    LSumWeighted += (ASorted[I] - LMean) * (LN - 1 - 2 * I) / (LN - 1);
   end;
 
   if LSumSq < 1e-10 then
