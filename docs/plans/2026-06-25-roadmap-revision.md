@@ -2,7 +2,7 @@
 
 > 基于 C5-P 完成后的实际状态和最近 bug fix 暴露的问题，修订目标树 C5-C8 的优先级和拆分。
 
-**当前状态：** C5 已推进到 P（structured dispatched call），C6 已推进到 H17（owned string return 的 class field store）。最近修了两个编译器 bug：sret codegen（字符串返回函数）和 class field string ops LLVM emission。
+**当前状态：** ✅ C5 已完成（2026-06-27），C6 已推进到 H17（owned string return 的 class field store）。最近修了两个编译器 bug：sret codegen（字符串返回函数）和 class field string ops LLVM emission。
 
 ---
 
@@ -113,8 +113,8 @@ C8 拆为两步：
 
 ```
                     ┌─────────────┐
-                    │  C5 收口     │  ← 当前
-                    │  Q + R      │  1-2 轮
+                    │  C5 ✅ 完成  │  ← 2026-06-27
+                    │  Q+R 已验证  │  
                     └──────┬──────┘
                            │
               ┌────────────┼────────────┐
@@ -141,7 +141,7 @@ C8 拆为两步：
               └──────────┘
 ```
 
-**关键路径：C5 收口 → C6-A → C8-prep → C8**
+**关键路径：C5 ✅ → C7-prep → C6-A → C8-prep → C8**
 **并行路径：C7-prep（微小独立）、C6-B（可延后）**
 
 ---
@@ -150,7 +150,7 @@ C8 拆为两步：
 
 | 原目标树 | 修订后 | 理由 |
 |----------|--------|------|
-| C5 状态 O | C5 推进到 Q+R 收口 | 实际已完成到 P |
+| C5 状态 O | ✅ C5 完成 (2026-06-27) | test_semantic_hir_expr_producer exit=0 已解决 |
 | C6 = allocator + optimization | C6-A = allocator, C6-B = string ownership | 拆分关注点 |
 | C7 在 C5,C6 之后 | C7-prep 提前到 C5 后立即做 | 微小独立，提升效率 |
 | C8 在 C5,C6,C7 之后 | C8-prep 在 C6-A 后立即做 | 尽早暴露自举差距 |
