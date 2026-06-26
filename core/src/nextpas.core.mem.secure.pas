@@ -1,10 +1,10 @@
 unit nextpas.core.mem.secure;
 
-{$mode ObjFPC}{$H+}
+{$I nextpas.core.settings.inc}
 
 {
   Memory utilities for secure data handling
-  
+
   Purpose: Provide secure memory operations, particularly for
            clearing sensitive data (keys, passwords, etc.)
 }
@@ -17,60 +17,58 @@ uses
 {**
  * Securely zero memory to prevent sensitive data from remaining
  * in memory after use through the platform-owned secure-zero seam.
- * 
+ *
  * This keeps backend selection inside nextpas.core.platform.memory.
- * 
- * @param Buffer Pointer to the buffer to zero
- * @param Size Size of the buffer in bytes
+ *
+ * @param ABuffer Pointer to the buffer to zero
+ * @param ASize Size of the buffer in bytes
  *}
-procedure SecureZeroMemory(Buffer: Pointer; Size: NativeUInt);
+procedure SecureZeroMemory(ABuffer: Pointer; ASize: NativeUInt);
 
 {**
  * Securely zero a byte array
- * 
- * @param Data The byte array to zero
+ *
+ * @param AData The byte array to zero
  *}
-procedure SecureZeroBytes(var Data: TBytes);
+procedure SecureZeroBytes(var AData: TBytes);
 
 {**
  * Securely zero a string
- * 
- * @param Str The string to zero
+ *
+ * @param AStr The string to zero
  *}
-procedure SecureZeroString(var Str: AnsiString);
+procedure SecureZeroString(var AStr: AnsiString);
 
 implementation
 
 uses
   nextpas.core.platform.memory;
 
-procedure SecureZeroMemory(Buffer: Pointer; Size: NativeUInt);
+procedure SecureZeroMemory(ABuffer: Pointer; ASize: NativeUInt);
 begin
-  platform_secure_zero_memory(Buffer, Size);
+  platform_secure_zero_memory(ABuffer, ASize);
 end;
 
-procedure SecureZeroBytes(var Data: TBytes);
+procedure SecureZeroBytes(var AData: TBytes);
 begin
-  if Length(Data) > 0 then
+  if Length(AData) > 0 then
   begin
-    SecureZeroMemory(@Data[0], Length(Data));
-    SetLength(Data, 0);
+    SecureZeroMemory(@AData[0], Length(AData));
+    SetLength(AData, 0);
   end;
 end;
 
-procedure SecureZeroString(var Str: AnsiString);
+procedure SecureZeroString(var AStr: AnsiString);
 var
-  Len: Integer;
+  LLen: Integer;
 begin
-  Len := Length(Str);
-  if Len > 0 then
+  LLen := Length(AStr);
+  if LLen > 0 then
   begin
-    // 确保字符串可写（处理常量字符串引用）
-    UniqueString(Str);
-    // 再次检查长度（UniqueString 可能改变引用）
-    if Length(Str) > 0 then
-      SecureZeroMemory(@Str[1], Len);
-    Str := '';
+    UniqueString(AStr);
+    if Length(AStr) > 0 then
+      SecureZeroMemory(@AStr[1], LLen);
+    AStr := '';
   end;
 end;
 

@@ -118,9 +118,9 @@ function DefaultAllocator: IAllocator; inline;
 function AllocZeroed(const AAllocator: IAllocator; const ASize: SizeUInt): Pointer; inline;
 function AllocArray(const AAllocator: IAllocator; const ACount, AElemSize: SizeUInt): Pointer; inline;
 
-procedure SecureZeroMemory(Buffer: Pointer; Size: NativeUInt); inline;
-procedure SecureZeroBytes(var Data: TBytes); inline;
-procedure SecureZeroString(var Str: AnsiString); inline;
+procedure SecureZeroMemory(ABuffer: Pointer; ASize: NativeUInt); inline;
+procedure SecureZeroBytes(var AData: TBytes); inline;
+procedure SecureZeroString(var AStr: AnsiString); inline;
 
 implementation
 
@@ -145,19 +145,19 @@ begin
   Result := AAllocator.AllocMem(LTotal);
 end;
 
-procedure SecureZeroMemory(Buffer: Pointer; Size: NativeUInt);
+procedure SecureZeroMemory(ABuffer: Pointer; ASize: NativeUInt);
 begin
-  nextpas.core.mem.secure.SecureZeroMemory(Buffer, Size);
+  nextpas.core.mem.secure.SecureZeroMemory(ABuffer, ASize);
 end;
 
-procedure SecureZeroBytes(var Data: TBytes);
+procedure SecureZeroBytes(var AData: TBytes);
 begin
-  nextpas.core.mem.secure.SecureZeroBytes(Data);
+  nextpas.core.mem.secure.SecureZeroBytes(AData);
 end;
 
-procedure SecureZeroString(var Str: AnsiString);
+procedure SecureZeroString(var AStr: AnsiString);
 begin
-  nextpas.core.mem.secure.SecureZeroString(Str);
+  nextpas.core.mem.secure.SecureZeroString(AStr);
 end;
 
 end.
