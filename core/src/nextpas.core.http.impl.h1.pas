@@ -551,7 +551,8 @@ end;
 
 function TPrefixedTcpStream.Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
 begin
-  Result := FInner.Seek(AOffset, AOrigin);
+  // TCP streams don't support seeking
+  Result := 0;
 end;
 
 procedure TPrefixedTcpStream.Close;
@@ -561,17 +562,19 @@ end;
 
 function TPrefixedTcpStream.GetSize: Int64;
 begin
-  Result := FInner.Size;
+  // TCP streams don't have a size
+  Result := 0;
 end;
 
 function TPrefixedTcpStream.GetPosition: Int64;
 begin
-  Result := FInner.Position;
+  // TCP streams don't support seeking, return 0
+  Result := 0;
 end;
 
 procedure TPrefixedTcpStream.SetPosition(const AValue: Int64);
 begin
-  FInner.Position := AValue;
+  // TCP streams don't support seeking, no-op
 end;
 
 function TPrefixedTcpStream.LocalAddr: TNetAddress;
@@ -1168,50 +1171,50 @@ begin
   LOutbound := nil;
   LResponseWriter := nil;
   LDrainStarted := False;
+  if FParserIsSnapshot then
+    FKeepAlive := True
+  else
+    FKeepAlive := ShouldKeepAlive(FParser);
+
+  if HasHttp11HostPolicyError(FParser) then
+  begin
+    WriteErrorResponse(FConn, HTTP_STATUS_BAD_REQUEST, FOptions.WriteTimeout);
+    FKeepAlive := False;
+    Exit(tscoServer);
+  end;
+
+  LContentLen := FParser.GetBodySize;
+  LBodyReader := FParser.NewBodyReader;
+  if LBodyReader <> nil then
+  begin
+    LReq := THttpRequest.CreateFromRequestTarget(FParser.GetMethod,
+      FParser.GetUrl, FParser.GetHttpVersion, FParser.GetHeaders,
+      LBodyReader, LContentLen);
+  end
+  else
+  begin
+    LContentLen := 0;
+    LReq := THttpRequest.CreateFromRequestTarget(FParser.GetMethod,
+      FParser.GetUrl, FParser.GetHttpVersion, FParser.GetHeaders, nil,
+      LContentLen);
+  end;
+
+  (LReq as THttpRequest).SetRemoteNetAddr(FConn.RemoteAddr);
+
+  if FPending <> '' then
+    LHijackConn := TPrefixedTcpStream.Create(FConn, FPending)
+  else
+    LHijackConn := FConn;
+  LOutbound := NewH1OutboundBuffer;
+  LResponseWriter := LOutbound as IWriter;
+  LW := TH1ResponseWriter.Create(LResponseWriter, LHijackConn,
+    LReq.Method = hmHead);
+  if FKeepAlive and (FParser.GetHttpVersion = hvHttp10) then
+    LW.GetHeaders.SetHeader('connection', 'keep-alive');
+  if not FKeepAlive then
+    LW.GetHeaders.SetHeader('connection', 'close');
+
   try
-    if FParserIsSnapshot then
-      FKeepAlive := True
-    else
-      FKeepAlive := ShouldKeepAlive(FParser);
-
-    if HasHttp11HostPolicyError(FParser) then
-    begin
-      WriteErrorResponse(FConn, HTTP_STATUS_BAD_REQUEST, FOptions.WriteTimeout);
-      FKeepAlive := False;
-      Exit(tscoServer);
-    end;
-
-    LContentLen := FParser.GetBodySize;
-    LBodyReader := FParser.NewBodyReader;
-    if LBodyReader <> nil then
-    begin
-      LReq := THttpRequest.CreateFromRequestTarget(FParser.GetMethod,
-        FParser.GetUrl, FParser.GetHttpVersion, FParser.GetHeaders,
-        LBodyReader, LContentLen);
-    end
-    else
-    begin
-      LContentLen := 0;
-      LReq := THttpRequest.CreateFromRequestTarget(FParser.GetMethod,
-        FParser.GetUrl, FParser.GetHttpVersion, FParser.GetHeaders, nil,
-        LContentLen);
-    end;
-
-    (LReq as THttpRequest).SetRemoteNetAddr(FConn.RemoteAddr);
-
-    if FPending <> '' then
-      LHijackConn := TPrefixedTcpStream.Create(FConn, FPending)
-    else
-      LHijackConn := FConn;
-    LOutbound := NewH1OutboundBuffer;
-    LResponseWriter := LOutbound as IWriter;
-    LW := TH1ResponseWriter.Create(LResponseWriter, LHijackConn,
-      LReq.Method = hmHead);
-    if FKeepAlive and (FParser.GetHttpVersion = hvHttp10) then
-      LW.GetHeaders.SetHeader('connection', 'keep-alive');
-    if not FKeepAlive then
-      LW.GetHeaders.SetHeader('connection', 'close');
-
     FHandler.ServeHTTP(LReq, LW);
 
     if (LW as TH1ResponseWriter).IsHijacked then
@@ -1226,7 +1229,7 @@ begin
     LDrainStarted := True;
     ArmDirectWriteDeadline;
     LOutbound.DrainAllTo(FConn as IWriter);
-
+  except
     on E: Exception do
     begin
       if (LW <> nil) and (LW as TH1ResponseWriter).IsHijacked then
