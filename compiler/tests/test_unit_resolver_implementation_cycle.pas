@@ -3,6 +3,7 @@ program test_unit_resolver_implementation_cycle;
 {$mode objfpc}{$H+}
 
 uses
+  nextpas.core.base,
   nextpas.core.fs,
   nextpas.core.path,
   nextpas.core.text.conv,
@@ -95,7 +96,7 @@ var
   Tree: TGreenTree;
 begin
   Randomize;
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-resolver-impl-cycle-' + IntToStr(Random(MaxInt));
   RootPath := IncludeTrailingPathDelimiter(ProjectRoot) +
     'RootImplementationCycle.pas';
@@ -172,9 +173,9 @@ begin
       Halt(1);
     if Resolver.ResolutionStatus <> 'ready' then
       Halt(2);
-    if Resolver.UnitGraph.ResolvedUnitCount <> 3 then
+    if Resolver.UnitGraph.ResolvedUnitCount <> 4 then
       Halt(3);
-    if Resolver.UnitGraph.EdgeCount <> 4 then
+    if Resolver.UnitGraph.EdgeCount <> 7 then
       Halt(4);
   finally
     Resolver.Free;
