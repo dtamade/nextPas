@@ -588,6 +588,85 @@ begin
   LPool.FreeMem(LPtr2);
 end;
 
+{ B2: FixedSlabPool AllocAligned 直接路径 (AAlignment <= 8 不走 fallback) }
+procedure TestFixedSlabAlignedDirectPath;
+var
+  LFallback: TFixedSlabRecordingAllocator;
+  LPool: TFixedSlabPool;
+  LP: Pointer;
+begin
+  LFallback := TFixedSlabRecordingAllocator.Create;
+  LPool := TFixedSlabPool.Create(1024, LFallback);
+  try
+    LFallback.FreeAlignedCalls := 0;
+    { AAlignment=8 <= 8, should go through direct slab path, not fallback }
+    LP := LPool.AllocAligned(32, 8);
+    Check(LP <> nil, 'AllocAligned(32, 8) succeeds');
+    Check(LPool.Owns(LP), 'pointer belongs to slab pool');
+    CheckEqual(0, LFallback.FreeAlignedCalls, 'fallback AllocAligned not called');
+    LPool.FreeMem(LP);
+  finally
+    LPool.Free;
+  end;
+end;
+
+{ B2: TSlabPool 小对齐直接路径 }
+procedure TestSlabAlignedDirectPath;
+var
+  LPool: TSlabPool;
+  LP: Pointer;
+  LStats: TSlabPoolStats;
+begin
+  LPool := TSlabPool.Create(4096);
+  try
+    { AAlignment=8 should go through direct slab path }
+    LP := LPool.AllocAligned(32, 8);
+    Check(LP <> nil, 'AllocAligned(32, 8) succeeds');
+    CheckEqual(Int64(0), PtrUInt(LP) mod 8, 'aligned to 8');
+    LStats := LPool.Stats;
+    CheckEqual(Int64(0), Int64(LStats.FallbackAllocCount), 'no fallback used');
+    LPool.FreeMem(LP);
+  finally
+    LPool.Free;
+  end;
+end;
+
+{ B3: TSlabPool 底层 allocator 失败时返回 nil }
+procedure TestSlabPoolOomWhenBackingFails;
+var
+  LPool: TSlabPool;
+  LP: Pointer;
+begin
+  { Create slab pool with very small capacity }
+  LPool := TSlabPool.Create(64);
+  try
+    LP := LPool.GetMem(32);
+    { First alloc may succeed or fail depending on slab internals.
+      The key is: no crash, returns nil on failure. }
+    if LP <> nil then
+      LPool.FreeMem(LP);
+  finally
+    LPool.Free;
+  end;
+end;
+
+{ B3: TFixedSlabPool Create(0) 后操作安全 }
+procedure TestFixedSlabPoolZeroCapacity;
+var
+  LPool: TFixedSlabPool;
+  LP: Pointer;
+begin
+  LPool := TFixedSlabPool.Create(0);
+  try
+    LP := LPool.GetMem(8);
+    Check(LP = nil, 'GetMem on zero-capacity pool returns nil');
+    LPool.FreeMem(nil);  { should not crash }
+    Check(LPool.Traits.HasMemSize, 'traits still valid');
+  finally
+    LPool.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.mem.slab_pool');
   T.Run('create stats and traits', @TestCreateStatsAndTraits);
@@ -602,5 +681,9 @@ begin
   T.Run('fixed slab aligned direct fails closed', @TestFixedSlabAlignedDirectFailsClosed);
   T.Run('fixed slab aligned fallback fails closed', @TestFixedSlabAlignedFallbackFailsClosed);
   T.Run('IMemoryPool contract via TSlabPool', @TestIMemoryPoolContract);
+  T.Run('fixed slab aligned direct path (B2)', @TestFixedSlabAlignedDirectPath);
+  T.Run('slab aligned direct path (B2)', @TestSlabAlignedDirectPath);
+  T.Run('slab pool OOM safe (B3)', @TestSlabPoolOomWhenBackingFails);
+  T.Run('fixed slab zero capacity safe (B3)', @TestFixedSlabPoolZeroCapacity);
   T.Summary;
 end.

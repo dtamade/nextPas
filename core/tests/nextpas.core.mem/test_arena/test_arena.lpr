@@ -164,6 +164,32 @@ begin
   end;
 end;
 
+{ B2: Reset 后 AllocAligned 正确对齐 }
+procedure TestArenaResetThenAllocAligned;
+var
+  LA: TLocalArena;
+  LP: Pointer;
+begin
+  LA := TLocalArena.Create(512);
+  try
+    { Allocate some memory }
+    LA.Alloc(100);
+    Check(LA.UsedSize > 0, 'used after alloc');
+
+    { Reset }
+    LA.Reset;
+    CheckEqual(Int64(0), Int64(LA.UsedSize), 'reset clears');
+
+    { AllocAligned after reset should work and be properly aligned }
+    LP := LA.AllocAligned(64, 256);
+    Check(LP <> nil, 'AllocAligned after reset succeeds');
+    CheckEqual(Int64(0), PtrUInt(LP) mod 256, 'pointer aligned to 256');
+    Check(LA.UsedSize >= 64, 'used size reflects allocation');
+  finally
+    LA.Free;
+  end;
+end;
+
 procedure TestArenaMark;
 var
   LA: TLocalArena;
@@ -271,6 +297,7 @@ begin
   T.Run('AllocAligned rejects invalid alignment', @TestArenaAllocAlignedRejectsInvalidAlignment);
   T.Run('AllocAligned accepts power-of-two alignment', @TestArenaAllocAlignedAcceptsPowerOfTwoAlignment);
   T.Run('Reset', @TestArenaReset);
+  T.Run('Reset then AllocAligned', @TestArenaResetThenAllocAligned);
   T.Run('Mark/Restore', @TestArenaMark);
   T.Run('Mark nested', @TestArenaMarkNested);
   T.Run('Write/Read', @TestArenaWriteRead);

@@ -175,6 +175,38 @@ begin
   end;
 end;
 
+{ B2: 跨段 mark/restore 后 AllocAligned }
+procedure TestMarkAcrossSegmentsThenAllocAligned;
+var
+  LArena: TChunkedArena;
+  LMark: TArenaMark;
+  LP: Pointer;
+  I: Integer;
+begin
+  LArena := TChunkedArena.Create(1024);
+  try
+    { Fill multiple segments }
+    for I := 0 to 63 do
+      LArena.Alloc(1024);
+
+    LMark := LArena.SaveMark;
+
+    { Allocate more in additional segments }
+    for I := 0 to 9 do
+      LArena.Alloc(1024);
+
+    { Restore to mark }
+    LArena.RestoreToMark(LMark);
+
+    { AllocAligned should work after cross-segment restore }
+    LP := LArena.AllocAligned(128, 64);
+    Check(LP <> nil, 'AllocAligned after cross-segment restore');
+    CheckEqual(Int64(0), PtrUInt(LP) mod 64, 'aligned to 64');
+  finally
+    LArena.Free;
+  end;
+end;
+
 procedure TestReset;
 var
   LArena: TChunkedArena;
@@ -478,6 +510,7 @@ begin
   T.Run('linear_growth', @TestLinearGrowth);
   T.Run('save_restore_mark', @TestSaveRestoreMark);
   T.Run('mark_across_segments', @TestMarkAcrossSegments);
+  T.Run('mark_across_segments_alloc_aligned', @TestMarkAcrossSegmentsThenAllocAligned);
   T.Run('reset', @TestReset);
   T.Run('reset_keep_segments', @TestResetKeepSegments);
   T.Run('max_size', @TestMaxSize);
