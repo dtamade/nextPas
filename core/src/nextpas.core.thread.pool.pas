@@ -80,15 +80,14 @@ begin
 
     LPool.FMutex.Release;
 
-    { Snapshot task info, zero the node, then dispose.
-      Using New/Dispose avoids the pool recycling races.
-      Zeroing before dispose prevents use-after-free if the
-      memory is immediately reused by another New(). }
+    { Snapshot task info, then clear the node before dispose.
+      The anonymous task must be copied out before any field is nulled. }
     LDirectProc := LNode^.DirectProc;
     LDirectData := LNode^.DirectData;
+    LTask := LNode^.Task;
+    LNode^.Task := nil;
     LNode^.DirectProc := nil;
     LNode^.DirectData := nil;
-    Pointer(LNode^.Task) := nil;
     LNode^.Next := nil;
     if Assigned(LDirectProc) then
     begin
@@ -100,12 +99,11 @@ begin
     end
     else
     begin
-      Pointer(LTask) := Pointer(LNode^.Task);
-      Dispose(LNode);
       try
         LTask();
       except
       end;
+      Dispose(LNode);
       LTask := nil;
     end;
 
