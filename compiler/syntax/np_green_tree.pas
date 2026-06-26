@@ -1903,6 +1903,39 @@ begin
         Result := TGreenNode.Create(gnkIdentifier, Token.ByteOffset,
           Length(Token.Lexeme), Token.Lexeme);
       end;
+    tkRecordKeyword, tkObjectKeyword:
+      begin
+        if Token.Kind = tkRecordKeyword then
+          Result := TGreenNode.Create(gnkRecordType, Token.ByteOffset, 0, '')
+        else
+          Result := TGreenNode.Create(gnkRecordType, Token.ByteOffset, 0, 'object');
+        Inc(ACursor);
+        SkipDirectives(ALexer, ACursor);
+        Depth := 1;
+        while (ACursor < ALexer.TokenCount) and (Depth > 0) and
+          (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+        begin
+          if CurrentToken(ALexer, ACursor).Kind = tkRecordKeyword then
+          begin
+            if (ACursor > 0) and
+              (ALexer.TokenAt(ACursor - 1).Kind <> tkOfKeyword) then
+              Inc(Depth);
+          end
+          else if CurrentToken(ALexer, ACursor).Kind = tkCaseKeyword then
+          begin
+            if (ACursor > 0) and
+              (ALexer.TokenAt(ACursor - 1).Kind <> tkOfKeyword) then
+              Inc(Depth);
+          end
+          else if CurrentToken(ALexer, ACursor).Kind = tkEndKeyword then
+            Dec(Depth);
+          if Depth > 0 then
+            Inc(ACursor);
+        end;
+        if (ACursor < ALexer.TokenCount) and
+          (CurrentToken(ALexer, ACursor).Kind = tkEndKeyword) then
+          Inc(ACursor);
+      end;
   else
     Exit(nil);
   end;
