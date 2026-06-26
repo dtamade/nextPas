@@ -99,7 +99,7 @@ begin
         LT.Reset;
     end;
     RunBench('TThreadArena.Alloc (64B, reset/10K)', ITERS, NowNs - T0);
-    LT.DrainTLS(LMgr);
+    LMgr.DrainTLS;
   finally
     LMgr.Free;
   end;

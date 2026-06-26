@@ -132,7 +132,7 @@ begin
   for I := 1 to AIterations do
   begin
     LIndex := SampleIndex(I);
-    LValue := LValue + TVec4f.Dot(GVec4A[LIndex], GVec4B[LIndex]);
+    LValue := LValue + GVec4A[LIndex].Dot(GVec4B[LIndex]);
   end;
   GFloatSink := LValue;
 end;
@@ -192,7 +192,7 @@ begin
   for I := 1 to AIterations do
   begin
     LIndex := SampleIndex(I);
-    LValue := LValue + TVec3f.Cross(GVec3A[LIndex], GVec3B[LIndex]);
+    LValue := LValue + GVec3A[LIndex].Cross(GVec3B[LIndex]);
   end;
   GVec3Sink := LValue;
 end;

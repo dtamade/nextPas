@@ -5,7 +5,6 @@ program bench_arena_vs_rtl;
 uses
   nextpas.core.bench,
   nextpas.core.mem.arena,
-  nextpas.core.mem.arena.compiler,
   nextpas.core.mem.base;
 
 var
@@ -110,62 +109,6 @@ begin
   end;
 end;
 
-{ --- TFastArena vs System.GetMem (small objects 16B-256B) --- }
-
-procedure BenchFastArenaAlloc16(aIters: Int64);
-var
-  LIt: Int64;
-  LArena: TFastArena;
-  LP: Pointer;
-begin
-  TFastArena_Init(LArena);
-  try
-    for LIt := 1 to aIters do
-    begin
-      LP := LArena.Alloc(16);
-      GSink := LP;
-    end;
-  finally
-    TFastArena_Release(LArena);
-  end;
-end;
-
-procedure BenchFastArenaAlloc64(aIters: Int64);
-var
-  LIt: Int64;
-  LArena: TFastArena;
-  LP: Pointer;
-begin
-  TFastArena_Init(LArena);
-  try
-    for LIt := 1 to aIters do
-    begin
-      LP := LArena.Alloc(64);
-      GSink := LP;
-    end;
-  finally
-    TFastArena_Release(LArena);
-  end;
-end;
-
-procedure BenchFastArenaAlloc256(aIters: Int64);
-var
-  LIt: Int64;
-  LArena: TFastArena;
-  LP: Pointer;
-begin
-  TFastArena_Init(LArena);
-  try
-    for LIt := 1 to aIters do
-    begin
-      LP := LArena.Alloc(256);
-      GSink := LP;
-    end;
-  finally
-    TFastArena_Release(LArena);
-  end;
-end;
-
 begin
   try
     WriteLn('--- TLocalArena vs System.GetMem (single alloc) ---');
@@ -176,9 +119,6 @@ begin
       .AddLoop('System.GetMem_64B', @BenchGetMem64)
       .AddLoop('TLocalArena.Alloc_256B', @BenchLocalArenaAlloc256)
       .AddLoop('System.GetMem_256B', @BenchGetMem256)
-      .AddLoop('TFastArena.Alloc_16B', @BenchFastArenaAlloc16)
-      .AddLoop('TFastArena.Alloc_64B', @BenchFastArenaAlloc64)
-      .AddLoop('TFastArena.Alloc_256B', @BenchFastArenaAlloc256)
       .Run;
     WriteLn(LResults.PrintToConsole);
   finally
