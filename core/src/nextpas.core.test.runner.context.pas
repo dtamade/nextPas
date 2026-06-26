@@ -11,6 +11,7 @@ interface
 uses
   SysUtils,          { Exception, EAbort, EAssertionFailed — FPC built-in }
   nextpas.core.text.conv,
+  nextpas.core.text.format,
   nextpas.core.test.base,
   nextpas.core.test.config,
   nextpas.core.test.output;
@@ -164,7 +165,7 @@ end;
 
 procedure TTestContext.LogF(const AFormat: string; const AArgs: array of const);
 begin
-  Log(Format(AFormat, AArgs));
+  Log(TextFormat(AFormat, AArgs));
 end;
 
 procedure TTestContext.OnCleanup(AProc: TTestProc);

@@ -139,8 +139,9 @@ var
 begin
   LConfig := ResolveConfig(AConfig);
   case LConfig.AnsiMode of
-    amOn: Exit(True);
+    amOn:  Exit(True);
     amOff: Exit(False);
+    amAuto: ; { fall through to auto-detect }
   end;
   InitAnsi;
   Result := GAnsiEnabled;
@@ -605,7 +606,7 @@ begin
       begin
         LTestResult := LRunResult.Results[J];
         LSb.AppendStr('    <testcase name="' + XmlEscape(LTestResult.Name) +
-          '" time="' + Format('%.3f', [LTestResult.Duration / 1000.0]) + '"');
+          '" time="' + FormatFloat('0.000', LTestResult.Duration / 1000.0) + '"');
         case LTestResult.Status of
           tsFailed:
             begin

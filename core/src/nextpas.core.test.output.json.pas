@@ -85,8 +85,6 @@ begin
     tsFailed:  Result := 'failed';
     tsSkipped: Result := 'skipped';
     tsError:   Result := 'error';
-  else
-    Result := 'unknown';
   end;
 end;
 
