@@ -3,7 +3,7 @@ program test_pool_allocator;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.mem.error,
   nextpas.core.mem.allocator.base,
   nextpas.core.mem.pool.allocator;
@@ -30,7 +30,7 @@ type
   end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GAllocator: IAllocator = nil;
   GPoolAllocator: TPoolAllocator = nil;
   GFallback: TRecordingFallback = nil;
@@ -116,7 +116,7 @@ begin
     Fail(AName + ': expected allocation error');
   except
     on E: EAllocError do
-      CheckEqual(Int64(Ord(AExpected)), Int64(Ord(E.Error)), AName + ': error code');
+      Check(Int64(Ord(AExpected)) = Int64(Ord(E.Error)), AName + ': error code');
   end;
 end;
 
@@ -173,12 +173,11 @@ begin
     Check(GAllocator.AllocMem(0) = nil, 'AllocMem(0) should return nil');
     Check(GAllocator.AllocAligned(0, 16) = nil, 'AllocAligned(0) should return nil');
     Check(GAllocator.ReallocMem(nil, 0) = nil, 'ReallocMem(nil, 0) should return nil');
-    CheckEqual(Int64(LBaselineAvailable), Int64(GPoolAllocator.Available),
-      'zero-size operations must not consume pool capacity');
+    Check(Int64(LBaselineAvailable) = Int64(GPoolAllocator.Available), 'zero-size operations must not consume pool capacity');
 
     LTraits := GAllocator.Traits;
-    CheckEqual(False, LTraits.HasMemSize, 'pool allocator should not claim complete mem-size support');
-    CheckEqual(False, LTraits.SupportsAligned, 'pool allocator should not claim native generic aligned support');
+    Check(False = LTraits.HasMemSize, 'pool allocator should not claim complete mem-size support');
+    Check(False = LTraits.SupportsAligned, 'pool allocator should not claim native generic aligned support');
   finally
     GAllocator := nil;
     GPoolAllocator := nil;
@@ -196,11 +195,11 @@ begin
   try
     GPtr := GAllocator.GetMem(16);
     Check(GPtr <> nil, 'pool allocation should succeed');
-    CheckEqual(Int64(1), Int64(GPoolAllocator.AllocatedCount), 'one pool block should be live');
+    Check(Int64(1) = Int64(GPoolAllocator.AllocatedCount), 'one pool block should be live');
 
     LResult := GAllocator.ReallocMem(GPtr, 0);
     Check(LResult = nil, 'ReallocMem(pool ptr, 0) should return nil');
-    CheckEqual(Int64(0), Int64(GPoolAllocator.AllocatedCount), 'ReallocMem(pool ptr, 0) should release the pool block');
+    Check(Int64(0) = Int64(GPoolAllocator.AllocatedCount), 'ReallocMem(pool ptr, 0) should release the pool block');
     CheckRaisesAllocError(@FreeReleasedPoolPointerAgain, aeInvalidPointer, 'pool pointer after ReallocMem zero');
     GPtr := nil;
   finally
@@ -224,10 +223,8 @@ begin
     LBaselineAllocCalls := GFallback.AllocCalls;
 
     CheckRaisesAllocError(@AllocAlignedWithInvalidAlignment, aeAlignmentNotSupported, 'invalid alignment');
-    CheckEqual(Int64(LBaselineGetCalls), Int64(GFallback.GetCalls),
-      'invalid alignment must not allocate fallback memory');
-    CheckEqual(Int64(LBaselineAllocCalls), Int64(GFallback.AllocCalls),
-      'invalid alignment must not call fallback AllocMem');
+    Check(Int64(LBaselineGetCalls) = Int64(GFallback.GetCalls), 'invalid alignment must not allocate fallback memory');
+    Check(Int64(LBaselineAllocCalls) = Int64(GFallback.AllocCalls), 'invalid alignment must not call fallback AllocMem');
   finally
     GAllocator := nil;
     GFallback := nil;
@@ -242,8 +239,8 @@ begin
     CheckRaisesAllocError(@FreeForeignPointer, aeInvalidPointer, 'foreign FreeMem');
     CheckRaisesAllocError(@FreeAlignedForeignPointer, aeInvalidPointer, 'foreign FreeAligned');
     CheckRaisesAllocError(@ReallocForeignPointer, aeInvalidPointer, 'foreign ReallocMem');
-    CheckEqual(Int64(0), Int64(GFallback.FreeCalls), 'foreign pointer must not be forwarded to fallback FreeMem');
-    CheckEqual(Int64(0), Int64(GFallback.ReallocCalls), 'foreign pointer must not be forwarded to fallback ReallocMem');
+    Check(Int64(0) = Int64(GFallback.FreeCalls), 'foreign pointer must not be forwarded to fallback FreeMem');
+    Check(Int64(0) = Int64(GFallback.ReallocCalls), 'foreign pointer must not be forwarded to fallback ReallocMem');
   finally
     GAllocator := nil;
     GFallback := nil;
@@ -258,11 +255,11 @@ begin
   try
     GPtr := GAllocator.GetMem(16);
     Check(GPtr <> nil, 'pool allocation should succeed');
-    CheckEqual(Int64(1), Int64(GPoolAllocator.AllocatedCount), 'one pool block should be live');
+    Check(Int64(1) = Int64(GPoolAllocator.AllocatedCount), 'one pool block should be live');
 
     CheckRaisesAllocError(@ReallocInteriorPoolPointer, aeInvalidPointer, 'interior ReallocMem');
-    CheckEqual(Int64(1), Int64(GPoolAllocator.AllocatedCount), 'interior ReallocMem must not leak a new pool block');
-    CheckEqual(Int64(1), Int64(GFallback.GetCalls), 'interior ReallocMem must not allocate fallback memory');
+    Check(Int64(1) = Int64(GPoolAllocator.AllocatedCount), 'interior ReallocMem must not leak a new pool block');
+    Check(Int64(1) = Int64(GFallback.GetCalls), 'interior ReallocMem must not allocate fallback memory');
 
     GAllocator.FreeMem(GPtr);
     GPtr := nil;
@@ -290,21 +287,18 @@ begin
 
     LPoolPtr := GAllocator.GetMem(16);
     try
-      CheckEqual(Int64(16), Int64(GPoolAllocator.GetMemSize(LPoolPtr)), 'pool pointer requested size');
+      Check(Int64(16) = Int64(GPoolAllocator.GetMemSize(LPoolPtr)), 'pool pointer requested size');
 
       GPtr := GAllocator.GetMem(16);
       Check(GPtr <> nil, 'pool exhaustion should allocate via fallback');
-      CheckEqual(Int64(LBaselineGetCalls + 1), Int64(GFallback.GetCalls),
-        'fallback should allocate exhausted request once');
-      CheckEqual(Int64(16), Int64(GPoolAllocator.GetMemSize(GPtr)), 'fallback pointer requested size');
+      Check(Int64(LBaselineGetCalls + 1) = Int64(GFallback.GetCalls), 'fallback should allocate exhausted request once');
+      Check(Int64(16) = Int64(GPoolAllocator.GetMemSize(GPtr)), 'fallback pointer requested size');
 
       GAllocator.FreeMem(GPtr);
-      CheckEqual(Int64(0), Int64(GPoolAllocator.GetMemSize(GPtr)), 'freed fallback pointer size is unknown');
-      CheckEqual(Int64(LBaselineFreeCalls + 1), Int64(GFallback.FreeCalls),
-        'tracked fallback pointer should free once');
+      Check(Int64(0) = Int64(GPoolAllocator.GetMemSize(GPtr)), 'freed fallback pointer size is unknown');
+      Check(Int64(LBaselineFreeCalls + 1) = Int64(GFallback.FreeCalls), 'tracked fallback pointer should free once');
       CheckRaisesAllocError(@FreeFallbackPointerAgain, aeInvalidPointer, 'fallback double FreeMem');
-      CheckEqual(Int64(LBaselineFreeCalls + 1), Int64(GFallback.FreeCalls),
-        'fallback double free must not be forwarded');
+      Check(Int64(LBaselineFreeCalls + 1) = Int64(GFallback.FreeCalls), 'fallback double free must not be forwarded');
       GPtr := nil;
     finally
       if GPtr <> nil then
@@ -319,12 +313,14 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.mem.pool_allocator');
-  T.Run('zero-size and traits', @TestZeroSizeAndTraits);
-  T.Run('realloc zero frees pool pointer', @TestReallocZeroFreesPoolPointer);
-  T.Run('invalid alignment fails closed', @TestInvalidAlignmentFailsClosed);
-  T.Run('foreign pointers fail closed', @TestForeignPointersFailClosed);
-  T.Run('interior pool realloc fails without leaking', @TestInteriorPoolReallocFailsWithoutLeaking);
-  T.Run('fallback allocations are tracked', @TestFallbackAllocationsAreTracked);
+  T := TTestSuite.Create('nextpas.core.mem.pool_allocator');
+  T.Test('zero-size and traits', @TestZeroSizeAndTraits);
+  T.Test('realloc zero frees pool pointer', @TestReallocZeroFreesPoolPointer);
+  T.Test('invalid alignment fails closed', @TestInvalidAlignmentFailsClosed);
+  T.Test('foreign pointers fail closed', @TestForeignPointersFailClosed);
+  T.Test('interior pool realloc fails without leaking', @TestInteriorPoolReallocFailsWithoutLeaking);
+  T.Test('fallback allocations are tracked', @TestFallbackAllocationsAreTracked);
+  T.Run;
+
   T.Summary;
 end.

@@ -3,14 +3,14 @@ program test_arena_class;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.mem,
   nextpas.core.mem.arena.local,
   nextpas.core.mem.arena.intf,
   nextpas.core.mem.blockpool;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestBasicAlloc;
 var A: TLocalArena; P: Pointer;
@@ -101,7 +101,7 @@ begin
   try
     P := A.AllocAligned(32, 64);
     Check(P <> nil, 'alloc aligned ok');
-    CheckEqual(Int64(0), Int64(PtrUInt(P) mod 64), 'alloc aligned should honor requested alignment');
+    Check(Int64(0) = Int64(PtrUInt(P) mod 64), 'alloc aligned should honor requested alignment');
     P := A.AllocAligned(16, 3);
     Check(P = nil, 'invalid non-power-of-two alignment should fail');
   finally
@@ -179,8 +179,8 @@ begin
     P2 := A.AllocAlignedFast(64, 128);
     Check(P1 <> nil, 'fast aligned alloc 1');
     Check(P2 <> nil, 'fast aligned alloc 2');
-    CheckEqual(Int64(0), Int64(PtrUInt(P1) mod 64), 'P1 should be 64-byte aligned');
-    CheckEqual(Int64(0), Int64(PtrUInt(P2) mod 128), 'P2 should be 128-byte aligned');
+    Check(Int64(0) = Int64(PtrUInt(P1) mod 64), 'P1 should be 64-byte aligned');
+    Check(Int64(0) = Int64(PtrUInt(P2) mod 128), 'P2 should be 128-byte aligned');
     Check(PtrUInt(P2) >= PtrUInt(P1) + 32, 'sequential');
   finally
     A.Free;
@@ -408,30 +408,33 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.mem.arena_class');
-  T.Run('basic alloc', @TestBasicAlloc);
-  T.Run('multiple allocs', @TestMultipleAllocs);
-  T.Run('exhaust', @TestExhaust);
-  T.Run('reset', @TestReset);
-  T.Run('mark/restore', @TestMarkRestore);
-  T.Run('alloc aligned', @TestAllocAligned);
-  T.Run('alloc zeroed', @TestAllocZeroed);
-  T.Run('alloc fast', @TestAllocFast);
-  T.Run('alloc fast source contract', @TestAllocFastSourceContract);
-  T.Run('alloc aligned fast', @TestAllocAlignedFast);
-  T.Run('alloc aligned fast source contract', @TestAllocAlignedFastSourceContract);
-  T.Run('zero size alloc', @TestZeroSizeAlloc);
-  T.Run('statistics', @TestStats);
-  T.Run('legacy TArena alias', @TestArenaClassLegacyAlias);
+  T := TTestSuite.Create('nextpas.core.mem.arena_class');
+  T.Test('basic alloc', @TestBasicAlloc);
+  T.Test('multiple allocs', @TestMultipleAllocs);
+  T.Test('exhaust', @TestExhaust);
+  T.Test('reset', @TestReset);
+  T.Test('mark/restore', @TestMarkRestore);
+  T.Test('alloc aligned', @TestAllocAligned);
+  T.Test('alloc zeroed', @TestAllocZeroed);
+  T.Test('alloc fast', @TestAllocFast);
+  T.Test('alloc fast source contract', @TestAllocFastSourceContract);
+  T.Test('alloc aligned fast', @TestAllocAlignedFast);
+  T.Test('alloc aligned fast source contract', @TestAllocAlignedFastSourceContract);
+  T.Test('zero size alloc', @TestZeroSizeAlloc);
+  T.Test('statistics', @TestStats);
+  T.Test('legacy TArena alias', @TestArenaClassLegacyAlias);
 
   { Edge-case tests }
-  T.Run('multiple_reset_cycles', @TestMultipleResetCycles);
-  T.Run('exhaust_then_reset', @TestExhaustThenReset);
-  T.Run('mark_restore_nested', @TestMarkRestoreNested);
-  T.Run('alloc_exact_capacity', @TestAllocExactCapacity);
-  T.Run('alloc_over_capacity', @TestAllocOverCapacity);
-  T.Run('iarena_interface', @TestIArenaInterface);
-  T.Run('stats_record', @TestStatsRecord);
+  T.Test('multiple_reset_cycles', @TestMultipleResetCycles);
+  T.Test('exhaust_then_reset', @TestExhaustThenReset);
+  T.Test('mark_restore_nested', @TestMarkRestoreNested);
+  T.Test('alloc_exact_capacity', @TestAllocExactCapacity);
+  T.Test('alloc_over_capacity', @TestAllocOverCapacity);
+  T.Test('iarena_interface', @TestIArenaInterface);
+  T.Test('stats_record', @TestStatsRecord);
+
+  T.Run;
+
 
   T.Summary;
 end.

@@ -4,7 +4,7 @@ program test_object_pool;
 
 uses
   nextpas.core.text.conv,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.mem.error,
   nextpas.core.mem.pool,
   nextpas.core.mem.pool.object_pool;
@@ -17,7 +17,7 @@ type
   TTestPool = specialize TObjectPool<TTestObject>;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestCreateAndDestroy;
 var
@@ -29,9 +29,9 @@ begin
       Result := TTestObject.Create;
     end);
   try
-    CheckEqual(Int64(5), Int64(LPool.MaxObjects), 'max objects');
-    CheckEqual(Int64(0), Int64(LPool.InPoolCount), 'initial in-pool');
-    CheckEqual(Int64(0), Int64(LPool.TotalCreated), 'initial total created');
+    Check(Int64(5) = Int64(LPool.MaxObjects), 'max objects');
+    Check(Int64(0) = Int64(LPool.InPoolCount), 'initial in-pool');
+    Check(Int64(0) = Int64(LPool.TotalCreated), 'initial total created');
   finally
     LPool.Free;
   end;
@@ -51,7 +51,7 @@ begin
   try
     Check(LPool.AcquireObject(LObj), 'acquire succeeds');
     Check(LObj <> nil, 'object not nil');
-    CheckEqual(Int64(1), Int64(LPool.TotalCreated), 'total created = 1');
+    Check(Int64(1) = Int64(LPool.TotalCreated), 'total created = 1');
     LPool.ReleaseObject(LObj);
   finally
     LPool.Free;
@@ -72,10 +72,10 @@ begin
   try
     Check(LPool.AcquireObject(LObj), 'first acquire');
     LPool.ReleaseObject(LObj);
-    CheckEqual(Int64(1), Int64(LPool.InPoolCount), 'in-pool after release');
+    Check(Int64(1) = Int64(LPool.InPoolCount), 'in-pool after release');
 
     Check(LPool.AcquireObject(LObj2), 'reacquire');
-    CheckEqual(Int64(0), Int64(LPool.InPoolCount), 'in-pool after reacquire');
+    Check(Int64(0) = Int64(LPool.InPoolCount), 'in-pool after reacquire');
     Check(LObj = LObj2, 'same object returned');
     LPool.ReleaseObject(LObj2);
   finally
@@ -103,7 +103,7 @@ begin
       LSuccess := LPool.AcquireObject(LObj);
       Check(LSuccess, 'acquire ' + IntToStr(I));
     end;
-    CheckEqual(Int64(2), Int64(LPool.TotalCreated), 'total created = 2');
+    Check(Int64(2) = Int64(LPool.TotalCreated), 'total created = 2');
 
     LSuccess := LPool.AcquireObject(LObj);
     Check(not LSuccess, 'pool exhausted');
@@ -132,17 +132,17 @@ begin
       LSuccess := LPool.AcquireObject(LObjs[LI]);
       Check(LSuccess, 'acquire ' + IntToStr(LI));
     end;
-    CheckEqual(Int64(3), Int64(LPool.TotalCreated), 'total created = 3');
+    Check(Int64(3) = Int64(LPool.TotalCreated), 'total created = 3');
     for LI := 0 to 2 do
       LPool.ReleaseObject(LObjs[LI]);
-    CheckEqual(Int64(3), Int64(LPool.InPoolCount), 'in-pool = 3 before reset');
+    Check(Int64(3) = Int64(LPool.InPoolCount), 'in-pool = 3 before reset');
 
     LPool.Reset;
-    CheckEqual(Int64(0), Int64(LPool.InPoolCount), 'in-pool after reset');
-    CheckEqual(Int64(0), Int64(LPool.TotalCreated), 'total created after reset');
+    Check(Int64(0) = Int64(LPool.InPoolCount), 'in-pool after reset');
+    Check(Int64(0) = Int64(LPool.TotalCreated), 'total created after reset');
 
     Check(LPool.AcquireObject(LObjs[0]), 'acquire after reset');
-    CheckEqual(Int64(1), Int64(LPool.TotalCreated), 'total created after post-reset acquire');
+    Check(Int64(1) = Int64(LPool.TotalCreated), 'total created after post-reset acquire');
     LPool.ReleaseObject(LObjs[0]);
   finally
     LPool.Free;
@@ -164,17 +164,17 @@ begin
   try
     for LI := 0 to 9 do
       Check(LPool.AcquireObject(LObjs[LI]), 'acquire ' + IntToStr(LI));
-    CheckEqual(Int64(10), Int64(LPool.TotalCreated), 'total = 10');
-    CheckEqual(Int64(0), Int64(LPool.InPoolCount), 'in-pool = 0');
+    Check(Int64(10) = Int64(LPool.TotalCreated), 'total = 10');
+    Check(Int64(0) = Int64(LPool.InPoolCount), 'in-pool = 0');
 
     for LI := 0 to 9 do
       LPool.ReleaseObject(LObjs[LI]);
-    CheckEqual(Int64(10), Int64(LPool.InPoolCount), 'in-pool = 10 after release all');
+    Check(Int64(10) = Int64(LPool.InPoolCount), 'in-pool = 10 after release all');
 
     for LI := 0 to 9 do
       Check(LPool.AcquireObject(LObjs[LI]), 'reacquire ' + IntToStr(LI));
-    CheckEqual(Int64(10), Int64(LPool.TotalCreated), 'total still 10');
-    CheckEqual(Int64(0), Int64(LPool.InPoolCount), 'in-pool = 0 after reacquire');
+    Check(Int64(10) = Int64(LPool.TotalCreated), 'total still 10');
+    Check(Int64(0) = Int64(LPool.InPoolCount), 'in-pool = 0 after reacquire');
 
     for LI := 0 to 9 do
       LPool.ReleaseObject(LObjs[LI]);
@@ -198,7 +198,7 @@ begin
     Check(LPool.Acquire(LPtr), 'pointer acquire');
     Check(LPtr <> nil, 'pointer not nil');
     LPool.Release(LPtr);
-    CheckEqual(Int64(1), Int64(LPool.InPoolCount), 'in-pool after pointer release');
+    Check(Int64(1) = Int64(LPool.InPoolCount), 'in-pool after pointer release');
   finally
     LPool.Free;
   end;
@@ -224,13 +224,13 @@ begin
     end);
   try
     Check(LPool.AcquireObject(LObj), 'acquire with init');
-    CheckEqual(42, LObj.Value, 'init callback set value');
-    CheckEqual(1, LInitCalled, 'init called once');
+    Check(42 = LObj.Value, 'init callback set value');
+    Check(1 = LInitCalled, 'init called once');
     LPool.ReleaseObject(LObj);
 
     Check(LPool.AcquireObject(LObj), 'reacquire with init');
-    CheckEqual(42, LObj.Value, 'init called again on reacquire');
-    CheckEqual(2, LInitCalled, 'init called twice');
+    Check(42 = LObj.Value, 'init called again on reacquire');
+    Check(2 = LInitCalled, 'init called twice');
     LPool.ReleaseObject(LObj);
   finally
     LPool.Free;
@@ -258,11 +258,11 @@ begin
   try
     Check(LPool.AcquireObject(LObj), 'acquire');
     LPool.ReleaseObject(LObj);
-    CheckEqual(1, LFinalizeCalled, 'finalize called on release');
+    Check(1 = LFinalizeCalled, 'finalize called on release');
 
     Check(LPool.AcquireObject(LObj), 'reacquire');
     LPool.ReleaseObject(LObj);
-    CheckEqual(2, LFinalizeCalled, 'finalize called again');
+    Check(2 = LFinalizeCalled, 'finalize called again');
   finally
     LPool.Free;
   end;
@@ -284,7 +284,7 @@ begin
         end)
   );
   try
-    CheckEqual(Int64(3), Int64(LPool.MaxObjects), 'config max size');
+    Check(Int64(3) = Int64(LPool.MaxObjects), 'config max size');
     Check(LPool.AcquireObject(LObj), 'acquire with config');
     LPool.ReleaseObject(LObj);
   finally
@@ -308,7 +308,7 @@ begin
     { Acquire 2 distinct objects (MaxSize=2) }
     Check(LPool.AcquireObject(LObj1), 'acquire 1');
     Check(LPool.AcquireObject(LObj2), 'acquire 2');
-    CheckEqual(Int64(2), Int64(LPool.TotalCreated), 'total = 2');
+    Check(Int64(2) = Int64(LPool.TotalCreated), 'total = 2');
 
     { Pool exhausted — use LDummy to avoid overwriting LObj1 }
     Check(not LPool.AcquireObject(LDummy), 'pool full at MaxSize');
@@ -316,27 +316,27 @@ begin
     { Release both to pool }
     LPool.ReleaseObject(LObj1);
     LPool.ReleaseObject(LObj2);
-    CheckEqual(Int64(2), Int64(LPool.InPoolCount), 'pool full');
+    Check(Int64(2) = Int64(LPool.InPoolCount), 'pool full');
 
     { Reacquire — no new creation }
     Check(LPool.AcquireObject(LObj1), 'reacquire 1');
     Check(LPool.AcquireObject(LObj2), 'reacquire 2');
-    CheckEqual(Int64(2), Int64(LPool.TotalCreated), 'total still 2');
+    Check(Int64(2) = Int64(LPool.TotalCreated), 'total still 2');
 
     { Release both again }
     LPool.ReleaseObject(LObj1);
     LPool.ReleaseObject(LObj2);
-    CheckEqual(Int64(2), Int64(LPool.InPoolCount), 'pool full again');
+    Check(Int64(2) = Int64(LPool.InPoolCount), 'pool full again');
 
     { Reset clears everything }
     LPool.Reset;
-    CheckEqual(Int64(0), Int64(LPool.TotalCreated), 'total = 0 after reset');
-    CheckEqual(Int64(0), Int64(LPool.InPoolCount), 'in-pool = 0 after reset');
+    Check(Int64(0) = Int64(LPool.TotalCreated), 'total = 0 after reset');
+    Check(Int64(0) = Int64(LPool.InPoolCount), 'in-pool = 0 after reset');
 
     { Post-reset: can create new objects }
     Check(LPool.AcquireObject(LObj1), 'post-reset acquire 1');
     Check(LPool.AcquireObject(LObj2), 'post-reset acquire 2');
-    CheckEqual(Int64(2), Int64(LPool.TotalCreated), 'total = 2 after post-reset');
+    Check(Int64(2) = Int64(LPool.TotalCreated), 'total = 2 after post-reset');
     LPool.ReleaseObject(LObj1);
     LPool.ReleaseObject(LObj2);
   finally
@@ -377,18 +377,20 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.mem.pool.object_pool');
-  T.Run('Create/Destroy lifecycle', @TestCreateAndDestroy);
-  T.Run('Acquire returns valid object', @TestAcquireReturnsValidObject);
-  T.Run('Release and reacquire', @TestReleaseAndReacquire);
-  T.Run('Pool exhaustion', @TestPoolExhaustion);
-  T.Run('Reset', @TestReset);
-  T.Run('Multiple acquire/release cycle', @TestMultipleAcquireReleaseCycle);
-  T.Run('Pointer interface', @TestPointerInterface);
-  T.Run('With init callback', @TestWithInitCallback);
-  T.Run('With finalize callback', @TestWithFinalizeCallback);
-  T.Run('TConfig builder', @TestTConfigBuilder);
-  T.Run('MaxSize boundary (R-15)', @TestMaxSizeBoundary);
-  T.Run('Double release detection (R-22)', @TestDoubleReleaseDetection);
+  T := TTestSuite.Create('nextpas.core.mem.pool.object_pool');
+  T.Test('Create/Destroy lifecycle', @TestCreateAndDestroy);
+  T.Test('Acquire returns valid object', @TestAcquireReturnsValidObject);
+  T.Test('Release and reacquire', @TestReleaseAndReacquire);
+  T.Test('Pool exhaustion', @TestPoolExhaustion);
+  T.Test('Reset', @TestReset);
+  T.Test('Multiple acquire/release cycle', @TestMultipleAcquireReleaseCycle);
+  T.Test('Pointer interface', @TestPointerInterface);
+  T.Test('With init callback', @TestWithInitCallback);
+  T.Test('With finalize callback', @TestWithFinalizeCallback);
+  T.Test('TConfig builder', @TestTConfigBuilder);
+  T.Test('MaxSize boundary (R-15)', @TestMaxSizeBoundary);
+  T.Test('Double release detection (R-22)', @TestDoubleReleaseDetection);
+  T.Run;
+
   T.Summary;
 end.

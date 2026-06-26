@@ -4,7 +4,7 @@ program test_arena_compiler;
 
 uses
   nextpas.core.text.conv,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.mem.arena.base,
   nextpas.core.mem.arena.virtual,
   nextpas.core.mem.allocator.arena,
@@ -12,7 +12,7 @@ uses
   nextpas.core.mem.base;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { --- TVirtualArena record tests --- }
 
@@ -680,12 +680,10 @@ begin
     LLarge := LArena.Alloc(ARENA_LARGE_THRESHOLD);
     Check(LLarge <> nil, 'large mark: large alloc');
     LExpectedUsed := LMark.TotalUsed + ARENA_LARGE_THRESHOLD;
-    CheckEqual(Int64(LExpectedUsed), Int64(LArena.TotalUsed),
-      'large mark: large alloc should grow TotalUsed');
+    Check(Int64(LExpectedUsed) = Int64(LArena.TotalUsed), 'large mark: large alloc should grow TotalUsed');
 
     LArena.RestoreToMark(LMark);
-    CheckEqual(Int64(LExpectedUsed), Int64(LArena.TotalUsed),
-      'large mark: RestoreToMark should keep large-object usage');
+    Check(Int64(LExpectedUsed) = Int64(LArena.TotalUsed), 'large mark: RestoreToMark should keep large-object usage');
   finally
     TVirtualArena_Release(LArena);
   end;
@@ -833,55 +831,58 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.mem.arena.virtual');
+  T := TTestSuite.Create('nextpas.core.mem.arena.virtual');
 
   { TVirtualArena record tests }
-  T.Run('alloc_basic', @TestAllocBasic);
-  T.Run('alloc_zero_size', @TestAllocZeroSize);
-  T.Run('alloc_aligned_16', @TestAllocAligned16);
-  T.Run('alloc_aligned_32', @TestAllocAligned32);
-  T.Run('alloc_aligned_64', @TestAllocAligned64);
-  T.Run('alloc_aligned_256', @TestAllocAligned256);
-  T.Run('alloc_aligned_4096', @TestAllocAligned4096);
-  T.Run('alloc_zeroed', @TestAllocZeroed);
-  T.Run('large_alloc', @TestLargeAlloc);
-  T.Run('save_restore_mark', @TestSaveRestoreMark);
-  T.Run('reset', @TestReset);
-  T.Run('release', @TestRelease);
-  T.Run('peak_used', @TestPeakUsed);
-  T.Run('alloc_count', @TestAllocCount);
-  T.Run('overflow_protection', @TestOverflowProtection);
-  T.Run('multiple_arenas', @TestMultipleArenas);
-  T.Run('multiple_small_allocs', @TestMultipleSmallAllocs);
-  T.Run('aligned_in_succession', @TestAlignedInSuccession);
-  T.Run('large_then_small', @TestLargeThenSmall);
+  T.Test('alloc_basic', @TestAllocBasic);
+  T.Test('alloc_zero_size', @TestAllocZeroSize);
+  T.Test('alloc_aligned_16', @TestAllocAligned16);
+  T.Test('alloc_aligned_32', @TestAllocAligned32);
+  T.Test('alloc_aligned_64', @TestAllocAligned64);
+  T.Test('alloc_aligned_256', @TestAllocAligned256);
+  T.Test('alloc_aligned_4096', @TestAllocAligned4096);
+  T.Test('alloc_zeroed', @TestAllocZeroed);
+  T.Test('large_alloc', @TestLargeAlloc);
+  T.Test('save_restore_mark', @TestSaveRestoreMark);
+  T.Test('reset', @TestReset);
+  T.Test('release', @TestRelease);
+  T.Test('peak_used', @TestPeakUsed);
+  T.Test('alloc_count', @TestAllocCount);
+  T.Test('overflow_protection', @TestOverflowProtection);
+  T.Test('multiple_arenas', @TestMultipleArenas);
+  T.Test('multiple_small_allocs', @TestMultipleSmallAllocs);
+  T.Test('aligned_in_succession', @TestAlignedInSuccession);
+  T.Test('large_then_small', @TestLargeThenSmall);
 
   { TVirtualArenaAllocator tests }
-  T.Run('arena_allocator_interface', @TestArenaAllocatorInterface);
-  T.Run('arena_allocator_reset', @TestArenaAllocatorReset);
-  T.Run('arena_allocator_traits', @TestArenaAllocatorTraits);
-  T.Run('arena_allocator_free_is_nop', @TestArenaAllocatorFreeIsNop);
-  T.Run('arena_allocator_alloc_mem', @TestArenaAllocatorAllocMem);
-  T.Run('arena_allocator_realloc', @TestArenaAllocatorRealloc);
+  T.Test('arena_allocator_interface', @TestArenaAllocatorInterface);
+  T.Test('arena_allocator_reset', @TestArenaAllocatorReset);
+  T.Test('arena_allocator_traits', @TestArenaAllocatorTraits);
+  T.Test('arena_allocator_free_is_nop', @TestArenaAllocatorFreeIsNop);
+  T.Test('arena_allocator_alloc_mem', @TestArenaAllocatorAllocMem);
+  T.Test('arena_allocator_realloc', @TestArenaAllocatorRealloc);
 
   { Edge-case tests }
-  T.Run('dual_direction_bump', @TestDualDirectionBump);
-  T.Run('dual_direction_overlap', @TestDualDirectionOverlap);
-  T.Run('nopointer_basic', @TestAllocNoPointerBasic);
-  T.Run('nopointer_zero_size', @TestAllocNoPointerZeroSize);
-  T.Run('commit_boundary', @TestCommitBoundary);
-  T.Run('large_threshold_boundary', @TestLargeThresholdBoundary);
-  T.Run('multiple_init_release_cycles', @TestMultipleInitReleaseCycles);
-  T.Run('reset_after_partial_use', @TestResetAfterPartialUse);
-  T.Run('save_mark_front_back', @TestSaveMarkFrontBack);
-  T.Run('restore_to_mark_keeps_large_object_usage',
+  T.Test('dual_direction_bump', @TestDualDirectionBump);
+  T.Test('dual_direction_overlap', @TestDualDirectionOverlap);
+  T.Test('nopointer_basic', @TestAllocNoPointerBasic);
+  T.Test('nopointer_zero_size', @TestAllocNoPointerZeroSize);
+  T.Test('commit_boundary', @TestCommitBoundary);
+  T.Test('large_threshold_boundary', @TestLargeThresholdBoundary);
+  T.Test('multiple_init_release_cycles', @TestMultipleInitReleaseCycles);
+  T.Test('reset_after_partial_use', @TestResetAfterPartialUse);
+  T.Test('save_mark_front_back', @TestSaveMarkFrontBack);
+  T.Test('restore_to_mark_keeps_large_object_usage',
     @TestRestoreToMarkKeepsLargeObjectUsage);
-  T.Run('stats_methods', @TestStatsMethods);
-  T.Run('aligned_zero_align', @TestAllocAlignedZeroAlign);
-  T.Run('aligned_non_power_of_two', @TestAllocAlignedNonPowerOfTwo);
-  T.Run('multiple_resets', @TestMultipleResets);
-  T.Run('reset_hard', @TestResetHard);
-  T.Run('alloc_unsafe', @TestAllocUnsafe);
+  T.Test('stats_methods', @TestStatsMethods);
+  T.Test('aligned_zero_align', @TestAllocAlignedZeroAlign);
+  T.Test('aligned_non_power_of_two', @TestAllocAlignedNonPowerOfTwo);
+  T.Test('multiple_resets', @TestMultipleResets);
+  T.Test('reset_hard', @TestResetHard);
+  T.Test('alloc_unsafe', @TestAllocUnsafe);
+
+  T.Run;
+
 
   T.Summary;
 end.

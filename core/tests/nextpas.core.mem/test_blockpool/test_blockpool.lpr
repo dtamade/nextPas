@@ -4,12 +4,12 @@ program test_blockpool;
 
 uses
   nextpas.core.text.conv,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.mem.error,
   nextpas.core.mem.blockpool;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestBasicAcquireRelease;
 var Pool: TBlockPool; P1, P2, P3: Pointer;
@@ -195,14 +195,12 @@ begin
       on E: EAllocError do
       begin
         LRaised := True;
-        CheckEqual(Int64(Ord(aeInvalidLayout)), Int64(Ord(E.Error)),
-          'total-size overflow error');
+        Check(Int64(Ord(aeInvalidLayout)) = Int64(Ord(E.Error)), 'total-size overflow error');
       end;
       on E: nextpas.core.mem.error.EOutOfMemory do
       begin
         LRaised := True;
-        CheckEqual(Int64(Ord(aeInvalidLayout)), Int64(Ord(E.Error)),
-          'total-size overflow error');
+        Check(Int64(Ord(aeInvalidLayout)) = Int64(Ord(E.Error)), 'total-size overflow error');
       end;
     end;
     Check(LRaised, 'total-size overflow must fail closed');
@@ -235,17 +233,19 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.mem.blockpool');
-  T.Run('basic acquire/release', @TestBasicAcquireRelease);
-  T.Run('exhaust pool', @TestExhaust);
-  T.Run('double free detection', @TestDoubleFree);
-  T.Run('reset', @TestReset);
-  T.Run('owns', @TestOwns);
-  T.Run('batch acquire/release', @TestBatchAcquireRelease);
-  T.Run('statistics', @TestStats);
-  T.Run('alignment', @TestAlignment);
-  T.Run('invalid pointer release', @TestInvalidRelease);
-  T.Run('rejects total-size overflow as invalid layout', @TestRejectsTotalSizeOverflowAsInvalidLayout);
-  T.Run('AcquireUnchecked stats (R-14)', @TestAcquireUncheckedStats);
+  T := TTestSuite.Create('nextpas.core.mem.blockpool');
+  T.Test('basic acquire/release', @TestBasicAcquireRelease);
+  T.Test('exhaust pool', @TestExhaust);
+  T.Test('double free detection', @TestDoubleFree);
+  T.Test('reset', @TestReset);
+  T.Test('owns', @TestOwns);
+  T.Test('batch acquire/release', @TestBatchAcquireRelease);
+  T.Test('statistics', @TestStats);
+  T.Test('alignment', @TestAlignment);
+  T.Test('invalid pointer release', @TestInvalidRelease);
+  T.Test('rejects total-size overflow as invalid layout', @TestRejectsTotalSizeOverflowAsInvalidLayout);
+  T.Test('AcquireUnchecked stats (R-14)', @TestAcquireUncheckedStats);
+  T.Run;
+
   T.Summary;
 end.

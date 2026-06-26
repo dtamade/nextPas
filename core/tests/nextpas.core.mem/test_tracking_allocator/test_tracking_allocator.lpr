@@ -8,7 +8,7 @@ uses
   {$ENDIF}
   nextpas.core.text.conv,
   Classes,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.mem.base,
   nextpas.core.mem.intf,
   nextpas.core.mem.allocator.base,
@@ -19,7 +19,7 @@ uses
   nextpas.core.mem.arena.virtual;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   { 全局 tracker 供线程测试使用 }
   GTracker: TTrackingAllocator;
 
@@ -437,39 +437,42 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.mem.allocator.tracking');
+  T := TTestSuite.Create('nextpas.core.mem.allocator.tracking');
 
   { TTrackingAllocator core tests }
-  T.Run('basic_track', @TestBasicTrack);
-  T.Run('free_removes', @TestFreeRemoves);
-  T.Run('multiple_allocs', @TestMultipleAllocs);
-  T.Run('realloc_tracks', @TestReallocTracks);
-  T.Run('leak_detection', @TestLeakDetection);
-  T.Run('no_leak', @TestNoLeak);
-  T.Run('report_leaks', @TestReportLeaks);
-  T.Run('byte_count', @TestByteCount);
-  T.Run('thread_safety', @TestThreadSafety);
-  T.Run('alloc_mem_zeroed', @TestAllocMemZeroed);
-  T.Run('inner_allocator_used', @TestInnerAllocatorUsed);
+  T.Test('basic_track', @TestBasicTrack);
+  T.Test('free_removes', @TestFreeRemoves);
+  T.Test('multiple_allocs', @TestMultipleAllocs);
+  T.Test('realloc_tracks', @TestReallocTracks);
+  T.Test('leak_detection', @TestLeakDetection);
+  T.Test('no_leak', @TestNoLeak);
+  T.Test('report_leaks', @TestReportLeaks);
+  T.Test('byte_count', @TestByteCount);
+  T.Test('thread_safety', @TestThreadSafety);
+  T.Test('alloc_mem_zeroed', @TestAllocMemZeroed);
+  T.Test('inner_allocator_used', @TestInnerAllocatorUsed);
 
   { Arena leak check }
-  T.Run('arena_leak_check', @TestArenaLeakCheck);
+  T.Test('arena_leak_check', @TestArenaLeakCheck);
 
   { Tracking with arena }
-  T.Run('tracking_with_arena', @TestTrackingWithArena);
+  T.Test('tracking_with_arena', @TestTrackingWithArena);
 
   { RunTestWithLeakCheck API }
-  T.Run('leak_check_api', @TestLeakCheckApi);
-  T.Run('leak_check_no_leak', @TestLeakCheckNoLeak);
+  T.Test('leak_check_api', @TestLeakCheckApi);
+  T.Test('leak_check_no_leak', @TestLeakCheckNoLeak);
 
   { Additional edge case tests }
-  T.Run('realloc_nil_is_getmem', @TestReallocNilIsGetMem);
-  T.Run('realloc_to_zero_is_free', @TestReallocToZeroIsFree);
-  T.Run('report_no_leaks', @TestReportNoLeaks);
+  T.Test('realloc_nil_is_getmem', @TestReallocNilIsGetMem);
+  T.Test('realloc_to_zero_is_free', @TestReallocToZeroIsFree);
+  T.Test('report_no_leaks', @TestReportNoLeaks);
 
   { AllocAligned + MemSize edge case tests }
-  T.Run('alloc_aligned_invalid_align', @TestAllocAlignedInvalidAlign);
-  T.Run('memsize_delegates', @TestTrackingMemSizeDelegates);
+  T.Test('alloc_aligned_invalid_align', @TestAllocAlignedInvalidAlign);
+  T.Test('memsize_delegates', @TestTrackingMemSizeDelegates);
+
+  T.Run;
+
 
   T.Summary;
 end.

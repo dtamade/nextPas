@@ -4,7 +4,7 @@ program test_oom;
 
 uses
   nextpas.core.exception,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.mem.error,
   nextpas.core.mem.allocator,
   nextpas.core.mem.blockpool,
@@ -31,7 +31,7 @@ type
   end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GFailVirtualReserve: Boolean = False;
   GFailVirtualCommit: Boolean = False;
   GFailVirtualMmap: Boolean = False;
@@ -303,19 +303,14 @@ begin
   FillChar(LArena, SizeOf(LArena), 0);
   TVirtualArena_Init(LArena);
   try
-    CheckEqual(Int64(Ord(vaafNone)), Int64(Ord(LArena.LastAllocFailure)),
-      'LastAllocFailure should start clear');
+    Check(Int64(Ord(vaafNone)) = Int64(Ord(LArena.LastAllocFailure)), 'LastAllocFailure should start clear');
     ResetVirtualArenaHooks;
     VirtualArenaTestSetCommitHook(@TestVirtualCommit);
     GFailVirtualCommit := True;
     Check(LArena.Alloc(32) = nil, 'Alloc should return nil when front commit fails');
-    CheckEqual(Int64(Ord(vaafFrontCommitFailed)),
-      Int64(Ord(LArena.LastAllocFailure)),
-      'Alloc should expose front commit failure');
+    Check(Int64(Ord(vaafFrontCommitFailed)) = Int64(Ord(LArena.LastAllocFailure)), 'Alloc should expose front commit failure');
     Check(LArena.AllocNoPointer(32) = nil, 'AllocNoPointer should return nil when back commit fails');
-    CheckEqual(Int64(Ord(vaafBackCommitFailed)),
-      Int64(Ord(LArena.LastAllocFailure)),
-      'AllocNoPointer should expose back commit failure');
+    Check(Int64(Ord(vaafBackCommitFailed)) = Int64(Ord(LArena.LastAllocFailure)), 'AllocNoPointer should expose back commit failure');
   finally
     ResetVirtualArenaHooks;
     TVirtualArena_Release(LArena);
@@ -334,19 +329,13 @@ begin
     GFailVirtualMmap := True;
     Check(LArena.Alloc(ARENA_LARGE_THRESHOLD) = nil,
       'Alloc should return nil when large-object mmap fails');
-    CheckEqual(Int64(Ord(vaafLargeObjectMapFailed)),
-      Int64(Ord(LArena.LastAllocFailure)),
-      'Alloc should expose large-object mmap failure');
+    Check(Int64(Ord(vaafLargeObjectMapFailed)) = Int64(Ord(LArena.LastAllocFailure)), 'Alloc should expose large-object mmap failure');
     Check(LArena.AllocNoPointer(ARENA_LARGE_THRESHOLD) = nil,
       'AllocNoPointer should return nil when large-object mmap fails');
-    CheckEqual(Int64(Ord(vaafLargeObjectMapFailed)),
-      Int64(Ord(LArena.LastAllocFailure)),
-      'AllocNoPointer should expose large-object mmap failure');
+    Check(Int64(Ord(vaafLargeObjectMapFailed)) = Int64(Ord(LArena.LastAllocFailure)), 'AllocNoPointer should expose large-object mmap failure');
     Check(LArena.AllocAligned(ARENA_LARGE_THRESHOLD, 64) = nil,
       'AllocAligned should return nil when large-object mmap fails');
-    CheckEqual(Int64(Ord(vaafLargeObjectMapFailed)),
-      Int64(Ord(LArena.LastAllocFailure)),
-      'AllocAligned should expose large-object mmap failure');
+    Check(Int64(Ord(vaafLargeObjectMapFailed)) = Int64(Ord(LArena.LastAllocFailure)), 'AllocAligned should expose large-object mmap failure');
   finally
     ResetVirtualArenaHooks;
     TVirtualArena_Release(LArena);
@@ -369,17 +358,19 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.mem.oom');
-  T.Run('mem OOM uses canonical root', @TestMemOutOfMemoryUsesCanonicalRoot);
-  T.Run('blockpool overflow contracts', @TestBlockPoolOverflowContracts);
-  T.Run('growable mem OOM uses canonical root', @TestGrowableMemOomUsesCanonicalRoot);
-  T.Run('allocator-backed mem OOM uses canonical root', @TestAllocatorBackedMemOomUsesCanonicalRoot);
-  T.Run('virtual arena reserve failure uses canonical root',
+  T := TTestSuite.Create('nextpas.core.mem.oom');
+  T.Test('mem OOM uses canonical root', @TestMemOutOfMemoryUsesCanonicalRoot);
+  T.Test('blockpool overflow contracts', @TestBlockPoolOverflowContracts);
+  T.Test('growable mem OOM uses canonical root', @TestGrowableMemOomUsesCanonicalRoot);
+  T.Test('allocator-backed mem OOM uses canonical root', @TestAllocatorBackedMemOomUsesCanonicalRoot);
+  T.Test('virtual arena reserve failure uses canonical root',
     @TestVirtualArenaReserveFailureUsesCanonicalRoot);
-  T.Run('virtual arena commit failure returns nil',
+  T.Test('virtual arena commit failure returns nil',
     @TestVirtualArenaCommitFailureReturnsNil);
-  T.Run('virtual arena large-object mmap failure returns nil',
+  T.Test('virtual arena large-object mmap failure returns nil',
     @TestVirtualArenaLargeObjectMmapFailureReturnsNil);
-  T.Run('non-OOM allocation error remains EAllocError', @TestNonOomAllocErrorRemainsEAllocError);
+  T.Test('non-OOM allocation error remains EAllocError', @TestNonOomAllocErrorRemainsEAllocError);
+  T.Run;
+
   T.Summary;
 end.

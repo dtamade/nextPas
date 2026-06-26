@@ -5,7 +5,7 @@ program test_stack_pool;
 uses
   nextpas.core.exception,
   nextpas.core.text.conv,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.base,
   nextpas.core.mem.stack_pool;
 
@@ -13,7 +13,7 @@ type
   TExceptionProc = procedure;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure CheckPointerAligned(APtr: Pointer; AAlignment: SizeUInt; const AName: string);
 begin
@@ -30,7 +30,7 @@ begin
   LByte := PByte(APtr);
   for LIndex := 0 to ASize - 1 do
   begin
-    CheckEqual(Int64(0), Int64(LByte^), AName + ': byte ' + IntToStr(LIndex));
+    Check(Int64(0) = Int64(LByte^), AName + ': byte ' + IntToStr(LIndex));
     Inc(LByte);
   end;
 end;
@@ -78,7 +78,7 @@ begin
   LPool := TStackPool.Create(32);
   try
     Check(LPool.IsEmpty, 'new pool starts empty');
-    CheckEqual(Int64(32), Int64(LPool.TotalSize), 'total size');
+    Check(Int64(32) = Int64(LPool.TotalSize), 'total size');
 
     LExpectedBase := nil;
     for LRound := 1 to 3 do
@@ -91,14 +91,14 @@ begin
         Check(LPtr = LExpectedBase, 'reset should reuse the same first slot');
 
       LPtr^ := Byte($40 + LRound);
-      CheckEqual(Int64($40 + LRound), Int64(LPtr^), 'allocation remains writable');
-      CheckEqual(Int64(16), Int64(LPool.UsedSize), 'used size after allocation');
-      CheckEqual(Int64(16), Int64(LPool.AvailableSize), 'available size after allocation');
+      Check(Int64($40 + LRound) = Int64(LPtr^), 'allocation remains writable');
+      Check(Int64(16) = Int64(LPool.UsedSize), 'used size after allocation');
+      Check(Int64(16) = Int64(LPool.AvailableSize), 'available size after allocation');
 
       LPool.Reset;
       Check(LPool.IsEmpty, 'reset clears used size');
-      CheckEqual(Int64(0), Int64(LPool.UsedSize), 'used size after reset');
-      CheckEqual(Int64(32), Int64(LPool.AvailableSize), 'available size after reset');
+      Check(Int64(0) = Int64(LPool.UsedSize), 'used size after reset');
+      Check(Int64(32) = Int64(LPool.AvailableSize), 'available size after reset');
     end;
   finally
     LPool.Free;
@@ -117,25 +117,25 @@ begin
   try
     Check(LPool.Alloc(8) <> nil, 'prefix allocation');
     LStateOuter := LPool.SaveState;
-    CheckEqual(Int64(8), Int64(LStateOuter), 'outer state matches used size');
+    Check(Int64(8) = Int64(LStateOuter), 'outer state matches used size');
 
     LSecond := LPool.Alloc(12);
     Check(LSecond <> nil, 'second allocation');
-    CheckEqual(Int64(20), Int64(LPool.UsedSize), 'used size after second allocation');
+    Check(Int64(20) = Int64(LPool.UsedSize), 'used size after second allocation');
 
     LStateInner := LPool.SaveState;
-    CheckEqual(Int64(20), Int64(LStateInner), 'inner state matches used size');
+    Check(Int64(20) = Int64(LStateInner), 'inner state matches used size');
 
     LThird := LPool.Alloc(8);
     Check(LThird <> nil, 'third allocation');
-    CheckEqual(Int64(32), Int64(LPool.UsedSize), 'used size after third allocation');
+    Check(Int64(32) = Int64(LPool.UsedSize), 'used size after third allocation');
 
     LPool.RestoreState(LStateInner);
-    CheckEqual(Int64(20), Int64(LPool.UsedSize), 'restore inner state');
+    Check(Int64(20) = Int64(LPool.UsedSize), 'restore inner state');
     Check(LPool.Alloc(8) = LThird, 'restored inner state should reuse the same aligned slot');
 
     LPool.RestoreState(LStateOuter);
-    CheckEqual(Int64(8), Int64(LPool.UsedSize), 'restore outer state');
+    Check(Int64(8) = Int64(LPool.UsedSize), 'restore outer state');
     Check(LPool.Alloc(12) = LSecond, 'restored outer state should reuse the same slot');
   finally
     LPool.Free;
@@ -156,28 +156,28 @@ begin
 
     LOuterScope := LPool.CreateScope;
     Check(LOuterScope.Active, 'outer scope starts active');
-    CheckEqual(Int64(1), Int64(LPool.ScopeManager.GetScopeDepth), 'outer scope depth');
+    Check(Int64(1) = Int64(LPool.ScopeManager.GetScopeDepth), 'outer scope depth');
     Check(LOuterScope.Alloc(16) <> nil, 'outer scope allocation');
-    CheckEqual(Int64(16), Int64(LPool.UsedSize), 'used after outer alloc');
+    Check(Int64(16) = Int64(LPool.UsedSize), 'used after outer alloc');
 
     LInnerScope := LPool.CreateScope;
     Check(LInnerScope.Active, 'inner scope starts active');
-    CheckEqual(Int64(2), Int64(LPool.ScopeManager.GetScopeDepth), 'nested scope depth');
+    Check(Int64(2) = Int64(LPool.ScopeManager.GetScopeDepth), 'nested scope depth');
     Check(LInnerScope.Alloc(8) <> nil, 'inner scope allocation');
-    CheckEqual(Int64(24), Int64(LPool.UsedSize), 'used after nested alloc');
+    Check(Int64(24) = Int64(LPool.UsedSize), 'used after nested alloc');
 
     LInnerScope.Free;
     LInnerScope := nil;
-    CheckEqual(Int64(16), Int64(LPool.UsedSize), 'freeing inner scope restores outer state');
-    CheckEqual(Int64(1), Int64(LPool.ScopeManager.GetScopeDepth), 'inner scope removal updates depth');
+    Check(Int64(16) = Int64(LPool.UsedSize), 'freeing inner scope restores outer state');
+    Check(Int64(1) = Int64(LPool.ScopeManager.GetScopeDepth), 'inner scope removal updates depth');
 
     LOuterScope.Release;
-    CheckEqual(False, LOuterScope.Active, 'manual release deactivates scope');
-    CheckEqual(Int64(0), Int64(LPool.UsedSize), 'manual release restores pool state');
+    Check(False = LOuterScope.Active, 'manual release deactivates scope');
+    Check(Int64(0) = Int64(LPool.UsedSize), 'manual release restores pool state');
 
     LOuterScope.Free;
     LOuterScope := nil;
-    CheckEqual(Int64(0), Int64(LPool.ScopeManager.GetScopeDepth), 'destroying released scope leaves manager empty');
+    Check(Int64(0) = Int64(LPool.ScopeManager.GetScopeDepth), 'destroying released scope leaves manager empty');
   finally
     LInnerScope.Free;
     LOuterScope.Free;
@@ -192,15 +192,15 @@ begin
   LPool := TScopedStackPool.Create(64, TStackPoolPolicy.Default);
   try
     Check(LPool.CreateScope <> nil, 'create managed scope');
-    CheckEqual(Int64(1), Int64(LPool.ScopeManager.GetScopeDepth), 'scope depth after push');
+    Check(Int64(1) = Int64(LPool.ScopeManager.GetScopeDepth), 'scope depth after push');
     Check(LPool.ScopeManager.GetCurrentScope <> nil, 'current scope available');
     Check(LPool.ScopeManager.GetCurrentScope.Alloc(12) <> nil, 'managed scope allocation');
-    CheckEqual(Int64(12), Int64(LPool.UsedSize), 'used before pop');
+    Check(Int64(12) = Int64(LPool.UsedSize), 'used before pop');
 
     LPool.ScopeManager.PopScope;
 
-    CheckEqual(Int64(0), Int64(LPool.ScopeManager.GetScopeDepth), 'pop should remove scope');
-    CheckEqual(Int64(0), Int64(LPool.UsedSize), 'pop should restore saved state');
+    Check(Int64(0) = Int64(LPool.ScopeManager.GetScopeDepth), 'pop should remove scope');
+    Check(Int64(0) = Int64(LPool.UsedSize), 'pop should restore saved state');
     Check(LPool.ScopeManager.GetCurrentScope = nil, 'no scope remains after pop');
   finally
     LPool.Free;
@@ -214,25 +214,25 @@ var
 begin
   LPool := TScopedStackPool.Create(64, TStackPoolPolicy.Default);
   try
-    CheckEqual(True, LPool.PushState, 'push initial state');
-    CheckEqual(Int64(1), Int64(LPool.GetStateStackDepth), 'state stack depth after first push');
+    Check(True = LPool.PushState, 'push initial state');
+    Check(Int64(1) = Int64(LPool.GetStateStackDepth), 'state stack depth after first push');
     Check(LPool.Alloc(8) <> nil, 'allocation after first push');
 
-    CheckEqual(True, LPool.PushState, 'push nested state');
-    CheckEqual(Int64(2), Int64(LPool.GetStateStackDepth), 'state stack depth after second push');
+    Check(True = LPool.PushState, 'push nested state');
+    Check(Int64(2) = Int64(LPool.GetStateStackDepth), 'state stack depth after second push');
     LSecond := LPool.Alloc(8);
     Check(LSecond <> nil, 'allocation after second push');
-    CheckEqual(Int64(16), Int64(LPool.UsedSize), 'used size before pop');
+    Check(Int64(16) = Int64(LPool.UsedSize), 'used size before pop');
 
-    CheckEqual(True, LPool.PopState, 'pop nested state');
-    CheckEqual(Int64(1), Int64(LPool.GetStateStackDepth), 'state stack depth after nested pop');
-    CheckEqual(Int64(8), Int64(LPool.UsedSize), 'nested pop restores state');
+    Check(True = LPool.PopState, 'pop nested state');
+    Check(Int64(1) = Int64(LPool.GetStateStackDepth), 'state stack depth after nested pop');
+    Check(Int64(8) = Int64(LPool.UsedSize), 'nested pop restores state');
     Check(LPool.Alloc(8) = LSecond, 'nested pop should reuse the same slot');
 
-    CheckEqual(True, LPool.PopState, 'pop initial state');
-    CheckEqual(Int64(0), Int64(LPool.GetStateStackDepth), 'state stack depth after final pop');
-    CheckEqual(Int64(0), Int64(LPool.UsedSize), 'final pop restores empty state');
-    CheckEqual(False, LPool.PopState, 'empty state stack returns false');
+    Check(True = LPool.PopState, 'pop initial state');
+    Check(Int64(0) = Int64(LPool.GetStateStackDepth), 'state stack depth after final pop');
+    Check(Int64(0) = Int64(LPool.UsedSize), 'final pop restores empty state');
+    Check(False = LPool.PopState, 'empty state stack returns false');
   finally
     LPool.Free;
   end;
@@ -250,10 +250,10 @@ begin
     LPtr := LPool.AllocAligned(16, 16);
     CheckPointerAligned(LPtr, 16, 'AllocAligned(16)');
 
-    CheckEqual(True, LPool.TryAllocAligned(8, LPtr, 32), 'TryAllocAligned(32) succeeds');
+    Check(True = LPool.TryAllocAligned(8, LPtr, 32), 'TryAllocAligned(32) succeeds');
     CheckPointerAligned(LPtr, 32, 'TryAllocAligned(32)');
 
-    CheckEqual(False, LPool.TryAllocAligned(8, LPtr, 3), 'TryAllocAligned rejects non power-of-two alignment');
+    Check(False = LPool.TryAllocAligned(8, LPtr, 3), 'TryAllocAligned rejects non power-of-two alignment');
     Check(LPtr = nil, 'invalid aligned allocation clears output pointer');
   finally
     LPool.Free;
@@ -297,11 +297,11 @@ begin
 
     LPtr := LPool.Alloc(9);
     Check(LPtr = nil, 'capacity exhaustion returns nil');
-    CheckEqual(Int64(8), Int64(LPool.UsedSize), 'failed allocation does not advance offset');
-    CheckEqual(Int64(8), Int64(LPool.AvailableSize), 'remaining capacity unchanged');
-    CheckEqual(False, LPool.IsFull, 'pool is not full until an exact-fit allocation succeeds');
+    Check(Int64(8) = Int64(LPool.UsedSize), 'failed allocation does not advance offset');
+    Check(Int64(8) = Int64(LPool.AvailableSize), 'remaining capacity unchanged');
+    Check(False = LPool.IsFull, 'pool is not full until an exact-fit allocation succeeds');
 
-    CheckEqual(False, LPool.TryAlloc(9, LPtr), 'TryAlloc returns false when exhausted');
+    Check(False = LPool.TryAlloc(9, LPtr), 'TryAlloc returns false when exhausted');
     Check(LPtr = nil, 'TryAlloc leaves output nil on failure');
 
     Check(LPool.Alloc(8) <> nil, 'exact-fit allocation still works after a failed request');
@@ -320,11 +320,11 @@ begin
   try
     Check(LPool.Alloc(High(SizeUInt)) = nil, 'oversized allocation returns nil');
     Check(LPool.AllocArray((High(SizeUInt) div 2) + 1, 2) = nil, 'array size overflow returns nil');
-    CheckEqual(Int64(0), Int64(LPool.UsedSize), 'overflow checks must not advance offset');
+    Check(Int64(0) = Int64(LPool.UsedSize), 'overflow checks must not advance offset');
 
     LStats := LPool.Statistics;
-    CheckEqual(Int64(0), Int64(LStats.TotalAllocations), 'failed allocations do not update statistics');
-    CheckEqual(Int64(0), Int64(LStats.TotalBytes), 'failed allocations do not add bytes');
+    Check(Int64(0) = Int64(LStats.TotalAllocations), 'failed allocations do not update statistics');
+    Check(Int64(0) = Int64(LStats.TotalBytes), 'failed allocations do not add bytes');
   finally
     LPool.Free;
   end;
@@ -337,21 +337,21 @@ var
   LDebug: TStackPoolPolicy;
 begin
   LDefault := TStackPoolPolicy.Default;
-  CheckEqual(True, LDefault.EnableStatistics, 'default policy enables statistics');
-  CheckEqual(True, LDefault.EnableScopeTracking, 'default policy enables scope tracking');
-  CheckEqual(False, LDefault.EnableAutoGrow, 'default policy leaves auto-grow disabled');
-  CheckEqual(Int64(SizeOf(Pointer)), Int64(LDefault.DefaultAlignment), 'default policy alignment');
-  CheckEqual(False, LDefault.EnableDebugMode, 'default policy debug flag');
+  Check(True = LDefault.EnableStatistics, 'default policy enables statistics');
+  Check(True = LDefault.EnableScopeTracking, 'default policy enables scope tracking');
+  Check(False = LDefault.EnableAutoGrow, 'default policy leaves auto-grow disabled');
+  Check(Int64(SizeOf(Pointer)) = Int64(LDefault.DefaultAlignment), 'default policy alignment');
+  Check(False = LDefault.EnableDebugMode, 'default policy debug flag');
 
   LHighPerformance := TStackPoolPolicy.HighPerformance;
-  CheckEqual(False, LHighPerformance.EnableStatistics, 'high-performance policy disables statistics');
-  CheckEqual(False, LHighPerformance.EnableScopeTracking, 'high-performance policy disables scope tracking');
-  CheckEqual(False, LHighPerformance.EnableDebugMode, 'high-performance policy keeps debug disabled');
+  Check(False = LHighPerformance.EnableStatistics, 'high-performance policy disables statistics');
+  Check(False = LHighPerformance.EnableScopeTracking, 'high-performance policy disables scope tracking');
+  Check(False = LHighPerformance.EnableDebugMode, 'high-performance policy keeps debug disabled');
 
   LDebug := TStackPoolPolicy.Debug;
-  CheckEqual(True, LDebug.EnableStatistics, 'debug policy keeps statistics enabled');
-  CheckEqual(True, LDebug.EnableScopeTracking, 'debug policy keeps scope tracking enabled');
-  CheckEqual(True, LDebug.EnableDebugMode, 'debug policy enables debug mode');
+  Check(True = LDebug.EnableStatistics, 'debug policy keeps statistics enabled');
+  Check(True = LDebug.EnableScopeTracking, 'debug policy keeps scope tracking enabled');
+  Check(True = LDebug.EnableDebugMode, 'debug policy enables debug mode');
   Check(Abs(LDebug.GrowthFactor - 1.5) < 1e-6, 'debug policy uses conservative growth factor');
 end;
 
@@ -372,40 +372,40 @@ begin
     Check(LInnerScope.Alloc(8) <> nil, 'nested scope allocation');
 
     LStats := LPool.Statistics;
-    CheckEqual(Int64(2), Int64(LStats.TotalAllocations), 'total allocations');
-    CheckEqual(Int64(24), Int64(LStats.TotalBytes), 'total bytes');
-    CheckEqual(Int64(24), Int64(LStats.PeakUsage), 'peak usage');
-    CheckEqual(Int64(24), Int64(LStats.CurrentUsage), 'current usage');
-    CheckEqual(Int64(2), Int64(LStats.ScopeCreations), 'scope creations');
-    CheckEqual(Int64(0), Int64(LStats.ScopeDestructions), 'scope destructions before teardown');
-    CheckEqual(Int64(2), Int64(LStats.MaxScopeDepth), 'max scope depth');
-    CheckEqual(Int64(2), Int64(LStats.CurrentScopeDepth), 'current scope depth');
+    Check(Int64(2) = Int64(LStats.TotalAllocations), 'total allocations');
+    Check(Int64(24) = Int64(LStats.TotalBytes), 'total bytes');
+    Check(Int64(24) = Int64(LStats.PeakUsage), 'peak usage');
+    Check(Int64(24) = Int64(LStats.CurrentUsage), 'current usage');
+    Check(Int64(2) = Int64(LStats.ScopeCreations), 'scope creations');
+    Check(Int64(0) = Int64(LStats.ScopeDestructions), 'scope destructions before teardown');
+    Check(Int64(2) = Int64(LStats.MaxScopeDepth), 'max scope depth');
+    Check(Int64(2) = Int64(LStats.CurrentScopeDepth), 'current scope depth');
     Check(Abs(LStats.FragmentationRatio - (1.0 - (24.0 / 64.0))) < 1e-9, 'fragmentation ratio reflects free space');
 
     LInnerScope.Free;
     LInnerScope := nil;
     LStats := LPool.Statistics;
-    CheckEqual(Int64(1), Int64(LStats.ScopeDestructions), 'inner scope destruction tracked');
-    CheckEqual(Int64(1), Int64(LStats.CurrentScopeDepth), 'current depth after inner free');
-    CheckEqual(Int64(16), Int64(LStats.CurrentUsage), 'current usage after inner free');
+    Check(Int64(1) = Int64(LStats.ScopeDestructions), 'inner scope destruction tracked');
+    Check(Int64(1) = Int64(LStats.CurrentScopeDepth), 'current depth after inner free');
+    Check(Int64(16) = Int64(LStats.CurrentUsage), 'current usage after inner free');
 
     LOuterScope.Free;
     LOuterScope := nil;
     LStats := LPool.Statistics;
-    CheckEqual(Int64(2), Int64(LStats.ScopeDestructions), 'outer scope destruction tracked');
-    CheckEqual(Int64(0), Int64(LStats.CurrentScopeDepth), 'depth after all scopes freed');
-    CheckEqual(Int64(0), Int64(LStats.CurrentUsage), 'usage after all scopes freed');
+    Check(Int64(2) = Int64(LStats.ScopeDestructions), 'outer scope destruction tracked');
+    Check(Int64(0) = Int64(LStats.CurrentScopeDepth), 'depth after all scopes freed');
+    Check(Int64(0) = Int64(LStats.CurrentUsage), 'usage after all scopes freed');
 
     LPool.ResetStatistics;
     LStats := LPool.Statistics;
-    CheckEqual(Int64(0), Int64(LStats.TotalAllocations), 'reset statistics clears allocation count');
-    CheckEqual(Int64(0), Int64(LStats.TotalBytes), 'reset statistics clears byte count');
-    CheckEqual(Int64(0), Int64(LStats.PeakUsage), 'reset statistics clears peak usage');
-    CheckEqual(Int64(0), Int64(LStats.ScopeCreations), 'reset statistics clears scope creations');
-    CheckEqual(Int64(0), Int64(LStats.ScopeDestructions), 'reset statistics clears scope destructions');
-    CheckEqual(Int64(0), Int64(LStats.MaxScopeDepth), 'reset statistics clears max scope depth');
-    CheckEqual(Int64(0), Int64(LStats.CurrentScopeDepth), 'reset statistics clears current scope depth');
-    CheckEqual(Int64(0), Int64(LStats.CurrentUsage), 'reset statistics clears current usage');
+    Check(Int64(0) = Int64(LStats.TotalAllocations), 'reset statistics clears allocation count');
+    Check(Int64(0) = Int64(LStats.TotalBytes), 'reset statistics clears byte count');
+    Check(Int64(0) = Int64(LStats.PeakUsage), 'reset statistics clears peak usage');
+    Check(Int64(0) = Int64(LStats.ScopeCreations), 'reset statistics clears scope creations');
+    Check(Int64(0) = Int64(LStats.ScopeDestructions), 'reset statistics clears scope destructions');
+    Check(Int64(0) = Int64(LStats.MaxScopeDepth), 'reset statistics clears max scope depth');
+    Check(Int64(0) = Int64(LStats.CurrentScopeDepth), 'reset statistics clears current scope depth');
+    Check(Int64(0) = Int64(LStats.CurrentUsage), 'reset statistics clears current usage');
   finally
     LInnerScope.Free;
     LOuterScope.Free;
@@ -424,7 +424,7 @@ begin
     Check(LPtr <> nil, 'empty pool can grow for a first large allocation');
     Check(LPool.TotalSize >= 16, 'pool grew enough for the allocation');
     PByte(LPtr)^ := $A5;
-    CheckEqual(Int64($A5), Int64(PByte(LPtr)^), 'grown allocation remains writable');
+    Check(Int64($A5) = Int64(PByte(LPtr)^), 'grown allocation remains writable');
   finally
     LPool.Free;
   end;
@@ -451,8 +451,8 @@ begin
     end;
 
     Check(LCaught, 'auto-grow must reject growth while previous allocations may still be active');
-    CheckEqual(Int64($5A), Int64(LFirst^), 'first allocation is still valid after rejected grow');
-    CheckEqual(Int64(16), Int64(LPool.TotalSize), 'rejected grow keeps the original buffer');
+    Check(Int64($5A) = Int64(LFirst^), 'first allocation is still valid after rejected grow');
+    Check(Int64(16) = Int64(LPool.TotalSize), 'rejected grow keeps the original buffer');
   finally
     LPool.Free;
   end;
@@ -485,8 +485,8 @@ begin
     end;
 
     Check(LCaught, 'auto-grow must reject untracked active scope allocations');
-    CheckEqual(Int64($C3), Int64(LFirst^), 'scope allocation is still valid after rejected grow');
-    CheckEqual(Int64(16), Int64(LPool.TotalSize), 'untracked scope grow rejection keeps the original buffer');
+    Check(Int64($C3) = Int64(LFirst^), 'scope allocation is still valid after rejected grow');
+    Check(Int64(16) = Int64(LPool.TotalSize), 'untracked scope grow rejection keeps the original buffer');
   finally
     LScope.Free;
     LPool.Free;
@@ -494,21 +494,23 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.mem.stack_pool');
-  T.Run('basic alloc + reset loop', @TestBasicAllocResetLoop);
-  T.Run('save/restore nested states', @TestSaveRestoreNestedStates);
-  T.Run('scoped lifecycle', @TestScopedScopeLifecycle);
-  T.Run('scope manager pop scope restores state', @TestScopeManagerPopScopeRestoresState);
-  T.Run('push/pop state stack', @TestPushPopStateStack);
-  T.Run('aligned allocation', @TestAlignedAllocation);
-  T.Run('scoped aligned allocation rejects invalid alignment', @TestScopedAllocAlignedRejectsInvalidAlignment);
-  T.Run('zeroed allocation', @TestZeroedAllocation);
-  T.Run('capacity failure returns nil', @TestCapacityFailureReturnsNil);
-  T.Run('overflow protection', @TestOverflowProtection);
-  T.Run('policy profiles', @TestPolicyProfiles);
-  T.Run('statistics correctness', @TestStatisticsCorrectness);
-  T.Run('auto-grow empty pool', @TestAutoGrowEmptyPool);
-  T.Run('auto-grow rejects existing allocation', @TestAutoGrowRejectsExistingAllocation);
-  T.Run('auto-grow rejects untracked scope allocation', @TestAutoGrowRejectsUntrackedScopeAllocation);
+  T := TTestSuite.Create('nextpas.core.mem.stack_pool');
+  T.Test('basic alloc + reset loop', @TestBasicAllocResetLoop);
+  T.Test('save/restore nested states', @TestSaveRestoreNestedStates);
+  T.Test('scoped lifecycle', @TestScopedScopeLifecycle);
+  T.Test('scope manager pop scope restores state', @TestScopeManagerPopScopeRestoresState);
+  T.Test('push/pop state stack', @TestPushPopStateStack);
+  T.Test('aligned allocation', @TestAlignedAllocation);
+  T.Test('scoped aligned allocation rejects invalid alignment', @TestScopedAllocAlignedRejectsInvalidAlignment);
+  T.Test('zeroed allocation', @TestZeroedAllocation);
+  T.Test('capacity failure returns nil', @TestCapacityFailureReturnsNil);
+  T.Test('overflow protection', @TestOverflowProtection);
+  T.Test('policy profiles', @TestPolicyProfiles);
+  T.Test('statistics correctness', @TestStatisticsCorrectness);
+  T.Test('auto-grow empty pool', @TestAutoGrowEmptyPool);
+  T.Test('auto-grow rejects existing allocation', @TestAutoGrowRejectsExistingAllocation);
+  T.Test('auto-grow rejects untracked scope allocation', @TestAutoGrowRejectsUntrackedScopeAllocation);
+  T.Run;
+
   T.Summary;
 end.

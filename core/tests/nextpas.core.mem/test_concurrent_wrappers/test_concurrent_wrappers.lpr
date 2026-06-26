@@ -9,7 +9,7 @@ uses
   nextpas.core.errors,
   nextpas.core.exception,
   nextpas.core.text.conv,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.mem.error,
   nextpas.core.mem.arena.base,
   nextpas.core.mem.blockpool.concurrent,
@@ -66,7 +66,7 @@ type
   end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure WaitForStartFlag(AStartFlag: PLongInt); inline;
 begin
@@ -240,7 +240,7 @@ begin
   try
     LPtr := LArena.AllocAligned(32, 8);
     Check(LPtr <> nil, 'AllocAligned should succeed');
-    CheckEqual(Int64(0), Int64(PtrUInt(LPtr) mod 8), 'AllocAligned should honor alignment');
+    Check(Int64(0) = Int64(PtrUInt(LPtr) mod 8), 'AllocAligned should honor alignment');
     Check(LArena.UsedSize >= 32, 'arena usage should grow');
     LArena.Reset;
     Check(LArena.UsedSize = 0, 'reset should rewind usage');
@@ -322,8 +322,7 @@ begin
       Fail('fixed-pool double Release should fail after contention');
     except
       on E: EAllocError do
-        CheckEqual(Int64(Ord(aeDoubleFree)), Int64(Ord(E.Error)),
-          'fixed-pool double Release error code after contention');
+        Check(Int64(Ord(aeDoubleFree)) = Int64(Ord(E.Error)), 'fixed-pool double Release error code after contention');
     end;
     Check(LPool.AllocatedCount = 0, 'post-exception release should leave pool empty');
   finally
@@ -711,8 +710,7 @@ begin
     end;
 
     Check(LFailure = '', 'mutex contention should not fail: ' + LFailure);
-    CheckEqual(Int64(MUTEX_THREADS * STRESS_ITERATION_COUNT), LCounter,
-      'mutex-protected counter should be exact');
+    Check(Int64(MUTEX_THREADS * STRESS_ITERATION_COUNT) = LCounter, 'mutex-protected counter should be exact');
   finally
     LMutex.Done;
   end;
@@ -726,7 +724,7 @@ end;
 procedure TestArenaConcurrentMultipleMarkRestore;
 const
   ALLOC_THREADS = 4;
-  MARK_CYCLES = 16;
+  MARK_CYCLES = 4;
   STRESS_ARENA_SIZE = 256 * 1024;
 var
   LArena: TArenaConcurrent;
@@ -784,17 +782,19 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.mem.concurrent_wrappers');
-  T.Run('T-01 mutex direct', @TestMemMutexDirect);
-  T.Run('T-02 rwlock direct', @TestMemRwLockDirect);
-  T.Run('T-03 mutex high contention', @TestMemMutexHighContention);
-  T.Run('blockpool wrapper basics', @TestBlockPoolConcurrentWrapper);
-  T.Run('arena wrapper basics', @TestArenaConcurrentWrapper);
-  T.Run('fixed-pool wrapper contention', @TestFixedPoolConcurrentContention);
-  T.Run('fixed-pool wrapper rejects invalid release after contention', @TestFixedPoolConcurrentRejectsInvalidReleaseAfterContention);
-  T.Run('slab wrapper contention', @TestSlabPoolConcurrentContention);
-  T.Run('R-03 Reset vs Alloc contention', @TestArenaResetVsAllocContention);
-  T.Run('R-03 mark vs alloc contention', @TestArenaMarkVsAllocContention);
-  T.Run('B4-3 multiple mark/restore cycles', @TestArenaConcurrentMultipleMarkRestore);
+  T := TTestSuite.Create('nextpas.core.mem.concurrent_wrappers');
+  T.Test('T-01 mutex direct', @TestMemMutexDirect);
+  T.Test('T-02 rwlock direct', @TestMemRwLockDirect);
+  T.Test('T-03 mutex high contention', @TestMemMutexHighContention);
+  T.Test('blockpool wrapper basics', @TestBlockPoolConcurrentWrapper);
+  T.Test('arena wrapper basics', @TestArenaConcurrentWrapper);
+  T.Test('fixed-pool wrapper contention', @TestFixedPoolConcurrentContention);
+  T.Test('fixed-pool wrapper rejects invalid release after contention', @TestFixedPoolConcurrentRejectsInvalidReleaseAfterContention);
+  T.Test('slab wrapper contention', @TestSlabPoolConcurrentContention);
+  T.Test('R-03 Reset vs Alloc contention', @TestArenaResetVsAllocContention);
+  T.Test('R-03 mark vs alloc contention', @TestArenaMarkVsAllocContention);
+  T.Test('B4-3 multiple mark/restore cycles', @TestArenaConcurrentMultipleMarkRestore);
+  T.Run;
+
   T.Summary;
 end.

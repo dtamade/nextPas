@@ -3,7 +3,7 @@ program test_memory_map_allocator;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.mem.error,
   nextpas.core.mem.allocator,
   nextpas.core.mem.allocator.mmap;
@@ -12,7 +12,7 @@ type
   TExceptionProc = procedure;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GAllocator: IAllocator = nil;
   GPtr: Pointer = nil;
   GForeignPtr: Pointer = nil;
@@ -25,7 +25,7 @@ begin
     Fail(AName + ': expected allocation error');
   except
     on E: EAllocError do
-      CheckEqual(Int64(Ord(AExpected)), Int64(Ord(E.Error)), AName + ': error code');
+      Check(Int64(Ord(AExpected)) = Int64(Ord(E.Error)), AName + ': error code');
   end;
 end;
 
@@ -62,13 +62,13 @@ begin
   LAllocator := CreateAnonymousMemoryMapAllocator(4096);
   Check(LAllocator <> nil, 'anonymous memory-map allocator should be created');
   Check(LAllocator.Traits.ThreadSafe, 'memory-map allocator should serialize access');
-  CheckEqual(True, LAllocator.Traits.ZeroInitialized, 'AllocMem should promise zeroing');
+  Check(True = LAllocator.Traits.ZeroInitialized, 'AllocMem should promise zeroing');
 
   LPtr := LAllocator.AllocMem(64);
   try
     Check(LPtr <> nil, 'AllocMem should allocate');
     for LIndex := 0 to 63 do
-      CheckEqual(Int64(0), Int64(PByte(LPtr)[LIndex]), 'AllocMem should zero each byte');
+      Check(Int64(0) = Int64(PByte(LPtr)[LIndex]), 'AllocMem should zero each byte');
   finally
     LAllocator.FreeMem(LPtr);
   end;
@@ -87,7 +87,7 @@ begin
   LPtr := LAllocator.ReallocMem(LPtr, 96);
   try
     Check(LPtr <> nil, 'reallocation should succeed');
-    CheckEqual(Int64($6B), Int64(PByte(LPtr)^), 'reallocation should preserve prefix');
+    Check(Int64($6B) = Int64(PByte(LPtr)^), 'reallocation should preserve prefix');
   finally
     LAllocator.FreeMem(LPtr);
   end;
@@ -155,11 +155,13 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.mem.memory_map_allocator');
-  T.Run('anonymous traits and zeroing', @TestAnonymousAllocatorTraitsAndZeroing);
-  T.Run('realloc preserves prefix', @TestReallocPreservesPrefix);
-  T.Run('multiple blocks do not alias and can reuse', @TestMultipleBlocksDoNotAliasAndCanReuse);
-  T.Run('invalid and double free', @TestInvalidAndDoubleFree);
-  T.Run('capacity exhaustion returns nil', @TestCapacityExhaustionReturnsNil);
+  T := TTestSuite.Create('nextpas.core.mem.memory_map_allocator');
+  T.Test('anonymous traits and zeroing', @TestAnonymousAllocatorTraitsAndZeroing);
+  T.Test('realloc preserves prefix', @TestReallocPreservesPrefix);
+  T.Test('multiple blocks do not alias and can reuse', @TestMultipleBlocksDoNotAliasAndCanReuse);
+  T.Test('invalid and double free', @TestInvalidAndDoubleFree);
+  T.Test('capacity exhaustion returns nil', @TestCapacityExhaustionReturnsNil);
+  T.Run;
+
   T.Summary;
 end.

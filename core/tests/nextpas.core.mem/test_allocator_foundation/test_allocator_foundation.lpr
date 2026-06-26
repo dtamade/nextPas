@@ -3,7 +3,7 @@ program test_allocator_foundation;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.mem.allocator.base,
   nextpas.core.mem.allocator.foundation,
   nextpas.core.mem.allocator.rtl;

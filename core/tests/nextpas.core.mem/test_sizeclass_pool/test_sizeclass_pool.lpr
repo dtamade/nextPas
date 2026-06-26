@@ -4,13 +4,13 @@ program test_sizeclass_pool;
 
 uses
   nextpas.core.text.conv,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.mem.base,
   nextpas.core.mem.error,
   nextpas.core.mem.pool.sizeclass;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { ---------------------------------------------------------------------------
   基本生命周期
@@ -22,8 +22,8 @@ var
 begin
   LP := TSizeClassPool.Create;
   try
-    CheckEqual(Int64(0), Int64(LP.PageCount), 'initial pages');
-    CheckEqual(Int64(0), Int64(LP.TotalAllocCount), 'initial allocs');
+    Check(Int64(0) = Int64(LP.PageCount), 'initial pages');
+    Check(Int64(0) = Int64(LP.TotalAllocCount), 'initial allocs');
   finally
     LP.Free;
   end;
@@ -35,23 +35,23 @@ end;
 
 procedure TestSizeClassIndexLookup;
 begin
-  CheckEqual(0, SizeClassIndex(0), '0B -> class 0');
-  CheckEqual(0, SizeClassIndex(1), '1B -> class 0');
-  CheckEqual(0, SizeClassIndex(8), '8B -> class 0');
-  CheckEqual(1, SizeClassIndex(9), '9B -> class 1');
-  CheckEqual(1, SizeClassIndex(16), '16B -> class 1');
-  CheckEqual(2, SizeClassIndex(17), '17B -> class 2');
-  CheckEqual(2, SizeClassIndex(32), '32B -> class 2');
-  CheckEqual(3, SizeClassIndex(33), '33B -> class 3');
-  CheckEqual(3, SizeClassIndex(64), '64B -> class 3');
-  CheckEqual(4, SizeClassIndex(65), '65B -> class 4');
-  CheckEqual(4, SizeClassIndex(128), '128B -> class 4');
-  CheckEqual(5, SizeClassIndex(129), '129B -> class 5');
-  CheckEqual(5, SizeClassIndex(256), '256B -> class 5');
-  CheckEqual(6, SizeClassIndex(257), '257B -> class 6');
-  CheckEqual(6, SizeClassIndex(512), '512B -> class 6');
-  CheckEqual(-1, SizeClassIndex(513), '513B -> no class');
-  CheckEqual(-1, SizeClassIndex(1024), '1024B -> no class');
+  Check(0 = SizeClassIndex(0), '0B -> class 0');
+  Check(0 = SizeClassIndex(1), '1B -> class 0');
+  Check(0 = SizeClassIndex(8), '8B -> class 0');
+  Check(1 = SizeClassIndex(9), '9B -> class 1');
+  Check(1 = SizeClassIndex(16), '16B -> class 1');
+  Check(2 = SizeClassIndex(17), '17B -> class 2');
+  Check(2 = SizeClassIndex(32), '32B -> class 2');
+  Check(3 = SizeClassIndex(33), '33B -> class 3');
+  Check(3 = SizeClassIndex(64), '64B -> class 3');
+  Check(4 = SizeClassIndex(65), '65B -> class 4');
+  Check(4 = SizeClassIndex(128), '128B -> class 4');
+  Check(5 = SizeClassIndex(129), '129B -> class 5');
+  Check(5 = SizeClassIndex(256), '256B -> class 5');
+  Check(6 = SizeClassIndex(257), '257B -> class 6');
+  Check(6 = SizeClassIndex(512), '512B -> class 6');
+  Check(-1 = SizeClassIndex(513), '513B -> no class');
+  Check(-1 = SizeClassIndex(1024), '1024B -> no class');
 end;
 
 { ---------------------------------------------------------------------------
@@ -67,7 +67,7 @@ begin
   try
     LP1 := LP.Alloc(8);
     Check(LP1 <> nil, 'alloc 8B');
-    CheckEqual(Int64(1), Int64(LP.PageCount), 'one page allocated');
+    Check(Int64(1) = Int64(LP.PageCount), 'one page allocated');
 
     LP2 := LP.Alloc(8);
     Check(LP2 <> nil, 'alloc 8B again');
@@ -130,7 +130,7 @@ begin
   LP := TSizeClassPool.Create;
   try
     Check(LP.Alloc(0) = nil, 'zero alloc returns nil');
-    CheckEqual(Int64(0), Int64(LP.PageCount), 'no pages allocated');
+    Check(Int64(0) = Int64(LP.PageCount), 'no pages allocated');
   finally
     LP.Free;
   end;
@@ -169,13 +169,13 @@ begin
   try
     LP1 := PInteger(LP.Alloc(4));
     LP1^ := 42;
-    CheckEqual(42, LP1^, 'integer write/read');
+    Check(42 = LP1^, 'integer write/read');
 
     LP2 := PByte(LP.Alloc(8));
     for I := 0 to 7 do
       LP2[I] := Byte(I + 10);
     for I := 0 to 7 do
-      CheckEqual(I + 10, LP2[I], 'byte write/read at ' + IntToStr(I));
+      Check(I + 10 = LP2[I], 'byte write/read at ' + IntToStr(I));
 
     LP.Release(LP1, 4);
     LP.Release(LP2, 8);
@@ -306,13 +306,13 @@ var
 begin
   LP := TSizeClassPool.Create;
   try
-    CheckEqual(Int64(8), Int64(LP.SlotSize(0)), 'class 0 slot size');
-    CheckEqual(Int64(16), Int64(LP.SlotSize(1)), 'class 1 slot size');
-    CheckEqual(Int64(32), Int64(LP.SlotSize(2)), 'class 2 slot size');
-    CheckEqual(Int64(64), Int64(LP.SlotSize(3)), 'class 3 slot size');
-    CheckEqual(Int64(128), Int64(LP.SlotSize(4)), 'class 4 slot size');
-    CheckEqual(Int64(256), Int64(LP.SlotSize(5)), 'class 5 slot size');
-    CheckEqual(Int64(512), Int64(LP.SlotSize(6)), 'class 6 slot size');
+    Check(Int64(8) = Int64(LP.SlotSize(0)), 'class 0 slot size');
+    Check(Int64(16) = Int64(LP.SlotSize(1)), 'class 1 slot size');
+    Check(Int64(32) = Int64(LP.SlotSize(2)), 'class 2 slot size');
+    Check(Int64(64) = Int64(LP.SlotSize(3)), 'class 3 slot size');
+    Check(Int64(128) = Int64(LP.SlotSize(4)), 'class 4 slot size');
+    Check(Int64(256) = Int64(LP.SlotSize(5)), 'class 5 slot size');
+    Check(Int64(512) = Int64(LP.SlotSize(6)), 'class 6 slot size');
   finally
     LP.Free;
   end;
@@ -404,39 +404,42 @@ end;
   --------------------------------------------------------------------------- }
 
 begin
-  T := TTestRunner.Create('nextpas.core.mem.pool.sizeclass');
+  T := TTestSuite.Create('nextpas.core.mem.pool.sizeclass');
 
   { 生命周期 }
-  T.Run('Create/Destroy', @TestCreateDestroy);
+  T.Test('Create/Destroy', @TestCreateDestroy);
 
   { SizeClassIndex }
-  T.Run('SizeClassIndex lookup', @TestSizeClassIndexLookup);
+  T.Test('SizeClassIndex lookup', @TestSizeClassIndexLookup);
 
   { 基本分配 }
-  T.Run('Alloc small', @TestAllocSmall);
-  T.Run('Alloc various sizes', @TestAllocVariousSizes);
-  T.Run('Free reuse', @TestFreeReuse);
-  T.Run('Zero alloc', @TestZeroAlloc);
-  T.Run('Oversize alloc', @TestOversizeAlloc);
+  T.Test('Alloc small', @TestAllocSmall);
+  T.Test('Alloc various sizes', @TestAllocVariousSizes);
+  T.Test('Free reuse', @TestFreeReuse);
+  T.Test('Zero alloc', @TestZeroAlloc);
+  T.Test('Oversize alloc', @TestOversizeAlloc);
 
   { Write/Read }
-  T.Run('Write/Read', @TestWriteRead);
+  T.Test('Write/Read', @TestWriteRead);
 
   { Reset }
-  T.Run('Reset', @TestReset);
+  T.Test('Reset', @TestReset);
 
   { 自动扩容 }
-  T.Run('Auto page growth', @TestAutoPageGrowth);
-  T.Run('Large alloc count', @TestLargeAllocCount);
+  T.Test('Auto page growth', @TestAutoPageGrowth);
+  T.Test('Large alloc count', @TestLargeAllocCount);
 
   { 边界 }
-  T.Run('Free nil', @TestFreeNil);
-  T.Run('Free zero size', @TestFreeZeroSize);
-  T.Run('Slot size query', @TestSlotSizeQuery);
+  T.Test('Free nil', @TestFreeNil);
+  T.Test('Free zero size', @TestFreeZeroSize);
+  T.Test('Slot size query', @TestSlotSizeQuery);
 
   { 混合 }
-  T.Run('Mixed size classes', @TestMixedSizeClasses);
-  T.Run('Alloc stress', @TestAllocStress);
+  T.Test('Mixed size classes', @TestMixedSizeClasses);
+  T.Test('Alloc stress', @TestAllocStress);
+
+  T.Run;
+
 
   T.Summary;
 end.
