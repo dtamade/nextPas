@@ -281,8 +281,16 @@ begin
 end;
 
 function TFallbackAllocator.Traits: TAllocatorTraits;
+var
+  LFallbackTraits: TAllocatorTraits;
 begin
   Result := FPrimary.Traits;
+  LFallbackTraits := FFallback.Traits;
+  { 合并 primary + fallback 能力：任一支持则组合支持 }
+  if LFallbackTraits.SupportsAligned then
+    Result.SupportsAligned := True;
+  if LFallbackTraits.ZeroInitialized then
+    Result.ZeroInitialized := True;
 end;
 
 { ---------------------------------------------------------------------------

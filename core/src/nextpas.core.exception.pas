@@ -7,16 +7,18 @@ unit nextpas.core.exception;
 
 interface
 
-uses
-  SysUtils;
-
 type
-  { Base Exception class — inherits from FPC SysUtils.Exception for raise/except compatibility.
-    Field layout uses inherited fmessage/fhelpcontext from SysUtils.Exception. }
-  Exception = class(SysUtils.Exception)
+  { Base Exception class — owned by nextpas.core, not re-exported from FPC SysUtils.
+    Field layout is FPC-compatible (fmessage/fhelpcontext) for ABI safety. }
+  Exception = class(TObject)
+  private
+    fmessage: string;
+    fhelpcontext: longint;
   public
     constructor Create(const msg: string);
     constructor CreateFmt(const msg: string; const args: array of const);
+    property HelpContext: longint read fhelpcontext write fhelpcontext;
+    property Message: string read fmessage write fmessage;
   end;
 
   ExceptClass = class of Exception;
@@ -293,7 +295,9 @@ end;
 
 constructor Exception.Create(const msg: string);
 begin
-  inherited Create(msg);
+  inherited Create;
+  fmessage := msg;
+  fhelpcontext := 0;
 end;
 
 constructor Exception.CreateFmt(const msg: string; const args: array of const);
