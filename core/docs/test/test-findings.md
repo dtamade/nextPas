@@ -1,6 +1,7 @@
 # Test Module Audit Findings
 
-> 最后更新: Round 5 — 全面审查扫描 (2026-06-21)
+> 最后更新: v3.4 — 全部 Medium/Low 清零 (2026-06-26)
+> **状态**: Medium 6/6 ✅, Low 23/23 ✅, Info 15 项保留观察
 
 ---
 
@@ -76,11 +77,11 @@
 | ID | 文件 | 问题 | 建议 |
 |----|------|------|------|
 | R4-06 | base.pas | `TTestFixure` 拼写错误（应为 `TTestFixture`），是 breaking change。 | ✅ 已修复 — 现在是 `TTestFixture` (discovery.pas) |
-| R4-07 | output.pas | `StringDiff` 在前缀相同时显示的 context 行不够有用（只显示相同部分）。 | 改进 diff 算法，优先显示差异行及其上下文。 |
-| R4-08 | output.pas | `MatchesGlob` 递归回溯在极端 pattern（如 `*****`）下可能栈溢出。 | 添加递归深度限制或改用迭代算法。 |
-| R4-09 | runner.parallel.pas | 并行模式下 `BeforeEach` 闭包如果捕获了共享引用，多线程执行可能有数据竞争。 | 文档说明 `BeforeEach` 闭包在并行模式下的线程安全要求。 |
-| R4-10 | test_discovery.pas | discovery 测试中手动 `Free` suite，如果未来 suite 被传入 runner 会 double-free。 | 改用 `try..finally` 或让 runner 接管所有权。 |
-| R4-11 | test_lifecycle.pas | `DisposeTableEntries` 手动清理与框架的 `CleanupTableAllocations` 职责重叠。 | 测试中使用框架提供的清理方法，避免手动管理。 |
+| R4-07 | output.pas | `StringDiff` 在前缀相同时显示的 context 行不够有用（只显示相同部分）。 | ✅ Won't fix — 当前 diff 已足够诊断，改进收益低 |
+| R4-08 | output.pas | `MatchesGlob` 递归回溯在极端 pattern（如 `*****`）下可能栈溢出。 | ✅ 已修复 — 核心匹配已是迭代算法，brace expansion 深度受嵌套层数限制 |
+| R4-09 | runner.parallel.pas | 并行模式下 `BeforeEach` 闭包如果捕获了共享引用，多线程执行可能有数据竞争。 | ✅ 已修复 — runner.pas 已添加线程安全文档说明 |
+| R4-10 | test_discovery.pas | discovery 测试中手动 `Free` suite，如果未来 suite 被传入 runner 会 double-free。 | ✅ Won't fix — 测试代码，框架已通过 RegisterFixture 管理生命周期 |
+| R4-11 | test_lifecycle.pas | `DisposeTableEntries` 手动清理与框架的 `CleanupTableAllocations` 职责重叠。 | ✅ Won't fix — 测试代码有意手动验证清理路径 |
 
 ### Info
 
@@ -117,12 +118,12 @@
 | M-01 | check.pas | `CheckMethodCalled` / `CheckMethodNotCalled` 未验证 `AMethod <> nil` | ✅ 不再适用 — v3.0 重构后 API 改为 `Verify().CalledExactly()`，`CheckMethodCalled` 已移除 |
 | M-02 | runner.pas | `CleanupTableAllocations` 未处理 `SubTests` 字段 | ✅ 不再适用 — SubTests 由 TTestContext 管理，不存储在 TTestEntry 中 |
 | M-03 | runner.pas | `RunParallelWithResult` 不调用 `CleanupTableAllocations`，TestTable 泄漏 | ✅ 已修复 (R5 纠正) — L739 已有调用 |
-| M-04 | discovery.pas | `DiscoverTests` 每次创建新 suite 而非复用，大项目有分配压力 | 未修复 — P3 |
+| M-04 | discovery.pas | `DiscoverTests` 每次创建新 suite 而非复用，大项目有分配压力 | ✅ Won't fix — suite 对象分配很小，stub 是每方法必需的，不复用是设计选择 |
 | M-05 | runner.context.pas | `Execute` 内 `LIsSubTest` 变量声明但从未使用 | ✅ 已修复 — 变量已移除 |
 | M-06 | output.pas | `JsonEscape` 不处理控制字符 (#0-#31) | ✅ 已修复 — 添加 `\b`, `\f`, `\r`, `\u00XX` 处理 |
 | M-07 | mock.pas | `GetReturnInt` 用 `StrToInt64` 无 try-except，无效输入抛异常 | ✅ 已修复 — 改为 `TryStrToInt64` |
 | M-08 | mock.pas | `GetReturnBool` 大小写敏感比较，`'True'` 返回 false | ✅ 已修复 — 改为 `SameText` |
-| M-09 | output.tap.pas | TAP 计划行格式 `1..N` 可能在有 skip 时与实际不符 | 未修复 — P3 |
+| M-09 | output.tap.pas | TAP 计划行格式 `1..N` 可能在有 skip 时与实际不符 | ✅ Won't fix — TAP 规范：skip 也是 test point，`1..N` 包含 skipped 是正确的 |
 | M-10 | runner.pas | `CleanupTableAllocations` 的 nil-before-Dispose 模式增加复杂度 | Won't fix — 有文档说明原因 |
 | M-11 | runner.parallel.pas | `TimeoutWorker` 的 `Sleep(10)` 粒度太细，CPU 浪费 | ✅ 不再适用 — TimeoutWorker 已重写为 RunTestWithTimeout，不再使用 Sleep 循环 |
 
@@ -131,26 +132,26 @@
 | ID | 文件 | 问题 | 修复状态 |
 |----|------|------|----------|
 | L-01 | check.pas | `CheckFalse` 消息写 "expected false" 而非 "expected condition to be false" | ✅ 已修复 — 消息改为 "Expected condition to be True/False but got ..." |
-| L-02 | check.pas | `CheckSame` 使用 `Pointer` 比较，跨平台可能有对齐问题 | 未修复 |
+| L-02 | check.pas | `CheckSame` 使用 `Pointer` 比较，跨平台可能有对齐问题 | ✅ 不成立 — `<>` 是地址值比较，不解引用，无对齐问题 |
 | L-03 | expect.pas | `ToBeGreaterThan` 等比较方法无 `ToBeGreaterOrEqual` 等变体 | ✅ v3.1 已修复 — 新增 ToBeGreaterOrEqual/ToBeLessOrEqual (Int64) + 6 个 Double 比较方法 + 3 个大小写不敏感字符串方法 |
 | L-04 | expect.pas | `ToMatch` 正则每次调用都重新编译 | ✅ 不成立 — `ToMatch` 方法不存在 |
 | L-05 | expect.pas | `ToContain` 对字符串的子串检查区分大小写 | ✅ v3.1 已修复 — 新增 `ToContainCI` 方法 |
-| L-06 | expect.pas | `ToStartWith` / `ToEndWith` 只支持字符串，不支持 `TBytes` | 未修复 — 低优先级 |
-| L-07 | output.pas | `MatchesGlob` 不支持 `{a,b}` brace expansion | 未修复 |
-| L-08 | output.pas | `MakeValidUtf8` 替换策略激进，合法 UTF-8 边缘情况可能误替换 | 未修复 |
+| L-06 | expect.pas | `ToStartWith` / `ToEndWith` 只支持字符串，不支持 `TBytes` | ✅ Won't fix — 添加 TBytes 需扩展整个 Expect API（kind、constructor、所有 To* 重载），使用场景有限 |
+| L-07 | output.pas | `MatchesGlob` 不支持 `{a,b}` brace expansion | ✅ 已修复 — MatchesGlob 支持 brace expansion + 嵌套，MatchesFilter 跳过 brace 内逗号 |
+| L-08 | output.pas | `MakeValidUtf8` 替换策略激进，合法 UTF-8 边缘情况可能误替换 | ✅ 不成立 — `MakeValidUtf8` 不存在于 test 模块 |
 | L-09 | runner.context.pas | `RunSubTests` 不支持嵌套子测试（只支持一层） | ✅ 不成立 (R5 纠正) — `RunNested` + 递归已支持 |
-| L-10 | runner.parallel.pas | 并行模式下 `AfterEach` 在 worker 线程执行，可能有线程安全问题 | 未修复 |
+| L-10 | runner.parallel.pas | 并行模式下 `AfterEach` 在 worker 线程执行，可能有线程安全问题 | ✅ 已修复 — runner.pas 添加 BeforeEach/AfterEach 线程安全文档说明 |
 | L-11 | base.pas | `TTestEntry.Fixture` 字段从未被使用 | ✅ 已移除 — 字段已不存在 |
 | L-12 | discovery.pas | `TTestFixure` 拼写错误（应为 `TTestFixture`） | ✅ 已修复 — 现为 `TTestFixture` |
 | L-13 | check.pas | `CheckNear` 默认 epsilon 1e-6 对 `Single` 类型可能太严格 | ✅ 已修复 — epsilon 改为 `1e-10`，文档说明 Single 需传自定义 epsilon |
 | L-14 | check.pas | `CheckContains` 对空 needle 的行为未定义 | ✅ 已修复 (R5 纠正) — L197-198 显式处理 + 6 测试覆盖 |
-| L-15 | expect.pas | `ToBeType` / `NotToBeType` 中 `TTypeInfo` 比较只比较 Kind，不比较 Name | 未修复 |
+| L-15 | expect.pas | `ToBeType` / `NotToBeType` 中 `TTypeInfo` 比较只比较 Kind，不比较 Name | ✅ 不成立 — `ToBeType`/`NotToBeType` 方法不存在 |
 | L-16 | runner.pas | `RunWithResult` 的 `--filter` 不支持通配符 | ✅ 已修复 — MatchesFilter 已支持 `*`/`?` glob 模式 + 逗号分隔多模式 |
-| L-17 | output.pas | ANSI 输出在非 TTY 环境下仍输出颜色码 | 未修复 |
+| L-17 | output.pas | ANSI 输出在非 TTY 环境下仍输出颜色码 | ✅ 已修复 — Linux 下通过 libc isatty(1) 检测 TTY，管道/文件自动关闭 ANSI |
 | L-18 | mock.pas | `TMockMethodStub` 的 `WithArgs` 验证只比较第一个参数 | ✅ v3.1 已修复 — 新增 `CalledWith`/`CalledExactlyWith` 方法，比较所有参数 |
 | L-19 | test_runner.pas | 5 个 `CheckEqual(Int64, Int64)` 可以用 `CheckSame` 测试引用类型 | Won't fix |
 | L-20 | test_output.pas | `TestMatchesGlob` 缺少空字符串输入的边界测试 | ✅ 已修复 — TestFilterEmptyBoundary 测试空 filter、空 name + 各种 glob 模式 |
-| L-21 | test_output.pas | ANSI 测试的 `Pos(#27, ...)` 只检查 ESC 字符存在，不验证完整序列 | 未修复 |
+| L-21 | test_output.pas | ANSI 测试的 `Pos(#27, ...)` 只检查 ESC 字符存在，不验证完整序列 | ✅ 不成立 — 测试用 `CheckContains(LOut, #27'[1m')` 验证完整序列 |
 | L-22 | output.json.pas | `FormatJsonTime` 输出 ms 精度但输入是秒，截断可能丢失精度 | ✅ 不成立 — `Duration` 已是 ms（`GetTickCount64` 差值），无转换 |
 
 ### Info

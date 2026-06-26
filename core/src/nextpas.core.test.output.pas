@@ -78,6 +78,11 @@ function CountSkipped(const AResults: specialize TArray<TTestRunResult>): Intege
 
 implementation
 
+{$IFDEF UNIX}
+{ libc isatty — check if file descriptor is a terminal }
+function c_isatty(fd: LongInt): LongInt; cdecl; external 'c' name 'isatty';
+{$ENDIF}
+
 { ═════════════════════════════════════════════════════════════════════════════ }
 { ANSI Helpers                                                                 }
 { ═════════════════════════════════════════════════════════════════════════════ }
@@ -111,7 +116,9 @@ begin
       Exit;
     end;
     {$IFDEF NEXTPAS_LINUX}
-    GAnsiEnabled := True;
+    { Enable ANSI if stdout is a TTY (terminal).
+      When piped to a file or non-TTY, disable to avoid escape sequences. }
+    GAnsiEnabled := c_isatty(1) <> 0;
     {$ELSE}
     GAnsiEnabled := (GetEnvironmentVariable('TERM') <> '') or
                     (GetEnvironmentVariable('ANSICON') <> '') or
@@ -298,11 +305,72 @@ end;
 { ── Glob matching (internal) ───────────────────────────────────────────────── }
 
 function MatchesGlob(const AName, APattern: string): Boolean;
-{ Iterative backtracking glob matcher — no Copy() allocations.
-  On '*', save positions and advance; on mismatch, backtrack. }
+{ Iterative backtracking glob matcher with brace expansion support.
+  Handles '*', '?', and brace groups (alt1,alt2,...).
+  Brace groups can be nested. }
 var
-  I, J, LStarI, LStarJ: Integer;
+  I, J, LStarI, LStarJ, LDepth, LStart, LEnd, LLast: Integer;
+  LAlt: string;
 begin
+  { ── Brace expansion ─────────────────────────────────────────────────────── }
+  I := 1;
+  while I <= Length(APattern) do
+  begin
+    if APattern[I] = '{' then
+    begin
+      (* Find matching '}' with nesting depth tracking *)
+      LDepth := 1;
+      J := I + 1;
+      while (J <= Length(APattern)) and (LDepth > 0) do
+      begin
+        if APattern[J] = '{' then Inc(LDepth)
+        else if APattern[J] = '}' then Dec(LDepth);
+        Inc(J);
+      end;
+      if LDepth <> 0 then
+        Break; (* unmatched brace — treat as literal *)
+      LEnd := J - 1; (* position of '}' *)
+      (* Try each comma-separated alternative inside the braces *)
+      LStart := I + 1;
+      LLast := LStart;
+      J := LStart;
+      while J <= LEnd do
+      begin
+        if (APattern[J] = ',') and (LStart = I + 1) then
+        begin
+          { Top-level comma: try this alternative }
+          LAlt := Copy(APattern, 1, I - 1) +
+                  Copy(APattern, LStart, J - LStart) +
+                  Copy(APattern, LEnd + 1, Length(APattern));
+          if MatchesGlob(AName, LAlt) then
+            Exit(True);
+          LStart := J + 1;
+        end
+        else if APattern[J] = '{' then
+        begin
+          { Skip nested brace group }
+          LDepth := 1;
+          Inc(J);
+          while (J <= LEnd) and (LDepth > 0) do
+          begin
+            if APattern[J] = '{' then Inc(LDepth)
+            else if APattern[J] = '}' then Dec(LDepth);
+            Inc(J);
+          end;
+          Continue;
+        end;
+        Inc(J);
+      end;
+      { Try last alternative (after last top-level comma, or entire content) }
+      LAlt := Copy(APattern, 1, I - 1) +
+              Copy(APattern, LStart, LEnd - LStart) +
+              Copy(APattern, LEnd + 1, Length(APattern));
+      Exit(MatchesGlob(AName, LAlt));
+    end;
+    Inc(I);
+  end;
+
+  { ── Core glob matching (iterative backtracking) ─────────────────────────── }
   I := 1; J := 1;
   LStarI := 0; LStarJ := 0;
   while I <= Length(AName) do
@@ -337,14 +405,26 @@ end;
 function MatchesFilter(const AName: string; const AConfig: TTestConfig): Boolean;
 var
   LFilter, LPattern: string;
-  LComma: Integer;
+  LComma, LDepth, LPos: Integer;
 begin
   LFilter := GetTestFilter(AConfig);
   if LFilter = '' then
     Exit(True);
   while LFilter <> '' do
   begin
-    LComma := Pos(',', LFilter);
+    { Find top-level comma (not inside braces) }
+    LComma := 0;
+    LDepth := 0;
+    for LPos := 1 to Length(LFilter) do
+    begin
+      if LFilter[LPos] = '{' then Inc(LDepth)
+      else if LFilter[LPos] = '}' then Dec(LDepth)
+      else if (LFilter[LPos] = ',') and (LDepth = 0) then
+      begin
+        LComma := LPos;
+        Break;
+      end;
+    end;
     if LComma > 0 then
     begin
       LPattern := Copy(LFilter, 1, LComma - 1);
@@ -361,8 +441,9 @@ begin
       SetLength(LPattern, Length(LPattern) - 1);
     if LPattern = '' then
       Continue;
-    { No wildcard = substring match; with wildcard = glob match }
-    if (Pos('*', LPattern) > 0) or (Pos('?', LPattern) > 0) then
+    { No wildcard/brace = substring match; with wildcard/brace = glob match }
+    if (Pos('*', LPattern) > 0) or (Pos('?', LPattern) > 0) or
+       (Pos('{', LPattern) > 0) then
     begin
       if MatchesGlob(AName, LPattern) then
         Exit(True);

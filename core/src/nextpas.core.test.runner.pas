@@ -96,6 +96,10 @@ type
     function  WithTeardown(AProc: TTestClosure): TTestSuite; overload;
     function  WithBeforeEach(AProc: TTestProc): TTestSuite; overload;
     function  WithBeforeEach(AProc: TTestClosure): TTestSuite; overload;
+    { Note: BeforeEach/AfterEach run in the same thread as the test.
+      In parallel mode (RunParallel), each worker thread executes its own
+      BeforeEach/AfterEach — if the closure captures shared state, the caller
+      is responsible for synchronization. }
     function  WithAfterEach(AProc: TTestProc): TTestSuite; overload;
     function  WithAfterEach(AProc: TTestClosure): TTestSuite; overload;
     function  Run: Boolean;

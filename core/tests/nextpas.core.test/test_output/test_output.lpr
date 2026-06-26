@@ -304,6 +304,47 @@ begin
   SetTestFilter('');
 end;
 
+procedure TestFilterBraceExpansion; { L-07: brace expansion }
+begin
+  Inc(GTestsRun);
+  try
+    { Simple brace alternatives }
+    SetTestFilter('{foo,bar}');
+    CheckTrue(MatchesFilter('foo'), '{foo,bar} matches foo');
+    CheckTrue(MatchesFilter('bar'), '{foo,bar} matches bar');
+    CheckFalse(MatchesFilter('baz'), '{foo,bar} does not match baz');
+    { Brace with prefix/suffix }
+    SetTestFilter('test_{a,b}_end');
+    CheckTrue(MatchesFilter('test_a_end'), 'test_{a,b}_end matches test_a_end');
+    CheckTrue(MatchesFilter('test_b_end'), 'test_{a,b}_end matches test_b_end');
+    CheckFalse(MatchesFilter('test_c_end'), 'test_{a,b}_end does not match test_c_end');
+    { Brace with wildcards }
+    SetTestFilter('{*.pas,*.lpr}');
+    CheckTrue(MatchesFilter('foo.pas'), '{*.pas,*.lpr} matches foo.pas');
+    CheckTrue(MatchesFilter('bar.lpr'), '{*.pas,*.lpr} matches bar.lpr');
+    CheckFalse(MatchesFilter('baz.txt'), '{*.pas,*.lpr} does not match baz.txt');
+    { Single alternative (no comma) }
+    SetTestFilter('{abc}');
+    CheckTrue(MatchesFilter('abc'), '{abc} matches abc');
+    CheckFalse(MatchesFilter('ab'), '{abc} does not match ab');
+    { Empty alternative }
+    SetTestFilter('{,foo}');
+    CheckTrue(MatchesFilter(''), '{,foo} matches empty');
+    CheckTrue(MatchesFilter('foo'), '{,foo} matches foo');
+    { Nested braces }
+    SetTestFilter('{a,{b,c}}');
+    CheckTrue(MatchesFilter('a'), '{a,{b,c}} matches a');
+    CheckTrue(MatchesFilter('b'), '{a,{b,c}} matches b');
+    CheckTrue(MatchesFilter('c'), '{a,{b,c}} matches c');
+    CheckFalse(MatchesFilter('d'), '{a,{b,c}} does not match d');
+    { No braces — unchanged behavior }
+    SetTestFilter('*.pas');
+    CheckTrue(MatchesFilter('test.pas'), '*.pas matches test.pas');
+  finally
+    SetTestFilter('');
+  end;
+end;
+
 procedure TestGetSetFilter;
 begin
   Inc(GTestsRun);
@@ -1368,6 +1409,7 @@ begin
   Suite.Test('TestFilterGlobCommaCombined', @TestFilterGlobCommaCombined);
   Suite.Test('TestFilterWildcardOnly', @TestFilterWildcardOnly);
   Suite.Test('TestFilterEmptyBoundary', @TestFilterEmptyBoundary);
+  Suite.Test('TestFilterBraceExpansion', @TestFilterBraceExpansion);
   Suite.Test('TestGetSetFilter', @TestGetSetFilter);
   Suite.Test('TestGetSetTimeout', @TestGetSetTimeout);
   Suite.Test('TestDefaultConfigValues', @TestDefaultConfigValues);

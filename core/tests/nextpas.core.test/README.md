@@ -11,7 +11,7 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 | `test_assertions` | Check* 过程式断言 API | 47 |
 | `test_expect` | IExpectation 流式断言 API | 92 |
 | `test_mock` | TMock 录制/验证/返回值/参数匹配 | 53 |
-| `test_output` | ANSI、StatusDot、filter、timeout、JUnit/TAP/JSON 格式化 | 61 |
+| `test_output` | ANSI、StatusDot、filter、timeout、JUnit/TAP/JSON 格式化、brace expansion | 62 |
 | `test_runner` | TTestRunner 多 suite、lifecycle、subtest、timeout、空 suite | 31 |
 | `test_lifecycle` | TestTable、TTestClosure、lifecycle 组合、facade 符号完整性 | 34 |
 | `test_parallel` | 并行执行、lifecycle、retry、skip、MaxParallelWorkers 批次调度 | 36 |
@@ -71,3 +71,10 @@ core/src/nextpas.core.testing.pas           ← v1 兼容层（deprecated）
 - **CheckTrue/False 消息改进**: "Expected condition to be True/False but got ..."
 - **TestFilterEmptyBoundary**: 空 filter、空 name + glob 边界测试（L-20）
 - **Findings 清理**: R1-R5 共 57 项 findings，40 项已解决，剩余 17 项为 Info/Won't Fix
+
+## v3.4 — Medium/Low 全清零
+
+- **Brace expansion**: `MatchesGlob` 支持 `{a,b}` 和嵌套 brace，`MatchesFilter` 跳过 brace 内逗号
+- **ANSI TTY 检测**: Linux 下通过 libc `isatty(1)` 检测 TTY，管道/文件自动关闭 ANSI
+- **Before/AfterEach 文档**: runner.pas 添加并行模式线程安全说明
+- **Findings**: Medium 6/6 ✅, Low 23/23 ✅, Info 15 项保留观察
