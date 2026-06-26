@@ -57,15 +57,21 @@ end.
 | `AddParallel(Name, Func, Threads)` | 并行基准 |
 | `AddRange(Name, Func, Params)` | 参数化基准（自动生成子基准） |
 | `AddLoop(Name, Func)` | 用户控制循环（见下方限制） |
+| `Clear` | 清空所有已注册条目 |
+| `RemoveByName(Name)` | 按名称移除条目 |
 | `SetMinDuration(Duration)` | 最小持续时间 |
-| `MaxIterations(N)` | 最大迭代次数 |
-| `MinSamples(N)` | 最小采样数 |
-| `WarmupIters(N)` | 热身次数 |
+| `SetMaxIterations(N)` | 最大迭代次数 |
+| `SetMinSamples(N)` | 最小采样数 |
+| `SetWarmupIters(N)` | 热身次数 |
 | `EnableMemoryTracking` | 启用内存追踪 |
+| `DisableMemoryTracking` | 禁用内存追踪 |
 | `CollectRawSamples` | 保存原始样本（用于 BoxPlot） |
+| `SetQuiet(Quiet)` | 安静模式 |
 | `AddBaseline(Name, NsPerOp)` | 添加基线 |
+| `AddBaselines(ArrayOfBaselines)` | 批量添加基线 |
 | `LoadBaseline(Path)` | 从文件加载基线 |
 | `SetFilter(Pattern)` | 名称过滤 |
+| `SetTimeout(Ms)` | 整体超时（超时后跳过剩余基准） |
 
 ## IBenchContext 接口
 
@@ -152,8 +158,8 @@ end.
 
 ### 统计双轨制
 
-- **TBenchStatsAnalyzer** (class/interface): runner 走的主路径，用 KahanSum + 两遍方差
-- **TAdvancedStats** (record): 独立工具，轻量级直接使用
+- **TBenchStatsAnalyzer** (class/interface): runner 走的主路径，用 KahanSum + 单遍方差 (PF-01)
+- **TAdvancedStats** (class): 独立工具，轻量级直接使用
 
 保持两套的理由：不同抽象层、不同算法选择、API 迁移成本高于收益。
 
@@ -199,4 +205,4 @@ make -C core/tests/nextpas.core.bench/test_bench_invalid_parameters_heaptrc clea
 | `NEXTPAS_BENCH_MIN_SAMPLES` | 最小采样数 |
 | `NEXTPAS_BENCH_WARMUP` | 热身次数 |
 | `NEXTPAS_BENCH_QUIET` | 安静模式（=1） |
-| `NEXTPAS_BENCH_NO_MEMTRACK` | 禁用内存追踪（=1） |
+| `NEXTPAS_BENCH_MEMTRACK` | 内存追踪（=0 禁用，默认启用） |

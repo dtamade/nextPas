@@ -165,6 +165,9 @@ function TInvLookup(ADF: Double; const ATable: array of Double; AZScore: Double)
 {** 对双精度浮点数组原地排序（IntroSort：小数组插入排序 + 大数组 QuickSort） }
 procedure SortDoubleArray(var AData: TDoubleArray);
 
+{** 创建默认基准配置 }
+function DefaultBenchConfig: TBenchConfig;
+
 implementation
 
 function TInvLookup(ADF: Double; const ATable: array of Double; AZScore: Double): Double;
@@ -334,6 +337,20 @@ begin
   LLen := Length(AData);
   if LLen > 1 then
     DoQuickSort(AData, 0, High(AData), 2 * IntLog2(LLen));  // IntroSort depth limit
+end;
+
+function DefaultBenchConfig: TBenchConfig;
+begin
+  Result := Default(TBenchConfig);
+  Result.MinDurationNs := BENCH_DEFAULT_MIN_DURATION_NS;
+  Result.MaxIterations := BENCH_DEFAULT_MAX_ITERATIONS;
+  Result.MinSamples := BENCH_DEFAULT_MIN_SAMPLES;
+  Result.WarmupIterations := BENCH_DEFAULT_WARMUP_ITERATIONS;
+  Result.EnableMemoryTracking := True;
+  Result.EnableParallel := False;
+  Result.ParallelThreads := BENCH_DEFAULT_PARALLEL_THREADS;
+  Result.CollectRawSamples := False;
+  Result.Quiet := False;
 end;
 
 end.

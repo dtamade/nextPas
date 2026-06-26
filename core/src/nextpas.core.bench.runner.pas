@@ -426,15 +426,7 @@ var
   LTmp: Int64;
 begin
   // 加载默认配置
-  FConfig.MinDurationNs := BENCH_DEFAULT_MIN_DURATION_NS;
-  FConfig.MaxIterations := BENCH_DEFAULT_MAX_ITERATIONS;
-  FConfig.MinSamples := BENCH_DEFAULT_MIN_SAMPLES;
-  FConfig.WarmupIterations := BENCH_DEFAULT_WARMUP_ITERATIONS;
-  FConfig.EnableMemoryTracking := True;
-  FConfig.EnableParallel := False;
-  FConfig.ParallelThreads := BENCH_DEFAULT_PARALLEL_THREADS;
-  FConfig.CollectRawSamples := False;
-  FConfig.Quiet := False;
+  FConfig := DefaultBenchConfig;
 
   // DS-09/DS-10: unified TryStrToInt64 parsing with range validation
 

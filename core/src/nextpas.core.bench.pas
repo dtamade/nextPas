@@ -169,16 +169,8 @@ begin
   SetLength(FBaselines, 0);
 
   // 初始化默认配置
+  FConfig := DefaultBenchConfig;
   FConfig.SuiteName := ASuiteName;
-  FConfig.MinDurationNs := BENCH_DEFAULT_MIN_DURATION_NS;
-  FConfig.MaxIterations := BENCH_DEFAULT_MAX_ITERATIONS;
-  FConfig.MinSamples := BENCH_DEFAULT_MIN_SAMPLES;
-  FConfig.WarmupIterations := BENCH_DEFAULT_WARMUP_ITERATIONS;
-  FConfig.EnableMemoryTracking := True;
-  FConfig.EnableParallel := False;
-  FConfig.ParallelThreads := BENCH_DEFAULT_PARALLEL_THREADS;
-  FConfig.CollectRawSamples := False;
-  FConfig.Quiet := False;
 
   FRunner := TBenchRunner.Create;
   FReportGenerator := TBenchReportGenerator.Create;
