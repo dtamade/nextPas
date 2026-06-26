@@ -5633,7 +5633,11 @@ begin
     SameText(AName, 'Assert') or SameText(AName, 'Swap') or
     SameText(AName, 'Lo') or SameText(AName, 'Hi') or
     SameText(AName, 'Odd') or SameText(AName, 'Char') or
-    SameText(AName, 'Free');
+    SameText(AName, 'Free') or SameText(AName, 'SetString') or
+    SameText(AName, 'LowerCase') or SameText(AName, 'UpperCase') or
+    SameText(AName, 'Trim') or SameText(AName, 'TrimLeft') or
+    SameText(AName, 'TrimRight') or SameText(AName, 'SameText') or
+    SameText(AName, 'CompareText') or SameText(AName, 'StringReplace');
 end;
 
 function TSemanticAnalyzer.InferExpressionType(const ANode: TGreenNode): LongInt;
@@ -5834,6 +5838,12 @@ begin
   FModel.AddType('OleVariant', 'builtin');
   FModel.AddType('String', 'alias');
   CardinalTypeId := FModel.AddType('Cardinal', 'alias');
+  FModel.AddType('SizeInt', 'alias');
+  FModel.AddType('SizeUInt', 'alias');
+  FModel.AddType('PtrInt', 'alias');
+  FModel.AddType('PtrUInt', 'alias');
+  FModel.AddType('NativeInt', 'alias');
+  FModel.AddType('NativeUInt', 'alias');
 
   FModel.SetTypeScalarFact(BooleanTypeId, sskBool, 1, False);
   FModel.SetTypeScalarFact(CharTypeId, sskInt, 8, False);
