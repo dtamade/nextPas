@@ -65,6 +65,11 @@ type
     {** ST-08: guard against post-Run mutation }
     procedure GuardNotRun;
 
+    {** PF-24: 确保条目数组有足够容量 }
+    procedure EnsureEntryCapacity;
+    {** PF-24: 确保基线数组有足够容量 }
+    procedure EnsureBaselineCapacity;
+
   public
     constructor Create(const ASuiteName: string);
     {** ST-11: 使用自定义配置创建基准套件 }
@@ -227,6 +232,32 @@ begin
     raise EBenchError.Create('Cannot modify suite after Run has been called');
 end;
 
+{** PF-24: ensure entry array has capacity for one more element }
+procedure TBenchSuite.EnsureEntryCapacity;
+begin
+  if FEntryCount >= FEntryCapacity then
+  begin
+    if FEntryCapacity = 0 then
+      FEntryCapacity := 8
+    else
+      FEntryCapacity := FEntryCapacity * 2;
+    SetLength(FEntries, FEntryCapacity);
+  end;
+end;
+
+{** PF-24: ensure baseline array has capacity for one more element }
+procedure TBenchSuite.EnsureBaselineCapacity;
+begin
+  if FBaselineCount >= FBaselineCapacity then
+  begin
+    if FBaselineCapacity = 0 then
+      FBaselineCapacity := 8
+    else
+      FBaselineCapacity := FBaselineCapacity * 2;
+    SetLength(FBaselines, FBaselineCapacity);
+  end;
+end;
+
 function TBenchSuite.Add(const AName: string; AFunc: TBenchFunc): IBenchSuite;
 var
   LEntry: TBenchEntry;
@@ -238,14 +269,7 @@ begin
   LEntry.Func := AFunc;
   LEntry.Condition := True;
 
-  if FEntryCount >= FEntryCapacity then
-  begin
-    if FEntryCapacity = 0 then
-      FEntryCapacity := 8
-    else
-      FEntryCapacity := FEntryCapacity * 2;
-    SetLength(FEntries, FEntryCapacity);
-  end;
+  EnsureEntryCapacity;
   FEntries[FEntryCount] := LEntry;
   Inc(FEntryCount);
 end;
@@ -264,14 +288,7 @@ begin
   LEntry.Teardown := ATeardown;
   LEntry.Condition := True;
 
-  if FEntryCount >= FEntryCapacity then
-  begin
-    if FEntryCapacity = 0 then
-      FEntryCapacity := 8
-    else
-      FEntryCapacity := FEntryCapacity * 2;
-    SetLength(FEntries, FEntryCapacity);
-  end;
+  EnsureEntryCapacity;
   FEntries[FEntryCount] := LEntry;
   Inc(FEntryCount);
 end;
@@ -288,14 +305,7 @@ begin
   LEntry.Func := AFunc;
   LEntry.Condition := ACondition;
 
-  if FEntryCount >= FEntryCapacity then
-  begin
-    if FEntryCapacity = 0 then
-      FEntryCapacity := 8
-    else
-      FEntryCapacity := FEntryCapacity * 2;
-    SetLength(FEntries, FEntryCapacity);
-  end;
+  EnsureEntryCapacity;
   FEntries[FEntryCount] := LEntry;
   Inc(FEntryCount);
 end;
@@ -317,14 +327,7 @@ begin
   LEntry.EnableParallel := True;
   LEntry.ParallelThreads := AThreads;
 
-  if FEntryCount >= FEntryCapacity then
-  begin
-    if FEntryCapacity = 0 then
-      FEntryCapacity := 8
-    else
-      FEntryCapacity := FEntryCapacity * 2;
-    SetLength(FEntries, FEntryCapacity);
-  end;
+  EnsureEntryCapacity;
   FEntries[FEntryCount] := LEntry;
   Inc(FEntryCount);
 end;
@@ -345,12 +348,7 @@ begin
     LEntry.ParamValue := AParams[LIndex];
     LEntry.Condition := True;
 
-    if FEntryCount >= FEntryCapacity then
-    begin
-      if FEntryCapacity = 0 then FEntryCapacity := 8
-      else FEntryCapacity := FEntryCapacity * 2;
-      SetLength(FEntries, FEntryCapacity);
-    end;
+    EnsureEntryCapacity;
     FEntries[FEntryCount] := LEntry;
     Inc(FEntryCount);
   end;
@@ -375,12 +373,7 @@ begin
     LEntry.Teardown := ATeardown;
     LEntry.Condition := True;
 
-    if FEntryCount >= FEntryCapacity then
-    begin
-      if FEntryCapacity = 0 then FEntryCapacity := 8
-      else FEntryCapacity := FEntryCapacity * 2;
-      SetLength(FEntries, FEntryCapacity);
-    end;
+    EnsureEntryCapacity;
     FEntries[FEntryCount] := LEntry;
     Inc(FEntryCount);
   end;
@@ -398,14 +391,7 @@ begin
   LEntry.IsLoop := True;
   LEntry.LoopFunc := AFunc;
 
-  if FEntryCount >= FEntryCapacity then
-  begin
-    if FEntryCapacity = 0 then
-      FEntryCapacity := 8
-    else
-      FEntryCapacity := FEntryCapacity * 2;
-    SetLength(FEntries, FEntryCapacity);
-  end;
+  EnsureEntryCapacity;
   FEntries[FEntryCount] := LEntry;
   Inc(FEntryCount);
 end;
@@ -506,14 +492,7 @@ function TBenchSuite.AddBaseline(const AName: string; ANsPerOp: Double): IBenchS
 begin
   GuardNotRun;
   Result := Self;
-  if FBaselineCount >= FBaselineCapacity then
-  begin
-    if FBaselineCapacity = 0 then
-      FBaselineCapacity := 8
-    else
-      FBaselineCapacity := FBaselineCapacity * 2;
-    SetLength(FBaselines, FBaselineCapacity);
-  end;
+  EnsureBaselineCapacity;
   FBaselines[FBaselineCount].Name := AName;
   FBaselines[FBaselineCount].NsPerOp := ANsPerOp;
   Inc(FBaselineCount);
@@ -553,19 +532,7 @@ begin
 
   // 将加载的基线添加到 suite
   for I := 0 to High(LBaselines) do
-  begin
-    if FBaselineCount >= FBaselineCapacity then
-    begin
-      if FBaselineCapacity = 0 then
-        FBaselineCapacity := 8
-      else
-        FBaselineCapacity := FBaselineCapacity * 2;
-      SetLength(FBaselines, FBaselineCapacity);
-    end;
-    FBaselines[FBaselineCount].Name := LBaselines[I].Name;
-    FBaselines[FBaselineCount].NsPerOp := LBaselines[I].NsPerOp;
-    Inc(FBaselineCount);
-  end;
+    AddBaseline(LBaselines[I].Name, LBaselines[I].NsPerOp);
 end;
 
 function TBenchSuite.SetFilter(const AFilter: string): IBenchSuite;
@@ -590,7 +557,7 @@ var
   LRunResult: TBenchResult;
   LStartNs: UInt64;
   LTimeoutNs: UInt64;
-  i: Integer;
+  I: Integer;
 begin
   FRunner.SetConfig(FConfig);
   FRunner.SetFilter(FFilter);
@@ -607,9 +574,9 @@ begin
   SetLength(LResults, FEntryCount);
   LResultCount := 0;
 
-  for i := 0 to FEntryCount - 1 do
+  for I := 0 to FEntryCount - 1 do
   begin
-    if not FEntries[i].Condition then
+    if not FEntries[I].Condition then
       Continue;
 
     // ST-04: 条目间超时检查
@@ -617,7 +584,7 @@ begin
     begin
       // 剩余条目标记为 skipped
       LRunResult := Default(TBenchResult);
-      LRunResult.Name := FEntries[i].Name;
+      LRunResult.Name := FEntries[I].Name;
       LRunResult.Executed := True;
       LRunResult.Skipped := True;
       LRunResult.SkipReason := 'Timeout exceeded';
@@ -626,7 +593,7 @@ begin
       Continue;
     end;
 
-    LRunResult := FRunner.RunOne(FEntries[i]);
+    LRunResult := FRunner.RunOne(FEntries[I]);
     if LRunResult.Executed then
     begin
       LResults[LResultCount] := LRunResult;
@@ -652,23 +619,23 @@ constructor TBenchResults.Create(const AResults: array of TBenchResult;
   const AEnvironment: TBenchEnvironment;
   const ABaselines: array of TBenchBaseline);
 var
-  i: Integer;
+  I: Integer;
 begin
   inherited Create;
 
   FResultCount := Length(AResults);
   SetLength(FResults, FResultCount);
-  for i := 0 to FResultCount - 1 do
-    FResults[i] := AResults[i];
+  for I := 0 to FResultCount - 1 do
+    FResults[I] := AResults[I];
 
   FEnvironment := AEnvironment;
 
   FBaselineCount := Length(ABaselines);
   SetLength(FBaselines, FBaselineCount);
-  for i := 0 to FBaselineCount - 1 do
+  for I := 0 to FBaselineCount - 1 do
   begin
-    FBaselines[i].Name := ABaselines[i].Name;
-    FBaselines[i].NsPerOp := ABaselines[i].NsPerOp;
+    FBaselines[I].Name := ABaselines[I].Name;
+    FBaselines[I].NsPerOp := ABaselines[I].NsPerOp;
   end;
 
   FReportGenerator := TBenchReportGenerator.Create;
@@ -687,7 +654,7 @@ var
   LComparisons: array of TBenchComparison;
   LCount: Integer;
   LIdx: Integer;
-  i, j: Integer;
+  I, J: Integer;
 begin
   // 预分配最大可能长度（结果数和基线数的较小值）
   if FResultCount < FBaselineCount then
@@ -696,19 +663,19 @@ begin
     SetLength(LComparisons, FBaselineCount);
   LCount := 0;
 
-  for i := 0 to FResultCount - 1 do
+  for I := 0 to FResultCount - 1 do
   begin
     for j := 0 to FBaselineCount - 1 do
     begin
-      if FResults[i].Name = FBaselines[j].Name then
+      if FResults[I].Name = FBaselines[J].Name then
       begin
         LIdx := LCount;
-        LComparisons[LIdx].BaselineName := FBaselines[j].Name;
-        LComparisons[LIdx].BaselineNsPerOp := FBaselines[j].NsPerOp;
-        LComparisons[LIdx].CurrentNsPerOp := FResults[i].NsPerOp;
+        LComparisons[LIdx].BaselineName := FBaselines[J].Name;
+        LComparisons[LIdx].BaselineNsPerOp := FBaselines[J].NsPerOp;
+        LComparisons[LIdx].CurrentNsPerOp := FResults[I].NsPerOp;
 
-        if FBaselines[j].NsPerOp > 0 then
-          LComparisons[LIdx].Ratio := FResults[i].NsPerOp / FBaselines[j].NsPerOp
+        if FBaselines[J].NsPerOp > 0 then
+          LComparisons[LIdx].Ratio := FResults[I].NsPerOp / FBaselines[J].NsPerOp
         else
           LComparisons[LIdx].Ratio := 1.0;
 
@@ -735,16 +702,16 @@ end;
 
 function TBenchResults.GetByName(const AName: string): TBenchResult;
 var
-  i: Integer;
+  I: Integer;
 begin
   Result := Default(TBenchResult);
   Result.Name := AName;
 
-  for i := 0 to FResultCount - 1 do
+  for I := 0 to FResultCount - 1 do
   begin
-    if FResults[i].Name = AName then
+    if FResults[I].Name = AName then
     begin
-      Result := FResults[i];
+      Result := FResults[I];
       Exit;
     end;
   end;
@@ -752,13 +719,13 @@ end;
 
 function TBenchResults.TryGetByName(const AName: string; out AResult: TBenchResult): Boolean;
 var
-  i: Integer;
+  I: Integer;
 begin
-  for i := 0 to FResultCount - 1 do
+  for I := 0 to FResultCount - 1 do
   begin
-    if FResults[i].Name = AName then
+    if FResults[I].Name = AName then
     begin
-      AResult := FResults[i];
+      AResult := FResults[I];
       Exit(True);
     end;
   end;
@@ -838,13 +805,13 @@ end;
 function TBenchResults.HasRegression(AThreshold: Double): Boolean;
 var
   LComparisons: array of TBenchComparison;
-  i: Integer;
+  I: Integer;
 begin
   LComparisons := GenerateComparisons;
 
-  for i := 0 to High(LComparisons) do
+  for I := 0 to High(LComparisons) do
   begin
-    if LComparisons[i].Ratio > AThreshold then
+    if LComparisons[I].Ratio > AThreshold then
       Exit(True);
   end;
 
