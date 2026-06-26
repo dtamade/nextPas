@@ -13,7 +13,7 @@ const
   SAMPLE_COUNT = 16;
 
 var
-  B: TBenchRunner;
+  LResults: IBenchResults;
   GVec4A: array[0..SAMPLE_COUNT - 1] of TVec4f;
   GVec4B: array[0..SAMPLE_COUNT - 1] of TVec4f;
   GVec3A: array[0..SAMPLE_COUNT - 1] of TVec3f;
@@ -132,7 +132,7 @@ begin
   for I := 1 to AIterations do
   begin
     LIndex := SampleIndex(I);
-    LValue := LValue + TVec4f.Dot(GVec4A[LIndex], GVec4B[LIndex]);
+    LValue := LValue + GVec4A[LIndex].Dot(GVec4B[LIndex]);
   end;
   GFloatSink := LValue;
 end;
@@ -192,7 +192,7 @@ begin
   for I := 1 to AIterations do
   begin
     LIndex := SampleIndex(I);
-    LValue := LValue + TVec3f.Cross(GVec3A[LIndex], GVec3B[LIndex]);
+    LValue := LValue + GVec3A[LIndex].Cross(GVec3B[LIndex]);
   end;
   GVec3Sink := LValue;
 end;
@@ -290,7 +290,6 @@ end;
 begin
   InitInputs;
 
-  B := TBenchRunner.Create;
   try
     WriteLn('=== nextpas.core.math SIMD seam benchmark ===');
     WriteLn('compiler-flags=-MObjFPC -Sh -O2');
@@ -300,25 +299,25 @@ begin
     WriteLn('public-cutover=not-approved-without-profiled-runtime-and-public-simd-contracts');
     WriteLn;
 
-    B.Run('TVec4f scalar add', @BenchVec4fScalarAdd);
-    B.Run('TVec4f simd seam add', @BenchVec4fSimdAdd);
-    B.Run('TVec4f scalar scale', @BenchVec4fScalarScale);
-    B.Run('TVec4f simd seam scale', @BenchVec4fSimdScale);
-    B.Run('TVec4f scalar dot', @BenchVec4fScalarDot);
-    B.Run('TVec4f simd seam dot', @BenchVec4fSimdDot);
-    B.Run('TVec4f scalar length', @BenchVec4fScalarLength);
-    B.Run('TVec4f simd seam length', @BenchVec4fSimdLength);
-    B.Run('TVec3f scalar cross', @BenchVec3fScalarCross);
-    B.Run('TVec3f simd seam cross', @BenchVec3fSimdCross);
-    B.Run('TMat4f scalar mat-vec', @BenchMat4fScalarMatVec);
-    B.Run('TMat4f simd seam mat-vec', @BenchMat4fSimdMatVec);
-    B.Run('TMat4f scalar mat-mat', @BenchMat4fScalarMatMat);
-    B.Run('TQuatf scalar rotate', @BenchQuatfScalarRotate);
-    B.Run('TQuatf simd seam rotate', @BenchQuatfSimdRotate);
-    WriteLn;
-    B.Summary;
+    LResults := TBenchSuite.Create('TVec4f scalar add')
+      .AddLoop('TVec4f scalar add', @BenchVec4fScalarAdd)
+      .AddLoop('TVec4f simd seam add', @BenchVec4fSimdAdd)
+      .AddLoop('TVec4f scalar scale', @BenchVec4fScalarScale)
+      .AddLoop('TVec4f simd seam scale', @BenchVec4fSimdScale)
+      .AddLoop('TVec4f scalar dot', @BenchVec4fScalarDot)
+      .AddLoop('TVec4f simd seam dot', @BenchVec4fSimdDot)
+      .AddLoop('TVec4f scalar length', @BenchVec4fScalarLength)
+      .AddLoop('TVec4f simd seam length', @BenchVec4fSimdLength)
+      .AddLoop('TVec3f scalar cross', @BenchVec3fScalarCross)
+      .AddLoop('TVec3f simd seam cross', @BenchVec3fSimdCross)
+      .AddLoop('TMat4f scalar mat-vec', @BenchMat4fScalarMatVec)
+      .AddLoop('TMat4f simd seam mat-vec', @BenchMat4fSimdMatVec)
+      .AddLoop('TMat4f scalar mat-mat', @BenchMat4fScalarMatMat)
+      .AddLoop('TQuatf scalar rotate', @BenchQuatfScalarRotate)
+      .AddLoop('TQuatf simd seam rotate', @BenchQuatfSimdRotate)
+      .Run;
+    WriteLn(LResults.PrintToConsole);
   finally
-    B.Free;
   end;
 
   WriteLn;

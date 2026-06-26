@@ -7,7 +7,7 @@ uses
   nextpas.core.text;
 
 var
-  B: TBenchRunner;
+  LResults: IBenchResults;
   GSizeSink: SizeUInt;
   GByteSink: Byte;
   GAsciiText: AnsiString;
@@ -115,26 +115,18 @@ end;
 
 begin
   InitSamples;
-  B := TBenchRunner.Create;
   WriteLn('=== nextpas.core.text grapheme + width benchmark ===');
   WriteLn;
 
   WriteLn('--- GraphemeNext traversal ---');
-  B.Run('GraphemeNext ASCII traversal', @BenchGraphemeAscii);
-  B.Run('GraphemeNext CJK traversal', @BenchGraphemeCjk);
-  B.Run('GraphemeNext emoji traversal', @BenchGraphemeEmoji);
-  WriteLn;
-
-  WriteLn('--- StringDisplayWidth ---');
-  B.Run('StringDisplayWidth ASCII', @BenchStringDisplayWidthAscii);
-  B.Run('StringDisplayWidth CJK', @BenchStringDisplayWidthCjk);
-  B.Run('StringDisplayWidth emoji', @BenchStringDisplayWidthEmoji);
-  WriteLn;
-
-  WriteLn('--- CodepointWidth ---');
-  B.Run('CodepointWidth mixed set', @BenchCodepointWidth);
-  WriteLn;
-
-  B.Summary;
-  B.Free;
+  LResults := TBenchSuite.Create('GraphemeNext ASCII traversal')
+    .AddLoop('GraphemeNext ASCII traversal', @BenchGraphemeAscii)
+    .AddLoop('GraphemeNext CJK traversal', @BenchGraphemeCjk)
+    .AddLoop('GraphemeNext emoji traversal', @BenchGraphemeEmoji)
+    .AddLoop('StringDisplayWidth ASCII', @BenchStringDisplayWidthAscii)
+    .AddLoop('StringDisplayWidth CJK', @BenchStringDisplayWidthCjk)
+    .AddLoop('StringDisplayWidth emoji', @BenchStringDisplayWidthEmoji)
+    .AddLoop('CodepointWidth mixed set', @BenchCodepointWidth)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
 end.

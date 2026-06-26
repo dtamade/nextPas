@@ -16,7 +16,7 @@ const
   N = 100000;
 
 var
-  B: TBenchRunner;
+  LResults: IBenchResults;
   GSink: Int64;
 
 procedure BenchListPushBack(aIters: Int64);
@@ -84,15 +84,12 @@ end;
 begin
   WriteLn('=== nextPas List Benchmark (N=', N, ') ===');
   WriteLn;
-  B := TBenchRunner.Create;
-  try
-    B.Run('List.PushBack/N=100000', @BenchListPushBack);
-    B.Run('List.PushFront/N=100000', @BenchListPushFront);
-    B.Run('List.PopFront/N=100000', @BenchListPopFront);
-    B.Run('ForwardList.PushFront/N=100000', @BenchFwdListPushFront);
-    B.Summary;
-  finally
-    B.Free;
-  end;
+  LResults := TBenchSuite.Create('List.PushBack')
+    .AddLoop('List.PushBack/N=100000', @BenchListPushBack)
+    .AddLoop('List.PushFront/N=100000', @BenchListPushFront)
+    .AddLoop('List.PopFront/N=100000', @BenchListPopFront)
+    .AddLoop('ForwardList.PushFront/N=100000', @BenchFwdListPushFront)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
   if GSink = -1 then WriteLn(GSink);
 end.

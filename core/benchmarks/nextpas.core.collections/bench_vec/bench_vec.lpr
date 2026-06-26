@@ -14,7 +14,7 @@ const
   N = 100000;
 
 var
-  B: TBenchRunner;
+  LResults: IBenchResults;
   GVec: TIntVec;
   GSink: Int64;
 
@@ -159,20 +159,17 @@ begin
 
   WriteLn('=== nextPas TVec<Integer> Benchmark (N=', N, ') ===');
   WriteLn;
-  B := TBenchRunner.Create;
-  try
-    B.Run('Vec.Push/N=100000', @BenchPush);
-    B.Run('Vec.Push+Reserve/N=100000', @BenchPushPrealloc);
-    B.Run('Vec.Pop/N=100000', @BenchPop);
-    B.Run('Vec.Get/N=100000', @BenchGet);
-    B.Run('Vec.Get(Memory ptr)/N=100000', @BenchGetPtr);
-    B.Run('Vec.Iterate/N=100000', @BenchIterate);
-    B.Run('Vec.Insert(mid)/N=1000', @BenchInsertMiddle);
-    B.Run('Vec.Delete(mid)/N=1000', @BenchDeleteMiddle);
-    B.Summary;
-  finally
-    B.Free;
-  end;
+  LResults := TBenchSuite.Create('Vec.Push')
+    .AddLoop('Vec.Push/N=100000', @BenchPush)
+    .AddLoop('Vec.Push+Reserve/N=100000', @BenchPushPrealloc)
+    .AddLoop('Vec.Pop/N=100000', @BenchPop)
+    .AddLoop('Vec.Get/N=100000', @BenchGet)
+    .AddLoop('Vec.Get(Memory ptr)/N=100000', @BenchGetPtr)
+    .AddLoop('Vec.Iterate/N=100000', @BenchIterate)
+    .AddLoop('Vec.Insert(mid)/N=1000', @BenchInsertMiddle)
+    .AddLoop('Vec.Delete(mid)/N=1000', @BenchDeleteMiddle)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
   GVec.Free;
   if GSink = -1 then WriteLn(GSink);
 end.

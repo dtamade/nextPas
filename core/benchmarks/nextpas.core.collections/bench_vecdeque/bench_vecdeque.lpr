@@ -14,7 +14,7 @@ const
   N = 100000;
 
 var
-  B: TBenchRunner;
+  LResults: IBenchResults;
   GDeque: TIntDeque;
   GSink: Int64;
   i: Integer;
@@ -123,18 +123,15 @@ begin
 
   WriteLn('=== nextPas TVecDeque<Integer> Benchmark (N=', N, ') ===');
   WriteLn;
-  B := TBenchRunner.Create;
-  try
-    B.Run('VecDeque.PushBack/N=100000', @BenchPushBack);
-    B.Run('VecDeque.PushFront/N=100000', @BenchPushFront);
-    B.Run('VecDeque.PopFront/N=100000', @BenchPopFront);
-    B.Run('VecDeque.PopBack/N=100000', @BenchPopBack);
-    B.Run('VecDeque.Get/N=100000', @BenchGet);
-    B.Run('VecDeque.Queue(push+pop)/N=100000', @BenchQueuePattern);
-    B.Summary;
-  finally
-    B.Free;
-  end;
+  LResults := TBenchSuite.Create('VecDeque.PushBack')
+    .AddLoop('VecDeque.PushBack/N=100000', @BenchPushBack)
+    .AddLoop('VecDeque.PushFront/N=100000', @BenchPushFront)
+    .AddLoop('VecDeque.PopFront/N=100000', @BenchPopFront)
+    .AddLoop('VecDeque.PopBack/N=100000', @BenchPopBack)
+    .AddLoop('VecDeque.Get/N=100000', @BenchGet)
+    .AddLoop('VecDeque.Queue(push+pop)/N=100000', @BenchQueuePattern)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
   GDeque.Free;
   if GSink = -1 then WriteLn(GSink);
 end.

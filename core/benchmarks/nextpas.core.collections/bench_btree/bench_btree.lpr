@@ -16,7 +16,7 @@ const
   N = 10000;
 
 var
-  B: TBenchRunner;
+  LResults: IBenchResults;
   GSink: Int64;
 
 function CmpInt(const A, B: Integer; aData: Pointer): SizeInt;
@@ -94,13 +94,14 @@ end;
 
 begin
   WriteLn('=== BTreeMap vs TreeMap (N=', N, ') ===');
-  B := TBenchRunner.Create;
-  B.Run('BTreeMap.Put', @BenchBTreePut);
-  B.Run('BTreeMap.Get', @BenchBTreeGet);
-  B.Run('BTreeMap.Remove', @BenchBTreeRemove);
-  B.Run('TreeMap.Put (RBTree)', @BenchTreeMapPut);
-  B.Run('TreeMap.Get (RBTree)', @BenchTreeMapGet);
-  B.Run('TreeMap.Remove (RBTree)', @BenchTreeMapRemove);
-  B.Free;
+  LResults := TBenchSuite.Create('BTreeMap')
+    .AddLoop('BTreeMap.Put', @BenchBTreePut)
+    .AddLoop('BTreeMap.Get', @BenchBTreeGet)
+    .AddLoop('BTreeMap.Remove', @BenchBTreeRemove)
+    .AddLoop('TreeMap.Put (RBTree)', @BenchTreeMapPut)
+    .AddLoop('TreeMap.Get (RBTree)', @BenchTreeMapGet)
+    .AddLoop('TreeMap.Remove (RBTree)', @BenchTreeMapRemove)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
   if GSink < 0 then Write('');
 end.

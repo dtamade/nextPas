@@ -14,64 +14,6 @@ uses
   nextpas.core.toml,
   nextpas.core.bench;
 
-type
-  TBumpAllocator = class(TInterfacedObject, IAllocator)
-  private
-    FBuf: PByte;
-    FCap: SizeUInt;
-    FPos: SizeUInt;
-  public
-    constructor Create(ACap: SizeUInt);
-    destructor Destroy; override;
-    function Allocate(const ASize: SizeUInt): Pointer;
-    function Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
-    procedure Deallocate(const APtr: Pointer);
-    procedure Reset;
-  end;
-
-constructor TBumpAllocator.Create(ACap: SizeUInt);
-begin
-  inherited Create;
-  FCap := ACap;
-  FBuf := GetMem(ACap);
-  FPos := 0;
-end;
-
-destructor TBumpAllocator.Destroy;
-begin
-  FreeMem(FBuf);
-  inherited;
-end;
-
-function TBumpAllocator.Allocate(const ASize: SizeUInt): Pointer;
-var
-  LAligned: SizeUInt;
-begin
-  LAligned := (FPos + 7) and not SizeUInt(7);
-  if LAligned + ASize > FCap then
-    Exit(GetMem(ASize));
-  Result := FBuf + LAligned;
-  FPos := LAligned + ASize;
-end;
-
-function TBumpAllocator.Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
-begin
-  Result := Allocate(ANewSize);
-  if APtr <> nil then
-    Move(APtr^, Result^, ANewSize);
-end;
-
-procedure TBumpAllocator.Deallocate(const APtr: Pointer);
-begin
-  if (PByte(APtr) < FBuf) or (PByte(APtr) >= FBuf + FCap) then
-    FreeMem(APtr);
-end;
-
-procedure TBumpAllocator.Reset;
-begin
-  FPos := 0;
-end;
-
 var
   GSmallToml: string;
   GMediumToml: string;
@@ -254,45 +196,11 @@ begin
 end;
 
 var
-  LBench: TBenchRunner;
-  GArena: IAllocator;
-
-procedure BenchMediumArena(AIters: Int64);
-var
-  LDoc: TTomlDocument;
-  LView: TStringView;
-  LI: Int64;
-begin
-  LView := TStringView.FromStr(GMediumToml);
-  for LI := 1 to AIters do
-  begin
-    (GArena as TBumpAllocator).Reset;
-    LDoc.Init(GArena);
-    LDoc.Parse(LView);
-    LDoc.Done;
-  end;
-end;
-
-procedure BenchLargeArena(AIters: Int64);
-var
-  LDoc: TTomlDocument;
-  LView: TStringView;
-  LI: Int64;
-begin
-  LView := TStringView.FromStr(GLargeToml);
-  for LI := 1 to AIters do
-  begin
-    (GArena as TBumpAllocator).Reset;
-    LDoc.Init(GArena);
-    LDoc.Parse(LView);
-    LDoc.Done;
-  end;
-end;
+  LResults: IBenchResults;
 
 begin
   BuildInputs;
   BuildStringInputs;
-  GArena := TBumpAllocator.Create(1024 * 1024);
 
   WriteLn('=== nextpas.core.toml benchmark ===');
   WriteLn('Small TOML:  ', Length(GSmallToml):5, ' bytes (10 keys)');
@@ -302,16 +210,14 @@ begin
   WriteLn('LongString:  ', Length(GLongStringToml):5, ' bytes (10KB string + escaped)');
   WriteLn;
 
-  LBench := TBenchRunner.Create;
-  LBench.Run('parse/small (10 keys)', @BenchSmallParse);
-  LBench.Run('parse/medium (~50 keys)', @BenchMediumParse);
-  LBench.Run('parse/large (~700 keys)', @BenchLargeParse);
-  LBench.Run('parse/string-heavy (100 strings)', @BenchStringHeavy);
-  LBench.Run('parse/long-string (10KB value)', @BenchLongString);
-  LBench.Run('facade/small (parse+interface)', @BenchSmallFacade);
-  LBench.Run('access/medium (3 lookups)', @BenchMediumAccess);
-  LBench.Run('arena/medium (~50 keys)', @BenchMediumArena);
-  LBench.Run('arena/large (~700 keys)', @BenchLargeArena);
-  LBench.Summary;
-  LBench.Free;
+  LResults := TBenchSuite.Create('parse')
+    .AddLoop('parse/small (10 keys)', @BenchSmallParse)
+    .AddLoop('parse/medium (~50 keys)', @BenchMediumParse)
+    .AddLoop('parse/large (~700 keys)', @BenchLargeParse)
+    .AddLoop('parse/string-heavy (100 strings)', @BenchStringHeavy)
+    .AddLoop('parse/long-string (10KB value)', @BenchLongString)
+    .AddLoop('facade/small (parse+interface)', @BenchSmallFacade)
+    .AddLoop('access/medium (3 lookups)', @BenchMediumAccess)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
 end.

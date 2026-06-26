@@ -9,7 +9,7 @@ uses
   nextpas.core.platform.thread;
 
 var
-  B: TBenchRunner;
+  LResults: IBenchResults;
   GPort: UInt16;
   GReady: Int32;
 
@@ -105,12 +105,11 @@ begin
 end;
 
 begin
-  B := TBenchRunner.Create;
   WriteLn('=== nextpas.core.net TCP benchmark ===');
   WriteLn;
-  B.Run('TCP echo round-trip 1KB', @BenchTcpRoundTrip1K);
-  B.Run('TCP write throughput 64KB', @BenchTcpThroughput64K);
-  WriteLn;
-  B.Summary;
-  B.Free;
+  LResults := TBenchSuite.Create('TCP echo round-trip 1KB')
+    .AddLoop('TCP echo round-trip 1KB', @BenchTcpRoundTrip1K)
+    .AddLoop('TCP write throughput 64KB', @BenchTcpThroughput64K)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
 end.

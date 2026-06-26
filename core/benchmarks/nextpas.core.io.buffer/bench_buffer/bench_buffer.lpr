@@ -9,7 +9,7 @@ uses
   nextpas.core.io.memory;
 
 var
-  B: TBenchRunner;
+  LResults: IBenchResults;
   GSink: SizeUInt;
 
 type
@@ -115,17 +115,16 @@ begin
 end;
 
 begin
-  B := TBenchRunner.Create;
   WriteLn('=== nextpas.core.io.buffer benchmark ===');
   WriteLn;
-  B.Run('BufferedRead 1 byte', @BenchBufferedRead_1Byte);
-  B.Run('BufferedRead 64 bytes', @BenchBufferedRead_64);
-  B.Run('BufferedRead 4KB', @BenchBufferedRead_4K);
-  B.Run('BufferedWrite 1 byte', @BenchBufferedWrite_1Byte);
-  B.Run('BufferedWrite 64 bytes', @BenchBufferedWrite_64);
-  B.Run('BufferedWrite 4KB', @BenchBufferedWrite_4K);
-  B.Run('Unbuffered Read 1 byte (baseline)', @BenchUnbufferedRead_1Byte);
-  WriteLn;
-  B.Summary;
-  B.Free;
+  LResults := TBenchSuite.Create('BufferedRead 1 byte')
+    .AddLoop('BufferedRead 1 byte', @BenchBufferedRead_1Byte)
+    .AddLoop('BufferedRead 64 bytes', @BenchBufferedRead_64)
+    .AddLoop('BufferedRead 4KB', @BenchBufferedRead_4K)
+    .AddLoop('BufferedWrite 1 byte', @BenchBufferedWrite_1Byte)
+    .AddLoop('BufferedWrite 64 bytes', @BenchBufferedWrite_64)
+    .AddLoop('BufferedWrite 4KB', @BenchBufferedWrite_4K)
+    .AddLoop('Unbuffered Read 1 byte (baseline)', @BenchUnbufferedRead_1Byte)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
 end.

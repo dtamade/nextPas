@@ -6,7 +6,7 @@ const
   INPUT_SIZE = 10000;
 
 var
-  B: TBenchRunner;
+  LResults: IBenchResults;
   GInput: string;
   GSink: Int64;
   i: Integer;
@@ -140,20 +140,20 @@ begin
 
   WriteLn('=== Regex Benchmark (input=', INPUT_SIZE, ' bytes) ===');
   WriteLn;
-  B := TBenchRunner.Create;
-  B.Run('Literal IsMatch', @BenchLiteralIsMatch);
-  B.Run('Digit Find (\d+)', @BenchDigitFind);
-  B.Run('Alternation (4 alts)', @BenchAlternation);
-  B.Run('Compile (date pattern)', @BenchCompile);
-  B.Run('IsFullMatch (^[a-z]+$)', @BenchIsFullMatch);
-  B.Run('Case-Insensitive (?i)', @BenchCaseInsensitive);
-  B.Run('Capture Groups (date)', @BenchCaptureGroups);
-  B.Run('FindAll (\\w+)', @BenchFindAll);
-  B.Run('ReplaceAll (\\d+ -> NUM)', @BenchReplaceAll);
-  B.Run('Split (\\s+)', @BenchSplit);
-  B.Run('FindIter (\\w+)', @BenchFindIter);
-  B.Run('Large 100KB literal', @BenchLargeInput);
-  B.Summary;
-  B.Free;
+  LResults := TBenchSuite.Create('Literal IsMatch')
+    .AddLoop('Literal IsMatch', @BenchLiteralIsMatch)
+    .AddLoop('Digit Find (\d+)', @BenchDigitFind)
+    .AddLoop('Alternation (4 alts)', @BenchAlternation)
+    .AddLoop('Compile (date pattern)', @BenchCompile)
+    .AddLoop('IsFullMatch (^[a-z]+$)', @BenchIsFullMatch)
+    .AddLoop('Case-Insensitive (?i)', @BenchCaseInsensitive)
+    .AddLoop('Capture Groups (date)', @BenchCaptureGroups)
+    .AddLoop('FindAll (\\w+)', @BenchFindAll)
+    .AddLoop('ReplaceAll (\\d+ -> NUM)', @BenchReplaceAll)
+    .AddLoop('Split (\\s+)', @BenchSplit)
+    .AddLoop('FindIter (\\w+)', @BenchFindIter)
+    .AddLoop('Large 100KB literal', @BenchLargeInput)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
   if GSink < 0 then Write('');
 end.

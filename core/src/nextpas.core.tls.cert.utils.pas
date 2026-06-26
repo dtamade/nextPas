@@ -1938,37 +1938,28 @@ end;
 
 class function TCertificateUtils.LoadFromFile(const AFileName: string): string;
 var
-  LStream: TFileStream;
   LBytes: TBytes;
 begin
   Result := '';
   if not nextpas.core.fs.IsFile(AFileName) then Exit;
 
-  LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
   try
-    SetLength(LBytes, LStream.Size);
-    if LStream.Size > 0 then
-      LStream.Read(LBytes[0], LStream.Size);
+    LBytes := nextpas.core.fs.ReadFile(AFileName);
     Result := AnsiString(nextpas.core.text.conv.UTF8BytesToString(LBytes));
-  finally
+  except
+    Result := '';
   end;
 end;
 
 class function TCertificateUtils.SaveToFile(const AFileName, ACertPEM: string): Boolean;
 var
-  LStream: TFileStream;
   LBytes: TBytes;
 begin
   Result := False;
   try
-    LStream := TFileStream.Create(AFileName, Word(fmCreate));
-    try
-      LBytes := nextpas.core.text.conv.StringToUTF8Bytes(ACertPEM);
-      if Length(LBytes) > 0 then
-        LStream.Write(LBytes[0], Length(LBytes));
-      Result := True;
-    finally
-    end;
+    LBytes := nextpas.core.text.conv.StringToUTF8Bytes(ACertPEM);
+    nextpas.core.fs.WriteFile(AFileName, LBytes);
+    Result := True;
   except
     Result := False;
   end;

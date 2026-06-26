@@ -12,7 +12,7 @@ const
   DATA_SIZE = 10000;
 
 var
-  B: TBenchRunner;
+  LResults: IBenchResults;
   GData: TBytes;
   GEncoded: string;
   GHexEncoded: string;
@@ -67,11 +67,12 @@ begin
 
   WriteLn('=== Encoding Benchmark (data=', DATA_SIZE, ' bytes) ===');
   WriteLn;
-  B := TBenchRunner.Create;
-  B.Run('Base64.Encode', @BenchBase64Encode);
-  B.Run('Base64.Decode', @BenchBase64Decode);
-  B.Run('Hex.Encode', @BenchHexEncode);
-  B.Run('Hex.Decode', @BenchHexDecode);
-  B.Free;
+  LResults := TBenchSuite.Create('Base64')
+    .AddLoop('Base64.Encode', @BenchBase64Encode)
+    .AddLoop('Base64.Decode', @BenchBase64Decode)
+    .AddLoop('Hex.Encode', @BenchHexEncode)
+    .AddLoop('Hex.Decode', @BenchHexDecode)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
   if GSink < 0 then Write('');
 end.

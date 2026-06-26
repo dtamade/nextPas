@@ -22,7 +22,7 @@ type
   end;
 
 var
-  B: TBenchRunner;
+  LResults: IBenchResults;
   GBody1K: AnsiString;
   GBytesWritten: SizeUInt;
 
@@ -226,16 +226,15 @@ end;
 
 begin
   InitBody1K;
-  B := TBenchRunner.Create;
   WriteLn('=== nextpas.core.http.h1writer benchmark ===');
   WriteLn('operation=http.h1writer.serialize');
   WriteLn;
-  B.Run('headers only 200', @BenchHeadersOnly200);
-  B.Run('headers block 200 6 headers', @BenchHeadersBlock200_6Headers);
-  B.Run('status lines common errors', @BenchStatusLinesCommonErrors);
-  B.Run('fixed 200 13B', @BenchFixed200_13B);
-  B.Run('outbound fixed 200 1KB', @BenchOutboundFixed200_1KB);
-  WriteLn;
-  B.Summary;
-  B.Free;
+  LResults := TBenchSuite.Create('headers only 200')
+    .AddLoop('headers only 200', @BenchHeadersOnly200)
+    .AddLoop('headers block 200 6 headers', @BenchHeadersBlock200_6Headers)
+    .AddLoop('status lines common errors', @BenchStatusLinesCommonErrors)
+    .AddLoop('fixed 200 13B', @BenchFixed200_13B)
+    .AddLoop('outbound fixed 200 1KB', @BenchOutboundFixed200_1KB)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
 end.

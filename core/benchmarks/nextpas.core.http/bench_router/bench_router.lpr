@@ -10,7 +10,7 @@ uses
   nextpas.core.http.router;
 
 var
-  B: TBenchRunner;
+  LResults: IBenchResults;
   GSink: string;
   GDispatchCount: Int64;
 
@@ -194,20 +194,19 @@ begin
 end;
 
 begin
-  B := TBenchRunner.Create;
   WriteLn('=== nextpas.core.http.router benchmark ===');
   WriteLn('operation=http.router.dispatch');
   WriteLn;
-  B.Run('Static match (5 routes)', @BenchStaticRoute_5Routes);
-  B.Run('Static match (50 routes)', @BenchStaticRoute_50Routes);
-  B.Run('Param :id', @BenchParamRoute);
-  B.Run('Multi param (3 params)', @BenchMultiParam);
-  B.Run('Wildcard *filepath', @BenchWildcard);
-  B.Run('Deep path (3 params, 8 segs)', @BenchDeepPath);
-  B.Run('Miss (no match)', @BenchMiss);
-  B.Run('handler dispatch (match + no-op handler)', @BenchHandlerDispatch);
-  B.Run('direct call (same request, no router)', @BenchDirectCall);
-  WriteLn;
-  B.Summary;
-  B.Free;
+  LResults := TBenchSuite.Create('Static match (5 routes)')
+    .AddLoop('Static match (5 routes)', @BenchStaticRoute_5Routes)
+    .AddLoop('Static match (50 routes)', @BenchStaticRoute_50Routes)
+    .AddLoop('Param :id', @BenchParamRoute)
+    .AddLoop('Multi param (3 params)', @BenchMultiParam)
+    .AddLoop('Wildcard *filepath', @BenchWildcard)
+    .AddLoop('Deep path (3 params, 8 segs)', @BenchDeepPath)
+    .AddLoop('Miss (no match)', @BenchMiss)
+    .AddLoop('handler dispatch (match + no-op handler)', @BenchHandlerDispatch)
+    .AddLoop('direct call (same request, no router)', @BenchDirectCall)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
 end.

@@ -54,7 +54,7 @@ begin
   for I := 0 to High(GResults) do
     LSuite.Add(GResults[I].Name, procedure(const ACtx2: IBenchContext) begin end);
   LResults := LSuite.Run;
-  LResults.ToConsole;
+  LResults.PrintToConsole;
   LResults := nil;
   LSuite := nil;
 end;

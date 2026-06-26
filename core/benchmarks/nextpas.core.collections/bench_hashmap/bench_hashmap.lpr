@@ -15,7 +15,7 @@ const
   N = 100000;
 
 var
-  B: TBenchRunner;
+  LResults: IBenchResults;
   GMap: TIntMap;
   GSwiss: TSwissTableI32I32;
   GSink: Int64;
@@ -184,23 +184,20 @@ begin
 
   WriteLn('=== nextPas THashMap<Integer,Integer> Benchmark (N=', N, ') ===');
   WriteLn;
-  B := TBenchRunner.Create;
-  try
-    B.Run('HashMap.Put/N=100000', @BenchPut);
-    B.Run('HashMap.Put+prealloc/N=100000', @BenchPutPrealloc);
-    B.Run('HashMap.Get(hit)/N=100000', @BenchGetHit);
-    B.Run('HashMap.Get(miss)/N=100000', @BenchGetMiss);
-    B.Run('HashMap.ContainsKey/N=100000', @BenchContainsKey);
-    B.Run('HashMap.Remove/N=100000', @BenchRemove);
-    B.Run('SwissTable.Put/N=100000', @BenchSwissPut);
-    B.Run('SwissTable.Put+prealloc/N=100000', @BenchSwissPutPrealloc);
-    B.Run('SwissTable.Get(hit)/N=100000', @BenchSwissGetHit);
-    B.Run('SwissTable.Get(miss)/N=100000', @BenchSwissGetMiss);
-    B.Run('SwissTable.Remove/N=100000', @BenchSwissRemove);
-    B.Summary;
-  finally
-    B.Free;
-  end;
+  LResults := TBenchSuite.Create('HashMap.Put')
+    .AddLoop('HashMap.Put/N=100000', @BenchPut)
+    .AddLoop('HashMap.Put+prealloc/N=100000', @BenchPutPrealloc)
+    .AddLoop('HashMap.Get(hit)/N=100000', @BenchGetHit)
+    .AddLoop('HashMap.Get(miss)/N=100000', @BenchGetMiss)
+    .AddLoop('HashMap.ContainsKey/N=100000', @BenchContainsKey)
+    .AddLoop('HashMap.Remove/N=100000', @BenchRemove)
+    .AddLoop('SwissTable.Put/N=100000', @BenchSwissPut)
+    .AddLoop('SwissTable.Put+prealloc/N=100000', @BenchSwissPutPrealloc)
+    .AddLoop('SwissTable.Get(hit)/N=100000', @BenchSwissGetHit)
+    .AddLoop('SwissTable.Get(miss)/N=100000', @BenchSwissGetMiss)
+    .AddLoop('SwissTable.Remove/N=100000', @BenchSwissRemove)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
   GSwiss.Free;
   GMap.Free;
   if GSink = -1 then WriteLn(GSink);

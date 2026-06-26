@@ -97,7 +97,7 @@ var
   LData: TDoubleArray;
 begin
   LData := Copy(GData100);
-  GAnalyzer.Sort(LData);
+  SortDoubleArray(LData);
 end;
 
 procedure BenchSort1000(const ACtx: IBenchContext);
@@ -105,7 +105,7 @@ var
   LData: TDoubleArray;
 begin
   LData := Copy(GData1000);
-  GAnalyzer.Sort(LData);
+  SortDoubleArray(LData);
 end;
 
 procedure BenchSort10000(const ACtx: IBenchContext);
@@ -113,7 +113,7 @@ var
   LData: TDoubleArray;
 begin
   LData := Copy(GData10000);
-  GAnalyzer.Sort(LData);
+  SortDoubleArray(LData);
 end;
 
 procedure BenchComputeStats100(const ACtx: IBenchContext);
@@ -136,7 +136,7 @@ var
   LData: TDoubleArray;
 begin
   LData := Copy(GData100);
-  GAnalyzer.Sort(LData);
+  SortDoubleArray(LData);
   GAnalyzer.Percentile(LData, 25);
   GAnalyzer.Percentile(LData, 50);
   GAnalyzer.Percentile(LData, 75);
@@ -148,7 +148,7 @@ var
   LData: TDoubleArray;
 begin
   LData := Copy(GData1000);
-  GAnalyzer.Sort(LData);
+  SortDoubleArray(LData);
   GAnalyzer.Percentile(LData, 25);
   GAnalyzer.Percentile(LData, 50);
   GAnalyzer.Percentile(LData, 75);
@@ -160,7 +160,7 @@ var
   LData: TDoubleArray;
 begin
   LData := Copy(GData10000);
-  GAnalyzer.Sort(LData);
+  SortDoubleArray(LData);
   GAnalyzer.Percentile(LData, 25);
   GAnalyzer.Percentile(LData, 50);
   GAnalyzer.Percentile(LData, 75);

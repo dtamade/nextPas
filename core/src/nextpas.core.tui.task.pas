@@ -112,6 +112,8 @@ type
   end;
   PTaskThreadPayload = ^TTaskThreadPayload;
 
+function PrefixTaskError(const Name, Msg: ShortString): ShortString; forward;
+
 function TaskThreadEntry(AArg: Pointer): Pointer; cdecl;
 var
   LP: PTaskThreadPayload;

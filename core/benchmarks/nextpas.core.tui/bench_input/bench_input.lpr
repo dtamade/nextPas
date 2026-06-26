@@ -52,12 +52,13 @@ begin
 end;
 
 var
-  Runner: TBenchRunner;
+  LResults: IBenchResults;
 begin
-  Runner := TBenchRunner.Create;
-  Runner.Run('ParseOne ASCII key', @BenchAsciiKey);
-  Runner.Run('ParseOne CSI arrow', @BenchCsiArrow);
-  Runner.Run('ParseOne SGR mouse (incomplete)', @BenchSgrMouse);
-  Runner.Run('ParseOne UTF-8 CJK', @BenchUtf8Cjk);
-  Runner.Summary;
+  LResults := TBenchSuite.Create('ParseOne ASCII key')
+    .AddLoop('ParseOne ASCII key', @BenchAsciiKey)
+    .AddLoop('ParseOne CSI arrow', @BenchCsiArrow)
+    .AddLoop('ParseOne SGR mouse (incomplete)', @BenchSgrMouse)
+    .AddLoop('ParseOne UTF-8 CJK', @BenchUtf8Cjk)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
 end.

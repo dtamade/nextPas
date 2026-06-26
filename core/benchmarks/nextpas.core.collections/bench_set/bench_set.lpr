@@ -18,7 +18,7 @@ const
   N = 100000;
 
 var
-  B: TBenchRunner;
+  LResults: IBenchResults;
   GHashSet: TIntHashSet;
   GTreeSet: TIntTreeSet;
   GBTreeSet: TIntBTreeSet;
@@ -128,19 +128,16 @@ begin
 
   WriteLn('=== nextPas Set Benchmark (N=', N, ') ===');
   WriteLn;
-  B := TBenchRunner.Create;
-  try
-    B.Run('HashSet.Add/N=100000', @BenchHashSetAdd);
-    B.Run('HashSet.Contains(hit)/N=100000', @BenchHashSetContainsHit);
-    B.Run('HashSet.Contains(miss)/N=100000', @BenchHashSetContainsMiss);
-    B.Run('TreeSet.Add/N=100000', @BenchTreeSetAdd);
-    B.Run('TreeSet.Contains/N=100000', @BenchTreeSetContains);
-    B.Run('BTreeSet.Add/N=100000', @BenchBTreeSetAdd);
-    B.Run('BTreeSet.Contains/N=100000', @BenchBTreeSetContains);
-    B.Summary;
-  finally
-    B.Free;
-  end;
+  LResults := TBenchSuite.Create('HashSet.Add')
+    .AddLoop('HashSet.Add/N=100000', @BenchHashSetAdd)
+    .AddLoop('HashSet.Contains(hit)/N=100000', @BenchHashSetContainsHit)
+    .AddLoop('HashSet.Contains(miss)/N=100000', @BenchHashSetContainsMiss)
+    .AddLoop('TreeSet.Add/N=100000', @BenchTreeSetAdd)
+    .AddLoop('TreeSet.Contains/N=100000', @BenchTreeSetContains)
+    .AddLoop('BTreeSet.Add/N=100000', @BenchBTreeSetAdd)
+    .AddLoop('BTreeSet.Contains/N=100000', @BenchBTreeSetContains)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
   GHashSet.Free;
   GTreeSet.Free;
   GBTreeSet.Free;

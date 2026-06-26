@@ -8,7 +8,7 @@ uses
   nextpas.core.sync;
 
 var
-  B: TBenchRunner;
+  LResults: IBenchResults;
   GSink: Int64;
 
 procedure BenchMutexLockUnlock(aIters: Int64);
@@ -90,16 +90,15 @@ begin
 end;
 
 begin
-  B := TBenchRunner.Create;
   WriteLn('=== nextpas.core.sync benchmark (uncontended) ===');
   WriteLn;
-  B.Run('Mutex Lock/Unlock', @BenchMutexLockUnlock);
-  B.Run('FutexMutex Lock/Unlock', @BenchFutexMutexLockUnlock);
-  B.Run('SpinLock Lock/Unlock', @BenchSpinLockLockUnlock);
-  B.Run('RWLock ReadLock/Unlock', @BenchRWLockReadLock);
-  B.Run('RWLock WriteLock/Unlock', @BenchRWLockWriteLock);
-  B.Run('Mutex TryAcquire', @BenchMutexTryAcquire);
-  WriteLn;
-  B.Summary;
-  B.Free;
+  LResults := TBenchSuite.Create('Mutex Lock')
+    .AddLoop('Mutex Lock/Unlock', @BenchMutexLockUnlock)
+    .AddLoop('FutexMutex Lock/Unlock', @BenchFutexMutexLockUnlock)
+    .AddLoop('SpinLock Lock/Unlock', @BenchSpinLockLockUnlock)
+    .AddLoop('RWLock ReadLock/Unlock', @BenchRWLockReadLock)
+    .AddLoop('RWLock WriteLock/Unlock', @BenchRWLockWriteLock)
+    .AddLoop('Mutex TryAcquire', @BenchMutexTryAcquire)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
 end.

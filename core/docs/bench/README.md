@@ -42,7 +42,7 @@ begin
     .Add('Sort/1000', @BenchSort)
     .Run;
 
-  WriteLn(LResults.ToConsole);
+  WriteLn(LResults.PrintToConsole);
   LResults.SaveToJSON('bench-results.json');
 end.
 ```
@@ -96,6 +96,37 @@ end.
 | `SaveToJSON(Path)` | 保存 JSON 到文件 |
 | `SaveToHTML(Path)` | 保存 HTML 到文件 |
 | `SaveToTSV(Path)` | 保存 TSV 到文件 |
+
+## TBenchRunner 便利 API
+
+对于简单的基准场景，`TBenchRunner` 提供了 `Run` + `Summary` 便利方法：
+
+```pascal
+uses
+  nextpas.core.bench;
+
+var
+  B: TBenchRunner;
+begin
+  B := TBenchRunner.Create;
+  try
+    B.Run('HashMap.Put/N=100000', @BenchPut);
+    B.Run('HashMap.Get(hit)/N=100000', @BenchGetHit);
+    B.Summary;
+  finally
+    B.Free;
+  end;
+end.
+```
+
+| 方法 | 说明 |
+|------|------|
+| `Run(Name, LoopFunc)` | 运行单个基准并累积结果。`LoopFunc: TBenchLoopFunc = procedure(AN: Int64)` |
+| `Summary` | 打印所有已累积结果的摘要到控制台 |
+| `RunOne(Name, Func)` | 运行单个基准返回 `TBenchResult`（`Func: TBenchFunc`） |
+| `RunAll(Entries)` | 批量运行多个 `TBenchEntry` |
+| `SetFilter(Pattern)` | 名称过滤（子串匹配） |
+| `Config` | 读写 `TBenchConfig` 配置 |
 
 ## 统计流水线
 
