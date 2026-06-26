@@ -668,9 +668,9 @@ begin
     WriteFileText(AFileName, JUnitXML(AResults, ASuiteName));
     Result := True;
   except
-    on E: Exception do
-      ResolveErrSink(DefaultConfig).WriteLn(
-        'WriteJUnitXML failed: ' + E.Message);
+    { Bare except — catches both FPC Exception and nextpas.core.exception descendants }
+    ResolveErrSink(DefaultConfig).WriteLn(
+      'WriteJUnitXML failed: could not write to ' + AFileName);
   end;
 end;
 
