@@ -24,27 +24,33 @@
 
 **验收**：明确 C6-A 依赖关系，决定是否继续或等待
 
-### A1: Unit Inventory + Blocker 分类
+### A1: ✅ 自举可行性探查（已完成 - 2026-06-26）
 
-**目标**：识别 mem 全部源码单元的自举编译障碍
+**Codex 审查结论**：
 
-**步骤**：
-1. 枚举 `core/src/nextpas.core.mem*.pas` 全部单元清单（非仅门面）
-2. 按以下 6 类分类编译障碍：
+| 单元 | 编译状态 | 备注 |
+|------|---------|------|
+| `nextpas.core.mem.base` | ✅ success | 纯类型定义，无外部依赖 |
+| `nextpas.core.mem.intf` | ✅ success | 接口定义，依赖 base |
+| `nextpas.core.mem.error` | ❌ **失败** | 第一个失败单元 |
+| `nextpas.core.mem` (门面) | ❌ 失败 | 被 error 阻塞 |
 
-| 类别 | 典型特征 | Owner Lane |
-|------|----------|------------|
-| TLS/threadvar | `threadvar` 声明、TLS freelist | 编译器 TLS 支持 |
-| generic + reference-to | 泛型类/接口、`reference to procedure` | 编译器泛型+匿名函数 |
-| interface/refcount | `IInterface`、`TInterfacedObject`、引用计数 | 编译器接口支持 |
-| external/ABI | `cdecl external`、`packed record`、ABI 绑定 | 编译器 FFI 支持 |
-| packed layout | `packed record`、内存布局精确控制 | 编译器 layout 支持 |
-| platform/runtime | 依赖 FPC System/SysUtils 或 platform 模块 | FPC stub + runtime |
+**真实阻塞：SysUtils stub 循环依赖**
+```
+nextpas.core.exception.pas → uses SysUtils → units/linux-x86_64/SysUtils.pas → uses nextpas.core.exception
+```
+- `core/src/nextpas.core.exception.pas:10` 继承 `SysUtils.Exception`
+- `units/linux-x86_64/SysUtils.pas:7` re-export `nextpas.core.exception.Exception`
+- `mem.error` 依赖 `nextpas.core.exception`，进入循环
 
-3. 对每个单元标注障碍类别和最小复现单元
-4. 产出 `core/docs/mem/selfhost-blocker-matrix.md`
-
-**验收**：blocker matrix 覆盖全部 mem 源码单元，每个障碍有 owner lane
+**语法特性验证**（全部通过 nextPas `query symbols` probe）：
+- ✅ default params（arena.chunked.pas:67）
+- ✅ overloaded constructors（arena.chunked.pas:67）
+- ✅ threadvar（arena.thread.pas:140）
+- ✅ packed record（allocator.mmap.pas:54）
+- ✅ cdecl external（allocator.mimalloc.pas:48）
+- ✅ generic + reference to（pool.object_pool.pas:26）
+- ✅ on E:（编译器已支持，mem 源码未使用）
 
 ### A2: Host/Runtime Surface Closure
 
@@ -100,6 +106,15 @@
 | `TestFallbackReallocZeroSize` | R-21: ASize=0 早返回 + entry 清理 | test_fallback_allocator |
 | `TestFallbackReallocFailureReturnsNil` | R-21: 失败返回 nil 而非原指针 | test_fallback_allocator |
 | `TestObjectPoolDoubleReleaseDetection` | R-22: 双重释放抛 EDoubleFree | test_object_pool |
+
+### B0: Codex 发现的门面测试缺口
+
+| 测试名 | 覆盖点 | 文件 |
+|--------|--------|------|
+| `TestFacadeAllocZeroed` | 门面 `AllocZeroed` helper | test_mem |
+| `TestFacadeAllocArray` | 门面 `AllocArray` helper | test_mem |
+| `TestMakeFixedSlabPoolOverloads` | `MakeFixedSlabPool` 3 个重载 | test_slab_pool |
+| `TestIBlockPoolInterfaceConsumer` | `IBlockPool` interface-typed 使用 | test_blockpool |
 
 ### B2: AllocAligned 路径测试
 
@@ -172,23 +187,25 @@
 ## 六、执行顺序（依赖图）
 
 ```
-A0 (前置条件) ──→ A1 (blocker matrix) ──→ A2 (stub) ──→ A3 (修复) ──→ A4 (消费者验证)
-                   ↓
-                   B1 (回归测试) ←── 可与 A2 并行
-                   ↓
-                   B2 (AllocAligned) ←── A3 完成后
-                   ↓
-                   B3 (错误路径) ←── A3 完成后
-                   ↓
-                   B4 (并发) ←── A4 完成后
-                   ↓
-                   C1-C3 (设计改进) ←── B1-B4 完成后
-                   ↓
-                   D1-D3 (基准复核) ←── 全部完成后
+A1 ✅ (已完成) ──→ A2 (修复 SysUtils 循环) ──→ A3 (全模块验证) ──→ A4 (消费者验证)
+                    ↓
+                    B0 (门面测试缺口) ←── 可与 A2 并行
+                    ↓
+                    B1 (回归测试) ←── 可与 A2 并行
+                    ↓
+                    B2 (AllocAligned) ←── A3 完成后
+                    ↓
+                    B3 (错误路径) ←── A3 完成后
+                    ↓
+                    B4 (并发) ←── A4 完成后
+                    ↓
+                    C1-C3 (设计改进) ←── B0-B4 完成后
+                    ↓
+                    D1-D3 (基准复核) ←── 全部完成后
 ```
 
 **并行策略**：
-- B1 可与 A2 并行（回归测试不依赖自举修复）
+- B0/B1 可与 A2 并行（测试不依赖自举修复）
 - B2/B3 可并行（独立测试路径）
 - C1-C3 可并行（独立设计改进）
 
