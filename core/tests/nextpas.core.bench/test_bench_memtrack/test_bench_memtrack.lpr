@@ -442,6 +442,54 @@ begin
   DisableGlobalMemoryTracking;
 end;
 
+procedure Test_ReAllocMem_Tracking;
+var
+  LPtr: Pointer;
+  LNilPtr: Pointer;
+  LStatsBeforeRealloc, LStatsAfterRealloc: TMemoryStats;
+begin
+  WriteLn('Test_ReAllocMem_Tracking:');
+
+  DisableGlobalMemoryTracking;
+  ResetGlobalMemoryTracker;
+  EnableGlobalMemoryTracking;
+
+  // Initial alloc
+  LPtr := GetMem(128);
+  Check(LPtr <> nil, 'Initial GetMem(128) returns non-nil');
+
+  LStatsBeforeRealloc := GetGlobalMemoryStats;
+  Check(LStatsBeforeRealloc.AllocCount >= 1, 'Before realloc: AllocCount >= 1');
+  Check(LStatsBeforeRealloc.AllocBytes >= 128, 'Before realloc: AllocBytes >= 128');
+
+  // ReAlloc to larger size
+  LPtr := ReAllocMem(LPtr, 512);
+  Check(LPtr <> nil, 'ReAllocMem(128 -> 512) returns non-nil');
+
+  LStatsAfterRealloc := GetGlobalMemoryStats;
+  // ReAllocMem should record a free (old size) and an alloc (new size)
+  Check(LStatsAfterRealloc.AllocCount > LStatsBeforeRealloc.AllocCount,
+    'ReAllocMem increments AllocCount');
+  Check(LStatsAfterRealloc.FreeCount > LStatsBeforeRealloc.FreeCount,
+    'ReAllocMem increments FreeCount (old block freed)');
+  Check(LStatsAfterRealloc.AllocBytes >= LStatsBeforeRealloc.AllocBytes + 512,
+    'ReAllocMem accounts for new allocation bytes');
+
+  // ReAlloc to smaller size
+  LPtr := ReAllocMem(LPtr, 64);
+  Check(LPtr <> nil, 'ReAllocMem(512 -> 64) returns non-nil');
+
+  // ReAlloc nil (should behave like GetMem)
+  LNilPtr := nil;
+  LNilPtr := ReAllocMem(LNilPtr, 256);
+  Check(LNilPtr <> nil, 'ReAllocMem(nil, 256) returns non-nil (acts as alloc)');
+  FreeMem(LNilPtr);
+
+  FreeMem(LPtr);
+
+  DisableGlobalMemoryTracking;
+end;
+
 { === Run All Tests === }
 
 procedure RunAllTests;
@@ -464,6 +512,7 @@ begin
   Test_GlobalMemoryTracking_EnableDisable;
   Test_GlobalMemoryTracker_Reset;
   Test_GetGlobalMemoryStats;
+  Test_ReAllocMem_Tracking;
 end;
 
 begin
