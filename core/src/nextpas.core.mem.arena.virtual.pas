@@ -541,7 +541,9 @@ begin
   Result := nil;
   FLastAllocFailure := vaafNone;
   if aSize = 0 then Exit;
-  if (aAlignment = 0) or (not IsPowerOfTwo(aAlignment)) then
+  if aAlignment = 0 then
+    aAlignment := SizeOf(Pointer);
+  if not IsPowerOfTwo(aAlignment) then
   begin
     FLastAllocFailure := vaafInvalidAlignment;
     Exit;

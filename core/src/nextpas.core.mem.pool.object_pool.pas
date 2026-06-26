@@ -16,6 +16,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.mem.intf,
+  nextpas.core.mem.error,
   nextpas.core.mem.allocator.rtl,
   nextpas.core.mem.pool;
 
@@ -436,8 +437,15 @@ begin
 end;
 
 procedure TObjectPool.ReleaseObject(aObject: T);
+var
+  LIdx: SizeInt;
 begin
   if aObject = nil then Exit;
+
+  // Double-release detection: scan pool for existing reference
+  for LIdx := 0 to FFreeTop - 1 do
+    if FPool[LIdx] = aObject then
+      raise EDoubleFree.Create(aeDoubleFree, 'TObjectPool.ReleaseObject: object already in pool');
 
   // Finalize object
   if FHasFinalize then

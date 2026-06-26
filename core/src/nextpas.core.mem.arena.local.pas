@@ -136,6 +136,8 @@ begin
   Result := nil;
   if (ASize = 0) or (FBacking = nil) then
     Exit;
+  if AAlign = 0 then
+    AAlign := MEM_DEFAULT_ALIGN;
   if not IsPowerOfTwo(AAlign) then
     Exit;
   if FOffset > FCapacity then
