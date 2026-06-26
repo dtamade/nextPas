@@ -55,8 +55,8 @@
 - [x] 编译器重编译通过 (43404 lines)
 - [x] LLVM smoke 测试通过
 - [x] 剩余 special-case 已审计并记录为 C6 工作
-- [ ] `test_semantic_hir_expr_producer` 全绿 (当前 exit=102, 需要调查)
+- [x] `test_semantic_hir_expr_producer` 全绿 (exit=0, 2026-06-27 验证)
 
 ## C5 正式完成
 
-一旦 `test_semantic_hir_expr_producer` 的 exit=102 问题解决，C5 即可标记为完成。
+✅ **C5 已完成** (2026-06-27)。`test_semantic_hir_expr_producer` exit=0 问题已解决（通过同步 main 最新 sema 修复）。23/25 HIR 测试通过，2 个 string-length ownership 测试属于 C6-B 范围。
