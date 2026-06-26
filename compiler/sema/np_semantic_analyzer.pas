@@ -5131,6 +5131,7 @@ var
   CallableOwnerUnitId: string;
   QualifiedPos: LongInt;
   ResolutionFailureKind: string;
+  SavedResKind: string;
   SavedScopeId: LongInt;
 begin
   if ANode = nil then
@@ -5246,7 +5247,12 @@ begin
       else
       begin
         if (MethodClass <> '') and
-          SameText(ResolutionFailureKind, 'unknown-callable') then
+          (SameText(ResolutionFailureKind, 'unknown-callable') or
+           SameText(ResolutionFailureKind, 'wrong-argument-count') or
+           SameText(ResolutionFailureKind, 'type-mismatch') or
+           SameText(ResolutionFailureKind, 'no-matching-overload')) then
+        begin
+          SavedResKind := ResolutionFailureKind;
           ImplicitSelfBound := TryRegisterImplicitSelfBareMethodCallBinding(
             ANode,
             MethodClass,
@@ -5255,6 +5261,9 @@ begin
             MemberFailureName,
             MemberFailureOffset
           );
+          if not ImplicitSelfBound then
+            ResolutionFailureKind := SavedResKind;
+        end;
         if (not ImplicitSelfBound) and
           SameText(ResolutionFailureKind, 'ambiguous-overload') then
           EmitSemaError(
@@ -6661,13 +6670,18 @@ begin
           if UniqueTypeId = 0 then
             UniqueTypeId := Symbol.TypeId
           else if UniqueTypeId <> Symbol.TypeId then
-            Exit(0);
+          begin
+            if SameText(FModel.TypeAt(Symbol.TypeId - 1).Kind, 'class') or
+              SameText(FModel.TypeAt(Symbol.TypeId - 1).Kind, 'interface') then
+              UniqueTypeId := Symbol.TypeId
+            else if not (SameText(FModel.TypeAt(UniqueTypeId - 1).Kind, 'class') or
+              SameText(FModel.TypeAt(UniqueTypeId - 1).Kind, 'interface')) then
+              Exit(0);
+          end;
         end;
       end;
-      if PreferredMatchCount = 1 then
+      if PreferredMatchCount >= 1 then
         Exit(UniqueTypeId);
-      if PreferredMatchCount > 1 then
-        Exit(0);
     end;
   end;
 
@@ -6688,13 +6702,18 @@ begin
         if UniqueTypeId = 0 then
           UniqueTypeId := Symbol.TypeId
         else if UniqueTypeId <> Symbol.TypeId then
-          Exit(0);
+        begin
+          if SameText(FModel.TypeAt(Symbol.TypeId - 1).Kind, 'class') or
+            SameText(FModel.TypeAt(Symbol.TypeId - 1).Kind, 'interface') then
+            UniqueTypeId := Symbol.TypeId
+          else if not (SameText(FModel.TypeAt(UniqueTypeId - 1).Kind, 'class') or
+            SameText(FModel.TypeAt(UniqueTypeId - 1).Kind, 'interface')) then
+            Exit(0);
+        end;
       end;
     end;
-    if PreferredMatchCount = 1 then
+    if PreferredMatchCount >= 1 then
       Exit(UniqueTypeId);
-    if PreferredMatchCount > 1 then
-      Exit(0);
 
     if AAllowDirectImportSearch then
     begin
