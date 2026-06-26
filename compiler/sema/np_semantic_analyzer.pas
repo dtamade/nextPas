@@ -29,7 +29,6 @@ type
     PriorValue: Int64;
   end;
   TParamSnapshots = array of TParamSnapshot;
-  TTypeIdArray = array of LongInt;
 
   TPendingSignatureEntry = record
     SymbolId: LongInt;
@@ -61,7 +60,6 @@ type
     FCurrentBlockTerminated: Boolean;
     FCurrentScopeId: LongInt;
     FCurrentProcessingUnitId: string;
-    FCurrentCallableDecl: TGreenNode;
     FBreakLabels: array of string;
     FContinueLabels: array of string;
     FRuntimeVarNames: array of string;
@@ -248,10 +246,7 @@ type
       const AArgCount: LongInt): Boolean;
     function DeclParamSignatureMatchesArgs(const ADecl: TGreenNode;
       const AArgSignature: string; const AArgCount: LongInt): Boolean;
-    function GetParamSignature(
-      const ADecl: TGreenNode;
-      const AOwnerUnitId: string = ''
-    ): string;
+    function GetParamSignature(const ADecl: TGreenNode): string;
     function GetSubstitutedParamSignature(const ADecl: TGreenNode;
       const AParamNames, AArgTypes: array of string): string;
     function MangledName(const AName: string; AParamCount: LongInt): string;
@@ -403,22 +398,6 @@ type
     function IsBuiltinProcedure(const AName: string): Boolean;
     function InferExpressionType(const ANode: TGreenNode): LongInt;
     function AreTypesCompatible(const ALhsTypeId, ARhsTypeId: LongInt): Boolean;
-    function CallArgumentTypeIds(
-      const ACallNode: TGreenNode;
-      out ATypeIds: TTypeIdArray
-    ): Boolean;
-    function DeclMatchesCallArgumentTypes(
-      const ADecl: TGreenNode;
-      const AOwnerUnitId: string;
-      const AArgTypeIds: TTypeIdArray
-    ): Boolean;
-    function TryResolveImplicitSelfCallByArgTypes(
-      const ACallNode: TGreenNode;
-      const AReceiverTypeId: LongInt;
-      const ACallName: string;
-      const AArgCount: LongInt;
-      out ATargetSymbolId: LongInt
-    ): Boolean;
     procedure SeedBuiltinTypes;
     procedure SeedCachedTypeGaps;
     procedure AssignScopesToSymbols;
@@ -440,7 +419,6 @@ type
     procedure SeedRuntimeContracts;
     procedure RebindExplicitClassParents;
     function ResolveTypeId(const ATypeName: string): LongInt;
-    function CanonicalTypeIdForMatching(const ATypeId: LongInt): LongInt;
     function ResolveTypeIdForOwner(
       const ATypeName: string;
       const APreferredOwnerUnitId: string;
@@ -3082,28 +3060,15 @@ begin
     Result := False;
 end;
 
-function TSemanticAnalyzer.GetParamSignature(
-  const ADecl: TGreenNode;
-  const AOwnerUnitId: string
-): string;
+function TSemanticAnalyzer.GetParamSignature(const ADecl: TGreenNode): string;
 var
-  EffectiveOwnerUnitId: string;
   J, K: LongInt;
   Child, ParamChild, TypeChild: TGreenNode;
-  ResolvedTypeId: LongInt;
-  TypeSig: string;
   TypeName: string;
+  Dummy: Int64;
 begin
   Result := '';
   if ADecl = nil then Exit;
-  EffectiveOwnerUnitId := NormalizeUnitIdentity(AOwnerUnitId);
-  if EffectiveOwnerUnitId = '' then
-  begin
-    if FCurrentProcessingUnitId <> '' then
-      EffectiveOwnerUnitId := NormalizeUnitIdentity(FCurrentProcessingUnitId)
-    else
-      EffectiveOwnerUnitId := NormalizeUnitIdentity(FUnitGraph.RootName);
-  end;
   for J := 0 to ADecl.ChildCount - 1 do
   begin
     Child := ADecl.ChildAt(J);
@@ -3122,19 +3087,7 @@ begin
           if TypeChild <> nil then
             TypeName := LowerCase(TypeChild.Text);
         end;
-        ResolvedTypeId := 0;
-        TypeSig := '';
-        if (TypeChild <> nil) and (TypeChild.NodeKind = gnkIdentifier) then
-        begin
-          ResolvedTypeId := ResolveTypeIdForOwner(
-            TypeChild.Text,
-            EffectiveOwnerUnitId
-          );
-          TypeSig := TypeSignatureForTypeId(ResolvedTypeId);
-        end;
-        if TypeSig <> '' then
-          Result := Result + TypeSig
-        else if (TypeName = 'string') or (TypeName = 'ansistring') then
+        if (TypeName = 'string') or (TypeName = 'ansistring') then
           Result := Result + 's'
         else if (TypeName = 'boolean') or (TypeName = 'bool') then
           Result := Result + 'b'
@@ -3256,15 +3209,12 @@ begin
   end
   else
     CleanName := AName;
-  Sig := GetParamSignature(ADecl, AOwnerUnitId);
+  Sig := GetParamSignature(ADecl);
   for Index := 0 to Length(FProcedureBodies) - 1 do
     if SameText(FProcedureBodies[Index].Name, CleanName) and
       SameText(FProcedureBodies[Index].OwnerUnitId, AOwnerUnitId) then
     begin
-      ExistingSig := GetParamSignature(
-        FProcedureBodies[Index].Decl,
-        FProcedureBodies[Index].OwnerUnitId
-      );
+      ExistingSig := GetParamSignature(FProcedureBodies[Index].Decl);
       if ExistingSig = Sig then
       begin
         FProcedureBodies[Index].Body := ABody;
@@ -4436,68 +4386,13 @@ var
   ArgNode: TGreenNode;
   ArgRoot: TGreenNode;
   ArgTypeId: LongInt;
-  CurrentOwnerUnitId: string;
   Index: LongInt;
   TypeSig: string;
-
-  function CurrentCallableParamSignature(const AParamName: string): string;
-  var
-    ChildIndex: LongInt;
-    ParamIndex: LongInt;
-    ParamList: TGreenNode;
-    ParamNode: TGreenNode;
-    ParamTypeId: LongInt;
-    TypeChild: TGreenNode;
-    TypeName: string;
-  begin
-    Result := '';
-    if (AParamName = '') or (FCurrentCallableDecl = nil) then
-      Exit;
-    for ChildIndex := 0 to FCurrentCallableDecl.ChildCount - 1 do
-    begin
-      ParamList := FCurrentCallableDecl.ChildAt(ChildIndex);
-      if (ParamList = nil) or (ParamList.NodeKind <> gnkParameterList) then
-        Continue;
-      for ParamIndex := 0 to ParamList.ChildCount - 1 do
-      begin
-        ParamNode := ParamList.ChildAt(ParamIndex);
-        if (ParamNode = nil) or (ParamNode.NodeKind <> gnkParameterDecl) or
-          (not SameText(ParamNode.Text, AParamName)) then
-          Continue;
-        ParamTypeId := ParamDeclTypeId(ParamNode, CurrentOwnerUnitId);
-        Result := TypeSignatureForTypeId(ParamTypeId);
-        if Result <> '' then
-          Exit;
-        TypeChild := nil;
-        TypeName := '';
-        if ParamNode.ChildCount > 0 then
-        begin
-          TypeChild := ParamNode.ChildAt(0);
-          if TypeChild <> nil then
-            TypeName := LowerCase(TypeChild.Text);
-        end;
-        if (TypeName = 'string') or (TypeName = 'ansistring') then
-          Exit('s');
-        if (TypeName = 'boolean') or (TypeName = 'bool') then
-          Exit('b');
-        if (TypeChild <> nil) and TypeMetaIsRecord(TypeChild.Text) then
-          Exit('r');
-        if (TypeChild <> nil) and (TypeMetaSize(TypeChild.Text) > 0) then
-          Exit('p');
-        Exit('i');
-      end;
-      Break;
-    end;
-  end;
 begin
   ASignature := '';
   Result := False;
   if ACallNode = nil then
     Exit;
-  if FCurrentProcessingUnitId <> '' then
-    CurrentOwnerUnitId := NormalizeUnitIdentity(FCurrentProcessingUnitId)
-  else
-    CurrentOwnerUnitId := NormalizeUnitIdentity(FUnitGraph.RootName);
 
   ArgRoot := ACallNode;
   if (ACallNode.NodeKind = gnkProcedureCallStatement) and
@@ -4514,166 +4409,11 @@ begin
     ArgNode := ArgRoot.ChildAt(Index);
     ArgTypeId := InferExpressionType(ArgNode);
     TypeSig := TypeSignatureForTypeId(ArgTypeId);
-    if (TypeSig = '') and (ArgNode <> nil) and
-      (ArgNode.NodeKind = gnkIdentifier) then
-      TypeSig := CurrentCallableParamSignature(ArgNode.Text);
     if TypeSig = '' then
       Exit(False);
     ASignature := ASignature + TypeSig;
   end;
   Result := True;
-end;
-
-function TSemanticAnalyzer.CallArgumentTypeIds(
-  const ACallNode: TGreenNode;
-  out ATypeIds: TTypeIdArray
-): Boolean;
-var
-  ArgNode: TGreenNode;
-  ArgRoot: TGreenNode;
-  ArgTypeId: LongInt;
-  Index: LongInt;
-begin
-  SetLength(ATypeIds, 0);
-  Result := False;
-  if ACallNode = nil then
-    Exit;
-
-  ArgRoot := ACallNode;
-  if (ACallNode.NodeKind = gnkProcedureCallStatement) and
-    (ACallNode.ChildCount > 0) and
-    (ACallNode.ChildAt(0) <> nil) and
-    (ACallNode.ChildAt(0).NodeKind = gnkFunctionCall) then
-    ArgRoot := ACallNode.ChildAt(0);
-
-  if ArgRoot.NodeKind <> gnkFunctionCall then
-    Exit(True);
-
-  for Index := 1 to ArgRoot.ChildCount - 1 do
-  begin
-    ArgNode := ArgRoot.ChildAt(Index);
-    ArgTypeId := InferExpressionType(ArgNode);
-    if ArgTypeId <= 0 then
-      Exit(False);
-    SetLength(ATypeIds, Length(ATypeIds) + 1);
-    ATypeIds[High(ATypeIds)] := ArgTypeId;
-  end;
-  Result := True;
-end;
-
-function TSemanticAnalyzer.DeclMatchesCallArgumentTypes(
-  const ADecl: TGreenNode;
-  const AOwnerUnitId: string;
-  const AArgTypeIds: TTypeIdArray
-): Boolean;
-var
-  ActualTypeSig: string;
-  ExpectedTypeSig: string;
-  Index: LongInt;
-  ParamDecl: TGreenNode;
-  ParamIndex: LongInt;
-  ParamList: TGreenNode;
-  ParamTypeId: LongInt;
-begin
-  Result := False;
-  if ADecl = nil then
-    Exit;
-  if not DeclAcceptsArgCount(ADecl, Length(AArgTypeIds)) then
-    Exit;
-
-  ParamList := nil;
-  for Index := 0 to ADecl.ChildCount - 1 do
-    if (ADecl.ChildAt(Index) <> nil) and
-      (ADecl.ChildAt(Index).NodeKind = gnkParameterList) then
-    begin
-      ParamList := ADecl.ChildAt(Index);
-      Break;
-    end;
-
-  if Length(AArgTypeIds) = 0 then
-    Exit(True);
-  if ParamList = nil then
-    Exit(False);
-
-  ParamIndex := 0;
-  for Index := 0 to ParamList.ChildCount - 1 do
-  begin
-    ParamDecl := ParamList.ChildAt(Index);
-    if (ParamDecl = nil) or (ParamDecl.NodeKind <> gnkParameterDecl) then
-      Continue;
-    if ParamIndex >= Length(AArgTypeIds) then
-      Break;
-    ParamTypeId := ParamDeclTypeId(ParamDecl, AOwnerUnitId);
-    if (ParamTypeId <= 0) or (AArgTypeIds[ParamIndex] <= 0) then
-      Exit(False);
-    ExpectedTypeSig := TypeSignatureForTypeId(ParamTypeId);
-    ActualTypeSig := TypeSignatureForTypeId(AArgTypeIds[ParamIndex]);
-    if (ExpectedTypeSig <> '') and (ActualTypeSig <> '') then
-    begin
-      if not ((ExpectedTypeSig = 's') and (ActualTypeSig = 'i')) and
-        (not SameText(ExpectedTypeSig, ActualTypeSig)) then
-        Exit(False);
-    end;
-    if not AreTypesCompatible(ParamTypeId, AArgTypeIds[ParamIndex]) then
-      Exit(False);
-    Inc(ParamIndex);
-  end;
-
-  Result := ParamIndex = Length(AArgTypeIds);
-end;
-
-function TSemanticAnalyzer.TryResolveImplicitSelfCallByArgTypes(
-  const ACallNode: TGreenNode;
-  const AReceiverTypeId: LongInt;
-  const ACallName: string;
-  const AArgCount: LongInt;
-  out ATargetSymbolId: LongInt
-): Boolean;
-var
-  ArgTypeIds: TTypeIdArray;
-  CandidateSymbolId: LongInt;
-  Index: LongInt;
-  MatchCount: LongInt;
-  QualifiedName: string;
-  TypeSymbol: TSemanticSymbol;
-begin
-  Result := False;
-  ATargetSymbolId := 0;
-  if (AReceiverTypeId <= 0) or (ACallName = '') then
-    Exit;
-  if not CallArgumentTypeIds(ACallNode, ArgTypeIds) then
-    Exit;
-  if Length(ArgTypeIds) <> AArgCount then
-    Exit;
-  if not TypeSymbolForTypeId(AReceiverTypeId, TypeSymbol) then
-    Exit;
-
-  QualifiedName := TypeSymbol.Name + '.' + ACallName;
-  MatchCount := 0;
-  for Index := 0 to Length(FProcedureBodies) - 1 do
-  begin
-    if not SameText(FProcedureBodies[Index].Name, QualifiedName) or
-      not SameText(FProcedureBodies[Index].OwnerUnitId, TypeSymbol.OwnerUnitId) then
-      Continue;
-    if not DeclMatchesCallArgumentTypes(
-      FProcedureBodies[Index].Decl,
-      FProcedureBodies[Index].OwnerUnitId,
-      ArgTypeIds
-    ) then
-      Continue;
-    CandidateSymbolId := CallableSymbolIdForDeclaration(
-      FProcedureBodies[Index].Decl,
-      FProcedureBodies[Index].OwnerUnitId
-    );
-    if CandidateSymbolId <= 0 then
-      Continue;
-    Inc(MatchCount);
-    ATargetSymbolId := CandidateSymbolId;
-    if MatchCount > 1 then
-      Exit(False);
-  end;
-
-  Result := MatchCount = 1;
 end;
 
 function TSemanticAnalyzer.MethodSymbolIdForExactClassTypeMember(
@@ -4892,13 +4632,7 @@ begin
       Inc(BodyCandidateCount);
       if (DeclAcceptsArgCount(FProcedureBodies[Index].Decl, AArgCount)) and
         ((not AHasArgSignature) or
-         SameText(
-           GetParamSignature(
-             FProcedureBodies[Index].Decl,
-             FProcedureBodies[Index].OwnerUnitId
-           ),
-           AArgSignature
-         )) then
+         SameText(GetParamSignature(FProcedureBodies[Index].Decl), AArgSignature)) then
         Inc(BodyMatchCount);
     end;
 
@@ -5173,16 +4907,6 @@ begin
     AResolutionFailureKind,
     ImplicitCandidates
   );
-  if (TargetSymbolId <= 0) and
-    SameText(AResolutionFailureKind, 'ambiguous-overload') and
-    TryResolveImplicitSelfCallByArgTypes(
-      ACallNode,
-      ReceiverTypeId,
-      CallName,
-      ArgCount,
-      TargetSymbolId
-    ) then
-    AResolutionFailureKind := '';
   if TargetSymbolId <= 0 then
     Exit;
 
@@ -5305,7 +5029,7 @@ begin
   else
     ExpectedKind := '';
   ParamCount := CountDeclParams(ADecl);
-  ParamSignature := GetParamSignature(ADecl, AOwnerUnitId);
+  ParamSignature := GetParamSignature(ADecl);
 
   for Index := 0 to FModel.SymbolCount - 1 do
   begin
@@ -5405,11 +5129,8 @@ var
   Payload: TDiagnosticPayload;
   MethodClass: string;
   CallableOwnerUnitId: string;
-  SavedCallableDecl: TGreenNode;
   QualifiedPos: LongInt;
   ResolutionFailureKind: string;
-  SavedResKind: string;
-  SavedMethodClass: string;
   SavedScopeId: LongInt;
 begin
   if ANode = nil then
@@ -5417,9 +5138,7 @@ begin
 
   MethodClass := ACurrentMethodClass;
   SavedScopeId := FCurrentScopeId;
-  SavedCallableDecl := FCurrentCallableDecl;
-  SavedMethodClass := FCurrentMethodClass;
-  if ANode.NodeKind in [gnkProcedureDecl, gnkFunctionDecl, gnkClassMethod] then
+  if ANode.NodeKind in [gnkProcedureDecl, gnkFunctionDecl] then
   begin
     QualifiedPos := Pos('.', ANode.Text);
     if QualifiedPos > 1 then
@@ -5427,9 +5146,7 @@ begin
     CallableScopeId := ProcedureBodyScopeIdForDecl(ANode);
     if CallableScopeId > 0 then
       FCurrentScopeId := CallableScopeId;
-    FCurrentCallableDecl := ANode;
   end;
-  FCurrentMethodClass := MethodClass;
 
   if ANode.NodeKind in [gnkProcedureCallStatement, gnkFunctionCall] then
   begin
@@ -5529,15 +5246,7 @@ begin
       else
       begin
         if (MethodClass <> '') and
-          (
-            SameText(ResolutionFailureKind, 'unknown-callable') or
-            SameText(ResolutionFailureKind, 'ambiguous-overload') or
-            SameText(ResolutionFailureKind, 'wrong-argument-count') or
-            SameText(ResolutionFailureKind, 'type-mismatch') or
-            SameText(ResolutionFailureKind, 'no-matching-overload')
-          ) then
-        begin
-          SavedResKind := ResolutionFailureKind;
+          SameText(ResolutionFailureKind, 'unknown-callable') then
           ImplicitSelfBound := TryRegisterImplicitSelfBareMethodCallBinding(
             ANode,
             MethodClass,
@@ -5546,9 +5255,6 @@ begin
             MemberFailureName,
             MemberFailureOffset
           );
-          if not ImplicitSelfBound then
-            ResolutionFailureKind := SavedResKind;
-        end;
         if (not ImplicitSelfBound) and
           SameText(ResolutionFailureKind, 'ambiguous-overload') then
           EmitSemaError(
@@ -5622,8 +5328,6 @@ begin
       SeedCallBindingsInNode(Child, MethodClass, ACurrentOwnerUnitId);
   end;
   FCurrentScopeId := SavedScopeId;
-  FCurrentCallableDecl := SavedCallableDecl;
-  FCurrentMethodClass := SavedMethodClass;
 end;
 
 procedure TSemanticAnalyzer.SeedCallBindings;
@@ -5938,86 +5642,14 @@ end;
 
 function TSemanticAnalyzer.InferExpressionType(const ANode: TGreenNode): LongInt;
 var
-  CurrentOwnerUnitId: string;
-  FieldMeta: TFieldMeta;
   LStrTypeId: LongInt;
   RType: LongInt;
   SymId: LongInt;
   Sym: TSemanticSymbol;
-  SelfTypeId: LongInt;
-
-  function InferCurrentCallableParamType(const AParamName: string): LongInt;
-  var
-    ChildIndex: LongInt;
-    ParamIndex: LongInt;
-    ParamList: TGreenNode;
-    ParamNode: TGreenNode;
-  begin
-    Result := 0;
-    if (AParamName = '') or (FCurrentCallableDecl = nil) then
-      Exit;
-    for ChildIndex := 0 to FCurrentCallableDecl.ChildCount - 1 do
-    begin
-      ParamList := FCurrentCallableDecl.ChildAt(ChildIndex);
-      if (ParamList = nil) or (ParamList.NodeKind <> gnkParameterList) then
-        Continue;
-      for ParamIndex := 0 to ParamList.ChildCount - 1 do
-      begin
-        ParamNode := ParamList.ChildAt(ParamIndex);
-        if (ParamNode <> nil) and (ParamNode.NodeKind = gnkParameterDecl) and
-          SameText(ParamNode.Text, AParamName) then
-          Exit(ParamDeclTypeId(ParamNode, CurrentOwnerUnitId));
-      end;
-      Break;
-    end;
-  end;
-
-  function InferCurrentMethodFieldType(const AFieldName: string): LongInt;
-  begin
-    Result := 0;
-    if (AFieldName = '') or (FCurrentMethodClass = '') then
-      Exit;
-
-    SelfTypeId := ResolveTypeIdForOwner(FCurrentMethodClass, CurrentOwnerUnitId);
-    if (SelfTypeId <= 0) and (FCurrentMethodClass <> '') then
-      SelfTypeId := FModel.FindTypeByName(FCurrentMethodClass);
-    if (SelfTypeId > 0) and
-      FModel.GetFieldMetaByName(SelfTypeId, AFieldName, FieldMeta) then
-      Result := FieldMeta.TypeId;
-  end;
-
-  function InferDotAccessType(const ADotNode: TGreenNode): LongInt;
-  var
-    BaseNode: TGreenNode;
-    BaseTypeId: LongInt;
-    FieldNode: TGreenNode;
-  begin
-    Result := 0;
-    if (ADotNode = nil) or (ADotNode.ChildCount < 2) then
-      Exit;
-
-    BaseNode := ADotNode.ChildAt(0);
-    FieldNode := ADotNode.ChildAt(1);
-    if (FieldNode = nil) or (FieldNode.NodeKind <> gnkIdentifier) then
-      Exit;
-
-    BaseTypeId := InferExpressionType(BaseNode);
-    if (BaseTypeId <= 0) and (BaseNode <> nil) and
-      (BaseNode.NodeKind = gnkIdentifier) then
-      BaseTypeId := InferCurrentMethodFieldType(BaseNode.Text);
-
-    if (BaseTypeId > 0) and
-      FModel.GetFieldMetaByName(BaseTypeId, FieldNode.Text, FieldMeta) then
-      Result := FieldMeta.TypeId;
-  end;
 begin
   Result := 0;
   if ANode = nil then
     Exit;
-  if FCurrentProcessingUnitId <> '' then
-    CurrentOwnerUnitId := FCurrentProcessingUnitId
-  else
-    CurrentOwnerUnitId := NormalizeUnitIdentity(FUnitGraph.RootName);
   case ANode.NodeKind of
     gnkIntegerLiteral:
       Result := FModel.FindTypeByName('Integer');
@@ -6038,11 +5670,7 @@ begin
           Result := Sym.TypeId;
         end
         else
-        begin
-          Result := InferCurrentCallableParamType(ANode.Text);
-          if Result = 0 then
-            Result := FModel.FindTypeByName(ANode.Text);
-        end;
+          Result := FModel.FindTypeByName(ANode.Text);
       end;
     gnkBinaryExpression:
       begin
@@ -6101,9 +5729,7 @@ begin
           Result := Sym.TypeId;
         end;
       end;
-    gnkDotAccess:
-      Result := InferDotAccessType(ANode);
-    gnkArrayAccess, gnkDereference:
+    gnkDotAccess, gnkArrayAccess, gnkDereference:
       Result := 0;
   end;
 end;
@@ -6977,28 +6603,6 @@ begin
   Result := ResolveTypeIdForOwner(ATypeName, '');
 end;
 
-function TSemanticAnalyzer.CanonicalTypeIdForMatching(
-  const ATypeId: LongInt
-): LongInt;
-var
-  Depth: LongInt;
-  Meta: TTypeMetadata;
-  NextTypeId: LongInt;
-begin
-  Result := ATypeId;
-  Depth := 0;
-  while (Result > 0) and (Result <= FModel.TypeCount) and (Depth < 16) do
-  begin
-    if not FModel.GetTypeMeta(Result, Meta) or (Meta.AliasTargetTypeId <= 0) then
-      Exit;
-    NextTypeId := Meta.AliasTargetTypeId;
-    if NextTypeId = Result then
-      Exit;
-    Result := NextTypeId;
-    Inc(Depth);
-  end;
-end;
-
 function TSemanticAnalyzer.ResolveTypeIdForOwner(
   const ATypeName: string;
   const APreferredOwnerUnitId: string;
@@ -7006,7 +6610,6 @@ function TSemanticAnalyzer.ResolveTypeIdForOwner(
 ): LongInt;
 var
   CandidateSeen: Boolean;
-  CandidateCanonicalTypeId: LongInt;
   DirectImportMatchCount: LongInt;
   DotPos: LongInt;
   I: LongInt;
@@ -7016,7 +6619,6 @@ var
   QualifiedOwnerUnitId: string;
   ShortTypeName: string;
   Symbol: TSemanticSymbol;
-  UniqueCanonicalTypeId: LongInt;
   UniqueTypeId: LongInt;
 begin
   if ATypeName = '' then
@@ -7047,7 +6649,6 @@ begin
     begin
       PreferredMatchCount := 0;
       UniqueTypeId := 0;
-      UniqueCanonicalTypeId := 0;
       for Index := 0 to FModel.SymbolCount - 1 do
       begin
         Symbol := FModel.SymbolAt(Index);
@@ -7057,28 +6658,16 @@ begin
           (Symbol.TypeId > 0) and (Symbol.TypeId <= FModel.TypeCount) then
         begin
           Inc(PreferredMatchCount);
-          CandidateCanonicalTypeId := CanonicalTypeIdForMatching(Symbol.TypeId);
           if UniqueTypeId = 0 then
-          begin
-            UniqueTypeId := Symbol.TypeId;
-            UniqueCanonicalTypeId := CandidateCanonicalTypeId;
-          end
-          else if UniqueCanonicalTypeId <> CandidateCanonicalTypeId then
-          begin
-            if SameText(FModel.TypeAt(Symbol.TypeId - 1).Kind, 'class') or
-              SameText(FModel.TypeAt(Symbol.TypeId - 1).Kind, 'interface') then
-            begin
-              UniqueTypeId := Symbol.TypeId;
-              UniqueCanonicalTypeId := CandidateCanonicalTypeId;
-            end
-            else if not (SameText(FModel.TypeAt(UniqueTypeId - 1).Kind, 'class') or
-              SameText(FModel.TypeAt(UniqueTypeId - 1).Kind, 'interface')) then
-              Exit(0);
-          end;
+            UniqueTypeId := Symbol.TypeId
+          else if UniqueTypeId <> Symbol.TypeId then
+            Exit(0);
         end;
       end;
-      if PreferredMatchCount >= 1 then
+      if PreferredMatchCount = 1 then
         Exit(UniqueTypeId);
+      if PreferredMatchCount > 1 then
+        Exit(0);
     end;
   end;
 
@@ -7087,7 +6676,6 @@ begin
   begin
     PreferredMatchCount := 0;
     UniqueTypeId := 0;
-    UniqueCanonicalTypeId := 0;
     for Index := 0 to FModel.SymbolCount - 1 do
     begin
       Symbol := FModel.SymbolAt(Index);
@@ -7097,34 +6685,21 @@ begin
         (Symbol.TypeId > 0) and (Symbol.TypeId <= FModel.TypeCount) then
       begin
         Inc(PreferredMatchCount);
-        CandidateCanonicalTypeId := CanonicalTypeIdForMatching(Symbol.TypeId);
         if UniqueTypeId = 0 then
-        begin
-          UniqueTypeId := Symbol.TypeId;
-          UniqueCanonicalTypeId := CandidateCanonicalTypeId;
-        end
-        else if UniqueCanonicalTypeId <> CandidateCanonicalTypeId then
-        begin
-          if SameText(FModel.TypeAt(Symbol.TypeId - 1).Kind, 'class') or
-            SameText(FModel.TypeAt(Symbol.TypeId - 1).Kind, 'interface') then
-          begin
-            UniqueTypeId := Symbol.TypeId;
-            UniqueCanonicalTypeId := CandidateCanonicalTypeId;
-          end
-          else if not (SameText(FModel.TypeAt(UniqueTypeId - 1).Kind, 'class') or
-            SameText(FModel.TypeAt(UniqueTypeId - 1).Kind, 'interface')) then
-            Exit(0);
-        end;
+          UniqueTypeId := Symbol.TypeId
+        else if UniqueTypeId <> Symbol.TypeId then
+          Exit(0);
       end;
     end;
-    if PreferredMatchCount >= 1 then
+    if PreferredMatchCount = 1 then
       Exit(UniqueTypeId);
+    if PreferredMatchCount > 1 then
+      Exit(0);
 
     if AAllowDirectImportSearch then
     begin
       DirectImportMatchCount := 0;
       UniqueTypeId := 0;
-      UniqueCanonicalTypeId := 0;
       for Index := 0 to FModel.SymbolCount - 1 do
       begin
         Symbol := FModel.SymbolAt(Index);
@@ -7134,13 +6709,9 @@ begin
           (Symbol.TypeId > 0) and (Symbol.TypeId <= FModel.TypeCount) then
         begin
           Inc(DirectImportMatchCount);
-          CandidateCanonicalTypeId := CanonicalTypeIdForMatching(Symbol.TypeId);
           if UniqueTypeId = 0 then
-          begin
-            UniqueTypeId := Symbol.TypeId;
-            UniqueCanonicalTypeId := CandidateCanonicalTypeId;
-          end
-          else if UniqueCanonicalTypeId <> CandidateCanonicalTypeId then
+            UniqueTypeId := Symbol.TypeId
+          else if UniqueTypeId <> Symbol.TypeId then
             Exit(0);
         end;
       end;
@@ -7153,21 +6724,18 @@ begin
 
   CandidateSeen := False;
   UniqueTypeId := 0;
-  UniqueCanonicalTypeId := 0;
   for Index := 0 to FModel.SymbolCount - 1 do
   begin
     Symbol := FModel.SymbolAt(Index);
     if SameText(Symbol.Kind, 'type') and SameText(Symbol.Name, ATypeName) and
       (Symbol.TypeId > 0) and (Symbol.TypeId <= FModel.TypeCount) then
     begin
-      CandidateCanonicalTypeId := CanonicalTypeIdForMatching(Symbol.TypeId);
       if not CandidateSeen then
       begin
         CandidateSeen := True;
         UniqueTypeId := Symbol.TypeId;
-        UniqueCanonicalTypeId := CandidateCanonicalTypeId;
       end
-      else if UniqueCanonicalTypeId <> CandidateCanonicalTypeId then
+      else if UniqueTypeId <> Symbol.TypeId then
         Exit(0);
     end;
   end;
@@ -7321,10 +6889,7 @@ begin
 
   FModel.SetSymbolParamCount(SymbolId, ParamCount);
   FModel.SetSymbolMinParamCount(SymbolId, CountRequiredDeclParams(ANode));
-  FModel.SetSymbolParamSignature(
-    SymbolId,
-    GetParamSignature(ANode, AOwnerUnitId)
-  );
+  FModel.SetSymbolParamSignature(SymbolId, GetParamSignature(ANode));
   FCurrentScopeId := SavedScopeId;
 end;
 
@@ -7389,10 +6954,7 @@ begin
 
   FModel.SetSymbolParamCount(SymbolId, ParamCount);
   FModel.SetSymbolMinParamCount(SymbolId, CountRequiredDeclParams(ANode));
-  FModel.SetSymbolParamSignature(
-    SymbolId,
-    GetParamSignature(ANode, AOwnerUnitId)
-  );
+  FModel.SetSymbolParamSignature(SymbolId, GetParamSignature(ANode));
   FCurrentScopeId := SavedScopeId;
 end;
 
@@ -7586,10 +7148,7 @@ begin
           'method', AOwnerUnitId, ATypeId, Child.ByteOffset);
         FModel.SetSymbolParamCount(SymbolId, CountDeclParams(Child));
         FModel.SetSymbolMinParamCount(SymbolId, CountRequiredDeclParams(Child));
-        FModel.SetSymbolParamSignature(
-          SymbolId,
-          GetParamSignature(Child, AOwnerUnitId)
-        );
+        FModel.SetSymbolParamSignature(SymbolId, GetParamSignature(Child));
         if DeclReturnsString(Child) then
           FModel.AddConstValue(IntfName + '$ret_str_' + NameNode.Text, 1);
       end;
@@ -8236,10 +7795,7 @@ begin
             'method', AOwnerUnitId, ATypeId, Child.ByteOffset);
           FModel.SetSymbolParamCount(SymbolId, CountDeclParams(Child));
           FModel.SetSymbolMinParamCount(SymbolId, CountRequiredDeclParams(Child));
-          FModel.SetSymbolParamSignature(
-            SymbolId,
-            GetParamSignature(Child, AOwnerUnitId)
-          );
+          FModel.SetSymbolParamSignature(SymbolId, GetParamSignature(Child));
           FModel.SetSymbolVisibility(SymbolId, CurrentVisibility);
           FModel.SetSymbolScope(SymbolId, ClassScopeId);
           if Pos(';virtual', Child.Text) > 0 then
@@ -15540,10 +15096,7 @@ begin
     SetLength(FPointerVarNames, 0);
     SetLength(FPointerVarTypes, 0);
     if HasOverload(Entry.Name) then
-      EffName := MangledNameSig(
-        Entry.Name,
-        GetParamSignature(Entry.Decl, Entry.OwnerUnitId)
-      )
+      EffName := MangledNameSig(Entry.Name, GetParamSignature(Entry.Decl))
     else
       EffName := Entry.Name;
     ParamCount := 0;
@@ -15974,7 +15527,7 @@ procedure TSemanticAnalyzer.SeedImportedUnitBodies;
       Exit;
 
     ParamCount := CountDeclParams(ANode);
-    ParamSignature := GetParamSignature(ANode, AOwnerUnitId);
+    ParamSignature := GetParamSignature(ANode);
     for SymbolIndex := 0 to FModel.SymbolCount - 1 do
     begin
       Symbol := FModel.SymbolAt(SymbolIndex);
