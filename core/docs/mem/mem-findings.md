@@ -647,20 +647,21 @@ README / ARCHITECTURE 已写明 `AllocUnsafe` 不保证对齐，这条不再单�
 
 ## 十、汇总
 
-### 状态统计（截止 2026-06-25 第五轮）
+### 状态统计（截止 2026-06-25 第六轮）
 
 | 状态               | 数量   | 说明                                                            |
 | ------------------ | ------ | --------------------------------------------------------------- |
-| **[FIXED] / 关闭** | **81** | 含第一轮 60 条 + 第二轮 9 条 + 第三轮 4 条 + 第四轮 4 条 + 第五轮 4 条 |
+| **[FIXED] / 关闭** | **83** | 含第一轮 60 条 + 第二轮 9 条 + 第三轮 4 条 + 第四轮 4 条 + 第五轮 4 条 + 第六轮 2 条 |
 | **仍然开放**       | **0**  | 当前树上已无剩余开放问题                                         |
 | **新增 (第二轮)**  | **9**  | 全部已修复                                                      |
 | **新增 (第三轮)**  | **4**  | 全部已修复                                                      |
 | **新增 (第四轮)**  | **4**  | 全部已修复                                                      |
 | **新增 (第五轮)**  | **4**  | 全部已修复                                                      |
+| **新增 (第六轮)**  | **2**  | 全部已修复                                                      |
 
 ### 当前最高优先级（建议先处理）
 
-1. 无。五轮 `mem-findings.md` 已清零。
+1. 无。六轮 `mem-findings.md` 已清零。
 
 ### 处理建议顺序
 
@@ -873,3 +874,23 @@ front bump 统计 `FTotalUsed += LPad + aSize`（含对齐 padding），back bum
 2. `FFallback.ReallocMem` 失败返回 nil 时，代码返回原指针 `APtr` 而非 nil，违反 `ReallocMem` 契约（失败应返回 nil）。
 
 **修复**：增加 `ASize=0` 早返回路径（调用 `FreeMem` + 返回 nil）。失败时不再覆盖 `Result`，保留 nil。
+
+---
+
+## 第六轮（持续打磨 — 安全防护 + API 一致性）
+
+### R-22 [FIXED] TObjectPool 无双重释放检测
+
+**P1 | 文件：`core/src/nextpas.core.mem.pool.object_pool.pas`**
+
+`ReleaseObject` 不检查对象是否已在池中。同一对象释放两次会被存储两次，后续 `AcquireObject` 返回同一指针给两个调用方，导致 use-after-free。
+
+**修复**：释放前线性扫描 `FPool[0..FFreeTop-1]` 检查已有引用，检测到重复抛出 `EDoubleFree`。
+
+### R-23 [FIXED] Arena AllocAligned(0) 行为不一致
+
+**P3 | 文件：`core/src/nextpas.core.mem.arena.local.pas`、`arena.virtual.pas`**
+
+`TLocalArena.AllocAligned(0)` 静默返回 nil（`IsPowerOfTwo(0) = False`），`TVirtualArena` 将 0 视为无效对齐设置失败原因。只有 `TChunkedArena` 将 0 归一化为 `MEM_DEFAULT_ALIGN`。三种实现行为不统一。
+
+**修复**：`TLocalArena` 和 `TVirtualArena` 均将 `AAlign=0` 归一化为 `MEM_DEFAULT_ALIGN`（`SizeOf(Pointer)`），与 `TChunkedArena` 一致。
