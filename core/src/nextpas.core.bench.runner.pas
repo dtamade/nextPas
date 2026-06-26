@@ -786,9 +786,9 @@ end;
 
 procedure TBenchRunner.WarmupEntry(const AEntry: TBenchEntry);
 var
-  i: Integer;
+  I: Integer;
 begin
-  for i := 1 to FConfig.WarmupIterations do
+  for I := 1 to FConfig.WarmupIterations do
     ExecuteEntry(AEntry, 1, False);
 end;
 
@@ -798,7 +798,7 @@ var
   LSamples: TDoubleArray;
   LMeasurement: TBenchResult;
   LMinSamples: Integer;
-  i: Integer;
+  I: Integer;
 begin
   AFirstSample := Default(TBenchResult);
 
@@ -809,20 +809,20 @@ begin
 
   SetLength(LSamples, LMinSamples);
 
-  for i := 0 to LMinSamples - 1 do
+  for I := 0 to LMinSamples - 1 do
   begin
-    LMeasurement := ExecuteEntry(AEntry, AIters, FConfig.EnableMemoryTracking and (i = 0));
-    if i = 0 then
+    LMeasurement := ExecuteEntry(AEntry, AIters, FConfig.EnableMemoryTracking and (I = 0));
+    if I = 0 then
       AFirstSample := LMeasurement;
 
     if LMeasurement.Iterations > 0 then
-      LSamples[i] := Double(LMeasurement.TotalNs) / Double(LMeasurement.Iterations)
+      LSamples[I] := Double(LMeasurement.TotalNs) / Double(LMeasurement.Iterations)
     else
-      LSamples[i] := 0.0;
+      LSamples[I] := 0.0;
 
     if LMeasurement.Skipped then
     begin
-      SetLength(LSamples, i + 1);
+      SetLength(LSamples, I + 1);
       Break;
     end;
   end;
@@ -942,31 +942,19 @@ end;
 
 procedure TBenchRunner.RunAll(const AEntries: array of TBenchEntry);
 var
-  i: Integer;
+  I: Integer;
 begin
   if not FConfig.Quiet then
-  begin
     WriteLn('=== nextpas.core.bench v1.0 ===');
-    WriteLn;
-  end;
 
-  for i := 0 to High(AEntries) do
+  for I := 0 to High(AEntries) do
   begin
-    if AEntries[i].Condition then
-      RunOne(AEntries[i]);
+    if AEntries[I].Condition then
+      RunOne(AEntries[I]);
   end;
 
   if not FConfig.Quiet then
-  begin
-    WriteLn;
-    WriteLn('=== Summary ===');
-    for i := 0 to FResultCount - 1 do
-    begin
-      WriteLn('  ', FResults[i].Name:40,
-        FResults[i].NsPerOp:10:1, ' ns/op',
-        FResults[i].OpsPerSec:14:0, ' ops/s');
-    end;
-  end;
+    Summary;
 end;
 
 function TBenchRunner.GetResults: TBenchResultArray;

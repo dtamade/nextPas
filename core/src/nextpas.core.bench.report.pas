@@ -163,17 +163,13 @@ end;
 function SanitizeTSVField(const AStr: string): string;
 var
   I: Integer;
-  LBuf: array of Char;
 begin
-  SetLength(LBuf, Length(AStr));
+  SetLength(Result, Length(AStr));
   for I := 1 to Length(AStr) do
-  begin
     if AStr[I] in [#9, #10, #13] then
-      LBuf[I - 1] := ' '
+      Result[I] := ' '
     else
-      LBuf[I - 1] := AStr[I];
-  end;
-  SetString(Result, PChar(LBuf), Length(AStr));
+      Result[I] := AStr[I];
 end;
 
 { TBenchReportGenerator }
@@ -195,12 +191,12 @@ end;
 
 procedure TBenchReportGenerator.SetResults(const AResults: array of TBenchResult);
 var
-  i: Integer;
+  I: Integer;
 begin
   FResultCount := Length(AResults);
   SetLength(FResults, FResultCount);
-  for i := 0 to FResultCount - 1 do
-    FResults[i] := AResults[i];
+  for I := 0 to FResultCount - 1 do
+    FResults[I] := AResults[I];
 end;
 
 procedure TBenchReportGenerator.SetEnvironment(const AEnvironment: TBenchEnvironment);
@@ -328,7 +324,7 @@ var
   LLines: TLineBuffer;
   LSkippedCount: Integer;
   LMaxDetail: Integer;
-  i: Integer;
+  I: Integer;
 begin
   LLines := Default(TLineBuffer);
 
@@ -353,20 +349,20 @@ begin
 
   // results (non-skipped only) + count skipped in one pass (ST-16)
   LSkippedCount := 0;
-  for i := 0 to FResultCount - 1 do
+  for I := 0 to FResultCount - 1 do
   begin
-    if not FResults[i].Skipped then
+    if not FResults[I].Skipped then
     begin
       // ST-18: columns match HTML header
       BufferAddLine(LLines, TextFormat('  %-40s %10s %10s %10s %10s %10s %10s %10s',
-        [FResults[i].Name,
-         FormatLargeNumber(FResults[i].Iterations),
-         FormatNumber(FResults[i].NsPerOp, 1),
-         FormatLargeNumber(Min(Int64(FResults[i].OpsPerSec), High(Int64))),
-         FormatNumber(FResults[i].StdDev, 1),
-         FormatNumber(FResults[i].Median, 1),
-         FormatNumber(FResults[i].P95, 1),
-         FormatNumber(FResults[i].P99, 1)]));
+        [FResults[I].Name,
+         FormatLargeNumber(FResults[I].Iterations),
+         FormatNumber(FResults[I].NsPerOp, 1),
+         FormatLargeNumber(Min(Int64(FResults[I].OpsPerSec), High(Int64))),
+         FormatNumber(FResults[I].StdDev, 1),
+         FormatNumber(FResults[I].Median, 1),
+         FormatNumber(FResults[I].P95, 1),
+         FormatNumber(FResults[I].P99, 1)]));
     end
     else
       Inc(LSkippedCount);
@@ -377,12 +373,12 @@ begin
     BufferAddLine(LLines, '');
     BufferAddLine(LLines, 'Skipped Benchmarks:');
     BufferAddLine(LLines, '');
-    for i := 0 to FResultCount - 1 do
+    for I := 0 to FResultCount - 1 do
     begin
-      if FResults[i].Skipped then
+      if FResults[I].Skipped then
       begin
-        BufferAddLine(LLines, '  ' + FResults[i].Name);
-        BufferAddLine(LLines, '    Reason: ' + FResults[i].SkipReason);
+        BufferAddLine(LLines, '  ' + FResults[I].Name);
+        BufferAddLine(LLines, '    Reason: ' + FResults[I].SkipReason);
       end;
     end;
   end;
@@ -393,26 +389,26 @@ begin
   // detailed statistics (non-skipped, up to LMaxDetail)
   LSkippedCount := 0;
   LMaxDetail := Min(FResultCount, 5);
-  for i := 0 to FResultCount - 1 do
+  for I := 0 to FResultCount - 1 do
   begin
-    if FResults[i].Skipped then
+    if FResults[I].Skipped then
     begin
       Inc(LSkippedCount);
       Continue;
     end;
-    if i - LSkippedCount >= LMaxDetail then
+    if I - LSkippedCount >= LMaxDetail then
       Break;
     BufferAddLine(LLines, '');
-    BufferAddLine(LLines, FResults[i].Name + ':');
+    BufferAddLine(LLines, FResults[I].Name + ':');
     BufferAddLine(LLines, TextFormat('  Mean: %s  StdDev: %s  Median: %s',
-      [FormatTime(FResults[i].NsPerOp),
-       FormatTime(FResults[i].StdDev),
-       FormatTime(FResults[i].Median)]));
+      [FormatTime(FResults[I].NsPerOp),
+       FormatTime(FResults[I].StdDev),
+       FormatTime(FResults[I].Median)]));
     BufferAddLine(LLines, TextFormat('  P95: %s  P99: %s  Outliers: %d/%d',
-      [FormatTime(FResults[i].P95),
-       FormatTime(FResults[i].P99),
-       FResults[i].Outliers,
-       FResults[i].SampleCount]));
+      [FormatTime(FResults[I].P95),
+       FormatTime(FResults[I].P99),
+       FResults[I].Outliers,
+       FResults[I].SampleCount]));
   end;
 
   Result := BufferToString(LLines);
@@ -501,7 +497,7 @@ end;
 function TBenchReportGenerator.ToTSV: string;
 var
   LLines: TLineBuffer;
-  i: Integer;
+  I: Integer;
 begin
   LLines := Default(TLineBuffer);
 
@@ -509,21 +505,21 @@ begin
   BufferAddLine(LLines, 'name' + #9 + 'status' + #9 + 'skip_reason' + #9 + 'iterations' + #9 + 'ns_per_op' + #9 + 'ops_per_sec' + #9 + 'stddev' + #9 + 'median' + #9 + 'p95' + #9 + 'p99' + #9 + 'outliers' + #9 + 'samples');
 
   // data
-  for i := 0 to FResultCount - 1 do
+  for I := 0 to FResultCount - 1 do
   begin
     BufferAddLine(LLines,
-      SanitizeTSVField(FResults[i].Name) + #9 +
-      BoolToStr(FResults[i].Skipped, 'skipped', 'ok') + #9 +
-      SanitizeTSVField(FResults[i].SkipReason) + #9 +
-      IntToStr(FResults[i].Iterations) + #9 +
-      FormatNumber(FResults[i].NsPerOp, 2) + #9 +
-      FormatNumber(FResults[i].OpsPerSec, 0) + #9 +
-      FormatNumber(FResults[i].StdDev, 2) + #9 +
-      FormatNumber(FResults[i].Median, 2) + #9 +
-      FormatNumber(FResults[i].P95, 2) + #9 +
-      FormatNumber(FResults[i].P99, 2) + #9 +
-      IntToStr(FResults[i].Outliers) + #9 +
-      IntToStr(FResults[i].SampleCount));
+      SanitizeTSVField(FResults[I].Name) + #9 +
+      BoolToStr(FResults[I].Skipped, 'skipped', 'ok') + #9 +
+      SanitizeTSVField(FResults[I].SkipReason) + #9 +
+      IntToStr(FResults[I].Iterations) + #9 +
+      FormatNumber(FResults[I].NsPerOp, 2) + #9 +
+      FormatNumber(FResults[I].OpsPerSec, 0) + #9 +
+      FormatNumber(FResults[I].StdDev, 2) + #9 +
+      FormatNumber(FResults[I].Median, 2) + #9 +
+      FormatNumber(FResults[I].P95, 2) + #9 +
+      FormatNumber(FResults[I].P99, 2) + #9 +
+      IntToStr(FResults[I].Outliers) + #9 +
+      IntToStr(FResults[I].SampleCount));
   end;
 
   Result := BufferToString(LLines);
@@ -696,22 +692,22 @@ end;
 
 procedure TBenchReportGenerator.GenerateHTMLResultRows(var ABuf: TLineBuffer);
 var
-  i: Integer;
+  I: Integer;
 begin
-  for i := 0 to FResultCount - 1 do
+  for I := 0 to FResultCount - 1 do
   begin
-    if FResults[i].Skipped then
+    if FResults[I].Skipped then
       Continue;
     BufferAddLine(ABuf, '      <tr>');
-    BufferAddLine(ABuf, '        <td class="benchmark-name">' + EscapeHTML(FResults[i].Name) + '</td>');
-    BufferAddLine(ABuf, '        <td>' + FormatLargeNumber(FResults[i].Iterations) + '</td>');
-    BufferAddLine(ABuf, '        <td>' + FormatNumber(FResults[i].NsPerOp, 1) + '</td>');
-    BufferAddLine(ABuf, '        <td>' + FormatLargeNumber(Min(Int64(FResults[i].OpsPerSec), High(Int64))) + '</td>');
-    BufferAddLine(ABuf, '        <td>' + FormatNumber(FResults[i].StdDev, 1) + '</td>');
-    BufferAddLine(ABuf, '        <td>' + FormatNumber(FResults[i].Median, 1) + '</td>');
-    BufferAddLine(ABuf, '        <td>' + FormatNumber(FResults[i].P95, 1) + '</td>');
-    BufferAddLine(ABuf, '        <td>' + FormatNumber(FResults[i].P99, 1) + '</td>');
-    BufferAddLine(ABuf, '        <td>' + IntToStr(FResults[i].Outliers) + '</td>');
+    BufferAddLine(ABuf, '        <td class="benchmark-name">' + EscapeHTML(FResults[I].Name) + '</td>');
+    BufferAddLine(ABuf, '        <td>' + FormatLargeNumber(FResults[I].Iterations) + '</td>');
+    BufferAddLine(ABuf, '        <td>' + FormatNumber(FResults[I].NsPerOp, 1) + '</td>');
+    BufferAddLine(ABuf, '        <td>' + FormatLargeNumber(Min(Int64(FResults[I].OpsPerSec), High(Int64))) + '</td>');
+    BufferAddLine(ABuf, '        <td>' + FormatNumber(FResults[I].StdDev, 1) + '</td>');
+    BufferAddLine(ABuf, '        <td>' + FormatNumber(FResults[I].Median, 1) + '</td>');
+    BufferAddLine(ABuf, '        <td>' + FormatNumber(FResults[I].P95, 1) + '</td>');
+    BufferAddLine(ABuf, '        <td>' + FormatNumber(FResults[I].P99, 1) + '</td>');
+    BufferAddLine(ABuf, '        <td>' + IntToStr(FResults[I].Outliers) + '</td>');
     BufferAddLine(ABuf, '      </tr>');
   end;
   BufferAddLine(ABuf, '    </tbody>');
@@ -721,11 +717,11 @@ end;
 procedure TBenchReportGenerator.GenerateHTMLSkippedSection(var ABuf: TLineBuffer);
 var
   LSkippedCount: Integer;
-  i: Integer;
+  I: Integer;
 begin
   LSkippedCount := 0;
-  for i := 0 to FResultCount - 1 do
-    if FResults[i].Skipped then
+  for I := 0 to FResultCount - 1 do
+    if FResults[I].Skipped then
       Inc(LSkippedCount);
 
   if LSkippedCount > 0 then
@@ -740,13 +736,13 @@ begin
     BufferAddLine(ABuf, '      </tr>');
     BufferAddLine(ABuf, '    </thead>');
     BufferAddLine(ABuf, '    <tbody>');
-    for i := 0 to FResultCount - 1 do
+    for I := 0 to FResultCount - 1 do
     begin
-      if FResults[i].Skipped then
+      if FResults[I].Skipped then
       begin
         BufferAddLine(ABuf, '      <tr>');
-        BufferAddLine(ABuf, '        <td class="benchmark-name">' + EscapeHTML(FResults[i].Name) + '</td>');
-        BufferAddLine(ABuf, '        <td>' + EscapeHTML(FResults[i].SkipReason) + '</td>');
+        BufferAddLine(ABuf, '        <td class="benchmark-name">' + EscapeHTML(FResults[I].Name) + '</td>');
+        BufferAddLine(ABuf, '        <td>' + EscapeHTML(FResults[I].SkipReason) + '</td>');
         BufferAddLine(ABuf, '      </tr>');
       end;
     end;
@@ -759,7 +755,7 @@ procedure TBenchReportGenerator.GenerateHTMLDetailedStats(var ABuf: TLineBuffer)
 var
   LSkippedCount: Integer;
   LMaxDetail: Integer;
-  i: Integer;
+  I: Integer;
 begin
   BufferAddLine(ABuf, '');
   BufferAddLine(ABuf, '  <div class="stats">');
@@ -767,22 +763,22 @@ begin
 
   LSkippedCount := 0;
   LMaxDetail := Min(FResultCount, 5);
-  for i := 0 to FResultCount - 1 do
+  for I := 0 to FResultCount - 1 do
   begin
-    if FResults[i].Skipped then
+    if FResults[I].Skipped then
     begin
       Inc(LSkippedCount);
       Continue;
     end;
-    if i - LSkippedCount >= LMaxDetail then
+    if I - LSkippedCount >= LMaxDetail then
       Break;
-    BufferAddLine(ABuf, '    <h3>' + EscapeHTML(FResults[i].Name) + '</h3>');
-    BufferAddLine(ABuf, '    <p>Mean: ' + FormatTime(FResults[i].NsPerOp) + '</p>');
-    BufferAddLine(ABuf, '    <p>StdDev: ' + FormatTime(FResults[i].StdDev) + '</p>');
-    BufferAddLine(ABuf, '    <p>Median: ' + FormatTime(FResults[i].Median) + '</p>');
-    BufferAddLine(ABuf, '    <p>P95: ' + FormatTime(FResults[i].P95) + '</p>');
-    BufferAddLine(ABuf, '    <p>P99: ' + FormatTime(FResults[i].P99) + '</p>');
-    BufferAddLine(ABuf, '    <p>Outliers: ' + IntToStr(FResults[i].Outliers) + '/' + IntToStr(FResults[i].SampleCount) + '</p>');
+    BufferAddLine(ABuf, '    <h3>' + EscapeHTML(FResults[I].Name) + '</h3>');
+    BufferAddLine(ABuf, '    <p>Mean: ' + FormatTime(FResults[I].NsPerOp) + '</p>');
+    BufferAddLine(ABuf, '    <p>StdDev: ' + FormatTime(FResults[I].StdDev) + '</p>');
+    BufferAddLine(ABuf, '    <p>Median: ' + FormatTime(FResults[I].Median) + '</p>');
+    BufferAddLine(ABuf, '    <p>P95: ' + FormatTime(FResults[I].P95) + '</p>');
+    BufferAddLine(ABuf, '    <p>P99: ' + FormatTime(FResults[I].P99) + '</p>');
+    BufferAddLine(ABuf, '    <p>Outliers: ' + IntToStr(FResults[I].Outliers) + '/' + IntToStr(FResults[I].SampleCount) + '</p>');
   end;
 
   BufferAddLine(ABuf, '  </div>');
@@ -790,15 +786,15 @@ end;
 
 procedure TBenchReportGenerator.GenerateHTMLBoxPlots(var ABuf: TLineBuffer);
 var
-  i: Integer;
+  I: Integer;
 begin
-  for i := 0 to FResultCount - 1 do
+  for I := 0 to FResultCount - 1 do
   begin
-    if (not FResults[i].Skipped) and (Length(FResults[i].RawSamples) > 0) then
+    if (not FResults[I].Skipped) and (Length(FResults[I].RawSamples) > 0) then
     begin
       BufferAddLine(ABuf, '  <div class="chart-container">');
-      BufferAddLine(ABuf, '    <h3>' + EscapeHTML(FResults[i].Name) + ' - Sample Distribution</h3>');
-      BufferAddLine(ABuf, '    ' + GenerateBoxPlot(FResults[i].RawSamples, FResults[i].Name));
+      BufferAddLine(ABuf, '    <h3>' + EscapeHTML(FResults[I].Name) + ' - Sample Distribution</h3>');
+      BufferAddLine(ABuf, '    ' + GenerateBoxPlot(FResults[I].RawSamples, FResults[I].Name));
       BufferAddLine(ABuf, '  </div>');
     end;
   end;
@@ -1060,7 +1056,7 @@ function TBenchReportGenerator.GenerateComparisonReport(
 var
   LLines: TLineBuffer;
   LStatus: string;
-  i: Integer;
+  I: Integer;
 begin
   LLines := Default(TLineBuffer);
 
@@ -1070,13 +1066,13 @@ begin
     ['Benchmark', 'Current', 'Baseline', 'Ratio', 'Status']));
   BufferAddLine(LLines, '  ' + TextOfChar('-', 90));
 
-  for i := 0 to High(ABaselines) do
+  for I := 0 to High(ABaselines) do
   begin
-    if ABaselines[i].IsSignificant then
+    if ABaselines[I].IsSignificant then
     begin
-      if ABaselines[i].Ratio > 1.0 then
+      if ABaselines[I].Ratio > 1.0 then
         LStatus := '✗ slower'
-      else if ABaselines[i].Ratio < 1.0 then
+      else if ABaselines[I].Ratio < 1.0 then
         LStatus := '✓ faster'
       else
         LStatus := '≈ same';
@@ -1084,10 +1080,10 @@ begin
     else
       LStatus := '≈ same';
     BufferAddLine(LLines, TextFormat('  %-40s %10s %10s %10s %10s',
-      [ABaselines[i].BaselineName,
-       FormatTime(ABaselines[i].CurrentNsPerOp),
-       FormatTime(ABaselines[i].BaselineNsPerOp),
-       FormatNumber(ABaselines[i].Ratio, 2) + 'x',
+      [ABaselines[I].BaselineName,
+       FormatTime(ABaselines[I].CurrentNsPerOp),
+       FormatTime(ABaselines[I].BaselineNsPerOp),
+       FormatNumber(ABaselines[I].Ratio, 2) + 'x',
        LStatus]));
   end;
 
