@@ -84,7 +84,7 @@ type
     function AddRange(const AName: string; AFunc: TBenchParamFunc;
       const AParams: array of Int64;
       ASetup: TBenchSetupFunc; ATeardown: TBenchTeardownFunc): IBenchSuite;
-    {** [Experimental] 用户控制循环 — TBenchLoopFunc 不支持 IBenchContext }
+    {** 用户控制循环 — TBenchLoopFunc 不支持 IBenchContext }
     function AddLoop(const AName: string; AFunc: TBenchLoopFunc): IBenchSuite;
     function Clear: IBenchSuite;
     function RemoveByName(const AName: string): IBenchSuite;
@@ -113,7 +113,6 @@ type
     FEnvironment: TBenchEnvironment;
     FBaselines: array of TBenchBaseline;
     FBaselineCount: Integer;
-    FBaselineCapacity: Integer;
     FReportGenerator: TBenchReportGenerator;
 
     {** 生成基线对比 }
@@ -170,6 +169,7 @@ begin
   SetLength(FBaselines, 0);
 
   // 初始化默认配置
+  FConfig.SuiteName := ASuiteName;
   FConfig.MinDurationNs := BENCH_DEFAULT_MIN_DURATION_NS;
   FConfig.MaxIterations := BENCH_DEFAULT_MAX_ITERATIONS;
   FConfig.MinSamples := BENCH_DEFAULT_MIN_SAMPLES;

@@ -136,7 +136,7 @@ type
       const AParams: array of Int64;
       ASetup: TBenchSetupFunc; ATeardown: TBenchTeardownFunc): IBenchSuite;
 
-    {** [Experimental] 添加用户控制循环的基准测试 — TBenchLoopFunc 不支持 IBenchContext }
+    {** 添加用户控制循环的基准测试 — TBenchLoopFunc 不支持 IBenchContext }
     function AddLoop(const AName: string; AFunc: TBenchLoopFunc): IBenchSuite;
 
     {** 清空所有已注册条目 (DS-03) }

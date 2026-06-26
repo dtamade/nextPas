@@ -979,7 +979,7 @@ end;
 
 function TBenchRunner.GetResults: TBenchResultArray;
 begin
-  Result := FResults;
+  Result := Copy(FResults, 0, FResultCount);
 end;
 
 function TBenchRunner.GetResultCount: Integer;

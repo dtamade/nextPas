@@ -56,7 +56,7 @@ end.
 | `AddWhen(Name, Func, Condition)` | 条件添加 |
 | `AddParallel(Name, Func, Threads)` | 并行基准 |
 | `AddRange(Name, Func, Params)` | 参数化基准（自动生成子基准） |
-| `AddLoop(Name, Func)` | [Experimental] 用户控制循环（见下方限制） |
+| `AddLoop(Name, Func)` | 用户控制循环（见下方限制） |
 | `SetMinDuration(Duration)` | 最小持续时间 |
 | `MaxIterations(N)` | 最大迭代次数 |
 | `MinSamples(N)` | 最小采样数 |

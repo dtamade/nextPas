@@ -88,9 +88,33 @@ end;
 function SplitLines(const AText: string): TStringArray;
 var
   LNormalized: string;
+  LLen, I, LOut: Integer;
 begin
-  LNormalized := StringReplace(AText, #13#10, #10, True);
-  LNormalized := StringReplace(LNormalized, #13, #10, True);
+  // 单遍扫描：将 CR/LF 统一为 LF
+  LLen := Length(AText);
+  SetLength(LNormalized, LLen);
+  LOut := 0;
+  I := 1;
+  while I <= LLen do
+  begin
+    Inc(LOut);
+    if (AText[I] = #13) and (I < LLen) and (AText[I + 1] = #10) then
+    begin
+      LNormalized[LOut] := #10;
+      Inc(I, 2);
+    end
+    else if AText[I] = #13 then
+    begin
+      LNormalized[LOut] := #10;
+      Inc(I);
+    end
+    else
+    begin
+      LNormalized[LOut] := AText[I];
+      Inc(I);
+    end;
+  end;
+  SetLength(LNormalized, LOut);
   Result := StringsSplit(LNormalized, #10);
 end;
 
