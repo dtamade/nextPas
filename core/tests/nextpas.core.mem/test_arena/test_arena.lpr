@@ -114,10 +114,10 @@ var
 begin
   LA := TLocalArena.Create(256);
   try
-    Check(LA.AllocAligned(16, 0) = nil, 'zero alignment should return nil');
+    Check(LA.AllocAligned(16, 0) <> nil, 'zero alignment normalized to MEM_DEFAULT_ALIGN');
     Check(LA.AllocAligned(16, 3) = nil, 'alignment 3 should return nil');
     Check(LA.AllocAligned(16, 5) = nil, 'alignment 5 should return nil');
-    CheckEqual(Int64(0), Int64(LA.UsedSize), 'invalid alignment should not advance offset');
+    CheckEqual(Int64(16), Int64(LA.UsedSize), 'only zero-align allocation advanced offset');
   finally
     LA.Free;
   end;

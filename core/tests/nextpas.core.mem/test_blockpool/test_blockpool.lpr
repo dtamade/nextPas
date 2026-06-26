@@ -211,6 +211,29 @@ begin
   end;
 end;
 
+{ R-14 regression: AcquireUnchecked increments TotalAllocs }
+procedure TestAcquireUncheckedStats;
+var Pool: TBlockPool; P1, P2, P3: Pointer;
+begin
+  Pool := TBlockPool.Create(64, 8);
+  try
+    P1 := Pool.AcquireUnchecked;
+    P2 := Pool.AcquireUnchecked;
+    P3 := Pool.AcquireUnchecked;
+    Check(P1 <> nil, 'unchecked acquire 1');
+    Check(P2 <> nil, 'unchecked acquire 2');
+    Check(P3 <> nil, 'unchecked acquire 3');
+    Check(Pool.TotalAllocs = 3, 'total allocs=3 after unchecked');
+    Check(Pool.PeakAlloc = 3, 'peak=3 after unchecked');
+    Pool.Release(P1);
+    Pool.Release(P2);
+    Pool.Release(P3);
+    Check(Pool.TotalFrees = 3, 'total frees=3 after release');
+  finally
+    Pool.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.mem.blockpool');
   T.Run('basic acquire/release', @TestBasicAcquireRelease);
@@ -223,5 +246,6 @@ begin
   T.Run('alignment', @TestAlignment);
   T.Run('invalid pointer release', @TestInvalidRelease);
   T.Run('rejects total-size overflow as invalid layout', @TestRejectsTotalSizeOverflowAsInvalidLayout);
+  T.Run('AcquireUnchecked stats (R-14)', @TestAcquireUncheckedStats);
   T.Summary;
 end.

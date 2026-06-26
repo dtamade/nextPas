@@ -404,6 +404,8 @@ begin
   ClearFreeBit(LIdx);
   Inc(FAllocCount);
   Inc(FTotalAllocs);
+  if FAllocCount > FPeakAlloc then
+    FPeakAlloc := FAllocCount;
   Result := LPtr;
 end;
 

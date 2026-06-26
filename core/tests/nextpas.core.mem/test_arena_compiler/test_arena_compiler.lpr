@@ -716,7 +716,7 @@ begin
   TVirtualArena_Init(LArena);
   try
     LP := LArena.AllocAligned(64, 0);
-    Check(LP = nil, 'aligned zero align: returns nil');
+    Check(LP <> nil, 'aligned zero align: normalized to MEM_DEFAULT_ALIGN');
   finally
     TVirtualArena_Release(LArena);
   end;
