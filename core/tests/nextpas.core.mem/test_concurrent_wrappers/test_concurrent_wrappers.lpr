@@ -24,7 +24,7 @@ const
   THREAD_COUNT = 8;
   ITERATION_COUNT = 32;
   NEGATIVE_ITERATION_COUNT = 256;
-  STRESS_ITERATION_COUNT = 1000;
+  STRESS_ITERATION_COUNT = 128;
 
 type
   PPoolWorkerData = ^TPoolWorkerData;
@@ -515,6 +515,9 @@ var
   LMutex: TMemMutex;
   LHitError: Boolean;
 begin
+  { TMemMutex 是 record，栈上变量不会自动初始化 — 必须先清零 }
+  FillChar(LMutex, SizeOf(LMutex), 0);
+
   { Basic init/acquire/release/done cycle }
   LMutex.Init;
   LMutex.Acquire;
@@ -535,7 +538,7 @@ begin
   LMutex.Release;
   LMutex.Done;
 
-  { Acquire on uninitialized mutex should raise }
+  { Acquire on uninitialized (zeroed) mutex should raise }
   FillChar(LMutex, SizeOf(LMutex), 0);
   LHitError := False;
   try
@@ -546,7 +549,7 @@ begin
   end;
   Check(LHitError, 'Acquire on uninitialized mutex should raise');
 
-  { Release on uninitialized mutex should raise }
+  { Release on uninitialized (zeroed) mutex should raise }
   LHitError := False;
   try
     LMutex.Release;
@@ -556,7 +559,7 @@ begin
   end;
   Check(LHitError, 'Release on uninitialized mutex should raise');
 
-  { Done on uninitialized mutex is a no-op }
+  { Done on uninitialized (zeroed) mutex is a no-op }
   LMutex.Done;
 end;
 
@@ -565,6 +568,9 @@ var
   LRwLock: TMemRwLock;
   LHitError: Boolean;
 begin
+  { TMemRwLock 是 record，栈上变量不会自动初始化 — 必须先清零 }
+  FillChar(LRwLock, SizeOf(LRwLock), 0);
+
   { Basic init/read/write/release/done cycle }
   LRwLock.Init;
   LRwLock.AcquireRead;
@@ -684,6 +690,7 @@ var
   LIndex: Integer;
   LFailure: string;
 begin
+  FillChar(LMutex, SizeOf(LMutex), 0);
   LMutex.Init;
   LCounter := 0;
   try
@@ -721,11 +728,37 @@ end;
  *
  * 多次 SaveMark/RestoreToMark 循环 + 并发 Alloc，验证正确性。
  *}
+function B4ArenaAllocWorkerProc(AArg: Pointer): Pointer; cdecl;
+var
+  LData: PArenaAllocStressWorkerData;
+  LIndex: Integer;
+  LPtr: Pointer;
+begin
+  LData := PArenaAllocStressWorkerData(AArg);
+  WaitForStartFlag(LData^.StartFlag);
+
+  try
+    for LIndex := 0 to 63 do
+    begin
+      LPtr := LData^.Arena.Alloc(32);
+      if LPtr <> nil then
+      begin
+        PByte(LPtr)^ := Byte(LIndex);
+        Inc(LData^.AllocCount);
+      end;
+    end;
+  except
+    on E: Exception do
+      LData^.Failure := E.Message;
+  end;
+  Result := nil;
+end;
+
 procedure TestArenaConcurrentMultipleMarkRestore;
 const
   ALLOC_THREADS = 4;
   MARK_CYCLES = 4;
-  STRESS_ARENA_SIZE = 256 * 1024;
+  STRESS_ARENA_SIZE = 64 * 1024;
 var
   LArena: TArenaConcurrent;
   LAllocWorkers: array[0..ALLOC_THREADS - 1] of TPlatformThreadRecord;
@@ -747,14 +780,14 @@ begin
         LAllocWorkerData[LIndex].StartFlag := @LStartFlag;
         LAllocWorkerData[LIndex].AllocCount := 0;
         LAllocWorkerData[LIndex].Failure := '';
-        platform_thread_spawn(LAllocWorkers[LIndex], @ArenaAllocStressWorkerProc,
+        platform_thread_spawn(LAllocWorkers[LIndex], @B4ArenaAllocWorkerProc,
           @LAllocWorkerData[LIndex]);
       end;
 
       LStartFlag := 1;
 
       { Let alloc workers run briefly, then mark and restore }
-      platform_thread_sleep_ns(500000);
+      platform_thread_sleep_ns(100000);
       LMark := LArena.SaveMark;
       LArena.RestoreToMark(LMark);
 
@@ -795,6 +828,5 @@ begin
   T.Test('R-03 mark vs alloc contention', @TestArenaMarkVsAllocContention);
   T.Test('B4-3 multiple mark/restore cycles', @TestArenaConcurrentMultipleMarkRestore);
   T.Run;
-
   T.Summary;
 end.

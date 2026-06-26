@@ -35,7 +35,7 @@ type
       PSegment = ^TSegment;
   private
     FSegments: array of TSegment;
-    FSegmentCount: SizeInt;
+    FSegmentCount: SizeUInt;
     FActive: SizeInt;
     FTotalSize: SizeUInt;
     FAlignment: SizeUInt;
@@ -61,7 +61,7 @@ type
     function TryReuseSegment(aMinSize: SizeUInt): Boolean;
     procedure FreeSegment(aIndex: SizeInt);
     procedure CacheSegment(aIndex: SizeInt);
-    procedure ShrinkToSegmentCount(aCount: SizeInt);
+    procedure ShrinkToSegmentCount(aCount: SizeUInt);
     procedure NormalizeState(aActiveIndex: SizeInt; aActiveUsed: SizeUInt);
     procedure ClearCache;
   public
@@ -415,13 +415,11 @@ begin
   SetLength(FFreeSegments, 0);
 end;
 
-procedure TChunkedArena.ShrinkToSegmentCount(aCount: SizeInt);
+procedure TChunkedArena.ShrinkToSegmentCount(aCount: SizeUInt);
 var
-  LIdx: SizeInt;
+  LIdx: SizeUInt;
 begin
-  if aCount < 0 then
-    aCount := 0;
-  if aCount > FSegmentCount then
+  if aCount >= FSegmentCount then
     Exit;
 
   for LIdx := FSegmentCount - 1 downto aCount do
