@@ -7,6 +7,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.mem.base,
+  nextpas.core.mem.error,
   nextpas.core.mem.intf,
   nextpas.core.mem.allocator.base;
 
@@ -85,7 +86,7 @@ destructor TTrackingAllocator.Destroy;
 begin
   DoneCriticalSection(FLock);
   FInner := nil;
-  inherited;
+  inherited Destroy;
 end;
 
 function TTrackingAllocator.FindRecordIndex(APtr: Pointer): SizeInt;
@@ -198,13 +199,19 @@ end;
 
 procedure TTrackingAllocator.DoFreeMem(ADst: Pointer);
 begin
-  FInner.FreeMem(ADst);
+  if ADst = nil then
+    Exit;
+  { Double-free / unknown pointer detection: check BEFORE freeing }
   EnterCriticalSection(FLock);
   try
+    if FindRecordIndex(ADst) < 0 then
+      raise EDoubleFree.Create(aeDoubleFree,
+        'TTrackingAllocator.DoFreeMem: pointer not tracked (double-free or foreign pointer)');
     RemoveRecord(ADst);
   finally
     LeaveCriticalSection(FLock);
   end;
+  FInner.FreeMem(ADst);
 end;
 
 function TTrackingAllocator.DoMemSize(APtr: Pointer): SizeUInt;

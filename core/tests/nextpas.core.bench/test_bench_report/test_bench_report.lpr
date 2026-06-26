@@ -571,6 +571,147 @@ begin
   CheckContains(LSVG, 'Boxplot Constant', 'Constant data BoxPlot contains name');
 end;
 
+{ === TG-31: SanitizeTSVField Indirect Coverage via ToTSV === }
+
+procedure TestSanitizeTSVField;
+var
+  LResults: array of TBenchResult;
+  LTSV: string;
+begin
+  WriteLn('TestSanitizeTSVField:');
+
+  // Create a result with tab and newline in the name
+  SetLength(LResults, 2);
+  LResults[0] := Default(TBenchResult);
+  LResults[0].Name := 'Bench' + #9 + 'Tab';
+  LResults[0].NsPerOp := 100.0;
+  LResults[0].OpsPerSec := 10000000;
+  LResults[1] := Default(TBenchResult);
+  LResults[1].Name := 'Bench' + #13 + 'CR';
+  LResults[1].NsPerOp := 50.0;
+  LResults[1].Skipped := True;
+  LResults[1].SkipReason := 'reason' + #10 + 'LF';
+
+  GGenerator.SetResults(LResults);
+
+  LTSV := GGenerator.ToTSV;
+
+  // Tab in name should be replaced with space — no raw tab in data rows
+  // Header has tabs as delimiters, but data field tabs should be sanitized
+  CheckContains(LTSV, 'Bench Tab', 'TSV sanitizes tab in name');
+  CheckContains(LTSV, 'Bench CR', 'TSV sanitizes CR in name');
+  CheckContains(LTSV, 'reason LF', 'TSV sanitizes LF in skip reason');
+end;
+
+{ === TG-32: GenerateComparisonReport Branch Coverage === }
+
+procedure TestGenerateComparisonReport_Faster;
+var
+  LComparisons: array of TBenchComparison;
+  LReport: string;
+begin
+  WriteLn('TestGenerateComparisonReport_Faster:');
+
+  SetLength(LComparisons, 1);
+  LComparisons[0].BaselineName := 'Sort.1K';
+  LComparisons[0].BaselineNsPerOp := 100.0;
+  LComparisons[0].CurrentNsPerOp := 80.0;
+  LComparisons[0].Ratio := 0.8;
+  LComparisons[0].HasStatisticalTest := False;
+  LComparisons[0].IsSignificant := True;
+  LComparisons[0].ApproximatePValue := 0.05;
+
+  LReport := GGenerator.GenerateComparisonReport(LComparisons);
+
+  CheckContains(LReport, 'Baseline Comparison', 'Faster report contains header');
+  CheckContains(LReport, 'Sort.1K', 'Faster report contains benchmark name');
+  CheckContains(LReport, 'faster', 'Faster report shows faster status');
+  CheckNotContains(LReport, 'slower', 'Faster report does not show slower');
+end;
+
+procedure TestGenerateComparisonReport_SameRatio;
+var
+  LComparisons: array of TBenchComparison;
+  LReport: string;
+begin
+  WriteLn('TestGenerateComparisonReport_SameRatio:');
+
+  SetLength(LComparisons, 1);
+  LComparisons[0].BaselineName := 'Lookup';
+  LComparisons[0].BaselineNsPerOp := 50.0;
+  LComparisons[0].CurrentNsPerOp := 50.0;
+  LComparisons[0].Ratio := 1.0;
+  LComparisons[0].HasStatisticalTest := False;
+  LComparisons[0].IsSignificant := True;
+  LComparisons[0].ApproximatePValue := 0.05;
+
+  LReport := GGenerator.GenerateComparisonReport(LComparisons);
+
+  CheckContains(LReport, 'Lookup', 'Same ratio report contains name');
+  CheckContains(LReport, 'same', 'Same ratio report shows same status');
+end;
+
+procedure TestGenerateComparisonReport_NotSignificant;
+var
+  LComparisons: array of TBenchComparison;
+  LReport: string;
+begin
+  WriteLn('TestGenerateComparisonReport_NotSignificant:');
+
+  SetLength(LComparisons, 1);
+  LComparisons[0].BaselineName := 'Memcpy';
+  LComparisons[0].BaselineNsPerOp := 20.0;
+  LComparisons[0].CurrentNsPerOp := 20.5;
+  LComparisons[0].Ratio := 1.025;
+  LComparisons[0].HasStatisticalTest := False;
+  LComparisons[0].IsSignificant := False;
+  LComparisons[0].ApproximatePValue := 0.05;
+
+  LReport := GGenerator.GenerateComparisonReport(LComparisons);
+
+  CheckContains(LReport, 'Memcpy', 'Not significant report contains name');
+  CheckContains(LReport, 'same', 'Not significant report shows same status');
+  CheckNotContains(LReport, 'slower', 'Not significant report does not show slower');
+  CheckNotContains(LReport, 'faster', 'Not significant report does not show faster');
+end;
+
+{ === TG-33: GenerateChart Edge Cases === }
+
+procedure TestGenerateChart_AllSkipped;
+var
+  LResults: array of TBenchResult;
+  LHTML: string;
+  LNoCrash: Boolean;
+begin
+  WriteLn('TestGenerateChart_AllSkipped:');
+  LNoCrash := True;
+
+  SetLength(LResults, 2);
+  LResults[0] := Default(TBenchResult);
+  LResults[0].Name := 'Skipped1';
+  LResults[0].Skipped := True;
+  LResults[1] := Default(TBenchResult);
+  LResults[1].Name := 'Skipped2';
+  LResults[1].Skipped := True;
+
+  GGenerator.SetResults(LResults);
+  GGenerator.SetEnvironment(CreateTestEnvironment);
+
+  try
+    LHTML := GGenerator.ToHTML;
+    // all-skipped: chart should show "No benchmark data" placeholder
+    CheckContains(LHTML, 'No benchmark data', 'All-skipped chart shows placeholder');
+    CheckContains(LHTML, '<svg', 'All-skipped chart contains SVG');
+    // skipped section should list both
+    CheckContains(LHTML, 'Skipped Benchmarks', 'All-skipped shows skipped section');
+    CheckContains(LHTML, 'Skipped1', 'All-skipped lists first entry');
+    CheckContains(LHTML, 'Skipped2', 'All-skipped lists second entry');
+  except
+    LNoCrash := False;
+  end;
+  Check(LNoCrash, 'All-skipped ToHTML does not crash');
+end;
+
 { === TG-08: Empty Results Set Report Generation === }
 
 procedure Test_EmptyResults_ToJSON;
@@ -670,6 +811,14 @@ begin
     WriteLn;
     TestGenerateComparisonReport;
     WriteLn;
+    TestGenerateComparisonReport_Faster;
+    WriteLn;
+    TestGenerateComparisonReport_SameRatio;
+    WriteLn;
+    TestGenerateComparisonReport_NotSignificant;
+    WriteLn;
+    TestGenerateChart_AllSkipped;
+    WriteLn;
     TestSkippedResultsReporting;
     WriteLn;
     TestFormatNumber;
@@ -685,6 +834,8 @@ begin
     TestEscapeJSON;
     WriteLn;
     TestEscapeHTML;
+    WriteLn;
+    TestSanitizeTSVField;
     WriteLn;
     WriteLn('=== GenerateBoxPlot Edge Cases (TG-09) ===');
     TestGenerateBoxPlot_EmptyData;

@@ -10,12 +10,15 @@ uses
 type
   {**
    * @desc Allocator capability description used by strategy code.
+   *
+   * @note ZeroInitialized 仅对 AllocMem 有效 — AllocMem 保证返回全零内存。
+   *       GetMem 不保证零填充，即使 ZeroInitialized=True。
    *}
   TAllocatorTraits = record
-    ZeroInitialized: Boolean;
-    ThreadSafe: Boolean;
-    HasMemSize: Boolean;
-    SupportsAligned: Boolean;
+    ZeroInitialized: Boolean;  { AllocMem 返回全零内存 }
+    ThreadSafe: Boolean;       { 所有方法线程安全 }
+    HasMemSize: Boolean;       { MemSize 返回实际分配块大小 }
+    SupportsAligned: Boolean;  { AllocAligned 可用 }
   end;
 
   {**

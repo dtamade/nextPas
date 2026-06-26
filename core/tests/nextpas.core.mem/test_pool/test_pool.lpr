@@ -4,7 +4,7 @@ program test_pool;
 
 uses
   nextpas.core.text.conv,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.mem.error,
   nextpas.core.mem.allocator.base,
   nextpas.core.mem.pool,
@@ -31,7 +31,7 @@ type
   end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GPool: TLocalBlockPool;
   GPtr: Pointer = nil;
   GExternalByte: Byte = 0;
@@ -43,7 +43,7 @@ begin
     Fail(AName + ': expected allocation error');
   except
     on E: EAllocError do
-      CheckEqual(Int64(Ord(AExpected)), Int64(Ord(E.Error)), AName + ': error code');
+      Check(Int64(Ord(AExpected)) = Int64(Ord(E.Error)), AName + ': error code');
   end;
 end;
 
@@ -112,10 +112,10 @@ var
 begin
   LP := TLocalBlockPool.Create(64, 10);
   try
-    CheckEqual(Int64(10), Int64(LP.Capacity), 'capacity');
+    Check(Int64(10) = Int64(LP.Capacity), 'capacity');
     Check(LP.BlockSize >= 64, 'block size');
-    CheckEqual(Int64(0), Int64(LP.InUse), 'in use');
-    CheckEqual(Int64(10), Int64(LP.Available), 'available');
+    Check(Int64(0) = Int64(LP.InUse), 'in use');
+    Check(Int64(10) = Int64(LP.Available), 'available');
     Check(not LP.IsFull);
     Check(LP.IsEmpty);
   finally
@@ -212,7 +212,7 @@ begin
     Check(GPtr <> nil, 'acquire for invalid release');
     CheckRaisesAllocError(@ReleaseExternalPointer, aeInvalidPointer, 'external pointer');
     CheckRaisesAllocError(@ReleaseInteriorPointer, aeInvalidPointer, 'interior pointer');
-    CheckEqual(Int64(1), Int64(GPool.InUse), 'invalid releases do not mutate in-use count');
+    Check(Int64(1) = Int64(GPool.InUse), 'invalid releases do not mutate in-use count');
     GPool.Release(GPtr);
   finally
     GPool.Free;
@@ -229,8 +229,8 @@ begin
     Check(GPtr <> nil, 'acquire for double free');
     GPool.Release(GPtr);
     CheckRaisesAllocError(@ReleaseDoubleFreePointer, aeDoubleFree, 'double free');
-    CheckEqual(Int64(0), Int64(GPool.InUse), 'double free does not underflow in-use count');
-    CheckEqual(Int64(1), Int64(GPool.Available), 'double free does not duplicate free stack entries');
+    Check(Int64(0) = Int64(GPool.InUse), 'double free does not underflow in-use count');
+    Check(Int64(1) = Int64(GPool.Available), 'double free does not duplicate free stack entries');
   finally
     GPool.Free;
     GPool := nil;
@@ -336,12 +336,12 @@ begin
   try
     LPtrs[0] := nil;
     LAcquired := LPool.AcquireN(LPtrs, 2);
-    CheckEqual(Int64(1), Int64(LAcquired), 'AcquireN should clamp to open-array length');
-    CheckEqual(Int64(1), Int64(LPool.AllocatedCount), 'AcquireN should acquire only one block');
+    Check(Int64(1) = Int64(LAcquired), 'AcquireN should clamp to open-array length');
+    Check(Int64(1) = Int64(LPool.AllocatedCount), 'AcquireN should acquire only one block');
 
     LPool.ReleaseN(LPtrs, 2);
-    CheckEqual(Int64(0), Int64(LPool.AllocatedCount), 'ReleaseN should release only the provided slot');
-    CheckEqual(Int64(2), Int64(LPool.Available), 'ReleaseN should restore one acquired block');
+    Check(Int64(0) = Int64(LPool.AllocatedCount), 'ReleaseN should release only the provided slot');
+    Check(Int64(2) = Int64(LPool.Available), 'ReleaseN should restore one acquired block');
   finally
     LPool.Free;
   end;
@@ -367,19 +367,16 @@ begin
       on E: EAllocError do
       begin
         LRaised := True;
-        CheckEqual(Int64(Ord(aeInvalidLayout)), Int64(Ord(E.Error)),
-          'fixed pool total-size overflow error');
+        Check(Int64(Ord(aeInvalidLayout)) = Int64(Ord(E.Error)), 'fixed pool total-size overflow error');
       end;
       on E: nextpas.core.mem.error.EOutOfMemory do
       begin
         LRaised := True;
-        CheckEqual(Int64(Ord(aeInvalidLayout)), Int64(Ord(E.Error)),
-          'fixed pool total-size overflow error');
+        Check(Int64(Ord(aeInvalidLayout)) = Int64(Ord(E.Error)), 'fixed pool total-size overflow error');
       end;
     end;
     Check(LRaised, 'fixed pool total-size overflow must fail closed');
-    CheckEqual(Int64(0), Int64(LAllocator.GetCalls),
-      'fixed pool total-size overflow must not call backing allocator');
+    Check(Int64(0) = Int64(LAllocator.GetCalls), 'fixed pool total-size overflow must not call backing allocator');
   finally
     LPool.Free;
     LAllocatorRef := nil;
@@ -401,32 +398,34 @@ begin
   try
     LPtrs[0] := nil;
     LAcquired := LPool.AcquireN(LPtrs, 2);
-    CheckEqual(Int64(1), Int64(LAcquired), 'object AcquireN should clamp to open-array length');
-    CheckEqual(Int64(1), Int64(LPool.TotalCreated), 'object AcquireN should create only one object');
+    Check(Int64(1) = Int64(LAcquired), 'object AcquireN should clamp to open-array length');
+    Check(Int64(1) = Int64(LPool.TotalCreated), 'object AcquireN should create only one object');
 
     LPool.ReleaseN(LPtrs, 2);
-    CheckEqual(Int64(1), Int64(LPool.InPoolCount), 'object ReleaseN should release only the provided slot');
+    Check(Int64(1) = Int64(LPool.InPoolCount), 'object ReleaseN should release only the provided slot');
   finally
     LPool.Free;
   end;
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.mem.pool');
-  T.Run('Create', @TestPoolCreate);
-  T.Run('Acquire/Release', @TestPoolAcquireRelease);
-  T.Run('Exhaust', @TestPoolExhaust);
-  T.Run('Reset', @TestPoolReset);
-  T.Run('Owns', @TestPoolOwns);
-  T.Run('TryAcquire', @TestPoolTryAcquire);
-  T.Run('rejects invalid release pointers', @TestPoolRejectsInvalidReleasePointers);
-  T.Run('rejects double free', @TestPoolRejectsDoubleFree);
-  T.Run('Write/Read', @TestPoolWriteRead);
-  T.Run('Multiple blocks (100)', @TestPoolMultipleBlocks);
-  T.Run('Small block size', @TestPoolSmallBlockSize);
-  T.Run('legacy TPool alias', @TestPoolLegacyAlias);
-  T.Run('fixed pool batch clamps to open-array length', @TestFixedPoolBatchClampsToOpenArrayLength);
-  T.Run('fixed pool rejects total-size overflow before alloc', @TestFixedPoolRejectsTotalSizeOverflowBeforeAlloc);
-  T.Run('object pool batch clamps to open-array length', @TestObjectPoolBatchClampsToOpenArrayLength);
+  T := TTestSuite.Create('nextpas.core.mem.pool');
+  T.Test('Create', @TestPoolCreate);
+  T.Test('Acquire/Release', @TestPoolAcquireRelease);
+  T.Test('Exhaust', @TestPoolExhaust);
+  T.Test('Reset', @TestPoolReset);
+  T.Test('Owns', @TestPoolOwns);
+  T.Test('TryAcquire', @TestPoolTryAcquire);
+  T.Test('rejects invalid release pointers', @TestPoolRejectsInvalidReleasePointers);
+  T.Test('rejects double free', @TestPoolRejectsDoubleFree);
+  T.Test('Write/Read', @TestPoolWriteRead);
+  T.Test('Multiple blocks (100)', @TestPoolMultipleBlocks);
+  T.Test('Small block size', @TestPoolSmallBlockSize);
+  T.Test('legacy TPool alias', @TestPoolLegacyAlias);
+  T.Test('fixed pool batch clamps to open-array length', @TestFixedPoolBatchClampsToOpenArrayLength);
+  T.Test('fixed pool rejects total-size overflow before alloc', @TestFixedPoolRejectsTotalSizeOverflowBeforeAlloc);
+  T.Test('object pool batch clamps to open-array length', @TestObjectPoolBatchClampsToOpenArrayLength);
+  T.Run;
+
   T.Summary;
 end.

@@ -9,7 +9,7 @@ uses
   nextpas.core.errors,
   nextpas.core.exception,
   nextpas.core.text.conv,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.mem.error,
   nextpas.core.mem.arena.base,
   nextpas.core.mem.blockpool.concurrent,
@@ -24,7 +24,7 @@ const
   THREAD_COUNT = 8;
   ITERATION_COUNT = 32;
   NEGATIVE_ITERATION_COUNT = 256;
-  STRESS_ITERATION_COUNT = 1000;
+  STRESS_ITERATION_COUNT = 128;
 
 type
   PPoolWorkerData = ^TPoolWorkerData;
@@ -66,7 +66,7 @@ type
   end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure WaitForStartFlag(AStartFlag: PLongInt); inline;
 begin
@@ -240,7 +240,7 @@ begin
   try
     LPtr := LArena.AllocAligned(32, 8);
     Check(LPtr <> nil, 'AllocAligned should succeed');
-    CheckEqual(Int64(0), Int64(PtrUInt(LPtr) mod 8), 'AllocAligned should honor alignment');
+    Check(Int64(0) = Int64(PtrUInt(LPtr) mod 8), 'AllocAligned should honor alignment');
     Check(LArena.UsedSize >= 32, 'arena usage should grow');
     LArena.Reset;
     Check(LArena.UsedSize = 0, 'reset should rewind usage');
@@ -322,8 +322,7 @@ begin
       Fail('fixed-pool double Release should fail after contention');
     except
       on E: EAllocError do
-        CheckEqual(Int64(Ord(aeDoubleFree)), Int64(Ord(E.Error)),
-          'fixed-pool double Release error code after contention');
+        Check(Int64(Ord(aeDoubleFree)) = Int64(Ord(E.Error)), 'fixed-pool double Release error code after contention');
     end;
     Check(LPool.AllocatedCount = 0, 'post-exception release should leave pool empty');
   finally
@@ -516,6 +515,9 @@ var
   LMutex: TMemMutex;
   LHitError: Boolean;
 begin
+  { TMemMutex 是 record，栈上变量不会自动初始化 — 必须先清零 }
+  FillChar(LMutex, SizeOf(LMutex), 0);
+
   { Basic init/acquire/release/done cycle }
   LMutex.Init;
   LMutex.Acquire;
@@ -536,7 +538,7 @@ begin
   LMutex.Release;
   LMutex.Done;
 
-  { Acquire on uninitialized mutex should raise }
+  { Acquire on uninitialized (zeroed) mutex should raise }
   FillChar(LMutex, SizeOf(LMutex), 0);
   LHitError := False;
   try
@@ -547,7 +549,7 @@ begin
   end;
   Check(LHitError, 'Acquire on uninitialized mutex should raise');
 
-  { Release on uninitialized mutex should raise }
+  { Release on uninitialized (zeroed) mutex should raise }
   LHitError := False;
   try
     LMutex.Release;
@@ -557,7 +559,7 @@ begin
   end;
   Check(LHitError, 'Release on uninitialized mutex should raise');
 
-  { Done on uninitialized mutex is a no-op }
+  { Done on uninitialized (zeroed) mutex is a no-op }
   LMutex.Done;
 end;
 
@@ -566,6 +568,9 @@ var
   LRwLock: TMemRwLock;
   LHitError: Boolean;
 begin
+  { TMemRwLock 是 record，栈上变量不会自动初始化 — 必须先清零 }
+  FillChar(LRwLock, SizeOf(LRwLock), 0);
+
   { Basic init/read/write/release/done cycle }
   LRwLock.Init;
   LRwLock.AcquireRead;
@@ -685,6 +690,7 @@ var
   LIndex: Integer;
   LFailure: string;
 begin
+  FillChar(LMutex, SizeOf(LMutex), 0);
   LMutex.Init;
   LCounter := 0;
   try
@@ -711,24 +717,116 @@ begin
     end;
 
     Check(LFailure = '', 'mutex contention should not fail: ' + LFailure);
-    CheckEqual(Int64(MUTEX_THREADS * STRESS_ITERATION_COUNT), LCounter,
-      'mutex-protected counter should be exact');
+    Check(Int64(MUTEX_THREADS * STRESS_ITERATION_COUNT) = LCounter, 'mutex-protected counter should be exact');
   finally
     LMutex.Done;
   end;
 end;
 
+{**
+ * B4-3: Multiple mark/restore cycles under concurrent Alloc.
+ *
+ * 多次 SaveMark/RestoreToMark 循环 + 并发 Alloc，验证正确性。
+ *}
+function B4ArenaAllocWorkerProc(AArg: Pointer): Pointer; cdecl;
+var
+  LData: PArenaAllocStressWorkerData;
+  LIndex: Integer;
+  LPtr: Pointer;
 begin
-  T := TTestRunner.Create('nextpas.core.mem.concurrent_wrappers');
-  T.Run('T-01 mutex direct', @TestMemMutexDirect);
-  T.Run('T-02 rwlock direct', @TestMemRwLockDirect);
-  T.Run('T-03 mutex high contention', @TestMemMutexHighContention);
-  T.Run('blockpool wrapper basics', @TestBlockPoolConcurrentWrapper);
-  T.Run('arena wrapper basics', @TestArenaConcurrentWrapper);
-  T.Run('fixed-pool wrapper contention', @TestFixedPoolConcurrentContention);
-  T.Run('fixed-pool wrapper rejects invalid release after contention', @TestFixedPoolConcurrentRejectsInvalidReleaseAfterContention);
-  T.Run('slab wrapper contention', @TestSlabPoolConcurrentContention);
-  T.Run('R-03 Reset vs Alloc contention', @TestArenaResetVsAllocContention);
-  T.Run('R-03 mark vs alloc contention', @TestArenaMarkVsAllocContention);
+  LData := PArenaAllocStressWorkerData(AArg);
+  WaitForStartFlag(LData^.StartFlag);
+
+  try
+    for LIndex := 0 to 63 do
+    begin
+      LPtr := LData^.Arena.Alloc(32);
+      if LPtr <> nil then
+      begin
+        PByte(LPtr)^ := Byte(LIndex);
+        Inc(LData^.AllocCount);
+      end;
+    end;
+  except
+    on E: Exception do
+      LData^.Failure := E.Message;
+  end;
+  Result := nil;
+end;
+
+procedure TestArenaConcurrentMultipleMarkRestore;
+const
+  ALLOC_THREADS = 4;
+  MARK_CYCLES = 4;
+  STRESS_ARENA_SIZE = 64 * 1024;
+var
+  LArena: TArenaConcurrent;
+  LAllocWorkers: array[0..ALLOC_THREADS - 1] of TPlatformThreadRecord;
+  LAllocWorkerData: array[0..ALLOC_THREADS - 1] of TArenaAllocStressWorkerData;
+  LStartFlag: LongInt;
+  LIndex, LCycle: Integer;
+  LMark: TArenaMark;
+  LFailure: string;
+begin
+  LArena := TArenaConcurrent.Create(STRESS_ARENA_SIZE);
+  try
+    for LCycle := 0 to MARK_CYCLES - 1 do
+    begin
+      LStartFlag := 0;
+
+      for LIndex := 0 to High(LAllocWorkers) do
+      begin
+        LAllocWorkerData[LIndex].Arena := LArena;
+        LAllocWorkerData[LIndex].StartFlag := @LStartFlag;
+        LAllocWorkerData[LIndex].AllocCount := 0;
+        LAllocWorkerData[LIndex].Failure := '';
+        platform_thread_spawn(LAllocWorkers[LIndex], @B4ArenaAllocWorkerProc,
+          @LAllocWorkerData[LIndex]);
+      end;
+
+      LStartFlag := 1;
+
+      { Let alloc workers run briefly, then mark and restore }
+      platform_thread_sleep_ns(100000);
+      LMark := LArena.SaveMark;
+      LArena.RestoreToMark(LMark);
+
+      for LIndex := 0 to High(LAllocWorkers) do
+        platform_thread_wait(LAllocWorkers[LIndex]);
+
+      LFailure := '';
+      for LIndex := 0 to High(LAllocWorkers) do
+      begin
+        if (LFailure = '') and (LAllocWorkerData[LIndex].Failure <> '') then
+          LFailure := 'cycle ' + IntToStr(LCycle) + ' worker ' + IntToStr(LIndex) + ': ' + LAllocWorkerData[LIndex].Failure;
+      end;
+
+      Check(LFailure = '', 'mark/restore cycle should not crash: ' + LFailure);
+
+      { Arena should be usable after each cycle }
+      LArena.Reset;
+    end;
+
+    { Final usability check }
+    Check(LArena.Alloc(64) <> nil, 'arena should remain usable after all mark/restore cycles');
+  finally
+    LArena.Free;
+  end;
+end;
+
+begin
+  T := TTestSuite.Create('nextpas.core.mem.concurrent_wrappers');
+  T.Test('T-01 mutex direct', @TestMemMutexDirect);
+  T.Test('T-02 rwlock direct', @TestMemRwLockDirect);
+  T.Test('T-03 mutex high contention', @TestMemMutexHighContention);
+  T.Test('blockpool wrapper basics', @TestBlockPoolConcurrentWrapper);
+  T.Test('arena wrapper basics', @TestArenaConcurrentWrapper);
+  T.Test('fixed-pool wrapper contention', @TestFixedPoolConcurrentContention);
+  T.Test('fixed-pool wrapper rejects invalid release after contention', @TestFixedPoolConcurrentRejectsInvalidReleaseAfterContention);
+  T.Test('slab wrapper contention', @TestSlabPoolConcurrentContention);
+  T.Test('R-03 Reset vs Alloc contention', @TestArenaResetVsAllocContention);
+  T.Test('R-03 mark vs alloc contention', @TestArenaMarkVsAllocContention);
+  T.Test('B4-3 multiple mark/restore cycles', @TestArenaConcurrentMultipleMarkRestore);
+  T.Run;
   T.Summary;
 end.

@@ -4,14 +4,14 @@ program test_arena_chunked;
 
 uses
   nextpas.core.text.conv,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.mem.arena.base,
   nextpas.core.mem.arena.chunked,
   nextpas.core.mem.arena.intf,
   nextpas.core.mem.base;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestBasicAlloc;
 var
@@ -170,6 +170,38 @@ begin
 
     LArena.RestoreToMark(LMark);
     Check(LArena.Alloc(512) <> nil, 'can alloc after cross-segment restore');
+  finally
+    LArena.Free;
+  end;
+end;
+
+{ B2: 跨段 mark/restore 后 AllocAligned }
+procedure TestMarkAcrossSegmentsThenAllocAligned;
+var
+  LArena: TChunkedArena;
+  LMark: TArenaMark;
+  LP: Pointer;
+  I: Integer;
+begin
+  LArena := TChunkedArena.Create(1024);
+  try
+    { Fill multiple segments }
+    for I := 0 to 63 do
+      LArena.Alloc(1024);
+
+    LMark := LArena.SaveMark;
+
+    { Allocate more in additional segments }
+    for I := 0 to 9 do
+      LArena.Alloc(1024);
+
+    { Restore to mark }
+    LArena.RestoreToMark(LMark);
+
+    { AllocAligned should work after cross-segment restore }
+    LP := LArena.AllocAligned(128, 64);
+    Check(LP <> nil, 'AllocAligned after cross-segment restore');
+    Check(Int64(0) = PtrUInt(LP) mod 64, 'aligned to 64');
   finally
     LArena.Free;
   end;
@@ -468,33 +500,37 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.mem.arena.chunked');
+  T := TTestSuite.Create('nextpas.core.mem.arena.chunked');
 
-  T.Run('basic_alloc', @TestBasicAlloc);
-  T.Run('multiple_allocs', @TestMultipleAllocs);
-  T.Run('alloc_aligned', @TestAllocAligned);
-  T.Run('alloc_zeroed', @TestAllocZeroed);
-  T.Run('geometric_growth', @TestGeometricGrowth);
-  T.Run('linear_growth', @TestLinearGrowth);
-  T.Run('save_restore_mark', @TestSaveRestoreMark);
-  T.Run('mark_across_segments', @TestMarkAcrossSegments);
-  T.Run('reset', @TestReset);
-  T.Run('reset_keep_segments', @TestResetKeepSegments);
-  T.Run('max_size', @TestMaxSize);
-  T.Run('iarena_interface', @TestIArenaInterface);
-  T.Run('zero_size_alloc', @TestZeroSizeAlloc);
+  T.Test('basic_alloc', @TestBasicAlloc);
+  T.Test('multiple_allocs', @TestMultipleAllocs);
+  T.Test('alloc_aligned', @TestAllocAligned);
+  T.Test('alloc_zeroed', @TestAllocZeroed);
+  T.Test('geometric_growth', @TestGeometricGrowth);
+  T.Test('linear_growth', @TestLinearGrowth);
+  T.Test('save_restore_mark', @TestSaveRestoreMark);
+  T.Test('mark_across_segments', @TestMarkAcrossSegments);
+  T.Test('mark_across_segments_alloc_aligned', @TestMarkAcrossSegmentsThenAllocAligned);
+  T.Test('reset', @TestReset);
+  T.Test('reset_keep_segments', @TestResetKeepSegments);
+  T.Test('max_size', @TestMaxSize);
+  T.Test('iarena_interface', @TestIArenaInterface);
+  T.Test('zero_size_alloc', @TestZeroSizeAlloc);
 
   { Edge-case tests }
-  T.Run('chunk_cache_reuse', @TestChunkCacheReuse);
-  T.Run('chunk_cache_limit', @TestChunkCacheLimit);
-  T.Run('multiple_reset_cycles', @TestMultipleResetCycles);
-  T.Run('aligned_zero_align', @TestAllocAlignedZeroAlign);
-  T.Run('aligned_invalid_align', @TestAllocAlignedInvalidAlign);
-  T.Run('stats_methods', @TestStatsMethods);
-  T.Run('peak_used_across_resets', @TestPeakUsedAcrossResets);
-  T.Run('reset_then_large_alloc', @TestResetThenLargeAlloc);
-  T.Run('remaining_size', @TestRemainingSize);
-  T.Run('segment_count_initial', @TestSegmentCountZero);
+  T.Test('chunk_cache_reuse', @TestChunkCacheReuse);
+  T.Test('chunk_cache_limit', @TestChunkCacheLimit);
+  T.Test('multiple_reset_cycles', @TestMultipleResetCycles);
+  T.Test('aligned_zero_align', @TestAllocAlignedZeroAlign);
+  T.Test('aligned_invalid_align', @TestAllocAlignedInvalidAlign);
+  T.Test('stats_methods', @TestStatsMethods);
+  T.Test('peak_used_across_resets', @TestPeakUsedAcrossResets);
+  T.Test('reset_then_large_alloc', @TestResetThenLargeAlloc);
+  T.Test('remaining_size', @TestRemainingSize);
+  T.Test('segment_count_initial', @TestSegmentCountZero);
+
+  T.Run;
+
 
   T.Summary;
 end.

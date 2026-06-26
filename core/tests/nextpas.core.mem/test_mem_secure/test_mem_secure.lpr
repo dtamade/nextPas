@@ -5,7 +5,7 @@ program test_mem_secure;
 uses
   nextpas.core.base,
   nextpas.core.fs,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.mem.secure,
   nextpas.core.platform.mmap;
 
@@ -20,7 +20,7 @@ const
     'core/tests/nextpas.core.mem/test_mem_secure_windows_compile_gate/test_mem_secure_windows_compile_gate.lpr';
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ReadSourceText(const APath: string): string;
 var
@@ -68,7 +68,7 @@ begin
 
   LByte := $A5;
   SecureZeroMemory(@LByte, 0);
-  CheckEqual(Int64($A5), Int64(LByte), 'zero-size secure zero leaves buffer unchanged');
+  Check(Int64($A5) = Int64(LByte), 'zero-size secure zero leaves buffer unchanged');
 end;
 
 procedure TestSecureZeroMemorySmallBuffers;
@@ -80,14 +80,14 @@ var
 begin
   LOne := $7F;
   SecureZeroMemory(@LOne, SizeOf(LOne));
-  CheckEqual(Int64(0), Int64(LOne), 'single-byte secure zero');
+  Check(Int64(0) = Int64(LOne), 'single-byte secure zero');
 
   LThree[0] := $11;
   LThree[1] := $22;
   LThree[2] := $33;
   SecureZeroMemory(@LThree[0], SizeOf(LThree));
   for LIndex := Low(LThree) to High(LThree) do
-    CheckEqual(Int64(0), Int64(LThree[LIndex]), 'three-byte secure zero');
+    Check(Int64(0) = Int64(LThree[LIndex]), 'three-byte secure zero');
 
   LGuarded[0] := $AA;
   LGuarded[1] := $11;
@@ -95,11 +95,11 @@ begin
   LGuarded[3] := $33;
   LGuarded[4] := $BB;
   SecureZeroMemory(@LGuarded[1], 3);
-  CheckEqual(Int64($AA), Int64(LGuarded[0]), 'leading guard unchanged');
-  CheckEqual(Int64(0), Int64(LGuarded[1]), 'guarded byte 1 cleared');
-  CheckEqual(Int64(0), Int64(LGuarded[2]), 'guarded byte 2 cleared');
-  CheckEqual(Int64(0), Int64(LGuarded[3]), 'guarded byte 3 cleared');
-  CheckEqual(Int64($BB), Int64(LGuarded[4]), 'trailing guard unchanged');
+  Check(Int64($AA) = Int64(LGuarded[0]), 'leading guard unchanged');
+  Check(Int64(0) = Int64(LGuarded[1]), 'guarded byte 1 cleared');
+  Check(Int64(0) = Int64(LGuarded[2]), 'guarded byte 2 cleared');
+  Check(Int64(0) = Int64(LGuarded[3]), 'guarded byte 3 cleared');
+  Check(Int64($BB) = Int64(LGuarded[4]), 'trailing guard unchanged');
 end;
 
 procedure TestSecureZeroBytesClearsAndShrinks;
@@ -112,7 +112,7 @@ begin
   LData[2] := $43;
 
   SecureZeroBytes(LData);
-  CheckEqual(Int64(0), Int64(Length(LData)), 'secure zero bytes shrinks array');
+  Check(Int64(0) = Int64(Length(LData)), 'secure zero bytes shrinks array');
 end;
 
 procedure TestSecureZeroStringClears;
@@ -121,7 +121,7 @@ var
 begin
   LText := 'secret';
   SecureZeroString(LText);
-  CheckEqual('', LText, 'secure zero string clears value');
+  Check('' = LText, 'secure zero string clears value');
 end;
 
 procedure TestPlatformSecureIsDeprecatedWrapper;
@@ -177,14 +177,16 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.mem.secure');
-  T.Run('nil and zero-size memory', @TestSecureZeroMemoryNilAndZeroSize);
-  T.Run('small buffers', @TestSecureZeroMemorySmallBuffers);
-  T.Run('byte arrays', @TestSecureZeroBytesClearsAndShrinks);
-  T.Run('strings', @TestSecureZeroStringClears);
-  T.Run('platform.secure is deprecated wrapper', @TestPlatformSecureIsDeprecatedWrapper);
-  T.Run('mem.secure delegates to platform.memory', @TestMemSecureDelegatesToPlatformMemory);
-  T.Run('windows compile gate uses platform.secure wrapper',
+  T := TTestSuite.Create('nextpas.core.mem.secure');
+  T.Test('nil and zero-size memory', @TestSecureZeroMemoryNilAndZeroSize);
+  T.Test('small buffers', @TestSecureZeroMemorySmallBuffers);
+  T.Test('byte arrays', @TestSecureZeroBytesClearsAndShrinks);
+  T.Test('strings', @TestSecureZeroStringClears);
+  T.Test('platform.secure is deprecated wrapper', @TestPlatformSecureIsDeprecatedWrapper);
+  T.Test('mem.secure delegates to platform.memory', @TestMemSecureDelegatesToPlatformMemory);
+  T.Test('windows compile gate uses platform.secure wrapper',
     @TestWindowsCompileGateUsesPlatformSecureWrapper);
+  T.Run;
+
   T.Summary;
 end.

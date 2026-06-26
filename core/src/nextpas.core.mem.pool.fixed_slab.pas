@@ -10,6 +10,7 @@ unit nextpas.core.mem.pool.fixed_slab;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.mem.pool.memory_pool,
   nextpas.core.mem.allocator,
   nextpas.core.mem.intf,
@@ -1509,7 +1510,7 @@ begin
   Result.ZeroInitialized := True;   // AllocMem 中有 FillChar
   Result.ThreadSafe      := False;  // 当前实现未加锁
   Result.HasMemSize      := True;   // 提供 ChunkSizeOf / MemSizeOf
-  Result.SupportsAligned := False;  // 未提供专门对齐 API
+  Result.SupportsAligned := True;   // AllocAligned 通过 fallback 路径实现
 end;
 
 function TFixedSlabPool.MemSizeOf(APtr: Pointer): SizeUInt;

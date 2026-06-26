@@ -167,9 +167,9 @@ end;
 
 ## 测试覆盖
 
-- 29 test projects with a static count of 289 `T.Run` cases
-- 0 memory leaks
-- 完整接口覆盖
+- 30 test projects with 398 `T.Test` cases (migrated to `nextpas.core.test` v3.x)
+- 0 memory leaks, 0 unfreed blocks
+- 完整接口覆盖：Arena / Pool / Allocator / Concurrent / Sharded / Contract / OOM
 
 ## 相关文档
 
@@ -181,6 +181,16 @@ end;
 
 ## 版本历史
 
+- v3.0 (2026-06-26): 自举修复 + 并发测试修复 + B4 并发测试补全 + D1 框架迁移
+  - 修复 `TChunkedArena.FSegmentCount` signed/unsigned 类型不匹配（自举阻塞）
+  - 修复并发测试 TMemMutex/TMemRwLock 未初始化导致无限循环（record 栈变量 FillChar）
+  - 补全 B4 并发测试：Reset/Alloc 竞争、Mark/Alloc 竞争、多次 Mark/Restore 循环
+  - 迁移 test_allocator_foundation 到新测试框架
+  - 30 suites / 398 tests / 0 leaks / 0 failures
+- v2.5 (2026-06-25): TObjectPool 双重释放检测 + Arena AllocAligned(0) 统一归一化
+- v2.4 (2026-06-25): 4 项深审修复 — TArenaMark AllocCount、ChunkedArena Reset 偏移、SlabSharded 清零、Fallback ReallocMem
+- v2.3 (2026-06-25): 4 项深审修复 — AcquireUnchecked 统计、TObjectPool 边界、FixedPool DEBUG 指针、Slab SupportsAligned
+- v2.2 (2026-06-25): 9 项打磨 — nil 安全、TLS 多实例隔离、AllocMem 路径、DEBUG 防护、门面补全
 - v2.1 (2026-06-23): TLA + SizeClass Slab + Fallback Chain + FPC FillChar/Move 清理
 - v2.0 (2026-06-22): 架构清理 + 性能优化 + 安全防护 + 并发语义补强
 - v1.0 (2026-06-22): 初始 Arena 实现

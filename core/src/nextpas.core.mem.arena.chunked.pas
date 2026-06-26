@@ -5,6 +5,7 @@ unit nextpas.core.mem.arena.chunked;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.mem.base,
   nextpas.core.mem.error,
   nextpas.core.mem.intf,
@@ -34,7 +35,7 @@ type
       PSegment = ^TSegment;
   private
     FSegments: array of TSegment;
-    FSegmentCount: SizeInt;
+    FSegmentCount: SizeUInt;
     FActive: SizeInt;
     FTotalSize: SizeUInt;
     FAlignment: SizeUInt;
@@ -60,7 +61,7 @@ type
     function TryReuseSegment(aMinSize: SizeUInt): Boolean;
     procedure FreeSegment(aIndex: SizeInt);
     procedure CacheSegment(aIndex: SizeInt);
-    procedure ShrinkToSegmentCount(aCount: SizeInt);
+    procedure ShrinkToSegmentCount(aCount: SizeUInt);
     procedure NormalizeState(aActiveIndex: SizeInt; aActiveUsed: SizeUInt);
     procedure ClearCache;
   public
@@ -414,13 +415,11 @@ begin
   SetLength(FFreeSegments, 0);
 end;
 
-procedure TChunkedArena.ShrinkToSegmentCount(aCount: SizeInt);
+procedure TChunkedArena.ShrinkToSegmentCount(aCount: SizeUInt);
 var
-  LIdx: SizeInt;
+  LIdx: SizeUInt;
 begin
-  if aCount < 0 then
-    aCount := 0;
-  if aCount > FSegmentCount then
+  if aCount >= FSegmentCount then
     Exit;
 
   for LIdx := FSegmentCount - 1 downto aCount do
@@ -616,6 +615,7 @@ begin
   Result.BackOffset := 0;
   Result.TotalUsed := CurrentUsed;
   Result.LargeUsed := 0;
+  Result.AllocCount := 0;  // TChunkedArena 不在此处跟踪
 end;
 
 procedure TChunkedArena.RestoreToMark(aMark: TArenaMark);
@@ -679,7 +679,12 @@ begin
   end;
 
   for LIdx := 0 to FSegmentCount - 1 do
+  begin
     FSegments[LIdx].Used := 0;
+    if LIdx > 0 then
+      FSegments[LIdx].StartOffset := 0;  // 会在 AddSegment 时按需重算
+  end;
+  FTotalSize := FSegments[0].Size;  // 重置为第一段容量
   FActive := 0;
 end;
 

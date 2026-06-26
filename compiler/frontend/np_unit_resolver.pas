@@ -69,6 +69,7 @@ type
     function CandidateSummary(const ACandidates: TStringArray): string;
     function ResolveUnitOrigin(const ASourcePath: string): TResolvedUnitOrigin;
     function EnsureRuntimeUnit: TResolvedUnit;
+    procedure EnsureImplicitRuntimeDependency(const ASourceUnitId: string);
     function StackIndexOf(const AUnitId: string): LongInt;
     function FindIndexedEntry(
       const ARootIndex: LongInt;
@@ -358,6 +359,21 @@ begin
   end;
 end;
 
+procedure TUnitResolver.EnsureImplicitRuntimeDependency(
+  const ASourceUnitId: string
+);
+var
+  RuntimeUnit: TResolvedUnit;
+begin
+  if (Trim(ASourceUnitId) = '') or SameText(ASourceUnitId, 'system') then
+    Exit;
+
+  RuntimeUnit := EnsureRuntimeUnit;
+  if RuntimeUnit.UnitId = '' then
+    Exit;
+  FUnitGraph.AddEdge(ugeImplicitRuntime, ASourceUnitId, RuntimeUnit.UnitId);
+end;
+
 function TUnitResolver.FindIndexedEntry(
   const ARootIndex: LongInt;
   const AUnitId: string
@@ -629,6 +645,7 @@ begin
     );
     FUnitGraph.AddResolvedUnit(ResolvedUnit);
     FUnitGraph.AddEdge(AEdgeKind, ASourceUnitId, ResolvedUnit.UnitId);
+    EnsureImplicitRuntimeDependency(ResolvedUnit.UnitId);
 
     PushResolutionStack(ResolvedUnit.UnitId, AEdgeKind);
     try
@@ -787,13 +804,7 @@ begin
 
   PushResolutionStack(RootUnit.UnitId, ugeRootRequest);
   try
-    if (ARootAst.RootKindName = 'program') or
-      (ARootAst.RootKindName = 'library') or
-      (ARootAst.RootKindName = 'package') then
-    begin
-      RuntimeUnit := EnsureRuntimeUnit;
-      FUnitGraph.AddEdge(ugeImplicitRuntime, RootUnit.UnitId, RuntimeUnit.UnitId);
-    end;
+    EnsureImplicitRuntimeDependency(RootUnit.UnitId);
 
     if not ResolveDependencyList(
       RootUnit.UnitId,

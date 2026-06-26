@@ -6,7 +6,7 @@ uses
   nextpas.core.base,
   nextpas.core.exception,
   nextpas.core.fs,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.mem.intf,
   nextpas.core.mem.utils,
   nextpas.core.mem.allocator,
@@ -71,7 +71,7 @@ type
   TQWordArray = array[0..1] of UInt64;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GGetMemCalls: Integer = 0;
   GAllocMemCalls: Integer = 0;
   GReallocMemCalls: Integer = 0;
@@ -207,21 +207,21 @@ begin
 
   LPtr := LAllocator.ReallocMem(nil, 16);
   Check(LPtr <> nil, 'ReallocMem(nil, size) should allocate');
-  CheckEqual(Int64(1), Int64(GGetMemCalls), 'ReallocMem(nil, size) should route through GetMem');
-  CheckEqual(Int64(0), Int64(GReallocMemCalls), 'ReallocMem(nil, size) should not call realloc callback');
+  Check(Int64(1) = Int64(GGetMemCalls), 'ReallocMem(nil, size) should route through GetMem');
+  Check(Int64(0) = Int64(GReallocMemCalls), 'ReallocMem(nil, size) should not call realloc callback');
 
   PByte(LPtr)^ := $5A;
   LPtr := LAllocator.ReallocMem(LPtr, 32);
   Check(LPtr <> nil, 'ReallocMem(existing, size) should return a pointer');
-  CheckEqual(Int64(1), Int64(GReallocMemCalls), 'ReallocMem(existing, size) should call realloc callback');
-  CheckEqual(Int64($5A), Int64(PByte(LPtr)^), 'ReallocMem should preserve the existing prefix');
+  Check(Int64(1) = Int64(GReallocMemCalls), 'ReallocMem(existing, size) should call realloc callback');
+  Check(Int64($5A) = Int64(PByte(LPtr)^), 'ReallocMem should preserve the existing prefix');
 
   LPtr := LAllocator.ReallocMem(LPtr, 0);
   Check(LPtr = nil, 'ReallocMem(existing, 0) should free and return nil');
-  CheckEqual(Int64(1), Int64(GFreeMemCalls), 'ReallocMem(existing, 0) should call free callback');
+  Check(Int64(1) = Int64(GFreeMemCalls), 'ReallocMem(existing, 0) should call free callback');
 
   LAllocator.FreeMem(nil);
-  CheckEqual(Int64(1), Int64(GFreeMemCalls), 'FreeMem(nil) should be a no-op');
+  Check(Int64(1) = Int64(GFreeMemCalls), 'FreeMem(nil) should be a no-op');
 end;
 
 procedure TestCallbackAllocatorSupportsCanonicalInterface;
@@ -238,16 +238,16 @@ begin
 
   LPtr := LAllocator.GetMem(24);
   Check(LPtr <> nil, 'GetMem should delegate to the compatibility allocator');
-  CheckEqual(Int64(1), Int64(GGetMemCalls), 'GetMem should route through GetMem');
+  Check(Int64(1) = Int64(GGetMemCalls), 'GetMem should route through GetMem');
 
   PByte(LPtr)^ := $33;
   LPtr := LAllocator.ReallocMem(LPtr, 48);
   Check(LPtr <> nil, 'ReallocMem should return a pointer');
-  CheckEqual(Int64(1), Int64(GReallocMemCalls), 'ReallocMem should route through ReallocMem');
-  CheckEqual(Int64($33), Int64(PByte(LPtr)^), 'ReallocMem should preserve the prefix');
+  Check(Int64(1) = Int64(GReallocMemCalls), 'ReallocMem should route through ReallocMem');
+  Check(Int64($33) = Int64(PByte(LPtr)^), 'ReallocMem should preserve the prefix');
 
   LAllocator.FreeMem(LPtr);
-  CheckEqual(Int64(1), Int64(GFreeMemCalls), 'FreeMem should route through FreeMem');
+  Check(Int64(1) = Int64(GFreeMemCalls), 'FreeMem should route through FreeMem');
 end;
 
 procedure ExpectNilCallbackRejected(const AName: string;
@@ -309,14 +309,14 @@ begin
   Check(LAllocator <> nil, 'RTL allocator should exist');
 
   LTraits := LAllocator.Traits;
-  CheckEqual(True, LTraits.ZeroInitialized, 'RTL AllocMem should be zero initialized');
-  CheckEqual(False, LTraits.SupportsAligned, 'RTL allocator should report non-native aligned support');
-  CheckEqual(False, LTraits.HasMemSize, 'RTL allocator should not expose MemSize');
+  Check(True = LTraits.ZeroInitialized, 'RTL AllocMem should be zero initialized');
+  Check(False = LTraits.SupportsAligned, 'RTL allocator should report non-native aligned support');
+  Check(False = LTraits.HasMemSize, 'RTL allocator should not expose MemSize');
 
   LPtr := LAllocator.AllocMem(32);
   try
     for I := 0 to 31 do
-      CheckEqual(Int64(0), Int64(PByte(LPtr)[I]), 'AllocMem should zero initialize each byte');
+      Check(Int64(0) = Int64(PByte(LPtr)[I]), 'AllocMem should zero initialize each byte');
   finally
     LAllocator.FreeMem(LPtr);
   end;
@@ -324,7 +324,7 @@ begin
   LPtr := LAllocator.AllocAligned(64, 32);
   try
     Check(LPtr <> nil, 'AllocAligned should return a pointer');
-    CheckEqual(Int64(0), Int64(PtrUInt(LPtr) mod 32), 'AllocAligned should honor the requested alignment');
+    Check(Int64(0) = Int64(PtrUInt(LPtr) mod 32), 'AllocAligned should honor the requested alignment');
   finally
     LAllocator.FreeAligned(LPtr);
   end;
@@ -602,8 +602,14 @@ begin
     'virtual arena Alloc should classify capacity exhaustion');
   CheckContains(LAllocSection, 'flastallocfailure := vaaffrontcommitfailed;',
     'virtual arena Alloc should classify front commit failure');
-  CheckContains(LAllocSection, 'flastallocfailure := vaaflargeobjectmapfailed;',
-    'virtual arena Alloc should classify large-object mmap failure');
+  CheckContains(LAllocSection, 'alloclargeobject(aSize)',
+    'virtual arena Alloc should delegate large objects to AllocLargeObject');
+
+  { AllocLargeObject owns the mmap failure path after DRY refactor }
+  CheckContains(LSource, 'function tvirtualarena.alloclargeobject',
+    'virtual arena should define AllocLargeObject helper');
+  CheckContains(LSource, 'flastallocfailure := vaaflargeobjectmapfailed;',
+    'AllocLargeObject should classify mmap failure');
 
   CheckNotContains(LSource, 'inc(garenatotalmapped',
     'virtual arena leak counter should not use plain Inc');
@@ -631,7 +637,7 @@ begin
     PByte(LPtr)^ := $4A;
     LPtr := LAllocator.ReallocMem(LPtr, 32);
     Check(LPtr <> nil, 'canonical allocator exposes ReallocMem');
-    CheckEqual(Int64($4A), Int64(PByte(LPtr)^), 'canonical ReallocMem preserves prefix');
+    Check(Int64($4A) = Int64(PByte(LPtr)^), 'canonical ReallocMem preserves prefix');
   finally
     LAllocator.FreeMem(LPtr);
   end;
@@ -668,9 +674,8 @@ begin
 
       if LPtr <> nil then
       begin
-        CheckEqual(False, nextpas.core.mem.allocator.mimalloc.TryGetMimallocUsableSize(LPtr, LSize),
-          'fallback should not query usable size when the optional symbol is unavailable');
-        CheckEqual(Int64(0), Int64(LSize), 'fallback usable-size query should return size 0');
+        Check(False = nextpas.core.mem.allocator.mimalloc.TryGetMimallocUsableSize(LPtr, LSize), 'fallback should not query usable size when the optional symbol is unavailable');
+        Check(Int64(0) = Int64(LSize), 'fallback usable-size query should return size 0');
       end;
     finally
       if LPtr <> nil then
@@ -695,9 +700,9 @@ begin
   LBytes[4] := 5;
   LBytes[5] := 6;
 
-  CheckEqual(False, IsOverlap(nil, 0, @LBytes[0], 4), 'nil block should not overlap');
-  CheckEqual(False, IsOverlap(@LBytes[0], 2, @LBytes[2], 2), 'adjacent ranges should not overlap');
-  CheckEqual(True, IsOverlap(@LBytes[0], 3, @LBytes[2], 3), 'intersecting ranges should overlap');
+  Check(False = IsOverlap(nil, 0, @LBytes[0], 4), 'nil block should not overlap');
+  Check(False = IsOverlap(@LBytes[0], 2, @LBytes[2], 2), 'adjacent ranges should not overlap');
+  Check(True = IsOverlap(@LBytes[0], 3, @LBytes[2], 3), 'intersecting ranges should overlap');
 end;
 
 procedure TestMemUtilsCopyUncheckedHandlesOverlap;
@@ -713,12 +718,12 @@ begin
 
   CopyUnChecked(@LBytes[0], @LBytes[1], 5);
 
-  CheckEqual(Int64(1), Int64(LBytes[0]), 'copy overlap index 0');
-  CheckEqual(Int64(1), Int64(LBytes[1]), 'copy overlap index 1');
-  CheckEqual(Int64(2), Int64(LBytes[2]), 'copy overlap index 2');
-  CheckEqual(Int64(3), Int64(LBytes[3]), 'copy overlap index 3');
-  CheckEqual(Int64(4), Int64(LBytes[4]), 'copy overlap index 4');
-  CheckEqual(Int64(5), Int64(LBytes[5]), 'copy overlap index 5');
+  Check(Int64(1) = Int64(LBytes[0]), 'copy overlap index 0');
+  Check(Int64(1) = Int64(LBytes[1]), 'copy overlap index 1');
+  Check(Int64(2) = Int64(LBytes[2]), 'copy overlap index 2');
+  Check(Int64(3) = Int64(LBytes[3]), 'copy overlap index 3');
+  Check(Int64(4) = Int64(LBytes[4]), 'copy overlap index 4');
+  Check(Int64(5) = Int64(LBytes[5]), 'copy overlap index 5');
 end;
 
 procedure TestMemUtilsFillAndZeroHelpers;
@@ -731,23 +736,23 @@ var
 begin
   Fill8(@LBytes[0], Length(LBytes), $AB);
   for I := Low(LBytes) to High(LBytes) do
-    CheckEqual(Int64($AB), Int64(LBytes[I]), 'Fill8 should write the requested byte');
+    Check(Int64($AB) = Int64(LBytes[I]), 'Fill8 should write the requested byte');
 
   Fill16(@LWords[0], Length(LWords), $1234);
   for I := Low(LWords) to High(LWords) do
-    CheckEqual(Int64($1234), Int64(LWords[I]), 'Fill16 should write the requested word');
+    Check(Int64($1234) = Int64(LWords[I]), 'Fill16 should write the requested word');
 
   Fill32(@LDWords[0], Length(LDWords), $89ABCDEF);
   for I := Low(LDWords) to High(LDWords) do
-    CheckEqual(Int64($89ABCDEF), Int64(LDWords[I]), 'Fill32 should write the requested dword');
+    Check(Int64($89ABCDEF) = Int64(LDWords[I]), 'Fill32 should write the requested dword');
 
   Fill64(@LQWords[0], Length(LQWords), $0123456789ABCDEF);
   for I := Low(LQWords) to High(LQWords) do
-    CheckEqual(Int64($0123456789ABCDEF), Int64(LQWords[I]), 'Fill64 should write the requested qword');
+    Check(Int64($0123456789ABCDEF) = Int64(LQWords[I]), 'Fill64 should write the requested qword');
 
   Zero(@LBytes[0], Length(LBytes));
   for I := Low(LBytes) to High(LBytes) do
-    CheckEqual(Int64(0), Int64(LBytes[I]), 'Zero should clear each byte');
+    Check(Int64(0) = Int64(LBytes[I]), 'Zero should clear each byte');
 end;
 
 procedure TestRingBufferAdvanceIndexFastPathContract;
@@ -791,36 +796,38 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.mem.contracts');
-  T.Run('callback allocator compatibility methods', @TestCallbackAllocatorCompatibilityMethods);
-  T.Run('callback allocator supports canonical interface', @TestCallbackAllocatorSupportsCanonicalInterface);
-  T.Run('callback allocator rejects nil callbacks at runtime',
+  T := TTestSuite.Create('nextpas.core.mem.contracts');
+  T.Test('callback allocator compatibility methods', @TestCallbackAllocatorCompatibilityMethods);
+  T.Test('callback allocator supports canonical interface', @TestCallbackAllocatorSupportsCanonicalInterface);
+  T.Test('callback allocator rejects nil callbacks at runtime',
     @TestCallbackAllocatorRejectsNilCallbacksAtRuntime);
-  T.Run('rtl allocator zero init traits and aligned alloc', @TestRtlAllocatorZeroInitTraitsAndAlignedAlloc);
-  T.Run('rtl allocator aligned alloc rejects size overflow', @TestRtlAllocatorAlignedAllocRejectsSizeOverflow);
-  T.Run('chunked arena and growable block pool use canonical allocator contract',
+  T.Test('rtl allocator zero init traits and aligned alloc', @TestRtlAllocatorZeroInitTraitsAndAlignedAlloc);
+  T.Test('rtl allocator aligned alloc rejects size overflow', @TestRtlAllocatorAlignedAllocRejectsSizeOverflow);
+  T.Test('chunked arena and growable block pool use canonical allocator contract',
     @TestChunkedArenaAndGrowableBlockPoolUseCanonicalAllocatorContract);
-  T.Run('arena units use explicit arena api', @TestArenaUnitsUseExplicitArenaApi);
-  T.Run('callback allocator rejects nil callbacks without contract guard',
+  T.Test('arena units use explicit arena api', @TestArenaUnitsUseExplicitArenaApi);
+  T.Test('callback allocator rejects nil callbacks without contract guard',
     @TestCallbackAllocatorRejectsNilCallbacksWithoutContractGuard);
-  T.Run('virtual arena AllocNoPointer guards against back underflow',
+  T.Test('virtual arena AllocNoPointer guards against back underflow',
     @TestVirtualArenaAllocNoPointerGuardsAgainstBackUnderflow);
-  T.Run('legacy allocator files removed', @TestLegacyAllocatorFilesRemoved);
-  T.Run('zero-consumer compatibility units removed', @TestZeroConsumerCompatibilityUnitsRemoved);
-  T.Run('mem.base owns constants and mem.error drops alloc result',
+  T.Test('legacy allocator files removed', @TestLegacyAllocatorFilesRemoved);
+  T.Test('zero-consumer compatibility units removed', @TestZeroConsumerCompatibilityUnitsRemoved);
+  T.Test('mem.base owns constants and mem.error drops alloc result',
     @TestBaseOwnsMemConstantsAndErrorDropsAllocResult);
-  T.Run('mem lock wrappers use atomic init state',
+  T.Test('mem lock wrappers use atomic init state',
     @TestMemLockWrappersUseAtomicInitState);
-  T.Run('virtual arena documents large-object mark semantics',
+  T.Test('virtual arena documents large-object mark semantics',
     @TestVirtualArenaDocumentsLargeObjectMarkSemantics);
-  T.Run('virtual arena exposes failure reason and atomic mapped counter',
+  T.Test('virtual arena exposes failure reason and atomic mapped counter',
     @TestVirtualArenaExposesFailureReasonAndAtomicMappedCounter);
-  T.Run('canonical allocator surface', @TestCanonicalAllocatorSurface);
-  T.Run('allocator aliases are canonical', @TestAllocatorAliasesAreCanonical);
-  T.Run('mimalloc usable-size capability fallback', @TestMimallocUsableSizeCapabilityFallback);
-  T.Run('mem.utils no-op and overlap contract', @TestMemUtilsNoOpAndOverlapContract);
-  T.Run('mem.utils copy unchecked handles overlap', @TestMemUtilsCopyUncheckedHandlesOverlap);
-  T.Run('mem.utils fill and zero helpers', @TestMemUtilsFillAndZeroHelpers);
-  T.Run('ring buffer advance-index fast path contract', @TestRingBufferAdvanceIndexFastPathContract);
+  T.Test('canonical allocator surface', @TestCanonicalAllocatorSurface);
+  T.Test('allocator aliases are canonical', @TestAllocatorAliasesAreCanonical);
+  T.Test('mimalloc usable-size capability fallback', @TestMimallocUsableSizeCapabilityFallback);
+  T.Test('mem.utils no-op and overlap contract', @TestMemUtilsNoOpAndOverlapContract);
+  T.Test('mem.utils copy unchecked handles overlap', @TestMemUtilsCopyUncheckedHandlesOverlap);
+  T.Test('mem.utils fill and zero helpers', @TestMemUtilsFillAndZeroHelpers);
+  T.Test('ring buffer advance-index fast path contract', @TestRingBufferAdvanceIndexFastPathContract);
+  T.Run;
+
   T.Summary;
 end.

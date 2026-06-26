@@ -810,10 +810,19 @@ begin
 end;
 
 function TSlabPoolSharded.AllocMem(ASize: SizeUInt): Pointer;
+var
+  LActualSize: SizeUInt;
 begin
   Result := GetMem(ASize);
   if Result <> nil then
-    ZeroMem(Result, ASize);
+  begin
+    // 清零实际分配块大小（而非仅请求大小），防止旧数据泄露
+    LActualSize := MemSizeOf(Result);
+    if LActualSize > 0 then
+      FillChar(Result^, LActualSize, 0)
+    else
+      FillChar(Result^, ASize, 0);
+  end;
 end;
 
 function TSlabPoolSharded.ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
@@ -947,7 +956,7 @@ begin
   Result.ZeroInitialized := True;
   Result.ThreadSafe := True;
   Result.HasMemSize := True;
-  Result.SupportsAligned := False;
+  Result.SupportsAligned := True;   // AllocAligned 通过 fallback 路径实现
 end;
 
 function TSlabPoolSharded.Owns(APtr: Pointer): Boolean;

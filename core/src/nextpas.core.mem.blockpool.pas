@@ -32,6 +32,7 @@ unit nextpas.core.mem.blockpool;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.mem.base,
   nextpas.core.mem.pool.base,
   nextpas.core.base.utils,
@@ -403,6 +404,9 @@ begin
   {$ENDIF}
   ClearFreeBit(LIdx);
   Inc(FAllocCount);
+  Inc(FTotalAllocs);
+  if FAllocCount > FPeakAlloc then
+    FPeakAlloc := FAllocCount;
   Result := LPtr;
 end;
 

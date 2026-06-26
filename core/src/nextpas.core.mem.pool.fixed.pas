@@ -5,6 +5,7 @@ unit nextpas.core.mem.pool.fixed;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.base.utils,
   nextpas.core.mem.pool.base,    // IPool (decoupled from facade)
   nextpas.core.mem.allocator,    // IAllocator + GetRtlAllocator
@@ -422,7 +423,7 @@ begin
 
   {$IFDEF FAF_MEM_DEBUG}
   // 污化已释放内存，提升 UAF 暴露率
-  FillMem(PByte(FBuffer)[SizeUInt(LIdx)*FBlockSize], FBlockSize, $A5);
+  FillMem(Pointer(PByte(FBuffer) + SizeUInt(LIdx) * FBlockSize), FBlockSize, $A5);
   {$ENDIF}
   FIsFree[LIdx] := True;
   Dec(FAllocatedCount);

@@ -647,18 +647,263 @@ README / ARCHITECTURE 已写明 `AllocUnsafe` 不保证对齐，这条不再单�
 
 ## 十、汇总
 
-### 状态统计
+### 状态统计（截止 2026-06-25 第七轮）
 
 | 状态               | 数量   | 说明                                                            |
 | ------------------ | ------ | --------------------------------------------------------------- |
-| **[FIXED] / 关闭** | **60** | 包含真实修复项，以及本轮复核后不再成立/不再作为缺陷跟踪的旧条目 |
+| **[FIXED] / 关闭** | **84** | 含第一轮 60 条 + 第二轮 9 条 + 第三轮 4 条 + 第四轮 4 条 + 第五轮 4 条 + 第六轮 2 条 + 第七轮 1 条 |
 | **仍然开放**       | **0**  | 当前树上已无剩余开放问题                                         |
-| **新增**           | **8**  | 本轮新增项已全部修复或关闭                                       |
+| **新增 (第二轮)**  | **9**  | 全部已修复                                                      |
+| **新增 (第三轮)**  | **4**  | 全部已修复                                                      |
+| **新增 (第四轮)**  | **4**  | 全部已修复                                                      |
+| **新增 (第五轮)**  | **4**  | 全部已修复                                                      |
+| **新增 (第六轮)**  | **2**  | 全部已修复                                                      |
+| **新增 (第七轮)**  | **1**  | 全部已修复                                                      |
 
 ### 当前最高优先级（建议先处理）
 
-1. 无。本轮 `mem-findings.md` 已清零，当前树上没有剩余开放条目。
+1. 无。七轮 `mem-findings.md` 已清零。
 
 ### 处理建议顺序
 
-1. 无。本报告内的旧开放问题已全部关闭；后续若继续演进，应按新的需求或新的审查结果重新立项。
+1. 无。
+
+---
+
+## 十一、第二轮审查 (2026-06-25)
+
+> 方法：4 Agent 并行全量源码审查 + 逐条验证 + 修复 + 测试回归
+
+### R-01 [FIXED] Compare8/Equal nil 硬崩溃
+
+**P0 | 文件：`core/src/nextpas.core.mem.utils.pas`**
+
+`Fill8`/`Copy`/`Zero` 有完整的 nil 检查并抛 `EArgumentNil`，但 `Compare8(aPtr1, aPtr2: Pointer; aCount: SizeInt)` 完全没有 nil 检查，nil + count > 0 时直接 SIGSEGV 硬崩溃。
+
+**修复**：入口加 `aCount = 0` 快速返回 + nil 指针检查抛 `EArgumentNil`，与 `Fill8` 对称。
+
+**验证**：`test_mem_utils` 新增 `TestCompareNilRaises` + `TestFillNilRaises`，28/28 通过。
+
+---
+
+### R-02 [FIXED] ThreadArena threadvar 全局共享
+
+**P0 | 文件：`core/src/nextpas.core.mem.arena.thread.pas`**
+
+`threadvar TLSCurrentArena: TLocalArena` 是全局变量，多个 `TThreadArenaManager` 实例共享同一 TLS。线程用 ManagerA.Get 后再用 ManagerB.Get 会错误返回 ManagerA 的 Arena。
+
+**修复**：新增 `threadvar TLSCurrentManager: Pointer`，`Get` 时校验 manager 匹配；不匹配时自动归还旧 Arena 到原 manager 池。新增 `DrainArenaOnly` 内部方法。
+
+**验证**：`test_thread_arena` 新增 `TestMultiManagerIsolation`，26/26 通过。
+
+---
+
+### R-03 [FIXED] AllocZeroed/AllocArray 绕过 AllocMem
+
+**P1 | 文件：`core/src/nextpas.core.mem.pas`**
+
+`AllocZeroed` 用 `GetMem + ZeroMem`，绕过了 `IAllocator.AllocMem`（各实现可能有更优零初始化路径如 calloc）。
+
+**修复**：改为 `AAllocator.AllocMem(ASize)`，删除手动 `ZeroMem`。
+
+---
+
+### R-04 [FIXED] TVirtualArena.FAllocCount 32 位溢出
+
+**P1 | 文件：`core/src/nextpas.core.mem.arena.virtual.pas`**
+
+`FAllocCount: SizeUInt` 在 32 位平台是 32 位，高频分配场景下会溢出。`TLocalArena`/`TChunkedArena` 已用 `QWord`，`TArenaStats.AllocCount` 也是 `QWord`。
+
+**修复**：字段和 `AllocCount` 方法均改为 `QWord`。
+
+---
+
+### R-05 [FIXED] AllocUnsafe 连 DEBUG Assert 都没有
+
+**P1 | 文件：`core/src/nextpas.core.mem.arena.virtual.pas`**
+
+`AllocUnsafe` 无任何检查。`TLocalArena.AllocFast` 有 `{$IFDEF DEBUG} Assert` 保护，`AllocUnsafe` 连 DEBUG 都没有。
+
+**修复**：加 `Assert(aSize > 0)` + `Assert(FFrontPtr <> nil)`。
+
+---
+
+### R-06 [FIXED] TArenaConcurrent.AllocZeroed 的 ZeroMem 在锁内
+
+**P1 | 文件：`core/src/nextpas.core.mem.arena.concurrent.pas`**
+
+`AllocZeroed` 获取锁后调用 `FInner.AllocZeroed`（alloc + ZeroMem 都在锁内），大缓冲区清零时其他线程被阻塞。
+
+**修复**：改为 `FInner.Alloc` 在锁内，`FillChar` 在锁外。Arena bump pointer 保证新分配只有当前线程持有。
+
+---
+
+### R-07 [FIXED] 门面缺导出异常子类和 TAllocatorTraits
+
+**P2 | 文件：`core/src/nextpas.core.mem.pas`**
+
+门面只导出 `EAllocError`/`EOutOfMemory`，缺 `EInvalidLayout`/`EInvalidPointer`/`EDoubleFree`/`TAllocatorTraits`。
+
+**修复**：全部补导出。
+
+---
+
+### R-08 [FIXED] TArenaMarker deprecated alias 清理
+
+**P2 | 文件：`core/src/nextpas.core.mem.pas`**
+
+`TArenaMarker = TArenaMark` 仅靠注释标记 deprecated，全仓库零引用。
+
+**修复**：直接删除。
+
+---
+
+### R-09 [NOT BUG] TChunkedArena.RemainingSize
+
+Agent 报告"多段时返回虚假剩余空间"。经验证 `CurrentUsed = StartOffset + Used` 是跨段累计值，`FTotalSize - CurrentUsed` 正确反映活跃段剩余空间。**不成立，关闭。**
+
+---
+
+### R-10 [FIXED] VirtualArena 大对象路径重复
+
+**P3 | 文件：`core/src/nextpas.core.mem.arena.virtual.pas`**
+
+`Alloc`/`AllocNoPointer`/`AllocAligned` 三处内联相同的大对象 mmap+track+stats 代码（各 ~15 行）。
+
+**修复**：提取 `AllocLargeObject(aSize)` 私有方法，三处改为 `Exit(AllocLargeObject(aSize))`。净减 10 行。
+
+---
+
+### R-11 [FIXED] AllocNoPointer back bump padding 不计入 FTotalUsed
+
+**P2 | 文件：`core/src/nextpas.core.mem.arena.virtual.pas`**
+
+front bump 统计 `FTotalUsed += LPad + aSize`（含对齐 padding），back bump 只统计 `FTotalUsed += aSize`（不含 padding）。padding 字节被消耗但不计入统计。
+
+**修复**：改为 `FTotalUsed += LOldBack - LAligned`（= aSize + padding）。
+
+---
+
+### R-12 [FIXED] EAllocError.Create aeNone 无防御
+
+**P3 | 文件：`core/src/nextpas.core.mem.error.pas`**
+
+`EAllocError.Create(aeNone)` 生成消息 "Success" + category ecNone，逻辑矛盾。
+
+**修复**：构造函数加 `Assert(aError <> aeNone)`。EOutOfMemory.Create 同步。
+
+---
+
+### R-13 [FIXED] TVirtualArena 缺 Stats 方法
+
+**P3 | 文件：`core/src/nextpas.core.mem.arena.virtual.pas`**
+
+`TLocalArena`/`TChunkedArena` 都有 `Stats: TArenaStats` 方法，`TVirtualArena` 没有。
+
+**修复**：补 `Stats` 方法，返回 `TotalAllocated/TotalUsed/PeakUsed/AllocCount`。
+
+---
+
+## 第四轮（深审 Agent 并行扫描 — 行为正确性 + 边界条件）
+
+### R-14 [FIXED] TBlockPool.AcquireUnchecked 缺少 FTotalAllocs 统计
+
+**P3 | 文件：`core/src/nextpas.core.mem.blockpool.pas`**
+
+`Acquire` 路径有 `Inc(FTotalAllocs)`，但 `AcquireUnchecked` 路径遗漏，导致统计永久欠计。
+
+**修复**：在 `AcquireUnchecked` 中 `Inc(FAllocCount)` 之后补 `Inc(FTotalAllocs)`。
+
+### R-15 [FIXED] TObjectPool MaxSize 边界后永远无法创建新对象
+
+**P3 | 文件：`core/src/nextpas.core.mem.pool.object_pool.pas`**
+
+当 pool 已满且 `TrackObjectLifetime=True` 时，`ReleaseObject` 会销毁对象（`aObject.Free`），但不减 `FTotalCreated`。`FTotalCreated` 只增不减，卡在 MaxSize 后永久拒绝 `AcquireObject`。
+
+**修复**：销毁对象后 `Dec(FTotalCreated)`，允许后续重新创建。
+
+### R-16 [FIXED] TFixedPool.ReleasePtr DEBUG FillMem 参数类型错误
+
+**P3 | 文件：`core/src/nextpas.core.mem.pool.fixed.pas`**
+
+`{$IFDEF FAF_MEM_DEBUG}` 块中 `FillMem(PByte(FBuffer)[SizeUInt(LIdx)*FBlockSize], ...)` — `PByte[]` 返回 `Byte` 值而非 `Pointer`，编译器隐式转换导致地址截断/错误污化。
+
+**修复**：改为 `FillMem(Pointer(PByte(FBuffer) + SizeUInt(LIdx) * FBlockSize), ...)` 正确指针算术。
+
+### R-17 [FIXED] Slab Pool Traits.SupportsAligned 误报 False
+
+**P3 | 文件：`core/src/nextpas.core.mem.pool.slab.pas`、`slab.sharded.pas`、`fixed_slab.pas`**
+
+三个 Slab Pool 类型的 `Traits.SupportsAligned` 声明为 `False`，但它们都实现了 `AllocAligned`（通过 fallback 路径：GetMem + 上对齐 + 前缀保存）。调用方查询 Traits 会误判不支持对齐分配。
+
+**修复**：三处 `SupportsAligned := False` → `True`，同步更新 `test_slab_pool` 断言。
+
+---
+
+## 第五轮（4 Agent 并行深度审查 — 边界条件/并发/API 契约）
+
+### R-18 [FIXED] VirtualArena SaveMark/RestoreToMark 不保存分配计数
+
+**P2 | 文件：`core/src/nextpas.core.mem.arena.base.pas`、`arena.virtual.pas`、`arena.local.pas`、`arena.chunked.pas`**
+
+`TArenaMark` 不含 `AllocCount` 字段。`TVirtualArena.Reset` 清零 `FAllocCount` 但保留 `FLargeUsed`（大对象跨 reset 存活），导致 `Stats` 报告 `AllocCount=0` 但 `TotalUsed>0`。`RestoreToMark` 也不回退 `FAllocCount`，restore 后分配计数只增不减。
+
+**修复**：`TArenaMark` 增加 `AllocCount: QWord` 字段。`TVirtualArena.SaveMark` 保存 `FAllocCount`，`RestoreToMark` 恢复。其他 arena（Local/Chunked）初始化 `AllocCount := 0`。
+
+### R-19 [FIXED] ChunkedArena Reset(KeepSegments=True) 不重置跨段偏移
+
+**P2 | 文件：`core/src/nextpas.core.mem.arena.chunked.pas`**
+
+`FKeepSegments=True` 时 `Reset` 只清零各段 `Used`，不清零非首段的 `StartOffset`，也不重置 `FTotalSize`。后续使用多段时 `CurrentUsed = StartOffset + Used` 包含旧偏移，`PeakUsed` 和 `RemainingSize` 报告错误值。
+
+**修复**：Reset(KeepSegments=True) 将非首段 `StartOffset` 清零（AddSegment 时按需重算），`FTotalSize` 重置为 `FSegments[0].Size`。
+
+### R-20 [FIXED] SlabPoolSharded.AllocMem 只清零请求大小，padding 泄露旧数据
+
+**P2 | 文件：`core/src/nextpas.core.mem.pool.slab.sharded.pas`**
+
+`TSlabPoolSharded.AllocMem` 调用 `ZeroMem(Result, ASize)` 只清零请求字节数，但 slab size-class 实际分配块可能更大（如 AllocMem(20) 返回 32 字节 slot）。`TSlabPool.AllocMem` 正确清零 `MemSizeOf(Result)`。`Traits.ZeroInitialized = True` 的承诺被违反。
+
+**修复**：改为 `FillChar(Result^, MemSizeOf(Result), 0)`，与 `TSlabPool.AllocMem` 一致。
+
+### R-21 [FIXED] FallbackAllocator.ReallocMem(ptr, 0) 泄露 tracking entry + 失败语义违反
+
+**P1 | 文件：`core/src/nextpas.core.mem.allocator.fallback.pas`**
+
+两个问题：
+1. `ReallocMem(nonNilPtr, 0)` 无 ASize=0 早返回。底层 `ReallocMem(ptr, 0)` 释放内存返回 nil，但 `LEntry^.Ptr` 被设为 nil，stale entry 永远无法被 FindEntry 匹配和移除。
+2. `FFallback.ReallocMem` 失败返回 nil 时，代码返回原指针 `APtr` 而非 nil，违反 `ReallocMem` 契约（失败应返回 nil）。
+
+**修复**：增加 `ASize=0` 早返回路径（调用 `FreeMem` + 返回 nil）。失败时不再覆盖 `Result`，保留 nil。
+
+---
+
+## 第六轮（持续打磨 — 安全防护 + API 一致性）
+
+### R-22 [FIXED] TObjectPool 无双重释放检测
+
+**P1 | 文件：`core/src/nextpas.core.mem.pool.object_pool.pas`**
+
+`ReleaseObject` 不检查对象是否已在池中。同一对象释放两次会被存储两次，后续 `AcquireObject` 返回同一指针给两个调用方，导致 use-after-free。
+
+**修复**：释放前线性扫描 `FPool[0..FFreeTop-1]` 检查已有引用，检测到重复抛出 `EDoubleFree`。
+
+### R-23 [FIXED] Arena AllocAligned(0) 行为不一致
+
+**P3 | 文件：`core/src/nextpas.core.mem.arena.local.pas`、`arena.virtual.pas`**
+
+`TLocalArena.AllocAligned(0)` 静默返回 nil（`IsPowerOfTwo(0) = False`），`TVirtualArena` 将 0 视为无效对齐设置失败原因。只有 `TChunkedArena` 将 0 归一化为 `MEM_DEFAULT_ALIGN`。三种实现行为不统一。
+
+**修复**：`TLocalArena` 和 `TVirtualArena` 均将 `AAlign=0` 归一化为 `MEM_DEFAULT_ALIGN`（`SizeOf(Pointer)`），与 `TChunkedArena` 一致。
+
+---
+
+## 第七轮（自举规划 + 回归测试补全）
+
+### R-24 [FIXED] TBlockPool.AcquireUnchecked 缺少 PeakAlloc 更新
+
+**P3 | 文件：`core/src/nextpas.core.mem.blockpool.pas`**
+
+`Acquire` 方法在 `Inc(FAllocCount)` 后有 `if FAllocCount > FPeakAlloc then FPeakAlloc := FAllocCount`，但 `AcquireUnchecked` 缺少此更新。通过 Unchecked 路径分配时 `PeakAlloc` 永远为 0。
+
+**修复**：在 `AcquireUnchecked` 中 `Inc(FTotalAllocs)` 之后补 `if FAllocCount > FPeakAlloc then FPeakAlloc := FAllocCount`。

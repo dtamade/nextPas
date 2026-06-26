@@ -527,7 +527,6 @@ end;
 
 function TBenchReportGenerator.GenerateChart(const AResults: array of TBenchResult): string;
 var
-  LCopy: array of TBenchResult;
   LLines: TLineBuffer;
   LMaxNsPerOp: Double;
   LBarWidth: Double;
@@ -542,33 +541,28 @@ var
   LIndex: Integer;
   I: Integer;
 begin
-  // snapshot the open-array to a local copy (CR-20)
-  SetLength(LCopy, Length(AResults));
-  for I := 0 to High(AResults) do
-    LCopy[I] := AResults[I];
-
   // count non-skipped
   LCount := 0;
-  for I := 0 to High(LCopy) do
-    if not LCopy[I].Skipped then
+  for I := 0 to High(AResults) do
+    if not AResults[I].Skipped then
       Inc(LCount);
 
   if LCount = 0 then
     Exit('<svg class="bench-chart" viewBox="0 0 820 280" role="img" aria-label="No benchmark data"></svg>');
 
   LMaxNsPerOp := 0.0;
-  for I := 0 to High(LCopy) do
-    if (not LCopy[I].Skipped) and (LCopy[I].NsPerOp > LMaxNsPerOp) then
-      LMaxNsPerOp := LCopy[I].NsPerOp;
+  for I := 0 to High(AResults) do
+    if (not AResults[I].Skipped) and (AResults[I].NsPerOp > LMaxNsPerOp) then
+      LMaxNsPerOp := AResults[I].NsPerOp;
   if LMaxNsPerOp <= 0 then
     LMaxNsPerOp := 1.0;
 
   // compute longest name for dynamic viewBox width (CR-21)
   LMaxNameLen := 0;
-  for I := 0 to High(LCopy) do
-    if not LCopy[I].Skipped then
-      if Length(LCopy[I].Name) > LMaxNameLen then
-        LMaxNameLen := Length(LCopy[I].Name);
+  for I := 0 to High(AResults) do
+    if not AResults[I].Skipped then
+      if Length(AResults[I].Name) > LMaxNameLen then
+        LMaxNameLen := Length(AResults[I].Name);
 
   LChartWidth := Max(820.0, 140.0 + LMaxNameLen * 8.0);
   LChartRight := LChartWidth - 36.0;
@@ -587,12 +581,12 @@ begin
 
   LBarWidth := (LChartRight - 64.0) / Max(LCount, 1);
   LIndex := 0;
-  for I := 0 to High(LCopy) do
+  for I := 0 to High(AResults) do
   begin
-    if LCopy[I].Skipped then
+    if AResults[I].Skipped then
       Continue;
 
-    LHeightRatio := LCopy[I].NsPerOp / LMaxNsPerOp;
+    LHeightRatio := AResults[I].NsPerOp / LMaxNsPerOp;
     LBarHeight := 184.0 * LHeightRatio;
     LBarX := 76.0 + LIndex * LBarWidth;
     LBarY := 236.0 - LBarHeight;
@@ -607,11 +601,11 @@ begin
       TextFormat('  <text x="%s" y="%s" class="chart-value">%s ns</text>',
         [FormatNumber(LBarX, 2),
          FormatNumber(Max(LBarY - 8.0, 18.0), 2),
-         EscapeHTML(FormatNumber(LCopy[I].NsPerOp, 1))]));
+         EscapeHTML(FormatNumber(AResults[I].NsPerOp, 1))]));
     BufferAddLine(LLines,
       TextFormat('  <text x="%s" y="254" class="chart-label">%s</text>',
         [FormatNumber(LBarX, 2),
-         EscapeHTML(LCopy[I].Name)]));
+         EscapeHTML(AResults[I].Name)]));
 
     Inc(LIndex);
   end;

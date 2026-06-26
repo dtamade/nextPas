@@ -3,7 +3,7 @@ program test_mapped_slab_pool;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.mem.error,
   nextpas.core.mem.mapped_slab_pool;
 
@@ -11,7 +11,7 @@ type
   TExceptionProc = procedure;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GPool: TMappedSlabAllocator = nil;
   GOtherPool: TMappedSlabAllocator = nil;
   GPtr: Pointer = nil;
@@ -25,7 +25,7 @@ begin
     Fail(AName + ': expected allocation error');
   except
     on E: EAllocError do
-      CheckEqual(Int64(Ord(AExpected)), Int64(Ord(E.Error)), AName + ': error code');
+      Check(Int64(Ord(AExpected)) = Int64(Ord(E.Error)), AName + ': error code');
   end;
 end;
 
@@ -77,9 +77,9 @@ begin
   try
     Check(GPool.IsValid, 'pool should be valid');
     GPool.GetStats(LAllocs, LFrees, LFailed, LUsedPages, LTotalPages);
-    CheckEqual(Int64(0), Int64(LAllocs), 'initial alloc count');
-    CheckEqual(Int64(0), Int64(LFrees), 'initial free count');
-    CheckEqual(Int64(1), Int64(LTotalPages), 'total pages');
+    Check(Int64(0) = Int64(LAllocs), 'initial alloc count');
+    Check(Int64(0) = Int64(LFrees), 'initial free count');
+    Check(Int64(1) = Int64(LTotalPages), 'total pages');
   finally
     GPool.Free;
     GPool := nil;
@@ -100,9 +100,9 @@ begin
     LP2 := GPool.Alloc(64);
     Check(LP2 = LP1, 'free should make same-size block reusable');
     GPool.GetStats(LAllocs, LFrees, LFailed, LUsedPages, LTotalPages);
-    CheckEqual(Int64(2), Int64(LAllocs), 'alloc count after reuse');
-    CheckEqual(Int64(1), Int64(LFrees), 'free count after reuse');
-    CheckEqual(Int64(0), Int64(LFailed), 'failed count after reuse');
+    Check(Int64(2) = Int64(LAllocs), 'alloc count after reuse');
+    Check(Int64(1) = Int64(LFrees), 'free count after reuse');
+    Check(Int64(0) = Int64(LFailed), 'failed count after reuse');
   finally
     GPool.Free;
     GPool := nil;
@@ -187,12 +187,14 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.mem.mapped_slab_pool');
-  T.Run('create anonymous', @TestCreateAnonymous);
-  T.Run('free reuses same-size block', @TestFreeReusesSameSizeBlock);
-  T.Run('mixed-size allocations do not overlap', @TestMixedSizeAllocationsDoNotOverlap);
-  T.Run('invalid and double free', @TestInvalidAndDoubleFree);
-  T.Run('cross-pool free', @TestCrossPoolFree);
-  T.Run('reset invalidates old pointers', @TestResetInvalidatesOldPointers);
+  T := TTestSuite.Create('nextpas.core.mem.mapped_slab_pool');
+  T.Test('create anonymous', @TestCreateAnonymous);
+  T.Test('free reuses same-size block', @TestFreeReusesSameSizeBlock);
+  T.Test('mixed-size allocations do not overlap', @TestMixedSizeAllocationsDoNotOverlap);
+  T.Test('invalid and double free', @TestInvalidAndDoubleFree);
+  T.Test('cross-pool free', @TestCrossPoolFree);
+  T.Test('reset invalidates old pointers', @TestResetInvalidatesOldPointers);
+  T.Run;
+
   T.Summary;
 end.

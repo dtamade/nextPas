@@ -5,6 +5,7 @@ unit nextpas.core.mem.memory_map;
 interface
 
 uses nextpas.core.platform.mmap,
+  nextpas.core.base,
   nextpas.core.base.utils;
 
 type

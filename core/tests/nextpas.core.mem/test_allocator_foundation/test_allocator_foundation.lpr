@@ -3,13 +3,13 @@ program test_allocator_foundation;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.mem.allocator.base,
   nextpas.core.mem.allocator.foundation,
   nextpas.core.mem.allocator.rtl;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GGetMemCalls: Integer = 0;
   GAllocMemCalls: Integer = 0;
   GReallocMemCalls: Integer = 0;
@@ -74,21 +74,23 @@ begin
 
   LPtr := LAllocator.GetMem(24);
   Check(LPtr <> nil, 'GetMem should allocate through the callback facade');
-  CheckEqual(Int64(1), Int64(GGetMemCalls), 'GetMem should call the GetMem callback');
+  Check(GGetMemCalls = 1, 'GetMem should call the GetMem callback');
 
   PByte(LPtr)^ := $7A;
   LPtr := LAllocator.ReallocMem(LPtr, 48);
   Check(LPtr <> nil, 'ReallocMem should return a pointer');
-  CheckEqual(Int64(1), Int64(GReallocMemCalls), 'ReallocMem should call the ReallocMem callback');
-  CheckEqual(Int64($7A), Int64(PByte(LPtr)^), 'ReallocMem should preserve the existing prefix');
+  Check(GReallocMemCalls = 1, 'ReallocMem should call the ReallocMem callback');
+  Check(PByte(LPtr)^ = $7A, 'ReallocMem should preserve the existing prefix');
 
   LAllocator.FreeMem(LPtr);
-  CheckEqual(Int64(1), Int64(GFreeMemCalls), 'FreeMem should call the FreeMem callback');
+  Check(GFreeMemCalls = 1, 'FreeMem should call the FreeMem callback');
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.mem.allocator.foundation');
-  T.Run('RTL allocator matches canonical singleton', @TestFoundationRtlAllocatorMatchesCanonicalSingleton);
-  T.Run('callback allocator routes callbacks', @TestFoundationCallbackAllocatorRoutesCallbacks);
+  T := TTestSuite.Create('nextpas.core.mem.allocator.foundation');
+  T.Test('RTL allocator matches canonical singleton', @TestFoundationRtlAllocatorMatchesCanonicalSingleton);
+  T.Test('callback allocator routes callbacks', @TestFoundationCallbackAllocatorRoutesCallbacks);
+  T.Run;
+
   T.Summary;
 end.

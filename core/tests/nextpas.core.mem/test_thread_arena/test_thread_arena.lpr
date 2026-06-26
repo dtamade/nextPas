@@ -8,7 +8,7 @@ uses
   {$ENDIF}
   nextpas.core.errors,
   nextpas.core.text.conv,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.mem.base,
   nextpas.core.mem.error,
   nextpas.core.mem.arena.base,
@@ -30,9 +30,9 @@ var
 begin
   LMgr := TThreadArenaManager.Create(DefaultThreadArenaConfig);
   try
-    CheckEqual(Int64(0), Int64(LMgr.PoolSize), 'initial pool empty');
-    CheckEqual(Int64(0), Int64(LMgr.TotalCreated), 'initial created 0');
-    CheckEqual(Int64(0), Int64(LMgr.TotalRecycled), 'initial recycled 0');
+    Check(Int64(0) = Int64(LMgr.PoolSize), 'initial pool empty');
+    Check(Int64(0) = Int64(LMgr.TotalCreated), 'initial created 0');
+    Check(Int64(0) = Int64(LMgr.TotalRecycled), 'initial recycled 0');
   finally
     LMgr.Free;
   end;
@@ -47,7 +47,7 @@ begin
   LConfig.MaxPoolSize := 2;
   LMgr := TThreadArenaManager.Create(LConfig);
   try
-    CheckEqual(Int64(0), Int64(LMgr.PoolSize), 'custom config pool empty');
+    Check(Int64(0) = Int64(LMgr.PoolSize), 'custom config pool empty');
   finally
     LMgr.Free;
   end;
@@ -73,7 +73,7 @@ begin
   try
     LArena := LMgr.Get;
     Check(LArena <> nil, 'Get returns non-nil arena');
-    CheckEqual(Int64(1), Int64(LMgr.TotalCreated), 'first Get creates arena');
+    Check(Int64(1) = Int64(LMgr.TotalCreated), 'first Get creates arena');
     LMgr.DrainTLS;
   finally
     LMgr.Free;
@@ -90,7 +90,7 @@ begin
     LArena1 := LMgr.Get;
     LArena2 := LMgr.Get;
     Check(LArena1 = LArena2, 'same thread returns same arena');
-    CheckEqual(Int64(1), Int64(LMgr.TotalCreated), 'only one arena created');
+    Check(Int64(1) = Int64(LMgr.TotalCreated), 'only one arena created');
     LMgr.DrainTLS;
   finally
     LMgr.Free;
@@ -107,8 +107,8 @@ begin
     Check(LMgr.HasArena, 'has arena after Get');
     LMgr.DrainTLS;
     Check(not LMgr.HasArena, 'no arena after DrainTLS');
-    CheckEqual(Int64(1), Int64(LMgr.PoolSize), 'arena returned to pool');
-    CheckEqual(Int64(1), Int64(LMgr.TotalRecycled), 'recycled count 1');
+    Check(Int64(1) = Int64(LMgr.PoolSize), 'arena returned to pool');
+    Check(Int64(1) = Int64(LMgr.TotalRecycled), 'recycled count 1');
   finally
     LMgr.Free;
   end;
@@ -123,7 +123,7 @@ begin
     LMgr.Get;
     LMgr.DrainTLS;
     LMgr.DrainTLS; { 二次 drain 应安全 }
-    CheckEqual(Int64(1), Int64(LMgr.TotalRecycled), 'only one recycled');
+    Check(Int64(1) = Int64(LMgr.TotalRecycled), 'only one recycled');
   finally
     LMgr.Free;
   end;
@@ -136,7 +136,7 @@ begin
   LMgr := TThreadArenaManager.Create(DefaultThreadArenaConfig);
   try
     LMgr.DrainTLS; { 无 arena 时 drain 应安全 }
-    CheckEqual(Int64(0), Int64(LMgr.TotalRecycled), 'nothing recycled');
+    Check(Int64(0) = Int64(LMgr.TotalRecycled), 'nothing recycled');
   finally
     LMgr.Free;
   end;
@@ -158,8 +158,8 @@ begin
 
     LArena2 := LMgr.Get;
     Check(LArena1 = LArena2, 'reused same arena from pool');
-    CheckEqual(Int64(1), Int64(LMgr.TotalCreated), 'no new arena created');
-    CheckEqual(Int64(1), Int64(LMgr.TotalRecycled), 'one recycled');
+    Check(Int64(1) = Int64(LMgr.TotalCreated), 'no new arena created');
+    Check(Int64(1) = Int64(LMgr.TotalRecycled), 'one recycled');
     LMgr.DrainTLS;
   finally
     LMgr.Free;
@@ -179,7 +179,7 @@ begin
     LMgr.DrainTLS;
 
     LArena := LMgr.Get;
-    CheckEqual(Int64(0), Int64(LArena.UsedSize), 'reset on reuse');
+    Check(Int64(0) = Int64(LArena.UsedSize), 'reset on reuse');
     LMgr.DrainTLS;
   finally
     LMgr.Free;
@@ -284,13 +284,13 @@ begin
     LT := TThreadArena.Create(LMgr.Get);
     LT.Alloc(32);
     LMark := LT.SaveMark;
-    CheckEqual(Int64(32), Int64(LMark.FrontOffset), 'mark offset');
+    Check(Int64(32) = Int64(LMark.FrontOffset), 'mark offset');
 
     LT.Alloc(64);
     CheckEqual(Int64(96), Int64(LT.UsedSize));
 
     LT.RestoreToMark(LMark);
-    CheckEqual(Int64(32), Int64(LT.UsedSize), 'restored');
+    Check(Int64(32) = Int64(LT.UsedSize), 'restored');
     LMgr.DrainTLS;
   finally
     LMgr.Free;
@@ -309,7 +309,7 @@ begin
     Check(LT.UsedSize > 0, 'used after alloc');
 
     LT.Reset;
-    CheckEqual(Int64(0), Int64(LT.UsedSize), 'reset clears');
+    Check(Int64(0) = Int64(LT.UsedSize), 'reset clears');
     Check(LT.Alloc(128) <> nil, 'can alloc after reset');
     LMgr.DrainTLS;
   finally
@@ -470,9 +470,9 @@ begin
       end;
     end;
 
-    CheckEqual(Int64(0), Int64(LFailCount), 'no thread failures');
+    Check(Int64(0) = Int64(LFailCount), 'no thread failures');
     Check(LMgr.TotalCreated <= THREAD_COUNT, 'at most THREAD_COUNT arenas created');
-    CheckEqual(Int64(THREAD_COUNT), Int64(LMgr.TotalRecycled), 'all arenas recycled');
+    Check(Int64(THREAD_COUNT) = Int64(LMgr.TotalRecycled), 'all arenas recycled');
   finally
     LMgr.Free;
   end;
@@ -549,7 +549,7 @@ begin
 
     { 主线程 Arena 不受影响 }
     Check(LP^ = 42, 'main thread data intact');
-    CheckEqual(Int64(2), Int64(LMgr.TotalCreated), 'two arenas created');
+    Check(Int64(2) = Int64(LMgr.TotalCreated), 'two arenas created');
 
     LMgr.DrainTLS;
   finally
@@ -594,7 +594,7 @@ begin
     Check(LT.Alloc(0) = nil, 'zero alloc returns nil');
     { AllocFast 是无检查路径，size=0 不返回 nil — 设计如此 }
     Check(LT.AllocFast(0) <> nil, 'zero fast alloc returns backing pointer');
-    CheckEqual(Int64(0), Int64(LT.UsedSize), 'zero alloc does not advance');
+    Check(Int64(0) = Int64(LT.UsedSize), 'zero alloc does not advance');
     LMgr.DrainTLS;
   finally
     LMgr.Free;
@@ -662,51 +662,95 @@ begin
 end;
 
 { ---------------------------------------------------------------------------
+  多 Manager 实例隔离
+  --------------------------------------------------------------------------- }
+
+procedure TestMultiManagerIsolation;
+var
+  LMgrA, LMgrB: TThreadArenaManager;
+  LArenaA, LArenaB: TLocalArena;
+begin
+  { 两个 Manager 实例应返回不同的 Arena }
+  LMgrA := TThreadArenaManager.Create(DefaultThreadArenaConfig);
+  LMgrB := TThreadArenaManager.Create(DefaultThreadArenaConfig);
+  try
+    LArenaA := LMgrA.Get;
+    Check(LArenaA <> nil, 'MgrA returns arena');
+    Check(LMgrA.HasArena, 'MgrA has arena');
+    Check(not LMgrB.HasArena, 'MgrB should not see MgrA arena');
+
+    { 切换到 MgrB — MgrA 的 Arena 应归还池 }
+    LArenaB := LMgrB.Get;
+    Check(LArenaB <> nil, 'MgrB returns arena');
+    Check(LArenaA <> LArenaB, 'MgrA and MgrB have different arenas');
+    Check(not LMgrA.HasArena, 'MgrA lost arena after MgrB.Get');
+    Check(LMgrB.HasArena, 'MgrB has arena');
+
+    { 切换回 MgrA — MgrB 的 Arena 应归还 }
+    LArenaA := LMgrA.Get;
+    Check(LMgrA.HasArena, 'MgrA re-acquired arena');
+    Check(not LMgrB.HasArena, 'MgrB lost arena after MgrA.Get');
+
+    LMgrA.DrainTLS;
+    LMgrB.DrainTLS;
+  finally
+    LMgrA.Free;
+    LMgrB.Free;
+  end;
+end;
+
+{ ---------------------------------------------------------------------------
   Runner
   --------------------------------------------------------------------------- }
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 begin
-  T := TTestRunner.Create('nextpas.core.mem.arena.thread');
+  T := TTestSuite.Create('nextpas.core.mem.arena.thread');
 
   { Manager 生命周期 }
-  T.Run('Manager create/destroy', @TestManagerCreateDestroy);
-  T.Run('Manager custom config', @TestManagerCustomConfig);
-  T.Run('Manager default config zeros', @TestManagerDefaultConfigZeros);
+  T.Test('Manager create/destroy', @TestManagerCreateDestroy);
+  T.Test('Manager custom config', @TestManagerCustomConfig);
+  T.Test('Manager default config zeros', @TestManagerDefaultConfigZeros);
 
   { Get / DrainTLS }
-  T.Run('Get returns arena', @TestGetReturnsArena);
-  T.Run('Get returns same arena', @TestGetReturnsSameArena);
-  T.Run('DrainTLS returns to pool', @TestDrainTLSReturnsArenaToPool);
-  T.Run('DrainTLS idempotent', @TestDrainTLSIdempotent);
-  T.Run('DrainTLS without Get', @TestDrainTLSWithoutGet);
+  T.Test('Get returns arena', @TestGetReturnsArena);
+  T.Test('Get returns same arena', @TestGetReturnsSameArena);
+  T.Test('DrainTLS returns to pool', @TestDrainTLSReturnsArenaToPool);
+  T.Test('DrainTLS idempotent', @TestDrainTLSIdempotent);
+  T.Test('DrainTLS without Get', @TestDrainTLSWithoutGet);
 
   { 回收复用 }
-  T.Run('Arena reuse after drain', @TestArenaReuseAfterDrain);
-  T.Run('Arena reset on reuse', @TestArenaResetOnReuse);
-  T.Run('Pool overflow', @TestPoolOverflow);
+  T.Test('Arena reuse after drain', @TestArenaReuseAfterDrain);
+  T.Test('Arena reset on reuse', @TestArenaResetOnReuse);
+  T.Test('Pool overflow', @TestPoolOverflow);
 
   { TThreadArena record }
-  T.Run('ThreadArena alloc', @TestThreadArenaAlloc);
-  T.Run('ThreadArena alloc zeroed', @TestThreadArenaAllocZeroed);
-  T.Run('ThreadArena alloc aligned', @TestThreadArenaAllocAligned);
-  T.Run('ThreadArena fast path', @TestThreadArenaFastPath);
-  T.Run('ThreadArena mark/restore', @TestThreadArenaMarkRestore);
-  T.Run('ThreadArena reset', @TestThreadArenaReset);
-  T.Run('ThreadArena remaining size', @TestThreadArenaRemainingSize);
+  T.Test('ThreadArena alloc', @TestThreadArenaAlloc);
+  T.Test('ThreadArena alloc zeroed', @TestThreadArenaAllocZeroed);
+  T.Test('ThreadArena alloc aligned', @TestThreadArenaAllocAligned);
+  T.Test('ThreadArena fast path', @TestThreadArenaFastPath);
+  T.Test('ThreadArena mark/restore', @TestThreadArenaMarkRestore);
+  T.Test('ThreadArena reset', @TestThreadArenaReset);
+  T.Test('ThreadArena remaining size', @TestThreadArenaRemainingSize);
 
   { 多线程 }
-  T.Run('Multi-thread isolation', @TestMultiThreadIsolation);
-  T.Run('Multi-thread pool recycle', @TestMultiThreadPoolRecycle);
-  T.Run('Main thread + worker', @TestMainThreadPlusWorker);
+  T.Test('Multi-thread isolation', @TestMultiThreadIsolation);
+  T.Test('Multi-thread pool recycle', @TestMultiThreadPoolRecycle);
+  T.Test('Main thread + worker', @TestMainThreadPlusWorker);
 
   { 边界 }
-  T.Run('Large allocation', @TestLargeAllocation);
-  T.Run('Zero size alloc', @TestZeroSizeAlloc);
-  T.Run('Write/read through thread arena', @TestWriteReadThroughThreadArena);
-  T.Run('Alloc stress', @TestAllocStress);
+  T.Test('Large allocation', @TestLargeAllocation);
+  T.Test('Zero size alloc', @TestZeroSizeAlloc);
+  T.Test('Write/read through thread arena', @TestWriteReadThroughThreadArena);
+  T.Test('Alloc stress', @TestAllocStress);
+
+  { 多 Manager 隔离 }
+  T.Test('Multi-manager isolation', @TestMultiManagerIsolation);
+
+  T.Run;
+
 
   T.Summary;
 end.

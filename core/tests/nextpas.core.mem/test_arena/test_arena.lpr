@@ -4,12 +4,12 @@ program test_arena;
 
 uses
   nextpas.core.text.conv,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.mem.arena,
   nextpas.core.mem.base;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestArenaCreate;
 var
@@ -17,9 +17,9 @@ var
 begin
   LA := TLocalArena.Create(1024);
   try
-    CheckEqual(Int64(1024), Int64(LA.Capacity), 'total size');
-    CheckEqual(Int64(0), Int64(LA.UsedSize), 'used size');
-    CheckEqual(Int64(1024), Int64(LA.RemainingSize), 'remaining size');
+    Check(Int64(1024) = Int64(LA.Capacity), 'total size');
+    Check(Int64(0) = Int64(LA.UsedSize), 'used size');
+    Check(Int64(1024) = Int64(LA.RemainingSize), 'remaining size');
   finally
     LA.Free;
   end;
@@ -52,7 +52,7 @@ begin
   LA := TLocalArena.Create(64);
   try
     Check(LA.Alloc(0) = nil, 'zero-size alloc should return nil');
-    CheckEqual(Int64(0), Int64(LA.UsedSize), 'zero-size alloc should not advance offset');
+    Check(Int64(0) = Int64(LA.UsedSize), 'zero-size alloc should not advance offset');
   finally
     LA.Free;
   end;
@@ -82,7 +82,7 @@ begin
   try
     Check(LA.Alloc(48) <> nil, 'initial alloc should succeed');
     Check(LA.Alloc(17) = nil, 'alloc larger than remaining capacity should fail closed');
-    CheckEqual(Int64(48), Int64(LA.UsedSize), 'failed alloc should not advance offset');
+    Check(Int64(48) = Int64(LA.UsedSize), 'failed alloc should not advance offset');
   finally
     LA.Free;
   end;
@@ -114,10 +114,10 @@ var
 begin
   LA := TLocalArena.Create(256);
   try
-    Check(LA.AllocAligned(16, 0) = nil, 'zero alignment should return nil');
+    Check(LA.AllocAligned(16, 0) <> nil, 'zero alignment normalized to MEM_DEFAULT_ALIGN');
     Check(LA.AllocAligned(16, 3) = nil, 'alignment 3 should return nil');
     Check(LA.AllocAligned(16, 5) = nil, 'alignment 5 should return nil');
-    CheckEqual(Int64(0), Int64(LA.UsedSize), 'invalid alignment should not advance offset');
+    Check(Int64(16) = Int64(LA.UsedSize), 'only zero-align allocation advanced offset');
   finally
     LA.Free;
   end;
@@ -155,10 +155,36 @@ begin
     CheckEqual(Int64(150), Int64(LA.UsedSize));
 
     LA.Reset;
-    CheckEqual(Int64(0), Int64(LA.UsedSize), 'reset clears');
+    Check(Int64(0) = Int64(LA.UsedSize), 'reset clears');
     CheckEqual(Int64(256), Int64(LA.RemainingSize));
 
     Check(LA.Alloc(256) <> nil, 'can reuse after reset');
+  finally
+    LA.Free;
+  end;
+end;
+
+{ B2: Reset 后 AllocAligned 正确对齐 }
+procedure TestArenaResetThenAllocAligned;
+var
+  LA: TLocalArena;
+  LP: Pointer;
+begin
+  LA := TLocalArena.Create(512);
+  try
+    { Allocate some memory }
+    LA.Alloc(100);
+    Check(LA.UsedSize > 0, 'used after alloc');
+
+    { Reset }
+    LA.Reset;
+    Check(Int64(0) = Int64(LA.UsedSize), 'reset clears');
+
+    { AllocAligned after reset should work and be properly aligned }
+    LP := LA.AllocAligned(64, 256);
+    Check(LP <> nil, 'AllocAligned after reset succeeds');
+    Check(Int64(0) = PtrUInt(LP) mod 256, 'pointer aligned to 256');
+    Check(LA.UsedSize >= 64, 'used size reflects allocation');
   finally
     LA.Free;
   end;
@@ -174,13 +200,13 @@ begin
   try
     LA.Alloc(32);
     LMark := LA.SaveMark;
-    CheckEqual(Int64(32), Int64(LMark.FrontOffset), 'mark front offset');
+    Check(Int64(32) = Int64(LMark.FrontOffset), 'mark front offset');
 
     LA.Alloc(64);
     CheckEqual(Int64(96), Int64(LA.UsedSize));
 
     LA.RestoreToMark(LMark);
-    CheckEqual(Int64(32), Int64(LA.UsedSize), 'restored to mark');
+    Check(Int64(32) = Int64(LA.UsedSize), 'restored to mark');
 
     LP := LA.Alloc(64);
     Check(LP <> nil, 'can alloc after restore');
@@ -261,20 +287,23 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.mem.arena');
-  T.Run('Create', @TestArenaCreate);
-  T.Run('Alloc', @TestArenaAlloc);
-  T.Run('Alloc zero size', @TestArenaAllocZeroSize);
-  T.Run('Alloc exhaust', @TestArenaAllocExhaust);
-  T.Run('Alloc insufficient capacity', @TestArenaAllocInsufficientCapacity);
-  T.Run('AllocAligned', @TestArenaAllocAligned);
-  T.Run('AllocAligned rejects invalid alignment', @TestArenaAllocAlignedRejectsInvalidAlignment);
-  T.Run('AllocAligned accepts power-of-two alignment', @TestArenaAllocAlignedAcceptsPowerOfTwoAlignment);
-  T.Run('Reset', @TestArenaReset);
-  T.Run('Mark/Restore', @TestArenaMark);
-  T.Run('Mark nested', @TestArenaMarkNested);
-  T.Run('Write/Read', @TestArenaWriteRead);
-  T.Run('AllocZeroed', @TestArenaZeroed);
-  T.Run('TLocalArena class', @TestArenaClassAlias);
+  T := TTestSuite.Create('nextpas.core.mem.arena');
+  T.Test('Create', @TestArenaCreate);
+  T.Test('Alloc', @TestArenaAlloc);
+  T.Test('Alloc zero size', @TestArenaAllocZeroSize);
+  T.Test('Alloc exhaust', @TestArenaAllocExhaust);
+  T.Test('Alloc insufficient capacity', @TestArenaAllocInsufficientCapacity);
+  T.Test('AllocAligned', @TestArenaAllocAligned);
+  T.Test('AllocAligned rejects invalid alignment', @TestArenaAllocAlignedRejectsInvalidAlignment);
+  T.Test('AllocAligned accepts power-of-two alignment', @TestArenaAllocAlignedAcceptsPowerOfTwoAlignment);
+  T.Test('Reset', @TestArenaReset);
+  T.Test('Reset then AllocAligned', @TestArenaResetThenAllocAligned);
+  T.Test('Mark/Restore', @TestArenaMark);
+  T.Test('Mark nested', @TestArenaMarkNested);
+  T.Test('Write/Read', @TestArenaWriteRead);
+  T.Test('AllocZeroed', @TestArenaZeroed);
+  T.Test('TLocalArena class', @TestArenaClassAlias);
+  T.Run;
+
   T.Summary;
 end.

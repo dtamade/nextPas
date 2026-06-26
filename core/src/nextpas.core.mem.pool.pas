@@ -170,7 +170,7 @@ begin
   FBlockCount := 0;
   FAcquired := 0;
   FFreeBits := nil;
-  inherited;
+  inherited Destroy;
 end;
 
 function TLocalBlockPool.Acquire: Pointer;

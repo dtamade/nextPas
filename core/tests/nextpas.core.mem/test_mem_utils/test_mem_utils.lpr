@@ -4,12 +4,13 @@ program test_mem_utils;
 
 uses
   nextpas.core.base,
+  nextpas.core.exception,
   nextpas.core.text.conv,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.mem.utils;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestIsOverlapNoOverlap;
 var
@@ -73,8 +74,8 @@ begin
   // Copy forward overlapping: src=0..7, dst=2..9
   Copy(@LBuf[0], @LBuf[2], 8);
   // LBuf[2] should now be 0, LBuf[3]=1, ..., LBuf[9]=7
-  CheckEqual(Int64(0), Int64(LBuf[2]), 'overlap copy forward [2]');
-  CheckEqual(Int64(7), Int64(LBuf[9]), 'overlap copy forward [9]');
+  Check(Int64(0) = Int64(LBuf[2]), 'overlap copy forward [2]');
+  Check(Int64(7) = Int64(LBuf[9]), 'overlap copy forward [9]');
   WriteLn('PASS: Copy overlapping');
 end;
 
@@ -107,7 +108,7 @@ begin
   LSrc := $12345678;
   LDst := $7ABCDEF0;
   Copy(@LSrc, @LDst, 0);
-  CheckEqual(Int64($7ABCDEF0), Int64(LDst), 'zero-size copy should not modify dst');
+  Check(Int64($7ABCDEF0) = Int64(LDst), 'zero-size copy should not modify dst');
   WriteLn('PASS: Copy zero-size');
 end;
 
@@ -118,7 +119,7 @@ var
 begin
   Fill(@LBuf[0], 64, $AB);
   for LI := 0 to 63 do
-    CheckEqual(Int64($AB), Int64(LBuf[LI]), 'Fill byte ' + IntToStr(LI));
+    Check(Int64($AB) = Int64(LBuf[LI]), 'Fill byte ' + IntToStr(LI));
   WriteLn('PASS: Fill (8-bit)');
 end;
 
@@ -130,7 +131,7 @@ begin
   FillChar(LBuf, SizeOf(LBuf), 0);
   Fill8(@LBuf[0], SizeInt(16), $CD);
   for LI := 0 to 15 do
-    CheckEqual(Int64($CD), Int64(LBuf[LI]), 'Fill8 SizeInt ' + IntToStr(LI));
+    Check(Int64($CD) = Int64(LBuf[LI]), 'Fill8 SizeInt ' + IntToStr(LI));
   WriteLn('PASS: Fill8 (SizeInt)');
 end;
 
@@ -141,7 +142,7 @@ var
 begin
   Fill16(@LWords[0], 4, $BEEF);
   for LI := 0 to 3 do
-    CheckEqual(Int64($BEEF), Int64(LWords[LI]), 'Fill16 word ' + IntToStr(LI));
+    Check(Int64($BEEF) = Int64(LWords[LI]), 'Fill16 word ' + IntToStr(LI));
   WriteLn('PASS: Fill16');
 end;
 
@@ -152,7 +153,7 @@ var
 begin
   Fill32(@LDwords[0], 4, UInt32($DEADBEEF));
   for LI := 0 to 3 do
-    CheckEqual(Int64(UInt32($DEADBEEF)), Int64(LDwords[LI]), 'Fill32 dword ' + IntToStr(LI));
+    Check(Int64(UInt32($DEADBEEF)) = Int64(LDwords[LI]), 'Fill32 dword ' + IntToStr(LI));
   WriteLn('PASS: Fill32');
 end;
 
@@ -177,7 +178,7 @@ begin
   FillChar(LBuf, SizeOf(LBuf), $FF);
   Zero(@LBuf[0], 32);
   for LI := 0 to 31 do
-    CheckEqual(Int64(0), Int64(LBuf[LI]), 'Zero byte ' + IntToStr(LI));
+    Check(Int64(0) = Int64(LBuf[LI]), 'Zero byte ' + IntToStr(LI));
   WriteLn('PASS: Zero');
 end;
 
@@ -188,8 +189,8 @@ begin
   LA[0] := 1; LA[1] := 2; LA[2] := 3; LA[3] := 4;
   LA[4] := 5; LA[5] := 6; LA[6] := 7; LA[7] := 8;
   LB := LA;
-  CheckEqual(Int64(0), Int64(Compare(@LA[0], @LB[0], 8)), 'Compare equal');
-  CheckEqual(Int64(0), Int64(Compare8(@LA[0], @LB[0], SizeInt(8))), 'Compare8 equal');
+  Check(Int64(0) = Int64(Compare(@LA[0], @LB[0], 8)), 'Compare equal');
+  Check(Int64(0) = Int64(Compare8(@LA[0], @LB[0], SizeInt(8))), 'Compare8 equal');
   WriteLn('PASS: Compare equal');
 end;
 
@@ -209,7 +210,7 @@ var
   LB: array[0..3] of UInt16 = ($1111, $2222, $3333, $4444);
   LC: array[0..3] of UInt16 = ($1111, $2222, $3333, $5555);
 begin
-  CheckEqual(Int64(0), Int64(Compare16(@LA[0], @LB[0], 4)), 'Compare16 equal');
+  Check(Int64(0) = Int64(Compare16(@LA[0], @LB[0], 4)), 'Compare16 equal');
   Check(Compare16(@LA[0], @LC[0], 4) <> 0, 'Compare16 not equal');
   WriteLn('PASS: Compare16');
 end;
@@ -219,7 +220,7 @@ var
   LA: array[0..3] of UInt32 = ($11111111, $22222222, $33333333, $44444444);
   LB: array[0..3] of UInt32 = ($11111111, $22222222, $33333333, $44444444);
 begin
-  CheckEqual(Int64(0), Int64(Compare32(@LA[0], @LB[0], 4)), 'Compare32 equal');
+  Check(Int64(0) = Int64(Compare32(@LA[0], @LB[0], 4)), 'Compare32 equal');
   WriteLn('PASS: Compare32');
 end;
 
@@ -259,11 +260,11 @@ var
   LPtr: Pointer;
 begin
   LPtr := AlignUp(Pointer($1001), 16);
-  CheckEqual(Int64($1010), Int64(PtrUInt(LPtr)), 'AlignUp $1001 to 16');
+  Check(Int64($1010) = Int64(PtrUInt(LPtr)), 'AlignUp $1001 to 16');
   LPtr := AlignUp(Pointer($1000), 16);
-  CheckEqual(Int64($1000), Int64(PtrUInt(LPtr)), 'AlignUp $1000 to 16 (already aligned)');
+  Check(Int64($1000) = Int64(PtrUInt(LPtr)), 'AlignUp $1000 to 16 (already aligned)');
   LPtr := AlignUp(Pointer($1003), 4);
-  CheckEqual(Int64($1004), Int64(PtrUInt(LPtr)), 'AlignUp $1003 to 4');
+  Check(Int64($1004) = Int64(PtrUInt(LPtr)), 'AlignUp $1003 to 4');
   WriteLn('PASS: AlignUp');
 end;
 
@@ -272,7 +273,7 @@ var
   LPtr: Pointer;
 begin
   LPtr := AlignUpUnChecked(Pointer($2005), 8);
-  CheckEqual(Int64($2008), Int64(PtrUInt(LPtr)), 'AlignUpUnChecked $2005 to 8');
+  Check(Int64($2008) = Int64(PtrUInt(LPtr)), 'AlignUpUnChecked $2005 to 8');
   WriteLn('PASS: AlignUpUnChecked');
 end;
 
@@ -302,37 +303,82 @@ var
 begin
   FillChar(LBuf, SizeOf(LBuf), $42);
   Fill(@LBuf[0], 0, $FF);
-  CheckEqual(Int64($42), Int64(LBuf[0]), 'Fill with count=0 should be no-op');
+  Check(Int64($42) = Int64(LBuf[0]), 'Fill with count=0 should be no-op');
   WriteLn('PASS: Fill zero-count');
 end;
 
+procedure TestCompareNilRaises;
+var
+  LBuf: array[0..7] of Byte;
+  LCaught: Boolean;
 begin
-  T := TTestRunner.Create('nextpas.core.mem.utils');
-  T.Run('IsOverlap no-overlap', @TestIsOverlapNoOverlap);
-  T.Run('IsOverlap with-overlap', @TestIsOverlapWithOverlap);
-  T.Run('IsOverlap boundary', @TestIsOverlapBoundary);
-  T.Run('IsOverlap same-size overload', @TestIsOverlapSameSize);
-  T.Run('Copy basic', @TestCopyBasic);
-  T.Run('Copy overlapping', @TestCopyOverlapping);
-  T.Run('CopyUnChecked', @TestCopyUnchecked);
-  T.Run('CopyNonOverlap', @TestCopyNonOverlap);
-  T.Run('Copy zero-size', @TestCopyZeroSize);
-  T.Run('Fill', @TestFill);
-  T.Run('Fill8 SizeInt', @TestFill8SizeInt);
-  T.Run('Fill16', @TestFill16);
-  T.Run('Fill32', @TestFill32);
-  T.Run('Fill64', @TestFill64);
-  T.Run('Zero', @TestZero);
-  T.Run('Compare equal', @TestCompareEqual);
-  T.Run('Compare not-equal', @TestCompareNotEqual);
-  T.Run('Compare16', @TestCompare16);
-  T.Run('Compare32', @TestCompare32);
-  T.Run('Equal', @TestEqual);
-  T.Run('Equal zero-size', @TestEqualZeroSize);
-  T.Run('IsAligned', @TestIsAligned);
-  T.Run('AlignUp', @TestAlignUp);
-  T.Run('AlignUpUnChecked', @TestAlignUpUnChecked);
-  T.Run('IsPowerOfTwo', @TestIsPowerOfTwo);
-  T.Run('Fill zero-count', @TestFillZeroCount);
+  LCaught := False;
+  FillChar(LBuf, SizeOf(LBuf), $AA);
+  try
+    Compare8(nil, @LBuf[0], SizeInt(8));
+  except
+    on EArgumentNil do LCaught := True;
+  end;
+  Check(LCaught, 'Compare8(nil, ptr, count>0) should raise EArgumentNil');
+
+  LCaught := False;
+  try
+    Compare8(@LBuf[0], nil, SizeInt(8));
+  except
+    on EArgumentNil do LCaught := True;
+  end;
+  Check(LCaught, 'Compare8(ptr, nil, count>0) should raise EArgumentNil');
+
+  { count=0 不应抛 }
+  Check(Int64(0) = Int64(Compare8(nil, nil, SizeInt(0))), 'Compare8(nil, nil, 0) = 0');
+  WriteLn('PASS: Compare nil raises');
+end;
+
+procedure TestFillNilRaises;
+var
+  LCaught: Boolean;
+begin
+  LCaught := False;
+  try
+    Fill8(nil, SizeInt(8), $FF);
+  except
+    on EArgumentNil do LCaught := True;
+  end;
+  Check(LCaught, 'Fill8(nil, count>0) should raise EArgumentNil');
+  WriteLn('PASS: Fill nil raises');
+end;
+
+begin
+  T := TTestSuite.Create('nextpas.core.mem.utils');
+  T.Test('IsOverlap no-overlap', @TestIsOverlapNoOverlap);
+  T.Test('IsOverlap with-overlap', @TestIsOverlapWithOverlap);
+  T.Test('IsOverlap boundary', @TestIsOverlapBoundary);
+  T.Test('IsOverlap same-size overload', @TestIsOverlapSameSize);
+  T.Test('Copy basic', @TestCopyBasic);
+  T.Test('Copy overlapping', @TestCopyOverlapping);
+  T.Test('CopyUnChecked', @TestCopyUnchecked);
+  T.Test('CopyNonOverlap', @TestCopyNonOverlap);
+  T.Test('Copy zero-size', @TestCopyZeroSize);
+  T.Test('Fill', @TestFill);
+  T.Test('Fill8 SizeInt', @TestFill8SizeInt);
+  T.Test('Fill16', @TestFill16);
+  T.Test('Fill32', @TestFill32);
+  T.Test('Fill64', @TestFill64);
+  T.Test('Zero', @TestZero);
+  T.Test('Compare equal', @TestCompareEqual);
+  T.Test('Compare not-equal', @TestCompareNotEqual);
+  T.Test('Compare16', @TestCompare16);
+  T.Test('Compare32', @TestCompare32);
+  T.Test('Equal', @TestEqual);
+  T.Test('Equal zero-size', @TestEqualZeroSize);
+  T.Test('IsAligned', @TestIsAligned);
+  T.Test('AlignUp', @TestAlignUp);
+  T.Test('AlignUpUnChecked', @TestAlignUpUnChecked);
+  T.Test('IsPowerOfTwo', @TestIsPowerOfTwo);
+  T.Test('Fill zero-count', @TestFillZeroCount);
+  T.Test('Compare nil raises', @TestCompareNilRaises);
+  T.Test('Fill nil raises', @TestFillNilRaises);
+  T.Run;
+
   T.Summary;
 end.

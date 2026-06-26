@@ -8,7 +8,7 @@ uses
   {$ENDIF}
   nextpas.core.errors,
   nextpas.core.exception,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.mem.error,
   nextpas.core.mem.blockpool.sharded,
   nextpas.core.mem.pool.slab.sharded,
@@ -63,8 +63,15 @@ type
     Failure: string;
   end;
 
+  PSlabAlignedWorkerData = ^TSlabAlignedWorkerData;
+  TSlabAlignedWorkerData = record
+    Pool: TSlabPoolSharded;
+    StartFlag: PLongInt;
+    Failure: string;
+  end;
+
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GBlockPool: TShardedBlockPool = nil;
   GBlockPtr: Pointer = nil;
   GSlabPool: TSlabPoolSharded = nil;
@@ -85,7 +92,7 @@ begin
     Fail(AName + ': expected allocation error');
   except
     on E: EAllocError do
-      CheckEqual(Int64(Ord(AExpected)), Int64(Ord(E.Error)), AName + ': error code');
+      Check(Int64(Ord(AExpected)) = Int64(Ord(E.Error)), AName + ': error code');
   end;
 end;
 
@@ -298,8 +305,7 @@ begin
     GBlockPool.Release(GBlockPtr);
     CheckRaisesAllocError(@ReleaseDuplicateRemoteShardedBlockPointer, aeDoubleFree,
       'duplicate remote sharded block release');
-    CheckEqual(Int64(THREAD_COUNT - 1), Int64(GBlockPool.InUse),
-      'duplicate release should not decrement in-use count');
+    Check(Int64(THREAD_COUNT - 1) = Int64(GBlockPool.InUse), 'duplicate release should not decrement in-use count');
   finally
     for LIndex := 0 to High(LThreads) do
     begin
@@ -374,9 +380,9 @@ begin
     try
       Check(LPtr <> nil, 'GetMem should allocate');
       Check(LPool.Owns(LPtr), 'sharded pool should own exact allocation pointer');
-      CheckEqual(Int64(64), Int64(LPool.MemSizeOf(LPtr)), 'exact pointer should report slab chunk size');
+      Check(Int64(64) = Int64(LPool.MemSizeOf(LPtr)), 'exact pointer should report slab chunk size');
       Check(not LPool.Owns(LPtr + 1), 'sharded pool should not own interior pointer diagnostically');
-      CheckEqual(Int64(0), Int64(LPool.MemSizeOf(LPtr + 1)), 'interior pointer should not report chunk size');
+      Check(Int64(0) = Int64(LPool.MemSizeOf(LPtr + 1)), 'interior pointer should not report chunk size');
     finally
       LPool.FreeMem(LPtr);
     end;
@@ -394,17 +400,113 @@ begin
 
     CheckRaisesAllocError(@FreeInteriorShardedSlabPointer, aeInvalidPointer, 'interior FreeMem');
     Check(GSlabPool.Owns(GSlabPtr), 'invalid FreeMem should not release exact pointer');
-    CheckEqual(Int64(64), Int64(GSlabPool.MemSizeOf(GSlabPtr)), 'invalid FreeMem should preserve exact pointer size');
+    Check(Int64(64) = Int64(GSlabPool.MemSizeOf(GSlabPtr)), 'invalid FreeMem should preserve exact pointer size');
 
     CheckRaisesAllocError(@ReallocInteriorShardedSlabPointer, aeInvalidPointer, 'interior ReallocMem');
     Check(GSlabPool.Owns(GSlabPtr), 'invalid ReallocMem should not release exact pointer');
-    CheckEqual(Int64(64), Int64(GSlabPool.MemSizeOf(GSlabPtr)), 'invalid ReallocMem should preserve exact pointer size');
+    Check(Int64(64) = Int64(GSlabPool.MemSizeOf(GSlabPtr)), 'invalid ReallocMem should preserve exact pointer size');
 
     GSlabPool.FreeMem(GSlabPtr);
   finally
     GSlabPtr := nil;
     TObject(GSlabPool).Free;
     GSlabPool := nil;
+  end;
+end;
+
+{** B4-1: TestShardedBlockPoolStatsAggregated — 多线程竞争后统计聚合正确。 *}
+procedure TestShardedBlockPoolStatsAggregated;
+var
+  LPool: TShardedBlockPool;
+  LThreads: array[0..THREAD_COUNT - 1] of TPlatformThreadRecord;
+  LThreadData: array[0..THREAD_COUNT - 1] of TBlockPoolWorkerData;
+  LStartFlag: LongInt;
+  LIndex: Integer;
+begin
+  LPool := TShardedBlockPool.Create(64, THREAD_COUNT * 4, 4);
+  try
+    LStartFlag := 0;
+    for LIndex := 0 to High(LThreads) do
+    begin
+      LThreadData[LIndex].Pool := LPool;
+      LThreadData[LIndex].StartFlag := @LStartFlag;
+      LThreadData[LIndex].Failure := '';
+      platform_thread_spawn(LThreads[LIndex], @BlockPoolWorkerProc, @LThreadData[LIndex]);
+    end;
+
+    LStartFlag := 1;
+    for LIndex := 0 to High(LThreads) do
+      platform_thread_wait(LThreads[LIndex]);
+
+    for LIndex := 0 to High(LThreads) do
+      Check(LThreadData[LIndex].Failure = '', 'stats worker should not fail');
+    Check(Int64(0) = Int64(LPool.InUse), 'InUse should be 0 after all releases');
+    Check(Int64(LPool.Capacity) = Int64(LPool.Available), 'Available should equal Capacity after contention');
+    Check(LPool.BlockSize = 64, 'BlockSize should be unchanged after contention');
+    Check(LPool.ShardCount = 4, 'ShardCount should be unchanged after contention');
+  finally
+    TObject(LPool).Free;
+  end;
+end;
+
+{** B4-2: TestShardedSlabAllocAlignedContention — AllocAligned 并发安全。 *}
+function SlabAlignedWorkerProc(AArg: Pointer): Pointer; cdecl;
+var
+  LData: PSlabAlignedWorkerData;
+  LAlign: SizeUInt;
+  LIndex: Integer;
+  LPtr: Pointer;
+begin
+  LData := PSlabAlignedWorkerData(AArg);
+  WaitForStartFlag(LData^.StartFlag);
+
+  try
+    for LIndex := 0 to ITERATION_COUNT - 1 do
+    begin
+      LAlign := 8 shl (LIndex mod 3);  { 8, 16, 32 — all powers of two }
+      LPtr := LData^.Pool.AllocAligned(32 + (LIndex mod 32), LAlign);
+      if LPtr = nil then
+        raise Exception.Create('SlabAligned: AllocAligned returned nil');
+      if PtrUInt(LPtr) mod LAlign <> 0 then
+        raise Exception.Create('SlabAligned: pointer not aligned');
+      PByte(LPtr)^ := Byte(LIndex);
+      LData^.Pool.FreeAligned(LPtr);
+    end;
+  except
+    on E: Exception do
+      LData^.Failure := E.Message;
+  end;
+  Result := nil;
+end;
+
+procedure TestShardedSlabAllocAlignedContention;
+var
+  LPool: TSlabPoolSharded;
+  LThreads: array[0..THREAD_COUNT - 1] of TPlatformThreadRecord;
+  LThreadData: array[0..THREAD_COUNT - 1] of TSlabAlignedWorkerData;
+  LStartFlag: LongInt;
+  LIndex: Integer;
+begin
+  LPool := TSlabPoolSharded.Create(8192, 4);
+  try
+    LStartFlag := 0;
+    for LIndex := 0 to High(LThreads) do
+    begin
+      LThreadData[LIndex].Pool := LPool;
+      LThreadData[LIndex].StartFlag := @LStartFlag;
+      LThreadData[LIndex].Failure := '';
+      platform_thread_spawn(LThreads[LIndex], @SlabAlignedWorkerProc, @LThreadData[LIndex]);
+    end;
+
+    LStartFlag := 1;
+    for LIndex := 0 to High(LThreads) do
+      platform_thread_wait(LThreads[LIndex]);
+
+    for LIndex := 0 to High(LThreads) do
+      Check(LThreadData[LIndex].Failure = '', 'slab aligned worker should not fail: ' + LThreadData[LIndex].Failure);
+    Check(LPool.Stats.FallbackAllocCount = 0, 'aligned contention should stay in slab fast path');
+  finally
+    TObject(LPool).Free;
   end;
 end;
 
@@ -452,8 +554,7 @@ begin
 
     LPool.FreeMem(LPtr);
     Check(not LPool.Owns(LPtr), 'remote slab FreeMem should clear ownership diagnostics immediately');
-    CheckEqual(Int64(0), Int64(LPool.MemSizeOf(LPtr)),
-      'remote slab FreeMem should clear size diagnostics immediately');
+    Check(Int64(0) = Int64(LPool.MemSizeOf(LPtr)), 'remote slab FreeMem should clear size diagnostics immediately');
   finally
     for LIndex := 0 to High(LThreads) do
     begin
@@ -467,13 +568,17 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.mem.sharded_pools');
-  T.Run('sharded blockpool contention', @TestShardedBlockPoolContention);
-  T.Run('sharded blockpool rejects duplicate remote release', @TestShardedBlockPoolRejectsDuplicateRemoteRelease);
-  T.Run('sharded blockpool thread-cache config rejects duplicate release', @TestShardedBlockPoolThreadCacheConfigRejectsDuplicateRelease);
-  T.Run('sharded slab contention', @TestShardedSlabPoolContention);
-  T.Run('sharded slab ownership diagnostics reject interior pointer', @TestShardedSlabOwnershipDiagnosticsRejectInteriorPointer);
-  T.Run('sharded slab release and realloc reject interior pointer', @TestShardedSlabReleaseAndReallocRejectInteriorPointer);
-  T.Run('sharded slab remote release clears diagnostics', @TestShardedSlabRemoteReleaseClearsDiagnostics);
+  T := TTestSuite.Create('nextpas.core.mem.sharded_pools');
+  T.Test('sharded blockpool contention', @TestShardedBlockPoolContention);
+  T.Test('sharded blockpool rejects duplicate remote release', @TestShardedBlockPoolRejectsDuplicateRemoteRelease);
+  T.Test('sharded blockpool thread-cache config rejects duplicate release', @TestShardedBlockPoolThreadCacheConfigRejectsDuplicateRelease);
+  T.Test('sharded slab contention', @TestShardedSlabPoolContention);
+  T.Test('sharded slab ownership diagnostics reject interior pointer', @TestShardedSlabOwnershipDiagnosticsRejectInteriorPointer);
+  T.Test('sharded slab release and realloc reject interior pointer', @TestShardedSlabReleaseAndReallocRejectInteriorPointer);
+  T.Test('sharded slab remote release clears diagnostics', @TestShardedSlabRemoteReleaseClearsDiagnostics);
+  T.Test('B4-1 stats aggregated after contention', @TestShardedBlockPoolStatsAggregated);
+  T.Test('B4-2 sharded slab aligned contention', @TestShardedSlabAllocAlignedContention);
+  T.Run;
+
   T.Summary;
 end.

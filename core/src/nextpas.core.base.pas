@@ -72,50 +72,72 @@ type
   csize_t = SizeUInt;
   ECore = nextpas.core.exception.ENextPasError;
   EInvariantViolation = class(ECore)
+  public
+    constructor Create(const AMessage: string);
   protected
     class function DefaultCategory: nextpas.core.exception.TErrorCategory; override;
   end;
   EWow = EInvariantViolation;
   EArgumentNil = class(ECore)
+  public
+    constructor Create(const AMessage: string);
   protected
     class function DefaultCategory: nextpas.core.exception.TErrorCategory; override;
   end;
   EEmptyCollection = class(ECore)
+  public
+    constructor Create(const AMessage: string);
   protected
     class function DefaultCategory: nextpas.core.exception.TErrorCategory; override;
   end;
   EInvalidArgument = class(ECore)
+  public
+    constructor Create(const AMessage: string);
   protected
     class function DefaultCategory: nextpas.core.exception.TErrorCategory; override;
   end;
   EInvalidResult = class(ECore)
+  public
+    constructor Create(const AMessage: string);
   protected
     class function DefaultCategory: nextpas.core.exception.TErrorCategory; override;
   end;
   ETimeoutError = nextpas.core.exception.ETimeoutError;
   EInvalidState = class(ECore)
+  public
+    constructor Create(const AMessage: string);
   protected
     class function DefaultCategory: nextpas.core.exception.TErrorCategory; override;
   end;
   EOutOfRange = class(ECore)
+  public
+    constructor Create(const AMessage: string);
   protected
     class function DefaultCategory: nextpas.core.exception.TErrorCategory; override;
   end;
   ENotSupported = class(ECore)
+  public
+    constructor Create(const AMessage: string);
   protected
     class function DefaultCategory: nextpas.core.exception.TErrorCategory; override;
   end;
   ENotCompatible = class(ECore)
+  public
+    constructor Create(const AMessage: string);
   protected
     class function DefaultCategory: nextpas.core.exception.TErrorCategory; override;
   end;
   EInvalidOperation = class(ECore)
+  public
+    constructor Create(const AMessage: string);
   protected
     class function DefaultCategory: nextpas.core.exception.TErrorCategory; override;
   end;
   EOutOfMemoryError = nextpas.core.exception.EOutOfMemoryError;
   EOutOfMemory = nextpas.core.exception.EOutOfMemory;
   EOverflow = class(ECore)
+  public
+    constructor Create(const AMessage: string);
   protected
     class function DefaultCategory: nextpas.core.exception.TErrorCategory; override;
   end;
@@ -257,9 +279,19 @@ begin
   Result := nextpas.core.exception.ecInternal;
 end;
 
+constructor EInvariantViolation.Create(const AMessage: string);
+begin
+  inherited Create(AMessage);
+end;
+
 class function EArgumentNil.DefaultCategory: nextpas.core.exception.TErrorCategory;
 begin
   Result := nextpas.core.exception.ecInvalidArgument;
+end;
+
+constructor EArgumentNil.Create(const AMessage: string);
+begin
+  inherited Create(AMessage);
 end;
 
 class function EInvalidArgument.DefaultCategory: nextpas.core.exception.TErrorCategory;
@@ -267,9 +299,19 @@ begin
   Result := nextpas.core.exception.ecInvalidArgument;
 end;
 
+constructor EInvalidArgument.Create(const AMessage: string);
+begin
+  inherited Create(AMessage);
+end;
+
 class function EInvalidResult.DefaultCategory: nextpas.core.exception.TErrorCategory;
 begin
   Result := nextpas.core.exception.ecInternal;
+end;
+
+constructor EInvalidResult.Create(const AMessage: string);
+begin
+  inherited Create(AMessage);
 end;
 
 class function EEmptyCollection.DefaultCategory: nextpas.core.exception.TErrorCategory;
@@ -277,9 +319,19 @@ begin
   Result := nextpas.core.exception.ecInvalidOperation;
 end;
 
+constructor EEmptyCollection.Create(const AMessage: string);
+begin
+  inherited Create(AMessage);
+end;
+
 class function EInvalidState.DefaultCategory: nextpas.core.exception.TErrorCategory;
 begin
   Result := nextpas.core.exception.ecInvalidOperation;
+end;
+
+constructor EInvalidState.Create(const AMessage: string);
+begin
+  inherited Create(AMessage);
 end;
 
 class function EOutOfRange.DefaultCategory: nextpas.core.exception.TErrorCategory;
@@ -287,9 +339,19 @@ begin
   Result := nextpas.core.exception.ecInvalidArgument;
 end;
 
+constructor EOutOfRange.Create(const AMessage: string);
+begin
+  inherited Create(AMessage);
+end;
+
 class function ENotSupported.DefaultCategory: nextpas.core.exception.TErrorCategory;
 begin
   Result := nextpas.core.exception.ecNotSupported;
+end;
+
+constructor ENotSupported.Create(const AMessage: string);
+begin
+  inherited Create(AMessage);
 end;
 
 class function ENotCompatible.DefaultCategory: nextpas.core.exception.TErrorCategory;
@@ -297,14 +359,29 @@ begin
   Result := nextpas.core.exception.ecInvalidArgument;
 end;
 
+constructor ENotCompatible.Create(const AMessage: string);
+begin
+  inherited Create(AMessage);
+end;
+
 class function EInvalidOperation.DefaultCategory: nextpas.core.exception.TErrorCategory;
 begin
   Result := nextpas.core.exception.ecInvalidOperation;
 end;
 
+constructor EInvalidOperation.Create(const AMessage: string);
+begin
+  inherited Create(AMessage);
+end;
+
 class function EOverflow.DefaultCategory: nextpas.core.exception.TErrorCategory;
 begin
   Result := nextpas.core.exception.ecInvalidArgument;
+end;
+
+constructor EOverflow.Create(const AMessage: string);
+begin
+  inherited Create(AMessage);
 end;
 
 { TPair<TKey, TValue> }

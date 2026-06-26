@@ -103,7 +103,7 @@ begin
   FAllocator := nil;
   FCapacity := 0;
   FOffset := 0;
-  inherited;
+  inherited Destroy;
 end;
 
 function TLocalArena.Alloc(ASize: SizeUInt): Pointer;
@@ -136,6 +136,8 @@ begin
   Result := nil;
   if (ASize = 0) or (FBacking = nil) then
     Exit;
+  if AAlign = 0 then
+    AAlign := MEM_DEFAULT_ALIGN;
   if not IsPowerOfTwo(AAlign) then
     Exit;
   if FOffset > FCapacity then
@@ -208,6 +210,7 @@ begin
   Result.BackOffset := 0;
   Result.TotalUsed := FOffset;
   Result.LargeUsed := 0;
+  Result.AllocCount := 0;  // TLocalArena 不在此处跟踪
 end;
 
 procedure TLocalArena.RestoreToMark(AMark: TArenaMark);

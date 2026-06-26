@@ -8,7 +8,7 @@ uses
   {$ENDIF}
   nextpas.core.errors,
   nextpas.core.exception,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.mem,
   nextpas.core.platform.thread;
 
@@ -25,7 +25,7 @@ type
   end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function DefaultAllocatorThreadProc(AArg: Pointer): Pointer; cdecl;
 var
@@ -104,8 +104,10 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.mem.default_allocator');
-  T.Run('singleton single-thread', @TestDefaultAllocatorSingletonSingleThread);
-  T.Run('concurrent start returns same instance', @TestDefaultAllocatorConcurrentStart);
+  T := TTestSuite.Create('nextpas.core.mem.default_allocator');
+  T.Test('singleton single-thread', @TestDefaultAllocatorSingletonSingleThread);
+  T.Test('concurrent start returns same instance', @TestDefaultAllocatorConcurrentStart);
+  T.Run;
+
   T.Summary;
 end.

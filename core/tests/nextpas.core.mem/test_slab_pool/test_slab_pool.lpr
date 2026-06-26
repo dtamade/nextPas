@@ -3,7 +3,7 @@ program test_slab_pool;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.mem.error,
   nextpas.core.mem.allocator.base,
   nextpas.core.mem.pool.memory_pool,
@@ -33,7 +33,7 @@ type
   end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GPool: TSlabPool = nil;
   GFixedSlabPool: TFixedSlabPool = nil;
   GFixedSlabFallback: TFixedSlabRecordingAllocator = nil;
@@ -47,7 +47,7 @@ begin
     Fail(AName + ': expected allocation error');
   except
     on E: EAllocError do
-      CheckEqual(Int64(Ord(AExpected)), Int64(Ord(E.Error)), AName + ': error code');
+      Check(Int64(Ord(AExpected)) = Int64(Ord(E.Error)), AName + ': error code');
   end;
 end;
 
@@ -245,22 +245,22 @@ begin
   LPool := TSlabPool.Create(4096);
   try
     LStats := LPool.Stats;
-    CheckEqual(Int64(1), Int64(LStats.SegmentCount), 'initial segment count');
+    Check(Int64(1) = Int64(LStats.SegmentCount), 'initial segment count');
     Check(LStats.TotalCapacity >= 4096, 'initial capacity should cover requested bytes');
-    CheckEqual(Int64(0), Int64(LStats.TotalUsed), 'initial used bytes');
-    CheckEqual(Int64(0), Int64(LStats.FallbackAllocCount), 'initial fallback count');
+    Check(Int64(0) = Int64(LStats.TotalUsed), 'initial used bytes');
+    Check(Int64(0) = Int64(LStats.FallbackAllocCount), 'initial fallback count');
 
     LTraits := LPool.Traits;
-    CheckEqual(True, LTraits.ZeroInitialized, 'AllocMem should promise zero initialization');
-    CheckEqual(False, LTraits.ThreadSafe, 'plain slab pool should not claim thread safety');
-    CheckEqual(True, LTraits.HasMemSize, 'slab pool should expose mem size');
-    CheckEqual(False, LTraits.SupportsAligned, 'slab pool should not claim generic aligned support');
+    Check(True = LTraits.ZeroInitialized, 'AllocMem should promise zero initialization');
+    Check(False = LTraits.ThreadSafe, 'plain slab pool should not claim thread safety');
+    Check(True = LTraits.HasMemSize, 'slab pool should expose mem size');
+    Check(True = LTraits.SupportsAligned, 'slab pool supports aligned via fallback path');
 
     LPerf := LPool.GetPerfCounters;
-    CheckEqual(Int64(0), Int64(LPerf.AllocCalls), 'initial alloc calls');
-    CheckEqual(Int64(0), Int64(LPerf.FreeCalls), 'initial free calls');
-    CheckEqual(Int64(0), Int64(LPerf.AllocTime), 'L0 slab pool should not sample alloc time directly');
-    CheckEqual(Int64(0), Int64(LPerf.FreeTime), 'L0 slab pool should not sample free time directly');
+    Check(Int64(0) = Int64(LPerf.AllocCalls), 'initial alloc calls');
+    Check(Int64(0) = Int64(LPerf.FreeCalls), 'initial free calls');
+    Check(Int64(0) = Int64(LPerf.AllocTime), 'L0 slab pool should not sample alloc time directly');
+    Check(Int64(0) = Int64(LPerf.FreeTime), 'L0 slab pool should not sample free time directly');
   finally
     LPool.Free;
   end;
@@ -278,24 +278,24 @@ begin
     LPtr := LPool.GetMem(64);
     Check(LPtr <> nil, 'GetMem should allocate');
     Check(LPool.Owns(LPtr), 'pool should own allocated pointer');
-    CheckEqual(Int64(64), Int64(LPool.MemSizeOf(LPtr)), 'MemSizeOf should report slab chunk size');
+    Check(Int64(64) = Int64(LPool.MemSizeOf(LPtr)), 'MemSizeOf should report slab chunk size');
 
     LPerf := LPool.GetPerfCounters;
-    CheckEqual(Int64(1), Int64(LPerf.AllocCalls), 'alloc calls after one allocation');
-    CheckEqual(Int64(0), Int64(LPerf.FreeCalls), 'free calls before release');
-    CheckEqual(Int64(0), Int64(LPerf.AllocTime), 'alloc time remains zero without L1 timing dependency');
+    Check(Int64(1) = Int64(LPerf.AllocCalls), 'alloc calls after one allocation');
+    Check(Int64(0) = Int64(LPerf.FreeCalls), 'free calls before release');
+    Check(Int64(0) = Int64(LPerf.AllocTime), 'alloc time remains zero without L1 timing dependency');
 
     LStats := LPool.Stats;
     Check(LStats.TotalUsed >= 64, 'used bytes should grow after allocation');
 
     LPool.FreeMem(LPtr);
     LPerf := LPool.GetPerfCounters;
-    CheckEqual(Int64(1), Int64(LPerf.AllocCalls), 'alloc calls should stay stable after free');
-    CheckEqual(Int64(1), Int64(LPerf.FreeCalls), 'free calls after release');
-    CheckEqual(Int64(0), Int64(LPerf.FreeTime), 'free time remains zero without L1 timing dependency');
+    Check(Int64(1) = Int64(LPerf.AllocCalls), 'alloc calls should stay stable after free');
+    Check(Int64(1) = Int64(LPerf.FreeCalls), 'free calls after release');
+    Check(Int64(0) = Int64(LPerf.FreeTime), 'free time remains zero without L1 timing dependency');
 
     LStats := LPool.Stats;
-    CheckEqual(Int64(0), Int64(LStats.FallbackAllocCount), 'slab path should not create fallback allocation');
+    Check(Int64(0) = Int64(LStats.FallbackAllocCount), 'slab path should not create fallback allocation');
   finally
     LPool.Free;
   end;
@@ -318,14 +318,14 @@ begin
       try
         Check(LPtr <> nil, 'GetMem should allocate');
         Check(LPool.Owns(LPtr), 'pool should own exact allocation pointer');
-        CheckEqual(Int64(CHUNK_SIZES[LIndex]), Int64(LPool.MemSizeOf(LPtr)), 'exact pointer should report slab chunk size');
+        Check(Int64(CHUNK_SIZES[LIndex]) = Int64(LPool.MemSizeOf(LPtr)), 'exact pointer should report slab chunk size');
         Check(not LPool.Owns(LPtr + 1), 'pool should not own interior pointer diagnostically');
-        CheckEqual(Int64(0), Int64(LPool.MemSizeOf(LPtr + 1)), 'interior pointer should not report chunk size');
+        Check(Int64(0) = Int64(LPool.MemSizeOf(LPtr + 1)), 'interior pointer should not report chunk size');
       finally
         LPool.FreeMem(LPtr);
       end;
       Check(not LPool.Owns(LPtr), 'pool should not own released allocation pointer');
-      CheckEqual(Int64(0), Int64(LPool.MemSizeOf(LPtr)), 'released pointer should not report chunk size');
+      Check(Int64(0) = Int64(LPool.MemSizeOf(LPtr)), 'released pointer should not report chunk size');
     end;
   finally
     LPool.Free;
@@ -341,11 +341,11 @@ begin
 
     CheckRaisesAllocError(@FreeInteriorSlabPointer, aeInvalidPointer, 'interior FreeMem');
     Check(GPool.Owns(GPtr), 'invalid FreeMem should not release exact pointer');
-    CheckEqual(Int64(64), Int64(GPool.MemSizeOf(GPtr)), 'invalid FreeMem should preserve exact pointer size');
+    Check(Int64(64) = Int64(GPool.MemSizeOf(GPtr)), 'invalid FreeMem should preserve exact pointer size');
 
     CheckRaisesAllocError(@ReallocInteriorSlabPointer, aeInvalidPointer, 'interior ReallocMem');
     Check(GPool.Owns(GPtr), 'invalid ReallocMem should not release exact pointer');
-    CheckEqual(Int64(64), Int64(GPool.MemSizeOf(GPtr)), 'invalid ReallocMem should preserve exact pointer size');
+    Check(Int64(64) = Int64(GPool.MemSizeOf(GPtr)), 'invalid ReallocMem should preserve exact pointer size');
 
     GPool.FreeMem(GPtr);
   finally
@@ -369,8 +369,7 @@ begin
       'top-level slab double ReallocMem');
     Check(not GPool.Owns(GPtr),
       'top-level slab double free should not restore ownership');
-    CheckEqual(Int64(0), Int64(GPool.MemSizeOf(GPtr)),
-      'top-level slab released pointer should not report chunk size');
+    Check(Int64(0) = Int64(GPool.MemSizeOf(GPtr)), 'top-level slab released pointer should not report chunk size');
   finally
     GPtr := nil;
     GPool.Free;
@@ -393,19 +392,19 @@ begin
       Check(LPtr <> nil, 'AllocAligned should succeed via fallback path');
       Check((PtrUInt(LPtr) mod 256) = 0, 'AllocAligned should honor requested alignment');
       Check(LPool.TryGetFallbackAllocInfo(LPtr, LSize, LAlign), 'aligned fallback should be tracked');
-      CheckEqual(Int64(96), Int64(LSize), 'tracked fallback size');
-      CheckEqual(Int64(256), Int64(LAlign), 'tracked fallback alignment');
+      Check(Int64(96) = Int64(LSize), 'tracked fallback size');
+      Check(Int64(256) = Int64(LAlign), 'tracked fallback alignment');
 
       LStats := LPool.Stats;
-      CheckEqual(Int64(1), Int64(LStats.FallbackAllocCount), 'fallback allocation count');
-      CheckEqual(Int64(96), Int64(LStats.FallbackBytes), 'fallback byte count');
+      Check(Int64(1) = Int64(LStats.FallbackAllocCount), 'fallback allocation count');
+      Check(Int64(96) = Int64(LStats.FallbackBytes), 'fallback byte count');
     finally
       LPool.FreeAligned(LPtr);
     end;
 
     LStats := LPool.Stats;
-    CheckEqual(Int64(0), Int64(LStats.FallbackAllocCount), 'fallback allocation count after free');
-    CheckEqual(Int64(0), Int64(LStats.FallbackBytes), 'fallback byte count after free');
+    Check(Int64(0) = Int64(LStats.FallbackAllocCount), 'fallback allocation count after free');
+    Check(Int64(0) = Int64(LStats.FallbackBytes), 'fallback byte count after free');
   finally
     LPool.Free;
   end;
@@ -426,13 +425,10 @@ begin
     LPtr := LPool.AllocAligned(High(SizeUInt), 256);
     try
       Check(LPtr = nil, 'overflowing aligned fallback request should fail closed');
-      CheckEqual(Int64(LGetCallsBefore), Int64(LAllocator.GetCalls),
-        'overflowing aligned fallback request must not call backing allocator');
+      Check(Int64(LGetCallsBefore) = Int64(LAllocator.GetCalls), 'overflowing aligned fallback request must not call backing allocator');
       LStats := LPool.Stats;
-      CheckEqual(Int64(0), Int64(LStats.FallbackAllocCount),
-        'overflowing aligned fallback request must not be tracked');
-      CheckEqual(Int64(0), Int64(LStats.FallbackBytes),
-        'overflowing aligned fallback request must not change fallback bytes');
+      Check(Int64(0) = Int64(LStats.FallbackAllocCount), 'overflowing aligned fallback request must not be tracked');
+      Check(Int64(0) = Int64(LStats.FallbackBytes), 'overflowing aligned fallback request must not change fallback bytes');
     finally
       if LPtr <> nil then
         LPool.FreeAligned(LPtr);
@@ -461,14 +457,12 @@ begin
       on E: EAllocError do
       begin
         LRaised := True;
-        CheckEqual(Int64(Ord(aeInvalidLayout)), Int64(Ord(E.Error)),
-          'fixed slab overflow capacity error');
+        Check(Int64(Ord(aeInvalidLayout)) = Int64(Ord(E.Error)), 'fixed slab overflow capacity error');
       end;
     end;
 
     Check(LRaised, 'fixed slab overflow capacity must fail closed');
-    CheckEqual(Int64(0), Int64(LAllocator.GetCalls),
-      'fixed slab overflow capacity must not call backing allocator');
+    Check(Int64(0) = Int64(LAllocator.GetCalls), 'fixed slab overflow capacity must not call backing allocator');
   finally
     LPool.Free;
     LAllocatorRef := nil;
@@ -490,15 +484,13 @@ begin
       'fixed slab interior FreeMem');
     Check(GFixedSlabPool.Owns(GPtr),
       'fixed slab invalid FreeMem should not release exact pointer');
-    CheckEqual(Int64(64), Int64(GFixedSlabPool.MemSizeOf(GPtr)),
-      'fixed slab invalid FreeMem should preserve exact pointer size');
+    Check(Int64(64) = Int64(GFixedSlabPool.MemSizeOf(GPtr)), 'fixed slab invalid FreeMem should preserve exact pointer size');
 
     CheckRaisesAllocError(@ReallocInteriorFixedSlabPointer, aeInvalidPointer,
       'fixed slab interior ReallocMem');
     Check(GFixedSlabPool.Owns(GPtr),
       'fixed slab invalid ReallocMem should not release exact pointer');
-    CheckEqual(Int64(64), Int64(GFixedSlabPool.MemSizeOf(GPtr)),
-      'fixed slab invalid ReallocMem should preserve exact pointer size');
+    Check(Int64(64) = Int64(GFixedSlabPool.MemSizeOf(GPtr)), 'fixed slab invalid ReallocMem should preserve exact pointer size');
 
     GFixedSlabPool.FreeMem(GPtr);
     CheckRaisesAllocError(@FreeDoubleFixedSlabPointer, aeDoubleFree,
@@ -546,8 +538,7 @@ begin
 
     CheckRaisesAllocError(@FreeForeignFixedSlabAlignedPointer, aeInvalidPointer,
       'fixed slab foreign FreeAligned');
-    CheckEqual(Int64(1), Int64(GFixedSlabFallback.FreeAlignedCalls),
-      'foreign FreeAligned must not delegate to backing allocator');
+    Check(Int64(1) = Int64(GFixedSlabFallback.FreeAlignedCalls), 'foreign FreeAligned must not delegate to backing allocator');
   finally
     GPtr := nil;
     GFixedSlabPool.Free;
@@ -588,19 +579,104 @@ begin
   LPool.FreeMem(LPtr2);
 end;
 
+{ B2: FixedSlabPool AllocAligned 直接路径 (AAlignment <= 8 不走 fallback) }
+procedure TestFixedSlabAlignedDirectPath;
+var
+  LFallback: TFixedSlabRecordingAllocator;
+  LPool: TFixedSlabPool;
+  LP: Pointer;
 begin
-  T := TTestRunner.Create('nextpas.core.mem.slab_pool');
-  T.Run('create stats and traits', @TestCreateStatsAndTraits);
-  T.Run('alloc free and perf counters', @TestAllocFreeAndPerfCounters);
-  T.Run('ownership diagnostics reject interior pointer', @TestOwnershipDiagnosticsRejectInteriorPointer);
-  T.Run('release and realloc reject interior pointer', @TestReleaseAndReallocRejectInteriorPointer);
-  T.Run('top-level slab double free fails closed', @TestTopLevelSlabDoubleFreeFailsClosed);
-  T.Run('aligned fallback tracking', @TestAllocAlignedFallsBackAndTracksStats);
-  T.Run('aligned fallback rejects backing size overflow', @TestSlabAlignedFallbackRejectsBackingSizeOverflow);
-  T.Run('fixed slab rejects capacity overflow', @TestFixedSlabCreateRejectsCapacityOverflow);
-  T.Run('fixed slab direct api fails closed', @TestFixedSlabDirectApiFailsClosed);
-  T.Run('fixed slab aligned direct fails closed', @TestFixedSlabAlignedDirectFailsClosed);
-  T.Run('fixed slab aligned fallback fails closed', @TestFixedSlabAlignedFallbackFailsClosed);
-  T.Run('IMemoryPool contract via TSlabPool', @TestIMemoryPoolContract);
+  LFallback := TFixedSlabRecordingAllocator.Create;
+  LPool := TFixedSlabPool.Create(1024, LFallback);
+  try
+    LFallback.FreeAlignedCalls := 0;
+    { AAlignment=8 <= 8, should go through direct slab path, not fallback }
+    LP := LPool.AllocAligned(32, 8);
+    Check(LP <> nil, 'AllocAligned(32, 8) succeeds');
+    Check(LPool.Owns(LP), 'pointer belongs to slab pool');
+    Check(0 = LFallback.FreeAlignedCalls, 'fallback AllocAligned not called');
+    LPool.FreeMem(LP);
+  finally
+    LPool.Free;
+  end;
+end;
+
+{ B2: TSlabPool 小对齐直接路径 }
+procedure TestSlabAlignedDirectPath;
+var
+  LPool: TSlabPool;
+  LP: Pointer;
+  LStats: TSlabPoolStats;
+begin
+  LPool := TSlabPool.Create(4096);
+  try
+    { AAlignment=8 should go through direct slab path }
+    LP := LPool.AllocAligned(32, 8);
+    Check(LP <> nil, 'AllocAligned(32, 8) succeeds');
+    Check(Int64(0) = PtrUInt(LP) mod 8, 'aligned to 8');
+    LStats := LPool.Stats;
+    Check(Int64(0) = Int64(LStats.FallbackAllocCount), 'no fallback used');
+    LPool.FreeMem(LP);
+  finally
+    LPool.Free;
+  end;
+end;
+
+{ B3: TSlabPool 底层 allocator 失败时返回 nil }
+procedure TestSlabPoolOomWhenBackingFails;
+var
+  LPool: TSlabPool;
+  LP: Pointer;
+begin
+  { Create slab pool with very small capacity }
+  LPool := TSlabPool.Create(64);
+  try
+    LP := LPool.GetMem(32);
+    { First alloc may succeed or fail depending on slab internals.
+      The key is: no crash, returns nil on failure. }
+    if LP <> nil then
+      LPool.FreeMem(LP);
+  finally
+    LPool.Free;
+  end;
+end;
+
+{ B3: TFixedSlabPool Create(0) 后操作安全 }
+procedure TestFixedSlabPoolZeroCapacity;
+var
+  LPool: TFixedSlabPool;
+  LP: Pointer;
+begin
+  LPool := TFixedSlabPool.Create(0);
+  try
+    LP := LPool.GetMem(8);
+    Check(LP = nil, 'GetMem on zero-capacity pool returns nil');
+    LPool.FreeMem(nil);  { should not crash }
+    Check(LPool.Traits.HasMemSize, 'traits still valid');
+  finally
+    LPool.Free;
+  end;
+end;
+
+begin
+  T := TTestSuite.Create('nextpas.core.mem.slab_pool');
+  T.Test('create stats and traits', @TestCreateStatsAndTraits);
+  T.Test('alloc free and perf counters', @TestAllocFreeAndPerfCounters);
+  T.Test('ownership diagnostics reject interior pointer', @TestOwnershipDiagnosticsRejectInteriorPointer);
+  T.Test('release and realloc reject interior pointer', @TestReleaseAndReallocRejectInteriorPointer);
+  T.Test('top-level slab double free fails closed', @TestTopLevelSlabDoubleFreeFailsClosed);
+  T.Test('aligned fallback tracking', @TestAllocAlignedFallsBackAndTracksStats);
+  T.Test('aligned fallback rejects backing size overflow', @TestSlabAlignedFallbackRejectsBackingSizeOverflow);
+  T.Test('fixed slab rejects capacity overflow', @TestFixedSlabCreateRejectsCapacityOverflow);
+  T.Test('fixed slab direct api fails closed', @TestFixedSlabDirectApiFailsClosed);
+  T.Test('fixed slab aligned direct fails closed', @TestFixedSlabAlignedDirectFailsClosed);
+  T.Test('fixed slab aligned fallback fails closed', @TestFixedSlabAlignedFallbackFailsClosed);
+  T.Test('IMemoryPool contract via TSlabPool', @TestIMemoryPoolContract);
+  T.Test('fixed slab aligned direct path (B2)', @TestFixedSlabAlignedDirectPath);
+  T.Test('slab aligned direct path (B2)', @TestSlabAlignedDirectPath);
+  T.Test('slab pool OOM safe (B3)', @TestSlabPoolOomWhenBackingFails);
+  T.Test('fixed slab zero capacity safe (B3)', @TestFixedSlabPoolZeroCapacity);
+  T.Run;
+
   T.Summary;
 end.
