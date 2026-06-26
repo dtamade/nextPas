@@ -65,17 +65,17 @@
 
 | ID | 文件 | 问题 | 建议 |
 |----|------|------|------|
-| R4-01 | expect.pas | `Not_()` 创建新对象但 `FNegated` 不会自动重置。`Expect('x').Not_.ToEqual('y').ToEqual('x')` 中第二个 `ToEqual` 仍以 `FNegated=True` 运行。 | 文档明确说明 `Not_()` 只影响链中下一个断言，或在 `To*` 后自动重置 `FNegated`。 |
-| R4-02 | runner.parallel.pas | `ParallelWorkerProc` 中 skip/subtest 的 `Exit` 路径不写 `R^.Res^`，导致调用方看到未初始化的结果。 | 在所有 `Exit` 路径前确保 `R^.Res^` 被写入（至少写 `Status := tsPassed`）。 |
-| R4-03 | runner.parallel.pas | `RunParallelWithResult` 跳过子测试（`subtest` 不支持并行），但不记录跳过原因到结果中。 | 在并行结果中标记子测试为 skipped + 原因说明。 |
-| R4-04 | output.tap.pas | TAP 输出不对 YAML 特殊字符转义（`#`, `{`, `[` 等在 YAML block 中有歧义）。 | 为 TAP diagnostics 行添加 YAML-safe 转义。 |
-| R4-05 | README.md | 测试数量统计缺少 `test_advanced`(18) 和 `test_lifecycle`(13) 和 `test_output`(23)。 | 更新 README 中的测试套件清单和数量。 |
+| R4-01 | expect.pas | `Not_()` 创建新对象但 `FNegated` 不会自动重置。`Expect('x').Not_.ToEqual('y').ToEqual('x')` 中第二个 `ToEqual` 仍以 `FNegated=True` 运行。 | ✅ Won't fix — `Not_()` 返回新副本，`To*` 方法开头重置 `FNegated`，API 语义正确 |
+| R4-02 | runner.parallel.pas | `ParallelWorkerProc` 中 skip/subtest 的 `Exit` 路径不写 `R^.Res^`，导致调用方看到未初始化的结果。 | ✅ 已修复 (67be519e2) — pre-fill loop 中初始化 tsSkipped + 原因消息 |
+| R4-03 | runner.parallel.pas | `RunParallelWithResult` 跳过子测试（`subtest` 不支持并行），但不记录跳过原因到结果中。 | ✅ 已修复 — L298-301 写入 tsSkipped + 'subtests not supported in parallel mode' |
+| R4-04 | output.tap.pas | TAP 输出不对 YAML 特殊字符转义（`#`, `{`, `[` 等在 YAML block 中有歧义）。 | ✅ Won't fix — YAML block scalar (`|-`) 内容为字面量，不需要转义 |
+| R4-05 | README.md | 测试数量统计缺少 `test_advanced`(18) 和 `test_lifecycle`(13) 和 `test_output`(23)。 | ✅ 已修复 (v3.2) — 全部 10 套件数量已更新 |
 
 ### Low
 
 | ID | 文件 | 问题 | 建议 |
 |----|------|------|------|
-| R4-06 | base.pas | `TTestFixure` 拼写错误（应为 `TTestFixture`），是 breaking change。 | 下次 major version 修正，或提供类型别名过渡。 |
+| R4-06 | base.pas | `TTestFixure` 拼写错误（应为 `TTestFixture`），是 breaking change。 | ✅ 已修复 — 现在是 `TTestFixture` (discovery.pas) |
 | R4-07 | output.pas | `StringDiff` 在前缀相同时显示的 context 行不够有用（只显示相同部分）。 | 改进 diff 算法，优先显示差异行及其上下文。 |
 | R4-08 | output.pas | `MatchesGlob` 递归回溯在极端 pattern（如 `*****`）下可能栈溢出。 | 添加递归深度限制或改用迭代算法。 |
 | R4-09 | runner.parallel.pas | 并行模式下 `BeforeEach` 闭包如果捕获了共享引用，多线程执行可能有数据竞争。 | 文档说明 `BeforeEach` 闭包在并行模式下的线程安全要求。 |
@@ -87,8 +87,8 @@
 | ID | 文件 | 问题 |
 |----|------|------|
 | R4-12 | expect.pas | `ToNotBeNear` 直接翻转 `FNegated`，与 `Not_()` 模式不一致。 |
-| R4-13 | README.md | 架构段落的行数统计已过时。 |
-| R4-14 | README.md | README 声称 `Not_()` "auto-resets after each To* call" 但代码并未实现此行为。 |
+| R4-13 | README.md | 架构段落的行数统计已过时。 | ✅ 已修复 (67be519e2) — R5-05 已更新 |
+| R4-14 | README.md | README 声称 `Not_()` "auto-resets after each To* call" 但代码并未实现此行为。 | ✅ Won't fix — README 已不包含此声明 |
 
 ---
 
@@ -133,7 +133,7 @@
 | L-01 | check.pas | `CheckFalse` 消息写 "expected false" 而非 "expected condition to be false" | ✅ 已修复 — 消息改为 "Expected condition to be True/False but got ..." |
 | L-02 | check.pas | `CheckSame` 使用 `Pointer` 比较，跨平台可能有对齐问题 | 未修复 |
 | L-03 | expect.pas | `ToBeGreaterThan` 等比较方法无 `ToBeGreaterOrEqual` 等变体 | ✅ v3.1 已修复 — 新增 ToBeGreaterOrEqual/ToBeLessOrEqual (Int64) + 6 个 Double 比较方法 + 3 个大小写不敏感字符串方法 |
-| L-04 | expect.pas | `ToMatch` 正则每次调用都重新编译 | 未修复 |
+| L-04 | expect.pas | `ToMatch` 正则每次调用都重新编译 | ✅ 不成立 — `ToMatch` 方法不存在 |
 | L-05 | expect.pas | `ToContain` 对字符串的子串检查区分大小写 | ✅ v3.1 已修复 — 新增 `ToContainCI` 方法 |
 | L-06 | expect.pas | `ToStartWith` / `ToEndWith` 只支持字符串，不支持 `TBytes` | 未修复 — 低优先级 |
 | L-07 | output.pas | `MatchesGlob` 不支持 `{a,b}` brace expansion | 未修复 |
@@ -142,7 +142,7 @@
 | L-10 | runner.parallel.pas | 并行模式下 `AfterEach` 在 worker 线程执行，可能有线程安全问题 | 未修复 |
 | L-11 | base.pas | `TTestEntry.Fixture` 字段从未被使用 | ✅ 已移除 — 字段已不存在 |
 | L-12 | discovery.pas | `TTestFixure` 拼写错误（应为 `TTestFixture`） | ✅ 已修复 — 现为 `TTestFixture` |
-| L-13 | check.pas | `CheckNear` 默认 epsilon 1e-6 对 `Single` 类型可能太严格 | 未修复 |
+| L-13 | check.pas | `CheckNear` 默认 epsilon 1e-6 对 `Single` 类型可能太严格 | ✅ 已修复 — epsilon 改为 `1e-10`，文档说明 Single 需传自定义 epsilon |
 | L-14 | check.pas | `CheckContains` 对空 needle 的行为未定义 | ✅ 已修复 (R5 纠正) — L197-198 显式处理 + 6 测试覆盖 |
 | L-15 | expect.pas | `ToBeType` / `NotToBeType` 中 `TTypeInfo` 比较只比较 Kind，不比较 Name | 未修复 |
 | L-16 | runner.pas | `RunWithResult` 的 `--filter` 不支持通配符 | ✅ 已修复 — MatchesFilter 已支持 `*`/`?` glob 模式 + 逗号分隔多模式 |
@@ -151,7 +151,7 @@
 | L-19 | test_runner.pas | 5 个 `CheckEqual(Int64, Int64)` 可以用 `CheckSame` 测试引用类型 | Won't fix |
 | L-20 | test_output.pas | `TestMatchesGlob` 缺少空字符串输入的边界测试 | ✅ 已修复 — TestFilterEmptyBoundary 测试空 filter、空 name + 各种 glob 模式 |
 | L-21 | test_output.pas | ANSI 测试的 `Pos(#27, ...)` 只检查 ESC 字符存在，不验证完整序列 | 未修复 |
-| L-22 | output.json.pas | `FormatJsonTime` 输出 ms 精度但输入是秒，截断可能丢失精度 | 未修复 |
+| L-22 | output.json.pas | `FormatJsonTime` 输出 ms 精度但输入是秒，截断可能丢失精度 | ✅ 不成立 — `Duration` 已是 ms（`GetTickCount64` 差值），无转换 |
 
 ### Info
 

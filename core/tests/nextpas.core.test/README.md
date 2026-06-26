@@ -11,12 +11,12 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 | `test_assertions` | Check* 过程式断言 API | 47 |
 | `test_expect` | IExpectation 流式断言 API | 92 |
 | `test_mock` | TMock 录制/验证/返回值/参数匹配 | 53 |
-| `test_output` | ANSI、StatusDot、filter、timeout、JUnit/TAP/JSON 格式化 | 60 |
-| `test_runner` | TTestRunner 多 suite、lifecycle、subtest、timeout、空 suite | ~25 |
-| `test_lifecycle` | TestTable、TTestClosure、lifecycle 组合、facade 符号完整性 | 13 |
-| `test_parallel` | 并行执行、lifecycle、retry、skip、MaxParallelWorkers 批次调度 | ~15 |
-| `test_diagnostics` | 错误诊断、stack trace、Double 比较、Error vs Failure | 17 |
-| `test_advanced` | RTTI discovery、retry、TAP/JSON 输出格式 | 12 |
+| `test_output` | ANSI、StatusDot、filter、timeout、JUnit/TAP/JSON 格式化 | 61 |
+| `test_runner` | TTestRunner 多 suite、lifecycle、subtest、timeout、空 suite | 31 |
+| `test_lifecycle` | TestTable、TTestClosure、lifecycle 组合、facade 符号完整性 | 34 |
+| `test_parallel` | 并行执行、lifecycle、retry、skip、MaxParallelWorkers 批次调度 | 36 |
+| `test_diagnostics` | 错误诊断、stack trace、Double 比较、Error vs Failure | 15+2i |
+| `test_advanced` | RTTI discovery、retry、TAP/JSON 输出格式 | 19 |
 | `test_subtests` | 子测试嵌套、ITestContext、failure 传播、AfterEach 失败、cleanup | 19 |
 
 ## 运行方式
@@ -65,3 +65,9 @@ core/src/nextpas.core.testing.pas           ← v1 兼容层（deprecated）
 - **批次调度**: `MaxParallelWorkers` 配置并行上限，分批 spawn+join
 - **Expect API 扩展**: `ToBeGreaterOrEqual`/`ToBeLessOrEqual` (Int64)、5 个 Double 比较方法、3 个大小写不敏感字符串方法
 - **Mock 参数验证**: `CalledWith`/`CalledExactlyWith` 比较所有调用参数
+
+## v3.2 改进
+
+- **CheckTrue/False 消息改进**: "Expected condition to be True/False but got ..."
+- **TestFilterEmptyBoundary**: 空 filter、空 name + glob 边界测试（L-20）
+- **Findings 清理**: R1-R5 共 57 项 findings，40 项已解决，剩余 17 项为 Info/Won't Fix

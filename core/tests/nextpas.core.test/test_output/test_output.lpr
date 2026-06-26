@@ -286,23 +286,6 @@ begin
   CheckTrue(MatchesFilter(''), '* matches empty');
   SetTestFilter('');
 end;
-procedure TestFilterEmptyBoundary; { L-20: empty string boundary }
-begin
-  Inc(GTestsRun);
-  { Empty filter = match everything }
-  SetTestFilter('');
-  CheckTrue(MatchesFilter(''), 'empty filter matches empty name');
-  CheckTrue(MatchesFilter('anything'), 'empty filter matches any name');
-  { Empty name with various patterns }
-  SetTestFilter('*');
-  CheckTrue(MatchesFilter(''), '* matches empty name');
-  SetTestFilter('**');
-  CheckTrue(MatchesFilter(''), '** matches empty name');
-  SetTestFilter('a*');
-  CheckFalse(MatchesFilter(''), 'a* does not match empty name');
-  SetTestFilter('');
-end;
-
 
 procedure TestFilterEmptyBoundary; { L-20: empty string boundary }
 begin
