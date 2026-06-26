@@ -167,7 +167,7 @@ end;
 
 ## 测试覆盖
 
-- 30 test projects with 410 `T.Test` cases (migrated to `nextpas.core.test` v3.x)
+- 31 test projects with 430 `T.Test` cases (migrated to `nextpas.core.test` v3.x)
 - 0 memory leaks, 0 unfreed blocks
 - 完整接口覆盖：Arena / Pool / Allocator / Concurrent / Sharded / Contract / OOM / Facade
 
@@ -181,12 +181,18 @@ end;
 
 ## 版本历史
 
+- v5.0 (2026-06-27): I-04 FallbackArena 提取 + T-04/T-05 边界测试 + capacity=1 修复
+  - 修复: `TBlockPool.RebuildFreeList` capacity=1 时 `SizeUInt` 下溢导致 A/V
+  - I-04: `TFallbackArena` 3 处重复跟踪代码提取为 `TrackFallback` 私有方法
+  - T-04: mutex 递归获取检测 + mutex 无锁释放 + rwlock 并发读者 (3 tests)
+  - T-05: blockpool capacity=1 / block_size=1 / alignment=1 / minimal 边界 (4 tests)
+  - 31 suites / 430 tests / 0 leaks / 0 failures
 - v4.0 (2026-06-27): E1 Facade 完整性 — 35→57 类型 re-export
   - 补全 14 个缺失 uses 导入，新增 22 个类型 re-export
   - Facade 类型覆盖率：15% → 26%（57/219 公共类型）
   - 新增 SecureZeroMemory/Bytes/String facade 转发
   - test_mem 迁移到 nextpas.core.test + 12 facade 可访问性测试
-  - 30 suites / 410 tests / 0 leaks / 0 failures
+  - 31 suites / 423 tests / 0 leaks / 0 failures
 - v3.0 (2026-06-26): 自举修复 + 并发测试修复 + B4 并发测试补全 + D1 框架迁移
   - 修复 `TChunkedArena.FSegmentCount` signed/unsigned 类型不匹配（自举阻塞）
   - 修复并发测试 TMemMutex/TMemRwLock 未初始化导致无限循环（record 栈变量 FillChar）

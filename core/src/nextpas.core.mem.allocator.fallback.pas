@@ -97,6 +97,7 @@ type
     FFallbackPtrs: array of Pointer;
     FFallbackCount: SizeInt;
     FTotalFallbacks: SizeUInt;
+    procedure TrackFallback(APtr: Pointer);
   public
     constructor Create(AArena: IArena; AFallback: IAllocator);
     destructor Destroy; override;
@@ -313,22 +314,26 @@ begin
   inherited Destroy;
 end;
 
+procedure TFallbackArena.TrackFallback(APtr: Pointer);
+begin
+  if FFallbackCount >= Length(FFallbackPtrs) then begin
+    if Length(FFallbackPtrs) = 0 then
+      SetLength(FFallbackPtrs, 16)
+    else
+      SetLength(FFallbackPtrs, Length(FFallbackPtrs) * 2);
+  end;
+  FFallbackPtrs[FFallbackCount] := APtr;
+  Inc(FFallbackCount);
+  Inc(FTotalFallbacks);
+end;
+
 function TFallbackArena.Alloc(ASize: SizeUInt): Pointer;
 begin
   Result := FArena.Alloc(ASize);
   if Result = nil then begin
     Result := FFallback.GetMem(ASize);
-    if Result <> nil then begin
-      if FFallbackCount >= Length(FFallbackPtrs) then begin
-        if Length(FFallbackPtrs) = 0 then
-          SetLength(FFallbackPtrs, 16)
-        else
-          SetLength(FFallbackPtrs, Length(FFallbackPtrs) * 2);
-      end;
-      FFallbackPtrs[FFallbackCount] := Result;
-      Inc(FFallbackCount);
-      Inc(FTotalFallbacks);
-    end;
+    if Result <> nil then
+      TrackFallback(Result);
   end;
 end;
 
@@ -337,17 +342,8 @@ begin
   Result := FArena.AllocAligned(ASize, AAlign);
   if Result = nil then begin
     Result := FFallback.AllocAligned(ASize, AAlign);
-    if Result <> nil then begin
-      if FFallbackCount >= Length(FFallbackPtrs) then begin
-        if Length(FFallbackPtrs) = 0 then
-          SetLength(FFallbackPtrs, 16)
-        else
-          SetLength(FFallbackPtrs, Length(FFallbackPtrs) * 2);
-      end;
-      FFallbackPtrs[FFallbackCount] := Result;
-      Inc(FFallbackCount);
-      Inc(FTotalFallbacks);
-    end;
+    if Result <> nil then
+      TrackFallback(Result);
   end;
 end;
 
@@ -356,17 +352,8 @@ begin
   Result := FArena.AllocZeroed(ASize);
   if Result = nil then begin
     Result := FFallback.AllocMem(ASize);
-    if Result <> nil then begin
-      if FFallbackCount >= Length(FFallbackPtrs) then begin
-        if Length(FFallbackPtrs) = 0 then
-          SetLength(FFallbackPtrs, 16)
-        else
-          SetLength(FFallbackPtrs, Length(FFallbackPtrs) * 2);
-      end;
-      FFallbackPtrs[FFallbackCount] := Result;
-      Inc(FFallbackCount);
-      Inc(FTotalFallbacks);
-    end;
+    if Result <> nil then
+      TrackFallback(Result);
   end;
 end;
 

@@ -235,11 +235,12 @@ begin
   // 建立 intrusive free-list：block0 -> block1 -> ... -> nil
   LPtr := PByte(FBuffer);
   FFreeHead := LPtr;
-  for I := 0 to FCapacity - 2 do
-  begin
-    PPointer(LPtr)^ := Pointer(LPtr + FBlockSize);
-    Inc(LPtr, FBlockSize);
-  end;
+  if FCapacity > 1 then
+    for I := 0 to FCapacity - 2 do
+    begin
+      PPointer(LPtr)^ := Pointer(LPtr + FBlockSize);
+      Inc(LPtr, FBlockSize);
+    end;
   PPointer(LPtr)^ := nil;
 end;
 
