@@ -578,7 +578,8 @@ begin
     (AKind = tkOverrideKeyword) or (AKind = tkAbstractKeyword) or
     (AKind = tkStaticKeyword) or (AKind = tkDynamicKeyword) or
     (AKind = tkReintroduceKeyword) or (AKind = tkDeprecatedKeyword) or
-    (AKind = tkPlatformKeyword) or (AKind = tkExperimentalKeyword);
+    (AKind = tkPlatformKeyword) or (AKind = tkExperimentalKeyword) or
+    (AKind = tkForwardKeyword);
 end;
 
 function IsOperatorNameToken(AKind: TTokenKind): Boolean;
@@ -1771,7 +1772,7 @@ begin
         begin
           Inc(ACursor);
           if (ACursor < ALexer.TokenCount) and
-            (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
+            IsMethodNameToken(CurrentToken(ALexer, ACursor).Kind) then
           begin
             NameNode.FText := NameNode.FText + '.' +
               CurrentToken(ALexer, ACursor).Lexeme;
@@ -2558,7 +2559,17 @@ begin
                      tkClassKeyword, tkInterfaceKeyword]) and
                     ((ACursor <= 0) or
                      (ALexer.TokenAt(ACursor - 1).Kind <> tkOfKeyword)) then
-                    Inc(Nesting)
+                  begin
+                    if (CurrentToken(ALexer, ACursor).Kind = tkClassKeyword) and
+                      (ACursor + 1 < ALexer.TokenCount) and
+                      (ALexer.TokenAt(ACursor + 1).Kind in
+                        [tkFunctionKeyword, tkProcedureKeyword,
+                         tkConstructorKeyword, tkDestructorKeyword,
+                         tkOperatorKeyword]) then
+                      { class as method modifier, not type declaration }
+                    else
+                      Inc(Nesting);
+                  end
                   else if (CurrentToken(ALexer, ACursor).Kind = tkEndKeyword) and
                     (Nesting > 0) then
                     Dec(Nesting);
@@ -2715,7 +2726,17 @@ begin
                      tkClassKeyword, tkInterfaceKeyword]) and
                     ((ACursor <= 0) or
                      (ALexer.TokenAt(ACursor - 1).Kind <> tkOfKeyword)) then
-                    Inc(Nesting)
+                  begin
+                    if (CurrentToken(ALexer, ACursor).Kind = tkClassKeyword) and
+                      (ACursor + 1 < ALexer.TokenCount) and
+                      (ALexer.TokenAt(ACursor + 1).Kind in
+                        [tkFunctionKeyword, tkProcedureKeyword,
+                         tkConstructorKeyword, tkDestructorKeyword,
+                         tkOperatorKeyword]) then
+                      { class as method modifier, not type declaration }
+                    else
+                      Inc(Nesting);
+                  end
                   else if (CurrentToken(ALexer, ACursor).Kind = tkEndKeyword) and
                     (Nesting > 0) then
                     Dec(Nesting);
