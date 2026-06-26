@@ -4,6 +4,9 @@ unit nextpas.core.mem.base;
 
 interface
 
+uses
+  nextpas.core.base;
+
 const
   MEM_DEFAULT_ALIGN = SizeOf(Pointer);
   MEM_CACHE_LINE_SIZE = 64;

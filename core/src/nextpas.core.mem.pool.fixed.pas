@@ -5,6 +5,7 @@ unit nextpas.core.mem.pool.fixed;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.base.utils,
   nextpas.core.mem.pool.base,    // IPool (decoupled from facade)
   nextpas.core.mem.allocator,    // IAllocator + GetRtlAllocator

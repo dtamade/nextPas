@@ -5,7 +5,7 @@ unit SysUtils;
 interface
 
 uses
-  nextpas.core.exception;
+  System, nextpas.core.exception;
 
 const
   PathDelim = '/';

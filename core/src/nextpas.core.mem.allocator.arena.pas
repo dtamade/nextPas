@@ -59,7 +59,7 @@ end;
 destructor TVirtualArenaAllocator.Destroy;
 begin
   TVirtualArena_Release(FArena);
-  inherited;
+  inherited Destroy;
 end;
 
 function TVirtualArenaAllocator.DoGetMem(ASize: SizeUInt): Pointer;

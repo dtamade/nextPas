@@ -10,6 +10,7 @@ unit nextpas.core.mem.pool.fixed_slab;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.mem.pool.memory_pool,
   nextpas.core.mem.allocator,
   nextpas.core.mem.intf,

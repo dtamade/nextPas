@@ -32,6 +32,7 @@ unit nextpas.core.mem.blockpool;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.mem.base,
   nextpas.core.mem.pool.base,
   nextpas.core.base.utils,

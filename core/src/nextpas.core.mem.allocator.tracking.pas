@@ -86,7 +86,7 @@ destructor TTrackingAllocator.Destroy;
 begin
   DoneCriticalSection(FLock);
   FInner := nil;
-  inherited;
+  inherited Destroy;
 end;
 
 function TTrackingAllocator.FindRecordIndex(APtr: Pointer): SizeInt;

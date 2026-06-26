@@ -5,6 +5,7 @@ unit nextpas.core.mem.arena.virtual;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.mem.base,
   nextpas.core.mem.error,
   nextpas.core.mem.arena.base,

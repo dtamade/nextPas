@@ -103,7 +103,7 @@ begin
   FAllocator := nil;
   FCapacity := 0;
   FOffset := 0;
-  inherited;
+  inherited Destroy;
 end;
 
 function TLocalArena.Alloc(ASize: SizeUInt): Pointer;

@@ -23,6 +23,7 @@ unit nextpas.core.mem.pool.allocator;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.base.utils,
   nextpas.core.mem.allocator,
   nextpas.core.mem.intf,

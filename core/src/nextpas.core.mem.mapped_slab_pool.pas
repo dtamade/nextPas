@@ -6,6 +6,7 @@ unit nextpas.core.mem.mapped_slab_pool;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.base.utils, nextpas.core.mem.memory_map;
 
 type

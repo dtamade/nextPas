@@ -167,7 +167,7 @@ end;
 
 ## 测试覆盖
 
-- 30 test projects with a static count of 348 `T.Run` cases
+- 30 test projects with a static count of 354 `T.Run` cases
 - 0 memory leaks
 - 完整接口覆盖
 
