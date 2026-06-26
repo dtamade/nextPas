@@ -30,6 +30,15 @@ type
   end;
   TParamSnapshots = array of TParamSnapshot;
 
+  TPendingSignatureEntry = record
+    SymbolId: LongInt;
+    GenericName: string;
+    MethodShortName: string;
+    OwnerUnitId: string;
+    ParamNames: array of string;
+    ArgTypes: array of string;
+  end;
+
   TSemanticAnalyzer = class
   private
     FRootAst: TAstFacade;
@@ -45,14 +54,7 @@ type
     FGenericWorkCount: LongInt;
     FGenericCacheKeys: array of string;
     FGenericCacheTypeIds: array of LongInt;
-    FPendingSignatures: array of record
-      SymbolId: LongInt;
-      GenericName: string;
-      MethodShortName: string;
-      OwnerUnitId: string;
-      ParamNames: array of string;
-      ArgTypes: array of string;
-    end;
+    FPendingSignatures: array of TPendingSignatureEntry;
     FInliningStack: array of string;
     FBlockLabelCounter: LongInt;
     FCurrentBlockTerminated: Boolean;
