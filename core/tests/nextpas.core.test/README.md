@@ -58,7 +58,7 @@ core/src/nextpas.core.testing.pas           ← v1 兼容层（deprecated）
 
 ## 审计记录
 
-`test-findings.md` 记录了 R1-R5 五轮审计发现及修复状态。
+`test-findings.md` 记录了 R1-R6 六轮审计发现及修复状态。R6 共 70 项（44 已修 + 2 文档化 + 24 不需修复）。
 
 ## v3.1 新特性
 
