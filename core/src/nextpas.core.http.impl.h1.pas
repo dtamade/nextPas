@@ -1312,7 +1312,7 @@ begin
     LOutbound := NewH1OutboundBuffer;
     LResponseWriter := LOutbound as IWriter;
     LW := TH1ResponseWriter.Create(LResponseWriter, LHijackConn,
-      LReq.Method = hmHead, not LKeepAlive);
+      LReq.Method = hmHead);
     if LKeepAlive and (FParser.GetHttpVersion = hvHttp10) then
       LW.GetHeaders.SetHeader('connection', 'keep-alive');
     if not LKeepAlive then
@@ -2286,35 +2286,38 @@ begin
     LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive,
       LResponseStarted);
   except
-    if LPooled then
+    on E: Exception do
     begin
-      LConn.Close;
-      if (not LRequestWriteComplete) and (ExceptObject is EHttpError) then
-        raise;
-      if LResponseStarted then
-        raise;
-      if not IsRetrySafeRequest(AReq) then
-        raise;
-      if (AReq.Body <> nil) and (AReq.ContentLength > 0) and (LBodyStream = nil) then
-        raise;
-      RewindRetryBody(AReq, LBodyStream, LBodyStartPosition);
-      LConn := TcpConnect(LHost, LPort);
-      try
-        ApplyClientDeadline(LConn, LRequestDeadline);
-        LRequestWriteComplete := False;
-        WriteRequest(LConn as IWriter, AReq, LAutoHost);
-        LRequestWriteComplete := True;
-        LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive,
-          LResponseStarted);
-      except
+      if LPooled then
+      begin
+        LConn.Close;
+        if (not LRequestWriteComplete) and (E is EHttpError) then
+          raise;
+        if LResponseStarted then
+          raise;
+        if not IsRetrySafeRequest(AReq) then
+          raise;
+        if (AReq.Body <> nil) and (AReq.ContentLength > 0) and (LBodyStream = nil) then
+          raise;
+        RewindRetryBody(AReq, LBodyStream, LBodyStartPosition);
+        LConn := TcpConnect(LHost, LPort);
+        try
+          ApplyClientDeadline(LConn, LRequestDeadline);
+          LRequestWriteComplete := False;
+          WriteRequest(LConn as IWriter, AReq, LAutoHost);
+          LRequestWriteComplete := True;
+          LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive,
+            LResponseStarted);
+        except
+          LConn.Close;
+          raise;
+        end;
+      end
+      else
+      begin
         LConn.Close;
         raise;
       end;
-    end
-    else
-    begin
-      LConn.Close;
-      raise;
     end;
   end;
 
