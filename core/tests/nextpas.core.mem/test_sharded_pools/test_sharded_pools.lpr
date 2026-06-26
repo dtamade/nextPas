@@ -63,6 +63,13 @@ type
     Failure: string;
   end;
 
+  PSlabAlignedWorkerData = ^TSlabAlignedWorkerData;
+  TSlabAlignedWorkerData = record
+    Pool: TSlabPoolSharded;
+    StartFlag: PLongInt;
+    Failure: string;
+  end;
+
 var
   T: TTestRunner;
   GBlockPool: TShardedBlockPool = nil;
@@ -408,6 +415,102 @@ begin
   end;
 end;
 
+{** B4-1: TestShardedBlockPoolStatsAggregated — 多线程竞争后统计聚合正确。 *}
+procedure TestShardedBlockPoolStatsAggregated;
+var
+  LPool: TShardedBlockPool;
+  LThreads: array[0..THREAD_COUNT - 1] of TPlatformThreadRecord;
+  LThreadData: array[0..THREAD_COUNT - 1] of TBlockPoolWorkerData;
+  LStartFlag: LongInt;
+  LIndex: Integer;
+begin
+  LPool := TShardedBlockPool.Create(64, THREAD_COUNT * 4, 4);
+  try
+    LStartFlag := 0;
+    for LIndex := 0 to High(LThreads) do
+    begin
+      LThreadData[LIndex].Pool := LPool;
+      LThreadData[LIndex].StartFlag := @LStartFlag;
+      LThreadData[LIndex].Failure := '';
+      platform_thread_spawn(LThreads[LIndex], @BlockPoolWorkerProc, @LThreadData[LIndex]);
+    end;
+
+    LStartFlag := 1;
+    for LIndex := 0 to High(LThreads) do
+      platform_thread_wait(LThreads[LIndex]);
+
+    for LIndex := 0 to High(LThreads) do
+      Check(LThreadData[LIndex].Failure = '', 'stats worker should not fail');
+    CheckEqual(Int64(0), Int64(LPool.InUse), 'InUse should be 0 after all releases');
+    CheckEqual(Int64(LPool.Capacity), Int64(LPool.Available), 'Available should equal Capacity after contention');
+    Check(LPool.BlockSize = 64, 'BlockSize should be unchanged after contention');
+    Check(LPool.ShardCount = 4, 'ShardCount should be unchanged after contention');
+  finally
+    TObject(LPool).Free;
+  end;
+end;
+
+{** B4-2: TestShardedSlabAllocAlignedContention — AllocAligned 并发安全。 *}
+function SlabAlignedWorkerProc(AArg: Pointer): Pointer; cdecl;
+var
+  LData: PSlabAlignedWorkerData;
+  LAlign: SizeUInt;
+  LIndex: Integer;
+  LPtr: Pointer;
+begin
+  LData := PSlabAlignedWorkerData(AArg);
+  WaitForStartFlag(LData^.StartFlag);
+
+  try
+    for LIndex := 0 to ITERATION_COUNT - 1 do
+    begin
+      LAlign := 8 shl (LIndex mod 3);  { 8, 16, 32 — all powers of two }
+      LPtr := LData^.Pool.AllocAligned(32 + (LIndex mod 32), LAlign);
+      if LPtr = nil then
+        raise Exception.Create('SlabAligned: AllocAligned returned nil');
+      if PtrUInt(LPtr) mod LAlign <> 0 then
+        raise Exception.Create('SlabAligned: pointer not aligned');
+      PByte(LPtr)^ := Byte(LIndex);
+      LData^.Pool.FreeAligned(LPtr);
+    end;
+  except
+    on E: Exception do
+      LData^.Failure := E.Message;
+  end;
+  Result := nil;
+end;
+
+procedure TestShardedSlabAllocAlignedContention;
+var
+  LPool: TSlabPoolSharded;
+  LThreads: array[0..THREAD_COUNT - 1] of TPlatformThreadRecord;
+  LThreadData: array[0..THREAD_COUNT - 1] of TSlabAlignedWorkerData;
+  LStartFlag: LongInt;
+  LIndex: Integer;
+begin
+  LPool := TSlabPoolSharded.Create(8192, 4);
+  try
+    LStartFlag := 0;
+    for LIndex := 0 to High(LThreads) do
+    begin
+      LThreadData[LIndex].Pool := LPool;
+      LThreadData[LIndex].StartFlag := @LStartFlag;
+      LThreadData[LIndex].Failure := '';
+      platform_thread_spawn(LThreads[LIndex], @SlabAlignedWorkerProc, @LThreadData[LIndex]);
+    end;
+
+    LStartFlag := 1;
+    for LIndex := 0 to High(LThreads) do
+      platform_thread_wait(LThreads[LIndex]);
+
+    for LIndex := 0 to High(LThreads) do
+      Check(LThreadData[LIndex].Failure = '', 'slab aligned worker should not fail: ' + LThreadData[LIndex].Failure);
+    Check(LPool.Stats.FallbackAllocCount = 0, 'aligned contention should stay in slab fast path');
+  finally
+    TObject(LPool).Free;
+  end;
+end;
+
 procedure TestShardedSlabRemoteReleaseClearsDiagnostics;
 var
   LPool: TSlabPoolSharded;
@@ -475,5 +578,7 @@ begin
   T.Run('sharded slab ownership diagnostics reject interior pointer', @TestShardedSlabOwnershipDiagnosticsRejectInteriorPointer);
   T.Run('sharded slab release and realloc reject interior pointer', @TestShardedSlabReleaseAndReallocRejectInteriorPointer);
   T.Run('sharded slab remote release clears diagnostics', @TestShardedSlabRemoteReleaseClearsDiagnostics);
+  T.Run('B4-1 stats aggregated after contention', @TestShardedBlockPoolStatsAggregated);
+  T.Run('B4-2 sharded slab aligned contention', @TestShardedSlabAllocAlignedContention);
   T.Summary;
 end.

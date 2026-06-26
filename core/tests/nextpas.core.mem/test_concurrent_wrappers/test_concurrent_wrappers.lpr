@@ -718,6 +718,71 @@ begin
   end;
 end;
 
+{**
+ * B4-3: Multiple mark/restore cycles under concurrent Alloc.
+ *
+ * 多次 SaveMark/RestoreToMark 循环 + 并发 Alloc，验证正确性。
+ *}
+procedure TestArenaConcurrentMultipleMarkRestore;
+const
+  ALLOC_THREADS = 4;
+  MARK_CYCLES = 16;
+  STRESS_ARENA_SIZE = 256 * 1024;
+var
+  LArena: TArenaConcurrent;
+  LAllocWorkers: array[0..ALLOC_THREADS - 1] of TPlatformThreadRecord;
+  LAllocWorkerData: array[0..ALLOC_THREADS - 1] of TArenaAllocStressWorkerData;
+  LStartFlag: LongInt;
+  LIndex, LCycle: Integer;
+  LMark: TArenaMark;
+  LFailure: string;
+begin
+  LArena := TArenaConcurrent.Create(STRESS_ARENA_SIZE);
+  try
+    for LCycle := 0 to MARK_CYCLES - 1 do
+    begin
+      LStartFlag := 0;
+
+      for LIndex := 0 to High(LAllocWorkers) do
+      begin
+        LAllocWorkerData[LIndex].Arena := LArena;
+        LAllocWorkerData[LIndex].StartFlag := @LStartFlag;
+        LAllocWorkerData[LIndex].AllocCount := 0;
+        LAllocWorkerData[LIndex].Failure := '';
+        platform_thread_spawn(LAllocWorkers[LIndex], @ArenaAllocStressWorkerProc,
+          @LAllocWorkerData[LIndex]);
+      end;
+
+      LStartFlag := 1;
+
+      { Let alloc workers run briefly, then mark and restore }
+      platform_thread_sleep_ns(500000);
+      LMark := LArena.SaveMark;
+      LArena.RestoreToMark(LMark);
+
+      for LIndex := 0 to High(LAllocWorkers) do
+        platform_thread_wait(LAllocWorkers[LIndex]);
+
+      LFailure := '';
+      for LIndex := 0 to High(LAllocWorkers) do
+      begin
+        if (LFailure = '') and (LAllocWorkerData[LIndex].Failure <> '') then
+          LFailure := 'cycle ' + IntToStr(LCycle) + ' worker ' + IntToStr(LIndex) + ': ' + LAllocWorkerData[LIndex].Failure;
+      end;
+
+      Check(LFailure = '', 'mark/restore cycle should not crash: ' + LFailure);
+
+      { Arena should be usable after each cycle }
+      LArena.Reset;
+    end;
+
+    { Final usability check }
+    Check(LArena.Alloc(64) <> nil, 'arena should remain usable after all mark/restore cycles');
+  finally
+    LArena.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.mem.concurrent_wrappers');
   T.Run('T-01 mutex direct', @TestMemMutexDirect);
@@ -730,5 +795,6 @@ begin
   T.Run('slab wrapper contention', @TestSlabPoolConcurrentContention);
   T.Run('R-03 Reset vs Alloc contention', @TestArenaResetVsAllocContention);
   T.Run('R-03 mark vs alloc contention', @TestArenaMarkVsAllocContention);
+  T.Run('B4-3 multiple mark/restore cycles', @TestArenaConcurrentMultipleMarkRestore);
   T.Summary;
 end.
