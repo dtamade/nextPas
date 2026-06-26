@@ -442,8 +442,6 @@ var
   LModifiedZ: Double;
   LOutlierCount: Integer;
   LDeviations: TDoubleArray;
-  LTemp: Double;
-  J: Integer;
 begin
   LMedian := Median;
 
@@ -639,7 +637,9 @@ begin
   end;
 end;
 
-{** PF-04: single-pass mean + variance for external data arrays }
+{** PF-04: compute mean + variance of external data array.
+ *  Two-pass algorithm: first pass for mean, second for sum-of-squared-deviations.
+ *  More numerically stable than single-pass sum-of-squares formula. }
 class procedure TAdvancedStats.ComputeMeanVariance(const AData: TDoubleArray;
   out AMean, AVariance: Double);
 var

@@ -293,7 +293,6 @@ var
   LName: string;
   LTimeStr: string;
   LParts: TStringArray;
-  LLower: Double;
   LMean: Double;
   LUpper: Double;
   LUnit: string;
@@ -317,7 +316,7 @@ begin
   if Length(LParts) >= 6 then
   begin
     // 6-token format: ["1.234", "us", "1.256", "us", "1.279", "us"]
-    LLower := StrToFloatDef(LParts[0], 0);
+    StrToFloatDef(LParts[0], 0); { lower bound parsed but not stored }
     LUnit := LParts[1];
     LMean := StrToFloatDef(LParts[2], 0);
     LUpper := StrToFloatDef(LParts[4], 0);
@@ -325,7 +324,7 @@ begin
   else if Length(LParts) >= 4 then
   begin
     // 4-token format: ["1.234", "1.256", "1.279", "us"]
-    LLower := StrToFloatDef(LParts[0], 0);
+    StrToFloatDef(LParts[0], 0); { lower bound parsed but not stored }
     LMean := StrToFloatDef(LParts[1], 0);
     LUpper := StrToFloatDef(LParts[2], 0);
     LUnit := LParts[3];

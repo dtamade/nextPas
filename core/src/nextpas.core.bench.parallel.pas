@@ -100,8 +100,6 @@ type
     FFunc: TBenchParallelFunc;
     FIterations: Int64;
     FElapsedNs: UInt64;
-    FStartNs: UInt64;
-    FEndNs: UInt64;
   protected
     procedure Execute; override;
   public
