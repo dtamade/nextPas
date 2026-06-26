@@ -26,9 +26,6 @@ type
     {** 计算百分位数 }
     function Percentile(const ASorted: TDoubleArray; APercent: Double): Double;
 
-    {** 计算四分位距 }
-    function ComputeIQR(const ASorted: TDoubleArray): Double;
-
     {** Shapiro-Wilk 正态性检验辅助函数 }
     function ShapiroWilkStatistic(const ASorted: TDoubleArray): Double;
 
@@ -156,6 +153,10 @@ begin
   if Length(AData) <= 1 then
     Exit(0.0);
 
+  {** NaN/Inf guard: avoid FPU exception 207 on NaN arithmetic }
+  if IsNan(AMean) or IsInfinite(AMean) then
+    Exit(0.0);
+
   // Kahan compensated summation for Sqr(x - mean)
   LSumSq := 0.0;
   LCompensation := 0.0;
@@ -206,11 +207,6 @@ begin
     Result := ASorted[LLower]
   else
     Result := ASorted[LLower] + (LIndex - LLower) * (ASorted[LUpper] - ASorted[LLower]);
-end;
-
-function TBenchStatsAnalyzer.ComputeIQR(const ASorted: TDoubleArray): Double;
-begin
-  Result := Percentile(ASorted, 75) - Percentile(ASorted, 25);
 end;
 
 function TBenchStatsAnalyzer.CountOutliers(const ASorted: TDoubleArray;
