@@ -939,6 +939,84 @@ begin
   end;
 end;
 
+{ D-2d: RwLock write contention — multiple writers on shared counter }
+type
+  PRwLockWriterData = ^TRwLockWriterData;
+  TRwLockWriterData = record
+    RwLock: ^TMemRwLock;
+    Counter: PInt64;
+    StartFlag: PLongInt;
+    Failure: string;
+  end;
+
+function RwLockWriterProc(AArg: Pointer): Pointer; cdecl;
+var
+  LData: PRwLockWriterData;
+  LRwLock: ^TMemRwLock;
+  LIndex: Integer;
+begin
+  LData := PRwLockWriterData(AArg);
+  LRwLock := LData^.RwLock;
+  WaitForStartFlag(LData^.StartFlag);
+
+  try
+    for LIndex := 0 to STRESS_ITERATION_COUNT - 1 do
+    begin
+      LRwLock^.AcquireWrite;
+      Inc(LData^.Counter^);
+      LRwLock^.ReleaseWrite;
+    end;
+  except
+    on E: Exception do
+      LData^.Failure := E.Message;
+  end;
+  Result := nil;
+end;
+
+procedure TestRwLockWriteContention;
+const
+  WRITER_COUNT = 8;
+var
+  LRwLock: TMemRwLock;
+  LWriters: array[0..WRITER_COUNT - 1] of TPlatformThreadRecord;
+  LWriterData: array[0..WRITER_COUNT - 1] of TRwLockWriterData;
+  LStartFlag: LongInt;
+  LCounter: Int64;
+  LIndex: Integer;
+  LFailure: string;
+begin
+  FillChar(LRwLock, SizeOf(LRwLock), 0);
+  LRwLock.Init;
+  LCounter := 0;
+  try
+    LStartFlag := 0;
+    for LIndex := 0 to High(LWriters) do
+    begin
+      LWriterData[LIndex].RwLock := @LRwLock;
+      LWriterData[LIndex].Counter := @LCounter;
+      LWriterData[LIndex].StartFlag := @LStartFlag;
+      LWriterData[LIndex].Failure := '';
+      platform_thread_spawn(LWriters[LIndex], @RwLockWriterProc,
+        @LWriterData[LIndex]);
+    end;
+
+    LStartFlag := 1;
+    for LIndex := 0 to High(LWriters) do
+      platform_thread_wait(LWriters[LIndex]);
+
+    LFailure := '';
+    for LIndex := 0 to High(LWriters) do
+    begin
+      if (LFailure = '') and (LWriterData[LIndex].Failure <> '') then
+        LFailure := 'writer ' + IntToStr(LIndex) + ': ' + LWriterData[LIndex].Failure;
+    end;
+    Check(LFailure = '', 'rwlock write contention should not fail: ' + LFailure);
+    Check(Int64(WRITER_COUNT * STRESS_ITERATION_COUNT) = LCounter, 'rwlock-protected counter should be exact');
+  finally
+    LRwLock.Done;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.mem.concurrent_wrappers');
   T.Test('T-01 mutex direct', @TestMemMutexDirect);
@@ -955,6 +1033,7 @@ begin
   T.Test('T-04 mutex recursive acquire raises', @TestMutexRecursiveAcquire);
   T.Test('T-04 mutex release without lock raises', @TestMutexReleaseWithoutLock);
   T.Test('T-04 rwlock multiple readers', @TestRwLockMultipleReaders);
+  T.Test('D-2d rwlock write contention', @TestRwLockWriteContention);
   T.Run;
   T.Summary;
 end.

@@ -167,7 +167,7 @@ end;
 
 ## 测试覆盖
 
-- 31 test projects with 430 `T.Test` cases (migrated to `nextpas.core.test` v3.x)
+- 31 test suites with 465 `T.Test` cases (migrated to `nextpas.core.test` v3.x)
 - 0 memory leaks, 0 unfreed blocks
 - 完整接口覆盖：Arena / Pool / Allocator / Concurrent / Sharded / Contract / OOM / Facade
 
@@ -181,6 +181,14 @@ end;
 
 ## 版本历史
 
+- v6.0 (2026-06-27): Phase D 测试覆盖 100% — 3 新测试套件 + 4 补充
+  - D-1a: `test_growing_fixed_pool` 12 tests — TGrowingFixedPool 全路径覆盖
+  - D-1b: `test_growing_block_pool` 12 tests — TGrowingBlockPool 全路径覆盖
+  - D-1c: `test_shared_memory` 8 tests — TSharedMemory 全 API 覆盖
+  - D-2a: TryGetRtlAllocator 测试 (test_allocator_foundation)
+  - D-2c: NextPowerOfTwo + NormalizeAlignment 边界测试 (test_mem_utils)
+  - D-2d: rwlock 写锁竞争 8 线程压力测试 (test_concurrent_wrappers)
+  - 31 suites / 465 tests / 0 leaks / 0 new failures
 - v5.0 (2026-06-27): I-04 FallbackArena 提取 + T-04/T-05 边界测试 + capacity=1 修复
   - 修复: `TBlockPool.RebuildFreeList` capacity=1 时 `SizeUInt` 下溢导致 A/V
   - I-04: `TFallbackArena` 3 处重复跟踪代码提取为 `TrackFallback` 私有方法
