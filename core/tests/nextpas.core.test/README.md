@@ -12,12 +12,12 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 | `test_expect` | IExpectation 流式断言 API | 92 |
 | `test_mock` | TMock 录制/验证/返回值/参数匹配 | 53 |
 | `test_output` | ANSI、StatusDot、filter、timeout、JUnit/TAP/JSON 格式化、brace expansion | 62 |
-| `test_runner` | TTestRunner 多 suite、lifecycle、subtest、timeout、空 suite | 31 |
-| `test_lifecycle` | TestTable、TTestClosure、lifecycle 组合、facade 符号完整性 | 34 |
-| `test_parallel` | 并行执行、lifecycle、retry、skip、MaxParallelWorkers 批次调度 | 36 |
-| `test_diagnostics` | 错误诊断、stack trace、Double 比较、Error vs Failure | 15+2i |
-| `test_advanced` | RTTI discovery、retry、TAP/JSON 输出格式 | 19 |
-| `test_subtests` | 子测试嵌套、ITestContext、failure 传播、AfterEach 失败、cleanup | 19 |
+| `test_runner` | TTestRunner 多 suite、lifecycle、subtest、timeout、空 suite | 34+1x |
+| `test_lifecycle` | TestTable、TTestClosure、lifecycle 组合、facade 符号完整性 | 15 |
+| `test_parallel` | 并行执行、lifecycle、retry、skip、MaxParallelWorkers 批次调度 | 8 |
+| `test_diagnostics` | 错误诊断、stack trace、Double 比较、Error vs Failure | 15 |
+| `test_advanced` | RTTI discovery、retry、TAP/JSON 输出格式 | 13 |
+| `test_subtests` | 子测试嵌套、ITestContext、failure 传播、AfterEach 失败、cleanup | 15 |
 
 ## 运行方式
 
@@ -42,7 +42,7 @@ make -C core/tests/nextpas.core.test/test_runner test
 ```
 core/src/nextpas.core.test.pas              ← Facade（re-export）
 core/src/nextpas.core.test.base.pas         ← 基础类型
-core/src/nextpas.core.test.config.pas       ← TTestConfig + 解析
+core/src/nextpas.core.test.config.pas       ← TTestConfig + IOutputSink + ANSI
 core/src/nextpas.core.test.check.pas        ← Check* 断言
 core/src/nextpas.core.test.expect.pas       ← IExpectation 流式断言
 core/src/nextpas.core.test.discovery.pas    ← RTTI 测试发现
@@ -56,25 +56,10 @@ core/src/nextpas.core.test.output.json.pas  ← JSON 输出
 core/src/nextpas.core.testing.pas           ← v1 兼容层（deprecated）
 ```
 
-## 审计记录
+## 版本历史
 
-`test-findings.md` 记录了 R1-R6 六轮审计发现及修复状态。R6 共 70 项（44 已修 + 2 文档化 + 24 不需修复）。
-
-## v3.1 新特性
-
-- **批次调度**: `MaxParallelWorkers` 配置并行上限，分批 spawn+join
-- **Expect API 扩展**: `ToBeGreaterOrEqual`/`ToBeLessOrEqual` (Int64)、5 个 Double 比较方法、3 个大小写不敏感字符串方法
-- **Mock 参数验证**: `CalledWith`/`CalledExactlyWith` 比较所有调用参数
-
-## v3.2 改进
-
-- **CheckTrue/False 消息改进**: "Expected condition to be True/False but got ..."
-- **TestFilterEmptyBoundary**: 空 filter、空 name + glob 边界测试（L-20）
-- **Findings 清理**: R1-R5 共 57 项 findings，40 项已解决，剩余 17 项为 Info/Won't Fix
-
-## v3.4 — Medium/Low 全清零
-
-- **Brace expansion**: `MatchesGlob` 支持 `{a,b}` 和嵌套 brace，`MatchesFilter` 跳过 brace 内逗号
-- **ANSI TTY 检测**: Linux 下通过 libc `isatty(1)` 检测 TTY，管道/文件自动关闭 ANSI
-- **Before/AfterEach 文档**: runner.pas 添加并行模式线程安全说明
-- **Findings**: Medium 6/6 ✅, Low 23/23 ✅, Info 15 项保留观察
+- **v3.0**: 基础框架 — 14 文件、505 测试、3-phase polish
+- **v3.1**: 批次调度 (`MaxParallelWorkers`)、Expect API 扩展（Double 比较、大小写不敏感）、Mock 参数验证
+- **v3.2**: CheckTrue/False 消息改进、空 filter 边界测试
+- **v3.4**: Brace expansion、ANSI TTY 检测、Before/AfterEach 文档
+- **v3.5**: CheckNotContains、FailUnexpected、CheckContains 统一替换、ResolveOutSink 缓存

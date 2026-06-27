@@ -1,3 +1,7 @@
+{ nextpas.core.test.config — TTestConfig, IOutputSink, ANSI helpers
+  =========================================================
+  Configuration record + output sink interface + ANSI formatting. }
+
 unit nextpas.core.test.config;
 
 {$I nextpas.core.settings.inc}
