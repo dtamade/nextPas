@@ -997,10 +997,7 @@ begin
       tsFailed:
         begin
           LOutSink.WriteLn('  ' + FormatStatusLine(tsFailed, LDisplayName, LConfig));
-          if LLastFailMsg <> '' then
-            LOutSink.WriteLn('    ' + AnsiDim(LLastFailMsg, LConfig))
-          else
-            LOutSink.WriteLn('    ' + AnsiDim('(assertion failed)', LConfig));
+          LOutSink.WriteLn('    ' + FormatFailDetail(LLastFailMsg, LConfig));
         end;
       tsSkipped:
         begin

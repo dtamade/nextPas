@@ -46,6 +46,13 @@ function FormatStatusLine(AStatus: TTestStatus; const AName: string;
 function FormatStatusLine(AStatus: TTestStatus; const AName: string;
   const AReason: string; const AConfig: TTestConfig): string; overload;
 
+{ ── FormatFailDetail ──────────────────────────────────────────────────────── }
+{ Returns the indented failure detail line: AnsiDim(msg) or AnsiDim('(assertion failed)')
+  if msg is empty. }
+
+function FormatFailDetail(const AMsg: string;
+  const AConfig: TTestConfig): string;
+
 { ── Test Filter ───────────────────────────────────────────────────────────── }
 
 procedure SetTestFilter(const APattern: string);
@@ -288,6 +295,16 @@ function FormatStatusLine(AStatus: TTestStatus; const AName: string;
   const AReason: string; const AConfig: TTestConfig): string;
 begin
   Result := FormatStatusLine(AStatus, AName, AConfig) + ' -- ' + AReason;
+end;
+
+{ FormatFailDetail — failure message with assertion-failed fallback }
+
+function FormatFailDetail(const AMsg: string; const AConfig: TTestConfig): string;
+begin
+  if AMsg <> '' then
+    Result := AnsiDim(AMsg, AConfig)
+  else
+    Result := AnsiDim('(assertion failed)', AConfig);
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }

@@ -458,10 +458,7 @@ begin
         begin
           R^.Fail^ := R^.Fail^ + 1;
           LOutSink.WriteLn('  ' + FormatStatusLine(tsFailed, R^.Entry.Name, LConfig));
-          if LFailMsg <> '' then
-            LOutSink.WriteLn('    ' + AnsiDim(LFailMsg, LConfig))
-          else
-            LOutSink.WriteLn('    ' + AnsiDim('(assertion failed)', LConfig));
+          LOutSink.WriteLn('    ' + FormatFailDetail(LFailMsg, LConfig));
         end;
       tsSkipped:
         begin
