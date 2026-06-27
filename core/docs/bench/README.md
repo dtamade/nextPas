@@ -171,6 +171,18 @@ end.
 
 并行模式自动禁用内存追踪（MemoryManager hook 全局唯一，无法线程安全地与并行执行共存）。会输出 WARNING 提示。
 
+## 质量保证
+
+| 指标 | 状态 |
+|------|------|
+| 测试套件 | 12 |
+| 框架级测试 | 221 |
+| 框架 | 全部使用 `nextpas.core.test` |
+| heaptrc | 8 套件零泄漏，1 套件全局单例可接受 |
+| NaN 安全 | `SortDoubleArray` 先分区 NaN 再排序 |
+| 统计防护 | `Variance`/`Skewness`/`Kurtosis` NaN/Inf guard |
+| `GetData` 语义 | 返回 `Copy(FData)` 独立副本 |
+
 ## 测试
 
 ```bash

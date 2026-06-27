@@ -68,6 +68,27 @@ begin
     LStr := LStr + IntToStr(i) + ',';
 end;
 
+{ Loop 基准函数（TBenchLoopFunc 签名） }
+procedure BenchFastLoop(AN: Int64);
+var
+  i: Int64;
+  LSum: Int64;
+begin
+  LSum := 0;
+  for i := 1 to AN do
+    LSum := LSum + i;
+end;
+
+procedure BenchMediumLoop(AN: Int64);
+var
+  i: Int64;
+  LSum: Double;
+begin
+  LSum := 0;
+  for i := 1 to AN do
+    LSum := LSum + Sin(i * 0.001);
+end;
+
 { 基准函数：使用上下文 }
 procedure BenchWithContext(const ACtx: IBenchContext);
 var
@@ -514,6 +535,50 @@ begin
   end;
 end;
 
+{ Run + Summary 便利 API 测试 }
+procedure TestRun_Summary;
+var
+  LRunner: TBenchRunner;
+  LConfig: TBenchConfig;
+begin
+  LRunner := TBenchRunner.Create;
+  try
+    LConfig := LRunner.GetConfig;
+    LConfig.MinDurationNs := TDuration.FromMilliseconds(5).AsNanoseconds;
+    LConfig.MaxIterations := 5000;
+    LConfig.MinSamples := 3;
+    LConfig.WarmupIterations := 0;
+    LConfig.EnableMemoryTracking := False;
+    LConfig.Quiet := True;
+    LRunner.SetConfig(LConfig);
+
+    LRunner.Run('FastLoop', @BenchFastLoop);
+    Check(LRunner.GetResultCount = 1, 'Run accumulates 1 result');
+    Check(LRunner.GetResults[0].NsPerOp > 0, 'Run NsPerOp > 0');
+
+    LRunner.Run('MediumLoop', @BenchMediumLoop);
+    Check(LRunner.GetResultCount = 2, 'Run accumulates 2 results');
+
+    LRunner.Summary;
+  finally
+    LRunner.Free;
+  end;
+end;
+
+{ Run with Summary on empty runner }
+procedure TestRun_Summary_Empty;
+var
+  LRunner: TBenchRunner;
+begin
+  LRunner := TBenchRunner.Create;
+  try
+    LRunner.Summary;
+    Check(LRunner.GetResultCount = 0, 'Empty Summary no crash');
+  finally
+    LRunner.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.bench.runner');
   T.Test('TBenchContext lifecycle', @TestTBenchContext);
@@ -528,6 +593,8 @@ begin
   T.Test('MeasureNs', @TestMeasureNs);
   T.Test('ClearResults', @TestClearResults);
   T.Test('RunAll statistics completeness (TG-12)', @TestRunAll_StatisticsComplete);
+  T.Test('Run + Summary', @TestRun_Summary);
+  T.Test('Summary on empty runner', @TestRun_Summary_Empty);
   T.Run;
   T.Summary;
 end.
