@@ -1378,6 +1378,55 @@ begin
   DeleteFile(LPath);
 end;
 
+procedure TestCompareTwoResults;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+  LComparison: TBenchComparison;
+begin
+  LSuite := CreateFastSuite('CompareTest');
+  LSuite.Add('Fast', @BenchFast);
+  LSuite.Add('Medium', @BenchMedium);
+  LSuite.CollectRawSamples;
+  LSuite.SetMinSamples(5);
+  LSuite.SetQuiet(True);
+  LResults := LSuite.Run;
+
+  { 比较 Fast vs Medium — Fast 应该更快 (ratio < 1) }
+  LComparison := LResults.CompareTwoResults('Fast', 'Medium');
+  Check(LComparison.Ratio < 1.0, 'CompareTwoResults: Fast/Medium ratio < 1');
+  Check(LComparison.CurrentNsPerOp > 0, 'CompareTwoResults: CurrentNsPerOp > 0');
+  Check(LComparison.BaselineNsPerOp > 0, 'CompareTwoResults: BaselineNsPerOp > 0');
+
+  { 有 RawSamples 时应有统计检验 }
+  Check(LComparison.HasStatisticalTest, 'CompareTwoResults: HasStatisticalTest with RawSamples');
+  Check(LComparison.ApproximatePValue > 0, 'CompareTwoResults: PValue > 0');
+  Check(LComparison.ApproximatePValue <= 1.0, 'CompareTwoResults: PValue <= 1');
+
+  { 不存在的 benchmark 名称 }
+  LComparison := LResults.CompareTwoResults('Fast', 'NonExistent');
+  Check(LComparison.Ratio = 1.0, 'CompareTwoResults: missing baseline returns ratio=1');
+end;
+
+procedure TestGetEnvironment;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+  LEnv: TBenchEnvironment;
+begin
+  LSuite := CreateFastSuite('EnvTest');
+  LSuite.Add('Fast', @BenchFast);
+  LSuite.SetQuiet(True);
+  LResults := LSuite.Run;
+
+  LEnv := LResults.GetEnvironment;
+  Check(LEnv.OS <> '', 'GetEnvironment: OS is non-empty');
+  Check(LEnv.CPU <> '', 'GetEnvironment: CPU is non-empty');
+  Check(LEnv.Cores > 0, 'GetEnvironment: Cores > 0');
+  Check(LEnv.FPCVersion <> '', 'GetEnvironment: FPCVersion is non-empty');
+  Check(LEnv.Timestamp <> '', 'GetEnvironment: Timestamp is non-empty');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -1429,6 +1478,8 @@ begin
     T.Test('AddBaselines', @TestTBenchSuite_AddBaselines);
     T.Test('SaveBaseline_RoundTrip', @TestSaveBaseline_RoundTrip);
     T.Test('AppendToTimeline', @TestAppendToTimeline);
+    T.Test('CompareTwoResults', @TestCompareTwoResults);
+    T.Test('GetEnvironment', @TestGetEnvironment);
     T.Run;
     T.Summary;
   finally
