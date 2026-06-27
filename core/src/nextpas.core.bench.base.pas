@@ -12,6 +12,14 @@ type
   {** 整数数组 }
   TInt64Array = array of Int64;
 
+  {** 异常值严重度分级 }
+  TOutlierSeverity = (
+    osNone,      // 非异常值
+    osMild,      // 1.5-3x IQR
+    osModerate,  // 3-10x IQR
+    osSevere     // >10x IQR
+  );
+
   {** 基准结果 - 单个基准测试的完整结果 }
   TBenchResult = record
     Name: string;
@@ -140,6 +148,11 @@ const
   Z_SCORE_99 = 2.576;
   OUTLIER_MULTIPLIER = 1.5;  // Tukey's Fences
 
+  {** 异常值严重度分级（criterion 风格） }
+  OUTLIER_MILD_THRESHOLD = 1.5;   // 1.5x IQR: mild outlier
+  OUTLIER_MODERATE_THRESHOLD = 3.0; // 3x IQR: moderate outlier
+  OUTLIER_SEVERE_THRESHOLD = 10.0;  // 10x IQR: severe outlier
+
   {** t 分布临界值查找表 (0-based, df=1..30) }
   TINV95_DATA: array[0..29] of Double = (
     12.706, 4.303, 3.182, 2.776, 2.571,
@@ -167,6 +180,9 @@ procedure SortDoubleArray(var AData: TDoubleArray);
 
 {** 创建默认基准配置 }
 function DefaultBenchConfig: TBenchConfig;
+
+{** 分类异常值严重度（criterion 风格：mild/moderate/severe） }
+function ClassifyOutlierSeverity(AValue, AQ1, AQ3: Double): TOutlierSeverity;
 
 implementation
 
@@ -390,6 +406,32 @@ begin
   Result.ParallelThreads := BENCH_DEFAULT_PARALLEL_THREADS;
   Result.CollectRawSamples := False;
   Result.Quiet := False;
+end;
+
+function ClassifyOutlierSeverity(AValue, AQ1, AQ3: Double): TOutlierSeverity;
+var
+  LIQR, LDist: Double;
+begin
+  LIQR := AQ3 - AQ1;
+  if LIQR <= 0 then
+    Exit(osNone);
+
+  { 计算值到最近的 fence 的距离（以 IQR 为单位） }
+  if AValue < AQ1 then
+    LDist := (AQ1 - AValue) / LIQR
+  else if AValue > AQ3 then
+    LDist := (AValue - AQ3) / LIQR
+  else
+    Exit(osNone);  { 在 Q1-Q3 之间，不是异常值 }
+
+  if LDist > OUTLIER_SEVERE_THRESHOLD then
+    Result := osSevere
+  else if LDist > OUTLIER_MODERATE_THRESHOLD then
+    Result := osModerate
+  else if LDist > OUTLIER_MILD_THRESHOLD then
+    Result := osMild
+  else
+    Result := osNone;
 end;
 
 end.

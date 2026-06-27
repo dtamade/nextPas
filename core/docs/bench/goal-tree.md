@@ -93,7 +93,7 @@ B12  Phase 1: 统计基础（对标 Go/Rust）                   ✅
 | 套件 | 测试数 | heaptrc | 说明 |
 |------|--------|---------|------|
 | test_bench_stats | 25 | ✅ 零泄漏 | 基础统计 + GeometricMean |
-| test_bench_stats_advanced | 25 | ✅ 零泄漏 | 高级统计 + NaN/Inf |
+| test_bench_stats_advanced | 30 | ✅ 零泄漏 | 高级统计 + 异常值分级 |
 | test_bench_mannwhitney | 10 | ✅ 零泄漏 | Mann-Whitney U 检验 |
 | test_bench_runner | 14 | ✅ 零泄漏 | 执行器 + StopTimer |
 | test_bench_integration | 43 | ✅ 零泄漏 | 集成测试 |
@@ -105,7 +105,7 @@ B12  Phase 1: 统计基础（对标 Go/Rust）                   ✅
 | test_bench_parallel_heaptrc | 1 | ✅ 0 leaks | 并行 heaptrc |
 | test_bench_parallel_memtrack_heaptrc | 2 | ✅ 0 leaks | 并行+memtrack |
 | test_bench_invalid_parameters_heaptrc | 5 | ✅ 0 leaks | 参数校验 |
-| **合计** | **234** | **13/13 通过** | |
+| **合计** | **239** | **13/13 通过** | |
 
 ## 已解决的技术债务
 

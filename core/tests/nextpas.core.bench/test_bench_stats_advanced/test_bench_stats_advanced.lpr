@@ -381,6 +381,51 @@ begin
   end;
 end;
 
+procedure Test_OutlierSeverity_None;
+begin
+  { Q1=25, Q3=75, IQR=50, value=50 (在中间) }
+  Check(ClassifyOutlierSeverity(50, 25, 75) = osNone, 'Value at median is not outlier');
+  { 值在 Q1-Q3 内 }
+  Check(ClassifyOutlierSeverity(30, 25, 75) = osNone, 'Value in IQR is not outlier');
+  Check(ClassifyOutlierSeverity(70, 25, 75) = osNone, 'Value in IQR is not outlier (high)');
+end;
+
+procedure Test_OutlierSeverity_Mild;
+begin
+  { Q1=25, Q3=75, IQR=50
+    Mild: 距离 > 1.5*IQR = 75，但 < 3*IQR = 150
+    下界: Q1 - 1.5*IQR = 25 - 75 = -50 → 值 < -50
+    上界: Q3 + 1.5*IQR = 75 + 75 = 150 → 值 > 150 }
+  Check(ClassifyOutlierSeverity(-60, 25, 75) = osMild, 'Below lower mild fence');
+  Check(ClassifyOutlierSeverity(160, 25, 75) = osMild, 'Above upper mild fence');
+end;
+
+procedure Test_OutlierSeverity_Moderate;
+begin
+  { Q1=25, Q3=75, IQR=50
+    Moderate: 距离 > 3*IQR = 150，但 < 10*IQR = 500
+    下界: Q1 - 3*IQR = 25 - 150 = -125 → 值 < -125
+    上界: Q3 + 3*IQR = 75 + 150 = 225 → 值 > 225 }
+  Check(ClassifyOutlierSeverity(-130, 25, 75) = osModerate, 'Below moderate fence');
+  Check(ClassifyOutlierSeverity(230, 25, 75) = osModerate, 'Above moderate fence');
+end;
+
+procedure Test_OutlierSeverity_Severe;
+begin
+  { Q1=25, Q3=75, IQR=50
+    Severe: 距离 > 10*IQR = 500
+    下界: Q1 - 10*IQR = 25 - 500 = -475
+    上界: Q3 + 10*IQR = 75 + 500 = 575 }
+  Check(ClassifyOutlierSeverity(-500, 25, 75) = osSevere, 'Below severe fence');
+  Check(ClassifyOutlierSeverity(600, 25, 75) = osSevere, 'Above severe fence');
+end;
+
+procedure Test_OutlierSeverity_ZeroIQR;
+begin
+  { IQR=0: 所有值相同，不应分类为异常值 }
+  Check(ClassifyOutlierSeverity(50, 50, 50) = osNone, 'Zero IQR returns osNone');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -410,6 +455,11 @@ begin
   T.Test('NaNInfinity_Percentile', @Test_NaNInfinity_Percentile);
   T.Test('GetData', @Test_GetData);
   T.Test('Count', @Test_Count);
+  T.Test('OutlierSeverity_None', @Test_OutlierSeverity_None);
+  T.Test('OutlierSeverity_Mild', @Test_OutlierSeverity_Mild);
+  T.Test('OutlierSeverity_Moderate', @Test_OutlierSeverity_Moderate);
+  T.Test('OutlierSeverity_Severe', @Test_OutlierSeverity_Severe);
+  T.Test('OutlierSeverity_ZeroIQR', @Test_OutlierSeverity_ZeroIQR);
   T.Run;
   T.Summary;
 end.

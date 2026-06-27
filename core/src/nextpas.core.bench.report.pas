@@ -266,6 +266,36 @@ begin
     Result := FormatNumber(ANs / 1000000000.0, 3) + ' s';
 end;
 
+{ 格式化吞吐量 (bytes/s → 人类可读) }
+function FormatThroughput(ABytesPerSec: Double): string;
+begin
+  if ABytesPerSec < 1024.0 then
+    Result := FormatFloat('0.0', ABytesPerSec) + ' B/s'
+  else if ABytesPerSec < 1024.0 * 1024.0 then
+    Result := FormatFloat('0.0', ABytesPerSec / 1024.0) + ' KB/s'
+  else if ABytesPerSec < 1024.0 * 1024.0 * 1024.0 then
+    Result := FormatFloat('0.0', ABytesPerSec / (1024.0 * 1024.0)) + ' MB/s'
+  else
+    Result := FormatFloat('0.00', ABytesPerSec / (1024.0 * 1024.0 * 1024.0)) + ' GB/s';
+end;
+
+{ 格式化变异系数 CV = StdDev / Mean * 100%
+  <5% 优秀，5-15% 一般，>15% 警告 }
+function FormatCV(AMean, AStdDev: Double): string;
+var
+  LPct: Double;
+begin
+  if (AMean <= 0) or (AStdDev <= 0) then
+    Exit('-');
+  LPct := (AStdDev / AMean) * 100.0;
+  if LPct < 5.0 then
+    Result := FormatFloat('0.0', LPct) + '% ✓'
+  else if LPct < 15.0 then
+    Result := FormatFloat('0.0', LPct) + '%'
+  else
+    Result := FormatFloat('0.0', LPct) + '% ⚠';
+end;
+
 function TBenchReportGenerator.EscapeJSON(const AStr: string): string;
 var
   I: Integer;
@@ -400,15 +430,20 @@ begin
       Break;
     BufferAddLine(LLines, '');
     BufferAddLine(LLines, FResults[I].Name + ':');
-    BufferAddLine(LLines, TextFormat('  Mean: %s  StdDev: %s  Median: %s',
+    BufferAddLine(LLines, TextFormat('  Mean: %s  StdDev: %s  Median: %s  CV: %s',
       [FormatTime(FResults[I].NsPerOp),
        FormatTime(FResults[I].StdDev),
-       FormatTime(FResults[I].Median)]));
+       FormatTime(FResults[I].Median),
+       FormatCV(FResults[I].NsPerOp, FResults[I].StdDev)]));
     BufferAddLine(LLines, TextFormat('  P95: %s  P99: %s  Outliers: %d/%d',
       [FormatTime(FResults[I].P95),
        FormatTime(FResults[I].P99),
        FResults[I].Outliers,
        FResults[I].SampleCount]));
+    if (FResults[I].BytesPerOp > 0) and (FResults[I].NsPerOp > 0) then
+      BufferAddLine(LLines, TextFormat('  Throughput: %s  (%d B/op)',
+        [FormatThroughput(FResults[I].BytesPerOp * 1e9 / FResults[I].NsPerOp),
+         FResults[I].BytesPerOp]));
   end;
 
   Result := BufferToString(LLines);
