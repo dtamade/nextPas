@@ -969,7 +969,7 @@
 - **CR-04**: PValue/HeuristicDifference 接口归属（设计决策，API 已文档化）
 - **CR-07**: Z-Score masking（小样本统计固有缺陷，Modified Z-Score 已提供替代）
 - **CR-08**: BootstrapCI LCG 质量（近似计算，统计意义足够）
-- **PF-02**: ShapiroWilkStatistic 简化实现（启发式，非精确统计，已重命名为 HeuristicNormalityCheck）
+- **PF-02**: ShapiroWilkStatistic 简化实现（启发式，非精确统计，保留原名避免 API 破坏）
 - **PF-03**: ComputeApproximatePValue 小 df 修正（实验性系数，已文档化）
 - **PF-14/PF-15**: 并行定时包含调度延迟（wall-clock 测量固有限制，已文档化）
 
@@ -1121,5 +1121,5 @@ be3737ac2 test(bench): ST-04 add Run timeout mechanism test
 
 ### Commits
 ```
-(to be added)
+baddbb1cb fix(bench): R3 audit — P0 test coverage + dead code + TJsonWriter consistency
 ```

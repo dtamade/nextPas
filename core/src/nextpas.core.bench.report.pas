@@ -1198,7 +1198,7 @@ begin
   BufferAddLine(LLines, '');
 
   { 表头 }
-  LLine := TextFormat('  %-40s %10s %8s %8s', ['Benchmark', 'ns/op', 'B/op', 'allocs']);
+  LLine := TextFormat('  %-40s %10s %8s %8s', ['Benchmark', 'ns/op', 'B/op', 'allocs/op']);
   for I := 0 to LNCols - 1 do
     LLine := LLine + TextFormat(' %10s', [AMatrix.BaselineNames[I]]);
   BufferAddLine(LLines, LLine);
