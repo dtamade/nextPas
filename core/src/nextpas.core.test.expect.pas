@@ -20,7 +20,7 @@ type
     ['{A7B3D91E-4C6F-4A28-B5D8-9E1F3C7A2B54}']
     function Not_: IExpectation;
     function ToEqual(const AExpected: string): IExpectation;
-    function ToEqualInt(AExpected: Int64): IExpectation;
+    function ToEqualInt(const AExpected: Int64): IExpectation;
     function ToEqualBool(AExpected: Boolean): IExpectation;
     function ToBeTrue: IExpectation;
     function ToBeFalse: IExpectation;
@@ -29,25 +29,25 @@ type
     function ToContain(const ASubstr: string): IExpectation;
     function ToStartWith(const APrefix: string): IExpectation;
     function ToEndWith(const ASuffix: string): IExpectation;
-    function ToBeGreaterThan(AExpected: Int64): IExpectation;
-    function ToBeLessThan(AExpected: Int64): IExpectation;
-    function ToBeGreaterOrEqual(AExpected: Int64): IExpectation;
-    function ToBeLessOrEqual(AExpected: Int64): IExpectation;
-    function ToBeInRange(ALow, AHigh: Int64): IExpectation;
-    function ToHaveLength(AExpected: NativeInt): IExpectation;
+    function ToBeGreaterThan(const AExpected: Int64): IExpectation;
+    function ToBeLessThan(const AExpected: Int64): IExpectation;
+    function ToBeGreaterOrEqual(const AExpected: Int64): IExpectation;
+    function ToBeLessOrEqual(const AExpected: Int64): IExpectation;
+    function ToBeInRange(const ALow, AHigh: Int64): IExpectation;
+    function ToHaveLength(const AExpected: NativeInt): IExpectation;
     function ToRaise(AExceptionClass: ExceptClass;
       const AMessage: string = ''): IExpectation;
     function ToNotRaise: IExpectation;
-    function ToBeNear(AExpected: Double;
-      AEpsilon: Double = 1e-10): IExpectation;
-    function ToNotBeNear(AExpected: Double;
-      AEpsilon: Double = 1e-10): IExpectation;
+    function ToBeNear(const AExpected: Double;
+      const AEpsilon: Double = 1e-10): IExpectation;
+    function ToNotBeNear(const AExpected: Double;
+      const AEpsilon: Double = 1e-10): IExpectation;
     { Double comparison }
-    function ToBeGreaterThanD(AExpected: Double): IExpectation;
-    function ToBeLessThanD(AExpected: Double): IExpectation;
-    function ToBeGreaterOrEqualD(AExpected: Double): IExpectation;
-    function ToBeLessOrEqualD(AExpected: Double): IExpectation;
-    function ToBeInRangeD(ALow, AHigh: Double): IExpectation;
+    function ToBeGreaterThanD(const AExpected: Double): IExpectation;
+    function ToBeLessThanD(const AExpected: Double): IExpectation;
+    function ToBeGreaterOrEqualD(const AExpected: Double): IExpectation;
+    function ToBeLessOrEqualD(const AExpected: Double): IExpectation;
+    function ToBeInRangeD(const ALow, AHigh: Double): IExpectation;
     { Case-insensitive string matching }
     function ToContainCI(const ASubstr: string): IExpectation;
     function ToStartWithCI(const APrefix: string): IExpectation;
@@ -57,10 +57,10 @@ type
 { ── Expect (fluent factory) ───────────────────────────────────────────────── }
 
 function Expect(const AValue: string): IExpectation;
-function ExpectInt(AValue: Int64): IExpectation;
+function ExpectInt(const AValue: Int64): IExpectation;
 function ExpectBool(AValue: Boolean): IExpectation;
-function ExpectDouble(AValue: Double): IExpectation;
-function ExpectPtr(AValue: Pointer): IExpectation;
+function ExpectDouble(const AValue: Double): IExpectation;
+function ExpectPtr(const AValue: Pointer): IExpectation;
 function ExpectProc(AProc: TTestProc): IExpectation;
 
 implementation
@@ -86,16 +86,16 @@ type
     FNegated    : Boolean;
   public
     constructor CreateStr(const AValue: string);
-    constructor CreateInt(AValue: Int64);
+    constructor CreateInt(const AValue: Int64);
     constructor CreateBool(AValue: Boolean);
-    constructor CreatePtr(AValue: Pointer);
+    constructor CreatePtr(const AValue: Pointer);
     constructor CreateProc(AProc: TTestProc);
-    constructor CreateDouble(AValue: Double);
+    constructor CreateDouble(const AValue: Double);
 
     { IExpectation }
     function Not_: IExpectation;
     function ToEqual(const AExpected: string): IExpectation;
-    function ToEqualInt(AExpected: Int64): IExpectation;
+    function ToEqualInt(const AExpected: Int64): IExpectation;
     function ToEqualBool(AExpected: Boolean): IExpectation;
     function ToBeTrue: IExpectation;
     function ToBeFalse: IExpectation;
@@ -104,25 +104,25 @@ type
     function ToContain(const ASubstr: string): IExpectation;
     function ToStartWith(const APrefix: string): IExpectation;
     function ToEndWith(const ASuffix: string): IExpectation;
-    function ToBeGreaterThan(AExpected: Int64): IExpectation;
-    function ToBeLessThan(AExpected: Int64): IExpectation;
-    function ToBeGreaterOrEqual(AExpected: Int64): IExpectation;
-    function ToBeLessOrEqual(AExpected: Int64): IExpectation;
-    function ToBeInRange(ALow, AHigh: Int64): IExpectation;
-    function ToHaveLength(AExpected: NativeInt): IExpectation;
+    function ToBeGreaterThan(const AExpected: Int64): IExpectation;
+    function ToBeLessThan(const AExpected: Int64): IExpectation;
+    function ToBeGreaterOrEqual(const AExpected: Int64): IExpectation;
+    function ToBeLessOrEqual(const AExpected: Int64): IExpectation;
+    function ToBeInRange(const ALow, AHigh: Int64): IExpectation;
+    function ToHaveLength(const AExpected: NativeInt): IExpectation;
     function ToRaise(AExceptionClass: ExceptClass;
       const AMessage: string = ''): IExpectation;
     function ToNotRaise: IExpectation;
-    function ToBeNear(AExpected: Double;
-      AEpsilon: Double = 1e-10): IExpectation;
-    function ToNotBeNear(AExpected: Double;
-      AEpsilon: Double = 1e-10): IExpectation;
+    function ToBeNear(const AExpected: Double;
+      const AEpsilon: Double = 1e-10): IExpectation;
+    function ToNotBeNear(const AExpected: Double;
+      const AEpsilon: Double = 1e-10): IExpectation;
     { Double comparison }
-    function ToBeGreaterThanD(AExpected: Double): IExpectation;
-    function ToBeLessThanD(AExpected: Double): IExpectation;
-    function ToBeGreaterOrEqualD(AExpected: Double): IExpectation;
-    function ToBeLessOrEqualD(AExpected: Double): IExpectation;
-    function ToBeInRangeD(ALow, AHigh: Double): IExpectation;
+    function ToBeGreaterThanD(const AExpected: Double): IExpectation;
+    function ToBeLessThanD(const AExpected: Double): IExpectation;
+    function ToBeGreaterOrEqualD(const AExpected: Double): IExpectation;
+    function ToBeLessOrEqualD(const AExpected: Double): IExpectation;
+    function ToBeInRangeD(const ALow, AHigh: Double): IExpectation;
     { Case-insensitive string matching }
     function ToContainCI(const ASubstr: string): IExpectation;
     function ToStartWithCI(const APrefix: string): IExpectation;
@@ -137,7 +137,7 @@ begin
   FNegated  := False;
 end;
 
-constructor TExpectation.CreateInt(AValue: Int64);
+constructor TExpectation.CreateInt(const AValue: Int64);
 begin
   inherited Create;
   FKind     := ekInt64;
@@ -153,7 +153,7 @@ begin
   FNegated   := False;
 end;
 
-constructor TExpectation.CreatePtr(AValue: Pointer);
+constructor TExpectation.CreatePtr(const AValue: Pointer);
 begin
   inherited Create;
   FKind     := ekPointer;
@@ -169,7 +169,7 @@ begin
   FNegated   := False;
 end;
 
-constructor TExpectation.CreateDouble(AValue: Double);
+constructor TExpectation.CreateDouble(const AValue: Double);
 begin
   inherited Create;
   FKind        := ekDouble;
@@ -213,7 +213,7 @@ begin
   Result := Self;
 end;
 
-function TExpectation.ToEqualInt(AExpected: Int64): IExpectation;
+function TExpectation.ToEqualInt(const AExpected: Int64): IExpectation;
 var
   LMatch: Boolean;
 begin
@@ -378,7 +378,7 @@ begin
   Result := Self;
 end;
 
-function TExpectation.ToBeGreaterThan(AExpected: Int64): IExpectation;
+function TExpectation.ToBeGreaterThan(const AExpected: Int64): IExpectation;
 var
   LMatch: Boolean;
 begin
@@ -398,7 +398,7 @@ begin
   Result := Self;
 end;
 
-function TExpectation.ToBeLessThan(AExpected: Int64): IExpectation;
+function TExpectation.ToBeLessThan(const AExpected: Int64): IExpectation;
 var
   LMatch: Boolean;
 begin
@@ -418,7 +418,7 @@ begin
   Result := Self;
 end;
 
-function TExpectation.ToBeInRange(ALow, AHigh: Int64): IExpectation;
+function TExpectation.ToBeInRange(const ALow, AHigh: Int64): IExpectation;
 var
   LMatch: Boolean;
 begin
@@ -443,7 +443,7 @@ begin
   Result := Self;
 end;
 
-function TExpectation.ToHaveLength(AExpected: NativeInt): IExpectation;
+function TExpectation.ToHaveLength(const AExpected: NativeInt): IExpectation;
 begin
   if FKind <> ekString then
     InternalFail('ToHaveLength called on non-string expectation');
@@ -531,8 +531,8 @@ begin
   Result := Self;
 end;
 
-function TExpectation.ToBeNear(AExpected: Double;
-  AEpsilon: Double): IExpectation;
+function TExpectation.ToBeNear(const AExpected: Double;
+  const AEpsilon: Double): IExpectation;
 var
   LDiff: Double;
 begin
@@ -555,8 +555,8 @@ begin
   Result := Self;
 end;
 
-function TExpectation.ToNotBeNear(AExpected: Double;
-  AEpsilon: Double): IExpectation;
+function TExpectation.ToNotBeNear(const AExpected: Double;
+  const AEpsilon: Double): IExpectation;
 begin
   { Flip negated flag in-place to avoid allocating a temporary TExpectation
     copy via Not_.  The try/finally ensures the flag is restored even if
@@ -571,7 +571,7 @@ end;
 
 { ── TExpectation: >= / <= for Int64 ────────────────────────────────────────── }
 
-function TExpectation.ToBeGreaterOrEqual(AExpected: Int64): IExpectation;
+function TExpectation.ToBeGreaterOrEqual(const AExpected: Int64): IExpectation;
 var
   LMatch: Boolean;
 begin
@@ -591,7 +591,7 @@ begin
   Result := Self;
 end;
 
-function TExpectation.ToBeLessOrEqual(AExpected: Int64): IExpectation;
+function TExpectation.ToBeLessOrEqual(const AExpected: Int64): IExpectation;
 var
   LMatch: Boolean;
 begin
@@ -613,7 +613,7 @@ end;
 
 { ── TExpectation: Double comparison ────────────────────────────────────────── }
 
-function TExpectation.ToBeGreaterThanD(AExpected: Double): IExpectation;
+function TExpectation.ToBeGreaterThanD(const AExpected: Double): IExpectation;
 var
   LMatch: Boolean;
 begin
@@ -633,7 +633,7 @@ begin
   Result := Self;
 end;
 
-function TExpectation.ToBeLessThanD(AExpected: Double): IExpectation;
+function TExpectation.ToBeLessThanD(const AExpected: Double): IExpectation;
 var
   LMatch: Boolean;
 begin
@@ -653,7 +653,7 @@ begin
   Result := Self;
 end;
 
-function TExpectation.ToBeGreaterOrEqualD(AExpected: Double): IExpectation;
+function TExpectation.ToBeGreaterOrEqualD(const AExpected: Double): IExpectation;
 var
   LMatch: Boolean;
 begin
@@ -673,7 +673,7 @@ begin
   Result := Self;
 end;
 
-function TExpectation.ToBeLessOrEqualD(AExpected: Double): IExpectation;
+function TExpectation.ToBeLessOrEqualD(const AExpected: Double): IExpectation;
 var
   LMatch: Boolean;
 begin
@@ -693,7 +693,7 @@ begin
   Result := Self;
 end;
 
-function TExpectation.ToBeInRangeD(ALow, AHigh: Double): IExpectation;
+function TExpectation.ToBeInRangeD(const ALow, AHigh: Double): IExpectation;
 var
   LMatch: Boolean;
 begin
@@ -789,7 +789,7 @@ begin
   Result := TExpectation.CreateStr(AValue);
 end;
 
-function ExpectInt(AValue: Int64): IExpectation;
+function ExpectInt(const AValue: Int64): IExpectation;
 begin
   Result := TExpectation.CreateInt(AValue);
 end;
@@ -799,12 +799,12 @@ begin
   Result := TExpectation.CreateBool(AValue);
 end;
 
-function ExpectDouble(AValue: Double): IExpectation;
+function ExpectDouble(const AValue: Double): IExpectation;
 begin
   Result := TExpectation.CreateDouble(AValue);
 end;
 
-function ExpectPtr(AValue: Pointer): IExpectation;
+function ExpectPtr(const AValue: Pointer): IExpectation;
 begin
   Result := TExpectation.CreatePtr(AValue);
 end;

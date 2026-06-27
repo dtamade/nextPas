@@ -76,10 +76,10 @@ type
 { ── Re-exported functions from test.expect ────────────────────────────────── }
 
 function Expect(const AValue: string): IExpectation;
-function ExpectInt(AValue: Int64): IExpectation;
+function ExpectInt(const AValue: Int64): IExpectation;
 function ExpectBool(AValue: Boolean): IExpectation;
-function ExpectDouble(AValue: Double): IExpectation;
-function ExpectPtr(AValue: Pointer): IExpectation;
+function ExpectDouble(const AValue: Double): IExpectation;
+function ExpectPtr(const AValue: Pointer): IExpectation;
 function ExpectProc(AProc: TTestProc): IExpectation;
 
 { ── Re-exported functions from test.check ─────────────────────────────────── }
@@ -186,16 +186,16 @@ implementation
 function Expect(const AValue: string): IExpectation;
 begin Result := nextpas.core.test.expect.Expect(AValue); end;
 
-function ExpectInt(AValue: Int64): IExpectation;
+function ExpectInt(const AValue: Int64): IExpectation;
 begin Result := nextpas.core.test.expect.ExpectInt(AValue); end;
 
 function ExpectBool(AValue: Boolean): IExpectation;
 begin Result := nextpas.core.test.expect.ExpectBool(AValue); end;
 
-function ExpectDouble(AValue: Double): IExpectation;
+function ExpectDouble(const AValue: Double): IExpectation;
 begin Result := nextpas.core.test.expect.ExpectDouble(AValue); end;
 
-function ExpectPtr(AValue: Pointer): IExpectation;
+function ExpectPtr(const AValue: Pointer): IExpectation;
 begin Result := nextpas.core.test.expect.ExpectPtr(AValue); end;
 
 function ExpectProc(AProc: TTestProc): IExpectation;

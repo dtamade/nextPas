@@ -35,9 +35,9 @@ type
   end;
 
 function MockStr(const AValue: string): TMockValue;
-function MockInt(AValue: Int64): TMockValue;
+function MockInt(const AValue: Int64): TMockValue;
 function MockBool(AValue: Boolean): TMockValue;
-function MockDouble(AValue: Double): TMockValue;
+function MockDouble(const AValue: Double): TMockValue;
 
 { ── Call Record ───────────────────────────────────────────────────────────── }
 
@@ -63,7 +63,7 @@ type
     { Configure the return value for this method }
     function Returns(const AValue: string): IMockSetup;
     { Configure the return value as Integer }
-    function ReturnsInt(AValue: Int64): IMockSetup;
+    function ReturnsInt(const AValue: Int64): IMockSetup;
     { Configure the return value as Boolean }
     function ReturnsBool(AValue: Boolean): IMockSetup;
     { Configure the return value as Double }
@@ -208,7 +208,7 @@ begin
   Result.StrVal  := AValue;
 end;
 
-function MockInt(AValue: Int64): TMockValue;
+function MockInt(const AValue: Int64): TMockValue;
 begin
   Result         := MockUnsetValue;
   Result.Kind    := mvInt64;
@@ -222,7 +222,7 @@ begin
   Result.BoolVal := AValue;
 end;
 
-function MockDouble(AValue: Double): TMockValue;
+function MockDouble(const AValue: Double): TMockValue;
 begin
   Result         := MockUnsetValue;
   Result.Kind    := mvDouble;
@@ -487,7 +487,7 @@ type
   public
     constructor Create(AState: TMockState; const AMethod: string);
     function Returns(const AValue: string): IMockSetup;
-    function ReturnsInt(AValue: Int64): IMockSetup;
+    function ReturnsInt(const AValue: Int64): IMockSetup;
     function ReturnsBool(AValue: Boolean): IMockSetup;
     function ReturnsDouble(const AValue: Double): IMockSetup;
     function InOrder: IMockSetup;
@@ -506,7 +506,7 @@ begin
   Result := Self;
 end;
 
-function TMockSetup.ReturnsInt(AValue: Int64): IMockSetup;
+function TMockSetup.ReturnsInt(const AValue: Int64): IMockSetup;
 begin
   FState.SetReturn(FMethod, IntToStr(AValue));
   FState.SetTypedReturnValue(FMethod, MockInt(AValue));
