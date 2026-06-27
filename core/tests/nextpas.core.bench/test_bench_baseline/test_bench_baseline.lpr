@@ -1,10 +1,10 @@
 program test_bench_baseline;
 
-{$mode objfpc}{$H+}
-{$modeswitch advancedrecords}
+{$I nextpas.core.settings.inc}
 
 uses
   nextpas.core.exception,
+  nextpas.core.test,
   nextpas.core.fs,
   nextpas.core.math.scalar,
   nextpas.core.platform.time,
@@ -12,24 +12,6 @@ uses
   nextpas.core.bench.base,
   nextpas.core.bench.baseline,
   nextpas.core.bench.intf;
-
-var
-  GTestsPassed: Integer = 0;
-  GTestsFailed: Integer = 0;
-
-procedure Check(ACondition: Boolean; const ATestName: string);
-begin
-  if ACondition then
-  begin
-    Inc(GTestsPassed);
-    WriteLn('  ✓ ', ATestName);
-  end
-  else
-  begin
-    Inc(GTestsFailed);
-    WriteLn('  ✗ ', ATestName);
-  end;
-end;
 
 { Helper functions }
 
@@ -62,7 +44,6 @@ procedure Test_Create;
 var
   LManager: TBaselineManager;
 begin
-  WriteLn('Test_Create:');
   LManager := TBaselineManager.Create(1.1);
   Check(True, 'Created successfully');
   Check(Length(LManager.GetAllBaselines) = 0, 'Initial baselines = 0');
@@ -73,7 +54,6 @@ var
   LManager: TBaselineManager;
   LBaseline: TBaselineData;
 begin
-  WriteLn('Test_AddBaseline:');
   LManager := TBaselineManager.Create(1.1);
 
   LBaseline := CreateTestBaseline('Sort', 1000);
@@ -89,7 +69,6 @@ var
   LResult: TBenchResult;
   LBaseline: TBaselineData;
 begin
-  WriteLn('Test_AddBaselineFromResult:');
   LManager := TBaselineManager.Create(1.1);
 
   LResult := CreateTestResult('Sort', 1000, 100, 5);
@@ -107,7 +86,6 @@ var
   LManager: TBaselineManager;
   LBaseline: TBaselineData;
 begin
-  WriteLn('Test_GetBaseline:');
   LManager := TBaselineManager.Create(1.1);
 
   LBaseline := CreateTestBaseline('Sort', 1000);
@@ -123,7 +101,6 @@ var
   LManager: TBaselineManager;
   LSuccess: Boolean;
 begin
-  WriteLn('Test_GetBaseline_NotFound:');
   LManager := TBaselineManager.Create(1.1);
 
   LSuccess := False;
@@ -140,7 +117,6 @@ procedure Test_RemoveBaseline;
 var
   LManager: TBaselineManager;
 begin
-  WriteLn('Test_RemoveBaseline:');
   LManager := TBaselineManager.Create(1.1);
 
   LManager.AddBaseline(CreateTestBaseline('Sort', 1000));
@@ -159,7 +135,6 @@ procedure Test_ClearBaselines;
 var
   LManager: TBaselineManager;
 begin
-  WriteLn('Test_ClearBaselines:');
   LManager := TBaselineManager.Create(1.1);
 
   LManager.AddBaseline(CreateTestBaseline('Sort', 1000));
@@ -178,7 +153,6 @@ var
   LResult: TBenchResult;
   LComparison: TBaselineComparison;
 begin
-  WriteLn('Test_CompareWithBaseline_NoRegression:');
   LManager := TBaselineManager.Create(1.1);
 
   LManager.AddBaseline(CreateTestBaseline('Sort', 1000));
@@ -190,7 +164,7 @@ begin
   Check(LComparison.Ratio > 1, 'Ratio > 1');
   Check(not LComparison.IsRegression, 'Not a regression');
   Check(not LComparison.IsImprovement, 'Not an improvement');
-  Check(Abs(LComparison.PercentChange - 5) < 0.1, 'PercentChange ≈ 5%');
+  CheckNear(5, LComparison.PercentChange, 0.1, 'PercentChange ~ 5%');
 end;
 
 procedure Test_CompareWithBaseline_Regression;
@@ -199,7 +173,6 @@ var
   LResult: TBenchResult;
   LComparison: TBaselineComparison;
 begin
-  WriteLn('Test_CompareWithBaseline_Regression:');
   LManager := TBaselineManager.Create(1.1);
 
   LManager.AddBaseline(CreateTestBaseline('Sort', 1000));
@@ -211,7 +184,7 @@ begin
   Check(LComparison.Ratio > 1.1, 'Ratio > 1.1');
   Check(LComparison.IsRegression, 'Is a regression');
   Check(not LComparison.IsImprovement, 'Not an improvement');
-  Check(Abs(LComparison.PercentChange - 20) < 0.1, 'PercentChange ≈ 20%');
+  CheckNear(20, LComparison.PercentChange, 0.1, 'PercentChange ~ 20%');
 end;
 
 procedure Test_CompareWithBaseline_Improvement;
@@ -220,7 +193,6 @@ var
   LResult: TBenchResult;
   LComparison: TBaselineComparison;
 begin
-  WriteLn('Test_CompareWithBaseline_Improvement:');
   LManager := TBaselineManager.Create(1.1);
 
   LManager.AddBaseline(CreateTestBaseline('Sort', 1000));
@@ -232,7 +204,7 @@ begin
   Check(LComparison.Ratio < 1, 'Ratio < 1');
   Check(not LComparison.IsRegression, 'Not a regression');
   Check(LComparison.IsImprovement, 'Is an improvement');
-  Check(Abs(LComparison.PercentChange - (-20)) < 0.1, 'PercentChange ≈ -20%');
+  CheckNear(-20, LComparison.PercentChange, 0.1, 'PercentChange ~ -20%');
 end;
 
 procedure Test_CompareAllWithBaselines;
@@ -241,7 +213,6 @@ var
   LResults: TBenchResultArray;
   LComparisons: TBaselineComparisonArray;
 begin
-  WriteLn('Test_CompareAllWithBaselines:');
   LManager := TBaselineManager.Create(1.1);
 
   LManager.AddBaseline(CreateTestBaseline('Sort', 1000));
@@ -263,7 +234,6 @@ var
   LManager: TBaselineManager;
   LResults: TBenchResultArray;
 begin
-  WriteLn('Test_HasRegression:');
   LManager := TBaselineManager.Create(1.1);
 
   LManager.AddBaseline(CreateTestBaseline('Sort', 1000));
@@ -285,7 +255,6 @@ var
   LManager: TBaselineManager;
   LBaselines: TBaselineArray;
 begin
-  WriteLn('Test_GetAllBaselines:');
   LManager := TBaselineManager.Create(1.1);
 
   LManager.AddBaseline(CreateTestBaseline('Sort', 1000));
@@ -301,7 +270,6 @@ var
   LManager: TBaselineManager;
   LBaselines: TBaselineArray;
 begin
-  WriteLn('Test_GetAllBaselines_Empty:');
   LManager := TBaselineManager.Create(1.1);
   LBaselines := LManager.GetAllBaselines;
   Check(Length(LBaselines) = 0, 'GetAllBaselines_Empty: length should be 0');
@@ -312,7 +280,6 @@ var
   LManager: TBaselineManager;
   LBaseline: TBaselineData;
 begin
-  WriteLn('Test_UpdateBaseline:');
   LManager := TBaselineManager.Create(1.1);
 
   LManager.AddBaseline(CreateTestBaseline('Sort', 1000));
@@ -329,7 +296,6 @@ var
   LResult: TBenchResult;
   LComparison: TBaselineComparison;
 begin
-  WriteLn('Test_CustomThreshold:');
   // Use 20% threshold
   LManager := TBaselineManager.Create(1.2);
 
@@ -351,7 +317,6 @@ var
   LManager: TBaselineManager;
   LJSON: string;
 begin
-  WriteLn('Test_JSON:');
   LManager := TBaselineManager.Create(1.1);
 
   LManager.AddBaseline(CreateTestBaseline('Sort', 1000));
@@ -371,8 +336,6 @@ var
   LBaseline: TBaselineData;
   LJSON: string;
 begin
-  WriteLn('Test_JSON_RoundTripPreservesNotesAndInvariantLocale:');
-
   LManager := TBaselineManager.Create(1.1);
   LBaseline := CreateTestBaseline('RoundTrip', 1000.5, 64, 2);
   LBaseline.Notes := 'line1' + LineEnding + 'line2 "quoted"';
@@ -399,7 +362,6 @@ var
   LPath: string;
   LB: TBaselineData;
 begin
-  WriteLn('Test_FileRoundTrip:');
   LPath := '/tmp/nextpas_bench_test_' + XidNew + '.json';
   LManager1 := TBaselineManager.Create;
   LB := Default(TBaselineData);
@@ -413,7 +375,7 @@ begin
   LManager2.LoadFromFile(LPath);
 
   Check(LManager2.HasBaseline('TestBench'), 'FileRoundTrip: baseline exists after load');
-  Check(Abs(LManager2.GetBaseline('TestBench').NsPerOp - 123.456) < 0.001, 'FileRoundTrip: NsPerOp matches');
+  CheckNear(123.456, LManager2.GetBaseline('TestBench').NsPerOp, 0.001, 'FileRoundTrip: NsPerOp matches');
   Check(LManager2.GetBaseline('TestBench').Notes = 'round-trip test', 'FileRoundTrip: Notes matches');
 
   Remove(LPath);
@@ -424,7 +386,6 @@ var
   LManager: TBaselineManager;
   LFailed: Boolean;
 begin
-  WriteLn('Test_LoadFromJSON_Errors:');
   LManager := TBaselineManager.Create;
 
   // invalid JSON
@@ -449,18 +410,14 @@ begin
   Check(not LManager.HasBaseline('anything'), 'LoadFromJSON_Errors: non-array baselines yields empty');
 end;
 
-{ === TG-14: LoadFromFile File Not Found Test === }
-
 procedure Test_LoadFromFile_NotFound;
 var
   LManager: TBaselineManager;
   LRaised: Boolean;
   LPath: string;
 begin
-  WriteLn('Test_LoadFromFile_NotFound:');
   LManager := TBaselineManager.Create;
   LRaised := False;
-  { TG-25: use XidNew to generate unique path instead of /tmp hardcoded }
   LPath := '/tmp/nonexistent_bench_baseline_' + XidNew + '.json';
 
   try
@@ -473,15 +430,12 @@ begin
   Check(not LManager.HasBaseline('anything'), 'No baselines loaded after failed LoadFromFile');
 end;
 
-{ === TG-13: CompareAllWithBaselines comparison field verification === }
-
 procedure Test_CompareAllWithBaselines_Fields;
 var
   LManager: TBaselineManager;
   LResults: TBenchResultArray;
   LComparisons: TBaselineComparisonArray;
 begin
-  WriteLn('Test_CompareAllWithBaselines_Fields:');
   LManager := TBaselineManager.Create(1.1);
 
   LManager.AddBaseline(CreateTestBaseline('Sort', 1000));
@@ -498,78 +452,57 @@ begin
   Check(Length(LComparisons) = 3, 'TG-13: Found 3 comparisons');
 
   // Sort: 1200 / 1000 = 1.2, regression (> 1.1)
-  Check(Abs(LComparisons[0].Ratio - 1.2) < 0.001, 'Sort Ratio = 1.2');
+  CheckNear(1.2, LComparisons[0].Ratio, 0.001, 'Sort Ratio = 1.2');
   Check(LComparisons[0].IsRegression, 'Sort IsRegression = true');
   Check(not LComparisons[0].IsImprovement, 'Sort IsImprovement = false');
-  Check(Abs(LComparisons[0].PercentChange - 20.0) < 0.1, 'Sort PercentChange = 20%');
+  CheckNear(20.0, LComparisons[0].PercentChange, 0.1, 'Sort PercentChange = 20%');
 
   // Hash: 1800 / 2000 = 0.9, improvement (< 1/1.1 = 0.909...)
-  Check(Abs(LComparisons[1].Ratio - 0.9) < 0.001, 'Hash Ratio = 0.9');
+  CheckNear(0.9, LComparisons[1].Ratio, 0.001, 'Hash Ratio = 0.9');
   Check(not LComparisons[1].IsRegression, 'Hash IsRegression = false');
   Check(LComparisons[1].IsImprovement, 'Hash IsImprovement = true');
-  Check(Abs(LComparisons[1].PercentChange - (-10.0)) < 0.1, 'Hash PercentChange = -10%');
+  CheckNear(-10.0, LComparisons[1].PercentChange, 0.1, 'Hash PercentChange = -10%');
 
   // Fast: 510 / 500 = 1.02, no regression, no improvement
-  Check(Abs(LComparisons[2].Ratio - 1.02) < 0.001, 'Fast Ratio = 1.02');
+  CheckNear(1.02, LComparisons[2].Ratio, 0.001, 'Fast Ratio = 1.02');
   Check(not LComparisons[2].IsRegression, 'Fast IsRegression = false');
   Check(not LComparisons[2].IsImprovement, 'Fast IsImprovement = false');
-  Check(Abs(LComparisons[2].PercentChange - 2.0) < 0.1, 'Fast PercentChange = 2%');
+  CheckNear(2.0, LComparisons[2].PercentChange, 0.1, 'Fast PercentChange = 2%');
 end;
 
 { === Run All Tests === }
 
-procedure RunAllTests;
+var
+  T: TTestSuite;
 begin
-  WriteLn('=== TBaselineManager Tests ===');
-  Test_Create;
-  Test_AddBaseline;
-  Test_AddBaselineFromResult;
-  Test_GetBaseline;
-  Test_GetBaseline_NotFound;
-  Test_RemoveBaseline;
-  Test_ClearBaselines;
-  Test_CompareWithBaseline_NoRegression;
-  Test_CompareWithBaseline_Regression;
-  Test_CompareWithBaseline_Improvement;
-  Test_CompareAllWithBaselines;
-  Test_HasRegression;
-  Test_GetAllBaselines;
-  Test_GetAllBaselines_Empty;
-  Test_UpdateBaseline;
-  Test_CustomThreshold;
-  Test_JSON;
-  Test_JSON_RoundTripPreservesNotesAndInvariantLocale;
-  Test_FileRoundTrip;
-  Test_LoadFromJSON_Errors;
-  WriteLn('');
-  WriteLn('=== LoadFromFile Error Tests (TG-14) ===');
-  Test_LoadFromFile_NotFound;
-  WriteLn('');
-  WriteLn('=== CompareAllWithBaselines Field Verification (TG-13) ===');
-  Test_CompareAllWithBaselines_Fields;
-end;
+  T := TTestSuite.Create('nextpas.core.bench.baseline');
 
-begin
-  WriteLn('=== nextpas.core.bench.baseline Test Suite ===');
-  WriteLn('');
+  T.Test('Create', @Test_Create);
+  T.Test('AddBaseline', @Test_AddBaseline);
+  T.Test('AddBaselineFromResult', @Test_AddBaselineFromResult);
+  T.Test('GetBaseline', @Test_GetBaseline);
+  T.Test('GetBaseline_NotFound', @Test_GetBaseline_NotFound);
+  T.Test('RemoveBaseline', @Test_RemoveBaseline);
+  T.Test('ClearBaselines', @Test_ClearBaselines);
+  T.Test('CompareWithBaseline_NoRegression', @Test_CompareWithBaseline_NoRegression);
+  T.Test('CompareWithBaseline_Regression', @Test_CompareWithBaseline_Regression);
+  T.Test('CompareWithBaseline_Improvement', @Test_CompareWithBaseline_Improvement);
+  T.Test('CompareAllWithBaselines', @Test_CompareAllWithBaselines);
+  T.Test('HasRegression', @Test_HasRegression);
+  T.Test('GetAllBaselines', @Test_GetAllBaselines);
+  T.Test('GetAllBaselines_Empty', @Test_GetAllBaselines_Empty);
+  T.Test('UpdateBaseline', @Test_UpdateBaseline);
+  T.Test('CustomThreshold', @Test_CustomThreshold);
+  T.Test('JSON', @Test_JSON);
+  T.Test('JSON_RoundTrip', @Test_JSON_RoundTripPreservesNotesAndInvariantLocale);
+  T.Test('FileRoundTrip', @Test_FileRoundTrip);
+  T.Test('LoadFromJSON_Errors', @Test_LoadFromJSON_Errors);
+  T.Test('LoadFromFile_NotFound', @Test_LoadFromFile_NotFound);
+  T.Test('CompareAllWithBaselines_Fields', @Test_CompareAllWithBaselines_Fields);
 
-  RunAllTests;
+  T.Run;
+  T.Summary;
 
-  WriteLn('');
-  WriteLn('=== Test Summary ===');
-  WriteLn('Total: ', GTestsPassed + GTestsFailed);
-  WriteLn('Passed: ', GTestsPassed);
-  WriteLn('Failed: ', GTestsFailed);
-
-  if GTestsFailed > 0 then
-  begin
-    WriteLn('');
-    WriteLn('*** FAILED ***');
+  if not T.AllPassed then
     Halt(1);
-  end
-  else
-  begin
-    WriteLn('');
-    WriteLn('✓ All tests passed!');
-  end;
 end.

@@ -1,17 +1,13 @@
 program test_bench_stats_advanced;
 
-{$mode objfpc}{$H+}
-{$modeswitch advancedrecords}
+{$I nextpas.core.settings.inc}
 
 uses
   nextpas.core.math.scalar,
   nextpas.core.math.impl.scalar,
   nextpas.core.bench.base,
-  nextpas.core.bench.stats.advanced;
-
-var
-  GTestsPassed: Integer = 0;
-  GTestsFailed: Integer = 0;
+  nextpas.core.bench.stats.advanced,
+  nextpas.core.test;
 
 function MakePositiveInfinity: Double;
 var
@@ -29,17 +25,6 @@ begin
   Move(LBits, Result, SizeOf(Result));
 end;
 
-procedure Check(ACondition: Boolean; const ATestName: string);
-begin
-  if ACondition then begin Inc(GTestsPassed); WriteLn('  ✓ ', ATestName); end
-  else begin Inc(GTestsFailed); WriteLn('  ✗ ', ATestName); end;
-end;
-
-procedure CheckApprox(AActual, AExpected, AEpsilon: Double; const ATestName: string);
-begin
-  Check(Abs(AActual - AExpected) <= AEpsilon, ATestName);
-end;
-
 function CreateTestData(AValues: array of Double): TDoubleArray;
 var
   I: Integer;
@@ -52,7 +37,7 @@ end;
 
 procedure Test_Create;
 var LData: TDoubleArray; LStats: TAdvancedStats;
-begin WriteLn('Test_Create:');
+begin
   LData := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0]);
   LStats := TAdvancedStats.Create(LData);
   Check(LStats.Count = 5, 'Count = 5');
@@ -61,7 +46,7 @@ end;
 
 procedure Test_Mean;
 var LData: TDoubleArray; LStats: TAdvancedStats;
-begin WriteLn('Test_Mean:');
+begin
   LData := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0]);
   LStats := TAdvancedStats.Create(LData);
   Check(Abs(LStats.Mean - 3.0) < 0.001, 'Mean = 3.0');
@@ -72,7 +57,7 @@ end;
 
 procedure Test_Median;
 var LData: TDoubleArray; LStats: TAdvancedStats;
-begin WriteLn('Test_Median:');
+begin
   LData := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0]);
   LStats := TAdvancedStats.Create(LData);
   Check(Abs(LStats.Median - 3.0) < 0.001, 'Median = 3.0');
@@ -85,28 +70,28 @@ end;
 
 procedure Test_StdDev;
 var LData: TDoubleArray; LStats: TAdvancedStats;
-begin WriteLn('Test_StdDev:');
+begin
   LData := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0]);
   LStats := TAdvancedStats.Create(LData);
-  Check(Abs(LStats.StdDev - 1.5811) < 0.01, 'StdDev ≈ 1.5811');
+  Check(Abs(LStats.StdDev - 1.5811) < 0.01, 'StdDev ~ 1.5811');
   LStats.Free;
 end;
 
 procedure Test_Variance;
 var LData: TDoubleArray; LStats: TAdvancedStats;
-begin WriteLn('Test_Variance:');
+begin
   LData := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0]);
   LStats := TAdvancedStats.Create(LData);
-  Check(Abs(LStats.Variance - 2.5) < 0.01, 'Variance ≈ 2.5');
+  Check(Abs(LStats.Variance - 2.5) < 0.01, 'Variance ~ 2.5');
   LStats.Free;
 end;
 
 procedure Test_Skewness;
 var LData: TDoubleArray; LStats: TAdvancedStats;
-begin WriteLn('Test_Skewness:');
+begin
   LData := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0]);
   LStats := TAdvancedStats.Create(LData);
-  Check(Abs(LStats.Skewness) < 0.1, 'Skewness ≈ 0');
+  Check(Abs(LStats.Skewness) < 0.1, 'Skewness ~ 0');
   LStats.Free;
   LData := CreateTestData([1.0, 1.0, 1.0, 1.0, 10.0]);
   LStats := TAdvancedStats.Create(LData);
@@ -116,17 +101,17 @@ end;
 
 procedure Test_Kurtosis;
 var LData: TDoubleArray; LStats: TAdvancedStats;
-begin WriteLn('Test_Kurtosis:');
+begin
   LData := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0]);
   LStats := TAdvancedStats.Create(LData);
   Check(LStats.Kurtosis < 0, 'Uniform data has negative kurtosis (platykurtic)');
-  Check(Abs(LStats.Kurtosis - (-1.3)) < 0.2, 'Kurtosis ≈ -1.3 for uniform 1..5');
+  Check(Abs(LStats.Kurtosis - (-1.3)) < 0.2, 'Kurtosis ~ -1.3 for uniform 1..5');
   LStats.Free;
 end;
 
 procedure Test_Percentile;
 var LData: TDoubleArray; LStats: TAdvancedStats;
-begin WriteLn('Test_Percentile:');
+begin
   LData := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0]);
   LStats := TAdvancedStats.Create(LData);
   Check(Abs(LStats.Percentile(0) - 1.0) < 0.001, 'P0 = 1.0');
@@ -137,7 +122,7 @@ end;
 
 procedure Test_IQR;
 var LData: TDoubleArray; LStats: TAdvancedStats;
-begin WriteLn('Test_IQR:');
+begin
   LData := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0]);
   LStats := TAdvancedStats.Create(LData);
   Check(Abs(LStats.IQR - 2.0) < 0.01, 'IQR = 2.0');
@@ -146,7 +131,7 @@ end;
 
 procedure Test_DetectOutliers_Tukey;
 var LData: TDoubleArray; LStats: TAdvancedStats; LResult: TOutlierDetection;
-begin WriteLn('Test_DetectOutliers_Tukey:');
+begin
   LData := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0, 100.0]);
   LStats := TAdvancedStats.Create(LData);
   LResult := LStats.DetectOutliers_Tukey;
@@ -159,7 +144,7 @@ end;
 procedure Test_DetectOutliers_ZScore;
 var LData: TDoubleArray; LStats: TAdvancedStats; LResult: TOutlierDetection;
   LFound100: Boolean; I: Integer;
-begin WriteLn('Test_DetectOutliers_ZScore:');
+begin
   LData := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0, 100.0]);
   LStats := TAdvancedStats.Create(LData);
   LResult := LStats.DetectOutliers_ZScore(1.5);
@@ -173,7 +158,7 @@ end;
 
 procedure Test_DetectOutliers_ModifiedZScore;
 var LData: TDoubleArray; LStats: TAdvancedStats; LResult: TOutlierDetection;
-begin WriteLn('Test_DetectOutliers_ModifiedZScore:');
+begin
   LData := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0, 100.0]);
   LStats := TAdvancedStats.Create(LData);
   LResult := LStats.DetectOutliers_ModifiedZScore;
@@ -184,11 +169,11 @@ end;
 
 procedure Test_ConfidenceInterval;
 var LData: TDoubleArray; LStats: TAdvancedStats; LCI: TConfidenceInterval;
-begin WriteLn('Test_ConfidenceInterval:');
+begin
   LData := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0]);
   LStats := TAdvancedStats.Create(LData);
   LCI := LStats.ConfidenceInterval(0.95);
-  Check(Abs(LCI.Level - 0.95) < 0.01, 'Level ≈ 0.95');
+  Check(Abs(LCI.Level - 0.95) < 0.01, 'Level ~ 0.95');
   Check(LCI.Lower < 3.0, 'Lower < 3.0');
   Check(LCI.Upper > 3.0, 'Upper > 3.0');
   LStats.Free;
@@ -196,21 +181,21 @@ end;
 
 procedure Test_BootstrapCI;
 var LData: TDoubleArray; LStats: TAdvancedStats; LCI: TConfidenceInterval;
-begin WriteLn('Test_BootstrapCI:');
+begin
   LData := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]);
   LStats := TAdvancedStats.Create(LData);
   LCI := LStats.BootstrapCI(10000, 0.95);
   { TG-23: Fixed seed (12345) makes BootstrapCI fully deterministic }
-  CheckApprox(LCI.Lower, 3.7, 0.15, 'Bootstrap CI lower ≈ 3.7');
-  CheckApprox(LCI.Upper, 7.3, 0.15, 'Bootstrap CI upper ≈ 7.3');
-  CheckApprox(LCI.Upper - LCI.Lower, 3.6, 0.3, 'Bootstrap CI width ≈ 3.6');
+  CheckNear(3.7, LCI.Lower, 0.15, 'Bootstrap CI lower ~ 3.7');
+  CheckNear(7.3, LCI.Upper, 0.15, 'Bootstrap CI upper ~ 7.3');
+  CheckNear(3.6, LCI.Upper - LCI.Lower, 0.3, 'Bootstrap CI width ~ 3.6');
   Check(Abs(LCI.Level - 0.95) < 0.01, 'Bootstrap CI level = 0.95');
   LStats.Free;
 end;
 
 procedure Test_TestNormality;
 var LData: TDoubleArray; LStats: TAdvancedStats; LResult: TNormalityTest;
-begin WriteLn('Test_TestNormality:');
+begin
   LData := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0]);
   LStats := TAdvancedStats.Create(LData);
   LResult := LStats.TestNormalityByMoments;
@@ -221,7 +206,7 @@ end;
 
 procedure Test_CompareWith;
 var LData1, LData2: TDoubleArray; LStats: TAdvancedStats; LTStat: Double;
-begin WriteLn('Test_CompareWith:');
+begin
   LData1 := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0]);
   LData2 := CreateTestData([2.0, 3.0, 4.0, 5.0, 6.0]);
   LStats := TAdvancedStats.Create(LData1);
@@ -232,7 +217,7 @@ end;
 
 procedure Test_EffectSize;
 var LData1, LData2: TDoubleArray; LStats: TAdvancedStats; LD: Double;
-begin WriteLn('Test_EffectSize:');
+begin
   LData1 := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0]);
   LData2 := CreateTestData([2.0, 3.0, 4.0, 5.0, 6.0]);
   LStats := TAdvancedStats.Create(LData1);
@@ -243,7 +228,7 @@ end;
 
 procedure Test_EmptyData;
 var LData: TDoubleArray; LStats: TAdvancedStats;
-begin WriteLn('Test_EmptyData:');
+begin
   LData := nil;
   LStats := TAdvancedStats.Create(LData);
   Check(LStats.Count = 0, 'Count = 0');
@@ -255,7 +240,7 @@ end;
 
 procedure Test_SingleValue;
 var LData: TDoubleArray; LStats: TAdvancedStats;
-begin WriteLn('Test_SingleValue:');
+begin
   LData := CreateTestData([42.0]);
   LStats := TAdvancedStats.Create(LData);
   Check(LStats.Count = 1, 'Count = 1');
@@ -270,102 +255,161 @@ end;
   Raising a managed exception is acceptable; crashing is not. }
 
 procedure Test_NaNInput_NoCrash;
-var LData: TDoubleArray; LHandled: Boolean;
-begin WriteLn('Test_NaNInput_NoCrash:');
-  LHandled := True;
+var LData: TDoubleArray; LStats: TAdvancedStats;
+begin
   LData := CreateTestData([1.0, 2.0, DoubleQuietNaN, 4.0, 5.0]);
+  LStats := TAdvancedStats.Create(LData);
   try
-    TAdvancedStats.Create(LData).Mean;
-    TAdvancedStats.Create(LData).Median;
-    TAdvancedStats.Create(LData).StdDev;
-    TAdvancedStats.Create(LData).Variance;
-  except end;
-  Check(LHandled, 'NaN input: all stats survive without segfault');
+    try LStats.Mean; except end;
+    try LStats.Median; except end;
+    try LStats.StdDev; except end;
+    try LStats.Variance; except end;
+  finally
+    LStats.Free;
+  end;
+  Check(True, 'NaN input: all stats survive without segfault');
 end;
 
 procedure Test_InfinityInput_NoCrash;
-var LData: TDoubleArray; LHandled: Boolean;
-begin WriteLn('Test_InfinityInput_NoCrash:');
-  LHandled := True;
+var LData: TDoubleArray; LStats: TAdvancedStats;
+begin
   LData := CreateTestData([1.0, 2.0, MakePositiveInfinity, 4.0, 5.0]);
+  LStats := TAdvancedStats.Create(LData);
   try
-    TAdvancedStats.Create(LData).Mean;
-    TAdvancedStats.Create(LData).Median;
-    TAdvancedStats.Create(LData).StdDev;
-    TAdvancedStats.Create(LData).Variance;
-  except end;
-  Check(LHandled, 'Positive Infinity input: all stats survive without segfault');
+    try LStats.Mean; except end;
+    try LStats.Median; except end;
+    try LStats.StdDev; except end;
+    try LStats.Variance; except end;
+  finally
+    LStats.Free;
+  end;
+  Check(True, 'Positive Infinity input: all stats survive without segfault');
 
-  LHandled := True;
   LData := CreateTestData([1.0, 2.0, MakeNegativeInfinity, 4.0, 5.0]);
+  LStats := TAdvancedStats.Create(LData);
   try
-    TAdvancedStats.Create(LData).Mean;
-    TAdvancedStats.Create(LData).Median;
-    TAdvancedStats.Create(LData).StdDev;
-    TAdvancedStats.Create(LData).Variance;
-  except end;
-  Check(LHandled, 'Negative Infinity input: all stats survive without segfault');
+    try LStats.Mean; except end;
+    try LStats.Median; except end;
+    try LStats.StdDev; except end;
+    try LStats.Variance; except end;
+  finally
+    LStats.Free;
+  end;
+  Check(True, 'Negative Infinity input: all stats survive without segfault');
 end;
 
 procedure Test_NaNInfinity_Kurtosis;
-var LData: TDoubleArray; LHandled: Boolean;
-begin WriteLn('Test_NaNInfinity_Kurtosis:');
-  LHandled := True;
+var LData: TDoubleArray; LStats: TAdvancedStats;
+begin
   LData := CreateTestData([1.0, 2.0, DoubleQuietNaN, 4.0, 5.0]);
+  LStats := TAdvancedStats.Create(LData);
   try
-    TAdvancedStats.Create(LData).Kurtosis;
-    TAdvancedStats.Create(LData).Skewness;
-  except end;
-  Check(LHandled, 'NaN: Kurtosis/Skewness survive without segfault');
+    try LStats.Kurtosis; except end;
+    try LStats.Skewness; except end;
+  finally
+    LStats.Free;
+  end;
+  Check(True, 'NaN: Kurtosis/Skewness survive without segfault');
 
-  LHandled := True;
   LData := CreateTestData([1.0, MakePositiveInfinity, 3.0, 4.0, 5.0]);
+  LStats := TAdvancedStats.Create(LData);
   try
-    TAdvancedStats.Create(LData).Kurtosis;
-    TAdvancedStats.Create(LData).Skewness;
-  except end;
-  Check(LHandled, 'Infinity: Kurtosis/Skewness survive without segfault');
+    try LStats.Kurtosis; except end;
+    try LStats.Skewness; except end;
+  finally
+    LStats.Free;
+  end;
+  Check(True, 'Infinity: Kurtosis/Skewness survive without segfault');
 end;
 
 procedure Test_NaNInfinity_Percentile;
-var LData: TDoubleArray; LHandled: Boolean;
-begin WriteLn('Test_NaNInfinity_Percentile:');
-  LHandled := True;
+var LData: TDoubleArray; LStats: TAdvancedStats;
+begin
   LData := CreateTestData([1.0, 2.0, DoubleQuietNaN, 4.0, 5.0]);
-  try TAdvancedStats.Create(LData).Percentile(50); except end;
-  Check(LHandled, 'NaN: Percentile survives without segfault');
+  LStats := TAdvancedStats.Create(LData);
+  try
+    try LStats.Percentile(50); except end;
+  finally
+    LStats.Free;
+  end;
+  Check(True, 'NaN: Percentile survives without segfault');
 
-  LHandled := True;
   LData := CreateTestData([1.0, 2.0, 3.0, 4.0, MakePositiveInfinity]);
-  try TAdvancedStats.Create(LData).Percentile(99); except end;
-  Check(LHandled, 'Infinity: Percentile survives without segfault');
+  LStats := TAdvancedStats.Create(LData);
+  try
+    try LStats.Percentile(99); except end;
+  finally
+    LStats.Free;
+  end;
+  Check(True, 'Infinity: Percentile survives without segfault');
 end;
 
-{ === Run All Tests === }
-
-procedure RunAllTests;
+procedure Test_GetData;
+var LOrig, LCopy: TDoubleArray; LStats: TAdvancedStats;
 begin
-  WriteLn('=== TAdvancedStats Tests ===');
-  Test_Create; Test_Mean; Test_Median; Test_StdDev; Test_Variance;
-  Test_Skewness; Test_Kurtosis; Test_Percentile; Test_IQR;
-  Test_DetectOutliers_Tukey; Test_DetectOutliers_ZScore; Test_DetectOutliers_ModifiedZScore;
-  Test_ConfidenceInterval; Test_BootstrapCI; Test_TestNormality;
-  Test_CompareWith; Test_EffectSize; Test_EmptyData; Test_SingleValue;
-  WriteLn;
-  WriteLn('=== NaN/Infinity Input Tests (TG-06) ===');
-  Test_NaNInput_NoCrash; Test_InfinityInput_NoCrash;
-  Test_NaNInfinity_Kurtosis; Test_NaNInfinity_Percentile;
+  LOrig := CreateTestData([10.0, 20.0, 30.0]);
+  LStats := TAdvancedStats.Create(LOrig);
+  try
+    LCopy := LStats.GetData;
+    Check(Length(LCopy) = 3, 'GetData returns correct length');
+    CheckNear(10.0, LCopy[0], 0.001, 'GetData[0] = 10.0');
+    CheckNear(20.0, LCopy[1], 0.001, 'GetData[1] = 20.0');
+    CheckNear(30.0, LCopy[2], 0.001, 'GetData[2] = 30.0');
+    { 修改副本不影响原始数据 }
+    LCopy[0] := 999.0;
+    LCopy := LStats.GetData;
+    CheckNear(10.0, LCopy[0], 0.001, 'GetData returns independent copy');
+  finally
+    LStats.Free;
+  end;
 end;
 
+procedure Test_Count;
+var LStats: TAdvancedStats;
 begin
-  WriteLn('=== nextpas.core.bench.stats.advanced Test Suite ===');
-  WriteLn('');
-  RunAllTests;
-  WriteLn('');
-  WriteLn('=== Test Summary ===');
-  WriteLn('Total: ', GTestsPassed + GTestsFailed);
-  WriteLn('Passed: ', GTestsPassed);
-  WriteLn('Failed: ', GTestsFailed);
-  if GTestsFailed > 0 then begin WriteLn; WriteLn('*** FAILED ***'); Halt(1); end
-  else begin WriteLn; WriteLn('✓ All tests passed!'); end;
+  LStats := TAdvancedStats.Create(CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0]));
+  try
+    Check(5 = LStats.Count, 'Count = 5 for 5-element data');
+  finally
+    LStats.Free;
+  end;
+  LStats := TAdvancedStats.Create(CreateTestData([]));
+  try
+    Check(0 = LStats.Count, 'Count = 0 for empty data');
+  finally
+    LStats.Free;
+  end;
+end;
+
+var
+  T: TTestSuite;
+begin
+  T := TTestSuite.Create('nextpas.core.bench.stats.advanced');
+  T.Test('Create', @Test_Create);
+  T.Test('Mean', @Test_Mean);
+  T.Test('Median', @Test_Median);
+  T.Test('StdDev', @Test_StdDev);
+  T.Test('Variance', @Test_Variance);
+  T.Test('Skewness', @Test_Skewness);
+  T.Test('Kurtosis', @Test_Kurtosis);
+  T.Test('Percentile', @Test_Percentile);
+  T.Test('IQR', @Test_IQR);
+  T.Test('DetectOutliers_Tukey', @Test_DetectOutliers_Tukey);
+  T.Test('DetectOutliers_ZScore', @Test_DetectOutliers_ZScore);
+  T.Test('DetectOutliers_ModifiedZScore', @Test_DetectOutliers_ModifiedZScore);
+  T.Test('ConfidenceInterval', @Test_ConfidenceInterval);
+  T.Test('BootstrapCI', @Test_BootstrapCI);
+  T.Test('TestNormality', @Test_TestNormality);
+  T.Test('CompareWith', @Test_CompareWith);
+  T.Test('EffectSize', @Test_EffectSize);
+  T.Test('EmptyData', @Test_EmptyData);
+  T.Test('SingleValue', @Test_SingleValue);
+  T.Test('NaNInput_NoCrash', @Test_NaNInput_NoCrash);
+  T.Test('InfinityInput_NoCrash', @Test_InfinityInput_NoCrash);
+  T.Test('NaNInfinity_Kurtosis', @Test_NaNInfinity_Kurtosis);
+  T.Test('NaNInfinity_Percentile', @Test_NaNInfinity_Percentile);
+  T.Test('GetData', @Test_GetData);
+  T.Test('Count', @Test_Count);
+  T.Run;
+  T.Summary;
 end.

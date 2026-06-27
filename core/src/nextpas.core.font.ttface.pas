@@ -24,6 +24,7 @@ type
   private
     FData: array of Byte;           // 完整文件数据
     FDataLength: Int32;
+    FTTCFaceOffset: Int32;          // TTC 第一个 face 的文件偏移（单 TTF 为 0）
     FTableCount: Int32;
     FTables: TFontTableEntryArray;
     FFormat: TFontFileFormat;
@@ -136,6 +137,7 @@ var
 begin
   inherited Create;
   FValid := False;
+  FTTCFaceOffset := 0;
   FHasFmt4 := False;
   FHasFmt12 := False;
   FLastError := '';
@@ -195,6 +197,7 @@ var
 begin
   inherited Create;
   FValid := False;
+  FTTCFaceOffset := 0;
   FHasFmt4 := False;
   FHasFmt12 := False;
   FLastError := '';
@@ -300,13 +303,34 @@ end;
 procedure TTFontFace.ParseHeader;
 var
   LMagic: UInt32;
+  LFaceCount, LFaceMagic: UInt32;
 begin
   FFormat := fffUnknown;
   LMagic := ReadUInt32BE(0);
   if LMagic = FONT_MAGIC_TRUETYPE then
     FFormat := fffTrueType
   else if LMagic = FONT_MAGIC_OTTO then
-    FFormat := fffOpenTypeCff;
+    FFormat := fffOpenTypeCff
+  else if LMagic = FONT_MAGIC_TTC then
+  begin
+    { TTC: 读取第一个 face 偏移 }
+    LFaceCount := ReadUInt32BE(8);
+    if LFaceCount < 1 then
+      Exit;
+    FTTCFaceOffset := ReadUInt32BE(12);
+    if (FTTCFaceOffset < 12) or (FTTCFaceOffset >= FDataLength - 12) then
+    begin
+      FTTCFaceOffset := 0;
+      Exit;
+    end;
+    LFaceMagic := ReadUInt32BE(FTTCFaceOffset);
+    if LFaceMagic = FONT_MAGIC_TRUETYPE then
+      FFormat := fffTrueType
+    else if LFaceMagic = FONT_MAGIC_OTTO then
+      FFormat := fffOpenTypeCff
+    else
+      FTTCFaceOffset := 0;
+  end;
 end;
 
 procedure TTFontFace.ParseTableDirectory;
@@ -314,12 +338,12 @@ var
   I: Int32;
   LOffset: Int32;
 begin
-  FTableCount := ReadUInt16BE(4);
+  FTableCount := ReadUInt16BE(4 + FTTCFaceOffset);
   if (FTableCount < 1) or (FTableCount > 256) then
     raise EFontError.Create('Invalid table count');
 
   SetLength(FTables, FTableCount);
-  LOffset := 12; // 跳过 TTC header (sfVersion + numTables + searchRange + entrySelector + rangeShift)
+  LOffset := 12 + FTTCFaceOffset;
   for I := 0 to FTableCount - 1 do
   begin
     FTables[I].Tag := ReadUInt32BE(LOffset);

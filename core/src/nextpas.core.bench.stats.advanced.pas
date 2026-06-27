@@ -255,6 +255,10 @@ begin
   if Length(FData) < 2 then Exit(0);
 
   LMean := Mean;
+  { NaN/Inf guard: 防止 FPC FPU 异常 (Runtime Error 207) }
+  if IsNaN(LMean) or IsInfinite(LMean) then
+    Exit(0);
+
   LSum := 0;
   for I := 0 to High(FData) do
     LSum := LSum + Sqr(FData[I] - LMean);
@@ -275,6 +279,9 @@ begin
 
   LMean := Mean;
   LStdDev := StdDev;
+  { NaN/Inf guard: 防止 FPC FPU 异常 (Runtime Error 207) }
+  if IsNaN(LMean) or IsInfinite(LMean) or IsNaN(LStdDev) or IsInfinite(LStdDev) then
+    Exit(0);
   if LStdDev = 0 then Exit(0);
 
   LSum := 0;
@@ -307,6 +314,9 @@ begin
   if LCount < 4 then Exit(0);
 
   LMean := Mean;
+  { NaN/Inf guard: 防止 FPC FPU 异常 (Runtime Error 207) }
+  if IsNaN(LMean) or IsInfinite(LMean) then
+    Exit(0);
 
   LSum2 := 0;
   LSum4 := 0;
@@ -734,7 +744,7 @@ end;
 
 function TAdvancedStats.GetData: TDoubleArray;
 begin
-  Result := FData;
+  Result := Copy(FData);
 end;
 
 function TAdvancedStats.Count: Integer;

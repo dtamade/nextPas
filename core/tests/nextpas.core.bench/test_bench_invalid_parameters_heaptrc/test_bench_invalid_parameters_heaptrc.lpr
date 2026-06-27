@@ -1,9 +1,6 @@
 program test_bench_invalid_parameters_heaptrc;
 
-{$mode objfpc}{$H+}
-{$modeswitch advancedrecords}
-{$modeswitch anonymousfunctions}
-{$modeswitch functionreferences}
+{$I nextpas.core.settings.inc}
 
 uses
   {$ifdef unix}
@@ -12,7 +9,8 @@ uses
   nextpas.core.exception,
   nextpas.core.bench,
   nextpas.core.bench.intf,
-  nextpas.core.time.base;
+  nextpas.core.time.base,
+  nextpas.core.test;
 
 procedure ExpectSetMinDurationRaised;
 var
@@ -199,12 +197,17 @@ begin
   end;
 end;
 
+var
+  T: TTestSuite;
 begin
-  ExpectSetMinDurationRaised;
-  ExpectSetMaxIterationsRaised;
-  ExpectSetMinSamplesRaised;
-  ExpectAddParallelRaised;
-  ExpectSetWarmupItersRaised;
+  T := TTestSuite.Create('nextpas.core.bench.invalid_parameters.heaptrc');
+  T.Test('SetMinDuration(0) raises EBenchInvalidParam', @ExpectSetMinDurationRaised);
+  T.Test('SetMaxIterations(0) raises EBenchInvalidParam', @ExpectSetMaxIterationsRaised);
+  T.Test('SetMinSamples(0) raises EBenchInvalidParam', @ExpectSetMinSamplesRaised);
+  T.Test('AddParallel(nil,0) raises EBenchInvalidParam', @ExpectAddParallelRaised);
+  T.Test('SetWarmupIters(-1) raises EBenchInvalidParam', @ExpectSetWarmupItersRaised);
+  T.Run;
+  T.Summary;
 
   WriteLn('INVALID_PARAMETERS_OK');
   WriteLn('ALL_EXCEPTION_TYPES_VERIFIED');

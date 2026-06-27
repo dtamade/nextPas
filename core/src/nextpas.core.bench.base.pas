@@ -330,13 +330,52 @@ begin
     DoQuickSort(AData, I, ARight, ADepthLimit - 1);
 end;
 
+{ IEEE 754 NaN 检测: exponent=全1 且 mantissa≠0 }
+function IsDoubleNaN(const AValue: Double): Boolean; inline;
+var
+  LBits: UInt64 absolute AValue;
+begin
+  Result := ((LBits and $7FF0000000000000) = $7FF0000000000000)
+        and ((LBits and $000FFFFFFFFFFFFF) <> 0);
+end;
+
+{ NaN 安全分区: 将 NaN 值移到数组末尾，返回非 NaN 元素个数 }
+function PartitionNaNsToTail(var AData: TDoubleArray): Integer;
+var
+  LHead, LTail: Integer;
+  LTmp: Double;
+begin
+  LHead := 0;
+  LTail := High(AData);
+  while LHead <= LTail do
+  begin
+    if IsDoubleNaN(AData[LTail]) then
+      Dec(LTail)
+    else if IsDoubleNaN(AData[LHead]) then
+    begin
+      LTmp := AData[LHead];
+      AData[LHead] := AData[LTail];
+      AData[LTail] := LTmp;
+      Inc(LHead);
+      Dec(LTail);
+    end
+    else
+      Inc(LHead);
+  end;
+  Result := LTail + 1;  { 非 NaN 元素的个数 }
+end;
+
 procedure SortDoubleArray(var AData: TDoubleArray);
 var
-  LLen: Integer;
+  LLen, LNonNaN: Integer;
 begin
   LLen := Length(AData);
   if LLen > 1 then
-    DoQuickSort(AData, 0, High(AData), 2 * IntLog2(LLen));  // IntroSort depth limit
+  begin
+    LNonNaN := PartitionNaNsToTail(AData);
+    if LNonNaN > 1 then
+      DoQuickSort(AData, 0, LNonNaN - 1, 2 * IntLog2(LNonNaN));
+  end;
 end;
 
 function DefaultBenchConfig: TBenchConfig;

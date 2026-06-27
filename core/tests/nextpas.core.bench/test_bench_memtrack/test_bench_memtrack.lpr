@@ -1,7 +1,6 @@
 program test_bench_memtrack;
 
-{$mode objfpc}{$H+}
-{$modeswitch advancedrecords}
+{$I nextpas.core.settings.inc}
 
 uses
   {$ifdef unix}
@@ -10,26 +9,11 @@ uses
   nextpas.core.math.scalar,
   nextpas.core.system.classes,
   nextpas.core.bench.memtrack,
-  nextpas.core.bench.parallel;
+  nextpas.core.bench.parallel,
+  nextpas.core.test;
 
 var
-  GTestsPassed: Integer = 0;
-  GTestsFailed: Integer = 0;
   GParallelTracker: TMemoryTracker;
-
-procedure Check(ACondition: Boolean; const ATestName: string);
-begin
-  if ACondition then
-  begin
-    Inc(GTestsPassed);
-    WriteLn('  ✓ ', ATestName);
-  end
-  else
-  begin
-    Inc(GTestsFailed);
-    WriteLn('  ✗ ', ATestName);
-  end;
-end;
 
 { === TMemoryTracker Tests === }
 
@@ -37,7 +21,6 @@ procedure Test_Create;
 var
   LTracker: TMemoryTracker;
 begin
-  WriteLn('Test_Create:');
   LTracker := TMemoryTracker.Create(True);
   Check(LTracker.IsEnabled = True, 'Enabled by default');
   Check(LTracker.GetStats.AllocCount = 0, 'Initial AllocCount = 0');
@@ -54,7 +37,6 @@ procedure Test_Create_Disabled;
 var
   LTracker: TMemoryTracker;
 begin
-  WriteLn('Test_Create_Disabled:');
   LTracker := TMemoryTracker.Create(False);
   Check(LTracker.IsEnabled = False, 'Disabled when specified');
 end;
@@ -64,7 +46,6 @@ var
   LTracker: TMemoryTracker;
   LStats: TMemoryStats;
 begin
-  WriteLn('Test_RecordAlloc:');
   LTracker := TMemoryTracker.Create(True);
 
   LTracker.RecordAlloc(100);
@@ -91,7 +72,6 @@ var
   LTracker: TMemoryTracker;
   LStats: TMemoryStats;
 begin
-  WriteLn('Test_RecordFree:');
   LTracker := TMemoryTracker.Create(True);
 
   LTracker.RecordAlloc(100);
@@ -112,16 +92,15 @@ var
   LTracker: TMemoryTracker;
   LStats: TMemoryStats;
 begin
-  WriteLn('Test_Peak:');
   LTracker := TMemoryTracker.Create(True);
 
-  // Alloc 100 → Current: 1 alloc, 100 bytes, Peak: 1 alloc, 100 bytes
+  // Alloc 100 -> Current: 1 alloc, 100 bytes, Peak: 1 alloc, 100 bytes
   LTracker.RecordAlloc(100);
-  // Alloc 200 → Current: 2 allocs, 300 bytes, Peak: 2 allocs, 300 bytes
+  // Alloc 200 -> Current: 2 allocs, 300 bytes, Peak: 2 allocs, 300 bytes
   LTracker.RecordAlloc(200);
-  // Free 100 → Current: 1 alloc, 200 bytes, Peak: 2 allocs, 300 bytes
+  // Free 100 -> Current: 1 alloc, 200 bytes, Peak: 2 allocs, 300 bytes
   LTracker.RecordFree(100);
-  // Alloc 300 → Current: 2 allocs, 500 bytes, Peak: 2 allocs, 500 bytes
+  // Alloc 300 -> Current: 2 allocs, 500 bytes, Peak: 2 allocs, 500 bytes
   LTracker.RecordAlloc(300);
 
   LStats := LTracker.GetStats;
@@ -136,7 +115,6 @@ var
   LTracker: TMemoryTracker;
   LStats: TMemoryStats;
 begin
-  WriteLn('Test_Reset:');
   LTracker := TMemoryTracker.Create(True);
 
   LTracker.RecordAlloc(100);
@@ -159,7 +137,6 @@ var
   LTracker: TMemoryTracker;
   LStats: TMemoryStats;
 begin
-  WriteLn('Test_Disabled:');
   LTracker := TMemoryTracker.Create(False);
 
   LTracker.RecordAlloc(100);
@@ -176,7 +153,6 @@ procedure Test_BytesPerOp;
 var
   LTracker: TMemoryTracker;
 begin
-  WriteLn('Test_BytesPerOp:');
   LTracker := TMemoryTracker.Create(True);
 
   LTracker.RecordAlloc(100);
@@ -191,7 +167,6 @@ procedure Test_AllocsPerOp;
 var
   LTracker: TMemoryTracker;
 begin
-  WriteLn('Test_AllocsPerOp:');
   LTracker := TMemoryTracker.Create(True);
 
   LTracker.RecordAlloc(100);
@@ -290,8 +265,6 @@ var
   LArgs: array[0..3] of Pointer;
   LThread, LAlloc: Integer;
 begin
-  WriteLn('TestMultiThreadPeakTracking:');
-
   LTracker := TMemoryTracker.Create(True);
   LTracker.Reset;
 
@@ -337,7 +310,6 @@ var
   LBench: TParallelBenchmark;
   LStats: TMemoryStats;
 begin
-  WriteLn('Test_ParallelThreadSafety:');
   GParallelTracker := TMemoryTracker.Create(True);
 
   LBench := TParallelBenchmark.Create(@ParallelRecordAlloc, THREAD_COUNT,
@@ -370,8 +342,6 @@ var
   LPtr: Pointer;
   LAllocCountBeforeDisable: Int64;
 begin
-  WriteLn('Test_GlobalMemoryTracking_EnableDisable:');
-
   // Disable first to ensure clean state
   DisableGlobalMemoryTracking;
   ResetGlobalMemoryTracker;
@@ -405,8 +375,6 @@ procedure Test_GlobalMemoryTracker_Reset;
 var
   LStats: TMemoryStats;
 begin
-  WriteLn('Test_GlobalMemoryTracker_Reset:');
-
   EnableGlobalMemoryTracking;
   GetMem(128);
 
@@ -426,8 +394,6 @@ procedure Test_GetGlobalMemoryStats;
 var
   LStats: TMemoryStats;
 begin
-  WriteLn('Test_GetGlobalMemoryStats:');
-
   ResetGlobalMemoryTracker;
   EnableGlobalMemoryTracking;
 
@@ -448,8 +414,6 @@ var
   LNilPtr: Pointer;
   LStatsBeforeRealloc, LStatsAfterRealloc: TMemoryStats;
 begin
-  WriteLn('Test_ReAllocMem_Tracking:');
-
   DisableGlobalMemoryTracking;
   ResetGlobalMemoryTracker;
   EnableGlobalMemoryTracking;
@@ -490,52 +454,36 @@ begin
   DisableGlobalMemoryTracking;
 end;
 
-{ === Run All Tests === }
-
-procedure RunAllTests;
+procedure Test_GlobalMemoryTracker_Singleton;
+var LTracker1, LTracker2: TMemoryTracker;
 begin
-  WriteLn('=== TMemoryTracker Tests ===');
-  Test_Create;
-  Test_Create_Disabled;
-  Test_RecordAlloc;
-  Test_RecordFree;
-  Test_Peak;
-  Test_Reset;
-  Test_Disabled;
-  Test_BytesPerOp;
-  Test_AllocsPerOp;
-  Test_ParallelThreadSafety;
-  TestMultiThreadPeakTracking;
-
-  WriteLn('');
-  WriteLn('=== GlobalMemoryTracker API Tests (TG-01) ===');
-  Test_GlobalMemoryTracking_EnableDisable;
-  Test_GlobalMemoryTracker_Reset;
-  Test_GetGlobalMemoryStats;
-  Test_ReAllocMem_Tracking;
+  LTracker1 := GlobalMemoryTracker;
+  LTracker2 := GlobalMemoryTracker;
+  Check(LTracker1.IsEnabled = LTracker2.IsEnabled, 'GlobalMemoryTracker returns consistent state');
 end;
 
+var
+  T: TTestSuite;
 begin
-  WriteLn('=== nextpas.core.bench.memtrack Test Suite ===');
-  WriteLn('');
+  T := TTestSuite.Create('nextpas.core.bench.memtrack');
 
-  RunAllTests;
+  T.Test('Create', @Test_Create);
+  T.Test('Create_Disabled', @Test_Create_Disabled);
+  T.Test('RecordAlloc', @Test_RecordAlloc);
+  T.Test('RecordFree', @Test_RecordFree);
+  T.Test('Peak', @Test_Peak);
+  T.Test('Reset', @Test_Reset);
+  T.Test('Disabled', @Test_Disabled);
+  T.Test('BytesPerOp', @Test_BytesPerOp);
+  T.Test('AllocsPerOp', @Test_AllocsPerOp);
+  T.Test('ParallelThreadSafety', @Test_ParallelThreadSafety);
+  T.Test('MultiThreadPeakTracking', @TestMultiThreadPeakTracking);
+  T.Test('GlobalMemoryTracking_EnableDisable', @Test_GlobalMemoryTracking_EnableDisable);
+  T.Test('GlobalMemoryTracker_Reset', @Test_GlobalMemoryTracker_Reset);
+  T.Test('GetGlobalMemoryStats', @Test_GetGlobalMemoryStats);
+  T.Test('ReAllocMem_Tracking', @Test_ReAllocMem_Tracking);
+  T.Test('GlobalMemoryTracker_Singleton', @Test_GlobalMemoryTracker_Singleton);
 
-  WriteLn('');
-  WriteLn('=== Test Summary ===');
-  WriteLn('Total: ', GTestsPassed + GTestsFailed);
-  WriteLn('Passed: ', GTestsPassed);
-  WriteLn('Failed: ', GTestsFailed);
-
-  if GTestsFailed > 0 then
-  begin
-    WriteLn('');
-    WriteLn('*** FAILED ***');
-    Halt(1);
-  end
-  else
-  begin
-    WriteLn('');
-    WriteLn('✓ All tests passed!');
-  end;
+  T.Run;
+  T.Summary;
 end.

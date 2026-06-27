@@ -1,46 +1,21 @@
-PROGRAM = test_bench_report
-FPC = fpc
-FPCFLAGS = -MObjFPC -Sh -O2 -gw -gl
-CORE_ROOT = ../../..
-SRC_DIR = $(CORE_ROOT)/src
+FPC ?= fpc
+CORE_ROOT := ../../..
+BUILD_DIR ?= $(CORE_ROOT)/build/projects/nextpas.core.bench/test_bench_report
+PROGRAM := test_bench_report
+SOURCE := $(PROGRAM).lpr
+FPC_FLAGS ?= -MObjFPC -Sh -O2 -gl -gh
+FPC_FLAGS += -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src
 
-SRCS = $(PROGRAM).lpr \
-       $(SRC_DIR)/nextpas.core.bench.base.pas \
-       $(SRC_DIR)/nextpas.core.bench.baseline.pas \
-       $(SRC_DIR)/nextpas.core.bench.intf.pas \
-       $(SRC_DIR)/nextpas.core.bench.memtrack.pas \
-       $(SRC_DIR)/nextpas.core.bench.parallel.pas \
-       $(SRC_DIR)/nextpas.core.bench.pas \
-       $(SRC_DIR)/nextpas.core.bench.report.pas \
-       $(SRC_DIR)/nextpas.core.bench.runner.pas \
-       $(SRC_DIR)/nextpas.core.bench.stats.pas \
-       $(SRC_DIR)/nextpas.core.bench.stats.advanced.pas \
-       $(SRC_DIR)/nextpas.core.bench.xlang.pas
+.PHONY: build run test clean
 
-BUILD_DIR = build
-BIN_DIR = $(BUILD_DIR)/bin
-OBJ_DIR = $(BUILD_DIR)/obj
+build:
+	@mkdir -p $(BUILD_DIR)
+	$(FPC) $(FPC_FLAGS) $(SOURCE)
 
-TARGET = $(BIN_DIR)/$(PROGRAM)
+run: build
+	$(BUILD_DIR)/$(PROGRAM)
 
-.PHONY: all clean test
-
-all: $(TARGET)
-
-$(TARGET): $(SRCS) | $(BIN_DIR) $(OBJ_DIR)
-	$(FPC) $(FPCFLAGS) \
-		-FU$(OBJ_DIR) -FE$(BIN_DIR) \
-		-Fu$(SRC_DIR) -Fi$(SRC_DIR) \
-		$(PROGRAM).lpr
-
-$(BIN_DIR):
-	mkdir -p $(BIN_DIR)
-
-$(OBJ_DIR):
-	mkdir -p $(OBJ_DIR)
+test: run
 
 clean:
 	rm -rf $(BUILD_DIR)
-
-test: $(TARGET)
-	$(TARGET)

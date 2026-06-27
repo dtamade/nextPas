@@ -1,6 +1,6 @@
 PROGRAM = test_bench_stats
 FPC = fpc
-FPCFLAGS = -MObjFPC -Sh -O2 -gw -gl
+FPCFLAGS = -MObjFPC -Sh -O2 -gw -gl -gh
 CORE_ROOT = ../../..
 SRC_DIR = $(CORE_ROOT)/src
 
@@ -10,7 +10,21 @@ SRCS = $(PROGRAM).lpr \
        $(SRC_DIR)/nextpas.core.bench.stats.pas \
        $(SRC_DIR)/nextpas.core.bench.runner.pas \
        $(SRC_DIR)/nextpas.core.bench.report.pas \
-       $(SRC_DIR)/nextpas.core.bench.pas
+       $(SRC_DIR)/nextpas.core.bench.pas \
+       $(SRC_DIR)/nextpas.core.test.pas \
+       $(SRC_DIR)/nextpas.core.test.base.pas \
+       $(SRC_DIR)/nextpas.core.test.check.pas \
+       $(SRC_DIR)/nextpas.core.test.config.pas \
+       $(SRC_DIR)/nextpas.core.test.expect.pas \
+       $(SRC_DIR)/nextpas.core.test.output.pas \
+       $(SRC_DIR)/nextpas.core.test.output.tap.pas \
+       $(SRC_DIR)/nextpas.core.test.output.json.pas \
+       $(SRC_DIR)/nextpas.core.test.runner.pas \
+       $(SRC_DIR)/nextpas.core.test.runner.context.pas \
+       $(SRC_DIR)/nextpas.core.test.runner.parallel.pas \
+       $(SRC_DIR)/nextpas.core.test.discovery.pas \
+       $(SRC_DIR)/nextpas.core.test.mock.pas \
+       $(SRC_DIR)/nextpas.core.sync.mutex.pas
 
 BUILD_DIR = build
 BIN_DIR = $(BUILD_DIR)/bin

@@ -17,6 +17,7 @@ const
   {** TTF 文件魔数：0x00010000 (TrueType) 或 'OTTO' (CFF OpenType) }
   FONT_MAGIC_TRUETYPE = $00010000;
   FONT_MAGIC_OTTO = $4F54544F;  // 'OTTO'
+  FONT_MAGIC_TTC = $74746366;   // 'ttcf'
 
   {** TTF 表标签（Big-Endian 4 字节标识） }
   TABLE_TAG_HEAD = $68656164;   // 'head'

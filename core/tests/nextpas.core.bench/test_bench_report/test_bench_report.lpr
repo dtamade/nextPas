@@ -1,45 +1,17 @@
 program test_bench_report;
 
-{$mode objfpc}{$H+}
-{$modeswitch advancedrecords}
+{$I nextpas.core.settings.inc}
 
 uses
   nextpas.core.text.conv,
   nextpas.core.bench.base,
   nextpas.core.bench.intf,
   nextpas.core.bench.stats,
-  nextpas.core.bench.report;
+  nextpas.core.bench.report,
+  nextpas.core.test;
 
 var
-  GTestCount: Integer;
-  GPassCount: Integer;
-  GFailCount: Integer;
   GGenerator: TBenchReportGenerator;
-
-procedure Check(ACondition: Boolean; const ATestName: string);
-begin
-  Inc(GTestCount);
-  if ACondition then
-  begin
-    Inc(GPassCount);
-    WriteLn('  ✓ ', ATestName);
-  end
-  else
-  begin
-    Inc(GFailCount);
-    WriteLn('  ✗ ', ATestName);
-  end;
-end;
-
-procedure CheckContains(const AStr, ASubstr, ATestName: string);
-begin
-  Check(Pos(ASubstr, AStr) > 0, ATestName);
-end;
-
-procedure CheckNotContains(const AStr, ASubstr, ATestName: string);
-begin
-  Check(Pos(ASubstr, AStr) = 0, ATestName);
-end;
 
 function CreateTestResults: TBenchResultArray;
 var
@@ -115,8 +87,6 @@ var
   LEnvironment: TBenchEnvironment;
   LConsole: string;
 begin
-  WriteLn('TestPrintToConsole:');
-
   LResults := CreateTestResults;
   LEnvironment := CreateTestEnvironment;
 
@@ -124,18 +94,18 @@ begin
   GGenerator.SetEnvironment(LEnvironment);
   LConsole := GGenerator.PrintToConsole;
 
-  CheckContains(LConsole, 'nextpas.core.bench v1.0', 'Contains version');
-  CheckContains(LConsole, 'Environment:', 'Contains environment header');
-  CheckContains(LConsole, 'OS: linux', 'Contains OS');
-  CheckContains(LConsole, 'CPU: x86_64', 'Contains CPU');
-  CheckContains(LConsole, 'Cores: 16', 'Contains cores');
-  CheckContains(LConsole, 'FPC: 3.3.1', 'Contains FPC version');
-  CheckContains(LConsole, 'Benchmark Results:', 'Contains results header');
-  CheckContains(LConsole, 'HashMap.Put', 'Contains first benchmark');
-  CheckContains(LConsole, 'HashMap.Get(hit)', 'Contains second benchmark');
-  CheckContains(LConsole, 'Bytes.Compare', 'Contains third benchmark');
-  CheckContains(LConsole, '245.3', 'Contains NsPerOp');
-  CheckContains(LConsole, 'Statistics', 'Contains statistics header');
+  CheckContains(LConsole, 'nextpas.core.bench v1.0');
+  CheckContains(LConsole, 'Environment:');
+  CheckContains(LConsole, 'OS: linux');
+  CheckContains(LConsole, 'CPU: x86_64');
+  CheckContains(LConsole, 'Cores: 16');
+  CheckContains(LConsole, 'FPC: 3.3.1');
+  CheckContains(LConsole, 'Benchmark Results:');
+  CheckContains(LConsole, 'HashMap.Put');
+  CheckContains(LConsole, 'HashMap.Get(hit)');
+  CheckContains(LConsole, 'Bytes.Compare');
+  CheckContains(LConsole, '245.3');
+  CheckContains(LConsole, 'Statistics');
 end;
 
 procedure TestToJSON;
@@ -144,8 +114,6 @@ var
   LEnvironment: TBenchEnvironment;
   LJSON: string;
 begin
-  WriteLn('TestToJSON:');
-
   LResults := CreateTestResults;
   LEnvironment := CreateTestEnvironment;
 
@@ -153,20 +121,20 @@ begin
   GGenerator.SetEnvironment(LEnvironment);
   LJSON := GGenerator.ToJSON;
 
-  CheckContains(LJSON, '"version":"1.0"', 'Contains version');
-  CheckContains(LJSON, '"os":"linux"', 'Contains OS');
-  CheckContains(LJSON, '"cpu":"x86_64"', 'Contains CPU');
-  CheckContains(LJSON, '"cores":16', 'Contains cores');
-  CheckContains(LJSON, '"fpc_version":"3.3.1"', 'Contains FPC version');
-  CheckContains(LJSON, '"name":"HashMap.Put"', 'Contains first benchmark');
-  CheckContains(LJSON, '"iterations":1000000', 'Contains iterations');
-  CheckContains(LJSON, '"ns_per_op":245.3', 'Contains NsPerOp');
-  CheckContains(LJSON, '"ops_per_sec":4080000', 'Contains OpsPerSec');
-  CheckContains(LJSON, '"stddev":12.3', 'Contains StdDev');
-  CheckContains(LJSON, '"median":243.1', 'Contains Median');
-  CheckContains(LJSON, '"p95":268.4', 'Contains P95');
-  CheckContains(LJSON, '"p99":289.2', 'Contains P99');
-  CheckContains(LJSON, '"outliers":3', 'Contains Outliers');
+  CheckContains(LJSON, '"version":"1.0"');
+  CheckContains(LJSON, '"os":"linux"');
+  CheckContains(LJSON, '"cpu":"x86_64"');
+  CheckContains(LJSON, '"cores":16');
+  CheckContains(LJSON, '"fpc_version":"3.3.1"');
+  CheckContains(LJSON, '"name":"HashMap.Put"');
+  CheckContains(LJSON, '"iterations":1000000');
+  CheckContains(LJSON, '"ns_per_op":245.3');
+  CheckContains(LJSON, '"ops_per_sec":4080000');
+  CheckContains(LJSON, '"stddev":12.3');
+  CheckContains(LJSON, '"median":243.1');
+  CheckContains(LJSON, '"p95":268.4');
+  CheckContains(LJSON, '"p99":289.2');
+  CheckContains(LJSON, '"outliers":3');
 end;
 
 procedure TestToTSV;
@@ -175,8 +143,6 @@ var
   LEnvironment: TBenchEnvironment;
   LTSV: string;
 begin
-  WriteLn('TestToTSV:');
-
   LResults := CreateTestResults;
   LEnvironment := CreateTestEnvironment;
 
@@ -184,10 +150,10 @@ begin
   GGenerator.SetEnvironment(LEnvironment);
   LTSV := GGenerator.ToTSV;
 
-  CheckContains(LTSV, 'name' + #9 + 'status' + #9 + 'skip_reason' + #9 + 'iterations', 'Contains header');
-  CheckContains(LTSV, 'HashMap.Put' + #9 + 'ok' + #9 + #9 + '1000000', 'Contains first benchmark');
-  CheckContains(LTSV, 'HashMap.Get(hit)' + #9 + 'ok' + #9 + #9 + '5000000', 'Contains second benchmark');
-  CheckContains(LTSV, 'Bytes.Compare' + #9 + 'ok' + #9 + #9 + '10000000', 'Contains third benchmark');
+  CheckContains(LTSV, 'name' + #9 + 'status' + #9 + 'skip_reason' + #9 + 'iterations');
+  CheckContains(LTSV, 'HashMap.Put' + #9 + 'ok' + #9 + #9 + '1000000');
+  CheckContains(LTSV, 'HashMap.Get(hit)' + #9 + 'ok' + #9 + #9 + '5000000');
+  CheckContains(LTSV, 'Bytes.Compare' + #9 + 'ok' + #9 + #9 + '10000000');
 end;
 
 procedure TestToHTML;
@@ -196,8 +162,6 @@ var
   LEnvironment: TBenchEnvironment;
   LHTML: string;
 begin
-  WriteLn('TestToHTML:');
-
   LResults := CreateTestResults;
   LEnvironment := CreateTestEnvironment;
 
@@ -205,18 +169,18 @@ begin
   GGenerator.SetEnvironment(LEnvironment);
   LHTML := GGenerator.ToHTML;
 
-  CheckContains(LHTML, '<!DOCTYPE html>', 'Contains DOCTYPE');
-  CheckContains(LHTML, '<title>nextpas.core.bench Report</title>', 'Contains title');
-  CheckContains(LHTML, '<h1>nextpas.core.bench Report</h1>', 'Contains main header');
-  CheckContains(LHTML, '<h2>Environment</h2>', 'Contains environment header');
-  CheckContains(LHTML, 'linux', 'Contains OS');
-  CheckContains(LHTML, 'x86_64', 'Contains CPU');
-  CheckContains(LHTML, '<h2>Benchmark Results</h2>', 'Contains results header');
-  CheckContains(LHTML, 'HashMap.Put', 'Contains first benchmark');
-  CheckContains(LHTML, '245.3', 'Contains NsPerOp');
-  CheckContains(LHTML, '<svg', 'Contains SVG chart');
-  CheckNotContains(LHTML, 'new Chart(', 'Does not depend on Chart.js');
-  CheckContains(LHTML, '<h2>Detailed Statistics</h2>', 'Contains statistics header');
+  CheckContains(LHTML, '<!DOCTYPE html>');
+  CheckContains(LHTML, '<title>nextpas.core.bench Report</title>');
+  CheckContains(LHTML, '<h1>nextpas.core.bench Report</h1>');
+  CheckContains(LHTML, '<h2>Environment</h2>');
+  CheckContains(LHTML, 'linux');
+  CheckContains(LHTML, 'x86_64');
+  CheckContains(LHTML, '<h2>Benchmark Results</h2>');
+  CheckContains(LHTML, 'HashMap.Put');
+  CheckContains(LHTML, '245.3');
+  CheckContains(LHTML, '<svg');
+  Check(Pos('new Chart(', LHTML) = 0, 'Does not depend on Chart.js');
+  CheckContains(LHTML, '<h2>Detailed Statistics</h2>');
 end;
 
 procedure TestToBenchstat;
@@ -224,24 +188,22 @@ var
   LResults: array of TBenchResult;
   LBenchstat: string;
 begin
-  WriteLn('TestToBenchstat:');
-
   LResults := CreateTestResults;
 
   GGenerator.SetResults(LResults);
   LBenchstat := GGenerator.ToBenchstat;
 
-  CheckContains(LBenchstat, 'name', 'Contains header name');
-  CheckContains(LBenchstat, 'ns/op', 'Contains header ns/op');
-  CheckContains(LBenchstat, '+- %', 'Contains header +- %');
-  CheckContains(LBenchstat, 'B/op', 'Contains header B/op');
-  CheckContains(LBenchstat, 'allocs/op', 'Contains header allocs/op');
-  CheckContains(LBenchstat, 'HashMap.Put', 'Contains first benchmark');
-  CheckContains(LBenchstat, '245.3', 'Contains NsPerOp value');
-  CheckContains(LBenchstat, 'HashMap.Get(hit)', 'Contains second benchmark');
-  CheckContains(LBenchstat, '89.2', 'Contains second NsPerOp');
-  CheckContains(LBenchstat, 'Bytes.Compare', 'Contains third benchmark');
-  CheckContains(LBenchstat, '1024', 'Contains BytesPerOp');
+  CheckContains(LBenchstat, 'name');
+  CheckContains(LBenchstat, 'ns/op');
+  CheckContains(LBenchstat, '+- %');
+  CheckContains(LBenchstat, 'B/op');
+  CheckContains(LBenchstat, 'allocs/op');
+  CheckContains(LBenchstat, 'HashMap.Put');
+  CheckContains(LBenchstat, '245.3');
+  CheckContains(LBenchstat, 'HashMap.Get(hit)');
+  CheckContains(LBenchstat, '89.2');
+  CheckContains(LBenchstat, 'Bytes.Compare');
+  CheckContains(LBenchstat, '1024');
 end;
 
 procedure TestToCrossLanguageHTML;
@@ -249,8 +211,6 @@ var
   LEntries: TCrossLangEntryArray;
   LHTML: string;
 begin
-  WriteLn('TestToCrossLanguageHTML:');
-
   SetLength(LEntries, 4);
   LEntries[0].Name := 'HashMap.Put';
   LEntries[0].Language := 'Pascal';
@@ -267,13 +227,13 @@ begin
 
   LHTML := GGenerator.ToCrossLanguageHTML(LEntries);
 
-  CheckContains(LHTML, '<!DOCTYPE html>', 'Cross-lang contains DOCTYPE');
-  CheckContains(LHTML, 'Pascal', 'Cross-lang contains Pascal');
-  CheckContains(LHTML, 'Go', 'Cross-lang contains Go');
-  CheckContains(LHTML, 'Rust', 'Cross-lang contains Rust');
-  CheckContains(LHTML, 'HashMap.Put', 'Cross-lang contains benchmark name');
-  CheckContains(LHTML, '245.3', 'Cross-lang contains Pascal value');
-  CheckContains(LHTML, 'Sort.1M', 'Cross-lang contains second benchmark');
+  CheckContains(LHTML, '<!DOCTYPE html>');
+  CheckContains(LHTML, 'Pascal');
+  CheckContains(LHTML, 'Go');
+  CheckContains(LHTML, 'Rust');
+  CheckContains(LHTML, 'HashMap.Put');
+  CheckContains(LHTML, '245.3');
+  CheckContains(LHTML, 'Sort.1M');
 end;
 
 procedure TestGenerateBoxPlot;
@@ -281,8 +241,6 @@ var
   LSamples: TDoubleArray;
   LSVG: string;
 begin
-  WriteLn('TestGenerateBoxPlot:');
-
   SetLength(LSamples, 10);
   LSamples[0] := 1.0;
   LSamples[1] := 2.0;
@@ -297,10 +255,10 @@ begin
 
   LSVG := GGenerator.GenerateBoxPlot(LSamples, 'TestBench');
 
-  CheckContains(LSVG, '<svg', 'BoxPlot contains SVG');
-  CheckContains(LSVG, '<rect', 'BoxPlot contains rect (box)');
-  CheckContains(LSVG, 'stroke="#ff6600"', 'BoxPlot contains median line');
-  CheckContains(LSVG, 'Boxplot TestBench', 'BoxPlot contains name in aria-label');
+  CheckContains(LSVG, '<svg');
+  CheckContains(LSVG, '<rect');
+  CheckContains(LSVG, 'stroke="#ff6600"');
+  CheckContains(LSVG, 'Boxplot TestBench');
 end;
 
 procedure TestToHTMLWithBoxPlot;
@@ -309,8 +267,6 @@ var
   LEnvironment: TBenchEnvironment;
   LHTML: string;
 begin
-  WriteLn('TestToHTMLWithBoxPlot:');
-
   LResults := CreateTestResults;
   SetLength(LResults[0].RawSamples, 5);
   LResults[0].RawSamples[0] := 200.0;
@@ -324,8 +280,8 @@ begin
   GGenerator.SetEnvironment(LEnvironment);
   LHTML := GGenerator.ToHTML;
 
-  CheckContains(LHTML, 'Sample Distribution', 'HTML includes sample distribution heading');
-  CheckContains(LHTML, 'Boxplot HashMap.Put', 'HTML includes boxplot aria-label');
+  CheckContains(LHTML, 'Sample Distribution');
+  CheckContains(LHTML, 'Boxplot HashMap.Put');
 end;
 
 procedure TestGenerateComparisonReport;
@@ -334,8 +290,6 @@ var
   LComparisons: array of TBenchComparison;
   LReport: string;
 begin
-  WriteLn('TestGenerateComparisonReport:');
-
   LResults := CreateTestResults;
 
   SetLength(LComparisons, 2);
@@ -357,13 +311,11 @@ begin
 
   LReport := GGenerator.GenerateComparisonReport(LComparisons);
 
-  CheckContains(LReport, 'Baseline Comparison', 'Contains header');
-  CheckContains(LReport, 'HashMap.Put', 'Contains first comparison');
-  CheckContains(LReport, 'HashMap.Get(hit)', 'Contains second comparison');
-  // 比率可能被格式化为不同精度
-  CheckContains(LReport, 'x', 'Contains ratio indicator');
-  CheckContains(LReport, 'slower', 'Contains slower status');
-  // 验证两个 comparison 都出现（报告不应只显示一个）
+  CheckContains(LReport, 'Baseline Comparison');
+  CheckContains(LReport, 'HashMap.Put');
+  CheckContains(LReport, 'HashMap.Get(hit)');
+  CheckContains(LReport, 'x');
+  CheckContains(LReport, 'slower');
   Check(Pos('HashMap.Put', LReport) < Pos('HashMap.Get(hit)', LReport),
     'First comparison appears before second');
 end;
@@ -377,8 +329,6 @@ var
   LTSV: string;
   LHTML: string;
 begin
-  WriteLn('TestSkippedResultsReporting:');
-
   LResults := CreateSkippedResults;
   LEnvironment := CreateTestEnvironment;
 
@@ -386,28 +336,24 @@ begin
   GGenerator.SetEnvironment(LEnvironment);
 
   LConsole := GGenerator.PrintToConsole;
-  CheckContains(LConsole, 'Skipped Benchmarks', 'Console shows skipped section');
-  CheckContains(LConsole, 'SIMD extension unavailable', 'Console shows skip reason');
+  CheckContains(LConsole, 'Skipped Benchmarks');
+  CheckContains(LConsole, 'SIMD extension unavailable');
 
   LJSON := GGenerator.ToJSON;
-  CheckContains(LJSON, '"status":"skipped"', 'JSON shows skipped status');
-  CheckContains(LJSON, '"skip_reason":"SIMD extension unavailable"', 'JSON shows skip reason');
+  CheckContains(LJSON, '"status":"skipped"');
+  CheckContains(LJSON, '"skip_reason":"SIMD extension unavailable"');
 
   LTSV := GGenerator.ToTSV;
-  CheckContains(LTSV, 'status' + #9 + 'skip_reason', 'TSV header includes skip columns');
-  CheckContains(LTSV, 'Unsupported.SIMD' + #9 + 'skipped' + #9 + 'SIMD extension unavailable',
-    'TSV includes skipped benchmark row');
+  CheckContains(LTSV, 'status' + #9 + 'skip_reason');
+  CheckContains(LTSV, 'Unsupported.SIMD' + #9 + 'skipped' + #9 + 'SIMD extension unavailable');
 
   LHTML := GGenerator.ToHTML;
-  CheckContains(LHTML, '<h2>Skipped Benchmarks</h2>', 'HTML shows skipped section');
-  CheckContains(LHTML, 'SIMD extension unavailable', 'HTML shows skip reason');
+  CheckContains(LHTML, '<h2>Skipped Benchmarks</h2>');
+  CheckContains(LHTML, 'SIMD extension unavailable');
 end;
 
 procedure TestFormatNumber;
 begin
-  WriteLn('TestFormatNumber:');
-
-  // 测试数字格式化
   Check(GGenerator.FormatNumber(245.3, 1) = '245.3', 'FormatNumber 245.3');
   Check(GGenerator.FormatNumber(89.2, 2) = '89.20', 'FormatNumber 89.2');
   Check(GGenerator.FormatNumber(0.0, 1) = '0.0', 'FormatNumber 0.0');
@@ -419,9 +365,6 @@ var
   LEnvironment: TBenchEnvironment;
   LJSON: string;
 begin
-  WriteLn('TestInvariantLocaleFormatting:');
-
-  // Framework FloatToStrF is locale-free by design — always uses '.'
   Check(GGenerator.FormatNumber(245.3, 1) = '245.3',
     'FormatNumber uses invariant decimal separator');
 
@@ -430,21 +373,17 @@ begin
   GGenerator.SetResults(LResults);
   GGenerator.SetEnvironment(LEnvironment);
   LJSON := GGenerator.ToJSON;
-  CheckContains(LJSON, '"ns_per_op":245.3', 'JSON keeps invariant decimal separator');
-  CheckNotContains(LJSON, '"ns_per_op":245,3', 'JSON does not emit locale decimal separator');
+  CheckContains(LJSON, '"ns_per_op":245.3');
+  Check(Pos('"ns_per_op":245,3', LJSON) = 0, 'JSON does not emit locale decimal separator');
 end;
 
 procedure TestFormatLargeNumber;
 begin
-  WriteLn('TestFormatLargeNumber:');
-
-  // 测试大数字格式化
   Check(GGenerator.FormatLargeNumber(1000000) = '1,000,000', 'FormatLargeNumber 1M');
   Check(GGenerator.FormatLargeNumber(1000) = '1,000', 'FormatLargeNumber 1K');
   Check(GGenerator.FormatLargeNumber(100) = '100', 'FormatLargeNumber 100');
   Check(GGenerator.FormatLargeNumber(0) = '0', 'FormatLargeNumber 0');
 
-  // TG-30: additional boundary values
   Check(GGenerator.FormatLargeNumber(-999) = '-999', 'FormatLargeNumber -999');
   Check(GGenerator.FormatLargeNumber(-1000) = '-1,000', 'FormatLargeNumber -1000');
   Check(GGenerator.FormatLargeNumber(1) = '1', 'FormatLargeNumber 1');
@@ -455,9 +394,6 @@ end;
 
 procedure TestFormatBytes;
 begin
-  WriteLn('TestFormatBytes:');
-
-  // 测试字节格式化
   Check(GGenerator.FormatBytes(1024) = '1.0 KB', 'FormatBytes 1KB');
   Check(GGenerator.FormatBytes(1048576) = '1.0 MB', 'FormatBytes 1MB');
   Check(GGenerator.FormatBytes(1073741824) = '1.00 GB', 'FormatBytes 1GB');
@@ -466,15 +402,11 @@ end;
 
 procedure TestFormatTime;
 begin
-  WriteLn('TestFormatTime:');
-
-  // 测试时间格式化 (ST-19: uses Unicode micro sign µ)
   Check(GGenerator.FormatTime(1000.0) = '1.00 µs', 'FormatTime 1µs');
   Check(GGenerator.FormatTime(1000000.0) = '1.00 ms', 'FormatTime 1ms');
   Check(GGenerator.FormatTime(1000000000.0) = '1.000 s', 'FormatTime 1s');
   Check(GGenerator.FormatTime(500.0) = '500.0 ns', 'FormatTime 500ns');
 
-  // TG-29: boundary values
   Check(GGenerator.FormatTime(0.0) = '0.0 ns', 'FormatTime 0ns');
   Check(GGenerator.FormatTime(1.0) = '1.0 ns', 'FormatTime 1ns');
   Check(GGenerator.FormatTime(999.0) = '999.0 ns', 'FormatTime 999ns');
@@ -484,9 +416,6 @@ end;
 
 procedure TestEscapeJSON;
 begin
-  WriteLn('TestEscapeJSON:');
-
-  // 测试 JSON 转义
   Check(GGenerator.EscapeJSON('hello') = 'hello', 'EscapeJSON simple');
   Check(GGenerator.EscapeJSON('hello "world"') = 'hello \"world\"', 'EscapeJSON quotes');
   Check(GGenerator.EscapeJSON('hello\nworld') = 'hello\\nworld', 'EscapeJSON newline');
@@ -495,33 +424,19 @@ end;
 
 procedure TestEscapeHTML;
 begin
-  WriteLn('TestEscapeHTML:');
-
-  // 测试 HTML 转义
   Check(GGenerator.EscapeHTML('hello') = 'hello', 'EscapeHTML simple');
   Check(GGenerator.EscapeHTML('hello <world>') = 'hello &lt;world&gt;', 'EscapeHTML tags');
   Check(GGenerator.EscapeHTML('hello "world"') = 'hello &quot;world&quot;', 'EscapeHTML quotes');
   Check(GGenerator.EscapeHTML('hello & world') = 'hello &amp; world', 'EscapeHTML ampersand');
 end;
 
-{ === TG-09: GenerateBoxPlot Edge Cases === }
-
 procedure TestGenerateBoxPlot_EmptyData;
 var
   LSamples: TDoubleArray;
   LSVG: string;
-  LNoCrash: Boolean;
 begin
-  WriteLn('TestGenerateBoxPlot_EmptyData:');
-  LNoCrash := True;
-
   SetLength(LSamples, 0);
-  try
-    LSVG := GGenerator.GenerateBoxPlot(LSamples, 'Empty');
-  except
-    LNoCrash := False;
-  end;
-  Check(LNoCrash, 'GenerateBoxPlot with empty data does not crash');
+  LSVG := GGenerator.GenerateBoxPlot(LSamples, 'Empty');
   Check(LSVG = '', 'GenerateBoxPlot with empty data returns empty string');
 end;
 
@@ -529,58 +444,35 @@ procedure TestGenerateBoxPlot_SingleElement;
 var
   LSamples: TDoubleArray;
   LSVG: string;
-  LNoCrash: Boolean;
 begin
-  WriteLn('TestGenerateBoxPlot_SingleElement:');
-  LNoCrash := True;
-
   SetLength(LSamples, 1);
   LSamples[0] := 42.0;
-  try
-    LSVG := GGenerator.GenerateBoxPlot(LSamples, 'Single');
-  except
-    LNoCrash := False;
-  end;
-  Check(LNoCrash, 'GenerateBoxPlot with single element does not crash');
+  LSVG := GGenerator.GenerateBoxPlot(LSamples, 'Single');
   Check(Length(LSVG) > 0, 'GenerateBoxPlot with single element produces SVG');
-  CheckContains(LSVG, '<svg', 'Single element BoxPlot contains SVG');
-  CheckContains(LSVG, 'Boxplot Single', 'Single element BoxPlot contains name');
+  CheckContains(LSVG, '<svg');
+  CheckContains(LSVG, 'Boxplot Single');
 end;
 
 procedure TestGenerateBoxPlot_ConstantData;
 var
   LSamples: TDoubleArray;
   LSVG: string;
-  LNoCrash: Boolean;
   i: Integer;
 begin
-  WriteLn('TestGenerateBoxPlot_ConstantData:');
-  LNoCrash := True;
-
   SetLength(LSamples, 10);
   for i := 0 to 9 do
     LSamples[i] := 5.0;
-  try
-    LSVG := GGenerator.GenerateBoxPlot(LSamples, 'Constant');
-  except
-    LNoCrash := False;
-  end;
-  Check(LNoCrash, 'GenerateBoxPlot with constant data does not crash');
+  LSVG := GGenerator.GenerateBoxPlot(LSamples, 'Constant');
   Check(Length(LSVG) > 0, 'GenerateBoxPlot with constant data produces SVG');
-  CheckContains(LSVG, '<svg', 'Constant data BoxPlot contains SVG');
-  CheckContains(LSVG, 'Boxplot Constant', 'Constant data BoxPlot contains name');
+  CheckContains(LSVG, '<svg');
+  CheckContains(LSVG, 'Boxplot Constant');
 end;
-
-{ === TG-31: SanitizeTSVField Indirect Coverage via ToTSV === }
 
 procedure TestSanitizeTSVField;
 var
   LResults: array of TBenchResult;
   LTSV: string;
 begin
-  WriteLn('TestSanitizeTSVField:');
-
-  // Create a result with tab and newline in the name
   SetLength(LResults, 2);
   LResults[0] := Default(TBenchResult);
   LResults[0].Name := 'Bench' + #9 + 'Tab';
@@ -596,22 +488,16 @@ begin
 
   LTSV := GGenerator.ToTSV;
 
-  // Tab in name should be replaced with space — no raw tab in data rows
-  // Header has tabs as delimiters, but data field tabs should be sanitized
-  CheckContains(LTSV, 'Bench Tab', 'TSV sanitizes tab in name');
-  CheckContains(LTSV, 'Bench CR', 'TSV sanitizes CR in name');
-  CheckContains(LTSV, 'reason LF', 'TSV sanitizes LF in skip reason');
+  CheckContains(LTSV, 'Bench Tab');
+  CheckContains(LTSV, 'Bench CR');
+  CheckContains(LTSV, 'reason LF');
 end;
-
-{ === TG-32: GenerateComparisonReport Branch Coverage === }
 
 procedure TestGenerateComparisonReport_Faster;
 var
   LComparisons: array of TBenchComparison;
   LReport: string;
 begin
-  WriteLn('TestGenerateComparisonReport_Faster:');
-
   SetLength(LComparisons, 1);
   LComparisons[0].BaselineName := 'Sort.1K';
   LComparisons[0].BaselineNsPerOp := 100.0;
@@ -623,10 +509,10 @@ begin
 
   LReport := GGenerator.GenerateComparisonReport(LComparisons);
 
-  CheckContains(LReport, 'Baseline Comparison', 'Faster report contains header');
-  CheckContains(LReport, 'Sort.1K', 'Faster report contains benchmark name');
-  CheckContains(LReport, 'faster', 'Faster report shows faster status');
-  CheckNotContains(LReport, 'slower', 'Faster report does not show slower');
+  CheckContains(LReport, 'Baseline Comparison');
+  CheckContains(LReport, 'Sort.1K');
+  CheckContains(LReport, 'faster');
+  Check(Pos('slower', LReport) = 0, 'Faster report does not show slower');
 end;
 
 procedure TestGenerateComparisonReport_SameRatio;
@@ -634,8 +520,6 @@ var
   LComparisons: array of TBenchComparison;
   LReport: string;
 begin
-  WriteLn('TestGenerateComparisonReport_SameRatio:');
-
   SetLength(LComparisons, 1);
   LComparisons[0].BaselineName := 'Lookup';
   LComparisons[0].BaselineNsPerOp := 50.0;
@@ -647,8 +531,8 @@ begin
 
   LReport := GGenerator.GenerateComparisonReport(LComparisons);
 
-  CheckContains(LReport, 'Lookup', 'Same ratio report contains name');
-  CheckContains(LReport, 'same', 'Same ratio report shows same status');
+  CheckContains(LReport, 'Lookup');
+  CheckContains(LReport, 'same');
 end;
 
 procedure TestGenerateComparisonReport_NotSignificant;
@@ -656,8 +540,6 @@ var
   LComparisons: array of TBenchComparison;
   LReport: string;
 begin
-  WriteLn('TestGenerateComparisonReport_NotSignificant:');
-
   SetLength(LComparisons, 1);
   LComparisons[0].BaselineName := 'Memcpy';
   LComparisons[0].BaselineNsPerOp := 20.0;
@@ -669,23 +551,17 @@ begin
 
   LReport := GGenerator.GenerateComparisonReport(LComparisons);
 
-  CheckContains(LReport, 'Memcpy', 'Not significant report contains name');
-  CheckContains(LReport, 'same', 'Not significant report shows same status');
-  CheckNotContains(LReport, 'slower', 'Not significant report does not show slower');
-  CheckNotContains(LReport, 'faster', 'Not significant report does not show faster');
+  CheckContains(LReport, 'Memcpy');
+  CheckContains(LReport, 'same');
+  Check(Pos('slower', LReport) = 0, 'Not significant report does not show slower');
+  Check(Pos('faster', LReport) = 0, 'Not significant report does not show faster');
 end;
-
-{ === TG-33: GenerateChart Edge Cases === }
 
 procedure TestGenerateChart_AllSkipped;
 var
   LResults: array of TBenchResult;
   LHTML: string;
-  LNoCrash: Boolean;
 begin
-  WriteLn('TestGenerateChart_AllSkipped:');
-  LNoCrash := True;
-
   SetLength(LResults, 2);
   LResults[0] := Default(TBenchResult);
   LResults[0].Name := 'Skipped1';
@@ -697,177 +573,92 @@ begin
   GGenerator.SetResults(LResults);
   GGenerator.SetEnvironment(CreateTestEnvironment);
 
-  try
-    LHTML := GGenerator.ToHTML;
-    // all-skipped: chart should show "No benchmark data" placeholder
-    CheckContains(LHTML, 'No benchmark data', 'All-skipped chart shows placeholder');
-    CheckContains(LHTML, '<svg', 'All-skipped chart contains SVG');
-    // skipped section should list both
-    CheckContains(LHTML, 'Skipped Benchmarks', 'All-skipped shows skipped section');
-    CheckContains(LHTML, 'Skipped1', 'All-skipped lists first entry');
-    CheckContains(LHTML, 'Skipped2', 'All-skipped lists second entry');
-  except
-    LNoCrash := False;
-  end;
-  Check(LNoCrash, 'All-skipped ToHTML does not crash');
+  LHTML := GGenerator.ToHTML;
+  CheckContains(LHTML, 'No benchmark data');
+  CheckContains(LHTML, '<svg');
+  CheckContains(LHTML, 'Skipped Benchmarks');
+  CheckContains(LHTML, 'Skipped1');
+  CheckContains(LHTML, 'Skipped2');
 end;
-
-{ === TG-08: Empty Results Set Report Generation === }
 
 procedure Test_EmptyResults_ToJSON;
 var
   LResults: TBenchResultArray;
   LJSON: string;
-  LNoCrash: Boolean;
 begin
-  WriteLn('Test_EmptyResults_ToJSON:');
-  LNoCrash := True;
-
   SetLength(LResults, 0);
   GGenerator.SetResults(LResults);
   GGenerator.SetEnvironment(CreateTestEnvironment);
 
-  try
-    LJSON := GGenerator.ToJSON;
-    Check(Length(LJSON) > 0, 'Empty results JSON is non-empty (structural)');
-    CheckContains(LJSON, '"version"', 'Empty JSON contains version');
-    CheckContains(LJSON, '"benchmarks"', 'Empty JSON contains benchmarks key');
-  except
-    LNoCrash := False;
-  end;
-  Check(LNoCrash, 'ToJSON with empty results does not raise exception');
+  LJSON := GGenerator.ToJSON;
+  Check(Length(LJSON) > 0, 'Empty results JSON is non-empty (structural)');
+  CheckContains(LJSON, '"version"');
+  CheckContains(LJSON, '"benchmarks"');
 end;
 
 procedure Test_EmptyResults_ToHTML;
 var
   LResults: TBenchResultArray;
   LHTML: string;
-  LNoCrash: Boolean;
 begin
-  WriteLn('Test_EmptyResults_ToHTML:');
-  LNoCrash := True;
-
   SetLength(LResults, 0);
   GGenerator.SetResults(LResults);
   GGenerator.SetEnvironment(CreateTestEnvironment);
 
-  try
-    LHTML := GGenerator.ToHTML;
-    CheckContains(LHTML, '<!DOCTYPE html>', 'Empty HTML contains DOCTYPE');
-    CheckContains(LHTML, '<h1>', 'Empty HTML contains heading');
-  except
-    LNoCrash := False;
-  end;
-  Check(LNoCrash, 'ToHTML with empty results does not raise exception');
+  LHTML := GGenerator.ToHTML;
+  CheckContains(LHTML, '<!DOCTYPE html>');
+  CheckContains(LHTML, '<h1>');
 end;
 
 procedure Test_EmptyResults_PrintToConsole;
 var
   LResults: TBenchResultArray;
   LConsole: string;
-  LNoCrash: Boolean;
 begin
-  WriteLn('Test_EmptyResults_PrintToConsole:');
-  LNoCrash := True;
-
   SetLength(LResults, 0);
   GGenerator.SetResults(LResults);
   GGenerator.SetEnvironment(CreateTestEnvironment);
 
-  try
-    LConsole := GGenerator.PrintToConsole;
-    CheckContains(LConsole, 'nextpas.core.bench v1.0', 'Empty console contains version');
-  except
-    LNoCrash := False;
-  end;
-  Check(LNoCrash, 'PrintToConsole with empty results does not raise exception');
+  LConsole := GGenerator.PrintToConsole;
+  CheckContains(LConsole, 'nextpas.core.bench v1.0');
 end;
 
+var
+  T: TTestSuite;
 begin
-  WriteLn('=== nextpas.core.bench.report Unit Tests ===');
-  WriteLn;
-
-  GTestCount := 0;
-  GPassCount := 0;
-  GFailCount := 0;
   GGenerator := TBenchReportGenerator.Create;
-
   try
-    TestPrintToConsole;
-    WriteLn;
-    TestToJSON;
-    WriteLn;
-    TestToTSV;
-    WriteLn;
-    TestToHTML;
-    WriteLn;
-    TestToBenchstat;
-    WriteLn;
-    TestToCrossLanguageHTML;
-    WriteLn;
-    TestGenerateBoxPlot;
-    WriteLn;
-    TestToHTMLWithBoxPlot;
-    WriteLn;
-    TestGenerateComparisonReport;
-    WriteLn;
-    TestGenerateComparisonReport_Faster;
-    WriteLn;
-    TestGenerateComparisonReport_SameRatio;
-    WriteLn;
-    TestGenerateComparisonReport_NotSignificant;
-    WriteLn;
-    TestGenerateChart_AllSkipped;
-    WriteLn;
-    TestSkippedResultsReporting;
-    WriteLn;
-    TestFormatNumber;
-    WriteLn;
-    TestInvariantLocaleFormatting;
-    WriteLn;
-    TestFormatLargeNumber;
-    WriteLn;
-    TestFormatBytes;
-    WriteLn;
-    TestFormatTime;
-    WriteLn;
-    TestEscapeJSON;
-    WriteLn;
-    TestEscapeHTML;
-    WriteLn;
-    TestSanitizeTSVField;
-    WriteLn;
-    WriteLn('=== GenerateBoxPlot Edge Cases (TG-09) ===');
-    TestGenerateBoxPlot_EmptyData;
-    WriteLn;
-    TestGenerateBoxPlot_SingleElement;
-    WriteLn;
-    TestGenerateBoxPlot_ConstantData;
-    WriteLn;
-    WriteLn('=== Empty Results Set Tests (TG-08) ===');
-    Test_EmptyResults_ToJSON;
-    WriteLn;
-    Test_EmptyResults_ToHTML;
-    WriteLn;
-    Test_EmptyResults_PrintToConsole;
-
-    WriteLn;
-    WriteLn('=== Test Summary ===');
-    WriteLn('Total: ', GTestCount);
-    WriteLn('Passed: ', GPassCount);
-    WriteLn('Failed: ', GFailCount);
-
-    if GFailCount > 0 then
-    begin
-      WriteLn;
-      WriteLn('✗ ', GFailCount, ' test(s) failed!');
-      Halt(1);
-    end
-    else
-    begin
-      WriteLn;
-      WriteLn('✓ All tests passed!');
-    end;
+    T := TTestSuite.Create('nextpas.core.bench.report');
+    T.Test('print to console', @TestPrintToConsole);
+    T.Test('to JSON', @TestToJSON);
+    T.Test('to TSV', @TestToTSV);
+    T.Test('to HTML', @TestToHTML);
+    T.Test('to benchstat', @TestToBenchstat);
+    T.Test('to cross-language HTML', @TestToCrossLanguageHTML);
+    T.Test('generate box plot', @TestGenerateBoxPlot);
+    T.Test('to HTML with box plot', @TestToHTMLWithBoxPlot);
+    T.Test('generate comparison report', @TestGenerateComparisonReport);
+    T.Test('comparison report faster', @TestGenerateComparisonReport_Faster);
+    T.Test('comparison report same ratio', @TestGenerateComparisonReport_SameRatio);
+    T.Test('comparison report not significant', @TestGenerateComparisonReport_NotSignificant);
+    T.Test('generate chart all skipped', @TestGenerateChart_AllSkipped);
+    T.Test('skipped results reporting', @TestSkippedResultsReporting);
+    T.Test('format number', @TestFormatNumber);
+    T.Test('invariant locale formatting', @TestInvariantLocaleFormatting);
+    T.Test('format large number', @TestFormatLargeNumber);
+    T.Test('format bytes', @TestFormatBytes);
+    T.Test('format time', @TestFormatTime);
+    T.Test('escape JSON', @TestEscapeJSON);
+    T.Test('escape HTML', @TestEscapeHTML);
+    T.Test('sanitize TSV field', @TestSanitizeTSVField);
+    T.Test('box plot empty data', @TestGenerateBoxPlot_EmptyData);
+    T.Test('box plot single element', @TestGenerateBoxPlot_SingleElement);
+    T.Test('box plot constant data', @TestGenerateBoxPlot_ConstantData);
+    T.Test('empty results to JSON', @Test_EmptyResults_ToJSON);
+    T.Test('empty results to HTML', @Test_EmptyResults_ToHTML);
+    T.Test('empty results print to console', @Test_EmptyResults_PrintToConsole);
+    T.Run;
+    T.Summary;
   finally
     GGenerator.Free;
   end;
