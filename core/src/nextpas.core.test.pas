@@ -102,6 +102,7 @@ procedure CheckFalse(AValue: Boolean; const AMessage: string = '');
 procedure CheckNil(AValue: Pointer; const AMessage: string = '');
 procedure CheckNotNil(AValue: Pointer; const AMessage: string = '');
 procedure CheckContains(const AHaystack, ANeedle: string);
+procedure CheckNotContains(const AHaystack, ANeedle: string);
 procedure CheckStartsWith(const AStr, APrefix: string);
 procedure CheckEndsWith(const AStr, ASuffix: string);
 procedure CheckSame(const AExpected, AActual: Pointer; const AMessage: string = '');
@@ -255,6 +256,9 @@ begin nextpas.core.test.check.CheckNotNil(AValue, AMessage); end;
 
 procedure CheckContains(const AHaystack, ANeedle: string);
 begin nextpas.core.test.check.CheckContains(AHaystack, ANeedle); end;
+
+procedure CheckNotContains(const AHaystack, ANeedle: string);
+begin nextpas.core.test.check.CheckNotContains(AHaystack, ANeedle); end;
 
 procedure CheckStartsWith(const AStr, APrefix: string);
 begin nextpas.core.test.check.CheckStartsWith(AStr, APrefix); end;

@@ -795,10 +795,8 @@ begin
     'JSON should end with closing brace');
   CheckContains(LCompact, '"suites":[{');
   CheckContains(LCompact, '"tests":[{');
-  CheckFalse(Pos(',]', LCompact) > 0,
-    'JSON should not contain trailing commas before ]');
-  CheckFalse(Pos(',}', LCompact) > 0,
-    'JSON should not contain trailing commas before }');
+  CheckNotContains(LCompact, ',]');
+  CheckNotContains(LCompact, ',}');
 end;
 
 { ── R2-F18: TAP/JSON multi-suite / JSON skip ──────────────────────────────── }
@@ -1077,7 +1075,7 @@ begin
   LResults[0].Passed := 0;
   LResults[0].Results[0].Message := 'err' + #1 + 'msg';
   LXml := JUnitXML(LResults);
-  CheckTrue(Pos(#1, LXml) = 0, 'SOH should not appear in XML');
+  CheckNotContains(LXml, #1);
   CheckContains(LXml, 'err msg');
 end;
 
@@ -1143,8 +1141,7 @@ begin
 
   LOut := LSink.GetOutput;
   CheckContains(LOut, 'My Display Name');
-  CheckFalse(Pos('internal_name', LOut) > 0,
-    'DisplayName should replace Name in output');
+  CheckNotContains(LOut, 'internal_name');
   { Do NOT free LSink — it's managed via IOutputSink interface reference counting }
 end;
 
@@ -1200,9 +1197,9 @@ begin
   { fast_test should appear (has 'fast' tag) }
   CheckContains(LOut, 'fast_test');
   { slow_test should NOT appear (no 'fast' tag) }
-  CheckFalse(Pos('slow_test', LOut) > 0, 'slow_test should be filtered out');
+  CheckNotContains(LOut, 'slow_test');
   { no_tag_test should NOT appear (no tags at all) }
-  CheckFalse(Pos('no_tag_test', LOut) > 0, 'no_tag_test should be filtered out');
+  CheckNotContains(LOut, 'no_tag_test');
   { Only 1 test should have passed }
   CheckEqual(1, LResult.Passed);
   { Do NOT free LSink }

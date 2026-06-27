@@ -35,6 +35,7 @@ procedure CheckFalse(AValue: Boolean; const AMessage: string = '');
 procedure CheckNil(AValue: Pointer; const AMessage: string = '');
 procedure CheckNotNil(AValue: Pointer; const AMessage: string = '');
 procedure CheckContains(const AHaystack, ANeedle: string);
+procedure CheckNotContains(const AHaystack, ANeedle: string);
 procedure CheckStartsWith(const AStr, APrefix: string);
 procedure CheckEndsWith(const AStr, ASuffix: string);
 procedure CheckSame(const AExpected, AActual: Pointer; const AMessage: string = '');
@@ -250,6 +251,14 @@ begin
     Exit; { empty needle matches everything — consistent with StartsWith/EndsWith }
   if Pos(ANeedle, AHaystack) = 0 then
     InternalFail('"' + AHaystack + '" does not contain "' + ANeedle + '"');
+end;
+
+procedure CheckNotContains(const AHaystack, ANeedle: string);
+begin
+  if (Length(ANeedle) = 0) then
+    Exit; { empty needle matches everything — companion to CheckContains }
+  if Pos(ANeedle, AHaystack) > 0 then
+    InternalFail('"' + AHaystack + '" should not contain "' + ANeedle + '"');
 end;
 
 procedure CheckStartsWith(const AStr, APrefix: string);
