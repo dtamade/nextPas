@@ -60,7 +60,7 @@ begin
   begin
     FailTest('expected at least 1 failure from beforeEach');
   end;
-  WriteLn(AnsiGreen('  ✓ Parallel beforeEach failure'));
+  PassTest('✓ Parallel beforeEach failure');
 end;
 
 procedure TestParallelSetupFail;
@@ -81,7 +81,7 @@ begin
   begin
     FailTest('expected LastFail=1 for setup failure, got ' + IntToStr(LSuite.LastFail));
   end;
-  WriteLn(AnsiGreen('  ✓ Parallel setup failure'));
+  PassTest('✓ Parallel setup failure');
 end;
 
 { ── R2-F22: Timeout + Retry + Skip in Parallel ──────────────────────────── }
@@ -111,7 +111,7 @@ begin
   begin
     FailTest('fast test should pass even with short timeout');
   end;
-  WriteLn(AnsiGreen('  ✓ Parallel timeout (fast tests pass)'));
+  PassTest('✓ Parallel timeout (fast tests pass)');
 end;
 
 procedure TestRetryInParallel;
@@ -129,7 +129,7 @@ begin
   begin
     FailTest('flaky test should have passed after retries');
   end;
-  WriteLn(AnsiGreen('  ✓ Retry in parallel'));
+  PassTest('✓ Retry in parallel');
 end;
 
 procedure TestSubtestSkipInParallel;
@@ -149,7 +149,7 @@ begin
   begin
     FailTest('expected at least 2 passes');
   end;
-  WriteLn(AnsiGreen('  ✓ Subtest skip in parallel'));
+  PassTest('✓ Subtest skip in parallel');
 end;
 
 { ── R3-F16: Closure + Retry ────────────────────────────────────────────────── }
@@ -176,7 +176,7 @@ begin
   begin
     FailTest('closure retry should eventually pass');
   end;
-  WriteLn(AnsiGreen('  ✓ Closure + Retry'));
+  PassTest('✓ Closure + Retry');
 end;
 
 { ── R6-54: Parallel subtest skip behavior ────────────────────────────────── }
@@ -200,7 +200,7 @@ begin
   CheckTrue(LResult.Passed >= 1, 'At least 1 normal test should pass');
   { Subtests in parallel mode get skipped — verify they don't crash the suite }
   CheckTrue(LResult.Failed = 0, 'No tests should fail');
-  WriteLn(AnsiGreen('  ✓ Parallel subtest skip'));
+  PassTest('✓ Parallel subtest skip');
 end;
 
 { ── R6-56: Table test parallel result name uniqueness ────────────────────── }
@@ -233,7 +233,7 @@ begin
     for J := I + 1 to High(LResult.Results) do
       if LResult.Results[I].Name = LResult.Results[J].Name then
         Fail('Duplicate result name: ' + LResult.Results[I].Name);
-  WriteLn(AnsiGreen('  ✓ Table parallel result name uniqueness'));
+  PassTest('✓ Table parallel result name uniqueness');
 end;
 
 procedure TestParallelSinkInjection;
@@ -266,7 +266,7 @@ begin
   begin
     FailTest('parallel sink error output should stay empty for clean run');
   end;
-  WriteLn(AnsiGreen('  ✓ Parallel sink injection'));
+  PassTest('✓ Parallel sink injection');
 end;
 
 { ── v3.1: MaxParallelWorkers batch dispatch ────────────────────────────────── }
@@ -314,7 +314,7 @@ begin
   begin
     FailTest('MaxConcurrent=' + IntToStr(GMaxConcurrent) + ', expected <= 2');
   end;
-  WriteLn(AnsiGreen('  ✓ MaxParallelWorkers batch dispatch'));
+  PassTest('✓ MaxParallelWorkers batch dispatch');
 end;
 
 var
@@ -345,11 +345,11 @@ begin
     FailTest('expected 8 tests run, got ' + IntToStr(GTestCounter));
   end;
   WriteLn;
-  WriteLn(AnsiGreen('ALL PASSED'));
+  PassTest('ALL PASSED');
 
   { ── B5.10: Parallel with failure ───────────────────────────────────────── }
   WriteLn;
-  WriteLn(AnsiBold('─── B5.10: Parallel Failure/Skip Tests ───'));
+  SectionHeader('B5.10: Parallel Failure/Skip Tests');
   LFailSuite := TTestSuite.Create('Parallel Failure');
   LFailSuite.Test('pass', @TestParallelPassA);
   LFailSuite.Test('fail', @TestParallelFail);
@@ -361,7 +361,7 @@ begin
   begin
     FailTest('expected at least 1 failure');
   end;
-  WriteLn(AnsiGreen('  ✓ Parallel with failure'));
+  PassTest('✓ Parallel with failure');
 
   { ── B5.10: Parallel with skip ─────────────────────────────────────────── }
   LSkipSuite := TTestSuite.Create('Parallel Skip');
@@ -376,7 +376,7 @@ begin
   begin
     FailTest('expected at least 2 skips (static + worker), got ' + IntToStr(LSkipSuite.LastSkip));
   end;
-  WriteLn(AnsiGreen('  ✓ Parallel with skip'));
+  PassTest('✓ Parallel with skip');
 
   { ── B5.10: RunAllParallel ─────────────────────────────────────────────── }
   LRunner := TTestRunner.Create('Parallel Runner');
@@ -386,11 +386,11 @@ begin
   begin
     FailTest('RunAllParallel with failure suite should return False');
   end;
-  WriteLn(AnsiGreen('  ✓ RunAllParallel'));
+  PassTest('✓ RunAllParallel');
 
   { ── F08: RunAllParallel aggregation ───────────────────────────────────── }
   WriteLn;
-  WriteLn(AnsiBold('─── F08: RunAllParallel Aggregation ───'));
+  SectionHeader('F08: RunAllParallel Aggregation');
   begin
     LRunner := TTestRunner.Create('Aggregation Runner');
     { Suite A: 3 pass + 1 skip + 1 fail = 5 }
@@ -425,21 +425,21 @@ begin
     begin
       FailTest('Expected TotalSkip=1, got ' + IntToStr(LRunner.TotalSkip));
     end;
-    WriteLn(AnsiGreen('  ✓ RunAllParallel aggregation'));
+    PassTest('✓ RunAllParallel aggregation');
   end;
 
   WriteLn;
-  WriteLn(AnsiGreen('ALL PARALLEL TESTS PASSED'));
+  PassTest('ALL PARALLEL TESTS PASSED');
 
   { ── F09: Parallel lifecycle failures ───────────────────────────────────── }
   WriteLn;
-  WriteLn(AnsiBold('─── F09: Parallel Lifecycle Failure Tests ───'));
+  SectionHeader('F09: Parallel Lifecycle Failure Tests');
   TestParallelBeforeEachFail;
   TestParallelSetupFail;
 
   { ── R2-F22: Timeout + Retry + Skip in Parallel ──────────────────────────── }
   WriteLn;
-  WriteLn(AnsiBold('─── R2-F22: Timeout/Retry/Skip Tests ───'));
+  SectionHeader('R2-F22: Timeout/Retry/Skip Tests');
   TestParallelTimeout;
   TestRetryInParallel;
   TestSubtestSkipInParallel;
@@ -447,19 +447,19 @@ begin
 
   { ── R6-54/R6-56: New parallel coverage tests ───────────────────────────── }
   WriteLn;
-  WriteLn(AnsiBold('─── R6-54/R6-56: Parallel Coverage ───'));
+  SectionHeader('R6-54/R6-56: Parallel Coverage');
   TestParallelSubtestSkip;
   TestTableParallelNameUniqueness;
   TestParallelSinkInjection;
 
   WriteLn;
-  WriteLn(AnsiGreen('ALL LIFECYCLE TESTS PASSED'));
+  PassTest('ALL LIFECYCLE TESTS PASSED');
 
   { ── v3.1: MaxParallelWorkers batch dispatch ──────────────────────────────── }
   WriteLn;
-  WriteLn(AnsiBold('─── v3.1: MaxParallelWorkers Batch Dispatch ───'));
+  SectionHeader('v3.1: MaxParallelWorkers Batch Dispatch');
   TestMaxParallelWorkers;
 
   WriteLn;
-  WriteLn(AnsiGreen('ALL PARALLEL TESTS PASSED'));
+  PassTest('ALL PARALLEL TESTS PASSED');
 end.

@@ -16,6 +16,7 @@ uses
   nextpas.core.test.base,
   nextpas.core.test.check,
   nextpas.core.test.expect,
+  nextpas.core.test.output,
   nextpas.core.test.runner,
   { 白盒测试：直接覆盖 runner.context 的结果收集边界。 }
   nextpas.core.test.runner.context;
@@ -506,10 +507,7 @@ begin
   CheckTrue(LSuccess, 'All lifecycle tests should pass');
 
   if Runner.AllPassed then
-    WriteLn('ALL PASSED')
+    PassTest('ALL PASSED')
   else
-  begin
-    WriteLn('SOME FAILED');
-    Halt(1);
-  end;
+    FailTest('SOME FAILED');
 end.

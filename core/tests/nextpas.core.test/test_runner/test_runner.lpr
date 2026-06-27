@@ -287,7 +287,7 @@ begin
 
   { Verify lifecycle counters }
   WriteLn;
-  WriteLn(AnsiBold('─── Lifecycle Counters ───'));
+  SectionHeader('Lifecycle Counters');
   WriteLn('  Setup called:     ', GSetupCalled);
   WriteLn('  Teardown called:  ', GTeardownCalled);
   WriteLn('  BeforeEach called:', GBeforeEachCalled);
@@ -320,7 +320,7 @@ begin
 
   { Test: Setup failure → Run returns False, all tests skipped }
   WriteLn;
-  WriteLn(AnsiBold('─── B5.3: Lifecycle Failure Tests ───'));
+  SectionHeader('B5.3: Lifecycle Failure Tests');
   LFailSuite1 := TTestSuite.Create('Setup Failure');
   LFailSuite1.SetSetup(procedure begin
     raise EConvertError.Create('setup boom');
@@ -504,7 +504,7 @@ begin
 
   { ── m15: Summary smoke test ───────────────────────────────────────────────── }
   WriteLn;
-  WriteLn(AnsiBold('─── m15: Summary Smoke Test ───'));
+  SectionHeader('m15: Summary Smoke Test');
   LResultSuite := TTestSuite.Create('Summary Smoke');
   LResultSuite.Test('pass', @TestSimplePass);
   LResultSuite.Skip('skip', 'planned');
@@ -514,7 +514,7 @@ begin
 
   { ── M20: AllPassed caching ────────────────────────────────────────────────── }
   WriteLn;
-  WriteLn(AnsiBold('─── M20: AllPassed Caching ───'));
+  SectionHeader('M20: AllPassed Caching');
   LResultSuite := TTestSuite.Create('Cache Test');
   LResultSuite.Test('pass1', @TestSimplePass);
   LResultSuite.Test('pass2', @TestSimplePass2);
@@ -532,12 +532,12 @@ begin
 
   { ── R2-F12: BeforeEach Skip ────────────────────────────────────────────────── }
   WriteLn;
-  WriteLn(AnsiBold('─── R2-F12: BeforeEach Skip ───'));
+  SectionHeader('R2-F12: BeforeEach Skip');
   TestBeforeEachSkip;
 
   { ── R2-F03: Subtest-level results ────────────────────────────────────────── }
   WriteLn;
-  WriteLn(AnsiBold('─── R2-F03: Subtest Results ───'));
+  SectionHeader('R2-F03: Subtest Results');
   begin
     LResultSuite := TTestSuite.Create('Subtest Results');
     LResultSuite.TestSubtest('subtests', @TestSubtests);
@@ -568,7 +568,7 @@ begin
 
   { ── R2-F02: RunParallelWithResult ────────────────────────────────────────── }
   WriteLn;
-  WriteLn(AnsiBold('─── R2-F02: RunParallelWithResult ───'));
+  SectionHeader('R2-F02: RunParallelWithResult');
   begin
     LResultSuite := TTestSuite.Create('Parallel Result');
     LResultSuite.Test('p1', @TestSimplePass);
@@ -596,7 +596,7 @@ begin
 
   { ── R2-F02: RunAllWithResult ─────────────────────────────────────────────── }
   WriteLn;
-  WriteLn(AnsiBold('─── R2-F02: RunAllWithResult ───'));
+  SectionHeader('R2-F02: RunAllWithResult');
   begin
     LRunNestedS1 := TTestSuite.Create('SuiteX');
     LRunNestedS1.Test('x1', procedure begin CheckTrue(True); end);
@@ -627,7 +627,7 @@ begin
 
   { ── R3-F17: Timeout trigger (watchdog actually fires) ───────────────────── }
   WriteLn;
-  WriteLn(AnsiBold('─── R3-F17: Timeout Trigger (Closure) ───'));
+  SectionHeader('R3-F17: Timeout Trigger (Closure)');
   begin
     LResultSuite := TTestSuite.Create('Timeout Trigger');
     LTimeoutSleepMs := 500;
@@ -769,7 +769,7 @@ begin
 
   { ── R6-58: ParseFilter helper (white-box) ─────────────────────────────────── }
   WriteLn;
-  WriteLn(AnsiBold('─── R6-58: ParseFilter helper ───'));
+  SectionHeader('R6-58: ParseFilter helper');
   begin
     { 白盒测试：直接验证 runner 内部命令行解析 helper。 }
     if nextpas.core.test.runner.ParseFilter('--filter=alpha') <> 'alpha' then
@@ -788,7 +788,7 @@ begin
   end;
 
   WriteLn;
-  WriteLn(AnsiBold('─── R6-58b: ParseTag helper ───'));
+  SectionHeader('R6-58b: ParseTag helper');
   begin
     if nextpas.core.test.runner.ParseTag('--tag=fast') <> 'fast' then
     begin
@@ -807,7 +807,7 @@ begin
 
   { ── R6-59: AddLine / JoinLines helpers ────────────────────────────────────── }
   WriteLn;
-  WriteLn(AnsiBold('─── R6-59: AddLine / JoinLines ───'));
+  SectionHeader('R6-59: AddLine / JoinLines');
   begin
     SetLength(LLines59, 0);
     AddLine(LLines59, 'first');
@@ -854,7 +854,7 @@ begin
 
   { ── R6-60: TTestRunResult default values ─────────────────────────────────── }
   WriteLn;
-  WriteLn(AnsiBold('─── R6-60: TTestRunResult defaults ───'));
+  SectionHeader('R6-60: TTestRunResult defaults');
   begin
     LDefaults60 := TTestRunResult.Create('my_suite');
     if LDefaults60.SuiteName <> 'my_suite' then
@@ -888,7 +888,7 @@ begin
   { The existing lifecycle counter tests already use exact equality (GSetupCalled <> 1).
     This test confirms TotalPass/TotalFail exactness after a known run. }
   WriteLn;
-  WriteLn(AnsiBold('─── R6-68: Strong exact-value assertions ───'));
+  SectionHeader('R6-68: Strong exact-value assertions');
   begin
     LExactSuite68 := TTestSuite.Create('Exact Suite');
     LExactSuite68.Test('p1', @TestSimplePass);
@@ -914,12 +914,12 @@ begin
   end;
 
   WriteLn;
-  WriteLn(AnsiBold('─── R2-F23: Runner config isolation ───'));
+  SectionHeader('R2-F23: Runner config isolation');
   TestRunnerConfigIsolation;
 
   { ── Phase 2: With* builder pattern ───────────────────────────────────────── }
   WriteLn;
-  WriteLn(AnsiBold('─── Phase 2: With* Builder Pattern ───'));
+  SectionHeader('Phase 2: With* Builder Pattern');
   begin
     LRunCount := 0;
     LBeforeEachCounter := 0;
@@ -949,7 +949,7 @@ begin
 
   { ── Phase 2: With* preserves existing API ────────────────────────────────── }
   WriteLn;
-  WriteLn(AnsiBold('─── Phase 2: SetSetup + WithConfig ───'));
+  SectionHeader('Phase 2: SetSetup + WithConfig');
   begin
     LRunCount := 0;
     LResultSuite := TTestSuite.Create('Mixed API');
@@ -970,7 +970,7 @@ begin
   end;
 
   WriteLn;
-  WriteLn(AnsiBold('─── R6-69: Regular Test CapturedLog ───'));
+  SectionHeader('R6-69: Regular Test CapturedLog');
   begin
     LResultSuite := TTestSuite.Create('Regular Log');
     LResultSuite.Test('log and fail', @TestRegularLogFailure);

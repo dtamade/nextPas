@@ -463,7 +463,7 @@ begin
   { ── Verify subtest failure propagation ────────────────────────────────────── }
   { A suite containing a subtest with a real failure should report failure }
   WriteLn;
-  WriteLn(AnsiBold('─── Failure Propagation ───'));
+  SectionHeader('Failure Propagation');
   begin
     LFailSuite := TTestSuite.Create('Failure Propagation');
     LFailSuite.TestSubtest('real failure', @TestSubtestWithRealFailure);
@@ -471,12 +471,12 @@ begin
     begin
       FailTest('suite with failing subtest should report failure');
     end;
-    WriteLn(AnsiGreen('  Failure propagation verified'));
+    PassTest('Failure propagation verified');
   end;
 
   { ── R6-12/13/14: Closure subtest failure propagation ───────────────────── }
   WriteLn;
-  WriteLn(AnsiBold('─── Closure Subtest Failure ───'));
+  SectionHeader('Closure Subtest Failure');
   begin
     LFailSuite := TTestSuite.Create('Closure Failure');
     LFailSuite.TestSubtest('closure failure', @TestClosureSubtestWithFailure);
@@ -484,12 +484,12 @@ begin
     begin
       FailTest('closure subtest failure should propagate');
     end;
-    WriteLn(AnsiGreen('  Closure subtest failure propagation verified'));
+    PassTest('Closure subtest failure propagation verified');
   end;
 
   { ── R6-55: Subtest skip counting precision ─────────────────────────────── }
   WriteLn;
-  WriteLn(AnsiBold('─── R6-55: Subtest Skip Counting ───'));
+  SectionHeader('R6-55: Subtest Skip Counting');
   begin
     LFailSuite := TTestSuite.Create('Skip Count');
     LFailSuite.TestSubtest('skip precision', @TestSubtestSkipPrecision);
@@ -504,12 +504,12 @@ begin
       'Expected 0 failures, got ' + IntToStr(LFailSuite.LastFail));
     CheckTrue(LFailSuite.LastPass >= 1,
       'Expected at least 1 pass, got ' + IntToStr(LFailSuite.LastPass));
-    WriteLn(AnsiGreen('  Subtest skip counting verified'));
+    PassTest('Subtest skip counting verified');
   end;
 
   { ── B5.7: 3-level nested failure propagation ────────────────────────────── }
   WriteLn;
-  WriteLn(AnsiBold('─── 3-Level Nested Failure ───'));
+  SectionHeader('3-Level Nested Failure');
   begin
     LFailSuite := TTestSuite.Create('Deep Nested Failure');
     LFailSuite.TestSubtest('3-level', @TestLevel3Nested);
@@ -517,12 +517,12 @@ begin
     begin
       FailTest('3-level nested failure should propagate');
     end;
-    WriteLn(AnsiGreen('  3-level failure propagation verified'));
+    PassTest('3-level failure propagation verified');
   end;
 
   { ── R3: AfterEach failure is treated as WARNING in subtests ─────────────── }
   WriteLn;
-  WriteLn(AnsiBold('─── AfterEach Failure ───'));
+  SectionHeader('AfterEach Failure');
   begin
     LFailSuite := TTestSuite.Create('AfterEach Fail');
     LFailSuite.OnAfterEach(procedure begin raise EAssertionFailed.Create('afterEach boom'); end);
@@ -532,12 +532,12 @@ begin
     begin
       FailTest('subtest AfterEach failure should be non-fatal');
     end;
-    WriteLn(AnsiGreen('  AfterEach failure treated as WARNING (non-fatal)'));
+    PassTest('AfterEach failure treated as WARNING (non-fatal)');
   end;
 
   { ── R2-F25: Subtest output should inherit suite sink/config ────────────── }
   WriteLn;
-  WriteLn(AnsiBold('─── Subtest Sink Propagation ───'));
+  SectionHeader('Subtest Sink Propagation');
   begin
     LOutSink := TBufferSink.Create;
     LErrSink := TBufferSink.Create;
@@ -563,12 +563,12 @@ begin
     begin
       FailTest('subtest sink err output should stay empty');
     end;
-    WriteLn(AnsiGreen('  Subtest sink propagation verified'));
+    PassTest('Subtest sink propagation verified');
   end;
 
   { ── Phase 2: Cleanup order verification ──────────────────────────────── }
   WriteLn;
-  WriteLn(AnsiBold('─── Cleanup Callbacks ───'));
+  SectionHeader('Cleanup Callbacks');
   begin
     GCleanupOrder := nil;
     LFailSuite := TTestSuite.Create('Cleanup Order');
@@ -593,7 +593,7 @@ begin
     begin
       FailTest('second cleanup should be A (reverse), got ' + GCleanupOrder[1]);
     end;
-    WriteLn(AnsiGreen('  Cleanup reverse order verified'));
+    PassTest('Cleanup reverse order verified');
   end;
 
   { ── Phase 2: Cleanup on failure ──────────────────────────────────────── }
@@ -616,7 +616,7 @@ begin
     begin
       FailTest('cleanup should run even on failure, got ' + GCleanupOrder[0]);
     end;
-    WriteLn(AnsiGreen('  Cleanup on failure verified'));
+    PassTest('Cleanup on failure verified');
   end;
 
   { ── Phase 2: Cleanup exception swallowed ─────────────────────────────── }
@@ -637,7 +637,7 @@ begin
     begin
       FailTest('expected WARNING cleanup error in stderr');
     end;
-    WriteLn(AnsiGreen('  Cleanup exception swallowed verified'));
+    PassTest('Cleanup exception swallowed verified');
   end;
 
   { ── Phase 2: Log output on failure ───────────────────────────────────── }
@@ -666,9 +666,9 @@ begin
     begin
       FailTest('passing subtest log should not appear in output');
     end;
-    WriteLn(AnsiGreen('  Log output on failure verified'));
+    PassTest('Log output on failure verified');
   end;
 
   WriteLn;
-  WriteLn(AnsiGreen('ALL PASSED'));
+  PassTest('ALL PASSED');
 end.

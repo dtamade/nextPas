@@ -450,34 +450,16 @@ begin
   try
     case LStatus of
       tsPassed:
-        begin
-          R^.Pass^ := R^.Pass^ + 1;
-          LOutSink.WriteLn('  ' + FormatStatusLine(tsPassed, R^.Entry.Name, LConfig));
-        end;
+        R^.Pass^ := R^.Pass^ + 1;
       tsFailed:
-        begin
-          R^.Fail^ := R^.Fail^ + 1;
-          LOutSink.WriteLn('  ' + FormatStatusLine(tsFailed, R^.Entry.Name, LConfig));
-          LOutSink.WriteLn('    ' + FormatFailDetail(LFailMsg, LConfig));
-        end;
+        R^.Fail^ := R^.Fail^ + 1;
       tsSkipped:
-        begin
-          R^.Skip^ := R^.Skip^ + 1;
-          if LSkipReason <> '' then
-            LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, R^.Entry.Name,
-              LSkipReason, LConfig))
-          else
-            LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, R^.Entry.Name, LConfig));
-        end;
+        R^.Skip^ := R^.Skip^ + 1;
       tsError:
-        begin
-          R^.Fail^ := R^.Fail^ + 1;
-          LOutSink.WriteLn('  ' + FormatStatusLine(tsError, R^.Entry.Name, LConfig) +
-            ' [unexpected error]');
-          if LFailMsg <> '' then
-            LOutSink.WriteLn('    ' + AnsiDim(LFailMsg, LConfig));
-        end;
+        R^.Fail^ := R^.Fail^ + 1;
     end;
+    WriteTestStatus(LStatus, R^.Entry.Name, LFailMsg, LSkipReason,
+      LOutSink, LConfig);
     { Write per-test result inside mutex for safety (skip if already written
       by beforeEach failure path, which sets Duration = 0 directly) }
     if (R^.Res <> nil) and (not LResultWritten) then

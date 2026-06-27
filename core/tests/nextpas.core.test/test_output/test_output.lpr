@@ -1469,10 +1469,7 @@ begin
   CheckTrue(LSuccess, 'All output tests should pass');
 
   if Runner.AllPassed then
-    WriteLn('ALL PASSED')
+    PassTest('ALL PASSED')
   else
-  begin
-    WriteLn('SOME FAILED');
-    Halt(1);
-  end;
+    FailTest('SOME FAILED');
 end.

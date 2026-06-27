@@ -313,5 +313,5 @@ begin
     FailTest('SOME TESTS FAILED');
   end;
   WriteLn;
-  WriteLn(AnsiGreen('ALL PASSED'));
+  PassTest('ALL PASSED');
 end.

@@ -60,6 +60,14 @@ procedure FailTest(const AMsg: string);
     the framework and cannot use Check* assertions. }
 procedure PassTest(const AMsg: string);
   { Print green 'OK: ...' message. Companion to FailTest. }
+procedure SectionHeader(const ATitle: string);
+  { Print bold '─── Title ───' section separator. }
+
+{ ── Per-Test Output ───────────────────────────────────────────────────────── }
+
+procedure WriteTestStatus(AStatus: TTestStatus; const AName, AFailMsg,
+  ASkipReason: string; const ASink: IOutputSink; const AConfig: TTestConfig);
+  { Write formatted per-test status line to ASink. }
 
 { ── Test Filter ───────────────────────────────────────────────────────────── }
 
@@ -326,6 +334,40 @@ end;
 procedure PassTest(const AMsg: string);
 begin
   WriteLn(AnsiGreen('OK: ' + AMsg));
+end;
+
+procedure SectionHeader(const ATitle: string);
+begin
+  WriteLn(AnsiBold('─── ' + ATitle + ' ───'));
+end;
+
+procedure WriteTestStatus(AStatus: TTestStatus; const AName, AFailMsg,
+  ASkipReason: string; const ASink: IOutputSink; const AConfig: TTestConfig);
+begin
+  case AStatus of
+    tsPassed:
+      ASink.WriteLn('  ' + FormatStatusLine(tsPassed, AName, AConfig));
+    tsFailed:
+      begin
+        ASink.WriteLn('  ' + FormatStatusLine(tsFailed, AName, AConfig));
+        ASink.WriteLn('    ' + FormatFailDetail(AFailMsg, AConfig));
+      end;
+    tsSkipped:
+      begin
+        if ASkipReason <> '' then
+          ASink.WriteLn('  ' + FormatStatusLine(tsSkipped, AName,
+            ASkipReason, AConfig))
+        else
+          ASink.WriteLn('  ' + FormatStatusLine(tsSkipped, AName, AConfig));
+      end;
+    tsError:
+      begin
+        ASink.WriteLn('  ' + FormatStatusLine(tsError, AName, AConfig) +
+          ' [unexpected exception]');
+        if AFailMsg <> '' then
+          ASink.WriteLn('    ' + AnsiDim(AFailMsg, AConfig));
+      end;
+  end;
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }

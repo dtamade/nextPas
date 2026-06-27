@@ -155,6 +155,12 @@ function MakeTestResult(const AName: string; AStatus: TTestStatus;
 procedure AppendResult(var AResults: specialize TArray<TTestResult>;
   const AResult: TTestResult);
   { Append a TTestResult to a dynamic array. }
+procedure RegisterEntry(var AEntries: specialize TArray<TTestEntry>;
+  const AEntry: TTestEntry);
+  { Append a TTestEntry to a dynamic array. }
+procedure CopyTags(out ATags: specialize TArray<string>;
+  const ASource: array of string);
+  { Copy an open array of tag strings into a dynamic array. }
 
 { ── Exception Formatting (eliminate repeated ClassName + trace patterns) ──── }
 
@@ -231,6 +237,23 @@ procedure AppendResult(var AResults: specialize TArray<TTestResult>;
 begin
   SetLength(AResults, Length(AResults) + 1);
   AResults[High(AResults)] := AResult;
+end;
+
+procedure RegisterEntry(var AEntries: specialize TArray<TTestEntry>;
+  const AEntry: TTestEntry);
+begin
+  SetLength(AEntries, Length(AEntries) + 1);
+  AEntries[High(AEntries)] := AEntry;
+end;
+
+procedure CopyTags(out ATags: specialize TArray<string>;
+  const ASource: array of string);
+var
+  I: Integer;
+begin
+  SetLength(ATags, Length(ASource));
+  for I := 0 to High(ASource) do
+    ATags[I] := ASource[I];
 end;
 
 { Exception Formatting }
