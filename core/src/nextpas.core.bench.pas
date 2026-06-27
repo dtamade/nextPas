@@ -714,15 +714,15 @@ begin
             LPValue := LAnalyzer.ComputeApproximatePValue(LCurrStats, LBaseStats);
             LComparisons[LIdx].HasStatisticalTest := True;
             LComparisons[LIdx].ApproximatePValue := LPValue;
-            LComparisons[LIdx].IsSignificant := LPValue < 0.05;
+            LComparisons[LIdx].IsSignificant := LPValue < BENCH_SIGNIFICANCE_ALPHA;
           end
           else
           begin
             { 采样不足，退回启发式判断 }
             LComparisons[LIdx].HasStatisticalTest := False;
             LComparisons[LIdx].IsSignificant :=
-              Abs(LComparisons[LIdx].Ratio - 1.0) > 0.05;
-            LComparisons[LIdx].ApproximatePValue := 0.05;
+              Abs(LComparisons[LIdx].Ratio - 1.0) > BENCH_MATRIX_DIFF_THRESHOLD;
+            LComparisons[LIdx].ApproximatePValue := BENCH_MATRIX_DIFF_THRESHOLD;
           end;
 
           Inc(LCount);
@@ -879,7 +879,7 @@ begin
       LPValue := LAnalyzer.ComputeMannWhitneyPValue(LA.RawSamples, LB.RawSamples);
       Result.HasStatisticalTest := True;
       Result.ApproximatePValue := LPValue;
-      Result.IsSignificant := LPValue < 0.05;
+      Result.IsSignificant := LPValue < BENCH_SIGNIFICANCE_ALPHA;
     finally
       LAnalyzer.Free;
     end;
@@ -888,8 +888,8 @@ begin
   begin
     { 无原始样本，退回启发式 }
     Result.HasStatisticalTest := False;
-    Result.IsSignificant := Abs(Result.Ratio - 1.0) > 0.05;
-    Result.ApproximatePValue := 0.05;
+    Result.IsSignificant := Abs(Result.Ratio - 1.0) > BENCH_MATRIX_DIFF_THRESHOLD;
+    Result.ApproximatePValue := BENCH_MATRIX_DIFF_THRESHOLD;
   end;
 end;
 

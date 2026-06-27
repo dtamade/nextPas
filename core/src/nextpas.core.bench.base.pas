@@ -160,8 +160,9 @@ const
   BENCH_DEFAULT_WARMUP_ITERATIONS = 5;
   BENCH_DEFAULT_PARALLEL_THREADS = 4;
 
-  {** R3-04: 矩阵 significance 阈值（baseline 无原始样本，用 ratio 阈值替代统计检验） }
-  BENCH_MATRIX_DIFF_THRESHOLD = 0.05;  // 5% 偏差视为 different
+  {** 统一显著性阈值常量 }
+  BENCH_SIGNIFICANCE_ALPHA = 0.05;       // 统计检验 alpha 水平 (Mann-Whitney/Welch's t)
+  BENCH_MATRIX_DIFF_THRESHOLD = 0.05;    // ratio 启发式阈值 (baseline 无原始样本时)
 
   {** 环境变量名 }
   BENCH_ENV_FILTER = 'NEXTPAS_BENCH_FILTER';
