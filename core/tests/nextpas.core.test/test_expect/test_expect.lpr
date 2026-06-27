@@ -695,7 +695,7 @@ begin
     on E: EAssertionFailed do
       CheckContains(E.Message, 'Expected');
     on E: Exception do
-      Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+      FailUnexpected(E);
   end;
 end;
 
@@ -709,7 +709,7 @@ begin
     on E: EAssertionFailed do
       CheckContains(E.Message, 'not near');
     on E: Exception do
-      Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+      FailUnexpected(E);
   end;
 end;
 
@@ -729,7 +729,7 @@ begin
     on E: EAssertionFailed do
       CheckContains(E.Message, 'non-integer');
     on E: Exception do
-      Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+      FailUnexpected(E);
   end;
 end;
 

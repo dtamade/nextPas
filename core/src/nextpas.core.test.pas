@@ -14,6 +14,7 @@ unit nextpas.core.test;
 interface
 
 uses
+  SysUtils,
   nextpas.core.test.base,
   nextpas.core.test.check,
   nextpas.core.test.config,
@@ -120,6 +121,7 @@ procedure CheckNear(const AExpected, AActual: Double;
 procedure CheckNotNear(const AExpected, AActual: Double;
   const AEpsilon: Double = 1e-10; const AMessage: string = '');
 procedure Fail(const AMessage: string);
+procedure FailUnexpected(const E: Exception);
 procedure Skip(const AReason: string = '');
 
 { ── Re-exported from test.base (stack trace) ─────────────────────────────── }
@@ -304,6 +306,9 @@ begin nextpas.core.test.check.CheckNotNear(AExpected, AActual, AEpsilon, AMessag
 
 procedure Fail(const AMessage: string);
 begin nextpas.core.test.check.Fail(AMessage); end;
+
+procedure FailUnexpected(const E: Exception);
+begin nextpas.core.test.check.FailUnexpected(E); end;
 
 procedure Skip(const AReason: string);
 begin nextpas.core.test.check.Skip(AReason); end;

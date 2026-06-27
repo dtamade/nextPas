@@ -57,6 +57,7 @@ procedure CheckNear(const AExpected, AActual: Double;
 procedure CheckNotNear(const AExpected, AActual: Double;
   const AEpsilon: Double = 1e-10; const AMessage: string = '');
 procedure Fail(const AMessage: string);
+procedure FailUnexpected(const E: Exception);
 procedure Skip(const AReason: string = '');
 
 implementation
@@ -420,6 +421,11 @@ end;
 procedure Fail(const AMessage: string);
 begin
   InternalFail(AMessage);
+end;
+
+procedure FailUnexpected(const E: Exception);
+begin
+  InternalFail('unexpected ' + E.ClassName + ': ' + E.Message);
 end;
 
 procedure Skip(const AReason: string);

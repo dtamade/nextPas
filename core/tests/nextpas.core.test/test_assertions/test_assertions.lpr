@@ -28,7 +28,7 @@ begin
     on E: EAssertionFailed do
       CheckContains(E.Message, 'expected failure');
     on E: Exception do
-      Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+      FailUnexpected(E);
   end;
 end;
 
@@ -42,7 +42,7 @@ begin
     on E: EAssertionFailed do
       CheckContains(E.Message, 'hello');
     on E: Exception do
-      Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+      FailUnexpected(E);
   end;
 end;
 
@@ -56,7 +56,7 @@ begin
     on E: EAssertionFailed do
       CheckContains(E.Message, '42');
     on E: Exception do
-      Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+      FailUnexpected(E);
   end;
 end;
 
@@ -71,7 +71,7 @@ begin
     on E: EAssertionFailed do
       CheckContains(E.Message, 'True');
     on E: Exception do
-      Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+      FailUnexpected(E);
   end;
 end;
 
@@ -88,7 +88,7 @@ begin
     on E: EAssertionFailed do
       CheckContains(LowerCase(E.Message), 'pointer');
     on E: Exception do
-      Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+      FailUnexpected(E);
   end;
 end;
 
@@ -101,7 +101,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do CheckContains(E.Message, 'differ');
-    on E: Exception do Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+    on E: Exception do FailUnexpected(E);
   end;
 end;
 
@@ -113,7 +113,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do CheckContains(E.Message, 'True');
-    on E: Exception do Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+    on E: Exception do FailUnexpected(E);
   end;
 end;
 
@@ -129,7 +129,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do CheckContains(LowerCase(E.Message), 'differ');
-    on E: Exception do Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+    on E: Exception do FailUnexpected(E);
   end;
 end;
 
@@ -144,7 +144,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do CheckContains(E.Message, 'should fail');
-    on E: Exception do Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+    on E: Exception do FailUnexpected(E);
   end;
 end;
 
@@ -161,7 +161,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do CheckContains(LowerCase(E.Message), 'non-nil');
-    on E: Exception do Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+    on E: Exception do FailUnexpected(E);
   end;
 end;
 
@@ -174,7 +174,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do CheckContains(E.Message, 'does not contain');
-    on E: Exception do Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+    on E: Exception do FailUnexpected(E);
   end;
 end;
 
@@ -187,7 +187,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do CheckContains(E.Message, 'does not start');
-    on E: Exception do Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+    on E: Exception do FailUnexpected(E);
   end;
 end;
 
@@ -203,7 +203,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do CheckContains(E.Message, 'does not end');
-    on E: Exception do Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+    on E: Exception do FailUnexpected(E);
   end;
 end;
 
@@ -219,7 +219,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do CheckContains(E.Message, 'should be same');
-    on E: Exception do Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+    on E: Exception do FailUnexpected(E);
   end;
 end;
 
@@ -233,7 +233,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do CheckContains(E.Message, 'not in range');
-    on E: Exception do Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+    on E: Exception do FailUnexpected(E);
   end;
 end;
 
@@ -246,7 +246,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do CheckContains(E.Message, '>');
-    on E: Exception do Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+    on E: Exception do FailUnexpected(E);
   end;
 end;
 
@@ -259,7 +259,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do CheckContains(E.Message, '<');
-    on E: Exception do Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+    on E: Exception do FailUnexpected(E);
   end;
 end;
 
@@ -272,7 +272,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do CheckContains(E.Message, 'Expected length');
-    on E: Exception do Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+    on E: Exception do FailUnexpected(E);
   end;
 end;
 
@@ -288,7 +288,7 @@ begin
     on E: EAssertionFailed do
       CheckContains(E.Message, 'EConvertError');
     on E: Exception do
-      Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+      FailUnexpected(E);
   end;
 end;
 
@@ -303,7 +303,7 @@ begin
     on E: EAssertionFailed do
       CheckContains(E.Message, 'EConvertError');
     on E: Exception do
-      Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+      FailUnexpected(E);
   end;
 end;
 
@@ -366,7 +366,7 @@ begin
     on E: EAssertionFailed do
       CheckContains(E.Message, 'intentional');
     on E: Exception do
-      Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+      FailUnexpected(E);
   end;
 end;
 
@@ -398,7 +398,7 @@ begin
     on E: EAssertionFailed do
       CheckContains(E.Message, 'should differ');
     on E: Exception do
-      Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+      FailUnexpected(E);
   end;
 end;
 
@@ -424,7 +424,7 @@ begin
     on E: EAssertionFailed do
       CheckContains(E.Message, 'Expected');
     on E: Exception do
-      Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+      FailUnexpected(E);
   end;
 end;
 
@@ -443,7 +443,7 @@ begin
     on E: EAssertionFailed do
       CheckContains(E.Message, 'differ');
     on E: Exception do
-      Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+      FailUnexpected(E);
   end;
 end;
 
@@ -463,7 +463,7 @@ begin
     on E: EAssertionFailed do
       CheckContains(E.Message, 'too close');
     on E: Exception do
-      Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+      FailUnexpected(E);
   end;
 end;
 
