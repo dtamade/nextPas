@@ -90,6 +90,7 @@ var
   LObj: TTestObject;
   LPtr: Pointer;
   LSuccess: Boolean;
+  LObjs: array[0..1] of TTestObject;
   I: Integer;
 begin
   LPool := TTestPool.Create(2,
@@ -100,7 +101,7 @@ begin
   try
     for I := 0 to 1 do
     begin
-      LSuccess := LPool.AcquireObject(LObj);
+      LSuccess := LPool.AcquireObject(LObjs[I]);
       Check(LSuccess, 'acquire ' + IntToStr(I));
     end;
     Check(Int64(2) = Int64(LPool.TotalCreated), 'total created = 2');
@@ -108,6 +109,10 @@ begin
     LSuccess := LPool.AcquireObject(LObj);
     Check(not LSuccess, 'pool exhausted');
     Check(not LPool.TryAcquire(LPtr), 'try acquire also fails');
+
+    { Release acquired objects before pool destruction }
+    for I := 0 to 1 do
+      LPool.ReleaseObject(LObjs[I]);
   finally
     LPool.Free;
   end;

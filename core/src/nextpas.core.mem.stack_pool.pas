@@ -40,6 +40,7 @@ type
   EStackPoolError = class(EAllocError);
 
 type
+  {** TStackPool 配置参数 *}
   TStackPoolConfig = record
     TotalSize: SizeUInt;
     Alignment: SizeUInt;    // 默认指针大小
@@ -201,7 +202,7 @@ type
     class function Debug: TStackPoolPolicy; static;
   end;
 
-  // 调试用内存映射条目类型
+  {** 调试用内存映射条目 *}
   TStackMemoryMapEntry = record
     Start: Pointer;
     Size: SizeUInt;

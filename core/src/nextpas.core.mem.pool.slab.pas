@@ -19,7 +19,7 @@ uses
   nextpas.core.mem.error;        // EAllocError, TAllocError
 
 type
-  // 性能计数器（供测试）
+  {** 性能计数器（供测试和基准使用）*}
   TSlabPerfCounters = record
     AllocCalls : QWord;
     FreeCalls  : QWord;
@@ -30,7 +30,7 @@ type
     MergedPages: QWord;
   end;
 
-  // 只读统计快照（不改变池行为）
+  {** 池状态只读快照（不改变池行为）*}
   TSlabPoolStats = record
     SegmentCount: Integer;
     TotalCapacity: SizeUInt;
@@ -39,7 +39,7 @@ type
     FallbackBytes: SizeUInt;
   end;
 
-  // 兼容配置
+  {** Slab 池配置参数 *}
   TSlabConfig = record
     MinShift: SizeUInt;            // 默认 3 (8B)
     EnablePageMerging: Boolean;    // 兼容字段（当前未用）
@@ -49,7 +49,7 @@ type
     PageSize: SizeUInt;            // 兼容字段（默认 4096）
   end;
 
-  // Fallback allocation record (oversize / high-alignment allocations)
+  {** Fallback 分配记录（超大/高对齐分配）*}
   TSlabFallbackAlloc = record
     UserPtr: Pointer;
     RawPtr: Pointer;

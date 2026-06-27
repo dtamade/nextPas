@@ -29,6 +29,7 @@ type
   {** 双重释放异常 | Double free exception *}
   EMemFixedPoolDoubleFree = class(EMemFixedPoolError);
 
+  {** TFixedPool 配置参数 *}
   TFixedPoolConfig = record
     BlockSize: SizeUInt;
     Capacity: Integer;
