@@ -912,15 +912,14 @@ var
   LBuilder: TStringBuilder;
   LWriter: TJsonWriter;
   I: Integer;
-  LLine: string;
 begin
-  for I := 0 to FResultCount - 1 do
-  begin
-    if not (FResults[I].Executed and (not FResults[I].Skipped)) then
-      Continue;
+  LBuilder.Init(256 + FResultCount * 128);
+  try
+    for I := 0 to FResultCount - 1 do
+    begin
+      if not (FResults[I].Executed and (not FResults[I].Skipped)) then
+        Continue;
 
-    LBuilder.Init(256);
-    try
       LWriter.Init(LBuilder);
       LWriter.BeginObject;
       LWriter.Key('timestamp');
@@ -940,18 +939,19 @@ begin
       LWriter.Key('allocsPerOp');
       LWriter.Int(FResults[I].AllocsPerOp);
       LWriter.EndObject;
-      LLine := LBuilder.ToString;
-    finally
-      LBuilder.Done;
+      LBuilder.AppendStr(LineEnding);
     end;
 
-    { 追加一行 JSON 到文件 }
-    try
-      AppendFileText(APath, LLine + LineEnding);
-    except
-      { 文件不存在时创建 }
-      WriteFileText(APath, LLine + LineEnding, PermDefault);
+    if LBuilder.Len > 0 then
+    begin
+      try
+        AppendFileText(APath, LBuilder.ToString);
+      except
+        WriteFileText(APath, LBuilder.ToString, PermDefault);
+      end;
     end;
+  finally
+    LBuilder.Done;
   end;
 end;
 

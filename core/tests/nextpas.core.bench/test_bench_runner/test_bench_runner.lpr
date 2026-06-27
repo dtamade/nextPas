@@ -474,13 +474,12 @@ end;
 procedure TestClearResults;
 var
   LRunner: TBenchRunner;
-  LResult: TBenchResult;
 begin
   LRunner := TBenchRunner.Create;
   try
     ConfigureFastRunner(LRunner);
     // 运行一个基准
-    LResult := LRunner.RunOne('Fast', @BenchFast);
+    LRunner.RunOne('Fast', @BenchFast);
     Check(LRunner.GetResultCount = 1, 'Has 1 result');
 
     // 清空结果
