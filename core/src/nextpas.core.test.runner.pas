@@ -850,8 +850,11 @@ begin
     LSubCtxI := nil;
     LSubCtx := nil;
     SetCurrentTestContext(nil);
-    LTestResult.Name    := LEntry.Name;
-    LTestResult.Message := '';
+    LTestResult.Name       := LEntry.Name;
+    LTestResult.Status     := tsPassed;
+    LTestResult.Message    := '';
+    LTestResult.Duration   := 0;
+    LTestResult.CapturedLog := nil;
     SetTestContext(Name, LEntry.Name);
 
     { Test filter — skip non-matching tests silently }
