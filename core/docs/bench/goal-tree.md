@@ -66,7 +66,7 @@ B8  报告扩展 ✅
   B8.3  原始样本收集 (CollectRawSamples)            ✅
 
 B9  质量保证 ✅
-  B9.1  12 测试套件 / 221 框架级测试                 ✅
+  B9.1  14 测试套件 / 257 框架级测试                 ✅
   B9.2  nextpas.core.test 框架迁移                  ✅
   B9.3  heaptrc 零泄漏验证 (12/12 套件全部启用 -gh)  ✅
   B9.4  API 覆盖补全 (GetData/Count/GetResults)     ✅
@@ -122,8 +122,8 @@ B14  Phase 3: 超越 Go/Rust                               ✅
 | test_bench_parallel_heaptrc | 1 | ✅ 0 leaks | 并行 heaptrc |
 | test_bench_parallel_memtrack_heaptrc | 2 | ✅ 0 leaks | 并行+memtrack |
 | test_bench_invalid_parameters_heaptrc | 5 | ✅ 0 leaks | 参数校验 |
-| test_bench_matrix | 14 | ✅ 0 leaks | 多基线矩阵 + 图表 |
-| **合计** | **256** | **14/14 通过** | |
+| test_bench_matrix | 15 | ✅ 0 leaks | 多基线矩阵 + 图表 + JSON |
+| **合计** | **257** | **14/14 通过** | |
 
 ## 已解决的技术债务
 

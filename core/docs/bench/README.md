@@ -108,6 +108,7 @@ end.
 | `CompareMultipleBaselines(Baselines)` | 多基线对比矩阵（超越 Go/Rust） |
 | `ToMatrixReport(Baselines)` | 多基线矩阵 Console 报告 |
 | `ToMatrixHTML(Baselines)` | 多基线矩阵 HTML（含 B/op + allocs/op） |
+| `ToMatrixJSON(Baselines)` | 多基线矩阵 JSON（CI 可消费） |
 | `SaveBaseline(Path, GitHash)` | 保存当前结果为命名基线 |
 | `AppendToTimeline(Path)` | 追加到 JSONL 时间线 |
 | `HasRegression(Threshold)` | 检测回归 |
@@ -187,7 +188,7 @@ end.
 | 指标 | 状态 |
 |------|------|
 | 测试套件 | 14 |
-| 框架级测试 | 256 |
+| 框架级测试 | 257 |
 | 框架 | 全部使用 `nextpas.core.test` |
 | heaptrc | 14/14 套件全部启用 -gh，零泄漏 |
 | NaN 安全 | `SortDoubleArray` 先分区 NaN 再排序 |
