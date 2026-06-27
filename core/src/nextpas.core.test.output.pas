@@ -77,6 +77,9 @@ procedure WriteRetryHint(ACurrent, ATotal: Integer;
 procedure WriteWarning(const AMsg: string;
   const ASink: IOutputSink; const AConfig: TTestConfig);
   { Write yellow 'WARNING: ...' to ASink (2-space indent). }
+procedure WriteSuiteHeader(const AName, ASuffix: string;
+  const ASink: IOutputSink; const AConfig: TTestConfig);
+  { Write blank line + bold '> Name (suffix)' suite header to ASink. }
 
 { ── Test Filter ───────────────────────────────────────────────────────────── }
 
@@ -391,6 +394,16 @@ procedure WriteWarning(const AMsg: string;
   const ASink: IOutputSink; const AConfig: TTestConfig);
 begin
   ASink.WriteLn('  ' + AnsiYellow('WARNING ', AConfig) + AMsg);
+end;
+
+procedure WriteSuiteHeader(const AName, ASuffix: string;
+  const ASink: IOutputSink; const AConfig: TTestConfig);
+begin
+  ASink.WriteLn('');
+  ASink.WriteLn(
+    AnsiBold('> ', AConfig) +
+    AnsiCyan(AName, AConfig) +
+    AnsiDim(' (' + ASuffix + ')', AConfig));
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }

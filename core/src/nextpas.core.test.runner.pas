@@ -679,10 +679,8 @@ begin
   try
 
   LOutSink.WriteLn('');
-  LOutSink.WriteLn(
-    AnsiBold('> ', LConfig) +
-    AnsiCyan(Name, LConfig) +
-    AnsiDim(' (' + IntToStr(Length(Tests)) + ' tests)', LConfig));
+  WriteSuiteHeader(Name, IntToStr(Length(Tests)) + ' tests',
+    LOutSink, LConfig);
 
   { Suite-level setup (uses shared helper) }
   if not RunSetup(LConfig, LSkip, LLastFailMsg) then
@@ -1099,10 +1097,8 @@ begin
   LTagFilter := GetTagFilter(LConfig);
 
   LOutSink.WriteLn('');
-  LOutSink.WriteLn(
-    AnsiBold('> ', LConfig) +
-    AnsiCyan(Name, LConfig) +
-    AnsiDim(' (' + IntToStr(LTotal) + ' tests, parallel)', LConfig));
+  WriteSuiteHeader(Name, IntToStr(LTotal) + ' tests, parallel',
+    LOutSink, LConfig);
 
   { Suite-level setup (serial, uses shared helper) }
   if not RunSetup(LConfig, LSkip, LErrorMsg) then
