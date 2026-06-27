@@ -26,7 +26,7 @@ procedure FreeListInsertShuffled(var AHead: Pointer; ANode: Pointer;
 
 implementation
 
-var
+threadvar
   { Per-thread PRNG state for free-list shuffle. }
   GShuffleState: UInt64;
 

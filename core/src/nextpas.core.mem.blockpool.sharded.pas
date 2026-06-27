@@ -896,7 +896,7 @@ begin
   end;
 end;
 
-	constructor TShardedBlockPool.Create(const aConfig: TShardedBlockPoolConfig);
+  constructor TShardedBlockPool.Create(const aConfig: TShardedBlockPoolConfig);
 var
   LShardCount: Integer;
   LIdx: Integer;
@@ -910,11 +910,11 @@ var
   LStartKey: PtrUInt;
   LEndKey: PtrUInt;
   LTotalCap: Int64;
-	begin
-	  inherited Create;
+  begin
+    inherited Create;
 
-	  FRoutingState := 0;
-	  RouteClear;
+    FRoutingState := 0;
+    RouteClear;
 
   FPoolId := NextShardedBlockPoolId;
   FCacheEpoch := 1;
@@ -998,19 +998,19 @@ var
     LApproxPages := HASH_MIN_CAP;
   PageMapInit(LApproxPages * 2);
 
-	  // index initial segments for all shards
-	  RouteWriteLock;
-	  try
-	    for LIdx := 0 to LShardCount - 1 do
-	      for LSegIdx := 0 to SizeInt(FShards[LIdx].Pool.SegmentCount) - 1 do
-	        if FShards[LIdx].Pool.GetSegmentRegion(LSegIdx, LStart, LEnd) then
+    // index initial segments for all shards
+    RouteWriteLock;
+    try
+      for LIdx := 0 to LShardCount - 1 do
+        for LSegIdx := 0 to SizeInt(FShards[LIdx].Pool.SegmentCount) - 1 do
+          if FShards[LIdx].Pool.GetSegmentRegion(LSegIdx, LStart, LEnd) then
           begin
-	          RouteInsert(LStart, LEnd, LIdx);
+            RouteInsert(LStart, LEnd, LIdx);
             IndexSegmentPagesLocked(LIdx, LStart, LEnd);
           end;
-	  finally
-	    RouteWriteUnlock;
-	  end;
+    finally
+      RouteWriteUnlock;
+    end;
 
   // initialize fast stats
   LTotalCap := 0;
@@ -1041,21 +1041,21 @@ begin
   Create(LCfg);
 end;
 
-	destructor TShardedBlockPool.Destroy;
+  destructor TShardedBlockPool.Destroy;
 var
   LIdx: Integer;
-	begin
-	  // lock shards to avoid racing with concurrent frees/allocs
-	  for LIdx := 0 to High(FShards) do
-	    FShards[LIdx].Lock.Acquire;
-	  try
-	    RouteWriteLock;
-	    try
-	      RouteClear;
+  begin
+    // lock shards to avoid racing with concurrent frees/allocs
+    for LIdx := 0 to High(FShards) do
+      FShards[LIdx].Lock.Acquire;
+    try
+      RouteWriteLock;
+      try
+        RouteClear;
         PageMapClear;
-	    finally
-	      RouteWriteUnlock;
-	    end;
+      finally
+        RouteWriteUnlock;
+      end;
 
     for LIdx := 0 to High(FShards) do
     begin
@@ -1071,8 +1071,8 @@ var
   for LIdx := 0 to High(FShards) do
     FShards[LIdx].Lock.Done;
 
-	  inherited Destroy;
-	end;
+    inherited Destroy;
+  end;
 
 function TShardedBlockPool.Acquire: Pointer;
 var

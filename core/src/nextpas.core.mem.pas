@@ -146,9 +146,10 @@ var
   LTotal: SizeUInt;
 begin
   if (ACount = 0) or (AElemSize = 0) then Exit(nil);
-  LTotal := ACount * AElemSize;
-  if (LTotal div AElemSize) <> ACount then
+  { Overflow-safe: check before multiply }
+  if ACount > (High(SizeUInt) div AElemSize) then
     raise EOutOfMemory.Create(aeOutOfMemory, 'AllocArray: size overflow');
+  LTotal := ACount * AElemSize;
   Result := AAllocator.AllocMem(LTotal);
 end;
 
