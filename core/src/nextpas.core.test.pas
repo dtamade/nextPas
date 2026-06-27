@@ -114,10 +114,10 @@ procedure CheckLength(const AExpected, AActual: NativeInt);
 procedure CheckRaises(AExceptionClass: ExceptClass; AProc: TTestProc;
   const AMessage: string = '');
 procedure CheckNoRaise(AProc: TTestProc; const AMessage: string = '');
-procedure CheckNear(AExpected, AActual: Double;
-  AEpsilon: Double = 1e-10; const AMessage: string = '');
-procedure CheckNotNear(AExpected, AActual: Double;
-  AEpsilon: Double = 1e-10; const AMessage: string = '');
+procedure CheckNear(const AExpected, AActual: Double;
+  const AEpsilon: Double = 1e-10; const AMessage: string = '');
+procedure CheckNotNear(const AExpected, AActual: Double;
+  const AEpsilon: Double = 1e-10; const AMessage: string = '');
 procedure Fail(const AMessage: string);
 procedure Skip(const AReason: string = '');
 
@@ -287,12 +287,12 @@ begin nextpas.core.test.check.CheckRaises(AExceptionClass, AProc, AMessage); end
 procedure CheckNoRaise(AProc: TTestProc; const AMessage: string);
 begin nextpas.core.test.check.CheckNoRaise(AProc, AMessage); end;
 
-procedure CheckNear(AExpected, AActual: Double;
-  AEpsilon: Double; const AMessage: string);
+procedure CheckNear(const AExpected, AActual: Double;
+  const AEpsilon: Double; const AMessage: string);
 begin nextpas.core.test.check.CheckNear(AExpected, AActual, AEpsilon, AMessage); end;
 
-procedure CheckNotNear(AExpected, AActual: Double;
-  AEpsilon: Double; const AMessage: string);
+procedure CheckNotNear(const AExpected, AActual: Double;
+  const AEpsilon: Double; const AMessage: string);
 begin nextpas.core.test.check.CheckNotNear(AExpected, AActual, AEpsilon, AMessage); end;
 
 procedure Fail(const AMessage: string);

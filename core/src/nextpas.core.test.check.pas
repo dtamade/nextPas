@@ -51,10 +51,10 @@ procedure CheckLessOrEqual(const AValue, AExpected: Int64);
   R4-07: Uses absolute epsilon — for large values (e.g. 1e15), the default
   1e-10 is too tight. Callers should pass a larger AEpsilon or use a
   relative-epsilon variant for magnitude-spanning comparisons. }
-procedure CheckNear(AExpected, AActual: Double;
-  AEpsilon: Double = 1e-10; const AMessage: string = '');
-procedure CheckNotNear(AExpected, AActual: Double;
-  AEpsilon: Double = 1e-10; const AMessage: string = '');
+procedure CheckNear(const AExpected, AActual: Double;
+  const AEpsilon: Double = 1e-10; const AMessage: string = '');
+procedure CheckNotNear(const AExpected, AActual: Double;
+  const AEpsilon: Double = 1e-10; const AMessage: string = '');
 procedure Fail(const AMessage: string);
 procedure Skip(const AReason: string = '');
 
@@ -374,8 +374,8 @@ begin
   end;
 end;
 
-procedure CheckNear(AExpected, AActual: Double;
-  AEpsilon: Double; const AMessage: string);
+procedure CheckNear(const AExpected, AActual: Double;
+  const AEpsilon: Double; const AMessage: string);
 var
   LDiff: Double;
 begin
@@ -391,8 +391,8 @@ begin
   end;
 end;
 
-procedure CheckNotNear(AExpected, AActual: Double;
-  AEpsilon: Double; const AMessage: string);
+procedure CheckNotNear(const AExpected, AActual: Double;
+  const AEpsilon: Double; const AMessage: string);
 var
   LDiff: Double;
 begin
