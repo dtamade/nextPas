@@ -70,10 +70,10 @@ end;
 
 function NormalizeAlignment(const AAlignment: SizeUInt): SizeUInt;
 begin
-  if (AAlignment = 0) or (not IsPowerOfTwo(AAlignment)) then
-    Result := DEFAULT_ALIGNMENT
+  if (AAlignment >= DEFAULT_ALIGNMENT) and IsPowerOfTwo(AAlignment) then
+    Result := AAlignment
   else
-    Result := AAlignment;
+    Result := DEFAULT_ALIGNMENT;
 end;
 
 end.
