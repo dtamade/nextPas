@@ -11,6 +11,7 @@ uses
   nextpas.core.base.utils,
   nextpas.core.base,
   nextpas.core.mem.base,
+  nextpas.core.mem.utils,
   nextpas.core.mem.allocator,
   nextpas.core.mem.intf,
   nextpas.core.mem.mutex,
@@ -142,30 +143,14 @@ end;
 { TSlabPoolSharded }
 
 function TSlabPoolSharded.NormalizeShardCount(aShardCount: Integer): Integer;
-var
-  LCPU: Integer;
 begin
-  if aShardCount <= 0 then
-  begin
-    LCPU := platform_cpu_count;
-    if LCPU < 1 then LCPU := 1;
-    if LCPU > 32 then LCPU := 32;
-    aShardCount := LCPU;
-  end;
-
-  if not IsPowerOfTwo(SizeUInt(aShardCount)) then
-    aShardCount := Integer(NextPowerOfTwo(SizeUInt(aShardCount)));
-  if aShardCount < 1 then aShardCount := 1;
-  Result := aShardCount;
+  Result := nextpas.core.mem.utils.NormalizeShardCount(aShardCount, platform_cpu_count);
 end;
 
 function TSlabPoolSharded.ChooseShardIndex: Integer; inline;
-var
-  LId: QWord;
 begin
-  if FShardCount <= 1 then Exit(0);
-  LId := QWord(platform_thread_id);
-  Result := Integer(MulHash64(LId) and QWord(FShardMask));
+  if FShardMask = 0 then Exit(0);
+  Result := nextpas.core.mem.utils.ChooseShardIndex(QWord(platform_thread_id), SizeUInt(FShardMask));
 end;
 
 function TSlabPoolSharded.PageKeyOf(APtr: Pointer): PtrUInt; inline;
