@@ -178,7 +178,7 @@ end.
 | 测试套件 | 12 |
 | 框架级测试 | 221 |
 | 框架 | 全部使用 `nextpas.core.test` |
-| heaptrc | 8 套件零泄漏，1 套件全局单例可接受 |
+| heaptrc | 12/12 套件全部启用 -gh，8 零泄漏 + 1 全局单例 128B |
 | NaN 安全 | `SortDoubleArray` 先分区 NaN 再排序 |
 | 统计防护 | `Variance`/`Skewness`/`Kurtosis` NaN/Inf guard |
 | `GetData` 语义 | 返回 `Copy(FData)` 独立副本 |

@@ -68,7 +68,7 @@ B8  报告扩展 ✅
 B9  质量保证 ✅
   B9.1  12 测试套件 / 221 框架级测试                 ✅
   B9.2  nextpas.core.test 框架迁移                  ✅
-  B9.3  heaptrc 零泄漏验证                          ✅
+  B9.3  heaptrc 零泄漏验证 (12/12 套件全部启用 -gh)  ✅
   B9.4  API 覆盖补全 (GetData/Count/GetResults)     ✅
 
 B10  文档 ✅
@@ -94,9 +94,9 @@ B11  跨语言基准对照                                    ⏳
 | test_bench_baseline | 22 | ✅ 零泄漏 | 基线管理 |
 | test_bench_memtrack | 16 | ✅ 零泄漏 | 内存追踪 |
 | test_bench_parallel | 11 | ✅ 零泄漏 | 并行基准 |
-| test_bench_parallel_heaptrc | 1 | — | 并行 heaptrc |
-| test_bench_parallel_memtrack_heaptrc | 2 | — | 并行+memtrack |
-| test_bench_invalid_parameters_heaptrc | 5 | — | 参数校验 |
+| test_bench_parallel_heaptrc | 1 | ✅ 0 leaks | 并行 heaptrc |
+| test_bench_parallel_memtrack_heaptrc | 2 | ✅ 0 leaks | 并行+memtrack |
+| test_bench_invalid_parameters_heaptrc | 5 | ✅ 0 leaks | 参数校验 |
 | **合计** | **221** | **8/8 通过** | |
 
 ## 已解决的技术债务
