@@ -138,7 +138,8 @@ type
      * @desc 恢复到指定状态
      *       Restore to specified state
      *
-     * @param aState 状态标记 State marker
+     * @param aState 状态标记（由 SaveState 返回）State marker (returned by SaveState)
+     * @note aState 必须来自同一 pool 实例的 SaveState 调用，否则行为未定义
      *}
     procedure RestoreState(aState: SizeUInt); inline;
 
