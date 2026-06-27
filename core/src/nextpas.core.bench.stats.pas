@@ -10,6 +10,14 @@ uses
   nextpas.core.bench.intf;
 
 type
+  {** OLS 线性回归结果 (P1-1: 去除固定开销) }
+  TOLSRegression = record
+    Slope: Double;       { 每次迭代的时间（纳秒） }
+    Intercept: Double;   { 固定开销（纳秒） }
+    RSquared: Double;    { 拟合度 (0-1)，越接近 1 越好 }
+    Valid: Boolean;      { 回归是否有效 }
+  end;
+
   {** 统计分析器实现 }
   TBenchStatsAnalyzer = class(TInterfacedObject, IBenchStatsAnalyzer)
   private
@@ -75,6 +83,9 @@ type
 
     {** 几何均值（多 benchmark ratio 聚合的正确方法） }
     function GeometricMean(const ARatios: TDoubleArray): Double;
+
+    {** OLS 线性回归: time = intercept + slope * N }
+    function ComputeOLSRegression(const AIterCounts, ATimes: TDoubleArray): TOLSRegression;
   end;
 
 implementation
@@ -655,6 +666,77 @@ begin
   end;
 
   Result := Exp(LSumLn / LLen);
+end;
+
+{** OLS 线性回归实现
+ *
+ *  给定 N 个数据点 (x_i, y_i)，求 y = intercept + slope * x 的最小二乘解。
+ *
+ *  公式:
+ *    slope = (n * Σxy - Σx * Σy) / (n * Σx² - (Σx)²)
+ *    intercept = (Σy - slope * Σx) / n
+ *    R² = 1 - SS_res / SS_tot
+ *
+ *  应用: Rust criterion 用此方法分离每次迭代的固定开销和可变开销。
+ *  在多个迭代次数 N 上运行 benchmark，回归 total_time = α + β*N，
+ *  β 就是每次迭代的真实时间，α 是固定开销。
+ }
+function TBenchStatsAnalyzer.ComputeOLSRegression(
+  const AIterCounts, ATimes: TDoubleArray): TOLSRegression;
+var
+  LN: Integer;
+  LSX, LSY, LSXY, LSX2, LSY2: Double;
+  LMeanY, LSStot, SSres: Double;
+  LD: Double;
+  I: Integer;
+begin
+  Result := Default(TOLSRegression);
+  LN := Length(AIterCounts);
+
+  if (LN < 2) or (LN <> Length(ATimes)) then
+  begin
+    Result.Valid := False;
+    Exit;
+  end;
+
+  { 累加统计量 }
+  LSX := 0; LSY := 0; LSXY := 0; LSX2 := 0; LSY2 := 0;
+  for I := 0 to LN - 1 do
+  begin
+    LSX := LSX + AIterCounts[I];
+    LSY := LSY + ATimes[I];
+    LSXY := LSXY + AIterCounts[I] * ATimes[I];
+    LSX2 := LSX2 + AIterCounts[I] * AIterCounts[I];
+    LSY2 := LSY2 + ATimes[I] * ATimes[I];
+  end;
+
+  { 分母 = n*Σx² - (Σx)² }
+  LD := LN * LSX2 - LSX * LSX;
+  if Abs(LD) < 1e-10 then
+  begin
+    Result.Valid := False;
+    Exit;
+  end;
+
+  Result.Slope := (LN * LSXY - LSX * LSY) / LD;
+  Result.Intercept := (LSY - Result.Slope * LSX) / LN;
+
+  { R² = 1 - SS_res / SS_tot }
+  LMeanY := LSY / LN;
+  LSStot := 0;
+  SSres := 0;
+  for I := 0 to LN - 1 do
+  begin
+    LSStot := LSStot + Sqr(ATimes[I] - LMeanY);
+    SSres := SSres + Sqr(ATimes[I] - (Result.Intercept + Result.Slope * AIterCounts[I]));
+  end;
+
+  if LSStot > 1e-10 then
+    Result.RSquared := 1.0 - SSres / LSStot
+  else
+    Result.RSquared := 1.0; { 所有 y 相同 → 完美拟合 }
+
+  Result.Valid := True;
 end;
 
 end.

@@ -523,6 +523,83 @@ begin
   CheckNear(0.0, GAnalyzer.GeometricMean(LRatios), 0.001, 'Negative ratio returns 0');
 end;
 
+procedure TestOLSRegression;
+var
+  LIters, LTimes: TDoubleArray;
+  LResult: TOLSRegression;
+  LStats: TBenchStatsAnalyzer;
+begin
+  LStats := TBenchStatsAnalyzer.Create;
+  try
+    { 线性关系: time = 100 + 50*N }
+    SetLength(LIters, 5);
+    SetLength(LTimes, 5);
+    LIters[0] := 1;   LTimes[0] := 150;   { 100 + 50*1 }
+    LIters[1] := 2;   LTimes[1] := 200;   { 100 + 50*2 }
+    LIters[2] := 4;   LTimes[2] := 300;   { 100 + 50*4 }
+    LIters[3] := 8;   LTimes[3] := 500;   { 100 + 50*8 }
+    LIters[4] := 16;  LTimes[4] := 900;   { 100 + 50*16 }
+    LResult := LStats.ComputeOLSRegression(LIters, LTimes);
+    Check(LResult.Valid, 'OLS regression valid');
+    CheckNear(50.0, LResult.Slope, 0.01, 'Slope = 50 ns/iter');
+    CheckNear(100.0, LResult.Intercept, 0.01, 'Intercept = 100 ns overhead');
+    Check(LResult.RSquared > 0.999, 'R² > 0.999 for perfect linear data');
+  finally
+    LStats.Free;
+  end;
+end;
+
+procedure TestOLSRegression_InsufficientData;
+var
+  LIters, LTimes: TDoubleArray;
+  LResult: TOLSRegression;
+  LStats: TBenchStatsAnalyzer;
+begin
+  LStats := TBenchStatsAnalyzer.Create;
+  try
+    { 只有 1 个数据点 }
+    SetLength(LIters, 1);
+    SetLength(LTimes, 1);
+    LIters[0] := 10;
+    LTimes[0] := 100;
+    LResult := LStats.ComputeOLSRegression(LIters, LTimes);
+    Check(not LResult.Valid, 'Single point regression invalid');
+
+    { 空数据 }
+    SetLength(LIters, 0);
+    SetLength(LTimes, 0);
+    LResult := LStats.ComputeOLSRegression(LIters, LTimes);
+    Check(not LResult.Valid, 'Empty data regression invalid');
+  finally
+    LStats.Free;
+  end;
+end;
+
+procedure TestOLSRegression_PerfectFit;
+var
+  LIters, LTimes: TDoubleArray;
+  LResult: TOLSRegression;
+  LStats: TBenchStatsAnalyzer;
+begin
+  LStats := TBenchStatsAnalyzer.Create;
+  try
+    { 完美线性: time = 0 + 10*N (无固定开销) }
+    SetLength(LIters, 4);
+    SetLength(LTimes, 4);
+    LIters[0] := 1;   LTimes[0] := 10;
+    LIters[1] := 10;  LTimes[1] := 100;
+    LIters[2] := 100; LTimes[2] := 1000;
+    LIters[3] := 1000; LTimes[3] := 10000;
+    LResult := LStats.ComputeOLSRegression(LIters, LTimes);
+    Check(LResult.Valid, 'Perfect fit valid');
+    CheckNear(10.0, LResult.Slope, 0.001, 'Slope = 10');
+    CheckNear(0.0, LResult.Intercept, 0.001, 'Intercept = 0 (no overhead)');
+    Check(LResult.RSquared > 0.9999, 'R² > 0.9999 for perfect data');
+  finally
+    LStats.Free;
+  end;
+end;
+
 var
   T: TTestSuite;
 begin
@@ -554,6 +631,9 @@ begin
   T.Test('Percentile_NaNInfinity', @TestPercentile_NaNInfinity);
   T.Test('HasHeuristicDifferenceAt', @TestHasHeuristicDifferenceAt);
   T.Test('GeometricMean', @TestGeometricMean);
+  T.Test('OLSRegression', @TestOLSRegression);
+  T.Test('OLSRegression_InsufficientData', @TestOLSRegression_InsufficientData);
+  T.Test('OLSRegression_PerfectFit', @TestOLSRegression_PerfectFit);
 
   T.Run;
   T.Summary;
