@@ -109,6 +109,12 @@ type
 
     {** 生成 benchstat 兼容格式 (Go benchstat 工具可直接解析) }
     function ToBenchstat: string;
+
+    {** 生成多基线对比矩阵报告 (P2-1, console) }
+    function GenerateMatrixReport(const AMatrix: TMatrixResult): string;
+
+    {** 生成多基线对比矩阵 HTML (P2-1) }
+    function GenerateMatrixHTML(const AMatrix: TMatrixResult): string;
   end;
 
 implementation
@@ -1160,6 +1166,150 @@ begin
   end;
 
   Result := BufferToString(LLines);
+end;
+
+{ P2-1: 多基线对比矩阵 — Console 报告 }
+
+function TBenchReportGenerator.GenerateMatrixReport(const AMatrix: TMatrixResult): string;
+var
+  LLines: TLineBuffer;
+  LNCols: Integer;
+  LLine: string;
+  LRatio: Double;
+  I, J: Integer;
+begin
+  LLines := Default(TLineBuffer);
+  LNCols := Length(AMatrix.BaselineNames);
+
+  BufferAddLine(LLines, '=== Multi-Baseline Comparison Matrix ===');
+  BufferAddLine(LLines, '');
+  BufferAddLine(LLines, 'Ratio = current / baseline. <1.0 faster, >1.0 slower.');
+  BufferAddLine(LLines, '');
+
+  { 表头 }
+  LLine := TextFormat('  %-40s %10s', ['Benchmark', 'Current']);
+  for I := 0 to LNCols - 1 do
+    LLine := LLine + TextFormat(' %10s', [AMatrix.BaselineNames[I]]);
+  BufferAddLine(LLines, LLine);
+  BufferAddLine(LLines, '  ' + TextOfChar('-', 42 + LNCols * 11));
+
+  { 每行数据 }
+  for I := 0 to High(AMatrix.Rows) do
+  begin
+    LLine := TextFormat('  %-40s %10s',
+      [AMatrix.Rows[I].Name, FormatTime(AMatrix.Rows[I].CurrentNsPerOp)]);
+    for J := 0 to High(AMatrix.Rows[I].Cells) do
+    begin
+      LRatio := AMatrix.Rows[I].Cells[J].Ratio;
+      if LRatio < 0.95 then
+        LLine := LLine + TextFormat(' %9s', [FormatFloat('0.00', LRatio) + 'x✓'])
+      else if LRatio > 1.05 then
+        LLine := LLine + TextFormat(' %9s', [FormatFloat('0.00', LRatio) + 'x✗'])
+      else
+        LLine := LLine + TextFormat(' %9s', [FormatFloat('0.00', LRatio) + 'x']);
+    end;
+    BufferAddLine(LLines, LLine);
+  end;
+
+  { 几何均值行 }
+  if Length(AMatrix.GeometricMeanRatios) > 0 then
+  begin
+    BufferAddLine(LLines, '  ' + TextOfChar('-', 42 + LNCols * 11));
+    LLine := TextFormat('  %-40s %10s', ['Geometric Mean', '']);
+    for J := 0 to High(AMatrix.GeometricMeanRatios) do
+    begin
+      LRatio := AMatrix.GeometricMeanRatios[J];
+      if LRatio < 0.95 then
+        LLine := LLine + TextFormat(' %9s', [FormatFloat('0.00', LRatio) + 'x✓'])
+      else if LRatio > 1.05 then
+        LLine := LLine + TextFormat(' %9s', [FormatFloat('0.00', LRatio) + 'x✗'])
+      else
+        LLine := LLine + TextFormat(' %9s', [FormatFloat('0.00', LRatio) + 'x']);
+    end;
+    BufferAddLine(LLines, LLine);
+  end;
+
+  Result := BufferToString(LLines);
+end;
+
+{ P2-1: 多基线对比矩阵 — HTML 报告 }
+
+function TBenchReportGenerator.GenerateMatrixHTML(const AMatrix: TMatrixResult): string;
+var
+  LBuf: TLineBuffer;
+  I, J: Integer;
+  LRatio: Double;
+  LClass: string;
+begin
+  LBuf := Default(TLineBuffer);
+
+  BufferAddLine(LBuf, '<!DOCTYPE html>');
+  BufferAddLine(LBuf, '<html><head><meta charset="utf-8">');
+  BufferAddLine(LBuf, '<title>Multi-Baseline Comparison Matrix</title>');
+  BufferAddLine(LBuf, '<style>');
+  BufferAddLine(LBuf, '  body { font-family: system-ui, -apple-system, sans-serif; margin: 20px; background: #f5f5f5; }');
+  BufferAddLine(LBuf, '  .matrix { border-collapse: collapse; width: 100%; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }');
+  BufferAddLine(LBuf, '  .matrix th, .matrix td { padding: 10px 14px; text-align: right; border-bottom: 1px solid #eee; }');
+  BufferAddLine(LBuf, '  .matrix th { background: #2d3748; color: white; font-weight: 600; }');
+  BufferAddLine(LBuf, '  .matrix td:first-child { text-align: left; font-weight: 500; }');
+  BufferAddLine(LBuf, '  .faster { color: #38a169; font-weight: 600; }');
+  BufferAddLine(LBuf, '  .slower { color: #e53e3e; font-weight: 600; }');
+  BufferAddLine(LBuf, '  .same { color: #718096; }');
+  BufferAddLine(LBuf, '  .geomean { background: #edf2f7; font-weight: 700; }');
+  BufferAddLine(LBuf, '  h1 { color: #2d3748; }');
+  BufferAddLine(LBuf, '  .subtitle { color: #718096; margin-bottom: 20px; }');
+  BufferAddLine(LBuf, '</style></head><body>');
+  BufferAddLine(LBuf, '<h1>Multi-Baseline Comparison Matrix</h1>');
+  BufferAddLine(LBuf, '<p class="subtitle">Ratio = current / baseline. &lt;1.0 = faster, &gt;1.0 = slower.</p>');
+  BufferAddLine(LBuf, '<table class="matrix">');
+  BufferAddLine(LBuf, '<tr><th>Benchmark</th><th>Current (ns/op)</th>');
+  for I := 0 to High(AMatrix.BaselineNames) do
+    BufferAddLine(LBuf, '<th>' + EscapeHTML(AMatrix.BaselineNames[I]) + '</th>');
+  BufferAddLine(LBuf, '</tr>');
+
+  for I := 0 to High(AMatrix.Rows) do
+  begin
+    BufferAddLine(LBuf, '<tr>');
+    BufferAddLine(LBuf, '<td>' + EscapeHTML(AMatrix.Rows[I].Name) + '</td>');
+    BufferAddLine(LBuf, '<td>' + FormatTime(AMatrix.Rows[I].CurrentNsPerOp) + '</td>');
+    for J := 0 to High(AMatrix.Rows[I].Cells) do
+    begin
+      LRatio := AMatrix.Rows[I].Cells[J].Ratio;
+      if LRatio < 0.95 then
+        LClass := ' class="faster"'
+      else if LRatio > 1.05 then
+        LClass := ' class="slower"'
+      else
+        LClass := ' class="same"';
+      BufferAddLine(LBuf, '<td' + LClass + '>' +
+        FormatFloat('0.00', LRatio) + 'x</td>');
+    end;
+    BufferAddLine(LBuf, '</tr>');
+  end;
+
+  { 几何均值行 }
+  if Length(AMatrix.GeometricMeanRatios) > 0 then
+  begin
+    BufferAddLine(LBuf, '<tr class="geomean"><td>Geometric Mean</td><td></td>');
+    for J := 0 to High(AMatrix.GeometricMeanRatios) do
+    begin
+      LRatio := AMatrix.GeometricMeanRatios[J];
+      if LRatio < 0.95 then
+        LClass := ' class="faster"'
+      else if LRatio > 1.05 then
+        LClass := ' class="slower"'
+      else
+        LClass := ' class="same"';
+      BufferAddLine(LBuf, '<td' + LClass + '>' +
+        FormatFloat('0.00', LRatio) + 'x</td>');
+    end;
+    BufferAddLine(LBuf, '</tr>');
+  end;
+
+  BufferAddLine(LBuf, '</table>');
+  BufferAddLine(LBuf, '</body></html>');
+
+  Result := BufferToString(LBuf);
 end;
 
 end.

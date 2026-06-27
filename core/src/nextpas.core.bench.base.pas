@@ -123,6 +123,31 @@ type
   {** 基线数组 }
   TBaselineArray = array of TBaselineData;
 
+  {** 多基线对比矩阵 — 超越 Go/Rust 的独有能力 }
+
+  {** 矩阵单元格：一个 benchmark 对一个 baseline 的对比 }
+  TMatrixCell = record
+    BaselineNsPerOp: Double;
+    Ratio: Double;              // current / baseline
+    IsSignificant: Boolean;
+    PValue: Double;
+  end;
+
+  {** 矩阵行：一个 benchmark 对所有 baselines 的对比 }
+  TMatrixRow = record
+    Name: string;
+    CurrentNsPerOp: Double;
+    CurrentStdDev: Double;
+    Cells: array of TMatrixCell;
+  end;
+
+  {** 多基线对比矩阵结果 }
+  TMatrixResult = record
+    BaselineNames: array of string;
+    Rows: array of TMatrixRow;
+    GeometricMeanRatios: array of Double;  // 每个 baseline 列的几何均值
+  end;
+
 const
   {** 默认配置值 }
   BENCH_DEFAULT_MIN_DURATION_NS = 1000000000;  // 1 秒

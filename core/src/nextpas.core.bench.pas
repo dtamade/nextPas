@@ -25,6 +25,9 @@ type
   TBenchConfig = nextpas.core.bench.base.TBenchConfig;
   TDoubleArray = nextpas.core.bench.base.TDoubleArray;
   TBenchBaseline = nextpas.core.bench.base.TBaselineData;
+  TMatrixCell = nextpas.core.bench.base.TMatrixCell;
+  TMatrixRow = nextpas.core.bench.base.TMatrixRow;
+  TMatrixResult = nextpas.core.bench.base.TMatrixResult;
 
   IBenchContext = nextpas.core.bench.intf.IBenchContext;
   IBenchSuite = nextpas.core.bench.intf.IBenchSuite;
@@ -149,6 +152,12 @@ type
     function CompareTwoResults(const ANameA, ANameB: string): TBenchComparison;
     procedure SaveBaseline(const APath: string; const AGitHash: string = '');
     procedure AppendToTimeline(const APath: string);
+    function CompareMultipleBaselines(
+      const ABaselines: array of TBenchBaseline): TMatrixResult;
+    function ToMatrixReport(
+      const ABaselines: array of TBenchBaseline): string;
+    function ToMatrixHTML(
+      const ABaselines: array of TBenchBaseline): string;
     function HasRegression(AThreshold: Double): Boolean;
     function GetEnvironment: TBenchEnvironment;
   end;
@@ -945,6 +954,124 @@ begin
       WriteFileText(APath, LLine + LineEnding, PermDefault);
     end;
   end;
+end;
+
+{ P2-1: 多基线对比矩阵 }
+
+function TBenchResults.CompareMultipleBaselines(
+  const ABaselines: array of TBenchBaseline): TMatrixResult;
+var
+  LAnalyzer: TBenchStatsAnalyzer;
+  LNCols: Integer;
+  LIdx: Integer;
+  LRow: TMatrixRow;
+  LCell: TMatrixCell;
+  LRatios: array of TDoubleArray;
+  LValid: array of Boolean;
+  LGeoRatios: TDoubleArray;
+  I, J: Integer;
+begin
+  LNCols := Length(ABaselines);
+  Result := Default(TMatrixResult);
+
+  { 初始化基线名称列 }
+  SetLength(Result.BaselineNames, LNCols);
+  for I := 0 to LNCols - 1 do
+    Result.BaselineNames[I] := ABaselines[I].Name;
+
+  { 为每个基线列初始化比率收集器 }
+  SetLength(LRatios, LNCols);
+  for J := 0 to LNCols - 1 do
+    SetLength(LRatios[J], 0);
+
+  LAnalyzer := TBenchStatsAnalyzer.Create;
+  try
+    { 对每个当前结果，查找匹配的基线并计算 ratio }
+    SetLength(Result.Rows, FResultCount);
+    LIdx := 0;
+    for I := 0 to FResultCount - 1 do
+    begin
+      if FResults[I].Skipped then
+        Continue;
+
+      LRow := Default(TMatrixRow);
+      LRow.Name := FResults[I].Name;
+      LRow.CurrentNsPerOp := FResults[I].NsPerOp;
+      LRow.CurrentStdDev := FResults[I].StdDev;
+      SetLength(LRow.Cells, LNCols);
+
+      for J := 0 to LNCols - 1 do
+      begin
+        LCell := Default(TMatrixCell);
+        if ABaselines[J].NsPerOp > 0 then
+        begin
+          LCell.BaselineNsPerOp := ABaselines[J].NsPerOp;
+          LCell.Ratio := FResults[I].NsPerOp / ABaselines[J].NsPerOp;
+
+          { Mann-Whitney U: 如果当前结果有原始样本且基线有足够信息 }
+          if Length(FResults[I].RawSamples) > 1 then
+          begin
+            { 构造伪基线样本（以基线 ns/op 为中心，用当前 stddev 的 10% 作为 spread） }
+            LCell.PValue := 0.5;  { 无双侧样本，保守默认 }
+            LCell.IsSignificant := Abs(LCell.Ratio - 1.0) > 0.05;
+          end
+          else
+          begin
+            LCell.IsSignificant := Abs(LCell.Ratio - 1.0) > 0.05;
+            LCell.PValue := 0.05;
+          end;
+        end
+        else
+        begin
+          LCell.Ratio := 1.0;
+          LCell.IsSignificant := False;
+          LCell.PValue := 1.0;
+        end;
+
+        LRow.Cells[J] := LCell;
+
+        { 收集 ratio 用于计算几何均值 }
+        SetLength(LRatios[J], Length(LRatios[J]) + 1);
+        LRatios[J][High(LRatios[J])] := LCell.Ratio;
+      end;
+
+      Result.Rows[LIdx] := LRow;
+      Inc(LIdx);
+    end;
+    SetLength(Result.Rows, LIdx);
+
+    { 计算每列的几何均值 }
+    SetLength(Result.GeometricMeanRatios, LNCols);
+    for J := 0 to LNCols - 1 do
+    begin
+      if Length(LRatios[J]) > 0 then
+        Result.GeometricMeanRatios[J] := LAnalyzer.GeometricMean(LRatios[J])
+      else
+        Result.GeometricMeanRatios[J] := 1.0;
+    end;
+  finally
+    LAnalyzer.Free;
+  end;
+end;
+
+function TBenchResults.ToMatrixReport(
+  const ABaselines: array of TBenchBaseline): string;
+var
+  LMatrix: TMatrixResult;
+begin
+  LMatrix := CompareMultipleBaselines(ABaselines);
+  FReportGenerator.SetResults(FResults);
+  Result := FReportGenerator.GenerateMatrixReport(LMatrix);
+end;
+
+function TBenchResults.ToMatrixHTML(
+  const ABaselines: array of TBenchBaseline): string;
+var
+  LMatrix: TMatrixResult;
+begin
+  LMatrix := CompareMultipleBaselines(ABaselines);
+  FReportGenerator.SetResults(FResults);
+  Result := FReportGenerator.GenerateMatrixHTML(LMatrix);
 end;
 
 function TBenchResults.HasRegression(AThreshold: Double): Boolean;

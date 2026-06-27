@@ -28,6 +28,12 @@ type
   {** 从 base 模块 re-export 数组类型 }
   TBenchResultArray = nextpas.core.bench.base.TBenchResultArray;
   TBenchComparisonArray = nextpas.core.bench.base.TBenchComparisonArray;
+  TBenchBaseline = nextpas.core.bench.base.TBaselineData;
+
+  {** 从 base 模块 re-export 多基线矩阵类型 }
+  TMatrixCell = nextpas.core.bench.base.TMatrixCell;
+  TMatrixRow = nextpas.core.bench.base.TMatrixRow;
+  TMatrixResult = nextpas.core.bench.base.TMatrixResult;
 
   {** 基准上下文 - 传递给基准函数的控制接口 }
   IBenchContext = interface
@@ -250,6 +256,18 @@ type
 
     {** 追加当前结果到时间线 JSONL 文件 (P1-5) }
     procedure AppendToTimeline(const APath: string);
+
+    {** 多基线对比矩阵 (P2-1)：当前结果 vs N 个基线，返回矩阵 }
+    function CompareMultipleBaselines(
+      const ABaselines: array of TBenchBaseline): TMatrixResult;
+
+    {** 多基线对比矩阵 — Console 报告 (P2-1) }
+    function ToMatrixReport(
+      const ABaselines: array of TBenchBaseline): string;
+
+    {** 多基线对比矩阵 — HTML 报告 (P2-1) }
+    function ToMatrixHTML(
+      const ABaselines: array of TBenchBaseline): string;
 
     {** 检测回归（返回 true 表示有回归） }
     function HasRegression(AThreshold: Double): Boolean;
