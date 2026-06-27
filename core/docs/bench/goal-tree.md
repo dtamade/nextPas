@@ -75,10 +75,11 @@ B10  文档 ✅
   B10.1  README.md (API 概览/快速开始)              ✅
   B10.2  goal-tree.md (目标树)                      ✅
 
-B11  跨语言基准对照                                    ⏳
-  B11.1  Go benchmark 对照数据                       ⏳
-  B11.2  Rust criterion 对照数据                     ⏳
-  B11.3  C 高精度计时对照                             ⏳
+B11  跨语言基准对照                                    ✅
+  B11.1  Go benchmark 基准代码                         ✅
+  B11.2  Rust criterion 基准代码                       ✅
+  B11.3  C 高精度计时基准                              ✅
+  B11.4  Pascal vs C 对比报告                          ✅
 ```
 
 ## 测试套件分布

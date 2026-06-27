@@ -358,7 +358,7 @@ begin
         [FResults[I].Name,
          FormatLargeNumber(FResults[I].Iterations),
          FormatNumber(FResults[I].NsPerOp, 1),
-         FormatLargeNumber(Min(Int64(FResults[I].OpsPerSec), High(Int64))),
+         FormatLargeNumber(Trunc(FResults[I].OpsPerSec)),
          FormatNumber(FResults[I].StdDev, 1),
          FormatNumber(FResults[I].Median, 1),
          FormatNumber(FResults[I].P95, 1),
@@ -696,7 +696,7 @@ begin
     BufferAddLine(ABuf, '        <td class="benchmark-name">' + EscapeHTML(FResults[I].Name) + '</td>');
     BufferAddLine(ABuf, '        <td>' + FormatLargeNumber(FResults[I].Iterations) + '</td>');
     BufferAddLine(ABuf, '        <td>' + FormatNumber(FResults[I].NsPerOp, 1) + '</td>');
-    BufferAddLine(ABuf, '        <td>' + FormatLargeNumber(Min(Int64(FResults[I].OpsPerSec), High(Int64))) + '</td>');
+    BufferAddLine(ABuf, '        <td>' + FormatLargeNumber(Trunc(FResults[I].OpsPerSec)) + '</td>');
     BufferAddLine(ABuf, '        <td>' + FormatNumber(FResults[I].StdDev, 1) + '</td>');
     BufferAddLine(ABuf, '        <td>' + FormatNumber(FResults[I].Median, 1) + '</td>');
     BufferAddLine(ABuf, '        <td>' + FormatNumber(FResults[I].P95, 1) + '</td>');
