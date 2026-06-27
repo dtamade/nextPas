@@ -380,6 +380,7 @@ var
   I: Integer;
   LOutlierCount: Integer;
 begin
+  Result := Default(TOutlierDetection);
   LQ1 := Percentile(25);
   LQ3 := Percentile(75);
   LIQR := LQ3 - LQ1;
@@ -414,6 +415,7 @@ var
   LZScore: Double;
   LOutlierCount: Integer;
 begin
+  Result := Default(TOutlierDetection);
   LMean := Mean;
   LStdDev := StdDev;
 
