@@ -45,6 +45,10 @@ type
 
     {** Allocate ASize bytes, zero-initialized. }
     function AllocMem(ASize: SizeUInt): Pointer;
+
+    {** Force a scavenge pass across all central pools.
+        Releases long-idle fully-free spans to OS. }
+    procedure Scavenge;
   end;
 
 {** Get the global singleton growing allocator. }
@@ -179,6 +183,14 @@ begin
   Result := GetMem(ASize);
   if Result <> nil then
     FillChar(Result^, ASize, 0);
+end;
+
+procedure TGrowingAllocator.Scavenge;
+var
+  I: Int32;
+begin
+  for I := 0 to MEM_SIZECLASS_COUNT - 1 do
+    ScavengeCentralPools(FCentrals[I], FOpCounter, 0);
 end;
 
 function DefaultGrowingAllocator: TGrowingAllocator;

@@ -312,7 +312,7 @@ end;
 | **I-1** | Free-list shuffle | G-3 | 小改 | ✅ xorshift64* + random insertion position |
 | **I-2** | Guard pages | G-2 | 1 文件 + 1 测试 | 待实施 (需 page-aligned virtual memory) |
 | **I-3** | Scan/noscan | G-1 | 小改 | ✅ SizeClassIsScan[] + Get/SetScan |
-| **J-1** | 对标基准套件 | G-5 | 5 基准项目 | 待实施 |
+| **J-1** | 对标基准套件 | G-5 | 5 基准项目 | ✅ bench_allocator: 8 patterns, 1.7-3.2x faster than glibc |
 | **J-2** | 碎片率测量 | G-5, H-1 | 1 基准项目 | 待实施 |
 
 ## 预期最终能力
