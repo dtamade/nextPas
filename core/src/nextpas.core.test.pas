@@ -137,6 +137,7 @@ function AnsiDim(const S: string): string;
 procedure SetAnsiEnabled(AEnabled: Boolean);
 function  StatusDot(AStatus: TTestStatus): string;
 procedure FailTest(const AMsg: string);
+procedure PassTest(const AMsg: string);
 procedure SetTestFilter(const APattern: string);
 function  GetTestFilter: string;
 function  MatchesFilter(const AName: string): Boolean;
@@ -338,6 +339,9 @@ begin Result := nextpas.core.test.output.StatusDot(AStatus); end;
 
 procedure FailTest(const AMsg: string);
 begin nextpas.core.test.output.FailTest(AMsg); end;
+
+procedure PassTest(const AMsg: string);
+begin nextpas.core.test.output.PassTest(AMsg); end;
 
 procedure SetTestFilter(const APattern: string);
 begin nextpas.core.test.output.SetTestFilter(APattern); end;

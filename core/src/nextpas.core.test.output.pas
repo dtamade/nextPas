@@ -58,6 +58,8 @@ function FormatFailDetail(const AMsg: string;
 procedure FailTest(const AMsg: string);
   { Print red 'FAIL: ...' message and Halt(1). For meta-tests that run outside
     the framework and cannot use Check* assertions. }
+procedure PassTest(const AMsg: string);
+  { Print green 'OK: ...' message. Companion to FailTest. }
 
 { ── Test Filter ───────────────────────────────────────────────────────────── }
 
@@ -319,6 +321,11 @@ procedure FailTest(const AMsg: string);
 begin
   WriteLn(AnsiRed('FAIL: ' + AMsg));
   Halt(1);
+end;
+
+procedure PassTest(const AMsg: string);
+begin
+  WriteLn(AnsiGreen('OK: ' + AMsg));
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }

@@ -138,7 +138,7 @@ begin
   begin
     FailTest('expected 0 failed, got ' + IntToStr(LSkipResult.Failed));
   end;
-  WriteLn(AnsiGreen('OK: BeforeEach Skip'));
+  PassTest('BeforeEach Skip');
 end;
 
 procedure TestRunnerConfigIsolation;
@@ -224,7 +224,7 @@ begin
     FailTest('runner B output should not contain runner A tests');
   end;
 
-  WriteLn(AnsiGreen('OK: Runner config isolation'));
+  PassTest('Runner config isolation');
 end;
 
 { ── Main ──────────────────────────────────────────────────────────────────── }
@@ -344,7 +344,7 @@ begin
   begin
     FailTest('Setup failure should count as failure');
   end;
-  WriteLn(AnsiGreen('OK: Setup failure path'));
+  PassTest('Setup failure path');
 
   { Test: BeforeEach failure → test marked error }
   LBeforeEachCounter := 0;
@@ -371,7 +371,7 @@ begin
   begin
     FailTest('At least 1 failure expected');
   end;
-  WriteLn(AnsiGreen('OK: BeforeEach failure path'));
+  PassTest('BeforeEach failure path');
 
   { Test: Teardown failure → warning output, test results preserved }
   LFailSuite3 := TTestSuite.Create('Teardown Failure');
@@ -385,7 +385,7 @@ begin
   begin
     FailTest('Teardown failure should not fail tests');
   end;
-  WriteLn(AnsiGreen('OK: Teardown failure path'));
+  PassTest('Teardown failure path');
 
   { ── B5.5/B5.6/B5.9: Runner feature tests ────────────────────────────── }
 
@@ -405,7 +405,7 @@ begin
   begin
     FailTest('Expected 2 passes, got ' + IntToStr(LRunNestedR.TotalPass));
   end;
-  WriteLn(AnsiGreen('OK: RunAll aggregation'));
+  PassTest('RunAll aggregation');
 
   { Test: AllPassed caching — second call should not re-run }
   LRunCount := 0;
@@ -424,14 +424,14 @@ begin
   begin
     FailTest('AllPassed should not re-run (count=' + IntToStr(LRunCount) + ')');
   end;
-  WriteLn(AnsiGreen('OK: AllPassed caching'));
+  PassTest('AllPassed caching');
 
   { Test: Summary smoke }
   LSummarySuite := TTestSuite.Create('Summary Smoke');
   LSummarySuite.Test('pass', procedure begin CheckTrue(True); end);
   LSummarySuite.Run;
   LSummarySuite.Summary; { should not raise }
-  WriteLn(AnsiGreen('OK: Summary smoke'));
+  PassTest('Summary smoke');
 
   { Test: Runner Summary }
   LSumSuite3 := TTestSuite.Create('Summary Suite');
@@ -449,7 +449,7 @@ begin
   begin
     FailTest('Expected 1 skip, got ' + IntToStr(LSumRunner.TotalSkip));
   end;
-  WriteLn(AnsiGreen('OK: Runner Summary'));
+  PassTest('Runner Summary');
 
   { Test: RunWithResult }
   LResultSuite := TTestSuite.Create('Result Test');
@@ -500,7 +500,7 @@ begin
   begin
     FailTest('Result[2] should be tsPassed');
   end;
-  WriteLn(AnsiGreen('OK: RunWithResult'));
+  PassTest('RunWithResult');
 
   { ── m15: Summary smoke test ───────────────────────────────────────────────── }
   WriteLn;
@@ -510,7 +510,7 @@ begin
   LResultSuite.Skip('skip', 'planned');
   LResultSuite.Run;
   LResultSuite.Summary;  { Should not crash }
-  WriteLn(AnsiGreen('OK: Summary'));
+  PassTest('Summary');
 
   { ── M20: AllPassed caching ────────────────────────────────────────────────── }
   WriteLn;
@@ -528,7 +528,7 @@ begin
   begin
     FailTest('AllPassed should be True on second call');
   end;
-  WriteLn(AnsiGreen('OK: AllPassed caching'));
+  PassTest('AllPassed caching');
 
   { ── R2-F12: BeforeEach Skip ────────────────────────────────────────────────── }
   WriteLn;
@@ -563,7 +563,7 @@ begin
     begin
       FailTest('Subtest result name should contain "subtests/", got ' + LSubtestResults.Results[2].Name);
     end;
-    WriteLn(AnsiGreen('OK: Subtest results collected'));
+    PassTest('Subtest results collected');
   end;
 
   { ── R2-F02: RunParallelWithResult ────────────────────────────────────────── }
@@ -591,7 +591,7 @@ begin
     begin
       FailTest('AllPassed should be True');
     end;
-    WriteLn(AnsiGreen('OK: RunParallelWithResult'));
+    PassTest('RunParallelWithResult');
   end;
 
   { ── R2-F02: RunAllWithResult ─────────────────────────────────────────────── }
@@ -622,7 +622,7 @@ begin
     begin
       FailTest('SuiteY should have 1 pass, got ' + IntToStr(LRunAllSuiteResults[1].Passed));
     end;
-    WriteLn(AnsiGreen('OK: RunAllWithResult'));
+    PassTest('RunAllWithResult');
   end;
 
   { ── R3-F17: Timeout trigger (watchdog actually fires) ───────────────────── }
@@ -651,7 +651,7 @@ begin
     begin
       FailTest('Expected timeout message, got ' + LTimeoutResult.Results[0].Message);
     end;
-    WriteLn(AnsiGreen('OK: Timeout trigger verified'));
+    PassTest('Timeout trigger verified');
   end;
 
   { ── R5-08/R5-09: Test filter coverage ──────────────────────────────────────── }
@@ -676,7 +676,7 @@ begin
       FailTest('filter match expected 0 skipped (filtered=invisible), got ' + IntToStr(LFilterResult.Skipped));
     end;
     SetTestFilter('');
-    WriteLn(AnsiGreen('OK: Filter matches specific test'));
+    PassTest('Filter matches specific test');
   end;
 
   begin
@@ -698,7 +698,7 @@ begin
       FailTest('filter no-match expected 0 skipped, got ' + IntToStr(LFilterResult.Skipped));
     end;
     SetTestFilter('');
-    WriteLn(AnsiGreen('OK: Filter matches nothing -> all invisible'));
+    PassTest('Filter matches nothing -> all invisible');
   end;
 
   begin
@@ -719,7 +719,7 @@ begin
     begin
       FailTest('empty filter expected 0 skipped, got ' + IntToStr(LFilterResult.Skipped));
     end;
-    WriteLn(AnsiGreen('OK: Empty filter runs everything'));
+    PassTest('Empty filter runs everything');
   end;
 
   begin
@@ -742,7 +742,7 @@ begin
       FailTest('glob b* expected 0 skipped, got ' + IntToStr(LFilterResult.Skipped));
     end;
     SetTestFilter('');
-    WriteLn(AnsiGreen('OK: Glob filter (b* matches beta)'));
+    PassTest('Glob filter (b* matches beta)');
   end;
 
   { ── R4-08: Empty suite run ───────────────────────────────────────────────── }
@@ -764,7 +764,7 @@ begin
     begin
       FailTest('Empty suite Skipped should be 0');
     end;
-    WriteLn(AnsiGreen('OK: Empty suite run'));
+    PassTest('Empty suite run');
   end;
 
   { ── R6-58: ParseFilter helper (white-box) ─────────────────────────────────── }
@@ -784,7 +784,7 @@ begin
     begin
       FailTest('ParseFilter should preserve embedded equals');
     end;
-    WriteLn(AnsiGreen('OK: ParseFilter helper'));
+    PassTest('ParseFilter helper');
   end;
 
   WriteLn;
@@ -802,7 +802,7 @@ begin
     begin
       FailTest('ParseTag should preserve hyphenated values');
     end;
-    WriteLn(AnsiGreen('OK: ParseTag helper'));
+    PassTest('ParseTag helper');
   end;
 
   { ── R6-59: AddLine / JoinLines helpers ────────────────────────────────────── }
@@ -839,7 +839,7 @@ begin
     begin
       FailTest('JoinLines should contain "third"');
     end;
-    WriteLn(AnsiGreen('OK: AddLine / JoinLines'));
+    PassTest('AddLine / JoinLines');
   end;
 
   { ── R6-59: JoinLines empty ────────────────────────────────────────────────── }
@@ -849,7 +849,7 @@ begin
     begin
       FailTest('JoinLines on empty array should return empty string');
     end;
-    WriteLn(AnsiGreen('OK: JoinLines empty'));
+    PassTest('JoinLines empty');
   end;
 
   { ── R6-60: TTestRunResult default values ─────────────────────────────────── }
@@ -881,7 +881,7 @@ begin
     begin
       FailTest('Results should be empty');
     end;
-    WriteLn(AnsiGreen('OK: TTestRunResult defaults'));
+    PassTest('TTestRunResult defaults');
   end;
 
   { ── R6-68: Strong assertions replacing Count > 0 ─────────────────────────── }
@@ -910,7 +910,7 @@ begin
     begin
       FailTest('expected exactly 1 skip, got ' + IntToStr(LExactRunner68.TotalSkip));
     end;
-    WriteLn(AnsiGreen('OK: Exact-value assertions'));
+    PassTest('Exact-value assertions');
   end;
 
   WriteLn;
@@ -944,7 +944,7 @@ begin
     begin
       FailTest('expected 2 tests run, got ' + IntToStr(LRunCount));
     end;
-    WriteLn(AnsiGreen('OK: With* builder pattern'));
+    PassTest('With* builder pattern');
   end;
 
   { ── Phase 2: With* preserves existing API ────────────────────────────────── }
@@ -966,7 +966,7 @@ begin
     begin
       FailTest('expected 1 test run, got ' + IntToStr(LRunCount));
     end;
-    WriteLn(AnsiGreen('OK: Mixed API compatibility'));
+    PassTest('Mixed API compatibility');
   end;
 
   WriteLn;
@@ -994,9 +994,9 @@ begin
     begin
       FailTest('captured log mismatch, got ' + LRegularLogResult.Results[0].CapturedLog[0]);
     end;
-    WriteLn(AnsiGreen('OK: Regular test captured log'));
+    PassTest('Regular test captured log');
   end;
 
   WriteLn;
-  WriteLn(AnsiGreen('OK: test_runner'));
+  PassTest('test_runner');
 end.
