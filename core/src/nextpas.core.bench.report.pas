@@ -116,6 +116,9 @@ type
     {** 生成多基线对比矩阵 HTML (P2-1) }
     function GenerateMatrixHTML(const AMatrix: TMatrixResult): string;
 
+    {** 生成多基线对比矩阵 JSON (CI 消费) }
+    function GenerateMatrixJSON(const AMatrix: TMatrixResult): string;
+
     {** P2-3: 生成分布直方图 SVG (原始样本分布) }
     function GenerateDistributionChart(const ASamples: TDoubleArray;
       const AName: string): string;
@@ -1195,17 +1198,20 @@ begin
   BufferAddLine(LLines, '');
 
   { 表头 }
-  LLine := TextFormat('  %-40s %10s', ['Benchmark', 'Current']);
+  LLine := TextFormat('  %-40s %10s %8s %8s', ['Benchmark', 'ns/op', 'B/op', 'allocs']);
   for I := 0 to LNCols - 1 do
     LLine := LLine + TextFormat(' %10s', [AMatrix.BaselineNames[I]]);
   BufferAddLine(LLines, LLine);
-  BufferAddLine(LLines, '  ' + TextOfChar('-', 42 + LNCols * 11));
+  BufferAddLine(LLines, '  ' + TextOfChar('-', 58 + LNCols * 11));
 
   { 每行数据 }
   for I := 0 to High(AMatrix.Rows) do
   begin
-    LLine := TextFormat('  %-40s %10s',
-      [AMatrix.Rows[I].Name, FormatTime(AMatrix.Rows[I].CurrentNsPerOp)]);
+    LLine := TextFormat('  %-40s %10s %8s %8s',
+      [AMatrix.Rows[I].Name,
+       FormatTime(AMatrix.Rows[I].CurrentNsPerOp),
+       IntToStr(AMatrix.Rows[I].CurrentBytesPerOp),
+       IntToStr(AMatrix.Rows[I].CurrentAllocsPerOp)]);
     for J := 0 to High(AMatrix.Rows[I].Cells) do
     begin
       LRatio := AMatrix.Rows[I].Cells[J].Ratio;
@@ -1222,8 +1228,8 @@ begin
   { 几何均值行 }
   if Length(AMatrix.GeometricMeanRatios) > 0 then
   begin
-    BufferAddLine(LLines, '  ' + TextOfChar('-', 42 + LNCols * 11));
-    LLine := TextFormat('  %-40s %10s', ['Geometric Mean', '']);
+    BufferAddLine(LLines, '  ' + TextOfChar('-', 58 + LNCols * 11));
+    LLine := TextFormat('  %-40s %10s %8s %8s', ['Geometric Mean', '', '', '']);
     for J := 0 to High(AMatrix.GeometricMeanRatios) do
     begin
       LRatio := AMatrix.GeometricMeanRatios[J];
@@ -1336,6 +1342,60 @@ begin
   BufferAddLine(LBuf, '</table>');
   BufferAddLine(LBuf, '</body></html>');
 
+  Result := BufferToString(LBuf);
+end;
+
+{ 矩阵 JSON 导出 — CI 可直接消费 }
+
+function TBenchReportGenerator.GenerateMatrixJSON(const AMatrix: TMatrixResult): string;
+var
+  LBuf: TLineBuffer;
+  I, J: Integer;
+begin
+  LBuf := Default(TLineBuffer);
+  BufferAddLine(LBuf, '{');
+  BufferAddLine(LBuf, '  "baselines": [');
+  for I := 0 to High(AMatrix.BaselineNames) do
+  begin
+    if I < High(AMatrix.BaselineNames) then
+      BufferAddLine(LBuf, '    "' + EscapeJSON(AMatrix.BaselineNames[I]) + '",')
+    else
+      BufferAddLine(LBuf, '    "' + EscapeJSON(AMatrix.BaselineNames[I]) + '"');
+  end;
+  BufferAddLine(LBuf, '  ],');
+  BufferAddLine(LBuf, '  "rows": [');
+  for I := 0 to High(AMatrix.Rows) do
+  begin
+    BufferAddLine(LBuf, '    {');
+    BufferAddLine(LBuf, '      "name": "' + EscapeJSON(AMatrix.Rows[I].Name) + '",');
+    BufferAddLine(LBuf, '      "nsPerOp": ' + FormatFloat('0.00', AMatrix.Rows[I].CurrentNsPerOp) + ',');
+    BufferAddLine(LBuf, '      "bytesPerOp": ' + IntToStr(AMatrix.Rows[I].CurrentBytesPerOp) + ',');
+    BufferAddLine(LBuf, '      "allocsPerOp": ' + IntToStr(AMatrix.Rows[I].CurrentAllocsPerOp) + ',');
+    BufferAddLine(LBuf, '      "ratios": [');
+    for J := 0 to High(AMatrix.Rows[I].Cells) do
+    begin
+      if J < High(AMatrix.Rows[I].Cells) then
+        BufferAddLine(LBuf, '        ' + FormatFloat('0.000', AMatrix.Rows[I].Cells[J].Ratio) + ',')
+      else
+        BufferAddLine(LBuf, '        ' + FormatFloat('0.000', AMatrix.Rows[I].Cells[J].Ratio));
+    end;
+    BufferAddLine(LBuf, '      ]');
+    if I < High(AMatrix.Rows) then
+      BufferAddLine(LBuf, '    },')
+    else
+      BufferAddLine(LBuf, '    }');
+  end;
+  BufferAddLine(LBuf, '  ],');
+  BufferAddLine(LBuf, '  "geometricMeanRatios": [');
+  for I := 0 to High(AMatrix.GeometricMeanRatios) do
+  begin
+    if I < High(AMatrix.GeometricMeanRatios) then
+      BufferAddLine(LBuf, '    ' + FormatFloat('0.000', AMatrix.GeometricMeanRatios[I]) + ',')
+    else
+      BufferAddLine(LBuf, '    ' + FormatFloat('0.000', AMatrix.GeometricMeanRatios[I]));
+  end;
+  BufferAddLine(LBuf, '  ]');
+  BufferAddLine(LBuf, '}');
   Result := BufferToString(LBuf);
 end;
 

@@ -454,6 +454,41 @@ begin
   end;
 end;
 
+{ --- P2 polish: JSON 矩阵导出 --- }
+
+procedure TestMatrix_JSON;
+var
+  LResults: array[0..1] of TBenchResult;
+  LBaselines: array[0..1] of TBenchBaseline;
+  LRes: TBenchResults;
+  LJSON: string;
+begin
+  LResults[0] := MakeResult('Sort', 100.0);
+  LResults[1] := MakeResult('Hash', 200.0);
+  LBaselines[0] := MakeBaseline('v1.0', 120.0);
+  LBaselines[1] := MakeBaseline('v2.0', 90.0);
+
+  LRes := TBenchResults.Create(LResults, Default(TBenchEnvironment), LBaselines);
+  try
+    LJSON := LRes.ToMatrixJSON(LBaselines);
+
+    Check(Length(LJSON) > 0, 'JSON not empty');
+    Check(Pos('"baselines"', LJSON) > 0, 'Has baselines key');
+    Check(Pos('"rows"', LJSON) > 0, 'Has rows key');
+    Check(Pos('"geometricMeanRatios"', LJSON) > 0, 'Has geomean key');
+    Check(Pos('"Sort"', LJSON) > 0, 'Has Sort entry');
+    Check(Pos('"Hash"', LJSON) > 0, 'Has Hash entry');
+    Check(Pos('"v1.0"', LJSON) > 0, 'Has v1.0 baseline');
+    Check(Pos('"v2.0"', LJSON) > 0, 'Has v2.0 baseline');
+    Check(Pos('"ratios"', LJSON) > 0, 'Has ratios array');
+    Check(Pos('"nsPerOp"', LJSON) > 0, 'Has nsPerOp');
+    Check(Pos('"bytesPerOp"', LJSON) > 0, 'Has bytesPerOp');
+    Check(Pos('"allocsPerOp"', LJSON) > 0, 'Has allocsPerOp');
+  finally
+    LRes.Free;
+  end;
+end;
+
 var
   T: TTestSuite;
 begin
@@ -476,6 +511,7 @@ begin
   T.Test('DistributionChart_Empty', @TestDistributionChart_Empty);
   T.Test('ComparisonChart', @TestComparisonChart);
   T.Test('ComparisonChart_Empty', @TestComparisonChart_Empty);
+  T.Test('MatrixJSON', @TestMatrix_JSON);
 
   T.Run;
   T.Summary;

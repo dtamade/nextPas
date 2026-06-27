@@ -158,6 +158,8 @@ type
       const ABaselines: array of TBenchBaseline): string;
     function ToMatrixHTML(
       const ABaselines: array of TBenchBaseline): string;
+    function ToMatrixJSON(
+      const ABaselines: array of TBenchBaseline): string;
     function HasRegression(AThreshold: Double): Boolean;
     function GetEnvironment: TBenchEnvironment;
   end;
@@ -1007,19 +1009,9 @@ begin
         begin
           LCell.BaselineNsPerOp := ABaselines[J].NsPerOp;
           LCell.Ratio := FResults[I].NsPerOp / ABaselines[J].NsPerOp;
-
-          { Mann-Whitney U: 如果当前结果有原始样本且基线有足够信息 }
-          if Length(FResults[I].RawSamples) > 1 then
-          begin
-            { 构造伪基线样本（以基线 ns/op 为中心，用当前 stddev 的 10% 作为 spread） }
-            LCell.PValue := 0.5;  { 无双侧样本，保守默认 }
-            LCell.IsSignificant := Abs(LCell.Ratio - 1.0) > 0.05;
-          end
-          else
-          begin
-            LCell.IsSignificant := Abs(LCell.Ratio - 1.0) > 0.05;
-            LCell.PValue := 0.05;
-          end;
+          { 基线无原始样本，无法做 Mann-Whitney U，用 ratio 启发式 }
+          LCell.IsSignificant := Abs(LCell.Ratio - 1.0) > 0.05;
+          LCell.PValue := 0.05;
         end
         else
         begin
@@ -1072,6 +1064,16 @@ begin
   LMatrix := CompareMultipleBaselines(ABaselines);
   FReportGenerator.SetResults(FResults);
   Result := FReportGenerator.GenerateMatrixHTML(LMatrix);
+end;
+
+function TBenchResults.ToMatrixJSON(
+  const ABaselines: array of TBenchBaseline): string;
+var
+  LMatrix: TMatrixResult;
+begin
+  LMatrix := CompareMultipleBaselines(ABaselines);
+  FReportGenerator.SetResults(FResults);
+  Result := FReportGenerator.GenerateMatrixJSON(LMatrix);
 end;
 
 function TBenchResults.HasRegression(AThreshold: Double): Boolean;

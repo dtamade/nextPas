@@ -269,6 +269,10 @@ type
     function ToMatrixHTML(
       const ABaselines: array of TBenchBaseline): string;
 
+    {** 多基线对比矩阵 — JSON 报告 (CI 消费) }
+    function ToMatrixJSON(
+      const ABaselines: array of TBenchBaseline): string;
+
     {** 检测回归（返回 true 表示有回归） }
     function HasRegression(AThreshold: Double): Boolean;
 
