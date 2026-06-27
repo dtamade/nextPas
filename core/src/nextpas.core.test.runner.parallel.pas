@@ -96,7 +96,7 @@ begin
     on E: Exception do
     begin
       R^.Status := tsError;
-      R^.ErrorMsg := E.ClassName + ': ' + E.Message;
+      R^.ErrorMsg := FormatExceptionMsg(E);
       WriteBarrier;
       R^.Done := True;
     end;
@@ -395,16 +395,12 @@ begin
         on E: EAssertionFailed do
         begin
           LStatus := tsFailed;
-          LFailMsg := E.Message;
-          if GLastTestTrace <> '' then
-            LFailMsg := LFailMsg + ' [' + GLastTestTrace + ']';
+          LFailMsg := AppendTestTrace(E.Message);
         end;
         on E: Exception do
         begin
           LStatus := tsError;
-          LFailMsg := E.ClassName + ': ' + E.Message;
-          if GLastTestTrace <> '' then
-            LFailMsg := LFailMsg + ' [' + GLastTestTrace + ']';
+          LFailMsg := AppendTestTrace(FormatExceptionMsg(E));
         end;
       end;
 
@@ -526,16 +522,14 @@ begin
           R^.Fail^ := R^.Fail^ + 1;
           LOutSink.WriteLn(
             '  ' + FormatStatusLine(tsError, R^.Entry.Name, LConfig));
-          LOutSink.WriteLn(
-            '    ' + AnsiDim(
-              'worker exception: ' + E.ClassName + ': ' + E.Message,
-              LConfig));
+          LOutSink.WriteLn('    ' + AnsiDim(
+            'worker exception: ' + FormatExceptionMsg(E), LConfig));
         finally
           SafeRelease(R^.Mtx, LConfig);
         end;
         if R^.Res <> nil then
           R^.Res^ := MakeTestResult(R^.Entry.Name, tsError,
-            'worker exception: ' + E.ClassName + ': ' + E.Message, 0);
+            'worker exception: ' + FormatExceptionMsg(E), 0);
       end;
     end;
   end;

@@ -153,6 +153,14 @@ function MakeTestResult(const AName: string; AStatus: TTestStatus;
   const AMessage: string; ADuration: Int64): TTestResult;
   { Construct a fully-initialized TTestResult in one call. }
 
+{ ── Exception Formatting (eliminate repeated ClassName + trace patterns) ──── }
+
+function FormatExceptionMsg(E: Exception): string;
+  { Returns 'ClassName: Message' — the standard error message format. }
+function AppendTestTrace(const AMsg: string): string;
+  { Appends ' [file:line]' from GLastTestTrace if non-empty; returns AMsg as-is
+    when no trace was captured. }
+
 { ── Internal Helpers (exported for use by other test.* units) ─────────────── }
 
 procedure SetTestContext(const ASuiteName, ATestName: string);
@@ -213,6 +221,21 @@ begin
   Result.Message    := AMessage;
   Result.Duration   := ADuration;
   Result.CapturedLog := nil;
+end;
+
+{ Exception Formatting }
+
+function FormatExceptionMsg(E: Exception): string;
+begin
+  Result := E.ClassName + ': ' + E.Message;
+end;
+
+function AppendTestTrace(const AMsg: string): string;
+begin
+  if GLastTestTrace <> '' then
+    Result := AMsg + ' [' + GLastTestTrace + ']'
+  else
+    Result := AMsg;
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }

@@ -838,17 +838,13 @@ begin
           on E: EAssertionFailed do
           begin
             LStatus := tsFailed;
-            LLastFailMsg := E.Message;
-            if GLastTestTrace <> '' then
-              LLastFailMsg := LLastFailMsg + ' [' + GLastTestTrace + ']';
+            LLastFailMsg := AppendTestTrace(E.Message);
             Inc(LFail);
           end;
           on E: Exception do
           begin
             LStatus := tsError;
-            LLastFailMsg := E.ClassName + ': ' + E.Message;
-            if GLastTestTrace <> '' then
-              LLastFailMsg := LLastFailMsg + ' [' + GLastTestTrace + ']';
+            LLastFailMsg := AppendTestTrace(FormatExceptionMsg(E));
             Inc(LFail);
           end;
         end;
@@ -911,16 +907,12 @@ begin
             on E: EAssertionFailed do
             begin
               LStatus := tsFailed;
-              LLastFailMsg := E.Message;
-              if GLastTestTrace <> '' then
-                LLastFailMsg := LLastFailMsg + ' [' + GLastTestTrace + ']';
+              LLastFailMsg := AppendTestTrace(E.Message);
             end;
             on E: Exception do
             begin
               LStatus := tsError;
-              LLastFailMsg := E.ClassName + ': ' + E.Message;
-              if GLastTestTrace <> '' then
-                LLastFailMsg := LLastFailMsg + ' [' + GLastTestTrace + ']';
+              LLastFailMsg := AppendTestTrace(FormatExceptionMsg(E));
             end;
           end;
 
@@ -949,17 +941,13 @@ begin
       on E: EAssertionFailed do
       begin
         LStatus := tsFailed;
-        LLastFailMsg := E.Message;
-        if GLastTestTrace <> '' then
-          LLastFailMsg := LLastFailMsg + ' [' + GLastTestTrace + ']';
+        LLastFailMsg := AppendTestTrace(E.Message);
         Inc(LFail);
       end;
       on E: Exception do
       begin
         LStatus := tsError;
-        LLastFailMsg := E.ClassName + ': ' + E.Message;
-        if GLastTestTrace <> '' then
-          LLastFailMsg := LLastFailMsg + ' [' + GLastTestTrace + ']';
+        LLastFailMsg := AppendTestTrace(FormatExceptionMsg(E));
         Inc(LFail);
       end;
     end;

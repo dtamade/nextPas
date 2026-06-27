@@ -260,10 +260,7 @@ begin
       on E: EAssertionFailed do
       begin
         LStatus := tsFailed;
-        LMsg    := E.Message;
-        { Append file:line from stack trace if available }
-        if GLastTestTrace <> '' then
-          LMsg := LMsg + ' [' + GLastTestTrace + ']';
+        LMsg    := AppendTestTrace(E.Message);
         ResolveOutSink(FConfig).WriteLn(
           '    ' + FormatStatusLine(tsFailed, LEntry.Name, FConfig));
         ResolveOutSink(FConfig).WriteLn(
@@ -279,10 +276,7 @@ begin
       on E: Exception do
       begin
         LStatus := tsError;
-        LMsg    := E.ClassName + ': ' + E.Message;
-        { Append file:line from stack trace if available }
-        if GLastTestTrace <> '' then
-          LMsg := LMsg + ' [' + GLastTestTrace + ']';
+        LMsg    := AppendTestTrace(FormatExceptionMsg(E));
         ResolveOutSink(FConfig).WriteLn(
           '    ' + FormatStatusLine(tsError, LEntry.Name, FConfig) +
           ' [' + E.ClassName + ']');
