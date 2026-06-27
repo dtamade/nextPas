@@ -31,10 +31,10 @@ uses
   nextpas.core.mem.arena.intf;
 
 type
-  {** Fallback 来源标记 }
+  {** Fallback 来源标记 *}
   TFallbackSource = (fsPrimary, fsFallback);
 
-  {** Fallback 分配记录 — 跟踪每个 fallback 分配的来源 }
+  {** Fallback 分配记录 — 跟踪每个 fallback 分配的来源 *}
   PFallbackEntry = ^TFallbackEntry;
   TFallbackEntry = record
     Ptr: Pointer;
@@ -62,20 +62,30 @@ type
     function FindEntry(APtr: Pointer): PFallbackEntry;
     procedure RemoveEntry(APtr: Pointer);
   public
+    {** 创建 fallback 分配器，指定主分配器和后备分配器 *}
     constructor Create(APrimary, AFallback: IAllocator);
+    {** 销毁 fallback 分配器（不释放已分配内存，由调用方负责） *}
     destructor Destroy; override;
 
     { IAllocator }
+    {** 分配内存，主分配器 OOM 时自动降级到后备 *}
     function GetMem(ASize: SizeUInt): Pointer;
+    {** 分配零初始化内存，主分配器 OOM 时降级 *}
     function AllocMem(ASize: SizeUInt): Pointer;
+    {** 重新分配内存，自动跟踪来源并从正确的分配器操作 *}
     function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+    {** 释放内存，自动判断来源并从正确的分配器释放 *}
     procedure FreeMem(APtr: Pointer);
+    {** 释放对齐内存，自动判断来源 *}
     procedure FreeAligned(APtr: Pointer);
+    {** 查询指针所属分配器的内存块大小 *}
     function MemSize(APtr: Pointer): SizeUInt;
+    {** 分配对齐内存，主分配器 OOM 时降级 *}
     function AllocAligned(ASize, AAlign: SizeUInt): Pointer;
+    {** 返回合并后的分配器特性（任一支持则组合支持） *}
     function Traits: TAllocatorTraits;
 
-    {** 已降级到 fallback 的分配次数 }
+    {** 已降级到 fallback 的分配次数 *}
     property TotalFallbacks: SizeUInt read FTotalFallbacks;
   end;
 
@@ -99,23 +109,34 @@ type
     FTotalFallbacks: SizeUInt;
     procedure TrackFallback(APtr: Pointer);
   public
+    {** 创建 fallback Arena，指定主 Arena 和后备分配器 *}
     constructor Create(AArena: IArena; AFallback: IAllocator);
+    {** 销毁 Arena，自动释放所有 fallback 分配的内存 *}
     destructor Destroy; override;
 
     { IArena }
+    {** Arena 分配，Arena OOM 时降级到后备分配器 *}
     function Alloc(ASize: SizeUInt): Pointer;
+    {** Arena 对齐分配，Arena OOM 时降级 *}
     function AllocAligned(ASize, AAlign: SizeUInt): Pointer;
+    {** Arena 零初始化分配，Arena OOM 时降级 *}
     function AllocZeroed(ASize: SizeUInt): Pointer;
+    {** 保存 Arena 当前状态标记（仅委托主 Arena） *}
     function SaveMark: TArenaMark;
+    {** 恢复 Arena 到指定标记（仅委托主 Arena） *}
     procedure RestoreToMark(AMark: TArenaMark);
+    {** 重置 Arena，仅重置主 Arena 部分，fallback 内存不受影响 *}
     procedure Reset;
+    {** 返回主 Arena 的已用大小 *}
     function UsedSize: SizeUInt;
+    {** 返回主 Arena 的剩余可用大小 *}
     function RemainingSize: SizeUInt;
+    {** 返回主 Arena 的统计信息 *}
     function Stats: TArenaStats;
 
-    {** 释放所有 fallback 分配的内存 }
+    {** 释放所有 fallback 分配的内存 *}
     procedure FreeFallbacks;
-    {** 已降级到 fallback 的分配次数 }
+    {** 已降级到 fallback 的分配次数 *}
     property TotalFallbacks: SizeUInt read FTotalFallbacks;
   end;
 

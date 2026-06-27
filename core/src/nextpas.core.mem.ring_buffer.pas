@@ -107,6 +107,7 @@ type
      * @return 是否成功 Success flag
      *}
     function Push(aData: Pointer): Boolean;
+    {** 尝试向缓冲区写入数据，返回详细操作结果 *}
     function TryPush(aData: Pointer): TRingOpResult;
 
     {**
@@ -119,6 +120,7 @@ type
      * @return 是否成功 Success flag
      *}
     function Pop(aData: Pointer): Boolean;
+    {** 尝试从缓冲区读取数据，返回详细操作结果 *}
     function TryPop(aData: Pointer): TRingOpResult;
 
     {**
@@ -153,24 +155,66 @@ type
     function Resize(aNewCapacity: SizeUInt): Boolean;
 
     { 批量操作 Batch operations }
+    {**
+     * 批量写入数据到缓冲区
+     *
+     * @params
+     *   aData    数据指针 Data pointer
+     *   aCount   请求写入的元素个数 Requested element count
+     *   aPushed  实际写入的元素个数 Actual pushed count (output)
+     *
+     * @return 是否成功写入至少一个元素 Whether at least one element was pushed
+     *}
     function Push(aData: Pointer; aCount: SizeUInt; out aPushed: SizeUInt): Boolean; overload;
+    {**
+     * 批量从缓冲区读取数据
+     *
+     * @params
+     *   aData    数据指针 Data pointer
+     *   aCount   请求读取的元素个数 Requested element count
+     *   aPopped  实际读取的元素个数 Actual popped count (output)
+     *
+     * @return 是否成功读取至少一个元素 Whether at least one element was popped
+     *}
     function Pop(aData: Pointer; aCount: SizeUInt; out aPopped: SizeUInt): Boolean; overload;
 
     { 连续片段 Contiguous spans }
+    {**
+     * 获取可写入的连续内存片段
+     *
+     * @params
+     *   aPtr         连续区域起始指针 Start pointer of contiguous region (output)
+     *   aLenInElems  连续区域可容纳的元素个数 Element count of contiguous region (output)
+     *}
     procedure GetContiguousWriteSpan(out aPtr: Pointer; out aLenInElems: SizeUInt);
+    {**
+     * 获取可读取的连续内存片段
+     *
+     * @params
+     *   aPtr         连续区域起始指针 Start pointer of contiguous region (output)
+     *   aLenInElems  连续区域可容纳的元素个数 Element count of contiguous region (output)
+     *}
     procedure GetContiguousReadSpan(out aPtr: Pointer; out aLenInElems: SizeUInt);
 
     // 属性 Properties
+    {** 缓冲区容量（最大元素数量） *}
     property Capacity: SizeUInt read FCapacity;
+    {** 单个元素的字节大小 *}
     property ElementSize: SizeUInt read FElementSize;
+    {** 当前缓冲区中的元素数量 *}
     property Count: SizeUInt read FCount;
 
     // 状态查询 Status queries
+    {** 检查缓冲区是否为空 *}
     function IsEmpty: Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    {** 检查缓冲区是否已满 *}
     function IsFull: Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    {** 获取可用空间（可容纳的元素个数）*}
     function GetAvailableSpace: SizeUInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function GetUsageRatio: Single; // 使用率 (0.0..1.0)
-    function GetUsagePercent: Single; // 使用率百分比 (0..100)
+    {** 获取使用率 (0.0..1.0) *}
+    function GetUsageRatio: Single;
+    {** 获取使用率百分比 (0..100) *}
+    function GetUsagePercent: Single;
 
     { 查找与访问 Find and access }
 
@@ -242,18 +286,29 @@ type
    *}
   generic TTypedRingBuffer<T> = class(TRingBuffer)
   public
+    {** 创建类型安全的环形缓冲区 *}
     constructor Create(aCapacity: SizeUInt; aAllocator: IAllocator = nil);
+    {** 写入一个元素 *}
     function Push(const aItem: T): Boolean; reintroduce;
+    {** 读取一个元素 *}
     function Pop(out aItem: T): Boolean; reintroduce;
+    {** 查看指定偏移处的元素（不移除）*}
     function Peek(out aItem: T; aOffset: SizeUInt = 0): Boolean; reintroduce;
+    {** 尝试写入一个元素，返回详细操作结果 *}
     function TryPush(const aItem: T): TRingOpResult; reintroduce;
+    {** 尝试读取一个元素，返回详细操作结果 *}
     function TryPop(out aItem: T): TRingOpResult; reintroduce;
 
     { 类型安全的查找与访问 Type-safe find and access }
+    {** 查找元素位置，-1 表示未找到 *}
     function Find(const aItem: T): Integer;
+    {** 检查缓冲区是否包含指定元素 *}
     function Contains(const aItem: T): Boolean;
+    {** 获取指定位置的元素（不移除）*}
     function GetItem(aIndex: SizeUInt; out aItem: T): Boolean;
+    {** 设置指定位置的元素值 *}
     function SetItem(aIndex: SizeUInt; const aItem: T): Boolean;
+    {** 丢弃指定数量的元素，返回实际丢弃个数 *}
     function Drop(aCount: SizeUInt): SizeUInt;
   end;
 

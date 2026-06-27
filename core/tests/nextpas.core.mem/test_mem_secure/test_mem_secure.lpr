@@ -52,12 +52,12 @@ end;
 
 procedure CheckContains(const ASource, AToken, AMessage: string);
 begin
-  Check(Pos(LowerCase(AToken), ASource) > 0, AMessage + ': ' + AToken);
+  Check(Pos(LowerCase(AToken), LowerCase(ASource)) > 0, AMessage + ': ' + AToken);
 end;
 
 procedure CheckNotContains(const ASource, AToken, AMessage: string);
 begin
-  Check(Pos(LowerCase(AToken), ASource) = 0, AMessage + ': ' + AToken);
+  Check(Pos(LowerCase(AToken), LowerCase(ASource)) = 0, AMessage + ': ' + AToken);
 end;
 
 procedure TestSecureZeroMemoryNilAndZeroSize;
@@ -151,29 +151,25 @@ begin
     MEM_SECURE_SOURCE_PATH_FROM_ROOT));
   CheckContains(LSource, 'nextpas.core.platform.memory',
     'mem.secure uses platform.memory');
-  CheckContains(LSource, 'platform_secure_zero_memory(buffer, size);',
+  CheckContains(LSource, 'platform_secure_zero_memory(abuffer, asize);',
     'mem.secure delegates to platform.memory secure zero');
   CheckNotContains(LSource, 'nextpas.core.platform.secure',
     'mem.secure no longer uses legacy platform.secure seam');
 end;
 
-procedure TestWindowsCompileGateUsesPlatformSecureWrapper;
+procedure TestWindowsCompileGateUsesPlatformMemory;
 var
   LSource: string;
 begin
   LSource := ReadSourceText(ResolveSourcePath(
     MEM_SECURE_WINDOWS_COMPILE_GATE_FROM_TEST,
     MEM_SECURE_WINDOWS_COMPILE_GATE_FROM_ROOT));
-  CheckContains(LSource, 'nextpas.core.platform.secure',
-    'windows compile gate imports platform.secure wrapper');
-  CheckContains(LSource, 'platform_secure_zero(@lbyte, sizeof(lbyte));',
-    'windows compile gate exercises deprecated platform.secure surface');
+  CheckContains(LSource, 'nextpas.core.platform.memory',
+    'windows compile gate imports platform.memory');
+  CheckContains(LSource, 'platform_secure_zero_memory(@lbyte, sizeof(lbyte));',
+    'windows compile gate exercises platform.memory secure zero');
   CheckContains(LSource, 'securezeromemory(@lbyte, sizeof(lbyte));',
     'windows compile gate still compiles mem.secure surface');
-  CheckNotContains(LSource, 'nextpas.core.platform.memory',
-    'windows compile gate does not bypass wrapper owner surface');
-  CheckNotContains(LSource, 'platform_secure_zero_memory(@lbyte, sizeof(lbyte));',
-    'windows compile gate no longer calls owner seam directly');
 end;
 
 begin
@@ -184,8 +180,8 @@ begin
   T.Test('strings', @TestSecureZeroStringClears);
   T.Test('platform.secure is deprecated wrapper', @TestPlatformSecureIsDeprecatedWrapper);
   T.Test('mem.secure delegates to platform.memory', @TestMemSecureDelegatesToPlatformMemory);
-  T.Test('windows compile gate uses platform.secure wrapper',
-    @TestWindowsCompileGateUsesPlatformSecureWrapper);
+  T.Test('windows compile gate uses platform.memory',
+    @TestWindowsCompileGateUsesPlatformMemory);
   T.Run;
 
   T.Summary;

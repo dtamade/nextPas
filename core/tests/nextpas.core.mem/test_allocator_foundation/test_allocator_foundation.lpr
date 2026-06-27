@@ -86,10 +86,25 @@ begin
   Check(GFreeMemCalls = 1, 'FreeMem should call the FreeMem callback');
 end;
 
+{ D-2a: TryGetRtlAllocator should return the same singleton as GetRtlAllocator }
+procedure TestTryGetRtlAllocator;
+var
+  LTry: IAllocator;
+  LGet: IAllocator;
+  LOk: Boolean;
+begin
+  LOk := TryGetRtlAllocator(LTry);
+  LGet := GetRtlAllocator;
+  Check(LOk, 'TryGetRtlAllocator should return True');
+  Check(LTry <> nil, 'TryGetRtlAllocator should return non-nil allocator');
+  Check(LTry = LGet, 'TryGetRtlAllocator should match GetRtlAllocator singleton');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.mem.allocator.foundation');
   T.Test('RTL allocator matches canonical singleton', @TestFoundationRtlAllocatorMatchesCanonicalSingleton);
   T.Test('callback allocator routes callbacks', @TestFoundationCallbackAllocatorRoutesCallbacks);
+  T.Test('TryGetRtlAllocator returns singleton', @TestTryGetRtlAllocator);
   T.Run;
 
   T.Summary;

@@ -1,12 +1,12 @@
 FPC ?= fpc
 CORE_ROOT := ../../..
-BUILD_DIR ?= $(CORE_ROOT)/build/projects/nextpas.core.mem/test_ring_buffer
-PROGRAM := test_ring_buffer
+BUILD_DIR ?= $(CORE_ROOT)/build/projects/nextpas.core.mem/bench_pool_family
+PROGRAM := bench_pool_family
 SOURCE := $(PROGRAM).lpr
-FPC_FLAGS ?= -MObjFPC -Sh -O2 -gl -gh
+FPC_FLAGS ?= -MObjFPC -Sh -O2
 FPC_FLAGS += -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src
 
-.PHONY: build run test clean
+.PHONY: build run clean
 
 build:
 	@mkdir -p $(BUILD_DIR)
@@ -14,8 +14,6 @@ build:
 
 run: build
 	$(BUILD_DIR)/$(PROGRAM)
-
-test: run
 
 clean:
 	rm -rf $(BUILD_DIR)

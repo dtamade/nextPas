@@ -298,6 +298,37 @@ begin
   WriteLn('PASS: IsPowerOfTwo');
 end;
 
+{ D-2c: NextPowerOfTwo boundary tests (from mem.base) }
+procedure TestNextPowerOfTwo;
+begin
+  Check(Int64(1) = Int64(NextPowerOfTwo(0)), 'NextPowerOfTwo(0) = 1');
+  Check(Int64(1) = Int64(NextPowerOfTwo(1)), 'NextPowerOfTwo(1) = 1');
+  Check(Int64(2) = Int64(NextPowerOfTwo(2)), 'NextPowerOfTwo(2) = 2');
+  Check(Int64(4) = Int64(NextPowerOfTwo(3)), 'NextPowerOfTwo(3) = 4');
+  Check(Int64(4) = Int64(NextPowerOfTwo(4)), 'NextPowerOfTwo(4) = 4');
+  Check(Int64(8) = Int64(NextPowerOfTwo(5)), 'NextPowerOfTwo(5) = 8');
+  Check(Int64(8) = Int64(NextPowerOfTwo(7)), 'NextPowerOfTwo(7) = 8');
+  Check(Int64(8) = Int64(NextPowerOfTwo(8)), 'NextPowerOfTwo(8) = 8');
+  Check(Int64(16) = Int64(NextPowerOfTwo(9)), 'NextPowerOfTwo(9) = 16');
+  Check(Int64(1024) = Int64(NextPowerOfTwo(1000)), 'NextPowerOfTwo(1000) = 1024');
+  Check(Int64(1024) = Int64(NextPowerOfTwo(1024)), 'NextPowerOfTwo(1024) = 1024');
+  WriteLn('PASS: NextPowerOfTwo');
+end;
+
+{ D-2c: NormalizeAlignment tests (from mem.base) }
+procedure TestNormalizeAlignment;
+begin
+  Check(Int64(DEFAULT_ALIGNMENT) = Int64(NormalizeAlignment(0)), 'NormalizeAlignment(0) = DEFAULT_ALIGNMENT');
+  Check(Int64(DEFAULT_ALIGNMENT) = Int64(NormalizeAlignment(1)), 'NormalizeAlignment(1) = DEFAULT_ALIGNMENT');
+  Check(Int64(DEFAULT_ALIGNMENT) = Int64(NormalizeAlignment(8)), 'NormalizeAlignment(8) = DEFAULT_ALIGNMENT (too small)');
+  Check(Int64(16) = Int64(NormalizeAlignment(16)), 'NormalizeAlignment(16) = 16');
+  Check(Int64(32) = Int64(NormalizeAlignment(32)), 'NormalizeAlignment(32) = 32');
+  Check(Int64(64) = Int64(NormalizeAlignment(64)), 'NormalizeAlignment(64) = 64');
+  Check(Int64(DEFAULT_ALIGNMENT) = Int64(NormalizeAlignment(3)), 'NormalizeAlignment(3) = DEFAULT_ALIGNMENT (not power of 2)');
+  Check(Int64(DEFAULT_ALIGNMENT) = Int64(NormalizeAlignment(12)), 'NormalizeAlignment(12) = DEFAULT_ALIGNMENT (not power of 2)');
+  WriteLn('PASS: NormalizeAlignment');
+end;
+
 procedure TestFillZeroCount;
 var
   LBuf: array[0..7] of Byte;
@@ -376,6 +407,8 @@ begin
   T.Test('AlignUp', @TestAlignUp);
   T.Test('AlignUpUnChecked', @TestAlignUpUnChecked);
   T.Test('IsPowerOfTwo', @TestIsPowerOfTwo);
+  T.Test('NextPowerOfTwo (mem.base)', @TestNextPowerOfTwo);
+  T.Test('NormalizeAlignment (mem.base)', @TestNormalizeAlignment);
   T.Test('Fill zero-count', @TestFillZeroCount);
   T.Test('Compare nil raises', @TestCompareNilRaises);
   T.Test('Fill nil raises', @TestFillNilRaises);

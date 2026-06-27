@@ -3,6 +3,8 @@ program test_platform_virtual;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.test,
+  nextpas.core.text.conv,
   nextpas.core.platform.memory;
 
 const
@@ -10,24 +12,7 @@ const
   CHUNK_2MB = 2 * 1024 * 1024;
 
 var
-  GTestCount: Integer = 0;
-  GPassCount: Integer = 0;
-  GFailCount: Integer = 0;
-
-procedure Check(ACondition: Boolean; const AName: string);
-begin
-  Inc(GTestCount);
-  if ACondition then
-  begin
-    Inc(GPassCount);
-    WriteLn('  PASS: ', AName);
-  end
-  else
-  begin
-    Inc(GFailCount);
-    WriteLn('  FAIL: ', AName);
-  end;
-end;
+  T: TTestSuite;
 
 { platform_virtual_reserve tests }
 
@@ -334,54 +319,43 @@ var
   P: Pointer;
 
 begin
-  WriteLn('=== platform.virtual memory API tests ===');
-  WriteLn;
+  T := TTestSuite.Create('nextpas.core.mem.platform_virtual');
 
-  WriteLn('--- Reserve ---');
-  TestReserveBasic;
-  TestReserveZeroSize;
-  TestReserveMultiplePages;
-  TestReserveSmall;
+  { Reserve }
+  T.Test('reserve basic', @TestReserveBasic);
+  T.Test('reserve zero size returns nil', @TestReserveZeroSize);
+  T.Test('reserve multiple pages', @TestReserveMultiplePages);
+  T.Test('reserve one page', @TestReserveSmall);
 
-  WriteLn;
-  WriteLn('--- Commit ---');
-  TestCommitBasic;
-  TestCommitMultiplePages;
-  TestCommitAndWrite;
-  TestCommitNil;
-  TestCommitZeroSize;
-  TestCommitIncremental;
+  { Commit }
+  T.Test('commit basic', @TestCommitBasic);
+  T.Test('commit multiple pages', @TestCommitMultiplePages);
+  T.Test('commit and write verification', @TestCommitAndWrite);
+  T.Test('commit nil returns false', @TestCommitNil);
+  T.Test('commit zero size returns false', @TestCommitZeroSize);
+  T.Test('commit incremental 3 pages', @TestCommitIncremental);
 
-  WriteLn;
-  WriteLn('--- Decommit ---');
-  TestDecommitBasic;
-  TestDecommitNil;
-  TestDecommitZeroSize;
-  TestDecommitThenRecommit;
+  { Decommit }
+  T.Test('decommit basic', @TestDecommitBasic);
+  T.Test('decommit nil safe no-op', @TestDecommitNil);
+  T.Test('decommit zero size safe no-op', @TestDecommitZeroSize);
+  T.Test('decommit then recommit', @TestDecommitThenRecommit);
 
-  WriteLn;
-  WriteLn('--- Release ---');
-  TestReleaseBasic;
-  TestReleaseNil;
-  TestReleaseZeroSize;
-  TestReleaseAfterCommit;
-  TestReserveReleaseCycle;
+  { Release }
+  T.Test('release basic', @TestReleaseBasic);
+  T.Test('release nil safe no-op', @TestReleaseNil);
+  T.Test('release zero size safe no-op', @TestReleaseZeroSize);
+  T.Test('release after commit', @TestReleaseAfterCommit);
+  T.Test('reserve/release 100 cycles', @TestReserveReleaseCycle);
 
-  WriteLn;
-  WriteLn('--- THP ---');
-  TestMadviseThp;
-  TestMadviseThpNil;
+  { THP }
+  T.Test('madvise thp', @TestMadviseThp);
+  T.Test('madvise thp nil safe no-op', @TestMadviseThpNil);
 
-  WriteLn;
-  WriteLn('--- Combined scenarios ---');
-  TestReserveCommitDecommitRelease;
-  TestLargeReserve;
+  { Combined scenarios }
+  T.Test('reserve-commit-decommit-release scenario', @TestReserveCommitDecommitRelease);
+  T.Test('large 256MB reserve', @TestLargeReserve);
 
-  WriteLn;
-  WriteLn('--- platform.virtual: ', GTestCount, ' total, ', GPassCount, ' passed, ', GFailCount, ' failed ---');
-
-  if GFailCount > 0 then
-    ExitCode := 1
-  else
-    ExitCode := 0;
+  T.Run;
+  T.Summary;
 end.

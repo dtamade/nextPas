@@ -19,7 +19,7 @@ uses
   nextpas.core.mem.error;        // EAllocError, TAllocError
 
 type
-  // 性能计数器（供测试）
+  {** 性能计数器（供测试和基准使用）*}
   TSlabPerfCounters = record
     AllocCalls : QWord;
     FreeCalls  : QWord;
@@ -30,7 +30,7 @@ type
     MergedPages: QWord;
   end;
 
-  // 只读统计快照（不改变池行为）
+  {** 池状态只读快照（不改变池行为）*}
   TSlabPoolStats = record
     SegmentCount: Integer;
     TotalCapacity: SizeUInt;
@@ -39,7 +39,7 @@ type
     FallbackBytes: SizeUInt;
   end;
 
-  // 兼容配置
+  {** Slab 池配置参数 *}
   TSlabConfig = record
     MinShift: SizeUInt;            // 默认 3 (8B)
     EnablePageMerging: Boolean;    // 兼容字段（当前未用）
@@ -49,7 +49,7 @@ type
     PageSize: SizeUInt;            // 兼容字段（默认 4096）
   end;
 
-  // Fallback allocation record (oversize / high-alignment allocations)
+  {** Fallback 分配记录（超大/高对齐分配）*}
   TSlabFallbackAlloc = record
     UserPtr: Pointer;
     RawPtr: Pointer;
@@ -167,50 +167,99 @@ type
     function PageMapLookup(aKey: PtrUInt; out aSegIdx: Integer): Boolean; inline;
     procedure IndexSegmentPages(aSegIdx: Integer);
   public
+    {** 创建 Slab 池（默认配置）*}
     constructor Create(aCapacity: SizeUInt; aAllocator: IAllocator = nil; aMinShift: SizeUInt = 3); overload;
+    {** 创建 Slab 池（自定义配置）*}
     constructor Create(aCapacity: SizeUInt; const aConfig: TSlabConfig; aAllocator: IAllocator = nil); overload;
+    {** 销毁池并释放所有段和回退分配 *}
     destructor Destroy; override;
     // IPool
+    {** 分配最小单元大小的指针 *}
     function Acquire(out APtr: Pointer): Boolean;
+    {** Acquire 的非阻塞别名 *}
     function TryAcquire(out APtr: Pointer): Boolean; inline;
+    {** 批量分配多个指针，返回实际成功数量 *}
     function AcquireN(out aUnits: array of Pointer; aCount: Integer): Integer;
+    {** 释放之前分配的指针 *}
     procedure Release(APtr: Pointer);
+    {** 批量释放多个指针 *}
     procedure ReleaseN(const aUnits: array of Pointer; aCount: Integer);
+    {** 重置池，释放所有回退分配并回收段空间 *}
     procedure Reset;
     // IAllocator aligned allocation
+    {**
+     * 分配对齐内存块
+     *
+     * @params
+     *   ASize      请求的字节大小
+     *   AAlignment 对齐要求（必须为 2 的幂）
+     *
+     * @return 分配成功返回指针，失败返回 nil
+     *}
     function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
+    {** 释放 AllocAligned 分配的内存块 *}
     procedure FreeAligned(APtr: Pointer);
     // IMemoryPool + IAllocator
     // Compatibility helpers for older tests
+    {** GetMem 的别名 *}
     function Alloc(ASize: SizeUInt): Pointer; inline;
+    {** FreeMem 的别名 *}
     procedure Free(APtr: Pointer); overload; inline;
+    {** FreeMem 的别名 *}
     procedure ReleasePtr(APtr: Pointer); inline;
+    {**
+     * 预热池：按指定单元大小预分配若干页
+     *
+     * @params
+     *   aUnitSize  单元字节大小
+     *   aMinPages  最少预热页数
+     *
+     * @return 实际预热的单元数
+     *}
     function Warmup(aUnitSize: SizeUInt; aMinPages: SizeUInt): SizeUInt;
     // 诊断/自省 helpers
+    {** 判断指针是否归本池所有 *}
     function Owns(APtr: Pointer): Boolean; inline;
+    {** 返回指针对应的实际分配大小，不属于本池则返回 0 *}
     function MemSizeOf(APtr: Pointer): SizeUInt;
+    {** 返回只读统计快照 *}
     function Stats: TSlabPoolStats;
     // 性能计数器快照（只读）
+    {** 返回性能计数器快照 *}
     function GetPerfCounters: TSlabPerfCounters; inline;
+    {** 获取指定段的内存区域范围和页移位 *}
     function GetSegmentRegion(aIndex: Integer; out aStart, aEnd: PByte; out aPageShift: SizeUInt): Boolean;
+    {** 查询指针是否为回退分配并返回大小和对齐信息 *}
     function TryGetFallbackAllocInfo(APtr: Pointer; out ASize, AAlignment: SizeUInt): Boolean;
+    {** 段数量 *}
     property SegmentCount: Integer read GetSegmentCount;
+    {** 当前活跃的回退分配数量 *}
     property FallbackAllocCount: Integer read GetFallbackAllocCount;
 
+    {** 分配指定大小的内存块，失败返回 nil *}
     function GetMem(ASize: SizeUInt): Pointer;
+    {** 分配零初始化的内存块 *}
     function AllocMem(ASize: SizeUInt): Pointer;
+    {** 重新分配内存块，自动拷贝旧数据 *}
     function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+    {** 释放内存块，指针不属于本池时抛出 ESlabPoolCorruption *}
     procedure FreeMem(ADst: Pointer);
+    {** 返回指针对应的分配大小（MemSizeOf 别名）*}
     function MemSize(APtr: Pointer): SizeUInt;
     // 兼容统计
+    {** 累计分配次数 *}
     property TotalAllocs: SizeUInt read FTotalAllocs;
+    {** 累计释放次数 *}
     property TotalFrees : SizeUInt read FTotalFrees;
     // IAllocator capability
+    {** 返回分配器能力特征（零初始化、线程安全、对齐支持等）*}
     function Traits: TAllocatorTraits;
 
   end;
 
+{** 创建默认 Slab 配置 *}
 function CreateDefaultSlabConfig: TSlabConfig;
+{** 创建启用了页合并的 Slab 配置 *}
 function CreateSlabConfigWithPageMerging: TSlabConfig;
 implementation
 

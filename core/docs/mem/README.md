@@ -167,7 +167,7 @@ end;
 
 ## 测试覆盖
 
-- 31 test projects with 430 `T.Test` cases (migrated to `nextpas.core.test` v3.x)
+- 31 test suites with 465 `T.Test` cases (migrated to `nextpas.core.test` v3.x)
 - 0 memory leaks, 0 unfreed blocks
 - 完整接口覆盖：Arena / Pool / Allocator / Concurrent / Sharded / Contract / OOM / Facade
 
@@ -181,6 +181,35 @@ end;
 
 ## 版本历史
 
+- v7.2 (2026-06-27): Phase F 基准测试 + Go 对照
+  - 新增: `bench_pool_family` 9 基准覆盖 TBlockPool/TFixedPool/TStackPool/TRingBuffer
+  - Go 对照: TBlockPool (15.6ns) 快于 sync.Pool (18.0ns)，TRingBuffer (31.8ns) 2x 快于 chan (63.7ns)
+  - 修复: bench_arena_vs_rtl Makefile build dir 创建
+  - Phase F 完成
+- v7.1 (2026-06-27): Round 15 — test_ring_buffer + 并发池恢复 + 测试修复
+  - 新增: `test_ring_buffer` 30 tests — TRingBuffer 全公共 API 覆盖
+  - 恢复: `test_sharded_pools` 9 tests — CS-001 修复后编译通过
+  - 恢复: `test_oom` 8 tests — CS-001 修复后编译通过
+  - 修复: NormalizeAlignment 实现与文档不一致（缺少 >= DEFAULT_ALIGNMENT 检查）
+  - 修复: test_mem_secure CheckContains 大小写 + compile gate 测试更新
+  - 重构: test_platform_virtual 迁移到 nextpas.core.test 框架
+  - 文档: RestoreState @note + RingBuffer.Clear 安全说明 (CS-010/CS-013)
+  - 34 suites / 465 tests / 0 leaks / 0 failures
+- v7.0 (2026-06-27): Phase E 文档注释 + Round 14 打磨
+  - Phase E: 9 文件 150+ 处方法级 `{** @desc *}` 文档注释
+  - E-2: 6 类型级文档补全 (TSlabPerfCounters/TSlabPoolStats/TSlabConfig/TFixedPoolConfig/TStackPoolConfig/TStackMemoryMapEntry)
+  - 修复: test_object_pool 48 bytes 泄漏 (TestPoolExhaustion 未归还对象)
+  - 修复: deprecation warning (platform_secure_zero → platform_secure_zero_memory)
+  - 修复: doc-extras 代理文档注释格式错误 ({** ... * → {** ... *})
+  - 34 suites / 465 tests / 0 leaks
+- v6.0 (2026-06-27): Phase D 测试覆盖 100% — 3 新测试套件 + 4 补充
+  - D-1a: `test_growing_fixed_pool` 12 tests — TGrowingFixedPool 全路径覆盖
+  - D-1b: `test_growing_block_pool` 12 tests — TGrowingBlockPool 全路径覆盖
+  - D-1c: `test_shared_memory` 8 tests — TSharedMemory 全 API 覆盖
+  - D-2a: TryGetRtlAllocator 测试 (test_allocator_foundation)
+  - D-2c: NextPowerOfTwo + NormalizeAlignment 边界测试 (test_mem_utils)
+  - D-2d: rwlock 写锁竞争 8 线程压力测试 (test_concurrent_wrappers)
+  - 31 suites / 465 tests / 0 leaks / 0 new failures
 - v5.0 (2026-06-27): I-04 FallbackArena 提取 + T-04/T-05 边界测试 + capacity=1 修复
   - 修复: `TBlockPool.RebuildFreeList` capacity=1 时 `SizeUInt` 下溢导致 A/V
   - I-04: `TFallbackArena` 3 处重复跟踪代码提取为 `TrackFallback` 私有方法

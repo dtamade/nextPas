@@ -32,22 +32,35 @@ type
     FInner: IBlockPool;
     FLock: TMemMutex;
   public
+    {** 使用已有 IBlockPool 实例创建线程安全包装器 *}
     constructor Create(aInner: IBlockPool); overload;
+    {** 创建线程安全块池，指定块大小、容量和对齐 *}
     constructor Create(aBlockSize, aCapacity: SizeUInt; aAlignment: SizeUInt = DEFAULT_ALIGNMENT); overload;
+    {** 销毁包装器，释放互斥锁 *}
     destructor Destroy; override;
 
     { IBlockPool }
+    {** 从池中获取一个块，已加锁 *}
     function Acquire: Pointer;
+    {** 尝试从池中获取一个块，池耗尽时返回 False *}
     function TryAcquire(out aPtr: Pointer): Boolean;
+    {** 归还一个块到池中 *}
     procedure Release(aPtr: Pointer);
+    {** 重置池，归还所有已分配的块 *}
     procedure Reset;
+    {** 返回每个块的字节大小（不可变） *}
     function BlockSize: SizeUInt;
+    {** 返回池的最大块容量（不可变） *}
     function Capacity: SizeUInt;
+    {** 返回当前空闲块数量 *}
     function Available: SizeUInt;
+    {** 返回当前已使用块数量 *}
     function InUse: SizeUInt;
 
     { IBlockPoolBatch }
+    {** 批量获取块，返回实际获取数量 *}
     function AcquireN(out aPtrs: array of Pointer; aCount: Integer): Integer;
+    {** 批量归还块 *}
     procedure ReleaseN(const aPtrs: array of Pointer; aCount: Integer);
 
     property Inner: IBlockPool read FInner;

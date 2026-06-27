@@ -40,6 +40,7 @@ type
   EStackPoolError = class(EAllocError);
 
 type
+  {** TStackPool 配置参数 *}
   TStackPoolConfig = record
     TotalSize: SizeUInt;
     Alignment: SizeUInt;    // 默认指针大小
@@ -78,6 +79,7 @@ type
      * @param aAllocator 基础分配器 Base allocator (optional)
      *}
     constructor Create(aSize: SizeUInt; aAllocator: IAllocator = nil); overload;
+    {** 使用配置记录创建栈式内存池 *}
     constructor Create(const aConfig: TStackPoolConfig); overload;
 
     {**
@@ -99,6 +101,7 @@ type
      * @return 内存指针 Memory pointer
      *}
     function Alloc(aSize: SizeUInt; aAlignment: SizeUInt = SizeOf(Pointer)): Pointer; inline;
+    {** 分配对齐内存，对齐值必须 >= SizeOf(Pointer) 且为 2 的幂 *}
     function AllocAligned(aSize: SizeUInt; aAlignment: SizeUInt): Pointer; inline;
 
     {**
@@ -108,6 +111,7 @@ type
      *       Try to allocate (no exception), return False on failure
      *}
     function TryAlloc(aSize: SizeUInt; out APtr: Pointer; aAlignment: SizeUInt = SizeOf(Pointer)): Boolean; inline;
+    {** 尝试分配对齐内存（不抛异常），失败返回 False *}
     function TryAllocAligned(aSize: SizeUInt; out APtr: Pointer; aAlignment: SizeUInt): Boolean; inline;
 
     {**
@@ -134,16 +138,22 @@ type
      * @desc 恢复到指定状态
      *       Restore to specified state
      *
-     * @param aState 状态标记 State marker
+     * @param aState 状态标记（由 SaveState 返回）State marker (returned by SaveState)
+     * @note aState 必须来自同一 pool 实例的 SaveState 调用，否则行为未定义
      *}
     procedure RestoreState(aState: SizeUInt); inline;
 
     // 属性 Properties
+    {** 池总容量（字节） Total capacity in bytes *}
     property TotalSize: SizeUInt read FSize;
+    {** 已使用量（字节） Used size in bytes *}
     property UsedSize: SizeUInt read FOffset;
+    {** 剩余可用量（字节） Available size in bytes *}
     property AvailableSize: SizeUInt read GetAvailableSize;
 
+    {** 检查栈池是否为空（无分配） *}
     function IsEmpty: Boolean;
+    {** 检查栈池是否已满（无剩余空间） *}
     function IsFull: Boolean;
   end;
 
@@ -185,12 +195,15 @@ type
     DefaultAlignment: SizeUInt;   // 默认对齐
     EnableDebugMode: Boolean;     // 启用调试模式
 
+    {** 返回默认策略：启用统计和作用域跟踪，2x 增长 *}
     class function Default: TStackPoolPolicy; static;
+    {** 返回高性能策略：关闭统计和跟踪，最大化吞吐 *}
     class function HighPerformance: TStackPoolPolicy; static;
+    {** 返回调试策略：启用调试模式，1.5x 保守增长 *}
     class function Debug: TStackPoolPolicy; static;
   end;
 
-  // 调试用内存映射条目类型
+  {** 调试用内存映射条目 *}
   TStackMemoryMapEntry = record
     Start: Pointer;
     Size: SizeUInt;
@@ -208,7 +221,9 @@ type
     FSavedState: SizeUInt;
     FActive: Boolean;
   public
+    {** 创建栈作用域，保存当前池状态 *}
     constructor Create(aPool: TScopedStackPool);
+    {** 销毁作用域，自动回滚到保存的状态 *}
     destructor Destroy; override;
 
     {** 在当前作用域中分配内存 *}
@@ -217,6 +232,7 @@ type
     {** 手动释放作用域（通常由析构函数自动调用） *}
     procedure Release;
 
+    {** 作用域是否活跃（未释放） Whether the scope is active (not released) *}
     property Active: Boolean read FActive;
   end;
 
@@ -230,14 +246,22 @@ type
     FScopes: array of TStackPoolScope;
     FPool: TScopedStackPool;
   public
+    {** 创建作用域管理器 *}
     constructor Create(aPool: TScopedStackPool);
+    {** 销毁管理器，清除所有未释放的作用域 *}
     destructor Destroy; override;
 
+    {** 推入新的作用域，返回作用域对象 *}
     function PushScope: TStackPoolScope;
+    {** 弹出并释放最顶层作用域 *}
     procedure PopScope;
-    procedure RemoveScope(aScope: TStackPoolScope);  // 从列表中移除（不释放）
+    {** 从管理列表中移除指定作用域（不释放对象） *}
+    procedure RemoveScope(aScope: TStackPoolScope);
+    {** 获取当前最顶层作用域，无作用域时返回 nil *}
     function GetCurrentScope: TStackPoolScope;
+    {** 获取当前作用域嵌套深度 *}
     function GetScopeDepth: Integer;
+    {** 释放并清除所有作用域 *}
     procedure ClearAllScopes;
   end;
 
@@ -268,7 +292,9 @@ type
     function CalculateFragmentation: Double;
 
   public
+    {** 创建作用域栈池，指定大小、策略和可选的基础分配器 *}
     constructor Create(aSize: SizeUInt; const aPolicy: TStackPoolPolicy; aAllocator: IAllocator = nil);
+    {** 销毁作用域栈池，释放所有内部资源 *}
     destructor Destroy; override;
 
     {** 分配内存（带策略支持） *}
@@ -313,8 +339,11 @@ type
     {** 获取内存映射信息（调试用） *}
     function GetMemoryMap(out aMap: array of TStackMemoryMapEntry): Integer;
 
+    {** 池策略配置 Pool policy configuration *}
     property Policy: TStackPoolPolicy read FPolicy write FPolicy;
+    {** 当前统计信息 Current statistics *}
     property Statistics: TStackPoolStatistics read GetStatistics;
+    {** 作用域管理器（可能为 nil） Scope manager (may be nil) *}
     property ScopeManager: TStackPoolScopeManager read FScopeManager;
   end;
 
@@ -328,9 +357,13 @@ type
     FScope: TStackPoolScope;
     FActive: Boolean;
   public
+    {** 初始化自动作用域，关联到指定池 *}
     class function Initialize(aPool: TScopedStackPool): TAutoStackPoolScope; static;
+    {** 终结自动作用域，回滚分配状态 *}
     procedure Finalize;
+    {** 在当前作用域中分配内存 *}
     function Alloc(aSize: SizeUInt; aAlignment: SizeUInt = SizeOf(Pointer)): Pointer;
+    {** 自动作用域是否活跃 Whether the auto scope is active *}
     property Active: Boolean read FActive;
   end;
 

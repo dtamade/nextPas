@@ -117,37 +117,130 @@ type
     function PopFree: Pointer; inline;
     procedure RebuildFreeList;
   public
+    {**
+     * @desc 创建固定块池，预分配整块内存并初始化空闲链表
+     *
+     * @params
+     *   aBlockSize   每个块的最小字节数（会向上对齐到 aAlignment）
+     *   aCapacity    块数量
+     *   aAlignment   对齐要求，默认 DEFAULT_ALIGNMENT
+     *
+     * @note aBlockSize 必须 > 0，aCapacity 必须 > 0
+     *       2 的幂次块大小启用 shift/mask 快路径
+     *}
     constructor Create(aBlockSize, aCapacity: SizeUInt; aAlignment: SizeUInt = DEFAULT_ALIGNMENT);
+
+    {** @desc 释放底层缓冲区，销毁池实例 *}
     destructor Destroy; override;
 
     { 核心 API - 全部 inline }
+
+    {**
+     * @desc 从池中获取一个块，池耗尽时返回 nil
+     * @return 已分配的块指针，或 nil
+     *}
     function Acquire: Pointer; inline;
+
+    {**
+     * @desc 尝试获取一个块，池耗尽时返回 False
+     *
+     * @params
+     *   aPtr  输出参数，获取到的块指针
+     *
+     * @return 是否成功获取
+     *}
     function TryAcquire(out aPtr: Pointer): Boolean; inline;
+
+    {**
+     * @desc 归还一个块到池中，含范围检查和双重释放检测
+     *
+     * @params
+     *   aPtr  要归还的块指针，传 nil 则静默忽略
+     *
+     * @note 指针不属于本池或已释放时抛出 EAllocError
+     *}
     procedure Release(aPtr: Pointer); inline;
+
+    {** @desc 重置池，将所有块恢复为空闲状态 *}
     procedure Reset; inline;
 
     { 快速 API - 无检查版本 }
+
+    {**
+     * @desc 获取一个块（无 nil 检查），池耗尽时行为未定义
+     * @return 已分配的块指针
+     * @note DEBUG 模式下池耗尽会触发 Assert
+     *}
     function AcquireUnchecked: Pointer; inline;
+
+    {**
+     * @desc 归还一个块（无范围/对齐检查）
+     *
+     * @params
+     *   aPtr  要归还的块指针
+     *
+     * @note DEBUG 模式下有断言保护，Release 模式无检查
+     *}
     procedure ReleaseUnchecked(aPtr: Pointer); inline;
 
     { IBlockPool }
+
+    {** @return 每个块的实际字节大小（已对齐） *}
     function BlockSize: SizeUInt; inline;
+    {** @return 池中块的总数量 *}
     function Capacity: SizeUInt; inline;
+    {** @return 当前可用（空闲）块数量 *}
     function Available: SizeUInt; inline;
+    {** @return 当前已分配（在用）块数量 *}
     function InUse: SizeUInt; inline;
 
     { IBlockPoolBatch }
+
+    {**
+     * @desc 批量获取多个块
+     *
+     * @params
+     *   aPtrs   输出数组，接收获取到的块指针
+     *   aCount  期望获取的数量
+     *
+     * @return 实际获取的数量（可能少于 aCount）
+     *}
     function AcquireN(out aPtrs: array of Pointer; aCount: Integer): Integer;
+
+    {**
+     * @desc 批量归还多个块
+     *
+     * @params
+     *   aPtrs   要归还的块指针数组
+     *   aCount  数组中有效指针的数量
+     *}
     procedure ReleaseN(const aPtrs: array of Pointer; aCount: Integer);
 
     { 辅助 }
+
+    {**
+     * @desc 判断指针是否属于本池的内存范围
+     * @return True 表示指针在池的缓冲区内
+     *}
     function Owns(aPtr: Pointer): Boolean; inline;
+
+    {**
+     * @desc 获取池底层缓冲区的基地址和总大小
+     *
+     * @params
+     *   aBase  输出缓冲区基地址
+     *   aSize  输出缓冲区总字节大小
+     *}
     procedure GetRange(out aBase: Pointer; out aSize: SizeUInt); inline;
 
     { 统计 }
+    {** @return 历史峰值同时分配的块数量 *}
     property PeakAlloc: SizeUInt read FPeakAlloc;
+    {** @return 累计分配（Acquire）总次数 *}
     property TotalAllocs: QWord read FTotalAllocs;
+    {** @return 累计释放（Release）总次数 *}
     property TotalFrees: QWord read FTotalFrees;
+    {** @return 池的实际对齐字节数 *}
     property Alignment: SizeUInt read FAlignment;
   end;
 
