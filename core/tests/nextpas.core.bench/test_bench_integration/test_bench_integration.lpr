@@ -293,8 +293,8 @@ begin
   Check(LComparisons[0].CurrentNsPerOp > 0, 'Current NsPerOp > 0');
   Check(Abs(LComparisons[0].Ratio - (LComparisons[0].CurrentNsPerOp / LComparisons[0].BaselineNsPerOp)) < 0.0001,
     'Ratio uses Current/Baseline direction');
-  Check(not LComparisons[0].HasStatisticalTest,
-    'Scalar baseline does not claim statistical significance');
+  Check(LComparisons[0].HasStatisticalTest,
+    'Welch t-test available when result has samples');
 end;
 
 procedure TestTBenchSuite_WithFilter;
