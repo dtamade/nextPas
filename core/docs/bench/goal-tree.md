@@ -86,13 +86,20 @@ B12  Phase 1: 统计基础（对标 Go/Rust）                   ✅
   B12.2  GeometricMean 几何均值聚合                    ✅
   B12.3  StopTimer/StartTimer 暂停/恢复计时器          ✅
   B12.4  CompareTwoResults 两结果 Mann-Whitney 对比    ✅
+  B12.5  GlobMatch 模式匹配过滤器                      ✅
+
+B13  Phase 2: 精密测量                                   🔄
+  B13.1  OLS 线性回归去除固定开销                       ✅
+  B13.2  吞吐量标准化显示 (bytes/s)                     ✅
+  B13.3  异常值严重度分级 (mild/moderate/severe)         ✅
+  B13.4  CV 变异系数显示                                ✅
 ```
 
 ## 测试套件分布
 
 | 套件 | 测试数 | heaptrc | 说明 |
 |------|--------|---------|------|
-| test_bench_stats | 25 | ✅ 零泄漏 | 基础统计 + GeometricMean |
+| test_bench_stats | 28 | ✅ 零泄漏 | 基础统计 + GeometricMean + OLS |
 | test_bench_stats_advanced | 30 | ✅ 零泄漏 | 高级统计 + 异常值分级 |
 | test_bench_mannwhitney | 10 | ✅ 零泄漏 | Mann-Whitney U 检验 |
 | test_bench_runner | 14 | ✅ 零泄漏 | 执行器 + StopTimer |
@@ -105,7 +112,7 @@ B12  Phase 1: 统计基础（对标 Go/Rust）                   ✅
 | test_bench_parallel_heaptrc | 1 | ✅ 0 leaks | 并行 heaptrc |
 | test_bench_parallel_memtrack_heaptrc | 2 | ✅ 0 leaks | 并行+memtrack |
 | test_bench_invalid_parameters_heaptrc | 5 | ✅ 0 leaks | 参数校验 |
-| **合计** | **239** | **13/13 通过** | |
+| **合计** | **242** | **13/13 通过** | |
 
 ## 已解决的技术债务
 
