@@ -438,16 +438,14 @@ begin
   if not LSuite.Run then
   begin
     WriteLn;
-    WriteLn(AnsiRed('SOME TESTS FAILED'));
-    Halt(1);
+    FailTest('SOME TESTS FAILED');
   end;
 
   WriteLn;
   WriteLn(AnsiBold('Subtests run: '), GSubTestsRun);
   if GSubTestsRun < 10 then
   begin
-    WriteLn(AnsiRed('FAIL: expected at least 10 subtests run, got '), GSubTestsRun);
-    Halt(1);
+    FailTest('expected at least 10 subtests run, got ' + IntToStr(GSubTestsRun));
   end;
 
   WriteLn(AnsiBold('BeforeEach count: '), GBeforeEachCount);
@@ -455,13 +453,11 @@ begin
   { BeforeEach/AfterEach should have been called exactly once per registered test }
   if GBeforeEachCount <> 13 then
   begin
-    WriteLn(AnsiRed('FAIL: expected exactly 13 BeforeEach calls, got '), GBeforeEachCount);
-    Halt(1);
+    FailTest('expected exactly 13 BeforeEach calls, got ' + IntToStr(GBeforeEachCount));
   end;
   if GAfterEachCount <> 13 then
   begin
-    WriteLn(AnsiRed('FAIL: expected exactly 13 AfterEach calls, got '), GAfterEachCount);
-    Halt(1);
+    FailTest('expected exactly 13 AfterEach calls, got ' + IntToStr(GAfterEachCount));
   end;
 
   { ── Verify subtest failure propagation ────────────────────────────────────── }
@@ -473,8 +469,7 @@ begin
     LFailSuite.TestSubtest('real failure', @TestSubtestWithRealFailure);
     if LFailSuite.Run then
     begin
-      WriteLn(AnsiRed('FAIL: suite with failing subtest should report failure'));
-      Halt(1);
+      FailTest('suite with failing subtest should report failure');
     end;
     WriteLn(AnsiGreen('  Failure propagation verified'));
   end;
@@ -487,8 +482,7 @@ begin
     LFailSuite.TestSubtest('closure failure', @TestClosureSubtestWithFailure);
     if LFailSuite.Run then
     begin
-      WriteLn(AnsiRed('FAIL: closure subtest failure should propagate'));
-      Halt(1);
+      FailTest('closure subtest failure should propagate');
     end;
     WriteLn(AnsiGreen('  Closure subtest failure propagation verified'));
   end;
@@ -502,8 +496,7 @@ begin
     LFailSuite.Test('normal', procedure begin CheckTrue(True); end);
     if not LFailSuite.Run then
     begin
-      WriteLn(AnsiRed('FAIL: suite with skip in subtest should pass'));
-      Halt(1);
+      FailTest('suite with skip in subtest should pass');
     end;
     { Subtest-level skips do NOT propagate to suite skip counter (design).
       But the suite should still pass (no failures). }
@@ -522,8 +515,7 @@ begin
     LFailSuite.TestSubtest('3-level', @TestLevel3Nested);
     if LFailSuite.Run then
     begin
-      WriteLn(AnsiRed('FAIL: 3-level nested failure should propagate'));
-      Halt(1);
+      FailTest('3-level nested failure should propagate');
     end;
     WriteLn(AnsiGreen('  3-level failure propagation verified'));
   end;
@@ -538,8 +530,7 @@ begin
     { Current design: subtest AfterEach failure is a WARNING, suite still passes }
     if not LFailSuite.Run then
     begin
-      WriteLn(AnsiRed('FAIL: subtest AfterEach failure should be non-fatal'));
-      Halt(1);
+      FailTest('subtest AfterEach failure should be non-fatal');
     end;
     WriteLn(AnsiGreen('  AfterEach failure treated as WARNING (non-fatal)'));
   end;
@@ -557,24 +548,20 @@ begin
     LFailSuite.TestSubtest('parent', @TestSubtestSinkPropagation);
     if not LFailSuite.Run then
     begin
-      WriteLn(AnsiRed('FAIL: subtest sink suite should pass'));
-      Halt(1);
+      FailTest('subtest sink suite should pass');
     end;
     LOutput := LOutSink.GetOutput;
     if Pos('parent/captured_pass', LOutput) = 0 then
     begin
-      WriteLn(AnsiRed('FAIL: expected captured_pass in subtest output sink'));
-      Halt(1);
+      FailTest('expected captured_pass in subtest output sink');
     end;
     if Pos('parent/captured_skip', LOutput) = 0 then
     begin
-      WriteLn(AnsiRed('FAIL: expected captured_skip in subtest output sink'));
-      Halt(1);
+      FailTest('expected captured_skip in subtest output sink');
     end;
     if LErrSink.GetOutput <> '' then
     begin
-      WriteLn(AnsiRed('FAIL: subtest sink err output should stay empty'));
-      Halt(1);
+      FailTest('subtest sink err output should stay empty');
     end;
     WriteLn(AnsiGreen('  Subtest sink propagation verified'));
   end;
@@ -591,24 +578,20 @@ begin
     LFailSuite.TestSubtest('cleanup basic', @TestCleanupBasic);
     if not LFailSuite.Run then
     begin
-      WriteLn(AnsiRed('FAIL: cleanup basic should pass'));
-      Halt(1);
+      FailTest('cleanup basic should pass');
     end;
     { Cleanup should be called in reverse order: B first, then A }
     if Length(GCleanupOrder) <> 2 then
     begin
-      WriteLn(AnsiRed('FAIL: expected 2 cleanup calls, got '), Length(GCleanupOrder));
-      Halt(1);
+      FailTest('expected 2 cleanup calls, got ' + IntToStr(Length(GCleanupOrder)));
     end;
     if GCleanupOrder[0] <> 'cleanup-B' then
     begin
-      WriteLn(AnsiRed('FAIL: first cleanup should be B (reverse), got '), GCleanupOrder[0]);
-      Halt(1);
+      FailTest('first cleanup should be B (reverse), got ' + GCleanupOrder[0]);
     end;
     if GCleanupOrder[1] <> 'cleanup-A' then
     begin
-      WriteLn(AnsiRed('FAIL: second cleanup should be A (reverse), got '), GCleanupOrder[1]);
-      Halt(1);
+      FailTest('second cleanup should be A (reverse), got ' + GCleanupOrder[1]);
     end;
     WriteLn(AnsiGreen('  Cleanup reverse order verified'));
   end;
@@ -623,18 +606,15 @@ begin
     LFailSuite.TestSubtest('cleanup failure', @TestCleanupOnFailure);
     if LFailSuite.Run then
     begin
-      WriteLn(AnsiRed('FAIL: suite with failing subtest should report failure'));
-      Halt(1);
+      FailTest('suite with failing subtest should report failure');
     end;
     if Length(GCleanupOrder) <> 1 then
     begin
-      WriteLn(AnsiRed('FAIL: expected 1 cleanup call, got '), Length(GCleanupOrder));
-      Halt(1);
+      FailTest('expected 1 cleanup call, got ' + IntToStr(Length(GCleanupOrder)));
     end;
     if GCleanupOrder[0] <> 'failure-cleanup' then
     begin
-      WriteLn(AnsiRed('FAIL: cleanup should run even on failure, got '), GCleanupOrder[0]);
-      Halt(1);
+      FailTest('cleanup should run even on failure, got ' + GCleanupOrder[0]);
     end;
     WriteLn(AnsiGreen('  Cleanup on failure verified'));
   end;
@@ -650,14 +630,12 @@ begin
     LFailSuite.TestSubtest('cleanup exception', @TestCleanupExceptionSwallowed);
     if not LFailSuite.Run then
     begin
-      WriteLn(AnsiRed('FAIL: cleanup exception should be swallowed'));
-      Halt(1);
+      FailTest('cleanup exception should be swallowed');
     end;
     LOutput := LErrSink.GetOutput;
     if Pos('WARNING cleanup error', LOutput) = 0 then
     begin
-      WriteLn(AnsiRed('FAIL: expected WARNING cleanup error in stderr'));
-      Halt(1);
+      FailTest('expected WARNING cleanup error in stderr');
     end;
     WriteLn(AnsiGreen('  Cleanup exception swallowed verified'));
   end;
@@ -673,24 +651,20 @@ begin
     LFailSuite.TestSubtest('log test', @TestLogCapture);
     if LFailSuite.Run then
     begin
-      WriteLn(AnsiRed('FAIL: suite with failing subtest should report failure'));
-      Halt(1);
+      FailTest('suite with failing subtest should report failure');
     end;
     LOutput := LOutSink.GetOutput;
     if Pos('debug info line 1', LOutput) = 0 then
     begin
-      WriteLn(AnsiRed('FAIL: expected "debug info line 1" in output'));
-      Halt(1);
+      FailTest('expected "debug info line 1" in output');
     end;
     if Pos('computed 1 + 2 = 3', LOutput) = 0 then
     begin
-      WriteLn(AnsiRed('FAIL: expected "computed 1 + 2 = 3" in output'));
-      Halt(1);
+      FailTest('expected "computed 1 + 2 = 3" in output');
     end;
     if Pos('hello from subtest', LOutput) > 0 then
     begin
-      WriteLn(AnsiRed('FAIL: passing subtest log should not appear in output'));
-      Halt(1);
+      FailTest('passing subtest log should not appear in output');
     end;
     WriteLn(AnsiGreen('  Log output on failure verified'));
   end;

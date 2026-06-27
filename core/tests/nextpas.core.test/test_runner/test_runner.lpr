@@ -132,13 +132,11 @@ begin
   LSuite.RunWithResult(LSkipResult);
   if LSkipResult.Skipped <> 2 then
   begin
-    WriteLn(AnsiRed('FAIL: expected 2 skipped, got '), LSkipResult.Skipped);
-    Halt(1);
+    FailTest('expected 2 skipped, got ' + IntToStr(LSkipResult.Skipped));
   end;
   if LSkipResult.Failed <> 0 then
   begin
-    WriteLn(AnsiRed('FAIL: expected 0 failed, got '), LSkipResult.Failed);
-    Halt(1);
+    FailTest('expected 0 failed, got ' + IntToStr(LSkipResult.Failed));
   end;
   WriteLn(AnsiGreen('OK: BeforeEach Skip'));
 end;
@@ -182,58 +180,48 @@ begin
 
   if not LRunnerA.RunAllWithResult(LResultsA) then
   begin
-    WriteLn(AnsiRed('FAIL: runner A should pass'));
-    Halt(1);
+    FailTest('runner A should pass');
   end;
   if not LRunnerB.RunAllWithResult(LResultsB) then
   begin
-    WriteLn(AnsiRed('FAIL: runner B should pass'));
-    Halt(1);
+    FailTest('runner B should pass');
   end;
 
   if (Length(LResultsA) <> 1) or (LResultsA[0].Passed <> 1) then
   begin
-    WriteLn(AnsiRed('FAIL: runner A should record exactly one passed test'));
-    Halt(1);
+    FailTest('runner A should record exactly one passed test');
   end;
   if (Length(LResultsB) <> 1) or (LResultsB[0].Passed <> 1) then
   begin
-    WriteLn(AnsiRed('FAIL: runner B should record exactly one passed test'));
-    Halt(1);
+    FailTest('runner B should record exactly one passed test');
   end;
 
   LOutputA := LOutA.GetOutput;
   LOutputB := LOutB.GetOutput;
   if Pos('alpha-only', LOutputA) = 0 then
   begin
-    WriteLn(AnsiRed('FAIL: runner A output should contain alpha-only'));
-    Halt(1);
+    FailTest('runner A output should contain alpha-only');
   end;
   if Pos('alpha-hidden', LOutputA) > 0 then
   begin
-    WriteLn(AnsiRed('FAIL: runner A output should not contain alpha-hidden'));
-    Halt(1);
+    FailTest('runner A output should not contain alpha-hidden');
   end;
   if Pos('beta-only', LOutputA) > 0 then
   begin
-    WriteLn(AnsiRed('FAIL: runner A output should not contain runner B tests'));
-    Halt(1);
+    FailTest('runner A output should not contain runner B tests');
   end;
 
   if Pos('beta-only', LOutputB) = 0 then
   begin
-    WriteLn(AnsiRed('FAIL: runner B output should contain beta-only'));
-    Halt(1);
+    FailTest('runner B output should contain beta-only');
   end;
   if Pos('beta-hidden', LOutputB) > 0 then
   begin
-    WriteLn(AnsiRed('FAIL: runner B output should not contain beta-hidden'));
-    Halt(1);
+    FailTest('runner B output should not contain beta-hidden');
   end;
   if Pos('alpha-only', LOutputB) > 0 then
   begin
-    WriteLn(AnsiRed('FAIL: runner B output should not contain runner A tests'));
-    Halt(1);
+    FailTest('runner B output should not contain runner A tests');
   end;
 
   WriteLn(AnsiGreen('OK: Runner config isolation'));
@@ -307,30 +295,25 @@ begin
 
   if GSetupCalled <> 1 then
   begin
-    WriteLn(AnsiRed('FAIL: Setup not called exactly once, got ' + IntToStr(GSetupCalled)));
-    Halt(1);
+    FailTest('Setup not called exactly once, got ' + IntToStr(GSetupCalled));
   end;
   if GTeardownCalled <> 1 then
   begin
-    WriteLn(AnsiRed('FAIL: Teardown not called exactly once, got ' + IntToStr(GTeardownCalled)));
-    Halt(1);
+    FailTest('Teardown not called exactly once, got ' + IntToStr(GTeardownCalled));
   end;
   if GBeforeEachCalled <> 4 then
   begin
-    WriteLn(AnsiRed('FAIL: BeforeEach not called exactly 4 times, got ' + IntToStr(GBeforeEachCalled)));
-    Halt(1);
+    FailTest('BeforeEach not called exactly 4 times, got ' + IntToStr(GBeforeEachCalled));
   end;
   if GAfterEachCalled <> 4 then
   begin
-    WriteLn(AnsiRed('FAIL: AfterEach not called exactly 4 times, got ' + IntToStr(GAfterEachCalled)));
-    Halt(1);
+    FailTest('AfterEach not called exactly 4 times, got ' + IntToStr(GAfterEachCalled));
   end;
 
   if not LPass then
   begin
     WriteLn;
-    WriteLn(AnsiRed('SOME TESTS FAILED'));
-    Halt(1);
+    FailTest('SOME TESTS FAILED');
   end;
 
   { ── B5.3: Lifecycle failure path tests ───────────────────────────────── }
@@ -347,23 +330,19 @@ begin
   end);
   if LFailSuite1.Run then
   begin
-    WriteLn(AnsiRed('FAIL: Setup failure should cause Run=False'));
-    Halt(1);
+    FailTest('Setup failure should cause Run=False');
   end;
   if LFailSuite1.LastPass <> 0 then
   begin
-    WriteLn(AnsiRed('FAIL: No tests should pass after setup failure'));
-    Halt(1);
+    FailTest('No tests should pass after setup failure');
   end;
   if not LFailSuite1.HasRun then
   begin
-    WriteLn(AnsiRed('FAIL: HasRun should be True after Run'));
-    Halt(1);
+    FailTest('HasRun should be True after Run');
   end;
   if LFailSuite1.LastFail < 1 then
   begin
-    WriteLn(AnsiRed('FAIL: Setup failure should count as failure'));
-    Halt(1);
+    FailTest('Setup failure should count as failure');
   end;
   WriteLn(AnsiGreen('OK: Setup failure path'));
 
@@ -386,13 +365,11 @@ begin
   end);
   if LFailSuite2.Run then
   begin
-    WriteLn(AnsiRed('FAIL: BeforeEach failure should cause Run=False'));
-    Halt(1);
+    FailTest('BeforeEach failure should cause Run=False');
   end;
   if LFailSuite2.LastFail < 1 then
   begin
-    WriteLn(AnsiRed('FAIL: At least 1 failure expected'));
-    Halt(1);
+    FailTest('At least 1 failure expected');
   end;
   WriteLn(AnsiGreen('OK: BeforeEach failure path'));
 
@@ -406,8 +383,7 @@ begin
   end);
   if not LFailSuite3.Run then
   begin
-    WriteLn(AnsiRed('FAIL: Teardown failure should not fail tests'));
-    Halt(1);
+    FailTest('Teardown failure should not fail tests');
   end;
   WriteLn(AnsiGreen('OK: Teardown failure path'));
 
@@ -423,13 +399,11 @@ begin
   LRunNestedR.Add(LRunNestedS2);
   if not LRunNestedR.RunAll then
   begin
-    WriteLn(AnsiRed('FAIL: RunAll aggregation should pass'));
-    Halt(1);
+    FailTest('RunAll aggregation should pass');
   end;
   if LRunNestedR.TotalPass <> 2 then
   begin
-    WriteLn(AnsiRed('FAIL: Expected 2 passes, got '), LRunNestedR.TotalPass);
-    Halt(1);
+    FailTest('Expected 2 passes, got ' + IntToStr(LRunNestedR.TotalPass));
   end;
   WriteLn(AnsiGreen('OK: RunAll aggregation'));
 
@@ -443,14 +417,12 @@ begin
   LCacheSuite.Run; { first run }
   if LRunCount <> 1 then
   begin
-    WriteLn(AnsiRed('FAIL: Expected 1 run, got '), LRunCount);
-    Halt(1);
+    FailTest('Expected 1 run, got ' + IntToStr(LRunCount));
   end;
   LCacheSuite.AllPassed; { should NOT re-run }
   if LRunCount <> 1 then
   begin
-    WriteLn(AnsiRed('FAIL: AllPassed should not re-run (count='), LRunCount, ')');
-    Halt(1);
+    FailTest('AllPassed should not re-run (count=' + IntToStr(LRunCount) + ')');
   end;
   WriteLn(AnsiGreen('OK: AllPassed caching'));
 
@@ -471,13 +443,11 @@ begin
   LSumRunner.Summary; { should not raise }
   if LSumRunner.TotalPass <> 1 then
   begin
-    WriteLn(AnsiRed('FAIL: Expected 1 pass, got '), LSumRunner.TotalPass);
-    Halt(1);
+    FailTest('Expected 1 pass, got ' + IntToStr(LSumRunner.TotalPass));
   end;
   if LSumRunner.TotalSkip <> 1 then
   begin
-    WriteLn(AnsiRed('FAIL: Expected 1 skip, got '), LSumRunner.TotalSkip);
-    Halt(1);
+    FailTest('Expected 1 skip, got ' + IntToStr(LSumRunner.TotalSkip));
   end;
   WriteLn(AnsiGreen('OK: Runner Summary'));
 
@@ -488,58 +458,47 @@ begin
   LResultSuite.Test('will pass 2', procedure begin CheckTrue(True); end);
   if not LResultSuite.RunWithResult(LRunWithResultResult) then
   begin
-    WriteLn(AnsiRed('FAIL: RunWithResult should return True'));
-    Halt(1);
+    FailTest('RunWithResult should return True');
   end;
   if LRunWithResultResult.SuiteName <> 'Result Test' then
   begin
-    WriteLn(AnsiRed('FAIL: SuiteName mismatch'));
-    Halt(1);
+    FailTest('SuiteName mismatch');
   end;
   if Length(LRunWithResultResult.Results) <> 3 then
   begin
-    WriteLn(AnsiRed('FAIL: Expected 3 results, got '), Length(LRunWithResultResult.Results));
-    Halt(1);
+    FailTest('Expected 3 results, got ' + IntToStr(Length(LRunWithResultResult.Results)));
   end;
   if LRunWithResultResult.Passed <> 2 then
   begin
-    WriteLn(AnsiRed('FAIL: Expected 2 passed, got '), LRunWithResultResult.Passed);
-    Halt(1);
+    FailTest('Expected 2 passed, got ' + IntToStr(LRunWithResultResult.Passed));
   end;
   if LRunWithResultResult.Skipped <> 1 then
   begin
-    WriteLn(AnsiRed('FAIL: Expected 1 skipped, got '), LRunWithResultResult.Skipped);
-    Halt(1);
+    FailTest('Expected 1 skipped, got ' + IntToStr(LRunWithResultResult.Skipped));
   end;
   if LRunWithResultResult.Failed <> 0 then
   begin
-    WriteLn(AnsiRed('FAIL: Expected 0 failed, got '), LRunWithResultResult.Failed);
-    Halt(1);
+    FailTest('Expected 0 failed, got ' + IntToStr(LRunWithResultResult.Failed));
   end;
   if not LRunWithResultResult.AllPassed then
   begin
-    WriteLn(AnsiRed('FAIL: AllPassed should be True'));
-    Halt(1);
+    FailTest('AllPassed should be True');
   end;
   if LRunWithResultResult.Results[0].Status <> tsPassed then
   begin
-    WriteLn(AnsiRed('FAIL: Result[0] should be tsPassed'));
-    Halt(1);
+    FailTest('Result[0] should be tsPassed');
   end;
   if LRunWithResultResult.Results[1].Status <> tsSkipped then
   begin
-    WriteLn(AnsiRed('FAIL: Result[1] should be tsSkipped'));
-    Halt(1);
+    FailTest('Result[1] should be tsSkipped');
   end;
   if LRunWithResultResult.Results[1].Message <> 'reason' then
   begin
-    WriteLn(AnsiRed('FAIL: Result[1] message should be "reason"'));
-    Halt(1);
+    FailTest('Result[1] message should be "reason"');
   end;
   if LRunWithResultResult.Results[2].Status <> tsPassed then
   begin
-    WriteLn(AnsiRed('FAIL: Result[2] should be tsPassed'));
-    Halt(1);
+    FailTest('Result[2] should be tsPassed');
   end;
   WriteLn(AnsiGreen('OK: RunWithResult'));
 
@@ -562,14 +521,12 @@ begin
   { First call triggers Run }
   if not LResultSuite.AllPassed then
   begin
-    WriteLn(AnsiRed('FAIL: AllPassed should be True on first call'));
-    Halt(1);
+    FailTest('AllPassed should be True on first call');
   end;
   { Second call should use cached result }
   if not LResultSuite.AllPassed then
   begin
-    WriteLn(AnsiRed('FAIL: AllPassed should be True on second call'));
-    Halt(1);
+    FailTest('AllPassed should be True on second call');
   end;
   WriteLn(AnsiGreen('OK: AllPassed caching'));
 
@@ -590,29 +547,21 @@ begin
       (3 sub + 1 subtest parent entry + 1 plain) }
     if Length(LSubtestResults.Results) <> 5 then
     begin
-      WriteLn(AnsiRed('FAIL: Expected 5 results (3 sub + 1 parent + 1 plain), got '),
-        Length(LSubtestResults.Results));
-      Halt(1);
+      FailTest('Expected 5 results (3 sub + 1 parent + 1 plain), got ' + IntToStr(Length(LSubtestResults.Results)));
     end;
     { Check subtest results are individually tracked
       Order: [0]=subtests(parent), [1]=plain pass, [2..4]=sub results }
     if LSubtestResults.Results[0].Name <> 'subtests' then
     begin
-      WriteLn(AnsiRed('FAIL: Result[0] name should be "subtests", got '),
-        LSubtestResults.Results[0].Name);
-      Halt(1);
+      FailTest('Result[0] name should be "subtests", got ' + LSubtestResults.Results[0].Name);
     end;
     if LSubtestResults.Results[2].Status <> tsPassed then
     begin
-      WriteLn(AnsiRed('FAIL: Subtest result[2] should be tsPassed, got '),
-        Ord(LSubtestResults.Results[2].Status));
-      Halt(1);
+      FailTest('Subtest result[2] should be tsPassed, got ' + IntToStr(Ord(LSubtestResults.Results[2].Status)));
     end;
     if Pos('subtests/', LSubtestResults.Results[2].Name) = 0 then
     begin
-      WriteLn(AnsiRed('FAIL: Subtest result name should contain "subtests/", got '),
-        LSubtestResults.Results[2].Name);
-      Halt(1);
+      FailTest('Subtest result name should contain "subtests/", got ' + LSubtestResults.Results[2].Name);
     end;
     WriteLn(AnsiGreen('OK: Subtest results collected'));
   end;
@@ -628,23 +577,19 @@ begin
     LResultSuite.RunParallelWithResult(nil, LParallelResult);
     if Length(LParallelResult.Results) <> 3 then
     begin
-      WriteLn(AnsiRed('FAIL: Expected 3 results, got '), Length(LParallelResult.Results));
-      Halt(1);
+      FailTest('Expected 3 results, got ' + IntToStr(Length(LParallelResult.Results)));
     end;
     if LParallelResult.Passed <> 2 then
     begin
-      WriteLn(AnsiRed('FAIL: Expected 2 passed, got '), LParallelResult.Passed);
-      Halt(1);
+      FailTest('Expected 2 passed, got ' + IntToStr(LParallelResult.Passed));
     end;
     if LParallelResult.Skipped <> 1 then
     begin
-      WriteLn(AnsiRed('FAIL: Expected 1 skipped, got '), LParallelResult.Skipped);
-      Halt(1);
+      FailTest('Expected 1 skipped, got ' + IntToStr(LParallelResult.Skipped));
     end;
     if not LParallelResult.AllPassed then
     begin
-      WriteLn(AnsiRed('FAIL: AllPassed should be True'));
-      Halt(1);
+      FailTest('AllPassed should be True');
     end;
     WriteLn(AnsiGreen('OK: RunParallelWithResult'));
   end;
@@ -663,23 +608,19 @@ begin
     LRunNestedR.Add(LRunNestedS2);
     if not LRunNestedR.RunAllWithResult(LRunAllSuiteResults) then
     begin
-      WriteLn(AnsiRed('FAIL: RunAllWithResult should return True'));
-      Halt(1);
+      FailTest('RunAllWithResult should return True');
     end;
     if Length(LRunAllSuiteResults) <> 2 then
     begin
-      WriteLn(AnsiRed('FAIL: Expected 2 suite results, got '), Length(LRunAllSuiteResults));
-      Halt(1);
+      FailTest('Expected 2 suite results, got ' + IntToStr(Length(LRunAllSuiteResults)));
     end;
     if LRunAllSuiteResults[0].SuiteName <> 'SuiteX' then
     begin
-      WriteLn(AnsiRed('FAIL: First suite name should be SuiteX'));
-      Halt(1);
+      FailTest('First suite name should be SuiteX');
     end;
     if LRunAllSuiteResults[1].Passed <> 1 then
     begin
-      WriteLn(AnsiRed('FAIL: SuiteY should have 1 pass, got '), LRunAllSuiteResults[1].Passed);
-      Halt(1);
+      FailTest('SuiteY should have 1 pass, got ' + IntToStr(LRunAllSuiteResults[1].Passed));
     end;
     WriteLn(AnsiGreen('OK: RunAllWithResult'));
   end;
@@ -696,24 +637,19 @@ begin
     SetTestTimeout(0);
     if LTimeoutResult.AllPassed then
     begin
-      WriteLn(AnsiRed('FAIL: timed-out test should not be AllPassed'));
-      Halt(1);
+      FailTest('timed-out test should not be AllPassed');
     end;
     if Length(LTimeoutResult.Results) <> 1 then
     begin
-      WriteLn(AnsiRed('FAIL: Expected 1 result, got '), Length(LTimeoutResult.Results));
-      Halt(1);
+      FailTest('Expected 1 result, got ' + IntToStr(Length(LTimeoutResult.Results)));
     end;
     if LTimeoutResult.Results[0].Status <> tsError then
     begin
-      WriteLn(AnsiRed('FAIL: Expected tsError status, got '), Ord(LTimeoutResult.Results[0].Status));
-      Halt(1);
+      FailTest('Expected tsError status, got ' + IntToStr(Ord(LTimeoutResult.Results[0].Status)));
     end;
     if Pos('timed out', LowerCase(LTimeoutResult.Results[0].Message)) = 0 then
     begin
-      WriteLn(AnsiRed('FAIL: Expected timeout message, got '),
-        LTimeoutResult.Results[0].Message);
-      Halt(1);
+      FailTest('Expected timeout message, got ' + LTimeoutResult.Results[0].Message);
     end;
     WriteLn(AnsiGreen('OK: Timeout trigger verified'));
   end;
@@ -729,18 +665,15 @@ begin
     SetTestFilter('bbb');
     if not LFilterSuite.RunWithResult(LFilterResult) then
     begin
-      WriteLn(AnsiRed('FAIL: filter match should pass'));
-      Halt(1);
+      FailTest('filter match should pass');
     end;
     if LFilterResult.Passed <> 1 then
     begin
-      WriteLn(AnsiRed('FAIL: filter match expected 1 passed, got '), LFilterResult.Passed);
-      Halt(1);
+      FailTest('filter match expected 1 passed, got ' + IntToStr(LFilterResult.Passed));
     end;
     if LFilterResult.Skipped <> 0 then
     begin
-      WriteLn(AnsiRed('FAIL: filter match expected 0 skipped (filtered=invisible), got '), LFilterResult.Skipped);
-      Halt(1);
+      FailTest('filter match expected 0 skipped (filtered=invisible), got ' + IntToStr(LFilterResult.Skipped));
     end;
     SetTestFilter('');
     WriteLn(AnsiGreen('OK: Filter matches specific test'));
@@ -754,18 +687,15 @@ begin
     SetTestFilter('zzz_nonexistent');
     if not LFilterSuite.RunWithResult(LFilterResult) then
     begin
-      WriteLn(AnsiRed('FAIL: filter no-match should still return True'));
-      Halt(1);
+      FailTest('filter no-match should still return True');
     end;
     if LFilterResult.Passed <> 0 then
     begin
-      WriteLn(AnsiRed('FAIL: filter no-match expected 0 passed, got '), LFilterResult.Passed);
-      Halt(1);
+      FailTest('filter no-match expected 0 passed, got ' + IntToStr(LFilterResult.Passed));
     end;
     if LFilterResult.Skipped <> 0 then
     begin
-      WriteLn(AnsiRed('FAIL: filter no-match expected 0 skipped, got '), LFilterResult.Skipped);
-      Halt(1);
+      FailTest('filter no-match expected 0 skipped, got ' + IntToStr(LFilterResult.Skipped));
     end;
     SetTestFilter('');
     WriteLn(AnsiGreen('OK: Filter matches nothing -> all invisible'));
@@ -779,18 +709,15 @@ begin
     SetTestFilter('');
     if not LFilterSuite.RunWithResult(LFilterResult) then
     begin
-      WriteLn(AnsiRed('FAIL: empty filter should pass'));
-      Halt(1);
+      FailTest('empty filter should pass');
     end;
     if LFilterResult.Passed <> 2 then
     begin
-      WriteLn(AnsiRed('FAIL: empty filter expected 2 passed, got '), LFilterResult.Passed);
-      Halt(1);
+      FailTest('empty filter expected 2 passed, got ' + IntToStr(LFilterResult.Passed));
     end;
     if LFilterResult.Skipped <> 0 then
     begin
-      WriteLn(AnsiRed('FAIL: empty filter expected 0 skipped, got '), LFilterResult.Skipped);
-      Halt(1);
+      FailTest('empty filter expected 0 skipped, got ' + IntToStr(LFilterResult.Skipped));
     end;
     WriteLn(AnsiGreen('OK: Empty filter runs everything'));
   end;
@@ -804,18 +731,15 @@ begin
     SetTestFilter('b*');
     if not LFilterSuite.RunWithResult(LFilterResult) then
     begin
-      WriteLn(AnsiRed('FAIL: glob filter should pass'));
-      Halt(1);
+      FailTest('glob filter should pass');
     end;
     if LFilterResult.Passed <> 1 then
     begin
-      WriteLn(AnsiRed('FAIL: glob b* expected 1 passed, got '), LFilterResult.Passed);
-      Halt(1);
+      FailTest('glob b* expected 1 passed, got ' + IntToStr(LFilterResult.Passed));
     end;
     if LFilterResult.Skipped <> 0 then
     begin
-      WriteLn(AnsiRed('FAIL: glob b* expected 0 skipped, got '), LFilterResult.Skipped);
-      Halt(1);
+      FailTest('glob b* expected 0 skipped, got ' + IntToStr(LFilterResult.Skipped));
     end;
     SetTestFilter('');
     WriteLn(AnsiGreen('OK: Glob filter (b* matches beta)'));
@@ -826,23 +750,19 @@ begin
     LEmptySuite := TTestSuite.Create('Empty');
     if not LEmptySuite.RunWithResult(LEmptyResult) then
     begin
-      WriteLn(AnsiRed('FAIL: Empty suite should return True (AllPassed)'));
-      Halt(1);
+      FailTest('Empty suite should return True (AllPassed)');
     end;
     if not LEmptyResult.AllPassed then
     begin
-      WriteLn(AnsiRed('FAIL: Empty suite AllPassed should be True'));
-      Halt(1);
+      FailTest('Empty suite AllPassed should be True');
     end;
     if LEmptyResult.Passed <> 0 then
     begin
-      WriteLn(AnsiRed('FAIL: Empty suite Passed should be 0'));
-      Halt(1);
+      FailTest('Empty suite Passed should be 0');
     end;
     if LEmptyResult.Skipped <> 0 then
     begin
-      WriteLn(AnsiRed('FAIL: Empty suite Skipped should be 0'));
-      Halt(1);
+      FailTest('Empty suite Skipped should be 0');
     end;
     WriteLn(AnsiGreen('OK: Empty suite run'));
   end;
@@ -854,18 +774,15 @@ begin
     { 白盒测试：直接验证 runner 内部命令行解析 helper。 }
     if nextpas.core.test.runner.ParseFilter('--filter=alpha') <> 'alpha' then
     begin
-      WriteLn(AnsiRed('FAIL: ParseFilter should extract alpha'));
-      Halt(1);
+      FailTest('ParseFilter should extract alpha');
     end;
     if nextpas.core.test.runner.ParseFilter('--other=beta') <> '' then
     begin
-      WriteLn(AnsiRed('FAIL: ParseFilter should ignore unrelated args'));
-      Halt(1);
+      FailTest('ParseFilter should ignore unrelated args');
     end;
     if nextpas.core.test.runner.ParseFilter('--filter=foo=bar') <> 'foo=bar' then
     begin
-      WriteLn(AnsiRed('FAIL: ParseFilter should preserve embedded equals'));
-      Halt(1);
+      FailTest('ParseFilter should preserve embedded equals');
     end;
     WriteLn(AnsiGreen('OK: ParseFilter helper'));
   end;
@@ -875,18 +792,15 @@ begin
   begin
     if nextpas.core.test.runner.ParseTag('--tag=fast') <> 'fast' then
     begin
-      WriteLn(AnsiRed('FAIL: ParseTag should extract fast'));
-      Halt(1);
+      FailTest('ParseTag should extract fast');
     end;
     if nextpas.core.test.runner.ParseTag('--other=fast') <> '' then
     begin
-      WriteLn(AnsiRed('FAIL: ParseTag should ignore unrelated args'));
-      Halt(1);
+      FailTest('ParseTag should ignore unrelated args');
     end;
     if nextpas.core.test.runner.ParseTag('--tag=core-http') <> 'core-http' then
     begin
-      WriteLn(AnsiRed('FAIL: ParseTag should preserve hyphenated values'));
-      Halt(1);
+      FailTest('ParseTag should preserve hyphenated values');
     end;
     WriteLn(AnsiGreen('OK: ParseTag helper'));
   end;
@@ -901,35 +815,29 @@ begin
     AddLine(LLines59, 'third');
     if Length(LLines59) <> 3 then
     begin
-      WriteLn(AnsiRed('FAIL: expected 3 lines after AddLine, got '), Length(LLines59));
-      Halt(1);
+      FailTest('expected 3 lines after AddLine, got ' + IntToStr(Length(LLines59)));
     end;
     if LLines59[0] <> 'first' then
     begin
-      WriteLn(AnsiRed('FAIL: expected "first", got "'), LLines59[0], '"');
-      Halt(1);
+      FailTest('expected "first", got "' + LLines59[0] + '"');
     end;
     if LLines59[2] <> 'third' then
     begin
-      WriteLn(AnsiRed('FAIL: expected "third", got "'), LLines59[2], '"');
-      Halt(1);
+      FailTest('expected "third", got "' + LLines59[2] + '"');
     end;
 
     LJoined59 := JoinLines(LLines59);
     if Pos('first', LJoined59) = 0 then
     begin
-      WriteLn(AnsiRed('FAIL: JoinLines should contain "first"'));
-      Halt(1);
+      FailTest('JoinLines should contain "first"');
     end;
     if Pos('second', LJoined59) = 0 then
     begin
-      WriteLn(AnsiRed('FAIL: JoinLines should contain "second"'));
-      Halt(1);
+      FailTest('JoinLines should contain "second"');
     end;
     if Pos('third', LJoined59) = 0 then
     begin
-      WriteLn(AnsiRed('FAIL: JoinLines should contain "third"'));
-      Halt(1);
+      FailTest('JoinLines should contain "third"');
     end;
     WriteLn(AnsiGreen('OK: AddLine / JoinLines'));
   end;
@@ -939,8 +847,7 @@ begin
     SetLength(LEmpty59, 0);
     if JoinLines(LEmpty59) <> '' then
     begin
-      WriteLn(AnsiRed('FAIL: JoinLines on empty array should return empty string'));
-      Halt(1);
+      FailTest('JoinLines on empty array should return empty string');
     end;
     WriteLn(AnsiGreen('OK: JoinLines empty'));
   end;
@@ -952,33 +859,27 @@ begin
     LDefaults60 := TTestRunResult.Create('my_suite');
     if LDefaults60.SuiteName <> 'my_suite' then
     begin
-      WriteLn(AnsiRed('FAIL: SuiteName should be my_suite'));
-      Halt(1);
+      FailTest('SuiteName should be my_suite');
     end;
     if LDefaults60.Passed <> 0 then
     begin
-      WriteLn(AnsiRed('FAIL: Passed should be 0, got '), LDefaults60.Passed);
-      Halt(1);
+      FailTest('Passed should be 0, got ' + IntToStr(LDefaults60.Passed));
     end;
     if LDefaults60.Failed <> 0 then
     begin
-      WriteLn(AnsiRed('FAIL: Failed should be 0, got '), LDefaults60.Failed);
-      Halt(1);
+      FailTest('Failed should be 0, got ' + IntToStr(LDefaults60.Failed));
     end;
     if LDefaults60.Skipped <> 0 then
     begin
-      WriteLn(AnsiRed('FAIL: Skipped should be 0, got '), LDefaults60.Skipped);
-      Halt(1);
+      FailTest('Skipped should be 0, got ' + IntToStr(LDefaults60.Skipped));
     end;
     if not LDefaults60.AllPassed then
     begin
-      WriteLn(AnsiRed('FAIL: AllPassed should be True for fresh TTestRunResult'));
-      Halt(1);
+      FailTest('AllPassed should be True for fresh TTestRunResult');
     end;
     if Length(LDefaults60.Results) <> 0 then
     begin
-      WriteLn(AnsiRed('FAIL: Results should be empty'));
-      Halt(1);
+      FailTest('Results should be empty');
     end;
     WriteLn(AnsiGreen('OK: TTestRunResult defaults'));
   end;
@@ -999,18 +900,15 @@ begin
     { R6-68: Use exact value checks, not weak "Count > 0" }
     if LExactRunner68.TotalPass <> 2 then
     begin
-      WriteLn(AnsiRed('FAIL: expected exactly 2 passes, got '), LExactRunner68.TotalPass);
-      Halt(1);
+      FailTest('expected exactly 2 passes, got ' + IntToStr(LExactRunner68.TotalPass));
     end;
     if LExactRunner68.TotalFail <> 0 then
     begin
-      WriteLn(AnsiRed('FAIL: expected exactly 0 failures, got '), LExactRunner68.TotalFail);
-      Halt(1);
+      FailTest('expected exactly 0 failures, got ' + IntToStr(LExactRunner68.TotalFail));
     end;
     if LExactRunner68.TotalSkip <> 1 then
     begin
-      WriteLn(AnsiRed('FAIL: expected exactly 1 skip, got '), LExactRunner68.TotalSkip);
-      Halt(1);
+      FailTest('expected exactly 1 skip, got ' + IntToStr(LExactRunner68.TotalSkip));
     end;
     WriteLn(AnsiGreen('OK: Exact-value assertions'));
   end;
@@ -1040,13 +938,11 @@ begin
     end);
     if not LResultSuite.Run then
     begin
-      WriteLn(AnsiRed('FAIL: With* chain should pass'));
-      Halt(1);
+      FailTest('With* chain should pass');
     end;
     if LRunCount <> 2 then
     begin
-      WriteLn(AnsiRed('FAIL: expected 2 tests run, got '), LRunCount);
-      Halt(1);
+      FailTest('expected 2 tests run, got ' + IntToStr(LRunCount));
     end;
     WriteLn(AnsiGreen('OK: With* builder pattern'));
   end;
@@ -1064,13 +960,11 @@ begin
     end);
     if not LResultSuite.Run then
     begin
-      WriteLn(AnsiRed('FAIL: mixed API should pass'));
-      Halt(1);
+      FailTest('mixed API should pass');
     end;
     if LRunCount <> 1 then
     begin
-      WriteLn(AnsiRed('FAIL: expected 1 test run, got '), LRunCount);
-      Halt(1);
+      FailTest('expected 1 test run, got ' + IntToStr(LRunCount));
     end;
     WriteLn(AnsiGreen('OK: Mixed API compatibility'));
   end;
@@ -1082,32 +976,23 @@ begin
     LResultSuite.Test('log and fail', @TestRegularLogFailure);
     if LResultSuite.RunWithResult(LRegularLogResult) then
     begin
-      WriteLn(AnsiRed('FAIL: logged failure test should return False'));
-      Halt(1);
+      FailTest('logged failure test should return False');
     end;
     if Length(LRegularLogResult.Results) <> 1 then
     begin
-      WriteLn(AnsiRed('FAIL: expected 1 logged result, got '),
-        Length(LRegularLogResult.Results));
-      Halt(1);
+      FailTest('expected 1 logged result, got ' + IntToStr(Length(LRegularLogResult.Results)));
     end;
     if LRegularLogResult.Results[0].Status <> tsFailed then
     begin
-      WriteLn(AnsiRed('FAIL: logged result should be tsFailed, got '),
-        Ord(LRegularLogResult.Results[0].Status));
-      Halt(1);
+      FailTest('logged result should be tsFailed, got ' + IntToStr(Ord(LRegularLogResult.Results[0].Status)));
     end;
     if Length(LRegularLogResult.Results[0].CapturedLog) <> 1 then
     begin
-      WriteLn(AnsiRed('FAIL: expected exactly 1 captured log line, got '),
-        Length(LRegularLogResult.Results[0].CapturedLog));
-      Halt(1);
+      FailTest('expected exactly 1 captured log line, got ' + IntToStr(Length(LRegularLogResult.Results[0].CapturedLog)));
     end;
     if LRegularLogResult.Results[0].CapturedLog[0] <> 'hello' then
     begin
-      WriteLn(AnsiRed('FAIL: captured log mismatch, got '),
-        LRegularLogResult.Results[0].CapturedLog[0]);
-      Halt(1);
+      FailTest('captured log mismatch, got ' + LRegularLogResult.Results[0].CapturedLog[0]);
     end;
     WriteLn(AnsiGreen('OK: Regular test captured log'));
   end;

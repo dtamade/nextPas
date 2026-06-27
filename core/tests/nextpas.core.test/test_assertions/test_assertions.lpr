@@ -660,8 +660,7 @@ begin
   if not LSuite.Run then
   begin
     WriteLn;
-    WriteLn(AnsiRed('SOME TESTS FAILED'));
-    Halt(1);
+    FailTest('SOME TESTS FAILED');
   end;
   WriteLn;
   WriteLn(AnsiGreen('ALL PASSED'));

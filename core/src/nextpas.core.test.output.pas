@@ -53,6 +53,12 @@ function FormatStatusLine(AStatus: TTestStatus; const AName: string;
 function FormatFailDetail(const AMsg: string;
   const AConfig: TTestConfig): string;
 
+{ ── Meta-Test Helpers (for test programs that verify the framework) ───────── }
+
+procedure FailTest(const AMsg: string);
+  { Print red 'FAIL: ...' message and Halt(1). For meta-tests that run outside
+    the framework and cannot use Check* assertions. }
+
 { ── Test Filter ───────────────────────────────────────────────────────────── }
 
 procedure SetTestFilter(const APattern: string);
@@ -305,6 +311,14 @@ begin
     Result := AnsiDim(AMsg, AConfig)
   else
     Result := AnsiDim('(assertion failed)', AConfig);
+end;
+
+{ Meta-Test Helpers }
+
+procedure FailTest(const AMsg: string);
+begin
+  WriteLn(AnsiRed('FAIL: ' + AMsg));
+  Halt(1);
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }
