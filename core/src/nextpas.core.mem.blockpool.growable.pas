@@ -17,6 +17,7 @@ uses
   nextpas.core.base.utils,
   nextpas.core.math,              // ✅ Math facade (for trunc)
   nextpas.core.mem.base,
+  nextpas.core.mem.utils,
   nextpas.core.mem.pool.base,     // DefaultAcquireN / DefaultReleaseN (CS-001)
   nextpas.core.mem.blockpool,
   nextpas.core.mem.intf,
@@ -251,8 +252,6 @@ end;
 function TGrowingBlockPool.NextGrowthBlocks: SizeUInt;
 var
   LStep: SizeUInt;
-  LFactor: Double;
-  LDesiredTotalF: Double;
   LDesiredTotal: SizeUInt;
   LAdd: SizeUInt;
 begin
@@ -273,28 +272,7 @@ begin
       if FTotalCapacity = 0 then
         Exit(64);
 
-      LFactor := FGrowthFactor;
-      if LFactor < 1.1 then
-        LFactor := 2.0;
-
-      LDesiredTotalF := Double(FTotalCapacity) * LFactor;
-      if LDesiredTotalF > Double(High(SizeUInt)) then
-        LDesiredTotal := High(SizeUInt)
-      else
-      begin
-        LDesiredTotal := SizeUInt(Trunc(LDesiredTotalF));
-        if Double(LDesiredTotal) < LDesiredTotalF then
-          Inc(LDesiredTotal);
-      end;
-
-      if LDesiredTotal <= FTotalCapacity then
-      begin
-        if FTotalCapacity > (High(SizeUInt) - FTotalCapacity) then
-          LDesiredTotal := High(SizeUInt)
-        else
-          LDesiredTotal := FTotalCapacity + FTotalCapacity;
-      end;
-
+      LDesiredTotal := CalcGeometricGrowth(FTotalCapacity, FGrowthFactor);
       LAdd := LDesiredTotal - FTotalCapacity;
       if LAdd = 0 then
         LAdd := 1;

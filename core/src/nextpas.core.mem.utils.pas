@@ -125,6 +125,15 @@ function IsOverlap(aPtr1, aPtr2: Pointer; aSize: SizeUInt): Boolean; overload; {
  *}
 function IsOverlapUnChecked(aPtr1, aPtr2: Pointer; aSize: SizeUInt): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
+{** @desc 几何增长计算（带溢出保护 + 单调递增保证）。
+ *  适用于分段池、可增长块池等需要按比例扩容的场景。
+ *  GrowthFactor < 1.1 自动修正为 2.0。
+ * @param aCurrentCapacity  当前总容量（字节或块数）。
+ * @param aGrowthFactor     增长倍数（如 2.0 表示翻倍）。
+ * @return 下一目标容量。
+ *}
+function CalcGeometricGrowth(aCurrentCapacity: SizeUInt; aGrowthFactor: Double): SizeUInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+
 
 {**
  * Copy
@@ -1335,6 +1344,36 @@ function ChooseShardIndex(AThreadId: QWord; aShardMask: SizeUInt): Integer;
 begin
   if aShardMask = 0 then Exit(0);
   Result := Integer(MulHash64(AThreadId) and QWord(aShardMask));
+end;
+
+{ Geometric growth calculation }
+
+function CalcGeometricGrowth(aCurrentCapacity: SizeUInt; aGrowthFactor: Double): SizeUInt;
+var
+  LFactor: Double;
+  LDesiredF: Double;
+  LDesired: SizeUInt;
+begin
+  LFactor := aGrowthFactor;
+  if LFactor < 1.1 then
+    LFactor := 2.0;
+  LDesiredF := Double(aCurrentCapacity) * LFactor;
+  if LDesiredF > Double(High(SizeUInt)) then
+    LDesired := High(SizeUInt)
+  else
+  begin
+    LDesired := SizeUInt(Trunc(LDesiredF));
+    if Double(LDesired) < LDesiredF then
+      Inc(LDesired);
+  end;
+  if LDesired <= aCurrentCapacity then
+  begin
+    if aCurrentCapacity > High(SizeUInt) div 2 then
+      LDesired := High(SizeUInt)
+    else
+      LDesired := aCurrentCapacity * 2;
+  end;
+  Result := LDesired;
 end;
 
 end.

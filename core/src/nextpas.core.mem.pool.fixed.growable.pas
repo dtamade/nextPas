@@ -7,8 +7,8 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.base.utils,
-  nextpas.core.math,              // ✅ Math facade (for trunc)
   nextpas.core.mem.base,          // Log2UInt, IsPowerOfTwo, NextPowerOfTwo
+  nextpas.core.mem.utils,         // CalcGeometricGrowth
   nextpas.core.mem.error,
   nextpas.core.mem.pool.base,     // IPool (decoupled)
   nextpas.core.mem.allocator;     // IAllocator + GetRtlAllocator
@@ -192,8 +192,6 @@ end;
 constructor TGrowingFixedPool.Create(const aConfig: TGrowingFixedPoolConfig);
 var
   LInitCap: SizeUInt;
-  LShift: SizeUInt;
-  LTmp: SizeUInt;
 begin
   inherited Create;
 
@@ -318,8 +316,6 @@ end;
 function TGrowingFixedPool.NextGrowthSize: SizeUInt;
 var
   LStep: SizeUInt;
-  LFactor: Double;
-  LDesiredTotalF: Double;
   LDesiredTotal: SizeUInt;
   LAdd: SizeUInt;
 begin
@@ -341,28 +337,7 @@ begin
       if FTotalCapacity = 0 then
         Exit(64);
 
-      LFactor := FConfig.GrowthFactor;
-      if LFactor < 1.1 then
-        LFactor := 2.0;
-
-      LDesiredTotalF := Double(FTotalCapacity) * LFactor;
-      if LDesiredTotalF > Double(High(SizeUInt)) then
-        LDesiredTotal := High(SizeUInt)
-      else
-      begin
-        LDesiredTotal := SizeUInt(Trunc(LDesiredTotalF));
-        if Double(LDesiredTotal) < LDesiredTotalF then
-          Inc(LDesiredTotal);
-      end;
-
-      if LDesiredTotal <= FTotalCapacity then
-      begin
-        if FTotalCapacity > (High(SizeUInt) - FTotalCapacity) then
-          LDesiredTotal := High(SizeUInt)
-        else
-          LDesiredTotal := FTotalCapacity + FTotalCapacity;
-      end;
-
+      LDesiredTotal := CalcGeometricGrowth(FTotalCapacity, FConfig.GrowthFactor);
       LAdd := LDesiredTotal - FTotalCapacity;
       if LAdd = 0 then
         LAdd := 1;
