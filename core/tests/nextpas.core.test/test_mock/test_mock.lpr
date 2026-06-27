@@ -339,7 +339,7 @@ begin
       Halt(1);
     except
       on E: EAssertionFailed do
-        Check(Pos('exactly', LowerCase(E.Message)) > 0, 'exactly fail msg');
+        CheckContains(LowerCase(E.Message), 'exactly');
     end;
   finally
     LM.Free;
@@ -358,7 +358,7 @@ begin
       Halt(1);
     except
       on E: EAssertionFailed do
-        Check(Pos('exactly', LowerCase(E.Message)) > 0, 'never fail msg');
+        CheckContains(LowerCase(E.Message), 'exactly');
     end;
   finally
     LM.Free;
@@ -378,7 +378,7 @@ begin
       Halt(1);
     except
       on E: EAssertionFailed do
-        Check(Pos('exactly', LowerCase(E.Message)) > 0, 'once fail msg');
+        CheckContains(LowerCase(E.Message), 'exactly');
     end;
   finally
     LM.Free;
@@ -397,7 +397,7 @@ begin
       Halt(1);
     except
       on E: EAssertionFailed do
-        Check(Pos('at least', LowerCase(E.Message)) > 0, 'at least fail msg');
+        CheckContains(LowerCase(E.Message), 'at least');
     end;
   finally
     LM.Free;
@@ -418,7 +418,7 @@ begin
       Halt(1);
     except
       on E: EAssertionFailed do
-        Check(Pos('at most', LowerCase(E.Message)) > 0, 'at most fail msg');
+        CheckContains(LowerCase(E.Message), 'at most');
     end;
   finally
     LM.Free;

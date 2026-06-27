@@ -88,7 +88,7 @@ begin
         Halt(1);
       except
         on E: EAssertionFailed do
-          Check(Pos('sub-assertion', E.Message) > 0);
+          CheckContains(E.Message, 'sub-assertion');
       end;
     end);
 end;
