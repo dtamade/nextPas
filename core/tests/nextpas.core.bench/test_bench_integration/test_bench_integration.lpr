@@ -15,6 +15,7 @@ uses
   nextpas.core.time.base,
   nextpas.core.fs,
   nextpas.core.fs.base,
+  nextpas.core.id.xid,
   nextpas.core.bench,
   nextpas.core.bench.base,
   nextpas.core.bench.intf,
@@ -1316,6 +1317,67 @@ begin
   Check(LComparisons[1].BaselineNsPerOp = 100.0, 'Baseline[1] NsPerOp = 100.0');
 end;
 
+procedure TestSaveBaseline_RoundTrip;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+  LPath: string;
+  LContent: string;
+begin
+  LPath := '/tmp/nextpas_bench_SaveBaseline_' + XidNew + '.json';
+  LSuite := CreateFastSuite('SaveBaselineTest');
+  LSuite.Add('Fast', @BenchFast);
+  LSuite.SetQuiet(True);
+  LResults := LSuite.Run;
+  LResults.SaveBaseline(LPath, 'abc123');
+
+  { 验证文件存在且包含正确的 JSON 结构 }
+  Check(FileExists(LPath), 'SaveBaseline: file created');
+  LContent := ReadFileText(LPath);
+  CheckContains(LContent, '"baselines"');
+  CheckContains(LContent, '"Fast"');
+  CheckContains(LContent, '"abc123"');
+
+  { 清理 }
+  DeleteFile(LPath);
+end;
+
+procedure TestAppendToTimeline;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+  LPath: string;
+  LContent: string;
+  LLineCount: Integer;
+  I: Integer;
+begin
+  LPath := '/tmp/nextpas_bench_Timeline_' + XidNew + '.jsonl';
+  LSuite := CreateFastSuite('TimelineTest');
+  LSuite.Add('Fast', @BenchFast);
+  LSuite.SetQuiet(True);
+  LResults := LSuite.Run;
+  LResults.AppendToTimeline(LPath);
+
+  { 验证文件存在且包含 JSONL 行 }
+  Check(FileExists(LPath), 'AppendToTimeline: file created');
+  LContent := ReadFileText(LPath);
+  CheckContains(LContent, '"name"');
+  CheckContains(LContent, '"Fast"');
+  CheckContains(LContent, '"nsPerOp"');
+  CheckContains(LContent, '"timestamp"');
+
+  { 追加第二次 — 验证 append 语义 }
+  LResults.AppendToTimeline(LPath);
+  LContent := ReadFileText(LPath);
+  LLineCount := 0;
+  for I := 1 to Length(LContent) do
+    if LContent[I] = #10 then Inc(LLineCount);
+  Check(LLineCount >= 2, 'AppendToTimeline: 2+ JSONL lines after second append');
+
+  { 清理 }
+  DeleteFile(LPath);
+end;
+
 var
   T: TTestSuite;
 begin
@@ -1365,6 +1427,8 @@ begin
     T.Test('ToBenchstat_Integration', @TestToBenchstat_Integration);
     T.Test('CreateWithConfig', @TestTBenchSuite_CreateWithConfig);
     T.Test('AddBaselines', @TestTBenchSuite_AddBaselines);
+    T.Test('SaveBaseline_RoundTrip', @TestSaveBaseline_RoundTrip);
+    T.Test('AppendToTimeline', @TestAppendToTimeline);
     T.Run;
     T.Summary;
   finally

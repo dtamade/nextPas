@@ -297,6 +297,21 @@ begin
   CheckNear(25000000.0, LResult.NsPerOp, 1.0, 'ms/op conversion');
 end;
 
+procedure Test_GoBench_UnicodeMicroSign;
+var
+  LResult: TBenchResult;
+begin
+  { GL-01: Go's standard output uses µs/op (Unicode micro sign $B5), not us/op }
+  LResult := ParseGoBenchLine('BenchmarkParseJSON-8   50000   24.5µs/op');
+  CheckNear(24500.0, LResult.NsPerOp, 1.0, 'µs/op glued format (Unicode)');
+  Check(LResult.Name = 'BenchmarkParseJSON', 'µs/op: name preserved');
+  Check(LResult.Iterations = 50000, 'µs/op: iterations parsed');
+
+  { Also test space-separated µs/op }
+  LResult := ParseGoBenchLine('BenchmarkHTTP-4   10000   1.50 µs/op');
+  CheckNear(1500.0, LResult.NsPerOp, 1.0, 'µs/op space-separated (Unicode)');
+end;
+
 procedure TestMultipleDashes;
 var
   LResult: TBenchResult;
@@ -455,6 +470,7 @@ begin
   T.Test('go: large ops values', @Test_GoBench_LargeOps);
   T.Test('go: us/op conversion', @Test_GoBench_UsPerOp);
   T.Test('go: ms/op conversion', @Test_GoBench_MsPerOp);
+  T.Test('go: µs/op unicode', @Test_GoBench_UnicodeMicroSign);
   T.Test('go: multiple dashes in name', @TestMultipleDashes);
 
   { Rust Bench Parser }

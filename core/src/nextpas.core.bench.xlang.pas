@@ -161,17 +161,46 @@ var
   LParts: TStringArray;
   LValue: Double;
   LUnit: string;
+  LCombinedValue: string;
+  LCombinedUnit: string;
+  LI: Integer;
 begin
   Result := 0;
   LParts := StringsSplit(AStr, ' ', True);
-  if Length(LParts) < 2 then Exit;
+  if Length(LParts) < 2 then
+  begin
+    { GL-01: Handle Go's glued format "1.50µs/op" (no space between value and unit).
+      Go's testing package outputs µs/op as a single token when time > 1µs.
+      Scan backwards to find where digits/dot/±/e end and the unit begins. }
+    if Length(LParts) = 1 then
+    begin
+      LI := Length(LParts[0]);
+      while (LI >= 1) and not (LParts[0][LI] in ['0'..'9', '.', '+', '-', 'e', 'E']) do
+        Dec(LI);
+      if LI >= 1 then
+      begin
+        LCombinedValue := Copy(LParts[0], 1, LI);
+        LCombinedUnit := Copy(LParts[0], LI + 1, MaxInt);
+        LValue := StrToFloatDef(LCombinedValue, 0);
+        if LCombinedUnit = 'ns/op' then
+          Result := LValue
+        else if (LCombinedUnit = 'us/op') or (LCombinedUnit = 'µs/op') then
+          Result := LValue * 1000
+        else if LCombinedUnit = 'ms/op' then
+          Result := LValue * 1000000
+        else if LCombinedUnit = 's/op' then
+          Result := LValue * 1000000000;
+      end;
+    end;
+    Exit;
+  end;
 
   LValue := StrToFloatDef(LParts[0], 0);
   LUnit := LParts[1];
 
   if LUnit = 'ns/op' then
     Result := LValue
-  else if LUnit = 'us/op' then
+  else if (LUnit = 'us/op') or (LUnit = 'µs/op') then
     Result := LValue * 1000
   else if LUnit = 'ms/op' then
     Result := LValue * 1000000
