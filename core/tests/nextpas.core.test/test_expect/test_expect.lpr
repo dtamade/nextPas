@@ -101,7 +101,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('world', E.Message) > 0);
+      CheckContains(E.Message, 'world');
   end;
 end;
 
@@ -112,7 +112,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('not to equal', E.Message) > 0);
+      CheckContains(E.Message, 'not to equal');
   end;
 end;
 
@@ -123,7 +123,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('99', E.Message) > 0);
+      CheckContains(E.Message, '99');
   end;
 end;
 
@@ -134,7 +134,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('True', E.Message) > 0);
+      CheckContains(E.Message, 'True');
   end;
 end;
 
@@ -145,7 +145,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('nil', E.Message) > 0);
+      CheckContains(E.Message, 'nil');
   end;
 end;
 
@@ -156,7 +156,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('does not contain', E.Message) > 0);
+      CheckContains(E.Message, 'does not contain');
   end;
 end;
 
@@ -167,7 +167,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('not in', E.Message) > 0);
+      CheckContains(E.Message, 'not in');
   end;
 end;
 
@@ -179,7 +179,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('ALow', E.Message) > 0, 'inverted range should mention ALow');
+      CheckContains(E.Message, 'ALow');
   end;
 end;
 
@@ -191,7 +191,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('nothing raised', E.Message) > 0);
+      CheckContains(E.Message, 'nothing raised');
   end;
 end;
 
@@ -222,7 +222,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('not', LowerCase(E.Message)) > 0, 'Not_ fail msg');
+      CheckContains(LowerCase(E.Message), 'not');
   end;
 end;
 
@@ -233,7 +233,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('not', LowerCase(E.Message)) > 0, 'Not_ fail msg');
+      CheckContains(LowerCase(E.Message), 'not');
   end;
 end;
 
@@ -245,7 +245,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('Expected not', E.Message) > 0, 'Not_ fail msg');
+      CheckContains(E.Message, 'Expected not');
   end;
 end;
 
@@ -257,7 +257,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('Expected not', E.Message) > 0, 'Not_ fail msg');
+      CheckContains(E.Message, 'Expected not');
   end;
 end;
 
@@ -269,7 +269,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('Expected non-nil but got nil', E.Message) > 0, 'Not_ fail msg');
+      CheckContains(E.Message, 'Expected non-nil but got nil');
   end;
 end;
 
@@ -284,7 +284,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('Expected nil but got', E.Message) > 0, 'Not_ fail msg');
+      CheckContains(E.Message, 'Expected nil but got');
   end;
 end;
 
@@ -295,7 +295,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('should not contain', E.Message) > 0, 'Not_ fail msg');
+      CheckContains(E.Message, 'should not contain');
   end;
 end;
 
@@ -306,7 +306,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('should not start', E.Message) > 0, 'Not_ fail msg');
+      CheckContains(E.Message, 'should not start');
   end;
 end;
 
@@ -317,7 +317,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('should not end', E.Message) > 0, 'Not_ fail msg');
+      CheckContains(E.Message, 'should not end');
   end;
 end;
 
@@ -328,7 +328,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('should not', E.Message) > 0, 'Not_ fail msg');
+      CheckContains(E.Message, 'should not');
   end;
 end;
 
@@ -339,7 +339,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('should not', E.Message) > 0, 'Not_ fail msg');
+      CheckContains(E.Message, 'should not');
   end;
 end;
 
@@ -350,7 +350,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('should not', E.Message) > 0, 'Not_ fail msg');
+      CheckContains(E.Message, 'should not');
   end;
 end;
 
@@ -361,7 +361,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('should not', LowerCase(E.Message)) > 0, 'Not_ fail msg');
+      CheckContains(LowerCase(E.Message), 'should not');
   end;
 end;
 
@@ -373,7 +373,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('EConvertError', E.Message) > 0, 'Not_ fail msg');
+      CheckContains(E.Message, 'EConvertError');
   end;
 end;
 
@@ -386,7 +386,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('does not start', E.Message) > 0, 'start fail msg');
+      CheckContains(E.Message, 'does not start');
   end;
 end;
 
@@ -397,7 +397,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('does not end', E.Message) > 0, 'end fail msg');
+      CheckContains(E.Message, 'does not end');
   end;
 end;
 
@@ -408,7 +408,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('Expected length', E.Message) > 0, 'length fail msg');
+      CheckContains(E.Message, 'Expected length');
   end;
 end;
 
@@ -420,7 +420,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('Expected False but got', E.Message) > 0, 'bool fail msg');
+      CheckContains(E.Message, 'Expected False but got');
   end;
 end;
 
@@ -432,7 +432,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('Expected non-nil but got nil', E.Message) > 0, 'notnil fail msg');
+      CheckContains(E.Message, 'Expected non-nil but got nil');
   end;
 end;
 
@@ -443,7 +443,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('not >', E.Message) > 0, 'gt fail msg');
+      CheckContains(E.Message, 'not >');
   end;
 end;
 
@@ -454,7 +454,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('not <', E.Message) > 0, 'lt fail msg');
+      CheckContains(E.Message, 'not <');
   end;
 end;
 
@@ -466,7 +466,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('Expected False but got', E.Message) > 0, 'bool eq fail msg');
+      CheckContains(E.Message, 'Expected False but got');
   end;
 end;
 
@@ -478,7 +478,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('does not contain', E.Message) > 0, 'raise msg fail');
+      CheckContains(E.Message, 'does not contain');
   end;
 end;
 
@@ -490,7 +490,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('Expected not False but got', E.Message) > 0, 'Not_ bool eq fail msg');
+      CheckContains(E.Message, 'Expected not False but got');
   end;
 end;
 
@@ -502,7 +502,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('Expected nil but got', E.Message) > 0, 'nil fail msg');
+      CheckContains(E.Message, 'Expected nil but got');
   end;
 end;
 
@@ -515,7 +515,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('non-string', E.Message) > 0, 'type mismatch msg');
+      CheckContains(E.Message, 'non-string');
   end;
 end;
 
@@ -526,7 +526,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('non-integer', E.Message) > 0, 'type mismatch msg');
+      CheckContains(E.Message, 'non-integer');
   end;
 end;
 
@@ -537,7 +537,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('non-pointer', E.Message) > 0, 'type mismatch msg');
+      CheckContains(E.Message, 'non-pointer');
   end;
 end;
 
@@ -548,7 +548,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('non-proc', E.Message) > 0, 'type mismatch msg');
+      CheckContains(E.Message, 'non-proc');
   end;
 end;
 
@@ -610,7 +610,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('no exception', E.Message) > 0, 'ToNotRaise fail msg');
+      CheckContains(E.Message, 'no exception');
   end;
 end;
 
@@ -641,7 +641,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('EConvertError', E.Message) > 0, 'Not_.ToRaise fail msg');
+      CheckContains(E.Message, 'EConvertError');
   end;
 end;
 
@@ -693,9 +693,9 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('Expected', E.Message) > 0, 'message');
+      CheckContains(E.Message, 'Expected');
     on E: Exception do
-      Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+      FailUnexpected(E);
   end;
 end;
 
@@ -707,9 +707,9 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('not near', E.Message) > 0, 'message');
+      CheckContains(E.Message, 'not near');
     on E: Exception do
-      Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+      FailUnexpected(E);
   end;
 end;
 
@@ -727,9 +727,9 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('non-integer', E.Message) > 0, 'mismatch message');
+      CheckContains(E.Message, 'non-integer');
     on E: Exception do
-      Check(False, 'unexpected ' + E.ClassName + ': ' + E.Message);
+      FailUnexpected(E);
   end;
 end;
 
@@ -797,7 +797,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('no exception', E.Message) > 0, 'should mention no exception');
+      CheckContains(E.Message, 'no exception');
   end;
 end;
 
@@ -811,7 +811,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('non-double', LowerCase(E.Message)) > 0, 'type mismatch for ToBeNear on int');
+      CheckContains(LowerCase(E.Message), 'non-double');
   end;
 end;
 
@@ -823,7 +823,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('non-integer', LowerCase(E.Message)) > 0, 'type mismatch for ToEqualInt on ptr');
+      CheckContains(LowerCase(E.Message), 'non-integer');
   end;
 end;
 
@@ -837,7 +837,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('not', LowerCase(E.Message)) > 0, 'Not_.ToBeNear should fail when within epsilon');
+      CheckContains(LowerCase(E.Message), 'not');
   end;
 end;
 
@@ -872,7 +872,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('is not >=', E.Message) > 0, 'expected >= fail message');
+      CheckContains(E.Message, 'is not >=');
   end;
 end;
 
@@ -885,7 +885,7 @@ begin
     Halt(1);
   except
     on E: EAssertionFailed do
-      Check(Pos('is not <=', E.Message) > 0, 'expected <= fail message');
+      CheckContains(E.Message, 'is not <=');
   end;
 end;
 

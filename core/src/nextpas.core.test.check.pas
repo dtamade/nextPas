@@ -35,6 +35,7 @@ procedure CheckFalse(AValue: Boolean; const AMessage: string = '');
 procedure CheckNil(AValue: Pointer; const AMessage: string = '');
 procedure CheckNotNil(AValue: Pointer; const AMessage: string = '');
 procedure CheckContains(const AHaystack, ANeedle: string);
+procedure CheckNotContains(const AHaystack, ANeedle: string);
 procedure CheckStartsWith(const AStr, APrefix: string);
 procedure CheckEndsWith(const AStr, ASuffix: string);
 procedure CheckSame(const AExpected, AActual: Pointer; const AMessage: string = '');
@@ -56,6 +57,7 @@ procedure CheckNear(const AExpected, AActual: Double;
 procedure CheckNotNear(const AExpected, AActual: Double;
   const AEpsilon: Double = 1e-10; const AMessage: string = '');
 procedure Fail(const AMessage: string);
+procedure FailUnexpected(const E: Exception);
 procedure Skip(const AReason: string = '');
 
 implementation
@@ -252,6 +254,14 @@ begin
     InternalFail('"' + AHaystack + '" does not contain "' + ANeedle + '"');
 end;
 
+procedure CheckNotContains(const AHaystack, ANeedle: string);
+begin
+  if (Length(ANeedle) = 0) then
+    Exit; { empty needle matches everything — companion to CheckContains }
+  if Pos(ANeedle, AHaystack) > 0 then
+    InternalFail('"' + AHaystack + '" should not contain "' + ANeedle + '"');
+end;
+
 procedure CheckStartsWith(const AStr, APrefix: string);
 begin
   if not StrStartsWith(AStr, APrefix) then
@@ -411,6 +421,11 @@ end;
 procedure Fail(const AMessage: string);
 begin
   InternalFail(AMessage);
+end;
+
+procedure FailUnexpected(const E: Exception);
+begin
+  InternalFail('unexpected ' + E.ClassName + ': ' + E.Message);
 end;
 
 procedure Skip(const AReason: string);

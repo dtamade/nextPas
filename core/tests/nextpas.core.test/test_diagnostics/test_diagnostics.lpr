@@ -266,10 +266,8 @@ begin
   { The trace should not contain framework internals }
   if LTrace <> '' then
   begin
-    CheckTrue(Pos('nextpas.core.test', LTrace) = 0,
-      'trace should not contain framework unit name');
-    CheckTrue(Pos('sysutils', LowerCase(LTrace)) = 0,
-      'trace should not contain sysutils');
+    CheckNotContains(LTrace, 'nextpas.core.test');
+    CheckNotContains(LowerCase(LTrace), 'sysutils');
   end
   else
     WriteLn('  (no trace captured — stack trace may not be available)');

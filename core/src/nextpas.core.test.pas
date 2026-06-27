@@ -14,6 +14,7 @@ unit nextpas.core.test;
 interface
 
 uses
+  SysUtils,
   nextpas.core.test.base,
   nextpas.core.test.check,
   nextpas.core.test.config,
@@ -102,6 +103,7 @@ procedure CheckFalse(AValue: Boolean; const AMessage: string = '');
 procedure CheckNil(AValue: Pointer; const AMessage: string = '');
 procedure CheckNotNil(AValue: Pointer; const AMessage: string = '');
 procedure CheckContains(const AHaystack, ANeedle: string);
+procedure CheckNotContains(const AHaystack, ANeedle: string);
 procedure CheckStartsWith(const AStr, APrefix: string);
 procedure CheckEndsWith(const AStr, ASuffix: string);
 procedure CheckSame(const AExpected, AActual: Pointer; const AMessage: string = '');
@@ -119,6 +121,7 @@ procedure CheckNear(const AExpected, AActual: Double;
 procedure CheckNotNear(const AExpected, AActual: Double;
   const AEpsilon: Double = 1e-10; const AMessage: string = '');
 procedure Fail(const AMessage: string);
+procedure FailUnexpected(const E: Exception);
 procedure Skip(const AReason: string = '');
 
 { ── Re-exported from test.base (stack trace) ─────────────────────────────── }
@@ -256,6 +259,9 @@ begin nextpas.core.test.check.CheckNotNil(AValue, AMessage); end;
 procedure CheckContains(const AHaystack, ANeedle: string);
 begin nextpas.core.test.check.CheckContains(AHaystack, ANeedle); end;
 
+procedure CheckNotContains(const AHaystack, ANeedle: string);
+begin nextpas.core.test.check.CheckNotContains(AHaystack, ANeedle); end;
+
 procedure CheckStartsWith(const AStr, APrefix: string);
 begin nextpas.core.test.check.CheckStartsWith(AStr, APrefix); end;
 
@@ -300,6 +306,9 @@ begin nextpas.core.test.check.CheckNotNear(AExpected, AActual, AEpsilon, AMessag
 
 procedure Fail(const AMessage: string);
 begin nextpas.core.test.check.Fail(AMessage); end;
+
+procedure FailUnexpected(const E: Exception);
+begin nextpas.core.test.check.FailUnexpected(E); end;
 
 procedure Skip(const AReason: string);
 begin nextpas.core.test.check.Skip(AReason); end;
