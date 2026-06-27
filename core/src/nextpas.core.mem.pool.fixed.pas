@@ -127,36 +127,59 @@ type
     function GetAvailable: Integer; inline;
   public
     // 构造/析构
+    {** 创建固定块池（块大小 aBlockSize，容量 aCapacity，默认对齐和分配器）*}
     constructor Create(aBlockSize: SizeUInt; aCapacity: Integer; aAllocator: IAllocator = nil); overload;
+    {** 创建固定块池，可指定对齐字节数 aAlignment（0 = 默认 max(pointer,16)）*}
     constructor Create(aBlockSize: SizeUInt; aCapacity: Integer; aAlignment: SizeUInt; aAllocator: IAllocator = nil); overload;
+    {** 使用 TFixedPoolConfig 记录创建池，支持 ZeroOnAlloc 选项 *}
     constructor Create(const aConfig: TFixedPoolConfig); overload;
+    {** 释放 arena 内存，FAF_MEM_DEBUG 下检测泄漏 *}
     destructor Destroy; override;
   public
     // 固定块 API
+    {** 从自由栈分配一个块，成功返回指针，耗尽返回 nil *}
     function Alloc: Pointer; inline;
+    {** 分配一个块，成功返回 True 并设置 aPtr，否则返回 False *}
     function TryAlloc(out aPtr: Pointer): Boolean; inline;
+    {** 归还一个块到自由栈，nil 为 no-op；不合法指针或双重释放抛异常 *}
     procedure ReleasePtr(aPtr: Pointer); inline;
+    {** 重建自由栈，所有块标记为空闲，计数器归零 *}
     procedure Reset; inline;
+    {** 获取 arena 连续内存范围（起始地址 aBase 和字节大小 aSize）*}
     procedure GetArenaRange(out aBase: Pointer; out aSize: SizeUInt); inline;
 
     // IPool（统一对外最小接口）
+    {** IPool 接口：分配一个块，成功返回 True *}
     function Acquire(out aUnit: Pointer): Boolean; inline;
-    function TryAcquire(out aUnit: Pointer): Boolean; inline; // alias
+    {** Acquire 的别名 *}
+    function TryAcquire(out aUnit: Pointer): Boolean; inline;
+    {** 批量分配至多 aCount 个块，返回实际分配数 *}
     function AcquireN(out aUnits: array of Pointer; aCount: Integer): Integer;
+    {** IPool 接口：归还一个块（委托给 ReleasePtr）*}
     procedure Release(aUnit: Pointer); inline;
+    {** 批量归还 aCount 个块 *}
     procedure ReleaseN(const aUnits: array of Pointer; aCount: Integer);
 
     // 辅助：判断指针是否属于本池（不检查对齐与双重释放，仅范围）
+    {** 判断 aPtr 是否落在本池 arena 范围内（不做对齐/双重释放检查）*}
     function Owns(aPtr: Pointer): Boolean; inline;
 
     // 只读属性
+    {** 每块字节数（构造时固定）*}
     property BlockSize: SizeUInt read FBlockSize;
+    {** 总块数 *}
     property Capacity: Integer read FCapacity;
+    {** 当前已分配块数 *}
     property AllocatedCount: Integer read FAllocatedCount;
+    {** 实际对齐字节数 *}
     property Alignment: SizeUInt read FAlignment;
+    {** 空闲块数 = Capacity - AllocatedCount *}
     property Available: Integer read GetAvailable;
+    {** 历史峰值已分配块数 *}
     property PeakAllocated: Integer read FPeakAllocated;
+    {** 累计 Alloc 调用次数 *}
     property TotalAllocCalls: QWord read FTotalAllocCalls;
+    {** 累计 ReleasePtr 调用次数 *}
     property TotalFreeCalls: QWord read FTotalFreeCalls;
   end;
 
@@ -180,23 +203,38 @@ type
     function GetCapacity: Integer; inline;
     function GetAllocatedCount: Integer; inline;
   public
+    {** 创建线程安全固定块池（可选对齐和分配器）*}
     constructor Create(aBlockSize: SizeUInt; aCapacity: Integer; aAlignment: SizeUInt = 0; aAllocator: IAllocator = nil); overload;
+    {** 使用 TFixedPoolConfig 创建线程安全固定块池 *}
     constructor Create(const aConfig: TFixedPoolConfig); overload;
+    {** 加锁释放内部 TFixedPool *}
     destructor Destroy; override;
 
+    {** 加锁分配一个块，成功返回 True *}
     function Acquire(out aUnit: Pointer): Boolean; inline;
+    {** Acquire 的别名 *}
     function TryAcquire(out aUnit: Pointer): Boolean; inline;
+    {** 加锁批量分配至多 aCount 个块 *}
     function AcquireN(out aUnits: array of Pointer; aCount: Integer): Integer; inline;
+    {** 加锁归还一个块 *}
     procedure Release(aUnit: Pointer); inline;
+    {** 加锁批量归还 aCount 个块 *}
     procedure ReleaseN(const aUnits: array of Pointer; aCount: Integer); inline;
 
+    {** 加锁分配一个块，成功返回指针，耗尽返回 nil *}
     function Alloc: Pointer; inline;
+    {** 加锁分配一个块，成功返回 True *}
     function TryAlloc(out aPtr: Pointer): Boolean; inline;
+    {** 加锁归还一个块 *}
     procedure ReleasePtr(aPtr: Pointer); inline;
+    {** 加锁重建自由栈 *}
     procedure Reset; inline;
 
+    {** 每块字节数（无锁读取，不可变）*}
     property BlockSize: SizeUInt read GetBlockSize;
+    {** 总块数（无锁读取，不可变）*}
     property Capacity: Integer read GetCapacity;
+    {** 当前已分配块数（加锁读取）*}
     property AllocatedCount: Integer read GetAllocatedCount;
   end;
 

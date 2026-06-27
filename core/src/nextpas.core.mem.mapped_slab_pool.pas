@@ -39,18 +39,26 @@ type
     procedure InitializeSlabStructures;
 
   public
+    {** 创建匿名映射 Slab 分配器，指定池大小、页大小和最大块类 *
     constructor CreateAnonymous(aPoolSize: UInt64;
       aPageSize: UInt32 = 4096; aMaxSizeClass: UInt32 = 2048);
+    {** 销毁分配器，释放匿名映射 *
     destructor Destroy; override;
 
+    {** 关闭映射，释放所有资源，使分配器不可用 *
     procedure Close;
 
+    {** 释放一个已分配的块，检测双重释放和非法指针 *
     procedure FreeBlock(aPtr: Pointer);
+    {** 分配指定大小的内存块，返回负载指针；失败返回 nil *
     function Alloc(aSize: UInt64): Pointer;
 
+    {** 获取分配器统计信息：总分配/释放/失败次数、已用页/总页数 *
     procedure GetStats(out aTotalAllocs, aTotalFrees, aFailedAllocs: UInt64;
       out aUsedPages, aTotalPages: UInt32);
+    {** 重置分配器，清除所有页描述符和统计，递增代次标记 *
     procedure Reset;
+    {** 检查分配器是否有效（映射已创建且头/数据区就绪） *
     function IsValid: Boolean;
 
     property PoolSize: UInt64 read FPoolSize;

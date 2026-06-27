@@ -69,25 +69,45 @@ type
     procedure ClearAllocatedBit(aArenaIndex: SizeInt; aBlockIndex: SizeUInt); inline;
     procedure ClearArenaAllocBits(aArenaIndex: SizeInt); inline;
   public
+    {** 创建可增长固定块池，按配置分配初始 arena *}
     constructor Create(const aConfig: TGrowingFixedPoolConfig);
+    {** 释放所有 arena 内存，归零计数器 *}
     destructor Destroy; override;
 
-    // IPool
+    {** 从自由栈弹出一个块；耗尽时自动扩展 arena *}
     function Acquire(out aUnit: Pointer): Boolean; inline;
+    {** Acquire 的别名，语义相同 *}
     function TryAcquire(out aPtr: Pointer): Boolean; inline;
+    {** 批量获取至多 aCount 个块，返回实际获取数 *}
     function AcquireN(out aPtrs: array of Pointer; aCount: Integer): Integer;
+    {** 归还一个块到自由栈，nil 为 no-op；不合法指针抛异常 *}
     procedure Release(aUnit: Pointer); inline;
+    {** 批量归还 aCount 个块，nil 元素自动跳过 *}
     procedure ReleaseN(const aPtrs: array of Pointer; aCount: Integer);
+    {** 重建自由栈并将所有块标记为空闲，计数器归零 *}
     procedure Reset; inline;
 
     // 管理
-    function ShrinkTo(aMinCapacity: SizeUInt): SizeUInt; // returns freed blocks
+    {**
+     * @desc 收缩池，释放尾部完全空闲的 arena
+     *
+     * @params
+     *   aMinCapacity  保留的最小块数（实际不低于已分配数）
+     *
+     * @return 本次释放的块总数
+     *}
+    function ShrinkTo(aMinCapacity: SizeUInt): SizeUInt;
 
     // Props
+    {** 每块字节数（构造时固定，2 的幂）*}
     property BlockSize: SizeUInt read FBlockSize;
+    {** 所有 arena 的总块数 *}
     property TotalCapacity: SizeUInt read FTotalCapacity;
+    {** 当前已分配块数 *}
     property AllocatedCount: SizeUInt read FAllocatedCount;
+    {** 当前 arena 数量 *}
     property ArenaCount: SizeUInt read GetArenaCount;
+    {** 返回空闲块数 = TotalCapacity - AllocatedCount *}
     function FreeCount: SizeUInt; inline;
   end;
 
