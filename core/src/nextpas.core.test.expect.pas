@@ -92,6 +92,9 @@ type
     constructor CreateProc(AProc: TTestProc);
     constructor CreateDouble(const AValue: Double);
 
+    procedure RequireKind(AKind: TExpectationKind;
+      const AMethod: string);
+      { Guard: fail with "X called on non-Y expectation" if FKind <> AKind. }
     procedure CheckMatch(AIsMatch: Boolean;
       const ANegMsg, APosMsg: string);
       { Core negation check: fail with ANegMsg if (FNegated and AIsMatch)
@@ -198,6 +201,17 @@ begin
   Result := LCopy;
 end;
 
+procedure TExpectation.RequireKind(AKind: TExpectationKind;
+  const AMethod: string);
+const
+  KindNames: array[TExpectationKind] of string = (
+    'string', 'integer', 'boolean', 'pointer', 'proc', 'double'
+  );
+begin
+  if FKind <> AKind then
+    InternalFail(AMethod + ' called on non-' + KindNames[AKind] + ' expectation');
+end;
+
 procedure TExpectation.CheckMatch(AIsMatch: Boolean;
   const ANegMsg, APosMsg: string);
 begin
@@ -215,8 +229,7 @@ end;
 
 function TExpectation.ToEqual(const AExpected: string): IExpectation;
 begin
-  if FKind <> ekString then
-    InternalFail('ToEqual(string) called on non-string expectation');
+  RequireKind(ekString, 'ToEqual(string)');
   CheckMatch(FStrValue = AExpected,
     'Expected "' + FStrValue + '" not to equal "' + AExpected + '"',
     'Expected "' + AExpected + '" but got "' + FStrValue + '"');
@@ -225,8 +238,7 @@ end;
 
 function TExpectation.ToEqualInt(const AExpected: Int64): IExpectation;
 begin
-  if FKind <> ekInt64 then
-    InternalFail('ToEqualInt called on non-integer expectation');
+  RequireKind(ekInt64, 'ToEqualInt');
   CheckMatch(FIntValue = AExpected,
     'Expected not ' + IntToStr(AExpected) + ' but value is ' + IntToStr(FIntValue),
     'Expected ' + IntToStr(AExpected) + ' but got ' + IntToStr(FIntValue));
@@ -237,8 +249,7 @@ function TExpectation.ToEqualBool(AExpected: Boolean): IExpectation;
 var
   LExpStr, LActStr: string;
 begin
-  if FKind <> ekBool then
-    InternalFail('ToEqualBool called on non-boolean expectation');
+  RequireKind(ekBool, 'ToEqualBool');
   LExpStr := BoolToStr(AExpected, 'True', 'False');
   LActStr := BoolToStr(FBoolValue, 'True', 'False');
   CheckMatch(FBoolValue = AExpected,
@@ -259,8 +270,7 @@ end;
 
 function TExpectation.ToBeNil: IExpectation;
 begin
-  if FKind <> ekPointer then
-    InternalFail('ToBeNil called on non-pointer expectation');
+  RequireKind(ekPointer, 'ToBeNil');
   CheckMatch(FPtrValue = nil,
     'Expected non-nil but got nil',
     'Expected nil but got $' + IntToHex(NativeUInt(FPtrValue), 16));
@@ -269,8 +279,7 @@ end;
 
 function TExpectation.ToBeNotNil: IExpectation;
 begin
-  if FKind <> ekPointer then
-    InternalFail('ToBeNotNil called on non-pointer expectation');
+  RequireKind(ekPointer, 'ToBeNotNil');
   CheckMatch(FPtrValue <> nil,
     'Expected nil but got $' + IntToHex(NativeUInt(FPtrValue), 16),
     'Expected non-nil but got nil');
@@ -281,8 +290,7 @@ function TExpectation.ToContain(const ASubstr: string): IExpectation;
 var
   LFound: Boolean;
 begin
-  if FKind <> ekString then
-    InternalFail('ToContain called on non-string expectation');
+  RequireKind(ekString, 'ToContain');
   if Length(ASubstr) = 0 then
     LFound := True { empty substring matches everything }
   else
@@ -295,8 +303,7 @@ end;
 
 function TExpectation.ToStartWith(const APrefix: string): IExpectation;
 begin
-  if FKind <> ekString then
-    InternalFail('ToStartWith called on non-string expectation');
+  RequireKind(ekString, 'ToStartWith');
   CheckMatch(StrStartsWith(FStrValue, APrefix),
     '"' + FStrValue + '" should not start with "' + APrefix + '"',
     '"' + FStrValue + '" does not start with "' + APrefix + '"');
@@ -308,8 +315,7 @@ var
   LMatch: Boolean;
   LLen: Integer;
 begin
-  if FKind <> ekString then
-    InternalFail('ToEndWith called on non-string expectation');
+  RequireKind(ekString, 'ToEndWith');
   LLen := Length(ASuffix);
   if LLen = 0 then
     LMatch := True
@@ -324,8 +330,7 @@ end;
 
 function TExpectation.ToBeGreaterThan(const AExpected: Int64): IExpectation;
 begin
-  if FKind <> ekInt64 then
-    InternalFail('ToBeGreaterThan called on non-integer expectation');
+  RequireKind(ekInt64, 'ToBeGreaterThan');
   CheckMatch(FIntValue > AExpected,
     IntToStr(FIntValue) + ' should not be > ' + IntToStr(AExpected),
     IntToStr(FIntValue) + ' is not > ' + IntToStr(AExpected));
@@ -334,8 +339,7 @@ end;
 
 function TExpectation.ToBeLessThan(const AExpected: Int64): IExpectation;
 begin
-  if FKind <> ekInt64 then
-    InternalFail('ToBeLessThan called on non-integer expectation');
+  RequireKind(ekInt64, 'ToBeLessThan');
   CheckMatch(FIntValue < AExpected,
     IntToStr(FIntValue) + ' should not be < ' + IntToStr(AExpected),
     IntToStr(FIntValue) + ' is not < ' + IntToStr(AExpected));
@@ -344,8 +348,7 @@ end;
 
 function TExpectation.ToBeInRange(const ALow, AHigh: Int64): IExpectation;
 begin
-  if FKind <> ekInt64 then
-    InternalFail('ToBeInRange called on non-integer expectation');
+  RequireKind(ekInt64, 'ToBeInRange');
   if ALow > AHigh then
     InternalFail('ToBeInRange: ALow (' + IntToStr(ALow) +
       ') > AHigh (' + IntToStr(AHigh) + ')');
@@ -359,8 +362,7 @@ end;
 
 function TExpectation.ToHaveLength(const AExpected: NativeInt): IExpectation;
 begin
-  if FKind <> ekString then
-    InternalFail('ToHaveLength called on non-string expectation');
+  RequireKind(ekString, 'ToHaveLength');
   CheckMatch(Length(FStrValue) = AExpected,
     'String should not have length ' + IntToStr(AExpected),
     'Expected length ' + IntToStr(AExpected) +
@@ -373,8 +375,7 @@ function TExpectation.ToRaise(AExceptionClass: ExceptClass;
 var
   LRaised: Boolean = False;
 begin
-  if FKind <> ekProc then
-    InternalFail('ToRaise called on non-proc expectation');
+  RequireKind(ekProc, 'ToRaise');
   try
     FProcValue;
   except
@@ -424,8 +425,7 @@ end;
   ETestSkipped) escapes, it calls InternalFail.  FNegated is never checked. }
 function TExpectation.ToNotRaise: IExpectation;
 begin
-  if FKind <> ekProc then
-    InternalFail('ToNotRaise called on non-proc expectation');
+  RequireKind(ekProc, 'ToNotRaise');
   try
     FProcValue;
   except
@@ -443,8 +443,7 @@ function TExpectation.ToBeNear(const AExpected: Double;
 var
   LDiff: Double;
 begin
-  if FKind <> ekDouble then
-    InternalFail('ToBeNear called on non-double expectation');
+  RequireKind(ekDouble, 'ToBeNear');
   LDiff := FDoubleValue - AExpected;
   if LDiff < 0 then LDiff := -LDiff;
   if FNegated then
@@ -480,8 +479,7 @@ end;
 
 function TExpectation.ToBeGreaterOrEqual(const AExpected: Int64): IExpectation;
 begin
-  if FKind <> ekInt64 then
-    InternalFail('ToBeGreaterOrEqual called on non-integer expectation');
+  RequireKind(ekInt64, 'ToBeGreaterOrEqual');
   CheckMatch(FIntValue >= AExpected,
     IntToStr(FIntValue) + ' should not be >= ' + IntToStr(AExpected),
     IntToStr(FIntValue) + ' is not >= ' + IntToStr(AExpected));
@@ -490,8 +488,7 @@ end;
 
 function TExpectation.ToBeLessOrEqual(const AExpected: Int64): IExpectation;
 begin
-  if FKind <> ekInt64 then
-    InternalFail('ToBeLessOrEqual called on non-integer expectation');
+  RequireKind(ekInt64, 'ToBeLessOrEqual');
   CheckMatch(FIntValue <= AExpected,
     IntToStr(FIntValue) + ' should not be <= ' + IntToStr(AExpected),
     IntToStr(FIntValue) + ' is not <= ' + IntToStr(AExpected));
@@ -502,8 +499,7 @@ end;
 
 function TExpectation.ToBeGreaterThanD(const AExpected: Double): IExpectation;
 begin
-  if FKind <> ekDouble then
-    InternalFail('ToBeGreaterThanD called on non-double expectation');
+  RequireKind(ekDouble, 'ToBeGreaterThanD');
   CheckMatch(FDoubleValue > AExpected,
     FloatToStr(FDoubleValue) + ' should not be > ' + FloatToStr(AExpected),
     FloatToStr(FDoubleValue) + ' is not > ' + FloatToStr(AExpected));
@@ -512,8 +508,7 @@ end;
 
 function TExpectation.ToBeLessThanD(const AExpected: Double): IExpectation;
 begin
-  if FKind <> ekDouble then
-    InternalFail('ToBeLessThanD called on non-double expectation');
+  RequireKind(ekDouble, 'ToBeLessThanD');
   CheckMatch(FDoubleValue < AExpected,
     FloatToStr(FDoubleValue) + ' should not be < ' + FloatToStr(AExpected),
     FloatToStr(FDoubleValue) + ' is not < ' + FloatToStr(AExpected));
@@ -522,8 +517,7 @@ end;
 
 function TExpectation.ToBeGreaterOrEqualD(const AExpected: Double): IExpectation;
 begin
-  if FKind <> ekDouble then
-    InternalFail('ToBeGreaterOrEqualD called on non-double expectation');
+  RequireKind(ekDouble, 'ToBeGreaterOrEqualD');
   CheckMatch(FDoubleValue >= AExpected,
     FloatToStr(FDoubleValue) + ' should not be >= ' + FloatToStr(AExpected),
     FloatToStr(FDoubleValue) + ' is not >= ' + FloatToStr(AExpected));
@@ -532,8 +526,7 @@ end;
 
 function TExpectation.ToBeLessOrEqualD(const AExpected: Double): IExpectation;
 begin
-  if FKind <> ekDouble then
-    InternalFail('ToBeLessOrEqualD called on non-double expectation');
+  RequireKind(ekDouble, 'ToBeLessOrEqualD');
   CheckMatch(FDoubleValue <= AExpected,
     FloatToStr(FDoubleValue) + ' should not be <= ' + FloatToStr(AExpected),
     FloatToStr(FDoubleValue) + ' is not <= ' + FloatToStr(AExpected));
@@ -544,8 +537,7 @@ function TExpectation.ToBeInRangeD(const ALow, AHigh: Double): IExpectation;
 var
   LMatch: Boolean;
 begin
-  if FKind <> ekDouble then
-    InternalFail('ToBeInRangeD called on non-double expectation');
+  RequireKind(ekDouble, 'ToBeInRangeD');
   if ALow > AHigh then
     InternalFail('ToBeInRangeD: low (' + FloatToStr(ALow) + ') > high (' + FloatToStr(AHigh) + ')');
   LMatch := (FDoubleValue >= ALow) and (FDoubleValue <= AHigh);
@@ -568,8 +560,7 @@ end;
 
 function TExpectation.ToContainCI(const ASubstr: string): IExpectation;
 begin
-  if FKind <> ekString then
-    InternalFail('ToContainCI called on non-string expectation');
+  RequireKind(ekString, 'ToContainCI');
   CheckMatch(Pos(LowerCase(ASubstr), LowerCase(FStrValue)) > 0,
     '"' + FStrValue + '" should not contain (ci) "' + ASubstr + '"',
     '"' + FStrValue + '" does not contain (ci) "' + ASubstr + '"');
@@ -578,8 +569,7 @@ end;
 
 function TExpectation.ToStartWithCI(const APrefix: string): IExpectation;
 begin
-  if FKind <> ekString then
-    InternalFail('ToStartWithCI called on non-string expectation');
+  RequireKind(ekString, 'ToStartWithCI');
   CheckMatch(
     (Length(FStrValue) >= Length(APrefix)) and
     (LowerCase(Copy(FStrValue, 1, Length(APrefix))) = LowerCase(APrefix)),
@@ -590,8 +580,7 @@ end;
 
 function TExpectation.ToEndWithCI(const ASuffix: string): IExpectation;
 begin
-  if FKind <> ekString then
-    InternalFail('ToEndWithCI called on non-string expectation');
+  RequireKind(ekString, 'ToEndWithCI');
   CheckMatch(
     (Length(FStrValue) >= Length(ASuffix)) and
     (LowerCase(Copy(FStrValue, Length(FStrValue) - Length(ASuffix) + 1,
