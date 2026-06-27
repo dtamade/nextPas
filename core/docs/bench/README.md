@@ -73,7 +73,7 @@ end.
 | `SetFilter(Pattern)` | 名称过滤 |
 | `SetTimeout(Ms)` | 整体超时（超时后跳过剩余基准） |
 
-## IBenchContext 接口
+### IBenchContext 接口
 
 基准函数通过 `IBenchContext` 控制执行：
 
@@ -82,6 +82,8 @@ end.
 | `SetBytes(N)` | 设置每操作字节数（计算 MB/s） |
 | `SetAllocs(N)` | 设置每操作分配次数 |
 | `ResetTimer` | 重置计时器（排除 setup 时间） |
+| `StopTimer` | 暂停计时器（保留已累计时间） |
+| `StartTimer` | 恢复计时器 |
 | `Skip(Reason)` | 跳过当前基准 |
 | `Iterations` | 当前迭代次数 |
 | `Elapsed` | 当前已用时间 |
@@ -102,6 +104,13 @@ end.
 | `SaveToJSON(Path)` | 保存 JSON 到文件 |
 | `SaveToHTML(Path)` | 保存 HTML 到文件 |
 | `SaveToTSV(Path)` | 保存 TSV 到文件 |
+| `CompareTwoResults(A, B)` | 两个结果 Mann-Whitney U 对比 |
+| `CompareMultipleBaselines(Baselines)` | 多基线对比矩阵（超越 Go/Rust） |
+| `ToMatrixReport(Baselines)` | 多基线矩阵 Console 报告 |
+| `ToMatrixHTML(Baselines)` | 多基线矩阵 HTML（含 B/op + allocs/op） |
+| `SaveBaseline(Path, GitHash)` | 保存当前结果为命名基线 |
+| `AppendToTimeline(Path)` | 追加到 JSONL 时间线 |
+| `HasRegression(Threshold)` | 检测回归 |
 
 ## TBenchRunner 便利 API
 
@@ -177,13 +186,33 @@ end.
 
 | 指标 | 状态 |
 |------|------|
-| 测试套件 | 12 |
-| 框架级测试 | 242 |
+| 测试套件 | 14 |
+| 框架级测试 | 256 |
 | 框架 | 全部使用 `nextpas.core.test` |
-| heaptrc | 12/12 套件全部启用 -gh，8 零泄漏 + 1 全局单例 128B |
+| heaptrc | 14/14 套件全部启用 -gh，零泄漏 |
 | NaN 安全 | `SortDoubleArray` 先分区 NaN 再排序 |
 | 统计防护 | `Variance`/`Skewness`/`Kurtosis` NaN/Inf guard |
 | `GetData` 语义 | 返回 `Copy(FData)` 独立副本 |
+
+## 竞争力矩阵（vs Go/Rust）
+
+| 能力 | nextpas | Go benchstat | Rust criterion |
+|------|---------|-------------|----------------|
+| Mann-Whitney U | ✅ | ✅ | ✅ |
+| 几何均值聚合 | ✅ | ✅ | ❌ |
+| OLS 线性回归 | ✅ | ❌ | ✅ |
+| StopTimer/StartTimer | ✅ | ✅ | ❌ |
+| 多基线对比矩阵 | ✅ | ❌ | ❌ |
+| 内存+性能联合报告 | ✅ | 部分 | ❌ |
+| 分布直方图 | ✅ | ❌ | ✅ |
+| 基线对比图 | ✅ | ❌ | ✅ |
+| CI 集成模板 | ✅ | ❌ | ❌ |
+| 时间线追踪 | ✅ | ❌ | ✅ |
+| 自适应测量 | ✅ | ❌ | ✅ |
+| Kahan 求和 | ✅ | ❌ | ❌ |
+| Shapiro-Wilk 正态性 | ✅ | ❌ | ❌ |
+| 内存追踪集成 | ✅ | ❌ | ❌ |
+| 并行基准 | ✅ | ❌ | ❌ |
 
 ## 测试
 
@@ -207,6 +236,7 @@ make -C core/tests/nextpas.core.bench/test_bench_parallel clean test
 make -C core/tests/nextpas.core.bench/test_bench_parallel_heaptrc clean test
 make -C core/tests/nextpas.core.bench/test_bench_parallel_memtrack_heaptrc clean test
 make -C core/tests/nextpas.core.bench/test_bench_invalid_parameters_heaptrc clean test
+make -C core/tests/nextpas.core.bench/test_bench_matrix clean test
 ```
 
 ## 环境变量
