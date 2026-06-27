@@ -147,6 +147,8 @@ type
     procedure SaveToTSV(const APath: string);
     function CompareWithBaseline: TBenchComparisonArray;
     function CompareTwoResults(const ANameA, ANameB: string): TBenchComparison;
+    procedure SaveBaseline(const APath: string; const AGitHash: string = '');
+    procedure AppendToTimeline(const APath: string);
     function HasRegression(AThreshold: Double): Boolean;
     function GetEnvironment: TBenchEnvironment;
   end;
@@ -157,8 +159,10 @@ uses
   nextpas.core.exception,
   nextpas.core.fs,
   nextpas.core.text.conv,
+  nextpas.core.text.builder,
   nextpas.core.time.format,
   nextpas.core.time.offsetdatetime,
+  nextpas.core.json.writer,
   nextpas.core.bench.baseline,
   nextpas.core.simd.cpuinfo;
 
@@ -878,6 +882,68 @@ begin
     Result.HasStatisticalTest := False;
     Result.IsSignificant := Abs(Result.Ratio - 1.0) > 0.05;
     Result.ApproximatePValue := 0.05;
+  end;
+end;
+
+procedure TBenchResults.SaveBaseline(const APath: string; const AGitHash: string);
+var
+  LManager: TBaselineManager;
+  I: Integer;
+begin
+  LManager := TBaselineManager.Create;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and (not FResults[I].Skipped) then
+      LManager.AddBaselineFromResult(FResults[I], AGitHash);
+  end;
+  LManager.SaveToFile(APath);
+end;
+
+procedure TBenchResults.AppendToTimeline(const APath: string);
+var
+  LBuilder: TStringBuilder;
+  LWriter: TJsonWriter;
+  I: Integer;
+  LLine: string;
+begin
+  for I := 0 to FResultCount - 1 do
+  begin
+    if not (FResults[I].Executed and (not FResults[I].Skipped)) then
+      Continue;
+
+    LBuilder.Init(256);
+    try
+      LWriter.Init(LBuilder);
+      LWriter.BeginObject;
+      LWriter.Key('timestamp');
+      LWriter.Str(FEnvironment.Timestamp);
+      LWriter.Key('name');
+      LWriter.Str(FResults[I].Name);
+      LWriter.Key('nsPerOp');
+      LWriter.Float(FResults[I].NsPerOp);
+      LWriter.Key('opsPerSec');
+      LWriter.Float(FResults[I].OpsPerSec);
+      LWriter.Key('stddev');
+      LWriter.Float(FResults[I].StdDev);
+      LWriter.Key('samples');
+      LWriter.Int(FResults[I].SampleCount);
+      LWriter.Key('bytesPerOp');
+      LWriter.Int(FResults[I].BytesPerOp);
+      LWriter.Key('allocsPerOp');
+      LWriter.Int(FResults[I].AllocsPerOp);
+      LWriter.EndObject;
+      LLine := LBuilder.ToString;
+    finally
+      LBuilder.Done;
+    end;
+
+    { 追加一行 JSON 到文件 }
+    try
+      AppendFileText(APath, LLine + LineEnding);
+    except
+      { 文件不存在时创建 }
+      WriteFileText(APath, LLine + LineEnding, PermDefault);
+    end;
   end;
 end;
 

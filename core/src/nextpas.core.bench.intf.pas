@@ -245,6 +245,12 @@ type
     {** 两个结果对比（Mann-Whitney U 检验，需 RawSamples） }
     function CompareTwoResults(const ANameA, ANameB: string): TBenchComparison;
 
+    {** 保存当前结果为命名基线文件 }
+    procedure SaveBaseline(const APath: string; const AGitHash: string = '');
+
+    {** 追加当前结果到时间线 JSONL 文件 (P1-5) }
+    procedure AppendToTimeline(const APath: string);
+
     {** 检测回归（返回 true 表示有回归） }
     function HasRegression(AThreshold: Double): Boolean;
 
