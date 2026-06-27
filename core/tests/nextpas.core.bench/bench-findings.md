@@ -1199,7 +1199,55 @@ ebba5de5d fix(bench): 补全 2 个遗漏的 Default 初始化 (Tukey/ZScore)
 | R4-05 | P3 | 已知 | Round 溢出 (CR-17 已记录) |
 | R4-06 | P3 | 保留 | Int64 索引风格 |
 
+## Round 5 — 深度审计 (2026-06-28)
+
+### GL-01 — Go µs/op Unicode 解析失败 (已修复)
+- **File**: `xlang.pas:159-180`
+- **Severity**: P0
+- **Category**: 正确性
+- **Detail**: Go 的 `testing.B` 标准输出使用 Unicode 微符号 µ (U+00B5) 而非 ASCII 'u'，格式为 `µs/op`。原 `ParseGoTime` 仅检查 `us/op`，导致 Go µs/op 输出被静默解析为 0 ns/op。此外，Go 的 µs/op 与数值之间无空格（如 `24.5µs/op`），原代码按空格分割后无法识别。
+- **Fix**: 增加 `µs/op` 匹配（Unicode + ASCII），增加 glued 格式回退解析。
+- **Test**: +1 test (Unicode µs/op glued + space-separated)
+
+### GL-02 — SaveBaseline/AppendToTimeline 零覆盖 (已修复)
+- **File**: `test_bench_integration.lpr`
+- **Severity**: P1
+- **Category**: 测试覆盖
+- **Detail**: `IBenchResults.SaveBaseline` 和 `AppendToTimeline` 两个公共 API 在测试中零覆盖。SaveBaseline 写入 JSON 格式基线文件，AppendToTimeline 写入 JSONL 时间线文件，两者的文件 I/O 和格式正确性从未验证。
+- **Fix**: +2 tests (SaveBaseline_RoundTrip + AppendToTimeline)，使用 XidNew 唯一临时路径。
+
+### GL-03 — CompareTwoResults/GetEnvironment 零覆盖 (已修复)
+- **File**: `test_bench_integration.lpr`
+- **Severity**: P1
+- **Category**: 测试覆盖
+- **Detail**: `CompareTwoResults` 使用 Mann-Whitney U 检验比较两个 benchmark 的原始样本，是唯一支持双 benchmark 统计对比的公共 API。`GetEnvironment` 返回运行环境信息。两者均无测试。
+- **Fix**: +2 tests。CompareTwoResults 验证 ratio/significance/pvalue + missing baseline fallback。GetEnvironment 验证所有字段非空。
+
+### 测试进度追踪
+
+> **更新日期**: 2026-06-28 (Round 5)
+
+| 套件 | 测试数 | 状态 |
+|------|--------|------|
+| baseline | 22 | ✅ |
+| integration | 47 | ✅ |
+| invalid_parameters_heaptrc | 5 | ✅ |
+| mannwhitney | 10 | ✅ |
+| matrix | 15 | ✅ |
+| memtrack | 16 | ✅ |
+| parallel | 11 | ✅ |
+| parallel_heaptrc | 1 | ✅ |
+| parallel_memtrack_heaptrc | 2 | ✅ |
+| report | 28 | ✅ |
+| runner | 14 | ✅ |
+| stats | 29 | ✅ |
+| stats_advanced | 30 | ✅ |
+| xlang | 35 | ✅ |
+| **Total** | **265** | **0 failures, 0 leaks** |
+
 ### Commits
 ```
-51234fa7a fix(bench): R4 audit — timestamp 24h + QUIET 'on' + findings doc
+8b55b8c8b fix(bench): Go µs/op Unicode parsing + SaveBaseline/AppendToTimeline tests
+b70b22e91 test(bench): add CompareTwoResults + GetEnvironment coverage
+```
 ```
