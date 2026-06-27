@@ -6,6 +6,7 @@ interface
 
 uses
   nextpas.core.mem.base,
+  nextpas.core.mem.utils,
   nextpas.core.mem.intf
   {$IFDEF NEXTPAS_CORE_STRICT_NULL_FREE}
   , nextpas.core.base
@@ -45,15 +46,6 @@ implementation
 
 {$PUSH}
 {$WARN 4055 OFF} // pointer/ordinal conversions in aligned alloc helpers
-
-function AlignUpPtr(P: Pointer; AAlignment: SizeUInt): Pointer; inline;
-var
-  LAddr, LMask: PtrUInt;
-begin
-  LAddr := PtrUInt(P);
-  LMask := PtrUInt(AAlignment - 1);
-  Result := Pointer((LAddr + LMask) and not LMask);
-end;
 
 function TAllocator.Traits: TAllocatorTraits;
 begin
@@ -141,7 +133,7 @@ begin
     Exit(nil);
   LRaw := GetMem(LNeeded);
   if LRaw = nil then Exit(nil);
-  Result := AlignUpPtr(Pointer(PtrUInt(LRaw) + SizeOf(Pointer)), AAlignment);
+  Result := AlignUpUnChecked(Pointer(PtrUInt(LRaw) + SizeOf(Pointer)), AAlignment);
   LHeaderPtr := PPointer(PtrUInt(Result) - SizeOf(Pointer));
   LHeaderPtr^ := LRaw;
 end;
