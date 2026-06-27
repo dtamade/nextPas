@@ -7205,6 +7205,10 @@ begin
       for ParamTypeId := SymCountBefore + 1 to FModel.SymbolCount do
         FModel.SetSymbolScope(ParamTypeId, CallableScopeId);
     end
+    else if Child.NodeKind = gnkProcedureDecl then
+      ProcessProcedureDecl(Child, AOwnerUnitId)
+    else if Child.NodeKind = gnkFunctionDecl then
+      ProcessFunctionDecl(Child, AOwnerUnitId)
     else if Child.NodeKind = gnkBeginBlock then
     begin
       RegisterProcedureBody(ANode.Text, Child, ANode, AOwnerUnitId);
@@ -7278,6 +7282,10 @@ begin
       for ParamTypeId := SymCountBefore + 1 to FModel.SymbolCount do
         FModel.SetSymbolScope(ParamTypeId, CallableScopeId);
     end
+    else if Child.NodeKind = gnkProcedureDecl then
+      ProcessProcedureDecl(Child, AOwnerUnitId)
+    else if Child.NodeKind = gnkFunctionDecl then
+      ProcessFunctionDecl(Child, AOwnerUnitId)
     else if Child.NodeKind = gnkBeginBlock then
     begin
       RegisterProcedureBody(ANode.Text, Child, ANode, AOwnerUnitId);
