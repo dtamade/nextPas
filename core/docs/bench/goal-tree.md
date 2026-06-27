@@ -40,7 +40,7 @@ B3  输出格式 ✅
 B4  基线管理 ✅
   B4.1  AddBaseline / AddBaselines                  ✅
   B4.2  LoadBaseline (JSON 文件)                    ✅
-  B4.3  回归检测 (Ratio + Welch's t-test)           ✅
+  B4.3  回归检测 (Welch's t-test + p-value)          ✅
 
 B5  内存追踪 ✅
   B5.1  TMemoryTracker (MemoryManager hook)         ✅
