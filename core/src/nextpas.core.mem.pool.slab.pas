@@ -11,6 +11,7 @@ uses
   nextpas.core.errors,
   nextpas.core.base,
   nextpas.core.mem.base,
+  nextpas.core.mem.utils,
   nextpas.core.mem.allocator,
   nextpas.core.mem.intf,
   nextpas.core.mem.pool.memory_pool,
@@ -287,15 +288,6 @@ function TSlabPool.IsOversize(const ASize: SizeUInt): Boolean; inline;
 begin
   // 兼容字段：仅用于“硬限制”单次分配的最大尺寸
   Result := (ASize <> 0) and (FConfig.MaxAllocSize > 0) and (ASize > FConfig.MaxAllocSize);
-end;
-
-function AlignUpPtrLocal(APtr: Pointer; AAlignment: SizeUInt): Pointer; inline;
-var
-  LAddr, LMask: PtrUInt;
-begin
-  LAddr := PtrUInt(APtr);
-  LMask := PtrUInt(AAlignment - 1);
-  Result := Pointer((LAddr + LMask) and not LMask);
 end;
 
 function NextPow2(const aValue: SizeUInt): SizeUInt; inline;
@@ -672,7 +664,7 @@ begin
   LRaw := FAllocator.GetMem(LNeeded);
   if LRaw = nil then Exit(nil);
 
-  LUser := AlignUpPtrLocal(LRaw, LAlign);
+  LUser := AlignUpUnChecked(LRaw, LAlign);
   try
     FbMapInsert(LUser, LRaw, ASize, LAlign);
   except
@@ -812,7 +804,7 @@ procedure TSlabPool.PageMapGrowIfNeeded(aNeedMore: SizeUInt);
 var
   LOldKeys: array of PtrUInt;
   LOldVals: array of Integer;
-  LOldCap, LIndex, LLog, LTmp: SizeUInt;
+  LOldCap, LIndex, LLog: SizeUInt;
   LKey: PtrUInt;
   LVal: Integer;
   LPos: SizeUInt;

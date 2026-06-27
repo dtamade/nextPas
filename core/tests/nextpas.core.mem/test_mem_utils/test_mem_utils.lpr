@@ -380,6 +380,60 @@ begin
   WriteLn('PASS: Fill nil raises');
 end;
 
+procedure TestGeometricGrowth2x;
+var
+  LResult: SizeUInt;
+begin
+  LResult := CalcGeometricGrowth(1000, 2.0);
+  Check(LResult = 2000, 'expected 2000 got ' + IntToStr(LResult));
+end;
+
+procedure TestGeometricGrowth15x;
+var
+  LResult: SizeUInt;
+begin
+  LResult := CalcGeometricGrowth(1000, 1.5);
+  Check(LResult = 1500, 'expected 1500 got ' + IntToStr(LResult));
+end;
+
+procedure TestGeometricGrowthLowFactor;
+var
+  LResult: SizeUInt;
+begin
+  LResult := CalcGeometricGrowth(1000, 1.0);
+  Check(LResult = 2000, 'low factor -> 2x: expected 2000 got ' + IntToStr(LResult));
+  LResult := CalcGeometricGrowth(1000, 0.5);
+  Check(LResult = 2000, 'low factor 0.5 -> 2x: expected 2000 got ' + IntToStr(LResult));
+end;
+
+procedure TestGeometricGrowthOverflow;
+var
+  LResult: SizeUInt;
+begin
+  LResult := CalcGeometricGrowth(High(SizeUInt), 2.0);
+  Check(LResult = High(SizeUInt), 'overflow should saturate');
+end;
+
+procedure TestGeometricGrowthMonotonic;
+var
+  LResult: SizeUInt;
+begin
+  LResult := CalcGeometricGrowth(1, 1.5);
+  Check(LResult >= 2, 'monotonic: expected >= 2 got ' + IntToStr(LResult));
+end;
+
+procedure TestGeometricGrowthCeiling;
+var
+  LResult: SizeUInt;
+begin
+  { 100 * 1.1 ≈ 110 (浮点精度可能 ceil 到 111, 接受两种) }
+  LResult := CalcGeometricGrowth(100, 1.1);
+  Check((LResult >= 110) and (LResult <= 111), '100*1.1≈110 got ' + IntToStr(LResult));
+  { 1000 * 1.5 = 1500.0 (精确) }
+  LResult := CalcGeometricGrowth(1000, 1.5);
+  Check(LResult = 1500, '1000*1.5=1500 got ' + IntToStr(LResult));
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.mem.utils');
   T.Test('IsOverlap no-overlap', @TestIsOverlapNoOverlap);
@@ -412,6 +466,12 @@ begin
   T.Test('Fill zero-count', @TestFillZeroCount);
   T.Test('Compare nil raises', @TestCompareNilRaises);
   T.Test('Fill nil raises', @TestFillNilRaises);
+  T.Test('CalcGeometricGrowth 2x', @TestGeometricGrowth2x);
+  T.Test('CalcGeometricGrowth 1.5x', @TestGeometricGrowth15x);
+  T.Test('CalcGeometricGrowth low-factor', @TestGeometricGrowthLowFactor);
+  T.Test('CalcGeometricGrowth overflow', @TestGeometricGrowthOverflow);
+  T.Test('CalcGeometricGrowth monotonic', @TestGeometricGrowthMonotonic);
+  T.Test('CalcGeometricGrowth ceiling', @TestGeometricGrowthCeiling);
   T.Run;
 
   T.Summary;

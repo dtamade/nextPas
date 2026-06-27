@@ -89,6 +89,9 @@ type
 
 implementation
 
+uses
+  nextpas.core.mem.utils;
+
 {$PUSH}
 {$WARN 4055 OFF} // pointer/ordinal conversions in arena internals
 
@@ -139,8 +142,6 @@ function TChunkedArena.CalcNextSegmentSize(aMinSize: SizeUInt; out aUpdateGrowth
 var
   LBaseSize: SizeUInt;
   LGrowthBase: SizeUInt;
-  LFactor: Double;
-  LTmp: Double;
   LThreshold: SizeUInt;
 begin
   aUpdateGrowthBase := True;
@@ -161,17 +162,7 @@ begin
           Exit(0);
       end;
   else
-    begin
-      LFactor := FGrowthFactor;
-      if LFactor < 1.1 then
-        LFactor := 2.0;
-      LTmp := Double(LGrowthBase) * LFactor;
-      if (LTmp <= 0.0) or (LTmp > Double(High(SizeUInt))) then
-        Exit(0);
-      LBaseSize := SizeUInt(Trunc(LTmp));
-      if LBaseSize <= LGrowthBase then
-        LBaseSize := LGrowthBase;
-    end;
+    LBaseSize := CalcGeometricGrowth(LGrowthBase, FGrowthFactor);
   end;
 
   if LBaseSize < aMinSize then
