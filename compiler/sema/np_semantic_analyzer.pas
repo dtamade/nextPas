@@ -7740,6 +7740,10 @@ begin
         end;
       end;
     end
+    else if Child.NodeKind = gnkProcedureDecl then
+      ProcessProcedureDecl(Child, AOwnerUnitId)
+    else if Child.NodeKind = gnkFunctionDecl then
+      ProcessFunctionDecl(Child, AOwnerUnitId)
     else if Child.NodeKind = gnkBeginBlock then
     begin
       RegisterProcedureBody(ANode.Text, Child, ANode, AOwnerUnitId);
@@ -7805,6 +7809,10 @@ begin
         end;
       end;
     end
+    else if Child.NodeKind = gnkProcedureDecl then
+      ProcessProcedureDecl(Child, AOwnerUnitId)
+    else if Child.NodeKind = gnkFunctionDecl then
+      ProcessFunctionDecl(Child, AOwnerUnitId)
     else if Child.NodeKind = gnkBeginBlock then
     begin
       RegisterProcedureBody(ANode.Text, Child, ANode, AOwnerUnitId);
