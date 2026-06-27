@@ -256,6 +256,11 @@ type
       out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;
     function CallArgumentCount(const ACallNode: TGreenNode): LongInt;
     function BareCallCalleeName(const ACallNode: TGreenNode): string;
+    function IsIntrinsicExprName(const AName: string): Boolean;
+    function TryGetTypeCastTargetTypeId(const ACallNode: TGreenNode;
+      out ATargetTypeId: LongInt): Boolean;
+    function TryGetIntrinsicExprName(const ACallNode: TGreenNode;
+      out AName: string): Boolean;
     function IsWrappedCallChild(
       const AParent: TGreenNode;
       const AChild: TGreenNode
@@ -3641,11 +3646,13 @@ function TSemanticAnalyzer.ExpressionTypeFactIsStable(
   const ACurrentOwnerUnitId: string
 ): Boolean;
 var
+  CallName: string;
   CurrentOwnerUnitId: string;
   Index: LongInt;
   RootOwnerUnitId: string;
   Sym: TSemanticSymbol;
   SymId: LongInt;
+  TargetTypeId: LongInt;
 begin
   Result := False;
   if ANode = nil then
@@ -3685,7 +3692,11 @@ begin
       end;
     gnkFunctionCall:
       begin
-        SymId := FModel.LookupSymbol(ANode.Text, FCurrentScopeId);
+        if TryGetTypeCastTargetTypeId(ANode, TargetTypeId) then
+          Exit(TypeIdHasStableScalarFact(TargetTypeId));
+        if TryGetIntrinsicExprName(ANode, CallName) then
+          Exit(TypeIdHasStableScalarFact(InferExpressionType(ANode)));
+        SymId := FModel.LookupSymbol(BareCallCalleeName(ANode), FCurrentScopeId);
         if SymId <= 0 then
           Exit(False);
         Sym := FModel.SymbolAt(SymId - 1);
@@ -3803,6 +3814,74 @@ begin
   end;
 
   Result := ACallNode.Text;
+end;
+
+function TSemanticAnalyzer.IsIntrinsicExprName(const AName: string): Boolean;
+begin
+  Result := SameText(AName, 'SizeOf') or SameText(AName, 'High') or
+    SameText(AName, 'Low') or SameText(AName, 'Length') or
+    SameText(AName, 'Ord') or SameText(AName, 'Pred') or
+    SameText(AName, 'Succ') or SameText(AName, 'Chr') or
+    SameText(AName, 'Assigned') or SameText(AName, 'Abs') or
+    SameText(AName, 'Sqr') or SameText(AName, 'Sqrt') or
+    SameText(AName, 'Round') or SameText(AName, 'Trunc');
+end;
+
+function TSemanticAnalyzer.TryGetTypeCastTargetTypeId(
+  const ACallNode: TGreenNode;
+  out ATargetTypeId: LongInt
+): Boolean;
+var
+  CalleeNode: TGreenNode;
+begin
+  ATargetTypeId := 0;
+  if (ACallNode = nil) or (ACallNode.NodeKind <> gnkFunctionCall) or
+    (ACallNode.ChildCount <> 2) then
+    Exit(False);
+
+  CalleeNode := ACallNode.ChildAt(0);
+  if (CalleeNode = nil) or (CalleeNode.NodeKind <> gnkIdentifier) or
+    (Trim(CalleeNode.Text) = '') then
+    Exit(False);
+
+  ATargetTypeId := ResolveTypeIdForOwner(
+    CalleeNode.Text,
+    NormalizeUnitIdentity(FCurrentProcessingUnitId)
+  );
+  if ATargetTypeId <= 0 then
+    ATargetTypeId := ResolveTypeIdForOwner(
+      CalleeNode.Text,
+      NormalizeUnitIdentity(FUnitGraph.RootName)
+    );
+  if ATargetTypeId <= 0 then
+    ATargetTypeId := ResolveTypeId(CalleeNode.Text);
+  Result := ATargetTypeId > 0;
+end;
+
+function TSemanticAnalyzer.TryGetIntrinsicExprName(
+  const ACallNode: TGreenNode;
+  out AName: string
+): Boolean;
+var
+  CalleeNode: TGreenNode;
+  DummyTypeId: LongInt;
+begin
+  AName := '';
+  if (ACallNode = nil) or (ACallNode.NodeKind <> gnkFunctionCall) or
+    (ACallNode.ChildCount < 1) then
+    Exit(False);
+
+  if TryGetTypeCastTargetTypeId(ACallNode, DummyTypeId) then
+    Exit(False);
+
+  CalleeNode := ACallNode.ChildAt(0);
+  if (CalleeNode = nil) or (CalleeNode.NodeKind <> gnkIdentifier) then
+    Exit(False);
+
+  AName := CalleeNode.Text;
+  Result := IsIntrinsicExprName(AName);
+  if not Result then
+    AName := '';
 end;
 
 function TSemanticAnalyzer.IsWrappedCallChild(
@@ -5656,9 +5735,11 @@ end;
 
 function TSemanticAnalyzer.InferExpressionType(const ANode: TGreenNode): LongInt;
 var
+  CallName: string;
   LStrTypeId: LongInt;
   RType: LongInt;
   SymId: LongInt;
+  TargetTypeId: LongInt;
   Sym: TSemanticSymbol;
 begin
   Result := 0;
@@ -5736,7 +5817,32 @@ begin
       end;
     gnkFunctionCall:
       begin
-        SymId := FModel.LookupSymbol(ANode.Text, FCurrentScopeId);
+        if TryGetTypeCastTargetTypeId(ANode, TargetTypeId) then
+          Exit(TargetTypeId);
+        if TryGetIntrinsicExprName(ANode, CallName) then
+        begin
+          if SameText(CallName, 'SizeOf') or SameText(CallName, 'High') or
+            SameText(CallName, 'Low') or SameText(CallName, 'Length') or
+            SameText(CallName, 'Ord') or SameText(CallName, 'Round') or
+            SameText(CallName, 'Trunc') then
+            Exit(FModel.FindTypeByName('Integer'));
+          if SameText(CallName, 'Chr') then
+            Exit(FModel.FindTypeByName('Char'));
+          if SameText(CallName, 'Assigned') then
+            Exit(FModel.FindTypeByName('Boolean'));
+          if SameText(CallName, 'Sqrt') then
+            Exit(FModel.FindTypeByName('Double'));
+          if SameText(CallName, 'Pred') or SameText(CallName, 'Succ') or
+            SameText(CallName, 'Abs') or SameText(CallName, 'Sqr') then
+          begin
+            if ANode.ChildCount >= 2 then
+              Result := InferExpressionType(ANode.ChildAt(1));
+            if Result = 0 then
+              Result := FModel.FindTypeByName('Integer');
+            Exit;
+          end;
+        end;
+        SymId := FModel.LookupSymbol(BareCallCalleeName(ANode), FCurrentScopeId);
         if SymId > 0 then
         begin
           Sym := FModel.SymbolAt(SymId - 1);
@@ -8848,12 +8954,17 @@ end;
 function TSemanticAnalyzer.EvaluateIntegerConstant(const ANode: TGreenNode;
   out AValue: Int64): Boolean;
 var
+  ArgNode: TGreenNode;
+  Fact: TSemanticScalarTypeFact;
+  IntrinsicName: string;
   Parsed: Int64;
   ParseCode: Word;
   Left, Right: Int64;
   Op: string;
   BodyNode, DeclNode: TGreenNode;
   ParamSnaps: TParamSnapshots;
+  TypeId: LongInt;
+  TypeName: string;
 begin
   AValue := 0;
   if ANode = nil then
@@ -8912,6 +9023,75 @@ begin
       end;
     gnkFunctionCall:
       begin
+        if TryGetIntrinsicExprName(ANode, IntrinsicName) then
+        begin
+          ArgNode := nil;
+          if ANode.ChildCount >= 2 then
+            ArgNode := ANode.ChildAt(1);
+          if SameText(IntrinsicName, 'SizeOf') and (ArgNode <> nil) then
+          begin
+            TypeId := 0;
+            if ArgNode.NodeKind = gnkIdentifier then
+              TypeId := ResolveTypeIdForOwner(
+                ArgNode.Text,
+                NormalizeUnitIdentity(FCurrentProcessingUnitId)
+              );
+            if TypeId <= 0 then
+              TypeId := InferExpressionType(ArgNode);
+            if (TypeId > 0) and FModel.GetTypeScalarFact(TypeId, Fact) then
+            begin
+              AValue := Fact.BitWidth div 8;
+              Exit(AValue > 0);
+            end;
+            if (TypeId > 0) and (TypeId <= FModel.TypeCount) then
+            begin
+              TypeName := FModel.TypeAt(TypeId - 1).Name;
+              if TypeMetaSize(TypeName) > 0 then
+              begin
+                AValue := TypeMetaSize(TypeName) div 8;
+                Exit(AValue > 0);
+              end;
+            end;
+          end
+          else if SameText(IntrinsicName, 'Length') and (ArgNode <> nil) and
+            (ArgNode.NodeKind = gnkStringLiteral) then
+          begin
+            AValue := Length(DecodePascalStringLiteral(ArgNode.Text));
+            Exit(True);
+          end
+          else if SameText(IntrinsicName, 'Ord') and (ArgNode <> nil) then
+          begin
+            if (ArgNode.NodeKind = gnkStringLiteral) and
+              (Length(ArgNode.Text) = 3) and (ArgNode.Text[1] = '''') then
+            begin
+              AValue := Ord(ArgNode.Text[2]);
+              Exit(True);
+            end;
+            if EvaluateIntegerConstant(ArgNode, Parsed) then
+            begin
+              AValue := Parsed;
+              Exit(True);
+            end;
+          end
+          else if SameText(IntrinsicName, 'Chr') and (ArgNode <> nil) and
+            EvaluateIntegerConstant(ArgNode, Parsed) then
+          begin
+            AValue := Parsed;
+            Exit(True);
+          end
+          else if SameText(IntrinsicName, 'Pred') and (ArgNode <> nil) and
+            EvaluateIntegerConstant(ArgNode, Parsed) then
+          begin
+            AValue := Parsed - 1;
+            Exit(True);
+          end
+          else if SameText(IntrinsicName, 'Succ') and (ArgNode <> nil) and
+            EvaluateIntegerConstant(ArgNode, Parsed) then
+          begin
+            AValue := Parsed + 1;
+            Exit(True);
+          end;
+        end;
         if LookupProcedureBody(ANode.Text, BodyNode, DeclNode) and
           (BodyNode <> nil) and
           not IsCurrentlyInlining(ANode.Text) then
@@ -11596,6 +11776,105 @@ var
     end;
     Result := True;
   end;
+
+  function TryBuildTypeCastHirExpr(
+    const ALocalCallNode: TGreenNode; out ALocalExprId: LongInt): Boolean;
+  var
+    SourceExprId, SourceTypeId, TargetTypeId: LongInt;
+  begin
+    ALocalExprId := 0;
+    if not TryGetTypeCastTargetTypeId(ALocalCallNode, TargetTypeId) then
+      Exit(False);
+    if (ALocalCallNode.ChildCount < 2) or (ALocalCallNode.ChildAt(1) = nil) then
+      Exit(False);
+    if not BuildRuntimeScalarHirExpr(ALocalCallNode.ChildAt(1), SourceExprId) then
+      Exit(False);
+    SourceTypeId := ExprTypeId(SourceExprId);
+    if (SourceTypeId <= 0) or (TargetTypeId <= 0) then
+      Exit(False);
+    if not IsStructuredAddressableScalarType(SourceTypeId) or
+      not IsStructuredAddressableScalarType(TargetTypeId) then
+      Exit(False);
+    ALocalExprId := CastExprToType(SourceExprId, TargetTypeId);
+    Result := ALocalExprId > 0;
+  end;
+
+  function TryBuildIntrinsicHirExpr(
+    const ALocalCallNode: TGreenNode; out ALocalExprId: LongInt): Boolean;
+  var
+    IntrinsicName: string;
+    ArgTypeId, LiteralTypeId, OperandExprId, ResultTypeId: LongInt;
+  begin
+    ALocalExprId := 0;
+    if not TryGetIntrinsicExprName(ALocalCallNode, IntrinsicName) then
+      Exit(False);
+
+    if EvaluateIntegerConstant(ALocalCallNode, Value) then
+    begin
+      LiteralTypeId := InferExpressionType(ALocalCallNode);
+      if LiteralTypeId <= 0 then
+        LiteralTypeId := FModel.FindTypeByName('Integer');
+      SetLength(Children, 0);
+      ALocalExprId := FModel.AddHirExpr(
+        shekIntLiteral, LiteralTypeId, 0, Children,
+        Value, '', '', ALocalCallNode.ByteOffset, shvcScalar
+      );
+      Exit(ALocalExprId > 0);
+    end;
+
+    if (ALocalCallNode.ChildCount < 2) or (ALocalCallNode.ChildAt(1) = nil) then
+      Exit(False);
+    if not BuildRuntimeScalarHirExpr(ALocalCallNode.ChildAt(1), OperandExprId) then
+      Exit(False);
+    ArgTypeId := ExprTypeId(OperandExprId);
+    if ArgTypeId <= 0 then
+      Exit(False);
+
+    if SameText(IntrinsicName, 'Ord') then
+    begin
+      ResultTypeId := FModel.FindTypeByName('Integer');
+      ALocalExprId := CastExprToType(OperandExprId, ResultTypeId);
+      Exit(ALocalExprId > 0);
+    end;
+
+    if SameText(IntrinsicName, 'Chr') then
+    begin
+      ResultTypeId := FModel.FindTypeByName('Char');
+      ALocalExprId := CastExprToType(OperandExprId, ResultTypeId);
+      Exit(ALocalExprId > 0);
+    end;
+
+    if SameText(IntrinsicName, 'Pred') or SameText(IntrinsicName, 'Succ') then
+    begin
+      ResultTypeId := InferExpressionType(ALocalCallNode);
+      if ResultTypeId <= 0 then
+        ResultTypeId := ArgTypeId;
+      SetLength(Children, 0);
+      LeftExprId := FModel.AddHirExpr(
+        shekIntLiteral, ResultTypeId, 0, Children,
+        1, '', '', ALocalCallNode.ByteOffset, shvcScalar
+      );
+      if LeftExprId <= 0 then
+        Exit(False);
+      OperandExprId := CastExprToType(OperandExprId, ResultTypeId);
+      if OperandExprId <= 0 then
+        Exit(False);
+      SetLength(Children, 2);
+      Children[0] := OperandExprId;
+      Children[1] := LeftExprId;
+      if SameText(IntrinsicName, 'Pred') then
+        Op := '-'
+      else
+        Op := '+';
+      ALocalExprId := FModel.AddHirExpr(
+        shekBinaryOp, ResultTypeId, 0, Children,
+        0, '', Op, ALocalCallNode.ByteOffset, shvcScalar
+      );
+      Exit(ALocalExprId > 0);
+    end;
+
+    Result := False;
+  end;
 begin
   AExprId := 0;
   if ANode = nil then
@@ -11706,6 +11985,14 @@ begin
     );
     Exit(True);
   end;
+
+  if (CallNode.NodeKind = gnkFunctionCall) and
+    TryBuildTypeCastHirExpr(CallNode, AExprId) then
+    Exit(True);
+
+  if (CallNode.NodeKind = gnkFunctionCall) and
+    TryBuildIntrinsicHirExpr(CallNode, AExprId) then
+    Exit(True);
 
   if TryGetDispatchedMemberCallContract(ANode, DispatchExprKind,
     ReceiverVarName, CalleeName, ParamKinds, SlotIndex, ResultTypeId) then
