@@ -181,6 +181,13 @@ end;
 
 ## 版本历史
 
+- v7.0 (2026-06-27): Phase E 文档注释 + Round 14 打磨
+  - Phase E: 9 文件 150+ 处方法级 `{** @desc *}` 文档注释
+  - E-2: 6 类型级文档补全 (TSlabPerfCounters/TSlabPoolStats/TSlabConfig/TFixedPoolConfig/TStackPoolConfig/TStackMemoryMapEntry)
+  - 修复: test_object_pool 48 bytes 泄漏 (TestPoolExhaustion 未归还对象)
+  - 修复: deprecation warning (platform_secure_zero → platform_secure_zero_memory)
+  - 修复: doc-extras 代理文档注释格式错误 ({** ... * → {** ... *})
+  - 34 suites / 465 tests / 0 leaks
 - v6.0 (2026-06-27): Phase D 测试覆盖 100% — 3 新测试套件 + 4 补充
   - D-1a: `test_growing_fixed_pool` 12 tests — TGrowingFixedPool 全路径覆盖
   - D-1b: `test_growing_block_pool` 12 tests — TGrowingBlockPool 全路径覆盖
