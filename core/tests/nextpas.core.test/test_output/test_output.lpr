@@ -12,17 +12,11 @@ program test_output;
 uses
   cthreads,
   SysUtils,
-  nextpas.core.test.base,
-  nextpas.core.test.check,
-  nextpas.core.test.config,
-  nextpas.core.test.output,
+  nextpas.core.test,
   { 白盒测试：直接断言 TAP/JSON renderer 与 runner 输出细节。 }
   nextpas.core.test.output.tap,
   nextpas.core.test.output.json,
   nextpas.core.test.runner;
-
-var
-  GTestsRun: Integer = 0;
 
 function ExtractXmlAttributeInt(const AXml, AAttribute: string): Integer;
 var
@@ -74,7 +68,6 @@ procedure TestAnsiHelpersEnabled;
 var
   LOut: string;
 begin
-  Inc(GTestsRun);
   SetAnsiEnabled(True);
   LOut := AnsiBold('hello');
   CheckContains(LOut, #27'[1m');
@@ -96,7 +89,6 @@ procedure TestAnsiHelpersDisabled;
 var
   LOut: string;
 begin
-  Inc(GTestsRun);
   SetAnsiEnabled(False);
   try
     LOut := AnsiBold('hello');
@@ -110,7 +102,6 @@ end;
 
 procedure TestAnsiToggle;
 begin
-  Inc(GTestsRun);
   SetAnsiEnabled(False);
   CheckEqual(AnsiGreen('x'), 'x');
   SetAnsiEnabled(True);
@@ -126,7 +117,6 @@ procedure TestAnsiBoldContainsContent;
 var
   LOut: string;
 begin
-  Inc(GTestsRun);
   SetAnsiEnabled(True);
   LOut := AnsiBold('my text');
   { The ANSI wrapper should contain the actual text }
@@ -140,7 +130,6 @@ procedure TestAnsiGreenContainsContent;
 var
   LOut: string;
 begin
-  Inc(GTestsRun);
   SetAnsiEnabled(True);
   LOut := AnsiGreen('pass');
   CheckContains(LOut, 'pass');
@@ -152,7 +141,6 @@ procedure TestAnsiRedContainsContent;
 var
   LOut: string;
 begin
-  Inc(GTestsRun);
   SetAnsiEnabled(True);
   LOut := AnsiRed('fail');
   CheckContains(LOut, 'fail');
@@ -166,7 +154,6 @@ procedure TestStatusDotAll;
 var
   LDot: string;
 begin
-  Inc(GTestsRun);
   SetAnsiEnabled(False);
   try
     LDot := StatusDot(tsPassed);
@@ -184,7 +171,6 @@ end;
 
 procedure TestStatusDotAsciiFallback;
 begin
-  Inc(GTestsRun);
   SetAnsiEnabled(False);
   try
     CheckEqual(StatusDot(tsPassed), '+');
@@ -200,7 +186,6 @@ procedure TestStatusDotDistinct;
 var
   LPassed, LFailed, LSkipped, LError: string;
 begin
-  Inc(GTestsRun);
   { StatusDot always calls AnsiGreen/AnsiRed/AnsiYellow/AnsiRed,
     which wrap with color codes. Each status type is structurally different. }
   LPassed  := StatusDot(tsPassed);
@@ -218,7 +203,6 @@ end;
 
 procedure TestFilterEmpty;
 begin
-  Inc(GTestsRun);
   SetTestFilter('');
   CheckTrue(MatchesFilter('anything'), 'Empty filter should match everything');
   CheckTrue(MatchesFilter(''), 'Empty filter should match empty string');
@@ -226,7 +210,6 @@ end;
 
 procedure TestFilterSubstring;
 begin
-  Inc(GTestsRun);
   SetTestFilter('hello');
   CheckTrue(MatchesFilter('hello'), 'Exact match');
   CheckTrue(MatchesFilter('say hello world'), 'Substring match');
@@ -238,7 +221,6 @@ end;
 
 procedure TestFilterGlobStar;
 begin
-  Inc(GTestsRun);
   SetTestFilter('test_*');
   CheckTrue(MatchesFilter('test_foo'), '* matches suffix');
   CheckTrue(MatchesFilter('test_'), '* matches empty suffix');
@@ -248,7 +230,6 @@ end;
 
 procedure TestFilterGlobQuestion;
 begin
-  Inc(GTestsRun);
   SetTestFilter('ab?d');
   CheckTrue(MatchesFilter('abcd'), '? matches single char');
   CheckTrue(MatchesFilter('abxd'), '? matches any char');
@@ -259,7 +240,6 @@ end;
 
 procedure TestFilterCommaSeparated;
 begin
-  Inc(GTestsRun);
   SetTestFilter('foo, bar, baz');
   CheckTrue(MatchesFilter('test_foo'), 'Comma-separated: foo');
   CheckTrue(MatchesFilter('test_bar'), 'Comma-separated: bar');
@@ -270,7 +250,6 @@ end;
 
 procedure TestFilterGlobCommaCombined;
 begin
-  Inc(GTestsRun);
   SetTestFilter('test_*,check_*');
   CheckTrue(MatchesFilter('test_alpha'), 'Glob + comma: test_');
   CheckTrue(MatchesFilter('check_beta'), 'Glob + comma: check_');
@@ -280,7 +259,6 @@ end;
 
 procedure TestFilterWildcardOnly;
 begin
-  Inc(GTestsRun);
   SetTestFilter('*');
   CheckTrue(MatchesFilter('anything'), '* matches everything');
   CheckTrue(MatchesFilter(''), '* matches empty');
@@ -289,7 +267,6 @@ end;
 
 procedure TestFilterEmptyBoundary; { L-20: empty string boundary }
 begin
-  Inc(GTestsRun);
   { Empty filter = match everything }
   SetTestFilter('');
   CheckTrue(MatchesFilter(''), 'empty filter matches empty name');
@@ -306,7 +283,6 @@ end;
 
 procedure TestFilterBraceExpansion; { L-07: brace expansion }
 begin
-  Inc(GTestsRun);
   try
     { Simple brace alternatives }
     SetTestFilter('{foo,bar}');
@@ -347,7 +323,6 @@ end;
 
 procedure TestGetSetFilter;
 begin
-  Inc(GTestsRun);
   SetTestFilter('my_pattern');
   CheckEqual(GetTestFilter, 'my_pattern');
   SetTestFilter('');
@@ -358,7 +333,6 @@ end;
 
 procedure TestGetSetTimeout;
 begin
-  Inc(GTestsRun);
   SetTestTimeout(5000);
   CheckEqual(GetTestTimeout, 5000);
   SetTestTimeout(0);
@@ -369,7 +343,6 @@ procedure TestDefaultConfigValues;
 var
   LConfig: TTestConfig;
 begin
-  Inc(GTestsRun);
   ResetDefaultConfig;
   LConfig := DefaultConfig;
   CheckEqual(LConfig.FilterPattern, '');
@@ -384,7 +357,6 @@ procedure TestBufferSinkCapture;
 var
   LSink: TBufferSink;
 begin
-  Inc(GTestsRun);
   LSink := TBufferSink.Create;
   try
     LSink.Write('alpha');
@@ -408,7 +380,6 @@ var
   LTotalTests: Integer;
   LTotalFailures: Integer;
 begin
-  Inc(GTestsRun);
   SetLength(LResults, 1);
   LResults[0] := TTestRunResult.Create('suite1');
   LResults[0].Passed := 2;
@@ -445,7 +416,6 @@ var
   LTotalFailures: Integer;
   LTotalSkipped: Integer;
 begin
-  Inc(GTestsRun);
   SetLength(LResults, 2);
   LResults[0] := TTestRunResult.Create('alpha');
   LResults[0].Passed := 1;
@@ -483,7 +453,6 @@ var
   LResults: specialize TArray<TTestRunResult>;
   LXml: string;
 begin
-  Inc(GTestsRun);
   SetLength(LResults, 1);
   LResults[0] := TTestRunResult.Create('test<>esc');
   LResults[0].Passed := 1;
@@ -503,7 +472,6 @@ var
   LResults: specialize TArray<TTestRunResult>;
   LXml: string;
 begin
-  Inc(GTestsRun);
   SetLength(LResults, 0);
   LXml := JUnitXML(LResults, 'empty');
   CheckEqual(0, ExtractXmlAttributeInt(LXml, 'tests'));
@@ -516,7 +484,6 @@ var
   LResults: specialize TArray<TTestRunResult>;
   LXml: string;
 begin
-  Inc(GTestsRun);
   SetLength(LResults, 1);
   LResults[0] := TTestRunResult.Create('');
   LResults[0].Passed := 1;
@@ -535,7 +502,6 @@ var
   LResults: specialize TArray<TTestRunResult>;
   LXml: string;
 begin
-  Inc(GTestsRun);
   SetLength(LResults, 1);
   LResults[0] := TTestRunResult.Create('s');
   LResults[0].Passed := 0;
@@ -555,7 +521,6 @@ var
   LResults: specialize TArray<TTestRunResult>;
   LXml: string;
 begin
-  Inc(GTestsRun);
   SetLength(LResults, 1);
   LResults[0] := TTestRunResult.Create('s');
   LResults[0].Passed := 0;
@@ -591,7 +556,6 @@ var
   LContent, LLine: string;
   LF: TextFile;
 begin
-  Inc(GTestsRun);
   LPath := MakeTempJUnitPath;
   try
     SetLength(LResults, 1);
@@ -628,7 +592,6 @@ procedure TestWriteJUnitXMLBadPath;
 var
   LResults: specialize TArray<TTestRunResult>;
 begin
-  Inc(GTestsRun);
   SetLength(LResults, 0);
   CheckFalse(WriteJUnitXML(LResults, '/nonexistent/dir/file.xml'),
     'WriteJUnitXML should return False on bad path');
@@ -639,7 +602,6 @@ var
   LResults: specialize TArray<TTestRunResult>;
   LErrSink: TBufferSink;
 begin
-  Inc(GTestsRun);
   SetLength(LResults, 0);
   ResetDefaultConfig;
   LErrSink := TBufferSink.Create;
@@ -660,7 +622,6 @@ var
   LResults: specialize TArray<TTestRunResult>;
   LOut: string;
 begin
-  Inc(GTestsRun);
   SetLength(LResults, 1);
   LResults[0] := TTestRunResult.Create('TapBasic');
   LResults[0].Passed  := 1;
@@ -686,7 +647,6 @@ var
   LResults: specialize TArray<TTestRunResult>;
   LOut: string;
 begin
-  Inc(GTestsRun);
   SetLength(LResults, 1);
   LResults[0] := TTestRunResult.Create('TapSkip');
   LResults[0].Passed  := 1;
@@ -707,7 +667,6 @@ var
   LResults: specialize TArray<TTestRunResult>;
   LOut: string;
 begin
-  Inc(GTestsRun);
   SetLength(LResults, 0);
   LOut := TAPReport(LResults, 'Empty');
   CheckContains(LOut, 'TAP version 13');
@@ -724,7 +683,6 @@ var
   LTotalFailed: Integer;
   LTotalSkipped: Integer;
 begin
-  Inc(GTestsRun);
   SetLength(LResults, 1);
   LResults[0] := TTestRunResult.Create('JsBasic');
   LResults[0].Passed    := 1;
@@ -758,7 +716,6 @@ var
   LResults: specialize TArray<TTestRunResult>;
   LOut: string;
 begin
-  Inc(GTestsRun);
   SetLength(LResults, 0);
   LOut := JSONReport(LResults, 'Empty');
   CheckEqual(0, ExtractJSONInt(LOut, 'totalPassed'));
@@ -773,7 +730,6 @@ var
   LOut: string;
   LCompact: string;
 begin
-  Inc(GTestsRun);
   SetLength(LResults, 1);
   LResults[0] := TTestRunResult.Create('json_valid_suite');
   LResults[0].Passed := 1;
@@ -806,7 +762,6 @@ var
   LResults: specialize TArray<TTestRunResult>;
   LOut: string;
 begin
-  Inc(GTestsRun);
   SetLength(LResults, 2);
   LResults[0] := TTestRunResult.Create('SuiteA');
   LResults[0].Passed := 1;
@@ -834,7 +789,6 @@ var
   LTotalPassed: Integer;
   LTotalSkipped: Integer;
 begin
-  Inc(GTestsRun);
   SetLength(LResults, 2);
   LResults[0] := TTestRunResult.Create('JsSuiteA');
   LResults[0].Passed := 2;
@@ -867,7 +821,6 @@ var
   LResults: specialize TArray<TTestRunResult>;
   LOut: string;
 begin
-  Inc(GTestsRun);
   SetLength(LResults, 1);
   LResults[0] := TTestRunResult.Create('JsSkip');
   LResults[0].Skipped := 1;
@@ -890,7 +843,6 @@ var
   LResults: specialize TArray<TTestRunResult>;
   LOut: string;
 begin
-  Inc(GTestsRun);
   SetLength(LResults, 1);
   LResults[0] := TTestRunResult.Create('TapDur');
   LResults[0].Passed := 1;
@@ -908,7 +860,6 @@ var
   LResults: specialize TArray<TTestRunResult>;
   LOut: string;
 begin
-  Inc(GTestsRun);
   SetLength(LResults, 1);
   LResults[0] := TTestRunResult.Create('JsDur');
   LResults[0].Passed := 1;
@@ -926,7 +877,6 @@ var
   LResults: specialize TArray<TTestRunResult>;
   LOut: string;
 begin
-  Inc(GTestsRun);
   SetLength(LResults, 1);
   LResults[0] := TTestRunResult.Create('TapMulti');
   LResults[0].Failed := 1;
@@ -947,7 +897,6 @@ var
   LResults: specialize TArray<TTestRunResult>;
   LOut: string;
 begin
-  Inc(GTestsRun);
   SetLength(LResults, 1);
   LResults[0] := TTestRunResult.Create('TapErr');
   LResults[0].Failed := 1;
@@ -967,7 +916,6 @@ procedure TestStatusDotUnicodeName;
 var
   LDot: string;
 begin
-  Inc(GTestsRun);
   { Calling StatusDot with Unicode content in the test name should not crash }
   LDot := StatusDot(tsPassed);
   CheckTrue(Length(LDot) > 0, 'StatusDot should return non-empty');
@@ -982,7 +930,6 @@ end;
 
 procedure TestFilterNestedGlob;
 begin
-  Inc(GTestsRun);
   SetTestFilter('a*b*c');
   CheckTrue(MatchesFilter('axxbyyc'), 'a*b*c should match axxbyyc');
   CheckTrue(MatchesFilter('abc'), 'a*b*c should match abc (* matches empty)');
@@ -998,7 +945,6 @@ var
   LResults: specialize TArray<TTestRunResult>;
   LXml: string;
 begin
-  Inc(GTestsRun);
   SetLength(LResults, 1);
   LResults[0] := TTestRunResult.Create('StructSuite');
   LResults[0].Passed := 1;
@@ -1026,7 +972,6 @@ var
   LResults: specialize TArray<TTestRunResult>;
   LOut: string;
 begin
-  Inc(GTestsRun);
   SetLength(LResults, 1);
   LResults[0] := TTestRunResult.Create('JsStruct');
   LResults[0].Passed := 1;
@@ -1050,7 +995,6 @@ var
   LResults: specialize TArray<TTestRunResult>;
   LXml: string;
 begin
-  Inc(GTestsRun);
   { Tab/LF/CR should be preserved in XML output }
   SetLength(LResults, 1);
   LResults[0] := TTestRunResult.Create('CtrlTest');
@@ -1083,7 +1027,6 @@ end;
 
 procedure TestAnsiStateRestoration;
 begin
-  Inc(GTestsRun);
   SetAnsiEnabled(True);
   try
     SetAnsiEnabled(False);
@@ -1099,7 +1042,6 @@ end;
 
 procedure TestSetGetTagFilter;
 begin
-  Inc(GTestsRun);
   SetTagFilter('fast,unit');
   CheckEqual('fast,unit', GetTagFilter);
   SetTagFilter('');
@@ -1128,7 +1070,6 @@ var
   LSink: TBufferSink;
   LOut: string;
 begin
-  Inc(GTestsRun);
   LSink := TBufferSink.Create;
   LConfig := DefaultConfig;
   LConfig.OutSink := LSink;
@@ -1153,7 +1094,6 @@ var
   LSink: TBufferSink;
   LOut: string;
 begin
-  Inc(GTestsRun);
   LSink := TBufferSink.Create;
   LConfig := DefaultConfig;
   LConfig.OutSink := LSink;
@@ -1179,7 +1119,6 @@ var
   LSink: TBufferSink;
   LOut: string;
 begin
-  Inc(GTestsRun);
   LSink := TBufferSink.Create;
   LConfig := DefaultConfig;
   LConfig.OutSink := LSink;
@@ -1212,7 +1151,6 @@ var
   LConfig: TTestConfig;
   LSink: TBufferSink;
 begin
-  Inc(GTestsRun);
   LSink := TBufferSink.Create;
   LConfig := DefaultConfig;
   LConfig.OutSink := LSink;
@@ -1239,7 +1177,6 @@ var
   LConfig: TTestConfig;
   LSink: TBufferSink;
 begin
-  Inc(GTestsRun);
   GRepeatCounter := 0;
   LSink := TBufferSink.Create;
   LConfig := DefaultConfig;
@@ -1265,7 +1202,6 @@ var
   LResults: specialize TArray<TTestRunResult>;
   LXml: string;
 begin
-  Inc(GTestsRun);
   SetLength(LResults, 1);
   LResults[0] := TTestRunResult.Create('caplog');
   LResults[0].Failed := 1;
@@ -1288,7 +1224,6 @@ var
   LResults: specialize TArray<TTestRunResult>;
   LXml: string;
 begin
-  Inc(GTestsRun);
   SetLength(LResults, 1);
   LResults[0] := TTestRunResult.Create('skipreason');
   LResults[0].Skipped := 1;
@@ -1308,7 +1243,6 @@ var
   LResults: specialize TArray<TTestRunResult>;
   LOut: string;
 begin
-  Inc(GTestsRun);
   SetLength(LResults, 1);
   LResults[0] := TTestRunResult.Create('TapLog');
   LResults[0].Failed := 1;
@@ -1335,7 +1269,6 @@ var
   LResults: specialize TArray<TTestRunResult>;
   LOut: string;
 begin
-  Inc(GTestsRun);
   SetLength(LResults, 1);
   LResults[0] := TTestRunResult.Create('JsLog');
   LResults[0].Failed := 1;
@@ -1360,7 +1293,6 @@ var
   LConfig: TTestConfig;
   LSink: TBufferSink;
 begin
-  Inc(GTestsRun);
   LSink := TBufferSink.Create;
   LConfig := DefaultConfig;
   LConfig.OutSink := LSink;
@@ -1462,7 +1394,7 @@ begin
   WriteLn;
   Runner.Summary;
 
-  CheckTrue(GTestsRun >= 59, 'Expected at least 59 tests, got ' + IntToStr(GTestsRun));
+  CheckTrue(LResults[0].Passed >= 59, 'Expected at least 59 tests, got ' + IntToStr(LResults[0].Passed));
   CheckTrue(LSuccess, 'All output tests should pass');
 
   if Runner.AllPassed then

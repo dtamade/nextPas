@@ -31,7 +31,7 @@ make -C core/tests/nextpas.core.test/test_runner test
 
 ## 约定
 
-- 编译模式：`{$mode objfpc}{$H+}`，使用 `{$modeswitch anonymousfunctions}`
+- 编译模式：`{$mode objfpc}{$H+}{$J-}`，使用 `{$modeswitch anonymousfunctions}`
 - 串行套件启用 heaptrc（`-gh`），必须 0 unfreed blocks
 - 并行套件（test_parallel）不用 heaptrc（FPC heaptrc 非线程安全）
 - 失败用 `Halt(1)` 退出，CI 通过 exit code 判断
@@ -64,3 +64,4 @@ core/src/nextpas.core.testing.pas           ← v1 兼容层（deprecated）
 - **v3.4**: Brace expansion、ANSI TTY 检测、Before/AfterEach 文档
 - **v3.5**: CheckNotContains、FailUnexpected、CheckContains 统一替换、ResolveOutSink 缓存
 - **v3.6**: 编译器指令标准化 (`{$J-}`)、WriteLn header 统一、test_advanced 输出规范化
+- **v3.7**: Facade 补全 (`ResetDefaultConfig`/`SetDefaultErrSink`/`TMockValueKind`)、测试文件 import 简化、移除脆弱手动计数器

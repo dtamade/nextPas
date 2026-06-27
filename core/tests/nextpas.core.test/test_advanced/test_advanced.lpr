@@ -11,10 +11,8 @@ program test_advanced;
 uses
   cthreads,
   SysUtils,
-  nextpas.core.test.base,
-  nextpas.core.test.check,
-  nextpas.core.test.output,
-  { 白盒测试：直接验证独立 TAP/JSON renderer 与 discovery/runner 集成。 }
+  nextpas.core.test,
+  { 白盒测试：直接验证 discovery + runner 集成。 }
   nextpas.core.test.output.tap,
   nextpas.core.test.output.json,
   nextpas.core.test.runner,

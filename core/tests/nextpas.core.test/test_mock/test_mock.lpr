@@ -11,11 +11,7 @@ program test_mock;
 uses
   cthreads,
   SysUtils,
-  nextpas.core.test.base,
-  nextpas.core.test.runner,
-  nextpas.core.test.check,
-  nextpas.core.test.output,
-  nextpas.core.test.mock;
+  nextpas.core.test;
 
 { ── TMockValue constructors ────────────────────────────────────────────────── }
 
