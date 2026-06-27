@@ -232,6 +232,83 @@ begin
   end;
 end;
 
+{ T-05: block_size=1 — smallest possible blocks }
+procedure TestBlockSizeOne;
+var Pool: TBlockPool; P1, P2: Pointer;
+begin
+  Pool := TBlockPool.Create(1, 4);
+  try
+    Check(Pool.Available = 4, 'available=4');
+    P1 := Pool.Acquire;
+    P2 := Pool.Acquire;
+    Check(P1 <> nil, 'acquire 1-byte block 1');
+    Check(P2 <> nil, 'acquire 1-byte block 2');
+    Check(P1 <> P2, 'distinct 1-byte blocks');
+    Check(Pool.Owns(P1), 'owns 1-byte block');
+    Pool.Release(P1);
+    Pool.Release(P2);
+  finally
+    Pool.Free;
+  end;
+end;
+
+{ T-05: capacity=1 — single-block pool }
+procedure TestCapacityOne;
+var Pool: TBlockPool; P, PDummy: Pointer; LOk: Boolean;
+begin
+  Pool := TBlockPool.Create(64, 1);
+  try
+    Check(Pool.Available = 1, 'available=1');
+    P := Pool.Acquire;
+    Check(P <> nil, 'acquire single block');
+    Check(Pool.Available = 0, 'available=0 after acquire');
+    LOk := Pool.TryAcquire(PDummy);
+    Check(not LOk, 'TryAcquire fails on capacity=1 pool');
+    Pool.Release(P);
+    Check(Pool.Available = 1, 'available=1 after release');
+  finally
+    Pool.Free;
+  end;
+end;
+
+{ T-05: alignment=1 — natural alignment, no padding }
+procedure TestAlignmentOne;
+var Pool: TBlockPool; I: Integer; P: Pointer;
+begin
+  Pool := TBlockPool.Create(32, 8, 1);
+  try
+    for I := 1 to 8 do
+    begin
+      P := Pool.Acquire;
+      Check(P <> nil, 'acquire with align=1 ' + IntToStr(I));
+      { alignment=1 means any address is valid }
+      Check((PtrUInt(P) mod 1) = 0, 'trivially aligned');
+    end;
+    Check(Pool.Available = 0, 'all acquired');
+  finally
+    Pool.Free;
+  end;
+end;
+
+{ T-05: block_size=1 + capacity=1 — extreme minimal }
+procedure TestMinimalPool;
+var Pool: TBlockPool; P: Pointer;
+begin
+  Pool := TBlockPool.Create(1, 1);
+  try
+    Check(Pool.Available = 1, 'available=1');
+    P := Pool.Acquire;
+    Check(P <> nil, 'acquire from minimal pool');
+    Check(Pool.InUse = 1, 'inuse=1');
+    Pool.Release(P);
+    Check(Pool.InUse = 0, 'inuse=0 after release');
+    Pool.Reset;
+    Check(Pool.Available = 1, 'available after reset');
+  finally
+    Pool.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.mem.blockpool');
   T.Test('basic acquire/release', @TestBasicAcquireRelease);
@@ -245,6 +322,10 @@ begin
   T.Test('invalid pointer release', @TestInvalidRelease);
   T.Test('rejects total-size overflow as invalid layout', @TestRejectsTotalSizeOverflowAsInvalidLayout);
   T.Test('AcquireUnchecked stats (R-14)', @TestAcquireUncheckedStats);
+  T.Test('block_size=1 boundary', @TestBlockSizeOne);
+  T.Test('capacity=1 boundary', @TestCapacityOne);
+  T.Test('alignment=1 (natural)', @TestAlignmentOne);
+  T.Test('minimal pool (size=1, cap=1)', @TestMinimalPool);
   T.Run;
 
   T.Summary;

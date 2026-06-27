@@ -34,6 +34,9 @@ type
     Pool: TGrowingBlockPoolConfig;
     ShardCount: Integer;              // 0 = auto (CPUCount rounded to pow2)
     ThreadCacheCapacity: Integer;     // 0 = disabled (per-thread pointer cache)
+                                       // NOTE: >0 raises error — thread-exit cleanup not yet implemented.
+                                       // The GetThreadCacheNode/FlushThreadCacheLocked code is present
+                                       // but unreachable until this is resolved.
     ThreadCacheCheckDoubleFree: Boolean; // enable O(n) scan in cache
     TrackInUse: Boolean;              // accurate InUse/Available via atomic counters (costs per-op atomics)
 

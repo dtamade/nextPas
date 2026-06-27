@@ -814,6 +814,131 @@ begin
   end;
 end;
 
+{ T-04: Recursive acquire on ERRORCHECK mutex should raise }
+procedure TestMutexRecursiveAcquire;
+var
+  LMutex: TMemMutex;
+  LCaught: Boolean;
+begin
+  FillChar(LMutex, SizeOf(LMutex), 0);
+  LMutex.Init;
+  try
+    LMutex.Acquire;
+    { Second Acquire on same thread should fail (ERRORCHECK mutex) }
+    LCaught := False;
+    try
+      LMutex.Acquire;
+    except
+      on E: Exception do
+        LCaught := True;
+    end;
+    Check(LCaught, 'recursive Acquire on ERRORCHECK mutex must raise');
+    LMutex.Release;
+  finally
+    LMutex.Done;
+  end;
+end;
+
+{ T-04: Release without matching Acquire should raise }
+procedure TestMutexReleaseWithoutLock;
+var
+  LMutex: TMemMutex;
+  LCaught: Boolean;
+begin
+  FillChar(LMutex, SizeOf(LMutex), 0);
+  LMutex.Init;
+  try
+    LCaught := False;
+    try
+      LMutex.Release;
+    except
+      on E: Exception do
+        LCaught := True;
+    end;
+    Check(LCaught, 'Release without Acquire must raise');
+  finally
+    LMutex.Done;
+  end;
+end;
+
+{ T-04: Multiple concurrent readers can hold read lock simultaneously }
+type
+  PRwLockReaderData = ^TRwLockReaderData;
+  TRwLockReaderData = record
+    RwLock: ^TMemRwLock;
+    Counter: PInt64;
+    StartFlag: PLongInt;
+    Failure: string;
+  end;
+
+function RwLockReaderProc(AArg: Pointer): Pointer; cdecl;
+var
+  LData: PRwLockReaderData;
+  LRwLock: ^TMemRwLock;
+  LIndex: Integer;
+begin
+  LData := PRwLockReaderData(AArg);
+  LRwLock := LData^.RwLock;
+  WaitForStartFlag(LData^.StartFlag);
+
+  try
+    for LIndex := 0 to 63 do
+    begin
+      LRwLock^.AcquireRead;
+      Inc(LData^.Counter^);
+      LRwLock^.ReleaseRead;
+    end;
+  except
+    on E: Exception do
+      LData^.Failure := E.Message;
+  end;
+  Result := nil;
+end;
+
+procedure TestRwLockMultipleReaders;
+const
+  READER_COUNT = 4;
+var
+  LRwLock: TMemRwLock;
+  LReaders: array[0..READER_COUNT - 1] of TPlatformThreadRecord;
+  LReaderData: array[0..READER_COUNT - 1] of TRwLockReaderData;
+  LStartFlag: LongInt;
+  LCounter: Int64;
+  LIndex: Integer;
+  LFailure: string;
+begin
+  FillChar(LRwLock, SizeOf(LRwLock), 0);
+  LRwLock.Init;
+  LCounter := 0;
+  try
+    LStartFlag := 0;
+    for LIndex := 0 to High(LReaders) do
+    begin
+      LReaderData[LIndex].RwLock := @LRwLock;
+      LReaderData[LIndex].Counter := @LCounter;
+      LReaderData[LIndex].StartFlag := @LStartFlag;
+      LReaderData[LIndex].Failure := '';
+      platform_thread_spawn(LReaders[LIndex], @RwLockReaderProc,
+        @LReaderData[LIndex]);
+    end;
+
+    LStartFlag := 1;
+    for LIndex := 0 to High(LReaders) do
+      platform_thread_wait(LReaders[LIndex]);
+
+    LFailure := '';
+    for LIndex := 0 to High(LReaders) do
+    begin
+      if (LFailure = '') and (LReaderData[LIndex].Failure <> '') then
+        LFailure := 'reader ' + IntToStr(LIndex) + ': ' + LReaderData[LIndex].Failure;
+    end;
+    Check(LFailure = '', 'concurrent readers should not fail: ' + LFailure);
+    Check(LCounter > 0, 'readers should have completed iterations');
+  finally
+    LRwLock.Done;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.mem.concurrent_wrappers');
   T.Test('T-01 mutex direct', @TestMemMutexDirect);
@@ -827,6 +952,9 @@ begin
   T.Test('R-03 Reset vs Alloc contention', @TestArenaResetVsAllocContention);
   T.Test('R-03 mark vs alloc contention', @TestArenaMarkVsAllocContention);
   T.Test('B4-3 multiple mark/restore cycles', @TestArenaConcurrentMultipleMarkRestore);
+  T.Test('T-04 mutex recursive acquire raises', @TestMutexRecursiveAcquire);
+  T.Test('T-04 mutex release without lock raises', @TestMutexReleaseWithoutLock);
+  T.Test('T-04 rwlock multiple readers', @TestRwLockMultipleReaders);
   T.Run;
   T.Summary;
 end.
