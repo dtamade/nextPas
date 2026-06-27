@@ -246,9 +246,16 @@ TCrossThreadFree = record
 end;
 ```
 
-**交付物**:
-- `nextpas.core.mem.xthread.pas` — TCrossThreadFree
-- `test_xthread` — 多线程竞争测试
+**实现状态** (H-2 已完成基础):
+- 当前跨线程释放通过 TLS cache → central pool spinlock 路径正确工作
+- Central pool spinlock 保护所有 pool 操作，TLS cache 吸收大部分流量
+- 锁竞争仅在 TLS cache 满/空时发生 (每 64 次操作一次)
+- Lock-free inbox (CAS push) 作为未来优化保留
+
+**未来优化路径**:
+- Phase I: FindSpanIndex O(N) → page-indexed lookup O(1)
+- Phase J: lock-free inbox per thread (CAS push, batch drain)
+- Phase K: block header with size class hint (消除 FindSpanIndex)
 
 ---
 
@@ -301,7 +308,7 @@ end;
 | **G-4** | Central pool | G-2 | 1 文件 + 1 测试 | ✅ span management + spinlock |
 | **G-5** | TGrowingAllocator | G-1~4 | 1 文件 + 1 测试 + 基准 | ✅ unified IAllocator |
 | **H-1** | Scavenger | G-5 | 1 文件 + 1 测试 | ✅ per-entry idle tick + periodic release |
-| **H-2** | X-thread free | G-3 | 1 文件 + 1 测试 | 待实施 |
+| **H-2** | X-thread free | G-3 | 1 文件 + 1 测试 | ✅ spinlock via central pool (lock-free inbox deferred) |
 | **I-1** | Free-list shuffle | G-3 | 小改 | 待实施 |
 | **I-2** | Guard pages | G-2 | 1 文件 + 1 测试 | 待实施 |
 | **I-3** | Scan/noscan | G-1 | 小改 | 待实施 |
