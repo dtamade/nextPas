@@ -1239,6 +1239,7 @@ end;
 procedure TTestSuite.Summary;
 var
   LConfig: TTestConfig;
+  LOutSink: IOutputSink;
 begin
   LConfig := ResolveConfig(Config);
   if not HasRun then
@@ -1247,12 +1248,13 @@ begin
       AnsiYellow('Warning: ', LConfig) + Name + ' has not been run yet');
     Exit;
   end;
-  ResolveOutSink(LConfig).WriteLn(
+  LOutSink := ResolveOutSink(LConfig);
+  LOutSink.WriteLn(
     AnsiBold('--- ', LConfig) +
     AnsiCyan(Name, LConfig) +
     AnsiBold(' ---', LConfig));
-  ResolveOutSink(LConfig).WriteLn('  Total tests: ' + IntToStr(Length(Tests)));
-  ResolveOutSink(LConfig).WriteLn(
+  LOutSink.WriteLn('  Total tests: ' + IntToStr(Length(Tests)));
+  LOutSink.WriteLn(
     '  Passed: ' + IntToStr(LastPass) +
     ', Failed: ' + IntToStr(LastFail) +
     ', Skipped: ' + IntToStr(LastSkip));
@@ -1429,12 +1431,14 @@ end;
 procedure TTestRunner.Summary;
 var
   LConfig: TTestConfig;
+  LOutSink: IOutputSink;
 begin
   LConfig := RunnerConfig(Self);
-  ResolveOutSink(LConfig).WriteLn('');
-  ResolveOutSink(LConfig).WriteLn(AnsiBold('=== Summary ===', LConfig));
-  ResolveOutSink(LConfig).WriteLn('  Suites: ' + IntToStr(Length(Suites)));
-  ResolveOutSink(LConfig).WriteLn(
+  LOutSink := ResolveOutSink(LConfig);
+  LOutSink.WriteLn('');
+  LOutSink.WriteLn(AnsiBold('=== Summary ===', LConfig));
+  LOutSink.WriteLn('  Suites: ' + IntToStr(Length(Suites)));
+  LOutSink.WriteLn(
     '  Passed: ' + IntToStr(TotalPass) +
     ', Failed: ' + IntToStr(TotalFail) +
     ', Skipped: ' + IntToStr(TotalSkip));
