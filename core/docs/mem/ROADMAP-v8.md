@@ -1,5 +1,7 @@
 # mem 模块路线图 v8.0 — 对标 Go / mimalloc / snmalloc
 
+> **状态**: 已完成 — 12/12 里程碑全清，2026-06-25。当前活跃路线图为 ROADMAP-v8.md。
+>
 > **目标**: 从"超越 Go chan"的专项能力，进化为通用内存分配器基础设施——在真实工作负载下与 Go runtime.mallocgc、mimalloc、snmalloc 正面对标。
 >
 > **原则**: 不做表面功夫。每个阶段交付可测量的性能数据，用 `nextpas.core.bench` 和对照基准说话。

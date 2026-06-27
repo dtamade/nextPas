@@ -167,7 +167,7 @@ end;
 
 ## 测试覆盖
 
-- 31 test suites with 465 `T.Test` cases (migrated to `nextpas.core.test` v3.x)
+- 30 test suites with 398 `T.Run` cases (migrated to `nextpas.core.test` v3.x)
 - 0 memory leaks, 0 unfreed blocks
 - 完整接口覆盖：Arena / Pool / Allocator / Concurrent / Sharded / Contract / OOM / Facade
 
@@ -176,8 +176,8 @@ end;
 - [架构设计](ARCHITECTURE.md)
 - [API 参考](API.md)
 - [基准测试](BENCHMARKS.md)
-- [审查报告](mem-findings.md)
-- [修复计划](mem-fix-plan.md)
+- [审查报告](mem-findings.md) — 已归档
+- [路线图 v8](ROADMAP-v8.md) — 已完成
 
 ## 版本历史
 
