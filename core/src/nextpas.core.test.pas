@@ -182,8 +182,14 @@ function JSONReport(const AResults: specialize TArray<TTestRunResult>;
 type
   TMock = nextpas.core.test.mock.TMock;
   TMockState = nextpas.core.test.mock.TMockState;
+  TMockValue = nextpas.core.test.mock.TMockValue;
   IMockSetup = nextpas.core.test.mock.IMockSetup;
   IMockVerify = nextpas.core.test.mock.IMockVerify;
+
+function MockStr(const AValue: string): TMockValue;
+function MockInt(const AValue: Int64): TMockValue;
+function MockBool(AValue: Boolean): TMockValue;
+function MockDouble(const AValue: Double): TMockValue;
 
 implementation
 
@@ -408,5 +414,19 @@ begin Result := nextpas.core.test.output.tap.TAPReport(AResults, ASuiteName); en
 function JSONReport(const AResults: specialize TArray<TTestRunResult>;
   const ASuiteName: string): string;
 begin Result := nextpas.core.test.output.json.JSONReport(AResults, ASuiteName); end;
+
+{ ── Forward to test.mock (helper functions) ────────────────────────────────── }
+
+function MockStr(const AValue: string): TMockValue;
+begin Result := nextpas.core.test.mock.MockStr(AValue); end;
+
+function MockInt(const AValue: Int64): TMockValue;
+begin Result := nextpas.core.test.mock.MockInt(AValue); end;
+
+function MockBool(AValue: Boolean): TMockValue;
+begin Result := nextpas.core.test.mock.MockBool(AValue); end;
+
+function MockDouble(const AValue: Double): TMockValue;
+begin Result := nextpas.core.test.mock.MockDouble(AValue); end;
 
 end.

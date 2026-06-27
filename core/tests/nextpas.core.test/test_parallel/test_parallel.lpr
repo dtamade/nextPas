@@ -1,7 +1,7 @@
 { test_parallel — Validates parallel test execution }
 program test_parallel;
 
-{$mode objfpc}{$H+}
+{$mode objfpc}{$H+}{$J-}
 {$modeswitch anonymousfunctions}
 {$modeswitch functionreferences}
 
@@ -322,6 +322,7 @@ var
   LFailSuite, LSkipSuite: TTestSuite;
   LRunner: TTestRunner;
 begin
+  WriteLn('=== test_parallel ===');
   LSuite := TTestSuite.Create('Parallel Tests');
   LSuite.Test('p1', @TestParallelSimple);
   LSuite.Test('p2', @TestParallelSimple);

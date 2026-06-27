@@ -6,7 +6,7 @@
 
 program test_diagnostics;
 
-{$mode objfpc}{$H+}
+{$mode objfpc}{$H+}{$J-}
 {$modeswitch anonymousfunctions}
 {$modeswitch functionreferences}
 
