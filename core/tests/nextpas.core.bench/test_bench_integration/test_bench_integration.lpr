@@ -1253,6 +1253,83 @@ begin
   end;
 end;
 
+procedure TestRemoveByName_NonExistent;
+var
+  LSuite: IBenchSuite;
+begin
+  WriteLn('TestRemoveByName_NonExistent:');
+  LSuite := CreateFastSuite('RemoveNonExistent');
+  LSuite.Add('Exists', @BenchFast);
+  LSuite.RemoveByName('DoesNotExist');
+  LSuite.SetQuiet(True);
+  LSuite.Run;
+  Check(LSuite.Run.Count = 1, 'RemoveByName(non-existent) leaves existing entries intact');
+end;
+
+procedure TestClearThenRun;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+begin
+  WriteLn('TestClearThenRun:');
+  LSuite := CreateFastSuite('ClearRun');
+  LSuite.Add('A', @BenchFast);
+  LSuite.Add('B', @BenchFast);
+  LSuite.Clear;
+  LSuite.SetQuiet(True);
+  LResults := LSuite.Run;
+  Check(LResults.Count = 0, 'Run after Clear returns 0 results');
+end;
+
+procedure TestAddBaseline_TDuration;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+  LComparisons: TBenchComparisonArray;
+begin
+  WriteLn('TestAddBaseline_TDuration:');
+  LSuite := CreateFastSuite('BaselineDuration');
+  LSuite.Add('Fast', @BenchFast);
+  LSuite.AddBaseline('Fast', TDuration.FromMilliseconds(1));
+  LSuite.SetQuiet(True);
+  LResults := LSuite.Run;
+  LComparisons := LResults.CompareWithBaseline;
+  Check(Length(LComparisons) = 1, 'TDuration baseline produces 1 comparison');
+  Check(LComparisons[0].BaselineNsPerOp = 1000000.0, 'TDuration baseline = 1ms = 1000000 ns');
+end;
+
+procedure TestHasRegression_Thresholds;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+begin
+  WriteLn('TestHasRegression_Thresholds:');
+  LSuite := CreateFastSuite('RegressionThreshold');
+  LSuite.Add('Fast', @BenchFast);
+  LSuite.AddBaseline('Fast', 0.001);
+  LSuite.SetQuiet(True);
+  LResults := LSuite.Run;
+  Check(LResults.HasRegression(0.1), 'Low threshold detects regression (ratio >> 0.1)');
+  Check(not LResults.HasRegression(1000000000.0), 'Very high threshold no regression');
+end;
+
+procedure TestToBenchstat_Integration;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+  LBenchstat: string;
+begin
+  WriteLn('TestToBenchstat_Integration:');
+  LSuite := CreateFastSuite('BenchstatInteg');
+  LSuite.Add('Fast', @BenchFast);
+  LSuite.SetQuiet(True);
+  LResults := LSuite.Run;
+  LBenchstat := LResults.ToBenchstat;
+  Check(Pos('name', LBenchstat) > 0, 'Benchstat contains header');
+  Check(Pos('Fast', LBenchstat) > 0, 'Benchstat contains benchmark name');
+  Check(Pos('ns/op', LBenchstat) > 0, 'Benchstat contains ns/op column');
+end;
+
 begin
   WriteLn('=== nextpas.core.bench Integration Tests ===');
   WriteLn;
@@ -1332,6 +1409,13 @@ begin
     WriteLn;
     WriteLn('=== Timeout Test (ST-04) ===');
     TestTBenchSuite_Timeout;
+    WriteLn;
+    WriteLn('=== Edge Case Tests (PF-25) ===');
+    TestRemoveByName_NonExistent; WriteLn;
+    TestClearThenRun; WriteLn;
+    TestAddBaseline_TDuration; WriteLn;
+    TestHasRegression_Thresholds; WriteLn;
+    TestToBenchstat_Integration;
   finally
     GParallelLock.Free;
   end;
