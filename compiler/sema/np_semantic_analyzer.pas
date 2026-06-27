@@ -5950,6 +5950,11 @@ begin
             Sym := FModel.SymbolAt(SymId - 1);
             LReceiverTypeId := Sym.TypeId;
           end;
+          { Fall back to FindTypeByName for type names used as
+            class method receivers (e.g. TOffsetDateTime.Now) }
+          if LReceiverTypeId <= 0 then
+            LReceiverTypeId := FModel.FindTypeByName(
+              ANode.ChildAt(0).Text);
         end
         else
           LReceiverTypeId := InferExpressionType(ANode.ChildAt(0));
@@ -6013,6 +6018,27 @@ begin
                   end;
                 if Result > 0 then
                   Break;
+              end;
+            end;
+            { Fall back to symbol table for class methods not in
+              FProcedureBodies (e.g. TOffsetDateTime.Now) }
+            if Result <= 0 then
+            begin
+              LQualifiedName := LTypeName + '.' + ANode.ChildAt(1).Text;
+              for LBodyIdx := 0 to FModel.SymbolCount - 1 do
+              begin
+                Sym := FModel.SymbolAt(LBodyIdx);
+                if SameText(Sym.Name, LQualifiedName) and
+                  (SameText(Sym.Kind, 'method') or
+                   SameText(Sym.Kind, 'function')) then
+                begin
+                  if Sym.ReturnTypeId > 0 then
+                    Result := Sym.ReturnTypeId
+                  else
+                    Result := Sym.TypeId;
+                  if Result > 0 then
+                    Break;
+                end;
               end;
             end;
           end;
@@ -7139,6 +7165,7 @@ var
   CallableScopeId, SavedScopeId: LongInt;
   ParamTypeId: LongInt;
   ParamCount: LongInt;
+  SymCountBefore: LongInt;
 begin
   if ANode = nil then
     Exit;
@@ -7171,6 +7198,13 @@ begin
         end;
       end;
     end
+    else if Child.NodeKind = gnkVarSection then
+    begin
+      SymCountBefore := FModel.SymbolCount;
+      ProcessVarSection(Child, AOwnerUnitId);
+      for ParamTypeId := SymCountBefore + 1 to FModel.SymbolCount do
+        FModel.SetSymbolScope(ParamTypeId, CallableScopeId);
+    end
     else if Child.NodeKind = gnkBeginBlock then
     begin
       RegisterProcedureBody(ANode.Text, Child, ANode, AOwnerUnitId);
@@ -7194,6 +7228,7 @@ var
   CallableScopeId, SavedScopeId: LongInt;
   ParamTypeId: LongInt;
   ParamCount: LongInt;
+  SymCountBefore: LongInt;
 begin
   if ANode = nil then
     Exit;
@@ -7235,6 +7270,13 @@ begin
           Inc(ParamCount);
         end;
       end;
+    end
+    else if Child.NodeKind = gnkVarSection then
+    begin
+      SymCountBefore := FModel.SymbolCount;
+      ProcessVarSection(Child, AOwnerUnitId);
+      for ParamTypeId := SymCountBefore + 1 to FModel.SymbolCount do
+        FModel.SetSymbolScope(ParamTypeId, CallableScopeId);
     end
     else if Child.NodeKind = gnkBeginBlock then
     begin
@@ -7282,6 +7324,8 @@ var
   TypeChild: TGreenNode;
   J: LongInt;
   FieldIndex: LongInt;
+  NameNode: TGreenNode;
+  SymbolId: LongInt;
   RecName: string;
   Meta: TTypeMetadata;
   FieldMeta: TTypeMetadata;
@@ -7310,7 +7354,29 @@ begin
   for I := 0 to ANode.ChildCount - 1 do
   begin
     Child := ANode.ChildAt(I);
-    if (Child = nil) or (Child.NodeKind <> gnkVarDecl) then
+    if Child = nil then
+      Continue;
+    if Child.NodeKind = gnkClassMethod then
+    begin
+      if Child.ChildCount > 0 then
+      begin
+        NameNode := Child.ChildAt(0);
+        if (NameNode <> nil) and (NameNode.NodeKind = gnkIdentifier) then
+        begin
+          SymbolId := FModel.AddSymbol(
+            RecName + '.' + NameNode.Text,
+            'method', AOwnerUnitId, ATypeId, Child.ByteOffset);
+          FModel.SetSymbolParamCount(SymbolId, CountDeclParams(Child));
+          FModel.SetSymbolMinParamCount(SymbolId, CountRequiredDeclParams(Child));
+          FModel.SetSymbolParamSignature(SymbolId, GetParamSignature(Child));
+          FModel.SetSymbolReturnTypeId(SymbolId,
+            DeclReturnTypeId(Child, AOwnerUnitId));
+          FModel.SetSymbolScope(SymbolId, RecordScopeId);
+        end;
+      end;
+      Continue;
+    end;
+    if Child.NodeKind <> gnkVarDecl then
       Continue;
     FieldTypeId := 0;
     TypeChild := nil;
@@ -7440,6 +7506,8 @@ begin
         FModel.SetSymbolParamCount(SymbolId, CountDeclParams(Child));
         FModel.SetSymbolMinParamCount(SymbolId, CountRequiredDeclParams(Child));
         FModel.SetSymbolParamSignature(SymbolId, GetParamSignature(Child));
+        FModel.SetSymbolReturnTypeId(SymbolId,
+          DeclReturnTypeId(Child, AOwnerUnitId));
         if DeclReturnsString(Child) then
           FModel.AddConstValue(IntfName + '$ret_str_' + NameNode.Text, 1);
       end;
@@ -8096,6 +8164,8 @@ begin
           FModel.SetSymbolParamCount(SymbolId, CountDeclParams(Child));
           FModel.SetSymbolMinParamCount(SymbolId, CountRequiredDeclParams(Child));
           FModel.SetSymbolParamSignature(SymbolId, GetParamSignature(Child));
+          FModel.SetSymbolReturnTypeId(SymbolId,
+            DeclReturnTypeId(Child, AOwnerUnitId));
           FModel.SetSymbolVisibility(SymbolId, CurrentVisibility);
           FModel.SetSymbolScope(SymbolId, ClassScopeId);
           if Pos(';virtual', Child.Text) > 0 then

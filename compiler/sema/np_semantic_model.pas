@@ -79,6 +79,7 @@ type
     ParamSignature: string;
     Visibility: string;
     ByteOffset: LongInt;
+    ReturnTypeId: LongInt;
   end;
 
   TGenericParentRef = record
@@ -278,6 +279,8 @@ type
     procedure SetSymbolVisibility(const ASymbolId: LongInt; const AVisibility: string);
     procedure SetSymbolParamSignature(const ASymbolId: LongInt;
       const ASignature: string);
+    procedure SetSymbolReturnTypeId(const ASymbolId: LongInt;
+      const AReturnTypeId: LongInt);
     function FindSymbolInScope(const AName: string;
       const AScopeId: LongInt): LongInt;
     function LookupSymbol(const AName: string;
@@ -756,6 +759,16 @@ begin
   Idx := ASymbolId - 1;
   if (Idx >= 0) and (Idx < Length(FSymbols)) then
     FSymbols[Idx].ParamSignature := ASignature;
+end;
+
+procedure TSemanticModel.SetSymbolReturnTypeId(const ASymbolId: LongInt;
+  const AReturnTypeId: LongInt);
+var
+  Idx: LongInt;
+begin
+  Idx := ASymbolId - 1;
+  if (Idx >= 0) and (Idx < Length(FSymbols)) then
+    FSymbols[Idx].ReturnTypeId := AReturnTypeId;
 end;
 
 function TSemanticModel.FindSymbolInScope(const AName: string;
