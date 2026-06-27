@@ -719,9 +719,7 @@ begin
         'setup failed: ' + LLastFailMsg, 0);
       SetLength(AResult.Results, Length(AResult.Results) + 1);
       AResult.Results[High(AResult.Results)] := LTestResult;
-      LOutSink.WriteLn(
-        '    ' + StatusDot(tsSkipped, LConfig) + ' ' +
-        AnsiDim(Tests[I].Name, LConfig));
+      LOutSink.WriteLn('    ' + FormatStatusLine(tsSkipped, Tests[I].Name, LConfig));
     end;
     AResult.Failed    := 1;
     AResult.Skipped   := LSkip;
@@ -771,13 +769,10 @@ begin
       SetLength(AResult.Results, Length(AResult.Results) + 1);
       AResult.Results[High(AResult.Results)] := LTestResult;
       if LEntry.SkipReason <> '' then
-        LOutSink.WriteLn(
-          '  ' + StatusDot(tsSkipped, LConfig) + ' ' +
-          AnsiDim(LEntry.Name, LConfig) + ' -- ' + LEntry.SkipReason)
+        LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, LEntry.Name,
+          LEntry.SkipReason, LConfig))
       else
-        LOutSink.WriteLn(
-          '  ' + StatusDot(tsSkipped, LConfig) + ' ' +
-          AnsiDim(LEntry.Name, LConfig));
+        LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, LEntry.Name, LConfig));
       ReportLeakIfAny(LStatus, LConfig);
       Continue;
     end;
@@ -795,9 +790,8 @@ begin
           LTestResult := MakeTestResult(LEntry.Name, tsSkipped, E.Message, 0);
           SetLength(AResult.Results, Length(AResult.Results) + 1);
           AResult.Results[High(AResult.Results)] := LTestResult;
-          LOutSink.WriteLn(
-            '  ' + StatusDot(tsSkipped, LConfig) + ' ' +
-            AnsiDim(LEntry.Name, LConfig) + ' -- ' + E.Message);
+          LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, LEntry.Name,
+            E.Message, LConfig));
           ReportLeakIfAny(LStatus, LConfig);
           Continue;
         end;
@@ -809,9 +803,8 @@ begin
             'beforeEach failed: ' + E.Message, 0);
           SetLength(AResult.Results, Length(AResult.Results) + 1);
           AResult.Results[High(AResult.Results)] := LTestResult;
-          LOutSink.WriteLn(
-            '  ' + StatusDot(tsError, LConfig) + ' ' + LEntry.Name +
-            ' -- beforeEach failed: ' + E.Message);
+          LOutSink.WriteLn('  ' + FormatStatusLine(tsError, LEntry.Name,
+            'beforeEach failed: ' + E.Message, LConfig));
           Inc(LFail);
           Continue;
         end;
@@ -1017,12 +1010,10 @@ begin
     { Output per-test — use DisplayName }
     case LStatus of
       tsPassed:
-        LOutSink.WriteLn('  ' + StatusDot(tsPassed, LConfig) + ' ' + LDisplayName);
+        LOutSink.WriteLn('  ' + FormatStatusLine(tsPassed, LDisplayName, LConfig));
       tsFailed:
         begin
-          LOutSink.WriteLn(
-            '  ' + StatusDot(tsFailed, LConfig) + ' ' +
-            AnsiRed(LDisplayName, LConfig));
+          LOutSink.WriteLn('  ' + FormatStatusLine(tsFailed, LDisplayName, LConfig));
           if LLastFailMsg <> '' then
             LOutSink.WriteLn('    ' + AnsiDim(LLastFailMsg, LConfig))
           else
@@ -1031,19 +1022,15 @@ begin
       tsSkipped:
         begin
           if LEntry.SkipReason <> '' then
-            LOutSink.WriteLn(
-              '  ' + StatusDot(tsSkipped, LConfig) + ' ' +
-              AnsiDim(LDisplayName, LConfig) + ' -- ' + LEntry.SkipReason)
+            LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, LDisplayName,
+              LEntry.SkipReason, LConfig))
           else
-            LOutSink.WriteLn(
-              '  ' + StatusDot(tsSkipped, LConfig) + ' ' +
-              AnsiDim(LDisplayName, LConfig));
+            LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, LDisplayName, LConfig));
         end;
       tsError:
         begin
-          LOutSink.WriteLn(
-            '  ' + StatusDot(tsError, LConfig) + ' ' +
-            AnsiRed(LDisplayName, LConfig) + ' [unexpected exception]');
+          LOutSink.WriteLn('  ' + FormatStatusLine(tsError, LDisplayName, LConfig) +
+            ' [unexpected exception]');
           if LLastFailMsg <> '' then
             LOutSink.WriteLn('    ' + AnsiDim(LLastFailMsg, LConfig));
         end;
@@ -1195,9 +1182,7 @@ begin
   if not RunSetup(LConfig, LSkip, LErrorMsg) then
   begin
     for I := 0 to High(Tests) do
-      LOutSink.WriteLn(
-        '    ' + StatusDot(tsSkipped, LConfig) + ' ' +
-        AnsiDim(Tests[I].Name, LConfig));
+      LOutSink.WriteLn('    ' + FormatStatusLine(tsSkipped, Tests[I].Name, LConfig));
     AResult.Failed    := 1;
     AResult.Skipped   := LSkip;
     AResult.AllPassed := False;

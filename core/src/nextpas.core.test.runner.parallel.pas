@@ -285,10 +285,8 @@ begin
     R^.Mtx.Acquire;
     try
       R^.Skip^ := R^.Skip^ + 1;
-      LOutSink.WriteLn(
-        '  ' + StatusDot(tsSkipped, LConfig) + ' ' +
-        AnsiDim(R^.Entry.Name, LConfig) +
-        ' -- subtests not supported in parallel mode');
+      LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, R^.Entry.Name,
+        'subtests not supported in parallel mode', LConfig));
     finally
       SafeRelease(R^.Mtx, LConfig);
     end;
@@ -303,9 +301,7 @@ begin
     R^.Mtx.Acquire;
     try
       R^.Skip^ := R^.Skip^ + 1;
-      LOutSink.WriteLn(
-        '  ' + StatusDot(tsSkipped, LConfig) + ' ' +
-        AnsiDim(R^.Entry.Name, LConfig));
+      LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, R^.Entry.Name, LConfig));
     finally
       SafeRelease(R^.Mtx, LConfig);
     end;
@@ -333,8 +329,8 @@ begin
         R^.Mtx.Acquire;
         try
           LOutSink.WriteLn(
-            '  ' + StatusDot(tsError, LConfig) + ' ' +
-            R^.Entry.Name + ' -- beforeEach failed: ' + E.Message);
+            '  ' + FormatStatusLine(tsError, R^.Entry.Name,
+              'beforeEach failed: ' + E.Message, LConfig));
           { Set Duration to 0 directly — no test ran, don't use GetTickCount64 }
           if R^.Res <> nil then
           begin
@@ -460,15 +456,12 @@ begin
       tsPassed:
         begin
           R^.Pass^ := R^.Pass^ + 1;
-          LOutSink.WriteLn(
-            '  ' + StatusDot(tsPassed, LConfig) + ' ' + R^.Entry.Name);
+          LOutSink.WriteLn('  ' + FormatStatusLine(tsPassed, R^.Entry.Name, LConfig));
         end;
       tsFailed:
         begin
           R^.Fail^ := R^.Fail^ + 1;
-          LOutSink.WriteLn(
-            '  ' + StatusDot(tsFailed, LConfig) + ' ' +
-            AnsiRed(R^.Entry.Name, LConfig));
+          LOutSink.WriteLn('  ' + FormatStatusLine(tsFailed, R^.Entry.Name, LConfig));
           if LFailMsg <> '' then
             LOutSink.WriteLn('    ' + AnsiDim(LFailMsg, LConfig))
           else
@@ -478,20 +471,16 @@ begin
         begin
           R^.Skip^ := R^.Skip^ + 1;
           if LSkipReason <> '' then
-            LOutSink.WriteLn(
-              '  ' + StatusDot(tsSkipped, LConfig) + ' ' +
-              AnsiDim(R^.Entry.Name, LConfig) + ' -- ' + LSkipReason)
+            LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, R^.Entry.Name,
+              LSkipReason, LConfig))
           else
-            LOutSink.WriteLn(
-              '  ' + StatusDot(tsSkipped, LConfig) + ' ' +
-              AnsiDim(R^.Entry.Name, LConfig));
+            LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, R^.Entry.Name, LConfig));
         end;
       tsError:
         begin
           R^.Fail^ := R^.Fail^ + 1;
-          LOutSink.WriteLn(
-            '  ' + StatusDot(tsError, LConfig) + ' ' +
-            AnsiRed(R^.Entry.Name, LConfig) + ' [unexpected error]');
+          LOutSink.WriteLn('  ' + FormatStatusLine(tsError, R^.Entry.Name, LConfig) +
+            ' [unexpected error]');
           if LFailMsg <> '' then
             LOutSink.WriteLn('    ' + AnsiDim(LFailMsg, LConfig));
         end;
@@ -536,8 +525,7 @@ begin
         try
           R^.Fail^ := R^.Fail^ + 1;
           LOutSink.WriteLn(
-            '  ' + StatusDot(tsError, LConfig) + ' ' +
-            AnsiRed(R^.Entry.Name, LConfig));
+            '  ' + FormatStatusLine(tsError, R^.Entry.Name, LConfig));
           LOutSink.WriteLn(
             '    ' + AnsiDim(
               'worker exception: ' + E.ClassName + ': ' + E.Message,

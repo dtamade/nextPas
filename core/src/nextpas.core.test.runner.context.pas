@@ -207,8 +207,8 @@ begin
         LStatus := tsSkipped;
         LMsg    := LEntry.SkipReason;
         ResolveOutSink(FConfig).WriteLn(
-          '    ' + StatusDot(tsSkipped, FConfig) + ' ' +
-          AnsiDim(LEntry.Name, FConfig) + ' -- ' + LEntry.SkipReason);
+          '    ' + FormatStatusLine(tsSkipped, LEntry.Name,
+            LEntry.SkipReason, FConfig));
         Inc(FSubSkip);
       end
       else if LEntry.Kind = ekSubtest then
@@ -235,7 +235,7 @@ begin
       begin
         PTestCaseProc(LEntry.TableProc)^(PTestCase(LEntry.TableCase)^);
         ResolveOutSink(FConfig).WriteLn(
-          '    ' + StatusDot(tsPassed, FConfig) + ' ' + LEntry.Name);
+          '    ' + FormatStatusLine(tsPassed, LEntry.Name, FConfig));
         Inc(FSubPass);
       end
       else
@@ -245,7 +245,7 @@ begin
         else
           LEntry.Proc;
         ResolveOutSink(FConfig).WriteLn(
-          '    ' + StatusDot(tsPassed, FConfig) + ' ' + LEntry.Name);
+          '    ' + FormatStatusLine(tsPassed, LEntry.Name, FConfig));
         Inc(FSubPass);
       end;
     except
@@ -254,8 +254,7 @@ begin
         LStatus := tsSkipped;
         LMsg    := E.Message;
         ResolveOutSink(FConfig).WriteLn(
-          '    ' + StatusDot(tsSkipped, FConfig) + ' ' +
-          AnsiDim(LEntry.Name, FConfig));
+          '    ' + FormatStatusLine(tsSkipped, LEntry.Name, FConfig));
         Inc(FSubSkip);
       end;
       on E: EAssertionFailed do
@@ -266,8 +265,7 @@ begin
         if GLastTestTrace <> '' then
           LMsg := LMsg + ' [' + GLastTestTrace + ']';
         ResolveOutSink(FConfig).WriteLn(
-          '    ' + StatusDot(tsFailed, FConfig) + ' ' +
-          AnsiRed(LEntry.Name, FConfig));
+          '    ' + FormatStatusLine(tsFailed, LEntry.Name, FConfig));
         ResolveOutSink(FConfig).WriteLn(
           '      ' + AnsiDim(LMsg, FConfig));
         { Output captured log lines on failure }
@@ -286,8 +284,8 @@ begin
         if GLastTestTrace <> '' then
           LMsg := LMsg + ' [' + GLastTestTrace + ']';
         ResolveOutSink(FConfig).WriteLn(
-          '    ' + StatusDot(tsError, FConfig) + ' ' +
-          AnsiRed(LEntry.Name, FConfig) + ' [' + E.ClassName + ']');
+          '    ' + FormatStatusLine(tsError, LEntry.Name, FConfig) +
+          ' [' + E.ClassName + ']');
         ResolveOutSink(FConfig).WriteLn(
           '      ' + AnsiDim(E.Message, FConfig));
         { Output captured log lines on error }

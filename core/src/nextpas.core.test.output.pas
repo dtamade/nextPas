@@ -37,6 +37,15 @@ procedure SetAnsiEnabled(AEnabled: Boolean);
 function StatusDot(AStatus: TTestStatus): string; overload;
 function StatusDot(AStatus: TTestStatus; const AConfig: TTestConfig): string; overload;
 
+{ ── FormatStatusLine ──────────────────────────────────────────────────────── }
+{ Assembles "StatusDot + name" with proper ANSI coloring.
+  Indentation is the caller's responsibility. }
+
+function FormatStatusLine(AStatus: TTestStatus; const AName: string;
+  const AConfig: TTestConfig): string; overload;
+function FormatStatusLine(AStatus: TTestStatus; const AName: string;
+  const AReason: string; const AConfig: TTestConfig): string; overload;
+
 { ── Test Filter ───────────────────────────────────────────────────────────── }
 
 procedure SetTestFilter(const APattern: string);
@@ -258,6 +267,27 @@ end;
 function StatusDot(AStatus: TTestStatus): string;
 begin
   Result := StatusDot(AStatus, DefaultConfig);
+end;
+
+{ FormatStatusLine — 2-param: name only }
+
+function FormatStatusLine(AStatus: TTestStatus; const AName: string;
+  const AConfig: TTestConfig): string;
+begin
+  case AStatus of
+    tsPassed:  Result := StatusDot(AStatus, AConfig) + ' ' + AName;
+    tsFailed:  Result := StatusDot(AStatus, AConfig) + ' ' + AnsiRed(AName, AConfig);
+    tsSkipped: Result := StatusDot(AStatus, AConfig) + ' ' + AnsiDim(AName, AConfig);
+    tsError:   Result := StatusDot(AStatus, AConfig) + ' ' + AnsiRed(AName, AConfig);
+  end;
+end;
+
+{ FormatStatusLine — 3-param: name + suffix (skip reason, error tag, etc.) }
+
+function FormatStatusLine(AStatus: TTestStatus; const AName: string;
+  const AReason: string; const AConfig: TTestConfig): string;
+begin
+  Result := FormatStatusLine(AStatus, AName, AConfig) + ' -- ' + AReason;
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }
