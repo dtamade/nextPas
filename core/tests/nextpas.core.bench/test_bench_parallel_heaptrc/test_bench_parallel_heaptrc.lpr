@@ -1,9 +1,6 @@
 program test_bench_parallel_heaptrc;
 
-{$mode objfpc}{$H+}
-{$modeswitch advancedrecords}
-{$modeswitch anonymousfunctions}
-{$modeswitch functionreferences}
+{$I nextpas.core.settings.inc}
 
 uses
   {$ifdef unix}
@@ -13,7 +10,8 @@ uses
   nextpas.core.sync.mutex,
   nextpas.core.time.sleep,
   nextpas.core.time.base,
-  nextpas.core.bench;
+  nextpas.core.bench,
+  nextpas.core.test;
 
 var
   GParallelLock: TMutex;
@@ -41,28 +39,42 @@ begin
   end;
 end;
 
+procedure TestParallelObserved;
 var
   LSuite: IBenchSuite;
   LResults: IBenchResults;
 begin
+  GActiveParallelCalls := 0;
+  GMaxParallelCalls := 0;
+
+  LSuite := TBenchSuite.Create('ParallelLeakCheck')
+    .SetMinDuration(TDuration.FromMilliseconds(1))
+    .SetMaxIterations(32)
+    .SetMinSamples(1)
+    .SetWarmupIters(1);
+  LSuite.AddParallel('ParallelObserved', @BenchParallelObserved, 4);
+
+  LResults := LSuite.Run;
+
+  Check(LResults.Count = 1, 'Expected 1 benchmark result');
+  Check(GMaxParallelCalls > 1, 'Expected concurrent parallel calls > 1');
+
+  LResults := nil;
+  LSuite := nil;
+end;
+
+var
+  T: TTestSuite;
+begin
   GParallelLock := TMutex.Create;
   try
-    LSuite := TBenchSuite.Create('ParallelLeakCheck')
-      .SetMinDuration(TDuration.FromMilliseconds(1))
-      .SetMaxIterations(32)
-      .SetMinSamples(1)
-      .SetWarmupIters(1);
-    LSuite.AddParallel('ParallelObserved', @BenchParallelObserved, 4);
+    T := TTestSuite.Create('nextpas.core.bench.parallel.heaptrc');
+    T.Test('parallel observed concurrency', @TestParallelObserved);
+    T.Run;
+    T.Summary;
 
-    LResults := LSuite.Run;
-    if LResults.Count <> 1 then
-      Halt(2);
-    if GMaxParallelCalls <= 1 then
-      Halt(3);
-
-    LResults := nil;
-    LSuite := nil;
-    WriteLn('PARALLEL_OK');
+    if not T.AllPassed then
+      Halt(1);
   finally
     GParallelLock.Free;
   end;

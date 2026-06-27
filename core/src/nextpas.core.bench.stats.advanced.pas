@@ -744,7 +744,7 @@ end;
 
 function TAdvancedStats.GetData: TDoubleArray;
 begin
-  Result := FData;
+  Result := Copy(FData);
 end;
 
 function TAdvancedStats.Count: Integer;

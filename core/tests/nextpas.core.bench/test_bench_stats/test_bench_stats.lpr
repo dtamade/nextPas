@@ -1,9 +1,9 @@
 program test_bench_stats;
 
-{$mode objfpc}{$H+}
-{$modeswitch advancedrecords}
+{$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.test,
   nextpas.core.math.scalar,
   nextpas.core.math.impl.scalar,
   nextpas.core.text.conv,
@@ -13,9 +13,6 @@ uses
 
 var
   GAnalyzer: IBenchStatsAnalyzer;
-  GTestCount: Integer;
-  GPassCount: Integer;
-  GFailCount: Integer;
 
 function MakePositiveInfinity: Double;
 var
@@ -31,19 +28,6 @@ var
 begin
   LBits := UInt64($FFF0000000000000);
   Move(LBits, Result, SizeOf(Result));
-end;
-
-procedure Check(ACondition: Boolean; const ATestName: string);
-begin
-  Inc(GTestCount);
-  if ACondition then begin Inc(GPassCount); WriteLn('  ✓ ', ATestName); end
-  else begin Inc(GFailCount); WriteLn('  ✗ ', ATestName); end;
-end;
-
-procedure CheckApprox(AActual, AExpected, AEpsilon: Double; const ATestName: string);
-begin
-  Check(Abs(AActual - AExpected) <= AEpsilon,
-    ATestName + ' (expected: ' + FloatToStr(AExpected) + ', got: ' + FloatToStr(AActual) + ')');
 end;
 
 { Helper: returns True if the call completes without segfault/hang.
@@ -63,79 +47,74 @@ procedure TestMean;
 var
   LData: TDoubleArray;
 begin
-  WriteLn('TestMean:');
   SetLength(LData, 0);
-  CheckApprox(GAnalyzer.Mean(LData), 0.0, 0.001, 'Empty array returns 0');
+  CheckNear(0.0, GAnalyzer.Mean(LData), 0.001, 'Empty array returns 0');
   SetLength(LData, 1); LData[0] := 5.0;
-  CheckApprox(GAnalyzer.Mean(LData), 5.0, 0.001, 'Single value returns that value');
+  CheckNear(5.0, GAnalyzer.Mean(LData), 0.001, 'Single value returns that value');
   SetLength(LData, 5); LData[0] := 1.0; LData[1] := 2.0; LData[2] := 3.0; LData[3] := 4.0; LData[4] := 5.0;
-  CheckApprox(GAnalyzer.Mean(LData), 3.0, 0.001, 'Multiple values correct mean');
+  CheckNear(3.0, GAnalyzer.Mean(LData), 0.001, 'Multiple values correct mean');
   SetLength(LData, 3); LData[0] := 1e15; LData[1] := 1.0; LData[2] := -1e15;
-  CheckApprox(GAnalyzer.Mean(LData), 1.0/3.0, 0.001, 'Kahan sum precision');
+  CheckNear(1.0/3.0, GAnalyzer.Mean(LData), 0.001, 'Kahan sum precision');
 end;
 
 procedure TestMedian;
 var
   LData: TDoubleArray;
 begin
-  WriteLn('TestMedian:');
   SetLength(LData, 5); LData[0] := 1.0; LData[1] := 3.0; LData[2] := 2.0; LData[3] := 5.0; LData[4] := 4.0;
-  CheckApprox(GAnalyzer.Median(LData), 3.0, 0.001, 'Odd count returns middle');
+  CheckNear(3.0, GAnalyzer.Median(LData), 0.001, 'Odd count returns middle');
   SetLength(LData, 4); LData[0] := 1.0; LData[1] := 2.0; LData[2] := 3.0; LData[3] := 4.0;
-  CheckApprox(GAnalyzer.Median(LData), 2.5, 0.001, 'Even count returns average');
+  CheckNear(2.5, GAnalyzer.Median(LData), 0.001, 'Even count returns average');
   SetLength(LData, 0);
-  CheckApprox(GAnalyzer.Median(LData), 0.0, 0.001, 'Empty array returns 0');
+  CheckNear(0.0, GAnalyzer.Median(LData), 0.001, 'Empty array returns 0');
 end;
 
 procedure TestStdDev;
 var
   LData: TDoubleArray;
 begin
-  WriteLn('TestStdDev:');
   SetLength(LData, 3); LData[0] := 5.0; LData[1] := 5.0; LData[2] := 5.0;
-  CheckApprox(GAnalyzer.StdDev(LData), 0.0, 0.001, 'Zero variance returns 0');
+  CheckNear(0.0, GAnalyzer.StdDev(LData), 0.001, 'Zero variance returns 0');
   SetLength(LData, 5); LData[0] := 2.0; LData[1] := 4.0; LData[2] := 4.0; LData[3] := 4.0; LData[4] := 5.0;
-  CheckApprox(GAnalyzer.StdDev(LData), 1.09544511501033, 0.001, 'Known values correct stddev');
+  CheckNear(1.09544511501033, GAnalyzer.StdDev(LData), 0.001, 'Known values correct stddev');
   SetLength(LData, 1); LData[0] := 10.0;
-  CheckApprox(GAnalyzer.StdDev(LData), 0.0, 0.001, 'Single value returns 0');
+  CheckNear(0.0, GAnalyzer.StdDev(LData), 0.001, 'Single value returns 0');
 end;
 
 procedure TestPercentile;
 var
   LSorted: TDoubleArray;
 begin
-  WriteLn('TestPercentile:');
   SetLength(LSorted, 10);
   LSorted[0] := 1.0; LSorted[1] := 2.0; LSorted[2] := 3.0; LSorted[3] := 4.0; LSorted[4] := 5.0;
   LSorted[5] := 6.0; LSorted[6] := 7.0; LSorted[7] := 8.0; LSorted[8] := 9.0; LSorted[9] := 10.0;
-  CheckApprox(GAnalyzer.Percentile(LSorted, 0), 1.0, 0.001, 'P0 returns min');
-  CheckApprox(GAnalyzer.Percentile(LSorted, 100), 10.0, 0.001, 'P100 returns max');
-  CheckApprox(GAnalyzer.Percentile(LSorted, 50), 5.5, 0.001, 'P50 returns median');
-  CheckApprox(GAnalyzer.Percentile(LSorted, 25), 3.25, 0.001, 'P25 correct');
-  CheckApprox(GAnalyzer.Percentile(LSorted, 75), 7.75, 0.001, 'P75 correct');
-  CheckApprox(GAnalyzer.Percentile(LSorted, 95), 9.55, 0.01, 'P95 correct');
-  CheckApprox(GAnalyzer.Percentile(LSorted, 99), 9.91, 0.01, 'P99 correct');
+  CheckNear(1.0, GAnalyzer.Percentile(LSorted, 0), 0.001, 'P0 returns min');
+  CheckNear(10.0, GAnalyzer.Percentile(LSorted, 100), 0.001, 'P100 returns max');
+  CheckNear(5.5, GAnalyzer.Percentile(LSorted, 50), 0.001, 'P50 returns median');
+  CheckNear(3.25, GAnalyzer.Percentile(LSorted, 25), 0.001, 'P25 correct');
+  CheckNear(7.75, GAnalyzer.Percentile(LSorted, 75), 0.001, 'P75 correct');
+  CheckNear(9.55, GAnalyzer.Percentile(LSorted, 95), 0.01, 'P95 correct');
+  CheckNear(9.91, GAnalyzer.Percentile(LSorted, 99), 0.01, 'P99 correct');
 
   // TG-26: Single element Percentile
   SetLength(LSorted, 1);
   LSorted[0] := 42.0;
-  CheckApprox(GAnalyzer.Percentile(LSorted, 50), 42.0, 0.001, 'Single element P50 = 42.0');
-  CheckApprox(GAnalyzer.Percentile(LSorted, 0), 42.0, 0.001, 'Single element P0 = 42.0');
-  CheckApprox(GAnalyzer.Percentile(LSorted, 100), 42.0, 0.001, 'Single element P100 = 42.0');
+  CheckNear(42.0, GAnalyzer.Percentile(LSorted, 50), 0.001, 'Single element P50 = 42.0');
+  CheckNear(42.0, GAnalyzer.Percentile(LSorted, 0), 0.001, 'Single element P0 = 42.0');
+  CheckNear(42.0, GAnalyzer.Percentile(LSorted, 100), 0.001, 'Single element P100 = 42.0');
 
   // TG-26: Two element Percentile
   SetLength(LSorted, 2);
   LSorted[0] := 10.0; LSorted[1] := 20.0;
-  CheckApprox(GAnalyzer.Percentile(LSorted, 0), 10.0, 0.001, 'Two element P0 = 10.0');
-  CheckApprox(GAnalyzer.Percentile(LSorted, 50), 15.0, 0.001, 'Two element P50 = 15.0');
-  CheckApprox(GAnalyzer.Percentile(LSorted, 100), 20.0, 0.001, 'Two element P100 = 20.0');
+  CheckNear(10.0, GAnalyzer.Percentile(LSorted, 0), 0.001, 'Two element P0 = 10.0');
+  CheckNear(15.0, GAnalyzer.Percentile(LSorted, 50), 0.001, 'Two element P50 = 15.0');
+  CheckNear(20.0, GAnalyzer.Percentile(LSorted, 100), 0.001, 'Two element P100 = 20.0');
 end;
 
 procedure TestOutliers;
 var
   LSorted: TDoubleArray;
 begin
-  WriteLn('TestOutliers:');
   SetLength(LSorted, 10);
   LSorted[0] := 1.0; LSorted[1] := 2.0; LSorted[2] := 3.0; LSorted[3] := 4.0; LSorted[4] := 5.0;
   LSorted[5] := 6.0; LSorted[6] := 7.0; LSorted[7] := 8.0; LSorted[8] := 9.0; LSorted[9] := 10.0;
@@ -154,7 +133,6 @@ var
   LStats: TBenchStats;
   i: Integer;
 begin
-  WriteLn('TestComputeStats:');
   RandSeed := 42;
   SetLength(LSamples, 100);
   for i := 0 to 99 do LSamples[i] := 100.0 + Random * 10.0;
@@ -186,7 +164,6 @@ var
   LStatsA, LStatsB: TBenchStats;
   i: Integer;
 begin
-  WriteLn('TestSignificantDifference:');
   { TG-17: use large sample (1000+) with fixed seed to reduce false positives }
   RandSeed := 42;
   SetLength(LA, 1000); SetLength(LB, 1000);
@@ -206,12 +183,11 @@ var
   LCIWidth: Double;
   I: Integer;
 begin
-  WriteLn('TestTInvLookup:');
   SetLength(LSamples, 5);
   LSamples[0] := 1.0; LSamples[1] := 2.0; LSamples[2] := 3.0; LSamples[3] := 4.0; LSamples[4] := 5.0;
   LStats := GAnalyzer.ComputeStats(LSamples);
   LCIWidth := LStats.Confidence95High - LStats.Confidence95Low;
-  CheckApprox(LCIWidth, 3.926, 0.15, 'DF=4 uses lookup-table CI width');
+  CheckNear(3.926, LCIWidth, 0.15, 'DF=4 uses lookup-table CI width');
   Check(LStats.Confidence95Low < LStats.Mean, 'CI95 low < mean');
   Check(LStats.Confidence95High > LStats.Mean, 'CI95 high > mean');
   SetLength(LSamples, 30);
@@ -229,19 +205,14 @@ end;
 procedure TestIsNormal;
 var
   LData: TDoubleArray;
-  LUniformResult: Boolean;
   i: Integer;
 begin
-  WriteLn('TestIsNormal:');
   RandSeed := 42; { TG-16: fixed seed for deterministic test data }
   SetLength(LData, 1000);
   for i := 0 to 999 do LData[i] := 100.0 + Random * 10.0 + Random * 10.0;
   Check(GAnalyzer.LooksNormalHeuristic(LData), 'Normal-like data passes heuristic check');
-  SetLength(LData, 1000);
-  for i := 0 to 999 do LData[i] := i * 0.1;
-  LUniformResult := GAnalyzer.LooksNormalHeuristic(LData);
-  if not LUniformResult then WriteLn('  ✓ Uniform correctly rejected as non-normal')
-  else WriteLn('  ⚠ Uniform incorrectly accepted (known limitation of heuristic)');
+  { Note: uniform distribution rejection is a known limitation of the heuristic;
+    we only verify normal-like data passes here. }
 end;
 
 procedure TestComputeApproximatePValue;
@@ -251,7 +222,6 @@ var
   LPValue: Double;
   i: Integer;
 begin
-  WriteLn('TestComputeApproximatePValue:');
   RandSeed := 42;
   SetLength(LA, 100); SetLength(LB, 100);
   for i := 0 to 99 do begin LA[i] := 100.0 + Random * 10.0; LB[i] := 100.0 + Random * 10.0; end;
@@ -275,33 +245,29 @@ begin
   LStatsA.Mean := 0.0; LStatsA.StdDev := 1.0; LStatsA.SampleCount := 10;
   LStatsB := LStatsA; LStatsB.Mean := 0.5;
   LPValue := GAnalyzer.ComputeApproximatePValue(LStatsA, LStatsB);
-  Check(LPValue > 0.2, 'Controlled t≈1.118 p-value > 0.2');
-  Check(LPValue < 0.35, 'Controlled t≈1.118 p-value < 0.35');
+  Check(LPValue > 0.2, 'Controlled t~1.118 p-value > 0.2');
+  Check(LPValue < 0.35, 'Controlled t~1.118 p-value < 0.35');
 end;
 
 procedure TestSort;
 var
   LData: TDoubleArray;
 begin
-  WriteLn('TestSort:');
   SetLength(LData, 5);
   LData[0] := 5.0; LData[1] := 3.0; LData[2] := 1.0; LData[3] := 4.0; LData[4] := 2.0;
   SortDoubleArray(LData);
-  CheckApprox(LData[0], 1.0, 0.001, 'Sort[0] = 1.0');
-  CheckApprox(LData[1], 2.0, 0.001, 'Sort[1] = 2.0');
-  CheckApprox(LData[2], 3.0, 0.001, 'Sort[2] = 3.0');
-  CheckApprox(LData[3], 4.0, 0.001, 'Sort[3] = 4.0');
-  CheckApprox(LData[4], 5.0, 0.001, 'Sort[4] = 5.0');
+  CheckNear(1.0, LData[0], 0.001, 'Sort[0] = 1.0');
+  CheckNear(2.0, LData[1], 0.001, 'Sort[1] = 2.0');
+  CheckNear(3.0, LData[2], 0.001, 'Sort[2] = 3.0');
+  CheckNear(4.0, LData[3], 0.001, 'Sort[3] = 4.0');
+  CheckNear(5.0, LData[4], 0.001, 'Sort[4] = 5.0');
 end;
-
-{ === TG-03: SortDoubleArray Edge Cases === }
 
 procedure TestSort_EmptyArray;
 var
   LData: TDoubleArray;
   LNoCrash: Boolean;
 begin
-  WriteLn('TestSort_EmptyArray:');
   LNoCrash := True;
   SetLength(LData, 0);
   try
@@ -317,11 +283,10 @@ procedure TestSort_SingleElement;
 var
   LData: TDoubleArray;
 begin
-  WriteLn('TestSort_SingleElement:');
   SetLength(LData, 1);
   LData[0] := 42.0;
   SortDoubleArray(LData);
-  CheckApprox(LData[0], 42.0, 0.001, 'Single element unchanged');
+  CheckNear(42.0, LData[0], 0.001, 'Single element unchanged');
 end;
 
 procedure TestSort_ReverseOrder;
@@ -329,13 +294,12 @@ var
   LData: TDoubleArray;
   i: Integer;
 begin
-  WriteLn('TestSort_ReverseOrder:');
   SetLength(LData, 10);
   for i := 0 to 9 do
     LData[i] := 10.0 - i;
   SortDoubleArray(LData);
   for i := 0 to 9 do
-    CheckApprox(LData[i], i + 1, 0.001, 'ReverseSort[' + IntToStr(i) + '] = ' + IntToStr(i + 1));
+    CheckNear(i + 1, LData[i], 0.001, 'ReverseSort[' + IntToStr(i) + '] = ' + IntToStr(i + 1));
 end;
 
 procedure TestSort_AllEqual;
@@ -343,31 +307,27 @@ var
   LData: TDoubleArray;
   i: Integer;
 begin
-  WriteLn('TestSort_AllEqual:');
   SetLength(LData, 10);
   for i := 0 to 9 do
     LData[i] := 7.0;
   SortDoubleArray(LData);
   for i := 0 to 9 do
-    CheckApprox(LData[i], 7.0, 0.001, 'AllEqual[' + IntToStr(i) + '] = 7.0');
+    CheckNear(7.0, LData[i], 0.001, 'AllEqual[' + IntToStr(i) + '] = 7.0');
 end;
-
-{ === SortDoubleArray NaN 安全性测试 (Phase 1 修复) === }
 
 procedure TestSort_NaNMixed;
 var
   LData: TDoubleArray;
 begin
-  WriteLn('TestSort_NaNMixed:');
-  { NaN 应排到末尾，非 NaN 部分正常排序 }
+  { NaN should sort to the tail, non-NaN portion sorted normally }
   SetLength(LData, 6);
   LData[0] := 5.0; LData[1] := DoubleQuietNaN; LData[2] := 1.0;
   LData[3] := DoubleQuietNaN; LData[4] := 3.0; LData[5] := 2.0;
   SortDoubleArray(LData);
-  CheckApprox(LData[0], 1.0, 0.001, 'NaN-mixed sort[0] = 1.0');
-  CheckApprox(LData[1], 2.0, 0.001, 'NaN-mixed sort[1] = 2.0');
-  CheckApprox(LData[2], 3.0, 0.001, 'NaN-mixed sort[2] = 3.0');
-  CheckApprox(LData[3], 5.0, 0.001, 'NaN-mixed sort[3] = 5.0');
+  CheckNear(1.0, LData[0], 0.001, 'NaN-mixed sort[0] = 1.0');
+  CheckNear(2.0, LData[1], 0.001, 'NaN-mixed sort[1] = 2.0');
+  CheckNear(3.0, LData[2], 0.001, 'NaN-mixed sort[2] = 3.0');
+  CheckNear(5.0, LData[3], 0.001, 'NaN-mixed sort[3] = 5.0');
   Check(IsNan(LData[4]), 'NaN-mixed sort[4] = NaN');
   Check(IsNan(LData[5]), 'NaN-mixed sort[5] = NaN');
 end;
@@ -377,7 +337,6 @@ var
   LData: TDoubleArray;
   LNoCrash: Boolean;
 begin
-  WriteLn('TestSort_AllNaN:');
   LNoCrash := True;
   SetLength(LData, 4);
   LData[0] := DoubleQuietNaN; LData[1] := DoubleQuietNaN;
@@ -395,15 +354,14 @@ procedure TestSort_NaNWithInfinity;
 var
   LData: TDoubleArray;
 begin
-  WriteLn('TestSort_NaNWithInfinity:');
-  { Infinity 正常参与排序，NaN 排到末尾 }
+  { Infinity sorts normally, NaN sorts to tail }
   SetLength(LData, 4);
   LData[0] := DoubleQuietNaN; LData[1] := MakePositiveInfinity;
   LData[2] := 1.0; LData[3] := MakeNegativeInfinity;
   SortDoubleArray(LData);
   Check(LData[0] < 0, 'NaN+Inf sort[0] = -Inf (negative)');
   Check(not IsNan(LData[0]), 'NaN+Inf sort[0] is not NaN');
-  CheckApprox(LData[1], 1.0, 0.001, 'NaN+Inf sort[1] = 1.0');
+  CheckNear(1.0, LData[1], 0.001, 'NaN+Inf sort[1] = 1.0');
   Check(LData[2] > 1e100, 'NaN+Inf sort[2] = +Inf (very large)');
   Check(not IsNan(LData[2]), 'NaN+Inf sort[2] is not NaN');
   Check(IsNan(LData[3]), 'NaN+Inf sort[3] = NaN');
@@ -411,58 +369,49 @@ end;
 
 procedure TestTInvLookup_KnownValues;
 begin
-  WriteLn('TestTInvLookup_KnownValues:');
-
-  { df=10, p=0.05 (two-tailed 95%) => t ≈ 2.228
+  { df=10, p=0.05 (two-tailed 95%) => t ~ 2.228
     TInvLookup(10, TINV95_DATA, Z_SCORE_95) should return TINV95_DATA[9] = 2.228 }
-  CheckApprox(TInvLookup(10, TINV95_DATA, Z_SCORE_95), 2.228, 0.001,
+  CheckNear(2.228, TInvLookup(10, TINV95_DATA, Z_SCORE_95), 0.001,
     'TInv 95% df=10 = 2.228');
 
-  { df=5, p=0.05 => t ≈ 2.571 }
-  CheckApprox(TInvLookup(5, TINV95_DATA, Z_SCORE_95), 2.571, 0.001,
+  { df=5, p=0.05 => t ~ 2.571 }
+  CheckNear(2.571, TInvLookup(5, TINV95_DATA, Z_SCORE_95), 0.001,
     'TInv 95% df=5 = 2.571');
 
-  { df=1, p=0.05 => t ≈ 12.706 }
-  CheckApprox(TInvLookup(1, TINV95_DATA, Z_SCORE_95), 12.706, 0.001,
+  { df=1, p=0.05 => t ~ 12.706 }
+  CheckNear(12.706, TInvLookup(1, TINV95_DATA, Z_SCORE_95), 0.001,
     'TInv 95% df=1 = 12.706');
 
-  { df=10, p=0.01 (two-tailed 99%) => t ≈ 3.169 }
-  CheckApprox(TInvLookup(10, TINV99_DATA, Z_SCORE_99), 3.169, 0.001,
+  { df=10, p=0.01 (two-tailed 99%) => t ~ 3.169 }
+  CheckNear(3.169, TInvLookup(10, TINV99_DATA, Z_SCORE_99), 0.001,
     'TInv 99% df=10 = 3.169');
 end;
 
 procedure TestTInvLookup_ExtremeDf;
 begin
-  WriteLn('TestTInvLookup_ExtremeDf:');
-
   { df < 1 should clamp to table[0] }
-  CheckApprox(TInvLookup(0.5, TINV95_DATA, Z_SCORE_95), 12.706, 0.001,
+  CheckNear(12.706, TInvLookup(0.5, TINV95_DATA, Z_SCORE_95), 0.001,
     'TInv df=0.5 clamps to df=1');
 
-  CheckApprox(TInvLookup(0.1, TINV95_DATA, Z_SCORE_95), 12.706, 0.001,
+  CheckNear(12.706, TInvLookup(0.1, TINV95_DATA, Z_SCORE_95), 0.001,
     'TInv df=0.1 clamps to df=1');
 
   { df >= 30 should converge to z-score }
-  CheckApprox(TInvLookup(30, TINV95_DATA, Z_SCORE_95), Z_SCORE_95, 0.001,
+  CheckNear(Z_SCORE_95, TInvLookup(30, TINV95_DATA, Z_SCORE_95), 0.001,
     'TInv df=30 = z-score 1.96');
 
-  CheckApprox(TInvLookup(100, TINV95_DATA, Z_SCORE_95), Z_SCORE_95, 0.001,
+  CheckNear(Z_SCORE_95, TInvLookup(100, TINV95_DATA, Z_SCORE_95), 0.001,
     'TInv df=100 = z-score 1.96');
 
-  CheckApprox(TInvLookup(1000, TINV95_DATA, Z_SCORE_95), Z_SCORE_95, 0.001,
+  CheckNear(Z_SCORE_95, TInvLookup(1000, TINV95_DATA, Z_SCORE_95), 0.001,
     'TInv df=1000 = z-score 1.96');
 end;
-
-{ === TG-05: NaN/Infinity Input Tests === }
-{ These verify that NaN/Infinity inputs do not cause segfaults or infinite loops.
-  Raising a managed exception is acceptable; crashing is not. }
 
 procedure TestMean_NaNInfinity;
 var
   LData: TDoubleArray;
   LHandled: Boolean;
 begin
-  WriteLn('TestMean_NaNInfinity:');
   SetLength(LData, 3);
 
   LHandled := True;
@@ -486,7 +435,6 @@ var
   LData: TDoubleArray;
   LHandled: Boolean;
 begin
-  WriteLn('TestStdDev_NaNInfinity:');
   SetLength(LData, 3);
 
   LHandled := True;
@@ -505,7 +453,6 @@ var
   LData: TDoubleArray;
   LHandled: Boolean;
 begin
-  WriteLn('TestPercentile_NaNInfinity:');
   SetLength(LData, 5);
 
   LHandled := True;
@@ -519,15 +466,12 @@ begin
   Check(LHandled, 'Percentile survives Positive Infinity without segfault');
 end;
 
-{ === DS-04: HasHeuristicDifferenceAt === }
-
 procedure TestHasHeuristicDifferenceAt;
 var
   LA, LB: TDoubleArray;
   LSa, LSb: TBenchStats;
   LI: Integer;
 begin
-  WriteLn('TestHasHeuristicDifferenceAt:');
   RandSeed := 42;
   SetLength(LA, 100); SetLength(LB, 100);
   for LI := 0 to 99 do begin LA[LI] := 100.0 + Random * 10.0; LB[LI] := 200.0 + Random * 10.0; end;
@@ -544,47 +488,37 @@ begin
     'DS-04: alpha=0.05 same distribution no difference');
 end;
 
+var
+  T: TTestSuite;
 begin
-  WriteLn('=== nextpas.core.bench.stats Unit Tests ===');
-  WriteLn;
   GAnalyzer := TBenchStatsAnalyzer.Create;
-  GTestCount := 0; GPassCount := 0; GFailCount := 0;
+  T := TTestSuite.Create('nextpas.core.bench.stats');
 
-  TestMean; WriteLn;
-  TestMedian; WriteLn;
-  TestStdDev; WriteLn;
-  TestPercentile; WriteLn;
-  TestOutliers; WriteLn;
-  TestComputeStats; WriteLn;
-  TestSignificantDifference; WriteLn;
-  TestComputeApproximatePValue; WriteLn;
-  TestTInvLookup; WriteLn;
-  TestIsNormal; WriteLn;
-  TestSort; WriteLn;
-  WriteLn('=== SortDoubleArray Edge Cases (TG-03) ===');
-  TestSort_EmptyArray; WriteLn;
-  TestSort_SingleElement; WriteLn;
-  TestSort_ReverseOrder; WriteLn;
-  TestSort_AllEqual; WriteLn;
-  WriteLn('=== SortDoubleArray NaN Safety ===');
-  TestSort_NaNMixed; WriteLn;
-  TestSort_AllNaN; WriteLn;
-  TestSort_NaNWithInfinity; WriteLn;
-  WriteLn('=== TInvLookup Edge Cases (TG-04) ===');
-  TestTInvLookup_KnownValues; WriteLn;
-  TestTInvLookup_ExtremeDf; WriteLn;
-  WriteLn('=== NaN/Infinity Input Tests (TG-05) ===');
-  TestMean_NaNInfinity; WriteLn;
-  TestStdDev_NaNInfinity; WriteLn;
-  TestPercentile_NaNInfinity; WriteLn;
+  T.Test('Mean', @TestMean);
+  T.Test('Median', @TestMedian);
+  T.Test('StdDev', @TestStdDev);
+  T.Test('Percentile', @TestPercentile);
+  T.Test('Outliers', @TestOutliers);
+  T.Test('ComputeStats', @TestComputeStats);
+  T.Test('SignificantDifference', @TestSignificantDifference);
+  T.Test('ApproximatePValue', @TestComputeApproximatePValue);
+  T.Test('TInvLookup', @TestTInvLookup);
+  T.Test('IsNormal', @TestIsNormal);
+  T.Test('Sort', @TestSort);
+  T.Test('Sort_EmptyArray', @TestSort_EmptyArray);
+  T.Test('Sort_SingleElement', @TestSort_SingleElement);
+  T.Test('Sort_ReverseOrder', @TestSort_ReverseOrder);
+  T.Test('Sort_AllEqual', @TestSort_AllEqual);
+  T.Test('Sort_NaNMixed', @TestSort_NaNMixed);
+  T.Test('Sort_AllNaN', @TestSort_AllNaN);
+  T.Test('Sort_NaNWithInfinity', @TestSort_NaNWithInfinity);
+  T.Test('TInvLookup_KnownValues', @TestTInvLookup_KnownValues);
+  T.Test('TInvLookup_ExtremeDf', @TestTInvLookup_ExtremeDf);
+  T.Test('Mean_NaNInfinity', @TestMean_NaNInfinity);
+  T.Test('StdDev_NaNInfinity', @TestStdDev_NaNInfinity);
+  T.Test('Percentile_NaNInfinity', @TestPercentile_NaNInfinity);
+  T.Test('HasHeuristicDifferenceAt', @TestHasHeuristicDifferenceAt);
 
-  WriteLn('=== HasHeuristicDifferenceAt (DS-04) ===');
-  TestHasHeuristicDifferenceAt; WriteLn;
-
-  WriteLn('=== Test Summary ===');
-  WriteLn('Total: ', GTestCount);
-  WriteLn('Passed: ', GPassCount);
-  WriteLn('Failed: ', GFailCount);
-  if GFailCount > 0 then begin WriteLn; WriteLn('✗ ', GFailCount, ' test(s) failed!'); Halt(1); end
-  else begin WriteLn; WriteLn('✓ All tests passed!'); end;
+  T.Run;
+  T.Summary;
 end.

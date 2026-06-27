@@ -1,7 +1,6 @@
 program test_bench_integration;
 
-{$mode objfpc}{$H+}
-{$modeswitch advancedrecords}
+{$I nextpas.core.settings.inc}
 {$modeswitch anonymousfunctions}
 {$modeswitch functionreferences}
 
@@ -19,12 +18,10 @@ uses
   nextpas.core.bench,
   nextpas.core.bench.base,
   nextpas.core.bench.intf,
-  nextpas.core.simd.cpuinfo;
+  nextpas.core.simd.cpuinfo,
+  nextpas.core.test;
 
 var
-  GTestCount: Integer;
-  GPassCount: Integer;
-  GFailCount: Integer;
   GSetupCallCount: Integer;
   GTeardownCallCount: Integer;
   GSetupVisibleInsideBench: Boolean;
@@ -34,21 +31,6 @@ var
   GActiveParallelCalls: Integer;
   GMaxParallelCalls: Integer;
   GGotName: Boolean; { ST-03 }
-
-procedure Check(ACondition: Boolean; const ATestName: string);
-begin
-  Inc(GTestCount);
-  if ACondition then
-  begin
-    Inc(GPassCount);
-    WriteLn('  ✓ ', ATestName);
-  end
-  else
-  begin
-    Inc(GFailCount);
-    WriteLn('  ✗ ', ATestName);
-  end;
-end;
 
 function ReadFileToString(const APath: string): string;
 begin
@@ -235,7 +217,6 @@ var
   LSuite: IBenchSuite;
   LResults: IBenchResults;
 begin
-  WriteLn('TestTBenchSuite_Basic:');
 
   // 创建套件
   LSuite := CreateFastSuite('TestSuite');
@@ -260,7 +241,6 @@ var
   LSuite: IBenchSuite;
   LResults: IBenchResults;
 begin
-  WriteLn('TestTBenchSuite_WithConfig:');
 
   // 创建套件
   LSuite := TBenchSuite.Create('TestSuite');
@@ -289,7 +269,6 @@ var
   LResults: IBenchResults;
   LComparisons: array of TBenchComparison;
 begin
-  WriteLn('TestTBenchSuite_WithBaseline:');
 
   // 创建套件
   LSuite := CreateFastSuite('TestSuite');
@@ -323,7 +302,6 @@ var
   LSuite: IBenchSuite;
   LResults: IBenchResults;
 begin
-  WriteLn('TestTBenchSuite_WithFilter:');
 
   // 创建套件
   LSuite := CreateFastSuite('TestSuite');
@@ -350,7 +328,6 @@ var
   LSuite: IBenchSuite;
   LResults: IBenchResults;
 begin
-  WriteLn('TestTBenchSuite_Conditional:');
 
   // 创建套件
   LSuite := CreateFastSuite('TestSuite');
@@ -373,7 +350,6 @@ var
   LSuite: IBenchSuite;
   LResults: IBenchResults;
 begin
-  WriteLn('TestTBenchSuite_WithContext:');
 
   // 创建套件
   LSuite := CreateFastSuite('TestSuite');
@@ -397,7 +373,6 @@ var
   LSuite: IBenchSuite;
   LResults: IBenchResults;
 begin
-  WriteLn('TestTBenchSuite_WithSetup:');
 
   GSetupCallCount := 0;
   GTeardownCallCount := 0;
@@ -423,7 +398,6 @@ var
   LSuite: IBenchSuite;
   LResults: IBenchResults;
 begin
-  WriteLn('TestTBenchSuite_AddRange:');
 
   LSuite := CreateFastSuite('RangeSuite');
   LSuite.AddRange('Sum', @BenchParamFunc, [100, 1000, 10000]);
@@ -447,7 +421,6 @@ var
   LResults: IBenchResults;
   LResult: TBenchResult;
 begin
-  WriteLn('TestTBenchSuite_AddLoop:');
 
   LSuite := TBenchSuite.Create('LoopSuite');
   LSuite
@@ -471,7 +444,6 @@ var
   LResults: IBenchResults;
   LResult: TBenchResult;
 begin
-  WriteLn('TestTBenchSuite_AddParallel:');
 
   GActiveParallelCalls := 0;
   GMaxParallelCalls := 0;
@@ -516,7 +488,6 @@ var
   LResults: IBenchResults;
   LResult: TBenchResult;
 begin
-  WriteLn('TestTBenchSuite_AddParallelSkipPropagation:');
 
   LSuite := TBenchSuite.Create('ParallelSkipSuite');
   LSuite
@@ -545,7 +516,6 @@ var
   LResults: IBenchResults;
   LAll: TBenchResultArray;
 begin
-  WriteLn('TestTBenchSuite_ParallelMemoryTrackingRejected:');
 
   LSuite := TBenchSuite.Create('ParallelMemtrackSuite');
   try
@@ -574,7 +544,6 @@ var
   LResults: IBenchResults;
   LResult: TBenchResult;
 begin
-  WriteLn('TestTBenchSuite_MemoryTracking:');
 
   LSuite := TBenchSuite.Create('MemtrackSuite');
   LSuite
@@ -599,7 +568,6 @@ var
   LResults: IBenchResults;
   LResult: TBenchResult;
 begin
-  WriteLn('TestTBenchSuite_RawSamples:');
 
   LSuite := TBenchSuite.Create('RawSamplesSuite');
   LSuite
@@ -623,7 +591,6 @@ var
   LSuite: IBenchSuite;
   LResults: IBenchResults;
 begin
-  WriteLn('TestTBenchSuite_QuietMode:');
 
   LSuite := TBenchSuite.Create('QuietSuite');
   LSuite
@@ -643,7 +610,6 @@ var
   LSuite: IBenchSuite;
   LResults: IBenchResults;
 begin
-  WriteLn('TestTBenchSuite_EnvironmentCores:');
 
   LSuite := CreateFastSuite('EnvironmentSuite');
   LSuite.Add('Fast', @BenchFast);
@@ -660,7 +626,6 @@ var
   LCorrectType: Boolean;
   LSuite: IBenchSuite;
 begin
-  WriteLn('TestTBenchSuite_InvalidParameters:');
 
   { TG-27: verify exception type is EBenchInvalidParam, not just "any exception" }
   LRaised := False;
@@ -754,7 +719,6 @@ var
   LRaised: Boolean;
   LSuite: IBenchSuite;
 begin
-  WriteLn('TestTBenchSuite_LoadBaselineRaises:');
 
   LRaised := False;
   LSuite := CreateFastSuite('BaselineErrorSuite');
@@ -796,7 +760,6 @@ var
   LResults: IBenchResults;
   LConsole: string;
 begin
-  WriteLn('TestTBenchResults_PrintToConsole:');
 
   // 创建套件
   LSuite := CreateFastSuite('TestSuite');
@@ -821,7 +784,6 @@ var
   LResults: IBenchResults;
   LJSON: string;
 begin
-  WriteLn('TestTBenchResults_ToJSON:');
 
   // 创建套件
   LSuite := CreateFastSuite('TestSuite');
@@ -847,7 +809,6 @@ var
   LResults: IBenchResults;
   LTSV: string;
 begin
-  WriteLn('TestTBenchResults_ToTSV:');
 
   // 创建套件
   LSuite := CreateFastSuite('TestSuite');
@@ -872,7 +833,6 @@ var
   LResults: IBenchResults;
   LHTML: string;
 begin
-  WriteLn('TestTBenchResults_ToHTML:');
 
   // 创建套件
   LSuite := CreateFastSuite('TestSuite');
@@ -898,7 +858,6 @@ var
   LSuite: IBenchSuite;
   LResults: IBenchResults;
 begin
-  WriteLn('TestTBenchResults_HasRegression:');
 
   // 创建套件
   LSuite := CreateFastSuite('TestSuite');
@@ -924,7 +883,6 @@ var
   LPath: string;
   LContent: string;
 begin
-  WriteLn('TestTBenchResults_SaveToJSON:');
 
   LSuite := CreateFastSuite('SaveJSONSuite');
   LSuite.Add('Fast', @BenchFast);
@@ -950,7 +908,6 @@ var
   LPath: string;
   LContent: string;
 begin
-  WriteLn('TestTBenchResults_SaveToHTML:');
 
   LSuite := CreateFastSuite('SaveHTMLSuite');
   LSuite.Add('Fast', @BenchFast);
@@ -976,7 +933,6 @@ var
   LPath: string;
   LContent: string;
 begin
-  WriteLn('TestTBenchResults_SaveToTSV:');
 
   LSuite := CreateFastSuite('SaveTSVSuite');
   LSuite.Add('Fast', @BenchFast);
@@ -1000,7 +956,6 @@ var
   LSuite: IBenchSuite;
   LResults: IBenchResults;
 begin
-  WriteLn('TestTBenchSuite_FluentAPI:');
 
   // 测试 Fluent API
   LSuite := TBenchSuite.Create('TestSuite')
@@ -1030,7 +985,6 @@ var
   LResults: IBenchResults;
   LRaised: Boolean;
 begin
-  WriteLn('TestSaveErrorHandling:');
 
   LSuite := CreateFastSuite('ErrorSuite');
   LSuite.Add('Fast', @BenchFast);
@@ -1076,7 +1030,6 @@ var
   LResult: TBenchResult;
   LFound: Boolean;
 begin
-  WriteLn('TestTBenchResults_TryGetByName:');
 
   LSuite := CreateFastSuite('TryGetByNameSuite');
   LSuite.Add('Fast', @BenchFast);
@@ -1109,7 +1062,6 @@ var
   LResults: IBenchResults;
   LAll: TBenchResultArray;
 begin
-  WriteLn('TestTBenchResults_GetAllOrder:');
 
   LSuite := CreateFastSuite('GetAllOrderSuite');
   LSuite.Add('Alpha', @BenchFast);
@@ -1135,7 +1087,6 @@ var
   LSuite: IBenchSuite;
   LResults: IBenchResults;
 begin
-  WriteLn('TestNewAPI_GetName:');
   GGotName := False;
   LSuite := TBenchSuite.Create('api-test');
   LSuite.Add('NameCheck', @BenchNameCheck);
@@ -1148,7 +1099,6 @@ var
   LSuite: IBenchSuite;
   LResults: IBenchResults;
 begin
-  WriteLn('TestNewAPI_AddBytesAllocs:');
   LSuite := TBenchSuite.Create('addbytes-test');
   LSuite.Add('AddBytesCheck', @BenchAddBytesAllocs);
   LResults := LSuite.SetQuiet(True).Run;
@@ -1163,7 +1113,6 @@ var
   LSuite: IBenchSuite;
   LResults: IBenchResults;
 begin
-  WriteLn('TestNewAPI_Clear:');
   LSuite := TBenchSuite.Create('clear-test');
   LSuite.Add('A', @BenchNoOp);
   LSuite.Add('B', @BenchNoOp);
@@ -1177,7 +1126,6 @@ var
   LSuite: IBenchSuite;
   LResults: IBenchResults;
 begin
-  WriteLn('TestNewAPI_RemoveByName:');
   LSuite := TBenchSuite.Create('remove-test');
   LSuite.Add('Keep', @BenchNoOp);
   LSuite.Add('Remove', @BenchNoOp);
@@ -1194,7 +1142,6 @@ var
   LSuite: IBenchSuite;
   LResults: IBenchResults;
 begin
-  WriteLn('TestNewAPI_AddRangeWithSetup:');
   GSetupCallCount := 0;
   GTeardownCallCount := 0;
   LSuite := TBenchSuite.Create('range-setup-test');
@@ -1225,7 +1172,6 @@ var
   LSkippedCount: Integer;
   I: Integer;
 begin
-  WriteLn('TestTBenchSuite_Timeout:');
   LSuite := TBenchSuite.Create('timeout-test');
   LSuite.Add('Sleep20ms', @BenchSleep20ms);
   LSuite.Add('Sleep5ms_1', @BenchSleep5ms);
@@ -1257,7 +1203,6 @@ procedure TestRemoveByName_NonExistent;
 var
   LSuite: IBenchSuite;
 begin
-  WriteLn('TestRemoveByName_NonExistent:');
   LSuite := CreateFastSuite('RemoveNonExistent');
   LSuite.Add('Exists', @BenchFast);
   LSuite.RemoveByName('DoesNotExist');
@@ -1271,7 +1216,6 @@ var
   LSuite: IBenchSuite;
   LResults: IBenchResults;
 begin
-  WriteLn('TestClearThenRun:');
   LSuite := CreateFastSuite('ClearRun');
   LSuite.Add('A', @BenchFast);
   LSuite.Add('B', @BenchFast);
@@ -1287,7 +1231,6 @@ var
   LResults: IBenchResults;
   LComparisons: TBenchComparisonArray;
 begin
-  WriteLn('TestAddBaseline_TDuration:');
   LSuite := CreateFastSuite('BaselineDuration');
   LSuite.Add('Fast', @BenchFast);
   LSuite.AddBaseline('Fast', TDuration.FromMilliseconds(1));
@@ -1303,7 +1246,6 @@ var
   LSuite: IBenchSuite;
   LResults: IBenchResults;
 begin
-  WriteLn('TestHasRegression_Thresholds:');
   LSuite := CreateFastSuite('RegressionThreshold');
   LSuite.Add('Fast', @BenchFast);
   LSuite.AddBaseline('Fast', 0.001);
@@ -1319,7 +1261,6 @@ var
   LResults: IBenchResults;
   LBenchstat: string;
 begin
-  WriteLn('TestToBenchstat_Integration:');
   LSuite := CreateFastSuite('BenchstatInteg');
   LSuite.Add('Fast', @BenchFast);
   LSuite.SetQuiet(True);
@@ -1330,111 +1271,103 @@ begin
   Check(Pos('ns/op', LBenchstat) > 0, 'Benchstat contains ns/op column');
 end;
 
+procedure TestTBenchSuite_CreateWithConfig;
+var
+  LConfig: TBenchConfig;
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
 begin
-  WriteLn('=== nextpas.core.bench Integration Tests ===');
-  WriteLn;
+  LConfig := DefaultBenchConfig;
+  LConfig.MinDurationNs := 5000000;
+  LConfig.MaxIterations := 5000;
+  LConfig.MinSamples := 3;
+  LConfig.WarmupIterations := 1;
+  LSuite := TBenchSuite.CreateWithConfig('CfgSuite', LConfig);
+  LSuite.Add('Fast', @BenchFast);
+  LSuite.SetQuiet(True);
+  LResults := LSuite.Run;
+  Check(LResults.Count = 1, 'CreateWithConfig result count = 1');
+  Check(LResults.GetByName('Fast').NsPerOp > 0, 'CreateWithConfig NsPerOp > 0');
+end;
 
-  GTestCount := 0;
-  GPassCount := 0;
-  GFailCount := 0;
+procedure TestTBenchSuite_AddBaselines;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+  LComparisons: TBenchComparisonArray;
+  LBaselines: array of TBaselineData;
+begin
+  LSuite := CreateFastSuite('AddBaselinesSuite');
+  LSuite.Add('Fast', @BenchFast);
+  LSuite.Add('Medium', @BenchMedium);
+  SetLength(LBaselines, 2);
+  LBaselines[0].Name := 'Fast';
+  LBaselines[0].NsPerOp := 50.0;
+  LBaselines[1].Name := 'Medium';
+  LBaselines[1].NsPerOp := 100.0;
+  LSuite.AddBaselines(LBaselines);
+  LSuite.SetQuiet(True);
+  LResults := LSuite.Run;
+  LComparisons := LResults.CompareWithBaseline;
+  Check(Length(LComparisons) = 2, 'AddBaselines produces 2 comparisons');
+  Check(LComparisons[0].BaselineName = 'Fast', 'Baseline[0] name = Fast');
+  Check(LComparisons[0].BaselineNsPerOp = 50.0, 'Baseline[0] NsPerOp = 50.0');
+  Check(LComparisons[1].BaselineName = 'Medium', 'Baseline[1] name = Medium');
+  Check(LComparisons[1].BaselineNsPerOp = 100.0, 'Baseline[1] NsPerOp = 100.0');
+end;
+
+var
+  T: TTestSuite;
+begin
   GParallelLock := TMutex.Create;
   try
-    TestTBenchSuite_Basic;
-    WriteLn;
-    TestTBenchSuite_WithConfig;
-    WriteLn;
-    TestTBenchSuite_WithBaseline;
-    WriteLn;
-    TestTBenchSuite_WithFilter;
-    WriteLn;
-    TestTBenchSuite_Conditional;
-    WriteLn;
-    TestTBenchSuite_WithContext;
-    WriteLn;
-    TestTBenchSuite_WithSetup;
-    WriteLn;
-    TestTBenchSuite_AddRange;
-    WriteLn;
-    TestTBenchSuite_AddLoop;
-    WriteLn;
-    TestTBenchSuite_AddParallel;
-    WriteLn;
-    TestTBenchSuite_AddParallelSkipPropagation;
-    WriteLn;
-    TestTBenchSuite_ParallelMemoryTrackingRejected;
-    WriteLn;
-    TestTBenchSuite_MemoryTracking;
-    WriteLn;
-    TestTBenchSuite_RawSamples;
-    WriteLn;
-    TestTBenchSuite_QuietMode;
-    WriteLn;
-    TestTBenchSuite_EnvironmentCores;
-    WriteLn;
-    TestTBenchSuite_InvalidParameters;
-    WriteLn;
-    TestTBenchSuite_LoadBaselineRaises;
-    WriteLn;
-    TestTBenchResults_PrintToConsole;
-    WriteLn;
-    TestTBenchResults_ToJSON;
-    WriteLn;
-    TestTBenchResults_ToTSV;
-    WriteLn;
-    TestTBenchResults_ToHTML;
-    WriteLn;
-    TestTBenchResults_HasRegression;
-    WriteLn;
-    TestTBenchResults_SaveToJSON;
-    WriteLn;
-    TestTBenchResults_SaveToHTML;
-    WriteLn;
-    TestTBenchResults_SaveToTSV;
-    WriteLn;
-    TestTBenchSuite_FluentAPI;
-    WriteLn;
-    TestSaveErrorHandling;
-    WriteLn;
-    TestTBenchResults_TryGetByName;
-    WriteLn;
-    WriteLn('=== GetAll Order Consistency (TG-11) ===');
-    TestTBenchResults_GetAllOrder;
-    WriteLn;
-    WriteLn('=== New API Tests (DS-02/03/04 + ST-03 + DS-14) ===');
-    TestNewAPI_GetName; WriteLn;
-    TestNewAPI_AddBytesAllocs; WriteLn;
-    TestNewAPI_Clear; WriteLn;
-    TestNewAPI_RemoveByName; WriteLn;
-    TestNewAPI_AddRangeWithSetup;
-    WriteLn;
-    WriteLn('=== Timeout Test (ST-04) ===');
-    TestTBenchSuite_Timeout;
-    WriteLn;
-    WriteLn('=== Edge Case Tests (PF-25) ===');
-    TestRemoveByName_NonExistent; WriteLn;
-    TestClearThenRun; WriteLn;
-    TestAddBaseline_TDuration; WriteLn;
-    TestHasRegression_Thresholds; WriteLn;
-    TestToBenchstat_Integration;
+    T := TTestSuite.Create('nextpas.core.bench.integration');
+    T.Test('Basic', @TestTBenchSuite_Basic);
+    T.Test('WithConfig', @TestTBenchSuite_WithConfig);
+    T.Test('WithBaseline', @TestTBenchSuite_WithBaseline);
+    T.Test('WithFilter', @TestTBenchSuite_WithFilter);
+    T.Test('Conditional', @TestTBenchSuite_Conditional);
+    T.Test('WithContext', @TestTBenchSuite_WithContext);
+    T.Test('WithSetup', @TestTBenchSuite_WithSetup);
+    T.Test('AddRange', @TestTBenchSuite_AddRange);
+    T.Test('AddLoop', @TestTBenchSuite_AddLoop);
+    T.Test('AddParallel', @TestTBenchSuite_AddParallel);
+    T.Test('AddParallelSkipPropagation', @TestTBenchSuite_AddParallelSkipPropagation);
+    T.Test('ParallelMemoryTrackingRejected', @TestTBenchSuite_ParallelMemoryTrackingRejected);
+    T.Test('MemoryTracking', @TestTBenchSuite_MemoryTracking);
+    T.Test('RawSamples', @TestTBenchSuite_RawSamples);
+    T.Test('QuietMode', @TestTBenchSuite_QuietMode);
+    T.Test('EnvironmentCores', @TestTBenchSuite_EnvironmentCores);
+    T.Test('InvalidParameters', @TestTBenchSuite_InvalidParameters);
+    T.Test('LoadBaselineRaises', @TestTBenchSuite_LoadBaselineRaises);
+    T.Test('PrintToConsole', @TestTBenchResults_PrintToConsole);
+    T.Test('ToJSON', @TestTBenchResults_ToJSON);
+    T.Test('ToTSV', @TestTBenchResults_ToTSV);
+    T.Test('ToHTML', @TestTBenchResults_ToHTML);
+    T.Test('HasRegression', @TestTBenchResults_HasRegression);
+    T.Test('SaveToJSON', @TestTBenchResults_SaveToJSON);
+    T.Test('SaveToHTML', @TestTBenchResults_SaveToHTML);
+    T.Test('SaveToTSV', @TestTBenchResults_SaveToTSV);
+    T.Test('FluentAPI', @TestTBenchSuite_FluentAPI);
+    T.Test('SaveErrorHandling', @TestSaveErrorHandling);
+    T.Test('TryGetByName', @TestTBenchResults_TryGetByName);
+    T.Test('GetAllOrder', @TestTBenchResults_GetAllOrder);
+    T.Test('GetName', @TestNewAPI_GetName);
+    T.Test('AddBytesAllocs', @TestNewAPI_AddBytesAllocs);
+    T.Test('Clear', @TestNewAPI_Clear);
+    T.Test('RemoveByName', @TestNewAPI_RemoveByName);
+    T.Test('AddRangeWithSetup', @TestNewAPI_AddRangeWithSetup);
+    T.Test('Timeout', @TestTBenchSuite_Timeout);
+    T.Test('RemoveByName_NonExistent', @TestRemoveByName_NonExistent);
+    T.Test('ClearThenRun', @TestClearThenRun);
+    T.Test('AddBaseline_TDuration', @TestAddBaseline_TDuration);
+    T.Test('HasRegression_Thresholds', @TestHasRegression_Thresholds);
+    T.Test('ToBenchstat_Integration', @TestToBenchstat_Integration);
+    T.Test('CreateWithConfig', @TestTBenchSuite_CreateWithConfig);
+    T.Test('AddBaselines', @TestTBenchSuite_AddBaselines);
+    T.Run;
+    T.Summary;
   finally
     GParallelLock.Free;
-  end;
-
-  WriteLn;
-  WriteLn('=== Test Summary ===');
-  WriteLn('Total: ', GTestCount);
-  WriteLn('Passed: ', GPassCount);
-  WriteLn('Failed: ', GFailCount);
-
-  if GFailCount > 0 then
-  begin
-    WriteLn;
-    WriteLn('✗ ', GFailCount, ' test(s) failed!');
-    Halt(1);
-  end
-  else
-  begin
-    WriteLn;
-    WriteLn('✓ All tests passed!');
   end;
 end.

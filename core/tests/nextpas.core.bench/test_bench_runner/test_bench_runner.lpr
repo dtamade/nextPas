@@ -1,9 +1,9 @@
 program test_bench_runner;
 
-{$mode objfpc}{$H+}
-{$modeswitch advancedrecords}
+{$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.test,
   nextpas.core.math.scalar,
   nextpas.core.os.env,
   nextpas.core.text.conv,
@@ -15,33 +15,10 @@ uses
   nextpas.core.bench.runner;
 
 var
-  GTestCount: Integer;
-  GPassCount: Integer;
-  GFailCount: Integer;
+  T: TTestSuite;
   GInvocationCount: Int64;
   GFirstObservedIteration: Int64;
   GLastObservedIteration: Int64;
-
-procedure Check(ACondition: Boolean; const ATestName: string);
-begin
-  Inc(GTestCount);
-  if ACondition then
-  begin
-    Inc(GPassCount);
-    WriteLn('  ✓ ', ATestName);
-  end
-  else
-  begin
-    Inc(GFailCount);
-    WriteLn('  ✗ ', ATestName);
-  end;
-end;
-
-procedure CheckApprox(AActual, AExpected, AEpsilon: Double; const ATestName: string);
-begin
-  Check(Abs(AActual - AExpected) <= AEpsilon,
-    ATestName + ' (expected: ' + FloatToStr(AExpected) + ', got: ' + FloatToStr(AActual) + ')');
-end;
 
 procedure ConfigureFastRunner(ARunner: TBenchRunner);
 var
@@ -134,8 +111,6 @@ var
   LCtx: TBenchContext;
   LElapsed: TDuration;
 begin
-  WriteLn('TestTBenchContext:');
-
   LCtx := TBenchContext.Create;
   try
     // 测试初始状态
@@ -191,8 +166,6 @@ var
   LRunner: TBenchRunner;
   LIters: Int64;
 begin
-  WriteLn('TestCalibrateIterations:');
-
   LRunner := TBenchRunner.Create;
   try
     ConfigureFastRunner(LRunner);
@@ -220,8 +193,6 @@ var
   LRunner: TBenchRunner;
   LResult: TBenchResult;
 begin
-  WriteLn('TestRunOne:');
-
   LRunner := TBenchRunner.Create;
   try
     ConfigureFastRunner(LRunner);
@@ -257,8 +228,6 @@ var
   LRunner: TBenchRunner;
   LResult: TBenchResult;
 begin
-  WriteLn('TestRunOneSkip:');
-
   LRunner := TBenchRunner.Create;
   try
     ConfigureFastRunner(LRunner);
@@ -277,8 +246,6 @@ var
   LEntry: TBenchEntry;
   LResult: TBenchResult;
 begin
-  WriteLn('TestRunOneTBenchEntry:');
-
   LRunner := TBenchRunner.Create;
   try
     ConfigureFastRunner(LRunner);
@@ -319,8 +286,6 @@ var
   LEntries: array of TBenchEntry;
   LResults: array of TBenchResult;
 begin
-  WriteLn('TestRunAll:');
-
   LRunner := TBenchRunner.Create;
   try
     ConfigureFastRunner(LRunner);
@@ -355,8 +320,6 @@ var
   LRunner: TBenchRunner;
   LResult: TBenchResult;
 begin
-  WriteLn('TestFilter:');
-
   LRunner := TBenchRunner.Create;
   try
     ConfigureFastRunner(LRunner);
@@ -382,8 +345,6 @@ var
   LRunner: TBenchRunner;
   LConfig: TBenchConfig;
 begin
-  WriteLn('TestConfig:');
-
   LRunner := TBenchRunner.Create;
   try
     // 测试默认配置
@@ -415,8 +376,6 @@ var
   LRunner: TBenchRunner;
   LConfig: TBenchConfig;
 begin
-  WriteLn('TestConfig_QuietEnv:');
-
   UnsetEnv(BENCH_ENV_QUIET);
   LRunner := TBenchRunner.Create;
   try
@@ -445,8 +404,6 @@ var
   LRunner: TBenchRunner;
   LElapsed: UInt64;
 begin
-  WriteLn('TestMeasureNs:');
-
   LRunner := TBenchRunner.Create;
   try
     ConfigureFastRunner(LRunner);
@@ -485,8 +442,6 @@ var
   LRunner: TBenchRunner;
   LResult: TBenchResult;
 begin
-  WriteLn('TestClearResults:');
-
   LRunner := TBenchRunner.Create;
   try
     ConfigureFastRunner(LRunner);
@@ -511,8 +466,6 @@ var
   LResults: array of TBenchResult;
   LConfig: TBenchConfig;
 begin
-  WriteLn('TestRunAll_StatisticsComplete:');
-
   LRunner := TBenchRunner.Create;
   try
     LConfig := LRunner.GetConfig;
@@ -562,53 +515,19 @@ begin
 end;
 
 begin
-  WriteLn('=== nextpas.core.bench.runner Unit Tests ===');
-  WriteLn;
-
-  GTestCount := 0;
-  GPassCount := 0;
-  GFailCount := 0;
-
-  TestTBenchContext;
-  WriteLn;
-  TestCalibrateIterations;
-  WriteLn;
-  TestRunOne;
-  WriteLn;
-  TestRunOneSkip;
-  WriteLn;
-  TestRunOneTBenchEntry;
-  WriteLn;
-  TestRunAll;
-  WriteLn;
-  TestFilter;
-  WriteLn;
-  TestConfig;
-  WriteLn;
-  TestConfig_QuietEnv;
-  WriteLn;
-  TestMeasureNs;
-  WriteLn;
-  TestClearResults;
-  WriteLn;
-  WriteLn('=== RunAll Statistics Completeness (TG-12) ===');
-  TestRunAll_StatisticsComplete;
-
-  WriteLn;
-  WriteLn('=== Test Summary ===');
-  WriteLn('Total: ', GTestCount);
-  WriteLn('Passed: ', GPassCount);
-  WriteLn('Failed: ', GFailCount);
-
-  if GFailCount > 0 then
-  begin
-    WriteLn;
-    WriteLn('✗ ', GFailCount, ' test(s) failed!');
-    Halt(1);
-  end
-  else
-  begin
-    WriteLn;
-    WriteLn('✓ All tests passed!');
-  end;
+  T := TTestSuite.Create('nextpas.core.bench.runner');
+  T.Test('TBenchContext lifecycle', @TestTBenchContext);
+  T.Test('CalibrateIterations', @TestCalibrateIterations);
+  T.Test('RunOne', @TestRunOne);
+  T.Test('RunOne skip', @TestRunOneSkip);
+  T.Test('RunOne TBenchEntry', @TestRunOneTBenchEntry);
+  T.Test('RunAll', @TestRunAll);
+  T.Test('Filter', @TestFilter);
+  T.Test('Config defaults and setters', @TestConfig);
+  T.Test('Config quiet from env', @TestConfig_QuietEnv);
+  T.Test('MeasureNs', @TestMeasureNs);
+  T.Test('ClearResults', @TestClearResults);
+  T.Test('RunAll statistics completeness (TG-12)', @TestRunAll_StatisticsComplete);
+  T.Run;
+  T.Summary;
 end.
