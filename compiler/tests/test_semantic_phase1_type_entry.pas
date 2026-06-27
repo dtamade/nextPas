@@ -18,6 +18,26 @@ begin
   Halt(1);
 end;
 
+procedure WriteTextFile(const APath: string; const AText: string);
+var
+  F: Text;
+begin
+  ForceDirectories(ExtractFileDir(APath));
+  Assign(F, APath);
+  Rewrite(F);
+  try
+    Write(F, AText);
+  finally
+    Close(F);
+  end;
+end;
+
+procedure DeleteFileIfExists(const APath: string);
+begin
+  if FileExists(APath) then
+    DeleteFile(APath);
+end;
+
 function BuildModel(const ASource: string; out ADiagnostics: TDiagnosticsSink
 ): TSemanticModel;
 var
@@ -42,6 +62,48 @@ begin
     Graph := TUnitGraph.Create;
     Graph.SetRootName(Ast.DeclaredName);
     Graph.MarkReady;
+    Analyzer := TSemanticAnalyzer.Create(Ast, Graph, ADiagnostics, 1, True);
+    Analyzer.Analyze;
+    Result := Analyzer.DetachModel;
+  finally
+    Analyzer.Free;
+    Graph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+  end;
+end;
+
+function BuildModelWithResolvedUnits(
+  const ASource: string;
+  const ARootName: string;
+  const AResolvedUnits: array of TResolvedUnit;
+  out ADiagnostics: TDiagnosticsSink
+): TSemanticModel;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Graph: TUnitGraph;
+  Index: LongInt;
+  Lexer: TLexerResult;
+  Tree: TGreenTree;
+begin
+  Result := nil;
+  Analyzer := nil;
+  Ast := nil;
+  Graph := nil;
+  Lexer := nil;
+  Tree := nil;
+  ADiagnostics := nil;
+  try
+    ADiagnostics := TDiagnosticsSink.CreateDefault;
+    Lexer := TLexerResult.Create(ASource, ADiagnostics, 1);
+    Tree := ParseGreenTree(Lexer, ADiagnostics, 1);
+    Ast := TAstFacade.Create(Tree);
+    Graph := TUnitGraph.Create;
+    Graph.SetRootName(ARootName);
+    for Index := Low(AResolvedUnits) to High(AResolvedUnits) do
+      Graph.AddResolvedUnit(AResolvedUnits[Index]);
     Analyzer := TSemanticAnalyzer.Create(Ast, Graph, ADiagnostics, 1, True);
     Analyzer.Analyze;
     Result := Analyzer.DetachModel;
@@ -248,8 +310,120 @@ begin
   end;
 end;
 
+procedure CheckCachedInstalledSourceTypeSymbolsStayReady;
+var
+  Binding: TSemanticBinding;
+  ClassesPath: string;
+  ClearBindingCount: LongInt;
+  Diagnostics: TDiagnosticsSink;
+  Index: LongInt;
+  Model: TSemanticModel;
+  ProjectRoot: string;
+  RootSourceText: string;
+begin
+  Randomize;
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+    'nextpas-phase1-cached-classes-' + IntToStr(Random(MaxInt));
+  ClassesPath := ProjectRoot + DirectorySeparator + 'classes.pas';
+  RootSourceText :=
+    'program CachedClassesTypeSymbols;' + LineEnding +
+    'uses Classes;' + LineEnding +
+    'var' + LineEnding +
+    '  List: TStringList;' + LineEnding +
+    'begin' + LineEnding +
+    '  List := TStringList.Create;' + LineEnding +
+    '  List.Clear;' + LineEnding +
+    'end.' + LineEnding;
+  WriteTextFile(
+    ClassesPath,
+    'unit Classes;' + LineEnding +
+    LineEnding +
+    'interface' + LineEnding +
+    'type' + LineEnding +
+    '  TStringList = class' + LineEnding +
+    '  public' + LineEnding +
+    '    constructor Create;' + LineEnding +
+    '    procedure Clear;' + LineEnding +
+    '  end;' + LineEnding +
+    LineEnding +
+    'implementation' + LineEnding +
+    'constructor TStringList.Create;' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure TStringList.Clear;' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    LineEnding +
+    'end.' + LineEnding
+  );
+
+  Diagnostics := nil;
+  Model := BuildModelWithResolvedUnits(
+    RootSourceText,
+    'CachedClassesWarmup',
+    [
+      BuildResolvedUnit('CachedClassesWarmup', '', ruoRootSource, '', 'program', 1),
+      BuildResolvedUnit('Classes', ClassesPath, ruoInstalledSource, '', 'unit', 2)
+    ],
+    Diagnostics
+  );
+  try
+    if Diagnostics = nil then
+      Fail('missing-cached-warmup-diagnostics');
+    if Model = nil then
+      Fail('missing-cached-warmup-model');
+    if Diagnostics.HasErrors then
+      Fail('unexpected-cached-warmup-diagnostic:' +
+        Diagnostics.LastDiagnosticCode + ':' + Diagnostics.LastDiagnosticMessage);
+    if not SameText(Model.Status, 'ready') then
+      Fail('unexpected-cached-warmup-status:' + Model.Status);
+  finally
+    Model.Free;
+    Diagnostics.Free;
+  end;
+
+  Diagnostics := nil;
+  Model := BuildModelWithResolvedUnits(
+    RootSourceText,
+    'CachedClassesReplay',
+    [
+      BuildResolvedUnit('CachedClassesReplay', '', ruoRootSource, '', 'program', 1),
+      BuildResolvedUnit('Classes', ClassesPath, ruoInstalledSource, '', 'unit', 2)
+    ],
+    Diagnostics
+  );
+  try
+    if Diagnostics = nil then
+      Fail('missing-cached-replay-diagnostics');
+    if Model = nil then
+      Fail('missing-cached-replay-model');
+    if Diagnostics.HasErrors then
+      Fail('unexpected-cached-replay-diagnostic:' +
+        Diagnostics.LastDiagnosticCode + ':' + Diagnostics.LastDiagnosticMessage);
+    if not SameText(Model.Status, 'ready') then
+      Fail('unexpected-cached-replay-status:' + Model.Status);
+    ClearBindingCount := 0;
+    for Index := 0 to Model.BindingCount - 1 do
+    begin
+      Binding := Model.BindingAt(Index);
+      if SameText(Binding.Kind, 'member-call') and
+        SameText(Binding.Name, 'Clear') then
+        Inc(ClearBindingCount);
+    end;
+    if ClearBindingCount <> 1 then
+      Fail('unexpected-cached-replay-clear-binding-count:' +
+        IntToStr(ClearBindingCount));
+  finally
+    Model.Free;
+    Diagnostics.Free;
+    DeleteFileIfExists(ClassesPath);
+    RmDir(ProjectRoot);
+  end;
+end;
+
 begin
   CheckTypeCastAndIntrinsicCallsStayReady;
   CheckTypeCastAndIntrinsicOverloadBindings;
+  CheckCachedInstalledSourceTypeSymbolsStayReady;
   WriteLn('semantic-phase1-type-entry-status=pass');
 end.

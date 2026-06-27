@@ -6030,45 +6030,77 @@ end;
 
 procedure TSemanticAnalyzer.SeedCachedTypeGaps;
 var
-  I: LongInt;
-  Sym: TSemanticSymbol;
-  NewTypeId, ParentTypeId: LongInt;
+  HasClassLikeMembers: Boolean;
+  I, J: LongInt;
+  ExistingTypeId: LongInt;
+  MemberSym, TypeSym: TSemanticSymbol;
+  ParentTypeId: LongInt;
   Meta: TTypeMetadata;
-  CachedOwnerUnitId: string;
+  OwnerUnitId: string;
 begin
   { Cached units only register symbols, not types. Seed type entries for
     type symbols from cached units that are missing from the model. }
-  CachedOwnerUnitId := 'sysutils';
   for I := 0 to FModel.SymbolCount - 1 do
   begin
-    Sym := FModel.SymbolAt(I);
-    if not SameText(Sym.Kind, 'type') then
+    TypeSym := FModel.SymbolAt(I);
+    if not SameText(TypeSym.Kind, 'type') then
       Continue;
-    if not SameText(Sym.OwnerUnitId, CachedOwnerUnitId) then
+    OwnerUnitId := NormalizeUnitIdentity(TypeSym.OwnerUnitId);
+    if OwnerUnitId = '' then
       Continue;
-    if FModel.FindTypeByName(Sym.Name) > 0 then
-      Continue;
-    NewTypeId := FModel.AddType(Sym.Name, 'declared');
-    FModel.SetTypeOwner(NewTypeId, Sym.OwnerUnitId);
-    { Best-effort parent: if the name suggests a class, try TObject }
-    if SameText(Sym.Name, 'Exception') or
-      SameText(Sym.Name, 'ExceptClass') or
-      (SameText(Copy(Sym.Name, 1, 1), 'E') and
-       (Length(Sym.Name) > 1) and
-       (Sym.Name[2] in ['A'..'Z'])) then
+
+    ExistingTypeId := 0;
+    if (TypeSym.TypeId > 0) and (TypeSym.TypeId <= FModel.TypeCount) then
+      ExistingTypeId := TypeSym.TypeId
+    else
+      ExistingTypeId := ResolveTypeIdForOwner(TypeSym.Name, OwnerUnitId, False);
+    if ExistingTypeId <= 0 then
+      ExistingTypeId := FModel.FindTypeByName(TypeSym.Name);
+
+    if ExistingTypeId <= 0 then
     begin
-      ParentTypeId := FModel.FindTypeByName('TObject');
-      if ParentTypeId > 0 then
+      ExistingTypeId := FModel.AddType(TypeSym.Name, 'declared');
+      FModel.SetTypeOwner(ExistingTypeId, OwnerUnitId);
+    end;
+    FModel.SetSymbolTypeId(TypeSym.SymbolId, ExistingTypeId);
+
+    HasClassLikeMembers := False;
+    for J := 0 to FModel.SymbolCount - 1 do
+    begin
+      MemberSym := FModel.SymbolAt(J);
+      if SameText(MemberSym.OwnerUnitId, OwnerUnitId) and
+        SameText(MemberSym.Kind, 'method') and
+        (Pos(LowerCase(FModel.TypeAt(ExistingTypeId - 1).Name) + '.',
+          LowerCase(MemberSym.Name)) = 1) then
       begin
-        FModel.SetTypeParent(NewTypeId, ParentTypeId);
-        FillChar(Meta, SizeOf(Meta), 0);
-        Meta.TypeId := NewTypeId;
-        Meta.Size := 8;
-        Meta.VmtCount := 1;
-        Meta.ParentClassId := ParentTypeId;
-        Meta.ParentClassName := 'TObject';
-        FModel.SetTypeMeta(NewTypeId, Meta);
+        HasClassLikeMembers := True;
+        Break;
       end;
+    end;
+
+    if HasClassLikeMembers or SameText(TypeSym.Name, 'Exception') or
+      SameText(TypeSym.Name, 'ExceptClass') or
+      (SameText(Copy(TypeSym.Name, 1, 1), 'E') and
+       (Length(TypeSym.Name) > 1) and
+       (TypeSym.Name[2] in ['A'..'Z'])) then
+    begin
+      ParentTypeId := 0;
+      if not SameText(TypeSym.Name, 'TObject') then
+        ParentTypeId := FModel.FindTypeByName('TObject');
+      if ParentTypeId > 0 then
+        FModel.SetTypeParent(ExistingTypeId, ParentTypeId);
+      FillChar(Meta, SizeOf(Meta), 0);
+      Meta.TypeId := ExistingTypeId;
+      Meta.Size := 8;
+      Meta.VmtCount := 0;
+      Meta.ParentClassId := ParentTypeId;
+      if ParentTypeId > 0 then
+        Meta.ParentClassName := 'TObject';
+      FModel.SetTypeMeta(ExistingTypeId, Meta);
+      FModel.AddConstValue(TypeSym.Name + '$size', 8);
+      FModel.AddConstValue(TypeSym.Name + '$vmt_count', 0);
+      if ParentTypeId > 0 then
+        FModel.AddStringConstValue(TypeSym.Name + '$parent_class', 'TObject');
     end;
   end;
 end;
