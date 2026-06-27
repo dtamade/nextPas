@@ -181,12 +181,14 @@ end;
 
 ## 版本历史
 
-- v7.1 (2026-06-27): Round 15 — test_ring_buffer + sharded pools 恢复
+- v7.1 (2026-06-27): Round 15 — test_ring_buffer + 并发池恢复 + 测试修复
   - 新增: `test_ring_buffer` 30 tests — TRingBuffer 全公共 API 覆盖
   - 恢复: `test_sharded_pools` 9 tests — CS-001 修复后编译通过
   - 恢复: `test_oom` 8 tests — CS-001 修复后编译通过
+  - 修复: NormalizeAlignment 实现与文档不一致（缺少 >= DEFAULT_ALIGNMENT 检查）
+  - 修复: test_mem_secure CheckContains 大小写 + compile gate 测试更新
   - 覆盖范围: Create/Push/Pop/TryPush/TryPop/Peek/Clear/Resize/BatchPushPop/Wrap-around/GetElementAt/FindElement/DropElements/ContiguousSpans/UsageRatio
-  - 25 suites / 364 tests / 0 leaks
+  - 34 suites / 483 tests / 0 leaks / 0 failures
 - v7.0 (2026-06-27): Phase E 文档注释 + Round 14 打磨
   - Phase E: 9 文件 150+ 处方法级 `{** @desc *}` 文档注释
   - E-2: 6 类型级文档补全 (TSlabPerfCounters/TSlabPoolStats/TSlabConfig/TFixedPoolConfig/TStackPoolConfig/TStackMemoryMapEntry)
