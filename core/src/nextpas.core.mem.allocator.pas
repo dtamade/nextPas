@@ -26,7 +26,8 @@ uses
   nextpas.core.mem.allocator.rtl,
   nextpas.core.mem.allocator.callback,
   nextpas.core.mem.allocator.mmap,
-  nextpas.core.mem.allocator.mimalloc
+  nextpas.core.mem.allocator.mimalloc,
+  nextpas.core.mem.allocator.guard
   {$IFDEF NEXTPAS_CORE_CRT_ALLOCATOR}
   ,nextpas.core.mem.allocator.crt
   {$ENDIF}
@@ -50,6 +51,7 @@ type
   {$ENDIF}
   TCallbackAllocator = nextpas.core.mem.allocator.callback.TCallbackAllocator;
   TMemoryMapAllocator = nextpas.core.mem.allocator.mmap.TMemoryMapAllocator;
+  TGuardAllocator = nextpas.core.mem.allocator.guard.TGuardAllocator;
 
   // 获取/工厂函数声明（门面转发）
   function GetRtlAllocator: IAllocator;
