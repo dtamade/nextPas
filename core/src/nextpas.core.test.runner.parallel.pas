@@ -293,12 +293,8 @@ begin
       SafeRelease(R^.Mtx, LConfig);
     end;
     if R^.Res <> nil then
-    begin
-      R^.Res^.Name     := R^.Entry.Name;
-      R^.Res^.Status   := tsSkipped;
-      R^.Res^.Message  := 'subtests not supported in parallel mode';
-      R^.Res^.Duration := 0;
-    end;
+      R^.Res^ := MakeTestResult(R^.Entry.Name, tsSkipped,
+        'subtests not supported in parallel mode', 0);
     Exit;
   end;
 
@@ -314,12 +310,8 @@ begin
       SafeRelease(R^.Mtx, LConfig);
     end;
     if R^.Res <> nil then
-    begin
-      R^.Res^.Name     := R^.Entry.Name;
-      R^.Res^.Status   := tsSkipped;
-      R^.Res^.Message  := R^.Entry.SkipReason;
-      R^.Res^.Duration := 0;
-    end;
+      R^.Res^ := MakeTestResult(R^.Entry.Name, tsSkipped,
+        R^.Entry.SkipReason, 0);
     Exit;
   end;
 
@@ -346,10 +338,7 @@ begin
           { Set Duration to 0 directly — no test ran, don't use GetTickCount64 }
           if R^.Res <> nil then
           begin
-            R^.Res^.Name     := R^.Entry.Name;
-            R^.Res^.Status   := tsError;
-            R^.Res^.Duration := 0;
-            R^.Res^.Message  := E.Message;
+            R^.Res^ := MakeTestResult(R^.Entry.Name, tsError, E.Message, 0);
             LResultWritten := True;
           end;
         finally
@@ -511,15 +500,16 @@ begin
       by beforeEach failure path, which sets Duration = 0 directly) }
     if (R^.Res <> nil) and (not LResultWritten) then
     begin
-      R^.Res^.Name     := R^.Entry.Name;
-      R^.Res^.Status   := LStatus;
-      R^.Res^.Duration := GetTickCount64 - LStartMs;
       case LStatus of
-        tsSkipped: R^.Res^.Message := LSkipReason;
-        tsFailed:  R^.Res^.Message := LFailMsg;
-        tsError:   R^.Res^.Message := LFailMsg;
+        tsSkipped: R^.Res^ := MakeTestResult(R^.Entry.Name, LStatus,
+                      LSkipReason, GetTickCount64 - LStartMs);
+        tsFailed:  R^.Res^ := MakeTestResult(R^.Entry.Name, LStatus,
+                      LFailMsg, GetTickCount64 - LStartMs);
+        tsError:   R^.Res^ := MakeTestResult(R^.Entry.Name, LStatus,
+                      LFailMsg, GetTickCount64 - LStartMs);
       else
-        R^.Res^.Message := '';
+        R^.Res^ := MakeTestResult(R^.Entry.Name, LStatus,
+                      '', GetTickCount64 - LStartMs);
       end;
     end;
   finally
@@ -556,12 +546,8 @@ begin
           SafeRelease(R^.Mtx, LConfig);
         end;
         if R^.Res <> nil then
-        begin
-          R^.Res^.Name     := R^.Entry.Name;
-          R^.Res^.Status   := tsError;
-          R^.Res^.Message  := 'worker exception: ' + E.ClassName + ': ' + E.Message;
-          R^.Res^.Duration := 0;
-        end;
+          R^.Res^ := MakeTestResult(R^.Entry.Name, tsError,
+            'worker exception: ' + E.ClassName + ': ' + E.Message, 0);
       end;
     end;
   end;

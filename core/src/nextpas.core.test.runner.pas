@@ -1009,15 +1009,12 @@ begin
     end;
 
     { Record test result }
-    LTestResult.Status   := LStatus;
-    LTestResult.Message  := LLastFailMsg;
-    LTestResult.Duration := GetTickCount64 - LStartMs;
+    LTestResult := MakeTestResult(LEntry.Name, LStatus, LLastFailMsg,
+      GetTickCount64 - LStartMs);
     { Copy captured log lines on failure/error for report output }
     if (LStatus in [tsFailed, tsError]) and (LSubCtx <> nil) and
        (Length(LSubCtx.FLogLines) > 0) then
-      LTestResult.CapturedLog := LSubCtx.FLogLines
-    else
-      LTestResult.CapturedLog := nil;
+      LTestResult.CapturedLog := LSubCtx.FLogLines;
     SetLength(AResult.Results, Length(AResult.Results) + 1);
     AResult.Results[High(AResult.Results)] := LTestResult;
 
