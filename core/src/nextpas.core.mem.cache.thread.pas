@@ -10,11 +10,24 @@ uses
   nextpas.core.mem.sizeclass;
 
 const
-  { Maximum entries per free list before batch flush. }
+  { Maximum entries per free list before batch flush (default, used by adaptive). }
   CACHE_MAX_LIST_SIZE = 64;
 
-  { Number of entries to refill/flush in a batch. }
+  { Number of entries to refill/flush in a batch (default, used by adaptive). }
   CACHE_BATCH_SIZE = 16;
+
+  { Adaptive batch thresholds by size class band.
+    Small objects get larger batches (more throughput, less central contention).
+    Large objects get smaller batches (less memory waste). }
+  CACHE_ADAPTIVE_BATCH_SMALL = 32;   { band 0-1: ≤1KB, batch 32, max 128 }
+  CACHE_ADAPTIVE_BATCH_MEDIUM = 16;  { band 2-3: ≤8KB, batch 16, max 64 }
+  CACHE_ADAPTIVE_BATCH_LARGE = 8;    { band 4:   ≤16KB, batch 8, max 32 }
+  CACHE_ADAPTIVE_BATCH_HUGE = 4;     { band 5:   ≤53KB, batch 4, max 16 }
+
+  CACHE_ADAPTIVE_MAX_SMALL = 128;
+  CACHE_ADAPTIVE_MAX_MEDIUM = 64;
+  CACHE_ADAPTIVE_MAX_LARGE = 32;
+  CACHE_ADAPTIVE_MAX_HUGE = 16;
 
 type
   {** Intrusive free-list node. Stored in the first Pointer-sized
@@ -71,6 +84,13 @@ procedure ThreadCacheFlush(var ACache: TThreadCache;
 function ThreadCacheCount(const ACache: TThreadCache;
   ASizeClass: Int32): Word; inline;
 
+{** Adaptive batch size for a size class index.
+    Small objects → larger batches (throughput), large → smaller (memory). }
+function AdaptiveBatchSize(ASizeClassIndex: Int32): Word;
+
+{** Adaptive max list size for a size class index. }
+function AdaptiveMaxListSize(ASizeClassIndex: Int32): Word;
+
 implementation
 
 procedure ThreadCacheInit(out ACache: TThreadCache);
@@ -121,7 +141,8 @@ end;
 procedure ThreadCacheRefill(var ACache: TThreadCache;
   ASizeClass: Int32; ARefillProc: TRefillProc);
 var
-  LBlocks: array[0..CACHE_BATCH_SIZE - 1] of Pointer;
+  LBlocks: array[0..CACHE_ADAPTIVE_BATCH_SMALL - 1] of Pointer;
+  LBatchSize: Word;
   LCount, I: Word;
   LNode: PFreeNode;
 begin
@@ -129,7 +150,8 @@ begin
     Exit;
   if not Assigned(ARefillProc) then
     Exit;
-  LCount := ARefillProc(ASizeClass, CACHE_BATCH_SIZE, @LBlocks[0]);
+  LBatchSize := AdaptiveBatchSize(ASizeClass);
+  LCount := ARefillProc(ASizeClass, LBatchSize, @LBlocks[0]);
   { Push all allocated blocks to the free list (in reverse to maintain order). }
   for I := LCount downto 1 do
   begin
@@ -143,7 +165,8 @@ end;
 procedure ThreadCacheFlush(var ACache: TThreadCache;
   ASizeClass: Int32; AFlushProc: TFlushProc);
 var
-  LBlocks: array[0..CACHE_BATCH_SIZE - 1] of Pointer;
+  LBlocks: array[0..CACHE_ADAPTIVE_BATCH_SMALL - 1] of Pointer;
+  LBatchSize: Word;
   LFlushCount, I: Word;
   LNode: PFreeNode;
 begin
@@ -151,9 +174,10 @@ begin
     Exit;
   if not Assigned(AFlushProc) then
     Exit;
-  { Pop up to CACHE_BATCH_SIZE entries. }
+  LBatchSize := AdaptiveBatchSize(ASizeClass);
+  { Pop up to LBatchSize entries. }
   LFlushCount := 0;
-  while (ACache.FHeads[ASizeClass] <> nil) and (LFlushCount < CACHE_BATCH_SIZE) do
+  while (ACache.FHeads[ASizeClass] <> nil) and (LFlushCount < LBatchSize) do
   begin
     LNode := ACache.FHeads[ASizeClass];
     ACache.FHeads[ASizeClass] := LNode^.FNext;
@@ -171,6 +195,30 @@ begin
   if (ASizeClass < 0) or (ASizeClass >= MEM_SIZECLASS_COUNT) then
     Exit(0);
   Result := ACache.FCounts[ASizeClass];
+end;
+
+function AdaptiveBatchSize(ASizeClassIndex: Int32): Word;
+begin
+  if ASizeClassIndex < 16 then
+    Result := CACHE_ADAPTIVE_BATCH_SMALL    { band 0-1: ≤256B-1KB }
+  else if ASizeClassIndex < 42 then
+    Result := CACHE_ADAPTIVE_BATCH_MEDIUM   { band 2-3: ≤4KB-8KB }
+  else if ASizeClassIndex < 47 then
+    Result := CACHE_ADAPTIVE_BATCH_LARGE    { band 4: ≤16KB }
+  else
+    Result := CACHE_ADAPTIVE_BATCH_HUGE;    { band 5: ≤53KB }
+end;
+
+function AdaptiveMaxListSize(ASizeClassIndex: Int32): Word;
+begin
+  if ASizeClassIndex < 16 then
+    Result := CACHE_ADAPTIVE_MAX_SMALL
+  else if ASizeClassIndex < 42 then
+    Result := CACHE_ADAPTIVE_MAX_MEDIUM
+  else if ASizeClassIndex < 47 then
+    Result := CACHE_ADAPTIVE_MAX_LARGE
+  else
+    Result := CACHE_ADAPTIVE_MAX_HUGE;
 end;
 
 end.

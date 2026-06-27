@@ -63,7 +63,7 @@ var
   GGrowingAllocator: TGrowingAllocator;
 
 { Thread-local cache: one per thread, zero initialization on thread start. }
-var
+threadvar
   GThreadCache: TThreadCache;
 
 { --- Refill/Flush callbacks (standalone functions for TRefillProc/TFlushProc) --- }
@@ -80,13 +80,19 @@ end;
 
 procedure FlushToCentral(AIndex: Int32; ACount: Word;
   ABlocks: PPointer);
+var
+  I: Word;
 begin
   if (AIndex < 0) or (AIndex >= MEM_SIZECLASS_COUNT) then
     Exit;
   if GGrowingAllocator = nil then
     Exit;
-  CentralPoolFree(GGrowingAllocator.FCentrals[AIndex], ACount, ABlocks,
-    GGrowingAllocator.FOpCounter);
+  { Push each block to the lock-free inbox (no spinlock needed). }
+  for I := 0 to ACount - 1 do
+  begin
+    CentralPoolInboxPush(GGrowingAllocator.FCentrals[AIndex], ABlocks^);
+    Inc(ABlocks);
+  end;
 end;
 
 { --- TGrowingAllocator --- }
@@ -164,7 +170,7 @@ begin
     Exit;
   end;
   { Try to push to TLS cache with shuffle (I-1: anti heap-spray). }
-  if GThreadCache.FCounts[LIndex] < CACHE_MAX_LIST_SIZE then
+  if GThreadCache.FCounts[LIndex] < AdaptiveMaxListSize(LIndex) then
   begin
     FreeListInsertShuffled(Pointer(GThreadCache.FHeads[LIndex]),
       APtr, GThreadCache.FCounts[LIndex]);

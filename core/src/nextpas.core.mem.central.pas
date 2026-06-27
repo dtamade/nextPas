@@ -37,7 +37,8 @@ type
 
   {** Central span pool for one size class. Manages partial and full spans.
       Provides batch alloc/free for the thread cache refill/flush path.
-      Thread-safe via spinlock (low contention: TLS cache absorbs most traffic). }
+      Thread-safe via spinlock (low contention: TLS cache absorbs most traffic).
+      Lock-free inbox: cross-thread frees push via CAS, alloc drains under lock. }
   TCentralPool = record
     FEntries: array of TCentralSpanEntry;
     FEntryCount: Int32;
@@ -45,6 +46,7 @@ type
     FPartialNext: array of Int32; { Intrusive linked list via indices. }
     FSlotSize: SizeUInt;
     FSpinLock: SizeUInt;    { Simple test-and-set lock. }
+    FInboxHead: Pointer;    { Lock-free inbox: CAS singly linked list. }
   end;
 
 {** Initialize a central pool for a given slot size. }
@@ -75,10 +77,22 @@ function CentralPoolFreeCount(var APool: TCentralPool): SizeUInt;
 function ScavengeCentralPools(var APool: TCentralPool;
   AOpCounter: UInt64; AIdleThreshold: UInt64): Int32;
 
+{** Push a freed block to the lock-free inbox (CAS, no spinlock).
+    Safe to call from any thread without locking.
+    Inbox is drained on the next CentralPoolAlloc call. }
+procedure CentralPoolInboxPush(var APool: TCentralPool; APtr: Pointer);
+
 implementation
 
 const
   INITIAL_CAPACITY = 4;
+
+type
+  { Intrusive free-list node for inbox. Same layout as TFreeNode/ShuffleNode. }
+  PInboxNode = ^TInboxNode;
+  TInboxNode = record
+    FNext: PInboxNode;
+  end;
 
 procedure SpinLock(var ALock: SizeUInt);
 begin
@@ -97,6 +111,7 @@ begin
   APool.FEntryCount := 0;
   APool.FPartialHead := -1;
   APool.FSpinLock := 0;
+  APool.FInboxHead := nil;
   SetLength(APool.FEntries, INITIAL_CAPACITY);
   SetLength(APool.FPartialNext, INITIAL_CAPACITY);
 end;
@@ -110,8 +125,20 @@ begin
       FreeMem(APool.FEntries[I].FMemory, APool.FEntries[I].FMemorySize);
   APool.FEntryCount := 0;
   APool.FPartialHead := -1;
+  APool.FInboxHead := nil;
   SetLength(APool.FEntries, 0);
   SetLength(APool.FPartialNext, 0);
+end;
+
+procedure CentralPoolInboxPush(var APool: TCentralPool; APtr: Pointer);
+var
+  LOldHead: Pointer;
+begin
+  { CAS push: lock-free, safe from any thread. }
+  repeat
+    LOldHead := APool.FInboxHead;
+    PInboxNode(APtr)^.FNext := PInboxNode(LOldHead);
+  until AtomicCmpExchange(APool.FInboxHead, APtr, LOldHead) = LOldHead;
 end;
 
 {** Add a new span to the pool (caller holds lock). }
@@ -144,6 +171,8 @@ begin
   Result := LIdx;
 end;
 
+function DrainInbox(var APool: TCentralPool; AOpCounter: UInt64): Word; forward;
+
 function CentralPoolAlloc(var APool: TCentralPool;
   ACount: Word; ABlocks: PPointer): Word;
 var
@@ -154,6 +183,9 @@ begin
   LCount := 0;
   SpinLock(APool.FSpinLock);
   try
+    { Drain lock-free inbox first — returned blocks become available. }
+    if APool.FInboxHead <> nil then
+      DrainInbox(APool, 0);
     while LCount < ACount do
     begin
       { Find a partial span. }
@@ -202,6 +234,38 @@ begin
       Exit(I);
   end;
   Result := -1;
+end;
+
+{ Drain the lock-free inbox into the spans (caller holds spinlock).
+  Returns number of blocks drained. }
+function DrainInbox(var APool: TCentralPool; AOpCounter: UInt64): Word;
+var
+  LHead, LNext: PInboxNode;
+  LIdx: Int32;
+  LWasFull: Boolean;
+begin
+  Result := 0;
+  { CAS inbox to nil — grab entire chain atomically. }
+  LHead := PInboxNode(AtomicExchange(APool.FInboxHead, nil));
+  while LHead <> nil do
+  begin
+    LNext := LHead^.FNext;
+    LIdx := FindSpanIndex(APool, Pointer(LHead));
+    if LIdx >= 0 then
+    begin
+      LWasFull := not SpanHasFree(APool.FEntries[LIdx].FSpan);
+      SpanFree(APool.FEntries[LIdx].FSpan, Pointer(LHead));
+      if SpanIsEmpty(APool.FEntries[LIdx].FSpan) then
+        APool.FEntries[LIdx].FLastFreeTick := AOpCounter;
+      if LWasFull and SpanHasFree(APool.FEntries[LIdx].FSpan) then
+      begin
+        APool.FPartialNext[LIdx] := APool.FPartialHead;
+        APool.FPartialHead := LIdx;
+      end;
+    end;
+    Inc(Result);
+    LHead := LNext;
+  end;
 end;
 
 procedure CentralPoolFree(var APool: TCentralPool;
