@@ -109,6 +109,9 @@ begin
   LEntry.Kind        := ekTest;
   LEntry.SkipReason  := '';
   LEntry.RetryCount  := 0;
+  LEntry.DisplayName := '';
+  LEntry.Tags        := nil;
+  LEntry.RepeatCount := 0;
   SetLength(FSubtests, Length(FSubtests) + 1);
   FSubtests[High(FSubtests)] := LEntry;
 end;
@@ -124,6 +127,9 @@ begin
   LEntry.Kind        := ekTest;
   LEntry.SkipReason  := '';
   LEntry.RetryCount  := 0;
+  LEntry.DisplayName := '';
+  LEntry.Tags        := nil;
+  LEntry.RepeatCount := 0;
   SetLength(FSubtests, Length(FSubtests) + 1);
   FSubtests[High(FSubtests)] := LEntry;
 end;
@@ -134,10 +140,14 @@ var
 begin
   LEntry.Name        := FTestName + '/' + AName;
   LEntry.Proc        := nil;
+  LEntry.Closure     := nil;
   LEntry.SubtestProc := TSubtestProc(AProc);
   LEntry.Kind        := ekSubtest;
   LEntry.SkipReason  := '';
   LEntry.RetryCount  := 0;
+  LEntry.DisplayName := '';
+  LEntry.Tags        := nil;
+  LEntry.RepeatCount := 0;
   SetLength(FSubtests, Length(FSubtests) + 1);
   FSubtests[High(FSubtests)] := LEntry;
 end;
