@@ -1,18 +1,25 @@
-# test_arena_chunked Makefile
+PROJECT = test_arena_chunked
 
-FPC := fpc
-FPC_FLAGS := -MObjFPC -Sh -O2 -gl -gh -FU../../../build/projects/nextpas.core.mem/test_arena_chunked -FE../../../build/projects/nextpas.core.mem/test_arena_chunked -Fu../../../src -Fi../../../src
+FPC ?= fpc
+CORE_ROOT = ../../..
+BUILD_DIR = $(CORE_ROOT)/build/projects/nextpas.core.mem/$(PROJECT)
 
-.PHONY: build test clean
+FPC_FLAGS = -MObjFPC -Sh -O2 -gl -gh \
+  -Fu$(CORE_ROOT)/src \
+  -Fi$(CORE_ROOT)/src \
+  -FE$(BUILD_DIR) \
+  -FU$(BUILD_DIR)
 
-build: test_arena_chunked
+.PHONY: all clean test
 
-test_arena_chunked: test_arena_chunked.lpr
-	@mkdir -p ../../../build/projects/nextpas.core.mem/test_arena_chunked
-	$(FPC) $(FPC_FLAGS) test_arena_chunked.lpr
+all: $(PROJECT)
 
-test: build
-	../../../build/projects/nextpas.core.mem/test_arena_chunked/test_arena_chunked
+$(PROJECT): $(PROJECT).lpr
+	@mkdir -p $(BUILD_DIR)
+	$(FPC) $(FPC_FLAGS) $(PROJECT).lpr
 
 clean:
-	rm -rf ../../../build/projects/nextpas.core.mem/test_arena_chunked
+	rm -rf $(BUILD_DIR)
+
+test: $(PROJECT)
+	$(BUILD_DIR)/$(PROJECT)

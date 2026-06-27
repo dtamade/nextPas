@@ -238,8 +238,6 @@ type
     property InPoolCount: SizeUInt read GetInPoolCount;
     {** 总共创建的对象数 | Total objects ever created *}
     property TotalCreated: SizeUInt read GetTotalCreated;
-    // 保留旧属性名以保持兼容
-    property CurrentObjects: SizeUInt read GetInPoolCount;
   end;
 
 

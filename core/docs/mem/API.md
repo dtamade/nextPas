@@ -346,13 +346,131 @@ property Arena: TLocalArena read FArena;
 
 ## 门面 helper
 
-门面 `nextpas.core.mem` 还提供这几个常用 helper：
+门面 `nextpas.core.mem` 提供这几个常用 helper：
 
 ```pascal
 function DefaultAllocator: IAllocator;
 function AllocZeroed(const AAllocator: IAllocator; const ASize: SizeUInt): Pointer;
 function AllocArray(const AAllocator: IAllocator; const ACount, AElemSize: SizeUInt): Pointer;
+
+procedure SecureZeroMemory(ABuffer: Pointer; ASize: NativeUInt);
+procedure SecureZeroBytes(var AData: TBytes);
+procedure SecureZeroString(var AStr: AnsiString);
 ```
+
+- `SecureZero*` 使用平台安全清零 API（不会被编译器优化掉）
+
+## 错误类型
+
+门面 re-export 的错误类型（来自 `nextpas.core.mem.error`）：
+
+```pascal
+type
+  TAllocatorKind = (akCustom, akRTL, akCRT, akMMap, akMimalloc, akArena, akGuard);
+  EAllocError = class(Exception) ... end;
+  EOutOfMemory = class(EAllocError) ... end;
+  EInvalidLayout = class(EAllocError) ... end;
+  EInvalidPointer = class(EAllocError) ... end;
+  EDoubleFree = class(EAllocError) ... end;
+```
+
+## 同步原语
+
+门面 re-export 的 mem-local 同步包装（来自 `nextpas.core.mem.mutex` / `rwlock`）：
+
+```pascal
+type
+  TMemMutex = record ... end;    // 递归安全互斥锁
+  TMemRwLock = record ... end;   // 读写锁
+```
+
+## Allocator 包装
+
+### `TTrackingAllocator`
+
+跟踪包装器，统计分配次数/字节数，支持回调通知。
+
+```pascal
+constructor Create(AInner: IAllocator);
+property TotalAllocs: QWord;
+property TotalFrees: QWord;
+property TotalBytesAllocated: QWord;
+property TotalBytesFreed: QWord;
+property ActiveAllocations: QWord;
+property ActiveBytes: QWord;
+procedure ResetStats;
+```
+
+### `TFallbackAllocator` / `TFallbackArena`
+
+多后端 fallback 链，主分配器失败时自动尝试备用。
+
+```pascal
+constructor Create(APrimary: IAllocator; AFallback: IAllocator);
+```
+
+### `TMimallocAllocator`
+
+mimalloc 动态加载后端。需要运行时可找到 mimalloc 共享库。
+
+```pascal
+function GetMimallocAllocator: IAllocator;
+function TryGetMimallocAllocator(out A: IAllocator): Boolean;
+```
+
+### `TMemoryMapAllocator`
+
+基于 mmap 的匿名映射分配器。
+
+```pascal
+function CreateAnonymousMemoryMapAllocator(AReservationSize: UInt64): IAllocator;
+```
+
+## Pool 类型
+
+### `IPool`
+
+池的最小接口（来自 `nextpas.core.mem.pool.base`）。
+
+### `TSizeClassPool`
+
+大小类池，自动根据请求大小选择最优 slab。
+
+### `TFixedPool` / `TFixedPoolConcurrent`
+
+固定大小对象池。Concurrent 变体线程安全。
+
+### `TSlabPool` / `TSlabPoolConcurrent` / `TSlabPoolSharded`
+
+页级 slab 池。三种变体：基础、并发、分片。
+
+### `TBlockPoolConcurrent` / `TShardedBlockPool`
+
+并发/分片块池。`TShardedBlockPool` 按线程分片减少争用。
+
+### `TStackPool`
+
+LIFO 栈池，适合确定性生命周期的临时对象。
+
+### `IMemoryPool`
+
+内存池接口（来自 `nextpas.core.mem.pool.memory_pool`）。
+
+## 容器
+
+### `TRingBuffer`
+
+环形缓冲区。对标 Go chan，基准测试中 2x 快于 Go chan。
+
+## 内存映射
+
+### `TMemoryMap` / `TSharedMemory`
+
+平台 mmap 包装。`TSharedMemory` 支持命名共享内存。
+
+### `TMappedSlabAllocator`
+
+大块匿名映射上的 slab 分配器。
 
 ## 选择建议
 
