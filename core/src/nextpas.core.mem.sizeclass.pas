@@ -48,6 +48,20 @@ var
   { Global immutable size class table. Initialized in initialization section. }
   SizeClasses: TSizeClassTable;
 
+  { Scan/noscan flags per size class. Initialized in initialization section.
+    True = allocation may contain pointers (scannable by GC).
+    False = allocation is pure data (no pointers).
+    Default: all False (noscan). Call SizeClassSetScan to change.
+    I-3: GC preparation — pointer-containing and data-only objects stored
+    separately to enable efficient conservative/generational GC. }
+  SizeClassIsScan: array[0..MEM_SIZECLASS_COUNT - 1] of Boolean;
+
+{** Return True if the size class is marked as scan (pointer-containing). }
+function SizeClassGetScan(AIndex: Int32): Boolean; inline;
+
+{** Set the scan/noscan flag for a size class. }
+procedure SizeClassSetScan(AIndex: Int32; AIsScan: Boolean);
+
 implementation
 
 const
@@ -193,8 +207,23 @@ begin
   end;
 end;
 
+function SizeClassGetScan(AIndex: Int32): Boolean;
+begin
+  if (AIndex < 0) or (AIndex >= MEM_SIZECLASS_COUNT) then
+    Exit(False);
+  Result := SizeClassIsScan[AIndex];
+end;
+
+procedure SizeClassSetScan(AIndex: Int32; AIsScan: Boolean);
+begin
+  if (AIndex >= 0) and (AIndex < MEM_SIZECLASS_COUNT) then
+    SizeClassIsScan[AIndex] := AIsScan;
+end;
+
 initialization
   InitSizeClasses;
   InitLookup;
+  { Default: all size classes are noscan (pure data). }
+  FillChar(SizeClassIsScan, SizeOf(SizeClassIsScan), 0);
 
 end.

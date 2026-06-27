@@ -11,7 +11,8 @@ uses
   nextpas.core.mem.sizeclass,
   nextpas.core.mem.span,
   nextpas.core.mem.central,
-  nextpas.core.mem.cache.thread;
+  nextpas.core.mem.cache.thread,
+  nextpas.core.mem.shuffle;
 
 type
   {** Unified growing allocator implementing IAllocator.
@@ -158,12 +159,19 @@ begin
     System.FreeMem(APtr);
     Exit;
   end;
-  { Try to push to TLS cache. }
-  if ThreadCacheFree(GThreadCache, LIndex, APtr) then
+  { Try to push to TLS cache with shuffle (I-1: anti heap-spray). }
+  if GThreadCache.FCounts[LIndex] < CACHE_MAX_LIST_SIZE then
+  begin
+    FreeListInsertShuffled(Pointer(GThreadCache.FHeads[LIndex]),
+      APtr, GThreadCache.FCounts[LIndex]);
+    Inc(GThreadCache.FCounts[LIndex]);
     Exit;
-  { Cache full: flush a batch to central, then retry. }
+  end;
+  { Cache full: flush a batch to central, then push with shuffle. }
   ThreadCacheFlush(GThreadCache, LIndex, @FlushToCentral);
-  ThreadCacheFree(GThreadCache, LIndex, APtr);
+  FreeListInsertShuffled(Pointer(GThreadCache.FHeads[LIndex]),
+    APtr, GThreadCache.FCounts[LIndex]);
+  Inc(GThreadCache.FCounts[LIndex]);
 end;
 
 function TGrowingAllocator.AllocMem(ASize: SizeUInt): Pointer;

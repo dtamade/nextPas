@@ -12,7 +12,7 @@ Phase D:   测试覆盖 100%                               ✅
 Phase E:   文档注释 80%+                                ✅
 Phase F:   基准测试 + Go/Rust 对照                      ✅
 R16-R17:   代码复用提炼 (MulHash64/Log2UInt/Growth/Align) ✅
-当前位置:  → Phase H: 内存生命周期管理
+当前位置:  → Phase J: 基准与验证
 ```
 
 ## 当前状态
@@ -309,9 +309,9 @@ end;
 | **G-5** | TGrowingAllocator | G-1~4 | 1 文件 + 1 测试 + 基准 | ✅ unified IAllocator |
 | **H-1** | Scavenger | G-5 | 1 文件 + 1 测试 | ✅ per-entry idle tick + periodic release |
 | **H-2** | X-thread free | G-3 | 1 文件 + 1 测试 | ✅ spinlock via central pool (lock-free inbox deferred) |
-| **I-1** | Free-list shuffle | G-3 | 小改 | 待实施 |
-| **I-2** | Guard pages | G-2 | 1 文件 + 1 测试 | 待实施 |
-| **I-3** | Scan/noscan | G-1 | 小改 | 待实施 |
+| **I-1** | Free-list shuffle | G-3 | 小改 | ✅ xorshift64* + random insertion position |
+| **I-2** | Guard pages | G-2 | 1 文件 + 1 测试 | 待实施 (需 page-aligned virtual memory) |
+| **I-3** | Scan/noscan | G-1 | 小改 | ✅ SizeClassIsScan[] + Get/SetScan |
 | **J-1** | 对标基准套件 | G-5 | 5 基准项目 | 待实施 |
 | **J-2** | 碎片率测量 | G-5, H-1 | 1 基准项目 | 待实施 |
 
