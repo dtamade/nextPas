@@ -3089,7 +3089,14 @@ begin
           if TypeChild <> nil then
             TypeName := LowerCase(TypeChild.Text);
         end;
-        if (TypeName = 'string') or (TypeName = 'ansistring') then
+        if (TypeChild <> nil) and (TypeChild.NodeKind = gnkArrayType) then
+          Result := Result + 'a'
+        else if (TypeChild <> nil) and (Pos('array<', TypeName) > 0) then
+          Result := Result + 'a'
+        else if (TypeChild <> nil) and
+          FModel.LookupConstValue(TypeChild.Text + '$array', Dummy) then
+          Result := Result + 'a'
+        else if (TypeName = 'string') or (TypeName = 'ansistring') then
           Result := Result + 's'
         else if (TypeName = 'boolean') or (TypeName = 'bool') then
           Result := Result + 'b'
@@ -3180,14 +3187,42 @@ begin
         if not Found then
         begin
           TypeName := LowerCase(TypeName);
-          if (TypeName = 'string') or (TypeName = 'ansistring') then
+          if (TypeChild <> nil) and (TypeChild.NodeKind = gnkArrayType) then
+            Result := Result + 'a'
+          else if (TypeChild <> nil) and (Pos('array<', LowerCase(TypeChild.Text)) > 0) then
+            Result := Result + 'a'
+          else if (TypeChild <> nil) and
+            FModel.LookupConstValue(TypeChild.Text + '$array', Dummy) then
+            Result := Result + 'a'
+          else if (TypeName = 'string') or (TypeName = 'ansistring') then
             Result := Result + 's'
           else if (TypeName = 'boolean') or (TypeName = 'bool') then
             Result := Result + 'b'
           else if (TypeChild <> nil) and TypeMetaIsRecord(TypeChild.Text) then
             Result := Result + 'r'
-          else if (TypeChild <> nil) and (TypeMetaSize(TypeChild.Text) > 0) then
-            Result := Result + 'p'
+          else if (TypeChild <> nil) and TypeIsInterfaceByName(TypeChild.Text) then
+            Result := Result + 'f'
+          else if SameText(TypeName, 'integer') or SameText(TypeName, 'longint') or
+            SameText(TypeName, 'longword') or SameText(TypeName, 'cardinal') or
+            SameText(TypeName, 'smallint') or SameText(TypeName, 'word') or
+            SameText(TypeName, 'byte') or SameText(TypeName, 'shortint') or
+            SameText(TypeName, 'int64') or SameText(TypeName, 'qword') or
+            SameText(TypeName, 'uint64') or SameText(TypeName, 'sizeint') or
+            SameText(TypeName, 'sizeuint') or SameText(TypeName, 'uint32') or
+            SameText(TypeName, 'ptruint') or SameText(TypeName, 'ptrint') then
+            Result := Result + 'i'
+          else if (TypeChild <> nil) then
+          begin
+            if (FModel.FindTypeByName(TypeChild.Text) > 0) and
+              SameText(FModel.TypeAt(FModel.FindTypeByName(TypeChild.Text) - 1).Kind, 'class') then
+              Result := Result + 'c'
+            else if TypeMetaIsClass(TypeChild.Text) then
+              Result := Result + 'c'
+            else if TypeMetaSize(TypeChild.Text) > 0 then
+              Result := Result + 'p'
+            else
+              Result := Result + 'i';
+          end
           else
             Result := Result + 'i';
         end;
