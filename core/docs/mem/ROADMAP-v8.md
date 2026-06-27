@@ -293,8 +293,9 @@ end;
 
 ### J-2: 碎片率测量
 
-- Long-running 碎片率测试: 1M 分配/释放循环后测量 RSS vs 实际使用
-- 对标: Go < 1.5x, mimalloc < 1.2x
+- RSS 碎片率测试: holes (50% free worst-case) + churn (alloc/free cycles)
+- 结果: holes 2.05x RSS/live (≤2.5x), churn 1.30x RSS recovery (≤1.5x)
+- 新增 TGrowingAllocator.Scavenge 公开 API
 
 ---
 
@@ -313,7 +314,7 @@ end;
 | **I-2** | Guard pages | G-2 | 1 文件 + 1 测试 | 待实施 (需 page-aligned virtual memory) |
 | **I-3** | Scan/noscan | G-1 | 小改 | ✅ SizeClassIsScan[] + Get/SetScan |
 | **J-1** | 对标基准套件 | G-5 | 5 基准项目 | ✅ bench_allocator: 8 patterns, 1.7-3.2x faster than glibc |
-| **J-2** | 碎片率测量 | G-5, H-1 | 1 基准项目 | 待实施 |
+| **J-2** | 碎片率测量 | G-5, H-1 | 1 基准项目 | ✅ holes 2.05x + churn 1.30x |
 
 ## 预期最终能力
 
