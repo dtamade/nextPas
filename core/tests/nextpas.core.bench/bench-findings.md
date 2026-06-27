@@ -1122,4 +1122,84 @@ be3737ac2 test(bench): ST-04 add Run timeout mechanism test
 ### Commits
 ```
 baddbb1cb fix(bench): R3 audit — P0 test coverage + dead code + TJsonWriter consistency
+30af89127 refactor(bench): extract hardcoded 0.05 into BENCH_SIGNIFICANCE_ALPHA + BENCH_MATRIX_DIFF_THRESHOLD
+b1f34e1d6 fix(bench): console matrix 'allocs'→'allocs/op' + findings doc correction
+f90f7d732 docs(bench): Shapiro-Wilk 标记为启发式 + findings 文档修正
+9b2dbf86c refactor(bench): AppendToTimeline 单次构建 + 修复未使用变量
+22df095ec fix(bench): 3 个 managed type 未初始化编译器警告
+ebba5de5d fix(bench): 补全 2 个遗漏的 Default 初始化 (Tukey/ZScore)
+```
+
+---
+
+# 第四期审查（2026-06-28）
+
+> **审查范围**: 全量 11 源文件深度审查 — 正确性/卫生/一致性/文档
+> **审查日期**: 2026-06-28
+> **当前状态**: 14 源文件 / 14 测试目录 / 257 测试 / 0 编译器警告
+
+## P1 — 正确性
+
+### R4-01 — FormatDateTime 12 小时制错误
+- **File**: `bench.pas:238`
+- **Severity**: P1
+- **Category**: 正确性
+- **Detail**: `FormatDateTime('yyyy-mm-ddThh:nn:ss', ...)` 使用 `hh`（12 小时制），导致 1PM 显示为 `01:00` 而非 `13:00`。ISO 8601 要求 24 小时制。
+- **Fix**: `hh` → `HH`。
+
+### R4-02 — report.pas:1296 编辑遗留损坏
+- **File**: `report.pas:1296`
+- **Severity**: P1
+- **Category**: 正确性
+- **Detail**: 之前的编辑在 `GenerateMatrixHTML` 中留下 `');');` 尾部垃圾字符。该行编译为语法错误。源文件时间戳晚于 PPU，导致 `make test` 使用旧 PPU 通过。
+- **Fix**: 移除多余 `');`。
+
+## P2 — 设计
+
+### R4-03 — BENCH_ENV_QUIET 布尔解析不对称
+- **File**: `runner.pas:487-489`
+- **Severity**: P2
+- **Category**: 设计
+- **Detail**: `BENCH_ENV_QUIET` 接受 '1'/'true'/'yes' 为 true，但不接受 'on'。而 `BENCH_ENV_MEMTRACK` 接受 '0'/'false'/'no' 为 false。两者布尔解析风格不统一。
+- **Fix**: 增加 'on' 到 QUIET true 值集合。
+
+## P3 — 已知限制（不修）
+
+### R4-04 — TLineBuffer 仍用 string 拼接
+- **File**: `report.pas` 全文 (~297 处 BufferAddLine)
+- **Severity**: P3
+- **Category**: 代码卫生
+- **Detail**: ST-23 仅将 TLineBuffer 从数组改为 string 包装器，未迁移到 TStringBuilder。~297 处调用需要逐一替换。收益有限（报告生成非热点）。
+- **Status**: 已知限制，不修。
+
+### R4-05 — xlang.pas Round(LNsPerOp*LIterations) 溢出风险
+- **File**: `xlang.pas:235,434`
+- **Severity**: P3
+- **Category**: 边界风险
+- **Detail**: CR-17 已记录。极端大值（NsPerOp>1s + Iterations>9e9）时 Round 返回错误 Int64。实际场景几乎不触发。
+- **Status**: 已知限制，不修。
+
+### R4-06 — ExecuteParallelEntry I 用 Int64 做数组索引
+- **File**: `runner.pas:595,636,651`
+- **Severity**: P3
+- **Category**: 风格
+- **Detail**: `for I := 0 to High(FParallelContexts) do` 中 `I: Int64` 应为 `Integer`。功能正确但类型不精确。
+- **Status**: 保留，不影响正确性。
+
+### 修复进度追踪
+
+> **更新日期**: 2026-06-28 (Round 8)
+
+| ID | 严重度 | 状态 | 修复方式 |
+|----|--------|------|----------|
+| R4-01 | P1 | ✅修 | `hh` → `HH` (24 小时制) |
+| R4-02 | P1 | ✅修 | 移除编辑遗留 `');` |
+| R4-03 | P2 | ✅修 | 增加 'on' 到 QUIET true 值 |
+| R4-04 | P3 | 已知 | TLineBuffer 迁移推迟 |
+| R4-05 | P3 | 已知 | Round 溢出 (CR-17 已记录) |
+| R4-06 | P3 | 保留 | Int64 索引风格 |
+
+### Commits
+```
+(to be added)
 ```

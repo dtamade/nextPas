@@ -485,7 +485,7 @@ begin
 
   LValue := GetEnvironmentVariable(BENCH_ENV_QUIET);
   if LValue <> '' then
-    if (LValue = '1') or (LowerCase(LValue) = 'true') or (LowerCase(LValue) = 'yes') then
+    if (LValue = '1') or (LowerCase(LValue) = 'true') or (LowerCase(LValue) = 'yes') or (LowerCase(LValue) = 'on') then
       FConfig.Quiet := True;
 
   { DS-08: BENCH_ENV_MEMTRACK with positive semantics (1=yes, 0=no) }
