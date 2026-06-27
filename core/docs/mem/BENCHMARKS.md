@@ -2,11 +2,26 @@
 
 ## 测试环境
 
-- **OS**: Linux 6.12.74+deb13+1-amd64
+- **OS**: Linux 6.12.90+deb13.1-amd64
 - **CPU**: x86_64
 - **编译器**: FPC 3.3.1-19195-gebfc7485b1-dirty
 - **编译选项**: -O2 (优化编译)
-- **测试时间**: 2026-06-22
+- **测试时间**: 2026-06-26
+
+## GrowingAllocator 基准 (2026-06-26)
+
+| 模式 | ns/op | ops/s | 备注 |
+|------|-------|-------|------|
+| small_64B | 76 | 13M | TLS cache + size class lookup |
+| medium_1KB | 63 | 16M | 直接 size class 分配 |
+| large_16KB | 57 | 17M | 大对象路径 |
+| huge_128KB | 75 | 13M | 超大对象路径 |
+| mixed_8sizes | 523 | 1.9M | 8 种 size 混合 |
+| batch_64x128B | 4237 | 0.24M | 64 次分配批量 |
+| system/small_64B | 38 | 26M | glibc 对照 |
+| system/medium_1KB | 70 | 14M | glibc 对照 |
+
+**分析**: GrowingAllocator 在 1KB+ 分配上与 glibc 持平或更快（63 vs 70 ns/op）。64B 小对象因 TLS cache 查找开销较慢（76 vs 38 ns/op），但换来零锁争用和自适应 batch refill。
 
 ## Go/Rust 基准对照 (2026-06-22)
 

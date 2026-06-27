@@ -156,6 +156,49 @@ type
 - `AllocAligned` / `FreeAligned` 是显式能力，而不是把 aligned block 混进普通 `FreeMem`
 - 40+ 模块依赖这条 surface，所以这里的变化成本远高于 arena 内部实现
 
+## GrowingAllocator 三层架构
+
+`TGrowingAllocator`（`allocator.growing.pas`）是模块的核心通用分配器，对标 Go runtime.mallocgc。
+
+```
+┌─────────────────────────────────────────────────┐
+│  Thread-Local Cache (cache.thread.pas)          │
+│  - threadvar TThreadCache per thread            │
+│  - 62 size classes, adaptive batch refill       │
+│  - Free list: intrusive singly-linked           │
+│  - Zero contention hot path                     │
+├─────────────────────────────────────────────────┤
+│  Central Pool (central.pas)                     │
+│  - TCentralPool per size class                  │
+│  - Spinlock-protected span management           │
+│  - Lock-free inbox (CAS push) for cross-thread  │
+│  - Scavenger: periodic OS memory release        │
+├─────────────────────────────────────────────────┤
+│  Size Class Table (sizeclass.pas)               │
+│  - 62 classes across 6 bands                    │
+│  - O(1) lookup via table                        │
+│  - Band 0-3: 8-256B (small), 4-5: medium/large  │
+└─────────────────────────────────────────────────┘
+```
+
+### 分配路径
+
+1. **Fast path**: TLS cache → free list pop → return (zero contention)
+2. **Refill**: TLS cache empty → batch acquire from Central Pool (spinlock)
+3. **Span alloc**: Central pool empty → allocate new span from OS
+
+### 释放路径
+
+1. **Fast path**: TLS cache has space → push to free list
+2. **Flush**: TLS cache full → batch release to Central Pool
+3. **Cross-thread free**: 目标线程 TLS → CAS push to Central inbox (lock-free)
+
+### 安全特性
+
+- **Free-list shuffle** (`shuffle.pas`): 释放时随机插入位置，防止 heap spraying
+- **Double-free detection**: GUARD_MAGIC header 检测
+- **Scan/NoScan separation**: 指针类型和纯数据分开存储
+
 ## 四类 arena 的定位
 
 ### `TLocalArena`
