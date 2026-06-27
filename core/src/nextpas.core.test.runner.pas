@@ -373,6 +373,8 @@ begin
   LEntry.DisplayName := '';
   LEntry.Tags        := nil;
   LEntry.RepeatCount := 0;
+  LEntry.TableCase   := nil;
+  LEntry.TableProc   := nil;
   SetLength(Tests, Length(Tests) + 1);
   Tests[High(Tests)] := LEntry;
 end;
@@ -391,6 +393,8 @@ begin
   LEntry.DisplayName := '';
   LEntry.Tags        := nil;
   LEntry.RepeatCount := 0;
+  LEntry.TableCase   := nil;
+  LEntry.TableProc   := nil;
   SetLength(Tests, Length(Tests) + 1);
   Tests[High(Tests)] := LEntry;
 end;
@@ -410,6 +414,8 @@ begin
   LEntry.DisplayName := '';
   LEntry.Tags        := nil;
   LEntry.RepeatCount := 0;
+  LEntry.TableCase   := nil;
+  LEntry.TableProc   := nil;
   SetLength(Tests, Length(Tests) + 1);
   Tests[High(Tests)] := LEntry;
 end;
@@ -429,6 +435,8 @@ begin
   LEntry.DisplayName := '';
   LEntry.Tags        := nil;
   LEntry.RepeatCount := 0;
+  LEntry.TableCase   := nil;
+  LEntry.TableProc   := nil;
   SetLength(Tests, Length(Tests) + 1);
   Tests[High(Tests)] := LEntry;
 end;
@@ -448,6 +456,8 @@ begin
   LEntry.RetryCount  := 0;
   LEntry.DisplayName := '';
   LEntry.RepeatCount := 0;
+  LEntry.TableCase   := nil;
+  LEntry.TableProc   := nil;
   SetLength(LEntry.Tags, Length(ATags));
   for I := 0 to High(ATags) do
     LEntry.Tags[I] := ATags[I];
@@ -470,6 +480,8 @@ begin
   LEntry.RetryCount  := 0;
   LEntry.DisplayName := '';
   LEntry.RepeatCount := 0;
+  LEntry.TableCase   := nil;
+  LEntry.TableProc   := nil;
   SetLength(LEntry.Tags, Length(ATags));
   for I := 0 to High(ATags) do
     LEntry.Tags[I] := ATags[I];
@@ -492,6 +504,8 @@ begin
   LEntry.RetryCount  := 0;
   LEntry.DisplayName := ADisplayName;
   LEntry.RepeatCount := 0;
+  LEntry.TableCase   := nil;
+  LEntry.TableProc   := nil;
   SetLength(LEntry.Tags, Length(ATags));
   for I := 0 to High(ATags) do
     LEntry.Tags[I] := ATags[I];
@@ -514,6 +528,8 @@ begin
   LEntry.RetryCount  := 0;
   LEntry.DisplayName := ADisplayName;
   LEntry.RepeatCount := 0;
+  LEntry.TableCase   := nil;
+  LEntry.TableProc   := nil;
   SetLength(LEntry.Tags, Length(ATags));
   for I := 0 to High(ATags) do
     LEntry.Tags[I] := ATags[I];
@@ -536,6 +552,8 @@ begin
   LEntry.DisplayName := '';
   LEntry.Tags        := nil;
   LEntry.RepeatCount := ARepeatCount;
+  LEntry.TableCase   := nil;
+  LEntry.TableProc   := nil;
   SetLength(Tests, Length(Tests) + 1);
   Tests[High(Tests)] := LEntry;
 end;
@@ -555,6 +573,8 @@ begin
   LEntry.DisplayName := '';
   LEntry.Tags        := nil;
   LEntry.RepeatCount := ARepeatCount;
+  LEntry.TableCase   := nil;
+  LEntry.TableProc   := nil;
   SetLength(Tests, Length(Tests) + 1);
   Tests[High(Tests)] := LEntry;
 end;
@@ -573,6 +593,8 @@ begin
   LEntry.DisplayName := '';
   LEntry.Tags        := nil;
   LEntry.RepeatCount := 0;
+  LEntry.TableCase   := nil;
+  LEntry.TableProc   := nil;
   SetLength(Tests, Length(Tests) + 1);
   Tests[High(Tests)] := LEntry;
 end;
@@ -625,6 +647,8 @@ begin
   LEntry.DisplayName := '';
   LEntry.Tags        := nil;
   LEntry.RepeatCount := 0;
+  LEntry.TableCase   := nil;
+  LEntry.TableProc   := nil;
   SetLength(Tests, Length(Tests) + 1);
   Tests[High(Tests)] := LEntry;
 end;
