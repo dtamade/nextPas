@@ -820,7 +820,9 @@ function TBenchRunner.CollectEntrySamples(const AEntry: TBenchEntry; AIters: Int
 var
   LSamples: TDoubleArray;
   LMeasurement: TBenchResult;
-  LMinSamples: Integer;
+  LMinSamples, LSampleCount: Integer;
+  LProbeNsPerOp: Double;
+  LTargetNs: UInt64;
   I: Integer;
 begin
   AFirstSample := Default(TBenchResult);
@@ -830,13 +832,45 @@ begin
   if LMinSamples < 1 then
     LMinSamples := 1;
 
-  SetLength(LSamples, LMinSamples);
+  { P1-7 自适应测量：用首次采样估算每样本耗时，自动决定采样数。
+    目标：总测量时间 ≈ 1s，但不少于 MinSamples，不超过 1000。
+    这是 Rust criterion 的核心方法：预热后自动校准采样数量。 }
+  LSampleCount := LMinSamples;
 
-  for I := 0 to LMinSamples - 1 do
+  { 先做一次探测采样 }
+  LMeasurement := ExecuteEntry(AEntry, AIters, FConfig.EnableMemoryTracking);
+  AFirstSample := LMeasurement;
+
+  if LMeasurement.Skipped then
   begin
-    LMeasurement := ExecuteEntry(AEntry, AIters, FConfig.EnableMemoryTracking and (I = 0));
-    if I = 0 then
-      AFirstSample := LMeasurement;
+    SetLength(LSamples, 1);
+    LSamples[0] := 0.0;
+    Exit(LSamples);
+  end;
+
+  if LMeasurement.Iterations > 0 then
+    LProbeNsPerOp := Double(LMeasurement.TotalNs) / Double(LMeasurement.Iterations)
+  else
+    LProbeNsPerOp := 0.0;
+
+  { 自适应：如果探测到每样本时间，计算最优采样数 }
+  if LProbeNsPerOp > 0 then
+  begin
+    LTargetNs := FConfig.MinDurationNs;  { 使用 MinDuration 作为总测量时间目标 }
+    LSampleCount := Max(LMinSamples,
+      Min(1000, Integer(Trunc(Double(LTargetNs) / (LProbeNsPerOp * AIters)))));
+  end;
+
+  if LSampleCount < LMinSamples then
+    LSampleCount := LMinSamples;
+
+  SetLength(LSamples, LSampleCount);
+  LSamples[0] := LProbeNsPerOp;  { 第一个样本已在探测中获得 }
+
+  for I := 1 to LSampleCount - 1 do
+  begin
+    LMeasurement := ExecuteEntry(AEntry, AIters,
+      FConfig.EnableMemoryTracking and (I = 1));  { 只在第二次采样时追踪内存 }
 
     if LMeasurement.Iterations > 0 then
       LSamples[I] := Double(LMeasurement.TotalNs) / Double(LMeasurement.Iterations)
