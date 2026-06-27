@@ -24,6 +24,9 @@ uses
   nextpas.core.mem.arena.thread,
   nextpas.core.mem.arena.concurrent,
   nextpas.core.mem.allocator.arena,
+  nextpas.core.mem.allocator.rtl,
+  nextpas.core.mem.allocator.callback,
+  nextpas.core.mem.allocator.guard,
   nextpas.core.mem.allocator.tracking,
   nextpas.core.mem.allocator.leak_check,
   nextpas.core.mem.allocator.fallback,
@@ -81,6 +84,9 @@ type
   // === 分配器包装 ===
   TVirtualArenaAllocator = nextpas.core.mem.allocator.arena.TVirtualArenaAllocator;
   TArenaAllocator = nextpas.core.mem.allocator.arena.TFastArenaAllocator;
+  TRtlAllocator = nextpas.core.mem.allocator.rtl.TRtlAllocator;
+  TCallbackAllocator = nextpas.core.mem.allocator.callback.TCallbackAllocator;
+  TGuardAllocator = nextpas.core.mem.allocator.guard.TGuardAllocator;
   TTrackingAllocator = nextpas.core.mem.allocator.tracking.TTrackingAllocator;
   TLeakCheckResult = nextpas.core.mem.allocator.leak_check.TLeakCheckResult;
   TFallbackAllocator = nextpas.core.mem.allocator.fallback.TFallbackAllocator;
