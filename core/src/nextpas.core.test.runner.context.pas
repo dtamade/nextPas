@@ -332,6 +332,7 @@ begin
       LTestResult.Name    := LEntry.Name;
       LTestResult.Status  := LStatus;
       LTestResult.Message := LMsg;
+      LTestResult.Duration := 0;
       { Copy captured log lines on failure/error }
       if (LStatus in [tsFailed, tsError]) and (Length(FLogLines) > 0) then
         LTestResult.CapturedLog := Copy(FLogLines, 0, Length(FLogLines))
