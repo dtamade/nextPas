@@ -1,7 +1,7 @@
 { test_assertions — Validates Check* procedural API }
 program test_assertions;
 
-{$mode objfpc}{$H+}
+{$mode objfpc}{$H+}{$J-}
 {$modeswitch anonymousfunctions}
 {$modeswitch functionreferences}
 
@@ -595,6 +595,7 @@ end;
 var
   LSuite: TTestSuite;
 begin
+  WriteLn('=== test_assertions ===');
   LSuite := TTestSuite.Create('Check* API');
 
   LSuite.Test('Check (pass)',          @TestCheckPass);

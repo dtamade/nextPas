@@ -3,7 +3,7 @@
 
 program test_advanced;
 
-{$mode objfpc}{$H+}
+{$mode objfpc}{$H+}{$J-}
 {$modeswitch anonymousfunctions}
 {$modeswitch functionreferences}
 {$M+}
@@ -45,7 +45,6 @@ var
   GDiscoveryAlphaCalled: Boolean = False;
   GDiscoveryBetaCalled: Boolean = False;
   GRetryCount: Integer = 0;
-  GTeardownFixtureFreeCalled: Boolean = False;
   GReportFailureMessage: string = '';
   GReportErrorMessage: string = '';
 
@@ -332,7 +331,8 @@ begin
   { R6-53: RTTI discovery + run, verifying fixture method dispatch works.
     White-box ownership note: the suite/runner cleanup path owns the fixture
     after DiscoverTests registration; never-run cases fall back to finalization.
-    TODO: verify teardown hook is called when DiscoverTests supports it. }
+    Teardown hook support is not yet in DiscoverTests API; this test verifies
+    dispatch correctness only. }
   LFixture := TTeardownFixture.Create;
   LSuite := DiscoverTests(LFixture, 'TeardownTest');
   CheckTrue(Length(LSuite.Tests) > 0, 'Should discover at least 1 test');
@@ -352,6 +352,7 @@ var
   LRunner: TTestRunner;
   LResults: specialize TArray<TTestRunResult>;
 begin
+  WriteLn('=== test_advanced ===');
   LSuite := TTestSuite.Create('advanced');
 
   { RTTI Discovery }
@@ -380,7 +381,11 @@ begin
   LRunner := TTestRunner.Create('main');
   LRunner.Add(LSuite);
   LRunner.RunAllWithResult(LResults);
+  WriteLn;
+  LRunner.Summary;
 
-  if (Length(LResults) = 0) or (not LResults[0].AllPassed) then
-    Halt(1);
+  if LRunner.AllPassed then
+    PassTest('ALL PASSED')
+  else
+    FailTest('SOME FAILED');
 end.

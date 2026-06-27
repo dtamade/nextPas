@@ -4,7 +4,9 @@
              ResetCalls, CallCount, unconfigured return }
 program test_mock;
 
-{$I nextpas.core.settings.inc}
+{$mode objfpc}{$H+}{$J-}
+{$modeswitch anonymousfunctions}
+{$modeswitch functionreferences}
 
 uses
   cthreads,

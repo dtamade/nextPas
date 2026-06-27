@@ -1,7 +1,7 @@
 { test_subtests — Validates nested subtest execution }
 program test_subtests;
 
-{$mode objfpc}{$H+}
+{$mode objfpc}{$H+}{$J-}
 {$modeswitch anonymousfunctions}
 {$modeswitch functionreferences}
 
@@ -416,6 +416,7 @@ var
   LErrSink: TBufferSink;
   LOutput: string;
 begin
+  WriteLn('=== test_subtests ===');
   LSuite := TTestSuite.Create('Subtest Integration');
 
   LSuite.OnBeforeEach(procedure begin InterLockedIncrement(GBeforeEachCount); end);

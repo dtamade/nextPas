@@ -1,7 +1,7 @@
 { test_runner — Validates TTestRunner multi-suite + subtests + lifecycle }
 program test_runner;
 
-{$mode objfpc}{$H+}
+{$mode objfpc}{$H+}{$J-}
 {$modeswitch anonymousfunctions}
 {$modeswitch functionreferences}
 
@@ -259,6 +259,7 @@ var
   LExactSuite68: TTestSuite;
   LExactRunner68: TTestRunner;
 begin
+  WriteLn('=== test_runner ===');
   { Suite 1: lifecycle }
   LSuite1 := TTestSuite.Create('Lifecycle');
   LSuite1.SetSetup(procedure begin Inc(GSetupCalled); end);

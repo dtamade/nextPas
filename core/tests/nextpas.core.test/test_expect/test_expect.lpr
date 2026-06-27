@@ -1,7 +1,7 @@
 { test_expect — Validates IExpectation fluent API }
 program test_expect;
 
-{$mode objfpc}{$H+}
+{$mode objfpc}{$H+}{$J-}
 {$modeswitch anonymousfunctions}
 {$modeswitch functionreferences}
 
@@ -1007,6 +1007,7 @@ end;
 var
   LSuite: TTestSuite;
 begin
+  WriteLn('=== test_expect ===');
   LSuite := TTestSuite.Create('IExpectation API');
 
   LSuite.Test('Expect string',           @TestExpectString);
