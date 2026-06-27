@@ -283,11 +283,11 @@ end;
 
 | Phase | 内容 | 前置 | 预计规模 | 状态 |
 |-------|------|------|----------|------|
-| **G-1** | Size class 表 | — | 1 文件 + 1 测试 | 待实施 |
-| **G-2** | Bitmap span | G-1 | 1 文件 + 1 测试 | 待实施 |
-| **G-3** | TLS cache | G-1 | 1 文件 + 1 测试 | 待实施 |
-| **G-4** | Central pool | G-2 | 1 文件 + 1 测试 | 待实施 |
-| **G-5** | TGrowingAllocator | G-1~4 | 1 文件 + 1 测试 + 基准 | 待实施 |
+| **G-1** | Size class 表 | — | 1 文件 + 1 测试 | ✅ 62 classes, 6 bands, O(1) lookup |
+| **G-2** | Bitmap span | G-1 | 1 文件 + 1 测试 | ✅ BSF single-instruction alloc |
+| **G-3** | TLS cache | G-1 | 1 文件 + 1 测试 | ✅ intrusive free list + batch refill/flush |
+| **G-4** | Central pool | G-2 | 1 文件 + 1 测试 | ✅ span management + spinlock |
+| **G-5** | TGrowingAllocator | G-1~4 | 1 文件 + 1 测试 + 基准 | ✅ unified IAllocator |
 | **H-1** | Scavenger | G-5 | 1 文件 + 1 测试 | 待实施 |
 | **H-2** | X-thread free | G-3 | 1 文件 + 1 测试 | 待实施 |
 | **I-1** | Free-list shuffle | G-3 | 小改 | 待实施 |
