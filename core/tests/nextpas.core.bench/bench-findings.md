@@ -1012,3 +1012,114 @@ c7570634f refactor(bench): ST-18 sync Console columns with HTML
 47babd9fc refactor(bench): ST-23 replace TLineBuffer array with string wrapper
 be3737ac2 test(bench): ST-04 add Run timeout mechanism test
 ```
+
+---
+
+# 第三期审查（2026-06-26）
+
+> **审查范围**: 第二期审查后新增代码 (matrix/charts/JSON/CI) + 跨文件一致性
+> **审查日期**: 2026-06-26
+> **当前状态**: 14 源文件 / 14 测试目录 / 257 测试（但 25 从未运行）
+
+## P0 — 测试从未执行
+
+### R3-01 — test_bench_matrix + test_bench_mannwhitney 缺失于父 Makefile
+- **File**: `tests/nextpas.core.bench/Makefile:1-5`
+- **Severity**: P0
+- **Category**: 测试覆盖
+- **Detail**: `PROJECTS` 列表只有 12 个目录，缺失 `test_bench_matrix` (15 tests) 和 `test_bench_mannwhitney` (10 tests)。`make -C core/tests/nextpas.core.bench test` 从未运行这 25 个测试。目标树和 README 声称 14 suites / 257 tests，实际只运行 12 suites / 232 tests。
+- **Fix**: 添加到 PROJECTS 列表。
+
+## P1 — 死代码/冗余
+
+### R3-02 — baseline.pas 三个死 re-export
+- **File**: `baseline.pas:28-30`
+- **Severity**: P1
+- **Category**: 冗余代码
+- **Detail**: `TBenchResultArray`, `TBaselineData`, `TBaselineArray` 在 baseline.pas 中 re-export，但无任何消费者使用（全部通过 intf.pas 或 facade 获取）。死代码。
+- **Fix**: 移除三行 re-export。
+
+### R3-03 — GenerateComparisonChart 中 LBarWidth 死变量
+- **File**: `report.pas:1501-1503`
+- **Severity**: P1
+- **Category**: 死代码
+- **Detail**: `LBarWidth` 声明并赋值为 `LGroupWidth / (LBaselineCount + 1)` 但从未在 SVG 渲染中使用（实际使用 `LBarWidth` 的是另一个同名变量在 HTML 图表函数中）。
+- **Fix**: 移除死变量声明和赋值。
+
+## P1 — 设计问题
+
+### R3-04 — TMatrixCell.IsSignificant 使用阈值启发式非统计检验
+- **File**: `bench.pas:1087-1088`
+- **Severity**: P1
+- **Category**: 设计
+- **Detail**: `CompareMultipleBaselines` 设置 `IsSignificant := Abs(Ratio - 1.0) > 0.05` 并硬编码 `PValue := 0.05`。这不是真实的统计检验（Mann-Whitney/Welch's t-test），只是固定 5% 阈值启发式。PValue 字段值误导消费者以为做了统计检验。
+- **Fix**: 重命名为 `IsDifferent`，PValue 改为 `Threshold := 0.05`，添加文档说明。
+
+### R3-05 — GenerateMatrixJSON 手工拼接 JSON
+- **File**: `report.pas:1353-1396`
+- **Severity**: P1
+- **Category**: 一致性
+- **Detail**: `GenerateMatrixJSON` 使用字符串拼接手动构建 JSON，而同文件的 `ToJSON` 和 `GenerateTimelineJSON` 都使用 `TJsonWriter`。手工拼接不处理 NaN/Infinity 特殊浮点值，且不一致。
+- **Fix**: 改用 TJsonWriter。
+
+### R3-06 — TCrossLangEntry 通过 facade 暴露
+- **File**: `bench.pas:38`
+- **Severity**: P1
+- **Category**: 设计
+- **Detail**: `TCrossLangEntry = nextpas.core.bench.report.TCrossLangEntry` 从 facade re-export。这是一个内部类型（仅用于跨语言报告生成），不应暴露在公共 facade 中。
+- **Fix**: 从 facade 移除。
+
+### R3-07 — SVG 图表硬编码 viewBox 尺寸
+- **File**: `report.pas:1453, 1519`
+- **Severity**: P2
+- **Category**: 设计
+- **Detail**: 分布直方图和对比图的 SVG viewBox 使用固定尺寸（300×150 / 400×200），不随数据量调整。多基线或长名称时内容溢出。
+- **Fix**: 根据基线数量和数据量动态计算 viewBox 宽度。
+
+## P2 — 文档不一致
+
+### R3-08 — README/目标树声称 14 suites / 257 tests 实际只运行 12 / 232
+- **File**: `README.md`, `goal-tree.md`
+- **Severity**: P2
+- **Category**: 文档
+- **Detail**: 由于 R3-01，声称的测试计数与实际运行不符。修复 R3-01 后恢复一致。
+
+## P2 — 代码风格
+
+### R3-09 — Matrix 函数字符串构建风格不一致
+- **File**: `report.pas:1200-1340`
+- **Severity**: P3
+- **Category**: 风格
+- **Detail**: `GenerateMatrixReport` 和 `GenerateMatrixHTML` 使用 `string` 变量 + `:=` 拼接，而同文件的 `ToConsole`/`ToHTML` 使用 `TLineBuffer.AddLine`/`BufferAddLine` 模式。风格不一致。
+- **Fix**: 迁移到 TLineBuffer 模式以保持一致。
+
+### R3-10 — intf.pas TBenchBaseline 别名可能冗余
+- **File**: `intf.pas:18`
+- **Severity**: P3
+- **Category**: 冗余
+- **Detail**: `TBenchBaseline = nextpas.core.bench.base.TBaselineData` 仅在 test_bench_matrix 中使用。facade 也有相同别名。是否需要在 intf 层也暴露存疑。但 test 需要用它，保留可接受。
+- **Fix**: 保留（有消费者）。
+
+---
+
+### 修复进度追踪
+
+> **更新日期**: 2026-06-26 (Round 7)
+
+| ID | 严重度 | 状态 | 修复方式 |
+|----|--------|------|----------|
+| R3-01 | P0 | ✅修 | Makefile 补齐 2 个目录 (matrix + mannwhitney) |
+| R3-02 | P1 | ✅修 | 移除 baseline.pas 3 个死 re-export |
+| R3-03 | P1 | ❌误报 | LBarW 实际被使用，非死变量 |
+| R3-04 | P1 | ✅修 | 添加 BENCH_MATRIX_DIFF_THRESHOLD 常量 + 文档 |
+| R3-05 | P1 | ✅修 | GenerateMatrixJSON 改用 TJsonWriter |
+| R3-06 | P1 | ✅修 | facade 移除 TCrossLangEntry 内部类型 |
+| R3-07 | P2 | ❌误报 | 对比图已动态计算，分布图 20 bins 固定合理 |
+| R3-08 | P2 | ✅修 | 文档随 R3-01 自动修正（14 suites / 257 tests 现在准确） |
+| R3-09 | P3 | ❌误报 | 已使用 BufferAddLine 模式，一致 |
+| R3-10 | P3 | 保留 | test_bench_matrix 需要 intf.pas 别名 |
+
+### Commits
+```
+(to be added)
+```

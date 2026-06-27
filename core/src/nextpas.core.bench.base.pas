@@ -125,12 +125,14 @@ type
 
   {** 多基线对比矩阵 — 超越 Go/Rust 的独有能力 }
 
-  {** 矩阵单元格：一个 benchmark 对一个 baseline 的对比 }
+  {** 矩阵单元格：一个 benchmark 对一个 baseline 的对比。
+   *  注意：IsSignificant 基于阈值启发式（非统计检验），因为 baseline 无原始样本。
+   *  Ratio 超过 BENCH_MATRIX_DIFF_THRESHOLD 时视为 significant。 }
   TMatrixCell = record
     BaselineNsPerOp: Double;
     Ratio: Double;              // current / baseline
-    IsSignificant: Boolean;
-    PValue: Double;
+    IsSignificant: Boolean;     // 阈值启发式：|Ratio-1| > BENCH_MATRIX_DIFF_THRESHOLD
+    PValue: Double;             // 当前为阈值（非真实 p-value），baseline 无原始样本
   end;
 
   {** 矩阵行：一个 benchmark 对所有 baselines 的对比 }
@@ -157,6 +159,9 @@ const
   BENCH_DEFAULT_MIN_SAMPLES = 30;
   BENCH_DEFAULT_WARMUP_ITERATIONS = 5;
   BENCH_DEFAULT_PARALLEL_THREADS = 4;
+
+  {** R3-04: 矩阵 significance 阈值（baseline 无原始样本，用 ratio 阈值替代统计检验） }
+  BENCH_MATRIX_DIFF_THRESHOLD = 0.05;  // 5% 偏差视为 different
 
   {** 环境变量名 }
   BENCH_ENV_FILTER = 'NEXTPAS_BENCH_FILTER';

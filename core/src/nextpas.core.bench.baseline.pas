@@ -24,11 +24,6 @@ uses
   nextpas.core.text.builder;
 
 type
-  {** 从 base 模块 re-export 类型 }
-  TBenchResultArray = nextpas.core.bench.base.TBenchResultArray;
-  TBaselineData = nextpas.core.bench.base.TBaselineData;
-  TBaselineArray = nextpas.core.bench.base.TBaselineArray;
-
   {**
    * 基线比较结果
    *}

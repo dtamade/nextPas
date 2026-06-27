@@ -40,9 +40,6 @@ type
   TBenchSetupFunc = nextpas.core.bench.intf.TBenchSetupFunc;
   TBenchTeardownFunc = nextpas.core.bench.intf.TBenchTeardownFunc;
 
-  {** ST-12: 重新导出跨语言报告类型 }
-  TCrossLangEntry = nextpas.core.bench.report.TCrossLangEntry;
-
   {** 重新导出执行器（旧 API 兼容：TBenchRunner.Run + Summary） }
   TBenchRunner = nextpas.core.bench.runner.TBenchRunner;
 
@@ -1009,9 +1006,9 @@ begin
         begin
           LCell.BaselineNsPerOp := ABaselines[J].NsPerOp;
           LCell.Ratio := FResults[I].NsPerOp / ABaselines[J].NsPerOp;
-          { 基线无原始样本，无法做 Mann-Whitney U，用 ratio 启发式 }
-          LCell.IsSignificant := Abs(LCell.Ratio - 1.0) > 0.05;
-          LCell.PValue := 0.05;
+          { R3-04: baseline 无原始样本，用 ratio 阈值替代统计检验 }
+          LCell.IsSignificant := Abs(LCell.Ratio - 1.0) > BENCH_MATRIX_DIFF_THRESHOLD;
+          LCell.PValue := BENCH_MATRIX_DIFF_THRESHOLD;
         end
         else
         begin

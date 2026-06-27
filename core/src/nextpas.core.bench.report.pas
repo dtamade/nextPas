@@ -1349,54 +1349,50 @@ end;
 
 function TBenchReportGenerator.GenerateMatrixJSON(const AMatrix: TMatrixResult): string;
 var
-  LBuf: TLineBuffer;
+  LBuilder: TStringBuilder;
+  LWriter: TJsonWriter;
   I, J: Integer;
 begin
-  LBuf := Default(TLineBuffer);
-  BufferAddLine(LBuf, '{');
-  BufferAddLine(LBuf, '  "baselines": [');
-  for I := 0 to High(AMatrix.BaselineNames) do
-  begin
-    if I < High(AMatrix.BaselineNames) then
-      BufferAddLine(LBuf, '    "' + EscapeJSON(AMatrix.BaselineNames[I]) + '",')
-    else
-      BufferAddLine(LBuf, '    "' + EscapeJSON(AMatrix.BaselineNames[I]) + '"');
-  end;
-  BufferAddLine(LBuf, '  ],');
-  BufferAddLine(LBuf, '  "rows": [');
-  for I := 0 to High(AMatrix.Rows) do
-  begin
-    BufferAddLine(LBuf, '    {');
-    BufferAddLine(LBuf, '      "name": "' + EscapeJSON(AMatrix.Rows[I].Name) + '",');
-    BufferAddLine(LBuf, '      "nsPerOp": ' + FormatFloat('0.00', AMatrix.Rows[I].CurrentNsPerOp) + ',');
-    BufferAddLine(LBuf, '      "bytesPerOp": ' + IntToStr(AMatrix.Rows[I].CurrentBytesPerOp) + ',');
-    BufferAddLine(LBuf, '      "allocsPerOp": ' + IntToStr(AMatrix.Rows[I].CurrentAllocsPerOp) + ',');
-    BufferAddLine(LBuf, '      "ratios": [');
-    for J := 0 to High(AMatrix.Rows[I].Cells) do
+  LBuilder.Init(512);
+  try
+    LWriter.Init(LBuilder);
+    LWriter.BeginObject;
+    LWriter.Key('baselines');
+    LWriter.BeginArray;
+    for I := 0 to High(AMatrix.BaselineNames) do
+      LWriter.Str(AMatrix.BaselineNames[I]);
+    LWriter.EndArray;
+    LWriter.Key('rows');
+    LWriter.BeginArray;
+    for I := 0 to High(AMatrix.Rows) do
     begin
-      if J < High(AMatrix.Rows[I].Cells) then
-        BufferAddLine(LBuf, '        ' + FormatFloat('0.000', AMatrix.Rows[I].Cells[J].Ratio) + ',')
-      else
-        BufferAddLine(LBuf, '        ' + FormatFloat('0.000', AMatrix.Rows[I].Cells[J].Ratio));
+      LWriter.BeginObject;
+      LWriter.Key('name');
+      LWriter.Str(AMatrix.Rows[I].Name);
+      LWriter.Key('nsPerOp');
+      LWriter.Float(AMatrix.Rows[I].CurrentNsPerOp);
+      LWriter.Key('bytesPerOp');
+      LWriter.Int(AMatrix.Rows[I].CurrentBytesPerOp);
+      LWriter.Key('allocsPerOp');
+      LWriter.Int(AMatrix.Rows[I].CurrentAllocsPerOp);
+      LWriter.Key('ratios');
+      LWriter.BeginArray;
+      for J := 0 to High(AMatrix.Rows[I].Cells) do
+        LWriter.Float(AMatrix.Rows[I].Cells[J].Ratio);
+      LWriter.EndArray;
+      LWriter.EndObject;
     end;
-    BufferAddLine(LBuf, '      ]');
-    if I < High(AMatrix.Rows) then
-      BufferAddLine(LBuf, '    },')
-    else
-      BufferAddLine(LBuf, '    }');
+    LWriter.EndArray;
+    LWriter.Key('geometricMeanRatios');
+    LWriter.BeginArray;
+    for I := 0 to High(AMatrix.GeometricMeanRatios) do
+      LWriter.Float(AMatrix.GeometricMeanRatios[I]);
+    LWriter.EndArray;
+    LWriter.EndObject;
+    Result := LBuilder.ToString;
+  finally
+    LBuilder.Done;
   end;
-  BufferAddLine(LBuf, '  ],');
-  BufferAddLine(LBuf, '  "geometricMeanRatios": [');
-  for I := 0 to High(AMatrix.GeometricMeanRatios) do
-  begin
-    if I < High(AMatrix.GeometricMeanRatios) then
-      BufferAddLine(LBuf, '    ' + FormatFloat('0.000', AMatrix.GeometricMeanRatios[I]) + ',')
-    else
-      BufferAddLine(LBuf, '    ' + FormatFloat('0.000', AMatrix.GeometricMeanRatios[I]));
-  end;
-  BufferAddLine(LBuf, '  ]');
-  BufferAddLine(LBuf, '}');
-  Result := BufferToString(LBuf);
 end;
 
 { P2-3: 分布直方图 SVG }
