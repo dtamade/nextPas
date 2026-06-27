@@ -3067,6 +3067,7 @@ var
   Child, ParamChild, TypeChild: TGreenNode;
   TypeName: string;
   Dummy: Int64;
+  LTypeId: LongInt;
 begin
   Result := '';
   if ADecl = nil then Exit;
@@ -3096,8 +3097,28 @@ begin
           Result := Result + 'r'
         else if (TypeChild <> nil) and TypeIsInterfaceByName(TypeChild.Text) then
           Result := Result + 'f'
-        else if (TypeChild <> nil) and (TypeMetaSize(TypeChild.Text) > 0) then
-          Result := Result + 'p'
+        else if SameText(TypeName, 'integer') or SameText(TypeName, 'longint') or
+          SameText(TypeName, 'longword') or SameText(TypeName, 'cardinal') or
+          SameText(TypeName, 'smallint') or SameText(TypeName, 'word') or
+          SameText(TypeName, 'byte') or SameText(TypeName, 'shortint') or
+          SameText(TypeName, 'int64') or SameText(TypeName, 'qword') or
+          SameText(TypeName, 'uint64') or SameText(TypeName, 'sizeint') or
+          SameText(TypeName, 'sizeuint') or SameText(TypeName, 'uint32') or
+          SameText(TypeName, 'ptruint') or SameText(TypeName, 'ptrint') then
+          Result := Result + 'i'
+        else if (TypeChild <> nil) then
+        begin
+          LTypeId := FModel.FindTypeByName(TypeChild.Text);
+          if (LTypeId > 0) and
+            SameText(FModel.TypeAt(LTypeId - 1).Kind, 'class') then
+            Result := Result + 'c'
+          else if TypeMetaIsClass(TypeChild.Text) then
+            Result := Result + 'c'
+          else if TypeMetaSize(TypeChild.Text) > 0 then
+            Result := Result + 'p'
+          else
+            Result := Result + 'i';
+        end
         else
           Result := Result + 'i';
       end;
@@ -3682,26 +3703,41 @@ begin
             TypeIdHasStableScalarFact(Sym.TypeId));
         end
         else if (not SameText(Sym.Kind, 'variable')) and
-          (not SameText(Sym.Kind, 'parameter')) then
+          (not SameText(Sym.Kind, 'parameter')) and
+          (not SameText(Sym.Kind, 'field')) then
           Exit(False);
-        Exit(TypeIdHasStableScalarFact(Sym.TypeId));
+        if TypeIdHasStableScalarFact(Sym.TypeId) then
+          Exit(True);
+        if (Sym.TypeId > 0) and (Sym.TypeId <= FModel.TypeCount) then
+        begin
+          if SameText(FModel.TypeAt(Sym.TypeId - 1).Kind, 'interface') then
+            Exit(True);
+          if SameText(FModel.TypeAt(Sym.TypeId - 1).Kind, 'class') then
+            Exit(True);
+        end;
+        Exit(False);
       end;
     gnkFunctionCall:
       begin
         SymId := FModel.LookupSymbol(ANode.Text, FCurrentScopeId);
-        if SymId <= 0 then
-          Exit(False);
-        Sym := FModel.SymbolAt(SymId - 1);
-        Exit(SameText(Sym.Kind, 'function') and (Sym.ParamCount = 0) and
-          (
-            SameText(Sym.OwnerUnitId, RootOwnerUnitId) or
+        if SymId > 0 then
+        begin
+          Sym := FModel.SymbolAt(SymId - 1);
+          Exit(SameText(Sym.Kind, 'function') and (Sym.ParamCount = 0) and
             (
-              (CurrentOwnerUnitId <> '') and
-              SameText(Sym.OwnerUnitId, CurrentOwnerUnitId) and
-              OwnerUnitAllowsProjectSourceDiagnostic(Sym.OwnerUnitId)
-            )
-          ) and
-          (ANode.ChildCount <= 1) and TypeIdHasStableScalarFact(Sym.TypeId));
+              SameText(Sym.OwnerUnitId, RootOwnerUnitId) or
+              (
+                (CurrentOwnerUnitId <> '') and
+                SameText(Sym.OwnerUnitId, CurrentOwnerUnitId) and
+                OwnerUnitAllowsProjectSourceDiagnostic(Sym.OwnerUnitId)
+              )
+            ) and
+            (ANode.ChildCount <= 1) and TypeIdHasStableScalarFact(Sym.TypeId));
+        end;
+        if (ANode.ChildCount > 0) and (ANode.ChildAt(0) <> nil) and
+          (ANode.ChildAt(0).NodeKind = gnkDotAccess) then
+          Exit(ExpressionTypeFactIsStable(ANode.ChildAt(0), CurrentOwnerUnitId));
+        Exit(False);
       end;
     gnkBinaryExpression, gnkUnaryExpression:
       begin
@@ -3712,6 +3748,35 @@ begin
           ) then
             Exit(False);
         Exit(True);
+      end;
+    gnkDotAccess:
+      begin
+        if ANode.ChildCount < 2 then
+          Exit(False);
+        if (ANode.ChildAt(0) = nil) or (ANode.ChildAt(1) = nil) then
+          Exit(False);
+        if ANode.ChildAt(0).NodeKind = gnkIdentifier then
+        begin
+          SymId := FModel.LookupSymbol(ANode.ChildAt(0).Text, FCurrentScopeId);
+          if SymId <= 0 then
+          begin
+            if SameText(ANode.ChildAt(0).Text, 'Self') and
+              (FCurrentMethodClass <> '') then
+              Exit(True);
+            Exit(False);
+          end;
+          Sym := FModel.SymbolAt(SymId - 1);
+          if Sym.TypeId <= 0 then
+            Exit(False);
+          if TypeIdHasStableScalarFact(Sym.TypeId) then
+            Exit(True);
+          if SameText(FModel.TypeAt(Sym.TypeId - 1).Kind, 'interface') then
+            Exit(True);
+          if SameText(FModel.TypeAt(Sym.TypeId - 1).Kind, 'class') then
+            Exit(True);
+          Exit(False);
+        end;
+        Exit(ExpressionTypeFactIsStable(ANode.ChildAt(0), CurrentOwnerUnitId));
       end;
   end;
 end;
@@ -4354,18 +4419,37 @@ begin
     Exit('s');
   if SameText(TypeName, 'Boolean') then
     Exit('b');
+  if SameText(TypeName, 'Integer') or SameText(TypeName, 'LongInt') or
+    SameText(TypeName, 'LongWord') or SameText(TypeName, 'Cardinal') or
+    SameText(TypeName, 'SmallInt') or SameText(TypeName, 'Word') or
+    SameText(TypeName, 'Byte') or SameText(TypeName, 'ShortInt') or
+    SameText(TypeName, 'Int64') or SameText(TypeName, 'QWord') or
+    SameText(TypeName, 'UInt64') or SameText(TypeName, 'SizeInt') or
+    SameText(TypeName, 'SizeUInt') or SameText(TypeName, 'UInt32') or
+    SameText(TypeName, 'PtrUInt') or SameText(TypeName, 'PtrInt') then
+    Exit('i');
+  if SameText(TypeInfo.Kind, 'class') then
+    Exit('c');
+  if SameText(TypeInfo.Kind, 'interface') then
+    Exit('f');
+  if SameText(TypeInfo.Kind, 'record') then
+    Exit('r');
   if FModel.GetTypeMeta(ATypeId, Meta) then
   begin
     if Meta.IsRecord then
       Exit('r');
     if TypeIsInterfaceByName(TypeName) then
       Exit('f');
+    if SameText(TypeInfo.Kind, 'class') then
+      Exit('c');
     Exit('p');
   end;
   if TypeMetaIsRecord(TypeName) then
     Exit('r');
   if TypeIsInterfaceByName(TypeName) then
     Exit('f');
+  if TypeMetaIsClass(TypeName) then
+    Exit('c');
   if TypeMetaSize(TypeName) > 0 then
     Exit('p');
   Result := 'i';
@@ -5663,7 +5747,10 @@ begin
     SameText(AName, 'LowerCase') or SameText(AName, 'UpperCase') or
     SameText(AName, 'Trim') or SameText(AName, 'TrimLeft') or
     SameText(AName, 'TrimRight') or SameText(AName, 'SameText') or
-    SameText(AName, 'CompareText') or SameText(AName, 'StringReplace');
+    SameText(AName, 'CompareText') or SameText(AName, 'StringReplace') or
+    SameText(AName, 'Default') or SameText(AName, 'TypeInfo') or
+    SameText(AName, 'InterlockedCompareExchange') or
+    SameText(AName, 'InterlockedIncrement') or SameText(AName, 'InterlockedDecrement');
 end;
 
 function TSemanticAnalyzer.InferExpressionType(const ANode: TGreenNode): LongInt;
@@ -5672,6 +5759,14 @@ var
   RType: LongInt;
   SymId: LongInt;
   Sym: TSemanticSymbol;
+  LReceiverTypeId: LongInt;
+  LFieldMeta: TFieldMeta;
+  LTypeName: string;
+  LDotPos: LongInt;
+  LReceiverName: string;
+  LMemberName: string;
+  LQualifiedName: string;
+  LBodyIdx: LongInt;
 begin
   Result := 0;
   if ANode = nil then
@@ -5753,9 +5848,142 @@ begin
         begin
           Sym := FModel.SymbolAt(SymId - 1);
           Result := Sym.TypeId;
+        end
+        else if Pos('.', ANode.Text) > 1 then
+        begin
+          LDotPos := Pos('.', ANode.Text);
+          LReceiverName := Copy(ANode.Text, 1, LDotPos - 1);
+          LMemberName := Copy(ANode.Text, LDotPos + 1, Length(ANode.Text));
+          LReceiverTypeId := 0;
+          if SameText(LReceiverName, 'Self') and (FCurrentMethodClass <> '') then
+            LReceiverTypeId := FModel.FindTypeByName(FCurrentMethodClass)
+          else
+          begin
+            SymId := FModel.LookupSymbol(LReceiverName, FCurrentScopeId);
+            if SymId > 0 then
+            begin
+              Sym := FModel.SymbolAt(SymId - 1);
+              LReceiverTypeId := Sym.TypeId;
+            end;
+          end;
+          if LReceiverTypeId > 0 then
+          begin
+            LTypeName := FModel.TypeAt(LReceiverTypeId - 1).Name;
+            LQualifiedName := LTypeName + '.' + LMemberName;
+            for LBodyIdx := 0 to Length(FProcedureBodies) - 1 do
+              if SameText(FProcedureBodies[LBodyIdx].Name, LQualifiedName) then
+              begin
+                Result := DeclReturnTypeId(
+                  FProcedureBodies[LBodyIdx].Decl,
+                  FProcedureBodies[LBodyIdx].OwnerUnitId);
+                if Result > 0 then
+                  Break;
+              end;
+          end;
+        end
+        else if (ANode.ChildCount > 0) and (ANode.ChildAt(0) <> nil) and
+          (ANode.ChildAt(0).NodeKind = gnkDotAccess) then
+          Result := InferExpressionType(ANode.ChildAt(0));
+      end;
+    gnkDotAccess:
+      begin
+        if ANode.ChildCount < 2 then
+          Exit;
+        if (ANode.ChildAt(0) = nil) or (ANode.ChildAt(1) = nil) then
+          Exit;
+        LReceiverTypeId := 0;
+        if SameText(ANode.ChildAt(0).Text, 'Self') and
+          (FCurrentMethodClass <> '') then
+        begin
+          LReceiverTypeId := FModel.FindTypeByName(FCurrentMethodClass);
+          if LReceiverTypeId <= 0 then
+          begin
+            SymId := FModel.LookupSymbol(FCurrentMethodClass, FCurrentScopeId);
+            if SymId > 0 then
+            begin
+              Sym := FModel.SymbolAt(SymId - 1);
+              if SameText(Sym.Kind, 'type') then
+                LReceiverTypeId := Sym.TypeId;
+            end;
+          end;
+        end
+        else if ANode.ChildAt(0).NodeKind = gnkIdentifier then
+        begin
+          SymId := FModel.LookupSymbol(ANode.ChildAt(0).Text, FCurrentScopeId);
+          if SymId > 0 then
+          begin
+            Sym := FModel.SymbolAt(SymId - 1);
+            LReceiverTypeId := Sym.TypeId;
+          end;
+        end
+        else
+          LReceiverTypeId := InferExpressionType(ANode.ChildAt(0));
+        if LReceiverTypeId <= 0 then
+          Exit;
+        LTypeName := '';
+        if LReceiverTypeId > 0 then
+          LTypeName := FModel.TypeAt(LReceiverTypeId - 1).Name;
+        if LTypeName <> '' then
+        begin
+          if FModel.GetFieldMetaByName(LReceiverTypeId, ANode.ChildAt(1).Text,
+            LFieldMeta) then
+            Result := LFieldMeta.TypeId
+          else
+          begin
+            LQualifiedName := LTypeName + '.' + ANode.ChildAt(1).Text;
+            for LBodyIdx := 0 to Length(FProcedureBodies) - 1 do
+              if SameText(FProcedureBodies[LBodyIdx].Name, LQualifiedName) then
+              begin
+                Result := DeclReturnTypeId(
+                  FProcedureBodies[LBodyIdx].Decl,
+                  FProcedureBodies[LBodyIdx].OwnerUnitId);
+                if Result > 0 then
+                  Break;
+              end;
+            if Result <= 0 then
+            begin
+              if FModel.TypeAt(LReceiverTypeId - 1).InstantiatedFrom > 0 then
+              begin
+                LReceiverTypeId := FModel.TypeAt(LReceiverTypeId - 1).InstantiatedFrom;
+                LTypeName := FModel.TypeAt(LReceiverTypeId - 1).Name;
+                LQualifiedName := LTypeName + '.' + ANode.ChildAt(1).Text;
+                for LBodyIdx := 0 to Length(FProcedureBodies) - 1 do
+                  if SameText(FProcedureBodies[LBodyIdx].Name, LQualifiedName) then
+                  begin
+                    Result := DeclReturnTypeId(
+                      FProcedureBodies[LBodyIdx].Decl,
+                      FProcedureBodies[LBodyIdx].OwnerUnitId);
+                    if Result > 0 then
+                      Break;
+                  end;
+              end;
+            end;
+            if Result <= 0 then
+            begin
+              while FModel.TypeAt(LReceiverTypeId - 1).ParentTypeId > 0 do
+              begin
+                LReceiverTypeId := FModel.TypeAt(LReceiverTypeId - 1).ParentTypeId;
+                if FModel.TypeAt(LReceiverTypeId - 1).InstantiatedFrom > 0 then
+                  LReceiverTypeId := FModel.TypeAt(LReceiverTypeId - 1).InstantiatedFrom;
+                LTypeName := FModel.TypeAt(LReceiverTypeId - 1).Name;
+                LQualifiedName := LTypeName + '.' + ANode.ChildAt(1).Text;
+                for LBodyIdx := 0 to Length(FProcedureBodies) - 1 do
+                  if SameText(FProcedureBodies[LBodyIdx].Name, LQualifiedName) then
+                  begin
+                    Result := DeclReturnTypeId(
+                      FProcedureBodies[LBodyIdx].Decl,
+                      FProcedureBodies[LBodyIdx].OwnerUnitId);
+                    if Result > 0 then
+                      Break;
+                  end;
+                if Result > 0 then
+                  Break;
+              end;
+            end;
+          end;
         end;
       end;
-    gnkDotAccess, gnkArrayAccess, gnkDereference:
+    gnkArrayAccess, gnkDereference:
       Result := 0;
   end;
 end;
