@@ -871,8 +871,13 @@ end;
 
 function TBenchRunner.ShouldRun(const AName: string): Boolean;
 begin
-  Result := (FFilterLower = '') or
-    (Pos(FFilterLower, LowerCase(AName)) > 0); { PF-08: use cached lowercase }
+  if FFilterLower = '' then
+    Exit(True);
+  { Glob 模式：filter 包含 * 或 ? 时使用 GlobMatch }
+  if (Pos('*', FFilter) > 0) or (Pos('?', FFilter) > 0) then
+    Result := GlobMatch(FFilterLower, LowerCase(AName))
+  else
+    Result := Pos(FFilterLower, LowerCase(AName)) > 0; { PF-08: 子串匹配 }
 end;
 
 procedure TBenchRunner.AddResult(const AResult: TBenchResult);

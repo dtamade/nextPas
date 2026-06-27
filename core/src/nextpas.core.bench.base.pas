@@ -184,6 +184,9 @@ function DefaultBenchConfig: TBenchConfig;
 {** 分类异常值严重度（criterion 风格：mild/moderate/severe） }
 function ClassifyOutlierSeverity(AValue, AQ1, AQ3: Double): TOutlierSeverity;
 
+{** Glob 模式匹配（* 匹配任意字符，? 匹配单个字符） }
+function GlobMatch(const APattern, AStr: string): Boolean;
+
 implementation
 
 function TInvLookup(ADF: Double; const ATable: array of Double; AZScore: Double): Double;
@@ -432,6 +435,54 @@ begin
     Result := osMild
   else
     Result := osNone;
+end;
+
+{** Glob 模式匹配实现
+ *
+ *  支持:
+ *    * — 匹配任意字符序列（包括空）
+ *    ? — 匹配单个字符
+ *    其他字符按字面匹配（大小写敏感）
+ *
+ *  递归实现，O(n*m) 最坏情况，基准名称通常很短，无性能问题。
+ }
+function GlobMatch(const APattern, AStr: string): Boolean;
+var
+  PI, SI: Integer;
+begin
+  PI := 1;
+  SI := 1;
+  while (PI <= Length(APattern)) and (SI <= Length(AStr)) do
+  begin
+    if APattern[PI] = '*' then
+    begin
+      { 跳过连续的 * }
+      while (PI <= Length(APattern)) and (APattern[PI] = '*') do
+        Inc(PI);
+      { * 匹配到末尾：如果后面没有更多模式字符，直接成功 }
+      if PI > Length(APattern) then
+        Exit(True);
+      { 尝试 * 匹配 0,1,2,... 个字符 }
+      while SI <= Length(AStr) do
+      begin
+        if GlobMatch(Copy(APattern, PI, MaxInt), Copy(AStr, SI, MaxInt)) then
+          Exit(True);
+        Inc(SI);
+      end;
+      Exit(False);
+    end
+    else if (APattern[PI] = '?') or (APattern[PI] = AStr[SI]) then
+    begin
+      Inc(PI);
+      Inc(SI);
+    end
+    else
+      Exit(False);
+  end;
+  { 跳过尾部的 * }
+  while (PI <= Length(APattern)) and (APattern[PI] = '*') do
+    Inc(PI);
+  Result := (PI > Length(APattern)) and (SI > Length(AStr));
 end;
 
 end.
