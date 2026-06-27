@@ -181,6 +181,11 @@ end;
 
 ## 版本历史
 
+- v7.2 (2026-06-27): Phase F 基准测试 + Go 对照
+  - 新增: `bench_pool_family` 9 基准覆盖 TBlockPool/TFixedPool/TStackPool/TRingBuffer
+  - Go 对照: TBlockPool (15.6ns) 快于 sync.Pool (18.0ns)，TRingBuffer (31.8ns) 2x 快于 chan (63.7ns)
+  - 修复: bench_arena_vs_rtl Makefile build dir 创建
+  - Phase F 完成
 - v7.1 (2026-06-27): Round 15 — test_ring_buffer + 并发池恢复 + 测试修复
   - 新增: `test_ring_buffer` 30 tests — TRingBuffer 全公共 API 覆盖
   - 恢复: `test_sharded_pools` 9 tests — CS-001 修复后编译通过
