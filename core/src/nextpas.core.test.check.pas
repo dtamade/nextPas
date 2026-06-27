@@ -37,16 +37,16 @@ procedure CheckNotNil(AValue: Pointer; const AMessage: string = '');
 procedure CheckContains(const AHaystack, ANeedle: string);
 procedure CheckStartsWith(const AStr, APrefix: string);
 procedure CheckEndsWith(const AStr, ASuffix: string);
-procedure CheckSame(AExpected, AActual: Pointer; const AMessage: string = '');
-procedure CheckInRange(AValue, ALow, AHigh: Int64);
-procedure CheckGreaterThan(AValue, AExpected: Int64);
-procedure CheckLessThan(AValue, AExpected: Int64);
-procedure CheckLength(AExpected, AActual: NativeInt);
+procedure CheckSame(const AExpected, AActual: Pointer; const AMessage: string = '');
+procedure CheckInRange(const AValue, ALow, AHigh: Int64);
+procedure CheckGreaterThan(const AValue, AExpected: Int64);
+procedure CheckLessThan(const AValue, AExpected: Int64);
+procedure CheckLength(const AExpected, AActual: NativeInt);
 procedure CheckRaises(AExceptionClass: ExceptClass; AProc: TTestProc;
   const AMessage: string = '');
 procedure CheckNoRaise(AProc: TTestProc; const AMessage: string = '');
-procedure CheckGreaterOrEqual(AValue, AExpected: Int64);
-procedure CheckLessOrEqual(AValue, AExpected: Int64);
+procedure CheckGreaterOrEqual(const AValue, AExpected: Int64);
+procedure CheckLessOrEqual(const AValue, AExpected: Int64);
 { Check that AActual is within AEpsilon of AExpected (absolute difference).
   R4-07: Uses absolute epsilon — for large values (e.g. 1e15), the default
   1e-10 is too tight. Callers should pass a larger AEpsilon or use a
@@ -270,7 +270,7 @@ begin
     InternalFail('"' + AStr + '" does not end with "' + ASuffix + '"');
 end;
 
-procedure CheckSame(AExpected, AActual: Pointer; const AMessage: string);
+procedure CheckSame(const AExpected, AActual: Pointer; const AMessage: string);
 begin
   if AExpected <> AActual then
   begin
@@ -283,7 +283,7 @@ begin
   end;
 end;
 
-procedure CheckInRange(AValue, ALow, AHigh: Int64);
+procedure CheckInRange(const AValue, ALow, AHigh: Int64);
 begin
   if ALow > AHigh then
     InternalFail('CheckInRange: ALow (' + IntToStr(ALow) +
@@ -293,35 +293,35 @@ begin
       IntToStr(ALow) + '..' + IntToStr(AHigh) + ']');
 end;
 
-procedure CheckGreaterThan(AValue, AExpected: Int64);
+procedure CheckGreaterThan(const AValue, AExpected: Int64);
 begin
   if AValue <= AExpected then
     InternalFail('Expected ' + IntToStr(AValue) + ' > ' +
       IntToStr(AExpected));
 end;
 
-procedure CheckLessThan(AValue, AExpected: Int64);
+procedure CheckLessThan(const AValue, AExpected: Int64);
 begin
   if AValue >= AExpected then
     InternalFail('Expected ' + IntToStr(AValue) + ' < ' +
       IntToStr(AExpected));
 end;
 
-procedure CheckGreaterOrEqual(AValue, AExpected: Int64);
+procedure CheckGreaterOrEqual(const AValue, AExpected: Int64);
 begin
   if AValue < AExpected then
     InternalFail('Expected ' + IntToStr(AValue) + ' >= ' +
       IntToStr(AExpected));
 end;
 
-procedure CheckLessOrEqual(AValue, AExpected: Int64);
+procedure CheckLessOrEqual(const AValue, AExpected: Int64);
 begin
   if AValue > AExpected then
     InternalFail('Expected ' + IntToStr(AValue) + ' <= ' +
       IntToStr(AExpected));
 end;
 
-procedure CheckLength(AExpected, AActual: NativeInt);
+procedure CheckLength(const AExpected, AActual: NativeInt);
 begin
   if AExpected <> AActual then
     InternalFail('Expected length ' + IntToStr(AExpected) +
