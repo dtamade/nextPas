@@ -352,7 +352,62 @@ begin
     CheckApprox(LData[i], 7.0, 0.001, 'AllEqual[' + IntToStr(i) + '] = 7.0');
 end;
 
-{ === TG-04: TInvLookup Edge Cases === }
+{ === SortDoubleArray NaN 安全性测试 (Phase 1 修复) === }
+
+procedure TestSort_NaNMixed;
+var
+  LData: TDoubleArray;
+begin
+  WriteLn('TestSort_NaNMixed:');
+  { NaN 应排到末尾，非 NaN 部分正常排序 }
+  SetLength(LData, 6);
+  LData[0] := 5.0; LData[1] := DoubleQuietNaN; LData[2] := 1.0;
+  LData[3] := DoubleQuietNaN; LData[4] := 3.0; LData[5] := 2.0;
+  SortDoubleArray(LData);
+  CheckApprox(LData[0], 1.0, 0.001, 'NaN-mixed sort[0] = 1.0');
+  CheckApprox(LData[1], 2.0, 0.001, 'NaN-mixed sort[1] = 2.0');
+  CheckApprox(LData[2], 3.0, 0.001, 'NaN-mixed sort[2] = 3.0');
+  CheckApprox(LData[3], 5.0, 0.001, 'NaN-mixed sort[3] = 5.0');
+  Check(IsNan(LData[4]), 'NaN-mixed sort[4] = NaN');
+  Check(IsNan(LData[5]), 'NaN-mixed sort[5] = NaN');
+end;
+
+procedure TestSort_AllNaN;
+var
+  LData: TDoubleArray;
+  LNoCrash: Boolean;
+begin
+  WriteLn('TestSort_AllNaN:');
+  LNoCrash := True;
+  SetLength(LData, 4);
+  LData[0] := DoubleQuietNaN; LData[1] := DoubleQuietNaN;
+  LData[2] := DoubleQuietNaN; LData[3] := DoubleQuietNaN;
+  try
+    SortDoubleArray(LData);
+  except
+    LNoCrash := False;
+  end;
+  Check(LNoCrash, 'All-NaN sort does not crash');
+  Check(Length(LData) = 4, 'All-NaN array length preserved');
+end;
+
+procedure TestSort_NaNWithInfinity;
+var
+  LData: TDoubleArray;
+begin
+  WriteLn('TestSort_NaNWithInfinity:');
+  { Infinity 正常参与排序，NaN 排到末尾 }
+  SetLength(LData, 4);
+  LData[0] := DoubleQuietNaN; LData[1] := MakePositiveInfinity;
+  LData[2] := 1.0; LData[3] := MakeNegativeInfinity;
+  SortDoubleArray(LData);
+  Check(LData[0] < 0, 'NaN+Inf sort[0] = -Inf (negative)');
+  Check(not IsNan(LData[0]), 'NaN+Inf sort[0] is not NaN');
+  CheckApprox(LData[1], 1.0, 0.001, 'NaN+Inf sort[1] = 1.0');
+  Check(LData[2] > 1e100, 'NaN+Inf sort[2] = +Inf (very large)');
+  Check(not IsNan(LData[2]), 'NaN+Inf sort[2] is not NaN');
+  Check(IsNan(LData[3]), 'NaN+Inf sort[3] = NaN');
+end;
 
 procedure TestTInvLookup_KnownValues;
 begin
@@ -511,6 +566,10 @@ begin
   TestSort_SingleElement; WriteLn;
   TestSort_ReverseOrder; WriteLn;
   TestSort_AllEqual; WriteLn;
+  WriteLn('=== SortDoubleArray NaN Safety ===');
+  TestSort_NaNMixed; WriteLn;
+  TestSort_AllNaN; WriteLn;
+  TestSort_NaNWithInfinity; WriteLn;
   WriteLn('=== TInvLookup Edge Cases (TG-04) ===');
   TestTInvLookup_KnownValues; WriteLn;
   TestTInvLookup_ExtremeDf; WriteLn;
