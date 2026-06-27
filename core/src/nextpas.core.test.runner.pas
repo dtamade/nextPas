@@ -1143,7 +1143,6 @@ begin
     LSubCtx := nil;
   end;
 
-  { Suite-level teardown }
   { Suite-level teardown (uses shared helper) }
   RunTeardown(LConfig);
 
@@ -1452,19 +1451,6 @@ begin
     Result := Run
   else
     Result := LastRunPassed;
-end;
-
-{ Nil-out a specific pointer value in a dynamic array (for double-free prevention) }
-procedure NilPointerInArray(var AArr: specialize TArray<Pointer>; APtr: Pointer);
-var
-  I: Integer;
-begin
-  for I := 0 to High(AArr) do
-    if AArr[I] = APtr then
-    begin
-      AArr[I] := nil;
-      Exit;
-    end;
 end;
 
 procedure TTestSuite.CleanupTableAllocations;
