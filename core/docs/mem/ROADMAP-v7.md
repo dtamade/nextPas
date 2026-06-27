@@ -76,3 +76,5 @@ Phase E:    文档注释 80%+                              ✅ 本轮
 | **D** | ≥460 tests / 0 leaks / 100% API 覆盖 | ✅ 完成 |
 | **E** | 80%+ 方法级文档 | ✅ 完成 |
 | **F** | 核心热路径基准 + Go/Rust 对照 | → 下轮 |
+
+> **Round 15** (2026-06-27): test_ring_buffer 30 tests + test_sharded_pools(9)/test_oom(8) 恢复编译
