@@ -48,6 +48,12 @@ type
     {** 重置计时器（排除 setup 时间） }
     procedure ResetTimer;
 
+    {** 暂停计时器（排除 setup/teardown 时间，保留已累计时间） }
+    procedure StopTimer;
+
+    {** 恢复计时器（扣除暂停期间的时间） }
+    procedure StartTimer;
+
     {** 跳过当前基准 }
     procedure Skip(const AReason: string);
 
@@ -236,6 +242,9 @@ type
     {** 与基线对比 }
     function CompareWithBaseline: TBenchComparisonArray;
 
+    {** 两个结果对比（Mann-Whitney U 检验，需 RawSamples） }
+    function CompareTwoResults(const ANameA, ANameB: string): TBenchComparison;
+
     {** 检测回归（返回 true 表示有回归） }
     function HasRegression(AThreshold: Double): Boolean;
 
@@ -281,6 +290,12 @@ type
 
     {** 计算百分位数 }
     function Percentile(const ASorted: TDoubleArray; APercent: Double): Double;
+
+    {** Mann-Whitney U 检验 p-value（非参数，适用于右偏基准数据） }
+    function ComputeMannWhitneyPValue(const A, B: TDoubleArray): Double;
+
+    {** 几何均值（多 benchmark ratio 聚合的正确方法） }
+    function GeometricMean(const ARatios: TDoubleArray): Double;
   end;
 
 implementation

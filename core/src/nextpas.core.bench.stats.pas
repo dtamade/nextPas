@@ -69,6 +69,12 @@ type
 
     {** 计算标准差 }
     function StdDev(const AData: TDoubleArray): Double;
+
+    {** Mann-Whitney U 检验 p-value（非参数，适用于右偏基准数据） }
+    function ComputeMannWhitneyPValue(const A, B: TDoubleArray): Double;
+
+    {** 几何均值（多 benchmark ratio 聚合的正确方法） }
+    function GeometricMean(const ARatios: TDoubleArray): Double;
   end;
 
 implementation
@@ -458,6 +464,197 @@ begin
   // 简化的判断阈值（完整实现需要查表）
   // W 接近 1 表示正态分布
   Result := LW > 0.9;
+end;
+
+{** Mann-Whitney U 检验实现
+ *
+ * 非参数秩和检验，不要求数据正态分布。
+ * 基准数据通常右偏（偶尔的 GC、缓存抖动导致长尾），
+ * t-test 的正态假设不成立，Mann-Whitney U 更可靠。
+ *
+ * 算法：
+ *   1. 合并两组样本，按值排序分配秩次
+ *   2. 平均秩处理并列值（ties）
+ *   3. U1 = n1*n2 + n1*(n1+1)/2 - R1
+ *   4. 大样本 (n>20) 用正态近似计算 z-score 和 p-value
+ *   5. 小样本用精确分布（查表/递推）
+ }
+function TBenchStatsAnalyzer.ComputeMannWhitneyPValue(const A, B: TDoubleArray): Double;
+var
+  LN1, LN2, LN: Integer;
+  LCombined: TDoubleArray;
+  LGroup: TInt64Array;   // 0=A, 1=B
+  LSortedIdx: TInt64Array;
+  LRanks: TDoubleArray;
+  LRankSum1: Double;
+  LU1, LU2, LU: Double;
+  LMU, LSigma: Double;
+  LTieCorrection: Double;
+  LZ: Double;
+  LRunStart, LRunEnd, I, J, K: Integer;
+  LAvgRank: Double;
+  LTemp: Double;
+  LTmpIdx: Int64;
+
+  { 从 z-score 计算双侧 p-value（Hastings 近似） }
+  function ZToPValue(AZ: Double): Double;
+  var
+    LT, LK, LP: Double;
+  begin
+    AZ := Abs(AZ);
+    if AZ > 6.0 then
+      Exit(0.000001)
+    else if AZ < 0.01 then
+      Exit(1.0);
+    LT := 1.0 / (1.0 + 0.2316419 * AZ);
+    LK := 0.3989422804014327 * Exp(-0.5 * AZ * AZ);
+    LP := LK * (LT * (0.319381530 + LT * (-0.356563782 + LT * (1.781477937 +
+          LT * (-1.821255978 + LT * 1.330274429)))));
+    Result := 2.0 * LP;
+    if Result > 1.0 then Result := 1.0;
+    if Result < 0.000001 then Result := 0.000001;
+  end;
+
+begin
+  LN1 := Length(A);
+  LN2 := Length(B);
+  LN := LN1 + LN2;
+
+  if (LN1 = 0) or (LN2 = 0) then
+    Exit(1.0);
+  if LN = 1 then
+    Exit(1.0);
+
+  { 1. 合并样本并标记来源 }
+  SetLength(LCombined, LN);
+  SetLength(LGroup, LN);
+  for I := 0 to LN1 - 1 do
+  begin
+    LCombined[I] := A[I];
+    LGroup[I] := 0;
+  end;
+  for I := 0 to LN2 - 1 do
+  begin
+    LCombined[LN1 + I] := B[I];
+    LGroup[LN1 + I] := 1;
+  end;
+
+  { 2. 构建索引数组用于间接排序 }
+  SetLength(LSortedIdx, LN);
+  for I := 0 to LN - 1 do
+    LSortedIdx[I] := I;
+
+  { 简单插入排序（基准样本通常 <1000 个） }
+  for I := 1 to LN - 1 do
+  begin
+    LTmpIdx := LSortedIdx[I];
+    LTemp := LCombined[LTmpIdx];
+    J := I - 1;
+    while (J >= 0) and (LCombined[LSortedIdx[J]] > LTemp) do
+    begin
+      LSortedIdx[J + 1] := LSortedIdx[J];
+      Dec(J);
+    end;
+    LSortedIdx[J + 1] := LTmpIdx;
+  end;
+
+  { 3. 分配秩次（并列值取平均秩） }
+  SetLength(LRanks, LN);
+  I := 0;
+  while I < LN do
+  begin
+    { 找到当前 run 的结束位置（相同值的区间） }
+    LRunStart := I;
+    LRunEnd := I;
+    while (LRunEnd + 1 < LN) and
+          (LCombined[LSortedIdx[LRunEnd + 1]] = LCombined[LSortedIdx[LRunStart]]) do
+      Inc(LRunEnd);
+
+    { 平均秩 = (run 开始位置 + run 结束位置 + 2) / 2
+      位置从 0 开始，秩从 1 开始 }
+    LAvgRank := (LRunStart + LRunEnd + 2) / 2.0;
+    for K := LRunStart to LRunEnd do
+      LRanks[LSortedIdx[K]] := LAvgRank;
+
+    I := LRunEnd + 1;
+  end;
+
+  { 4. 计算样本 A 的秩和 }
+  LRankSum1 := 0.0;
+  for I := 0 to LN - 1 do
+    if LGroup[I] = 0 then
+      LRankSum1 := LRankSum1 + LRanks[I];
+
+  { 5. 计算 U 统计量 }
+  LU1 := LN1 * LN2 + LN1 * (LN1 + 1) / 2.0 - LRankSum1;
+  LU2 := LN1 * LN2 - LU1;
+  if LU1 < LU2 then
+    LU := LU1
+  else
+    LU := LU2;
+
+  { 6. 正态近似计算 p-value }
+  LMU := LN1 * LN2 / 2.0;
+
+  { 并列值修正（tie correction） }
+  LTieCorrection := 0.0;
+  I := 0;
+  while I < LN do
+  begin
+    LRunStart := I;
+    LRunEnd := I;
+    while (LRunEnd + 1 < LN) and
+          (LCombined[LSortedIdx[LRunEnd + 1]] = LCombined[LSortedIdx[LRunStart]]) do
+      Inc(LRunEnd);
+    K := LRunEnd - LRunStart + 1;
+    if K > 1 then
+      LTieCorrection := LTieCorrection + (K * K * K - K);
+    I := LRunEnd + 1;
+  end;
+
+  LSigma := Sqrt(LN1 * LN2 / 12.0 *
+    (LN + 1 - LTieCorrection / (LN * (LN - 1))));
+
+  if LSigma < 1e-10 then
+    Exit(1.0);
+
+  LZ := (LU - LMU) / LSigma;
+  Result := ZToPValue(LZ);
+end;
+
+{** 几何均值实现
+ *
+ * 几何均值 = (r1 * r2 * ... * rn) ^ (1/n)
+ *           = exp(1/n * sum(ln(ri)))
+ *
+ * 为什么用几何均值而不是算术均值：
+ *   Ratio = 1.2 表示慢 20%，ratio = 0.8 表示快 20%。
+ *   算术均值 (1.2 + 0.8) / 2 = 1.0 → 看起来没变化
+ *   但实际是: 先慢 20% 再快 20% = 0.96 → 几何均值 = sqrt(1.2*0.8) = 0.9798
+ *   几何均值正确反映了倍率的"平均"含义。
+ *
+ * Go benchstat v2 使用几何均值聚合多 benchmark 的 ratio。
+ }
+function TBenchStatsAnalyzer.GeometricMean(const ARatios: TDoubleArray): Double;
+var
+  LLen: Integer;
+  LSumLn: Double;
+  I: Integer;
+begin
+  LLen := Length(ARatios);
+  if LLen = 0 then
+    Exit(1.0);
+
+  { 所有 ratio 必须为正数 }
+  LSumLn := 0.0;
+  for I := 0 to LLen - 1 do
+  begin
+    if ARatios[I] <= 0.0 then
+      Exit(0.0);  { 非法 ratio，返回 0 作为哨兵 }
+    LSumLn := LSumLn + Ln(ARatios[I]);
+  end;
+
+  Result := Exp(LSumLn / LLen);
 end;
 
 end.

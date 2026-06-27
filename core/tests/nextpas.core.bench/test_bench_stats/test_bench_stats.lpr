@@ -488,6 +488,41 @@ begin
     'DS-04: alpha=0.05 same distribution no difference');
 end;
 
+procedure TestGeometricMean;
+var
+  LRatios: TDoubleArray;
+begin
+  { 空数组返回 1.0 }
+  SetLength(LRatios, 0);
+  CheckNear(1.0, GAnalyzer.GeometricMean(LRatios), 0.001, 'Empty ratios returns 1.0');
+
+  { 单元素返回该元素 }
+  SetLength(LRatios, 1); LRatios[0] := 2.0;
+  CheckNear(2.0, GAnalyzer.GeometricMean(LRatios), 0.001, 'Single ratio returns itself');
+
+  { 经典例子: sqrt(1.2 * 0.8) = sqrt(0.96) = 0.9798 }
+  SetLength(LRatios, 2); LRatios[0] := 1.2; LRatios[1] := 0.8;
+  CheckNear(0.9798, GAnalyzer.GeometricMean(LRatios), 0.001,
+    'Geometric mean of 1.2 and 0.8 = 0.9798');
+
+  { 算术均值错误: (1.2 + 0.8) / 2 = 1.0 → 掩盖了实际的回归 }
+  { 几何均值正确: 0.9798 < 1.0 → 检测到回归 }
+
+  { 三个相同 ratio: geo mean = ratio }
+  SetLength(LRatios, 3); LRatios[0] := 1.5; LRatios[1] := 1.5; LRatios[2] := 1.5;
+  CheckNear(1.5, GAnalyzer.GeometricMean(LRatios), 0.001, 'Three identical ratios = ratio');
+
+  { 1.0 表示无变化 }
+  SetLength(LRatios, 5);
+  LRatios[0] := 1.0; LRatios[1] := 1.0; LRatios[2] := 1.0;
+  LRatios[3] := 1.0; LRatios[4] := 1.0;
+  CheckNear(1.0, GAnalyzer.GeometricMean(LRatios), 0.001, 'All 1.0 = 1.0');
+
+  { 非法 ratio (负数) 返回 0 }
+  SetLength(LRatios, 2); LRatios[0] := 1.0; LRatios[1] := -0.5;
+  CheckNear(0.0, GAnalyzer.GeometricMean(LRatios), 0.001, 'Negative ratio returns 0');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -518,6 +553,7 @@ begin
   T.Test('StdDev_NaNInfinity', @TestStdDev_NaNInfinity);
   T.Test('Percentile_NaNInfinity', @TestPercentile_NaNInfinity);
   T.Test('HasHeuristicDifferenceAt', @TestHasHeuristicDifferenceAt);
+  T.Test('GeometricMean', @TestGeometricMean);
 
   T.Run;
   T.Summary;

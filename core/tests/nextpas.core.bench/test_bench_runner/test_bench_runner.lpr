@@ -166,6 +166,19 @@ begin
     LElapsed := LCtx.GetElapsed;
     Check(LElapsed.AsNanoseconds > 0, 'GetElapsed remains positive on second call');
 
+    // 测试 StopTimer/StartTimer（排除 setup 时间）
+    LCtx.Reset;
+    LCtx.ResetTimer;
+    TSleep.ForDuration(TDuration.FromMilliseconds(5));  { 计时中 }
+    LCtx.StopTimer;
+    TSleep.ForDuration(TDuration.FromMilliseconds(50)); { 暂停期间不计入 }
+    LCtx.StartTimer;
+    TSleep.ForDuration(TDuration.FromMilliseconds(5));  { 继续计时 }
+    LElapsed := LCtx.GetElapsed;
+    { 总计时应该约 10ms，而不是 60ms }
+    Check(LElapsed.AsMilliseconds < 40, 'StopTimer/StartTimer excludes paused time (< 40ms)');
+    Check(LElapsed.AsMilliseconds >= 5, 'StopTimer/StartTimer preserves active time (>= 5ms)');
+
     // 测试 Skip
     LCtx.Skip('Test reason');
     Check(LCtx.IsSkipped, 'Skip sets skipped flag');

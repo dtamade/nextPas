@@ -151,7 +151,9 @@ end.
 
 输出 (TBenchResults)
   → Console/JSON/TSV/HTML/SVG/Benchstat
-  → 基线对比 (Ratio + Welch's t-test)
+  → 基线对比 (Ratio + Mann-Whitney U / Welch's t-test)
+  → 两结果对比 (CompareTwoResults + Mann-Whitney U)
+  → 聚合指标 (GeometricMean 几何均值)
 ```
 
 ## 设计决策
@@ -176,7 +178,7 @@ end.
 | 指标 | 状态 |
 |------|------|
 | 测试套件 | 12 |
-| 框架级测试 | 221 |
+| 框架级测试 | 234 |
 | 框架 | 全部使用 `nextpas.core.test` |
 | heaptrc | 12/12 套件全部启用 -gh，8 零泄漏 + 1 全局单例 128B |
 | NaN 安全 | `SortDoubleArray` 先分区 NaN 再排序 |

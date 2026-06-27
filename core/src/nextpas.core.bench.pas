@@ -146,6 +146,7 @@ type
     procedure SaveToHTML(const APath: string);
     procedure SaveToTSV(const APath: string);
     function CompareWithBaseline: TBenchComparisonArray;
+    function CompareTwoResults(const ANameA, ANameB: string): TBenchComparison;
     function HasRegression(AThreshold: Double): Boolean;
     function GetEnvironment: TBenchEnvironment;
   end;
@@ -831,6 +832,53 @@ end;
 function TBenchResults.CompareWithBaseline: TBenchComparisonArray;
 begin
   Result := GenerateComparisons;
+end;
+
+function TBenchResults.CompareTwoResults(const ANameA, ANameB: string): TBenchComparison;
+var
+  LA, LB: TBenchResult;
+  LFoundA, LFoundB: Boolean;
+  LAnalyzer: TBenchStatsAnalyzer;
+  LPValue: Double;
+begin
+  Result := Default(TBenchComparison);
+  Result.BaselineName := ANameB;
+  Result.Ratio := 1.0;
+
+  LFoundA := TryGetByName(ANameA, LA);
+  LFoundB := TryGetByName(ANameB, LB);
+
+  if (not LFoundA) or (not LFoundB) then
+    Exit;
+
+  Result.BaselineNsPerOp := LB.NsPerOp;
+  Result.CurrentNsPerOp := LA.NsPerOp;
+
+  if LB.NsPerOp > 0 then
+    Result.Ratio := LA.NsPerOp / LB.NsPerOp
+  else
+    Result.Ratio := 1.0;
+
+  { Mann-Whitney U 检验：需要两组原始样本 }
+  if (Length(LA.RawSamples) > 1) and (Length(LB.RawSamples) > 1) then
+  begin
+    LAnalyzer := TBenchStatsAnalyzer.Create;
+    try
+      LPValue := LAnalyzer.ComputeMannWhitneyPValue(LA.RawSamples, LB.RawSamples);
+      Result.HasStatisticalTest := True;
+      Result.ApproximatePValue := LPValue;
+      Result.IsSignificant := LPValue < 0.05;
+    finally
+      LAnalyzer.Free;
+    end;
+  end
+  else
+  begin
+    { 无原始样本，退回启发式 }
+    Result.HasStatisticalTest := False;
+    Result.IsSignificant := Abs(Result.Ratio - 1.0) > 0.05;
+    Result.ApproximatePValue := 0.05;
+  end;
 end;
 
 function TBenchResults.HasRegression(AThreshold: Double): Boolean;

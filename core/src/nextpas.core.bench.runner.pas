@@ -26,6 +26,7 @@ type
     FSkipped: Boolean;
     FSkipReason: string;
     FName: string; { ST-03: benchmark name }
+    FPausedNs: UInt64;  { StopTimer 记录暂停时刻 }
 
   public
     constructor Create;
@@ -36,6 +37,8 @@ type
     procedure AddBytes(ABytes: Int64); { DS-14 }
     procedure AddAllocs(AAllocs: Int64); { DS-14 }
     procedure ResetTimer;
+    procedure StopTimer;
+    procedure StartTimer;
     procedure Skip(const AReason: string);
     function GetIterations: Int64;
     function GetElapsed: TDuration;
@@ -285,6 +288,25 @@ begin
   FStartNs := platform_monotonic_ns;
 end;
 
+procedure TBenchContext.StopTimer;
+begin
+  FPausedNs := platform_monotonic_ns;
+end;
+
+procedure TBenchContext.StartTimer;
+var
+  LNow: UInt64;
+  LPausedDuration: UInt64;
+begin
+  if FPausedNs = 0 then
+    Exit;  { StopTimer 未调用，忽略 }
+  LNow := platform_monotonic_ns;
+  LPausedDuration := LNow - FPausedNs;
+  { 将 start 时间向前推移，等效扣除暂停时间 }
+  FStartNs := FStartNs + LPausedDuration;
+  FPausedNs := 0;
+end;
+
 procedure TBenchContext.Skip(const AReason: string);
 begin
   FSkipped := True;
@@ -335,6 +357,7 @@ begin
   FElapsedNs := 0;
   FSkipped := False;
   FSkipReason := '';
+  FPausedNs := 0;
 end;
 
 procedure TBenchContext.IncrementIterations;

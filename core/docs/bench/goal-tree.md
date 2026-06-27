@@ -80,15 +80,22 @@ B11  跨语言基准对照                                    ✅
   B11.2  Rust criterion 基准代码                       ✅
   B11.3  C 高精度计时基准                              ✅
   B11.4  Pascal vs C 对比报告                          ✅
+
+B12  Phase 1: 统计基础（对标 Go/Rust）                   ✅
+  B12.1  Mann-Whitney U 检验（非参数，右偏数据适用）    ✅
+  B12.2  GeometricMean 几何均值聚合                    ✅
+  B12.3  StopTimer/StartTimer 暂停/恢复计时器          ✅
+  B12.4  CompareTwoResults 两结果 Mann-Whitney 对比    ✅
 ```
 
 ## 测试套件分布
 
 | 套件 | 测试数 | heaptrc | 说明 |
 |------|--------|---------|------|
-| test_bench_stats | 24 | ✅ 零泄漏 | 基础统计 |
+| test_bench_stats | 25 | ✅ 零泄漏 | 基础统计 + GeometricMean |
 | test_bench_stats_advanced | 25 | ✅ 零泄漏 | 高级统计 + NaN/Inf |
-| test_bench_runner | 12 | ✅ 零泄漏 | 执行器 |
+| test_bench_mannwhitney | 10 | ✅ 零泄漏 | Mann-Whitney U 检验 |
+| test_bench_runner | 14 | ✅ 零泄漏 | 执行器 + StopTimer |
 | test_bench_integration | 43 | ✅ 零泄漏 | 集成测试 |
 | test_bench_report | 28 | ✅ 零泄漏 | 报告生成 |
 | test_bench_xlang | 32 | ✅ 零泄漏 | 跨语言解析 |
@@ -98,7 +105,7 @@ B11  跨语言基准对照                                    ✅
 | test_bench_parallel_heaptrc | 1 | ✅ 0 leaks | 并行 heaptrc |
 | test_bench_parallel_memtrack_heaptrc | 2 | ✅ 0 leaks | 并行+memtrack |
 | test_bench_invalid_parameters_heaptrc | 5 | ✅ 0 leaks | 参数校验 |
-| **合计** | **221** | **8/8 通过** | |
+| **合计** | **234** | **13/13 通过** | |
 
 ## 已解决的技术债务
 
