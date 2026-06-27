@@ -30,6 +30,8 @@ type
   end;
   TParamSnapshots = array of TParamSnapshot;
 
+  TTypeIdArray = array of LongInt;
+
   TPendingSignatureEntry = record
     SymbolId: LongInt;
     GenericName: string;
@@ -221,7 +223,8 @@ type
     function LookupProcedureBody(const AName: string;
       out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;
     function LookupCallBindingDeclaration(const AName: string;
-      const AArgCount: LongInt; const AArgSignature: string;
+      const AArgCount: LongInt; const AArgTypeIds: TTypeIdArray;
+      const AArgSignature: string;
       const AHasArgSignature: Boolean;
       const AHasTypeMismatchEvidence: Boolean;
       out AResolutionFailureKind: string;
@@ -247,6 +250,7 @@ type
     function DeclParamSignatureMatchesArgs(const ADecl: TGreenNode;
       const AArgSignature: string; const AArgCount: LongInt): Boolean;
     function GetParamSignature(const ADecl: TGreenNode): string;
+    function GetParamIdentitySignature(const ADecl: TGreenNode): string;
     function GetSubstitutedParamSignature(const ADecl: TGreenNode;
       const AParamNames, AArgTypes: array of string): string;
     function MangledName(const AName: string; AParamCount: LongInt): string;
@@ -255,6 +259,9 @@ type
     function LookupOverload(const AName: string; AArgCount: LongInt;
       out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;
     function CallArgumentCount(const ACallNode: TGreenNode): LongInt;
+    function CallArgumentTypeIds(const ACallNode: TGreenNode;
+      out ATypeIds: TTypeIdArray): Boolean;
+    function TypeIdArrayHasKnownTypes(const ATypeIds: TTypeIdArray): Boolean;
     function BareCallCalleeName(const ACallNode: TGreenNode): string;
     function IsIntrinsicExprName(const AName: string): Boolean;
     function TryGetTypeCastTargetTypeId(const ACallNode: TGreenNode;
@@ -284,6 +291,7 @@ type
       const AReceiverName: string;
       const AMemberName: string;
       const AArgCount: LongInt;
+      const AArgTypeIds: TTypeIdArray;
       const AArgSignature: string;
       const AHasArgSignature: Boolean;
       const AHasTypeMismatchEvidence: Boolean;
@@ -319,6 +327,14 @@ type
     function TypeMetaInterfaces(const ATypeName: string): string;
     function TypeSignatureForTypeId(const ATypeId: LongInt): string;
     function TypeIdHasStableScalarFact(const ATypeId: LongInt): Boolean;
+    function CanonicalTypeId(const ATypeId: LongInt): LongInt;
+    function IsPointerTypeId(const ATypeId: LongInt): Boolean;
+    function DeclParamTypesExactMatch(const ADecl: TGreenNode;
+      const AOwnerUnitId: string; const AArgTypeIds: TTypeIdArray;
+      const AArgCount: LongInt): Boolean;
+    function DeclParamTypesCompatibleMatch(const ADecl: TGreenNode;
+      const AOwnerUnitId: string; const AArgTypeIds: TTypeIdArray;
+      const AArgCount: LongInt): Boolean;
     function CallArgumentSignature(
       const ACallNode: TGreenNode;
       out ASignature: string
@@ -335,6 +351,7 @@ type
       const AClassTypeId: LongInt;
       const AMemberName: string;
       const AArgCount: LongInt;
+      const AArgTypeIds: TTypeIdArray;
       const AArgSignature: string;
       const AHasArgSignature: Boolean;
       const AHasTypeMismatchEvidence: Boolean;
@@ -347,6 +364,7 @@ type
       const AClassTypeId: LongInt;
       const AMemberName: string;
       const AArgCount: LongInt;
+      const AArgTypeIds: TTypeIdArray;
       const AArgSignature: string;
       const AHasArgSignature: Boolean;
       const AHasTypeMismatchEvidence: Boolean;
@@ -3069,8 +3087,10 @@ function TSemanticAnalyzer.GetParamSignature(const ADecl: TGreenNode): string;
 var
   J, K: LongInt;
   Child, ParamChild, TypeChild: TGreenNode;
+  TypeId: LongInt;
   TypeName: string;
   Dummy: Int64;
+  TypeSig: string;
 begin
   Result := '';
   if ADecl = nil then Exit;
@@ -3092,7 +3112,25 @@ begin
           if TypeChild <> nil then
             TypeName := LowerCase(TypeChild.Text);
         end;
-        if (TypeName = 'string') or (TypeName = 'ansistring') then
+        TypeId := 0;
+        if TypeChild <> nil then
+        begin
+          TypeId := ResolveTypeIdForOwner(
+            TypeChild.Text,
+            NormalizeUnitIdentity(FCurrentProcessingUnitId)
+          );
+          if TypeId <= 0 then
+            TypeId := ResolveTypeIdForOwner(
+              TypeChild.Text,
+              NormalizeUnitIdentity(FUnitGraph.RootName)
+            );
+          if TypeId <= 0 then
+            TypeId := ResolveTypeId(TypeChild.Text);
+        end;
+        TypeSig := TypeSignatureForTypeId(TypeId);
+        if TypeSig <> '' then
+          Result := Result + TypeSig
+        else if (TypeName = 'string') or (TypeName = 'ansistring') then
           Result := Result + 's'
         else if (TypeName = 'boolean') or (TypeName = 'bool') then
           Result := Result + 'b'
@@ -3108,15 +3146,59 @@ begin
   end;
 end;
 
+function TSemanticAnalyzer.GetParamIdentitySignature(
+  const ADecl: TGreenNode
+): string;
+var
+  Child: TGreenNode;
+  Index: LongInt;
+  ParamChild: TGreenNode;
+  ParamIndex: LongInt;
+  TypeChild: TGreenNode;
+  TypeName: string;
+begin
+  Result := '';
+  if ADecl = nil then
+    Exit;
+  for Index := 0 to ADecl.ChildCount - 1 do
+  begin
+    Child := ADecl.ChildAt(Index);
+    if (Child = nil) or (Child.NodeKind <> gnkParameterList) then
+      Continue;
+    ParamIndex := 0;
+    while ParamIndex < Child.ChildCount do
+    begin
+      ParamChild := Child.ChildAt(ParamIndex);
+      if (ParamChild <> nil) and (ParamChild.NodeKind = gnkParameterDecl) then
+      begin
+        TypeName := '';
+        if ParamChild.ChildCount > 0 then
+        begin
+          TypeChild := ParamChild.ChildAt(0);
+          if TypeChild <> nil then
+            TypeName := LowerCase(TypeChild.Text);
+        end;
+        if Result <> '' then
+          Result := Result + '|';
+        Result := Result + TypeName;
+      end;
+      Inc(ParamIndex);
+    end;
+    Exit;
+  end;
+end;
+
 function TSemanticAnalyzer.GetSubstitutedParamSignature(
   const ADecl: TGreenNode;
   const AParamNames, AArgTypes: array of string): string;
 var
   J, K, P: LongInt;
   Child, ParamChild, TypeChild: TGreenNode;
+  TypeId: LongInt;
   TypeName, SubstType: string;
   Dummy: Int64;
   Found: Boolean;
+  TypeSig: string;
 begin
   Result := '';
   if ADecl = nil then Exit;
@@ -3144,7 +3226,11 @@ begin
           if SameText(TypeName, AParamNames[P]) then
           begin
             SubstType := LowerCase(AArgTypes[P]);
-            if (SubstType = 'string') or (SubstType = 'ansistring') then
+            TypeId := ResolveTypeId(AArgTypes[P]);
+            TypeSig := TypeSignatureForTypeId(TypeId);
+            if TypeSig <> '' then
+              Result := Result + TypeSig
+            else if (SubstType = 'string') or (SubstType = 'ansistring') then
               Result := Result + 's'
             else if (SubstType = 'boolean') or (SubstType = 'bool') then
               Result := Result + 'b'
@@ -3161,7 +3247,25 @@ begin
         if not Found then
         begin
           TypeName := LowerCase(TypeName);
-          if (TypeName = 'string') or (TypeName = 'ansistring') then
+          TypeId := 0;
+          if TypeChild <> nil then
+          begin
+            TypeId := ResolveTypeIdForOwner(
+              TypeChild.Text,
+              NormalizeUnitIdentity(FCurrentProcessingUnitId)
+            );
+            if TypeId <= 0 then
+              TypeId := ResolveTypeIdForOwner(
+                TypeChild.Text,
+                NormalizeUnitIdentity(FUnitGraph.RootName)
+              );
+            if TypeId <= 0 then
+              TypeId := ResolveTypeId(TypeChild.Text);
+          end;
+          TypeSig := TypeSignatureForTypeId(TypeId);
+          if TypeSig <> '' then
+            Result := Result + TypeSig
+          else if (TypeName = 'string') or (TypeName = 'ansistring') then
             Result := Result + 's'
           else if (TypeName = 'boolean') or (TypeName = 'bool') then
             Result := Result + 'b'
@@ -3214,12 +3318,12 @@ begin
   end
   else
     CleanName := AName;
-  Sig := GetParamSignature(ADecl);
+  Sig := GetParamIdentitySignature(ADecl);
   for Index := 0 to Length(FProcedureBodies) - 1 do
     if SameText(FProcedureBodies[Index].Name, CleanName) and
       SameText(FProcedureBodies[Index].OwnerUnitId, AOwnerUnitId) then
     begin
-      ExistingSig := GetParamSignature(FProcedureBodies[Index].Decl);
+      ExistingSig := GetParamIdentitySignature(FProcedureBodies[Index].Decl);
       if ExistingSig = Sig then
       begin
         FProcedureBodies[Index].Body := ABody;
@@ -3266,6 +3370,13 @@ begin
   if (TypeChild = nil) or (TypeChild.NodeKind <> gnkIdentifier) then
     Exit;
   Result := ResolveTypeIdForOwner(TypeChild.Text, AOwnerUnitId);
+  if Result <= 0 then
+    Result := ResolveTypeIdForOwner(
+      TypeChild.Text,
+      NormalizeUnitIdentity(FUnitGraph.RootName)
+    );
+  if Result <= 0 then
+    Result := ResolveTypeId(TypeChild.Text);
 end;
 
 function TSemanticAnalyzer.LookupProcedureBody(const AName: string;
@@ -3317,6 +3428,7 @@ end;
 function TSemanticAnalyzer.LookupCallBindingDeclaration(
   const AName: string;
   const AArgCount: LongInt;
+  const AArgTypeIds: TTypeIdArray;
   const AArgSignature: string;
   const AHasArgSignature: Boolean;
   const AHasTypeMismatchEvidence: Boolean;
@@ -3326,13 +3438,22 @@ function TSemanticAnalyzer.LookupCallBindingDeclaration(
   out AOwnerUnitId: string
 ): Boolean;
 var
+  DirectImportCompatibleMatchCount: LongInt;
+  DirectImportCompatibleMatchIndex: LongInt;
+  DirectImportExactMatchCount: LongInt;
+  DirectImportExactMatchIndex: LongInt;
+  HasArgTypeIds: Boolean;
   Index: LongInt;
   ImportedDiagnosticMatchCount: LongInt;
   ImportedMatchCount: LongInt;
   ImportedMatchIndex: LongInt;
   ImportedDiagnosticNameCount: LongInt;
   ImportedNameCount: LongInt;
+  ImportedCompatibleMatchCount: LongInt;
+  ImportedCompatibleMatchIndex: LongInt;
   ImportedDiagnosticSignatureMatchCount: LongInt;
+  ImportedExactMatchCount: LongInt;
+  ImportedExactMatchIndex: LongInt;
   ImportedSignatureMatchCount: LongInt;
   ImportedSignatureMatchIndex: LongInt;
   DirectImportMatchCount: LongInt;
@@ -3342,6 +3463,10 @@ var
   RootMatchIndex: LongInt;
   RootNameCount: LongInt;
   RootOwnerUnitId: string;
+  RootCompatibleMatchCount: LongInt;
+  RootCompatibleMatchIndex: LongInt;
+  RootExactMatchCount: LongInt;
+  RootExactMatchIndex: LongInt;
   RootSignatureMatchCount: LongInt;
   RootSignatureMatchIndex: LongInt;
 begin
@@ -3358,16 +3483,30 @@ begin
   ImportedDiagnosticNameCount := 0;
   ImportedDiagnosticSignatureMatchCount := 0;
   ImportedNameCount := 0;
+  ImportedCompatibleMatchCount := 0;
+  ImportedCompatibleMatchIndex := -1;
+  ImportedExactMatchCount := 0;
+  ImportedExactMatchIndex := -1;
   ImportedSignatureMatchCount := 0;
   ImportedSignatureMatchIndex := -1;
+  DirectImportCompatibleMatchCount := 0;
+  DirectImportCompatibleMatchIndex := -1;
+  DirectImportExactMatchCount := 0;
+  DirectImportExactMatchIndex := -1;
   DirectImportMatchCount := 0;
   DirectImportMatchIndex := -1;
   RootMatchCount := 0;
   RootMatchIndex := -1;
   RootNameCount := 0;
+  RootCompatibleMatchCount := 0;
+  RootCompatibleMatchIndex := -1;
+  RootExactMatchCount := 0;
+  RootExactMatchIndex := -1;
   RootSignatureMatchCount := 0;
   RootSignatureMatchIndex := -1;
   RootOwnerUnitId := NormalizeUnitIdentity(FUnitGraph.RootName);
+  HasArgTypeIds := (Length(AArgTypeIds) = AArgCount) and
+    TypeIdArrayHasKnownTypes(AArgTypeIds);
 
   for Index := 0 to Length(FProcedureBodies) - 1 do
     if SameText(FProcedureBodies[Index].Name, AName) then
@@ -3381,6 +3520,26 @@ begin
         begin
           RootMatchIndex := Index;
           Inc(RootMatchCount);
+          if HasArgTypeIds and DeclParamTypesExactMatch(
+            FProcedureBodies[Index].Decl,
+            FProcedureBodies[Index].OwnerUnitId,
+            AArgTypeIds,
+            AArgCount
+          ) then
+          begin
+            RootExactMatchIndex := Index;
+            Inc(RootExactMatchCount);
+          end
+          else if HasArgTypeIds and DeclParamTypesCompatibleMatch(
+            FProcedureBodies[Index].Decl,
+            FProcedureBodies[Index].OwnerUnitId,
+            AArgTypeIds,
+            AArgCount
+          ) then
+          begin
+            RootCompatibleMatchIndex := Index;
+            Inc(RootCompatibleMatchCount);
+          end;
           if AHasArgSignature and
             DeclParamSignatureMatchesArgs(
               FProcedureBodies[Index].Decl,
@@ -3404,11 +3563,51 @@ begin
         begin
           ImportedMatchIndex := Index;
           Inc(ImportedMatchCount);
+          if HasArgTypeIds and DeclParamTypesExactMatch(
+            FProcedureBodies[Index].Decl,
+            FProcedureBodies[Index].OwnerUnitId,
+            AArgTypeIds,
+            AArgCount
+          ) then
+          begin
+            ImportedExactMatchIndex := Index;
+            Inc(ImportedExactMatchCount);
+          end
+          else if HasArgTypeIds and DeclParamTypesCompatibleMatch(
+            FProcedureBodies[Index].Decl,
+            FProcedureBodies[Index].OwnerUnitId,
+            AArgTypeIds,
+            AArgCount
+          ) then
+          begin
+            ImportedCompatibleMatchIndex := Index;
+            Inc(ImportedCompatibleMatchCount);
+          end;
           if UnitDirectlyImports(RootOwnerUnitId,
             FProcedureBodies[Index].OwnerUnitId) then
           begin
             DirectImportMatchIndex := Index;
             Inc(DirectImportMatchCount);
+            if HasArgTypeIds and DeclParamTypesExactMatch(
+              FProcedureBodies[Index].Decl,
+              FProcedureBodies[Index].OwnerUnitId,
+              AArgTypeIds,
+              AArgCount
+            ) then
+            begin
+              DirectImportExactMatchIndex := Index;
+              Inc(DirectImportExactMatchCount);
+            end
+            else if HasArgTypeIds and DeclParamTypesCompatibleMatch(
+              FProcedureBodies[Index].Decl,
+              FProcedureBodies[Index].OwnerUnitId,
+              AArgTypeIds,
+              AArgCount
+            ) then
+            begin
+              DirectImportCompatibleMatchIndex := Index;
+              Inc(DirectImportCompatibleMatchCount);
+            end;
           end;
           if OwnerUnitAllowsProjectSourceDiagnostic(
             FProcedureBodies[Index].OwnerUnitId
@@ -3434,7 +3633,31 @@ begin
 
   if RootMatchCount > 0 then
   begin
-    if RootMatchCount = 1 then
+    if HasArgTypeIds and
+      ((RootExactMatchCount > 0) or (RootCompatibleMatchCount > 0)) then
+    begin
+      if RootExactMatchCount = 1 then
+        RootSignatureMatchIndex := RootExactMatchIndex
+      else if RootExactMatchCount > 1 then
+      begin
+        AResolutionFailureKind := 'ambiguous-overload';
+        Exit(False);
+      end
+      else if RootCompatibleMatchCount = 1 then
+        RootSignatureMatchIndex := RootCompatibleMatchIndex
+      else if RootCompatibleMatchCount > 1 then
+      begin
+        AResolutionFailureKind := 'ambiguous-overload';
+        Exit(False);
+      end
+      else
+      begin
+        if AHasTypeMismatchEvidence then
+          AResolutionFailureKind := 'no-matching-overload';
+        Exit(False);
+      end;
+    end
+    else if RootMatchCount = 1 then
     begin
       if AHasArgSignature and
         (not DeclParamSignatureMatchesArgs(
@@ -3502,7 +3725,20 @@ begin
     is safe. If Count > 1, we fall through to the ambiguity check below. }
   if (ImportedMatchCount > 1) and (DirectImportMatchCount = 1) then
   begin
-    if AHasArgSignature and
+    if HasArgTypeIds and (DirectImportExactMatchCount = 1) then
+      DirectImportMatchIndex := DirectImportExactMatchIndex
+    else if HasArgTypeIds and (DirectImportCompatibleMatchCount = 1) then
+      DirectImportMatchIndex := DirectImportCompatibleMatchIndex
+    else if HasArgTypeIds then
+    begin
+      if AHasTypeMismatchEvidence and
+        OwnerUnitAllowsProjectSourceDiagnostic(
+          FProcedureBodies[DirectImportMatchIndex].OwnerUnitId
+        ) then
+        AResolutionFailureKind := 'type-mismatch';
+      Exit(False);
+    end
+    else if AHasArgSignature and
       (not DeclParamSignatureMatchesArgs(
         FProcedureBodies[DirectImportMatchIndex].Decl,
         AArgSignature,
@@ -3524,7 +3760,30 @@ begin
 
   if ImportedMatchCount = 1 then
   begin
-    if AHasArgSignature and
+    if HasArgTypeIds and DeclParamTypesExactMatch(
+      FProcedureBodies[ImportedMatchIndex].Decl,
+      FProcedureBodies[ImportedMatchIndex].OwnerUnitId,
+      AArgTypeIds,
+      AArgCount
+    ) then
+      ImportedSignatureMatchIndex := ImportedMatchIndex
+    else if HasArgTypeIds and DeclParamTypesCompatibleMatch(
+      FProcedureBodies[ImportedMatchIndex].Decl,
+      FProcedureBodies[ImportedMatchIndex].OwnerUnitId,
+      AArgTypeIds,
+      AArgCount
+    ) then
+      ImportedSignatureMatchIndex := ImportedMatchIndex
+    else if HasArgTypeIds then
+    begin
+      if AHasTypeMismatchEvidence and
+        OwnerUnitAllowsProjectSourceDiagnostic(
+          FProcedureBodies[ImportedMatchIndex].OwnerUnitId
+        ) then
+        AResolutionFailureKind := 'type-mismatch';
+      Exit(False);
+    end
+    else if AHasArgSignature and
       (not DeclParamSignatureMatchesArgs(
         FProcedureBodies[ImportedMatchIndex].Decl,
         AArgSignature,
@@ -3537,8 +3796,36 @@ begin
         ) then
         AResolutionFailureKind := 'type-mismatch';
       Exit(False);
+    end
+    else
+      ImportedSignatureMatchIndex := ImportedMatchIndex
+  end
+  else if HasArgTypeIds and
+    ((ImportedExactMatchCount > 0) or (ImportedCompatibleMatchCount > 0)) then
+  begin
+    if ImportedExactMatchCount = 1 then
+      ImportedSignatureMatchIndex := ImportedExactMatchIndex
+    else if ImportedExactMatchCount > 1 then
+    begin
+      if ImportedDiagnosticSignatureMatchCount > 0 then
+        AResolutionFailureKind := 'ambiguous-overload';
+      Exit(False);
+    end
+    else if ImportedCompatibleMatchCount = 1 then
+      ImportedSignatureMatchIndex := ImportedCompatibleMatchIndex
+    else if ImportedCompatibleMatchCount > 1 then
+    begin
+      if ImportedDiagnosticMatchCount > 0 then
+        AResolutionFailureKind := 'ambiguous-overload';
+      Exit(False);
+    end
+    else
+    begin
+      if AHasTypeMismatchEvidence and
+        (ImportedDiagnosticMatchCount = ImportedMatchCount) then
+        AResolutionFailureKind := 'no-matching-overload';
+      Exit(False);
     end;
-    ImportedSignatureMatchIndex := ImportedMatchIndex
   end
   else if (not AHasArgSignature) or (ImportedSignatureMatchCount > 1) then
   begin
@@ -3824,7 +4111,8 @@ begin
     SameText(AName, 'Succ') or SameText(AName, 'Chr') or
     SameText(AName, 'Assigned') or SameText(AName, 'Abs') or
     SameText(AName, 'Sqr') or SameText(AName, 'Sqrt') or
-    SameText(AName, 'Round') or SameText(AName, 'Trunc');
+    SameText(AName, 'Round') or SameText(AName, 'Trunc') or
+    SameText(AName, 'Default');
 end;
 
 function TSemanticAnalyzer.TryGetTypeCastTargetTypeId(
@@ -4083,13 +4371,14 @@ begin
 end;
 
 function TSemanticAnalyzer.TryResolveTypeNameMemberCallTarget(
-  const AReceiverName: string;
-  const AMemberName: string;
-  const AArgCount: LongInt;
-  const AArgSignature: string;
-  const AHasArgSignature: Boolean;
-  const AHasTypeMismatchEvidence: Boolean;
-  out AReceiverTypeId: LongInt;
+      const AReceiverName: string;
+      const AMemberName: string;
+      const AArgCount: LongInt;
+      const AArgTypeIds: TTypeIdArray;
+      const AArgSignature: string;
+      const AHasArgSignature: Boolean;
+      const AHasTypeMismatchEvidence: Boolean;
+      out AReceiverTypeId: LongInt;
   out ATargetSymbolId: LongInt
 ): Boolean;
 var
@@ -4140,6 +4429,7 @@ begin
       CandidateTypeId,
       AMemberName,
       AArgCount,
+      AArgTypeIds,
       AArgSignature,
       AHasArgSignature,
       AHasTypeMismatchEvidence,
@@ -4500,10 +4790,203 @@ begin
   Result := True;
 end;
 
+function TSemanticAnalyzer.CallArgumentTypeIds(
+  const ACallNode: TGreenNode;
+  out ATypeIds: TTypeIdArray
+): Boolean;
+var
+  ArgNode: TGreenNode;
+  ArgRoot: TGreenNode;
+  ArgTypeId: LongInt;
+  Index: LongInt;
+begin
+  SetLength(ATypeIds, 0);
+  Result := False;
+  if ACallNode = nil then
+    Exit;
+
+  ArgRoot := ACallNode;
+  if (ACallNode.NodeKind = gnkProcedureCallStatement) and
+    (ACallNode.ChildCount > 0) and
+    (ACallNode.ChildAt(0) <> nil) and
+    (ACallNode.ChildAt(0).NodeKind = gnkFunctionCall) then
+    ArgRoot := ACallNode.ChildAt(0);
+
+  if ArgRoot.NodeKind <> gnkFunctionCall then
+  begin
+    Result := True;
+    Exit;
+  end;
+
+  SetLength(ATypeIds, ArgRoot.ChildCount - 1);
+  for Index := 1 to ArgRoot.ChildCount - 1 do
+  begin
+    ArgNode := ArgRoot.ChildAt(Index);
+    ArgTypeId := InferExpressionType(ArgNode);
+    ATypeIds[Index - 1] := ArgTypeId;
+  end;
+  Result := True;
+end;
+
+function TSemanticAnalyzer.TypeIdArrayHasKnownTypes(
+  const ATypeIds: TTypeIdArray
+): Boolean;
+var
+  Index: LongInt;
+begin
+  Result := Length(ATypeIds) = 0;
+  if Result then
+    Exit;
+  for Index := 0 to Length(ATypeIds) - 1 do
+    if ATypeIds[Index] > 0 then
+      Exit(True);
+  Result := False;
+end;
+
+function TSemanticAnalyzer.CanonicalTypeId(const ATypeId: LongInt): LongInt;
+var
+  CurrentTypeId: LongInt;
+  Depth: LongInt;
+  Meta: TTypeMetadata;
+begin
+  CurrentTypeId := ATypeId;
+  Depth := 0;
+  while (CurrentTypeId > 0) and (CurrentTypeId <= FModel.TypeCount) and
+    (Depth < 16) do
+  begin
+    if FModel.GetTypeMeta(CurrentTypeId, Meta) and
+      (Meta.AliasTargetTypeId > 0) and
+      (Meta.AliasTargetTypeId <> CurrentTypeId) then
+      CurrentTypeId := Meta.AliasTargetTypeId
+    else
+      Break;
+    Inc(Depth);
+  end;
+  Result := CurrentTypeId;
+end;
+
+function TSemanticAnalyzer.IsPointerTypeId(const ATypeId: LongInt): Boolean;
+var
+  CurrentTypeId: LongInt;
+  Fact: TSemanticScalarTypeFact;
+begin
+  Result := False;
+  CurrentTypeId := CanonicalTypeId(ATypeId);
+  while (CurrentTypeId > 0) and (CurrentTypeId <= FModel.TypeCount) do
+  begin
+    if FModel.GetTypeScalarFact(CurrentTypeId, Fact) and
+      (Fact.Kind = sskPointer) then
+      Exit(True);
+    CurrentTypeId := FModel.TypeAt(CurrentTypeId - 1).ParentTypeId;
+  end;
+end;
+
+function TSemanticAnalyzer.DeclParamTypesExactMatch(
+  const ADecl: TGreenNode;
+  const AOwnerUnitId: string;
+  const AArgTypeIds: TTypeIdArray;
+  const AArgCount: LongInt
+): Boolean;
+var
+  Child: TGreenNode;
+  ChildIndex: LongInt;
+  LeftFact: TSemanticScalarTypeFact;
+  RightFact: TSemanticScalarTypeFact;
+  ParamEntryIndex: LongInt;
+  ParamDecl: TGreenNode;
+  ParamIndex: LongInt;
+  ParamTypeId: LongInt;
+begin
+  Result := False;
+  if (ADecl = nil) or (AArgCount < 0) or
+    (Length(AArgTypeIds) <> AArgCount) then
+    Exit;
+
+  for ChildIndex := 0 to ADecl.ChildCount - 1 do
+  begin
+    Child := ADecl.ChildAt(ChildIndex);
+    if (Child = nil) or (Child.NodeKind <> gnkParameterList) then
+      Continue;
+
+    ParamIndex := 0;
+    for ParamEntryIndex := 0 to Child.ChildCount - 1 do
+    begin
+      ParamDecl := Child.ChildAt(ParamEntryIndex);
+      if (ParamDecl = nil) or (ParamDecl.NodeKind <> gnkParameterDecl) then
+        Continue;
+      if ParamIndex >= AArgCount then
+        Break;
+      ParamTypeId := ParamDeclTypeId(ParamDecl, AOwnerUnitId);
+      if (ParamTypeId > 0) and (AArgTypeIds[ParamIndex] > 0) and
+        (CanonicalTypeId(ParamTypeId) <>
+         CanonicalTypeId(AArgTypeIds[ParamIndex])) then
+      begin
+        if not (
+          FModel.GetTypeScalarFact(CanonicalTypeId(ParamTypeId), LeftFact) and
+          FModel.GetTypeScalarFact(CanonicalTypeId(AArgTypeIds[ParamIndex]), RightFact) and
+          (LeftFact.Kind in [sskBool, sskInt, sskFloat]) and
+          (RightFact.Kind = LeftFact.Kind) and
+          (RightFact.BitWidth = LeftFact.BitWidth) and
+          (RightFact.Signed = LeftFact.Signed)
+        ) then
+          Exit(False);
+      end;
+      Inc(ParamIndex);
+    end;
+    Exit(ParamIndex = AArgCount);
+  end;
+  Result := AArgCount = 0;
+end;
+
+function TSemanticAnalyzer.DeclParamTypesCompatibleMatch(
+  const ADecl: TGreenNode;
+  const AOwnerUnitId: string;
+  const AArgTypeIds: TTypeIdArray;
+  const AArgCount: LongInt
+): Boolean;
+var
+  Child: TGreenNode;
+  ChildIndex: LongInt;
+  ParamEntryIndex: LongInt;
+  ParamDecl: TGreenNode;
+  ParamIndex: LongInt;
+  ParamTypeId: LongInt;
+begin
+  Result := False;
+  if (ADecl = nil) or (AArgCount < 0) or
+    (Length(AArgTypeIds) <> AArgCount) then
+    Exit;
+
+  for ChildIndex := 0 to ADecl.ChildCount - 1 do
+  begin
+    Child := ADecl.ChildAt(ChildIndex);
+    if (Child = nil) or (Child.NodeKind <> gnkParameterList) then
+      Continue;
+
+    ParamIndex := 0;
+    for ParamEntryIndex := 0 to Child.ChildCount - 1 do
+    begin
+      ParamDecl := Child.ChildAt(ParamEntryIndex);
+      if (ParamDecl = nil) or (ParamDecl.NodeKind <> gnkParameterDecl) then
+        Continue;
+      if ParamIndex >= AArgCount then
+        Break;
+      ParamTypeId := ParamDeclTypeId(ParamDecl, AOwnerUnitId);
+      if (ParamTypeId > 0) and (AArgTypeIds[ParamIndex] > 0) and
+        not AreTypesCompatible(ParamTypeId, AArgTypeIds[ParamIndex]) then
+        Exit(False);
+      Inc(ParamIndex);
+    end;
+    Exit(ParamIndex = AArgCount);
+  end;
+  Result := AArgCount = 0;
+end;
+
 function TSemanticAnalyzer.MethodSymbolIdForExactClassTypeMember(
   const AClassTypeId: LongInt;
   const AMemberName: string;
   const AArgCount: LongInt;
+  const AArgTypeIds: TTypeIdArray;
   const AArgSignature: string;
   const AHasArgSignature: Boolean;
   const AHasTypeMismatchEvidence: Boolean;
@@ -4514,10 +4997,15 @@ function TSemanticAnalyzer.MethodSymbolIdForExactClassTypeMember(
 ): LongInt;
 var
   BodyCandidateCount: LongInt;
+  BodyCompatibleMatchCount: LongInt;
+  BodyCompatibleMatchIndex: LongInt;
+  BodyExactMatchCount: LongInt;
+  BodyExactMatchIndex: LongInt;
   BodyMatchCount: LongInt;
   BestDist: LongInt;
   BestSymbolId: LongInt;
   Dist: LongInt;
+  HasArgTypeIds: Boolean;
   Index: LongInt;
   QualifiedName: string;
   SameOwnerCount: LongInt;
@@ -4538,6 +5026,8 @@ begin
     Exit;
 
   QualifiedName := TypeSymbol.Name + '.' + AMemberName;
+  HasArgTypeIds := (Length(AArgTypeIds) = AArgCount) and
+    TypeIdArrayHasKnownTypes(AArgTypeIds);
   SymbolId := 0;
   SignatureSymbolId := 0;
   SymbolMatchCount := 0;
@@ -4576,6 +5066,76 @@ begin
           SignatureSymbolId := Symbol.SymbolId;
         end;
       end;
+    end;
+  end;
+  BodyCandidateCount := 0;
+  BodyCompatibleMatchCount := 0;
+  BodyCompatibleMatchIndex := -1;
+  BodyExactMatchCount := 0;
+  BodyExactMatchIndex := -1;
+  BodyMatchCount := 0;
+  for Index := 0 to Length(FProcedureBodies) - 1 do
+    if SameText(FProcedureBodies[Index].Name, QualifiedName) and
+      SameText(FProcedureBodies[Index].OwnerUnitId, TypeSymbol.OwnerUnitId) then
+    begin
+      Inc(BodyCandidateCount);
+      if DeclAcceptsArgCount(FProcedureBodies[Index].Decl, AArgCount) then
+      begin
+        if HasArgTypeIds and DeclParamTypesExactMatch(
+          FProcedureBodies[Index].Decl,
+          TypeSymbol.OwnerUnitId,
+          AArgTypeIds,
+          AArgCount
+        ) then
+        begin
+          BodyExactMatchIndex := Index;
+          Inc(BodyExactMatchCount);
+        end
+        else if HasArgTypeIds and DeclParamTypesCompatibleMatch(
+          FProcedureBodies[Index].Decl,
+          TypeSymbol.OwnerUnitId,
+          AArgTypeIds,
+          AArgCount
+        ) then
+        begin
+          BodyCompatibleMatchIndex := Index;
+          Inc(BodyCompatibleMatchCount);
+        end;
+        if (not AHasArgSignature) or
+          SameText(GetParamSignature(FProcedureBodies[Index].Decl), AArgSignature) then
+          Inc(BodyMatchCount);
+      end;
+    end;
+  if HasArgTypeIds and
+    ((BodyExactMatchCount > 0) or (BodyCompatibleMatchCount > 0)) then
+  begin
+    if BodyExactMatchCount = 1 then
+      Exit(CallableSymbolIdForDeclaration(
+        FProcedureBodies[BodyExactMatchIndex].Decl,
+        TypeSymbol.OwnerUnitId
+      ));
+    if BodyExactMatchCount > 1 then
+    begin
+      if SameText(
+        TypeSymbol.OwnerUnitId,
+        NormalizeUnitIdentity(FUnitGraph.RootName)
+      ) or OwnerUnitAllowsProjectSourceDiagnostic(TypeSymbol.OwnerUnitId) then
+        AResolutionFailureKind := 'ambiguous-overload';
+      Exit;
+    end;
+    if BodyCompatibleMatchCount = 1 then
+      Exit(CallableSymbolIdForDeclaration(
+        FProcedureBodies[BodyCompatibleMatchIndex].Decl,
+        TypeSymbol.OwnerUnitId
+      ));
+    if BodyCompatibleMatchCount > 1 then
+    begin
+      if SameText(
+        TypeSymbol.OwnerUnitId,
+        NormalizeUnitIdentity(FUnitGraph.RootName)
+      ) or OwnerUnitAllowsProjectSourceDiagnostic(TypeSymbol.OwnerUnitId) then
+        AResolutionFailureKind := 'ambiguous-overload';
+      Exit;
     end;
   end;
   if SymbolMatchCount = 0 then
@@ -4707,19 +5267,6 @@ begin
   if SymbolId <= 0 then
     Exit;
 
-  BodyCandidateCount := 0;
-  BodyMatchCount := 0;
-  for Index := 0 to Length(FProcedureBodies) - 1 do
-    if SameText(FProcedureBodies[Index].Name, QualifiedName) and
-      SameText(FProcedureBodies[Index].OwnerUnitId, TypeSymbol.OwnerUnitId) then
-    begin
-      Inc(BodyCandidateCount);
-      if (DeclAcceptsArgCount(FProcedureBodies[Index].Decl, AArgCount)) and
-        ((not AHasArgSignature) or
-         SameText(GetParamSignature(FProcedureBodies[Index].Decl), AArgSignature)) then
-        Inc(BodyMatchCount);
-    end;
-
   if BodyCandidateCount = 0 then
     Exit(SymbolId);
   if BodyMatchCount > 1 then
@@ -4737,6 +5284,7 @@ function TSemanticAnalyzer.MethodSymbolIdForClassTypeMember(
   const AClassTypeId: LongInt;
   const AMemberName: string;
   const AArgCount: LongInt;
+  const AArgTypeIds: TTypeIdArray;
   const AArgSignature: string;
   const AHasArgSignature: Boolean;
   const AHasTypeMismatchEvidence: Boolean;
@@ -4783,6 +5331,7 @@ begin
       CurrentTypeId,
       AMemberName,
       AArgCount,
+      AArgTypeIds,
       AArgSignature,
       AHasArgSignature,
       AHasTypeMismatchEvidence,
@@ -4839,6 +5388,7 @@ function TSemanticAnalyzer.TryRegisterMemberCallBinding(
 ): Boolean;
 var
   ArgCount: LongInt;
+  ArgTypeIds: TTypeIdArray;
   ArgSignature: string;
   Candidates: TOverloadCandidateArray;
   HasArgSignature: Boolean;
@@ -4867,6 +5417,8 @@ begin
   AActualArgCount := ArgCount;
   AFailureName := MemberName;
   AFailureOffset := MemberOffset;
+  if not CallArgumentTypeIds(ACallNode, ArgTypeIds) then
+    SetLength(ArgTypeIds, 0);
   HasArgSignature := CallArgumentSignature(ACallNode, ArgSignature);
   HasTypeMismatchEvidence := HasArgSignature and
     CallArgumentSignatureIsStable(ACallNode, ACurrentOwnerUnitId);
@@ -4881,6 +5433,7 @@ begin
       ReceiverName,
       MemberName,
       ArgCount,
+      ArgTypeIds,
       ArgSignature,
       HasArgSignature,
       HasTypeMismatchEvidence,
@@ -4896,6 +5449,7 @@ begin
       ReceiverTypeId,
       MemberName,
       ArgCount,
+      ArgTypeIds,
       ArgSignature,
       HasArgSignature,
       HasTypeMismatchEvidence,
@@ -4947,6 +5501,7 @@ function TSemanticAnalyzer.TryRegisterImplicitSelfBareMethodCallBinding(
 ): Boolean;
 var
   ArgCount: LongInt;
+  ArgTypeIds: TTypeIdArray;
   ArgSignature: string;
   CallName: string;
   HasArgSignature: Boolean;
@@ -4978,6 +5533,8 @@ begin
     Exit;
 
   ArgCount := CallArgumentCount(ACallNode);
+  if not CallArgumentTypeIds(ACallNode, ArgTypeIds) then
+    SetLength(ArgTypeIds, 0);
   HasArgSignature := CallArgumentSignature(ACallNode, ArgSignature);
   HasTypeMismatchEvidence := HasArgSignature and
     CallArgumentSignatureIsStable(ACallNode, ACurrentOwnerUnitId);
@@ -4985,6 +5542,7 @@ begin
     ReceiverTypeId,
     CallName,
     ArgCount,
+    ArgTypeIds,
     ArgSignature,
     HasArgSignature,
     HasTypeMismatchEvidence,
@@ -5118,23 +5676,23 @@ begin
   for Index := 0 to FModel.SymbolCount - 1 do
   begin
     Symbol := FModel.SymbolAt(Index);
-    if SameText(Symbol.Name, ADecl.Text) and
-      ((AOwnerUnitId = '') or SameText(Symbol.OwnerUnitId, AOwnerUnitId)) and
-      ((ExpectedKind = '') or SameText(Symbol.Kind, ExpectedKind)) and
-      (Symbol.ParamCount = ParamCount) and
-      SameText(Symbol.ParamSignature, ParamSignature) then
-      Exit(Symbol.SymbolId);
-  end;
-
-  for Index := 0 to FModel.SymbolCount - 1 do
-  begin
-    Symbol := FModel.SymbolAt(Index);
     if (Symbol.ByteOffset = ADecl.ByteOffset) and
       SameText(Symbol.Name, ADecl.Text) and
       ((AOwnerUnitId = '') or SameText(Symbol.OwnerUnitId, AOwnerUnitId)) and
       (SameText(Symbol.Kind, 'procedure') or
        SameText(Symbol.Kind, 'function') or
        SameText(Symbol.Kind, 'method')) then
+      Exit(Symbol.SymbolId);
+  end;
+
+  for Index := 0 to FModel.SymbolCount - 1 do
+  begin
+    Symbol := FModel.SymbolAt(Index);
+    if SameText(Symbol.Name, ADecl.Text) and
+      ((AOwnerUnitId = '') or SameText(Symbol.OwnerUnitId, AOwnerUnitId)) and
+      ((ExpectedKind = '') or SameText(Symbol.Kind, ExpectedKind)) and
+      (Symbol.ParamCount = ParamCount) and
+      SameText(Symbol.ParamSignature, ParamSignature) then
       Exit(Symbol.SymbolId);
   end;
 
@@ -5197,6 +5755,7 @@ procedure TSemanticAnalyzer.SeedCallBindingsInNode(
 );
 var
   ArgIndex: LongInt;
+  ArgTypeIds: TTypeIdArray;
   ArgSignature: string;
   BodyNode: TGreenNode;
   CallableScopeId: LongInt;
@@ -5312,6 +5871,8 @@ begin
     begin
       MemberFailureName := ANode.Text;
       MemberFailureOffset := ANode.ByteOffset;
+      if not CallArgumentTypeIds(ANode, ArgTypeIds) then
+        SetLength(ArgTypeIds, 0);
       HasArgSignature := CallArgumentSignature(ANode, ArgSignature);
       HasTypeMismatchEvidence := HasArgSignature and
         CallArgumentSignatureIsStable(ANode, ACurrentOwnerUnitId);
@@ -5319,6 +5880,7 @@ begin
       if LookupCallBindingDeclaration(
         ANode.Text,
         CallArgumentCount(ANode),
+        ArgTypeIds,
         ArgSignature,
         HasArgSignature,
         HasTypeMismatchEvidence,
@@ -5727,6 +6289,7 @@ begin
     SameText(AName, 'Lo') or SameText(AName, 'Hi') or
     SameText(AName, 'Odd') or SameText(AName, 'Char') or
     SameText(AName, 'Free') or SameText(AName, 'SetString') or
+    SameText(AName, 'Default') or
     SameText(AName, 'LowerCase') or SameText(AName, 'UpperCase') or
     SameText(AName, 'Trim') or SameText(AName, 'TrimLeft') or
     SameText(AName, 'TrimRight') or SameText(AName, 'SameText') or
@@ -5735,7 +6298,10 @@ end;
 
 function TSemanticAnalyzer.InferExpressionType(const ANode: TGreenNode): LongInt;
 var
+  ArgNode: TGreenNode;
+  BaseTypeId: LongInt;
   CallName: string;
+  FieldMeta: TFieldMeta;
   LStrTypeId: LongInt;
   RType: LongInt;
   SymId: LongInt;
@@ -5759,6 +6325,8 @@ begin
         if SameText(ANode.Text, 'True') or SameText(ANode.Text, 'False') then
           Exit(FModel.FindTypeByName('Boolean'));
         SymId := FModel.LookupSymbol(ANode.Text, FCurrentScopeId);
+        if SymId <= 0 then
+          SymId := FModel.FindSymbolByName(ANode.Text);
         if SymId > 0 then
         begin
           Sym := FModel.SymbolAt(SymId - 1);
@@ -5821,6 +6389,25 @@ begin
           Exit(TargetTypeId);
         if TryGetIntrinsicExprName(ANode, CallName) then
         begin
+          if SameText(CallName, 'Default') and (ANode.ChildCount >= 2) then
+          begin
+            ArgNode := ANode.ChildAt(1);
+            if (ArgNode <> nil) and (ArgNode.NodeKind = gnkIdentifier) then
+            begin
+              Result := ResolveTypeIdForOwner(
+                ArgNode.Text,
+                NormalizeUnitIdentity(FCurrentProcessingUnitId)
+              );
+              if Result <= 0 then
+                Result := ResolveTypeIdForOwner(
+                  ArgNode.Text,
+                  NormalizeUnitIdentity(FUnitGraph.RootName)
+                );
+            end;
+            if Result <= 0 then
+              Result := InferExpressionType(ArgNode);
+            Exit;
+          end;
           if SameText(CallName, 'SizeOf') or SameText(CallName, 'High') or
             SameText(CallName, 'Low') or SameText(CallName, 'Length') or
             SameText(CallName, 'Ord') or SameText(CallName, 'Round') or
@@ -5849,7 +6436,41 @@ begin
           Result := Sym.TypeId;
         end;
       end;
-    gnkDotAccess, gnkArrayAccess, gnkDereference:
+    gnkDotAccess:
+      begin
+        if (ANode.ChildCount >= 2) and (ANode.ChildAt(0) <> nil) and
+          (ANode.ChildAt(1) <> nil) and
+          (ANode.ChildAt(1).NodeKind = gnkIdentifier) then
+        begin
+          BaseTypeId := InferExpressionType(ANode.ChildAt(0));
+          if (BaseTypeId > 0) and FModel.GetFieldMetaByName(
+            BaseTypeId,
+            ANode.ChildAt(1).Text,
+            FieldMeta
+          ) then
+            Exit(FieldMeta.TypeId);
+        end;
+        Result := 0;
+      end;
+    gnkDereference:
+      begin
+        if (ANode.ChildCount >= 1) and (ANode.ChildAt(0) <> nil) then
+        begin
+          BaseTypeId := InferExpressionType(ANode.ChildAt(0));
+          if (BaseTypeId > 0) and (BaseTypeId <= FModel.TypeCount) then
+          begin
+            CallName := FModel.TypeAt(CanonicalTypeId(BaseTypeId) - 1).Name;
+            if (Length(CallName) > 1) and (CallName[1] = 'P') then
+            begin
+              Result := FModel.FindTypeByName(Copy(CallName, 2, Length(CallName) - 1));
+              if Result > 0 then
+                Exit;
+            end;
+          end;
+        end;
+        Result := 0;
+      end;
+    gnkArrayAccess:
       Result := 0;
   end;
 end;
@@ -5861,25 +6482,24 @@ var
   StrIds: array[0..4] of LongInt;
   I: LongInt;
   LhsIsInt, RhsIsInt, LhsIsStr, RhsIsStr: Boolean;
-  LhsType, RhsType: TSemanticType;
   CharTypeId, WideCharTypeId: LongInt;
+  CanonicalLhsTypeId, CanonicalRhsTypeId: LongInt;
 begin
   if ALhsTypeId = ARhsTypeId then
     Exit(True);
   if (ALhsTypeId = 0) or (ARhsTypeId = 0) then
     Exit(True);
 
-  LhsType := FModel.TypeAt(ALhsTypeId - 1);
-  RhsType := FModel.TypeAt(ARhsTypeId - 1);
-  if (LhsType.Kind = 'declared') or (RhsType.Kind = 'declared') or
-    (LhsType.Kind = 'alias') or (RhsType.Kind = 'alias') then
-  begin
-    if FModel.IsTypeDescendantOf(ARhsTypeId, ALhsTypeId) then
-      Exit(True);
-    if FModel.IsTypeDescendantOf(ALhsTypeId, ARhsTypeId) then
-      Exit(True);
+  CanonicalLhsTypeId := CanonicalTypeId(ALhsTypeId);
+  CanonicalRhsTypeId := CanonicalTypeId(ARhsTypeId);
+  if CanonicalLhsTypeId = CanonicalRhsTypeId then
     Exit(True);
-  end;
+  if FModel.IsTypeDescendantOf(CanonicalRhsTypeId, CanonicalLhsTypeId) then
+    Exit(True);
+  if FModel.IsTypeDescendantOf(CanonicalLhsTypeId, CanonicalRhsTypeId) then
+    Exit(True);
+  if IsPointerTypeId(CanonicalLhsTypeId) and IsPointerTypeId(CanonicalRhsTypeId) then
+    Exit(True);
 
   IntIds[0] := FModel.FindTypeByName('Byte');
   IntIds[1] := FModel.FindTypeByName('Word');
@@ -5901,8 +6521,8 @@ begin
   RhsIsInt := False;
   for I := 0 to High(IntIds) do
   begin
-    if ALhsTypeId = IntIds[I] then LhsIsInt := True;
-    if ARhsTypeId = IntIds[I] then RhsIsInt := True;
+    if CanonicalLhsTypeId = IntIds[I] then LhsIsInt := True;
+    if CanonicalRhsTypeId = IntIds[I] then RhsIsInt := True;
   end;
   if LhsIsInt and RhsIsInt then
     Exit(True);
@@ -5917,23 +6537,27 @@ begin
   RhsIsStr := False;
   for I := 0 to High(StrIds) do
   begin
-    if ALhsTypeId = StrIds[I] then LhsIsStr := True;
-    if ARhsTypeId = StrIds[I] then RhsIsStr := True;
+    if CanonicalLhsTypeId = StrIds[I] then LhsIsStr := True;
+    if CanonicalRhsTypeId = StrIds[I] then RhsIsStr := True;
   end;
   if LhsIsStr and RhsIsStr then
     Exit(True);
 
-  if ALhsTypeId = FModel.FindTypeByName('Boolean') then
-    Exit(ARhsTypeId = FModel.FindTypeByName('Boolean'));
+  if CanonicalLhsTypeId = FModel.FindTypeByName('Boolean') then
+    Exit(CanonicalRhsTypeId = FModel.FindTypeByName('Boolean'));
 
   CharTypeId := FModel.FindTypeByName('Char');
   WideCharTypeId := FModel.FindTypeByName('WideChar');
-  if LhsIsStr and ((ARhsTypeId = CharTypeId) or (ARhsTypeId = WideCharTypeId)) then
+  if LhsIsStr and ((CanonicalRhsTypeId = CharTypeId) or
+    (CanonicalRhsTypeId = WideCharTypeId)) then
     Exit(True);
-  if ((ALhsTypeId = CharTypeId) or (ALhsTypeId = WideCharTypeId)) and RhsIsStr then
+  if ((CanonicalLhsTypeId = CharTypeId) or
+    (CanonicalLhsTypeId = WideCharTypeId)) and RhsIsStr then
     Exit(True);
-  if ((ALhsTypeId = CharTypeId) or (ALhsTypeId = WideCharTypeId)) and
-    ((ARhsTypeId = CharTypeId) or (ARhsTypeId = WideCharTypeId)) then
+  if ((CanonicalLhsTypeId = CharTypeId) or
+    (CanonicalLhsTypeId = WideCharTypeId)) and
+    ((CanonicalRhsTypeId = CharTypeId) or
+     (CanonicalRhsTypeId = WideCharTypeId)) then
     Exit(True);
 
   Result := False;
@@ -5948,6 +6572,8 @@ var
   Int64TypeId, QWordTypeId, SingleTypeId, DoubleTypeId: LongInt;
   PointerTypeId, CardinalTypeId: LongInt;
   PByteTypeId, PWordTypeId, PInt32TypeId, PInt16TypeId: LongInt;
+  PInt64TypeId, PUInt64TypeId, PPointerTypeId: LongInt;
+  PPtrIntTypeId, PPtrUIntTypeId: LongInt;
   PCharTypeId, PAnsiCharTypeId: LongInt;
 begin
   BooleanTypeId := FModel.AddType('Boolean', 'builtin');
@@ -5970,6 +6596,11 @@ begin
   PWordTypeId := FModel.AddType('PWord', 'alias');
   PInt32TypeId := FModel.AddType('PInt32', 'alias');
   PInt16TypeId := FModel.AddType('PInt16', 'alias');
+  PInt64TypeId := FModel.AddType('PInt64', 'alias');
+  PUInt64TypeId := FModel.AddType('PUInt64', 'alias');
+  PPointerTypeId := FModel.AddType('PPointer', 'alias');
+  PPtrIntTypeId := FModel.AddType('PPtrInt', 'alias');
+  PPtrUIntTypeId := FModel.AddType('PPtrUInt', 'alias');
   PCharTypeId := FModel.AddType('PChar', 'alias');
   PAnsiCharTypeId := FModel.AddType('PAnsiChar', 'alias');
   FModel.AddType('Text', 'builtin');
@@ -5995,6 +6626,11 @@ begin
   FModel.SetTypeParent(PWordTypeId, PointerTypeId);
   FModel.SetTypeParent(PInt32TypeId, PointerTypeId);
   FModel.SetTypeParent(PInt16TypeId, PointerTypeId);
+  FModel.SetTypeParent(PInt64TypeId, PointerTypeId);
+  FModel.SetTypeParent(PUInt64TypeId, PointerTypeId);
+  FModel.SetTypeParent(PPointerTypeId, PointerTypeId);
+  FModel.SetTypeParent(PPtrIntTypeId, PointerTypeId);
+  FModel.SetTypeParent(PPtrUIntTypeId, PointerTypeId);
   FModel.SetTypeParent(PCharTypeId, PointerTypeId);
   FModel.SetTypeParent(PAnsiCharTypeId, PointerTypeId);
   FModel.SetTypeParent(Int32TypeId, LongIntTypeId);
@@ -6024,6 +6660,11 @@ begin
   FModel.SetTypeScalarFact(PWordTypeId, sskPointer, 64, False);
   FModel.SetTypeScalarFact(PInt32TypeId, sskPointer, 64, False);
   FModel.SetTypeScalarFact(PInt16TypeId, sskPointer, 64, False);
+  FModel.SetTypeScalarFact(PInt64TypeId, sskPointer, 64, False);
+  FModel.SetTypeScalarFact(PUInt64TypeId, sskPointer, 64, False);
+  FModel.SetTypeScalarFact(PPointerTypeId, sskPointer, 64, False);
+  FModel.SetTypeScalarFact(PPtrIntTypeId, sskPointer, 64, False);
+  FModel.SetTypeScalarFact(PPtrUIntTypeId, sskPointer, 64, False);
   FModel.SetTypeScalarFact(PCharTypeId, sskPointer, 64, False);
   FModel.SetTypeScalarFact(PAnsiCharTypeId, sskPointer, 64, False);
 end;
@@ -6223,7 +6864,7 @@ end;
 procedure TSemanticAnalyzer.CheckTypeMismatchesInNode(const ANode: TGreenNode);
 var
   I: LongInt;
-  Child, RhsChild: TGreenNode;
+  Child, LhsChild, RhsChild: TGreenNode;
   LhsName: string;
   LhsSymId: LongInt;
   LhsSym: TSemanticSymbol;
@@ -6238,11 +6879,20 @@ begin
         LhsName := ANode.Text;
         if LhsName = '' then
           Exit;
-        LhsSymId := FModel.LookupSymbol(LhsName, FCurrentScopeId);
-        if LhsSymId = 0 then
-          Exit;
-        LhsSym := FModel.SymbolAt(LhsSymId - 1);
-        LhsTypeId := LhsSym.TypeId;
+        LhsTypeId := 0;
+        LhsChild := nil;
+        if ANode.ChildCount > 0 then
+          LhsChild := ANode.ChildAt(0);
+        if (LhsChild <> nil) and (LhsChild.NodeKind = gnkIdentifier) then
+        begin
+          LhsSymId := FModel.LookupSymbol(LhsName, FCurrentScopeId);
+          if LhsSymId = 0 then
+            Exit;
+          LhsSym := FModel.SymbolAt(LhsSymId - 1);
+          LhsTypeId := LhsSym.TypeId;
+        end
+        else if LhsChild <> nil then
+          LhsTypeId := InferExpressionType(LhsChild);
         if LhsTypeId = 0 then
           Exit;
         RhsChild := nil;
@@ -9091,6 +9741,23 @@ begin
             AValue := Length(DecodePascalStringLiteral(ArgNode.Text));
             Exit(True);
           end
+          else if SameText(IntrinsicName, 'Default') and (ArgNode <> nil) then
+          begin
+            TypeId := 0;
+            if ArgNode.NodeKind = gnkIdentifier then
+              TypeId := ResolveTypeIdForOwner(
+                ArgNode.Text,
+                NormalizeUnitIdentity(FCurrentProcessingUnitId)
+              );
+            if TypeId <= 0 then
+              TypeId := InferExpressionType(ArgNode);
+            if (TypeId > 0) and FModel.GetTypeScalarFact(TypeId, Fact) and
+              (Fact.Kind in [sskBool, sskInt]) then
+            begin
+              AValue := 0;
+              Exit(True);
+            end;
+          end
           else if SameText(IntrinsicName, 'Ord') and (ArgNode <> nil) then
           begin
             if (ArgNode.NodeKind = gnkStringLiteral) and
@@ -11029,6 +11696,7 @@ function TSemanticAnalyzer.TryGetDispatchedMemberCallContract(
   out AReceiverVarName, ACalleeName, AParamKinds: string;
   out ASlotIndex, AReturnTypeId: LongInt): Boolean;
 var
+  ArgTypeIds: TTypeIdArray;
   Candidates: TOverloadCandidateArray;
   DeclNode, MemberNode, ReceiverNode: TGreenNode;
   HasArgSignature, HasTypeMismatchEvidence: Boolean;
@@ -11099,6 +11767,8 @@ begin
   HasArgSignature := (ACallNode <> nil) and
     (ACallNode.NodeKind in [gnkFunctionCall, gnkProcedureCallStatement, gnkDotAccess]) and
     CallArgumentSignature(ACallNode, ArgSignature);
+  if not CallArgumentTypeIds(ACallNode, ArgTypeIds) then
+    SetLength(ArgTypeIds, 0);
   HasTypeMismatchEvidence := HasArgSignature and
     CallArgumentSignatureIsStable(ACallNode,
       NormalizeUnitIdentity(FUnitGraph.RootName));
@@ -11108,6 +11778,7 @@ begin
     ReceiverTypeId,
     MemberName,
     ArgCount,
+    ArgTypeIds,
     ArgSignature,
     HasArgSignature,
     HasTypeMismatchEvidence,
@@ -11222,6 +11893,7 @@ function TSemanticAnalyzer.TryGetOrdinaryMemberCallContract(
   const ACallNode: TGreenNode; out AReceiverVarName, ACalleeName,
   AParamKinds: string; out AReturnTypeId: LongInt): Boolean;
 var
+  ArgTypeIds: TTypeIdArray;
   BodyNode, DeclNode: TGreenNode;
   Candidates: TOverloadCandidateArray;
   MemberNode, ReceiverNode: TGreenNode;
@@ -11291,6 +11963,8 @@ begin
   HasArgSignature := (ACallNode <> nil) and
     (ACallNode.NodeKind in [gnkFunctionCall, gnkProcedureCallStatement]) and
     CallArgumentSignature(ACallNode, ArgSignature);
+  if not CallArgumentTypeIds(ACallNode, ArgTypeIds) then
+    SetLength(ArgTypeIds, 0);
   HasTypeMismatchEvidence := HasArgSignature and
     CallArgumentSignatureIsStable(ACallNode,
       NormalizeUnitIdentity(FUnitGraph.RootName));
@@ -11300,6 +11974,7 @@ begin
     ReceiverTypeId,
     MemberName,
     ArgCount,
+    ArgTypeIds,
     ArgSignature,
     HasArgSignature,
     HasTypeMismatchEvidence,
@@ -11319,6 +11994,7 @@ begin
     not LookupCallBindingDeclaration(
       ACalleeName,
       ArgCount,
+      ArgTypeIds,
       ArgSignature,
       HasArgSignature,
       HasTypeMismatchEvidence,
@@ -11835,11 +12511,43 @@ var
     const ALocalCallNode: TGreenNode; out ALocalExprId: LongInt): Boolean;
   var
     IntrinsicName: string;
-    ArgTypeId, LiteralTypeId, OperandExprId, ResultTypeId: LongInt;
+    ArgNode: TGreenNode;
+    ArgTypeId, DefaultTypeId, LiteralTypeId, OperandExprId, ResultTypeId: LongInt;
   begin
     ALocalExprId := 0;
     if not TryGetIntrinsicExprName(ALocalCallNode, IntrinsicName) then
       Exit(False);
+
+    if SameText(IntrinsicName, 'Default') then
+    begin
+      if (ALocalCallNode.ChildCount < 2) or (ALocalCallNode.ChildAt(1) = nil) then
+        Exit(False);
+      ArgNode := ALocalCallNode.ChildAt(1);
+      DefaultTypeId := 0;
+      if ArgNode.NodeKind = gnkIdentifier then
+      begin
+        DefaultTypeId := ResolveTypeIdForOwner(
+          ArgNode.Text,
+          NormalizeUnitIdentity(FCurrentProcessingUnitId)
+        );
+        if DefaultTypeId <= 0 then
+          DefaultTypeId := ResolveTypeIdForOwner(
+            ArgNode.Text,
+            NormalizeUnitIdentity(FUnitGraph.RootName)
+          );
+      end;
+      if DefaultTypeId <= 0 then
+        DefaultTypeId := InferExpressionType(ArgNode);
+      if (DefaultTypeId > 0) and IsPointerTypeId(DefaultTypeId) then
+      begin
+        SetLength(Children, 0);
+        ALocalExprId := FModel.AddHirExpr(
+          shekNilLiteral, DefaultTypeId, 0, Children,
+          0, '', '', ALocalCallNode.ByteOffset, shvcScalar
+        );
+        Exit(ALocalExprId > 0);
+      end;
+    end;
 
     if EvaluateIntegerConstant(ALocalCallNode, Value) then
     begin
@@ -13039,6 +13747,29 @@ begin
       Decoded := Child.Text;
       if (Decoded = 'Result') and (FCurrentRetVarName <> '') then
         Decoded := FCurrentRetVarName;
+      Arg := nil;
+      if Child.ChildCount >= 2 then
+        Arg := Child.ChildAt(1);
+      if FNoFold and (Arg <> nil) and
+        (Arg.NodeKind = gnkFunctionCall) and
+        TryGetIntrinsicExprName(Arg, FuncName) and
+        SameText(FuncName, 'Default') and IsRecordVar(Decoded) then
+      begin
+        StringValue := LookupRecordVar(Decoded);
+        Value := TypeMetaSize(StringValue);
+        if (StringValue <> '') and (Value > 0) then
+        begin
+          FModel.AddTypedHirNode(
+            'fillchar-runtime',
+            Decoded,
+            0,
+            0,
+            Decoded + #9 + 'int ' + IntToStr(Value div 8) + #10 +
+            #9 + 'int 0' + #10
+          );
+          Continue;
+        end;
+      end;
       if FNoFold and (Child.ChildCount >= 2) and
         (Child.ChildAt(0) <> nil) and
         (Child.ChildAt(0).NodeKind = gnkDereference) and
@@ -15925,8 +16656,7 @@ procedure TSemanticAnalyzer.SeedImportedUnitBodies;
       if SameText(Symbol.OwnerUnitId, AOwnerUnitId) and
         SameText(Symbol.Name, ANode.Text) and
         SameText(Symbol.Kind, KindName) and
-        (Symbol.ParamCount = ParamCount) and
-        SameText(Symbol.ParamSignature, ParamSignature) then
+        (Symbol.ByteOffset = ANode.ByteOffset) then
         Exit;
     end;
 

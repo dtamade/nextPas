@@ -162,6 +162,55 @@ begin
   end;
 end;
 
+function SymbolIdByNameKindOwnerAndOffset(
+  const AModel: TSemanticModel;
+  const AName: string;
+  const AKind: string;
+  const AOwnerUnitId: string;
+  const AByteOffset: LongInt
+): LongInt;
+var
+  Index: LongInt;
+  Symbol: TSemanticSymbol;
+begin
+  Result := 0;
+  for Index := 0 to AModel.SymbolCount - 1 do
+  begin
+    Symbol := AModel.SymbolAt(Index);
+    if SameText(Symbol.Name, AName) and SameText(Symbol.Kind, AKind) and
+      SameText(Symbol.OwnerUnitId, AOwnerUnitId) and
+      (Symbol.ByteOffset = AByteOffset) then
+      Exit(Symbol.SymbolId);
+  end;
+end;
+
+function SymbolIdByNameKindOwnerAndOrdinal(
+  const AModel: TSemanticModel;
+  const AName: string;
+  const AKind: string;
+  const AOwnerUnitId: string;
+  const AOrdinal: LongInt
+): LongInt;
+var
+  Count: LongInt;
+  Index: LongInt;
+  Symbol: TSemanticSymbol;
+begin
+  Result := 0;
+  Count := 0;
+  for Index := 0 to AModel.SymbolCount - 1 do
+  begin
+    Symbol := AModel.SymbolAt(Index);
+    if SameText(Symbol.Name, AName) and SameText(Symbol.Kind, AKind) and
+      SameText(Symbol.OwnerUnitId, AOwnerUnitId) then
+    begin
+      Inc(Count);
+      if Count = AOrdinal then
+        Exit(Symbol.SymbolId);
+    end;
+  end;
+end;
+
 procedure CheckTypeCastAndIntrinsicCallsStayReady;
 var
   AssignNode: TTypedHirNode;
@@ -310,6 +359,165 @@ begin
   end;
 end;
 
+procedure CheckPointerCompatibleOverloadsAndDefaultIntrinsic;
+var
+  Binding: TSemanticBinding;
+  BodyFound: Boolean;
+  BodyOffset: LongInt;
+  BodySymbolId: LongInt;
+  Diagnostics: TDiagnosticsSink;
+  Index: LongInt;
+  IntegerAssign: TTypedHirNode;
+  IntegerAssignExpr: TSemanticHirExpr;
+  Model: TSemanticModel;
+  PickOffset: LongInt;
+  PickSymbolId: LongInt;
+  PointerOnlyFound: Boolean;
+  PointerOnlyOffset: LongInt;
+  PointerOnlySymbolId: LongInt;
+  RecordAssignFound: Boolean;
+  SourceText: string;
+begin
+  Diagnostics := nil;
+  SourceText :=
+    'program PointerCompatibleOverloads;' + LineEnding +
+    'type' + LineEnding +
+    '  TBytes = array of Byte;' + LineEnding +
+    '  IReader = interface' + LineEnding +
+    '  end;' + LineEnding +
+    '  TRec = record' + LineEnding +
+    '    Value: Integer;' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure TakeAny(const Value: Pointer);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure Pick(const Value: Pointer);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure Pick(const Value: PByte);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure PickBody(const Value: IReader);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure PickBody(const Value: TBytes);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'var' + LineEnding +
+    '  Data: TBytes;' + LineEnding +
+    '  I: Integer;' + LineEnding +
+    '  P: PByte;' + LineEnding +
+    '  R: TRec;' + LineEnding +
+    'begin' + LineEnding +
+    '  TakeAny(P);' + LineEnding +
+    '  Pick(P);' + LineEnding +
+    '  PickBody(Data);' + LineEnding +
+    '  I := Default(Integer);' + LineEnding +
+    '  R := Default(TRec);' + LineEnding +
+    'end.' + LineEnding;
+  Model := BuildModel(SourceText, Diagnostics);
+  try
+    if Diagnostics = nil then
+      Fail('missing-pointer-default-diagnostics');
+    if Model = nil then
+      Fail('missing-pointer-default-model');
+    if Diagnostics.HasErrors then
+      Fail('unexpected-pointer-default-diagnostic:' +
+        Diagnostics.LastDiagnosticCode + ':' + Diagnostics.LastDiagnosticMessage);
+    if not SameText(Model.Status, 'ready') then
+      Fail('unexpected-pointer-default-model-status:' + Model.Status);
+
+    PointerOnlySymbolId := SymbolIdByNameKindOwnerAndSignature(
+      Model, 'TakeAny', 'procedure', 'pointercompatibleoverloads', 1, 'p');
+    if PointerOnlySymbolId <= 0 then
+      Fail('missing-pointer-only-symbol');
+
+    PickSymbolId := SymbolIdByNameKindOwnerAndOrdinal(
+      Model,
+      'Pick',
+      'procedure',
+      'pointercompatibleoverloads',
+      2
+    );
+    if PickSymbolId <= 0 then
+      Fail('missing-typed-pointer-overload-symbol');
+
+    BodySymbolId := SymbolIdByNameKindOwnerAndOrdinal(
+      Model,
+      'PickBody',
+      'procedure',
+      'pointercompatibleoverloads',
+      2
+    );
+    if BodySymbolId <= 0 then
+      Fail('missing-bytes-overload-symbol');
+
+    PointerOnlyOffset := Pos('  TakeAny(P);', SourceText) + Length('  ') - 1;
+    PickOffset := Pos('  Pick(P);', SourceText) + Length('  ') - 1;
+    BodyOffset := Pos('  PickBody(Data);', SourceText) + Length('  ') - 1;
+    PointerOnlyFound := False;
+    BodyFound := False;
+    RecordAssignFound := False;
+    for Index := 0 to Model.BindingCount - 1 do
+    begin
+      Binding := Model.BindingAt(Index);
+      if not SameText(Binding.Kind, 'call') then
+        Continue;
+      if SameText(Binding.Name, 'TakeAny') and
+        (Binding.ByteOffset = PointerOnlyOffset) then
+      begin
+        PointerOnlyFound := True;
+        if Binding.TargetSymbolId <> PointerOnlySymbolId then
+          Fail('pointer-only-binding-target-mismatch');
+      end
+      else if SameText(Binding.Name, 'Pick') and
+        (Binding.ByteOffset = PickOffset) then
+      begin
+        RecordAssignFound := True;
+        if Binding.TargetSymbolId <> PickSymbolId then
+          Fail('typed-pointer-overload-target-mismatch');
+      end
+      else if SameText(Binding.Name, 'PickBody') and
+        (Binding.ByteOffset = BodyOffset) then
+      begin
+        BodyFound := True;
+        if Binding.TargetSymbolId <> BodySymbolId then
+          Fail('bytes-overload-target-mismatch');
+      end;
+    end;
+    if not PointerOnlyFound then
+      Fail('missing-pointer-only-binding');
+    if not RecordAssignFound then
+      Fail('missing-typed-pointer-overload-binding');
+    if not BodyFound then
+      Fail('missing-bytes-overload-binding');
+
+    if not FindAssignRuntimeNode(Model, 'I', IntegerAssign) then
+      Fail('missing-default-integer-assign-node');
+    if IntegerAssign.ExprId <= 0 then
+      Fail('missing-default-integer-assign-expr');
+    IntegerAssignExpr := Model.HirExprAt(IntegerAssign.ExprId - 1);
+    if IntegerAssignExpr.Kind <> shekIntLiteral then
+      Fail('default-integer-expr-not-int-literal');
+    if IntegerAssignExpr.LiteralInt <> 0 then
+      Fail('default-integer-literal-not-zero');
+
+    RecordAssignFound := False;
+    for Index := 0 to Model.TypedHirNodeCount - 1 do
+      if SameText(Model.TypedHirNodeAt(Index).Kind, 'fillchar-runtime') and
+        SameText(Model.TypedHirNodeAt(Index).DisplayName, 'R') then
+      begin
+        RecordAssignFound := True;
+        Break;
+      end;
+    if not RecordAssignFound then
+      Fail('missing-default-record-assign-node');
+  finally
+    Model.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckCachedInstalledSourceTypeSymbolsStayReady;
 var
   Binding: TSemanticBinding;
@@ -424,6 +632,7 @@ end;
 begin
   CheckTypeCastAndIntrinsicCallsStayReady;
   CheckTypeCastAndIntrinsicOverloadBindings;
+  CheckPointerCompatibleOverloadsAndDefaultIntrinsic;
   CheckCachedInstalledSourceTypeSymbolsStayReady;
   WriteLn('semantic-phase1-type-entry-status=pass');
 end.
