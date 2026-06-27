@@ -15,7 +15,6 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.base.utils,
-  nextpas.core.math,              // ✅ Math facade (for trunc)
   nextpas.core.mem.base,
   nextpas.core.mem.utils,
   nextpas.core.mem.pool.base,     // DefaultAcquireN / DefaultReleaseN (CS-001)
