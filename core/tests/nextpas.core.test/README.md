@@ -63,3 +63,4 @@ core/src/nextpas.core.testing.pas           ← v1 兼容层（deprecated）
 - **v3.2**: CheckTrue/False 消息改进、空 filter 边界测试
 - **v3.4**: Brace expansion、ANSI TTY 检测、Before/AfterEach 文档
 - **v3.5**: CheckNotContains、FailUnexpected、CheckContains 统一替换、ResolveOutSink 缓存
+- **v3.6**: 编译器指令标准化 (`{$J-}`)、WriteLn header 统一、test_advanced 输出规范化
