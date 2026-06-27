@@ -115,6 +115,14 @@ type
 
     {** 生成多基线对比矩阵 HTML (P2-1) }
     function GenerateMatrixHTML(const AMatrix: TMatrixResult): string;
+
+    {** P2-3: 生成分布直方图 SVG (原始样本分布) }
+    function GenerateDistributionChart(const ASamples: TDoubleArray;
+      const AName: string): string;
+
+    {** P2-3: 生成基线对比图 SVG (当前 vs N 基线) }
+    function GenerateComparisonChart(
+      const AComparisons: array of TBenchComparison): string;
   end;
 
 implementation
@@ -1328,6 +1336,178 @@ begin
   BufferAddLine(LBuf, '</table>');
   BufferAddLine(LBuf, '</body></html>');
 
+  Result := BufferToString(LBuf);
+end;
+
+{ P2-3: 分布直方图 SVG }
+
+function TBenchReportGenerator.GenerateDistributionChart(
+  const ASamples: TDoubleArray; const AName: string): string;
+var
+  LBuf: TLineBuffer;
+  LSorted: TDoubleArray;
+  LMin, LMax, LBinWidth: Double;
+  LBins: array of Integer;
+  LBinCount, LMaxBin, I, LIdx: Integer;
+  LBarW, LBarH, LBarX, LBarY: Double;
+  LChartW, LChartH: Double;
+begin
+  LBuf := Default(TLineBuffer);
+  if Length(ASamples) < 2 then
+    Exit('');
+
+  { 排序样本找范围 }
+  LSorted := Copy(ASamples);
+  SortDoubleArray(LSorted);
+  LMin := LSorted[0];
+  LMax := LSorted[High(LSorted)];
+  if LMax <= LMin then
+    Exit('');
+
+  { 20 个 bin }
+  LBinCount := 20;
+  LBinWidth := (LMax - LMin) / LBinCount;
+  if LBinWidth <= 0 then
+    Exit('');
+  SetLength(LBins, LBinCount);
+  for I := 0 to LBinCount - 1 do
+    LBins[I] := 0;
+  for I := 0 to High(LSorted) do
+  begin
+    LIdx := Trunc((LSorted[I] - LMin) / LBinWidth);
+    if LIdx >= LBinCount then LIdx := LBinCount - 1;
+    if LIdx < 0 then LIdx := 0;
+    Inc(LBins[LIdx]);
+  end;
+
+  { 找最大 bin 计数用于缩放 }
+  LMaxBin := 0;
+  for I := 0 to LBinCount - 1 do
+    if LBins[I] > LMaxBin then LMaxBin := LBins[I];
+  if LMaxBin = 0 then Exit('');
+
+  LChartW := 500.0;
+  LChartH := 200.0;
+
+  BufferAddLine(LBuf, TextFormat(
+    '<svg viewBox="0 0 %s %s" role="img" aria-label="Distribution: %s">',
+    [FormatFloat('0', LChartW), FormatFloat('0', LChartH), EscapeHTML(AName)]));
+  BufferAddLine(LBuf, TextFormat(
+    '<rect x="0" y="0" width="%s" height="%s" rx="12" fill="#fbfcfd"/>',
+    [FormatFloat('0', LChartW), FormatFloat('0', LChartH)]));
+  BufferAddLine(LBuf, TextFormat(
+    '<text x="10" y="16" font-size="12" fill="#333">%s distribution (%d samples)</text>',
+    [EscapeHTML(AName), Length(ASamples)]));
+
+  { 绘制直方图 bar }
+  LBarW := (LChartW - 40.0) / LBinCount;
+  for I := 0 to LBinCount - 1 do
+  begin
+    if LBins[I] = 0 then Continue;
+    LBarH := (LBins[I] / LMaxBin) * (LChartH - 50.0);
+    LBarX := 20.0 + I * LBarW;
+    LBarY := LChartH - 20.0 - LBarH;
+    BufferAddLine(LBuf, TextFormat(
+      '<rect x="%s" y="%s" width="%s" height="%s" fill="#4a7a6f" rx="2"/>',
+      [FormatFloat('0.1', LBarX + 1), FormatFloat('0.1', LBarY),
+       FormatFloat('0.1', Max(LBarW - 2, 2)), FormatFloat('0.1', LBarH)]));
+  end;
+
+  { X 轴标签 }
+  BufferAddLine(LBuf, TextFormat(
+    '<text x="20" y="%s" font-size="9" fill="#999">%s</text>',
+    [FormatFloat('0', LChartH - 5), FormatFloat('0.0', LMin)]));
+  BufferAddLine(LBuf, TextFormat(
+    '<text x="%s" y="%s" font-size="9" fill="#999" text-anchor="end">%s</text>',
+    [FormatFloat('0', LChartW - 5), FormatFloat('0', LChartH - 5),
+     FormatFloat('0.0', LMax)]));
+
+  BufferAddLine(LBuf, '</svg>');
+  Result := BufferToString(LBuf);
+end;
+
+{ P2-3: 基线对比图 SVG }
+
+function TBenchReportGenerator.GenerateComparisonChart(
+  const AComparisons: array of TBenchComparison): string;
+var
+  LBuf: TLineBuffer;
+  LMaxVal: Double;
+  LChartW, LChartH, LGroupW, LBarW: Double;
+  LBarH, LBarX, LBarY: Double;
+  I: Integer;
+begin
+  LBuf := Default(TLineBuffer);
+  if Length(AComparisons) = 0 then Exit('');
+
+  { 找最大值 }
+  LMaxVal := 0;
+  for I := 0 to High(AComparisons) do
+  begin
+    if AComparisons[I].CurrentNsPerOp > LMaxVal then
+      LMaxVal := AComparisons[I].CurrentNsPerOp;
+    if AComparisons[I].BaselineNsPerOp > LMaxVal then
+      LMaxVal := AComparisons[I].BaselineNsPerOp;
+  end;
+  if LMaxVal <= 0 then Exit('');
+
+  LChartW := Max(600.0, 100.0 + Length(AComparisons) * 120.0);
+  LChartH := 250.0;
+  LGroupW := (LChartW - 60.0) / Length(AComparisons);
+
+  BufferAddLine(LBuf, TextFormat(
+    '<svg viewBox="0 0 %s %s" role="img" aria-label="Baseline comparison chart">',
+    [FormatFloat('0', LChartW), FormatFloat('0', LChartH)]));
+  BufferAddLine(LBuf, TextFormat(
+    '<rect x="0" y="0" width="%s" height="%s" rx="12" fill="#fbfcfd"/>',
+    [FormatFloat('0', LChartW), FormatFloat('0', LChartH)]));
+  BufferAddLine(LBuf, '<text x="10" y="16" font-size="12" fill="#333">Current vs Baseline</text>');
+
+  { 图例 }
+  BufferAddLine(LBuf, '<rect x="10" y="24" width="10" height="10" fill="#4a7a6f" rx="2"/>');
+  BufferAddLine(LBuf, '<text x="24" y="33" font-size="10" fill="#555">Current</text>');
+  BufferAddLine(LBuf, '<rect x="90" y="24" width="10" height="10" fill="#e53e3e" rx="2"/>');
+  BufferAddLine(LBuf, '<text x="104" y="33" font-size="10" fill="#555">Baseline</text>');
+
+  LBarW := LGroupW * 0.35;
+
+  for I := 0 to High(AComparisons) do
+  begin
+    LBarX := 30.0 + I * LGroupW;
+
+    { Current bar }
+    LBarH := (AComparisons[I].CurrentNsPerOp / LMaxVal) * (LChartH - 70.0);
+    LBarY := LChartH - 30.0 - LBarH;
+    BufferAddLine(LBuf, TextFormat(
+      '<rect x="%s" y="%s" width="%s" height="%s" fill="#4a7a6f" rx="3"/>',
+      [FormatFloat('0.1', LBarX), FormatFloat('0.1', LBarY),
+       FormatFloat('0.1', LBarW), FormatFloat('0.1', LBarH)]));
+    BufferAddLine(LBuf, TextFormat(
+      '<text x="%s" y="%s" font-size="9" fill="#555" text-anchor="middle">%s</text>',
+      [FormatFloat('0.1', LBarX + LBarW / 2), FormatFloat('0.1', LBarY - 4),
+       FormatTime(AComparisons[I].CurrentNsPerOp)]));
+
+    { Baseline bar }
+    LBarH := (AComparisons[I].BaselineNsPerOp / LMaxVal) * (LChartH - 70.0);
+    LBarY := LChartH - 30.0 - LBarH;
+    BufferAddLine(LBuf, TextFormat(
+      '<rect x="%s" y="%s" width="%s" height="%s" fill="#e53e3e" rx="3"/>',
+      [FormatFloat('0.1', LBarX + LBarW + 4), FormatFloat('0.1', LBarY),
+       FormatFloat('0.1', LBarW), FormatFloat('0.1', LBarH)]));
+    BufferAddLine(LBuf, TextFormat(
+      '<text x="%s" y="%s" font-size="9" fill="#555" text-anchor="middle">%s</text>',
+      [FormatFloat('0.1', LBarX + LBarW * 1.5 + 4), FormatFloat('0.1', LBarY - 4),
+       FormatTime(AComparisons[I].BaselineNsPerOp)]));
+
+    { Ratio label }
+    BufferAddLine(LBuf, TextFormat(
+      '<text x="%s" y="%s" font-size="10" fill="#333" text-anchor="middle">%s (%sx)</text>',
+      [FormatFloat('0.1', LBarX + LGroupW / 2), FormatFloat('0.1', LChartH - 10),
+       EscapeHTML(AComparisons[I].BaselineName),
+       FormatFloat('0.00', AComparisons[I].Ratio)]));
+  end;
+
+  BufferAddLine(LBuf, '</svg>');
   Result := BufferToString(LBuf);
 end;
 

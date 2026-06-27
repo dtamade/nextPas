@@ -967,8 +967,6 @@ var
   LRow: TMatrixRow;
   LCell: TMatrixCell;
   LRatios: array of TDoubleArray;
-  LValid: array of Boolean;
-  LGeoRatios: TDoubleArray;
   I, J: Integer;
 begin
   LNCols := Length(ABaselines);

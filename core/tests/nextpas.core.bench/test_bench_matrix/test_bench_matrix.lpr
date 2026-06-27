@@ -6,6 +6,7 @@ uses
   nextpas.core.bench,
   nextpas.core.bench.base,
   nextpas.core.bench.intf,
+  nextpas.core.bench.report,
   nextpas.core.text.conv,
   nextpas.core.test;
 
@@ -344,6 +345,115 @@ begin
   end;
 end;
 
+{ --- P2-3: 分布直方图 --- }
+
+procedure TestDistributionChart;
+var
+  LGen: TBenchReportGenerator;
+  LSamples: TDoubleArray;
+  LSVG: string;
+  I: Integer;
+begin
+  LGen := TBenchReportGenerator.Create;
+  try
+    { 生成正态分布样本 }
+    RandSeed := 42;
+    SetLength(LSamples, 100);
+    for I := 0 to 99 do
+      LSamples[I] := 100.0 + (Random - 0.5) * 20.0;
+
+    LSVG := LGen.GenerateDistributionChart(LSamples, 'Sort');
+
+    Check(Length(LSVG) > 0, 'Distribution chart not empty');
+    Check(Pos('<svg', LSVG) > 0, 'Has SVG tag');
+    Check(Pos('Sort', LSVG) > 0, 'Has benchmark name');
+    Check(Pos('100 samples', LSVG) > 0, 'Has sample count');
+    Check(Pos('distribution', LSVG) > 0, 'Has distribution label');
+  finally
+    LGen.Free;
+  end;
+end;
+
+{ 空样本返回空字符串 }
+procedure TestDistributionChart_Empty;
+var
+  LGen: TBenchReportGenerator;
+  LSamples: TDoubleArray;
+  LSVG: string;
+begin
+  LGen := TBenchReportGenerator.Create;
+  try
+    SetLength(LSamples, 0);
+    LSVG := LGen.GenerateDistributionChart(LSamples, 'Empty');
+    Check(LSVG = '', 'Empty samples returns empty SVG');
+
+    SetLength(LSamples, 1);
+    LSamples[0] := 100.0;
+    LSVG := LGen.GenerateDistributionChart(LSamples, 'Single');
+    Check(LSVG = '', 'Single sample returns empty SVG');
+  finally
+    LGen.Free;
+  end;
+end;
+
+{ --- P2-3: 基线对比图 --- }
+
+procedure TestComparisonChart;
+var
+  LGen: TBenchReportGenerator;
+  LComparisons: array[0..2] of TBenchComparison;
+  LSVG: string;
+begin
+  LGen := TBenchReportGenerator.Create;
+  try
+    LComparisons[0] := Default(TBenchComparison);
+    LComparisons[0].BaselineName := 'v1.0';
+    LComparisons[0].CurrentNsPerOp := 100.0;
+    LComparisons[0].BaselineNsPerOp := 120.0;
+    LComparisons[0].Ratio := 0.833;
+
+    LComparisons[1] := Default(TBenchComparison);
+    LComparisons[1].BaselineName := 'v1.1';
+    LComparisons[1].CurrentNsPerOp := 100.0;
+    LComparisons[1].BaselineNsPerOp := 95.0;
+    LComparisons[1].Ratio := 1.053;
+
+    LComparisons[2] := Default(TBenchComparison);
+    LComparisons[2].BaselineName := 'v2.0';
+    LComparisons[2].CurrentNsPerOp := 100.0;
+    LComparisons[2].BaselineNsPerOp := 100.0;
+    LComparisons[2].Ratio := 1.0;
+
+    LSVG := LGen.GenerateComparisonChart(LComparisons);
+
+    Check(Length(LSVG) > 0, 'Comparison chart not empty');
+    Check(Pos('<svg', LSVG) > 0, 'Has SVG tag');
+    Check(Pos('Current', LSVG) > 0, 'Has Current legend');
+    Check(Pos('Baseline', LSVG) > 0, 'Has Baseline legend');
+    Check(Pos('v1.0', LSVG) > 0, 'Has v1.0 label');
+    Check(Pos('v1.1', LSVG) > 0, 'Has v1.1 label');
+    Check(Pos('v2.0', LSVG) > 0, 'Has v2.0 label');
+    Check(Pos('0.83x', LSVG) > 0, 'Has v1.0 ratio');
+  finally
+    LGen.Free;
+  end;
+end;
+
+{ 空对比返回空字符串 }
+procedure TestComparisonChart_Empty;
+var
+  LGen: TBenchReportGenerator;
+  LSVG: string;
+begin
+  LGen := TBenchReportGenerator.Create;
+  try
+    LSVG := LGen.GenerateComparisonChart([]);
+    Check(LSVG = '', 'Empty comparisons returns empty SVG');
+  finally
+    LGen.Free;
+  end;
+end;
+
 var
   T: TTestSuite;
 begin
@@ -362,6 +472,10 @@ begin
   T.Test('ConsoleReport', @TestMatrix_ConsoleReport);
   T.Test('HTMLReport', @TestMatrix_HTMLReport);
   T.Test('ManyBaselines', @TestMatrix_ManyBaselines);
+  T.Test('DistributionChart', @TestDistributionChart);
+  T.Test('DistributionChart_Empty', @TestDistributionChart_Empty);
+  T.Test('ComparisonChart', @TestComparisonChart);
+  T.Test('ComparisonChart_Empty', @TestComparisonChart_Empty);
 
   T.Run;
   T.Summary;
