@@ -46,12 +46,12 @@
 
 ### P2 — 超越（做 Go/Rust 做不到的）
 
-| ID | Gap | 理由 | 对标 |
-|----|-----|------|------|
-| P2-1 | 多基线对比矩阵 | 一次运行对比 N 个基线（不只是 A vs B） | 无（超越） |
-| P2-2 | 内存 + 性能联合报告 | 同时展示 ns/op 和 allocs/op + bytes/op | Go testing 有但不美观 |
-| P2-3 | HTML 报告交互图表 | 趋势图、分布图、对比图 | criterion HTML |
-| P2-4 | CI 集成模板 | GitHub Actions / GitLab CI 模板，回归检测 | benchstat CI |
+| ID | Gap | 理由 | 对标 | 状态 |
+|----|-----|------|------|------|
+| P2-1 | 多基线对比矩阵 | 一次运行对比 N 个基线（不只是 A vs B） | 无（超越） | ✅ |
+| P2-2 | 内存 + 性能联合报告 | 同时展示 ns/op 和 allocs/op + bytes/op | Go testing 有但不美观 | ✅ |
+| P2-3 | HTML 报告交互图表 | 趋势图、分布图、对比图 | criterion HTML | ✅ |
+| P2-4 | CI 集成模板 | GitHub Actions / GitLab CI 模板，回归检测 | benchstat CI | ✅ |
 
 ---
 
