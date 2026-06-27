@@ -299,6 +299,7 @@ type
     function TypeMetaIsRecord(const ATypeName: string): Boolean;
     function TypeMetaIsClass(const ATypeName: string): Boolean;
     function TypeMetaIsInterface(const ATypeName: string): Boolean;
+    function TypeIsInterfaceByName(const ATypeName: string): Boolean;
     function TypeMetaFieldIndex(const ATypeName, AFieldName: string): Int64;
     function TypeMetaFieldIsStr(const ATypeName, AFieldName: string): Boolean;
     function TypeMetaFieldIsPtr(const ATypeName, AFieldName: string): Boolean;
@@ -3093,6 +3094,8 @@ begin
           Result := Result + 'b'
         else if (TypeChild <> nil) and TypeMetaIsRecord(TypeChild.Text) then
           Result := Result + 'r'
+        else if (TypeChild <> nil) and TypeIsInterfaceByName(TypeChild.Text) then
+          Result := Result + 'f'
         else if (TypeChild <> nil) and (TypeMetaSize(TypeChild.Text) > 0) then
           Result := Result + 'p'
         else
@@ -4195,6 +4198,16 @@ begin
   Result := FModel.LookupConstValue(ATypeName + '$interface', V);
 end;
 
+function TSemanticAnalyzer.TypeIsInterfaceByName(const ATypeName: string): Boolean;
+var TypeId: LongInt;
+begin
+  if TypeMetaIsInterface(ATypeName) then
+    Exit(True);
+  TypeId := FModel.FindTypeByName(ATypeName);
+  Result := (TypeId > 0) and
+    SameText(FModel.TypeAt(TypeId - 1).Kind, 'interface');
+end;
+
 function TSemanticAnalyzer.TypeMetaFieldIndex(
   const ATypeName, AFieldName: string): Int64;
 var Meta: TTypeMetadata; FM: TFieldMeta; I: LongInt; V: Int64;
@@ -4345,10 +4358,14 @@ begin
   begin
     if Meta.IsRecord then
       Exit('r');
+    if TypeIsInterfaceByName(TypeName) then
+      Exit('f');
     Exit('p');
   end;
   if TypeMetaIsRecord(TypeName) then
     Exit('r');
+  if TypeIsInterfaceByName(TypeName) then
+    Exit('f');
   if TypeMetaSize(TypeName) > 0 then
     Exit('p');
   Result := 'i';
