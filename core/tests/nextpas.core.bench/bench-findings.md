@@ -1201,5 +1201,5 @@ ebba5de5d fix(bench): 补全 2 个遗漏的 Default 初始化 (Tukey/ZScore)
 
 ### Commits
 ```
-(to be added)
+51234fa7a fix(bench): R4 audit — timestamp 24h + QUIET 'on' + findings doc
 ```
