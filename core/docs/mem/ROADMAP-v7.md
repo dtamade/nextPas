@@ -78,3 +78,7 @@ Phase E:    文档注释 80%+                              ✅ 本轮
 | **F** | 核心热路径基准 + Go/Rust 对照 | ✅ 完成 |
 
 > **Round 15** (2026-06-27): test_ring_buffer 30 tests + test_sharded_pools(9)/test_oom(8) 恢复编译 + bench_pool_family + Go 对照
+>
+> **Round 16** (2026-06-27): B1 MulHash64 + Log2UInt 提取到 mem.base (8 文件, -103 行) + B2 NormalizeShardCount + ChooseShardIndex 提取到 mem.utils (3 文件)
+>
+> **Round 17** (2026-06-27): B3 CalcGeometricGrowth 提取到 mem.utils (3 文件, -64 行) + B4 AlignUpPtr 局部副本统一到 AlignUpUnChecked (2 文件, -16 行) + 清理遗留未使用变量 + 移除不再需要的 math 导入
