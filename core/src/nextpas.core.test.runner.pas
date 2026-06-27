@@ -596,6 +596,7 @@ begin
 
     LEntry.Name       := AName + '/' + ACases[I].Name;
     LEntry.Proc       := nil;
+    LEntry.Closure    := nil;
     LEntry.SubtestProc := nil;
     LEntry.Kind       := ekTableTest;
     LEntry.SkipReason := '';
@@ -616,6 +617,7 @@ var
 begin
   LEntry.Name        := AName;
   LEntry.Proc        := nil;
+  LEntry.Closure     := nil;
   LEntry.SubtestProc := nil;
   LEntry.Kind        := ekSkipped;
   LEntry.SkipReason  := AReason;
