@@ -811,6 +811,7 @@ begin
     LastFail      := 1;
     LastSkip      := LSkip;
     Result         := False;
+    CleanupTableAllocations;
     LOutSink.WriteLn(
       AnsiDim('  ' + IntToStr(LSkip) + ' skipped (setup failure)', LConfig));
     Exit;
@@ -1294,6 +1295,7 @@ begin
     LastFail      := 1;
     LastSkip      := LSkip;
     Result         := False;
+    CleanupTableAllocations;
     LOutSink.WriteLn(
       AnsiDim('  ' + IntToStr(LSkip) + ' skipped (setup failure)', LConfig));
     Exit;
@@ -1507,7 +1509,6 @@ begin
       GFixtureRegistry[FixtureAllocations[I]] := nil;
     end;
   FixtureAllocations := nil;
-  StubAllocations := nil;
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }
