@@ -7008,16 +7008,12 @@ begin
           (Symbol.TypeId > 0) and (Symbol.TypeId <= FModel.TypeCount) then
         begin
           Inc(DirectImportMatchCount);
-          if UniqueTypeId = 0 then
-            UniqueTypeId := Symbol.TypeId
-          else if UniqueTypeId <> Symbol.TypeId then
-            Exit(0);
+          { Prefer later entry (full definition over forward declaration) }
+          UniqueTypeId := Symbol.TypeId;
         end;
       end;
-      if DirectImportMatchCount = 1 then
+      if DirectImportMatchCount >= 1 then
         Exit(UniqueTypeId);
-      if DirectImportMatchCount > 1 then
-        Exit(0);
     end;
   end;
 
@@ -7029,13 +7025,9 @@ begin
     if SameText(Symbol.Kind, 'type') and SameText(Symbol.Name, ATypeName) and
       (Symbol.TypeId > 0) and (Symbol.TypeId <= FModel.TypeCount) then
     begin
-      if not CandidateSeen then
-      begin
-        CandidateSeen := True;
-        UniqueTypeId := Symbol.TypeId;
-      end
-      else if UniqueTypeId <> Symbol.TypeId then
-        Exit(0);
+      { Prefer later type entry (full definition over forward declaration) }
+      UniqueTypeId := Symbol.TypeId;
+      CandidateSeen := True;
     end;
   end;
   if CandidateSeen then
@@ -7497,13 +7489,13 @@ procedure TSemanticAnalyzer.VerifyInterfaceImplementation(
   const AOwnerUnitId: string);
 var
   I, J, K: LongInt;
-  IntfName, ClsN, MethN: string;
+  IntfName, ClsN, MethN, CheckName: string;
   IntfTypeId: LongInt;
   Symbol: TSemanticSymbol;
   QualIntfMethod: string;
   Found: Boolean;
+  CurrentCheckTypeId: LongInt;
 begin
-  ClsN := FModel.TypeAt(AClassTypeId - 1).Name;
   I := 1;
   while I <= Length(AInterfaceList) do
   begin
@@ -7533,18 +7525,27 @@ begin
         begin
           MethN := Copy(Symbol.Name, Length(QualIntfMethod) + 1, MaxInt);
           Found := False;
-          for J := 0 to FModel.SymbolCount - 1 do
-            if SameText(FModel.SymbolAt(J).Name, ClsN + '.' + MethN) and
-              (SameText(FModel.SymbolAt(J).Kind, 'method') or
-               SameText(FModel.SymbolAt(J).Kind, 'constructor')) then
-            begin
-              Found := True;
-              Break;
-            end;
+          CurrentCheckTypeId := AClassTypeId;
+          while (CurrentCheckTypeId > 0) and (not Found) and
+                (CurrentCheckTypeId <> FModel.TypeAt(CurrentCheckTypeId - 1).ParentTypeId) do
+          begin
+            ClsN := FModel.TypeAt(CurrentCheckTypeId - 1).Name;
+            for J := 0 to FModel.SymbolCount - 1 do
+              if SameText(FModel.SymbolAt(J).Name, ClsN + '.' + MethN) and
+                (SameText(FModel.SymbolAt(J).Kind, 'method') or
+                 SameText(FModel.SymbolAt(J).Kind, 'constructor')) then
+              begin
+                Found := True;
+                Break;
+              end;
+            if not Found then
+              CurrentCheckTypeId := FModel.TypeAt(CurrentCheckTypeId - 1).ParentTypeId;
+          end;
           if not Found then
             FDiagnostics.EmitError('sema.missing-interface-method', 'sema',
               FRootFileId, 0,
-              ClsN + ' does not implement ' + IntfName + '.' + MethN);
+              FModel.TypeAt(AClassTypeId - 1).Name +
+              ' does not implement ' + IntfName + '.' + MethN);
         end;
       end;
     end;

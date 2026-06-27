@@ -253,6 +253,7 @@ type
       const AByteOffset: LongInt
     ): LongInt;
     function AddType(const AName: string; const AKind: string): LongInt;
+    procedure SetTypeKind(const ATypeId: LongInt; const AKind: string);
     procedure SetTypeScalarFact(const ATypeId: LongInt;
       const AKind: TSemanticScalarKind; const ABitWidth: LongInt;
       const ASigned: Boolean);
@@ -457,6 +458,16 @@ begin
   FTypes[NextIndex].Kind := AKind;
   FTypes[NextIndex].ParentTypeId := 0;
   Result := FTypes[NextIndex].TypeId;
+end;
+
+procedure TSemanticModel.SetTypeKind(const ATypeId: LongInt;
+  const AKind: string);
+var
+  Idx: LongInt;
+begin
+  Idx := ATypeId - 1;
+  if (Idx >= 0) and (Idx < Length(FTypes)) then
+    FTypes[Idx].Kind := AKind;
 end;
 
 procedure TSemanticModel.SetTypeScalarFact(const ATypeId: LongInt;

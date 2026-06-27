@@ -3062,6 +3062,12 @@ begin
                 Inc(ACursor);
               MatchTokenSilent(ALexer, ACursor, tkRBracket);
             end;
+            if (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind = tkSemicolon) then
+            begin
+              // Forward interface declaration: interface;
+            end
+            else
             while (ACursor < ALexer.TokenCount) and
               (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
               (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
