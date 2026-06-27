@@ -790,6 +790,14 @@ function AlignUp(aPtr: Pointer; aAlignment: SizeUInt = SIZE_PTR): Pointer; {$IFD
  *}
 function AlignUpUnChecked(aPtr: Pointer; aAlignment: SizeUInt = SIZE_PTR): Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
+{ Sharded pool utilities }
+
+{** 归一化分片数: <= 0 时取 CPU 数 (clamped 1..32), 非 2 的幂时上取整. }
+function NormalizeShardCount(aShardCount, aCPUCount: Integer): Integer;
+
+{** 线程→分片路由: MulHash64(AThreadId) and mask. }
+function ChooseShardIndex(AThreadId: QWord; aShardMask: SizeUInt): Integer;
+
 implementation
 
 uses
@@ -1305,6 +1313,28 @@ begin
   {$PUSH}{$WARN 4055 OFF}
   Result := Pointer(PtrUInt(aPtr) and not (aAlignment - 1));
   {$POP}
+end;
+
+{ Sharded pool utilities }
+
+function NormalizeShardCount(aShardCount, aCPUCount: Integer): Integer;
+begin
+  if aShardCount <= 0 then
+  begin
+    aShardCount := aCPUCount;
+    if aShardCount < 1 then aShardCount := 1;
+    if aShardCount > 32 then aShardCount := 32;
+  end;
+  if not IsPowerOfTwo(SizeUInt(aShardCount)) then
+    aShardCount := Integer(NextPowerOfTwo(SizeUInt(aShardCount)));
+  if aShardCount < 1 then aShardCount := 1;
+  Result := aShardCount;
+end;
+
+function ChooseShardIndex(AThreadId: QWord; aShardMask: SizeUInt): Integer;
+begin
+  if aShardMask = 0 then Exit(0);
+  Result := Integer(MulHash64(AThreadId) and QWord(aShardMask));
 end;
 
 end.

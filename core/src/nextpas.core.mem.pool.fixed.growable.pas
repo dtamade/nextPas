@@ -8,6 +8,7 @@ uses
   nextpas.core.base,
   nextpas.core.base.utils,
   nextpas.core.math,              // ✅ Math facade (for trunc)
+  nextpas.core.mem.base,          // Log2UInt, IsPowerOfTwo, NextPowerOfTwo
   nextpas.core.mem.error,
   nextpas.core.mem.pool.base,     // IPool (decoupled)
   nextpas.core.mem.allocator;     // IAllocator + GetRtlAllocator
@@ -208,15 +209,7 @@ begin
   FBlockSize := aConfig.BlockSize;
   FBlockMask := FBlockSize - 1;
 
-  // 计算 log2(BlockSize)
-  LShift := 0;
-  LTmp := FBlockSize;
-  while LTmp > 1 do
-  begin
-    Inc(LShift);
-    LTmp := LTmp shr 1;
-  end;
-  FBlockShift := LShift;
+  FBlockShift := Log2UInt(FBlockSize);
 
   if aConfig.Allocator = nil then
     FAllocator := nextpas.core.mem.allocator.GetRtlAllocator

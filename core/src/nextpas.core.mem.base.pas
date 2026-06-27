@@ -40,6 +40,17 @@ function AlignUp(const AValue, AAlignment: SizeUInt): SizeUInt; inline;
     otherwise return DEFAULT_ALIGNMENT. }
 function NormalizeAlignment(const AAlignment: SizeUInt): SizeUInt; inline;
 
+{** Return AAlignment if it is a power of two and >= AMinAlignment,
+    otherwise return AMinAlignment. }
+function NormalizeAlignmentMin(const AAlignment, AMinAlignment: SizeUInt): SizeUInt; inline;
+
+{** Fibonacci hash: multiply by 2^64/golden-ratio. Used for shard routing and
+    open-addressing hash maps. }
+function MulHash64(const AValue: QWord): QWord; inline;
+
+{** Integer log2 (floor). Returns 0 for AValue = 0. }
+function Log2UInt(const AValue: SizeUInt): SizeUInt;
+
 implementation
 
 function IsPowerOfTwo(const AValue: SizeUInt): Boolean;
@@ -74,6 +85,34 @@ begin
     Result := AAlignment
   else
     Result := DEFAULT_ALIGNMENT;
+end;
+
+function NormalizeAlignmentMin(const AAlignment, AMinAlignment: SizeUInt): SizeUInt;
+begin
+  if (AAlignment >= AMinAlignment) and IsPowerOfTwo(AAlignment) then
+    Result := AAlignment
+  else
+    Result := AMinAlignment;
+end;
+
+{$PUSH}{$Q-}
+function MulHash64(const AValue: QWord): QWord;
+begin
+  Result := AValue * QWord(11400714819323198485);
+end;
+{$POP}
+
+function Log2UInt(const AValue: SizeUInt): SizeUInt;
+var
+  LVal: SizeUInt;
+begin
+  Result := 0;
+  LVal := AValue;
+  while LVal > 1 do
+  begin
+    Inc(Result);
+    LVal := LVal shr 1;
+  end;
 end;
 
 end.

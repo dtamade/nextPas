@@ -11,6 +11,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.mem.base,
   nextpas.core.mem.pool.memory_pool,
   nextpas.core.mem.allocator,
   nextpas.core.mem.intf,
@@ -164,13 +165,10 @@ const
   NGX_SLAB_BUSY        = PtrUInt($FFFFFFFFFFFFFFFF);
 {$endif}
 
-{$PUSH}
-{$Q-}
 function FixedSlabHash(AKey: PtrUInt): PtrUInt; inline;
 begin
-  Result := PtrUInt(QWord(AKey) * QWord(11400714819323198485));
+  Result := PtrUInt(MulHash64(QWord(AKey)));
 end;
-{$POP}
 
 {$IFDEF NEXTPAS_SLAB_TESTGUARD}
 procedure SlabDbg(const s: AnsiString);
