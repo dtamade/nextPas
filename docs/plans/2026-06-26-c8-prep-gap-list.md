@@ -9,13 +9,13 @@
 
 | 类别 | 数量 | 说明 |
 |------|------|------|
-| ✅ 语法+语义通过 | ~95 | parser + sema 全绿，FPC 后端问题不算 |
+| ✅ 语法+语义通过 | ~98 | parser + sema 全绿 |
 | 🔴 Parser 语法错误 | ~12 | 需要 parser 增强 |
-| 🟡 语义错误 | 2 | missing-interface-method (bench, bitset) |
+| 🟡 语义错误 | 0 | 全部修复 |
 | ⚪ FPC 后端失败 | ~15 | host-compiler-exec-failed，非编译器语义问题 |
 | ⚪ 缺少源文件 | ~5 | 文件名不存在（非编译器问题） |
 
-**语义通过率：~98%**（100 个模块中仅 2 个有 sema 错误）
+**语义通过率：100%**（所有 core 模块 sema 0 错误）
 
 ---
 
@@ -36,6 +36,9 @@
 | 11 | class/interface encoding | class → 'c', interface → 'f' | ecc0cc1df |
 | 12 | array type encoding | array of T → 'a' + GetSubstitutedParamSignature 同步 | b9cee6eff |
 | 13 | IsBuiltinProcedure | Default/TypeInfo/InterlockedCompare/Inc/Dec | ecc0cc1df |
+| 14 | interface forward declaration parser | interface; 分号检查 | 2ecc93437 |
+| 15 | VerifyInterfaceImplementation parent chain | 父类方法继承检查 | 2ecc93437 |
+| 16 | ResolveTypeIdForOwner duplicate types | 前向声明+完整定义优先完整定义 | 2ecc93437 |
 
 ---
 
@@ -89,9 +92,9 @@
 - `TextOfChar` — bench.report → ✅ 通过
 - `StringsSplit` — bench.xlang → 待测试
 
-### S5：interface not implemented — 🔴 未修复
-- `TBenchResults does not implement IBenchResults.*` — bench (11 methods)
-- `TBitSet does not implement IBitSet.AppendTo` — collections.bitset (15 errors)
+### S5：interface not implemented — ✅ 全部修复
+- `TBenchResults does not implement IBenchResults.*` — bench → ✅ 通过 (parser forward decl fix)
+- `TBitSet does not implement IBitSet.AppendTo` — collections.bitset → ✅ 通过 (parent chain + type resolution)
 
 ### S6：compiler exit
 - `http` — FPC 编译失败（后端问题，非 sema）
