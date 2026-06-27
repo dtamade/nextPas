@@ -14,6 +14,17 @@ const
   { Default number of slots per span. }
   CENTRAL_SPAN_SLOTS = 64;
 
+  { Scavenger: number of alloc/free ops before a fully-free span becomes
+    eligible for release. At ~10M ops/s, 100K ops ≈ 10ms idle. }
+  SCAVENGER_IDLE_THRESHOLD = 100000;
+
+  { Scavenger: how often (in ops) to run a scavenge check.
+    Must be power of 2 for cheap masking. }
+  SCAVENGER_CHECK_INTERVAL = 1024;
+
+  { Scavenger: max spans released per scavenge pass (bounds hold time). }
+  SCAVENGER_MAX_RELEASE = 16;
+
 type
   {** Entry in the central span pool: a span + its memory region. }
   PCentralSpanEntry = ^TCentralSpanEntry;
@@ -21,6 +32,7 @@ type
     FSpan: TSpan;
     FMemory: Pointer;     { Allocated memory backing the span. }
     FMemorySize: SizeUInt;
+    FLastFreeTick: UInt64; { Op counter when span became fully free (0 = not idle). }
   end;
 
   {** Central span pool for one size class. Manages partial and full spans.
@@ -48,12 +60,20 @@ function CentralPoolAlloc(var APool: TCentralPool;
   ACount: Word; ABlocks: PPointer): Word;
 
 {** Batch free: return ABlocks[] to their respective spans.
-    Thread-safe. }
+    Fully free spans are marked with the current op counter for scavenging.
+    AOpCounter: current op counter (for idle tracking). Thread-safe. }
 procedure CentralPoolFree(var APool: TCentralPool;
-  ACount: Word; ABlocks: PPointer);
+  ACount: Word; ABlocks: PPointer; AOpCounter: UInt64);
 
-{** Return total free slots across all spans. }
+{** Return total free slots across all non-released spans. }
 function CentralPoolFreeCount(var APool: TCentralPool): SizeUInt;
+
+{** Scan all entries and release backing memory for fully-free spans that have
+    been idle for more than AIdleThreshold ops.
+    AOpCounter: current monotonic operation counter.
+    Returns number of spans released. Thread-safe. }
+function ScavengeCentralPools(var APool: TCentralPool;
+  AOpCounter: UInt64; AIdleThreshold: UInt64): Int32;
 
 implementation
 
@@ -86,7 +106,8 @@ var
   I: Int32;
 begin
   for I := 0 to APool.FEntryCount - 1 do
-    FreeMem(APool.FEntries[I].FMemory, APool.FEntries[I].FMemorySize);
+    if APool.FEntries[I].FMemory <> nil then
+      FreeMem(APool.FEntries[I].FMemory, APool.FEntries[I].FMemorySize);
   APool.FEntryCount := 0;
   APool.FPartialHead := -1;
   SetLength(APool.FEntries, 0);
@@ -116,6 +137,7 @@ begin
   SpanInit(APool.FEntries[LIdx].FSpan, LMem, APool.FSlotSize, CENTRAL_SPAN_SLOTS);
   APool.FEntries[LIdx].FMemory := LMem;
   APool.FEntries[LIdx].FMemorySize := LMemSize;
+  APool.FEntries[LIdx].FLastFreeTick := 0;
   { Add to partial list. }
   APool.FPartialNext[LIdx] := APool.FPartialHead;
   APool.FPartialHead := LIdx;
@@ -142,6 +164,8 @@ begin
           Break;
       end;
       LIdx := APool.FPartialHead;
+      { Clear idle timestamp (span is being reused). }
+      APool.FEntries[LIdx].FLastFreeTick := 0;
       { Alloc from this span. }
       LPtr := SpanAlloc(APool.FEntries[LIdx].FSpan);
       if LPtr = nil then
@@ -181,7 +205,7 @@ begin
 end;
 
 procedure CentralPoolFree(var APool: TCentralPool;
-  ACount: Word; ABlocks: PPointer);
+  ACount: Word; ABlocks: PPointer; AOpCounter: UInt64);
 var
   I: Word;
   LIdx: Int32;
@@ -199,6 +223,9 @@ begin
       end;
       LWasFull := not SpanHasFree(APool.FEntries[LIdx].FSpan);
       SpanFree(APool.FEntries[LIdx].FSpan, ABlocks^);
+      { If span became completely empty, mark it as idle for scavenging. }
+      if SpanIsEmpty(APool.FEntries[LIdx].FSpan) then
+        APool.FEntries[LIdx].FLastFreeTick := AOpCounter;
       { If span was full and now has space, re-add to partial list. }
       if LWasFull and SpanHasFree(APool.FEntries[LIdx].FSpan) then
       begin
@@ -220,7 +247,47 @@ begin
   SpinLock(APool.FSpinLock);
   try
     for I := 0 to APool.FEntryCount - 1 do
-      Inc(Result, SpanFreeCount(APool.FEntries[I].FSpan));
+      if APool.FEntries[I].FMemory <> nil then
+        Inc(Result, SpanFreeCount(APool.FEntries[I].FSpan));
+  finally
+    SpinUnlock(APool.FSpinLock);
+  end;
+end;
+
+function ScavengeCentralPools(var APool: TCentralPool;
+  AOpCounter: UInt64; AIdleThreshold: UInt64): Int32;
+var
+  I: Int32;
+  LAge: UInt64;
+begin
+  Result := 0;
+  SpinLock(APool.FSpinLock);
+  try
+    for I := 0 to APool.FEntryCount - 1 do
+    begin
+      if Result >= SCAVENGER_MAX_RELEASE then
+        Break;
+      { Only consider fully-free spans with active memory. }
+      if APool.FEntries[I].FMemory = nil then
+        Continue;
+      if not SpanIsEmpty(APool.FEntries[I].FSpan) then
+        Continue;
+      if APool.FEntries[I].FLastFreeTick = 0 then
+        Continue;
+      { Check if idle long enough. }
+      LAge := AOpCounter - APool.FEntries[I].FLastFreeTick;
+      if LAge >= AIdleThreshold then
+      begin
+        FreeMem(APool.FEntries[I].FMemory, APool.FEntries[I].FMemorySize);
+        APool.FEntries[I].FMemory := nil;
+        APool.FEntries[I].FLastFreeTick := 0;
+        { Mark span as empty so SpanAlloc returns nil if entry is still
+          on the partial list (edge case: race with concurrent alloc). }
+        APool.FEntries[I].FSpan.FBitmap := 0;
+        APool.FEntries[I].FSpan.FFreeCount := 0;
+        Inc(Result);
+      end;
+    end;
   finally
     SpinUnlock(APool.FSpinLock);
   end;

@@ -12,13 +12,15 @@ Phase D:   测试覆盖 100%                               ✅
 Phase E:   文档注释 80%+                                ✅
 Phase F:   基准测试 + Go/Rust 对照                      ✅
 R16-R17:   代码复用提炼 (MulHash64/Log2UInt/Growth/Align) ✅
-当前位置:  → Phase G: 通用分配器基础设施
+当前位置:  → Phase H: 内存生命周期管理
 ```
 
 ## 当前状态
 
 - 49 源文件 / 19,920 行
 - 30 suites / 398 tests / 0 leaks (R17 后)
++ Phase G (G-1~G-5): 5 新单元 / 43 新测试
++ Phase H-1 (Scavenger): 7 新测试 + central.pas 增强
 - 核心热路径: Arena 2ns (476M ops/s), RingBuffer 2x 快于 Go chan
 - 已有能力: Arena (bump/local/chunked), 固定块池 (block/slab/mapped), 分片锁, 线程局部, 无锁 CAS
 - 缺失能力: 见下方差距分析
@@ -212,9 +214,19 @@ TMemoryScavenger = class
 end;
 ```
 
+**实现方案** (H-1 已完成):
+- 集成在 `central.pas` 中，无需独立文件
+- 每个 TCentralSpanEntry 增加 `FLastFreeTick: UInt64` — span 变为完全空闲时的操作计数器
+- `ScavengeCentralPools()` 扫描所有 entries，释放 `age ≥ threshold` 的空闲 span
+- TGrowingAllocator 每 1024 次操作检查一次 (SCAVENGER_CHECK_INTERVAL)
+- 使用操作计数器而非 wall-clock，避免引入 L0→time 依赖
+- FreeMem 直接归还 OS (glibc large block → munmap)
+- 未来可升级为 `platform_virtual_decommit` (需 span 改用虚拟内存分配)
+
 **交付物**:
-- `nextpas.core.mem.scavenger.pas` — TMemoryScavenger
-- `test_scavenger` — OS 回收验证
+- `nextpas.core.mem.central.pas` — 增强: FLastFreeTick + ScavengeCentralPools
+- `nextpas.core.mem.allocator.growing.pas` — 增强: FOpCounter + 周期性 scavenge
+- `test_scavenger` — 7 tests: skip_recent / release_old / alloc_after / selective / empty / reuse / partial
 
 **对标指标**:
 - RSS 回收: 空闲 >50% 30s 后 RSS 降至实际使用量的 ≤120%
@@ -288,7 +300,7 @@ end;
 | **G-3** | TLS cache | G-1 | 1 文件 + 1 测试 | ✅ intrusive free list + batch refill/flush |
 | **G-4** | Central pool | G-2 | 1 文件 + 1 测试 | ✅ span management + spinlock |
 | **G-5** | TGrowingAllocator | G-1~4 | 1 文件 + 1 测试 + 基准 | ✅ unified IAllocator |
-| **H-1** | Scavenger | G-5 | 1 文件 + 1 测试 | 待实施 |
+| **H-1** | Scavenger | G-5 | 1 文件 + 1 测试 | ✅ per-entry idle tick + periodic release |
 | **H-2** | X-thread free | G-3 | 1 文件 + 1 测试 | 待实施 |
 | **I-1** | Free-list shuffle | G-3 | 小改 | 待实施 |
 | **I-2** | Guard pages | G-2 | 1 文件 + 1 测试 | 待实施 |
@@ -304,7 +316,7 @@ end;
 | Size classes | 7 | 48 | 48 |
 | 小对象分配延迟 | N/A | ≤ 8ns | ≤ 8ns |
 | 多线程争用 | mutex | TLS 0 争用 | TLS 0 争用 |
-| OS 内存回收 | ❌ | ❌ | ✅ scavenger |
+| OS 内存回收 | ❌ | ❌ | ✅ per-entry idle tick + periodic scavenge |
 | RSS 碎片率 | 无法测量 | ≤ 1.5x | ≤ 1.3x |
 | 基准对标 | Arena/chan only | Go/mimalloc 全路径 | 含碎片率 |
 

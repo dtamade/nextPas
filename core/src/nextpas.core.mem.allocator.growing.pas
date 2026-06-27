@@ -30,6 +30,7 @@ type
     FCentrals: array[0..MEM_SIZECLASS_COUNT - 1] of TCentralPool;
     procedure InitCentrals;
   public
+    FOpCounter: UInt64;  { Monotonic op counter for scavenger idle tracking. }
     constructor Create;
     destructor Destroy; override;
 
@@ -79,7 +80,8 @@ begin
     Exit;
   if GGrowingAllocator = nil then
     Exit;
-  CentralPoolFree(GGrowingAllocator.FCentrals[AIndex], ACount, ABlocks);
+  CentralPoolFree(GGrowingAllocator.FCentrals[AIndex], ACount, ABlocks,
+    GGrowingAllocator.FOpCounter);
 end;
 
 { --- TGrowingAllocator --- }
@@ -113,6 +115,14 @@ var
 begin
   if ASize = 0 then
     Exit(nil);
+  Inc(FOpCounter);
+  { Periodic scavenge: release long-idle spans to OS. }
+  if (FOpCounter and (SCAVENGER_CHECK_INTERVAL - 1)) = 0 then
+  begin
+    for LIndex := 0 to MEM_SIZECLASS_COUNT - 1 do
+      ScavengeCentralPools(FCentrals[LIndex], FOpCounter,
+        SCAVENGER_IDLE_THRESHOLD);
+  end;
   LIndex := SizeClassIndex(ASize);
   if LIndex < 0 then
   begin
@@ -140,6 +150,7 @@ var
 begin
   if APtr = nil then
     Exit;
+  Inc(FOpCounter);
   LIndex := SizeClassIndex(ASize);
   if LIndex < 0 then
   begin

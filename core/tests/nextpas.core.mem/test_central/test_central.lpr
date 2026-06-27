@@ -80,9 +80,11 @@ begin
   LCount := CentralPoolAlloc(LPool, 4, @LBlocks[0]);
   Check(LCount = 4, 'alloc 4');
   LFreeBefore := CentralPoolFreeCount(LPool);
-  CentralPoolFree(LPool, 4, @LBlocks[0]);
+  CentralPoolFree(LPool, 4, @LBlocks[0], 0);
   LFreeAfter := CentralPoolFreeCount(LPool);
   Check(LFreeAfter = LFreeBefore + 4, 'free increased by 4');
+  { Span is partial (not fully empty): FLastFreeTick stays 0. }
+  Check(LPool.FEntries[0].FLastFreeTick = 0, 'not idle (partial)');
   CentralPoolDestroy(LPool);
   WriteLn('PASS: central free');
 end;
@@ -96,7 +98,8 @@ begin
   CentralPoolInit(LPool, 64);
   CentralPoolAlloc(LPool, 4, @LBlocks[0]);
   LSaved := LBlocks[0];
-  CentralPoolFree(LPool, 1, @LBlocks[0]);
+  CentralPoolFree(LPool, 1, @LBlocks[0], 0);
+  { Free 1 of 4 → span not empty → stays in partial list. }
   CentralPoolAlloc(LPool, 1, @LBlocks[0]);
   Check(LBlocks[0] = LSaved, 're-alloc returns freed slot');
   CentralPoolDestroy(LPool);
@@ -112,7 +115,7 @@ begin
   Check(CentralPoolFreeCount(LPool) = 0, 'initial free = 0');
   CentralPoolAlloc(LPool, 10, @LBlocks[0]);
   Check(CentralPoolFreeCount(LPool) = 64 - 10, 'free after alloc');
-  CentralPoolFree(LPool, 5, @LBlocks[0]);
+  CentralPoolFree(LPool, 5, @LBlocks[0], 0);
   Check(CentralPoolFreeCount(LPool) = 64 - 5, 'free after partial free');
   CentralPoolDestroy(LPool);
   WriteLn('PASS: free count');
