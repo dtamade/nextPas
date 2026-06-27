@@ -453,6 +453,7 @@ var
   LOutlierCount: Integer;
   LDeviations: TDoubleArray;
 begin
+  Result := Default(TOutlierDetection);
   LMedian := Median;
 
   // Calculate MAD (Median Absolute Deviation)
