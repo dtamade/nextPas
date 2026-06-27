@@ -892,10 +892,8 @@ begin
 
           { Retry: print hint and loop }
           Dec(LRetriesLeft);
-          LOutSink.WriteLn(
-            '  ' + AnsiYellow('retrying', LConfig) + ' (' +
-            IntToStr(LTotalRetries - LRetriesLeft) + '/' +
-            IntToStr(LTotalRetries) + ')...');
+          WriteRetryHint(LTotalRetries - LRetriesLeft, LTotalRetries,
+            LOutSink, LConfig);
         until False;
         end; { end repeat loop }
 
@@ -931,9 +929,7 @@ begin
       except
         on E: Exception do
         begin
-          LErrSink.WriteLn(
-            '  ' + AnsiYellow('WARNING afterEach failed: ', LConfig) +
-            E.Message);
+          WriteWarning('afterEach failed: ' + E.Message, LErrSink, LConfig);
           if LStatus = tsPassed then
           begin
             LStatus := tsError;
@@ -1044,8 +1040,8 @@ begin
     if Assigned(Teardown) then Teardown else TeardownClosure();
   except
     on E: Exception do
-      ResolveErrSink(AConfig).WriteLn(
-        '  ' + AnsiYellow('WARNING teardown error: ', AConfig) + E.Message);
+      WriteWarning('teardown error: ' + E.Message,
+        ResolveErrSink(AConfig), AConfig);
   end;
   { R4-12: Nil-out after execution to prevent double-free if the same
     suite is run twice on the same runner (e.g. fixture teardown that frees

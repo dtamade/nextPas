@@ -69,6 +69,15 @@ procedure WriteTestStatus(AStatus: TTestStatus; const AName, AFailMsg,
   ASkipReason: string; const ASink: IOutputSink; const AConfig: TTestConfig);
   { Write formatted per-test status line to ASink. }
 
+{ ── Diagnostic Output ─────────────────────────────────────────────────────── }
+
+procedure WriteRetryHint(ACurrent, ATotal: Integer;
+  const ASink: IOutputSink; const AConfig: TTestConfig);
+  { Write yellow 'retrying (N/M)...' hint to ASink. }
+procedure WriteWarning(const AMsg: string;
+  const ASink: IOutputSink; const AConfig: TTestConfig);
+  { Write yellow 'WARNING: ...' to ASink (2-space indent). }
+
 { ── Test Filter ───────────────────────────────────────────────────────────── }
 
 procedure SetTestFilter(const APattern: string);
@@ -368,6 +377,20 @@ begin
           ASink.WriteLn('    ' + AnsiDim(AFailMsg, AConfig));
       end;
   end;
+end;
+
+procedure WriteRetryHint(ACurrent, ATotal: Integer;
+  const ASink: IOutputSink; const AConfig: TTestConfig);
+begin
+  ASink.WriteLn(
+    '  ' + AnsiYellow('retrying', AConfig) + ' (' +
+    IntToStr(ACurrent) + '/' + IntToStr(ATotal) + ')...');
+end;
+
+procedure WriteWarning(const AMsg: string;
+  const ASink: IOutputSink; const AConfig: TTestConfig);
+begin
+  ASink.WriteLn('  ' + AnsiYellow('WARNING ', AConfig) + AMsg);
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }

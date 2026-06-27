@@ -411,10 +411,8 @@ begin
       Dec(LRetriesLeft);
       R^.Mtx.Acquire;
       try
-        LOutSink.WriteLn(
-          '  ' + AnsiYellow('retrying', LConfig) + ' (' +
-          IntToStr(R^.Entry.RetryCount - LRetriesLeft) + '/' +
-          IntToStr(R^.Entry.RetryCount) + ')...');
+        WriteRetryHint(R^.Entry.RetryCount - LRetriesLeft,
+          R^.Entry.RetryCount, LOutSink, LConfig);
       finally
         SafeRelease(R^.Mtx, LConfig);
       end;
@@ -431,9 +429,7 @@ begin
       begin
         R^.Mtx.Acquire;
         try
-          LErrSink.WriteLn(
-            '  ' + AnsiYellow('WARNING afterEach failed: ', LConfig) +
-            E.Message);
+          WriteWarning('afterEach failed: ' + E.Message, LErrSink, LConfig);
         finally
           SafeRelease(R^.Mtx, LConfig);
         end;
