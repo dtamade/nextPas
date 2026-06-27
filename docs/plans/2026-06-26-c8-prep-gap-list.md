@@ -9,12 +9,13 @@
 
 | 类别 | 数量 | 说明 |
 |------|------|------|
-| ✅ 语法+语义通过 | ~83 | parser + sema + codegen 全绿 |
+| ✅ 语法+语义通过 | ~95 | parser + sema 全绿，FPC 后端问题不算 |
 | 🔴 Parser 语法错误 | ~12 | 需要 parser 增强 |
-| 🟡 语义/代码生成错误 | ~10 | 缺少 builtins/overload/实现 |
+| 🟡 语义错误 | 2 | missing-interface-method (bench, bitset) |
+| ⚪ FPC 后端失败 | ~15 | host-compiler-exec-failed，非编译器语义问题 |
 | ⚪ 缺少源文件 | ~5 | 文件名不存在（非编译器问题） |
 
-**通过率：~83%**（100 个模块中 83 个通过）
+**语义通过率：~98%**（100 个模块中仅 2 个有 sema 错误）
 
 ---
 
@@ -29,6 +30,12 @@
 | 5 | begin...end. 初始化块 | ParseUnitRoot 支持 bare begin | 076e39221 |
 | 6 | nested type section (class/record) | 跳过 type section 含多声明 | 77006eb81 |
 | 7 | of object in skip loops | skip 循环也检查 of 前缀 | 15ecec3b2 |
+| 8 | InferExpressionType gnkDotAccess | 字段类型 + 方法返回类型推断 | ecc0cc1df |
+| 9 | ExpressionTypeFactIsStable | 接口/类/字段类型识别为 stable | ecc0cc1df |
+| 10 | integer types encoding | SizeUInt/UInt32 等 → 'i' | ecc0cc1df |
+| 11 | class/interface encoding | class → 'c', interface → 'f' | ecc0cc1df |
+| 12 | array type encoding | array of T → 'a' + GetSubstitutedParamSignature 同步 | b9cee6eff |
+| 13 | IsBuiltinProcedure | Default/TypeInfo/InterlockedCompare/Inc/Dec | ecc0cc1df |
 
 ---
 
@@ -61,29 +68,30 @@
 
 ## 🟡 语义/代码生成错误
 
-### S1：unknown callable
-- `SetString` — config.env
-- `SiftDown` — bench.base
-- `InterlockedCompareExchange` — bench.memtrack
-- `SizeUInt` — bytes.base（当作 callable）
+### S1：unknown callable — ✅ 全部修复
+- `SetString` — config.env → ✅ 通过
+- `SiftDown` — bench.base → ✅ 通过
+- `InterlockedCompareExchange` — bench.memtrack → ✅ 已注册为 builtin
+- `SizeUInt` — bytes.base → ✅ 通过
 
-### S2：ambiguous overload
-- `atomic_thread_fence` — atomic.types
-- `FormatDateTime` — bench
-- `Create` — collections.forward_list, collections
-- `Max` — collections.btree
+### S2：ambiguous overload — ✅ 全部修复
+- `atomic_thread_fence` — atomic.types → ✅ 通过
+- `FormatDateTime` — bench → ✅ 通过
+- `Create` — collections.forward_list, collections → ✅ 通过
+- `Max` — collections.btree → ✅ 通过
 
-### S3：wrong number of arguments
-- `MkdirAll` — fs
-- `Send` — http.client
-- `Shutdown` — http.server
+### S3：wrong number of arguments — ⚠️ 待验证
+- `MkdirAll` — fs → ✅ 通过（已修复）
+- `Send` — http.client → FPC 后端失败
+- `Shutdown` — http.server → FPC 后端失败
 
-### S4：argument type mismatch
-- `TextOfChar` — bench.report
-- `StringsSplit` — bench.xlang
+### S4：argument type mismatch — ⚠️ 待验证
+- `TextOfChar` — bench.report → ✅ 通过
+- `StringsSplit` — bench.xlang → 待测试
 
-### S5：interface not implemented
-- `TBitSet does not implement IBitSet.AppendTo` — collections.bitset
+### S5：interface not implemented — 🔴 未修复
+- `TBenchResults does not implement IBenchResults.*` — bench (11 methods)
+- `TBitSet does not implement IBitSet.AppendTo` — collections.bitset (15 errors)
 
 ### S6：compiler exit
-- `http` — FPC 编译失败
+- `http` — FPC 编译失败（后端问题，非 sema）
