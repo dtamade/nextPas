@@ -280,6 +280,77 @@ begin
   Check(True, 'ligature: single glyph returns 0 or valid');
 end;
 
+procedure TestLigatureShapingEndToEnd;
+var
+  LCodepoints: array[0..1] of UInt32;
+  LShaped: TFontShapedGlyphArray;
+  LGlyphF, LGlyphI: TFontShapedGlyph;
+  LHasLigature: Boolean;
+begin
+  LCodepoints[0] := Ord('f');
+  LCodepoints[1] := Ord('i');
+  LShaped := GShaper.ShapeString(LCodepoints);
+
+  { 检查 DejaVuSans 是否有 fi 连字 }
+  LHasLigature := GFace.HasLigatures;
+  if LHasLigature then
+  begin
+    LGlyphF := GShaper.ShapeCodepoint(Ord('f'));
+    LGlyphI := GShaper.ShapeCodepoint(Ord('i'));
+    if GFace.LookupLigature([LGlyphF.GlyphIndex, LGlyphI.GlyphIndex]) <> 0 then
+    begin
+      Check(Length(LShaped) = 1, 'ligature e2e: fi produces 1 glyph');
+      Check(LShaped[0].GlyphIndex <> LGlyphF.GlyphIndex,
+        'ligature e2e: glyph index changed (ligature applied)');
+      Check(LShaped[0].AdvanceWidth = LGlyphF.AdvanceWidth + LGlyphI.AdvanceWidth,
+        'ligature e2e: advance = f + i');
+    end
+    else
+      Check(True, 'ligature e2e: fi not in font (skip)');
+  end
+  else
+    Check(True, 'ligature e2e: no ligature support (skip)');
+end;
+
+{ ===================================================================== }
+{ 6. CJK 宽字符整形 (WenQuanYi Zen Hei TTC)                             }
+{ ===================================================================== }
+
+procedure TestCJKLookup;
+var
+  LGlyph: UInt32;
+begin
+  LGlyph := GFace.LookupCodepoint($4E2D);
+  Check(LGlyph > 0, 'CJK: 中 (U+4E2D) lookup > 0');
+  LGlyph := GFace.LookupCodepoint($5B57);
+  Check(LGlyph > 0, 'CJK: 字 (U+5B57) lookup > 0');
+  LGlyph := GFace.LookupCodepoint($4F60);
+  Check(LGlyph > 0, 'CJK: 你 (U+4F60) lookup > 0');
+end;
+
+procedure TestCJKAdvanceWidth;
+var
+  LAsciiAdvance, LCJKAdvance: UInt16;
+begin
+  LAsciiAdvance := GShaper.GetAdvanceWidth(Ord('A'));
+  LCJKAdvance := GShaper.GetAdvanceWidth($4E2D);
+  Check(LCJKAdvance > LAsciiAdvance,
+    Format('CJK: 中 advance (%d) > A advance (%d)', [LCJKAdvance, LAsciiAdvance]));
+end;
+
+procedure TestCJKShaping;
+var
+  LCodepoints: array[0..1] of UInt32;
+  LShaped: TFontShapedGlyphArray;
+begin
+  LCodepoints[0] := $4E2D;
+  LCodepoints[1] := $5B57;
+  LShaped := GShaper.ShapeString(LCodepoints);
+  Check(Length(LShaped) = 2, 'CJK shaping: 2 glyphs for 2 codepoints');
+  Check(LShaped[0].GlyphIndex > 0, 'CJK shaping: 中 has valid glyph');
+  Check(LShaped[1].GlyphIndex > 0, 'CJK shaping: 字 has valid glyph');
+end;
+
 { ===================================================================== }
 { main                                                                    }
 { ===================================================================== }
@@ -337,12 +408,42 @@ begin
         TestKernLookup;
         TestShapeWithKern;
         TestLigatureLookup;
+        TestLigatureShapingEndToEnd;
       end
       else
         WriteLn('  SKIP: DejaVuSans invalid');
     end
     else
       WriteLn('  SKIP: DejaVuSans not found');
+
+    { --- CJK 宽字符整形 (WenQuanYi Zen Hei TTC) --- }
+    WriteLn;
+    WriteLn('--- CJK wide character shaping (TTC) ---');
+
+    GShaper.Free;
+    GFace.Free;
+    GFace := nil;
+    GShaper := nil;
+    if FileExists('/tmp/test_font.ttc') then
+      GFace := TTFontFace.Create('/tmp/test_font.ttc')
+    else if FileExists('/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc') then
+      GFace := TTFontFace.Create('/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc');
+    if (GFace <> nil) and GFace.IsValid then
+    begin
+      GShaper := TFontLiteShaper.Create(GFace);
+      TestCJKLookup;
+      TestCJKAdvanceWidth;
+      TestCJKShaping;
+    end
+    else
+    begin
+      WriteLn('  SKIP: WenQuanYi not accessible (try: cp /usr/share/fonts/truetype/wqy/wqy-zenhei.ttc /tmp/test_font.ttc)');
+      if GFace <> nil then
+      begin
+        GFace.Free;
+        GFace := nil;
+      end;
+    end;
 
     WriteLn;
     WriteLn('=== Results: ', GPassed, ' passed, ', GFailed, ' failed ===');
