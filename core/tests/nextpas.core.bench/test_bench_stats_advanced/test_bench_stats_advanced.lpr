@@ -255,75 +255,93 @@ end;
   Raising a managed exception is acceptable; crashing is not. }
 
 procedure Test_NaNInput_NoCrash;
-var LData: TDoubleArray; LHandled: Boolean;
+var LData: TDoubleArray; LStats: TAdvancedStats;
 begin
-  LHandled := True;
   LData := CreateTestData([1.0, 2.0, DoubleQuietNaN, 4.0, 5.0]);
+  LStats := TAdvancedStats.Create(LData);
   try
-    TAdvancedStats.Create(LData).Mean;
-    TAdvancedStats.Create(LData).Median;
-    TAdvancedStats.Create(LData).StdDev;
-    TAdvancedStats.Create(LData).Variance;
-  except end;
-  Check(LHandled, 'NaN input: all stats survive without segfault');
+    try LStats.Mean; except end;
+    try LStats.Median; except end;
+    try LStats.StdDev; except end;
+    try LStats.Variance; except end;
+  finally
+    LStats.Free;
+  end;
+  Check(True, 'NaN input: all stats survive without segfault');
 end;
 
 procedure Test_InfinityInput_NoCrash;
-var LData: TDoubleArray; LHandled: Boolean;
+var LData: TDoubleArray; LStats: TAdvancedStats;
 begin
-  LHandled := True;
   LData := CreateTestData([1.0, 2.0, MakePositiveInfinity, 4.0, 5.0]);
+  LStats := TAdvancedStats.Create(LData);
   try
-    TAdvancedStats.Create(LData).Mean;
-    TAdvancedStats.Create(LData).Median;
-    TAdvancedStats.Create(LData).StdDev;
-    TAdvancedStats.Create(LData).Variance;
-  except end;
-  Check(LHandled, 'Positive Infinity input: all stats survive without segfault');
+    try LStats.Mean; except end;
+    try LStats.Median; except end;
+    try LStats.StdDev; except end;
+    try LStats.Variance; except end;
+  finally
+    LStats.Free;
+  end;
+  Check(True, 'Positive Infinity input: all stats survive without segfault');
 
-  LHandled := True;
   LData := CreateTestData([1.0, 2.0, MakeNegativeInfinity, 4.0, 5.0]);
+  LStats := TAdvancedStats.Create(LData);
   try
-    TAdvancedStats.Create(LData).Mean;
-    TAdvancedStats.Create(LData).Median;
-    TAdvancedStats.Create(LData).StdDev;
-    TAdvancedStats.Create(LData).Variance;
-  except end;
-  Check(LHandled, 'Negative Infinity input: all stats survive without segfault');
+    try LStats.Mean; except end;
+    try LStats.Median; except end;
+    try LStats.StdDev; except end;
+    try LStats.Variance; except end;
+  finally
+    LStats.Free;
+  end;
+  Check(True, 'Negative Infinity input: all stats survive without segfault');
 end;
 
 procedure Test_NaNInfinity_Kurtosis;
-var LData: TDoubleArray; LHandled: Boolean;
+var LData: TDoubleArray; LStats: TAdvancedStats;
 begin
-  LHandled := True;
   LData := CreateTestData([1.0, 2.0, DoubleQuietNaN, 4.0, 5.0]);
+  LStats := TAdvancedStats.Create(LData);
   try
-    TAdvancedStats.Create(LData).Kurtosis;
-    TAdvancedStats.Create(LData).Skewness;
-  except end;
-  Check(LHandled, 'NaN: Kurtosis/Skewness survive without segfault');
+    try LStats.Kurtosis; except end;
+    try LStats.Skewness; except end;
+  finally
+    LStats.Free;
+  end;
+  Check(True, 'NaN: Kurtosis/Skewness survive without segfault');
 
-  LHandled := True;
   LData := CreateTestData([1.0, MakePositiveInfinity, 3.0, 4.0, 5.0]);
+  LStats := TAdvancedStats.Create(LData);
   try
-    TAdvancedStats.Create(LData).Kurtosis;
-    TAdvancedStats.Create(LData).Skewness;
-  except end;
-  Check(LHandled, 'Infinity: Kurtosis/Skewness survive without segfault');
+    try LStats.Kurtosis; except end;
+    try LStats.Skewness; except end;
+  finally
+    LStats.Free;
+  end;
+  Check(True, 'Infinity: Kurtosis/Skewness survive without segfault');
 end;
 
 procedure Test_NaNInfinity_Percentile;
-var LData: TDoubleArray; LHandled: Boolean;
+var LData: TDoubleArray; LStats: TAdvancedStats;
 begin
-  LHandled := True;
   LData := CreateTestData([1.0, 2.0, DoubleQuietNaN, 4.0, 5.0]);
-  try TAdvancedStats.Create(LData).Percentile(50); except end;
-  Check(LHandled, 'NaN: Percentile survives without segfault');
+  LStats := TAdvancedStats.Create(LData);
+  try
+    try LStats.Percentile(50); except end;
+  finally
+    LStats.Free;
+  end;
+  Check(True, 'NaN: Percentile survives without segfault');
 
-  LHandled := True;
   LData := CreateTestData([1.0, 2.0, 3.0, 4.0, MakePositiveInfinity]);
-  try TAdvancedStats.Create(LData).Percentile(99); except end;
-  Check(LHandled, 'Infinity: Percentile survives without segfault');
+  LStats := TAdvancedStats.Create(LData);
+  try
+    try LStats.Percentile(99); except end;
+  finally
+    LStats.Free;
+  end;
+  Check(True, 'Infinity: Percentile survives without segfault');
 end;
 
 procedure Test_GetData;

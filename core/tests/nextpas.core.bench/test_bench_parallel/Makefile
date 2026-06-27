@@ -1,6 +1,6 @@
 PROGRAM = test_bench_parallel
 FPC = fpc
-FPCFLAGS = -MObjFPC -Sh -O2 -gw -gl
+FPCFLAGS = -MObjFPC -Sh -O2 -gw -gl -gh
 CORE_ROOT = ../../..
 SRC_DIR = $(CORE_ROOT)/src
 
