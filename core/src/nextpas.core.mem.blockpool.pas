@@ -250,17 +250,6 @@ implementation
 {$PUSH}
 {$WARN 4055 OFF} // pointer/ordinal conversions in pool internals
 
-function NormalizeArenaAlignment(const AAlignment: SizeUInt): SizeUInt; inline;
-begin
-  if AAlignment = 0 then
-    Exit(MEM_DEFAULT_ALIGN);
-  if not IsPowerOfTwo(AAlignment) then
-    Exit(0);
-  if AAlignment < MEM_DEFAULT_ALIGN then
-    Exit(MEM_DEFAULT_ALIGN);
-  Result := AAlignment;
-end;
-
 { ============================================================================ }
 { TBlockPool }
 { ============================================================================ }
