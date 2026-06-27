@@ -70,6 +70,13 @@ begin
     Halt(ABaseCode + 5);
 end;
 
+procedure AssertTypeExists(const AModel: TSemanticModel;
+  const ATypeName: string; const ABaseCode: LongInt);
+begin
+  if AModel.FindTypeByName(ATypeName) <= 0 then
+    Halt(ABaseCode);
+end;
+
 var
   Model: TSemanticModel;
   Fact: TSemanticScalarTypeFact;
@@ -98,9 +105,22 @@ begin
     AssertScalarFact(Model, 'Single', sskFloat, 32, False, 110);
     AssertScalarFact(Model, 'Double', sskFloat, 64, False, 120);
     AssertScalarFact(Model, 'Pointer', sskPointer, 64, False, 130);
+    AssertScalarFact(Model, 'ShortInt', sskInt, 8, True, 140);
+    AssertScalarFact(Model, 'SmallInt', sskInt, 16, True, 150);
+    AssertScalarFact(Model, 'Int32', sskInt, 32, True, 160);
+    AssertScalarFact(Model, 'UInt32', sskInt, 32, False, 170);
+    AssertScalarFact(Model, 'UInt64', sskInt, 64, False, 180);
+    AssertScalarFact(Model, 'WideChar', sskInt, 16, False, 190);
+    AssertScalarFact(Model, 'PByte', sskPointer, 64, False, 200);
+    AssertScalarFact(Model, 'PWord', sskPointer, 64, False, 210);
+    AssertScalarFact(Model, 'PInt32', sskPointer, 64, False, 220);
+    AssertScalarFact(Model, 'PInt16', sskPointer, 64, False, 230);
+    AssertScalarFact(Model, 'PChar', sskPointer, 64, False, 240);
+    AssertScalarFact(Model, 'PAnsiChar', sskPointer, 64, False, 250);
+    AssertTypeExists(Model, 'RawByteString', 260);
 
     if Model.GetTypeScalarFact(9999, Fact) then
-      Halt(140);
+      Halt(270);
   finally
     Model.Free;
   end;

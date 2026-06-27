@@ -4322,6 +4322,7 @@ end;
 
 function TSemanticAnalyzer.TypeSignatureForTypeId(const ATypeId: LongInt): string;
 var
+  Fact: TSemanticScalarTypeFact;
   TypeName: string;
   TypeInfo: TSemanticType;
   Dummy: Int64;
@@ -4336,11 +4337,14 @@ begin
   if (TypeName = '') then
     Exit;
   if SameText(TypeName, 'String') or SameText(TypeName, 'AnsiString') or
+    SameText(TypeName, 'RawByteString') or
     SameText(TypeName, 'ShortString') or SameText(TypeName, 'WideString') or
     SameText(TypeName, 'UnicodeString') then
     Exit('s');
   if SameText(TypeName, 'Boolean') then
     Exit('b');
+  if FModel.GetTypeScalarFact(ATypeId, Fact) and (Fact.Kind = sskPointer) then
+    Exit('p');
   if FModel.GetTypeMeta(ATypeId, Meta) then
   begin
     if Meta.IsRecord then
@@ -4373,6 +4377,7 @@ begin
 
   Result :=
     SameText(TypeInfo.Name, 'AnsiString') or
+    SameText(TypeInfo.Name, 'RawByteString') or
     SameText(TypeInfo.Name, 'ShortString') or
     SameText(TypeInfo.Name, 'WideString') or
     SameText(TypeInfo.Name, 'UnicodeString');
@@ -5746,11 +5751,12 @@ end;
 function TSemanticAnalyzer.AreTypesCompatible(
   const ALhsTypeId, ARhsTypeId: LongInt): Boolean;
 var
-  IntIds: array[0..9] of LongInt;
-  StrIds: array[0..3] of LongInt;
+  IntIds: array[0..14] of LongInt;
+  StrIds: array[0..4] of LongInt;
   I: LongInt;
   LhsIsInt, RhsIsInt, LhsIsStr, RhsIsStr: Boolean;
   LhsType, RhsType: TSemanticType;
+  CharTypeId, WideCharTypeId: LongInt;
 begin
   if ALhsTypeId = ARhsTypeId then
     Exit(True);
@@ -5776,13 +5782,18 @@ begin
   IntIds[4] := FModel.FindTypeByName('Int64');
   IntIds[5] := FModel.FindTypeByName('QWord');
   IntIds[6] := FModel.FindTypeByName('LongWord');
-  IntIds[7] := FModel.FindTypeByName('Single');
-  IntIds[8] := FModel.FindTypeByName('Double');
-  IntIds[9] := FModel.FindTypeByName('Pointer');
+  IntIds[7] := FModel.FindTypeByName('ShortInt');
+  IntIds[8] := FModel.FindTypeByName('SmallInt');
+  IntIds[9] := FModel.FindTypeByName('Int32');
+  IntIds[10] := FModel.FindTypeByName('UInt32');
+  IntIds[11] := FModel.FindTypeByName('UInt64');
+  IntIds[12] := FModel.FindTypeByName('WideChar');
+  IntIds[13] := FModel.FindTypeByName('Single');
+  IntIds[14] := FModel.FindTypeByName('Double');
 
   LhsIsInt := False;
   RhsIsInt := False;
-  for I := 0 to 9 do
+  for I := 0 to High(IntIds) do
   begin
     if ALhsTypeId = IntIds[I] then LhsIsInt := True;
     if ARhsTypeId = IntIds[I] then RhsIsInt := True;
@@ -5794,10 +5805,11 @@ begin
   StrIds[1] := FModel.FindTypeByName('ShortString');
   StrIds[2] := FModel.FindTypeByName('WideString');
   StrIds[3] := FModel.FindTypeByName('UnicodeString');
+  StrIds[4] := FModel.FindTypeByName('RawByteString');
 
   LhsIsStr := False;
   RhsIsStr := False;
-  for I := 0 to 3 do
+  for I := 0 to High(StrIds) do
   begin
     if ALhsTypeId = StrIds[I] then LhsIsStr := True;
     if ARhsTypeId = StrIds[I] then RhsIsStr := True;
@@ -5808,12 +5820,14 @@ begin
   if ALhsTypeId = FModel.FindTypeByName('Boolean') then
     Exit(ARhsTypeId = FModel.FindTypeByName('Boolean'));
 
-  if LhsIsStr and (ARhsTypeId = FModel.FindTypeByName('Char')) then
+  CharTypeId := FModel.FindTypeByName('Char');
+  WideCharTypeId := FModel.FindTypeByName('WideChar');
+  if LhsIsStr and ((ARhsTypeId = CharTypeId) or (ARhsTypeId = WideCharTypeId)) then
     Exit(True);
-  if (ALhsTypeId = FModel.FindTypeByName('Char')) and RhsIsStr then
+  if ((ALhsTypeId = CharTypeId) or (ALhsTypeId = WideCharTypeId)) and RhsIsStr then
     Exit(True);
-  if (ALhsTypeId = FModel.FindTypeByName('Char')) and
-    (ARhsTypeId = FModel.FindTypeByName('Char')) then
+  if ((ALhsTypeId = CharTypeId) or (ALhsTypeId = WideCharTypeId)) and
+    ((ARhsTypeId = CharTypeId) or (ARhsTypeId = WideCharTypeId)) then
     Exit(True);
 
   Result := False;
@@ -5821,17 +5835,24 @@ end;
 
 procedure TSemanticAnalyzer.SeedBuiltinTypes;
 var
-  BooleanTypeId, IntegerTypeId, CharTypeId: LongInt;
+  BooleanTypeId, IntegerTypeId, CharTypeId, WideCharTypeId: LongInt;
   ByteTypeId, WordTypeId, LongIntTypeId, LongWordTypeId: LongInt;
+  ShortIntTypeId, SmallIntTypeId: LongInt;
+  Int32TypeId, UInt32TypeId, UInt64TypeId: LongInt;
   Int64TypeId, QWordTypeId, SingleTypeId, DoubleTypeId: LongInt;
   PointerTypeId, CardinalTypeId: LongInt;
+  PByteTypeId, PWordTypeId, PInt32TypeId, PInt16TypeId: LongInt;
+  PCharTypeId, PAnsiCharTypeId: LongInt;
 begin
   BooleanTypeId := FModel.AddType('Boolean', 'builtin');
   IntegerTypeId := FModel.AddType('Integer', 'builtin');
   FModel.AddType('AnsiString', 'builtin');
   CharTypeId := FModel.AddType('Char', 'builtin');
+  WideCharTypeId := FModel.AddType('WideChar', 'builtin');
   ByteTypeId := FModel.AddType('Byte', 'builtin');
   WordTypeId := FModel.AddType('Word', 'builtin');
+  ShortIntTypeId := FModel.AddType('ShortInt', 'builtin');
+  SmallIntTypeId := FModel.AddType('SmallInt', 'builtin');
   LongIntTypeId := FModel.AddType('LongInt', 'builtin');
   LongWordTypeId := FModel.AddType('LongWord', 'builtin');
   Int64TypeId := FModel.AddType('Int64', 'builtin');
@@ -5839,14 +5860,24 @@ begin
   SingleTypeId := FModel.AddType('Single', 'builtin');
   DoubleTypeId := FModel.AddType('Double', 'builtin');
   PointerTypeId := FModel.AddType('Pointer', 'builtin');
+  PByteTypeId := FModel.AddType('PByte', 'alias');
+  PWordTypeId := FModel.AddType('PWord', 'alias');
+  PInt32TypeId := FModel.AddType('PInt32', 'alias');
+  PInt16TypeId := FModel.AddType('PInt16', 'alias');
+  PCharTypeId := FModel.AddType('PChar', 'alias');
+  PAnsiCharTypeId := FModel.AddType('PAnsiChar', 'alias');
   FModel.AddType('Text', 'builtin');
   FModel.AddType('ShortString', 'builtin');
   FModel.AddType('WideString', 'builtin');
   FModel.AddType('UnicodeString', 'builtin');
+  FModel.AddType('RawByteString', 'builtin');
   FModel.AddType('Variant', 'builtin');
   FModel.AddType('OleVariant', 'builtin');
   FModel.AddType('String', 'alias');
   CardinalTypeId := FModel.AddType('Cardinal', 'alias');
+  Int32TypeId := FModel.AddType('Int32', 'alias');
+  UInt32TypeId := FModel.AddType('UInt32', 'alias');
+  UInt64TypeId := FModel.AddType('UInt64', 'alias');
   FModel.AddType('SizeInt', 'alias');
   FModel.AddType('SizeUInt', 'alias');
   FModel.AddType('PtrInt', 'alias');
@@ -5854,19 +5885,41 @@ begin
   FModel.AddType('NativeInt', 'alias');
   FModel.AddType('NativeUInt', 'alias');
 
+  FModel.SetTypeParent(PByteTypeId, PointerTypeId);
+  FModel.SetTypeParent(PWordTypeId, PointerTypeId);
+  FModel.SetTypeParent(PInt32TypeId, PointerTypeId);
+  FModel.SetTypeParent(PInt16TypeId, PointerTypeId);
+  FModel.SetTypeParent(PCharTypeId, PointerTypeId);
+  FModel.SetTypeParent(PAnsiCharTypeId, PointerTypeId);
+  FModel.SetTypeParent(Int32TypeId, LongIntTypeId);
+  FModel.SetTypeParent(UInt32TypeId, LongWordTypeId);
+  FModel.SetTypeParent(UInt64TypeId, QWordTypeId);
+
   FModel.SetTypeScalarFact(BooleanTypeId, sskBool, 1, False);
   FModel.SetTypeScalarFact(CharTypeId, sskInt, 8, False);
+  FModel.SetTypeScalarFact(WideCharTypeId, sskInt, 16, False);
   FModel.SetTypeScalarFact(ByteTypeId, sskInt, 8, False);
   FModel.SetTypeScalarFact(WordTypeId, sskInt, 16, False);
+  FModel.SetTypeScalarFact(ShortIntTypeId, sskInt, 8, True);
+  FModel.SetTypeScalarFact(SmallIntTypeId, sskInt, 16, True);
   FModel.SetTypeScalarFact(IntegerTypeId, sskInt, 32, True);
   FModel.SetTypeScalarFact(LongIntTypeId, sskInt, 32, True);
   FModel.SetTypeScalarFact(LongWordTypeId, sskInt, 32, False);
   FModel.SetTypeScalarFact(CardinalTypeId, sskInt, 32, False);
+  FModel.SetTypeScalarFact(Int32TypeId, sskInt, 32, True);
+  FModel.SetTypeScalarFact(UInt32TypeId, sskInt, 32, False);
   FModel.SetTypeScalarFact(Int64TypeId, sskInt, 64, True);
   FModel.SetTypeScalarFact(QWordTypeId, sskInt, 64, False);
+  FModel.SetTypeScalarFact(UInt64TypeId, sskInt, 64, False);
   FModel.SetTypeScalarFact(SingleTypeId, sskFloat, 32, False);
   FModel.SetTypeScalarFact(DoubleTypeId, sskFloat, 64, False);
   FModel.SetTypeScalarFact(PointerTypeId, sskPointer, 64, False);
+  FModel.SetTypeScalarFact(PByteTypeId, sskPointer, 64, False);
+  FModel.SetTypeScalarFact(PWordTypeId, sskPointer, 64, False);
+  FModel.SetTypeScalarFact(PInt32TypeId, sskPointer, 64, False);
+  FModel.SetTypeScalarFact(PInt16TypeId, sskPointer, 64, False);
+  FModel.SetTypeScalarFact(PCharTypeId, sskPointer, 64, False);
+  FModel.SetTypeScalarFact(PAnsiCharTypeId, sskPointer, 64, False);
 end;
 
 procedure TSemanticAnalyzer.SeedCachedTypeGaps;
