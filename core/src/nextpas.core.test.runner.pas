@@ -745,11 +745,7 @@ begin
     LSubCtxI := nil;
     LSubCtx := nil;
     SetCurrentTestContext(nil);
-    LTestResult.Name       := LEntry.Name;
-    LTestResult.Status     := tsPassed;
-    LTestResult.Message    := '';
-    LTestResult.Duration   := 0;
-    LTestResult.CapturedLog := nil;
+    LTestResult := MakeTestResult(LEntry.Name, tsPassed, '', 0);
     SetTestContext(Name, LEntry.Name);
 
     { Test filter — skip non-matching tests silently }
@@ -1295,10 +1291,8 @@ begin
       LThreads[I] := BeginThread(@ParallelThreadEntry, @LRecs[I]);
       if LThreads[I] = 0 then
       begin
-        LResults[I].Name     := Tests[I].Name;
-        LResults[I].Status   := tsError;
-        LResults[I].Message  := 'BeginThread failed';
-        LResults[I].Duration := 0;
+        LResults[I] := MakeTestResult(Tests[I].Name, tsError,
+          'BeginThread failed', 0);
         Inc(LFail);
       end;
       Inc(LSpawned);
