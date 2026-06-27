@@ -560,14 +560,7 @@ begin
   if IsPowerOfTwo(FBlockSize) then
   begin
     FBlockMask := FBlockSize - 1;
-    LShift := 0;
-    LTmp := FBlockSize;
-    while LTmp > 1 do
-    begin
-      Inc(LShift);
-      LTmp := LTmp shr 1;
-    end;
-    FBlockShift := LShift;
+    FBlockShift := Log2UInt(FBlockSize);
   end
   else
   begin

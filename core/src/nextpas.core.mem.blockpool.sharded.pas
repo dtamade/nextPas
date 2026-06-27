@@ -228,14 +228,6 @@ begin
   Result := atomic_fetch_add_64(GShardedBlockPoolIdGen, 1) + 1;
 end;
 
-{$push}
-{$Q-}
-function MulHash64(aValue: QWord): QWord; inline;
-begin
-  Result := aValue * QWord(11400714819323198485);
-end;
-{$pop}
-
 class function TShardedBlockPoolConfig.Default(aBlockSize, aCapacity: SizeUInt; aShardCount: Integer): TShardedBlockPoolConfig;
 begin
   Result.Pool := TGrowingBlockPoolConfig.Default(aBlockSize, aCapacity);
@@ -398,8 +390,6 @@ procedure TShardedBlockPool.PageMapInit(aMinCapacity: SizeUInt);
 var
   LCap: SizeUInt;
   LIdx: SizeUInt;
-  LLog: SizeUInt;
-  LTmp: SizeUInt;
 begin
   LCap := HASH_MIN_CAP;
   while LCap < aMinCapacity do
@@ -418,14 +408,7 @@ begin
   end;
 
   FPageMask := LCap - 1;
-  LLog := 0;
-  LTmp := LCap;
-  while LTmp > 1 do
-  begin
-    Inc(LLog);
-    LTmp := LTmp shr 1;
-  end;
-  FPageHighShift := SizeUInt(64 - LLog);
+  FPageHighShift := SizeUInt(64 - Log2UInt(LCap));
   FPageCount := 0;
 end;
 
@@ -452,8 +435,6 @@ var
   LOldShard: array of Integer;
   LOldCap: SizeUInt;
   LIdx: SizeUInt;
-  LLog: SizeUInt;
-  LTmp: SizeUInt;
   LKey: PtrUInt;
   LPos: SizeUInt;
   LHash: QWord;
@@ -477,15 +458,7 @@ begin
   SetLength(FPageLimit, LOldCap shl 1);
   SetLength(FPageShard, LOldCap shl 1);
   FPageMask := (LOldCap shl 1) - 1;
-
-  LLog := 0;
-  LTmp := FPageMask + 1;
-  while LTmp > 1 do
-  begin
-    Inc(LLog);
-    LTmp := LTmp shr 1;
-  end;
-  FPageHighShift := SizeUInt(64 - LLog);
+  FPageHighShift := SizeUInt(64 - Log2UInt(FPageMask + 1));
 
   for LIdx := 0 to FPageMask do
   begin
@@ -944,12 +917,9 @@ var
   LPerShardCap: SizeUInt;
   LShardConfig: TGrowingBlockPoolConfig;
   LStart, LEnd: PByte;
- LSegIdx: SizeInt;
-  LShift: SizeUInt;
+  LSegIdx: SizeInt;
   LTmp: SizeUInt;
   LPageSize: SizeUInt;
-  LPageShift: SizeUInt;
-  LPageTmp: SizeUInt;
   LApproxPages: SizeUInt;
   LStartKey: PtrUInt;
   LEndKey: PtrUInt;
@@ -1012,28 +982,14 @@ var
   if (FBlockSize <> 0) and IsPowerOfTwo(FBlockSize) then
   begin
     FBlockMask := FBlockSize - 1;
-    LShift := 0;
-    LTmp := FBlockSize;
-    while LTmp > 1 do
-    begin
-      Inc(LShift);
-      LTmp := LTmp shr 1;
-    end;
-    FBlockShift := LShift;
+    FBlockShift := Log2UInt(FBlockSize);
   end;
 
   // page-map granularity (default 4096 bytes)
   LPageSize := SizeUInt(MEM_PAGE_SIZE);
   if (LPageSize <> 0) and IsPowerOfTwo(LPageSize) then
   begin
-    LPageShift := 0;
-    LPageTmp := LPageSize;
-    while LPageTmp > 1 do
-    begin
-      Inc(LPageShift);
-      LPageTmp := LPageTmp shr 1;
-    end;
-    FPageShift := LPageShift;
+    FPageShift := Log2UInt(LPageSize);
   end
   else
     FPageShift := 12;

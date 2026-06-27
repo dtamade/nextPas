@@ -134,14 +134,6 @@ const
   HASH_MIN_CAP = 64;
   FB_TOMBSTONE = PtrUInt(1);
 
-{$push}
-{$Q-}
-function MulHash64(x: QWord): QWord; inline;
-begin
-  Result := x * QWord(11400714819323198485);
-end;
-{$pop}
-
 function NextPow2Size(const aValue: SizeUInt): SizeUInt; inline;
 begin
   Result := NextPowerOfTwo(aValue);
@@ -196,14 +188,7 @@ begin
     FPageVals[LIdx] := -1;
   end;
   FPageMask := LCap - 1;
-  LLog := 0;
-  LTmp := LCap;
-  while LTmp > 1 do
-  begin
-    Inc(LLog);
-    LTmp := LTmp shr 1;
-  end;
-  FPageHighShift := SizeUInt(64 - LLog);
+  FPageHighShift := SizeUInt(64 - Log2UInt(LCap));
   FPageCount := 0;
 end;
 
@@ -238,15 +223,7 @@ begin
   SetLength(FPageKeys, LOldCap shl 1);
   SetLength(FPageVals, LOldCap shl 1);
   FPageMask := (LOldCap shl 1) - 1;
-
-  LLog := 0;
-  LTmp := FPageMask + 1;
-  while LTmp > 1 do
-  begin
-    Inc(LLog);
-    LTmp := LTmp shr 1;
-  end;
-  FPageHighShift := SizeUInt(64 - LLog);
+  FPageHighShift := SizeUInt(64 - Log2UInt(FPageMask + 1));
 
   for LIdx := 0 to FPageMask do
   begin
@@ -322,14 +299,7 @@ begin
     FFbVals[LIdx] := -1;
   end;
   FFbMask := LCap - 1;
-  LLog := 0;
-  LTmp := LCap;
-  while LTmp > 1 do
-  begin
-    Inc(LLog);
-    LTmp := LTmp shr 1;
-  end;
-  FFbHighShift := SizeUInt(64 - LLog);
+  FFbHighShift := SizeUInt(64 - Log2UInt(LCap));
   FFbCount := 0;
   FFbFill := 0;
 end;
@@ -369,15 +339,7 @@ begin
   SetLength(FFbKeys, aNewCapacity);
   SetLength(FFbVals, aNewCapacity);
   FFbMask := aNewCapacity - 1;
-
-  LLog := 0;
-  LTmp := aNewCapacity;
-  while LTmp > 1 do
-  begin
-    Inc(LLog);
-    LTmp := LTmp shr 1;
-  end;
-  FFbHighShift := SizeUInt(64 - LLog);
+  FFbHighShift := SizeUInt(64 - Log2UInt(aNewCapacity));
 
   for LIdx := 0 to FFbMask do
   begin
