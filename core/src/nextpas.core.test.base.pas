@@ -140,7 +140,7 @@ threadvar
 function GetLastTestTrace: string;
   { Returns the most recently captured (and filtered) stack trace.
     Empty if no trace has been captured yet on this thread. }
-function FormatTestLocation(APrefix: string = ''): string;
+function FormatTestLocation(const APrefix: string = ''): string;
   { Returns the first non-empty frame from GLastTestTrace, prefixed with APrefix.
     Returns '' if no useful frame was captured. }
 
@@ -241,7 +241,7 @@ begin
   Result := GLastTestTrace;
 end;
 
-function FormatTestLocation(APrefix: string): string;
+function FormatTestLocation(const APrefix: string): string;
 var
   LTrace: string;
 begin
