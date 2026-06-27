@@ -409,6 +409,35 @@ begin
   Check(LResults[1].Name = 'BenchmarkGood2', 'Second valid result preserved');
 end;
 
+{ === CRLF / Mixed Line Endings === }
+
+procedure Test_ParseGoBenchOutput_CRLF;
+var
+  LResults: TBenchResultArray;
+  LOutput: string;
+begin
+  { Windows-style CRLF line endings }
+  LOutput := 'BenchmarkFoo-8   1000000   1234 ns/op' + #13#10 +
+             'BenchmarkBar-4   500000   2345 ns/op' + #13#10;
+  LResults := ParseGoBenchOutput(LOutput);
+  Check(Length(LResults) = 2, 'CRLF: parsed 2 results');
+  Check(LResults[0].Name = 'BenchmarkFoo', 'CRLF: first name correct');
+  Check(LResults[1].Name = 'BenchmarkBar', 'CRLF: second name correct');
+end;
+
+procedure Test_ParseGoBenchOutput_MixedLineEndings;
+var
+  LResults: TBenchResultArray;
+  LOutput: string;
+begin
+  { Mixed CR, LF, CRLF }
+  LOutput := 'BenchmarkA-1   100   100 ns/op' + #13 +
+             'BenchmarkB-2   200   200 ns/op' + #10 +
+             'BenchmarkC-3   300   300 ns/op' + #13#10;
+  LResults := ParseGoBenchOutput(LOutput);
+  Check(Length(LResults) = 3, 'Mixed line endings: parsed 3 results');
+end;
+
 { === Main === }
 
 var
@@ -461,6 +490,10 @@ begin
   { Rust mean=0 validation }
   T.Test('rust: mean=0 raises error', @Test_ParseRustBenchLine_MeanZero);
   T.Test('rust: mean=0 skipped in output', @Test_ParseRustBenchOutput_MeanZeroSkipped);
+
+  { CRLF / Mixed line endings }
+  T.Test('go: CRLF line endings', @Test_ParseGoBenchOutput_CRLF);
+  T.Test('go: mixed line endings', @Test_ParseGoBenchOutput_MixedLineEndings);
 
   T.Run;
   T.Summary;

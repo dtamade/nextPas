@@ -211,8 +211,14 @@ begin
   SetLength(LData, 1000);
   for i := 0 to 999 do LData[i] := 100.0 + Random * 10.0 + Random * 10.0;
   Check(GAnalyzer.LooksNormalHeuristic(LData), 'Normal-like data passes heuristic check');
-  { Note: uniform distribution rejection is a known limitation of the heuristic;
-    we only verify normal-like data passes here. }
+
+  { Negative case: uniform distribution should NOT look normal
+    (heuristic limitation: it may still pass for some uniform data, so only
+    verify the function handles the call without error) }
+  SetLength(LData, 1000);
+  for i := 0 to 999 do LData[i] := i * 0.01; { uniform 0..10 }
+  GAnalyzer.LooksNormalHeuristic(LData);
+  Check(True, 'Uniform distribution: LooksNormalHeuristic completes without error');
 end;
 
 procedure TestComputeApproximatePValue;
@@ -410,60 +416,107 @@ end;
 procedure TestMean_NaNInfinity;
 var
   LData: TDoubleArray;
-  LHandled: Boolean;
+  LResult: Double;
+  LNoCrash: Boolean;
 begin
   SetLength(LData, 3);
 
-  LHandled := True;
+  { NaN input: FPC propagates NaN through arithmetic }
   LData[0] := 1.0; LData[1] := DoubleQuietNaN; LData[2] := 3.0;
-  try GAnalyzer.Mean(LData); except end;
-  Check(LHandled, 'Mean survives NaN input without segfault');
+  LNoCrash := True;
+  try
+    LResult := GAnalyzer.Mean(LData);
+    Check(IsNan(LResult), 'Mean with NaN input returns NaN');
+  except
+    LNoCrash := False;
+  end;
+  Check(LNoCrash, 'Mean survives NaN input without crash');
 
-  LHandled := True;
+  { +Inf input: result should be +Inf }
   LData[0] := 1.0; LData[1] := MakePositiveInfinity; LData[2] := 3.0;
-  try GAnalyzer.Mean(LData); except end;
-  Check(LHandled, 'Mean survives Positive Infinity without segfault');
+  LNoCrash := True;
+  try
+    LResult := GAnalyzer.Mean(LData);
+    Check(LResult > 1e300, 'Mean with +Inf input returns +Inf');
+  except
+    LNoCrash := False;
+  end;
+  Check(LNoCrash, 'Mean survives +Inf input without crash');
 
-  LHandled := True;
+  { -Inf input: result should be -Inf }
   LData[0] := 1.0; LData[1] := MakeNegativeInfinity; LData[2] := 3.0;
-  try GAnalyzer.Mean(LData); except end;
-  Check(LHandled, 'Mean survives Negative Infinity without segfault');
+  LNoCrash := True;
+  try
+    LResult := GAnalyzer.Mean(LData);
+    Check(LResult < -1e300, 'Mean with -Inf input returns -Inf');
+  except
+    LNoCrash := False;
+  end;
+  Check(LNoCrash, 'Mean survives -Inf input without crash');
 end;
 
 procedure TestStdDev_NaNInfinity;
 var
   LData: TDoubleArray;
-  LHandled: Boolean;
+  LResult: Double;
+  LNoCrash: Boolean;
 begin
   SetLength(LData, 3);
 
-  LHandled := True;
+  { NaN input: StdDev should return NaN or 0 (not crash) }
   LData[0] := 1.0; LData[1] := DoubleQuietNaN; LData[2] := 3.0;
-  try GAnalyzer.StdDev(LData); except end;
-  Check(LHandled, 'StdDev survives NaN input without segfault');
+  LNoCrash := True;
+  try
+    LResult := GAnalyzer.StdDev(LData);
+    { NaN propagation through Sqrt(Variance) }
+    Check(IsNan(LResult) or (LResult >= 0), 'StdDev with NaN input returns NaN or non-negative');
+  except
+    LNoCrash := False;
+  end;
+  Check(LNoCrash, 'StdDev survives NaN input without crash');
 
-  LHandled := True;
+  { +Inf input }
   LData[0] := 1.0; LData[1] := MakePositiveInfinity; LData[2] := 3.0;
-  try GAnalyzer.StdDev(LData); except end;
-  Check(LHandled, 'StdDev survives Positive Infinity without segfault');
+  LNoCrash := True;
+  try
+    LResult := GAnalyzer.StdDev(LData);
+    Check(LResult >= 0, 'StdDev with +Inf input returns non-negative or Inf');
+  except
+    LNoCrash := False;
+  end;
+  Check(LNoCrash, 'StdDev survives +Inf input without crash');
 end;
 
 procedure TestPercentile_NaNInfinity;
 var
   LData: TDoubleArray;
-  LHandled: Boolean;
+  LResult: Double;
+  LNoCrash: Boolean;
 begin
   SetLength(LData, 5);
 
-  LHandled := True;
+  { NaN in sorted position — Percentile should return some value or NaN }
   LData[0] := 1.0; LData[1] := 2.0; LData[2] := DoubleQuietNaN; LData[3] := 4.0; LData[4] := 5.0;
-  try GAnalyzer.Percentile(LData, 50); except end;
-  Check(LHandled, 'Percentile survives NaN input without segfault');
+  LNoCrash := True;
+  try
+    LResult := GAnalyzer.Percentile(LData, 50);
+    { NaN may be at any position in sorted order; result could be NaN or a valid value }
+    Check(True, 'Percentile(50) with NaN returns a value (NaN or number)');
+  except
+    LNoCrash := False;
+  end;
+  Check(LNoCrash, 'Percentile survives NaN input without crash');
 
-  LHandled := True;
+  { +Inf at end — Percentile(99) should return +Inf or a large value }
   LData[0] := 1.0; LData[1] := 2.0; LData[2] := 3.0; LData[3] := 4.0; LData[4] := MakePositiveInfinity;
-  try GAnalyzer.Percentile(LData, 99); except end;
-  Check(LHandled, 'Percentile survives Positive Infinity without segfault');
+  LNoCrash := True;
+  try
+    LResult := GAnalyzer.Percentile(LData, 99);
+    Check(LResult > 3.0, 'Percentile(99) with +Inf at end > 3.0');
+  except
+    LNoCrash := False;
+  end;
+  Check(LNoCrash, 'Percentile survives +Inf input without crash');
 end;
 
 procedure TestHasHeuristicDifferenceAt;
@@ -600,6 +653,45 @@ begin
   end;
 end;
 
+procedure TestGlobMatch;
+begin
+  { 精确匹配 }
+  Check(GlobMatch('Foo', 'Foo'), 'GlobMatch exact match');
+  Check(not GlobMatch('Foo', 'Bar'), 'GlobMatch exact mismatch');
+
+  { 空模式和空字符串 }
+  Check(GlobMatch('', ''), 'GlobMatch empty pattern and string');
+  Check(not GlobMatch('', 'Foo'), 'GlobMatch empty pattern, non-empty string');
+  Check(not GlobMatch('Foo', ''), 'GlobMatch non-empty pattern, empty string');
+
+  { ? 通配符 }
+  Check(GlobMatch('F?o', 'Foo'), 'GlobMatch ? matches single char');
+  Check(GlobMatch('F?o', 'Fao'), 'GlobMatch ? matches different char');
+  Check(not GlobMatch('F?o', 'Fooo'), 'GlobMatch ? does not match multiple chars');
+  Check(not GlobMatch('F?o', 'Fo'), 'GlobMatch ? requires exactly one char');
+
+  { * 通配符 }
+  Check(GlobMatch('*', 'anything'), 'GlobMatch * matches anything');
+  Check(GlobMatch('*', ''), 'GlobMatch * matches empty');
+  Check(GlobMatch('Foo*', 'FooBar'), 'GlobMatch prefix* matches');
+  Check(GlobMatch('Foo*', 'Foo'), 'GlobMatch prefix* matches exact');
+  Check(GlobMatch('*Bar', 'FooBar'), 'GlobMatch *suffix matches');
+  Check(GlobMatch('F*ar', 'FooBar'), 'GlobMatch F*ar matches middle');
+  Check(not GlobMatch('Foo*', 'BarFoo'), 'GlobMatch prefix* does not match wrong prefix');
+
+  { 连续 ** }
+  Check(GlobMatch('**', 'anything'), 'GlobMatch ** same as *');
+  Check(GlobMatch('F**r', 'FooBar'), 'GlobMatch F**r matches');
+
+  { 基准名称模式 }
+  Check(GlobMatch('Benchmark*', 'BenchmarkSort'), 'GlobMatch Benchmark prefix');
+  Check(GlobMatch('*Sort', 'QuickSort'), 'GlobMatch Sort suffix');
+  Check(GlobMatch('*Sort*', 'BenchmarkSortN=100'), 'GlobMatch *Sort* contains');
+
+  { 大小写敏感 }
+  Check(not GlobMatch('foo', 'Foo'), 'GlobMatch is case-sensitive');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -631,6 +723,7 @@ begin
   T.Test('Percentile_NaNInfinity', @TestPercentile_NaNInfinity);
   T.Test('HasHeuristicDifferenceAt', @TestHasHeuristicDifferenceAt);
   T.Test('GeometricMean', @TestGeometricMean);
+  T.Test('GlobMatch', @TestGlobMatch);
   T.Test('OLSRegression', @TestOLSRegression);
   T.Test('OLSRegression_InsufficientData', @TestOLSRegression_InsufficientData);
   T.Test('OLSRegression_PerfectFit', @TestOLSRegression_PerfectFit);
