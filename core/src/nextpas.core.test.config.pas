@@ -68,7 +68,7 @@ function ResolveErrSink(const AConfig: TTestConfig): IOutputSink;
 procedure ResetDefaultConfig;
 procedure SetDefaultFilterPattern(const APattern: string);
 procedure SetDefaultTagFilter(const APattern: string);
-procedure SetDefaultTimeoutMs(ATimeoutMs: UInt64);
+procedure SetDefaultTimeoutMs(const ATimeoutMs: UInt64);
 procedure SetDefaultAnsiMode(AAnsiMode: TAnsiMode);
 procedure SetDefaultOutSink(const ASink: IOutputSink);
 procedure SetDefaultErrSink(const ASink: IOutputSink);
@@ -146,7 +146,7 @@ begin
   GDefaultConfig.TagFilter := APattern;
 end;
 
-procedure SetDefaultTimeoutMs(ATimeoutMs: UInt64);
+procedure SetDefaultTimeoutMs(const ATimeoutMs: UInt64);
 begin
   GDefaultConfig.TimeoutMs := ATimeoutMs;
 end;
