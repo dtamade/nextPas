@@ -73,8 +73,7 @@ implementation
 
 procedure TTestResultAppender.Append(const AResult: TTestResult);
 begin
-  SetLength(FResults, Length(FResults) + 1);
-  FResults[High(FResults)] := AResult;
+  AppendResult(FResults, AResult);
 end;
 
 function TTestResultAppender.GetResults: specialize TArray<TTestResult>;

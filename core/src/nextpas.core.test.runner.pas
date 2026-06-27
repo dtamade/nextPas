@@ -717,8 +717,7 @@ begin
     begin
       LTestResult := MakeTestResult(Tests[I].Name, tsSkipped,
         'setup failed: ' + LLastFailMsg, 0);
-      SetLength(AResult.Results, Length(AResult.Results) + 1);
-      AResult.Results[High(AResult.Results)] := LTestResult;
+      AppendResult(AResult.Results, LTestResult);
       LOutSink.WriteLn('    ' + FormatStatusLine(tsSkipped, Tests[I].Name, LConfig));
     end;
     AResult.Failed    := 1;
@@ -766,8 +765,7 @@ begin
       Inc(LSkip);
       LTestResult := MakeTestResult(LEntry.Name, tsSkipped,
         LEntry.SkipReason, 0);
-      SetLength(AResult.Results, Length(AResult.Results) + 1);
-      AResult.Results[High(AResult.Results)] := LTestResult;
+      AppendResult(AResult.Results, LTestResult);
       if LEntry.SkipReason <> '' then
         LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, LEntry.Name,
           LEntry.SkipReason, LConfig))
@@ -788,8 +786,7 @@ begin
           LStatus := tsSkipped;
           Inc(LSkip);
           LTestResult := MakeTestResult(LEntry.Name, tsSkipped, E.Message, 0);
-          SetLength(AResult.Results, Length(AResult.Results) + 1);
-          AResult.Results[High(AResult.Results)] := LTestResult;
+          AppendResult(AResult.Results, LTestResult);
           LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, LEntry.Name,
             E.Message, LConfig));
           ReportLeakIfAny(LStatus, LConfig);
@@ -801,8 +798,7 @@ begin
           LLastFailMsg := E.Message;
           LTestResult := MakeTestResult(LEntry.Name, tsError,
             'beforeEach failed: ' + E.Message, 0);
-          SetLength(AResult.Results, Length(AResult.Results) + 1);
-          AResult.Results[High(AResult.Results)] := LTestResult;
+          AppendResult(AResult.Results, LTestResult);
           LOutSink.WriteLn('  ' + FormatStatusLine(tsError, LEntry.Name,
             'beforeEach failed: ' + E.Message, LConfig));
           Inc(LFail);
@@ -992,8 +988,7 @@ begin
     if (LStatus in [tsFailed, tsError]) and (LSubCtx <> nil) and
        (Length(LSubCtx.FLogLines) > 0) then
       LTestResult.CapturedLog := LSubCtx.FLogLines;
-    SetLength(AResult.Results, Length(AResult.Results) + 1);
-    AResult.Results[High(AResult.Results)] := LTestResult;
+    AppendResult(AResult.Results, LTestResult);
 
     { Output per-test — use DisplayName }
     case LStatus of
@@ -1036,10 +1031,7 @@ begin
 
   { Merge subtest-level results from appender }
   for J := 0 to High(LAppender.Results) do
-  begin
-    SetLength(AResult.Results, Length(AResult.Results) + 1);
-    AResult.Results[High(AResult.Results)] := LAppender.Results[J];
-  end;
+    AppendResult(AResult.Results, LAppender.Results[J]);
 
   finally
     LSubCtxI := nil;
@@ -1296,10 +1288,7 @@ begin
   for I := 0 to High(Tests) do
     if (LThreads[I] <> 0) or (LResults[I].Status <> tsPassed) or
        (LResults[I].Name <> '') then
-    begin
-      SetLength(AResult.Results, Length(AResult.Results) + 1);
-      AResult.Results[High(AResult.Results)] := LResults[I];
-    end;
+      AppendResult(AResult.Results, LResults[I]);
 
   FinalizeResults(LConfig, AResult, LPass, LFail, LSkip);
   Result := LastRunPassed;

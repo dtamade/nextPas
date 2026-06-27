@@ -152,6 +152,9 @@ procedure ClearEntry(out AEntry: TTestEntry);
 function MakeTestResult(const AName: string; AStatus: TTestStatus;
   const AMessage: string; ADuration: Int64): TTestResult;
   { Construct a fully-initialized TTestResult in one call. }
+procedure AppendResult(var AResults: specialize TArray<TTestResult>;
+  const AResult: TTestResult);
+  { Append a TTestResult to a dynamic array. }
 
 { ── Exception Formatting (eliminate repeated ClassName + trace patterns) ──── }
 
@@ -221,6 +224,13 @@ begin
   Result.Message    := AMessage;
   Result.Duration   := ADuration;
   Result.CapturedLog := nil;
+end;
+
+procedure AppendResult(var AResults: specialize TArray<TTestResult>;
+  const AResult: TTestResult);
+begin
+  SetLength(AResults, Length(AResults) + 1);
+  AResults[High(AResults)] := AResult;
 end;
 
 { Exception Formatting }
