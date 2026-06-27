@@ -88,11 +88,14 @@ B12  Phase 1: 统计基础（对标 Go/Rust）                   ✅
   B12.4  CompareTwoResults 两结果 Mann-Whitney 对比    ✅
   B12.5  GlobMatch 模式匹配过滤器                      ✅
 
-B13  Phase 2: 精密测量                                   🔄
+B13  Phase 2: 精密测量                                   ✅
   B13.1  OLS 线性回归去除固定开销                       ✅
   B13.2  吞吐量标准化显示 (bytes/s)                     ✅
   B13.3  异常值严重度分级 (mild/moderate/severe)         ✅
   B13.4  CV 变异系数显示                                ✅
+  B13.5  自适应测量（自动校准采样数量）                  ✅
+  B13.6  命名基线 SaveBaseline / LoadBaseline           ✅
+  B13.7  时间线追踪 AppendToTimeline (JSONL)            ✅
 ```
 
 ## 测试套件分布
