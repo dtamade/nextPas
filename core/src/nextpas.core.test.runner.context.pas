@@ -102,18 +102,9 @@ procedure TTestContext.Run(const AName: string; AProc: TTestProc);
 var
   LEntry: TTestEntry;
 begin
-  LEntry.Name        := FTestName + '/' + AName;
-  LEntry.Proc        := AProc;
-  LEntry.Closure     := nil;
-  LEntry.SubtestProc := nil;
-  LEntry.Kind        := ekTest;
-  LEntry.SkipReason  := '';
-  LEntry.RetryCount  := 0;
-  LEntry.DisplayName := '';
-  LEntry.Tags        := nil;
-  LEntry.RepeatCount := 0;
-  LEntry.TableCase   := nil;
-  LEntry.TableProc   := nil;
+  ClearEntry(LEntry);
+  LEntry.Name := FTestName + '/' + AName;
+  LEntry.Proc := AProc;
   SetLength(FSubtests, Length(FSubtests) + 1);
   FSubtests[High(FSubtests)] := LEntry;
 end;
@@ -122,18 +113,9 @@ procedure TTestContext.Run(const AName: string; AProc: TTestClosure);
 var
   LEntry: TTestEntry;
 begin
-  LEntry.Name        := FTestName + '/' + AName;
-  LEntry.Proc        := nil;
-  LEntry.Closure     := AProc;
-  LEntry.SubtestProc := nil;
-  LEntry.Kind        := ekTest;
-  LEntry.SkipReason  := '';
-  LEntry.RetryCount  := 0;
-  LEntry.DisplayName := '';
-  LEntry.Tags        := nil;
-  LEntry.RepeatCount := 0;
-  LEntry.TableCase   := nil;
-  LEntry.TableProc   := nil;
+  ClearEntry(LEntry);
+  LEntry.Name    := FTestName + '/' + AName;
+  LEntry.Closure := AProc;
   SetLength(FSubtests, Length(FSubtests) + 1);
   FSubtests[High(FSubtests)] := LEntry;
 end;
@@ -142,18 +124,10 @@ procedure TTestContext.RunNested(const AName: string; AProc: Pointer);
 var
   LEntry: TTestEntry;
 begin
+  ClearEntry(LEntry);
   LEntry.Name        := FTestName + '/' + AName;
-  LEntry.Proc        := nil;
-  LEntry.Closure     := nil;
   LEntry.SubtestProc := TSubtestProc(AProc);
   LEntry.Kind        := ekSubtest;
-  LEntry.SkipReason  := '';
-  LEntry.RetryCount  := 0;
-  LEntry.DisplayName := '';
-  LEntry.Tags        := nil;
-  LEntry.RepeatCount := 0;
-  LEntry.TableCase   := nil;
-  LEntry.TableProc   := nil;
   SetLength(FSubtests, Length(FSubtests) + 1);
   FSubtests[High(FSubtests)] := LEntry;
 end;
@@ -329,15 +303,10 @@ begin
     { Collect subtest result via callback if caller requested it }
     if (LEntry.Kind <> ekSubtest) and Assigned(FOnResult) then
     begin
-      LTestResult.Name    := LEntry.Name;
-      LTestResult.Status  := LStatus;
-      LTestResult.Message := LMsg;
-      LTestResult.Duration := 0;
+      LTestResult := MakeTestResult(LEntry.Name, LStatus, LMsg, 0);
       { Copy captured log lines on failure/error }
       if (LStatus in [tsFailed, tsError]) and (Length(FLogLines) > 0) then
-        LTestResult.CapturedLog := Copy(FLogLines, 0, Length(FLogLines))
-      else
-        LTestResult.CapturedLog := nil;
+        LTestResult.CapturedLog := Copy(FLogLines, 0, Length(FLogLines));
       FOnResult(LTestResult);
     end;
   end;

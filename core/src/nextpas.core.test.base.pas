@@ -144,6 +144,15 @@ function FormatTestLocation(const APrefix: string = ''): string;
   { Returns the first non-empty frame from GLastTestTrace, prefixed with APrefix.
     Returns '' if no useful frame was captured. }
 
+{ ── Record Helpers (reduce boilerplate at creation sites) ───────────────────── }
+
+procedure ClearEntry(out AEntry: TTestEntry);
+  { Initialize all TTestEntry fields to safe defaults.
+    Callers then override only the fields they need. }
+function MakeTestResult(const AName: string; AStatus: TTestStatus;
+  const AMessage: string; ADuration: Int64): TTestResult;
+  { Construct a fully-initialized TTestResult in one call. }
+
 { ── Internal Helpers (exported for use by other test.* units) ─────────────── }
 
 procedure SetTestContext(const ASuiteName, ATestName: string);
@@ -174,6 +183,36 @@ begin
   Result.Skipped   := 0;
   Result.AllPassed := True;
   Result.Results   := nil;
+end;
+
+{ ═════════════════════════════════════════════════════════════════════════════ }
+{ Record Helpers                                                                }
+{ ═════════════════════════════════════════════════════════════════════════════ }
+
+procedure ClearEntry(out AEntry: TTestEntry);
+begin
+  AEntry.Name        := '';
+  AEntry.Proc        := nil;
+  AEntry.Closure     := nil;
+  AEntry.SubtestProc := nil;
+  AEntry.Kind        := ekTest;
+  AEntry.SkipReason  := '';
+  AEntry.RetryCount  := 0;
+  AEntry.DisplayName := '';
+  AEntry.Tags        := nil;
+  AEntry.RepeatCount := 0;
+  AEntry.TableCase   := nil;
+  AEntry.TableProc   := nil;
+end;
+
+function MakeTestResult(const AName: string; AStatus: TTestStatus;
+  const AMessage: string; ADuration: Int64): TTestResult;
+begin
+  Result.Name       := AName;
+  Result.Status     := AStatus;
+  Result.Message    := AMessage;
+  Result.Duration   := ADuration;
+  Result.CapturedLog := nil;
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }

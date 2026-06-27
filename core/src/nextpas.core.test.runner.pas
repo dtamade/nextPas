@@ -363,18 +363,9 @@ procedure TTestSuite.Test(const AName: string; AProc: TTestProc);
 var
   LEntry: TTestEntry;
 begin
-  LEntry.Name        := AName;
-  LEntry.Proc        := AProc;
-  LEntry.Closure     := nil;
-  LEntry.SubtestProc := nil;
-  LEntry.Kind        := ekTest;
-  LEntry.SkipReason  := '';
-  LEntry.RetryCount  := 0;
-  LEntry.DisplayName := '';
-  LEntry.Tags        := nil;
-  LEntry.RepeatCount := 0;
-  LEntry.TableCase   := nil;
-  LEntry.TableProc   := nil;
+  ClearEntry(LEntry);
+  LEntry.Name := AName;
+  LEntry.Proc := AProc;
   SetLength(Tests, Length(Tests) + 1);
   Tests[High(Tests)] := LEntry;
 end;
@@ -383,18 +374,9 @@ procedure TTestSuite.Test(const AName: string; AProc: TTestClosure);
 var
   LEntry: TTestEntry;
 begin
-  LEntry.Name        := AName;
-  LEntry.Proc        := nil;
-  LEntry.Closure     := AProc;
-  LEntry.SubtestProc := nil;
-  LEntry.Kind        := ekTest;
-  LEntry.SkipReason  := '';
-  LEntry.RetryCount  := 0;
-  LEntry.DisplayName := '';
-  LEntry.Tags        := nil;
-  LEntry.RepeatCount := 0;
-  LEntry.TableCase   := nil;
-  LEntry.TableProc   := nil;
+  ClearEntry(LEntry);
+  LEntry.Name    := AName;
+  LEntry.Closure := AProc;
   SetLength(Tests, Length(Tests) + 1);
   Tests[High(Tests)] := LEntry;
 end;
@@ -404,18 +386,10 @@ procedure TTestSuite.Test(const AName: string; AProc: TTestProc;
 var
   LEntry: TTestEntry;
 begin
-  LEntry.Name        := AName;
-  LEntry.Proc        := AProc;
-  LEntry.Closure     := nil;
-  LEntry.SubtestProc := nil;
-  LEntry.Kind        := ekTest;
-  LEntry.SkipReason  := '';
-  LEntry.RetryCount  := ARetryCount;
-  LEntry.DisplayName := '';
-  LEntry.Tags        := nil;
-  LEntry.RepeatCount := 0;
-  LEntry.TableCase   := nil;
-  LEntry.TableProc   := nil;
+  ClearEntry(LEntry);
+  LEntry.Name       := AName;
+  LEntry.Proc       := AProc;
+  LEntry.RetryCount := ARetryCount;
   SetLength(Tests, Length(Tests) + 1);
   Tests[High(Tests)] := LEntry;
 end;
@@ -425,18 +399,10 @@ procedure TTestSuite.Test(const AName: string; AProc: TTestClosure;
 var
   LEntry: TTestEntry;
 begin
-  LEntry.Name        := AName;
-  LEntry.Proc        := nil;
-  LEntry.Closure     := AProc;
-  LEntry.SubtestProc := nil;
-  LEntry.Kind        := ekTest;
-  LEntry.SkipReason  := '';
-  LEntry.RetryCount  := ARetryCount;
-  LEntry.DisplayName := '';
-  LEntry.Tags        := nil;
-  LEntry.RepeatCount := 0;
-  LEntry.TableCase   := nil;
-  LEntry.TableProc   := nil;
+  ClearEntry(LEntry);
+  LEntry.Name       := AName;
+  LEntry.Closure    := AProc;
+  LEntry.RetryCount := ARetryCount;
   SetLength(Tests, Length(Tests) + 1);
   Tests[High(Tests)] := LEntry;
 end;
@@ -447,17 +413,9 @@ var
   LEntry: TTestEntry;
   I: Integer;
 begin
-  LEntry.Name        := AName;
-  LEntry.Proc        := AProc;
-  LEntry.Closure     := nil;
-  LEntry.SubtestProc := nil;
-  LEntry.Kind        := ekTest;
-  LEntry.SkipReason  := '';
-  LEntry.RetryCount  := 0;
-  LEntry.DisplayName := '';
-  LEntry.RepeatCount := 0;
-  LEntry.TableCase   := nil;
-  LEntry.TableProc   := nil;
+  ClearEntry(LEntry);
+  LEntry.Name := AName;
+  LEntry.Proc := AProc;
   SetLength(LEntry.Tags, Length(ATags));
   for I := 0 to High(ATags) do
     LEntry.Tags[I] := ATags[I];
@@ -471,17 +429,9 @@ var
   LEntry: TTestEntry;
   I: Integer;
 begin
-  LEntry.Name        := AName;
-  LEntry.Proc        := nil;
-  LEntry.Closure     := AProc;
-  LEntry.SubtestProc := nil;
-  LEntry.Kind        := ekTest;
-  LEntry.SkipReason  := '';
-  LEntry.RetryCount  := 0;
-  LEntry.DisplayName := '';
-  LEntry.RepeatCount := 0;
-  LEntry.TableCase   := nil;
-  LEntry.TableProc   := nil;
+  ClearEntry(LEntry);
+  LEntry.Name    := AName;
+  LEntry.Closure := AProc;
   SetLength(LEntry.Tags, Length(ATags));
   for I := 0 to High(ATags) do
     LEntry.Tags[I] := ATags[I];
@@ -495,17 +445,10 @@ var
   LEntry: TTestEntry;
   I: Integer;
 begin
+  ClearEntry(LEntry);
   LEntry.Name        := AName;
   LEntry.Proc        := AProc;
-  LEntry.Closure     := nil;
-  LEntry.SubtestProc := nil;
-  LEntry.Kind        := ekTest;
-  LEntry.SkipReason  := '';
-  LEntry.RetryCount  := 0;
   LEntry.DisplayName := ADisplayName;
-  LEntry.RepeatCount := 0;
-  LEntry.TableCase   := nil;
-  LEntry.TableProc   := nil;
   SetLength(LEntry.Tags, Length(ATags));
   for I := 0 to High(ATags) do
     LEntry.Tags[I] := ATags[I];
@@ -519,17 +462,10 @@ var
   LEntry: TTestEntry;
   I: Integer;
 begin
+  ClearEntry(LEntry);
   LEntry.Name        := AName;
-  LEntry.Proc        := nil;
   LEntry.Closure     := AProc;
-  LEntry.SubtestProc := nil;
-  LEntry.Kind        := ekTest;
-  LEntry.SkipReason  := '';
-  LEntry.RetryCount  := 0;
   LEntry.DisplayName := ADisplayName;
-  LEntry.RepeatCount := 0;
-  LEntry.TableCase   := nil;
-  LEntry.TableProc   := nil;
   SetLength(LEntry.Tags, Length(ATags));
   for I := 0 to High(ATags) do
     LEntry.Tags[I] := ATags[I];
@@ -542,18 +478,10 @@ procedure TTestSuite.TestRepeat(const AName: string; AProc: TTestProc;
 var
   LEntry: TTestEntry;
 begin
+  ClearEntry(LEntry);
   LEntry.Name        := AName;
   LEntry.Proc        := AProc;
-  LEntry.Closure     := nil;
-  LEntry.SubtestProc := nil;
-  LEntry.Kind        := ekTest;
-  LEntry.SkipReason  := '';
-  LEntry.RetryCount  := 0;
-  LEntry.DisplayName := '';
-  LEntry.Tags        := nil;
   LEntry.RepeatCount := ARepeatCount;
-  LEntry.TableCase   := nil;
-  LEntry.TableProc   := nil;
   SetLength(Tests, Length(Tests) + 1);
   Tests[High(Tests)] := LEntry;
 end;
@@ -563,18 +491,10 @@ procedure TTestSuite.TestRepeat(const AName: string; AProc: TTestClosure;
 var
   LEntry: TTestEntry;
 begin
+  ClearEntry(LEntry);
   LEntry.Name        := AName;
-  LEntry.Proc        := nil;
   LEntry.Closure     := AProc;
-  LEntry.SubtestProc := nil;
-  LEntry.Kind        := ekTest;
-  LEntry.SkipReason  := '';
-  LEntry.RetryCount  := 0;
-  LEntry.DisplayName := '';
-  LEntry.Tags        := nil;
   LEntry.RepeatCount := ARepeatCount;
-  LEntry.TableCase   := nil;
-  LEntry.TableProc   := nil;
   SetLength(Tests, Length(Tests) + 1);
   Tests[High(Tests)] := LEntry;
 end;
@@ -583,18 +503,10 @@ procedure TTestSuite.TestSubtest(const AName: string; AProc: TSubtestProc);
 var
   LEntry: TTestEntry;
 begin
+  ClearEntry(LEntry);
   LEntry.Name        := AName;
-  LEntry.Proc        := nil;
-  LEntry.Closure     := nil;
   LEntry.SubtestProc := AProc;
   LEntry.Kind        := ekSubtest;
-  LEntry.SkipReason  := '';
-  LEntry.RetryCount  := 0;
-  LEntry.DisplayName := '';
-  LEntry.Tags        := nil;
-  LEntry.RepeatCount := 0;
-  LEntry.TableCase   := nil;
-  LEntry.TableProc   := nil;
   SetLength(Tests, Length(Tests) + 1);
   Tests[High(Tests)] := LEntry;
 end;
@@ -616,18 +528,11 @@ begin
     New(LPProc);
     LPProc^ := AProc;
 
-    LEntry.Name       := AName + '/' + ACases[I].Name;
-    LEntry.Proc       := nil;
-    LEntry.Closure    := nil;
-    LEntry.SubtestProc := nil;
-    LEntry.Kind       := ekTableTest;
-    LEntry.SkipReason := '';
-    LEntry.RetryCount := 0;
-    LEntry.DisplayName := '';
-    LEntry.Tags       := nil;
-    LEntry.RepeatCount := 0;
-    LEntry.TableCase  := LPCase;
-    LEntry.TableProc  := LPProc;
+    ClearEntry(LEntry);
+    LEntry.Name      := AName + '/' + ACases[I].Name;
+    LEntry.Kind      := ekTableTest;
+    LEntry.TableCase := LPCase;
+    LEntry.TableProc := LPProc;
     SetLength(Tests, Length(Tests) + 1);
     Tests[High(Tests)] := LEntry;
   end;
@@ -637,18 +542,10 @@ procedure TTestSuite.Skip(const AName: string; const AReason: string);
 var
   LEntry: TTestEntry;
 begin
-  LEntry.Name        := AName;
-  LEntry.Proc        := nil;
-  LEntry.Closure     := nil;
-  LEntry.SubtestProc := nil;
-  LEntry.Kind        := ekSkipped;
-  LEntry.SkipReason  := AReason;
-  LEntry.RetryCount  := 0;
-  LEntry.DisplayName := '';
-  LEntry.Tags        := nil;
-  LEntry.RepeatCount := 0;
-  LEntry.TableCase   := nil;
-  LEntry.TableProc   := nil;
+  ClearEntry(LEntry);
+  LEntry.Name       := AName;
+  LEntry.Kind       := ekSkipped;
+  LEntry.SkipReason := AReason;
   SetLength(Tests, Length(Tests) + 1);
   Tests[High(Tests)] := LEntry;
 end;
@@ -818,10 +715,8 @@ begin
     { All tests skipped — populate results with skipped entries }
     for I := 0 to High(Tests) do
     begin
-      LTestResult.Name     := Tests[I].Name;
-      LTestResult.Status   := tsSkipped;
-      LTestResult.Message  := 'setup failed: ' + LLastFailMsg;
-      LTestResult.Duration := 0;
+      LTestResult := MakeTestResult(Tests[I].Name, tsSkipped,
+        'setup failed: ' + LLastFailMsg, 0);
       SetLength(AResult.Results, Length(AResult.Results) + 1);
       AResult.Results[High(AResult.Results)] := LTestResult;
       LOutSink.WriteLn(
@@ -875,9 +770,8 @@ begin
     begin
       LStatus := tsSkipped;
       Inc(LSkip);
-      LTestResult.Status   := tsSkipped;
-      LTestResult.Message  := LEntry.SkipReason;
-      LTestResult.Duration := 0;
+      LTestResult := MakeTestResult(LEntry.Name, tsSkipped,
+        LEntry.SkipReason, 0);
       SetLength(AResult.Results, Length(AResult.Results) + 1);
       AResult.Results[High(AResult.Results)] := LTestResult;
       if LEntry.SkipReason <> '' then
@@ -902,9 +796,7 @@ begin
         begin
           LStatus := tsSkipped;
           Inc(LSkip);
-          LTestResult.Status   := tsSkipped;
-          LTestResult.Message  := E.Message;
-          LTestResult.Duration := 0;
+          LTestResult := MakeTestResult(LEntry.Name, tsSkipped, E.Message, 0);
           SetLength(AResult.Results, Length(AResult.Results) + 1);
           AResult.Results[High(AResult.Results)] := LTestResult;
           LOutSink.WriteLn(
@@ -917,9 +809,8 @@ begin
         begin
           LStatus := tsError;
           LLastFailMsg := E.Message;
-          LTestResult.Status   := tsError;
-          LTestResult.Message  := 'beforeEach failed: ' + E.Message;
-          LTestResult.Duration := 0;
+          LTestResult := MakeTestResult(LEntry.Name, tsError,
+            'beforeEach failed: ' + E.Message, 0);
           SetLength(AResult.Results, Length(AResult.Results) + 1);
           AResult.Results[High(AResult.Results)] := LTestResult;
           LOutSink.WriteLn(
