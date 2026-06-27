@@ -20,7 +20,7 @@ var
   LCount: Word;
 begin
   SetLength(LBlocks, ACount);
-  LCount := CentralPoolAlloc(APool, ACount, @LBlocks[0]);
+  LCount := CentralPoolAlloc(APool, ACount, @LBlocks[0], 0);
   Check(LCount = ACount, 'alloc ' + IntToStr(ACount));
   CentralPoolFree(APool, ACount, @LBlocks[0], AOpCounter);
 end;
@@ -68,7 +68,7 @@ begin
   AllocAndFreeAll(LPool, CENTRAL_SPAN_SLOTS, 100);
   ScavengeCentralPools(LPool, 200, 50);
   Check(LPool.FEntries[0].FMemory = nil, 'released');
-  LCount := CentralPoolAlloc(LPool, 1, @LBlocks[0]);
+  LCount := CentralPoolAlloc(LPool, 1, @LBlocks[0], 0);
   Check(LCount = 1, 'alloc 1');
   Check(LPool.FEntryCount = 2, '2 entries');
   CentralPoolDestroy(LPool);
@@ -87,9 +87,9 @@ begin
   { Fill and empty span 0 at tick 10. }
   AllocAndFreeAll(LPool, CENTRAL_SPAN_SLOTS, 10);
   { Fill span 0 again (64 allocs) to exhaust it, don't free. }
-  CentralPoolAlloc(LPool, CENTRAL_SPAN_SLOTS, @LKeep[0]);
+  CentralPoolAlloc(LPool, CENTRAL_SPAN_SLOTS, @LKeep[0], 0);
   { Allocate 1 more → creates span 1 (span 0 is full). }
-  CentralPoolAlloc(LPool, 1, @LOne[0]);
+  CentralPoolAlloc(LPool, 1, @LOne[0], 0);
   Check(LPool.FEntryCount = 2, '2 entries');
   { Free the 64 from span 0 back at tick 150. }
   CentralPoolFree(LPool, CENTRAL_SPAN_SLOTS, @LKeep[0], 150);
@@ -129,12 +129,12 @@ var
   LCount: Word;
 begin
   CentralPoolInit(LPool, 64);
-  LCount := CentralPoolAlloc(LPool, CENTRAL_SPAN_SLOTS, @LBlocks[0]);
+  LCount := CentralPoolAlloc(LPool, CENTRAL_SPAN_SLOTS, @LBlocks[0], 0);
   Check(LCount = 64, 'alloc 64');
   CentralPoolFree(LPool, CENTRAL_SPAN_SLOTS, @LBlocks[0], 200);
   Check(LPool.FEntries[0].FLastFreeTick = 200, 'tick set');
   { Re-alloc from span — tick should clear. }
-  LCount := CentralPoolAlloc(LPool, 1, @LBlocks[0]);
+  LCount := CentralPoolAlloc(LPool, 1, @LBlocks[0], 0);
   Check(LCount = 1, 're-alloc 1');
   Check(LPool.FEntries[0].FLastFreeTick = 0, 'tick cleared');
   CentralPoolDestroy(LPool);
@@ -149,7 +149,7 @@ var
   LCount: Word;
 begin
   CentralPoolInit(LPool, 64);
-  LCount := CentralPoolAlloc(LPool, 4, @LBlocks[0]);
+  LCount := CentralPoolAlloc(LPool, 4, @LBlocks[0], 0);
   Check(LCount = 4, 'alloc 4');
   { Free 1 — span still has 60 allocated (not empty). }
   CentralPoolFree(LPool, 1, @LBlocks[0], 100);

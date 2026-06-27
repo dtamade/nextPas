@@ -10,10 +10,12 @@ uses
   nextpas.core.mem.sizeclass;
 
 const
-  { Maximum entries per free list before batch flush (default, used by adaptive). }
+  { Default max list size for ThreadCacheFree (low-level API).
+    Adaptive path in allocator.growing uses AdaptiveMaxListSize per band. }
   CACHE_MAX_LIST_SIZE = 64;
 
-  { Number of entries to refill/flush in a batch (default, used by adaptive). }
+  { Default batch size for ThreadCacheRefill/Flush (low-level API).
+    Adaptive path uses AdaptiveBatchSize per band. }
   CACHE_BATCH_SIZE = 16;
 
   { Adaptive batch thresholds by size class band.

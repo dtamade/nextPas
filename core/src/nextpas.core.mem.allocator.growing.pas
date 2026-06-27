@@ -75,7 +75,8 @@ begin
     Exit(0);
   if GGrowingAllocator = nil then
     Exit(0);
-  Result := CentralPoolAlloc(GGrowingAllocator.FCentrals[AIndex], ACount, ABlocks);
+  Result := CentralPoolAlloc(GGrowingAllocator.FCentrals[AIndex], ACount, ABlocks,
+    GGrowingAllocator.FOpCounter);
 end;
 
 procedure FlushToCentral(AIndex: Int32; ACount: Word;
@@ -201,8 +202,6 @@ end;
 
 function DefaultGrowingAllocator: TGrowingAllocator;
 begin
-  if GGrowingAllocator = nil then
-    GGrowingAllocator := TGrowingAllocator.Create;
   Result := GGrowingAllocator;
 end;
 
@@ -212,6 +211,7 @@ begin
 end;
 
 initialization
+  GGrowingAllocator := TGrowingAllocator.Create;
 
 finalization
   FreeAndNil(GGrowingAllocator);

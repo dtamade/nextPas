@@ -48,12 +48,14 @@ uses
 
 const
   GUARD_PAGE_SIZE = MEM_PAGE_SIZE;  { 4K guard page }
+  GUARD_MAGIC = $47554152;  { 'GUAR' — validates header integrity }
 
 type
   { Stored just before the user pointer, within the committed region. }
   PGuardHeader = ^TGuardHeader;
   TGuardHeader = record
-    Base: Pointer;     { base of the full mmap reservation }
+    Magic: UInt32;        { GUARD_MAGIC — detects invalid/double free }
+    Base: Pointer;        { base of the full mmap reservation }
     TotalSize: SizeUInt;  { total reservation size (guard + committed + guard) }
     UserSize: SizeUInt;   { originally requested size }
   end;
@@ -114,6 +116,7 @@ begin
 
   { Write header at the start of committed region }
   LHdr := PGuardHeader(LCommitBase);
+  LHdr^.Magic := GUARD_MAGIC;
   LHdr^.Base := LBase;
   LHdr^.TotalSize := LTotalSize;
   LHdr^.UserSize := ASize;
@@ -166,6 +169,9 @@ begin
   if ADst = nil then
     Exit;
   LHdr := PGuardHeader(PtrUInt(ADst) - HeaderSize);
+  if LHdr^.Magic <> GUARD_MAGIC then
+    Exit;  { Invalid pointer — silently ignore to avoid crash on bad input. }
+  LHdr^.Magic := 0;  { Clear magic to detect double free. }
   platform_virtual_release(LHdr^.Base, LHdr^.TotalSize);
 end;
 
@@ -174,6 +180,8 @@ var
   LHdr: PGuardHeader;
 begin
   LHdr := PGuardHeader(PtrUInt(APtr) - HeaderSize);
+  if LHdr^.Magic <> GUARD_MAGIC then
+    Exit(0);
   Result := LHdr^.UserSize;
 end;
 

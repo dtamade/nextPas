@@ -31,7 +31,7 @@ var
   LCount: Word;
 begin
   CentralPoolInit(LPool, 64);
-  LCount := CentralPoolAlloc(LPool, 1, @LBlocks[0]);
+  LCount := CentralPoolAlloc(LPool, 1, @LBlocks[0], 0);
   Check(LCount = 1, 'allocated 1');
   Check(LBlocks[0] <> nil, 'non-nil');
   Check(CentralPoolFreeCount(LPool) = CENTRAL_SPAN_SLOTS - 1, 'free = 63');
@@ -47,7 +47,7 @@ var
   I: Integer;
 begin
   CentralPoolInit(LPool, 64);
-  LCount := CentralPoolAlloc(LPool, 32, @LBlocks[0]);
+  LCount := CentralPoolAlloc(LPool, 32, @LBlocks[0], 0);
   Check(LCount = 32, 'allocated 32');
   for I := 0 to 30 do
     Check(LBlocks[I] <> LBlocks[I + 1], 'unique ' + IntToStr(I));
@@ -62,7 +62,7 @@ var
   LCount: Word;
 begin
   CentralPoolInit(LPool, 64);
-  LCount := CentralPoolAlloc(LPool, 128, @LBlocks[0]);
+  LCount := CentralPoolAlloc(LPool, 128, @LBlocks[0], 0);
   Check(LCount = 128, 'allocated 128 across 2 spans');
   Check(LPool.FEntryCount = 2, '2 spans created');
   CentralPoolDestroy(LPool);
@@ -77,7 +77,7 @@ var
   LFreeBefore, LFreeAfter: SizeUInt;
 begin
   CentralPoolInit(LPool, 64);
-  LCount := CentralPoolAlloc(LPool, 4, @LBlocks[0]);
+  LCount := CentralPoolAlloc(LPool, 4, @LBlocks[0], 0);
   Check(LCount = 4, 'alloc 4');
   LFreeBefore := CentralPoolFreeCount(LPool);
   CentralPoolFree(LPool, 4, @LBlocks[0], 0);
@@ -96,11 +96,11 @@ var
   LSaved: Pointer;
 begin
   CentralPoolInit(LPool, 64);
-  CentralPoolAlloc(LPool, 4, @LBlocks[0]);
+  CentralPoolAlloc(LPool, 4, @LBlocks[0], 0);
   LSaved := LBlocks[0];
   CentralPoolFree(LPool, 1, @LBlocks[0], 0);
   { Free 1 of 4 → span not empty → stays in partial list. }
-  CentralPoolAlloc(LPool, 1, @LBlocks[0]);
+  CentralPoolAlloc(LPool, 1, @LBlocks[0], 0);
   Check(LBlocks[0] = LSaved, 're-alloc returns freed slot');
   CentralPoolDestroy(LPool);
   WriteLn('PASS: free and realloc');
@@ -113,7 +113,7 @@ var
 begin
   CentralPoolInit(LPool, 32);
   Check(CentralPoolFreeCount(LPool) = 0, 'initial free = 0');
-  CentralPoolAlloc(LPool, 10, @LBlocks[0]);
+  CentralPoolAlloc(LPool, 10, @LBlocks[0], 0);
   Check(CentralPoolFreeCount(LPool) = 64 - 10, 'free after alloc');
   CentralPoolFree(LPool, 5, @LBlocks[0], 0);
   Check(CentralPoolFreeCount(LPool) = 64 - 5, 'free after partial free');

@@ -57,9 +57,10 @@ procedure CentralPoolDestroy(var APool: TCentralPool);
 
 {** Batch allocate: fill ABlocks[] with ACount pointers to free slots.
     Returns actual count allocated (may be < ACount if pool exhausted).
+    AOpCounter: current op counter (for idle tracking on inbox drain).
     Thread-safe. }
 function CentralPoolAlloc(var APool: TCentralPool;
-  ACount: Word; ABlocks: PPointer): Word;
+  ACount: Word; ABlocks: PPointer; AOpCounter: UInt64): Word;
 
 {** Batch free: return ABlocks[] to their respective spans.
     Fully free spans are marked with the current op counter for scavenging.
@@ -174,7 +175,7 @@ end;
 function DrainInbox(var APool: TCentralPool; AOpCounter: UInt64): Word; forward;
 
 function CentralPoolAlloc(var APool: TCentralPool;
-  ACount: Word; ABlocks: PPointer): Word;
+  ACount: Word; ABlocks: PPointer; AOpCounter: UInt64): Word;
 var
   LCount: Word;
   LIdx: Int32;
@@ -185,7 +186,7 @@ begin
   try
     { Drain lock-free inbox first — returned blocks become available. }
     if APool.FInboxHead <> nil then
-      DrainInbox(APool, 0);
+      DrainInbox(APool, AOpCounter);
     while LCount < ACount do
     begin
       { Find a partial span. }
