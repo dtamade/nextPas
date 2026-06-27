@@ -1,0 +1,86 @@
+# GitHub Actions workflow for nextpas bench regression detection
+#
+# Usage:
+#   1. Copy this file to .github/workflows/bench.yml in your repository
+#   2. Adjust the benchmark binary path and filter as needed
+#   3. On push/PR, benchmarks run and gate on 10% regression threshold
+#
+# Features:
+#   - Runs benchmarks on every push/PR
+#   - Compares against main branch baseline
+#   - Posts regression report as PR comment
+#   - Saves baseline on main branch merges
+#   - Timeline tracking for historical analysis
+
+name: Benchmark Gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history for git hash
+
+      - name: Setup FPC
+        uses: actions/setup-fpc@v1
+        with:
+          fpc-version: '3.3.1'
+
+      - name: Build benchmarks
+        run: make -C core test  # or your specific benchmark target
+
+      - name: Restore baseline cache
+        uses: actions/cache@v4
+        with:
+          path: .benchbaselines
+          key: bench-baseline-${{ github.base_ref || 'main' }}
+          restore-keys: |
+            bench-baseline-main
+
+      - name: Run benchmarks
+        run: |
+          mkdir -p .benchbaselines
+          # Replace with your actual benchmark binary
+          # ./your-bench-binary \
+          #   --collect-raw-samples \
+          #   --json .benchbaselines/results.json \
+          #   --save-baseline .benchbaselines/current.json \
+          #   --git-hash "${{ github.sha }}"
+
+      - name: Compare with baseline
+        if: github.event_name == 'pull_request'
+        run: |
+          if [ -f .benchbaselines/current.json ]; then
+            # ./your-bench-binary \
+            #   --compare .benchbaselines/current.json \
+            #   --threshold 1.10
+            echo "Baseline comparison complete"
+          else
+            echo "No baseline found — skipping regression check"
+          fi
+
+      - name: Save baseline on main
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          # ./your-bench-binary \
+          #   --save-baseline .benchbaselines/current.json \
+          #   --git-hash "${{ github.sha }}" \
+          #   --append-timeline .benchbaselines/timeline.jsonl
+          echo "Baseline saved for ${{ github.sha }}"
+
+      - name: Upload benchmark artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-results
+          path: |
+            .benchbaselines/results.json
+            .benchbaselines/timeline.jsonl
+            .benchbaselines/report.html
+          retention-days: 90

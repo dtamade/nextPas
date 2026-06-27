@@ -1229,6 +1229,23 @@ begin
     BufferAddLine(LLines, LLine);
   end;
 
+  { P2-2: 内存+性能联合报告 }
+  BufferAddLine(LLines, '');
+  BufferAddLine(LLines, '=== Memory Impact ===');
+  BufferAddLine(LLines, '');
+  BufferAddLine(LLines, TextFormat('  %-40s %10s %10s %10s',
+    ['Benchmark', 'ns/op', 'B/op', 'allocs/op']));
+  BufferAddLine(LLines, '  ' + TextOfChar('-', 73));
+  for I := 0 to High(AMatrix.Rows) do
+  begin
+    LLine := TextFormat('  %-40s %10s %10s %10s',
+      [AMatrix.Rows[I].Name,
+       FormatTime(AMatrix.Rows[I].CurrentNsPerOp),
+       IntToStr(AMatrix.Rows[I].CurrentBytesPerOp),
+       IntToStr(AMatrix.Rows[I].CurrentAllocsPerOp)]);
+    BufferAddLine(LLines, LLine);
+  end;
+
   Result := BufferToString(LLines);
 end;
 
@@ -1262,7 +1279,7 @@ begin
   BufferAddLine(LBuf, '<h1>Multi-Baseline Comparison Matrix</h1>');
   BufferAddLine(LBuf, '<p class="subtitle">Ratio = current / baseline. &lt;1.0 = faster, &gt;1.0 = slower.</p>');
   BufferAddLine(LBuf, '<table class="matrix">');
-  BufferAddLine(LBuf, '<tr><th>Benchmark</th><th>Current (ns/op)</th>');
+  BufferAddLine(LBuf, '<tr><th>Benchmark</th><th>ns/op</th><th>B/op</th><th>allocs/op</th>');
   for I := 0 to High(AMatrix.BaselineNames) do
     BufferAddLine(LBuf, '<th>' + EscapeHTML(AMatrix.BaselineNames[I]) + '</th>');
   BufferAddLine(LBuf, '</tr>');
@@ -1272,6 +1289,8 @@ begin
     BufferAddLine(LBuf, '<tr>');
     BufferAddLine(LBuf, '<td>' + EscapeHTML(AMatrix.Rows[I].Name) + '</td>');
     BufferAddLine(LBuf, '<td>' + FormatTime(AMatrix.Rows[I].CurrentNsPerOp) + '</td>');
+    BufferAddLine(LBuf, '<td>' + IntToStr(AMatrix.Rows[I].CurrentBytesPerOp) + '</td>');
+    BufferAddLine(LBuf, '<td>' + IntToStr(AMatrix.Rows[I].CurrentAllocsPerOp) + '</td>');
     for J := 0 to High(AMatrix.Rows[I].Cells) do
     begin
       LRatio := AMatrix.Rows[I].Cells[J].Ratio;
@@ -1290,7 +1309,7 @@ begin
   { 几何均值行 }
   if Length(AMatrix.GeometricMeanRatios) > 0 then
   begin
-    BufferAddLine(LBuf, '<tr class="geomean"><td>Geometric Mean</td><td></td>');
+    BufferAddLine(LBuf, '<tr class="geomean"><td>Geometric Mean</td><td></td><td></td><td></td>');
     for J := 0 to High(AMatrix.GeometricMeanRatios) do
     begin
       LRatio := AMatrix.GeometricMeanRatios[J];

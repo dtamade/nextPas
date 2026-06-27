@@ -138,6 +138,8 @@ type
     Name: string;
     CurrentNsPerOp: Double;
     CurrentStdDev: Double;
+    CurrentBytesPerOp: Int64;
+    CurrentAllocsPerOp: Int64;
     Cells: array of TMatrixCell;
   end;
 

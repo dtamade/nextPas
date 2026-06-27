@@ -998,6 +998,8 @@ begin
       LRow.Name := FResults[I].Name;
       LRow.CurrentNsPerOp := FResults[I].NsPerOp;
       LRow.CurrentStdDev := FResults[I].StdDev;
+      LRow.CurrentBytesPerOp := FResults[I].BytesPerOp;
+      LRow.CurrentAllocsPerOp := FResults[I].AllocsPerOp;
       SetLength(LRow.Cells, LNCols);
 
       for J := 0 to LNCols - 1 do
