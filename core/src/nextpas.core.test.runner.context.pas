@@ -112,6 +112,8 @@ begin
   LEntry.DisplayName := '';
   LEntry.Tags        := nil;
   LEntry.RepeatCount := 0;
+  LEntry.TableCase   := nil;
+  LEntry.TableProc   := nil;
   SetLength(FSubtests, Length(FSubtests) + 1);
   FSubtests[High(FSubtests)] := LEntry;
 end;
@@ -130,6 +132,8 @@ begin
   LEntry.DisplayName := '';
   LEntry.Tags        := nil;
   LEntry.RepeatCount := 0;
+  LEntry.TableCase   := nil;
+  LEntry.TableProc   := nil;
   SetLength(FSubtests, Length(FSubtests) + 1);
   FSubtests[High(FSubtests)] := LEntry;
 end;
@@ -148,6 +152,8 @@ begin
   LEntry.DisplayName := '';
   LEntry.Tags        := nil;
   LEntry.RepeatCount := 0;
+  LEntry.TableCase   := nil;
+  LEntry.TableProc   := nil;
   SetLength(FSubtests, Length(FSubtests) + 1);
   FSubtests[High(FSubtests)] := LEntry;
 end;
