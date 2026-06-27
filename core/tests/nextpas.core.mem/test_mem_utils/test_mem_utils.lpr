@@ -7,6 +7,7 @@ uses
   nextpas.core.exception,
   nextpas.core.text.conv,
   nextpas.core.test,
+  nextpas.core.mem.base,
   nextpas.core.mem.utils;
 
 var

@@ -730,13 +730,6 @@ function Equal(aPtr1, aPtr2: Pointer; aSize: SizeInt): Boolean; overload; {$IFDE
 function IsAligned(aPtr: Pointer; aAlignment: SizeUInt = SizeOf(Pointer)): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
   {**
-   * IsPowerOfTwo
-   *
-   * @desc Checks if a value is a power of two (and > 0).
-   *}
-  function IsPowerOfTwo(N: SizeUInt): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-
-  {**
    * AlignDown
    *
    * @desc Aligns a pointer downwards to the nearest specified boundary.
@@ -798,6 +791,9 @@ function AlignUp(aPtr: Pointer; aAlignment: SizeUInt = SIZE_PTR): Pointer; {$IFD
 function AlignUpUnChecked(aPtr: Pointer; aAlignment: SizeUInt = SIZE_PTR): Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 implementation
+
+uses
+  nextpas.core.mem.base;
 
 {$IFDEF NEXTPAS_CORE_CRT_MEMCPY}
 function memcpy(aDst, aSrc : pointer; aSize : SizeUInt): Pointer; cdecl external {$IFDEF MSWINDOWS}'msvcrt.dll'{$ELSE}'libc'{$ENDIF} name 'memcpy';
@@ -1292,11 +1288,6 @@ begin
   {$POP}
 end;
 
-
-function IsPowerOfTwo(N: SizeUInt): Boolean;
-begin
-  Result := (N<>0) and ((N and (N-1))=0);
-end;
 
 function AlignDown(aPtr: Pointer; aAlignment: SizeUInt): Pointer;
 begin

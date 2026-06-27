@@ -33,6 +33,7 @@ interface
 uses
   nextpas.core.base.utils,
   nextpas.core.base,
+  nextpas.core.mem.base,
   nextpas.core.mem.allocator,
   nextpas.core.mem.error;
 
@@ -277,7 +278,7 @@ begin
   FHead := 0;
   FTail := 0;
   FCount := 0;
-  FIsPow2Capacity := nextpas.core.mem.utils.IsPowerOfTwo(FCapacity);
+  FIsPow2Capacity := nextpas.core.mem.base.IsPowerOfTwo(FCapacity);
 
   if aAllocator = nil then
     FBaseAllocator := nextpas.core.mem.allocator.GetRtlAllocator
@@ -532,7 +533,7 @@ begin
   // 更新状态
   FBuffer := LNewBuffer;
   FCapacity := aNewCapacity;
-  FIsPow2Capacity := nextpas.core.mem.utils.IsPowerOfTwo(FCapacity);
+  FIsPow2Capacity := nextpas.core.mem.base.IsPowerOfTwo(FCapacity);
   FHead := 0;
   if FCapacity > 0 then
     FTail := AdvanceIndex(0, FCount)
