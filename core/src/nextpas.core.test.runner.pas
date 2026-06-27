@@ -363,36 +363,20 @@ procedure TTestSuite.Test(const AName: string; AProc: TTestProc);
 var
   LEntry: TTestEntry;
 begin
-  LEntry.Name        := AName;
-  LEntry.Proc        := AProc;
-  LEntry.Closure     := nil;
-  LEntry.SubtestProc := nil;
-  LEntry.Kind        := ekTest;
-  LEntry.SkipReason  := '';
-  LEntry.RetryCount  := 0;
-  LEntry.DisplayName := '';
-  LEntry.Tags        := nil;
-  LEntry.RepeatCount := 0;
-  SetLength(Tests, Length(Tests) + 1);
-  Tests[High(Tests)] := LEntry;
+  ClearEntry(LEntry);
+  LEntry.Name := AName;
+  LEntry.Proc := AProc;
+  RegisterEntry(Tests, LEntry);
 end;
 
 procedure TTestSuite.Test(const AName: string; AProc: TTestClosure);
 var
   LEntry: TTestEntry;
 begin
-  LEntry.Name        := AName;
-  LEntry.Proc        := nil;
-  LEntry.Closure     := AProc;
-  LEntry.SubtestProc := nil;
-  LEntry.Kind        := ekTest;
-  LEntry.SkipReason  := '';
-  LEntry.RetryCount  := 0;
-  LEntry.DisplayName := '';
-  LEntry.Tags        := nil;
-  LEntry.RepeatCount := 0;
-  SetLength(Tests, Length(Tests) + 1);
-  Tests[High(Tests)] := LEntry;
+  ClearEntry(LEntry);
+  LEntry.Name    := AName;
+  LEntry.Closure := AProc;
+  RegisterEntry(Tests, LEntry);
 end;
 
 procedure TTestSuite.Test(const AName: string; AProc: TTestProc;
@@ -400,18 +384,11 @@ procedure TTestSuite.Test(const AName: string; AProc: TTestProc;
 var
   LEntry: TTestEntry;
 begin
-  LEntry.Name        := AName;
-  LEntry.Proc        := AProc;
-  LEntry.Closure     := nil;
-  LEntry.SubtestProc := nil;
-  LEntry.Kind        := ekTest;
-  LEntry.SkipReason  := '';
-  LEntry.RetryCount  := ARetryCount;
-  LEntry.DisplayName := '';
-  LEntry.Tags        := nil;
-  LEntry.RepeatCount := 0;
-  SetLength(Tests, Length(Tests) + 1);
-  Tests[High(Tests)] := LEntry;
+  ClearEntry(LEntry);
+  LEntry.Name       := AName;
+  LEntry.Proc       := AProc;
+  LEntry.RetryCount := ARetryCount;
+  RegisterEntry(Tests, LEntry);
 end;
 
 procedure TTestSuite.Test(const AName: string; AProc: TTestClosure;
@@ -419,106 +396,61 @@ procedure TTestSuite.Test(const AName: string; AProc: TTestClosure;
 var
   LEntry: TTestEntry;
 begin
-  LEntry.Name        := AName;
-  LEntry.Proc        := nil;
-  LEntry.Closure     := AProc;
-  LEntry.SubtestProc := nil;
-  LEntry.Kind        := ekTest;
-  LEntry.SkipReason  := '';
-  LEntry.RetryCount  := ARetryCount;
-  LEntry.DisplayName := '';
-  LEntry.Tags        := nil;
-  LEntry.RepeatCount := 0;
-  SetLength(Tests, Length(Tests) + 1);
-  Tests[High(Tests)] := LEntry;
+  ClearEntry(LEntry);
+  LEntry.Name       := AName;
+  LEntry.Closure    := AProc;
+  LEntry.RetryCount := ARetryCount;
+  RegisterEntry(Tests, LEntry);
 end;
 
 procedure TTestSuite.Test(const AName: string; AProc: TTestProc;
   const ATags: array of string);
 var
   LEntry: TTestEntry;
-  I: Integer;
 begin
-  LEntry.Name        := AName;
-  LEntry.Proc        := AProc;
-  LEntry.Closure     := nil;
-  LEntry.SubtestProc := nil;
-  LEntry.Kind        := ekTest;
-  LEntry.SkipReason  := '';
-  LEntry.RetryCount  := 0;
-  LEntry.DisplayName := '';
-  LEntry.RepeatCount := 0;
-  SetLength(LEntry.Tags, Length(ATags));
-  for I := 0 to High(ATags) do
-    LEntry.Tags[I] := ATags[I];
-  SetLength(Tests, Length(Tests) + 1);
-  Tests[High(Tests)] := LEntry;
+  ClearEntry(LEntry);
+  LEntry.Name := AName;
+  LEntry.Proc := AProc;
+  CopyTags(LEntry.Tags, ATags);
+  RegisterEntry(Tests, LEntry);
 end;
 
 procedure TTestSuite.Test(const AName: string; AProc: TTestClosure;
   const ATags: array of string);
 var
   LEntry: TTestEntry;
-  I: Integer;
 begin
-  LEntry.Name        := AName;
-  LEntry.Proc        := nil;
-  LEntry.Closure     := AProc;
-  LEntry.SubtestProc := nil;
-  LEntry.Kind        := ekTest;
-  LEntry.SkipReason  := '';
-  LEntry.RetryCount  := 0;
-  LEntry.DisplayName := '';
-  LEntry.RepeatCount := 0;
-  SetLength(LEntry.Tags, Length(ATags));
-  for I := 0 to High(ATags) do
-    LEntry.Tags[I] := ATags[I];
-  SetLength(Tests, Length(Tests) + 1);
-  Tests[High(Tests)] := LEntry;
+  ClearEntry(LEntry);
+  LEntry.Name    := AName;
+  LEntry.Closure := AProc;
+  CopyTags(LEntry.Tags, ATags);
+  RegisterEntry(Tests, LEntry);
 end;
 
 procedure TTestSuite.Test(const AName: string; AProc: TTestProc;
   const ADisplayName: string; const ATags: array of string);
 var
   LEntry: TTestEntry;
-  I: Integer;
 begin
+  ClearEntry(LEntry);
   LEntry.Name        := AName;
   LEntry.Proc        := AProc;
-  LEntry.Closure     := nil;
-  LEntry.SubtestProc := nil;
-  LEntry.Kind        := ekTest;
-  LEntry.SkipReason  := '';
-  LEntry.RetryCount  := 0;
   LEntry.DisplayName := ADisplayName;
-  LEntry.RepeatCount := 0;
-  SetLength(LEntry.Tags, Length(ATags));
-  for I := 0 to High(ATags) do
-    LEntry.Tags[I] := ATags[I];
-  SetLength(Tests, Length(Tests) + 1);
-  Tests[High(Tests)] := LEntry;
+  CopyTags(LEntry.Tags, ATags);
+  RegisterEntry(Tests, LEntry);
 end;
 
 procedure TTestSuite.Test(const AName: string; AProc: TTestClosure;
   const ADisplayName: string; const ATags: array of string);
 var
   LEntry: TTestEntry;
-  I: Integer;
 begin
+  ClearEntry(LEntry);
   LEntry.Name        := AName;
-  LEntry.Proc        := nil;
   LEntry.Closure     := AProc;
-  LEntry.SubtestProc := nil;
-  LEntry.Kind        := ekTest;
-  LEntry.SkipReason  := '';
-  LEntry.RetryCount  := 0;
   LEntry.DisplayName := ADisplayName;
-  LEntry.RepeatCount := 0;
-  SetLength(LEntry.Tags, Length(ATags));
-  for I := 0 to High(ATags) do
-    LEntry.Tags[I] := ATags[I];
-  SetLength(Tests, Length(Tests) + 1);
-  Tests[High(Tests)] := LEntry;
+  CopyTags(LEntry.Tags, ATags);
+  RegisterEntry(Tests, LEntry);
 end;
 
 procedure TTestSuite.TestRepeat(const AName: string; AProc: TTestProc;
@@ -526,18 +458,11 @@ procedure TTestSuite.TestRepeat(const AName: string; AProc: TTestProc;
 var
   LEntry: TTestEntry;
 begin
+  ClearEntry(LEntry);
   LEntry.Name        := AName;
   LEntry.Proc        := AProc;
-  LEntry.Closure     := nil;
-  LEntry.SubtestProc := nil;
-  LEntry.Kind        := ekTest;
-  LEntry.SkipReason  := '';
-  LEntry.RetryCount  := 0;
-  LEntry.DisplayName := '';
-  LEntry.Tags        := nil;
   LEntry.RepeatCount := ARepeatCount;
-  SetLength(Tests, Length(Tests) + 1);
-  Tests[High(Tests)] := LEntry;
+  RegisterEntry(Tests, LEntry);
 end;
 
 procedure TTestSuite.TestRepeat(const AName: string; AProc: TTestClosure;
@@ -545,36 +470,22 @@ procedure TTestSuite.TestRepeat(const AName: string; AProc: TTestClosure;
 var
   LEntry: TTestEntry;
 begin
+  ClearEntry(LEntry);
   LEntry.Name        := AName;
-  LEntry.Proc        := nil;
   LEntry.Closure     := AProc;
-  LEntry.SubtestProc := nil;
-  LEntry.Kind        := ekTest;
-  LEntry.SkipReason  := '';
-  LEntry.RetryCount  := 0;
-  LEntry.DisplayName := '';
-  LEntry.Tags        := nil;
   LEntry.RepeatCount := ARepeatCount;
-  SetLength(Tests, Length(Tests) + 1);
-  Tests[High(Tests)] := LEntry;
+  RegisterEntry(Tests, LEntry);
 end;
 
 procedure TTestSuite.TestSubtest(const AName: string; AProc: TSubtestProc);
 var
   LEntry: TTestEntry;
 begin
+  ClearEntry(LEntry);
   LEntry.Name        := AName;
-  LEntry.Proc        := nil;
-  LEntry.Closure     := nil;
   LEntry.SubtestProc := AProc;
   LEntry.Kind        := ekSubtest;
-  LEntry.SkipReason  := '';
-  LEntry.RetryCount  := 0;
-  LEntry.DisplayName := '';
-  LEntry.Tags        := nil;
-  LEntry.RepeatCount := 0;
-  SetLength(Tests, Length(Tests) + 1);
-  Tests[High(Tests)] := LEntry;
+  RegisterEntry(Tests, LEntry);
 end;
 
 procedure TTestSuite.TestTable(const AName: string;
@@ -594,19 +505,12 @@ begin
     New(LPProc);
     LPProc^ := AProc;
 
-    LEntry.Name       := AName + '/' + ACases[I].Name;
-    LEntry.Proc       := nil;
-    LEntry.SubtestProc := nil;
-    LEntry.Kind       := ekTableTest;
-    LEntry.SkipReason := '';
-    LEntry.RetryCount := 0;
-    LEntry.DisplayName := '';
-    LEntry.Tags       := nil;
-    LEntry.RepeatCount := 0;
-    LEntry.TableCase  := LPCase;
-    LEntry.TableProc  := LPProc;
-    SetLength(Tests, Length(Tests) + 1);
-    Tests[High(Tests)] := LEntry;
+    ClearEntry(LEntry);
+    LEntry.Name      := AName + '/' + ACases[I].Name;
+    LEntry.Kind      := ekTableTest;
+    LEntry.TableCase := LPCase;
+    LEntry.TableProc := LPProc;
+    RegisterEntry(Tests, LEntry);
   end;
 end;
 
@@ -614,17 +518,11 @@ procedure TTestSuite.Skip(const AName: string; const AReason: string);
 var
   LEntry: TTestEntry;
 begin
-  LEntry.Name        := AName;
-  LEntry.Proc        := nil;
-  LEntry.SubtestProc := nil;
-  LEntry.Kind        := ekSkipped;
-  LEntry.SkipReason  := AReason;
-  LEntry.RetryCount  := 0;
-  LEntry.DisplayName := '';
-  LEntry.Tags        := nil;
-  LEntry.RepeatCount := 0;
-  SetLength(Tests, Length(Tests) + 1);
-  Tests[High(Tests)] := LEntry;
+  ClearEntry(LEntry);
+  LEntry.Name       := AName;
+  LEntry.Kind       := ekSkipped;
+  LEntry.SkipReason := AReason;
+  RegisterEntry(Tests, LEntry);
 end;
 
 procedure TTestSuite.SetSetup(AProc: TTestProc);
@@ -781,10 +679,8 @@ begin
   try
 
   LOutSink.WriteLn('');
-  LOutSink.WriteLn(
-    AnsiBold('> ', LConfig) +
-    AnsiCyan(Name, LConfig) +
-    AnsiDim(' (' + IntToStr(Length(Tests)) + ' tests)', LConfig));
+  WriteSuiteHeader(Name, IntToStr(Length(Tests)) + ' tests',
+    LOutSink, LConfig);
 
   { Suite-level setup (uses shared helper) }
   if not RunSetup(LConfig, LSkip, LLastFailMsg) then
@@ -792,15 +688,10 @@ begin
     { All tests skipped — populate results with skipped entries }
     for I := 0 to High(Tests) do
     begin
-      LTestResult.Name     := Tests[I].Name;
-      LTestResult.Status   := tsSkipped;
-      LTestResult.Message  := 'setup failed: ' + LLastFailMsg;
-      LTestResult.Duration := 0;
-      SetLength(AResult.Results, Length(AResult.Results) + 1);
-      AResult.Results[High(AResult.Results)] := LTestResult;
-      LOutSink.WriteLn(
-        '    ' + StatusDot(tsSkipped, LConfig) + ' ' +
-        AnsiDim(Tests[I].Name, LConfig));
+      LTestResult := MakeTestResult(Tests[I].Name, tsSkipped,
+        'setup failed: ' + LLastFailMsg, 0);
+      AppendResult(AResult.Results, LTestResult);
+      LOutSink.WriteLn('    ' + FormatStatusLine(tsSkipped, Tests[I].Name, LConfig));
     end;
     AResult.Failed    := 1;
     AResult.Skipped   := LSkip;
@@ -811,6 +702,7 @@ begin
     LastFail      := 1;
     LastSkip      := LSkip;
     Result         := False;
+    CleanupTableAllocations;
     LOutSink.WriteLn(
       AnsiDim('  ' + IntToStr(LSkip) + ' skipped (setup failure)', LConfig));
     Exit;
@@ -823,8 +715,7 @@ begin
     LSubCtxI := nil;
     LSubCtx := nil;
     SetCurrentTestContext(nil);
-    LTestResult.Name    := LEntry.Name;
-    LTestResult.Message := '';
+    LTestResult := MakeTestResult(LEntry.Name, tsPassed, '', 0);
     SetTestContext(Name, LEntry.Name);
 
     { Test filter — skip non-matching tests silently }
@@ -845,19 +736,14 @@ begin
     begin
       LStatus := tsSkipped;
       Inc(LSkip);
-      LTestResult.Status   := tsSkipped;
-      LTestResult.Message  := LEntry.SkipReason;
-      LTestResult.Duration := 0;
-      SetLength(AResult.Results, Length(AResult.Results) + 1);
-      AResult.Results[High(AResult.Results)] := LTestResult;
+      LTestResult := MakeTestResult(LEntry.Name, tsSkipped,
+        LEntry.SkipReason, 0);
+      AppendResult(AResult.Results, LTestResult);
       if LEntry.SkipReason <> '' then
-        LOutSink.WriteLn(
-          '  ' + StatusDot(tsSkipped, LConfig) + ' ' +
-          AnsiDim(LEntry.Name, LConfig) + ' -- ' + LEntry.SkipReason)
+        LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, LEntry.Name,
+          LEntry.SkipReason, LConfig))
       else
-        LOutSink.WriteLn(
-          '  ' + StatusDot(tsSkipped, LConfig) + ' ' +
-          AnsiDim(LEntry.Name, LConfig));
+        LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, LEntry.Name, LConfig));
       ReportLeakIfAny(LStatus, LConfig);
       Continue;
     end;
@@ -872,14 +758,10 @@ begin
         begin
           LStatus := tsSkipped;
           Inc(LSkip);
-          LTestResult.Status   := tsSkipped;
-          LTestResult.Message  := E.Message;
-          LTestResult.Duration := 0;
-          SetLength(AResult.Results, Length(AResult.Results) + 1);
-          AResult.Results[High(AResult.Results)] := LTestResult;
-          LOutSink.WriteLn(
-            '  ' + StatusDot(tsSkipped, LConfig) + ' ' +
-            AnsiDim(LEntry.Name, LConfig) + ' -- ' + E.Message);
+          LTestResult := MakeTestResult(LEntry.Name, tsSkipped, E.Message, 0);
+          AppendResult(AResult.Results, LTestResult);
+          LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, LEntry.Name,
+            E.Message, LConfig));
           ReportLeakIfAny(LStatus, LConfig);
           Continue;
         end;
@@ -887,14 +769,11 @@ begin
         begin
           LStatus := tsError;
           LLastFailMsg := E.Message;
-          LTestResult.Status   := tsError;
-          LTestResult.Message  := 'beforeEach failed: ' + E.Message;
-          LTestResult.Duration := 0;
-          SetLength(AResult.Results, Length(AResult.Results) + 1);
-          AResult.Results[High(AResult.Results)] := LTestResult;
-          LOutSink.WriteLn(
-            '  ' + StatusDot(tsError, LConfig) + ' ' + LEntry.Name +
-            ' -- beforeEach failed: ' + E.Message);
+          LTestResult := MakeTestResult(LEntry.Name, tsError,
+            'beforeEach failed: ' + E.Message, 0);
+          AppendResult(AResult.Results, LTestResult);
+          LOutSink.WriteLn('  ' + FormatStatusLine(tsError, LEntry.Name,
+            'beforeEach failed: ' + E.Message, LConfig));
           Inc(LFail);
           Continue;
         end;
@@ -928,17 +807,13 @@ begin
           on E: EAssertionFailed do
           begin
             LStatus := tsFailed;
-            LLastFailMsg := E.Message;
-            if GLastTestTrace <> '' then
-              LLastFailMsg := LLastFailMsg + ' [' + GLastTestTrace + ']';
+            LLastFailMsg := AppendTestTrace(E.Message);
             Inc(LFail);
           end;
           on E: Exception do
           begin
             LStatus := tsError;
-            LLastFailMsg := E.ClassName + ': ' + E.Message;
-            if GLastTestTrace <> '' then
-              LLastFailMsg := LLastFailMsg + ' [' + GLastTestTrace + ']';
+            LLastFailMsg := AppendTestTrace(FormatExceptionMsg(E));
             Inc(LFail);
           end;
         end;
@@ -1001,16 +876,12 @@ begin
             on E: EAssertionFailed do
             begin
               LStatus := tsFailed;
-              LLastFailMsg := E.Message;
-              if GLastTestTrace <> '' then
-                LLastFailMsg := LLastFailMsg + ' [' + GLastTestTrace + ']';
+              LLastFailMsg := AppendTestTrace(E.Message);
             end;
             on E: Exception do
             begin
               LStatus := tsError;
-              LLastFailMsg := E.ClassName + ': ' + E.Message;
-              if GLastTestTrace <> '' then
-                LLastFailMsg := LLastFailMsg + ' [' + GLastTestTrace + ']';
+              LLastFailMsg := AppendTestTrace(FormatExceptionMsg(E));
             end;
           end;
 
@@ -1019,10 +890,8 @@ begin
 
           { Retry: print hint and loop }
           Dec(LRetriesLeft);
-          LOutSink.WriteLn(
-            '  ' + AnsiYellow('retrying', LConfig) + ' (' +
-            IntToStr(LTotalRetries - LRetriesLeft) + '/' +
-            IntToStr(LTotalRetries) + ')...');
+          WriteRetryHint(LTotalRetries - LRetriesLeft, LTotalRetries,
+            LOutSink, LConfig);
         until False;
         end; { end repeat loop }
 
@@ -1039,17 +908,13 @@ begin
       on E: EAssertionFailed do
       begin
         LStatus := tsFailed;
-        LLastFailMsg := E.Message;
-        if GLastTestTrace <> '' then
-          LLastFailMsg := LLastFailMsg + ' [' + GLastTestTrace + ']';
+        LLastFailMsg := AppendTestTrace(E.Message);
         Inc(LFail);
       end;
       on E: Exception do
       begin
         LStatus := tsError;
-        LLastFailMsg := E.ClassName + ': ' + E.Message;
-        if GLastTestTrace <> '' then
-          LLastFailMsg := LLastFailMsg + ' [' + GLastTestTrace + ']';
+        LLastFailMsg := AppendTestTrace(FormatExceptionMsg(E));
         Inc(LFail);
       end;
     end;
@@ -1062,9 +927,7 @@ begin
       except
         on E: Exception do
         begin
-          LErrSink.WriteLn(
-            '  ' + AnsiYellow('WARNING afterEach failed: ', LConfig) +
-            E.Message);
+          WriteWarning('afterEach failed: ' + E.Message, LErrSink, LConfig);
           if LStatus = tsPassed then
           begin
             LStatus := tsError;
@@ -1088,52 +951,17 @@ begin
     end;
 
     { Record test result }
-    LTestResult.Status   := LStatus;
-    LTestResult.Message  := LLastFailMsg;
-    LTestResult.Duration := GetTickCount64 - LStartMs;
+    LTestResult := MakeTestResult(LEntry.Name, LStatus, LLastFailMsg,
+      GetTickCount64 - LStartMs);
     { Copy captured log lines on failure/error for report output }
     if (LStatus in [tsFailed, tsError]) and (LSubCtx <> nil) and
        (Length(LSubCtx.FLogLines) > 0) then
-      LTestResult.CapturedLog := LSubCtx.FLogLines
-    else
-      LTestResult.CapturedLog := nil;
-    SetLength(AResult.Results, Length(AResult.Results) + 1);
-    AResult.Results[High(AResult.Results)] := LTestResult;
+      LTestResult.CapturedLog := LSubCtx.FLogLines;
+    AppendResult(AResult.Results, LTestResult);
 
     { Output per-test — use DisplayName }
-    case LStatus of
-      tsPassed:
-        LOutSink.WriteLn('  ' + StatusDot(tsPassed, LConfig) + ' ' + LDisplayName);
-      tsFailed:
-        begin
-          LOutSink.WriteLn(
-            '  ' + StatusDot(tsFailed, LConfig) + ' ' +
-            AnsiRed(LDisplayName, LConfig));
-          if LLastFailMsg <> '' then
-            LOutSink.WriteLn('    ' + AnsiDim(LLastFailMsg, LConfig))
-          else
-            LOutSink.WriteLn('    ' + AnsiDim('(assertion failed)', LConfig));
-        end;
-      tsSkipped:
-        begin
-          if LEntry.SkipReason <> '' then
-            LOutSink.WriteLn(
-              '  ' + StatusDot(tsSkipped, LConfig) + ' ' +
-              AnsiDim(LDisplayName, LConfig) + ' -- ' + LEntry.SkipReason)
-          else
-            LOutSink.WriteLn(
-              '  ' + StatusDot(tsSkipped, LConfig) + ' ' +
-              AnsiDim(LDisplayName, LConfig));
-        end;
-      tsError:
-        begin
-          LOutSink.WriteLn(
-            '  ' + StatusDot(tsError, LConfig) + ' ' +
-            AnsiRed(LDisplayName, LConfig) + ' [unexpected exception]');
-          if LLastFailMsg <> '' then
-            LOutSink.WriteLn('    ' + AnsiDim(LLastFailMsg, LConfig));
-        end;
-    end;
+    WriteTestStatus(LStatus, LDisplayName, LLastFailMsg,
+      LEntry.SkipReason, LOutSink, LConfig);
 
     LLastFailMsg := '';
     ReportLeakIfAny(LStatus, LConfig);
@@ -1142,16 +970,12 @@ begin
     LSubCtx := nil;
   end;
 
-  { Suite-level teardown }
   { Suite-level teardown (uses shared helper) }
   RunTeardown(LConfig);
 
   { Merge subtest-level results from appender }
   for J := 0 to High(LAppender.Results) do
-  begin
-    SetLength(AResult.Results, Length(AResult.Results) + 1);
-    AResult.Results[High(AResult.Results)] := LAppender.Results[J];
-  end;
+    AppendResult(AResult.Results, LAppender.Results[J]);
 
   finally
     LSubCtxI := nil;
@@ -1214,8 +1038,8 @@ begin
     if Assigned(Teardown) then Teardown else TeardownClosure();
   except
     on E: Exception do
-      ResolveErrSink(AConfig).WriteLn(
-        '  ' + AnsiYellow('WARNING teardown error: ', AConfig) + E.Message);
+      WriteWarning('teardown error: ' + E.Message,
+        ResolveErrSink(AConfig), AConfig);
   end;
   { R4-12: Nil-out after execution to prevent double-free if the same
     suite is run twice on the same runner (e.g. fixture teardown that frees
@@ -1273,18 +1097,14 @@ begin
   LTagFilter := GetTagFilter(LConfig);
 
   LOutSink.WriteLn('');
-  LOutSink.WriteLn(
-    AnsiBold('> ', LConfig) +
-    AnsiCyan(Name, LConfig) +
-    AnsiDim(' (' + IntToStr(LTotal) + ' tests, parallel)', LConfig));
+  WriteSuiteHeader(Name, IntToStr(LTotal) + ' tests, parallel',
+    LOutSink, LConfig);
 
   { Suite-level setup (serial, uses shared helper) }
   if not RunSetup(LConfig, LSkip, LErrorMsg) then
   begin
     for I := 0 to High(Tests) do
-      LOutSink.WriteLn(
-        '    ' + StatusDot(tsSkipped, LConfig) + ' ' +
-        AnsiDim(Tests[I].Name, LConfig));
+      LOutSink.WriteLn('    ' + FormatStatusLine(tsSkipped, Tests[I].Name, LConfig));
     AResult.Failed    := 1;
     AResult.Skipped   := LSkip;
     AResult.AllPassed := False;
@@ -1294,6 +1114,7 @@ begin
     LastFail      := 1;
     LastSkip      := LSkip;
     Result         := False;
+    CleanupTableAllocations;
     LOutSink.WriteLn(
       AnsiDim('  ' + IntToStr(LSkip) + ' skipped (setup failure)', LConfig));
     Exit;
@@ -1377,10 +1198,8 @@ begin
       LThreads[I] := BeginThread(@ParallelThreadEntry, @LRecs[I]);
       if LThreads[I] = 0 then
       begin
-        LResults[I].Name     := Tests[I].Name;
-        LResults[I].Status   := tsError;
-        LResults[I].Message  := 'BeginThread failed';
-        LResults[I].Duration := 0;
+        LResults[I] := MakeTestResult(Tests[I].Name, tsError,
+          'BeginThread failed', 0);
         Inc(LFail);
       end;
       Inc(LSpawned);
@@ -1411,10 +1230,7 @@ begin
   for I := 0 to High(Tests) do
     if (LThreads[I] <> 0) or (LResults[I].Status <> tsPassed) or
        (LResults[I].Name <> '') then
-    begin
-      SetLength(AResult.Results, Length(AResult.Results) + 1);
-      AResult.Results[High(AResult.Results)] := LResults[I];
-    end;
+      AppendResult(AResult.Results, LResults[I]);
 
   FinalizeResults(LConfig, AResult, LPass, LFail, LSkip);
   Result := LastRunPassed;
@@ -1450,19 +1266,6 @@ begin
     Result := Run
   else
     Result := LastRunPassed;
-end;
-
-{ Nil-out a specific pointer value in a dynamic array (for double-free prevention) }
-procedure NilPointerInArray(var AArr: specialize TArray<Pointer>; APtr: Pointer);
-var
-  I: Integer;
-begin
-  for I := 0 to High(AArr) do
-    if AArr[I] = APtr then
-    begin
-      AArr[I] := nil;
-      Exit;
-    end;
 end;
 
 procedure TTestSuite.CleanupTableAllocations;
@@ -1507,7 +1310,6 @@ begin
       GFixtureRegistry[FixtureAllocations[I]] := nil;
     end;
   FixtureAllocations := nil;
-  StubAllocations := nil;
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }

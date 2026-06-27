@@ -96,7 +96,7 @@ begin
     on E: Exception do
     begin
       R^.Status := tsError;
-      R^.ErrorMsg := E.ClassName + ': ' + E.Message;
+      R^.ErrorMsg := FormatExceptionMsg(E);
       WriteBarrier;
       R^.Done := True;
     end;
@@ -285,20 +285,14 @@ begin
     R^.Mtx.Acquire;
     try
       R^.Skip^ := R^.Skip^ + 1;
-      LOutSink.WriteLn(
-        '  ' + StatusDot(tsSkipped, LConfig) + ' ' +
-        AnsiDim(R^.Entry.Name, LConfig) +
-        ' -- subtests not supported in parallel mode');
+      LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, R^.Entry.Name,
+        'subtests not supported in parallel mode', LConfig));
     finally
       SafeRelease(R^.Mtx, LConfig);
     end;
     if R^.Res <> nil then
-    begin
-      R^.Res^.Name     := R^.Entry.Name;
-      R^.Res^.Status   := tsSkipped;
-      R^.Res^.Message  := 'subtests not supported in parallel mode';
-      R^.Res^.Duration := 0;
-    end;
+      R^.Res^ := MakeTestResult(R^.Entry.Name, tsSkipped,
+        'subtests not supported in parallel mode', 0);
     Exit;
   end;
 
@@ -307,19 +301,13 @@ begin
     R^.Mtx.Acquire;
     try
       R^.Skip^ := R^.Skip^ + 1;
-      LOutSink.WriteLn(
-        '  ' + StatusDot(tsSkipped, LConfig) + ' ' +
-        AnsiDim(R^.Entry.Name, LConfig));
+      LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, R^.Entry.Name, LConfig));
     finally
       SafeRelease(R^.Mtx, LConfig);
     end;
     if R^.Res <> nil then
-    begin
-      R^.Res^.Name     := R^.Entry.Name;
-      R^.Res^.Status   := tsSkipped;
-      R^.Res^.Message  := R^.Entry.SkipReason;
-      R^.Res^.Duration := 0;
-    end;
+      R^.Res^ := MakeTestResult(R^.Entry.Name, tsSkipped,
+        R^.Entry.SkipReason, 0);
     Exit;
   end;
 
@@ -341,15 +329,12 @@ begin
         R^.Mtx.Acquire;
         try
           LOutSink.WriteLn(
-            '  ' + StatusDot(tsError, LConfig) + ' ' +
-            R^.Entry.Name + ' -- beforeEach failed: ' + E.Message);
+            '  ' + FormatStatusLine(tsError, R^.Entry.Name,
+              'beforeEach failed: ' + E.Message, LConfig));
           { Set Duration to 0 directly — no test ran, don't use GetTickCount64 }
           if R^.Res <> nil then
           begin
-            R^.Res^.Name     := R^.Entry.Name;
-            R^.Res^.Status   := tsError;
-            R^.Res^.Duration := 0;
-            R^.Res^.Message  := E.Message;
+            R^.Res^ := MakeTestResult(R^.Entry.Name, tsError, E.Message, 0);
             LResultWritten := True;
           end;
         finally
@@ -410,16 +395,12 @@ begin
         on E: EAssertionFailed do
         begin
           LStatus := tsFailed;
-          LFailMsg := E.Message;
-          if GLastTestTrace <> '' then
-            LFailMsg := LFailMsg + ' [' + GLastTestTrace + ']';
+          LFailMsg := AppendTestTrace(E.Message);
         end;
         on E: Exception do
         begin
           LStatus := tsError;
-          LFailMsg := E.ClassName + ': ' + E.Message;
-          if GLastTestTrace <> '' then
-            LFailMsg := LFailMsg + ' [' + GLastTestTrace + ']';
+          LFailMsg := AppendTestTrace(FormatExceptionMsg(E));
         end;
       end;
 
@@ -430,10 +411,8 @@ begin
       Dec(LRetriesLeft);
       R^.Mtx.Acquire;
       try
-        LOutSink.WriteLn(
-          '  ' + AnsiYellow('retrying', LConfig) + ' (' +
-          IntToStr(R^.Entry.RetryCount - LRetriesLeft) + '/' +
-          IntToStr(R^.Entry.RetryCount) + ')...');
+        WriteRetryHint(R^.Entry.RetryCount - LRetriesLeft,
+          R^.Entry.RetryCount, LOutSink, LConfig);
       finally
         SafeRelease(R^.Mtx, LConfig);
       end;
@@ -450,9 +429,7 @@ begin
       begin
         R^.Mtx.Acquire;
         try
-          LErrSink.WriteLn(
-            '  ' + AnsiYellow('WARNING afterEach failed: ', LConfig) +
-            E.Message);
+          WriteWarning('afterEach failed: ' + E.Message, LErrSink, LConfig);
         finally
           SafeRelease(R^.Mtx, LConfig);
         end;
@@ -469,57 +446,30 @@ begin
   try
     case LStatus of
       tsPassed:
-        begin
-          R^.Pass^ := R^.Pass^ + 1;
-          LOutSink.WriteLn(
-            '  ' + StatusDot(tsPassed, LConfig) + ' ' + R^.Entry.Name);
-        end;
+        R^.Pass^ := R^.Pass^ + 1;
       tsFailed:
-        begin
-          R^.Fail^ := R^.Fail^ + 1;
-          LOutSink.WriteLn(
-            '  ' + StatusDot(tsFailed, LConfig) + ' ' +
-            AnsiRed(R^.Entry.Name, LConfig));
-          if LFailMsg <> '' then
-            LOutSink.WriteLn('    ' + AnsiDim(LFailMsg, LConfig))
-          else
-            LOutSink.WriteLn('    ' + AnsiDim('(assertion failed)', LConfig));
-        end;
+        R^.Fail^ := R^.Fail^ + 1;
       tsSkipped:
-        begin
-          R^.Skip^ := R^.Skip^ + 1;
-          if LSkipReason <> '' then
-            LOutSink.WriteLn(
-              '  ' + StatusDot(tsSkipped, LConfig) + ' ' +
-              AnsiDim(R^.Entry.Name, LConfig) + ' -- ' + LSkipReason)
-          else
-            LOutSink.WriteLn(
-              '  ' + StatusDot(tsSkipped, LConfig) + ' ' +
-              AnsiDim(R^.Entry.Name, LConfig));
-        end;
+        R^.Skip^ := R^.Skip^ + 1;
       tsError:
-        begin
-          R^.Fail^ := R^.Fail^ + 1;
-          LOutSink.WriteLn(
-            '  ' + StatusDot(tsError, LConfig) + ' ' +
-            AnsiRed(R^.Entry.Name, LConfig) + ' [unexpected error]');
-          if LFailMsg <> '' then
-            LOutSink.WriteLn('    ' + AnsiDim(LFailMsg, LConfig));
-        end;
+        R^.Fail^ := R^.Fail^ + 1;
     end;
+    WriteTestStatus(LStatus, R^.Entry.Name, LFailMsg, LSkipReason,
+      LOutSink, LConfig);
     { Write per-test result inside mutex for safety (skip if already written
       by beforeEach failure path, which sets Duration = 0 directly) }
     if (R^.Res <> nil) and (not LResultWritten) then
     begin
-      R^.Res^.Name     := R^.Entry.Name;
-      R^.Res^.Status   := LStatus;
-      R^.Res^.Duration := GetTickCount64 - LStartMs;
       case LStatus of
-        tsSkipped: R^.Res^.Message := LSkipReason;
-        tsFailed:  R^.Res^.Message := LFailMsg;
-        tsError:   R^.Res^.Message := LFailMsg;
+        tsSkipped: R^.Res^ := MakeTestResult(R^.Entry.Name, LStatus,
+                      LSkipReason, GetTickCount64 - LStartMs);
+        tsFailed:  R^.Res^ := MakeTestResult(R^.Entry.Name, LStatus,
+                      LFailMsg, GetTickCount64 - LStartMs);
+        tsError:   R^.Res^ := MakeTestResult(R^.Entry.Name, LStatus,
+                      LFailMsg, GetTickCount64 - LStartMs);
       else
-        R^.Res^.Message := '';
+        R^.Res^ := MakeTestResult(R^.Entry.Name, LStatus,
+                      '', GetTickCount64 - LStartMs);
       end;
     end;
   finally
@@ -546,22 +496,15 @@ begin
         try
           R^.Fail^ := R^.Fail^ + 1;
           LOutSink.WriteLn(
-            '  ' + StatusDot(tsError, LConfig) + ' ' +
-            AnsiRed(R^.Entry.Name, LConfig));
-          LOutSink.WriteLn(
-            '    ' + AnsiDim(
-              'worker exception: ' + E.ClassName + ': ' + E.Message,
-              LConfig));
+            '  ' + FormatStatusLine(tsError, R^.Entry.Name, LConfig));
+          LOutSink.WriteLn('    ' + AnsiDim(
+            'worker exception: ' + FormatExceptionMsg(E), LConfig));
         finally
           SafeRelease(R^.Mtx, LConfig);
         end;
         if R^.Res <> nil then
-        begin
-          R^.Res^.Name     := R^.Entry.Name;
-          R^.Res^.Status   := tsError;
-          R^.Res^.Message  := 'worker exception: ' + E.ClassName + ': ' + E.Message;
-          R^.Res^.Duration := 0;
-        end;
+          R^.Res^ := MakeTestResult(R^.Entry.Name, tsError,
+            'worker exception: ' + FormatExceptionMsg(E), 0);
       end;
     end;
   end;

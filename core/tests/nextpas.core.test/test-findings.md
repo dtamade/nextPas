@@ -769,21 +769,7 @@ end;
 **文件**: `runner.pas:711-713`
 **严重度**: P1 — 维护性
 
-```pascal
-{ TODO: RunWithResult and RunParallelWithResult share setup-failure, teardown,
-  result-counting, and HasRun/LastRunPassed-update logic.  Extract shared
-  helpers (e.g. RunSetup, RunTeardown, FinalizeResults) to reduce duplication. }
-```
-
-R2-F04 标记"✅ 已修"，但 TODO 仍在。两函数共享的逻辑包括：
-- setup-failure 路径（~30 行完全相同）
-- teardown try/except（~8 行）
-- HasRun/LastRunPassed/LastPass/LastFail/LastSkip 更新（~10 行）
-- Result 对象填充（~10 行）
-
-**建议修复**: 提取 `RunSetup`、`RunTeardown`、`FinalizeResults` 辅助方法。
-
-**预估工作量**: 中等（~50 行重组）
+R2-F04 ✅ 已修：RunSetup、RunTeardown、FinalizeResults 辅助方法已提取，TODO 注释已从源码中移除。
 
 ---
 
@@ -1391,10 +1377,9 @@ end;
 
 | 类别 | 数量 |
 |------|------|
-| ✅ 已修复 | 24（15 代码 + 18 测试覆盖） |
-| 📝 已文档化 | 3 |
-| ⏭️ 不需修复 | 32 |
-| 🔲 TODO | 8 |
+| ✅ 已修复 | 44（14 代码修复 + 30 测试覆盖） |
+| 📝 已文档化 | 2 |
+| ⏭️ 不需修复 | 24 |
 | **合计** | **70** |
 
 ### Commit 清单

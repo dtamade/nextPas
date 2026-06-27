@@ -659,8 +659,7 @@ begin
   end;
   if not LCaught then
   begin
-    WriteLn(AnsiRed('FAIL: EAccessViolation should propagate through Not_.ToRaise'));
-    Halt(1);
+    FailTest('EAccessViolation should propagate through Not_.ToRaise');
   end;
 end;
 
@@ -1132,9 +1131,8 @@ begin
   if not LSuite.Run then
   begin
     WriteLn;
-    WriteLn(AnsiRed('SOME TESTS FAILED'));
-    Halt(1);
+    FailTest('SOME TESTS FAILED');
   end;
   WriteLn;
-  WriteLn(AnsiGreen('ALL PASSED'));
+  PassTest('ALL PASSED');
 end.

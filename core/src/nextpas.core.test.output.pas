@@ -37,6 +37,50 @@ procedure SetAnsiEnabled(AEnabled: Boolean);
 function StatusDot(AStatus: TTestStatus): string; overload;
 function StatusDot(AStatus: TTestStatus; const AConfig: TTestConfig): string; overload;
 
+{ ── FormatStatusLine ──────────────────────────────────────────────────────── }
+{ Assembles "StatusDot + name" with proper ANSI coloring.
+  Indentation is the caller's responsibility. }
+
+function FormatStatusLine(AStatus: TTestStatus; const AName: string;
+  const AConfig: TTestConfig): string; overload;
+function FormatStatusLine(AStatus: TTestStatus; const AName: string;
+  const AReason: string; const AConfig: TTestConfig): string; overload;
+
+{ ── FormatFailDetail ──────────────────────────────────────────────────────── }
+{ Returns the indented failure detail line: AnsiDim(msg) or AnsiDim('(assertion failed)')
+  if msg is empty. }
+
+function FormatFailDetail(const AMsg: string;
+  const AConfig: TTestConfig): string;
+
+{ ── Meta-Test Helpers (for test programs that verify the framework) ───────── }
+
+procedure FailTest(const AMsg: string);
+  { Print red 'FAIL: ...' message and Halt(1). For meta-tests that run outside
+    the framework and cannot use Check* assertions. }
+procedure PassTest(const AMsg: string);
+  { Print green 'OK: ...' message. Companion to FailTest. }
+procedure SectionHeader(const ATitle: string);
+  { Print bold '─── Title ───' section separator. }
+
+{ ── Per-Test Output ───────────────────────────────────────────────────────── }
+
+procedure WriteTestStatus(AStatus: TTestStatus; const AName, AFailMsg,
+  ASkipReason: string; const ASink: IOutputSink; const AConfig: TTestConfig);
+  { Write formatted per-test status line to ASink. }
+
+{ ── Diagnostic Output ─────────────────────────────────────────────────────── }
+
+procedure WriteRetryHint(ACurrent, ATotal: Integer;
+  const ASink: IOutputSink; const AConfig: TTestConfig);
+  { Write yellow 'retrying (N/M)...' hint to ASink. }
+procedure WriteWarning(const AMsg: string;
+  const ASink: IOutputSink; const AConfig: TTestConfig);
+  { Write yellow 'WARNING: ...' to ASink (2-space indent). }
+procedure WriteSuiteHeader(const AName, ASuffix: string;
+  const ASink: IOutputSink; const AConfig: TTestConfig);
+  { Write blank line + bold '> Name (suffix)' suite header to ASink. }
+
 { ── Test Filter ───────────────────────────────────────────────────────────── }
 
 procedure SetTestFilter(const APattern: string);
@@ -139,8 +183,9 @@ var
 begin
   LConfig := ResolveConfig(AConfig);
   case LConfig.AnsiMode of
-    amOn: Exit(True);
+    amOn:  Exit(True);
     amOff: Exit(False);
+    amAuto: ; { fall through to auto-detect }
   end;
   InitAnsi;
   Result := GAnsiEnabled;
@@ -257,6 +302,108 @@ end;
 function StatusDot(AStatus: TTestStatus): string;
 begin
   Result := StatusDot(AStatus, DefaultConfig);
+end;
+
+{ FormatStatusLine — 2-param: name only }
+
+function FormatStatusLine(AStatus: TTestStatus; const AName: string;
+  const AConfig: TTestConfig): string;
+begin
+  case AStatus of
+    tsPassed:  Result := StatusDot(AStatus, AConfig) + ' ' + AName;
+    tsFailed:  Result := StatusDot(AStatus, AConfig) + ' ' + AnsiRed(AName, AConfig);
+    tsSkipped: Result := StatusDot(AStatus, AConfig) + ' ' + AnsiDim(AName, AConfig);
+    tsError:   Result := StatusDot(AStatus, AConfig) + ' ' + AnsiRed(AName, AConfig);
+  end;
+end;
+
+{ FormatStatusLine — 3-param: name + suffix (skip reason, error tag, etc.) }
+
+function FormatStatusLine(AStatus: TTestStatus; const AName: string;
+  const AReason: string; const AConfig: TTestConfig): string;
+begin
+  Result := FormatStatusLine(AStatus, AName, AConfig) + ' -- ' + AReason;
+end;
+
+{ FormatFailDetail — failure message with assertion-failed fallback }
+
+function FormatFailDetail(const AMsg: string; const AConfig: TTestConfig): string;
+begin
+  if AMsg <> '' then
+    Result := AnsiDim(AMsg, AConfig)
+  else
+    Result := AnsiDim('(assertion failed)', AConfig);
+end;
+
+{ Meta-Test Helpers }
+
+procedure FailTest(const AMsg: string);
+begin
+  WriteLn(AnsiRed('FAIL: ' + AMsg));
+  Halt(1);
+end;
+
+procedure PassTest(const AMsg: string);
+begin
+  WriteLn(AnsiGreen('OK: ' + AMsg));
+end;
+
+procedure SectionHeader(const ATitle: string);
+begin
+  WriteLn(AnsiBold('─── ' + ATitle + ' ───'));
+end;
+
+procedure WriteTestStatus(AStatus: TTestStatus; const AName, AFailMsg,
+  ASkipReason: string; const ASink: IOutputSink; const AConfig: TTestConfig);
+begin
+  case AStatus of
+    tsPassed:
+      ASink.WriteLn('  ' + FormatStatusLine(tsPassed, AName, AConfig));
+    tsFailed:
+      begin
+        ASink.WriteLn('  ' + FormatStatusLine(tsFailed, AName, AConfig));
+        ASink.WriteLn('    ' + FormatFailDetail(AFailMsg, AConfig));
+      end;
+    tsSkipped:
+      begin
+        if ASkipReason <> '' then
+          ASink.WriteLn('  ' + FormatStatusLine(tsSkipped, AName,
+            ASkipReason, AConfig))
+        else
+          ASink.WriteLn('  ' + FormatStatusLine(tsSkipped, AName, AConfig));
+      end;
+    tsError:
+      begin
+        ASink.WriteLn('  ' + FormatStatusLine(tsError, AName, AConfig) +
+          ' [unexpected exception]');
+        if AFailMsg <> '' then
+          ASink.WriteLn('    ' + AnsiDim(AFailMsg, AConfig));
+      end;
+  end;
+end;
+
+procedure WriteRetryHint(ACurrent, ATotal: Integer;
+  const ASink: IOutputSink; const AConfig: TTestConfig);
+begin
+  ASink.WriteLn(
+    '  ' + AnsiYellow('retrying', AConfig) + ' (' +
+    IntToStr(ACurrent) + '/' + IntToStr(ATotal) + ')...');
+end;
+
+procedure WriteWarning(const AMsg: string;
+  const ASink: IOutputSink; const AConfig: TTestConfig);
+begin
+  ASink.WriteLn('  ' + AnsiYellow('WARNING ', AConfig) + AMsg);
+end;
+
+procedure WriteSuiteHeader(const AName, ASuffix: string;
+  const ASink: IOutputSink; const AConfig: TTestConfig);
+begin
+  ASink.WriteLn('');
+  ASink.WriteLn(
+    AnsiBold('> ', AConfig) +
+    AnsiCyan(AName, AConfig) +
+    AnsiDim(' (' + ASuffix + ')', AConfig));
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }
@@ -605,7 +752,7 @@ begin
       begin
         LTestResult := LRunResult.Results[J];
         LSb.AppendStr('    <testcase name="' + XmlEscape(LTestResult.Name) +
-          '" time="' + Format('%.3f', [LTestResult.Duration / 1000.0]) + '"');
+          '" time="' + FormatFloat('0.000', LTestResult.Duration / 1000.0) + '"');
         case LTestResult.Status of
           tsFailed:
             begin
@@ -668,9 +815,9 @@ begin
     WriteFileText(AFileName, JUnitXML(AResults, ASuiteName));
     Result := True;
   except
-    on E: Exception do
-      ResolveErrSink(DefaultConfig).WriteLn(
-        'WriteJUnitXML failed: ' + E.Message);
+    { Bare except — catches both FPC Exception and nextpas.core.exception descendants }
+    ResolveErrSink(DefaultConfig).WriteLn(
+      'WriteJUnitXML failed: could not write to ' + AFileName);
   end;
 end;
 

@@ -140,9 +140,35 @@ threadvar
 function GetLastTestTrace: string;
   { Returns the most recently captured (and filtered) stack trace.
     Empty if no trace has been captured yet on this thread. }
-function FormatTestLocation(APrefix: string = ''): string;
+function FormatTestLocation(const APrefix: string = ''): string;
   { Returns the first non-empty frame from GLastTestTrace, prefixed with APrefix.
     Returns '' if no useful frame was captured. }
+
+{ ── Record Helpers (reduce boilerplate at creation sites) ───────────────────── }
+
+procedure ClearEntry(out AEntry: TTestEntry);
+  { Initialize all TTestEntry fields to safe defaults.
+    Callers then override only the fields they need. }
+function MakeTestResult(const AName: string; AStatus: TTestStatus;
+  const AMessage: string; ADuration: Int64): TTestResult;
+  { Construct a fully-initialized TTestResult in one call. }
+procedure AppendResult(var AResults: specialize TArray<TTestResult>;
+  const AResult: TTestResult);
+  { Append a TTestResult to a dynamic array. }
+procedure RegisterEntry(var AEntries: specialize TArray<TTestEntry>;
+  const AEntry: TTestEntry);
+  { Append a TTestEntry to a dynamic array. }
+procedure CopyTags(out ATags: specialize TArray<string>;
+  const ASource: array of string);
+  { Copy an open array of tag strings into a dynamic array. }
+
+{ ── Exception Formatting (eliminate repeated ClassName + trace patterns) ──── }
+
+function FormatExceptionMsg(E: Exception): string;
+  { Returns 'ClassName: Message' — the standard error message format. }
+function AppendTestTrace(const AMsg: string): string;
+  { Appends ' [file:line]' from GLastTestTrace if non-empty; returns AMsg as-is
+    when no trace was captured. }
 
 { ── Internal Helpers (exported for use by other test.* units) ─────────────── }
 
@@ -174,6 +200,75 @@ begin
   Result.Skipped   := 0;
   Result.AllPassed := True;
   Result.Results   := nil;
+end;
+
+{ ═════════════════════════════════════════════════════════════════════════════ }
+{ Record Helpers                                                                }
+{ ═════════════════════════════════════════════════════════════════════════════ }
+
+procedure ClearEntry(out AEntry: TTestEntry);
+begin
+  AEntry.Name        := '';
+  AEntry.Proc        := nil;
+  AEntry.Closure     := nil;
+  AEntry.SubtestProc := nil;
+  AEntry.Kind        := ekTest;
+  AEntry.SkipReason  := '';
+  AEntry.RetryCount  := 0;
+  AEntry.DisplayName := '';
+  AEntry.Tags        := nil;
+  AEntry.RepeatCount := 0;
+  AEntry.TableCase   := nil;
+  AEntry.TableProc   := nil;
+end;
+
+function MakeTestResult(const AName: string; AStatus: TTestStatus;
+  const AMessage: string; ADuration: Int64): TTestResult;
+begin
+  Result.Name       := AName;
+  Result.Status     := AStatus;
+  Result.Message    := AMessage;
+  Result.Duration   := ADuration;
+  Result.CapturedLog := nil;
+end;
+
+procedure AppendResult(var AResults: specialize TArray<TTestResult>;
+  const AResult: TTestResult);
+begin
+  SetLength(AResults, Length(AResults) + 1);
+  AResults[High(AResults)] := AResult;
+end;
+
+procedure RegisterEntry(var AEntries: specialize TArray<TTestEntry>;
+  const AEntry: TTestEntry);
+begin
+  SetLength(AEntries, Length(AEntries) + 1);
+  AEntries[High(AEntries)] := AEntry;
+end;
+
+procedure CopyTags(out ATags: specialize TArray<string>;
+  const ASource: array of string);
+var
+  I: Integer;
+begin
+  SetLength(ATags, Length(ASource));
+  for I := 0 to High(ASource) do
+    ATags[I] := ASource[I];
+end;
+
+{ Exception Formatting }
+
+function FormatExceptionMsg(E: Exception): string;
+begin
+  Result := E.ClassName + ': ' + E.Message;
+end;
+
+function AppendTestTrace(const AMsg: string): string;
+begin
+  if GLastTestTrace <> '' then
+    Result := AMsg + ' [' + GLastTestTrace + ']'
+  else
+    Result := AMsg;
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }
@@ -241,7 +336,7 @@ begin
   Result := GLastTestTrace;
 end;
 
-function FormatTestLocation(APrefix: string): string;
+function FormatTestLocation(const APrefix: string): string;
 var
   LTrace: string;
 begin

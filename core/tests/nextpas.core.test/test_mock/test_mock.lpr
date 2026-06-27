@@ -12,6 +12,7 @@ uses
   nextpas.core.test.base,
   nextpas.core.test.runner,
   nextpas.core.test.check,
+  nextpas.core.test.output,
   nextpas.core.test.mock;
 
 { ── TMockValue constructors ────────────────────────────────────────────────── }
@@ -1028,10 +1029,7 @@ begin
   Runner.Summary;
 
   if LSuccess then
-    WriteLn('ALL PASSED')
+    PassTest('ALL PASSED')
   else
-  begin
-    WriteLn('SOME FAILED');
-    Halt(1);
-  end;
+    FailTest('SOME FAILED');
 end.

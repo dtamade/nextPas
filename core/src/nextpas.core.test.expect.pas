@@ -20,7 +20,7 @@ type
     ['{A7B3D91E-4C6F-4A28-B5D8-9E1F3C7A2B54}']
     function Not_: IExpectation;
     function ToEqual(const AExpected: string): IExpectation;
-    function ToEqualInt(AExpected: Int64): IExpectation;
+    function ToEqualInt(const AExpected: Int64): IExpectation;
     function ToEqualBool(AExpected: Boolean): IExpectation;
     function ToBeTrue: IExpectation;
     function ToBeFalse: IExpectation;
@@ -29,25 +29,25 @@ type
     function ToContain(const ASubstr: string): IExpectation;
     function ToStartWith(const APrefix: string): IExpectation;
     function ToEndWith(const ASuffix: string): IExpectation;
-    function ToBeGreaterThan(AExpected: Int64): IExpectation;
-    function ToBeLessThan(AExpected: Int64): IExpectation;
-    function ToBeGreaterOrEqual(AExpected: Int64): IExpectation;
-    function ToBeLessOrEqual(AExpected: Int64): IExpectation;
-    function ToBeInRange(ALow, AHigh: Int64): IExpectation;
-    function ToHaveLength(AExpected: NativeInt): IExpectation;
+    function ToBeGreaterThan(const AExpected: Int64): IExpectation;
+    function ToBeLessThan(const AExpected: Int64): IExpectation;
+    function ToBeGreaterOrEqual(const AExpected: Int64): IExpectation;
+    function ToBeLessOrEqual(const AExpected: Int64): IExpectation;
+    function ToBeInRange(const ALow, AHigh: Int64): IExpectation;
+    function ToHaveLength(const AExpected: NativeInt): IExpectation;
     function ToRaise(AExceptionClass: ExceptClass;
       const AMessage: string = ''): IExpectation;
     function ToNotRaise: IExpectation;
-    function ToBeNear(AExpected: Double;
-      AEpsilon: Double = 1e-10): IExpectation;
-    function ToNotBeNear(AExpected: Double;
-      AEpsilon: Double = 1e-10): IExpectation;
+    function ToBeNear(const AExpected: Double;
+      const AEpsilon: Double = 1e-10): IExpectation;
+    function ToNotBeNear(const AExpected: Double;
+      const AEpsilon: Double = 1e-10): IExpectation;
     { Double comparison }
-    function ToBeGreaterThanD(AExpected: Double): IExpectation;
-    function ToBeLessThanD(AExpected: Double): IExpectation;
-    function ToBeGreaterOrEqualD(AExpected: Double): IExpectation;
-    function ToBeLessOrEqualD(AExpected: Double): IExpectation;
-    function ToBeInRangeD(ALow, AHigh: Double): IExpectation;
+    function ToBeGreaterThanD(const AExpected: Double): IExpectation;
+    function ToBeLessThanD(const AExpected: Double): IExpectation;
+    function ToBeGreaterOrEqualD(const AExpected: Double): IExpectation;
+    function ToBeLessOrEqualD(const AExpected: Double): IExpectation;
+    function ToBeInRangeD(const ALow, AHigh: Double): IExpectation;
     { Case-insensitive string matching }
     function ToContainCI(const ASubstr: string): IExpectation;
     function ToStartWithCI(const APrefix: string): IExpectation;
@@ -57,10 +57,10 @@ type
 { ── Expect (fluent factory) ───────────────────────────────────────────────── }
 
 function Expect(const AValue: string): IExpectation;
-function ExpectInt(AValue: Int64): IExpectation;
+function ExpectInt(const AValue: Int64): IExpectation;
 function ExpectBool(AValue: Boolean): IExpectation;
-function ExpectDouble(AValue: Double): IExpectation;
-function ExpectPtr(AValue: Pointer): IExpectation;
+function ExpectDouble(const AValue: Double): IExpectation;
+function ExpectPtr(const AValue: Pointer): IExpectation;
 function ExpectProc(AProc: TTestProc): IExpectation;
 
 implementation
@@ -86,16 +86,24 @@ type
     FNegated    : Boolean;
   public
     constructor CreateStr(const AValue: string);
-    constructor CreateInt(AValue: Int64);
+    constructor CreateInt(const AValue: Int64);
     constructor CreateBool(AValue: Boolean);
-    constructor CreatePtr(AValue: Pointer);
+    constructor CreatePtr(const AValue: Pointer);
     constructor CreateProc(AProc: TTestProc);
-    constructor CreateDouble(AValue: Double);
+    constructor CreateDouble(const AValue: Double);
+
+    procedure RequireKind(AKind: TExpectationKind;
+      const AMethod: string);
+      { Guard: fail with "X called on non-Y expectation" if FKind <> AKind. }
+    procedure CheckMatch(AIsMatch: Boolean;
+      const ANegMsg, APosMsg: string);
+      { Core negation check: fail with ANegMsg if (FNegated and AIsMatch)
+        or with APosMsg if (not FNegated and not AIsMatch). }
 
     { IExpectation }
     function Not_: IExpectation;
     function ToEqual(const AExpected: string): IExpectation;
-    function ToEqualInt(AExpected: Int64): IExpectation;
+    function ToEqualInt(const AExpected: Int64): IExpectation;
     function ToEqualBool(AExpected: Boolean): IExpectation;
     function ToBeTrue: IExpectation;
     function ToBeFalse: IExpectation;
@@ -104,25 +112,25 @@ type
     function ToContain(const ASubstr: string): IExpectation;
     function ToStartWith(const APrefix: string): IExpectation;
     function ToEndWith(const ASuffix: string): IExpectation;
-    function ToBeGreaterThan(AExpected: Int64): IExpectation;
-    function ToBeLessThan(AExpected: Int64): IExpectation;
-    function ToBeGreaterOrEqual(AExpected: Int64): IExpectation;
-    function ToBeLessOrEqual(AExpected: Int64): IExpectation;
-    function ToBeInRange(ALow, AHigh: Int64): IExpectation;
-    function ToHaveLength(AExpected: NativeInt): IExpectation;
+    function ToBeGreaterThan(const AExpected: Int64): IExpectation;
+    function ToBeLessThan(const AExpected: Int64): IExpectation;
+    function ToBeGreaterOrEqual(const AExpected: Int64): IExpectation;
+    function ToBeLessOrEqual(const AExpected: Int64): IExpectation;
+    function ToBeInRange(const ALow, AHigh: Int64): IExpectation;
+    function ToHaveLength(const AExpected: NativeInt): IExpectation;
     function ToRaise(AExceptionClass: ExceptClass;
       const AMessage: string = ''): IExpectation;
     function ToNotRaise: IExpectation;
-    function ToBeNear(AExpected: Double;
-      AEpsilon: Double = 1e-10): IExpectation;
-    function ToNotBeNear(AExpected: Double;
-      AEpsilon: Double = 1e-10): IExpectation;
+    function ToBeNear(const AExpected: Double;
+      const AEpsilon: Double = 1e-10): IExpectation;
+    function ToNotBeNear(const AExpected: Double;
+      const AEpsilon: Double = 1e-10): IExpectation;
     { Double comparison }
-    function ToBeGreaterThanD(AExpected: Double): IExpectation;
-    function ToBeLessThanD(AExpected: Double): IExpectation;
-    function ToBeGreaterOrEqualD(AExpected: Double): IExpectation;
-    function ToBeLessOrEqualD(AExpected: Double): IExpectation;
-    function ToBeInRangeD(ALow, AHigh: Double): IExpectation;
+    function ToBeGreaterThanD(const AExpected: Double): IExpectation;
+    function ToBeLessThanD(const AExpected: Double): IExpectation;
+    function ToBeGreaterOrEqualD(const AExpected: Double): IExpectation;
+    function ToBeLessOrEqualD(const AExpected: Double): IExpectation;
+    function ToBeInRangeD(const ALow, AHigh: Double): IExpectation;
     { Case-insensitive string matching }
     function ToContainCI(const ASubstr: string): IExpectation;
     function ToStartWithCI(const APrefix: string): IExpectation;
@@ -137,7 +145,7 @@ begin
   FNegated  := False;
 end;
 
-constructor TExpectation.CreateInt(AValue: Int64);
+constructor TExpectation.CreateInt(const AValue: Int64);
 begin
   inherited Create;
   FKind     := ekInt64;
@@ -153,7 +161,7 @@ begin
   FNegated   := False;
 end;
 
-constructor TExpectation.CreatePtr(AValue: Pointer);
+constructor TExpectation.CreatePtr(const AValue: Pointer);
 begin
   inherited Create;
   FKind     := ekPointer;
@@ -169,7 +177,7 @@ begin
   FNegated   := False;
 end;
 
-constructor TExpectation.CreateDouble(AValue: Double);
+constructor TExpectation.CreateDouble(const AValue: Double);
 begin
   inherited Create;
   FKind        := ekDouble;
@@ -193,68 +201,60 @@ begin
   Result := LCopy;
 end;
 
-function TExpectation.ToEqual(const AExpected: string): IExpectation;
-var
-  LMatch: Boolean;
+procedure TExpectation.RequireKind(AKind: TExpectationKind;
+  const AMethod: string);
+const
+  KindNames: array[TExpectationKind] of string = (
+    'string', 'integer', 'boolean', 'pointer', 'proc', 'double'
+  );
 begin
-  if FKind <> ekString then
-    InternalFail('ToEqual(string) called on non-string expectation');
-  LMatch := FStrValue = AExpected;
+  if FKind <> AKind then
+    InternalFail(AMethod + ' called on non-' + KindNames[AKind] + ' expectation');
+end;
+
+procedure TExpectation.CheckMatch(AIsMatch: Boolean;
+  const ANegMsg, APosMsg: string);
+begin
   if FNegated then
   begin
-    if LMatch then
-      InternalFail('Expected "' + FStrValue + '" not to equal "' + AExpected + '"');
+    if AIsMatch then
+      InternalFail(ANegMsg);
   end
   else
   begin
-    if not LMatch then
-      InternalFail('Expected "' + AExpected + '" but got "' + FStrValue + '"');
+    if not AIsMatch then
+      InternalFail(APosMsg);
   end;
+end;
+
+function TExpectation.ToEqual(const AExpected: string): IExpectation;
+begin
+  RequireKind(ekString, 'ToEqual(string)');
+  CheckMatch(FStrValue = AExpected,
+    'Expected "' + FStrValue + '" not to equal "' + AExpected + '"',
+    'Expected "' + AExpected + '" but got "' + FStrValue + '"');
   Result := Self;
 end;
 
-function TExpectation.ToEqualInt(AExpected: Int64): IExpectation;
-var
-  LMatch: Boolean;
+function TExpectation.ToEqualInt(const AExpected: Int64): IExpectation;
 begin
-  if FKind <> ekInt64 then
-    InternalFail('ToEqualInt called on non-integer expectation');
-  LMatch := FIntValue = AExpected;
-  if FNegated then
-  begin
-    if LMatch then
-      InternalFail('Expected not ' + IntToStr(AExpected) +
-        ' but value is ' + IntToStr(FIntValue));
-  end
-  else
-  begin
-    if not LMatch then
-      InternalFail('Expected ' + IntToStr(AExpected) +
-        ' but got ' + IntToStr(FIntValue));
-  end;
+  RequireKind(ekInt64, 'ToEqualInt');
+  CheckMatch(FIntValue = AExpected,
+    'Expected not ' + IntToStr(AExpected) + ' but value is ' + IntToStr(FIntValue),
+    'Expected ' + IntToStr(AExpected) + ' but got ' + IntToStr(FIntValue));
   Result := Self;
 end;
 
 function TExpectation.ToEqualBool(AExpected: Boolean): IExpectation;
 var
-  LMatch: Boolean;
   LExpStr, LActStr: string;
 begin
-  if FKind <> ekBool then
-    InternalFail('ToEqualBool called on non-boolean expectation');
-  LMatch := FBoolValue = AExpected;
+  RequireKind(ekBool, 'ToEqualBool');
   LExpStr := BoolToStr(AExpected, 'True', 'False');
   LActStr := BoolToStr(FBoolValue, 'True', 'False');
-  if FNegated then
-  begin
-    if LMatch then
-      InternalFail('Expected not ' + LExpStr + ' but got ' + LActStr);
-  end
-  else
-  begin
-    if not LMatch then
-      InternalFail('Expected ' + LExpStr + ' but got ' + LActStr);
-  end;
+  CheckMatch(FBoolValue = AExpected,
+    'Expected not ' + LExpStr + ' but got ' + LActStr,
+    'Expected ' + LExpStr + ' but got ' + LActStr);
   Result := Self;
 end;
 
@@ -269,43 +269,20 @@ begin
 end;
 
 function TExpectation.ToBeNil: IExpectation;
-var
-  LIsNil: Boolean;
 begin
-  if FKind <> ekPointer then
-    InternalFail('ToBeNil called on non-pointer expectation');
-  LIsNil := FPtrValue = nil;
-  if FNegated then
-  begin
-    if LIsNil then
-      InternalFail('Expected non-nil but got nil');
-  end
-  else
-  begin
-    if not LIsNil then
-      InternalFail('Expected nil but got $' +
-        IntToHex(NativeUInt(FPtrValue), 16));
-  end;
+  RequireKind(ekPointer, 'ToBeNil');
+  CheckMatch(FPtrValue = nil,
+    'Expected non-nil but got nil',
+    'Expected nil but got $' + IntToHex(NativeUInt(FPtrValue), 16));
   Result := Self;
 end;
 
 function TExpectation.ToBeNotNil: IExpectation;
 begin
-  if FKind <> ekPointer then
-    InternalFail('ToBeNotNil called on non-pointer expectation');
-  if FNegated then
-  begin
-    { Not_.ToBeNotNil = expect nil }
-    if FPtrValue <> nil then
-      InternalFail('Expected nil but got $' +
-        IntToHex(NativeUInt(FPtrValue), 16));
-  end
-  else
-  begin
-    { ToBeNotNil = expect non-nil }
-    if FPtrValue = nil then
-      InternalFail('Expected non-nil but got nil');
-  end;
+  RequireKind(ekPointer, 'ToBeNotNil');
+  CheckMatch(FPtrValue <> nil,
+    'Expected nil but got $' + IntToHex(NativeUInt(FPtrValue), 16),
+    'Expected non-nil but got nil');
   Result := Self;
 end;
 
@@ -313,42 +290,23 @@ function TExpectation.ToContain(const ASubstr: string): IExpectation;
 var
   LFound: Boolean;
 begin
-  if FKind <> ekString then
-    InternalFail('ToContain called on non-string expectation');
+  RequireKind(ekString, 'ToContain');
   if Length(ASubstr) = 0 then
     LFound := True { empty substring matches everything }
   else
     LFound := Pos(ASubstr, FStrValue) > 0;
-  if FNegated then
-  begin
-    if LFound then
-      InternalFail('"' + FStrValue + '" should not contain "' + ASubstr + '"');
-  end
-  else
-  begin
-    if not LFound then
-      InternalFail('"' + FStrValue + '" does not contain "' + ASubstr + '"');
-  end;
+  CheckMatch(LFound,
+    '"' + FStrValue + '" should not contain "' + ASubstr + '"',
+    '"' + FStrValue + '" does not contain "' + ASubstr + '"');
   Result := Self;
 end;
 
 function TExpectation.ToStartWith(const APrefix: string): IExpectation;
-var
-  LMatch: Boolean;
 begin
-  if FKind <> ekString then
-    InternalFail('ToStartWith called on non-string expectation');
-  LMatch := StrStartsWith(FStrValue, APrefix);
-  if FNegated then
-  begin
-    if LMatch then
-      InternalFail('"' + FStrValue + '" should not start with "' + APrefix + '"');
-  end
-  else
-  begin
-    if not LMatch then
-      InternalFail('"' + FStrValue + '" does not start with "' + APrefix + '"');
-  end;
+  RequireKind(ekString, 'ToStartWith');
+  CheckMatch(StrStartsWith(FStrValue, APrefix),
+    '"' + FStrValue + '" should not start with "' + APrefix + '"',
+    '"' + FStrValue + '" does not start with "' + APrefix + '"');
   Result := Self;
 end;
 
@@ -357,107 +315,58 @@ var
   LMatch: Boolean;
   LLen: Integer;
 begin
-  if FKind <> ekString then
-    InternalFail('ToEndWith called on non-string expectation');
+  RequireKind(ekString, 'ToEndWith');
   LLen := Length(ASuffix);
   if LLen = 0 then
     LMatch := True
   else
     LMatch := (Length(FStrValue) >= LLen) and
               (Copy(FStrValue, Length(FStrValue) - LLen + 1, LLen) = ASuffix);
-  if FNegated then
-  begin
-    if LMatch then
-      InternalFail('"' + FStrValue + '" should not end with "' + ASuffix + '"');
-  end
-  else
-  begin
-    if not LMatch then
-      InternalFail('"' + FStrValue + '" does not end with "' + ASuffix + '"');
-  end;
+  CheckMatch(LMatch,
+    '"' + FStrValue + '" should not end with "' + ASuffix + '"',
+    '"' + FStrValue + '" does not end with "' + ASuffix + '"');
   Result := Self;
 end;
 
-function TExpectation.ToBeGreaterThan(AExpected: Int64): IExpectation;
-var
-  LMatch: Boolean;
+function TExpectation.ToBeGreaterThan(const AExpected: Int64): IExpectation;
 begin
-  if FKind <> ekInt64 then
-    InternalFail('ToBeGreaterThan called on non-integer expectation');
-  LMatch := FIntValue > AExpected;
-  if FNegated then
-  begin
-    if LMatch then
-      InternalFail(IntToStr(FIntValue) + ' should not be > ' + IntToStr(AExpected));
-  end
-  else
-  begin
-    if not LMatch then
-      InternalFail(IntToStr(FIntValue) + ' is not > ' + IntToStr(AExpected));
-  end;
+  RequireKind(ekInt64, 'ToBeGreaterThan');
+  CheckMatch(FIntValue > AExpected,
+    IntToStr(FIntValue) + ' should not be > ' + IntToStr(AExpected),
+    IntToStr(FIntValue) + ' is not > ' + IntToStr(AExpected));
   Result := Self;
 end;
 
-function TExpectation.ToBeLessThan(AExpected: Int64): IExpectation;
-var
-  LMatch: Boolean;
+function TExpectation.ToBeLessThan(const AExpected: Int64): IExpectation;
 begin
-  if FKind <> ekInt64 then
-    InternalFail('ToBeLessThan called on non-integer expectation');
-  LMatch := FIntValue < AExpected;
-  if FNegated then
-  begin
-    if LMatch then
-      InternalFail(IntToStr(FIntValue) + ' should not be < ' + IntToStr(AExpected));
-  end
-  else
-  begin
-    if not LMatch then
-      InternalFail(IntToStr(FIntValue) + ' is not < ' + IntToStr(AExpected));
-  end;
+  RequireKind(ekInt64, 'ToBeLessThan');
+  CheckMatch(FIntValue < AExpected,
+    IntToStr(FIntValue) + ' should not be < ' + IntToStr(AExpected),
+    IntToStr(FIntValue) + ' is not < ' + IntToStr(AExpected));
   Result := Self;
 end;
 
-function TExpectation.ToBeInRange(ALow, AHigh: Int64): IExpectation;
-var
-  LMatch: Boolean;
+function TExpectation.ToBeInRange(const ALow, AHigh: Int64): IExpectation;
 begin
-  if FKind <> ekInt64 then
-    InternalFail('ToBeInRange called on non-integer expectation');
+  RequireKind(ekInt64, 'ToBeInRange');
   if ALow > AHigh then
     InternalFail('ToBeInRange: ALow (' + IntToStr(ALow) +
       ') > AHigh (' + IntToStr(AHigh) + ')');
-  LMatch := (FIntValue >= ALow) and (FIntValue <= AHigh);
-  if FNegated then
-  begin
-    if LMatch then
-      InternalFail(IntToStr(FIntValue) + ' should not be in [' +
-        IntToStr(ALow) + '..' + IntToStr(AHigh) + ']');
-  end
-  else
-  begin
-    if not LMatch then
-      InternalFail(IntToStr(FIntValue) + ' not in [' +
-        IntToStr(ALow) + '..' + IntToStr(AHigh) + ']');
-  end;
+  CheckMatch((FIntValue >= ALow) and (FIntValue <= AHigh),
+    IntToStr(FIntValue) + ' should not be in [' +
+      IntToStr(ALow) + '..' + IntToStr(AHigh) + ']',
+    IntToStr(FIntValue) + ' not in [' +
+      IntToStr(ALow) + '..' + IntToStr(AHigh) + ']');
   Result := Self;
 end;
 
-function TExpectation.ToHaveLength(AExpected: NativeInt): IExpectation;
+function TExpectation.ToHaveLength(const AExpected: NativeInt): IExpectation;
 begin
-  if FKind <> ekString then
-    InternalFail('ToHaveLength called on non-string expectation');
-  if FNegated then
-  begin
-    if Length(FStrValue) = AExpected then
-      InternalFail('String should not have length ' + IntToStr(AExpected));
-  end
-  else
-  begin
-    if Length(FStrValue) <> AExpected then
-      InternalFail('Expected length ' + IntToStr(AExpected) +
-        ' but got ' + IntToStr(Length(FStrValue)));
-  end;
+  RequireKind(ekString, 'ToHaveLength');
+  CheckMatch(Length(FStrValue) = AExpected,
+    'String should not have length ' + IntToStr(AExpected),
+    'Expected length ' + IntToStr(AExpected) +
+      ' but got ' + IntToStr(Length(FStrValue)));
   Result := Self;
 end;
 
@@ -466,8 +375,7 @@ function TExpectation.ToRaise(AExceptionClass: ExceptClass;
 var
   LRaised: Boolean = False;
 begin
-  if FKind <> ekProc then
-    InternalFail('ToRaise called on non-proc expectation');
+  RequireKind(ekProc, 'ToRaise');
   try
     FProcValue;
   except
@@ -517,8 +425,7 @@ end;
   ETestSkipped) escapes, it calls InternalFail.  FNegated is never checked. }
 function TExpectation.ToNotRaise: IExpectation;
 begin
-  if FKind <> ekProc then
-    InternalFail('ToNotRaise called on non-proc expectation');
+  RequireKind(ekProc, 'ToNotRaise');
   try
     FProcValue;
   except
@@ -531,13 +438,12 @@ begin
   Result := Self;
 end;
 
-function TExpectation.ToBeNear(AExpected: Double;
-  AEpsilon: Double): IExpectation;
+function TExpectation.ToBeNear(const AExpected: Double;
+  const AEpsilon: Double): IExpectation;
 var
   LDiff: Double;
 begin
-  if FKind <> ekDouble then
-    InternalFail('ToBeNear called on non-double expectation');
+  RequireKind(ekDouble, 'ToBeNear');
   LDiff := FDoubleValue - AExpected;
   if LDiff < 0 then LDiff := -LDiff;
   if FNegated then
@@ -555,8 +461,8 @@ begin
   Result := Self;
 end;
 
-function TExpectation.ToNotBeNear(AExpected: Double;
-  AEpsilon: Double): IExpectation;
+function TExpectation.ToNotBeNear(const AExpected: Double;
+  const AEpsilon: Double): IExpectation;
 begin
   { Flip negated flag in-place to avoid allocating a temporary TExpectation
     copy via Not_.  The try/finally ensures the flag is restored even if
@@ -571,134 +477,67 @@ end;
 
 { ── TExpectation: >= / <= for Int64 ────────────────────────────────────────── }
 
-function TExpectation.ToBeGreaterOrEqual(AExpected: Int64): IExpectation;
-var
-  LMatch: Boolean;
+function TExpectation.ToBeGreaterOrEqual(const AExpected: Int64): IExpectation;
 begin
-  if FKind <> ekInt64 then
-    InternalFail('ToBeGreaterOrEqual called on non-integer expectation');
-  LMatch := FIntValue >= AExpected;
-  if FNegated then
-  begin
-    if LMatch then
-      InternalFail(IntToStr(FIntValue) + ' should not be >= ' + IntToStr(AExpected));
-  end
-  else
-  begin
-    if not LMatch then
-      InternalFail(IntToStr(FIntValue) + ' is not >= ' + IntToStr(AExpected));
-  end;
+  RequireKind(ekInt64, 'ToBeGreaterOrEqual');
+  CheckMatch(FIntValue >= AExpected,
+    IntToStr(FIntValue) + ' should not be >= ' + IntToStr(AExpected),
+    IntToStr(FIntValue) + ' is not >= ' + IntToStr(AExpected));
   Result := Self;
 end;
 
-function TExpectation.ToBeLessOrEqual(AExpected: Int64): IExpectation;
-var
-  LMatch: Boolean;
+function TExpectation.ToBeLessOrEqual(const AExpected: Int64): IExpectation;
 begin
-  if FKind <> ekInt64 then
-    InternalFail('ToBeLessOrEqual called on non-integer expectation');
-  LMatch := FIntValue <= AExpected;
-  if FNegated then
-  begin
-    if LMatch then
-      InternalFail(IntToStr(FIntValue) + ' should not be <= ' + IntToStr(AExpected));
-  end
-  else
-  begin
-    if not LMatch then
-      InternalFail(IntToStr(FIntValue) + ' is not <= ' + IntToStr(AExpected));
-  end;
+  RequireKind(ekInt64, 'ToBeLessOrEqual');
+  CheckMatch(FIntValue <= AExpected,
+    IntToStr(FIntValue) + ' should not be <= ' + IntToStr(AExpected),
+    IntToStr(FIntValue) + ' is not <= ' + IntToStr(AExpected));
   Result := Self;
 end;
 
 { ── TExpectation: Double comparison ────────────────────────────────────────── }
 
-function TExpectation.ToBeGreaterThanD(AExpected: Double): IExpectation;
-var
-  LMatch: Boolean;
+function TExpectation.ToBeGreaterThanD(const AExpected: Double): IExpectation;
 begin
-  if FKind <> ekDouble then
-    InternalFail('ToBeGreaterThanD called on non-double expectation');
-  LMatch := FDoubleValue > AExpected;
-  if FNegated then
-  begin
-    if LMatch then
-      InternalFail(FloatToStr(FDoubleValue) + ' should not be > ' + FloatToStr(AExpected));
-  end
-  else
-  begin
-    if not LMatch then
-      InternalFail(FloatToStr(FDoubleValue) + ' is not > ' + FloatToStr(AExpected));
-  end;
+  RequireKind(ekDouble, 'ToBeGreaterThanD');
+  CheckMatch(FDoubleValue > AExpected,
+    FloatToStr(FDoubleValue) + ' should not be > ' + FloatToStr(AExpected),
+    FloatToStr(FDoubleValue) + ' is not > ' + FloatToStr(AExpected));
   Result := Self;
 end;
 
-function TExpectation.ToBeLessThanD(AExpected: Double): IExpectation;
-var
-  LMatch: Boolean;
+function TExpectation.ToBeLessThanD(const AExpected: Double): IExpectation;
 begin
-  if FKind <> ekDouble then
-    InternalFail('ToBeLessThanD called on non-double expectation');
-  LMatch := FDoubleValue < AExpected;
-  if FNegated then
-  begin
-    if LMatch then
-      InternalFail(FloatToStr(FDoubleValue) + ' should not be < ' + FloatToStr(AExpected));
-  end
-  else
-  begin
-    if not LMatch then
-      InternalFail(FloatToStr(FDoubleValue) + ' is not < ' + FloatToStr(AExpected));
-  end;
+  RequireKind(ekDouble, 'ToBeLessThanD');
+  CheckMatch(FDoubleValue < AExpected,
+    FloatToStr(FDoubleValue) + ' should not be < ' + FloatToStr(AExpected),
+    FloatToStr(FDoubleValue) + ' is not < ' + FloatToStr(AExpected));
   Result := Self;
 end;
 
-function TExpectation.ToBeGreaterOrEqualD(AExpected: Double): IExpectation;
-var
-  LMatch: Boolean;
+function TExpectation.ToBeGreaterOrEqualD(const AExpected: Double): IExpectation;
 begin
-  if FKind <> ekDouble then
-    InternalFail('ToBeGreaterOrEqualD called on non-double expectation');
-  LMatch := FDoubleValue >= AExpected;
-  if FNegated then
-  begin
-    if LMatch then
-      InternalFail(FloatToStr(FDoubleValue) + ' should not be >= ' + FloatToStr(AExpected));
-  end
-  else
-  begin
-    if not LMatch then
-      InternalFail(FloatToStr(FDoubleValue) + ' is not >= ' + FloatToStr(AExpected));
-  end;
+  RequireKind(ekDouble, 'ToBeGreaterOrEqualD');
+  CheckMatch(FDoubleValue >= AExpected,
+    FloatToStr(FDoubleValue) + ' should not be >= ' + FloatToStr(AExpected),
+    FloatToStr(FDoubleValue) + ' is not >= ' + FloatToStr(AExpected));
   Result := Self;
 end;
 
-function TExpectation.ToBeLessOrEqualD(AExpected: Double): IExpectation;
-var
-  LMatch: Boolean;
+function TExpectation.ToBeLessOrEqualD(const AExpected: Double): IExpectation;
 begin
-  if FKind <> ekDouble then
-    InternalFail('ToBeLessOrEqualD called on non-double expectation');
-  LMatch := FDoubleValue <= AExpected;
-  if FNegated then
-  begin
-    if LMatch then
-      InternalFail(FloatToStr(FDoubleValue) + ' should not be <= ' + FloatToStr(AExpected));
-  end
-  else
-  begin
-    if not LMatch then
-      InternalFail(FloatToStr(FDoubleValue) + ' is not <= ' + FloatToStr(AExpected));
-  end;
+  RequireKind(ekDouble, 'ToBeLessOrEqualD');
+  CheckMatch(FDoubleValue <= AExpected,
+    FloatToStr(FDoubleValue) + ' should not be <= ' + FloatToStr(AExpected),
+    FloatToStr(FDoubleValue) + ' is not <= ' + FloatToStr(AExpected));
   Result := Self;
 end;
 
-function TExpectation.ToBeInRangeD(ALow, AHigh: Double): IExpectation;
+function TExpectation.ToBeInRangeD(const ALow, AHigh: Double): IExpectation;
 var
   LMatch: Boolean;
 begin
-  if FKind <> ekDouble then
-    InternalFail('ToBeInRangeD called on non-double expectation');
+  RequireKind(ekDouble, 'ToBeInRangeD');
   if ALow > AHigh then
     InternalFail('ToBeInRangeD: low (' + FloatToStr(ALow) + ') > high (' + FloatToStr(AHigh) + ')');
   LMatch := (FDoubleValue >= ALow) and (FDoubleValue <= AHigh);
@@ -720,65 +559,34 @@ end;
 { ── TExpectation: Case-insensitive string ──────────────────────────────────── }
 
 function TExpectation.ToContainCI(const ASubstr: string): IExpectation;
-var
-  LMatch: Boolean;
 begin
-  if FKind <> ekString then
-    InternalFail('ToContainCI called on non-string expectation');
-  LMatch := Pos(LowerCase(ASubstr), LowerCase(FStrValue)) > 0;
-  if FNegated then
-  begin
-    if LMatch then
-      InternalFail('"' + FStrValue + '" should not contain (ci) "' + ASubstr + '"');
-  end
-  else
-  begin
-    if not LMatch then
-      InternalFail('"' + FStrValue + '" does not contain (ci) "' + ASubstr + '"');
-  end;
+  RequireKind(ekString, 'ToContainCI');
+  CheckMatch(Pos(LowerCase(ASubstr), LowerCase(FStrValue)) > 0,
+    '"' + FStrValue + '" should not contain (ci) "' + ASubstr + '"',
+    '"' + FStrValue + '" does not contain (ci) "' + ASubstr + '"');
   Result := Self;
 end;
 
 function TExpectation.ToStartWithCI(const APrefix: string): IExpectation;
-var
-  LMatch: Boolean;
 begin
-  if FKind <> ekString then
-    InternalFail('ToStartWithCI called on non-string expectation');
-  LMatch := (Length(FStrValue) >= Length(APrefix)) and
-            (LowerCase(Copy(FStrValue, 1, Length(APrefix))) = LowerCase(APrefix));
-  if FNegated then
-  begin
-    if LMatch then
-      InternalFail('"' + FStrValue + '" should not start with (ci) "' + APrefix + '"');
-  end
-  else
-  begin
-    if not LMatch then
-      InternalFail('"' + FStrValue + '" does not start with (ci) "' + APrefix + '"');
-  end;
+  RequireKind(ekString, 'ToStartWithCI');
+  CheckMatch(
+    (Length(FStrValue) >= Length(APrefix)) and
+    (LowerCase(Copy(FStrValue, 1, Length(APrefix))) = LowerCase(APrefix)),
+    '"' + FStrValue + '" should not start with (ci) "' + APrefix + '"',
+    '"' + FStrValue + '" does not start with (ci) "' + APrefix + '"');
   Result := Self;
 end;
 
 function TExpectation.ToEndWithCI(const ASuffix: string): IExpectation;
-var
-  LMatch: Boolean;
 begin
-  if FKind <> ekString then
-    InternalFail('ToEndWithCI called on non-string expectation');
-  LMatch := (Length(FStrValue) >= Length(ASuffix)) and
-            (LowerCase(Copy(FStrValue, Length(FStrValue) - Length(ASuffix) + 1,
-             Length(ASuffix))) = LowerCase(ASuffix));
-  if FNegated then
-  begin
-    if LMatch then
-      InternalFail('"' + FStrValue + '" should not end with (ci) "' + ASuffix + '"');
-  end
-  else
-  begin
-    if not LMatch then
-      InternalFail('"' + FStrValue + '" does not end with (ci) "' + ASuffix + '"');
-  end;
+  RequireKind(ekString, 'ToEndWithCI');
+  CheckMatch(
+    (Length(FStrValue) >= Length(ASuffix)) and
+    (LowerCase(Copy(FStrValue, Length(FStrValue) - Length(ASuffix) + 1,
+     Length(ASuffix))) = LowerCase(ASuffix)),
+    '"' + FStrValue + '" should not end with (ci) "' + ASuffix + '"',
+    '"' + FStrValue + '" does not end with (ci) "' + ASuffix + '"');
   Result := Self;
 end;
 
@@ -789,7 +597,7 @@ begin
   Result := TExpectation.CreateStr(AValue);
 end;
 
-function ExpectInt(AValue: Int64): IExpectation;
+function ExpectInt(const AValue: Int64): IExpectation;
 begin
   Result := TExpectation.CreateInt(AValue);
 end;
@@ -799,12 +607,12 @@ begin
   Result := TExpectation.CreateBool(AValue);
 end;
 
-function ExpectDouble(AValue: Double): IExpectation;
+function ExpectDouble(const AValue: Double): IExpectation;
 begin
   Result := TExpectation.CreateDouble(AValue);
 end;
 
-function ExpectPtr(AValue: Pointer): IExpectation;
+function ExpectPtr(const AValue: Pointer): IExpectation;
 begin
   Result := TExpectation.CreatePtr(AValue);
 end;

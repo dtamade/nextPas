@@ -76,10 +76,10 @@ type
 { ── Re-exported functions from test.expect ────────────────────────────────── }
 
 function Expect(const AValue: string): IExpectation;
-function ExpectInt(AValue: Int64): IExpectation;
+function ExpectInt(const AValue: Int64): IExpectation;
 function ExpectBool(AValue: Boolean): IExpectation;
-function ExpectDouble(AValue: Double): IExpectation;
-function ExpectPtr(AValue: Pointer): IExpectation;
+function ExpectDouble(const AValue: Double): IExpectation;
+function ExpectPtr(const AValue: Pointer): IExpectation;
 function ExpectProc(AProc: TTestProc): IExpectation;
 
 { ── Re-exported functions from test.check ─────────────────────────────────── }
@@ -104,20 +104,20 @@ procedure CheckNotNil(AValue: Pointer; const AMessage: string = '');
 procedure CheckContains(const AHaystack, ANeedle: string);
 procedure CheckStartsWith(const AStr, APrefix: string);
 procedure CheckEndsWith(const AStr, ASuffix: string);
-procedure CheckSame(AExpected, AActual: Pointer; const AMessage: string = '');
-procedure CheckInRange(AValue, ALow, AHigh: Int64);
-procedure CheckGreaterThan(AValue, AExpected: Int64);
-procedure CheckLessThan(AValue, AExpected: Int64);
-procedure CheckGreaterOrEqual(AValue, AExpected: Int64);
-procedure CheckLessOrEqual(AValue, AExpected: Int64);
-procedure CheckLength(AExpected, AActual: NativeInt);
+procedure CheckSame(const AExpected, AActual: Pointer; const AMessage: string = '');
+procedure CheckInRange(const AValue, ALow, AHigh: Int64);
+procedure CheckGreaterThan(const AValue, AExpected: Int64);
+procedure CheckLessThan(const AValue, AExpected: Int64);
+procedure CheckGreaterOrEqual(const AValue, AExpected: Int64);
+procedure CheckLessOrEqual(const AValue, AExpected: Int64);
+procedure CheckLength(const AExpected, AActual: NativeInt);
 procedure CheckRaises(AExceptionClass: ExceptClass; AProc: TTestProc;
   const AMessage: string = '');
 procedure CheckNoRaise(AProc: TTestProc; const AMessage: string = '');
-procedure CheckNear(AExpected, AActual: Double;
-  AEpsilon: Double = 1e-10; const AMessage: string = '');
-procedure CheckNotNear(AExpected, AActual: Double;
-  AEpsilon: Double = 1e-10; const AMessage: string = '');
+procedure CheckNear(const AExpected, AActual: Double;
+  const AEpsilon: Double = 1e-10; const AMessage: string = '');
+procedure CheckNotNear(const AExpected, AActual: Double;
+  const AEpsilon: Double = 1e-10; const AMessage: string = '');
 procedure Fail(const AMessage: string);
 procedure Skip(const AReason: string = '');
 
@@ -136,6 +136,9 @@ function AnsiCyan(const S: string): string;
 function AnsiDim(const S: string): string;
 procedure SetAnsiEnabled(AEnabled: Boolean);
 function  StatusDot(AStatus: TTestStatus): string;
+procedure FailTest(const AMsg: string);
+procedure PassTest(const AMsg: string);
+procedure SectionHeader(const ATitle: string);
 procedure SetTestFilter(const APattern: string);
 function  GetTestFilter: string;
 function  MatchesFilter(const AName: string): Boolean;
@@ -186,16 +189,16 @@ implementation
 function Expect(const AValue: string): IExpectation;
 begin Result := nextpas.core.test.expect.Expect(AValue); end;
 
-function ExpectInt(AValue: Int64): IExpectation;
+function ExpectInt(const AValue: Int64): IExpectation;
 begin Result := nextpas.core.test.expect.ExpectInt(AValue); end;
 
 function ExpectBool(AValue: Boolean): IExpectation;
 begin Result := nextpas.core.test.expect.ExpectBool(AValue); end;
 
-function ExpectDouble(AValue: Double): IExpectation;
+function ExpectDouble(const AValue: Double): IExpectation;
 begin Result := nextpas.core.test.expect.ExpectDouble(AValue); end;
 
-function ExpectPtr(AValue: Pointer): IExpectation;
+function ExpectPtr(const AValue: Pointer): IExpectation;
 begin Result := nextpas.core.test.expect.ExpectPtr(AValue); end;
 
 function ExpectProc(AProc: TTestProc): IExpectation;
@@ -259,25 +262,25 @@ begin nextpas.core.test.check.CheckStartsWith(AStr, APrefix); end;
 procedure CheckEndsWith(const AStr, ASuffix: string);
 begin nextpas.core.test.check.CheckEndsWith(AStr, ASuffix); end;
 
-procedure CheckSame(AExpected, AActual: Pointer; const AMessage: string);
+procedure CheckSame(const AExpected, AActual: Pointer; const AMessage: string);
 begin nextpas.core.test.check.CheckSame(AExpected, AActual, AMessage); end;
 
-procedure CheckInRange(AValue, ALow, AHigh: Int64);
+procedure CheckInRange(const AValue, ALow, AHigh: Int64);
 begin nextpas.core.test.check.CheckInRange(AValue, ALow, AHigh); end;
 
-procedure CheckGreaterThan(AValue, AExpected: Int64);
+procedure CheckGreaterThan(const AValue, AExpected: Int64);
 begin nextpas.core.test.check.CheckGreaterThan(AValue, AExpected); end;
 
-procedure CheckLessThan(AValue, AExpected: Int64);
+procedure CheckLessThan(const AValue, AExpected: Int64);
 begin nextpas.core.test.check.CheckLessThan(AValue, AExpected); end;
 
-procedure CheckGreaterOrEqual(AValue, AExpected: Int64);
+procedure CheckGreaterOrEqual(const AValue, AExpected: Int64);
 begin nextpas.core.test.check.CheckGreaterOrEqual(AValue, AExpected); end;
 
-procedure CheckLessOrEqual(AValue, AExpected: Int64);
+procedure CheckLessOrEqual(const AValue, AExpected: Int64);
 begin nextpas.core.test.check.CheckLessOrEqual(AValue, AExpected); end;
 
-procedure CheckLength(AExpected, AActual: NativeInt);
+procedure CheckLength(const AExpected, AActual: NativeInt);
 begin nextpas.core.test.check.CheckLength(AExpected, AActual); end;
 
 procedure CheckRaises(AExceptionClass: ExceptClass; AProc: TTestProc;
@@ -287,12 +290,12 @@ begin nextpas.core.test.check.CheckRaises(AExceptionClass, AProc, AMessage); end
 procedure CheckNoRaise(AProc: TTestProc; const AMessage: string);
 begin nextpas.core.test.check.CheckNoRaise(AProc, AMessage); end;
 
-procedure CheckNear(AExpected, AActual: Double;
-  AEpsilon: Double; const AMessage: string);
+procedure CheckNear(const AExpected, AActual: Double;
+  const AEpsilon: Double; const AMessage: string);
 begin nextpas.core.test.check.CheckNear(AExpected, AActual, AEpsilon, AMessage); end;
 
-procedure CheckNotNear(AExpected, AActual: Double;
-  AEpsilon: Double; const AMessage: string);
+procedure CheckNotNear(const AExpected, AActual: Double;
+  const AEpsilon: Double; const AMessage: string);
 begin nextpas.core.test.check.CheckNotNear(AExpected, AActual, AEpsilon, AMessage); end;
 
 procedure Fail(const AMessage: string);
@@ -334,6 +337,15 @@ begin nextpas.core.test.output.SetAnsiEnabled(AEnabled); end;
 
 function StatusDot(AStatus: TTestStatus): string;
 begin Result := nextpas.core.test.output.StatusDot(AStatus); end;
+
+procedure FailTest(const AMsg: string);
+begin nextpas.core.test.output.FailTest(AMsg); end;
+
+procedure PassTest(const AMsg: string);
+begin nextpas.core.test.output.PassTest(AMsg); end;
+
+procedure SectionHeader(const ATitle: string);
+begin nextpas.core.test.output.SectionHeader(ATitle); end;
 
 procedure SetTestFilter(const APattern: string);
 begin nextpas.core.test.output.SetTestFilter(APattern); end;
