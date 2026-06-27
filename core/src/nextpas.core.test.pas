@@ -1,11 +1,14 @@
 { nextpas.core.test — Advanced Pascal Unit Testing Framework (facade)
   =========================================================
   Re-exports all public API from sub-modules:
-    test.base, test.check, test.expect, test.output, test.runner,
-    test.output.tap, test.output.json, test.discovery, test.mock
+    test.base, test.check, test.config, test.expect, test.output,
+    test.output.tap, test.output.json, test.runner, test.discovery,
+    test.mock
+  White-box modules (not re-exported — import directly for internals):
+    test.runner.context, test.runner.parallel
   Dual API: procedural Check* + fluent IExpectation chain.
   Parallel execution, subtests, ANSI output, leak detection,
-  RTTI discovery, retry, TAP/JSON output, mock framework. }
+  RTTI discovery, retry, TAP/JSON/JUnit output, mock framework. }
 
 unit nextpas.core.test;
 
@@ -62,6 +65,11 @@ const
   amAuto = nextpas.core.test.config.amAuto;
   amOn = nextpas.core.test.config.amOn;
   amOff = nextpas.core.test.config.amOff;
+  mvUnset  = nextpas.core.test.mock.mvUnset;
+  mvString = nextpas.core.test.mock.mvString;
+  mvInt64  = nextpas.core.test.mock.mvInt64;
+  mvBool   = nextpas.core.test.mock.mvBool;
+  mvDouble = nextpas.core.test.mock.mvDouble;
 
 { ── Re-exported types from test.expect ────────────────────────────────────── }
 
@@ -155,6 +163,8 @@ function JUnitXML(const AResults: specialize TArray<TTestRunResult>;
 function WriteJUnitXML(const AResults: specialize TArray<TTestRunResult>;
   const AFileName: string; const ASuiteName: string = ''): Boolean;
 function DefaultConfig: TTestConfig;
+procedure ResetDefaultConfig;
+procedure SetDefaultErrSink(const ASink: IOutputSink);
 
 type
   TTestResults = nextpas.core.test.base.TTestResults;
@@ -180,6 +190,7 @@ function JSONReport(const AResults: specialize TArray<TTestRunResult>;
 { ── Re-exported types from test.mock ──────────────────────────────────────── }
 
 type
+  TMockValueKind = nextpas.core.test.mock.TMockValueKind;
   TMock = nextpas.core.test.mock.TMock;
   TMockState = nextpas.core.test.mock.TMockState;
   TMockValue = nextpas.core.test.mock.TMockValue;
@@ -396,6 +407,12 @@ begin Result := nextpas.core.test.output.WriteJUnitXML(AResults, AFileName, ASui
 
 function DefaultConfig: TTestConfig;
 begin Result := nextpas.core.test.config.DefaultConfig; end;
+
+procedure ResetDefaultConfig;
+begin nextpas.core.test.config.ResetDefaultConfig; end;
+
+procedure SetDefaultErrSink(const ASink: IOutputSink);
+begin nextpas.core.test.config.SetDefaultErrSink(ASink); end;
 
 { ── Forward to test.discovery ──────────────────────────────────────────────── }
 

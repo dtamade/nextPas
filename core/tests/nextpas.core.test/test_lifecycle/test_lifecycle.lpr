@@ -13,16 +13,11 @@ program test_lifecycle;
 uses
   cthreads,
   SysUtils,
-  nextpas.core.test.base,
-  nextpas.core.test.check,
-  nextpas.core.test.expect,
-  nextpas.core.test.output,
-  nextpas.core.test.runner,
+  nextpas.core.test,
   { 白盒测试：直接覆盖 runner.context 的结果收集边界。 }
   nextpas.core.test.runner.context;
 
 var
-  GTestsRun: Integer = 0;
   GSetupCalls: Integer = 0;
   GTeardownCalls: Integer = 0;
   GBeforeEachCalls: Integer = 0;
@@ -40,7 +35,6 @@ end;
 
 procedure TestTableBasicProc(const ACase: TTestCase);
 begin
-  Inc(GTestsRun);
   if ACase.Name = 'add' then
     CheckEqual(StrToInt(ACase.Data), 1 + 1)
   else if ACase.Name = 'mul' then
@@ -51,7 +45,6 @@ end;
 
 procedure TestTableStringProc(const ACase: TTestCase);
 begin
-  Inc(GTestsRun);
   if ACase.Name = 'upper' then
     CheckEqual(ACase.Data, 'HELLO')
   else if ACase.Name = 'lower' then
@@ -114,7 +107,6 @@ var
   LSuccess: Boolean;
   LC1, LC2: TTestClosure;
 begin
-  Inc(GTestsRun);
   Suite := TTestSuite.Create('closure-basic');
   LC1 := @ClosurePass;
   LC2 := @ClosureExpect;
@@ -135,7 +127,6 @@ var
   LSuccess: Boolean;
   LSetup, LTear, LC1, LC2: TTestClosure;
 begin
-  Inc(GTestsRun);
   GSetupCalls := 0;
   GTeardownCalls := 0;
   Suite := TTestSuite.Create('closure-lifecycle');
@@ -164,7 +155,6 @@ var
   LSuccess: Boolean;
   LBefore, LAfter, LC: TTestClosure;
 begin
-  Inc(GTestsRun);
   GBeforeEachCalls := 0;
   GAfterEachCalls := 0;
   Suite := TTestSuite.Create('closure-hooks');
@@ -193,7 +183,7 @@ end;
 
 procedure CtxFailProc;
 begin
-  InternalFail('deliberate failure from ITestContext');
+  Fail('deliberate failure from ITestContext');
 end;
 
 procedure CtxFailSubtest(constref Ctx: ITestContext);
@@ -206,7 +196,6 @@ var
   Suite: TTestSuite;
   LResult: TTestRunResult;
 begin
-  Inc(GTestsRun);
   Suite := TTestSuite.Create('ctx-fail');
   Suite.TestSubtest('fail-via-ctx', @CtxFailSubtest);
   Suite.RunWithResult(LResult);
@@ -231,7 +220,6 @@ var
   Suite: TTestSuite;
   LResult: TTestRunResult;
 begin
-  Inc(GTestsRun);
   Suite := TTestSuite.Create('ctx-skip');
   Suite.TestSubtest('skip-via-ctx', @CtxSkipSubtest);
   Suite.RunWithResult(LResult);
@@ -249,7 +237,6 @@ var
   Runner: TTestRunner;
   LAutoPassed: Boolean;
 begin
-  Inc(GTestsRun);
   Suite := TTestSuite.Create('auto-run');
   Suite.Test('ok', @SimpleTrue);
   Runner := TTestRunner.Create('auto-runner');
@@ -267,7 +254,6 @@ procedure TestSuiteCreateDefaults;
 var
   Suite: TTestSuite;
 begin
-  Inc(GTestsRun);
   Suite := TTestSuite.Create('defaults');
   CheckTrue(Suite.Name = 'defaults');
   CheckTrue(Length(Suite.Tests) = 0);
@@ -292,7 +278,6 @@ procedure TestRunnerCreateDefaults;
 var
   Runner: TTestRunner;
 begin
-  Inc(GTestsRun);
   Runner := TTestRunner.Create('my-runner');
   CheckTrue(Runner.Name = 'my-runner');
   CheckTrue(Length(Runner.Suites) = 0);
@@ -309,7 +294,6 @@ var
   Suite: TTestSuite;
   LResult: TTestRunResult;
 begin
-  Inc(GTestsRun);
   Suite := TTestSuite.Create('skip-suite');
   Suite.Skip('skipped_a', 'not implemented');
   Suite.Skip('skipped_b');
@@ -328,7 +312,6 @@ var
   LResult: TTestRunResult;
   LMathCases, LStrCases: specialize TArray<TTestCase>;
 begin
-  Inc(GTestsRun);
   Suite := TTestSuite.Create('table-serial');
   SetLength(LMathCases, 2);
   LMathCases[0] := MakeCase('add', '2');
@@ -353,7 +336,6 @@ var
   LSuccess: Boolean;
   LMathCases: specialize TArray<TTestCase>;
 begin
-  Inc(GTestsRun);
   Suite := TTestSuite.Create('table-parallel');
   SetLength(LMathCases, 2);
   LMathCases[0] := MakeCase('add', '2');
@@ -373,7 +355,6 @@ var
   LSuccess: Boolean;
   LC1, LC2, LC3: TTestClosure;
 begin
-  Inc(GTestsRun);
   Suite := TTestSuite.Create('closure-parallel');
   LC1 := @ClosurePass;
   LC2 := @ClosureCheckInt;
@@ -396,7 +377,6 @@ var
   LSuite: TTestSuite;
   LResult: TTestRunResult;
 begin
-  Inc(GTestsRun);
   GSetupFailTeardownCalled := 0;
   LSuite := TTestSuite.Create('setup-fail-teardown');
   LSuite.SetSetup(procedure begin raise EConvertError.Create('setup boom'); end);
@@ -422,7 +402,6 @@ var
   LResults: TTestResults;
   LExcept: ExceptClass;
 begin
-  Inc(GTestsRun);
   LStatus := tsPassed;
   CheckTrue(LStatus = tsPassed);
   LResult.Name := 'test';
@@ -454,7 +433,6 @@ var
   LAppender: TTestResultAppender;
   LCollectedResult: TTestResult;
 begin
-  Inc(GTestsRun);
   { 白盒测试：验证 runner.context 通过只读 Results property 暴露收集结果。 }
   LAppender := TTestResultAppender.Create;
   try
@@ -503,7 +481,7 @@ begin
   WriteLn;
   Runner.Summary;
 
-  CheckTrue(GTestsRun >= 15, 'Expected at least 15 tests, got ' + IntToStr(GTestsRun));
+  CheckTrue(LResults[0].Passed >= 15, 'Expected at least 15 tests, got ' + IntToStr(LResults[0].Passed));
   CheckTrue(LSuccess, 'All lifecycle tests should pass');
 
   if Runner.AllPassed then
