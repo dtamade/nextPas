@@ -83,17 +83,24 @@ procedure FlushToCentral(AIndex: Int32; ACount: Word;
   ABlocks: PPointer);
 var
   I: Word;
+  LOldHead: Pointer;
 begin
   if (AIndex < 0) or (AIndex >= MEM_SIZECLASS_COUNT) then
     Exit;
   if GGrowingAllocator = nil then
     Exit;
-  { Push each block to the lock-free inbox (no spinlock needed). }
-  for I := 0 to ACount - 1 do
-  begin
-    CentralPoolInboxPush(GGrowingAllocator.FCentrals[AIndex], ABlocks^);
-    Inc(ABlocks);
-  end;
+  if ACount = 0 then
+    Exit;
+  { Chain all blocks into a linked list, then CAS entire chain into inbox
+    (single atomic swap instead of N individual CAS pushes). }
+  for I := 0 to ACount - 2 do
+    PFreeNode(ABlocks[I])^.FNext := PFreeNode(ABlocks[I + 1]);
+  PFreeNode(ABlocks[ACount - 1])^.FNext := nil;
+  repeat
+    LOldHead := GGrowingAllocator.FCentrals[AIndex].FInboxHead;
+    PFreeNode(ABlocks[ACount - 1])^.FNext := PFreeNode(LOldHead);
+  until AtomicCmpExchange(GGrowingAllocator.FCentrals[AIndex].FInboxHead,
+    ABlocks[0], LOldHead) = LOldHead;
 end;
 
 { --- TGrowingAllocator --- }
