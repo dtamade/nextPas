@@ -155,6 +155,18 @@ begin
       Exit(Pointer(LNode));
     end;
   end
+  else if ASize <= 1024 then
+  begin
+    { Fast formula for band 1 (256-1024, 64B step): (size shr 6) + 14 }
+    LIndex := Int32(ASize shr 6) + 14;
+    LNode := GThreadCache.FHeads[LIndex];
+    if LNode <> nil then
+    begin
+      GThreadCache.FHeads[LIndex] := LNode^.FNext;
+      Dec(GThreadCache.FCounts[LIndex]);
+      Exit(Pointer(LNode));
+    end;
+  end
   else
   begin
     LIndex := SizeClassIndex(ASize);
@@ -201,6 +213,19 @@ begin
     if GThreadCache.FCounts[LIndex] < CACHE_ADAPTIVE_MAX_SMALL then
     begin
       { Direct push to head: shuffle not needed for ≤2 element lists. }
+      LNode := PFreeNode(APtr);
+      LNode^.FNext := GThreadCache.FHeads[LIndex];
+      GThreadCache.FHeads[LIndex] := LNode;
+      Inc(GThreadCache.FCounts[LIndex]);
+      Exit;
+    end;
+  end
+  else if ASize <= 1024 then
+  begin
+    { Fast formula for band 1 (256-1024, 64B step): (size shr 6) + 14 }
+    LIndex := Int32(ASize shr 6) + 14;
+    if GThreadCache.FCounts[LIndex] < CACHE_ADAPTIVE_MAX_SMALL then
+    begin
       LNode := PFreeNode(APtr);
       LNode^.FNext := GThreadCache.FHeads[LIndex];
       GThreadCache.FHeads[LIndex] := LNode;

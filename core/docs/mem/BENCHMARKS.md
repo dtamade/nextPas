@@ -12,20 +12,20 @@
 
 | 模式 | ns/op | ops/s | 备注 |
 |------|-------|-------|------|
-| small_64B | 23 | 43.3M | **2.3x 快于 glibc** |
-| medium_1KB | 78 | 12.7M | **1.1x 快于 glibc** |
-| large_16KB | 28 | 37.1M | 直接 push 快速路径 |
-| huge_128KB | 120 | 8.3M | 超大对象路径 |
-| mixed_8sizes | 386 | 2.6M | 8 种 size 混合 |
-| batch_64x128B | 1236 | 0.81M | 64 次分配批量 |
-| system/small_64B | 55 | 18.2M | glibc 对照 |
-| system/medium_1KB | 89 | 11.2M | glibc 对照 |
+| small_64B | 24 | 40.8M | **2.3x 快于 glibc** |
+| medium_1KB | 25 | 40.3M | **3.7x 快于 glibc** |
+| large_16KB | 31 | 32.0M | 直接 push 快速路径 |
+| huge_128KB | 115 | 8.7M | 超大对象路径 |
+| mixed_8sizes | 346 | 2.9M | 8 种 size 混合 |
+| batch_64x128B | 1500 | 0.67M | 64 次分配批量 |
+| system/small_64B | 55 | 18.1M | glibc 对照 |
+| system/medium_1KB | 91 | 11.0M | glibc 对照 |
 
 **分析**:
-- **64B 分配 2.3x 快于 glibc** (23 vs 55 ns/op): ≤256B 快速路径跳过 SizeClassIndex 查表 + FreeMem 直接 push head
-- **16KB 分配 28ns**: 中等对象 FreeMem 直接 push 快速路径跳过 FreeListInsertShuffled
+- **64B 分配 2.3x 快于 glibc** (24 vs 55 ns/op): ≤256B 快速路径跳过 SizeClassIndex 查表 + FreeMem 直接 push head
+- **1KB 分配 3.7x 快于 glibc** (25 vs 91 ns/op): `(ASize shr 6) + 14` 直接公式替代查表，与 64B 路径同等速度
+- **16KB 分配 31ns**: 中等对象 FreeMem 直接 push 快速路径跳过 FreeListInsertShuffled
 - **FlushToCentral 批量 CAS**: N 次独立 CAS push 合并为单次原子链表交换
-- **SizeClassIndex inline**: 查找表内联消除跨单元函数调用开销
 - 零锁争用：TLS cache 吸收 99%+ 流量
 - FPC `threadvar` 的 `__tls_get_addr` 开销 (~5ns) 通过快速路径掩盖
 
