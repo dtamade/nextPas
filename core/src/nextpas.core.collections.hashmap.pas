@@ -139,6 +139,7 @@ type
       TBucket = record
         State: Byte; // 0=Empty,1=Occupied,2=Tombstone
         Hash: UInt32;
+        NextOccupied: SizeUInt; // linked list for O(1) iteration
         Key: K;
         Value: V;
       end;
@@ -150,6 +151,7 @@ type
     FCount: SizeUInt;    // occupied count
     FUsed: SizeUInt;     // occupied + tombstone
     FMaxLoad: SizeUInt;  // threshold for rehash by used
+    FHeadOccupied: SizeUInt; // head of occupied chain (FCapacity = empty)
     FHash: THash;
     FEquals: TEquals;
   private
@@ -370,6 +372,7 @@ begin
   FCapacity := aCapacity;
   FMask := aCapacity - 1;
   FCount := 0; FUsed := 0;
+  FHeadOccupied := aCapacity; { sentinel: empty list }
   RecalcMaxLoad;
 end;
 
@@ -388,6 +391,9 @@ begin
         idx := (idx + 1) and FMask;
       (FBuckets + idx)^.State := Ord(bsOccupied);
       (FBuckets + idx)^.Hash := (oldBuckets + i)^.Hash;
+      { link into occupied chain }
+      (FBuckets + idx)^.NextOccupied := FHeadOccupied;
+      FHeadOccupied := idx;
       Move((oldBuckets + i)^.Key, (FBuckets + idx)^.Key, SizeOf(K));
       Move((oldBuckets + i)^.Value, (FBuckets + idx)^.Value, SizeOf(V));
       FillChar((oldBuckets + i)^.Key, SizeOf(K), 0);
@@ -467,6 +473,7 @@ begin
   end;
   FCount := 0;
   FUsed := 0;
+  FHeadOccupied := FCapacity; { sentinel: empty list }
 end;
 
 function THashMap.GetCount: SizeUInt;
@@ -538,26 +545,21 @@ begin
   if aIter^.Started then
   begin
     {$PUSH}{$WARN 4055 OFF}
-    idx := SizeUInt(aIter^.Data) + 1;
+    idx := (FBuckets + SizeUInt(aIter^.Data))^.NextOccupied;
     {$POP}
   end
   else
   begin
     aIter^.Started := True;
-    idx := 0;
+    idx := FHeadOccupied;
   end;
 
-  // 找到下一个 bsOccupied 桶
-  while idx < FCapacity do
+  if idx < FCapacity then
   begin
-    if (FBuckets + idx)^.State = Ord(bsOccupied) then
-    begin
-      {$PUSH}{$WARN 4055 OFF}
-      aIter^.Data := Pointer(idx);
-      {$POP}
-      Exit(True);
-    end;
-    Inc(idx);
+    {$PUSH}{$WARN 4055 OFF}
+    aIter^.Data := Pointer(idx);
+    {$POP}
+    Exit(True);
   end;
 
   Result := False;
@@ -739,6 +741,8 @@ begin
   end;
   (FBuckets + insertIdx)^.State := Ord(bsOccupied);
   (FBuckets + insertIdx)^.Hash := h;
+  (FBuckets + insertIdx)^.NextOccupied := FHeadOccupied;
+  FHeadOccupied := insertIdx;
   (FBuckets + insertIdx)^.Key := AKey;
   (FBuckets + insertIdx)^.Value := AValue;
   Inc(FCount);
@@ -805,6 +809,8 @@ begin
   end;
   (FBuckets + insertIdx)^.State := Ord(bsOccupied);
   (FBuckets + insertIdx)^.Hash := h;
+  (FBuckets + insertIdx)^.NextOccupied := FHeadOccupied;
+  FHeadOccupied := insertIdx;
   (FBuckets + insertIdx)^.Key := AKey;
   (FBuckets + insertIdx)^.Value := AValue;
   Inc(FCount);
@@ -814,11 +820,28 @@ begin
 end;
 
 function THashMap.Remove(const AKey: K): Boolean;
-var idx: SizeUInt; h: UInt32;
+var idx, prev, cur: SizeUInt; h: UInt32;
 begin
   if FCapacity = 0 then Exit(False);
   h := KeyHash(AKey);
   if not FindIndex(AKey, h, idx) then Exit(False);
+  { unlink from occupied chain }
+  if FHeadOccupied = idx then
+    FHeadOccupied := (FBuckets + idx)^.NextOccupied
+  else
+  begin
+    prev := FHeadOccupied;
+    while prev < FCapacity do
+    begin
+      cur := (FBuckets + prev)^.NextOccupied;
+      if cur = idx then
+      begin
+        (FBuckets + prev)^.NextOccupied := (FBuckets + idx)^.NextOccupied;
+        Break;
+      end;
+      prev := cur;
+    end;
+  end;
   // CRITICAL FIX: Finalize then re-initialize to ensure clean state
   // Prevents dangling references and undefined behavior
   Finalize((FBuckets + idx)^.Key);

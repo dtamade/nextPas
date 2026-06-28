@@ -1649,6 +1649,10 @@ begin
       LOutSink.WriteLn(AnsiBold(
         '--- Iteration ' + IntToStr(LIter) + '/' + IntToStr(LRepeatAll) +
         ' ---', LConfig));
+      { Reset counters each iteration — only the last iteration's totals are kept }
+      TotalPass := 0;
+      TotalFail := 0;
+      TotalSkip := 0;
     end;
     LStartMs := GetTickCount64;
     for I := 0 to High(Suites) do
@@ -1734,6 +1738,10 @@ begin
       LOutSink.WriteLn(AnsiBold(
         '--- Iteration ' + IntToStr(LIter) + '/' + IntToStr(LRepeatAll) +
         ' ---', LConfig));
+      { Reset counters each iteration — only the last iteration's totals are kept }
+      TotalPass := 0;
+      TotalFail := 0;
+      TotalSkip := 0;
     end;
     LStartMs := GetTickCount64;
     for I := 0 to High(Suites) do
