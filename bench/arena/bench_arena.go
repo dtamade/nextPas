@@ -286,6 +286,19 @@ func BenchmarkRegex_Match(b *testing.B) {
 }
 
 func BenchmarkRegex_FindAll(b *testing.B) {
+	re := regexp.MustCompile(`\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} \[\w+\] .+`)
+	lines := generateRegexLogLines()
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		total := 0
+		for _, line := range lines {
+			matches := re.FindAllString(line, -1)
+			total += len(matches)
+		}
+	}
+}
+
+func BenchmarkRegex_FindAllCapture(b *testing.B) {
 	re := regexp.MustCompile(`(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}\.\d{3}) \[(\w+)\] (.+)`)
 	lines := generateRegexLogLines()
 	b.ResetTimer()

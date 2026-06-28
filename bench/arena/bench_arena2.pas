@@ -237,6 +237,7 @@ var
   GRegexLogLines: array of AnsiString;
   GRegexPattern: AnsiString;
   GRegexSimplePattern: AnsiString;
+  GRegexFindAllPattern: AnsiString;
 
 procedure InitRegexData;
 var
@@ -244,6 +245,7 @@ var
 begin
   GRegexPattern := '(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}\.\d{3}) \[(\w+)\] (.+)';
   GRegexSimplePattern := '\d+';
+  GRegexFindAllPattern := '\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} \[\w+\] .+';
   SetLength(GRegexLogLines, REGEX_N);
   for I := 0 to REGEX_N - 1 do
     GRegexLogLines[I] := '2026-06-29 14:3' + AnsiString(IntToStr(I mod 10)) +
@@ -280,6 +282,22 @@ begin
 end;
 
 procedure BenchRegex_FindAll(const ACtx: IBenchContext);
+var
+  LRe: TRegex;
+  I, LTotal: SizeInt;
+  LMatches: TMatchArray;
+begin
+  LRe := TRegex.Compile(GRegexFindAllPattern);
+  LTotal := 0;
+  for I := 0 to REGEX_N - 1 do
+  begin
+    LMatches := LRe.FindAll(GRegexLogLines[I]);
+    Inc(LTotal, Length(LMatches));
+  end;
+  ACtx.SetBytes(REGEX_N * 80);
+end;
+
+procedure BenchRegex_FindAllCapture(const ACtx: IBenchContext);
 var
   LRe: TRegex;
   I, LTotal: SizeInt;
@@ -343,6 +361,7 @@ begin
   LSuite.Add('Regex/Match', @BenchRegex_Match);
   LSuite.Add('Regex/SimpleMatch', @BenchRegex_SimpleMatch);
   LSuite.Add('Regex/FindAll', @BenchRegex_FindAll);
+  LSuite.Add('Regex/FindAllCapture', @BenchRegex_FindAllCapture);
 
   LResults := LSuite.Run;
 
