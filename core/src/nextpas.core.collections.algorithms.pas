@@ -715,7 +715,7 @@ end;
 
 procedure _IntroSortInt32(var aArr: array of Int32; aLo, aHi: SizeInt; aDepthLimit: SizeInt);
 var
-  I, J, Mid, PivotIdx: SizeInt;
+  I, J, Mid, PivotIdx, N: SizeInt;
   Pivot, Tmp: Int32;
 begin
   while aHi - aLo > 16 do
@@ -727,19 +727,80 @@ begin
     end;
     Dec(aDepthLimit);
 
-    { Median-of-three pivot — direct comparison, no function pointer }
+    { Pivot: Tukey's ninther for large, median-of-three otherwise }
     Mid := aLo + (aHi - aLo) div 2;
-    if aArr[aLo] < aArr[Mid] then
+    if aHi - aLo > 128 then
     begin
-      if aArr[Mid] < aArr[aHi] then PivotIdx := Mid
-      else if aArr[aLo] < aArr[aHi] then PivotIdx := aHi
-      else PivotIdx := aLo;
+      N := (aHi - aLo) div 8;
+      PivotIdx := aLo + N;
+      if aArr[aLo] < aArr[aLo + N] then
+      begin
+        if aArr[aLo + N] < aArr[aLo + 2*N] then PivotIdx := aLo + N
+        else if aArr[aLo] < aArr[aLo + 2*N] then PivotIdx := aLo + 2*N
+        else PivotIdx := aLo;
+      end
+      else
+      begin
+        if aArr[aLo] < aArr[aLo + 2*N] then PivotIdx := aLo
+        else if aArr[aLo + N] < aArr[aLo + 2*N] then PivotIdx := aLo + 2*N;
+      end;
+      I := PivotIdx; { save first median }
+
+      PivotIdx := Mid - N;
+      if aArr[Mid - N] < aArr[Mid] then
+      begin
+        if aArr[Mid] < aArr[Mid + N] then PivotIdx := Mid
+        else if aArr[Mid - N] < aArr[Mid + N] then PivotIdx := Mid + N
+        else PivotIdx := Mid - N;
+      end
+      else
+      begin
+        if aArr[Mid - N] < aArr[Mid + N] then PivotIdx := Mid - N
+        else if aArr[Mid] < aArr[Mid + N] then PivotIdx := Mid + N;
+      end;
+      J := PivotIdx; { save second median }
+
+      PivotIdx := aHi - 2*N;
+      if aArr[aHi - 2*N] < aArr[aHi - N] then
+      begin
+        if aArr[aHi - N] < aArr[aHi] then PivotIdx := aHi - N
+        else if aArr[aHi - 2*N] < aArr[aHi] then PivotIdx := aHi
+        else PivotIdx := aHi - 2*N;
+      end
+      else
+      begin
+        if aArr[aHi - 2*N] < aArr[aHi] then PivotIdx := aHi - 2*N
+        else if aArr[aHi - N] < aArr[aHi] then PivotIdx := aHi;
+      end;
+      { median of three medians }
+      if aArr[I] < aArr[J] then
+      begin
+        if aArr[J] < aArr[PivotIdx] then PivotIdx := J
+        else if aArr[I] < aArr[PivotIdx] then { keep PivotIdx }
+        else PivotIdx := I;
+      end
+      else
+      begin
+        if aArr[I] < aArr[PivotIdx] then PivotIdx := I
+        else if aArr[J] < aArr[PivotIdx] then { keep PivotIdx }
+        else PivotIdx := J;
+      end;
     end
     else
     begin
-      if aArr[aLo] < aArr[aHi] then PivotIdx := aLo
-      else if aArr[Mid] < aArr[aHi] then PivotIdx := aHi
-      else PivotIdx := Mid;
+      { Median-of-three }
+      if aArr[aLo] < aArr[Mid] then
+      begin
+        if aArr[Mid] < aArr[aHi] then PivotIdx := Mid
+        else if aArr[aLo] < aArr[aHi] then PivotIdx := aHi
+        else PivotIdx := aLo;
+      end
+      else
+      begin
+        if aArr[aLo] < aArr[aHi] then PivotIdx := aLo
+        else if aArr[Mid] < aArr[aHi] then PivotIdx := aHi
+        else PivotIdx := Mid;
+      end;
     end;
     Pivot := aArr[PivotIdx];
 
