@@ -45,6 +45,11 @@ type
   ETestSkipped = nextpas.core.test.base.ETestSkipped;
   TTestEntryKind = nextpas.core.test.base.TTestEntryKind;
   TTestEntry = nextpas.core.test.base.TTestEntry;
+  TBenchProc = nextpas.core.test.base.TBenchProc;
+  TBenchContext = nextpas.core.test.base.TBenchContext;
+  PBenchContext = nextpas.core.test.base.PBenchContext;
+  TBenchResult = nextpas.core.test.base.TBenchResult;
+  TBenchResults = nextpas.core.test.base.TBenchResults;
   TAnsiMode = nextpas.core.test.config.TAnsiMode;
   TConfigKey = nextpas.core.test.config.TConfigKey;
   TConfigKeys = nextpas.core.test.config.TConfigKeys;
@@ -65,6 +70,7 @@ const
   ekSkipped = nextpas.core.test.base.ekSkipped;
   ekTableTest = nextpas.core.test.base.ekTableTest;
   ekShouldFail = nextpas.core.test.base.ekShouldFail;
+  ekBench    = nextpas.core.test.base.ekBench;
   amAuto = nextpas.core.test.config.amAuto;
   amOn = nextpas.core.test.config.amOn;
   amOff = nextpas.core.test.config.amOff;
@@ -183,6 +189,9 @@ procedure SetDefaultMaxFailures(AMaxFailures: Integer);
 procedure SetDefaultJsonOutput(AJsonOutput: Boolean);
 procedure SetDefaultVerboseMode(AVerbose: Boolean);
 procedure SetDefaultRunTimeoutSec(ATimeoutSec: Integer);
+procedure SetDefaultBenchEnabled(AEnabled: Boolean);
+procedure SetDefaultBenchTimeMs(ATimeMs: Integer);
+procedure SetDefaultBenchMem(ABenchMem: Boolean);
 function  GetRepeatAllCount(const AConfig: TTestConfig): Integer;
 function  GetSlowTestCount(const AConfig: TTestConfig): Integer;
 function  GetShuffleSeed(const AConfig: TTestConfig): Integer;
@@ -194,6 +203,9 @@ function  GetMaxFailures(const AConfig: TTestConfig): Integer;
 function  GetJsonOutput(const AConfig: TTestConfig): Boolean;
 function  GetVerboseMode(const AConfig: TTestConfig): Boolean;
 function  GetRunTimeoutSec(const AConfig: TTestConfig): Integer;
+function  GetBenchEnabled(const AConfig: TTestConfig): Boolean;
+function  GetBenchTimeMs(const AConfig: TTestConfig): Integer;
+function  GetBenchMem(const AConfig: TTestConfig): Boolean;
 function  FormatDuration(AMillis: Int64): string;
 function  GetTopSlowest(const AResults: TTestResults;
   ACount: Integer): TTestResults;
@@ -512,6 +524,15 @@ begin nextpas.core.test.config.SetDefaultVerboseMode(AVerbose); end;
 procedure SetDefaultRunTimeoutSec(ATimeoutSec: Integer);
 begin nextpas.core.test.config.SetDefaultRunTimeoutSec(ATimeoutSec); end;
 
+procedure SetDefaultBenchEnabled(AEnabled: Boolean);
+begin nextpas.core.test.config.SetDefaultBenchEnabled(AEnabled); end;
+
+procedure SetDefaultBenchTimeMs(ATimeMs: Integer);
+begin nextpas.core.test.config.SetDefaultBenchTimeMs(ATimeMs); end;
+
+procedure SetDefaultBenchMem(ABenchMem: Boolean);
+begin nextpas.core.test.config.SetDefaultBenchMem(ABenchMem); end;
+
 function GetShortMode(const AConfig: TTestConfig): Boolean;
 begin Result := nextpas.core.test.config.GetShortMode(AConfig); end;
 
@@ -529,6 +550,15 @@ begin Result := nextpas.core.test.config.GetVerboseMode(AConfig); end;
 
 function GetRunTimeoutSec(const AConfig: TTestConfig): Integer;
 begin Result := nextpas.core.test.config.GetRunTimeoutSec(AConfig); end;
+
+function GetBenchEnabled(const AConfig: TTestConfig): Boolean;
+begin Result := nextpas.core.test.config.GetBenchEnabled(AConfig); end;
+
+function GetBenchTimeMs(const AConfig: TTestConfig): Integer;
+begin Result := nextpas.core.test.config.GetBenchTimeMs(AConfig); end;
+
+function GetBenchMem(const AConfig: TTestConfig): Boolean;
+begin Result := nextpas.core.test.config.GetBenchMem(AConfig); end;
 
 function FormatDuration(AMillis: Int64): string;
 begin Result := nextpas.core.test.output.FormatDuration(AMillis); end;

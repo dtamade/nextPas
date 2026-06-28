@@ -17,7 +17,8 @@ type
   TConfigKey = (ckFilter, ckTag, ckTimeout, ckAnsi,
     ckOutSink, ckErrSink, ckRetry, ckWorkers, ckCount, ckSlow,
     ckShuffle, ckFailFast, ckList, ckShort, ckProgress, ckMaxFail,
-    ckJsonOutput, ckVerbose, ckRunTimeout);
+    ckJsonOutput, ckVerbose, ckRunTimeout,
+    ckBench, ckBenchTime, ckBenchMem);
   TConfigKeys = set of TConfigKey;
 
   IOutputSink = interface
@@ -80,6 +81,9 @@ type
     JsonOutput    : Boolean; { true = emit JSON report to stdout after run }
     VerboseMode   : Boolean; { true = show per-test [PASS]/[FAIL]/[SKIP] with duration }
     RunTimeoutSec : Integer; { 0=unlimited, >0 = global suite runner timeout in seconds }
+    BenchEnabled  : Boolean; { true = run benchmarks (Go -bench=. equivalent) }
+    BenchTimeMs   : Integer; { benchmark target duration in ms (default 1000 = 1s) }
+    BenchMem      : Boolean; { true = report memory allocations per op }
   end;
 
 function DefaultConfig: TTestConfig;
@@ -106,6 +110,9 @@ procedure SetDefaultMaxFailures(AMaxFailures: Integer);
 procedure SetDefaultJsonOutput(AJsonOutput: Boolean);
 procedure SetDefaultVerboseMode(AVerbose: Boolean);
 procedure SetDefaultRunTimeoutSec(ATimeoutSec: Integer);
+procedure SetDefaultBenchEnabled(AEnabled: Boolean);
+procedure SetDefaultBenchTimeMs(ATimeMs: Integer);
+procedure SetDefaultBenchMem(ABenchMem: Boolean);
 function  GetRepeatAllCount(const AConfig: TTestConfig): Integer;
 function  GetSlowTestCount(const AConfig: TTestConfig): Integer;
 function  GetShuffleSeed(const AConfig: TTestConfig): Integer;
@@ -117,6 +124,9 @@ function  GetMaxFailures(const AConfig: TTestConfig): Integer;
 function  GetJsonOutput(const AConfig: TTestConfig): Boolean;
 function  GetVerboseMode(const AConfig: TTestConfig): Boolean;
 function  GetRunTimeoutSec(const AConfig: TTestConfig): Integer;
+function  GetBenchEnabled(const AConfig: TTestConfig): Boolean;
+function  GetBenchTimeMs(const AConfig: TTestConfig): Integer;
+function  GetBenchMem(const AConfig: TTestConfig): Boolean;
 
 implementation
 
@@ -145,6 +155,9 @@ begin
   Result.JsonOutput    := False;
   Result.VerboseMode   := False;
   Result.RunTimeoutSec := 0; { unlimited by default }
+  Result.BenchEnabled  := False;
+  Result.BenchTimeMs   := 1000; { default 1 second per benchmark }
+  Result.BenchMem      := False;
 end;
 
 function DefaultConfig: TTestConfig;
@@ -319,6 +332,24 @@ begin
   Include(GExplicit, ckRunTimeout);
 end;
 
+procedure SetDefaultBenchEnabled(AEnabled: Boolean);
+begin
+  GDefaultConfig.BenchEnabled := AEnabled;
+  Include(GExplicit, ckBench);
+end;
+
+procedure SetDefaultBenchTimeMs(ATimeMs: Integer);
+begin
+  GDefaultConfig.BenchTimeMs := ATimeMs;
+  Include(GExplicit, ckBenchTime);
+end;
+
+procedure SetDefaultBenchMem(ABenchMem: Boolean);
+begin
+  GDefaultConfig.BenchMem := ABenchMem;
+  Include(GExplicit, ckBenchMem);
+end;
+
 function GetRepeatAllCount(const AConfig: TTestConfig): Integer;
 begin
   Result := ResolveConfig(AConfig).RepeatAllCount;
@@ -372,6 +403,21 @@ end;
 function GetRunTimeoutSec(const AConfig: TTestConfig): Integer;
 begin
   Result := ResolveConfig(AConfig).RunTimeoutSec;
+end;
+
+function GetBenchEnabled(const AConfig: TTestConfig): Boolean;
+begin
+  Result := ResolveConfig(AConfig).BenchEnabled;
+end;
+
+function GetBenchTimeMs(const AConfig: TTestConfig): Integer;
+begin
+  Result := ResolveConfig(AConfig).BenchTimeMs;
+end;
+
+function GetBenchMem(const AConfig: TTestConfig): Boolean;
+begin
+  Result := ResolveConfig(AConfig).BenchMem;
 end;
 
 procedure TStdoutSink.Write(const AText: string);
