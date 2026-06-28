@@ -14,6 +14,10 @@ uses
 type
   TAnsiMode = (amAuto, amOn, amOff);
 
+  TConfigKey = (ckFilter, ckTag, ckTimeout, ckAnsi,
+    ckOutSink, ckErrSink, ckRetry, ckWorkers);
+  TConfigKeys = set of TConfigKey;
+
   IOutputSink = interface
     ['{92B1BE7D-E6E5-49B1-8533-1D934BF43D07}']
     procedure Write(const AText: string);
@@ -83,6 +87,7 @@ implementation
 
 var
   GDefaultConfig: TTestConfig;
+  GExplicit: TConfigKeys;
 
 function CreateDefaultConfig: TTestConfig;
 begin
@@ -138,26 +143,31 @@ end;
 procedure ResetDefaultConfig;
 begin
   GDefaultConfig := CreateDefaultConfig;
+  GExplicit := [];
 end;
 
 procedure SetDefaultFilterPattern(const APattern: string);
 begin
   GDefaultConfig.FilterPattern := APattern;
+  Include(GExplicit, ckFilter);
 end;
 
 procedure SetDefaultTagFilter(const APattern: string);
 begin
   GDefaultConfig.TagFilter := APattern;
+  Include(GExplicit, ckTag);
 end;
 
 procedure SetDefaultTimeoutMs(const ATimeoutMs: UInt64);
 begin
   GDefaultConfig.TimeoutMs := ATimeoutMs;
+  Include(GExplicit, ckTimeout);
 end;
 
 procedure SetDefaultAnsiMode(AAnsiMode: TAnsiMode);
 begin
   GDefaultConfig.AnsiMode := AAnsiMode;
+  Include(GExplicit, ckAnsi);
 end;
 
 procedure SetDefaultOutSink(const ASink: IOutputSink);
@@ -166,6 +176,7 @@ begin
     GDefaultConfig.OutSink := TStdoutSink.Create
   else
     GDefaultConfig.OutSink := ASink;
+  Include(GExplicit, ckOutSink);
 end;
 
 procedure SetDefaultErrSink(const ASink: IOutputSink);
@@ -174,16 +185,19 @@ begin
     GDefaultConfig.ErrSink := TStderrSink.Create
   else
     GDefaultConfig.ErrSink := ASink;
+  Include(GExplicit, ckErrSink);
 end;
 
 procedure SetDefaultRetryCount(ARetryCount: Integer);
 begin
   GDefaultConfig.RetryCount := ARetryCount;
+  Include(GExplicit, ckRetry);
 end;
 
 procedure SetDefaultMaxParallelWorkers(AMaxWorkers: Integer);
 begin
   GDefaultConfig.MaxParallelWorkers := AMaxWorkers;
+  Include(GExplicit, ckWorkers);
 end;
 
 procedure TStdoutSink.Write(const AText: string);

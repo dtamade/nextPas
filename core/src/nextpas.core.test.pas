@@ -46,6 +46,8 @@ type
   TTestEntryKind = nextpas.core.test.base.TTestEntryKind;
   TTestEntry = nextpas.core.test.base.TTestEntry;
   TAnsiMode = nextpas.core.test.config.TAnsiMode;
+  TConfigKey = nextpas.core.test.config.TConfigKey;
+  TConfigKeys = nextpas.core.test.config.TConfigKeys;
   IOutputSink = nextpas.core.test.config.IOutputSink;
   TStringLines = nextpas.core.test.config.TStringLines;
   TStdoutSink = nextpas.core.test.config.TStdoutSink;
