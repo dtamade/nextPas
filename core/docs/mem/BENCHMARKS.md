@@ -8,50 +8,50 @@
 - **编译选项**: -O2 (优化编译)
 - **测试时间**: 2026-06-29
 
-## GrowingAllocator 基准 (2026-06-29)
+## GrowingAllocator 基准 (2026-06-29, inline 优化后)
 
 ### 单线程
 
 | 模式 | ns/op | Mops/s | 备注 |
 |------|-------|--------|------|
-| small_64B | 27 | 37.2 | **1.9x 快于 glibc** |
-| medium_1KB | 28 | 36.2 | **3.2x 快于 glibc** |
-| large_16KB | 41 | 24.2 | 直接 push 快速路径 |
-| huge_128KB | 114 | 8.8 | **huge 快速路径**跳过查表 |
-| mixed_8sizes | 356 | 2.8 | 8 种 size 混合 (16B-128KB) |
-| mixed_small | 213 | 4.7 | 6 种小 size 混合 (16B-4KB) |
-| batch_64x128B | 1578 | 0.63 | 64 次循环分配 |
-| **batch_api_64x128B** | **467** | **2.14** | **BatchGetMem API, 7.3ns/块** |
-| realloc_same_class | 54 | 18.5 | **同 class 零拷贝** |
-| realloc_diff_class | 118 | 8.4 | 不同 class alloc+copy+free |
-| arena/bump_64B | 7 | 136.5 | **Arena bump pointer** |
-| system/small_64B | 52 | 19.4 | glibc 对照 |
-| system/medium_1KB | 91 | 11.0 | glibc 对照 |
+| small_64B | **16** | **63.1** | **3.5x 快于 glibc** |
+| medium_1KB | **21** | **48.0** | **4.5x 快于 glibc** |
+| large_16KB | **31** | **32.1** | 直接 push 快速路径 |
+| huge_128KB | **94** | **10.6** | huge 快速路径 |
+| mixed_8sizes | **271** | **3.7** | 8 种 size 混合 |
+| mixed_small | **145** | **6.9** | 6 种小 size 混合 |
+| batch_64x128B | **810** | **1.2** | 64 次循环分配 |
+| **batch_api_64x128B** | **479** | **2.1** | **BatchGetMem API, 7.5ns/块** |
+| realloc_same_class | **40** | **24.7** | **同 class 零拷贝** |
+| realloc_diff_class | **103** | **9.7** | 不同 class alloc+copy+free |
+| arena/bump_64B | 7 | 135.0 | Arena bump pointer |
+| system/small_64B | 56 | 17.8 | glibc 对照 |
+| system/medium_1KB | 105 | 9.6 | glibc 对照 |
 
 ### 并发 (4 线程, 每 alloc+free)
 
 | 模式 | ns/op | Mops/s | total_ops | 备注 |
 |------|-------|--------|-----------|------|
-| concurrent/4T_64B | **6** | **169** | 2,560,000 | TLS 零争用线性扩展 |
-| concurrent/4T_1KB | **6** | **169** | 2,560,000 | TLS 零争用线性扩展 |
-| concurrent/4T_mixed | **11** | **95** | 2,560,000 | 6 种 size 混合, 4 线程 |
+| concurrent/4T_64B | **4** | **227** | 2,560,000 | TLS 零争用, inline 热路径 |
+| concurrent/4T_1KB | **4** | **267** | 2,560,000 | TLS 零争用, inline 热路径 |
+| concurrent/4T_mixed | **9** | **111** | 2,560,000 | 6 种 size, 4 线程 |
 
 **并发分析**:
-- **4 线程 64B 吞吐量 169 Mops/s** — TLS cache 完全消除争用，吞吐量随线程数线性增长
-- **4 线程混合 95 Mops/s** — 6 种 size class 跨 4 线程，11ns/op
-- 每线程独立 thread cache (threadvar)，central pool 仅在 cache miss 时偶尔访问
-- **6ns per alloc+free**（4 线程平均）— 比单线程 27ns 快 4.5x，接近线性扩展
+- **4 线程 64B 吞吐量 227 Mops/s** — TLS cache + inline 热路径，吞吐量接近线性扩展
+- **4 线程 1KB 吞吐量 267 Mops/s** — 1KB fast path 更短 (单一 formula)，inline 收益更大
+- **4 线程混合 111 Mops/s** — 6 种 size class 跨 4 线程，9ns/op
+- **4ns per alloc+free**（4 线程平均）— 比单线程 16ns 快 4x
 
 **分析**:
-- **64B 分配 1.9x 快于 glibc** (27 vs 52 ns/op): ≤256B 快速路径跳过 SizeClassIndex 查表 + FreeMem 直接 push head
-- **1KB 分配 3.2x 快于 glibc** (28 vs 91 ns/op): `(ASize shr 6) + 14` 直接公式替代查表，与 64B 路径同等速度
-- **128KB 分配 114ns**: huge 快速路径跳过 SizeClassIndex 查表，直接 System.GetMem
-- **混合小 size 213ns (18ns/op)**: 6 种 16B-4KB 混合，无 huge 分配开销
-- **批量 API 467ns (7.3ns/块)**: BatchGetMem/BatchFreeMem 摊薄 TLS + 查表开销，3.4x 快于循环调用
-- **ReallocMem 同 class 54ns**: 零拷贝 (size class 相同直接返回原指针)
+- **inline 关键优化**: FPC 不默认内联类方法，显式 `inline` 指令消除 ~5ns 函数调用开销 (push/pop/ret + 栈帧)
+- **64B 分配 3.5x 快于 glibc** (16 vs 56 ns/op): 内联后热路径 = TLS + fast sizeclass + push head
+- **1KB 分配 4.5x 快于 glibc** (21 vs 105 ns/op): `(ASize shr 6) + 14` 直接公式替代查表
+- **128KB 分配 94ns**: huge 路径 inline 后跳过 sizeclass 开销
+- **混合小 size 145ns (12ns/op)**: 6 种 16B-4KB 混合，每 op 接近单 size class 性能
+- **批量 API 479ns (7.5ns/块)**: BatchGetMem/BatchFreeMem 仍是最快批量路径
+- **ReallocMem 同 class 40ns**: inline 后零拷贝更快
 - **Arena bump 7ns**: 最快路径，适合生命周期统一的临时分配
 - **FlushToCentral 批量 CAS**: N 次独立 CAS push 合并为单次原子链表交换
-- **FOpCounter 移入 TLS**: `TThreadCache.FOpCount` 消除多线程共享写争用
 - 零锁争用：TLS cache 吸收 99%+ 流量
 - FPC `threadvar` 的 `__tls_get_addr` 开销 (~5ns) 通过快速路径掩盖
 
