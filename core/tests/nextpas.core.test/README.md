@@ -65,3 +65,4 @@ core/src/nextpas.core.testing.pas           ← v1 兼容层（deprecated）
 - **v3.5**: CheckNotContains、FailUnexpected、CheckContains 统一替换、ResolveOutSink 缓存
 - **v3.6**: 编译器指令标准化 (`{$J-}`)、WriteLn header 统一、test_advanced 输出规范化
 - **v3.7**: Facade 补全 (`ResetDefaultConfig`/`SetDefaultErrSink`/`TMockValueKind`)、测试文件 import 简化、移除脆弱手动计数器
+- **v3.8**: 死代码导入清理 (`test_output`/`test_advanced` → facade-only)、头注释统一化

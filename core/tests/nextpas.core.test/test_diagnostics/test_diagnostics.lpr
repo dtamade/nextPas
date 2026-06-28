@@ -1,4 +1,4 @@
-{ test_diagnostics — Validates Phase 1 polish features
+{ test_diagnostics — Error diagnostics and stack trace coverage
   =========================================================
   Covers: stack trace capture (file:line), CheckEqual(Double),
           CheckNotEqual(Double), Error/Failure distinction,

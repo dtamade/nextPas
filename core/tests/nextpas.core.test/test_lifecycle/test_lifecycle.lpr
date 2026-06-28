@@ -1,4 +1,4 @@
-{ test_lifecycle.lpr — nextpas.core.test lifecycle, closure, table, facade
+{ test_lifecycle — Lifecycle, closure, table, facade coverage
   =========================================================
   Covers: TestTable, TTestClosure (setup/teardown/beforeEach/afterEach),
           ITestContext.Fail, ITestContext.Skip, TTestRunner.AllPassed auto-run,

@@ -1,4 +1,4 @@
-{ test_output.lpr — nextpas.core.test.output API coverage
+{ test_output — Output API coverage
   =========================================================
   Covers: ANSI helpers, StatusDot, SetTestFilter/MatchesFilter,
           SetTestTimeout/GetTestTimeout, JUnitXML, WriteJUnitXML }
@@ -12,11 +12,7 @@ program test_output;
 uses
   cthreads,
   SysUtils,
-  nextpas.core.test,
-  { 白盒测试：直接断言 TAP/JSON renderer 与 runner 输出细节。 }
-  nextpas.core.test.output.tap,
-  nextpas.core.test.output.json,
-  nextpas.core.test.runner;
+  nextpas.core.test;
 
 function ExtractXmlAttributeInt(const AXml, AAttribute: string): Integer;
 var
