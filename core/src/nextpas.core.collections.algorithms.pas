@@ -155,8 +155,14 @@ generic function Merge<T>(const aFirst, aSecond: array of T;
 { Internal helpers - do not use directly }
 generic procedure _Swap<T>(var A, B: T); inline;
 generic procedure _ReverseRange<T>(var aArr: array of T; aLo, aHi: SizeInt);
-generic procedure _QuickSortImpl<T>(var aArr: array of T; aLo, aHi: SizeInt;
+generic procedure _InsertionSortImpl<T>(var aArr: array of T; aLo, aHi: SizeInt;
   aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer);
+generic procedure _SiftDownImpl<T>(var aArr: array of T; aStart, aEnd: SizeInt;
+  aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer);
+generic procedure _HeapSortImpl<T>(var aArr: array of T; aLo, aHi: SizeInt;
+  aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer);
+generic procedure _IntroSortImpl<T>(var aArr: array of T; aLo, aHi: SizeInt;
+  aDepthLimit: SizeInt; aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer);
 
 implementation
 
@@ -181,40 +187,153 @@ begin
   end;
 end;
 
-{ QuickSort implementation }
-generic procedure _QuickSortImpl<T>(var aArr: array of T; aLo, aHi: SizeInt;
+const
+  _INSERTION_SORT_THRESHOLD = 16;
+
+{ Insertion sort for small partitions }
+generic procedure _InsertionSortImpl<T>(var aArr: array of T; aLo, aHi: SizeInt;
   aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer);
 var
-  i, j: SizeInt;
-  Pivot: T;
+  I, J: SizeInt;
+  Tmp: T;
 begin
-  if aLo >= aHi then Exit;
-
-  i := aLo;
-  j := aHi;
-  Pivot := aArr[(aLo + aHi) div 2];
-
-  repeat
-    while aCompare(aArr[i], Pivot, aData) < 0 do Inc(i);
-    while aCompare(aArr[j], Pivot, aData) > 0 do Dec(j);
-
-    if i <= j then
+  for I := aLo + 1 to aHi do
+  begin
+    Tmp := aArr[I];
+    J := I - 1;
+    while (J >= aLo) and (aCompare(aArr[J], Tmp, aData) > 0) do
     begin
-      specialize _Swap<T>(aArr[i], aArr[j]);
-      Inc(i);
-      Dec(j);
+      aArr[J + 1] := aArr[J];
+      Dec(J);
     end;
-  until i > j;
-
-  if aLo < j then specialize _QuickSortImpl<T>(aArr, aLo, j, aCompare, aData);
-  if i < aHi then specialize _QuickSortImpl<T>(aArr, i, aHi, aCompare, aData);
+    aArr[J + 1] := Tmp;
+  end;
 end;
 
-{ Sort<T> }
-generic procedure Sort<T>(var aArr: array of T; aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer);
+{ Heapsort sift-down }
+generic procedure _SiftDownImpl<T>(var aArr: array of T; aStart, aEnd: SizeInt;
+  aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer);
+var
+  LRoot, LChild, LSwap: SizeInt;
 begin
-  if Length(aArr) <= 1 then Exit;
-  specialize _QuickSortImpl<T>(aArr, 0, High(aArr), aCompare, aData);
+  LRoot := aStart;
+  while True do
+  begin
+    LChild := 2 * LRoot + 1;
+    if LChild > aEnd then Break;
+    LSwap := LRoot;
+    if aCompare(aArr[LSwap], aArr[LChild], aData) < 0 then
+      LSwap := LChild;
+    if (LChild + 1 <= aEnd) and (aCompare(aArr[LSwap], aArr[LChild + 1], aData) < 0) then
+      LSwap := LChild + 1;
+    if LSwap = LRoot then Break;
+    specialize _Swap<T>(aArr[LRoot], aArr[LSwap]);
+    LRoot := LSwap;
+  end;
+end;
+
+{ Heapsort — guaranteed O(n log n) worst case }
+generic procedure _HeapSortImpl<T>(var aArr: array of T; aLo, aHi: SizeInt;
+  aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer);
+var
+  I: SizeInt;
+begin
+  for I := (aLo + aHi) div 2 downto aLo do
+    specialize _SiftDownImpl<T>(aArr, I, aHi, aCompare, aData);
+  for I := aHi downto aLo + 1 do
+  begin
+    specialize _Swap<T>(aArr[aLo], aArr[I]);
+    specialize _SiftDownImpl<T>(aArr, aLo, I - 1, aCompare, aData);
+  end;
+end;
+
+{ Median-of-three pivot selection }
+function _MedianOfThreeIdx<T>(const aArr: array of T; aLo, aMid, aHi: SizeInt;
+  aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer): SizeInt;
+begin
+  if aCompare(aArr[aLo], aArr[aMid], aData) < 0 then
+  begin
+    if aCompare(aArr[aMid], aArr[aHi], aData) < 0 then
+      Result := aMid
+    else if aCompare(aArr[aLo], aArr[aHi], aData) < 0 then
+      Result := aHi
+    else
+      Result := aLo;
+  end
+  else
+  begin
+    if aCompare(aArr[aLo], aArr[aHi], aData) < 0 then
+      Result := aLo
+    else if aCompare(aArr[aMid], aArr[aHi], aData) < 0 then
+      Result := aHi
+    else
+      Result := aMid;
+  end;
+end;
+
+{ IntroSort — QuickSort + InsertionSort + HeapSort fallback }
+generic procedure _IntroSortImpl<T>(var aArr: array of T; aLo, aHi: SizeInt;
+  aDepthLimit: SizeInt; aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer);
+var
+  I, J, PivotIdx: SizeInt;
+  Pivot: T;
+begin
+  while aHi - aLo > _INSERTION_SORT_THRESHOLD do
+  begin
+    if aDepthLimit = 0 then
+    begin
+      specialize _HeapSortImpl<T>(aArr, aLo, aHi, aCompare, aData);
+      Exit;
+    end;
+    Dec(aDepthLimit);
+
+    { Median-of-three pivot }
+    PivotIdx := _MedianOfThreeIdx(aArr, aLo, aLo + (aHi - aLo) div 2, aHi,
+      aCompare, aData);
+    Pivot := aArr[PivotIdx];
+
+    { Partition }
+    I := aLo;
+    J := aHi;
+    repeat
+      while aCompare(aArr[I], Pivot, aData) < 0 do Inc(I);
+      while aCompare(aArr[J], Pivot, aData) > 0 do Dec(J);
+      if I <= J then
+      begin
+        specialize _Swap<T>(aArr[I], aArr[J]);
+        Inc(I);
+        Dec(J);
+      end;
+    until I > J;
+
+    { Recurse on smaller partition, iterate on larger (tail call elimination) }
+    if J - aLo < aHi - J then
+    begin
+      specialize _IntroSortImpl<T>(aArr, aLo, J, aDepthLimit, aCompare, aData);
+      aLo := I;
+    end
+    else
+    begin
+      specialize _IntroSortImpl<T>(aArr, I, aHi, aDepthLimit, aCompare, aData);
+      aHi := J;
+    end;
+  end;
+
+  { Insertion sort for small partition }
+  specialize _InsertionSortImpl<T>(aArr, aLo, aHi, aCompare, aData);
+end;
+
+{ Sort<T> — IntroSort: O(n log n) guaranteed, fast on all inputs }
+generic procedure Sort<T>(var aArr: array of T; aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer);
+var
+  N, DepthLimit: SizeInt;
+begin
+  N := Length(aArr);
+  if N <= 1 then Exit;
+  DepthLimit := 1;
+  while (1 shl DepthLimit) < N do
+    Inc(DepthLimit);
+  specialize _IntroSortImpl<T>(aArr, 0, High(aArr), DepthLimit * 2, aCompare, aData);
 end;
 
 { BinarySearch<T> }
