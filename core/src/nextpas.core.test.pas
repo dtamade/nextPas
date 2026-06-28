@@ -165,6 +165,9 @@ function WriteJUnitXML(const AResults: specialize TArray<TTestRunResult>;
 function DefaultConfig: TTestConfig;
 procedure ResetDefaultConfig;
 procedure SetDefaultErrSink(const ASink: IOutputSink);
+procedure SetDefaultOutSink(const ASink: IOutputSink);
+procedure SetDefaultRetryCount(ARetryCount: Integer);
+procedure SetDefaultMaxParallelWorkers(AMaxWorkers: Integer);
 
 type
   TTestResults = nextpas.core.test.base.TTestResults;
@@ -173,6 +176,7 @@ type
 
 type
   TTestFixture = nextpas.core.test.discovery.TTestFixture;
+  TTestFixtureClass = nextpas.core.test.discovery.TTestFixtureClass;
 
 function DiscoverTests(AFixture: TTestFixture;
   const ASuiteName: string = ''): TTestSuite;
@@ -194,6 +198,7 @@ type
   TMock = nextpas.core.test.mock.TMock;
   TMockState = nextpas.core.test.mock.TMockState;
   TMockValue = nextpas.core.test.mock.TMockValue;
+  TMockCalls = nextpas.core.test.mock.TMockCalls;
   IMockSetup = nextpas.core.test.mock.IMockSetup;
   IMockVerify = nextpas.core.test.mock.IMockVerify;
 
@@ -413,6 +418,15 @@ begin nextpas.core.test.config.ResetDefaultConfig; end;
 
 procedure SetDefaultErrSink(const ASink: IOutputSink);
 begin nextpas.core.test.config.SetDefaultErrSink(ASink); end;
+
+procedure SetDefaultOutSink(const ASink: IOutputSink);
+begin nextpas.core.test.config.SetDefaultOutSink(ASink); end;
+
+procedure SetDefaultRetryCount(ARetryCount: Integer);
+begin nextpas.core.test.config.SetDefaultRetryCount(ARetryCount); end;
+
+procedure SetDefaultMaxParallelWorkers(AMaxWorkers: Integer);
+begin nextpas.core.test.config.SetDefaultMaxParallelWorkers(AMaxWorkers); end;
 
 { ── Forward to test.discovery ──────────────────────────────────────────────── }
 

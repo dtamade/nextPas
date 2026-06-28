@@ -72,19 +72,21 @@ begin
     for LRes in LSuite.Results do
     begin
       Inc(LCount);
+      if ASuiteName <> '' then
+        LLine := ASuiteName + ' / ' + LRes.Name
+      else
+        LLine := LSuite.SuiteName + ' / ' + LRes.Name;
       case LRes.Status of
         tsPassed:
         begin
-          LLine := 'ok ' + IntToStr(LCount) + ' - ' +
-            LSuite.SuiteName + ' / ' + LRes.Name;
+          LLine := 'ok ' + IntToStr(LCount) + ' - ' + LLine;
           if LRes.Duration > 0 then
             LLine := LLine + ' # duration_ms: ' + IntToStr(LRes.Duration);
           AddLine(LLines, LLine);
         end;
         tsFailed:
         begin
-          LLine := 'not ok ' + IntToStr(LCount) + ' - ' +
-            LSuite.SuiteName + ' / ' + LRes.Name;
+          LLine := 'not ok ' + IntToStr(LCount) + ' - ' + LLine;
           AddLine(LLines, LLine);
           AddLine(LLines, '  ---');
           AddYAMLBlockScalar(LLines, 'message', LRes.Message);
@@ -95,8 +97,7 @@ begin
         end;
         tsError:
         begin
-          LLine := 'not ok ' + IntToStr(LCount) + ' - ' +
-            LSuite.SuiteName + ' / ' + LRes.Name;
+          LLine := 'not ok ' + IntToStr(LCount) + ' - ' + LLine;
           AddLine(LLines, LLine);
           AddLine(LLines, '  ---');
           AddYAMLBlockScalar(LLines, 'message', LRes.Message);
@@ -107,8 +108,7 @@ begin
         end;
         tsSkipped:
         begin
-          LLine := 'ok ' + IntToStr(LCount) + ' - ' +
-            LSuite.SuiteName + ' / ' + LRes.Name + ' # skip';
+          LLine := 'ok ' + IntToStr(LCount) + ' - ' + LLine + ' # skip';
           if LRes.Message <> '' then
             LLine := LLine + ' ' + LRes.Message;
           AddLine(LLines, LLine);

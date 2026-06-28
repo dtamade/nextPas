@@ -561,6 +561,8 @@ end;
 function TExpectation.ToContainCI(const ASubstr: string): IExpectation;
 begin
   RequireKind(ekString, 'ToContainCI');
+  if Length(ASubstr) = 0 then
+    Exit(Self); { empty needle matches everything — consistent with ToContain }
   CheckMatch(Pos(LowerCase(ASubstr), LowerCase(FStrValue)) > 0,
     '"' + FStrValue + '" should not contain (ci) "' + ASubstr + '"',
     '"' + FStrValue + '" does not contain (ci) "' + ASubstr + '"');

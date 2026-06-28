@@ -369,6 +369,9 @@ begin
         if ASkipReason <> '' then
           ASink.WriteLn('  ' + FormatStatusLine(tsSkipped, AName,
             ASkipReason, AConfig))
+        else if AFailMsg <> '' then
+          ASink.WriteLn('  ' + FormatStatusLine(tsSkipped, AName,
+            AFailMsg, AConfig))
         else
           ASink.WriteLn('  ' + FormatStatusLine(tsSkipped, AName, AConfig));
       end;
@@ -456,7 +459,7 @@ function MatchesGlob(const AName, APattern: string): Boolean;
   Handles '*', '?', and brace groups (alt1,alt2,...).
   Brace groups can be nested. }
 var
-  I, J, LStarI, LStarJ, LDepth, LStart, LEnd, LLast: Integer;
+  I, J, LStarI, LStarJ, LDepth, LStart, LEnd: Integer;
   LAlt: string;
 begin
   { ── Brace expansion ─────────────────────────────────────────────────────── }
@@ -479,11 +482,10 @@ begin
       LEnd := J - 1; (* position of '}' *)
       (* Try each comma-separated alternative inside the braces *)
       LStart := I + 1;
-      LLast := LStart;
       J := LStart;
       while J <= LEnd do
       begin
-        if (APattern[J] = ',') and (LStart = I + 1) then
+        if APattern[J] = ',' then
         begin
           { Top-level comma: try this alternative }
           LAlt := Copy(APattern, 1, I - 1) +
