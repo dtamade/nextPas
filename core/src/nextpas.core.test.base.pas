@@ -83,6 +83,7 @@ type
     Skipped   : Integer;
     AllPassed : Boolean;
     Results   : TTestResults;
+    SlowTests : TTestResults;  { top N slowest tests, populated by runner }
     class function Create(const ASuiteName: string): TTestRunResult; static;
   end;
 
@@ -92,7 +93,7 @@ type
     constructor Create(const AReason: string);
   end;
 
-  TTestEntryKind = (ekTest, ekSubtest, ekSkipped, ekTableTest);
+  TTestEntryKind = (ekTest, ekSubtest, ekSkipped, ekTableTest, ekShouldFail);
 
   TTestEntry = record
     Name       : string;
@@ -111,6 +112,7 @@ type
       Run/RunParallel completes — the record has no managed finalization for raw
       pointers. Safety net: GStubRegistry in finalization catches suites that
       never run. }
+    ShouldFailMsg: string;  { ekShouldFail: expected failure reason; test passes if it fails }
     TableCase  : Pointer;       { PTestCase, heap-allocated }
     TableProc  : Pointer;       { PTestCaseProc, heap-allocated }
   end;
@@ -155,6 +157,9 @@ function MakeTestResult(const AName: string; AStatus: TTestStatus;
 procedure AppendResult(var AResults: specialize TArray<TTestResult>;
   const AResult: TTestResult);
   { Append a TTestResult to a dynamic array. }
+function GetTopSlowest(const AResults: TTestResults;
+  ACount: Integer): TTestResults;
+  { Return up to ACount slowest tests from AResults, sorted descending by Duration. }
 procedure RegisterEntry(var AEntries: specialize TArray<TTestEntry>;
   const AEntry: TTestEntry);
   { Append a TTestEntry to a dynamic array. }
@@ -200,6 +205,7 @@ begin
   Result.Skipped   := 0;
   Result.AllPassed := True;
   Result.Results   := nil;
+  Result.SlowTests := nil;
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }
@@ -218,6 +224,7 @@ begin
   AEntry.DisplayName := '';
   AEntry.Tags        := nil;
   AEntry.RepeatCount := 0;
+  AEntry.ShouldFailMsg := '';
   AEntry.TableCase   := nil;
   AEntry.TableProc   := nil;
 end;
@@ -237,6 +244,47 @@ procedure AppendResult(var AResults: specialize TArray<TTestResult>;
 begin
   SetLength(AResults, Length(AResults) + 1);
   AResults[High(AResults)] := AResult;
+end;
+
+function GetTopSlowest(const AResults: TTestResults;
+  ACount: Integer): TTestResults;
+{ Simple selection: scan AResults up to ACount times, each time picking the
+  highest-duration entry not yet selected. O(ACount * N) but ACount is tiny. }
+var
+  LUsed: array of Boolean;
+  I, J, LBestIdx: Integer;
+  LCount: Integer;
+begin
+  if (ACount <= 0) or (Length(AResults) = 0) then
+    Exit(nil);
+  LCount := Length(AResults);
+  if ACount > LCount then
+    ACount := LCount;
+  SetLength(LUsed, LCount);
+  SetLength(Result, ACount);
+  for I := 0 to ACount - 1 do
+  begin
+    LBestIdx := -1;
+    for J := 0 to LCount - 1 do
+    begin
+      if LUsed[J] then Continue;
+      if (LBestIdx < 0) or (AResults[J].Duration > AResults[LBestIdx].Duration) then
+        LBestIdx := J;
+    end;
+    if LBestIdx < 0 then
+    begin
+      SetLength(Result, I);
+      Exit;
+    end;
+    LUsed[LBestIdx] := True;
+    Result[I] := AResults[LBestIdx];
+    { Stop if the next best has 0 duration — no more meaningful entries }
+    if AResults[LBestIdx].Duration = 0 then
+    begin
+      SetLength(Result, I);
+      Exit;
+    end;
+  end;
 end;
 
 procedure RegisterEntry(var AEntries: specialize TArray<TTestEntry>;

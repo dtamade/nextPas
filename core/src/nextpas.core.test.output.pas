@@ -80,6 +80,11 @@ procedure WriteWarning(const AMsg: string;
 procedure WriteSuiteHeader(const AName, ASuffix: string;
   const ASink: IOutputSink; const AConfig: TTestConfig);
   { Write blank line + bold '> Name (suffix)' suite header to ASink. }
+procedure WriteSlowTests(const ASlowTests: TTestResults;
+  const ASink: IOutputSink; const AConfig: TTestConfig);
+  { Write slow test report: '  Slowest tests:' followed by top N entries. }
+function FormatDuration(AMillis: Int64): string;
+  { Format milliseconds as '12ms' or '1.23s' for >= 1000ms. }
 
 { ── Test Filter ───────────────────────────────────────────────────────────── }
 
@@ -409,6 +414,39 @@ begin
     AnsiDim(' (' + ASuffix + ')', AConfig));
 end;
 
+function FormatDuration(AMillis: Int64): string;
+var
+  LMs: Integer;
+begin
+  if AMillis < 1000 then
+    Result := IntToStr(AMillis) + 'ms'
+  else
+  begin
+    LMs := AMillis mod 1000;
+    if LMs = 0 then
+      Result := IntToStr(AMillis div 1000) + 's'
+    else if LMs mod 100 = 0 then
+      Result := IntToStr(AMillis div 1000) + '.' + IntToStr(LMs div 100) + 's'
+    else
+      Result := IntToStr(AMillis div 1000) + '.' +
+        Copy(IntToStr(1000 + LMs), 2, 2) + 's';
+  end;
+end;
+
+procedure WriteSlowTests(const ASlowTests: TTestResults;
+  const ASink: IOutputSink; const AConfig: TTestConfig);
+var
+  I: Integer;
+begin
+  if Length(ASlowTests) = 0 then Exit;
+  ASink.WriteLn('');
+  ASink.WriteLn(AnsiDim('  Slowest tests:', AConfig));
+  for I := 0 to High(ASlowTests) do
+    ASink.WriteLn(
+      AnsiDim('    ' + FormatDuration(ASlowTests[I].Duration) +
+        '  ' + ASlowTests[I].Name, AConfig));
+end;
+
 { ═════════════════════════════════════════════════════════════════════════════ }
 { Test Filter & Timeout (public API)                                          }
 { ═════════════════════════════════════════════════════════════════════════════ }
@@ -551,6 +589,63 @@ begin
   Result := J > Length(APattern);
 end;
 
+function SplitPathSegment(const APath: string; AStart: Integer;
+  out ASegment: string): Integer;
+{ Extract segment from APath starting at AStart up to next '/'.
+  Returns position after '/' or past-end if no more segments. }
+var
+  LSlash: Integer;
+begin
+  LSlash := Pos('/', Copy(APath, AStart, MaxInt));
+  if LSlash > 0 then
+  begin
+    ASegment := Copy(APath, AStart, LSlash - 1);
+    Result := AStart + LSlash;
+  end
+  else
+  begin
+    ASegment := Copy(APath, AStart, MaxInt);
+    Result := Length(APath) + 1;
+  end;
+end;
+
+function MatchesHierarchical(const AName, AFilter: string): Boolean;
+{ Hierarchical filter matching (Go-style -run TestParent/SubA).
+  Rules:
+    1. Filter is prefix of name: matches parent + all descendants.
+       "P/S" matches "P/S" and "P/S/L" and "P/S/L/X"
+    2. Name is prefix of filter: matches parent so it can enter children.
+       "P" matches filter "P/S" (P must run to test P/S)
+    3. Segment-level glob matching: "P/*" matches "P/anything" }
+var
+  LNameSeg, LFilterSeg: string;
+  LNamePos, LFilterPos: Integer;
+  LMatchedSegments: Integer;
+begin
+  Result := False;
+  LNamePos := 1;
+  LFilterPos := 1;
+  LMatchedSegments := 0;
+
+  while (LNamePos <= Length(AName)) and (LFilterPos <= Length(AFilter)) do
+  begin
+    LNamePos := SplitPathSegment(AName, LNamePos, LNameSeg);
+    LFilterPos := SplitPathSegment(AFilter, LFilterPos, LFilterSeg);
+
+    { Glob match on this segment }
+    if MatchesGlob(LNameSeg, LFilterSeg) then
+      Inc(LMatchedSegments)
+    else
+      Exit(False);
+  end;
+
+  { At least one segment matched. Either:
+    - Both exhausted (exact match)
+    - Name exhausted, filter has more (name is prefix — parent matches)
+    - Filter exhausted, name has more (filter is prefix — descendant matches) }
+  Result := LMatchedSegments > 0;
+end;
+
 function MatchesFilter(const AName: string; const AConfig: TTestConfig): Boolean;
 var
   LFilter, LPattern: string;
@@ -590,8 +685,19 @@ begin
       SetLength(LPattern, Length(LPattern) - 1);
     if LPattern = '' then
       Continue;
+    { Hierarchical filter: pattern contains '/' — match segment-by-segment.
+      Go-style: --filter=TestParent/SubA matches TestParent/SubA/LeafA (filter is prefix)
+      and also TestParent/SubA itself (exact match).
+      Name prefix match: if filter starts with name, the parent should run
+      (so its children can be tested). E.g. filter=TestParent/SubA should
+      let TestParent run so it can enter subtests. }
+    if Pos('/', LPattern) > 0 then
+    begin
+      if MatchesHierarchical(AName, LPattern) then
+        Exit(True);
+    end
     { No wildcard/brace = substring match; with wildcard/brace = glob match }
-    if (Pos('*', LPattern) > 0) or (Pos('?', LPattern) > 0) or
+    else if (Pos('*', LPattern) > 0) or (Pos('?', LPattern) > 0) or
        (Pos('{', LPattern) > 0) then
     begin
       if MatchesGlob(AName, LPattern) then

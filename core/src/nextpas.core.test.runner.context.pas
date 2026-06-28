@@ -281,6 +281,42 @@ begin
           ResolveOutSink(FConfig), FConfig);
         Inc(FSubPass);
       end
+      else if LEntry.Kind = ekShouldFail then
+      begin
+        try
+          if Assigned(LEntry.Closure) then
+            LEntry.Closure()
+          else
+            LEntry.Proc;
+          LStatus := tsFailed;
+          if LEntry.ShouldFailMsg <> '' then
+            LMsg := 'Expected failure (' + LEntry.ShouldFailMsg +
+              ') but test passed'
+          else
+            LMsg := 'Expected failure but test passed';
+          WriteSubtestStatus(tsFailed, LEntry.Name, LMsg, '', '',
+            ResolveOutSink(FConfig), FConfig);
+          Inc(FSubFail);
+          AppendFailedName(FFailedNames, LEntry.Name);
+        except
+          on E: ETestSkipped do
+          begin
+            LStatus := tsSkipped;
+            LMsg := E.Message;
+            WriteSubtestStatus(tsSkipped, LEntry.Name, '', '', '',
+              ResolveOutSink(FConfig), FConfig);
+            Inc(FSubSkip);
+          end;
+          on E: Exception do
+          begin
+            { Expected failure — subtest passes }
+            LStatus := tsPassed;
+            WriteSubtestStatus(tsPassed, LEntry.Name, '', '', '',
+              ResolveOutSink(FConfig), FConfig);
+            Inc(FSubPass);
+          end;
+        end;
+      end
       else
       begin
         if Assigned(LEntry.Closure) then
