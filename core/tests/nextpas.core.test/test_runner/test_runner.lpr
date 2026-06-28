@@ -281,6 +281,20 @@ var
   LJsonResult: TTestRunResult;
   LJsonConfig: TTestConfig;
   LJsonSink: TBufferSink;
+  { Phase 10: verbose mode }
+  LVerbSuite: TTestSuite;
+  LVerbResult: TTestRunResult;
+  LVerbConfig: TTestConfig;
+  LVerbSink: TBufferSink;
+  LVerbOut: string;
+  { Phase 11: run timeout }
+  LTimeoutRunSuite: TTestSuite;
+  LTimeoutRunResult: TTestRunResult;
+  LTimeoutRunConfig: TTestConfig;
+  LTimeoutRunSink: TBufferSink;
+  LTimeoutRunOut: string;
+  { Phase 12: cleanup }
+  GCleanupCalled: Integer;
 begin
   WriteLn('=== test_runner ===');
   { Suite 1: lifecycle }
@@ -1435,6 +1449,112 @@ begin
     end;
     ResetDefaultConfig;
     PassTest('JSON output');
+  end;
+
+  { ── Phase 10: Verbose mode ───────────────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 10: Verbose mode');
+  begin
+    ResetDefaultConfig;
+    LVerbSuite := TTestSuite.Create('VerbTest');
+    LVerbSuite.Test('vpass', procedure begin CheckTrue(True); end);
+    LVerbSuite.Test('vfail', procedure begin CheckTrue(False, 'intentional'); end);
+    LVerbSuite.Skip('vskip', 'planned');
+    LVerbConfig := DefaultConfig;
+    LVerbConfig.VerboseMode := True;
+    LVerbSink := TBufferSink.Create;
+    LVerbConfig.OutSink := LVerbSink;
+    LVerbConfig.ErrSink := LVerbSink;
+    LVerbConfig.AnsiMode := amOff;
+    LVerbSuite.Config := LVerbConfig;
+    LVerbSuite.RunWithResult(LVerbResult);
+    LVerbOut := LVerbSink.GetOutput;
+    LVerbSink := nil;  { release via refcount, don't .Free }
+    { Verify verbose output contains [PASS], [FAIL], [SKIP] }
+    if Pos('[PASS]', LVerbOut) = 0 then
+      FailTest('verbose: expected [PASS] in output');
+    if Pos('[FAIL]', LVerbOut) = 0 then
+      FailTest('verbose: expected [FAIL] in output');
+    if Pos('[SKIP]', LVerbOut) = 0 then
+      FailTest('verbose: expected [SKIP] in output');
+    { Verify timing is shown (parentheses with ms/s) }
+    if Pos('(', LVerbOut) = 0 then
+      FailTest('verbose: expected timing in output');
+    { Verify counts }
+    if LVerbResult.Passed <> 1 then
+      FailTest('verbose: expected 1 passed, got ' + IntToStr(LVerbResult.Passed));
+    if LVerbResult.Failed <> 1 then
+      FailTest('verbose: expected 1 failed, got ' + IntToStr(LVerbResult.Failed));
+    if LVerbResult.Skipped <> 1 then
+      FailTest('verbose: expected 1 skipped, got ' + IntToStr(LVerbResult.Skipped));
+    ResetDefaultConfig;
+    PassTest('Verbose mode');
+  end;
+
+  { ── Phase 11: Run timeout ────────────────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 11: Run timeout');
+  begin
+    ResetDefaultConfig;
+    LTimeoutRunSuite := TTestSuite.Create('TimeoutRunTest');
+    LTimeoutRunSuite.Test('fast1', procedure begin CheckTrue(True); end);
+    LTimeoutRunSuite.Test('fast2', procedure begin CheckTrue(True); end);
+    { Set a 1-second run timeout — should be enough for fast tests }
+    LTimeoutRunConfig := DefaultConfig;
+    LTimeoutRunConfig.RunTimeoutSec := 10;
+    LTimeoutRunSink := TBufferSink.Create;
+    LTimeoutRunConfig.OutSink := LTimeoutRunSink;
+    LTimeoutRunConfig.ErrSink := LTimeoutRunSink;
+    LTimeoutRunConfig.AnsiMode := amOff;
+    LTimeoutRunSuite.Config := LTimeoutRunConfig;
+    LTimeoutRunSuite.RunWithResult(LTimeoutRunResult);
+    LTimeoutRunOut := LTimeoutRunSink.GetOutput;
+    LTimeoutRunSink := nil;  { release via refcount }
+    { Fast tests should pass within 10s timeout }
+    if not LTimeoutRunResult.AllPassed then
+      FailTest('run timeout: fast tests should pass within 10s');
+    if LTimeoutRunResult.Passed <> 2 then
+      FailTest('run timeout: expected 2 passed, got ' +
+        IntToStr(LTimeoutRunResult.Passed));
+    ResetDefaultConfig;
+    PassTest('Run timeout');
+  end;
+
+  { ── Phase 12: Cleanup handlers ───────────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 12: Cleanup handlers');
+  begin
+    ResetDefaultConfig;
+    GCleanupCalled := 0;
+    LVerbSuite := TTestSuite.Create('CleanupTest');
+    { Register cleanup handler via procedure-based API }
+    LVerbSuite.Cleanup(procedure begin Inc(GCleanupCalled); end);
+    LVerbSuite.Test('clean1', procedure begin CheckTrue(True); end);
+    LVerbSuite.Test('clean2', procedure begin CheckTrue(True); end);
+    LVerbSuite.RunWithResult(LVerbResult);
+    { Cleanup runs after each test: 2 tests = 2 cleanup calls }
+    if GCleanupCalled <> 2 then
+      FailTest('cleanup: expected 2 cleanup calls, got ' +
+        IntToStr(GCleanupCalled));
+    if not LVerbResult.AllPassed then
+      FailTest('cleanup: all tests should pass');
+    { Test cleanup runs even on failure }
+    GCleanupCalled := 0;
+    LVerbSuite := TTestSuite.Create('CleanupFailTest');
+    LVerbSuite.Cleanup(procedure begin Inc(GCleanupCalled); end);
+    LVerbSuite.Test('willfail', procedure begin CheckTrue(False, 'intentional'); end);
+    LVerbSuite.Test('willpass', procedure begin CheckTrue(True); end);
+    LVerbSuite.RunWithResult(LVerbResult);
+    { Cleanup should still run for both tests (even the failed one) }
+    if GCleanupCalled <> 2 then
+      FailTest('cleanup on fail: expected 2 cleanup calls, got ' +
+        IntToStr(GCleanupCalled));
+    if LVerbResult.Failed <> 1 then
+      FailTest('cleanup on fail: expected 1 failure');
+    if LVerbResult.Passed <> 1 then
+      FailTest('cleanup on fail: expected 1 pass');
+    ResetDefaultConfig;
+    PassTest('Cleanup handlers');
   end;
 
   WriteLn;

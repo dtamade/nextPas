@@ -17,7 +17,7 @@ type
   TConfigKey = (ckFilter, ckTag, ckTimeout, ckAnsi,
     ckOutSink, ckErrSink, ckRetry, ckWorkers, ckCount, ckSlow,
     ckShuffle, ckFailFast, ckList, ckShort, ckProgress, ckMaxFail,
-    ckJsonOutput);
+    ckJsonOutput, ckVerbose, ckRunTimeout);
   TConfigKeys = set of TConfigKey;
 
   IOutputSink = interface
@@ -78,6 +78,8 @@ type
     ShowProgress  : Boolean; { true = show [N/Total] progress counter }
     MaxFailures   : Integer; { 0=unlimited, >0 = stop after N total failures }
     JsonOutput    : Boolean; { true = emit JSON report to stdout after run }
+    VerboseMode   : Boolean; { true = show per-test [PASS]/[FAIL]/[SKIP] with duration }
+    RunTimeoutSec : Integer; { 0=unlimited, >0 = global suite runner timeout in seconds }
   end;
 
 function DefaultConfig: TTestConfig;
@@ -102,6 +104,8 @@ procedure SetDefaultShortMode(AShortMode: Boolean);
 procedure SetDefaultShowProgress(AShowProgress: Boolean);
 procedure SetDefaultMaxFailures(AMaxFailures: Integer);
 procedure SetDefaultJsonOutput(AJsonOutput: Boolean);
+procedure SetDefaultVerboseMode(AVerbose: Boolean);
+procedure SetDefaultRunTimeoutSec(ATimeoutSec: Integer);
 function  GetRepeatAllCount(const AConfig: TTestConfig): Integer;
 function  GetSlowTestCount(const AConfig: TTestConfig): Integer;
 function  GetShuffleSeed(const AConfig: TTestConfig): Integer;
@@ -111,6 +115,8 @@ function  GetShortMode(const AConfig: TTestConfig): Boolean;
 function  GetShowProgress(const AConfig: TTestConfig): Boolean;
 function  GetMaxFailures(const AConfig: TTestConfig): Integer;
 function  GetJsonOutput(const AConfig: TTestConfig): Boolean;
+function  GetVerboseMode(const AConfig: TTestConfig): Boolean;
+function  GetRunTimeoutSec(const AConfig: TTestConfig): Integer;
 
 implementation
 
@@ -137,6 +143,8 @@ begin
   Result.ShowProgress  := False;
   Result.MaxFailures   := 0; { unlimited by default }
   Result.JsonOutput    := False;
+  Result.VerboseMode   := False;
+  Result.RunTimeoutSec := 0; { unlimited by default }
 end;
 
 function DefaultConfig: TTestConfig;
@@ -299,6 +307,18 @@ begin
   Include(GExplicit, ckJsonOutput);
 end;
 
+procedure SetDefaultVerboseMode(AVerbose: Boolean);
+begin
+  GDefaultConfig.VerboseMode := AVerbose;
+  Include(GExplicit, ckVerbose);
+end;
+
+procedure SetDefaultRunTimeoutSec(ATimeoutSec: Integer);
+begin
+  GDefaultConfig.RunTimeoutSec := ATimeoutSec;
+  Include(GExplicit, ckRunTimeout);
+end;
+
 function GetRepeatAllCount(const AConfig: TTestConfig): Integer;
 begin
   Result := ResolveConfig(AConfig).RepeatAllCount;
@@ -342,6 +362,16 @@ end;
 function GetJsonOutput(const AConfig: TTestConfig): Boolean;
 begin
   Result := ResolveConfig(AConfig).JsonOutput;
+end;
+
+function GetVerboseMode(const AConfig: TTestConfig): Boolean;
+begin
+  Result := ResolveConfig(AConfig).VerboseMode;
+end;
+
+function GetRunTimeoutSec(const AConfig: TTestConfig): Integer;
+begin
+  Result := ResolveConfig(AConfig).RunTimeoutSec;
 end;
 
 procedure TStdoutSink.Write(const AText: string);

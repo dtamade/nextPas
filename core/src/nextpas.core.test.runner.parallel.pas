@@ -50,6 +50,7 @@ type
     BeforeClosure  : TTestClosure;
     After          : TTestProc;
     AfterClosure   : TTestClosure;
+    EachCleanups   : specialize TArray<TTestClosure>;  { LIFO cleanup after each test }
     Pass           : PInteger;
     Fail           : PInteger;
     Skip           : PInteger;
@@ -264,6 +265,8 @@ var
   LTimeoutMs: Integer;
   LOutSink: IOutputSink;
   LErrSink: IOutputSink;
+  LCIdx: Integer;
+  LDurMs: Int64;
 begin
   Result := nil;
   R := PThreadRec(AArg);
@@ -303,7 +306,11 @@ begin
     R^.Mtx.Acquire;
     try
       R^.Skip^ := R^.Skip^ + 1;
-      LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, R^.Entry.Name, LConfig));
+      if LConfig.VerboseMode then
+        WriteTestStatusVerbose(tsSkipped, R^.Entry.Name, '',
+          R^.Entry.SkipReason, 0, LOutSink, LConfig)
+      else
+        LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, R^.Entry.Name, LConfig));
     finally
       SafeRelease(R^.Mtx, LConfig);
     end;
@@ -476,6 +483,27 @@ begin
     end;
   end;
 
+  { EachCleanups: LIFO cleanup, runs even on failure }
+  if Length(R^.EachCleanups) > 0 then
+  begin
+    for LCIdx := High(R^.EachCleanups) downto 0 do
+    begin
+      try
+        R^.EachCleanups[LCIdx]();
+      except
+        on E: Exception do
+        begin
+          R^.Mtx.Acquire;
+          try
+            WriteWarning('cleanup failed: ' + E.Message, LErrSink, LConfig);
+          finally
+            SafeRelease(R^.Mtx, LConfig);
+          end;
+        end;
+      end;
+    end;
+  end;
+
   R^.Mtx.Acquire;
   try
     case LStatus of
@@ -489,21 +517,42 @@ begin
         R^.Fail^ := R^.Fail^ + 1;
     end;
     { Progress counter — increment and format prefix }
+    LDurMs := GetTickCount64 - LStartMs;
     if R^.ProgressCounter <> nil then
     begin
       R^.ProgressCounter^ := R^.ProgressCounter^ + 1;
       if R^.ProgressTotal > 0 then
-        WriteTestStatus(LStatus,
-          '[' + IntToStr(R^.ProgressCounter^) + '/' +
-          IntToStr(R^.ProgressTotal) + '] ' + R^.Entry.Name,
-          LFailMsg, LSkipReason, LOutSink, LConfig)
+      begin
+        if LConfig.VerboseMode then
+          WriteTestStatusVerbose(LStatus,
+            '[' + IntToStr(R^.ProgressCounter^) + '/' +
+            IntToStr(R^.ProgressTotal) + '] ' + R^.Entry.Name,
+            LFailMsg, LSkipReason, LDurMs, LOutSink, LConfig)
+        else
+          WriteTestStatus(LStatus,
+            '[' + IntToStr(R^.ProgressCounter^) + '/' +
+            IntToStr(R^.ProgressTotal) + '] ' + R^.Entry.Name,
+            LFailMsg, LSkipReason, LOutSink, LConfig);
+      end
+      else
+      begin
+        if LConfig.VerboseMode then
+          WriteTestStatusVerbose(LStatus, R^.Entry.Name, LFailMsg,
+            LSkipReason, LDurMs, LOutSink, LConfig)
+        else
+          WriteTestStatus(LStatus, R^.Entry.Name, LFailMsg, LSkipReason,
+            LOutSink, LConfig);
+      end;
+    end
+    else
+    begin
+      if LConfig.VerboseMode then
+        WriteTestStatusVerbose(LStatus, R^.Entry.Name, LFailMsg,
+          LSkipReason, LDurMs, LOutSink, LConfig)
       else
         WriteTestStatus(LStatus, R^.Entry.Name, LFailMsg, LSkipReason,
           LOutSink, LConfig);
-    end
-    else
-      WriteTestStatus(LStatus, R^.Entry.Name, LFailMsg, LSkipReason,
-        LOutSink, LConfig);
+    end;
     { Write per-test result inside mutex for safety (skip if already written
       by beforeEach failure path, which sets Duration = 0 directly) }
     if (R^.Res <> nil) and (not LResultWritten) then

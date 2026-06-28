@@ -12,6 +12,7 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 - **v3.11**: quality hardening — LCG overflow fix, facade exports, test coverage audit
 - **v3.12**: audit — config sentinel fix, table-test error handling, CLI dedup
 - **v4.0**: --short + --progress + --failures-max + --json + parallel ShortSkip fix
+- **v5.0**: --verbose + --timeout + Cleanup() + parallel verbose/cleanup
 
 ## 竞品对比
 
@@ -26,9 +27,11 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 | FailFast | `-failfast` | `--fail-fast` | `--failfast` |
 | Max failures | — | — | `--failures-max=N` |
 | Progress | — | — | `--progress` |
+| Verbose | `-v` | `--show-output` | `--verbose` |
+| Global timeout | — | — | `--timeout=N` |
+| Cleanup | `t.Cleanup()` | — | `Suite.Cleanup()` |
 | JSON output | `-json` | — | `--json` |
 | List mode | — | `--list` | `--list` |
-| 耗时报告 | `-v` | `--show-output` | Slow test report |
 | Tags | — | — | `--tag=` |
 | Retry | — | — | `Test(name, proc, N)` |
 | Mock | — | — | TMock fluent API |
@@ -42,9 +45,9 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 | `test_expect` | IExpectation 流式断言 API | 92 |
 | `test_mock` | TMock 录制/验证/返回值/参数匹配 | 53 |
 | `test_output` | ANSI、StatusDot、filter、timeout、JUnit/TAP/JSON 格式化、brace expansion、层级过滤、hierarchical+glob 组合 | 64 |
-| `test_runner` | TTestRunner 多 suite、lifecycle、subtest、timeout、空 suite、ShouldFail、FormatDuration、shuffle、failfast、list、determinism | 45+1x |
+| `test_runner` | TTestRunner 多 suite、lifecycle、subtest、timeout、空 suite、ShouldFail、FormatDuration、shuffle、failfast、list、determinism、verbose、runtimeout、cleanup | 48+1x |
 | `test_lifecycle` | TestTable、TTestClosure、lifecycle 组合、facade 符号完整性 | 15 |
-| `test_parallel` | 并行执行、lifecycle、retry、skip、MaxParallelWorkers 批次调度 | 8 |
+| `test_parallel` | 并行执行、lifecycle、retry、skip、MaxParallelWorkers 批次调度、verbose、cleanup | 10 |
 | `test_diagnostics` | 错误诊断、stack trace、Double 比较、Error vs Failure | 15 |
 | `test_advanced` | RTTI discovery、retry、TAP/JSON 输出格式 | 13 |
 | `test_subtests` | 子测试嵌套、ITestContext、failure 传播、AfterEach 失败、cleanup | 15 |
@@ -110,3 +113,8 @@ core/src/nextpas.core.testing.pas           ← v1 兼容层（deprecated）
   - `--json` CLI 输出: 机器可读 JSON 报告直出 stdout
   - 并行 ShortSkip: batch 调度正确跳过 ShortSkip 测试 (P0 修复)
   - 新增 8 个测试覆盖全部新特性
+- **v5.0**: 差异化碾压特性:
+  - `--verbose` 逐测试详情: `[PASS]/[FAIL]/[SKIP]` + 耗时，串行+并行均支持 (Go `-v` 更好)
+  - `--timeout=N` 全局运行超时: 整个 suite 运行超时保护，秒级精度 (**Go/Rust 独有**)
+  - `Suite.Cleanup()` 保证清理: LIFO 清理回调，失败/成功均执行，串行+并行 (Go `t.Cleanup()` 等价)
+  - 新增 5 个测试 (verbose + timeout + cleanup 串行/并行)

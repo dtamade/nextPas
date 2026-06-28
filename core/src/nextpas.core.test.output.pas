@@ -68,6 +68,10 @@ procedure SectionHeader(const ATitle: string);
 procedure WriteTestStatus(AStatus: TTestStatus; const AName, AFailMsg,
   ASkipReason: string; const ASink: IOutputSink; const AConfig: TTestConfig);
   { Write formatted per-test status line to ASink. }
+procedure WriteTestStatusVerbose(AStatus: TTestStatus; const AName, AFailMsg,
+  ASkipReason: string; ADurationMs: Int64;
+  const ASink: IOutputSink; const AConfig: TTestConfig);
+  { Write verbose per-test status line with duration to ASink. }
 
 { ── Diagnostic Output ─────────────────────────────────────────────────────── }
 
@@ -384,6 +388,46 @@ begin
       begin
         ASink.WriteLn('  ' + FormatStatusLine(tsError, AName, AConfig) +
           ' [unexpected exception]');
+        if AFailMsg <> '' then
+          ASink.WriteLn('    ' + AnsiDim(AFailMsg, AConfig));
+      end;
+  end;
+end;
+
+procedure WriteTestStatusVerbose(AStatus: TTestStatus; const AName, AFailMsg,
+  ASkipReason: string; ADurationMs: Int64;
+  const ASink: IOutputSink; const AConfig: TTestConfig);
+{ Verbose mode: show every test with status + duration.
+  Format: '  [PASS] name (12ms)' or '  [FAIL] name (1.23s)' or '  [SKIP] name - reason'. }
+var
+  LDurStr: string;
+begin
+  LDurStr := ' (' + FormatDuration(ADurationMs) + ')';
+  case AStatus of
+    tsPassed:
+      ASink.WriteLn('  ' + AnsiGreen('[PASS]', AConfig) + ' ' +
+        AName + AnsiDim(LDurStr, AConfig));
+    tsFailed:
+      begin
+        ASink.WriteLn('  ' + AnsiRed('[FAIL]', AConfig) + ' ' +
+          AName + AnsiDim(LDurStr, AConfig));
+        ASink.WriteLn('    ' + FormatFailDetail(AFailMsg, AConfig));
+      end;
+    tsSkipped:
+      begin
+        if ASkipReason <> '' then
+          ASink.WriteLn('  ' + AnsiYellow('[SKIP]', AConfig) + ' ' +
+            AName + ' - ' + ASkipReason)
+        else if AFailMsg <> '' then
+          ASink.WriteLn('  ' + AnsiYellow('[SKIP]', AConfig) + ' ' +
+            AName + ' - ' + AFailMsg)
+        else
+          ASink.WriteLn('  ' + AnsiYellow('[SKIP]', AConfig) + ' ' + AName);
+      end;
+    tsError:
+      begin
+        ASink.WriteLn('  ' + AnsiRed('[FAIL]', AConfig) + ' ' +
+          AName + AnsiDim(LDurStr, AConfig) + ' [unexpected exception]');
         if AFailMsg <> '' then
           ASink.WriteLn('    ' + AnsiDim(AFailMsg, AConfig));
       end;

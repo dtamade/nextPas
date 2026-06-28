@@ -21,6 +21,11 @@ var
   { Phase 9: ShortSkip in parallel }
   GShortSkipSuite: TTestSuite;
   GShortSkipResult: TTestRunResult;
+  { Phase 10: Verbose in parallel }
+  GVerbSuite: TTestSuite;
+  GVerbResult: TTestRunResult;
+  { Phase 10: Cleanup in parallel }
+  GCleanupCounter: Integer = 0;
 
 procedure TestParallelSimple;
 begin
@@ -531,6 +536,48 @@ begin
         IntToStr(GShortSkipResult.Skipped));
     ResetDefaultConfig;
     PassTest('ShortSkip on in parallel');
+  end;
+
+  { ── Phase 10: Verbose mode in parallel ──────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 10: Verbose in Parallel');
+  begin
+    ResetDefaultConfig;
+    SetDefaultVerboseMode(True);
+    GVerbSuite := TTestSuite.Create('VerbParallel');
+    GVerbSuite.Test('vp1', @TestParallelPassA);
+    GVerbSuite.Test('vp2', @TestParallelPassA);
+    GVerbSuite.Test('vp3', @TestParallelPassA);
+    GVerbSuite.Config := DefaultConfig;
+    GVerbSuite.RunParallelWithResult(nil, GVerbResult);
+    if GVerbResult.Passed <> 3 then
+      FailTest('verbose parallel: expected 3 passed, got ' +
+        IntToStr(GVerbResult.Passed));
+    ResetDefaultConfig;
+    PassTest('Verbose in parallel');
+  end;
+
+  { ── Phase 10: Cleanup in parallel ───────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 10: Cleanup in Parallel');
+  begin
+    ResetDefaultConfig;
+    GCleanupCounter := 0;
+    GVerbSuite := TTestSuite.Create('CleanupParallel');
+    GVerbSuite.Cleanup(procedure begin InterLockedIncrement(GCleanupCounter); end);
+    GVerbSuite.Test('cp1', @TestParallelPassA);
+    GVerbSuite.Test('cp2', @TestParallelPassA);
+    GVerbSuite.Test('cp3', @TestParallelPassA);
+    GVerbSuite.RunParallelWithResult(nil, GVerbResult);
+    { Cleanup should run after each test: 3 tests = 3 cleanup calls }
+    if GCleanupCounter <> 3 then
+      FailTest('cleanup parallel: expected 3 cleanup calls, got ' +
+        IntToStr(GCleanupCounter));
+    if GVerbResult.Passed <> 3 then
+      FailTest('cleanup parallel: expected 3 passed, got ' +
+        IntToStr(GVerbResult.Passed));
+    ResetDefaultConfig;
+    PassTest('Cleanup in parallel');
   end;
 
   WriteLn;
