@@ -205,6 +205,7 @@ end;
 procedure TestIsNormal;
 var
   LData: TDoubleArray;
+  LIsNormal: Boolean;
   i: Integer;
 begin
   RandSeed := 42; { TG-16: fixed seed for deterministic test data }
@@ -212,6 +213,16 @@ begin
   for i := 0 to 999 do LData[i] := 100.0 + Random * 10.0 + Random * 10.0;
   Check(GAnalyzer.LooksNormalHeuristic(LData), 'Normal-like data passes heuristic check');
 
+  { Negative case: bimodal distribution should be rejected after W normalization fix }
+  for i := 0 to 499 do LData[i] := 0.0;
+  for i := 500 to 999 do LData[i] := 100.0;
+  LIsNormal := GAnalyzer.LooksNormalHeuristic(LData);
+  Check(not LIsNormal, 'Bimodal distribution: LooksNormalHeuristic returns False');
+
+  { Exponential distribution should also be rejected }
+  for i := 0 to 999 do LData[i] := Exp(i * 0.01);
+  LIsNormal := GAnalyzer.LooksNormalHeuristic(LData);
+  Check(not LIsNormal, 'Exponential distribution: LooksNormalHeuristic returns False');
 end;
 
 procedure TestComputeApproximatePValue;

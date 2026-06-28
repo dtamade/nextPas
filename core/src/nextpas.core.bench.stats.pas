@@ -430,10 +430,12 @@ var
   LN: Integer;
   LMean: Double;
   LSumSq, LSumWeighted: Double;
+  LNormFactor: Double;
   I: Integer;
 begin
-  // 简化的 Shapiro-Wilk 统计量计算
-  // 完整实现需要查表，这里使用简化版本
+  // 简化的 Shapiro-Wilk 风格统计量
+  // 完整实现需要查表（m_i 系数），这里用线性权重近似。
+  // 归一化保证 W ∈ [0,1]（Cauchy-Schwarz 不等式）。
   LN := Length(ASorted);
   if LN < 3 then
     Exit(1.0);
@@ -442,18 +444,23 @@ begin
   LSumSq := 0.0;
   LSumWeighted := 0.0;
 
-  // 计算加权平方和
+  // 权重 w_i = (N-1-2i)/(N-1) 的 L2 范数:
+  //   Σ w_i^2 = N(N+1) / (3(N-1))
+  // 归一化因子 = 1/sqrt(Σ w_i^2)
+  LNormFactor := Sqrt(3.0 * (LN - 1) / (LN * (LN + 1)));
+
   for I := 0 to LN - 1 do
   begin
     LSumSq += Sqr(ASorted[I] - LMean);
-    // 简化的权重计算（近似正态分布的顺序统计量期望）
     LSumWeighted += (ASorted[I] - LMean) * (LN - 1 - 2 * I) / (LN - 1);
   end;
 
   if LSumSq < 1e-10 then
     Exit(1.0);
 
-  Result := Sqr(LSumWeighted) / LSumSq;
+  // W = (Σ w̃_i * (x_i - mean))^2 / Σ (x_i - mean)^2, where w̃ are L2-normalized
+  // By Cauchy-Schwarz: W ∈ [0,1]. W close to 1 → normal-like.
+  Result := Sqr(LSumWeighted * LNormFactor) / LSumSq;
 end;
 
 function TBenchStatsAnalyzer.LooksNormalHeuristic(const ASamples: TDoubleArray): Boolean;
