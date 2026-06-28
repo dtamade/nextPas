@@ -257,6 +257,11 @@ var
   { R6-68: Strong exact-value assertions }
   LExactSuite68: TTestSuite;
   LExactRunner68: TTestRunner;
+  { Phase 8: shuffle determinism }
+  LOrder1: specialize TArray<string>;
+  LIdx: Integer;
+  { Phase 8: TableTest failure message }
+  LTableCases: specialize TArray<TTestCase>;
 begin
   WriteLn('=== test_runner ===');
   { Suite 1: lifecycle }
@@ -1057,6 +1062,19 @@ begin
       FailTest('FormatDuration(1234) = ' + FormatDuration(1234));
     if FormatDuration(500) <> '500ms' then
       FailTest('FormatDuration(500) = ' + FormatDuration(500));
+    { Additional edge cases }
+    if FormatDuration(1200) <> '1.2s' then
+      FailTest('FormatDuration(1200) = ' + FormatDuration(1200));
+    if FormatDuration(10500) <> '10.5s' then
+      FailTest('FormatDuration(10500) = ' + FormatDuration(10500));
+    if FormatDuration(59999) <> '59.99s' then
+      FailTest('FormatDuration(59999) = ' + FormatDuration(59999));
+    if FormatDuration(1) <> '1ms' then
+      FailTest('FormatDuration(1) = ' + FormatDuration(1));
+    if FormatDuration(1100) <> '1.1s' then
+      FailTest('FormatDuration(1100) = ' + FormatDuration(1100));
+    if FormatDuration(60000) <> '60s' then
+      FailTest('FormatDuration(60000) = ' + FormatDuration(60000));
     PassTest('FormatDuration formatting');
   end;
 
@@ -1120,12 +1138,155 @@ begin
     LResultSuite.Test('testA', procedure begin CheckTrue(True); end);
     LResultSuite.Test('testB', procedure begin CheckTrue(True); end);
     LResultSuite.Skip('testC', 'reason');
+    LResultSuite.ShouldFail('testD', procedure begin
+      raise Exception.Create('expected');
+    end);
     { List mode is handled at runner level, but we can test the concept:
-      the suite should still have all 3 entries registered }
-    if Length(LResultSuite.Tests) <> 3 then
-      FailTest('expected 3 entries, got ' + IntToStr(Length(LResultSuite.Tests)));
+      the suite should still have all 4 entries registered }
+    if Length(LResultSuite.Tests) <> 4 then
+      FailTest('expected 4 entries, got ' + IntToStr(Length(LResultSuite.Tests)));
     CheckTrue(LResultSuite.Tests[2].Kind = ekSkipped, 'testC should be ekSkipped');
+    CheckTrue(LResultSuite.Tests[3].Kind = ekShouldFail, 'testD should be ekShouldFail');
     PassTest('ListMode entries registered correctly');
+  end;
+
+  { ── ShouldFail with closure ────────────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 8: ShouldFail with closure');
+  begin
+    LResultSuite := TTestSuite.Create('ShouldFailClosure');
+    { ShouldFail with closure that raises = pass }
+    LResultSuite.ShouldFail('closure raises', procedure begin
+      raise EConvertError.Create('closure error');
+    end);
+    { ShouldFail with closure that does not raise = fail }
+    LResultSuite.ShouldFail('closure no raise', procedure begin
+      { intentionally empty }
+    end);
+    if LResultSuite.RunWithResult(LRegularLogResult) then
+      FailTest('ShouldFailClosure suite should fail');
+    if LRegularLogResult.Passed <> 1 then
+      FailTest('expected 1 passed (closure raises), got ' + IntToStr(LRegularLogResult.Passed));
+    if LRegularLogResult.Failed <> 1 then
+      FailTest('expected 1 failed (closure no raise), got ' + IntToStr(LRegularLogResult.Failed));
+    PassTest('ShouldFail with closure');
+  end;
+
+  { ── ShouldFail with Skip inside ────────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 8: ShouldFail with Skip inside');
+  begin
+    LResultSuite := TTestSuite.Create('ShouldFailSkip');
+    LResultSuite.ShouldFail('skip inside', procedure begin
+      Skip('skipped inside should-fail');
+    end);
+    LResultSuite.ShouldFail('raise inside', procedure begin
+      raise Exception.Create('expected');
+    end);
+    LResultSuite.RunWithResult(LRegularLogResult);
+    { skip inside ShouldFail = skipped (not passed, not failed) }
+    if LRegularLogResult.Skipped <> 1 then
+      FailTest('expected 1 skipped, got ' + IntToStr(LRegularLogResult.Skipped));
+    if LRegularLogResult.Passed <> 1 then
+      FailTest('expected 1 passed (raise), got ' + IntToStr(LRegularLogResult.Passed));
+    if LRegularLogResult.Failed <> 0 then
+      FailTest('expected 0 failed, got ' + IntToStr(LRegularLogResult.Failed));
+    PassTest('ShouldFail with Skip inside');
+  end;
+
+  { ── Shuffle determinism: same seed = same order ────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 8: Shuffle determinism');
+  begin
+    { Two runs with same seed must produce identical order }
+    LResultSuite := TTestSuite.Create('ShuffleDeterminism');
+    LResultSuite.Test('a', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('b', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('c', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('d', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('e', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('f', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('g', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('h', procedure begin CheckTrue(True); end);
+
+    LResultSuite.Config.ShuffleSeed := 12345;
+    LResultSuite.RunWithResult(LRegularLogResult);
+    { Capture order from first run }
+    SetLength(LOrder1, Length(LRegularLogResult.Results));
+    for LIdx := 0 to High(LRegularLogResult.Results) do
+      LOrder1[LIdx] := LRegularLogResult.Results[LIdx].Name;
+
+    { Reset and run again with same seed — need fresh suite since entries are shuffled in-place }
+    LResultSuite := TTestSuite.Create('ShuffleDeterminism2');
+    LResultSuite.Test('a', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('b', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('c', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('d', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('e', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('f', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('g', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('h', procedure begin CheckTrue(True); end);
+    LResultSuite.Config.ShuffleSeed := 12345;
+    LResultSuite.RunWithResult(LRegularLogResult);
+
+    for LIdx := 0 to High(LOrder1) do
+    begin
+      if LOrder1[LIdx] <> LRegularLogResult.Results[LIdx].Name then
+        FailTest('order mismatch at index ' + IntToStr(LIdx) +
+          ': ' + LOrder1[LIdx] + ' vs ' + LRegularLogResult.Results[LIdx].Name);
+    end;
+    PassTest('Shuffle determinism: same seed = same order');
+  end;
+
+  { ── Shuffle boundary: seed=1 (minimum valid) ──────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 8: Shuffle boundary seeds');
+  begin
+    LResultSuite := TTestSuite.Create('ShuffleBoundary');
+    LResultSuite.Test('x1', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('x2', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('x3', procedure begin CheckTrue(True); end);
+    { seed=1 should not crash }
+    LResultSuite.Config.ShuffleSeed := 1;
+    LResultSuite.RunWithResult(LRegularLogResult);
+    if LRegularLogResult.Passed <> 3 then
+      FailTest('seed=1: expected 3 passed, got ' + IntToStr(LRegularLogResult.Passed));
+    { seed=MaxInt should not crash }
+    LResultSuite := TTestSuite.Create('ShuffleBoundary2');
+    LResultSuite.Test('y1', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('y2', procedure begin CheckTrue(True); end);
+    LResultSuite.Config.ShuffleSeed := MaxInt;
+    LResultSuite.RunWithResult(LRegularLogResult);
+    if LRegularLogResult.Passed <> 2 then
+      FailTest('seed=MaxInt: expected 2 passed, got ' + IntToStr(LRegularLogResult.Passed));
+    PassTest('Shuffle boundary seeds');
+  end;
+
+  { ── TableTest failure preserves message (audit P0-2) ───────────────────── }
+  WriteLn;
+  SectionHeader('Phase 8: TableTest failure message');
+  begin
+    LResultSuite := TTestSuite.Create('TableTestMsg');
+    LTableCases := nil;
+    SetLength(LTableCases, 2);
+    LTableCases[0].Name := 'add'; LTableCases[0].Data := '1+1=2';
+    LTableCases[1].Name := 'fail_case'; LTableCases[1].Data := 'boom';
+    LResultSuite.TestTable('math', LTableCases,
+      procedure(const AC: TTestCase)
+      begin
+        if AC.Name = 'fail_case' then
+          CheckTrue(False, 'table fail message');
+      end);
+    LResultSuite.RunWithResult(LRegularLogResult);
+    if LRegularLogResult.Failed <> 1 then
+      FailTest('expected 1 failed table case, got ' + IntToStr(LRegularLogResult.Failed));
+    { Verify failure message is NOT empty (the bug was: LLastFailMsg stayed empty) }
+    if LRegularLogResult.Results[1].Message = '' then
+      FailTest('table test failure message should not be empty');
+    if Pos('table fail message', LRegularLogResult.Results[1].Message) = 0 then
+      FailTest('table test failure message should contain assertion text, got: ' +
+        LRegularLogResult.Results[1].Message);
+    PassTest('TableTest failure preserves message');
   end;
 
   WriteLn;

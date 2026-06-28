@@ -149,11 +149,11 @@ begin
     Result.RetryCount := LDefaults.RetryCount;
   if Result.MaxParallelWorkers = 0 then
     Result.MaxParallelWorkers := LDefaults.MaxParallelWorkers;
-  if Result.RepeatAllCount = 0 then
+  if (Result.RepeatAllCount = 0) and not (ckCount in GExplicit) then
     Result.RepeatAllCount := LDefaults.RepeatAllCount;
-  if Result.SlowTestCount = 0 then
+  if (Result.SlowTestCount = 0) and not (ckSlow in GExplicit) then
     Result.SlowTestCount := LDefaults.SlowTestCount;
-  if Result.ShuffleSeed = 0 then
+  if (Result.ShuffleSeed = 0) and not (ckShuffle in GExplicit) then
     Result.ShuffleSeed := LDefaults.ShuffleSeed;
   { FailFast and ListMode: false is the intentional default, no merge needed }
 end;

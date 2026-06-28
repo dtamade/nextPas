@@ -309,7 +309,7 @@ begin
   for I := N - 1 downto 1 do
   begin
     LSeed := LSeed * 1103515245 + 12345;
-    J := Abs(LSeed mod (I + 1));
+    J := (LSeed and $7FFFFFFF) mod (I + 1);
     LTemp := AEntries[I];
     AEntries[I] := AEntries[J];
     AEntries[J] := LTemp;
