@@ -3723,6 +3723,36 @@ begin
     import. When DirectImportMatchCount > 1, the index may not point to
     the "best" candidate — but we only use it when Count = 1, so this
     is safe. If Count > 1, we fall through to the ambiguity check below. }
+  if HasArgTypeIds and (DirectImportExactMatchCount = 1) then
+  begin
+    ABody := FProcedureBodies[DirectImportExactMatchIndex].Body;
+    ADecl := FProcedureBodies[DirectImportExactMatchIndex].Decl;
+    AOwnerUnitId := FProcedureBodies[DirectImportExactMatchIndex].OwnerUnitId;
+    Exit(True);
+  end;
+
+  if HasArgTypeIds and (DirectImportExactMatchCount > 1) then
+  begin
+    AResolutionFailureKind := 'ambiguous-overload';
+    Exit(False);
+  end;
+
+  if HasArgTypeIds and (DirectImportCompatibleMatchCount = 1) and
+    (DirectImportExactMatchCount = 0) then
+  begin
+    ABody := FProcedureBodies[DirectImportCompatibleMatchIndex].Body;
+    ADecl := FProcedureBodies[DirectImportCompatibleMatchIndex].Decl;
+    AOwnerUnitId := FProcedureBodies[DirectImportCompatibleMatchIndex].OwnerUnitId;
+    Exit(True);
+  end;
+
+  if HasArgTypeIds and (DirectImportCompatibleMatchCount > 1) and
+    (DirectImportExactMatchCount = 0) then
+  begin
+    AResolutionFailureKind := 'ambiguous-overload';
+    Exit(False);
+  end;
+
   if (ImportedMatchCount > 1) and (DirectImportMatchCount = 1) then
   begin
     if HasArgTypeIds and (DirectImportExactMatchCount = 1) then
@@ -4335,10 +4365,25 @@ begin
   if AName = '' then
     Exit;
 
+  if FCurrentScopeId > 0 then
+  begin
+    Index := FModel.LookupSymbol(AName, FCurrentScopeId);
+    if Index > 0 then
+    begin
+      Symbol := FModel.SymbolAt(Index - 1);
+      if (SameText(Symbol.Kind, 'variable') or
+        SameText(Symbol.Kind, 'parameter')) and
+        (Symbol.TypeId > 0) and (Symbol.TypeId <= FModel.TypeCount) then
+        Exit(Symbol.TypeId);
+    end;
+  end;
+
   for Index := 0 to FModel.SymbolCount - 1 do
   begin
     Symbol := FModel.SymbolAt(Index);
-    if SameText(Symbol.Name, AName) and SameText(Symbol.Kind, 'variable') and
+    if SameText(Symbol.Name, AName) and
+      (SameText(Symbol.Kind, 'variable') or
+       SameText(Symbol.Kind, 'parameter')) and
       (Symbol.TypeId > 0) and (Symbol.TypeId <= FModel.TypeCount) then
       Exit(Symbol.TypeId);
   end;
@@ -6376,6 +6421,8 @@ begin
       end;
     gnkUnaryExpression:
       begin
+        if ANode.Text = '@' then
+          Exit(FModel.FindTypeByName('Pointer'));
         if ANode.Text = 'not' then
           Result := InferExpressionType(ANode.ChildAt(0))
         else
@@ -7639,6 +7686,7 @@ procedure TSemanticAnalyzer.ProcessVarSection(const ANode: TGreenNode;
 var
   I, J: LongInt;
   Child, TypeChild: TGreenNode;
+  SymbolId: LongInt;
   TypeId: LongInt;
 begin
   if ANode = nil then
@@ -7660,8 +7708,10 @@ begin
         Break;
       end;
     end;
-    FModel.AddSymbol(Child.Text, 'variable', AOwnerUnitId, TypeId,
+    SymbolId := FModel.AddSymbol(Child.Text, 'variable', AOwnerUnitId, TypeId,
       Child.ByteOffset);
+    if FCurrentScopeId > 0 then
+      FModel.SetSymbolScope(SymbolId, FCurrentScopeId);
   end;
 end;
 
@@ -7733,13 +7783,19 @@ begin
         if (ParamChild <> nil) and (ParamChild.NodeKind = gnkParameterDecl) then
         begin
           ParamTypeId := ParamDeclTypeId(ParamChild, AOwnerUnitId);
-          FModel.AddSymbol(ParamChild.Text, 'parameter', AOwnerUnitId, ParamTypeId,
+          SymbolId := FModel.AddSymbol(
+            StripParamModifier(ParamChild.Text),
+            'parameter',
+            AOwnerUnitId,
+            ParamTypeId,
             ParamChild.ByteOffset);
-          FModel.SetSymbolScope(FModel.SymbolCount, CallableScopeId);
+          FModel.SetSymbolScope(SymbolId, CallableScopeId);
           Inc(ParamCount);
         end;
       end;
     end
+    else if Child.NodeKind = gnkVarSection then
+      ProcessVarSection(Child, AOwnerUnitId)
     else if Child.NodeKind = gnkProcedureDecl then
       ProcessProcedureDecl(Child, AOwnerUnitId)
     else if Child.NodeKind = gnkFunctionDecl then
@@ -7802,13 +7858,19 @@ begin
         if (ParamChild <> nil) and (ParamChild.NodeKind = gnkParameterDecl) then
         begin
           ParamTypeId := ParamDeclTypeId(ParamChild, AOwnerUnitId);
-          FModel.AddSymbol(ParamChild.Text, 'parameter', AOwnerUnitId, ParamTypeId,
+          SymbolId := FModel.AddSymbol(
+            StripParamModifier(ParamChild.Text),
+            'parameter',
+            AOwnerUnitId,
+            ParamTypeId,
             ParamChild.ByteOffset);
-          FModel.SetSymbolScope(FModel.SymbolCount, CallableScopeId);
+          FModel.SetSymbolScope(SymbolId, CallableScopeId);
           Inc(ParamCount);
         end;
       end;
     end
+    else if Child.NodeKind = gnkVarSection then
+      ProcessVarSection(Child, AOwnerUnitId)
     else if Child.NodeKind = gnkProcedureDecl then
       ProcessProcedureDecl(Child, AOwnerUnitId)
     else if Child.NodeKind = gnkFunctionDecl then
