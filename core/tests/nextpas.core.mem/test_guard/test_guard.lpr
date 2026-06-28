@@ -163,6 +163,35 @@ begin
   end;
 end;
 
+{ ── Double-free detection ── }
+
+procedure TestDoubleFreeDetection;
+var
+  LAlloc: TGuardAllocator;
+  LPtr: Pointer;
+  LRaised: Boolean;
+begin
+  LAlloc := TGuardAllocator.Create;
+  try
+    LPtr := LAlloc.GetMem(64);
+    Check(LPtr <> nil, 'GetMem(64)');
+    LAlloc.FreeMem(LPtr);
+
+    { Guard allocator unmaps memory on free; second free hits unmapped page }
+    LRaised := False;
+    try
+      LAlloc.FreeMem(LPtr);
+    except
+      on E: Exception do
+        LRaised := True;
+    end;
+    Check(LRaised, 'double free should raise an exception (unmapped page)');
+    WriteLn('PASS: double-free detection');
+  finally
+    LAlloc.Free;
+  end;
+end;
+
 { ── Main ── }
 
 begin
@@ -176,6 +205,7 @@ begin
   T.Test('page_aligned', @TestPageAligned);
   T.Test('nil_handling', @TestNilHandling);
   T.Test('traits', @TestTraits);
+  T.Test('double_free_detection', @TestDoubleFreeDetection);
 
   T.Run;
   T.Summary;
