@@ -329,6 +329,34 @@ begin
   Check(LResult.NsPerOp = 5000, 'SingleDash-2: NsPerOp = 5000');
 end;
 
+{ === CR-17: TotalNs overflow protection === }
+
+procedure Test_ParseGoBenchLine_OverflowSafe;
+var
+  LResult: TBenchResult;
+begin
+  { Safe upper bound: 1e9 ns/op * 1000 iters = 1e12 — should succeed }
+  LResult := ParseGoBenchLine('BenchmarkSafe-1   1000   1000000000 ns/op');
+  Check(LResult.TotalNs > 0, 'Safe TotalNs: > 0');
+  Check(LResult.NsPerOp = 1000000000, 'Safe TotalNs: NsPerOp preserved');
+end;
+
+procedure Test_ParseGoBenchLine_Overflow;
+var
+  LResults: TBenchResultArray;
+  LSkipped: Integer;
+begin
+  { Overflow: 9999999999 ns/op * 9999999999 iters would overflow.
+    Multi-line parse should skip this line and continue. }
+  LResults := ParseGoBenchOutput(
+    'BenchmarkOK-1   100   1000 ns/op' + LineEnding +
+    'BenchmarkOverflow-1   9999999999   9999999999.0 ns/op' + LineEnding +
+    'BenchmarkOK2-1   200   2000 ns/op');
+  LSkipped := GetLastParseSkippedCount;
+  Check(LSkipped >= 1, 'Overflow line skipped (skipped count >= 1)');
+  Check(Length(LResults) >= 2, 'Non-overflow lines parsed successfully');
+end;
+
 { === Empty Input / Newline Tests === }
 
 procedure Test_ParseGoBenchOutput_Empty;
@@ -510,6 +538,8 @@ begin
   { CRLF / Mixed line endings }
   T.Test('go: CRLF line endings', @Test_ParseGoBenchOutput_CRLF);
   T.Test('go: mixed line endings', @Test_ParseGoBenchOutput_MixedLineEndings);
+  T.Test('go: TotalNs overflow safe', @Test_ParseGoBenchLine_OverflowSafe);
+  T.Test('go: TotalNs overflow protection', @Test_ParseGoBenchLine_Overflow);
 
   T.Run;
   T.Summary;

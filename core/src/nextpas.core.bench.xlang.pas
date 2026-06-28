@@ -73,7 +73,8 @@ implementation
 uses
   nextpas.core.text.base,
   nextpas.core.text.conv,
-  nextpas.core.text.strings;
+  nextpas.core.text.strings,
+  nextpas.core.math.scalar;
 
 threadvar
   GLastParseSkippedCount: Integer;
@@ -128,6 +129,31 @@ begin
   if LTrimmed = '' then
     Exit(True);
   Result := LTrimmed[1] = '#';
+end;
+
+{ Helper: Safely compute TotalNs = NsPerOp * Iterations
+  Raises EParseError on overflow or non-finite input (CR-17). }
+
+function SafeDeriveTotalNs(ANsPerOp: Double; AIterations: Int64): UInt64;
+var
+  LProduct: Double;
+begin
+  if (ANsPerOp <= 0) or (AIterations <= 0) then
+    Exit(0);
+  if IsNan(ANsPerOp) or IsInfinite(ANsPerOp) then
+    raise EParseError.Create('Non-finite NsPerOp');
+
+  LProduct := ANsPerOp * Double(AIterations);
+
+  { Double can represent integers up to 2^53 exactly.
+    Round() in FPC raises EInvalidOp when the value exceeds High(Int64).
+    Guard with a safe upper bound. }
+  if IsNan(LProduct) or IsInfinite(LProduct) or (LProduct > 9.2e18) then
+    raise EParseError.CreateFmt(
+      'TotalNs overflow: NsPerOp=%.1f * Iterations=%d exceeds representable range',
+      [ANsPerOp, AIterations]);
+
+  Result := UInt64(Round(LProduct));
 end;
 
 { Helper: Parse "key=value" pairs }
@@ -261,7 +287,7 @@ begin
 
   Result.Name := LName;
   Result.Iterations := LIterations;
-  Result.TotalNs := Round(LNsPerOp * LIterations);
+  Result.TotalNs := SafeDeriveTotalNs(LNsPerOp, LIterations);
   Result.NsPerOp := LNsPerOp;
   if LNsPerOp > 0 then
     Result.OpsPerSec := 1000000000 / LNsPerOp
@@ -460,7 +486,7 @@ begin
   Result.Outliers := 0;
   Result.SampleCount := 1;
   Result.Iterations := LIterations;
-  Result.TotalNs := Round(LNsPerOp * LIterations);
+  Result.TotalNs := SafeDeriveTotalNs(LNsPerOp, LIterations);
   if LNsPerOp > 0 then
     Result.OpsPerSec := 1000000000 / LNsPerOp
   else

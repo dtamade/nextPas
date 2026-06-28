@@ -592,7 +592,7 @@ var
   LParallelResult: TParallelBenchResult;
   LPerThreadIterations: Int64;
   LMaxThreadElapsedNs: UInt64;
-  I: Int64;
+  I: SizeInt;
 begin
   Result := Default(TBenchResult);
   Result.Executed := True;
