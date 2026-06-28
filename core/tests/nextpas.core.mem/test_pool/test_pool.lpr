@@ -7,6 +7,7 @@ uses
   nextpas.core.test,
   nextpas.core.mem.error,
   nextpas.core.mem.allocator.base,
+  nextpas.core.mem.allocator.rtl,
   nextpas.core.mem.pool,
   nextpas.core.mem.pool.base,
   nextpas.core.mem.pool.fixed,
@@ -408,6 +409,32 @@ begin
   end;
 end;
 
+{ ── Test: MakeFixedSlabPool factory ── }
+
+procedure TestMakeFixedSlabPoolFactory;
+var
+  LPool: IFixedSlabPool;
+  LPtr: Pointer;
+  LOk: Boolean;
+begin
+  LPool := MakeFixedSlabPool(1024);
+  Check(LPool <> nil, 'MakeFixedSlabPool should return non-nil');
+  LOk := LPool.Acquire(LPtr);
+  Check(LOk, 'Acquire from MakeFixedSlabPool should succeed');
+  Check(LPtr <> nil, 'Acquire should return non-nil pointer');
+  LPool.Release(LPtr);
+end;
+
+{ ── Test: AllocErrorToString ── }
+
+procedure TestAllocErrorToString;
+begin
+  Check(AllocErrorToString(aeOutOfMemory) <> '', 'aeOutOfMemory should have string');
+  Check(AllocErrorToString(aeInvalidPointer) <> '', 'aeInvalidPointer should have string');
+  Check(AllocErrorToString(aeDoubleFree) <> '', 'aeDoubleFree should have string');
+  Check(AllocErrorToString(aeInvalidLayout) <> '', 'aeInvalidLayout should have string');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.mem.pool');
   T.Test('Create', @TestPoolCreate);
@@ -425,6 +452,8 @@ begin
   T.Test('fixed pool batch clamps to open-array length', @TestFixedPoolBatchClampsToOpenArrayLength);
   T.Test('fixed pool rejects total-size overflow before alloc', @TestFixedPoolRejectsTotalSizeOverflowBeforeAlloc);
   T.Test('object pool batch clamps to open-array length', @TestObjectPoolBatchClampsToOpenArrayLength);
+  T.Test('MakeFixedSlabPool factory', @TestMakeFixedSlabPoolFactory);
+  T.Test('AllocErrorToString', @TestAllocErrorToString);
   T.Run;
 
   T.Summary;
