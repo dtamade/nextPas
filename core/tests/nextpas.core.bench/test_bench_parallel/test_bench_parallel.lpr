@@ -48,9 +48,15 @@ end;
 procedure Test_Create;
 var
   LBench: TParallelBenchmark;
+  LResult: TParallelBenchResult;
 begin
   LBench := TParallelBenchmark.Create(@BenchSimple, 4, 1000, 100);
-  Check(True, 'Created successfully');
+  { Create 应初始化配置 — 通过 Execute 后的 Config 验证 }
+  LResult := LBench.Execute;
+  Check(LResult.Config.ThreadCount = 4, 'Create: ThreadCount = 4');
+  Check(LResult.Config.IterationsPerThread = 1000, 'Create: IterationsPerThread = 1000');
+  Check(LResult.Config.WarmupIterations = 100, 'Create: WarmupIterations = 100');
+  Check(LResult.TotalNs > 0, 'Create: TotalNs > 0 after Execute');
 end;
 
 procedure Test_Execute_Simple;
@@ -116,11 +122,19 @@ end;
 procedure Test_Execute_Warmup;
 var
   LResult: TParallelBenchResult;
+  I: Integer;
 begin
   LResult := RunParallelBench(@BenchSimple, 2, 10000);
 
-  // Warmup is handled internally, just verify it doesn't crash
-  Check(LResult.TotalNs > 0, 'TotalNs > 0');
+  Check(LResult.TotalNs > 0, 'Warmup: TotalNs > 0');
+  Check(Length(LResult.ThreadResults) = 2, 'Warmup: 2 thread results');
+  for I := 0 to High(LResult.ThreadResults) do
+  begin
+    Check(LResult.ThreadResults[I].Iterations = 10000,
+      'Warmup: thread ' + nextpas.core.text.conv.IntToStr(I) + ' iterations = 10000');
+    Check(LResult.ThreadResults[I].ThreadId = I,
+      'Warmup: thread ' + nextpas.core.text.conv.IntToStr(I) + ' ThreadId correct');
+  end;
 end;
 
 procedure Test_Execute_ZeroIterations;
@@ -160,12 +174,25 @@ end;
 procedure Test_Execute_HeavyWorkload;
 var
   LResult: TParallelBenchResult;
+  I: Integer;
+  LTotalIterations: Int64;
 begin
   LResult := RunParallelBench(@BenchSimple, 4, 100000);
 
-  Check(LResult.TotalNs > 0, 'TotalNs > 0');
-  Check(LResult.NsPerOp > 0, 'NsPerOp > 0');
-  Check(LResult.OpsPerSec > 0, 'OpsPerSec > 0');
+  Check(LResult.TotalNs > 0, 'HeavyWorkload: TotalNs > 0');
+  Check(LResult.NsPerOp > 0, 'HeavyWorkload: NsPerOp > 0');
+  Check(LResult.OpsPerSec > 0, 'HeavyWorkload: OpsPerSec > 0');
+  Check(Length(LResult.ThreadResults) = 4, 'HeavyWorkload: 4 thread results');
+
+  { 验证所有线程的迭代次数总和 }
+  LTotalIterations := 0;
+  for I := 0 to High(LResult.ThreadResults) do
+  begin
+    Check(LResult.ThreadResults[I].Iterations = 100000,
+      'HeavyWorkload: thread ' + nextpas.core.text.conv.IntToStr(I) + ' iterations = 100000');
+    Inc(LTotalIterations, LResult.ThreadResults[I].Iterations);
+  end;
+  Check(LTotalIterations = 4 * 100000, 'HeavyWorkload: total iterations = 400000');
 end;
 
 procedure Test_GetResults;
