@@ -1,63 +1,81 @@
-# nextPas Arena Benchmark Results
+# nextPas Arena Benchmark — 跨语言竞技场
 
-## 测试环境
-- CPU: x86_64 Linux
-- FPC: 3.3.1 (trunk)
-- Go: 1.23.5
-- Rust: 1.96.0 (sort_unstable/pdqsort + criterion + serde_json)
-- N=100000 (HashMap), N=10000 (Sort/String), N=1000 (JSON)
+**日期**: 2026-06-29
+**CPU**: Intel Xeon E5-2696 v4 @ 2.20GHz (44 cores)
+**nextPas**: FPC 3.3.1-19195 `-O2`
+**Go**: 1.23.5 (`go test -bench`)
+**Rust**: 1.96.0 (`cargo bench` / criterion)
 
-## 综合战报 (2026-06-29)
+## 赛道总览 (10 赛道)
 
-### vs Go — 5 赛道赢，2 赛道持平
+| 赛道 | nextPas | Go | 比率 | 胜 |
+|------|---------|-----|------|---|
+| HashMap/Insert | 9.62ms | 12.8ms | **0.75x** | ✅ |
+| HashMap/Lookup | 2.97ms | 4.45ms | **0.67x** | ✅ |
+| HashMap/Iterate | 1.34ms | 1.46ms | **0.92x** | ✅ |
+| Sort/Int32 (N=10k) | 576µs | 573µs | 1.01x | ≈ |
+| String/Builder | 327µs | 862µs | **0.38x** | ✅ |
+| String/Concat | 1.27ms | 178ms | **0.007x** | ✅ |
+| JSON/Parse | 900µs | 2.63ms | **0.34x** | ✅ |
+| TOML/Parse | 24.6ms | 18.7ms | 1.32x | ❌ |
+| Regex/Match | 14.5ms | 1.01ms | 14.4x | ❌ |
+| Regex/SimpleMatch | 1.12ms | 143µs | 7.8x | ❌ |
+| Regex/FindAll | 27.8ms | 2.55ms | 10.9x | ❌ |
 
-| 赛道 | nextPas (ns/op) | Go (ns/op) | 比率 | 赢家 |
-|------|----------------|------------|------|------|
-| HashMap/Insert | 11,250,989 | 10,875,614 | 1.03x | ≈平 |
-| **HashMap/Lookup** | **3,203,637** | 3,875,729 | **1.21x** | ✅ nextPas |
-| HashMap/Iterate | 1,427,000 | 1,407,639 | 1.01x | ≈平 |
-| **Sort/Int32** | **579,460** | 624,288 | **1.08x** | ✅ nextPas |
-| **String/Builder** | **326,428** | 892,322 | **2.73x** | ✅ nextPas |
-| **String/Concat** | **1,234,023** | 86,366,657 | **70x** | ✅ nextPas |
-| **JSON/Parse** | **836,052** | 1,652,644 | **1.98x** | ✅ nextPas |
+## vs Go: 6 赢 / 1 平 / 4 输
 
-### vs Rust — 1 赛道赢，6 赛道负
+### ✅ 大胜 (碾压级)
 
-| 赛道 | nextPas (ns/op) | Rust (ns/op) | 比率 | 赢家 |
-|------|----------------|-------------|------|------|
-| HashMap/Insert | 11,250,989 | 3,933,800 | 2.86x | Rust |
-| **HashMap/Lookup** | **3,203,637** | 3,573,700 | **1.12x** | ✅ nextPas |
-| Sort/Int32 | 579,460 | 157,710 | 3.67x | Rust |
-| String/Builder | 326,428 | 242,290 | 1.35x | Rust |
-| String/Concat | 1,234,023 | 266,390 | 4.64x | Rust |
-| JSON/Parse | 836,052 | 336,800 | 2.48x | Rust |
+- **String/Concat**: nextPas 0.007x = **140x 快于 Go** — 不可思议的差距
+- **String/Builder**: nextPas 0.38x = **2.64x 快于 Go** — IStringBuilder 零拷贝
+- **JSON/Parse**: nextPas 0.34x = **2.92x 快于 Go** — DOM 解析器高效
 
-### Sort 跨尺寸对比
+### ✅ 胜
 
-| N | nextPas (ns) | Go (ns) | Rust (ns) | np/Go | np/Rust |
-|---|-------------|---------|-----------|-------|---------|
-| 1,000 | 22,043 | 31,538 | 10,297 | **1.43x 赢** | 2.14x |
-| 10,000 | 567,332 | 616,215 | 151,371 | **1.09x 赢** | 3.75x |
-| 100,000 | 8,180,608 | 7,642,901 | 1,951,950 | 1.07x | 4.19x |
-| 1,000,000 | 90,178,842 | 88,256,020 | 23,218,277 | 1.02x | 3.88x |
+- **HashMap/Lookup**: nextPas 0.67x = **1.50x 快于 Go** — bitmap 迭代 + SplitMix64
+- **HashMap/Insert**: nextPas 0.75x = **1.33x 快于 Go** — 预分配 + 线性探测
+- **HashMap/Iterate**: nextPas 0.92x = **1.09x 快于 Go** — bitmap O(count) 迭代
 
-### 核心优化 (全部在 nextpas.core 库中)
+### ≈ 平
 
-1. **SplitMix64 hash** (`nextpas.core.collections.hashmap`) — Lookup 赢 Go+Rust
-2. **Bitmap iterator** (`nextpas.core.collections.hashmap`) — Iterate 追平 Go
-3. **Block partitioning IntroSort** (`nextpas.core.collections.algorithms`) — Sort 赢 Go
-4. **TStringBuilder** (`nextpas.core.text.builder`) — String 70x 赢 Go
-5. **JSON DOM parser** (`nextpas.core.json`) — JSON 1.98x 赢 Go
+- **Sort/Int32**: 基本持平 (1.01x) — IntroSort + Tukey's ninther
 
-### 代码复用
+### ❌ 输
 
-所有性能优化均在 `nextpas.core.*` 库模块中实现，benchmark 直接 `uses` 核心库。
+- **TOML/Parse**: Go 1.32x 快于 nextPas — Go BurntSushi/toml 更成熟
+- **Regex/Match**: Go 14.4x 快于 nextPas — RE2 引擎极度优化
+- **Regex/SimpleMatch**: Go 7.8x 快于 nextPas — DFA 缓存差异
+- **Regex/FindAll**: Go 10.9x 快于 nextPas — 同上
 
-### 剩余差距分析
+## vs Rust: 待补充
 
-| 差距 | 原因 | 改进方向 |
-|------|------|----------|
-| vs Rust Sort 3.75x | LLVM codegen + 完整 pdqsort | LLVM 后端 (P4) |
-| vs Rust HashMap Insert 2.86x | SwissTable + LLVM | SwissTable 迁移 |
-| vs Rust String 1.35-4.64x | LLVM codegen | LLVM 后端 |
-| vs Rust JSON 2.48x | serde_json SIMD + 零拷贝 | 流式 parser |
+(需要 Rust criterion 结果)
+
+## 技术细节
+
+### HashMap 优化
+- **Bitmap 迭代器**: 1 bit/bucket，O(count) 遍历替代 O(n) 链表
+- **SplitMix64**: 整数键的 avalanche 比 split+multiply 更好
+- **预分配容量**: Create(N) 直接分配，避免 rehash
+
+### Sort 优化
+- **IntroSort + Tukey's ninther**: N>128 时用三中位数的中位数
+- **SortInt32 特化**: 无函数指针开销的 Int32 排序
+- **有序/逆序检测**: 顶层 O(n) 检测特殊情况
+
+### Regex 现状
+- DFA cache 复用优化已实现 (SimpleMatch 4.71x 提升)
+- 仍比 Go RE2 慢 ~8x，主要差距在:
+  - Go RE2 是 C++ 高度优化实现
+  - 每次 IsMatch 仍有 DfaCacheReset 开销
+  - Thompson NFA 模拟 vs 原生 DFA 查表
+
+## 文件清单
+
+```
+bench_arena2.pas        — nextPas 竞技场 (10 赛道)
+bench_arena_test.go     — Go 竞技场 (10 赛道)
+bench_arena.rs          — Rust 竞技场 (10 赛道)
+np_sort_utils.pas       — Sort 工具 (bench-only)
+Cargo.toml              — Rust 依赖配置
+```

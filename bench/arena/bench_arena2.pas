@@ -15,6 +15,8 @@ uses
   nextpas.core.collections.hashmap,
   nextpas.core.text.builder,
   nextpas.core.json,
+  nextpas.core.toml,
+  nextpas.core.regex,
   nextpas.core.time.base,
   nextpas.core.bench,
   nextpas.core.bench.base,
@@ -26,6 +28,8 @@ const
   SORT_N        = 10000;
   STRING_N      = 10000;
   JSON_N        = 1000;
+  TOML_N        = 500;
+  REGEX_N       = 1000;
 
 type
   TIntHashMap = specialize THashMap<SizeInt, SizeInt>;
@@ -169,6 +173,129 @@ begin
 end;
 
 { ============================================================
+  赛道 5: TOML — parse
+  ============================================================ }
+
+var
+  GTomlStr: AnsiString;
+
+procedure InitTomlData;
+var
+  LBuilder: IStringBuilder;
+  I: SizeInt;
+begin
+  LBuilder := MakeStringBuilder(TOML_N * 200);
+  LBuilder.AppendStr('[server]' + LineEnding);
+  LBuilder.AppendStr('host = "0.0.0.0"' + LineEnding);
+  LBuilder.AppendStr('port = 8080' + LineEnding);
+  LBuilder.AppendStr('workers = 16' + LineEnding);
+  LBuilder.AppendStr('max_connections = 10000' + LineEnding);
+  LBuilder.AppendStr(LineEnding);
+  LBuilder.AppendStr('[database]' + LineEnding);
+  LBuilder.AppendStr('driver = "postgresql"' + LineEnding);
+  LBuilder.AppendStr('host = "db.example.com"' + LineEnding);
+  LBuilder.AppendStr('port = 5432' + LineEnding);
+  LBuilder.AppendStr('pool_size = 20' + LineEnding);
+  LBuilder.AppendStr(LineEnding);
+
+  for I := 0 to TOML_N - 1 do
+  begin
+    LBuilder.AppendStr('[[services]]' + LineEnding);
+    LBuilder.AppendStr('name = "service_'); LBuilder.AppendInt(I);
+    LBuilder.AppendStr('"' + LineEnding);
+    LBuilder.AppendStr('enabled = ');
+    if (I and 1) = 0 then LBuilder.AppendStr('true') else LBuilder.AppendStr('false');
+    LBuilder.AppendStr(LineEnding);
+    LBuilder.AppendStr('weight = '); LBuilder.AppendInt(I mod 100);
+    LBuilder.AppendStr(LineEnding);
+    LBuilder.AppendStr('timeout = '); LBuilder.AppendInt(1000 + I * 10);
+    LBuilder.AppendStr('.5' + LineEnding);
+    LBuilder.AppendStr('endpoint = "https://api.example.com/v1/service_');
+    LBuilder.AppendInt(I); LBuilder.AppendStr('"' + LineEnding);
+    LBuilder.AppendStr('tags = ["production", "region_');
+    LBuilder.AppendInt(I mod 5); LBuilder.AppendStr('", "tier_');
+    LBuilder.AppendStr('backend'); LBuilder.AppendStr('"]' + LineEnding);
+    LBuilder.AppendStr(LineEnding);
+  end;
+
+  GTomlStr := LBuilder.ToString;
+end;
+
+procedure BenchTOML_Parse(const ACtx: IBenchContext);
+var
+  LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse(GTomlStr);
+  ACtx.SetBytes(Length(GTomlStr));
+end;
+
+{ ============================================================
+  赛道 6: Regex — match + findall
+  ============================================================ }
+
+var
+  GRegexLogLines: array of AnsiString;
+  GRegexPattern: AnsiString;
+  GRegexSimplePattern: AnsiString;
+
+procedure InitRegexData;
+var
+  I: SizeInt;
+begin
+  GRegexPattern := '(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}\.\d{3}) \[(\w+)\] (.+)';
+  GRegexSimplePattern := '\d+';
+  SetLength(GRegexLogLines, REGEX_N);
+  for I := 0 to REGEX_N - 1 do
+    GRegexLogLines[I] := '2026-06-29 14:3' + AnsiString(IntToStr(I mod 10)) +
+      ':2' + AnsiString(IntToStr(I mod 6)) + '.' +
+      AnsiString(IntToStr(100 + (I * 37) mod 900)) +
+      ' [info] Request #' + IntToStr(I) + ' completed in ' +
+      IntToStr(I mod 500) + 'ms';
+end;
+
+procedure BenchRegex_Match(const ACtx: IBenchContext);
+var
+  LRe: TRegex;
+  I, LMatched: SizeInt;
+begin
+  LRe := TRegex.Compile(GRegexPattern);
+  LMatched := 0;
+  for I := 0 to REGEX_N - 1 do
+    if LRe.IsMatch(GRegexLogLines[I]) then
+      Inc(LMatched);
+  ACtx.SetBytes(REGEX_N * 80);
+end;
+
+procedure BenchRegex_SimpleMatch(const ACtx: IBenchContext);
+var
+  LRe: TRegex;
+  I, LMatched: SizeInt;
+begin
+  LRe := TRegex.Compile(GRegexSimplePattern);
+  LMatched := 0;
+  for I := 0 to REGEX_N - 1 do
+    if LRe.IsMatch(GRegexLogLines[I]) then
+      Inc(LMatched);
+  ACtx.SetBytes(REGEX_N * 80);
+end;
+
+procedure BenchRegex_FindAll(const ACtx: IBenchContext);
+var
+  LRe: TRegex;
+  I, LTotal: SizeInt;
+  LMatches: TMatchArray;
+begin
+  LRe := TRegex.Compile(GRegexPattern);
+  LTotal := 0;
+  for I := 0 to REGEX_N - 1 do
+  begin
+    LMatches := LRe.FindAll(GRegexLogLines[I]);
+    Inc(LTotal, Length(LMatches));
+  end;
+  ACtx.SetBytes(REGEX_N * 80);
+end;
+
+{ ============================================================
   Main
   ============================================================ }
 var
@@ -184,6 +311,8 @@ begin
   InitHashMapKeys;
   InitSortData;
   InitJsonData;
+  InitTomlData;
+  InitRegexData;
 
   { Pre-allocate and populate map for Lookup/Iterate benchmarks }
   GPreallocMap := TIntHashMap.Create(HASHMAP_N);
@@ -210,6 +339,10 @@ begin
   LSuite.Add('String/Builder', @BenchString_Builder);
   LSuite.Add('String/Concat', @BenchString_Concat);
   LSuite.Add('JSON/Parse', @BenchJSON_Parse);
+  LSuite.Add('TOML/Parse', @BenchTOML_Parse);
+  LSuite.Add('Regex/Match', @BenchRegex_Match);
+  LSuite.Add('Regex/SimpleMatch', @BenchRegex_SimpleMatch);
+  LSuite.Add('Regex/FindAll', @BenchRegex_FindAll);
 
   LResults := LSuite.Run;
 
