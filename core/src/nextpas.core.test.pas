@@ -177,11 +177,23 @@ procedure SetDefaultSlowTestCount(ACount: Integer);
 procedure SetDefaultShuffleSeed(ASeed: Integer);
 procedure SetDefaultFailFast(AFailFast: Boolean);
 procedure SetDefaultListMode(AListMode: Boolean);
+procedure SetDefaultShortMode(AShortMode: Boolean);
+procedure SetDefaultShowProgress(AShowProgress: Boolean);
+procedure SetDefaultMaxFailures(AMaxFailures: Integer);
+procedure SetDefaultJsonOutput(AJsonOutput: Boolean);
+procedure SetDefaultVerboseMode(AVerbose: Boolean);
+procedure SetDefaultRunTimeoutSec(ATimeoutSec: Integer);
 function  GetRepeatAllCount(const AConfig: TTestConfig): Integer;
 function  GetSlowTestCount(const AConfig: TTestConfig): Integer;
 function  GetShuffleSeed(const AConfig: TTestConfig): Integer;
 function  GetFailFast(const AConfig: TTestConfig): Boolean;
 function  GetListMode(const AConfig: TTestConfig): Boolean;
+function  GetShortMode(const AConfig: TTestConfig): Boolean;
+function  GetShowProgress(const AConfig: TTestConfig): Boolean;
+function  GetMaxFailures(const AConfig: TTestConfig): Integer;
+function  GetJsonOutput(const AConfig: TTestConfig): Boolean;
+function  GetVerboseMode(const AConfig: TTestConfig): Boolean;
+function  GetRunTimeoutSec(const AConfig: TTestConfig): Integer;
 function  FormatDuration(AMillis: Int64): string;
 function  GetTopSlowest(const AResults: TTestResults;
   ACount: Integer): TTestResults;
@@ -481,6 +493,42 @@ begin nextpas.core.test.config.SetDefaultFailFast(AFailFast); end;
 
 procedure SetDefaultListMode(AListMode: Boolean);
 begin nextpas.core.test.config.SetDefaultListMode(AListMode); end;
+
+procedure SetDefaultShortMode(AShortMode: Boolean);
+begin nextpas.core.test.config.SetDefaultShortMode(AShortMode); end;
+
+procedure SetDefaultShowProgress(AShowProgress: Boolean);
+begin nextpas.core.test.config.SetDefaultShowProgress(AShowProgress); end;
+
+procedure SetDefaultMaxFailures(AMaxFailures: Integer);
+begin nextpas.core.test.config.SetDefaultMaxFailures(AMaxFailures); end;
+
+procedure SetDefaultJsonOutput(AJsonOutput: Boolean);
+begin nextpas.core.test.config.SetDefaultJsonOutput(AJsonOutput); end;
+
+procedure SetDefaultVerboseMode(AVerbose: Boolean);
+begin nextpas.core.test.config.SetDefaultVerboseMode(AVerbose); end;
+
+procedure SetDefaultRunTimeoutSec(ATimeoutSec: Integer);
+begin nextpas.core.test.config.SetDefaultRunTimeoutSec(ATimeoutSec); end;
+
+function GetShortMode(const AConfig: TTestConfig): Boolean;
+begin Result := nextpas.core.test.config.GetShortMode(AConfig); end;
+
+function GetShowProgress(const AConfig: TTestConfig): Boolean;
+begin Result := nextpas.core.test.config.GetShowProgress(AConfig); end;
+
+function GetMaxFailures(const AConfig: TTestConfig): Integer;
+begin Result := nextpas.core.test.config.GetMaxFailures(AConfig); end;
+
+function GetJsonOutput(const AConfig: TTestConfig): Boolean;
+begin Result := nextpas.core.test.config.GetJsonOutput(AConfig); end;
+
+function GetVerboseMode(const AConfig: TTestConfig): Boolean;
+begin Result := nextpas.core.test.config.GetVerboseMode(AConfig); end;
+
+function GetRunTimeoutSec(const AConfig: TTestConfig): Integer;
+begin Result := nextpas.core.test.config.GetRunTimeoutSec(AConfig); end;
 
 function FormatDuration(AMillis: Int64): string;
 begin Result := nextpas.core.test.output.FormatDuration(AMillis); end;

@@ -262,6 +262,39 @@ var
   LIdx: Integer;
   { Phase 8: TableTest failure message }
   LTableCases: specialize TArray<TTestCase>;
+  { Phase 9: short mode }
+  LShortSuite: TTestSuite;
+  LShortResult: TTestRunResult;
+  LShortConfig: TTestConfig;
+  { Phase 9: progress }
+  LProgressSuite: TTestSuite;
+  LProgressResult: TTestRunResult;
+  LProgressConfig: TTestConfig;
+  { Phase 9: max failures }
+  LMaxFailSuite: TTestSuite;
+  LMaxFailResult: TTestRunResult;
+  LMaxFailConfig: TTestConfig;
+  LMaxFailRunner: TTestRunner;
+  LMaxFailRunnerResults: specialize TArray<TTestRunResult>;
+  { Phase 9: JSON output }
+  LJsonSuite: TTestSuite;
+  LJsonResult: TTestRunResult;
+  LJsonConfig: TTestConfig;
+  LJsonSink: TBufferSink;
+  { Phase 10: verbose mode }
+  LVerbSuite: TTestSuite;
+  LVerbResult: TTestRunResult;
+  LVerbConfig: TTestConfig;
+  LVerbSink: TBufferSink;
+  LVerbOut: string;
+  { Phase 11: run timeout }
+  LTimeoutRunSuite: TTestSuite;
+  LTimeoutRunResult: TTestRunResult;
+  LTimeoutRunConfig: TTestConfig;
+  LTimeoutRunSink: TBufferSink;
+  LTimeoutRunOut: string;
+  { Phase 12: cleanup }
+  GCleanupCalled: Integer;
 begin
   WriteLn('=== test_runner ===');
   { Suite 1: lifecycle }
@@ -1287,6 +1320,241 @@ begin
       FailTest('table test failure message should contain assertion text, got: ' +
         LRegularLogResult.Results[1].Message);
     PassTest('TableTest failure preserves message');
+  end;
+
+  { ── Phase 9: ShortSkip ───────────────────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 9: ShortSkip');
+  begin
+    { Test 1: ShortSkip test runs normally when ShortMode is off }
+    LShortSuite := TTestSuite.Create('ShortSkipNormal');
+    LShortSuite.Test('normal_pass', procedure begin CheckTrue(True); end);
+    LShortSuite.ShortSkip('slow_test', procedure begin CheckTrue(True); end);
+    ResetDefaultConfig;
+    LShortSuite.RunWithResult(LShortResult);
+    if LShortResult.Passed <> 2 then
+      FailTest('ShortSkip off: expected 2 passed, got ' +
+        IntToStr(LShortResult.Passed));
+    if LShortResult.Skipped <> 0 then
+      FailTest('ShortSkip off: expected 0 skipped, got ' +
+        IntToStr(LShortResult.Skipped));
+    { Test 2: ShortSkip test is skipped when ShortMode is on }
+    LShortSuite := TTestSuite.Create('ShortSkipActive');
+    LShortSuite.Test('fast_pass', procedure begin CheckTrue(True); end);
+    LShortSuite.ShortSkip('slow_test', procedure begin CheckTrue(True); end);
+    LShortSuite.ShortSkip('another_slow', procedure begin CheckTrue(True); end);
+    ResetDefaultConfig;
+    SetDefaultShortMode(True);
+    LShortConfig := DefaultConfig;
+    LShortSuite.Config := LShortConfig;
+    LShortSuite.RunWithResult(LShortResult);
+    if LShortResult.Passed <> 1 then
+      FailTest('ShortSkip on: expected 1 passed, got ' +
+        IntToStr(LShortResult.Passed));
+    if LShortResult.Skipped <> 2 then
+      FailTest('ShortSkip on: expected 2 skipped, got ' +
+        IntToStr(LShortResult.Skipped));
+    ResetDefaultConfig;
+    PassTest('ShortSkip');
+  end;
+
+  { ── Phase 9: Progress counter ────────────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 9: Progress counter');
+  begin
+    ResetDefaultConfig;
+    SetDefaultShowProgress(True);
+    LProgressConfig := DefaultConfig;
+    { Test 1: Progress mode runs normally and reports correct counts }
+    LProgressSuite := TTestSuite.Create('ProgressTest');
+    LProgressSuite.Test('p1', procedure begin CheckTrue(True); end);
+    LProgressSuite.Test('p2', procedure begin CheckTrue(True); end);
+    LProgressSuite.Test('p3', procedure begin CheckTrue(True); end);
+    LProgressSuite.Config := LProgressConfig;
+    LProgressSuite.RunWithResult(LProgressResult);
+    if LProgressResult.Passed <> 3 then
+      FailTest('progress: expected 3 passed, got ' +
+        IntToStr(LProgressResult.Passed));
+    if LProgressResult.Failed <> 0 then
+      FailTest('progress: expected 0 failed, got ' +
+        IntToStr(LProgressResult.Failed));
+    ResetDefaultConfig;
+    PassTest('Progress counter');
+  end;
+
+  { ── Phase 9: MaxFailures ─────────────────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 9: MaxFailures');
+  begin
+    ResetDefaultConfig;
+    { Test 1: Suite-level max failures }
+    LMaxFailSuite := TTestSuite.Create('MaxFailSuite');
+    LMaxFailSuite.Test('fail1', procedure begin CheckTrue(False, 'fail1'); end);
+    LMaxFailSuite.Test('fail2', procedure begin CheckTrue(False, 'fail2'); end);
+    LMaxFailSuite.Test('fail3', procedure begin CheckTrue(False, 'fail3'); end);
+    LMaxFailSuite.Test('pass1', procedure begin CheckTrue(True); end);
+    SetDefaultMaxFailures(2);
+    LMaxFailConfig := DefaultConfig;
+    LMaxFailSuite.Config := LMaxFailConfig;
+    LMaxFailSuite.RunWithResult(LMaxFailResult);
+    { Should stop after 2 failures, fail3 and pass1 not run }
+    if LMaxFailResult.Failed <> 2 then
+      FailTest('MaxFailures: expected 2 failed, got ' +
+        IntToStr(LMaxFailResult.Failed));
+    if LMaxFailResult.Passed <> 0 then
+      FailTest('MaxFailures: expected 0 passed (pass1 not reached), got ' +
+        IntToStr(LMaxFailResult.Passed));
+    ResetDefaultConfig;
+    { Test 2: Cross-suite max failures via TTestRunner (separate suite) }
+    LMaxFailSuite := TTestSuite.Create('MaxFailRunner2');
+    LMaxFailSuite.Test('fail_a', procedure begin CheckTrue(False, 'fail_a'); end);
+    LMaxFailSuite.Test('fail_b', procedure begin CheckTrue(False, 'fail_b'); end);
+    LMaxFailSuite.Test('pass_a', procedure begin CheckTrue(True); end);
+    SetDefaultMaxFailures(1);
+    LMaxFailRunner := TTestRunner.Create('MaxFailRunner');
+    LMaxFailRunner.Add(LMaxFailSuite);
+    LMaxFailRunner.RunAllWithResult(LMaxFailRunnerResults);
+    { Runner should stop after 1 total failure across suites }
+    if LMaxFailRunner.TotalFail < 1 then
+      FailTest('MaxFailures runner: expected >= 1 total fail, got ' +
+        IntToStr(LMaxFailRunner.TotalFail));
+    ResetDefaultConfig;
+    PassTest('MaxFailures');
+  end;
+
+  { ── Phase 9: JSON output ─────────────────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 9: JSON output');
+  begin
+    ResetDefaultConfig;
+    { Test JSON report generation via programmatic API }
+    LJsonSuite := TTestSuite.Create('JsonTest');
+    LJsonSuite.Test('jpass', procedure begin CheckTrue(True); end);
+    LJsonSuite.Skip('jskip', 'planned');
+    LJsonSuite.RunWithResult(LJsonResult);
+    { Verify JSON report function works correctly }
+    LJsonSink := TBufferSink.Create;
+    try
+      LJsonSink.Write(JSONReport(specialize TArray<TTestRunResult>.Create(LJsonResult), 'JsonTest'));
+      if Pos('"totalPassed"', LJsonSink.GetOutput) = 0 then
+        FailTest('json: expected "totalPassed" in output');
+      if Pos('"totalSkipped"', LJsonSink.GetOutput) = 0 then
+        FailTest('json: expected "totalSkipped" in output');
+      if Pos('"suites"', LJsonSink.GetOutput) = 0 then
+        FailTest('json: expected "suites" in output');
+      if Pos('"name": "JsonTest"', LJsonSink.GetOutput) = 0 then
+        FailTest('json: expected suite name "JsonTest" in output');
+    finally
+      LJsonSink.Free;
+    end;
+    ResetDefaultConfig;
+    PassTest('JSON output');
+  end;
+
+  { ── Phase 10: Verbose mode ───────────────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 10: Verbose mode');
+  begin
+    ResetDefaultConfig;
+    LVerbSuite := TTestSuite.Create('VerbTest');
+    LVerbSuite.Test('vpass', procedure begin CheckTrue(True); end);
+    LVerbSuite.Test('vfail', procedure begin CheckTrue(False, 'intentional'); end);
+    LVerbSuite.Skip('vskip', 'planned');
+    LVerbConfig := DefaultConfig;
+    LVerbConfig.VerboseMode := True;
+    LVerbSink := TBufferSink.Create;
+    LVerbConfig.OutSink := LVerbSink;
+    LVerbConfig.ErrSink := LVerbSink;
+    LVerbConfig.AnsiMode := amOff;
+    LVerbSuite.Config := LVerbConfig;
+    LVerbSuite.RunWithResult(LVerbResult);
+    LVerbOut := LVerbSink.GetOutput;
+    LVerbSink := nil;  { release via refcount, don't .Free }
+    { Verify verbose output contains [PASS], [FAIL], [SKIP] }
+    if Pos('[PASS]', LVerbOut) = 0 then
+      FailTest('verbose: expected [PASS] in output');
+    if Pos('[FAIL]', LVerbOut) = 0 then
+      FailTest('verbose: expected [FAIL] in output');
+    if Pos('[SKIP]', LVerbOut) = 0 then
+      FailTest('verbose: expected [SKIP] in output');
+    { Verify timing is shown (parentheses with ms/s) }
+    if Pos('(', LVerbOut) = 0 then
+      FailTest('verbose: expected timing in output');
+    { Verify counts }
+    if LVerbResult.Passed <> 1 then
+      FailTest('verbose: expected 1 passed, got ' + IntToStr(LVerbResult.Passed));
+    if LVerbResult.Failed <> 1 then
+      FailTest('verbose: expected 1 failed, got ' + IntToStr(LVerbResult.Failed));
+    if LVerbResult.Skipped <> 1 then
+      FailTest('verbose: expected 1 skipped, got ' + IntToStr(LVerbResult.Skipped));
+    ResetDefaultConfig;
+    PassTest('Verbose mode');
+  end;
+
+  { ── Phase 11: Run timeout ────────────────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 11: Run timeout');
+  begin
+    ResetDefaultConfig;
+    LTimeoutRunSuite := TTestSuite.Create('TimeoutRunTest');
+    LTimeoutRunSuite.Test('fast1', procedure begin CheckTrue(True); end);
+    LTimeoutRunSuite.Test('fast2', procedure begin CheckTrue(True); end);
+    { Set a 1-second run timeout — should be enough for fast tests }
+    LTimeoutRunConfig := DefaultConfig;
+    LTimeoutRunConfig.RunTimeoutSec := 10;
+    LTimeoutRunSink := TBufferSink.Create;
+    LTimeoutRunConfig.OutSink := LTimeoutRunSink;
+    LTimeoutRunConfig.ErrSink := LTimeoutRunSink;
+    LTimeoutRunConfig.AnsiMode := amOff;
+    LTimeoutRunSuite.Config := LTimeoutRunConfig;
+    LTimeoutRunSuite.RunWithResult(LTimeoutRunResult);
+    LTimeoutRunOut := LTimeoutRunSink.GetOutput;
+    LTimeoutRunSink := nil;  { release via refcount }
+    { Fast tests should pass within 10s timeout }
+    if not LTimeoutRunResult.AllPassed then
+      FailTest('run timeout: fast tests should pass within 10s');
+    if LTimeoutRunResult.Passed <> 2 then
+      FailTest('run timeout: expected 2 passed, got ' +
+        IntToStr(LTimeoutRunResult.Passed));
+    ResetDefaultConfig;
+    PassTest('Run timeout');
+  end;
+
+  { ── Phase 12: Cleanup handlers ───────────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 12: Cleanup handlers');
+  begin
+    ResetDefaultConfig;
+    GCleanupCalled := 0;
+    LVerbSuite := TTestSuite.Create('CleanupTest');
+    { Register cleanup handler via procedure-based API }
+    LVerbSuite.Cleanup(procedure begin Inc(GCleanupCalled); end);
+    LVerbSuite.Test('clean1', procedure begin CheckTrue(True); end);
+    LVerbSuite.Test('clean2', procedure begin CheckTrue(True); end);
+    LVerbSuite.RunWithResult(LVerbResult);
+    { Cleanup runs after each test: 2 tests = 2 cleanup calls }
+    if GCleanupCalled <> 2 then
+      FailTest('cleanup: expected 2 cleanup calls, got ' +
+        IntToStr(GCleanupCalled));
+    if not LVerbResult.AllPassed then
+      FailTest('cleanup: all tests should pass');
+    { Test cleanup runs even on failure }
+    GCleanupCalled := 0;
+    LVerbSuite := TTestSuite.Create('CleanupFailTest');
+    LVerbSuite.Cleanup(procedure begin Inc(GCleanupCalled); end);
+    LVerbSuite.Test('willfail', procedure begin CheckTrue(False, 'intentional'); end);
+    LVerbSuite.Test('willpass', procedure begin CheckTrue(True); end);
+    LVerbSuite.RunWithResult(LVerbResult);
+    { Cleanup should still run for both tests (even the failed one) }
+    if GCleanupCalled <> 2 then
+      FailTest('cleanup on fail: expected 2 cleanup calls, got ' +
+        IntToStr(GCleanupCalled));
+    if LVerbResult.Failed <> 1 then
+      FailTest('cleanup on fail: expected 1 failure');
+    if LVerbResult.Passed <> 1 then
+      FailTest('cleanup on fail: expected 1 pass');
+    ResetDefaultConfig;
+    PassTest('Cleanup handlers');
   end;
 
   WriteLn;

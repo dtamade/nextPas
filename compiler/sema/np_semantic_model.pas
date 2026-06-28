@@ -274,6 +274,7 @@ type
     function AddScope(const AKind: TScopeKind; const AName: string;
       const AParentScopeId: LongInt): LongInt;
     procedure SetSymbolScope(const ASymbolId: LongInt; const AScopeId: LongInt);
+    procedure SetSymbolTypeId(const ASymbolId: LongInt; const ATypeId: LongInt);
     procedure SetSymbolParamCount(const ASymbolId: LongInt; const ACount: LongInt);
     procedure SetSymbolMinParamCount(const ASymbolId: LongInt; const ACount: LongInt);
     procedure SetSymbolVisibility(const ASymbolId: LongInt; const AVisibility: string);
@@ -719,6 +720,16 @@ begin
   Idx := ASymbolId - 1;
   if (Idx >= 0) and (Idx < Length(FSymbols)) then
     FSymbols[Idx].ScopeId := AScopeId;
+end;
+
+procedure TSemanticModel.SetSymbolTypeId(const ASymbolId: LongInt;
+  const ATypeId: LongInt);
+var
+  Idx: LongInt;
+begin
+  Idx := ASymbolId - 1;
+  if (Idx >= 0) and (Idx < Length(FSymbols)) then
+    FSymbols[Idx].TypeId := ATypeId;
 end;
 
 procedure TSemanticModel.SetSymbolParamCount(const ASymbolId: LongInt;

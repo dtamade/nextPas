@@ -16,7 +16,8 @@ type
 
   TConfigKey = (ckFilter, ckTag, ckTimeout, ckAnsi,
     ckOutSink, ckErrSink, ckRetry, ckWorkers, ckCount, ckSlow,
-    ckShuffle, ckFailFast, ckList);
+    ckShuffle, ckFailFast, ckList, ckShort, ckProgress, ckMaxFail,
+    ckJsonOutput, ckVerbose, ckRunTimeout);
   TConfigKeys = set of TConfigKey;
 
   IOutputSink = interface
@@ -73,6 +74,12 @@ type
     ShuffleSeed   : Integer; { 0=off, -1=random, >0=specific seed }
     FailFast      : Boolean; { true = stop on first failure }
     ListMode      : Boolean; { true = list test names only, don't run }
+    ShortMode     : Boolean; { true = skip tests marked with ShortSkip }
+    ShowProgress  : Boolean; { true = show [N/Total] progress counter }
+    MaxFailures   : Integer; { 0=unlimited, >0 = stop after N total failures }
+    JsonOutput    : Boolean; { true = emit JSON report to stdout after run }
+    VerboseMode   : Boolean; { true = show per-test [PASS]/[FAIL]/[SKIP] with duration }
+    RunTimeoutSec : Integer; { 0=unlimited, >0 = global suite runner timeout in seconds }
   end;
 
 function DefaultConfig: TTestConfig;
@@ -93,11 +100,23 @@ procedure SetDefaultSlowTestCount(ACount: Integer);
 procedure SetDefaultShuffleSeed(ASeed: Integer);
 procedure SetDefaultFailFast(AFailFast: Boolean);
 procedure SetDefaultListMode(AListMode: Boolean);
+procedure SetDefaultShortMode(AShortMode: Boolean);
+procedure SetDefaultShowProgress(AShowProgress: Boolean);
+procedure SetDefaultMaxFailures(AMaxFailures: Integer);
+procedure SetDefaultJsonOutput(AJsonOutput: Boolean);
+procedure SetDefaultVerboseMode(AVerbose: Boolean);
+procedure SetDefaultRunTimeoutSec(ATimeoutSec: Integer);
 function  GetRepeatAllCount(const AConfig: TTestConfig): Integer;
 function  GetSlowTestCount(const AConfig: TTestConfig): Integer;
 function  GetShuffleSeed(const AConfig: TTestConfig): Integer;
 function  GetFailFast(const AConfig: TTestConfig): Boolean;
 function  GetListMode(const AConfig: TTestConfig): Boolean;
+function  GetShortMode(const AConfig: TTestConfig): Boolean;
+function  GetShowProgress(const AConfig: TTestConfig): Boolean;
+function  GetMaxFailures(const AConfig: TTestConfig): Integer;
+function  GetJsonOutput(const AConfig: TTestConfig): Boolean;
+function  GetVerboseMode(const AConfig: TTestConfig): Boolean;
+function  GetRunTimeoutSec(const AConfig: TTestConfig): Integer;
 
 implementation
 
@@ -120,6 +139,12 @@ begin
   Result.ShuffleSeed   := 0; { shuffle off by default }
   Result.FailFast      := False;
   Result.ListMode      := False;
+  Result.ShortMode     := False;
+  Result.ShowProgress  := False;
+  Result.MaxFailures   := 0; { unlimited by default }
+  Result.JsonOutput    := False;
+  Result.VerboseMode   := False;
+  Result.RunTimeoutSec := 0; { unlimited by default }
 end;
 
 function DefaultConfig: TTestConfig;
@@ -258,6 +283,42 @@ begin
   Include(GExplicit, ckList);
 end;
 
+procedure SetDefaultShortMode(AShortMode: Boolean);
+begin
+  GDefaultConfig.ShortMode := AShortMode;
+  Include(GExplicit, ckShort);
+end;
+
+procedure SetDefaultShowProgress(AShowProgress: Boolean);
+begin
+  GDefaultConfig.ShowProgress := AShowProgress;
+  Include(GExplicit, ckProgress);
+end;
+
+procedure SetDefaultMaxFailures(AMaxFailures: Integer);
+begin
+  GDefaultConfig.MaxFailures := AMaxFailures;
+  Include(GExplicit, ckMaxFail);
+end;
+
+procedure SetDefaultJsonOutput(AJsonOutput: Boolean);
+begin
+  GDefaultConfig.JsonOutput := AJsonOutput;
+  Include(GExplicit, ckJsonOutput);
+end;
+
+procedure SetDefaultVerboseMode(AVerbose: Boolean);
+begin
+  GDefaultConfig.VerboseMode := AVerbose;
+  Include(GExplicit, ckVerbose);
+end;
+
+procedure SetDefaultRunTimeoutSec(ATimeoutSec: Integer);
+begin
+  GDefaultConfig.RunTimeoutSec := ATimeoutSec;
+  Include(GExplicit, ckRunTimeout);
+end;
+
 function GetRepeatAllCount(const AConfig: TTestConfig): Integer;
 begin
   Result := ResolveConfig(AConfig).RepeatAllCount;
@@ -281,6 +342,36 @@ end;
 function GetListMode(const AConfig: TTestConfig): Boolean;
 begin
   Result := ResolveConfig(AConfig).ListMode;
+end;
+
+function GetShortMode(const AConfig: TTestConfig): Boolean;
+begin
+  Result := ResolveConfig(AConfig).ShortMode;
+end;
+
+function GetShowProgress(const AConfig: TTestConfig): Boolean;
+begin
+  Result := ResolveConfig(AConfig).ShowProgress;
+end;
+
+function GetMaxFailures(const AConfig: TTestConfig): Integer;
+begin
+  Result := ResolveConfig(AConfig).MaxFailures;
+end;
+
+function GetJsonOutput(const AConfig: TTestConfig): Boolean;
+begin
+  Result := ResolveConfig(AConfig).JsonOutput;
+end;
+
+function GetVerboseMode(const AConfig: TTestConfig): Boolean;
+begin
+  Result := ResolveConfig(AConfig).VerboseMode;
+end;
+
+function GetRunTimeoutSec(const AConfig: TTestConfig): Integer;
+begin
+  Result := ResolveConfig(AConfig).RunTimeoutSec;
 end;
 
 procedure TStdoutSink.Write(const AText: string);

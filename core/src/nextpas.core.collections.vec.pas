@@ -29,17 +29,17 @@ type
   {**
    * TVec<T>
    *
-   * @desc 动态向量实现，连续内存的可变长度数组
+   * @desc 
    *
-   * @param T 元素类型
+   * @param T 
    *
    * @note
-   *   - 底层使用 TArray<T> 存储，保证内存连续
-   *   - 支持可配置的增长策略（默认 1.5x）
-   *   - 提供栈操作（Push/Pop）、函数式操作（Filter/Retain）
-   *   - 支持 O(1) 的交换删除（DeleteSwap）
+   *   -  TArray<T> 
+   *   -  1.5x
+   *   - Push/PopFilter/Retain
+   *   -  O(1) DeleteSwap
    *
-   * @threadsafety 非线程安全
+   * @threadsafety 
    *
    * @example
    *   var Vec: specialize TVec<Integer>;
@@ -52,17 +52,17 @@ type
    *     Vec.Free;
    *   end;
    *
-   * @see IVec 接口定义
-   * @see TVecDeque 双端队列替代方案
+   * @see IVec 
+   * @see TVecDeque 
    *}
   generic TVec<T> = class(specialize TGenericCollection<T>, specialize IVec<T>)
   public type
     IVecT = specialize IVec<T>;
     {**
-     * TDrainIter - Drain 迭代器
+     * TDrainIter - Drain 
      *
-     * @desc 消费式范围迭代器，迭代被 drain 的元素
-     *       调用 Drain 时立即从原容器移除元素，迭代器逐个返回
+     * @desc  drain 
+     *        Drain 
      *}
     TDrainIter = record
     private
@@ -89,8 +89,8 @@ type
     procedure SyncDataPtr; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 
-  { 迭代器回调}
-{ 参见迭代器最佳实践：docs/Iterator_BestPractices.md }
+  { }
+{ docs/Iterator_BestPractices.md }
   protected
     function  DoIterGetCurrent(aIter: PPtrIter): Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function  DoIterMoveNext(aIter: PPtrIter): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
@@ -100,7 +100,7 @@ type
     function  GetDefaultGrowStrategyI: IGrowthStrategy; virtual;
     function  CalcGrowSize(aCurrentSize, aRequiredSize: SizeUInt): SizeUInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
-  { 基类虚方法实现}
+  { }
   protected
     procedure DoFill(const aElement: T); override;
     procedure DoZero; override;
@@ -537,7 +537,7 @@ type
     function  SwapRemoveAt(aIndex: SizeUInt): T; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function  TrySwapRemoveAt(aIndex: SizeUInt; var aElement: T): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
-    { 函数式编程方法 }
+    {  }
     function Filter(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): specialize IVec<T>; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function Filter(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): specialize IVec<T>; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
@@ -556,7 +556,7 @@ type
     function All(aPredicate: specialize TPredicateRefFunc<T>): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     {$ENDIF}
 
-    { 就地操作方法 }
+    {  }
     procedure Retain(aPredicate: specialize TPredicateFunc<T>; aData: Pointer); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     procedure Retain(aPredicate: specialize TPredicateMethod<T>; aData: Pointer); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
@@ -569,25 +569,25 @@ type
     function SplitOff(aIndex: SizeUInt): specialize IVec<T>;
     procedure Splice(aIndex, aRemoveCount: SizeUInt; const aInsert: array of T);
 
-    { 去重方法 }
+    {  }
     function Dedup: SizeUInt;
     function DedupBy(aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt;
 
-    { 便利方法 }
+    {  }
     function ToArray: specialize TGenericArray<T>; override;
     function Clone: TCollection; override;
     function First: T; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function Last: T; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
-    { 高性能无检查方法 }
+    {  }
     procedure PushUnchecked(const aElement: T); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
-    { Unchecked 算法方法 - 跳过边界检查，追求极致性能 }
+    { Unchecked  -  }
 
     {**
      * FindUnchecked
-     * @desc 无检查版本的查找方法，跳过所有边界检查
-     * @remark 调用者必须确保参数有效性，否则可能导致程序崩溃
+     * @desc 
+     * @remark 
      *}
     function FindUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
     function FindUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt; overload;
@@ -598,8 +598,8 @@ type
 
     {**
      * ForEachUnchecked
-     * @desc 无检查版本的遍历方法，跳过所有边界检查
-     * @remark 调用者必须确保参数有效性，否则可能导致程序崩溃
+     * @desc 
+     * @remark 
      *}
     function ForEachUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): Boolean; overload;
     function ForEachUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): Boolean; overload;
@@ -609,8 +609,8 @@ type
 
     {**
      * SortUnchecked
-     * @desc 无检查版本的排序方法，跳过所有边界检查
-     * @remark 调用者必须确保参数有效性，否则可能导致程序崩溃
+     * @desc 
+     * @remark 
      *}
     procedure SortUnchecked(aStartIndex, aCount: SizeUInt); overload;
     procedure SortUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer); overload;
@@ -621,8 +621,8 @@ type
 
     {**
      * ContainsUnchecked
-     * @desc 无检查版本的包含检查方法，跳过所有边界检查
-     * @remark 调用者必须确保参数有效性，否则可能导致程序崩溃
+     * @desc 
+     * @remark 
      *}
     function ContainsUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): Boolean; overload;
     function ContainsUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): Boolean; overload;
@@ -633,15 +633,15 @@ type
 
     {**
      * ZeroUnchecked
-     * @desc 无检查版本的清零方法，跳过所有边界检查
-     * @remark 调用者必须确保参数有效性，否则可能导致程序崩溃
+     * @desc 
+     * @remark 
      *}
     procedure ZeroUnchecked(aIndex, aCount: SizeUInt);
 
     {**
      * FindIfUnchecked, FindIfNotUnchecked, FindLastUnchecked, FindLastIfUnchecked, FindLastIfNotUnchecked
-     * @desc 无检查版本的查找方法，跳过所有边界检查
-     * @remark 调用者必须确保参数有效性，否则可能导致程序崩溃
+     * @desc 
+     * @remark 
      *}
     function FindIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
     function FindIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
@@ -676,8 +676,8 @@ type
 
     {**
      * CountOfUnchecked, CountIfUnchecked
-     * @desc 无检查版本的计数方法，跳过所有边界检查
-     * @remark 调用者必须确保参数有效性，否则可能导致程序崩溃
+     * @desc 
+     * @remark 
      *}
     function CountOfUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeUInt; overload;
     function CountOfUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt; overload;
@@ -694,15 +694,15 @@ type
 
     {**
      * FillUnchecked
-     * @desc 无检查版本的填充方法，跳过所有边界检查
-     * @remark 调用者必须确保参数有效性，否则可能导致程序崩溃
+     * @desc 
+     * @remark 
      *}
     procedure FillUnchecked(aStartIndex, aCount: SizeUInt; const aElement: T);
 
     {**
      * ReplaceUnchecked, ReplaceIfUnchecked
-     * @desc 无检查版本的替换方法，跳过所有边界检查
-     * @remark 调用者必须确保参数有效性，否则可能导致程序崩溃
+     * @desc 
+     * @remark 
      *}
     function ReplaceUnchecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt): SizeUInt; overload;
     function ReplaceUnchecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt; overload;
@@ -719,8 +719,8 @@ type
 
     {**
      * IsSortedUnchecked
-     * @desc 无检查版本的排序检查方法，跳过所有边界检查
-     * @remark 调用者必须确保参数有效性，否则可能导致程序崩溃
+     * @desc 
+     * @remark 
      *}
     function IsSortedUnchecked(aStartIndex, aCount: SizeUInt): Boolean; overload;
     function IsSortedUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): Boolean; overload;
@@ -731,8 +731,8 @@ type
 
     {**
      * BinarySearchUnchecked, BinarySearchInsertUnchecked
-     * @desc 无检查版本的二分查找方法，跳过所有边界检查
-     * @remark 调用者必须确保参数有效性，否则可能导致程序崩溃
+     * @desc 
+     * @remark 
      *}
     function BinarySearchUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
     function BinarySearchUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt; overload;
@@ -750,8 +750,8 @@ type
 
     {**
      * ShuffleUnchecked
-     * @desc 无检查版本的随机打乱方法，跳过所有边界检查
-     * @remark 调用者必须确保参数有效性，否则可能导致程序崩溃
+     * @desc 
+     * @remark 
      *}
     procedure ShuffleUnchecked(aStartIndex, aCount: SizeUInt); overload;
     procedure ShuffleUnchecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorFunc; aData: Pointer); overload;
@@ -762,8 +762,8 @@ type
 
     {**
      * ReverseUnchecked
-     * @desc 无检查版本的反转方法，跳过所有边界检查
-     * @remark 调用者必须确保参数有效性，否则可能导致程序崩溃
+     * @desc 
+     * @remark 
      *}
     procedure ReverseUnchecked(aStartIndex, aCount: SizeUInt);
 
@@ -880,14 +880,14 @@ end;
 
 destructor TVec.Destroy;
 begin
-  // 接口化统一：策略仅为接口持有，依赖引用计数自动回收
+  // 
   FGrowStrategy := nil;
   FPrevNonAlignedStrategy := nil;
   FBuf.Free;
   inherited Destroy;
 end;
 
-{ 迭代器回�?}
+{ ?}
 
 function TVec.DoIterGetCurrent(aIter: PPtrIter): Pointer;
 begin
@@ -913,12 +913,12 @@ begin
   end;
 end;
 
-{ 内部辅助方法 }
+{  }
 
 function TVec.GetDefaultGrowStrategyI: IGrowthStrategy;
 begin
-  // 默认采用因子增长 1.5x（与 Java ArrayList/Rust 常见实践一致）
-  // 如需 2 的幂对齐，请显式设置策略或在 VecDeque 使用按幂归一化策略
+  //  1.5x Java ArrayList/Rust 
+  //  2  VecDeque 
   Result := FactorGrow(1.5);
 end;
 
@@ -935,7 +935,7 @@ begin
   Result := FGrowStrategy.GetGrowSize(aCurrentSize, aRequiredSize);
 end;
 
-{ 基类虚方法实�?- 直接委托给TArray }
+{ ?- TArray }
 
 procedure TVec.DoFill(const aElement: T);
 begin
@@ -952,7 +952,7 @@ begin
   Reverse(0, FCount);
 end;
 
-{ ICollection - 直接委托给TArray }
+{ ICollection - TArray }
 
 function TVec.PtrIter: TPtrIter;
 begin
@@ -1010,7 +1010,7 @@ begin
   aDst.AppendUnchecked(GetMemory, FCount);
 end;
 
-{ IGenericCollection - 直接委托给TArray }
+{ IGenericCollection - TArray }
 
 procedure TVec.SaveToUnchecked(aDst: TCollection);
 begin
@@ -1020,7 +1020,7 @@ begin
     aDst.LoadFromUnchecked(GetMemory, FCount);
 end;
 
-{ IArray - 直接委托给TArray }
+{ IArray - TArray }
 
 function TVec.GetMemory: PElement;
 begin
@@ -1085,7 +1085,7 @@ var
   LElemSize: SizeUInt;
   LPtr: Pointer;
 begin
-  // 边界裁剪：允许 aCount=0，返回空 span；若起点超界，返回空 span
+  //  aCount=0 span span
   if (aCount = 0) or (aIndex >= FCount) then
     Exit(TSpan.FromPointer(nil, 0, SizeOf(T)));
 
@@ -1108,7 +1108,7 @@ begin
   else if aNewSize > FCount then
   begin
     Reserve(aNewSize - FCount);
-    // 初始化新增范围，确保托管类型被正确初始化，非托管类型置零
+    // 
     GetElementManager.InitializeElementsUnchecked(FBuf.GetPtrUnchecked(FCount), aNewSize - FCount);
   end;
 
@@ -1136,7 +1136,7 @@ begin
 end;
 
 
-  { 接口化统一：直接以接口持有，不再使用弱包装视图 }
+  {  }
 function TVec.GetGrowStrategy: IGrowthStrategy;
 begin
   if FGrowStrategy = nil then
@@ -1166,7 +1166,7 @@ begin
   LCapacity := GetCapacity;
 
   if IsAddOverflow(FCount, aAdditional) then
-    exit(False);  // TryReserve 不应该抛出异常，返回 False
+    exit(False);  // TryReserve  False
 
   LTarget := FCount + aAdditional;
   Result  := (LCapacity >= LTarget);
@@ -1176,7 +1176,7 @@ begin
     LExpected := CalcGrowSize(LCapacity, LTarget);
 
     if LExpected <= LCapacity then
-      exit(False);  // 增长计算错误，返�?False 而不是抛出异�?
+      exit(False);  // ?False ?
 
     SetCapacity(LExpected);
     Result := True;
@@ -1197,7 +1197,7 @@ begin
     exit(True);
 
   if IsAddOverflow(FCount, aAdditional) then
-    exit(False);  // TryReserveExact 不应该抛出异常，返回 False
+    exit(False);  // TryReserveExact  False
 
   LExpect := FCount + aAdditional;
   Result  := (GetCapacity >= LExpect);
@@ -1208,7 +1208,7 @@ begin
       SetCapacity(LExpect);
       Result := True;
     except
-      Result := False;  // Try 方法不应该抛出异常，捕获并返回 False
+      Result := False;  // Try  False
     end;
   end;
 end;
@@ -1243,27 +1243,27 @@ end;
 
 procedure TVec.EnableAlignedGrowth(aAlignElements: SizeUInt);
 begin
-  // 启用对齐增长：TAlignedWrapperStrategy 直接接受 IGrowthStrategy
-  // aAlignElements 需为 2 的幂；若非法，回退到默认 64
+  // TAlignedWrapperStrategy  IGrowthStrategy
+  // aAlignElements  2  64
   if aAlignElements = 0 then
     aAlignElements := TAlignedWrapperStrategy.DEFAULT_ALIGN_SIZE;
   if (aAlignElements and (aAlignElements - 1)) <> 0 then
     aAlignElements := TAlignedWrapperStrategy.DEFAULT_ALIGN_SIZE;
 
-  // 若已启用，则先禁用以恢复原策略
+  // 
   if IsAlignedGrowthEnabled then
     DisableAlignedGrowth;
 
-  // 保存原策略以便恢复
+  // 
   FPrevNonAlignedStrategy := GetGrowStrategy;
 
-  // 直接创建 TAlignedWrapperStrategy，它实现 IGrowthStrategy
+  //  TAlignedWrapperStrategy IGrowthStrategy
   SetGrowStrategy(TAlignedWrapperStrategy.Create(FPrevNonAlignedStrategy, aAlignElements));
 end;
 
 procedure TVec.DisableAlignedGrowth;
 begin
-  // 恢复先前的非对齐策略
+  // 
   if FPrevNonAlignedStrategy <> nil then
     SetGrowStrategy(FPrevNonAlignedStrategy)
   else
@@ -1293,19 +1293,19 @@ begin
 
   LCap := GetCapacity;
 
-  // 如果需要扩容，先扩容
+  // 
   if aNewSize > LCap then
     SetCapacity(aNewSize);
 
-  // 如果需要缩容（减少元素数），处理托管类型
+  // 
   if (aNewSize < FCount) and GetIsManagedType then
     GetElementManager.FinalizeManagedElementsUnchecked(FBuf.GetPtrUnchecked(aNewSize), FCount - aNewSize);
 
-  // 如果需要扩容（增加元素数），初始化新元素
+  // 
   if aNewSize > FCount then
     GetElementManager.InitializeElementsUnchecked(FBuf.GetPtrUnchecked(FCount), aNewSize - FCount);
 
-  // 只改变 FCount，不改变容量（除非之前需要扩容）
+  //  FCount
   FCount := aNewSize;
 end;
 
@@ -1329,24 +1329,24 @@ var
   ElemSize: SizeUInt;
   ThresholdBytes: SizeUInt;
 begin
-  // 滞回策略（按字节计）：阈值 = max(2×UsedBytes, 64 KiB)
-  // 当 CapacityBytes > 阈值时，收缩到 Count
+  //  = max(2UsedBytes, 64 KiB)
+  //  CapacityBytes >  Count
   UsedElems := FCount;
   CapElems  := GetCapacity;
 
   if CapElems <= UsedElems then
-    exit; // 容量不超过使用量，无需收缩
+    exit; // 
 
   ElemSize := GetElementSize;
   UsedBytes := UsedElems * ElemSize;
   CapBytes  := CapElems * ElemSize;
 
-  // 阈值 = max(2×UsedBytes, 64 KiB)
-  RatioThresholdBytes := UsedBytes shl 1;  // 2×UsedBytes
+  //  = max(2UsedBytes, 64 KiB)
+  RatioThresholdBytes := UsedBytes shl 1;  // 2UsedBytes
   MinKeepBytes := 64 * 1024;               // 64 KiB
 
-  // 如果容量字节数小于 64 KiB，主要使用 2×UsedBytes 作为阈值
-  // 否则使用 max(2×UsedBytes, 64 KiB)
+  //  64 KiB 2UsedBytes 
+  //  max(2UsedBytes, 64 KiB)
   if CapBytes < MinKeepBytes then
     ThresholdBytes := RatioThresholdBytes
   else
@@ -1421,7 +1421,7 @@ function TVec.TryPop(aDst: Pointer; aCount: SizeUInt): Boolean;
 var
   LIndex: SizeUInt;
 begin
-  // Try 方法完整参数检查：确保永不抛异常
+  // Try 
   if aCount = 0 then
     exit(True);
 
@@ -1440,7 +1440,7 @@ var
   LLen: SizeUInt;
 begin
   if aCount = 0 then
-    exit(True);  // aCount = 0 是成功的无操作
+    exit(True);  // aCount = 0 
 
   LLen := Length(aDst);
 
@@ -1482,7 +1482,7 @@ function TVec.TryPeekCopy(aDst: Pointer; aCount: SizeUInt): Boolean;
 var
   LP: Pointer;
 begin
-  // Try 方法完整参数检查：确保永不抛异常
+  // Try 
   if aCount = 0 then
     exit(True);
 
@@ -1490,7 +1490,7 @@ begin
     exit(False);
 
   LP := PeekRange(aCount);
-  // PeekRange 已经检查了边界，这里 LP 不会为 nil
+  // PeekRange  LP  nil
   GetElementManager.CopyElementsNonOverlapUnchecked(LP, aDst, aCount);
   Result := True;
 end;
@@ -1500,7 +1500,7 @@ var
   LLen: SizeUInt;
 begin
   if aCount = 0 then
-    exit(True);  // aCount = 0 是成功的无操作
+    exit(True);  // aCount = 0 
 
   if aCount > FCount then
     exit(False);
@@ -1604,7 +1604,7 @@ begin
   aSrc.SerializeToArrayBuffer(GetPtrUnchecked(aIndex), aCount);
 end;
 
-{ IVec - Write 系列（需要动态扩容的特殊逻辑）}
+{ IVec - Write }
 
 procedure TVec.Write(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt);
 begin
@@ -1649,10 +1649,10 @@ begin
   WriteUnchecked(aIndex, @aSrc[0], LLen);
 end;
 
-  { Unchecked: 调用方必须确保前置条件：
-    - aSrc 非空（Length(aSrc) > 0），否则引用 @aSrc[0] 未定义
-    - 写入范围 [aIndex, aIndex + Length(aSrc) - 1] 在有效范围内，或调用方先行 Reserve/SetCapacity
-    - 本方法不做任何参数/边界检查，违反前置条件将导致未定义行为 }
+  { Unchecked: 
+    - aSrc Length(aSrc) > 0 @aSrc[0] 
+    -  [aIndex, aIndex + Length(aSrc) - 1]  Reserve/SetCapacity
+    - / }
 
 procedure TVec.WriteUnchecked(aIndex: SizeUInt; const aSrc: array of T);
 begin
@@ -1747,10 +1747,10 @@ begin
   WriteExact(aIndex, @aSrc[0], LLen);
 end;
 
-  { Unchecked: 调用方必须确保前置条件：
-    - aSrc 非空（Length(aSrc) > 0），否则引用 @aSrc[0] 未定义
-    - 写入范围 [aIndex, aIndex + Length(aSrc) - 1] 在 [0..Capacity) 内；WriteExactUnchecked 不会自动扩容
-    - 本方法不做任何参数/边界检查，违反前置条件将导致未定义行为 }
+  { Unchecked: 
+    - aSrc Length(aSrc) > 0 @aSrc[0] 
+    -  [aIndex, aIndex + Length(aSrc) - 1]  [0..Capacity) WriteExactUnchecked 
+    - / }
 
 procedure TVec.WriteExactUnchecked(aIndex: SizeUInt; const aSrc: array of T);
 begin
@@ -1977,17 +1977,17 @@ begin
   Result := True;
 end;
 
-{ 函数式编程方法实现 }
+{  }
 
 function TVec.Filter(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): specialize IVec<T>;
 var
   LResult: specialize TVec<T>;
   i: SizeUInt;
 begin
-  // 预分配最大可能容量，避免重分配
+  // 
   LResult := specialize TVec<T>.Create(FCount, GetAllocator, nil);
   try
-    // 复制增长策略
+    // 
     LResult.SetGrowStrategy(GetGrowStrategy);
 
     if FCount > 0 then
@@ -1995,7 +1995,7 @@ begin
       if aPredicate(GetUnchecked(i), aData) then
         LResult.PushUnchecked(GetUnchecked(i));
 
-    // 收缩到实际大小
+    // 
     LResult.ShrinkToFit;
     Result := LResult;
   except
@@ -2009,18 +2009,18 @@ var
   LResult: specialize TVec<T>;
   i: SizeUInt;
 begin
-  // 预分配最大可能容量，避免重分配
+  // 
   LResult := specialize TVec<T>.Create(FCount, GetAllocator, nil);
   try
-    // 复制增长策略
+    // 
     LResult.SetGrowStrategy(GetGrowStrategy);
 
     if FCount > 0 then
     for i := 0 to FCount - 1 do
-      if aPredicate(GetUnchecked(i), aData) then  // 直接使用引用，避免拷贝
-        LResult.PushUnchecked(GetUnchecked(i));   // 无边界检查版本
+      if aPredicate(GetUnchecked(i), aData) then  // 
+        LResult.PushUnchecked(GetUnchecked(i));   // 
 
-    // 收缩到实际大小
+    // 
     LResult.ShrinkToFit;
     Result := LResult;
   except
@@ -2035,18 +2035,18 @@ var
   LResult: specialize TVec<T>;
   i: SizeUInt;
 begin
-  // 预分配最大可能容量，避免重分配
+  // 
   LResult := specialize TVec<T>.Create(FCount, GetAllocator, nil);
   try
-    // 复制增长策略
+    // 
     LResult.SetGrowStrategy(GetGrowStrategy);
 
     if FCount > 0 then
     for i := 0 to FCount - 1 do
-      if aPredicate(GetUnchecked(i)) then         // 直接使用引用，避免拷贝
-        LResult.PushUnchecked(GetUnchecked(i));   // 无边界检查版本
+      if aPredicate(GetUnchecked(i)) then         // 
+        LResult.PushUnchecked(GetUnchecked(i));   // 
 
-    // 收缩到实际大小
+    // 
     LResult.ShrinkToFit;
     Result := LResult;
   except
@@ -2126,7 +2126,7 @@ begin
 end;
 {$ENDIF}
 
-{ 就地操作方法实现 }
+{  }
 
 procedure TVec.Retain(aPredicate: specialize TPredicateFunc<T>; aData: Pointer);
 var
@@ -2142,7 +2142,7 @@ begin
         PutUnchecked(j, GetUnchecked(i));
       Inc(j);
     end;
-  // 调整大小，自动处理托管类型清理
+  // 
   Resize(j);
 end;
 
@@ -2160,7 +2160,7 @@ begin
         PutUnchecked(j, GetUnchecked(i));
       Inc(j);
     end;
-  // 调整大小，自动处理托管类型清理
+  // 
   Resize(j);
 end;
 
@@ -2179,7 +2179,7 @@ begin
         PutUnchecked(j, GetUnchecked(i));
       Inc(j);
     end;
-  // 调整大小，自动处理托管类型清理
+  // 
   Resize(j);
 end;
 {$ENDIF}
@@ -2202,30 +2202,30 @@ begin
     exit;
   end;
 
-  // 边界检查
+  // 
   if aStart >= FCount then
     raise EOutOfRange.Create('TVec.Drain: start index out of range');
 
   if aCount > FCount - aStart then
     aCount := FCount - aStart;
 
-  // 创建结果向量并复制要删除的元素
+  // 
   LResult := specialize TVec<T>.Create(aCount, GetAllocator, nil);
   try
-    // 复制增长策略
+    // 
     LResult.SetGrowStrategy(GetGrowStrategy);
 
     for i := 0 to aCount - 1 do
       LResult.PushUnchecked(GetUnchecked(aStart + i));
 
-    // 移动后续元素（如果有的话）
+    // 
     if aStart + aCount < FCount then
     begin
       for i := aStart + aCount to FCount - 1 do
         PutUnchecked(i - aCount, GetUnchecked(i));
     end;
 
-    // 调整大小
+    // 
     Resize(FCount - aCount);
     Result := LResult;
   except
@@ -2239,13 +2239,13 @@ var
   LCount: SizeUInt;
   LDrained: IVecT;
 begin
-  // 半开区间 [aStart, aEnd) 转换为 (start, count) 格式
+  //  [aStart, aEnd)  (start, count) 
   if aEnd <= aStart then
     LCount := 0
   else
     LCount := aEnd - aStart;
 
-  // 空范围特殊处理
+  // 
   if LCount = 0 then
   begin
     LDrained := Drain(aStart, 0);
@@ -2253,7 +2253,7 @@ begin
     Exit;
   end;
 
-  // 使用原有 Drain 方法获取被移除的元素
+  //  Drain 
   LDrained := Drain(aStart, LCount);
   Result.Init(LDrained);
 end;
@@ -2290,26 +2290,26 @@ var
   LSplitCount: SizeUInt;
   i: SizeUInt;
 begin
-  // 边界检查
+  // 
   if aIndex > FCount then
     raise EOutOfRange.Create('TVec.SplitOff: index out of range');
 
-  // 计算分割出去的元素数量
+  // 
   LSplitCount := FCount - aIndex;
 
-  // 创建结果向量
+  // 
   LResult := specialize TVec<T>.Create(LSplitCount, GetAllocator, nil);
   try
-    // 复制增长策略
+    // 
     LResult.SetGrowStrategy(GetGrowStrategy);
 
-    // 复制 [aIndex, Count) 范围的元素到新向量
-    // 注意：使用 LSplitCount > 0 检查避免无符号整数下溢
+    //  [aIndex, Count) 
+    //  LSplitCount > 0 
     if LSplitCount > 0 then
       for i := 0 to LSplitCount - 1 do
         LResult.PushUnchecked(GetUnchecked(aIndex + i));
 
-    // 截断原向量到 [0, aIndex)
+    //  [0, aIndex)
     Truncate(aIndex);
 
     Result := LResult;
@@ -2323,53 +2323,53 @@ procedure TVec.Splice(aIndex, aRemoveCount: SizeUInt; const aInsert: array of T)
 var
   LInsertLen: SizeInt;
 begin
-  // 边界检查
+  // 
   if aIndex > FCount then
     raise EOutOfRange.Create('TVec.Splice: index out of range');
 
-  // 调整 aRemoveCount，确保不超出边界
+  //  aRemoveCount
   if aRemoveCount > FCount - aIndex then
     aRemoveCount := FCount - aIndex;
 
   LInsertLen := Length(aInsert);
 
-  // 先删除元素
+  // 
   if aRemoveCount > 0 then
     Delete(aIndex, aRemoveCount);
 
-  // 再插入新元素
+  // 
   if LInsertLen > 0 then
     Insert(aIndex, aInsert);
 end;
 
-{ 去重方法实现 }
+{  }
 
 function TVec.Dedup: SizeUInt;
 var
   i, j: SizeUInt;
 begin
-  // 空向量或单元素向量无需去重
+  // 
   if FCount < 2 then
     Exit(0);
 
-  // 使用就地压缩算法，保留第一个出现的元素
-  j := 1; // 写入位置，从第二个元素开始
+  // 
+  j := 1; // 
   for i := 1 to FCount - 1 do
   begin
-    // 使用内存比较判断是否相等
+    // 
     if not CompareMem(GetPtrUnchecked(i), GetPtrUnchecked(j - 1), GetElementSize) then
     begin
-      // 元素不同，保留
+      // 
       if i <> j then
         PutUnchecked(j, GetUnchecked(i));
       Inc(j);
     end;
   end;
 
-  // 计算被移除的元素数量
+  // 
   Result := FCount - j;
 
-  // 调整大小，自动处理托管类型清理
+  // 
   if Result > 0 then
     Resize(j);
 end;
@@ -2378,33 +2378,33 @@ function TVec.DedupBy(aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeU
 var
   i, j: SizeUInt;
 begin
-  // 空向量或单元素向量无需去重
+  // 
   if FCount < 2 then
     Exit(0);
 
-  // 使用就地压缩算法，保留第一个出现的元素
-  j := 1; // 写入位置，从第二个元素开始
+  // 
+  j := 1; // 
   for i := 1 to FCount - 1 do
   begin
-    // 使用自定义比较函数判断是否相等
+    // 
     if not aEquals(GetUnchecked(i), GetUnchecked(j - 1), aData) then
     begin
-      // 元素不同，保留
+      // 
       if i <> j then
         PutUnchecked(j, GetUnchecked(i));
       Inc(j);
     end;
   end;
 
-  // 计算被移除的元素数量
+  // 
   Result := FCount - j;
 
-  // 调整大小，自动处理托管类型清理
+  // 
   if Result > 0 then
     Resize(j);
 end;
 
-{ 便利方法实现 }
+{  }
 
 function TVec.ToArray: specialize TGenericArray<T>;
 var
@@ -2412,7 +2412,7 @@ var
 begin
   Result := nil;
   SetLength(Result, FCount);
-  // 空向量直接返回，避免无效索引访问
+  // 
   if FCount > 0 then
     for i := 0 to FCount - 1 do
       Result[i] := GetUnchecked(i);
@@ -2424,7 +2424,7 @@ var
 begin
   LResult := specialize TVec<T>.Create(FCount, GetAllocator, nil);
   try
-    // 复制增长策略，保持完整配置
+    // 
     LResult.SetGrowStrategy(GetGrowStrategy);
 
     if FCount > 0 then
@@ -2451,7 +2451,7 @@ begin
   Result := GetUnchecked(FCount - 1);
 end;
 
-{ 高性能无检查方法实现 }
+{  }
 
 procedure TVec.PushUnchecked(const aElement: T);
 begin
@@ -2489,10 +2489,10 @@ begin
 
   if LLen = 0 then
     exit;
-  { Unchecked: 调用方必须确保前置条件：
-    - aSrc 非空（Length(aSrc) > 0），否则引用 @aSrc[0] 未定义
-    - 覆写范围 [aIndex, aIndex + Length(aSrc) - 1] 在有效范围内
-    - 本方法不做任何参数/边界检查，违反前置条件将导致未定义行为 }
+  { Unchecked: 
+    - aSrc Length(aSrc) > 0 @aSrc[0] 
+    -  [aIndex, aIndex + Length(aSrc) - 1] 
+    - / }
 
 
   Overwrite(aIndex, @aSrc[0], LLen);
@@ -2803,7 +2803,7 @@ begin
 end;
 {$ENDIF}
 
-{ FindUnchecked 无检查查找 - 跳过边界检查，追求极致性能 }
+{ FindUnchecked  -  }
 
 function TVec.FindUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt): SizeInt;
 begin
@@ -3208,7 +3208,7 @@ begin
 end;
 {$ENDIF}
 
-{ IGenericCollection - CountOf 系列方法实现 }
+{ IGenericCollection - CountOf  }
 function TVec.CountOf(const aElement: T; aStartIndex: SizeUInt): SizeUInt;
 begin
   if aStartIndex >= FCount then
@@ -4477,7 +4477,7 @@ begin
 end;
 {$ENDIF}
 
-{ Unchecked 算法方法实现 - 跳过边界检查，追求极致性能 }
+{ Unchecked  -  }
 
 function TVec.ForEachUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): Boolean;
 begin
@@ -4820,4 +4820,4 @@ finalization
     _VecDefaultFactorStrategy.Free;
     _VecDefaultFactorStrategy := nil;
   end;
-用
+
