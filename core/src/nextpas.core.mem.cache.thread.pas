@@ -88,10 +88,10 @@ function ThreadCacheCount(const ACache: TThreadCache;
 
 {** Adaptive batch size for a size class index.
     Small objects → larger batches (throughput), large → smaller (memory). }
-function AdaptiveBatchSize(ASizeClassIndex: Int32): Word;
+function AdaptiveBatchSize(ASizeClassIndex: Int32): Word; inline;
 
 {** Adaptive max list size for a size class index. }
-function AdaptiveMaxListSize(ASizeClassIndex: Int32): Word;
+function AdaptiveMaxListSize(ASizeClassIndex: Int32): Word; inline;
 
 implementation
 

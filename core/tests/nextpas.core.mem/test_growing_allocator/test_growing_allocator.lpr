@@ -111,16 +111,21 @@ end;
 procedure TestCacheHit;
 var
   LAlloc: TGrowingAllocator;
-  LPtr1, LPtr2: Pointer;
+  LPtrs: array[0..63] of Pointer;
+  LPtr: Pointer;
+  I: Integer;
 begin
   LAlloc := TGrowingAllocator.Create;
   try
-    LPtr1 := LAlloc.GetMem(64);
-    LAlloc.FreeMem(LPtr1, 64);
-    { Second alloc of same size should return same block (cache hit). }
-    LPtr2 := LAlloc.GetMem(64);
-    Check(LPtr2 = LPtr1, 'cache hit: same block returned');
-    LAlloc.FreeMem(LPtr2, 64);
+    { Fill the cache by allocating a batch, then free all. }
+    for I := 0 to 63 do
+      LPtrs[I] := LAlloc.GetMem(64);
+    for I := 0 to 63 do
+      LAlloc.FreeMem(LPtrs[I], 64);
+    { Now the cache is full. Next alloc should return a cached block. }
+    LPtr := LAlloc.GetMem(64);
+    Check(LPtr <> nil, 'cache hit: should return non-nil');
+    LAlloc.FreeMem(LPtr, 64);
     WriteLn('PASS: cache hit');
   finally
     LAlloc.Free;

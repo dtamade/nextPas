@@ -5,6 +5,7 @@ program bench_allocator;
 {$modeswitch functionreferences}
 
 uses
+  cthreads,
   nextpas.core.base,
   nextpas.core.exception,
   nextpas.core.text.conv,
@@ -122,6 +123,71 @@ begin
   System.FreeMem(LPtr);
 end;
 
+{ --- Concurrent benchmark helpers --- }
+
+const
+  CONCURRENT_THREADS = 4;
+  CONCURRENT_BATCH = 64;
+
+type
+  PConcurrentWorker = ^TConcurrentWorker;
+  TConcurrentWorker = record
+    Alloc: TGrowingAllocator;
+    AllocSize: SizeUInt;
+  end;
+
+function ConcurrentWorkerFunc(Parameter: Pointer): PtrInt;
+var
+  LWorker: PConcurrentWorker;
+  LPtrs: array[0..CONCURRENT_BATCH - 1] of Pointer;
+  I: Integer;
+begin
+  LWorker := PConcurrentWorker(Parameter);
+  for I := 0 to CONCURRENT_BATCH - 1 do
+    LPtrs[I] := LWorker^.Alloc.GetMem(LWorker^.AllocSize);
+  for I := 0 to CONCURRENT_BATCH - 1 do
+    LWorker^.Alloc.FreeMem(LPtrs[I], LWorker^.AllocSize);
+  Result := 0;
+end;
+
+{ Pattern 9: Concurrent 4T × 64B (256 ops total per iter). }
+procedure BenchConcurrent64(const ACtx: IBenchContext);
+var
+  LWorkers: array[0..CONCURRENT_THREADS - 1] of TConcurrentWorker;
+  LThreads: array[0..CONCURRENT_THREADS - 1] of TThreadID;
+  I: Integer;
+begin
+  if ACtx <> nil then
+    ACtx.SetBytes(CONCURRENT_THREADS * CONCURRENT_BATCH * 64);
+  for I := 0 to CONCURRENT_THREADS - 1 do
+  begin
+    LWorkers[I].Alloc := GAlloc;
+    LWorkers[I].AllocSize := 64;
+    LThreads[I] := BeginThread(@ConcurrentWorkerFunc, @LWorkers[I]);
+  end;
+  for I := 0 to CONCURRENT_THREADS - 1 do
+    WaitForThreadTerminate(LThreads[I], 0);
+end;
+
+{ Pattern 10: Concurrent 4T × 1KB (256 ops total per iter). }
+procedure BenchConcurrent1K(const ACtx: IBenchContext);
+var
+  LWorkers: array[0..CONCURRENT_THREADS - 1] of TConcurrentWorker;
+  LThreads: array[0..CONCURRENT_THREADS - 1] of TThreadID;
+  I: Integer;
+begin
+  if ACtx <> nil then
+    ACtx.SetBytes(CONCURRENT_THREADS * CONCURRENT_BATCH * 1024);
+  for I := 0 to CONCURRENT_THREADS - 1 do
+  begin
+    LWorkers[I].Alloc := GAlloc;
+    LWorkers[I].AllocSize := 1024;
+    LThreads[I] := BeginThread(@ConcurrentWorkerFunc, @LWorkers[I]);
+  end;
+  for I := 0 to CONCURRENT_THREADS - 1 do
+    WaitForThreadTerminate(LThreads[I], 0);
+end;
+
 { --- Main --- }
 
 var
@@ -149,6 +215,10 @@ begin
     { System allocator baselines. }
     LSuite.Add('system/small_64B', @BenchSystemSmall64);
     LSuite.Add('system/medium_1KB', @BenchSystemMedium1K);
+
+    { Concurrent benchmarks (4 threads). }
+    LSuite.Add('concurrent/4T_64B', @BenchConcurrent64);
+    LSuite.Add('concurrent/4T_1KB', @BenchConcurrent1K);
 
     LResults := LSuite.Run;
 
