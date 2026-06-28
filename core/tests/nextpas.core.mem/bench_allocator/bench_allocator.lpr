@@ -85,6 +85,24 @@ begin
     GAlloc.FreeMem(LPtrs[I], LSizes[I]);
 end;
 
+{ Pattern 5b: Mixed small sizes (16B-4KB, no huge alloc).
+  More representative of typical application workloads. }
+procedure BenchMixedSmall(const ACtx: IBenchContext);
+var
+  LSizes: array[0..5] of SizeUInt;
+  LPtrs: array[0..5] of Pointer;
+  I: Integer;
+begin
+  LSizes[0] := 16;  LSizes[1] := 64;  LSizes[2] := 256;
+  LSizes[3] := 512; LSizes[4] := 1024; LSizes[5] := 4096;
+  for I := 0 to 5 do
+    LPtrs[I] := GAlloc.GetMem(LSizes[I]);
+  if ACtx <> nil then
+    ACtx.SetBytes(16 + 64 + 256 + 512 + 1024 + 4096);
+  for I := 5 downto 0 do
+    GAlloc.FreeMem(LPtrs[I], LSizes[I]);
+end;
+
 { Pattern 6: Batch alloc then batch free (mimalloc sh6bench style).
   Allocates N blocks, then frees them all. }
 const
@@ -210,6 +228,31 @@ begin
   Result := 0;
 end;
 
+{ Mixed-size concurrent worker: cycles through 6 size classes per batch. }
+const
+  MIXED_SIZES: array[0..5] of SizeUInt = (16, 64, 256, 512, 1024, 4096);
+
+function ConcurrentMixedWorkerFunc(Parameter: Pointer): PtrInt;
+var
+  LWorker: PConcurrentWorker;
+  LPtrs: array[0..CONCURRENT_BATCH - 1] of Pointer;
+  LSizes: array[0..CONCURRENT_BATCH - 1] of SizeUInt;
+  J, I: Integer;
+begin
+  LWorker := PConcurrentWorker(Parameter);
+  for J := 1 to LWorker^.Iters do
+  begin
+    for I := 0 to CONCURRENT_BATCH - 1 do
+    begin
+      LSizes[I] := MIXED_SIZES[I mod 6];
+      LPtrs[I] := LWorker^.Alloc.GetMem(LSizes[I]);
+    end;
+    for I := 0 to CONCURRENT_BATCH - 1 do
+      LWorker^.Alloc.FreeMem(LPtrs[I], LSizes[I]);
+  end;
+  Result := 0;
+end;
+
 procedure RunConcurrentManual(const AName: string; ASize: SizeUInt);
 var
   LWorkers: array[0..CONCURRENT_THREADS - 1] of TConcurrentWorker;
@@ -239,6 +282,35 @@ begin
     '  iters=', CONCURRENT_ITERS: 6);
 end;
 
+procedure RunConcurrentMixed;
+var
+  LWorkers: array[0..CONCURRENT_THREADS - 1] of TConcurrentWorker;
+  LThreads: array[0..CONCURRENT_THREADS - 1] of TThreadID;
+  LStartNs, LEndNs, LTotalOps: UInt64;
+  LElapsedNs: Double;
+  I: Integer;
+begin
+  for I := 0 to CONCURRENT_THREADS - 1 do
+  begin
+    LWorkers[I].Alloc := GAlloc;
+    LWorkers[I].AllocSize := 0;  { unused by mixed worker }
+    LWorkers[I].Iters := CONCURRENT_ITERS;
+  end;
+  LStartNs := platform_monotonic_ns;
+  for I := 0 to CONCURRENT_THREADS - 1 do
+    LThreads[I] := BeginThread(@ConcurrentMixedWorkerFunc, @LWorkers[I]);
+  for I := 0 to CONCURRENT_THREADS - 1 do
+    WaitForThreadTerminate(LThreads[I], 0);
+  LEndNs := platform_monotonic_ns;
+  LTotalOps := UInt64(CONCURRENT_THREADS) * CONCURRENT_BATCH * CONCURRENT_ITERS;
+  LElapsedNs := LEndNs - LStartNs;
+  WriteLn('concurrent/4T_mixed': 30,
+    '  ns/op=', Round(LElapsedNs / LTotalOps): 8,
+    '  Mops/s=', FormatFloat('0.00', LTotalOps / (LElapsedNs / 1e9) / 1e6): 8,
+    '  total_ops=', LTotalOps: 10,
+    '  iters=', CONCURRENT_ITERS: 6);
+end;
+
 { --- Main --- }
 
 var
@@ -262,6 +334,7 @@ begin
     LSuite.Add('growing/large_16KB', @BenchLarge16K);
     LSuite.Add('growing/huge_128KB', @BenchHuge128K);
     LSuite.Add('growing/mixed_8sizes', @BenchMixed);
+    LSuite.Add('growing/mixed_small', @BenchMixedSmall);
     LSuite.Add('growing/batch_64x128B', @BenchBatch64);
     LSuite.Add('growing/batch_api_64x128B', @BenchBatchAPI64);
     LSuite.Add('growing/realloc_same_class', @BenchReallocSameClass);
@@ -295,6 +368,7 @@ begin
     WriteLn('--- Concurrent (4 threads, per-alloc+free) ---');
     RunConcurrentManual('concurrent/4T_64B', 64);
     RunConcurrentManual('concurrent/4T_1KB', 1024);
+    RunConcurrentMixed;
 
     WriteLn;
     WriteLn('Done.');
