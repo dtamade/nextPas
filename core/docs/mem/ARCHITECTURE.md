@@ -70,7 +70,7 @@ Growing allocator 内部层（不单独对外暴露）：
 - `nextpas.core.mem.cache.thread` — TLS free list + batch refill/flush
 - `nextpas.core.mem.central` — Central span pool + spinlock + lock-free inbox
 - `nextpas.core.mem.shuffle` — Free-list 随机插入（防 heap spraying）
-- `nextpas.core.mem.default` — 全局 `DefaultAllocator`（`TGrowingAllocator` 单例）
+- `nextpas.core.mem.default` — 全局 `DefaultAllocator`（`TRtlAllocator` 单例）
 - `nextpas.core.mem.utils` — 内部工具函数（overlap/alignment/growth）
 
 Pool 侧：
