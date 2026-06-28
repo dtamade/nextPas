@@ -10,9 +10,9 @@
 SHELL := /bin/bash
 
 # Pascal
-PASCAL_SRC := bench_arena.pas
-PASCAL_BIN := bench_arena_pas
-FPC_FLAGS  := -O3 -CX -Xs -Fi../../core/src -Fu../../core/src -Fu../../units/linux-x86_64 -Fi../../units/linux-x86_64
+PASCAL_SRC := bench_arena2.pas
+PASCAL_BIN := bench_arena2
+FPC_FLAGS  := -O2 -Fi../../core/src -Fu../../core/src -Fu/opt/fpcupdeluxe/fpc/units/x86_64-linux/rtl -Fu../../units/linux-x86_64 -Fi../../units/linux-x86_64
 
 # Go
 GO_SRC     := bench_arena.go
