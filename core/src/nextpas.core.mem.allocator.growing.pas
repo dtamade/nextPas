@@ -218,6 +218,16 @@ begin
     end;
     if GThreadCache.FCounts[LIndex] < AdaptiveMaxListSize(LIndex) then
     begin
+      { For small lists, skip shuffle overhead — direct push to head.
+        Shuffle only matters once the list has enough entropy. }
+      if GThreadCache.FCounts[LIndex] < 8 then
+      begin
+        LNode := PFreeNode(APtr);
+        LNode^.FNext := GThreadCache.FHeads[LIndex];
+        GThreadCache.FHeads[LIndex] := LNode;
+        Inc(GThreadCache.FCounts[LIndex]);
+        Exit;
+      end;
       FreeListInsertShuffled(Pointer(GThreadCache.FHeads[LIndex]),
         APtr, GThreadCache.FCounts[LIndex]);
       Inc(GThreadCache.FCounts[LIndex]);
