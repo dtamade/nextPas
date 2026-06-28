@@ -1347,6 +1347,50 @@ begin
   CheckFalse(MatchesFilter('OtherParent/SubA', LConfig),
     'hierarchical glob: unrelated should not match');
 
+  { Hierarchical + glob combo: filter with glob in segment }
+  SetTestFilter('TestParent/Sub*');
+  CheckTrue(MatchesFilter('TestParent/SubA', LConfig),
+    'hierarchical glob combo: Sub* matches SubA');
+  CheckTrue(MatchesFilter('TestParent/SubB', LConfig),
+    'hierarchical glob combo: Sub* matches SubB');
+  CheckTrue(MatchesFilter('TestParent/SubAlpha', LConfig),
+    'hierarchical glob combo: Sub* matches SubAlpha');
+  CheckFalse(MatchesFilter('TestParent/LeafA', LConfig),
+    'hierarchical glob combo: Sub* does not match LeafA');
+  CheckTrue(MatchesFilter('TestParent', LConfig),
+    'hierarchical glob combo: parent matches');
+
+  { Hierarchical with ? wildcard }
+  SetTestFilter('TestParent/Sub?');
+  CheckTrue(MatchesFilter('TestParent/SubA', LConfig),
+    'hierarchical ? wildcard: Sub? matches SubA');
+  CheckTrue(MatchesFilter('TestParent/SubX', LConfig),
+    'hierarchical ? wildcard: Sub? matches SubX');
+  CheckFalse(MatchesFilter('TestParent/SubAB', LConfig),
+    'hierarchical ? wildcard: Sub? does not match SubAB');
+  CheckTrue(MatchesFilter('TestParent', LConfig),
+    'hierarchical ? wildcard: parent matches');
+
+  { Hierarchical with brace expansion }
+  SetTestFilter('TestParent/{SubA,SubB}');
+  CheckTrue(MatchesFilter('TestParent/SubA', LConfig),
+    'hierarchical brace: matches SubA');
+  CheckTrue(MatchesFilter('TestParent/SubB', LConfig),
+    'hierarchical brace: matches SubB');
+  CheckFalse(MatchesFilter('TestParent/SubC', LConfig),
+    'hierarchical brace: does not match SubC');
+  CheckTrue(MatchesFilter('TestParent', LConfig),
+    'hierarchical brace: parent matches');
+
+  { Hierarchical with comma-separated top-level filters }
+  SetTestFilter('TestParent/SubA,OtherParent/SubB');
+  CheckTrue(MatchesFilter('TestParent/SubA', LConfig),
+    'comma hierarchical: matches first filter');
+  CheckTrue(MatchesFilter('OtherParent/SubB', LConfig),
+    'comma hierarchical: matches second filter');
+  CheckFalse(MatchesFilter('OtherParent/SubA', LConfig),
+    'comma hierarchical: does not match wrong combo');
+
   { Reset filter }
   SetTestFilter('');
 end;
@@ -1475,7 +1519,7 @@ begin
   WriteLn;
   Runner.Summary;
 
-  CheckTrue(LResults[0].Passed >= 59, 'Expected at least 59 tests, got ' + IntToStr(LResults[0].Passed));
+  CheckTrue(LResults[0].Passed >= 63, 'Expected at least 63 tests, got ' + IntToStr(LResults[0].Passed));
   CheckTrue(LSuccess, 'All output tests should pass');
 
   if Runner.AllPassed then

@@ -397,6 +397,57 @@ begin
     Result := ResolveConfig(DefaultConfig);
 end;
 
+procedure ApplyCLIArgs;
+{ Auto-detect CLI arguments and apply to global default config.
+  Shared by RunAllWithResult and RunAllParallelWithResult. }
+var
+  LCount, LShuffleSeed: Integer;
+begin
+  if GetTestFilter = '' then
+    SetTestFilter(ParseFilterFromArgs);
+  if GetTagFilter = '' then
+    SetTagFilter(ParseTagFromArgs);
+  if GetRepeatAllCount(DefaultConfig) = 0 then
+  begin
+    LCount := ParseCountFromArgs;
+    if LCount > 0 then
+      SetDefaultRepeatAllCount(LCount);
+  end;
+  LShuffleSeed := ParseShuffleFromArgs;
+  if LShuffleSeed <> 0 then
+    SetDefaultShuffleSeed(LShuffleSeed);
+  if ParseFailFastFromArgs then
+    SetDefaultFailFast(True);
+  if ParseListFromArgs then
+    SetDefaultListMode(True);
+end;
+
+function WriteListMode(const ASuites: specialize TArray<TTestSuite>;
+  const AConfig: TTestConfig; out AResults: specialize TArray<TTestRunResult>): Boolean;
+{ Print test names grouped by suite without running. Returns True to indicate
+  the caller should use the result directly (always True = no failures). }
+var
+  I, J: Integer;
+  LOutSink: IOutputSink;
+begin
+  LOutSink := ResolveOutSink(AConfig);
+  for I := 0 to High(ASuites) do
+  begin
+    LOutSink.WriteLn(ASuites[I].Name + ':');
+    for J := 0 to High(ASuites[I].Tests) do
+    begin
+      if ASuites[I].Tests[J].Kind = ekSkipped then
+        LOutSink.WriteLn('  ' + ASuites[I].Tests[J].Name + ' (skipped)')
+      else if ASuites[I].Tests[J].Kind = ekShouldFail then
+        LOutSink.WriteLn('  ' + ASuites[I].Tests[J].Name + ' (should-fail)')
+      else
+        LOutSink.WriteLn('  ' + ASuites[I].Tests[J].Name);
+    end;
+  end;
+  SetLength(AResults, 0);
+  Result := True;
+end;
+
 { ═════════════════════════════════════════════════════════════════════════════ }
 { TTestSuite                                                                   }
 { ═════════════════════════════════════════════════════════════════════════════ }
@@ -949,8 +1000,29 @@ begin
       else if LEntry.Kind = ekTableTest then
       begin
         { Table-driven test: invoke the stored proc with case data }
-        PTestCaseProc(LEntry.TableProc)^(PTestCase(LEntry.TableCase)^);
-        Inc(LPass);
+        try
+          PTestCaseProc(LEntry.TableProc)^(PTestCase(LEntry.TableCase)^);
+          Inc(LPass);
+        except
+          on E: ETestSkipped do
+          begin
+            LStatus := tsSkipped;
+            LLastFailMsg := E.Message;
+            Inc(LSkip);
+          end;
+          on E: EAssertionFailed do
+          begin
+            LStatus := tsFailed;
+            LLastFailMsg := AppendTestTrace(E.Message);
+            Inc(LFail);
+          end;
+          on E: Exception do
+          begin
+            LStatus := tsError;
+            LLastFailMsg := AppendTestTrace(FormatExceptionMsg(E));
+            Inc(LFail);
+          end;
+        end;
       end
       else if LEntry.Kind = ekShouldFail then
       begin
@@ -1529,55 +1601,23 @@ end;
 function TTestRunner.RunAllWithResult(
   out AResults: specialize TArray<TTestRunResult>): Boolean;
 var
-  I, J, LIter, LRepeatAll, LShuffleSeed: Integer;
+  I, LIter, LRepeatAll: Integer;
   LAllPassed: Boolean;
   LSuiteResult: TTestRunResult;
   LConfig: TTestConfig;
   LOutSink: IOutputSink;
   LStartMs: Int64;
-  LFailFast, LListMode: Boolean;
-
+  LFailFast: Boolean;
 begin
-  { Auto-detect CLI args }
-  if GetTestFilter = '' then
-    SetTestFilter(ParseFilterFromArgs);
-  if GetTagFilter = '' then
-    SetTagFilter(ParseTagFromArgs);
-  if GetRepeatAllCount(DefaultConfig) = 0 then
-  begin
-    LIter := ParseCountFromArgs;
-    if LIter > 0 then
-      SetDefaultRepeatAllCount(LIter);
-  end;
-  LShuffleSeed := ParseShuffleFromArgs;
-  if LShuffleSeed <> 0 then
-    SetDefaultShuffleSeed(LShuffleSeed);
-  if ParseFailFastFromArgs then
-    SetDefaultFailFast(True);
-  if ParseListFromArgs then
-    SetDefaultListMode(True);
+  ApplyCLIArgs;
   LConfig := RunnerConfig(Self);
   LOutSink := ResolveOutSink(LConfig);
 
   { List mode: print test names and exit without running }
-  LListMode := GetListMode(LConfig);
-  if LListMode then
+  if GetListMode(LConfig) then
   begin
-    for I := 0 to High(Suites) do
-    begin
-      LOutSink.WriteLn(Suites[I].Name + ':');
-      for J := 0 to High(Suites[I].Tests) do
-      begin
-        if Suites[I].Tests[J].Kind = ekSkipped then
-          LOutSink.WriteLn('  ' + Suites[I].Tests[J].Name + ' (skipped)')
-        else
-          LOutSink.WriteLn('  ' + Suites[I].Tests[J].Name);
-      end;
-    end;
-    SetLength(AResults, 0);
     HasRun := True;
-    Result := True;
-    Exit;
+    Exit(WriteListMode(Suites, LConfig, AResults));
   end;
 
   LRepeatAll := GetRepeatAllCount(LConfig);
@@ -1646,55 +1686,23 @@ end;
 function TTestRunner.RunAllParallelWithResult(APool: IThreadPool;
   out AResults: specialize TArray<TTestRunResult>): Boolean;
 var
-  I, J, LIter, LRepeatAll, LShuffleSeed: Integer;
+  I, LIter, LRepeatAll: Integer;
   LAllPassed: Boolean;
   LSuiteResult: TTestRunResult;
   LConfig: TTestConfig;
   LOutSink: IOutputSink;
   LStartMs: Int64;
-  LFailFast, LListMode: Boolean;
-
+  LFailFast: Boolean;
 begin
-  { Auto-detect CLI args }
-  if GetTestFilter = '' then
-    SetTestFilter(ParseFilterFromArgs);
-  if GetTagFilter = '' then
-    SetTagFilter(ParseTagFromArgs);
-  if GetRepeatAllCount(DefaultConfig) = 0 then
-  begin
-    LIter := ParseCountFromArgs;
-    if LIter > 0 then
-      SetDefaultRepeatAllCount(LIter);
-  end;
-  LShuffleSeed := ParseShuffleFromArgs;
-  if LShuffleSeed <> 0 then
-    SetDefaultShuffleSeed(LShuffleSeed);
-  if ParseFailFastFromArgs then
-    SetDefaultFailFast(True);
-  if ParseListFromArgs then
-    SetDefaultListMode(True);
+  ApplyCLIArgs;
   LConfig := RunnerConfig(Self);
   LOutSink := ResolveOutSink(LConfig);
 
   { List mode: print test names and exit without running }
-  LListMode := GetListMode(LConfig);
-  if LListMode then
+  if GetListMode(LConfig) then
   begin
-    for I := 0 to High(Suites) do
-    begin
-      LOutSink.WriteLn(Suites[I].Name + ':');
-      for J := 0 to High(Suites[I].Tests) do
-      begin
-        if Suites[I].Tests[J].Kind = ekSkipped then
-          LOutSink.WriteLn('  ' + Suites[I].Tests[J].Name + ' (skipped)')
-        else
-          LOutSink.WriteLn('  ' + Suites[I].Tests[J].Name);
-      end;
-    end;
-    SetLength(AResults, 0);
     HasRun := True;
-    Result := True;
-    Exit;
+    Exit(WriteListMode(Suites, LConfig, AResults));
   end;
 
   LRepeatAll := GetRepeatAllCount(LConfig);

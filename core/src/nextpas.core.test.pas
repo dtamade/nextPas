@@ -64,6 +64,7 @@ const
   ekSubtest = nextpas.core.test.base.ekSubtest;
   ekSkipped = nextpas.core.test.base.ekSkipped;
   ekTableTest = nextpas.core.test.base.ekTableTest;
+  ekShouldFail = nextpas.core.test.base.ekShouldFail;
   amAuto = nextpas.core.test.config.amAuto;
   amOn = nextpas.core.test.config.amOn;
   amOff = nextpas.core.test.config.amOff;
