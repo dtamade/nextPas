@@ -22,6 +22,8 @@ type
     Codepoint: UInt32;     // 原始 Unicode 码位
     AdvanceWidth: UInt16;  // 水平步进（font units）
     LeftSideBearing: Int16; // 左侧边距（font units）
+    MarkOffsetX: Int16;    // Mark-to-Base X 偏移（font units，0 = 无）
+    MarkOffsetY: Int16;    // Mark-to-Base Y 偏移（font units，0 = 无）
   end;
 
   {** 塑形输出序列 }
@@ -93,6 +95,7 @@ var
   LKernVal: Int16;
   LSubArr: array of UInt16;
   LTotalAdvance: Int32;
+  LMarkAnchor: TFontAnchor;
 begin
   LCount := Length(ACodepoints);
   if LCount = 0 then
@@ -162,6 +165,28 @@ begin
       LKernVal := FFace.LookupKern(Result[LI].GlyphIndex, Result[LI + 1].GlyphIndex);
       if LKernVal <> 0 then
         Result[LI].AdvanceWidth := Result[LI].AdvanceWidth + LKernVal;
+    end;
+
+  // Fourth pass: Mark-to-Base positioning.
+  // Combining marks (zero advance width) are positioned relative to the
+  // preceding base glyph using GPOS MarkBasePos.
+  if FFace.HasMarkToBase then
+    for LI := 1 to High(Result) do
+    begin
+      if Result[LI].AdvanceWidth <> 0 then
+        Continue;
+      // Find the nearest preceding base glyph (non-zero advance).
+      LK := LI - 1;
+      while (LK >= 0) and (Result[LK].AdvanceWidth = 0) do
+        Dec(LK);
+      if LK < 0 then
+        Continue;
+      LMarkAnchor := FFace.LookupMarkToBase(Result[LI].GlyphIndex, Result[LK].GlyphIndex);
+      if (LMarkAnchor.X <> 0) or (LMarkAnchor.Y <> 0) then
+      begin
+        Result[LI].MarkOffsetX := LMarkAnchor.X;
+        Result[LI].MarkOffsetY := LMarkAnchor.Y;
+      end;
     end;
 end;
 

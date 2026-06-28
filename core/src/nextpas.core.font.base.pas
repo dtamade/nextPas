@@ -33,6 +33,8 @@ const
 
   {** GPOS Lookup Type：Pair Adjustment（kern） }
   GPOS_LOOKUP_PAIR_ADJUSTMENT = 2;
+  {** GPOS Lookup Type：Mark-to-Base Attachment }
+  GPOS_LOOKUP_MARK_TO_BASE = 4;
 
   {** GSUB Lookup Type：Ligature Substitution }
   GSUB_LOOKUP_LIGATURE = 4;
@@ -270,6 +272,23 @@ type
     LigatureSetCount: Int32; // LigatureSet 数量
   end;
   TFontLigatureSubtableArray = array of TFontLigatureSubtable;
+
+  {** GPOS Anchor 表（X/Y 坐标，font units） }
+  TFontAnchor = record
+    X: Int16;
+    Y: Int16;
+  end;
+
+  {** GPOS Mark-to-Base 子表（查询时解析 MarkArray + BaseArray） }
+  TFontMarkToBaseSubtable = record
+    BaseOffset: Int32;         // 子表在文件中的偏移
+    MarkCoverageOffset: Int32; // Mark Coverage 表偏移（相对文件）
+    BaseCoverageOffset: Int32; // Base Coverage 表偏移（相对文件）
+    ClassCount: Int32;         // mark class 数量
+    MarkArrayOffset: Int32;    // MarkArray 偏移（相对文件）
+    BaseArrayOffset: Int32;    // BaseArray 偏移（相对文件）
+  end;
+  TFontMarkToBaseSubtableArray = array of TFontMarkToBaseSubtable;
 
 {** 字形轮廓内存释放 }
 procedure FontGlyphOutlineClear(var AOutline: TFontGlyphOutline);

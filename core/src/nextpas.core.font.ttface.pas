@@ -40,6 +40,7 @@ type
     FOs2: TFontOs2Table;
     FPairPosSubtables: TFontPairPosSubtableArray;
     FLigatureSubtables: TFontLigatureSubtableArray;
+    FMarkToBaseSubtables: TFontMarkToBaseSubtableArray;
     FValid: Boolean;
     FLastError: string;
     procedure ParseHeader;
@@ -100,6 +101,12 @@ type
     {** 查找连字替换。输入字形序列匹配时返回替换字形索引。
         不匹配返回 0。 }
     function LookupLigature(const AGlyphs: array of UInt16): UInt16;
+    {** 是否包含 Mark-to-Base 定位数据（GPOS MarkBasePos） }
+    function HasMarkToBase: Boolean;
+    {** 查找 Mark-to-Base 定位。AMarkGlyph 是 combining mark 的字形索引，
+        ABaseGlyph 是 base 字形的索引。返回 mark 的 anchor 偏移
+        （相对于 base 的 anchor）。未匹配时返回 X=0,Y=0。 }
+    function LookupMarkToBase(AMarkGlyph, ABaseGlyph: UInt16): TFontAnchor;
   end;
 
 implementation
@@ -702,6 +709,49 @@ begin
       FPairPosSubtables[LIdx] := LSubtable;
     end;
   end;
+
+  // Second pass: Mark-to-Base (lookup type 4).
+  SetLength(FMarkToBaseSubtables, 0);
+  for LI := 0 to LLookupCount - 1 do
+  begin
+    if FDataLength < LLookupListOff + 4 + LI * 2 then
+      Continue;
+    LLookupOff := LLookupListOff + ReadUInt16BE(LLookupListOff + 2 + LI * 2);
+    if FDataLength < LLookupOff + 6 then
+      Continue;
+    LLookupType := ReadUInt16BE(LLookupOff);
+    if LLookupType <> GPOS_LOOKUP_MARK_TO_BASE then
+      Continue;
+    LSubtableCount := ReadUInt16BE(LLookupOff + 4);
+
+    for LJ := 0 to LSubtableCount - 1 do
+    begin
+      if FDataLength < LLookupOff + 8 + LJ * 2 then
+        Continue;
+      LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
+      if FDataLength < LSubOff + 12 then
+        Continue;
+      // MarkBasePos Format 1:
+      //   uint16 posFormat (=1)
+      //   Offset16 markCoverageOffset
+      //   Offset16 baseCoverageOffset
+      //   Offset16 markClassCount
+      //   Offset16 markArrayOffset
+      //   Offset16 baseArrayOffset
+      LSub := LSubOff;
+      if ReadUInt16BE(LSub) <> 1 then
+        Continue;
+
+      LIdx := Length(FMarkToBaseSubtables);
+      SetLength(FMarkToBaseSubtables, LIdx + 1);
+      FMarkToBaseSubtables[LIdx].BaseOffset := LSub;
+      FMarkToBaseSubtables[LIdx].MarkCoverageOffset := LSub + ReadUInt16BE(LSub + 2);
+      FMarkToBaseSubtables[LIdx].BaseCoverageOffset := LSub + ReadUInt16BE(LSub + 4);
+      FMarkToBaseSubtables[LIdx].ClassCount := ReadUInt16BE(LSub + 6);
+      FMarkToBaseSubtables[LIdx].MarkArrayOffset := LSub + ReadUInt16BE(LSub + 8);
+      FMarkToBaseSubtables[LIdx].BaseArrayOffset := LSub + ReadUInt16BE(LSub + 10);
+    end;
+  end;
 end;
 
 procedure TTFontFace.ParseGsub;
@@ -935,6 +985,107 @@ end;
 function TTFontFace.HasLigatures: Boolean;
 begin
   Result := Length(FLigatureSubtables) > 0;
+end;
+
+function TTFontFace.HasMarkToBase: Boolean;
+begin
+  Result := Length(FMarkToBaseSubtables) > 0;
+end;
+
+function TTFontFace.LookupMarkToBase(AMarkGlyph, ABaseGlyph: UInt16): TFontAnchor;
+var
+  LI: Int32;
+  LSub: TFontMarkToBaseSubtable;
+  LMarkCovIdx, LBaseCovIdx: Int32;
+  LMarkCount, LBaseCount: Int32;
+  LMarkClass: UInt16;
+  LMarkAnchorOff, LBaseAnchorOff: Int32;
+  LBaseRecordSize: Int32;
+
+  function CoverageIndexOf(ACovOffset, AGlyphId: Int32): Int32;
+  var
+    LFmt, LCnt, LM, LR, LSG, LEC: Int32;
+  begin
+    if FDataLength < ACovOffset + 4 then
+      Exit(-1);
+    LFmt := ReadUInt16BE(ACovOffset);
+    if LFmt = 1 then
+    begin
+      LCnt := ReadUInt16BE(ACovOffset + 2);
+      for LM := 0 to LCnt - 1 do
+        if ReadUInt16BE(ACovOffset + 4 + LM * 2) = AGlyphId then
+          Exit(LM);
+      Result := -1;
+    end
+    else if LFmt = 2 then
+    begin
+      LCnt := ReadUInt16BE(ACovOffset + 2);
+      for LR := 0 to LCnt - 1 do
+      begin
+        if FDataLength < ACovOffset + 4 + LR * 6 + 6 then
+          Break;
+        LSG := ReadUInt16BE(ACovOffset + 4 + LR * 6);
+        LEC := ReadUInt16BE(ACovOffset + 4 + LR * 6 + 2);
+        if (AGlyphId >= LSG) and (AGlyphId <= LEC) then
+          Exit(ReadUInt16BE(ACovOffset + 4 + LR * 6 + 4) + (AGlyphId - LSG));
+      end;
+      Result := -1;
+    end
+    else
+      Result := -1;
+  end;
+
+begin
+  Result.X := 0;
+  Result.Y := 0;
+  for LI := 0 to High(FMarkToBaseSubtables) do
+  begin
+    LSub := FMarkToBaseSubtables[LI];
+    // Check mark coverage.
+    LMarkCovIdx := CoverageIndexOf(LSub.MarkCoverageOffset, AMarkGlyph);
+    if LMarkCovIdx < 0 then
+      Continue;
+    // Check base coverage.
+    LBaseCovIdx := CoverageIndexOf(LSub.BaseCoverageOffset, ABaseGlyph);
+    if LBaseCovIdx < 0 then
+      Continue;
+    // Read MarkArray: markCount (uint16), then per-mark: markClass (uint16) + anchor offset (uint16).
+    if FDataLength < LSub.MarkArrayOffset + 2 then
+      Continue;
+    LMarkCount := ReadUInt16BE(LSub.MarkArrayOffset);
+    if LMarkCovIdx >= LMarkCount then
+      Continue;
+    // Each mark record: 2 + 2 = 4 bytes.
+    if FDataLength < LSub.MarkArrayOffset + 2 + LMarkCovIdx * 4 + 4 then
+      Continue;
+    LMarkClass := ReadUInt16BE(LSub.MarkArrayOffset + 2 + LMarkCovIdx * 4);
+    LMarkAnchorOff := LSub.MarkArrayOffset + 2 + LMarkCovIdx * 4 +
+      ReadUInt16BE(LSub.MarkArrayOffset + 2 + LMarkCovIdx * 4 + 2);
+    // Read mark anchor (X, Y as int16).
+    if FDataLength < LMarkAnchorOff + 4 then
+      Continue;
+    // Read BaseArray: baseCount (uint16), then per-base: classCount * offset(uint16).
+    if FDataLength < LSub.BaseArrayOffset + 2 then
+      Continue;
+    LBaseCount := ReadUInt16BE(LSub.BaseArrayOffset);
+    if LBaseCovIdx >= LBaseCount then
+      Continue;
+    if LMarkClass >= LSub.ClassCount then
+      Continue;
+    // Each base record: ClassCount * 2 bytes (array of Offset16).
+    LBaseRecordSize := LSub.ClassCount * 2;
+    if FDataLength < LSub.BaseArrayOffset + 2 + LBaseCovIdx * LBaseRecordSize + LMarkClass * 2 + 2 then
+      Continue;
+    LBaseAnchorOff := LSub.BaseArrayOffset + 2 + LBaseCovIdx * LBaseRecordSize +
+      ReadUInt16BE(LSub.BaseArrayOffset + 2 + LBaseCovIdx * LBaseRecordSize + LMarkClass * 2);
+    // Read base anchor (X, Y as int16).
+    if FDataLength < LBaseAnchorOff + 4 then
+      Continue;
+    // Positioning: mark offset = base_anchor - mark_anchor.
+    Result.X := ReadInt16BE(LBaseAnchorOff) - ReadInt16BE(LMarkAnchorOff);
+    Result.Y := ReadInt16BE(LBaseAnchorOff + 2) - ReadInt16BE(LMarkAnchorOff + 2);
+    Exit;
+  end;
 end;
 
 function TTFontFace.IsValid: Boolean;
