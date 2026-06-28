@@ -124,6 +124,7 @@ end;
 function TGrowingAllocator.GetMem(ASize: SizeUInt): Pointer;
 var
   LIndex: Int32;
+  LNode: PFreeNode;
 begin
   if ASize = 0 then
     Exit(nil);
@@ -138,22 +139,29 @@ begin
   LIndex := SizeClassIndex(ASize);
   if LIndex < 0 then
   begin
-    { Large allocation: direct GetMem. }
     System.GetMem(Result, ASize);
     Exit;
   end;
-  { Try TLS cache first. }
-  Result := ThreadCacheAlloc(GThreadCache, LIndex);
-  if Result <> nil then
+  { Inlined TLS cache pop. }
+  LNode := GThreadCache.FHeads[LIndex];
+  if LNode <> nil then
+  begin
+    GThreadCache.FHeads[LIndex] := LNode^.FNext;
+    Dec(GThreadCache.FCounts[LIndex]);
+    Result := Pointer(LNode);
     Exit;
+  end;
   { Cache miss: refill from central pool. }
   ThreadCacheRefill(GThreadCache, LIndex, @RefillFromCentral);
-  Result := ThreadCacheAlloc(GThreadCache, LIndex);
-  if Result = nil then
+  LNode := GThreadCache.FHeads[LIndex];
+  if LNode <> nil then
   begin
-    { Central pool also exhausted: fall back to direct GetMem. }
+    GThreadCache.FHeads[LIndex] := LNode^.FNext;
+    Dec(GThreadCache.FCounts[LIndex]);
+    Result := Pointer(LNode);
+  end
+  else
     System.GetMem(Result, ASize);
-  end;
 end;
 
 procedure TGrowingAllocator.FreeMem(APtr: Pointer; ASize: SizeUInt);
@@ -166,11 +174,9 @@ begin
   LIndex := SizeClassIndex(ASize);
   if LIndex < 0 then
   begin
-    { Large block: direct FreeMem. }
     System.FreeMem(APtr);
     Exit;
   end;
-  { Try to push to TLS cache with shuffle (I-1: anti heap-spray). }
   if GThreadCache.FCounts[LIndex] < AdaptiveMaxListSize(LIndex) then
   begin
     FreeListInsertShuffled(Pointer(GThreadCache.FHeads[LIndex]),
@@ -178,7 +184,6 @@ begin
     Inc(GThreadCache.FCounts[LIndex]);
     Exit;
   end;
-  { Cache full: flush a batch to central, then push with shuffle. }
   ThreadCacheFlush(GThreadCache, LIndex, @FlushToCentral);
   FreeListInsertShuffled(Pointer(GThreadCache.FHeads[LIndex]),
     APtr, GThreadCache.FCounts[LIndex]);
