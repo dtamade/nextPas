@@ -56,6 +56,11 @@ type
     procedure BatchFreeMem(ASize: SizeUInt; ACount: Word;
       ABlocks: PPointer);
 
+    {** Resize a block. If the new size fits in the same size class,
+        returns the same pointer (zero-copy). Otherwise allocates new,
+        copies data, and frees the old block. }
+    function ReallocMem(APtr: Pointer; AOldSize, ANewSize: SizeUInt): Pointer;
+
     {** Force a scavenge pass across all central pools.
         Releases long-idle fully-free spans to OS. }
     procedure Scavenge;
@@ -154,7 +159,7 @@ begin
       ScavengeCentralPools(FCentrals[LIndex], GThreadCache.FOpCount,
         SCAVENGER_IDLE_THRESHOLD);
   end;
-  { Huge allocation: skip size class lookup entirely. }
+  { Huge allocation: skip size class lookup, direct System.GetMem. }
   if ASize > MEM_SIZECLASS_MAX then
   begin
     System.GetMem(Result, ASize);
@@ -218,7 +223,7 @@ begin
   if APtr = nil then
     Exit;
   Inc(GThreadCache.FOpCount);
-  { Huge allocation: skip size class lookup entirely. }
+  { Huge allocation: skip size class lookup. }
   if ASize > MEM_SIZECLASS_MAX then
   begin
     System.FreeMem(APtr);
@@ -300,7 +305,7 @@ begin
   Result := 0;
   if (ASize = 0) or (ACount = 0) then
     Exit;
-  { Huge: delegate to System.GetMem per block. }
+  { Huge: System.GetMem per block. }
   if ASize > MEM_SIZECLASS_MAX then
   begin
     while Result < ACount do
@@ -355,7 +360,7 @@ var
 begin
   if (ACount = 0) or (ABlocks = nil) then
     Exit;
-  { Huge: delegate to System.FreeMem per block. }
+  { Huge: System.FreeMem per block. }
   if ASize > MEM_SIZECLASS_MAX then
   begin
     for I := 0 to ACount - 1 do
@@ -385,6 +390,45 @@ begin
     GThreadCache.FHeads[LIndex] := LNode;
     Inc(GThreadCache.FCounts[LIndex]);
     Inc(ABlocks);
+  end;
+end;
+
+function TGrowingAllocator.ReallocMem(APtr: Pointer;
+  AOldSize, ANewSize: SizeUInt): Pointer;
+begin
+  if APtr = nil then
+    Exit(GetMem(ANewSize));
+  if ANewSize = 0 then
+  begin
+    FreeMem(APtr, AOldSize);
+    Exit(nil);
+  end;
+  { Same size class → zero-copy (most common: Vec/GrowSlice growing within class). }
+  if (AOldSize <= MEM_SIZECLASS_MAX) and (ANewSize <= MEM_SIZECLASS_MAX) then
+  begin
+    { Fast band checks: if both in same band AND same class → zero-copy. }
+    if (AOldSize <= 256) and (ANewSize <= 256) then
+    begin
+      if Int32((AOldSize + 15) shr 4) = Int32((ANewSize + 15) shr 4) then
+        Exit(APtr);
+    end
+    else if (AOldSize <= 1024) and (ANewSize <= 1024) then
+    begin
+      if Int32(AOldSize shr 6) = Int32(ANewSize shr 6) then
+        Exit(APtr);
+    end
+    else if SizeClassIndex(AOldSize) = SizeClassIndex(ANewSize) then
+      Exit(APtr);
+  end;
+  { Different class: alloc + copy + free. }
+  Result := GetMem(ANewSize);
+  if Result <> nil then
+  begin
+    if ANewSize > AOldSize then
+      Move(APtr^, Result^, AOldSize)
+    else
+      Move(APtr^, Result^, ANewSize);
+    FreeMem(APtr, AOldSize);
   end;
 end;
 
