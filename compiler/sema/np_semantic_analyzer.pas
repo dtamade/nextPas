@@ -5782,7 +5782,7 @@ begin
     SameText(AName, 'LowerCase') or SameText(AName, 'UpperCase') or
     SameText(AName, 'Trim') or SameText(AName, 'TrimLeft') or
     SameText(AName, 'TrimRight') or SameText(AName, 'SameText') or
-    SameText(AName, 'CompareText') or SameText(AName, 'StringReplace') or
+    SameText(AName, 'CompareText') or SameText(AName, 'UnicodeCompareStr') or SameText(AName, 'StringReplace') or
     SameText(AName, 'Default') or SameText(AName, 'TypeInfo') or
     SameText(AName, 'InterlockedCompareExchange') or
     SameText(AName, 'InterlockedIncrement') or SameText(AName, 'InterlockedDecrement');
@@ -6155,6 +6155,7 @@ begin
   CardinalTypeId := FModel.AddType('Cardinal', 'alias');
   FModel.AddType('SizeInt', 'alias');
   FModel.AddType('SizeUInt', 'alias');
+  FModel.AddType('UInt32', 'alias');
   FModel.AddType('PtrInt', 'alias');
   FModel.AddType('PtrUInt', 'alias');
   FModel.AddType('NativeInt', 'alias');

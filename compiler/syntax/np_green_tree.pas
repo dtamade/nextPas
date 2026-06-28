@@ -1212,7 +1212,8 @@ begin
           end;
         tkLParen:
           begin
-            if Result.NodeKind in [gnkIdentifier, gnkDotAccess] then
+            if Result.NodeKind in [gnkIdentifier, gnkDotAccess,
+              gnkDereference, gnkFunctionCall] then
             begin
               Inc(ACursor);
               RHS := TGreenNode.Create(gnkFunctionCall, Result.ByteOffset, 0,
@@ -4377,6 +4378,7 @@ var
     StmtNode: TGreenNode;
     RHS: TGreenNode;
     Token: TToken;
+    DotNode, CaretNode, CallNode, ArgExpr: TGreenNode;
   begin
     if (ACursor >= ALexer.TokenCount) or
       (CurrentToken(ALexer, ACursor).Kind in ATerminatorSet) then
@@ -4619,10 +4621,72 @@ var
         end;
       tkLParen:
         begin
-          { parenthesized expression as statement: (expr)^.field := value }
+          { parenthesized expression as statement: (expr)^.field := value,
+            (expr).method(), functionPointer^(args) etc. }
           StmtNode := TGreenNode.Create(gnkProcedureCallStatement,
             Token.ByteOffset, 0, '');
+          Inc(ACursor);
           RHS := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+          MatchTokenSilent(ALexer, ACursor, tkRParen);
+          { apply postfix chains: .method, ^, () }
+          while RHS <> nil do
+          begin
+            if (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind = tkDot) then
+            begin
+              Inc(ACursor);
+              if (ACursor < ALexer.TokenCount) and
+                IsMethodNameToken(CurrentToken(ALexer, ACursor).Kind) then
+              begin
+                DotNode := TGreenNode.Create(gnkDotAccess,
+                  RHS.ByteOffset, 0, CurrentToken(ALexer, ACursor).Lexeme);
+                DotNode.AppendChild(RHS);
+                DotNode.AppendChild(TGreenNode.Create(gnkIdentifier,
+                  CurrentToken(ALexer, ACursor).ByteOffset,
+                  Length(CurrentToken(ALexer, ACursor).Lexeme),
+                  CurrentToken(ALexer, ACursor).Lexeme));
+                RHS := DotNode;
+                Inc(ACursor);
+              end
+              else
+                Break;
+            end
+            else if (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind = tkCaret) then
+            begin
+              CaretNode := TGreenNode.Create(gnkDereference,
+                RHS.ByteOffset, 0, '');
+              CaretNode.AppendChild(RHS);
+              RHS := CaretNode;
+              Inc(ACursor);
+            end
+            else if (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind = tkLParen) and
+              (RHS.NodeKind in [gnkIdentifier, gnkDotAccess,
+                gnkDereference, gnkFunctionCall]) then
+            begin
+              Inc(ACursor);
+              CallNode := TGreenNode.Create(gnkFunctionCall,
+                RHS.ByteOffset, 0, RHS.Text);
+              CallNode.AppendChild(RHS);
+              while (ACursor < ALexer.TokenCount) and
+                (CurrentToken(ALexer, ACursor).Kind <> tkRParen) do
+              begin
+                ArgExpr := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+                if ArgExpr <> nil then
+                  CallNode.AppendChild(ArgExpr);
+                if (ACursor < ALexer.TokenCount) and
+                  (CurrentToken(ALexer, ACursor).Kind = tkComma) then
+                  Inc(ACursor)
+                else
+                  Break;
+              end;
+              MatchTokenSilent(ALexer, ACursor, tkRParen);
+              RHS := CallNode;
+            end
+            else
+              Break;
+          end;
           if RHS <> nil then
             StmtNode.AppendChild(RHS);
           if (ACursor < ALexer.TokenCount) and
