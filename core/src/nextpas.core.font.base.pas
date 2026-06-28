@@ -38,6 +38,8 @@ const
   {** GPOS Lookup Type：Mark-to-Mark Attachment }
   GPOS_LOOKUP_MARK_TO_MARK = 6;
 
+  {** GSUB Lookup Type：Single Substitution }
+  GSUB_LOOKUP_SINGLE = 1;
   {** GSUB Lookup Type：Ligature Substitution }
   GSUB_LOOKUP_LIGATURE = 4;
 
@@ -274,6 +276,17 @@ type
     LigatureSetCount: Int32; // LigatureSet 数量
   end;
   TFontLigatureSubtableArray = array of TFontLigatureSubtable;
+
+  {** GSUB Single Substitution 子表（Format 1 delta 或 Format 2 array） }
+  TFontSingleSubstSubtable = record
+    BaseOffset: Int32;       // 子表在文件中的偏移
+    CoverageOffset: Int32;   // Coverage 表偏移（相对文件）
+    Format: UInt16;          // 1=delta, 2=array
+    DeltaGlyphID: Int16;    // Format 1: delta value
+    GlyphCount: Int32;      // Format 2: substitute glyph count
+    SubstituteArrayOffset: Int32; // Format 2: substitute glyph array offset（相对文件）
+  end;
+  TFontSingleSubstSubtableArray = array of TFontSingleSubstSubtable;
 
   {** GPOS Anchor 表（X/Y 坐标，font units） }
   TFontAnchor = record

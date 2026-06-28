@@ -40,6 +40,7 @@ type
     FOs2: TFontOs2Table;
     FPairPosSubtables: TFontPairPosSubtableArray;
     FLigatureSubtables: TFontLigatureSubtableArray;
+    FSingleSubstSubtables: TFontSingleSubstSubtableArray;
     FMarkToBaseSubtables: TFontMarkToBaseSubtableArray;
     FMarkToMarkSubtables: TFontMarkToMarkSubtableArray;
     FValid: Boolean;
@@ -102,6 +103,11 @@ type
     {** 查找连字替换。输入字形序列匹配时返回替换字形索引。
         不匹配返回 0。 }
     function LookupLigature(const AGlyphs: array of UInt16): UInt16;
+    {** 是否包含单字形替换数据（GSUB Single） }
+    function HasSingleSubst: Boolean;
+    {** 查找单字形替换。AGlyphId 匹配 coverage 时返回替换字形索引。
+        不匹配返回 0。 }
+    function LookupSingleSubst(AGlyphId: UInt16): UInt16;
     {** 是否包含 Mark-to-Base 定位数据（GPOS MarkBasePos） }
     function HasMarkToBase: Boolean;
     {** 查找 Mark-to-Base 定位。AMarkGlyph 是 combining mark 的字形索引，
@@ -803,6 +809,7 @@ var
   LLookupOff, LLookupType, LSubtableCount: Int32;
   LSubOff, LSub, LSubFmt, LCovOff, LLSCount, LIdx: Int32;
   LSubtable: TFontLigatureSubtable;
+  LSingleSubst: TFontSingleSubstSubtable;
 begin
   LTableIdx := FindTable(TABLE_TAG_GSUB);
   if LTableIdx < 0 then
@@ -815,6 +822,7 @@ begin
     Exit;
   LLookupCount := ReadUInt16BE(LLookupListOff);
   SetLength(FLigatureSubtables, 0);
+  SetLength(FSingleSubstSubtables, 0);
 
   for LI := 0 to LLookupCount - 1 do
   begin
@@ -824,31 +832,78 @@ begin
     if FDataLength < LLookupOff + 6 then
       Continue;
     LLookupType := ReadUInt16BE(LLookupOff);
-    if LLookupType <> GSUB_LOOKUP_LIGATURE then
-      Continue;
-    LSubtableCount := ReadUInt16BE(LLookupOff + 4);
 
-    for LJ := 0 to LSubtableCount - 1 do
+    // Single Substitution (type 1).
+    if LLookupType = GSUB_LOOKUP_SINGLE then
     begin
-      if FDataLength < LLookupOff + 8 + LJ * 2 then
-        Continue;
-      LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
-      LSub := LSubOff;
-      if FDataLength < LSub + 6 then
-        Continue;
-      LSubFmt := ReadUInt16BE(LSub);
-      LCovOff := ReadUInt16BE(LSub + 2);
-      LLSCount := ReadUInt16BE(LSub + 4);
-      if LSubFmt <> 1 then
-        Continue;
+      LSubtableCount := ReadUInt16BE(LLookupOff + 4);
+      for LJ := 0 to LSubtableCount - 1 do
+      begin
+        if FDataLength < LLookupOff + 8 + LJ * 2 then
+          Continue;
+        LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
+        LSub := LSubOff;
+        if FDataLength < LSub + 6 then
+          Continue;
+        LSubFmt := ReadUInt16BE(LSub);
+        LCovOff := ReadUInt16BE(LSub + 2);
+        // Format 1: delta substitution.
+        if LSubFmt = 1 then
+        begin
+          if FDataLength < LSub + 6 then
+            Continue;
+          LSingleSubst.BaseOffset := LSub;
+          LSingleSubst.CoverageOffset := LSub + LCovOff;
+          LSingleSubst.Format := 1;
+          LSingleSubst.DeltaGlyphID := ReadInt16BE(LSub + 4);
+          LSingleSubst.GlyphCount := 0;
+          LSingleSubst.SubstituteArrayOffset := 0;
+          LIdx := Length(FSingleSubstSubtables);
+          SetLength(FSingleSubstSubtables, LIdx + 1);
+          FSingleSubstSubtables[LIdx] := LSingleSubst;
+        end
+        // Format 2: array substitution.
+        else if LSubFmt = 2 then
+        begin
+          if FDataLength < LSub + 8 then
+            Continue;
+          LSingleSubst.BaseOffset := LSub;
+          LSingleSubst.CoverageOffset := LSub + LCovOff;
+          LSingleSubst.Format := 2;
+          LSingleSubst.DeltaGlyphID := 0;
+          LSingleSubst.GlyphCount := ReadUInt16BE(LSub + 4);
+          LSingleSubst.SubstituteArrayOffset := LSub + 6;
+          LIdx := Length(FSingleSubstSubtables);
+          SetLength(FSingleSubstSubtables, LIdx + 1);
+          FSingleSubstSubtables[LIdx] := LSingleSubst;
+        end;
+      end;
+    end;
 
-      LSubtable.BaseOffset := LSub;
-      LSubtable.CoverageOffset := LSub + LCovOff;
-      LSubtable.LigatureSetCount := LLSCount;
-
-      LIdx := Length(FLigatureSubtables);
-      SetLength(FLigatureSubtables, LIdx + 1);
-      FLigatureSubtables[LIdx] := LSubtable;
+    // Ligature Substitution (type 4).
+    if LLookupType = GSUB_LOOKUP_LIGATURE then
+    begin
+      LSubtableCount := ReadUInt16BE(LLookupOff + 4);
+      for LJ := 0 to LSubtableCount - 1 do
+      begin
+        if FDataLength < LLookupOff + 8 + LJ * 2 then
+          Continue;
+        LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
+        LSub := LSubOff;
+        if FDataLength < LSub + 6 then
+          Continue;
+        LSubFmt := ReadUInt16BE(LSub);
+        LCovOff := ReadUInt16BE(LSub + 2);
+        LLSCount := ReadUInt16BE(LSub + 4);
+        if LSubFmt <> 1 then
+          Continue;
+        LSubtable.BaseOffset := LSub;
+        LSubtable.CoverageOffset := LSub + LCovOff;
+        LSubtable.LigatureSetCount := LLSCount;
+        LIdx := Length(FLigatureSubtables);
+        SetLength(FLigatureSubtables, LIdx + 1);
+        FLigatureSubtables[LIdx] := LSubtable;
+      end;
     end;
   end;
 end;
@@ -1027,6 +1082,78 @@ end;
 function TTFontFace.HasLigatures: Boolean;
 begin
   Result := Length(FLigatureSubtables) > 0;
+end;
+
+function TTFontFace.HasSingleSubst: Boolean;
+begin
+  Result := Length(FSingleSubstSubtables) > 0;
+end;
+
+function TTFontFace.LookupSingleSubst(AGlyphId: UInt16): UInt16;
+var
+  LI, LCovIdx: Int32;
+  LSub: TFontSingleSubstSubtable;
+
+  function CoverageIndexOf(ACovOffset, AGlyphId: Int32): Int32;
+  var
+    LFmt, LCnt, LM, LR, LSG, LEC: Int32;
+  begin
+    if FDataLength < ACovOffset + 4 then
+      Exit(-1);
+    LFmt := ReadUInt16BE(ACovOffset);
+    if LFmt = 1 then
+    begin
+      LCnt := ReadUInt16BE(ACovOffset + 2);
+      for LM := 0 to LCnt - 1 do
+        if ReadUInt16BE(ACovOffset + 4 + LM * 2) = AGlyphId then
+          Exit(LM);
+      Result := -1;
+    end
+    else if LFmt = 2 then
+    begin
+      LCnt := ReadUInt16BE(ACovOffset + 2);
+      for LR := 0 to LCnt - 1 do
+      begin
+        if FDataLength < ACovOffset + 4 + LR * 6 + 6 then
+          Break;
+        LSG := ReadUInt16BE(ACovOffset + 4 + LR * 6);
+        LEC := ReadUInt16BE(ACovOffset + 4 + LR * 6 + 2);
+        if (AGlyphId >= LSG) and (AGlyphId <= LEC) then
+          Exit(ReadUInt16BE(ACovOffset + 4 + LR * 6 + 4) + (AGlyphId - LSG));
+      end;
+      Result := -1;
+    end
+    else
+      Result := -1;
+  end;
+
+begin
+  Result := 0;
+  for LI := 0 to High(FSingleSubstSubtables) do
+  begin
+    LSub := FSingleSubstSubtables[LI];
+    LCovIdx := CoverageIndexOf(LSub.CoverageOffset, AGlyphId);
+    if LCovIdx < 0 then
+      Continue;
+    if LSub.Format = 1 then
+    begin
+      // Format 1: delta substitution.
+      Result := (AGlyphId + LSub.DeltaGlyphID) and $FFFF;
+      if Result <> 0 then
+        Exit;
+    end
+    else if LSub.Format = 2 then
+    begin
+      // Format 2: array substitution.
+      if LCovIdx >= LSub.GlyphCount then
+        Continue;
+      if FDataLength < LSub.SubstituteArrayOffset + (LCovIdx + 1) * 2 then
+        Continue;
+      Result := ReadUInt16BE(LSub.SubstituteArrayOffset + LCovIdx * 2);
+      if Result <> 0 then
+        Exit;
+    end;
+  end;
 end;
 
 function TTFontFace.HasMarkToBase: Boolean;
