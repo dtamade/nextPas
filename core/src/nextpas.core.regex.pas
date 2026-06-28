@@ -342,7 +342,13 @@ begin
   end;
   if FProgram.NumCaptures = 0 then
   begin
-    Result := DfaFindAll(FProgram, PAnsiChar(AInput), Length(AInput), AMaxMatches);
+    if FDfaCache = nil then
+    begin
+      FDfaCache := AllocMem(SizeOf(TDfaCache));
+      DfaCacheInit(PDfaCache(FDfaCache)^, Length(FProgram.Code));
+    end;
+    Result := DfaFindAllCached(FProgram, PAnsiChar(AInput), Length(AInput),
+      PDfaCache(FDfaCache)^, AMaxMatches);
     Exit;
   end;
   Result := NfaFindAll(FProgram, PAnsiChar(AInput), Length(AInput), AMaxMatches);
