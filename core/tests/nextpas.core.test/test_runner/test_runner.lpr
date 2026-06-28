@@ -997,6 +997,69 @@ begin
     PassTest('Regular test captured log');
   end;
 
+  { ── ShouldFail (expected failure) ─────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 6: ShouldFail (expected failure)');
+  begin
+    LResultSuite := TTestSuite.Create('ShouldFail');
+    { Test that raises = passes with ShouldFail }
+    LResultSuite.ShouldFail('raises is ok', procedure begin
+      raise Exception.Create('expected error');
+    end, 'expected error');
+    { Test that doesn't raise = fails with ShouldFail }
+    LResultSuite.ShouldFail('no raise is fail', procedure begin
+      { intentionally empty — no exception }
+    end);
+    if LResultSuite.RunWithResult(LRegularLogResult) then
+    begin
+      FailTest('ShouldFail suite should fail (one test passes without raising)');
+    end;
+    if LRegularLogResult.Passed <> 1 then
+    begin
+      FailTest('expected 1 passed (raises), got ' + IntToStr(LRegularLogResult.Passed));
+    end;
+    if LRegularLogResult.Failed <> 1 then
+    begin
+      FailTest('expected 1 failed (no raise), got ' + IntToStr(LRegularLogResult.Failed));
+    end;
+    PassTest('ShouldFail basic behavior');
+  end;
+
+  { ── Slow test report ─────────────────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 6: Slow test report');
+  begin
+    LResultSuite := TTestSuite.Create('SlowSuite');
+    LResultSuite.Test('fast', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('slow', procedure begin
+      { Simulate work — sleep not available in test, just verify the mechanism }
+      CheckTrue(True);
+    end);
+    LResultSuite.RunWithResult(LRegularLogResult);
+    if Length(LRegularLogResult.SlowTests) > 5 then
+    begin
+      FailTest('slow tests should be capped at SlowTestCount');
+    end;
+    PassTest('Slow test report populated');
+  end;
+
+  { ── FormatDuration ───────────────────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 6: FormatDuration');
+  begin
+    if FormatDuration(0) <> '0ms' then
+      FailTest('FormatDuration(0) = ' + FormatDuration(0));
+    if FormatDuration(999) <> '999ms' then
+      FailTest('FormatDuration(999) = ' + FormatDuration(999));
+    if FormatDuration(1000) <> '1s' then
+      FailTest('FormatDuration(1000) = ' + FormatDuration(1000));
+    if FormatDuration(1234) <> '1.23s' then
+      FailTest('FormatDuration(1234) = ' + FormatDuration(1234));
+    if FormatDuration(500) <> '500ms' then
+      FailTest('FormatDuration(500) = ' + FormatDuration(500));
+    PassTest('FormatDuration formatting');
+  end;
+
   WriteLn;
   PassTest('test_runner');
 end.

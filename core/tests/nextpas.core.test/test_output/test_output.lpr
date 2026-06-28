@@ -1306,6 +1306,89 @@ begin
   { Do NOT free LSink }
 end;
 
+procedure TestHierarchicalFilter;
+{ Test Go-style hierarchical filter matching: --filter=Parent/Sub }
+var
+  LConfig: TTestConfig;
+begin
+  LConfig := DefaultConfig;
+  LConfig.AnsiMode := amOff;
+
+  { Set hierarchical filter }
+  SetTestFilter('TestParent/SubA');
+  { Exact match }
+  CheckTrue(MatchesFilter('TestParent/SubA', LConfig),
+    'hierarchical: exact match TestParent/SubA');
+  { Filter is prefix of name (descendant match) }
+  CheckTrue(MatchesFilter('TestParent/SubA/LeafA', LConfig),
+    'hierarchical: filter prefix matches descendant');
+  CheckTrue(MatchesFilter('TestParent/SubA/LeafA/Deep', LConfig),
+    'hierarchical: filter prefix matches deep descendant');
+  { Name is prefix of filter (parent must run to enter children) }
+  CheckTrue(MatchesFilter('TestParent', LConfig),
+    'hierarchical: parent matches when filter targets its children');
+  { Sibling should NOT match }
+  CheckFalse(MatchesFilter('TestParent/SubB', LConfig),
+    'hierarchical: sibling SubB should not match');
+  CheckFalse(MatchesFilter('TestParent/SubB/LeafA', LConfig),
+    'hierarchical: sibling descendant should not match');
+  { Unrelated should NOT match }
+  CheckFalse(MatchesFilter('OtherParent/SubA', LConfig),
+    'hierarchical: unrelated parent should not match');
+
+  { Test with glob segment }
+  SetTestFilter('TestParent/*');
+  CheckTrue(MatchesFilter('TestParent/SubA', LConfig),
+    'hierarchical glob: * matches any child');
+  CheckTrue(MatchesFilter('TestParent/SubB', LConfig),
+    'hierarchical glob: * matches any child');
+  CheckTrue(MatchesFilter('TestParent', LConfig),
+    'hierarchical glob: parent matches');
+  CheckFalse(MatchesFilter('OtherParent/SubA', LConfig),
+    'hierarchical glob: unrelated should not match');
+
+  { Reset filter }
+  SetTestFilter('');
+end;
+
+procedure TestGetTopSlowest;
+var
+  LResults: TTestResults;
+  LSlow: TTestResults;
+begin
+  SetLength(LResults, 4);
+  LResults[0] := MakeTestResult('fast', tsPassed, '', 10);
+  LResults[1] := MakeTestResult('slow', tsPassed, '', 5000);
+  LResults[2] := MakeTestResult('medium', tsPassed, '', 100);
+  LResults[3] := MakeTestResult('medium2', tsPassed, '', 200);
+
+  { Top 2 }
+  LSlow := GetTopSlowest(LResults, 2);
+  CheckTrue(Length(LSlow) = 2, 'top 2 should have 2 entries');
+  CheckTrue(LSlow[0].Name = 'slow', 'slowest should be first');
+  CheckTrue(LSlow[0].Duration = 5000, 'slowest duration');
+  CheckTrue(LSlow[1].Name = 'medium2', 'second slowest');
+
+  { Top 10 with only 4 entries }
+  LSlow := GetTopSlowest(LResults, 10);
+  CheckTrue(Length(LSlow) = 4, 'should cap at array length');
+
+  { Top 0 }
+  LSlow := GetTopSlowest(LResults, 0);
+  CheckTrue(Length(LSlow) = 0, 'top 0 should be empty');
+
+  { Empty input }
+  LSlow := GetTopSlowest(nil, 5);
+  CheckTrue(Length(LSlow) = 0, 'nil input should be empty');
+
+  { All zero duration }
+  SetLength(LResults, 2);
+  LResults[0] := MakeTestResult('a', tsPassed, '', 0);
+  LResults[1] := MakeTestResult('b', tsPassed, '', 0);
+  LSlow := GetTopSlowest(LResults, 3);
+  CheckTrue(Length(LSlow) = 0, 'all zero duration should return empty');
+end;
+
 var
   Suite: TTestSuite;
   Runner: TTestRunner;
@@ -1383,6 +1466,8 @@ begin
   Suite.Test('TestTAPCapturedLogInFailure',   @TestTAPCapturedLogInFailure);
   Suite.Test('TestJSONCapturedLogInFailure',  @TestJSONCapturedLogInFailure);
   Suite.Test('TestRunnerTagsOverload',        @TestRunnerTagsOverload);
+  Suite.Test('Hierarchical filter matching',  @TestHierarchicalFilter);
+  Suite.Test('GetTopSlowest',                 @TestGetTopSlowest);
 
   Runner := TTestRunner.Create('output-tests');
   Runner.Add(Suite);

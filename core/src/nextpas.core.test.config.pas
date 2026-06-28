@@ -15,7 +15,7 @@ type
   TAnsiMode = (amAuto, amOn, amOff);
 
   TConfigKey = (ckFilter, ckTag, ckTimeout, ckAnsi,
-    ckOutSink, ckErrSink, ckRetry, ckWorkers);
+    ckOutSink, ckErrSink, ckRetry, ckWorkers, ckCount, ckSlow);
   TConfigKeys = set of TConfigKey;
 
   IOutputSink = interface
@@ -67,6 +67,8 @@ type
     MaxParallelWorkers: Integer;
       { 0 = unlimited (current behavior, one OS thread per test)
         >0 = max concurrent OS threads in parallel mode (batch dispatch) }
+    RepeatAllCount: Integer; { --count=N: run all tests N times (>1), 0=once }
+    SlowTestCount : Integer; { N slowest tests to show in summary (0=off, default=5) }
   end;
 
 function DefaultConfig: TTestConfig;
@@ -82,6 +84,10 @@ procedure SetDefaultOutSink(const ASink: IOutputSink);
 procedure SetDefaultErrSink(const ASink: IOutputSink);
 procedure SetDefaultRetryCount(ARetryCount: Integer);
 procedure SetDefaultMaxParallelWorkers(AMaxWorkers: Integer);
+procedure SetDefaultRepeatAllCount(ARepeatCount: Integer);
+procedure SetDefaultSlowTestCount(ACount: Integer);
+function  GetRepeatAllCount(const AConfig: TTestConfig): Integer;
+function  GetSlowTestCount(const AConfig: TTestConfig): Integer;
 
 implementation
 
@@ -99,6 +105,8 @@ begin
   Result.ErrSink := TStderrSink.Create;
   Result.RetryCount := 0;
   Result.MaxParallelWorkers := 0; { unlimited by default }
+  Result.RepeatAllCount := 0; { run once by default }
+  Result.SlowTestCount := 5; { show top 5 slowest by default }
 end;
 
 function DefaultConfig: TTestConfig;
@@ -128,6 +136,10 @@ begin
     Result.RetryCount := LDefaults.RetryCount;
   if Result.MaxParallelWorkers = 0 then
     Result.MaxParallelWorkers := LDefaults.MaxParallelWorkers;
+  if Result.RepeatAllCount = 0 then
+    Result.RepeatAllCount := LDefaults.RepeatAllCount;
+  if Result.SlowTestCount = 0 then
+    Result.SlowTestCount := LDefaults.SlowTestCount;
 end;
 
 function ResolveOutSink(const AConfig: TTestConfig): IOutputSink;
@@ -198,6 +210,28 @@ procedure SetDefaultMaxParallelWorkers(AMaxWorkers: Integer);
 begin
   GDefaultConfig.MaxParallelWorkers := AMaxWorkers;
   Include(GExplicit, ckWorkers);
+end;
+
+procedure SetDefaultRepeatAllCount(ARepeatCount: Integer);
+begin
+  GDefaultConfig.RepeatAllCount := ARepeatCount;
+  Include(GExplicit, ckCount);
+end;
+
+procedure SetDefaultSlowTestCount(ACount: Integer);
+begin
+  GDefaultConfig.SlowTestCount := ACount;
+  Include(GExplicit, ckSlow);
+end;
+
+function GetRepeatAllCount(const AConfig: TTestConfig): Integer;
+begin
+  Result := ResolveConfig(AConfig).RepeatAllCount;
+end;
+
+function GetSlowTestCount(const AConfig: TTestConfig): Integer;
+begin
+  Result := ResolveConfig(AConfig).SlowTestCount;
 end;
 
 procedure TStdoutSink.Write(const AText: string);

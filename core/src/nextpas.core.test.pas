@@ -155,6 +155,7 @@ procedure SectionHeader(const ATitle: string);
 procedure SetTestFilter(const APattern: string);
 function  GetTestFilter: string;
 function  MatchesFilter(const AName: string): Boolean;
+function  MatchesFilter(const AName: string; const AConfig: TTestConfig): Boolean;
 procedure SetTagFilter(const APattern: string);
 function  GetTagFilter: string;
 procedure SetTestTimeout(AMillis: Integer);
@@ -170,6 +171,15 @@ procedure SetDefaultErrSink(const ASink: IOutputSink);
 procedure SetDefaultOutSink(const ASink: IOutputSink);
 procedure SetDefaultRetryCount(ARetryCount: Integer);
 procedure SetDefaultMaxParallelWorkers(AMaxWorkers: Integer);
+procedure SetDefaultRepeatAllCount(ARepeatCount: Integer);
+procedure SetDefaultSlowTestCount(ACount: Integer);
+function  GetRepeatAllCount(const AConfig: TTestConfig): Integer;
+function  GetSlowTestCount(const AConfig: TTestConfig): Integer;
+function  FormatDuration(AMillis: Int64): string;
+function  GetTopSlowest(const AResults: TTestResults;
+  ACount: Integer): TTestResults;
+function  MakeTestResult(const AName: string; AStatus: TTestStatus;
+  const AMessage: string; ADuration: Int64): TTestResult;
 
 type
   TTestResults = nextpas.core.test.base.TTestResults;
@@ -389,6 +399,9 @@ begin Result := nextpas.core.test.output.GetTestFilter; end;
 function MatchesFilter(const AName: string): Boolean;
 begin Result := nextpas.core.test.output.MatchesFilter(AName); end;
 
+function MatchesFilter(const AName: string; const AConfig: TTestConfig): Boolean;
+begin Result := nextpas.core.test.output.MatchesFilter(AName, AConfig); end;
+
 procedure SetTagFilter(const APattern: string);
 begin nextpas.core.test.output.SetTagFilter(APattern); end;
 
@@ -429,6 +442,29 @@ begin nextpas.core.test.config.SetDefaultRetryCount(ARetryCount); end;
 
 procedure SetDefaultMaxParallelWorkers(AMaxWorkers: Integer);
 begin nextpas.core.test.config.SetDefaultMaxParallelWorkers(AMaxWorkers); end;
+
+procedure SetDefaultRepeatAllCount(ARepeatCount: Integer);
+begin nextpas.core.test.config.SetDefaultRepeatAllCount(ARepeatCount); end;
+
+procedure SetDefaultSlowTestCount(ACount: Integer);
+begin nextpas.core.test.config.SetDefaultSlowTestCount(ACount); end;
+
+function GetRepeatAllCount(const AConfig: TTestConfig): Integer;
+begin Result := nextpas.core.test.config.GetRepeatAllCount(AConfig); end;
+
+function GetSlowTestCount(const AConfig: TTestConfig): Integer;
+begin Result := nextpas.core.test.config.GetSlowTestCount(AConfig); end;
+
+function FormatDuration(AMillis: Int64): string;
+begin Result := nextpas.core.test.output.FormatDuration(AMillis); end;
+
+function GetTopSlowest(const AResults: TTestResults;
+  ACount: Integer): TTestResults;
+begin Result := nextpas.core.test.base.GetTopSlowest(AResults, ACount); end;
+
+function MakeTestResult(const AName: string; AStatus: TTestStatus;
+  const AMessage: string; ADuration: Int64): TTestResult;
+begin Result := nextpas.core.test.base.MakeTestResult(AName, AStatus, AMessage, ADuration); end;
 
 { ── Forward to test.discovery ──────────────────────────────────────────────── }
 

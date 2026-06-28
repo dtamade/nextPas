@@ -80,6 +80,12 @@ type
     procedure TestTable(const AName: string;
       ACases: specialize TArray<TTestCase>;
       AProc: TTestCaseProc);
+    { ShouldFail: test passes if proc raises any exception (Rust #[should_panic]).
+      AShouldFailMsg is optional reason shown in output. }
+    procedure ShouldFail(const AName: string; AProc: TTestProc;
+      const AShouldFailMsg: string = '');
+    procedure ShouldFail(const AName: string; AProc: TTestClosure;
+      const AShouldFailMsg: string = '');
     procedure Skip(const AName: string; const AReason: string = '');
     procedure SetSetup(AProc: TTestProc);
     procedure SetSetup(AProc: TTestClosure);
@@ -202,6 +208,17 @@ begin
   Result := '';
 end;
 
+function ParseCount(const AArg: string): Integer;
+begin
+  if Copy(AArg, 1, 8) = '--count=' then
+  begin
+    Result := StrToIntDef(Copy(AArg, 9, MaxInt), 0);
+    if Result < 0 then Result := 0;
+  end
+  else
+    Result := 0;
+end;
+
 procedure SetCurrentTestContext(AContext: TObject);
 begin
   GCurrentTestContextObj := AContext;
@@ -292,6 +309,26 @@ begin
       Exit(LTag);
     if (ParamStr(K) = '--tag') and (K < ParamCount) then
       Exit(ParamStr(K + 1));
+  end;
+end;
+
+function ParseCountFromArgs: Integer;
+var
+  K: Integer;
+  LCount: Integer;
+begin
+  Result := 0;
+  for K := 1 to ParamCount do
+  begin
+    LCount := ParseCount(ParamStr(K));
+    if LCount > 0 then
+      Exit(LCount);
+    if (ParamStr(K) = '--count') and (K < ParamCount) then
+    begin
+      Result := StrToIntDef(ParamStr(K + 1), 0);
+      if Result < 0 then Result := 0;
+      Exit;
+    end;
   end;
 end;
 
@@ -522,6 +559,32 @@ begin
   LEntry.Name       := AName;
   LEntry.Kind       := ekSkipped;
   LEntry.SkipReason := AReason;
+  RegisterEntry(Tests, LEntry);
+end;
+
+procedure TTestSuite.ShouldFail(const AName: string; AProc: TTestProc;
+  const AShouldFailMsg: string);
+var
+  LEntry: TTestEntry;
+begin
+  ClearEntry(LEntry);
+  LEntry.Name          := AName;
+  LEntry.Proc          := AProc;
+  LEntry.Kind          := ekShouldFail;
+  LEntry.ShouldFailMsg := AShouldFailMsg;
+  RegisterEntry(Tests, LEntry);
+end;
+
+procedure TTestSuite.ShouldFail(const AName: string; AProc: TTestClosure;
+  const AShouldFailMsg: string);
+var
+  LEntry: TTestEntry;
+begin
+  ClearEntry(LEntry);
+  LEntry.Name          := AName;
+  LEntry.Closure       := AProc;
+  LEntry.Kind          := ekShouldFail;
+  LEntry.ShouldFailMsg := AShouldFailMsg;
   RegisterEntry(Tests, LEntry);
 end;
 
@@ -824,6 +887,38 @@ begin
         PTestCaseProc(LEntry.TableProc)^(PTestCase(LEntry.TableCase)^);
         Inc(LPass);
       end
+      else if LEntry.Kind = ekShouldFail then
+      begin
+        { ShouldFail: test passes if proc raises, fails if it doesn't.
+          Rust-style #[should_panic] expected-failure testing. }
+        try
+          if Assigned(LEntry.Closure) then
+            LEntry.Closure()
+          else
+            LEntry.Proc;
+          { No exception = unexpected success }
+          LStatus := tsFailed;
+          if LEntry.ShouldFailMsg <> '' then
+            LLastFailMsg := 'Expected failure (' + LEntry.ShouldFailMsg +
+              ') but test passed'
+          else
+            LLastFailMsg := 'Expected failure but test passed';
+          Inc(LFail);
+        except
+          on E: ETestSkipped do
+          begin
+            LStatus := tsSkipped;
+            LLastFailMsg := E.Message;
+            Inc(LSkip);
+          end;
+          on E: Exception do
+          begin
+            { Expected failure — test passes }
+            LStatus := tsPassed;
+            Inc(LPass);
+          end;
+        end;
+      end
       else
       begin
         { Run with retry support + repeat support: if RepeatCount > 1, run
@@ -1051,6 +1146,8 @@ end;
 
 procedure TTestSuite.FinalizeResults(const AConfig: TTestConfig;
   var AResult: TTestRunResult; APass, AFail, ASkip: Integer);
+var
+  LSlowCount: Integer;
 begin
   CleanupTableAllocations;
   AResult.Passed    := APass;
@@ -1062,6 +1159,11 @@ begin
   LastPass      := APass;
   LastFail      := AFail;
   LastSkip      := ASkip;
+  { Populate slow test report }
+  LSlowCount := GetSlowTestCount(AConfig);
+  if LSlowCount > 0 then
+    AResult.SlowTests := GetTopSlowest(AResult.Results, LSlowCount);
+  WriteSlowTests(AResult.SlowTests, ResolveOutSink(AConfig), AConfig);
   ResolveOutSink(AConfig).WriteLn(
     AnsiDim(
       '  ' + IntToStr(APass) + ' passed, ' +
@@ -1355,37 +1457,72 @@ end;
 function TTestRunner.RunAllWithResult(
   out AResults: specialize TArray<TTestRunResult>): Boolean;
 var
-  I: Integer;
+  I, LIter, LRepeatAll: Integer;
   LAllPassed: Boolean;
   LSuiteResult: TTestRunResult;
   LConfig: TTestConfig;
+  LOutSink: IOutputSink;
+  LStartMs: Int64;
 
 begin
-  { Auto-detect --filter from command line if not already set programmatically }
+  { Auto-detect --filter / --tag / --count from command line }
   if GetTestFilter = '' then
     SetTestFilter(ParseFilterFromArgs);
   if GetTagFilter = '' then
     SetTagFilter(ParseTagFromArgs);
+  if GetRepeatAllCount(DefaultConfig) = 0 then
+  begin
+    LIter := ParseCountFromArgs;
+    if LIter > 0 then
+      SetDefaultRepeatAllCount(LIter);
+  end;
   LConfig := RunnerConfig(Self);
+  LOutSink := ResolveOutSink(LConfig);
 
-  ResolveOutSink(LConfig).WriteLn(
+  LRepeatAll := GetRepeatAllCount(LConfig);
+  if LRepeatAll <= 0 then LRepeatAll := 1;
+
+  LOutSink.WriteLn(
     AnsiBold('=== ', LConfig) +
     AnsiBold(Name, LConfig) +
     AnsiBold(' ===', LConfig));
+  if LRepeatAll > 1 then
+    LOutSink.WriteLn(AnsiDim(
+      '  Running all tests ' + IntToStr(LRepeatAll) + ' times (--count=' +
+      IntToStr(LRepeatAll) + ')', LConfig));
+
   LAllPassed := True;
   TotalPass := 0;
   TotalFail := 0;
   TotalSkip := 0;
   SetLength(AResults, Length(Suites));
-  for I := 0 to High(Suites) do
+
+  for LIter := 1 to LRepeatAll do
   begin
-    if not Suites[I].RunWithResult(LSuiteResult) then
-      LAllPassed := False;
-    AResults[I] := LSuiteResult;
-    Inc(TotalPass, Suites[I].LastPass);
-    Inc(TotalFail, Suites[I].LastFail);
-    Inc(TotalSkip, Suites[I].LastSkip);
+    if LRepeatAll > 1 then
+    begin
+      LOutSink.WriteLn('');
+      LOutSink.WriteLn(AnsiBold(
+        '--- Iteration ' + IntToStr(LIter) + '/' + IntToStr(LRepeatAll) +
+        ' ---', LConfig));
+    end;
+    LStartMs := GetTickCount64;
+    for I := 0 to High(Suites) do
+    begin
+      if not Suites[I].RunWithResult(LSuiteResult) then
+        LAllPassed := False;
+      { Only keep the last iteration's results }
+      AResults[I] := LSuiteResult;
+      Inc(TotalPass, Suites[I].LastPass);
+      Inc(TotalFail, Suites[I].LastFail);
+      Inc(TotalSkip, Suites[I].LastSkip);
+    end;
+    if LRepeatAll > 1 then
+      LOutSink.WriteLn(AnsiDim(
+        '  Iteration ' + IntToStr(LIter) + ' completed in ' +
+        FormatDuration(GetTickCount64 - LStartMs), LConfig));
   end;
+
   HasRun := True;
   Result := LAllPassed;
 end;
@@ -1393,37 +1530,71 @@ end;
 function TTestRunner.RunAllParallelWithResult(APool: IThreadPool;
   out AResults: specialize TArray<TTestRunResult>): Boolean;
 var
-  I: Integer;
+  I, LIter, LRepeatAll: Integer;
   LAllPassed: Boolean;
   LSuiteResult: TTestRunResult;
   LConfig: TTestConfig;
+  LOutSink: IOutputSink;
+  LStartMs: Int64;
 
 begin
-  { Auto-detect --filter from command line if not already set programmatically }
+  { Auto-detect --filter / --tag / --count from command line }
   if GetTestFilter = '' then
     SetTestFilter(ParseFilterFromArgs);
   if GetTagFilter = '' then
     SetTagFilter(ParseTagFromArgs);
+  if GetRepeatAllCount(DefaultConfig) = 0 then
+  begin
+    LIter := ParseCountFromArgs;
+    if LIter > 0 then
+      SetDefaultRepeatAllCount(LIter);
+  end;
   LConfig := RunnerConfig(Self);
+  LOutSink := ResolveOutSink(LConfig);
 
-  ResolveOutSink(LConfig).WriteLn(
+  LRepeatAll := GetRepeatAllCount(LConfig);
+  if LRepeatAll <= 0 then LRepeatAll := 1;
+
+  LOutSink.WriteLn(
     AnsiBold('=== ', LConfig) +
     AnsiBold(Name, LConfig) +
     AnsiBold(' (parallel) ===', LConfig));
+  if LRepeatAll > 1 then
+    LOutSink.WriteLn(AnsiDim(
+      '  Running all tests ' + IntToStr(LRepeatAll) + ' times (--count=' +
+      IntToStr(LRepeatAll) + ')', LConfig));
+
   LAllPassed := True;
   TotalPass := 0;
   TotalFail := 0;
   TotalSkip := 0;
   SetLength(AResults, Length(Suites));
-  for I := 0 to High(Suites) do
+
+  for LIter := 1 to LRepeatAll do
   begin
-    if not Suites[I].RunParallelWithResult(APool, LSuiteResult) then
-      LAllPassed := False;
-    AResults[I] := LSuiteResult;
-    Inc(TotalPass, Suites[I].LastPass);
-    Inc(TotalFail, Suites[I].LastFail);
-    Inc(TotalSkip, Suites[I].LastSkip);
+    if LRepeatAll > 1 then
+    begin
+      LOutSink.WriteLn('');
+      LOutSink.WriteLn(AnsiBold(
+        '--- Iteration ' + IntToStr(LIter) + '/' + IntToStr(LRepeatAll) +
+        ' ---', LConfig));
+    end;
+    LStartMs := GetTickCount64;
+    for I := 0 to High(Suites) do
+    begin
+      if not Suites[I].RunParallelWithResult(APool, LSuiteResult) then
+        LAllPassed := False;
+      AResults[I] := LSuiteResult;
+      Inc(TotalPass, Suites[I].LastPass);
+      Inc(TotalFail, Suites[I].LastFail);
+      Inc(TotalSkip, Suites[I].LastSkip);
+    end;
+    if LRepeatAll > 1 then
+      LOutSink.WriteLn(AnsiDim(
+        '  Iteration ' + IntToStr(LIter) + ' completed in ' +
+        FormatDuration(GetTickCount64 - LStartMs), LConfig));
   end;
+
   HasRun := True;
   Result := LAllPassed;
 end;
