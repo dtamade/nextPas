@@ -38,6 +38,8 @@ type
     procedure SortEdgeTable;
     procedure RasterizeSubPixel(ABitmap: PByte; AWidth, AHeight: Int32;
       const AOutline: TFontGlyphOutline; AAScale: Int32);
+    {** 通用扫描线填充：使用已缩放的边表填充位图（二值填充 + 偶奇规则） }
+    procedure ScanlineFill(ABitmap: PByte; AWidth, AHeight: Int32);
   public
     constructor Create;
     destructor Destroy; override;
@@ -46,6 +48,13 @@ type
         ASizePx: 目标字号（像素）
         AUnitsPerEm: 字体 units/em（通常 1000 或 2048） }
     function Rasterize(const AOutline: TFontGlyphOutline;
+      ASizePx: Single; AUnitsPerEm: UInt16): TFontRasterResult;
+    {** 光栅化字形轮廓为 LCD 子像素位图（3 bytes/pixel: R, G, B 覆盖率）。
+        水平 3x 超采样 + 垂直 4x 超采样。
+        AOutline: 字形轮廓（font units）
+        ASizePx: 目标字号（像素）
+        AUnitsPerEm: 字体 units/em }
+    function RasterizeLCD(const AOutline: TFontGlyphOutline;
       ASizePx: Single; AUnitsPerEm: UInt16): TFontRasterResult;
   end;
 
@@ -302,46 +311,19 @@ end;
 { 子像素扫描线光栅化（二值填充 + 偶奇规则）                                    }
 { ========================================================================= }
 
-procedure TFontRasterizer.RasterizeSubPixel(ABitmap: PByte;
-  AWidth, AHeight: Int32; const AOutline: TFontGlyphOutline;
-  AAScale: Int32);
+procedure TFontRasterizer.ScanlineFill(ABitmap: PByte; AWidth, AHeight: Int32);
 var
-  LLines: TFontLineSegmentArray;
   LI, LJ: Int32;
   LScanY: Single;
   LEdgeIdx: Int32;
   LRem: Int32;
-  LBaseX, LBaseY, LScale: Single;
   LRow: PByte;
   LInside: Boolean;
   LXLeft, LXRight: Int32;
   LTempAE: TActiveEdge;
-  LX0, LY0, LX1, LY1: Single;
 begin
-  FontExtractLineSegments(AOutline, LLines);
-  if Length(LLines) = 0 then
-    Exit;
-
-  FillChar(ABitmap^, AWidth * AHeight, 0);
-
-  LScale := AAScale;
-  LBaseX := -AOutline.XMin * LScale;
-  LBaseY := -AOutline.YMin * LScale;
-  EdgeTableClear;
-
-  for LI := 0 to High(LLines) do
-  begin
-    LX0 := LLines[LI].X0 * LScale + LBaseX;
-    LY0 := LLines[LI].Y0 * LScale + LBaseY;
-    LX1 := LLines[LI].X1 * LScale + LBaseX;
-    LY1 := LLines[LI].Y1 * LScale + LBaseY;
-    EdgeTableAddSegment(LX0, LY0, LX1, LY1);
-  end;
-
   if FEdgeCount = 0 then
     Exit;
-
-  SortEdgeTable;
 
   if FEdgeCount > Length(FActiveEdges) then
     SetLength(FActiveEdges, FEdgeCount);
@@ -418,6 +400,39 @@ begin
         Inc(LI);
     end;
   end;
+end;
+
+procedure TFontRasterizer.RasterizeSubPixel(ABitmap: PByte;
+  AWidth, AHeight: Int32; const AOutline: TFontGlyphOutline;
+  AAScale: Int32);
+var
+  LLines: TFontLineSegmentArray;
+  LI: Int32;
+  LBaseX, LBaseY, LScale: Single;
+  LX0, LY0, LX1, LY1: Single;
+begin
+  FontExtractLineSegments(AOutline, LLines);
+  if Length(LLines) = 0 then
+    Exit;
+
+  FillChar(ABitmap^, AWidth * AHeight, 0);
+
+  LScale := AAScale;
+  LBaseX := -AOutline.XMin * LScale;
+  LBaseY := -AOutline.YMin * LScale;
+  EdgeTableClear;
+
+  for LI := 0 to High(LLines) do
+  begin
+    LX0 := LLines[LI].X0 * LScale + LBaseX;
+    LY0 := LLines[LI].Y0 * LScale + LBaseY;
+    LX1 := LLines[LI].X1 * LScale + LBaseX;
+    LY1 := LLines[LI].Y1 * LScale + LBaseY;
+    EdgeTableAddSegment(LX0, LY0, LX1, LY1);
+  end;
+
+  SortEdgeTable;
+  ScanlineFill(ABitmap, AWidth, AHeight);
 end;
 
 { ========================================================================= }
@@ -502,6 +517,94 @@ begin
   Result.BearingYPx := LScaled.YMax;
   Result.AdvancePx := LWidth;
   Result.PitchBytes := LWidth;
+end;
+
+function TFontRasterizer.RasterizeLCD(const AOutline: TFontGlyphOutline;
+  ASizePx: Single; AUnitsPerEm: UInt16): TFontRasterResult;
+const
+  LCD_H_SCALE = 3;  // 水平子像素超采样倍率
+  LCD_V_SCALE = 4;  // 垂直抗锯齿超采样倍率
+var
+  LWidth, LHeight, LSubW, LSubH: Int32;
+  LSubBitmap: TBytes;
+  LLines: TFontLineSegmentArray;
+  LSI, LI: Int32;
+  LX, LY: Int32;
+  LSumR, LSumG, LSumB: UInt32;
+  LScale: Single;
+  LBaseX, LBaseY: Single;
+  LX0, LY0, LX1, LY1: Single;
+begin
+  FontRasterResultClear(Result);
+
+  if AOutline.ContourCount <= 0 then
+    Exit;
+  if AUnitsPerEm = 0 then
+    Exit;
+  if ASizePx <= 0 then
+    Exit;
+
+  // 缩放轮廓：font units → pixels
+  LScale := ASizePx / AUnitsPerEm;
+  LWidth := Ceil(AOutline.XMax * LScale) - Floor(AOutline.XMin * LScale);
+  LHeight := Ceil(AOutline.YMax * LScale) - Floor(AOutline.YMin * LScale);
+  if (LWidth <= 0) or (LHeight <= 0) then
+    Exit;
+
+  // 提取线段（原始 font units 坐标）
+  FontExtractLineSegments(AOutline, LLines);
+  if Length(LLines) = 0 then
+    Exit;
+
+  // 超采样位图：水平 3x，垂直 4x
+  LSubW := LWidth * LCD_H_SCALE;
+  LSubH := LHeight * LCD_V_SCALE;
+  SetLength(LSubBitmap, LSubW * LSubH);
+
+  // 构建边表：X 用 LCD_H_SCALE，Y 用 LCD_V_SCALE（非对称缩放）
+  LBaseX := -AOutline.XMin * LScale * LCD_H_SCALE;
+  LBaseY := -AOutline.YMin * LScale * LCD_V_SCALE;
+  EdgeTableClear;
+
+  for LI := 0 to High(LLines) do
+  begin
+    LX0 := LLines[LI].X0 * LScale * LCD_H_SCALE + LBaseX;
+    LY0 := LLines[LI].Y0 * LScale * LCD_V_SCALE + LBaseY;
+    LX1 := LLines[LI].X1 * LScale * LCD_H_SCALE + LBaseX;
+    LY1 := LLines[LI].Y1 * LScale * LCD_V_SCALE + LBaseY;
+    EdgeTableAddSegment(LX0, LY0, LX1, LY1);
+  end;
+
+  SortEdgeTable;
+  ScanlineFill(@LSubBitmap[0], LSubW, LSubH);
+
+  // 下采样：每个像素有 3 个水平子像素（R, G, B），每个子像素有 4 个垂直样本
+  // R = 平均列 0, G = 平均列 1, B = 平均列 2（在 3x 块内）
+  Result.WidthPx := LWidth;
+  Result.HeightPx := LHeight;
+  Result.BearingXPx := Floor(AOutline.XMin * LScale);
+  Result.BearingYPx := Ceil(AOutline.YMax * LScale);
+  Result.AdvancePx := LWidth;
+  Result.PitchBytes := LWidth * 3;
+  SetLength(Result.Pixels, LWidth * LHeight * 3);
+
+  for LY := 0 to LHeight - 1 do
+    for LX := 0 to LWidth - 1 do
+    begin
+      LSumR := 0;
+      LSumG := 0;
+      LSumB := 0;
+      for LSI := 0 to LCD_V_SCALE - 1 do
+      begin
+        Inc(LSumR, LSubBitmap[(LY * LCD_V_SCALE + LSI) * LSubW + LX * LCD_H_SCALE + 0]);
+        Inc(LSumG, LSubBitmap[(LY * LCD_V_SCALE + LSI) * LSubW + LX * LCD_H_SCALE + 1]);
+        Inc(LSumB, LSubBitmap[(LY * LCD_V_SCALE + LSI) * LSubW + LX * LCD_H_SCALE + 2]);
+      end;
+      LI := (LY * LWidth + LX) * 3;
+      Result.Pixels[LI + 0] := Byte(Min(255, LSumR div LCD_V_SCALE));
+      Result.Pixels[LI + 1] := Byte(Min(255, LSumG div LCD_V_SCALE));
+      Result.Pixels[LI + 2] := Byte(Min(255, LSumB div LCD_V_SCALE));
+    end;
 end;
 
 end.
