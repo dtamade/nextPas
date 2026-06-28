@@ -20,6 +20,30 @@ type
 
   EStreamError = class(Exception);
 
+  TNotifyEvent = procedure(Sender: TObject) of object;
+
+  TThread = class
+  private
+    FFinished: Boolean;
+    FFreeOnTerminate: Boolean;
+    FReturnValue: Integer;
+    FOnTerminate: TNotifyEvent;
+    procedure SetOnTerminate(Value: TNotifyEvent);
+  protected
+    procedure Execute; virtual; abstract;
+    procedure DoTerminate; virtual;
+    property ReturnValue: Integer read FReturnValue write FReturnValue;
+  public
+    constructor Create(CreateSuspended: Boolean);
+    destructor Destroy; override;
+    procedure Start;
+    procedure Terminate;
+    function WaitFor: Integer;
+    property Finished: Boolean read FFinished;
+    property FreeOnTerminate: Boolean read FFreeOnTerminate write FFreeOnTerminate;
+    property OnTerminate: TNotifyEvent read FOnTerminate write SetOnTerminate;
+  end;
+
   TSeekOrigin = (soBeginning, soCurrent, soEnd);
 
   TStream = class
@@ -145,6 +169,48 @@ type
   end;
 
 implementation
+
+{ TThread }
+
+constructor TThread.Create(CreateSuspended: Boolean);
+begin
+  inherited Create;
+  FFinished := False;
+  FFreeOnTerminate := False;
+  FReturnValue := 0;
+  FOnTerminate := nil;
+end;
+
+destructor TThread.Destroy;
+begin
+  inherited Destroy;
+end;
+
+procedure TThread.Start;
+begin
+  Execute;
+end;
+
+procedure TThread.Terminate;
+begin
+  FFinished := True;
+end;
+
+function TThread.WaitFor: Integer;
+begin
+  Result := FReturnValue;
+end;
+
+procedure TThread.DoTerminate;
+begin
+  if Assigned(FOnTerminate) then
+    FOnTerminate(Self);
+end;
+
+procedure TThread.SetOnTerminate(Value: TNotifyEvent);
+begin
+  FOnTerminate := Value;
+end;
 
 { TStream }
 
