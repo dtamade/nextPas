@@ -295,6 +295,10 @@ var
   LTimeoutRunOut: string;
   { Phase 12: cleanup }
   GCleanupCalled: Integer;
+  { Phase 13: benchmark }
+  LBenchSuite: TTestSuite;
+  LBenchResults: TBenchResults;
+  LBenchConfig: TTestConfig;
 begin
   WriteLn('=== test_runner ===');
   { Suite 1: lifecycle }
@@ -1555,6 +1559,60 @@ begin
       FailTest('cleanup on fail: expected 1 pass');
     ResetDefaultConfig;
     PassTest('Cleanup handlers');
+  end;
+
+  { ── Phase 13: Benchmark ──────────────────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 13: Benchmark');
+  begin
+    ResetDefaultConfig;
+    LBenchSuite := TTestSuite.Create('BenchTest');
+    { Register a simple benchmark }
+    LBenchSuite.Bench('Addition', procedure(BC: PBenchContext)
+    var
+      I: Integer;
+      LSum: Int64;
+    begin
+      LSum := 0;
+      for I := 1 to BC^.N do
+        LSum := LSum + I;
+      { Prevent optimizer from eliminating the loop }
+      if LSum < 0 then WriteLn('impossible');
+    end);
+    LBenchSuite.Bench('StringConcat', procedure(BC: PBenchContext)
+    var
+      I: Integer;
+      S: string;
+    begin
+      S := '';
+      for I := 1 to BC^.N do
+        S := S + 'x';
+      if Length(S) < 0 then WriteLn('impossible');
+    end);
+    LBenchConfig := DefaultConfig;
+    LBenchConfig.BenchEnabled := True;
+    LBenchConfig.BenchTimeMs := 100; { short time for fast test }
+    LBenchSuite.Config := LBenchConfig;
+    LBenchSuite.RunBenchmarks(LBenchResults);
+    { Verify benchmark results }
+    if Length(LBenchResults) <> 2 then
+      FailTest('bench: expected 2 results, got ' +
+        IntToStr(Length(LBenchResults)));
+    if LBenchResults[0].Name <> 'Addition' then
+      FailTest('bench: expected name "Addition", got "' +
+        LBenchResults[0].Name + '"');
+    if LBenchResults[0].N <= 0 then
+      FailTest('bench: expected N > 0');
+    if LBenchResults[0].N <= 0 then
+      FailTest('bench: expected N > 0');
+    { NsPerOp may be 0 for sub-ms operations (ms granularity) — that's OK }
+    if LBenchResults[1].Name <> 'StringConcat' then
+      FailTest('bench: expected name "StringConcat", got "' +
+        LBenchResults[1].Name + '"');
+    if LBenchResults[1].N <= 0 then
+      FailTest('bench: expected N > 0');
+    ResetDefaultConfig;
+    PassTest('Benchmark');
   end;
 
   WriteLn;

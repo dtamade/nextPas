@@ -90,6 +90,13 @@ procedure WriteSlowTests(const ASlowTests: TTestResults;
 function FormatDuration(AMillis: Int64): string;
   { Format milliseconds as '12ms' or '1.23s' for >= 1000ms. }
 
+{ ── Benchmark Output ─────────────────────────────────────────────────────── }
+
+function FormatBenchLine(const AR: nextpas.core.test.base.TBenchResult;
+  AShowMem: Boolean; const AConfig: TTestConfig): string;
+  { Format a single benchmark result line.
+    Output: '  BenchmarkName  1000000  3.2 ns/op  48 B/op  1 allocs/op' }
+
 { ── Test Filter ───────────────────────────────────────────────────────────── }
 
 procedure SetTestFilter(const APattern: string);
@@ -475,6 +482,29 @@ begin
       Result := IntToStr(AMillis div 1000) + '.' +
         Copy(IntToStr(1000 + LMs), 2, 2) + 's';
   end;
+end;
+
+function FormatBenchLine(const AR: nextpas.core.test.base.TBenchResult;
+  AShowMem: Boolean; const AConfig: TTestConfig): string;
+{ Format: '  BenchmarkName  1000000  3.2 ns/op  48 B/op  1 allocs/op' }
+var
+  LNsOp: string;
+begin
+  { Format ns/op with appropriate unit }
+  if AR.NsPerOp >= 1000000000 then
+    LNsOp := FormatFloat('0.00', AR.NsPerOp / 1000000000.0) + ' s/op'
+  else if AR.NsPerOp >= 1000000 then
+    LNsOp := FormatFloat('0.00', AR.NsPerOp / 1000000.0) + ' ms/op'
+  else if AR.NsPerOp >= 1000 then
+    LNsOp := FormatFloat('0.00', AR.NsPerOp / 1000.0) + ' us/op'
+  else
+    LNsOp := IntToStr(AR.NsPerOp) + ' ns/op';
+  Result := '  ' + AnsiCyan(AR.Name, AConfig) + '  ' +
+    AnsiBold(IntToStr(AR.N), AConfig) + '  ' +
+    AnsiGreen(LNsOp, AConfig);
+  if AShowMem then
+    Result := Result + '  ' + IntToStr(AR.AllocBytes) + ' B/op' +
+      '  ' + IntToStr(AR.AllocCount) + ' allocs/op';
 end;
 
 procedure WriteSlowTests(const ASlowTests: TTestResults;
