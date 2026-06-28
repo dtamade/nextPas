@@ -136,22 +136,37 @@ begin
       ScavengeCentralPools(FCentrals[LIndex], FOpCounter,
         SCAVENGER_IDLE_THRESHOLD);
   end;
-  LIndex := SizeClassIndex(ASize);
-  if LIndex < 0 then
+  { Fast path for common small sizes: skip SizeClassIndex lookup. }
+  if ASize <= 256 then
   begin
-    System.GetMem(Result, ASize);
-    Exit;
-  end;
-  { Inlined TLS cache pop. }
-  LNode := GThreadCache.FHeads[LIndex];
-  if LNode <> nil then
+    LIndex := Int32((ASize + 15) shr 4) - 1;
+    LNode := GThreadCache.FHeads[LIndex];
+    if LNode <> nil then
+    begin
+      GThreadCache.FHeads[LIndex] := LNode^.FNext;
+      Dec(GThreadCache.FCounts[LIndex]);
+      Exit(Pointer(LNode));
+    end;
+  end
+  else
   begin
-    GThreadCache.FHeads[LIndex] := LNode^.FNext;
-    Dec(GThreadCache.FCounts[LIndex]);
-    Result := Pointer(LNode);
-    Exit;
+    LIndex := SizeClassIndex(ASize);
+    if LIndex < 0 then
+    begin
+      System.GetMem(Result, ASize);
+      Exit;
+    end;
+    LNode := GThreadCache.FHeads[LIndex];
+    if LNode <> nil then
+    begin
+      GThreadCache.FHeads[LIndex] := LNode^.FNext;
+      Dec(GThreadCache.FCounts[LIndex]);
+      Exit(Pointer(LNode));
+    end;
   end;
   { Cache miss: refill from central pool. }
+  if LIndex < 0 then
+    LIndex := SizeClassIndex(ASize);
   ThreadCacheRefill(GThreadCache, LIndex, @RefillFromCentral);
   LNode := GThreadCache.FHeads[LIndex];
   if LNode <> nil then
@@ -167,23 +182,42 @@ end;
 procedure TGrowingAllocator.FreeMem(APtr: Pointer; ASize: SizeUInt);
 var
   LIndex: Int32;
+  LNode: PFreeNode;
 begin
   if APtr = nil then
     Exit;
   Inc(FOpCounter);
-  LIndex := SizeClassIndex(ASize);
-  if LIndex < 0 then
+  { Fast path for common small sizes: skip SizeClassIndex + shuffle overhead. }
+  if ASize <= 256 then
   begin
-    System.FreeMem(APtr);
-    Exit;
-  end;
-  if GThreadCache.FCounts[LIndex] < AdaptiveMaxListSize(LIndex) then
+    LIndex := Int32((ASize + 15) shr 4) - 1;
+    if GThreadCache.FCounts[LIndex] < CACHE_ADAPTIVE_MAX_SMALL then
+    begin
+      { Direct push to head: shuffle not needed for ≤2 element lists. }
+      LNode := PFreeNode(APtr);
+      LNode^.FNext := GThreadCache.FHeads[LIndex];
+      GThreadCache.FHeads[LIndex] := LNode;
+      Inc(GThreadCache.FCounts[LIndex]);
+      Exit;
+    end;
+  end
+  else
   begin
-    FreeListInsertShuffled(Pointer(GThreadCache.FHeads[LIndex]),
-      APtr, GThreadCache.FCounts[LIndex]);
-    Inc(GThreadCache.FCounts[LIndex]);
-    Exit;
+    LIndex := SizeClassIndex(ASize);
+    if LIndex < 0 then
+    begin
+      System.FreeMem(APtr);
+      Exit;
+    end;
+    if GThreadCache.FCounts[LIndex] < AdaptiveMaxListSize(LIndex) then
+    begin
+      FreeListInsertShuffled(Pointer(GThreadCache.FHeads[LIndex]),
+        APtr, GThreadCache.FCounts[LIndex]);
+      Inc(GThreadCache.FCounts[LIndex]);
+      Exit;
+    end;
   end;
+  { Cache full: flush a batch to central, then push with shuffle. }
   ThreadCacheFlush(GThreadCache, LIndex, @FlushToCentral);
   FreeListInsertShuffled(Pointer(GThreadCache.FHeads[LIndex]),
     APtr, GThreadCache.FCounts[LIndex]);

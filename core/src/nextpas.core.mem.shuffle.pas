@@ -22,7 +22,7 @@ type
     Uses per-thread xorshift64* PRNG. No external dependencies.
     Security: prevents heap spraying by randomizing allocation order. }
 procedure FreeListInsertShuffled(var AHead: Pointer; ANode: Pointer;
-  ACount: Word);
+  ACount: Word); inline;
 
 implementation
 
