@@ -14,6 +14,7 @@ uses
   nextpas.core.bench.base,
   nextpas.core.mem.sizeclass,
   nextpas.core.mem.allocator.growing,
+  nextpas.core.mem.arena.local,
   nextpas.core.platform.time;
 
 var
@@ -113,6 +114,46 @@ begin
   GAlloc.BatchFreeMem(128, BATCH_SIZE, @LPtrs[0]);
 end;
 
+{ Pattern 6c: ReallocMem same size class (zero-copy). }
+procedure BenchReallocSameClass(const ACtx: IBenchContext);
+var
+  LPtr: Pointer;
+begin
+  LPtr := GAlloc.GetMem(64);
+  if ACtx <> nil then
+    ACtx.SetBytes(64);
+  { Reallocate to 128B — same size class (band 0, class 7 → class 7). }
+  LPtr := GAlloc.ReallocMem(LPtr, 64, 128);
+  GAlloc.FreeMem(LPtr, 128);
+end;
+
+{ Pattern 6d: ReallocMem different size class (copy). }
+procedure BenchReallocDiffClass(const ACtx: IBenchContext);
+var
+  LPtr: Pointer;
+begin
+  LPtr := GAlloc.GetMem(64);
+  if ACtx <> nil then
+    ACtx.SetBytes(64);
+  { Reallocate to 2KB — different size class (band 0 → band 2). }
+  LPtr := GAlloc.ReallocMem(LPtr, 64, 2048);
+  GAlloc.FreeMem(LPtr, 2048);
+end;
+
+{ Pattern 6e: TLocalArena bump pointer (baseline). }
+var
+  GArena: TLocalArena;
+
+procedure BenchArena64(const ACtx: IBenchContext);
+var
+  LPtr: Pointer;
+begin
+  LPtr := GArena.AllocFast(64);
+  if ACtx <> nil then
+    ACtx.SetBytes(64);
+  { No free needed — bump pointer. }
+end;
+
 { Pattern 7: System allocator baseline (64B) for comparison. }
 procedure BenchSystemSmall64(const ACtx: IBenchContext);
 var
@@ -207,6 +248,7 @@ var
   I: Integer;
 begin
   GAlloc := TGrowingAllocator.Create;
+  GArena := TLocalArena.Create(1024 * 1024);  { 1MB arena }
   try
     LSuite := TBenchSuite.Create('allocator')
       .SetMinDuration(TDuration.FromMilliseconds(100))
@@ -222,6 +264,9 @@ begin
     LSuite.Add('growing/mixed_8sizes', @BenchMixed);
     LSuite.Add('growing/batch_64x128B', @BenchBatch64);
     LSuite.Add('growing/batch_api_64x128B', @BenchBatchAPI64);
+    LSuite.Add('growing/realloc_same_class', @BenchReallocSameClass);
+    LSuite.Add('growing/realloc_diff_class', @BenchReallocDiffClass);
+    LSuite.Add('arena/bump_64B', @BenchArena64);
 
     { System allocator baselines. }
     LSuite.Add('system/small_64B', @BenchSystemSmall64);
@@ -254,6 +299,7 @@ begin
     WriteLn;
     WriteLn('Done.');
   finally
+    GArena.Free;
     GAlloc.Free;
   end;
 end.

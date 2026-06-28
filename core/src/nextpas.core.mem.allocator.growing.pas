@@ -395,8 +395,6 @@ end;
 
 function TGrowingAllocator.ReallocMem(APtr: Pointer;
   AOldSize, ANewSize: SizeUInt): Pointer;
-var
-  LOldClass, LNewClass: Int32;
 begin
   if APtr = nil then
     Exit(GetMem(ANewSize));
@@ -408,20 +406,19 @@ begin
   { Same size class → zero-copy (most common: Vec/GrowSlice growing within class). }
   if (AOldSize <= MEM_SIZECLASS_MAX) and (ANewSize <= MEM_SIZECLASS_MAX) then
   begin
-    if AOldSize <= 256 then
-      LOldClass := Int32((AOldSize + 15) shr 4) - 1
-    else if AOldSize <= 1024 then
-      LOldClass := Int32(AOldSize shr 6) + 14
-    else
-      LOldClass := SizeClassIndex(AOldSize);
-    if ANewSize <= 256 then
-      LNewClass := Int32((ANewSize + 15) shr 4) - 1
-    else if ANewSize <= 1024 then
-      LNewClass := Int32(ANewSize shr 6) + 14
-    else
-      LNewClass := SizeClassIndex(ANewSize);
-    if LOldClass = LNewClass then
-      Exit(APtr);  { Zero-copy! }
+    { Fast band checks: if both in same band AND same class → zero-copy. }
+    if (AOldSize <= 256) and (ANewSize <= 256) then
+    begin
+      if Int32((AOldSize + 15) shr 4) = Int32((ANewSize + 15) shr 4) then
+        Exit(APtr);
+    end
+    else if (AOldSize <= 1024) and (ANewSize <= 1024) then
+    begin
+      if Int32(AOldSize shr 6) = Int32(ANewSize shr 6) then
+        Exit(APtr);
+    end
+    else if SizeClassIndex(AOldSize) = SizeClassIndex(ANewSize) then
+      Exit(APtr);
   end;
   { Different class: alloc + copy + free. }
   Result := GetMem(ANewSize);
