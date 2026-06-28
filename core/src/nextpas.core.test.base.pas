@@ -160,6 +160,10 @@ procedure AppendResult(var AResults: specialize TArray<TTestResult>;
 function GetTopSlowest(const AResults: TTestResults;
   ACount: Integer): TTestResults;
   { Return up to ACount slowest tests from AResults, sorted descending by Duration. }
+procedure ShuffleEntries(var AEntries: specialize TArray<TTestEntry>;
+  ASeed: Integer);
+  { Fisher-Yates shuffle of test entries. ASeed > 0 for deterministic shuffle.
+    ASeed = -1 uses a pseudo-random seed based on current tick count. }
 procedure RegisterEntry(var AEntries: specialize TArray<TTestEntry>;
   const AEntry: TTestEntry);
   { Append a TTestEntry to a dynamic array. }
@@ -284,6 +288,31 @@ begin
       SetLength(Result, I);
       Exit;
     end;
+  end;
+end;
+
+procedure ShuffleEntries(var AEntries: specialize TArray<TTestEntry>;
+  ASeed: Integer);
+{ Fisher-Yates (Knuth) shuffle. ASeed > 0 = deterministic, ASeed = -1 = random. }
+var
+  I, J, N: Integer;
+  LSeed: Integer;
+  LTemp: TTestEntry;
+begin
+  N := Length(AEntries);
+  if N <= 1 then Exit;
+  if ASeed = -1 then
+    LSeed := Integer(GetTickCount64 and $7FFFFFFF)
+  else
+    LSeed := ASeed;
+  { Simple LCG PRNG — not cryptographic, just needs to be uniform }
+  for I := N - 1 downto 1 do
+  begin
+    LSeed := LSeed * 1103515245 + 12345;
+    J := Abs(LSeed mod (I + 1));
+    LTemp := AEntries[I];
+    AEntries[I] := AEntries[J];
+    AEntries[J] := LTemp;
   end;
 end;
 

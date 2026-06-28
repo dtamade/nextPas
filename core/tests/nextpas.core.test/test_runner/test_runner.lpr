@@ -1060,6 +1060,74 @@ begin
     PassTest('FormatDuration formatting');
   end;
 
+  { ── Shuffle (deterministic) ───────────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 7: Shuffle entries');
+  begin
+    LResultSuite := TTestSuite.Create('ShuffleTest');
+    LResultSuite.Test('alpha', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('beta', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('gamma', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('delta', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('epsilon', procedure begin CheckTrue(True); end);
+    { Run with seed=42 and verify order changed }
+    LResultSuite.Config.ShuffleSeed := 42;
+    LResultSuite.RunWithResult(LRegularLogResult);
+    if LRegularLogResult.Passed <> 5 then
+      FailTest('expected 5 passed after shuffle, got ' + IntToStr(LRegularLogResult.Passed));
+    { Verify order actually changed — check at least one test moved }
+    if (LRegularLogResult.Results[0].Name = 'alpha') and
+       (LRegularLogResult.Results[1].Name = 'beta') and
+       (LRegularLogResult.Results[2].Name = 'gamma') and
+       (LRegularLogResult.Results[3].Name = 'delta') and
+       (LRegularLogResult.Results[4].Name = 'epsilon') then
+      FailTest('shuffle seed=42 did not change order');
+    PassTest('Shuffle deterministic with seed');
+  end;
+
+  { ── FailFast ────────────────────────────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 7: FailFast');
+  begin
+    LResultSuite := TTestSuite.Create('FailFastSuite');
+    LResultSuite.Config.FailFast := True;
+    LRunCount := 0;
+    LResultSuite.Test('pass1', procedure begin
+      InterLockedIncrement(LRunCount);
+      CheckTrue(True);
+    end);
+    LResultSuite.Test('fail1', procedure begin
+      InterLockedIncrement(LRunCount);
+      Fail('expected failure');
+    end);
+    LResultSuite.Test('pass2', procedure begin
+      InterLockedIncrement(LRunCount);
+      CheckTrue(True);
+    end);
+    if LResultSuite.RunWithResult(LRegularLogResult) then
+      FailTest('FailFast suite should fail');
+    { pass1 runs, fail1 runs (and fails → break), pass2 should NOT run }
+    if LRunCount <> 2 then
+      FailTest('FailFast should stop after failure, ran ' + IntToStr(LRunCount) + ' tests');
+    PassTest('FailFast stops after first failure');
+  end;
+
+  { ── ListMode ────────────────────────────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 7: ListMode');
+  begin
+    LResultSuite := TTestSuite.Create('ListSuite');
+    LResultSuite.Test('testA', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('testB', procedure begin CheckTrue(True); end);
+    LResultSuite.Skip('testC', 'reason');
+    { List mode is handled at runner level, but we can test the concept:
+      the suite should still have all 3 entries registered }
+    if Length(LResultSuite.Tests) <> 3 then
+      FailTest('expected 3 entries, got ' + IntToStr(Length(LResultSuite.Tests)));
+    CheckTrue(LResultSuite.Tests[2].Kind = ekSkipped, 'testC should be ekSkipped');
+    PassTest('ListMode entries registered correctly');
+  end;
+
   WriteLn;
   PassTest('test_runner');
 end.

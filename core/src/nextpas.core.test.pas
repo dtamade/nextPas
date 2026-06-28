@@ -173,13 +173,21 @@ procedure SetDefaultRetryCount(ARetryCount: Integer);
 procedure SetDefaultMaxParallelWorkers(AMaxWorkers: Integer);
 procedure SetDefaultRepeatAllCount(ARepeatCount: Integer);
 procedure SetDefaultSlowTestCount(ACount: Integer);
+procedure SetDefaultShuffleSeed(ASeed: Integer);
+procedure SetDefaultFailFast(AFailFast: Boolean);
+procedure SetDefaultListMode(AListMode: Boolean);
 function  GetRepeatAllCount(const AConfig: TTestConfig): Integer;
 function  GetSlowTestCount(const AConfig: TTestConfig): Integer;
+function  GetShuffleSeed(const AConfig: TTestConfig): Integer;
+function  GetFailFast(const AConfig: TTestConfig): Boolean;
+function  GetListMode(const AConfig: TTestConfig): Boolean;
 function  FormatDuration(AMillis: Int64): string;
 function  GetTopSlowest(const AResults: TTestResults;
   ACount: Integer): TTestResults;
 function  MakeTestResult(const AName: string; AStatus: TTestStatus;
   const AMessage: string; ADuration: Int64): TTestResult;
+procedure ShuffleEntries(var AEntries: specialize TArray<TTestEntry>;
+  ASeed: Integer);
 
 type
   TTestResults = nextpas.core.test.base.TTestResults;
@@ -455,6 +463,24 @@ begin Result := nextpas.core.test.config.GetRepeatAllCount(AConfig); end;
 function GetSlowTestCount(const AConfig: TTestConfig): Integer;
 begin Result := nextpas.core.test.config.GetSlowTestCount(AConfig); end;
 
+function GetShuffleSeed(const AConfig: TTestConfig): Integer;
+begin Result := nextpas.core.test.config.GetShuffleSeed(AConfig); end;
+
+function GetFailFast(const AConfig: TTestConfig): Boolean;
+begin Result := nextpas.core.test.config.GetFailFast(AConfig); end;
+
+function GetListMode(const AConfig: TTestConfig): Boolean;
+begin Result := nextpas.core.test.config.GetListMode(AConfig); end;
+
+procedure SetDefaultShuffleSeed(ASeed: Integer);
+begin nextpas.core.test.config.SetDefaultShuffleSeed(ASeed); end;
+
+procedure SetDefaultFailFast(AFailFast: Boolean);
+begin nextpas.core.test.config.SetDefaultFailFast(AFailFast); end;
+
+procedure SetDefaultListMode(AListMode: Boolean);
+begin nextpas.core.test.config.SetDefaultListMode(AListMode); end;
+
 function FormatDuration(AMillis: Int64): string;
 begin Result := nextpas.core.test.output.FormatDuration(AMillis); end;
 
@@ -465,6 +491,10 @@ begin Result := nextpas.core.test.base.GetTopSlowest(AResults, ACount); end;
 function MakeTestResult(const AName: string; AStatus: TTestStatus;
   const AMessage: string; ADuration: Int64): TTestResult;
 begin Result := nextpas.core.test.base.MakeTestResult(AName, AStatus, AMessage, ADuration); end;
+
+procedure ShuffleEntries(var AEntries: specialize TArray<TTestEntry>;
+  ASeed: Integer);
+begin nextpas.core.test.base.ShuffleEntries(AEntries, ASeed); end;
 
 { ── Forward to test.discovery ──────────────────────────────────────────────── }
 
