@@ -76,7 +76,7 @@ begin
   if GGrowingAllocator = nil then
     Exit(0);
   Result := CentralPoolAlloc(GGrowingAllocator.FCentrals[AIndex], ACount, ABlocks,
-    GGrowingAllocator.FOpCounter);
+    GThreadCache.FOpCount);
 end;
 
 procedure FlushToCentral(AIndex: Int32; ACount: Word;
@@ -135,12 +135,13 @@ var
 begin
   if ASize = 0 then
     Exit(nil);
-  Inc(FOpCounter);
-  { Periodic scavenge: release long-idle spans to OS. }
-  if (FOpCounter and (SCAVENGER_CHECK_INTERVAL - 1)) = 0 then
+  Inc(GThreadCache.FOpCount);
+  { Periodic scavenge: uses thread-local counter in GThreadCache. }
+  if (GThreadCache.FOpCount and (SCAVENGER_CHECK_INTERVAL - 1)) = 0 then
   begin
+    AtomicExchange(FOpCounter, GThreadCache.FOpCount);
     for LIndex := 0 to MEM_SIZECLASS_COUNT - 1 do
-      ScavengeCentralPools(FCentrals[LIndex], FOpCounter,
+      ScavengeCentralPools(FCentrals[LIndex], GThreadCache.FOpCount,
         SCAVENGER_IDLE_THRESHOLD);
   end;
   { Fast path for common small sizes: skip SizeClassIndex lookup. }
@@ -205,7 +206,7 @@ var
 begin
   if APtr = nil then
     Exit;
-  Inc(FOpCounter);
+  Inc(GThreadCache.FOpCount);
   { Fast path for common small sizes: skip SizeClassIndex + shuffle overhead. }
   if ASize <= 256 then
   begin
