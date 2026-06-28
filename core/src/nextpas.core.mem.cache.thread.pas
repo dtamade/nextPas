@@ -47,6 +47,7 @@ type
   TThreadCache = record
     FHeads: array[0..MEM_SIZECLASS_COUNT - 1] of PFreeNode;
     FCounts: array[0..MEM_SIZECLASS_COUNT - 1] of Word;
+    FOpCount: UInt64;
   end;
 
   {** Callback for batch refill: allocate ACount blocks of size class AIndex
