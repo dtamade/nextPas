@@ -46,6 +46,16 @@ type
     {** Allocate ASize bytes, zero-initialized. }
     function AllocMem(ASize: SizeUInt): Pointer;
 
+    {** Batch allocate ACount blocks of ASize bytes each.
+        More efficient than N individual GetMem calls: amortizes TLS/refill overhead.
+        Returns count actually allocated (may < ACount on OOM). }
+    function BatchGetMem(ASize: SizeUInt; ACount: Word;
+      ABlocks: PPointer): Word;
+
+    {** Batch free ACount blocks of ASize bytes each. }
+    procedure BatchFreeMem(ASize: SizeUInt; ACount: Word;
+      ABlocks: PPointer);
+
     {** Force a scavenge pass across all central pools.
         Releases long-idle fully-free spans to OS. }
     procedure Scavenge;
@@ -144,6 +154,12 @@ begin
       ScavengeCentralPools(FCentrals[LIndex], GThreadCache.FOpCount,
         SCAVENGER_IDLE_THRESHOLD);
   end;
+  { Huge allocation: skip size class lookup entirely. }
+  if ASize > MEM_SIZECLASS_MAX then
+  begin
+    System.GetMem(Result, ASize);
+    Exit;
+  end;
   { Fast path for common small sizes: skip SizeClassIndex lookup. }
   if ASize <= 256 then
   begin
@@ -171,11 +187,6 @@ begin
   else
   begin
     LIndex := SizeClassIndex(ASize);
-    if LIndex < 0 then
-    begin
-      System.GetMem(Result, ASize);
-      Exit;
-    end;
     LNode := GThreadCache.FHeads[LIndex];
     if LNode <> nil then
     begin
@@ -207,6 +218,12 @@ begin
   if APtr = nil then
     Exit;
   Inc(GThreadCache.FOpCount);
+  { Huge allocation: skip size class lookup entirely. }
+  if ASize > MEM_SIZECLASS_MAX then
+  begin
+    System.FreeMem(APtr);
+    Exit;
+  end;
   { Fast path for common small sizes: skip SizeClassIndex + shuffle overhead. }
   if ASize <= 256 then
   begin
@@ -272,6 +289,103 @@ begin
   Result := GetMem(ASize);
   if Result <> nil then
     FillChar(Result^, ASize, 0);
+end;
+
+function TGrowingAllocator.BatchGetMem(ASize: SizeUInt; ACount: Word;
+  ABlocks: PPointer): Word;
+var
+  LIndex: Int32;
+  LNode: PFreeNode;
+begin
+  Result := 0;
+  if (ASize = 0) or (ACount = 0) then
+    Exit;
+  { Huge: delegate to System.GetMem per block. }
+  if ASize > MEM_SIZECLASS_MAX then
+  begin
+    while Result < ACount do
+    begin
+      Inc(GThreadCache.FOpCount);
+      System.GetMem(ABlocks^, ASize);
+      if ABlocks^ = nil then
+        Break;
+      Inc(ABlocks);
+      Inc(Result);
+    end;
+    Exit;
+  end;
+  { Compute size class index once. }
+  if ASize <= 256 then
+    LIndex := Int32((ASize + 15) shr 4) - 1
+  else if ASize <= 1024 then
+    LIndex := Int32(ASize shr 6) + 14
+  else
+    LIndex := SizeClassIndex(ASize);
+  { Pre-fill cache if empty. }
+  if GThreadCache.FHeads[LIndex] = nil then
+    ThreadCacheRefill(GThreadCache, LIndex, @RefillFromCentral);
+  { Pop from cache, refill on miss. }
+  while Result < ACount do
+  begin
+    LNode := GThreadCache.FHeads[LIndex];
+    if LNode <> nil then
+    begin
+      GThreadCache.FHeads[LIndex] := LNode^.FNext;
+      Dec(GThreadCache.FCounts[LIndex]);
+      ABlocks^ := Pointer(LNode);
+      Inc(ABlocks);
+      Inc(Result);
+      Inc(GThreadCache.FOpCount);
+    end
+    else
+    begin
+      ThreadCacheRefill(GThreadCache, LIndex, @RefillFromCentral);
+      if GThreadCache.FHeads[LIndex] = nil then
+        Break;
+    end;
+  end;
+end;
+
+procedure TGrowingAllocator.BatchFreeMem(ASize: SizeUInt; ACount: Word;
+  ABlocks: PPointer);
+var
+  LIndex: Int32;
+  LNode: PFreeNode;
+  I: Word;
+begin
+  if (ACount = 0) or (ABlocks = nil) then
+    Exit;
+  { Huge: delegate to System.FreeMem per block. }
+  if ASize > MEM_SIZECLASS_MAX then
+  begin
+    for I := 0 to ACount - 1 do
+    begin
+      Inc(GThreadCache.FOpCount);
+      if ABlocks^ <> nil then
+        System.FreeMem(ABlocks^);
+      Inc(ABlocks);
+    end;
+    Exit;
+  end;
+  { Compute size class index once. }
+  if ASize <= 256 then
+    LIndex := Int32((ASize + 15) shr 4) - 1
+  else if ASize <= 1024 then
+    LIndex := Int32(ASize shr 6) + 14
+  else
+    LIndex := SizeClassIndex(ASize);
+  { Push all blocks to cache, flush when full. }
+  for I := 0 to ACount - 1 do
+  begin
+    Inc(GThreadCache.FOpCount);
+    if GThreadCache.FCounts[LIndex] >= CACHE_ADAPTIVE_MAX_SMALL then
+      ThreadCacheFlush(GThreadCache, LIndex, @FlushToCentral);
+    LNode := PFreeNode(ABlocks^);
+    LNode^.FNext := GThreadCache.FHeads[LIndex];
+    GThreadCache.FHeads[LIndex] := LNode;
+    Inc(GThreadCache.FCounts[LIndex]);
+    Inc(ABlocks);
+  end;
 end;
 
 procedure TGrowingAllocator.Scavenge;

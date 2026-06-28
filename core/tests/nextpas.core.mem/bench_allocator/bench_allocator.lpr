@@ -102,6 +102,17 @@ begin
     GAlloc.FreeMem(LPtrs[I], 128);
 end;
 
+{ Pattern 6b: Batch alloc/free via BatchGetMem/BatchFreeMem API. }
+procedure BenchBatchAPI64(const ACtx: IBenchContext);
+var
+  LPtrs: array[0..BATCH_SIZE - 1] of Pointer;
+begin
+  GAlloc.BatchGetMem(128, BATCH_SIZE, @LPtrs[0]);
+  if ACtx <> nil then
+    ACtx.SetBytes(BATCH_SIZE * 128);
+  GAlloc.BatchFreeMem(128, BATCH_SIZE, @LPtrs[0]);
+end;
+
 { Pattern 7: System allocator baseline (64B) for comparison. }
 procedure BenchSystemSmall64(const ACtx: IBenchContext);
 var
@@ -210,6 +221,7 @@ begin
     LSuite.Add('growing/huge_128KB', @BenchHuge128K);
     LSuite.Add('growing/mixed_8sizes', @BenchMixed);
     LSuite.Add('growing/batch_64x128B', @BenchBatch64);
+    LSuite.Add('growing/batch_api_64x128B', @BenchBatchAPI64);
 
     { System allocator baselines. }
     LSuite.Add('system/small_64B', @BenchSystemSmall64);
