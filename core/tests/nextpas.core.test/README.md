@@ -10,6 +10,7 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 - **v3.9**: ShouldFail + hierarchical filter + --count=N + slow test report
 - **v3.10**: shuffle + failfast + list mode
 - **v3.11**: quality hardening — LCG overflow fix, facade exports, test coverage audit
+- **v3.12**: audit — config sentinel fix, table-test error handling, CLI dedup
 
 ## 竞品对比
 
