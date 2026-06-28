@@ -1,279 +1,158 @@
 program test_rsa_ct;
 
-{$mode ObjFPC}{$H+}
+{$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
-  Classes,
+  SysUtils, Classes,
   nextpas.core.crypto.rsa.ct,
-  nextpas.core.crypto.bigint;
-
-var
-  GPassCount: Integer = 0;
-  GFailCount: Integer = 0;
-
-procedure Check(ACondition: Boolean; const AName: string);
-begin
-  if ACondition then
-  begin
-    WriteLn('  [PASS] ', AName);
-    Inc(GPassCount);
-  end
-  else
-  begin
-    WriteLn('  [FAIL] ', AName);
-    Inc(GFailCount);
-  end;
-end;
+  nextpas.core.crypto.bigint,
+  nextpas.core.test;
 
 function HexToBytes(const AHex: string): TBytes;
-var
-  I: Integer;
-begin
-  Result := nil;
-  SetLength(Result, Length(AHex) div 2);
-  for I := 0 to Length(Result) - 1 do
-    Result[I] := StrToInt('$' + Copy(AHex, I * 2 + 1, 2));
+var I: Integer;
+begin SetLength(Result, Length(AHex) div 2);
+  for I := 0 to Length(Result)-1 do Result[I] := StrToInt('$' + Copy(AHex, I*2+1, 2));
 end;
 
 function BytesToHex(const AData: TBytes): string;
-var
-  I: Integer;
-begin
-  Result := '';
-  for I := 0 to Length(AData) - 1 do
-    Result := Result + LowerCase(IntToHex(AData[I], 2));
+var I: Integer;
+begin Result := '';
+  for I := 0 to Length(AData)-1 do Result := Result + LowerCase(IntToHex(AData[I], 2));
 end;
 
 function LoadTextFile(const APath: string): string;
-var
-  LText: TStringList;
+var LText: TStringList;
 begin
   Result := '';
   LText := TStringList.Create;
-  try
-    LText.LoadFromFile(APath);
-    Result := LText.Text;
-  finally
-    LText.Free;
-  end;
+  try LText.LoadFromFile(APath); Result := LText.Text;
+  finally LText.Free; end;
 end;
 
 function SourcePath(const AUnitFile: string): string;
 begin
   Result := ExpandFileName(
-    ExtractFileDir(ParamStr(0)) + PathDelim +
-    '..' + PathDelim + '..' + PathDelim + '..' + PathDelim + '..' + PathDelim +
-    'src' + PathDelim + AUnitFile);
+    ExtractFileDir(ParamStr(0)) + PathDelim + '..' + PathDelim + '..' + PathDelim +
+    '..' + PathDelim + '..' + PathDelim + 'src' + PathDelim + AUnitFile);
 end;
 
-procedure TestSmallModExp;
 var
-  LMsg, LMod, LExp, LSig, LSigOld: TBytes;
-  LError, LOldError: string;
+  LRunner: TTestRunner;
+  LSuite: TTestSuite;
 begin
-  WriteLn('--- Small modexp cross-validate ---');
+  LSuite := TTestSuite.Create('rsa_ct');
 
-  LMsg := TBytes.Create(0, 0, 0, 3);
-  LMod := TBytes.Create(0, 0, 0, 11);
-  LExp := TBytes.Create(0, 0, 0, 7);
+  LSuite.Test('small modexp cross-validate', procedure
+  var LMsg, LMod, LExp, LSig, LSigOld: TBytes; LError, LOldError: string;
+  begin
+    LMsg := TBytes.Create(0,0,0,3); LMod := TBytes.Create(0,0,0,11); LExp := TBytes.Create(0,0,0,7);
+    CheckTrue(TryRSACTModExpSign(LMsg, LMod, LExp, LSig, LError));
+    CheckEqual('', LError);
+    CheckTrue(LSig[Length(LSig)-1] = 9);
+    TryBigIntModExpFromUnsignedBytes(LMsg, LExp, LMod, LSigOld, LOldError);
+    CheckTrue(LSigOld[Length(LSigOld)-1] = 9);
+  end);
 
-  Check(TryRSACTModExpSign(LMsg, LMod, LExp, LSig, LError), 'CT modexp ok');
-  Check(LError = '', 'no error');
-  Check(LSig[Length(LSig)-1] = 9, '3^7 mod 11 = 9');
+  LSuite.Test('m^1 mod n = m', procedure
+  var LN, LExp, LMsg, LSig: TBytes; LError: string;
+  begin
+    LN := HexToBytes('FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF97');
+    LExp := HexToBytes('0000000000000000000000000000000000000000000000000000000000000001');
+    LMsg := HexToBytes('000000000000000000000000000000000000000000000000000000000000012A');
+    CheckTrue(TryRSACTModExpSign(LMsg, LN, LExp, LSig, LError));
+    CheckTrue(LSig[Length(LSig)-1] = $2A);
+    CheckTrue(LSig[Length(LSig)-2] = $01);
+  end);
 
-  TryBigIntModExpFromUnsignedBytes(LMsg, LExp, LMod, LSigOld, LOldError);
-  Check(LSigOld[Length(LSigOld)-1] = 9, 'old also gives 9');
-end;
+  LSuite.Test('m^2 mod n', procedure
+  var LN, LExp, LMsg, LSigCT, LSigOld: TBytes; LError, LOldError: string;
+  begin
+    LN := HexToBytes('FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEF');
+    LExp := HexToBytes('0000000000000000000000000000000000000000000000000000000000000002');
+    LMsg := HexToBytes('0000000000000000000000000000000000000000000000000000000000000005');
+    CheckTrue(TryRSACTModExpSign(LMsg, LN, LExp, LSigCT, LError));
+    CheckTrue(LSigCT[Length(LSigCT)-1] = 25);
+    TryBigIntModExpFromUnsignedBytes(LMsg, LExp, LN, LSigOld, LOldError);
+    CheckTrue(LSigOld[Length(LSigOld)-1] = 25);
+  end);
 
-procedure TestModExpIdentity;
-var
-  LN, LExp, LMsg, LSig: TBytes;
-  LError: string;
-begin
-  WriteLn('--- m^1 mod n = m ---');
+  LSuite.Test('cross-validate 1024-bit', procedure
+  var LN, LD, LMsg, LSigCT, LSigOld: TBytes; LError, LOldError: string; I: Integer;
+  begin
+    SetLength(LN, 128);
+    for I := 0 to 127 do LN[I] := Byte((I*37+13) and $FF);
+    LN[127] := LN[127] or 1; LN[0] := LN[0] or $80;
+    SetLength(LD, 128);
+    for I := 0 to 127 do LD[I] := Byte((I*53+7) and $FF);
+    LD[127] := LD[127] or 1;
+    SetLength(LMsg, 128);
+    for I := 0 to 127 do LMsg[I] := Byte((I*17+3) and $FF);
+    LMsg[0] := LMsg[0] and $7F;
+    CheckTrue(TryRSACTModExpSign(LMsg, LN, LD, LSigCT, LError));
+    CheckTrue(TryRSAModExpSignPurePascal(LMsg, LN, LD, LSigOld, LOldError));
+    CheckEqual(BytesToHex(LSigCT), BytesToHex(LSigOld));
+  end);
 
-  LN := HexToBytes('FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF97');
-  LExp := HexToBytes('0000000000000000000000000000000000000000000000000000000000000001');
-  LMsg := HexToBytes('000000000000000000000000000000000000000000000000000000000000012A');
+  LSuite.Test('error cases', procedure
+  var LSig: TBytes; LError: string; LN, LE, LD: TBytes;
+  begin
+    SetLength(LN, 0); LE := TBytes.Create(1); LD := TBytes.Create(1);
+    CheckTrue(not TryRSACTModExpSign(LE, LN, LD, LSig, LError));
+    LN := TBytes.Create(0,0,0,4);
+    CheckTrue(not TryRSACTModExpSign(LE, LN, LD, LSig, LError));
+  end);
 
-  Check(TryRSACTModExpSign(LMsg, LN, LExp, LSig, LError), 'm^1 ok');
-  Check(LSig[Length(LSig)-1] = $2A, 'low byte preserved');
-  Check(LSig[Length(LSig)-2] = $01, 'second byte preserved');
-end;
+  LSuite.Test('512-bit with large exponent', procedure
+  var LN, LD, LMsg, LSigCT, LSigOld: TBytes; LError, LOldError: string; I: Integer;
+  begin
+    SetLength(LN, 64);
+    for I := 0 to 63 do LN[I] := Byte((I*41+19) and $FF);
+    LN[63] := LN[63] or 1; LN[0] := LN[0] or $C0;
+    SetLength(LD, 64);
+    for I := 0 to 63 do LD[I] := Byte((I*67+31) and $FF);
+    LD[63] := LD[63] or 1; LD[0] := LD[0] or $80;
+    SetLength(LMsg, 64);
+    for I := 0 to 63 do LMsg[I] := Byte((I*23+5) and $FF);
+    LMsg[0] := LMsg[0] and $3F;
+    CheckTrue(TryRSACTModExpSign(LMsg, LN, LD, LSigCT, LError));
+    CheckTrue(TryRSAModExpSignPurePascal(LMsg, LN, LD, LSigOld, LOldError));
+    CheckEqual(BytesToHex(LSigCT), BytesToHex(LSigOld));
+  end);
 
-procedure TestModExpSquare;
-var
-  LN, LExp, LMsg, LSigCT, LSigOld: TBytes;
-  LError, LOldError: string;
-begin
-  WriteLn('--- m^2 mod n ---');
+  LSuite.Test('CRT cross-validate', procedure
+  var LMsg, LN, LD, LE, LP, LQ, LDP, LDQ, LQInv, LCRT, LExpected: TBytes;
+    LCRTError, LExpectedError: string;
+  begin
+    LMsg := TBytes.Create(42); LN := TBytes.Create(0,143); LD := TBytes.Create(103);
+    LE := TBytes.Create(7); LP := TBytes.Create(11); LQ := TBytes.Create(13);
+    LDP := TBytes.Create(3); LDQ := TBytes.Create(7); LQInv := TBytes.Create(6);
+    CheckTrue(TryRSACTModExpSign(LMsg, LN, LD, LExpected, LExpectedError));
+    CheckTrue(TryRSACTSignWithCRT(LMsg, LN, LE, LP, LQ, LDP, LDQ, LQInv, LCRT, LCRTError));
+    CheckEqual(BytesToHex(LCRT), BytesToHex(LExpected));
+  end);
 
-  LN := HexToBytes('FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEF');
-  LExp := HexToBytes('0000000000000000000000000000000000000000000000000000000000000002');
-  LMsg := HexToBytes('0000000000000000000000000000000000000000000000000000000000000005');
+  LSuite.Test('sensitive scratch cleanup contract', procedure
+  var LSource: string;
+  begin
+    LSource := LowerCase(LoadTextFile(SourcePath('nextpas.core.crypto.rsa.ct.pas')));
+    CheckTrue(Pos('procedure ctnatsecurezero(var a: tctnat);', LSource) > 0);
+    CheckTrue(Pos('procedure ctmontctxsecurezero(var ctx: tctmontctx);', LSource) > 0);
+    CheckTrue(Pos('ctnatsecurezero(a);', LSource) > 0);
+    CheckTrue(Pos('ctnatsecurezero(lmsg);', LSource) > 0);
+    CheckTrue(Pos('ctnatsecurezero(lresult);', LSource) > 0);
+    CheckTrue(Pos('ctmontctxsecurezero(lctx);', LSource) > 0);
+    CheckTrue(Pos('ctnatsecurezero(lm1);', LSource) > 0);
+    CheckTrue(Pos('ctnatsecurezero(lm2);', LSource) > 0);
+    CheckTrue(Pos('ctnatsecurezero(lh);', LSource) > 0);
+    CheckTrue(Pos('ctnatsecurezero(lsig);', LSource) > 0);
+    CheckTrue(Pos('ctmontctxsecurezero(lctxp);', LSource) > 0);
+    CheckTrue(Pos('ctmontctxsecurezero(lctxq);', LSource) > 0);
+    CheckTrue(Pos('ctmontctxsecurezero(lctxn);', LSource) > 0);
+  end);
 
-  Check(TryRSACTModExpSign(LMsg, LN, LExp, LSigCT, LError), 'CT m^2 ok');
-  Check(LSigCT[Length(LSigCT)-1] = 25, '5^2 = 25');
-
-  TryBigIntModExpFromUnsignedBytes(LMsg, LExp, LN, LSigOld, LOldError);
-  Check(LSigOld[Length(LSigOld)-1] = 25, 'old also 25');
-end;
-
-procedure TestCrossValidate128Byte;
-var
-  LN, LD, LMsg, LSigCT, LSigOld: TBytes;
-  LError, LOldError: string;
-  I: Integer;
-begin
-  WriteLn('--- Cross-validate 1024-bit modexp ---');
-
-  SetLength(LN, 128);
-  for I := 0 to 127 do
-    LN[I] := Byte((I * 37 + 13) and $FF);
-  LN[127] := LN[127] or 1;
-  LN[0] := LN[0] or $80;
-
-  SetLength(LD, 128);
-  for I := 0 to 127 do
-    LD[I] := Byte((I * 53 + 7) and $FF);
-  LD[127] := LD[127] or 1;
-
-  SetLength(LMsg, 128);
-  for I := 0 to 127 do
-    LMsg[I] := Byte((I * 17 + 3) and $FF);
-  LMsg[0] := LMsg[0] and $7F;
-
-  Check(TryRSACTModExpSign(LMsg, LN, LD, LSigCT, LError), 'CT 1024-bit ok');
-  Check(TryRSAModExpSignPurePascal(LMsg, LN, LD, LSigOld, LOldError), 'old 1024-bit ok');
-  Check(BytesToHex(LSigCT) = BytesToHex(LSigOld), 'CT == old for 1024-bit');
-end;
-
-procedure TestErrorCases;
-var
-  LSig: TBytes;
-  LError: string;
-  LN, LE, LD: TBytes;
-begin
-  WriteLn('--- Error cases ---');
-
-  SetLength(LN, 0);
-  LE := TBytes.Create(1);
-  LD := TBytes.Create(1);
-
-  Check(not TryRSACTModExpSign(LE, LN, LD, LSig, LError), 'empty modulus rejected');
-
-  LN := TBytes.Create(0, 0, 0, 4);
-  Check(not TryRSACTModExpSign(LE, LN, LD, LSig, LError), 'even modulus rejected');
-end;
-
-procedure TestLargerExponent;
-var
-  LN, LD, LMsg, LSigCT, LSigOld: TBytes;
-  LError, LOldError: string;
-  I: Integer;
-begin
-  WriteLn('--- 64-byte modexp with large exponent ---');
-
-  SetLength(LN, 64);
-  for I := 0 to 63 do
-    LN[I] := Byte((I * 41 + 19) and $FF);
-  LN[63] := LN[63] or 1;
-  LN[0] := LN[0] or $C0;
-
-  SetLength(LD, 64);
-  for I := 0 to 63 do
-    LD[I] := Byte((I * 67 + 31) and $FF);
-  LD[63] := LD[63] or 1;
-  LD[0] := LD[0] or $80;
-
-  SetLength(LMsg, 64);
-  for I := 0 to 63 do
-    LMsg[I] := Byte((I * 23 + 5) and $FF);
-  LMsg[0] := LMsg[0] and $3F;
-
-  Check(TryRSACTModExpSign(LMsg, LN, LD, LSigCT, LError), 'CT 512-bit ok');
-  Check(TryRSAModExpSignPurePascal(LMsg, LN, LD, LSigOld, LOldError), 'old 512-bit ok');
-  Check(BytesToHex(LSigCT) = BytesToHex(LSigOld), 'CT == old for 512-bit');
-end;
-
-procedure TestCRTMatchesModExp;
-var
-  LMsg, LN, LD, LE: TBytes;
-  LP, LQ, LDP, LDQ, LQInv: TBytes;
-  LCRT, LExpected: TBytes;
-  LCRTError, LExpectedError: string;
-begin
-  WriteLn('--- Small CRT cross-validate ---');
-
-  LMsg := TBytes.Create(42);
-  LN := TBytes.Create(0, 143); // 11 * 13
-  LD := TBytes.Create(103);
-  LE := TBytes.Create(7);
-  LP := TBytes.Create(11);
-  LQ := TBytes.Create(13);
-  LDP := TBytes.Create(3);  // 103 mod (11 - 1)
-  LDQ := TBytes.Create(7);  // 103 mod (13 - 1)
-  LQInv := TBytes.Create(6); // 13^-1 mod 11
-
-  Check(TryRSACTModExpSign(LMsg, LN, LD, LExpected, LExpectedError),
-    'modexp oracle for CRT ok');
-  Check(TryRSACTSignWithCRT(LMsg, LN, LE, LP, LQ, LDP, LDQ, LQInv, LCRT, LCRTError),
-    'CRT sign ok');
-  Check(BytesToHex(LCRT) = BytesToHex(LExpected), 'CRT == modexp oracle');
-end;
-
-procedure TestSensitiveScratchCleanupContract;
-var
-  LSource: string;
-begin
-  WriteLn('--- Sensitive scratch cleanup contract ---');
-
-  LSource := LowerCase(LoadTextFile(SourcePath('nextpas.core.crypto.rsa.ct.pas')));
-
-  Check(Pos('procedure ctnatsecurezero(var a: tctnat);', LSource) > 0,
-    'ctnatsecurezero helper exists');
-  Check(Pos('procedure ctmontctxsecurezero(var ctx: tctmontctx);', LSource) > 0,
-    'ctmontctxsecurezero helper exists');
-  Check(Pos('ctnatsecurezero(a);', LSource) > 0,
-    'ctnatalloc zeroizes reused scratch before realloc');
-  Check(Pos('ctnatsecurezero(lmsg);', LSource) > 0,
-    'modexp zeroizes message scratch');
-  Check(Pos('ctnatsecurezero(lresult);', LSource) > 0,
-    'modexp zeroizes result scratch');
-  Check(Pos('ctmontctxsecurezero(lctx);', LSource) > 0,
-    'modexp zeroizes montgomery context');
-  Check(Pos('ctnatsecurezero(lm1);', LSource) > 0,
-    'crt zeroizes m1 scratch');
-  Check(Pos('ctnatsecurezero(lm2);', LSource) > 0,
-    'crt zeroizes m2 scratch');
-  Check(Pos('ctnatsecurezero(lh);', LSource) > 0,
-    'crt zeroizes h scratch');
-  Check(Pos('ctnatsecurezero(lsig);', LSource) > 0,
-    'crt zeroizes signature scratch');
-  Check(Pos('ctmontctxsecurezero(lctxp);', LSource) > 0,
-    'crt zeroizes p montgomery context');
-  Check(Pos('ctmontctxsecurezero(lctxq);', LSource) > 0,
-    'crt zeroizes q montgomery context');
-  Check(Pos('ctmontctxsecurezero(lctxn);', LSource) > 0,
-    'crt zeroizes modulus montgomery context');
-end;
-
-begin
-  WriteLn('=== RSA CT (Constant-Time) Tests ===');
-  WriteLn;
-
-  TestSmallModExp;
-  TestModExpIdentity;
-  TestModExpSquare;
-  TestCrossValidate128Byte;
-  TestErrorCases;
-  TestLargerExponent;
-  TestCRTMatchesModExp;
-  TestSensitiveScratchCleanupContract;
-
-  WriteLn;
-  WriteLn(Format('Results: %d passed, %d failed', [GPassCount, GFailCount]));
-  if GFailCount > 0 then
-    Halt(1);
+  LRunner := TTestRunner.Create('nextpas.core.crypto.rsa_ct');
+  LRunner.Add(LSuite);
+  LRunner.RunAll;
+  LRunner.Summary;
+  if not LRunner.AllPassed then Halt(1);
 end.
