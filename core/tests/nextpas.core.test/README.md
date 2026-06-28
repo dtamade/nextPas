@@ -11,6 +11,7 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 - **v3.10**: shuffle + failfast + list mode
 - **v3.11**: quality hardening — LCG overflow fix, facade exports, test coverage audit
 - **v3.12**: audit — config sentinel fix, table-test error handling, CLI dedup
+- **v4.0**: --short + --progress + --failures-max + --json + parallel ShortSkip fix
 
 ## 竞品对比
 
@@ -19,9 +20,13 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 | Subtests | `t.Run()` | — | `TestSubtest` |
 | 层级过滤 | `-run Foo/Bar` | — | `--filter=Parent/Sub` |
 | Expected fail | — | `#[should_panic]` | `ShouldFail` |
+| Short mode | `-short` | — | `--short` |
 | 全局 repeat | `-count N` | `--repeat` | `--count=N` |
 | Shuffle | `-shuffle` | `--shuffle` | `--shuffle[-seed=N]` |
 | FailFast | `-failfast` | `--fail-fast` | `--failfast` |
+| Max failures | — | — | `--failures-max=N` |
+| Progress | — | — | `--progress` |
+| JSON output | `-json` | — | `--json` |
 | List mode | — | `--list` | `--list` |
 | 耗时报告 | `-v` | `--show-output` | Slow test report |
 | Tags | — | — | `--tag=` |
@@ -94,3 +99,14 @@ core/src/nextpas.core.testing.pas           ← v1 兼容层（deprecated）
 - **v3.9**: ShouldFail (expected failure)、层级过滤 (`--filter=Parent/Sub`)、`--count=N`、慢测试报告、FormatDuration
 - **v3.10**: Fisher-Yates shuffle (`--shuffle[-seed=N]`)、FailFast 双级 (`--failfast`)、List mode (`--list`)
 - **v3.11**: 质量加固 — LCG `Abs` 溢出修复、`ekShouldFail` facade 导出、runner 重构 (`ApplyCLIArgs`/`WriteListMode`)、table test 异常处理、15+ 新测试 (FormatDuration 边界/ShouldFail closure/Skip/ shuffle 确定性/种子边界/hierarchical+glob 组合)
+
+## 版本历史 (续)
+
+- **v3.12**: audit — config sentinel fix, table-test error handling, CLI dedup
+- **v4.0**: 差异化碾压特性:
+  - `--short` 模式: `ShortSkip` 标记慢测试，开发时跳过 (对标 Go `-short`)
+  - `--progress` 进度计数: `[N/Total]` 前缀，串行+并行均支持
+  - `--failures-max=N` 全局失败上限: 非首次失败即停，跨 suite 累计
+  - `--json` CLI 输出: 机器可读 JSON 报告直出 stdout
+  - 并行 ShortSkip: batch 调度正确跳过 ShortSkip 测试 (P0 修复)
+  - 新增 8 个测试覆盖全部新特性

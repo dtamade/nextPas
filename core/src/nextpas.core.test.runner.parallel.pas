@@ -54,6 +54,8 @@ type
     Fail           : PInteger;
     Skip           : PInteger;
     Res            : ^TTestResult; { non-nil -> write per-test result here }
+    ProgressCounter: PInteger;     { shared counter for [N/Total] display }
+    ProgressTotal  : Integer;      { total eligible tests for progress }
   end;
   PThreadRec = ^TThreadRec;
 
@@ -486,8 +488,22 @@ begin
       tsError:
         R^.Fail^ := R^.Fail^ + 1;
     end;
-    WriteTestStatus(LStatus, R^.Entry.Name, LFailMsg, LSkipReason,
-      LOutSink, LConfig);
+    { Progress counter — increment and format prefix }
+    if R^.ProgressCounter <> nil then
+    begin
+      R^.ProgressCounter^ := R^.ProgressCounter^ + 1;
+      if R^.ProgressTotal > 0 then
+        WriteTestStatus(LStatus,
+          '[' + IntToStr(R^.ProgressCounter^) + '/' +
+          IntToStr(R^.ProgressTotal) + '] ' + R^.Entry.Name,
+          LFailMsg, LSkipReason, LOutSink, LConfig)
+      else
+        WriteTestStatus(LStatus, R^.Entry.Name, LFailMsg, LSkipReason,
+          LOutSink, LConfig);
+    end
+    else
+      WriteTestStatus(LStatus, R^.Entry.Name, LFailMsg, LSkipReason,
+        LOutSink, LConfig);
     { Write per-test result inside mutex for safety (skip if already written
       by beforeEach failure path, which sets Duration = 0 directly) }
     if (R^.Res <> nil) and (not LResultWritten) then

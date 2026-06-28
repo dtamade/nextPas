@@ -18,6 +18,9 @@ var
   { v3.12: ShouldFail in parallel }
   GShouldFailSuite: TTestSuite;
   GShouldFailResult: TTestRunResult;
+  { Phase 9: ShortSkip in parallel }
+  GShortSkipSuite: TTestSuite;
+  GShortSkipResult: TTestRunResult;
 
 procedure TestParallelSimple;
 begin
@@ -487,6 +490,47 @@ begin
       FailTest('expected 1 failed (no_raise_fail), got ' +
         IntToStr(GShouldFailResult.Failed));
     PassTest('✓ ShouldFail in parallel mode');
+  end;
+
+  { ── Phase 9: ShortSkip in parallel mode ───────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 9: ShortSkip in Parallel');
+  begin
+    ResetDefaultConfig;
+    { Test 1: ShortSkip test runs normally when ShortMode is off }
+    GShortSkipSuite := TTestSuite.Create('ShortSkipOff');
+    GShortSkipSuite.Test('fast_pass', @TestParallelPassA);
+    GShortSkipSuite.ShortSkip('slow_skip', procedure begin
+      CheckTrue(True);
+    end);
+    GShortSkipSuite.Test('fast_pass2', @TestParallelPassA);
+    GShortSkipSuite.RunParallelWithResult(nil, GShortSkipResult);
+    if GShortSkipResult.Passed <> 3 then
+      FailTest('ShortSkip off: expected 3 passed, got ' +
+        IntToStr(GShortSkipResult.Passed));
+    if GShortSkipResult.Skipped <> 0 then
+      FailTest('ShortSkip off: expected 0 skipped, got ' +
+        IntToStr(GShortSkipResult.Skipped));
+    ResetDefaultConfig;
+    PassTest('ShortSkip off in parallel');
+    { Test 2: ShortSkip test is skipped in parallel when ShortMode is on }
+    GShortSkipSuite := TTestSuite.Create('ShortSkipOn');
+    GShortSkipSuite.Test('fast1', @TestParallelPassA);
+    GShortSkipSuite.ShortSkip('slow1', procedure begin
+      CheckTrue(True);
+    end);
+    GShortSkipSuite.Test('fast2', @TestParallelPassA);
+    SetDefaultShortMode(True);
+    GShortSkipSuite.Config := DefaultConfig;
+    GShortSkipSuite.RunParallelWithResult(nil, GShortSkipResult);
+    if GShortSkipResult.Passed <> 2 then
+      FailTest('ShortSkip on: expected 2 passed, got ' +
+        IntToStr(GShortSkipResult.Passed));
+    if GShortSkipResult.Skipped <> 1 then
+      FailTest('ShortSkip on: expected 1 skipped, got ' +
+        IntToStr(GShortSkipResult.Skipped));
+    ResetDefaultConfig;
+    PassTest('ShortSkip on in parallel');
   end;
 
   WriteLn;
