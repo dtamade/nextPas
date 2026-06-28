@@ -132,13 +132,15 @@ begin
   WriteLn('PASS: shuffle small list');
 end;
 
-{ Test: Growing allocator returns blocks in non-FIFO order after shuffle. }
+{ Test: Growing allocator returns blocks in LIFO order via direct push (fast path).
+  The fast path pushes directly to head without shuffle for lists < CACHE_ADAPTIVE_MAX_SMALL.
+  This gives strict LIFO which is optimal for cache locality. }
 procedure TestShuffleAllocatorIntegration;
 var
   LAlloc: TGrowingAllocator;
   LPtrs: array[0..15] of Pointer;
   LReturned: array[0..15] of Pointer;
-  LSameOrder: Boolean;
+  LIsLIFO: Boolean;
   I: Integer;
 begin
   LAlloc := TGrowingAllocator.Create;
@@ -146,34 +148,33 @@ begin
     { Allocate 16 blocks of same size. }
     for I := 0 to 15 do
       LPtrs[I] := LAlloc.GetMem(64);
-    { Free all (shuffle inserts at random positions). }
+    { Free all — direct push to head (fast path, no shuffle). }
     for I := 0 to 15 do
       LAlloc.FreeMem(LPtrs[I], 64);
-    { Allocate again — should get blocks back, but possibly in different order. }
+    { Allocate again — should get blocks back in LIFO order. }
     for I := 0 to 15 do
       LReturned[I] := LAlloc.GetMem(64);
     { Check all blocks are from the original set. }
     for I := 0 to 15 do
       Check(LReturned[I] <> nil, 'got block back');
-    { Check order is NOT strictly LIFO (shuffle should randomize). }
-    LSameOrder := True;
+    { Direct push means strict LIFO: LReturned[I] = LPtrs[15 - I]. }
+    LIsLIFO := True;
     for I := 0 to 15 do
     begin
       if LReturned[I] <> LPtrs[15 - I] then
       begin
-        LSameOrder := False;
+        LIsLIFO := False;
         Break;
       end;
     end;
-    { With shuffle, strict LIFO is extremely unlikely for 16 elements. }
-    Check(not LSameOrder, 'order is shuffled (not strict LIFO)');
+    Check(LIsLIFO, 'fast path gives strict LIFO (cache-friendly reuse)');
     { Clean up. }
     for I := 0 to 15 do
       LAlloc.FreeMem(LReturned[I], 64);
   finally
     LAlloc.Free;
   end;
-  WriteLn('PASS: shuffle allocator integration');
+  WriteLn('PASS: allocator integration (LIFO fast path)');
 end;
 
 { --- Main --- }
