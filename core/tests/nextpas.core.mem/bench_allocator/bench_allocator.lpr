@@ -13,7 +13,8 @@ uses
   nextpas.core.bench,
   nextpas.core.bench.base,
   nextpas.core.mem.sizeclass,
-  nextpas.core.mem.allocator.growing;
+  nextpas.core.mem.allocator.growing,
+  nextpas.core.platform.time;
 
 var
   GAlloc: TGrowingAllocator;
@@ -123,69 +124,67 @@ begin
   System.FreeMem(LPtr);
 end;
 
-{ --- Concurrent benchmark helpers --- }
+{ --- Concurrent benchmark (manual timing, bypasses framework) --- }
+{ The bench framework measures per-call latency. For concurrent we need
+  per-alloc+free latency across threads, so we time manually. }
 
 const
   CONCURRENT_THREADS = 4;
   CONCURRENT_BATCH = 64;
+  CONCURRENT_ITERS = 10000;  { batches per thread }
 
 type
   PConcurrentWorker = ^TConcurrentWorker;
   TConcurrentWorker = record
     Alloc: TGrowingAllocator;
     AllocSize: SizeUInt;
+    Iters: Integer;
   end;
 
 function ConcurrentWorkerFunc(Parameter: Pointer): PtrInt;
 var
   LWorker: PConcurrentWorker;
   LPtrs: array[0..CONCURRENT_BATCH - 1] of Pointer;
-  I: Integer;
+  J, I: Integer;
 begin
   LWorker := PConcurrentWorker(Parameter);
-  for I := 0 to CONCURRENT_BATCH - 1 do
-    LPtrs[I] := LWorker^.Alloc.GetMem(LWorker^.AllocSize);
-  for I := 0 to CONCURRENT_BATCH - 1 do
-    LWorker^.Alloc.FreeMem(LPtrs[I], LWorker^.AllocSize);
+  for J := 1 to LWorker^.Iters do
+  begin
+    for I := 0 to CONCURRENT_BATCH - 1 do
+      LPtrs[I] := LWorker^.Alloc.GetMem(LWorker^.AllocSize);
+    for I := 0 to CONCURRENT_BATCH - 1 do
+      LWorker^.Alloc.FreeMem(LPtrs[I], LWorker^.AllocSize);
+  end;
   Result := 0;
 end;
 
-{ Pattern 9: Concurrent 4T × 64B (256 ops total per iter). }
-procedure BenchConcurrent64(const ACtx: IBenchContext);
+procedure RunConcurrentManual(const AName: string; ASize: SizeUInt);
 var
   LWorkers: array[0..CONCURRENT_THREADS - 1] of TConcurrentWorker;
   LThreads: array[0..CONCURRENT_THREADS - 1] of TThreadID;
+  LStartNs, LEndNs, LTotalOps: UInt64;
+  LElapsedNs: Double;
   I: Integer;
 begin
-  if ACtx <> nil then
-    ACtx.SetBytes(CONCURRENT_THREADS * CONCURRENT_BATCH * 64);
   for I := 0 to CONCURRENT_THREADS - 1 do
   begin
     LWorkers[I].Alloc := GAlloc;
-    LWorkers[I].AllocSize := 64;
-    LThreads[I] := BeginThread(@ConcurrentWorkerFunc, @LWorkers[I]);
+    LWorkers[I].AllocSize := ASize;
+    LWorkers[I].Iters := CONCURRENT_ITERS;
   end;
+  LStartNs := platform_monotonic_ns;
+  for I := 0 to CONCURRENT_THREADS - 1 do
+    LThreads[I] := BeginThread(@ConcurrentWorkerFunc, @LWorkers[I]);
   for I := 0 to CONCURRENT_THREADS - 1 do
     WaitForThreadTerminate(LThreads[I], 0);
-end;
-
-{ Pattern 10: Concurrent 4T × 1KB (256 ops total per iter). }
-procedure BenchConcurrent1K(const ACtx: IBenchContext);
-var
-  LWorkers: array[0..CONCURRENT_THREADS - 1] of TConcurrentWorker;
-  LThreads: array[0..CONCURRENT_THREADS - 1] of TThreadID;
-  I: Integer;
-begin
-  if ACtx <> nil then
-    ACtx.SetBytes(CONCURRENT_THREADS * CONCURRENT_BATCH * 1024);
-  for I := 0 to CONCURRENT_THREADS - 1 do
-  begin
-    LWorkers[I].Alloc := GAlloc;
-    LWorkers[I].AllocSize := 1024;
-    LThreads[I] := BeginThread(@ConcurrentWorkerFunc, @LWorkers[I]);
-  end;
-  for I := 0 to CONCURRENT_THREADS - 1 do
-    WaitForThreadTerminate(LThreads[I], 0);
+  LEndNs := platform_monotonic_ns;
+  LTotalOps := UInt64(CONCURRENT_THREADS) * CONCURRENT_BATCH * CONCURRENT_ITERS;
+  LElapsedNs := LEndNs - LStartNs;
+  WriteLn(AName: 30,
+    '  ns/op=', Round(LElapsedNs / LTotalOps): 8,
+    '  Mops/s=', FormatFloat('0.00', LTotalOps / (LElapsedNs / 1e9) / 1e6): 8,
+    '  total_ops=', LTotalOps: 10,
+    '  iters=', CONCURRENT_ITERS: 6);
 end;
 
 { --- Main --- }
@@ -216,13 +215,9 @@ begin
     LSuite.Add('system/small_64B', @BenchSystemSmall64);
     LSuite.Add('system/medium_1KB', @BenchSystemMedium1K);
 
-    { Concurrent benchmarks (4 threads). }
-    LSuite.Add('concurrent/4T_64B', @BenchConcurrent64);
-    LSuite.Add('concurrent/4T_1KB', @BenchConcurrent1K);
-
     LResults := LSuite.Run;
 
-    { Print results. }
+    { Print single-threaded results. }
     WriteLn;
     WriteLn('=== Allocator Benchmark Results ===');
     WriteLn;
@@ -237,6 +232,12 @@ begin
           '  iters=', LAll[I].Iterations: 8);
       end;
     end;
+
+    { Concurrent benchmarks (manual timing). }
+    WriteLn;
+    WriteLn('--- Concurrent (4 threads, per-alloc+free) ---');
+    RunConcurrentManual('concurrent/4T_64B', 64);
+    RunConcurrentManual('concurrent/4T_1KB', 1024);
 
     WriteLn;
     WriteLn('Done.');
