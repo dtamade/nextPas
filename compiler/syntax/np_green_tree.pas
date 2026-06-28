@@ -3066,15 +3066,14 @@ begin
             if (ACursor < ALexer.TokenCount) and
               (CurrentToken(ALexer, ACursor).Kind = tkSemicolon) then
             begin
-              // Forward interface declaration: interface;
+              { Forward interface declaration: interface; — semicolon consumed by ParseTypeSection }
             end
             else
-            while (ACursor < ALexer.TokenCount) and
-              (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
-              (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
             begin
               while (ACursor < ALexer.TokenCount) and
                 (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
+                (CurrentToken(ALexer, ACursor).Kind <> tkImplementationKeyword) and
+                (CurrentToken(ALexer, ACursor).Kind <> tkBeginKeyword) and
                 (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
               begin
                 if CurrentToken(ALexer, ACursor).Kind in
@@ -3349,6 +3348,7 @@ begin
         (CurrentToken(ALexer, ACursor).Kind <> tkSemicolon) and
         (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
         (CurrentToken(ALexer, ACursor).Kind <> tkImplementationKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkBeginKeyword) and
         (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
         Inc(ACursor);
       MatchTokenSilent(ALexer, ACursor, tkSemicolon);
