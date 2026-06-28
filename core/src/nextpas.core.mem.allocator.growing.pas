@@ -38,10 +38,10 @@ type
     {** Allocate ASize bytes. Returns nil on failure.
         Small allocations go through TLS cache → central pool.
         Large allocations use direct GetMem. }
-    function GetMem(ASize: SizeUInt): Pointer;
+    function GetMem(ASize: SizeUInt): Pointer; inline;
 
     {** Free a block previously allocated by GetMem. }
-    procedure FreeMem(APtr: Pointer; ASize: SizeUInt);
+    procedure FreeMem(APtr: Pointer; ASize: SizeUInt); inline;
 
     {** Allocate ASize bytes, zero-initialized. }
     function AllocMem(ASize: SizeUInt): Pointer;
@@ -143,7 +143,7 @@ begin
   inherited Destroy;
 end;
 
-function TGrowingAllocator.GetMem(ASize: SizeUInt): Pointer;
+function TGrowingAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LIndex: Int32;
   LNode: PFreeNode;
@@ -215,7 +215,7 @@ begin
     System.GetMem(Result, ASize);
 end;
 
-procedure TGrowingAllocator.FreeMem(APtr: Pointer; ASize: SizeUInt);
+procedure TGrowingAllocator.FreeMem(APtr: Pointer; ASize: SizeUInt); inline;
 var
   LIndex: Int32;
   LNode: PFreeNode;
