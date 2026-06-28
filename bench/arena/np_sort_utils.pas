@@ -113,13 +113,23 @@ begin
     end;
     Dec(ADepthLimit);
 
-    { Median-of-three pivot }
-    LPivot := MedianOfThree(
-      AArr[ALo],
-      AArr[ALo + (AHi - ALo) div 2],
-      AArr[AHi]);
+    { Pivot selection: Tukey's ninther for large, median-of-three otherwise }
+    if AHi - ALo > 128 then
+    begin
+      { Tukey's ninther: median of three medians-of-three }
+      I := (AHi - ALo) div 8;
+      LPivot := MedianOfThree(
+        MedianOfThree(AArr[ALo], AArr[ALo + I], AArr[ALo + 2*I]),
+        MedianOfThree(AArr[ALo + 3*I], AArr[ALo + (AHi - ALo) div 2], AArr[AHi - 3*I]),
+        MedianOfThree(AArr[AHi - 2*I], AArr[AHi - I], AArr[AHi]));
+    end
+    else
+      LPivot := MedianOfThree(
+        AArr[ALo],
+        AArr[ALo + (AHi - ALo) div 2],
+        AArr[AHi]);
 
-    { Partition }
+    { Hoare partition }
     I := ALo;
     J := AHi;
     while True do

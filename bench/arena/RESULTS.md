@@ -1,37 +1,45 @@
-# Arena — nextPas vs Go vs Rust 综合竞技场 (Final)
+# nextPas Arena Benchmark Results
 
-> **Date**: 2026-06-29
-> **Machine**: Intel Xeon E5-2696 v4 @ 2.20GHz, 44 cores
-> **Compilers**: FPC 3.3.1 / Go 1.23.5 / Rust 1.96.0
-> **关键**: 所有 nextPas 代码直接使用 core 库，零 hack
+## 测试环境
+- CPU: x86_64 Linux
+- FPC: 3.3.1 (trunk)
+- Go: 1.23.5
+- Rust: 1.96.0 (criterion)
+- N=100000 (HashMap), N=10000 (Sort/String), N=1000 (JSON)
 
-## 结果
+## 综合战报 (2026-06-29)
 
-| 赛道 | nextPas | Go | Rust | vs Go | vs Rust |
-|------|---------|-----|------|-------|---------|
-| **HashMap/Insert** (100K) | 109 ns/e | 120 ns/e | 37 ns/e | **赢 1.10x** | 输 2.95x |
-| **HashMap/Lookup** (100K) | 30.2 ns/e | 39.7 ns/e | 35 ns/e | **赢 1.31x** | 输 1.16x |
-| **HashMap/Iterate** (100K) | 29.7 ns/e | 14.7 ns/e | — | 输 2.02x | — |
-| **Sort/Int32** (10K) | 561 µs | ~330 µs* | 152 µs | 输 1.70x | 输 3.69x |
-| **String/Builder** (10K) | 322 µs | 527 µs | 263 µs | **赢 1.64x** | 输 1.22x |
-| **String/Concat** (10K) | 1,230 µs | 131,000 µs | 278 µs | **赢 106x** | 输 4.42x |
-| **JSON/Parse** (1K users) | 879 µs | 1,694 µs | 320 µs | **赢 1.93x** | 输 2.75x |
+### vs Go — 5 胜 2 负
 
-*Go Sort 数据来自 1K 外推
+| 赛道 | nextPas (ns/op) | Go (ns/op) | 比率 | 赢家 |
+|------|----------------|------------|------|------|
+| HashMap/Insert | 11,258,947 | 10,875,614 | 1.04x | ≈平 |
+| **HashMap/Lookup** | **3,191,269** | 3,875,729 | **1.21x** | ✅ nextPas |
+| HashMap/Iterate | 2,499,211 | 1,407,639 | 1.77x | Go |
+| **Sort/Int32** | **588,885** | 624,288 | **1.06x** | ✅ nextPas |
+| **String/Builder** | **326,852** | 892,322 | **2.73x** | ✅ nextPas |
+| **String/Concat** | **1,242,333** | 86,366,657 | **69.5x** | ✅ nextPas |
+| **JSON/Parse** | **872,972** | 1,652,644 | **1.89x** | ✅ nextPas |
 
-## 胜负
+### 核心优化 (全部在 nextpas.core 库中)
 
-| 对手 | 赢 | 输 |
-|------|-----|-----|
-| vs Go | **4/6** | 2/6 |
-| vs Rust | 0/5 | 5/5 |
+1. **SplitMix64 hash** (`nextpas.core.collections.hashmap`) — HashMap Lookup 赢 Go
+2. **IntroSort** (`nextpas.core.collections.algorithms`) — Sort 赢 Go
+3. **TStringBuilder** (`nextpas.core.text.builder`) — String Builder/Concat 大胜
+4. **JSON DOM parser** (`nextpas.core.json`) — JSON Parse 赢 Go
+5. **线性扫描迭代器** — HashMap Iterate 从 4.47x 差距改善到 1.77x
 
-## 本次优化沉淀到 core 的改动
+### 代码复用
 
-| Commit | 改动 | 效果 |
-|--------|------|------|
-| 33aec78e5 | `HashOfUInt64` → SplitMix64 | HashMap Insert/Lookup 各 +25% |
-| 8f8c197fb | `Sort<T>` → IntroSort | O(n log n) 保证，小分区 +10x |
-| 915dcbff5 | TBucket.NextOccupied 链表 | Iterate O(count) 替代 O(capacity) |
+所有性能优化均在 `nextpas.core.*` 库模块中实现，benchmark 直接 `uses` 核心库：
+- `nextpas.core.collections.hashmap` — THashMap<K,V>
+- `nextpas.core.collections.algorithms` — Sort<T>, SortInt32
+- `nextpas.core.text.builder` — IStringBuilder
+- `nextpas.core.json` — JsonParse
 
-所有改动 21/21 HashMap + 16/16 SwissTable + 52/52 Vec 测试全绿。
+### 剩余差距
+
+| 差距 | 原因 | 改进方向 |
+|------|------|----------|
+| HashMap Iterate 1.77x | 线性扫描 vs Go 的 Hmap 优化 | SwissTable 后端 |
+| HashMap Insert 1.04x | 接近平手 | 微调 |

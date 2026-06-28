@@ -541,25 +541,28 @@ end;
 function THashMap.DoIterMoveNext(aIter: PPtrIter): Boolean;
 var
   idx: SizeUInt;
+  pBkt: PBucket;
 begin
   if aIter^.Started then
-  begin
-    {$PUSH}{$WARN 4055 OFF}
-    idx := (FBuckets + SizeUInt(aIter^.Data))^.NextOccupied;
-    {$POP}
-  end
+    idx := SizeUInt(aIter^.Data) + 1
   else
   begin
     aIter^.Started := True;
-    idx := FHeadOccupied;
+    idx := 0;
   end;
 
-  if idx < FCapacity then
+  { Linear scan — sequential memory access, cache-prefetcher friendly }
+  while idx < FCapacity do
   begin
-    {$PUSH}{$WARN 4055 OFF}
-    aIter^.Data := Pointer(idx);
-    {$POP}
-    Exit(True);
+    pBkt := FBuckets + idx;
+    if pBkt^.State = 1 then { Occupied }
+    begin
+      {$PUSH}{$WARN 4055 OFF}
+      aIter^.Data := Pointer(idx);
+      {$POP}
+      Exit(True);
+    end;
+    Inc(idx);
   end;
 
   Result := False;

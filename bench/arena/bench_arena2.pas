@@ -175,6 +175,7 @@ var
   LSuite: IBenchSuite;
   LResults: IBenchResults;
   LI: SizeInt;
+  LFilter: string;
 begin
   WriteLn('=== nextPas Arena Benchmark v2 ===');
   WriteLn('FPC ', {$I %FPCVERSION%}, ' / ', {$I %FPCTARGETCPU%}, '-', {$I %FPCTARGETOS%});
@@ -194,6 +195,13 @@ begin
     .SetMaxIterations(10000)
     .SetMinSamples(6)
     .SetWarmupIters(3);
+
+  { Apply filter from command line }
+  if ParamCount > 0 then
+  begin
+    LFilter := ParamStr(1);
+    LSuite.SetFilter(LFilter);
+  end;
 
   LSuite.Add('HashMap/Insert', @BenchHashMap_Insert);
   LSuite.Add('HashMap/Lookup', @BenchHashMap_Lookup);
