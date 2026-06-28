@@ -113,6 +113,7 @@ type
       pointers. Safety net: GStubRegistry in finalization catches suites that
       never run. }
     ShouldFailMsg: string;  { ekShouldFail: expected failure reason; test passes if it fails }
+    ShortSkip  : Boolean;  { true = skip this test in --short mode (Go testing.Short()) }
     TableCase  : Pointer;       { PTestCase, heap-allocated }
     TableProc  : Pointer;       { PTestCaseProc, heap-allocated }
   end;
@@ -229,6 +230,7 @@ begin
   AEntry.Tags        := nil;
   AEntry.RepeatCount := 0;
   AEntry.ShouldFailMsg := '';
+  AEntry.ShortSkip   := False;
   AEntry.TableCase   := nil;
   AEntry.TableProc   := nil;
 end;
