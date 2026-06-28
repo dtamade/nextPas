@@ -320,6 +320,23 @@ begin
     Exit;
   end;
 
+  { Benchmarks: not supported in parallel mode — skip gracefully }
+  if R^.Entry.Kind = ekBench then
+  begin
+    R^.Mtx.Acquire;
+    try
+      R^.Skip^ := R^.Skip^ + 1;
+      LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, R^.Entry.Name,
+        'benchmarks not supported in parallel mode', LConfig));
+    finally
+      SafeRelease(R^.Mtx, LConfig);
+    end;
+    if R^.Res <> nil then
+      R^.Res^ := MakeTestResult(R^.Entry.Name, tsSkipped,
+        'benchmarks not supported in parallel mode', 0);
+    Exit;
+  end;
+
   if Assigned(R^.Before) or Assigned(R^.BeforeClosure) then
   begin
     try

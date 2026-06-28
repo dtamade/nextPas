@@ -1309,6 +1309,10 @@ begin
     else
       LProgressPrefix := '';
 
+    { Benchmarks: skip in regular test run (only run via RunBenchmarks) }
+    if LEntry.Kind = ekBench then
+      Continue;
+
     { Skip check BEFORE BeforeEach — skipped tests don't need hooks }
     if LEntry.Kind = ekSkipped then
     begin

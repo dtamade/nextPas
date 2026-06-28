@@ -1726,6 +1726,33 @@ begin
     PassTest('Benchmark with --benchmem');
   end;
 
+  { ── Phase 13e: Benchmarks skipped in regular Run ───────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 13e: Benchmarks skipped in Run');
+  begin
+    ResetDefaultConfig;
+    LBenchSuite := TTestSuite.Create('BenchSkipTest');
+    { Register both a test and a benchmark in the same suite }
+    LBenchSuite.Test('normal', procedure begin CheckTrue(True); end);
+    LBenchSuite.Bench('skipped_bench', procedure(BC: PBenchContext)
+    begin
+      { This should never be called in regular Run }
+      FailTest('bench: benchmark should not run in regular test mode');
+    end);
+    LBenchSuite.Config := DefaultConfig;
+    LBenchSuite.RunWithResult(LVerbResult);
+    { Only the normal test should run, benchmark should be skipped }
+    if LVerbResult.Passed <> 1 then
+      FailTest('bench skip: expected 1 passed, got ' +
+        IntToStr(LVerbResult.Passed));
+    { Benchmark should not appear in results at all }
+    if LVerbResult.Failed <> 0 then
+      FailTest('bench skip: expected 0 failed, got ' +
+        IntToStr(LVerbResult.Failed));
+    ResetDefaultConfig;
+    PassTest('Benchmarks skipped in Run');
+  end;
+
   WriteLn;
   PassTest('test_runner');
 end.
