@@ -88,3 +88,4 @@ bench/cross-language/bench_pool
 bench/cross-language/bench_pool_go
 bench/cross-language/bench_pool_pascal
 bench/cross-language/bench_pool_rust
+bench/arena/arena
