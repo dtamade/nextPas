@@ -237,7 +237,7 @@ begin
   LTAP := TAPReport(LResults, 'MyTests');
   CheckContains(LTAP, 'TAP version 13');
   CheckContains(LTAP, '1..1');
-  CheckContains(LTAP, 'ok 1 - MySuite / TestFoo');
+  CheckContains(LTAP, 'ok 1 - MyTests / TestFoo');
   CheckContains(LTAP, '# total: 1');
   CheckContains(LTAP, '# passed: 1');
 end;
