@@ -8,6 +8,7 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 
 - v3.8: dead import cleanup + header standardization
 - **v3.9**: ShouldFail + hierarchical filter + --count=N + slow test report
+- **v3.10**: shuffle + failfast + list mode
 
 ## 竞品对比
 
@@ -17,6 +18,9 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 | 层级过滤 | `-run Foo/Bar` | — | `--filter=Parent/Sub` |
 | Expected fail | — | `#[should_panic]` | `ShouldFail` |
 | 全局 repeat | `-count N` | `--repeat` | `--count=N` |
+| Shuffle | `-shuffle` | `--shuffle` | `--shuffle[-seed=N]` |
+| FailFast | `-failfast` | `--fail-fast` | `--failfast` |
+| List mode | — | `--list` | `--list` |
 | 耗时报告 | `-v` | `--show-output` | Slow test report |
 | Tags | — | — | `--tag=` |
 | Retry | — | — | `Test(name, proc, N)` |
@@ -31,7 +35,7 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 | `test_expect` | IExpectation 流式断言 API | 92 |
 | `test_mock` | TMock 录制/验证/返回值/参数匹配 | 53 |
 | `test_output` | ANSI、StatusDot、filter、timeout、JUnit/TAP/JSON 格式化、brace expansion、层级过滤 | 64 |
-| `test_runner` | TTestRunner 多 suite、lifecycle、subtest、timeout、空 suite、ShouldFail、FormatDuration | 37+1x |
+| `test_runner` | TTestRunner 多 suite、lifecycle、subtest、timeout、空 suite、ShouldFail、FormatDuration、shuffle、failfast、list | 40+1x |
 | `test_lifecycle` | TestTable、TTestClosure、lifecycle 组合、facade 符号完整性 | 15 |
 | `test_parallel` | 并行执行、lifecycle、retry、skip、MaxParallelWorkers 批次调度 | 8 |
 | `test_diagnostics` | 错误诊断、stack trace、Double 比较、Error vs Failure | 15 |
