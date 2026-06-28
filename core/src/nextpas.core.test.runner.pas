@@ -2002,11 +2002,11 @@ begin
       LElapsedMs := GetTickCount64 - LStartMs;
       if LElapsedMs >= LBenchTimeMs then
         Break;
-      { Scale N: if too fast (< 10ms), multiply aggressively }
+      { Scale N: use Int64 to prevent overflow before bounds check }
       if LElapsedMs < 10 then
-        LN := LN * 100
+        LN := Int64(LN) * 100
       else
-        LN := Integer(Int64(LN) * LBenchTimeMs div LElapsedMs);
+        LN := Int64(LN) * LBenchTimeMs div LElapsedMs;
       if LN > 1000000000 then
       begin
         LN := 1000000000;
