@@ -271,6 +271,16 @@ type
   end;
   TFontPairPosSubtableArray = array of TFontPairPosSubtable;
 
+  {** GPOS PairPos kern 子表 Format 1（逐对调整，查询时解析 PairSet） }
+  TFontPairPosFmt1Subtable = record
+    BaseOffset: Int32;       // 子表在文件中的偏移
+    CoverageOffset: Int32;   // Coverage 表偏移（相对文件）
+    PairSetCount: Int32;      // PairSet 数量（= coverage glyph 数）
+    ValueRecordSize: Int32;  // 每条 PairValueRecord 的总字节数（VR1 + VR2）
+    XAdvanceOffset: Int32;   // XAdvance 在 ValueRecord1 中的字节偏移（-1 = 无）
+  end;
+  TFontPairPosFmt1SubtableArray = array of TFontPairPosFmt1Subtable;
+
   {** GPOS SinglePos 子表（Format 1 uniform / Format 2 per-glyph） }
   TFontSinglePosSubtable = record
     BaseOffset: Int32;         // 子表在文件中的偏移

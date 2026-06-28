@@ -39,6 +39,7 @@ type
     FLocaOffsets: array of UInt32;
     FOs2: TFontOs2Table;
     FPairPosSubtables: TFontPairPosSubtableArray;
+    FPairPosFmt1Subtables: TFontPairPosFmt1SubtableArray;
     FLigatureSubtables: TFontLigatureSubtableArray;
     FSingleSubstSubtables: TFontSingleSubstSubtableArray;
     FSinglePosSubtables: TFontSinglePosSubtableArray;
@@ -97,10 +98,14 @@ type
 
     {** 是否包含 kern 对数据（GPOS PairPos） }
     function HasKernPairs: Boolean;
+    {** 是否包含逐对 kern 数据（GPOS PairPos Fmt1） }
+    function HasKernFmt1Pairs: Boolean;
     {** 是否包含连字数据（GSUB Ligature） }
     function HasLigatures: Boolean;
-    {** 查找 kern 对调整值（font units，0 = 无调整） }
+    {** 查找 kern 对调整值（font units，0 = 无调整）— class-based Fmt2 }
     function LookupKern(ALeftGlyph, ARightGlyph: UInt16): Int16;
+    {** 查找 kern 对调整值（font units，0 = 无调整）— pair-based Fmt1 }
+    function LookupKernFmt1(ALeftGlyph, ARightGlyph: UInt16): Int16;
     {** 查找连字替换。输入字形序列匹配时返回替换字形索引。
         不匹配返回 0。 }
     function LookupLigature(const AGlyphs: array of UInt16): UInt16;
@@ -668,6 +673,7 @@ begin
     Exit;
   LLookupCount := ReadUInt16BE(LLookupListOff);
   SetLength(FPairPosSubtables, 0);
+  SetLength(FPairPosFmt1Subtables, 0);
   SetLength(FSinglePosSubtables, 0);
   SetLength(FMarkToBaseSubtables, 0);
   SetLength(FMarkToMarkSubtables, 0);
@@ -729,7 +735,7 @@ begin
       end;
     end;
 
-    // PairPos (type 2).
+    // PairPos (type 1 — pair-based, type 2 — class-based).
     if LLookupType = GPOS_LOOKUP_PAIR_ADJUSTMENT then
     begin
       LSubtableCount := ReadUInt16BE(LLookupOff + 4);
@@ -739,36 +745,65 @@ begin
           Continue;
         LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
         LSub := LSubOff;
-        if FDataLength < LSub + 16 then
+        if FDataLength < LSub + 10 then
           Continue;
         LPosFmt := ReadUInt16BE(LSub);
         LCovOff := ReadUInt16BE(LSub + 2);
         LValFmt1 := ReadUInt16BE(LSub + 4);
         LValFmt2 := ReadUInt16BE(LSub + 6);
-        if LPosFmt <> 2 then
-          Continue;
+
+        // Compute VR1 size and XAdvance offset within VR1.
         LXAdvBit := -1;
         LEntrySize := 0;
         if (LValFmt1 and $0001) <> 0 then Inc(LEntrySize, 2);
         if (LValFmt1 and $0002) <> 0 then Inc(LEntrySize, 2);
         if (LValFmt1 and $0004) <> 0 then begin LXAdvBit := LEntrySize; Inc(LEntrySize, 2); end;
         if (LValFmt1 and $0008) <> 0 then Inc(LEntrySize, 2);
-        if (LValFmt2 and $0001) <> 0 then Inc(LEntrySize, 2);
-        if (LValFmt2 and $0002) <> 0 then Inc(LEntrySize, 2);
-        if (LValFmt2 and $0004) <> 0 then Inc(LEntrySize, 2);
-        if (LValFmt2 and $0008) <> 0 then Inc(LEntrySize, 2);
         if (LEntrySize <= 0) or (LXAdvBit < 0) then
           Continue;
-        LSubtable.BaseOffset := LSub;
-        LSubtable.CoverageOffset := LSub + LCovOff;
-        LSubtable.ClassDef1Offset := LSub + ReadUInt16BE(LSub + 8);
-        LSubtable.ClassDef2Offset := LSub + ReadUInt16BE(LSub + 10);
-        LSubtable.Class2Count := ReadUInt16BE(LSub + 14);
-        LSubtable.ValueRecordSize := LEntrySize;
-        LSubtable.XAdvanceOffset := LXAdvBit;
-        LIdx := Length(FPairPosSubtables);
-        SetLength(FPairPosSubtables, LIdx + 1);
-        FPairPosSubtables[LIdx] := LSubtable;
+
+        if LPosFmt = 1 then
+        begin
+          // Format 1: Pair-based adjustment.
+          // PairValueRecord = SecondGlyph(2) + VR1 + VR2.
+          // Add VR2 size to get full record size.
+          LIdx := LEntrySize;  // VR1 size.
+          if (LValFmt2 and $0001) <> 0 then Inc(LEntrySize, 2);
+          if (LValFmt2 and $0002) <> 0 then Inc(LEntrySize, 2);
+          if (LValFmt2 and $0004) <> 0 then Inc(LEntrySize, 2);
+          if (LValFmt2 and $0008) <> 0 then Inc(LEntrySize, 2);
+          if FDataLength < LSub + 10 then
+            Continue;
+          LIdx := Length(FPairPosFmt1Subtables);
+          SetLength(FPairPosFmt1Subtables, LIdx + 1);
+          FPairPosFmt1Subtables[LIdx].BaseOffset := LSub;
+          FPairPosFmt1Subtables[LIdx].CoverageOffset := LSub + LCovOff;
+          FPairPosFmt1Subtables[LIdx].PairSetCount := ReadUInt16BE(LSub + 8);
+          FPairPosFmt1Subtables[LIdx].ValueRecordSize := LEntrySize;
+          FPairPosFmt1Subtables[LIdx].XAdvanceOffset := LXAdvBit;
+        end
+        else if LPosFmt = 2 then
+        begin
+          // Format 2: Class-based adjustment.
+          // Class2Record = VR1 + VR2 (no SecondGlyph prefix).
+          if FDataLength < LSub + 16 then
+            Continue;
+          // Add VR2 size to get full Class2Record size.
+          if (LValFmt2 and $0001) <> 0 then Inc(LEntrySize, 2);
+          if (LValFmt2 and $0002) <> 0 then Inc(LEntrySize, 2);
+          if (LValFmt2 and $0004) <> 0 then Inc(LEntrySize, 2);
+          if (LValFmt2 and $0008) <> 0 then Inc(LEntrySize, 2);
+          LSubtable.BaseOffset := LSub;
+          LSubtable.CoverageOffset := LSub + LCovOff;
+          LSubtable.ClassDef1Offset := LSub + ReadUInt16BE(LSub + 8);
+          LSubtable.ClassDef2Offset := LSub + ReadUInt16BE(LSub + 10);
+          LSubtable.Class2Count := ReadUInt16BE(LSub + 14);
+          LSubtable.ValueRecordSize := LEntrySize;
+          LSubtable.XAdvanceOffset := LXAdvBit;
+          LIdx := Length(FPairPosSubtables);
+          SetLength(FPairPosSubtables, LIdx + 1);
+          FPairPosSubtables[LIdx] := LSubtable;
+        end;
       end;
     end;
 
@@ -1027,6 +1062,90 @@ begin
   end;
 end;
 
+function TTFontFace.LookupKernFmt1(ALeftGlyph, ARightGlyph: UInt16): Int16;
+var
+  LI: Int32;
+  LSub: TFontPairPosFmt1Subtable;
+  LCovIdx, LPairSetOff, LPairCount, LRecSize: Int32;
+  LLo, LHi, LMid, LSecondGid: Int32;
+
+  function CoverageIndexOf(ACovOffset, AGlyphId: Int32): Int32;
+  var
+    LFmt, LCnt, LM, LR2, LSG2, LEC2: Int32;
+  begin
+    if FDataLength < ACovOffset + 4 then
+      Exit(-1);
+    LFmt := ReadUInt16BE(ACovOffset);
+    if LFmt = 1 then
+    begin
+      LCnt := ReadUInt16BE(ACovOffset + 2);
+      for LM := 0 to LCnt - 1 do
+        if ReadUInt16BE(ACovOffset + 4 + LM * 2) = AGlyphId then
+          Exit(LM);
+      Result := -1;
+    end
+    else if LFmt = 2 then
+    begin
+      LCnt := ReadUInt16BE(ACovOffset + 2);
+      for LR2 := 0 to LCnt - 1 do
+      begin
+        if FDataLength < ACovOffset + 4 + LR2 * 6 + 6 then
+          Break;
+        LSG2 := ReadUInt16BE(ACovOffset + 4 + LR2 * 6);
+        LEC2 := ReadUInt16BE(ACovOffset + 4 + LR2 * 6 + 2);
+        if (AGlyphId >= LSG2) and (AGlyphId <= LEC2) then
+          Exit(ReadUInt16BE(ACovOffset + 4 + LR2 * 6 + 4) + (AGlyphId - LSG2));
+      end;
+      Result := -1;
+    end
+    else
+      Result := -1;
+  end;
+
+begin
+  Result := 0;
+  for LI := 0 to High(FPairPosFmt1Subtables) do
+  begin
+    LSub := FPairPosFmt1Subtables[LI];
+    // Check if left glyph is in coverage.
+    LCovIdx := CoverageIndexOf(LSub.CoverageOffset, ALeftGlyph);
+    if LCovIdx < 0 then
+      Continue;
+    if LCovIdx >= LSub.PairSetCount then
+      Continue;
+    // Read PairSet offset from the PairSet offset array at subtable start + 10.
+    if FDataLength < LSub.BaseOffset + 10 + (LCovIdx + 1) * 2 then
+      Continue;
+    LPairSetOff := LSub.BaseOffset + ReadUInt16BE(LSub.BaseOffset + 10 + LCovIdx * 2);
+    if FDataLength < LPairSetOff + 2 then
+      Continue;
+    LPairCount := ReadUInt16BE(LPairSetOff);
+    LRecSize := 2 + LSub.ValueRecordSize;  // SecondGlyph(2) + VR1 + VR2.
+    // Binary search for ARightGlyph in the sorted PairSet.
+    LLo := 0;
+    LHi := LPairCount - 1;
+    while LLo <= LHi do
+    begin
+      LMid := (LLo + LHi) div 2;
+      if FDataLength < LPairSetOff + 2 + (LMid + 1) * LRecSize then
+        Break;
+      LSecondGid := ReadUInt16BE(LPairSetOff + 2 + LMid * LRecSize);
+      if LSecondGid = ARightGlyph then
+      begin
+        // Found: read XAdvance from VR1.
+        if (LSub.XAdvanceOffset >= 0) and
+           (FDataLength >= LPairSetOff + 2 + LMid * LRecSize + 2 + LSub.XAdvanceOffset + 2) then
+          Result := ReadInt16BE(LPairSetOff + 2 + LMid * LRecSize + 2 + LSub.XAdvanceOffset);
+        Exit;
+      end
+      else if LSecondGid < ARightGlyph then
+        LLo := LMid + 1
+      else
+        LHi := LMid - 1;
+    end;
+  end;
+end;
+
 function TTFontFace.LookupLigature(const AGlyphs: array of UInt16): UInt16;
 var
   LI, LJ, LK, LM: Int32;
@@ -1099,6 +1218,11 @@ end;
 function TTFontFace.HasKernPairs: Boolean;
 begin
   Result := Length(FPairPosSubtables) > 0;
+end;
+
+function TTFontFace.HasKernFmt1Pairs: Boolean;
+begin
+  Result := Length(FPairPosFmt1Subtables) > 0;
 end;
 
 function TTFontFace.HasLigatures: Boolean;

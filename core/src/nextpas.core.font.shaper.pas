@@ -29,7 +29,7 @@ type
   {** 塑形输出序列 }
   TFontShapedGlyphArray = array of TFontShapedGlyph;
 
-  {** 精简版文本塑形器：cmap + hmtx + kern + ligature }
+  {** 精简版文本塑形器：cmap + hmtx + SingleSubst + kern + SinglePos + ligature + mark positioning }
   TFontLiteShaper = class
   private
     FFace: TTFontFace;
@@ -39,7 +39,7 @@ type
     destructor Destroy; override;
     {** 塑形单个 codepoint }
     function ShapeCodepoint(ACodepoint: UInt32): TFontShapedGlyph;
-    {** 塑形 codepoint 序列，应用 kern 调整和连字替换。
+    {** 塑形 codepoint 序列，应用 SingleSubst + kern + SinglePos + 连字 + mark 定位。
         返回的字形数可能少于输入（连字合并时）。 }
     function ShapeString(const ACodepoints: array of UInt32): TFontShapedGlyphArray;
     {** 获取字形水平步进宽度（font units） }
@@ -96,6 +96,7 @@ var
   LSubArr: array of UInt16;
   LTotalAdvance: Int32;
   LMarkAnchor: TFontAnchor;
+  LSubstGlyph: UInt16;
 begin
   LCount := Length(ACodepoints);
   if LCount = 0 then
@@ -112,6 +113,19 @@ begin
     Result[LI] := ShapeCodepoint(ACodepoints[LI]);
     LGlyphs[LI] := Result[LI].GlyphIndex;
   end;
+
+  // 1.5 pass: single substitution (GSUB SingleSubst).
+  // Applied after cmap, before ligature, so ligature tables can match substituted glyphs.
+  if FFace.HasSingleSubst then
+    for LI := 0 to LCount - 1 do
+    begin
+      LSubstGlyph := FFace.LookupSingleSubst(LGlyphs[LI]);
+      if LSubstGlyph <> 0 then
+      begin
+        LGlyphs[LI] := LSubstGlyph;
+        Result[LI].GlyphIndex := LSubstGlyph;
+      end;
+    end;
 
   // Second pass: ligature substitution.
   LOut := 0;
@@ -158,11 +172,29 @@ begin
   end;
   SetLength(Result, LOut);
 
-  // Third pass: kern adjustment (adjust advance of preceding glyph).
-  if FFace.HasKernPairs then
-    for LI := 0 to High(Result) - 1 do
+  // Third pass: kern adjustment (both class-based Fmt2 and pair-based Fmt1)
+  // and SinglePos positioning.
+  for LI := 0 to High(Result) - 1 do
+  begin
+    // Try class-based PairPos Fmt2 first, then pair-based Fmt1.
+    if FFace.HasKernPairs then
     begin
       LKernVal := FFace.LookupKern(Result[LI].GlyphIndex, Result[LI + 1].GlyphIndex);
+      if LKernVal <> 0 then
+        Result[LI].AdvanceWidth := Result[LI].AdvanceWidth + LKernVal;
+    end;
+    if FFace.HasKernFmt1Pairs then
+    begin
+      LKernVal := FFace.LookupKernFmt1(Result[LI].GlyphIndex, Result[LI + 1].GlyphIndex);
+      if LKernVal <> 0 then
+        Result[LI].AdvanceWidth := Result[LI].AdvanceWidth + LKernVal;
+    end;
+  end;
+  // SinglePos adjustments (applied to every glyph independently).
+  if FFace.HasSinglePos then
+    for LI := 0 to High(Result) do
+    begin
+      LKernVal := FFace.LookupSinglePosXAdvance(Result[LI].GlyphIndex);
       if LKernVal <> 0 then
         Result[LI].AdvanceWidth := Result[LI].AdvanceWidth + LKernVal;
     end;
