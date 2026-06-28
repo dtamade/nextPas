@@ -35,6 +35,8 @@ const
   GPOS_LOOKUP_PAIR_ADJUSTMENT = 2;
   {** GPOS Lookup Type：Mark-to-Base Attachment }
   GPOS_LOOKUP_MARK_TO_BASE = 4;
+  {** GPOS Lookup Type：Mark-to-Mark Attachment }
+  GPOS_LOOKUP_MARK_TO_MARK = 6;
 
   {** GSUB Lookup Type：Ligature Substitution }
   GSUB_LOOKUP_LIGATURE = 4;
@@ -289,6 +291,17 @@ type
     BaseArrayOffset: Int32;    // BaseArray 偏移（相对文件）
   end;
   TFontMarkToBaseSubtableArray = array of TFontMarkToBaseSubtable;
+
+  {** GPOS Mark-to-Mark 子表（结构同 Mark-to-Base，Mark1=base mark, Mark2=attaching mark） }
+  TFontMarkToMarkSubtable = record
+    BaseOffset: Int32;           // 子表在文件中的偏移
+    Mark1CoverageOffset: Int32;  // Mark1 Coverage（base mark）偏移
+    Mark2CoverageOffset: Int32;  // Mark2 Coverage（attaching mark）偏移
+    ClassCount: Int32;           // mark class 数量
+    Mark1ArrayOffset: Int32;     // Mark1Array 偏移（base mark anchors）
+    Mark2ArrayOffset: Int32;     // Mark2Array 偏移（attaching mark class + anchor）
+  end;
+  TFontMarkToMarkSubtableArray = array of TFontMarkToMarkSubtable;
 
 {** 字形轮廓内存释放 }
 procedure FontGlyphOutlineClear(var AOutline: TFontGlyphOutline);

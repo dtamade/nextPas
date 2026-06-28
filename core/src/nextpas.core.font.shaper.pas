@@ -167,21 +167,32 @@ begin
         Result[LI].AdvanceWidth := Result[LI].AdvanceWidth + LKernVal;
     end;
 
-  // Fourth pass: Mark-to-Base positioning.
+  // Fourth pass: Mark-to-Base and Mark-to-Mark positioning.
   // Combining marks (zero advance width) are positioned relative to the
-  // preceding base glyph using GPOS MarkBasePos.
-  if FFace.HasMarkToBase then
+  // preceding base glyph or base mark using GPOS MarkBasePos/MarkMarkPos.
+  if FFace.HasMarkToBase or FFace.HasMarkToMark then
     for LI := 1 to High(Result) do
     begin
       if Result[LI].AdvanceWidth <> 0 then
         Continue;
-      // Find the nearest preceding base glyph (non-zero advance).
+      // Find the nearest preceding glyph (may be base or mark).
       LK := LI - 1;
-      while (LK >= 0) and (Result[LK].AdvanceWidth = 0) do
-        Dec(LK);
       if LK < 0 then
         Continue;
-      LMarkAnchor := FFace.LookupMarkToBase(Result[LI].GlyphIndex, Result[LK].GlyphIndex);
+      // If preceding glyph is also a combining mark, try Mark-to-Mark first.
+      LMarkAnchor.X := 0;
+      LMarkAnchor.Y := 0;
+      if (Result[LK].AdvanceWidth = 0) and FFace.HasMarkToMark then
+        LMarkAnchor := FFace.LookupMarkToMark(Result[LI].GlyphIndex, Result[LK].GlyphIndex);
+      // If no Mark-to-Mark match, find nearest base glyph for Mark-to-Base.
+      if (LMarkAnchor.X = 0) and (LMarkAnchor.Y = 0) and FFace.HasMarkToBase then
+      begin
+        LK := LI - 1;
+        while (LK >= 0) and (Result[LK].AdvanceWidth = 0) do
+          Dec(LK);
+        if LK >= 0 then
+          LMarkAnchor := FFace.LookupMarkToBase(Result[LI].GlyphIndex, Result[LK].GlyphIndex);
+      end;
       if (LMarkAnchor.X <> 0) or (LMarkAnchor.Y <> 0) then
       begin
         Result[LI].MarkOffsetX := LMarkAnchor.X;
