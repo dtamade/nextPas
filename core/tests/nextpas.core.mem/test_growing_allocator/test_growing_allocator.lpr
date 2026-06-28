@@ -155,6 +155,129 @@ begin
   WriteLn('PASS: default allocator');
 end;
 
+{ --- ReallocMem tests --- }
+
+procedure TestReallocSameClass;
+var
+  LAlloc: TGrowingAllocator;
+  LPtr, LPtr2: PByte;
+  I: Integer;
+begin
+  LAlloc := TGrowingAllocator.Create;
+  try
+    LPtr := PByte(LAlloc.GetMem(50));
+    Check(LPtr <> nil, 'initial alloc');
+    for I := 0 to 49 do
+      LPtr[I] := Byte(I);
+    { Realloc to 60B — same size class (band 0, class 3 covers 49-64B). }
+    LPtr2 := PByte(LAlloc.ReallocMem(LPtr, 50, 60));
+    Check(LPtr2 <> nil, 'realloc returns non-nil');
+    Check(LPtr2 = LPtr, 'same class → zero-copy (same pointer)');
+    for I := 0 to 49 do
+      Check(LPtr2[I] = Byte(I), 'data[' + IntToStr(I) + '] preserved');
+    LAlloc.FreeMem(LPtr2, 60);
+    WriteLn('PASS: realloc same class (zero-copy)');
+  finally
+    LAlloc.Free;
+  end;
+end;
+
+procedure TestReallocDiffClass;
+var
+  LAlloc: TGrowingAllocator;
+  LPtr, LPtr2: PByte;
+  I: Integer;
+begin
+  LAlloc := TGrowingAllocator.Create;
+  try
+    LPtr := PByte(LAlloc.GetMem(64));
+    for I := 0 to 63 do
+      LPtr[I] := Byte(I + 1);
+    { Realloc to 2KB — different class (band 0 → band 2). }
+    LPtr2 := PByte(LAlloc.ReallocMem(LPtr, 64, 2048));
+    Check(LPtr2 <> nil, 'realloc diff class returns non-nil');
+    { Verify data preserved (first 64 bytes). }
+    for I := 0 to 63 do
+      Check(LPtr2[I] = Byte(I + 1), 'diff class data[' + IntToStr(I) + '] preserved');
+    LAlloc.FreeMem(LPtr2, 2048);
+    WriteLn('PASS: realloc diff class (copy)');
+  finally
+    LAlloc.Free;
+  end;
+end;
+
+procedure TestReallocNil;
+var
+  LAlloc: TGrowingAllocator;
+  LPtr: Pointer;
+begin
+  LAlloc := TGrowingAllocator.Create;
+  try
+    { Realloc(nil, 0, 128) should behave like GetMem(128). }
+    LPtr := LAlloc.ReallocMem(nil, 0, 128);
+    Check(LPtr <> nil, 'realloc nil acts as alloc');
+    LAlloc.FreeMem(LPtr, 128);
+    WriteLn('PASS: realloc nil');
+  finally
+    LAlloc.Free;
+  end;
+end;
+
+procedure TestReallocToZero;
+var
+  LAlloc: TGrowingAllocator;
+  LPtr: Pointer;
+begin
+  LAlloc := TGrowingAllocator.Create;
+  try
+    LPtr := LAlloc.GetMem(128);
+    Check(LPtr <> nil, 'initial alloc');
+    { Realloc(Ptr, 128, 0) should free and return nil. }
+    Check(LAlloc.ReallocMem(LPtr, 128, 0) = nil, 'realloc to zero frees');
+    WriteLn('PASS: realloc to zero');
+  finally
+    LAlloc.Free;
+  end;
+end;
+
+{ --- BatchGetMem/BatchFreeMem tests --- }
+
+procedure TestBatchGetMem;
+var
+  LAlloc: TGrowingAllocator;
+  LPtrs: array[0..63] of Pointer;
+  LCount: Word;
+  I: Integer;
+begin
+  LAlloc := TGrowingAllocator.Create;
+  try
+    LCount := LAlloc.BatchGetMem(128, 64, @LPtrs[0]);
+    Check(LCount = 64, 'batch get 64 blocks');
+    { All should be distinct. }
+    for I := 0 to 62 do
+      Check(LPtrs[I] <> LPtrs[I + 1], 'block ' + IntToStr(I) + ' distinct');
+    LAlloc.BatchFreeMem(128, 64, @LPtrs[0]);
+    WriteLn('PASS: batch get/free 64 blocks');
+  finally
+    LAlloc.Free;
+  end;
+end;
+
+procedure TestBatchGetMemZero;
+var
+  LAlloc: TGrowingAllocator;
+  LPtrs: array[0..0] of Pointer;
+begin
+  LAlloc := TGrowingAllocator.Create;
+  try
+    Check(LAlloc.BatchGetMem(0, 1, @LPtrs[0]) = 0, 'zero size returns 0');
+    Check(LAlloc.BatchGetMem(64, 0, @LPtrs[0]) = 0, 'zero count returns 0');
+    WriteLn('PASS: batch get zero');
+  finally
+    LAlloc.Free;
+  end;
+end;
+
 procedure CleanupDefaultAllocator;
 begin
   ResetDefaultGrowingAllocator;
@@ -172,6 +295,12 @@ begin
   T.Test('cache_hit', @TestCacheHit);
   T.Test('zero_size', @TestZeroSize);
   T.Test('default_allocator', @TestDefaultAllocator);
+  T.Test('realloc_same_class', @TestReallocSameClass);
+  T.Test('realloc_diff_class', @TestReallocDiffClass);
+  T.Test('realloc_nil', @TestReallocNil);
+  T.Test('realloc_to_zero', @TestReallocToZero);
+  T.Test('batch_get_free', @TestBatchGetMem);
+  T.Test('batch_get_zero', @TestBatchGetMemZero);
 
   T.Run;
   T.Summary;
