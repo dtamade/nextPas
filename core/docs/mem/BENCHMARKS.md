@@ -14,14 +14,15 @@
 
 | 模式 | ns/op | Mops/s | 备注 |
 |------|-------|--------|------|
-| small_64B | 25 | 39.5 | **2.2x 快于 glibc** |
-| medium_1KB | 26 | 37.8 | **3.5x 快于 glibc** |
-| large_16KB | 32 | 31.5 | 直接 push 快速路径 |
-| huge_128KB | 117 | 8.5 | 超大对象路径 |
-| mixed_8sizes | 353 | 2.8 | 8 种 size 混合 |
-| batch_64x128B | 1571 | 0.64 | 64 次分配批量 |
-| system/small_64B | 56 | 17.9 | glibc 对照 |
-| system/medium_1KB | 92 | 10.9 | glibc 对照 |
+| small_64B | 27 | 37.0 | **2.1x 快于 glibc** |
+| medium_1KB | 27 | 37.2 | **3.4x 快于 glibc** |
+| large_16KB | 33 | 30.6 | 直接 push 快速路径 |
+| huge_128KB | 112 | 8.9 | **huge 快速路径**跳过查表 |
+| mixed_8sizes | 357 | 2.8 | 8 种 size 混合 |
+| batch_64x128B | 1339 | 0.75 | 64 次循环分配 |
+| **batch_api_64x128B** | **468** | **2.14** | **BatchGetMem API, 7.3ns/块** |
+| system/small_64B | 53 | 18.9 | glibc 对照 |
+| system/medium_1KB | 91 | 11.0 | glibc 对照 |
 
 ### 并发 (4 线程, 每 alloc+free)
 
@@ -36,8 +37,10 @@
 - **5ns per alloc+free**（4 线程平均）— 比单线程 25ns 快 5x，完美线性扩展
 
 **分析**:
-- **64B 分配 2.2x 快于 glibc** (25 vs 56 ns/op): ≤256B 快速路径跳过 SizeClassIndex 查表 + FreeMem 直接 push head
-- **1KB 分配 3.5x 快于 glibc** (26 vs 92 ns/op): `(ASize shr 6) + 14` 直接公式替代查表，与 64B 路径同等速度
+- **64B 分配 2.1x 快于 glibc** (27 vs 53 ns/op): ≤256B 快速路径跳过 SizeClassIndex 查表 + FreeMem 直接 push head
+- **1KB 分配 3.4x 快于 glibc** (27 vs 91 ns/op): `(ASize shr 6) + 14` 直接公式替代查表，与 64B 路径同等速度
+- **128KB 分配 112ns**: huge 快速路径跳过 SizeClassIndex 查表，直接 System.GetMem
+- **批量 API 468ns (7.3ns/块)**: BatchGetMem/BatchFreeMem 摊薄 TLS + 查表开销，2.87x 快于循环调用
 - **16KB 分配 32ns**: 中等对象 FreeMem 直接 push 快速路径跳过 FreeListInsertShuffled
 - **FlushToCentral 批量 CAS**: N 次独立 CAS push 合并为单次原子链表交换
 - **FOpCounter 移入 TLS**: `TThreadCache.FOpCount` 消除多线程共享写争用
