@@ -26,8 +26,8 @@ R18-R20:   ReallocMem + BatchAPI + Arena benchmark            ✅
 
 - 49 源文件 / 19,920+ 行
 - **44 suites / 557 tests / 0 failures / 0 leaks**
-- 核心热路径: Arena 7ns (136 Mops/s), 64B 27ns (1.9x 快于 glibc), 1KB 28ns (3.2x 快于 glibc)
-- 并发 4T: 6ns/op (172 Mops/s)
+- 核心热路径: Arena 7ns (135 Mops/s), 64B **16ns** (**3.5x 快于 glibc**), 1KB **21ns** (**4.5x 快于 glibc**)
+- 并发 4T: **4ns/op** (227 Mops/s)
 - Batch API: 7.3ns/block (3.4x 快于逐个分配)
 - ReallocMem 同 class 零拷贝: 54ns
 - 已有能力: Arena (bump/local/chunked), 固定块池 (block/slab/mapped), 分片锁, 线程局部 TLS cache, 无锁 CAS, bitmap span, scavenger, guard pages
