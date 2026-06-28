@@ -3096,7 +3096,8 @@ begin
         else if (TypeChild <> nil) and
           FModel.LookupConstValue(TypeChild.Text + '$array', Dummy) then
           Result := Result + 'a'
-        else if (TypeName = 'string') or (TypeName = 'ansistring') then
+        else if (TypeName = 'string') or (TypeName = 'ansistring') or
+          (TypeName = 'unicodestring') or (TypeName = 'widestring') then
           Result := Result + 's'
         else if (TypeName = 'boolean') or (TypeName = 'bool') then
           Result := Result + 'b'
