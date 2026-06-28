@@ -35,7 +35,7 @@ type
     Sizes are rounded up to the nearest class boundary.
     Returns -1 if ASize > MEM_SIZECLASS_MAX (caller should use direct mmap).
     O(1): single table lookup. }
-function SizeClassIndex(ASize: SizeUInt): Int32; inline;
+function SizeClassIndex(ASize: SizeUInt): Int32;
 
 {** Return the usable size for a given class index (0..59).
     The returned size is >= the size passed to SizeClassIndex. }
@@ -115,7 +115,7 @@ var
   { Pre-computed lookup table: SizeClassLookup[size div 8] = class index. }
   SizeClassLookup: TSizeClassLookup;
 
-function SizeClassIndex(ASize: SizeUInt): Int32; inline; inline;
+function SizeClassIndex(ASize: SizeUInt): Int32;
 var
   LIdx: SizeUInt;
 begin
