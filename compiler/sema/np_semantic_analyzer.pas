@@ -6412,6 +6412,8 @@ begin
             Exit;
           Result := FModel.FindTypeByName('Integer');
         end
+        else if ANode.Text = '/' then
+          Result := FModel.FindTypeByName('Double')
         else
         begin
           Result := InferExpressionType(ANode.ChildAt(0));
