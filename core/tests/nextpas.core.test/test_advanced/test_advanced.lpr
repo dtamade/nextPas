@@ -1,4 +1,4 @@
-{ test_advanced — Tests for: RTTI discovery, retry, TAP/JSON output, mock
+{ test_advanced — RTTI discovery, retry, TAP/JSON output, mock
   ========================================================= }
 
 program test_advanced;
@@ -11,12 +11,7 @@ program test_advanced;
 uses
   cthreads,
   SysUtils,
-  nextpas.core.test,
-  { 白盒测试：直接验证 discovery + runner 集成。 }
-  nextpas.core.test.output.tap,
-  nextpas.core.test.output.json,
-  nextpas.core.test.runner,
-  nextpas.core.test.discovery;
+  nextpas.core.test;
 
 { ── Fixtures and globals ──────────────────────────────────────────────────── }
 
