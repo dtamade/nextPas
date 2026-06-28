@@ -353,6 +353,10 @@ function DefaultAllocator: IAllocator;
 function AllocZeroed(const AAllocator: IAllocator; const ASize: SizeUInt): Pointer;
 function AllocArray(const AAllocator: IAllocator; const ACount, AElemSize: SizeUInt): Pointer;
 
+function MakeFixedSlabPool(ACapacity: SizeUInt): IFixedSlabPool;
+function MakePoolAllocator(ABlockSize: SizeUInt; ACapacity: Integer;
+  AFallback: IAllocator = nil): IAllocator;
+
 procedure SecureZeroMemory(ABuffer: Pointer; ASize: NativeUInt);
 procedure SecureZeroBytes(var AData: TBytes);
 procedure SecureZeroString(var AStr: AnsiString);
