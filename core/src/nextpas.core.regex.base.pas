@@ -66,6 +66,7 @@ type
     LiteralAltPatterns: array of string;
     IsCaseFoldLiteral: Boolean;
     CaseFoldLiteral: string;
+    HasAsserts: Boolean;
   end;
 
   TGroup = record

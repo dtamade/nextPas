@@ -123,7 +123,7 @@ begin
   C.StateCount := 1;
 end;
 
-{ --- Reset DFA cache for reuse: keep arrays, reset state --- }
+{ --- Reset DFA cache for reuse: keep allocated arrays, reset all state --- }
 
 procedure DfaCacheReset(var C: TDfaCache);
 var ctx: Integer;
@@ -132,7 +132,7 @@ begin
   C.Overflow := False;
   C.CloseCount := 0;
   C.NextCount := 0;
-  // Reinitialize the empty start state
+  { Reinitialize state 0 — skip SetLength (arrays already allocated) }
   SetLength(C.States[0].PCs, 0);
   C.States[0].Hash := 0;
   C.States[0].IsMatch := False;
@@ -723,6 +723,7 @@ var
   LPrevIsWord: Boolean;
   LCurrIsWord: Boolean;
   LRoots: array of UInt32;
+  LNoAsserts: Boolean;
 begin
   Result := False;
   LCodeLen := Length(AProgram.Code);
@@ -731,6 +732,9 @@ begin
     Exit(NfaIsMatch(AProgram, AInput, ALen));
 
   DfaCacheReset(ACache);
+
+  { Check if pattern has no assertions — enables context-free fast path }
+  LNoAsserts := not AProgram.HasAsserts;
 
   LHasPrefix := AProgram.LiteralPrefixLen > 0;
   LPrefixLen := AProgram.LiteralPrefixLen;
@@ -792,6 +796,84 @@ begin
   curState := 0;
   pos := startPos;
 
+  { --- Fast path: no assertions, context always 0, no IsWordChar calls --- }
+  if LNoAsserts then
+  begin
+    while pos < ALen do
+    begin
+      ch := Ord(AInput[pos]);
+
+      nextState := ACache.States[curState].Next[0, ch];
+
+      if nextState = DFA_UNKNOWN then
+      begin
+        nextState := ComputeTransition(ACache, AProgram, curState, 0, ch, True);
+        if ACache.Overflow then
+          Exit(NfaIsMatch(AProgram, AInput, ALen));
+      end;
+
+      if ACache.States[curState].MatchOnTrans[0, ch] then
+        Exit(True);
+
+      if nextState = DFA_DEAD then
+      begin
+        Inc(pos);
+        if LHasPrefix and (pos < ALen) then
+        begin
+          LPrefixByte := Byte(LPrefixStr[1]);
+          while True do
+          begin
+            prefixPos := SizeInt(ScanFindByte(AInput + pos, ALen - pos, LPrefixByte));
+            if prefixPos < 0 then Exit;
+            pos := pos + SizeUInt(prefixPos);
+            if LPrefixLen <= 1 then Break;
+            if pos + LPrefixLen > ALen then Exit;
+            k := 1;
+            while (k < LPrefixLen) and (AInput[pos + k] = AnsiChar(LPrefixStr[k + 1])) do
+              Inc(k);
+            if k = LPrefixLen then Break;
+            Inc(pos);
+            if pos >= ALen then Exit;
+          end;
+        end
+        else if (AProgram.StartClassSize > 0) and (AProgram.StartClassSize < 128) and
+                (not LHasPrefix) then
+        begin
+          while (pos < ALen) and
+                (not CharBitmapTest(AProgram.StartClass, Ord(AInput[pos]))) do
+            Inc(pos);
+        end;
+        curState := 0;
+        Continue;
+      end;
+
+      curState := nextState;
+      Inc(pos);
+    end;
+
+    // EOF check (no-assertion path)
+    if curState > 0 then
+    begin
+      LPrevIsWord := (ALen > 0) and IsWordChar(Ord(AInput[ALen - 1]));
+      LCtx := Ord(LPrevIsWord);
+      if ALen = 0 then LCtx := LCtx or 2;
+      if CheckEofAccept(ACache, AProgram, curState, LCtx, True) then
+        Exit(True);
+    end
+    else
+    begin
+      SetLength(LRoots, 1);
+      LRoots[0] := 0;
+      LAtStart := (ALen = 0);
+      LPrevIsWord := (ALen > 0) and IsWordChar(Ord(AInput[ALen - 1]));
+      if EpsilonClose(ACache, AProgram, LRoots, 1,
+           LAtStart, LPrevIsWord, False, True) then
+        Exit(True);
+    end;
+    Exit(False);
+  end;
+
+  { --- Standard path: has assertions, full context computation --- }
   while pos < ALen do
   begin
     ch := Ord(AInput[pos]);
