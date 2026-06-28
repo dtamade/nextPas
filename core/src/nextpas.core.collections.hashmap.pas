@@ -139,7 +139,6 @@ type
       TBucket = record
         State: Byte; // 0=Empty,1=Occupied,2=Tombstone
         Hash: UInt32;
-        NextOccupied: SizeUInt; // linked list for O(1) iteration
         Key: K;
         Value: V;
       end;
@@ -152,7 +151,6 @@ type
     FCount: SizeUInt;    // occupied count
     FUsed: SizeUInt;     // occupied + tombstone
     FMaxLoad: SizeUInt;  // threshold for rehash by used
-    FHeadOccupied: SizeUInt; // head of occupied chain (FCapacity = empty)
     FHash: THash;
     FEquals: TEquals;
   private
@@ -381,7 +379,6 @@ begin
   FCapacity := aCapacity;
   FMask := aCapacity - 1;
   FCount := 0; FUsed := 0;
-  FHeadOccupied := aCapacity; { sentinel: empty list }
   RecalcMaxLoad;
 end;
 
@@ -407,37 +404,25 @@ var
   byteIdx: SizeUInt;
   bitIdx: Byte;
   b: Byte;
+  endByte: SizeUInt;
 begin
   byteIdx := aStart shr 3;
   bitIdx := aStart and 7;
-  { Check first byte with mask }
-  if byteIdx < (FCapacity + 7) div 8 then
+  endByte := (FCapacity + 7) div 8;
+  if byteIdx < endByte then
   begin
+    { Check first byte with mask for bits >= aStart }
     b := (FBitmap + byteIdx)^ and ($FF shl bitIdx);
     if b <> 0 then
     begin
+      bitIdx := aStart and 7;
       while (b and 1) = 0 do begin b := b shr 1; Inc(bitIdx); end;
       Result := (byteIdx shl 3) + bitIdx;
       if Result < FCapacity then Exit;
     end;
-    { Scan remaining bytes in 8-byte (64-bit) chunks }
     Inc(byteIdx);
-    while byteIdx + 8 <= (FCapacity + 7) div 8 do
-    begin
-      if PSizeUInt(FBitmap + byteIdx)^ <> 0 then
-      begin
-        { Found non-zero 64-bit word, scan byte by byte }
-        while (FBitmap + byteIdx)^ = 0 do Inc(byteIdx);
-        b := (FBitmap + byteIdx)^;
-        bitIdx := 0;
-        while (b and 1) = 0 do begin b := b shr 1; Inc(bitIdx); end;
-        Result := (byteIdx shl 3) + bitIdx;
-        if Result < FCapacity then Exit;
-      end;
-      Inc(byteIdx, 8);
-    end;
     { Scan remaining bytes }
-    while byteIdx < (FCapacity + 7) div 8 do
+    while byteIdx < endByte do
     begin
       b := (FBitmap + byteIdx)^;
       if b <> 0 then
@@ -454,10 +439,10 @@ begin
 end;
 
 procedure THashMap.Rehash(aNewCapacity: SizeUInt);
-var oldBuckets: PBucket; oldBitmap: PByte; oldCap, oldBmpSize, i: SizeUInt; idx: SizeUInt;
+var oldBuckets: PBucket; oldBitmap: PByte; oldCap, i: SizeUInt; idx: SizeUInt;
 begin
   oldBuckets := FBuckets; oldBitmap := FBitmap;
-  oldCap := FCapacity; oldBmpSize := (FCapacity + 7) div 8;
+  oldCap := FCapacity;
   FBuckets := nil; FBitmap := nil; FCapacity := 0;
   InitCapacity(aNewCapacity);
   for i := 0 to oldCap-1 do
@@ -469,9 +454,6 @@ begin
         idx := (idx + 1) and FMask;
       (FBuckets + idx)^.State := Ord(bsOccupied);
       (FBuckets + idx)^.Hash := (oldBuckets + i)^.Hash;
-      { link into occupied chain }
-      (FBuckets + idx)^.NextOccupied := FHeadOccupied;
-      FHeadOccupied := idx;
       Move((oldBuckets + i)^.Key, (FBuckets + idx)^.Key, SizeOf(K));
       Move((oldBuckets + i)^.Value, (FBuckets + idx)^.Value, SizeOf(V));
       FillChar((oldBuckets + i)^.Key, SizeOf(K), 0);
@@ -554,7 +536,6 @@ begin
   end;
   FCount := 0;
   FUsed := 0;
-  FHeadOccupied := FCapacity; { sentinel: empty list }
   BitmapZero;
 end;
 
@@ -822,8 +803,6 @@ begin
   end;
   (FBuckets + insertIdx)^.State := Ord(bsOccupied);
   (FBuckets + insertIdx)^.Hash := h;
-  (FBuckets + insertIdx)^.NextOccupied := FHeadOccupied;
-  FHeadOccupied := insertIdx;
   (FBuckets + insertIdx)^.Key := AKey;
   (FBuckets + insertIdx)^.Value := AValue;
   BitmapSet(insertIdx);
@@ -891,8 +870,6 @@ begin
   end;
   (FBuckets + insertIdx)^.State := Ord(bsOccupied);
   (FBuckets + insertIdx)^.Hash := h;
-  (FBuckets + insertIdx)^.NextOccupied := FHeadOccupied;
-  FHeadOccupied := insertIdx;
   (FBuckets + insertIdx)^.Key := AKey;
   (FBuckets + insertIdx)^.Value := AValue;
   BitmapSet(insertIdx);
@@ -903,28 +880,11 @@ begin
 end;
 
 function THashMap.Remove(const AKey: K): Boolean;
-var idx, prev, cur: SizeUInt; h: UInt32;
+var idx: SizeUInt; h: UInt32;
 begin
   if FCapacity = 0 then Exit(False);
   h := KeyHash(AKey);
   if not FindIndex(AKey, h, idx) then Exit(False);
-  { unlink from occupied chain }
-  if FHeadOccupied = idx then
-    FHeadOccupied := (FBuckets + idx)^.NextOccupied
-  else
-  begin
-    prev := FHeadOccupied;
-    while prev < FCapacity do
-    begin
-      cur := (FBuckets + prev)^.NextOccupied;
-      if cur = idx then
-      begin
-        (FBuckets + prev)^.NextOccupied := (FBuckets + idx)^.NextOccupied;
-        Break;
-      end;
-      prev := cur;
-    end;
-  end;
   // CRITICAL FIX: Finalize then re-initialize to ensure clean state
   // Prevents dangling references and undefined behavior
   Finalize((FBuckets + idx)^.Key);

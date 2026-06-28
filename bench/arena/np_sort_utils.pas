@@ -16,7 +16,6 @@ implementation
 
 const
   INSERTION_SORT_THRESHOLD = 16;
-  BLOCK_SIZE = 128; { pdqsort block size }
 
 procedure InsertionSortInt32(var AArr: array of Int32; ALo, AHi: Integer);
 var
@@ -92,104 +91,10 @@ begin
   end;
 end;
 
-{ pdqsort-style block partition for Int32.
-  Processes elements in blocks of BLOCK_SIZE, maintaining
-  left/right offset buffers to reduce random writes. }
-function BlockPartitionInt32(var AArr: array of Int32; ALo, AHi: Integer;
-  APivot: Int32): Integer;
-var
-  LOffsetsL, LOffsetsR: array[0..BLOCK_SIZE-1] of Integer;
-  LNumL, LNumR, LStartL, LStartR: Integer;
-  LI, LJ, L, R: Integer;
-  LTmp: Int32;
-begin
-  L := ALo;
-  R := AHi;
-
-  while R - L + 1 > 2 * BLOCK_SIZE do
-  begin
-    { Fill left block: indices where AArr[i] < pivot }
-    LNumL := 0; LStartL := L;
-    for LI := L to L + BLOCK_SIZE - 1 do
-      if AArr[LI] < APivot then
-      begin
-        LOffsetsL[LNumL] := LI;
-        Inc(LNumL);
-      end;
-
-    { Fill right block: indices where AArr[i] > pivot }
-    LNumR := 0; LStartR := R - BLOCK_SIZE + 1;
-    for LI := R downto LStartR do
-      if AArr[LI] > APivot then
-      begin
-        LOffsetsR[LNumR] := LI;
-        Inc(LNumR);
-      end;
-
-    { Swap elements from left/right blocks }
-    if LNumL < LNumR then LJ := LNumL else LJ := LNumR;
-    for LI := 0 to LJ - 1 do
-    begin
-      LTmp := AArr[LOffsetsL[LI]];
-      AArr[LOffsetsL[LI]] := AArr[LOffsetsR[LI]];
-      AArr[LOffsetsR[LI]] := LTmp;
-    end;
-
-    { Update bounds based on what's left }
-    if LNumL > LNumR then
-    begin
-      { More elements < pivot on left than > pivot on right;
-        remaining left elements go to the right side of partition }
-      for LI := LNumR to LNumL - 1 do
-      begin
-        { Swap remaining left-block elements to the end }
-        LTmp := AArr[LOffsetsL[LI]];
-        AArr[LOffsetsL[LI]] := AArr[R];
-        AArr[R] := LTmp;
-        Dec(R);
-      end;
-      L := LStartL + BLOCK_SIZE;
-    end
-    else if LNumR > LNumL then
-    begin
-      for LI := LNumL to LNumR - 1 do
-      begin
-        LTmp := AArr[LOffsetsR[LI]];
-        AArr[LOffsetsR[LI]] := AArr[L];
-        AArr[L] := LTmp;
-        Inc(L);
-      end;
-      R := LStartR - 1;
-    end
-    else
-    begin
-      L := LStartL + BLOCK_SIZE;
-      R := LStartR - 1;
-    end;
-  end;
-
-  { Final Hoare partition for remaining elements }
-  LI := L;
-  LJ := R;
-  while True do
-  begin
-    while AArr[LI] < APivot do Inc(LI);
-    while AArr[LJ] > APivot do Dec(LJ);
-    if LI >= LJ then Break;
-    LTmp := AArr[LI];
-    AArr[LI] := AArr[LJ];
-    AArr[LJ] := LTmp;
-    Inc(LI);
-    Dec(LJ);
-  end;
-
-  Result := LJ;
-end;
-
 procedure IntroSortInner(var AArr: array of Int32; ALo, AHi, ADepthLimit: Integer);
 var
-  LPivot: Int32;
-  I, J, PMid: Integer;
+  LPivot, LTmp: Int32;
+  I, J: Integer;
 begin
   while AHi - ALo > INSERTION_SORT_THRESHOLD do
   begin
@@ -215,38 +120,31 @@ begin
         AArr[ALo + (AHi - ALo) div 2],
         AArr[AHi]);
 
-    { Use block partition for large ranges, Hoare for small }
-    if AHi - ALo > 2 * BLOCK_SIZE then
-      PMid := BlockPartitionInt32(AArr, ALo, AHi, LPivot)
-    else
+    { Hoare partition }
+    I := ALo;
+    J := AHi;
+    while True do
     begin
-      { Hoare partition }
-      I := ALo;
-      J := AHi;
-      while True do
-      begin
-        while AArr[I] < LPivot do Inc(I);
-        while AArr[J] > LPivot do Dec(J);
-        if I >= J then Break;
-        AArr[I] := AArr[I] xor AArr[J];
-        AArr[J] := AArr[I] xor AArr[J];
-        AArr[I] := AArr[I] xor AArr[J];
-        Inc(I);
-        Dec(J);
-      end;
-      PMid := J;
+      while AArr[I] < LPivot do Inc(I);
+      while AArr[J] > LPivot do Dec(J);
+      if I >= J then Break;
+      LTmp := AArr[I];
+      AArr[I] := AArr[J];
+      AArr[J] := LTmp;
+      Inc(I);
+      Dec(J);
     end;
 
     { Recurse on smaller partition, iterate on larger (tail call elimination) }
-    if PMid - ALo < AHi - PMid then
+    if J - ALo < AHi - J then
     begin
-      IntroSortInner(AArr, ALo, PMid, ADepthLimit);
-      ALo := PMid + 1;
+      IntroSortInner(AArr, ALo, J, ADepthLimit);
+      ALo := J + 1;
     end
     else
     begin
-      IntroSortInner(AArr, PMid + 1, AHi, ADepthLimit);
-      AHi := PMid;
+      IntroSortInner(AArr, J + 1, AHi, ADepthLimit);
+      AHi := J;
     end;
   end;
 
