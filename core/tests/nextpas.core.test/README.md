@@ -2,7 +2,26 @@
 
 ## 概述
 
-nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子测试、参数化测试、超时、retry、TAP/JSON/JUnit 输出。
+nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子测试、参数化测试、超时、retry、expected failure、层级过滤、TAP/JSON/JUnit 输出。
+
+## 版本
+
+- v3.8: dead import cleanup + header standardization
+- **v3.9**: ShouldFail + hierarchical filter + --count=N + slow test report
+
+## 竞品对比
+
+| 特性 | Go testing | Rust test | nextpas.core.test |
+|------|-----------|-----------|-------------------|
+| Subtests | `t.Run()` | — | `TestSubtest` |
+| 层级过滤 | `-run Foo/Bar` | — | `--filter=Parent/Sub` |
+| Expected fail | — | `#[should_panic]` | `ShouldFail` |
+| 全局 repeat | `-count N` | `--repeat` | `--count=N` |
+| 耗时报告 | `-v` | `--show-output` | Slow test report |
+| Tags | — | — | `--tag=` |
+| Retry | — | — | `Test(name, proc, N)` |
+| Mock | — | — | TMock fluent API |
+| Output | text | text | ANSI/TAP/JSON/JUnit |
 
 ## 套件列表
 
@@ -11,8 +30,8 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 | `test_assertions` | Check* 过程式断言 API | 47 |
 | `test_expect` | IExpectation 流式断言 API | 92 |
 | `test_mock` | TMock 录制/验证/返回值/参数匹配 | 53 |
-| `test_output` | ANSI、StatusDot、filter、timeout、JUnit/TAP/JSON 格式化、brace expansion | 62 |
-| `test_runner` | TTestRunner 多 suite、lifecycle、subtest、timeout、空 suite | 34+1x |
+| `test_output` | ANSI、StatusDot、filter、timeout、JUnit/TAP/JSON 格式化、brace expansion、层级过滤 | 64 |
+| `test_runner` | TTestRunner 多 suite、lifecycle、subtest、timeout、空 suite、ShouldFail、FormatDuration | 37+1x |
 | `test_lifecycle` | TestTable、TTestClosure、lifecycle 组合、facade 符号完整性 | 15 |
 | `test_parallel` | 并行执行、lifecycle、retry、skip、MaxParallelWorkers 批次调度 | 8 |
 | `test_diagnostics` | 错误诊断、stack trace、Double 比较、Error vs Failure | 15 |
