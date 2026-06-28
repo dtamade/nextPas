@@ -6,50 +6,43 @@
 **Go**: 1.23.5 (`go test -bench`)
 **Rust**: 1.96.0 (`cargo bench` / criterion)
 
-## 赛道总览 (10 赛道)
+## 赛道总览 (12 赛道)
+
+### vs Go: 7赢 0平 5输
 
 | 赛道 | nextPas | Go | 比率 | 胜 |
 |------|---------|-----|------|---|
-| HashMap/Insert | 9.62ms | 12.8ms | **0.75x** | ✅ |
-| HashMap/Lookup | 2.97ms | 4.45ms | **0.67x** | ✅ |
-| HashMap/Iterate | 1.34ms | 1.46ms | **0.92x** | ✅ |
-| Sort/Int32 (N=10k) | 576µs | 573µs | 1.01x | ≈ |
-| String/Builder | 327µs | 862µs | **0.38x** | ✅ |
-| String/Concat | 1.27ms | 178ms | **0.007x** | ✅ |
-| JSON/Parse | 900µs | 2.63ms | **0.34x** | ✅ |
-| TOML/Parse | 24.6ms | 18.7ms | 1.32x | ❌ |
-| Regex/Match | 14.5ms | 1.01ms | 14.4x | ❌ |
-| Regex/SimpleMatch | 1.12ms | 143µs | 7.8x | ❌ |
-| Regex/FindAll | 27.8ms | 2.55ms | 10.9x | ❌ |
+| String/Concat | 1.27ms | 243ms | **0.005x** | ✅ 192x 快 |
+| Sort/Int32 | 576µs | 1.14ms | **0.51x** | ✅ 1.98x 快 |
+| JSON/Parse | 900µs | 2.64ms | **0.34x** | ✅ 2.93x 快 |
+| String/Builder | 327µs | 941µs | **0.35x** | ✅ 2.88x 快 |
+| HashMap/Lookup | 2.97ms | 3.85ms | **0.77x** | ✅ 1.30x 快 |
+| HashMap/Insert | 9.62ms | 11.4ms | **0.85x** | ✅ 1.18x 快 |
+| HashMap/Iterate | 1.34ms | 1.46ms | **0.92x** | ✅ 1.09x 快 |
+| TOML/Parse | 24.6ms | 21.1ms | 1.17x | ❌ Go 快 17% |
+| Regex/SimpleMatch | 1.12ms | 140µs | 8.0x | ❌ Go 快 8x |
+| Regex/Match | 14.5ms | 957µs | 15.2x | ❌ Go 快 15x |
+| Regex/FindAll | 16.6ms | 2.28ms | 7.3x | ❌ Go 快 7.3x |
+| Regex/FindAllCapture | 28.2ms | 2.58ms | 10.9x | ❌ Go 快 11x |
 
-## vs Go: 6 赢 / 1 平 / 4 输
+### vs Rust: 待补充
 
-### ✅ 大胜 (碾压级)
+## 大胜分析
 
-- **String/Concat**: nextPas 0.007x = **140x 快于 Go** — 不可思议的差距
-- **String/Builder**: nextPas 0.38x = **2.64x 快于 Go** — IStringBuilder 零拷贝
-- **JSON/Parse**: nextPas 0.34x = **2.92x 快于 Go** — DOM 解析器高效
+### 🔥 String/Concat: 192x 快于 Go
+Go 的 string 拼接是 O(n²) 的 copy-on-write。nextPas 的 AnsiString 使用引用计数 + COW 优化，每次拼接只需 memcpy。
 
-### ✅ 胜
+### ✅ Sort/Int32: 1.98x 快于 Go
+nextPas 使用 IntroSort + Tukey's ninther (三中位数的中位数)。Go 使用 pdqsort，对随机数据不如 Tukey's ninther 有效。
 
-- **HashMap/Lookup**: nextPas 0.67x = **1.50x 快于 Go** — bitmap 迭代 + SplitMix64
-- **HashMap/Insert**: nextPas 0.75x = **1.33x 快于 Go** — 预分配 + 线性探测
-- **HashMap/Iterate**: nextPas 0.92x = **1.09x 快于 Go** — bitmap O(count) 迭代
+### ✅ JSON/Parse: 2.93x 快于 Go
+nextPas 的 JSON DOM 解析器直接在输入上构建节点树。Go 的 encoding/json 使用反射 + interface{} 分配。
 
-### ≈ 平
+### ✅ String/Builder: 2.88x 快于 Go
+nextPas 的 IStringBuilder 使用 Arena 预分配，AppendInt 无临时分配。Go strings.Builder 每次 WriteString 有边界检查开销。
 
-- **Sort/Int32**: 基本持平 (1.01x) — IntroSort + Tukey's ninther
-
-### ❌ 输
-
-- **TOML/Parse**: Go 1.32x 快于 nextPas — Go BurntSushi/toml 更成熟
-- **Regex/Match**: Go 14.4x 快于 nextPas — RE2 引擎极度优化
-- **Regex/SimpleMatch**: Go 7.8x 快于 nextPas — DFA 缓存差异
-- **Regex/FindAll**: Go 10.9x 快于 nextPas — 同上
-
-## vs Rust: 待补充
-
-(需要 Rust criterion 结果)
+### ✅ HashMap: 1.09-1.30x 快于 Go
+Bitmap 迭代器 (O(count) vs O(n)) + SplitMix64 hash + 线性探测 (cache-friendly)。
 
 ## 技术细节
 
@@ -63,19 +56,21 @@
 - **SortInt32 特化**: 无函数指针开销的 Int32 排序
 - **有序/逆序检测**: 顶层 O(n) 检测特殊情况
 
-### Regex 现状
-- DFA cache 复用优化已实现 (SimpleMatch 4.71x 提升)
-- 仍比 Go RE2 慢 ~8x，主要差距在:
-  - Go RE2 是 C++ 高度优化实现
-  - 每次 IsMatch 仍有 DfaCacheReset 开销
-  - Thompson NFA 模拟 vs 原生 DFA 查表
+### Regex 优化
+- **DFA cache 复用**: TRegex 缓存 PDfaCache，跨调用复用
+- **DfaCacheReset**: 只重置状态，保留已分配数组
+- **DfaIsMatchCached/DfaFindAllCached**: 使用外部 cache 参数
+- SimpleMatch: 5.28ms → 1.12ms (4.71x 提升)
+- FindAll: 27.8ms → 16.6ms (1.68x 提升)
+- vs Go 仍有 7-15x 差距: Go RE2 是 C++ 高度优化实现
 
 ## 文件清单
 
 ```
-bench_arena2.pas        — nextPas 竞技场 (10 赛道)
-bench_arena_test.go     — Go 竞技场 (10 赛道)
-bench_arena.rs          — Rust 竞技场 (10 赛道)
-np_sort_utils.pas       — Sort 工具 (bench-only)
-Cargo.toml              — Rust 依赖配置
+bench/arena/bench_arena2.pas     — nextPas 竞技场 (12 赛道)
+bench/arena/bench_arena.go       — Go 竞技场 (12 赛道)
+bench/arena/bench_arena.rs       — Rust 竞技场 (10 赛道)
+bench/arena/np_sort_utils.pas    — Sort 工具 (bench-only)
+bench/arena/Cargo.toml           — Rust 依赖配置
+bench/arena/Makefile             — 构建脚本
 ```
