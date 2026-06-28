@@ -167,6 +167,137 @@ begin
   WriteLn('PASS: ', NUM_THREADS, ' threads x ', OPS_PER_THREAD, ' ops x mixed sizes (32/256/2K/16K)');
 end;
 
+{ ── Test: high contention, 8 threads ── }
+
+procedure TestHighContention;
+var
+  LWorkers: array[0..7] of TWorkerData;
+  LThreads: array[0..7] of TThreadID;
+  LAllocator: TGrowingAllocator;
+  LI: Int32;
+  LAllDone: Boolean;
+begin
+  LAllocator := DefaultGrowingAllocator;
+
+  for LI := 0 to 7 do
+  begin
+    LWorkers[LI].Alloc := LAllocator;
+    LWorkers[LI].OpsCount := 5000;
+    LWorkers[LI].AllocSize := 128;
+    LWorkers[LI].Done := False;
+    LWorkers[LI].ErrorMsg := '';
+  end;
+
+  for LI := 0 to 7 do
+    LThreads[LI] := BeginThread(@WorkerFunc, @LWorkers[LI]);
+
+  repeat
+    LAllDone := True;
+    for LI := 0 to 7 do
+      if not LWorkers[LI].Done then
+      begin
+        LAllDone := False;
+        Break;
+      end;
+    if not LAllDone then
+      Sleep(1);
+  until LAllDone;
+
+  for LI := 0 to 7 do
+    WaitForThreadTerminate(LThreads[LI], 0);
+
+  for LI := 0 to 7 do
+    Check(LWorkers[LI].ErrorMsg = '', 'thread ' + IntToStr(LI) + ': ' + LWorkers[LI].ErrorMsg);
+
+  WriteLn('PASS: 8 threads x 5000 ops x 128B high contention');
+end;
+
+{ ── Test: cross-thread free ── }
+
+type
+  PCrossFreeData = ^TCrossFreeData;
+  TCrossFreeData = record
+    Alloc: TGrowingAllocator;
+    Ptrs: array[0..255] of Pointer;
+    Count: Int32;
+    Done: Boolean;
+    ErrorMsg: string;
+  end;
+
+function AllocatorFunc(Parameter: Pointer): PtrInt;
+var
+  LData: PCrossFreeData;
+  LI: Int32;
+begin
+  LData := PCrossFreeData(Parameter);
+  try
+    for LI := 0 to LData^.Count - 1 do
+    begin
+      LData^.Ptrs[LI] := LData^.Alloc.GetMem(64);
+      if LData^.Ptrs[LI] = nil then
+      begin
+        LData^.ErrorMsg := 'Alloc returned nil at ' + IntToStr(LI);
+        LData^.Done := True;
+        Exit(1);
+      end;
+      FillChar(LData^.Ptrs[LI]^, 64, Byte(LI));
+    end;
+    LData^.Done := True;
+    Result := 0;
+  except
+    on E: Exception do
+    begin
+      LData^.ErrorMsg := E.Message;
+      LData^.Done := True;
+      Result := 1;
+    end;
+  end;
+end;
+
+function FreerFunc(Parameter: Pointer): PtrInt;
+var
+  LData: PCrossFreeData;
+  LI: Int32;
+begin
+  LData := PCrossFreeData(Parameter);
+  try
+    { Wait for allocator to finish }
+    while not LData^.Done do
+      Sleep(1);
+    { Free all from different thread }
+    for LI := 0 to LData^.Count - 1 do
+      LData^.Alloc.FreeMem(LData^.Ptrs[LI], 64);
+    LData^.Done := False; { Signal completion }
+    Result := 0;
+  except
+    on E: Exception do
+    begin
+      LData^.ErrorMsg := E.Message;
+      Result := 1;
+    end;
+  end;
+end;
+
+procedure TestCrossThreadFree;
+var
+  LData: TCrossFreeData;
+  LAllocThread, LFreeThread: TThreadID;
+begin
+  LData.Alloc := DefaultGrowingAllocator;
+  LData.Count := 256;
+  LData.Done := False;
+  LData.ErrorMsg := '';
+
+  LAllocThread := BeginThread(@AllocatorFunc, @LData);
+  LFreeThread := BeginThread(@FreerFunc, @LData);
+
+  WaitForThreadTerminate(LAllocThread, 0);
+  WaitForThreadTerminate(LFreeThread, 0);
+
+  Check(LData.ErrorMsg = '', 'cross-thread free: ' + LData.ErrorMsg);
+  WriteLn('PASS: cross-thread free (256 allocs from thread A, freed from thread B)');
+end;
+
 { ── Main ── }
 
 begin
@@ -174,6 +305,8 @@ begin
 
   T.Test('same_size_class', @TestSameSizeClass);
   T.Test('mixed_sizes', @TestMixedSizes);
+  T.Test('high_contention_8_threads', @TestHighContention);
+  T.Test('cross_thread_free', @TestCrossThreadFree);
 
   T.Run;
   T.Summary;

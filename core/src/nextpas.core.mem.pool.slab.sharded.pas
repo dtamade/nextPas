@@ -68,7 +68,7 @@ type
     FFbCount: SizeUInt;            // live entries
     FFbFill: SizeUInt;             // live + tombstones
   private
-    function NormalizeShardCount(aShardCount: Integer): Integer;
+    function NormalizeShardCount(AShardCount: Integer): Integer;
     function ChooseShardIndex: Integer; inline;
     function PageKeyOf(APtr: Pointer): PtrUInt; inline;
 
@@ -93,8 +93,8 @@ type
     function ShouldUseFallback(const ASize: SizeUInt): Boolean; inline;
     function TryRouteShardIndex(APtr: Pointer; out aShard: Integer; out aIsFallback: Boolean): Boolean;
   public
-    constructor Create(aCapacity: SizeUInt; aShardCount: Integer = 0; aAllocator: IAllocator = nil; aMinShift: SizeUInt = 3); overload;
-    constructor Create(aCapacity: SizeUInt; const aConfig: TSlabConfig; aShardCount: Integer = 0; aAllocator: IAllocator = nil); overload;
+    constructor Create(aCapacity: SizeUInt; AShardCount: Integer = 0; AAllocator: IAllocator = nil; aMinShift: SizeUInt = 3); overload;
+    constructor Create(aCapacity: SizeUInt; const AConfig: TSlabConfig; AShardCount: Integer = 0; AAllocator: IAllocator = nil); overload;
     destructor Destroy; override;
   public
     // IPool
@@ -142,9 +142,9 @@ end;
 
 { TSlabPoolSharded }
 
-function TSlabPoolSharded.NormalizeShardCount(aShardCount: Integer): Integer;
+function TSlabPoolSharded.NormalizeShardCount(AShardCount: Integer): Integer;
 begin
-  Result := nextpas.core.mem.utils.NormalizeShardCount(aShardCount, platform_cpu_count);
+  Result := nextpas.core.mem.utils.NormalizeShardCount(AShardCount, platform_cpu_count);
 end;
 
 function TSlabPoolSharded.ChooseShardIndex: Integer; inline;
@@ -540,7 +540,7 @@ begin
   end;
 end;
 
-constructor TSlabPoolSharded.Create(aCapacity: SizeUInt; aShardCount: Integer; aAllocator: IAllocator; aMinShift: SizeUInt);
+constructor TSlabPoolSharded.Create(aCapacity: SizeUInt; AShardCount: Integer; AAllocator: IAllocator; aMinShift: SizeUInt);
 var
   LShardCount, LIdx: Integer;
   LStart, LEnd: PByte;
@@ -549,7 +549,7 @@ var
 begin
   inherited Create;
 
-  FAllocator := aAllocator;
+  FAllocator := AAllocator;
   if FAllocator = nil then
     FAllocator := nextpas.core.mem.allocator.GetRtlAllocator;
 
@@ -566,7 +566,7 @@ begin
     FConfig.MinShift := aMinShift;
   end;
 
-  LShardCount := NormalizeShardCount(aShardCount);
+  LShardCount := NormalizeShardCount(AShardCount);
   FShardCount := LShardCount;
   FShardMask := LShardCount - 1;
   SetLength(FShards, LShardCount);
@@ -605,12 +605,12 @@ begin
   end;
 end;
 
-constructor TSlabPoolSharded.Create(aCapacity: SizeUInt; const aConfig: TSlabConfig; aShardCount: Integer; aAllocator: IAllocator);
+constructor TSlabPoolSharded.Create(aCapacity: SizeUInt; const AConfig: TSlabConfig; AShardCount: Integer; AAllocator: IAllocator);
 begin
-  FConfig := aConfig;
+  FConfig := AConfig;
   if FConfig.MinShift = 0 then
     FConfig.MinShift := 3;
-  Create(aCapacity, aShardCount, aAllocator, FConfig.MinShift);
+  Create(aCapacity, AShardCount, AAllocator, FConfig.MinShift);
 end;
 
 destructor TSlabPoolSharded.Destroy;

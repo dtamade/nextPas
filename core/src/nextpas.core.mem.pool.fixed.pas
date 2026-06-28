@@ -128,10 +128,10 @@ type
     function GetAvailable: Integer; inline;
   public
     // 构造/析构
-    {** 创建固定块池（块大小 aBlockSize，容量 aCapacity，默认对齐和分配器）*}
-    constructor Create(aBlockSize: SizeUInt; aCapacity: Integer; aAllocator: IAllocator = nil); overload;
-    {** 创建固定块池，可指定对齐字节数 aAlignment（0 = 默认 max(pointer,16)）*}
-    constructor Create(aBlockSize: SizeUInt; aCapacity: Integer; aAlignment: SizeUInt; aAllocator: IAllocator = nil); overload;
+    {** 创建固定块池（块大小 ABlockSize，容量 ACapacity，默认对齐和分配器）*}
+    constructor Create(ABlockSize: SizeUInt; ACapacity: Integer; AAllocator: IAllocator = nil); overload;
+    {** 创建固定块池，可指定对齐字节数 AAlignment（0 = 默认 max(pointer,16)）*}
+    constructor Create(ABlockSize: SizeUInt; ACapacity: Integer; AAlignment: SizeUInt; AAllocator: IAllocator = nil); overload;
     {** 使用 TFixedPoolConfig 记录创建池，支持 ZeroOnAlloc 选项 *}
     constructor Create(const aConfig: TFixedPoolConfig); overload;
     {** 释放 arena 内存，FAF_MEM_DEBUG 下检测泄漏 *}
@@ -205,7 +205,7 @@ type
     function GetAllocatedCount: Integer; inline;
   public
     {** 创建线程安全固定块池（可选对齐和分配器）*}
-    constructor Create(aBlockSize: SizeUInt; aCapacity: Integer; aAlignment: SizeUInt = 0; aAllocator: IAllocator = nil); overload;
+    constructor Create(ABlockSize: SizeUInt; ACapacity: Integer; AAlignment: SizeUInt = 0; AAllocator: IAllocator = nil); overload;
     {** 使用 TFixedPoolConfig 创建线程安全固定块池 *}
     constructor Create(const aConfig: TFixedPoolConfig); overload;
     {** 加锁释放内部 TFixedPool *}
@@ -284,12 +284,12 @@ begin
   Result := 'Memory leak: ' + LCount + ' blocks not freed';
 end;
 
-constructor TFixedPool.Create(aBlockSize: SizeUInt; aCapacity: Integer; aAllocator: IAllocator);
+constructor TFixedPool.Create(ABlockSize: SizeUInt; ACapacity: Integer; AAllocator: IAllocator);
 begin
-  Create(aBlockSize, aCapacity, 0{use default}, aAllocator);
+  Create(ABlockSize, ACapacity, 0{use default}, AAllocator);
 end;
 
-constructor TFixedPool.Create(aBlockSize: SizeUInt; aCapacity: Integer; aAlignment: SizeUInt; aAllocator: IAllocator);
+constructor TFixedPool.Create(ABlockSize: SizeUInt; ACapacity: Integer; AAlignment: SizeUInt; AAllocator: IAllocator);
 var
   LOverflowCheck: SizeUInt;
   LRaw: Pointer;
@@ -297,34 +297,34 @@ var
   LAddr, LAligned: PtrUInt;
 begin
   inherited Create;
-  if aBlockSize = 0 then
+  if ABlockSize = 0 then
     raise EMemFixedPoolError.Create(aeInvalidLayout, 'Block size cannot be zero');
-  if (SizeOf(Pointer) <> 0) and ((aBlockSize mod SizeOf(Pointer)) <> 0) then
+  if (SizeOf(Pointer) <> 0) and ((ABlockSize mod SizeOf(Pointer)) <> 0) then
     raise EMemFixedPoolError.Create(aeInvalidLayout, 'Block size must be a multiple of pointer size');
-  if aCapacity <= 0 then
+  if ACapacity <= 0 then
     raise EMemFixedPoolError.Create(aeInvalidLayout, 'Capacity must be positive');
 
-  FBlockSize := aBlockSize;
-  FCapacity := aCapacity;
+  FBlockSize := ABlockSize;
+  FCapacity := ACapacity;
   FAllocatedCount := 0;
   FPeakAllocated := 0;
   FTotalAllocCalls := 0;
   FTotalFreeCalls := 0;
 
-  if aAllocator = nil then
+  if AAllocator = nil then
     FAllocator := nextpas.core.mem.allocator.GetRtlAllocator
   else
-    FAllocator := aAllocator;
+    FAllocator := AAllocator;
 
   // Alignment: 默认 max(pointer,16)；必须为 2 的幂
-  if aAlignment = 0 then
+  if AAlignment = 0 then
   begin
     // SizeOf(Pointer) is a compile-time constant; on supported targets it's <= 16,
     // so max(SizeOf(Pointer), 16) is always 16. Keep it branch-free to avoid FPC 6018.
     FAlignment := 16;
   end
   else
-    FAlignment := aAlignment;
+    FAlignment := AAlignment;
   if (FAlignment and (FAlignment-1)) <> 0 then
     raise EMemFixedPoolError.Create(aeAlignmentNotSupported, 'Alignment must be power of two');
   if (FBlockSize mod FAlignment) <> 0 then
@@ -506,11 +506,11 @@ end;
 
 { TFixedPoolConcurrent }
 
-constructor TFixedPoolConcurrent.Create(aBlockSize: SizeUInt; aCapacity: Integer; aAlignment: SizeUInt; aAllocator: IAllocator);
+constructor TFixedPoolConcurrent.Create(ABlockSize: SizeUInt; ACapacity: Integer; AAlignment: SizeUInt; AAllocator: IAllocator);
 begin
   inherited Create;
   FLock.Init;
-  FInner := TFixedPool.Create(aBlockSize, aCapacity, aAlignment, aAllocator);
+  FInner := TFixedPool.Create(ABlockSize, ACapacity, AAlignment, AAllocator);
 end;
 
 constructor TFixedPoolConcurrent.Create(const aConfig: TFixedPoolConfig);

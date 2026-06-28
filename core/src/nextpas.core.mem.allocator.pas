@@ -3,10 +3,10 @@
 
 ## 摘要
 
-提供内存分配器的兼容 / 扩展聚合门面。
+内存分配器聚合门面：聚合 RTL/CRT/Callback/MMap/Mimalloc/Guard 后端。
 
-严格 L0 场景应优先使用 `nextpas.core.mem.allocator.foundation`。
-本单元保留为便利入口，并继续聚合可选后端。
+- `allocator.foundation` — 最小 L0 门面（仅 RTL + Callback），适合依赖受限场景
+- `allocator.pas`（本单元）— 完整门面，额外包含 MMap、Mimalloc、Guard 后端
 
 本单元所有接口完全遵守 `空操作原则`, 输入参数 `count = 0` 时, 不进行任何操作.
 

@@ -66,7 +66,7 @@ type
     FBaseAllocator: IAllocator;
 
     function GetAvailableSize: SizeUInt;
-    function AlignOffset(aOffset, aAlignment: SizeUInt): SizeUInt;
+    function AlignOffset(AOffset, AAlignment: SizeUInt): SizeUInt;
 
   public
     {**
@@ -75,12 +75,12 @@ type
      * @desc 创建栈式内存池
      *       Create stack memory pool
      *
-     * @param aSize 总大小 Total size
-     * @param aAllocator 基础分配器 Base allocator (optional)
+     * @param ASize 总大小 Total size
+     * @param AAllocator 基础分配器 Base allocator (optional)
      *}
-    constructor Create(aSize: SizeUInt; aAllocator: IAllocator = nil); overload;
+    constructor Create(ASize: SizeUInt; AAllocator: IAllocator = nil); overload;
     {** 使用配置记录创建栈式内存池 *}
-    constructor Create(const aConfig: TStackPoolConfig); overload;
+    constructor Create(const AConfig: TStackPoolConfig); overload;
 
     {**
      * Destroy
@@ -96,13 +96,13 @@ type
      * @desc 分配内存
      *       Allocate memory
      *
-     * @param aSize 请求大小 Requested size
-     * @param aAlignment 对齐要求 Alignment requirement (default: pointer size)
+     * @param ASize 请求大小 Requested size
+     * @param AAlignment 对齐要求 Alignment requirement (default: pointer size)
      * @return 内存指针 Memory pointer
      *}
-    function Alloc(aSize: SizeUInt; aAlignment: SizeUInt = SizeOf(Pointer)): Pointer; inline;
+    function Alloc(ASize: SizeUInt; AAlignment: SizeUInt = SizeOf(Pointer)): Pointer; inline;
     {** 分配对齐内存，对齐值必须 >= SizeOf(Pointer) 且为 2 的幂 *}
-    function AllocAligned(aSize: SizeUInt; aAlignment: SizeUInt): Pointer; inline;
+    function AllocAligned(ASize: SizeUInt; AAlignment: SizeUInt): Pointer; inline;
 
     {**
      * TryAlloc
@@ -110,9 +110,9 @@ type
      * @desc 尝试分配（不抛异常），失败返回 False
      *       Try to allocate (no exception), return False on failure
      *}
-    function TryAlloc(aSize: SizeUInt; out APtr: Pointer; aAlignment: SizeUInt = SizeOf(Pointer)): Boolean; inline;
+    function TryAlloc(ASize: SizeUInt; out APtr: Pointer; AAlignment: SizeUInt = SizeOf(Pointer)): Boolean; inline;
     {** 尝试分配对齐内存（不抛异常），失败返回 False *}
-    function TryAllocAligned(aSize: SizeUInt; out APtr: Pointer; aAlignment: SizeUInt): Boolean; inline;
+    function TryAllocAligned(ASize: SizeUInt; out APtr: Pointer; AAlignment: SizeUInt): Boolean; inline;
 
     {**
      * Reset
@@ -138,10 +138,10 @@ type
      * @desc 恢复到指定状态
      *       Restore to specified state
      *
-     * @param aState 状态标记（由 SaveState 返回）State marker (returned by SaveState)
-     * @note aState 必须来自同一 pool 实例的 SaveState 调用，否则行为未定义
+     * @param AState 状态标记（由 SaveState 返回）State marker (returned by SaveState)
+     * @note AState 必须来自同一 pool 实例的 SaveState 调用，否则行为未定义
      *}
-    procedure RestoreState(aState: SizeUInt); inline;
+    procedure RestoreState(AState: SizeUInt); inline;
 
     // 属性 Properties
     {** 池总容量（字节） Total capacity in bytes *}
@@ -222,12 +222,12 @@ type
     FActive: Boolean;
   public
     {** 创建栈作用域，保存当前池状态 *}
-    constructor Create(aPool: TScopedStackPool);
+    constructor Create(APool: TScopedStackPool);
     {** 销毁作用域，自动回滚到保存的状态 *}
     destructor Destroy; override;
 
     {** 在当前作用域中分配内存 *}
-    function Alloc(aSize: SizeUInt; aAlignment: SizeUInt = SizeOf(Pointer)): Pointer;
+    function Alloc(ASize: SizeUInt; AAlignment: SizeUInt = SizeOf(Pointer)): Pointer;
 
     {** 手动释放作用域（通常由析构函数自动调用） *}
     procedure Release;
@@ -247,7 +247,7 @@ type
     FPool: TScopedStackPool;
   public
     {** 创建作用域管理器 *}
-    constructor Create(aPool: TScopedStackPool);
+    constructor Create(APool: TScopedStackPool);
     {** 销毁管理器，清除所有未释放的作用域 *}
     destructor Destroy; override;
 
@@ -256,7 +256,7 @@ type
     {** 弹出并释放最顶层作用域 *}
     procedure PopScope;
     {** 从管理列表中移除指定作用域（不释放对象） *}
-    procedure RemoveScope(aScope: TStackPoolScope);
+    procedure RemoveScope(AScope: TStackPoolScope);
     {** 获取当前最顶层作用域，无作用域时返回 nil *}
     function GetCurrentScope: TStackPoolScope;
     {** 获取当前作用域嵌套深度 *}
@@ -286,19 +286,19 @@ type
     FStateStackTop: Integer;
     FMaxStateStack: Integer;
 
-    procedure UpdateStatistics(aAllocSize: SizeUInt);
-    procedure GrowPool(aRequiredSize: SizeUInt);
+    procedure UpdateStatistics(AAllocSize: SizeUInt);
+    procedure GrowPool(ARequiredSize: SizeUInt);
     function CanRelocateBufferForGrow: Boolean;
     function CalculateFragmentation: Double;
 
   public
     {** 创建作用域栈池，指定大小、策略和可选的基础分配器 *}
-    constructor Create(aSize: SizeUInt; const aPolicy: TStackPoolPolicy; aAllocator: IAllocator = nil);
+    constructor Create(ASize: SizeUInt; const APolicy: TStackPoolPolicy; AAllocator: IAllocator = nil);
     {** 销毁作用域栈池，释放所有内部资源 *}
     destructor Destroy; override;
 
     {** 分配内存（带策略支持） *}
-    function Alloc(aSize: SizeUInt; aAlignment: SizeUInt = SizeOf(Pointer)): Pointer; reintroduce;
+    function Alloc(ASize: SizeUInt; AAlignment: SizeUInt = SizeOf(Pointer)): Pointer; reintroduce;
 
     {** 创建新的作用域 *}
     function CreateScope: TStackPoolScope;
@@ -313,16 +313,16 @@ type
     function GetStateStackDepth: Integer;
 
     {** 分配对齐内存 *}
-    function AllocAligned(aSize: SizeUInt; aAlignment: SizeUInt): Pointer; reintroduce;
+    function AllocAligned(ASize: SizeUInt; AAlignment: SizeUInt): Pointer; reintroduce;
 
     {** 分配并清零的内存 *}
-    function AllocZeroed(aSize: SizeUInt; aAlignment: SizeUInt = 0): Pointer;
+    function AllocZeroed(ASize: SizeUInt; AAlignment: SizeUInt = 0): Pointer;
 
     {** 分配字符串内存 *}
-    function AllocString(aLength: SizeUInt): PChar;
+    function AllocString(ALength: SizeUInt): PChar;
 
     {** 分配数组内存 *}
-    function AllocArray(aElementSize: SizeUInt; aCount: SizeUInt; aAlignment: SizeUInt = 0): Pointer;
+    function AllocArray(AElementSize: SizeUInt; ACount: SizeUInt; AAlignment: SizeUInt = 0): Pointer;
 
     {** 获取统计信息 *}
     function GetStatistics: TStackPoolStatistics;
@@ -337,7 +337,7 @@ type
     procedure Optimize;
 
     {** 获取内存映射信息（调试用） *}
-    function GetMemoryMap(out aMap: array of TStackMemoryMapEntry): Integer;
+    function GetMemoryMap(out AMap: array of TStackMemoryMapEntry): Integer;
 
     {** 池策略配置 Pool policy configuration *}
     property Policy: TStackPoolPolicy read FPolicy write FPolicy;
@@ -358,11 +358,11 @@ type
     FActive: Boolean;
   public
     {** 初始化自动作用域，关联到指定池 *}
-    class function Initialize(aPool: TScopedStackPool): TAutoStackPoolScope; static;
+    class function Initialize(APool: TScopedStackPool): TAutoStackPoolScope; static;
     {** 终结自动作用域，回滚分配状态 *}
     procedure Finalize;
     {** 在当前作用域中分配内存 *}
-    function Alloc(aSize: SizeUInt; aAlignment: SizeUInt = SizeOf(Pointer)): Pointer;
+    function Alloc(ASize: SizeUInt; AAlignment: SizeUInt = SizeOf(Pointer)): Pointer;
     {** 自动作用域是否活跃 Whether the auto scope is active *}
     property Active: Boolean read FActive;
   end;
@@ -373,31 +373,31 @@ uses
   nextpas.core.base.utils,
   nextpas.core.math;
 
-constructor TStackPool.Create(const aConfig: TStackPoolConfig);
+constructor TStackPool.Create(const AConfig: TStackPoolConfig);
 begin
-  Create(aConfig.TotalSize, aConfig.Allocator);
-  if aConfig.ZeroOnAlloc and (FBuffer <> nil) then
+  Create(AConfig.TotalSize, AConfig.Allocator);
+  if AConfig.ZeroOnAlloc and (FBuffer <> nil) then
     ZeroMem(FBuffer, FSize);
 end;
 
 { TStackPool }
 
-constructor TStackPool.Create(aSize: SizeUInt; aAllocator: IAllocator);
+constructor TStackPool.Create(ASize: SizeUInt; AAllocator: IAllocator);
 begin
   inherited Create;
 
-  if aSize = 0 then
+  if ASize = 0 then
     raise EStackPoolError.Create(aeInvalidLayout, 'Stack size cannot be zero');
 
-  FSize := aSize;
+  FSize := ASize;
   FOffset := 0;
 
-  if aAllocator = nil then
+  if AAllocator = nil then
     FBaseAllocator := nextpas.core.mem.allocator.GetRtlAllocator
   else
-    FBaseAllocator := aAllocator;
+    FBaseAllocator := AAllocator;
 
-  FBuffer := FBaseAllocator.GetMem(aSize);
+  FBuffer := FBaseAllocator.GetMem(ASize);
   if FBuffer = nil then
     raise EOutOfMemory.Create(aeOutOfMemory, 'Failed to allocate stack buffer');
 end;
@@ -409,30 +409,30 @@ begin
   inherited Destroy;
 end;
 
-function TStackPool.Alloc(aSize: SizeUInt; aAlignment: SizeUInt): Pointer;
+function TStackPool.Alloc(ASize: SizeUInt; AAlignment: SizeUInt): Pointer;
 var
   LAlignedOffset: SizeUInt;
 begin
   Result := nil;
-  if aSize = 0 then
+  if ASize = 0 then
     Exit;
 
   // 防御性：对齐为 0 则使用指针大小；且对齐必须为 2 的幂（否则回退为指针大小）
-  if aAlignment = 0 then
-    aAlignment := SizeOf(Pointer);
-  if (aAlignment and (aAlignment - 1)) <> 0 then
-    aAlignment := SizeOf(Pointer);
+  if AAlignment = 0 then
+    AAlignment := SizeOf(Pointer);
+  if (AAlignment and (AAlignment - 1)) <> 0 then
+    AAlignment := SizeOf(Pointer);
 
   // 计算对齐后的偏移（中文注释）：按对齐要求向上取整
-  LAlignedOffset := AlignOffset(FOffset, aAlignment);
+  LAlignedOffset := AlignOffset(FOffset, AAlignment);
 
   // 溢出与界限检查
-  if (LAlignedOffset > FSize) or (aSize > FSize - LAlignedOffset) then
+  if (LAlignedOffset > FSize) or (ASize > FSize - LAlignedOffset) then
     Exit;
 
   // 返回指针并更新偏移（使用类型化指针算术以避免 4055）
   Result := Pointer(PByte(FBuffer) + LAlignedOffset);
-  FOffset := LAlignedOffset + aSize;
+  FOffset := LAlignedOffset + ASize;
 end;
 
 procedure TStackPool.Reset;
@@ -445,16 +445,16 @@ begin
   Result := FOffset;
 end;
 
-function TStackPool.TryAlloc(aSize: SizeUInt; out APtr: Pointer; aAlignment: SizeUInt): Boolean;
+function TStackPool.TryAlloc(ASize: SizeUInt; out APtr: Pointer; AAlignment: SizeUInt): Boolean;
 begin
-  APtr := Alloc(aSize, aAlignment);
+  APtr := Alloc(ASize, AAlignment);
   Result := APtr <> nil;
 end;
 
-procedure TStackPool.RestoreState(aState: SizeUInt);
+procedure TStackPool.RestoreState(AState: SizeUInt);
 begin
-  if aState <= FSize then
-    FOffset := aState;
+  if AState <= FSize then
+    FOffset := AState;
 end;
 
 function TStackPool.GetAvailableSize: SizeUInt;
@@ -472,23 +472,23 @@ begin
   Result := FOffset >= FSize;
 end;
 
-function TStackPool.AllocAligned(aSize: SizeUInt; aAlignment: SizeUInt): Pointer;
+function TStackPool.AllocAligned(ASize: SizeUInt; AAlignment: SizeUInt): Pointer;
 begin
-  if aSize = 0 then Exit(nil);
+  if ASize = 0 then Exit(nil);
   // ✅ M-4: 统一对齐验证逻辑，与 TAllocator.AllocAligned 保持一致
-  if aAlignment = 0 then
-    raise EInvalidArgument.Create('TStackPool.AllocAligned: aAlignment is 0');
-  if aAlignment < SizeOf(Pointer) then
-    raise EInvalidArgument.Create('TStackPool.AllocAligned: aAlignment must be >= pointer size');
-  if (aAlignment and (aAlignment - 1)) <> 0 then
-    raise EInvalidArgument.Create('TStackPool.AllocAligned: aAlignment must be power of two');
-  Result := Alloc(aSize, aAlignment);
+  if AAlignment = 0 then
+    raise EInvalidArgument.Create('TStackPool.AllocAligned: AAlignment is 0');
+  if AAlignment < SizeOf(Pointer) then
+    raise EInvalidArgument.Create('TStackPool.AllocAligned: AAlignment must be >= pointer size');
+  if (AAlignment and (AAlignment - 1)) <> 0 then
+    raise EInvalidArgument.Create('TStackPool.AllocAligned: AAlignment must be power of two');
+  Result := Alloc(ASize, AAlignment);
 end;
 
-function TStackPool.TryAllocAligned(aSize: SizeUInt; out APtr: Pointer; aAlignment: SizeUInt): Boolean;
+function TStackPool.TryAllocAligned(ASize: SizeUInt; out APtr: Pointer; AAlignment: SizeUInt): Boolean;
 begin
   try
-    APtr := AllocAligned(aSize, aAlignment);
+    APtr := AllocAligned(ASize, AAlignment);
     Result := APtr <> nil;
   except
     APtr := nil;
@@ -496,12 +496,12 @@ begin
   end;
 end;
 
-function TStackPool.AlignOffset(aOffset, aAlignment: SizeUInt): SizeUInt;
+function TStackPool.AlignOffset(AOffset, AAlignment: SizeUInt): SizeUInt;
 begin
-  if aAlignment <= 1 then
-    Result := aOffset
+  if AAlignment <= 1 then
+    Result := AOffset
   else
-    Result := (aOffset + aAlignment - 1) and not (aAlignment - 1);
+    Result := (AOffset + AAlignment - 1) and not (AAlignment - 1);
 end;
 
 // ============================================================================
@@ -539,10 +539,10 @@ end;
 // TStackPoolScope
 // ============================================================================
 
-constructor TStackPoolScope.Create(aPool: TScopedStackPool);
+constructor TStackPoolScope.Create(APool: TScopedStackPool);
 begin
   inherited Create;
-  FPool := aPool;
+  FPool := APool;
   FSavedState := FPool.SaveState;
   FActive := True;
 
@@ -560,7 +560,7 @@ begin
   inherited Destroy;
 end;
 
-function TStackPoolScope.Alloc(aSize: SizeUInt; aAlignment: SizeUInt): Pointer;
+function TStackPoolScope.Alloc(ASize: SizeUInt; AAlignment: SizeUInt): Pointer;
 begin
   if not FActive then
   begin
@@ -568,10 +568,10 @@ begin
     Exit;
   end;
 
-  if aAlignment = 0 then
-    aAlignment := FPool.Policy.DefaultAlignment;
+  if AAlignment = 0 then
+    AAlignment := FPool.Policy.DefaultAlignment;
 
-  Result := FPool.Alloc(aSize, aAlignment);
+  Result := FPool.Alloc(ASize, AAlignment);
 end;
 
 procedure TStackPoolScope.Release;
@@ -589,10 +589,10 @@ end;
 // TStackPoolScopeManager
 // ============================================================================
 
-constructor TStackPoolScopeManager.Create(aPool: TScopedStackPool);
+constructor TStackPoolScopeManager.Create(APool: TScopedStackPool);
 begin
   inherited Create;
-  FPool := aPool;
+  FPool := APool;
   FScopes := nil;
 end;
 
@@ -636,14 +636,14 @@ begin
     FPool.FStatistics.CurrentScopeDepth := Length(FScopes);
 end;
 
-procedure TStackPoolScopeManager.RemoveScope(aScope: TStackPoolScope);
+procedure TStackPoolScopeManager.RemoveScope(AScope: TStackPoolScope);
 var
   LIndex, LLen, I: Integer;
 begin
   LLen := Length(FScopes);
   LIndex := -1;
   for I := 0 to LLen - 1 do
-    if FScopes[I] = aScope then
+    if FScopes[I] = AScope then
     begin
       LIndex := I;
       Break;
@@ -687,11 +687,11 @@ end;
 // TScopedStackPool
 // ============================================================================
 
-constructor TScopedStackPool.Create(aSize: SizeUInt; const aPolicy: TStackPoolPolicy; aAllocator: IAllocator);
+constructor TScopedStackPool.Create(ASize: SizeUInt; const APolicy: TStackPoolPolicy; AAllocator: IAllocator);
 begin
-  inherited Create(aSize, aAllocator);
+  inherited Create(ASize, AAllocator);
 
-  FPolicy := aPolicy;
+  FPolicy := APolicy;
   ZeroMem(@FStatistics, SizeOf(FStatistics));
 
   if FPolicy.EnableScopeTracking then
@@ -713,25 +713,25 @@ begin
   inherited Destroy;
 end;
 
-function TScopedStackPool.Alloc(aSize: SizeUInt; aAlignment: SizeUInt): Pointer;
+function TScopedStackPool.Alloc(ASize: SizeUInt; AAlignment: SizeUInt): Pointer;
 begin
-  if aAlignment = 0 then
-    aAlignment := FPolicy.DefaultAlignment;
+  if AAlignment = 0 then
+    AAlignment := FPolicy.DefaultAlignment;
 
-  Result := inherited Alloc(aSize, aAlignment);
+  Result := inherited Alloc(ASize, AAlignment);
 
   if Result = nil then
   begin
     // 如果分配失败且启用自动增长，尝试扩容
     if FPolicy.EnableAutoGrow then
     begin
-      GrowPool(aSize);
-      Result := inherited Alloc(aSize, aAlignment);
+      GrowPool(ASize);
+      Result := inherited Alloc(ASize, AAlignment);
     end;
   end;
 
   if (Result <> nil) and FPolicy.EnableStatistics then
-    UpdateStatistics(aSize);
+    UpdateStatistics(ASize);
 end;
 
 function TScopedStackPool.CreateScope: TStackPoolScope;
@@ -774,39 +774,39 @@ begin
   Result := FStateStackTop + 1;
 end;
 
-function TScopedStackPool.AllocAligned(aSize: SizeUInt; aAlignment: SizeUInt): Pointer;
+function TScopedStackPool.AllocAligned(ASize: SizeUInt; AAlignment: SizeUInt): Pointer;
 begin
-  if aSize = 0 then Exit(nil);
-  if aAlignment = 0 then
-    raise EInvalidArgument.Create('TScopedStackPool.AllocAligned: aAlignment is 0');
-  if aAlignment < SizeOf(Pointer) then
-    raise EInvalidArgument.Create('TScopedStackPool.AllocAligned: aAlignment must be >= pointer size');
-  if (aAlignment and (aAlignment - 1)) <> 0 then
-    raise EInvalidArgument.Create('TScopedStackPool.AllocAligned: aAlignment must be power of two');
-  Result := Alloc(aSize, aAlignment);
+  if ASize = 0 then Exit(nil);
+  if AAlignment = 0 then
+    raise EInvalidArgument.Create('TScopedStackPool.AllocAligned: AAlignment is 0');
+  if AAlignment < SizeOf(Pointer) then
+    raise EInvalidArgument.Create('TScopedStackPool.AllocAligned: AAlignment must be >= pointer size');
+  if (AAlignment and (AAlignment - 1)) <> 0 then
+    raise EInvalidArgument.Create('TScopedStackPool.AllocAligned: AAlignment must be power of two');
+  Result := Alloc(ASize, AAlignment);
 end;
 
-function TScopedStackPool.AllocZeroed(aSize: SizeUInt; aAlignment: SizeUInt): Pointer;
+function TScopedStackPool.AllocZeroed(ASize: SizeUInt; AAlignment: SizeUInt): Pointer;
 begin
-  Result := Alloc(aSize, aAlignment);
+  Result := Alloc(ASize, AAlignment);
   if Result <> nil then
-    ZeroMem(Result, aSize);
+    ZeroMem(Result, ASize);
 end;
 
-function TScopedStackPool.AllocString(aLength: SizeUInt): PChar;
+function TScopedStackPool.AllocString(ALength: SizeUInt): PChar;
 begin
-  Result := PChar(AllocZeroed(aLength + 1, 1)); // +1 for null terminator
+  Result := PChar(AllocZeroed(ALength + 1, 1)); // +1 for null terminator
 end;
 
-function TScopedStackPool.AllocArray(aElementSize: SizeUInt; aCount: SizeUInt; aAlignment: SizeUInt): Pointer;
+function TScopedStackPool.AllocArray(AElementSize: SizeUInt; ACount: SizeUInt; AAlignment: SizeUInt): Pointer;
 var
   LTotalSize: SizeUInt;
 begin
   // ✅ m-3: 添加溢出检查
-  if (aCount > 0) and (aElementSize > High(SizeUInt) div aCount) then
+  if (ACount > 0) and (AElementSize > High(SizeUInt) div ACount) then
     Exit(nil);  // 溢出，返回 nil
-  LTotalSize := aElementSize * aCount;
-  Result := AllocZeroed(LTotalSize, aAlignment);
+  LTotalSize := AElementSize * ACount;
+  Result := AllocZeroed(LTotalSize, AAlignment);
 end;
 
 function TScopedStackPool.GetStatistics: TStackPoolStatistics;
@@ -836,32 +836,32 @@ begin
   // 实际应用中可以实现内存整理等功能
 end;
 
-function TScopedStackPool.GetMemoryMap(out aMap: array of TStackMemoryMapEntry): Integer;
+function TScopedStackPool.GetMemoryMap(out AMap: array of TStackMemoryMapEntry): Integer;
 begin
   // 简化实现：返回单个已使用块
   Result := 0;
-  if Length(aMap) > 0 then
+  if Length(AMap) > 0 then
   begin
-    aMap[0].Start := FBuffer;
-    aMap[0].Size := UsedSize;
-    aMap[0].Used := True;
+    AMap[0].Start := FBuffer;
+    AMap[0].Size := UsedSize;
+    AMap[0].Used := True;
     Result := 1;
   end;
 end;
 
-procedure TScopedStackPool.UpdateStatistics(aAllocSize: SizeUInt);
+procedure TScopedStackPool.UpdateStatistics(AAllocSize: SizeUInt);
 begin
   if not FPolicy.EnableStatistics then Exit;
 
   Inc(FStatistics.TotalAllocations);
-  FStatistics.TotalBytes := FStatistics.TotalBytes + aAllocSize;
+  FStatistics.TotalBytes := FStatistics.TotalBytes + AAllocSize;
   FStatistics.CurrentUsage := UsedSize;
 
   if FStatistics.CurrentUsage > FStatistics.PeakUsage then
     FStatistics.PeakUsage := FStatistics.CurrentUsage;
 end;
 
-procedure TScopedStackPool.GrowPool(aRequiredSize: SizeUInt);
+procedure TScopedStackPool.GrowPool(ARequiredSize: SizeUInt);
 var
   LNewSize, LMinRequired: SizeUInt;
   LNewBuffer: Pointer;
@@ -874,7 +874,7 @@ begin
       'Cannot grow pool while allocations or scopes are active (would invalidate existing pointers)');
 
   // 计算最小所需大小
-  LMinRequired := UsedSize + aRequiredSize;
+  LMinRequired := UsedSize + ARequiredSize;
 
   // 按增长因子计算新大小
   LNewSize := Round(FSize * FPolicy.GrowthFactor);
@@ -925,9 +925,9 @@ end;
 // TAutoStackPoolScope
 // ============================================================================
 
-class function TAutoStackPoolScope.Initialize(aPool: TScopedStackPool): TAutoStackPoolScope;
+class function TAutoStackPoolScope.Initialize(APool: TScopedStackPool): TAutoStackPoolScope;
 begin
-  Result.FScope := aPool.CreateScope;
+  Result.FScope := APool.CreateScope;
   Result.FActive := True;
 end;
 
@@ -941,10 +941,10 @@ begin
   end;
 end;
 
-function TAutoStackPoolScope.Alloc(aSize: SizeUInt; aAlignment: SizeUInt): Pointer;
+function TAutoStackPoolScope.Alloc(ASize: SizeUInt; AAlignment: SizeUInt): Pointer;
 begin
   if FActive and Assigned(FScope) then
-    Result := FScope.Alloc(aSize, aAlignment)
+    Result := FScope.Alloc(ASize, AAlignment)
   else
     Result := nil;
 end;

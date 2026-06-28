@@ -194,6 +194,50 @@ begin
   { LTracker 引用计数自动释放 }
 end;
 
+{ 验证 TGrowingAllocator 可通过 facade 访问 }
+procedure TestGrowingAllocatorAccessible;
+var
+  LAlloc: TGrowingAllocator;
+  LPtr: Pointer;
+begin
+  LAlloc := TGrowingAllocator.Create;
+  try
+    LPtr := LAlloc.GetMem(128);
+    Check(LPtr <> nil, 'TGrowingAllocator.GetMem should succeed');
+    LAlloc.FreeMem(LPtr, 128);
+  finally
+    LAlloc.Free;
+  end;
+end;
+
+{ 验证 IFixedSlabPool + MakeFixedSlabPool 可通过 facade 访问 }
+procedure TestFixedSlabPoolAccessible;
+var
+  LPool: IFixedSlabPool;
+  LPtr: Pointer;
+  LOk: Boolean;
+begin
+  LPool := MakeFixedSlabPool(512);
+  Check(LPool <> nil, 'MakeFixedSlabPool should return non-nil');
+  LOk := LPool.Acquire(LPtr);
+  Check(LOk, 'IFixedSlabPool.Acquire should succeed');
+  Check(LPtr <> nil, 'Acquire should return non-nil');
+  LPool.Release(LPtr);
+end;
+
+{ 验证 TPoolAllocator 可通过 facade 访问 }
+procedure TestPoolAllocatorAccessible;
+var
+  LAlloc: IAllocator;
+  LPtr: Pointer;
+begin
+  LAlloc := MakePoolAllocator(64, 50);
+  Check(LAlloc <> nil, 'MakePoolAllocator should return non-nil');
+  LPtr := LAlloc.GetMem(32);
+  Check(LPtr <> nil, 'PoolAllocator.GetMem should succeed');
+  LAlloc.FreeMem(LPtr);
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.mem.facade');
   T.Test('DefaultAllocator not nil', @TestDefaultAllocatorNotNil);
@@ -208,6 +252,9 @@ begin
   T.Test('BlockPoolConcurrent accessible', @TestBlockPoolConcurrentAccessible);
   T.Test('SecureZero accessible', @TestSecureZeroAccessible);
   T.Test('TrackingAllocator accessible', @TestTrackingAllocatorAccessible);
+  T.Test('GrowingAllocator accessible', @TestGrowingAllocatorAccessible);
+  T.Test('FixedSlabPool accessible', @TestFixedSlabPoolAccessible);
+  T.Test('PoolAllocator accessible', @TestPoolAllocatorAccessible);
   T.Run;
 
   T.Summary;

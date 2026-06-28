@@ -66,11 +66,25 @@ begin
   end;
 end;
 
+procedure TestTryGetCrtAllocator;
+var
+  LTry: IAllocator;
+  LGet: IAllocator;
+  LOk: Boolean;
+begin
+  LOk := TryGetCrtAllocator(LTry);
+  LGet := GetCrtAllocator;
+  Check(LOk, 'TryGetCrtAllocator should return True');
+  Check(LTry <> nil, 'TryGetCrtAllocator should return non-nil allocator');
+  Check(LTry = LGet, 'TryGetCrtAllocator should match GetCrtAllocator singleton');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.mem.allocator.crt');
   T.Test('singleton and traits', @TestCrtAllocatorSingletonAndTraits);
   T.Test('AllocMem and ReallocMem', @TestCrtAllocatorAllocMemAndReallocMem);
   T.Test('aligned fallback', @TestCrtAllocatorAlignedFallback);
+  T.Test('TryGetCrtAllocator', @TestTryGetCrtAllocator);
   T.Run;
 
   T.Summary;

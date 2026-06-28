@@ -156,8 +156,8 @@ type
     procedure FlushThreadCacheLocked(aShard: Integer; aNode: PThreadCacheNode; aFlushCount: Integer);
 
   public
-    constructor Create(const aConfig: TShardedBlockPoolConfig); overload;
-    constructor Create(const aConfig: TGrowingBlockPoolConfig; aShardCount: Integer = 0); overload;
+    constructor Create(const AConfig: TShardedBlockPoolConfig); overload;
+    constructor Create(const AConfig: TGrowingBlockPoolConfig; aShardCount: Integer = 0); overload;
     constructor Create(aBlockSize, aCapacity: SizeUInt; aShardCount: Integer = 0; aAlignment: SizeUInt = DEFAULT_ALIGNMENT); overload;
     destructor Destroy; override;
 
@@ -172,8 +172,8 @@ type
     function InUse: SizeUInt;
 
     { IBlockPoolBatch }
-    function AcquireN(out aPtrs: array of Pointer; aCount: Integer): Integer;
-    procedure ReleaseN(const aPtrs: array of Pointer; aCount: Integer);
+    function AcquireN(out APtrs: array of Pointer; ACount: Integer): Integer;
+    procedure ReleaseN(const APtrs: array of Pointer; ACount: Integer);
 
     // Flush current thread cache back to shard (optional helper for short-lived threads)
     procedure FlushThreadCache;
@@ -896,7 +896,7 @@ begin
   end;
 end;
 
-	constructor TShardedBlockPool.Create(const aConfig: TShardedBlockPoolConfig);
+  constructor TShardedBlockPool.Create(const AConfig: TShardedBlockPoolConfig);
 var
   LShardCount: Integer;
   LIdx: Integer;
@@ -910,27 +910,27 @@ var
   LStartKey: PtrUInt;
   LEndKey: PtrUInt;
   LTotalCap: Int64;
-	begin
-	  inherited Create;
+  begin
+    inherited Create;
 
-	  FRoutingState := 0;
-	  RouteClear;
+    FRoutingState := 0;
+    RouteClear;
 
   FPoolId := NextShardedBlockPoolId;
   FCacheEpoch := 1;
   // Disable the old per-thread cache until it has generation ownership and
   // thread-exit cleanup. Otherwise duplicate frees can be hidden in TLS state
   // and cache nodes leak after pool destruction.
-  if aConfig.ThreadCacheCapacity > 0 then
+  if AConfig.ThreadCacheCapacity > 0 then
     raise EAllocError.Create(aeInvalidLayout,
       'TShardedBlockPool: ThreadCacheCapacity > 0 not supported (missing thread-exit cleanup)');
   FThreadCacheCapacity := 0;
-  FThreadCacheCheckDoubleFree := aConfig.ThreadCacheCheckDoubleFree;
-  FTrackInUse := aConfig.TrackInUse;
+  FThreadCacheCheckDoubleFree := AConfig.ThreadCacheCheckDoubleFree;
+  FTrackInUse := AConfig.TrackInUse;
   FTotalCapacity := 0;
 
-  FConfig := aConfig.Pool;
-  LShardCount := NormalizeShardCount(aConfig.ShardCount);
+  FConfig := AConfig.Pool;
+  LShardCount := NormalizeShardCount(AConfig.ShardCount);
   FShardCount := LShardCount;
   FShardMask := LShardCount - 1;
   SetLength(FShards, LShardCount);
@@ -998,19 +998,19 @@ var
     LApproxPages := HASH_MIN_CAP;
   PageMapInit(LApproxPages * 2);
 
-	  // index initial segments for all shards
-	  RouteWriteLock;
-	  try
-	    for LIdx := 0 to LShardCount - 1 do
-	      for LSegIdx := 0 to SizeInt(FShards[LIdx].Pool.SegmentCount) - 1 do
-	        if FShards[LIdx].Pool.GetSegmentRegion(LSegIdx, LStart, LEnd) then
+    // index initial segments for all shards
+    RouteWriteLock;
+    try
+      for LIdx := 0 to LShardCount - 1 do
+        for LSegIdx := 0 to SizeInt(FShards[LIdx].Pool.SegmentCount) - 1 do
+          if FShards[LIdx].Pool.GetSegmentRegion(LSegIdx, LStart, LEnd) then
           begin
-	          RouteInsert(LStart, LEnd, LIdx);
+            RouteInsert(LStart, LEnd, LIdx);
             IndexSegmentPagesLocked(LIdx, LStart, LEnd);
           end;
-	  finally
-	    RouteWriteUnlock;
-	  end;
+    finally
+      RouteWriteUnlock;
+    end;
 
   // initialize fast stats
   LTotalCap := 0;
@@ -1020,11 +1020,11 @@ var
   FTotalCapacity := LTotalCap;
 end;
 
-constructor TShardedBlockPool.Create(const aConfig: TGrowingBlockPoolConfig; aShardCount: Integer);
+constructor TShardedBlockPool.Create(const AConfig: TGrowingBlockPoolConfig; aShardCount: Integer);
 var
   LCfg: TShardedBlockPoolConfig;
 begin
-  LCfg.Pool := aConfig;
+  LCfg.Pool := AConfig;
   LCfg.ShardCount := aShardCount;
   LCfg.ThreadCacheCapacity := 0;
   LCfg.ThreadCacheCheckDoubleFree := True;
@@ -1041,21 +1041,21 @@ begin
   Create(LCfg);
 end;
 
-	destructor TShardedBlockPool.Destroy;
+  destructor TShardedBlockPool.Destroy;
 var
   LIdx: Integer;
-	begin
-	  // lock shards to avoid racing with concurrent frees/allocs
-	  for LIdx := 0 to High(FShards) do
-	    FShards[LIdx].Lock.Acquire;
-	  try
-	    RouteWriteLock;
-	    try
-	      RouteClear;
+  begin
+    // lock shards to avoid racing with concurrent frees/allocs
+    for LIdx := 0 to High(FShards) do
+      FShards[LIdx].Lock.Acquire;
+    try
+      RouteWriteLock;
+      try
+        RouteClear;
         PageMapClear;
-	    finally
-	      RouteWriteUnlock;
-	    end;
+      finally
+        RouteWriteUnlock;
+      end;
 
     for LIdx := 0 to High(FShards) do
     begin
@@ -1071,8 +1071,8 @@ var
   for LIdx := 0 to High(FShards) do
     FShards[LIdx].Lock.Done;
 
-	  inherited Destroy;
-	end;
+    inherited Destroy;
+  end;
 
 function TShardedBlockPool.Acquire: Pointer;
 var
@@ -1293,35 +1293,35 @@ begin
   Result := SizeUInt(LSum);
 end;
 
-function TShardedBlockPool.AcquireN(out aPtrs: array of Pointer; aCount: Integer): Integer;
+function TShardedBlockPool.AcquireN(out APtrs: array of Pointer; ACount: Integer): Integer;
 var
   LIdx: Integer;
   LPtr: Pointer;
 begin
   Result := 0;
-  if aCount <= 0 then Exit(0);
-  for LIdx := 0 to aCount - 1 do
+  if ACount <= 0 then Exit(0);
+  for LIdx := 0 to ACount - 1 do
   begin
-    if LIdx > High(aPtrs) then
+    if LIdx > High(APtrs) then
       Break;
     LPtr := Acquire;
     if LPtr = nil then
       Break;
-    aPtrs[LIdx] := LPtr;
+    APtrs[LIdx] := LPtr;
     Inc(Result);
   end;
 end;
 
-procedure TShardedBlockPool.ReleaseN(const aPtrs: array of Pointer; aCount: Integer);
+procedure TShardedBlockPool.ReleaseN(const APtrs: array of Pointer; ACount: Integer);
 var
   LIdx: Integer;
 begin
-  if aCount <= 0 then Exit;
-  for LIdx := 0 to aCount - 1 do
+  if ACount <= 0 then Exit;
+  for LIdx := 0 to ACount - 1 do
   begin
-    if LIdx > High(aPtrs) then
+    if LIdx > High(APtrs) then
       Break;
-    Release(aPtrs[LIdx]);
+    Release(APtrs[LIdx]);
   end;
 end;
 

@@ -59,9 +59,9 @@ type
 
     { IBlockPoolBatch }
     {** 批量获取块，返回实际获取数量 *}
-    function AcquireN(out aPtrs: array of Pointer; aCount: Integer): Integer;
+    function AcquireN(out APtrs: array of Pointer; ACount: Integer): Integer;
     {** 批量归还块 *}
-    procedure ReleaseN(const aPtrs: array of Pointer; aCount: Integer);
+    procedure ReleaseN(const APtrs: array of Pointer; ACount: Integer);
 
     property Inner: IBlockPool read FInner;
   end;
@@ -116,28 +116,28 @@ begin
   end;
 end;
 
-function TBlockPoolConcurrent.AcquireN(out aPtrs: array of Pointer; aCount: Integer): Integer;
+function TBlockPoolConcurrent.AcquireN(out APtrs: array of Pointer; ACount: Integer): Integer;
 var
   LBatch: IBlockPoolBatch;
   LIdx: Integer;
   LPtr: Pointer;
 begin
   Result := 0;
-  if aCount <= 0 then Exit(0);
+  if ACount <= 0 then Exit(0);
   FLock.Acquire;
   try
-    if aCount > Length(aPtrs) then
-      aCount := Length(aPtrs);
+    if ACount > Length(APtrs) then
+      ACount := Length(APtrs);
     if Supports(FInner, IBlockPoolBatch, LBatch) then
-      Exit(LBatch.AcquireN(aPtrs, aCount));
-    for LIdx := 0 to aCount - 1 do
+      Exit(LBatch.AcquireN(APtrs, ACount));
+    for LIdx := 0 to ACount - 1 do
     begin
-      if LIdx > High(aPtrs) then
+      if LIdx > High(APtrs) then
         Break;
       LPtr := FInner.Acquire;
       if LPtr = nil then
         Break;
-      aPtrs[LIdx] := LPtr;
+      APtrs[LIdx] := LPtr;
       Inc(Result);
     end;
   finally
@@ -145,26 +145,26 @@ begin
   end;
 end;
 
-procedure TBlockPoolConcurrent.ReleaseN(const aPtrs: array of Pointer; aCount: Integer);
+procedure TBlockPoolConcurrent.ReleaseN(const APtrs: array of Pointer; ACount: Integer);
 var
   LBatch: IBlockPoolBatch;
   LIdx: Integer;
 begin
-  if aCount <= 0 then Exit;
+  if ACount <= 0 then Exit;
   FLock.Acquire;
   try
-    if aCount > Length(aPtrs) then
-      aCount := Length(aPtrs);
+    if ACount > Length(APtrs) then
+      ACount := Length(APtrs);
     if Supports(FInner, IBlockPoolBatch, LBatch) then
     begin
-      LBatch.ReleaseN(aPtrs, aCount);
+      LBatch.ReleaseN(APtrs, ACount);
       Exit;
     end;
-    for LIdx := 0 to aCount - 1 do
+    for LIdx := 0 to ACount - 1 do
     begin
-      if LIdx > High(aPtrs) then
+      if LIdx > High(APtrs) then
         Break;
-      FInner.Release(aPtrs[LIdx]);
+      FInner.Release(APtrs[LIdx]);
     end;
   finally
     FLock.Release;

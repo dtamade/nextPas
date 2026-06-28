@@ -33,8 +33,8 @@ type
     FInner: TSlabPool;
     FLock: TMemMutex;
   public
-    constructor Create(aCapacity: SizeUInt; aAllocator: IAllocator = nil; aMinShift: SizeUInt = 3); overload;
-    constructor Create(aCapacity: SizeUInt; const aConfig: TSlabConfig; aAllocator: IAllocator = nil); overload;
+    constructor Create(aCapacity: SizeUInt; AAllocator: IAllocator = nil; aMinShift: SizeUInt = 3); overload;
+    constructor Create(aCapacity: SizeUInt; const AConfig: TSlabConfig; AAllocator: IAllocator = nil); overload;
     destructor Destroy; override;
   public
     // IPool
@@ -74,18 +74,18 @@ implementation
 
 { TSlabPoolConcurrent }
 
-constructor TSlabPoolConcurrent.Create(aCapacity: SizeUInt; aAllocator: IAllocator; aMinShift: SizeUInt);
+constructor TSlabPoolConcurrent.Create(aCapacity: SizeUInt; AAllocator: IAllocator; aMinShift: SizeUInt);
 begin
   inherited Create;
   FLock.Init;
-  FInner := TSlabPool.Create(aCapacity, aAllocator, aMinShift);
+  FInner := TSlabPool.Create(aCapacity, AAllocator, aMinShift);
 end;
 
-constructor TSlabPoolConcurrent.Create(aCapacity: SizeUInt; const aConfig: TSlabConfig; aAllocator: IAllocator);
+constructor TSlabPoolConcurrent.Create(aCapacity: SizeUInt; const AConfig: TSlabConfig; AAllocator: IAllocator);
 begin
   inherited Create;
   FLock.Init;
-  FInner := TSlabPool.Create(aCapacity, aConfig, aAllocator);
+  FInner := TSlabPool.Create(aCapacity, AConfig, AAllocator);
 end;
 
 destructor TSlabPoolConcurrent.Destroy;

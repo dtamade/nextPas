@@ -8,11 +8,11 @@ type
   {** 最小基座接口（可用于统一抽象，但不强制大小语义） *}
   IPool = interface
     ['{6B2E8E2D-0C3A-4E6C-9D7F-2B7E4B7A9A10}']
-    function Acquire(out aPtr: Pointer): Boolean;
-    function TryAcquire(out aPtr: Pointer): Boolean;
-    function AcquireN(out aPtrs: array of Pointer; aCount: Integer): Integer;
-    procedure Release(aPtr: Pointer);
-    procedure ReleaseN(const aPtrs: array of Pointer; aCount: Integer);
+    function Acquire(out APtr: Pointer): Boolean;
+    function TryAcquire(out APtr: Pointer): Boolean;
+    function AcquireN(out APtrs: array of Pointer; ACount: Integer): Integer;
+    procedure Release(APtr: Pointer);
+    procedure ReleaseN(const APtrs: array of Pointer; ACount: Integer);
     procedure Reset;
   end;
 
@@ -23,14 +23,14 @@ type
 
 {**
  * @desc Default AcquireN loop: call AAcquire repeatedly, fill APtrs up to
- *       min(aCount, Length(aPtrs)), stop on nil. Returns acquired count.
+ *       min(ACount, Length(APtrs)), stop on nil. Returns acquired count.
  *}
 function DefaultAcquireN(const AAcquire: TAcquireOneFunc;
   out APtrs: array of Pointer; ACount: Integer): Integer;
 
 {**
  * @desc Default ReleaseN loop: call ARelease for each entry in APtrs,
- *       up to min(aCount, Length(aPtrs)).
+ *       up to min(ACount, Length(APtrs)).
  *}
 procedure DefaultReleaseN(const ARelease: TReleaseOneProc;
   const APtrs: array of Pointer; ACount: Integer);

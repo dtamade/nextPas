@@ -966,8 +966,6 @@ done:
   Dec(pool^.stats[slot].used);
 end;
 
-// 所有旧的 slab 函数已删除，使用 nginx 移植版本
-
 { TFixedSlabPool }
 constructor TFixedSlabPool.Create(ACapacity: SizeUInt; AAllocator: IAllocator; AMinShift: SizeUInt);
 var

@@ -169,9 +169,9 @@ type
     procedure IndexSegmentPages(aSegIdx: Integer);
   public
     {** 创建 Slab 池（默认配置）*}
-    constructor Create(aCapacity: SizeUInt; aAllocator: IAllocator = nil; aMinShift: SizeUInt = 3); overload;
+    constructor Create(ACapacity: SizeUInt; AAllocator: IAllocator = nil; aMinShift: SizeUInt = 3); overload;
     {** 创建 Slab 池（自定义配置）*}
-    constructor Create(aCapacity: SizeUInt; const aConfig: TSlabConfig; aAllocator: IAllocator = nil); overload;
+    constructor Create(ACapacity: SizeUInt; const AConfig: TSlabConfig; AAllocator: IAllocator = nil); overload;
     {** 销毁池并释放所有段和回退分配 *}
     destructor Destroy; override;
     // IPool
@@ -901,13 +901,13 @@ begin
   end;
 end;
 
-constructor TSlabPool.Create(aCapacity: SizeUInt; aAllocator: IAllocator; aMinShift: SizeUInt);
+constructor TSlabPool.Create(ACapacity: SizeUInt; AAllocator: IAllocator; aMinShift: SizeUInt);
 var
   LSegment: TFixedSlabPool;
 begin
   inherited Create;
-  if aAllocator=nil then FAllocator:=nextpas.core.mem.allocator.GetRtlAllocator else FAllocator:=aAllocator;
-  if aCapacity=0 then aCapacity:=64*1024;
+  if AAllocator=nil then FAllocator:=nextpas.core.mem.allocator.GetRtlAllocator else FAllocator:=AAllocator;
+  if ACapacity=0 then ACapacity:=64*1024;
   if aMinShift=0 then aMinShift:=3;
 
   if FConfig.MinShift = 0 then
@@ -919,14 +919,14 @@ begin
     FConfig.PageSize := 4096;
 
 
-  FInitialCapacity:=aCapacity; FMinShift:=aMinShift; FActive:=0;
+  FInitialCapacity:=ACapacity; FMinShift:=aMinShift; FActive:=0;
   ZeroMem(@FPerf, SizeOf(FPerf));
   SetLength(FSegments,1);
-  LSegment:=TFixedSlabPool.Create(aCapacity,FAllocator,aMinShift);
+  LSegment:=TFixedSlabPool.Create(ACapacity,FAllocator,aMinShift);
   FSegments[0]:=LSegment;
   FAvailCount := 0;  // 显式初始化
   FbMapInit(8);
-  PageMapInit( (aCapacity shr LSegment.PageShift) * 2 );
+  PageMapInit( (ACapacity shr LSegment.PageShift) * 2 );
   IndexSegmentPages(0);
 end;
 
@@ -938,13 +938,13 @@ begin
   Result.SupportsAligned := True;   // AllocAligned 通过 fallback 路径实现
 end;
 
-constructor TSlabPool.Create(aCapacity: SizeUInt; const aConfig: TSlabConfig; aAllocator: IAllocator);
+constructor TSlabPool.Create(ACapacity: SizeUInt; const AConfig: TSlabConfig; AAllocator: IAllocator);
 begin
-  // 忽略 aConfig.EnablePageMerging（兼容字段）
+  // 忽略 AConfig.EnablePageMerging（兼容字段）
   // MinShift 和 MaxAllocSize 采纳
-  FConfig := aConfig;
+  FConfig := AConfig;
   if FConfig.MinShift=0 then FConfig.MinShift := 3;
-  Create(aCapacity, aAllocator, FConfig.MinShift);
+  Create(ACapacity, AAllocator, FConfig.MinShift);
 end;
 
 function TSlabPool.Alloc(ASize: SizeUInt): Pointer; inline;

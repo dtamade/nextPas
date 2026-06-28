@@ -41,29 +41,67 @@ lock surface，同时把真实宿主原语继续收敛在 `platform.sync`。它�
 - `nextpas.core.mem.arena.thread`
 - `nextpas.core.mem.arena` facade
 
-当前活跃的增长型 arena 是 `TChunkedArena`。`arena.growable` 已经不属于当前架构 truth。
+当前活跃的增长型 arena 是 `TChunkedArena`。`arena.growable` 已删除，其功能由 `TChunkedArena` 取代。
 
-### L2：allocator 和 pool
+### L2：allocator、pool 和内部实现
 
-Allocator 侧常用单元：
+Allocator 侧：
 
-- `nextpas.core.mem.allocator.base`
-- `nextpas.core.mem.allocator.arena`
-- `nextpas.core.mem.allocator.tracking`
-- `nextpas.core.mem.allocator.leak_check`
-- `nextpas.core.mem.allocator.fallback`
-- `nextpas.core.mem.allocator.mimalloc.loader`
-- `nextpas.core.mem.allocator.mimalloc`
+- `nextpas.core.mem.allocator.base` — `TAllocator` 抽象基类 + `IAllocator` 定义
+- `nextpas.core.mem.allocator.rtl` — FPC RTL GetMem/FreeMem 后端
+- `nextpas.core.mem.allocator.crt` — C runtime malloc/free 后端（条件编译）
+- `nextpas.core.mem.allocator.callback` — 回调委托后端
+- `nextpas.core.mem.allocator.foundation` — 最小 L0 门面（RTL + Callback）
+- `nextpas.core.mem.allocator.arena` — Arena → IAllocator 包装（`TVirtualArenaAllocator`）
+- `nextpas.core.mem.allocator.tracking` — 跟踪包装（统计 + 回调）
+- `nextpas.core.mem.allocator.leak_check` — 泄漏检测包装
+- `nextpas.core.mem.allocator.fallback` — 多后端 fallback 链
+- `nextpas.core.mem.allocator.mmap` — mmap 匿名映射后端
+- `nextpas.core.mem.allocator.mimalloc.loader` — mimalloc 动态库路径发现
+- `nextpas.core.mem.allocator.mimalloc` — mimalloc FFI 绑定 + allocator 语义
+- `nextpas.core.mem.allocator.guard` — Guard page 调试分配器（PROT_NONE 保护）
+- `nextpas.core.mem.allocator.growing` — **核心**: TLS + Central Pool 三层通用分配器
+- `nextpas.core.mem.allocator` — Allocator 侧聚合门面
 
-Pool 侧常用单元：
+Growing allocator 内部层（不单独对外暴露）：
 
-- `nextpas.core.mem.pool`
-- `nextpas.core.mem.pool.sizeclass`
-- `nextpas.core.mem.blockpool`
-- `nextpas.core.mem.blockpool.sharded`
-- `nextpas.core.mem.stack_pool`
-- `nextpas.core.mem.memory_map`
-- `nextpas.core.mem.mapped_slab_pool`
+- `nextpas.core.mem.sizeclass` — 62 档位大小分类表（O(1) 查表）
+- `nextpas.core.mem.span` — Bitmap span（BSF 单指令分配）
+- `nextpas.core.mem.cache.thread` — TLS free list + batch refill/flush
+- `nextpas.core.mem.central` — Central span pool + spinlock + lock-free inbox
+- `nextpas.core.mem.shuffle` — Free-list 随机插入（防 heap spraying）
+- `nextpas.core.mem.default` — 全局 `DefaultAllocator`（`TRtlAllocator` 单例）
+- `nextpas.core.mem.utils` — 内部工具函数（overlap/alignment/growth）
+
+Pool 侧：
+
+- `nextpas.core.mem.pool.base` — `IPool` 接口定义
+- `nextpas.core.mem.pool.fixed` — 固定大小块池（位图 + free list）
+- `nextpas.core.mem.pool.fixed.growable` — 可增长固定池
+- `nextpas.core.mem.pool.fixed_slab` — 固定 slab 池（nginx 移植算法）
+- `nextpas.core.mem.pool.sizeclass` — 大小类池（多尺寸自动选择）
+- `nextpas.core.mem.pool.slab` — 页级 slab 池
+- `nextpas.core.mem.pool.slab.concurrent` — 并发 slab 池
+- `nextpas.core.mem.pool.slab.sharded` — 分片 slab 池
+- `nextpas.core.mem.pool.memory_pool` — `IMemoryPool` 接口定义
+- `nextpas.core.mem.pool.object_pool` — 泛型对象池（`IObjectPool<T>`）
+- `nextpas.core.mem.pool.allocator` — 池分配器（池 → IAllocator 包装）
+- `nextpas.core.mem.pool` — Pool 侧聚合门面
+
+BlockPool 侧：
+
+- `nextpas.core.mem.blockpool` — `IBlockPool` / `IBlockPoolBatch` + `TBlockPool`
+- `nextpas.core.mem.blockpool.concurrent` — 并发块池
+- `nextpas.core.mem.blockpool.growable` — 可增长块池
+- `nextpas.core.mem.blockpool.sharded` — 分片块池
+
+其他：
+
+- `nextpas.core.mem.stack_pool` — 栈池（LIFO 固定大小）
+- `nextpas.core.mem.ring_buffer` — 环形缓冲区（Go chan 对标）
+- `nextpas.core.mem.memory_map` — `TMemoryMap` / `TSharedMemory` 映射包装
+- `nextpas.core.mem.mapped_slab_pool` — 匿名映射 slab 分配器
+- `nextpas.core.mem.secure` — 安全内存清零（`SecureZeroMemory` 等）
 
 ### L3：门面
 
@@ -117,6 +155,49 @@ type
 - `FreeMem` 是 `procedure`，当前 contract 不返回释放字节数
 - `AllocAligned` / `FreeAligned` 是显式能力，而不是把 aligned block 混进普通 `FreeMem`
 - 40+ 模块依赖这条 surface，所以这里的变化成本远高于 arena 内部实现
+
+## GrowingAllocator 三层架构
+
+`TGrowingAllocator`（`allocator.growing.pas`）是模块的核心通用分配器，对标 Go runtime.mallocgc。
+
+```
+┌─────────────────────────────────────────────────┐
+│  Thread-Local Cache (cache.thread.pas)          │
+│  - threadvar TThreadCache per thread            │
+│  - 62 size classes, adaptive batch refill       │
+│  - Free list: intrusive singly-linked           │
+│  - Zero contention hot path                     │
+├─────────────────────────────────────────────────┤
+│  Central Pool (central.pas)                     │
+│  - TCentralPool per size class                  │
+│  - Spinlock-protected span management           │
+│  - Lock-free inbox (CAS push) for cross-thread  │
+│  - Scavenger: periodic OS memory release        │
+├─────────────────────────────────────────────────┤
+│  Size Class Table (sizeclass.pas)               │
+│  - 62 classes across 6 bands                    │
+│  - O(1) lookup via table                        │
+│  - Band 0-3: 8-256B (small), 4-5: medium/large  │
+└─────────────────────────────────────────────────┘
+```
+
+### 分配路径
+
+1. **Fast path**: TLS cache → free list pop → return (zero contention)
+2. **Refill**: TLS cache empty → batch acquire from Central Pool (spinlock)
+3. **Span alloc**: Central pool empty → allocate new span from OS
+
+### 释放路径
+
+1. **Fast path**: TLS cache has space → push to free list
+2. **Flush**: TLS cache full → batch release to Central Pool
+3. **Cross-thread free**: 目标线程 TLS → CAS push to Central inbox (lock-free)
+
+### 安全特性
+
+- **Free-list shuffle** (`shuffle.pas`): 释放时随机插入位置，防止 heap spraying
+- **Double-free detection**: GUARD_MAGIC header 检测
+- **Scan/NoScan separation**: 指针类型和纯数据分开存储
 
 ## 四类 arena 的定位
 
