@@ -15,7 +15,8 @@ type
   TAnsiMode = (amAuto, amOn, amOff);
 
   TConfigKey = (ckFilter, ckTag, ckTimeout, ckAnsi,
-    ckOutSink, ckErrSink, ckRetry, ckWorkers, ckCount, ckSlow);
+    ckOutSink, ckErrSink, ckRetry, ckWorkers, ckCount, ckSlow,
+    ckShuffle, ckFailFast, ckList);
   TConfigKeys = set of TConfigKey;
 
   IOutputSink = interface
@@ -69,6 +70,9 @@ type
         >0 = max concurrent OS threads in parallel mode (batch dispatch) }
     RepeatAllCount: Integer; { --count=N: run all tests N times (>1), 0=once }
     SlowTestCount : Integer; { N slowest tests to show in summary (0=off, default=5) }
+    ShuffleSeed   : Integer; { 0=off, -1=random, >0=specific seed }
+    FailFast      : Boolean; { true = stop on first failure }
+    ListMode      : Boolean; { true = list test names only, don't run }
   end;
 
 function DefaultConfig: TTestConfig;
@@ -86,8 +90,14 @@ procedure SetDefaultRetryCount(ARetryCount: Integer);
 procedure SetDefaultMaxParallelWorkers(AMaxWorkers: Integer);
 procedure SetDefaultRepeatAllCount(ARepeatCount: Integer);
 procedure SetDefaultSlowTestCount(ACount: Integer);
+procedure SetDefaultShuffleSeed(ASeed: Integer);
+procedure SetDefaultFailFast(AFailFast: Boolean);
+procedure SetDefaultListMode(AListMode: Boolean);
 function  GetRepeatAllCount(const AConfig: TTestConfig): Integer;
 function  GetSlowTestCount(const AConfig: TTestConfig): Integer;
+function  GetShuffleSeed(const AConfig: TTestConfig): Integer;
+function  GetFailFast(const AConfig: TTestConfig): Boolean;
+function  GetListMode(const AConfig: TTestConfig): Boolean;
 
 implementation
 
@@ -107,6 +117,9 @@ begin
   Result.MaxParallelWorkers := 0; { unlimited by default }
   Result.RepeatAllCount := 0; { run once by default }
   Result.SlowTestCount := 5; { show top 5 slowest by default }
+  Result.ShuffleSeed   := 0; { shuffle off by default }
+  Result.FailFast      := False;
+  Result.ListMode      := False;
 end;
 
 function DefaultConfig: TTestConfig;
@@ -140,6 +153,9 @@ begin
     Result.RepeatAllCount := LDefaults.RepeatAllCount;
   if Result.SlowTestCount = 0 then
     Result.SlowTestCount := LDefaults.SlowTestCount;
+  if Result.ShuffleSeed = 0 then
+    Result.ShuffleSeed := LDefaults.ShuffleSeed;
+  { FailFast and ListMode: false is the intentional default, no merge needed }
 end;
 
 function ResolveOutSink(const AConfig: TTestConfig): IOutputSink;
@@ -224,6 +240,24 @@ begin
   Include(GExplicit, ckSlow);
 end;
 
+procedure SetDefaultShuffleSeed(ASeed: Integer);
+begin
+  GDefaultConfig.ShuffleSeed := ASeed;
+  Include(GExplicit, ckShuffle);
+end;
+
+procedure SetDefaultFailFast(AFailFast: Boolean);
+begin
+  GDefaultConfig.FailFast := AFailFast;
+  Include(GExplicit, ckFailFast);
+end;
+
+procedure SetDefaultListMode(AListMode: Boolean);
+begin
+  GDefaultConfig.ListMode := AListMode;
+  Include(GExplicit, ckList);
+end;
+
 function GetRepeatAllCount(const AConfig: TTestConfig): Integer;
 begin
   Result := ResolveConfig(AConfig).RepeatAllCount;
@@ -232,6 +266,21 @@ end;
 function GetSlowTestCount(const AConfig: TTestConfig): Integer;
 begin
   Result := ResolveConfig(AConfig).SlowTestCount;
+end;
+
+function GetShuffleSeed(const AConfig: TTestConfig): Integer;
+begin
+  Result := ResolveConfig(AConfig).ShuffleSeed;
+end;
+
+function GetFailFast(const AConfig: TTestConfig): Boolean;
+begin
+  Result := ResolveConfig(AConfig).FailFast;
+end;
+
+function GetListMode(const AConfig: TTestConfig): Boolean;
+begin
+  Result := ResolveConfig(AConfig).ListMode;
 end;
 
 procedure TStdoutSink.Write(const AText: string);

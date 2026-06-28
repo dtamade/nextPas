@@ -219,6 +219,30 @@ begin
     Result := 0;
 end;
 
+function ParseShuffleSeed(const AArg: string): Integer;
+{ Returns: 0 = no shuffle, -1 = --shuffle (random), >0 = --shuffle-seed=N }
+begin
+  if AArg = '--shuffle' then
+    Exit(-1);
+  if Copy(AArg, 1, 16) = '--shuffle-seed=' then
+  begin
+    Result := StrToIntDef(Copy(AArg, 17, MaxInt), -1);
+    if Result = 0 then Result := -1; { seed=0 means off, so treat 0 as -1 }
+  end
+  else
+    Result := 0;
+end;
+
+function IsFailFastArg(const AArg: string): Boolean;
+begin
+  Result := (AArg = '--failfast') or (AArg = '--fail-fast');
+end;
+
+function IsListArg(const AArg: string): Boolean;
+begin
+  Result := (AArg = '--list') or (AArg = '--list-tests');
+end;
+
 procedure SetCurrentTestContext(AContext: TObject);
 begin
   GCurrentTestContextObj := AContext;
@@ -330,6 +354,39 @@ begin
       Exit;
     end;
   end;
+end;
+
+function ParseShuffleFromArgs: Integer;
+var
+  K, LSeed: Integer;
+begin
+  Result := 0;
+  for K := 1 to ParamCount do
+  begin
+    LSeed := ParseShuffleSeed(ParamStr(K));
+    if LSeed <> 0 then
+      Exit(LSeed);
+  end;
+end;
+
+function ParseFailFastFromArgs: Boolean;
+var
+  K: Integer;
+begin
+  Result := False;
+  for K := 1 to ParamCount do
+    if IsFailFastArg(ParamStr(K)) then
+      Exit(True);
+end;
+
+function ParseListFromArgs: Boolean;
+var
+  K: Integer;
+begin
+  Result := False;
+  for K := 1 to ParamCount do
+    if IsListArg(ParamStr(K)) then
+      Exit(True);
 end;
 
 function RunnerConfig(const ARunner: TTestRunner): TTestConfig;
@@ -745,6 +802,14 @@ begin
   WriteSuiteHeader(Name, IntToStr(Length(Tests)) + ' tests',
     LOutSink, LConfig);
 
+  { Shuffle tests if enabled }
+  if LConfig.ShuffleSeed <> 0 then
+  begin
+    ShuffleEntries(Tests, LConfig.ShuffleSeed);
+    LOutSink.WriteLn(AnsiDim(
+      '  shuffled (seed=' + IntToStr(Abs(LConfig.ShuffleSeed)) + ')', LConfig));
+  end;
+
   { Suite-level setup (uses shared helper) }
   if not RunSetup(LConfig, LSkip, LLastFailMsg) then
   begin
@@ -1063,6 +1128,13 @@ begin
     SetCurrentTestContext(nil);
     LSubCtxI := nil;
     LSubCtx := nil;
+    { FailFast: stop on first failure }
+    if LConfig.FailFast and (LStatus in [tsFailed, tsError]) then
+    begin
+      LOutSink.WriteLn(AnsiYellow(
+        '  FAILFAST: stopping on first failure', LConfig));
+      Break;
+    end;
   end;
 
   { Suite-level teardown (uses shared helper) }
@@ -1457,15 +1529,16 @@ end;
 function TTestRunner.RunAllWithResult(
   out AResults: specialize TArray<TTestRunResult>): Boolean;
 var
-  I, LIter, LRepeatAll: Integer;
+  I, J, LIter, LRepeatAll, LShuffleSeed: Integer;
   LAllPassed: Boolean;
   LSuiteResult: TTestRunResult;
   LConfig: TTestConfig;
   LOutSink: IOutputSink;
   LStartMs: Int64;
+  LFailFast, LListMode: Boolean;
 
 begin
-  { Auto-detect --filter / --tag / --count from command line }
+  { Auto-detect CLI args }
   if GetTestFilter = '' then
     SetTestFilter(ParseFilterFromArgs);
   if GetTagFilter = '' then
@@ -1476,11 +1549,40 @@ begin
     if LIter > 0 then
       SetDefaultRepeatAllCount(LIter);
   end;
+  LShuffleSeed := ParseShuffleFromArgs;
+  if LShuffleSeed <> 0 then
+    SetDefaultShuffleSeed(LShuffleSeed);
+  if ParseFailFastFromArgs then
+    SetDefaultFailFast(True);
+  if ParseListFromArgs then
+    SetDefaultListMode(True);
   LConfig := RunnerConfig(Self);
   LOutSink := ResolveOutSink(LConfig);
 
+  { List mode: print test names and exit without running }
+  LListMode := GetListMode(LConfig);
+  if LListMode then
+  begin
+    for I := 0 to High(Suites) do
+    begin
+      LOutSink.WriteLn(Suites[I].Name + ':');
+      for J := 0 to High(Suites[I].Tests) do
+      begin
+        if Suites[I].Tests[J].Kind = ekSkipped then
+          LOutSink.WriteLn('  ' + Suites[I].Tests[J].Name + ' (skipped)')
+        else
+          LOutSink.WriteLn('  ' + Suites[I].Tests[J].Name);
+      end;
+    end;
+    SetLength(AResults, 0);
+    HasRun := True;
+    Result := True;
+    Exit;
+  end;
+
   LRepeatAll := GetRepeatAllCount(LConfig);
   if LRepeatAll <= 0 then LRepeatAll := 1;
+  LFailFast := GetFailFast(LConfig);
 
   LOutSink.WriteLn(
     AnsiBold('=== ', LConfig) +
@@ -1490,6 +1592,8 @@ begin
     LOutSink.WriteLn(AnsiDim(
       '  Running all tests ' + IntToStr(LRepeatAll) + ' times (--count=' +
       IntToStr(LRepeatAll) + ')', LConfig));
+  if LFailFast then
+    LOutSink.WriteLn(AnsiDim('  FailFast enabled', LConfig));
 
   LAllPassed := True;
   TotalPass := 0;
@@ -1510,7 +1614,19 @@ begin
     for I := 0 to High(Suites) do
     begin
       if not Suites[I].RunWithResult(LSuiteResult) then
+      begin
         LAllPassed := False;
+        if LFailFast then
+        begin
+          LOutSink.WriteLn(AnsiYellow(
+            '  FAILFAST: stopping after suite failure', LConfig));
+          AResults[I] := LSuiteResult;
+          Inc(TotalPass, Suites[I].LastPass);
+          Inc(TotalFail, Suites[I].LastFail);
+          Inc(TotalSkip, Suites[I].LastSkip);
+          Break;
+        end;
+      end;
       { Only keep the last iteration's results }
       AResults[I] := LSuiteResult;
       Inc(TotalPass, Suites[I].LastPass);
@@ -1530,15 +1646,16 @@ end;
 function TTestRunner.RunAllParallelWithResult(APool: IThreadPool;
   out AResults: specialize TArray<TTestRunResult>): Boolean;
 var
-  I, LIter, LRepeatAll: Integer;
+  I, J, LIter, LRepeatAll, LShuffleSeed: Integer;
   LAllPassed: Boolean;
   LSuiteResult: TTestRunResult;
   LConfig: TTestConfig;
   LOutSink: IOutputSink;
   LStartMs: Int64;
+  LFailFast, LListMode: Boolean;
 
 begin
-  { Auto-detect --filter / --tag / --count from command line }
+  { Auto-detect CLI args }
   if GetTestFilter = '' then
     SetTestFilter(ParseFilterFromArgs);
   if GetTagFilter = '' then
@@ -1549,11 +1666,40 @@ begin
     if LIter > 0 then
       SetDefaultRepeatAllCount(LIter);
   end;
+  LShuffleSeed := ParseShuffleFromArgs;
+  if LShuffleSeed <> 0 then
+    SetDefaultShuffleSeed(LShuffleSeed);
+  if ParseFailFastFromArgs then
+    SetDefaultFailFast(True);
+  if ParseListFromArgs then
+    SetDefaultListMode(True);
   LConfig := RunnerConfig(Self);
   LOutSink := ResolveOutSink(LConfig);
 
+  { List mode: print test names and exit without running }
+  LListMode := GetListMode(LConfig);
+  if LListMode then
+  begin
+    for I := 0 to High(Suites) do
+    begin
+      LOutSink.WriteLn(Suites[I].Name + ':');
+      for J := 0 to High(Suites[I].Tests) do
+      begin
+        if Suites[I].Tests[J].Kind = ekSkipped then
+          LOutSink.WriteLn('  ' + Suites[I].Tests[J].Name + ' (skipped)')
+        else
+          LOutSink.WriteLn('  ' + Suites[I].Tests[J].Name);
+      end;
+    end;
+    SetLength(AResults, 0);
+    HasRun := True;
+    Result := True;
+    Exit;
+  end;
+
   LRepeatAll := GetRepeatAllCount(LConfig);
   if LRepeatAll <= 0 then LRepeatAll := 1;
+  LFailFast := GetFailFast(LConfig);
 
   LOutSink.WriteLn(
     AnsiBold('=== ', LConfig) +
@@ -1563,6 +1709,8 @@ begin
     LOutSink.WriteLn(AnsiDim(
       '  Running all tests ' + IntToStr(LRepeatAll) + ' times (--count=' +
       IntToStr(LRepeatAll) + ')', LConfig));
+  if LFailFast then
+    LOutSink.WriteLn(AnsiDim('  FailFast enabled', LConfig));
 
   LAllPassed := True;
   TotalPass := 0;
@@ -1583,7 +1731,19 @@ begin
     for I := 0 to High(Suites) do
     begin
       if not Suites[I].RunParallelWithResult(APool, LSuiteResult) then
+      begin
         LAllPassed := False;
+        if LFailFast then
+        begin
+          LOutSink.WriteLn(AnsiYellow(
+            '  FAILFAST: stopping after suite failure', LConfig));
+          AResults[I] := LSuiteResult;
+          Inc(TotalPass, Suites[I].LastPass);
+          Inc(TotalFail, Suites[I].LastFail);
+          Inc(TotalSkip, Suites[I].LastSkip);
+          Break;
+        end;
+      end;
       AResults[I] := LSuiteResult;
       Inc(TotalPass, Suites[I].LastPass);
       Inc(TotalFail, Suites[I].LastFail);
