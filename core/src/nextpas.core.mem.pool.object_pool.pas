@@ -149,10 +149,10 @@ type
       class function Default: TConfig; static;
 
       {** 设置分配器 | Set allocator *}
-      function WithAllocator(aAllocator: IAllocator): TConfig;
+      function WithAllocator(AAllocator: IAllocator): TConfig;
 
       {** 设置最大对象数 | Set maximum objects *}
-      function WithMaxSize(aMaxSize: SizeUInt): TConfig;
+      function WithMaxSize(AMaxSize: SizeUInt): TConfig;
 
       {** 设置创建回调 | Set creator callback *}
       function WithCreator(aCreator: TObjectCreatorRefFunc): TConfig;
@@ -206,11 +206,11 @@ type
 
   public
     // ✅ P0-1: 简化构造函数（使用 RefFunc 统一处理）
-    constructor Create(aAllocator: IAllocator; aMaxSize: SizeUInt;
+    constructor Create(AAllocator: IAllocator; AMaxSize: SizeUInt;
                        aCreator: TObjectCreatorRefFunc;
                        aInit: TObjectInitRefFunc;
                        aFinalize: TObjectFinalizeRefFunc);
-    constructor Create(aMaxSize: SizeUInt;
+    constructor Create(AMaxSize: SizeUInt;
                        aCreator: TObjectCreatorRefFunc;
                        aInit: TObjectInitRefFunc = nil;
                        aFinalize: TObjectFinalizeRefFunc = nil);
@@ -255,16 +255,16 @@ begin
   Result.FFinalize := nil;
 end;
 
-function TObjectPool.TConfig.WithAllocator(aAllocator: IAllocator): TConfig;
+function TObjectPool.TConfig.WithAllocator(AAllocator: IAllocator): TConfig;
 begin
   Result := Self;
-  Result.FAllocator := aAllocator;
+  Result.FAllocator := AAllocator;
 end;
 
-function TObjectPool.TConfig.WithMaxSize(aMaxSize: SizeUInt): TConfig;
+function TObjectPool.TConfig.WithMaxSize(AMaxSize: SizeUInt): TConfig;
 begin
   Result := Self;
-  Result.FMaxSize := aMaxSize;
+  Result.FMaxSize := AMaxSize;
 end;
 
 function TObjectPool.TConfig.WithCreator(aCreator: TObjectCreatorRefFunc): TConfig;
@@ -326,22 +326,22 @@ begin
 end;
 
 // ✅ P0-1: 核心构造函数 - 使用值语义存储回调
-constructor TObjectPool.Create(aAllocator: IAllocator; aMaxSize: SizeUInt;
+constructor TObjectPool.Create(AAllocator: IAllocator; AMaxSize: SizeUInt;
                                aCreator: TObjectCreatorRefFunc;
                                aInit: TObjectInitRefFunc;
                                aFinalize: TObjectFinalizeRefFunc);
 begin
   inherited Create;
 
-  if aMaxSize = 0 then
+  if AMaxSize = 0 then
     FMaxSize := 100
   else
-    FMaxSize := aMaxSize;
+    FMaxSize := AMaxSize;
 
-  if aAllocator = nil then
+  if AAllocator = nil then
     FAllocator := GetRtlAllocator
   else
-    FAllocator := aAllocator;
+    FAllocator := AAllocator;
 
   FTotalCreated := 0;
   FInPoolCount := 0;
@@ -360,12 +360,12 @@ begin
   FHasFinalize := Assigned(aFinalize);
 end;
 
-constructor TObjectPool.Create(aMaxSize: SizeUInt;
+constructor TObjectPool.Create(AMaxSize: SizeUInt;
                                aCreator: TObjectCreatorRefFunc;
                                aInit: TObjectInitRefFunc;
                                aFinalize: TObjectFinalizeRefFunc);
 begin
-  Create(nil, aMaxSize, aCreator, aInit, aFinalize);
+  Create(nil, AMaxSize, aCreator, aInit, aFinalize);
 end;
 
 constructor TObjectPool.Create(aCreator: TObjectCreatorRefFunc);

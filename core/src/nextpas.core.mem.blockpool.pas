@@ -71,8 +71,8 @@ type
    *}
   IBlockPoolBatch = interface(IBlockPool)
     [GUID_IBLOCKPOOLBATCH]
-    function AcquireN(out aPtrs: array of Pointer; aCount: Integer): Integer; // returns acquired count
-    procedure ReleaseN(const aPtrs: array of Pointer; aCount: Integer);
+    function AcquireN(out APtrs: array of Pointer; ACount: Integer): Integer; // returns acquired count
+    procedure ReleaseN(const APtrs: array of Pointer; ACount: Integer);
   end;
 
   {**
@@ -200,21 +200,21 @@ type
      * @desc 批量获取多个块
      *
      * @params
-     *   aPtrs   输出数组，接收获取到的块指针
-     *   aCount  期望获取的数量
+     *   APtrs   输出数组，接收获取到的块指针
+     *   ACount  期望获取的数量
      *
-     * @return 实际获取的数量（可能少于 aCount）
+     * @return 实际获取的数量（可能少于 ACount）
      *}
-    function AcquireN(out aPtrs: array of Pointer; aCount: Integer): Integer;
+    function AcquireN(out APtrs: array of Pointer; ACount: Integer): Integer;
 
     {**
      * @desc 批量归还多个块
      *
      * @params
-     *   aPtrs   要归还的块指针数组
-     *   aCount  数组中有效指针的数量
+     *   APtrs   要归还的块指针数组
+     *   ACount  数组中有效指针的数量
      *}
-    procedure ReleaseN(const aPtrs: array of Pointer; aCount: Integer);
+    procedure ReleaseN(const APtrs: array of Pointer; ACount: Integer);
 
     { 辅助 }
 
@@ -492,14 +492,14 @@ begin
   Result := aPtr <> nil;
 end;
 
-function TBlockPool.AcquireN(out aPtrs: array of Pointer; aCount: Integer): Integer;
+function TBlockPool.AcquireN(out APtrs: array of Pointer; ACount: Integer): Integer;
 begin
-  Result := DefaultAcquireN(@Acquire, aPtrs, aCount);
+  Result := DefaultAcquireN(@Acquire, APtrs, ACount);
 end;
 
-procedure TBlockPool.ReleaseN(const aPtrs: array of Pointer; aCount: Integer);
+procedure TBlockPool.ReleaseN(const APtrs: array of Pointer; ACount: Integer);
 begin
-  DefaultReleaseN(@Release, aPtrs, aCount);
+  DefaultReleaseN(@Release, APtrs, ACount);
 end;
 
 procedure TBlockPool.Release(aPtr: Pointer);

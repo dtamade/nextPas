@@ -36,7 +36,7 @@ type
     Allocator: IAllocator;         // nil = system heap (GetMem/FreeMem)
     KeepSegments: Boolean;         // keep extra segments on Reset
 
-    class function Default(aBlockSize, aInitialCapacity: SizeUInt): TGrowingBlockPoolConfig; static;
+    class function Default(ABlockSize, aInitialCapacity: SizeUInt): TGrowingBlockPoolConfig; static;
   end;
 
   {**
@@ -103,10 +103,10 @@ type
 
     procedure RebuildFreeList;
     procedure FreeSegment(aIndex: SizeInt);
-    procedure ShrinkToSegmentCount(aCount: SizeInt);
+    procedure ShrinkToSegmentCount(ACount: SizeInt);
   public
     constructor Create(const aConfig: TGrowingBlockPoolConfig); overload;
-    constructor Create(aBlockSize, aInitialCapacity: SizeUInt; aAlignment: SizeUInt = DEFAULT_ALIGNMENT); overload;
+    constructor Create(ABlockSize, aInitialCapacity: SizeUInt; AAlignment: SizeUInt = DEFAULT_ALIGNMENT); overload;
     destructor Destroy; override;
 
     { IBlockPool }
@@ -120,8 +120,8 @@ type
     function InUse: SizeUInt;
 
     { IBlockPoolBatch }
-    function AcquireN(out aPtrs: array of Pointer; aCount: Integer): Integer;
-    procedure ReleaseN(const aPtrs: array of Pointer; aCount: Integer);
+    function AcquireN(out APtrs: array of Pointer; ACount: Integer): Integer;
+    procedure ReleaseN(const APtrs: array of Pointer; ACount: Integer);
 
     { Diagnostics }
     function SegmentCount: SizeUInt; inline;
@@ -138,9 +138,9 @@ implementation
 {$PUSH}
 {$WARN 4055 OFF} // pointer/ordinal conversions in pool internals
 
-class function TGrowingBlockPoolConfig.Default(aBlockSize, aInitialCapacity: SizeUInt): TGrowingBlockPoolConfig;
+class function TGrowingBlockPoolConfig.Default(ABlockSize, aInitialCapacity: SizeUInt): TGrowingBlockPoolConfig;
 begin
-  Result.BlockSize := aBlockSize;
+  Result.BlockSize := ABlockSize;
   Result.InitialCapacity := aInitialCapacity;
   Result.MaxCapacity := 0;
   Result.GrowthKind := bpgkGeometric;
@@ -481,19 +481,19 @@ begin
     FreeMem(LRaw);
 end;
 
-procedure TGrowingBlockPool.ShrinkToSegmentCount(aCount: SizeInt);
+procedure TGrowingBlockPool.ShrinkToSegmentCount(ACount: SizeInt);
 var
   LIdx: SizeInt;
 begin
-  if aCount < 0 then
-    aCount := 0;
-  if aCount >= Length(FSegments) then
+  if ACount < 0 then
+    ACount := 0;
+  if ACount >= Length(FSegments) then
     Exit;
 
-  for LIdx := High(FSegments) downto aCount do
+  for LIdx := High(FSegments) downto ACount do
     FreeSegment(LIdx);
 
-  SetLength(FSegments, aCount);
+  SetLength(FSegments, ACount);
 end;
 
 constructor TGrowingBlockPool.Create(const aConfig: TGrowingBlockPoolConfig);
@@ -581,12 +581,12 @@ begin
     raise EOutOfMemory.Create(aeOutOfMemory, 'TGrowingBlockPool: failed to allocate initial segment');
 end;
 
-constructor TGrowingBlockPool.Create(aBlockSize, aInitialCapacity: SizeUInt; aAlignment: SizeUInt);
+constructor TGrowingBlockPool.Create(ABlockSize, aInitialCapacity: SizeUInt; AAlignment: SizeUInt);
 var
   LConfig: TGrowingBlockPoolConfig;
 begin
-  LConfig := TGrowingBlockPoolConfig.Default(aBlockSize, aInitialCapacity);
-  LConfig.Alignment := aAlignment;
+  LConfig := TGrowingBlockPoolConfig.Default(ABlockSize, aInitialCapacity);
+  LConfig.Alignment := AAlignment;
   Create(LConfig);
 end;
 
@@ -650,14 +650,14 @@ begin
   Result := aPtr <> nil;
 end;
 
-function TGrowingBlockPool.AcquireN(out aPtrs: array of Pointer; aCount: Integer): Integer;
+function TGrowingBlockPool.AcquireN(out APtrs: array of Pointer; ACount: Integer): Integer;
 begin
-  Result := DefaultAcquireN(@Acquire, aPtrs, aCount);
+  Result := DefaultAcquireN(@Acquire, APtrs, ACount);
 end;
 
-procedure TGrowingBlockPool.ReleaseN(const aPtrs: array of Pointer; aCount: Integer);
+procedure TGrowingBlockPool.ReleaseN(const APtrs: array of Pointer; ACount: Integer);
 begin
-  DefaultReleaseN(@Release, aPtrs, aCount);
+  DefaultReleaseN(@Release, APtrs, ACount);
 end;
 
 procedure TGrowingBlockPool.Release(aPtr: Pointer);
