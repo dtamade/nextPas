@@ -45,7 +45,6 @@ var
   LManager: TBaselineManager;
 begin
   LManager := TBaselineManager.Create(1.1);
-  Check(True, 'Created successfully');
   Check(Length(LManager.GetAllBaselines) = 0, 'Initial baselines = 0');
 end;
 

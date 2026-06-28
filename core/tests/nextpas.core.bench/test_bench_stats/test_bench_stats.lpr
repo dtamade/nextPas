@@ -212,13 +212,6 @@ begin
   for i := 0 to 999 do LData[i] := 100.0 + Random * 10.0 + Random * 10.0;
   Check(GAnalyzer.LooksNormalHeuristic(LData), 'Normal-like data passes heuristic check');
 
-  { Negative case: uniform distribution should NOT look normal
-    (heuristic limitation: it may still pass for some uniform data, so only
-    verify the function handles the call without error) }
-  SetLength(LData, 1000);
-  for i := 0 to 999 do LData[i] := i * 0.01; { uniform 0..10 }
-  GAnalyzer.LooksNormalHeuristic(LData);
-  Check(True, 'Uniform distribution: LooksNormalHeuristic completes without error');
 end;
 
 procedure TestComputeApproximatePValue;
@@ -501,7 +494,6 @@ begin
   try
     LResult := GAnalyzer.Percentile(LData, 50);
     { NaN may be at any position in sorted order; result could be NaN or a valid value }
-    Check(True, 'Percentile(50) with NaN returns a value (NaN or number)');
   except
     LNoCrash := False;
   end;

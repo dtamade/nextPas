@@ -348,7 +348,6 @@ begin
 
   // Enable tracking
   EnableGlobalMemoryTracking;
-  Check(True, 'EnableGlobalMemoryTracking does not crash');
 
   // Perform a known allocation
   LPtr := GetMem(256);
@@ -361,7 +360,6 @@ begin
 
   // Disable tracking
   DisableGlobalMemoryTracking;
-  Check(True, 'DisableGlobalMemoryTracking does not crash');
 
   // After disabling, further allocations should not be tracked
   LPtr := GetMem(512);
