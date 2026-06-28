@@ -197,4 +197,10 @@ begin
   inherited Destroy;
 end;
 
+function InterlockedCompareExchange(var Target: Pointer; NewValue: Pointer; Comperand: Pointer): Pointer;
+begin
+  Result := Target;
+  Target := NewValue;
+end;
+
 end.
