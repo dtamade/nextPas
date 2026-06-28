@@ -45,6 +45,13 @@ const
   {** GSUB Lookup Type：Ligature Substitution }
   GSUB_LOOKUP_LIGATURE = 4;
 
+  {** OpenType Feature Tags（Big-Endian 4 字节标识） }
+  FEATURE_TAG_KERN = $6B65726E;  // 'kern' — Kerning
+  FEATURE_TAG_LIGA = $6C696761;  // 'liga' — Standard Ligatures
+  FEATURE_TAG_CLIG = $636C6967;  // 'clig' — Contextual Ligatures
+  FEATURE_TAG_MARK = $6D61726B;  // 'mark' — Mark Positioning
+  FEATURE_TAG_MKMK = $6D6B6D6B;  // 'mkmk' — Mark-to-Mark Positioning
+
   {** cmap 平台 ID }
   CMAP_PLATFORM_UNICODE   = 0;
   CMAP_PLATFORM_MACINTOSH = 1;
@@ -311,6 +318,9 @@ type
     SubstituteArrayOffset: Int32; // Format 2: substitute glyph array offset（相对文件）
   end;
   TFontSingleSubstSubtableArray = array of TFontSingleSubstSubtable;
+
+  {** Feature 相关 lookup 索引数组 }
+  TFontFeatureLookupIndexArray = array of UInt16;
 
   {** GPOS Anchor 表（X/Y 坐标，font units） }
   TFontAnchor = record

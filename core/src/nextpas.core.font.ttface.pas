@@ -45,6 +45,12 @@ type
     FSinglePosSubtables: TFontSinglePosSubtableArray;
     FMarkToBaseSubtables: TFontMarkToBaseSubtableArray;
     FMarkToMarkSubtables: TFontMarkToMarkSubtableArray;
+    {** Feature-specific lookup indices }
+    FKernLookups: TFontFeatureLookupIndexArray;     // GPOS 'kern'
+    FMarkLookups: TFontFeatureLookupIndexArray;      // GPOS 'mark'
+    FMkmkLookups: TFontFeatureLookupIndexArray;      // GPOS 'mkmk'
+    FLigaLookups: TFontFeatureLookupIndexArray;      // GSUB 'liga'
+    FCligLookups: TFontFeatureLookupIndexArray;      // GSUB 'clig'
     FValid: Boolean;
     FLastError: string;
     procedure ParseHeader;
@@ -59,6 +65,8 @@ type
     procedure ParseOs2;
     procedure ParseGpos;
     procedure ParseGsub;
+    function ParseFeatureLookups(ATableOffset: Int32;
+      const AFeatureTags: array of UInt32): TFontFeatureLookupIndexArray;
     function ReadUInt16BE(AOffset: Int32): UInt16;
     function ReadUInt32BE(AOffset: Int32): UInt32;
     function ReadInt16BE(AOffset: Int32): Int16;
@@ -130,6 +138,17 @@ type
     {** 查找 Mark-to-Mark 定位。AMarkGlyph 是 attaching mark，ABaseMarkGlyph 是 base mark。
         返回 attaching mark 的 anchor 偏移。未匹配时返回 X=0,Y=0。 }
     function LookupMarkToMark(AMarkGlyph, ABaseMarkGlyph: UInt16): TFontAnchor;
+
+    {** GPOS 是否声明了 'kern' feature（PairPos lookups 受此控制） }
+    function HasFeatureKern: Boolean;
+    {** GPOS 是否声明了 'mark' feature（MarkBasePos lookups 受此控制） }
+    function HasFeatureMark: Boolean;
+    {** GPOS 是否声明了 'mkmk' feature（MarkMarkPos lookups 受此控制） }
+    function HasFeatureMkmk: Boolean;
+    {** GSUB 是否声明了 'liga' feature（Ligature lookups 受此控制） }
+    function HasFeatureLiga: Boolean;
+    {** GSUB 是否声明了 'clig' feature（Contextual Ligature lookups 受此控制） }
+    function HasFeatureClig: Boolean;
   end;
 
 implementation
@@ -649,6 +668,71 @@ begin
 end;
 
 { ========================================================================= }
+{ Feature List 解析                                                         }
+{ ========================================================================= }
+
+function TTFontFace.ParseFeatureLookups(ATableOffset: Int32;
+  const AFeatureTags: array of UInt32): TFontFeatureLookupIndexArray;
+var
+  LFeatListOff, LFeatCount, LI, LJ, LK: Int32;
+  LFeatTag, LFeatOff, LLookupCount, LLookupIdx: Int32;
+  LMatch, LAlready: Boolean;
+  LCapacity: Int32;
+begin
+  SetLength(Result, 0);
+  LCapacity := 0;
+  if FDataLength < ATableOffset + 10 then
+    Exit;
+  LFeatListOff := ATableOffset + ReadUInt16BE(ATableOffset + 6);
+  if LFeatListOff = ATableOffset then
+    Exit; // No feature list.
+  if FDataLength < LFeatListOff + 2 then
+    Exit;
+  LFeatCount := ReadUInt16BE(LFeatListOff);
+  for LI := 0 to LFeatCount - 1 do
+  begin
+    if FDataLength < LFeatListOff + 2 + LI * 6 + 8 then
+      Continue;
+    LFeatTag := ReadUInt32BE(LFeatListOff + 2 + LI * 6);
+    // Check if this feature tag matches any of the requested tags.
+    LMatch := False;
+    for LJ := 0 to High(AFeatureTags) do
+      if LFeatTag = AFeatureTags[LJ] then
+      begin
+        LMatch := True;
+        Break;
+      end;
+    if not LMatch then
+      Continue;
+    // Read the Feature table and collect lookup indices.
+    LFeatOff := LFeatListOff + ReadUInt16BE(LFeatListOff + 2 + LI * 6 + 4);
+    if FDataLength < LFeatOff + 4 then
+      Continue;
+    LLookupCount := ReadUInt16BE(LFeatOff + 2);
+    for LJ := 0 to LLookupCount - 1 do
+    begin
+      if FDataLength < LFeatOff + 4 + LJ * 2 + 2 then
+        Continue;
+      LLookupIdx := ReadUInt16BE(LFeatOff + 4 + LJ * 2);
+      // Add if not already present (dedup).
+      LAlready := False;
+      for LK := 0 to High(Result) do
+        if Result[LK] = LLookupIdx then
+        begin
+          LAlready := True;
+          Break;
+        end;
+      if not LAlready then
+      begin
+        LCapacity := Length(Result) + 1;
+        SetLength(Result, LCapacity);
+        Result[LCapacity - 1] := LLookupIdx;
+      end;
+    end;
+  end;
+end;
+
+{ ========================================================================= }
 { GPOS / GSUB 解析（kern pairs + ligatures）                                 }
 { ========================================================================= }
 
@@ -677,6 +761,13 @@ begin
   SetLength(FSinglePosSubtables, 0);
   SetLength(FMarkToBaseSubtables, 0);
   SetLength(FMarkToMarkSubtables, 0);
+  // Parse GPOS feature list for kern/mark/mkmk features.
+  FKernLookups := ParseFeatureLookups(LGposOff,
+    [FEATURE_TAG_KERN]);
+  FMarkLookups := ParseFeatureLookups(LGposOff,
+    [FEATURE_TAG_MARK]);
+  FMkmkLookups := ParseFeatureLookups(LGposOff,
+    [FEATURE_TAG_MKMK]);
 
   for LI := 0 to LLookupCount - 1 do
   begin
@@ -880,6 +971,11 @@ begin
   LLookupCount := ReadUInt16BE(LLookupListOff);
   SetLength(FLigatureSubtables, 0);
   SetLength(FSingleSubstSubtables, 0);
+  // Parse GSUB feature list for liga/clig features.
+  FLigaLookups := ParseFeatureLookups(LGsubOff,
+    [FEATURE_TAG_LIGA]);
+  FCligLookups := ParseFeatureLookups(LGsubOff,
+    [FEATURE_TAG_CLIG]);
 
   for LI := 0 to LLookupCount - 1 do
   begin
@@ -1572,6 +1668,31 @@ begin
     Result.Y := ReadInt16BE(LMark1AnchorOff + 2) - ReadInt16BE(LMark2AnchorOff + 2);
     Exit;
   end;
+end;
+
+function TTFontFace.HasFeatureKern: Boolean;
+begin
+  Result := Length(FKernLookups) > 0;
+end;
+
+function TTFontFace.HasFeatureMark: Boolean;
+begin
+  Result := Length(FMarkLookups) > 0;
+end;
+
+function TTFontFace.HasFeatureMkmk: Boolean;
+begin
+  Result := Length(FMkmkLookups) > 0;
+end;
+
+function TTFontFace.HasFeatureLiga: Boolean;
+begin
+  Result := Length(FLigaLookups) > 0;
+end;
+
+function TTFontFace.HasFeatureClig: Boolean;
+begin
+  Result := Length(FCligLookups) > 0;
 end;
 
 function TTFontFace.IsValid: Boolean;
