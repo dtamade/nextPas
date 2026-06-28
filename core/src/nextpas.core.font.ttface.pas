@@ -45,12 +45,14 @@ type
     FSinglePosSubtables: TFontSinglePosSubtableArray;
     FMarkToBaseSubtables: TFontMarkToBaseSubtableArray;
     FMarkToMarkSubtables: TFontMarkToMarkSubtableArray;
+    FCursivePosSubtables: TFontCursivePosSubtableArray;
     {** Feature-specific lookup indices }
     FKernLookups: TFontFeatureLookupIndexArray;     // GPOS 'kern'
     FMarkLookups: TFontFeatureLookupIndexArray;      // GPOS 'mark'
     FMkmkLookups: TFontFeatureLookupIndexArray;      // GPOS 'mkmk'
     FLigaLookups: TFontFeatureLookupIndexArray;      // GSUB 'liga'
     FCligLookups: TFontFeatureLookupIndexArray;      // GSUB 'clig'
+    FCursLookups: TFontFeatureLookupIndexArray;      // GPOS 'curs'
     FValid: Boolean;
     FLastError: string;
     procedure ParseHeader;
@@ -139,6 +141,17 @@ type
         返回 attaching mark 的 anchor 偏移。未匹配时返回 X=0,Y=0。 }
     function LookupMarkToMark(AMarkGlyph, ABaseMarkGlyph: UInt16): TFontAnchor;
 
+    {** GPOS CursivePos 是否有子表 }
+    function HasCursivePos: Boolean;
+    {** 查找 CursivePos ExitAnchor（字形 A 的出口锚点）。
+        AGlyphId 是前一个字形，返回其 exit anchor 的 X/Y 偏移。
+        未匹配时返回 X=0,Y=0。 }
+    function LookupCursivePosExitAnchor(AGlyphId: UInt16): TFontAnchor;
+    {** 查找 CursivePos EntryAnchor（字形 B 的入口锚点）。
+        AGlyphId 是后一个字形，返回其 entry anchor 的 X/Y 偏移。
+        未匹配时返回 X=0,Y=0。 }
+    function LookupCursivePosEntryAnchor(AGlyphId: UInt16): TFontAnchor;
+
     {** GPOS 是否声明了 'kern' feature（PairPos lookups 受此控制） }
     function HasFeatureKern: Boolean;
     {** GPOS 是否声明了 'mark' feature（MarkBasePos lookups 受此控制） }
@@ -149,6 +162,8 @@ type
     function HasFeatureLiga: Boolean;
     {** GSUB 是否声明了 'clig' feature（Contextual Ligature lookups 受此控制） }
     function HasFeatureClig: Boolean;
+    {** GPOS 是否声明了 'curs' feature（CursivePos lookups 受此控制） }
+    function HasFeatureCurs: Boolean;
   end;
 
 implementation
@@ -742,7 +757,7 @@ var
   LLookupListOff, LLookupCount, LI, LJ: Int32;
   LLookupOff, LLookupType, LSubtableCount: Int32;
   LSubOff, LSub, LPosFmt, LCovOff, LValFmt1, LValFmt2: Int32;
-  LEntrySize, LXAdvBit, LIdx: Int32;
+  LEntrySize, LXAdvBit, LIdx, LEECount: Int32;
   LSubtable: TFontPairPosSubtable;
   LSinglePos: TFontSinglePosSubtable;
 begin
@@ -761,13 +776,16 @@ begin
   SetLength(FSinglePosSubtables, 0);
   SetLength(FMarkToBaseSubtables, 0);
   SetLength(FMarkToMarkSubtables, 0);
-  // Parse GPOS feature list for kern/mark/mkmk features.
+  SetLength(FCursivePosSubtables, 0);
+  // Parse GPOS feature list for kern/mark/mkmk/curs features.
   FKernLookups := ParseFeatureLookups(LGposOff,
     [FEATURE_TAG_KERN]);
   FMarkLookups := ParseFeatureLookups(LGposOff,
     [FEATURE_TAG_MARK]);
   FMkmkLookups := ParseFeatureLookups(LGposOff,
     [FEATURE_TAG_MKMK]);
+  FCursLookups := ParseFeatureLookups(LGposOff,
+    [FEATURE_TAG_CURS]);
 
   for LI := 0 to LLookupCount - 1 do
   begin
@@ -895,6 +913,30 @@ begin
           SetLength(FPairPosSubtables, LIdx + 1);
           FPairPosSubtables[LIdx] := LSubtable;
         end;
+      end;
+    end;
+
+    // CursivePos (type 3): cursive attachment (entry/exit anchors).
+    if LLookupType = GPOS_LOOKUP_CursivePos then
+    begin
+      LSubtableCount := ReadUInt16BE(LLookupOff + 4);
+      for LJ := 0 to LSubtableCount - 1 do
+      begin
+        if FDataLength < LLookupOff + 8 + LJ * 2 then
+          Continue;
+        LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
+        if FDataLength < LSubOff + 6 then
+          Continue;
+        LSub := LSubOff;
+        if ReadUInt16BE(LSub) <> 1 then
+          Continue;
+        LEECount := ReadUInt16BE(LSub + 4);
+        LIdx := Length(FCursivePosSubtables);
+        SetLength(FCursivePosSubtables, LIdx + 1);
+        FCursivePosSubtables[LIdx].BaseOffset := LSub;
+        FCursivePosSubtables[LIdx].CoverageOffset := LSub + ReadUInt16BE(LSub + 2);
+        FCursivePosSubtables[LIdx].EntryExitCount := LEECount;
+        FCursivePosSubtables[LIdx].EntryExitArrayOffset := LSub + 6;
       end;
     end;
 
@@ -1670,6 +1712,152 @@ begin
   end;
 end;
 
+function TTFontFace.HasCursivePos: Boolean;
+begin
+  Result := Length(FCursivePosSubtables) > 0;
+end;
+
+function TTFontFace.LookupCursivePosExitAnchor(AGlyphId: UInt16): TFontAnchor;
+var
+  LI, LJ: Int32;
+  LSub: TFontCursivePosSubtable;
+  LCovIdx: Int32;
+  LRecOff, LExitOff: Int32;
+
+  function CoverageIndexOf(ACovOffset, ATarget: Int32): Int32;
+  var
+    LFmt, LCnt, LM, LR, LSG, LEC: Int32;
+  begin
+    if FDataLength < ACovOffset + 4 then
+      Exit(-1);
+    LFmt := ReadUInt16BE(ACovOffset);
+    if LFmt = 1 then
+    begin
+      LCnt := ReadUInt16BE(ACovOffset + 2);
+      for LM := 0 to LCnt - 1 do
+        if ReadUInt16BE(ACovOffset + 4 + LM * 2) = ATarget then
+          Exit(LM);
+      Result := -1;
+    end
+    else if LFmt = 2 then
+    begin
+      LCnt := ReadUInt16BE(ACovOffset + 2);
+      for LR := 0 to LCnt - 1 do
+      begin
+        if FDataLength < ACovOffset + 4 + LR * 6 + 6 then
+          Break;
+        LSG := ReadUInt16BE(ACovOffset + 4 + LR * 6);
+        LEC := ReadUInt16BE(ACovOffset + 4 + LR * 6 + 2);
+        if (ATarget >= LSG) and (ATarget <= LEC) then
+          Exit(ReadUInt16BE(ACovOffset + 4 + LR * 6 + 4) + (ATarget - LSG));
+      end;
+      Result := -1;
+    end
+    else
+      Result := -1;
+  end;
+
+begin
+  Result.X := 0;
+  Result.Y := 0;
+  for LI := 0 to High(FCursivePosSubtables) do
+  begin
+    LSub := FCursivePosSubtables[LI];
+    LCovIdx := CoverageIndexOf(LSub.CoverageOffset, AGlyphId);
+    if LCovIdx < 0 then
+      Continue;
+    if LCovIdx >= LSub.EntryExitCount then
+      Continue;
+    // EntryExitRecord[LCovIdx]: entryAnchorOffset(uint16) + exitAnchorOffset(uint16).
+    LRecOff := LSub.EntryExitArrayOffset + LCovIdx * 4;
+    if FDataLength < LRecOff + 4 then
+      Continue;
+    LExitOff := ReadUInt16BE(LRecOff + 2);  // exit anchor offset (relative to subtable).
+    if LExitOff = 0 then
+      Continue;  // null exit anchor.
+    LExitOff := LSub.BaseOffset + LExitOff;
+    if FDataLength < LExitOff + 4 then
+      Continue;
+    // AnchorFormat 1: X(Int16) + Y(Int16).
+    if ReadUInt16BE(LExitOff) = 1 then
+    begin
+      Result.X := ReadInt16BE(LExitOff + 2);
+      Result.Y := ReadInt16BE(LExitOff + 4);
+    end;
+    Exit;
+  end;
+end;
+
+function TTFontFace.LookupCursivePosEntryAnchor(AGlyphId: UInt16): TFontAnchor;
+var
+  LI: Int32;
+  LSub: TFontCursivePosSubtable;
+  LCovIdx: Int32;
+  LRecOff, LEntryOff: Int32;
+
+  function CoverageIndexOf(ACovOffset, ATarget: Int32): Int32;
+  var
+    LFmt, LCnt, LM, LR, LSG, LEC: Int32;
+  begin
+    if FDataLength < ACovOffset + 4 then
+      Exit(-1);
+    LFmt := ReadUInt16BE(ACovOffset);
+    if LFmt = 1 then
+    begin
+      LCnt := ReadUInt16BE(ACovOffset + 2);
+      for LM := 0 to LCnt - 1 do
+        if ReadUInt16BE(ACovOffset + 4 + LM * 2) = ATarget then
+          Exit(LM);
+      Result := -1;
+    end
+    else if LFmt = 2 then
+    begin
+      LCnt := ReadUInt16BE(ACovOffset + 2);
+      for LR := 0 to LCnt - 1 do
+      begin
+        if FDataLength < ACovOffset + 4 + LR * 6 + 6 then
+          Break;
+        LSG := ReadUInt16BE(ACovOffset + 4 + LR * 6);
+        LEC := ReadUInt16BE(ACovOffset + 4 + LR * 6 + 2);
+        if (ATarget >= LSG) and (ATarget <= LEC) then
+          Exit(ReadUInt16BE(ACovOffset + 4 + LR * 6 + 4) + (ATarget - LSG));
+      end;
+      Result := -1;
+    end
+    else
+      Result := -1;
+  end;
+
+begin
+  Result.X := 0;
+  Result.Y := 0;
+  for LI := 0 to High(FCursivePosSubtables) do
+  begin
+    LSub := FCursivePosSubtables[LI];
+    LCovIdx := CoverageIndexOf(LSub.CoverageOffset, AGlyphId);
+    if LCovIdx < 0 then
+      Continue;
+    if LCovIdx >= LSub.EntryExitCount then
+      Continue;
+    LRecOff := LSub.EntryExitArrayOffset + LCovIdx * 4;
+    if FDataLength < LRecOff + 4 then
+      Continue;
+    LEntryOff := ReadUInt16BE(LRecOff);  // entry anchor offset (relative to subtable).
+    if LEntryOff = 0 then
+      Continue;  // null entry anchor.
+    LEntryOff := LSub.BaseOffset + LEntryOff;
+    if FDataLength < LEntryOff + 4 then
+      Continue;
+    // AnchorFormat 1: X(Int16) + Y(Int16).
+    if ReadUInt16BE(LEntryOff) = 1 then
+    begin
+      Result.X := ReadInt16BE(LEntryOff + 2);
+      Result.Y := ReadInt16BE(LEntryOff + 4);
+    end;
+    Exit;
+  end;
+end;
+
 function TTFontFace.HasFeatureKern: Boolean;
 begin
   Result := Length(FKernLookups) > 0;
@@ -1693,6 +1881,11 @@ end;
 function TTFontFace.HasFeatureClig: Boolean;
 begin
   Result := Length(FCligLookups) > 0;
+end;
+
+function TTFontFace.HasFeatureCurs: Boolean;
+begin
+  Result := Length(FCursLookups) > 0;
 end;
 
 function TTFontFace.IsValid: Boolean;

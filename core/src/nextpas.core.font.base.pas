@@ -35,6 +35,8 @@ const
   GPOS_LOOKUP_PAIR_ADJUSTMENT = 2;
   {** GPOS Lookup Type：Single Adjustment }
   GPOS_LOOKUP_SINGLE_POS = 1;
+  {** GPOS Lookup Type：Cursive Attachment }
+  GPOS_LOOKUP_CursivePos = 3;
   {** GPOS Lookup Type：Mark-to-Base Attachment }
   GPOS_LOOKUP_MARK_TO_BASE = 4;
   {** GPOS Lookup Type：Mark-to-Mark Attachment }
@@ -51,6 +53,7 @@ const
   FEATURE_TAG_CLIG = $636C6967;  // 'clig' — Contextual Ligatures
   FEATURE_TAG_MARK = $6D61726B;  // 'mark' — Mark Positioning
   FEATURE_TAG_MKMK = $6D6B6D6B;  // 'mkmk' — Mark-to-Mark Positioning
+  FEATURE_TAG_CURS = $63757273;  // 'curs' — Cursive Positioning
 
   {** cmap 平台 ID }
   CMAP_PLATFORM_UNICODE   = 0;
@@ -349,6 +352,15 @@ type
     Mark2ArrayOffset: Int32;     // Mark2Array 偏移（attaching mark class + anchor）
   end;
   TFontMarkToMarkSubtableArray = array of TFontMarkToMarkSubtable;
+
+  {** GPOS CursivePos 子表（Format 1: Entry/Exit anchor pairs） }
+  TFontCursivePosSubtable = record
+    BaseOffset: Int32;           // 子表在文件中的偏移
+    CoverageOffset: Int32;       // Coverage 表偏移（相对文件）
+    EntryExitCount: Int32;       // EntryExitRecord 数量
+    EntryExitArrayOffset: Int32; // EntryExitRecord 数组起始偏移（相对文件）
+  end;
+  TFontCursivePosSubtableArray = array of TFontCursivePosSubtable;
 
 {** 字形轮廓内存释放 }
 procedure FontGlyphOutlineClear(var AOutline: TFontGlyphOutline);

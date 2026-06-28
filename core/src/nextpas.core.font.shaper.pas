@@ -29,7 +29,7 @@ type
   {** 塑形输出序列 }
   TFontShapedGlyphArray = array of TFontShapedGlyph;
 
-  {** 精简版文本塑形器：cmap + hmtx + SingleSubst + kern + SinglePos + ligature + mark positioning }
+  {** 精简版文本塑形器：cmap + hmtx + SingleSubst + kern + SinglePos + CursivePos + ligature + mark positioning }
   TFontLiteShaper = class
   private
     FFace: TTFontFace;
@@ -39,7 +39,7 @@ type
     destructor Destroy; override;
     {** 塑形单个 codepoint }
     function ShapeCodepoint(ACodepoint: UInt32): TFontShapedGlyph;
-    {** 塑形 codepoint 序列，应用 SingleSubst + kern + SinglePos + 连字 + mark 定位。
+    {** 塑形 codepoint 序列，应用 SingleSubst + kern + SinglePos + CursivePos + 连字 + mark 定位。
         返回的字形数可能少于输入（连字合并时）。 }
     function ShapeString(const ACodepoints: array of UInt32): TFontShapedGlyphArray;
     {** 获取字形水平步进宽度（font units） }
@@ -97,6 +97,7 @@ var
   LTotalAdvance: Int32;
   LMarkAnchor: TFontAnchor;
   LSubstGlyph: UInt16;
+  LCExit, LCEntry: TFontAnchor;
 begin
   LCount := Length(ACodepoints);
   if LCount = 0 then
@@ -197,6 +198,19 @@ begin
       LKernVal := FFace.LookupSinglePosXAdvance(Result[LI].GlyphIndex);
       if LKernVal <> 0 then
         Result[LI].AdvanceWidth := Result[LI].AdvanceWidth + LKernVal;
+    end;
+  // CursivePos: cursive attachment (entry/exit anchors).
+  // Align glyph B's entry anchor with glyph A's exit anchor (X direction).
+  if FFace.HasCursivePos then
+    for LI := 0 to High(Result) - 1 do
+    begin
+      LCExit := FFace.LookupCursivePosExitAnchor(Result[LI].GlyphIndex);
+      if (LCExit.X = 0) and (LCExit.Y = 0) then
+        Continue;
+      LCEntry := FFace.LookupCursivePosEntryAnchor(Result[LI + 1].GlyphIndex);
+      if (LCEntry.X = 0) and (LCEntry.Y = 0) then
+        Continue;
+      Result[LI].AdvanceWidth := Result[LI].AdvanceWidth + (LCExit.X - LCEntry.X);
     end;
 
   // Fourth pass: Mark-to-Base and Mark-to-Mark positioning.
