@@ -1,63 +1,79 @@
 program test_sha512;
-{$mode objfpc}{$H+}
+
+{$I nextpas.core.settings.inc}
+
 uses
-  SysUtils, nextpas.core.hash.base, nextpas.core.hash.intf, nextpas.core.hash.sha512;
-var
-  GPass: Integer = 0;
-procedure Check(const AName: string; ACond: Boolean);
-begin
-  if ACond then begin Inc(GPass); WriteLn('  [PASS] ', AName); end
-  else begin WriteLn('  [FAIL] ', AName); Halt(1); end;
-end;
+  SysUtils,
+  nextpas.core.hash.base,
+  nextpas.core.hash.intf,
+  nextpas.core.hash.sha512,
+  nextpas.core.test;
+
 function ToHex(const ABuf; ALen: Integer): string;
-var I: Integer; P: PByte;
-begin
-  Result := ''; P := @ABuf;
-  for I := 0 to ALen-1 do Result := Result + LowerCase(IntToHex(P[I], 2));
-end;
 var
-  LH: IHasher;
-  LD512: TSHA512Digest;
-  LD384: TSHA384Digest;
-  LData: AnsiString;
+  I: Integer;
+  P: PByte;
 begin
-  WriteLn('=== nextpas.core.hash.sha512 unit tests ===');
+  Result := '';
+  P := @ABuf;
+  for I := 0 to ALen - 1 do
+    Result := Result + LowerCase(IntToHex(P[I], 2));
+end;
 
-  // SHA-512("")
-  LH := NewSHA512;
-  LH.Sum(LD512, SHA512_DIGEST_SIZE);
-  Check('SHA-512("") prefix',
-    Copy(ToHex(LD512, 64), 1, 16) = 'cf83e1357eefb8bd');
+var
+  LRunner: TTestRunner;
+  LSuite: TTestSuite;
+begin
+  LSuite := TTestSuite.Create('sha512');
 
-  // SHA-512("abc")
-  LH := NewSHA512;
-  LData := 'abc';
-  LH.Write(LData[1], 3);
-  LH.Sum(LD512, SHA512_DIGEST_SIZE);
-  Check('SHA-512("abc") prefix',
-    Copy(ToHex(LD512, 64), 1, 16) = 'ddaf35a193617aba');
+  LSuite.Test('SHA-512("")', procedure
+  var LH: IHasher; LD: TSHA512Digest;
+  begin
+    LH := NewSHA512; LH.Sum(LD, SHA512_DIGEST_SIZE);
+    CheckEqual('cf83e1357eefb8bd', Copy(ToHex(LD, 64), 1, 16));
+  end);
 
-  // SHA-384("")
-  LH := NewSHA384;
-  LH.Sum(LD384, SHA384_DIGEST_SIZE);
-  Check('SHA-384("") prefix',
-    Copy(ToHex(LD384, 48), 1, 16) = '38b060a751ac9638');
+  LSuite.Test('SHA-512("abc")', procedure
+  var LH: IHasher; LD: TSHA512Digest; LData: AnsiString;
+  begin
+    LH := NewSHA512; LData := 'abc'; LH.Write(LData[1], 3); LH.Sum(LD, SHA512_DIGEST_SIZE);
+    CheckEqual('ddaf35a193617aba', Copy(ToHex(LD, 64), 1, 16));
+  end);
 
-  // SHA-384("abc")
-  LH := NewSHA384;
-  LH.Write(LData[1], 3);
-  LH.Sum(LD384, SHA384_DIGEST_SIZE);
-  Check('SHA-384("abc") prefix',
-    Copy(ToHex(LD384, 48), 1, 16) = 'cb00753f45a35e8b');
+  LSuite.Test('SHA-384("")', procedure
+  var LH: IHasher; LD: TSHA384Digest;
+  begin
+    LH := NewSHA384; LH.Sum(LD, SHA384_DIGEST_SIZE);
+    CheckEqual('38b060a751ac9638', Copy(ToHex(LD, 48), 1, 16));
+  end);
 
-  // Metadata
-  LH := NewSHA512;
-  Check('SHA-512 DigestSize=64', LH.DigestSize = 64);
-  Check('SHA-512 BlockSize=128', LH.BlockSize = 128);
-  LH := NewSHA384;
-  Check('SHA-384 DigestSize=48', LH.DigestSize = 48);
-  Check('SHA-384 BlockSize=128', LH.BlockSize = 128);
+  LSuite.Test('SHA-384("abc")', procedure
+  var LH: IHasher; LD: TSHA384Digest; LData: AnsiString;
+  begin
+    LH := NewSHA384; LData := 'abc'; LH.Write(LData[1], 3); LH.Sum(LD, SHA384_DIGEST_SIZE);
+    CheckEqual('cb00753f45a35e8b', Copy(ToHex(LD, 48), 1, 16));
+  end);
 
-  WriteLn;
-  WriteLn('Results: ', GPass, ' passed');
+  LSuite.Test('SHA-512 metadata', procedure
+  var LH: IHasher;
+  begin
+    LH := NewSHA512;
+    CheckEqual(64, LH.DigestSize);
+    CheckEqual(128, LH.BlockSize);
+  end);
+
+  LSuite.Test('SHA-384 metadata', procedure
+  var LH: IHasher;
+  begin
+    LH := NewSHA384;
+    CheckEqual(48, LH.DigestSize);
+    CheckEqual(128, LH.BlockSize);
+  end);
+
+  LRunner := TTestRunner.Create('nextpas.core.hash.sha512');
+  LRunner.Add(LSuite);
+  LRunner.RunAll;
+  LRunner.Summary;
+  if not LRunner.AllPassed then
+    Halt(1);
 end.
