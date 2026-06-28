@@ -93,6 +93,10 @@ type
     procedure ShortSkip(const AName: string; AProc: TTestProc);
     procedure ShortSkip(const AName: string; AProc: TTestClosure);
     procedure Skip(const AName: string; const AReason: string = '');
+    { Bench: register a benchmark (Go BenchmarkXxx equivalent).
+      BenchProc receives PBenchContext; framework controls N iterations.
+      Benches are only run when --bench is passed. }
+    procedure Bench(const AName: string; AProc: TBenchProc);
     procedure SetSetup(AProc: TTestProc);
     procedure SetSetup(AProc: TTestClosure);
     procedure SetTeardown(AProc: TTestProc);
@@ -128,6 +132,7 @@ type
         thread pool integration. }
     function  RunParallelWithResult(APool: IThreadPool;
       out AResult: TTestRunResult): Boolean;
+    function  RunBenchmarks(out AResults: TBenchResults): Boolean;
     procedure Summary;
     function  AllPassed: Boolean;
     { Free heap-allocated table test pointers (TableCase, TableProc) }
@@ -159,6 +164,8 @@ type
     function  RunAllParallel(APool: IThreadPool): Boolean;
     function  RunAllParallelWithResult(APool: IThreadPool;
       out AResults: specialize TArray<TTestRunResult>): Boolean;
+    function  RunAllBenchmarks(
+      out AResults: specialize TArray<TBenchResults>): Boolean;
     procedure Summary;
     function  AllPassed: Boolean;
   end;
@@ -295,6 +302,56 @@ begin
   end
   else
     Result := 0;
+end;
+
+function IsBenchArg(const AArg: string): Boolean;
+begin
+  Result := (Copy(AArg, 1, 8) = '--bench');
+end;
+
+function ParseBenchPattern(const AArg: string): string;
+begin
+  if AArg = '--bench' then
+    Exit('.');  { match all benchmarks }
+  if Copy(AArg, 1, 7) = '--bench' then
+  begin
+    if AArg[8] = '=' then
+      Exit(Copy(AArg, 9, MaxInt))
+    else if AArg = '--bench' then
+      Exit('.');
+  end;
+  Result := '';
+end;
+
+function ParseBenchTime(const AArg: string): Integer;
+{ Parse --benchtime=Nms or --benchtime=Ns. Returns ms, 0 if not matched. }
+var
+  LVal: string;
+  LNum: Integer;
+begin
+  if Copy(AArg, 1, 12) = '--benchtime=' then
+  begin
+    LVal := Copy(AArg, 13, MaxInt);
+    if (Length(LVal) > 1) and (LVal[Length(LVal)] = 's') then
+    begin
+      LNum := StrToIntDef(Copy(LVal, 1, Length(LVal) - 1), 0);
+      if LNum > 0 then Exit(LNum * 1000);
+    end;
+    if (Length(LVal) > 2) and (Copy(LVal, Length(LVal) - 1, 2) = 'ms') then
+    begin
+      LNum := StrToIntDef(Copy(LVal, 1, Length(LVal) - 2), 0);
+      if LNum > 0 then Exit(LNum);
+    end;
+    { bare number = seconds }
+    LNum := StrToIntDef(LVal, 0);
+    if LNum > 0 then Exit(LNum * 1000);
+  end;
+  Result := 0;
+end;
+
+function IsBenchMemArg(const AArg: string): Boolean;
+begin
+  Result := (AArg = '--benchmem') or (AArg = '-benchmem');
 end;
 
 procedure SetCurrentTestContext(AContext: TObject);
@@ -521,6 +578,53 @@ begin
   end;
 end;
 
+function ParseBenchFromArgs: string;
+{ Returns bench pattern: '' = no bench, '.' = all, 'Foo' = match 'Foo'. }
+var
+  K: Integer;
+begin
+  Result := '';
+  for K := 1 to ParamCount do
+  begin
+    if IsBenchArg(ParamStr(K)) then
+    begin
+      Result := ParseBenchPattern(ParamStr(K));
+      Exit;
+    end;
+    if (ParamStr(K) = '--bench') and (K < ParamCount) and
+       (Copy(ParamStr(K + 1), 1, 1) <> '-') then
+      Exit(ParamStr(K + 1));
+  end;
+end;
+
+function ParseBenchTimeFromArgs: Integer;
+var
+  K, LVal: Integer;
+begin
+  Result := 0;
+  for K := 1 to ParamCount do
+  begin
+    LVal := ParseBenchTime(ParamStr(K));
+    if LVal > 0 then
+      Exit(LVal);
+    if (ParamStr(K) = '--benchtime') and (K < ParamCount) then
+    begin
+      Result := StrToIntDef(ParamStr(K + 1), 0);
+      if Result > 0 then Exit(Result * 1000);
+    end;
+  end;
+end;
+
+function ParseBenchMemFromArgs: Boolean;
+var
+  K: Integer;
+begin
+  Result := False;
+  for K := 1 to ParamCount do
+    if IsBenchMemArg(ParamStr(K)) then
+      Exit(True);
+end;
+
 function RunnerConfig(const ARunner: TTestRunner): TTestConfig;
 begin
   if Length(ARunner.Suites) > 0 then
@@ -533,7 +637,8 @@ procedure ApplyCLIArgs;
 { Auto-detect CLI arguments and apply to global default config.
   Shared by RunAllWithResult and RunAllParallelWithResult. }
 var
-  LCount, LShuffleSeed, LMaxFail, LRunTimeout: Integer;
+  LCount, LShuffleSeed, LMaxFail, LRunTimeout, LBenchTime: Integer;
+  LBenchPattern: string;
 begin
   if GetTestFilter = '' then
     SetTestFilter(ParseFilterFromArgs);
@@ -566,6 +671,17 @@ begin
   LRunTimeout := ParseRunTimeoutFromArgs;
   if LRunTimeout > 0 then
     SetDefaultRunTimeoutSec(LRunTimeout);
+  LBenchPattern := ParseBenchFromArgs;
+  if LBenchPattern <> '' then
+  begin
+    SetDefaultBenchEnabled(True);
+    SetDefaultFilterPattern(LBenchPattern);
+  end;
+  LBenchTime := ParseBenchTimeFromArgs;
+  if LBenchTime > 0 then
+    SetDefaultBenchTimeMs(LBenchTime);
+  if ParseBenchMemFromArgs then
+    SetDefaultBenchMem(True);
 end;
 
 function WriteListMode(const ASuites: specialize TArray<TTestSuite>;
@@ -864,6 +980,17 @@ begin
   LEntry.Name      := AName;
   LEntry.Closure   := AProc;
   LEntry.ShortSkip := True;
+  RegisterEntry(Tests, LEntry);
+end;
+
+procedure TTestSuite.Bench(const AName: string; AProc: TBenchProc);
+var
+  LEntry: TTestEntry;
+begin
+  ClearEntry(LEntry);
+  LEntry.Name     := AName;
+  LEntry.Kind     := ekBench;
+  LEntry.BenchProc := AProc;
   RegisterEntry(Tests, LEntry);
 end;
 
@@ -1826,6 +1953,80 @@ begin
   Result := LastRunPassed;
 end;
 
+function TTestSuite.RunBenchmarks(out AResults: TBenchResults): Boolean;
+{ Run all ekBench entries with adaptive N scaling until timing stabilizes.
+    Algorithm (mirrors Go testing.B):
+    1. Start with N=1
+    2. Run N iterations, measure total time
+    3. If total time < BenchTimeMs, multiply N and retry
+    4. Stop when total time >= BenchTimeMs or N >= 1 billion
+    5. Report NsPerOp = TotalNs / N }
+var
+  I: Integer;
+  LEntry: TTestEntry;
+  LConfig: TTestConfig;
+  LOutSink: IOutputSink;
+  LBenchTimeMs: Integer;
+  LShowMem: Boolean;
+  LCtx: TBenchContext;
+  LN: Integer;
+  LStartMs, LElapsedMs: Int64;
+  LResult: TBenchResult;
+  LCount: Integer;
+begin
+  LConfig := ResolveConfig(Config);
+  LOutSink := ResolveOutSink(LConfig);
+  LBenchTimeMs := GetBenchTimeMs(LConfig);
+  if LBenchTimeMs <= 0 then LBenchTimeMs := 1000;
+  LShowMem := GetBenchMem(LConfig);
+  LCount := 0;
+  SetLength(AResults, 0);
+  LOutSink.WriteLn('');
+  WriteSuiteHeader(Name, 'benchmarks', LOutSink, LConfig);
+  for I := 0 to High(Tests) do
+  begin
+    LEntry := Tests[I];
+    if LEntry.Kind <> ekBench then Continue;
+    if not MatchesFilter(LEntry.Name, LConfig) then Continue;
+    { Adaptive N scaling — use GetTickCount64 (ms) for reliable timing }
+    LN := 1;
+    repeat
+      FillChar(LCtx, SizeOf(LCtx), 0);
+      LCtx.N := LN;
+      LStartMs := GetTickCount64;
+      LEntry.BenchProc(@LCtx);
+      LElapsedMs := GetTickCount64 - LStartMs;
+      if LElapsedMs >= LBenchTimeMs then
+        Break;
+      { Scale N: if too fast (< 10ms), multiply aggressively }
+      if LElapsedMs < 10 then
+        LN := LN * 100
+      else
+        LN := Integer(Int64(LN) * LBenchTimeMs div LElapsedMs);
+      if LN > 1000000000 then
+      begin
+        LN := 1000000000;
+        Break;
+      end;
+    until False;
+    { Final run with calibrated N }
+    FillChar(LCtx, SizeOf(LCtx), 0);
+    LCtx.N := LN;
+    LStartMs := GetTickCount64;
+    LEntry.BenchProc(@LCtx);
+    LElapsedMs := GetTickCount64 - LStartMs;
+    LResult := MakeBenchResult(LEntry.Name, LN,
+      LElapsedMs * 1000000, LCtx.AllocBytes, LCtx.AllocCount);
+    SetLength(AResults, Length(AResults) + 1);
+    AResults[High(AResults)] := LResult;
+    LOutSink.WriteLn(FormatBenchLine(LResult, LShowMem, LConfig));
+    Inc(LCount);
+  end;
+  if LCount = 0 then
+    LOutSink.WriteLn(AnsiDim('  (no benchmarks matched)', LConfig));
+  Result := LCount > 0;
+end;
+
 procedure TTestSuite.Summary;
 var
   LConfig: TTestConfig;
@@ -1953,6 +2154,7 @@ var
   LStartMs: Int64;
   LFailFast: Boolean;
   LMaxFailures: Integer;
+  LBenchResults: specialize TArray<TBenchResults>;
 begin
   ApplyCLIArgs;
   LConfig := RunnerConfig(Self);
@@ -2054,6 +2256,9 @@ begin
   { JSON output — emit machine-readable report to stdout }
   if GetJsonOutput(LConfig) then
     LOutSink.WriteLn(JSONReport(AResults, Name));
+  { Benchmarks — run after regular tests if --bench was passed }
+  if GetBenchEnabled(LConfig) then
+    RunAllBenchmarks(LBenchResults);
 end;
 
 function TTestRunner.RunAllParallelWithResult(APool: IThreadPool;
@@ -2167,6 +2372,30 @@ begin
   { JSON output — emit machine-readable report to stdout }
   if GetJsonOutput(LConfig) then
     LOutSink.WriteLn(JSONReport(AResults, Name));
+end;
+
+function TTestRunner.RunAllBenchmarks(
+  out AResults: specialize TArray<TBenchResults>): Boolean;
+var
+  I: Integer;
+  LConfig: TTestConfig;
+  LOutSink: IOutputSink;
+begin
+  ApplyCLIArgs;
+  LConfig := RunnerConfig(Self);
+  LOutSink := ResolveOutSink(LConfig);
+  LOutSink.WriteLn(
+    AnsiBold('=== ', LConfig) +
+    AnsiBold(Name + ' benchmarks', LConfig) +
+    AnsiBold(' ===', LConfig));
+  SetLength(AResults, Length(Suites));
+  Result := True;
+  for I := 0 to High(Suites) do
+  begin
+    if not Suites[I].RunBenchmarks(AResults[I]) then
+      { No benchmarks in this suite — not a failure }
+      ;
+  end;
 end;
 
 procedure TTestRunner.Summary;

@@ -13,6 +13,7 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 - **v3.12**: audit — config sentinel fix, table-test error handling, CLI dedup
 - **v4.0**: --short + --progress + --failures-max + --json + parallel ShortSkip fix
 - **v5.0**: --verbose + --timeout + Cleanup() + parallel verbose/cleanup
+- **v6.0**: Benchmark — adaptive N scaling, ns/op, --bench/--benchtime/--benchmem
 
 ## 竞品对比
 
@@ -30,6 +31,7 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 | Verbose | `-v` | `--show-output` | `--verbose` |
 | Global timeout | — | — | `--timeout=N` |
 | Cleanup | `t.Cleanup()` | — | `Suite.Cleanup()` |
+| Benchmark | `BenchmarkXxx` | — | `Bench()` + `--bench` |
 | JSON output | `-json` | — | `--json` |
 | List mode | — | `--list` | `--list` |
 | Tags | — | — | `--tag=` |
@@ -45,7 +47,7 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 | `test_expect` | IExpectation 流式断言 API | 92 |
 | `test_mock` | TMock 录制/验证/返回值/参数匹配 | 53 |
 | `test_output` | ANSI、StatusDot、filter、timeout、JUnit/TAP/JSON 格式化、brace expansion、层级过滤、hierarchical+glob 组合 | 64 |
-| `test_runner` | TTestRunner 多 suite、lifecycle、subtest、timeout、空 suite、ShouldFail、FormatDuration、shuffle、failfast、list、determinism、verbose、runtimeout、cleanup | 48+1x |
+| `test_runner` | TTestRunner 多 suite、lifecycle、subtest、timeout、空 suite、ShouldFail、FormatDuration、shuffle、failfast、list、determinism、verbose、runtimeout、cleanup、benchmark | 49+1x |
 | `test_lifecycle` | TestTable、TTestClosure、lifecycle 组合、facade 符号完整性 | 15 |
 | `test_parallel` | 并行执行、lifecycle、retry、skip、MaxParallelWorkers 批次调度、verbose、cleanup | 10 |
 | `test_diagnostics` | 错误诊断、stack trace、Double 比较、Error vs Failure | 15 |
@@ -118,3 +120,11 @@ core/src/nextpas.core.testing.pas           ← v1 兼容层（deprecated）
   - `--timeout=N` 全局运行超时: 整个 suite 运行超时保护，秒级精度 (**Go/Rust 独有**)
   - `Suite.Cleanup()` 保证清理: LIFO 清理回调，失败/成功均执行，串行+并行 (Go `t.Cleanup()` 等价)
   - 新增 5 个测试 (verbose + timeout + cleanup 串行/并行)
+- **v6.0**: Benchmark — Go `testing.B` 等价:
+  - `Bench(name, proc)`: 注册 benchmark，`TBenchProc` 接收 `PBenchContext` 控制 N 次迭代
+  - 自适应 N 缩放: 从 N=1 开始，按目标时间自动缩放至稳定 (Go 算法)
+  - `--bench[=pattern]`: 启用 benchmark，支持 pattern 匹配
+  - `--benchtime=Nms/Ns`: 设置每个 benchmark 目标时间 (默认 1s)
+  - `--benchmem`: 显示每次操作的内存分配 (B/op, allocs/op)
+  - `FormatBenchLine`: ANSI 着色输出 `name N ns/op`
+  - 新增 1 个 benchmark 测试 (Addition + StringConcat)
