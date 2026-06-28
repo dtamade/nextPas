@@ -15,6 +15,9 @@ var
   GParallelRetryCount: Integer = 0;
   GConcurrentCount: Integer = 0;
   GMaxConcurrent: Integer = 0;
+  { v3.12: ShouldFail in parallel }
+  GShouldFailSuite: TTestSuite;
+  GShouldFailResult: TTestRunResult;
 
 procedure TestParallelSimple;
 begin
@@ -460,6 +463,31 @@ begin
   WriteLn;
   SectionHeader('v3.1: MaxParallelWorkers Batch Dispatch');
   TestMaxParallelWorkers;
+
+  { ── v3.12: ShouldFail in parallel mode ────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('v3.12: ShouldFail in Parallel');
+  begin
+    GShouldFailSuite := TTestSuite.Create('ShouldFailParallel');
+    { ShouldFail that raises = should pass in parallel mode }
+    GShouldFailSuite.ShouldFail('raises_ok', procedure begin
+      raise Exception.Create('expected error');
+    end);
+    { ShouldFail that does NOT raise = should fail in parallel mode }
+    GShouldFailSuite.ShouldFail('no_raise_fail', procedure begin
+      { intentionally empty }
+    end);
+    { Regular test alongside ShouldFail }
+    GShouldFailSuite.Test('regular_pass', @TestParallelPassA);
+    GShouldFailSuite.RunParallelWithResult(nil, GShouldFailResult);
+    if GShouldFailResult.Passed <> 2 then
+      FailTest('expected 2 passed (raises_ok + regular_pass), got ' +
+        IntToStr(GShouldFailResult.Passed));
+    if GShouldFailResult.Failed <> 1 then
+      FailTest('expected 1 failed (no_raise_fail), got ' +
+        IntToStr(GShouldFailResult.Failed));
+    PassTest('✓ ShouldFail in parallel mode');
+  end;
 
   WriteLn;
   PassTest('ALL PARALLEL TESTS PASSED');
