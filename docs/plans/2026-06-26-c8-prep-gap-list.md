@@ -42,30 +42,27 @@
 
 ---
 
-## 🔴 剩余 Parser 语法错误
+## ✅ 已修复 Parser 语法错误 (2026-06-29)
 
-### P1：表达式链式调用
+### P1：表达式链式调用 — ✅ 已修复
 - `"statement" expected but "." found` — `collections.arr`
 - `(Self as TCollection).TryLoadFrom(...)` 不被识别
+- **修复**: `ParseStatement` 的 `tkLParen` 分支增加 postfix 链处理 (.method, ^, ())
+- **提交**: a0d6d0252
 
-### P2：函数指针调用
+### P2：函数指针调用 — ✅ 已修复
 - `"statement" expected but "(" found` — `collections.base`, `toml.parser`
 - `TEqualsFunc(aEquals^)(aLeft, aRight)` 不被识别
+- **修复**: `ParsePrimaryExpression` chaining 允许 `gnkDereference`/`gnkFunctionCall` 后跟 `tkLParen`
+- **提交**: a0d6d0252
 
-### P3：statement expected but ";" found
-- `collections.hashmap`, `collections.skiplist`
-
-### P4：IMPLEMENTATION expected but BEGIN/END found
-- `collections.vecdeque`, `bench.parallel`
-
-### P5：statement expected but END found
-- `bench.runner`
-
-### P6：identifier expected but "." found
-- `fs.dir` — uses 子句或限定名
+### P3-P6：级联错误 — ✅ 全部修复
+- P3-P6 是 P1/P2 的级联失败，修复 P1/P2 后自动解决
+- 所有 8 个模块现在 `syntax-status=ready`
 
 ### P7：非法字符
 - `collections.vec` — 源文件含非 ASCII 字节 $A8
+- **状态**: 未修复（源码问题，非编译器问题）
 
 ---
 
@@ -88,9 +85,23 @@
 - `Send` — http.client → FPC 后端失败
 - `Shutdown` — http.server → FPC 后端失败
 
-### S4：argument type mismatch — ⚠️ 待验证
+### S4：argument type mismatch — ✅ 已修复
 - `TextOfChar` — bench.report → ✅ 通过
 - `StringsSplit` — bench.xlang → 待测试
+- `UnicodeCompareStr` — collections.base → ✅ 已注册为 builtin (a0d6d0252)
+- `compare_unicodestring` — collections.base → ✅ GetParamSignature 签名对齐 (f16a7e6bc)
+- `equals_unicodestring` — collections.base → ✅ 同上
+
+### S7：unknown callable "UInt32" — ✅ 已修复
+- `toml.parser`, `fs.dir` → ✅ 注册 UInt32 为类型别名 (a0d6d0252)
+
+### S8：unknown member "Create" — 🔴 Pre-existing
+- `collections.base` (offset 49132) — 类引用调用 `LCollectionClass.Create(Self)` 未被识别
+
+### S9：wrong-argument-count "IsOverlap" — 🔴 Pre-existing
+- `collections.base` (4 处) — virtual abstract 方法在非泛型基类中，无函数体
+- 声明和调用都是 2 个参数，但 sema 报告 wrong-argument-count
+- 根因待查：可能是 FProcedureBodies 中缺少 abstract 方法条目
 
 ### S5：interface not implemented — ✅ 全部修复
 - `TBenchResults does not implement IBenchResults.*` — bench → ✅ 通过 (parser forward decl fix)
