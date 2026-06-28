@@ -33,6 +33,8 @@ const
 
   {** GPOS Lookup Type：Pair Adjustment（kern） }
   GPOS_LOOKUP_PAIR_ADJUSTMENT = 2;
+  {** GPOS Lookup Type：Single Adjustment }
+  GPOS_LOOKUP_SINGLE_POS = 1;
   {** GPOS Lookup Type：Mark-to-Base Attachment }
   GPOS_LOOKUP_MARK_TO_BASE = 4;
   {** GPOS Lookup Type：Mark-to-Mark Attachment }
@@ -268,6 +270,18 @@ type
     XAdvanceOffset: Int32;   // XAdvance 在 ValueRecord 中的字节偏移（-1 = 无）
   end;
   TFontPairPosSubtableArray = array of TFontPairPosSubtable;
+
+  {** GPOS SinglePos 子表（Format 1 uniform / Format 2 per-glyph） }
+  TFontSinglePosSubtable = record
+    BaseOffset: Int32;         // 子表在文件中的偏移
+    CoverageOffset: Int32;     // Coverage 表偏移（相对文件）
+    Format: UInt16;            // 1=uniform, 2=per-glyph array
+    ValueRecordSize: Int32;    // 每条 ValueRecord 的字节数
+    XAdvanceOffset: Int32;     // XAdvance 在 ValueRecord 中的字节偏移（-1 = 无）
+    GlyphCount: Int32;         // Format 2: glyph count
+    ValueArrayOffset: Int32;   // Format 1/2: ValueRecord 数据起始偏移（相对文件）
+  end;
+  TFontSinglePosSubtableArray = array of TFontSinglePosSubtable;
 
   {** GSUB 连字子表数据（查询时解析） }
   TFontLigatureSubtable = record

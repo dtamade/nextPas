@@ -41,6 +41,7 @@ type
     FPairPosSubtables: TFontPairPosSubtableArray;
     FLigatureSubtables: TFontLigatureSubtableArray;
     FSingleSubstSubtables: TFontSingleSubstSubtableArray;
+    FSinglePosSubtables: TFontSinglePosSubtableArray;
     FMarkToBaseSubtables: TFontMarkToBaseSubtableArray;
     FMarkToMarkSubtables: TFontMarkToMarkSubtableArray;
     FValid: Boolean;
@@ -108,6 +109,11 @@ type
     {** 查找单字形替换。AGlyphId 匹配 coverage 时返回替换字形索引。
         不匹配返回 0。 }
     function LookupSingleSubst(AGlyphId: UInt16): UInt16;
+    {** 是否包含单字形定位数据（GPOS SinglePos） }
+    function HasSinglePos: Boolean;
+    {** 查找单字形 XAdvance 调整。AGlyphId 匹配 coverage 时返回 XAdvance 偏移。
+        不匹配返回 0。 }
+    function LookupSinglePosXAdvance(AGlyphId: UInt16): Int16;
     {** 是否包含 Mark-to-Base 定位数据（GPOS MarkBasePos） }
     function HasMarkToBase: Boolean;
     {** 查找 Mark-to-Base 定位。AMarkGlyph 是 combining mark 的字形索引，
@@ -649,6 +655,7 @@ var
   LSubOff, LSub, LPosFmt, LCovOff, LValFmt1, LValFmt2: Int32;
   LEntrySize, LXAdvBit, LIdx: Int32;
   LSubtable: TFontPairPosSubtable;
+  LSinglePos: TFontSinglePosSubtable;
 begin
   LTableIdx := FindTable(TABLE_TAG_GPOS);
   if LTableIdx < 0 then
@@ -661,114 +668,10 @@ begin
     Exit;
   LLookupCount := ReadUInt16BE(LLookupListOff);
   SetLength(FPairPosSubtables, 0);
-
-  for LI := 0 to LLookupCount - 1 do
-  begin
-    if FDataLength < LLookupListOff + 4 + LI * 2 then
-      Continue;
-    LLookupOff := LLookupListOff + ReadUInt16BE(LLookupListOff + 2 + LI * 2);
-    if FDataLength < LLookupOff + 6 then
-      Continue;
-    LLookupType := ReadUInt16BE(LLookupOff);
-    if LLookupType <> GPOS_LOOKUP_PAIR_ADJUSTMENT then
-      Continue;
-    LSubtableCount := ReadUInt16BE(LLookupOff + 4);
-
-    for LJ := 0 to LSubtableCount - 1 do
-    begin
-      if FDataLength < LLookupOff + 8 + LJ * 2 then
-        Continue;
-      LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
-      LSub := LSubOff;
-      if FDataLength < LSub + 16 then
-        Continue;
-      LPosFmt := ReadUInt16BE(LSub);
-      LCovOff := ReadUInt16BE(LSub + 2);
-      LValFmt1 := ReadUInt16BE(LSub + 4);
-      LValFmt2 := ReadUInt16BE(LSub + 6);
-
-      // Only class-based PairPos (Format 2).
-      if LPosFmt <> 2 then
-        Continue;
-
-      // Compute XAdvance offset in ValueRecord.
-      // Order: XPlacement(0x01), YPlacement(0x02), XAdvance(0x04), YAdvance(0x08)
-      LXAdvBit := -1;
-      LEntrySize := 0;
-      if (LValFmt1 and $0001) <> 0 then Inc(LEntrySize, 2);
-      if (LValFmt1 and $0002) <> 0 then Inc(LEntrySize, 2);
-      if (LValFmt1 and $0004) <> 0 then begin LXAdvBit := LEntrySize; Inc(LEntrySize, 2); end;
-      if (LValFmt1 and $0008) <> 0 then Inc(LEntrySize, 2);
-      // valFmt2 size.
-      if (LValFmt2 and $0001) <> 0 then Inc(LEntrySize, 2);
-      if (LValFmt2 and $0002) <> 0 then Inc(LEntrySize, 2);
-      if (LValFmt2 and $0004) <> 0 then Inc(LEntrySize, 2);
-      if (LValFmt2 and $0008) <> 0 then Inc(LEntrySize, 2);
-
-      if (LEntrySize <= 0) or (LXAdvBit < 0) then
-        Continue;
-
-      LSubtable.BaseOffset := LSub;
-      LSubtable.CoverageOffset := LSub + LCovOff;
-      LSubtable.ClassDef1Offset := LSub + ReadUInt16BE(LSub + 8);
-      LSubtable.ClassDef2Offset := LSub + ReadUInt16BE(LSub + 10);
-      LSubtable.Class2Count := ReadUInt16BE(LSub + 14);
-      LSubtable.ValueRecordSize := LEntrySize;
-      LSubtable.XAdvanceOffset := LXAdvBit;
-
-      LIdx := Length(FPairPosSubtables);
-      SetLength(FPairPosSubtables, LIdx + 1);
-      FPairPosSubtables[LIdx] := LSubtable;
-    end;
-  end;
-
-  // Second pass: Mark-to-Base (lookup type 4).
+  SetLength(FSinglePosSubtables, 0);
   SetLength(FMarkToBaseSubtables, 0);
-  for LI := 0 to LLookupCount - 1 do
-  begin
-    if FDataLength < LLookupListOff + 4 + LI * 2 then
-      Continue;
-    LLookupOff := LLookupListOff + ReadUInt16BE(LLookupListOff + 2 + LI * 2);
-    if FDataLength < LLookupOff + 6 then
-      Continue;
-    LLookupType := ReadUInt16BE(LLookupOff);
-    if LLookupType <> GPOS_LOOKUP_MARK_TO_BASE then
-      Continue;
-    LSubtableCount := ReadUInt16BE(LLookupOff + 4);
-
-    for LJ := 0 to LSubtableCount - 1 do
-    begin
-      if FDataLength < LLookupOff + 8 + LJ * 2 then
-        Continue;
-      LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
-      if FDataLength < LSubOff + 12 then
-        Continue;
-      // MarkBasePos Format 1:
-      //   uint16 posFormat (=1)
-      //   Offset16 markCoverageOffset
-      //   Offset16 baseCoverageOffset
-      //   Offset16 markClassCount
-      //   Offset16 markArrayOffset
-      //   Offset16 baseArrayOffset
-      LSub := LSubOff;
-      if ReadUInt16BE(LSub) <> 1 then
-        Continue;
-
-      LIdx := Length(FMarkToBaseSubtables);
-      SetLength(FMarkToBaseSubtables, LIdx + 1);
-      FMarkToBaseSubtables[LIdx].BaseOffset := LSub;
-      FMarkToBaseSubtables[LIdx].MarkCoverageOffset := LSub + ReadUInt16BE(LSub + 2);
-      FMarkToBaseSubtables[LIdx].BaseCoverageOffset := LSub + ReadUInt16BE(LSub + 4);
-      FMarkToBaseSubtables[LIdx].ClassCount := ReadUInt16BE(LSub + 6);
-      FMarkToBaseSubtables[LIdx].MarkArrayOffset := LSub + ReadUInt16BE(LSub + 8);
-      FMarkToBaseSubtables[LIdx].BaseArrayOffset := LSub + ReadUInt16BE(LSub + 10);
-    end;
-  end;
-
-  // Third pass: Mark-to-Mark (lookup type 6).
-  // MarkMarkPos Format 1 has the same binary layout as MarkBasePos Format 1.
-  // Field semantics: Mark1=base mark, Mark2=attaching mark.
   SetLength(FMarkToMarkSubtables, 0);
+
   for LI := 0 to LLookupCount - 1 do
   begin
     if FDataLength < LLookupListOff + 4 + LI * 2 then
@@ -777,27 +680,146 @@ begin
     if FDataLength < LLookupOff + 6 then
       Continue;
     LLookupType := ReadUInt16BE(LLookupOff);
-    if LLookupType <> GPOS_LOOKUP_MARK_TO_MARK then
-      Continue;
-    LSubtableCount := ReadUInt16BE(LLookupOff + 4);
-    for LJ := 0 to LSubtableCount - 1 do
+
+    // SinglePos (type 1).
+    if LLookupType = GPOS_LOOKUP_SINGLE_POS then
     begin
-      if FDataLength < LLookupOff + 8 + LJ * 2 then
-        Continue;
-      LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
-      if FDataLength < LSubOff + 12 then
-        Continue;
-      LSub := LSubOff;
-      if ReadUInt16BE(LSub) <> 1 then
-        Continue;
-      LIdx := Length(FMarkToMarkSubtables);
-      SetLength(FMarkToMarkSubtables, LIdx + 1);
-      FMarkToMarkSubtables[LIdx].BaseOffset := LSub;
-      FMarkToMarkSubtables[LIdx].Mark1CoverageOffset := LSub + ReadUInt16BE(LSub + 2);
-      FMarkToMarkSubtables[LIdx].Mark2CoverageOffset := LSub + ReadUInt16BE(LSub + 4);
-      FMarkToMarkSubtables[LIdx].ClassCount := ReadUInt16BE(LSub + 6);
-      FMarkToMarkSubtables[LIdx].Mark1ArrayOffset := LSub + ReadUInt16BE(LSub + 8);
-      FMarkToMarkSubtables[LIdx].Mark2ArrayOffset := LSub + ReadUInt16BE(LSub + 10);
+      LSubtableCount := ReadUInt16BE(LLookupOff + 4);
+      for LJ := 0 to LSubtableCount - 1 do
+      begin
+        if FDataLength < LLookupOff + 8 + LJ * 2 then
+          Continue;
+        LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
+        LSub := LSubOff;
+        if FDataLength < LSub + 8 then
+          Continue;
+        LPosFmt := ReadUInt16BE(LSub);
+        LCovOff := ReadUInt16BE(LSub + 2);
+        LValFmt1 := ReadUInt16BE(LSub + 4);
+        LXAdvBit := -1;
+        LEntrySize := 0;
+        if (LValFmt1 and $0001) <> 0 then Inc(LEntrySize, 2);
+        if (LValFmt1 and $0002) <> 0 then Inc(LEntrySize, 2);
+        if (LValFmt1 and $0004) <> 0 then begin LXAdvBit := LEntrySize; Inc(LEntrySize, 2); end;
+        if (LValFmt1 and $0008) <> 0 then Inc(LEntrySize, 2);
+        if (LEntrySize <= 0) or (LXAdvBit < 0) then
+          Continue;
+        LSinglePos.BaseOffset := LSub;
+        LSinglePos.CoverageOffset := LSub + LCovOff;
+        LSinglePos.Format := LPosFmt;
+        LSinglePos.ValueRecordSize := LEntrySize;
+        LSinglePos.XAdvanceOffset := LXAdvBit;
+        if LPosFmt = 1 then
+        begin
+          LSinglePos.GlyphCount := 0;
+          LSinglePos.ValueArrayOffset := LSub + 6;
+        end
+        else if LPosFmt = 2 then
+        begin
+          if FDataLength < LSub + 8 then
+            Continue;
+          LSinglePos.GlyphCount := ReadUInt16BE(LSub + 6);
+          LSinglePos.ValueArrayOffset := LSub + 8;
+        end
+        else
+          Continue;
+        LIdx := Length(FSinglePosSubtables);
+        SetLength(FSinglePosSubtables, LIdx + 1);
+        FSinglePosSubtables[LIdx] := LSinglePos;
+      end;
+    end;
+
+    // PairPos (type 2).
+    if LLookupType = GPOS_LOOKUP_PAIR_ADJUSTMENT then
+    begin
+      LSubtableCount := ReadUInt16BE(LLookupOff + 4);
+      for LJ := 0 to LSubtableCount - 1 do
+      begin
+        if FDataLength < LLookupOff + 8 + LJ * 2 then
+          Continue;
+        LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
+        LSub := LSubOff;
+        if FDataLength < LSub + 16 then
+          Continue;
+        LPosFmt := ReadUInt16BE(LSub);
+        LCovOff := ReadUInt16BE(LSub + 2);
+        LValFmt1 := ReadUInt16BE(LSub + 4);
+        LValFmt2 := ReadUInt16BE(LSub + 6);
+        if LPosFmt <> 2 then
+          Continue;
+        LXAdvBit := -1;
+        LEntrySize := 0;
+        if (LValFmt1 and $0001) <> 0 then Inc(LEntrySize, 2);
+        if (LValFmt1 and $0002) <> 0 then Inc(LEntrySize, 2);
+        if (LValFmt1 and $0004) <> 0 then begin LXAdvBit := LEntrySize; Inc(LEntrySize, 2); end;
+        if (LValFmt1 and $0008) <> 0 then Inc(LEntrySize, 2);
+        if (LValFmt2 and $0001) <> 0 then Inc(LEntrySize, 2);
+        if (LValFmt2 and $0002) <> 0 then Inc(LEntrySize, 2);
+        if (LValFmt2 and $0004) <> 0 then Inc(LEntrySize, 2);
+        if (LValFmt2 and $0008) <> 0 then Inc(LEntrySize, 2);
+        if (LEntrySize <= 0) or (LXAdvBit < 0) then
+          Continue;
+        LSubtable.BaseOffset := LSub;
+        LSubtable.CoverageOffset := LSub + LCovOff;
+        LSubtable.ClassDef1Offset := LSub + ReadUInt16BE(LSub + 8);
+        LSubtable.ClassDef2Offset := LSub + ReadUInt16BE(LSub + 10);
+        LSubtable.Class2Count := ReadUInt16BE(LSub + 14);
+        LSubtable.ValueRecordSize := LEntrySize;
+        LSubtable.XAdvanceOffset := LXAdvBit;
+        LIdx := Length(FPairPosSubtables);
+        SetLength(FPairPosSubtables, LIdx + 1);
+        FPairPosSubtables[LIdx] := LSubtable;
+      end;
+    end;
+
+    // MarkBasePos (type 4).
+    if LLookupType = GPOS_LOOKUP_MARK_TO_BASE then
+    begin
+      LSubtableCount := ReadUInt16BE(LLookupOff + 4);
+      for LJ := 0 to LSubtableCount - 1 do
+      begin
+        if FDataLength < LLookupOff + 8 + LJ * 2 then
+          Continue;
+        LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
+        if FDataLength < LSubOff + 12 then
+          Continue;
+        LSub := LSubOff;
+        if ReadUInt16BE(LSub) <> 1 then
+          Continue;
+        LIdx := Length(FMarkToBaseSubtables);
+        SetLength(FMarkToBaseSubtables, LIdx + 1);
+        FMarkToBaseSubtables[LIdx].BaseOffset := LSub;
+        FMarkToBaseSubtables[LIdx].MarkCoverageOffset := LSub + ReadUInt16BE(LSub + 2);
+        FMarkToBaseSubtables[LIdx].BaseCoverageOffset := LSub + ReadUInt16BE(LSub + 4);
+        FMarkToBaseSubtables[LIdx].ClassCount := ReadUInt16BE(LSub + 6);
+        FMarkToBaseSubtables[LIdx].MarkArrayOffset := LSub + ReadUInt16BE(LSub + 8);
+        FMarkToBaseSubtables[LIdx].BaseArrayOffset := LSub + ReadUInt16BE(LSub + 10);
+      end;
+    end;
+
+    // MarkMarkPos (type 6).
+    if LLookupType = GPOS_LOOKUP_MARK_TO_MARK then
+    begin
+      LSubtableCount := ReadUInt16BE(LLookupOff + 4);
+      for LJ := 0 to LSubtableCount - 1 do
+      begin
+        if FDataLength < LLookupOff + 8 + LJ * 2 then
+          Continue;
+        LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
+        if FDataLength < LSubOff + 12 then
+          Continue;
+        LSub := LSubOff;
+        if ReadUInt16BE(LSub) <> 1 then
+          Continue;
+        LIdx := Length(FMarkToMarkSubtables);
+        SetLength(FMarkToMarkSubtables, LIdx + 1);
+        FMarkToMarkSubtables[LIdx].BaseOffset := LSub;
+        FMarkToMarkSubtables[LIdx].Mark1CoverageOffset := LSub + ReadUInt16BE(LSub + 2);
+        FMarkToMarkSubtables[LIdx].Mark2CoverageOffset := LSub + ReadUInt16BE(LSub + 4);
+        FMarkToMarkSubtables[LIdx].ClassCount := ReadUInt16BE(LSub + 6);
+        FMarkToMarkSubtables[LIdx].Mark1ArrayOffset := LSub + ReadUInt16BE(LSub + 8);
+        FMarkToMarkSubtables[LIdx].Mark2ArrayOffset := LSub + ReadUInt16BE(LSub + 10);
+      end;
     end;
   end;
 end;
@@ -1150,6 +1172,80 @@ begin
       if FDataLength < LSub.SubstituteArrayOffset + (LCovIdx + 1) * 2 then
         Continue;
       Result := ReadUInt16BE(LSub.SubstituteArrayOffset + LCovIdx * 2);
+      if Result <> 0 then
+        Exit;
+    end;
+  end;
+end;
+
+function TTFontFace.HasSinglePos: Boolean;
+begin
+  Result := Length(FSinglePosSubtables) > 0;
+end;
+
+function TTFontFace.LookupSinglePosXAdvance(AGlyphId: UInt16): Int16;
+var
+  LI, LCovIdx: Int32;
+  LSub: TFontSinglePosSubtable;
+
+  function CoverageIndexOf(ACovOffset, AGlyphId: Int32): Int32;
+  var
+    LFmt, LCnt, LM, LR, LSG, LEC: Int32;
+  begin
+    if FDataLength < ACovOffset + 4 then
+      Exit(-1);
+    LFmt := ReadUInt16BE(ACovOffset);
+    if LFmt = 1 then
+    begin
+      LCnt := ReadUInt16BE(ACovOffset + 2);
+      for LM := 0 to LCnt - 1 do
+        if ReadUInt16BE(ACovOffset + 4 + LM * 2) = AGlyphId then
+          Exit(LM);
+      Result := -1;
+    end
+    else if LFmt = 2 then
+    begin
+      LCnt := ReadUInt16BE(ACovOffset + 2);
+      for LR := 0 to LCnt - 1 do
+      begin
+        if FDataLength < ACovOffset + 4 + LR * 6 + 6 then
+          Break;
+        LSG := ReadUInt16BE(ACovOffset + 4 + LR * 6);
+        LEC := ReadUInt16BE(ACovOffset + 4 + LR * 6 + 2);
+        if (AGlyphId >= LSG) and (AGlyphId <= LEC) then
+          Exit(ReadUInt16BE(ACovOffset + 4 + LR * 6 + 4) + (AGlyphId - LSG));
+      end;
+      Result := -1;
+    end
+    else
+      Result := -1;
+  end;
+
+begin
+  Result := 0;
+  for LI := 0 to High(FSinglePosSubtables) do
+  begin
+    LSub := FSinglePosSubtables[LI];
+    LCovIdx := CoverageIndexOf(LSub.CoverageOffset, AGlyphId);
+    if LCovIdx < 0 then
+      Continue;
+    if LSub.Format = 1 then
+    begin
+      // Format 1: uniform — same ValueRecord for all glyphs.
+      if FDataLength < LSub.ValueArrayOffset + LSub.XAdvanceOffset + 2 then
+        Continue;
+      Result := ReadInt16BE(LSub.ValueArrayOffset + LSub.XAdvanceOffset);
+      if Result <> 0 then
+        Exit;
+    end
+    else if LSub.Format = 2 then
+    begin
+      // Format 2: per-glyph array.
+      if LCovIdx >= LSub.GlyphCount then
+        Continue;
+      if FDataLength < LSub.ValueArrayOffset + LCovIdx * LSub.ValueRecordSize + LSub.XAdvanceOffset + 2 then
+        Continue;
+      Result := ReadInt16BE(LSub.ValueArrayOffset + LCovIdx * LSub.ValueRecordSize + LSub.XAdvanceOffset);
       if Result <> 0 then
         Exit;
     end;
