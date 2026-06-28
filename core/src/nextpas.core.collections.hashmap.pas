@@ -290,11 +290,12 @@ begin
 end;
 
 function HashOfUInt64(x: QWord): UInt32;
-var lo,hi: UInt32;
 begin
-  lo := UInt32(x and $FFFFFFFF);
-  hi := UInt32(x shr 32);
-  Result := HashMix32(lo xor (hi * $9E3779B1));
+  { SplitMix64 — better avalanche for integer keys than split+multiply }
+  Inc(x, QWord($9E3779B97F4A7C15));
+  x := (x xor (x shr 30)) * QWord($BF58476D1CE4E5B9);
+  x := (x xor (x shr 27)) * QWord($94D049BB133111EB);
+  Result := UInt32(x xor (x shr 32));
 end;
 
 function HashOfAnsiString(const s: AnsiString): UInt32;
