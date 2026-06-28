@@ -6786,41 +6786,6 @@ begin
         Result := 0;
       end;
     gnkArrayAccess:
-    gnkDotAccess:
-      begin
-        if (ANode.ChildCount >= 2) and (ANode.ChildAt(0) <> nil) and
-          (ANode.ChildAt(1) <> nil) and
-          (ANode.ChildAt(1).NodeKind = gnkIdentifier) then
-        begin
-          BaseTypeId := InferExpressionType(ANode.ChildAt(0));
-          if (BaseTypeId > 0) and FModel.GetFieldMetaByName(
-            BaseTypeId,
-            ANode.ChildAt(1).Text,
-            FieldMeta
-          ) then
-            Exit(FieldMeta.TypeId);
-        end;
-        Result := 0;
-      end;
-    gnkDereference:
-      begin
-        if (ANode.ChildCount >= 1) and (ANode.ChildAt(0) <> nil) then
-        begin
-          BaseTypeId := InferExpressionType(ANode.ChildAt(0));
-          if (BaseTypeId > 0) and (BaseTypeId <= FModel.TypeCount) then
-          begin
-            CallName := FModel.TypeAt(CanonicalTypeId(BaseTypeId) - 1).Name;
-            if (Length(CallName) > 1) and (CallName[1] = 'P') then
-            begin
-              Result := FModel.FindTypeByName(Copy(CallName, 2, Length(CallName) - 1));
-              if Result > 0 then
-                Exit;
-            end;
-          end;
-        end;
-        Result := 0;
-      end;
-    gnkArrayAccess:
       Result := 0;
   end;
 end;
