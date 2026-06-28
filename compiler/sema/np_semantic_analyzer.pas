@@ -7481,14 +7481,9 @@ begin
     FModel.MarkReady;
 end;
 
-function TSemanticAnalyzer.HasPanic: Boolean;
-begin
-  Result := FHasPanic;
-end;
-
 function TSemanticAnalyzer.DetachModel: TSemanticModel;
 begin
-  FModel.Status := 'ready';
+  FModel.MarkReady;
   Result := FModel;
   FModel := nil;
 end;
