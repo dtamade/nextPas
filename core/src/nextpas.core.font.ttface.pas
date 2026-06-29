@@ -5094,6 +5094,9 @@ var
   LDeltasX, LDeltasY: array of Single;
 
   LPointDeltaX, LPointDeltaY: array of Single;
+  LTouched: array of Boolean;
+  LContourStart, LContourEnd, LNumTouched, LTPrev, LTNext: Int32;
+  LTouchedPts: array of Int32;
 
   LReadPos: Int32;
   LRunCount, LRunFlags: Int32;
@@ -5219,6 +5222,56 @@ var
           Dec(LM);
         end;
       end;
+    end;
+  end;
+
+  {** IUP interpolation for untouched points in a single contour range.
+      Interpolates deltas for untouched points between two touched endpoints.
+      If AStart > AEnd, the range wraps around the contour boundary. }
+  procedure IupInterpolateRange(
+    AStart, AEnd: Int32; ASxD, ASyD, AExD, AEyD: Single);
+  var
+    LI: Int32;
+    LT, LDist: Single;
+    LP0, LP1: Int32;
+  begin
+    LP0 := AStart;
+    LP1 := AEnd;
+    if LP0 = LP1 then
+    begin
+      // Single touched point — apply its delta to all untouched
+      for LI := AStart to AEnd do
+      begin
+        LDeltasX[LI] := ASxD;
+        LDeltasY[LI] := ASyD;
+      end;
+      Exit;
+    end;
+
+    for LI := AStart to AEnd do
+    begin
+      if LTouched[LI] then
+        Continue;
+
+      // X axis interpolation
+      LDist := Single(AOutline.Points[LP1].X) - Single(AOutline.Points[LP0].X);
+      if Abs(LDist) < 0.5 then
+        LT := 0.5
+      else
+        LT := (Single(AOutline.Points[LI].X) - Single(AOutline.Points[LP0].X)) / LDist;
+      if LT < 0 then LT := 0;
+      if LT > 1 then LT := 1;
+      LDeltasX[LI] := ASxD + LT * (AExD - ASxD);
+
+      // Y axis interpolation
+      LDist := Single(AOutline.Points[LP1].Y) - Single(AOutline.Points[LP0].Y);
+      if Abs(LDist) < 0.5 then
+        LT := 0.5
+      else
+        LT := (Single(AOutline.Points[LI].Y) - Single(AOutline.Points[LP0].Y)) / LDist;
+      if LT < 0 then LT := 0;
+      if LT > 1 then LT := 1;
+      LDeltasY[LI] := ASyD + LT * (AEyD - ASyD);
     end;
   end;
 
@@ -5450,13 +5503,78 @@ begin
     end
     else
     begin
+      // IUP: interpolate untouched points before accumulating
+      // 标记哪些点有显式 delta
+      SetLength(LTouched, LNPoints);
+      for LJ := 0 to LNPoints - 1 do
+        LTouched[LJ] := False;
       for LJ := 0 to LPointCount - 1 do
-      begin
         if LPoints[LJ] < UInt16(LNPoints) then
+          LTouched[LPoints[LJ]] := True;
+
+      // 逐轮廓做 IUP 插值
+      for LJ := 0 to AOutline.ContourCount - 1 do
+      begin
+        if LJ = 0 then LContourStart := 0
+        else LContourStart := AOutline.ContourEnds[LJ - 1] + 1;
+        LContourEnd := AOutline.ContourEnds[LJ];
+
+        if LContourStart > LContourEnd then
+          Continue;
+
+        // 收集该轮廓内被触摸的点索引
+        LNumTouched := 0;
+        SetLength(LTouchedPts, LContourEnd - LContourStart + 1);
+        for LK := LContourStart to LContourEnd do
+          if LTouched[LK] then
+          begin
+            LTouchedPts[LNumTouched] := LK;
+            Inc(LNumTouched);
+          end;
+
+        if LNumTouched = 0 then
+          Continue;  // 全部未触摸 → delta 保持 0
+
+        if LNumTouched = 1 then
         begin
-          LPointDeltaX[LPoints[LJ]] := LPointDeltaX[LPoints[LJ]] + LDeltasX[LJ] * LApply;
-          LPointDeltaY[LPoints[LJ]] := LPointDeltaY[LPoints[LJ]] + LDeltasY[LJ] * LApply;
+          // 只有一个触摸点 → 全轮廓用同一 delta
+          LK := LTouchedPts[0];
+          IupInterpolateRange(LContourStart, LContourEnd,
+            LDeltasX[LK], LDeltasY[LK], LDeltasX[LK], LDeltasY[LK]);
+          Continue;
         end;
+
+        // 多个触摸点：在相邻触摸点之间插值
+        for LK := 0 to LNumTouched - 1 do
+        begin
+          LTPrev := LTouchedPts[LK];
+          if LK < LNumTouched - 1 then
+            LTNext := LTouchedPts[LK + 1]
+          else
+            LTNext := LTouchedPts[0];
+
+          if LTPrev < LTNext then
+          begin
+            // 普通区间（不跨越轮廓边界）
+            IupInterpolateRange(LTPrev + 1, LTNext - 1,
+              LDeltasX[LTPrev], LDeltasY[LTPrev], LDeltasX[LTNext], LDeltasY[LTNext]);
+          end
+          else
+          begin
+            // 跨越轮廓末尾 → 头部的 wrap-around 区间
+            IupInterpolateRange(LTPrev + 1, LContourEnd,
+              LDeltasX[LTPrev], LDeltasY[LTPrev], LDeltasX[LTNext], LDeltasY[LTNext]);
+            IupInterpolateRange(LContourStart, LTNext - 1,
+              LDeltasX[LTPrev], LDeltasY[LTPrev], LDeltasX[LTNext], LDeltasY[LTNext]);
+          end;
+        end;
+      end;
+
+      // 累积插值后的 delta
+      for LJ := 0 to LNPoints - 1 do
+      begin
+        LPointDeltaX[LJ] := LPointDeltaX[LJ] + LDeltasX[LJ] * LApply;
+        LPointDeltaY[LJ] := LPointDeltaY[LJ] + LDeltasY[LJ] * LApply;
       end;
     end;
   end; // for each tuple
@@ -5721,6 +5839,36 @@ begin
         FCff2ItemVarStore.Regions[I].Axes[J].EndCoord := ReadUInt16BE(LAxisBase + 4);
         Inc(LAxisBase, 6);
       end;
+    end;
+
+    // 解析 ItemVariationData 子表（含 regionIndices）
+    FCff2ItemVarStore.DataCount := LDataCount;
+    SetLength(FCff2ItemVarStore.DataSubtables, LDataCount);
+    for I := 0 to LDataCount - 1 do
+    begin
+      if LIVSFormat = 1 then
+        LDataOff := Int32(ReadUInt32BE(LIVSOff + 4 + I * 4))
+      else
+        LDataOff := Int32(ReadUInt32BE(LIVSOff + 8 + I * 4));
+      LDataOff := LIVSOff + LDataOff;
+      if LDataOff + 6 > FDataLength then Exit;
+
+      FCff2ItemVarStore.DataSubtables[I].ItemCount := ReadUInt16BE(LDataOff);
+      FCff2ItemVarStore.DataSubtables[I].WordDeltaCount := ReadUInt16BE(LDataOff + 2);
+      FCff2ItemVarStore.DataSubtables[I].RegionIndexCount := ReadUInt16BE(LDataOff + 4);
+
+      SetLength(FCff2ItemVarStore.DataSubtables[I].RegionIndices,
+        FCff2ItemVarStore.DataSubtables[I].RegionIndexCount);
+      for J := 0 to FCff2ItemVarStore.DataSubtables[I].RegionIndexCount - 1 do
+        FCff2ItemVarStore.DataSubtables[I].RegionIndices[J] :=
+          ReadUInt16BE(LDataOff + 6 + J * 2);
+
+      FCff2ItemVarStore.DataSubtables[I].DeltaDataOffset :=
+        LDataOff + 6 + FCff2ItemVarStore.DataSubtables[I].RegionIndexCount * 2;
+      FCff2ItemVarStore.DataSubtables[I].RowStride :=
+        (FCff2ItemVarStore.DataSubtables[I].WordDeltaCount and $7FFF) * 2 +
+        (FCff2ItemVarStore.DataSubtables[I].RegionIndexCount -
+         (FCff2ItemVarStore.DataSubtables[I].WordDeltaCount and $7FFF));
     end;
 
     FCff2HasVarStore := True;
@@ -6515,18 +6663,22 @@ begin
           Dec(LST);
           if (LBlendN > 0) and (LBlendN <= LST) then
           begin
-            // region count（CFF2 VStore 通常所有 region 共享）
-            LBlendK := FCff2ItemVarStore.RegionCount;
+            // 使用 vsindex 选择的子表 region 索引
+            if (LVarStoreIdx >= 0) and (LVarStoreIdx < FCff2ItemVarStore.DataCount) then
+              LBlendK := FCff2ItemVarStore.DataSubtables[LVarStoreIdx].RegionIndexCount
+            else
+              LBlendK := 0;
 
             if (LBlendK > 0) and (LST >= LBlendN + LBlendN * LBlendK) then
             begin
-              // 计算 region scalars
+              // 计算 region scalars（用子表的 regionIndices 索引全局 region 数组）
               SetLength(LBlendScalars, LBlendK);
               for LBlendI := 0 to LBlendK - 1 do
               begin
                 LBlendScalars[LBlendI] := CalcItemVarRegionScalar(
                   FCff2ItemVarStore.Regions, FCff2ItemVarStore.RegionCount,
-                  LBlendI, FCurrentNormCoords);
+                  FCff2ItemVarStore.DataSubtables[LVarStoreIdx].RegionIndices[LBlendI],
+                  FCurrentNormCoords);
               end;
               // LStack: [base0..baseN-1, delta0_k0..deltaN-1_k0, ..., delta0_kK-1..deltaN-1_kK-1]
               for LBlendI := 0 to LBlendN - 1 do

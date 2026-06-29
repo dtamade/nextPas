@@ -573,12 +573,9 @@ type
   end;
   TCff2VariationRegionArray = array of TCff2VariationRegion;
 
-  {** CFF2 ItemVariationStore 解析结果 }
-  TCff2ItemVariationStore = record
-    Format: UInt16;           // 目前固定为 1
-    RegionCount: UInt16;
-    Regions: TCff2VariationRegionArray;
-  end;
+  {** CFF2 ItemVariationStore 解析结果（定义在 TItemVariationDataSubtableArray 之后） }
+  // 注意：此类型使用了 TItemVariationDataSubtableArray，需要在该类型之后定义
+  // 移至 TItemVariationStore 附近定义
 
   {** CFF2 顶层 DICT 基本数据 }
   TCff2TopDict = record
@@ -660,6 +657,15 @@ type
     AxisCount: UInt16;
     RegionCount: UInt16;
     Regions: TCff2VariationRegionArray;   // 复用已有类型
+    DataCount: UInt16;
+    DataSubtables: TItemVariationDataSubtableArray;
+  end;
+
+  {** CFF2 ItemVariationStore 解析结果（含 DataSubtable 区域索引） }
+  TCff2ItemVariationStore = record
+    Format: UInt16;           // 目前固定为 1
+    RegionCount: UInt16;
+    Regions: TCff2VariationRegionArray;
     DataCount: UInt16;
     DataSubtables: TItemVariationDataSubtableArray;
   end;
