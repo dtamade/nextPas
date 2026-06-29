@@ -95,13 +95,15 @@
 ### S7：unknown callable "UInt32" — ✅ 已修复
 - `toml.parser`, `fs.dir` → ✅ 注册 UInt32 为类型别名 (a0d6d0252)
 
-### S8：unknown member "Create" — 🔴 Pre-existing
+### S8：unknown member "Create" — ✅ 已修复
 - `collections.base` (offset 49132) — 类引用调用 `LCollectionClass.Create(Self)` 未被识别
+- **修复**: `ProcessTypeSection` 检测 `class of T` 模式，设置 `AliasTargetTypeId` (30dc80bc9)
+- **剩余**: `sema.ambiguous-overload` — class-of 继承了 Create 重载，需要调用方 disambiguate
 
-### S9：wrong-argument-count "IsOverlap" — 🔴 Pre-existing
+### S9：wrong-argument-count "IsOverlap" — ✅ 已修复
 - `collections.base` (4 处) — virtual abstract 方法在非泛型基类中，无函数体
-- 声明和调用都是 2 个参数，但 sema 报告 wrong-argument-count
-- 根因待查：可能是 FProcedureBodies 中缺少 abstract 方法条目
+- **根因**: `ResolveTypeIdForOwner` 在两个 type 条目（前向声明+完整定义）且两者 Kind 都不是 'class' 时 `Exit(0)`，导致 `Self` 类型解析失败
+- **修复**: 当两者都不是 class/interface 时，优先选择后面的条目（完整定义） (6092dd4f7)
 
 ### S5：interface not implemented — ✅ 全部修复
 - `TBenchResults does not implement IBenchResults.*` — bench → ✅ 通过 (parser forward decl fix)
