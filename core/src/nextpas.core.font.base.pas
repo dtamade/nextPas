@@ -36,6 +36,7 @@ const
   TABLE_TAG_FVAR = $66766172;   // 'fvar'
   TABLE_TAG_AVAR = $61766172;   // 'avar'
   TABLE_TAG_HVAR = $48564152;   // 'HVAR'
+  TABLE_TAG_GVAR = $67766172;   // 'gvar'
   TABLE_TAG_NAME = $6E616D65;   // 'name'
 
   {** GPOS Lookup Type：Pair Adjustment（kern） }
@@ -149,6 +150,22 @@ const
   GLYF_COMPOUND_HAVE_MATRIX       = $0080;
   GLYF_COMPOUND_HAVE_INSTRUCTIONS = $0100;
   GLYF_COMPOUND_USE_METRICS       = $0400;
+
+  {** gvar tuple variation header flags }
+  GVAR_TUPLE_COUNT_MASK           = $0FFF;  // tupleCount 低 12 位
+  GVAR_TUPLES_SHARE_POINT_NUMBERS = $8000;  // 共享 packed points
+  {** gvar tuple index flags }
+  GVAR_TI_EMBEDDED_TUPLE_COORD    = $8000;  // 内嵌 tuple coords
+  GVAR_TI_INTERMEDIATE_TUPLE      = $4000;  // 中间区域 tuple
+  GVAR_TI_PRIVATE_POINT_NUMBERS   = $2000;  // 该 tuple 有自己的 point numbers
+  GVAR_TI_TUPLE_INDEX_MASK        = $0FFF;  // 共享 tuple 索引掩码
+  {** gvar packed points encoding }
+  GVAR_PT_POINTS_ARE_WORDS        = $80;    // 点索引为 16-bit
+  GVAR_PT_POINT_RUN_COUNT_MASK    = $7F;    // 运行计数掩码
+  {** gvar packed deltas encoding }
+  GVAR_DT_DELTAS_ARE_ZERO         = $80;    // 全零 delta 运行
+  GVAR_DT_DELTAS_ARE_WORDS        = $40;    // 16-bit delta 运行
+  GVAR_DT_DELTA_RUN_COUNT_MASK    = $3F;    // 运行计数掩码
 
   {** Bezier 光栅化默认参数 }
   RASTERIZER_FLATNESS_PX = 0.25;    // 自适应细分平坦度阈值（像素）
@@ -655,6 +672,23 @@ type
     AdvWidthMapCount: Int32;              // 映射条目数
     AdvWidthMapDataOff: Int32;            // mapData 绝对偏移
     VariationStore: TItemVariationStore;
+  end;
+
+  {** gvar 共享 tuple 坐标（已从 F2Dot14 转为 16.16 Fixed） }
+  TGvarSharedTuple = record
+    Coords: array of Int32;               // length = axisCount
+  end;
+  TGvarSharedTupleArray = array of TGvarSharedTuple;
+
+  {** gvar 表解析结果 }
+  TGvarTable = record
+    AxisCount: Int32;
+    GlyphCount: Int32;
+    SharedTupleCount: Int32;
+    SharedTuples: TGvarSharedTupleArray;  // 共享 tuple 坐标（Fixed 16.16）
+    GlyphOffsets: array of UInt32;        // glyphCount+1 个数据偏移（绝对）
+    TableStart: UInt32;                   // gvar 表起始偏移
+    TableSize: UInt32;                    // gvar 表大小（bounds check）
   end;
 
 {** 创建默认特性配置（liga=1, kern=1） }

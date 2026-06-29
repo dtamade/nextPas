@@ -97,6 +97,8 @@ type
     FAvarValid: Boolean;
     FHvar: THvarTable;
     FHvarValid: Boolean;
+    FGvar: TGvarTable;
+    FGvarValid: Boolean;
     FValid: Boolean;
     FLastError: string;
     procedure ParseHeader;
@@ -117,6 +119,7 @@ type
     procedure ParsePost;
     procedure ParseAvar;
     procedure ParseHvar;
+    procedure ParseGvar;
     procedure ParseName;
     {** 计算通用 ItemVariationStore 的 region scalar（Single 坐标） }
     function CalcItemVarRegionScalar(const ARegions: TCff2VariationRegionArray;
@@ -354,6 +357,15 @@ type
         返回 0 表示无变化或无 HVAR。 }
     function CalcHvarAdvanceDelta(AGlyphIndex: UInt32;
       const ANormCoords: array of Single): Single;
+    {** gvar 表是否有效（TrueType 可变字形轮廓） }
+    function HasGvar: Boolean;
+    {** 应用 gvar 字形变化 delta 到轮廓点坐标。
+        AOutline: 输入/输出，修改 Points[].X 和 Points[].Y。
+        ANormCoords: 归一化坐标数组（length = axisCount）。
+        无 gvar 或无变化数据时不做修改。 }
+    procedure ApplyGvarDeltas(AGlyphIndex: UInt32;
+      var AOutline: TFontGlyphOutline;
+      const ANormCoords: array of Single);
   end;
 
 implementation
@@ -405,6 +417,7 @@ begin
   FFvarValid := False;
   FAvarValid := False;
   FHvarValid := False;
+  FGvarValid := False;
   FLastError := '';
 
   if not FsExists(AFilePath) then
@@ -478,6 +491,10 @@ begin
       ParseHvar;
     except
     end;
+    try
+      ParseGvar;
+    except
+    end;
     FValid := True;
   except
     on E: Exception do
@@ -508,6 +525,7 @@ begin
   FFvarValid := False;
   FAvarValid := False;
   FHvarValid := False;
+  FGvarValid := False;
   FLastError := '';
 
   LLen := Length(AData);
@@ -568,6 +586,10 @@ begin
     end;
     try
       ParseHvar;
+    except
+    end;
+    try
+      ParseGvar;
     except
     end;
     FValid := True;
@@ -4645,6 +4667,495 @@ begin
   end;
 
   Result := LDeltaSum;
+end;
+
+{ ========================================================================= }
+{ gvar 表解析（TrueType Glyph Variations）                                   }
+{ ========================================================================= }
+
+procedure TTFontFace.ParseGvar;
+var
+  LIdx: Int32;
+  LOff: Int32;
+  LAxisCount, LSharedCount, LGlyphCount, LFlags: Int32;
+  LCoordOff, LDataOff, I, J: Int32;
+  LOffSize4: Boolean;
+  LCoordBase: Int32;
+begin
+  LIdx := FindTable(TABLE_TAG_GVAR);
+  if LIdx < 0 then
+    Exit;
+  LOff := Int32(FTables[LIdx].Offset);
+  FGvar.TableStart := UInt32(LOff);
+  FGvar.TableSize := FTables[LIdx].Length;
+
+  // gvar header: version(4)+axisCount(2)+globalCoordCount(2)+offsetToCoord(4)+glyphCount(2)+flags(2)+offsetToData(4) = 20
+  if LOff + 20 > FDataLength then
+    Exit;
+
+  if ReadUInt32BE(LOff) <> $00010000 then
+    Exit;
+
+  LAxisCount := ReadUInt16BE(LOff + 4);
+  LSharedCount := ReadUInt16BE(LOff + 6);
+  LCoordOff := Int32(ReadUInt32BE(LOff + 8));
+  LGlyphCount := ReadUInt16BE(LOff + 12);
+  LFlags := ReadUInt16BE(LOff + 14);
+  LDataOff := Int32(ReadUInt32BE(LOff + 16));
+
+  if (LAxisCount < 1) or (LAxisCount > 16) then
+    Exit;
+  if LGlyphCount < 1 then
+    Exit;
+
+  FGvar.AxisCount := LAxisCount;
+  FGvar.SharedTupleCount := LSharedCount;
+  FGvar.GlyphCount := LGlyphCount;
+  LOffSize4 := (LFlags and 1) <> 0;
+
+  // 读取 glyph offsets（glyphCount + 1 个）
+  SetLength(FGvar.GlyphOffsets, LGlyphCount + 1);
+  if LOffSize4 then
+  begin
+    if LOff + 20 + (LGlyphCount + 1) * 4 > FDataLength then
+      Exit;
+    for I := 0 to LGlyphCount do
+    begin
+      FGvar.GlyphOffsets[I] := UInt32(LOff) + UInt32(LDataOff) + ReadUInt32BE(LOff + 20 + I * 4);
+      if (I > 0) and (FGvar.GlyphOffsets[I] < FGvar.GlyphOffsets[I - 1]) then
+        FGvar.GlyphOffsets[I] := FGvar.GlyphOffsets[I - 1];
+    end;
+  end
+  else
+  begin
+    if LOff + 20 + (LGlyphCount + 1) * 2 > FDataLength then
+      Exit;
+    for I := 0 to LGlyphCount do
+    begin
+      FGvar.GlyphOffsets[I] := UInt32(LOff) + UInt32(LDataOff) + UInt32(ReadUInt16BE(LOff + 20 + I * 2)) * 2;
+      if (I > 0) and (FGvar.GlyphOffsets[I] < FGvar.GlyphOffsets[I - 1]) then
+        FGvar.GlyphOffsets[I] := FGvar.GlyphOffsets[I - 1];
+    end;
+  end;
+
+  // 读取共享 tuple 坐标（F2Dot14 → Fixed 16.16）
+  LCoordBase := LOff + LCoordOff;
+  SetLength(FGvar.SharedTuples, LSharedCount);
+  for I := 0 to LSharedCount - 1 do
+  begin
+    SetLength(FGvar.SharedTuples[I].Coords, LAxisCount);
+    for J := 0 to LAxisCount - 1 do
+    begin
+      if LCoordBase + 2 > FDataLength then
+        Exit;
+      FGvar.SharedTuples[I].Coords[J] := Int32(Int16(ReadUInt16BE(LCoordBase))) shl 2;
+      Inc(LCoordBase, 2);
+    end;
+  end;
+
+  FGvarValid := True;
+end;
+
+function TTFontFace.HasGvar: Boolean;
+begin
+  Result := FGvarValid;
+end;
+
+procedure TTFontFace.ApplyGvarDeltas(AGlyphIndex: UInt32;
+  var AOutline: TFontGlyphOutline;
+  const ANormCoords: array of Single);
+var
+  LNPoints, LTupleCount, LDataSize: Int32;
+  LGlyphStart, LTupleDataStart, LOffsetToData: Int32;
+  LI, LJ, LK: Int32;
+  LTupleDataSize, LTupleIndex: Int32;
+  LApply: Single;
+
+  LTupleCoords: array of Int32;    // Fixed 16.16
+  LImStartCoords: array of Int32;
+  LImEndCoords: array of Int32;
+
+  LSharedPoints: array of UInt16;
+  LSharedPointCount: Int32;
+  LPoints: array of UInt16;
+  LPointCount: Int32;
+  LAllPoints: Boolean;
+  LDeltasX, LDeltasY: array of Single;
+
+  LPointDeltaX, LPointDeltaY: array of Single;
+
+  LReadPos: Int32;
+  LRunCount, LRunFlags: Int32;
+  LFirst: UInt16;
+  LDeltaCount: Int32;
+
+  procedure ReadPackedPointsInternal(APos: Int32; out ACount: Int32;
+    out AAllPts: Boolean; out APts: array of UInt16; out ANewPos: Int32);
+  var
+    LN, LRC, LM: Int32;
+    LF: UInt16;
+  begin
+    ANewPos := APos;
+    LN := ReadUInt8(ANewPos);
+    Inc(ANewPos);
+
+    if LN = 0 then
+    begin
+      AAllPts := True;
+      ACount := 0;
+      Exit;
+    end;
+
+    AAllPts := False;
+    if (LN and GVAR_PT_POINTS_ARE_WORDS) <> 0 then
+    begin
+      LN := (LN and GVAR_PT_POINT_RUN_COUNT_MASK) shl 8;
+      LN := LN or ReadUInt8(ANewPos);
+      Inc(ANewPos);
+    end
+    else
+      LN := LN and GVAR_PT_POINT_RUN_COUNT_MASK;
+
+    ACount := LN;
+    LF := 0;
+    LM := 0;
+    while LM < LN do
+    begin
+      LRC := ReadUInt8(ANewPos);
+      Inc(ANewPos);
+      if (LRC and GVAR_PT_POINTS_ARE_WORDS) <> 0 then
+      begin
+        LRC := LRC and GVAR_PT_POINT_RUN_COUNT_MASK;
+        LF := LF + ReadUInt16BE(ANewPos);
+        Inc(ANewPos, 2);
+        if LM < Length(APts) then APts[LM] := LF;
+        Inc(LM);
+        while LRC > 0 do
+        begin
+          if LM >= LN then Break;
+          LF := LF + ReadUInt16BE(ANewPos);
+          Inc(ANewPos, 2);
+          if LM < Length(APts) then APts[LM] := LF;
+          Inc(LM);
+          Dec(LRC);
+        end;
+      end
+      else
+      begin
+        LRC := LRC and GVAR_PT_POINT_RUN_COUNT_MASK;
+        LF := LF + ReadUInt8(ANewPos);
+        Inc(ANewPos);
+        if LM < Length(APts) then APts[LM] := LF;
+        Inc(LM);
+        while LRC > 0 do
+        begin
+          if LM >= LN then Break;
+          LF := LF + ReadUInt8(ANewPos);
+          Inc(ANewPos);
+          if LM < Length(APts) then APts[LM] := LF;
+          Inc(LM);
+          Dec(LRC);
+        end;
+      end;
+    end;
+  end;
+
+  procedure ReadPackedDeltasInternal(APos, AExpectedCount: Int32;
+    out ADeltas: array of Single; out ANewPos: Int32);
+  var
+    LRC, LM, LJ2: Int32;
+  begin
+    ANewPos := APos;
+    LJ2 := 0;
+    while LJ2 < AExpectedCount do
+    begin
+      if ANewPos >= FDataLength then Break;
+      LRC := ReadUInt8(ANewPos);
+      Inc(ANewPos);
+      LM := LRC and GVAR_DT_DELTA_RUN_COUNT_MASK;
+
+      if (LRC and GVAR_DT_DELTAS_ARE_ZERO) <> 0 then
+      begin
+        while LM >= 0 do
+        begin
+          if LJ2 >= AExpectedCount then Break;
+          if LJ2 < Length(ADeltas) then ADeltas[LJ2] := 0;
+          Inc(LJ2);
+          Dec(LM);
+        end;
+      end
+      else if (LRC and GVAR_DT_DELTAS_ARE_WORDS) <> 0 then
+      begin
+        while LM >= 0 do
+        begin
+          if LJ2 >= AExpectedCount then Break;
+          if ANewPos + 2 > FDataLength then Break;
+          if LJ2 < Length(ADeltas) then ADeltas[LJ2] := Int16(ReadUInt16BE(ANewPos));
+          Inc(ANewPos, 2);
+          Inc(LJ2);
+          Dec(LM);
+        end;
+      end
+      else
+      begin
+        while LM >= 0 do
+        begin
+          if LJ2 >= AExpectedCount then Break;
+          if ANewPos >= FDataLength then Break;
+          if LJ2 < Length(ADeltas) then ADeltas[LJ2] := Int8(ReadUInt8(ANewPos));
+          Inc(ANewPos);
+          Inc(LJ2);
+          Dec(LM);
+        end;
+      end;
+    end;
+  end;
+
+begin
+  if not FGvarValid then
+    Exit;
+  if AGlyphIndex >= UInt32(FGvar.GlyphCount) then
+    Exit;
+
+  LNPoints := Length(AOutline.Points);
+  if LNPoints = 0 then
+    Exit;
+
+  // 检查该字形是否有变化数据
+  if FGvar.GlyphOffsets[AGlyphIndex] = FGvar.GlyphOffsets[AGlyphIndex + 1] then
+    Exit;
+
+  LDataSize := Int32(FGvar.GlyphOffsets[AGlyphIndex + 1] - FGvar.GlyphOffsets[AGlyphIndex]);
+  if LDataSize < 4 then
+    Exit;
+
+  LGlyphStart := Int32(FGvar.GlyphOffsets[AGlyphIndex]);
+  if LGlyphStart + 4 > FDataLength then
+    Exit;
+
+  // per-glyph header: tupleCount(2) + offsetToData(2)
+  LTupleCount := ReadUInt16BE(LGlyphStart);
+  LOffsetToData := ReadUInt16BE(LGlyphStart + 2);
+  LTupleCount := LTupleCount and GVAR_TUPLE_COUNT_MASK;
+
+  if (LTupleCount = 0) or (LOffsetToData > LDataSize) then
+    Exit;
+
+  LTupleDataStart := LGlyphStart + LOffsetToData;
+
+  // 分配累积 delta 数组
+  SetLength(LPointDeltaX, LNPoints);
+  SetLength(LPointDeltaY, LNPoints);
+  for LI := 0 to LNPoints - 1 do
+  begin
+    LPointDeltaX[LI] := 0;
+    LPointDeltaY[LI] := 0;
+  end;
+
+  // 分配 tuple 坐标缓冲区
+  SetLength(LTupleCoords, FGvar.AxisCount);
+  SetLength(LImStartCoords, FGvar.AxisCount);
+  SetLength(LImEndCoords, FGvar.AxisCount);
+
+  // 如果共享点号，读取一次
+  LSharedPointCount := 0;
+  LSharedPoints := nil;
+
+  if (ReadUInt16BE(LGlyphStart) and GVAR_TUPLES_SHARE_POINT_NUMBERS) <> 0 then
+  begin
+    SetLength(LSharedPoints, LNPoints);
+    ReadPackedPointsInternal(LTupleDataStart, LSharedPointCount,
+      LAllPoints{%H-}, LSharedPoints, LReadPos);
+    if not LAllPoints then
+      SetLength(LSharedPoints, LSharedPointCount)
+    else
+    begin
+      LSharedPointCount := 0;
+      LSharedPoints := nil;
+    end;
+    LTupleDataStart := LReadPos;
+  end;
+
+  // 遍历每个 tuple
+  for LI := 0 to LTupleCount - 1 do
+  begin
+    LReadPos := LGlyphStart + 4 + LI * 4;
+    if LReadPos + 4 > FDataLength then
+      Break;
+
+    LTupleDataSize := ReadUInt16BE(LReadPos);
+    LTupleIndex := ReadUInt16BE(LReadPos + 2);
+
+    // 移到 tuple 数据之后的坐标区
+    LReadPos := LGlyphStart + 4 + LI * 4 + 4;
+
+    // 读取 tuple 坐标（如果内嵌）
+    if (LTupleIndex and GVAR_TI_EMBEDDED_TUPLE_COORD) <> 0 then
+    begin
+      for LJ := 0 to FGvar.AxisCount - 1 do
+      begin
+        if LReadPos + 2 > FDataLength then Exit;
+        LTupleCoords[LJ] := Int32(Int16(ReadUInt16BE(LReadPos))) shl 2;
+        Inc(LReadPos, 2);
+      end;
+    end
+    else
+    begin
+      LK := LTupleIndex and GVAR_TI_TUPLE_INDEX_MASK;
+      if LK >= FGvar.SharedTupleCount then
+      begin
+        LTupleDataStart := LTupleDataStart + LTupleDataSize;
+        Continue;
+      end;
+      for LJ := 0 to FGvar.AxisCount - 1 do
+        LTupleCoords[LJ] := FGvar.SharedTuples[LK].Coords[LJ];
+    end;
+
+    // 读取中间区域坐标
+    if (LTupleIndex and GVAR_TI_INTERMEDIATE_TUPLE) <> 0 then
+    begin
+      for LJ := 0 to FGvar.AxisCount - 1 do
+      begin
+        if LReadPos + 2 > FDataLength then Exit;
+        LImStartCoords[LJ] := Int32(Int16(ReadUInt16BE(LReadPos))) shl 2;
+        Inc(LReadPos, 2);
+      end;
+      for LJ := 0 to FGvar.AxisCount - 1 do
+      begin
+        if LReadPos + 2 > FDataLength then Exit;
+        LImEndCoords[LJ] := Int32(Int16(ReadUInt16BE(LReadPos))) shl 2;
+        Inc(LReadPos, 2);
+      end;
+    end;
+
+    // 计算 tuple scaling factor
+    LApply := 1.0;
+    for LJ := 0 to FGvar.AxisCount - 1 do
+    begin
+      if LTupleCoords[LJ] = 0 then
+        Continue;
+
+      // normCoord=0 且 tupleCoord≠0 → 该轴缩放为 0
+      if ANormCoords[LJ] = 0 then
+      begin
+        LApply := 0;
+        Break;
+      end;
+
+      if (LTupleIndex and GVAR_TI_INTERMEDIATE_TUPLE) <> 0 then
+      begin
+        if (ANormCoords[LJ] <= Single(LImStartCoords[LJ]) / 65536.0) or
+           (ANormCoords[LJ] >= Single(LImEndCoords[LJ]) / 65536.0) then
+        begin
+          LApply := 0;
+          Break;
+        end;
+        if ANormCoords[LJ] < Single(LTupleCoords[LJ]) / 65536.0 then
+          LApply := LApply * (ANormCoords[LJ] - Single(LImStartCoords[LJ]) / 65536.0) /
+                    (Single(LTupleCoords[LJ]) / 65536.0 - Single(LImStartCoords[LJ]) / 65536.0)
+        else
+          LApply := LApply * (Single(LImEndCoords[LJ]) / 65536.0 - ANormCoords[LJ]) /
+                    (Single(LImEndCoords[LJ]) / 65536.0 - Single(LTupleCoords[LJ]) / 65536.0);
+      end
+      else
+      begin
+        // 检查 normCoord 是否在 [min(0,tupleCoord), max(0,tupleCoord)] 范围内
+        if LTupleCoords[LJ] > 0 then
+        begin
+          if (ANormCoords[LJ] < 0) or (ANormCoords[LJ] > Single(LTupleCoords[LJ]) / 65536.0) then
+          begin
+            LApply := 0;
+            Break;
+          end;
+        end
+        else
+        begin
+          if (ANormCoords[LJ] < Single(LTupleCoords[LJ]) / 65536.0) or (ANormCoords[LJ] > 0) then
+          begin
+            LApply := 0;
+            Break;
+          end;
+        end;
+        LApply := LApply * ANormCoords[LJ] / (Single(LTupleCoords[LJ]) / 65536.0);
+      end;
+    end;
+
+    if LApply = 0 then
+    begin
+      LTupleDataStart := LTupleDataStart + LTupleDataSize;
+      Continue;
+    end;
+
+    // 读取 point numbers（私有或共享）
+    if (LTupleIndex and GVAR_TI_PRIVATE_POINT_NUMBERS) <> 0 then
+    begin
+      SetLength(LPoints, LNPoints);
+      ReadPackedPointsInternal(LTupleDataStart, LPointCount,
+        LAllPoints, LPoints, LReadPos);
+      LTupleDataStart := LReadPos;
+    end
+    else
+    begin
+      if LSharedPointCount = 0 then
+      begin
+        LAllPoints := True;
+        LPointCount := 0;
+        LPoints := nil;
+      end
+      else
+      begin
+        LAllPoints := False;
+        LPointCount := LSharedPointCount;
+        LPoints := LSharedPoints;
+      end;
+    end;
+
+    // 读取 packed deltas
+    if LAllPoints then
+      LDeltaCount := LNPoints
+    else
+      LDeltaCount := LPointCount;
+
+    SetLength(LDeltasX, LDeltaCount);
+    for LK := 0 to LDeltaCount - 1 do
+      LDeltasX[LK] := 0;
+    ReadPackedDeltasInternal(LTupleDataStart, LDeltaCount, LDeltasX, LReadPos);
+    LTupleDataStart := LReadPos;
+
+    SetLength(LDeltasY, LDeltaCount);
+    for LK := 0 to LDeltaCount - 1 do
+      LDeltasY[LK] := 0;
+    ReadPackedDeltasInternal(LTupleDataStart, LDeltaCount, LDeltasY, LReadPos);
+    LTupleDataStart := LReadPos;
+
+    // 应用 delta（乘以 scaling factor）并累积
+    if LAllPoints then
+    begin
+      for LJ := 0 to LNPoints - 1 do
+      begin
+        LPointDeltaX[LJ] := LPointDeltaX[LJ] + LDeltasX[LJ] * LApply;
+        LPointDeltaY[LJ] := LPointDeltaY[LJ] + LDeltasY[LJ] * LApply;
+      end;
+    end
+    else
+    begin
+      for LJ := 0 to LPointCount - 1 do
+      begin
+        if LPoints[LJ] < UInt16(LNPoints) then
+        begin
+          LPointDeltaX[LPoints[LJ]] := LPointDeltaX[LPoints[LJ]] + LDeltasX[LJ] * LApply;
+          LPointDeltaY[LPoints[LJ]] := LPointDeltaY[LPoints[LJ]] + LDeltasY[LJ] * LApply;
+        end;
+      end;
+    end;
+  end; // for each tuple
+
+  // 最终应用 delta 到轮廓坐标
+  for LI := 0 to LNPoints - 1 do
+  begin
+    AOutline.Points[LI].X := AOutline.Points[LI].X + Round(LPointDeltaX[LI]);
+    AOutline.Points[LI].Y := AOutline.Points[LI].Y + Round(LPointDeltaY[LI]);
+  end;
 end;
 
 { ========================================================================= }
