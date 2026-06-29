@@ -67,6 +67,13 @@ type
     FCffCharStringsDataStart: Int32;  // CharStrings 数据起始（绝对文件偏移）
     FCffDefaultWidthX: Int32;         // DefaultWidthX（Private DICT）
     FCffNominalWidthX: Int32;         // NominalWidthX（Private DICT）
+    {** CFF subroutine INDEX 数据 }
+    FCffGlobalSubrIdxPos: Int32;      // Global Subr INDEX header 位置（绝对）
+    FCffGlobalSubrCount: Int32;       // Global Subr 条目数量
+    FCffLocalSubrIdxPos: Int32;       // Local Subr INDEX header 位置（绝对）
+    FCffLocalSubrCount: Int32;        // Local Subr 条目数量
+    FCffGlobalSubrBias: Int32;        // Global Subr 数字偏移
+    FCffLocalSubrBias: Int32;         // Local Subr 数字偏移
     FValid: Boolean;
     FLastError: string;
     procedure ParseHeader;
@@ -3642,6 +3649,12 @@ var
 
 var
   LItemOff, LItemLen: Int32;
+  LStringIdxOff: Int32;
+  LStringCount: Int32;
+  LStrOffSz, LStrLastOff: Int32;
+  LSubrsOff: Int32;
+  LPrivateAbs: Int32;
+  LTopDictOffSz, LTopDictLastOff: Int32;
 begin
   FCffValid := False;
   LIdx := FindTable(TABLE_TAG_CFF);
@@ -3699,10 +3712,68 @@ begin
     FCffNominalWidthX := ParseCffDictInt(LCffOff + LPrivateOff, LPrivateSize, 21);
   end;
 
+  // Global Subr INDEX — follows String INDEX
+  // 计算 Top DICT INDEX 结束位置 → String INDEX header 位置
+  LTopDictOffSz := ReadUInt8Local(LTopDictIdxOff + 2);
+  LTopDictLastOff := 0;
+  for LI2 := 0 to LTopDictOffSz - 1 do
+    LTopDictLastOff := (LTopDictLastOff shl 8) or ReadUInt8Local(LTopDictIdxOff + 3 + LTopDictCount * LTopDictOffSz + LI2);
+  LStringIdxOff := LTopDictIdxOff + 3 + (LTopDictCount + 1) * LTopDictOffSz + LTopDictLastOff - 1;
+
+  // 解析 String INDEX
+  ParseCffIndex(LStringIdxOff, LStringCount);
+  // String INDEX 结束位置 → Global Subr INDEX header 位置
+  if LStringCount > 0 then
+  begin
+    LStrOffSz := ReadUInt8Local(LStringIdxOff + 2);
+    LStrLastOff := 0;
+    for LI2 := 0 to LStrOffSz - 1 do
+      LStrLastOff := (LStrLastOff shl 8) or ReadUInt8Local(LStringIdxOff + 3 + LStringCount * LStrOffSz + LI2);
+    FCffGlobalSubrIdxPos := LStringIdxOff + 3 + (LStringCount + 1) * LStrOffSz + LStrLastOff - 1;
+  end
+  else
+    FCffGlobalSubrIdxPos := LStringIdxOff + 2; // count=0 时 header 长度为 2
+
+  ParseCffIndex(FCffGlobalSubrIdxPos, FCffGlobalSubrCount);
+  // 计算 Global Subr bias
+  if FCffGlobalSubrCount < 1240 then
+    FCffGlobalSubrBias := 107
+  else if FCffGlobalSubrCount < 33900 then
+    FCffGlobalSubrBias := 1131
+  else
+    FCffGlobalSubrBias := 32768;
+
+  // Local Subrs — 从 Private DICT op 19 获取偏移
+  FCffLocalSubrIdxPos := 0;
+  FCffLocalSubrCount := 0;
+  FCffLocalSubrBias := 107;
+  if (LPrivateSize > 0) and (LPrivateOff > 0) then
+  begin
+    LPrivateAbs := LCffOff + LPrivateOff;
+    LSubrsOff := ParseCffDictInt(LPrivateAbs, LPrivateSize, 19);
+    if LSubrsOff > 0 then
+    begin
+      FCffLocalSubrIdxPos := LPrivateAbs + LSubrsOff;
+      ParseCffIndex(FCffLocalSubrIdxPos, FCffLocalSubrCount);
+      if FCffLocalSubrCount < 1240 then
+        FCffLocalSubrBias := 107
+      else if FCffLocalSubrCount < 33900 then
+        FCffLocalSubrBias := 1131
+      else
+        FCffLocalSubrBias := 32768;
+    end;
+  end;
+
   FCffValid := True;
 end;
 
 function TTFontFace.GlyphOutlineCff(AGlyphIndex: UInt32): TFontGlyphOutline;
+type
+  TCffCallEntry = record
+    DataOff: Int32;   // 子程序数据起始（绝对文件偏移）
+    DataLen: Int32;   // 子程序数据长度
+    RetPos: Int32;    // 返回位置（调用点之后的下一字节）
+  end;
 var
   LItemOff, LItemLen, LI, LB, LOp: Int32;
   LStack: array[0..47] of Int32;
@@ -3713,6 +3784,13 @@ var
   LPointCount, LEndCount: Int32;
   LStartX, LStartY, LMx, LMy, LDx, LDy: Int32;
   LIdxOff, LOffSz, LVal1, LVal2, LDataStart: Int32;
+  LI2: Int32;
+  { call stack }
+  LCallStack: array[0..9] of TCffCallEntry;
+  LCallDepth: Int32;
+  LCurDataOff, LCurDataEnd: Int32;  // 当前执行的 charstring 范围
+  LSubrIdx, LSubrOff, LSubrLen: Int32;
+  LSubrIdxPos, LSubrCount, LSubrBias: Int32;
 
   LPoints: array of TFontContourPoint;
   LEnds: array of UInt16;
@@ -3797,11 +3875,14 @@ begin
   LHasWidth := False;
   LWidth := FCffDefaultWidthX;
   LPointCount := 0; LEndCount := 0;
+  LCallDepth := 0;
+  LCurDataOff := LItemOff;
+  LCurDataEnd := LItemOff + LItemLen;
   SetLength(LPoints, 128);
   SetLength(LEnds, 16);
 
-  LI := LItemOff;
-  while LI < LItemOff + LItemLen do
+  LI := LCurDataOff;
+  while LI < LCurDataEnd do
   begin
     LB := ReadUInt8(LI);
 
@@ -3944,10 +4025,68 @@ begin
         LST := 0;
       end;
 
-      29, 10: begin // callsubr, callgsubr — 简化：不执行子程序
-        if LST > 0 then Dec(LST);
+      29, 10: begin // callsubr (10), callgsubr (29)
+        if LST > 0 then
+        begin
+          Dec(LST);
+          // 计算带偏移的子程序索引
+          if LOp = 10 then
+          begin
+            // callsubr — Local Subrs
+            LSubrIdxPos := FCffLocalSubrIdxPos;
+            LSubrCount := FCffLocalSubrCount;
+            LSubrBias := FCffLocalSubrBias;
+          end
+          else
+          begin
+            // callgsubr — Global Subrs
+            LSubrIdxPos := FCffGlobalSubrIdxPos;
+            LSubrCount := FCffGlobalSubrCount;
+            LSubrBias := FCffGlobalSubrBias;
+          end;
+          LSubrIdx := LStack[LST] + LSubrBias;
+          if (LSubrIdx >= 0) and (LSubrIdx < LSubrCount) and (LCallDepth < 10) then
+          begin
+            // 获取子程序数据
+            begin
+              LIdxOff := LSubrIdxPos;
+              LOffSz := ReadUInt8(LIdxOff + 2);
+              LDataStart := LIdxOff + 3 + (LSubrCount + 1) * LOffSz;
+              LVal1 := 0;
+              for LI2 := 0 to LOffSz - 1 do
+                LVal1 := (LVal1 shl 8) or ReadUInt8(LIdxOff + 3 + LSubrIdx * LOffSz + LI2);
+              LVal2 := 0;
+              for LI2 := 0 to LOffSz - 1 do
+                LVal2 := (LVal2 shl 8) or ReadUInt8(LIdxOff + 3 + (LSubrIdx + 1) * LOffSz + LI2);
+              LSubrOff := LDataStart + LVal1 - 1;
+              LSubrLen := LVal2 - LVal1;
+            end;
+            if LSubrLen > 0 then
+            begin
+              // 保存当前执行上下文
+              LCallStack[LCallDepth].DataOff := LCurDataOff;
+              LCallStack[LCallDepth].DataLen := LCurDataEnd - LCurDataOff;
+              LCallStack[LCallDepth].RetPos := LI;
+              Inc(LCallDepth);
+              // 跳转到子程序
+              LCurDataOff := LSubrOff;
+              LCurDataEnd := LSubrOff + LSubrLen;
+              LI := LCurDataOff;
+              Continue;
+            end;
+          end;
+        end;
       end;
-      11: begin end; // return
+      11: begin // return — 从子程序返回
+        if LCallDepth > 0 then
+        begin
+          Dec(LCallDepth);
+          LCurDataOff := LCallStack[LCallDepth].DataOff;
+          LCurDataEnd := LCurDataOff + LCallStack[LCallDepth].DataLen;
+          LI := LCallStack[LCallDepth].RetPos;
+          Continue;
+        end;
+      end;
 
       14: begin // endchar
         CheckWidth;
@@ -3957,8 +4096,70 @@ begin
       end;
 
       15, 16: LST := 0; // vsindex, blend
-      (12 shl 8) or 34, (12 shl 8) or 35,
-      (12 shl 8) or 36, (12 shl 8) or 37: LST := 0; // flex variants
+      (12 shl 8) or 34: begin // hflex — 7 args: dx1 dx2 dy2 dx3 dx4 dx5 dx6
+        if LST >= 7 then begin
+          LStartX := LCx; LStartY := LCy;
+          // 第一段: dx1,0 dx2,dy2 dx3,0
+          CubicToQuad(LStartX, LStartY, LStack[0], 0, LStack[1], LStack[2], LStack[3], 0);
+          LCx := LStartX + LStack[0] + LStack[1] + LStack[3];
+          LCy := LStartY + LStack[2];
+          // 第二段: dx4,0 dx5,-dy2 dx6,0
+          CubicToQuad(LCx, LCy, LStack[4], 0, LStack[5], -LStack[2], LStack[6], 0);
+          LCx := LCx + LStack[4] + LStack[5] + LStack[6];
+        end;
+        LST := 0;
+      end;
+      (12 shl 8) or 35: begin // flex — 13 args: dx1..dy6 depth
+        if LST >= 13 then begin
+          LStartX := LCx; LStartY := LCy;
+          // 第一段: dx1,dy1 dx2,dy2 dx3,dy3
+          CubicToQuad(LStartX, LStartY, LStack[0], LStack[1], LStack[2], LStack[3], LStack[4], LStack[5]);
+          LCx := LStartX + LStack[0] + LStack[2] + LStack[4];
+          LCy := LStartY + LStack[1] + LStack[3] + LStack[5];
+          // 第二段: dx4,dy4 dx5,dy5 dx6,dy6
+          CubicToQuad(LCx, LCy, LStack[6], LStack[7], LStack[8], LStack[9], LStack[10], LStack[11]);
+          LCx := LCx + LStack[6] + LStack[8] + LStack[10];
+          LCy := LCy + LStack[7] + LStack[9] + LStack[11];
+        end;
+        LST := 0;
+      end;
+      (12 shl 8) or 36: begin // hflex1 — 9 args: dx1 dy1 dx2 dy2 dx3 dx4 dx5 dy5 dx6
+        if LST >= 9 then begin
+          LStartX := LCx; LStartY := LCy;
+          // 第一段: dx1,dy1 dx2,dy2 dx3,0
+          CubicToQuad(LStartX, LStartY, LStack[0], LStack[1], LStack[2], LStack[3], LStack[4], 0);
+          LCx := LStartX + LStack[0] + LStack[2] + LStack[4];
+          LCy := LStartY + LStack[1] + LStack[3];
+          // 第二段: dx4,0 dx5,dy5 dx6,0
+          CubicToQuad(LCx, LCy, LStack[5], 0, LStack[6], LStack[7], LStack[8], 0);
+          LCx := LCx + LStack[5] + LStack[6] + LStack[8];
+        end;
+        LST := 0;
+      end;
+      (12 shl 8) or 37: begin // flex1 — 11 args: dx1 dy1 dx2 dy2 dx3 dy3 dx4 dy4 dx5 dy5 d6
+        if LST >= 11 then begin
+          LStartX := LCx; LStartY := LCy;
+          // 第一段: dx1,dy1 dx2,dy2 dx3,dy3
+          CubicToQuad(LStartX, LStartY, LStack[0], LStack[1], LStack[2], LStack[3], LStack[4], LStack[5]);
+          LCx := LStartX + LStack[0] + LStack[2] + LStack[4];
+          LCy := LStartY + LStack[1] + LStack[3] + LStack[5];
+          // 判断 d6 是 dx 还是 dy（基于两段曲线的总位移）
+          if Abs(LStack[0] + LStack[2] + LStack[4] + LStack[6] + LStack[8]) >
+             Abs(LStack[1] + LStack[3] + LStack[5] + LStack[7] + LStack[9]) then
+          begin
+            // d6 = dy6, dx6 = 0
+            CubicToQuad(LCx, LCy, LStack[6], LStack[7], LStack[8], LStack[9], 0, LStack[10]);
+            LCy := LCy + LStack[7] + LStack[9] + LStack[10];
+          end
+          else
+          begin
+            // d6 = dx6, dy6 = 0
+            CubicToQuad(LCx, LCy, LStack[6], LStack[7], LStack[8], LStack[9], LStack[10], 0);
+            LCx := LCx + LStack[6] + LStack[8] + LStack[10];
+          end;
+        end;
+        LST := 0;
+      end;
     else
       LST := 0;
     end;
