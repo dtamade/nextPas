@@ -863,7 +863,7 @@ begin
         end;
 
         if (LYear > 0) and (LMonth in [1..12]) and (LDay in [1..31]) then
-          Result := System.EncodeDate(LYear, LMonth, LDay) + System.EncodeTime(LHour, LMin, LSec, 0);
+          Result := SysUtils.EncodeDate(LYear, LMonth, LDay) + SysUtils.EncodeTime(LHour, LMin, LSec, 0);
       except
         Result := 0;
       end;

@@ -18,7 +18,7 @@ interface
 
 uses
   nextpas.core.base,
-  Base64, nextpas.core.fs,
+  Base64, nextpas.core.fs, SysUtils,
   nextpas.core.io.intf,
   nextpas.core.io.util,
   nextpas.core.io.stream_adapter,
@@ -479,7 +479,7 @@ begin
     raise ESSLCertError.Create('Stream is nil');
 
   LReadData := ReadLimitedStreamBytes(
-    WrapIStream(AStream, False),
+    AStream,
     MAX_CERTIFICATE_SIZE,
     'Certificate stream'
   );
@@ -584,7 +584,7 @@ begin
     raise ESSLCertError.Create('Stream is nil');
 
   LReadData := ReadLimitedStreamBytes(
-    WrapIStream(AStream, False),
+    AStream,
     MAX_PRIVATE_KEY_SIZE,
     'Private key stream'
   );
@@ -1093,7 +1093,7 @@ begin
   ApplyCredentials;
 
   try
-    Result := TMbedTLSConnection.Create(Self as ISSLContext, FSSLConfig, WrapIStream(AStream, False));
+    Result := TMbedTLSConnection.Create(Self as ISSLContext, FSSLConfig, AStream);
   except
     on E: ESSLException do
       raise;
