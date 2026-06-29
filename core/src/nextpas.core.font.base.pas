@@ -493,6 +493,17 @@ function FontFeatureIsEnabled(const AConfig: TFontFeatureConfig;
 {** 获取特性的值（0 = 未找到/禁用） }
 function FontFeatureGetValue(const AConfig: TFontFeatureConfig;
   ATag: UInt32): UInt32;
+{** 解析特性字符串（如 "+liga", "-kern", "cv01=2"）。
+    成功返回 True 并设置 ATag/AValue。失败返回 False。
+    支持 Ghostty/HarfBuzz 风格语法：
+    - "+tag" / "-tag" — 启用/禁用
+    - "tag on" / "tag off" — 关键字
+    - "tag=N" — 数值参数
+    - 引号可选："'kern'" / "\"liga\"" }
+function FontFeatureParseString(const AStr: AnsiString;
+  out ATag: UInt32; out AValue: UInt32): Boolean;
+{** 从 4 字节 ASCII tag 创建 UInt32（Big-Endian） }
+function FontFeatureTagFromString(const ATag: AnsiString): UInt32;
 
 implementation
 
@@ -542,6 +553,217 @@ begin
   for I := 0 to High(AConfig.Features) do
     if AConfig.Features[I].Tag = ATag then
       Exit(AConfig.Features[I].Value);
+end;
+
+function FontFeatureTagFromString(const ATag: AnsiString): UInt32;
+var
+  LLen: Int32;
+begin
+  Result := 0;
+  LLen := Length(ATag);
+  if LLen >= 1 then Result := Result or (UInt32(Byte(ATag[1])) shl 24);
+  if LLen >= 2 then Result := Result or (UInt32(Byte(ATag[2])) shl 16);
+  if LLen >= 3 then Result := Result or (UInt32(Byte(ATag[3])) shl 8);
+  if LLen >= 4 then Result := Result or UInt32(Byte(ATag[4]));
+end;
+
+function FontFeatureParseString(const AStr: AnsiString;
+  out ATag: UInt32; out AValue: UInt32): Boolean;
+var
+  LI, LLen: Int32;
+  LTagStr: AnsiString;
+  LValStr: AnsiString;
+  LState: (psStart, psTag, psValue, psDone);
+  LByte: Byte;
+  LVal: Int32;
+  LSign: Int32;
+
+  function TrimStr(const S: AnsiString): AnsiString;
+  var
+    LStart, LEnd: Int32;
+  begin
+    LStart := 1;
+    LEnd := Length(S);
+    while (LStart <= LEnd) and ((Byte(S[LStart]) = Ord(' ')) or (Byte(S[LStart]) = Ord(#9))) do
+      Inc(LStart);
+    while (LEnd >= LStart) and ((Byte(S[LEnd]) = Ord(' ')) or (Byte(S[LEnd]) = Ord(#9))) do
+      Dec(LEnd);
+    Result := Copy(S, LStart, LEnd - LStart + 1);
+  end;
+
+  function ParseInt(const S: AnsiString): Int32;
+  var
+    I: Int32;
+  begin
+    Result := 0;
+    LSign := 1;
+    I := 1;
+    if (Length(S) > 0) and (Byte(S[1]) = Ord('-')) then
+    begin
+      LSign := -1;
+      I := 2;
+    end;
+    while I <= Length(S) do
+    begin
+      if (Byte(S[I]) >= Ord('0')) and (Byte(S[I]) <= Ord('9')) then
+        Result := Result * 10 + (Byte(S[I]) - Ord('0'))
+      else
+        Break;
+      Inc(I);
+    end;
+    Result := Result * LSign;
+  end;
+begin
+  Result := False;
+  ATag := 0;
+  AValue := 1; // 默认启用
+  LLen := Length(AStr);
+  if LLen = 0 then
+    Exit;
+
+  LTagStr := '';
+  LValStr := '';
+  LState := psStart;
+  LI := 1;
+
+  while LI <= LLen do
+  begin
+    LByte := Byte(AStr[LI]);
+
+    case LState of
+      psStart: begin
+        // 跳过前导空白
+        if (LByte = Ord(' ')) or (LByte = Ord(#9)) then
+        begin
+          Inc(LI);
+          Continue;
+        end;
+        // '+' 前缀 = 启用
+        if LByte = Ord('+') then
+        begin
+          AValue := 1;
+          LState := psTag;
+          Inc(LI);
+          Continue;
+        end;
+        // '-' 前缀 = 禁用
+        if LByte = Ord('-') then
+        begin
+          AValue := 0;
+          LState := psTag;
+          Inc(LI);
+          Continue;
+        end;
+        // 引号开始
+        if (LByte = Ord('''')) or (LByte = Ord('"')) then
+        begin
+          LState := psTag;
+          Inc(LI);
+          Continue;
+        end;
+        // 直接开始 tag
+        LState := psTag;
+        Continue;
+      end;
+
+      psTag: begin
+        // 引号结束
+        if (LByte = Ord('''')) or (LByte = Ord('"')) then
+        begin
+          LState := psValue;
+          Inc(LI);
+          Continue;
+        end;
+        // 空格 = tag 结束，进入值解析
+        if (LByte = Ord(' ')) or (LByte = Ord(#9)) then
+        begin
+          LState := psValue;
+          Inc(LI);
+          Continue;
+        end;
+        // '=' = 值开始
+        if LByte = Ord('=') then
+        begin
+          LState := psValue;
+          Inc(LI);
+          Continue;
+        end;
+        // 逗号或结束 = 完成
+        if (LByte = Ord(',')) or (LI = LLen + 1) then
+        begin
+          if Length(LTagStr) >= 4 then
+          begin
+            ATag := FontFeatureTagFromString(LTagStr);
+            Result := True;
+          end;
+          Exit;
+        end;
+        // 收集 tag 字符
+        if Length(LTagStr) < 4 then
+          LTagStr := LTagStr + AnsiString(Char(LByte));
+        Inc(LI);
+      end;
+
+      psValue: begin
+        // 跳过空白
+        if (LByte = Ord(' ')) or (LByte = Ord(#9)) then
+        begin
+          Inc(LI);
+          Continue;
+        end;
+        // 逗号或结束 = 完成
+        if (LByte = Ord(',')) or (LI = LLen + 1) then
+        begin
+          if Length(LTagStr) >= 4 then
+          begin
+            ATag := FontFeatureTagFromString(LTagStr);
+            // 解析值
+            LValStr := TrimStr(LValStr);
+            if (LValStr = 'on') or (LValStr = 'On') or (LValStr = 'ON') then
+              AValue := 1
+            else if (LValStr = 'off') or (LValStr = 'Off') or (LValStr = 'OFF') then
+              AValue := 0
+            else if Length(LValStr) > 0 then
+            begin
+              LVal := ParseInt(LValStr);
+              if LVal <> 0 then
+                AValue := UInt32(LVal);
+            end;
+            Result := True;
+          end;
+          Exit;
+        end;
+        // 收集值字符
+        LValStr := LValStr + AnsiString(Char(LByte));
+        Inc(LI);
+      end;
+    else
+      Inc(LI);
+    end;
+  end;
+
+  // 字符串结束，处理最后的 tag
+  if (LState = psTag) and (Length(LTagStr) >= 4) then
+  begin
+    ATag := FontFeatureTagFromString(LTagStr);
+    Result := True;
+  end
+  else if (LState = psValue) and (Length(LTagStr) >= 4) then
+  begin
+    ATag := FontFeatureTagFromString(LTagStr);
+    LValStr := TrimStr(LValStr);
+    if (LValStr = 'on') or (LValStr = 'On') or (LValStr = 'ON') then
+      AValue := 1
+    else if (LValStr = 'off') or (LValStr = 'Off') or (LValStr = 'OFF') then
+      AValue := 0
+    else if Length(LValStr) > 0 then
+    begin
+      LVal := ParseInt(LValStr);
+      if LVal <> 0 then
+        AValue := UInt32(LVal);
+    end;
+    Result := True;
+  end;
 end;
 
 end.
