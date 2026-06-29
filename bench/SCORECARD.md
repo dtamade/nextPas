@@ -8,10 +8,10 @@
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **60** | 1 | 30 | **67%** |
+| **Go** | **62** | 1 | 30 | **67%** |
 | **Rust** | 19 | 0 | 47 | **29%** |
 
-## Track Summary (22 tracks, 95 operations)
+## Track Summary (23 tracks, 97 operations)
 
 ### Text Operations (6 ops)
 
@@ -267,6 +267,15 @@
 
 **2W vs Go** — Pascal `set of Char` + in-place character building vs Go `strings.Builder` + branch-based char checks
 
+### String Conversion (2 ops)
+
+| Track | Pascal (ns) | Go (ns) | vs Go |
+|-------|-------------|---------|-------|
+| **ManualParse/100K** | **925846** | 1400182 | **1.51x** ✓ (vs Atoi) |
+| **IntToStr/100K** | **3498290** | 7290595 | **2.08x** ✓ (vs Itoa) |
+
+**2W vs Go** — Pascal hand-written parse + IntToStr vs Go `strconv.Atoi`/`Itoa` with error handling overhead
+
 ### Pascal Wins (biggest margins vs Go)
 1. **String Concat: 3557x** — Go immutable strings O(n²) vs Pascal COW
 2. **Fill/1KB: 23.37x** — FillChar→rep stosb vs Go byte loop (no memset opt)
@@ -301,6 +310,7 @@
 - **Bit set operations**: Pascal dominant (5W vs Go) — `set of Byte` is killer
 - **FillChar/Fill**: Pascal dominant (3W vs Go) — `rep stosb` vs Go byte loop
 - **String escape**: Pascal strong (2W vs Go) — `set of Char` + in-place build 1.74x faster
+- **String conversion**: Pascal strong (2W vs Go) — hand-written parse 1.51x, IntToStr 2.08x faster
 - **Bit scan / byte swap**: Pascal strong (3W vs Go) — BSR/BSF/BSwap intrinsics
 - **Dynamic arrays**: Pascal strong (4W vs Go) — SetLength realloc 2-8x faster than Go append
 - **Matrix operations**: Pascal dominant (4W vs Go) — FPC loop optimization beats Go compiler
@@ -316,7 +326,7 @@
 
 ## Conclusion
 
-Pascal beats Go 67% of the time across 91 benchmarks. The biggest wins come from
+Pascal beats Go 67% of the time across 93 benchmarks. The biggest wins come from
 FillChar operations (compiles to `rep stosb`, 11-23x faster than Go's byte loop),
 string operations (immutable strings are Go's Achilles heel), bit set operations
 (`set of Byte` compiles to native instructions), number formatting
