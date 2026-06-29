@@ -8,10 +8,10 @@
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **62** | 1 | 30 | **67%** |
+| **Go** | **63** | 1 | 33 | **65%** |
 | **Rust** | 19 | 0 | 47 | **29%** |
 
-## Track Summary (23 tracks, 97 operations)
+## Track Summary (24 tracks, 101 operations)
 
 ### Text Operations (6 ops)
 
@@ -276,6 +276,17 @@
 
 **2W vs Go** — Pascal hand-written parse + IntToStr vs Go `strconv.Atoi`/`Itoa` with error handling overhead
 
+### Interface Dispatch (4 ops)
+
+| Track | Pascal (ns) | Go (ns) | vs Go |
+|-------|-------------|---------|-------|
+| **Interfaced/Area/100K** | **395797** | 494366 | **1.25x** ✓ |
+| Interfaced/Perimeter/100K | 345203 | 330389 | 0.96x |
+| Interfaced/Kind/100K | 333512 | 264895 | 0.79x |
+| Direct/Area/100K | 333463 | 108110 | 0.32x |
+
+**1W 1D 2L vs Go** — FPC interface vtable dispatch vs Go interface (2 ptrs); Go devirtualization much stronger (3.08x on direct calls)
+
 ### Pascal Wins (biggest margins vs Go)
 1. **String Concat: 3557x** — Go immutable strings O(n²) vs Pascal COW
 2. **Fill/1KB: 23.37x** — FillChar→rep stosb vs Go byte loop (no memset opt)
@@ -311,6 +322,7 @@
 - **FillChar/Fill**: Pascal dominant (3W vs Go) — `rep stosb` vs Go byte loop
 - **String escape**: Pascal strong (2W vs Go) — `set of Char` + in-place build 1.74x faster
 - **String conversion**: Pascal strong (2W vs Go) — hand-written parse 1.51x, IntToStr 2.08x faster
+- **Interface dispatch**: Mixed — FPC Area 1.25x faster; Go devirtualization 3.08x on direct calls
 - **Bit scan / byte swap**: Pascal strong (3W vs Go) — BSR/BSF/BSwap intrinsics
 - **Dynamic arrays**: Pascal strong (4W vs Go) — SetLength realloc 2-8x faster than Go append
 - **Matrix operations**: Pascal dominant (4W vs Go) — FPC loop optimization beats Go compiler
@@ -326,7 +338,7 @@
 
 ## Conclusion
 
-Pascal beats Go 67% of the time across 93 benchmarks. The biggest wins come from
+Pascal beats Go 65% of the time across 97 benchmarks. The biggest wins come from
 FillChar operations (compiles to `rep stosb`, 11-23x faster than Go's byte loop),
 string operations (immutable strings are Go's Achilles heel), bit set operations
 (`set of Byte` compiles to native instructions), number formatting
