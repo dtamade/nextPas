@@ -444,6 +444,195 @@ begin
   end;
 end;
 
+{ ── Scavenger concurrent safety ── }
+
+const
+  SCAV_OPS = 2000;
+  SCAV_THREADS = 4;
+
+type
+  PScavData = ^TScavData;
+  TScavData = record
+    Alloc: TGrowingAllocator;
+    TID: Integer;
+    Done: Boolean;
+    ErrorMsg: string;
+  end;
+
+function ScavAllocWorker(Parameter: Pointer): PtrInt;
+var
+  LData: PScavData;
+  LPtrs: array[0..31] of Pointer;
+  LI, LJ: Integer;
+begin
+  LData := PScavData(Parameter);
+  try
+    for LI := 0 to SCAV_OPS - 1 do
+    begin
+      for LJ := 0 to 31 do
+      begin
+        LPtrs[LJ] := LData^.Alloc.GetMem(64);
+        if LPtrs[LJ] = nil then
+        begin
+          LData^.ErrorMsg := 'nil at op ' + IntToStr(LI);
+          LData^.Done := True;
+          Exit(1);
+        end;
+        PByte(LPtrs[LJ])^ := Byte(LI + LJ);
+      end;
+      for LJ := 0 to 31 do
+        LData^.Alloc.FreeMem(LPtrs[LJ], 64);
+    end;
+    LData^.Done := True;
+    Result := 0;
+  except
+    on E: Exception do begin LData^.ErrorMsg := E.Message; LData^.Done := True; Result := 1; end;
+  end;
+end;
+
+function ScavScavengeWorker(Parameter: Pointer): PtrInt;
+var
+  LData: PScavData;
+  LI: Integer;
+begin
+  LData := PScavData(Parameter);
+  try
+    for LI := 0 to SCAV_OPS - 1 do
+      LData^.Alloc.Scavenge;
+    LData^.Done := True;
+    Result := 0;
+  except
+    on E: Exception do begin LData^.ErrorMsg := E.Message; LData^.Done := True; Result := 1; end;
+  end;
+end;
+
+procedure TestScavengerConcurrentSafety;
+var
+  LAllocator: TGrowingAllocator;
+  LWorkers: array[0..SCAV_THREADS] of TScavData;
+  LThreads: array[0..SCAV_THREADS] of TThreadID;
+  LI: Integer;
+  LAllDone: Boolean;
+begin
+  LAllocator := DefaultGrowingAllocator;
+  for LI := 0 to SCAV_THREADS do
+  begin
+    LWorkers[LI].Alloc := LAllocator;
+    LWorkers[LI].TID := LI;
+    LWorkers[LI].Done := False;
+    LWorkers[LI].ErrorMsg := '';
+  end;
+  { SCAV_THREADS alloc workers + 1 scavenge worker. }
+  for LI := 0 to SCAV_THREADS - 1 do
+    LThreads[LI] := BeginThread(@ScavAllocWorker, @LWorkers[LI]);
+  LThreads[SCAV_THREADS] := BeginThread(@ScavScavengeWorker, @LWorkers[SCAV_THREADS]);
+  repeat
+    LAllDone := True;
+    for LI := 0 to SCAV_THREADS do
+      if not LWorkers[LI].Done then begin LAllDone := False; Break; end;
+    if not LAllDone then Sleep(1);
+  until LAllDone;
+  for LI := 0 to SCAV_THREADS do
+    WaitForThreadTerminate(LThreads[LI], 0);
+  for LI := 0 to SCAV_THREADS do
+    Check(LWorkers[LI].ErrorMsg = '', 'scav thread ' + IntToStr(LI) + ': ' + LWorkers[LI].ErrorMsg);
+  WriteLn('PASS: scavenger concurrent safety (' + IntToStr(SCAV_THREADS) +
+    ' alloc + 1 scavenge, ' + IntToStr(SCAV_OPS) + ' ops)');
+end;
+
+{ ── Rapid thread creation/destruction stress ── }
+
+const
+  RAPID_ROUNDS = 100;
+
+function RapidThreadWorker(Parameter: Pointer): PtrInt;
+var
+  LAlloc: ^TGrowingAllocator;
+  LPtrs: array[0..15] of Pointer;
+  I: Integer;
+begin
+  LAlloc := Parameter;
+  for I := 0 to 15 do
+    LPtrs[I] := LAlloc^.GetMem(64);
+  for I := 0 to 15 do
+    LAlloc^.FreeMem(LPtrs[I], 64);
+  Result := 0;
+end;
+
+procedure TestRapidThreadCreation;
+var
+  LAllocator: TGrowingAllocator;
+  LThread: TThreadID;
+  I: Integer;
+begin
+  LAllocator := DefaultGrowingAllocator;
+  for I := 0 to RAPID_ROUNDS - 1 do
+  begin
+    LThread := BeginThread(@RapidThreadWorker, @LAllocator);
+    WaitForThreadTerminate(LThread, 0);
+  end;
+  WriteLn('PASS: rapid thread creation/destruction (' +
+    IntToStr(RAPID_ROUNDS) + ' rounds)');
+end;
+
+{ ── Growing allocator OOM simulation ── }
+
+procedure TestGrowingAllocatorGetMemZero;
+var
+  LAlloc: TGrowingAllocator;
+begin
+  LAlloc := TGrowingAllocator.Create;
+  try
+    Check(LAlloc.GetMem(0) = nil, 'GetMem(0) returns nil');
+    Check(LAlloc.BatchGetMem(0, 10, nil) = 0, 'BatchGetMem(size=0) returns 0');
+    Check(LAlloc.BatchGetMem(64, 0, nil) = 0, 'BatchGetMem(count=0) returns 0');
+    WriteLn('PASS: growing allocator zero-size edge cases');
+  finally
+    LAlloc.Free;
+  end;
+end;
+
+{ ── ReallocMem variable-size stress ── }
+
+procedure TestReallocMemStress;
+var
+  LAlloc: TGrowingAllocator;
+  LPtr: PByte;
+  LOldSize, LNewSize: SizeUInt;
+  I: Integer;
+begin
+  LAlloc := TGrowingAllocator.Create;
+  try
+    LPtr := PByte(LAlloc.GetMem(16));
+    Check(LPtr <> nil, 'initial alloc');
+    LPtr[0] := $42;
+    LOldSize := 16;
+    { Grow from 16B to 128KB in steps. }
+    for I := 1 to 20 do
+    begin
+      LNewSize := SizeUInt(16) shl I;
+      if LNewSize > 131072 then Break;
+      LPtr := PByte(LAlloc.ReallocMem(LPtr, LOldSize, LNewSize));
+      Check(LPtr <> nil, 'realloc to ' + IntToStr(LNewSize));
+      Check(LPtr[0] = $42, 'data preserved at size ' + IntToStr(LNewSize));
+      LOldSize := LNewSize;
+    end;
+    { Shrink back down. }
+    while LOldSize > 16 do
+    begin
+      LNewSize := LOldSize div 2;
+      LPtr := PByte(LAlloc.ReallocMem(LPtr, LOldSize, LNewSize));
+      Check(LPtr <> nil, 'shrink to ' + IntToStr(LNewSize));
+      Check(LPtr[0] = $42, 'data[0] preserved after shrink');
+      LOldSize := LNewSize;
+    end;
+    LAlloc.FreeMem(LPtr, LOldSize);
+    WriteLn('PASS: realloc stress grow/shrink cycle');
+  finally
+    LAlloc.Free;
+  end;
+end;
+
 { ── Main ── }
 
 begin
@@ -461,6 +650,10 @@ begin
   T.Test('thread_exit_cleanup', @TestThreadExitCleanup);
   T.Test('concurrent_stress', @TestConcurrentStress);
   T.Test('allocmem_zeroed_all', @TestAllocMemZeroedAllSizes);
+  T.Test('scavenger_concurrent', @TestScavengerConcurrentSafety);
+  T.Test('rapid_thread_creation', @TestRapidThreadCreation);
+  T.Test('zero_size_edge_cases', @TestGrowingAllocatorGetMemZero);
+  T.Test('realloc_stress', @TestReallocMemStress);
 
   T.Run;
   T.Summary;
