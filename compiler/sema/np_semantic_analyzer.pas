@@ -7752,7 +7752,8 @@ end;
 
 function TSemanticAnalyzer.DetachModel: TSemanticModel;
 begin
-  FModel.MarkReady;
+  if FModel.Status = 'deferred' then
+    FModel.MarkReady;
   Result := FModel;
   FModel := nil;
 end;
