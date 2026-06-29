@@ -8,10 +8,10 @@
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **36** | 1 | 24 | **60%** |
-| **Rust** | 18 | 0 | 41 | **30%** |
+| **Go** | **40** | 1 | 24 | **63%** |
+| **Rust** | 19 | 0 | 44 | **30%** |
 
-## Track Summary (14 tracks, 62 operations)
+## Track Summary (15 tracks, 66 operations)
 
 ### Text Operations (6 ops)
 
@@ -121,6 +121,17 @@
 
 **4W vs Go, 3W vs Rust**
 
+### Matrix Operations (4 ops)
+
+| Track | Pascal | Go | vs Go |
+|-------|--------|-----|-------|
+| **MatMul/128** | **2.92ms** | 5.10ms | **1.75x** ✓ |
+| **MatAdd/512** | **0.40ms** | 0.60ms | **1.49x** ✓ |
+| **Transpose/512** | **2.13ms** | 3.00ms | **1.41x** ✓ |
+| **MatMul/256** | **51.3ms** | 63.6ms | **1.24x** ✓ |
+
+**4W vs Go, 1W vs Rust (Transpose: 1.06x)**
+
 ### I/O Operations (6 ops)
 
 | Track | Pascal | Go | vs Go | Rust | vs Rust |
@@ -190,11 +201,12 @@
 8. **Builder/IntAppend: 4.95x** — Direct digit writing vs Go's allocation per int
 9. **Format/Hex: 4.59x** — IntToHex + concat vs Go's fmt.Sprintf format parsing
 10. **Builder/Large: 3.77x** — Mixed formatting, Go's strconv overhead
-11. **LowerCase: 2.12x** — Go's strings.ToLower Unicode overhead for ASCII
+11. **JSON/Parse: 2.88x** — SAX parser vs Go's reflect-heavy encoding/json
 12. **Format/Int: 2.24x** — IntToStr + concat vs Go's fmt.Sprintf reflect overhead
-4. **JSON/Parse: 2.88x** — SAX parser vs Go's reflect-heavy encoding/json
-5. **StrReplace: 1.75x** — FPC string replacement vs Go's reflect-heavy ReplaceAll
-6. **TryStrToInt: 1.60x** — Direct parse vs Go's error-return overhead
+13. **LowerCase: 2.12x** — Go's strings.ToLower Unicode overhead for ASCII
+14. **MatMul/128: 1.75x** — FPC loop optimization vs Go compiler
+15. **StrReplace: 1.75x** — FPC string replacement vs Go's reflect-heavy ReplaceAll
+16. **MatAdd/512: 1.49x** — FPC simple loop vs Go bounds-checked loop
 
 ### Pascal Losses (biggest gaps vs Go)
 1. **InOrder BST: 20.9x** — Recursive vs iterative (implementation issue)
@@ -206,6 +218,7 @@
 ### Categories
 - **Bit set operations**: Pascal dominant (5W vs Go) — `set of Byte` is killer
 - **FillChar/Fill**: Pascal dominant (3W vs Go) — `rep stosb` vs Go byte loop
+- **Matrix operations**: Pascal dominant (4W vs Go) — FPC loop optimization beats Go compiler
 - **File I/O Write**: Pascal dominant (3W vs Go) — direct syscall vs Go's bufio
 - **String operations**: Pascal dominant (7W vs Go)
 - **Memory/pointer**: Pascal strong (5W vs Go)
@@ -216,11 +229,12 @@
 
 ## Conclusion
 
-Pascal beats Go 60% of the time across 62 benchmarks. The biggest wins come from
+Pascal beats Go 63% of the time across 66 benchmarks. The biggest wins come from
 FillChar operations (compiles to `rep stosb`, 11-23x faster than Go's byte loop),
 string operations (immutable strings are Go's Achilles heel), bit set operations
 (`set of Byte` compiles to native instructions), number formatting
-(direct digit writing), and file I/O writes (direct syscall vs Go's bufio).
+(direct digit writing), matrix operations (FPC loop optimization),
+and file I/O writes (direct syscall vs Go's bufio).
 Losses come from auto-vectorization gaps, Go's optimized hash map,
 and branchless codegen for binary search. Against Rust, Pascal wins 30% —
 Rust's zero-cost abstractions and LLVM codegen make it consistently fast.
