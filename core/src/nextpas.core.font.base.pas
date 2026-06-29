@@ -32,6 +32,7 @@ const
   TABLE_TAG_OS2  = $4F532F32;   // 'OS/2'
   TABLE_TAG_GPOS = $47504F53;   // 'GPOS'
   TABLE_TAG_GSUB = $47535542;   // 'GSUB'
+  TABLE_TAG_NAME = $6E616D65;   // 'name'
 
   {** GPOS Lookup Type：Pair Adjustment（kern） }
   GPOS_LOOKUP_PAIR_ADJUSTMENT = 2;
@@ -101,6 +102,30 @@ const
   CMAP_FORMAT_6  = 6;   // 紧凑单区间
   CMAP_FORMAT_12 = 12;  // 全 Unicode（SMP emoji 等）
   CMAP_FORMAT_14 = 14;  // IVS（Variation Selector）
+
+  {** name 表 NameID }
+  NAME_ID_COPYRIGHT        = 0;
+  NAME_ID_FONT_FAMILY      = 1;
+  NAME_ID_FONT_SUBFAMILY   = 2;
+  NAME_ID_UNIQUE_ID        = 3;
+  NAME_ID_FULL_NAME        = 4;
+  NAME_ID_VERSION          = 5;
+  NAME_ID_POSTSCRIPT_NAME  = 6;
+  NAME_ID_TRADEMARK        = 7;
+  NAME_ID_MANUFACTURER     = 8;
+  NAME_ID_DESIGNER         = 9;
+  NAME_ID_DESCRIPTION      = 10;
+  NAME_ID_VENDOR_URL       = 11;
+  NAME_ID_DESIGNER_URL     = 12;
+  NAME_ID_LICENSE          = 13;
+  NAME_ID_LICENSE_URL      = 14;
+  NAME_ID_TYPOGRAPHIC_FAMILY    = 16;
+  NAME_ID_TYPOGRAPHIC_SUBFAMILY = 17;
+  NAME_ID_COMPATIBLE_FULL       = 18;
+  NAME_ID_SAMPLE_TEXT           = 19;
+  NAME_ID_POSTSCRIPT_CID        = 20;
+  NAME_ID_WWS_FAMILY            = 21;
+  NAME_ID_WWS_SUBFAMILY         = 22;
 
   {** glyf 简单字形标志位 }
   GLYF_FLAG_ON_CURVE        = $01;
@@ -328,6 +353,16 @@ type
   TFontCmapFmt14 = record
     VarSelectors: TFontCmapFmt14VarSelectorArray;
   end;
+
+  {** name 表名称记录 }
+  TFontNameRecord = record
+    PlatformID: UInt16;
+    EncodingID: UInt16;
+    LanguageID: UInt16;
+    NameID: UInt16;
+    Value: AnsiString;       // UTF-8 解码后的值
+  end;
+  TFontNameRecordArray = array of TFontNameRecord;
 
   {** 字体加载错误 }
   EFontError = class(Exception);

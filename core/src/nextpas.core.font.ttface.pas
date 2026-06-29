@@ -38,6 +38,7 @@ type
     FHasFmt4: Boolean;
     FHasFmt12: Boolean;
     FHasFmt14: Boolean;
+    FNameRecords: TFontNameRecordArray;
     FLocaOffsets: array of UInt32;
     FOs2: TFontOs2Table;
     FPairPosSubtables: TFontPairPosSubtableArray;
@@ -91,6 +92,7 @@ type
     procedure ParseGpos;
     procedure ParseGsub;
     procedure ParseCff;
+    procedure ParseName;
     function GlyphOutlineCff(AGlyphIndex: UInt32): TFontGlyphOutline;
     function ParseFeatureLookups(ATableOffset: Int32;
       const AFeatureTags: array of UInt32): TFontFeatureLookupIndexArray;
@@ -255,6 +257,18 @@ type
         - Default UVS: 范围匹配返回 0（表示使用默认字形）
         - 无此 VS: 返回 0 }
     function LookupIVS(ACodepoint, AVariationSelector: UInt32): UInt32;
+
+    {** 获取指定 NameID 的名称（UTF-8）。未找到返回空字符串。
+        优先返回 Windows 平台 Unicode 编码的名称。 }
+    function GetName(ANameID: UInt16): AnsiString;
+    {** 获取字体家族名（NameID 1） }
+    function FamilyName: AnsiString;
+    {** 获取字体样式名（NameID 2） }
+    function SubfamilyName: AnsiString;
+    {** 获取完整名称（NameID 4） }
+    function FullName: AnsiString;
+    {** 获取 PostScript 名称（NameID 6） }
+    function PostScriptName: AnsiString;
   end;
 
 implementation
@@ -345,6 +359,10 @@ begin
       ParseGsub;
     except
     end;
+    try
+      ParseName;
+    except
+    end;
     FValid := True;
   except
     on E: Exception do
@@ -401,6 +419,10 @@ begin
     end;
     try
       ParseGsub;
+    except
+    end;
+    try
+      ParseName;
     except
     end;
     FValid := True;
@@ -3140,6 +3162,62 @@ begin
   Result := 0;
 end;
 
+function TTFontFace.GetName(ANameID: UInt16): AnsiString;
+var
+  I: Int32;
+  LBestPlatform, LBestIdx: Int32;
+begin
+  Result := '';
+  LBestPlatform := 999;
+  LBestIdx := -1;
+
+  for I := 0 to High(FNameRecords) do
+  begin
+    if FNameRecords[I].NameID <> ANameID then
+      Continue;
+    // 优先 Windows 平台（Platform 3），其次 Unicode（Platform 0）
+    if FNameRecords[I].PlatformID = 3 then
+    begin
+      if LBestPlatform > 3 then
+      begin
+        LBestPlatform := 3;
+        LBestIdx := I;
+      end;
+    end
+    else if FNameRecords[I].PlatformID = 0 then
+    begin
+      if LBestPlatform > 0 then
+      begin
+        LBestPlatform := 0;
+        LBestIdx := I;
+      end;
+    end;
+  end;
+
+  if LBestIdx >= 0 then
+    Result := FNameRecords[LBestIdx].Value;
+end;
+
+function TTFontFace.FamilyName: AnsiString;
+begin
+  Result := GetName(NAME_ID_FONT_FAMILY);
+end;
+
+function TTFontFace.SubfamilyName: AnsiString;
+begin
+  Result := GetName(NAME_ID_FONT_SUBFAMILY);
+end;
+
+function TTFontFace.FullName: AnsiString;
+begin
+  Result := GetName(NAME_ID_FULL_NAME);
+end;
+
+function TTFontFace.PostScriptName: AnsiString;
+begin
+  Result := GetName(NAME_ID_POSTSCRIPT_NAME);
+end;
+
 function TTFontFace.IsValid: Boolean;
 begin
   Result := FValid;
@@ -3594,6 +3672,80 @@ begin
     // 复合字形
     ParseCompoundComponents(LOffset + 10, LCompoundBuf);
     Result := ExpandCompoundOutline(LCompoundBuf);
+  end;
+end;
+
+{ ========================================================================= }
+{ name 表解析                                                                }
+{ ========================================================================= }
+
+procedure TTFontFace.ParseName;
+var
+  LIdx, LOff: Int32;
+  LFormat, LCount, LStringOffset: Int32;
+  I, LRecOff: Int32;
+  LPlatformID, LEncodingID, LLanguageID, LNameID: UInt16;
+  LLength, LOffset: UInt16;
+  LValue: AnsiString;
+  J, LChar: Int32;
+begin
+  LIdx := FindTable(TABLE_TAG_NAME);
+  if LIdx < 0 then
+    Exit;
+
+  LOff := Int32(FTables[LIdx].Offset);
+  LFormat := ReadUInt16BE(LOff);
+  LCount := ReadUInt16BE(LOff + 2);
+  LStringOffset := ReadUInt16BE(LOff + 4);
+
+  if (LCount < 1) or (LCount > 1024) then
+    Exit;
+
+  SetLength(FNameRecords, 0);
+
+  for I := 0 to LCount - 1 do
+  begin
+    LRecOff := LOff + 6 + I * 12;
+    LPlatformID := ReadUInt16BE(LRecOff);
+    LEncodingID := ReadUInt16BE(LRecOff + 2);
+    LLanguageID := ReadUInt16BE(LRecOff + 4);
+    LNameID := ReadUInt16BE(LRecOff + 6);
+    LLength := ReadUInt16BE(LRecOff + 8);
+    LOffset := ReadUInt16BE(LRecOff + 10);
+
+    // 只处理 Windows 平台 Unicode BMP 编码（Platform 3, Encoding 1）
+    // 和 Unicode 平台（Platform 0）
+    if not (((LPlatformID = 3) and (LEncodingID = 1)) or
+            (LPlatformID = 0)) then
+      Continue;
+
+    // 解码 UTF-16BE 字符串
+    LValue := '';
+    for J := 0 to (LLength div 2) - 1 do
+    begin
+      LChar := ReadUInt16BE(LOff + LStringOffset + LOffset + J * 2);
+      if LChar < 128 then
+        LValue := LValue + AnsiString(Char(LChar))
+      else if LChar < 2048 then
+      begin
+        LValue := LValue + AnsiString(Char($C0 or (LChar shr 6)));
+        LValue := LValue + AnsiString(Char($80 or (LChar and $3F)));
+      end
+      else
+      begin
+        LValue := LValue + AnsiString(Char($E0 or (LChar shr 12)));
+        LValue := LValue + AnsiString(Char($80 or ((LChar shr 6) and $3F)));
+        LValue := LValue + AnsiString(Char($80 or (LChar and $3F)));
+      end;
+    end;
+
+    // 添加记录
+    SetLength(FNameRecords, Length(FNameRecords) + 1);
+    FNameRecords[High(FNameRecords)].PlatformID := LPlatformID;
+    FNameRecords[High(FNameRecords)].EncodingID := LEncodingID;
+    FNameRecords[High(FNameRecords)].LanguageID := LLanguageID;
+    FNameRecords[High(FNameRecords)].NameID := LNameID;
+    FNameRecords[High(FNameRecords)].Value := LValue;
   end;
 end;
 
