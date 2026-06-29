@@ -49,6 +49,7 @@ type
     FLogLines : specialize TArray<string>;
     FCleanups : specialize TArray<TTestClosure>;
     constructor Create(const ATestName: string; const AConfig: TTestConfig);
+    destructor Destroy; override;
     procedure Run(const AName: string; AProc: TTestProc);
     procedure Run(const AName: string; AProc: TTestClosure);
     procedure RunNested(const AName: string; AProc: Pointer);
@@ -95,6 +96,27 @@ begin
   FSubFail  := 0;
   FSubSkip  := 0;
   FOnResult := nil;
+end;
+
+destructor TTestContext.Destroy;
+var
+  I: Integer;
+begin
+  { Explicitly release closures — FPC may not finalize managed fields
+    in classes destroyed via reference counting. }
+  for I := 0 to High(FSubtests) do
+  begin
+    FSubtests[I].Closure := nil;
+    FSubtests[I].SubtestProc := nil;
+  end;
+  FSubtests := nil;
+  for I := 0 to High(FCleanups) do
+    FCleanups[I] := nil;
+  FCleanups := nil;
+  FOnResult := nil;
+  FFailedNames := nil;
+  FLogLines := nil;
+  inherited Destroy;
 end;
 
 procedure TTestContext.Run(const AName: string; AProc: TTestProc);
@@ -144,9 +166,16 @@ begin
 end;
 
 procedure TTestContext.Log(const AMessage: string);
+var
+  LOldLen, LCap: Integer;
 begin
-  SetLength(FLogLines, Length(FLogLines) + 1);
-  FLogLines[High(FLogLines)] := AMessage;
+  LOldLen := Length(FLogLines);
+  LCap := LOldLen;
+  if LCap < 8 then LCap := 8
+  else if LOldLen >= LCap then LCap := LCap * 2;
+  if LCap <> LOldLen then SetLength(FLogLines, LCap);
+  FLogLines[LOldLen] := AMessage;
+  SetLength(FLogLines, LOldLen + 1);
 end;
 
 procedure TTestContext.LogF(const AFormat: string; const AArgs: array of const);
@@ -157,19 +186,32 @@ end;
 procedure TTestContext.OnCleanup(AProc: TTestProc);
 var
   LProc: TTestProc;
+  LOldLen, LCap: Integer;
 begin
   LProc := AProc;
-  SetLength(FCleanups, Length(FCleanups) + 1);
-  FCleanups[High(FCleanups)] := procedure
+  LOldLen := Length(FCleanups);
+  LCap := LOldLen;
+  if LCap < 4 then LCap := 4
+  else if LOldLen >= LCap then LCap := LCap * 2;
+  if LCap <> LOldLen then SetLength(FCleanups, LCap);
+  FCleanups[LOldLen] := procedure
   begin
     LProc;
   end;
+  SetLength(FCleanups, LOldLen + 1);
 end;
 
 procedure TTestContext.OnCleanup(AProc: TTestClosure);
+var
+  LOldLen, LCap: Integer;
 begin
-  SetLength(FCleanups, Length(FCleanups) + 1);
-  FCleanups[High(FCleanups)] := AProc;
+  LOldLen := Length(FCleanups);
+  LCap := LOldLen;
+  if LCap < 4 then LCap := 4
+  else if LOldLen >= LCap then LCap := LCap * 2;
+  if LCap <> LOldLen then SetLength(FCleanups, LCap);
+  FCleanups[LOldLen] := AProc;
+  SetLength(FCleanups, LOldLen + 1);
 end;
 
 procedure TTestContext.ClearLog;
@@ -223,9 +265,17 @@ end;
 
 procedure AppendFailedName(var ANames: specialize TArray<string>;
   const AName: string);
+{ Geometric growth: pre-allocate capacity to avoid O(n²) realloc. }
+var
+  LOldLen, LCap: Integer;
 begin
-  SetLength(ANames, Length(ANames) + 1);
-  ANames[High(ANames)] := AName;
+  LOldLen := Length(ANames);
+  LCap := LOldLen;
+  if LCap < 4 then LCap := 4
+  else if LOldLen >= LCap then LCap := LCap * 2;
+  if LCap <> LOldLen then SetLength(ANames, LCap);
+  ANames[LOldLen] := AName;
+  SetLength(ANames, LOldLen + 1);
 end;
 
 procedure TTestContext.ExecuteSubtests;
@@ -240,6 +290,7 @@ var
   LNames: string;
   K: Integer;
   J: Integer;
+  LTotal, LPos: Integer;
 begin
   for I := 0 to High(FSubtests) do
   begin
@@ -376,11 +427,27 @@ begin
   { Propagate subtest failures to parent }
   if FSubFail > 0 then
   begin
-    LNames := '';
+    { Build comma-separated list: pre-compute total length to avoid O(n²) concat }
+    LTotal := 0;
+    for K := 0 to High(FFailedNames) do
+      Inc(LTotal, Length(FFailedNames[K]));
+    if Length(FFailedNames) > 1 then
+      Inc(LTotal, 2 * (Length(FFailedNames) - 1)); { ', ' separators }
+    SetLength(LNames, LTotal);
+    LPos := 1;
     for K := 0 to High(FFailedNames) do
     begin
-      if K > 0 then LNames := LNames + ', ';
-      LNames := LNames + FFailedNames[K];
+      if K > 0 then
+      begin
+        LNames[LPos] := ',';
+        LNames[LPos + 1] := ' ';
+        Inc(LPos, 2);
+      end;
+      if Length(FFailedNames[K]) > 0 then
+      begin
+        Move(FFailedNames[K][1], LNames[LPos], Length(FFailedNames[K]));
+        Inc(LPos, Length(FFailedNames[K]));
+      end;
     end;
     InternalFail(IntToStr(FSubFail) + ' subtest(s) failed in ' + FTestName + ': ' + LNames);
   end;

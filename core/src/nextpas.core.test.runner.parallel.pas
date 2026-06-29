@@ -320,6 +320,23 @@ begin
     Exit;
   end;
 
+  { Benchmarks: not supported in parallel mode — skip gracefully }
+  if R^.Entry.Kind = ekBench then
+  begin
+    R^.Mtx.Acquire;
+    try
+      R^.Skip^ := R^.Skip^ + 1;
+      LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, R^.Entry.Name,
+        'benchmarks not supported in parallel mode', LConfig));
+    finally
+      SafeRelease(R^.Mtx, LConfig);
+    end;
+    if R^.Res <> nil then
+      R^.Res^ := MakeTestResult(R^.Entry.Name, tsSkipped,
+        'benchmarks not supported in parallel mode', 0);
+    Exit;
+  end;
+
   if Assigned(R^.Before) or Assigned(R^.BeforeClosure) then
   begin
     try
@@ -391,8 +408,16 @@ begin
         end
         else if R^.Entry.Kind = ekTableTest then
         begin
-          { Table-driven test: invoke the stored proc with case data }
-          PTestCaseProc(R^.Entry.TableProc)^(PTestCase(R^.Entry.TableCase)^);
+          { Table-driven test: invoke the stored proc with case data.
+            Nil guard: --count=N re-runs the suite after CleanupTableAllocations
+            has disposed TableCase/TableProc. Skip gracefully on re-run. }
+          if (R^.Entry.TableCase = nil) or (R^.Entry.TableProc = nil) then
+          begin
+            LStatus := tsSkipped;
+            LSkipReason := 'table data already disposed (--count re-run)';
+          end
+          else
+            PTestCaseProc(R^.Entry.TableProc)^(PTestCase(R^.Entry.TableCase)^);
         end
         else if R^.Entry.Kind = ekShouldFail then
         begin

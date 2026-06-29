@@ -41,16 +41,18 @@ type
     AfterEach       : TTestProc;
     AfterEachClosure : TTestClosure;
     EachCleanups     : specialize TArray<TTestClosure>;  { LIFO cleanup after each test }
-    { Heap-allocated stubs from DiscoverTests — disposed by CleanupTableAllocations.
+    { Heap-allocated stubs from DiscoverTests — disposed by CleanupTableAllocations
+      (FCleanupDone guard) or in finalization safety net.
       Stores GStubRegistry indices for O(1) cleanup (R4-10).
       Raw pointers because discovery.pas uses PMethodStub which runner.pas cannot see. }
     StubAllocations: specialize TArray<Integer>;
     { R6-05: GFixtureRegistry indices for fixtures registered by DiscoverTests.
-      Freed by CleanupTableAllocations when suite runs, or by finalization if not. }
+      Freed by CleanupTableAllocations (FCleanupDone guard) or finalization. }
     FixtureAllocations: specialize TArray<Integer>;
     { Cached run results — set by Run/RunParallel }
     LastRunPassed: Boolean;
     HasRun       : Boolean;
+    FCleanupDone : Boolean;  { prevents double-free on --count=N re-runs }
     LastPass     : Integer;
     LastFail     : Integer;
     LastSkip     : Integer;
@@ -135,7 +137,8 @@ type
     function  RunBenchmarks(out AResults: TBenchResults): Boolean;
     procedure Summary;
     function  AllPassed: Boolean;
-    { Free heap-allocated table test pointers (TableCase, TableProc) }
+    { Dispose table test data, stubs, and fixtures. FCleanupDone guard
+      prevents double-free on --count=N re-runs. }
     procedure CleanupTableAllocations;
     { Shared helpers for RunWithResult/RunParallelWithResult (R4-03) }
     function  RunSetup(const AConfig: TTestConfig; out ASkipCount: Integer;
@@ -196,8 +199,8 @@ uses
   nextpas.core.test.runner.parallel;
 
 { Global registry of all heap-allocated method stubs from DiscoverTests.
-  Stubs are disposed here in finalization as a safety net for suites that
-  are created but never run (and thus never call CleanupTableAllocations).
+  Stubs are disposed by CleanupTableAllocations (with FCleanupDone guard)
+  or in finalization as safety net for suites that are never run.
   R6-08: NOT thread-safe — all access must be from the main thread only. }
 var
   GStubRegistry: specialize TArray<Pointer>;
@@ -734,6 +737,7 @@ begin
   Result.FixtureAllocations := nil;
   Result.LastRunPassed := False;
   Result.HasRun        := False;
+  Result.FCleanupDone  := False;
   Result.LastPass      := 0;
   Result.LastFail      := 0;
   Result.LastSkip      := 0;
@@ -745,13 +749,27 @@ procedure RegisterStub(var ASuite: TTestSuite; APtr: Pointer);
     with no synchronization. Current usage is safe: registration and
     cleanup both occur on the main thread during discovery and suite
     finalization. }
+var
+  LOldLen, LCap: Integer;
 begin
-  { Global safety-net — disposed in finalization for suites that never run }
-  SetLength(GStubRegistry, Length(GStubRegistry) + 1);
-  GStubRegistry[High(GStubRegistry)] := APtr;
-  { Per-suite tracking — stores GStubRegistry index for O(1) cleanup (R4-10) }
-  SetLength(ASuite.StubAllocations, Length(ASuite.StubAllocations) + 1);
-  ASuite.StubAllocations[High(ASuite.StubAllocations)] := High(GStubRegistry);
+  { Global safety-net — disposed in finalization for suites that never run.
+    Geometric growth to avoid O(n²) realloc on repeated RegisterStub calls. }
+  LOldLen := Length(GStubRegistry);
+  LCap := LOldLen;
+  if LCap < 16 then LCap := 16
+  else if LOldLen >= LCap then LCap := LCap * 2;
+  if LCap <> LOldLen then SetLength(GStubRegistry, LCap);
+  GStubRegistry[LOldLen] := APtr;
+  SetLength(GStubRegistry, LOldLen + 1);
+  { Per-suite tracking — stores GStubRegistry index for O(1) cleanup (R4-10).
+    Geometric growth: pre-allocate capacity to avoid per-registration realloc. }
+  LOldLen := Length(ASuite.StubAllocations);
+  LCap := LOldLen;
+  if LCap < 8 then LCap := 8
+  else if LOldLen >= LCap then LCap := LCap * 2;
+  if LCap <> LOldLen then SetLength(ASuite.StubAllocations, LCap);
+  ASuite.StubAllocations[LOldLen] := High(GStubRegistry);
+  SetLength(ASuite.StubAllocations, LOldLen + 1);
 end;
 
 procedure RegisterFixture(var ASuite: TTestSuite; AFixture: TObject);
@@ -760,13 +778,27 @@ procedure RegisterFixture(var ASuite: TTestSuite; AFixture: TObject);
     with no synchronization. Current usage is safe: registration and
     cleanup both occur on the main thread during discovery and suite
     finalization. }
+var
+  LOldLen, LCap, LGblOldLen, LGblCap: Integer;
 begin
-  { Global safety-net — disposed in finalization for suites that never run }
-  SetLength(GFixtureRegistry, Length(GFixtureRegistry) + 1);
-  GFixtureRegistry[High(GFixtureRegistry)] := AFixture;
-  { Per-suite tracking — stores GFixtureRegistry index for O(1) cleanup }
-  SetLength(ASuite.FixtureAllocations, Length(ASuite.FixtureAllocations) + 1);
-  ASuite.FixtureAllocations[High(ASuite.FixtureAllocations)] := High(GFixtureRegistry);
+  { Global safety-net — disposed in finalization for suites that never run.
+    Geometric growth to avoid O(n²) realloc on repeated RegisterFixture calls. }
+  LGblOldLen := Length(GFixtureRegistry);
+  LGblCap := LGblOldLen;
+  if LGblCap < 16 then LGblCap := 16
+  else if LGblOldLen >= LGblCap then LGblCap := LGblCap * 2;
+  if LGblCap <> LGblOldLen then SetLength(GFixtureRegistry, LGblCap);
+  GFixtureRegistry[LGblOldLen] := AFixture;
+  SetLength(GFixtureRegistry, LGblOldLen + 1);
+  { Per-suite tracking — stores GFixtureRegistry index for O(1) cleanup.
+    Geometric growth to avoid per-registration realloc. }
+  LOldLen := Length(ASuite.FixtureAllocations);
+  LCap := LOldLen;
+  if LCap < 8 then LCap := 8
+  else if LOldLen >= LCap then LCap := LCap * 2;
+  if LCap <> LOldLen then SetLength(ASuite.FixtureAllocations, LCap);
+  ASuite.FixtureAllocations[LOldLen] := High(GFixtureRegistry);
+  SetLength(ASuite.FixtureAllocations, LOldLen + 1);
 end;
 
 procedure TTestSuite.Test(const AName: string; AProc: TTestProc);
@@ -1045,19 +1077,32 @@ end;
 procedure TTestSuite.Cleanup(AProc: TTestProc);
 var
   LProc: TTestProc;
+  LOldLen, LCap: Integer;
 begin
   LProc := AProc;
-  SetLength(EachCleanups, Length(EachCleanups) + 1);
-  EachCleanups[High(EachCleanups)] := procedure
+  LOldLen := Length(EachCleanups);
+  LCap := LOldLen;
+  if LCap < 4 then LCap := 4
+  else if LOldLen >= LCap then LCap := LCap * 2;
+  if LCap <> LOldLen then SetLength(EachCleanups, LCap);
+  EachCleanups[LOldLen] := procedure
   begin
     LProc;
   end;
+  SetLength(EachCleanups, LOldLen + 1);
 end;
 
 procedure TTestSuite.Cleanup(AProc: TTestClosure);
+var
+  LOldLen, LCap: Integer;
 begin
-  SetLength(EachCleanups, Length(EachCleanups) + 1);
-  EachCleanups[High(EachCleanups)] := AProc;
+  LOldLen := Length(EachCleanups);
+  LCap := LOldLen;
+  if LCap < 4 then LCap := 4
+  else if LOldLen >= LCap then LCap := LCap * 2;
+  if LCap <> LOldLen then SetLength(EachCleanups, LCap);
+  EachCleanups[LOldLen] := AProc;
+  SetLength(EachCleanups, LOldLen + 1);
 end;
 
 function TTestSuite.WithConfig(const AConfig: TTestConfig): TTestSuite;
@@ -1125,21 +1170,34 @@ end;
 function TTestSuite.WithEachCleanup(AProc: TTestProc): TTestSuite;
 var
   LProc: TTestProc;
+  LOldLen, LCap: Integer;
 begin
   Result := Self;
   LProc := AProc;
-  SetLength(Result.EachCleanups, Length(Result.EachCleanups) + 1);
-  Result.EachCleanups[High(Result.EachCleanups)] := procedure
+  LOldLen := Length(Result.EachCleanups);
+  LCap := LOldLen;
+  if LCap < 4 then LCap := 4
+  else if LOldLen >= LCap then LCap := LCap * 2;
+  if LCap <> LOldLen then SetLength(Result.EachCleanups, LCap);
+  Result.EachCleanups[LOldLen] := procedure
   begin
     LProc;
   end;
+  SetLength(Result.EachCleanups, LOldLen + 1);
 end;
 
 function TTestSuite.WithEachCleanup(AProc: TTestClosure): TTestSuite;
+var
+  LOldLen, LCap: Integer;
 begin
   Result := Self;
-  SetLength(Result.EachCleanups, Length(Result.EachCleanups) + 1);
-  Result.EachCleanups[High(Result.EachCleanups)] := AProc;
+  LOldLen := Length(Result.EachCleanups);
+  LCap := LOldLen;
+  if LCap < 4 then LCap := 4
+  else if LOldLen >= LCap then LCap := LCap * 2;
+  if LCap <> LOldLen then SetLength(Result.EachCleanups, LCap);
+  Result.EachCleanups[LOldLen] := AProc;
+  SetLength(Result.EachCleanups, LOldLen + 1);
 end;
 
 function TTestSuite.Run: Boolean;
@@ -1241,7 +1299,6 @@ begin
     LastFail      := 1;
     LastSkip      := LSkip;
     Result         := False;
-    CleanupTableAllocations;
     LOutSink.WriteLn(
       AnsiDim('  ' + IntToStr(LSkip) + ' skipped (setup failure)', LConfig));
     Exit;
@@ -1308,6 +1365,10 @@ begin
         IntToStr(LProgressTotal) + '] '
     else
       LProgressPrefix := '';
+
+    { Benchmarks: skip in regular test run (only run via RunBenchmarks) }
+    if LEntry.Kind = ekBench then
+      Continue;
 
     { Skip check BEFORE BeforeEach — skipped tests don't need hooks }
     if LEntry.Kind = ekSkipped then
@@ -1409,7 +1470,16 @@ begin
       end
       else if LEntry.Kind = ekTableTest then
       begin
-        { Table-driven test: invoke the stored proc with case data }
+        { Table-driven test: invoke the stored proc with case data.
+          Nil guard: --count=N re-runs the suite after CleanupTableAllocations
+          has disposed TableCase/TableProc. Skip gracefully on re-run. }
+        if (LEntry.TableCase = nil) or (LEntry.TableProc = nil) then
+        begin
+          LStatus := tsSkipped;
+          LLastFailMsg := 'table data already disposed (--count re-run)';
+          Inc(LSkip);
+        end
+        else
         try
           PTestCaseProc(LEntry.TableProc)^(PTestCase(LEntry.TableCase)^);
           Inc(LPass);
@@ -1652,6 +1722,13 @@ begin
     LAppender.Free;
   end;
 
+  { Dispose table test allocations (PTestCase/PTestCaseProc heap data).
+    Must be called before FinalizeResults so that --count=N re-runs can
+    skip already-disposed entries via the nil guard in the test loop.
+    FCleanupDone guard prevents double-free when RunAllWithResult also
+    calls CleanupTableAllocations after the full run. }
+  CleanupTableAllocations;
+
   FinalizeResults(LConfig, AResult, LPass, LFail, LSkip);
   Result := LastRunPassed;
 end;
@@ -1720,10 +1797,13 @@ end;
 
 procedure TTestSuite.FinalizeResults(const AConfig: TTestConfig;
   var AResult: TTestRunResult; APass, AFail, ASkip: Integer);
+{ Sets result counters, populates slow test report, writes summary line.
+  Does NOT call CleanupTableAllocations — stubs/fixtures must survive the
+  full suite lifetime (--count=N re-runs need valid closure pointers).
+  The caller (RunAll* or finalization) is responsible for cleanup. }
 var
   LSlowCount: Integer;
 begin
-  CleanupTableAllocations;
   AResult.Passed    := APass;
   AResult.Failed    := AFail;
   AResult.Skipped   := ASkip;
@@ -1806,7 +1886,6 @@ begin
     LastFail      := 1;
     LastSkip      := LSkip;
     Result         := False;
-    CleanupTableAllocations;
     LOutSink.WriteLn(
       AnsiDim('  ' + IntToStr(LSkip) + ' skipped (setup failure)', LConfig));
     Exit;
@@ -1949,6 +2028,11 @@ begin
        (LResults[I].Name <> '') then
       AppendResult(AResult.Results, LResults[I]);
 
+  { Dispose table test allocations from parallel worker records.
+    Same rationale as RunWithResult — FCleanupDone guard prevents
+    double-free when RunAllParallelWithResult also calls this. }
+  CleanupTableAllocations;
+
   FinalizeResults(LConfig, AResult, LPass, LFail, LSkip);
   Result := LastRunPassed;
 end;
@@ -1972,7 +2056,7 @@ var
   LN: Integer;
   LStartMs, LElapsedMs: Int64;
   LResult: TBenchResult;
-  LCount: Integer;
+  LCount, LCap: Integer;
 begin
   LConfig := ResolveConfig(Config);
   LOutSink := ResolveOutSink(LConfig);
@@ -1980,6 +2064,7 @@ begin
   if LBenchTimeMs <= 0 then LBenchTimeMs := 1000;
   LShowMem := GetBenchMem(LConfig);
   LCount := 0;
+  LCap := 0;
   SetLength(AResults, 0);
   LOutSink.WriteLn('');
   WriteSuiteHeader(Name, 'benchmarks', LOutSink, LConfig);
@@ -1998,11 +2083,11 @@ begin
       LElapsedMs := GetTickCount64 - LStartMs;
       if LElapsedMs >= LBenchTimeMs then
         Break;
-      { Scale N: if too fast (< 10ms), multiply aggressively }
+      { Scale N: use Int64 to prevent overflow before bounds check }
       if LElapsedMs < 10 then
-        LN := LN * 100
+        LN := Int64(LN) * 100
       else
-        LN := Integer(Int64(LN) * LBenchTimeMs div LElapsedMs);
+        LN := Int64(LN) * LBenchTimeMs div LElapsedMs;
       if LN > 1000000000 then
       begin
         LN := 1000000000;
@@ -2017,11 +2102,20 @@ begin
     LElapsedMs := GetTickCount64 - LStartMs;
     LResult := MakeBenchResult(LEntry.Name, LN,
       LElapsedMs * 1000000, LCtx.AllocBytes, LCtx.AllocCount);
-    SetLength(AResults, Length(AResults) + 1);
-    AResults[High(AResults)] := LResult;
+    { Geometric growth: only grow during loop, trim once at end.
+      Writing beyond logical length after SetLength-down triggers heaptrc
+      guard violation even though allocated capacity is sufficient. }
+    if LCount >= LCap then
+    begin
+      if LCap < 4 then LCap := 4
+      else LCap := LCap * 2;
+      SetLength(AResults, LCap);
+    end;
+    AResults[LCount] := LResult;
     LOutSink.WriteLn(FormatBenchLine(LResult, LShowMem, LConfig));
     Inc(LCount);
   end;
+  SetLength(AResults, LCount); { trim to logical size }
   if LCount = 0 then
     LOutSink.WriteLn(AnsiDim('  (no benchmarks matched)', LConfig));
   Result := LCount > 0;
@@ -2062,13 +2156,15 @@ begin
 end;
 
 procedure TTestSuite.CleanupTableAllocations;
-  { Note: Must be called from the main thread only. Accesses GStubRegistry
-    and GFixtureRegistry which are not thread-safe. Current usage is safe:
-    called from FinalizeResults which runs on the main thread after all
-    parallel worker threads have joined. }
+  { Disposes heap-allocated table test data, stubs, and fixtures.
+    FCleanupDone guard prevents double-free on --count=N re-runs where
+    CleanupTableAllocations is called once after the final iteration.
+    Must be called from the main thread only. }
 var
   I: Integer;
 begin
+  if FCleanupDone then Exit;
+  FCleanupDone := True;
   for I := 0 to High(Tests) do
   begin
     if Tests[I].Kind = ekTableTest then
@@ -2123,10 +2219,23 @@ procedure TTestRunner.Add(const ASuite: TTestSuite);
   { const avoids copying the entire record on the call side (same as var for
     structured types). Internally the suite IS copied into Suites[] via Pascal
     assignment. Mutations to the caller's ASuite after Add() are NOT visible
-    to the runner. Rule: register ALL tests before calling Add. }
+    to the runner. Rule: register ALL tests before calling Add.
+    IMPORTANT: Pascal record assignment shares dynamic array references via
+    refcount. We must deep-copy Tests so that runner operations (shuffle,
+    etc.) don't mutate the caller's original suite data. }
+var
+  LOldLen, LCap: Integer;
 begin
-  SetLength(Suites, Length(Suites) + 1);
-  Suites[High(Suites)] := ASuite;
+  LOldLen := Length(Suites);
+  LCap := LOldLen;
+  if LCap < 4 then LCap := 4
+  else if LOldLen >= LCap then LCap := LCap * 2;
+  if LCap <> LOldLen then SetLength(Suites, LCap);
+  Suites[LOldLen] := ASuite;
+  { Deep-copy Tests to break refcount sharing — shuffle and other
+    mutations in RunWithResult must not affect the caller's suite. }
+  Suites[LOldLen].Tests := Copy(ASuite.Tests, 0, Length(ASuite.Tests));
+  SetLength(Suites, LOldLen + 1);
 end;
 
 function TTestRunner.RunAll: Boolean;
@@ -2251,6 +2360,11 @@ begin
         FormatDuration(GetTickCount64 - LStartMs), LConfig));
   end;
 
+  { Cleanup after all iterations: stubs/fixtures/table data must survive
+    --count=N re-runs. FinalizeResults no longer calls this. }
+  for I := 0 to High(Suites) do
+    Suites[I].CleanupTableAllocations;
+
   HasRun := True;
   Result := LAllPassed;
   { JSON output — emit machine-readable report to stdout }
@@ -2367,6 +2481,11 @@ begin
         FormatDuration(GetTickCount64 - LStartMs), LConfig));
   end;
 
+  { Cleanup after all iterations: stubs/fixtures/table data must survive
+    --count=N re-runs. FinalizeResults no longer calls this. }
+  for I := 0 to High(Suites) do
+    Suites[I].CleanupTableAllocations;
+
   HasRun := True;
   Result := LAllPassed;
   { JSON output — emit machine-readable report to stdout }
@@ -2424,15 +2543,17 @@ end;
 
 finalization
   { Safety net: dispose any method stubs and fixture objects that were not
-    cleaned up by CleanupTableAllocations (e.g. suites created but never run). }
+    cleaned up by CleanupTableAllocations (e.g. suites created but never run).
+    For suites that ran, CleanupTableAllocations already freed these and
+    set the GStubRegistry/GFixtureRegistry entries to nil — the nil check
+    prevents double-free here. Iterate each registry independently to handle
+    length mismatches. }
   for GStubCleanupI := 0 to High(GStubRegistry) do
-  begin
     if GStubRegistry[GStubCleanupI] <> nil then
       FreeMem(GStubRegistry[GStubCleanupI]);
-    if GStubCleanupI <= High(GFixtureRegistry) then
-      if GFixtureRegistry[GStubCleanupI] <> nil then
-        GFixtureRegistry[GStubCleanupI].Free;
-  end;
+  for GStubCleanupI := 0 to High(GFixtureRegistry) do
+    if GFixtureRegistry[GStubCleanupI] <> nil then
+      GFixtureRegistry[GStubCleanupI].Free;
   GStubRegistry := nil;
   GFixtureRegistry := nil;
 
