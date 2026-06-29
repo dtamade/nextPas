@@ -49,6 +49,7 @@ type
     FCursivePosSubtables: TFontCursivePosSubtableArray;
     FMultipleSubstSubtables: TFontMultipleSubstSubtableArray;
     FAlternateSubstSubtables: TFontAlternateSubstSubtableArray;
+    FContextSubstSubtables: TFontContextSubstSubtableArray;
     {** Feature-specific lookup indices }
     FKernLookups: TFontFeatureLookupIndexArray;     // GPOS 'kern'
     FMarkLookups: TFontFeatureLookupIndexArray;      // GPOS 'mark'
@@ -139,6 +140,19 @@ type
     {** 查找备选替换。AGlyphId 匹配 coverage 时返回备选字形数组。
         不匹配返回空数组。返回的数组可由调用方按需选择（如 stylistic set）。 }
     function LookupAlternateSubst(AGlyphId: UInt16): TFontGlyphIdArray;
+
+    {** 是否包含规则匹配替换数据（GSUB ContextSubst + ChainedContextSubst） }
+    function HasContextSubst: Boolean;
+    {** 获取 ContextSubst 子表数量 }
+    function ContextSubstCount: Int32;
+    {** 获取指定索引的 ContextSubst 子表信息 }
+    procedure GetContextSubstInfo(AIndex: Int32;
+      out AInputGlyphCount, ASubstCount: Int32);
+    {** 获取指定 ContextSubst 子表的输入 Coverage 偏移 }
+    function GetContextSubstInputCoverage(AIndex, APosition: Int32): Int32;
+    {** 获取指定 ContextSubst 子表的替换记录 }
+    procedure GetContextSubstLookup(AIndex, ASubstIdx: Int32;
+      out ASeqIndex: UInt16; out ALookupIndex: UInt16);
 
     {** 是否包含单字形定位数据（GPOS SinglePos） }
     function HasSinglePos: Boolean;
@@ -1061,7 +1075,7 @@ var
   LLookupListOff, LLookupCount, LI, LJ: Int32;
   LLookupOff, LLookupType, LSubtableCount: Int32;
   LSubOff, LSub, LSubFmt, LCovOff, LLSCount, LIdx: Int32;
-  LLookupOffOrig: Int32;
+  LLookupOffOrig, LK, LCtxIdx: Int32;
   LSubtable: TFontLigatureSubtable;
   LSingleSubst: TFontSingleSubstSubtable;
 begin
@@ -1079,6 +1093,7 @@ begin
   SetLength(FSingleSubstSubtables, 0);
   SetLength(FMultipleSubstSubtables, 0);
   SetLength(FAlternateSubstSubtables, 0);
+  SetLength(FContextSubstSubtables, 0);
   // Parse GSUB feature list for liga/clig features.
   FLigaLookups := ParseFeatureLookups(LGsubOff,
     [FEATURE_TAG_LIGA]);
@@ -1200,6 +1215,99 @@ begin
         FAlternateSubstSubtables[LIdx].CoverageOffset := LSub + LCovOff;
         FAlternateSubstSubtables[LIdx].AlternateSetCount := LLSCount;
         FAlternateSubstSubtables[LIdx].AlternateSetArrayOffset := LSub + 6;
+      end;
+    end;
+
+    // Context Substitution (type 5) and ChainedContext Substitution (type 6).
+    // Currently only Format 3 (coverage-based) is parsed.
+    if (LLookupType = GSUB_LOOKUP_CONTEXT) or
+       (LLookupType = GSUB_LOOKUP_CHAINED_CONTEXT) then
+    begin
+      LSubtableCount := ReadUInt16BE(LLookupOffOrig + 4);
+      for LJ := 0 to LSubtableCount - 1 do
+      begin
+        if FDataLength < LLookupOffOrig + 8 + LJ * 2 then
+          Continue;
+        LSubOff := LLookupOffOrig + ReadUInt16BE(LLookupOffOrig + 6 + LJ * 2);
+        LSub := LSubOff;
+        if FDataLength < LSub + 4 then
+          Continue;
+        LSubFmt := ReadUInt16BE(LSub);
+        // Only parse Format 3 (coverage-based).
+        if LSubFmt <> 3 then
+          Continue;
+        if LLookupType = GSUB_LOOKUP_CONTEXT then
+        begin
+          // ContextSubst Fmt3: format(2) + glyphCount(2) + substCount(2) +
+          //   inputCoverages[glyphCount](2) + substRecords[substCount](4).
+          if FDataLength < LSub + 6 then
+            Continue;
+          LLSCount := ReadUInt16BE(LSub + 2);  // inputGlyphCount
+          LIdx := ReadUInt16BE(LSub + 4);       // substCount
+          if FDataLength < LSub + 6 + LLSCount * 2 + LIdx * 4 then
+            Continue;
+          LCtxIdx := Length(FContextSubstSubtables);
+          SetLength(FContextSubstSubtables, LCtxIdx + 1);
+          FContextSubstSubtables[LCtxIdx].BaseOffset := LSub;
+          FContextSubstSubtables[LCtxIdx].InputGlyphCount := LLSCount;
+          FContextSubstSubtables[LCtxIdx].SubstCount := LIdx;
+          SetLength(FContextSubstSubtables[LCtxIdx].InputCoverageOffsets, LLSCount);
+          SetLength(FContextSubstSubtables[LCtxIdx].SubstSeqIndices, LIdx);
+          SetLength(FContextSubstSubtables[LCtxIdx].SubstLookupIndices, LIdx);
+          for LK := 0 to LLSCount - 1 do
+            FContextSubstSubtables[LCtxIdx].InputCoverageOffsets[LK] :=
+              LSub + ReadUInt16BE(LSub + 6 + LK * 2);
+          for LK := 0 to LIdx - 1 do
+          begin
+            FContextSubstSubtables[LCtxIdx].SubstSeqIndices[LK] :=
+              ReadUInt16BE(LSub + 6 + LLSCount * 2 + LK * 4);
+            FContextSubstSubtables[LCtxIdx].SubstLookupIndices[LK] :=
+              ReadUInt16BE(LSub + 6 + LLSCount * 2 + LK * 4 + 2);
+          end;
+        end
+        else
+        begin
+          // ChainedContextSubst Fmt3: format(2) + backtrackGlyphCount(2) +
+          //   backtrackCoverages[bt](2) + inputGlyphCount(2) +
+          //   inputCoverages[input](2) + lookaheadGlyphCount(2) +
+          //   lookaheadCoverages[la](2) + substCount(2) + substRecords(4).
+          if FDataLength < LSub + 4 then
+            Continue;
+          LLSCount := ReadUInt16BE(LSub + 2);  // backtrackGlyphCount
+          LK := LSub + 4 + LLSCount * 2;       // offset to inputGlyphCount
+          if FDataLength < LK + 2 then
+            Continue;
+          LLSCount := ReadUInt16BE(LK);         // inputGlyphCount
+          LK := LK + 2 + LLSCount * 2;         // offset to lookaheadGlyphCount
+          if FDataLength < LK + 2 then
+            Continue;
+          LCovOff := ReadUInt16BE(LK);          // lookaheadGlyphCount
+          LK := LK + 2 + LCovOff * 2;          // offset to substCount
+          if FDataLength < LK + 2 then
+            Continue;
+          LIdx := ReadUInt16BE(LK);             // substCount
+          if FDataLength < LK + 2 + LIdx * 4 then
+            Continue;
+          LCtxIdx := Length(FContextSubstSubtables);
+          SetLength(FContextSubstSubtables, LCtxIdx + 1);
+          FContextSubstSubtables[LCtxIdx].BaseOffset := LSub;
+          FContextSubstSubtables[LCtxIdx].InputGlyphCount := LLSCount;
+          FContextSubstSubtables[LCtxIdx].SubstCount := LIdx;
+          SetLength(FContextSubstSubtables[LCtxIdx].InputCoverageOffsets, LLSCount);
+          SetLength(FContextSubstSubtables[LCtxIdx].SubstSeqIndices, LIdx);
+          SetLength(FContextSubstSubtables[LCtxIdx].SubstLookupIndices, LIdx);
+          // Input coverage offsets are right before lookaheadGlyphCount.
+          for LCovOff := 0 to LLSCount - 1 do
+            FContextSubstSubtables[LCtxIdx].InputCoverageOffsets[LCovOff] :=
+              LSub + ReadUInt16BE(LK - 2 - (LLSCount - LCovOff) * 2);
+          for LCovOff := 0 to LIdx - 1 do
+          begin
+            FContextSubstSubtables[LCtxIdx].SubstSeqIndices[LCovOff] :=
+              ReadUInt16BE(LK + 2 + LCovOff * 4);
+            FContextSubstSubtables[LCtxIdx].SubstLookupIndices[LCovOff] :=
+              ReadUInt16BE(LK + 2 + LCovOff * 4 + 2);
+          end;
+        end;
       end;
     end;
 
@@ -1709,6 +1817,52 @@ begin
       Result[LJ] := ReadUInt16BE(LSetOff + 2 + LJ * 2);
     Exit;
   end;
+end;
+
+function TTFontFace.HasContextSubst: Boolean;
+begin
+  Result := Length(FContextSubstSubtables) > 0;
+end;
+
+function TTFontFace.ContextSubstCount: Int32;
+begin
+  Result := Length(FContextSubstSubtables);
+end;
+
+procedure TTFontFace.GetContextSubstInfo(AIndex: Int32;
+  out AInputGlyphCount, ASubstCount: Int32);
+begin
+  if (AIndex >= 0) and (AIndex < Length(FContextSubstSubtables)) then
+  begin
+    AInputGlyphCount := FContextSubstSubtables[AIndex].InputGlyphCount;
+    ASubstCount := FContextSubstSubtables[AIndex].SubstCount;
+  end
+  else
+  begin
+    AInputGlyphCount := 0;
+    ASubstCount := 0;
+  end;
+end;
+
+function TTFontFace.GetContextSubstInputCoverage(AIndex, APosition: Int32): Int32;
+begin
+  Result := 0;
+  if (AIndex >= 0) and (AIndex < Length(FContextSubstSubtables)) then
+    if (APosition >= 0) and (APosition < Length(FContextSubstSubtables[AIndex].InputCoverageOffsets)) then
+      Result := FContextSubstSubtables[AIndex].InputCoverageOffsets[APosition];
+end;
+
+procedure TTFontFace.GetContextSubstLookup(AIndex, ASubstIdx: Int32;
+  out ASeqIndex: UInt16; out ALookupIndex: UInt16);
+begin
+  ASeqIndex := 0;
+  ALookupIndex := 0;
+  if (AIndex >= 0) and (AIndex < Length(FContextSubstSubtables)) then
+    if (ASubstIdx >= 0) and (ASubstIdx < FContextSubstSubtables[AIndex].SubstCount) then
+    begin
+      ASeqIndex := FContextSubstSubtables[AIndex].SubstSeqIndices[ASubstIdx];
+      ALookupIndex := FContextSubstSubtables[AIndex].SubstLookupIndices[ASubstIdx];
+    end;
 end;
 
 function TTFontFace.HasSinglePos: Boolean;

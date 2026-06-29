@@ -55,6 +55,10 @@ const
   GSUB_LOOKUP_MULTIPLE = 2;
   {** GSUB Lookup Type：Alternate Substitution（备选替换） }
   GSUB_LOOKUP_ALTERNATE = 3;
+  {** GSUB Lookup Type：Context Substitution（规则匹配） }
+  GSUB_LOOKUP_CONTEXT = 5;
+  {** GSUB Lookup Type：Chained Context Substitution }
+  GSUB_LOOKUP_CHAINED_CONTEXT = 6;
 
   {** OpenType Feature Tags（Big-Endian 4 字节标识） }
   FEATURE_TAG_KERN = $6B65726E;  // 'kern' — Kerning
@@ -402,6 +406,17 @@ type
     AlternateSetArrayOffset: Int32; // AlternateSet 偏移数组起始（相对文件）
   end;
   TFontAlternateSubstSubtableArray = array of TFontAlternateSubstSubtable;
+
+  {** GSUB ContextSubst/ChainedContextSubst 子表 — 存储 Format 3 数据 }
+  TFontContextSubstSubtable = record
+    BaseOffset: Int32;               // 子表在文件中的偏移
+    InputGlyphCount: Int32;          // 匹配序列长度
+    SubstCount: Int32;              // Substitution 记录数
+    InputCoverageOffsets: array of Int32; // 每个输入位置的 Coverage 偏移（绝对文件偏移）
+    SubstSeqIndices: array of UInt16;    // 每个 subst 的序列索引
+    SubstLookupIndices: array of UInt16; // 每个 subst 的 lookup 索引
+  end;
+  TFontContextSubstSubtableArray = array of TFontContextSubstSubtable;
 
 {** 字形轮廓内存释放 }
 procedure FontGlyphOutlineClear(var AOutline: TFontGlyphOutline);
