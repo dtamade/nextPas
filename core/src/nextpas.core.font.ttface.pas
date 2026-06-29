@@ -77,6 +77,17 @@ type
     FCffLocalSubrCount: Int32;        // Local Subr 条目数量
     FCffGlobalSubrBias: Int32;        // Global Subr 数字偏移
     FCffLocalSubrBias: Int32;         // Local Subr 数字偏移
+    FPost: TFontPostTable;
+    FPostValid: Boolean;
+    FCff2Valid: Boolean;
+    FCff2Off: Int32;                    // CFF2 表在文件中的偏移
+    FCff2TopDict: TCff2TopDict;
+    FCff2ItemVarStore: TCff2ItemVariationStore;
+    FCff2HasVarStore: Boolean;
+    FCff2GlobalSubrIdxPos: Int32;       // Global Subr INDEX header 位置
+    FCff2GlobalSubrCount: Int32;
+    FCff2FontDictCount: Int32;
+    FCff2FontDicts: TCff2FontDictArray;
     FValid: Boolean;
     FLastError: string;
     procedure ParseHeader;
@@ -92,6 +103,8 @@ type
     procedure ParseGpos;
     procedure ParseGsub;
     procedure ParseCff;
+    procedure ParseCff2;
+    procedure ParsePost;
     procedure ParseName;
     function GlyphOutlineCff(AGlyphIndex: UInt32): TFontGlyphOutline;
     function ParseFeatureLookups(ATableOffset: Int32;
@@ -269,6 +282,29 @@ type
     function FullName: AnsiString;
     {** 获取 PostScript 名称（NameID 6） }
     function PostScriptName: AnsiString;
+
+    {** post 表是否成功解析 }
+    function HasPostTable: Boolean;
+    {** 下划线位置（font units，相对于 baseline，通常为负值表示 baseline 下方） }
+    function UnderlinePosition: Int16;
+    {** 下划线粗细（font units，0 表示字体数据损坏） }
+    function UnderlineThickness: Int16;
+    {** 是否等宽字体（post.isFixedPitch 非 0） }
+    function IsFixedPitch: Boolean;
+
+    {** CFF2 字体是否成功解析 }
+    function HasCff2: Boolean;
+    {** CFF2 是否包含 ItemVariationStore（可变字体） }
+    function HasVariationStore: Boolean;
+    {** CFF2 变化轴数量（VariationStore 中的 axisCount） }
+    function VariationAxisCount: Int32;
+    {** CFF2 变化区域数量 }
+    function VariationRegionCount: Int32;
+    {** 计算指定 normalized 坐标在指定 region 的标量（F2Dot14 输入）。
+        ACoords 数组长度应等于 VariationAxisCount。
+        值域 -1.0..+1.0 以 16384 为单位（F2Dot14 格式）。 }
+    function CalcRegionScalar(ARegionIdx: Int32;
+      const ACoords: array of Int16): Single;
   end;
 
 implementation
@@ -310,6 +346,9 @@ begin
   FHasFmt4 := False;
   FHasFmt12 := False;
   FHasFmt14 := False;
+  FPostValid := False;
+  FCff2Valid := False;
+  FCff2HasVarStore := False;
   FLastError := '';
 
   if not FsExists(AFilePath) then
@@ -352,6 +391,10 @@ begin
       end;
     end;
     try
+      ParseCff2;
+    except
+    end;
+    try
       ParseGpos;
     except
     end;
@@ -361,6 +404,10 @@ begin
     end;
     try
       ParseName;
+    except
+    end;
+    try
+      ParsePost;
     except
     end;
     FValid := True;
@@ -383,6 +430,7 @@ begin
   FHasFmt4 := False;
   FHasFmt12 := False;
   FHasFmt14 := False;
+  FPostValid := False;
   FLastError := '';
 
   LLen := Length(AData);
@@ -414,6 +462,10 @@ begin
       end;
     end;
     try
+      ParseCff2;
+    except
+    end;
+    try
       ParseGpos;
     except
     end;
@@ -423,6 +475,10 @@ begin
     end;
     try
       ParseName;
+    except
+    end;
+    try
+      ParsePost;
     except
     end;
     FValid := True;
@@ -3747,6 +3803,354 @@ begin
     FNameRecords[High(FNameRecords)].NameID := LNameID;
     FNameRecords[High(FNameRecords)].Value := LValue;
   end;
+end;
+
+{ ========================================================================= }
+{ post 表解析（参考 Ghostty post.zig）                                        }
+{ ========================================================================= }
+
+procedure TTFontFace.ParsePost;
+var
+  LIdx, LOff: Int32;
+  LVersion: UInt32;
+begin
+  LIdx := FindTable(TABLE_TAG_POST);
+  if LIdx < 0 then
+    Exit;
+  LOff := Int32(FTables[LIdx].Offset);
+  if LOff + 32 > FDataLength then
+    Exit;
+
+  LVersion := ReadUInt32BE(LOff);   // 16.16 fixed: $00010000 = 1.0, $00030000 = 3.0
+  FPost.UnderlinePosition := ReadInt16BE(LOff + 8);
+  FPost.UnderlineThickness := ReadInt16BE(LOff + 10);
+  FPost.IsFixedPitch := ReadUInt32BE(LOff + 12);
+  FPostValid := True;
+end;
+
+function TTFontFace.HasPostTable: Boolean;
+begin
+  Result := FPostValid;
+end;
+
+function TTFontFace.UnderlinePosition: Int16;
+begin
+  if FPostValid then
+    Result := FPost.UnderlinePosition
+  else
+    Result := 0;
+end;
+
+function TTFontFace.UnderlineThickness: Int16;
+begin
+  if FPostValid then
+  begin
+    Result := FPost.UnderlineThickness;
+    // Ghostty 容错：thickness=0 视为损坏，返回 -1 作为 fallback 信号
+    if Result = 0 then
+      Result := -1;
+  end
+  else
+    Result := -1;
+end;
+
+function TTFontFace.IsFixedPitch: Boolean;
+begin
+  Result := FPostValid and (FPost.IsFixedPitch <> 0);
+end;
+
+function TTFontFace.CalcRegionScalar(ARegionIdx: Int32;
+  const ACoords: array of Int16): Single;
+var
+  LRegion: TCff2VariationRegion;
+  I: Int32;
+  LStart, LPeak, LEnd, LCoord: Single;
+  LScalar: Single;
+begin
+  Result := 1.0;
+  if (ARegionIdx < 0) or (ARegionIdx >= FCff2ItemVarStore.RegionCount) then
+    Exit;
+  if Length(ACoords) < FCff2ItemVarStore.Regions[0].AxisCount then
+    Exit;
+
+  LRegion := FCff2ItemVarStore.Regions[ARegionIdx];
+  LScalar := 1.0;
+  for I := 0 to LRegion.AxisCount - 1 do
+  begin
+    LStart := LRegion.Axes[I].StartCoord / 16384.0;
+    LPeak  := LRegion.Axes[I].PeakCoord / 16384.0;
+    LEnd   := LRegion.Axes[I].EndCoord / 16384.0;
+    LCoord := ACoords[I] / 16384.0;
+
+    if (LPeak = 0) or ((LStart = LPeak) and (LEnd = LPeak)) then
+      Continue;
+
+    if (LCoord < LStart) or (LCoord > LEnd) then
+    begin
+      // 超出 region 范围，整体 scalar 为 0
+      LScalar := 0;
+      Break;
+    end;
+
+    if LCoord = LPeak then
+      Continue;  // scalar 乘以 1.0
+
+    if LCoord < LPeak then
+      LScalar := LScalar * (LCoord - LStart) / (LPeak - LStart)
+    else
+      LScalar := LScalar * (LEnd - LCoord) / (LEnd - LPeak);
+  end;
+  Result := LScalar;
+end;
+
+{ ========================================================================= }
+{ CFF2 (Compact Font Format 2) 解析                                          }
+{ ========================================================================= }
+
+procedure TTFontFace.ParseCff2;
+var
+  LIdx, LCff2Off, LHdrSize, LTopDictSize: Int32;
+  LPos, LEnd: Int32;
+  LOp, LVal: Int32;
+  LValBuf: array[0..3] of Byte;
+  LVStoreOff, LCharStringsOff, LPvtSize, LPvtOff: Int32;
+  LFDArrayOff, LFDSelectOff: Int32;
+  LSubrIdxPos, LSubrCount: Int32;
+  { ItemVariationStore }
+  LIVSOff, LIVSFormat, LRegionListOff, LDataCount: Int32;
+  LDataOff, LAxisCount, LRegionCount: Int32;
+  LRegionBase, LAxisBase, I, J: Int32;
+
+  function ReadCff2Int(APos, ASize: Int32): Int32;
+  var
+    K: Int32;
+  begin
+    Result := 0;
+    for K := 0 to ASize - 1 do
+      Result := (Result shl 8) or ReadUInt8(APos + K);
+  end;
+
+begin
+  LIdx := FindTable(TABLE_TAG_CFF2);
+  if LIdx < 0 then
+    Exit;
+  LCff2Off := Int32(FTables[LIdx].Offset);
+  FCff2Off := LCff2Off;
+
+  if LCff2Off + 5 > FDataLength then
+    Exit;
+
+  // CFF2 Header: MajorVersion(1), MinorVersion(1), HeaderSize(1), TopDICTSize(2)
+  if ReadUInt8(LCff2Off) <> 2 then
+    Exit;
+  LHdrSize := ReadUInt8(LCff2Off + 2);
+  LTopDictSize := ReadUInt16BE(LCff2Off + 3);
+
+  if (LHdrSize < 5) or (LTopDictSize < 1) then
+    Exit;
+
+  // ---- 解析 Top DICT ----
+  LVStoreOff := 0;
+  LCharStringsOff := 0;
+  LPvtSize := 0;
+  LPvtOff := 0;
+  LFDArrayOff := 0;
+  LFDSelectOff := 0;
+
+  LPos := LCff2Off + LHdrSize;
+  LEnd := LPos + LTopDictSize;
+  if LEnd > FDataLength then
+    Exit;
+
+  // CFF DICT 编码：operand 栈 + operator
+  while LPos < LEnd do
+  begin
+    LOp := ReadUInt8(LPos);
+    Inc(LPos);
+
+    if LOp = 29 then
+    begin
+      // 4-byte integer
+      if LPos + 4 > FDataLength then Exit;
+      LVal := ReadCff2Int(LPos, 4);
+      Inc(LPos, 4);
+    end
+    else if LOp = 28 then
+    begin
+      // 2-byte signed integer
+      if LPos + 2 > FDataLength then Exit;
+      LVal := Int16(ReadUInt16BE(LPos));
+      Inc(LPos, 2);
+    end
+    else if (LOp >= 32) and (LOp <= 246) then
+    begin
+      LVal := LOp - 139;
+    end
+    else if (LOp >= 247) and (LOp <= 250) then
+    begin
+      if LPos + 1 > FDataLength then Exit;
+      LVal := (LOp - 247) * 256 + ReadUInt8(LPos) + 108;
+      Inc(LPos);
+    end
+    else if (LOp >= 251) and (LOp <= 254) then
+    begin
+      if LPos + 1 > FDataLength then Exit;
+      LVal := -(LOp - 251) * 256 - ReadUInt8(LPos) - 108;
+      Inc(LPos);
+    end
+    else if LOp = 30 then
+    begin
+      // BCD（跳过，读到 0xFF 终止符）
+      while LPos < LEnd do
+      begin
+        if (ReadUInt8(LPos) and $0F) = $0F then begin Inc(LPos); Break; end;
+        if ((ReadUInt8(LPos) shr 4) and $0F) = $0F then begin Inc(LPos); Break; end;
+        Inc(LPos);
+      end;
+      LVal := 0;
+    end
+    else if LOp = 12 then
+    begin
+      // 2-byte operator (escape)
+      if LPos >= LEnd then Exit;
+      LOp := (LOp shl 8) or ReadUInt8(LPos);
+      Inc(LPos);
+      // 处理 operator
+      case LOp of
+        $0C24: LVStoreOff := LVal;    // vstore
+        $0C25: LFDSelectOff := LVal;   // FDSelect
+        $0C26: LFDArrayOff := LVal;    // FDArray
+      end;
+    end
+    else
+    begin
+      // 1-byte operator
+      case LOp of
+        17: LCharStringsOff := LVal;    // CharStrings
+        18: begin                         // Private
+              LPvtSize := LVal;
+              // 下一个 operand 是 offset
+              // 读取下一个 integer
+              if LPos < LEnd then
+              begin
+                LOp := ReadUInt8(LPos);
+                Inc(LPos);
+                if LOp = 29 then begin LPvtOff := ReadCff2Int(LPos, 4); Inc(LPos, 4); end
+                else if LOp = 28 then begin LPvtOff := Int16(ReadUInt16BE(LPos)); Inc(LPos, 2); end
+                else if (LOp >= 32) and (LOp <= 246) then LPvtOff := LOp - 139
+                else if (LOp >= 247) and (LOp <= 250) then begin LPvtOff := (LOp - 247) * 256 + ReadUInt8(LPos) + 108; Inc(LPos); end
+                else if (LOp >= 251) and (LOp <= 254) then begin LPvtOff := -(LOp - 251) * 256 - ReadUInt8(LPos) - 108; Inc(LPos); end
+                else LPvtOff := LVal;
+              end;
+            end;
+      end;
+    end;
+  end;
+
+  FCff2TopDict.CharStringsOff := LCharStringsOff;
+  FCff2TopDict.VStoreOff := LVStoreOff;
+  FCff2TopDict.FDArrayOff := LFDArrayOff;
+  FCff2TopDict.FDSelectOff := LFDSelectOff;
+  FCff2TopDict.HasVStore := (LVStoreOff > 0);
+
+  // ---- Global Subr INDEX ----
+  LSubrIdxPos := LCff2Off + LHdrSize + LTopDictSize;
+  if LSubrIdxPos + 2 <= FDataLength then
+  begin
+    LSubrCount := ReadUInt16BE(LSubrIdxPos);
+    FCff2GlobalSubrIdxPos := LSubrIdxPos;
+    FCff2GlobalSubrCount := LSubrCount;
+  end;
+
+  // ---- 解析 ItemVariationStore ----
+  if LVStoreOff > 0 then
+  begin
+    LIVSOff := LCff2Off + LVStoreOff;
+    if LIVSOff + 8 > FDataLength then Exit;
+
+    LIVSFormat := ReadUInt16BE(LIVSOff);
+    LRegionListOff := ReadUInt16BE(LIVSOff + 2);
+    LDataCount := ReadUInt16BE(LIVSOff + 4);
+
+    if (LIVSFormat <> 1) or (LRegionListOff < 8) then Exit;
+
+    // 读取 VariationRegionList
+    LRegionBase := LIVSOff + LRegionListOff;
+    if LRegionBase + 2 > FDataLength then Exit;
+    LAxisCount := ReadUInt16BE(LRegionBase);
+    if (LAxisCount < 1) or (LAxisCount > CFF2_MAX_AXES) then Exit;
+
+    // 计算 region 数量：variationRegionList 从 axisCount(2) 开始，
+    // 每个 region = axisCount * 6 bytes (3 * F2Dot14)
+    // 从第一个 itemVariationData 的 regionIndexCount 推算
+    if LDataCount > 0 then
+    begin
+      LDataOff := ReadUInt16BE(LIVSOff + 6);  // 第一个 data offset
+      LDataOff := LIVSOff + LDataOff;
+      if LDataOff + 6 > FDataLength then Exit;
+      LRegionCount := ReadUInt16BE(LDataOff + 4);  // regionIndexCount
+    end
+    else
+      LRegionCount := 0;
+
+    if LRegionCount > CFF2_MAX_REGIONS then
+      LRegionCount := CFF2_MAX_REGIONS;
+
+    // 解析 regions
+    FCff2ItemVarStore.Format := LIVSFormat;
+    FCff2ItemVarStore.RegionCount := LRegionCount;
+    SetLength(FCff2ItemVarStore.Regions, LRegionCount);
+
+    LAxisBase := LRegionBase + 2;  // skip axisCount
+    for I := 0 to LRegionCount - 1 do
+    begin
+      FCff2ItemVarStore.Regions[I].AxisCount := LAxisCount;
+      for J := 0 to LAxisCount - 1 do
+      begin
+        if LAxisBase + 6 > FDataLength then Exit;
+        FCff2ItemVarStore.Regions[I].Axes[J].StartCoord := ReadUInt16BE(LAxisBase);
+        FCff2ItemVarStore.Regions[I].Axes[J].PeakCoord := ReadUInt16BE(LAxisBase + 2);
+        FCff2ItemVarStore.Regions[I].Axes[J].EndCoord := ReadUInt16BE(LAxisBase + 4);
+        Inc(LAxisBase, 6);
+      end;
+    end;
+
+    FCff2HasVarStore := True;
+  end;
+
+  // ---- 解析 FDArray (Font DICT Array) ----
+  if LFDArrayOff > 0 then
+  begin
+    // TODO: FDArray 解析（多 FD 字体需要）
+  end;
+
+  FCff2Valid := True;
+end;
+
+function TTFontFace.HasCff2: Boolean;
+begin
+  Result := FCff2Valid;
+end;
+
+function TTFontFace.HasVariationStore: Boolean;
+begin
+  Result := FCff2Valid and FCff2HasVarStore;
+end;
+
+function TTFontFace.VariationAxisCount: Int32;
+begin
+  if FCff2HasVarStore and (FCff2ItemVarStore.RegionCount > 0) then
+    Result := FCff2ItemVarStore.Regions[0].AxisCount
+  else
+    Result := 0;
+end;
+
+function TTFontFace.VariationRegionCount: Int32;
+begin
+  if FCff2HasVarStore then
+    Result := FCff2ItemVarStore.RegionCount
+  else
+    Result := 0;
 end;
 
 { ========================================================================= }

@@ -32,6 +32,7 @@ const
   TABLE_TAG_OS2  = $4F532F32;   // 'OS/2'
   TABLE_TAG_GPOS = $47504F53;   // 'GPOS'
   TABLE_TAG_GSUB = $47535542;   // 'GSUB'
+  TABLE_TAG_POST = $706F7374;   // 'post'
   TABLE_TAG_NAME = $6E616D65;   // 'name'
 
   {** GPOS Lookup Type：Pair Adjustment（kern） }
@@ -226,6 +227,13 @@ type
     STypoLineGap: Int16;
     SxHeight: Int16;
     SCapHeight: Int16;
+  end;
+
+  {** post 表关键字段（参考 Ghostty post.zig） }
+  TFontPostTable = record
+    UnderlinePosition: Int16;    // 下划线顶部 y 坐标建议值
+    UnderlineThickness: Int16;   // 下划线粗细建议值（0 = broken）
+    IsFixedPitch: UInt32;        // 0=比例间距, 非0=等宽
   end;
 
   {** 字体级指标 }
@@ -519,6 +527,56 @@ procedure FontGlyphOutlineClear(var AOutline: TFontGlyphOutline);
 
 {** 光栅化结果内存释放 }
 procedure FontRasterResultClear(var AResult: TFontRasterResult);
+
+{ ========================================================================= }
+{ CFF2 可变字体支持                                                         }
+{ ========================================================================= }
+
+const
+  {** CFF2 ItemVariationStore region indices count }
+  CFF2_MAX_AXES = 16;       // OpenType 最多支持 16 个变化轴
+  CFF2_MAX_REGIONS = 64;    // 实用上限：同一 VariationStore 中的区域数量
+
+type
+  {** CFF2 变化轴区域（一个 Region 的单轴范围，F2Dot14 格式） }
+  TCff2VariationRegionAxis = record
+    StartCoord: Int16;
+    PeakCoord: Int16;
+    EndCoord: Int16;
+  end;
+
+  {** CFF2 变化区域（一组轴范围，共同定义一个 "region"） }
+  TCff2VariationRegion = record
+    AxisCount: Int32;
+    Axes: array[0..CFF2_MAX_AXES - 1] of TCff2VariationRegionAxis;
+  end;
+  TCff2VariationRegionArray = array of TCff2VariationRegion;
+
+  {** CFF2 ItemVariationStore 解析结果 }
+  TCff2ItemVariationStore = record
+    Format: UInt16;           // 目前固定为 1
+    RegionCount: UInt16;
+    Regions: TCff2VariationRegionArray;
+  end;
+
+  {** CFF2 顶层 DICT 基本数据 }
+  TCff2TopDict = record
+    CharStringsType: Int32;         // 通常 2 (Type 2)
+    CharStringsOff: Int32;          // CharStrings INDEX 偏移
+    FDArrayOff: Int32;              // Font DICT Array 偏移
+    FDSelectOff: Int32;             // FDSelect 偏移
+    TopDictSize: Int32;             // Top DICT 数据长度
+    VStoreOff: Int32;               // ItemVariationStore 偏移（0=无）
+    HasVStore: Boolean;
+  end;
+
+  {** CFF2 FDArray 中的单个 Font DICT }
+  TCff2FontDict = record
+    PrivateDictSize: Int32;
+    PrivateDictOff: Int32;
+    SubrsOff: Int32;
+  end;
+  TCff2FontDictArray = array of TCff2FontDict;
 
 {** 创建默认特性配置（liga=1, kern=1） }
 function FontFeatureConfigDefault: TFontFeatureConfig;
