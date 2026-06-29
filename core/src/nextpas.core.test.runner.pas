@@ -2534,15 +2534,14 @@ finalization
     cleaned up by CleanupTableAllocations (e.g. suites created but never run).
     For suites that ran, CleanupTableAllocations already freed these and
     set the GStubRegistry/GFixtureRegistry entries to nil — the nil check
-    prevents double-free here. }
+    prevents double-free here. Iterate each registry independently to handle
+    length mismatches. }
   for GStubCleanupI := 0 to High(GStubRegistry) do
-  begin
     if GStubRegistry[GStubCleanupI] <> nil then
       FreeMem(GStubRegistry[GStubCleanupI]);
-    if GStubCleanupI <= High(GFixtureRegistry) then
-      if GFixtureRegistry[GStubCleanupI] <> nil then
-        GFixtureRegistry[GStubCleanupI].Free;
-  end;
+  for GStubCleanupI := 0 to High(GFixtureRegistry) do
+    if GFixtureRegistry[GStubCleanupI] <> nil then
+      GFixtureRegistry[GStubCleanupI].Free;
   GStubRegistry := nil;
   GFixtureRegistry := nil;
 

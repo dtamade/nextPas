@@ -47,6 +47,7 @@ type
   TBufferSink = class(TInterfacedObject, IOutputSink)
   private
     FLines: TStringLines;
+    FLineCap: Integer;
     FHasOpenLine: Boolean;
     function GetLines: TStringLines;
     procedure EnsureOpenLine;
@@ -456,11 +457,22 @@ begin
 end;
 
 procedure TBufferSink.EnsureOpenLine;
+var
+  LOldLen, LCap: Integer;
 begin
   if not FHasOpenLine then
   begin
-    SetLength(FLines, Length(FLines) + 1);
-    FLines[High(FLines)] := '';
+    LOldLen := Length(FLines);
+    LCap := FLineCap;
+    if LOldLen >= LCap then
+    begin
+      if LCap < 8 then LCap := 8
+      else LCap := LCap * 2;
+      FLineCap := LCap;
+      SetLength(FLines, LCap);
+    end;
+    SetLength(FLines, LOldLen + 1);
+    FLines[LOldLen] := '';
     FHasOpenLine := True;
   end;
 end;
@@ -484,18 +496,47 @@ end;
 
 function TBufferSink.GetOutput: string;
 var
-  I: Integer;
+  I, LTotal, LLEn, LPos: Integer;
+  LLE: string;
 begin
-  if Length(FLines) = 0 then
+  I := Length(FLines);
+  if I = 0 then
     Exit('');
-  Result := FLines[0];
+  if I = 1 then
+    Exit(FLines[0]);
+  LLE := LineEnding;
+  LLEn := Length(LLE);
+  LTotal := 0;
+  for I := 0 to High(FLines) do
+    Inc(LTotal, Length(FLines[I]));
+  Inc(LTotal, LLEn * (Length(FLines) - 1));
+  SetLength(Result, LTotal);
+  LPos := 1;
+  I := Length(FLines[0]);
+  if I > 0 then
+  begin
+    Move(FLines[0][1], Result[LPos], I);
+    Inc(LPos, I);
+  end;
   for I := 1 to High(FLines) do
-    Result := Result + LineEnding + FLines[I];
+  begin
+    if LLEn > 0 then
+    begin
+      Move(LLE[1], Result[LPos], LLEn);
+      Inc(LPos, LLEn);
+    end;
+    if Length(FLines[I]) > 0 then
+    begin
+      Move(FLines[I][1], Result[LPos], Length(FLines[I]));
+      Inc(LPos, Length(FLines[I]));
+    end;
+  end;
 end;
 
 procedure TBufferSink.Clear;
 begin
   FLines := nil;
+  FLineCap := 0;
   FHasOpenLine := False;
 end;
 

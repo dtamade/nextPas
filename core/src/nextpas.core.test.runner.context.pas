@@ -268,6 +268,7 @@ var
   LNames: string;
   K: Integer;
   J: Integer;
+  LTotal, LPos: Integer;
 begin
   for I := 0 to High(FSubtests) do
   begin
@@ -404,11 +405,27 @@ begin
   { Propagate subtest failures to parent }
   if FSubFail > 0 then
   begin
-    LNames := '';
+    { Build comma-separated list: pre-compute total length to avoid O(n²) concat }
+    LTotal := 0;
+    for K := 0 to High(FFailedNames) do
+      Inc(LTotal, Length(FFailedNames[K]));
+    if Length(FFailedNames) > 1 then
+      Inc(LTotal, 2 * (Length(FFailedNames) - 1)); { ', ' separators }
+    SetLength(LNames, LTotal);
+    LPos := 1;
     for K := 0 to High(FFailedNames) do
     begin
-      if K > 0 then LNames := LNames + ', ';
-      LNames := LNames + FFailedNames[K];
+      if K > 0 then
+      begin
+        LNames[LPos] := ',';
+        LNames[LPos + 1] := ' ';
+        Inc(LPos, 2);
+      end;
+      if Length(FFailedNames[K]) > 0 then
+      begin
+        Move(FFailedNames[K][1], LNames[LPos], Length(FFailedNames[K]));
+        Inc(LPos, Length(FFailedNames[K]));
+      end;
     end;
     InternalFail(IntToStr(FSubFail) + ' subtest(s) failed in ' + FTestName + ': ' + LNames);
   end;
