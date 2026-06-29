@@ -24,6 +24,7 @@ uses
   nextpas.core.mem.arena.thread,
   nextpas.core.mem.arena.concurrent,
   nextpas.core.mem.allocator.arena,
+  nextpas.core.mem.allocator.base,
   nextpas.core.mem.allocator.rtl,
   nextpas.core.mem.allocator.callback,
   nextpas.core.mem.allocator.guard,
@@ -55,6 +56,8 @@ type
   TAllocatorKind = nextpas.core.mem.base.TAllocatorKind;
   TAllocatorTraits = nextpas.core.mem.intf.TAllocatorTraits;
   IAllocator = nextpas.core.mem.intf.IAllocator;
+  TAllocator = nextpas.core.mem.allocator.base.TAllocator;
+  TMemAllocator = nextpas.core.mem.allocator.base.TMemAllocator;
   TAllocError = nextpas.core.mem.error.TAllocError;
   EAllocError = nextpas.core.mem.error.EAllocError;
   EOutOfMemory = nextpas.core.mem.error.EOutOfMemory;
