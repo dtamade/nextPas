@@ -21,6 +21,7 @@ uses
   nextpas.core.exception,
   nextpas.core.base,
   nextpas.core.text.conv,
+  nextpas.core.text.strings,
   nextpas.core.tls.base;
 
 type
@@ -88,7 +89,6 @@ function CompareTwoBackends(
 implementation
 
 uses
-  nextpas.core.text.strings,
     nextpas.core.tls.factory,
   nextpas.core.json.builder;
 
@@ -682,7 +682,7 @@ begin
     HTML.Add('</body>');
     HTML.Add('</html>');
 
-    Result := HTML.Text;
+    Result := nextpas.core.text.strings.StringsJoin(HTML, sLineBreak);
   finally
   end;
 end;

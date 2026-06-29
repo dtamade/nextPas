@@ -23,6 +23,7 @@ uses
   nextpas.core.base,
   nextpas.core.base.utils,
   nextpas.core.text.conv,
+  SysUtils,
   nextpas.core.tls.base,
   nextpas.core.tls.cert.builder,
   nextpas.core.tls.errors,

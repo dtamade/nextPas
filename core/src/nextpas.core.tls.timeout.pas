@@ -20,8 +20,6 @@ type
   public
     constructor Create(AInner: IStream; AReadTimeoutMs: Integer = 30000;
       AWriteTimeoutMs: Integer = 30000); overload;
-    constructor Create(AInner: IStream; AReadTimeoutMs: Integer = 30000;
-      AWriteTimeoutMs: Integer = 30000); overload;
     function Read(var Buffer; Count: Longint): Longint; overload;
     function Write(const Buffer; Count: Longint): Longint; overload;
     function Read(var ABuf; const ACount: SizeUInt): SizeUInt; overload;

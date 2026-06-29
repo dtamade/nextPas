@@ -37,8 +37,10 @@ unit nextpas.core.tls.crypto.utils;
 interface
 
 uses
-  nextpas.core.system,
+  nextpas.core.system, nextpas.core.exception,
   nextpas.core.io.intf, nextpas.core.fs.stream,
+  nextpas.core.text, nextpas.core.text.conv, SysUtils,
+  nextpas.core.fs,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.errors,
@@ -702,7 +704,7 @@ begin
   Result.ErrorMessage := '';
 end;
 
-function MakeErrorResult(E: Exception): TEncryptionResult;
+function MakeErrorResult(E: TObject): TEncryptionResult;
 begin
   Result.Success := False;
   Result.Data := nil;
@@ -710,7 +712,12 @@ begin
     Result.ErrorCode := Integer(ESSLException(E).ErrorCode)
   else
     Result.ErrorCode := -1;
-  Result.ErrorMessage := E.Message;
+  if E is Exception then
+    Result.ErrorMessage := Exception(E).Message
+  else if E is nextpas.core.exception.Exception then
+    Result.ErrorMessage := nextpas.core.exception.Exception(E).Message
+  else
+    Result.ErrorMessage := 'Unknown error';
 end;
 
 { TCryptoUtils }
@@ -1416,7 +1423,7 @@ class function TCryptoUtils.SHA256(const AData: string): TBytes;
 var
   LBytes: TBytes;
 begin
-  LBytes := nextpas.core.text.conv.StringToUTF8Bytes(AData));
+  LBytes := nextpas.core.text.conv.StringToUTF8Bytes(AData);
   Result := SHA256(LBytes);
 end;
 
@@ -1529,7 +1536,7 @@ class function TCryptoUtils.SHA512(const AData: string): TBytes;
 var
   LBytes: TBytes;
 begin
-  LBytes := nextpas.core.text.conv.StringToUTF8Bytes(AData));
+  LBytes := nextpas.core.text.conv.StringToUTF8Bytes(AData);
   Result := SHA512(LBytes);
 end;
 
