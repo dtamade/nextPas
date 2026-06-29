@@ -8,10 +8,10 @@
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **56** | 1 | 29 | **66%** |
+| **Go** | **58** | 1 | 30 | **66%** |
 | **Rust** | 19 | 0 | 47 | **29%** |
 
-## Track Summary (20 tracks, 87 operations)
+## Track Summary (21 tracks, 91 operations)
 
 ### Text Operations (6 ops)
 
@@ -245,6 +245,16 @@
 | **SliceCopy/100K** | **308204** | 748499 | **2.43x** ✓ |
 
 **4W vs Go** — Pascal `SetLength` + direct indexing vs Go `append` + bounds check + GC write barrier
+
+### Const Lookup Table Operations (3 ops)
+
+| Track | Pascal (ns) | Go (ns) | vs Go |
+|-------|-------------|---------|-------|
+| HexLookup/100K | 130290 | 111606 | 0.86x |
+| **ToUpper/Table/100K** | **83544** | 111280 | **1.33x** ✓ |
+| **ToUpper/Branch/100K** | **128211** | 142944 | **1.12x** ✓ |
+
+**2W vs Go** — Pascal `const` array in .rodata, direct table lookup vs Go global init + bounds check
 
 ### Pascal Wins (biggest margins vs Go)
 1. **String Concat: 3557x** — Go immutable strings O(n²) vs Pascal COW
