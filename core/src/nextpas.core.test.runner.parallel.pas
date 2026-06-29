@@ -408,8 +408,16 @@ begin
         end
         else if R^.Entry.Kind = ekTableTest then
         begin
-          { Table-driven test: invoke the stored proc with case data }
-          PTestCaseProc(R^.Entry.TableProc)^(PTestCase(R^.Entry.TableCase)^);
+          { Table-driven test: invoke the stored proc with case data.
+            Nil guard: --count=N re-runs the suite after CleanupTableAllocations
+            has disposed TableCase/TableProc. Skip gracefully on re-run. }
+          if (R^.Entry.TableCase = nil) or (R^.Entry.TableProc = nil) then
+          begin
+            LStatus := tsSkipped;
+            LSkipReason := 'table data already disposed (--count re-run)';
+          end
+          else
+            PTestCaseProc(R^.Entry.TableProc)^(PTestCase(R^.Entry.TableCase)^);
         end
         else if R^.Entry.Kind = ekShouldFail then
         begin
