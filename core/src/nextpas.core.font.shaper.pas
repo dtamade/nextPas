@@ -33,9 +33,13 @@ type
   TFontLiteShaper = class
   private
     FFace: TTFontFace;
+    FFeatureConfig: TFontFeatureConfig;
   public
     {** 创建塑形器（AFontFace 不归本对象所有，调用方需保活） }
     constructor Create(AFontFace: TTFontFace);
+    {** 创建塑形器（带特性配置） }
+    constructor CreateWithFeatures(AFontFace: TTFontFace;
+      const AFeatureConfig: TFontFeatureConfig);
     destructor Destroy; override;
     {** 塑形单个 codepoint }
     function ShapeCodepoint(ACodepoint: UInt32): TFontShapedGlyph;
@@ -64,6 +68,19 @@ begin
   if not AFontFace.IsValid then
     raise EInvalidArgument.Create('AFontFace is not valid');
   FFace := AFontFace;
+  FFeatureConfig := FontFeatureConfigDefault;
+end;
+
+constructor TFontLiteShaper.CreateWithFeatures(AFontFace: TTFontFace;
+  const AFeatureConfig: TFontFeatureConfig);
+begin
+  inherited Create;
+  if AFontFace = nil then
+    raise EArgumentNil.Create('AFontFace');
+  if not AFontFace.IsValid then
+    raise EInvalidArgument.Create('AFontFace is not valid');
+  FFace := AFontFace;
+  FFeatureConfig := AFeatureConfig;
 end;
 
 destructor TFontLiteShaper.Destroy;
@@ -180,13 +197,14 @@ begin
     end;
   end;
 
-  // Second pass: ligature substitution.
+  // Second pass: ligature substitution (only if liga feature is enabled).
   LOut := 0;
   LI := 0;
   while LI < LCount do
   begin
     // Try to find a ligature starting at LI.
-    if (LI + 1 < LCount) and FFace.HasLigatures then
+    if (LI + 1 < LCount) and FFace.HasLigatures and
+       FontFeatureIsEnabled(FFeatureConfig, FEATURE_TAG_LIGA) then
     begin
       // Try progressively longer sequences.
       LLigGlyph := 0;
@@ -226,17 +244,17 @@ begin
   SetLength(Result, LOut);
 
   // Third pass: kern adjustment (both class-based Fmt2 and pair-based Fmt1)
-  // and SinglePos positioning.
+  // and SinglePos positioning (only if kern feature is enabled).
   for LI := 0 to High(Result) - 1 do
   begin
     // Try class-based PairPos Fmt2 first, then pair-based Fmt1.
-    if FFace.HasKernPairs then
+    if FFace.HasKernPairs and FontFeatureIsEnabled(FFeatureConfig, FEATURE_TAG_KERN) then
     begin
       LKernVal := FFace.LookupKern(Result[LI].GlyphIndex, Result[LI + 1].GlyphIndex);
       if LKernVal <> 0 then
         Result[LI].AdvanceWidth := Result[LI].AdvanceWidth + LKernVal;
     end;
-    if FFace.HasKernFmt1Pairs then
+    if FFace.HasKernFmt1Pairs and FontFeatureIsEnabled(FFeatureConfig, FEATURE_TAG_KERN) then
     begin
       LKernVal := FFace.LookupKernFmt1(Result[LI].GlyphIndex, Result[LI + 1].GlyphIndex);
       if LKernVal <> 0 then

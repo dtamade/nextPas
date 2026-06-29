@@ -73,6 +73,13 @@ const
   FEATURE_TAG_MARK = $6D61726B;  // 'mark' — Mark Positioning
   FEATURE_TAG_MKMK = $6D6B6D6B;  // 'mkmk' — Mark-to-Mark Positioning
   FEATURE_TAG_CURS = $63757273;  // 'curs' — Cursive Positioning
+  FEATURE_TAG_CALT = $63616C74;  // 'calt' — Contextual Alternates
+  FEATURE_TAG_DLIG = $646C6967;  // 'dlig' — Discretionary Ligatures
+  FEATURE_TAG_HLIG = $686C6967;  // 'hlig' — Historical Ligatures
+  FEATURE_TAG_RLIG = $726C6967;  // 'rlig' — Required Ligatures
+  FEATURE_TAG_CCMP = $63636D70;  // 'ccmp' — Glyph Composition/Decomposition
+  FEATURE_TAG_LOCL = $6C6F636C;  // 'locl' — Localized Forms
+  FEATURE_TAG_SALT = $73616C74;  // 'salt' — Stylistic Alternates
 
   {** cmap 平台 ID }
   CMAP_PLATFORM_UNICODE   = 0;
@@ -126,8 +133,20 @@ type
   TFontFileFormat = (
     fffUnknown,
     fffTrueType,     // glyf 轮廓
-    fffOpenTypeCff   // CFF 轮廓（不支持）
+    fffOpenTypeCff   // CFF 轮廓
   );
+
+  {** OpenType 特性设置 }
+  TFontFeatureSetting = record
+    Tag: UInt32;       // Feature tag (e.g., FEATURE_TAG_LIGA)
+    Value: UInt32;     // 0 = disabled, 1 = enabled, 2+ = variant selector
+  end;
+  TFontFeatureSettingArray = array of TFontFeatureSetting;
+
+  {** 字体特性配置 }
+  TFontFeatureConfig = record
+    Features: TFontFeatureSettingArray;
+  end;
 
   {** TTF 表目录条目 }
   TFontTableEntry = record
@@ -466,6 +485,15 @@ procedure FontGlyphOutlineClear(var AOutline: TFontGlyphOutline);
 {** 光栅化结果内存释放 }
 procedure FontRasterResultClear(var AResult: TFontRasterResult);
 
+{** 创建默认特性配置（liga=1, kern=1） }
+function FontFeatureConfigDefault: TFontFeatureConfig;
+{** 检查特性是否启用 }
+function FontFeatureIsEnabled(const AConfig: TFontFeatureConfig;
+  ATag: UInt32): Boolean;
+{** 获取特性的值（0 = 未找到/禁用） }
+function FontFeatureGetValue(const AConfig: TFontFeatureConfig;
+  ATag: UInt32): UInt32;
+
 implementation
 
 procedure FontGlyphOutlineClear(var AOutline: TFontGlyphOutline);
@@ -488,6 +516,32 @@ begin
   AResult.AdvancePx := 0;
   AResult.PitchBytes := 0;
   SetLength(AResult.Pixels, 0);
+end;
+
+function FontFeatureConfigDefault: TFontFeatureConfig;
+begin
+  SetLength(Result.Features, 2);
+  Result.Features[0].Tag := FEATURE_TAG_LIGA;
+  Result.Features[0].Value := 1;
+  Result.Features[1].Tag := FEATURE_TAG_KERN;
+  Result.Features[1].Value := 1;
+end;
+
+function FontFeatureIsEnabled(const AConfig: TFontFeatureConfig;
+  ATag: UInt32): Boolean;
+begin
+  Result := FontFeatureGetValue(AConfig, ATag) > 0;
+end;
+
+function FontFeatureGetValue(const AConfig: TFontFeatureConfig;
+  ATag: UInt32): UInt32;
+var
+  I: Int32;
+begin
+  Result := 0;
+  for I := 0 to High(AConfig.Features) do
+    if AConfig.Features[I].Tag = ATag then
+      Exit(AConfig.Features[I].Value);
 end;
 
 end.
