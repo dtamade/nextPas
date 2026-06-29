@@ -4285,7 +4285,7 @@ begin
   LRegionBase := LIVSOff + Int32(ReadUInt32BE(LIVSOff + 2));
   LDataCount := ReadUInt16BE(LIVSOff + 6);
 
-  if LRegionBase + 2 > FDataLength then Exit;
+  if LRegionBase + 4 > FDataLength then Exit;
   LAxisCount := ReadUInt16BE(LRegionBase);
   if (LAxisCount < 1) or (LAxisCount > 16) then Exit;
 
@@ -4307,7 +4307,7 @@ begin
   FHvar.VariationStore.RegionCount := LRegionCount;
   SetLength(FHvar.VariationStore.Regions, LRegionCount);
 
-  K := LRegionBase + 2;  // skip axisCount
+  K := LRegionBase + 4;  // skip axisCount(2) + regionCount(2)
   for I := 0 to LRegionCount - 1 do
   begin
     FHvar.VariationStore.Regions[I].AxisCount := LAxisCount;
@@ -4739,7 +4739,7 @@ begin
   LRegionBase := LIVSOff + Int32(ReadUInt32BE(LIVSOff + 2));
   LDataCount := ReadUInt16BE(LIVSOff + 6);
 
-  if LRegionBase + 2 > FDataLength then Exit;
+  if LRegionBase + 4 > FDataLength then Exit;
   LAxisCount := ReadUInt16BE(LRegionBase);
   if (LAxisCount < 1) or (LAxisCount > 16) then Exit;
 
@@ -4760,7 +4760,7 @@ begin
   FVvar.VariationStore.RegionCount := LRegionCount;
   SetLength(FVvar.VariationStore.Regions, LRegionCount);
 
-  K := LRegionBase + 2;
+  K := LRegionBase + 4;  // skip axisCount(2) + regionCount(2)
   for I := 0 to LRegionCount - 1 do
   begin
     FVvar.VariationStore.Regions[I].AxisCount := LAxisCount;
@@ -5650,29 +5650,56 @@ begin
     if LIVSOff + 8 > FDataLength then Exit;
 
     LIVSFormat := ReadUInt16BE(LIVSOff);
-    LRegionListOff := Int32(ReadUInt32BE(LIVSOff + 2));
-    LDataCount := ReadUInt16BE(LIVSOff + 6);
+    if LIVSFormat = 1 then
+    begin
+      // Format 1: format(u16), itemVariationDataCount(u16), offsets(u32[])
+      // VariationRegionList follows the offset array
+      LDataCount := ReadUInt16BE(LIVSOff + 2);
+      if LIVSOff + 4 + LDataCount * 4 > FDataLength then Exit;
 
-    if (LIVSFormat <> 1) or (LRegionListOff < 8) then Exit;
+      // 第一个 data subtable 的偏移 (用于读取 regionIndexCount)
+      if LDataCount > 0 then
+      begin
+        LDataOff := Int32(ReadUInt32BE(LIVSOff + 4));
+        LDataOff := LIVSOff + LDataOff;
+        if LDataOff + 6 > FDataLength then Exit;
+        LRegionCount := ReadUInt16BE(LDataOff + 4);  // regionIndexCount
+      end
+      else
+        LRegionCount := 0;
+
+      // VariationRegionList 紧跟在 offset array 之后
+      LRegionListOff := 4 + LDataCount * 4;
+    end
+    else if LIVSFormat = 2 then
+    begin
+      // Format 2: format(u16), variationRegionListOffset(u32),
+      //           itemVariationDataCount(u16), ...
+      if LIVSOff + 8 > FDataLength then Exit;
+      LRegionListOff := Int32(ReadUInt32BE(LIVSOff + 2));
+      LDataCount := ReadUInt16BE(LIVSOff + 6);
+
+      if LDataCount > 0 then
+      begin
+        LDataOff := Int32(ReadUInt32BE(LIVSOff + 8));
+        LDataOff := LIVSOff + LDataOff;
+        if LDataOff + 6 > FDataLength then Exit;
+        LRegionCount := ReadUInt16BE(LDataOff + 4);
+      end
+      else
+        LRegionCount := 0;
+    end
+    else
+      Exit;
+
+    if LRegionListOff < 4 then Exit;
 
     // 读取 VariationRegionList
     LRegionBase := LIVSOff + LRegionListOff;
-    if LRegionBase + 2 > FDataLength then Exit;
+    if LRegionBase + 4 > FDataLength then Exit;
     LAxisCount := ReadUInt16BE(LRegionBase);
+    // regionCount at LRegionBase + 2 (由 DataSubtable 的 regionIndexCount 推导，此处跳过)
     if (LAxisCount < 1) or (LAxisCount > CFF2_MAX_AXES) then Exit;
-
-    // 计算 region 数量：variationRegionList 从 axisCount(2) 开始，
-    // 每个 region = axisCount * 6 bytes (3 * F2Dot14)
-    // 从第一个 itemVariationData 的 regionIndexCount 推算
-    if LDataCount > 0 then
-    begin
-      LDataOff := Int32(ReadUInt32BE(LIVSOff + 8));  // 第一个 data offset (Offset32)
-      LDataOff := LIVSOff + LDataOff;
-      if LDataOff + 6 > FDataLength then Exit;
-      LRegionCount := ReadUInt16BE(LDataOff + 4);  // regionIndexCount
-    end
-    else
-      LRegionCount := 0;
 
     if LRegionCount > CFF2_MAX_REGIONS then
       LRegionCount := CFF2_MAX_REGIONS;
@@ -5682,7 +5709,7 @@ begin
     FCff2ItemVarStore.RegionCount := LRegionCount;
     SetLength(FCff2ItemVarStore.Regions, LRegionCount);
 
-    LAxisBase := LRegionBase + 2;  // skip axisCount
+    LAxisBase := LRegionBase + 4;  // skip axisCount(2) + regionCount(2)
     for I := 0 to LRegionCount - 1 do
     begin
       FCff2ItemVarStore.Regions[I].AxisCount := LAxisCount;
