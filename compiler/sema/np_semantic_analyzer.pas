@@ -9180,6 +9180,41 @@ begin
         ProcessRecordFields(TypeChild, AOwnerUnitId, TypeId)
       else if TypeChild.NodeKind = gnkClassType then
       begin
+        { Detect "class of TRef" — exactly one identifier child, no body }
+        if (not SameText(TypeChild.Text, 'interface')) and
+          (TypeChild.ChildCount = 1) and
+          (TypeChild.ChildAt(0) <> nil) and
+          (TypeChild.ChildAt(0).NodeKind = gnkIdentifier) then
+        begin
+          AliasTargetId := ResolveTypeIdForOwner(
+            TypeChild.ChildAt(0).Text, AOwnerUnitId);
+          if AliasTargetId > 0 then
+          begin
+            AliasHasTargetMeta := FModel.GetTypeMeta(
+              AliasTargetId, AliasTargetMeta);
+            if not FModel.GetTypeMeta(TypeId, AliasLocalMeta) then
+              FillChar(AliasLocalMeta, SizeOf(AliasLocalMeta), 0);
+            AliasLocalMeta.TypeId := TypeId;
+            AliasLocalMeta.AliasTargetTypeId := AliasTargetId;
+            if AliasHasTargetMeta and (AliasTargetMeta.Size > 0) then
+            begin
+              AliasLocalMeta.Size := AliasTargetMeta.Size;
+              AliasLocalMeta.VmtCount := AliasTargetMeta.VmtCount;
+              AliasLocalMeta.ParentClassId := AliasTargetId;
+              if FModel.TypeAt(AliasTargetId - 1).Name <> '' then
+                AliasLocalMeta.ParentClassName :=
+                  FModel.TypeAt(AliasTargetId - 1).Name;
+            end;
+            FModel.SetTypeMeta(TypeId, AliasLocalMeta);
+            FModel.SetTypeParent(TypeId, AliasTargetId);
+            FModel.SetTypeKind(TypeId, 'class');
+            if TypeMetaSize(Child.Text) <= 0 then
+              FModel.AddConstValue(Child.Text + '$size', 8);
+          end;
+          { Skip normal class processing — this is a class reference type }
+        end
+        else
+        begin
         ParentTypeId := 0;
         if not SameText(TypeChild.Text, 'interface') then
           ParentTypeId := ImplicitSystemObjectParentTypeId(Child.Text);
@@ -9242,6 +9277,7 @@ begin
         end
         else
           ProcessInterfaceMethods(TypeChild, AOwnerUnitId, TypeId);
+        end; { else: normal class (not class-of) }
       end
       else if (TypeChild.NodeKind = gnkIdentifier) and
         (Pos('<', TypeChild.Text) > 0) then

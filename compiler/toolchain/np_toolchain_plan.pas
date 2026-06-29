@@ -1097,7 +1097,9 @@ begin
     AddUniqueRoot(FProjectUnitRoots[Index]);
   for Index := 0 to Length(FExplicitUnitRoots) - 1 do
     AddUniqueRoot(FExplicitUnitRoots[Index]);
-  AddUniqueRoot(FTargetFacts.UnitsDir);
+  { Skip FTargetFacts.UnitsDir: FPC should use its own RTL units (System,
+    SysUtils, BaseUnix, etc.) instead of the bridge stubs in the runtime
+    SDK directory. The stubs are only needed for nextpas resolution. }
 end;
 
 function TToolchainPlanner.PrepareLlvmContract: Boolean;
