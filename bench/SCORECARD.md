@@ -8,10 +8,10 @@
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **52** | 1 | 28 | **65%** |
+| **Go** | **56** | 1 | 29 | **66%** |
 | **Rust** | 19 | 0 | 47 | **29%** |
 
-## Track Summary (19 tracks, 82 operations)
+## Track Summary (20 tracks, 87 operations)
 
 ### Text Operations (6 ops)
 
@@ -234,12 +234,25 @@
 
 **3W vs Go** — Pascal `packed record` 26B vs Go struct 32B (19% smaller, better cache utilization)
 
+### Dynamic Array Operations (5 ops)
+
+| Track | Pascal (ns) | Go (ns) | vs Go |
+|-------|-------------|---------|-------|
+| BuildAppend/100K | 6733388 | 2666208 | 0.40x |
+| **BuildPrealloc/100K** | **79048** | 252738 | **3.20x** ✓ |
+| **BuildDoubling/100K** | **454471** | 3573214 | **7.87x** ✓ |
+| **Concat/100K** | **404991** | 874548 | **2.16x** ✓ |
+| **SliceCopy/100K** | **308204** | 748499 | **2.43x** ✓ |
+
+**4W vs Go** — Pascal `SetLength` + direct indexing vs Go `append` + bounds check + GC write barrier
+
 ### Pascal Wins (biggest margins vs Go)
 1. **String Concat: 3557x** — Go immutable strings O(n²) vs Pascal COW
 2. **Fill/1KB: 23.37x** — FillChar→rep stosb vs Go byte loop (no memset opt)
 3. **Fill/64B: 15.03x** — FillChar→rep stosb vs Go byte loop
 4. **Fill/64KB: 11.22x** — FillChar→rep stosb vs Go byte loop
-5. **Set Union: 7.06x** — Pascal `set of Byte` native bit operations vs Go byte loop
+5. **BuildDoubling: 7.87x** — Pascal SetLength realloc vs Go append GC overhead
+6. **Set Union: 7.06x** — Pascal `set of Byte` native bit operations vs Go byte loop
 6. **Set Intersection: 6.74x** — Same mechanism, 4 AND instructions
 7. **Set Difference: 6.54x** — Same mechanism, 4 BIC instructions
 8. **Builder/IntAppend: 4.95x** — Direct digit writing vs Go's allocation per int
@@ -267,6 +280,7 @@
 - **Bit set operations**: Pascal dominant (5W vs Go) — `set of Byte` is killer
 - **FillChar/Fill**: Pascal dominant (3W vs Go) — `rep stosb` vs Go byte loop
 - **Bit scan / byte swap**: Pascal strong (3W vs Go) — BSR/BSF/BSwap intrinsics
+- **Dynamic arrays**: Pascal strong (4W vs Go) — SetLength realloc 2-8x faster than Go append
 - **Matrix operations**: Pascal dominant (4W vs Go) — FPC loop optimization beats Go compiler
 - **Object lifecycle**: Pascal dominant (3W vs Go) — New/Dispose vs GC write barrier
 - **Memory move**: Pascal strong (3W vs Go) — ERMSB + prefetchnta at 16K-256K
@@ -280,11 +294,12 @@
 
 ## Conclusion
 
-Pascal beats Go 65% of the time across 82 benchmarks. The biggest wins come from
+Pascal beats Go 66% of the time across 87 benchmarks. The biggest wins come from
 FillChar operations (compiles to `rep stosb`, 11-23x faster than Go's byte loop),
 string operations (immutable strings are Go's Achilles heel), bit set operations
 (`set of Byte` compiles to native instructions), number formatting
-(direct digit writing), bit scan/byte swap (BSR/BSF/BSwap intrinsics),
+(direct digit writing), dynamic arrays (SetLength realloc 2-8x faster than Go append),
+bit scan/byte swap (BSR/BSF/BSwap intrinsics),
 matrix operations (FPC loop optimization),
 object lifecycle (New/Dispose vs GC write barrier, 1.5-1.7x),
 memory move (FPC_MOVE ERMSB+prefetchnta vs Go memmove, 1.23-1.31x at 16K-256K),
