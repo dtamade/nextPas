@@ -8,10 +8,10 @@
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **49** | 1 | 26 | **65%** |
+| **Go** | **52** | 1 | 28 | **65%** |
 | **Rust** | 19 | 0 | 47 | **29%** |
 
-## Track Summary (18 tracks, 77 operations)
+## Track Summary (19 tracks, 82 operations)
 
 ### Text Operations (6 ops)
 
@@ -222,6 +222,18 @@
 
 **3W vs Go** — BSR/BSF x86 intrinsics; BSwap→`bswap` vs Go manual bit manipulation
 
+### Packed Record Operations (5 ops)
+
+| Track | Pascal (ns) | Go (ns) | vs Go |
+|-------|-------------|---------|-------|
+| PackedCopy/100K | 493718 | 286515 | 0.58x |
+| **PackedMove/100K** | **264594** | 280343 | **1.06x** ✓ |
+| **PackedUpdate/100K** | **224521** | 241720 | **1.08x** ✓ |
+| **PackedFilter/100K** | **128614** | 159072 | **1.24x** ✓ |
+| PackedCompact/100K | 437951 | 276643 | 0.63x |
+
+**3W vs Go** — Pascal `packed record` 26B vs Go struct 32B (19% smaller, better cache utilization)
+
 ### Pascal Wins (biggest margins vs Go)
 1. **String Concat: 3557x** — Go immutable strings O(n²) vs Pascal COW
 2. **Fill/1KB: 23.37x** — FillChar→rep stosb vs Go byte loop (no memset opt)
@@ -268,7 +280,7 @@
 
 ## Conclusion
 
-Pascal beats Go 65% of the time across 77 benchmarks. The biggest wins come from
+Pascal beats Go 65% of the time across 82 benchmarks. The biggest wins come from
 FillChar operations (compiles to `rep stosb`, 11-23x faster than Go's byte loop),
 string operations (immutable strings are Go's Achilles heel), bit set operations
 (`set of Byte` compiles to native instructions), number formatting
@@ -276,6 +288,7 @@ string operations (immutable strings are Go's Achilles heel), bit set operations
 matrix operations (FPC loop optimization),
 object lifecycle (New/Dispose vs GC write barrier, 1.5-1.7x),
 memory move (FPC_MOVE ERMSB+prefetchnta vs Go memmove, 1.23-1.31x at 16K-256K),
+packed records (19% smaller than Go struct, 1.24x faster filter),
 and file I/O writes (direct syscall vs Go's bufio).
 Losses come from auto-vectorization gaps, Go's optimized hash map,
 and branchless codegen for binary search. Against Rust, Pascal wins 30% —
