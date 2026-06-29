@@ -243,9 +243,17 @@ end;
 
 procedure AppendFailedName(var ANames: specialize TArray<string>;
   const AName: string);
+{ Geometric growth: pre-allocate capacity to avoid O(n²) realloc. }
+var
+  LOldLen, LCap: Integer;
 begin
-  SetLength(ANames, Length(ANames) + 1);
-  ANames[High(ANames)] := AName;
+  LOldLen := Length(ANames);
+  LCap := LOldLen;
+  if LCap < 4 then LCap := 4
+  else if LOldLen >= LCap then LCap := LCap * 2;
+  if LCap <> LOldLen then SetLength(ANames, LCap);
+  ANames[LOldLen] := AName;
+  SetLength(ANames, LOldLen + 1);
 end;
 
 procedure TTestContext.ExecuteSubtests;

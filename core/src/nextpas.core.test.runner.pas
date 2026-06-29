@@ -748,9 +748,15 @@ procedure RegisterStub(var ASuite: TTestSuite; APtr: Pointer);
 var
   LOldLen, LCap: Integer;
 begin
-  { Global safety-net — disposed in finalization for suites that never run }
-  SetLength(GStubRegistry, Length(GStubRegistry) + 1);
-  GStubRegistry[High(GStubRegistry)] := APtr;
+  { Global safety-net — disposed in finalization for suites that never run.
+    Geometric growth to avoid O(n²) realloc on repeated RegisterStub calls. }
+  LOldLen := Length(GStubRegistry);
+  LCap := LOldLen;
+  if LCap < 16 then LCap := 16
+  else if LOldLen >= LCap then LCap := LCap * 2;
+  if LCap <> LOldLen then SetLength(GStubRegistry, LCap);
+  GStubRegistry[LOldLen] := APtr;
+  SetLength(GStubRegistry, LOldLen + 1);
   { Per-suite tracking — stores GStubRegistry index for O(1) cleanup (R4-10).
     Geometric growth: pre-allocate capacity to avoid per-registration realloc. }
   LOldLen := Length(ASuite.StubAllocations);
@@ -769,11 +775,17 @@ procedure RegisterFixture(var ASuite: TTestSuite; AFixture: TObject);
     cleanup both occur on the main thread during discovery and suite
     finalization. }
 var
-  LOldLen, LCap: Integer;
+  LOldLen, LCap, LGblOldLen, LGblCap: Integer;
 begin
-  { Global safety-net — disposed in finalization for suites that never run }
-  SetLength(GFixtureRegistry, Length(GFixtureRegistry) + 1);
-  GFixtureRegistry[High(GFixtureRegistry)] := AFixture;
+  { Global safety-net — disposed in finalization for suites that never run.
+    Geometric growth to avoid O(n²) realloc on repeated RegisterFixture calls. }
+  LGblOldLen := Length(GFixtureRegistry);
+  LGblCap := LGblOldLen;
+  if LGblCap < 16 then LGblCap := 16
+  else if LGblOldLen >= LGblCap then LGblCap := LGblCap * 2;
+  if LGblCap <> LGblOldLen then SetLength(GFixtureRegistry, LGblCap);
+  GFixtureRegistry[LGblOldLen] := AFixture;
+  SetLength(GFixtureRegistry, LGblOldLen + 1);
   { Per-suite tracking — stores GFixtureRegistry index for O(1) cleanup.
     Geometric growth to avoid per-registration realloc. }
   LOldLen := Length(ASuite.FixtureAllocations);
@@ -2018,7 +2030,7 @@ var
   LN: Integer;
   LStartMs, LElapsedMs: Int64;
   LResult: TBenchResult;
-  LCount: Integer;
+  LCount, LCap: Integer;
 begin
   LConfig := ResolveConfig(Config);
   LOutSink := ResolveOutSink(LConfig);
@@ -2026,6 +2038,7 @@ begin
   if LBenchTimeMs <= 0 then LBenchTimeMs := 1000;
   LShowMem := GetBenchMem(LConfig);
   LCount := 0;
+  LCap := 0;
   SetLength(AResults, 0);
   LOutSink.WriteLn('');
   WriteSuiteHeader(Name, 'benchmarks', LOutSink, LConfig);
@@ -2063,11 +2076,20 @@ begin
     LElapsedMs := GetTickCount64 - LStartMs;
     LResult := MakeBenchResult(LEntry.Name, LN,
       LElapsedMs * 1000000, LCtx.AllocBytes, LCtx.AllocCount);
-    SetLength(AResults, Length(AResults) + 1);
-    AResults[High(AResults)] := LResult;
+    { Geometric growth: only grow during loop, trim once at end.
+      Writing beyond logical length after SetLength-down triggers heaptrc
+      guard violation even though allocated capacity is sufficient. }
+    if LCount >= LCap then
+    begin
+      if LCap < 4 then LCap := 4
+      else LCap := LCap * 2;
+      SetLength(AResults, LCap);
+    end;
+    AResults[LCount] := LResult;
     LOutSink.WriteLn(FormatBenchLine(LResult, LShowMem, LConfig));
     Inc(LCount);
   end;
+  SetLength(AResults, LCount); { trim to logical size }
   if LCount = 0 then
     LOutSink.WriteLn(AnsiDim('  (no benchmarks matched)', LConfig));
   Result := LCount > 0;
@@ -2170,9 +2192,16 @@ procedure TTestRunner.Add(const ASuite: TTestSuite);
     structured types). Internally the suite IS copied into Suites[] via Pascal
     assignment. Mutations to the caller's ASuite after Add() are NOT visible
     to the runner. Rule: register ALL tests before calling Add. }
+var
+  LOldLen, LCap: Integer;
 begin
-  SetLength(Suites, Length(Suites) + 1);
-  Suites[High(Suites)] := ASuite;
+  LOldLen := Length(Suites);
+  LCap := LOldLen;
+  if LCap < 4 then LCap := 4
+  else if LOldLen >= LCap then LCap := LCap * 2;
+  if LCap <> LOldLen then SetLength(Suites, LCap);
+  Suites[LOldLen] := ASuite;
+  SetLength(Suites, LOldLen + 1);
 end;
 
 function TTestRunner.RunAll: Boolean;
