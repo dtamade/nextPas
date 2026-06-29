@@ -95,6 +95,8 @@ type
     FFvarValid: Boolean;
     FAvar: TAvarTable;
     FAvarValid: Boolean;
+    FHvar: THvarTable;
+    FHvarValid: Boolean;
     FValid: Boolean;
     FLastError: string;
     procedure ParseHeader;
@@ -114,7 +116,12 @@ type
     procedure ParseFvar;
     procedure ParsePost;
     procedure ParseAvar;
+    procedure ParseHvar;
     procedure ParseName;
+    {** 计算通用 ItemVariationStore 的 region scalar（Single 坐标） }
+    function CalcItemVarRegionScalar(const ARegions: TCff2VariationRegionArray;
+      ARegionCount, ARegionIdx: Int32;
+      const ANormCoords: array of Single): Single;
     function GlyphOutlineCff(AGlyphIndex: UInt32): TFontGlyphOutline;
     function ParseFeatureLookups(ATableOffset: Int32;
       const AFeatureTags: array of UInt32): TFontFeatureLookupIndexArray;
@@ -340,6 +347,13 @@ type
     function GetCff2FontDict(AFDIndex: Int32): TCff2FontDict;
     {** CFF2 Font DICT 数量 }
     function Cff2FontDictCount: Int32;
+    {** HVAR 表是否有效 }
+    function HasHvar: Boolean;
+    {** 计算指定字形的水平 advance width delta。
+        ANormCoords: 已通过 NormalizeAxisValue 处理的归一化坐标数组。
+        返回 0 表示无变化或无 HVAR。 }
+    function CalcHvarAdvanceDelta(AGlyphIndex: UInt32;
+      const ANormCoords: array of Single): Single;
   end;
 
 implementation
@@ -390,6 +404,7 @@ begin
   FCff2FDSelectGlyphCount := 0;
   FFvarValid := False;
   FAvarValid := False;
+  FHvarValid := False;
   FLastError := '';
 
   if not FsExists(AFilePath) then
@@ -459,6 +474,10 @@ begin
       ParseAvar;
     except
     end;
+    try
+      ParseHvar;
+    except
+    end;
     FValid := True;
   except
     on E: Exception do
@@ -488,6 +507,7 @@ begin
   FCff2FDSelectGlyphCount := 0;
   FFvarValid := False;
   FAvarValid := False;
+  FHvarValid := False;
   FLastError := '';
 
   LLen := Length(AData);
@@ -544,6 +564,10 @@ begin
     end;
     try
       ParseAvar;
+    except
+    end;
+    try
+      ParseHvar;
     except
     end;
     FValid := True;
@@ -4109,6 +4133,213 @@ begin
   FAvarValid := True;
 end;
 
+function TTFontFace.CalcItemVarRegionScalar(
+  const ARegions: TCff2VariationRegionArray;
+  ARegionCount, ARegionIdx: Int32;
+  const ANormCoords: array of Single): Single;
+var
+  LRegion: TCff2VariationRegion;
+  I: Int32;
+  LStart, LPeak, LEnd, LCoord, LScalar: Single;
+begin
+  Result := 1.0;
+  if (ARegionIdx < 0) or (ARegionIdx >= ARegionCount) then
+    Exit;
+
+  LRegion := ARegions[ARegionIdx];
+  LScalar := 1.0;
+  for I := 0 to LRegion.AxisCount - 1 do
+  begin
+    LStart := LRegion.Axes[I].StartCoord / 16384.0;
+    LPeak  := LRegion.Axes[I].PeakCoord / 16384.0;
+    LEnd   := LRegion.Axes[I].EndCoord / 16384.0;
+    if I <= High(ANormCoords) then
+      LCoord := ANormCoords[I]
+    else
+      LCoord := 0;
+
+    if (LPeak = 0) or ((LStart = LPeak) and (LEnd = LPeak)) then
+      Continue;
+
+    if (LCoord < LStart) or (LCoord > LEnd) then
+    begin
+      LScalar := 0;
+      Break;
+    end;
+
+    if LCoord < LPeak then
+    begin
+      if LPeak <> LStart then
+        LScalar := LScalar * (LCoord - LStart) / (LPeak - LStart)
+      else
+        LScalar := 0;
+    end
+    else if LCoord > LPeak then
+    begin
+      if LEnd <> LPeak then
+        LScalar := LScalar * (LEnd - LCoord) / (LEnd - LPeak)
+      else
+        LScalar := 0;
+    end;
+  end;
+
+  Result := LScalar;
+end;
+
+procedure TTFontFace.ParseHvar;
+var
+  LIdx, LOff, LIVSOff, LAwMapOff: Int32;
+  LRegionBase, LAxisCount, LRegionCount, LDataCount: Int32;
+  LDataOff, I, J, K: Int32;
+  LMapFmt, LMapEntryFmt, LMapCount: Int32;
+  LMapEntrySize, LInnerBits: Int32;
+
+  function ReadUInt16Local(AOff: Int32): UInt16;
+  begin
+    if (AOff >= 0) and (AOff + 1 < FDataLength) then
+      Result := ReadUInt16BE(AOff)
+    else
+      Result := 0;
+  end;
+
+  function ReadUInt32Local(AOff: Int32): UInt32;
+  begin
+    if (AOff >= 0) and (AOff + 3 < FDataLength) then
+      Result := ReadUInt32BE(AOff)
+    else
+      Result := 0;
+  end;
+
+begin
+  LIdx := FindTable(TABLE_TAG_HVAR);
+  if LIdx < 0 then
+    Exit;
+  LOff := Int32(FTables[LIdx].Offset);
+
+  if LOff + 20 > FDataLength then
+    Exit;
+
+  // HVAR header
+  if ReadUInt16BE(LOff) <> 1 then
+    Exit;
+
+  LIVSOff := Int32(ReadUInt32BE(LOff + 4));    // itemVariationStoreOffset
+  LAwMapOff := Int32(ReadUInt32BE(LOff + 8));   // advanceWidthMappingOffset
+
+  if LIVSOff < 20 then
+    Exit;
+
+  // ---- 解析 ItemVariationStore（HVAR 自己的） ----
+  LIVSOff := LOff + LIVSOff;
+  if LIVSOff + 8 > FDataLength then Exit;
+
+  if ReadUInt16BE(LIVSOff) <> 1 then Exit;
+
+  LRegionBase := LIVSOff + Int32(ReadUInt32BE(LIVSOff + 2));
+  LDataCount := ReadUInt16BE(LIVSOff + 6);
+
+  if LRegionBase + 2 > FDataLength then Exit;
+  LAxisCount := ReadUInt16BE(LRegionBase);
+  if (LAxisCount < 1) or (LAxisCount > 16) then Exit;
+
+  // 解析 regions
+  FHvar.VariationStore.AxisCount := LAxisCount;
+  if LDataCount > 0 then
+  begin
+    LDataOff := Int32(ReadUInt32BE(LIVSOff + 8));
+    LDataOff := LIVSOff + LDataOff;
+    if LDataOff + 6 > FDataLength then Exit;
+    LRegionCount := ReadUInt16BE(LDataOff + 4);
+  end
+  else
+    LRegionCount := 0;
+
+  if LRegionCount > 32767 then
+    LRegionCount := 32767;
+
+  FHvar.VariationStore.RegionCount := LRegionCount;
+  SetLength(FHvar.VariationStore.Regions, LRegionCount);
+
+  K := LRegionBase + 2;  // skip axisCount
+  for I := 0 to LRegionCount - 1 do
+  begin
+    FHvar.VariationStore.Regions[I].AxisCount := LAxisCount;
+    for J := 0 to LAxisCount - 1 do
+    begin
+      if K + 6 > FDataLength then Exit;
+      FHvar.VariationStore.Regions[I].Axes[J].StartCoord := ReadUInt16BE(K);
+      FHvar.VariationStore.Regions[I].Axes[J].PeakCoord := ReadUInt16BE(K + 2);
+      FHvar.VariationStore.Regions[I].Axes[J].EndCoord := ReadUInt16BE(K + 4);
+      Inc(K, 6);
+    end;
+  end;
+
+  // 解析 ItemVariationData 子表
+  FHvar.VariationStore.DataCount := LDataCount;
+  SetLength(FHvar.VariationStore.DataSubtables, LDataCount);
+  for I := 0 to LDataCount - 1 do
+  begin
+    LDataOff := Int32(ReadUInt32BE(LIVSOff + 8 + I * 4));
+    LDataOff := LIVSOff + LDataOff;
+    if LDataOff + 6 > FDataLength then Exit;
+
+    FHvar.VariationStore.DataSubtables[I].ItemCount := ReadUInt16BE(LDataOff);
+    FHvar.VariationStore.DataSubtables[I].WordDeltaCount := ReadUInt16BE(LDataOff + 2);
+    FHvar.VariationStore.DataSubtables[I].RegionIndexCount := ReadUInt16BE(LDataOff + 4);
+
+    // 解析 regionIndices
+    SetLength(FHvar.VariationStore.DataSubtables[I].RegionIndices,
+      FHvar.VariationStore.DataSubtables[I].RegionIndexCount);
+    for J := 0 to FHvar.VariationStore.DataSubtables[I].RegionIndexCount - 1 do
+      FHvar.VariationStore.DataSubtables[I].RegionIndices[J] :=
+        ReadUInt16BE(LDataOff + 6 + J * 2);
+
+    // deltaSets 数据起始
+    FHvar.VariationStore.DataSubtables[I].DeltaDataOffset :=
+      LDataOff + 6 + FHvar.VariationStore.DataSubtables[I].RegionIndexCount * 2;
+
+    // 计算每行字节数
+    // 非 LONG_WORDS 模式: wordDeltaCount 个 int16 + (regionIndexCount - wordDeltaCount) 个 int8
+    FHvar.VariationStore.DataSubtables[I].RowStride :=
+      (FHvar.VariationStore.DataSubtables[I].WordDeltaCount and $7FFF) * 2 +
+      (FHvar.VariationStore.DataSubtables[I].RegionIndexCount -
+       (FHvar.VariationStore.DataSubtables[I].WordDeltaCount and $7FFF));
+  end;
+
+  // ---- 解析 advanceWidthMapping (DeltaSetIndexMap) ----
+  if LAwMapOff > 0 then
+  begin
+    LAwMapOff := LOff + LAwMapOff;
+    if LAwMapOff + 4 > FDataLength then Exit;
+
+    LMapFmt := ReadUInt8(LAwMapOff);
+    LMapEntryFmt := ReadUInt8(LAwMapOff + 1);
+    if LMapFmt = 0 then
+    begin
+      LMapCount := ReadUInt16BE(LAwMapOff + 2);
+      FHvar.AdvWidthMapDataOff := LAwMapOff + 4;
+    end
+    else
+    begin
+      LMapCount := Int32(ReadUInt32BE(LAwMapOff + 2));
+      FHvar.AdvWidthMapDataOff := LAwMapOff + 6;
+    end;
+
+    LMapEntrySize := ((LMapEntryFmt and $30) shr 4) + 1;
+    LInnerBits := (LMapEntryFmt and $0F) + 1;
+
+    FHvar.HasAdvWidthMapping := True;
+    FHvar.AdvWidthMapFormat := LMapFmt;
+    FHvar.AdvWidthMapEntrySize := LMapEntrySize;
+    FHvar.AdvWidthMapInnerBits := LInnerBits;
+    FHvar.AdvWidthMapCount := LMapCount;
+  end
+  else
+    FHvar.HasAdvWidthMapping := False;
+
+  FHvarValid := True;
+end;
+
 function TTFontFace.HasFvar: Boolean;
 begin
   Result := FFvarValid;
@@ -4280,6 +4511,140 @@ end;
 function TTFontFace.Cff2FontDictCount: Int32;
 begin
   Result := FCff2FontDictCount;
+end;
+
+function TTFontFace.HasHvar: Boolean;
+begin
+  Result := FHvarValid;
+end;
+
+function TTFontFace.CalcHvarAdvanceDelta(AGlyphIndex: UInt32;
+  const ANormCoords: array of Single): Single;
+var
+  LOuterIdx, LInnerIdx: Int32;
+  LEntry: UInt32;
+  LI, LByteOff, LBitCount: Int32;
+  LSubIdx, LSubtable: Int32;
+  LItemIdx, LRegionIdx, LRegionIdxCount, LWordCount: Int32;
+  LDeltaPos: Int32;
+  LDelta16: Int16;
+  LDelta8: Int8;
+  LScalar, LDeltaSum: Single;
+  LIsLong: Boolean;
+begin
+  Result := 0;
+  if not FHvarValid then
+    Exit;
+
+  // 确定 delta-set index
+  if FHvar.HasAdvWidthMapping then
+  begin
+    // 通过 DeltaSetIndexMap 查找
+    if Int32(AGlyphIndex) >= FHvar.AdvWidthMapCount then
+    begin
+      // 越界：使用最后一条
+      if FHvar.AdvWidthMapCount = 0 then Exit;
+      LEntry := 0;
+      for LI := 0 to FHvar.AdvWidthMapEntrySize - 1 do
+      begin
+        LByteOff := FHvar.AdvWidthMapDataOff + (FHvar.AdvWidthMapCount - 1) * FHvar.AdvWidthMapEntrySize + LI;
+        if LByteOff < FDataLength then
+          LEntry := (LEntry shl 8) or FData[LByteOff];
+      end;
+    end
+    else
+    begin
+      LEntry := 0;
+      for LI := 0 to FHvar.AdvWidthMapEntrySize - 1 do
+      begin
+        LByteOff := FHvar.AdvWidthMapDataOff + Int32(AGlyphIndex) * FHvar.AdvWidthMapEntrySize + LI;
+        if LByteOff < FDataLength then
+          LEntry := (LEntry shl 8) or FData[LByteOff];
+      end;
+    end;
+
+    LBitCount := FHvar.AdvWidthMapInnerBits;
+    LInnerIdx := LEntry and ((1 shl LBitCount) - 1);
+    LOuterIdx := LEntry shr LBitCount;
+  end
+  else
+  begin
+    // 隐式映射：outer=0, inner=glyphID
+    LOuterIdx := 0;
+    LInnerIdx := Int32(AGlyphIndex);
+  end;
+
+  // 特殊值：0xFFFF/0xFFFF = 无变化
+  if (LOuterIdx = $FFFF) and (LInnerIdx = $FFFF) then
+    Exit;
+
+  // 查找 ItemVariationData 子表
+  if LOuterIdx >= FHvar.VariationStore.DataCount then
+    Exit;
+
+  LSubtable := LOuterIdx;
+  LItemIdx := LInnerIdx;
+  LRegionIdxCount := FHvar.VariationStore.DataSubtables[LSubtable].RegionIndexCount;
+  LWordCount := FHvar.VariationStore.DataSubtables[LSubtable].WordDeltaCount and $7FFF;
+  LIsLong := (FHvar.VariationStore.DataSubtables[LSubtable].WordDeltaCount and $8000) <> 0;
+
+  if LItemIdx >= FHvar.VariationStore.DataSubtables[LSubtable].ItemCount then
+    Exit;
+
+  // 计算 delta 行偏移
+  LDeltaPos := FHvar.VariationStore.DataSubtables[LSubtable].DeltaDataOffset +
+    LItemIdx * FHvar.VariationStore.DataSubtables[LSubtable].RowStride;
+
+  // 累加 delta: Σ(delta_i * scalar_i)
+  LDeltaSum := 0;
+  for LI := 0 to LRegionIdxCount - 1 do
+  begin
+    LRegionIdx := FHvar.VariationStore.DataSubtables[LSubtable].RegionIndices[LI];
+
+    if LI < LWordCount then
+    begin
+      // "word" delta (int16 或 int32)
+      if LIsLong then
+      begin
+        // int32 delta（HVAR 通常不用）
+        if LDeltaPos + 4 > FDataLength then Break;
+        LDeltaSum := LDeltaSum + Int32(ReadUInt32BE(LDeltaPos)) *
+          CalcItemVarRegionScalar(FHvar.VariationStore.Regions, FHvar.VariationStore.RegionCount, LRegionIdx, ANormCoords);
+        Inc(LDeltaPos, 4);
+      end
+      else
+      begin
+        // int16 delta
+        if LDeltaPos + 2 > FDataLength then Break;
+        LDelta16 := Int16(ReadUInt16BE(LDeltaPos));
+        LDeltaSum := LDeltaSum + LDelta16 *
+          CalcItemVarRegionScalar(FHvar.VariationStore.Regions, FHvar.VariationStore.RegionCount, LRegionIdx, ANormCoords);
+        Inc(LDeltaPos, 2);
+      end;
+    end
+    else
+    begin
+      // "byte" delta (int8 或 int16)
+      if LIsLong then
+      begin
+        if LDeltaPos + 2 > FDataLength then Break;
+        LDelta16 := Int16(ReadUInt16BE(LDeltaPos));
+        LDeltaSum := LDeltaSum + LDelta16 *
+          CalcItemVarRegionScalar(FHvar.VariationStore.Regions, FHvar.VariationStore.RegionCount, LRegionIdx, ANormCoords);
+        Inc(LDeltaPos, 2);
+      end
+      else
+      begin
+        if LDeltaPos + 1 > FDataLength then Break;
+        LDelta8 := Int8(FData[LDeltaPos]);
+        LDeltaSum := LDeltaSum + LDelta8 *
+          CalcItemVarRegionScalar(FHvar.VariationStore.Regions, FHvar.VariationStore.RegionCount, LRegionIdx, ANormCoords);
+        Inc(LDeltaPos, 1);
+      end;
+    end;
+  end;
+
+  Result := LDeltaSum;
 end;
 
 { ========================================================================= }
@@ -4454,8 +4819,8 @@ begin
     if LIVSOff + 8 > FDataLength then Exit;
 
     LIVSFormat := ReadUInt16BE(LIVSOff);
-    LRegionListOff := ReadUInt16BE(LIVSOff + 2);
-    LDataCount := ReadUInt16BE(LIVSOff + 4);
+    LRegionListOff := Int32(ReadUInt32BE(LIVSOff + 2));
+    LDataCount := ReadUInt16BE(LIVSOff + 6);
 
     if (LIVSFormat <> 1) or (LRegionListOff < 8) then Exit;
 
@@ -4470,7 +4835,7 @@ begin
     // 从第一个 itemVariationData 的 regionIndexCount 推算
     if LDataCount > 0 then
     begin
-      LDataOff := ReadUInt16BE(LIVSOff + 6);  // 第一个 data offset
+      LDataOff := Int32(ReadUInt32BE(LIVSOff + 8));  // 第一个 data offset (Offset32)
       LDataOff := LIVSOff + LDataOff;
       if LDataOff + 6 > FDataLength then Exit;
       LRegionCount := ReadUInt16BE(LDataOff + 4);  // regionIndexCount

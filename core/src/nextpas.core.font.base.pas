@@ -35,6 +35,7 @@ const
   TABLE_TAG_POST = $706F7374;   // 'post'
   TABLE_TAG_FVAR = $66766172;   // 'fvar'
   TABLE_TAG_AVAR = $61766172;   // 'avar'
+  TABLE_TAG_HVAR = $48564152;   // 'HVAR'
   TABLE_TAG_NAME = $6E616D65;   // 'name'
 
   {** GPOS Lookup Type：Pair Adjustment（kern） }
@@ -624,6 +625,36 @@ type
   TAvarTable = record
     AxisCount: UInt16;
     Segments: TAvarSegmentMapArray;
+  end;
+
+  {** 通用 ItemVariationStore — 用于 HVAR/VVAR 等表 }
+  TItemVariationDataSubtable = record
+    ItemCount: UInt16;
+    WordDeltaCount: UInt16;     // 含 LONG_WORDS 标志
+    RegionIndexCount: UInt16;
+    RegionIndices: array of UInt16;
+    DeltaDataOffset: Int32;     // deltaSets 数据起始（绝对文件偏移）
+    RowStride: Int32;           // 每行字节数
+  end;
+  TItemVariationDataSubtableArray = array of TItemVariationDataSubtable;
+
+  TItemVariationStore = record
+    AxisCount: UInt16;
+    RegionCount: UInt16;
+    Regions: TCff2VariationRegionArray;   // 复用已有类型
+    DataCount: UInt16;
+    DataSubtables: TItemVariationDataSubtableArray;
+  end;
+
+  {** HVAR 表解析结果 }
+  THvarTable = record
+    HasAdvWidthMapping: Boolean;          // 是否有 advance width 映射
+    AdvWidthMapFormat: Byte;              // DeltaSetIndexMap format (0 or 1)
+    AdvWidthMapEntrySize: Int32;          // 每条目字节数
+    AdvWidthMapInnerBits: Int32;          // inner index 位数
+    AdvWidthMapCount: Int32;              // 映射条目数
+    AdvWidthMapDataOff: Int32;            // mapData 绝对偏移
+    VariationStore: TItemVariationStore;
   end;
 
 {** 创建默认特性配置（liga=1, kern=1） }
