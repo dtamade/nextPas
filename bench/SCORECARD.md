@@ -8,10 +8,10 @@
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **72** | 1 | 33 | **69%** |
+| **Go** | **82** | 1 | 33 | **71%** |
 | **Rust** | 19 | 0 | 47 | **29%** |
 
-## Track Summary (26 tracks, 110 operations)
+## Track Summary (27 tracks, 120 operations)
 
 ### Text Operations (6 ops)
 
@@ -310,6 +310,23 @@
 
 **6W vs Go** — SwissTable (SIMD ctrl byte probing + open addressing) vs Go map (runtime hash + incremental rehash)
 
+### HashSet Operations (10 ops)
+
+| Track | Pascal (ns) | Go (ns) | vs Go |
+|-------|-------------|---------|-------|
+| **Build/100** | **1992** | 4737 | **2.38x** ✓ |
+| **Build/1K** | **18732** | 52626 | **2.81x** ✓ |
+| **Build/10K** | **202748** | 769695 | **3.80x** ✓ |
+| **Build/100K** | **3484116** | 10068149 | **2.89x** ✓ |
+| **LookupHit/1K** | **12912** | 20874 | **1.62x** ✓ |
+| **LookupHit/10K** | **148849** | 273137 | **1.84x** ✓ |
+| **LookupHit/100K** | **2200750** | 3720018 | **1.69x** ✓ |
+| **LookupMiss/1K** | **12730** | 16598 | **1.30x** ✓ |
+| **LookupMiss/10K** | **139887** | 207533 | **1.48x** ✓ |
+| **LookupMiss/100K** | **1988431** | 2997008 | **1.51x** ✓ |
+
+**10W vs Go** — Build 2.4-3.8x (SwissTable SIMD ctrl vs Go runtime map); Lookup 1.3-1.8x (pre-built, pure probing); 13ns/elem at 100K vs Go's 37ns
+
 ### Pascal Wins (biggest margins vs Go)
 1. **String Concat: 3557x** — Go immutable strings O(n²) vs Pascal COW
 2. **Fill/1KB: 23.37x** — FillChar→rep stosb vs Go byte loop (no memset opt)
@@ -348,6 +365,7 @@
 - **Interface dispatch**: Mixed — FPC Area 1.25x faster; Go devirtualization 3.08x on direct calls
 - **Type-specialized sort**: Pascal dominant (3W vs Go) — SortI32 2-8x faster, type specialization crushes interface dispatch
 - **SwissMap**: Pascal dominant (6W vs Go) — SwissTable 3-6x faster than Go map, SIMD ctrl byte probing
+- **HashSet**: Pascal dominant (10W vs Go) — Build 2.4-3.8x, Lookup 1.3-1.8x, 13ns/elem at 100K
 - **Bit scan / byte swap**: Pascal strong (3W vs Go) — BSR/BSF/BSwap intrinsics
 - **Dynamic arrays**: Pascal strong (4W vs Go) — SetLength realloc 2-8x faster than Go append
 - **Matrix operations**: Pascal dominant (4W vs Go) — FPC loop optimization beats Go compiler
