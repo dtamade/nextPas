@@ -10,101 +10,86 @@ uses
   nextpas.core.thread.base,
   nextpas.core.thread.intf,
   nextpas.core.thread.pool.worksteal,
-  nextpas.core.platform.thread;
+  nextpas.core.platform.thread,
+  nextpas.core.test;
+
+var GCounter: Integer = 0;
 
 var
-  GPass: Integer = 0;
-  GFail: Integer = 0;
-  GCounter: Integer = 0;
-
-procedure Check(const AName: string; ACond: Boolean);
+  LRunner: TTestRunner;
+  LSuite: TTestSuite;
 begin
-  if ACond then begin Inc(GPass); WriteLn('  PASS: ', AName); end
-  else begin Inc(GFail); WriteLn('  FAIL: ', AName); end;
-end;
+  LSuite := TTestSuite.Create('thread.worksteal');
 
-procedure TestCreateAndShutdown;
-var LPool: IThreadPool;
-begin
-  WriteLn('--- TestCreateAndShutdown ---');
-  LPool := CreateWorkStealingPool(2);
-  Check('Created', LPool <> nil);
-  Check('WorkerCount=2', LPool.WorkerCount = 2);
-  LPool.Shutdown;
-  Check('Shutdown OK', True);
-end;
+  LSuite.Test('create and shutdown', procedure
+  var LPool: IThreadPool;
+  begin
+    LPool := CreateWorkStealingPool(2);
+    CheckTrue(LPool <> nil);
+    CheckTrue(LPool.WorkerCount = 2);
+    LPool.Shutdown;
+    CheckTrue(True);
+  end);
 
-procedure TestSubmitSingle;
-var LPool: IThreadPool;
-begin
-  WriteLn('--- TestSubmitSingle ---');
-  GCounter := 0;
-  LPool := CreateWorkStealingPool(2);
-  LPool.Submit(procedure begin InterlockedIncrement(GCounter); end);
-  LPool.WaitAll;
-  Check('Counter=1', InterlockedCompareExchange(GCounter, 0, 0) = 1);
-  LPool.Shutdown;
-end;
-
-procedure TestSubmit100;
-var LPool: IThreadPool; LI: Integer;
-begin
-  WriteLn('--- TestSubmit100 ---');
-  GCounter := 0;
-  LPool := CreateWorkStealingPool(4);
-  for LI := 1 to 100 do
+  LSuite.Test('submit single', procedure
+  var LPool: IThreadPool;
+  begin
+    GCounter := 0;
+    LPool := CreateWorkStealingPool(2);
     LPool.Submit(procedure begin InterlockedIncrement(GCounter); end);
-  LPool.WaitAll;
-  Check('Counter=100', InterlockedCompareExchange(GCounter, 0, 0) = 100);
-  LPool.Shutdown;
-end;
+    LPool.WaitAll;
+    CheckTrue(InterlockedCompareExchange(GCounter, 0, 0) = 1);
+    LPool.Shutdown;
+  end);
 
-procedure TestSubmit1000;
-var LPool: IThreadPool; LI: Integer;
-begin
-  WriteLn('--- TestSubmit1000 ---');
-  GCounter := 0;
-  LPool := CreateWorkStealingPool(4);
-  for LI := 1 to 1000 do
-    LPool.Submit(procedure begin InterlockedIncrement(GCounter); end);
-  LPool.WaitAll;
-  Check('Counter=1000', InterlockedCompareExchange(GCounter, 0, 0) = 1000);
-  LPool.Shutdown;
-end;
+  LSuite.Test('submit 100', procedure
+  var LPool: IThreadPool; LI: Integer;
+  begin
+    GCounter := 0;
+    LPool := CreateWorkStealingPool(4);
+    for LI := 1 to 100 do
+      LPool.Submit(procedure begin InterlockedIncrement(GCounter); end);
+    LPool.WaitAll;
+    CheckTrue(InterlockedCompareExchange(GCounter, 0, 0) = 100);
+    LPool.Shutdown;
+  end);
 
-procedure TestSubmit10000;
-var LPool: IThreadPool; LI: Integer;
-begin
-  WriteLn('--- TestSubmit10000 ---');
-  GCounter := 0;
-  LPool := CreateWorkStealingPool(4);
-  for LI := 1 to 10000 do
-    LPool.Submit(procedure begin InterlockedIncrement(GCounter); end);
-  LPool.WaitAll;
-  Check('Counter=10000', InterlockedCompareExchange(GCounter, 0, 0) = 10000);
-  LPool.Shutdown;
-end;
+  LSuite.Test('submit 1000', procedure
+  var LPool: IThreadPool; LI: Integer;
+  begin
+    GCounter := 0;
+    LPool := CreateWorkStealingPool(4);
+    for LI := 1 to 1000 do
+      LPool.Submit(procedure begin InterlockedIncrement(GCounter); end);
+    LPool.WaitAll;
+    CheckTrue(InterlockedCompareExchange(GCounter, 0, 0) = 1000);
+    LPool.Shutdown;
+  end);
 
-procedure TestWaitAllEmpty;
-var LPool: IThreadPool;
-begin
-  WriteLn('--- TestWaitAllEmpty ---');
-  LPool := CreateWorkStealingPool(2);
-  LPool.WaitAll;
-  Check('No hang', True);
-  LPool.Shutdown;
-end;
+  LSuite.Test('submit 10000', procedure
+  var LPool: IThreadPool; LI: Integer;
+  begin
+    GCounter := 0;
+    LPool := CreateWorkStealingPool(4);
+    for LI := 1 to 10000 do
+      LPool.Submit(procedure begin InterlockedIncrement(GCounter); end);
+    LPool.WaitAll;
+    CheckTrue(InterlockedCompareExchange(GCounter, 0, 0) = 10000);
+    LPool.Shutdown;
+  end);
 
-begin
-  WriteLn('=== nextpas.core.thread.pool.worksteal tests ===');
-  WriteLn;
-  TestCreateAndShutdown;
-  TestSubmitSingle;
-  TestSubmit100;
-  TestSubmit1000;
-  TestSubmit10000;
-  TestWaitAllEmpty;
-  WriteLn;
-  WriteLn('=== Results: ', GPass, ' passed, ', GFail, ' failed ===');
-  if GFail > 0 then Halt(1);
+  LSuite.Test('WaitAll empty', procedure
+  var LPool: IThreadPool;
+  begin
+    LPool := CreateWorkStealingPool(2);
+    LPool.WaitAll;
+    CheckTrue(True);
+    LPool.Shutdown;
+  end);
+
+  LRunner := TTestRunner.Create('nextpas.core.thread.worksteal');
+  LRunner.Add(LSuite);
+  LRunner.RunAll;
+  LRunner.Summary;
+  if not LRunner.AllPassed then Halt(1);
 end.
