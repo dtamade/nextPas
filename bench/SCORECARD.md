@@ -8,10 +8,10 @@
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **18** | 0 | 14 | **56%** |
-| **Rust** | 11 | 0 | 21 | 34% |
+| **Go** | **23** | 0 | 16 | **59%** |
+| **Rust** | 15 | 0 | 23 | **39%** |
 
-## Track Summary (8 tracks, 32 operations)
+## Track Summary (10 tracks, 39 operations)
 
 ### Text Operations (6 ops)
 
@@ -107,9 +107,33 @@
 
 ## Key Findings
 
+### Bit Set Operations (5 ops)
+
+| Track | Pascal | Go | vs Go |
+|-------|--------|-----|-------|
+| **Union/100k** | **231µs** | 1.51ms | **6.54x** ✓ |
+| **Intersection/100k** | **224µs** | 1.51ms | **6.74x** ✓ |
+| **Difference/100k** | **231µs** | 1.63ms | **7.06x** ✓ |
+| Membership/100k | 297µs | 37.5µs | 0.13x |
+| **Build/100k** | **104µs** | 132µs | **1.27x** ✓ |
+
+**5W vs Go, 4W vs Rust** ⭐ Killer track
+
+### Binary Search (2 ops)
+
+| Track | Pascal | Go | vs Go |
+|-------|--------|-----|-------|
+| BinarySearch/100k | 18.3ms | 14.9ms | 0.81x |
+| BinarySearchHit/100k | 8.92ms | 6.39ms | 0.72x |
+
+**0W vs Go, 0W vs Rust**
+
 ### Pascal Wins (biggest margins vs Go)
 1. **String Concat: 3557x** — Go immutable strings O(n²) vs Pascal COW
-2. **Builder/IntAppend: 4.95x** — Direct digit writing vs Go's allocation per int
+2. **Set Union: 7.06x** — Pascal `set of Byte` native bit operations vs Go byte loop
+3. **Set Intersection: 6.74x** — Same mechanism, 4 AND instructions
+4. **Set Difference: 6.54x** — Same mechanism, 4 BIC instructions
+5. **Builder/IntAppend: 4.95x** — Direct digit writing vs Go's allocation per int
 3. **Builder/Large: 3.77x** — Mixed formatting, Go's strconv overhead
 4. **JSON/Parse: 2.88x** — SAX parser vs Go's reflect-heavy encoding/json
 5. **StrReplace: 1.75x** — FPC string replacement vs Go's reflect-heavy ReplaceAll
@@ -123,16 +147,19 @@
 5. **Array Sum: 2.04x** — Go auto-vectorization
 
 ### Categories
+- **Bit set operations**: Pascal dominant (5W vs Go) — `set of Byte` is killer
 - **String operations**: Pascal dominant (7W vs Go)
 - **Memory/pointer**: Pascal strong (5W vs Go)
 - **Numeric loops**: Go/Rust win (auto-vectorization)
 - **Hash maps**: Go wins (incremental rehash, cache-friendly miss)
+- **Binary search**: Go/Rust win (branchless codegen)
 - **Float formatting**: Go/Rust win (Ryu algorithm)
 
 ## Conclusion
 
-Pascal beats Go 56% of the time across 32 benchmarks. The biggest wins come from
-string operations (immutable strings are Go's Achilles heel) and number formatting
-(direct digit writing). Losses come from auto-vectorization gaps and Go's optimized
-hash map. Against Rust, Pascal wins 34% — Rust's zero-cost abstractions and LLVM
-codegen make it consistently fast.
+Pascal beats Go 59% of the time across 39 benchmarks. The biggest wins come from
+string operations (immutable strings are Go's Achilles heel), bit set operations
+(`set of Byte` compiles to native instructions), and number formatting
+(direct digit writing). Losses come from auto-vectorization gaps, Go's optimized
+hash map, and branchless codegen for binary search. Against Rust, Pascal wins 39% —
+Rust's zero-cost abstractions and LLVM codegen make it consistently fast.
