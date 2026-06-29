@@ -5,6 +5,7 @@ program test_text_conv;
 uses
   SysUtils,
   nextpas.core.base,
+  nextpas.core.exception,
   nextpas.core.testing,
   nextpas.core.text.conv,
   nextpas.core.text.format;
