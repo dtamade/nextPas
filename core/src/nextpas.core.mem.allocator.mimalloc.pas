@@ -16,7 +16,7 @@ uses
 type
   {**
    * TMimallocAllocator
-   * @desc 使用 mimalloc 库的 IAllocator 实现
+   * @desc 使用 mimalloc 库的 TMemAllocator 实现
    *}
   TMimallocAllocator = class(TAllocator)
   protected
@@ -29,8 +29,8 @@ type
     function  Traits: TAllocatorTraits; override;
   end;
 
-function TryGetMimallocAllocator(out A: IAllocator): Boolean;
-function GetMimallocAllocator: IAllocator;
+function TryGetMimallocAllocator(out A: TMemAllocator): Boolean;
+function GetMimallocAllocator: TMemAllocator;
 function MimallocUsableSizeAvailable: Boolean;
 function TryGetMimallocUsableSize(APtr: Pointer; out ASize: SizeUInt): Boolean;
 
@@ -177,7 +177,7 @@ begin
   Result.HasMemSize      := MimallocUsableSizeAvailable;
 end;
 
-function GetMimallocAllocator: IAllocator;
+function GetMimallocAllocator: TMemAllocator;
 begin
   if _MimallocAllocatorObj = nil then
   begin
@@ -186,15 +186,15 @@ begin
       if _MimallocAllocatorObj = nil then
       begin
         _MimallocAllocatorObj := TMimallocAllocator.Create;
-        _MimallocAllocatorIntf := _MimallocAllocatorObj as IAllocator; // anchor lifetime
+        _MimallocAllocatorIntf := _MimallocAllocatorObj; // anchor lifetime
       end;
     finally
       LeaveCriticalSection(GAllocatorLock);
     end;
   end;
-  Result := _MimallocAllocatorIntf;
+  Result := _MimallocAllocatorObj;
 end;
-function TryGetMimallocAllocator(out A: IAllocator): Boolean;
+function TryGetMimallocAllocator(out A: TMemAllocator): Boolean;
 begin
   try
     A := GetMimallocAllocator;

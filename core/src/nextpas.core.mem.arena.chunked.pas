@@ -11,7 +11,8 @@ uses
   nextpas.core.mem.intf,
   nextpas.core.mem.arena.base,
   nextpas.core.base.utils,
-  nextpas.core.mem.arena.intf;
+  nextpas.core.mem.arena.intf,
+  nextpas.core.mem.allocator.base;
 
 type
   {** TChunkedArena
@@ -45,7 +46,7 @@ type
     FGrowthStep: SizeUInt;
     FGrowthBaseSize: SizeUInt;
     FKeepSegments: Boolean;
-    FAllocator: IAllocator;
+    FAllocator: TMemAllocator;
     FPeakUsed: SizeUInt;
     FTotalAllocs: QWord;
     { Chunk cache: freed segments cached for reuse (Go-style reuse→ready→new) }

@@ -7,7 +7,8 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.bytes.base,
-  nextpas.core.mem.intf;
+  nextpas.core.mem.intf,
+  nextpas.core.mem.allocator.base;
 
 type
   IBytesBuilder = interface
@@ -40,7 +41,7 @@ type
   end;
 
 function CreateBytesBuilder(const AInitialCapacity: SizeUInt = BYTES_BUILDER_DEFAULT_CAPACITY): IBytesBuilder;
-function CreateBytesBuilderWith(const AAllocator: IAllocator; const AInitialCapacity: SizeUInt = BYTES_BUILDER_DEFAULT_CAPACITY): IBytesBuilder;
+function CreateBytesBuilderWith(const AAllocator: TMemAllocator; const AInitialCapacity: SizeUInt = BYTES_BUILDER_DEFAULT_CAPACITY): IBytesBuilder;
 
 implementation
 
@@ -53,10 +54,10 @@ type
     FPtr: PByte;
     FLen: SizeUInt;
     FCap: SizeUInt;
-    FAllocator: IAllocator;
+    FAllocator: TMemAllocator;
     procedure Grow(const ANeeded: SizeUInt);
   public
-    constructor Create(const AAllocator: IAllocator; const AInitialCapacity: SizeUInt);
+    constructor Create(const AAllocator: TMemAllocator; const AInitialCapacity: SizeUInt);
     destructor Destroy; override;
 
     function GetLength: SizeUInt;
@@ -87,14 +88,14 @@ begin
   Result := TBytesBuilderImpl.Create(nextpas.core.mem.DefaultAllocator, AInitialCapacity);
 end;
 
-function CreateBytesBuilderWith(const AAllocator: IAllocator; const AInitialCapacity: SizeUInt): IBytesBuilder;
+function CreateBytesBuilderWith(const AAllocator: TMemAllocator; const AInitialCapacity: SizeUInt): IBytesBuilder;
 begin
   Result := TBytesBuilderImpl.Create(AAllocator, AInitialCapacity);
 end;
 
 { TBytesBuilderImpl }
 
-constructor TBytesBuilderImpl.Create(const AAllocator: IAllocator; const AInitialCapacity: SizeUInt);
+constructor TBytesBuilderImpl.Create(const AAllocator: TMemAllocator; const AInitialCapacity: SizeUInt);
 begin
   inherited Create;
   FAllocator := AAllocator;

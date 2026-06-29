@@ -232,7 +232,7 @@ end;
 
 procedure TestInnerAllocatorUsed;
 var
-  LInner: IAllocator;
+  LInner: TMemAllocator;
   LTracker: TTrackingAllocator;
   LP: Pointer;
   LTrackerTraits: TAllocatorTraits;
@@ -278,7 +278,7 @@ end;
 
 procedure TestTrackingWithArena;
 var
-  LArena: IAllocator;
+  LArena: TMemAllocator;
   LTracker: TTrackingAllocator;
   LP: Pointer;
 begin
@@ -300,7 +300,7 @@ end;
 { --- RunTestWithLeakCheck tests --- }
 
 { 有意泄漏的回调 }
-procedure DoLeakTest(AAllocator: IAllocator);
+procedure DoLeakTest(AAllocator: TMemAllocator);
 var
   LP: Pointer;
 begin
@@ -309,7 +309,7 @@ begin
 end;
 
 { 不泄漏的回调 }
-procedure DoNoLeakTest(AAllocator: IAllocator);
+procedure DoNoLeakTest(AAllocator: TMemAllocator);
 var
   LP: Pointer;
 begin

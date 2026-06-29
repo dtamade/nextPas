@@ -5,11 +5,12 @@ unit nextpas.core.mem.pool.memory_pool;
 interface
 
 uses
-  nextpas.core.mem.pool.base;
+  nextpas.core.mem.pool.base,
+  nextpas.core.mem.allocator.base;
 
 type
 
-  // 与 IAllocator 对齐的通用内存池接口（作为“友好接口”层）
+  // 与 TMemAllocator 对齐的通用内存池接口（作为“友好接口”层）
   //
   // 说明：
   // - 历史原因：IMemoryPool 继承自 IPool，因此会暴露 Acquire/TryAcquire/AcquireN/Release 等“单位”API。

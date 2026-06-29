@@ -25,7 +25,8 @@ const
   {$ELSE}
   GROUP_SIZE   = 16;
   {$ENDIF}
-  MIN_CAPACITY = GROUP_SIZE;
+  MIN_CAPACITY = GROUP_SIZE,
+  nextpas.core.mem.allocator.base;
 
 type
   {$IFDEF HAS_AVX2}
@@ -95,7 +96,7 @@ type
     FGrowthLeft: SizeUInt;
     FHash: THash;
     FEquals: TEquals;
-    FAllocator: IAllocator;
+    FAllocator: TMemAllocator;
 
     function KeyHash(const AKey: K): UInt32;
     function KeysEqual(const L, R: K): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
@@ -118,7 +119,7 @@ type
     procedure GrowAndRehash;
 
   public
-    constructor Create(aCapacity: SizeUInt = 0; aHash: THash = nil; aEquals: TEquals = nil; aAllocator: IAllocator = nil);
+    constructor Create(aCapacity: SizeUInt = 0; aHash: THash = nil; aEquals: TEquals = nil; aAllocator: TMemAllocator = nil);
     destructor Destroy; override;
 
     function TryGetValue(const AKey: K; out AValue: V): Boolean;
@@ -604,7 +605,7 @@ end;
 
 { Public API }
 
-constructor TSwissTable.Create(aCapacity: SizeUInt; aHash: THash; aEquals: TEquals; aAllocator: IAllocator);
+constructor TSwissTable.Create(aCapacity: SizeUInt; aHash: THash; aEquals: TEquals; aAllocator: TMemAllocator);
 begin
   inherited Create;
   if Assigned(aHash) <> Assigned(aEquals) then

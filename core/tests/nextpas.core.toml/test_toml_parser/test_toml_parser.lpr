@@ -17,39 +17,40 @@ var
 
 const
   TOML_PARSER_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.toml.parser.pas';
-  TOML_PARSER_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.toml.parser.pas';
+  TOML_PARSER_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.toml.parser.pas',
+  nextpas.core.mem.allocator.base;
 
 type
-  TFailingReallocateAllocator = class(TInterfacedObject, IAllocator)
+  TFailingReallocateAllocator = class(TAllocator)
   private
     FFailOnReallocateCall: SizeUInt;
     FReallocateCalls: SizeUInt;
   public
     constructor Create(const AFailOnReallocateCall: SizeUInt);
-    function GetMem(ASize: SizeUInt): Pointer;
-    function AllocMem(ASize: SizeUInt): Pointer;
-    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
-    procedure FreeMem(ADst: Pointer);
-    function MemSize(APtr: Pointer): SizeUInt;
-    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
-    procedure FreeAligned(APtr: Pointer);
-    function Traits: TAllocatorTraits;
+    function GetMem(ASize: SizeUInt): Pointer; override;
+    function AllocMem(ASize: SizeUInt): Pointer; override;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
+    procedure FreeMem(ADst: Pointer); override;
+    function MemSize(APtr: Pointer): SizeUInt; override;
+    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer; override;
+    procedure FreeAligned(APtr: Pointer); override;
+    function Traits: TAllocatorTraits; override;
   end;
 
-  TFailingAllocateAllocator = class(TInterfacedObject, IAllocator)
+  TFailingAllocateAllocator = class(TAllocator)
   private
     FFailOnAllocateCall: SizeUInt;
     FAllocateCalls: SizeUInt;
   public
     constructor Create(const AFailOnAllocateCall: SizeUInt);
-    function GetMem(ASize: SizeUInt): Pointer;
-    function AllocMem(ASize: SizeUInt): Pointer;
-    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
-    procedure FreeMem(ADst: Pointer);
-    function MemSize(APtr: Pointer): SizeUInt;
-    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
-    procedure FreeAligned(APtr: Pointer);
-    function Traits: TAllocatorTraits;
+    function GetMem(ASize: SizeUInt): Pointer; override;
+    function AllocMem(ASize: SizeUInt): Pointer; override;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
+    procedure FreeMem(ADst: Pointer); override;
+    function MemSize(APtr: Pointer): SizeUInt; override;
+    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer; override;
+    procedure FreeAligned(APtr: Pointer); override;
+    function Traits: TAllocatorTraits; override;
   end;
 
 constructor TFailingReallocateAllocator.Create(
@@ -787,11 +788,11 @@ end;
 procedure TestNodeGrowthOOMFailsClosed;
 var
   LAllocatorObj: TFailingReallocateAllocator;
-  LAllocator: IAllocator;
+  LAllocator: TMemAllocator;
   LDoc: TTomlDocument;
 begin
   LAllocatorObj := TFailingReallocateAllocator.Create(1);
-  LAllocator := LAllocatorObj as IAllocator;
+  LAllocator := LAllocatorObj;
   LDoc.Init(LAllocator);
   try
     Check(not LDoc.Parse(TStringView.FromStr(BuildTomlKeyValuePairs(80))),
@@ -807,11 +808,11 @@ end;
 procedure TestOwnedBufferGrowthOOMFailsClosed;
 var
   LAllocatorObj: TFailingReallocateAllocator;
-  LAllocator: IAllocator;
+  LAllocator: TMemAllocator;
   LDoc: TTomlDocument;
 begin
   LAllocatorObj := TFailingReallocateAllocator.Create(1);
-  LAllocator := LAllocatorObj as IAllocator;
+  LAllocator := LAllocatorObj;
   LDoc.Init(LAllocator);
   try
     Check(not LDoc.Parse(TStringView.FromStr(BuildTomlEscapedStrings(17))),
@@ -827,11 +828,11 @@ end;
 procedure TestInitAllocateOOMSetsError;
 var
   LAllocatorObj: TFailingAllocateAllocator;
-  LAllocator: IAllocator;
+  LAllocator: TMemAllocator;
   LDoc: TTomlDocument;
 begin
   LAllocatorObj := TFailingAllocateAllocator.Create(1);
-  LAllocator := LAllocatorObj as IAllocator;
+  LAllocator := LAllocatorObj;
   LDoc.Init(LAllocator);
   try
     Check(LDoc.HasError, 'init allocate OOM sets error');

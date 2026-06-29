@@ -12,8 +12,8 @@ var
 
 procedure TestCrtAllocatorSingletonAndTraits;
 var
-  LFirst: IAllocator;
-  LSecond: IAllocator;
+  LFirst: TMemAllocator;
+  LSecond: TMemAllocator;
   LTraits: TAllocatorTraits;
 begin
   LFirst := GetCrtAllocator;
@@ -31,7 +31,7 @@ end;
 
 procedure TestCrtAllocatorAllocMemAndReallocMem;
 var
-  LAllocator: IAllocator;
+  LAllocator: TMemAllocator;
   LPtr: PByte;
   LI: Integer;
 begin
@@ -53,7 +53,7 @@ end;
 
 procedure TestCrtAllocatorAlignedFallback;
 var
-  LAllocator: IAllocator;
+  LAllocator: TMemAllocator;
   LPtr: Pointer;
 begin
   LAllocator := GetCrtAllocator;
@@ -68,8 +68,8 @@ end;
 
 procedure TestTryGetCrtAllocator;
 var
-  LTry: IAllocator;
-  LGet: IAllocator;
+  LTry: TMemAllocator;
+  LGet: TMemAllocator;
   LOk: Boolean;
 begin
   LOk := TryGetCrtAllocator(LTry);

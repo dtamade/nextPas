@@ -6,11 +6,12 @@ interface
 
 uses
   nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.tracking;
+  nextpas.core.mem.allocator.tracking,
+  nextpas.core.mem.allocator.base;
 
 type
   {** 带 allocator 参数的回调类型 }
-  TAllocatorTestProc = procedure(AAllocator: IAllocator);
+  TAllocatorTestProc = procedure(AAllocator: TMemAllocator);
 
   {** 泄漏检查结果 }
   TLeakCheckResult = record
@@ -21,12 +22,12 @@ type
   end;
 
 {** 运行测试过程并检查泄漏。
-    ATest 会收到一个 TTrackingAllocator 作为 IAllocator 参数，
+    ATest 会收到一个 TTrackingAllocator 作为 TMemAllocator 参数，
     回调内应通过该参数进行分配以确保泄漏被检测到。
     如果 AInnerAllocator 为 nil，使用默认的 TRtlAllocator。
     返回泄漏检查结果。 }
 function RunTestWithLeakCheck(ATest: TAllocatorTestProc;
-  AInnerAllocator: IAllocator = nil): TLeakCheckResult;
+  AInnerAllocator: TMemAllocator = nil): TLeakCheckResult;
 
 implementation
 
@@ -34,11 +35,11 @@ uses
   nextpas.core.mem.allocator.rtl;
 
 function RunTestWithLeakCheck(ATest: TAllocatorTestProc;
-  AInnerAllocator: IAllocator): TLeakCheckResult;
+  AInnerAllocator: TMemAllocator): TLeakCheckResult;
 var
-  LInner: IAllocator;
+  LInner: TMemAllocator;
   LTracker: TTrackingAllocator;
-  LTrackerIntf: IAllocator;
+  LTrackerIntf: TMemAllocator;
 begin
   if AInnerAllocator <> nil then
     LInner := AInnerAllocator
@@ -47,7 +48,7 @@ begin
 
   { 创建 tracker 并通过接口变量管理生命周期 }
   LTracker := TTrackingAllocator.Create(LInner);
-  LTrackerIntf := LTracker as IAllocator;
+  LTrackerIntf := LTracker;
   { LTrackerIntf 现在持有引用，不再通过 LTracker.Free 释放 }
   LTracker := nil;
 
@@ -61,6 +62,7 @@ begin
     Result.HasLeaks := LTracker.HasLeaks;
     Result.Report := LTracker.ReportLeaks;
   finally
+    LTrackerIntf.Free;
     LTrackerIntf := nil;
   end;
 end;

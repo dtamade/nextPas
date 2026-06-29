@@ -71,7 +71,8 @@ function HashOfAnsiString(const s: AnsiString): UInt32;
  * @param s String to hash
  * @return UInt32 Hash value
  *}
-function HashOfUnicodeString(const s: UnicodeString): UInt32;
+function HashOfUnicodeString(const s: UnicodeString): UInt32,
+  nextpas.core.mem.allocator.base;
 
 type
   {**
@@ -210,7 +211,7 @@ type
      *   // 自定义哈希函数
      *   Map := specialize THashMap<TMyRecord, Integer>.Create(0, @MyRecordHash);
      *}
-    constructor Create(aCapacity: SizeUInt = 0; aHash: THash = nil; aEquals: TEquals = nil; aAllocator: IAllocator = nil);
+    constructor Create(aCapacity: SizeUInt = 0; aHash: THash = nil; aEquals: TEquals = nil; aAllocator: TMemAllocator = nil);
 
     {**
      * Destroy
@@ -326,7 +327,7 @@ end;
 
 { THashMap<K,V> }
 
-constructor THashMap.Create(aCapacity: SizeUInt; aHash: THash; aEquals: TEquals; aAllocator: IAllocator);
+constructor THashMap.Create(aCapacity: SizeUInt; aHash: THash; aEquals: TEquals; aAllocator: TMemAllocator);
 begin
   inherited Create(aAllocator);
   FHash := aHash;

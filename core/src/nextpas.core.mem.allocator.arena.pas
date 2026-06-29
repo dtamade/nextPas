@@ -14,7 +14,7 @@ uses
 type
   {** TVirtualArenaAllocator
    *
-   *  将 TVirtualArena 包装为 IAllocator 接口。
+   *  将 TVirtualArena 包装为 TMemAllocator 接口。
    *  分配通过 TVirtualArena 的 bump 指针完成，DoFreeMem 为 no-op。
    *  Reset 方法一次性释放所有内存。
    *
@@ -39,7 +39,7 @@ type
     {** 直接访问内部 TVirtualArena }
     property Arena: TVirtualArena read FArena;
 
-    {** IAllocator traits }
+    {** TMemAllocator traits }
     function Traits: TAllocatorTraits; override;
   end;
 

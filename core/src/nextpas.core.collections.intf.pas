@@ -10,7 +10,8 @@ uses
   nextpas.core.mem.intf,
   nextpas.core.collections.base,
   nextpas.core.collections.element_manager.intf,
-  nextpas.core.collections.slice;
+  nextpas.core.collections.slice,
+  nextpas.core.mem.allocator.base;
 
 type
   { ICollection 基础非泛型容器接口 }
@@ -47,7 +48,7 @@ type
     *   This allocator is never `nil`; by default, it is the RTL's memory allocator.
     *   此容器永远不会 `nil`, 默认它是 `rtl` 的内存分配器.
     *}
-    function GetAllocator: IAllocator;
+    function GetAllocator: TMemAllocator;
 
     {**
     * GetCount
@@ -520,7 +521,7 @@ type
 
     property Count:     SizeUInt   read GetCount;
     property Data:      Pointer    read GetData write SetData;
-    property Allocator: IAllocator read GetAllocator;
+    property Allocator: TMemAllocator read GetAllocator;
 
   end;
   { IGenericCollection 泛型容器接口 }

@@ -35,7 +35,8 @@ uses
   nextpas.core.base,
   nextpas.core.mem.base,
   nextpas.core.mem.allocator,
-  nextpas.core.mem.error;
+  nextpas.core.mem.error,
+   nextpas.core.mem.allocator.base;
 
 type
   {** 环形缓冲区异常 Ring buffer exception *}
@@ -69,7 +70,7 @@ type
     FHead: SizeUInt;      // 读取位置 Read position
     FTail: SizeUInt;      // 写入位置 Write position
     FCount: SizeUInt;     // 当前元素数量 Current element count
-    FBaseAllocator: IAllocator;
+    FBaseAllocator: TMemAllocator;
     FIsPow2Capacity: Boolean;
 
     function GetElementPtr(aIndex: SizeUInt): Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
@@ -87,7 +88,7 @@ type
      * @param aElementSize 元素大小 Element size
      * @param aAllocator 基础分配器 Base allocator (optional)
      *}
-    constructor Create(aCapacity: SizeUInt; aElementSize: SizeUInt; aAllocator: IAllocator = nil);
+    constructor Create(aCapacity: SizeUInt; aElementSize: SizeUInt; aAllocator: TMemAllocator = nil);
 
     {**
      * Destroy
@@ -287,7 +288,7 @@ type
   generic TTypedRingBuffer<T> = class(TRingBuffer)
   public
     {** 创建类型安全的环形缓冲区 *}
-    constructor Create(aCapacity: SizeUInt; aAllocator: IAllocator = nil);
+    constructor Create(aCapacity: SizeUInt; aAllocator: TMemAllocator = nil);
     {** 写入一个元素 *}
     function Push(const aItem: T): Boolean; reintroduce;
     {** 读取一个元素 *}
@@ -319,7 +320,7 @@ uses
 
 { TRingBuffer }
 
-constructor TRingBuffer.Create(aCapacity: SizeUInt; aElementSize: SizeUInt; aAllocator: IAllocator);
+constructor TRingBuffer.Create(aCapacity: SizeUInt; aElementSize: SizeUInt; aAllocator: TMemAllocator);
 begin
   inherited Create;
 
@@ -733,7 +734,7 @@ end;
 
 { TTypedRingBuffer<T> }
 
-constructor TTypedRingBuffer.Create(aCapacity: SizeUInt; aAllocator: IAllocator);
+constructor TTypedRingBuffer.Create(aCapacity: SizeUInt; aAllocator: TMemAllocator);
 begin
   inherited Create(aCapacity, SizeOf(T), aAllocator);
 end;

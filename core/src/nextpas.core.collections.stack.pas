@@ -10,7 +10,8 @@ uses
   nextpas.core.mem.default,
   nextpas.core.collections.base,
   nextpas.core.collections.stack.intf,
-  nextpas.core.collections.vec;
+  nextpas.core.collections.vec,
+  nextpas.core.mem.allocator.base;
 
 type
   generic TStack<T> = class(TInterfacedObject, specialize IStack<T>)
@@ -21,7 +22,7 @@ type
     FVec: TInternalVec;
 
   public
-    constructor Create(const aAllocator: IAllocator = nil);
+    constructor Create(const aAllocator: TMemAllocator = nil);
     destructor Destroy; override;
 
     { IStack implementation }
@@ -42,13 +43,13 @@ type
 
   generic function MakeStack<T>: specialize IStack<T>;
   generic function MakeStack<T>(const aSrc: array of T): specialize IStack<T>;
-  generic function MakeStack<T>(const aAllocator: IAllocator): specialize IStack<T>;
+  generic function MakeStack<T>(const aAllocator: TMemAllocator): specialize IStack<T>;
 
 implementation
 
 { TStack<T> }
 
-constructor TStack.Create(const aAllocator: IAllocator = nil);
+constructor TStack.Create(const aAllocator: TMemAllocator = nil);
 begin
   inherited Create;
   if aAllocator <> nil then
@@ -149,7 +150,7 @@ begin
   end;
 end;
 
-generic function MakeStack<T>(const aAllocator: IAllocator): specialize IStack<T>;
+generic function MakeStack<T>(const aAllocator: TMemAllocator): specialize IStack<T>;
 type
   TStackImpl = specialize TStack<T>;
 begin

@@ -14,7 +14,8 @@ uses
   nextpas.core.collections.intf,
   nextpas.core.collections.priorityqueue.base,
   nextpas.core.collections.priorityqueue.intf,
-  nextpas.core.collections.element_manager;
+  nextpas.core.collections.element_manager,
+  nextpas.core.mem.allocator.base;
 
 type
   {**
@@ -52,7 +53,7 @@ type
   public
     function GetCount: SizeUInt; override;
 
-    constructor Create(aComparer: TPQCompareFunc; aCapacity: SizeUInt = PRIORITYQUEUE_DEFAULT_CAPACITY; aAllocator: IAllocator = nil); reintroduce;
+    constructor Create(aComparer: TPQCompareFunc; aCapacity: SizeUInt = PRIORITYQUEUE_DEFAULT_CAPACITY; aAllocator: TMemAllocator = nil); reintroduce;
     destructor Destroy; override;
 
     { IPriorityQueue<T> }
@@ -75,19 +76,19 @@ type
   end;
 
 { 工厂函数声明 }
-generic function MakePriorityQueue<T>(aComparer: specialize TCompareFunc<T>; aCapacity: SizeUInt = PRIORITYQUEUE_DEFAULT_CAPACITY; aAllocator: IAllocator = nil): specialize IPriorityQueue<T>;
+generic function MakePriorityQueue<T>(aComparer: specialize TCompareFunc<T>; aCapacity: SizeUInt = PRIORITYQUEUE_DEFAULT_CAPACITY; aAllocator: TMemAllocator = nil): specialize IPriorityQueue<T>;
 
 implementation
 
 { 工厂函数实现 }
-generic function MakePriorityQueue<T>(aComparer: specialize TCompareFunc<T>; aCapacity: SizeUInt; aAllocator: IAllocator): specialize IPriorityQueue<T>;
+generic function MakePriorityQueue<T>(aComparer: specialize TCompareFunc<T>; aCapacity: SizeUInt; aAllocator: TMemAllocator): specialize IPriorityQueue<T>;
 begin
   Result := specialize TPriorityQueue<T>.Create(aComparer, aCapacity, aAllocator);
 end;
 
 { TPriorityQueue<T> }
 
-constructor TPriorityQueue.Create(aComparer: TPQCompareFunc; aCapacity: SizeUInt; aAllocator: IAllocator);
+constructor TPriorityQueue.Create(aComparer: TPQCompareFunc; aCapacity: SizeUInt; aAllocator: TMemAllocator);
 begin
   inherited Create(aAllocator, nil);
   if not Assigned(aComparer) then

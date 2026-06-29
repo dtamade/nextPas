@@ -36,7 +36,7 @@ type
     property ReservationSize: SizeUInt read FReservationSize;
   end;
 
-function CreateAnonymousMemoryMapAllocator(aReservationSize: UInt64): IAllocator;
+function CreateAnonymousMemoryMapAllocator(aReservationSize: UInt64): TMemAllocator;
 
 implementation
 
@@ -330,7 +330,7 @@ begin
   Result.SupportsAligned := False;
 end;
 
-function CreateAnonymousMemoryMapAllocator(aReservationSize: UInt64): IAllocator;
+function CreateAnonymousMemoryMapAllocator(aReservationSize: UInt64): TMemAllocator;
 begin
   Result := TMemoryMapAllocator.CreateAnonymous(aReservationSize);
 end;

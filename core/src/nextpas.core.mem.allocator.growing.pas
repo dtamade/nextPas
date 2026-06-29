@@ -12,10 +12,11 @@ uses
   nextpas.core.mem.span,
   nextpas.core.mem.central,
   nextpas.core.mem.cache.thread,
-  nextpas.core.mem.shuffle;
+  nextpas.core.mem.shuffle,
+  nextpas.core.mem.allocator.base;
 
 type
-  {** Unified growing allocator implementing IAllocator.
+  {** Unified growing allocator implementing TMemAllocator.
       Routes allocations through:
         small (≤ MEM_SIZECLASS_MAX) → TLS cache → central pool → new span
         large (> MEM_SIZECLASS_MAX) → direct GetMem

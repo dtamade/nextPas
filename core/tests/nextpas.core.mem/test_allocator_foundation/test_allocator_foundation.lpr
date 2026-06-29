@@ -49,8 +49,8 @@ end;
 
 procedure TestFoundationRtlAllocatorMatchesCanonicalSingleton;
 var
-  LFoundationAllocator: IAllocator;
-  LCanonicalAllocator: nextpas.core.mem.allocator.base.IAllocator;
+  LFoundationAllocator: TMemAllocator;
+  LCanonicalAllocator: nextpas.core.mem.allocator.base.TMemAllocator;
 begin
   LFoundationAllocator := GetRtlAllocator;
   LCanonicalAllocator := nextpas.core.mem.allocator.rtl.GetRtlAllocator;
@@ -62,7 +62,7 @@ end;
 
 procedure TestFoundationCallbackAllocatorRoutesCallbacks;
 var
-  LAllocator: IAllocator;
+  LAllocator: TMemAllocator;
   LPtr: Pointer;
 begin
   ResetCallbackCounters;
@@ -89,8 +89,8 @@ end;
 { D-2a: TryGetRtlAllocator should return the same singleton as GetRtlAllocator }
 procedure TestTryGetRtlAllocator;
 var
-  LTry: IAllocator;
-  LGet: IAllocator;
+  LTry: TMemAllocator;
+  LGet: TMemAllocator;
   LOk: Boolean;
 begin
   LOk := TryGetRtlAllocator(LTry);

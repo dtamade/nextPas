@@ -17,7 +17,8 @@ uses
   nextpas.core.mem.ring_buffer,
   nextpas.core.mem.stack_pool,
   nextpas.core.platform.memory,
-  nextpas.core.platform.mmap;
+  nextpas.core.platform.mmap,
+  nextpas.core.mem.allocator.base;
 
 type
   TExceptionProc = procedure;
@@ -55,9 +56,9 @@ procedure TFailAllocator.DoFreeMem(ADst: Pointer);
 begin
 end;
 
-function NewFailAllocator: nextpas.core.mem.allocator.IAllocator;
+function NewFailAllocator: nextpas.core.mem.allocator.TMemAllocator;
 begin
-  Result := TFailAllocator.Create as nextpas.core.mem.allocator.IAllocator;
+  Result := TFailAllocator.Create as nextpas.core.mem.allocator.TMemAllocator;
 end;
 
 procedure ResetVirtualArenaHooks;

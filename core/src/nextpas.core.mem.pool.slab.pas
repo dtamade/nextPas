@@ -108,9 +108,9 @@ type
    *
    * @see TFixedSlabPool, TSlabPoolConcurrent, IMemoryPool
    *}
-  TSlabPool = class(TInterfacedObject, IMemoryPool, IAllocator)
+  TSlabPool = class(TAllocator, IMemoryPool)
   private
-    FAllocator: IAllocator;
+    FAllocator: TMemAllocator;
     FSegments: array of TFixedSlabPool;
     FActive: Integer;
     FInitialCapacity, FMinShift: SizeUInt;
@@ -169,9 +169,9 @@ type
     procedure IndexSegmentPages(aSegIdx: Integer);
   public
     {** 创建 Slab 池（默认配置）*}
-    constructor Create(ACapacity: SizeUInt; AAllocator: IAllocator = nil; aMinShift: SizeUInt = 3); overload;
+    constructor Create(ACapacity: SizeUInt; AAllocator: TMemAllocator = nil; aMinShift: SizeUInt = 3); overload;
     {** 创建 Slab 池（自定义配置）*}
-    constructor Create(ACapacity: SizeUInt; const AConfig: TSlabConfig; AAllocator: IAllocator = nil); overload;
+    constructor Create(ACapacity: SizeUInt; const AConfig: TSlabConfig; AAllocator: TMemAllocator = nil); overload;
     {** 销毁池并释放所有段和回退分配 *}
     destructor Destroy; override;
     // IPool
@@ -187,7 +187,7 @@ type
     procedure ReleaseN(const aUnits: array of Pointer; aCount: Integer);
     {** 重置池，释放所有回退分配并回收段空间 *}
     procedure Reset;
-    // IAllocator aligned allocation
+    // TMemAllocator aligned allocation
     {**
      * 分配对齐内存块
      *
@@ -197,10 +197,10 @@ type
      *
      * @return 分配成功返回指针，失败返回 nil
      *}
-    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
+    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer; override;
     {** 释放 AllocAligned 分配的内存块 *}
-    procedure FreeAligned(APtr: Pointer);
-    // IMemoryPool + IAllocator
+    procedure FreeAligned(APtr: Pointer); override;
+    // IMemoryPool + TMemAllocator
     // Compatibility helpers for older tests
     {** GetMem 的别名 *}
     function Alloc(ASize: SizeUInt): Pointer; inline;
@@ -222,7 +222,7 @@ type
     {** 判断指针是否归本池所有 *}
     function Owns(APtr: Pointer): Boolean; inline;
     {** 返回指针对应的实际分配大小，不属于本池则返回 0 *}
-    function MemSizeOf(APtr: Pointer): SizeUInt;
+    function MemSizeOf(APtr: Pointer): SizeUInt; override;
     {** 返回只读统计快照 *}
     function Stats: TSlabPoolStats;
     // 性能计数器快照（只读）
@@ -238,23 +238,23 @@ type
     property FallbackAllocCount: Integer read GetFallbackAllocCount;
 
     {** 分配指定大小的内存块，失败返回 nil *}
-    function GetMem(ASize: SizeUInt): Pointer;
+    function GetMem(ASize: SizeUInt): Pointer; override;
     {** 分配零初始化的内存块 *}
-    function AllocMem(ASize: SizeUInt): Pointer;
+    function AllocMem(ASize: SizeUInt): Pointer; override;
     {** 重新分配内存块，自动拷贝旧数据 *}
-    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
     {** 释放内存块，指针不属于本池时抛出 ESlabPoolCorruption *}
-    procedure FreeMem(ADst: Pointer);
+    procedure FreeMem(ADst: Pointer); override;
     {** 返回指针对应的分配大小（MemSizeOf 别名）*}
-    function MemSize(APtr: Pointer): SizeUInt;
+    function MemSize(APtr: Pointer): SizeUInt; override;
     // 兼容统计
     {** 累计分配次数 *}
     property TotalAllocs: SizeUInt read FTotalAllocs;
     {** 累计释放次数 *}
     property TotalFrees : SizeUInt read FTotalFrees;
-    // IAllocator capability
+    // TMemAllocator capability
     {** 返回分配器能力特征（零初始化、线程安全、对齐支持等）*}
-    function Traits: TAllocatorTraits;
+    function Traits: TAllocatorTraits; override;
 
   end;
 
@@ -263,6 +263,9 @@ function CreateDefaultSlabConfig: TSlabConfig;
 {** 创建启用了页合并的 Slab 配置 *}
 function CreateSlabConfigWithPageMerging: TSlabConfig;
 implementation
+
+uses
+  nextpas.core.mem.allocator.base;
 
 const
   HASH_MIN_CAP = 64;
@@ -901,7 +904,7 @@ begin
   end;
 end;
 
-constructor TSlabPool.Create(ACapacity: SizeUInt; AAllocator: IAllocator; aMinShift: SizeUInt);
+constructor TSlabPool.Create(ACapacity: SizeUInt; AAllocator: TMemAllocator; aMinShift: SizeUInt);
 var
   LSegment: TFixedSlabPool;
 begin
@@ -938,7 +941,7 @@ begin
   Result.SupportsAligned := True;   // AllocAligned 通过 fallback 路径实现
 end;
 
-constructor TSlabPool.Create(ACapacity: SizeUInt; const AConfig: TSlabConfig; AAllocator: IAllocator);
+constructor TSlabPool.Create(ACapacity: SizeUInt; const AConfig: TSlabConfig; AAllocator: TMemAllocator);
 begin
   // 忽略 AConfig.EnablePageMerging（兼容字段）
   // MinShift 和 MaxAllocSize 采纳

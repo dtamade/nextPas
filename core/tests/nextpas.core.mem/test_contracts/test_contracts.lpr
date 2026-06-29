@@ -191,7 +191,7 @@ end;
 
 procedure TestCallbackAllocatorCompatibilityMethods;
 var
-  LAllocator: nextpas.core.mem.allocator.IAllocator;
+  LAllocator: nextpas.core.mem.allocator.TMemAllocator;
   LPtr: Pointer;
 begin
   ResetAllocatorCounters;
@@ -226,7 +226,7 @@ end;
 
 procedure TestCallbackAllocatorSupportsCanonicalInterface;
 var
-  LAllocator: nextpas.core.mem.intf.IAllocator;
+  LAllocator: TMemAllocator;
   LPtr: Pointer;
 begin
   ResetAllocatorCounters;
@@ -234,7 +234,7 @@ begin
     @CallbackGetMem,
     @CallbackAllocMem,
     @CallbackReallocMem,
-    @CallbackFreeMem) as nextpas.core.mem.intf.IAllocator;
+    @CallbackFreeMem);
 
   LPtr := LAllocator.GetMem(24);
   Check(LPtr <> nil, 'GetMem should delegate to the compatibility allocator');
@@ -257,7 +257,7 @@ procedure ExpectNilCallbackRejected(const AName: string;
   AFreeMem: TFreeMemCallback);
 var
   LRaised: Boolean;
-  LAllocator: nextpas.core.mem.allocator.IAllocator;
+  LAllocator: nextpas.core.mem.allocator.TMemAllocator;
 begin
   LRaised := False;
   LAllocator := nil;
@@ -300,7 +300,7 @@ end;
 
 procedure TestRtlAllocatorZeroInitTraitsAndAlignedAlloc;
 var
-  LAllocator: nextpas.core.mem.allocator.IAllocator;
+  LAllocator: nextpas.core.mem.allocator.TMemAllocator;
   LTraits: nextpas.core.mem.allocator.base.TAllocatorTraits;
   LPtr: Pointer;
   I: Integer;
@@ -332,7 +332,7 @@ end;
 
 procedure TestRtlAllocatorAlignedAllocRejectsSizeOverflow;
 var
-  LAllocator: nextpas.core.mem.allocator.IAllocator;
+  LAllocator: nextpas.core.mem.allocator.TMemAllocator;
   LPtr: Pointer;
 begin
   LAllocator := GetRtlAllocator;
@@ -623,11 +623,11 @@ end;
 
 procedure TestCanonicalAllocatorSurface;
 var
-  LAllocator: nextpas.core.mem.intf.IAllocator;
+  LAllocator: TMemAllocator;
   LTraits: nextpas.core.mem.intf.TAllocatorTraits;
   LPtr: Pointer;
 begin
-  LAllocator := GetRtlAllocator as nextpas.core.mem.intf.IAllocator;
+  LAllocator := GetRtlAllocator;
   LTraits := LAllocator.Traits;
   Check(LTraits.ThreadSafe, 'canonical allocator exposes traits');
 
@@ -645,18 +645,18 @@ end;
 
 procedure TestAllocatorAliasesAreCanonical;
 var
-  LCanonical: nextpas.core.mem.intf.IAllocator;
-  LFacade: nextpas.core.mem.allocator.IAllocator;
+  LCanonical: TMemAllocator;
+  LFacade: nextpas.core.mem.allocator.TMemAllocator;
 begin
   LFacade := GetRtlAllocator;
-  LCanonical := LFacade as nextpas.core.mem.intf.IAllocator;
+  LCanonical := LFacade;
   Check(LCanonical <> nil, 'allocator facade alias should be canonical');
   Check(LCanonical = LFacade, 'facade and canonical allocator interfaces should resolve to the same interface identity');
 end;
 
 procedure TestMimallocUsableSizeCapabilityFallback;
 var
-  LAllocator: nextpas.core.mem.allocator.IAllocator;
+  LAllocator: nextpas.core.mem.allocator.TMemAllocator;
   LPtr: Pointer;
   LSize: SizeUInt;
 begin

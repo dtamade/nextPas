@@ -16,7 +16,8 @@ uses
   nextpas.core.mem.allocator,
   nextpas.core.mem.intf,
   nextpas.core.base.utils,
-  nextpas.core.mem.error;
+  nextpas.core.mem.error,
+  nextpas.core.mem.allocator.base;
 
 type
   {$IFDEF NEXTPAS_CORE_SLAB_STATS}
@@ -47,10 +48,10 @@ type
     property Used: SizeUInt read GetUsed;
   end;
 
-  TFixedSlabPool = class(TInterfacedObject, IFixedSlabPool, IMemoryPool, IAllocator)
+  TFixedSlabPool = class(TAllocator, IFixedSlabPool, IMemoryPool)
   private
     // Fields first
-    FAllocator: IAllocator;
+    FAllocator: TMemAllocator;
     FRaw: Pointer;        // 原始分配指针（释放用）
     FBase: PByte;         // 区域基址（也是 pool header 地址）
     FRegionEnd: PByte;    // 区域结束地址（传给 pool^.endp）
@@ -87,7 +88,7 @@ type
     procedure FreeActiveAlignedFallbacks;
 
   public
-    constructor Create(ACapacity: SizeUInt; AAllocator: IAllocator = nil; AMinShift: SizeUInt = 3);
+    constructor Create(ACapacity: SizeUInt; AAllocator: TMemAllocator = nil; AMinShift: SizeUInt = 3);
     destructor Destroy; override;
 
     function Acquire(out AUnit: Pointer): Boolean;
@@ -100,21 +101,21 @@ type
     function GetCapacity: SizeUInt;
     function GetUsed: SizeUInt;
 
-    function GetMem(ASize: SizeUInt): Pointer;
-    function AllocMem(ASize: SizeUInt): Pointer;
-    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
-    procedure FreeMem(ADst: Pointer);
-    function MemSize(APtr: Pointer): SizeUInt;
+    function GetMem(ASize: SizeUInt): Pointer; override;
+    function AllocMem(ASize: SizeUInt): Pointer; override;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
+    procedure FreeMem(ADst: Pointer); override;
+    function MemSize(APtr: Pointer): SizeUInt; override;
 
-    // IAllocator aligned allocation (fallback to GetMem with size class alignment)
-    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
-    procedure FreeAligned(APtr: Pointer);
+    // TMemAllocator aligned allocation (fallback to GetMem with size class alignment)
+    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer; override;
+    procedure FreeAligned(APtr: Pointer); override;
 
-    // IAllocator capability
-    function Traits: TAllocatorTraits;
+    // TMemAllocator capability
+    function Traits: TAllocatorTraits; override;
 
     // Public helper for callers needing old block size
-    function MemSizeOf(APtr: Pointer): SizeUInt;
+    function MemSizeOf(APtr: Pointer): SizeUInt; override;
 
     // Helpers for segment management
     function Owns(APtr: Pointer): Boolean;
@@ -967,7 +968,7 @@ done:
 end;
 
 { TFixedSlabPool }
-constructor TFixedSlabPool.Create(ACapacity: SizeUInt; AAllocator: IAllocator; AMinShift: SizeUInt);
+constructor TFixedSlabPool.Create(ACapacity: SizeUInt; AAllocator: TMemAllocator; AMinShift: SizeUInt);
 var
   n: SizeUInt;
   desired_pages: SizeUInt;

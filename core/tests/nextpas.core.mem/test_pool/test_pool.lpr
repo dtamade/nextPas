@@ -19,18 +19,18 @@ type
   TExceptionProc = procedure;
   TBatchObject = class
   end;
-  TFixedPoolRecordingAllocator = class(TInterfacedObject, IAllocator)
+  TFixedPoolRecordingAllocator = class(TAllocator)
   public
     GetCalls: Integer;
     FreeCalls: Integer;
-    function GetMem(ASize: SizeUInt): Pointer;
-    function AllocMem(ASize: SizeUInt): Pointer;
-    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
-    procedure FreeMem(ADst: Pointer);
-    function MemSize(APtr: Pointer): SizeUInt;
-    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
-    procedure FreeAligned(APtr: Pointer);
-    function Traits: TAllocatorTraits;
+    function GetMem(ASize: SizeUInt): Pointer; override;
+    function AllocMem(ASize: SizeUInt): Pointer; override;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
+    procedure FreeMem(ADst: Pointer); override;
+    function MemSize(APtr: Pointer): SizeUInt; override;
+    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer; override;
+    procedure FreeAligned(APtr: Pointer); override;
+    function Traits: TAllocatorTraits; override;
   end;
 
 var
@@ -354,7 +354,7 @@ procedure TestFixedPoolRejectsTotalSizeOverflowBeforeAlloc;
 var
   LPool: TFixedPool;
   LAllocator: TFixedPoolRecordingAllocator;
-  LAllocatorRef: IAllocator;
+  LAllocatorRef: TMemAllocator;
   LBlockSize: SizeUInt;
   LRaised: Boolean;
 begin
@@ -441,7 +441,7 @@ end;
 
 procedure TestMakePoolAllocatorFactory;
 var
-  LAllocator: IAllocator;
+  LAllocator: TMemAllocator;
   LPtr: Pointer;
 begin
   LAllocator := MakePoolAllocator(64, 100);

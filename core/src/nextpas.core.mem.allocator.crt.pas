@@ -11,7 +11,7 @@ uses
 type
   {**
    * TCrtAllocator
-   * @desc 使用 C 运行时库 (CRT) 内存管理器实现的 IAllocator 具体类
+   * @desc 使用 C 运行时库 (CRT) 内存管理器实现的 TMemAllocator 具体类
    *}
   TCrtAllocator = class(TAllocator)
   protected
@@ -23,8 +23,8 @@ type
     function  Traits: TAllocatorTraits; override;
   end;
 
-function GetCrtAllocator: IAllocator;
-function TryGetCrtAllocator(out A: IAllocator): Boolean;
+function GetCrtAllocator: TMemAllocator;
+function TryGetCrtAllocator(out A: TMemAllocator): Boolean;
 
 implementation
 
@@ -70,7 +70,7 @@ begin
   Result.HasMemSize      := False;
 end;
 
-function GetCrtAllocator: IAllocator;
+function GetCrtAllocator: TMemAllocator;
 begin
   if _CrtAllocatorObj = nil then
   begin
@@ -79,16 +79,16 @@ begin
       if _CrtAllocatorObj = nil then
       begin
         _CrtAllocatorObj := TCrtAllocator.Create;
-        _CrtAllocatorIntf := _CrtAllocatorObj as IAllocator; // anchor lifetime
+        _CrtAllocatorIntf := _CrtAllocatorObj; // anchor lifetime
       end;
     finally
       LeaveCriticalSection(GCrtAllocLock);
     end;
   end;
-  Result := _CrtAllocatorIntf;
+  Result := _CrtAllocatorObj;
 end;
 
-function TryGetCrtAllocator(out A: IAllocator): Boolean;
+function TryGetCrtAllocator(out A: TMemAllocator): Boolean;
 begin
   try
     A := GetCrtAllocator;

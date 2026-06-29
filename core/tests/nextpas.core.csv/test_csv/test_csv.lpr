@@ -10,23 +10,24 @@ uses
   nextpas.core.testing;
 
 var
-  T: TTestRunner;
+  T: TTestRunner,
+  nextpas.core.mem.allocator.base;
 
 type
-  TFailingReallocateAllocator = class(TInterfacedObject, IAllocator)
+  TFailingReallocateAllocator = class(TAllocator)
   private
     FFailOnReallocateCall: SizeUInt;
     FReallocateCalls: SizeUInt;
   public
     constructor Create(const AFailOnReallocateCall: SizeUInt);
-    function GetMem(ASize: SizeUInt): Pointer;
-    function AllocMem(ASize: SizeUInt): Pointer;
-    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
-    procedure FreeMem(ADst: Pointer);
-    function MemSize(APtr: Pointer): SizeUInt;
-    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
-    procedure FreeAligned(APtr: Pointer);
-    function Traits: TAllocatorTraits;
+    function GetMem(ASize: SizeUInt): Pointer; override;
+    function AllocMem(ASize: SizeUInt): Pointer; override;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
+    procedure FreeMem(ADst: Pointer); override;
+    function MemSize(APtr: Pointer): SizeUInt; override;
+    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer; override;
+    procedure FreeAligned(APtr: Pointer); override;
+    function Traits: TAllocatorTraits; override;
   end;
 
 constructor TFailingReallocateAllocator.Create(
@@ -1094,10 +1095,10 @@ var
   R: TCsvReader;
   Fields: TStringArray;
   LAllocatorObj: TFailingReallocateAllocator;
-  LAllocator: IAllocator;
+  LAllocator: TMemAllocator;
 begin
   LAllocatorObj := TFailingReallocateAllocator.Create(1);
-  LAllocator := LAllocatorObj as IAllocator;
+  LAllocator := LAllocatorObj;
   R := TCsvReader.Create('a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t',
     ',', 0, False, #0, LAllocator);
   Check(not R.ReadRow(Fields), 'oom row read fails');

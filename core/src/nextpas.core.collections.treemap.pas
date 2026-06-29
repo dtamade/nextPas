@@ -17,7 +17,8 @@ uses
   nextpas.core.collections.treemap.base,
   nextpas.core.collections.treemap.intf,
   nextpas.core.collections.element_manager,
-  nextpas.core.collections.arr;
+  nextpas.core.collections.arr,
+  nextpas.core.mem.allocator.base;
 
 type
 
@@ -44,7 +45,7 @@ type
 
   private
     FCount: SizeUInt;
-    FAllocator: IAllocator;
+    FAllocator: TMemAllocator;
     FElementManager: TElementManagerType;
     FCompareMethod: specialize TCompareFunc<K>;
 
@@ -75,7 +76,7 @@ type
     function GetPredecessor(aNode: PNode): PNode;
 
   public
-    constructor Create(const aAllocator: IAllocator; const aCompare: specialize TCompareFunc<K>);
+    constructor Create(const aAllocator: TMemAllocator; const aCompare: specialize TCompareFunc<K>);
     destructor Destroy; override;
 
     { API }
@@ -178,7 +179,7 @@ type
      *   // 自定义比较器（降序）
      *   tree := specialize TTreeMap<Integer, String>.Create(nil, @ReverseCompare);
      *}
-    constructor Create(const aAllocator: IAllocator = nil; const aCompare: TKeyCompareFunc = nil); reintroduce; overload;
+    constructor Create(const aAllocator: TMemAllocator = nil; const aCompare: TKeyCompareFunc = nil); reintroduce; overload;
 
     {**
      * Destroy
@@ -276,7 +277,7 @@ implementation
 
 { TRedBlackTree }
 
-constructor TRedBlackTree.Create(const aAllocator: IAllocator; const aCompare: specialize TCompareFunc<K>);
+constructor TRedBlackTree.Create(const aAllocator: TMemAllocator; const aCompare: specialize TCompareFunc<K>);
 begin
   inherited Create;
   FAllocator := aAllocator;
@@ -1049,7 +1050,7 @@ end;
 
 { TTreeMap }
 
-constructor TTreeMap.Create(const aAllocator: IAllocator; const aCompare: TKeyCompareFunc);
+constructor TTreeMap.Create(const aAllocator: TMemAllocator; const aCompare: TKeyCompareFunc);
 begin
   FComparer := aCompare;
   inherited Create(aAllocator, nil);

@@ -10,7 +10,8 @@ interface
 uses
   nextpas.core.mem.intf,
   nextpas.core.xml.base,
-  nextpas.core.xml.reader;
+  nextpas.core.xml.reader,
+ nextpas.core.mem.allocator.base;
 
 type
   TXmlNodeKind = (xnkElement, xnkText, xnkCData, xnkComment, xnkPI, xnkDocument);
@@ -46,19 +47,19 @@ type
     procedure ParseInput(const AInput: string);
   public
     class function None: TXmlDocument; static;
-    procedure Init(const AAllocator: IAllocator);
+    procedure Init(const AAllocator: TMemAllocator);
     procedure Done;
     procedure Free;
     class function Parse(const AInput: string): TXmlDocument; static; overload;
     class function ParseWith(const AInput: string;
-      const AAllocator: IAllocator): TXmlDocument; static;
+      const AAllocator: TMemAllocator): TXmlDocument; static;
     function IsAssigned: Boolean;
     function Kind: TXmlNodeKind;
     function Root: TXmlNode;
     function Child(AIndex: Integer): TXmlNode;
     function SelectPath(const APath: string): TXmlNodeArray;
     function ChildCount: Integer;
-    function Allocator: IAllocator;
+    function Allocator: TMemAllocator;
     property Children: TXmlNodeArray read GetChildren;
   end;
 
@@ -97,7 +98,7 @@ type
     procedure SetAttributes(ANodeIdx: UInt32;
       const AAttributes: TXmlAttributeArray);
     function AttributePtr(AIdx: UInt32): PXmlAttribute;
-    function Allocator: IAllocator;
+    function Allocator: TMemAllocator;
   end;
 
   TXmlDocumentState = class(TInterfacedObject, IXmlDocumentStateAccessor)
@@ -109,12 +110,12 @@ type
     FAttributes: PXmlAttribute;
     FAttrCount: UInt32;
     FAttrCap: UInt32;
-    FAllocator: IAllocator;
+    FAllocator: TMemAllocator;
     procedure ClearBuffers;
     procedure EnsureNodeCapacity(ANeeded: UInt32);
     procedure EnsureAttrCapacity(ANeeded: UInt32);
   public
-    constructor Create(const AAllocator: IAllocator);
+    constructor Create(const AAllocator: TMemAllocator);
     destructor Destroy; override;
     procedure Reset;
     function HasNode(AIdx: UInt32): Boolean;
@@ -126,7 +127,7 @@ type
     procedure SetAttributes(ANodeIdx: UInt32;
       const AAttributes: TXmlAttributeArray);
     function AttributePtr(AIdx: UInt32): PXmlAttribute;
-    function Allocator: IAllocator;
+    function Allocator: TMemAllocator;
   end;
 
 function NodeState(const ANode: TXmlNode): IXmlDocumentStateAccessor;
@@ -167,7 +168,7 @@ end;
 
 { TXmlDocumentState }
 
-constructor TXmlDocumentState.Create(const AAllocator: IAllocator);
+constructor TXmlDocumentState.Create(const AAllocator: TMemAllocator);
 begin
   inherited Create;
   if AAllocator = nil then
@@ -353,7 +354,7 @@ begin
   Result := @FAttributes[AIdx];
 end;
 
-function TXmlDocumentState.Allocator: IAllocator;
+function TXmlDocumentState.Allocator: TMemAllocator;
 begin
   Result := FAllocator;
 end;
@@ -580,7 +581,7 @@ begin
   Result.FState := nil;
 end;
 
-procedure TXmlDocument.Init(const AAllocator: IAllocator);
+procedure TXmlDocument.Init(const AAllocator: TMemAllocator);
 begin
   FState := TXmlDocumentState.Create(AAllocator) as IXmlDocumentStateAccessor;
 end;
@@ -605,7 +606,7 @@ begin
   Result := xnkDocument;
 end;
 
-function TXmlDocument.Allocator: IAllocator;
+function TXmlDocument.Allocator: TMemAllocator;
 var
   LState: IXmlDocumentStateAccessor;
 begin
@@ -757,7 +758,7 @@ begin
 end;
 
 class function TXmlDocument.ParseWith(const AInput: string;
-  const AAllocator: IAllocator): TXmlDocument;
+  const AAllocator: TMemAllocator): TXmlDocument;
 begin
   Result.Init(AAllocator);
   try

@@ -14,7 +14,8 @@ uses
   nextpas.core.json.types,
   nextpas.core.json.parser,
   nextpas.core.json.value,
-  nextpas.core.json.writer;
+  nextpas.core.json.writer,
+ nextpas.core.mem.allocator.base;
 
 type
   TJsonNodeKind = nextpas.core.json.types.TJsonNodeKind;
@@ -38,8 +39,8 @@ function JsonParse(const AInput: TStringView): IJsonDocument; overload;
 function TryJsonParse(const AInput: string; out ADoc: IJsonDocument): Boolean;
 
 { Parse with custom allocator (arena/pool for bulk allocation). }
-function JsonParseWith(const AInput: string; const AAllocator: IAllocator): IJsonDocument; overload;
-function JsonParseWith(const AInput: TStringView; const AAllocator: IAllocator): IJsonDocument; overload;
+function JsonParseWith(const AInput: string; const AAllocator: TMemAllocator): IJsonDocument; overload;
+function JsonParseWith(const AInput: TStringView; const AAllocator: TMemAllocator): IJsonDocument; overload;
 
 { Serialize a TJsonValue subtree to compact JSON string. }
 function JsonStringify(const AValue: TJsonValue): string;
@@ -57,8 +58,8 @@ type
     FDoc: TJsonDocument;
     FInputCopy: string;
   public
-    constructor Create(const AInput: string; const AAllocator: IAllocator);
-    constructor CreateFromView(const AInput: TStringView; const AAllocator: IAllocator);
+    constructor Create(const AInput: string; const AAllocator: TMemAllocator);
+    constructor CreateFromView(const AInput: TStringView; const AAllocator: TMemAllocator);
     destructor Destroy; override;
     function Root: TJsonValue;
     function HasError: Boolean;
@@ -68,7 +69,7 @@ type
     function StringifyPretty(const AIndent: Int32 = 2): string;
   end;
 
-constructor TJsonDocumentImpl.Create(const AInput: string; const AAllocator: IAllocator);
+constructor TJsonDocumentImpl.Create(const AInput: string; const AAllocator: TMemAllocator);
 begin
   inherited Create;
   FInputCopy := AInput;
@@ -76,7 +77,7 @@ begin
   FDoc.Parse(TStringView.FromStr(FInputCopy));
 end;
 
-constructor TJsonDocumentImpl.CreateFromView(const AInput: TStringView; const AAllocator: IAllocator);
+constructor TJsonDocumentImpl.CreateFromView(const AInput: TStringView; const AAllocator: TMemAllocator);
 begin
   inherited Create;
   SetString(FInputCopy, AInput.Data, AInput.Len);
@@ -320,12 +321,12 @@ begin
   Result := not ADoc.HasError;
 end;
 
-function JsonParseWith(const AInput: string; const AAllocator: IAllocator): IJsonDocument;
+function JsonParseWith(const AInput: string; const AAllocator: TMemAllocator): IJsonDocument;
 begin
   Result := TJsonDocumentImpl.Create(AInput, AAllocator);
 end;
 
-function JsonParseWith(const AInput: TStringView; const AAllocator: IAllocator): IJsonDocument;
+function JsonParseWith(const AInput: TStringView; const AAllocator: TMemAllocator): IJsonDocument;
 begin
   Result := TJsonDocumentImpl.CreateFromView(AInput, AAllocator);
 end;
