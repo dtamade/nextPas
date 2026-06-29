@@ -41,6 +41,9 @@ const
   GPOS_LOOKUP_MARK_TO_BASE = 4;
   {** GPOS Lookup Type：Mark-to-Mark Attachment }
   GPOS_LOOKUP_MARK_TO_MARK = 6;
+  {** GPOS/GSUB Lookup Type：Extension（32-bit offset 包装） }
+  GPOS_LOOKUP_EXTENSION = 9;
+  GSUB_LOOKUP_EXTENSION = 7;
 
   {** GSUB Lookup Type：Single Substitution }
   GSUB_LOOKUP_SINGLE = 1;

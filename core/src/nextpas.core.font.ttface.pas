@@ -773,6 +773,7 @@ var
   LLookupOff, LLookupType, LSubtableCount: Int32;
   LSubOff, LSub, LPosFmt, LCovOff, LValFmt1, LValFmt2: Int32;
   LEntrySize, LXAdvBit, LIdx, LEECount: Int32;
+  LLookupOffOrig: Int32;
   LSubtable: TFontPairPosSubtable;
   LSinglePos: TFontSinglePosSubtable;
 begin
@@ -810,16 +811,26 @@ begin
     if FDataLength < LLookupOff + 6 then
       Continue;
     LLookupType := ReadUInt16BE(LLookupOff);
+    LLookupOffOrig := LLookupOff;
+
+    // ExtensionPos (type 9): unwrap to actual lookup type + subtable offset.
+    if LLookupType = GPOS_LOOKUP_EXTENSION then
+    begin
+      if FDataLength < LLookupOff + 12 then
+        Continue;
+      LLookupType := ReadUInt16BE(LLookupOff + 6);
+      LLookupOff := LLookupOff + ReadUInt32BE(LLookupOff + 8);
+    end;
 
     // SinglePos (type 1).
     if LLookupType = GPOS_LOOKUP_SINGLE_POS then
     begin
-      LSubtableCount := ReadUInt16BE(LLookupOff + 4);
+      LSubtableCount := ReadUInt16BE(LLookupOffOrig + 4);
       for LJ := 0 to LSubtableCount - 1 do
       begin
-        if FDataLength < LLookupOff + 8 + LJ * 2 then
+        if FDataLength < LLookupOffOrig + 8 + LJ * 2 then
           Continue;
-        LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
+        LSubOff := LLookupOffOrig + ReadUInt16BE(LLookupOffOrig + 6 + LJ * 2);
         LSub := LSubOff;
         if FDataLength < LSub + 8 then
           Continue;
@@ -862,12 +873,12 @@ begin
     // PairPos (type 1 — pair-based, type 2 — class-based).
     if LLookupType = GPOS_LOOKUP_PAIR_ADJUSTMENT then
     begin
-      LSubtableCount := ReadUInt16BE(LLookupOff + 4);
+      LSubtableCount := ReadUInt16BE(LLookupOffOrig + 4);
       for LJ := 0 to LSubtableCount - 1 do
       begin
-        if FDataLength < LLookupOff + 8 + LJ * 2 then
+        if FDataLength < LLookupOffOrig + 8 + LJ * 2 then
           Continue;
-        LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
+        LSubOff := LLookupOffOrig + ReadUInt16BE(LLookupOffOrig + 6 + LJ * 2);
         LSub := LSubOff;
         if FDataLength < LSub + 10 then
           Continue;
@@ -934,12 +945,12 @@ begin
     // CursivePos (type 3): cursive attachment (entry/exit anchors).
     if LLookupType = GPOS_LOOKUP_CursivePos then
     begin
-      LSubtableCount := ReadUInt16BE(LLookupOff + 4);
+      LSubtableCount := ReadUInt16BE(LLookupOffOrig + 4);
       for LJ := 0 to LSubtableCount - 1 do
       begin
-        if FDataLength < LLookupOff + 8 + LJ * 2 then
+        if FDataLength < LLookupOffOrig + 8 + LJ * 2 then
           Continue;
-        LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
+        LSubOff := LLookupOffOrig + ReadUInt16BE(LLookupOffOrig + 6 + LJ * 2);
         if FDataLength < LSubOff + 6 then
           Continue;
         LSub := LSubOff;
@@ -958,12 +969,12 @@ begin
     // MarkBasePos (type 4).
     if LLookupType = GPOS_LOOKUP_MARK_TO_BASE then
     begin
-      LSubtableCount := ReadUInt16BE(LLookupOff + 4);
+      LSubtableCount := ReadUInt16BE(LLookupOffOrig + 4);
       for LJ := 0 to LSubtableCount - 1 do
       begin
-        if FDataLength < LLookupOff + 8 + LJ * 2 then
+        if FDataLength < LLookupOffOrig + 8 + LJ * 2 then
           Continue;
-        LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
+        LSubOff := LLookupOffOrig + ReadUInt16BE(LLookupOffOrig + 6 + LJ * 2);
         if FDataLength < LSubOff + 12 then
           Continue;
         LSub := LSubOff;
@@ -983,12 +994,12 @@ begin
     // MarkMarkPos (type 6).
     if LLookupType = GPOS_LOOKUP_MARK_TO_MARK then
     begin
-      LSubtableCount := ReadUInt16BE(LLookupOff + 4);
+      LSubtableCount := ReadUInt16BE(LLookupOffOrig + 4);
       for LJ := 0 to LSubtableCount - 1 do
       begin
-        if FDataLength < LLookupOff + 8 + LJ * 2 then
+        if FDataLength < LLookupOffOrig + 8 + LJ * 2 then
           Continue;
-        LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
+        LSubOff := LLookupOffOrig + ReadUInt16BE(LLookupOffOrig + 6 + LJ * 2);
         if FDataLength < LSubOff + 12 then
           Continue;
         LSub := LSubOff;
@@ -1013,6 +1024,7 @@ var
   LLookupListOff, LLookupCount, LI, LJ: Int32;
   LLookupOff, LLookupType, LSubtableCount: Int32;
   LSubOff, LSub, LSubFmt, LCovOff, LLSCount, LIdx: Int32;
+  LLookupOffOrig: Int32;
   LSubtable: TFontLigatureSubtable;
   LSingleSubst: TFontSingleSubstSubtable;
 begin
@@ -1044,16 +1056,26 @@ begin
     if FDataLength < LLookupOff + 6 then
       Continue;
     LLookupType := ReadUInt16BE(LLookupOff);
+    LLookupOffOrig := LLookupOff;
+
+    // ExtensionSubst (type 7): unwrap to actual lookup type + subtable offset.
+    if LLookupType = GSUB_LOOKUP_EXTENSION then
+    begin
+      if FDataLength < LLookupOff + 12 then
+        Continue;
+      LLookupType := ReadUInt16BE(LLookupOff + 6);
+      LLookupOff := LLookupOff + ReadUInt32BE(LLookupOff + 8);
+    end;
 
     // Single Substitution (type 1).
     if LLookupType = GSUB_LOOKUP_SINGLE then
     begin
-      LSubtableCount := ReadUInt16BE(LLookupOff + 4);
+      LSubtableCount := ReadUInt16BE(LLookupOffOrig + 4);
       for LJ := 0 to LSubtableCount - 1 do
       begin
-        if FDataLength < LLookupOff + 8 + LJ * 2 then
+        if FDataLength < LLookupOffOrig + 8 + LJ * 2 then
           Continue;
-        LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
+        LSubOff := LLookupOffOrig + ReadUInt16BE(LLookupOffOrig + 6 + LJ * 2);
         LSub := LSubOff;
         if FDataLength < LSub + 6 then
           Continue;
@@ -1095,12 +1117,12 @@ begin
     // Multiple Substitution (type 2): one-to-many.
     if LLookupType = GSUB_LOOKUP_MULTIPLE then
     begin
-      LSubtableCount := ReadUInt16BE(LLookupOff + 4);
+      LSubtableCount := ReadUInt16BE(LLookupOffOrig + 4);
       for LJ := 0 to LSubtableCount - 1 do
       begin
-        if FDataLength < LLookupOff + 8 + LJ * 2 then
+        if FDataLength < LLookupOffOrig + 8 + LJ * 2 then
           Continue;
-        LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
+        LSubOff := LLookupOffOrig + ReadUInt16BE(LLookupOffOrig + 6 + LJ * 2);
         LSub := LSubOff;
         if FDataLength < LSub + 6 then
           Continue;
@@ -1121,12 +1143,12 @@ begin
     // Alternate Substitution (type 3): one-from-many.
     if LLookupType = GSUB_LOOKUP_ALTERNATE then
     begin
-      LSubtableCount := ReadUInt16BE(LLookupOff + 4);
+      LSubtableCount := ReadUInt16BE(LLookupOffOrig + 4);
       for LJ := 0 to LSubtableCount - 1 do
       begin
-        if FDataLength < LLookupOff + 8 + LJ * 2 then
+        if FDataLength < LLookupOffOrig + 8 + LJ * 2 then
           Continue;
-        LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
+        LSubOff := LLookupOffOrig + ReadUInt16BE(LLookupOffOrig + 6 + LJ * 2);
         LSub := LSubOff;
         if FDataLength < LSub + 6 then
           Continue;
@@ -1147,12 +1169,12 @@ begin
     // Ligature Substitution (type 4).
     if LLookupType = GSUB_LOOKUP_LIGATURE then
     begin
-      LSubtableCount := ReadUInt16BE(LLookupOff + 4);
+      LSubtableCount := ReadUInt16BE(LLookupOffOrig + 4);
       for LJ := 0 to LSubtableCount - 1 do
       begin
-        if FDataLength < LLookupOff + 8 + LJ * 2 then
+        if FDataLength < LLookupOffOrig + 8 + LJ * 2 then
           Continue;
-        LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
+        LSubOff := LLookupOffOrig + ReadUInt16BE(LLookupOffOrig + 6 + LJ * 2);
         LSub := LSubOff;
         if FDataLength < LSub + 6 then
           Continue;
