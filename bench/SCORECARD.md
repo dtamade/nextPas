@@ -8,10 +8,10 @@
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **25** | 0 | 18 | **58%** |
-| **Rust** | 15 | 0 | 25 | **38%** |
+| **Go** | **28** | 0 | 18 | **61%** |
+| **Rust** | 15 | 0 | 29 | **34%** |
 
-## Track Summary (11 tracks, 43 operations)
+## Track Summary (12 tracks, 47 operations)
 
 ### Text Operations (6 ops)
 
@@ -107,6 +107,17 @@
 
 ## Key Findings
 
+### String Formatting (4 ops)
+
+| Track | Pascal | Go | vs Go |
+|-------|--------|-----|-------|
+| **Format/Int/100k** | **8.32ms** | 18.6ms | **2.24x** ✓ |
+| **Format/Str/100k** | **5.09ms** | 12.4ms | **2.44x** ✓ |
+| Format/Multi/100k | 63.6ms | 63.9ms | 1.00x |
+| **Format/Hex/100k** | **5.18ms** | 23.8ms | **4.59x** ✓ |
+
+**3W vs Go, 0W vs Rust**
+
 ### Bit Set Operations (5 ops)
 
 | Track | Pascal | Go | vs Go |
@@ -147,6 +158,8 @@
 5. **Builder/IntAppend: 4.95x** — Direct digit writing vs Go's allocation per int
 6. **Builder/Large: 3.77x** — Mixed formatting, Go's strconv overhead
 7. **LowerCase: 2.12x** — Go's strings.ToLower Unicode overhead for ASCII
+8. **Format/Hex: 4.59x** — IntToHex + concat vs Go's fmt.Sprintf format parsing
+9. **Format/Int: 2.24x** — IntToStr + concat vs Go's fmt.Sprintf reflect overhead
 3. **Builder/Large: 3.77x** — Mixed formatting, Go's strconv overhead
 4. **JSON/Parse: 2.88x** — SAX parser vs Go's reflect-heavy encoding/json
 5. **StrReplace: 1.75x** — FPC string replacement vs Go's reflect-heavy ReplaceAll
