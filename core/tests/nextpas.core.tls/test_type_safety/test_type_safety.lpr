@@ -1,19 +1,12 @@
 program test_type_safety;
 
-{$mode objfpc}{$H+}{$J-}
-
-{**
- * Phase 2.4 - Type Safety Test Suite
- *
- * Tests for:
- * - Enumeration types
- * - Unit types (TKeySize, TTimeoutDuration, TBufferSize)
- * - Generic types (TSecureData<T>, TResult<T,E>)
- *}
+{$I nextpas.core.settings.inc}
+{$J-}
 
 uses
   SysUtils,
-  nextpas.core.tls.safety;
+  nextpas.core.tls.safety,
+  nextpas.core.test;
 
 type
   TIntSecureData = specialize TSecureData<Integer>;
@@ -22,507 +15,165 @@ type
   TBytesStringResult = specialize TResult<TBytes, string>;
 
 var
-  GTestsPassed: Integer = 0;
-  GTestsFailed: Integer = 0;
-
-procedure Assert(ACondition: Boolean; const AMessage: string);
+  LRunner: TTestRunner;
+  LSuite: TTestSuite;
 begin
-  if ACondition then
+  LSuite := TTestSuite.Create('tls.type_safety');
+
+  LSuite.Test('SSLVersion enum', procedure begin
+    CheckEqual('TLS 1.2', SSLVersionToString(sslv_TLS12));
+    CheckEqual('TLS 1.3', SSLVersionToString(sslv_TLS13));
+    CheckTrue(StringToSSLVersion('TLS 1.2') = sslv_TLS12);
+    CheckTrue(StringToSSLVersion('TLS1.3') = sslv_TLS13);
+    CheckTrue(StringToSSLVersion('tlsv13') = sslv_TLS13);
+  end);
+
+  LSuite.Test('KeyType enum', procedure begin
+    CheckEqual('RSA', KeyTypeToString(kt_RSA));
+    CheckEqual('EC', KeyTypeToString(kt_EC));
+    CheckEqual('Ed25519', KeyTypeToString(kt_Ed25519));
+  end);
+
+  LSuite.Test('CertificateFormat enum', procedure begin
+    CheckEqual('PEM', CertificateFormatToString(cf_PEM));
+    CheckEqual('DER', CertificateFormatToString(cf_DER));
+    CheckEqual('PKCS12', CertificateFormatToString(cf_PKCS12));
+  end);
+
+  LSuite.Test('TKeySize unit type', procedure
+  var LS1, LS2, LS3: TKeySize; LErr: Boolean;
   begin
-    Inc(GTestsPassed);
-    WriteLn('  ✓ ', AMessage);
-  end
-  else
+    LS1 := TKeySize.Bits(256);
+    CheckTrue(LS1.ToBits = 256); CheckTrue(LS1.ToBytes = 32);
+    LS2 := TKeySize.Bytes(32);
+    CheckTrue(LS2.ToBits = 256); CheckTrue(LS2.ToBytes = 32);
+    CheckTrue(LS1.IsEqual(LS2));
+    LS3 := TKeySize.Bits(128);
+    CheckTrue(LS3.Compare(LS1) < 0); CheckTrue(LS1.Compare(LS3) > 0);
+    CheckTrue(LS1.IsValid);
+    LErr := False; try LS1 := TKeySize.Bits(127); except LErr := True; end;
+    CheckTrue(LErr);
+    LErr := False; try LS1 := TKeySize.Bytes(-1); except LErr := True; end;
+    CheckTrue(LErr);
+  end);
+
+  LSuite.Test('TTimeoutDuration unit type', procedure
+  var LT1, LT2, LT3: TTimeoutDuration;
   begin
-    Inc(GTestsFailed);
-    WriteLn('  ✗ FAILED: ', AMessage);
-  end;
-end;
-
-{**
- * Test 1: SSLVersion Enum Conversions
- *}
-procedure TestSSLVersionEnum;
-var
-  LVersion: TSSLVersion;
-  LStr: string;
-begin
-  WriteLn;
-  WriteLn('=== Test 1: TSSLVersion Enumeration ===');
-
-  // Test enum to string
-  LStr := SSLVersionToString(sslv_TLS12);
-  Assert(LStr = 'TLS 1.2', 'TLS 1.2 should convert to string correctly');
-
-  LStr := SSLVersionToString(sslv_TLS13);
-  Assert(LStr = 'TLS 1.3', 'TLS 1.3 should convert to string correctly');
-
-  // Test string to enum
-  LVersion := StringToSSLVersion('TLS 1.2');
-  Assert(LVersion = sslv_TLS12, 'String "TLS 1.2" should parse correctly');
-
-  LVersion := StringToSSLVersion('TLS1.3');
-  Assert(LVersion = sslv_TLS13, 'String "TLS1.3" should parse correctly');
-
-  LVersion := StringToSSLVersion('tlsv13');
-  Assert(LVersion = sslv_TLS13, 'String "tlsv13" should parse correctly (case insensitive)');
-end;
-
-{**
- * Test 2: KeyType Enum Conversions
- *}
-procedure TestKeyTypeEnum;
-var
-  LStr: string;
-begin
-  WriteLn;
-  WriteLn('=== Test 2: TKeyType Enumeration ===');
-
-  LStr := KeyTypeToString(kt_RSA);
-  Assert(LStr = 'RSA', 'RSA should convert correctly');
-
-  LStr := KeyTypeToString(kt_EC);
-  Assert(LStr = 'EC', 'EC should convert correctly');
-
-  LStr := KeyTypeToString(kt_Ed25519);
-  Assert(LStr = 'Ed25519', 'Ed25519 should convert correctly');
-end;
-
-{**
- * Test 3: CertificateFormat Enum Conversions
- *}
-procedure TestCertificateFormatEnum;
-var
-  LStr: string;
-begin
-  WriteLn;
-  WriteLn('=== Test 3: TCertificateFormat Enumeration ===');
-
-  LStr := CertificateFormatToString(cf_PEM);
-  Assert(LStr = 'PEM', 'PEM should convert correctly');
-
-  LStr := CertificateFormatToString(cf_DER);
-  Assert(LStr = 'DER', 'DER should convert correctly');
-
-  LStr := CertificateFormatToString(cf_PKCS12);
-  Assert(LStr = 'PKCS12', 'PKCS12 should convert correctly');
-end;
-
-{**
- * Test 4: TKeySize Unit Type Safety
- *}
-procedure TestKeySizeUnitType;
-var
-  LSize1, LSize2, LSize3: TKeySize;
-  LErrorRaised: Boolean;
-begin
-  WriteLn;
-  WriteLn('=== Test 4: TKeySize Unit Type Safety ===');
-
-  // Test bits constructor
-  LSize1 := TKeySize.Bits(256);
-  Assert(LSize1.ToBits = 256, 'Bits constructor should store bits correctly');
-  Assert(LSize1.ToBytes = 32, 'Bits(256) should equal 32 bytes');
-
-  // Test bytes constructor
-  LSize2 := TKeySize.Bytes(32);
-  Assert(LSize2.ToBits = 256, 'Bytes(32) should equal 256 bits');
-  Assert(LSize2.ToBytes = 32, 'Bytes constructor should store bytes correctly');
-
-  // Test equality
-  Assert(LSize1.IsEqual(LSize2), '256 bits should equal 32 bytes');
-
-  // Test comparison
-  LSize3 := TKeySize.Bits(128);
-  Assert(LSize3.Compare(LSize1) < 0, '128 bits should be less than 256 bits');
-  Assert(LSize1.Compare(LSize3) > 0, '256 bits should be greater than 128 bits');
-  Assert(LSize1.Compare(LSize2) = 0, 'Equal sizes should compare as 0');
-
-  // Test validation
-  Assert(LSize1.IsValid, 'Valid key size should pass validation');
-
-  // Test error: non-multiple of 8
-  LErrorRaised := False;
-  try
-    LSize1 := TKeySize.Bits(127);
-  except
-    on E: Exception do
-      LErrorRaised := True;
-  end;
-  Assert(LErrorRaised, 'Non-multiple of 8 bits should raise error');
-
-  // Test error: negative size
-  LErrorRaised := False;
-  try
-    LSize1 := TKeySize.Bytes(-1);
-  except
-    on E: Exception do
-      LErrorRaised := True;
-  end;
-  Assert(LErrorRaised, 'Negative size should raise error');
-end;
-
-{**
- * Test 5: TTimeoutDuration Unit Type Safety
- *}
-procedure TestTimeoutDurationUnitType;
-var
-  LTimeout1, LTimeout2, LTimeout3: TTimeoutDuration;
-begin
-  WriteLn;
-  WriteLn('=== Test 5: TTimeoutDuration Unit Type Safety ===');
-
-  // Test milliseconds constructor
-  LTimeout1 := TTimeoutDuration.Milliseconds(5000);
-  Assert(LTimeout1.ToMilliseconds = 5000, 'Milliseconds should store correctly');
-  Assert(Abs(LTimeout1.ToSeconds - 5.0) < 0.001, '5000ms should equal 5 seconds');
-
-  // Test seconds constructor
-  LTimeout2 := TTimeoutDuration.Seconds(5);
-  Assert(LTimeout2.ToMilliseconds = 5000, 'Seconds should convert to milliseconds');
-  Assert(LTimeout1.IsEqual(LTimeout2), '5000ms should equal 5 seconds');
-
-  // Test minutes constructor
-  LTimeout3 := TTimeoutDuration.Minutes(2);
-  Assert(LTimeout3.ToMilliseconds = 120000, 'Minutes should convert correctly');
-  Assert(Abs(LTimeout3.ToSeconds - 120.0) < 0.001, '2 minutes should equal 120 seconds');
-
-  // Test infinite
-  LTimeout1 := TTimeoutDuration.Infinite;
-  Assert(LTimeout1.IsInfinite, 'Infinite timeout should be recognized');
-
-  // Test comparison
-  LTimeout1 := TTimeoutDuration.Seconds(10);
-  LTimeout2 := TTimeoutDuration.Seconds(5);
-  Assert(LTimeout1.Compare(LTimeout2) > 0, '10s should be greater than 5s');
-  Assert(LTimeout2.Compare(LTimeout1) < 0, '5s should be less than 10s');
-end;
-
-{**
- * Test 6: TBufferSize Unit Type Safety
- *}
-procedure TestBufferSizeUnitType;
-var
-  LSize1, LSize2, LSize3: TBufferSize;
-begin
-  WriteLn;
-  WriteLn('=== Test 6: TBufferSize Unit Type Safety ===');
-
-  // Test bytes constructor
-  LSize1 := TBufferSize.Bytes(2048);
-  Assert(LSize1.ToBytes = 2048, 'Bytes should store correctly');
-  Assert(LSize1.ToKB = 2, '2048 bytes should equal 2 KB');
-
-  // Test KB constructor
-  LSize2 := TBufferSize.KB(2);
-  Assert(LSize2.ToBytes = 2048, 'KB should convert to bytes');
-  Assert(LSize1.IsEqual(LSize2), '2048 bytes should equal 2 KB');
-
-  // Test MB constructor
-  LSize3 := TBufferSize.MB(1);
-  Assert(LSize3.ToBytes = 1048576, 'MB should convert to bytes');
-  Assert(LSize3.ToKB = 1024, '1 MB should equal 1024 KB');
-  Assert(LSize3.ToMB = 1, 'MB should round-trip correctly');
-
-  // Test comparison
-  Assert(LSize3.Compare(LSize1) > 0, '1 MB should be greater than 2 KB');
-  Assert(LSize1.Compare(LSize3) < 0, '2 KB should be less than 1 MB');
-end;
-
-{**
- * Test 7: TSecureData<T> - Some/None Pattern
- *}
-procedure TestSecureDataSomeNone;
-var
-  LData: TIntSecureData;
-  LValue: Integer;
-begin
-  WriteLn;
-  WriteLn('=== Test 7: TSecureData<T> Some/None Pattern ===');
-
-  // Test Some
-  LData := TIntSecureData.Some(42);
-  Assert(LData.IsValid, 'Some should be valid');
-  Assert(LData.IsSome, 'Some should return true for IsSome');
-  Assert(not LData.IsNone, 'Some should return false for IsNone');
-
-  LValue := LData.Unwrap;
-  Assert(LValue = 42, 'Unwrap should return stored value');
-
-  // Test None
-  LData := TIntSecureData.None('Test error');
-  Assert(not LData.IsValid, 'None should not be valid');
-  Assert(LData.IsNone, 'None should return true for IsNone');
-  Assert(not LData.IsSome, 'None should return false for IsSome');
-  Assert(LData.ErrorMessage = 'Test error', 'Error message should be stored');
-end;
-
-{**
- * Test 8: TSecureData<T> - UnwrapOr Default Value
- *}
-procedure TestSecureDataUnwrapOr;
-var
-  LData: TIntSecureData;
-  LValue: Integer;
-begin
-  WriteLn;
-  WriteLn('=== Test 8: TSecureData<T> UnwrapOr ===');
-
-  // Test Some with UnwrapOr
-  LData := TIntSecureData.Some(42);
-  LValue := LData.UnwrapOr(100);
-  Assert(LValue = 42, 'UnwrapOr should return actual value for Some');
-
-  // Test None with UnwrapOr
-  LData := TIntSecureData.None;
-  LValue := LData.UnwrapOr(100);
-  Assert(LValue = 100, 'UnwrapOr should return default value for None');
-end;
-
-{**
- * Test 9: TSecureData<T> - Unwrap Error Handling
- *}
-procedure TestSecureDataUnwrapError;
-var
-  LData: TIntSecureData;
-  LValue: Integer;
-  LErrorRaised: Boolean;
-begin
-  WriteLn;
-  WriteLn('=== Test 9: TSecureData<T> Unwrap Error ===');
-
-  // Test Unwrap on None should raise error
-  LData := TIntSecureData.None('No value');
-  LErrorRaised := False;
-  try
-    LValue := LData.Unwrap;
-  except
-    on E: Exception do
-      LErrorRaised := True;
-  end;
-  Assert(LErrorRaised, 'Unwrap on None should raise exception');
-end;
-
-{**
- * Test 10: TResult<T,E> - Ok/Err Pattern
- *}
-procedure TestResultOkErr;
-var
-  LResult: TIntStringResult;
-  LValue: Integer;
-  LError: string;
-begin
-  WriteLn;
-  WriteLn('=== Test 10: TResult<T,E> Ok/Err Pattern ===');
-
-  // Test Ok
-  LResult := TIntStringResult.Ok(42);
-  Assert(LResult.IsOk, 'Ok should return true for IsOk');
-  Assert(not LResult.IsErr, 'Ok should return false for IsErr');
-
-  LValue := LResult.Unwrap;
-  Assert(LValue = 42, 'Unwrap should return Ok value');
-
-  // Test Err
-  LResult := TIntStringResult.Err('Operation failed');
-  Assert(LResult.IsErr, 'Err should return true for IsErr');
-  Assert(not LResult.IsOk, 'Err should return false for IsOk');
-
-  LError := LResult.UnwrapErr;
-  Assert(LError = 'Operation failed', 'UnwrapErr should return error value');
-end;
-
-{**
- * Test 11: TResult<T,E> - UnwrapOr Default Value
- *}
-procedure TestResultUnwrapOr;
-var
-  LResult: TIntStringResult;
-  LValue: Integer;
-begin
-  WriteLn;
-  WriteLn('=== Test 11: TResult<T,E> UnwrapOr ===');
-
-  // Test Ok with UnwrapOr
-  LResult := TIntStringResult.Ok(42);
-  LValue := LResult.UnwrapOr(100);
-  Assert(LValue = 42, 'UnwrapOr should return actual value for Ok');
-
-  // Test Err with UnwrapOr
-  LResult := TIntStringResult.Err('Error');
-  LValue := LResult.UnwrapOr(100);
-  Assert(LValue = 100, 'UnwrapOr should return default value for Err');
-end;
-
-{**
- * Test 12: TResult<T,E> - Unwrap/UnwrapErr Error Handling
- *}
-procedure TestResultUnwrapErrors;
-var
-  LResult: TIntStringResult;
-  LValue: Integer;
-  LError: string;
-  LErrorRaised: Boolean;
-begin
-  WriteLn;
-  WriteLn('=== Test 12: TResult<T,E> Unwrap Errors ===');
-
-  // Test Unwrap on Err should raise error
-  LResult := TIntStringResult.Err('Failed');
-  LErrorRaised := False;
-  try
-    LValue := LResult.Unwrap;
-  except
-    on E: Exception do
-      LErrorRaised := True;
-  end;
-  Assert(LErrorRaised, 'Unwrap on Err should raise exception');
-
-  // Test UnwrapErr on Ok should raise error
-  LResult := TIntStringResult.Ok(42);
-  LErrorRaised := False;
-  try
-    LError := LResult.UnwrapErr;
-  except
-    on E: Exception do
-      LErrorRaised := True;
-  end;
-  Assert(LErrorRaised, 'UnwrapErr on Ok should raise exception');
-end;
-
-{**
- * Test 13: EllipticCurve NID Mappings
- *}
-procedure TestEllipticCurveNID;
-var
-  LNID: Integer;
-  LStr: string;
-begin
-  WriteLn;
-  WriteLn('=== Test 13: TEllipticCurve NID Mappings ===');
-
-  // Test NID conversions
-  LNID := EllipticCurveToNID(ec_P256);
-  Assert(LNID = 415, 'P-256 should map to NID 415');
-
-  LNID := EllipticCurveToNID(ec_P384);
-  Assert(LNID = 715, 'P-384 should map to NID 715');
-
-  LNID := EllipticCurveToNID(ec_X25519);
-  Assert(LNID = 1034, 'X25519 should map to NID 1034');
-
-  // Test string conversions
-  LStr := EllipticCurveToString(ec_P256);
-  Assert(LStr = 'P-256', 'P-256 should convert to string correctly');
-
-  LStr := EllipticCurveToString(ec_BrainpoolP384);
-  Assert(LStr = 'Brainpool P-384', 'BrainpoolP384 should convert correctly');
-end;
-
-{**
- * Test 14: CipherMode Enum Conversions
- *}
-procedure TestCipherModeEnum;
-var
-  LStr: string;
-begin
-  WriteLn;
-  WriteLn('=== Test 14: TCipherMode Enumeration ===');
-
-  LStr := CipherModeToString(cm_GCM);
-  Assert(LStr = 'GCM', 'GCM should convert correctly');
-
-  LStr := CipherModeToString(cm_CBC);
-  Assert(LStr = 'CBC', 'CBC should convert correctly');
-
-  LStr := CipherModeToString(cm_CTR);
-  Assert(LStr = 'CTR', 'CTR should convert correctly');
-end;
-
-{**
- * Test 15: Practical Use Case - TSecureData<string>
- *}
-procedure TestSecureDataStringPractical;
-var
-  LData: TStringSecureData;
-  LValue: string;
-begin
-  WriteLn;
-  WriteLn('=== Test 15: TSecureData<string> Practical Use ===');
-
-  // Simulate optional configuration value
-  LData := TStringSecureData.Some('localhost');
-  Assert(LData.IsSome, 'Config value should be Some');
-  LValue := LData.UnwrapOr('default.server.com');
-  Assert(LValue = 'localhost', 'Should use configured value');
-
-  // Simulate missing configuration
-  LData := TStringSecureData.None('Config not found');
-  Assert(LData.IsNone, 'Missing config should be None');
-  LValue := LData.UnwrapOr('default.server.com');
-  Assert(LValue = 'default.server.com', 'Should use default value');
-end;
-
-procedure PrintSummary;
-begin
-  WriteLn;
-  WriteLn('═══════════════════════════════════════════════════════════');
-  WriteLn('  Phase 2.4: Type Safety Test Suite');
-  WriteLn('═══════════════════════════════════════════════════════════');
-  WriteLn;
-  WriteLn('Test Summary:');
-  WriteLn('  Tests Passed: ', GTestsPassed);
-  WriteLn('  Tests Failed: ', GTestsFailed);
-  WriteLn('  Total Tests:  ', GTestsPassed + GTestsFailed);
-  WriteLn;
-
-  if GTestsFailed = 0 then
+    LT1 := TTimeoutDuration.Milliseconds(5000);
+    CheckTrue(LT1.ToMilliseconds = 5000);
+    CheckTrue(Abs(LT1.ToSeconds - 5.0) < 0.001);
+    LT2 := TTimeoutDuration.Seconds(5);
+    CheckTrue(LT2.ToMilliseconds = 5000); CheckTrue(LT1.IsEqual(LT2));
+    LT3 := TTimeoutDuration.Minutes(2);
+    CheckTrue(LT3.ToMilliseconds = 120000);
+    CheckTrue(Abs(LT3.ToSeconds - 120.0) < 0.001);
+    LT1 := TTimeoutDuration.Infinite;
+    CheckTrue(LT1.IsInfinite);
+    LT1 := TTimeoutDuration.Seconds(10); LT2 := TTimeoutDuration.Seconds(5);
+    CheckTrue(LT1.Compare(LT2) > 0); CheckTrue(LT2.Compare(LT1) < 0);
+  end);
+
+  LSuite.Test('TBufferSize unit type', procedure
+  var LS1, LS2, LS3: TBufferSize;
   begin
-    WriteLn('  ✓ ALL TESTS PASSED!');
-    WriteLn;
-  end
-  else
+    LS1 := TBufferSize.Bytes(2048);
+    CheckTrue(LS1.ToBytes = 2048); CheckTrue(LS1.ToKB = 2);
+    LS2 := TBufferSize.KB(2);
+    CheckTrue(LS2.ToBytes = 2048); CheckTrue(LS1.IsEqual(LS2));
+    LS3 := TBufferSize.MB(1);
+    CheckTrue(LS3.ToBytes = 1048576); CheckTrue(LS3.ToKB = 1024);
+    CheckTrue(LS3.ToMB = 1);
+    CheckTrue(LS3.Compare(LS1) > 0); CheckTrue(LS1.Compare(LS3) < 0);
+  end);
+
+  LSuite.Test('TSecureData<T> Some/None', procedure
+  var LD: TIntSecureData;
   begin
-    WriteLn('  ✗ SOME TESTS FAILED!');
-    WriteLn;
-    Halt(1);
-  end;
-end;
+    LD := TIntSecureData.Some(42);
+    CheckTrue(LD.IsValid); CheckTrue(LD.IsSome); CheckTrue(not LD.IsNone);
+    CheckTrue(LD.Unwrap = 42);
+    LD := TIntSecureData.None('Test error');
+    CheckTrue(not LD.IsValid); CheckTrue(LD.IsNone); CheckTrue(not LD.IsSome);
+    CheckEqual('Test error', LD.ErrorMessage);
+  end);
 
-begin
-  try
-    WriteLn('═══════════════════════════════════════════════════════════');
-    WriteLn('  Phase 2.4: Type Safety Tests');
-    WriteLn('═══════════════════════════════════════════════════════════');
+  LSuite.Test('TSecureData<T> UnwrapOr', procedure
+  var LD: TIntSecureData;
+  begin
+    LD := TIntSecureData.Some(42);
+    CheckTrue(LD.UnwrapOr(100) = 42);
+    LD := TIntSecureData.None;
+    CheckTrue(LD.UnwrapOr(100) = 100);
+  end);
 
-    TestSSLVersionEnum;
-    TestKeyTypeEnum;
-    TestCertificateFormatEnum;
-    TestKeySizeUnitType;
-    TestTimeoutDurationUnitType;
-    TestBufferSizeUnitType;
-    TestSecureDataSomeNone;
-    TestSecureDataUnwrapOr;
-    TestSecureDataUnwrapError;
-    TestResultOkErr;
-    TestResultUnwrapOr;
-    TestResultUnwrapErrors;
-    TestEllipticCurveNID;
-    TestCipherModeEnum;
-    TestSecureDataStringPractical;
+  LSuite.Test('TSecureData<T> Unwrap error', procedure
+  var LD: TIntSecureData; LErr: Boolean;
+  begin
+    LD := TIntSecureData.None('No value');
+    LErr := False; try LD.Unwrap; except LErr := True; end;
+    CheckTrue(LErr);
+  end);
 
-    PrintSummary;
+  LSuite.Test('TResult<T,E> Ok/Err', procedure
+  var LR: TIntStringResult;
+  begin
+    LR := TIntStringResult.Ok(42);
+    CheckTrue(LR.IsOk); CheckTrue(not LR.IsErr);
+    CheckTrue(LR.Unwrap = 42);
+    LR := TIntStringResult.Err('Operation failed');
+    CheckTrue(LR.IsErr); CheckTrue(not LR.IsOk);
+    CheckEqual('Operation failed', LR.UnwrapErr);
+  end);
 
-    WriteLn('✓ Phase 2.4 Type safety implementation complete!');
-    WriteLn('✓ All enumeration, unit, and generic types working correctly!');
-    WriteLn;
+  LSuite.Test('TResult<T,E> UnwrapOr', procedure
+  var LR: TIntStringResult;
+  begin
+    LR := TIntStringResult.Ok(42);
+    CheckTrue(LR.UnwrapOr(100) = 42);
+    LR := TIntStringResult.Err('Error');
+    CheckTrue(LR.UnwrapOr(100) = 100);
+  end);
 
-  except
-    on E: Exception do
-    begin
-      WriteLn;
-      WriteLn('✗ Unexpected error: ', E.Message);
-      Halt(1);
-    end;
-  end;
+  LSuite.Test('TResult<T,E> Unwrap errors', procedure
+  var LR: TIntStringResult; LErr: Boolean;
+  begin
+    LR := TIntStringResult.Err('Failed');
+    LErr := False; try LR.Unwrap; except LErr := True; end;
+    CheckTrue(LErr);
+    LR := TIntStringResult.Ok(42);
+    LErr := False; try LR.UnwrapErr; except LErr := True; end;
+    CheckTrue(LErr);
+  end);
+
+  LSuite.Test('EllipticCurve NID', procedure begin
+    CheckTrue(EllipticCurveToNID(ec_P256) = 415);
+    CheckTrue(EllipticCurveToNID(ec_P384) = 715);
+    CheckTrue(EllipticCurveToNID(ec_X25519) = 1034);
+    CheckEqual('P-256', EllipticCurveToString(ec_P256));
+    CheckEqual('Brainpool P-384', EllipticCurveToString(ec_BrainpoolP384));
+  end);
+
+  LSuite.Test('CipherMode enum', procedure begin
+    CheckEqual('GCM', CipherModeToString(cm_GCM));
+    CheckEqual('CBC', CipherModeToString(cm_CBC));
+    CheckEqual('CTR', CipherModeToString(cm_CTR));
+  end);
+
+  LSuite.Test('TSecureData<string> practical', procedure
+  var LD: TStringSecureData;
+  begin
+    LD := TStringSecureData.Some('localhost');
+    CheckTrue(LD.IsSome);
+    CheckEqual('localhost', LD.UnwrapOr('default.server.com'));
+    LD := TStringSecureData.None('Config not found');
+    CheckTrue(LD.IsNone);
+    CheckEqual('default.server.com', LD.UnwrapOr('default.server.com'));
+  end);
+
+  LRunner := TTestRunner.Create('nextpas.core.tls.type_safety');
+  LRunner.Add(LSuite);
+  LRunner.RunAll;
+  LRunner.Summary;
+  if not LRunner.AllPassed then Halt(1);
 end.
