@@ -8,33 +8,34 @@
 - **编译选项**: -O2 (优化编译)
 - **测试时间**: 2026-06-29
 
-## GrowingAllocator 基准 (2026-06-29, inline 优化后)
+## GrowingAllocator 基准 (2026-06-29, inline + MixedBatch)
 
 ### 单线程
 
 | 模式 | ns/op | Mops/s | 备注 |
 |------|-------|--------|------|
-| small_64B | **16** | **63.1** | **3.5x 快于 glibc** |
-| medium_1KB | **21** | **48.0** | **4.5x 快于 glibc** |
-| large_16KB | **31** | **32.1** | 直接 push 快速路径 |
-| huge_128KB | **94** | **10.6** | huge 快速路径 |
-| mixed_8sizes | **271** | **3.7** | 8 种 size 混合 |
-| mixed_small | **145** | **6.9** | 6 种小 size 混合 |
-| batch_64x128B | **810** | **1.2** | 64 次循环分配 |
-| **batch_api_64x128B** | **479** | **2.1** | **BatchGetMem API, 7.5ns/块** |
-| realloc_same_class | **40** | **24.7** | **同 class 零拷贝** |
-| realloc_diff_class | **103** | **9.7** | 不同 class alloc+copy+free |
-| arena/bump_64B | 7 | 135.0 | Arena bump pointer |
-| system/small_64B | 56 | 17.8 | glibc 对照 |
-| system/medium_1KB | 105 | 9.6 | glibc 对照 |
+| small_64B | **16** | **63** | **3.5x 快于 glibc** |
+| medium_1KB | **16** | **62** | **5.7x 快于 glibc** |
+| large_16KB | **22** | **46** | 直接 push 快速路径 |
+| huge_128KB | **92** | **11** | huge 快速路径 |
+| mixed_8sizes | **276** | **3.6** | 8 种 size 混合 |
+| mixed_small | **143** | **7.0** | 6 种小 size 循环 |
+| **mixed_batch_api** | **63** | **16.0** | **MixedBatch API, 5.3ns/op** |
+| batch_64x128B | **546** | **1.8** | 64 次循环分配 (inline 后) |
+| **batch_api_64x128B** | **443** | **2.3** | **BatchGetMem API, 6.9ns/块** |
+| realloc_same_class | **27** | **36.3** | **同 class 零拷贝** |
+| realloc_diff_class | **102** | **9.8** | 不同 class alloc+copy+free |
+| arena/bump_64B | 7 | 129 | Arena bump pointer |
+| system/small_64B | 56 | 17.9 | glibc 对照 |
+| system/medium_1KB | 94 | 10.7 | glibc 对照 |
 
 ### 并发 (4 线程, 每 alloc+free)
 
 | 模式 | ns/op | Mops/s | total_ops | 备注 |
 |------|-------|--------|-----------|------|
-| concurrent/4T_64B | **4** | **227** | 2,560,000 | TLS 零争用, inline 热路径 |
-| concurrent/4T_1KB | **4** | **267** | 2,560,000 | TLS 零争用, inline 热路径 |
-| concurrent/4T_mixed | **9** | **111** | 2,560,000 | 6 种 size, 4 线程 |
+| concurrent/4T_64B | **3** | **329** | 2,560,000 | TLS 零争用 + inline |
+| concurrent/4T_1KB | **4** | **282** | 2,560,000 | TLS 零争用 + inline |
+| concurrent/4T_mixed | **8** | **122** | 2,560,000 | 6 种 size, 4 线程 |
 
 **并发分析**:
 - **4 线程 64B 吞吐量 227 Mops/s** — TLS cache + inline 热路径，吞吐量接近线性扩展

@@ -50,16 +50,22 @@ type
         More efficient than N individual GetMem calls: amortizes TLS/refill overhead.
         Returns count actually allocated (may < ACount on OOM). }
     function BatchGetMem(ASize: SizeUInt; ACount: Word;
-      ABlocks: PPointer): Word;
+      ABlocks: PPointer): Word; inline;
 
     {** Batch free ACount blocks of ASize bytes each. }
     procedure BatchFreeMem(ASize: SizeUInt; ACount: Word;
-      ABlocks: PPointer);
+      ABlocks: PPointer); inline;
+
+    {** Mixed-size batch: allocates then frees N blocks cycling through ASizes[].
+        Pre-computes class indices once for maximum throughput.
+        ASizes points to an array of SizeUInt values. }
+    procedure MixedBatch(ASizes: Pointer; ACount: Integer;
+      ABlocks: PPointer); inline;
 
     {** Resize a block. If the new size fits in the same size class,
         returns the same pointer (zero-copy). Otherwise allocates new,
         copies data, and frees the old block. }
-    function ReallocMem(APtr: Pointer; AOldSize, ANewSize: SizeUInt): Pointer;
+    function ReallocMem(APtr: Pointer; AOldSize, ANewSize: SizeUInt): Pointer; inline;
 
     {** Force a scavenge pass across all central pools.
         Releases long-idle fully-free spans to OS. }
@@ -297,7 +303,7 @@ begin
 end;
 
 function TGrowingAllocator.BatchGetMem(ASize: SizeUInt; ACount: Word;
-  ABlocks: PPointer): Word;
+  ABlocks: PPointer): Word; inline;
 var
   LIndex: Int32;
   LNode: PFreeNode;
@@ -352,7 +358,7 @@ begin
 end;
 
 procedure TGrowingAllocator.BatchFreeMem(ASize: SizeUInt; ACount: Word;
-  ABlocks: PPointer);
+  ABlocks: PPointer); inline;
 var
   LIndex: Int32;
   LNode: PFreeNode;
@@ -393,8 +399,97 @@ begin
   end;
 end;
 
+procedure TGrowingAllocator.MixedBatch(ASizes: Pointer; ACount: Integer;
+  ABlocks: PPointer); inline;
+const
+  MAX_MIXED = 8;
+type
+  TSizeUIntArray = array[0..MAX_MIXED - 1] of SizeUInt;
+  PSizeUIntArray = ^TSizeUIntArray;
+var
+  LSizes: TSizeUIntArray;
+  LClasses: array[0..MAX_MIXED - 1] of Int32;
+  LBase: PPointer;
+  LSizesPtr: PSizeUIntArray;
+  LCount, I: Integer;
+  LSize: SizeUInt;
+  LClass: Int32;
+  LNode: PFreeNode;
+begin
+  LCount := ACount;
+  if LCount > MAX_MIXED then
+    LCount := MAX_MIXED;
+  LBase := ABlocks;
+  LSizesPtr := PSizeUIntArray(ASizes);
+  { Pre-compute class indices once. }
+  for I := 0 to LCount - 1 do
+  begin
+    LSizes[I] := LSizesPtr^[I];
+    LSize := LSizes[I];
+    if LSize <= MEM_SIZECLASS_MAX then
+    begin
+      if LSize <= 256 then
+        LClasses[I] := Int32((LSize + 15) shr 4) - 1
+      else if LSize <= 1024 then
+        LClasses[I] := Int32(LSize shr 6) + 14
+      else
+        LClasses[I] := SizeClassIndex(LSize);
+    end
+    else
+      LClasses[I] := -1;
+  end;
+  { Allocate all blocks, store to LBase[0..LCount-1]. }
+  for I := 0 to LCount - 1 do
+  begin
+    if LClasses[I] < 0 then
+    begin
+      System.GetMem(LBase[I], LSizes[I]);
+      Continue;
+    end;
+    LClass := LClasses[I];
+    LNode := GThreadCache.FHeads[LClass];
+    if LNode <> nil then
+    begin
+      GThreadCache.FHeads[LClass] := LNode^.FNext;
+      Dec(GThreadCache.FCounts[LClass]);
+      LBase[I] := Pointer(LNode);
+    end
+    else
+    begin
+      ThreadCacheRefill(GThreadCache, LClass, @RefillFromCentral);
+      LNode := GThreadCache.FHeads[LClass];
+      if LNode <> nil then
+      begin
+        GThreadCache.FHeads[LClass] := LNode^.FNext;
+        Dec(GThreadCache.FCounts[LClass]);
+        LBase[I] := Pointer(LNode);
+      end
+      else
+        LBase[I] := nil;
+    end;
+  end;
+  { Free all blocks. }
+  for I := 0 to LCount - 1 do
+  begin
+    if LBase[I] = nil then
+      Continue;
+    if LClasses[I] < 0 then
+    begin
+      System.FreeMem(LBase[I]);
+      Continue;
+    end;
+    LClass := LClasses[I];
+    if GThreadCache.FCounts[LClass] >= CACHE_ADAPTIVE_MAX_SMALL then
+      ThreadCacheFlush(GThreadCache, LClass, @FlushToCentral);
+    LNode := PFreeNode(LBase[I]);
+    LNode^.FNext := GThreadCache.FHeads[LClass];
+    GThreadCache.FHeads[LClass] := LNode;
+    Inc(GThreadCache.FCounts[LClass]);
+  end;
+end;
+
 function TGrowingAllocator.ReallocMem(APtr: Pointer;
-  AOldSize, ANewSize: SizeUInt): Pointer;
+  AOldSize, ANewSize: SizeUInt): Pointer; inline;
 begin
   if APtr = nil then
     Exit(GetMem(ANewSize));

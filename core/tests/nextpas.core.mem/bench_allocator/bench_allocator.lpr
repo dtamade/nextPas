@@ -103,6 +103,20 @@ begin
     GAlloc.FreeMem(LPtrs[I], LSizes[I]);
 end;
 
+{ Pattern 5c: MixedBatch API — pre-computed class indices.
+  Direct TLS cache access, no per-element SizeClassIndex. }
+procedure BenchMixedBatchAPI(const ACtx: IBenchContext);
+var
+  LSizes: array[0..5] of SizeUInt;
+  LPtrs: array[0..5] of Pointer;
+begin
+  LSizes[0] := 16;  LSizes[1] := 64;  LSizes[2] := 256;
+  LSizes[3] := 512; LSizes[4] := 1024; LSizes[5] := 4096;
+  GAlloc.MixedBatch(@LSizes, 6, @LPtrs);
+  if ACtx <> nil then
+    ACtx.SetBytes(16 + 64 + 256 + 512 + 1024 + 4096);
+end;
+
 { Pattern 6: Batch alloc then batch free (mimalloc sh6bench style).
   Allocates N blocks, then frees them all. }
 const
@@ -335,6 +349,7 @@ begin
     LSuite.Add('growing/huge_128KB', @BenchHuge128K);
     LSuite.Add('growing/mixed_8sizes', @BenchMixed);
     LSuite.Add('growing/mixed_small', @BenchMixedSmall);
+    LSuite.Add('growing/mixed_batch_api', @BenchMixedBatchAPI);
     LSuite.Add('growing/batch_64x128B', @BenchBatch64);
     LSuite.Add('growing/batch_api_64x128B', @BenchBatchAPI64);
     LSuite.Add('growing/realloc_same_class', @BenchReallocSameClass);
