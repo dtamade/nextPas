@@ -206,6 +206,7 @@
 ### Categories
 - **Bit set operations**: Pascal dominant (5W vs Go) — `set of Byte` is killer
 - **FillChar/Fill**: Pascal dominant (3W vs Go) — `rep stosb` vs Go byte loop
+- **File I/O Write**: Pascal dominant (3W vs Go) — direct syscall vs Go's bufio
 - **String operations**: Pascal dominant (7W vs Go)
 - **Memory/pointer**: Pascal strong (5W vs Go)
 - **Numeric loops**: Go/Rust win (auto-vectorization)
@@ -215,10 +216,11 @@
 
 ## Conclusion
 
-Pascal beats Go 58% of the time across 56 benchmarks. The biggest wins come from
+Pascal beats Go 60% of the time across 62 benchmarks. The biggest wins come from
 FillChar operations (compiles to `rep stosb`, 11-23x faster than Go's byte loop),
 string operations (immutable strings are Go's Achilles heel), bit set operations
-(`set of Byte` compiles to native instructions), and number formatting
-(direct digit writing). Losses come from auto-vectorization gaps, Go's optimized
-hash map, and branchless codegen for binary search. Against Rust, Pascal wins 32% —
+(`set of Byte` compiles to native instructions), number formatting
+(direct digit writing), and file I/O writes (direct syscall vs Go's bufio).
+Losses come from auto-vectorization gaps, Go's optimized hash map,
+and branchless codegen for binary search. Against Rust, Pascal wins 30% —
 Rust's zero-cost abstractions and LLVM codegen make it consistently fast.
