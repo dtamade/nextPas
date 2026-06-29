@@ -41,16 +41,18 @@ type
     AfterEach       : TTestProc;
     AfterEachClosure : TTestClosure;
     EachCleanups     : specialize TArray<TTestClosure>;  { LIFO cleanup after each test }
-    { Heap-allocated stubs from DiscoverTests — disposed by CleanupTableAllocations.
+    { Heap-allocated stubs from DiscoverTests — disposed by CleanupTableAllocations
+      (FCleanupDone guard) or in finalization safety net.
       Stores GStubRegistry indices for O(1) cleanup (R4-10).
       Raw pointers because discovery.pas uses PMethodStub which runner.pas cannot see. }
     StubAllocations: specialize TArray<Integer>;
     { R6-05: GFixtureRegistry indices for fixtures registered by DiscoverTests.
-      Freed by CleanupTableAllocations when suite runs, or by finalization if not. }
+      Freed by CleanupTableAllocations (FCleanupDone guard) or finalization. }
     FixtureAllocations: specialize TArray<Integer>;
     { Cached run results — set by Run/RunParallel }
     LastRunPassed: Boolean;
     HasRun       : Boolean;
+    FCleanupDone : Boolean;  { prevents double-free on --count=N re-runs }
     LastPass     : Integer;
     LastFail     : Integer;
     LastSkip     : Integer;
@@ -135,7 +137,8 @@ type
     function  RunBenchmarks(out AResults: TBenchResults): Boolean;
     procedure Summary;
     function  AllPassed: Boolean;
-    { Free heap-allocated table test pointers (TableCase, TableProc) }
+    { Dispose table test data, stubs, and fixtures. FCleanupDone guard
+      prevents double-free on --count=N re-runs. }
     procedure CleanupTableAllocations;
     { Shared helpers for RunWithResult/RunParallelWithResult (R4-03) }
     function  RunSetup(const AConfig: TTestConfig; out ASkipCount: Integer;
@@ -196,8 +199,8 @@ uses
   nextpas.core.test.runner.parallel;
 
 { Global registry of all heap-allocated method stubs from DiscoverTests.
-  Stubs are disposed here in finalization as a safety net for suites that
-  are created but never run (and thus never call CleanupTableAllocations).
+  Stubs are disposed by CleanupTableAllocations (with FCleanupDone guard)
+  or in finalization as safety net for suites that are never run.
   R6-08: NOT thread-safe — all access must be from the main thread only. }
 var
   GStubRegistry: specialize TArray<Pointer>;
@@ -734,6 +737,7 @@ begin
   Result.FixtureAllocations := nil;
   Result.LastRunPassed := False;
   Result.HasRun        := False;
+  Result.FCleanupDone  := False;
   Result.LastPass      := 0;
   Result.LastFail      := 0;
   Result.LastSkip      := 0;
@@ -1295,7 +1299,6 @@ begin
     LastFail      := 1;
     LastSkip      := LSkip;
     Result         := False;
-    CleanupTableAllocations;
     LOutSink.WriteLn(
       AnsiDim('  ' + IntToStr(LSkip) + ' skipped (setup failure)', LConfig));
     Exit;
@@ -1787,10 +1790,13 @@ end;
 
 procedure TTestSuite.FinalizeResults(const AConfig: TTestConfig;
   var AResult: TTestRunResult; APass, AFail, ASkip: Integer);
+{ Sets result counters, populates slow test report, writes summary line.
+  Does NOT call CleanupTableAllocations — stubs/fixtures must survive the
+  full suite lifetime (--count=N re-runs need valid closure pointers).
+  The caller (RunAll* or finalization) is responsible for cleanup. }
 var
   LSlowCount: Integer;
 begin
-  CleanupTableAllocations;
   AResult.Passed    := APass;
   AResult.Failed    := AFail;
   AResult.Skipped   := ASkip;
@@ -1873,7 +1879,6 @@ begin
     LastFail      := 1;
     LastSkip      := LSkip;
     Result         := False;
-    CleanupTableAllocations;
     LOutSink.WriteLn(
       AnsiDim('  ' + IntToStr(LSkip) + ' skipped (setup failure)', LConfig));
     Exit;
@@ -2139,13 +2144,15 @@ begin
 end;
 
 procedure TTestSuite.CleanupTableAllocations;
-  { Note: Must be called from the main thread only. Accesses GStubRegistry
-    and GFixtureRegistry which are not thread-safe. Current usage is safe:
-    called from FinalizeResults which runs on the main thread after all
-    parallel worker threads have joined. }
+  { Disposes heap-allocated table test data, stubs, and fixtures.
+    FCleanupDone guard prevents double-free on --count=N re-runs where
+    CleanupTableAllocations is called once after the final iteration.
+    Must be called from the main thread only. }
 var
   I: Integer;
 begin
+  if FCleanupDone then Exit;
+  FCleanupDone := True;
   for I := 0 to High(Tests) do
   begin
     if Tests[I].Kind = ekTableTest then
@@ -2341,6 +2348,11 @@ begin
         FormatDuration(GetTickCount64 - LStartMs), LConfig));
   end;
 
+  { Cleanup after all iterations: stubs/fixtures/table data must survive
+    --count=N re-runs. FinalizeResults no longer calls this. }
+  for I := 0 to High(Suites) do
+    Suites[I].CleanupTableAllocations;
+
   HasRun := True;
   Result := LAllPassed;
   { JSON output — emit machine-readable report to stdout }
@@ -2457,6 +2469,11 @@ begin
         FormatDuration(GetTickCount64 - LStartMs), LConfig));
   end;
 
+  { Cleanup after all iterations: stubs/fixtures/table data must survive
+    --count=N re-runs. FinalizeResults no longer calls this. }
+  for I := 0 to High(Suites) do
+    Suites[I].CleanupTableAllocations;
+
   HasRun := True;
   Result := LAllPassed;
   { JSON output — emit machine-readable report to stdout }
@@ -2514,7 +2531,10 @@ end;
 
 finalization
   { Safety net: dispose any method stubs and fixture objects that were not
-    cleaned up by CleanupTableAllocations (e.g. suites created but never run). }
+    cleaned up by CleanupTableAllocations (e.g. suites created but never run).
+    For suites that ran, CleanupTableAllocations already freed these and
+    set the GStubRegistry/GFixtureRegistry entries to nil — the nil check
+    prevents double-free here. }
   for GStubCleanupI := 0 to High(GStubRegistry) do
   begin
     if GStubRegistry[GStubCleanupI] <> nil then
