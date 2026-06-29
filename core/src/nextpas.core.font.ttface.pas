@@ -88,8 +88,13 @@ type
     FCff2GlobalSubrCount: Int32;
     FCff2FontDictCount: Int32;
     FCff2FontDicts: TCff2FontDictArray;
+    FCff2FDSelectFmt: Int32;              // FDSelect format (0 or 3)
+    FCff2FDSelectData: Int32;             // FDSelect 数据偏移（绝对）
+    FCff2FDSelectGlyphCount: Int32;       // FDSelect 覆盖的字形数
     FFvar: TFontFvarTable;
     FFvarValid: Boolean;
+    FAvar: TAvarTable;
+    FAvarValid: Boolean;
     FValid: Boolean;
     FLastError: string;
     procedure ParseHeader;
@@ -108,6 +113,7 @@ type
     procedure ParseCff2;
     procedure ParseFvar;
     procedure ParsePost;
+    procedure ParseAvar;
     procedure ParseName;
     function GlyphOutlineCff(AGlyphIndex: UInt32): TFontGlyphOutline;
     function ParseFeatureLookups(ATableOffset: Int32;
@@ -321,6 +327,19 @@ type
     function FvarInstanceCount: Int32;
     {** 获取指定索引的命名实例 }
     function GetFvarInstance(AIndex: Int32): TFontNamedInstance;
+    {** avar 表是否有效 }
+    function HasAvar: Boolean;
+    {** 通过 avar 将用户空间坐标映射到归一化坐标。
+        若无 avar 表则使用默认线性归一化。 }
+    function NormalizeAxisValue(AAxisIndex: Int32;
+      AUserValue: Single): Single;
+    {** 获取 CFF2 字形的 FD 索引（用于多 FD 字体）。
+        仅单 FD 字体返回 0。 }
+    function GetCff2GlyphFD(AGlyphIndex: UInt32): Int32;
+    {** 获取指定 FD 索引的 Font DICT }
+    function GetCff2FontDict(AFDIndex: Int32): TCff2FontDict;
+    {** CFF2 Font DICT 数量 }
+    function Cff2FontDictCount: Int32;
   end;
 
 implementation
@@ -365,7 +384,12 @@ begin
   FPostValid := False;
   FCff2Valid := False;
   FCff2HasVarStore := False;
+  FCff2FontDictCount := 0;
+  FCff2FDSelectFmt := -1;
+  FCff2FDSelectData := 0;
+  FCff2FDSelectGlyphCount := 0;
   FFvarValid := False;
+  FAvarValid := False;
   FLastError := '';
 
   if not FsExists(AFilePath) then
@@ -431,6 +455,10 @@ begin
       ParsePost;
     except
     end;
+    try
+      ParseAvar;
+    except
+    end;
     FValid := True;
   except
     on E: Exception do
@@ -452,6 +480,14 @@ begin
   FHasFmt12 := False;
   FHasFmt14 := False;
   FPostValid := False;
+  FCff2Valid := False;
+  FCff2HasVarStore := False;
+  FCff2FontDictCount := 0;
+  FCff2FDSelectFmt := -1;
+  FCff2FDSelectData := 0;
+  FCff2FDSelectGlyphCount := 0;
+  FFvarValid := False;
+  FAvarValid := False;
   FLastError := '';
 
   LLen := Length(AData);
@@ -504,6 +540,10 @@ begin
     end;
     try
       ParsePost;
+    except
+    end;
+    try
+      ParseAvar;
     except
     end;
     FValid := True;
@@ -3979,12 +4019,11 @@ begin
       Exit;
 
     FFvar.Axes[I].Tag := ReadUInt32BE(LBase);
-    FFvar.Axes[I].NameID := ReadUInt16BE(LBase + 4);
-    // bytes 6-7: flags (reserved, ignored)
-    // min/def/max: Fixed 16.16 格式
-    FFvar.Axes[I].MinValue := ReadUInt32BE(LBase + 8) / 65536.0;
-    FFvar.Axes[I].DefaultValue := ReadUInt32BE(LBase + 12) / 65536.0;
-    FFvar.Axes[I].MaxValue := ReadUInt32BE(LBase + 16) / 65536.0;
+    // OpenType spec: tag(4) + min(4) + def(4) + max(4) + flags(2) + nameID(2)
+    FFvar.Axes[I].MinValue := ReadUInt32BE(LBase + 4) / 65536.0;
+    FFvar.Axes[I].DefaultValue := ReadUInt32BE(LBase + 8) / 65536.0;
+    FFvar.Axes[I].MaxValue := ReadUInt32BE(LBase + 12) / 65536.0;
+    FFvar.Axes[I].NameID := ReadUInt16BE(LBase + 18);
   end;
 
   // 解析命名实例
@@ -3998,8 +4037,8 @@ begin
     if J + LInstSize > FDataLength then
       Exit;
 
-    FFvar.Instances[I].Flags := ReadUInt16BE(J);
-    FFvar.Instances[I].NameID := ReadUInt16BE(J + 2);
+    FFvar.Instances[I].NameID := ReadUInt16BE(J);
+    FFvar.Instances[I].Flags := ReadUInt16BE(J + 2);
     SetLength(FFvar.Instances[I].Coordinates, LAxisCount);
     // 读取每个轴的坐标（Fixed 16.16）
     // 注意：axisCount > instanceSize 中的坐标数量时可能有 subfamilyNameID 等扩展字段
@@ -4020,6 +4059,54 @@ begin
   end;
 
   FFvarValid := True;
+end;
+
+procedure TTFontFace.ParseAvar;
+var
+  LIdx, LOff, LAxisCount, I, K: Int32;
+  LPairCount, LBase: Int32;
+begin
+  LIdx := FindTable(TABLE_TAG_AVAR);
+  if LIdx < 0 then
+    Exit;
+  LOff := Int32(FTables[LIdx].Offset);
+
+  if LOff + 8 > FDataLength then
+    Exit;
+
+  // avar header: majorVersion(2), minorVersion(2), reserved(2), axisCount(2)
+  if ReadUInt16BE(LOff) <> 1 then
+    Exit;
+
+  LAxisCount := ReadUInt16BE(LOff + 6);
+  if (LAxisCount < 1) or (LAxisCount > 16) then
+    Exit;
+
+  FAvar.AxisCount := LAxisCount;
+  SetLength(FAvar.Segments, LAxisCount);
+
+  LBase := LOff + 8;  // 跳过 header
+  for I := 0 to LAxisCount - 1 do
+  begin
+    if LBase + 2 > FDataLength then
+      Exit;
+    LPairCount := ReadUInt16BE(LBase);
+    Inc(LBase, 2);
+
+    FAvar.Segments[I].PairCount := LPairCount;
+    SetLength(FAvar.Segments[I].Pairs, LPairCount);
+
+    for K := 0 to LPairCount - 1 do
+    begin
+      if LBase + 4 > FDataLength then
+        Exit;
+      FAvar.Segments[I].Pairs[K].FromCoord := ReadUInt16BE(LBase);
+      FAvar.Segments[I].Pairs[K].ToCoord := ReadUInt16BE(LBase + 2);
+      Inc(LBase, 4);
+    end;
+  end;
+
+  FAvarValid := True;
 end;
 
 function TTFontFace.HasFvar: Boolean;
@@ -4072,6 +4159,129 @@ begin
     Result := FFvar.Instances[AIndex];
 end;
 
+function TTFontFace.HasAvar: Boolean;
+begin
+  Result := FAvarValid;
+end;
+
+function TTFontFace.NormalizeAxisValue(AAxisIndex: Int32;
+  AUserValue: Single): Single;
+var
+  LAxis: TFontVariationAxis;
+  LDefaultNorm: Single;
+  LSegPairs: TAvarAxisValueMapArray;
+  LPairCount, K: Int32;
+  LFrom0, LFrom1, LTo0, LTo1: Single;
+begin
+  if not FFvarValid or (AAxisIndex < 0) or (AAxisIndex >= FFvar.AxisCount) then
+  begin
+    Result := 0;
+    Exit;
+  end;
+
+  LAxis := FFvar.Axes[AAxisIndex];
+
+  // 默认线性归一化：用户空间 → [-1, 0, +1]
+  if AUserValue < LAxis.DefaultValue then
+    LDefaultNorm := -(LAxis.DefaultValue - AUserValue) / (LAxis.DefaultValue - LAxis.MinValue)
+  else if AUserValue > LAxis.DefaultValue then
+    LDefaultNorm := (AUserValue - LAxis.DefaultValue) / (LAxis.MaxValue - LAxis.DefaultValue)
+  else
+    LDefaultNorm := 0;
+
+  // 若无 avar 或轴越界，返回默认归一化
+  if not FAvarValid or (AAxisIndex >= FAvar.AxisCount) then
+  begin
+    Result := LDefaultNorm;
+    Exit;
+  end;
+
+  // avar 分段线性映射：F2Dot14 值 → Single
+  LSegPairs := FAvar.Segments[AAxisIndex].Pairs;
+  LPairCount := FAvar.Segments[AAxisIndex].PairCount;
+  if LPairCount < 2 then
+  begin
+    Result := LDefaultNorm;
+    Exit;
+  end;
+
+  // 找到 LDefaultNorm 所在的 [from0, from1] 段
+  for K := 0 to LPairCount - 2 do
+  begin
+    LFrom0 := LSegPairs[K].FromCoord / 16384.0;
+    LFrom1 := LSegPairs[K + 1].FromCoord / 16384.0;
+    if (LDefaultNorm >= LFrom0) and (LDefaultNorm <= LFrom1) then
+    begin
+      LTo0 := LSegPairs[K].ToCoord / 16384.0;
+      LTo1 := LSegPairs[K + 1].ToCoord / 16384.0;
+      if LFrom1 = LFrom0 then
+        Result := LTo0
+      else
+        Result := LTo0 + (LDefaultNorm - LFrom0) * (LTo1 - LTo0) / (LFrom1 - LFrom0);
+      Exit;
+    end;
+  end;
+
+  // 超出映射范围，返回默认
+  Result := LDefaultNorm;
+end;
+
+function TTFontFace.GetCff2GlyphFD(AGlyphIndex: UInt32): Int32;
+var
+  LPos, LRangeCount, K, LFirst: Int32;
+begin
+  if FCff2FontDictCount <= 1 then
+  begin
+    Result := 0;
+    Exit;
+  end;
+
+  if FCff2FDSelectFmt = 0 then
+  begin
+    // Format 0: 直接查表
+    LPos := FCff2FDSelectData + 1 + Int32(AGlyphIndex);
+    if (LPos >= 0) and (LPos < FDataLength) then
+      Result := FData[LPos]
+    else
+      Result := 0;
+  end
+  else if FCff2FDSelectFmt = 3 then
+  begin
+    // Format 3: nRanges(2) + ranges(first:2, fd:1) + sentinel(2)
+    LPos := FCff2FDSelectData + 1;
+    if LPos + 2 > FDataLength then begin Result := 0; Exit; end;
+    LRangeCount := ReadUInt16BE(LPos);
+    Inc(LPos, 2);
+    Result := 0;
+    for K := 0 to LRangeCount - 1 do
+    begin
+      if LPos + 3 > FDataLength then Break;
+      LFirst := ReadUInt16BE(LPos);
+      if (K = LRangeCount - 1) or (Int32(AGlyphIndex) < ReadUInt16BE(LPos + 3)) then
+      begin
+        if Int32(AGlyphIndex) >= LFirst then
+          Result := FData[LPos + 2];
+        Break;
+      end;
+      Inc(LPos, 3);
+    end;
+  end
+  else
+    Result := 0;
+end;
+
+function TTFontFace.GetCff2FontDict(AFDIndex: Int32): TCff2FontDict;
+begin
+  FillChar(Result, SizeOf(Result), 0);
+  if (AFDIndex >= 0) and (AFDIndex < FCff2FontDictCount) then
+    Result := FCff2FontDicts[AFDIndex];
+end;
+
+function TTFontFace.Cff2FontDictCount: Int32;
+begin
+  Result := FCff2FontDictCount;
+end;
+
 { ========================================================================= }
 { CFF2 (Compact Font Format 2) 解析                                          }
 { ========================================================================= }
@@ -4089,6 +4299,12 @@ var
   LIVSOff, LIVSFormat, LRegionListOff, LDataCount: Int32;
   LDataOff, LAxisCount, LRegionCount: Int32;
   LRegionBase, LAxisBase, I, J: Int32;
+  { FDArray }
+  LFDArrayParseOff, LFDArrayOffSize, LFDArrayDataStart: Int32;
+  LFDItemOff, LFDItemEnd, LFDItemLen, LFDItemPos, LFDItemEndPos: Int32;
+  LFDOp, LFDVal0, LFDVal1: Int32;
+  { FDSelect }
+  LFDSPos: Int32;
 
   function ReadCff2Int(APos, ASize: Int32): Int32;
   var
@@ -4290,7 +4506,114 @@ begin
   // ---- 解析 FDArray (Font DICT Array) ----
   if LFDArrayOff > 0 then
   begin
-    // TODO: FDArray 解析（多 FD 字体需要）
+    LFDArrayParseOff := LCff2Off + LFDArrayOff;
+    // FDArray 是 CFF INDEX 格式
+    if LFDArrayParseOff + 3 <= FDataLength then
+    begin
+      FCff2FontDictCount := ReadUInt16BE(LFDArrayParseOff);
+      LFDArrayOffSize := ReadUInt8(LFDArrayParseOff + 2);
+      if (FCff2FontDictCount > 0) and (LFDArrayOffSize in [1..4]) then
+      begin
+        SetLength(FCff2FontDicts, FCff2FontDictCount);
+        LFDArrayDataStart := LFDArrayParseOff + 3 + (FCff2FontDictCount + 1) * LFDArrayOffSize;
+        for I := 0 to FCff2FontDictCount - 1 do
+        begin
+          // 读取第 I 项的偏移和长度
+          LFDItemOff := 0;
+          for J := 0 to LFDArrayOffSize - 1 do
+            LFDItemOff := (LFDItemOff shl 8) or ReadUInt8(LFDArrayParseOff + 3 + I * LFDArrayOffSize + J);
+          LFDItemEnd := 0;
+          for J := 0 to LFDArrayOffSize - 1 do
+            LFDItemEnd := (LFDItemEnd shl 8) or ReadUInt8(LFDArrayParseOff + 3 + (I + 1) * LFDArrayOffSize + J);
+          LFDItemLen := LFDItemEnd - LFDItemOff;
+
+          FCff2FontDicts[I].PrivateDictSize := 0;
+          FCff2FontDicts[I].PrivateDictOff := 0;
+          FCff2FontDicts[I].SubrsOff := 0;
+
+          // 解析 Font DICT（只有 operator 18 = Private）
+          LFDItemPos := LFDArrayDataStart + LFDItemOff;
+          LFDItemEndPos := LFDItemPos + LFDItemLen;
+          if LFDItemEndPos > FDataLength then
+            Continue;
+          LFDVal0 := 0;
+          LFDVal1 := 0;
+          while LFDItemPos < LFDItemEndPos do
+          begin
+            LFDOp := ReadUInt8(LFDItemPos);
+            Inc(LFDItemPos);
+            if LFDOp = 29 then
+            begin
+              if LFDItemPos + 4 > FDataLength then Break;
+              LFDVal1 := LFDVal0;
+              LFDVal0 := ReadCff2Int(LFDItemPos, 4);
+              Inc(LFDItemPos, 4);
+            end
+            else if LFDOp = 28 then
+            begin
+              if LFDItemPos + 2 > FDataLength then Break;
+              LFDVal1 := LFDVal0;
+              LFDVal0 := Int16(ReadUInt16BE(LFDItemPos));
+              Inc(LFDItemPos, 2);
+            end
+            else if (LFDOp >= 32) and (LFDOp <= 246) then
+            begin
+              LFDVal1 := LFDVal0;
+              LFDVal0 := LFDOp - 139;
+            end
+            else if (LFDOp >= 247) and (LFDOp <= 250) then
+            begin
+              if LFDItemPos + 1 > FDataLength then Break;
+              LFDVal1 := LFDVal0;
+              LFDVal0 := (LFDOp - 247) * 256 + ReadUInt8(LFDItemPos) + 108;
+              Inc(LFDItemPos);
+            end
+            else if (LFDOp >= 251) and (LFDOp <= 254) then
+            begin
+              if LFDItemPos + 1 > FDataLength then Break;
+              LFDVal1 := LFDVal0;
+              LFDVal0 := -(LFDOp - 251) * 256 - ReadUInt8(LFDItemPos) - 108;
+              Inc(LFDItemPos);
+            end
+            else if LFDOp = 30 then
+            begin
+              // BCD skip
+              while LFDItemPos < LFDItemEndPos do
+              begin
+                if (ReadUInt8(LFDItemPos) and $0F) = $0F then begin Inc(LFDItemPos); Break; end;
+                if ((ReadUInt8(LFDItemPos) shr 4) and $0F) = $0F then begin Inc(LFDItemPos); Break; end;
+                Inc(LFDItemPos);
+              end;
+              LFDVal1 := LFDVal0;
+              LFDVal0 := 0;
+            end
+            else
+            begin
+              // operator
+              if LFDOp = 18 then
+              begin
+                // Private DICT: size, offset
+                FCff2FontDicts[I].PrivateDictSize := LFDVal1;
+                FCff2FontDicts[I].PrivateDictOff := LFDVal0;
+              end;
+              LFDVal0 := 0;
+            end;
+          end;
+        end;
+      end;
+    end;
+  end;
+
+  // ---- 解析 FDSelect ----
+  if (LFDSelectOff > 0) and (FCff2FontDictCount > 1) then
+  begin
+    LFDSPos := LCff2Off + LFDSelectOff;
+    if LFDSPos + 1 <= FDataLength then
+    begin
+      FCff2FDSelectFmt := ReadUInt8(LFDSPos);
+      FCff2FDSelectData := LFDSPos;
+      FCff2FDSelectGlyphCount := FMaxp.NumGlyphs;
+    end;
   end;
 
   FCff2Valid := True;

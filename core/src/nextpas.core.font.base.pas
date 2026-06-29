@@ -34,6 +34,7 @@ const
   TABLE_TAG_GSUB = $47535542;   // 'GSUB'
   TABLE_TAG_POST = $706F7374;   // 'post'
   TABLE_TAG_FVAR = $66766172;   // 'fvar'
+  TABLE_TAG_AVAR = $61766172;   // 'avar'
   TABLE_TAG_NAME = $6E616D65;   // 'name'
 
   {** GPOS Lookup Type：Pair Adjustment（kern） }
@@ -603,6 +604,26 @@ type
     Axes: TFontVariationAxisArray;
     InstanceCount: UInt16;
     Instances: TFontNamedInstanceArray;
+  end;
+
+  {** avar 轴值映射对 (F2Dot14 格式) }
+  TAvarAxisValueMap = record
+    FromCoord: Int16;   // 默认归一化坐标 (F2Dot14)
+    ToCoord: Int16;     // 修改后归一化坐标 (F2Dot14)
+  end;
+  TAvarAxisValueMapArray = array of TAvarAxisValueMap;
+
+  {** avar 单轴的分段映射 }
+  TAvarSegmentMap = record
+    PairCount: Int32;
+    Pairs: TAvarAxisValueMapArray;
+  end;
+  TAvarSegmentMapArray = array of TAvarSegmentMap;
+
+  {** avar 表解析结果 }
+  TAvarTable = record
+    AxisCount: UInt16;
+    Segments: TAvarSegmentMapArray;
   end;
 
 {** 创建默认特性配置（liga=1, kern=1） }
