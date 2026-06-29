@@ -6,7 +6,8 @@ interface
 
 uses
   nextpas.core.text.view,
-  nextpas.core.mem.intf;
+  nextpas.core.mem.intf,
+  nextpas.core.mem.allocator.base;
 
 type
   IStringBuilder = interface
@@ -32,11 +33,11 @@ type
     FBuf: PAnsiChar;
     FLen: SizeUInt;
     FCap: SizeUInt;
-    FAllocator: IAllocator;
+    FAllocator: TAllocator;
     procedure Grow(const ANeeded: SizeUInt);
   public
     procedure Init(const AInitialCap: SizeUInt = 256);
-    procedure InitWith(const AInitialCap: SizeUInt; const AAllocator: IAllocator);
+    procedure InitWith(const AInitialCap: SizeUInt; const AAllocator: TAllocator);
     procedure Done;
 
     procedure AppendByte(const AByte: Byte); inline;
@@ -222,7 +223,7 @@ begin
     FBuf := nil;
 end;
 
-procedure TBufStringBuilder.InitWith(const AInitialCap: SizeUInt; const AAllocator: IAllocator);
+procedure TBufStringBuilder.InitWith(const AInitialCap: SizeUInt; const AAllocator: TAllocator);
 begin
   FLen := 0;
   FAllocator := AAllocator;
