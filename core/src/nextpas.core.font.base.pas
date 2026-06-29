@@ -48,6 +48,8 @@ const
   GSUB_LOOKUP_LIGATURE = 4;
   {** GSUB Lookup Type：Multiple Substitution（一对多） }
   GSUB_LOOKUP_MULTIPLE = 2;
+  {** GSUB Lookup Type：Alternate Substitution（备选替换） }
+  GSUB_LOOKUP_ALTERNATE = 3;
 
   {** OpenType Feature Tags（Big-Endian 4 字节标识） }
   FEATURE_TAG_KERN = $6B65726E;  // 'kern' — Kerning
@@ -374,6 +376,15 @@ type
                                  // 每个偏移(2 bytes)相对于子表起始
   end;
   TFontMultipleSubstSubtableArray = array of TFontMultipleSubstSubtable;
+
+  {** GSUB AlternateSubst 子表（Format 1: 备选替换，结构同 MultipleSubst） }
+  TFontAlternateSubstSubtable = record
+    BaseOffset: Int32;           // 子表在文件中的偏移
+    CoverageOffset: Int32;       // Coverage 表偏移（相对文件）
+    AlternateSetCount: Int32;    // AlternateSet 数量
+    AlternateSetArrayOffset: Int32; // AlternateSet 偏移数组起始（相对文件）
+  end;
+  TFontAlternateSubstSubtableArray = array of TFontAlternateSubstSubtable;
 
 {** 字形轮廓内存释放 }
 procedure FontGlyphOutlineClear(var AOutline: TFontGlyphOutline);

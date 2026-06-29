@@ -47,6 +47,7 @@ type
     FMarkToMarkSubtables: TFontMarkToMarkSubtableArray;
     FCursivePosSubtables: TFontCursivePosSubtableArray;
     FMultipleSubstSubtables: TFontMultipleSubstSubtableArray;
+    FAlternateSubstSubtables: TFontAlternateSubstSubtableArray;
     {** Feature-specific lookup indices }
     FKernLookups: TFontFeatureLookupIndexArray;     // GPOS 'kern'
     FMarkLookups: TFontFeatureLookupIndexArray;      // GPOS 'mark'
@@ -131,6 +132,12 @@ type
     {** 查找一对多替换。AGlyphId 匹配 coverage 时返回替换字形数量和 ID 数组。
         不匹配返回空数组。 }
     function LookupMultipleSubst(AGlyphId: UInt16): TFontGlyphIdArray;
+
+    {** 是否包含备选替换数据（GSUB AlternateSubst） }
+    function HasAlternateSubst: Boolean;
+    {** 查找备选替换。AGlyphId 匹配 coverage 时返回备选字形数组。
+        不匹配返回空数组。返回的数组可由调用方按需选择（如 stylistic set）。 }
+    function LookupAlternateSubst(AGlyphId: UInt16): TFontGlyphIdArray;
 
     {** 是否包含单字形定位数据（GPOS SinglePos） }
     function HasSinglePos: Boolean;
@@ -1022,6 +1029,7 @@ begin
   SetLength(FLigatureSubtables, 0);
   SetLength(FSingleSubstSubtables, 0);
   SetLength(FMultipleSubstSubtables, 0);
+  SetLength(FAlternateSubstSubtables, 0);
   // Parse GSUB feature list for liga/clig features.
   FLigaLookups := ParseFeatureLookups(LGsubOff,
     [FEATURE_TAG_LIGA]);
@@ -1107,6 +1115,32 @@ begin
         FMultipleSubstSubtables[LIdx].CoverageOffset := LSub + LCovOff;
         FMultipleSubstSubtables[LIdx].SequenceCount := LLSCount;
         FMultipleSubstSubtables[LIdx].SequenceArrayOffset := LSub + 6;
+      end;
+    end;
+
+    // Alternate Substitution (type 3): one-from-many.
+    if LLookupType = GSUB_LOOKUP_ALTERNATE then
+    begin
+      LSubtableCount := ReadUInt16BE(LLookupOff + 4);
+      for LJ := 0 to LSubtableCount - 1 do
+      begin
+        if FDataLength < LLookupOff + 8 + LJ * 2 then
+          Continue;
+        LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
+        LSub := LSubOff;
+        if FDataLength < LSub + 6 then
+          Continue;
+        LSubFmt := ReadUInt16BE(LSub);
+        if LSubFmt <> 1 then
+          Continue;
+        LCovOff := ReadUInt16BE(LSub + 2);
+        LLSCount := ReadUInt16BE(LSub + 4);
+        LIdx := Length(FAlternateSubstSubtables);
+        SetLength(FAlternateSubstSubtables, LIdx + 1);
+        FAlternateSubstSubtables[LIdx].BaseOffset := LSub;
+        FAlternateSubstSubtables[LIdx].CoverageOffset := LSub + LCovOff;
+        FAlternateSubstSubtables[LIdx].AlternateSetCount := LLSCount;
+        FAlternateSubstSubtables[LIdx].AlternateSetArrayOffset := LSub + 6;
       end;
     end;
 
@@ -1543,6 +1577,77 @@ begin
     SetLength(Result, LCount);
     for LJ := 0 to LCount - 1 do
       Result[LJ] := ReadUInt16BE(LSeqOff + 2 + LJ * 2);
+    Exit;
+  end;
+end;
+
+function TTFontFace.HasAlternateSubst: Boolean;
+begin
+  Result := Length(FAlternateSubstSubtables) > 0;
+end;
+
+function TTFontFace.LookupAlternateSubst(AGlyphId: UInt16): TFontGlyphIdArray;
+var
+  LI, LCovIdx, LSetOff, LCount, LJ: Int32;
+  LSub: TFontAlternateSubstSubtable;
+
+  function CoverageIndexOf(ACovOffset, ATarget: Int32): Int32;
+  var
+    LFmt, LCnt, LM, LR, LSG, LEC: Int32;
+  begin
+    if FDataLength < ACovOffset + 4 then
+      Exit(-1);
+    LFmt := ReadUInt16BE(ACovOffset);
+    if LFmt = 1 then
+    begin
+      LCnt := ReadUInt16BE(ACovOffset + 2);
+      for LM := 0 to LCnt - 1 do
+        if ReadUInt16BE(ACovOffset + 4 + LM * 2) = ATarget then
+          Exit(LM);
+      Result := -1;
+    end
+    else if LFmt = 2 then
+    begin
+      LCnt := ReadUInt16BE(ACovOffset + 2);
+      for LR := 0 to LCnt - 1 do
+      begin
+        if FDataLength < ACovOffset + 4 + LR * 6 + 6 then
+          Break;
+        LSG := ReadUInt16BE(ACovOffset + 4 + LR * 6);
+        LEC := ReadUInt16BE(ACovOffset + 4 + LR * 6 + 2);
+        if (ATarget >= LSG) and (ATarget <= LEC) then
+          Exit(ReadUInt16BE(ACovOffset + 4 + LR * 6 + 4) + (ATarget - LSG));
+      end;
+      Result := -1;
+    end
+    else
+      Result := -1;
+  end;
+
+begin
+  SetLength(Result, 0);
+  for LI := 0 to High(FAlternateSubstSubtables) do
+  begin
+    LSub := FAlternateSubstSubtables[LI];
+    LCovIdx := CoverageIndexOf(LSub.CoverageOffset, AGlyphId);
+    if LCovIdx < 0 then
+      Continue;
+    if LCovIdx >= LSub.AlternateSetCount then
+      Continue;
+    LSetOff := LSub.AlternateSetArrayOffset + LCovIdx * 2;
+    if FDataLength < LSetOff + 2 then
+      Continue;
+    LSetOff := LSub.BaseOffset + ReadUInt16BE(LSetOff);
+    if FDataLength < LSetOff + 2 then
+      Continue;
+    LCount := ReadUInt16BE(LSetOff);
+    if LCount = 0 then
+      Continue;
+    if FDataLength < LSetOff + 2 + LCount * 2 then
+      Continue;
+    SetLength(Result, LCount);
+    for LJ := 0 to LCount - 1 do
+      Result[LJ] := ReadUInt16BE(LSetOff + 2 + LJ * 2);
     Exit;
   end;
 end;
