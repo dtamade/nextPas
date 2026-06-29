@@ -1207,6 +1207,16 @@ end;
 
 // === Stub implementations for non-ARM platforms ===
 
+uses
+  nextpas.core.simd.cpuinfo.base;
+
+type
+  TARMProcessorInfo = record
+    Architecture: string;
+    InstructionSet: string;
+    CoreType: string;
+  end;
+
 implementation
 
 function DetectARMFeatures: TARMFeatures;

@@ -56,8 +56,6 @@ function sse42_crc32_u64(crc: UInt64; data: UInt64): UInt64;
 
 implementation
 
-uses
-
 procedure EnsureExperimentalIntrinsicsEnabled; inline;
 begin
   {$IFNDEF NEXTPAS_SIMD_EXPERIMENTAL_INTRINSICS}

@@ -17,7 +17,36 @@ unit nextpas.core.tls.winssl.base;
 
 interface
 
-uses Windows, nextpas.core.tls.base;
+uses
+  {$IFDEF WINDOWS} Windows, {$ENDIF}
+  nextpas.core.tls.base;
+
+{$IFNDEF WINDOWS}
+type
+  DWORD = LongWord;
+  LONG = LongInt;
+  ULONG = LongWord;
+  BOOL = LongBool;
+  THandle = System.THandle;
+  PByte = System.PByte;
+  PWideChar = System.PWideChar;
+  LPCSTR = PAnsiChar;
+  LPCWSTR = PWideChar;
+  TFileTime = record
+    dwLowDateTime: DWORD;
+    dwHighDateTime: DWORD;
+  end;
+  TSystemTime = record
+    wYear: Word;
+    wMonth: Word;
+    wDayOfWeek: Word;
+    wDay: Word;
+    wHour: Word;
+    wMinute: Word;
+    wSecond: Word;
+    wMilliseconds: Word;
+  end;
+{$ENDIF}
 
 type
   // ============================================================================
