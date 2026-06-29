@@ -45,6 +45,7 @@ type
     FSinglePosSubtables: TFontSinglePosSubtableArray;
     FMarkToBaseSubtables: TFontMarkToBaseSubtableArray;
     FMarkToMarkSubtables: TFontMarkToMarkSubtableArray;
+    FMarkToLigSubtables: TFontMarkToLigSubtableArray;
     FCursivePosSubtables: TFontCursivePosSubtableArray;
     FMultipleSubstSubtables: TFontMultipleSubstSubtableArray;
     FAlternateSubstSubtables: TFontAlternateSubstSubtableArray;
@@ -155,6 +156,14 @@ type
     {** 查找 Mark-to-Mark 定位。AMarkGlyph 是 attaching mark，ABaseMarkGlyph 是 base mark。
         返回 attaching mark 的 anchor 偏移。未匹配时返回 X=0,Y=0。 }
     function LookupMarkToMark(AMarkGlyph, ABaseMarkGlyph: UInt16): TFontAnchor;
+
+    {** GPOS MarkLigPos 是否有子表 }
+    function HasMarkToLig: Boolean;
+    {** 查找 Mark-to-Ligature 定位。AMarkGlyph 是 combining mark，
+        ALigGlyph 是连字字形，AComponentIdx 是组件索引（0=第一个组件）。
+        返回 mark 的 anchor 偏移。未匹配时返回 X=0,Y=0。 }
+    function LookupMarkToLig(AMarkGlyph, ALigGlyph: UInt16;
+      AComponentIdx: Int32): TFontAnchor;
 
     {** GPOS CursivePos 是否有子表 }
     function HasCursivePos: Boolean;
@@ -793,6 +802,7 @@ begin
   SetLength(FMarkToBaseSubtables, 0);
   SetLength(FMarkToMarkSubtables, 0);
   SetLength(FCursivePosSubtables, 0);
+  SetLength(FMarkToLigSubtables, 0);
   // Parse GPOS feature list for kern/mark/mkmk/curs features.
   FKernLookups := ParseFeatureLookups(LGposOff,
     [FEATURE_TAG_KERN]);
@@ -988,6 +998,33 @@ begin
         FMarkToBaseSubtables[LIdx].ClassCount := ReadUInt16BE(LSub + 6);
         FMarkToBaseSubtables[LIdx].MarkArrayOffset := LSub + ReadUInt16BE(LSub + 8);
         FMarkToBaseSubtables[LIdx].BaseArrayOffset := LSub + ReadUInt16BE(LSub + 10);
+      end;
+    end;
+
+    // MarkLigPos (type 5): mark-to-ligature attachment.
+    // Structure: posFormat(2) + markCoverage(2) + ligCoverage(2) +
+    //            classCount(2) + markArray(2) + ligArray(2).
+    if LLookupType = GPOS_LOOKUP_MARK_TO_LIGATURE then
+    begin
+      LSubtableCount := ReadUInt16BE(LLookupOffOrig + 4);
+      for LJ := 0 to LSubtableCount - 1 do
+      begin
+        if FDataLength < LLookupOffOrig + 8 + LJ * 2 then
+          Continue;
+        LSubOff := LLookupOffOrig + ReadUInt16BE(LLookupOffOrig + 6 + LJ * 2);
+        if FDataLength < LSubOff + 14 then
+          Continue;
+        LSub := LSubOff;
+        if ReadUInt16BE(LSub) <> 1 then
+          Continue;
+        LIdx := Length(FMarkToLigSubtables);
+        SetLength(FMarkToLigSubtables, LIdx + 1);
+        FMarkToLigSubtables[LIdx].BaseOffset := LSub;
+        FMarkToLigSubtables[LIdx].MarkCoverageOffset := LSub + ReadUInt16BE(LSub + 2);
+        FMarkToLigSubtables[LIdx].LigCoverageOffset := LSub + ReadUInt16BE(LSub + 4);
+        FMarkToLigSubtables[LIdx].ClassCount := ReadUInt16BE(LSub + 6);
+        FMarkToLigSubtables[LIdx].MarkArrayOffset := LSub + ReadUInt16BE(LSub + 8);
+        FMarkToLigSubtables[LIdx].LigArrayOffset := LSub + ReadUInt16BE(LSub + 10);
       end;
     end;
 
@@ -1942,6 +1979,111 @@ begin
     // Positioning: mark offset = mark1_anchor - mark2_anchor.
     Result.X := ReadInt16BE(LMark1AnchorOff) - ReadInt16BE(LMark2AnchorOff);
     Result.Y := ReadInt16BE(LMark1AnchorOff + 2) - ReadInt16BE(LMark2AnchorOff + 2);
+    Exit;
+  end;
+end;
+
+function TTFontFace.HasMarkToLig: Boolean;
+begin
+  Result := Length(FMarkToLigSubtables) > 0;
+end;
+
+function TTFontFace.LookupMarkToLig(AMarkGlyph, ALigGlyph: UInt16;
+  AComponentIdx: Int32): TFontAnchor;
+var
+  LI: Int32;
+  LSub: TFontMarkToLigSubtable;
+  LMarkCovIdx, LLigCovIdx: Int32;
+  LMarkCount, LMarkClass: UInt16;
+  LMarkAnchorOff: Int32;
+  LLigCount, LCompCount: UInt16;
+  LLigAttachOff, LCompOff, LAnchorOff: Int32;
+
+  function CoverageIndexOf(ACovOffset, AGlyphId: Int32): Int32;
+  var
+    LFmt, LCnt, LM, LR, LSG, LEC: Int32;
+  begin
+    if FDataLength < ACovOffset + 4 then
+      Exit(-1);
+    LFmt := ReadUInt16BE(ACovOffset);
+    if LFmt = 1 then
+    begin
+      LCnt := ReadUInt16BE(ACovOffset + 2);
+      for LM := 0 to LCnt - 1 do
+        if ReadUInt16BE(ACovOffset + 4 + LM * 2) = AGlyphId then
+          Exit(LM);
+      Result := -1;
+    end
+    else if LFmt = 2 then
+    begin
+      LCnt := ReadUInt16BE(ACovOffset + 2);
+      for LR := 0 to LCnt - 1 do
+      begin
+        if FDataLength < ACovOffset + 4 + LR * 6 + 6 then
+          Break;
+        LSG := ReadUInt16BE(ACovOffset + 4 + LR * 6);
+        LEC := ReadUInt16BE(ACovOffset + 4 + LR * 6 + 2);
+        if (AGlyphId >= LSG) and (AGlyphId <= LEC) then
+          Exit(ReadUInt16BE(ACovOffset + 4 + LR * 6 + 4) + (AGlyphId - LSG));
+      end;
+      Result := -1;
+    end
+    else
+      Result := -1;
+  end;
+
+begin
+  Result.X := 0;
+  Result.Y := 0;
+  for LI := 0 to High(FMarkToLigSubtables) do
+  begin
+    LSub := FMarkToLigSubtables[LI];
+    LMarkCovIdx := CoverageIndexOf(LSub.MarkCoverageOffset, AMarkGlyph);
+    if LMarkCovIdx < 0 then
+      Continue;
+    LLigCovIdx := CoverageIndexOf(LSub.LigCoverageOffset, ALigGlyph);
+    if LLigCovIdx < 0 then
+      Continue;
+    // Read MarkArray: markCount, then per-mark: markClass(uint16) + anchorOffset(uint16).
+    if FDataLength < LSub.MarkArrayOffset + 2 then
+      Continue;
+    LMarkCount := ReadUInt16BE(LSub.MarkArrayOffset);
+    if LMarkCovIdx >= LMarkCount then
+      Continue;
+    if FDataLength < LSub.MarkArrayOffset + 2 + LMarkCovIdx * 4 + 4 then
+      Continue;
+    LMarkClass := ReadUInt16BE(LSub.MarkArrayOffset + 2 + LMarkCovIdx * 4);
+    LMarkAnchorOff := LSub.MarkArrayOffset + 2 + LMarkCovIdx * 4 +
+      ReadUInt16BE(LSub.MarkArrayOffset + 2 + LMarkCovIdx * 4 + 2);
+    if FDataLength < LMarkAnchorOff + 4 then
+      Continue;
+    if LMarkClass >= LSub.ClassCount then
+      Continue;
+    // Read LigatureArray: ligCount, then per-lig: LigAttach offset (uint16, relative to LigArray).
+    if FDataLength < LSub.LigArrayOffset + 2 then
+      Continue;
+    LLigCount := ReadUInt16BE(LSub.LigArrayOffset);
+    if LLigCovIdx >= LLigCount then
+      Continue;
+    if FDataLength < LSub.LigArrayOffset + 2 + LLigCovIdx * 2 + 2 then
+      Continue;
+    LLigAttachOff := LSub.LigArrayOffset +
+      ReadUInt16BE(LSub.LigArrayOffset + 2 + LLigCovIdx * 2);
+    if FDataLength < LLigAttachOff + 2 then
+      Continue;
+    LCompCount := ReadUInt16BE(LLigAttachOff);
+    if (AComponentIdx < 0) or (AComponentIdx >= LCompCount) then
+      Continue;
+    // ComponentRecord[componentIdx]: ClassCount * anchor offsets (uint16, relative to LigAttach).
+    LCompOff := LLigAttachOff + 2 + AComponentIdx * (LSub.ClassCount * 2);
+    if FDataLength < LCompOff + (LMarkClass + 1) * 2 then
+      Continue;
+    LAnchorOff := LLigAttachOff + ReadUInt16BE(LCompOff + LMarkClass * 2);
+    if FDataLength < LAnchorOff + 4 then
+      Continue;
+    // Positioning: mark offset = ligature_anchor - mark_anchor.
+    Result.X := ReadInt16BE(LAnchorOff) - ReadInt16BE(LMarkAnchorOff);
+    Result.Y := ReadInt16BE(LAnchorOff + 2) - ReadInt16BE(LMarkAnchorOff + 2);
     Exit;
   end;
 end;

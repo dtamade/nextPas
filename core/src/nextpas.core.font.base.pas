@@ -39,6 +39,8 @@ const
   GPOS_LOOKUP_CursivePos = 3;
   {** GPOS Lookup Type：Mark-to-Base Attachment }
   GPOS_LOOKUP_MARK_TO_BASE = 4;
+  {** GPOS Lookup Type：Mark-to-Ligature Attachment }
+  GPOS_LOOKUP_MARK_TO_LIGATURE = 5;
   {** GPOS Lookup Type：Mark-to-Mark Attachment }
   GPOS_LOOKUP_MARK_TO_MARK = 6;
   {** GPOS/GSUB Lookup Type：Extension（32-bit offset 包装） }
@@ -360,6 +362,18 @@ type
     Mark2ArrayOffset: Int32;     // Mark2Array 偏移（attaching mark class + anchor）
   end;
   TFontMarkToMarkSubtableArray = array of TFontMarkToMarkSubtable;
+
+  {** GPOS Mark-to-Ligature 子表（MarkLigPos Format 1）
+      结构同 Mark-to-Base，但 LigatureArray 中每个连字有多个组件锚点 }
+  TFontMarkToLigSubtable = record
+    BaseOffset: Int32;           // 子表在文件中的偏移
+    MarkCoverageOffset: Int32;   // Mark Coverage 表偏移（相对文件）
+    LigCoverageOffset: Int32;    // Ligature Coverage 表偏移（相对文件）
+    ClassCount: Int32;           // mark class 数量
+    MarkArrayOffset: Int32;      // MarkArray 偏移（相对文件）
+    LigArrayOffset: Int32;       // LigatureArray 偏移（相对文件）
+  end;
+  TFontMarkToLigSubtableArray = array of TFontMarkToLigSubtable;
 
   {** GPOS CursivePos 子表（Format 1: Entry/Exit anchor pairs） }
   TFontCursivePosSubtable = record
