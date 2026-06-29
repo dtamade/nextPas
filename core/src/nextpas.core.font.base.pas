@@ -59,6 +59,10 @@ const
   GSUB_LOOKUP_CONTEXT = 5;
   {** GSUB Lookup Type：Chained Context Substitution }
   GSUB_LOOKUP_CHAINED_CONTEXT = 6;
+  {** GPOS Lookup Type：Context Positioning（规则匹配定位） }
+  GPOS_LOOKUP_CONTEXT_POS = 7;
+  {** GPOS Lookup Type：Chained Context Positioning }
+  GPOS_LOOKUP_CONTEXT_POS_CHAINED = 8;
 
   {** OpenType Feature Tags（Big-Endian 4 字节标识） }
   FEATURE_TAG_KERN = $6B65726E;  // 'kern' — Kerning
