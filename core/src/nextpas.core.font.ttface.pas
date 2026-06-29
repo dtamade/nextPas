@@ -99,6 +99,7 @@ type
     FHvarValid: Boolean;
     FGvar: TGvarTable;
     FGvarValid: Boolean;
+    FCurrentNormCoords: array of Single;  // 当前归一化坐标（用于 CFF2 blend）
     FValid: Boolean;
     FLastError: string;
     procedure ParseHeader;
@@ -366,6 +367,9 @@ type
     procedure ApplyGvarDeltas(AGlyphIndex: UInt32;
       var AOutline: TFontGlyphOutline;
       const ANormCoords: array of Single);
+    {** 设置当前归一化坐标（用于 CFF2 blend 和后续可变字形生成）。
+        传入空数组清除变化状态。 }
+    procedure SetVariationCoords(const ANormCoords: array of Single);
   end;
 
 implementation
@@ -5158,6 +5162,15 @@ begin
   end;
 end;
 
+procedure TTFontFace.SetVariationCoords(const ANormCoords: array of Single);
+var
+  LI: Int32;
+begin
+  SetLength(FCurrentNormCoords, Length(ANormCoords));
+  for LI := 0 to High(ANormCoords) do
+    FCurrentNormCoords[LI] := ANormCoords[LI];
+end;
+
 { ========================================================================= }
 { CFF2 (Compact Font Format 2) 解析                                          }
 { ========================================================================= }
@@ -5844,6 +5857,12 @@ var
   LCurDataOff, LCurDataEnd: Int32;  // 当前执行的 charstring 范围
   LSubrIdx, LSubrOff, LSubrLen: Int32;
   LSubrIdxPos, LSubrCount, LSubrBias: Int32;
+  { blend 操作符变量 }
+  LVarStoreIdx: Int32;                   // vsindex 选择的子表索引
+  LBlendN, LBlendK, LBlendI, LBlendJ: Int32;
+  LBlendDelta: Int32;
+  LBlendRIdx: Int32;
+  LBlendScalars: array of Single;
 
   LPoints: array of TFontContourPoint;
   LEnds: array of UInt16;
@@ -5929,6 +5948,7 @@ begin
   LWidth := FCffDefaultWidthX;
   LPointCount := 0; LEndCount := 0;
   LCallDepth := 0;
+  LVarStoreIdx := 0;  // 默认 variation 子表索引
   LCurDataOff := LItemOff;
   LCurDataEnd := LItemOff + LItemLen;
   SetLength(LPoints, 128);
@@ -6148,7 +6168,52 @@ begin
         Break;
       end;
 
-      15, 16: LST := 0; // vsindex, blend
+      15: begin // vsindex — 设置 variation 数据子表索引
+        if (LST >= 1) and FCff2Valid and FCff2HasVarStore then
+          LVarStoreIdx := LStack[LST - 1];
+        LST := 0;
+      end;
+
+      16: begin // blend — CFF2 字形坐标变化混合
+        if (LST >= 1) and FCff2Valid and FCff2HasVarStore then
+        begin
+          LBlendN := LStack[LST - 1];
+          Dec(LST);
+          if (LBlendN > 0) and (LBlendN <= LST) then
+          begin
+            // region count（CFF2 VStore 通常所有 region 共享）
+            LBlendK := FCff2ItemVarStore.RegionCount;
+
+            if (LBlendK > 0) and (LST >= LBlendN + LBlendN * LBlendK) then
+            begin
+              // 计算 region scalars
+              SetLength(LBlendScalars, LBlendK);
+              for LBlendI := 0 to LBlendK - 1 do
+              begin
+                LBlendScalars[LBlendI] := CalcItemVarRegionScalar(
+                  FCff2ItemVarStore.Regions, FCff2ItemVarStore.RegionCount,
+                  LBlendI, FCurrentNormCoords);
+              end;
+              // LStack: [base0..baseN-1, delta0_k0..deltaN-1_k0, ..., delta0_kK-1..deltaN-1_kK-1]
+              for LBlendI := 0 to LBlendN - 1 do
+              begin
+                LBlendDelta := 0;
+                for LBlendJ := 0 to LBlendK - 1 do
+                begin
+                  LBlendDelta := LBlendDelta +
+                    Trunc(LStack[LBlendN + LBlendJ * LBlendN + LBlendI] * LBlendScalars[LBlendJ]);
+                end;
+                LStack[LBlendI] := LStack[LBlendI] + LBlendDelta;
+              end;
+              LST := LBlendN;
+            end
+            else
+              LST := LBlendN;
+          end;
+        end
+        else
+          LST := 0;
+      end;
       (12 shl 8) or 34: begin // hflex — 7 args: dx1 dx2 dy2 dx3 dx4 dx5 dx6
         if LST >= 7 then begin
           LStartX := LCx; LStartY := LCy;

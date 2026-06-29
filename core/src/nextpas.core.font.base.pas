@@ -36,6 +36,7 @@ const
   TABLE_TAG_FVAR = $66766172;   // 'fvar'
   TABLE_TAG_AVAR = $61766172;   // 'avar'
   TABLE_TAG_HVAR = $48564152;   // 'HVAR'
+  TABLE_TAG_VVAR = $56564152;   // 'VVAR'
   TABLE_TAG_GVAR = $67766172;   // 'gvar'
   TABLE_TAG_NAME = $6E616D65;   // 'name'
 
