@@ -8,10 +8,10 @@
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **66** | 1 | 33 | **67%** |
+| **Go** | **72** | 1 | 33 | **69%** |
 | **Rust** | 19 | 0 | 47 | **29%** |
 
-## Track Summary (25 tracks, 104 operations)
+## Track Summary (26 tracks, 110 operations)
 
 ### Text Operations (6 ops)
 
@@ -297,6 +297,19 @@
 
 **3W vs Go** — FPC `SortI32` (type-specialized introsort) vs Go `sort.Ints` (interface-based pdqsort)
 
+### SwissMap Operations (6 ops)
+
+| Track | Pascal (ns) | Go (ns) | vs Go |
+|-------|-------------|---------|-------|
+| **Swiss/Put/1K** | **18933** | 56746 | **3.00x** ✓ |
+| **Swiss/Put/10K** | **184177** | 818310 | **4.44x** ✓ |
+| **Swiss/Put/100K** | **3618166** | 8409432 | **2.32x** ✓ |
+| **Swiss/Lookup/1K** | **12572** | 68975 | **5.80x** ✓ |
+| **Swiss/Lookup/10K** | **145163** | 641615 | **4.42x** ✓ |
+| **Swiss/Miss/1K** | **12279** | 51025 | **4.16x** ✓ |
+
+**6W vs Go** — SwissTable (SIMD ctrl byte probing + open addressing) vs Go map (runtime hash + incremental rehash)
+
 ### Pascal Wins (biggest margins vs Go)
 1. **String Concat: 3557x** — Go immutable strings O(n²) vs Pascal COW
 2. **Fill/1KB: 23.37x** — FillChar→rep stosb vs Go byte loop (no memset opt)
@@ -334,6 +347,7 @@
 - **String conversion**: Pascal strong (2W vs Go) — hand-written parse 1.51x, IntToStr 2.08x faster
 - **Interface dispatch**: Mixed — FPC Area 1.25x faster; Go devirtualization 3.08x on direct calls
 - **Type-specialized sort**: Pascal dominant (3W vs Go) — SortI32 2-8x faster, type specialization crushes interface dispatch
+- **SwissMap**: Pascal dominant (6W vs Go) — SwissTable 3-6x faster than Go map, SIMD ctrl byte probing
 - **Bit scan / byte swap**: Pascal strong (3W vs Go) — BSR/BSF/BSwap intrinsics
 - **Dynamic arrays**: Pascal strong (4W vs Go) — SetLength realloc 2-8x faster than Go append
 - **Matrix operations**: Pascal dominant (4W vs Go) — FPC loop optimization beats Go compiler
@@ -349,7 +363,7 @@
 
 ## Conclusion
 
-Pascal beats Go 67% of the time across 100 benchmarks. The biggest wins come from
+Pascal beats Go 69% of the time across 106 benchmarks. The biggest wins come from
 FillChar operations (compiles to `rep stosb`, 11-23x faster than Go's byte loop),
 string operations (immutable strings are Go's Achilles heel), bit set operations
 (`set of Byte` compiles to native instructions), number formatting
@@ -361,7 +375,9 @@ memory move (FPC_MOVE ERMSB+prefetchnta vs Go memmove, 1.23-1.31x at 16K-256K),
 packed records (19% smaller than Go struct, 1.24x faster filter),
 and file I/O writes (direct syscall vs Go's bufio),
 and string escape (set of Char + in-place build, 1.74x faster than Go strings.Builder),
-and type-specialized sort (SortI32 2-8x faster than Go sort.Ints, type specialization vs interface dispatch).
+and type-specialized sort (SortI32 2-8x faster than Go sort.Ints, type specialization vs interface dispatch),
+SwissMap (3-6x faster than Go map, SIMD ctrl byte probing + open addressing),
+and interface dispatch (FPC vtable 1.25x faster than Go interface for heavy methods).
 Losses come from auto-vectorization gaps, Go's optimized hash map,
 and branchless codegen for binary search. Against Rust, Pascal wins 30% —
 Rust's zero-cost abstractions and LLVM codegen make it consistently fast.
