@@ -34,8 +34,10 @@ type
     FHmtx: TFontHorizontalMetricArray;
     FCmapFmt4: TFontCmapFmt4;
     FCmapFmt12: TFontCmapFmt12;
+    FCmapFmt14: TFontCmapFmt14;
     FHasFmt4: Boolean;
     FHasFmt12: Boolean;
+    FHasFmt14: Boolean;
     FLocaOffsets: array of UInt32;
     FOs2: TFontOs2Table;
     FPairPosSubtables: TFontPairPosSubtableArray;
@@ -243,6 +245,16 @@ type
     function HasFeatureClig: Boolean;
     {** GPOS 是否声明了 'curs' feature（CursivePos lookups 受此控制） }
     function HasFeatureCurs: Boolean;
+
+    {** 是否包含 cmap Format 14 (IVS) 数据 }
+    function HasFmt14: Boolean;
+    {** 查找 IVS (Ideographic Variation Selector) 字形。
+        ACodepoint 是基础字码（如 U+845B），AVariationSelector 是 VS（如 U+E0100）。
+        返回字形索引。未匹配返回 0（使用默认字形）。
+        - Non-Default UVS: 精确匹配返回指定 glyphID
+        - Default UVS: 范围匹配返回 0（表示使用默认字形）
+        - 无此 VS: 返回 0 }
+    function LookupIVS(ACodepoint, AVariationSelector: UInt32): UInt32;
   end;
 
 implementation
@@ -283,6 +295,7 @@ begin
   FTTCFaceOffset := 0;
   FHasFmt4 := False;
   FHasFmt12 := False;
+  FHasFmt14 := False;
   FLastError := '';
 
   if not FsExists(AFilePath) then
@@ -351,6 +364,7 @@ begin
   FTTCFaceOffset := 0;
   FHasFmt4 := False;
   FHasFmt12 := False;
+  FHasFmt14 := False;
   FLastError := '';
 
   LLen := Length(AData);
@@ -594,6 +608,10 @@ var
   LIdDelta, LIdRangeOff: UInt16;
   LGlyphId: UInt16;
   LGroupCount, K: Int32;
+  LFmt14Length, LNumVarSelectors: UInt32;
+  LVarSelectorIdx, LDefaultUVSOff, LNonDefaultUVSOff: UInt32;
+  LNumDefaultRanges, LNumNonDefaultMappings: UInt32;
+  M: Int32;
 begin
   LIdx := FindTable(TABLE_TAG_CMAP);
   if LIdx < 0 then
@@ -604,6 +622,7 @@ begin
 
   FHasFmt4 := False;
   FHasFmt12 := False;
+  FHasFmt14 := False;
 
   for I := 0 to LSubtableCount - 1 do
   begin
@@ -687,6 +706,67 @@ begin
           end;
           FHasFmt12 := True;
         end;
+      end;
+    end;
+
+    // Format 14（IVS — Variation Selector）
+    if (LFormat = CMAP_FORMAT_14) and (not FHasFmt14) then
+    begin
+      LFmt14Length := ReadUInt32BE(LSubtableBase + 2);
+      LNumVarSelectors := ReadUInt32BE(LSubtableBase + 6);
+      if (LNumVarSelectors > 0) and (LNumVarSelectors < 1024) then
+      begin
+        SetLength(FCmapFmt14.VarSelectors, LNumVarSelectors);
+        for M := 0 to Int32(LNumVarSelectors) - 1 do
+        begin
+          // 每条记录：varSelector(3) + defaultUVSOffset(4) + nonDefaultUVSOffset(4) = 11 bytes
+          J := LSubtableBase + 10 + M * 11;
+          FCmapFmt14.VarSelectors[M].VarSelector :=
+            (ReadUInt8(J) shl 16) or (ReadUInt8(J + 1) shl 8) or ReadUInt8(J + 2);
+          LDefaultUVSOff := ReadUInt32BE(J + 3);
+          LNonDefaultUVSOff := ReadUInt32BE(J + 7);
+
+          // Default UVS Table
+          if LDefaultUVSOff > 0 then
+          begin
+            LNumDefaultRanges := ReadUInt32BE(LSubtableBase + LDefaultUVSOff);
+            if LNumDefaultRanges < 65536 then
+            begin
+              SetLength(FCmapFmt14.VarSelectors[M].DefaultUVSRanges, LNumDefaultRanges);
+              for K := 0 to Int32(LNumDefaultRanges) - 1 do
+              begin
+                LVarSelectorIdx := LSubtableBase + LDefaultUVSOff + 4 + K * 4;
+                FCmapFmt14.VarSelectors[M].DefaultUVSRanges[K].StartUnicodeValue :=
+                  (ReadUInt8(LVarSelectorIdx) shl 16) or
+                  (ReadUInt8(LVarSelectorIdx + 1) shl 8) or
+                  ReadUInt8(LVarSelectorIdx + 2);
+                FCmapFmt14.VarSelectors[M].DefaultUVSRanges[K].AdditionalCount :=
+                  ReadUInt8(LVarSelectorIdx + 3);
+              end;
+            end;
+          end;
+
+          // Non-Default UVS Table
+          if LNonDefaultUVSOff > 0 then
+          begin
+            LNumNonDefaultMappings := ReadUInt32BE(LSubtableBase + LNonDefaultUVSOff);
+            if LNumNonDefaultMappings < 65536 then
+            begin
+              SetLength(FCmapFmt14.VarSelectors[M].NonDefaultUVS, LNumNonDefaultMappings);
+              for K := 0 to Int32(LNumNonDefaultMappings) - 1 do
+              begin
+                LVarSelectorIdx := LSubtableBase + LNonDefaultUVSOff + 4 + K * 5;
+                FCmapFmt14.VarSelectors[M].NonDefaultUVS[K].UnicodeValue :=
+                  (ReadUInt8(LVarSelectorIdx) shl 16) or
+                  (ReadUInt8(LVarSelectorIdx + 1) shl 8) or
+                  ReadUInt8(LVarSelectorIdx + 2);
+                FCmapFmt14.VarSelectors[M].NonDefaultUVS[K].GlyphID :=
+                  ReadUInt16BE(LVarSelectorIdx + 3);
+              end;
+            end;
+          end;
+        end;
+        FHasFmt14 := True;
       end;
     end;
   end;
@@ -3009,6 +3089,55 @@ end;
 function TTFontFace.HasFeatureCurs: Boolean;
 begin
   Result := Length(FCursLookups) > 0;
+end;
+
+function TTFontFace.HasFmt14: Boolean;
+begin
+  Result := FHasFmt14;
+end;
+
+function TTFontFace.LookupIVS(ACodepoint, AVariationSelector: UInt32): UInt32;
+var
+  I, J: Int32;
+  LVS: TFontCmapFmt14VarSelector;
+  LRange: TFontCmapFmt14DefaultUVSRange;
+  LMapping: TFontCmapFmt14UVSMapping;
+begin
+  Result := 0;
+  if not FHasFmt14 then
+    Exit;
+
+  // 查找 Variation Selector
+  for I := 0 to High(FCmapFmt14.VarSelectors) do
+  begin
+    if FCmapFmt14.VarSelectors[I].VarSelector = AVariationSelector then
+    begin
+      LVS := FCmapFmt14.VarSelectors[I];
+
+      // 先查 Non-Default UVS（精确匹配返回 glyphID）
+      for J := 0 to High(LVS.NonDefaultUVS) do
+      begin
+        LMapping := LVS.NonDefaultUVS[J];
+        if LMapping.UnicodeValue = ACodepoint then
+          Exit(UInt32(LMapping.GlyphID));
+      end;
+
+      // 再查 Default UVS（范围匹配返回 0 = 使用默认字形）
+      for J := 0 to High(LVS.DefaultUVSRanges) do
+      begin
+        LRange := LVS.DefaultUVSRanges[J];
+        if (ACodepoint >= LRange.StartUnicodeValue) and
+           (ACodepoint <= LRange.StartUnicodeValue + LRange.AdditionalCount) then
+          Exit(0); // Default: 使用基础字形
+      end;
+
+      // VS 存在但此字码不在任何表中
+      Exit(0);
+    end;
+  end;
+
+  // 此 VS 未在 Format 14 中注册
+  Result := 0;
 end;
 
 function TTFontFace.IsValid: Boolean;

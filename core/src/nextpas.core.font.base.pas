@@ -93,6 +93,7 @@ const
   CMAP_FORMAT_4  = 4;   // BMP（最常用）
   CMAP_FORMAT_6  = 6;   // 紧凑单区间
   CMAP_FORMAT_12 = 12;  // 全 Unicode（SMP emoji 等）
+  CMAP_FORMAT_14 = 14;  // IVS（Variation Selector）
 
   {** glyf 简单字形标志位 }
   GLYF_FLAG_ON_CURVE        = $01;
@@ -283,6 +284,30 @@ type
   {** cmap 格式 12 子表 }
   TFontCmapFmt12 = record
     Groups: TFontCmapFmt12GroupArray;
+  end;
+
+  {** cmap 格式 14 (IVS) — Variation Selector 映射 }
+  TFontCmapFmt14DefaultUVSRange = record
+    StartUnicodeValue: UInt32;  // 3 字节
+    AdditionalCount: Byte;
+  end;
+  TFontCmapFmt14DefaultUVSRangeArray = array of TFontCmapFmt14DefaultUVSRange;
+
+  TFontCmapFmt14UVSMapping = record
+    UnicodeValue: UInt32;      // 3 字节
+    GlyphID: UInt16;
+  end;
+  TFontCmapFmt14UVSMappingArray = array of TFontCmapFmt14UVSMapping;
+
+  TFontCmapFmt14VarSelector = record
+    VarSelector: UInt32;       // 3 字节，U+E0100-U+E01EF
+    DefaultUVSRanges: TFontCmapFmt14DefaultUVSRangeArray;
+    NonDefaultUVS: TFontCmapFmt14UVSMappingArray;
+  end;
+  TFontCmapFmt14VarSelectorArray = array of TFontCmapFmt14VarSelector;
+
+  TFontCmapFmt14 = record
+    VarSelectors: TFontCmapFmt14VarSelectorArray;
   end;
 
   {** 字体加载错误 }
