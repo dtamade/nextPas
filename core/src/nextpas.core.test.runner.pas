@@ -2191,7 +2191,10 @@ procedure TTestRunner.Add(const ASuite: TTestSuite);
   { const avoids copying the entire record on the call side (same as var for
     structured types). Internally the suite IS copied into Suites[] via Pascal
     assignment. Mutations to the caller's ASuite after Add() are NOT visible
-    to the runner. Rule: register ALL tests before calling Add. }
+    to the runner. Rule: register ALL tests before calling Add.
+    IMPORTANT: Pascal record assignment shares dynamic array references via
+    refcount. We must deep-copy Tests so that runner operations (shuffle,
+    etc.) don't mutate the caller's original suite data. }
 var
   LOldLen, LCap: Integer;
 begin
@@ -2201,6 +2204,9 @@ begin
   else if LOldLen >= LCap then LCap := LCap * 2;
   if LCap <> LOldLen then SetLength(Suites, LCap);
   Suites[LOldLen] := ASuite;
+  { Deep-copy Tests to break refcount sharing — shuffle and other
+    mutations in RunWithResult must not affect the caller's suite. }
+  Suites[LOldLen].Tests := Copy(ASuite.Tests, 0, Length(ASuite.Tests));
   SetLength(Suites, LOldLen + 1);
 end;
 
