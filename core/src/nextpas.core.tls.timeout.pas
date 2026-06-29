@@ -5,9 +5,8 @@ unit nextpas.core.tls.timeout;
 interface
 
 uses
-   nextpas.core.io.intf,
-  nextpas.core.io.base,
-  nextpas.core.io.intf;
+  nextpas.core.io.intf,
+  nextpas.core.io.base;
 
 type
   TTimeoutStream = class(TInterfacedObject, IStream)

@@ -5,9 +5,8 @@ unit nextpas.core.tls.nonblocking;
 interface
 
 uses
-   nextpas.core.io.intf,
-  nextpas.core.io.base,
   nextpas.core.io.intf,
+  nextpas.core.io.base,
   nextpas.core.base.utils;
 
 type

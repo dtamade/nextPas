@@ -49,6 +49,7 @@ begin
   FAllowIfNoPins := False;
 end;
 
+procedure TSSLPinningVerifier.AddPin(const ASHA256Hash: TBytes);
 var
   LIdx: Integer;
 begin

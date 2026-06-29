@@ -7,7 +7,7 @@ interface
 uses nextpas.core.base, nextpas.core.sync, nextpas.core.tls.base, nextpas.core.tls.tls, nextpas.core.tls.dialer; type TSSLPoolEntry = record Host: string;
   
     Port: Word;
-    Stream: TSSLStream;
+    Stream: IStream;
     IdleSince: TDateTime;
   end;
 
@@ -24,8 +24,8 @@ uses nextpas.core.base, nextpas.core.sync, nextpas.core.tls.base, nextpas.core.t
     destructor Destroy; override;
 
     function Acquire(const AHost: string; APort: Word;
-      out AStream: TSSLStream; out AError: string): Boolean;
-    procedure Release(const AHost: string; APort: Word; AStream: TSSLStream);
+      out AStream: IStream; out AError: string): Boolean;
+    procedure Release(const AHost: string; APort: Word; AStream: IStream);
     procedure CloseIdle;
     procedure CloseAll;
 
@@ -53,11 +53,11 @@ begin
 end;
 
 function TSSLConnectionPool.Acquire(const AHost: string; APort: Word;
-  out AStream: TSSLStream; out AError: string): Boolean;
+  out AStream: IStream; out AError: string): Boolean;
 var
   I: Integer;
   LNow: TDateTime;
-  LExpired: TSSLStream;
+  LExpired: IStream;
 begin
   AStream := nil;
   AError := '';
@@ -104,7 +104,7 @@ begin
 end;
 
 procedure TSSLConnectionPool.Release(const AHost: string; APort: Word;
-  AStream: TSSLStream);
+  AStream: IStream);
 var
   LIdx: Integer;
 begin

@@ -17,6 +17,7 @@ unit nextpas.core.tls.mbedtls.certificate;
 interface
 
 uses
+  SysUtils, DateUtils,
   nextpas.core.base,
   nextpas.core.io.intf, nextpas.core.fs.stream,
   nextpas.core.base.utils,

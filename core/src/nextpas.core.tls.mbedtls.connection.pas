@@ -24,7 +24,6 @@ uses
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.connection.base,
-  nextpas.core.io.intf,
   nextpas.core.io.stream_adapter,
   nextpas.core.tls.mbedtls.base,
   nextpas.core.tls.mbedtls.native_handle,

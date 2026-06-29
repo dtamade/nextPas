@@ -26,6 +26,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.io.intf,
   nextpas.core.fs.stream, nextpas.core.fs, nextpas.core.sync,
   nextpas.core.collections.hashmap,
   {$IFDEF UNIX}BaseUnix,{$ENDIF}

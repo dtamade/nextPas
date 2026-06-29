@@ -6,7 +6,6 @@ interface
 
 uses
   nextpas.core.base,
-   nextpas.core.io.intf,
   nextpas.core.io.intf,
   nextpas.core.tls.base;
 
