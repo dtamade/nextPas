@@ -26,11 +26,13 @@ type
     procedure DoFreeMem(ADst: Pointer); override;
     function  DoMemSize(APtr: Pointer): SizeUInt; override;
   public
+    procedure FreeMem(APtr: Pointer; ASize: SizeUInt); override;
+    function ReallocMem(APtr: Pointer; AOldSize, ANewSize: SizeUInt): Pointer; override;
     function  Traits: TAllocatorTraits; override;
   end;
 
-function TryGetMimallocAllocator(out A: IAllocator): Boolean;
-function GetMimallocAllocator: IAllocator;
+function TryGetMimallocAllocator(out A: TAllocator): Boolean;
+function GetMimallocAllocator: TAllocator;
 function MimallocUsableSizeAvailable: Boolean;
 function TryGetMimallocUsableSize(APtr: Pointer; out ASize: SizeUInt): Boolean;
 
@@ -105,8 +107,8 @@ uses
 {$ENDIF}
 
 var
-  _MimallocAllocatorObj: TAllocator = nil;
-  _MimallocAllocatorIntf: IAllocator = nil;
+  _MimallocAllocatorObj: TMimallocAllocator;
+  _MimallocAllocatorIntf: IAllocator;
   GAllocatorLock: TRTLCriticalSection;
 
 function MimallocUsableSizeAvailable: Boolean;
@@ -155,8 +157,30 @@ end;
 procedure TMimallocAllocator.DoFreeMem(ADst: Pointer);
 begin
   if not EnsureMimallocLoaded then
-    Exit; // free path when library missing: nothing to do
+    Exit;
   _mi_free(ADst);
+end;
+
+procedure TMimallocAllocator.FreeMem(APtr: Pointer; ASize: SizeUInt);
+begin
+  if not EnsureMimallocLoaded then
+    Exit;
+  _mi_free(APtr);
+end;
+
+function TMimallocAllocator.ReallocMem(APtr: Pointer;
+  AOldSize, ANewSize: SizeUInt): Pointer;
+begin
+  if not EnsureMimallocLoaded then
+    raise EAllocError.Create(aeInternalError, 'mimalloc not available');
+  if APtr = nil then
+    Exit(_mi_malloc(ANewSize));
+  if ANewSize = 0 then
+  begin
+    _mi_free(APtr);
+    Exit(nil);
+  end;
+  Result := _mi_realloc(APtr, ANewSize);
 end;
 
 function TMimallocAllocator.DoMemSize(APtr: Pointer): SizeUInt;
@@ -177,7 +201,7 @@ begin
   Result.HasMemSize      := MimallocUsableSizeAvailable;
 end;
 
-function GetMimallocAllocator: IAllocator;
+function GetMimallocAllocator: TAllocator;
 begin
   if _MimallocAllocatorObj = nil then
   begin
@@ -192,9 +216,9 @@ begin
       LeaveCriticalSection(GAllocatorLock);
     end;
   end;
-  Result := _MimallocAllocatorIntf;
+  Result := _MimallocAllocatorObj;
 end;
-function TryGetMimallocAllocator(out A: IAllocator): Boolean;
+function TryGetMimallocAllocator(out A: TAllocator): Boolean;
 begin
   try
     A := GetMimallocAllocator;

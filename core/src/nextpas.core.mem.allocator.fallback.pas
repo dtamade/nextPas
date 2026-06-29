@@ -5,11 +5,11 @@
   适用于: Arena 处理大文件、编译器处理超大编译单元等需要 graceful degradation 的场景。
 
   TFallbackAllocator:
-    IAllocator 包装器, try primary → EOutOfMemory → fallback
-    FreeMem/LFreeMem: 记录来源, 从正确的分配器释放
+    TAllocator 子类, try primary → EOutOfMemory → fallback
+    FreeMem: 记录来源, 从正确的分配器释放
 
   TFallbackArena:
-    IArena 包装器, Arena OOM (返回 nil) → 降级到 IAllocator
+    IArena 包装器, Arena OOM (返回 nil) → 降级到 TAllocator
     Reset: 只重置 Arena, 不重置 fallback 分配的内存
 
   设计约束:
@@ -27,6 +27,7 @@ uses
   nextpas.core.mem.base,
   nextpas.core.mem.error,
   nextpas.core.mem.intf,
+  nextpas.core.mem.allocator.base,
   nextpas.core.mem.arena.base,
   nextpas.core.mem.arena.intf;
 
@@ -42,18 +43,10 @@ type
     Size: SizeUInt;
   end;
 
-  // Fallback Allocator — 主分配器 OOM 时降级到后备
-  //
-  // 使用模式:
-  //   var LFall: TFallbackAllocator;
-  //   LFall := TFallbackAllocator.Create(LArenaAllocator, LRtlAllocator);
-  //   LP := LFall.GetMem(1024);  // arena 优先, OOM 时降级到 RTL
-  //   LFall.FreeMem(LP);         // 自动从正确的分配器释放
-  TFallbackAllocator = class(TInterfacedObject, IAllocator)
+  TFallbackAllocator = class(TAllocator)
   private
-    FPrimary: IAllocator;
-    FFallback: IAllocator;
-    { 记录 fallback 分配的来源 (简化: 用动态数组, 线性搜索) }
+    FPrimary: TAllocator;
+    FFallback: TAllocator;
     FEntries: array of TFallbackEntry;
     FEntryCount: SizeInt;
     FTotalFallbacks: SizeUInt;
@@ -61,82 +54,46 @@ type
     procedure TrackFallback(APtr: Pointer; ASize: SizeUInt);
     function FindEntry(APtr: Pointer): PFallbackEntry;
     procedure RemoveEntry(APtr: Pointer);
+  protected
+    function DoGetMem(ASize: SizeUInt): Pointer; override;
+    function DoAllocMem(ASize: SizeUInt): Pointer; override;
+    function DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
+    procedure DoFreeMem(ADst: Pointer); override;
   public
-    {** 创建 fallback 分配器，指定主分配器和后备分配器 *}
-    constructor Create(APrimary, AFallback: IAllocator);
-    {** 销毁 fallback 分配器（不释放已分配内存，由调用方负责） *}
+    constructor Create(APrimary, AFallback: TAllocator);
     destructor Destroy; override;
 
-    { IAllocator }
-    {** 分配内存，主分配器 OOM 时自动降级到后备 *}
-    function GetMem(ASize: SizeUInt): Pointer;
-    {** 分配零初始化内存，主分配器 OOM 时降级 *}
-    function AllocMem(ASize: SizeUInt): Pointer;
-    {** 重新分配内存，自动跟踪来源并从正确的分配器操作 *}
-    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
-    {** 释放内存，自动判断来源并从正确的分配器释放 *}
-    procedure FreeMem(APtr: Pointer);
-    {** 释放对齐内存，自动判断来源 *}
-    procedure FreeAligned(APtr: Pointer);
-    {** 查询指针所属分配器的内存块大小 *}
-    function MemSize(APtr: Pointer): SizeUInt;
-    {** 分配对齐内存，主分配器 OOM 时降级 *}
-    function AllocAligned(ASize, AAlign: SizeUInt): Pointer;
-    {** 返回合并后的分配器特性（任一支持则组合支持） *}
-    function Traits: TAllocatorTraits;
+    procedure FreeMem(APtr: Pointer; ASize: SizeUInt); override;
+    function ReallocMem(APtr: Pointer; AOldSize, ANewSize: SizeUInt): Pointer; override;
+    function Traits: TAllocatorTraits; override;
 
-    {** 已降级到 fallback 的分配次数 *}
     property TotalFallbacks: SizeUInt read FTotalFallbacks;
   end;
 
-  // Fallback Arena — Arena OOM 时降级到 IAllocator
-  //
-  // Arena 分配返回 nil 时, 自动尝试 IAllocator 分配。
-  // Reset 只重置 Arena, fallback 分配的内存不重置 (需手动释放)。
-  //
-  // 使用模式:
-  //   var LFall: TFallbackArena;
-  //   LFall := TFallbackArena.Create(LArena, LRtlAllocator);
-  //   LP := LFall.Alloc(1024);  // arena 优先, nil 时降级
-  //   LFall.Reset;              // 只重置 arena 部分
   TFallbackArena = class(TInterfacedObject, IArena)
   private
     FArena: IArena;
-    FFallback: IAllocator;
-    { 记录 fallback 分配 }
+    FFallback: TAllocator;
     FFallbackPtrs: array of Pointer;
+    FFallbackSizes: array of SizeUInt;
     FFallbackCount: SizeInt;
     FTotalFallbacks: SizeUInt;
-    procedure TrackFallback(APtr: Pointer);
+    procedure TrackFallback(APtr: Pointer; ASize: SizeUInt);
   public
-    {** 创建 fallback Arena，指定主 Arena 和后备分配器 *}
-    constructor Create(AArena: IArena; AFallback: IAllocator);
-    {** 销毁 Arena，自动释放所有 fallback 分配的内存 *}
+    constructor Create(AArena: IArena; AFallback: TAllocator);
     destructor Destroy; override;
 
-    { IArena }
-    {** Arena 分配，Arena OOM 时降级到后备分配器 *}
     function Alloc(ASize: SizeUInt): Pointer;
-    {** Arena 对齐分配，Arena OOM 时降级 *}
     function AllocAligned(ASize, AAlign: SizeUInt): Pointer;
-    {** Arena 零初始化分配，Arena OOM 时降级 *}
     function AllocZeroed(ASize: SizeUInt): Pointer;
-    {** 保存 Arena 当前状态标记（仅委托主 Arena） *}
     function SaveMark: TArenaMark;
-    {** 恢复 Arena 到指定标记（仅委托主 Arena） *}
     procedure RestoreToMark(AMark: TArenaMark);
-    {** 重置 Arena，仅重置主 Arena 部分，fallback 内存不受影响 *}
     procedure Reset;
-    {** 返回主 Arena 的已用大小 *}
     function UsedSize: SizeUInt;
-    {** 返回主 Arena 的剩余可用大小 *}
     function RemainingSize: SizeUInt;
-    {** 返回主 Arena 的统计信息 *}
     function Stats: TArenaStats;
 
-    {** 释放所有 fallback 分配的内存 *}
     procedure FreeFallbacks;
-    {** 已降级到 fallback 的分配次数 *}
     property TotalFallbacks: SizeUInt read FTotalFallbacks;
   end;
 
@@ -146,7 +103,7 @@ implementation
   TFallbackAllocator
   --------------------------------------------------------------------------- }
 
-constructor TFallbackAllocator.Create(APrimary, AFallback: IAllocator);
+constructor TFallbackAllocator.Create(APrimary, AFallback: TAllocator);
 begin
   inherited Create;
   FPrimary := APrimary;
@@ -158,7 +115,6 @@ end;
 
 destructor TFallbackAllocator.Destroy;
 begin
-  { entries 只是跟踪, 不释放内存 (由调用方负责) }
   FEntries := nil;
   inherited Destroy;
 end;
@@ -200,7 +156,7 @@ begin
     end;
 end;
 
-function TFallbackAllocator.GetMem(ASize: SizeUInt): Pointer;
+function TFallbackAllocator.DoGetMem(ASize: SizeUInt): Pointer;
 begin
   Result := FPrimary.GetMem(ASize);
   if Result = nil then begin
@@ -210,7 +166,7 @@ begin
   end;
 end;
 
-function TFallbackAllocator.AllocMem(ASize: SizeUInt): Pointer;
+function TFallbackAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
 begin
   Result := FPrimary.AllocMem(ASize);
   if Result = nil then begin
@@ -220,86 +176,79 @@ begin
   end;
 end;
 
-function TFallbackAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TFallbackAllocator.DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
 var
   LEntry: PFallbackEntry;
 begin
-  if APtr = nil then
-    Exit(GetMem(ASize));
-
-  if ASize = 0 then
-  begin
-    FreeMem(APtr);
+  if ADst = nil then
+    Exit(DoGetMem(ASize));
+  if ASize = 0 then begin
+    DoFreeMem(ADst);
     Exit(nil);
   end;
-
-  LEntry := FindEntry(APtr);
-  if LEntry <> nil then
-  begin
-    { 来自 fallback — Realloc 后更新记录 }
-    Result := FFallback.ReallocMem(APtr, ASize);
-    if Result <> nil then
-    begin
+  LEntry := FindEntry(ADst);
+  if LEntry <> nil then begin
+    Result := FFallback.ReallocMem(ADst, LEntry^.Size, ASize);
+    if Result <> nil then begin
       LEntry^.Ptr := Result;
       LEntry^.Size := ASize;
-    end
-    { ReallocMem 失败时 Result = nil，原指针仍有效，保留原记录 }
+    end;
   end
   else
-    Result := FPrimary.ReallocMem(APtr, ASize);
+    Result := FPrimary.ReallocMem(ADst, 0, ASize);
 end;
 
-procedure TFallbackAllocator.FreeMem(APtr: Pointer);
+procedure TFallbackAllocator.DoFreeMem(ADst: Pointer);
+var
+  LEntry: PFallbackEntry;
+begin
+  if ADst = nil then
+    Exit;
+  LEntry := FindEntry(ADst);
+  if LEntry <> nil then begin
+    FFallback.FreeMem(ADst, LEntry^.Size);
+    RemoveEntry(ADst);
+  end
+  else
+    FPrimary.FreeMem(ADst, 0);
+end;
+
+procedure TFallbackAllocator.FreeMem(APtr: Pointer; ASize: SizeUInt);
 var
   LEntry: PFallbackEntry;
 begin
   if APtr = nil then
     Exit;
-
   LEntry := FindEntry(APtr);
   if LEntry <> nil then begin
-    FFallback.FreeMem(APtr);
+    FFallback.FreeMem(APtr, LEntry^.Size);
     RemoveEntry(APtr);
   end
   else
-    FPrimary.FreeMem(APtr);
+    FPrimary.FreeMem(APtr, ASize);
 end;
 
-procedure TFallbackAllocator.FreeAligned(APtr: Pointer);
+function TFallbackAllocator.ReallocMem(APtr: Pointer;
+  AOldSize, ANewSize: SizeUInt): Pointer;
 var
   LEntry: PFallbackEntry;
 begin
   if APtr = nil then
-    Exit;
-
-  LEntry := FindEntry(APtr);
-  if LEntry <> nil then begin
-    FFallback.FreeAligned(APtr);
-    RemoveEntry(APtr);
-  end
-  else
-    FPrimary.FreeAligned(APtr);
-end;
-
-function TFallbackAllocator.MemSize(APtr: Pointer): SizeUInt;
-var
-  LEntry: PFallbackEntry;
-begin
-  LEntry := FindEntry(APtr);
-  if LEntry <> nil then
-    Result := FFallback.MemSize(APtr)
-  else
-    Result := FPrimary.MemSize(APtr);
-end;
-
-function TFallbackAllocator.AllocAligned(ASize, AAlign: SizeUInt): Pointer;
-begin
-  Result := FPrimary.AllocAligned(ASize, AAlign);
-  if Result = nil then begin
-    Result := FFallback.AllocAligned(ASize, AAlign);
-    if Result <> nil then
-      TrackFallback(Result, ASize);
+    Exit(DoGetMem(ANewSize));
+  if ANewSize = 0 then begin
+    FreeMem(APtr, AOldSize);
+    Exit(nil);
   end;
+  LEntry := FindEntry(APtr);
+  if LEntry <> nil then begin
+    Result := FFallback.ReallocMem(APtr, LEntry^.Size, ANewSize);
+    if Result <> nil then begin
+      LEntry^.Ptr := Result;
+      LEntry^.Size := ANewSize;
+    end;
+  end
+  else
+    Result := FPrimary.ReallocMem(APtr, AOldSize, ANewSize);
 end;
 
 function TFallbackAllocator.Traits: TAllocatorTraits;
@@ -308,7 +257,6 @@ var
 begin
   Result := FPrimary.Traits;
   LFallbackTraits := FFallback.Traits;
-  { 合并 primary + fallback 能力：任一支持则组合支持 }
   if LFallbackTraits.SupportsAligned then
     Result.SupportsAligned := True;
   if LFallbackTraits.ZeroInitialized then
@@ -319,12 +267,13 @@ end;
   TFallbackArena
   --------------------------------------------------------------------------- }
 
-constructor TFallbackArena.Create(AArena: IArena; AFallback: IAllocator);
+constructor TFallbackArena.Create(AArena: IArena; AFallback: TAllocator);
 begin
   inherited Create;
   FArena := AArena;
   FFallback := AFallback;
   FFallbackPtrs := nil;
+  FFallbackSizes := nil;
   FFallbackCount := 0;
   FTotalFallbacks := 0;
 end;
@@ -335,15 +284,19 @@ begin
   inherited Destroy;
 end;
 
-procedure TFallbackArena.TrackFallback(APtr: Pointer);
+procedure TFallbackArena.TrackFallback(APtr: Pointer; ASize: SizeUInt);
 begin
   if FFallbackCount >= Length(FFallbackPtrs) then begin
-    if Length(FFallbackPtrs) = 0 then
-      SetLength(FFallbackPtrs, 16)
-    else
+    if Length(FFallbackPtrs) = 0 then begin
+      SetLength(FFallbackPtrs, 16);
+      SetLength(FFallbackSizes, 16);
+    end else begin
       SetLength(FFallbackPtrs, Length(FFallbackPtrs) * 2);
+      SetLength(FFallbackSizes, Length(FFallbackSizes) * 2);
+    end;
   end;
   FFallbackPtrs[FFallbackCount] := APtr;
+  FFallbackSizes[FFallbackCount] := ASize;
   Inc(FFallbackCount);
   Inc(FTotalFallbacks);
 end;
@@ -354,7 +307,7 @@ begin
   if Result = nil then begin
     Result := FFallback.GetMem(ASize);
     if Result <> nil then
-      TrackFallback(Result);
+      TrackFallback(Result, ASize);
   end;
 end;
 
@@ -364,7 +317,7 @@ begin
   if Result = nil then begin
     Result := FFallback.AllocAligned(ASize, AAlign);
     if Result <> nil then
-      TrackFallback(Result);
+      TrackFallback(Result, ASize);
   end;
 end;
 
@@ -374,7 +327,7 @@ begin
   if Result = nil then begin
     Result := FFallback.AllocMem(ASize);
     if Result <> nil then
-      TrackFallback(Result);
+      TrackFallback(Result, ASize);
   end;
 end;
 
@@ -413,7 +366,7 @@ var
   I: SizeInt;
 begin
   for I := 0 to FFallbackCount - 1 do
-    FFallback.FreeMem(FFallbackPtrs[I]);
+    FFallback.FreeMem(FFallbackPtrs[I], FFallbackSizes[I]);
   FFallbackCount := 0;
 end;
 

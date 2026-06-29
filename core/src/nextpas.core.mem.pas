@@ -135,7 +135,7 @@ function AllocArray(const AAllocator: IAllocator; const ACount, AElemSize: SizeU
 
 function MakeFixedSlabPool(ACapacity: SizeUInt): IFixedSlabPool; inline;
 function MakePoolAllocator(ABlockSize: SizeUInt; ACapacity: Integer;
-  AFallback: IAllocator = nil): IAllocator; inline;
+  AFallback: TAllocator = nil): TAllocator; inline;
 
 procedure SecureZeroMemory(ABuffer: Pointer; ASize: NativeUInt); inline;
 procedure SecureZeroBytes(var AData: TBytes); inline;
@@ -171,7 +171,7 @@ begin
 end;
 
 function MakePoolAllocator(ABlockSize: SizeUInt; ACapacity: Integer;
-  AFallback: IAllocator): IAllocator;
+  AFallback: TAllocator): TAllocator;
 begin
   Result := nextpas.core.mem.pool.allocator.MakePoolAllocator(ABlockSize, ACapacity, AFallback);
 end;

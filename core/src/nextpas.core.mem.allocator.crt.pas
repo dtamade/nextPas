@@ -11,7 +11,8 @@ uses
 type
   {**
    * TCrtAllocator
-   * @desc 使用 C 运行时库 (CRT) 内存管理器实现的 IAllocator 具体类
+   * @desc 使用 C 运行时库 (CRT) 内存管理器实现的分配器。
+   *       FreeMem/ASize 参数被忽略（CRT 通过 header 知道大小）。
    *}
   TCrtAllocator = class(TAllocator)
   protected
@@ -20,11 +21,13 @@ type
     function  DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
     procedure DoFreeMem(ADst: Pointer); override;
   public
+    procedure FreeMem(APtr: Pointer; ASize: SizeUInt); override;
+    function ReallocMem(APtr: Pointer; AOldSize, ANewSize: SizeUInt): Pointer; override;
     function  Traits: TAllocatorTraits; override;
   end;
 
-function GetCrtAllocator: IAllocator;
-function TryGetCrtAllocator(out A: IAllocator): Boolean;
+function GetCrtAllocator: TAllocator;
+function TryGetCrtAllocator(out A: TAllocator): Boolean;
 
 implementation
 
@@ -34,8 +37,8 @@ function  crt_realloc(APtr: Pointer; ASize: SizeUInt): Pointer; cdecl external {
 procedure crt_free(APtr: Pointer); cdecl external {$IFDEF MSWINDOWS}'msvcrt.dll'{$ELSE}'c'{$ENDIF} name 'free';
 
 var
-  _CrtAllocatorObj: TAllocator = nil;
-  _CrtAllocatorIntf: IAllocator = nil;
+  _CrtAllocatorObj: TCrtAllocator;
+  _CrtAllocatorIntf: IAllocator;
   GCrtAllocLock: TRTLCriticalSection;
 
 function TCrtAllocator.DoGetMem(ASize: SizeUInt): Pointer;
@@ -58,19 +61,33 @@ begin
   crt_free(ADst);
 end;
 
+procedure TCrtAllocator.FreeMem(APtr: Pointer; ASize: SizeUInt);
+begin
+  crt_free(APtr);
+end;
+
+function TCrtAllocator.ReallocMem(APtr: Pointer;
+  AOldSize, ANewSize: SizeUInt): Pointer;
+begin
+  if APtr = nil then
+    Exit(crt_malloc(ANewSize));
+  if ANewSize = 0 then
+  begin
+    crt_free(APtr);
+    Exit(nil);
+  end;
+  Result := crt_realloc(APtr, ANewSize);
+end;
+
 function TCrtAllocator.Traits: TAllocatorTraits;
 begin
   Result := inherited Traits;
-  // CRT semantics:
-  // - AllocMem uses calloc path => zero initialized; GetMem not guaranteed
-  // - No native aligned API exposed via this allocator
-  // - No MemSize/usable_size available
   Result.ZeroInitialized := True;
   Result.SupportsAligned := False;
   Result.HasMemSize      := False;
 end;
 
-function GetCrtAllocator: IAllocator;
+function GetCrtAllocator: TAllocator;
 begin
   if _CrtAllocatorObj = nil then
   begin
@@ -79,16 +96,16 @@ begin
       if _CrtAllocatorObj = nil then
       begin
         _CrtAllocatorObj := TCrtAllocator.Create;
-        _CrtAllocatorIntf := _CrtAllocatorObj as IAllocator; // anchor lifetime
+        _CrtAllocatorIntf := _CrtAllocatorObj as IAllocator;
       end;
     finally
       LeaveCriticalSection(GCrtAllocLock);
     end;
   end;
-  Result := _CrtAllocatorIntf;
+  Result := _CrtAllocatorObj;
 end;
 
-function TryGetCrtAllocator(out A: IAllocator): Boolean;
+function TryGetCrtAllocator(out A: TAllocator): Boolean;
 begin
   try
     A := GetCrtAllocator;

@@ -29,17 +29,12 @@ type
     function DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
     procedure DoFreeMem(ADst: Pointer); override;
   public
-    {** 创建 TVirtualArenaAllocator }
     constructor Create(AAlignment: SizeUInt = DEFAULT_ALIGNMENT);
     destructor Destroy; override;
-
-    {** 重置 Arena（保留 mmap 映射，从头开始分配） }
     procedure Reset;
-
-    {** 直接访问内部 TVirtualArena }
     property Arena: TVirtualArena read FArena;
-
-    {** IAllocator traits }
+    procedure FreeMem(APtr: Pointer; ASize: SizeUInt); override;
+    function ReallocMem(APtr: Pointer; AOldSize, ANewSize: SizeUInt): Pointer; override;
     function Traits: TAllocatorTraits; override;
   end;
 
@@ -98,6 +93,21 @@ begin
   Result.ThreadSafe      := False;
   Result.HasMemSize      := False;
   Result.SupportsAligned := True;
+end;
+
+procedure TVirtualArenaAllocator.FreeMem(APtr: Pointer; ASize: SizeUInt);
+begin
+  { Arena bump allocator — individual free is no-op. Use Reset to release all. }
+end;
+
+function TVirtualArenaAllocator.ReallocMem(APtr: Pointer;
+  AOldSize, ANewSize: SizeUInt): Pointer;
+begin
+  if APtr = nil then
+    Exit(DoGetMem(ANewSize));
+  if ANewSize = 0 then
+    Exit(nil); { Arena — no-op free }
+  Result := DoReallocMem(APtr, ANewSize);
 end;
 
 end.

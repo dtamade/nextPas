@@ -32,6 +32,9 @@ type
     procedure DoFreeMem(ADst: Pointer); override;
   public
     constructor Init(aGetMem: TGetMemCallback; aAllocMem: TAllocMemCallback; aReallocMem: TReallocMemCallback; aFreeMem: TFreeMemCallback);
+    { Phase 1: 新签名 override。ASize/AOldSize 被忽略（回调使用旧签名）。 }
+    procedure FreeMem(APtr: Pointer; ASize: SizeUInt); override;
+    function ReallocMem(APtr: Pointer; AOldSize, ANewSize: SizeUInt): Pointer; override;
   end;
 
 function CreateCallbackAllocator(aGetMem: TGetMemCallback;
@@ -70,6 +73,24 @@ end;
 procedure TCallbackAllocator.DoFreeMem(ADst: Pointer);
 begin
   FFreeMemCallback(ADst)
+end;
+
+procedure TCallbackAllocator.FreeMem(APtr: Pointer; ASize: SizeUInt);
+begin
+  FFreeMemCallback(APtr);
+end;
+
+function TCallbackAllocator.ReallocMem(APtr: Pointer;
+  AOldSize, ANewSize: SizeUInt): Pointer;
+begin
+  if APtr = nil then
+    Exit(FGetMemCallback(ANewSize));
+  if ANewSize = 0 then
+  begin
+    FFreeMemCallback(APtr);
+    Exit(nil);
+  end;
+  Result := FReallocMemCallback(APtr, ANewSize);
 end;
 
 function CreateCallbackAllocator(aGetMem: TGetMemCallback;

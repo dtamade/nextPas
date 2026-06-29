@@ -62,8 +62,8 @@ type
 
     // 对齐分配（默认 over-allocate 实现，子类可覆盖为原生对齐）
     // 注意：覆盖 AllocAligned 的子类必须同时覆盖 FreeAligned
-    function  AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
-    procedure FreeAligned(APtr: Pointer);
+    function  AllocAligned(ASize, AAlignment: SizeUInt): Pointer; virtual;
+    procedure FreeAligned(APtr: Pointer); virtual;
     function  Traits: TAllocatorTraits; virtual;
   end;
 

@@ -11,7 +11,8 @@ uses
 type
   {**
    * TRtlAllocator
-   * @desc 使用标准 Pascal RTL 内存管理器实现的 IAllocator 具体类
+   * @desc 使用标准 Pascal RTL 内存管理器实现的分配器。
+   *       FreeMem/ASize 参数被忽略（RTL 通过 header 知道大小）。
    *}
   TRtlAllocator = class(TAllocator)
   protected
@@ -20,17 +21,20 @@ type
     function  DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
     procedure DoFreeMem(ADst: Pointer); override;
   public
+    { Phase 1: 新签名 override。ASize/AOldSize 被忽略。 }
+    procedure FreeMem(APtr: Pointer; ASize: SizeUInt); override;
+    function ReallocMem(APtr: Pointer; AOldSize, ANewSize: SizeUInt): Pointer; override;
     function  Traits: TAllocatorTraits; override;
   end;
 
-function GetRtlAllocator: IAllocator;
-function TryGetRtlAllocator(out A: IAllocator): Boolean;
+function GetRtlAllocator: TAllocator;
+function TryGetRtlAllocator(out A: TAllocator): Boolean;
 
 implementation
 
 var
-  _RTLAllocatorObj: TAllocator = nil;
-  _RTLAllocatorIntf: IAllocator = nil;
+  _RTLAllocatorObj: TRtlAllocator;
+  _RTLAllocatorIntf: IAllocator;
   GRtlAllocLock: TRTLCriticalSection;
 
 function TRtlAllocator.DoGetMem(ASize: SizeUInt): Pointer;
@@ -53,19 +57,35 @@ begin
   System.FreeMem(ADst);
 end;
 
+procedure TRtlAllocator.FreeMem(APtr: Pointer; ASize: SizeUInt);
+begin
+  { RTL knows block size via its own header — ASize ignored. }
+  System.FreeMem(APtr);
+end;
+
+function TRtlAllocator.ReallocMem(APtr: Pointer;
+  AOldSize, ANewSize: SizeUInt): Pointer;
+begin
+  { RTL handles old size internally — AOldSize ignored. }
+  if APtr = nil then
+    Exit(System.GetMem(ANewSize));
+  if ANewSize = 0 then
+  begin
+    System.FreeMem(APtr);
+    Exit(nil);
+  end;
+  Result := System.ReallocMem(APtr, ANewSize);
+end;
+
 function TRtlAllocator.Traits: TAllocatorTraits;
 begin
   Result := inherited Traits;
-  // RTL Allocator semantics:
-  // - AllocMem zero-initializes; GetMem does not guarantee zero
-  // - No native aligned API exposed via this allocator (use aligned module/bridge)
-  // - No MemSize/usable_size available
   Result.ZeroInitialized := True;
   Result.SupportsAligned := False;
   Result.HasMemSize      := False;
 end;
 
-function GetRtlAllocator: IAllocator;
+function GetRtlAllocator: TAllocator;
 begin
   if _RTLAllocatorObj = nil then
   begin
@@ -74,16 +94,16 @@ begin
       if _RTLAllocatorObj = nil then
       begin
         _RTLAllocatorObj := TRtlAllocator.Create;
-        _RTLAllocatorIntf := _RTLAllocatorObj as IAllocator; // anchor lifetime via interface
+        _RTLAllocatorIntf := _RTLAllocatorObj as IAllocator;
       end;
     finally
       LeaveCriticalSection(GRtlAllocLock);
     end;
   end;
-  Result := _RTLAllocatorIntf;
+  Result := _RTLAllocatorObj;
 end;
 
-function TryGetRtlAllocator(out A: IAllocator): Boolean;
+function TryGetRtlAllocator(out A: TAllocator): Boolean;
 begin
   try
     A := GetRtlAllocator;
@@ -98,7 +118,7 @@ initialization
   InitCriticalSection(GRtlAllocLock);
 finalization
   DoneCriticalSection(GRtlAllocLock);
-  _RTLAllocatorIntf := nil; // release anchor; object will be freed by interface refcount
+  _RTLAllocatorIntf := nil;
   _RTLAllocatorObj := nil;
 
 end.

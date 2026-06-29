@@ -31,7 +31,7 @@ type
    *}
   TTrackingAllocator = class(TAllocator)
   private
-    FInner: IAllocator;
+    FInner: TAllocator;
     FRecords: TAllocRecordArray;
     FCount: SizeInt;
     FCapacity: SizeInt;
@@ -48,20 +48,17 @@ type
     procedure DoFreeMem(ADst: Pointer); override;
     function DoMemSize(APtr: Pointer): SizeUInt; override;
   public
-    constructor Create(aInner: IAllocator);
+    constructor Create(aInner: TAllocator);
     destructor Destroy; override;
 
-    {** 当前活跃分配数 }
     function ActiveAllocCount: SizeInt;
-    {** 当前活跃分配字节 }
     function ActiveAllocBytes: SizeUInt;
-    {** 是否有泄漏 }
     function HasLeaks: Boolean;
-    {** 生成泄漏报告（包含每个未释放块的地址和大小） }
     function ReportLeaks: string;
-    {** 内部分配器 }
-    property Inner: IAllocator read FInner;
+    property Inner: TAllocator read FInner;
 
+    procedure FreeMem(APtr: Pointer; ASize: SizeUInt); override;
+    function ReallocMem(APtr: Pointer; AOldSize, ANewSize: SizeUInt): Pointer; override;
     function Traits: TAllocatorTraits; override;
   end;
 
@@ -69,7 +66,7 @@ implementation
 
 { TTrackingAllocator }
 
-constructor TTrackingAllocator.Create(aInner: IAllocator);
+constructor TTrackingAllocator.Create(aInner: TAllocator);
 begin
   inherited Create;
   if aInner = nil then
@@ -294,6 +291,40 @@ begin
   Result.ThreadSafe      := True;
   Result.HasMemSize      := FInner.Traits.HasMemSize;
   Result.SupportsAligned := False;
+end;
+
+procedure TTrackingAllocator.FreeMem(APtr: Pointer; ASize: SizeUInt);
+begin
+  if APtr = nil then
+    Exit;
+  EnterCriticalSection(FLock);
+  try
+    if FindRecordIndex(APtr) < 0 then
+      raise EDoubleFree.Create(aeDoubleFree,
+        'TTrackingAllocator.FreeMem: pointer not tracked (double-free or foreign pointer)');
+    RemoveRecord(APtr);
+  finally
+    LeaveCriticalSection(FLock);
+  end;
+  FInner.FreeMem(APtr, ASize);
+end;
+
+function TTrackingAllocator.ReallocMem(APtr: Pointer;
+  AOldSize, ANewSize: SizeUInt): Pointer;
+begin
+  Result := FInner.ReallocMem(APtr, AOldSize, ANewSize);
+  EnterCriticalSection(FLock);
+  try
+    if Result <> nil then
+    begin
+      if APtr <> nil then
+        UpdateRecord(APtr, Result, ANewSize)
+      else
+        AddRecord(Result, ANewSize);
+    end;
+  finally
+    LeaveCriticalSection(FLock);
+  end;
 end;
 
 end.
