@@ -49,6 +49,7 @@ type
     FLogLines : specialize TArray<string>;
     FCleanups : specialize TArray<TTestClosure>;
     constructor Create(const ATestName: string; const AConfig: TTestConfig);
+    destructor Destroy; override;
     procedure Run(const AName: string; AProc: TTestProc);
     procedure Run(const AName: string; AProc: TTestClosure);
     procedure RunNested(const AName: string; AProc: Pointer);
@@ -95,6 +96,27 @@ begin
   FSubFail  := 0;
   FSubSkip  := 0;
   FOnResult := nil;
+end;
+
+destructor TTestContext.Destroy;
+var
+  I: Integer;
+begin
+  { Explicitly release closures — FPC may not finalize managed fields
+    in classes destroyed via reference counting. }
+  for I := 0 to High(FSubtests) do
+  begin
+    FSubtests[I].Closure := nil;
+    FSubtests[I].SubtestProc := nil;
+  end;
+  FSubtests := nil;
+  for I := 0 to High(FCleanups) do
+    FCleanups[I] := nil;
+  FCleanups := nil;
+  FOnResult := nil;
+  FFailedNames := nil;
+  FLogLines := nil;
+  inherited Destroy;
 end;
 
 procedure TTestContext.Run(const AName: string; AProc: TTestProc);

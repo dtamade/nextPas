@@ -1755,4 +1755,31 @@ begin
 
   WriteLn;
   PassTest('test_runner');
+
+  { Release closures before heaptrc reports (unit finalization runs before
+    main block locals are freed — closures would appear as unfreed). }
+  LRunner := Default(TTestRunner);
+  LSumRunner := Default(TTestRunner);
+  LMaxFailRunner := Default(TTestRunner);
+  LExactRunner68 := Default(TTestRunner);
+  LSuite1 := Default(TTestSuite);
+  LSuite2 := Default(TTestSuite);
+  LFailSuite1 := Default(TTestSuite);
+  LFailSuite2 := Default(TTestSuite);
+  LFailSuite3 := Default(TTestSuite);
+  LRunNestedS1 := Default(TTestSuite);
+  LRunNestedS2 := Default(TTestSuite);
+  LCacheSuite := Default(TTestSuite);
+  LSummarySuite := Default(TTestSuite);
+  LSumSuite3 := Default(TTestSuite);
+  LResultSuite := Default(TTestSuite);
+  LExactSuite68 := Default(TTestSuite);
+  LShortSuite := Default(TTestSuite);
+  LProgressSuite := Default(TTestSuite);
+  LMaxFailSuite := Default(TTestSuite);
+  LJsonSuite := Default(TTestSuite);
+  LJsonSink := nil;
+  LVerbSuite := Default(TTestSuite);
+  LVerbSink := nil;
+  LBenchSuite := Default(TTestSuite);
 end.

@@ -1722,6 +1722,13 @@ begin
     LAppender.Free;
   end;
 
+  { Dispose table test allocations (PTestCase/PTestCaseProc heap data).
+    Must be called before FinalizeResults so that --count=N re-runs can
+    skip already-disposed entries via the nil guard in the test loop.
+    FCleanupDone guard prevents double-free when RunAllWithResult also
+    calls CleanupTableAllocations after the full run. }
+  CleanupTableAllocations;
+
   FinalizeResults(LConfig, AResult, LPass, LFail, LSkip);
   Result := LastRunPassed;
 end;
@@ -2020,6 +2027,11 @@ begin
     if (LThreads[I] <> 0) or (LResults[I].Status <> tsPassed) or
        (LResults[I].Name <> '') then
       AppendResult(AResult.Results, LResults[I]);
+
+  { Dispose table test allocations from parallel worker records.
+    Same rationale as RunWithResult — FCleanupDone guard prevents
+    double-free when RunAllParallelWithResult also calls this. }
+  CleanupTableAllocations;
 
   FinalizeResults(LConfig, AResult, LPass, LFail, LSkip);
   Result := LastRunPassed;
