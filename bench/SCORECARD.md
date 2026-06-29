@@ -8,10 +8,10 @@
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **82** | 1 | 33 | **71%** |
+| **Go** | **84** | 3 | 33 | **70%** |
 | **Rust** | 19 | 0 | 47 | **29%** |
 
-## Track Summary (27 tracks, 120 operations)
+## Track Summary (28 tracks, 124 operations)
 
 ### Text Operations (6 ops)
 
@@ -327,6 +327,17 @@
 
 **10W vs Go** — Build 2.4-3.8x (SwissTable SIMD ctrl vs Go runtime map); Lookup 1.3-1.8x (pre-built, pure probing); 13ns/elem at 100K vs Go's 37ns
 
+### Binary Search (4 ops)
+
+| Track | Pascal (ns) | Go (ns) | vs Go |
+|-------|-------------|---------|-------|
+| **Standard/Hit/100K** | **5627351** | 10656752 | **1.89x** ✓ |
+| **Standard/Miss/100K** | **6948379** | 10497013 | **1.51x** ✓ |
+| Eytzinger/Hit/100K | 5041982 | 5213655 | 1.03x — |
+| Eytzinger/Miss/100K | 5813074 | 5929896 | 1.02x — |
+
+**2W 2D vs Go** — Standard search 1.5-1.9x faster (Go sort.Search closure overhead); Eytzinger layout (cache-friendly) ties at 100K
+
 ### Pascal Wins (biggest margins vs Go)
 1. **String Concat: 3557x** — Go immutable strings O(n²) vs Pascal COW
 2. **Fill/1KB: 23.37x** — FillChar→rep stosb vs Go byte loop (no memset opt)
@@ -376,7 +387,7 @@
 - **Memory/pointer**: Pascal strong (5W vs Go)
 - **Numeric loops**: Go/Rust win (auto-vectorization)
 - **Hash maps**: Go wins (incremental rehash, cache-friendly miss)
-- **Binary search**: Go/Rust win (branchless codegen)
+- **Binary search**: Pascal strong (2W 2D vs Go) — Standard 1.5-1.9x faster; Eytzinger layout ties
 - **Float formatting**: Go/Rust win (Ryu algorithm)
 
 ## Conclusion
