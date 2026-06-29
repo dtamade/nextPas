@@ -4,8 +4,11 @@ unit nextpas.core.text.base;
 
 interface
 
+uses
+  nextpas.core.base;
+
 type
-  TStringArray = array of string;
+  TStringArray = nextpas.core.base.TStringArray;
 
 implementation
 

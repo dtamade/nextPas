@@ -29,7 +29,8 @@ uses
   {$ELSE}
   Sockets,
   {$ENDIF}
-  nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.base.utils, nextpas.core.system.classes,
+  Classes, SysUtils, DateUtils,
+  nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.text.strings, nextpas.core.base.utils, nextpas.core.system.classes,
   nextpas.core.io.intf,
   nextpas.core.io.stream_adapter,
   nextpas.core.io.util,
@@ -1386,7 +1387,6 @@ var
   LDecryptError: string;
   LReadKey, LReadIV, LReadMACKey: TBytes;
   LReadSeqNum: PQWord;
-  LStreamAdapter: TStream;
 begin
   Result := False;
   AContentType := 0;
@@ -1399,15 +1399,10 @@ begin
     Exit;
   end;
 
-  LStreamAdapter := WrapIStream(FStream);
-  try
-    if not TLS12ReadRecord(LStreamAdapter, AContentType, LEncrypted) then
-    begin
-      AError := 'Failed to read TLS 1.2 protected record';
-      Exit;
-    end;
-  finally
-    LStreamAdapter.Free;
+  if not TLS12ReadRecord(FStream, AContentType, LEncrypted) then
+  begin
+    AError := 'Failed to read TLS 1.2 protected record';
+    Exit;
   end;
 
   if not TLS12GetCipherSuiteInfo(FTLS12State.CipherSuite, LSuiteInfo) then
@@ -1525,7 +1520,7 @@ begin
 
   if Trim(FALPNProtocols) <> '' then
   begin
-    LProtoList := FALPNProtocols.Split([',']);
+    LProtoList := StringsSplit(FALPNProtocols, ',');
     for I := 0 to High(LProtoList) do
     begin
       LProtocol := Trim(LProtoList[I]);
@@ -3145,7 +3140,7 @@ begin
       // We create a combined stream that reads prefix first, then socket
       LCombined := TConcatStream.Create(LPrefixStream, LSocketStream);
       try
-        if not TryTLS12ServerHandshake(LCombined, LConfig, LState, LError) then
+        if not TryTLS12ServerHandshake(WrapTStream(LCombined, False), LConfig, LState, LError) then
         begin
           SetHandshakeError(sslErrHandshake, 'TLS 1.2 server handshake failed: ' + LError);
           Exit;
@@ -3241,7 +3236,7 @@ begin
       LCombined := TConcatStream.Create(LPrefixStream, LSocketStream);
       try
         if not TryTLS12ClientHandshakeFromFallback(
-          LCombined,
+          WrapTStream(LCombined, False),
           AClientHelloHandshake,
           LClientRandom,
           FServerName,
@@ -3304,7 +3299,6 @@ var
   LProtos: array of string;
   LProtoList: TStringArray;
   LCertificate: ISSLCertificate;
-  LStreamAdapter: TStream;
   LContextCipherSuites: IFreePascalContextCipherSuites;
   LConfiguredCipherSuites12: TTLS12CipherSuiteList;
   LSuiteInfo: TTLS12CipherSuiteInfo;
@@ -3339,7 +3333,7 @@ begin
 
     if Trim(FALPNProtocols) <> '' then
     begin
-      LProtoList := FALPNProtocols.Split([',']);
+      LProtoList := StringsSplit(FALPNProtocols, ',');
       SetLength(LProtos, 0);
       for I := 0 to High(LProtoList) do
         if Trim(LProtoList[I]) <> '' then
@@ -3367,30 +3361,20 @@ begin
       LCachedSession.CipherSuite := LTLS12ResumeSession.GetTLS12CipherSuite;
       LCachedSession.ServerName := FServerName;
 
-      LStreamAdapter := WrapIStream(FStream);
-      try
-        if Length(LConfiguredCipherSuites12) > 0 then
-          LHandshakeOk := TryTLS12ClientHandshakeWithResume(
-            LStreamAdapter, FServerName, LProtos, LConfiguredCipherSuites12,
-            LCachedSession, FTLS12State, LError)
-        else
-          LHandshakeOk := TryTLS12ClientHandshakeWithResume(
-            LStreamAdapter, FServerName, LProtos,
-            LCachedSession, FTLS12State, LError);
-      finally
-        LStreamAdapter.Free;
-      end;
+      if Length(LConfiguredCipherSuites12) > 0 then
+        LHandshakeOk := TryTLS12ClientHandshakeWithResume(
+          FStream, FServerName, LProtos, LConfiguredCipherSuites12,
+          LCachedSession, FTLS12State, LError)
+      else
+        LHandshakeOk := TryTLS12ClientHandshakeWithResume(
+          FStream, FServerName, LProtos,
+          LCachedSession, FTLS12State, LError);
     end
     else
     begin
-      LStreamAdapter := WrapIStream(FStream);
-      try
-        LHandshakeOk := TryTLS12ClientHandshake(
-          LStreamAdapter, FServerName, LProtos, LConfiguredCipherSuites12,
-          FTLS12State, LError);
-      finally
-        LStreamAdapter.Free;
-      end;
+      LHandshakeOk := TryTLS12ClientHandshake(
+        FStream, FServerName, LProtos, LConfiguredCipherSuites12,
+        FTLS12State, LError);
     end;
 
     if not LHandshakeOk then

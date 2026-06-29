@@ -309,7 +309,7 @@ function TFreePascalContext.ReadStreamToBytes(AStream: IStream): TBytes;
 begin
   if AStream = nil then
     RaiseInvalidParameter('AStream');
-  Result := ReadIStreamToBytes(WrapIStream(AStream, False), High(Int64), 'AStream');
+  Result := ReadIStreamToBytes(AStream, High(Int64), 'AStream');
 end;
 
 function TFreePascalContext.ReadIStreamToBytes(const AStream: IStream;
@@ -626,7 +626,7 @@ var
 begin
   if AStream = nil then
     RaiseInvalidParameter('AStream');
-  LTransport := WrapIStream(AStream, False);
+  LTransport := AStream;
   FCertificateData := ReadIStreamToBytes(LTransport, MAX_CERTIFICATE_SIZE, 'AStream');
 end;
 
@@ -677,7 +677,7 @@ var
 begin
   if AStream = nil then
     RaiseInvalidParameter('AStream');
-  LTransport := WrapIStream(AStream, False);
+  LTransport := AStream;
   FPrivateKeyData := ReadIStreamToBytes(LTransport, MAX_PRIVATE_KEY_SIZE, 'AStream');
   if APassword <> '' then
     DecryptPrivateKeyData(APassword, 'TFreePascalContext.LoadPrivateKey(AStream)');
@@ -836,7 +836,7 @@ begin
     else if LBlock.IsEncrypted and (LBlock.Headers <> nil) then
     begin
       LDEKInfo := '';
-      for I := 0 to LBlock.Length(Headers) - 1 do
+      for I := 0 to Length(LBlock.Headers) - 1 do
       begin
         if Pos('DEK-Info:', LBlock.Headers[I]) = 1 then
         begin
@@ -1188,7 +1188,7 @@ function TFreePascalContext.CreateConnection(AStream: IStream): ISSLConnection;
 var
   LTransport: IStream;
 begin
-  LTransport := WrapIStream(AStream, False);
+  LTransport := AStream;
   Result := TFreePascalConnection.Create(Self as ISSLContext, LTransport);
 end;
 
@@ -1290,8 +1290,6 @@ begin
 end;
 
 procedure TFreePascalContext.AddCRLFile(const AFileName: string);
-var
-  LCRLText: TStringArray;
 begin
   if not nextpas.core.fs.IsFile(AFileName) then
     raise ESSLFileNotFoundException.CreateWithContext(
@@ -1301,18 +1299,14 @@ begin
       0,
       sslFreePascal
     );
-  try
-    LCRLText.LoadFromFile(AFileName);
-    AddCRLPEM(LCRLText.Text);
-  finally
-  end;
+  AddCRLPEM(nextpas.core.fs.ReadFileText(AFileName));
 end;
 
 function TFreePascalContext.BuildCRLStore: TStringArray;
 begin
   if (FCRLMaterial = nil) or (Length(FCRLMaterial) = 0) then
     Exit(nil);
-  Result.Assign(FCRLMaterial);
+  Result := Copy(FCRLMaterial);
 end;
 
 procedure TFreePascalContext.ClearServerStapledOCSPResponse;

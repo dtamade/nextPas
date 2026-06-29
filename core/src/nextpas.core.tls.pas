@@ -17,7 +17,7 @@ unit nextpas.core.tls;
 
 interface
 
-uses nextpas.core.tls.base, nextpas.core.tls.exceptions, nextpas.core.tls.tls, nextpas.core.tls.dialer, nextpas.core.tls.quick, nextpas.core.tls.context.builder, nextpas.core.tls.connection.builder; type // Primary API (rustls-aligned) TSSLConnector = nextpas.core.tls.tls.TSSLConnector;
+uses nextpas.core.io.intf, nextpas.core.tls.base, nextpas.core.tls.exceptions, nextpas.core.tls.tls, nextpas.core.tls.dialer, nextpas.core.tls.quick, nextpas.core.tls.context.builder, nextpas.core.tls.connection.builder; type // Primary API (rustls-aligned) TSSLConnector = nextpas.core.tls.tls.TSSLConnector;
   TSSLAcceptor = nextpas.core.tls.tls.TSSLAcceptor;
   TSSLStream = nextpas.core.tls.tls.TSSLStream;
 
@@ -26,9 +26,9 @@ uses nextpas.core.tls.base, nextpas.core.tls.exceptions, nextpas.core.tls.tls, n
   TSSLDialResult = nextpas.core.tls.dialer.TSSLDialResult;
 
 // Convenience functions (DNS + TCP + TLS in one call)
-function TLSDial(const AHost: string; APort: Word): TSSLStream;
+function TLSDial(const AHost: string; APort: Word): IStream;
 function TryTLSDial(const AHost: string; APort: Word;
-  out AStream: TSSLStream; out AError: string): Boolean;
+  out AStream: IStream; out AError: string): Boolean;
 
 implementation
 
@@ -41,7 +41,7 @@ begin
   Result := GDefaultDialer;
 end;
 
-function TLSDial(const AHost: string; APort: Word): TSSLStream;
+function TLSDial(const AHost: string; APort: Word): IStream;
 var
   LResult: TSSLDialResult;
 begin
@@ -52,7 +52,7 @@ begin
 end;
 
 function TryTLSDial(const AHost: string; APort: Word;
-  out AStream: TSSLStream; out AError: string): Boolean;
+  out AStream: IStream; out AError: string): Boolean;
 begin
   Result := GetDefaultDialer.TryDial(AHost, APort, AStream, AError);
 end;
@@ -61,6 +61,7 @@ initialization
   RegisterFreePascalBackend;
 
 finalization
-  FreeAndNil(GDefaultDialer);
+  GDefaultDialer.Free;
+  GDefaultDialer := nil;
 
 end.
