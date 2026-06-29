@@ -675,6 +675,24 @@ type
     VariationStore: TItemVariationStore;
   end;
 
+  {** VVAR 表（垂直度量变化）。
+      结构和 HVAR 完全一致，但有 vrsb 和 vadv 两个 DeltaSetIndexMap。 }
+  TVvarTable = record
+    VariationStore: TItemVariationStore;
+    HasVrsbMapping: Boolean;
+    VrsbMapDataOff: Int32;
+    VrsbMapFormat: Int32;
+    VrsbMapEntrySize: Int32;
+    VrsbMapInnerBits: Int32;
+    VrsbMapCount: Int32;
+    HasVadvMapping: Boolean;
+    VadvMapDataOff: Int32;
+    VadvMapFormat: Int32;
+    VadvMapEntrySize: Int32;
+    VadvMapInnerBits: Int32;
+    VadvMapCount: Int32;
+  end;
+
   {** gvar 共享 tuple 坐标（已从 F2Dot14 转为 16.16 Fixed） }
   TGvarSharedTuple = record
     Coords: array of Int32;               // length = axisCount

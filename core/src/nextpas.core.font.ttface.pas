@@ -97,6 +97,8 @@ type
     FAvarValid: Boolean;
     FHvar: THvarTable;
     FHvarValid: Boolean;
+    FVvar: TVvarTable;
+    FVvarValid: Boolean;
     FGvar: TGvarTable;
     FGvarValid: Boolean;
     FCurrentNormCoords: array of Single;  // 当前归一化坐标（用于 CFF2 blend）
@@ -120,6 +122,7 @@ type
     procedure ParsePost;
     procedure ParseAvar;
     procedure ParseHvar;
+    procedure ParseVvar;
     procedure ParseGvar;
     procedure ParseName;
     {** 计算通用 ItemVariationStore 的 region scalar（Single 坐标） }
@@ -358,6 +361,14 @@ type
         返回 0 表示无变化或无 HVAR。 }
     function CalcHvarAdvanceDelta(AGlyphIndex: UInt32;
       const ANormCoords: array of Single): Single;
+    {** VVAR 表是否有效（垂直度量变化） }
+    function HasVvar: Boolean;
+    {** 计算指定字形的垂直 advance height delta。
+        ANormCoords: 已通过 NormalizeAxisValue 处理的归一化坐标数组。
+        使用 vadvMapping（如果有）或隐式映射。
+        返回 0 表示无变化或无 VVAR。 }
+    function CalcVvarAdvanceDelta(AGlyphIndex: UInt32;
+      const ANormCoords: array of Single): Single;
     {** gvar 表是否有效（TrueType 可变字形轮廓） }
     function HasGvar: Boolean;
     {** 应用 gvar 字形变化 delta 到轮廓点坐标。
@@ -421,6 +432,7 @@ begin
   FFvarValid := False;
   FAvarValid := False;
   FHvarValid := False;
+  FVvarValid := False;
   FGvarValid := False;
   FLastError := '';
 
@@ -496,6 +508,10 @@ begin
     except
     end;
     try
+      ParseVvar;
+    except
+    end;
+    try
       ParseGvar;
     except
     end;
@@ -529,6 +545,7 @@ begin
   FFvarValid := False;
   FAvarValid := False;
   FHvarValid := False;
+  FVvarValid := False;
   FGvarValid := False;
   FLastError := '';
 
@@ -590,6 +607,10 @@ begin
     end;
     try
       ParseHvar;
+    except
+    end;
+    try
+      ParseVvar;
     except
     end;
     try
@@ -4667,6 +4688,292 @@ begin
           CalcItemVarRegionScalar(FHvar.VariationStore.Regions, FHvar.VariationStore.RegionCount, LRegionIdx, ANormCoords);
         Inc(LDeltaPos, 1);
       end;
+    end;
+  end;
+
+  Result := LDeltaSum;
+end;
+
+{ ========================================================================= }
+{ VVAR 表解析（Vertical Metrics Variations）                                 }
+{ ========================================================================= }
+
+procedure TTFontFace.ParseVvar;
+var
+  LIdx, LOff, LIVSOff, LVrsbMapOff, LVadvMapOff: Int32;
+  LRegionBase, LAxisCount, LRegionCount, LDataCount: Int32;
+  LDataOff, I, J, K: Int32;
+  LMapFmt, LMapEntryFmt, LMapCount: Int32;
+  LMapEntrySize, LInnerBits: Int32;
+begin
+  LIdx := FindTable(TABLE_TAG_VVAR);
+  if LIdx < 0 then
+    Exit;
+  LOff := Int32(FTables[LIdx].Offset);
+
+  // VVAR header: 16 bytes minimum
+  // bytes 0-1: version (must be 1)
+  // bytes 2-3: reserved
+  // bytes 4-7:  itemVariationStoreOffset (Offset32)
+  // bytes 8-11: vrsbMappingOffset (Offset32)
+  // bytes 12-15: vadvMappingOffset (Offset32, optional)
+  if LOff + 16 > FDataLength then
+    Exit;
+
+  if ReadUInt16BE(LOff) <> 1 then
+    Exit;
+
+  LIVSOff := Int32(ReadUInt32BE(LOff + 4));
+  LVrsbMapOff := Int32(ReadUInt32BE(LOff + 8));
+  LVadvMapOff := Int32(ReadUInt32BE(LOff + 12));
+
+  if LIVSOff < 16 then
+    Exit;
+
+  // ---- 解析 ItemVariationStore（VVAR 自己的） ----
+  LIVSOff := LOff + LIVSOff;
+  if LIVSOff + 8 > FDataLength then Exit;
+
+  if ReadUInt16BE(LIVSOff) <> 1 then Exit;
+
+  LRegionBase := LIVSOff + Int32(ReadUInt32BE(LIVSOff + 2));
+  LDataCount := ReadUInt16BE(LIVSOff + 6);
+
+  if LRegionBase + 2 > FDataLength then Exit;
+  LAxisCount := ReadUInt16BE(LRegionBase);
+  if (LAxisCount < 1) or (LAxisCount > 16) then Exit;
+
+  FVvar.VariationStore.AxisCount := LAxisCount;
+  if LDataCount > 0 then
+  begin
+    LDataOff := Int32(ReadUInt32BE(LIVSOff + 8));
+    LDataOff := LIVSOff + LDataOff;
+    if LDataOff + 6 > FDataLength then Exit;
+    LRegionCount := ReadUInt16BE(LDataOff + 4);
+  end
+  else
+    LRegionCount := 0;
+
+  if LRegionCount > 32767 then
+    LRegionCount := 32767;
+
+  FVvar.VariationStore.RegionCount := LRegionCount;
+  SetLength(FVvar.VariationStore.Regions, LRegionCount);
+
+  K := LRegionBase + 2;
+  for I := 0 to LRegionCount - 1 do
+  begin
+    FVvar.VariationStore.Regions[I].AxisCount := LAxisCount;
+    for J := 0 to LAxisCount - 1 do
+    begin
+      if K + 6 > FDataLength then Exit;
+      FVvar.VariationStore.Regions[I].Axes[J].StartCoord := ReadUInt16BE(K);
+      FVvar.VariationStore.Regions[I].Axes[J].PeakCoord := ReadUInt16BE(K + 2);
+      FVvar.VariationStore.Regions[I].Axes[J].EndCoord := ReadUInt16BE(K + 4);
+      Inc(K, 6);
+    end;
+  end;
+
+  // 解析 ItemVariationData 子表
+  FVvar.VariationStore.DataCount := LDataCount;
+  SetLength(FVvar.VariationStore.DataSubtables, LDataCount);
+  for I := 0 to LDataCount - 1 do
+  begin
+    LDataOff := Int32(ReadUInt32BE(LIVSOff + 8 + I * 4));
+    LDataOff := LIVSOff + LDataOff;
+    if LDataOff + 6 > FDataLength then Exit;
+
+    FVvar.VariationStore.DataSubtables[I].ItemCount := ReadUInt16BE(LDataOff);
+    FVvar.VariationStore.DataSubtables[I].WordDeltaCount := ReadUInt16BE(LDataOff + 2);
+    FVvar.VariationStore.DataSubtables[I].RegionIndexCount := ReadUInt16BE(LDataOff + 4);
+
+    SetLength(FVvar.VariationStore.DataSubtables[I].RegionIndices,
+      FVvar.VariationStore.DataSubtables[I].RegionIndexCount);
+    for J := 0 to FVvar.VariationStore.DataSubtables[I].RegionIndexCount - 1 do
+      FVvar.VariationStore.DataSubtables[I].RegionIndices[J] :=
+        ReadUInt16BE(LDataOff + 6 + J * 2);
+
+    FVvar.VariationStore.DataSubtables[I].DeltaDataOffset :=
+      LDataOff + 6 + FVvar.VariationStore.DataSubtables[I].RegionIndexCount * 2;
+    FVvar.VariationStore.DataSubtables[I].RowStride :=
+      (FVvar.VariationStore.DataSubtables[I].WordDeltaCount and $7FFF) * 2 +
+      (FVvar.VariationStore.DataSubtables[I].RegionIndexCount -
+       (FVvar.VariationStore.DataSubtables[I].WordDeltaCount and $7FFF));
+  end;
+
+  // ---- 解析 vrsbMapping (DeltaSetIndexMap) ----
+  if LVrsbMapOff > 0 then
+  begin
+    LVrsbMapOff := LOff + LVrsbMapOff;
+    if LVrsbMapOff + 4 > FDataLength then Exit;
+
+    LMapFmt := ReadUInt8(LVrsbMapOff);
+    LMapEntryFmt := ReadUInt8(LVrsbMapOff + 1);
+    if LMapFmt = 0 then
+    begin
+      LMapCount := ReadUInt16BE(LVrsbMapOff + 2);
+      FVvar.VrsbMapDataOff := LVrsbMapOff + 4;
+    end
+    else
+    begin
+      LMapCount := Int32(ReadUInt32BE(LVrsbMapOff + 2));
+      FVvar.VrsbMapDataOff := LVrsbMapOff + 6;
+    end;
+
+    LMapEntrySize := ((LMapEntryFmt and $30) shr 4) + 1;
+    LInnerBits := (LMapEntryFmt and $0F) + 1;
+
+    FVvar.HasVrsbMapping := True;
+    FVvar.VrsbMapFormat := LMapFmt;
+    FVvar.VrsbMapEntrySize := LMapEntrySize;
+    FVvar.VrsbMapInnerBits := LInnerBits;
+    FVvar.VrsbMapCount := LMapCount;
+  end
+  else
+    FVvar.HasVrsbMapping := False;
+
+  // ---- 解析 vadvMapping (DeltaSetIndexMap) ----
+  if LVadvMapOff > 0 then
+  begin
+    LVadvMapOff := LOff + LVadvMapOff;
+    if LVadvMapOff + 4 > FDataLength then Exit;
+
+    LMapFmt := ReadUInt8(LVadvMapOff);
+    LMapEntryFmt := ReadUInt8(LVadvMapOff + 1);
+    if LMapFmt = 0 then
+    begin
+      LMapCount := ReadUInt16BE(LVadvMapOff + 2);
+      FVvar.VadvMapDataOff := LVadvMapOff + 4;
+    end
+    else
+    begin
+      LMapCount := Int32(ReadUInt32BE(LVadvMapOff + 2));
+      FVvar.VadvMapDataOff := LVadvMapOff + 6;
+    end;
+
+    LMapEntrySize := ((LMapEntryFmt and $30) shr 4) + 1;
+    LInnerBits := (LMapEntryFmt and $0F) + 1;
+
+    FVvar.HasVadvMapping := True;
+    FVvar.VadvMapFormat := LMapFmt;
+    FVvar.VadvMapEntrySize := LMapEntrySize;
+    FVvar.VadvMapInnerBits := LInnerBits;
+    FVvar.VadvMapCount := LMapCount;
+  end
+  else
+    FVvar.HasVadvMapping := False;
+
+  FVvarValid := True;
+end;
+
+function TTFontFace.HasVvar: Boolean;
+begin
+  Result := FVvarValid;
+end;
+
+function TTFontFace.CalcVvarAdvanceDelta(AGlyphIndex: UInt32;
+  const ANormCoords: array of Single): Single;
+var
+  LOuterIdx, LInnerIdx: Int32;
+  LEntry: UInt32;
+  LI, LByteOff, LBitCount: Int32;
+  LSubIdx, LSubtable: Int32;
+  LItemIdx, LRegionIdx, LRegionIdxCount, LWordCount: Int32;
+  LDeltaPos: Int32;
+  LDelta16: Int16;
+  LDelta8: Int8;
+  LScalar, LDeltaSum: Single;
+  LIsLong: Boolean;
+begin
+  Result := 0;
+  if not FVvarValid then
+    Exit;
+
+  // VVAR: 优先使用 vadvMapping（垂直 advance），回退到隐式映射
+  if FVvar.HasVadvMapping then
+  begin
+    if Int32(AGlyphIndex) >= FVvar.VadvMapCount then
+    begin
+      if FVvar.VadvMapCount = 0 then Exit;
+      LEntry := 0;
+      for LI := 0 to FVvar.VadvMapEntrySize - 1 do
+      begin
+        LByteOff := FVvar.VadvMapDataOff + (FVvar.VadvMapCount - 1) * FVvar.VadvMapEntrySize + LI;
+        if LByteOff < FDataLength then
+          LEntry := (LEntry shl 8) or FData[LByteOff];
+      end;
+    end
+    else
+    begin
+      LEntry := 0;
+      for LI := 0 to FVvar.VadvMapEntrySize - 1 do
+      begin
+        LByteOff := FVvar.VadvMapDataOff + Int32(AGlyphIndex) * FVvar.VadvMapEntrySize + LI;
+        if LByteOff < FDataLength then
+          LEntry := (LEntry shl 8) or FData[LByteOff];
+      end;
+    end;
+
+    LBitCount := FVvar.VadvMapInnerBits;
+    LInnerIdx := LEntry and ((1 shl LBitCount) - 1);
+    LOuterIdx := LEntry shr LBitCount;
+  end
+  else
+  begin
+    // 隐式映射：outer=0, inner=glyphID
+    LOuterIdx := 0;
+    LInnerIdx := Int32(AGlyphIndex);
+  end;
+
+  // 特殊值：0xFFFF/0xFFFF = 无变化
+  if (LOuterIdx = $FFFF) and (LInnerIdx = $FFFF) then
+    Exit;
+
+  if LOuterIdx >= FVvar.VariationStore.DataCount then
+    Exit;
+
+  LSubtable := LOuterIdx;
+  LItemIdx := LInnerIdx;
+  LRegionIdxCount := FVvar.VariationStore.DataSubtables[LSubtable].RegionIndexCount;
+  LWordCount := FVvar.VariationStore.DataSubtables[LSubtable].WordDeltaCount and $7FFF;
+  LIsLong := (FVvar.VariationStore.DataSubtables[LSubtable].WordDeltaCount and $8000) <> 0;
+
+  if LItemIdx >= FVvar.VariationStore.DataSubtables[LSubtable].ItemCount then
+    Exit;
+
+  LDeltaPos := FVvar.VariationStore.DataSubtables[LSubtable].DeltaDataOffset +
+    LItemIdx * FVvar.VariationStore.DataSubtables[LSubtable].RowStride;
+
+  LDeltaSum := 0;
+  for LI := 0 to LRegionIdxCount - 1 do
+  begin
+    LRegionIdx := FVvar.VariationStore.DataSubtables[LSubtable].RegionIndices[LI];
+
+    if LI < LWordCount then
+    begin
+      if LIsLong then
+      begin
+        if LDeltaPos + 4 > FDataLength then Break;
+        LDeltaSum := LDeltaSum + Int32(ReadUInt32BE(LDeltaPos)) *
+          CalcItemVarRegionScalar(FVvar.VariationStore.Regions, FVvar.VariationStore.RegionCount, LRegionIdx, ANormCoords);
+        Inc(LDeltaPos, 4);
+      end
+      else
+      begin
+        if LDeltaPos + 2 > FDataLength then Break;
+        LDelta16 := Int16(ReadUInt16BE(LDeltaPos));
+        LDeltaSum := LDeltaSum + LDelta16 *
+          CalcItemVarRegionScalar(FVvar.VariationStore.Regions, FVvar.VariationStore.RegionCount, LRegionIdx, ANormCoords);
+        Inc(LDeltaPos, 2);
+      end;
+    end
+    else
+    begin
+      if LDeltaPos + 1 > FDataLength then Break;
+      LDelta8 := Int8(FData[LDeltaPos]);
+      LDeltaSum := LDeltaSum + LDelta8 *
+        CalcItemVarRegionScalar(FVvar.VariationStore.Regions, FVvar.VariationStore.RegionCount, LRegionIdx, ANormCoords);
+      Inc(LDeltaPos);
     end;
   end;
 
