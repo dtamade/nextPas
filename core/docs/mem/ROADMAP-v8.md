@@ -19,7 +19,8 @@ Phase H:   Scavenger + X-thread free                          ✅
 Phase I:   Shuffle + Guard Pages + Scan/NoScan                ✅
 Phase J:   基准与验证 + 碎片率测量                             ✅
 R18-R20:   ReallocMem + BatchAPI + Arena benchmark            ✅
-当前位置:  全部完成，44 suites / 557 tests / 0 failures
+R25-R27:   性能终极优化 + 稳定性加固                            ✅
+当前位置:  全部完成，45 suites / 573+ tests / 0 failures
 ```
 
 ## 当前状态 (2026-06-29)
@@ -355,3 +356,39 @@ TGuardAllocator: 每次分配用 PROT_NONE 页包围，越界写入立即 SIGSEG
 - J 系列: 预计 2 轮
 
 **总计**: ~16 轮迭代, 每轮独立可验证。
+
+---
+
+## 稳定性加固 (R25-R27)
+
+### 已完成
+
+| 改动 | 描述 | 测试 |
+|------|------|------|
+| SpanFree double-free 检测 | 返回 `Boolean`, bitmap 位已设置则拒绝 | `span_double_free` |
+| SpanFree 边界检查 | 指针必须在 span 内存范围内 | `span_out_of_range` |
+| Debug 模式 poison | `{$IFDEF DEBUG}` FillChar $DE, use-after-free 可见 | — |
+| Thread exit cleanup | pthread TLS key destructor, 防止缓存块泄漏 | `thread_exit_cleanup` |
+| Scavenge span unlink | 释放 span 前从 partial list 摘除 | `scavenger_concurrent` |
+| ReallocMem inline bug | FPC 常量折叠 codegen bug, 去掉 inline | `realloc_literal_constants` |
+
+### 测试覆盖 (test_stability)
+
+| 测试 | 场景 |
+|------|------|
+| span_double_free | 重复 free 同一指针 → 拒绝 |
+| span_out_of_range | OOB 指针 → 拒绝 |
+| span_all_slots_cycle | 64-slot 全周期 alloc/free/re-alloc |
+| edge_case_sizes | 14 种边界 size (1B → 53KB+) |
+| realloc_literal_constants | FPC inline codegen bug 回归测试 |
+| stress_alloc_free | 100K × 256 alloc/free 循环 |
+| stress_mixed_sizes | 50K × 64 混合 size alloc/free |
+| stress_batch | 10K × 128 batch alloc/free |
+| stress_mixed_batch | 100K MixedBatch(8 sizes) |
+| thread_exit_cleanup | pthread destructor 验证 |
+| concurrent_stress | 8T × 5K ops × 6 sizes |
+| allocmem_zeroed_all | AllocMem 零初始化 6 种 size |
+| scavenger_concurrent | 4 alloc + 1 scavenge, 2K ops |
+| rapid_thread_creation | 100 轮 spawn→alloc→free→join |
+| zero_size_edge_cases | GetMem(0), BatchGetMem(0,n) |
+| realloc_stress | grow 16B→128KB + shrink back |
