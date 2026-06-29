@@ -128,6 +128,58 @@ begin
       end;
     end;
 
+  // 1.7 pass: multiple substitution (GSUB MultipleSubst, one-to-many).
+  // Expands single glyphs into glyph sequences. Must run before ligature.
+  if FFace.HasMultipleSubst then
+  begin
+    LM := 0;
+    for LI := 0 to LCount - 1 do
+    begin
+      LSubArr := FFace.LookupMultipleSubst(LGlyphs[LI]);
+      if Length(LSubArr) > 0 then
+        Inc(LM, Length(LSubArr))
+      else
+        Inc(LM);
+    end;
+    if LM <> LCount then
+    begin
+      // Array grew — reallocate and expand.
+      SetLength(Result, LM);
+      SetLength(LGlyphs, LM);
+      LK := LM - 1;
+      for LI := LCount - 1 downto 0 do
+      begin
+        LSubArr := FFace.LookupMultipleSubst(Result[LI].GlyphIndex);
+        if Length(LSubArr) > 1 then
+        begin
+          // Expand: first glyph keeps original advance, rest get their own.
+          for LM := High(LSubArr) downto 1 do
+          begin
+            Result[LK] := Result[LI];
+            Result[LK].GlyphIndex := LSubArr[LM];
+            Result[LK].AdvanceWidth := FFace.GlyphHorizontalMetric(LSubArr[LM]).AdvanceWidth;
+            LGlyphs[LK] := LSubArr[LM];
+            Dec(LK);
+          end;
+          // First substitute replaces original.
+          Result[LK].GlyphIndex := LSubArr[0];
+          Result[LK].AdvanceWidth := FFace.GlyphHorizontalMetric(LSubArr[0]).AdvanceWidth;
+          LGlyphs[LK] := LSubArr[0];
+          Dec(LK);
+        end
+        else if LK <> LI then
+        begin
+          Result[LK] := Result[LI];
+          LGlyphs[LK] := LGlyphs[LI];
+          Dec(LK);
+        end
+        else
+          Dec(LK);
+      end;
+      LCount := LM;
+    end;
+  end;
+
   // Second pass: ligature substitution.
   LOut := 0;
   LI := 0;

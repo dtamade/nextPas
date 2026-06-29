@@ -46,6 +46,8 @@ const
   GSUB_LOOKUP_SINGLE = 1;
   {** GSUB Lookup Type：Ligature Substitution }
   GSUB_LOOKUP_LIGATURE = 4;
+  {** GSUB Lookup Type：Multiple Substitution（一对多） }
+  GSUB_LOOKUP_MULTIPLE = 2;
 
   {** OpenType Feature Tags（Big-Endian 4 字节标识） }
   FEATURE_TAG_KERN = $6B65726E;  // 'kern' — Kerning
@@ -324,6 +326,7 @@ type
 
   {** Feature 相关 lookup 索引数组 }
   TFontFeatureLookupIndexArray = array of UInt16;
+  TFontGlyphIdArray = array of UInt16;
 
   {** GPOS Anchor 表（X/Y 坐标，font units） }
   TFontAnchor = record
@@ -361,6 +364,16 @@ type
     EntryExitArrayOffset: Int32; // EntryExitRecord 数组起始偏移（相对文件）
   end;
   TFontCursivePosSubtableArray = array of TFontCursivePosSubtable;
+
+  {** GSUB MultipleSubst 子表（Format 1: 一对多替换） }
+  TFontMultipleSubstSubtable = record
+    BaseOffset: Int32;           // 子表在文件中的偏移
+    CoverageOffset: Int32;       // Coverage 表偏移（相对文件）
+    SequenceCount: Int32;        // SequenceTable 数量（= Coverage glyph 数量）
+    SequenceArrayOffset: Int32;  // SequenceTable 偏移数组起始（相对文件）
+                                 // 每个偏移(2 bytes)相对于子表起始
+  end;
+  TFontMultipleSubstSubtableArray = array of TFontMultipleSubstSubtable;
 
 {** 字形轮廓内存释放 }
 procedure FontGlyphOutlineClear(var AOutline: TFontGlyphOutline);
