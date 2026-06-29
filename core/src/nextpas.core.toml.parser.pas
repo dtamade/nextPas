@@ -1,7 +1,7 @@
 unit nextpas.core.toml.parser;
 { Low-level TOML v1.0 parser. Builds a flat node array from input text.
   TTomlDocument is a record with Init/Done lifecycle — caller manages memory.
-  Uses IAllocator for all heap operations (arena-friendly).
+  Uses TMemAllocator for all heap operations (arena-friendly).
 
   OWNERSHIP: TTomlDocument is NOT copyable. It owns heap resources (FNodes,
   FOwnedBufs, FHashBuckets). Assigning one TTomlDocument to another will cause
@@ -21,7 +21,8 @@ interface
 uses
   nextpas.core.text.view,
   nextpas.core.mem.intf,
-  nextpas.core.toml.base;
+  nextpas.core.toml.base,
+  nextpas.core.mem.allocator.base;
 
 type
   TTomlDocument = record
@@ -29,7 +30,7 @@ type
     FNodes: PTomlNode;
     FNodeCount: UInt32;
     FNodeCap: UInt32;
-    FAllocator: IAllocator;
+    FAllocator: TMemAllocator;
     FInput: TStringView;
     FError: TTomlError;
     FHasError: Boolean;
@@ -47,7 +48,7 @@ type
     procedure BuildHashIndex(ATableIdx: UInt32);
     function HashLookup(ATableIdx: UInt32; const AKey: TStringView; AHash: UInt32): UInt32;
   public
-    procedure Init(const AAllocator: IAllocator);
+    procedure Init(const AAllocator: TMemAllocator);
     procedure Done;
     function Parse(const AInput: TStringView): Boolean;
     function Root: UInt32; inline;
@@ -188,7 +189,7 @@ end;
 
 { TTomlDocument }
 
-procedure TTomlDocument.Init(const AAllocator: IAllocator);
+procedure TTomlDocument.Init(const AAllocator: TMemAllocator);
 var
   LPtr: Pointer;
 begin

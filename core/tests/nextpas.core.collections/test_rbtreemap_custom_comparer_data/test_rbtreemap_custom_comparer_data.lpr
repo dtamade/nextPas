@@ -7,7 +7,8 @@ uses
   nextpas.core.testing,
   nextpas.core.collections.base,
   nextpas.core.collections.orderedmap.rb,
-  nextpas.core.mem.intf;
+  nextpas.core.mem.intf,
+  nextpas.core.mem.allocator.base;
 
 type
   TIntRBMap = specialize TRBTreeMap<Integer, Integer>;
@@ -53,7 +54,7 @@ var
 begin
   LState.Magic := 73129;
   LState.Calls := 0;
-  LMap := TIntRBMap.Create(@CompareRequiresData, IAllocator(nil), @LState);
+  LMap := TIntRBMap.Create(@CompareRequiresData, TMemAllocator(nil), @LState);
   try
     Check(LMap.Add(10, 100), 'add first');
     Check(LMap.Add(20, 200), 'add second');
@@ -86,7 +87,7 @@ var
 begin
   LState.Magic := 73129;
   LState.Calls := 0;
-  LMap := TIntRBMap.Create(@CompareRequiresData, IAllocator(nil), @LState);
+  LMap := TIntRBMap.Create(@CompareRequiresData, TMemAllocator(nil), @LState);
   try
     LMap.Put(10, 100);
     LMap.Put(20, 200);
@@ -121,7 +122,7 @@ var
 begin
   LState.Magic := 73129;
   LState.Calls := 0;
-  LMap := TIntRBMap.Create(@CompareRequiresData, IAllocator(nil), @LState);
+  LMap := TIntRBMap.Create(@CompareRequiresData, TMemAllocator(nil), @LState);
   try
     LMap.Put(10, 100);
     LMap.Put(20, 200);
@@ -149,7 +150,7 @@ var
 begin
   LState.Magic := 73129;
   LState.Calls := 0;
-  LMap := TIntRBMap.Create(@CompareRequiresData, IAllocator(nil), @LState);
+  LMap := TIntRBMap.Create(@CompareRequiresData, TMemAllocator(nil), @LState);
   try
     LMap.Put(10, 100);
     LMap.Put(20, 200);
@@ -179,7 +180,7 @@ var
 begin
   LState.Magic := 73129;
   LState.Calls := 0;
-  LMap := TIntRBMap.Create(@CompareRequiresData, IAllocator(nil), @LState);
+  LMap := TIntRBMap.Create(@CompareRequiresData, TMemAllocator(nil), @LState);
   try
     LMap.Put(10, 100);
     LMap.Put(20, 200);

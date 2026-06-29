@@ -5,11 +5,11 @@
   适用于: Arena 处理大文件、编译器处理超大编译单元等需要 graceful degradation 的场景。
 
   TFallbackAllocator:
-    IAllocator 包装器, try primary → EOutOfMemory → fallback
+    TMemAllocator 包装器, try primary → EOutOfMemory → fallback
     FreeMem/LFreeMem: 记录来源, 从正确的分配器释放
 
   TFallbackArena:
-    IArena 包装器, Arena OOM (返回 nil) → 降级到 IAllocator
+    IArena 包装器, Arena OOM (返回 nil) → 降级到 TMemAllocator
     Reset: 只重置 Arena, 不重置 fallback 分配的内存
 
   设计约束:
@@ -28,7 +28,8 @@ uses
   nextpas.core.mem.error,
   nextpas.core.mem.intf,
   nextpas.core.mem.arena.base,
-  nextpas.core.mem.arena.intf;
+  nextpas.core.mem.arena.intf,
+  nextpas.core.mem.allocator.base;
 
 type
   {** Fallback 来源标记 *}
@@ -49,10 +50,10 @@ type
   //   LFall := TFallbackAllocator.Create(LArenaAllocator, LRtlAllocator);
   //   LP := LFall.GetMem(1024);  // arena 优先, OOM 时降级到 RTL
   //   LFall.FreeMem(LP);         // 自动从正确的分配器释放
-  TFallbackAllocator = class(TInterfacedObject, IAllocator)
+  TFallbackAllocator = class(TAllocator)
   private
-    FPrimary: IAllocator;
-    FFallback: IAllocator;
+    FPrimary: TMemAllocator;
+    FFallback: TMemAllocator;
     { 记录 fallback 分配的来源 (简化: 用动态数组, 线性搜索) }
     FEntries: array of TFallbackEntry;
     FEntryCount: SizeInt;
@@ -63,35 +64,35 @@ type
     procedure RemoveEntry(APtr: Pointer);
   public
     {** 创建 fallback 分配器，指定主分配器和后备分配器 *}
-    constructor Create(APrimary, AFallback: IAllocator);
+    constructor Create(APrimary, AFallback: TMemAllocator);
     {** 销毁 fallback 分配器（不释放已分配内存，由调用方负责） *}
     destructor Destroy; override;
 
-    { IAllocator }
+    { TMemAllocator }
     {** 分配内存，主分配器 OOM 时自动降级到后备 *}
-    function GetMem(ASize: SizeUInt): Pointer;
+    function GetMem(ASize: SizeUInt): Pointer; override;
     {** 分配零初始化内存，主分配器 OOM 时降级 *}
-    function AllocMem(ASize: SizeUInt): Pointer;
+    function AllocMem(ASize: SizeUInt): Pointer; override;
     {** 重新分配内存，自动跟踪来源并从正确的分配器操作 *}
-    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
     {** 释放内存，自动判断来源并从正确的分配器释放 *}
-    procedure FreeMem(APtr: Pointer);
+    procedure FreeMem(APtr: Pointer); override;
     {** 释放对齐内存，自动判断来源 *}
-    procedure FreeAligned(APtr: Pointer);
+    procedure FreeAligned(APtr: Pointer); override;
     {** 查询指针所属分配器的内存块大小 *}
-    function MemSize(APtr: Pointer): SizeUInt;
+    function MemSize(APtr: Pointer): SizeUInt; override;
     {** 分配对齐内存，主分配器 OOM 时降级 *}
-    function AllocAligned(ASize, AAlign: SizeUInt): Pointer;
+    function AllocAligned(ASize, AAlign: SizeUInt): Pointer; override;
     {** 返回合并后的分配器特性（任一支持则组合支持） *}
-    function Traits: TAllocatorTraits;
+    function Traits: TAllocatorTraits; override;
 
     {** 已降级到 fallback 的分配次数 *}
     property TotalFallbacks: SizeUInt read FTotalFallbacks;
   end;
 
-  // Fallback Arena — Arena OOM 时降级到 IAllocator
+  // Fallback Arena — Arena OOM 时降级到 TMemAllocator
   //
-  // Arena 分配返回 nil 时, 自动尝试 IAllocator 分配。
+  // Arena 分配返回 nil 时, 自动尝试 TMemAllocator 分配。
   // Reset 只重置 Arena, fallback 分配的内存不重置 (需手动释放)。
   //
   // 使用模式:
@@ -102,7 +103,7 @@ type
   TFallbackArena = class(TInterfacedObject, IArena)
   private
     FArena: IArena;
-    FFallback: IAllocator;
+    FFallback: TMemAllocator;
     { 记录 fallback 分配 }
     FFallbackPtrs: array of Pointer;
     FFallbackCount: SizeInt;
@@ -110,7 +111,7 @@ type
     procedure TrackFallback(APtr: Pointer);
   public
     {** 创建 fallback Arena，指定主 Arena 和后备分配器 *}
-    constructor Create(AArena: IArena; AFallback: IAllocator);
+    constructor Create(AArena: IArena; AFallback: TMemAllocator);
     {** 销毁 Arena，自动释放所有 fallback 分配的内存 *}
     destructor Destroy; override;
 
@@ -118,7 +119,7 @@ type
     {** Arena 分配，Arena OOM 时降级到后备分配器 *}
     function Alloc(ASize: SizeUInt): Pointer;
     {** Arena 对齐分配，Arena OOM 时降级 *}
-    function AllocAligned(ASize, AAlign: SizeUInt): Pointer;
+    function AllocAligned(ASize, AAlign: SizeUInt): Pointer; override;
     {** Arena 零初始化分配，Arena OOM 时降级 *}
     function AllocZeroed(ASize: SizeUInt): Pointer;
     {** 保存 Arena 当前状态标记（仅委托主 Arena） *}
@@ -146,7 +147,7 @@ implementation
   TFallbackAllocator
   --------------------------------------------------------------------------- }
 
-constructor TFallbackAllocator.Create(APrimary, AFallback: IAllocator);
+constructor TFallbackAllocator.Create(APrimary, AFallback: TMemAllocator);
 begin
   inherited Create;
   FPrimary := APrimary;
@@ -319,7 +320,7 @@ end;
   TFallbackArena
   --------------------------------------------------------------------------- }
 
-constructor TFallbackArena.Create(AArena: IArena; AFallback: IAllocator);
+constructor TFallbackArena.Create(AArena: IArena; AFallback: TMemAllocator);
 begin
   inherited Create;
   FArena := AArena;

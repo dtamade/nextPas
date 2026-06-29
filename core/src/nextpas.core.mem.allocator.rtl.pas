@@ -11,7 +11,7 @@ uses
 type
   {**
    * TRtlAllocator
-   * @desc 使用标准 Pascal RTL 内存管理器实现的 IAllocator 具体类
+   * @desc 使用标准 Pascal RTL 内存管理器实现的 TMemAllocator 具体类
    *}
   TRtlAllocator = class(TAllocator)
   protected
@@ -23,8 +23,8 @@ type
     function  Traits: TAllocatorTraits; override;
   end;
 
-function GetRtlAllocator: IAllocator;
-function TryGetRtlAllocator(out A: IAllocator): Boolean;
+function GetRtlAllocator: TMemAllocator;
+function TryGetRtlAllocator(out A: TMemAllocator): Boolean;
 
 implementation
 
@@ -65,7 +65,7 @@ begin
   Result.HasMemSize      := False;
 end;
 
-function GetRtlAllocator: IAllocator;
+function GetRtlAllocator: TMemAllocator;
 begin
   if _RTLAllocatorObj = nil then
   begin
@@ -74,16 +74,16 @@ begin
       if _RTLAllocatorObj = nil then
       begin
         _RTLAllocatorObj := TRtlAllocator.Create;
-        _RTLAllocatorIntf := _RTLAllocatorObj as IAllocator; // anchor lifetime via interface
+        _RTLAllocatorIntf := _RTLAllocatorObj; // anchor lifetime via interface
       end;
     finally
       LeaveCriticalSection(GRtlAllocLock);
     end;
   end;
-  Result := _RTLAllocatorIntf;
+  Result := _RTLAllocatorObj;
 end;
 
-function TryGetRtlAllocator(out A: IAllocator): Boolean;
+function TryGetRtlAllocator(out A: TMemAllocator): Boolean;
 begin
   try
     A := GetRtlAllocator;

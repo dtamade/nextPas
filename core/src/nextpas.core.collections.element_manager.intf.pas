@@ -4,7 +4,8 @@ unit nextpas.core.collections.element_manager.intf;
 
 interface
 
-uses nextpas.core.system.typinfo, nextpas.core.base, nextpas.core.mem.intf, nextpas.core.collections.element_manager.base;
+uses nextpas.core.system.typinfo, nextpas.core.base, nextpas.core.mem.intf, nextpas.core.collections.element_manager.base,
+  nextpas.core.mem.allocator.base;
 
 type
 
@@ -31,7 +32,7 @@ type
      *   An `TAllocator` instance.
      *   一个 `TAllocator` 实例.
      *}
-    function GetAllocator: IAllocator;
+    function GetAllocator: TMemAllocator;
 
     {**
      * GetElementSize
@@ -486,7 +487,7 @@ type
     property ElementSize:     SizeUInt   read GetElementSize;
     property IsManagedType:   Boolean    read GetIsManagedType;
     property ElementTypeInfo: PTypeInfo  read GetElementTypeInfo;
-    property Allocator:       IAllocator read GetAllocator;
+    property Allocator:       TMemAllocator read GetAllocator;
 
   end;
 

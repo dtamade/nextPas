@@ -1,6 +1,6 @@
 unit nextpas.core.mem;
 {**
- * @desc 内存管理门面：IAllocator 抽象、默认分配器、工具函数。
+ * @desc 内存管理门面：TMemAllocator 抽象、默认分配器、工具函数。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -48,13 +48,14 @@ uses
   nextpas.core.mem.memory_map,
   nextpas.core.mem.mapped_slab_pool,
   nextpas.core.mem.secure,
-  nextpas.core.mem.pool;
+  nextpas.core.mem.pool
 
 type
   // === 基础类型 ===
   TAllocatorKind = nextpas.core.mem.base.TAllocatorKind;
   TAllocatorTraits = nextpas.core.mem.intf.TAllocatorTraits;
   IAllocator = nextpas.core.mem.intf.IAllocator;
+  TMemAllocator = nextpas.core.mem.allocator.base.TMemAllocator;
   TAllocError = nextpas.core.mem.error.TAllocError;
   EAllocError = nextpas.core.mem.error.EAllocError;
   EOutOfMemory = nextpas.core.mem.error.EOutOfMemory;
@@ -125,14 +126,14 @@ type
   TSharedMemory = nextpas.core.mem.memory_map.TSharedMemory;
   TMappedSlabAllocator = nextpas.core.mem.mapped_slab_pool.TMappedSlabAllocator;
 
-function DefaultAllocator: IAllocator; inline;
+function DefaultAllocator: TMemAllocator; inline;
 
-function AllocZeroed(const AAllocator: IAllocator; const ASize: SizeUInt): Pointer; inline;
-function AllocArray(const AAllocator: IAllocator; const ACount, AElemSize: SizeUInt): Pointer; inline;
+function AllocZeroed(const AAllocator: TMemAllocator; const ASize: SizeUInt): Pointer; inline;
+function AllocArray(const AAllocator: TMemAllocator; const ACount, AElemSize: SizeUInt): Pointer; inline;
 
 function MakeFixedSlabPool(ACapacity: SizeUInt): IFixedSlabPool; inline;
 function MakePoolAllocator(ABlockSize: SizeUInt; ACapacity: Integer;
-  AFallback: IAllocator = nil): IAllocator; inline;
+  AFallback: TMemAllocator = nil): TMemAllocator; inline;
 
 procedure SecureZeroMemory(ABuffer: Pointer; ASize: NativeUInt); inline;
 procedure SecureZeroBytes(var AData: TBytes); inline;
@@ -140,17 +141,17 @@ procedure SecureZeroString(var AStr: AnsiString); inline;
 
 implementation
 
-function DefaultAllocator: IAllocator;
+function DefaultAllocator: TMemAllocator;
 begin
   Result := nextpas.core.mem.default.DefaultAllocator;
 end;
 
-function AllocZeroed(const AAllocator: IAllocator; const ASize: SizeUInt): Pointer;
+function AllocZeroed(const AAllocator: TMemAllocator; const ASize: SizeUInt): Pointer;
 begin
   Result := AAllocator.AllocMem(ASize);
 end;
 
-function AllocArray(const AAllocator: IAllocator; const ACount, AElemSize: SizeUInt): Pointer;
+function AllocArray(const AAllocator: TMemAllocator; const ACount, AElemSize: SizeUInt): Pointer;
 var
   LTotal: SizeUInt;
 begin
@@ -168,7 +169,7 @@ begin
 end;
 
 function MakePoolAllocator(ABlockSize: SizeUInt; ACapacity: Integer;
-  AFallback: IAllocator): IAllocator;
+  AFallback: TMemAllocator): TMemAllocator;
 begin
   Result := nextpas.core.mem.pool.allocator.MakePoolAllocator(ABlockSize, ACapacity, AFallback);
 end;

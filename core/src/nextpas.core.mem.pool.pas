@@ -11,7 +11,8 @@ uses
   nextpas.core.mem.pool.base,
   nextpas.core.mem.pool.memory_pool,
   nextpas.core.base.utils,
-  nextpas.core.mem.pool.fixed_slab;
+  nextpas.core.mem.pool.fixed_slab,
+  nextpas.core.mem.allocator.base;
 
 type
   IPool = nextpas.core.mem.pool.base.IPool;
@@ -70,8 +71,8 @@ type
 
   TPool = TLocalBlockPool;
 
-function MakeFixedSlabPool(ACapacity: SizeUInt; AAllocator: IAllocator; AMinShift: SizeUInt = 3): IFixedSlabPool; overload;
-function MakeFixedSlabPool(ACapacity: SizeUInt; AAllocator: IAllocator): IFixedSlabPool; overload;
+function MakeFixedSlabPool(ACapacity: SizeUInt; AAllocator: TMemAllocator; AMinShift: SizeUInt = 3): IFixedSlabPool; overload;
+function MakeFixedSlabPool(ACapacity: SizeUInt; AAllocator: TMemAllocator): IFixedSlabPool; overload;
 function MakeFixedSlabPool(ACapacity: SizeUInt): IFixedSlabPool; overload;
 
 implementation
@@ -82,12 +83,12 @@ type
     Next: PFreeNode;
   end;
 
-function MakeFixedSlabPool(ACapacity: SizeUInt; AAllocator: IAllocator; AMinShift: SizeUInt): IFixedSlabPool;
+function MakeFixedSlabPool(ACapacity: SizeUInt; AAllocator: TMemAllocator; AMinShift: SizeUInt): IFixedSlabPool;
 begin
   Result := TFixedSlabPool.Create(ACapacity, AAllocator, AMinShift);
 end;
 
-function MakeFixedSlabPool(ACapacity: SizeUInt; AAllocator: IAllocator): IFixedSlabPool;
+function MakeFixedSlabPool(ACapacity: SizeUInt; AAllocator: TMemAllocator): IFixedSlabPool;
 begin
   Result := TFixedSlabPool.Create(ACapacity, AAllocator);
 end;

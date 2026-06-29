@@ -32,7 +32,8 @@ Copyright: (c) 2025 fafafaStudio. All rights reserved.
 
 interface
 
-uses nextpas.core.system.typinfo, nextpas.core.base, nextpas.core.math, nextpas.core.mem.utils, nextpas.core.mem.intf, nextpas.core.mem.default, nextpas.core.collections.element_manager.intf;
+uses nextpas.core.system.typinfo, nextpas.core.base, nextpas.core.math, nextpas.core.mem.utils, nextpas.core.mem.intf, nextpas.core.mem.default, nextpas.core.collections.element_manager.intf,
+   nextpas.core.mem.allocator.base;
 
   type
 
@@ -42,17 +43,17 @@ uses nextpas.core.system.typinfo, nextpas.core.base, nextpas.core.math, nextpas.
   type
     PElement = ^T;
   private
-    FAllocator:       IAllocator;
+    FAllocator:       TMemAllocator;
     FElementSize:     SizeUInt;
     FIsManagedType:   Boolean;
     FElementTypeInfo: PTypeInfo;
   private
     procedure CopyElementsUncheckedInternal(aSrc, aDst: PElement; aElementCount: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
   public
-    constructor Create(aAllocator: IAllocator); overload;
+    constructor Create(aAllocator: TMemAllocator); overload;
     constructor Create; overload;
 
-    function  GeTAllocator: IAllocator; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function  GeTAllocator: TMemAllocator; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function  GetElementSize: SizeUInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function  GetIsManagedType: Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function  GetElementTypeInfo: PTypeInfo; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
@@ -82,7 +83,7 @@ uses nextpas.core.system.typinfo, nextpas.core.base, nextpas.core.math, nextpas.
     property  ElementSize:     SizeUInt   read GetElementSize;
     property  IsManagedType:   Boolean    read GetIsManagedType;
     property  ElementTypeInfo: PTypeInfo  read GetElementTypeInfo;
-    property  Allocator:       IAllocator read GeTAllocator;
+    property  Allocator:       TMemAllocator read GeTAllocator;
   end;
 
 
@@ -90,7 +91,7 @@ implementation
 
 { TElementManager }
 
-constructor TElementManager.Create(aAllocator: IAllocator);
+constructor TElementManager.Create(aAllocator: TMemAllocator);
 begin
   inherited Create;
   FAllocator       := aAllocator;
@@ -104,7 +105,7 @@ begin
   Create(DefaultAllocator);
 end;
 
-function TElementManager.GeTAllocator: IAllocator;
+function TElementManager.GeTAllocator: TMemAllocator;
 begin
   Result := FAllocator;
 end;

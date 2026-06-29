@@ -13,7 +13,8 @@ uses
   {$HINTS OFF}nextpas.core.mem.utils,{$HINTS ON}
   nextpas.core.mem.intf,
   nextpas.core.collections.base,
-  nextpas.core.collections.element_manager;
+  nextpas.core.collections.element_manager,
+  nextpas.core.mem.allocator.base;
 
 type
 
@@ -327,7 +328,7 @@ type
    *   支持各种类型的节点统一管理
    *
    * @remark
-   *   - 使用 IAllocator 进行内存管理
+   *   - 使用 TMemAllocator 进行内存管理
    *   - 支持 TElementManager<T> 处理托管类型
    *   - 提供节点池化以提高性能
    *}
@@ -346,7 +347,7 @@ type
       TElementManager = specialize TElementManager<T>;
 
   private
-    FAllocator: IAllocator;
+    FAllocator: TMemAllocator;
     FElementManager: TElementManager;
     FSinglePoolBlocks: PPointer;
     FSinglePoolBlockCount: SizeUInt;
@@ -358,7 +359,7 @@ type
     FDoublePoolEnd: Pointer;
 
   public
-    constructor Create(aAllocator: IAllocator);
+    constructor Create(aAllocator: TMemAllocator);
     destructor Destroy; override;
 
     {**
@@ -462,7 +463,7 @@ type
      *}
     procedure DestroyTreeNode(aNode: PTreeNode);
 
-    property Allocator: IAllocator read FAllocator;
+    property Allocator: TMemAllocator read FAllocator;
     property ElementManager: TElementManager read FElementManager;
 
   end;
@@ -764,7 +765,7 @@ end;
 
 { TNodeManager<T> }
 
-constructor TNodeManager.Create(aAllocator: IAllocator);
+constructor TNodeManager.Create(aAllocator: TMemAllocator);
 begin
   inherited Create;
   if aAllocator = nil then

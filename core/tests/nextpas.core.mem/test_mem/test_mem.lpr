@@ -14,7 +14,7 @@ var
 
 procedure TestDefaultAllocatorNotNil;
 var
-  LAlloc: IAllocator;
+  LAlloc: TMemAllocator;
 begin
   LAlloc := DefaultAllocator;
   Check(LAlloc <> nil, 'DefaultAllocator should not be nil');
@@ -23,7 +23,7 @@ end;
 
 procedure TestAllocatorBasicOps;
 var
-  LAlloc: IAllocator;
+  LAlloc: TMemAllocator;
   LPtr: Pointer;
   LIntPtr: PInteger;
 begin
@@ -184,7 +184,7 @@ end;
 { 验证 TrackingAllocator 可通过 facade 访问 }
 procedure TestTrackingAllocatorAccessible;
 var
-  LTracker: IAllocator;
+  LTracker: TMemAllocator;
   LPtr: Pointer;
 begin
   LTracker := TTrackingAllocator.Create(DefaultAllocator);
@@ -228,7 +228,7 @@ end;
 { 验证 TPoolAllocator 可通过 facade 访问 }
 procedure TestPoolAllocatorAccessible;
 var
-  LAlloc: IAllocator;
+  LAlloc: TMemAllocator;
   LPtr: Pointer;
 begin
   LAlloc := MakePoolAllocator(64, 50);

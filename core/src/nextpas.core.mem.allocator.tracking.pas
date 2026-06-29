@@ -23,7 +23,7 @@ type
 
   {** TTrackingAllocator
    *
-   *  包装任意 IAllocator，记录所有分配/释放操作，
+   *  包装任意 TMemAllocator，记录所有分配/释放操作，
    *  用于测试时检测内存泄漏。
    *
    *  线程安全（内部用 TRTLCriticalSection 保护记录表）。
@@ -31,7 +31,7 @@ type
    *}
   TTrackingAllocator = class(TAllocator)
   private
-    FInner: IAllocator;
+    FInner: TMemAllocator;
     FRecords: TAllocRecordArray;
     FCount: SizeInt;
     FCapacity: SizeInt;
@@ -48,7 +48,7 @@ type
     procedure DoFreeMem(ADst: Pointer); override;
     function DoMemSize(APtr: Pointer): SizeUInt; override;
   public
-    constructor Create(aInner: IAllocator);
+    constructor Create(aInner: TMemAllocator);
     destructor Destroy; override;
 
     {** 当前活跃分配数 }
@@ -60,7 +60,7 @@ type
     {** 生成泄漏报告（包含每个未释放块的地址和大小） }
     function ReportLeaks: string;
     {** 内部分配器 }
-    property Inner: IAllocator read FInner;
+    property Inner: TMemAllocator read FInner;
 
     function Traits: TAllocatorTraits; override;
   end;
@@ -69,7 +69,7 @@ implementation
 
 { TTrackingAllocator }
 
-constructor TTrackingAllocator.Create(aInner: IAllocator);
+constructor TTrackingAllocator.Create(aInner: TMemAllocator);
 begin
   inherited Create;
   if aInner = nil then

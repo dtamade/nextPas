@@ -13,7 +13,8 @@ uses
   nextpas.core.xml.base,
   nextpas.core.xml.reader,
   nextpas.core.xml.writer,
-  nextpas.core.xml.dom;
+  nextpas.core.xml.dom,
+ nextpas.core.mem.allocator.base;
 
 type
   TXmlTokenKind = nextpas.core.xml.base.TXmlTokenKind;
@@ -68,17 +69,17 @@ const
   xnkDocument = nextpas.core.xml.dom.xnkDocument;
 
 function XmlParse(const AInput: string): TXmlDocument; inline;
-function XmlParseWith(const AInput: string; const AAllocator: IAllocator): TXmlDocument;
+function XmlParseWith(const AInput: string; const AAllocator: TMemAllocator): TXmlDocument;
 function XmlParseDoc(const AInput: string): IXmlDocument; inline;
-function XmlParseDocWith(const AInput: string; const AAllocator: IAllocator): IXmlDocument;
+function XmlParseDocWith(const AInput: string; const AAllocator: TMemAllocator): IXmlDocument;
 function TryXmlParse(const AInput: string; out ADoc: TXmlDocument): Boolean;
-function TryXmlParseWith(const AInput: string; const AAllocator: IAllocator;
+function TryXmlParseWith(const AInput: string; const AAllocator: TMemAllocator;
   out ADoc: TXmlDocument): Boolean;
 function TryXmlParseDoc(const AInput: string; out ADoc: IXmlDocument): Boolean;
-function TryXmlParseDocWith(const AInput: string; const AAllocator: IAllocator;
+function TryXmlParseDocWith(const AInput: string; const AAllocator: TMemAllocator;
   out ADoc: IXmlDocument): Boolean;
 function XmlTokenize(const AInput: string): TXmlTokenArray;
-function XmlTokenizeWith(const AInput: string; const AAllocator: IAllocator): TXmlTokenArray;
+function XmlTokenizeWith(const AInput: string; const AAllocator: TMemAllocator): TXmlTokenArray;
 function XmlDecodeEntities(const AStr: string): string; inline;
 function XmlEncodeText(const AStr: string): string; inline;
 function XmlEncodeAttr(const AStr: string): string; inline;
@@ -109,7 +110,7 @@ type
 
   PXmlTokenSlot = ^TXmlToken;
 
-function GrowTokenSlots(const AAllocator: IAllocator; var ASlots: PXmlTokenSlot;
+function GrowTokenSlots(const AAllocator: TMemAllocator; var ASlots: PXmlTokenSlot;
   var ACap: Integer; ANeeded: Integer): Boolean;
 var
   LNewCap: Integer;
@@ -136,7 +137,7 @@ begin
   Result := True;
 end;
 
-procedure ReleaseTokenSlots(const AAllocator: IAllocator; var ASlots: PXmlTokenSlot;
+procedure ReleaseTokenSlots(const AAllocator: TMemAllocator; var ASlots: PXmlTokenSlot;
   ACount: Integer);
 var
   LI: Integer;
@@ -211,7 +212,7 @@ begin
   Result := XmlParseWith(AInput, DefaultAllocator);
 end;
 
-function XmlParseWith(const AInput: string; const AAllocator: IAllocator): TXmlDocument;
+function XmlParseWith(const AInput: string; const AAllocator: TMemAllocator): TXmlDocument;
 begin
   Result := TXmlDocument.ParseWith(AInput, AAllocator);
 end;
@@ -221,7 +222,7 @@ begin
   Result := TryXmlParseWith(AInput, DefaultAllocator, ADoc);
 end;
 
-function TryXmlParseWith(const AInput: string; const AAllocator: IAllocator;
+function TryXmlParseWith(const AInput: string; const AAllocator: TMemAllocator;
   out ADoc: TXmlDocument): Boolean;
 begin
   ADoc := TXmlDocument.None;
@@ -244,7 +245,7 @@ begin
   Result := XmlParseDocWith(AInput, DefaultAllocator);
 end;
 
-function XmlParseDocWith(const AInput: string; const AAllocator: IAllocator): IXmlDocument;
+function XmlParseDocWith(const AInput: string; const AAllocator: TMemAllocator): IXmlDocument;
 var
   LDoc: TXmlDocument;
 begin
@@ -262,7 +263,7 @@ begin
   Result := TryXmlParseDocWith(AInput, DefaultAllocator, ADoc);
 end;
 
-function TryXmlParseDocWith(const AInput: string; const AAllocator: IAllocator;
+function TryXmlParseDocWith(const AInput: string; const AAllocator: TMemAllocator;
   out ADoc: IXmlDocument): Boolean;
 var
   LDoc: TXmlDocument;
@@ -285,12 +286,12 @@ begin
   Result := XmlTokenizeWith(AInput, DefaultAllocator);
 end;
 
-function XmlTokenizeWith(const AInput: string; const AAllocator: IAllocator): TXmlTokenArray;
+function XmlTokenizeWith(const AInput: string; const AAllocator: TMemAllocator): TXmlTokenArray;
 var
   LReader: TXmlReader;
   LTok: TXmlToken;
   LCount, LCap, LI: Integer;
-  LAllocator: IAllocator;
+  LAllocator: TMemAllocator;
   LToks: PXmlTokenSlot;
 begin
   Result := nil;

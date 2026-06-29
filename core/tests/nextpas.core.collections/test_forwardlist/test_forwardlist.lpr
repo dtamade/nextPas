@@ -13,7 +13,8 @@ uses
   nextpas.core.collections,
   nextpas.core.collections.base,
   nextpas.core.collections.forward_list.intf,
-  nextpas.core.collections.forward_list;
+  nextpas.core.collections.forward_list,
+  nextpas.core.mem.allocator.base;
 
 type
   IIntFList = specialize IForwardList<Integer>;
@@ -443,7 +444,7 @@ end;
 procedure TestPushFrontBlockRegistryAllocationFailureIsAtomic;
 var
   LL: TIntFList;
-  LAllocator: IAllocator;
+  LAllocator: TMemAllocator;
   LAlloc: TFailingAllocatorSnapshot;
   LValue: Integer;
   LCaught: Boolean;

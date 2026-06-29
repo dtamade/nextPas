@@ -15,7 +15,8 @@ const
   CTRL_DELETED = Byte($80);
   GROUP_SIZE   = 16;
 
-function InlineHash32(x: UInt32): UInt32; inline;
+function InlineHash32(x: UInt32): UInt32; inline,
+  nextpas.core.mem.allocator.base;
 
 type
   generic TSwissTableI32<V> = class
@@ -32,7 +33,7 @@ type
     FGroupCount: SizeUInt;
     FCount: SizeUInt;
     FGrowthLeft: SizeUInt;
-    FAllocator: IAllocator;
+    FAllocator: TMemAllocator;
 
     procedure AllocTable(ACapacity: SizeUInt);
     procedure FreeTable;
@@ -41,7 +42,7 @@ type
 
   public
     constructor Create(aCapacity: SizeUInt = 0);
-    constructor CreateWith(aCapacity: SizeUInt; const aAllocator: IAllocator);
+    constructor CreateWith(aCapacity: SizeUInt; const aAllocator: TMemAllocator);
     destructor Destroy; override;
 
     function TryGetValue(AKey: Int32; out AValue: V): Boolean;
@@ -199,7 +200,7 @@ begin
   end;
 end;
 
-constructor TSwissTableI32.CreateWith(aCapacity: SizeUInt; const aAllocator: IAllocator);
+constructor TSwissTableI32.CreateWith(aCapacity: SizeUInt; const aAllocator: TMemAllocator);
 begin
   inherited Create;
   FCtrl := nil; FSlots := nil; FAllocator := aAllocator;

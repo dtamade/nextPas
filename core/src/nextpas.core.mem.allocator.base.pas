@@ -30,16 +30,18 @@ type
     procedure DoFreeMem(ADst: Pointer); virtual; abstract;
     function DoMemSize(APtr: Pointer): SizeUInt; virtual;
   public
-    function  GetMem(ASize: SizeUInt): Pointer; {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
-    function  AllocMem(ASize: SizeUInt): Pointer; {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
-    function  ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
-    procedure FreeMem(ADst: Pointer); {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
-    function  MemSize(APtr: Pointer): SizeUInt; {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
-    // 对齐分配（默认回退实现，子类可覆盖为原生对齐）
-    function  AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
-    procedure FreeAligned(APtr: Pointer);
+    function  GetMem(ASize: SizeUInt): Pointer; virtual;
+    function  AllocMem(ASize: SizeUInt): Pointer; virtual;
+    function  ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; virtual;
+    procedure FreeMem(ADst: Pointer); virtual;
+    function  MemSize(APtr: Pointer): SizeUInt; virtual;
+    function  AllocAligned(ASize, AAlignment: SizeUInt): Pointer; virtual;
+    procedure FreeAligned(APtr: Pointer); virtual;
     function  Traits: TAllocatorTraits; virtual;
+    procedure FreeMem(APtr: Pointer; ASize: SizeUInt); virtual;
+    function  ReallocMem(APtr: Pointer; AOldSize, ANewSize: SizeUInt): Pointer; virtual;
   end;
+  TMemAllocator = TAllocator;
 
 
 implementation
@@ -110,6 +112,16 @@ begin
     {$ENDIF}
   end;
   DoFreeMem(ADst);
+end;
+
+procedure TAllocator.FreeMem(APtr: Pointer; ASize: SizeUInt);
+begin
+  FreeMem(APtr);
+end;
+
+function TAllocator.ReallocMem(APtr: Pointer; AOldSize, ANewSize: SizeUInt): Pointer;
+begin
+  Result := ReallocMem(APtr, ANewSize);
 end;
 
 function TAllocator.AllocAligned(ASize, AAlignment: SizeUInt): Pointer;

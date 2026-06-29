@@ -14,7 +14,8 @@ uses
   nextpas.core.collections.hashmap.intf,
   nextpas.core.collections.linkedhashmap.base,
   nextpas.core.collections.linkedhashmap.intf,
-  nextpas.core.collections.hashmap;
+  nextpas.core.collections.hashmap,
+  nextpas.core.mem.allocator.base;
 
 type
   {**
@@ -54,9 +55,9 @@ type
 
   public
     constructor Create; overload;
-    constructor Create(aAllocator: IAllocator); overload;
+    constructor Create(aAllocator: TMemAllocator); overload;
     constructor Create(aCapacity: SizeUInt); overload;
-    constructor Create(aCapacity: SizeUInt; aAllocator: IAllocator); overload;
+    constructor Create(aCapacity: SizeUInt; aAllocator: TMemAllocator); overload;
     destructor Destroy; override;
 
     // IHashMap<K,V> interface
@@ -129,7 +130,7 @@ begin
   Create(0, nil);
 end;
 
-constructor TLinkedHashMap.Create(aAllocator: IAllocator);
+constructor TLinkedHashMap.Create(aAllocator: TMemAllocator);
 begin
   Create(0, aAllocator);
 end;
@@ -139,7 +140,7 @@ begin
   Create(aCapacity, nil);
 end;
 
-constructor TLinkedHashMap.Create(aCapacity: SizeUInt; aAllocator: IAllocator);
+constructor TLinkedHashMap.Create(aCapacity: SizeUInt; aAllocator: TMemAllocator);
 begin
   inherited Create(aAllocator);
 

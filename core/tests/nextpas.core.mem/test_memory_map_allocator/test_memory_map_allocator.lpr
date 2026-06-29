@@ -6,14 +6,15 @@ uses
   nextpas.core.test,
   nextpas.core.mem.error,
   nextpas.core.mem.allocator,
-  nextpas.core.mem.allocator.mmap;
+  nextpas.core.mem.allocator.mmap,
+  nextpas.core.mem.allocator.base;
 
 type
   TExceptionProc = procedure;
 
 var
   T: TTestSuite;
-  GAllocator: IAllocator = nil;
+  GAllocator: TMemAllocator = nil;
   GPtr: Pointer = nil;
   GForeignPtr: Pointer = nil;
   GStackByte: Byte = 0;
@@ -55,7 +56,7 @@ end;
 
 procedure TestAnonymousAllocatorTraitsAndZeroing;
 var
-  LAllocator: IAllocator;
+  LAllocator: TMemAllocator;
   LPtr: Pointer;
   LIndex: Integer;
 begin
@@ -76,7 +77,7 @@ end;
 
 procedure TestReallocPreservesPrefix;
 var
-  LAllocator: IAllocator;
+  LAllocator: TMemAllocator;
   LPtr: Pointer;
 begin
   LAllocator := CreateAnonymousMemoryMapAllocator(4096);
@@ -95,7 +96,7 @@ end;
 
 procedure TestMultipleBlocksDoNotAliasAndCanReuse;
 var
-  LAllocator: IAllocator;
+  LAllocator: TMemAllocator;
   LFirst: Pointer;
   LSecond: Pointer;
   LReused: Pointer;
@@ -146,7 +147,7 @@ end;
 
 procedure TestCapacityExhaustionReturnsNil;
 var
-  LAllocator: IAllocator;
+  LAllocator: TMemAllocator;
   LPtr: Pointer;
 begin
   LAllocator := CreateAnonymousMemoryMapAllocator(512);
