@@ -33,6 +33,7 @@ const
   TABLE_TAG_GPOS = $47504F53;   // 'GPOS'
   TABLE_TAG_GSUB = $47535542;   // 'GSUB'
   TABLE_TAG_POST = $706F7374;   // 'post'
+  TABLE_TAG_FVAR = $66766172;   // 'fvar'
   TABLE_TAG_NAME = $6E616D65;   // 'name'
 
   {** GPOS Lookup Type：Pair Adjustment（kern） }
@@ -577,6 +578,32 @@ type
     SubrsOff: Int32;
   end;
   TCff2FontDictArray = array of TCff2FontDict;
+
+  {** fvar 变化轴（参考 Apple TrueType Reference / OpenType fvar） }
+  TFontVariationAxis = record
+    Tag: UInt32;           // 4 字节标识符（'wght', 'wdth', 'opsz', 'ital', 'slnt'）
+    NameID: UInt16;        // name 表中的 nameID
+    MinValue: Single;      // 轴最小值
+    DefaultValue: Single;  // 轴默认值
+    MaxValue: Single;      // 轴最大值
+  end;
+  TFontVariationAxisArray = array of TFontVariationAxis;
+
+  {** fvar 命名实例 }
+  TFontNamedInstance = record
+    Flags: UInt16;         // 标志位（0x0001 = 不同的 PostScript nameID）
+    NameID: UInt16;        // 实例名称的 nameID
+    Coordinates: array of Single;  // 每个轴的坐标值
+  end;
+  TFontNamedInstanceArray = array of TFontNamedInstance;
+
+  {** fvar 表解析结果 }
+  TFontFvarTable = record
+    AxisCount: UInt16;
+    Axes: TFontVariationAxisArray;
+    InstanceCount: UInt16;
+    Instances: TFontNamedInstanceArray;
+  end;
 
 {** 创建默认特性配置（liga=1, kern=1） }
 function FontFeatureConfigDefault: TFontFeatureConfig;

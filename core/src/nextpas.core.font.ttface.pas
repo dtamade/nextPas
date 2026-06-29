@@ -88,6 +88,8 @@ type
     FCff2GlobalSubrCount: Int32;
     FCff2FontDictCount: Int32;
     FCff2FontDicts: TCff2FontDictArray;
+    FFvar: TFontFvarTable;
+    FFvarValid: Boolean;
     FValid: Boolean;
     FLastError: string;
     procedure ParseHeader;
@@ -104,6 +106,7 @@ type
     procedure ParseGsub;
     procedure ParseCff;
     procedure ParseCff2;
+    procedure ParseFvar;
     procedure ParsePost;
     procedure ParseName;
     function GlyphOutlineCff(AGlyphIndex: UInt32): TFontGlyphOutline;
@@ -305,6 +308,19 @@ type
         值域 -1.0..+1.0 以 16384 为单位（F2Dot14 格式）。 }
     function CalcRegionScalar(ARegionIdx: Int32;
       const ACoords: array of Int16): Single;
+
+    {** fvar 表是否成功解析（可变字体检测） }
+    function HasFvar: Boolean;
+    {** 变化轴数量 }
+    function FvarAxisCount: Int32;
+    {** 获取指定索引的变化轴信息 }
+    function GetFvarAxis(AIndex: Int32): TFontVariationAxis;
+    {** 按 tag 查找轴索引（未找到返回 -1） }
+    function FindFvarAxisByTag(ATag: UInt32): Int32;
+    {** 命名实例数量 }
+    function FvarInstanceCount: Int32;
+    {** 获取指定索引的命名实例 }
+    function GetFvarInstance(AIndex: Int32): TFontNamedInstance;
   end;
 
 implementation
@@ -349,6 +365,7 @@ begin
   FPostValid := False;
   FCff2Valid := False;
   FCff2HasVarStore := False;
+  FFvarValid := False;
   FLastError := '';
 
   if not FsExists(AFilePath) then
@@ -392,6 +409,10 @@ begin
     end;
     try
       ParseCff2;
+    except
+    end;
+    try
+      ParseFvar;
     except
     end;
     try
@@ -463,6 +484,10 @@ begin
     end;
     try
       ParseCff2;
+    except
+    end;
+    try
+      ParseFvar;
     except
     end;
     try
@@ -3901,6 +3926,150 @@ begin
       LScalar := LScalar * (LEnd - LCoord) / (LEnd - LPeak);
   end;
   Result := LScalar;
+end;
+
+{ ========================================================================= }
+{ fvar 表解析（可变字体轴信息 + 命名实例）                                      }
+{ ========================================================================= }
+
+procedure TTFontFace.ParseFvar;
+var
+  LIdx, LOff: Int32;
+  LVersion: UInt32;
+  LAxesArrOff, LAxisCount, LAxisSize: UInt16;
+  LInstCount, LInstSize: UInt16;
+  I, J, LBase: Int32;
+begin
+  LIdx := FindTable(TABLE_TAG_FVAR);
+  if LIdx < 0 then
+    Exit;
+  LOff := Int32(FTables[LIdx].Offset);
+  if LOff + 16 > FDataLength then
+    Exit;
+
+  // fvar 头部（Apple / OpenType 兼容布局）：
+  //   0: UInt32 version (Fixed 16.16 = 0x00010000)
+  //   4: UInt16 axesArrayOffset
+  //   6: UInt16 countSizePairs (= 2)
+  //   8: UInt16 axisCount
+  //  10: UInt16 axisSize
+  //  12: UInt16 instanceCount
+  //  14: UInt16 instanceSize
+  LVersion := ReadUInt32BE(LOff);
+  if LVersion <> $00010000 then
+    Exit;
+
+  LAxesArrOff := ReadUInt16BE(LOff + 4);
+  LAxisCount := ReadUInt16BE(LOff + 8);
+  LAxisSize := ReadUInt16BE(LOff + 10);
+  LInstCount := ReadUInt16BE(LOff + 12);
+  LInstSize := ReadUInt16BE(LOff + 14);
+
+  if (LAxisCount < 1) or (LAxisCount > 32) or (LAxisSize < 20) then
+    Exit;
+
+  FFvar.AxisCount := LAxisCount;
+  SetLength(FFvar.Axes, LAxisCount);
+
+  // 解析轴记录
+  for I := 0 to LAxisCount - 1 do
+  begin
+    LBase := LOff + LAxesArrOff + I * LAxisSize;
+    if LBase + LAxisSize > FDataLength then
+      Exit;
+
+    FFvar.Axes[I].Tag := ReadUInt32BE(LBase);
+    FFvar.Axes[I].NameID := ReadUInt16BE(LBase + 4);
+    // bytes 6-7: flags (reserved, ignored)
+    // min/def/max: Fixed 16.16 格式
+    FFvar.Axes[I].MinValue := ReadUInt32BE(LBase + 8) / 65536.0;
+    FFvar.Axes[I].DefaultValue := ReadUInt32BE(LBase + 12) / 65536.0;
+    FFvar.Axes[I].MaxValue := ReadUInt32BE(LBase + 16) / 65536.0;
+  end;
+
+  // 解析命名实例
+  FFvar.InstanceCount := LInstCount;
+  SetLength(FFvar.Instances, LInstCount);
+  LBase := LOff + LAxesArrOff + LAxisCount * LAxisSize;
+
+  for I := 0 to LInstCount - 1 do
+  begin
+    J := LBase + I * LInstSize;
+    if J + LInstSize > FDataLength then
+      Exit;
+
+    FFvar.Instances[I].Flags := ReadUInt16BE(J);
+    FFvar.Instances[I].NameID := ReadUInt16BE(J + 2);
+    SetLength(FFvar.Instances[I].Coordinates, LAxisCount);
+    // 读取每个轴的坐标（Fixed 16.16）
+    // 注意：axisCount > instanceSize 中的坐标数量时可能有 subfamilyNameID 等扩展字段
+    // 但基本情况下坐标数 = axisCount
+  end;
+
+  // 第二遍读取实例坐标（避免在循环中多次检查 bounds）
+  for I := 0 to LInstCount - 1 do
+  begin
+    J := LBase + I * LInstSize + 4;  // 跳过 flags(2) + nameID(2)
+    for LIdx := 0 to LAxisCount - 1 do
+    begin
+      if J + 4 > FDataLength then
+        Break;
+      FFvar.Instances[I].Coordinates[LIdx] := ReadUInt32BE(J) / 65536.0;
+      Inc(J, 4);
+    end;
+  end;
+
+  FFvarValid := True;
+end;
+
+function TTFontFace.HasFvar: Boolean;
+begin
+  Result := FFvarValid;
+end;
+
+function TTFontFace.FvarAxisCount: Int32;
+begin
+  if FFvarValid then
+    Result := FFvar.AxisCount
+  else
+    Result := 0;
+end;
+
+function TTFontFace.GetFvarAxis(AIndex: Int32): TFontVariationAxis;
+begin
+  FillChar(Result, SizeOf(Result), 0);
+  if FFvarValid and (AIndex >= 0) and (AIndex < FFvar.AxisCount) then
+    Result := FFvar.Axes[AIndex];
+end;
+
+function TTFontFace.FindFvarAxisByTag(ATag: UInt32): Int32;
+var
+  I: Int32;
+begin
+  Result := -1;
+  if not FFvarValid then
+    Exit;
+  for I := 0 to FFvar.AxisCount - 1 do
+    if FFvar.Axes[I].Tag = ATag then
+    begin
+      Result := I;
+      Exit;
+    end;
+end;
+
+function TTFontFace.FvarInstanceCount: Int32;
+begin
+  if FFvarValid then
+    Result := FFvar.InstanceCount
+  else
+    Result := 0;
+end;
+
+function TTFontFace.GetFvarInstance(AIndex: Int32): TFontNamedInstance;
+begin
+  FillChar(Result, SizeOf(Result), 0);
+  if FFvarValid and (AIndex >= 0) and (AIndex < FFvar.InstanceCount) then
+    Result := FFvar.Instances[AIndex];
 end;
 
 { ========================================================================= }
