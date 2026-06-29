@@ -17,6 +17,11 @@ const
     and AVX (32-byte, when combined with AllocAligned) use cases. }
   DEFAULT_ALIGNMENT = 16;
 
+  { Debug-mode poison pattern written to freed memory to detect use-after-free.
+    0xDE is chosen because: (1) recognisable in hex dumps, (2) unlikely valid pointer,
+    (3) non-zero so dereference traps. }
+  MEM_POISON_FREED = $DE;
+
 type
   TAllocatorKind = (
     akDefault,

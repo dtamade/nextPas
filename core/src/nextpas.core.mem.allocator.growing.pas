@@ -65,7 +65,7 @@ type
     {** Resize a block. If the new size fits in the same size class,
         returns the same pointer (zero-copy). Otherwise allocates new,
         copies data, and frees the old block. }
-    function ReallocMem(APtr: Pointer; AOldSize, ANewSize: SizeUInt): Pointer; inline;
+    function ReallocMem(APtr: Pointer; AOldSize, ANewSize: SizeUInt): Pointer;
 
     {** Force a scavenge pass across all central pools.
         Releases long-idle fully-free spans to OS. }
@@ -83,9 +83,35 @@ implementation
 var
   GGrowingAllocator: TGrowingAllocator;
 
+{ Forward declarations for thread-exit cleanup. }
+procedure FlushToCentral(AIndex: Int32; ACount: Word; ABlocks: PPointer); forward;
+
 { Thread-local cache: one per thread, zero initialization on thread start. }
 threadvar
   GThreadCache: TThreadCache;
+
+{ --- Thread-exit cleanup via pthread TLS key destructor ---
+  When a thread exits, pthread calls ThreadExitFlush with the TLS value.
+  We flush all cached blocks back to the central pool to prevent leakage. }
+
+type
+  TThreadExitProc = procedure(AData: Pointer); cdecl;
+
+{$IFDEF LINUX}
+var
+  GCacheCleanupKey: QWord;  { pthread_key_t = unsigned long on Linux x86-64 }
+
+function pthread_key_create(var AKey: QWord;
+  ADestructor: TThreadExitProc): Integer; cdecl; external 'c' name 'pthread_key_create';
+function pthread_key_delete(AKey: QWord): Integer; cdecl; external 'c' name 'pthread_key_delete';
+function pthread_setspecific(AKey: QWord; AValue: Pointer): Integer; cdecl; external 'c' name 'pthread_setspecific';
+{$ENDIF}
+
+procedure ThreadExitFlush(AData: Pointer); cdecl;
+begin
+  if (AData <> nil) and (GGrowingAllocator <> nil) then
+    ThreadCacheFlushAll(GThreadCache, @FlushToCentral);
+end;
 
 { --- Refill/Flush callbacks (standalone functions for TRefillProc/TFlushProc) --- }
 
@@ -158,6 +184,9 @@ begin
   if ASize = 0 then
     Exit(nil);
   Inc(GThreadCache.FOpCount);
+  { Register thread-exit cleanup callback (once per thread). }
+  if GThreadCache.FOpCount = 1 then
+    pthread_setspecific(GCacheCleanupKey, @GThreadCache);
   { Periodic scavenge: uses thread-local counter in GThreadCache. }
   if (GThreadCache.FOpCount and (SCAVENGER_CHECK_INTERVAL - 1)) = 0 then
   begin
@@ -181,7 +210,9 @@ begin
     begin
       GThreadCache.FHeads[LIndex] := LNode^.FNext;
       Dec(GThreadCache.FCounts[LIndex]);
-      Exit(Pointer(LNode));
+      Result := Pointer(LNode);
+      {$IFDEF DEBUG}FillChar(Result^, ASize, MEM_POISON_FREED);{$ENDIF}
+      Exit(Result);
     end;
   end
   else if ASize <= 1024 then
@@ -193,7 +224,9 @@ begin
     begin
       GThreadCache.FHeads[LIndex] := LNode^.FNext;
       Dec(GThreadCache.FCounts[LIndex]);
-      Exit(Pointer(LNode));
+      Result := Pointer(LNode);
+      {$IFDEF DEBUG}FillChar(Result^, ASize, MEM_POISON_FREED);{$ENDIF}
+      Exit(Result);
     end;
   end
   else
@@ -204,7 +237,9 @@ begin
     begin
       GThreadCache.FHeads[LIndex] := LNode^.FNext;
       Dec(GThreadCache.FCounts[LIndex]);
-      Exit(Pointer(LNode));
+      Result := Pointer(LNode);
+      {$IFDEF DEBUG}FillChar(Result^, ASize, MEM_POISON_FREED);{$ENDIF}
+      Exit(Result);
     end;
   end;
   { Cache miss: refill from central pool. }
@@ -220,6 +255,10 @@ begin
   end
   else
     System.GetMem(Result, ASize);
+  {$IFDEF DEBUG}
+  if Result <> nil then
+    FillChar(Result^, ASize, MEM_POISON_FREED);
+  {$ENDIF}
 end;
 {$pop}
 
@@ -231,6 +270,7 @@ var
 begin
   if APtr = nil then
     Exit;
+  {$IFDEF DEBUG}FillChar(APtr^, ASize, MEM_POISON_FREED);{$ENDIF}
   Inc(GThreadCache.FOpCount);
   { Huge allocation: skip size class lookup. }
   if ASize > MEM_SIZECLASS_MAX then
@@ -495,7 +535,7 @@ end;
 {$pop}
 
 function TGrowingAllocator.ReallocMem(APtr: Pointer;
-  AOldSize, ANewSize: SizeUInt): Pointer; inline;
+  AOldSize, ANewSize: SizeUInt): Pointer;
 begin
   if APtr = nil then
     Exit(GetMem(ANewSize));
@@ -552,9 +592,11 @@ begin
 end;
 
 initialization
+  {$IFDEF LINUX}pthread_key_create(GCacheCleanupKey, @ThreadExitFlush);{$ENDIF}
   GGrowingAllocator := TGrowingAllocator.Create;
 
 finalization
   FreeAndNil(GGrowingAllocator);
+  {$IFDEF LINUX}pthread_key_delete(GCacheCleanupKey);{$ENDIF}
 
 end.

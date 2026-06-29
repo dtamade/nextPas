@@ -255,13 +255,15 @@ begin
     if LIdx >= 0 then
     begin
       LWasFull := not SpanHasFree(APool.FEntries[LIdx].FSpan);
-      SpanFree(APool.FEntries[LIdx].FSpan, Pointer(LHead));
-      if SpanIsEmpty(APool.FEntries[LIdx].FSpan) then
-        APool.FEntries[LIdx].FLastFreeTick := AOpCounter;
-      if LWasFull and SpanHasFree(APool.FEntries[LIdx].FSpan) then
+      if SpanFree(APool.FEntries[LIdx].FSpan, Pointer(LHead)) then
       begin
-        APool.FPartialNext[LIdx] := APool.FPartialHead;
-        APool.FPartialHead := LIdx;
+        if SpanIsEmpty(APool.FEntries[LIdx].FSpan) then
+          APool.FEntries[LIdx].FLastFreeTick := AOpCounter;
+        if LWasFull and SpanHasFree(APool.FEntries[LIdx].FSpan) then
+        begin
+          APool.FPartialNext[LIdx] := APool.FPartialHead;
+          APool.FPartialHead := LIdx;
+        end;
       end;
     end;
     Inc(Result);
@@ -287,15 +289,17 @@ begin
         Continue;
       end;
       LWasFull := not SpanHasFree(APool.FEntries[LIdx].FSpan);
-      SpanFree(APool.FEntries[LIdx].FSpan, ABlocks^);
-      { If span became completely empty, mark it as idle for scavenging. }
-      if SpanIsEmpty(APool.FEntries[LIdx].FSpan) then
-        APool.FEntries[LIdx].FLastFreeTick := AOpCounter;
-      { If span was full and now has space, re-add to partial list. }
-      if LWasFull and SpanHasFree(APool.FEntries[LIdx].FSpan) then
+      if SpanFree(APool.FEntries[LIdx].FSpan, ABlocks^) then
       begin
-        APool.FPartialNext[LIdx] := APool.FPartialHead;
-        APool.FPartialHead := LIdx;
+        { If span became completely empty, mark it as idle for scavenging. }
+        if SpanIsEmpty(APool.FEntries[LIdx].FSpan) then
+          APool.FEntries[LIdx].FLastFreeTick := AOpCounter;
+        { If span was full and now has space, re-add to partial list. }
+        if LWasFull and SpanHasFree(APool.FEntries[LIdx].FSpan) then
+        begin
+          APool.FPartialNext[LIdx] := APool.FPartialHead;
+          APool.FPartialHead := LIdx;
+        end;
       end;
       Inc(ABlocks);
     end;
@@ -322,7 +326,7 @@ end;
 function ScavengeCentralPools(var APool: TCentralPool;
   AOpCounter: UInt64; AIdleThreshold: UInt64): Int32;
 var
-  I: Int32;
+  I, LPrev, LCur: Int32;
   LAge: UInt64;
 begin
   Result := 0;
@@ -343,11 +347,25 @@ begin
       LAge := AOpCounter - APool.FEntries[I].FLastFreeTick;
       if LAge >= AIdleThreshold then
       begin
+        { Unlink from partial list if present (safety for edge cases). }
+        LPrev := -1;
+        LCur := APool.FPartialHead;
+        while LCur >= 0 do
+        begin
+          if LCur = I then
+          begin
+            if LPrev < 0 then
+              APool.FPartialHead := APool.FPartialNext[LCur]
+            else
+              APool.FPartialNext[LPrev] := APool.FPartialNext[LCur];
+            Break;
+          end;
+          LPrev := LCur;
+          LCur := APool.FPartialNext[LCur];
+        end;
         FreeMem(APool.FEntries[I].FMemory, APool.FEntries[I].FMemorySize);
         APool.FEntries[I].FMemory := nil;
         APool.FEntries[I].FLastFreeTick := 0;
-        { Mark span as empty so SpanAlloc returns nil if entry is still
-          on the partial list (edge case: race with concurrent alloc). }
         APool.FEntries[I].FSpan.FBitmap := 0;
         APool.FEntries[I].FSpan.FFreeCount := 0;
         Inc(Result);
