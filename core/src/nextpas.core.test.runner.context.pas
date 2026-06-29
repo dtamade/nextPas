@@ -144,9 +144,16 @@ begin
 end;
 
 procedure TTestContext.Log(const AMessage: string);
+var
+  LOldLen, LCap: Integer;
 begin
-  SetLength(FLogLines, Length(FLogLines) + 1);
-  FLogLines[High(FLogLines)] := AMessage;
+  LOldLen := Length(FLogLines);
+  LCap := LOldLen;
+  if LCap < 8 then LCap := 8
+  else if LOldLen >= LCap then LCap := LCap * 2;
+  if LCap <> LOldLen then SetLength(FLogLines, LCap);
+  FLogLines[LOldLen] := AMessage;
+  SetLength(FLogLines, LOldLen + 1);
 end;
 
 procedure TTestContext.LogF(const AFormat: string; const AArgs: array of const);
@@ -157,19 +164,32 @@ end;
 procedure TTestContext.OnCleanup(AProc: TTestProc);
 var
   LProc: TTestProc;
+  LOldLen, LCap: Integer;
 begin
   LProc := AProc;
-  SetLength(FCleanups, Length(FCleanups) + 1);
-  FCleanups[High(FCleanups)] := procedure
+  LOldLen := Length(FCleanups);
+  LCap := LOldLen;
+  if LCap < 4 then LCap := 4
+  else if LOldLen >= LCap then LCap := LCap * 2;
+  if LCap <> LOldLen then SetLength(FCleanups, LCap);
+  FCleanups[LOldLen] := procedure
   begin
     LProc;
   end;
+  SetLength(FCleanups, LOldLen + 1);
 end;
 
 procedure TTestContext.OnCleanup(AProc: TTestClosure);
+var
+  LOldLen, LCap: Integer;
 begin
-  SetLength(FCleanups, Length(FCleanups) + 1);
-  FCleanups[High(FCleanups)] := AProc;
+  LOldLen := Length(FCleanups);
+  LCap := LOldLen;
+  if LCap < 4 then LCap := 4
+  else if LOldLen >= LCap then LCap := LCap * 2;
+  if LCap <> LOldLen then SetLength(FCleanups, LCap);
+  FCleanups[LOldLen] := AProc;
+  SetLength(FCleanups, LOldLen + 1);
 end;
 
 procedure TTestContext.ClearLog;

@@ -286,9 +286,23 @@ end;
 
 procedure AppendResult(var AResults: specialize TArray<TTestResult>;
   const AResult: TTestResult);
+var
+  LOldLen, LNewLen, LCap: Integer;
 begin
-  SetLength(AResults, Length(AResults) + 1);
-  AResults[High(AResults)] := AResult;
+  LOldLen := Length(AResults);
+  LCap := LOldLen;
+  if LCap < 16 then
+    LCap := 16
+  else if LOldLen >= LCap then
+    LCap := LCap * 2;
+  if LCap <> LOldLen then
+    SetLength(AResults, LCap);
+  AResults[LOldLen] := AResult;
+  { Trim to actual length — FPC keeps capacity internally,
+    so the next SetLength to the same size is a no-op. }
+  LNewLen := LOldLen + 1;
+  if LNewLen <> LCap then
+    SetLength(AResults, LNewLen);
 end;
 
 function GetTopSlowest(const AResults: TTestResults;
@@ -359,9 +373,19 @@ end;
 
 procedure RegisterEntry(var AEntries: specialize TArray<TTestEntry>;
   const AEntry: TTestEntry);
+var
+  LOldLen, LCap: Integer;
 begin
-  SetLength(AEntries, Length(AEntries) + 1);
-  AEntries[High(AEntries)] := AEntry;
+  LOldLen := Length(AEntries);
+  LCap := LOldLen;
+  if LCap < 16 then
+    LCap := 16
+  else if LOldLen >= LCap then
+    LCap := LCap * 2;
+  if LCap <> LOldLen then
+    SetLength(AEntries, LCap);
+  AEntries[LOldLen] := AEntry;
+  SetLength(AEntries, LOldLen + 1);
 end;
 
 procedure CopyTags(out ATags: specialize TArray<string>;

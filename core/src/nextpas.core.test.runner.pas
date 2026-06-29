@@ -745,13 +745,21 @@ procedure RegisterStub(var ASuite: TTestSuite; APtr: Pointer);
     with no synchronization. Current usage is safe: registration and
     cleanup both occur on the main thread during discovery and suite
     finalization. }
+var
+  LOldLen, LCap: Integer;
 begin
   { Global safety-net — disposed in finalization for suites that never run }
   SetLength(GStubRegistry, Length(GStubRegistry) + 1);
   GStubRegistry[High(GStubRegistry)] := APtr;
-  { Per-suite tracking — stores GStubRegistry index for O(1) cleanup (R4-10) }
-  SetLength(ASuite.StubAllocations, Length(ASuite.StubAllocations) + 1);
-  ASuite.StubAllocations[High(ASuite.StubAllocations)] := High(GStubRegistry);
+  { Per-suite tracking — stores GStubRegistry index for O(1) cleanup (R4-10).
+    Geometric growth: pre-allocate capacity to avoid per-registration realloc. }
+  LOldLen := Length(ASuite.StubAllocations);
+  LCap := LOldLen;
+  if LCap < 8 then LCap := 8
+  else if LOldLen >= LCap then LCap := LCap * 2;
+  if LCap <> LOldLen then SetLength(ASuite.StubAllocations, LCap);
+  ASuite.StubAllocations[LOldLen] := High(GStubRegistry);
+  SetLength(ASuite.StubAllocations, LOldLen + 1);
 end;
 
 procedure RegisterFixture(var ASuite: TTestSuite; AFixture: TObject);
@@ -760,13 +768,21 @@ procedure RegisterFixture(var ASuite: TTestSuite; AFixture: TObject);
     with no synchronization. Current usage is safe: registration and
     cleanup both occur on the main thread during discovery and suite
     finalization. }
+var
+  LOldLen, LCap: Integer;
 begin
   { Global safety-net — disposed in finalization for suites that never run }
   SetLength(GFixtureRegistry, Length(GFixtureRegistry) + 1);
   GFixtureRegistry[High(GFixtureRegistry)] := AFixture;
-  { Per-suite tracking — stores GFixtureRegistry index for O(1) cleanup }
-  SetLength(ASuite.FixtureAllocations, Length(ASuite.FixtureAllocations) + 1);
-  ASuite.FixtureAllocations[High(ASuite.FixtureAllocations)] := High(GFixtureRegistry);
+  { Per-suite tracking — stores GFixtureRegistry index for O(1) cleanup.
+    Geometric growth to avoid per-registration realloc. }
+  LOldLen := Length(ASuite.FixtureAllocations);
+  LCap := LOldLen;
+  if LCap < 8 then LCap := 8
+  else if LOldLen >= LCap then LCap := LCap * 2;
+  if LCap <> LOldLen then SetLength(ASuite.FixtureAllocations, LCap);
+  ASuite.FixtureAllocations[LOldLen] := High(GFixtureRegistry);
+  SetLength(ASuite.FixtureAllocations, LOldLen + 1);
 end;
 
 procedure TTestSuite.Test(const AName: string; AProc: TTestProc);
@@ -1045,19 +1061,32 @@ end;
 procedure TTestSuite.Cleanup(AProc: TTestProc);
 var
   LProc: TTestProc;
+  LOldLen, LCap: Integer;
 begin
   LProc := AProc;
-  SetLength(EachCleanups, Length(EachCleanups) + 1);
-  EachCleanups[High(EachCleanups)] := procedure
+  LOldLen := Length(EachCleanups);
+  LCap := LOldLen;
+  if LCap < 4 then LCap := 4
+  else if LOldLen >= LCap then LCap := LCap * 2;
+  if LCap <> LOldLen then SetLength(EachCleanups, LCap);
+  EachCleanups[LOldLen] := procedure
   begin
     LProc;
   end;
+  SetLength(EachCleanups, LOldLen + 1);
 end;
 
 procedure TTestSuite.Cleanup(AProc: TTestClosure);
+var
+  LOldLen, LCap: Integer;
 begin
-  SetLength(EachCleanups, Length(EachCleanups) + 1);
-  EachCleanups[High(EachCleanups)] := AProc;
+  LOldLen := Length(EachCleanups);
+  LCap := LOldLen;
+  if LCap < 4 then LCap := 4
+  else if LOldLen >= LCap then LCap := LCap * 2;
+  if LCap <> LOldLen then SetLength(EachCleanups, LCap);
+  EachCleanups[LOldLen] := AProc;
+  SetLength(EachCleanups, LOldLen + 1);
 end;
 
 function TTestSuite.WithConfig(const AConfig: TTestConfig): TTestSuite;
@@ -1125,21 +1154,34 @@ end;
 function TTestSuite.WithEachCleanup(AProc: TTestProc): TTestSuite;
 var
   LProc: TTestProc;
+  LOldLen, LCap: Integer;
 begin
   Result := Self;
   LProc := AProc;
-  SetLength(Result.EachCleanups, Length(Result.EachCleanups) + 1);
-  Result.EachCleanups[High(Result.EachCleanups)] := procedure
+  LOldLen := Length(Result.EachCleanups);
+  LCap := LOldLen;
+  if LCap < 4 then LCap := 4
+  else if LOldLen >= LCap then LCap := LCap * 2;
+  if LCap <> LOldLen then SetLength(Result.EachCleanups, LCap);
+  Result.EachCleanups[LOldLen] := procedure
   begin
     LProc;
   end;
+  SetLength(Result.EachCleanups, LOldLen + 1);
 end;
 
 function TTestSuite.WithEachCleanup(AProc: TTestClosure): TTestSuite;
+var
+  LOldLen, LCap: Integer;
 begin
   Result := Self;
-  SetLength(Result.EachCleanups, Length(Result.EachCleanups) + 1);
-  Result.EachCleanups[High(Result.EachCleanups)] := AProc;
+  LOldLen := Length(Result.EachCleanups);
+  LCap := LOldLen;
+  if LCap < 4 then LCap := 4
+  else if LOldLen >= LCap then LCap := LCap * 2;
+  if LCap <> LOldLen then SetLength(Result.EachCleanups, LCap);
+  Result.EachCleanups[LOldLen] := AProc;
+  SetLength(Result.EachCleanups, LOldLen + 1);
 end;
 
 function TTestSuite.Run: Boolean;
