@@ -24,7 +24,6 @@ type
     FLastIOResult: TSSLIOResult;
   public
     constructor Create(AInner: IStream); overload;
-    constructor Create(AInner: IStream); overload;
     function Read(var Buffer; Count: Longint): Longint; overload;
     function Write(const Buffer; Count: Longint): Longint; overload;
 

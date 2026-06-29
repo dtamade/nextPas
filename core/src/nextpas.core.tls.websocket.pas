@@ -34,7 +34,6 @@ type
     FIsClient: Boolean;
   public
     constructor Create(AStream: IStream; AIsClient: Boolean); overload;
-    constructor Create(AStream: IStream; AIsClient: Boolean); overload;
     function SendText(const AText: string): Boolean;
     function SendBinary(const AData: TBytes): Boolean;
     function SendPing(const AData: TBytes): Boolean;

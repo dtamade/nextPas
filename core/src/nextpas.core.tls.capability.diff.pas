@@ -17,6 +17,7 @@ unit nextpas.core.tls.capability.diff;
 interface
 
 uses
+  Classes,
   nextpas.core.exception,
   nextpas.core.base,
   nextpas.core.text.conv,
@@ -422,9 +423,10 @@ end;
 
 function GenerateTextReport(const ADiff: TCapabilityDiffResult): string;
 var
-  Report: TStringArray;
+  Report: TStringList;
   i: Integer;
 begin
+  Report := TStringList.Create;
   try
     Report.Add('════════════════════════════════════════════════════════════');
     Report.Add('  能力矩阵差异报告');
@@ -477,6 +479,7 @@ begin
 
     Result := Report.Text;
   finally
+    Report.Free;
   end;
 end;
 

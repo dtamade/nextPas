@@ -15,6 +15,7 @@ function TLS12BuildCertificateVerify(const AConfig: TTLS12ClientCertConfig;
 
 implementation
 
+function TLS12BuildClientCertificate(const AConfig: TTLS12ClientCertConfig): TBytes;
 var
   LCertLen, LTotalLen: Integer;
 begin
