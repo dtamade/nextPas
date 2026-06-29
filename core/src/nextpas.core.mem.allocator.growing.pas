@@ -90,14 +90,15 @@ procedure FlushToCentral(AIndex: Int32; ACount: Word; ABlocks: PPointer); forwar
 threadvar
   GThreadCache: TThreadCache;
 
-{ --- Thread-exit cleanup via pthread TLS key destructor ---
-  When a thread exits, pthread calls ThreadExitFlush with the TLS value.
-  We flush all cached blocks back to the central pool to prevent leakage. }
+{ --- Thread-exit cleanup ---
+  UNIX: pthread TLS key destructor. Windows: FlsCallback.
+  When a thread exits, the callback flushes all cached blocks
+  back to the central pool to prevent leakage. }
 
 type
   TThreadExitProc = procedure(AData: Pointer); cdecl;
 
-{$IFDEF LINUX}
+{$IFDEF UNIX}
 var
   GCacheCleanupKey: QWord;  { pthread_key_t = unsigned long on Linux x86-64 }
 
@@ -107,13 +108,43 @@ function pthread_key_delete(AKey: QWord): Integer; cdecl; external 'c' name 'pth
 function pthread_setspecific(AKey: QWord; AValue: Pointer): Integer; cdecl; external 'c' name 'pthread_setspecific';
 {$ENDIF}
 
+{$IFDEF MSWINDOWS}
+type
+  TFlsCallback = procedure(lpFlsData: Pointer); stdcall;
+var
+  GCacheCleanupIndex: DWORD;
+
+function FlsAlloc(lpCallback: TFlsCallback): DWORD; stdcall; external 'kernel32.dll' name 'FlsAlloc';
+function FlsFree(dwFlsIndex: DWORD): BOOL; stdcall; external 'kernel32.dll' name 'FlsFree';
+function FlsSetValue(dwFlsIndex: DWORD; lpFlsData: Pointer): BOOL; stdcall; external 'kernel32.dll' name 'FlsSetValue';
+{$ENDIF}
+
 procedure ThreadExitFlush(AData: Pointer); cdecl;
 begin
   if (AData <> nil) and (GGrowingAllocator <> nil) then
     ThreadCacheFlushAll(GThreadCache, @FlushToCentral);
 end;
 
-{ --- Refill/Flush callbacks (standalone functions for TRefillProc/TFlushProc) --- }
+{$IFDEF MSWINDOWS}
+procedure ThreadExitFlsCallback(lpFlsData: Pointer); stdcall;
+begin
+  ThreadExitFlush(lpFlsData);
+end;
+{$ENDIF}
+
+{ Fast inline size class lookup — same logic as the band checks in GetMem/FreeMem
+  but as a single function for use in ReallocMem's same-class check. }
+function FastSizeClassIndex(ASize: SizeUInt): Int32; inline;
+begin
+  if ASize <= 256 then
+    Result := Int32((ASize + 15) shr 4) - 1
+  else if ASize <= 1024 then
+    Result := Int32(ASize shr 6) + 14
+  else
+    Result := SizeClassIndex(ASize);
+end;
+
+{ Refill/Flush callbacks (standalone functions for TRefillProc/TFlushProc) --- }
 
 function RefillFromCentral(AIndex: Int32; ACount: Word;
   ABlocks: PPointer): Word;
@@ -186,7 +217,14 @@ begin
   Inc(GThreadCache.FOpCount);
   { Register thread-exit cleanup callback (once per thread). }
   if GThreadCache.FOpCount = 1 then
+  begin
+    {$IFDEF UNIX}
     pthread_setspecific(GCacheCleanupKey, @GThreadCache);
+    {$ENDIF}
+    {$IFDEF MSWINDOWS}
+    FlsSetValue(GCacheCleanupIndex, @GThreadCache);
+    {$ENDIF}
+  end;
   { Periodic scavenge: uses thread-local counter in GThreadCache. }
   if (GThreadCache.FOpCount and (SCAVENGER_CHECK_INTERVAL - 1)) = 0 then
   begin
@@ -546,21 +584,8 @@ begin
   end;
   { Same size class → zero-copy (most common: Vec/GrowSlice growing within class). }
   if (AOldSize <= MEM_SIZECLASS_MAX) and (ANewSize <= MEM_SIZECLASS_MAX) then
-  begin
-    { Fast band checks: if both in same band AND same class → zero-copy. }
-    if (AOldSize <= 256) and (ANewSize <= 256) then
-    begin
-      if Int32((AOldSize + 15) shr 4) = Int32((ANewSize + 15) shr 4) then
-        Exit(APtr);
-    end
-    else if (AOldSize <= 1024) and (ANewSize <= 1024) then
-    begin
-      if Int32(AOldSize shr 6) = Int32(ANewSize shr 6) then
-        Exit(APtr);
-    end
-    else if SizeClassIndex(AOldSize) = SizeClassIndex(ANewSize) then
+    if FastSizeClassIndex(AOldSize) = FastSizeClassIndex(ANewSize) then
       Exit(APtr);
-  end;
   { Different class: alloc + copy + free. }
   Result := GetMem(ANewSize);
   if Result <> nil then
@@ -592,11 +617,13 @@ begin
 end;
 
 initialization
-  {$IFDEF LINUX}pthread_key_create(GCacheCleanupKey, @ThreadExitFlush);{$ENDIF}
+  {$IFDEF UNIX}pthread_key_create(GCacheCleanupKey, @ThreadExitFlush);{$ENDIF}
+  {$IFDEF MSWINDOWS}GCacheCleanupIndex := FlsAlloc(@ThreadExitFlsCallback);{$ENDIF}
   GGrowingAllocator := TGrowingAllocator.Create;
 
 finalization
   FreeAndNil(GGrowingAllocator);
-  {$IFDEF LINUX}pthread_key_delete(GCacheCleanupKey);{$ENDIF}
+  {$IFDEF UNIX}pthread_key_delete(GCacheCleanupKey);{$ENDIF}
+  {$IFDEF MSWINDOWS}FlsFree(GCacheCleanupIndex);{$ENDIF}
 
 end.
