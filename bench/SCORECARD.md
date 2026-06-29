@@ -8,10 +8,10 @@
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **58** | 1 | 30 | **66%** |
+| **Go** | **60** | 1 | 30 | **67%** |
 | **Rust** | 19 | 0 | 47 | **29%** |
 
-## Track Summary (21 tracks, 91 operations)
+## Track Summary (22 tracks, 95 operations)
 
 ### Text Operations (6 ops)
 
@@ -256,6 +256,17 @@
 
 **2W vs Go** — Pascal `const` array in .rodata, direct table lookup vs Go global init + bounds check
 
+### String Escape Operations (4 ops)
+
+| Track | Pascal (ns) | Go (ns) | vs Go |
+|-------|-------------|---------|-------|
+| **Escape/SetBuild/10K** | **1116498** | 1947837 | **1.74x** ✓ |
+| **Escape/TwoPass/10K** | **1091251** | 1669426 | **1.53x** ✓ |
+| **Escape/CountSet/10K** | **333460** | 302154 | 0.91x |
+| Escape/CountBranch/10K | 472148 | 302154 | 0.64x |
+
+**2W vs Go** — Pascal `set of Char` + in-place character building vs Go `strings.Builder` + branch-based char checks
+
 ### Pascal Wins (biggest margins vs Go)
 1. **String Concat: 3557x** — Go immutable strings O(n²) vs Pascal COW
 2. **Fill/1KB: 23.37x** — FillChar→rep stosb vs Go byte loop (no memset opt)
@@ -289,6 +300,7 @@
 ### Categories
 - **Bit set operations**: Pascal dominant (5W vs Go) — `set of Byte` is killer
 - **FillChar/Fill**: Pascal dominant (3W vs Go) — `rep stosb` vs Go byte loop
+- **String escape**: Pascal strong (2W vs Go) — `set of Char` + in-place build 1.74x faster
 - **Bit scan / byte swap**: Pascal strong (3W vs Go) — BSR/BSF/BSwap intrinsics
 - **Dynamic arrays**: Pascal strong (4W vs Go) — SetLength realloc 2-8x faster than Go append
 - **Matrix operations**: Pascal dominant (4W vs Go) — FPC loop optimization beats Go compiler
@@ -304,7 +316,7 @@
 
 ## Conclusion
 
-Pascal beats Go 66% of the time across 87 benchmarks. The biggest wins come from
+Pascal beats Go 67% of the time across 91 benchmarks. The biggest wins come from
 FillChar operations (compiles to `rep stosb`, 11-23x faster than Go's byte loop),
 string operations (immutable strings are Go's Achilles heel), bit set operations
 (`set of Byte` compiles to native instructions), number formatting
@@ -314,7 +326,8 @@ matrix operations (FPC loop optimization),
 object lifecycle (New/Dispose vs GC write barrier, 1.5-1.7x),
 memory move (FPC_MOVE ERMSB+prefetchnta vs Go memmove, 1.23-1.31x at 16K-256K),
 packed records (19% smaller than Go struct, 1.24x faster filter),
-and file I/O writes (direct syscall vs Go's bufio).
+and file I/O writes (direct syscall vs Go's bufio),
+and string escape (set of Char + in-place build, 1.74x faster than Go strings.Builder).
 Losses come from auto-vectorization gaps, Go's optimized hash map,
 and branchless codegen for binary search. Against Rust, Pascal wins 30% —
 Rust's zero-cost abstractions and LLVM codegen make it consistently fast.
