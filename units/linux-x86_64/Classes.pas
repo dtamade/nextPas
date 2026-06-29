@@ -76,6 +76,20 @@ type
     property Items[Index: Integer]: IInterface read GetItem write SetItem; default;
   end;
 
+  TThread = class
+  private
+    FTerminated: Boolean;
+    FFreeOnTerminate: Boolean;
+  public
+    constructor Create(CreateSuspended: Boolean);
+    procedure Execute; virtual; abstract;
+    procedure Start;
+    procedure Terminate;
+    function WaitFor: Integer;
+    property Terminated: Boolean read FTerminated;
+    property FreeOnTerminate: Boolean read FFreeOnTerminate write FFreeOnTerminate;
+  end;
+
   TFileStream = class(TStream)
   private
     FHandle: File;
@@ -145,6 +159,30 @@ type
   end;
 
 implementation
+
+{ TThread }
+
+constructor TThread.Create(CreateSuspended: Boolean);
+begin
+  inherited Create;
+  FTerminated := False;
+  FFreeOnTerminate := False;
+end;
+
+procedure TThread.Start;
+begin
+  // stub — no real threading needed for bench
+end;
+
+procedure TThread.Terminate;
+begin
+  FTerminated := True;
+end;
+
+function TThread.WaitFor: Integer;
+begin
+  Result := 0;
+end;
 
 { TStream }
 

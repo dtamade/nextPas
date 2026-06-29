@@ -8,10 +8,10 @@
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **43** | 1 | 24 | **64%** |
+| **Go** | **46** | 1 | 25 | **65%** |
 | **Rust** | 19 | 0 | 47 | **29%** |
 
-## Track Summary (16 tracks, 69 operations)
+## Track Summary (17 tracks, 73 operations)
 
 ### Text Operations (6 ops)
 
@@ -142,6 +142,17 @@
 
 **3W vs Go, 0W vs Rust (GC overhead)**
 
+### Memory Move Operations (4 ops)
+
+| Track | Pascal (ns) | Go (ns) | vs Go |
+|-------|-------------|---------|-------|
+| Move4K/x100 | 63.5 | 54.2 | 0.85x |
+| **Move16K/x100** | **220.7** | 270.8 | **1.23x** ✓ |
+| **Move64K/x100** | **2943.6** | 3012.3 | **1.02x** ✓ |
+| **Move256K/x100** | **16372.5** | 21470.2 | **1.31x** ✓ |
+
+**3W vs Go** — FPC FPC_MOVE: ERMSB (≥1536B) + prefetchnta (≥256KB) vs Go runtime.memmove
+
 ### I/O Operations (6 ops)
 
 | Track | Pascal | Go | vs Go | Rust | vs Rust |
@@ -233,6 +244,7 @@
 - **FillChar/Fill**: Pascal dominant (3W vs Go) — `rep stosb` vs Go byte loop
 - **Matrix operations**: Pascal dominant (4W vs Go) — FPC loop optimization beats Go compiler
 - **Object lifecycle**: Pascal dominant (3W vs Go) — New/Dispose vs GC write barrier
+- **Memory move**: Pascal strong (3W vs Go) — ERMSB + prefetchnta at 16K-256K
 - **File I/O Write**: Pascal dominant (3W vs Go) — direct syscall vs Go's bufio
 - **String operations**: Pascal dominant (7W vs Go)
 - **Memory/pointer**: Pascal strong (5W vs Go)
@@ -243,12 +255,13 @@
 
 ## Conclusion
 
-Pascal beats Go 64% of the time across 69 benchmarks. The biggest wins come from
+Pascal beats Go 65% of the time across 73 benchmarks. The biggest wins come from
 FillChar operations (compiles to `rep stosb`, 11-23x faster than Go's byte loop),
 string operations (immutable strings are Go's Achilles heel), bit set operations
 (`set of Byte` compiles to native instructions), number formatting
 (direct digit writing), matrix operations (FPC loop optimization),
 object lifecycle (New/Dispose vs GC write barrier, 1.5-1.7x),
+memory move (FPC_MOVE ERMSB+prefetchnta vs Go memmove, 1.23-1.31x at 16K-256K),
 and file I/O writes (direct syscall vs Go's bufio).
 Losses come from auto-vectorization gaps, Go's optimized hash map,
 and branchless codegen for binary search. Against Rust, Pascal wins 30% —
