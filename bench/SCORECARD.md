@@ -8,10 +8,10 @@
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **23** | 0 | 16 | **59%** |
-| **Rust** | 15 | 0 | 23 | **39%** |
+| **Go** | **25** | 0 | 18 | **58%** |
+| **Rust** | 15 | 0 | 25 | **38%** |
 
-## Track Summary (10 tracks, 39 operations)
+## Track Summary (11 tracks, 43 operations)
 
 ### Text Operations (6 ops)
 
@@ -119,6 +119,17 @@
 
 **5W vs Go, 4W vs Rust** ⭐ Killer track
 
+### String Operations (4 ops)
+
+| Track | Pascal | Go | vs Go |
+|-------|--------|-----|-------|
+| SameText/100k | 48.9ms | 32.8ms | 0.67x |
+| **UpperCase/100k** | **39.7ms** | 52.9ms | **1.33x** ✓ |
+| **LowerCase/100k** | **38.7ms** | 82.2ms | **2.12x** ✓ |
+| CompareStr/100k | 1.15ms | 37.3µs | 0.03x |
+
+**2W vs Go, 0W vs Rust**
+
 ### Binary Search (2 ops)
 
 | Track | Pascal | Go | vs Go |
@@ -134,6 +145,8 @@
 3. **Set Intersection: 6.74x** — Same mechanism, 4 AND instructions
 4. **Set Difference: 6.54x** — Same mechanism, 4 BIC instructions
 5. **Builder/IntAppend: 4.95x** — Direct digit writing vs Go's allocation per int
+6. **Builder/Large: 3.77x** — Mixed formatting, Go's strconv overhead
+7. **LowerCase: 2.12x** — Go's strings.ToLower Unicode overhead for ASCII
 3. **Builder/Large: 3.77x** — Mixed formatting, Go's strconv overhead
 4. **JSON/Parse: 2.88x** — SAX parser vs Go's reflect-heavy encoding/json
 5. **StrReplace: 1.75x** — FPC string replacement vs Go's reflect-heavy ReplaceAll
