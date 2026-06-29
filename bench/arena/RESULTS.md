@@ -25,7 +25,20 @@
 | Regex/FindAll | 16.6ms | 2.28ms | 7.3x | ❌ Go 快 7.3x |
 | Regex/FindAllCapture | 28.2ms | 2.58ms | 10.9x | ❌ Go 快 11x |
 
-### vs Rust: 待补充
+### vs Rust: 1赢 0平 10输
+
+| 赛道 | nextPas | Rust | 比率 | 胜 |
+|------|---------|------|------|---|
+| HashMap/Lookup | 2.97ms | 3.69ms | **0.80x** | ✅ 1.24x 快 |
+| HashMap/Insert | 9.62ms | 4.00ms | 2.41x | ❌ Rust 快 2.4x |
+| Sort/Int32 | 576µs | 156µs | 3.69x | ❌ Rust 快 3.7x |
+| String/Builder | 327µs | 257µs | 1.27x | ❌ Rust 快 1.3x |
+| String/Concat | 1.27ms | 276µs | 4.60x | ❌ Rust 快 4.6x |
+| JSON/Parse | 900µs | 343µs | 2.62x | ❌ Rust 快 2.6x |
+| TOML/Parse | 24.6ms | 3.91ms | 6.29x | ❌ Rust 快 6.3x |
+| Regex/SimpleMatch | 1.12ms | 28.1µs | 39.9x | ❌ Rust 快 40x |
+| Regex/Match | 14.5ms | 143µs | 101x | ❌ Rust 快 101x |
+| Regex/FindAll | 16.6ms | 291µs | 57x | ❌ Rust 快 57x |
 
 ## 大胜分析
 
