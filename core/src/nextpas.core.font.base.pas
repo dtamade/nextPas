@@ -26,6 +26,8 @@ const
   TABLE_TAG_CMAP = $636D6170;   // 'cmap'
   TABLE_TAG_LOCA = $6C6F6361;   // 'loca'
   TABLE_TAG_GLYF = $676C7966;   // 'glyf'
+  TABLE_TAG_CFF  = $43464620;   // 'CFF '
+  TABLE_TAG_CFF2 = $43464632;   // 'CFF2'
   TABLE_TAG_HMTX = $686D7478;   // 'hmtx'
   TABLE_TAG_OS2  = $4F532F32;   // 'OS/2'
   TABLE_TAG_GPOS = $47504F53;   // 'GPOS'

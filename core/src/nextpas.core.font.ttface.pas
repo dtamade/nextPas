@@ -58,6 +58,15 @@ type
     FLigaLookups: TFontFeatureLookupIndexArray;      // GSUB 'liga'
     FCligLookups: TFontFeatureLookupIndexArray;      // GSUB 'clig'
     FCursLookups: TFontFeatureLookupIndexArray;      // GPOS 'curs'
+    {** CFF 字体数据（OTF OpenType with CFF outlines） }
+    FCffValid: Boolean;
+    FCffOff: Int32;                    // CFF 表在文件中的偏移
+    FCffCharStringsOff: Int32;        // CharStrings INDEX 偏移（相对 CFF 起始）
+    FCffCharStringsCount: Int32;      // 字形数量
+    FCffCharStringsOffSize: Int32;    // CharStrings INDEX offset size
+    FCffCharStringsDataStart: Int32;  // CharStrings 数据起始（绝对文件偏移）
+    FCffDefaultWidthX: Int32;         // DefaultWidthX（Private DICT）
+    FCffNominalWidthX: Int32;         // NominalWidthX（Private DICT）
     FValid: Boolean;
     FLastError: string;
     procedure ParseHeader;
@@ -72,6 +81,8 @@ type
     procedure ParseOs2;
     procedure ParseGpos;
     procedure ParseGsub;
+    procedure ParseCff;
+    function GlyphOutlineCff(AGlyphIndex: UInt32): TFontGlyphOutline;
     function ParseFeatureLookups(ATableOffset: Int32;
       const AFeatureTags: array of UInt32): TFontFeatureLookupIndexArray;
     function ReadUInt16BE(AOffset: Int32): UInt16;
@@ -288,16 +299,24 @@ begin
 
   try
     ParseHeader;
-    if not (FFormat in [fffTrueType]) then
+    if not (FFormat in [fffTrueType, fffOpenTypeCff]) then
       Exit;
     ParseTableDirectory;
     ParseHead;
     ParseHhea;
     ParseMaxp;
     ParseCmap;
-    ParseLoca;
+    if FFormat = fffTrueType then
+      ParseLoca;
     ParseHmtx;
     ParseOs2;
+    if FFormat = fffOpenTypeCff then
+    begin
+      try
+        ParseCff;
+      except
+      end;
+    end;
     try
       ParseGpos;
     except
@@ -337,16 +356,24 @@ begin
 
   try
     ParseHeader;
-    if not (FFormat in [fffTrueType]) then
+    if not (FFormat in [fffTrueType, fffOpenTypeCff]) then
       Exit;
     ParseTableDirectory;
     ParseHead;
     ParseHhea;
     ParseMaxp;
     ParseCmap;
-    ParseLoca;
+    if FFormat = fffTrueType then
+      ParseLoca;
     ParseHmtx;
     ParseOs2;
+    if FFormat = fffOpenTypeCff then
+    begin
+      try
+        ParseCff;
+      except
+      end;
+    end;
     try
       ParseGpos;
     except
@@ -3006,7 +3033,10 @@ end;
 
 function TTFontFace.GlyphCount: UInt32;
 begin
-  Result := FMaxp.NumGlyphs;
+  if FCffValid then
+    Result := UInt32(FCffCharStringsCount)
+  else
+    Result := FMaxp.NumGlyphs;
 end;
 
 function TTFontFace.LookupCodepoint(ACodepoint: UInt32): UInt32;
@@ -3394,6 +3424,13 @@ var
 begin
   FontGlyphOutlineClear(Result);
 
+  // CFF 字体：使用 Type 2 charstring 解析
+  if FCffValid then
+  begin
+    Result := GlyphOutlineCff(AGlyphIndex);
+    Exit;
+  end;
+
   if (Length(FLocaOffsets) = 0) or (AGlyphIndex >= UInt32(Length(FLocaOffsets) - 1)) then
     Exit;
 
@@ -3422,6 +3459,517 @@ begin
     ParseCompoundComponents(LOffset + 10, LCompoundBuf);
     Result := ExpandCompoundOutline(LCompoundBuf);
   end;
+end;
+
+{ ========================================================================= }
+{ CFF (Compact Font Format) 解析                                              }
+{ ========================================================================= }
+
+procedure TTFontFace.ParseCff;
+var
+  LIdx, LCffOff, LHdrSize: Int32;
+  LNameCount, LTopDictCount: Int32;
+  LNameIdxOff, LTopDictIdxOff: Int32;
+  LTopDictOff, LTopDictLen: Int32;
+  LCharStringsIdxOff: Int32;
+  LPrivateSize, LPrivateOff: Int32;
+  LNOffSz, LNLastOff, LI2: Int32;
+
+  function ReadUInt8Local(AOff: Int32): Byte;
+  begin
+    if (AOff >= 0) and (AOff < FDataLength) then
+      Result := FData[AOff]
+    else
+      Result := 0;
+  end;
+
+  function ParseCffIndex(APos: Int32; out ACount: Int32): Int32;
+  begin
+    ACount := 0;
+    if FDataLength < APos + 3 then
+      Exit(0);
+    ACount := (ReadUInt8Local(APos) shl 8) or ReadUInt8Local(APos + 1);
+    if ACount = 0 then
+      Exit(APos + 2);
+    Result := APos + 3 + (ACount + 1) * ReadUInt8Local(APos + 2);
+  end;
+
+  procedure GetCffIndexItem(AIdxPos, AItem, ACount: Int32;
+    out AItemOff, AItemLen: Int32);
+  var
+    LOffSz, LI, LV1, LV2, LDataStart: Int32;
+  begin
+    AItemOff := 0; AItemLen := 0;
+    if (AItem < 0) or (AItem >= ACount) or (ACount = 0) then
+      Exit;
+    LOffSz := ReadUInt8Local(AIdxPos + 2);
+    LDataStart := AIdxPos + 3 + (ACount + 1) * LOffSz;
+    LV1 := 0;
+    for LI := 0 to LOffSz - 1 do
+      LV1 := (LV1 shl 8) or ReadUInt8Local(AIdxPos + 3 + AItem * LOffSz + LI);
+    LV2 := 0;
+    for LI := 0 to LOffSz - 1 do
+      LV2 := (LV2 shl 8) or ReadUInt8Local(AIdxPos + 3 + (AItem + 1) * LOffSz + LI);
+    AItemOff := LDataStart + LV1 - 1;
+    AItemLen := LV2 - LV1;
+  end;
+
+  function ParseCffDictInt(APos, ALen, ATargetOp: Int32): Int32;
+  var
+    LI, LB: Int32;
+    LOps: array[0..31] of Int32;
+    LN: Int32;
+    LOp: Int32;
+  begin
+    Result := 0;
+    LN := 0;
+    LI := APos;
+    while LI < APos + ALen do
+    begin
+      LB := ReadUInt8Local(LI);
+      if (LB >= 32) and (LB <= 246) then
+      begin
+        if LN < 32 then begin LOps[LN] := LB - 139; Inc(LN); end;
+        Inc(LI);
+      end
+      else if (LB >= 247) and (LB <= 250) then
+      begin
+        if LN < 32 then begin LOps[LN] := (LB - 247) * 256 + ReadUInt8Local(LI + 1) + 108; Inc(LN); end;
+        Inc(LI, 2);
+      end
+      else if (LB >= 251) and (LB <= 254) then
+      begin
+        if LN < 32 then begin LOps[LN] := -((LB - 251) * 256) - ReadUInt8Local(LI + 1) - 108; Inc(LN); end;
+        Inc(LI, 2);
+      end
+      else if LB = 28 then
+      begin
+        if LN < 32 then begin LOps[LN] := SmallInt((ReadUInt8Local(LI + 1) shl 8) or ReadUInt8Local(LI + 2)); Inc(LN); end;
+        Inc(LI, 3);
+      end
+      else if LB = 29 then
+      begin
+        if LN < 32 then begin LOps[LN] := Int32(ReadUInt32BE(LI + 1)); Inc(LN); end;
+        Inc(LI, 5);
+      end
+      else if LB = 30 then
+      begin
+        Inc(LI);
+        while LI < APos + ALen do
+        begin
+          LB := ReadUInt8Local(LI); Inc(LI);
+          if (LB and $0F) = $0F then Break;
+          if ((LB shr 4) and $0F) = $0F then Break;
+        end;
+        LN := 0;
+      end
+      else if LB <= 21 then
+      begin
+        LOp := LB;
+        if LB = 12 then begin Inc(LI); LOp := (12 shl 8) or ReadUInt8Local(LI); end;
+        Inc(LI);
+        if (LOp = ATargetOp) and (LN > 0) then
+          Exit(LOps[0]);
+        LN := 0;
+      end
+      else
+        Inc(LI);
+    end;
+  end;
+
+  function ParseCffDictSecondInt(APos, ALen, ATargetOp: Int32): Int32;
+  var
+    LI, LB: Int32;
+    LOps: array[0..31] of Int32;
+    LN: Int32;
+    LOp: Int32;
+  begin
+    Result := 0;
+    LN := 0;
+    LI := APos;
+    while LI < APos + ALen do
+    begin
+      LB := ReadUInt8Local(LI);
+      if (LB >= 32) and (LB <= 246) then
+      begin
+        if LN < 32 then begin LOps[LN] := LB - 139; Inc(LN); end;
+        Inc(LI);
+      end
+      else if (LB >= 247) and (LB <= 250) then
+      begin
+        if LN < 32 then begin LOps[LN] := (LB - 247) * 256 + ReadUInt8Local(LI + 1) + 108; Inc(LN); end;
+        Inc(LI, 2);
+      end
+      else if (LB >= 251) and (LB <= 254) then
+      begin
+        if LN < 32 then begin LOps[LN] := -((LB - 251) * 256) - ReadUInt8Local(LI + 1) - 108; Inc(LN); end;
+        Inc(LI, 2);
+      end
+      else if LB = 28 then
+      begin
+        if LN < 32 then begin LOps[LN] := SmallInt((ReadUInt8Local(LI + 1) shl 8) or ReadUInt8Local(LI + 2)); Inc(LN); end;
+        Inc(LI, 3);
+      end
+      else if LB = 29 then
+      begin
+        if LN < 32 then begin LOps[LN] := Int32(ReadUInt32BE(LI + 1)); Inc(LN); end;
+        Inc(LI, 5);
+      end
+      else if LB = 30 then
+      begin
+        Inc(LI);
+        while LI < APos + ALen do
+        begin
+          LB := ReadUInt8Local(LI); Inc(LI);
+          if (LB and $0F) = $0F then Break;
+          if ((LB shr 4) and $0F) = $0F then Break;
+        end;
+        LN := 0;
+      end
+      else if LB <= 21 then
+      begin
+        LOp := LB;
+        if LB = 12 then begin Inc(LI); LOp := (12 shl 8) or ReadUInt8Local(LI); end;
+        Inc(LI);
+        if (LOp = ATargetOp) and (LN >= 2) then
+          Exit(LOps[1]);
+        LN := 0;
+      end
+      else
+        Inc(LI);
+    end;
+  end;
+
+var
+  LItemOff, LItemLen: Int32;
+begin
+  FCffValid := False;
+  LIdx := FindTable(TABLE_TAG_CFF);
+  if LIdx < 0 then
+    Exit;
+  LCffOff := FTables[LIdx].Offset;
+  FCffOff := LCffOff;
+  if FDataLength < LCffOff + 4 then
+    Exit;
+
+  LHdrSize := ReadUInt8Local(LCffOff + 2);
+
+  // Name INDEX — header position
+  LNameIdxOff := LCffOff + LHdrSize;
+  ParseCffIndex(LNameIdxOff, LNameCount);
+  if LNameCount = 0 then
+    Exit;
+
+  // Top DICT INDEX — starts at end of Name INDEX data
+  LNOffSz := ReadUInt8Local(LNameIdxOff + 2);
+  LNLastOff := 0;
+  for LI2 := 0 to LNOffSz - 1 do
+    LNLastOff := (LNLastOff shl 8) or ReadUInt8Local(LNameIdxOff + 3 + LNameCount * LNOffSz + LI2);
+  // Save header position, then get data start
+  LTopDictIdxOff := LNameIdxOff + 3 + (LNameCount + 1) * LNOffSz + LNLastOff - 1;
+  ParseCffIndex(LTopDictIdxOff, LTopDictCount);
+  if LTopDictCount = 0 then
+    Exit;
+
+  // Get first Top DICT item
+  GetCffIndexItem(LTopDictIdxOff, 0, LTopDictCount, LTopDictOff, LTopDictLen);
+
+  // CharStrings offset (operator 17)
+  FCffCharStringsOff := ParseCffDictInt(LTopDictOff, LTopDictLen, 17);
+  if FCffCharStringsOff <= 0 then
+    Exit;
+
+  // Private DICT: size (first operand of op 18), offset (second operand)
+  LPrivateSize := ParseCffDictInt(LTopDictOff, LTopDictLen, 18);
+  LPrivateOff := ParseCffDictSecondInt(LTopDictOff, LTopDictLen, 18);
+
+  // CharStrings INDEX
+  LCharStringsIdxOff := LCffOff + FCffCharStringsOff;
+  FCffCharStringsDataStart := ParseCffIndex(LCharStringsIdxOff, FCffCharStringsCount);
+  if FCffCharStringsCount <= 0 then
+    Exit;
+  FCffCharStringsOffSize := ReadUInt8Local(LCharStringsIdxOff + 2);
+
+  // Private DICT: DefaultWidthX (op 20), NominalWidthX (op 21)
+  FCffDefaultWidthX := 0;
+  FCffNominalWidthX := 0;
+  if (LPrivateSize > 0) and (LPrivateOff > 0) then
+  begin
+    FCffDefaultWidthX := ParseCffDictInt(LCffOff + LPrivateOff, LPrivateSize, 20);
+    FCffNominalWidthX := ParseCffDictInt(LCffOff + LPrivateOff, LPrivateSize, 21);
+  end;
+
+  FCffValid := True;
+end;
+
+function TTFontFace.GlyphOutlineCff(AGlyphIndex: UInt32): TFontGlyphOutline;
+var
+  LItemOff, LItemLen, LI, LB, LOp: Int32;
+  LStack: array[0..47] of Int32;
+  LST: Int32;  // stack top
+  LCx, LCy: Int32;
+  LHasWidth: Boolean;
+  LWidth: Int32;
+  LPointCount, LEndCount: Int32;
+  LStartX, LStartY, LMx, LMy, LDx, LDy: Int32;
+  LIdxOff, LOffSz, LVal1, LVal2, LDataStart: Int32;
+
+  LPoints: array of TFontContourPoint;
+  LEnds: array of UInt16;
+
+  procedure EmitP(AX, AY: Int32; AOn: Boolean);
+  begin
+    if LPointCount >= Length(LPoints) then
+      SetLength(LPoints, LPointCount + 64);
+    LPoints[LPointCount].X := AX;
+    LPoints[LPointCount].Y := AY;
+    LPoints[LPointCount].OnCurve := AOn;
+    Inc(LPointCount);
+  end;
+
+  procedure EndCtr;
+  begin
+    if LPointCount > 0 then
+    begin
+      if LEndCount >= Length(LEnds) then
+        SetLength(LEnds, LEndCount + 8);
+      LEnds[LEndCount] := LPointCount - 1;
+      Inc(LEndCount);
+    end;
+  end;
+
+  procedure CheckWidth;
+  begin
+    if (not LHasWidth) and (LST > 0) and (LST mod 2 = 1) then
+    begin
+      LWidth := FCffNominalWidthX + LStack[0];
+      LHasWidth := True;
+    end;
+  end;
+
+  procedure CubicToQuad(AX0, AY0, ADx1, ADy1, ADx2, ADy2, ADx3, ADy3: Int32);
+  var
+    LP1x, LP1y, LP2x, LP2y: Int32;
+    LMx2, LMy2: Int32;
+    LQ1x, LQ1y, LQ2x, LQ2y: Int32;
+  begin
+    LP1x := AX0 + ADx1; LP1y := AY0 + ADy1;
+    LP2x := LP1x + ADx2; LP2y := LP1y + ADy2;
+    LMx2 := LP2x + ADx3; LMy2 := LP2y + ADy3;
+    LDx := (AX0 + 3 * LP1x + 3 * LP2x + LMx2) div 8;
+    LDy := (AY0 + 3 * LP1y + 3 * LP2y + LMy2) div 8;
+    LQ1x := 2 * LP1x - (AX0 + LDx + 1) div 2;
+    LQ1y := 2 * LP1y - (AY0 + LDy + 1) div 2;
+    LQ2x := 2 * LP2x - (LMx2 + LDx + 1) div 2;
+    LQ2y := 2 * LP2y - (LMy2 + LDy + 1) div 2;
+    EmitP(LQ1x, LQ1y, False);
+    EmitP(LDx, LDy, True);
+    EmitP(LQ2x, LQ2y, False);
+    EmitP(LMx2, LMy2, True);
+  end;
+
+begin
+  FontGlyphOutlineClear(Result);
+  if not FCffValid then
+    Exit;
+  if AGlyphIndex >= UInt32(FCffCharStringsCount) then
+    Exit;
+
+  // 获取 charstring 数据偏移
+  begin
+    LIdxOff := FCffOff + FCffCharStringsOff;
+    LOffSz := FCffCharStringsOffSize;
+    LDataStart := LIdxOff + 3 + (FCffCharStringsCount + 1) * LOffSz;
+    LVal1 := 0;
+    for LI := 0 to LOffSz - 1 do
+      LVal1 := (LVal1 shl 8) or ReadUInt8(LIdxOff + 3 + AGlyphIndex * LOffSz + LI);
+    LVal2 := 0;
+    for LI := 0 to LOffSz - 1 do
+      LVal2 := (LVal2 shl 8) or ReadUInt8(LIdxOff + 3 + (AGlyphIndex + 1) * LOffSz + LI);
+    LItemOff := LDataStart + LVal1 - 1;
+    LItemLen := LVal2 - LVal1;
+  end;
+  if LItemLen <= 0 then
+    Exit;
+
+  LST := 0;
+  LCx := 0; LCy := 0;
+  LHasWidth := False;
+  LWidth := FCffDefaultWidthX;
+  LPointCount := 0; LEndCount := 0;
+  SetLength(LPoints, 128);
+  SetLength(LEnds, 16);
+
+  LI := LItemOff;
+  while LI < LItemOff + LItemLen do
+  begin
+    LB := ReadUInt8(LI);
+
+    // 操作数
+    if (LB >= 32) and (LB <= 246) then
+    begin
+      if LST < 48 then begin LStack[LST] := LB - 139; Inc(LST); end;
+      Inc(LI); Continue;
+    end
+    else if (LB >= 247) and (LB <= 250) then
+    begin
+      if LST < 48 then begin LStack[LST] := (LB - 247) * 256 + ReadUInt8(LI + 1) + 108; Inc(LST); end;
+      Inc(LI, 2); Continue;
+    end
+    else if (LB >= 251) and (LB <= 254) then
+    begin
+      if LST < 48 then begin LStack[LST] := -((LB - 251) * 256) - ReadUInt8(LI + 1) - 108; Inc(LST); end;
+      Inc(LI, 2); Continue;
+    end
+    else if LB = 28 then
+    begin
+      if LST < 48 then begin LStack[LST] := ReadInt16BE(LI + 1); Inc(LST); end;
+      Inc(LI, 3); Continue;
+    end
+    else if LB = 255 then
+    begin
+      if LST < 48 then begin LStack[LST] := Int32(ReadUInt32BE(LI + 1)) div 65536; Inc(LST); end;
+      Inc(LI, 5); Continue;
+    end;
+
+    // 操作符
+    LOp := LB;
+    Inc(LI);
+    if LB = 12 then begin LOp := (12 shl 8) or ReadUInt8(LI); Inc(LI); end;
+
+    case LOp of
+      1, 3, 18, 23: begin CheckWidth; LST := 0; end; // hstem, vstem, hstemhm, vstemhm
+
+      19, 20: begin // hintmask, cntrmask
+        CheckWidth; LST := 0;
+        Inc(LI); // skip mask byte
+      end;
+
+      4: begin // vmoveto
+        CheckWidth;
+        if LST >= 1 then begin EndCtr; Inc(LCy, LStack[LST - 1]); EmitP(LCx, LCy, True); end;
+        LST := 0;
+      end;
+      21: begin // rmoveto
+        CheckWidth;
+        if LST >= 2 then begin EndCtr; Inc(LCx, LStack[LST - 2]); Inc(LCy, LStack[LST - 1]); EmitP(LCx, LCy, True); end;
+        LST := 0;
+      end;
+      22: begin // hmoveto
+        CheckWidth;
+        if LST >= 1 then begin EndCtr; Inc(LCx, LStack[LST - 1]); EmitP(LCx, LCy, True); end;
+        LST := 0;
+      end;
+
+      5: begin // rlineto
+        while LST >= 2 do begin Dec(LST, 2); Inc(LCx, LStack[LST]); Inc(LCy, LStack[LST + 1]); EmitP(LCx, LCy, True); end;
+        LST := 0;
+      end;
+      6: begin // hlineto
+        while LST >= 1 do begin
+          Dec(LST); Inc(LCx, LStack[LST]); EmitP(LCx, LCy, True);
+          if LST >= 1 then begin Dec(LST); Inc(LCy, LStack[LST]); EmitP(LCx, LCy, True); end;
+        end;
+        LST := 0;
+      end;
+      7: begin // vlineto
+        while LST >= 1 do begin
+          Dec(LST); Inc(LCy, LStack[LST]); EmitP(LCx, LCy, True);
+          if LST >= 1 then begin Dec(LST); Inc(LCx, LStack[LST]); EmitP(LCx, LCy, True); end;
+        end;
+        LST := 0;
+      end;
+
+      8: begin // rrcurveto (cubic Bézier → 两段 quadratic)
+        while LST >= 6 do begin
+          Dec(LST, 6);
+          LStartX := LCx; LStartY := LCy;
+          CubicToQuad(LStartX, LStartY,
+            LStack[LST], LStack[LST + 1], LStack[LST + 2],
+            LStack[LST + 3], LStack[LST + 4], LStack[LST + 5]);
+          LCx := LStartX + LStack[LST] + LStack[LST + 2] + LStack[LST + 4];
+          LCy := LStartY + LStack[LST + 1] + LStack[LST + 3] + LStack[LST + 5];
+        end;
+        LST := 0;
+      end;
+
+      27: begin // hhcurveto
+        while LST >= 4 do begin
+          LStartX := LCx; LStartY := LCy;
+          if LST mod 2 = 1 then begin
+            CubicToQuad(LStartX, LStartY, LStack[1], LStack[0], LStack[2], LStack[3], LStack[4], 0);
+            LCx := LStartX + LStack[1] + LStack[2] + LStack[4];
+            LCy := LStartY + LStack[0] + LStack[3];
+          end else begin
+            CubicToQuad(LStartX, LStartY, LStack[0], 0, LStack[1], LStack[2], LStack[3], 0);
+            LCx := LStartX + LStack[0] + LStack[1] + LStack[3];
+            LCy := LStartY + LStack[2];
+          end;
+          LST := 0;
+        end;
+        LST := 0;
+      end;
+
+      31: begin // vvcurveto
+        while LST >= 4 do begin
+          LStartX := LCx; LStartY := LCy;
+          if LST mod 2 = 1 then begin
+            CubicToQuad(LStartX, LStartY, LStack[0], LStack[1], 0, LStack[2], 0, LStack[3]);
+            LCx := LStartX + LStack[0];
+            LCy := LStartY + LStack[1] + LStack[2] + LStack[3];
+          end else begin
+            CubicToQuad(LStartX, LStartY, 0, LStack[0], 0, LStack[1], 0, LStack[2]);
+            LCx := LStartX;
+            LCy := LStartY + LStack[0] + LStack[1] + LStack[2];
+          end;
+          LST := 0;
+        end;
+        LST := 0;
+      end;
+
+      30: begin // vhcurveto
+        while LST >= 4 do begin
+          LStartX := LCx; LStartY := LCy;
+          if LST >= 5 then begin
+            CubicToQuad(LStartX, LStartY, 0, LStack[0], LStack[1], LStack[2], LStack[3], LStack[4]);
+            LCx := LStartX + LStack[1] + LStack[3];
+            LCy := LStartY + LStack[0] + LStack[2] + LStack[4];
+          end else begin
+            CubicToQuad(LStartX, LStartY, 0, LStack[0], LStack[1], LStack[2], LStack[3], 0);
+            LCx := LStartX + LStack[1] + LStack[3];
+            LCy := LStartY + LStack[0] + LStack[2];
+          end;
+          LST := 0;
+        end;
+        LST := 0;
+      end;
+
+      29, 10: begin // callsubr, callgsubr — 简化：不执行子程序
+        if LST > 0 then Dec(LST);
+      end;
+      11: begin end; // return
+
+      14: begin // endchar
+        CheckWidth;
+        EndCtr;
+        LST := 0;
+        Break;
+      end;
+
+      15, 16: LST := 0; // vsindex, blend
+      (12 shl 8) or 34, (12 shl 8) or 35,
+      (12 shl 8) or 36, (12 shl 8) or 37: LST := 0; // flex variants
+    else
+      LST := 0;
+    end;
+  end;
+
+  EndCtr;
+  SetLength(LPoints, LPointCount);
+  SetLength(LEnds, LEndCount);
+  Result.ContourCount := LEndCount;
+  Result.Points := LPoints;
+  Result.ContourEnds := LEnds;
 end;
 
 end.
