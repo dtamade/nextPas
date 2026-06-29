@@ -1,0 +1,14 @@
+/home/dtamade/projects/nextPas/.worktrees/bench/bench/bits/target/release/deps/serde-ad73371d3702cd89.d: /home/dtamade/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /home/dtamade/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /home/dtamade/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /home/dtamade/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /home/dtamade/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /home/dtamade/projects/nextPas/.worktrees/bench/bench/bits/target/release/build/serde-5737b3c69675d160/out/private.rs
+
+/home/dtamade/projects/nextPas/.worktrees/bench/bench/bits/target/release/deps/libserde-ad73371d3702cd89.rlib: /home/dtamade/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /home/dtamade/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /home/dtamade/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /home/dtamade/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /home/dtamade/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /home/dtamade/projects/nextPas/.worktrees/bench/bench/bits/target/release/build/serde-5737b3c69675d160/out/private.rs
+
+/home/dtamade/projects/nextPas/.worktrees/bench/bench/bits/target/release/deps/libserde-ad73371d3702cd89.rmeta: /home/dtamade/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /home/dtamade/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /home/dtamade/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /home/dtamade/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /home/dtamade/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /home/dtamade/projects/nextPas/.worktrees/bench/bench/bits/target/release/build/serde-5737b3c69675d160/out/private.rs
+
+/home/dtamade/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs:
+/home/dtamade/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs:
+/home/dtamade/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs:
+/home/dtamade/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs:
+/home/dtamade/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs:
+/home/dtamade/projects/nextPas/.worktrees/bench/bench/bits/target/release/build/serde-5737b3c69675d160/out/private.rs:
+
+# env-dep:OUT_DIR=/home/dtamade/projects/nextPas/.worktrees/bench/bench/bits/target/release/build/serde-5737b3c69675d160/out
