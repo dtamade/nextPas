@@ -64,11 +64,6 @@ begin
   FIsClient := AIsClient;
 end;
 
-constructor TWebSocketConnection.Create(AStream: IStream; AIsClient: Boolean);
-begin
-  Create(WrapTStream(AStream, False), AIsClient);
-end;
-
 function BuildFrame(AOpcode: TWebSocketOpcode; const APayload: TBytes;
   AMask: Boolean): TBytes;
 var

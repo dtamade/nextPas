@@ -71,11 +71,6 @@ begin
     LRuntime.SetBlocking(False);
 end;
 
-constructor TNonBlockingStream.Create(AInner: IStream);
-begin
-  Create(WrapTStream(AInner, False));
-end;
-
 function TNonBlockingStream.Read(var Buffer; Count: Longint): Longint;
 begin
   if Count <= 0 then

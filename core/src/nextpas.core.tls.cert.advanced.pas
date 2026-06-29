@@ -20,6 +20,7 @@ unit nextpas.core.tls.cert.advanced;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.base.utils,
   nextpas.core.text.conv,
   nextpas.core.tls.base,

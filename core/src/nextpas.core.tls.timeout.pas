@@ -61,12 +61,6 @@ begin
   FConnectTimeout := 10000;
 end;
 
-constructor TTimeoutStream.Create(AInner: IStream; AReadTimeoutMs: Integer;
-  AWriteTimeoutMs: Integer);
-begin
-  Create(WrapTStream(AInner, False), AReadTimeoutMs, AWriteTimeoutMs);
-end;
-
 procedure TTimeoutStream.ApplyReadTimeout;
 var
   LTcp: ITcpStream;

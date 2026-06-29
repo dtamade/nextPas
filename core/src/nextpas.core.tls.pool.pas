@@ -97,7 +97,7 @@ begin
 
   // Free expired stream outside lock (may block on shutdown)
   if LExpired <> nil then
-    LExpired.Free;
+    LExpired := nil;
 
   // No idle connection found — create new
   Result := FDialer.TryDial(AHost, APort, AStream, AError);
@@ -113,7 +113,7 @@ begin
   // MaxIdle=0 means don't pool — close immediately
   if FMaxIdle <= 0 then
   begin
-    AStream.Free;
+    AStream := nil;
     Exit;
   end;
 
@@ -125,7 +125,7 @@ begin
       // Pool full — close oldest
       if Length(FEntries) > 0 then
       begin
-        FEntries[0].Stream.Free;
+        FEntries[0].Stream := nil;
         FEntries[0] := FEntries[High(FEntries)];
         SetLength(FEntries, Length(FEntries) - 1);
       end;
@@ -155,7 +155,7 @@ begin
     begin
       if DateTimeMillisecondsBetween(LNow, FEntries[I].IdleSince) >= FIdleTimeoutMs then
       begin
-        FEntries[I].Stream.Free;
+        FEntries[I].Stream := nil;
         FEntries[I] := FEntries[High(FEntries)];
         SetLength(FEntries, Length(FEntries) - 1);
       end
@@ -174,7 +174,7 @@ begin
   FLock.Acquire;
   try
     for I := 0 to High(FEntries) do
-      FEntries[I].Stream.Free;
+      FEntries[I].Stream := nil;
     SetLength(FEntries, 0);
   finally
     FLock.Release;
