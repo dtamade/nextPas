@@ -411,16 +411,27 @@ type
   end;
   TFontAlternateSubstSubtableArray = array of TFontAlternateSubstSubtable;
 
-  {** GSUB ContextSubst/ChainedContextSubst 子表 — 存储 Format 3 数据 }
+  {** GSUB ContextSubst/ChainedContextSubst 子表 — 存储 Format 1/2/3 数据 }
   TFontContextSubstSubtable = record
     BaseOffset: Int32;               // 子表在文件中的偏移
-    InputGlyphCount: Int32;          // 匹配序列长度
-    SubstCount: Int32;              // Substitution 记录数
-    InputCoverageOffsets: array of Int32; // 每个输入位置的 Coverage 偏移（绝对文件偏移）
-    SubstSeqIndices: array of UInt16;    // 每个 subst 的序列索引
-    SubstLookupIndices: array of UInt16; // 每个 subst 的 lookup 索引
+    Format: Int32;                   // 子表格式（1=glyph-based, 2=class-based, 3=coverage-based）
+    InputGlyphCount: Int32;          // 匹配序列长度（Format 3 专用）
+    SubstCount: Int32;              // Substitution 记录数（Format 3 专用）
+    InputCoverageOffsets: array of Int32; // 每个输入位置的 Coverage 偏移（Format 3）
+    SubstSeqIndices: array of UInt16;    // 每个 subst 的序列索引（Format 3）
+    SubstLookupIndices: array of UInt16; // 每个 subst 的 lookup 索引（Format 3）
+    RuleSetCount: Int32;             // RuleSet/ClassSeqRuleSet 数量（Format 1/2）
+    RuleSetOffsets: array of Int32;  // 每个 RuleSet 的绝对文件偏移（Format 1/2，0=空）
+    IsChained: Boolean;              // True = ChainedContext (有 backtrack/lookahead)
   end;
   TFontContextSubstSubtableArray = array of TFontContextSubstSubtable;
+
+  {** Context 子表中的单条 lookup 记录（sequenceIndex + lookupIndex） }
+  TFontContextLookupRecord = record
+    SequenceIndex: UInt16;
+    LookupIndex: UInt16;
+  end;
+  TFontContextLookupRecordArray = array of TFontContextLookupRecord;
 
 {** 字形轮廓内存释放 }
 procedure FontGlyphOutlineClear(var AOutline: TFontGlyphOutline);

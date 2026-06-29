@@ -154,6 +154,15 @@ type
     {** 获取指定 ContextSubst 子表的替换记录 }
     procedure GetContextSubstLookup(AIndex, ASubstIdx: Int32;
       out ASeqIndex: UInt16; out ALookupIndex: UInt16);
+    {** 获取指定 ContextSubst 子表的格式（1/2/3） }
+    function GetContextSubstFmt(AIndex: Int32): Int32;
+    {** 获取指定 ContextSubst 子表的 RuleSet 数量（Format 1/2） }
+    function GetContextSubstRuleSetCount(AIndex: Int32): Int32;
+    {** 获取指定 ContextSubst 子表中指定首字形的 lookup 记录。
+        Format 1/2: 通过 CoverageIndexOf 找到 rule set，解析规则中的 subst 记录。
+        Format 3: 返回所有 subst 记录（首字形忽略）。 }
+    function GetContextSubstForGlyph(AIndex: Int32;
+      AFirstGlyph: UInt16): TFontContextLookupRecordArray;
 
     {** 是否包含规则匹配定位数据（GPOS ContextPos + ChainedContextPos） }
     function HasContextPos: Boolean;
@@ -1084,7 +1093,7 @@ begin
     end;
 
     // ContextPos (type 7) and ChainedContextPos (type 8).
-    // Currently only Format 3 (coverage-based) is parsed.
+    // Parses Format 1 (glyph-based), Format 2 (class-based), Format 3 (coverage-based).
     if (LLookupType = GPOS_LOOKUP_CONTEXT_POS) or
        (LLookupType = GPOS_LOOKUP_CONTEXT_POS_CHAINED) then
     begin
@@ -1098,79 +1107,155 @@ begin
         if FDataLength < LSub + 4 then
           Continue;
         LSubFmt := ReadUInt16BE(LSub);
-        // Only parse Format 3 (coverage-based).
-        if LSubFmt <> 3 then
-          Continue;
-        if LLookupType = GPOS_LOOKUP_CONTEXT_POS then
+        if LSubFmt = 3 then
         begin
-          // ContextPos Fmt3: format(2) + posCount(2) + posLookupCount(2) +
-          //   inputCoverages[posCount](2) + posLookupRecords[posLookupCount](4).
-          if FDataLength < LSub + 6 then
-            Continue;
-          LLSCount := ReadUInt16BE(LSub + 2);  // posCount (input glyph count)
-          LIdx := ReadUInt16BE(LSub + 4);       // posLookupRecordCount
-          if FDataLength < LSub + 6 + LLSCount * 2 + LIdx * 4 then
-            Continue;
-          LCtxIdx := Length(FContextPosSubtables);
-          SetLength(FContextPosSubtables, LCtxIdx + 1);
-          FContextPosSubtables[LCtxIdx].BaseOffset := LSub;
-          FContextPosSubtables[LCtxIdx].InputGlyphCount := LLSCount;
-          FContextPosSubtables[LCtxIdx].SubstCount := LIdx;
-          SetLength(FContextPosSubtables[LCtxIdx].InputCoverageOffsets, LLSCount);
-          SetLength(FContextPosSubtables[LCtxIdx].SubstSeqIndices, LIdx);
-          SetLength(FContextPosSubtables[LCtxIdx].SubstLookupIndices, LIdx);
-          for LK := 0 to LLSCount - 1 do
-            FContextPosSubtables[LCtxIdx].InputCoverageOffsets[LK] :=
-              LSub + ReadUInt16BE(LSub + 6 + LK * 2);
-          for LK := 0 to LIdx - 1 do
+          if LLookupType = GPOS_LOOKUP_CONTEXT_POS then
           begin
-            FContextPosSubtables[LCtxIdx].SubstSeqIndices[LK] :=
-              ReadUInt16BE(LSub + 6 + LLSCount * 2 + LK * 4);
-            FContextPosSubtables[LCtxIdx].SubstLookupIndices[LK] :=
-              ReadUInt16BE(LSub + 6 + LLSCount * 2 + LK * 4 + 2);
+            // ContextPos Fmt3: format(2) + posCount(2) + posLookupCount(2) +
+            //   inputCoverages[posCount](2) + posLookupRecords[posLookupCount](4).
+            if FDataLength < LSub + 6 then
+              Continue;
+            LLSCount := ReadUInt16BE(LSub + 2);  // posCount (input glyph count)
+            LIdx := ReadUInt16BE(LSub + 4);       // posLookupRecordCount
+            if FDataLength < LSub + 6 + LLSCount * 2 + LIdx * 4 then
+              Continue;
+            LCtxIdx := Length(FContextPosSubtables);
+            SetLength(FContextPosSubtables, LCtxIdx + 1);
+            FContextPosSubtables[LCtxIdx].BaseOffset := LSub;
+            FContextPosSubtables[LCtxIdx].Format := 3;
+            FContextPosSubtables[LCtxIdx].IsChained := False;
+            FContextPosSubtables[LCtxIdx].InputGlyphCount := LLSCount;
+            FContextPosSubtables[LCtxIdx].SubstCount := LIdx;
+            SetLength(FContextPosSubtables[LCtxIdx].InputCoverageOffsets, LLSCount);
+            SetLength(FContextPosSubtables[LCtxIdx].SubstSeqIndices, LIdx);
+            SetLength(FContextPosSubtables[LCtxIdx].SubstLookupIndices, LIdx);
+            for LK := 0 to LLSCount - 1 do
+              FContextPosSubtables[LCtxIdx].InputCoverageOffsets[LK] :=
+                LSub + ReadUInt16BE(LSub + 6 + LK * 2);
+            for LK := 0 to LIdx - 1 do
+            begin
+              FContextPosSubtables[LCtxIdx].SubstSeqIndices[LK] :=
+                ReadUInt16BE(LSub + 6 + LLSCount * 2 + LK * 4);
+              FContextPosSubtables[LCtxIdx].SubstLookupIndices[LK] :=
+                ReadUInt16BE(LSub + 6 + LLSCount * 2 + LK * 4 + 2);
+            end;
+          end
+          else
+          begin
+            // ChainedContextPos Fmt3: same structure as ChainedContextSubst Fmt3.
+            if FDataLength < LSub + 4 then
+              Continue;
+            LLSCount := ReadUInt16BE(LSub + 2);
+            LK := LSub + 4 + LLSCount * 2;
+            if FDataLength < LK + 2 then
+              Continue;
+            LLSCount := ReadUInt16BE(LK);
+            LK := LK + 2 + LLSCount * 2;
+            if FDataLength < LK + 2 then
+              Continue;
+            LCovOff := ReadUInt16BE(LK);
+            LK := LK + 2 + LCovOff * 2;
+            if FDataLength < LK + 2 then
+              Continue;
+            LIdx := ReadUInt16BE(LK);
+            if FDataLength < LK + 2 + LIdx * 4 then
+              Continue;
+            LCtxIdx := Length(FContextPosSubtables);
+            SetLength(FContextPosSubtables, LCtxIdx + 1);
+            FContextPosSubtables[LCtxIdx].BaseOffset := LSub;
+            FContextPosSubtables[LCtxIdx].Format := 3;
+            FContextPosSubtables[LCtxIdx].IsChained := True;
+            FContextPosSubtables[LCtxIdx].InputGlyphCount := LLSCount;
+            FContextPosSubtables[LCtxIdx].SubstCount := LIdx;
+            SetLength(FContextPosSubtables[LCtxIdx].InputCoverageOffsets, LLSCount);
+            SetLength(FContextPosSubtables[LCtxIdx].SubstSeqIndices, LIdx);
+            SetLength(FContextPosSubtables[LCtxIdx].SubstLookupIndices, LIdx);
+            for LCovOff := 0 to LLSCount - 1 do
+              FContextPosSubtables[LCtxIdx].InputCoverageOffsets[LCovOff] :=
+                LSub + ReadUInt16BE(LK - 2 - (LLSCount - LCovOff) * 2);
+            for LCovOff := 0 to LIdx - 1 do
+            begin
+              FContextPosSubtables[LCtxIdx].SubstSeqIndices[LCovOff] :=
+                ReadUInt16BE(LK + 2 + LCovOff * 4);
+              FContextPosSubtables[LCtxIdx].SubstLookupIndices[LCovOff] :=
+                ReadUInt16BE(LK + 2 + LCovOff * 4 + 2);
+            end;
           end;
         end
-        else
+        else if (LSubFmt = 1) or (LSubFmt = 2) then
         begin
-          // ChainedContextPos Fmt3: format(2) + backtrackGlyphCount(2) +
-          //   backtrackCoverages[bt](2) + inputGlyphCount(2) +
-          //   inputCoverages[input](2) + lookaheadGlyphCount(2) +
-          //   lookaheadCoverages[la](2) + posCount(2) + posLookupRecords(4).
-          if FDataLength < LSub + 4 then
-            Continue;
-          LLSCount := ReadUInt16BE(LSub + 2);  // backtrackGlyphCount
-          LK := LSub + 4 + LLSCount * 2;       // offset to inputGlyphCount
-          if FDataLength < LK + 2 then
-            Continue;
-          LLSCount := ReadUInt16BE(LK);         // inputGlyphCount
-          LK := LK + 2 + LLSCount * 2;         // offset to lookaheadGlyphCount
-          if FDataLength < LK + 2 then
-            Continue;
-          LCovOff := ReadUInt16BE(LK);          // lookaheadGlyphCount
-          LK := LK + 2 + LCovOff * 2;          // offset to posCount
-          if FDataLength < LK + 2 then
-            Continue;
-          LIdx := ReadUInt16BE(LK);             // posLookupRecordCount
-          if FDataLength < LK + 2 + LIdx * 4 then
-            Continue;
-          LCtxIdx := Length(FContextPosSubtables);
-          SetLength(FContextPosSubtables, LCtxIdx + 1);
-          FContextPosSubtables[LCtxIdx].BaseOffset := LSub;
-          FContextPosSubtables[LCtxIdx].InputGlyphCount := LLSCount;
-          FContextPosSubtables[LCtxIdx].SubstCount := LIdx;
-          SetLength(FContextPosSubtables[LCtxIdx].InputCoverageOffsets, LLSCount);
-          SetLength(FContextPosSubtables[LCtxIdx].SubstSeqIndices, LIdx);
-          SetLength(FContextPosSubtables[LCtxIdx].SubstLookupIndices, LIdx);
-          // Input coverage offsets are right before lookaheadGlyphCount.
-          for LCovOff := 0 to LLSCount - 1 do
-            FContextPosSubtables[LCtxIdx].InputCoverageOffsets[LCovOff] :=
-              LSub + ReadUInt16BE(LK - 2 - (LLSCount - LCovOff) * 2);
-          for LCovOff := 0 to LIdx - 1 do
+          // Same structure as GSUB ContextSubst/ChainedContextSubst Fmt1/2.
+          if LSubFmt = 1 then
           begin
-            FContextPosSubtables[LCtxIdx].SubstSeqIndices[LCovOff] :=
-              ReadUInt16BE(LK + 2 + LCovOff * 4);
-            FContextPosSubtables[LCtxIdx].SubstLookupIndices[LCovOff] :=
-              ReadUInt16BE(LK + 2 + LCovOff * 4 + 2);
+            if FDataLength < LSub + 6 then
+              Continue;
+            LLSCount := ReadUInt16BE(LSub + 4);
+            if FDataLength < LSub + 6 + LLSCount * 2 then
+              Continue;
+            LCtxIdx := Length(FContextPosSubtables);
+            SetLength(FContextPosSubtables, LCtxIdx + 1);
+            FContextPosSubtables[LCtxIdx].BaseOffset := LSub;
+            FContextPosSubtables[LCtxIdx].Format := 1;
+            FContextPosSubtables[LCtxIdx].IsChained := (LLookupType = GPOS_LOOKUP_CONTEXT_POS_CHAINED);
+            FContextPosSubtables[LCtxIdx].RuleSetCount := LLSCount;
+            SetLength(FContextPosSubtables[LCtxIdx].RuleSetOffsets, LLSCount);
+            for LK := 0 to LLSCount - 1 do
+            begin
+              LCovOff := ReadUInt16BE(LSub + 6 + LK * 2);
+              if LCovOff <> 0 then
+                FContextPosSubtables[LCtxIdx].RuleSetOffsets[LK] := LSub + LCovOff
+              else
+                FContextPosSubtables[LCtxIdx].RuleSetOffsets[LK] := 0;
+            end;
+          end
+          else
+          begin
+            if LLookupType = GPOS_LOOKUP_CONTEXT_POS then
+            begin
+              if FDataLength < LSub + 8 then
+                Continue;
+              LLSCount := ReadUInt16BE(LSub + 6);
+              if FDataLength < LSub + 8 + LLSCount * 2 then
+                Continue;
+              LCtxIdx := Length(FContextPosSubtables);
+              SetLength(FContextPosSubtables, LCtxIdx + 1);
+              FContextPosSubtables[LCtxIdx].BaseOffset := LSub;
+              FContextPosSubtables[LCtxIdx].Format := 2;
+              FContextPosSubtables[LCtxIdx].IsChained := False;
+              FContextPosSubtables[LCtxIdx].RuleSetCount := LLSCount;
+              SetLength(FContextPosSubtables[LCtxIdx].RuleSetOffsets, LLSCount);
+              for LK := 0 to LLSCount - 1 do
+              begin
+                LCovOff := ReadUInt16BE(LSub + 8 + LK * 2);
+                if LCovOff <> 0 then
+                  FContextPosSubtables[LCtxIdx].RuleSetOffsets[LK] := LSub + LCovOff
+                else
+                  FContextPosSubtables[LCtxIdx].RuleSetOffsets[LK] := 0;
+              end;
+            end
+            else
+            begin
+              if FDataLength < LSub + 12 then
+                Continue;
+              LLSCount := ReadUInt16BE(LSub + 10);
+              if FDataLength < LSub + 12 + LLSCount * 2 then
+                Continue;
+              LCtxIdx := Length(FContextPosSubtables);
+              SetLength(FContextPosSubtables, LCtxIdx + 1);
+              FContextPosSubtables[LCtxIdx].BaseOffset := LSub;
+              FContextPosSubtables[LCtxIdx].Format := 2;
+              FContextPosSubtables[LCtxIdx].IsChained := True;
+              FContextPosSubtables[LCtxIdx].RuleSetCount := LLSCount;
+              SetLength(FContextPosSubtables[LCtxIdx].RuleSetOffsets, LLSCount);
+              for LK := 0 to LLSCount - 1 do
+              begin
+                LCovOff := ReadUInt16BE(LSub + 12 + LK * 2);
+                if LCovOff <> 0 then
+                  FContextPosSubtables[LCtxIdx].RuleSetOffsets[LK] := LSub + LCovOff
+                else
+                  FContextPosSubtables[LCtxIdx].RuleSetOffsets[LK] := 0;
+              end;
+            end;
           end;
         end;
       end;
@@ -1328,7 +1413,7 @@ begin
     end;
 
     // Context Substitution (type 5) and ChainedContext Substitution (type 6).
-    // Currently only Format 3 (coverage-based) is parsed.
+    // Parses Format 1 (glyph-based), Format 2 (class-based), Format 3 (coverage-based).
     if (LLookupType = GSUB_LOOKUP_CONTEXT) or
        (LLookupType = GSUB_LOOKUP_CHAINED_CONTEXT) then
     begin
@@ -1342,79 +1427,173 @@ begin
         if FDataLength < LSub + 4 then
           Continue;
         LSubFmt := ReadUInt16BE(LSub);
-        // Only parse Format 3 (coverage-based).
-        if LSubFmt <> 3 then
-          Continue;
-        if LLookupType = GSUB_LOOKUP_CONTEXT then
+        if LSubFmt = 3 then
         begin
-          // ContextSubst Fmt3: format(2) + glyphCount(2) + substCount(2) +
-          //   inputCoverages[glyphCount](2) + substRecords[substCount](4).
-          if FDataLength < LSub + 6 then
-            Continue;
-          LLSCount := ReadUInt16BE(LSub + 2);  // inputGlyphCount
-          LIdx := ReadUInt16BE(LSub + 4);       // substCount
-          if FDataLength < LSub + 6 + LLSCount * 2 + LIdx * 4 then
-            Continue;
-          LCtxIdx := Length(FContextSubstSubtables);
-          SetLength(FContextSubstSubtables, LCtxIdx + 1);
-          FContextSubstSubtables[LCtxIdx].BaseOffset := LSub;
-          FContextSubstSubtables[LCtxIdx].InputGlyphCount := LLSCount;
-          FContextSubstSubtables[LCtxIdx].SubstCount := LIdx;
-          SetLength(FContextSubstSubtables[LCtxIdx].InputCoverageOffsets, LLSCount);
-          SetLength(FContextSubstSubtables[LCtxIdx].SubstSeqIndices, LIdx);
-          SetLength(FContextSubstSubtables[LCtxIdx].SubstLookupIndices, LIdx);
-          for LK := 0 to LLSCount - 1 do
-            FContextSubstSubtables[LCtxIdx].InputCoverageOffsets[LK] :=
-              LSub + ReadUInt16BE(LSub + 6 + LK * 2);
-          for LK := 0 to LIdx - 1 do
+          if LLookupType = GSUB_LOOKUP_CONTEXT then
           begin
-            FContextSubstSubtables[LCtxIdx].SubstSeqIndices[LK] :=
-              ReadUInt16BE(LSub + 6 + LLSCount * 2 + LK * 4);
-            FContextSubstSubtables[LCtxIdx].SubstLookupIndices[LK] :=
-              ReadUInt16BE(LSub + 6 + LLSCount * 2 + LK * 4 + 2);
+            // ContextSubst Fmt3: format(2) + glyphCount(2) + substCount(2) +
+            //   inputCoverages[glyphCount](2) + substRecords[substCount](4).
+            if FDataLength < LSub + 6 then
+              Continue;
+            LLSCount := ReadUInt16BE(LSub + 2);  // inputGlyphCount
+            LIdx := ReadUInt16BE(LSub + 4);       // substCount
+            if FDataLength < LSub + 6 + LLSCount * 2 + LIdx * 4 then
+              Continue;
+            LCtxIdx := Length(FContextSubstSubtables);
+            SetLength(FContextSubstSubtables, LCtxIdx + 1);
+            FContextSubstSubtables[LCtxIdx].BaseOffset := LSub;
+            FContextSubstSubtables[LCtxIdx].Format := 3;
+            FContextSubstSubtables[LCtxIdx].IsChained := False;
+            FContextSubstSubtables[LCtxIdx].InputGlyphCount := LLSCount;
+            FContextSubstSubtables[LCtxIdx].SubstCount := LIdx;
+            SetLength(FContextSubstSubtables[LCtxIdx].InputCoverageOffsets, LLSCount);
+            SetLength(FContextSubstSubtables[LCtxIdx].SubstSeqIndices, LIdx);
+            SetLength(FContextSubstSubtables[LCtxIdx].SubstLookupIndices, LIdx);
+            for LK := 0 to LLSCount - 1 do
+              FContextSubstSubtables[LCtxIdx].InputCoverageOffsets[LK] :=
+                LSub + ReadUInt16BE(LSub + 6 + LK * 2);
+            for LK := 0 to LIdx - 1 do
+            begin
+              FContextSubstSubtables[LCtxIdx].SubstSeqIndices[LK] :=
+                ReadUInt16BE(LSub + 6 + LLSCount * 2 + LK * 4);
+              FContextSubstSubtables[LCtxIdx].SubstLookupIndices[LK] :=
+                ReadUInt16BE(LSub + 6 + LLSCount * 2 + LK * 4 + 2);
+            end;
+          end
+          else
+          begin
+            // ChainedContextSubst Fmt3: format(2) + backtrackGlyphCount(2) +
+            //   backtrackCoverages[bt](2) + inputGlyphCount(2) +
+            //   inputCoverages[input](2) + lookaheadGlyphCount(2) +
+            //   lookaheadCoverages[la](2) + substCount(2) + substRecords(4).
+            if FDataLength < LSub + 4 then
+              Continue;
+            LLSCount := ReadUInt16BE(LSub + 2);  // backtrackGlyphCount
+            LK := LSub + 4 + LLSCount * 2;       // offset to inputGlyphCount
+            if FDataLength < LK + 2 then
+              Continue;
+            LLSCount := ReadUInt16BE(LK);         // inputGlyphCount
+            LK := LK + 2 + LLSCount * 2;         // offset to lookaheadGlyphCount
+            if FDataLength < LK + 2 then
+              Continue;
+            LCovOff := ReadUInt16BE(LK);          // lookaheadGlyphCount
+            LK := LK + 2 + LCovOff * 2;          // offset to substCount
+            if FDataLength < LK + 2 then
+              Continue;
+            LIdx := ReadUInt16BE(LK);             // substCount
+            if FDataLength < LK + 2 + LIdx * 4 then
+              Continue;
+            LCtxIdx := Length(FContextSubstSubtables);
+            SetLength(FContextSubstSubtables, LCtxIdx + 1);
+            FContextSubstSubtables[LCtxIdx].BaseOffset := LSub;
+            FContextSubstSubtables[LCtxIdx].Format := 3;
+            FContextSubstSubtables[LCtxIdx].IsChained := True;
+            FContextSubstSubtables[LCtxIdx].InputGlyphCount := LLSCount;
+            FContextSubstSubtables[LCtxIdx].SubstCount := LIdx;
+            SetLength(FContextSubstSubtables[LCtxIdx].InputCoverageOffsets, LLSCount);
+            SetLength(FContextSubstSubtables[LCtxIdx].SubstSeqIndices, LIdx);
+            SetLength(FContextSubstSubtables[LCtxIdx].SubstLookupIndices, LIdx);
+            // Input coverage offsets are right before lookaheadGlyphCount.
+            for LCovOff := 0 to LLSCount - 1 do
+              FContextSubstSubtables[LCtxIdx].InputCoverageOffsets[LCovOff] :=
+                LSub + ReadUInt16BE(LK - 2 - (LLSCount - LCovOff) * 2);
+            for LCovOff := 0 to LIdx - 1 do
+            begin
+              FContextSubstSubtables[LCtxIdx].SubstSeqIndices[LCovOff] :=
+                ReadUInt16BE(LK + 2 + LCovOff * 4);
+              FContextSubstSubtables[LCtxIdx].SubstLookupIndices[LCovOff] :=
+                ReadUInt16BE(LK + 2 + LCovOff * 4 + 2);
+            end;
           end;
         end
-        else
+        else if (LSubFmt = 1) or (LSubFmt = 2) then
         begin
-          // ChainedContextSubst Fmt3: format(2) + backtrackGlyphCount(2) +
-          //   backtrackCoverages[bt](2) + inputGlyphCount(2) +
-          //   inputCoverages[input](2) + lookaheadGlyphCount(2) +
-          //   lookaheadCoverages[la](2) + substCount(2) + substRecords(4).
-          if FDataLength < LSub + 4 then
-            Continue;
-          LLSCount := ReadUInt16BE(LSub + 2);  // backtrackGlyphCount
-          LK := LSub + 4 + LLSCount * 2;       // offset to inputGlyphCount
-          if FDataLength < LK + 2 then
-            Continue;
-          LLSCount := ReadUInt16BE(LK);         // inputGlyphCount
-          LK := LK + 2 + LLSCount * 2;         // offset to lookaheadGlyphCount
-          if FDataLength < LK + 2 then
-            Continue;
-          LCovOff := ReadUInt16BE(LK);          // lookaheadGlyphCount
-          LK := LK + 2 + LCovOff * 2;          // offset to substCount
-          if FDataLength < LK + 2 then
-            Continue;
-          LIdx := ReadUInt16BE(LK);             // substCount
-          if FDataLength < LK + 2 + LIdx * 4 then
-            Continue;
-          LCtxIdx := Length(FContextSubstSubtables);
-          SetLength(FContextSubstSubtables, LCtxIdx + 1);
-          FContextSubstSubtables[LCtxIdx].BaseOffset := LSub;
-          FContextSubstSubtables[LCtxIdx].InputGlyphCount := LLSCount;
-          FContextSubstSubtables[LCtxIdx].SubstCount := LIdx;
-          SetLength(FContextSubstSubtables[LCtxIdx].InputCoverageOffsets, LLSCount);
-          SetLength(FContextSubstSubtables[LCtxIdx].SubstSeqIndices, LIdx);
-          SetLength(FContextSubstSubtables[LCtxIdx].SubstLookupIndices, LIdx);
-          // Input coverage offsets are right before lookaheadGlyphCount.
-          for LCovOff := 0 to LLSCount - 1 do
-            FContextSubstSubtables[LCtxIdx].InputCoverageOffsets[LCovOff] :=
-              LSub + ReadUInt16BE(LK - 2 - (LLSCount - LCovOff) * 2);
-          for LCovOff := 0 to LIdx - 1 do
+          // ContextSubst Fmt1: format(2) + coverageOffset(2) + subRuleSetCount(2) +
+          //   subRuleSetOffsets[subRuleSetCount](2).
+          // ContextSubst Fmt2: format(2) + coverageOffset(2) + classDefOffset(2) +
+          //   subClassSetCount(2) + subClassSetOffsets[subClassSetCount](2).
+          // ChainedContextSubst Fmt1: format(2) + coverageOffset(2) +
+          //   chainedSubRuleSetCount(2) + chainedSubRuleSetOffsets[...](2).
+          // ChainedContextSubst Fmt2: format(2) + coverageOffset(2) +
+          //   backtrackClassDefOffset(2) + inputClassDefOffset(2) +
+          //   lookaheadClassDefOffset(2) + chainedClassSeqRuleSetCount(2) +
+          //   chainedClassSeqRuleSetOffsets[...](2).
+          if LSubFmt = 1 then
           begin
-            FContextSubstSubtables[LCtxIdx].SubstSeqIndices[LCovOff] :=
-              ReadUInt16BE(LK + 2 + LCovOff * 4);
-            FContextSubstSubtables[LCtxIdx].SubstLookupIndices[LCovOff] :=
-              ReadUInt16BE(LK + 2 + LCovOff * 4 + 2);
+            // Format 1: coverage(2) + ruleSetCount(2) + offsets(2*count).
+            if FDataLength < LSub + 6 then
+              Continue;
+            LLSCount := ReadUInt16BE(LSub + 4);  // ruleSetCount
+            if FDataLength < LSub + 6 + LLSCount * 2 then
+              Continue;
+            LCtxIdx := Length(FContextSubstSubtables);
+            SetLength(FContextSubstSubtables, LCtxIdx + 1);
+            FContextSubstSubtables[LCtxIdx].BaseOffset := LSub;
+            FContextSubstSubtables[LCtxIdx].Format := 1;
+            FContextSubstSubtables[LCtxIdx].IsChained := (LLookupType = GSUB_LOOKUP_CHAINED_CONTEXT);
+            FContextSubstSubtables[LCtxIdx].RuleSetCount := LLSCount;
+            SetLength(FContextSubstSubtables[LCtxIdx].RuleSetOffsets, LLSCount);
+            for LK := 0 to LLSCount - 1 do
+            begin
+              LCovOff := ReadUInt16BE(LSub + 6 + LK * 2);
+              if LCovOff <> 0 then
+                FContextSubstSubtables[LCtxIdx].RuleSetOffsets[LK] := LSub + LCovOff
+              else
+                FContextSubstSubtables[LCtxIdx].RuleSetOffsets[LK] := 0;
+            end;
+          end
+          else
+          begin
+            // Format 2: ruleSetCount is at different offset depending on Chained vs plain.
+            if LLookupType = GSUB_LOOKUP_CONTEXT then
+            begin
+              // ContextSubst Fmt2: format(2) + cov(2) + classDef(2) + subClassSetCount(2) + offsets.
+              if FDataLength < LSub + 8 then
+                Continue;
+              LLSCount := ReadUInt16BE(LSub + 6);  // subClassSetCount
+              if FDataLength < LSub + 8 + LLSCount * 2 then
+                Continue;
+              LCtxIdx := Length(FContextSubstSubtables);
+              SetLength(FContextSubstSubtables, LCtxIdx + 1);
+              FContextSubstSubtables[LCtxIdx].BaseOffset := LSub;
+              FContextSubstSubtables[LCtxIdx].Format := 2;
+              FContextSubstSubtables[LCtxIdx].IsChained := False;
+              FContextSubstSubtables[LCtxIdx].RuleSetCount := LLSCount;
+              SetLength(FContextSubstSubtables[LCtxIdx].RuleSetOffsets, LLSCount);
+              for LK := 0 to LLSCount - 1 do
+              begin
+                LCovOff := ReadUInt16BE(LSub + 8 + LK * 2);
+                if LCovOff <> 0 then
+                  FContextSubstSubtables[LCtxIdx].RuleSetOffsets[LK] := LSub + LCovOff
+                else
+                  FContextSubstSubtables[LCtxIdx].RuleSetOffsets[LK] := 0;
+              end;
+            end
+            else
+            begin
+              // ChainedContextSubst Fmt2: format(2) + cov(2) + btClassDef(2) +
+              //   inClassDef(2) + laClassDef(2) + ruleSetCount(2) + offsets.
+              if FDataLength < LSub + 12 then
+                Continue;
+              LLSCount := ReadUInt16BE(LSub + 10);  // chainedClassSeqRuleSetCount
+              if FDataLength < LSub + 12 + LLSCount * 2 then
+                Continue;
+              LCtxIdx := Length(FContextSubstSubtables);
+              SetLength(FContextSubstSubtables, LCtxIdx + 1);
+              FContextSubstSubtables[LCtxIdx].BaseOffset := LSub;
+              FContextSubstSubtables[LCtxIdx].Format := 2;
+              FContextSubstSubtables[LCtxIdx].IsChained := True;
+              FContextSubstSubtables[LCtxIdx].RuleSetCount := LLSCount;
+              SetLength(FContextSubstSubtables[LCtxIdx].RuleSetOffsets, LLSCount);
+              for LK := 0 to LLSCount - 1 do
+              begin
+                LCovOff := ReadUInt16BE(LSub + 12 + LK * 2);
+                if LCovOff <> 0 then
+                  FContextSubstSubtables[LCtxIdx].RuleSetOffsets[LK] := LSub + LCovOff
+                else
+                  FContextSubstSubtables[LCtxIdx].RuleSetOffsets[LK] := 0;
+              end;
+            end;
           end;
         end;
       end;
@@ -1972,6 +2151,231 @@ begin
       ASeqIndex := FContextSubstSubtables[AIndex].SubstSeqIndices[ASubstIdx];
       ALookupIndex := FContextSubstSubtables[AIndex].SubstLookupIndices[ASubstIdx];
     end;
+end;
+
+function TTFontFace.GetContextSubstFmt(AIndex: Int32): Int32;
+begin
+  if (AIndex >= 0) and (AIndex < Length(FContextSubstSubtables)) then
+    Result := FContextSubstSubtables[AIndex].Format
+  else
+    Result := 0;
+end;
+
+function TTFontFace.GetContextSubstRuleSetCount(AIndex: Int32): Int32;
+begin
+  if (AIndex >= 0) and (AIndex < Length(FContextSubstSubtables)) then
+    Result := FContextSubstSubtables[AIndex].RuleSetCount
+  else
+    Result := 0;
+end;
+
+function TTFontFace.GetContextSubstForGlyph(AIndex: Int32;
+  AFirstGlyph: UInt16): TFontContextLookupRecordArray;
+var
+  LSub: TFontContextSubstSubtable;
+  LCovIdx, LRuleSetOff, LRuleCount, LRuleOff: Int32;
+  LI, LK, LPos, LBtCount, LInCount, LLaCount, LSubstCount: Int32;
+  LInClassDefOff: Int32;
+  LClassId: UInt16;
+
+  function CoverageIndexOf(ACovOffset, AGlyphId: Int32): Int32;
+  var
+    LFmt, LCnt, LM, LR, LSG, LEC: Int32;
+  begin
+    if FDataLength < ACovOffset + 4 then
+      Exit(-1);
+    LFmt := ReadUInt16BE(ACovOffset);
+    if LFmt = 1 then
+    begin
+      LCnt := ReadUInt16BE(ACovOffset + 2);
+      for LM := 0 to LCnt - 1 do
+        if ReadUInt16BE(ACovOffset + 4 + LM * 2) = AGlyphId then
+          Exit(LM);
+      Result := -1;
+    end
+    else if LFmt = 2 then
+    begin
+      LCnt := ReadUInt16BE(ACovOffset + 2);
+      for LR := 0 to LCnt - 1 do
+      begin
+        if FDataLength < ACovOffset + 4 + LR * 6 + 6 then
+          Break;
+        LSG := ReadUInt16BE(ACovOffset + 4 + LR * 6);
+        LEC := ReadUInt16BE(ACovOffset + 4 + LR * 6 + 2);
+        if (AGlyphId >= LSG) and (AGlyphId <= LEC) then
+          Exit(ReadUInt16BE(ACovOffset + 4 + LR * 6 + 4) + (AGlyphId - LSG));
+      end;
+      Result := -1;
+    end
+    else
+      Result := -1;
+  end;
+
+  function GetClass(ACdOffset, AGlyphId: Int32): UInt16;
+  var
+    LFmt, LSG, LGC, LRC, LRR, LESG, LESC: Int32;
+  begin
+    if FDataLength < ACdOffset + 4 then
+      Exit(0);
+    LFmt := ReadUInt16BE(ACdOffset);
+    if LFmt = 1 then
+    begin
+      LSG := ReadUInt16BE(ACdOffset + 2);
+      LGC := ReadUInt16BE(ACdOffset + 4);
+      if (AGlyphId >= LSG) and (AGlyphId < LSG + LGC) then
+        Result := ReadUInt16BE(ACdOffset + 6 + (AGlyphId - LSG) * 2)
+      else
+        Result := 0;
+    end
+    else if LFmt = 2 then
+    begin
+      LRC := ReadUInt16BE(ACdOffset + 2);
+      for LRR := 0 to LRC - 1 do
+      begin
+        if FDataLength < ACdOffset + 4 + LRR * 6 + 6 then
+          Break;
+        LESG := ReadUInt16BE(ACdOffset + 4 + LRR * 6);
+        LESC := ReadUInt16BE(ACdOffset + 4 + LRR * 6 + 2);
+        if (AGlyphId >= LESG) and (AGlyphId <= LESC) then
+          Exit(ReadUInt16BE(ACdOffset + 4 + LRR * 6 + 4));
+      end;
+      Result := 0;
+    end
+    else
+      Result := 0;
+  end;
+
+begin
+  SetLength(Result, 0);
+  if (AIndex < 0) or (AIndex >= Length(FContextSubstSubtables)) then
+    Exit;
+  LSub := FContextSubstSubtables[AIndex];
+
+  if LSub.Format = 3 then
+  begin
+    // Format 3: return all pre-parsed records.
+    SetLength(Result, LSub.SubstCount);
+    for LI := 0 to LSub.SubstCount - 1 do
+    begin
+      Result[LI].SequenceIndex := LSub.SubstSeqIndices[LI];
+      Result[LI].LookupIndex := LSub.SubstLookupIndices[LI];
+    end;
+    Exit;
+  end;
+
+  if LSub.Format = 1 then
+  begin
+    // Format 1: use coverage index to find rule set.
+    LCovIdx := CoverageIndexOf(LSub.BaseOffset + ReadUInt16BE(LSub.BaseOffset + 2),
+      AFirstGlyph);
+    if LCovIdx < 0 then
+      Exit;
+    if LCovIdx >= LSub.RuleSetCount then
+      Exit;
+    LRuleSetOff := LSub.RuleSetOffsets[LCovIdx];
+    if LRuleSetOff = 0 then
+      Exit;
+  end
+  else if LSub.Format = 2 then
+  begin
+    // Format 2: use class ID to find rule set.
+    // InputClassDef offset depends on plain vs chained.
+    if ReadUInt16BE(LSub.BaseOffset) = 2 then
+    begin
+      // ContextSubst Fmt2: format(2) + cov(2) + classDef(2) + ...
+      LInClassDefOff := LSub.BaseOffset + ReadUInt16BE(LSub.BaseOffset + 4);
+    end
+    else
+    begin
+      // ChainedContextSubst Fmt2: format(2) + cov(2) + btClassDef(2) +
+      //   inClassDef(2) + laClassDef(2) + ...
+      LInClassDefOff := LSub.BaseOffset + ReadUInt16BE(LSub.BaseOffset + 6);
+    end;
+    LClassId := GetClass(LInClassDefOff, AFirstGlyph);
+    if LClassId >= LSub.RuleSetCount then
+      Exit;
+    LRuleSetOff := LSub.RuleSetOffsets[LClassId];
+    if LRuleSetOff = 0 then
+      Exit;
+  end
+  else
+    Exit;
+
+  // Parse rules in the rule set.
+  // RuleSet: ruleCount(2) + ruleOffsets[ruleCount](2).
+  // Rule: [backtrackGlyphCount(2) + backtrackGlyphIDs(bt*2)] +
+  //       inputGlyphCount(2) + inputGlyphIDs[(input-1)*2] +
+  //       [lookaheadGlyphCount(2) + lookaheadGlyphIDs(la*2)] +
+  //       substCount(2) + substRecords[substCount](4).
+  if FDataLength < LRuleSetOff + 2 then
+    Exit;
+  LRuleCount := ReadUInt16BE(LRuleSetOff);
+  // For simplicity, parse the first rule only (most common case).
+  if LRuleCount = 0 then
+    Exit;
+  if FDataLength < LRuleSetOff + 4 then
+    Exit;
+  LRuleOff := LRuleSetOff + ReadUInt16BE(LRuleSetOff + 2);
+  if FDataLength < LRuleOff + 2 then
+    Exit;
+
+  // Walk the rule to find substCount.
+  // Determine if this is a plain or chained context by checking the subtable's
+  // lookup type via BaseOffset format field (already stored).
+  // Plain ContextSubst (GSUB 5): inputGlyphCount(2) + inputGlyphIDs + substCount(2) + substRecords.
+  // Chained ContextSubst (GSUB 6): backtrackGlyphCount(2) + ... + substCount(2) + substRecords.
+  // We distinguish by checking if the subtable was parsed from a Chained type.
+  // Parse rules in the rule set.
+  // RuleSet: ruleCount(2) + ruleOffsets[ruleCount](2).
+  if FDataLength < LRuleSetOff + 2 then
+    Exit;
+  LRuleCount := ReadUInt16BE(LRuleSetOff);
+  if LRuleCount = 0 then
+    Exit;
+  if FDataLength < LRuleSetOff + 4 then
+    Exit;
+  LRuleOff := LRuleSetOff + ReadUInt16BE(LRuleSetOff + 2);
+  if FDataLength < LRuleOff + 2 then
+    Exit;
+
+  if LSub.IsChained then
+  begin
+    // ChainedSubRule: backtrackGlyphCount(2) + backtrackGlyphIDs(bt*2) +
+    //   inputGlyphCount(2) + inputGlyphIDs[(input-1)*2] +
+    //   lookaheadGlyphCount(2) + lookaheadGlyphIDs(la*2) +
+    //   substCount(2) + substRecords[substCount](4).
+    LBtCount := ReadUInt16BE(LRuleOff);
+    LPos := LRuleOff + 2 + LBtCount * 2;
+    if FDataLength < LPos + 2 then
+      Exit;
+    LInCount := ReadUInt16BE(LPos);
+    LPos := LPos + 2 + (LInCount - 1) * 2;
+    if FDataLength < LPos + 2 then
+      Exit;
+    LLaCount := ReadUInt16BE(LPos);
+    LPos := LPos + 2 + LLaCount * 2;
+  end
+  else
+  begin
+    // SubRule: inputGlyphCount(2) + inputGlyphIDs[(input-1)*2] +
+    //   substCount(2) + substRecords[substCount](4).
+    LPos := LRuleOff;
+    LInCount := ReadUInt16BE(LPos);
+    LPos := LPos + 2 + (LInCount - 1) * 2;
+  end;
+  if FDataLength < LPos + 2 then
+    Exit;
+  LSubstCount := ReadUInt16BE(LPos);
+  if FDataLength < LPos + 2 + LSubstCount * 4 then
+    Exit;
+  LPos := LPos + 2;
+
+  SetLength(Result, LSubstCount);
+  for LI := 0 to LSubstCount - 1 do
+  begin
+    Result[LI].SequenceIndex := ReadUInt16BE(LPos + LI * 4);
+    Result[LI].LookupIndex := ReadUInt16BE(LPos + LI * 4 + 2);
+  end;
 end;
 
 function TTFontFace.HasContextPos: Boolean;
