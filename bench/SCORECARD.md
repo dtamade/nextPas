@@ -8,10 +8,10 @@
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **32** | 0 | 23 | **58%** |
-| **Rust** | 18 | 0 | 35 | **34%** |
+| **Go** | **36** | 1 | 24 | **60%** |
+| **Rust** | 18 | 0 | 41 | **30%** |
 
-## Track Summary (13 tracks, 56 operations)
+## Track Summary (14 tracks, 62 operations)
 
 ### Text Operations (6 ops)
 
@@ -120,6 +120,19 @@
 | Reverse/1KB | 8.16ms | 6.79ms | 0.83x | 2.54ms | 0.31x |
 
 **4W vs Go, 3W vs Rust**
+
+### I/O Operations (6 ops)
+
+| Track | Pascal | Go | vs Go | Rust | vs Rust |
+|-------|--------|-----|-------|------|---------|
+| Write/1MB | 498µs | 499µs | 1.00x | 476µs | 0.96x |
+| **Read/1MB** | **817µs** | 1360µs | **1.66x** ✓ | 167µs | 0.20x |
+| **Write/10MB** | **5.96ms** | 10.93ms | **1.83x** ✓ | 6.23ms | 1.05x |
+| **Read/10MB** | **12.87ms** | 15.06ms | **1.17x** ✓ | 2.11ms | 0.16x |
+| **Write/Text** | **283µs** | 397µs | **1.40x** ✓ | 168µs | 0.59x |
+| Read/Text | 770µs | 456µs | 0.59x | 54µs | 0.07x |
+
+**4W vs Go, 0W vs Rust**
 
 ## Key Findings
 
