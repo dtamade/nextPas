@@ -8,10 +8,10 @@
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **84** | 3 | 33 | **70%** |
+| **Go** | **87** | 3 | 33 | **71%** |
 | **Rust** | 19 | 0 | 47 | **29%** |
 
-## Track Summary (28 tracks, 124 operations)
+## Track Summary (29 tracks, 127 operations)
 
 ### Text Operations (6 ops)
 
@@ -338,12 +338,25 @@
 
 **2W 2D vs Go** — Standard search 1.5-1.9x faster (Go sort.Search closure overhead); Eytzinger layout (cache-friendly) ties at 100K
 
+### SIMD ReduceSum (3 ops)
+
+| Track | Pascal SIMD (ns) | Go (ns) | vs Go |
+|-------|------------------|---------|-------|
+| **Sum/4K** | **222** | 4448 | **20.0x** ✓ |
+| **Sum/64K** | **6125** | 71346 | **11.6x** ✓ |
+| **Sum/1M** | **136174** | 1144451 | **8.4x** ✓ |
+
+**3W vs Go** — AVX2 vpaddps explicit SIMD vs Go scalar loop (no auto-vectorization); flips previous "Array Sum: Go wins" loss
+
 ### Pascal Wins (biggest margins vs Go)
 1. **String Concat: 3557x** — Go immutable strings O(n²) vs Pascal COW
-2. **Fill/1KB: 23.37x** — FillChar→rep stosb vs Go byte loop (no memset opt)
-3. **Fill/64B: 15.03x** — FillChar→rep stosb vs Go byte loop
-4. **Fill/64KB: 11.22x** — FillChar→rep stosb vs Go byte loop
-5. **BuildDoubling: 7.87x** — Pascal SetLength realloc vs Go append GC overhead
+2. **SIMD ReduceSum/4K: 20.0x** — AVX2 vpaddps vs Go scalar loop
+3. **Fill/1KB: 23.37x** — FillChar→rep stosb vs Go byte loop (no memset opt)
+4. **Fill/64B: 15.03x** — FillChar→rep stosb vs Go byte loop
+5. **SIMD ReduceSum/64K: 11.6x** — AVX2 vpaddps vs Go scalar loop
+6. **Fill/64KB: 11.22x** — FillChar→rep stosb vs Go byte loop
+7. **SIMD ReduceSum/1M: 8.4x** — AVX2 vpaddps vs Go scalar loop
+8. **BuildDoubling: 7.87x** — Pascal SetLength realloc vs Go append GC overhead
 6. **Set Union: 7.06x** — Pascal `set of Byte` native bit operations vs Go byte loop
 6. **Set Intersection: 6.74x** — Same mechanism, 4 AND instructions
 7. **Set Difference: 6.54x** — Same mechanism, 4 BIC instructions
@@ -385,7 +398,7 @@
 - **File I/O Write**: Pascal dominant (3W vs Go) — direct syscall vs Go's bufio
 - **String operations**: Pascal dominant (7W vs Go)
 - **Memory/pointer**: Pascal strong (5W vs Go)
-- **Numeric loops**: Go/Rust win (auto-vectorization)
+- **Numeric loops**: Pascal dominant with SIMD (3W, 8-20x); Go/Rust win on scalar paths (auto-vectorization)
 - **Hash maps**: Go wins (incremental rehash, cache-friendly miss)
 - **Binary search**: Pascal strong (2W 2D vs Go) — Standard 1.5-1.9x faster; Eytzinger layout ties
 - **Float formatting**: Go/Rust win (Ryu algorithm)
