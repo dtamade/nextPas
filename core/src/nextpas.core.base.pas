@@ -70,6 +70,13 @@ type
   cint64  = Int64;
   cuint64 = UInt64;
   csize_t = SizeUInt;
+
+  { C ABI pointer types }
+  Pcint    = ^cint;
+  Pcuint   = ^cuint;
+  Pcint64  = ^cint64;
+  Pcuint64 = ^cuint64;
+
   ECore = nextpas.core.exception.ENextPasError;
   EInvariantViolation = class(ECore)
   public
