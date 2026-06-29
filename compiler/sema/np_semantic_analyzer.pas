@@ -7864,9 +7864,12 @@ begin
           if SameText(FModel.TypeAt(Symbol.TypeId - 1).Kind, 'class') or
             SameText(FModel.TypeAt(Symbol.TypeId - 1).Kind, 'interface') then
             UniqueTypeId := Symbol.TypeId
-          else if not (SameText(FModel.TypeAt(UniqueTypeId - 1).Kind, 'class') or
-            SameText(FModel.TypeAt(UniqueTypeId - 1).Kind, 'interface')) then
-            Exit(0);
+          else if SameText(FModel.TypeAt(UniqueTypeId - 1).Kind, 'class') or
+            SameText(FModel.TypeAt(UniqueTypeId - 1).Kind, 'interface') then
+            { Keep existing class/interface UniqueTypeId }
+          else
+            { Neither is class/interface yet — prefer later entry }
+            UniqueTypeId := Symbol.TypeId;
         end;
       end;
     end;
