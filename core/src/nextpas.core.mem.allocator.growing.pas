@@ -149,6 +149,7 @@ begin
   inherited Destroy;
 end;
 
+{$push}{$R-} { Range checks disabled in hot path for performance. }
 function TGrowingAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LIndex: Int32;
@@ -220,7 +221,9 @@ begin
   else
     System.GetMem(Result, ASize);
 end;
+{$pop}
 
+{$push}{$R-}
 procedure TGrowingAllocator.FreeMem(APtr: Pointer; ASize: SizeUInt); inline;
 var
   LIndex: Int32;
@@ -294,6 +297,7 @@ begin
     APtr, GThreadCache.FCounts[LIndex]);
   Inc(GThreadCache.FCounts[LIndex]);
 end;
+{$pop}
 
 function TGrowingAllocator.AllocMem(ASize: SizeUInt): Pointer;
 begin
@@ -302,6 +306,7 @@ begin
     FillChar(Result^, ASize, 0);
 end;
 
+{$push}{$R-}
 function TGrowingAllocator.BatchGetMem(ASize: SizeUInt; ACount: Word;
   ABlocks: PPointer): Word; inline;
 var
@@ -487,6 +492,7 @@ begin
     Inc(GThreadCache.FCounts[LClass]);
   end;
 end;
+{$pop}
 
 function TGrowingAllocator.ReallocMem(APtr: Pointer;
   AOldSize, ANewSize: SizeUInt): Pointer; inline;
