@@ -648,10 +648,7 @@ var
 begin
   Result := nil;
 
-  LAlign := AAlignment;
-  if LAlign = 0 then
-    LAlign := 16;
-  LAlign := SanitizeAlignment(LAlign);
+  LAlign := SanitizeConfigAlignment(AAlignment);
 
   // over-allocate for alignment; raw pointer is tracked out-of-band
   if ASize > High(SizeUInt) - (LAlign - 1) then

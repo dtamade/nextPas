@@ -314,17 +314,8 @@ begin
 
   FAllocator := ResolveAllocator(AAllocator);
 
-  // Alignment: 默认 max(pointer,16)；必须为 2 的幂
-  if AAlignment = 0 then
-  begin
-    // SizeOf(Pointer) is a compile-time constant; on supported targets it's <= 16,
-    // so max(SizeOf(Pointer), 16) is always 16. Keep it branch-free to avoid FPC 6018.
-    FAlignment := 16;
-  end
-  else
-    FAlignment := AAlignment;
-  if (FAlignment and (FAlignment-1)) <> 0 then
-    raise EMemFixedPoolError.Create(aeAlignmentNotSupported, 'Alignment must be power of two');
+  // Alignment: 0→DEFAULT_ALIGNMENT(16), validate power-of-two, min MEM_DEFAULT_ALIGN
+  FAlignment := SanitizeConfigAlignment(AAlignment);
   if (FBlockSize mod FAlignment) <> 0 then
     raise EMemFixedPoolError.Create(aeInvalidLayout, 'Block size must be a multiple of alignment');
 
