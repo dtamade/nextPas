@@ -723,8 +723,9 @@ begin
       end;
       if Dir = 'ifdef' then PushFrame(EvalSimpleCondition(DirArg))
       else if Dir = 'ifndef' then PushFrame(not EvalSimpleCondition(DirArg))
+      else if Dir = 'if' then PushFrame(EvalIfExpr(DirArg))
       else if Dir = 'else' then HandleElse
-      else if Dir = 'elseif' then HandleElseIf(EvalSimpleCondition(DirArg))
+      else if Dir = 'elseif' then HandleElseIf(EvalIfExpr(DirArg))
       else if (Dir = 'endif') or (Dir = 'ifend') then HandleEndIf
       else if Dir = 'define' then begin if IsActive then FDefines.Define(DirArg); end
       else if Dir = 'undef' then begin if IsActive then FDefines.Undef(DirArg); end

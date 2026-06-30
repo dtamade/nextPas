@@ -3353,6 +3353,16 @@ begin
         Inc(ACursor);
       MatchTokenSilent(ALexer, ACursor, tkSemicolon);
     end;
+    { Consume calling conventions after procedure type semicolons:
+      e.g. "procedure; cdecl;" — after the first ; is consumed, check for cdecl }
+    while (ACursor < ALexer.TokenCount) and
+      (IsDirectiveToken(CurrentToken(ALexer, ACursor).Kind) or
+       ((CurrentToken(ALexer, ACursor).Kind = tkIdentifier) and
+        IsCallingDirective(CurrentToken(ALexer, ACursor).Lexeme))) do
+    begin
+      Inc(ACursor);
+      MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+    end;
   end;
 
   Result := True;
