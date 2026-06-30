@@ -905,7 +905,7 @@ var
   LSegment: TFixedSlabPool;
 begin
   inherited Create;
-  if AAllocator=nil then FAllocator:=GetRtlAllocator else FAllocator:=AAllocator;
+  FAllocator:=ResolveAllocator(AAllocator);
   if ACapacity=0 then ACapacity:=64*1024;
   if aMinShift=0 then aMinShift:=3;
 

@@ -73,10 +73,7 @@ end;
 constructor TLocalArena.Create(const ACapacity: SizeUInt; const AAllocator: TAllocator);
 begin
   inherited Create;
-  if AAllocator <> nil then
-    FAllocator := AAllocator
-  else
-    FAllocator := GetRtlAllocator;
+  FAllocator := ResolveAllocator(AAllocator);
   if ACapacity > 0 then
   begin
     FBacking := FAllocator.GetMem(ACapacity);

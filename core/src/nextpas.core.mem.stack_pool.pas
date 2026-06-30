@@ -393,10 +393,7 @@ begin
   FSize := ASize;
   FOffset := 0;
 
-  if AAllocator = nil then
-    FBaseAllocator := GetRtlAllocator
-  else
-    FBaseAllocator := AAllocator;
+  FBaseAllocator := ResolveAllocator(AAllocator);
 
   FBuffer := FBaseAllocator.GetMem(ASize);
   if FBuffer = nil then

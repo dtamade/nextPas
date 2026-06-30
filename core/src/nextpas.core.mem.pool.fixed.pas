@@ -312,10 +312,7 @@ begin
   FTotalAllocCalls := 0;
   FTotalFreeCalls := 0;
 
-  if AAllocator = nil then
-    FAllocator := nextpas.core.mem.allocator.rtl.GetRtlAllocator
-  else
-    FAllocator := AAllocator;
+  FAllocator := ResolveAllocator(AAllocator);
 
   // Alignment: 默认 max(pointer,16)；必须为 2 的幂
   if AAlignment = 0 then

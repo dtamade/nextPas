@@ -26,6 +26,9 @@ type
 
 function GetRtlAllocator: TAllocator;
 function TryGetRtlAllocator(out A: TAllocator): Boolean;
+{** ResolveAllocator: 返回 AAllocator（非 nil），否则返回 GetRtlAllocator。
+    消除构造函数中重复的 nil→default 分支。 }
+function ResolveAllocator(AAllocator: TAllocator): TAllocator; inline;
 
 implementation
 
@@ -87,6 +90,14 @@ begin
     A := nil;
     Result := False;
   end;
+end;
+
+function ResolveAllocator(AAllocator: TAllocator): TAllocator;
+begin
+  if AAllocator <> nil then
+    Result := AAllocator
+  else
+    Result := GetRtlAllocator;
 end;
 
 initialization

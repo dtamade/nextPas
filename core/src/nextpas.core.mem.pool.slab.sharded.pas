@@ -549,9 +549,7 @@ var
 begin
   inherited Create;
 
-  FAllocator := AAllocator;
-  if FAllocator = nil then
-    FAllocator := GetRtlAllocator;
+  FAllocator := ResolveAllocator(AAllocator);
 
   if aCapacity = 0 then
     aCapacity := 64 * 1024;

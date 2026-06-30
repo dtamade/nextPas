@@ -980,10 +980,7 @@ var
 begin
   inherited Create;
 
-  if AAllocator = nil then
-    FAllocator := GetRtlAllocator
-  else
-    FAllocator := AAllocator;
+  FAllocator := ResolveAllocator(AAllocator);
 
   if ACapacity = 0 then
     Exit;

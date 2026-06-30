@@ -21,6 +21,7 @@ uses
   nextpas.core.base,
   nextpas.core.base.utils,
   nextpas.core.mem.allocator.base,
+  nextpas.core.mem.allocator.rtl,
   nextpas.core.mem.error,
   nextpas.core.mem.pool.fixed;
 
@@ -80,9 +81,6 @@ function MakePoolAllocator(ABlockSize: SizeUInt; ACapacity: Integer; AFallback: 
 
 implementation
 
-uses
-  nextpas.core.mem.allocator.rtl;
-
 { TPoolAllocator }
 
 constructor TPoolAllocator.Create(ABlockSize: SizeUInt; ACapacity: Integer; AFallback: TAllocator);
@@ -96,10 +94,7 @@ begin
   if LAlignedSize < SizeOf(Pointer) then
     LAlignedSize := SizeOf(Pointer);
   FBlockSize := LAlignedSize;
-  if AFallback = nil then
-    FFallback := GetRtlAllocator
-  else
-    FFallback := AFallback;
+  FFallback := ResolveAllocator(AFallback);
   FPool := TFixedPool.Create(FBlockSize, ACapacity, 16, FFallback);
 end;
 

@@ -531,10 +531,7 @@ begin
     FBlockShift := 0;
   end;
 
-  if aConfig.Allocator <> nil then
-    FAllocator := aConfig.Allocator
-  else
-    FAllocator := GetRtlAllocator;
+  FAllocator := ResolveAllocator(aConfig.Allocator);
   FKeepSegments := aConfig.KeepSegments;
   FInitialCapacity := aConfig.InitialCapacity;
   if FInitialCapacity = 0 then

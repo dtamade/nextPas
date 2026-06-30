@@ -336,10 +336,7 @@ begin
   FCount := 0;
   FIsPow2Capacity := nextpas.core.mem.base.IsPowerOfTwo(FCapacity);
 
-  if aAllocator = nil then
-    FBaseAllocator := GetRtlAllocator
-  else
-    FBaseAllocator := aAllocator;
+  FBaseAllocator := ResolveAllocator(aAllocator);
 
   // 防止乘法溢出并分配内存
   if (FElementSize <> 0) and (FCapacity > MAX_SIZE_UINT div FElementSize) then

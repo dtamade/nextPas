@@ -210,10 +210,7 @@ begin
 
   FBlockShift := Log2UInt(FBlockSize);
 
-  if aConfig.Allocator = nil then
-    FAllocator := GetRtlAllocator
-  else
-    FAllocator := aConfig.Allocator;
+  FAllocator := ResolveAllocator(aConfig.Allocator);
 
   SetLength(FArenas, 0);
   SetLength(FFreeStack, 0);
