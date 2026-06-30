@@ -857,10 +857,7 @@ var
   LNatural: SizeUInt;
 begin
   if ASize = 0 then Exit(nil);
-  if AAlignment < SizeOf(Pointer) then
-    AAlignment := SizeOf(Pointer);
-  if not IsPowerOfTwo(AAlignment) then
-    raise EInvalidArgument.Create('TSlabPoolSharded.AllocAligned: AAlignment must be power of two and >= pointer size');
+  AAlignment := SanitizeAlignment(AAlignment);
 
   LShard := ChooseShardIndex;
   FShards[LShard].Lock.Acquire;

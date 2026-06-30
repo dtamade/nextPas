@@ -651,10 +651,7 @@ begin
   LAlign := AAlignment;
   if LAlign = 0 then
     LAlign := 16;
-  if LAlign < SizeOf(Pointer) then
-    LAlign := SizeOf(Pointer);
-  if not IsPowerOfTwo(LAlign) then
-    raise EInvalidArgument.Create('TSlabPool.AllocFallback: AAlignment must be power of two and >= pointer size');
+  LAlign := SanitizeAlignment(LAlign);
 
   // over-allocate for alignment; raw pointer is tracked out-of-band
   if ASize > High(SizeUInt) - (LAlign - 1) then
@@ -1264,10 +1261,7 @@ begin
 
   LPerfEnabled := FConfig.EnablePerfMonitoring;
 
-  if AAlignment < SizeOf(Pointer) then
-    AAlignment := SizeOf(Pointer);
-  if not IsPowerOfTwo(AAlignment) then
-    raise EInvalidArgument.Create('TSlabPool.AllocAligned: AAlignment must be power of two and >= pointer size');
+  AAlignment := SanitizeAlignment(AAlignment);
 
   if ShouldUseFallback(ASize) then
   begin

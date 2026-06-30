@@ -110,6 +110,12 @@ type
  *}
 function AllocErrorToString(aError: TAllocError): string;
 
+{** SanitizeAlignment: clamp AAlignment to >= SizeOf(Pointer), then validate
+    power-of-two. Returns the sanitized value. Raises EAllocError if
+    alignment is not a power of two after clamping.
+    Eliminates repeated clamp+check+raise patterns across slab/pool types. }
+function SanitizeAlignment(AAlignment: SizeUInt): SizeUInt;
+
 implementation
 
 const
@@ -181,6 +187,15 @@ begin
     inherited Create(aMsg + ': ' + ERROR_MESSAGES[aeOutOfMemory])
   else
     inherited Create(ERROR_MESSAGES[aeOutOfMemory]);
+end;
+
+function SanitizeAlignment(AAlignment: SizeUInt): SizeUInt;
+begin
+  if AAlignment < SizeOf(Pointer) then
+    AAlignment := SizeOf(Pointer);
+  if (AAlignment and (AAlignment - 1)) <> 0 then
+    raise EAllocError.Create(aeAlignmentNotSupported, 'Alignment must be power of two and >= pointer size');
+  Result := AAlignment;
 end;
 
 end.
