@@ -1,7 +1,6 @@
 unit BaseUnix;
 
 {$mode objfpc}{$H+}
-{$IFNDEF FPC}
 
 interface
 
@@ -159,10 +158,5 @@ begin Result := -1; end;
 
 function fpClockGettime(clk_id: cint; tp: PTimeSpec): cint;
 begin Result := -1; end;
-
-{$ELSE}
-interface
-implementation
-{$ENDIF}
 
 end.
