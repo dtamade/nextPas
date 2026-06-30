@@ -149,3 +149,61 @@ func BenchmarkFloatArrayDot(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkFloatArrayMinMax(b *testing.B) {
+	var a [arrArr]float64
+	for i := 0; i < arrArr; i++ {
+		a[i] = float64((i*17+3)%1000 - 500)
+	}
+	for n := 0; n < b.N; n++ {
+		for i := 0; i < arrN; i++ {
+			min, max := a[0], a[0]
+			for j := 1; j < arrArr; j++ {
+				v := a[j]
+				if v < min {
+					min = v
+				}
+				if v > max {
+					max = v
+				}
+			}
+			sinkF = min + max
+		}
+	}
+}
+
+func BenchmarkIntArrayFilter(b *testing.B) {
+	var a [arrArr]int
+	for i := 0; i < arrArr; i++ {
+		a[i] = i
+	}
+	for n := 0; n < b.N; n++ {
+		for i := 0; i < arrN; i++ {
+			cnt := 0
+			var r [arrArr]int
+			for j := 0; j < arrArr; j++ {
+				if a[j]&1 == 0 {
+					r[cnt] = a[j]
+					cnt++
+				}
+			}
+			sinkI = cnt
+		}
+	}
+}
+
+func BenchmarkFloatArrayNorm(b *testing.B) {
+	var a [arrArr]float64
+	for i := 0; i < arrArr; i++ {
+		a[i] = float64(i) * 0.001
+	}
+	for n := 0; n < b.N; n++ {
+		for i := 0; i < arrN; i++ {
+			s := float64(0)
+			for j := 0; j < arrArr; j++ {
+				s += a[j] * a[j]
+			}
+			sinkF = s
+		}
+	}
+}

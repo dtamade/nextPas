@@ -111,6 +111,46 @@ begin
   end;
   if S < 0 then WriteLn('');
 end;
+procedure BenchFloatArrayMinMax(const ACtx: IBenchContext);
+const ARR_SZ = 10000;
+var I, J: Integer; LMin, LMax, V: Double; A: array[0..ARR_SZ-1] of Double;
+begin
+  for I := 0 to ARR_SZ-1 do A[I] := (I * 17 + 3) mod 1000 - 500;
+  for I := 1 to N do begin
+    LMin := A[0]; LMax := A[0];
+    for J := 1 to ARR_SZ-1 do begin
+      V := A[J];
+      if V < LMin then LMin := V;
+      if V > LMax then LMax := V;
+    end;
+  end;
+  if LMin > LMax then WriteLn('');
+end;
+procedure BenchIntArrayFilter(const ACtx: IBenchContext);
+const ARR_SZ = 10000;
+var I, J, Cnt: Integer; A: array[0..ARR_SZ-1] of Integer; R: array[0..ARR_SZ-1] of Integer;
+begin
+  for I := 0 to ARR_SZ-1 do A[I] := I;
+  for I := 1 to N do begin
+    Cnt := 0;
+    for J := 0 to ARR_SZ-1 do
+      if (A[J] and 1) = 0 then begin R[Cnt] := A[J]; Inc(Cnt); end;
+  end;
+  if Cnt < 0 then WriteLn('');
+end;
+procedure BenchFloatArrayNorm(const ACtx: IBenchContext);
+const ARR_SZ = 10000;
+var I, J: Integer; S: Double; A: array[0..ARR_SZ-1] of Double;
+begin
+  for I := 0 to ARR_SZ-1 do A[I] := I * 0.001;
+  for I := 1 to N do begin
+    S := 0.0;
+    for J := 0 to ARR_SZ-1 do
+      S := S + A[J] * A[J];
+    S := Sqrt(S);
+  end;
+  if S < 0 then WriteLn('');
+end;
 var LSuite: IBenchSuite; LResults: IBenchResults;
 begin
   InitData;
@@ -124,6 +164,9 @@ begin
   LSuite.Add('CountEven/10Kx10K', @BenchCountEven);
   LSuite.Add('FloatArraySum/10Kx10K', @BenchFloatArraySum);
   LSuite.Add('FloatArrayDot/10Kx10K', @BenchFloatArrayDot);
+  LSuite.Add('FloatArrayMinMax/10Kx10K', @BenchFloatArrayMinMax);
+  LSuite.Add('IntArrayFilter/10Kx10K', @BenchIntArrayFilter);
+  LSuite.Add('FloatArrayNorm/10Kx10K', @BenchFloatArrayNorm);
   LResults := LSuite.Run;
   WriteLn(LResults.ToBenchStat);
 end.
