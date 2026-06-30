@@ -2,6 +2,7 @@ unit System;
 
 {$mode objfpc}{$H+}
 
+{$IFNDEF FPC}
 interface
 
 type
@@ -202,5 +203,10 @@ begin
   Result := Target;
   Target := NewValue;
 end;
+
+{$ELSE}
+interface
+implementation
+{$ENDIF}
 
 end.
