@@ -584,6 +584,8 @@ type
     FMethod: string;
     procedure CheckCount(AActual, AExpected: Integer;
       const AQualifier: string; APasses: Boolean);
+    function CheckCallOrder(const AOtherMethod: string;
+      AExpectBefore: Boolean): IMockVerify;
   public
     constructor Create(AState: TMockState; const AMethod: string);
     procedure CalledExactly(ACount: Integer);
@@ -655,15 +657,26 @@ begin
   Result := Self;
 end;
 
-function TMockVerifier.CalledBefore(const AOtherMethod: string): IMockVerify;
+function TMockVerifier.CheckCallOrder(const AOtherMethod: string;
+  AExpectBefore: Boolean): IMockVerify;
 var
   I, LSelfIdx, LOtherIdx: Integer;
+  LRelWord, LOppositeWord: string;
 begin
+  if AExpectBefore then
+  begin
+    LRelWord := 'before';
+    LOppositeWord := 'after';
+  end
+  else
+  begin
+    LRelWord := 'after';
+    LOppositeWord := 'before';
+  end;
   LSelfIdx := -1;
   LOtherIdx := -1;
   for I := 0 to High(FState.CallOrder) do
   begin
-    { Find first occurrence of each method }
     if (LSelfIdx < 0) and (FState.CallOrder[I] = FMethod) then
       LSelfIdx := I;
     if (LOtherIdx < 0) and (FState.CallOrder[I] = AOtherMethod) then
@@ -672,47 +685,38 @@ begin
       Break;
   end;
   if LSelfIdx < 0 then
-    InternalFail('Expected ' + FMethod + ' called before ' +
+    InternalFail('Expected ' + FMethod + ' called ' + LRelWord + ' ' +
       AOtherMethod + ', but ' + FMethod + ' was never called');
   if LOtherIdx < 0 then
-    InternalFail('Expected ' + FMethod + ' called before ' +
+    InternalFail('Expected ' + FMethod + ' called ' + LRelWord + ' ' +
       AOtherMethod + ', but ' + AOtherMethod + ' was never called');
-  if LSelfIdx >= LOtherIdx then
-    InternalFail('Expected ' + FMethod + ' called before ' +
-      AOtherMethod + ', but ' + FMethod + ' was called at index ' +
-      IntToStr(LSelfIdx) + ' (after ' + AOtherMethod + ' at index ' +
-      IntToStr(LOtherIdx) + ')');
+  if AExpectBefore then
+  begin
+    if LSelfIdx >= LOtherIdx then
+      InternalFail('Expected ' + FMethod + ' called ' + LRelWord + ' ' +
+        AOtherMethod + ', but ' + FMethod + ' was called at index ' +
+        IntToStr(LSelfIdx) + ' (' + LOppositeWord + ' ' + AOtherMethod +
+        ' at index ' + IntToStr(LOtherIdx) + ')');
+  end
+  else
+  begin
+    if LSelfIdx <= LOtherIdx then
+      InternalFail('Expected ' + FMethod + ' called ' + LRelWord + ' ' +
+        AOtherMethod + ', but ' + FMethod + ' was called at index ' +
+        IntToStr(LSelfIdx) + ' (' + LOppositeWord + ' ' + AOtherMethod +
+        ' at index ' + IntToStr(LOtherIdx) + ')');
+  end;
   Result := Self;
 end;
 
-function TMockVerifier.CalledAfter(const AOtherMethod: string): IMockVerify;
-var
-  I, LSelfIdx, LOtherIdx: Integer;
+function TMockVerifier.CalledBefore(const AOtherMethod: string): IMockVerify;
 begin
-  LSelfIdx := -1;
-  LOtherIdx := -1;
-  for I := 0 to High(FState.CallOrder) do
-  begin
-    { Find first occurrence of each method }
-    if (LSelfIdx < 0) and (FState.CallOrder[I] = FMethod) then
-      LSelfIdx := I;
-    if (LOtherIdx < 0) and (FState.CallOrder[I] = AOtherMethod) then
-      LOtherIdx := I;
-    if (LSelfIdx >= 0) and (LOtherIdx >= 0) then
-      Break;
-  end;
-  if LSelfIdx < 0 then
-    InternalFail('Expected ' + FMethod + ' called after ' +
-      AOtherMethod + ', but ' + FMethod + ' was never called');
-  if LOtherIdx < 0 then
-    InternalFail('Expected ' + FMethod + ' called after ' +
-      AOtherMethod + ', but ' + AOtherMethod + ' was never called');
-  if LSelfIdx <= LOtherIdx then
-    InternalFail('Expected ' + FMethod + ' called after ' +
-      AOtherMethod + ', but ' + FMethod + ' was called at index ' +
-      IntToStr(LSelfIdx) + ' (before ' + AOtherMethod + ' at index ' +
-      IntToStr(LOtherIdx) + ')');
-  Result := Self;
+  Result := CheckCallOrder(AOtherMethod, True);
+end;
+
+function TMockVerifier.CalledAfter(const AOtherMethod: string): IMockVerify;
+begin
+  Result := CheckCallOrder(AOtherMethod, False);
 end;
 
 function TMockVerifier.CalledWith(const AArgs: array of string): IMockVerify;
