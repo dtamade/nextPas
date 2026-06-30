@@ -763,13 +763,31 @@ begin
   SetLength(ASuite.FixtureAllocations, LOldLen + 1);
 end;
 
+{ ── Registration helpers ────────────────────────────────────────────────────── }
+{ Reduce boilerplate in Test/ShouldFail/ShortSkip overloads. Each public method
+  calls InitProcEntry or InitClosureEntry, sets extra fields, then RegisterEntry. }
+
+procedure InitProcEntry(var AEntry: TTestEntry; const AName: string;
+  AProc: TTestProc);
+begin
+  ClearEntry(AEntry);
+  AEntry.Name := AName;
+  AEntry.Proc := AProc;
+end;
+
+procedure InitClosureEntry(var AEntry: TTestEntry; const AName: string;
+  AProc: TTestClosure);
+begin
+  ClearEntry(AEntry);
+  AEntry.Name := AName;
+  AEntry.Closure := AProc;
+end;
+
 procedure TTestSuite.Test(const AName: string; AProc: TTestProc);
 var
   LEntry: TTestEntry;
 begin
-  ClearEntry(LEntry);
-  LEntry.Name := AName;
-  LEntry.Proc := AProc;
+  InitProcEntry(LEntry, AName, AProc);
   RegisterEntry(Tests, LEntry);
 end;
 
@@ -777,9 +795,7 @@ procedure TTestSuite.Test(const AName: string; AProc: TTestClosure);
 var
   LEntry: TTestEntry;
 begin
-  ClearEntry(LEntry);
-  LEntry.Name    := AName;
-  LEntry.Closure := AProc;
+  InitClosureEntry(LEntry, AName, AProc);
   RegisterEntry(Tests, LEntry);
 end;
 
@@ -788,9 +804,7 @@ procedure TTestSuite.Test(const AName: string; AProc: TTestProc;
 var
   LEntry: TTestEntry;
 begin
-  ClearEntry(LEntry);
-  LEntry.Name       := AName;
-  LEntry.Proc       := AProc;
+  InitProcEntry(LEntry, AName, AProc);
   LEntry.RetryCount := ARetryCount;
   RegisterEntry(Tests, LEntry);
 end;
@@ -800,9 +814,7 @@ procedure TTestSuite.Test(const AName: string; AProc: TTestClosure;
 var
   LEntry: TTestEntry;
 begin
-  ClearEntry(LEntry);
-  LEntry.Name       := AName;
-  LEntry.Closure    := AProc;
+  InitClosureEntry(LEntry, AName, AProc);
   LEntry.RetryCount := ARetryCount;
   RegisterEntry(Tests, LEntry);
 end;
@@ -812,9 +824,7 @@ procedure TTestSuite.Test(const AName: string; AProc: TTestProc;
 var
   LEntry: TTestEntry;
 begin
-  ClearEntry(LEntry);
-  LEntry.Name := AName;
-  LEntry.Proc := AProc;
+  InitProcEntry(LEntry, AName, AProc);
   CopyTags(LEntry.Tags, ATags);
   RegisterEntry(Tests, LEntry);
 end;
@@ -824,9 +834,7 @@ procedure TTestSuite.Test(const AName: string; AProc: TTestClosure;
 var
   LEntry: TTestEntry;
 begin
-  ClearEntry(LEntry);
-  LEntry.Name    := AName;
-  LEntry.Closure := AProc;
+  InitClosureEntry(LEntry, AName, AProc);
   CopyTags(LEntry.Tags, ATags);
   RegisterEntry(Tests, LEntry);
 end;
@@ -836,9 +844,7 @@ procedure TTestSuite.Test(const AName: string; AProc: TTestProc;
 var
   LEntry: TTestEntry;
 begin
-  ClearEntry(LEntry);
-  LEntry.Name        := AName;
-  LEntry.Proc        := AProc;
+  InitProcEntry(LEntry, AName, AProc);
   LEntry.DisplayName := ADisplayName;
   CopyTags(LEntry.Tags, ATags);
   RegisterEntry(Tests, LEntry);
@@ -849,9 +855,7 @@ procedure TTestSuite.Test(const AName: string; AProc: TTestClosure;
 var
   LEntry: TTestEntry;
 begin
-  ClearEntry(LEntry);
-  LEntry.Name        := AName;
-  LEntry.Closure     := AProc;
+  InitClosureEntry(LEntry, AName, AProc);
   LEntry.DisplayName := ADisplayName;
   CopyTags(LEntry.Tags, ATags);
   RegisterEntry(Tests, LEntry);
@@ -862,9 +866,7 @@ procedure TTestSuite.TestRepeat(const AName: string; AProc: TTestProc;
 var
   LEntry: TTestEntry;
 begin
-  ClearEntry(LEntry);
-  LEntry.Name        := AName;
-  LEntry.Proc        := AProc;
+  InitProcEntry(LEntry, AName, AProc);
   LEntry.RepeatCount := ARepeatCount;
   RegisterEntry(Tests, LEntry);
 end;
@@ -874,9 +876,7 @@ procedure TTestSuite.TestRepeat(const AName: string; AProc: TTestClosure;
 var
   LEntry: TTestEntry;
 begin
-  ClearEntry(LEntry);
-  LEntry.Name        := AName;
-  LEntry.Closure     := AProc;
+  InitClosureEntry(LEntry, AName, AProc);
   LEntry.RepeatCount := ARepeatCount;
   RegisterEntry(Tests, LEntry);
 end;
@@ -934,9 +934,7 @@ procedure TTestSuite.ShouldFail(const AName: string; AProc: TTestProc;
 var
   LEntry: TTestEntry;
 begin
-  ClearEntry(LEntry);
-  LEntry.Name          := AName;
-  LEntry.Proc          := AProc;
+  InitProcEntry(LEntry, AName, AProc);
   LEntry.Kind          := ekShouldFail;
   LEntry.ShouldFailMsg := AShouldFailMsg;
   RegisterEntry(Tests, LEntry);
@@ -947,9 +945,7 @@ procedure TTestSuite.ShouldFail(const AName: string; AProc: TTestClosure;
 var
   LEntry: TTestEntry;
 begin
-  ClearEntry(LEntry);
-  LEntry.Name          := AName;
-  LEntry.Closure       := AProc;
+  InitClosureEntry(LEntry, AName, AProc);
   LEntry.Kind          := ekShouldFail;
   LEntry.ShouldFailMsg := AShouldFailMsg;
   RegisterEntry(Tests, LEntry);
@@ -959,9 +955,7 @@ procedure TTestSuite.ShortSkip(const AName: string; AProc: TTestProc);
 var
   LEntry: TTestEntry;
 begin
-  ClearEntry(LEntry);
-  LEntry.Name      := AName;
-  LEntry.Proc      := AProc;
+  InitProcEntry(LEntry, AName, AProc);
   LEntry.ShortSkip := True;
   RegisterEntry(Tests, LEntry);
 end;
@@ -970,9 +964,7 @@ procedure TTestSuite.ShortSkip(const AName: string; AProc: TTestClosure);
 var
   LEntry: TTestEntry;
 begin
-  ClearEntry(LEntry);
-  LEntry.Name      := AName;
-  LEntry.Closure   := AProc;
+  InitClosureEntry(LEntry, AName, AProc);
   LEntry.ShortSkip := True;
   RegisterEntry(Tests, LEntry);
 end;
