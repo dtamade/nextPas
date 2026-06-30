@@ -712,26 +712,18 @@ procedure RegisterStub(var ASuite: TTestSuite; APtr: Pointer);
     cleanup both occur on the main thread during discovery and suite
     finalization. }
 var
-  LOldLen, LCap: Integer;
+  LIdx: Integer;
 begin
   { Global safety-net — disposed in finalization for suites that never run.
     Geometric growth to avoid O(n²) realloc on repeated RegisterStub calls. }
-  LOldLen := Length(GStubRegistry);
-  LCap := LOldLen;
-  if LCap < 16 then LCap := 16
-  else if LOldLen >= LCap then LCap := LCap * 2;
-  if LCap <> LOldLen then SetLength(GStubRegistry, LCap);
-  GStubRegistry[LOldLen] := APtr;
-  SetLength(GStubRegistry, LOldLen + 1);
+  LIdx := GrowArrayLen(GStubRegistry, 16);
+  GStubRegistry[LIdx] := APtr;
+  SetLength(GStubRegistry, LIdx + 1);
   { Per-suite tracking — stores GStubRegistry index for O(1) cleanup (R4-10).
     Geometric growth: pre-allocate capacity to avoid per-registration realloc. }
-  LOldLen := Length(ASuite.StubAllocations);
-  LCap := LOldLen;
-  if LCap < 8 then LCap := 8
-  else if LOldLen >= LCap then LCap := LCap * 2;
-  if LCap <> LOldLen then SetLength(ASuite.StubAllocations, LCap);
-  ASuite.StubAllocations[LOldLen] := High(GStubRegistry);
-  SetLength(ASuite.StubAllocations, LOldLen + 1);
+  LIdx := GrowArrayLen(ASuite.StubAllocations, 8);
+  ASuite.StubAllocations[LIdx] := High(GStubRegistry);
+  SetLength(ASuite.StubAllocations, LIdx + 1);
 end;
 
 procedure RegisterFixture(var ASuite: TTestSuite; AFixture: TObject);
@@ -741,26 +733,18 @@ procedure RegisterFixture(var ASuite: TTestSuite; AFixture: TObject);
     cleanup both occur on the main thread during discovery and suite
     finalization. }
 var
-  LOldLen, LCap, LGblOldLen, LGblCap: Integer;
+  LIdx: Integer;
 begin
   { Global safety-net — disposed in finalization for suites that never run.
     Geometric growth to avoid O(n²) realloc on repeated RegisterFixture calls. }
-  LGblOldLen := Length(GFixtureRegistry);
-  LGblCap := LGblOldLen;
-  if LGblCap < 16 then LGblCap := 16
-  else if LGblOldLen >= LGblCap then LGblCap := LGblCap * 2;
-  if LGblCap <> LGblOldLen then SetLength(GFixtureRegistry, LGblCap);
-  GFixtureRegistry[LGblOldLen] := AFixture;
-  SetLength(GFixtureRegistry, LGblOldLen + 1);
+  LIdx := GrowArrayLen(GFixtureRegistry, 16);
+  GFixtureRegistry[LIdx] := AFixture;
+  SetLength(GFixtureRegistry, LIdx + 1);
   { Per-suite tracking — stores GFixtureRegistry index for O(1) cleanup.
     Geometric growth to avoid per-registration realloc. }
-  LOldLen := Length(ASuite.FixtureAllocations);
-  LCap := LOldLen;
-  if LCap < 8 then LCap := 8
-  else if LOldLen >= LCap then LCap := LCap * 2;
-  if LCap <> LOldLen then SetLength(ASuite.FixtureAllocations, LCap);
-  ASuite.FixtureAllocations[LOldLen] := High(GFixtureRegistry);
-  SetLength(ASuite.FixtureAllocations, LOldLen + 1);
+  LIdx := GrowArrayLen(ASuite.FixtureAllocations, 8);
+  ASuite.FixtureAllocations[LIdx] := High(GFixtureRegistry);
+  SetLength(ASuite.FixtureAllocations, LIdx + 1);
 end;
 
 { ── Registration helpers ────────────────────────────────────────────────────── }
@@ -1028,6 +1012,48 @@ begin
   AfterEachClosure := AProc;
 end;
 
+{ ── Generic array capacity growth ───────────────────────────────────────────── }
+
+function GrowCapacity(ALen, AInitCap: Integer): Integer;
+{ Returns new capacity for a dynamic array. Geometric growth above AInitCap. }
+begin
+  if ALen < AInitCap then
+    Result := AInitCap
+  else
+    Result := ALen * 2;
+end;
+
+function GrowArrayLen(var AArray: specialize TArray<Pointer>; AInitCap: Integer): Integer;
+{ Grow AArray capacity if needed. Returns old length (= insertion index). }
+var
+  LOldLen, LCap: Integer;
+begin
+  LOldLen := Length(AArray);
+  LCap := GrowCapacity(LOldLen, AInitCap);
+  if LCap <> LOldLen then SetLength(AArray, LCap);
+  Result := LOldLen;
+end;
+
+function GrowArrayLen(var AArray: specialize TArray<Integer>; AInitCap: Integer): Integer;
+var
+  LOldLen, LCap: Integer;
+begin
+  LOldLen := Length(AArray);
+  LCap := GrowCapacity(LOldLen, AInitCap);
+  if LCap <> LOldLen then SetLength(AArray, LCap);
+  Result := LOldLen;
+end;
+
+function GrowArrayLen(var AArray: specialize TArray<TTestSuite>; AInitCap: Integer): Integer;
+var
+  LOldLen, LCap: Integer;
+begin
+  LOldLen := Length(AArray);
+  LCap := GrowCapacity(LOldLen, AInitCap);
+  if LCap <> LOldLen then SetLength(AArray, LCap);
+  Result := LOldLen;
+end;
+
 { ── EachCleanups capacity growth helper ─────────────────────────────────────── }
 
 function GrowEachCleanups(var ACleanups: specialize TArray<TTestClosure>): Integer;
@@ -1036,9 +1062,7 @@ var
   LOldLen, LCap: Integer;
 begin
   LOldLen := Length(ACleanups);
-  LCap := LOldLen;
-  if LCap < 4 then LCap := 4
-  else if LOldLen >= LCap then LCap := LCap * 2;
+  LCap := GrowCapacity(LOldLen, 4);
   if LCap <> LOldLen then SetLength(ACleanups, LCap);
   Result := LOldLen;
 end;
@@ -2177,18 +2201,14 @@ procedure TTestRunner.Add(const ASuite: TTestSuite);
     refcount. We must deep-copy Tests so that runner operations (shuffle,
     etc.) don't mutate the caller's original suite data. }
 var
-  LOldLen, LCap: Integer;
+  LIdx: Integer;
 begin
-  LOldLen := Length(Suites);
-  LCap := LOldLen;
-  if LCap < 4 then LCap := 4
-  else if LOldLen >= LCap then LCap := LCap * 2;
-  if LCap <> LOldLen then SetLength(Suites, LCap);
-  Suites[LOldLen] := ASuite;
+  LIdx := GrowArrayLen(Suites, 4);
+  Suites[LIdx] := ASuite;
   { Deep-copy Tests to break refcount sharing — shuffle and other
     mutations in RunWithResult must not affect the caller's suite. }
-  Suites[LOldLen].Tests := Copy(ASuite.Tests, 0, Length(ASuite.Tests));
-  SetLength(Suites, LOldLen + 1);
+  Suites[LIdx].Tests := Copy(ASuite.Tests, 0, Length(ASuite.Tests));
+  SetLength(Suites, LIdx + 1);
 end;
 
 function TTestRunner.RunAll: Boolean;
