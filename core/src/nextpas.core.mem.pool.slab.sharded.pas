@@ -41,7 +41,7 @@ type
         KnownSegmentCount: Integer;
       end;
   private
-    FAllocator: IAllocator;
+    FAllocator: TAllocator;
     FConfig: TSlabConfig;
     FInitialCapacity: SizeUInt;
     FMinShift: SizeUInt;
@@ -93,8 +93,8 @@ type
     function ShouldUseFallback(const ASize: SizeUInt): Boolean; inline;
     function TryRouteShardIndex(APtr: Pointer; out aShard: Integer; out aIsFallback: Boolean): Boolean;
   public
-    constructor Create(aCapacity: SizeUInt; AShardCount: Integer = 0; AAllocator: IAllocator = nil; aMinShift: SizeUInt = 3); overload;
-    constructor Create(aCapacity: SizeUInt; const AConfig: TSlabConfig; AShardCount: Integer = 0; AAllocator: IAllocator = nil); overload;
+    constructor Create(aCapacity: SizeUInt; AShardCount: Integer = 0; AAllocator: TAllocator = nil; aMinShift: SizeUInt = 3); overload;
+    constructor Create(aCapacity: SizeUInt; const AConfig: TSlabConfig; AShardCount: Integer = 0; AAllocator: TAllocator = nil); overload;
     destructor Destroy; override;
   public
     // IPool
@@ -540,7 +540,7 @@ begin
   end;
 end;
 
-constructor TSlabPoolSharded.Create(aCapacity: SizeUInt; AShardCount: Integer; AAllocator: IAllocator; aMinShift: SizeUInt);
+constructor TSlabPoolSharded.Create(aCapacity: SizeUInt; AShardCount: Integer; AAllocator: TAllocator; aMinShift: SizeUInt);
 var
   LShardCount, LIdx: Integer;
   LStart, LEnd: PByte;
@@ -605,7 +605,7 @@ begin
   end;
 end;
 
-constructor TSlabPoolSharded.Create(aCapacity: SizeUInt; const AConfig: TSlabConfig; AShardCount: Integer; AAllocator: IAllocator);
+constructor TSlabPoolSharded.Create(aCapacity: SizeUInt; const AConfig: TSlabConfig; AShardCount: Integer; AAllocator: TAllocator);
 begin
   FConfig := AConfig;
   if FConfig.MinShift = 0 then

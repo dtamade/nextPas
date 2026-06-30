@@ -13,7 +13,7 @@ uses
 type
   TExceptionProc = procedure;
 
-  TFixedSlabRecordingAllocator = class(TInterfacedObject, IAllocator)
+  TFixedSlabRecordingAllocator = class(TAllocator)
   private
     FPtrs: array of Pointer;
     function IndexOf(APtr: Pointer): Integer;
@@ -21,15 +21,11 @@ type
     function Untrack(APtr: Pointer): Boolean;
   public
     GetCalls: Integer;
-    FreeAlignedCalls: Integer;
-    function GetMem(ASize: SizeUInt): Pointer;
-    function AllocMem(ASize: SizeUInt): Pointer;
-    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
-    procedure FreeMem(ADst: Pointer);
-    function MemSize(APtr: Pointer): SizeUInt;
-    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
-    procedure FreeAligned(APtr: Pointer);
-    function Traits: TAllocatorTraits;
+    FreeCalls: Integer;
+  protected
+    function DoGetMem(ASize: SizeUInt): Pointer; override;
+    function DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
+    procedure DoFreeMem(ADst: Pointer); override;
   end;
 
 var
@@ -86,32 +82,17 @@ begin
   SetLength(FPtrs, LLast);
 end;
 
-function TFixedSlabRecordingAllocator.GetMem(ASize: SizeUInt): Pointer;
+function TFixedSlabRecordingAllocator.DoGetMem(ASize: SizeUInt): Pointer;
 begin
-  if ASize = 0 then Exit(nil);
   Inc(GetCalls);
   Result := System.GetMem(ASize);
   Track(Result);
 end;
 
-function TFixedSlabRecordingAllocator.AllocMem(ASize: SizeUInt): Pointer;
-begin
-  if ASize = 0 then Exit(nil);
-  Result := System.AllocMem(ASize);
-  Track(Result);
-end;
-
-function TFixedSlabRecordingAllocator.ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+function TFixedSlabRecordingAllocator.DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
 var
   LIndex: Integer;
 begin
-  if ASize = 0 then
-  begin
-    FreeMem(ADst);
-    Exit(nil);
-  end;
-  if ADst = nil then
-    Exit(GetMem(ASize));
   LIndex := IndexOf(ADst);
   if LIndex < 0 then
     Exit(nil);
@@ -119,49 +100,13 @@ begin
   FPtrs[LIndex] := Result;
 end;
 
-procedure TFixedSlabRecordingAllocator.FreeMem(ADst: Pointer);
+procedure TFixedSlabRecordingAllocator.DoFreeMem(ADst: Pointer);
 begin
-  if ADst = nil then Exit;
   if Untrack(ADst) then
+  begin
+    Inc(FreeCalls);
     System.FreeMem(ADst);
-end;
-
-function TFixedSlabRecordingAllocator.MemSize(APtr: Pointer): SizeUInt;
-begin
-  Result := 0;
-end;
-
-function TFixedSlabRecordingAllocator.AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
-var
-  LRaw: Pointer;
-  LNeeded: SizeUInt;
-  LMask: PtrUInt;
-begin
-  if ASize = 0 then Exit(nil);
-  LNeeded := ASize + AAlignment - 1 + SizeOf(Pointer);
-  LRaw := GetMem(LNeeded);
-  if LRaw = nil then Exit(nil);
-  LMask := PtrUInt(AAlignment - 1);
-  Result := Pointer((PtrUInt(LRaw) + SizeOf(Pointer) + LMask) and not LMask);
-  PPointer(PtrUInt(Result) - SizeOf(Pointer))^ := LRaw;
-end;
-
-procedure TFixedSlabRecordingAllocator.FreeAligned(APtr: Pointer);
-var
-  LRaw: Pointer;
-begin
-  if APtr = nil then Exit;
-  Inc(FreeAlignedCalls);
-  LRaw := PPointer(PtrUInt(APtr) - SizeOf(Pointer))^;
-  FreeMem(LRaw);
-end;
-
-function TFixedSlabRecordingAllocator.Traits: TAllocatorTraits;
-begin
-  Result.ZeroInitialized := False;
-  Result.ThreadSafe := False;
-  Result.HasMemSize := False;
-  Result.SupportsAligned := True;
+  end;
 end;
 
 procedure FreeInteriorSlabPointer;
@@ -442,17 +387,15 @@ end;
 procedure TestFixedSlabCreateRejectsCapacityOverflow;
 var
   LAllocator: TFixedSlabRecordingAllocator;
-  LAllocatorRef: IAllocator;
   LPool: TFixedSlabPool;
   LRaised: Boolean;
 begin
   LAllocator := TFixedSlabRecordingAllocator.Create;
-  LAllocatorRef := LAllocator;
   LPool := nil;
   try
     LRaised := False;
     try
-      LPool := TFixedSlabPool.Create(High(SizeUInt), LAllocatorRef);
+      LPool := TFixedSlabPool.Create(High(SizeUInt), LAllocator);
     except
       on E: EAllocError do
       begin
@@ -465,7 +408,6 @@ begin
     Check(Int64(0) = Int64(LAllocator.GetCalls), 'fixed slab overflow capacity must not call backing allocator');
   finally
     LPool.Free;
-    LAllocatorRef := nil;
     LAllocator := nil;
   end;
 end;
@@ -538,7 +480,7 @@ begin
 
     CheckRaisesAllocError(@FreeForeignFixedSlabAlignedPointer, aeInvalidPointer,
       'fixed slab foreign FreeAligned');
-    Check(Int64(1) = Int64(GFixedSlabFallback.FreeAlignedCalls), 'foreign FreeAligned must not delegate to backing allocator');
+    Check(Int64(1) = Int64(GFixedSlabFallback.FreeCalls), 'foreign FreeAligned must not delegate to backing allocator');
   finally
     GPtr := nil;
     GFixedSlabPool.Free;
@@ -589,12 +531,12 @@ begin
   LFallback := TFixedSlabRecordingAllocator.Create;
   LPool := TFixedSlabPool.Create(1024, LFallback);
   try
-    LFallback.FreeAlignedCalls := 0;
+    LFallback.GetCalls := 0;
     { AAlignment=8 <= 8, should go through direct slab path, not fallback }
     LP := LPool.AllocAligned(32, 8);
     Check(LP <> nil, 'AllocAligned(32, 8) succeeds');
     Check(LPool.Owns(LP), 'pointer belongs to slab pool');
-    Check(0 = LFallback.FreeAlignedCalls, 'fallback AllocAligned not called');
+    Check(0 = LFallback.GetCalls, 'fallback allocator not called for direct slab path');
     LPool.FreeMem(LP);
   finally
     LPool.Free;

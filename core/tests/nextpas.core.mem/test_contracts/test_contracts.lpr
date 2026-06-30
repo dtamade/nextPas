@@ -371,16 +371,16 @@ begin
   LBlockPoolSource := ReadSourceText(ResolveSourcePath(
     MEM_BLOCKPOOL_GROWABLE_SOURCE_PATH_FROM_TEST,
     MEM_BLOCKPOOL_GROWABLE_SOURCE_PATH_FROM_ROOT));
-  CheckContains(LBlockPoolSource, 'nextpas.core.mem.intf',
-    'growable block pool should depend on the canonical allocator contract');
-  CheckNotContains(LBlockPoolSource, 'nextpas.core.mem.alloc',
-    'growable block pool should not depend on the removed legacy allocator contract');
+  CheckContains(LBlockPoolSource, 'nextpas.core.mem.allocator.base',
+    'growable block pool should depend on the canonical allocator base');
+  CheckNotContains(LBlockPoolSource, 'nextpas.core.mem.allocator,',
+    'growable block pool should not depend on the allocator facade');
   CheckNotContains(LBlockPoolSource, 'nextpas.core.mem.layout',
     'growable block pool should not depend on the removed layout unit');
-  CheckContains(LBlockPoolSource, 'allocator: iallocator',
-    'growable block pool config should expose iallocator');
-  CheckContains(LBlockPoolSource, 'fallocator: iallocator',
-    'growable block pool field should store iallocator');
+  CheckContains(LBlockPoolSource, 'allocator: tallocator',
+    'growable block pool config should expose tallocator');
+  CheckContains(LBlockPoolSource, 'fallocator: tallocator',
+    'growable block pool field should store tallocator');
   CheckContains(LBlockPoolSource, 'lraw := fallocator.getmem(lallocsize);',
     'growable block pool should allocate segments via iallocator.getmem');
   CheckContains(LBlockPoolSource, 'fallocator.freemem(lraw)',

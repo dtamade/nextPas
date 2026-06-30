@@ -110,7 +110,7 @@ type
    *}
   TSlabPool = class(TInterfacedObject, IMemoryPool, IAllocator)
   private
-    FAllocator: IAllocator;
+    FAllocator: TAllocator;
     FSegments: array of TFixedSlabPool;
     FActive: Integer;
     FInitialCapacity, FMinShift: SizeUInt;
@@ -169,9 +169,9 @@ type
     procedure IndexSegmentPages(aSegIdx: Integer);
   public
     {** 创建 Slab 池（默认配置）*}
-    constructor Create(ACapacity: SizeUInt; AAllocator: IAllocator = nil; aMinShift: SizeUInt = 3); overload;
+    constructor Create(ACapacity: SizeUInt; AAllocator: TAllocator = nil; aMinShift: SizeUInt = 3); overload;
     {** 创建 Slab 池（自定义配置）*}
-    constructor Create(ACapacity: SizeUInt; const AConfig: TSlabConfig; AAllocator: IAllocator = nil); overload;
+    constructor Create(ACapacity: SizeUInt; const AConfig: TSlabConfig; AAllocator: TAllocator = nil); overload;
     {** 销毁池并释放所有段和回退分配 *}
     destructor Destroy; override;
     // IPool
@@ -901,7 +901,7 @@ begin
   end;
 end;
 
-constructor TSlabPool.Create(ACapacity: SizeUInt; AAllocator: IAllocator; aMinShift: SizeUInt);
+constructor TSlabPool.Create(ACapacity: SizeUInt; AAllocator: TAllocator; aMinShift: SizeUInt);
 var
   LSegment: TFixedSlabPool;
 begin
@@ -938,7 +938,7 @@ begin
   Result.SupportsAligned := True;   // AllocAligned 通过 fallback 路径实现
 end;
 
-constructor TSlabPool.Create(ACapacity: SizeUInt; const AConfig: TSlabConfig; AAllocator: IAllocator);
+constructor TSlabPool.Create(ACapacity: SizeUInt; const AConfig: TSlabConfig; AAllocator: TAllocator);
 begin
   // 忽略 AConfig.EnablePageMerging（兼容字段）
   // MinShift 和 MaxAllocSize 采纳

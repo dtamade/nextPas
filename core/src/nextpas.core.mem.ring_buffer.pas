@@ -69,7 +69,7 @@ type
     FHead: SizeUInt;      // 读取位置 Read position
     FTail: SizeUInt;      // 写入位置 Write position
     FCount: SizeUInt;     // 当前元素数量 Current element count
-    FBaseAllocator: IAllocator;
+    FBaseAllocator: TAllocator;
     FIsPow2Capacity: Boolean;
 
     function GetElementPtr(aIndex: SizeUInt): Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
@@ -87,7 +87,7 @@ type
      * @param aElementSize 元素大小 Element size
      * @param aAllocator 基础分配器 Base allocator (optional)
      *}
-    constructor Create(aCapacity: SizeUInt; aElementSize: SizeUInt; aAllocator: IAllocator = nil);
+    constructor Create(aCapacity: SizeUInt; aElementSize: SizeUInt; aAllocator: TAllocator = nil);
 
     {**
      * Destroy
@@ -287,7 +287,7 @@ type
   generic TTypedRingBuffer<T> = class(TRingBuffer)
   public
     {** 创建类型安全的环形缓冲区 *}
-    constructor Create(aCapacity: SizeUInt; aAllocator: IAllocator = nil);
+    constructor Create(aCapacity: SizeUInt; aAllocator: TAllocator = nil);
     {** 写入一个元素 *}
     function Push(const aItem: T): Boolean; reintroduce;
     {** 读取一个元素 *}
@@ -319,7 +319,7 @@ uses
 
 { TRingBuffer }
 
-constructor TRingBuffer.Create(aCapacity: SizeUInt; aElementSize: SizeUInt; aAllocator: IAllocator);
+constructor TRingBuffer.Create(aCapacity: SizeUInt; aElementSize: SizeUInt; aAllocator: TAllocator);
 begin
   inherited Create;
 
@@ -733,7 +733,7 @@ end;
 
 { TTypedRingBuffer<T> }
 
-constructor TTypedRingBuffer.Create(aCapacity: SizeUInt; aAllocator: IAllocator);
+constructor TTypedRingBuffer.Create(aCapacity: SizeUInt; aAllocator: TAllocator);
 begin
   inherited Create(aCapacity, SizeOf(T), aAllocator);
 end;

@@ -50,7 +50,7 @@ type
   TFixedSlabPool = class(TInterfacedObject, IFixedSlabPool, IMemoryPool, IAllocator)
   private
     // Fields first
-    FAllocator: IAllocator;
+    FAllocator: TAllocator;
     FRaw: Pointer;        // 原始分配指针（释放用）
     FBase: PByte;         // 区域基址（也是 pool header 地址）
     FRegionEnd: PByte;    // 区域结束地址（传给 pool^.endp）
@@ -87,7 +87,7 @@ type
     procedure FreeActiveAlignedFallbacks;
 
   public
-    constructor Create(ACapacity: SizeUInt; AAllocator: IAllocator = nil; AMinShift: SizeUInt = 3);
+    constructor Create(ACapacity: SizeUInt; AAllocator: TAllocator = nil; AMinShift: SizeUInt = 3);
     destructor Destroy; override;
 
     function Acquire(out AUnit: Pointer): Boolean;
@@ -967,7 +967,7 @@ done:
 end;
 
 { TFixedSlabPool }
-constructor TFixedSlabPool.Create(ACapacity: SizeUInt; AAllocator: IAllocator; AMinShift: SizeUInt);
+constructor TFixedSlabPool.Create(ACapacity: SizeUInt; AAllocator: TAllocator; AMinShift: SizeUInt);
 var
   n: SizeUInt;
   desired_pages: SizeUInt;

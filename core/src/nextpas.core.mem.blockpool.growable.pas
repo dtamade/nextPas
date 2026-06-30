@@ -19,7 +19,7 @@ uses
   nextpas.core.mem.utils,
   nextpas.core.mem.pool.base,     // DefaultAcquireN / DefaultReleaseN (CS-001)
   nextpas.core.mem.blockpool,
-  nextpas.core.mem.intf,
+  nextpas.core.mem.allocator.base, // TAllocator
   nextpas.core.mem.error;
 
 type
@@ -33,7 +33,7 @@ type
     GrowthFactor: Double;          // geometric only (>= 1.1 recommended)
     GrowthStep: SizeUInt;          // linear only (>= 1)
     Alignment: SizeUInt;           // 0 = DEFAULT_ALIGNMENT, must be power of two
-    Allocator: IAllocator;         // nil = system heap (GetMem/FreeMem)
+    Allocator: TAllocator;         // nil = system heap (GetMem/FreeMem)
     KeepSegments: Boolean;         // keep extra segments on Reset
 
     class function Default(ABlockSize, aInitialCapacity: SizeUInt): TGrowingBlockPoolConfig; static;
@@ -82,7 +82,7 @@ type
     FGrowthStep: SizeUInt;
     FKeepSegments: Boolean;
 
-    FAllocator: IAllocator;
+    FAllocator: TAllocator;
 
     // statistics
     FPeakAlloc: SizeUInt;

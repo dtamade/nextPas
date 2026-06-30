@@ -11,7 +11,7 @@ uses
   nextpas.core.mem.utils,         // CalcGeometricGrowth
   nextpas.core.mem.error,
   nextpas.core.mem.pool.base,     // IPool (decoupled)
-  nextpas.core.mem.allocator;     // IAllocator + GetRtlAllocator
+  nextpas.core.mem.allocator;     // TAllocator + GetRtlAllocator
 
 type
   EGrowingFixedPoolError = class(EAllocError);
@@ -28,7 +28,7 @@ type
     GrowthStep: SizeUInt;  // for Linear
     MaxCapacity: SizeUInt; // 0 = unlimited
     ZeroOnInit: Boolean;
-    Allocator: IAllocator;
+    Allocator: TAllocator;
   end;
 
   { TGrowingFixedPool }
@@ -54,7 +54,7 @@ type
     FFreeStack: array of Pointer;
     FFreeTop: SizeUInt;
 
-    FAllocator: IAllocator;
+    FAllocator: TAllocator;
 
     FConfig: TGrowingFixedPoolConfig;
 

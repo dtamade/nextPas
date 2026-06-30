@@ -6,7 +6,7 @@ interface
 
 uses
   nextpas.core.base.utils,
-  nextpas.core.mem.intf,
+  nextpas.core.mem.allocator.base,
   nextpas.core.mem.mutex,
   nextpas.core.mem.pool.memory_pool,
   nextpas.core.mem.pool.slab;
@@ -33,8 +33,8 @@ type
     FInner: TSlabPool;
     FLock: TMemMutex;
   public
-    constructor Create(aCapacity: SizeUInt; AAllocator: IAllocator = nil; aMinShift: SizeUInt = 3); overload;
-    constructor Create(aCapacity: SizeUInt; const AConfig: TSlabConfig; AAllocator: IAllocator = nil); overload;
+    constructor Create(aCapacity: SizeUInt; AAllocator: TAllocator = nil; aMinShift: SizeUInt = 3); overload;
+    constructor Create(aCapacity: SizeUInt; const AConfig: TSlabConfig; AAllocator: TAllocator = nil); overload;
     destructor Destroy; override;
   public
     // IPool
@@ -74,14 +74,14 @@ implementation
 
 { TSlabPoolConcurrent }
 
-constructor TSlabPoolConcurrent.Create(aCapacity: SizeUInt; AAllocator: IAllocator; aMinShift: SizeUInt);
+constructor TSlabPoolConcurrent.Create(aCapacity: SizeUInt; AAllocator: TAllocator; aMinShift: SizeUInt);
 begin
   inherited Create;
   FLock.Init;
   FInner := TSlabPool.Create(aCapacity, AAllocator, aMinShift);
 end;
 
-constructor TSlabPoolConcurrent.Create(aCapacity: SizeUInt; const AConfig: TSlabConfig; AAllocator: IAllocator);
+constructor TSlabPoolConcurrent.Create(aCapacity: SizeUInt; const AConfig: TSlabConfig; AAllocator: TAllocator);
 begin
   inherited Create;
   FLock.Init;
