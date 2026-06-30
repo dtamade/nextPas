@@ -95,8 +95,6 @@ var
   LHdr: PGuardHeader;
 begin
   Result := nil;
-  if ASize = 0 then
-    Exit;
   if not CalcLayout(ASize, LCommittedSize, LTotalSize) then
     Exit;
 

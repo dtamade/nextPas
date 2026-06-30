@@ -137,7 +137,6 @@ var
   LSplit: PMemoryMapBlockHeader;
 begin
   Result := nil;
-  if ASize = 0 then Exit;
 
   LNeeded := AlignUp(HeaderSize + ASize, SizeOf(Pointer));
   if LNeeded < ASize then Exit;
