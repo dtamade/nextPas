@@ -144,6 +144,10 @@ type
     function  RunSetup(const AConfig: TTestConfig; out ASkipCount: Integer;
                 out AErrorMsg: string): Boolean;
     procedure RunTeardown(const AConfig: TTestConfig);
+    procedure HandleSetupFailure(var AResult: TTestRunResult;
+                ASkipCount: Integer; const AErrorMsg: string;
+                const ASink: IOutputSink; const AConfig: TTestConfig;
+                APopulateResults: Boolean);
     procedure FinalizeResults(const AConfig: TTestConfig;
                 var AResult: TTestRunResult;
                 APass, AFail, ASkip: Integer);
@@ -1250,25 +1254,8 @@ begin
   { Suite-level setup (uses shared helper) }
   if not RunSetup(LConfig, LSkip, LLastFailMsg) then
   begin
-    { All tests skipped — populate results with skipped entries }
-    for I := 0 to High(Tests) do
-    begin
-      LTestResult := MakeTestResult(Tests[I].Name, tsSkipped,
-        'setup failed: ' + LLastFailMsg, 0);
-      AppendResult(AResult.Results, LTestResult);
-      LOutSink.WriteLn('    ' + FormatStatusLine(tsSkipped, Tests[I].Name, LConfig));
-    end;
-    AResult.Failed    := 1;
-    AResult.Skipped   := LSkip;
-    AResult.AllPassed := False;
-    HasRun        := True;
-    LastRunPassed := False;
-    LastPass      := 0;
-    LastFail      := 1;
-    LastSkip      := LSkip;
-    Result         := False;
-    LOutSink.WriteLn(
-      AnsiDim('  ' + IntToStr(LSkip) + ' skipped (setup failure)', LConfig));
+    HandleSetupFailure(AResult, LSkip, LLastFailMsg, LOutSink, LConfig, True);
+    Result := False;
     Exit;
   end;
 
@@ -1763,6 +1750,40 @@ begin
   TeardownClosure := nil;
 end;
 
+procedure TTestSuite.HandleSetupFailure(var AResult: TTestRunResult;
+  ASkipCount: Integer; const AErrorMsg: string;
+  const ASink: IOutputSink; const AConfig: TTestConfig;
+  APopulateResults: Boolean);
+{ Shared setup-failure handler for RunWithResult and RunParallelWithResult.
+  APopulateResults: True for serial (populates AResult.Results with skipped entries),
+  False for parallel (output only). }
+var
+  I: Integer;
+  LTestResult: TTestResult;
+begin
+  if APopulateResults then
+    for I := 0 to High(Tests) do
+    begin
+      LTestResult := MakeTestResult(Tests[I].Name, tsSkipped,
+        'setup failed: ' + AErrorMsg, 0);
+      AppendResult(AResult.Results, LTestResult);
+      ASink.WriteLn('    ' + FormatStatusLine(tsSkipped, Tests[I].Name, AConfig));
+    end
+  else
+    for I := 0 to High(Tests) do
+      ASink.WriteLn('    ' + FormatStatusLine(tsSkipped, Tests[I].Name, AConfig));
+  AResult.Failed    := 1;
+  AResult.Skipped   := ASkipCount;
+  AResult.AllPassed := False;
+  HasRun        := True;
+  LastRunPassed := False;
+  LastPass      := 0;
+  LastFail      := 1;
+  LastSkip      := ASkipCount;
+  ASink.WriteLn(
+    AnsiDim('  ' + IntToStr(ASkipCount) + ' skipped (setup failure)', AConfig));
+end;
+
 procedure TTestSuite.FinalizeResults(const AConfig: TTestConfig;
   var AResult: TTestRunResult; APass, AFail, ASkip: Integer);
 { Sets result counters, populates slow test report, writes summary line.
@@ -1845,19 +1866,8 @@ begin
   { Suite-level setup (serial, uses shared helper) }
   if not RunSetup(LConfig, LSkip, LErrorMsg) then
   begin
-    for I := 0 to High(Tests) do
-      LOutSink.WriteLn('    ' + FormatStatusLine(tsSkipped, Tests[I].Name, LConfig));
-    AResult.Failed    := 1;
-    AResult.Skipped   := LSkip;
-    AResult.AllPassed := False;
-    HasRun        := True;
-    LastRunPassed := False;
-    LastPass      := 0;
-    LastFail      := 1;
-    LastSkip      := LSkip;
-    Result         := False;
-    LOutSink.WriteLn(
-      AnsiDim('  ' + IntToStr(LSkip) + ' skipped (setup failure)', LConfig));
+    HandleSetupFailure(AResult, LSkip, LErrorMsg, LOutSink, LConfig, False);
+    Result := False;
     Exit;
   end;
 
