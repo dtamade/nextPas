@@ -103,6 +103,8 @@ type
     FCalls   : TMockCalls;
     FSetups  : specialize TArray<TMockCall>;
     FCallOrder: specialize TArray<string>;  { records method names in call order }
+    procedure AppendCall(const ACall: TMockCall; const AMethodName: string);
+    procedure AppendSetup(const ASetup: TMockCall);
     procedure SetTypedReturnValue(const AMethodName: string;
       const AValue: TMockValue);
   public
@@ -309,11 +311,35 @@ begin
   inherited Destroy;
 end;
 
+procedure TMockState.AppendCall(const ACall: TMockCall;
+  const AMethodName: string);
+var
+  LOldLen, LCap: Integer;
+begin
+  LOldLen := Length(FCalls);
+  LCap := GrowCapacity(LOldLen, 16);
+  if LCap <> LOldLen then SetLength(FCalls, LCap);
+  FCalls[LOldLen] := ACall;
+  SetLength(FCalls, LOldLen + 1);
+  RecordOrder(FCallOrder, AMethodName);
+end;
+
+procedure TMockState.AppendSetup(const ASetup: TMockCall);
+var
+  LOldLen, LCap: Integer;
+begin
+  LOldLen := Length(FSetups);
+  LCap := GrowCapacity(LOldLen, 4);
+  if LCap <> LOldLen then SetLength(FSetups, LCap);
+  FSetups[LOldLen] := ASetup;
+  SetLength(FSetups, LOldLen + 1);
+end;
+
 procedure TMockState.RecordCall(const AMethodName: string;
   const AArgs: array of string);
 var
   LCall: TMockCall;
-  I, LOldLen, LCap: Integer;
+  I: Integer;
 begin
   InitCallRecord(LCall, AMethodName);
   SetLength(LCall.Args, Length(AArgs));
@@ -323,20 +349,14 @@ begin
     LCall.Args[I] := AArgs[I];
     LCall.TypedArgs[I] := MockStr(AArgs[I]);
   end;
-
-  LOldLen := Length(FCalls);
-  LCap := GrowCapacity(LOldLen, 16);
-  if LCap <> LOldLen then SetLength(FCalls, LCap);
-  FCalls[LOldLen] := LCall;
-  SetLength(FCalls, LOldLen + 1);
-  RecordOrder(FCallOrder, AMethodName);
+  AppendCall(LCall, AMethodName);
 end;
 
 procedure TMockState.RecordCallTyped(const AMethodName: string;
   const AArgs: array of TMockValue);
 var
   LCall: TMockCall;
-  I, LOldLen, LCap: Integer;
+  I: Integer;
 begin
   InitCallRecord(LCall, AMethodName);
   SetLength(LCall.Args, Length(AArgs));
@@ -346,13 +366,7 @@ begin
     LCall.TypedArgs[I] := AArgs[I];
     LCall.Args[I] := MockValueToString(AArgs[I]);
   end;
-
-  LOldLen := Length(FCalls);
-  LCap := GrowCapacity(LOldLen, 16);
-  if LCap <> LOldLen then SetLength(FCalls, LCap);
-  FCalls[LOldLen] := LCall;
-  SetLength(FCalls, LOldLen + 1);
-  RecordOrder(FCallOrder, AMethodName);
+  AppendCall(LCall, AMethodName);
 end;
 
 function TMockState.GetReturn(const AMethodName: string): string;
@@ -416,7 +430,7 @@ end;
 procedure TMockState.SetReturn(const AMethodName, AValue: string);
 var
   LSetup: TMockCall;
-  LIdx, LOldLen, LCap: Integer;
+  LIdx: Integer;
 begin
   { R6-20: Override existing setup for the same method instead of appending }
   LIdx := FindSetupIndex(FSetups, AMethodName);
@@ -434,18 +448,14 @@ begin
   LSetup.HasResult        := True;
   LSetup.Args             := nil;
   LSetup.TypedArgs        := nil;
-  LOldLen := Length(FSetups);
-  LCap := GrowCapacity(LOldLen, 4);
-  if LCap <> LOldLen then SetLength(FSetups, LCap);
-  FSetups[LOldLen] := LSetup;
-  SetLength(FSetups, LOldLen + 1);
+  AppendSetup(LSetup);
 end;
 
 procedure TMockState.SetTypedReturnValue(const AMethodName: string;
   const AValue: TMockValue);
 var
   LSetup: TMockCall;
-  LIdx, LOldLen, LCap: Integer;
+  LIdx: Integer;
 begin
   LIdx := FindSetupIndex(FSetups, AMethodName);
   if LIdx >= 0 then
@@ -460,11 +470,7 @@ begin
   LSetup.HasResult        := True;
   LSetup.ResultValue      := MockValueToString(AValue);
   LSetup.TypedReturnValue := AValue;
-  LOldLen := Length(FSetups);
-  LCap := GrowCapacity(LOldLen, 4);
-  if LCap <> LOldLen then SetLength(FSetups, LCap);
-  FSetups[LOldLen] := LSetup;
-  SetLength(FSetups, LOldLen + 1);
+  AppendSetup(LSetup);
 end;
 
 function TMockState.CallCount(const AMethodName: string): Integer;
