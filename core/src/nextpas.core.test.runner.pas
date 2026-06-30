@@ -1771,6 +1771,7 @@ procedure TTestSuite.FinalizeResults(const AConfig: TTestConfig;
   The caller (RunAll* or finalization) is responsible for cleanup. }
 var
   LSlowCount: Integer;
+  LOutSink: IOutputSink;
 begin
   AResult.Passed    := APass;
   AResult.Failed    := AFail;
@@ -1785,8 +1786,9 @@ begin
   LSlowCount := GetSlowTestCount(AConfig);
   if LSlowCount > 0 then
     AResult.SlowTests := GetTopSlowest(AResult.Results, LSlowCount);
-  WriteSlowTests(AResult.SlowTests, ResolveOutSink(AConfig), AConfig);
-  ResolveOutSink(AConfig).WriteLn(
+  LOutSink := ResolveOutSink(AConfig);
+  WriteSlowTests(AResult.SlowTests, LOutSink, AConfig);
+  LOutSink.WriteLn(
     AnsiDim(
       '  ' + IntToStr(APass) + ' passed, ' +
       IntToStr(AFail) + ' failed, ' +
