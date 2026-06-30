@@ -8,10 +8,10 @@
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **115** | 4 | 32 | **76%** |
+| **Go** | **118** | 4 | 33 | **76%** |
 | **Rust** | 19 | 0 | 47 | **29%** |
 
-## Track Summary (37 tracks, 156 operations)
+## Track Summary (38 tracks, 160 operations)
 
 ### Text Operations (6 ops)
 
@@ -275,6 +275,17 @@
 | **ToUpper/Branch/100K** | **128211** | 142944 | **1.12x** ✓ |
 
 **2W vs Go** — Pascal `const` array in .rodata, direct table lookup vs Go global init + bounds check
+
+### Character Classification Operations (4 ops)
+
+| Track | Pascal (ns) | Go (ns) | vs Go |
+|-------|-------------|---------|-------|
+| IsDigit/2.56M | 2801760 | 2262643 | 0.81x |
+| **IsAlpha/2.56M** | **2304952** | 3681512 | **1.60x** ✓ |
+| **IsWhitespace/2.56M** | **2307052** | 3079141 | **1.33x** ✓ |
+| **IsHexDigit/2.56M** | **2250006** | 4168584 | **1.85x** ✓ |
+
+**3W 1L vs Go** — FPC `IsAlpha`/`IsHexDigit` use efficient table lookup; Go inline range checks have more branch overhead for wide character ranges
 
 ### String Escape Operations (4 ops)
 
