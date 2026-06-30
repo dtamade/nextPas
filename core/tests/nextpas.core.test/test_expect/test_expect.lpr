@@ -1002,6 +1002,19 @@ begin
   end;
 end;
 
+procedure TestExpectToRaiseNilClass;
+{ P0: ToRaise(nil) must fail gracefully, not SIGSEGV }
+begin
+  try
+    ExpectProc(procedure begin end).ToRaise(nil);
+    Halt(1); { should not reach here }
+  except
+    on E: EAssertionFailed do
+      Check(Pos('nil', E.Message) > 0,
+        'Expected nil in error message, got: ' + E.Message);
+  end;
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -1128,6 +1141,9 @@ begin
   LSuite.Test('ToStartWithCI',               @TestExpectStartWithCI);
   LSuite.Test('ToEndWithCI',                 @TestExpectEndWithCI);
   LSuite.Test('Not_.ToBeGreaterOrEqual',      @TestExpectGreaterOrEqualNot);
+
+  { P0: ToRaise nil ExceptClass guard }
+  LSuite.Test('ToRaise(nil) → graceful fail', @TestExpectToRaiseNilClass);
 
   if not LSuite.Run then
   begin
