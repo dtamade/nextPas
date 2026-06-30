@@ -8,10 +8,10 @@
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **97** | 3 | 33 | **73%** |
+| **Go** | **105** | 3 | 33 | **74%** |
 | **Rust** | 19 | 0 | 47 | **29%** |
 
-## Track Summary (31 tracks, 137 operations)
+## Track Summary (32 tracks, 145 operations)
 
 ### Text Operations (6 ops)
 
@@ -372,6 +372,21 @@
 
 **4W vs Go** — SortI32 + linear scan 2.5-2.8x (type-specialized sort dominates); Swiss dedup 1.6-1.9x vs Go map
 
+### PriorityQueue (8 ops)
+
+| Track | Pascal (ns) | Go (ns) | vs Go |
+|-------|-------------|---------|-------|
+| **Push/1K** | **30734** | 164778 | **5.36x** ✓ |
+| **Push/10K** | **394618** | 2039246 | **5.17x** ✓ |
+| **Push/100K** | **7402771** | 25479234 | **3.45x** ✓ |
+| **Pop/1K** | **109163** | 343412 | **3.15x** ✓ |
+| **Pop/10K** | **1325507** | 4095162 | **3.09x** ✓ |
+| **Pop/100K** | **16471709** | 56858941 | **3.45x** ✓ |
+| **Interleaved/1K** | **52470** | 211848 | **4.03x** ✓ |
+| **Interleaved/10K** | **642182** | 2806403 | **3.74x** ✓ |
+
+**8W vs Go** — Direct function pointer (TPQCompareFunc) vs Go heap.Interface dispatch; 3-5x across all operations
+
 ### Pascal Wins (biggest margins vs Go)
 1. **String Concat: 3557x** — Go immutable strings O(n²) vs Pascal COW
 2. **SIMD ReduceSum/4K: 20.0x** — AVX2 vpaddps vs Go scalar loop
@@ -412,6 +427,7 @@
 - **String conversion**: Pascal strong (2W vs Go) — hand-written parse 1.51x, IntToStr 2.08x faster
 - **Interface dispatch**: Mixed — FPC Area 1.25x faster; Go devirtualization 3.08x on direct calls
 - **Type-specialized sort**: Pascal dominant (3W vs Go) — SortI32 2-8x faster, type specialization crushes interface dispatch
+- **PriorityQueue**: Pascal dominant (8W vs Go) — TPriorityQueue 3-5x faster than Go container/heap, function pointer vs interface dispatch
 - **SwissMap**: Pascal dominant (6W vs Go) — SwissTable 3-6x faster than Go map, SIMD ctrl byte probing
 - **HashSet**: Pascal dominant (10W vs Go) — Build 2.4-3.8x, Lookup 1.3-1.8x, 13ns/elem at 100K
 - **Bit scan / byte swap**: Pascal strong (3W vs Go) — BSR/BSF/BSwap intrinsics
