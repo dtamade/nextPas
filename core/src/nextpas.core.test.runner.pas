@@ -184,6 +184,12 @@ procedure RegisterFixture(var ASuite: TTestSuite; AFixture: TObject);
 function ParseFilter(const AArg: string): string;
 { White-box helper for test_runner: parse --tag=value form from one argv item. }
 function ParseTag(const AArg: string): string;
+{ Generic arg parsing primitives — all ParseXxx/IsXxxArg delegate here. }
+function HasArgFlag(const AArg, AFlag1: string;
+  const AFlag2: string = ''): Boolean;
+function ExtractArgValue(const AArg, APrefix: string): string;
+function ExtractArgIntValue(const AArg, APrefix: string;
+  ADefault: Integer): Integer;
 { Check if a test entry matches a tag filter. Empty filter = match all. }
 function MatchesTagFilter(const AEntryTags: specialize TArray<string>;
   const ATagFilter: string): Boolean;
@@ -214,31 +220,60 @@ var
 threadvar
   GCurrentTestContextObj: TObject;
 
-{ ── Command-line helpers ──────────────────────────────────────────────────── }
+type
+  TArgStringParser = function(const AArg: string): string;
+  TArgIntParser = function(const AArg: string): Integer;
+  TArgFlagChecker = function(const AArg: string): Boolean;
+
+{ ── Command-line helpers ────────────────────────────────────────────────────── }
+{ Generic arg parsing primitives — all ParseXxx/IsXxxArg functions delegate here }
+
+function HasArgFlag(const AArg, AFlag1: string;
+  const AFlag2: string = ''): Boolean;
+{ Returns True if AArg equals AFlag1 or AFlag2. }
+begin
+  Result := (AArg = AFlag1) or ((AFlag2 <> '') and (AArg = AFlag2));
+end;
+
+function ExtractArgValue(const AArg, APrefix: string): string;
+{ Returns the value portion of '--prefix=value' if AArg starts with APrefix+'='.
+  Returns '' if no match. }
+begin
+  if Copy(AArg, 1, Length(APrefix) + 1) = APrefix + '=' then
+    Result := Copy(AArg, Length(APrefix) + 2, MaxInt)
+  else
+    Result := '';
+end;
+
+function ExtractArgIntValue(const AArg, APrefix: string;
+  ADefault: Integer): Integer;
+{ Returns integer value of '--prefix=N', clamped to >= 0, or ADefault if no match. }
+var
+  LValue: string;
+begin
+  LValue := ExtractArgValue(AArg, APrefix);
+  if LValue = '' then
+    Exit(ADefault);
+  Result := StrToIntDef(LValue, ADefault);
+  if Result < 0 then
+    Result := 0;
+end;
+
+{ ── Single-arg parsers (delegated to generic primitives) ───────────────────── }
 
 function ParseFilter(const AArg: string): string;
 begin
-  if Copy(AArg, 1, 9) = '--filter=' then
-    Exit(Copy(AArg, 10, MaxInt));
-  Result := '';
+  Result := ExtractArgValue(AArg, '--filter');
 end;
 
 function ParseTag(const AArg: string): string;
 begin
-  if Copy(AArg, 1, 6) = '--tag=' then
-    Exit(Copy(AArg, 7, MaxInt));
-  Result := '';
+  Result := ExtractArgValue(AArg, '--tag');
 end;
 
 function ParseCount(const AArg: string): Integer;
 begin
-  if Copy(AArg, 1, 8) = '--count=' then
-  begin
-    Result := StrToIntDef(Copy(AArg, 9, MaxInt), 0);
-    if Result < 0 then Result := 0;
-  end
-  else
-    Result := 0;
+  Result := ExtractArgIntValue(AArg, '--count', 0);
 end;
 
 function ParseShuffleSeed(const AArg: string): Integer;
@@ -246,65 +281,48 @@ function ParseShuffleSeed(const AArg: string): Integer;
 begin
   if AArg = '--shuffle' then
     Exit(-1);
-  if Copy(AArg, 1, 16) = '--shuffle-seed=' then
-  begin
-    Result := StrToIntDef(Copy(AArg, 17, MaxInt), -1);
-    if Result = 0 then Result := -1; { seed=0 means off, so treat 0 as -1 }
-  end
-  else
-    Result := 0;
+  Result := ExtractArgIntValue(AArg, '--shuffle-seed', 0);
+  if Result = 0 then Result := -1; { seed=0 means off, so treat 0 as -1 }
 end;
 
 function IsFailFastArg(const AArg: string): Boolean;
 begin
-  Result := (AArg = '--failfast') or (AArg = '--fail-fast');
+  Result := HasArgFlag(AArg, '--failfast', '--fail-fast');
 end;
 
 function IsListArg(const AArg: string): Boolean;
 begin
-  Result := (AArg = '--list') or (AArg = '--list-tests');
+  Result := HasArgFlag(AArg, '--list', '--list-tests');
 end;
 
 function IsShortArg(const AArg: string): Boolean;
 begin
-  Result := (AArg = '--short') or (AArg = '-short');
+  Result := HasArgFlag(AArg, '--short', '-short');
 end;
 
 function IsProgressArg(const AArg: string): Boolean;
 begin
-  Result := (AArg = '--progress') or (AArg = '-progress');
+  Result := HasArgFlag(AArg, '--progress', '-progress');
 end;
 
 function ParseMaxFailures(const AArg: string): Integer;
 begin
-  if Copy(AArg, 1, 16) = '--failures-max=' then
-  begin
-    Result := StrToIntDef(Copy(AArg, 17, MaxInt), 0);
-    if Result < 0 then Result := 0;
-  end
-  else
-    Result := 0;
+  Result := ExtractArgIntValue(AArg, '--failures-max', 0);
 end;
 
 function IsJsonArg(const AArg: string): Boolean;
 begin
-  Result := (AArg = '--json') or (AArg = '-json');
+  Result := HasArgFlag(AArg, '--json', '-json');
 end;
 
 function IsVerboseArg(const AArg: string): Boolean;
 begin
-  Result := (AArg = '--verbose') or (AArg = '-v');
+  Result := HasArgFlag(AArg, '--verbose', '-v');
 end;
 
 function ParseRunTimeout(const AArg: string): Integer;
 begin
-  if Copy(AArg, 1, 10) = '--timeout=' then
-  begin
-    Result := StrToIntDef(Copy(AArg, 11, MaxInt), 0);
-    if Result < 0 then Result := 0;
-  end
-  else
-    Result := 0;
+  Result := ExtractArgIntValue(AArg, '--timeout', 0);
 end;
 
 function IsBenchArg(const AArg: string): Boolean;
@@ -354,7 +372,7 @@ end;
 
 function IsBenchMemArg(const AArg: string): Boolean;
 begin
-  Result := (AArg = '--benchmem') or (AArg = '-benchmem');
+  Result := HasArgFlag(AArg, '--benchmem', '-benchmem');
 end;
 
 procedure SetCurrentTestContext(AContext: TObject);
@@ -417,168 +435,133 @@ begin
     Result := AEntry.Name;
 end;
 
-function ParseFilterFromArgs: string;
+{ ── FromArgs helpers (iterate ParamCount once, delegate to single-arg parsers) }
+
+function FindArgValue(
+  AParseFunc: TArgStringParser;
+  const ALongFlag: string
+): string;
+{ Generic: scan argv for --flag=value (via AParseFunc) or --flag value form. }
 var
   K: Integer;
-  LFilter: string;
+  LVal: string;
 begin
-  Result := '';
   for K := 1 to ParamCount do
   begin
-    { Support both --filter value and --filter=value syntax }
-    LFilter := ParseFilter(ParamStr(K));
-    if LFilter <> '' then
-      Exit(LFilter);
-    if (ParamStr(K) = '--filter') and (K < ParamCount) then
+    LVal := AParseFunc(ParamStr(K));
+    if LVal <> '' then
+      Exit(LVal);
+    if (ParamStr(K) = ALongFlag) and (K < ParamCount) then
       Exit(ParamStr(K + 1));
   end;
-end;
-
-function ParseTagFromArgs: string;
-var
-  K: Integer;
-  LTag: string;
-begin
   Result := '';
-  for K := 1 to ParamCount do
-  begin
-    LTag := ParseTag(ParamStr(K));
-    if LTag <> '' then
-      Exit(LTag);
-    if (ParamStr(K) = '--tag') and (K < ParamCount) then
-      Exit(ParamStr(K + 1));
-  end;
 end;
 
-function ParseCountFromArgs: Integer;
+function FindArgInt(
+  AParseFunc: TArgIntParser;
+  const ALongFlag: string;
+  ADefault: Integer
+): Integer;
+{ Generic: scan argv for --flag=N (via AParseFunc) or --flag N form. }
 var
   K: Integer;
-  LCount: Integer;
+  LVal: Integer;
 begin
-  Result := 0;
   for K := 1 to ParamCount do
   begin
-    LCount := ParseCount(ParamStr(K));
-    if LCount > 0 then
-      Exit(LCount);
-    if (ParamStr(K) = '--count') and (K < ParamCount) then
+    LVal := AParseFunc(ParamStr(K));
+    if LVal <> 0 then
+      Exit(LVal);
+    if (ParamStr(K) = ALongFlag) and (K < ParamCount) then
     begin
-      Result := StrToIntDef(ParamStr(K + 1), 0);
+      Result := StrToIntDef(ParamStr(K + 1), ADefault);
       if Result < 0 then Result := 0;
       Exit;
     end;
   end;
+  Result := ADefault;
+end;
+
+function FindFlagInArgs(
+  AIsFlagFunc: TArgFlagChecker
+): Boolean;
+{ Generic: scan argv for a boolean flag. }
+var
+  K: Integer;
+begin
+  for K := 1 to ParamCount do
+    if AIsFlagFunc(ParamStr(K)) then
+      Exit(True);
+  Result := False;
+end;
+
+function ParseFilterFromArgs: string;
+begin
+  Result := FindArgValue(@ParseFilter, '--filter');
+end;
+
+function ParseTagFromArgs: string;
+begin
+  Result := FindArgValue(@ParseTag, '--tag');
+end;
+
+function ParseCountFromArgs: Integer;
+begin
+  Result := FindArgInt(@ParseCount, '--count', 0);
 end;
 
 function ParseShuffleFromArgs: Integer;
 var
-  K, LSeed: Integer;
+  K: Integer;
+  LSeed: Integer;
 begin
-  Result := 0;
   for K := 1 to ParamCount do
   begin
     LSeed := ParseShuffleSeed(ParamStr(K));
     if LSeed <> 0 then
       Exit(LSeed);
   end;
+  Result := 0;
 end;
 
 function ParseFailFastFromArgs: Boolean;
-var
-  K: Integer;
 begin
-  Result := False;
-  for K := 1 to ParamCount do
-    if IsFailFastArg(ParamStr(K)) then
-      Exit(True);
+  Result := FindFlagInArgs(@IsFailFastArg);
 end;
 
 function ParseListFromArgs: Boolean;
-var
-  K: Integer;
 begin
-  Result := False;
-  for K := 1 to ParamCount do
-    if IsListArg(ParamStr(K)) then
-      Exit(True);
+  Result := FindFlagInArgs(@IsListArg);
 end;
 
 function ParseShortFromArgs: Boolean;
-var
-  K: Integer;
 begin
-  Result := False;
-  for K := 1 to ParamCount do
-    if IsShortArg(ParamStr(K)) then
-      Exit(True);
+  Result := FindFlagInArgs(@IsShortArg);
 end;
 
 function ParseProgressFromArgs: Boolean;
-var
-  K: Integer;
 begin
-  Result := False;
-  for K := 1 to ParamCount do
-    if IsProgressArg(ParamStr(K)) then
-      Exit(True);
+  Result := FindFlagInArgs(@IsProgressArg);
 end;
 
 function ParseMaxFailuresFromArgs: Integer;
-var
-  K, LVal: Integer;
 begin
-  Result := 0;
-  for K := 1 to ParamCount do
-  begin
-    LVal := ParseMaxFailures(ParamStr(K));
-    if LVal > 0 then
-      Exit(LVal);
-    if (ParamStr(K) = '--failures-max') and (K < ParamCount) then
-    begin
-      Result := StrToIntDef(ParamStr(K + 1), 0);
-      if Result < 0 then Result := 0;
-      Exit;
-    end;
-  end;
+  Result := FindArgInt(@ParseMaxFailures, '--failures-max', 0);
 end;
 
 function ParseJsonFromArgs: Boolean;
-var
-  K: Integer;
 begin
-  Result := False;
-  for K := 1 to ParamCount do
-    if IsJsonArg(ParamStr(K)) then
-      Exit(True);
+  Result := FindFlagInArgs(@IsJsonArg);
 end;
 
 function ParseVerboseFromArgs: Boolean;
-var
-  K: Integer;
 begin
-  Result := False;
-  for K := 1 to ParamCount do
-    if IsVerboseArg(ParamStr(K)) then
-      Exit(True);
+  Result := FindFlagInArgs(@IsVerboseArg);
 end;
 
 function ParseRunTimeoutFromArgs: Integer;
-var
-  K, LVal: Integer;
 begin
-  Result := 0;
-  for K := 1 to ParamCount do
-  begin
-    LVal := ParseRunTimeout(ParamStr(K));
-    if LVal > 0 then
-      Exit(LVal);
-    if (ParamStr(K) = '--timeout') and (K < ParamCount) then
-    begin
-      Result := StrToIntDef(ParamStr(K + 1), 0);
-      if Result < 0 then Result := 0;
-      Exit;
-    end;
-  end;
+  Result := FindArgInt(@ParseRunTimeout, '--timeout', 0);
 end;
 
 function ParseBenchFromArgs: string;
@@ -586,46 +569,25 @@ function ParseBenchFromArgs: string;
 var
   K: Integer;
 begin
-  Result := '';
   for K := 1 to ParamCount do
   begin
     if IsBenchArg(ParamStr(K)) then
-    begin
-      Result := ParseBenchPattern(ParamStr(K));
-      Exit;
-    end;
+      Exit(ParseBenchPattern(ParamStr(K)));
     if (ParamStr(K) = '--bench') and (K < ParamCount) and
        (Copy(ParamStr(K + 1), 1, 1) <> '-') then
       Exit(ParamStr(K + 1));
   end;
+  Result := '';
 end;
 
 function ParseBenchTimeFromArgs: Integer;
-var
-  K, LVal: Integer;
 begin
-  Result := 0;
-  for K := 1 to ParamCount do
-  begin
-    LVal := ParseBenchTime(ParamStr(K));
-    if LVal > 0 then
-      Exit(LVal);
-    if (ParamStr(K) = '--benchtime') and (K < ParamCount) then
-    begin
-      Result := StrToIntDef(ParamStr(K + 1), 0);
-      if Result > 0 then Exit(Result * 1000);
-    end;
-  end;
+  Result := FindArgInt(@ParseBenchTime, '--benchtime', 0);
 end;
 
 function ParseBenchMemFromArgs: Boolean;
-var
-  K: Integer;
 begin
-  Result := False;
-  for K := 1 to ParamCount do
-    if IsBenchMemArg(ParamStr(K)) then
-      Exit(True);
+  Result := FindFlagInArgs(@IsBenchMemArg);
 end;
 
 function RunnerConfig(const ARunner: TTestRunner): TTestConfig;
