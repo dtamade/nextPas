@@ -8,10 +8,10 @@
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **87** | 3 | 33 | **71%** |
+| **Go** | **93** | 3 | 33 | **72%** |
 | **Rust** | 19 | 0 | 47 | **29%** |
 
-## Track Summary (29 tracks, 127 operations)
+## Track Summary (30 tracks, 133 operations)
 
 ### Text Operations (6 ops)
 
@@ -347,6 +347,19 @@
 | **Sum/1M** | **136174** | 1144451 | **8.4x** ✓ |
 
 **3W vs Go** — AVX2 vpaddps explicit SIMD vs Go scalar loop (no auto-vectorization); flips previous "Array Sum: Go wins" loss
+
+### Set Intersection (6 ops)
+
+| Track | Pascal (ns) | Go (ns) | vs Go |
+|-------|-------------|---------|-------|
+| **Merge/10Kx100K** | **40794** | 56583 | **1.39x** ✓ |
+| **Merge/100Kx100K** | **155597** | 186788 | **1.20x** ✓ |
+| **Count/10Kx100K** | **36276** | 54230 | **1.49x** ✓ |
+| **Count/100Kx100K** | **127975** | 148949 | **1.16x** ✓ |
+| **Swiss/Map/10Kx100K** | **1666430** | 2812924 | **1.69x** ✓ |
+| **Swiss/Map/100Kx100K** | **5820212** | 14499561 | **2.49x** ✓ |
+
+**6W vs Go** — Sorted merge 1.2-1.5x; Swiss hash intersection 1.7-2.5x vs Go map (build + probe)
 
 ### Pascal Wins (biggest margins vs Go)
 1. **String Concat: 3557x** — Go immutable strings O(n²) vs Pascal COW
