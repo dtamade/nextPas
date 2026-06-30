@@ -582,6 +582,8 @@ type
   private
     FState: TMockState;
     FMethod: string;
+    procedure CheckCount(AActual, AExpected: Integer;
+      const AQualifier: string; APasses: Boolean);
   public
     constructor Create(AState: TMockState; const AMethod: string);
     procedure CalledExactly(ACount: Integer);
@@ -604,15 +606,21 @@ begin
   FMethod := AMethod;
 end;
 
+procedure TMockVerifier.CheckCount(AActual, AExpected: Integer;
+  const AQualifier: string; APasses: Boolean);
+begin
+  if not APasses then
+    InternalFail('Expected ' + FMethod + ' called ' + AQualifier + ' ' +
+      IntToStr(AExpected) + ' time(s), but was called ' +
+      IntToStr(AActual) + ' time(s)');
+end;
+
 procedure TMockVerifier.CalledExactly(ACount: Integer);
 var
   LCount: Integer;
 begin
   LCount := FState.CallCount(FMethod);
-  if LCount <> ACount then
-    InternalFail('Expected ' + FMethod + ' called exactly ' +
-      IntToStr(ACount) + ' time(s), but was called ' +
-      IntToStr(LCount) + ' time(s)');
+  CheckCount(LCount, ACount, 'exactly', LCount = ACount);
 end;
 
 procedure TMockVerifier.CalledAtLeast(ACount: Integer);
@@ -620,10 +628,7 @@ var
   LCount: Integer;
 begin
   LCount := FState.CallCount(FMethod);
-  if LCount < ACount then
-    InternalFail('Expected ' + FMethod + ' called at least ' +
-      IntToStr(ACount) + ' time(s), but was called ' +
-      IntToStr(LCount) + ' time(s)');
+  CheckCount(LCount, ACount, 'at least', LCount >= ACount);
 end;
 
 procedure TMockVerifier.CalledAtMost(ACount: Integer);
@@ -631,10 +636,7 @@ var
   LCount: Integer;
 begin
   LCount := FState.CallCount(FMethod);
-  if LCount > ACount then
-    InternalFail('Expected ' + FMethod + ' called at most ' +
-      IntToStr(ACount) + ' time(s), but was called ' +
-      IntToStr(LCount) + ' time(s)');
+  CheckCount(LCount, ACount, 'at most', LCount <= ACount);
 end;
 
 procedure TMockVerifier.CalledNever;
