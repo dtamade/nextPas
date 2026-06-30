@@ -5933,6 +5933,7 @@ var
   ResolutionFailureKind: string;
   SavedResKind: string;
   SavedScopeId: LongInt;
+  TypeCastTargetTypeId: LongInt;
 begin
   if ANode = nil then
     Exit;
@@ -6026,6 +6027,13 @@ begin
     end
     else if Pos('.', ANode.Text) = 0 then
     begin
+      { Type cast: TypeId(Arg) — skip call binding for type casts }
+      if TryGetTypeCastTargetTypeId(ANode, TypeCastTargetTypeId) then
+      begin
+        { Type cast detected; no call binding needed }
+      end
+      else
+      begin
       MemberFailureName := ANode.Text;
       MemberFailureOffset := ANode.ByteOffset;
       if not CallArgumentTypeIds(ANode, ArgTypeIds) then
@@ -6118,6 +6126,7 @@ begin
             ANode.ByteOffset
           );
       end;
+      end; { not a type cast }
     end;
   end;
 
@@ -6453,7 +6462,15 @@ begin
     SameText(AName, 'CompareText') or SameText(AName, 'UnicodeCompareStr') or SameText(AName, 'StringReplace') or
     SameText(AName, 'Default') or SameText(AName, 'TypeInfo') or
     SameText(AName, 'InterlockedCompareExchange') or
-    SameText(AName, 'InterlockedIncrement') or SameText(AName, 'InterlockedDecrement');
+    SameText(AName, 'InterlockedIncrement') or SameText(AName, 'InterlockedDecrement') or
+    SameText(AName, 'InterlockedCompareExchange64') or
+    SameText(AName, 'ReadWriteBarrier') or SameText(AName, 'ReadBarrier') or SameText(AName, 'WriteBarrier') or
+    SameText(AName, 'DoneCriticalSection') or
+    SameText(AName, 'FillQWord') or SameText(AName, 'SarInt64') or
+    SameText(AName, 'UniqueString') or SameText(AName, 'StringOfChar') or
+    SameText(AName, 'ThreadSwitch') or SameText(AName, 'RunError') or
+    SameText(AName, 'ArcTan') or SameText(AName, 'FormatDateTime') or
+    SameText(AName, 'DoublePack');
 end;
 
 function TSemanticAnalyzer.InferExpressionType(const ANode: TGreenNode): LongInt;
@@ -6890,6 +6907,7 @@ var
   PInt64TypeId, PUInt64TypeId, PPointerTypeId: LongInt;
   PPtrIntTypeId, PPtrUIntTypeId: LongInt;
   PCharTypeId, PAnsiCharTypeId: LongInt;
+  PUInt32TypeId, PDoubleTypeId, PWideCharTypeId, PNativeUIntTypeId: LongInt;
 begin
   BooleanTypeId := FModel.AddType('Boolean', 'builtin');
   IntegerTypeId := FModel.AddType('Integer', 'builtin');
@@ -6937,6 +6955,14 @@ begin
   FModel.AddType('PtrUInt', 'alias');
   FModel.AddType('NativeInt', 'alias');
   FModel.AddType('NativeUInt', 'alias');
+  FModel.AddType('AnsiChar', 'builtin');
+  FModel.AddType('UInt16', 'alias');
+  FModel.AddType('UInt8', 'alias');
+  FModel.AddType('Int16', 'alias');
+  PUInt32TypeId := FModel.AddType('PUInt32', 'alias');
+  PDoubleTypeId := FModel.AddType('PDouble', 'alias');
+  PWideCharTypeId := FModel.AddType('PWideChar', 'alias');
+  PNativeUIntTypeId := FModel.AddType('PNativeUInt', 'alias');
 
   FModel.SetTypeParent(PByteTypeId, PointerTypeId);
   FModel.SetTypeParent(PWordTypeId, PointerTypeId);
@@ -6949,6 +6975,10 @@ begin
   FModel.SetTypeParent(PPtrUIntTypeId, PointerTypeId);
   FModel.SetTypeParent(PCharTypeId, PointerTypeId);
   FModel.SetTypeParent(PAnsiCharTypeId, PointerTypeId);
+  FModel.SetTypeParent(PUInt32TypeId, PointerTypeId);
+  FModel.SetTypeParent(PDoubleTypeId, PointerTypeId);
+  FModel.SetTypeParent(PWideCharTypeId, PointerTypeId);
+  FModel.SetTypeParent(PNativeUIntTypeId, PointerTypeId);
   FModel.SetTypeParent(Int32TypeId, LongIntTypeId);
   FModel.SetTypeParent(UInt32TypeId, LongWordTypeId);
   FModel.SetTypeParent(UInt64TypeId, QWordTypeId);
@@ -6983,6 +7013,10 @@ begin
   FModel.SetTypeScalarFact(PPtrUIntTypeId, sskPointer, 64, False);
   FModel.SetTypeScalarFact(PCharTypeId, sskPointer, 64, False);
   FModel.SetTypeScalarFact(PAnsiCharTypeId, sskPointer, 64, False);
+  FModel.SetTypeScalarFact(PUInt32TypeId, sskPointer, 64, False);
+  FModel.SetTypeScalarFact(PDoubleTypeId, sskPointer, 64, False);
+  FModel.SetTypeScalarFact(PWideCharTypeId, sskPointer, 64, False);
+  FModel.SetTypeScalarFact(PNativeUIntTypeId, sskPointer, 64, False);
 end;
 
 procedure TSemanticAnalyzer.SeedCachedTypeGaps;
