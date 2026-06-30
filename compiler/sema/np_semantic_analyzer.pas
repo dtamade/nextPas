@@ -4227,7 +4227,9 @@ begin
     SameText(AName, 'Assigned') or SameText(AName, 'Abs') or
     SameText(AName, 'Sqr') or SameText(AName, 'Sqrt') or
     SameText(AName, 'Round') or SameText(AName, 'Trunc') or
-    SameText(AName, 'Default');
+    SameText(AName, 'Default') or
+    SameText(AName, 'Min') or SameText(AName, 'Max') or
+    SameText(AName, 'Supports') or SameText(AName, 'IsFinite');
 end;
 
 function TSemanticAnalyzer.TryGetTypeCastTargetTypeId(
@@ -4661,7 +4663,18 @@ function TSemanticAnalyzer.IsDeferredSystemObjectMember(
   const AMemberName: string
 ): Boolean;
 begin
-  Result := SameText(AMemberName, 'Free');
+  Result := SameText(AMemberName, 'Free') or
+    SameText(AMemberName, 'Create') or
+    SameText(AMemberName, 'Destroy') or
+    SameText(AMemberName, 'CreateFmt') or
+    SameText(AMemberName, 'CreateRes') or
+    SameText(AMemberName, 'CreateResFmt') or
+    SameText(AMemberName, 'ClassName') or
+    SameText(AMemberName, 'ClassType') or
+    SameText(AMemberName, 'InheritsFrom') or
+    SameText(AMemberName, 'GetInterface') or
+    SameText(AMemberName, 'AfterConstruction') or
+    SameText(AMemberName, 'BeforeDestruction');
 end;
 
 function TSemanticAnalyzer.TypeMetaSize(const ATypeName: string): Int64;
@@ -6470,7 +6483,35 @@ begin
     SameText(AName, 'UniqueString') or SameText(AName, 'StringOfChar') or
     SameText(AName, 'ThreadSwitch') or SameText(AName, 'RunError') or
     SameText(AName, 'ArcTan') or SameText(AName, 'FormatDateTime') or
-    SameText(AName, 'DoublePack');
+    SameText(AName, 'DoublePack') or
+    SameText(AName, 'Min') or SameText(AName, 'Max') or
+    SameText(AName, 'Supports') or SameText(AName, 'HandlerFunc') or
+    SameText(AName, 'GetCryptoProcAddress') or SameText(AName, 'SHA256') or
+    SameText(AName, 'IsFinite') or SameText(AName, 'atomic_load_64') or
+    SameText(AName, 'InitCriticalSection') or SameText(AName, 'glXGetProcAddress') or
+    SameText(AName, 'atomic_compare_exchange_weak_64') or
+    SameText(AName, 'atomic_update_if_equal_64') or
+    SameText(AName, 'atomic_store_64') or SameText(AName, 'atomic_exchange_64') or
+    SameText(AName, 'atomic_compare_exchange_strong_64') or
+    SameText(AName, 'atomic_compare_exchange_64') or
+    SameText(AName, 'atomic_fetch_add_64') or SameText(AName, 'atomic_fetch_sub_64') or
+    SameText(AName, 'atomic_fetch_and_64') or SameText(AName, 'atomic_fetch_or_64') or
+    SameText(AName, 'atomic_fetch_xor_64') or SameText(AName, 'atomic_fetch_nand_64') or
+    SameText(AName, 'atomic_fetch_min_64') or SameText(AName, 'atomic_fetch_max_64') or
+    SameText(AName, 'atomic_increment_64') or SameText(AName, 'atomic_decrement_64') or
+    SameText(AName, 'atomic_load') or SameText(AName, 'atomic_store') or
+    SameText(AName, 'atomic_exchange') or SameText(AName, 'atomic_compare_exchange') or
+    SameText(AName, 'atomic_compare_exchange_strong') or SameText(AName, 'atomic_compare_exchange_weak') or
+    SameText(AName, 'atomic_fetch_add') or SameText(AName, 'atomic_fetch_sub') or
+    SameText(AName, 'atomic_fetch_and') or SameText(AName, 'atomic_fetch_or') or
+    SameText(AName, 'atomic_fetch_xor') or SameText(AName, 'atomic_fetch_nand') or
+    SameText(AName, 'atomic_fetch_min') or SameText(AName, 'atomic_fetch_max') or
+    SameText(AName, 'atomic_increment') or SameText(AName, 'atomic_decrement') or
+    SameText(AName, 'InterlockedExchangeAdd') or SameText(AName, 'InterlockedExchange') or
+    SameText(AName, 'atomic_update_if_equal') or
+    SameText(AName, 'cpu_pause') or SameText(AName, 'cpu_relax') or SameText(AName, 'cpu_yield') or
+    SameText(AName, 'atomic_wait') or SameText(AName, 'atomic_notify_one') or SameText(AName, 'atomic_notify_all') or
+    SameText(AName, 'atomic_tagged_ptr_store');
 end;
 
 function TSemanticAnalyzer.InferExpressionType(const ANode: TGreenNode): LongInt;
@@ -6606,6 +6647,16 @@ begin
             Exit(FModel.FindTypeByName('Char'));
           if SameText(CallName, 'Assigned') then
             Exit(FModel.FindTypeByName('Boolean'));
+          if SameText(CallName, 'Supports') or SameText(CallName, 'IsFinite') then
+            Exit(FModel.FindTypeByName('Boolean'));
+          if SameText(CallName, 'Min') or SameText(CallName, 'Max') then
+          begin
+            if ANode.ChildCount >= 2 then
+              Result := InferExpressionType(ANode.ChildAt(1));
+            if Result = 0 then
+              Result := FModel.FindTypeByName('Integer');
+            Exit;
+          end;
           if SameText(CallName, 'Sqrt') then
             Exit(FModel.FindTypeByName('Double'));
           if SameText(CallName, 'Pred') or SameText(CallName, 'Succ') or
@@ -6995,6 +7046,24 @@ begin
   FModel.SetTypeScalarFact(LongWordTypeId, sskInt, 32, False);
   FModel.SetTypeScalarFact(CardinalTypeId, sskInt, 32, False);
   FModel.SetTypeScalarFact(Int32TypeId, sskInt, 32, True);
+  FModel.SetTypeScalarFact(Int64TypeId, sskInt, 64, True);
+  FModel.SetTypeScalarFact(QWordTypeId, sskInt, 64, False);
+  FModel.SetTypeScalarFact(SingleTypeId, sskFloat, 32, False);
+  FModel.SetTypeScalarFact(DoubleTypeId, sskFloat, 64, False);
+  FModel.SetTypeScalarFact(PointerTypeId, sskPointer, 64, False);
+
+  { System types — TObject as root class, TClass as class-of pointer }
+  FModel.AddType('TObject', 'class');
+  FModel.AddType('TClass', 'alias');
+  FModel.AddType('TGUID', 'record');
+  FModel.AddType('IInterface', 'interface');
+  FModel.AddType('IUnknown', 'interface');
+  { Exception hierarchy — commonly used across core modules }
+  FModel.AddType('Exception', 'class');
+  FModel.AddType('EOutOfRange', 'class');
+  FModel.AddType('EInvalidCast', 'class');
+  FModel.AddType('EArgumentNilException', 'class');
+  FModel.AddType('EInvalidOpException', 'class');
   FModel.SetTypeScalarFact(UInt32TypeId, sskInt, 32, False);
   FModel.SetTypeScalarFact(Int64TypeId, sskInt, 64, True);
   FModel.SetTypeScalarFact(QWordTypeId, sskInt, 64, False);
