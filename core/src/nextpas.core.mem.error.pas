@@ -151,9 +151,7 @@ begin
       Result := ecResourceExhausted;
     aeInvalidLayout, aeAlignmentNotSupported, aeSizeMismatch:
       Result := ecInvalidArgument;
-    aeInvalidPointer, aeDoubleFree:
-      Result := ecInvalidOperation;
-    aePoolClosed, aeReallocNotSupported:
+    aeInvalidPointer, aeDoubleFree, aePoolClosed, aeReallocNotSupported:
       Result := ecInvalidOperation;
     aeInternalError:
       Result := ecInternal;
