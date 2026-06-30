@@ -20,6 +20,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.base.utils,
+  nextpas.core.mem.base,            // ValidateAlignArg
   nextpas.core.mem.allocator.base,
   nextpas.core.mem.allocator.rtl,
   nextpas.core.mem.error,
@@ -331,10 +332,8 @@ end;
 function TPoolAllocator.AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
 begin
   if ASize = 0 then Exit(nil);
-  if (AAlignment = 0) or ((AAlignment and (AAlignment - 1)) <> 0) then
+  if not ValidateAlignArg(AAlignment) then
     raise EAllocError.Create(aeAlignmentNotSupported, 'TPoolAllocator.AllocAligned: alignment must be power of two');
-  if AAlignment < SizeOf(Pointer) then
-    AAlignment := SizeOf(Pointer);
   if (AAlignment <= 16) and (ASize <= FBlockSize) then begin
     if FPool.TryAlloc(Result) then begin
       try
