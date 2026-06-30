@@ -1,5 +1,9 @@
 # nextpas.core.test — Advanced Pascal Unit Testing Framework
 
+> 模块负责人: Claude (test worktree)
+> 最后更新: 2026-06-29
+> 治理状态: v6.0, 12 模块, 8724 行, 10 测试套件
+
 ## Overview
 
 `nextpas.core.test` is a modern, production-grade unit testing framework for Free Pascal, designed to be the most advanced Pascal testing framework available.
@@ -15,8 +19,20 @@
 - **Full lifecycle**: Setup/Teardown, BeforeEach/AfterEach hooks (both proc and closure overloads)
 - **Multi-suite runner**: `TTestRunner` aggregates multiple suites
 - **JUnit XML export**: `JUnitXML` / `WriteJUnitXML` for CI integration
-- **Test filtering**: `SetTestFilter` pattern-based test selection
+- **TAP v13 export**: `TAPReport` for CI integration
+- **JSON export**: `JSONReport` for CI integration
+- **Test filtering**: `SetTestFilter` pattern-based test selection + hierarchical (`--filter=Parent/Sub`)
+- **Tag filtering**: `SetTagFilter` comma-separated tag filter
 - **Test timeout**: `SetTestTimeout` global timeout configuration
+- **Retry**: `RetryCount` per-test or global retry
+- **Shuffle**: `SetDefaultShuffleSeed` deterministic test shuffling
+- **FailFast**: `SetDefaultFailFast` stop on first failure
+- **Short mode**: `ShortSkip` for Go-style `--short` mode
+- **Verbose mode**: `SetDefaultVerboseMode` per-test [PASS]/[FAIL]/[SKIP] output
+- **Progress**: `SetDefaultShowProgress` [N/Total] progress counter
+- **Mock framework**: `TMock` with setup/verify/typed values/call ordering
+- **RTTI discovery**: `DiscoverTests` auto-discovers published methods
+- **Benchmarking**: `Bench` + adaptive N scaling (Go testing.B equivalent)
 - **Structured results**: `RunWithResult` / `RunAllWithResult` for programmatic result access
 - **Minimal dependencies**: Only uses FPC RTL (`SysUtils`) + `nextpas.core.*` modules
 
@@ -422,71 +438,71 @@ after each test in serial mode.
 ## Build & Test
 
 ```bash
-# Single test
+# Single test suite
 make -C core/tests/nextpas.core.test/test_assertions clean test
 
-# All nextpas.core.test tests
-for t in test_assertions test_expect test_runner test_parallel test_subtests test_advanced test_lifecycle test_output; do
-  make -C core/tests/nextpas.core.test/$t clean test
+# All test framework suites
+for d in core/tests/nextpas.core.test/test_*; do
+  make -C "$d" clean test
 done
+
+# List all test suites
+ls core/tests/nextpas.core.test/
 ```
 
 ## Architecture
 
 ```
-nextpas.core.test.pas               <- Facade: pure re-export (315 lines)
-  uses:
-    nextpas.core.test.base           <- Types + GExecState + InternalFail/Skip (193 lines)
-      TTestStatus, TTestEntry, TTestResult, TTestRunResult
-      ETestSkipped, TTestProc, TTestClosure, TTestCase, TTestCaseProc
-      ITestContext, TSubtestProc
-      threadvar GExecState (thread-local execution state)
-    nextpas.core.test.check          <- 20 Check*/Fail/Skip procedures (334 lines)
-    nextpas.core.test.expect         <- IExpectation + TExpectation factory+methods (558 lines)
-    nextpas.core.test.discovery      <- RTTI discovery (156 lines)
-    nextpas.core.test.mock           <- Manual mock helper (375 lines)
-    nextpas.core.test.output         <- ANSI color + JUnitXML + Filter + Timeout (435 lines)
-      uses:
-        nextpas.core.test.output.tap       <- TAP v13 output (108 lines)
-        nextpas.core.test.output.json      <- JSON output (154 lines)
-    nextpas.core.test.runner         <- TTestSuite + TTestRunner (933 lines)
-      uses:
-        nextpas.core.test.runner.context   <- TTestContext + SubtestResult (208 lines)
-        nextpas.core.test.runner.parallel  <- ParallelWorker + TimeoutWorker (156 lines)
+test.pas (facade, 610 lines) — 纯 re-export, 无逻辑
+  ├── test.base (600)      — L0: 类型, 异常, GExecState, InternalFail/Skip
+  ├── test.config (546)    — L0: TTestConfig, IOutputSink, SetDefault*/Get*
+  ├── test.check (404)     — L1: 20+ Check*/Fail/Skip procedures
+  ├── test.expect (627)    — L1: IExpectation + 6 工厂 + 30+ To* methods
+  ├── test.output (1092)   — L2: ANSI + 过滤 + JUnit XML + 泄漏报告
+  ├── test.output.json (185)  — L2: JSON 输出
+  ├── test.output.tap (131)   — L2: TAP v13 输出
+  ├── test.runner (2392)   — L3: TTestSuite + TTestRunner
+  ├── test.discovery (154) — L4: RTTI 自动发现
+  └── test.mock (820)      — L4: Mock 框架
+
+内部模块 (不在 facade re-export):
+  ├── test.runner.context (460)   — 子测试上下文 (TTestContext)
+  └── test.runner.parallel (573)  — 并行执行 (ParallelWorkerProc)
+
+废弃:
+  └── testing.pas (130) — 向后兼容, 禁止新代码使用
 
 Dependency graph:
-  test.base  <--  test.check, test.expect, test.output, test.discovery, test.mock
-                     \              |              /         |              |
-                      \             |             /          |              |
-                       +---->  test.runner  <----+           |              |
-                                 |                           |              |
-                            test.pas (facade)                |              |
-                                                             |              |
-  test.base  <--  test.output.tap, test.output.json          |              |
-                      \                    /                  |              |
-                       +--> test.output <--+                  |              |
-                                                             |              |
-  test.base, test.runner  <--  test.discovery                |              |
-  test.base            <--  test.mock   <--------------------+
-```
+  L0: base ← config (独立, 互不依赖)
+  L1: check ← base, text.conv
+      expect ← base, text.conv
+  L2: output ← base, config, text.conv, text.builder, fs
+      output.json ← base, output, text.conv
+      output.tap ← base, output, text.conv
+  L3: runner ← base, check, config, output, atomic, sync, thread.*, platform.*
+      runner.context ← base, config, output
+      runner.parallel ← base, config, output
+  L4: discovery ← base, runner
+      mock ← base, text.conv
+  门面: test ← all above
 
 ## Dependencies
 
-| Dependency | Usage |
-|-----------|-------|
-| `SysUtils` | `ExceptClass`, `EAbort`, `EAssertionFailed`, exception handling -- FPC built-in, irreplaceable |
-| `nextpas.core.errors` | Error infrastructure |
-| `nextpas.core.text.conv` | String conversion utilities |
-| `nextpas.core.atomic` | Atomic operations for thread-safe counters |
-| `nextpas.core.sync` | Mutex for parallel result collection |
-| `nextpas.core.thread.base` / `.intf` | Thread abstractions |
-| `nextpas.core.collections.base` | Array types |
-| `nextpas.core.platform.thread` | `platform_thread_create` for parallel dispatch |
-| `nextpas.core.platform.time` | Monotonic clock for timeout enforcement |
+| Dependency | Module | Usage |
+|-----------|--------|-------|
+| `SysUtils` | All | `ExceptClass`, `EAbort`, `EAssertionFailed` — FPC built-in, irreplaceable |
+| `nextpas.core.text.conv` | check, expect, output, mock, discovery | String conversion utilities |
+| `nextpas.core.text.builder` | output | StringBuilder for JUnit XML |
+| `nextpas.core.fs` | output | File I/O for WriteJUnitXML |
+| `nextpas.core.atomic` | runner | Atomic operations for thread-safe counters |
+| `nextpas.core.sync` | runner | Mutex for parallel result collection |
+| `nextpas.core.thread.base` / `.intf` | runner | Thread abstractions |
+| `nextpas.core.collections.base` | runner | Array types |
+| `nextpas.core.platform.thread` | runner | `platform_thread_create` for parallel dispatch |
+| `nextpas.core.time.cpu` | runner | CPU time measurement |
 
-Note: `Classes` is no longer a dependency. The framework previously depended on
-`Classes` for `TList` but has been migrated to use `specialize TArray<T>` from
-`nextpas.core.collections.base`.
+Note: `Classes` is NOT a dependency. The framework uses `specialize TArray<T>` from
+`nextpas.core.collections.base` instead of `TList`.
 
 ## Test Coverage
 
@@ -497,4 +513,217 @@ Note: `Classes` is no longer a dependency. The framework previously depended on
 | test_runner | 33 | Lifecycle hooks, failure paths, RunAll, RunAllWithResult, AllPassed cache, Summary, TestTable |
 | test_subtests | 10 | Nested subtests, RunNested API, 3-level failure propagation |
 | test_parallel | 24 | Parallel execution, failure/skip in threads, RunAllParallel, RunParallelWithResult |
-| **Total** | **~164** | **100% public API path coverage** |
+| test_lifecycle | ~15 | Setup/Teardown, BeforeEach/AfterEach, Cleanup |
+| test_mock | ~20 | TMock setup/verify, typed values, call ordering, CalledWith |
+| test_output | ~10 | ANSI formatting, StatusDot, FormatStatusLine, JUnit XML |
+| test_diagnostics | ~10 | Test filter, tag filter, timeout |
+| test_advanced | ~15 | Retry, shuffle, failfast, short mode, verbose, progress |
+| **Total** | **~234** | |
+
+---
+
+## Engineering Governance
+
+### 分层架构
+
+```
+L0 基础层:  base.pas, config.pas
+            ↓ 不依赖任何 test.* 模块
+L1 断言层:  check.pas, expect.pas
+            ↓ 只依赖 L0
+L2 输出层:  output.pas, output.json.pas, output.tap.pas
+            ↓ 依赖 L0
+L3 执行层:  runner.pas, runner.context.pas, runner.parallel.pas
+            ↓ 依赖 L0-L2
+L4 扩展层:  discovery.pas, mock.pas
+            ↓ 依赖 L0 + L3
+门面:       test.pas — 纯 re-export，无逻辑
+废弃:       testing.pas — 向后兼容，禁止新代码使用
+```
+
+### 依赖规则
+
+1. **只向下依赖**: L0 不依赖 L1-L4, L1 不依赖 L2-L4
+2. **禁止循环依赖**: check.pas 和 expect.pas 不能互相引用
+3. **门面无逻辑**: test.pas 只做 re-export, 不含任何实现
+4. **internal 模块不从 facade re-export**: runner.context, runner.parallel
+
+### 稳定性等级
+
+| 等级 | 含义 | 规则 |
+|------|------|------|
+| **Stable** | 可以放心使用 | 变更需向后兼容 |
+| **Experimental** | 可能变化 | 变更需文档说明 |
+| **Internal** | 框架内部 | 不在 facade re-export, 禁止外部使用 |
+
+#### L0: base.pas
+
+| 符号 | 稳定性 | 说明 |
+|------|--------|------|
+| `TTestProc`, `TTestClosure`, `TSubtestProc` | Stable | 核心过程类型 |
+| `ITestContext` | Stable | 子测试上下文接口 |
+| `TTestCase`, `TTestCaseProc` | Stable | 表驱动测试类型 |
+| `TTestStatus`, `TTestResult`, `TTestRunResult` | Stable | 结果类型 |
+| `ETestSkipped` | Stable | 跳过异常 |
+| `TBenchContext`, `TBenchResult` | Stable | 基准测试类型 |
+| `TTestEntry` | **Internal** | 测试条目 (runner 内部) |
+| `MakeTestResult`, `MakeBenchResult` | Stable | 构造辅助 |
+| `GetTopSlowest`, `ShuffleEntries` | Stable | 结果处理 |
+| `GrowCapacity`, `GrowCleanups` | **Internal** | 数组增长原语 |
+| `RunShouldFailEntry` | **Internal** | ShouldFail 执行 |
+| `InternalFail`, `InternalSkip` | **Internal** | 断言/跳过 |
+| `SetTestContext`, `GetLastTestTrace` | **Internal** | 执行上下文 |
+
+#### L0: config.pas
+
+| 符号 | 稳定性 | 说明 |
+|------|--------|------|
+| `TTestConfig` | Stable | 配置记录 |
+| `IOutputSink`, `TStdoutSink`, `TStderrSink`, `TBufferSink` | Stable | 输出接收器 |
+| `TAnsiMode` | Stable | ANSI 模式枚举 |
+| `DefaultConfig`, `ResolveConfig` | Stable | 配置解析 |
+| `SetDefault*`, `Get*` | Stable | 配置访问器 |
+| `ResetDefaultConfig` | Stable | 重置配置 |
+
+#### L1: check.pas
+
+| 符号 | 稳定性 | 说明 |
+|------|--------|------|
+| `Check`, `CheckEqual`, `CheckNotEqual` | Stable | 核心断言 |
+| `CheckTrue/False`, `CheckNil/NotNil` | Stable | 布尔/指针断言 |
+| `CheckContains/NotContains`, `CheckStartsWith/EndsWith` | Stable | 字符串断言 |
+| `CheckSame`, `CheckInRange`, `CheckLength` | Stable | 指针/范围/长度 |
+| `CheckGreaterThan/LessThan`, `CheckGreaterOrEqual/LessOrEqual` | Stable | 比较断言 |
+| `CheckRaises`, `CheckNoRaise` | Stable | 异常断言 |
+| `CheckNear`, `CheckNotNear` | Stable | 浮点近似 |
+| `Fail`, `FailUnexpected`, `Skip` | Stable | 流程控制 |
+
+#### L1: expect.pas
+
+| 符号 | 稳定性 | 说明 |
+|------|--------|------|
+| `IExpectation` | Stable | fluent 断言接口 |
+| `Expect`, `ExpectInt`, `ExpectBool`, `ExpectDouble`, `ExpectPtr`, `ExpectProc` | Stable | 工厂函数 |
+| `Not_`, `ToEqual`, `ToEqualInt`, `ToEqualBool` | Stable | 值比较 |
+| `ToBeTrue/False`, `ToBeNil/NotNil` | Stable | 状态断言 |
+| `ToContain`, `ToStartWith`, `ToEndWith` | Stable | 字符串匹配 |
+| `ToBeGreaterThan/LessThan`, `ToBeGreaterOrEqual/LessOrEqual` | Stable | 整数比较 |
+| `ToBeInRange`, `ToHaveLength` | Stable | 范围/长度 |
+| `ToRaise`, `ToNotRaise` | Stable | 异常断言 |
+| `ToBeNear`, `ToNotBeNear` | Stable | 浮点近似 |
+| `ToBeGreaterThanD/LessThanD`, `ToBeGreaterOrEqualD/LessOrEqualD`, `ToBeInRangeD` | Stable | Double 比较 |
+| `ToContainCI`, `ToStartWithCI`, `ToEndWithCI` | Stable | 不敏感字符串匹配 |
+
+#### L2: output.pas
+
+| 符号 | 稳定性 | 说明 |
+|------|--------|------|
+| `AnsiBold/Green/Red/Yellow/Cyan/Dim` | Stable | ANSI 颜色 |
+| `SetAnsiEnabled` | Stable | 控制 ANSI |
+| `StatusDot`, `FormatStatusLine` | Stable | 状态格式化 |
+| `WriteTestOutput` | Stable | 统一测试输出 |
+| `FormatDuration`, `FormatBenchLine` | Stable | 格式化 |
+| `SetTestFilter/GetTestFilter`, `SetTagFilter/GetTagFilter` | Stable | 过滤器 |
+| `SetTestTimeout/GetTestTimeout` | Stable | 超时配置 |
+| `MatchesFilter` | Stable | 过滤匹配 |
+| `ReportLeakIfAny` | Stable | 泄漏报告 |
+| `JUnitXML`, `WriteJUnitXML` | Stable | JUnit 输出 |
+| `FailTest`, `PassTest`, `SectionHeader` | Stable | 元测试辅助 |
+| `WriteRetryHint`, `WriteWarning` | **Internal** | 诊断输出 |
+| `WriteSuiteHeader`, `WriteSlowTests` | **Internal** | 套件输出 |
+
+#### L3: runner.pas
+
+| 符号 | 稳定性 | 说明 |
+|------|--------|------|
+| `TTestSuite` (record + 所有 public 方法) | Stable | 测试套件 |
+| `TTestRunner` (record + 所有 public 方法) | Stable | 多套件 runner |
+| `Ctx` | Stable | 当前测试上下文 |
+| `RegisterStub`, `RegisterFixture` | **Internal** | 注册辅助 |
+| `ParseFilter`, `ParseTag` | **Internal** | CLI 解析 |
+
+#### L4: discovery.pas + mock.pas
+
+| 符号 | 稳定性 | 说明 |
+|------|--------|------|
+| `TTestFixture`, `TTestFixtureClass` | Stable | fixture 基类 |
+| `DiscoverTests` | Stable | RTTI 发现 |
+| `TMock`, `TMockState` | Stable | Mock 对象 |
+| `TMockValue`, `MockStr/Int/Bool/Double` | Stable | Mock 值 |
+| `IMockSetup`, `IMockVerify` | Stable | Mock 接口 |
+
+### 工程代码契约
+
+#### 1. 参数校验
+
+| 规则 | 说明 |
+|------|------|
+| nil 指针 | `CheckNil(nil)` 合法; `CheckRaises(nil, ...)` 必须报错 |
+| 空字符串 | `CheckContains(s, '')` 匹配一切; `CheckStartsWith(s, '')` 匹配一切 |
+| 边界值 | `CheckInRange(v, 5, 3)` 必须报错 (low > high) |
+| ExceptClass | `CheckRaises(nil, proc)` → `InternalFail` |
+
+#### 2. 异常处理
+
+| 异常 | 行为 | 说明 |
+|------|------|------|
+| `ETestSkipped` | re-raise | 流程控制，不是错误 |
+| `EAssertionFailed` | 记录 tsFailed, 继续 | 断言失败 |
+| `Exception` | 记录 tsError, 继续 | 意外错误 |
+| `EAbort` (非 ETestSkipped) | 不捕获, 传播 | 用户主动中止 |
+
+#### 3. 内存管理
+
+| 规则 | 说明 |
+|------|------|
+| heaptrc 兼容 | 所有测试 0 unfreed |
+| threadvar 隔离 | 并行测试不共享可变状态 |
+| LIFO 清理 | EachCleanups 按注册逆序执行 |
+| FCleanupDone 守卫 | 防止 --count=N 重复释放 |
+| 深拷贝 | `TTestRunner.Add` 深拷贝 Tests 数组 |
+
+#### 4. 并行安全
+
+| 共享资源 | 保护方式 |
+|----------|----------|
+| `GExecState` | threadvar, 天然隔离 |
+| `GStubRegistry` | 仅主线程访问 |
+| `GFixtureRegistry` | 仅主线程访问 |
+| `GAnsiEnabled` | 初始化后只读 |
+| `GDefaultConfig` | 初始化后只读 |
+
+### 文件清单
+
+| 文件 | 行数 | 层 | 职责 |
+|------|------|----|------|
+| test.base.pas | 600 | L0 | 基础类型、异常、内部状态 |
+| test.config.pas | 546 | L0 | TTestConfig、IOutputSink |
+| test.check.pas | 404 | L1 | Check* 断言 API |
+| test.expect.pas | 627 | L1 | IExpectation fluent API |
+| test.output.pas | 1092 | L2 | ANSI、过滤、JUnit XML |
+| test.output.json.pas | 185 | L2 | JSON 输出 |
+| test.output.tap.pas | 131 | L2 | TAP v13 输出 |
+| test.runner.pas | 2392 | L3 | TTestSuite、TTestRunner |
+| test.runner.context.pas | 460 | L3 | 子测试上下文 |
+| test.runner.parallel.pas | 573 | L3 | 并行执行 |
+| test.discovery.pas | 154 | L4 | RTTI 自动发现 |
+| test.mock.pas | 820 | L4 | Mock 框架 |
+| test.pas | 610 | 门面 | 纯 re-export |
+| testing.pas | 130 | 废弃 | 向后兼容 |
+| **总计** | **8724** | | |
+
+### 测试覆盖矩阵
+
+| 套件 | 模块覆盖 | 测试数 |
+|------|----------|--------|
+| test_assertions | check.pas, expect.pas | 28 |
+| test_expect | expect.pas | 69 |
+| test_runner | runner.pas | 33 |
+| test_subtests | runner.pas (subtests) | 10 |
+| test_parallel | runner.parallel.pas | 24 |
+| test_lifecycle | runner.pas (setup/teardown) | ~15 |
+| test_mock | mock.pas | ~20 |
+| test_output | output.pas | ~10 |
+| test_diagnostics | runner.pas (filter/timeout) | ~10 |
+| test_advanced | runner.pas (advanced) | ~15 |
+| **总计** | | **~234** |
