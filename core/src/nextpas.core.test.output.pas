@@ -1032,14 +1032,11 @@ end;
 { ═════════════════════════════════════════════════════════════════════════════ }
 
 procedure AddLine(var ALines: specialize TArray<string>; const ALine: string);
-{ Geometric growth: pre-allocate capacity to avoid O(n²) realloc. }
 var
   LOldLen, LCap: Integer;
 begin
   LOldLen := Length(ALines);
-  LCap := LOldLen;
-  if LCap < 8 then LCap := 8
-  else if LOldLen >= LCap then LCap := LCap * 2;
+  LCap := GrowCapacity(LOldLen, 8);
   if LCap <> LOldLen then SetLength(ALines, LCap);
   ALines[LOldLen] := ALine;
   SetLength(ALines, LOldLen + 1);

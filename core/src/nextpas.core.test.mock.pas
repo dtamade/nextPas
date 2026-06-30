@@ -274,9 +274,7 @@ var
   LOldLen, LCap: Integer;
 begin
   LOldLen := Length(AOrder);
-  LCap := LOldLen;
-  if LCap < 16 then LCap := 16
-  else if LOldLen >= LCap then LCap := LCap * 2;
+  LCap := GrowCapacity(LOldLen, 16);
   if LCap <> LOldLen then SetLength(AOrder, LCap);
   AOrder[LOldLen] := AName;
   SetLength(AOrder, LOldLen + 1);
@@ -327,9 +325,7 @@ begin
   end;
 
   LOldLen := Length(FCalls);
-  LCap := LOldLen;
-  if LCap < 16 then LCap := 16
-  else if LOldLen >= LCap then LCap := LCap * 2;
+  LCap := GrowCapacity(LOldLen, 16);
   if LCap <> LOldLen then SetLength(FCalls, LCap);
   FCalls[LOldLen] := LCall;
   SetLength(FCalls, LOldLen + 1);
@@ -352,9 +348,7 @@ begin
   end;
 
   LOldLen := Length(FCalls);
-  LCap := LOldLen;
-  if LCap < 16 then LCap := 16
-  else if LOldLen >= LCap then LCap := LCap * 2;
+  LCap := GrowCapacity(LOldLen, 16);
   if LCap <> LOldLen then SetLength(FCalls, LCap);
   FCalls[LOldLen] := LCall;
   SetLength(FCalls, LOldLen + 1);
@@ -441,9 +435,7 @@ begin
   LSetup.Args             := nil;
   LSetup.TypedArgs        := nil;
   LOldLen := Length(FSetups);
-  LCap := LOldLen;
-  if LCap < 4 then LCap := 4
-  else if LOldLen >= LCap then LCap := LCap * 2;
+  LCap := GrowCapacity(LOldLen, 4);
   if LCap <> LOldLen then SetLength(FSetups, LCap);
   FSetups[LOldLen] := LSetup;
   SetLength(FSetups, LOldLen + 1);
@@ -469,9 +461,7 @@ begin
   LSetup.ResultValue      := MockValueToString(AValue);
   LSetup.TypedReturnValue := AValue;
   LOldLen := Length(FSetups);
-  LCap := LOldLen;
-  if LCap < 4 then LCap := 4
-  else if LOldLen >= LCap then LCap := LCap * 2;
+  LCap := GrowCapacity(LOldLen, 4);
   if LCap <> LOldLen then SetLength(FSetups, LCap);
   FSetups[LOldLen] := LSetup;
   SetLength(FSetups, LOldLen + 1);

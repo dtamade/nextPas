@@ -2075,8 +2075,7 @@ begin
       guard violation even though allocated capacity is sufficient. }
     if LCount >= LCap then
     begin
-      if LCap < 4 then LCap := 4
-      else LCap := LCap * 2;
+      LCap := GrowCapacity(LCap, 4);
       SetLength(AResults, LCap);
     end;
     AResults[LCount] := LResult;
