@@ -8,10 +8,10 @@
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **125** | 5 | 33 | **77%** |
+| **Go** | **126** | 5 | 33 | **77%** |
 | **Rust** | 19 | 0 | 47 | **29%** |
 
-## Track Summary (41 tracks, 168 operations)
+## Track Summary (41 tracks, 169 operations)
 
 ### Text Operations (6 ops)
 
@@ -94,7 +94,7 @@
 
 **3W vs Go, 1W vs Rust**
 
-### BST Tree Operations (4 ops)
+### BST Tree Operations (5 ops)
 
 | Track | Pascal | Go | vs Go |
 |-------|--------|-----|-------|
@@ -102,8 +102,9 @@
 | Lookup/100k | 25.0ms | 23.0ms | 0.92x |
 | **InsertLookup/100k** | **63.1ms** | 83.7ms | **1.33x** ✓ |
 | **InOrder/100k** | **1.92ms** | 2.36ms | **1.23x** ✓ |
+| **LookupMiss/100k** | **1.285ms** | 2.043ms | **1.59x** ✓ |
 
-**3W 1D vs Go** — InOrder翻转！原20.9x差距是基准测试方法论问题（Pascal每次重建树vs Go预建树）；修正后Pascal更快
+**4W 1D vs Go** — InOrder翻转！原20.9x差距是基准测试方法论问题（Pascal每次重建树vs Go预建树）；修正后Pascal更快。LookupMiss指针追踪misscase 1.59x
 
 ### Copy/Memory Operations (9 ops)
 
@@ -501,13 +502,13 @@
 - **String operations**: Pascal dominant (7W vs Go)
 - **Memory/pointer**: Pascal strong (5W vs Go)
 - **Numeric loops**: Pascal dominant with SIMD (3W, 8-20x); Go/Rust win on scalar paths (auto-vectorization)
-- **BST tree operations**: Pascal dominant (3W 1D vs Go) — Insert 1.72x, InsertLookup 1.33x, InOrder 1.23x; Lookup ties 0.92x. 原20.9x InOrder差距是基准测试伪影
+- **BST tree operations**: Pascal dominant (4W 1D vs Go) — Insert 1.72x, InsertLookup 1.33x, InOrder 1.23x, LookupMiss 1.59x; Lookup ties 0.92x. 原20.9x InOrder差距是基准测试伪影
 - **Binary search**: Pascal strong (2W 2D vs Go) — Standard 1.5-1.9x faster; Eytzinger layout ties
 - **Float formatting**: Go/Rust win (Ryu algorithm)
 
 ## Conclusion
 
-Pascal beats Go 77% of the time across 114 benchmarks. The biggest wins come from
+Pascal beats Go 77% of the time across 115 benchmarks. The biggest wins come from
 FillChar operations (compiles to `rep stosb`, 11-27x faster than Go's byte loop),
 string operations (immutable strings are Go's Achilles heel), bit set operations
 string operations (immutable strings are Go's Achilles heel), bit set operations
