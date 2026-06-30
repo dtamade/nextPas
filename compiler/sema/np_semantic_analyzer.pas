@@ -4229,6 +4229,7 @@ begin
     SameText(AName, 'Round') or SameText(AName, 'Trunc') or
     SameText(AName, 'Default') or
     SameText(AName, 'Min') or SameText(AName, 'Max') or
+    SameText(AName, 'Floor') or SameText(AName, 'Ceil') or
     SameText(AName, 'Supports') or SameText(AName, 'IsFinite');
 end;
 
@@ -5197,7 +5198,8 @@ begin
 
   { Skip overload resolution for constructors/destructors with many overloads }
   if SameText(AMemberName, 'Create') or SameText(AMemberName, 'Destroy') or
-    SameText(AMemberName, 'CreateFmt') or SameText(AMemberName, 'CreateRes') then
+    SameText(AMemberName, 'CreateFmt') or SameText(AMemberName, 'CreateRes') or
+    SameText(AMemberName, 'Equal') then
   begin
     QualifiedName := TypeSymbol.Name + '.' + AMemberName;
     for Index := 0 to FModel.SymbolCount - 1 do
@@ -6510,6 +6512,7 @@ begin
     SameText(AName, 'ArcTan') or SameText(AName, 'FormatDateTime') or
     SameText(AName, 'DoublePack') or
     SameText(AName, 'Min') or SameText(AName, 'Max') or
+    SameText(AName, 'Floor') or SameText(AName, 'Ceil') or
     SameText(AName, 'Supports') or SameText(AName, 'HandlerFunc') or
     SameText(AName, 'GetCryptoProcAddress') or SameText(AName, 'SHA256') or
     SameText(AName, 'IsFinite') or SameText(AName, 'atomic_load_64') or
@@ -6666,7 +6669,8 @@ begin
           if SameText(CallName, 'SizeOf') or SameText(CallName, 'High') or
             SameText(CallName, 'Low') or SameText(CallName, 'Length') or
             SameText(CallName, 'Ord') or SameText(CallName, 'Round') or
-            SameText(CallName, 'Trunc') then
+            SameText(CallName, 'Trunc') or SameText(CallName, 'Floor') or
+            SameText(CallName, 'Ceil') then
             Exit(FModel.FindTypeByName('Integer'));
           if SameText(CallName, 'Chr') then
             Exit(FModel.FindTypeByName('Char'));
