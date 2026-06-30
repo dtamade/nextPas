@@ -8,10 +8,10 @@
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **105** | 3 | 33 | **74%** |
+| **Go** | **106** | 3 | 33 | **75%** |
 | **Rust** | 19 | 0 | 47 | **29%** |
 
-## Track Summary (32 tracks, 145 operations)
+## Track Summary (33 tracks, 146 operations)
 
 ### Text Operations (6 ops)
 
@@ -287,15 +287,16 @@
 
 **1W 1D 2L vs Go** — FPC interface vtable dispatch vs Go interface (2 ptrs); Go devirtualization much stronger (3.08x on direct calls)
 
-### TypeSpecialized Sort (3 ops)
+### TypeSpecialized Sort (4 ops)
 
 | Track | Pascal (ns) | Go (ns) | vs Go |
 |-------|-------------|---------|-------|
 | **FastSort/1K** | **20272** | 46501 | **2.29x** ✓ |
 | **FastSort/10K** | **175119** | 775133 | **4.43x** ✓ |
 | **FastSort/100K** | **1944273** | 15479051 | **7.95x** ✓ |
+| **SortI32/1M** | **677657** | 5612779 | **8.28x** ✓ |
 
-**3W vs Go** — FPC `SortI32` (type-specialized introsort) vs Go `sort.Ints` (interface-based pdqsort)
+**4W vs Go** — FPC `SortI32` (type-specialized introsort) vs Go `sort.Ints` (interface-based pdqsort)
 
 ### SwissMap Operations (6 ops)
 
