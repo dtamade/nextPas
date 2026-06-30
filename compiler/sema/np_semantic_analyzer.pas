@@ -6489,7 +6489,7 @@ begin
     SameText(AName, 'StrToInt') or SameText(AName, 'Addr') or
     SameText(AName, 'FillChar') or SameText(AName, 'Move') or
     SameText(AName, 'GetMem') or SameText(AName, 'FreeMem') or
-    SameText(AName, 'ReallocMem') or
+    SameText(AName, 'ReallocMem') or SameText(AName, 'Close') or
     SameText(AName, 'Exclude') or SameText(AName, 'Include') or
     SameText(AName, 'Assert') or SameText(AName, 'Swap') or
     SameText(AName, 'Lo') or SameText(AName, 'Hi') or
@@ -6539,7 +6539,9 @@ begin
     SameText(AName, 'atomic_update_if_equal') or
     SameText(AName, 'cpu_pause') or SameText(AName, 'cpu_relax') or SameText(AName, 'cpu_yield') or
     SameText(AName, 'atomic_wait') or SameText(AName, 'atomic_notify_one') or SameText(AName, 'atomic_notify_all') or
-    SameText(AName, 'atomic_tagged_ptr_store');
+    SameText(AName, 'atomic_tagged_ptr_store') or
+    SameText(AName, 'LeaveCriticalSection') or SameText(AName, 'EnterCriticalSection') or
+    SameText(AName, 'Ln') or SameText(AName, 'Int') or SameText(AName, 'Frac');
 end;
 
 function TSemanticAnalyzer.InferExpressionType(const ANode: TGreenNode): LongInt;
@@ -7087,6 +7089,7 @@ begin
   FModel.AddType('TGUID', 'record');
   FModel.AddType('IInterface', 'interface');
   FModel.AddType('IUnknown', 'interface');
+  FModel.AddType('PSingle', 'alias');
   { Exception hierarchy — commonly used across core modules }
   FModel.AddType('Exception', 'class');
   FModel.AddType('EOutOfRange', 'class');
