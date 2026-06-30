@@ -63,7 +63,6 @@ type
     constructor Create(APrimary, AFallback: TAllocator);
     destructor Destroy; override;
 
-    procedure FreeMem(APtr: Pointer; ASize: SizeUInt); override;
     function ReallocMem(APtr: Pointer; AOldSize, ANewSize: SizeUInt): Pointer; override;
     function Traits: TAllocatorTraits; override;
 
@@ -202,8 +201,6 @@ procedure TFallbackAllocator.DoFreeMem(ADst: Pointer);
 var
   LEntry: PFallbackEntry;
 begin
-  if ADst = nil then
-    Exit;
   LEntry := FindEntry(ADst);
   if LEntry <> nil then begin
     FFallback.FreeMem(ADst, LEntry^.Size);
@@ -213,32 +210,13 @@ begin
     FPrimary.FreeMem(ADst, 0);
 end;
 
-procedure TFallbackAllocator.FreeMem(APtr: Pointer; ASize: SizeUInt);
-var
-  LEntry: PFallbackEntry;
-begin
-  if APtr = nil then
-    Exit;
-  LEntry := FindEntry(APtr);
-  if LEntry <> nil then begin
-    FFallback.FreeMem(APtr, LEntry^.Size);
-    RemoveEntry(APtr);
-  end
-  else
-    FPrimary.FreeMem(APtr, ASize);
-end;
-
 function TFallbackAllocator.ReallocMem(APtr: Pointer;
   AOldSize, ANewSize: SizeUInt): Pointer;
 var
   LEntry: PFallbackEntry;
 begin
-  if APtr = nil then
-    Exit(DoGetMem(ANewSize));
-  if ANewSize = 0 then begin
-    FreeMem(APtr, AOldSize);
-    Exit(nil);
-  end;
+  if (APtr = nil) or (ANewSize = 0) then
+    Exit(inherited ReallocMem(APtr, AOldSize, ANewSize));
   LEntry := FindEntry(APtr);
   if LEntry <> nil then begin
     Result := FFallback.ReallocMem(APtr, LEntry^.Size, ANewSize);

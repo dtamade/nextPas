@@ -31,8 +31,6 @@ type
   public
     constructor CreateAnonymous(aReservationSize: UInt64);
     destructor Destroy; override;
-    procedure FreeMem(APtr: Pointer; ASize: SizeUInt); override;
-    function ReallocMem(APtr: Pointer; AOldSize, ANewSize: SizeUInt): Pointer; override;
     function Traits: TAllocatorTraits; override;
 
     property ReservationSize: SizeUInt read FReservationSize;
@@ -330,30 +328,6 @@ begin
   Result.ThreadSafe := True;
   Result.HasMemSize := False;
   Result.SupportsAligned := False;
-end;
-
-procedure TMemoryMapAllocator.FreeMem(APtr: Pointer; ASize: SizeUInt);
-begin
-  { Mmap allocator tracks block size internally via header — ASize ignored. }
-  if APtr = nil then Exit;
-  EnterCriticalSection(FLock);
-  try
-    FreeLocked(APtr);
-  finally
-    LeaveCriticalSection(FLock);
-  end;
-end;
-
-function TMemoryMapAllocator.ReallocMem(APtr: Pointer;
-  AOldSize, ANewSize: SizeUInt): Pointer;
-begin
-  if APtr = nil then
-    Exit(DoGetMem(ANewSize));
-  if ANewSize = 0 then begin
-    FreeMem(APtr, 0);
-    Exit(nil);
-  end;
-  Result := DoReallocMem(APtr, ANewSize);
 end;
 
 function CreateAnonymousMemoryMapAllocator(aReservationSize: UInt64): TAllocator;

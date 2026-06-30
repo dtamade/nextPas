@@ -128,7 +128,7 @@ type
   TSharedMemory = nextpas.core.mem.memory_map.TSharedMemory;
   TMappedSlabAllocator = nextpas.core.mem.mapped_slab_pool.TMappedSlabAllocator;
 
-function DefaultAllocator: IAllocator; inline;
+function DefaultAllocator: TAllocator; inline;
 
 function AllocZeroed(const AAllocator: IAllocator; const ASize: SizeUInt): Pointer; inline;
 function AllocArray(const AAllocator: IAllocator; const ACount, AElemSize: SizeUInt): Pointer; inline;
@@ -143,7 +143,7 @@ procedure SecureZeroString(var AStr: AnsiString); inline;
 
 implementation
 
-function DefaultAllocator: IAllocator;
+function DefaultAllocator: TAllocator;
 begin
   Result := nextpas.core.mem.default.DefaultAllocator;
 end;

@@ -26,8 +26,6 @@ type
     procedure DoFreeMem(ADst: Pointer); override;
     function  DoMemSize(APtr: Pointer): SizeUInt; override;
   public
-    procedure FreeMem(APtr: Pointer; ASize: SizeUInt); override;
-    function ReallocMem(APtr: Pointer; AOldSize, ANewSize: SizeUInt): Pointer; override;
     function  Traits: TAllocatorTraits; override;
   end;
 
@@ -159,28 +157,6 @@ begin
   if not EnsureMimallocLoaded then
     Exit;
   _mi_free(ADst);
-end;
-
-procedure TMimallocAllocator.FreeMem(APtr: Pointer; ASize: SizeUInt);
-begin
-  if not EnsureMimallocLoaded then
-    Exit;
-  _mi_free(APtr);
-end;
-
-function TMimallocAllocator.ReallocMem(APtr: Pointer;
-  AOldSize, ANewSize: SizeUInt): Pointer;
-begin
-  if not EnsureMimallocLoaded then
-    raise EAllocError.Create(aeInternalError, 'mimalloc not available');
-  if APtr = nil then
-    Exit(_mi_malloc(ANewSize));
-  if ANewSize = 0 then
-  begin
-    _mi_free(APtr);
-    Exit(nil);
-  end;
-  Result := _mi_realloc(APtr, ANewSize);
 end;
 
 function TMimallocAllocator.DoMemSize(APtr: Pointer): SizeUInt;

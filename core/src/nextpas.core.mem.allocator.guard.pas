@@ -38,8 +38,6 @@ type
     function DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
     procedure DoFreeMem(ADst: Pointer); override;
     function DoMemSize(APtr: Pointer): SizeUInt; override;
-    procedure FreeMem(APtr: Pointer; ASize: SizeUInt); override;
-    function ReallocMem(APtr: Pointer; AOldSize, ANewSize: SizeUInt): Pointer; override;
     function Traits: TAllocatorTraits; override;
   end;
 
@@ -194,26 +192,6 @@ begin
   Result.ThreadSafe := False;
   Result.HasMemSize := True;
   Result.SupportsAligned := False;
-end;
-
-procedure TGuardAllocator.FreeMem(APtr: Pointer; ASize: SizeUInt);
-begin
-  { Guard header stores UserSize — ASize ignored. }
-  DoFreeMem(APtr);
-end;
-
-function TGuardAllocator.ReallocMem(APtr: Pointer;
-  AOldSize, ANewSize: SizeUInt): Pointer;
-begin
-  { Guard header stores old size — AOldSize ignored. }
-  if APtr = nil then
-    Exit(DoGetMem(ANewSize));
-  if ANewSize = 0 then
-  begin
-    DoFreeMem(APtr);
-    Exit(nil);
-  end;
-  Result := DoReallocMem(APtr, ANewSize);
 end;
 
 end.

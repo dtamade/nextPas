@@ -33,8 +33,6 @@ type
     destructor Destroy; override;
     procedure Reset;
     property Arena: TVirtualArena read FArena;
-    procedure FreeMem(APtr: Pointer; ASize: SizeUInt); override;
-    function ReallocMem(APtr: Pointer; AOldSize, ANewSize: SizeUInt): Pointer; override;
     function Traits: TAllocatorTraits; override;
   end;
 
@@ -93,21 +91,6 @@ begin
   Result.ThreadSafe      := False;
   Result.HasMemSize      := False;
   Result.SupportsAligned := True;
-end;
-
-procedure TVirtualArenaAllocator.FreeMem(APtr: Pointer; ASize: SizeUInt);
-begin
-  { Arena bump allocator — individual free is no-op. Use Reset to release all. }
-end;
-
-function TVirtualArenaAllocator.ReallocMem(APtr: Pointer;
-  AOldSize, ANewSize: SizeUInt): Pointer;
-begin
-  if APtr = nil then
-    Exit(DoGetMem(ANewSize));
-  if ANewSize = 0 then
-    Exit(nil); { Arena — no-op free }
-  Result := DoReallocMem(APtr, ANewSize);
 end;
 
 end.

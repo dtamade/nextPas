@@ -447,7 +447,7 @@ var
   LRaised: Boolean;
 begin
   LAllocator := TFixedSlabRecordingAllocator.Create;
-  LAllocatorRef := LAllocator as IAllocator;
+  LAllocatorRef := LAllocator;
   LPool := nil;
   try
     LRaised := False;

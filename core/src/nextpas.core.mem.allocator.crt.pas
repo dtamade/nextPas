@@ -21,8 +21,6 @@ type
     function  DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
     procedure DoFreeMem(ADst: Pointer); override;
   public
-    procedure FreeMem(APtr: Pointer; ASize: SizeUInt); override;
-    function ReallocMem(APtr: Pointer; AOldSize, ANewSize: SizeUInt): Pointer; override;
     function  Traits: TAllocatorTraits; override;
   end;
 
@@ -59,24 +57,6 @@ end;
 procedure TCrtAllocator.DoFreeMem(ADst: Pointer);
 begin
   crt_free(ADst);
-end;
-
-procedure TCrtAllocator.FreeMem(APtr: Pointer; ASize: SizeUInt);
-begin
-  crt_free(APtr);
-end;
-
-function TCrtAllocator.ReallocMem(APtr: Pointer;
-  AOldSize, ANewSize: SizeUInt): Pointer;
-begin
-  if APtr = nil then
-    Exit(crt_malloc(ANewSize));
-  if ANewSize = 0 then
-  begin
-    crt_free(APtr);
-    Exit(nil);
-  end;
-  Result := crt_realloc(APtr, ANewSize);
 end;
 
 function TCrtAllocator.Traits: TAllocatorTraits;

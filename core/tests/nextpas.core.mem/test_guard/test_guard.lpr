@@ -77,7 +77,7 @@ begin
     Check(LPtr <> nil, 'GetMem(64)');
     for LI := 0 to 63 do
       LPtr[LI] := Byte(LI);
-    LNew := PByte(LAlloc.ReallocMem(LPtr, 256));
+    LNew := PByte(LAlloc.ReallocMem(LPtr, 128, 256));
     Check(LNew <> nil, 'ReallocMem(256)');
     for LI := 0 to 63 do
       Check(LNew[LI] = Byte(LI), 'data preserved');

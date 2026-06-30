@@ -90,7 +90,7 @@ begin
     Check(LTracker.ActiveAllocCount = 1, 'before realloc: count=1');
     LP^ := 42;
 
-    LP2 := PInteger(LTracker.ReallocMem(LP, 256));
+    LP2 := PInteger(LTracker.ReallocMem(LP, 4, 256));
     Check(LP2 <> nil, 'ReallocMem should succeed');
     Check(LP2^ = 42, 'data preserved after realloc');
     Check(LTracker.ActiveAllocCount = 1, 'after realloc: count=1');
@@ -232,7 +232,7 @@ end;
 
 procedure TestInnerAllocatorUsed;
 var
-  LInner: IAllocator;
+  LInner: TAllocator;
   LTracker: TTrackingAllocator;
   LP: Pointer;
   LTrackerTraits: TAllocatorTraits;
@@ -278,7 +278,7 @@ end;
 
 procedure TestTrackingWithArena;
 var
-  LArena: IAllocator;
+  LArena: TAllocator;
   LTracker: TTrackingAllocator;
   LP: Pointer;
 begin
@@ -300,7 +300,7 @@ end;
 { --- RunTestWithLeakCheck tests --- }
 
 { 有意泄漏的回调 }
-procedure DoLeakTest(AAllocator: IAllocator);
+procedure DoLeakTest(AAllocator: TAllocator);
 var
   LP: Pointer;
 begin
@@ -309,7 +309,7 @@ begin
 end;
 
 { 不泄漏的回调 }
-procedure DoNoLeakTest(AAllocator: IAllocator);
+procedure DoNoLeakTest(AAllocator: TAllocator);
 var
   LP: Pointer;
 begin
@@ -347,7 +347,7 @@ var
 begin
   LTracker := TTrackingAllocator.Create(GetRtlAllocator);
   try
-    LP := LTracker.ReallocMem(nil, 64);
+    LP := LTracker.ReallocMem(nil, 0, 64);
     Check(LP <> nil, 'ReallocMem(nil) should work');
     Check(LTracker.ActiveAllocCount = 1, 'should track as alloc');
     LTracker.FreeMem(LP);
@@ -365,7 +365,7 @@ begin
   try
     LP := LTracker.GetMem(64);
     Check(LTracker.ActiveAllocCount = 1, 'before realloc: count=1');
-    LTracker.ReallocMem(LP, 0);
+    LTracker.ReallocMem(LP, 64, 0);
     Check(LTracker.ActiveAllocCount = 0, 'after realloc to 0: count=0');
   finally
     LTracker.Free;

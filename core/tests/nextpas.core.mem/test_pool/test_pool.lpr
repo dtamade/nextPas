@@ -441,7 +441,7 @@ end;
 
 procedure TestMakePoolAllocatorFactory;
 var
-  LAllocator: IAllocator;
+  LAllocator: TAllocator;
   LPtr: Pointer;
 begin
   LAllocator := MakePoolAllocator(64, 100);

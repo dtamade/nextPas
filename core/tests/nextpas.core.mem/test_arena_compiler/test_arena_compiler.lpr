@@ -9,6 +9,7 @@ uses
   nextpas.core.mem.arena.virtual,
   nextpas.core.mem.allocator.arena,
   nextpas.core.mem.intf,
+  nextpas.core.mem.allocator.base,
   nextpas.core.mem.base;
 
 var
@@ -363,7 +364,7 @@ end;
 
 procedure TestArenaAllocatorInterface;
 var
-  LAlloc: IAllocator;
+  LAlloc: TAllocator;
   LP: Pointer;
 begin
   LAlloc := TVirtualArenaAllocator.Create;
@@ -414,7 +415,7 @@ end;
 
 procedure TestArenaAllocatorFreeIsNop;
 var
-  LAlloc: IAllocator;
+  LAlloc: TAllocator;
   LP1, LP2: Pointer;
 begin
   LAlloc := TVirtualArenaAllocator.Create;
@@ -427,7 +428,7 @@ end;
 
 procedure TestArenaAllocatorAllocMem;
 var
-  LAlloc: IAllocator;
+  LAlloc: TAllocator;
   LP: PByte;
   I: Integer;
 begin
@@ -440,7 +441,7 @@ end;
 
 procedure TestArenaAllocatorRealloc;
 var
-  LAlloc: IAllocator;
+  LAlloc: TAllocator;
   LP, LP2: PInteger;
 begin
   LAlloc := TVirtualArenaAllocator.Create;

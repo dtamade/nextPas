@@ -57,7 +57,7 @@ type
     function ReportLeaks: string;
     property Inner: TAllocator read FInner;
 
-    procedure FreeMem(APtr: Pointer; ASize: SizeUInt); override;
+    procedure FreeMem(ADst: Pointer);
     function ReallocMem(APtr: Pointer; AOldSize, ANewSize: SizeUInt): Pointer; override;
     function Traits: TAllocatorTraits; override;
   end;
@@ -293,35 +293,33 @@ begin
   Result.SupportsAligned := False;
 end;
 
-procedure TTrackingAllocator.FreeMem(APtr: Pointer; ASize: SizeUInt);
+procedure TTrackingAllocator.FreeMem(ADst: Pointer);
 begin
-  if APtr = nil then
+  if ADst = nil then
     Exit;
   EnterCriticalSection(FLock);
   try
-    if FindRecordIndex(APtr) < 0 then
+    if FindRecordIndex(ADst) < 0 then
       raise EDoubleFree.Create(aeDoubleFree,
         'TTrackingAllocator.FreeMem: pointer not tracked (double-free or foreign pointer)');
-    RemoveRecord(APtr);
+    RemoveRecord(ADst);
   finally
     LeaveCriticalSection(FLock);
   end;
-  FInner.FreeMem(APtr, ASize);
+  FInner.FreeMem(ADst);
 end;
 
 function TTrackingAllocator.ReallocMem(APtr: Pointer;
   AOldSize, ANewSize: SizeUInt): Pointer;
 begin
+  { Delegate nil/0 cases to base class (handles FreeMem → record removal). }
+  if (APtr = nil) or (ANewSize = 0) then
+    Exit(inherited ReallocMem(APtr, AOldSize, ANewSize));
   Result := FInner.ReallocMem(APtr, AOldSize, ANewSize);
   EnterCriticalSection(FLock);
   try
     if Result <> nil then
-    begin
-      if APtr <> nil then
-        UpdateRecord(APtr, Result, ANewSize)
-      else
-        AddRecord(Result, ANewSize);
-    end;
+      UpdateRecord(APtr, Result, ANewSize);
   finally
     LeaveCriticalSection(FLock);
   end;

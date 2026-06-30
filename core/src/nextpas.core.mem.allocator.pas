@@ -55,13 +55,13 @@ type
   TGuardAllocator = nextpas.core.mem.allocator.guard.TGuardAllocator;
 
   // 获取/工厂函数声明（门面转发）
-  function GetRtlAllocator: IAllocator;
+  function GetRtlAllocator: TAllocator;
   {$IFDEF NEXTPAS_CORE_CRT_ALLOCATOR}
-  function GetCrtAllocator: IAllocator;
+  function GetCrtAllocator: TAllocator;
   {$ENDIF}
-  function GetMimallocAllocator: IAllocator;
-  function TryGetMimallocAllocator(out A: IAllocator): Boolean;
-  function CreateAnonymousMemoryMapAllocator(aReservationSize: UInt64): IAllocator;
+  function GetMimallocAllocator: TAllocator;
+  function TryGetMimallocAllocator(out A: TAllocator): Boolean;
+  function CreateAnonymousMemoryMapAllocator(aReservationSize: UInt64): TAllocator;
   function CreateCallbackAllocator(aGetMem: TGetMemCallback;
                                    aAllocMem: TAllocMemCallback;
                                    aReallocMem: TReallocMemCallback;
@@ -69,28 +69,28 @@ type
 
 implementation
 
-function GetRtlAllocator: IAllocator;
+function GetRtlAllocator: TAllocator;
 begin
   Result := nextpas.core.mem.allocator.rtl.GetRtlAllocator;
 end;
 
-function GetMimallocAllocator: IAllocator; inline;
+function GetMimallocAllocator: TAllocator; inline;
 begin
   Result := nextpas.core.mem.allocator.mimalloc.GetMimallocAllocator;
 end;
 
-function TryGetMimallocAllocator(out A: IAllocator): Boolean; inline;
+function TryGetMimallocAllocator(out A: TAllocator): Boolean; inline;
 begin
   Result := nextpas.core.mem.allocator.mimalloc.TryGetMimallocAllocator(A);
 end;
 
-function CreateAnonymousMemoryMapAllocator(aReservationSize: UInt64): IAllocator;
+function CreateAnonymousMemoryMapAllocator(aReservationSize: UInt64): TAllocator;
 begin
   Result := nextpas.core.mem.allocator.mmap.CreateAnonymousMemoryMapAllocator(aReservationSize);
 end;
 
 {$IFDEF NEXTPAS_CORE_CRT_ALLOCATOR}
-function GetCrtAllocator: IAllocator;
+function GetCrtAllocator: TAllocator;
 begin
   Result := nextpas.core.mem.allocator.crt.GetCrtAllocator;
 end;

@@ -19,7 +19,7 @@ const
 type
   PDefaultAllocatorThreadData = ^TDefaultAllocatorThreadData;
   TDefaultAllocatorThreadData = record
-    Allocator: IAllocator;
+    Allocator: TAllocator;
     Failed: Boolean;
     StartFlag: PLongInt;
   end;
@@ -60,8 +60,8 @@ end;
 
 procedure TestDefaultAllocatorSingletonSingleThread;
 var
-  LFirst: IAllocator;
-  LSecond: IAllocator;
+  LFirst: TAllocator;
+  LSecond: TAllocator;
 begin
   LFirst := DefaultAllocator;
   LSecond := DefaultAllocator;
@@ -77,7 +77,7 @@ var
   LThreadData: array[0..THREAD_COUNT - 1] of TDefaultAllocatorThreadData;
   LStartFlag: LongInt;
   LIndex: Integer;
-  LFirst: IAllocator;
+  LFirst: TAllocator;
 begin
   LStartFlag := 0;
   for LIndex := 0 to High(LThreads) do
@@ -105,7 +105,7 @@ end;
 
 procedure TestDefaultAllocatorAllocMem;
 var
-  LAllocator: IAllocator;
+  LAllocator: TAllocator;
   LPtr: Pointer;
   LI: Integer;
 begin
@@ -120,7 +120,7 @@ end;
 
 procedure TestDefaultAllocatorMemSize;
 var
-  LAllocator: IAllocator;
+  LAllocator: TAllocator;
   LPtr: Pointer;
   LReported: SizeUInt;
 begin
@@ -134,7 +134,7 @@ end;
 
 procedure TestDefaultAllocatorReallocPreserves;
 var
-  LAllocator: IAllocator;
+  LAllocator: TAllocator;
   LPtr: Pointer;
   LI: Integer;
 begin

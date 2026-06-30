@@ -31,7 +31,7 @@ type
 
 var
   T: TTestSuite;
-  GAllocator: IAllocator = nil;
+  GAllocator: TAllocator = nil;
   GPoolAllocator: TPoolAllocator = nil;
   GFallback: TRecordingFallback = nil;
   GPtr: Pointer = nil;
@@ -166,7 +166,7 @@ var
 begin
   GFallback := TRecordingFallback.Create;
   GPoolAllocator := TPoolAllocator.Create(32, 1, GFallback);
-  GAllocator := GPoolAllocator as IAllocator;
+  GAllocator := GPoolAllocator;
   try
     LBaselineAvailable := GPoolAllocator.Available;
     Check(GAllocator.GetMem(0) = nil, 'GetMem(0) should return nil');
@@ -191,7 +191,7 @@ var
 begin
   GFallback := TRecordingFallback.Create;
   GPoolAllocator := TPoolAllocator.Create(32, 1, GFallback);
-  GAllocator := GPoolAllocator as IAllocator;
+  GAllocator := GPoolAllocator;
   try
     GPtr := GAllocator.GetMem(16);
     Check(GPtr <> nil, 'pool allocation should succeed');
@@ -251,7 +251,7 @@ procedure TestInteriorPoolReallocFailsWithoutLeaking;
 begin
   GFallback := TRecordingFallback.Create;
   GPoolAllocator := TPoolAllocator.Create(32, 2, GFallback);
-  GAllocator := GPoolAllocator as IAllocator;
+  GAllocator := GPoolAllocator;
   try
     GPtr := GAllocator.GetMem(16);
     Check(GPtr <> nil, 'pool allocation should succeed');
@@ -280,7 +280,7 @@ var
 begin
   GFallback := TRecordingFallback.Create;
   GPoolAllocator := TPoolAllocator.Create(32, 1, GFallback);
-  GAllocator := GPoolAllocator as IAllocator;
+  GAllocator := GPoolAllocator;
   try
     LBaselineGetCalls := GFallback.GetCalls;
     LBaselineFreeCalls := GFallback.FreeCalls;

@@ -21,9 +21,6 @@ type
     function  DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
     procedure DoFreeMem(ADst: Pointer); override;
   public
-    { Phase 1: 新签名 override。ASize/AOldSize 被忽略。 }
-    procedure FreeMem(APtr: Pointer; ASize: SizeUInt); override;
-    function ReallocMem(APtr: Pointer; AOldSize, ANewSize: SizeUInt): Pointer; override;
     function  Traits: TAllocatorTraits; override;
   end;
 
@@ -55,26 +52,6 @@ end;
 procedure TRtlAllocator.DoFreeMem(ADst: Pointer);
 begin
   System.FreeMem(ADst);
-end;
-
-procedure TRtlAllocator.FreeMem(APtr: Pointer; ASize: SizeUInt);
-begin
-  { RTL knows block size via its own header — ASize ignored. }
-  System.FreeMem(APtr);
-end;
-
-function TRtlAllocator.ReallocMem(APtr: Pointer;
-  AOldSize, ANewSize: SizeUInt): Pointer;
-begin
-  { RTL handles old size internally — AOldSize ignored. }
-  if APtr = nil then
-    Exit(System.GetMem(ANewSize));
-  if ANewSize = 0 then
-  begin
-    System.FreeMem(APtr);
-    Exit(nil);
-  end;
-  Result := System.ReallocMem(APtr, ANewSize);
 end;
 
 function TRtlAllocator.Traits: TAllocatorTraits;

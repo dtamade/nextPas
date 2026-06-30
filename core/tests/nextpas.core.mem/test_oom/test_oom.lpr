@@ -57,7 +57,7 @@ end;
 
 function NewFailAllocator: nextpas.core.mem.allocator.IAllocator;
 begin
-  Result := TFailAllocator.Create as nextpas.core.mem.allocator.IAllocator;
+  Result := TFailAllocator.Create;
 end;
 
 procedure ResetVirtualArenaHooks;

@@ -63,8 +63,6 @@ type
     constructor Create(ABlockSize: SizeUInt; ACapacity: Integer; AFallback: TAllocator = nil);
     destructor Destroy; override;
 
-    procedure FreeMem(APtr: Pointer; ASize: SizeUInt); override;
-    function ReallocMem(APtr: Pointer; AOldSize, ANewSize: SizeUInt): Pointer; override;
     function AllocAligned(ASize, AAlignment: SizeUInt): Pointer; override;
     procedure FreeAligned(APtr: Pointer); override;
     function Traits: TAllocatorTraits; override;
@@ -269,7 +267,7 @@ begin
   Result := FPool.Available;
 end;
 
-{ --- Do* template methods (Phase 0-1 compat) --- }
+{ --- Do* template methods --- }
 
 function TPoolAllocator.DoGetMem(ASize: SizeUInt): Pointer;
 begin
@@ -334,7 +332,6 @@ procedure TPoolAllocator.DoFreeMem(ADst: Pointer);
 var
   LAlloc: TPoolAllocatorAlloc;
 begin
-  if ADst = nil then Exit;
   if not UntrackAlloc(ADst, LAlloc) then
     RaiseUnknownPointer(ADst, 'FreeMem');
   if LAlloc.Owner = paoPool then
@@ -343,59 +340,6 @@ begin
     FFallback.FreeAligned(ADst)
   else
     FFallback.FreeMem(ADst, LAlloc.Size);
-end;
-
-{ --- New public signatures (Phase 1) --- }
-
-procedure TPoolAllocator.FreeMem(APtr: Pointer; ASize: SizeUInt);
-var
-  LAlloc: TPoolAllocatorAlloc;
-begin
-  if APtr = nil then Exit;
-  if not UntrackAlloc(APtr, LAlloc) then
-    RaiseUnknownPointer(APtr, 'FreeMem');
-  if LAlloc.Owner = paoPool then
-    FPool.ReleasePtr(APtr)
-  else if LAlloc.Aligned then
-    FFallback.FreeAligned(APtr)
-  else
-    FFallback.FreeMem(APtr, LAlloc.Size);
-end;
-
-function TPoolAllocator.ReallocMem(APtr: Pointer;
-  AOldSize, ANewSize: SizeUInt): Pointer;
-var
-  LAlloc: TPoolAllocatorAlloc;
-  LCopySize: SizeUInt;
-begin
-  if APtr = nil then Exit(DoGetMem(ANewSize));
-  if ANewSize = 0 then begin
-    FreeMem(APtr, AOldSize);
-    Exit(nil);
-  end;
-  if not TryGetAlloc(APtr, LAlloc) then
-    RaiseUnknownPointer(APtr, 'ReallocMem');
-  if LAlloc.Owner = paoPool then begin
-    Result := DoGetMem(ANewSize);
-    if Result <> nil then begin
-      LCopySize := LAlloc.Size;
-      if LCopySize > ANewSize then LCopySize := ANewSize;
-      if LCopySize > 0 then CopyMem(Result, APtr, LCopySize);
-      FreeMem(APtr, LAlloc.Size);
-    end;
-  end else if LAlloc.Aligned then begin
-    Result := AllocFallback(ANewSize, LAlloc.Alignment, True);
-    if Result <> nil then begin
-      LCopySize := LAlloc.Size;
-      if LCopySize > ANewSize then LCopySize := ANewSize;
-      if LCopySize > 0 then CopyMem(Result, APtr, LCopySize);
-      FFallback.FreeAligned(APtr);
-    end;
-  end else begin
-    Result := FFallback.ReallocMem(APtr, LAlloc.Size, ANewSize);
-    if Result <> nil then
-      UpdateTrackedAlloc(APtr, Result, ANewSize, 0, False);
-  end;
 end;
 
 function TPoolAllocator.Traits: TAllocatorTraits;
