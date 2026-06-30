@@ -32,6 +32,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.mem.base,            // ValidateAlignArg
   nextpas.core.mem.allocator.base,  // TAllocator
   nextpas.core.mem.allocator.rtl,   // ResolveAllocator
   nextpas.core.mem.error;
