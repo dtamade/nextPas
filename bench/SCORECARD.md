@@ -8,10 +8,10 @@
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **118** | 4 | 33 | **76%** |
+| **Go** | **120** | 4 | 33 | **76%** |
 | **Rust** | 19 | 0 | 47 | **29%** |
 
-## Track Summary (38 tracks, 160 operations)
+## Track Summary (39 tracks, 162 operations)
 
 ### Text Operations (6 ops)
 
@@ -189,7 +189,16 @@
 | Membership/100k | 297µs | 37.5µs | 0.13x |
 | **Build/100k** | **104µs** | 132µs | **1.27x** ✓ |
 
-**5W vs Go, 4W vs Rust** ⭐ Killer track
+**5W 1L vs Go** — `set of Byte` compiles to `bt` (bit test) instruction; Go `map[byte]bool` has hash overhead. Bulk ops 6.5-7x, single membership 9.25x, sparse 2.65x
+
+### Set Membership Operations (2 ops)
+
+| Track | Pascal (ns) | Go (ns) | vs Go |
+|-------|-------------|---------|-------|
+| **SetContains/10M** | **29443187** | 272733597 | **9.25x** ✓ |
+| **SetContainsSparse/10M** | **30043596** | 79625570 | **2.65x** ✓ |
+
+**2W vs Go** — FPC `set of Byte` → `bt` instruction vs Go `map[byte]bool` hash lookup; sparse literal set also compiles to bitmap constant
 
 ### String Operations (4 ops)
 
