@@ -195,6 +195,9 @@ procedure RegisterEntry(var AEntries: specialize TArray<TTestEntry>;
 procedure CopyTags(out ATags: specialize TArray<string>;
   const ASource: array of string);
   { Copy an open array of tag strings into a dynamic array. }
+function GrowCapacity(ALen, AInitCap: Integer): Integer;
+  { Returns new capacity for a dynamic array. Geometric growth above AInitCap.
+    Shared by runner, context, and other growth call-sites. }
 
 { ── Exception Formatting (eliminate repeated ClassName + trace patterns) ──── }
 
@@ -290,16 +293,10 @@ var
   LOldLen, LNewLen, LCap: Integer;
 begin
   LOldLen := Length(AResults);
-  LCap := LOldLen;
-  if LCap < 16 then
-    LCap := 16
-  else if LOldLen >= LCap then
-    LCap := LCap * 2;
+  LCap := GrowCapacity(LOldLen, 16);
   if LCap <> LOldLen then
     SetLength(AResults, LCap);
   AResults[LOldLen] := AResult;
-  { Trim to actual length — FPC keeps capacity internally,
-    so the next SetLength to the same size is a no-op. }
   LNewLen := LOldLen + 1;
   if LNewLen <> LCap then
     SetLength(AResults, LNewLen);
@@ -377,11 +374,7 @@ var
   LOldLen, LCap: Integer;
 begin
   LOldLen := Length(AEntries);
-  LCap := LOldLen;
-  if LCap < 16 then
-    LCap := 16
-  else if LOldLen >= LCap then
-    LCap := LCap * 2;
+  LCap := GrowCapacity(LOldLen, 16);
   if LCap <> LOldLen then
     SetLength(AEntries, LCap);
   AEntries[LOldLen] := AEntry;
@@ -396,6 +389,14 @@ begin
   SetLength(ATags, Length(ASource));
   for I := 0 to High(ASource) do
     ATags[I] := ASource[I];
+end;
+
+function GrowCapacity(ALen, AInitCap: Integer): Integer;
+begin
+  if ALen < AInitCap then
+    Result := AInitCap
+  else
+    Result := ALen * 2;
 end;
 
 { Exception Formatting }

@@ -1014,15 +1014,6 @@ end;
 
 { ── Generic array capacity growth ───────────────────────────────────────────── }
 
-function GrowCapacity(ALen, AInitCap: Integer): Integer;
-{ Returns new capacity for a dynamic array. Geometric growth above AInitCap. }
-begin
-  if ALen < AInitCap then
-    Result := AInitCap
-  else
-    Result := ALen * 2;
-end;
-
 function GrowArrayLen(var AArray: specialize TArray<Pointer>; AInitCap: Integer): Integer;
 { Grow AArray capacity if needed. Returns old length (= insertion index). }
 var

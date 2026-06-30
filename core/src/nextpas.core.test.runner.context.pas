@@ -170,9 +170,7 @@ var
   LOldLen, LCap: Integer;
 begin
   LOldLen := Length(FLogLines);
-  LCap := LOldLen;
-  if LCap < 8 then LCap := 8
-  else if LOldLen >= LCap then LCap := LCap * 2;
+  LCap := GrowCapacity(LOldLen, 8);
   if LCap <> LOldLen then SetLength(FLogLines, LCap);
   FLogLines[LOldLen] := AMessage;
   SetLength(FLogLines, LOldLen + 1);
@@ -190,9 +188,7 @@ var
 begin
   LProc := AProc;
   LOldLen := Length(FCleanups);
-  LCap := LOldLen;
-  if LCap < 4 then LCap := 4
-  else if LOldLen >= LCap then LCap := LCap * 2;
+  LCap := GrowCapacity(LOldLen, 4);
   if LCap <> LOldLen then SetLength(FCleanups, LCap);
   FCleanups[LOldLen] := procedure
   begin
@@ -206,9 +202,7 @@ var
   LOldLen, LCap: Integer;
 begin
   LOldLen := Length(FCleanups);
-  LCap := LOldLen;
-  if LCap < 4 then LCap := 4
-  else if LOldLen >= LCap then LCap := LCap * 2;
+  LCap := GrowCapacity(LOldLen, 4);
   if LCap <> LOldLen then SetLength(FCleanups, LCap);
   FCleanups[LOldLen] := AProc;
   SetLength(FCleanups, LOldLen + 1);
@@ -265,14 +259,11 @@ end;
 
 procedure AppendFailedName(var ANames: specialize TArray<string>;
   const AName: string);
-{ Geometric growth: pre-allocate capacity to avoid O(n²) realloc. }
 var
   LOldLen, LCap: Integer;
 begin
   LOldLen := Length(ANames);
-  LCap := LOldLen;
-  if LCap < 4 then LCap := 4
-  else if LOldLen >= LCap then LCap := LCap * 2;
+  LCap := GrowCapacity(LOldLen, 4);
   if LCap <> LOldLen then SetLength(ANames, LCap);
   ANames[LOldLen] := AName;
   SetLength(ANames, LOldLen + 1);
