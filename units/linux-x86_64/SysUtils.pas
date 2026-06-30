@@ -5,7 +5,7 @@ unit SysUtils;
 interface
 
 uses
-  {$IFNDEF FPC}System,{$ENDIF} nextpas.core.exception;
+  nextpas.core.exception;
 const
   PathDelim = '/';
   DirectorySeparator = '/';
