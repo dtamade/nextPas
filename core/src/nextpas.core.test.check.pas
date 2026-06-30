@@ -264,14 +264,9 @@ end;
 procedure CheckSame(const AExpected, AActual: Pointer; const AMessage: string);
 begin
   if AExpected <> AActual then
-  begin
-    if AMessage <> '' then
-      InternalFail(AMessage)
-    else
-      InternalFail('Expected same pointer $' +
-        IntToHex(NativeUInt(AExpected), 16) + ' but got $' +
-        IntToHex(NativeUInt(AActual), 16));
-  end;
+    FailWithDefault(AMessage,
+      'Expected same pointer $' + IntToHex(NativeUInt(AExpected), 16) +
+      ' but got $' + IntToHex(NativeUInt(AActual), 16));
 end;
 
 procedure CheckInRange(const AValue, ALow, AHigh: Int64);
@@ -373,13 +368,9 @@ begin
   LDiff := AActual - AExpected;
   if LDiff < 0 then LDiff := -LDiff;
   if LDiff > AEpsilon then
-  begin
-    if AMessage <> '' then
-      InternalFail(AMessage)
-    else
-      InternalFail('Expected ' + FloatToStr(AExpected) +
-        ' (+/-' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual));
-  end;
+    FailWithDefault(AMessage,
+      'Expected ' + FloatToStr(AExpected) +
+      ' (+/-' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual));
 end;
 
 procedure CheckNotNear(const AExpected, AActual: Double;
@@ -390,13 +381,9 @@ begin
   LDiff := AActual - AExpected;
   if LDiff < 0 then LDiff := -LDiff;
   if LDiff <= AEpsilon then
-  begin
-    if AMessage <> '' then
-      InternalFail(AMessage)
-    else
-      InternalFail('Expected not near ' + FloatToStr(AExpected) +
-        ' (+/-' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual));
-  end;
+    FailWithDefault(AMessage,
+      'Expected not near ' + FloatToStr(AExpected) +
+      ' (+/-' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual));
 end;
 
 procedure Fail(const AMessage: string);
