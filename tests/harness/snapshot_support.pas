@@ -31,6 +31,10 @@ function SnapshotStatusForFixture(
 function ReadTextFile(const APath: string): string;
 procedure WriteTextFile(const APath: string; const AText: string);
 function NormalizeSnapshotText(const AText: string): string;
+function RelativeFixtureName(
+  const AGroupRoot: string;
+  const AFixturePath: string
+): string;
 
 implementation
 
