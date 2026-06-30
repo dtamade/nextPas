@@ -23,11 +23,6 @@ function SnapshotDiffPathForFixture(
   const AGroupRoot: string;
   const AFixturePath: string
 ): string;
-function SnapshotStatusForFixture(
-  const AGroupName: string;
-  const AGroupRoot: string;
-  const AFixturePath: string
-): string;
 function ReadTextFile(const APath: string): string;
 procedure WriteTextFile(const APath: string; const AText: string);
 function NormalizeSnapshotText(const AText: string): string;
