@@ -52,6 +52,42 @@ begin
   end;
   if A[0] < 0 then WriteLn('');
 end;
+procedure BenchArraySum(const ACtx: IBenchContext);
+const ARR_SZ = 10000;
+var I, J: Integer; S: Int64; A: array[0..ARR_SZ-1] of Int64;
+begin
+  for I := 0 to ARR_SZ-1 do A[I] := I;
+  for I := 1 to N do begin
+    S := 0;
+    for J := 0 to ARR_SZ-1 do
+      S := S + A[J];
+  end;
+  if S < 0 then WriteLn('');
+end;
+procedure BenchLinearSearch(const ACtx: IBenchContext);
+const ARR_SZ = 10000;
+var I, J, Found: Integer; A: array[0..ARR_SZ-1] of Integer;
+begin
+  for I := 0 to ARR_SZ-1 do A[I] := I * 3 + 7;
+  for I := 1 to N do begin
+    Found := -1;
+    for J := 0 to ARR_SZ-1 do
+      if A[J] = 29998 then begin Found := J; Break; end;
+  end;
+  if Found < 0 then WriteLn('');
+end;
+procedure BenchCountEven(const ACtx: IBenchContext);
+const ARR_SZ = 10000;
+var I, J, Count: Integer; A: array[0..ARR_SZ-1] of Integer;
+begin
+  for I := 0 to ARR_SZ-1 do A[I] := I;
+  for I := 1 to N do begin
+    Count := 0;
+    for J := 0 to ARR_SZ-1 do
+      if (A[J] and 1) = 0 then Inc(Count);
+  end;
+  if Count < 0 then WriteLn('');
+end;
 var LSuite: IBenchSuite; LResults: IBenchResults;
 begin
   InitData;
@@ -60,6 +96,9 @@ begin
   LSuite.Add('ByteFrequency/4KB×100K', @BenchByteFrequency);
   LSuite.Add('ArrayReverse/10K×100K', @BenchArrayReverse);
   LSuite.Add('ArrayRotate/10K×100K', @BenchArrayRotate);
+  LSuite.Add('ArraySum/10Kx10K', @BenchArraySum);
+  LSuite.Add('LinearSearch/10Kx10K', @BenchLinearSearch);
+  LSuite.Add('CountEven/10Kx10K', @BenchCountEven);
   LResults := LSuite.Run;
   WriteLn(LResults.ToBenchStat);
 end.

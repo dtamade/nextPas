@@ -62,3 +62,56 @@ func BenchmarkArrayRotate(b *testing.B) {
 		sinkI = a[0]
 	}
 }
+
+func BenchmarkArraySum(b *testing.B) {
+	for n := 0; n < b.N; n++ {
+		var a [arrArr]int64
+		for i := 0; i < arrArr; i++ {
+			a[i] = int64(i)
+		}
+		for i := 0; i < arrN; i++ {
+			s := int64(0)
+			for j := 0; j < arrArr; j++ {
+				s += a[j]
+			}
+			sinkI = int(s)
+		}
+	}
+}
+
+func BenchmarkLinearSearch(b *testing.B) {
+	for n := 0; n < b.N; n++ {
+		var a [arrArr]int
+		for i := 0; i < arrArr; i++ {
+			a[i] = i*3 + 7
+		}
+		for i := 0; i < arrN; i++ {
+			found := -1
+			for j := 0; j < arrArr; j++ {
+				if a[j] == 29998 {
+					found = j
+					break
+				}
+			}
+			sinkI = found
+		}
+	}
+}
+
+func BenchmarkCountEven(b *testing.B) {
+	for n := 0; n < b.N; n++ {
+		var a [arrArr]int
+		for i := 0; i < arrArr; i++ {
+			a[i] = i
+		}
+		for i := 0; i < arrN; i++ {
+			count := 0
+			for j := 0; j < arrArr; j++ {
+				if a[j]&1 == 0 {
+					count++
+				}
+			}
+			sinkI = count
+		}
+	}
+}
