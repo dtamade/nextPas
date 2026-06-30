@@ -2201,6 +2201,41 @@ begin
   SetLength(Suites, LIdx + 1);
 end;
 
+{ ── Runner banner (shared by sequential + parallel paths) ────────────────────── }
+
+procedure WriteRunnerBanner(const AName: string; const AConfig: TTestConfig;
+  const ASink: IOutputSink; AIsParallel: Boolean);
+var
+  LRepeatAll, LMaxFailures: Integer;
+  LLabel: string;
+begin
+  if AIsParallel then LLabel := ' (parallel)' else LLabel := '';
+  ASink.WriteLn(
+    AnsiBold('=== ', AConfig) +
+    AnsiBold(AName, AConfig) +
+    AnsiBold(LLabel + ' ===', AConfig));
+  LRepeatAll := GetRepeatAllCount(AConfig);
+  if LRepeatAll > 1 then
+    ASink.WriteLn(AnsiDim(
+      '  Running all tests ' + IntToStr(LRepeatAll) + ' times (--count=' +
+      IntToStr(LRepeatAll) + ')', AConfig));
+  if GetFailFast(AConfig) then
+    ASink.WriteLn(AnsiDim('  FailFast enabled', AConfig));
+  LMaxFailures := GetMaxFailures(AConfig);
+  if LMaxFailures > 0 then
+    ASink.WriteLn(AnsiDim(
+      '  Failures max: ' + IntToStr(LMaxFailures) + ' (--failures-max)',
+      AConfig));
+  if GetShortMode(AConfig) then
+    ASink.WriteLn(AnsiDim('  Short mode enabled (--short)', AConfig));
+  if GetVerboseMode(AConfig) then
+    ASink.WriteLn(AnsiDim('  Verbose mode (--verbose)', AConfig));
+  if GetRunTimeoutSec(AConfig) > 0 then
+    ASink.WriteLn(AnsiDim(
+      '  Run timeout: ' + IntToStr(GetRunTimeoutSec(AConfig)) + 's (--timeout)',
+      AConfig));
+end;
+
 function TTestRunner.RunAll: Boolean;
 var
   LResults: specialize TArray<TTestRunResult>;
@@ -2244,28 +2279,7 @@ begin
   LFailFast := GetFailFast(LConfig);
   LMaxFailures := GetMaxFailures(LConfig);
 
-  LOutSink.WriteLn(
-    AnsiBold('=== ', LConfig) +
-    AnsiBold(Name, LConfig) +
-    AnsiBold(' ===', LConfig));
-  if LRepeatAll > 1 then
-    LOutSink.WriteLn(AnsiDim(
-      '  Running all tests ' + IntToStr(LRepeatAll) + ' times (--count=' +
-      IntToStr(LRepeatAll) + ')', LConfig));
-  if LFailFast then
-    LOutSink.WriteLn(AnsiDim('  FailFast enabled', LConfig));
-  if LMaxFailures > 0 then
-    LOutSink.WriteLn(AnsiDim(
-      '  Failures max: ' + IntToStr(LMaxFailures) + ' (--failures-max)',
-      LConfig));
-  if GetShortMode(LConfig) then
-    LOutSink.WriteLn(AnsiDim('  Short mode enabled (--short)', LConfig));
-  if GetVerboseMode(LConfig) then
-    LOutSink.WriteLn(AnsiDim('  Verbose mode (--verbose)', LConfig));
-  if GetRunTimeoutSec(LConfig) > 0 then
-    LOutSink.WriteLn(AnsiDim(
-      '  Run timeout: ' + IntToStr(GetRunTimeoutSec(LConfig)) + 's (--timeout)',
-      LConfig));
+  WriteRunnerBanner(Name, LConfig, LOutSink, False);
 
   LAllPassed := True;
   TotalPass := 0;
@@ -2366,28 +2380,7 @@ begin
   LFailFast := GetFailFast(LConfig);
   LMaxFailures := GetMaxFailures(LConfig);
 
-  LOutSink.WriteLn(
-    AnsiBold('=== ', LConfig) +
-    AnsiBold(Name, LConfig) +
-    AnsiBold(' (parallel) ===', LConfig));
-  if LRepeatAll > 1 then
-    LOutSink.WriteLn(AnsiDim(
-      '  Running all tests ' + IntToStr(LRepeatAll) + ' times (--count=' +
-      IntToStr(LRepeatAll) + ')', LConfig));
-  if LFailFast then
-    LOutSink.WriteLn(AnsiDim('  FailFast enabled', LConfig));
-  if LMaxFailures > 0 then
-    LOutSink.WriteLn(AnsiDim(
-      '  Failures max: ' + IntToStr(LMaxFailures) + ' (--failures-max)',
-      LConfig));
-  if GetShortMode(LConfig) then
-    LOutSink.WriteLn(AnsiDim('  Short mode enabled (--short)', LConfig));
-  if GetVerboseMode(LConfig) then
-    LOutSink.WriteLn(AnsiDim('  Verbose mode (--verbose)', LConfig));
-  if GetRunTimeoutSec(LConfig) > 0 then
-    LOutSink.WriteLn(AnsiDim(
-      '  Run timeout: ' + IntToStr(GetRunTimeoutSec(LConfig)) + 's (--timeout)',
-      LConfig));
+  WriteRunnerBanner(Name, LConfig, LOutSink, True);
 
   LAllPassed := True;
   TotalPass := 0;
