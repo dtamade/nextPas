@@ -306,11 +306,8 @@ begin
     R^.Mtx.Acquire;
     try
       R^.Skip^ := R^.Skip^ + 1;
-      if LConfig.VerboseMode then
-        WriteTestStatusVerbose(tsSkipped, R^.Entry.Name, '',
-          R^.Entry.SkipReason, 0, LOutSink, LConfig)
-      else
-        LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, R^.Entry.Name, LConfig));
+      WriteTestOutput(tsSkipped, R^.Entry.Name, '', R^.Entry.SkipReason,
+        0, LOutSink, LConfig);
     finally
       SafeRelease(R^.Mtx, LConfig);
     end;
@@ -326,8 +323,8 @@ begin
     R^.Mtx.Acquire;
     try
       R^.Skip^ := R^.Skip^ + 1;
-      LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, R^.Entry.Name,
-        'benchmarks not supported in parallel mode', LConfig));
+      WriteTestOutput(tsSkipped, R^.Entry.Name, '',
+        'benchmarks not supported in parallel mode', 0, LOutSink, LConfig);
     finally
       SafeRelease(R^.Mtx, LConfig);
     end;
@@ -547,37 +544,17 @@ begin
     begin
       R^.ProgressCounter^ := R^.ProgressCounter^ + 1;
       if R^.ProgressTotal > 0 then
-      begin
-        if LConfig.VerboseMode then
-          WriteTestStatusVerbose(LStatus,
-            '[' + IntToStr(R^.ProgressCounter^) + '/' +
-            IntToStr(R^.ProgressTotal) + '] ' + R^.Entry.Name,
-            LFailMsg, LSkipReason, LDurMs, LOutSink, LConfig)
-        else
-          WriteTestStatus(LStatus,
-            '[' + IntToStr(R^.ProgressCounter^) + '/' +
-            IntToStr(R^.ProgressTotal) + '] ' + R^.Entry.Name,
-            LFailMsg, LSkipReason, LOutSink, LConfig);
-      end
+        WriteTestOutput(LStatus,
+          '[' + IntToStr(R^.ProgressCounter^) + '/' +
+          IntToStr(R^.ProgressTotal) + '] ' + R^.Entry.Name,
+          LFailMsg, LSkipReason, LDurMs, LOutSink, LConfig)
       else
-      begin
-        if LConfig.VerboseMode then
-          WriteTestStatusVerbose(LStatus, R^.Entry.Name, LFailMsg,
-            LSkipReason, LDurMs, LOutSink, LConfig)
-        else
-          WriteTestStatus(LStatus, R^.Entry.Name, LFailMsg, LSkipReason,
-            LOutSink, LConfig);
-      end;
+        WriteTestOutput(LStatus, R^.Entry.Name, LFailMsg,
+          LSkipReason, LDurMs, LOutSink, LConfig);
     end
     else
-    begin
-      if LConfig.VerboseMode then
-        WriteTestStatusVerbose(LStatus, R^.Entry.Name, LFailMsg,
-          LSkipReason, LDurMs, LOutSink, LConfig)
-      else
-        WriteTestStatus(LStatus, R^.Entry.Name, LFailMsg, LSkipReason,
-          LOutSink, LConfig);
-    end;
+      WriteTestOutput(LStatus, R^.Entry.Name, LFailMsg,
+        LSkipReason, LDurMs, LOutSink, LConfig);
     { Write per-test result inside mutex for safety (skip if already written
       by beforeEach failure path, which sets Duration = 0 directly) }
     if (R^.Res <> nil) and (not LResultWritten) then

@@ -709,6 +709,49 @@ begin
   Result.LastSkip      := 0;
 end;
 
+{ ── Generic array capacity growth ───────────────────────────────────────────── }
+
+function GrowArrayLen(var AArray: specialize TArray<Pointer>; AInitCap: Integer): Integer;
+{ Grow AArray capacity if needed. Returns old length (= insertion index). }
+var
+  LOldLen, LCap: Integer;
+begin
+  LOldLen := Length(AArray);
+  LCap := GrowCapacity(LOldLen, AInitCap);
+  if LCap <> LOldLen then SetLength(AArray, LCap);
+  Result := LOldLen;
+end;
+
+function GrowArrayLen(var AArray: specialize TArray<TObject>; AInitCap: Integer): Integer;
+var
+  LOldLen, LCap: Integer;
+begin
+  LOldLen := Length(AArray);
+  LCap := GrowCapacity(LOldLen, AInitCap);
+  if LCap <> LOldLen then SetLength(AArray, LCap);
+  Result := LOldLen;
+end;
+
+function GrowArrayLen(var AArray: specialize TArray<Integer>; AInitCap: Integer): Integer;
+var
+  LOldLen, LCap: Integer;
+begin
+  LOldLen := Length(AArray);
+  LCap := GrowCapacity(LOldLen, AInitCap);
+  if LCap <> LOldLen then SetLength(AArray, LCap);
+  Result := LOldLen;
+end;
+
+function GrowArrayLen(var AArray: specialize TArray<TTestSuite>; AInitCap: Integer): Integer;
+var
+  LOldLen, LCap: Integer;
+begin
+  LOldLen := Length(AArray);
+  LCap := GrowCapacity(LOldLen, AInitCap);
+  if LCap <> LOldLen then SetLength(AArray, LCap);
+  Result := LOldLen;
+end;
+
 procedure RegisterStub(var ASuite: TTestSuite; APtr: Pointer);
   { Note: RegisterStub must be called from the main thread only.
     GStubRegistry is not thread-safe — it uses plain dynamic arrays
@@ -1014,39 +1057,6 @@ procedure TTestSuite.OnAfterEach(AProc: TTestClosure);
 begin
   AfterEach := nil;
   AfterEachClosure := AProc;
-end;
-
-{ ── Generic array capacity growth ───────────────────────────────────────────── }
-
-function GrowArrayLen(var AArray: specialize TArray<Pointer>; AInitCap: Integer): Integer;
-{ Grow AArray capacity if needed. Returns old length (= insertion index). }
-var
-  LOldLen, LCap: Integer;
-begin
-  LOldLen := Length(AArray);
-  LCap := GrowCapacity(LOldLen, AInitCap);
-  if LCap <> LOldLen then SetLength(AArray, LCap);
-  Result := LOldLen;
-end;
-
-function GrowArrayLen(var AArray: specialize TArray<Integer>; AInitCap: Integer): Integer;
-var
-  LOldLen, LCap: Integer;
-begin
-  LOldLen := Length(AArray);
-  LCap := GrowCapacity(LOldLen, AInitCap);
-  if LCap <> LOldLen then SetLength(AArray, LCap);
-  Result := LOldLen;
-end;
-
-function GrowArrayLen(var AArray: specialize TArray<TTestSuite>; AInitCap: Integer): Integer;
-var
-  LOldLen, LCap: Integer;
-begin
-  LOldLen := Length(AArray);
-  LCap := GrowCapacity(LOldLen, AInitCap);
-  if LCap <> LOldLen then SetLength(AArray, LCap);
-  Result := LOldLen;
 end;
 
 { ── EachCleanups capacity growth helper ─────────────────────────────────────── }
