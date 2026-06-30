@@ -34,7 +34,6 @@ type
   TGuardAllocator = class(TAllocator)
   public
     function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
     function DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
     procedure DoFreeMem(ADst: Pointer); override;
     function DoMemSize(APtr: Pointer): SizeUInt; override;
@@ -123,13 +122,6 @@ begin
 
   { Return pointer past the header }
   Result := Pointer(PtrUInt(LCommitBase) + HeaderSize);
-end;
-
-function TGuardAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
-begin
-  Result := DoGetMem(ASize);
-  if Result <> nil then
-    FillChar(Result^, ASize, 0);
 end;
 
 function TGuardAllocator.DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;

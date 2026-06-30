@@ -34,7 +34,9 @@ type
       The base class public methods (FreeMem, ReallocMem) handle nil/0 guards
       and delegate to these. }
     function DoGetMem(ASize: SizeUInt): Pointer; virtual; abstract;
-    function DoAllocMem(ASize: SizeUInt): Pointer; virtual; abstract;
+    {** Default: DoGetMem + ZeroMem. Subclasses with native zero-fill (calloc, AllocMem)
+        should override for efficiency. }
+    function DoAllocMem(ASize: SizeUInt): Pointer; virtual;
     function DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; virtual; abstract;
     procedure DoFreeMem(ADst: Pointer); virtual; abstract;
     function DoMemSize(APtr: Pointer): SizeUInt; virtual;
@@ -91,6 +93,13 @@ end;
 function TAllocator.DoMemSize(APtr: Pointer): SizeUInt;
 begin
   Result := 0;
+end;
+
+function TAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+begin
+  Result := DoGetMem(ASize);
+  if Result <> nil then
+    FillChar(Result^, ASize, 0);
 end;
 
 function TAllocator.MemSize(APtr: Pointer): SizeUInt;
@@ -165,14 +174,17 @@ function TAllocator.BatchGetMem(ASize: SizeUInt; ACount: Word;
   ABlocks: PPointer): Word;
 var
   I: Word;
+  LPtr: PPointer;
 begin
   Result := 0;
+  LPtr := ABlocks;
   for I := 0 to ACount - 1 do
   begin
-    PPointer(PByte(ABlocks) + I * SizeOf(Pointer))^ := GetMem(ASize);
-    if PPointer(PByte(ABlocks) + I * SizeOf(Pointer))^ = nil then
+    LPtr^ := GetMem(ASize);
+    if LPtr^ = nil then
       Break;
     Inc(Result);
+    Inc(LPtr);
   end;
 end;
 
@@ -180,13 +192,14 @@ procedure TAllocator.BatchFreeMem(ASize: SizeUInt; ACount: Word;
   ABlocks: PPointer);
 var
   I: Word;
-  LPtr: Pointer;
+  LPtr: PPointer;
 begin
+  LPtr := ABlocks;
   for I := 0 to ACount - 1 do
   begin
-    LPtr := PPointer(PByte(ABlocks) + I * SizeOf(Pointer))^;
-    if LPtr <> nil then
-      FreeMem(LPtr, ASize);
+    if LPtr^ <> nil then
+      FreeMem(LPtr^, ASize);
+    Inc(LPtr);
   end;
 end;
 

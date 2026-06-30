@@ -56,7 +56,6 @@ type
     procedure RaiseUnknownPointer(APtr: Pointer; const aOperation: string);
   protected
     function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
     function DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
     procedure DoFreeMem(ADst: Pointer); override;
   public
@@ -284,13 +283,6 @@ begin
     end;
   end;
   Result := AllocFallback(ASize, 0, False);
-end;
-
-function TPoolAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
-begin
-  Result := DoGetMem(ASize);
-  if Result <> nil then
-    ZeroMem(Result, ASize);
 end;
 
 function TPoolAllocator.DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
