@@ -134,7 +134,7 @@ begin
       #10:
         Result := Result + '\n';
       #11:
-        Result := Result + '';
+        Result := Result + '\u000b';
       #12:
         Result := Result + '\f';
       #13:

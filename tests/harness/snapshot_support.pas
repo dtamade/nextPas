@@ -125,33 +125,6 @@ begin
   );
 end;
 
-function SnapshotStatusForFixture(
-  const AGroupName: string;
-  const AGroupRoot: string;
-  const AFixturePath: string
-): string;
-var
-  SnapshotPathValue: string;
-  RawSnapshotText: string;
-  NormalizedSnapshotText: string;
-begin
-  SnapshotPathValue := SnapshotPathForFixture(
-    AGroupName,
-    AGroupRoot,
-    AFixturePath
-  );
-
-  if not FileExists(SnapshotPathValue) then
-    Exit('missing');
-
-  RawSnapshotText := ReadTextFile(SnapshotPathValue);
-  NormalizedSnapshotText := NormalizeSnapshotText(RawSnapshotText);
-  if RawSnapshotText <> NormalizedSnapshotText then
-    Exit('unstable');
-
-  Result := 'ready';
-end;
-
 function ReadTextFile(const APath: string): string;
 var
   Stream: TFileStream;
