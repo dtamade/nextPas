@@ -201,6 +201,11 @@ function GrowCapacity(ALen, AInitCap: Integer): Integer;
 function GrowCleanups(var ACleanups: specialize TArray<TTestClosure>): Integer;
   { Grow ACleanups capacity and return insertion index (old length).
     Shared by runner.EachCleanups and context.FCleanups. }
+procedure RunShouldFailEntry(const AEntry: TTestEntry;
+  out AStatus: TTestStatus; out AFailMsg: string);
+  { Execute a ShouldFail test entry. Sets AStatus to tsPassed if the proc
+    raises (expected), tsFailed if it doesn't, tsSkipped on ETestSkipped.
+    Shared by serial and parallel runners. }
 
 { ── Exception Formatting (eliminate repeated ClassName + trace patterns) ──── }
 
@@ -410,6 +415,36 @@ begin
   LCap := GrowCapacity(LOldLen, 4);
   if LCap <> LOldLen then SetLength(ACleanups, LCap);
   Result := LOldLen;
+end;
+
+procedure RunShouldFailEntry(const AEntry: TTestEntry;
+  out AStatus: TTestStatus; out AFailMsg: string);
+begin
+  AStatus := tsPassed;
+  AFailMsg := '';
+  try
+    if Assigned(AEntry.Closure) then
+      AEntry.Closure()
+    else
+      AEntry.Proc;
+    { No exception = unexpected success }
+    AStatus := tsFailed;
+    if AEntry.ShouldFailMsg <> '' then
+      AFailMsg := 'Expected failure (' + AEntry.ShouldFailMsg + ') but test passed'
+    else
+      AFailMsg := 'Expected failure but test passed';
+  except
+    on E: ETestSkipped do
+    begin
+      AStatus := tsSkipped;
+      AFailMsg := E.Message;
+    end;
+    on E: Exception do
+    begin
+      { Expected failure — test passes }
+      AStatus := tsPassed;
+    end;
+  end;
 end;
 
 { Exception Formatting }

@@ -418,32 +418,9 @@ begin
         end
         else if R^.Entry.Kind = ekShouldFail then
         begin
-          { ShouldFail: test passes if proc raises, fails if it doesn't.
-            Rust-style #[should_panic] expected-failure testing. }
-          try
-            if Assigned(R^.Entry.Closure) then
-              R^.Entry.Closure()
-            else
-              R^.Entry.Proc;
-            { No exception = unexpected success }
-            LStatus := tsFailed;
-            if R^.Entry.ShouldFailMsg <> '' then
-              LFailMsg := 'Expected failure (' + R^.Entry.ShouldFailMsg +
-                ') but test passed'
-            else
-              LFailMsg := 'Expected failure but test passed';
-          except
-            on E: ETestSkipped do
-            begin
-              LStatus := tsSkipped;
-              LSkipReason := E.Message;
-            end;
-            on E: Exception do
-            begin
-              { Expected failure — test passes }
-              LStatus := tsPassed;
-            end;
-          end;
+          RunShouldFailEntry(R^.Entry, LStatus, LFailMsg);
+          if LStatus = tsSkipped then
+            LSkipReason := LFailMsg;
         end
         else if Assigned(R^.Entry.Closure) then
           R^.Entry.Closure()
