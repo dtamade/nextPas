@@ -462,13 +462,7 @@ begin
   FMaxSize := aConfig.MaxSize;
   FKeepSegments := aConfig.KeepSegments;
 
-  LAlign := aConfig.Alignment;
-  if LAlign = 0 then
-    LAlign := DEFAULT_ALIGNMENT;
-  if (LAlign and (LAlign - 1)) <> 0 then
-    raise EAllocError.Create(aeAlignmentNotSupported, 'TChunkedArena: alignment must be power of 2');
-  if LAlign < MEM_DEFAULT_ALIGN then
-    LAlign := MEM_DEFAULT_ALIGN;
+  LAlign := SanitizeConfigAlignment(aConfig.Alignment);
   FAlignment := LAlign;
 
   SetLength(FSegments, 0);

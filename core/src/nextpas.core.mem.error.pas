@@ -27,7 +27,8 @@ unit nextpas.core.mem.error;
 interface
 
 uses
-  nextpas.core.exception;
+  nextpas.core.exception,
+  nextpas.core.mem.base;
 
 type
   {**
@@ -116,6 +117,11 @@ function AllocErrorToString(aError: TAllocError): string;
     Eliminates repeated clamp+check+raise patterns across slab/pool types. }
 function SanitizeAlignment(AAlignment: SizeUInt): SizeUInt;
 
+{** SanitizeConfigAlignment: 0→DEFAULT_ALIGNMENT, validate power-of-two,
+    clamp to MEM_DEFAULT_ALIGN. For config/constructor alignment parameters.
+    Raises EAllocError(aeAlignmentNotSupported) if not power of two. }
+function SanitizeConfigAlignment(AAlignment: SizeUInt): SizeUInt;
+
 implementation
 
 const
@@ -195,6 +201,17 @@ begin
     AAlignment := SizeOf(Pointer);
   if (AAlignment and (AAlignment - 1)) <> 0 then
     raise EAllocError.Create(aeAlignmentNotSupported, 'Alignment must be power of two and >= pointer size');
+  Result := AAlignment;
+end;
+
+function SanitizeConfigAlignment(AAlignment: SizeUInt): SizeUInt;
+begin
+  if AAlignment = 0 then
+    Exit(DEFAULT_ALIGNMENT);
+  if (AAlignment and (AAlignment - 1)) <> 0 then
+    raise EAllocError.Create(aeAlignmentNotSupported, 'Alignment must be power of 2');
+  if AAlignment < MEM_DEFAULT_ALIGN then
+    AAlignment := MEM_DEFAULT_ALIGN;
   Result := AAlignment;
 end;
 

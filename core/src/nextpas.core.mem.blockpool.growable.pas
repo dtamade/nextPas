@@ -496,16 +496,7 @@ begin
   if aConfig.BlockSize = 0 then
     raise EAllocError.Create(aeInvalidLayout, 'TGrowingBlockPool: block size must be > 0');
 
-  LAlign := aConfig.Alignment;
-  if LAlign = 0 then
-    LAlign := DEFAULT_ALIGNMENT
-  else
-  begin
-    if (LAlign and (LAlign - 1)) <> 0 then
-      raise EAllocError.Create(aeAlignmentNotSupported, 'TGrowingBlockPool: alignment must be power of 2');
-    if LAlign < MEM_DEFAULT_ALIGN then
-      LAlign := MEM_DEFAULT_ALIGN;
-  end;
+  LAlign := SanitizeConfigAlignment(aConfig.Alignment);
 
   if aConfig.BlockSize < LAlign then
     LActualBlockSize := LAlign

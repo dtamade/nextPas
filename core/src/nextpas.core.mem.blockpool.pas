@@ -348,16 +348,7 @@ begin
   if aCapacity > SizeUInt(High(SizeInt)) then
     raise EAllocError.Create(aeInvalidLayout, 'TBlockPool: capacity too large');
 
-  LAlign := aAlignment;
-  if LAlign = 0 then
-    LAlign := DEFAULT_ALIGNMENT
-  else
-  begin
-    if (LAlign and (LAlign - 1)) <> 0 then
-      raise EAllocError.Create(aeAlignmentNotSupported, 'TBlockPool: alignment must be power of 2');
-    if LAlign < MEM_DEFAULT_ALIGN then
-      LAlign := MEM_DEFAULT_ALIGN;
-  end;
+  LAlign := SanitizeConfigAlignment(aAlignment);
 
   // 块大小必须至少为对齐大小
   if aBlockSize < LAlign then
