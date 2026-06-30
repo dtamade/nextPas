@@ -630,7 +630,7 @@ var
   LIdx: SizeUInt;
   LKey: PtrUInt;
 begin
-  if (FAllocator <> nil) and (Length(FFbKeys) > 0) then
+  if Length(FFbKeys) > 0 then
     for LIdx := 0 to FFbMask do
     begin
       LKey := FFbKeys[LIdx];
@@ -647,7 +647,6 @@ var
   LRaw, LUser: Pointer;
 begin
   Result := nil;
-  if (ASize = 0) or (FAllocator = nil) then Exit(nil);
 
   LAlign := AAlignment;
   if LAlign = 0 then
@@ -1170,7 +1169,7 @@ begin
 
   // 释放旧块并移除 tracking（注意：先分配成功再销毁旧块）
   if TryUntrackFallbackAlloc(ADst, LAlloc) then
-    if (FAllocator <> nil) and (LAlloc.RawPtr <> nil) then
+    if LAlloc.RawPtr <> nil then
       FAllocator.FreeMem(LAlloc.RawPtr);
 
   Result := LNew;
@@ -1195,7 +1194,7 @@ begin
   end
   else if TryUntrackFallbackAlloc(ADst, LAlloc) then
   begin
-    if (FAllocator <> nil) and (LAlloc.RawPtr <> nil) then
+    if LAlloc.RawPtr <> nil then
       FAllocator.FreeMem(LAlloc.RawPtr);
     Inc(FTotalFrees);
   end

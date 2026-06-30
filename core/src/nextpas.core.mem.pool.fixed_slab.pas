@@ -1414,9 +1414,6 @@ procedure TFixedSlabPool.FreeActiveAlignedFallbacks;
 var
   LIndex: Integer;
 begin
-  if FAllocator = nil then
-    Exit;
-
   for LIndex := 0 to High(FAlignedFallbackPtrs) do
     if (FAlignedFallbackPtrs[LIndex] <> nil) and
        (FAlignedFallbackStates[LIndex] = FIXED_SLAB_ALIGNED_ACTIVE) then
@@ -1653,13 +1650,11 @@ begin
   // For larger alignment, fall back to underlying allocator if available.
   if (AAlignment <= 8) or (AAlignment <= ASize) then
     Result := GetMem(ASize)
-  else if FAllocator <> nil then
+  else
   begin
     Result := FAllocator.AllocAligned(ASize, AAlignment);
     TrackAlignedFallback(Result);
-  end
-  else
-    Result := nil; // Cannot satisfy alignment request without backing allocator
+  end;
 end;
 
 procedure TFixedSlabPool.FreeAligned(APtr: Pointer);

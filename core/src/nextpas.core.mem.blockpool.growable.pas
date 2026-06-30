@@ -20,6 +20,7 @@ uses
   nextpas.core.mem.pool.base,     // DefaultAcquireN / DefaultReleaseN (CS-001)
   nextpas.core.mem.blockpool,
   nextpas.core.mem.allocator.base, // TAllocator
+  nextpas.core.mem.allocator.rtl,  // GetRtlAllocator
   nextpas.core.mem.error;
 
 type
@@ -325,18 +326,9 @@ begin
   if LAllocSize < LBytes then
     raise EOutOfMemory.Create(aeOutOfMemory, 'TGrowingBlockPool: allocation size overflow');
 
-  if FAllocator <> nil then
-  begin
-    LRaw := FAllocator.GetMem(LAllocSize);
-    if LRaw = nil then
-      Exit(False);
-  end
-  else
-  begin
-    GetMem(LRaw, LAllocSize);
-    if LRaw = nil then
-      Exit(False);
-  end;
+  LRaw := FAllocator.GetMem(LAllocSize);
+  if LRaw = nil then
+    Exit(False);
 
   LAddr := PtrUInt(LRaw);
   if FAlignment <= 1 then
@@ -346,10 +338,7 @@ begin
     LMask := FAlignment - 1;
     if PtrUInt(LMask) > (High(PtrUInt) - LAddr) then
     begin
-      if FAllocator <> nil then
-        FAllocator.FreeMem(LRaw)
-      else
-        FreeMem(LRaw);
+      FAllocator.FreeMem(LRaw);
       Exit(False);
     end;
     LAligned := (LAddr + PtrUInt(LMask)) and not PtrUInt(LMask);
@@ -475,10 +464,7 @@ begin
   if LRaw = nil then
     Exit;
 
-  if FAllocator <> nil then
-    FAllocator.FreeMem(LRaw)
-  else
-    FreeMem(LRaw);
+  FAllocator.FreeMem(LRaw);
 end;
 
 procedure TGrowingBlockPool.ShrinkToSegmentCount(ACount: SizeInt);
@@ -545,7 +531,10 @@ begin
     FBlockShift := 0;
   end;
 
-  FAllocator := aConfig.Allocator;
+  if aConfig.Allocator <> nil then
+    FAllocator := aConfig.Allocator
+  else
+    FAllocator := GetRtlAllocator;
   FKeepSegments := aConfig.KeepSegments;
   FInitialCapacity := aConfig.InitialCapacity;
   if FInitialCapacity = 0 then

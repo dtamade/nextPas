@@ -8,6 +8,7 @@ uses
   nextpas.core.mem.base,
   nextpas.core.mem.error,
   nextpas.core.mem.allocator.base,
+  nextpas.core.mem.allocator.rtl,  // GetRtlAllocator
   nextpas.core.mem.arena.base,
   nextpas.core.base.utils,
   nextpas.core.mem.arena.intf;
@@ -72,13 +73,13 @@ end;
 constructor TLocalArena.Create(const ACapacity: SizeUInt; const AAllocator: TAllocator);
 begin
   inherited Create;
-  FAllocator := AAllocator;
+  if AAllocator <> nil then
+    FAllocator := AAllocator
+  else
+    FAllocator := GetRtlAllocator;
   if ACapacity > 0 then
   begin
-    if FAllocator <> nil then
-      FBacking := FAllocator.GetMem(ACapacity)
-    else
-      FBacking := GetMem(ACapacity);
+    FBacking := FAllocator.GetMem(ACapacity);
     if FBacking = nil then
       raise EOutOfMemory.Create(aeOutOfMemory, 'TLocalArena.Create: out of memory');
   end
@@ -94,10 +95,7 @@ destructor TLocalArena.Destroy;
 begin
   if FBacking <> nil then
   begin
-    if FAllocator <> nil then
-      FAllocator.FreeMem(FBacking)
-    else
-      FreeMem(FBacking);
+    FAllocator.FreeMem(FBacking);
     FBacking := nil;
   end;
   FAllocator := nil;
