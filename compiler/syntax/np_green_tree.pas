@@ -2037,6 +2037,10 @@ begin
       IsCallingDirective(CurrentToken(ALexer, ACursor).Lexeme))) do
     Inc(ACursor);
 
+  { Parse optional var/const/type declarations before begin }
+  ParseBlockDeclarations(ALexer, ACursor, Node, ActiveExpressionTree,
+    ADiagnostics, ARootFileId);
+
   if not MatchTokenSilent(ALexer, ACursor, tkBeginKeyword) then
   begin
     EmitSyntaxError(ADiagnostics, ARootFileId,
