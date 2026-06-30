@@ -138,14 +138,6 @@ var
   LOldSize: SizeUInt;
   LCopySize: SizeUInt;
 begin
-  if ADst = nil then
-    Exit(DoGetMem(ASize));
-  if ASize = 0 then
-  begin
-    DoFreeMem(ADst);
-    Exit(nil);
-  end;
-
   LHdr := PGuardHeader(PtrUInt(ADst) - HeaderSize);
   LOldSize := LHdr^.UserSize;
 

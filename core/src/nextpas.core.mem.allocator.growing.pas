@@ -15,7 +15,7 @@ uses
   nextpas.core.mem.shuffle;
 
 type
-  {** Unified growing allocator implementing IAllocator.
+  {** Unified growing allocator (TAllocator subclass).
       Routes allocations through:
         small (≤ MEM_SIZECLASS_MAX) → TLS cache → central pool → new span
         large (> MEM_SIZECLASS_MAX) → direct GetMem

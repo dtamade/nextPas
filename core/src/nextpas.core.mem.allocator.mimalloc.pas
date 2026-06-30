@@ -16,7 +16,7 @@ uses
 type
   {**
    * TMimallocAllocator
-   * @desc 使用 mimalloc 库的 IAllocator 实现
+   * @desc 使用 mimalloc 库的 TAllocator 实现
    *}
   TMimallocAllocator = class(TAllocator)
   protected

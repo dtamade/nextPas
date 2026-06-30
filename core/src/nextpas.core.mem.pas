@@ -1,6 +1,6 @@
 unit nextpas.core.mem;
 {**
- * @desc 内存管理门面：IAllocator 抽象、默认分配器、工具函数。
+ * @desc 内存管理门面：默认分配器、工具函数。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -130,8 +130,8 @@ type
 
 function DefaultAllocator: TAllocator; inline;
 
-function AllocZeroed(const AAllocator: IAllocator; const ASize: SizeUInt): Pointer; inline;
-function AllocArray(const AAllocator: IAllocator; const ACount, AElemSize: SizeUInt): Pointer; inline;
+function AllocZeroed(const AAllocator: TAllocator; const ASize: SizeUInt): Pointer; inline;
+function AllocArray(const AAllocator: TAllocator; const ACount, AElemSize: SizeUInt): Pointer; inline;
 
 function MakeFixedSlabPool(ACapacity: SizeUInt): IFixedSlabPool; inline;
 function MakePoolAllocator(ABlockSize: SizeUInt; ACapacity: Integer;
@@ -148,12 +148,12 @@ begin
   Result := nextpas.core.mem.default.DefaultAllocator;
 end;
 
-function AllocZeroed(const AAllocator: IAllocator; const ASize: SizeUInt): Pointer;
+function AllocZeroed(const AAllocator: TAllocator; const ASize: SizeUInt): Pointer;
 begin
   Result := AAllocator.AllocMem(ASize);
 end;
 
-function AllocArray(const AAllocator: IAllocator; const ACount, AElemSize: SizeUInt): Pointer;
+function AllocArray(const AAllocator: TAllocator; const ACount, AElemSize: SizeUInt): Pointer;
 var
   LTotal: SizeUInt;
 begin

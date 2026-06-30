@@ -179,12 +179,6 @@ function TFallbackAllocator.DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointe
 var
   LEntry: PFallbackEntry;
 begin
-  if ADst = nil then
-    Exit(DoGetMem(ASize));
-  if ASize = 0 then begin
-    DoFreeMem(ADst);
-    Exit(nil);
-  end;
   LEntry := FindEntry(ADst);
   if LEntry <> nil then begin
     Result := FFallback.ReallocMem(ADst, LEntry^.Size, ASize);

@@ -298,11 +298,6 @@ var
   LAlloc: TPoolAllocatorAlloc;
   LCopySize: SizeUInt;
 begin
-  if ADst = nil then Exit(DoGetMem(ASize));
-  if ASize = 0 then begin
-    DoFreeMem(ADst);
-    Exit(nil);
-  end;
   if not TryGetAlloc(ADst, LAlloc) then
     RaiseUnknownPointer(ADst, 'ReallocMem');
   if LAlloc.Owner = paoPool then begin
