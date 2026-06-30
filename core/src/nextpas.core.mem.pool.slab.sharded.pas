@@ -12,15 +12,14 @@ uses
   nextpas.core.base,
   nextpas.core.mem.base,
   nextpas.core.mem.utils,
-  nextpas.core.mem.allocator,
-  nextpas.core.mem.intf,
+  nextpas.core.mem.allocator.rtl,   // ResolveAllocator
+  nextpas.core.mem.allocator.base,
   nextpas.core.mem.mutex,
   nextpas.core.mem.pool.memory_pool,
   nextpas.core.mem.rwlock,
   nextpas.core.mem.pool.slab,
   nextpas.core.mem.error,
-  nextpas.core.platform.thread,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.platform.thread;
 
 type
   {**
@@ -33,7 +32,7 @@ type
    *   - Reset 会使之前分配的指针失效；调用端需自行保证语义正确。
    *   - 仍保持 TSlabPool 的严格所有权：释放非本池指针会抛 ESlabPoolCorruption。
    *}
-  TSlabPoolSharded = class(TAllocator, IMemoryPool)
+  TSlabPoolSharded = class(TInterfacedObject, IMemoryPool, IAllocator)
   private
     type
       TShard = record
@@ -42,7 +41,7 @@ type
         KnownSegmentCount: Integer;
       end;
   private
-    FAllocator: TMemAllocator;
+    FAllocator: TAllocator;
     FConfig: TSlabConfig;
     FInitialCapacity: SizeUInt;
     FMinShift: SizeUInt;
@@ -94,8 +93,8 @@ type
     function ShouldUseFallback(const ASize: SizeUInt): Boolean; inline;
     function TryRouteShardIndex(APtr: Pointer; out aShard: Integer; out aIsFallback: Boolean): Boolean;
   public
-    constructor Create(aCapacity: SizeUInt; AShardCount: Integer = 0; AAllocator: TMemAllocator = nil; aMinShift: SizeUInt = 3); overload;
-    constructor Create(aCapacity: SizeUInt; const AConfig: TSlabConfig; AShardCount: Integer = 0; AAllocator: TMemAllocator = nil); overload;
+    constructor Create(aCapacity: SizeUInt; AShardCount: Integer = 0; AAllocator: TAllocator = nil; aMinShift: SizeUInt = 3); overload;
+    constructor Create(aCapacity: SizeUInt; const AConfig: TSlabConfig; AShardCount: Integer = 0; AAllocator: TAllocator = nil); overload;
     destructor Destroy; override;
   public
     // IPool
@@ -107,22 +106,22 @@ type
     procedure Reset;
 
     // IMemoryPool
-    function GetMem(ASize: SizeUInt): Pointer; override;
-    function AllocMem(ASize: SizeUInt): Pointer; override;
-    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure FreeMem(ADst: Pointer); override;
-    function MemSize(APtr: Pointer): SizeUInt; override;
+    function GetMem(ASize: SizeUInt): Pointer;
+    function AllocMem(ASize: SizeUInt): Pointer;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(ADst: Pointer);
+    function MemSize(APtr: Pointer): SizeUInt;
 
-    // TMemAllocator aligned allocation
-    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer; override;
-    procedure FreeAligned(APtr: Pointer); override;
+    // IAllocator aligned allocation
+    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
+    procedure FreeAligned(APtr: Pointer);
 
-    // TMemAllocator capability
-    function Traits: TAllocatorTraits; override;
+    // IAllocator capability
+    function Traits: TAllocatorTraits;
   public
     // Diagnostics
     function Owns(APtr: Pointer): Boolean;
-    function MemSizeOf(APtr: Pointer): SizeUInt; override;
+    function MemSizeOf(APtr: Pointer): SizeUInt;
     function Stats: TSlabPoolStats;
     function GetPerfCounters: TSlabPerfCounters;
     function ShardCount: Integer; inline;
@@ -541,7 +540,7 @@ begin
   end;
 end;
 
-constructor TSlabPoolSharded.Create(aCapacity: SizeUInt; AShardCount: Integer; AAllocator: TMemAllocator; aMinShift: SizeUInt);
+constructor TSlabPoolSharded.Create(aCapacity: SizeUInt; AShardCount: Integer; AAllocator: TAllocator; aMinShift: SizeUInt);
 var
   LShardCount, LIdx: Integer;
   LStart, LEnd: PByte;
@@ -550,9 +549,7 @@ var
 begin
   inherited Create;
 
-  FAllocator := AAllocator;
-  if FAllocator = nil then
-    FAllocator := nextpas.core.mem.allocator.GetRtlAllocator;
+  FAllocator := ResolveAllocator(AAllocator);
 
   if aCapacity = 0 then
     aCapacity := 64 * 1024;
@@ -606,7 +603,7 @@ begin
   end;
 end;
 
-constructor TSlabPoolSharded.Create(aCapacity: SizeUInt; const AConfig: TSlabConfig; AShardCount: Integer; AAllocator: TMemAllocator);
+constructor TSlabPoolSharded.Create(aCapacity: SizeUInt; const AConfig: TSlabConfig; AShardCount: Integer; AAllocator: TAllocator);
 begin
   FConfig := AConfig;
   if FConfig.MinShift = 0 then
@@ -860,10 +857,7 @@ var
   LNatural: SizeUInt;
 begin
   if ASize = 0 then Exit(nil);
-  if AAlignment < SizeOf(Pointer) then
-    AAlignment := SizeOf(Pointer);
-  if not IsPowerOfTwo(AAlignment) then
-    raise EInvalidArgument.Create('TSlabPoolSharded.AllocAligned: AAlignment must be power of two and >= pointer size');
+  AAlignment := SanitizeAlignment(AAlignment);
 
   LShard := ChooseShardIndex;
   FShards[LShard].Lock.Acquire;
@@ -900,11 +894,10 @@ end;
 
 function TSlabPoolSharded.Traits: TAllocatorTraits;
 begin
-  // keep consistent with TSlabPool but mark as thread-safe
   Result.ZeroInitialized := True;
-  Result.ThreadSafe := True;
-  Result.HasMemSize := True;
-  Result.SupportsAligned := True;   // AllocAligned 通过 fallback 路径实现
+  Result.ThreadSafe      := True;
+  Result.HasMemSize      := True;
+  Result.SupportsAligned := True;
 end;
 
 function TSlabPoolSharded.Owns(APtr: Pointer): Boolean;

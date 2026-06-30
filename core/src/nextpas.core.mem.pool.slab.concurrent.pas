@@ -6,11 +6,10 @@ interface
 
 uses
   nextpas.core.base.utils,
-  nextpas.core.mem.intf,
+  nextpas.core.mem.allocator.base,
   nextpas.core.mem.mutex,
   nextpas.core.mem.pool.memory_pool,
-  nextpas.core.mem.pool.slab,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.pool.slab;
 
 type
   {**
@@ -23,19 +22,19 @@ type
    *   - 目标：先提供正确性与可用性；并发优化（分段锁 / tcache）后续再做
    *   - Reset 会使之前分配的指针失效；调用端需要自行保证语义正确
    *}
-  TSlabPoolConcurrent = class(TAllocator, IMemoryPool)
+  TSlabPoolConcurrent = class(TInterfacedObject, IMemoryPool, IAllocator)
   private
     {**
      * Lock ordering: Single mutex (FLock). No nesting with other locks.
-     * All IMemoryPool/TMemAllocator operations are serialized under FLock.
+     * All IMemoryPool/IAllocator operations are serialized under FLock.
      *
      * 锁顺序：单锁（FLock），不与其他锁嵌套，所有操作在 FLock 下串行。
      *}
     FInner: TSlabPool;
     FLock: TMemMutex;
   public
-    constructor Create(aCapacity: SizeUInt; AAllocator: TMemAllocator = nil; aMinShift: SizeUInt = 3); overload;
-    constructor Create(aCapacity: SizeUInt; const AConfig: TSlabConfig; AAllocator: TMemAllocator = nil); overload;
+    constructor Create(aCapacity: SizeUInt; AAllocator: TAllocator = nil; aMinShift: SizeUInt = 3); overload;
+    constructor Create(aCapacity: SizeUInt; const AConfig: TSlabConfig; AAllocator: TAllocator = nil); overload;
     destructor Destroy; override;
   public
     // IPool
@@ -46,16 +45,16 @@ type
     procedure ReleaseN(const aUnits: array of Pointer; aCount: Integer);
     procedure Reset;
     // IMemoryPool
-    function GetMem(ASize: SizeUInt): Pointer; override;
-    function AllocMem(ASize: SizeUInt): Pointer; override;
-    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure FreeMem(ADst: Pointer); override;
-    function MemSize(APtr: Pointer): SizeUInt; override;
-    // TMemAllocator aligned allocation
-    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer; override;
-    procedure FreeAligned(APtr: Pointer); override;
-    // TMemAllocator capability
-    function Traits: TAllocatorTraits; override;
+    function GetMem(ASize: SizeUInt): Pointer;
+    function AllocMem(ASize: SizeUInt): Pointer;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(ADst: Pointer);
+    function MemSize(APtr: Pointer): SizeUInt;
+    // IAllocator aligned allocation
+    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
+    procedure FreeAligned(APtr: Pointer);
+    // IAllocator capability
+    function Traits: TAllocatorTraits;
   public
     // Compatibility helpers (same semantics as inner)
     function Alloc(ASize: SizeUInt): Pointer; inline;
@@ -64,7 +63,7 @@ type
     function Warmup(aUnitSize: SizeUInt; aMinPages: SizeUInt): SizeUInt;
     // Diagnostics forwarding
     function Owns(APtr: Pointer): Boolean;
-    function MemSizeOf(APtr: Pointer): SizeUInt; override;
+    function MemSizeOf(APtr: Pointer): SizeUInt;
     function Stats: TSlabPoolStats;
     function GetPerfCounters: TSlabPerfCounters;
     function SegmentCount: Integer;
@@ -75,14 +74,14 @@ implementation
 
 { TSlabPoolConcurrent }
 
-constructor TSlabPoolConcurrent.Create(aCapacity: SizeUInt; AAllocator: TMemAllocator; aMinShift: SizeUInt);
+constructor TSlabPoolConcurrent.Create(aCapacity: SizeUInt; AAllocator: TAllocator; aMinShift: SizeUInt);
 begin
   inherited Create;
   FLock.Init;
   FInner := TSlabPool.Create(aCapacity, AAllocator, aMinShift);
 end;
 
-constructor TSlabPoolConcurrent.Create(aCapacity: SizeUInt; const AConfig: TSlabConfig; AAllocator: TMemAllocator);
+constructor TSlabPoolConcurrent.Create(aCapacity: SizeUInt; const AConfig: TSlabConfig; AAllocator: TAllocator);
 begin
   inherited Create;
   FLock.Init;

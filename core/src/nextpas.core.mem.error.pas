@@ -27,7 +27,8 @@ unit nextpas.core.mem.error;
 interface
 
 uses
-  nextpas.core.exception;
+  nextpas.core.exception,
+  nextpas.core.mem.base;
 
 type
   {**
@@ -94,6 +95,8 @@ type
     FError: TAllocError;
   public
     constructor Create(aError: TAllocError; const aMsg: string = '');
+    {** 快捷构造：自动使用 aeOutOfMemory，18 处调用点统一。 }
+    constructor CreateMsg(const aMsg: string);
     property Error: TAllocError read FError;
   end;
   EInvalidLayout = class(EAllocError);
@@ -107,6 +110,17 @@ type
  *       Get string description for error code
  *}
 function AllocErrorToString(aError: TAllocError): string;
+
+{** SanitizeAlignment: clamp AAlignment to >= SizeOf(Pointer), then validate
+    power-of-two. Returns the sanitized value. Raises EAllocError if
+    alignment is not a power of two after clamping.
+    Eliminates repeated clamp+check+raise patterns across slab/pool types. }
+function SanitizeAlignment(AAlignment: SizeUInt): SizeUInt;
+
+{** SanitizeConfigAlignment: 0→DEFAULT_ALIGNMENT, validate power-of-two,
+    clamp to MEM_DEFAULT_ALIGN. For config/constructor alignment parameters.
+    Raises EAllocError(aeAlignmentNotSupported) if not power of two. }
+function SanitizeConfigAlignment(AAlignment: SizeUInt): SizeUInt;
 
 implementation
 
@@ -137,9 +151,7 @@ begin
       Result := ecResourceExhausted;
     aeInvalidLayout, aeAlignmentNotSupported, aeSizeMismatch:
       Result := ecInvalidArgument;
-    aeInvalidPointer, aeDoubleFree:
-      Result := ecInvalidOperation;
-    aePoolClosed, aeReallocNotSupported:
+    aeInvalidPointer, aeDoubleFree, aePoolClosed, aeReallocNotSupported:
       Result := ecInvalidOperation;
     aeInternalError:
       Result := ecInternal;
@@ -148,16 +160,21 @@ begin
   end;
 end;
 
+function BuildAllocMsg(aError: TAllocError; const aMsg: string): string; inline;
+begin
+  if aMsg <> '' then
+    Result := aMsg + ': ' + ERROR_MESSAGES[aError]
+  else
+    Result := ERROR_MESSAGES[aError];
+end;
+
 { EAllocError }
 
 constructor EAllocError.Create(aError: TAllocError; const aMsg: string);
 begin
   Assert(aError <> aeNone, 'EAllocError.Create: aeNone is not a valid error code');
   FError := aError;
-  if aMsg <> '' then
-    inherited Create(aMsg + ': ' + ERROR_MESSAGES[aError], AllocErrorCategory(aError))
-  else
-    inherited Create(ERROR_MESSAGES[aError], AllocErrorCategory(aError));
+  inherited Create(BuildAllocMsg(aError, aMsg), AllocErrorCategory(aError));
 end;
 
 { EOutOfMemory }
@@ -166,10 +183,33 @@ constructor EOutOfMemory.Create(aError: TAllocError; const aMsg: string);
 begin
   Assert(aError <> aeNone, 'EOutOfMemory.Create: aeNone is not a valid error code');
   FError := aError;
-  if aMsg <> '' then
-    inherited Create(aMsg + ': ' + ERROR_MESSAGES[aError])
-  else
-    inherited Create(ERROR_MESSAGES[aError]);
+  inherited Create(BuildAllocMsg(aError, aMsg));
+end;
+
+constructor EOutOfMemory.CreateMsg(const aMsg: string);
+begin
+  FError := aeOutOfMemory;
+  inherited Create(BuildAllocMsg(aeOutOfMemory, aMsg));
+end;
+
+function SanitizeAlignment(AAlignment: SizeUInt): SizeUInt;
+begin
+  if AAlignment < SizeOf(Pointer) then
+    AAlignment := SizeOf(Pointer);
+  if (AAlignment and (AAlignment - 1)) <> 0 then
+    raise EAllocError.Create(aeAlignmentNotSupported, 'Alignment must be power of two and >= pointer size');
+  Result := AAlignment;
+end;
+
+function SanitizeConfigAlignment(AAlignment: SizeUInt): SizeUInt;
+begin
+  if AAlignment = 0 then
+    Exit(DEFAULT_ALIGNMENT);
+  if (AAlignment and (AAlignment - 1)) <> 0 then
+    raise EAllocError.Create(aeAlignmentNotSupported, 'Alignment must be power of 2');
+  if AAlignment < MEM_DEFAULT_ALIGN then
+    AAlignment := MEM_DEFAULT_ALIGN;
+  Result := AAlignment;
 end;
 
 end.

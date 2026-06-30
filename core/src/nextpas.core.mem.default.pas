@@ -5,17 +5,16 @@ unit nextpas.core.mem.default;
 interface
 
 uses
-  nextpas.core.mem.intf,
   nextpas.core.mem.allocator.base;
 
-function DefaultAllocator: TMemAllocator;
+function DefaultAllocator: TAllocator;
 
 implementation
 
 uses
   nextpas.core.mem.allocator.foundation;
 
-function DefaultAllocator: TMemAllocator;
+function DefaultAllocator: TAllocator;
 begin
   Result := nextpas.core.mem.allocator.foundation.GetRtlAllocator;
 end;

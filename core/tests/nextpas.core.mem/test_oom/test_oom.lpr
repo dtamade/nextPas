@@ -17,8 +17,7 @@ uses
   nextpas.core.mem.ring_buffer,
   nextpas.core.mem.stack_pool,
   nextpas.core.platform.memory,
-  nextpas.core.platform.mmap,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.platform.mmap;
 
 type
   TExceptionProc = procedure;
@@ -56,9 +55,9 @@ procedure TFailAllocator.DoFreeMem(ADst: Pointer);
 begin
 end;
 
-function NewFailAllocator: nextpas.core.mem.allocator.TMemAllocator;
+function NewFailAllocator: nextpas.core.mem.allocator.TAllocator;
 begin
-  Result := TFailAllocator.Create as nextpas.core.mem.allocator.TMemAllocator;
+  Result := TFailAllocator.Create;
 end;
 
 procedure ResetVirtualArenaHooks;
@@ -138,7 +137,7 @@ end;
 
 procedure RaiseMemOutOfMemory;
 begin
-  raise nextpas.core.mem.error.EOutOfMemory.Create(aeOutOfMemory, 'alloc result');
+  raise nextpas.core.mem.error.EOutOfMemory.CreateMsg('alloc result');
 end;
 
 procedure RaiseBlockPoolTotalSizeOverflow;

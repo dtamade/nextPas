@@ -26,7 +26,7 @@ R25-R27:   性能终极优化 + 稳定性加固                            ✅
 ## 当前状态 (2026-06-29)
 
 - 49 源文件 / 19,920+ 行
-- **44 suites / 557 tests / 0 failures / 0 leaks**
+- **45 suites / 573+ tests / 0 failures / 0 leaks**
 - 核心热路径: Arena 7ns (135 Mops/s), 64B **16ns** (**3.5x 快于 glibc**), 1KB **21ns** (**4.5x 快于 glibc**)
 - 并发 4T: **4ns/op** (227 Mops/s)
 - Batch API: 7.3ns/block (3.4x 快于逐个分配)

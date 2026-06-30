@@ -15,11 +15,10 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.mem.intf,
+  nextpas.core.mem.allocator.base,
   nextpas.core.mem.error,
   nextpas.core.mem.allocator.rtl,
-  nextpas.core.mem.pool,
- nextpas.core.mem.allocator.base;
+  nextpas.core.mem.pool;
 
 type
 
@@ -140,7 +139,7 @@ type
      *}
     TConfig = record
     private
-      FAllocator: TMemAllocator;
+      FAllocator: TAllocator;
       FMaxSize: SizeUInt;
       FCreator: TObjectCreatorRefFunc;
       FInit: TObjectInitRefFunc;
@@ -150,7 +149,7 @@ type
       class function Default: TConfig; static;
 
       {** 设置分配器 | Set allocator *}
-      function WithAllocator(AAllocator: TMemAllocator): TConfig;
+      function WithAllocator(AAllocator: TAllocator): TConfig;
 
       {** 设置最大对象数 | Set maximum objects *}
       function WithMaxSize(AMaxSize: SizeUInt): TConfig;
@@ -165,7 +164,7 @@ type
       function WithFinalize(aFinalize: TObjectFinalizeRefFunc): TConfig;
 
       {** 获取配置的分配器 | Get configured allocator *}
-      property Allocator: TMemAllocator read FAllocator;
+      property Allocator: TAllocator read FAllocator;
       {** 获取配置的最大对象数 | Get configured max size *}
       property MaxSize: SizeUInt read FMaxSize;
       {** 获取配置的创建回调 | Get configured creator *}
@@ -176,7 +175,7 @@ type
       property Finalize: TObjectFinalizeRefFunc read FFinalize;
     end;
   private
-    FAllocator:      TMemAllocator;
+    FAllocator:      TAllocator;
     FMaxSize:        SizeUInt;
 
     // ✅ P0-1: 明确的计数语义
@@ -207,7 +206,7 @@ type
 
   public
     // ✅ P0-1: 简化构造函数（使用 RefFunc 统一处理）
-    constructor Create(AAllocator: TMemAllocator; AMaxSize: SizeUInt;
+    constructor Create(AAllocator: TAllocator; AMaxSize: SizeUInt;
                        aCreator: TObjectCreatorRefFunc;
                        aInit: TObjectInitRefFunc;
                        aFinalize: TObjectFinalizeRefFunc);
@@ -256,7 +255,7 @@ begin
   Result.FFinalize := nil;
 end;
 
-function TObjectPool.TConfig.WithAllocator(AAllocator: TMemAllocator): TConfig;
+function TObjectPool.TConfig.WithAllocator(AAllocator: TAllocator): TConfig;
 begin
   Result := Self;
   Result.FAllocator := AAllocator;
@@ -327,7 +326,7 @@ begin
 end;
 
 // ✅ P0-1: 核心构造函数 - 使用值语义存储回调
-constructor TObjectPool.Create(AAllocator: TMemAllocator; AMaxSize: SizeUInt;
+constructor TObjectPool.Create(AAllocator: TAllocator; AMaxSize: SizeUInt;
                                aCreator: TObjectCreatorRefFunc;
                                aInit: TObjectInitRefFunc;
                                aFinalize: TObjectFinalizeRefFunc);
@@ -339,10 +338,7 @@ begin
   else
     FMaxSize := AMaxSize;
 
-  if AAllocator = nil then
-    FAllocator := GetRtlAllocator
-  else
-    FAllocator := AAllocator;
+  FAllocator := ResolveAllocator(AAllocator);
 
   FTotalCreated := 0;
   FInPoolCount := 0;

@@ -5,7 +5,6 @@ unit nextpas.core.mem.allocator.mimalloc;
 interface
 
 uses
-  nextpas.core.errors,
   nextpas.core.mem.allocator.base
   {$IFNDEF NEXTPAS_CORE_MIMALLOC_STATIC}
   ,nextpas.core.mem.allocator.mimalloc.loader
@@ -16,7 +15,7 @@ uses
 type
   {**
    * TMimallocAllocator
-   * @desc 使用 mimalloc 库的 TMemAllocator 实现
+   * @desc 使用 mimalloc 库的 TAllocator 实现
    *}
   TMimallocAllocator = class(TAllocator)
   protected
@@ -29,8 +28,8 @@ type
     function  Traits: TAllocatorTraits; override;
   end;
 
-function TryGetMimallocAllocator(out A: TMemAllocator): Boolean;
-function GetMimallocAllocator: TMemAllocator;
+function TryGetMimallocAllocator(out A: TAllocator): Boolean;
+function GetMimallocAllocator: TAllocator;
 function MimallocUsableSizeAvailable: Boolean;
 function TryGetMimallocUsableSize(APtr: Pointer; out ASize: SizeUInt): Boolean;
 
@@ -105,8 +104,8 @@ uses
 {$ENDIF}
 
 var
-  _MimallocAllocatorObj: TAllocator = nil;
-  _MimallocAllocatorIntf: IAllocator = nil;
+  _MimallocAllocatorObj: TMimallocAllocator;
+  _MimallocAllocatorIntf: IAllocator;
   GAllocatorLock: TRTLCriticalSection;
 
 function MimallocUsableSizeAvailable: Boolean;
@@ -155,7 +154,7 @@ end;
 procedure TMimallocAllocator.DoFreeMem(ADst: Pointer);
 begin
   if not EnsureMimallocLoaded then
-    Exit; // free path when library missing: nothing to do
+    Exit;
   _mi_free(ADst);
 end;
 
@@ -168,16 +167,11 @@ end;
 function TMimallocAllocator.Traits: TAllocatorTraits;
 begin
   Result := inherited Traits;
-  // mimalloc semantics:
-  // - AllocMem uses mi_calloc => zero initialized; GetMem not guaranteed
-  // - SupportsAligned remains False here (use aligned bridge or module)
-  // - HasMemSize is true only when the optional usable-size symbol is present
   Result.ZeroInitialized := True;
-  Result.SupportsAligned := False;
   Result.HasMemSize      := MimallocUsableSizeAvailable;
 end;
 
-function GetMimallocAllocator: TMemAllocator;
+function GetMimallocAllocator: TAllocator;
 begin
   if _MimallocAllocatorObj = nil then
   begin
@@ -186,7 +180,7 @@ begin
       if _MimallocAllocatorObj = nil then
       begin
         _MimallocAllocatorObj := TMimallocAllocator.Create;
-        _MimallocAllocatorIntf := _MimallocAllocatorObj; // anchor lifetime
+        _MimallocAllocatorIntf := _MimallocAllocatorObj as IAllocator; // anchor lifetime
       end;
     finally
       LeaveCriticalSection(GAllocatorLock);
@@ -194,7 +188,7 @@ begin
   end;
   Result := _MimallocAllocatorObj;
 end;
-function TryGetMimallocAllocator(out A: TMemAllocator): Boolean;
+function TryGetMimallocAllocator(out A: TAllocator): Boolean;
 begin
   try
     A := GetMimallocAllocator;

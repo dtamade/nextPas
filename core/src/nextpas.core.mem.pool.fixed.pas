@@ -8,7 +8,8 @@ uses
   nextpas.core.base,
   nextpas.core.base.utils,
   nextpas.core.mem.pool.base,    // IPool (decoupled from facade)
-  nextpas.core.mem.allocator,    // TMemAllocator + GetRtlAllocator
+  nextpas.core.mem.allocator.base, // TAllocator
+  nextpas.core.mem.allocator.rtl,
   nextpas.core.mem.mutex,
   nextpas.core.mem.error;        // EAllocError, TAllocError
 
@@ -35,7 +36,7 @@ type
     Capacity: Integer;
     Alignment: SizeUInt;    // 新增：对齐（默认 max(pointer,16)）
     ZeroOnAlloc: Boolean;   // 分配后清零（可选，默认 False）
-    Allocator: TMemAllocator;
+    Allocator: TAllocator;
   end;
 
   {**
@@ -111,7 +112,7 @@ type
     FFreeStack: array of Integer;// 可用块索引栈
     FFreeTop: Integer;           // 栈顶（可用元素个数）
     FIsFree: array of Boolean;   // 双重释放检测
-    FAllocator: TMemAllocator;
+    FAllocator: TAllocator;
     FZeroOnAlloc: Boolean;       // 每次分配是否清零
     // 对齐与原始缓冲
     FAlignment: SizeUInt;        // 实际使用的对齐（默认为 max(pointer,16)）
@@ -129,9 +130,9 @@ type
   public
     // 构造/析构
     {** 创建固定块池（块大小 ABlockSize，容量 ACapacity，默认对齐和分配器）*}
-    constructor Create(ABlockSize: SizeUInt; ACapacity: Integer; AAllocator: TMemAllocator = nil); overload;
+    constructor Create(ABlockSize: SizeUInt; ACapacity: Integer; AAllocator: TAllocator = nil); overload;
     {** 创建固定块池，可指定对齐字节数 AAlignment（0 = 默认 max(pointer,16)）*}
-    constructor Create(ABlockSize: SizeUInt; ACapacity: Integer; AAlignment: SizeUInt; AAllocator: TMemAllocator = nil); overload;
+    constructor Create(ABlockSize: SizeUInt; ACapacity: Integer; AAlignment: SizeUInt; AAllocator: TAllocator = nil); overload;
     {** 使用 TFixedPoolConfig 记录创建池，支持 ZeroOnAlloc 选项 *}
     constructor Create(const aConfig: TFixedPoolConfig); overload;
     {** 释放 arena 内存，FAF_MEM_DEBUG 下检测泄漏 *}
@@ -205,7 +206,7 @@ type
     function GetAllocatedCount: Integer; inline;
   public
     {** 创建线程安全固定块池（可选对齐和分配器）*}
-    constructor Create(ABlockSize: SizeUInt; ACapacity: Integer; AAlignment: SizeUInt = 0; AAllocator: TMemAllocator = nil); overload;
+    constructor Create(ABlockSize: SizeUInt; ACapacity: Integer; AAlignment: SizeUInt = 0; AAllocator: TAllocator = nil); overload;
     {** 使用 TFixedPoolConfig 创建线程安全固定块池 *}
     constructor Create(const aConfig: TFixedPoolConfig); overload;
     {** 加锁释放内部 TFixedPool *}
@@ -240,9 +241,6 @@ type
   end;
 
 implementation
-
-uses
-  nextpas.core.mem.allocator.base;
 
 {$PUSH}
 {$WARN 4055 OFF} // pointer/ordinal conversions in pool internals
@@ -287,12 +285,12 @@ begin
   Result := 'Memory leak: ' + LCount + ' blocks not freed';
 end;
 
-constructor TFixedPool.Create(ABlockSize: SizeUInt; ACapacity: Integer; AAllocator: TMemAllocator);
+constructor TFixedPool.Create(ABlockSize: SizeUInt; ACapacity: Integer; AAllocator: TAllocator);
 begin
   Create(ABlockSize, ACapacity, 0{use default}, AAllocator);
 end;
 
-constructor TFixedPool.Create(ABlockSize: SizeUInt; ACapacity: Integer; AAlignment: SizeUInt; AAllocator: TMemAllocator);
+constructor TFixedPool.Create(ABlockSize: SizeUInt; ACapacity: Integer; AAlignment: SizeUInt; AAllocator: TAllocator);
 var
   LOverflowCheck: SizeUInt;
   LRaw: Pointer;
@@ -314,22 +312,10 @@ begin
   FTotalAllocCalls := 0;
   FTotalFreeCalls := 0;
 
-  if AAllocator = nil then
-    FAllocator := nextpas.core.mem.allocator.GetRtlAllocator
-  else
-    FAllocator := AAllocator;
+  FAllocator := ResolveAllocator(AAllocator);
 
-  // Alignment: 默认 max(pointer,16)；必须为 2 的幂
-  if AAlignment = 0 then
-  begin
-    // SizeOf(Pointer) is a compile-time constant; on supported targets it's <= 16,
-    // so max(SizeOf(Pointer), 16) is always 16. Keep it branch-free to avoid FPC 6018.
-    FAlignment := 16;
-  end
-  else
-    FAlignment := AAlignment;
-  if (FAlignment and (FAlignment-1)) <> 0 then
-    raise EMemFixedPoolError.Create(aeAlignmentNotSupported, 'Alignment must be power of two');
+  // Alignment: 0→DEFAULT_ALIGNMENT(16), validate power-of-two, min MEM_DEFAULT_ALIGN
+  FAlignment := SanitizeConfigAlignment(AAlignment);
   if (FBlockSize mod FAlignment) <> 0 then
     raise EMemFixedPoolError.Create(aeInvalidLayout, 'Block size must be a multiple of alignment');
 
@@ -346,7 +332,7 @@ begin
   // 如果分配器不提供对齐接口，则 over-allocate 并手动对齐
   LRaw := FAllocator.GetMem(FTotalSize + (FAlignment - 1));
   if LRaw = nil then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'Failed to allocate arena buffer');
+    raise EOutOfMemory.CreateMsg('Failed to allocate arena buffer');
   FRawBuffer := LRaw;
   try
     LAddr := PtrUInt(LRaw);
@@ -509,7 +495,7 @@ end;
 
 { TFixedPoolConcurrent }
 
-constructor TFixedPoolConcurrent.Create(ABlockSize: SizeUInt; ACapacity: Integer; AAlignment: SizeUInt; AAllocator: TMemAllocator);
+constructor TFixedPoolConcurrent.Create(ABlockSize: SizeUInt; ACapacity: Integer; AAlignment: SizeUInt; AAllocator: TAllocator);
 begin
   inherited Create;
   FLock.Init;

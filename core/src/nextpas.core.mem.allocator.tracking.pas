@@ -8,7 +8,6 @@ uses
   nextpas.core.base,
   nextpas.core.mem.base,
   nextpas.core.mem.error,
-  nextpas.core.mem.intf,
   nextpas.core.mem.allocator.base;
 
 type
@@ -23,7 +22,7 @@ type
 
   {** TTrackingAllocator
    *
-   *  包装任意 TMemAllocator，记录所有分配/释放操作，
+   *  包装任意 IAllocator，记录所有分配/释放操作，
    *  用于测试时检测内存泄漏。
    *
    *  线程安全（内部用 TRTLCriticalSection 保护记录表）。
@@ -31,7 +30,7 @@ type
    *}
   TTrackingAllocator = class(TAllocator)
   private
-    FInner: TMemAllocator;
+    FInner: TAllocator;
     FRecords: TAllocRecordArray;
     FCount: SizeInt;
     FCapacity: SizeInt;
@@ -48,20 +47,17 @@ type
     procedure DoFreeMem(ADst: Pointer); override;
     function DoMemSize(APtr: Pointer): SizeUInt; override;
   public
-    constructor Create(aInner: TMemAllocator);
+    constructor Create(aInner: TAllocator);
     destructor Destroy; override;
 
-    {** 当前活跃分配数 }
     function ActiveAllocCount: SizeInt;
-    {** 当前活跃分配字节 }
     function ActiveAllocBytes: SizeUInt;
-    {** 是否有泄漏 }
     function HasLeaks: Boolean;
-    {** 生成泄漏报告（包含每个未释放块的地址和大小） }
     function ReportLeaks: string;
-    {** 内部分配器 }
-    property Inner: TMemAllocator read FInner;
+    property Inner: TAllocator read FInner;
 
+    procedure FreeMem(ADst: Pointer);
+    function ReallocMem(APtr: Pointer; AOldSize, ANewSize: SizeUInt): Pointer; override;
     function Traits: TAllocatorTraits; override;
   end;
 
@@ -69,7 +65,7 @@ implementation
 
 { TTrackingAllocator }
 
-constructor TTrackingAllocator.Create(aInner: TMemAllocator);
+constructor TTrackingAllocator.Create(aInner: TAllocator);
 begin
   inherited Create;
   if aInner = nil then
@@ -290,10 +286,40 @@ end;
 
 function TTrackingAllocator.Traits: TAllocatorTraits;
 begin
-  Result.ZeroInitialized := False;
-  Result.ThreadSafe      := True;
-  Result.HasMemSize      := FInner.Traits.HasMemSize;
-  Result.SupportsAligned := False;
+  Result := inherited Traits;
+  Result.HasMemSize := FInner.Traits.HasMemSize;
+end;
+
+procedure TTrackingAllocator.FreeMem(ADst: Pointer);
+begin
+  if ADst = nil then
+    Exit;
+  EnterCriticalSection(FLock);
+  try
+    if FindRecordIndex(ADst) < 0 then
+      raise EDoubleFree.Create(aeDoubleFree,
+        'TTrackingAllocator.FreeMem: pointer not tracked (double-free or foreign pointer)');
+    RemoveRecord(ADst);
+  finally
+    LeaveCriticalSection(FLock);
+  end;
+  FInner.FreeMem(ADst);
+end;
+
+function TTrackingAllocator.ReallocMem(APtr: Pointer;
+  AOldSize, ANewSize: SizeUInt): Pointer;
+begin
+  { Delegate nil/0 cases to base class (handles FreeMem → record removal). }
+  if (APtr = nil) or (ANewSize = 0) then
+    Exit(inherited ReallocMem(APtr, AOldSize, ANewSize));
+  Result := FInner.ReallocMem(APtr, AOldSize, ANewSize);
+  EnterCriticalSection(FLock);
+  try
+    if Result <> nil then
+      UpdateRecord(APtr, Result, ANewSize);
+  finally
+    LeaveCriticalSection(FLock);
+  end;
 end;
 
 end.

@@ -9,6 +9,7 @@ uses
   nextpas.core.mem.arena.virtual,
   nextpas.core.mem.allocator.arena,
   nextpas.core.mem.intf,
+  nextpas.core.mem.allocator.base,
   nextpas.core.mem.base;
 
 var
@@ -363,12 +364,12 @@ end;
 
 procedure TestArenaAllocatorInterface;
 var
-  LAlloc: TMemAllocator;
+  LAlloc: TAllocator;
   LP: Pointer;
 begin
   LAlloc := TVirtualArenaAllocator.Create;
   LP := LAlloc.GetMem(128);
-  Check(LP <> nil, 'TMemAllocator.GetMem should work');
+  Check(LP <> nil, 'IAllocator.GetMem should work');
   Check(LAlloc.Traits.ThreadSafe = False, 'should not be thread-safe');
   Check(LAlloc.Traits.SupportsAligned = True, 'should support aligned');
   Check(LAlloc.Traits.HasMemSize = False, 'should not have MemSize');
@@ -414,7 +415,7 @@ end;
 
 procedure TestArenaAllocatorFreeIsNop;
 var
-  LAlloc: TMemAllocator;
+  LAlloc: TAllocator;
   LP1, LP2: Pointer;
 begin
   LAlloc := TVirtualArenaAllocator.Create;
@@ -427,7 +428,7 @@ end;
 
 procedure TestArenaAllocatorAllocMem;
 var
-  LAlloc: TMemAllocator;
+  LAlloc: TAllocator;
   LP: PByte;
   I: Integer;
 begin
@@ -440,7 +441,7 @@ end;
 
 procedure TestArenaAllocatorRealloc;
 var
-  LAlloc: TMemAllocator;
+  LAlloc: TAllocator;
   LP, LP2: PInteger;
 begin
   LAlloc := TVirtualArenaAllocator.Create;

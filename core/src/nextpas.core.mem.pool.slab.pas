@@ -12,8 +12,8 @@ uses
   nextpas.core.base,
   nextpas.core.mem.base,
   nextpas.core.mem.utils,
-  nextpas.core.mem.allocator,
-  nextpas.core.mem.intf,
+  nextpas.core.mem.allocator.rtl,   // ResolveAllocator
+  nextpas.core.mem.allocator.base,
   nextpas.core.mem.pool.memory_pool,
   nextpas.core.mem.pool.fixed_slab,
   nextpas.core.base.utils,
@@ -108,9 +108,9 @@ type
    *
    * @see TFixedSlabPool, TSlabPoolConcurrent, IMemoryPool
    *}
-  TSlabPool = class(TAllocator, IMemoryPool)
+  TSlabPool = class(TInterfacedObject, IMemoryPool, IAllocator)
   private
-    FAllocator: TMemAllocator;
+    FAllocator: TAllocator;
     FSegments: array of TFixedSlabPool;
     FActive: Integer;
     FInitialCapacity, FMinShift: SizeUInt;
@@ -169,9 +169,9 @@ type
     procedure IndexSegmentPages(aSegIdx: Integer);
   public
     {** 创建 Slab 池（默认配置）*}
-    constructor Create(ACapacity: SizeUInt; AAllocator: TMemAllocator = nil; aMinShift: SizeUInt = 3); overload;
+    constructor Create(ACapacity: SizeUInt; AAllocator: TAllocator = nil; aMinShift: SizeUInt = 3); overload;
     {** 创建 Slab 池（自定义配置）*}
-    constructor Create(ACapacity: SizeUInt; const AConfig: TSlabConfig; AAllocator: TMemAllocator = nil); overload;
+    constructor Create(ACapacity: SizeUInt; const AConfig: TSlabConfig; AAllocator: TAllocator = nil); overload;
     {** 销毁池并释放所有段和回退分配 *}
     destructor Destroy; override;
     // IPool
@@ -187,7 +187,7 @@ type
     procedure ReleaseN(const aUnits: array of Pointer; aCount: Integer);
     {** 重置池，释放所有回退分配并回收段空间 *}
     procedure Reset;
-    // TMemAllocator aligned allocation
+    // IAllocator aligned allocation
     {**
      * 分配对齐内存块
      *
@@ -197,10 +197,10 @@ type
      *
      * @return 分配成功返回指针，失败返回 nil
      *}
-    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer; override;
+    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
     {** 释放 AllocAligned 分配的内存块 *}
-    procedure FreeAligned(APtr: Pointer); override;
-    // IMemoryPool + TMemAllocator
+    procedure FreeAligned(APtr: Pointer);
+    // IMemoryPool + IAllocator
     // Compatibility helpers for older tests
     {** GetMem 的别名 *}
     function Alloc(ASize: SizeUInt): Pointer; inline;
@@ -222,7 +222,7 @@ type
     {** 判断指针是否归本池所有 *}
     function Owns(APtr: Pointer): Boolean; inline;
     {** 返回指针对应的实际分配大小，不属于本池则返回 0 *}
-    function MemSizeOf(APtr: Pointer): SizeUInt; override;
+    function MemSizeOf(APtr: Pointer): SizeUInt;
     {** 返回只读统计快照 *}
     function Stats: TSlabPoolStats;
     // 性能计数器快照（只读）
@@ -238,23 +238,23 @@ type
     property FallbackAllocCount: Integer read GetFallbackAllocCount;
 
     {** 分配指定大小的内存块，失败返回 nil *}
-    function GetMem(ASize: SizeUInt): Pointer; override;
+    function GetMem(ASize: SizeUInt): Pointer;
     {** 分配零初始化的内存块 *}
-    function AllocMem(ASize: SizeUInt): Pointer; override;
+    function AllocMem(ASize: SizeUInt): Pointer;
     {** 重新分配内存块，自动拷贝旧数据 *}
-    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
     {** 释放内存块，指针不属于本池时抛出 ESlabPoolCorruption *}
-    procedure FreeMem(ADst: Pointer); override;
+    procedure FreeMem(ADst: Pointer);
     {** 返回指针对应的分配大小（MemSizeOf 别名）*}
-    function MemSize(APtr: Pointer): SizeUInt; override;
+    function MemSize(APtr: Pointer): SizeUInt;
     // 兼容统计
     {** 累计分配次数 *}
     property TotalAllocs: SizeUInt read FTotalAllocs;
     {** 累计释放次数 *}
     property TotalFrees : SizeUInt read FTotalFrees;
-    // TMemAllocator capability
+    // IAllocator capability
     {** 返回分配器能力特征（零初始化、线程安全、对齐支持等）*}
-    function Traits: TAllocatorTraits; override;
+    function Traits: TAllocatorTraits;
 
   end;
 
@@ -263,9 +263,6 @@ function CreateDefaultSlabConfig: TSlabConfig;
 {** 创建启用了页合并的 Slab 配置 *}
 function CreateSlabConfigWithPageMerging: TSlabConfig;
 implementation
-
-uses
-  nextpas.core.mem.allocator.base;
 
 const
   HASH_MIN_CAP = 64;
@@ -633,7 +630,7 @@ var
   LIdx: SizeUInt;
   LKey: PtrUInt;
 begin
-  if (FAllocator <> nil) and (Length(FFbKeys) > 0) then
+  if Length(FFbKeys) > 0 then
     for LIdx := 0 to FFbMask do
     begin
       LKey := FFbKeys[LIdx];
@@ -650,15 +647,8 @@ var
   LRaw, LUser: Pointer;
 begin
   Result := nil;
-  if (ASize = 0) or (FAllocator = nil) then Exit(nil);
 
-  LAlign := AAlignment;
-  if LAlign = 0 then
-    LAlign := 16;
-  if LAlign < SizeOf(Pointer) then
-    LAlign := SizeOf(Pointer);
-  if not IsPowerOfTwo(LAlign) then
-    raise EInvalidArgument.Create('TSlabPool.AllocFallback: AAlignment must be power of two and >= pointer size');
+  LAlign := SanitizeConfigAlignment(AAlignment);
 
   // over-allocate for alignment; raw pointer is tracked out-of-band
   if ASize > High(SizeUInt) - (LAlign - 1) then
@@ -904,12 +894,12 @@ begin
   end;
 end;
 
-constructor TSlabPool.Create(ACapacity: SizeUInt; AAllocator: TMemAllocator; aMinShift: SizeUInt);
+constructor TSlabPool.Create(ACapacity: SizeUInt; AAllocator: TAllocator; aMinShift: SizeUInt);
 var
   LSegment: TFixedSlabPool;
 begin
   inherited Create;
-  if AAllocator=nil then FAllocator:=nextpas.core.mem.allocator.GetRtlAllocator else FAllocator:=AAllocator;
+  FAllocator:=ResolveAllocator(AAllocator);
   if ACapacity=0 then ACapacity:=64*1024;
   if aMinShift=0 then aMinShift:=3;
 
@@ -935,13 +925,13 @@ end;
 
 function TSlabPool.Traits: TAllocatorTraits;
 begin
-  Result.ZeroInitialized := True;   // AllocMem 保证零填充
-  Result.ThreadSafe      := False;  // 当前未加锁
-  Result.HasMemSize      := True;   // 通过 ChunkSizeOf/MemSizeOf
-  Result.SupportsAligned := True;   // AllocAligned 通过 fallback 路径实现
+  Result.ZeroInitialized := True;
+  Result.ThreadSafe      := False;
+  Result.HasMemSize      := True;
+  Result.SupportsAligned := True;
 end;
 
-constructor TSlabPool.Create(ACapacity: SizeUInt; const AConfig: TSlabConfig; AAllocator: TMemAllocator);
+constructor TSlabPool.Create(ACapacity: SizeUInt; const AConfig: TSlabConfig; AAllocator: TAllocator);
 begin
   // 忽略 AConfig.EnablePageMerging（兼容字段）
   // MinShift 和 MaxAllocSize 采纳
@@ -1173,7 +1163,7 @@ begin
 
   // 释放旧块并移除 tracking（注意：先分配成功再销毁旧块）
   if TryUntrackFallbackAlloc(ADst, LAlloc) then
-    if (FAllocator <> nil) and (LAlloc.RawPtr <> nil) then
+    if LAlloc.RawPtr <> nil then
       FAllocator.FreeMem(LAlloc.RawPtr);
 
   Result := LNew;
@@ -1198,7 +1188,7 @@ begin
   end
   else if TryUntrackFallbackAlloc(ADst, LAlloc) then
   begin
-    if (FAllocator <> nil) and (LAlloc.RawPtr <> nil) then
+    if LAlloc.RawPtr <> nil then
       FAllocator.FreeMem(LAlloc.RawPtr);
     Inc(FTotalFrees);
   end
@@ -1268,10 +1258,7 @@ begin
 
   LPerfEnabled := FConfig.EnablePerfMonitoring;
 
-  if AAlignment < SizeOf(Pointer) then
-    AAlignment := SizeOf(Pointer);
-  if not IsPowerOfTwo(AAlignment) then
-    raise EInvalidArgument.Create('TSlabPool.AllocAligned: AAlignment must be power of two and >= pointer size');
+  AAlignment := SanitizeAlignment(AAlignment);
 
   if ShouldUseFallback(ASize) then
   begin

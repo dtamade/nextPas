@@ -34,9 +34,9 @@ uses
   nextpas.core.base.utils,
   nextpas.core.base,
   nextpas.core.mem.base,
-  nextpas.core.mem.allocator,
-  nextpas.core.mem.error,
-   nextpas.core.mem.allocator.base;
+  nextpas.core.mem.allocator.base,  // TAllocator
+  nextpas.core.mem.allocator.rtl,   // ResolveAllocator
+  nextpas.core.mem.error;
 
 type
   {** 环形缓冲区异常 Ring buffer exception *}
@@ -70,7 +70,7 @@ type
     FHead: SizeUInt;      // 读取位置 Read position
     FTail: SizeUInt;      // 写入位置 Write position
     FCount: SizeUInt;     // 当前元素数量 Current element count
-    FBaseAllocator: TMemAllocator;
+    FBaseAllocator: TAllocator;
     FIsPow2Capacity: Boolean;
 
     function GetElementPtr(aIndex: SizeUInt): Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
@@ -88,7 +88,7 @@ type
      * @param aElementSize 元素大小 Element size
      * @param aAllocator 基础分配器 Base allocator (optional)
      *}
-    constructor Create(aCapacity: SizeUInt; aElementSize: SizeUInt; aAllocator: TMemAllocator = nil);
+    constructor Create(aCapacity: SizeUInt; aElementSize: SizeUInt; aAllocator: TAllocator = nil);
 
     {**
      * Destroy
@@ -288,7 +288,7 @@ type
   generic TTypedRingBuffer<T> = class(TRingBuffer)
   public
     {** 创建类型安全的环形缓冲区 *}
-    constructor Create(aCapacity: SizeUInt; aAllocator: TMemAllocator = nil);
+    constructor Create(aCapacity: SizeUInt; aAllocator: TAllocator = nil);
     {** 写入一个元素 *}
     function Push(const aItem: T): Boolean; reintroduce;
     {** 读取一个元素 *}
@@ -320,7 +320,7 @@ uses
 
 { TRingBuffer }
 
-constructor TRingBuffer.Create(aCapacity: SizeUInt; aElementSize: SizeUInt; aAllocator: TMemAllocator);
+constructor TRingBuffer.Create(aCapacity: SizeUInt; aElementSize: SizeUInt; aAllocator: TAllocator);
 begin
   inherited Create;
 
@@ -336,10 +336,7 @@ begin
   FCount := 0;
   FIsPow2Capacity := nextpas.core.mem.base.IsPowerOfTwo(FCapacity);
 
-  if aAllocator = nil then
-    FBaseAllocator := nextpas.core.mem.allocator.GetRtlAllocator
-  else
-    FBaseAllocator := aAllocator;
+  FBaseAllocator := ResolveAllocator(aAllocator);
 
   // 防止乘法溢出并分配内存
   if (FElementSize <> 0) and (FCapacity > MAX_SIZE_UINT div FElementSize) then
@@ -347,7 +344,7 @@ begin
 
   FBuffer := FBaseAllocator.GetMem(FCapacity * FElementSize);
   if FBuffer = nil then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'Failed to allocate ring buffer memory');
+    raise EOutOfMemory.CreateMsg('Failed to allocate ring buffer memory');
 end;
 
 destructor TRingBuffer.Destroy;
@@ -734,7 +731,7 @@ end;
 
 { TTypedRingBuffer<T> }
 
-constructor TTypedRingBuffer.Create(aCapacity: SizeUInt; aAllocator: TMemAllocator);
+constructor TTypedRingBuffer.Create(aCapacity: SizeUInt; aAllocator: TAllocator);
 begin
   inherited Create(aCapacity, SizeOf(T), aAllocator);
 end;

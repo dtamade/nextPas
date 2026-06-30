@@ -23,14 +23,10 @@ type
   public
     GetCalls: Integer;
     FreeCalls: Integer;
-    function GetMem(ASize: SizeUInt): Pointer; override;
-    function AllocMem(ASize: SizeUInt): Pointer; override;
-    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure FreeMem(ADst: Pointer); override;
-    function MemSize(APtr: Pointer): SizeUInt; override;
-    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer; override;
-    procedure FreeAligned(APtr: Pointer); override;
-    function Traits: TAllocatorTraits; override;
+  protected
+    function DoGetMem(ASize: SizeUInt): Pointer; override;
+    function DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
+    procedure DoFreeMem(ADst: Pointer); override;
   end;
 
 var
@@ -50,48 +46,20 @@ begin
   end;
 end;
 
-function TFixedPoolRecordingAllocator.GetMem(ASize: SizeUInt): Pointer;
+function TFixedPoolRecordingAllocator.DoGetMem(ASize: SizeUInt): Pointer;
 begin
   Inc(GetCalls);
   Result := nil;
 end;
 
-function TFixedPoolRecordingAllocator.AllocMem(ASize: SizeUInt): Pointer;
-begin
-  Result := GetMem(ASize);
-end;
-
-function TFixedPoolRecordingAllocator.ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+function TFixedPoolRecordingAllocator.DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
 begin
   Result := nil;
 end;
 
-procedure TFixedPoolRecordingAllocator.FreeMem(ADst: Pointer);
+procedure TFixedPoolRecordingAllocator.DoFreeMem(ADst: Pointer);
 begin
   Inc(FreeCalls);
-end;
-
-function TFixedPoolRecordingAllocator.MemSize(APtr: Pointer): SizeUInt;
-begin
-  Result := 0;
-end;
-
-function TFixedPoolRecordingAllocator.AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
-begin
-  Result := GetMem(ASize);
-end;
-
-procedure TFixedPoolRecordingAllocator.FreeAligned(APtr: Pointer);
-begin
-  Inc(FreeCalls);
-end;
-
-function TFixedPoolRecordingAllocator.Traits: TAllocatorTraits;
-begin
-  Result.ZeroInitialized := False;
-  Result.ThreadSafe := False;
-  Result.HasMemSize := False;
-  Result.SupportsAligned := False;
 end;
 
 procedure ReleaseExternalPointer;
@@ -354,7 +322,7 @@ procedure TestFixedPoolRejectsTotalSizeOverflowBeforeAlloc;
 var
   LPool: TFixedPool;
   LAllocator: TFixedPoolRecordingAllocator;
-  LAllocatorRef: TMemAllocator;
+  LAllocatorRef: TAllocator;
   LBlockSize: SizeUInt;
   LRaised: Boolean;
 begin
@@ -441,7 +409,7 @@ end;
 
 procedure TestMakePoolAllocatorFactory;
 var
-  LAllocator: TMemAllocator;
+  LAllocator: TAllocator;
   LPtr: Pointer;
 begin
   LAllocator := MakePoolAllocator(64, 100);

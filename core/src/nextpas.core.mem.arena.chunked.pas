@@ -8,11 +8,9 @@ uses
   nextpas.core.base,
   nextpas.core.mem.base,
   nextpas.core.mem.error,
-  nextpas.core.mem.intf,
   nextpas.core.mem.arena.base,
   nextpas.core.base.utils,
-  nextpas.core.mem.arena.intf,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.arena.intf;
 
 type
   {** TChunkedArena
@@ -46,7 +44,6 @@ type
     FGrowthStep: SizeUInt;
     FGrowthBaseSize: SizeUInt;
     FKeepSegments: Boolean;
-    FAllocator: TMemAllocator;
     FPeakUsed: SizeUInt;
     FTotalAllocs: QWord;
     { Chunk cache: freed segments cached for reuse (Go-style reuse→ready→new) }
@@ -233,18 +230,9 @@ begin
   if LAllocSize < LSegSize then
     Exit(False);
 
-  if FAllocator <> nil then
-  begin
-    LRaw := FAllocator.GetMem(LAllocSize);
-    if LRaw = nil then
-      Exit(False);
-  end
-  else
-  begin
-    GetMem(LRaw, LAllocSize);
-    if LRaw = nil then
-      Exit(False);
-  end;
+  GetMem(LRaw, LAllocSize);
+  if LRaw = nil then
+    Exit(False);
 
   LAddr := PtrUInt(LRaw);
   if FAlignment <= 1 then
@@ -254,10 +242,7 @@ begin
     LMask := FAlignment - 1;
     if PtrUInt(LMask) > (High(PtrUInt) - LAddr) then
     begin
-      if FAllocator <> nil then
-        FAllocator.FreeMem(LRaw)
-      else
-        FreeMem(LRaw);
+      FreeMem(LRaw);
       Exit(False);
     end;
     LAligned := (LAddr + PtrUInt(LMask)) and not PtrUInt(LMask);
@@ -265,10 +250,7 @@ begin
 
   if (High(SizeUInt) - FTotalSize) < LSegSize then
   begin
-    if FAllocator <> nil then
-      FAllocator.FreeMem(LRaw)
-    else
-      FreeMem(LRaw);
+    FreeMem(LRaw);
     Exit(False);
   end;
 
@@ -310,10 +292,7 @@ begin
   FSegments[aIndex].RawSize := 0;
   if LRaw = nil then
     Exit;
-  if FAllocator <> nil then
-    FAllocator.FreeMem(LRaw)
-  else
-    FreeMem(LRaw);
+  FreeMem(LRaw);
 end;
 
 { CacheSegment - move segment to free list for reuse instead of freeing }
@@ -395,12 +374,7 @@ begin
   for I := 0 to FFreeCount - 1 do
   begin
     if FFreeSegments[I].Raw <> nil then
-    begin
-      if FAllocator <> nil then
-        FAllocator.FreeMem(FFreeSegments[I].Raw)
-      else
-        FreeMem(FFreeSegments[I].Raw);
-    end;
+      FreeMem(FFreeSegments[I].Raw);
     FFreeSegments[I].Raw := nil;
   end;
   FFreeCount := 0;
@@ -487,15 +461,8 @@ begin
 
   FMaxSize := aConfig.MaxSize;
   FKeepSegments := aConfig.KeepSegments;
-  FAllocator := nil;
 
-  LAlign := aConfig.Alignment;
-  if LAlign = 0 then
-    LAlign := DEFAULT_ALIGNMENT;
-  if (LAlign and (LAlign - 1)) <> 0 then
-    raise EAllocError.Create(aeAlignmentNotSupported, 'TChunkedArena: alignment must be power of 2');
-  if LAlign < MEM_DEFAULT_ALIGN then
-    LAlign := MEM_DEFAULT_ALIGN;
+  LAlign := SanitizeConfigAlignment(aConfig.Alignment);
   FAlignment := LAlign;
 
   SetLength(FSegments, 0);
@@ -510,7 +477,7 @@ begin
   FCacheLimit := CHUNK_CACHE_LIMIT;
 
   if not AddSegment(LInitSize) then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'TChunkedArena: failed to allocate initial segment');
+    raise EOutOfMemory.CreateMsg('TChunkedArena: failed to allocate initial segment');
   FActive := 0;
 end;
 

@@ -31,7 +31,7 @@ type
 
 var
   T: TTestSuite;
-  GAllocator: TMemAllocator = nil;
+  GAllocator: TAllocator = nil;
   GPoolAllocator: TPoolAllocator = nil;
   GFallback: TRecordingFallback = nil;
   GPtr: Pointer = nil;
@@ -180,9 +180,7 @@ begin
     Check(False = LTraits.SupportsAligned, 'pool allocator should not claim native generic aligned support');
   finally
     GAllocator := nil;
-    GPoolAllocator.Free;
     GPoolAllocator := nil;
-    GFallback.Free;
     GFallback := nil;
   end;
 end;
@@ -208,9 +206,7 @@ begin
     if GPtr <> nil then
       GAllocator.FreeMem(GPtr);
     GAllocator := nil;
-    GPoolAllocator.Free;
     GPoolAllocator := nil;
-    GFallback.Free;
     GFallback := nil;
   end;
 end;
@@ -230,9 +226,7 @@ begin
     Check(Int64(LBaselineGetCalls) = Int64(GFallback.GetCalls), 'invalid alignment must not allocate fallback memory');
     Check(Int64(LBaselineAllocCalls) = Int64(GFallback.AllocCalls), 'invalid alignment must not call fallback AllocMem');
   finally
-    GAllocator.Free;
     GAllocator := nil;
-    GFallback.Free;
     GFallback := nil;
   end;
 end;
@@ -248,9 +242,7 @@ begin
     Check(Int64(0) = Int64(GFallback.FreeCalls), 'foreign pointer must not be forwarded to fallback FreeMem');
     Check(Int64(0) = Int64(GFallback.ReallocCalls), 'foreign pointer must not be forwarded to fallback ReallocMem');
   finally
-    GAllocator.Free;
     GAllocator := nil;
-    GFallback.Free;
     GFallback := nil;
   end;
 end;
@@ -275,9 +267,7 @@ begin
     if GPtr <> nil then
       GAllocator.FreeMem(GPtr);
     GAllocator := nil;
-    GPoolAllocator.Free;
     GPoolAllocator := nil;
-    GFallback.Free;
     GFallback := nil;
   end;
 end;
@@ -317,9 +307,7 @@ begin
     end;
   finally
     GAllocator := nil;
-    GPoolAllocator.Free;
     GPoolAllocator := nil;
-    GFallback.Free;
     GFallback := nil;
   end;
 end;

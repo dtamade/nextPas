@@ -14,13 +14,12 @@ uses
 
 const
   THREAD_COUNT = 12;
-  ITERATION_COUNT = 64,
-  nextpas.core.mem.allocator.base;
+  ITERATION_COUNT = 64;
 
 type
   PDefaultAllocatorThreadData = ^TDefaultAllocatorThreadData;
   TDefaultAllocatorThreadData = record
-    Allocator: TMemAllocator;
+    Allocator: TAllocator;
     Failed: Boolean;
     StartFlag: PLongInt;
   end;
@@ -61,8 +60,8 @@ end;
 
 procedure TestDefaultAllocatorSingletonSingleThread;
 var
-  LFirst: TMemAllocator;
-  LSecond: TMemAllocator;
+  LFirst: TAllocator;
+  LSecond: TAllocator;
 begin
   LFirst := DefaultAllocator;
   LSecond := DefaultAllocator;
@@ -78,7 +77,7 @@ var
   LThreadData: array[0..THREAD_COUNT - 1] of TDefaultAllocatorThreadData;
   LStartFlag: LongInt;
   LIndex: Integer;
-  LFirst: TMemAllocator;
+  LFirst: TAllocator;
 begin
   LStartFlag := 0;
   for LIndex := 0 to High(LThreads) do
@@ -106,7 +105,7 @@ end;
 
 procedure TestDefaultAllocatorAllocMem;
 var
-  LAllocator: TMemAllocator;
+  LAllocator: TAllocator;
   LPtr: Pointer;
   LI: Integer;
 begin
@@ -121,7 +120,7 @@ end;
 
 procedure TestDefaultAllocatorMemSize;
 var
-  LAllocator: TMemAllocator;
+  LAllocator: TAllocator;
   LPtr: Pointer;
   LReported: SizeUInt;
 begin
@@ -135,7 +134,7 @@ end;
 
 procedure TestDefaultAllocatorReallocPreserves;
 var
-  LAllocator: TMemAllocator;
+  LAllocator: TAllocator;
   LPtr: Pointer;
   LI: Integer;
 begin

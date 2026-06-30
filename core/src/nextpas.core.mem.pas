@@ -1,6 +1,6 @@
 unit nextpas.core.mem;
 {**
- * @desc 内存管理门面：TMemAllocator 抽象、默认分配器、工具函数。
+ * @desc 内存管理门面：默认分配器、工具函数。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -9,9 +9,7 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.base.utils,
   nextpas.core.mem.base,
-  nextpas.core.mem.intf,
   nextpas.core.mem.error,
   nextpas.core.mem.default,
   nextpas.core.mem.mutex,
@@ -24,6 +22,7 @@ uses
   nextpas.core.mem.arena.thread,
   nextpas.core.mem.arena.concurrent,
   nextpas.core.mem.allocator.arena,
+  nextpas.core.mem.allocator.base,
   nextpas.core.mem.allocator.rtl,
   nextpas.core.mem.allocator.callback,
   nextpas.core.mem.allocator.guard,
@@ -48,13 +47,14 @@ uses
   nextpas.core.mem.memory_map,
   nextpas.core.mem.mapped_slab_pool,
   nextpas.core.mem.secure,
-  nextpas.core.mem.pool
+  nextpas.core.mem.pool;
 
 type
   // === 基础类型 ===
   TAllocatorKind = nextpas.core.mem.base.TAllocatorKind;
-  TAllocatorTraits = nextpas.core.mem.intf.TAllocatorTraits;
-  IAllocator = nextpas.core.mem.intf.IAllocator;
+  TAllocatorTraits = nextpas.core.mem.allocator.base.TAllocatorTraits;
+  IAllocator = nextpas.core.mem.allocator.base.IAllocator;
+  TAllocator = nextpas.core.mem.allocator.base.TAllocator;
   TMemAllocator = nextpas.core.mem.allocator.base.TMemAllocator;
   TAllocError = nextpas.core.mem.error.TAllocError;
   EAllocError = nextpas.core.mem.error.EAllocError;
@@ -126,14 +126,14 @@ type
   TSharedMemory = nextpas.core.mem.memory_map.TSharedMemory;
   TMappedSlabAllocator = nextpas.core.mem.mapped_slab_pool.TMappedSlabAllocator;
 
-function DefaultAllocator: TMemAllocator; inline;
+function DefaultAllocator: TAllocator; inline;
 
-function AllocZeroed(const AAllocator: TMemAllocator; const ASize: SizeUInt): Pointer; inline;
-function AllocArray(const AAllocator: TMemAllocator; const ACount, AElemSize: SizeUInt): Pointer; inline;
+function AllocZeroed(const AAllocator: TAllocator; const ASize: SizeUInt): Pointer; inline;
+function AllocArray(const AAllocator: TAllocator; const ACount, AElemSize: SizeUInt): Pointer; inline;
 
 function MakeFixedSlabPool(ACapacity: SizeUInt): IFixedSlabPool; inline;
 function MakePoolAllocator(ABlockSize: SizeUInt; ACapacity: Integer;
-  AFallback: TMemAllocator = nil): TMemAllocator; inline;
+  AFallback: TAllocator = nil): TAllocator; inline;
 
 procedure SecureZeroMemory(ABuffer: Pointer; ASize: NativeUInt); inline;
 procedure SecureZeroBytes(var AData: TBytes); inline;
@@ -141,24 +141,24 @@ procedure SecureZeroString(var AStr: AnsiString); inline;
 
 implementation
 
-function DefaultAllocator: TMemAllocator;
+function DefaultAllocator: TAllocator;
 begin
   Result := nextpas.core.mem.default.DefaultAllocator;
 end;
 
-function AllocZeroed(const AAllocator: TMemAllocator; const ASize: SizeUInt): Pointer;
+function AllocZeroed(const AAllocator: TAllocator; const ASize: SizeUInt): Pointer;
 begin
   Result := AAllocator.AllocMem(ASize);
 end;
 
-function AllocArray(const AAllocator: TMemAllocator; const ACount, AElemSize: SizeUInt): Pointer;
+function AllocArray(const AAllocator: TAllocator; const ACount, AElemSize: SizeUInt): Pointer;
 var
   LTotal: SizeUInt;
 begin
   if (ACount = 0) or (AElemSize = 0) then Exit(nil);
   { Overflow-safe: check before multiply }
   if ACount > (High(SizeUInt) div AElemSize) then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'AllocArray: size overflow');
+    raise EOutOfMemory.CreateMsg('AllocArray: size overflow');
   LTotal := ACount * AElemSize;
   Result := AAllocator.AllocMem(LTotal);
 end;
@@ -169,7 +169,7 @@ begin
 end;
 
 function MakePoolAllocator(ABlockSize: SizeUInt; ACapacity: Integer;
-  AFallback: TMemAllocator): TMemAllocator;
+  AFallback: TAllocator): TAllocator;
 begin
   Result := nextpas.core.mem.pool.allocator.MakePoolAllocator(ABlockSize, ACapacity, AFallback);
 end;
