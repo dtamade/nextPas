@@ -39,16 +39,29 @@ var
   LTextBuf: TTextBuf;
   I, J, Count: Integer;
 begin
-  // Fill with text-like data: spaces every ~6 bytes, some newlines
   for J := 0 to TEXT_LEN-1 do
-    if (J mod 6 = 0) then LTextBuf[J] := 32  // space
-    else if (J mod 50 = 0) then LTextBuf[J] := 10 // newline
-    else LTextBuf[J] := Byte(65 + (J mod 26)); // A-Z
+    if (J mod 6 = 0) then LTextBuf[J] := 32
+    else if (J mod 50 = 0) then LTextBuf[J] := 10
+    else LTextBuf[J] := Byte(65 + (J mod 26));
   for I := 1 to NUM_ITERS do begin
     Count := 0;
     for J := 0 to TEXT_LEN-1 do
       if LTextBuf[J] = 32 then Inc(Count);
   end;
+end;
+procedure BenchBufferAnd(const ACtx: IBenchContext);
+var I, J: Integer;
+begin
+  for I := 1 to N do
+    for J := 0 to SZ-1 do
+      GC[J] := GA[J] and GB[J];
+end;
+procedure BenchBufferNot(const ACtx: IBenchContext);
+var I, J: Integer;
+begin
+  for I := 1 to N do
+    for J := 0 to SZ-1 do
+      GC[J] := not GA[J];
 end;
 var LSuite: IBenchSuite; LResults: IBenchResults;
 begin
@@ -58,6 +71,8 @@ begin
   LSuite.Add('MemZero/4KB×100K', @BenchMemZero);
   LSuite.Add('BufferXor/4KB×100K', @BenchBufferXor);
   LSuite.Add('WordCount/100KB×1K', @BenchWordCount);
+  LSuite.Add('BufferAnd/4KB×100K', @BenchBufferAnd);
+  LSuite.Add('BufferNot/4KB×100K', @BenchBufferNot);
   LResults := LSuite.Run;
   WriteLn(LResults.ToBenchStat);
 end.

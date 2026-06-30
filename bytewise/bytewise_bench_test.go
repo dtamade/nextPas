@@ -64,3 +64,25 @@ func BenchmarkWordCount(b *testing.B) {
 		sink = count
 	}
 }
+
+func BenchmarkBufferAnd(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		for j := 0; j < n; j++ {
+			for k := 0; k < sz; k++ {
+				gc[k] = ga[k] & gb[k]
+			}
+		}
+		sink = int(gc[0])
+	}
+}
+
+func BenchmarkBufferNot(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		for j := 0; j < n; j++ {
+			for k := 0; k < sz; k++ {
+				gc[k] = ^ga[k]
+			}
+		}
+		sink = int(gc[0])
+	}
+}
