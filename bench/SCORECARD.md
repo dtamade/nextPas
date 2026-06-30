@@ -8,10 +8,10 @@
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **138** | 5 | 33 | **79%** |
+| **Go** | **140** | 5 | 33 | **79%** |
 | **Rust** | 19 | 0 | 47 | **29%** |
 
-## Track Summary (42 tracks, 181 operations)
+## Track Summary (42 tracks, 183 operations)
 
 ### Text Operations (6 ops)
 
@@ -440,15 +440,17 @@
 
 **2W vs Go** — FillChar→rep stosb 27x crushes Go byte loop; Move/copy 1.42x; CompareMem ties
 
-### ByteWise Operations (3 ops)
+### ByteWise Operations (5 ops)
 
 | Track | Pascal | Go | vs Go |
 |-------|--------|-----|-------|
 | **MemZero/4KB×100K** | **5.92ms** | 6.94ms | **1.17x** ✓ |
 | **BufferXor/4KB×100K** | **320ms** | 491ms | **1.54x** ✓ |
 | **WordCount/100KB×1K** | **81.9ms** | 103ms | **1.26x** ✓ |
+| **BufferAnd/4KB×100K** | **305ms** | 470ms | **1.54x** ✓ |
+| **BufferNot/4KB×100K** | **268ms** | 327ms | **1.22x** ✓ |
 
-**3W vs Go** — Simple scalar loops: FPC generates tighter code than Go
+**5W vs Go** — Simple scalar loops: FPC generates tighter code than Go
 
 ### Array Operations (11 ops)
 
@@ -521,7 +523,7 @@
 - **Object lifecycle**: Pascal dominant (3W vs Go) — New/Dispose vs GC write barrier
 - **Memory move**: Pascal strong (3W vs Go) — ERMSB + prefetchnta at 16K-256K
 - **ByteArray ops**: Pascal strong (2W 1D vs Go) — FillBytes 27x, CopyBytes 1.42x, CompareBytes ties
-- **Scalar loops**: Pascal strong (3W vs Go) — MemZero 1.17x, BufferXor 1.54x, WordCount 1.26x; FPC tighter codegen
+- **Scalar loops**: Pascal strong (5W vs Go) — MemZero 1.17x, BufferXor 1.54x, BufferAnd 1.54x, WordCount 1.26x, BufferNot 1.22x; FPC tighter codegen
 - **Array indexed loops**: Pascal dominant (11W vs Go) — ArraySum 11.1x, ByteFrequency 10.4x, FloatArraySum 10.3x, FloatArrayMinMax 10.2x, FloatArrayDot 10.1x, FloatArrayNorm 9.95x, CountEven 9.69x, IntArrayFilter 9.07x, ArrayReverse 8.75x, ArrayRotate 8.57x, LinearSearch 6.51x; Go bounds check + write barrier overhead
 - **File I/O Write**: Pascal dominant (3W vs Go) — direct syscall vs Go's bufio
 - **String operations**: Pascal dominant (7W vs Go)
