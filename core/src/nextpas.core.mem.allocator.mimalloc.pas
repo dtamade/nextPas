@@ -5,7 +5,6 @@ unit nextpas.core.mem.allocator.mimalloc;
 interface
 
 uses
-  nextpas.core.errors,
   nextpas.core.mem.allocator.base
   {$IFNDEF NEXTPAS_CORE_MIMALLOC_STATIC}
   ,nextpas.core.mem.allocator.mimalloc.loader

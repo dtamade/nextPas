@@ -5,7 +5,6 @@ unit nextpas.core.mem.allocator.crt;
 interface
 
 uses
-  nextpas.core.errors,
   nextpas.core.mem.allocator.base;
 
 type
