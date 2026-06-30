@@ -111,6 +111,84 @@ func BenchmarkInOrder100k(b *testing.B) {
 	}
 }
 
+func bstLookupMiss100k(b *testing.B) {
+	var root *bstNode
+	for i := 0; i < treeN; i++ {
+		root = bstInsert(root, treeKeys[i])
+	}
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		sink := 0
+		for i := 1; i <= treeN; i++ {
+			if bstLookup(root, int64(treeN+i)) != nil {
+				sink++
+			}
+		}
+		if sink > 0 {
+			fmt.Println()
+		}
+	}
+}
+
+func bstDeleteMin(root *bstNode) (*bstNode, *bstNode) {
+	var parent *bstNode
+	curr := root
+	for curr.left != nil {
+		parent = curr
+		curr = curr.left
+	}
+	if parent == nil {
+		return root.right, curr
+	}
+	parent.left = curr.right
+	return root, curr
+}
+
+func bstDelete(root *bstNode, key int64) *bstNode {
+	if root == nil {
+		return nil
+	}
+	if key < root.key {
+		root.left = bstDelete(root.left, key)
+		return root
+	}
+	if key > root.key {
+		root.right = bstDelete(root.right, key)
+		return root
+	}
+	// Found
+	if root.left == nil && root.right == nil {
+		return nil
+	}
+	if root.left == nil {
+		return root.right
+	}
+	if root.right == nil {
+		return root.left
+	}
+	// Two children: find in-order successor
+	var successor *bstNode
+	root.right, successor = bstDeleteMin(root.right)
+	successor.left = root.left
+	successor.right = root.right
+	return successor
+}
+
+func BenchmarkDelete100k(b *testing.B) {
+	for n := 0; n < b.N; n++ {
+		var root *bstNode
+		for i := 0; i < treeN; i++ {
+			root = bstInsert(root, treeKeys[i])
+		}
+		for i := 0; i < treeN; i++ {
+			root = bstDelete(root, treeKeys[i])
+		}
+		if root != nil {
+			fmt.Println()
+		}
+	}
+}
+
 func BenchmarkLookupMiss100k(b *testing.B) {
 	var root *bstNode
 	for i := 0; i < treeN; i++ {

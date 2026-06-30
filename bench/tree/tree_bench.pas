@@ -202,6 +202,62 @@ begin
   if Found <> nil then WriteLn('');
 end;
 
+function BSTDeleteMin(var Root: PNode): PNode;
+var Parent, Curr: PNode;
+begin
+  Parent := nil;
+  Curr := Root;
+  while Curr^.Left <> nil do begin
+    Parent := Curr;
+    Curr := Curr^.Left;
+  end;
+  Result := Curr;
+  if Parent = nil then
+    Root := Curr^.Right
+  else
+    Parent^.Left := Curr^.Right;
+end;
+
+function BSTDelete(Root: PNode; Key: Int64): PNode;
+var LSuccessor: PNode;
+begin
+  if Root = nil then Exit(nil);
+  if Key < Root^.Key then begin
+    Root^.Left := BSTDelete(Root^.Left, Key);
+    Exit(Root);
+  end;
+  if Key > Root^.Key then begin
+    Root^.Right := BSTDelete(Root^.Right, Key);
+    Exit(Root);
+  end;
+  // Key = Root^.Key — found the node to delete
+  if (Root^.Left = nil) and (Root^.Right = nil) then begin
+    // Leaf — just remove
+    Exit(nil);
+  end;
+  if Root^.Left = nil then Exit(Root^.Right);
+  if Root^.Right = nil then Exit(Root^.Left);
+  // Two children: find in-order successor (min of right subtree)
+  LSuccessor := BSTDeleteMin(Root^.Right);
+  LSuccessor^.Left := Root^.Left;
+  LSuccessor^.Right := Root^.Right;
+  Result := LSuccessor;
+end;
+
+procedure BenchDelete(const ACtx: IBenchContext);
+var Root, Copy: PNode; J: Integer;
+begin
+  // Copy the prebuilt tree structure for deletion
+  Copy := nil;
+  for J := 0 to N - 1 do
+    Copy := BSTInsert(Copy, GKeys[J]);
+  Root := Copy;
+  for J := 0 to N - 1 do
+    Root := BSTDelete(Root, GKeys[J]);
+  ACtx.SetBytes(N * SizeOf(TNode) * 2);
+  if Root <> nil then WriteLn('');
+end;
+
 var
   LSuite: IBenchSuite;
   LResults: IBenchResults;
@@ -225,6 +281,7 @@ begin
   LSuite.Add('InOrderIterative/100k', @BenchInOrderIterative);
   LSuite.Add('InOrderArena/100k', @BenchInOrderArena);
   LSuite.Add('LookupMiss/100k', @BenchLookupMiss);
+  LSuite.Add('Delete/100k', @BenchDelete);
 
   LResults := LSuite.Run;
 
