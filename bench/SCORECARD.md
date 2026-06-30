@@ -8,10 +8,10 @@
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **93** | 3 | 33 | **72%** |
+| **Go** | **97** | 3 | 33 | **73%** |
 | **Rust** | 19 | 0 | 47 | **29%** |
 
-## Track Summary (30 tracks, 133 operations)
+## Track Summary (31 tracks, 137 operations)
 
 ### Text Operations (6 ops)
 
@@ -360,6 +360,17 @@
 | **Swiss/Map/100Kx100K** | **5820212** | 14499561 | **2.49x** ✓ |
 
 **6W vs Go** — Sorted merge 1.2-1.5x; Swiss hash intersection 1.7-2.5x vs Go map (build + probe)
+
+### Deduplication (4 ops)
+
+| Track | Pascal (ns) | Go (ns) | vs Go |
+|-------|-------------|---------|-------|
+| **SortDedup/100K** | **210145** | 532983 | **2.54x** ✓ |
+| **SortDedup/1M** | **2003381** | 5551127 | **2.77x** ✓ |
+| **SwissDedup/100K** | **2817499** | 5454705 | **1.94x** ✓ |
+| **SwissDedup/1M** | **41022147** | 65207876 | **1.59x** ✓ |
+
+**4W vs Go** — SortI32 + linear scan 2.5-2.8x (type-specialized sort dominates); Swiss dedup 1.6-1.9x vs Go map
 
 ### Pascal Wins (biggest margins vs Go)
 1. **String Concat: 3557x** — Go immutable strings O(n²) vs Pascal COW
