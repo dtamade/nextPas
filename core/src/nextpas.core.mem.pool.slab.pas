@@ -12,7 +12,7 @@ uses
   nextpas.core.base,
   nextpas.core.mem.base,
   nextpas.core.mem.utils,
-  nextpas.core.mem.allocator,
+  nextpas.core.mem.allocator.rtl,   // GetRtlAllocator
   nextpas.core.mem.allocator.base,
   nextpas.core.mem.pool.memory_pool,
   nextpas.core.mem.pool.fixed_slab,
@@ -906,7 +906,7 @@ var
   LSegment: TFixedSlabPool;
 begin
   inherited Create;
-  if AAllocator=nil then FAllocator:=nextpas.core.mem.allocator.GetRtlAllocator else FAllocator:=AAllocator;
+  if AAllocator=nil then FAllocator:=GetRtlAllocator else FAllocator:=AAllocator;
   if ACapacity=0 then ACapacity:=64*1024;
   if aMinShift=0 then aMinShift:=3;
 

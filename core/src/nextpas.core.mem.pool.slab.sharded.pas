@@ -12,7 +12,7 @@ uses
   nextpas.core.base,
   nextpas.core.mem.base,
   nextpas.core.mem.utils,
-  nextpas.core.mem.allocator,
+  nextpas.core.mem.allocator.rtl,   // GetRtlAllocator
   nextpas.core.mem.allocator.base,
   nextpas.core.mem.mutex,
   nextpas.core.mem.pool.memory_pool,
@@ -551,7 +551,7 @@ begin
 
   FAllocator := AAllocator;
   if FAllocator = nil then
-    FAllocator := nextpas.core.mem.allocator.GetRtlAllocator;
+    FAllocator := GetRtlAllocator;
 
   if aCapacity = 0 then
     aCapacity := 64 * 1024;

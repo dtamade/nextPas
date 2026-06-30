@@ -212,7 +212,6 @@ end;
 
 function TPoolAllocator.AllocFallback(ASize, AAlignment: SizeUInt; aAligned: Boolean): Pointer;
 begin
-  if ASize = 0 then Exit(nil);
   if aAligned then
     Result := FFallback.AllocAligned(ASize, AAlignment)
   else
@@ -270,7 +269,6 @@ end;
 
 function TPoolAllocator.DoGetMem(ASize: SizeUInt): Pointer;
 begin
-  if ASize = 0 then Exit(nil);
   if ASize <= FBlockSize then begin
     if FPool.TryAlloc(Result) then begin
       try

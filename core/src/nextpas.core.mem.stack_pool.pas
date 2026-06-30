@@ -32,7 +32,8 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.mem.allocator,
+  nextpas.core.mem.allocator.base,  // TAllocator
+  nextpas.core.mem.allocator.rtl,   // GetRtlAllocator
   nextpas.core.mem.error;
 
 type
@@ -393,7 +394,7 @@ begin
   FOffset := 0;
 
   if AAllocator = nil then
-    FBaseAllocator := nextpas.core.mem.allocator.GetRtlAllocator
+    FBaseAllocator := GetRtlAllocator
   else
     FBaseAllocator := AAllocator;
 

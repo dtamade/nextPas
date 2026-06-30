@@ -34,7 +34,8 @@ uses
   nextpas.core.base.utils,
   nextpas.core.base,
   nextpas.core.mem.base,
-  nextpas.core.mem.allocator,
+  nextpas.core.mem.allocator.base,  // TAllocator
+  nextpas.core.mem.allocator.rtl,   // GetRtlAllocator
   nextpas.core.mem.error;
 
 type
@@ -336,7 +337,7 @@ begin
   FIsPow2Capacity := nextpas.core.mem.base.IsPowerOfTwo(FCapacity);
 
   if aAllocator = nil then
-    FBaseAllocator := nextpas.core.mem.allocator.GetRtlAllocator
+    FBaseAllocator := GetRtlAllocator
   else
     FBaseAllocator := aAllocator;
 

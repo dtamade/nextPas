@@ -11,7 +11,8 @@ uses
   nextpas.core.mem.utils,         // CalcGeometricGrowth
   nextpas.core.mem.error,
   nextpas.core.mem.pool.base,     // IPool (decoupled)
-  nextpas.core.mem.allocator;     // TAllocator + GetRtlAllocator
+  nextpas.core.mem.allocator.base,  // TAllocator
+  nextpas.core.mem.allocator.rtl;   // GetRtlAllocator
 
 type
   EGrowingFixedPoolError = class(EAllocError);
@@ -210,7 +211,7 @@ begin
   FBlockShift := Log2UInt(FBlockSize);
 
   if aConfig.Allocator = nil then
-    FAllocator := nextpas.core.mem.allocator.GetRtlAllocator
+    FAllocator := GetRtlAllocator
   else
     FAllocator := aConfig.Allocator;
 
