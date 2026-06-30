@@ -7,7 +7,7 @@ interface
 uses
   nextpas.core.mem.base,
   nextpas.core.mem.error,
-  nextpas.core.mem.intf,
+  nextpas.core.mem.allocator.base,
   nextpas.core.mem.arena.base,
   nextpas.core.base.utils,
   nextpas.core.mem.arena.intf;
@@ -27,12 +27,12 @@ type
     FOffset: SizeUInt;
     FPeakUsed: SizeUInt;
     FTotalAllocs: QWord;
-    FAllocator: IAllocator;
+    FAllocator: TAllocator;
   public
     {** 创建 Arena 并分配 ACapacity 字节的后备内存。ACapacity=0 时不做分配。 }
     constructor Create(const ACapacity: SizeUInt); overload;
     {** 创建 Arena 并使用指定分配器分配后备内存。AAllocator=nil 时回退到 System.GetMem。 }
-    constructor Create(const ACapacity: SizeUInt; const AAllocator: IAllocator); overload;
+    constructor Create(const ACapacity: SizeUInt; const AAllocator: TAllocator); overload;
     {** 释放后备内存。 }
     destructor Destroy; override;
 
@@ -69,7 +69,7 @@ begin
   Create(ACapacity, nil);
 end;
 
-constructor TLocalArena.Create(const ACapacity: SizeUInt; const AAllocator: IAllocator);
+constructor TLocalArena.Create(const ACapacity: SizeUInt; const AAllocator: TAllocator);
 begin
   inherited Create;
   FAllocator := AAllocator;

@@ -8,7 +8,6 @@ uses
   nextpas.core.base,
   nextpas.core.mem.base,
   nextpas.core.mem.error,
-  nextpas.core.mem.intf,
   nextpas.core.mem.arena.base,
   nextpas.core.base.utils,
   nextpas.core.mem.arena.intf;
@@ -45,7 +44,6 @@ type
     FGrowthStep: SizeUInt;
     FGrowthBaseSize: SizeUInt;
     FKeepSegments: Boolean;
-    FAllocator: IAllocator;
     FPeakUsed: SizeUInt;
     FTotalAllocs: QWord;
     { Chunk cache: freed segments cached for reuse (Go-style reuse→ready→new) }
@@ -232,18 +230,9 @@ begin
   if LAllocSize < LSegSize then
     Exit(False);
 
-  if FAllocator <> nil then
-  begin
-    LRaw := FAllocator.GetMem(LAllocSize);
-    if LRaw = nil then
-      Exit(False);
-  end
-  else
-  begin
-    GetMem(LRaw, LAllocSize);
-    if LRaw = nil then
-      Exit(False);
-  end;
+  GetMem(LRaw, LAllocSize);
+  if LRaw = nil then
+    Exit(False);
 
   LAddr := PtrUInt(LRaw);
   if FAlignment <= 1 then
@@ -253,10 +242,7 @@ begin
     LMask := FAlignment - 1;
     if PtrUInt(LMask) > (High(PtrUInt) - LAddr) then
     begin
-      if FAllocator <> nil then
-        FAllocator.FreeMem(LRaw)
-      else
-        FreeMem(LRaw);
+      FreeMem(LRaw);
       Exit(False);
     end;
     LAligned := (LAddr + PtrUInt(LMask)) and not PtrUInt(LMask);
@@ -264,10 +250,7 @@ begin
 
   if (High(SizeUInt) - FTotalSize) < LSegSize then
   begin
-    if FAllocator <> nil then
-      FAllocator.FreeMem(LRaw)
-    else
-      FreeMem(LRaw);
+    FreeMem(LRaw);
     Exit(False);
   end;
 
@@ -309,10 +292,7 @@ begin
   FSegments[aIndex].RawSize := 0;
   if LRaw = nil then
     Exit;
-  if FAllocator <> nil then
-    FAllocator.FreeMem(LRaw)
-  else
-    FreeMem(LRaw);
+  FreeMem(LRaw);
 end;
 
 { CacheSegment - move segment to free list for reuse instead of freeing }
@@ -394,12 +374,7 @@ begin
   for I := 0 to FFreeCount - 1 do
   begin
     if FFreeSegments[I].Raw <> nil then
-    begin
-      if FAllocator <> nil then
-        FAllocator.FreeMem(FFreeSegments[I].Raw)
-      else
-        FreeMem(FFreeSegments[I].Raw);
-    end;
+      FreeMem(FFreeSegments[I].Raw);
     FFreeSegments[I].Raw := nil;
   end;
   FFreeCount := 0;
@@ -486,7 +461,6 @@ begin
 
   FMaxSize := aConfig.MaxSize;
   FKeepSegments := aConfig.KeepSegments;
-  FAllocator := nil;
 
   LAlign := aConfig.Alignment;
   if LAlign = 0 then

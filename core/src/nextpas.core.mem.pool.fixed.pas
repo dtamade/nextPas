@@ -8,7 +8,8 @@ uses
   nextpas.core.base,
   nextpas.core.base.utils,
   nextpas.core.mem.pool.base,    // IPool (decoupled from facade)
-  nextpas.core.mem.allocator,    // IAllocator + GetRtlAllocator
+  nextpas.core.mem.allocator.base, // TAllocator + GetRtlAllocator
+  nextpas.core.mem.allocator.rtl,
   nextpas.core.mem.mutex,
   nextpas.core.mem.error;        // EAllocError, TAllocError
 
@@ -35,7 +36,7 @@ type
     Capacity: Integer;
     Alignment: SizeUInt;    // 新增：对齐（默认 max(pointer,16)）
     ZeroOnAlloc: Boolean;   // 分配后清零（可选，默认 False）
-    Allocator: IAllocator;
+    Allocator: TAllocator;
   end;
 
   {**
@@ -111,7 +112,7 @@ type
     FFreeStack: array of Integer;// 可用块索引栈
     FFreeTop: Integer;           // 栈顶（可用元素个数）
     FIsFree: array of Boolean;   // 双重释放检测
-    FAllocator: IAllocator;
+    FAllocator: TAllocator;
     FZeroOnAlloc: Boolean;       // 每次分配是否清零
     // 对齐与原始缓冲
     FAlignment: SizeUInt;        // 实际使用的对齐（默认为 max(pointer,16)）
@@ -129,9 +130,9 @@ type
   public
     // 构造/析构
     {** 创建固定块池（块大小 ABlockSize，容量 ACapacity，默认对齐和分配器）*}
-    constructor Create(ABlockSize: SizeUInt; ACapacity: Integer; AAllocator: IAllocator = nil); overload;
+    constructor Create(ABlockSize: SizeUInt; ACapacity: Integer; AAllocator: TAllocator = nil); overload;
     {** 创建固定块池，可指定对齐字节数 AAlignment（0 = 默认 max(pointer,16)）*}
-    constructor Create(ABlockSize: SizeUInt; ACapacity: Integer; AAlignment: SizeUInt; AAllocator: IAllocator = nil); overload;
+    constructor Create(ABlockSize: SizeUInt; ACapacity: Integer; AAlignment: SizeUInt; AAllocator: TAllocator = nil); overload;
     {** 使用 TFixedPoolConfig 记录创建池，支持 ZeroOnAlloc 选项 *}
     constructor Create(const aConfig: TFixedPoolConfig); overload;
     {** 释放 arena 内存，FAF_MEM_DEBUG 下检测泄漏 *}
@@ -205,7 +206,7 @@ type
     function GetAllocatedCount: Integer; inline;
   public
     {** 创建线程安全固定块池（可选对齐和分配器）*}
-    constructor Create(ABlockSize: SizeUInt; ACapacity: Integer; AAlignment: SizeUInt = 0; AAllocator: IAllocator = nil); overload;
+    constructor Create(ABlockSize: SizeUInt; ACapacity: Integer; AAlignment: SizeUInt = 0; AAllocator: TAllocator = nil); overload;
     {** 使用 TFixedPoolConfig 创建线程安全固定块池 *}
     constructor Create(const aConfig: TFixedPoolConfig); overload;
     {** 加锁释放内部 TFixedPool *}
@@ -284,12 +285,12 @@ begin
   Result := 'Memory leak: ' + LCount + ' blocks not freed';
 end;
 
-constructor TFixedPool.Create(ABlockSize: SizeUInt; ACapacity: Integer; AAllocator: IAllocator);
+constructor TFixedPool.Create(ABlockSize: SizeUInt; ACapacity: Integer; AAllocator: TAllocator);
 begin
   Create(ABlockSize, ACapacity, 0{use default}, AAllocator);
 end;
 
-constructor TFixedPool.Create(ABlockSize: SizeUInt; ACapacity: Integer; AAlignment: SizeUInt; AAllocator: IAllocator);
+constructor TFixedPool.Create(ABlockSize: SizeUInt; ACapacity: Integer; AAlignment: SizeUInt; AAllocator: TAllocator);
 var
   LOverflowCheck: SizeUInt;
   LRaw: Pointer;
@@ -312,7 +313,7 @@ begin
   FTotalFreeCalls := 0;
 
   if AAllocator = nil then
-    FAllocator := nextpas.core.mem.allocator.GetRtlAllocator
+    FAllocator := nextpas.core.mem.allocator.rtl.GetRtlAllocator
   else
     FAllocator := AAllocator;
 
@@ -506,7 +507,7 @@ end;
 
 { TFixedPoolConcurrent }
 
-constructor TFixedPoolConcurrent.Create(ABlockSize: SizeUInt; ACapacity: Integer; AAlignment: SizeUInt; AAllocator: IAllocator);
+constructor TFixedPoolConcurrent.Create(ABlockSize: SizeUInt; ACapacity: Integer; AAlignment: SizeUInt; AAllocator: TAllocator);
 begin
   inherited Create;
   FLock.Init;
