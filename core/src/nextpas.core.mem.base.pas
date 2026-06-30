@@ -45,6 +45,10 @@ function AlignUp(const AValue, AAlignment: SizeUInt): SizeUInt; inline;
     otherwise return DEFAULT_ALIGNMENT. }
 function NormalizeAlignment(const AAlignment: SizeUInt): SizeUInt; inline;
 
+{** Validate an alignment argument: must be non-zero, >= pointer size, and
+    power of two. Returns True if valid. }
+function ValidateAlignArg(const AAlignment: SizeUInt): Boolean; inline;
+
 {** Fibonacci hash: multiply by 2^64/golden-ratio. Used for shard routing and
     open-addressing hash maps. }
 function MulHash64(const AValue: QWord): QWord; inline;
@@ -86,6 +90,11 @@ begin
     Result := AAlignment
   else
     Result := DEFAULT_ALIGNMENT;
+end;
+
+function ValidateAlignArg(const AAlignment: SizeUInt): Boolean;
+begin
+  Result := (AAlignment <> 0) and (AAlignment >= SizeOf(Pointer)) and IsPowerOfTwo(AAlignment);
 end;
 
 {$PUSH}{$Q-}

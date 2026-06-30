@@ -473,13 +473,8 @@ end;
 function TStackPool.AllocAligned(ASize: SizeUInt; AAlignment: SizeUInt): Pointer;
 begin
   if ASize = 0 then Exit(nil);
-  // ✅ M-4: 统一对齐验证逻辑，与 TAllocator.AllocAligned 保持一致
-  if AAlignment = 0 then
-    raise EInvalidArgument.Create('TStackPool.AllocAligned: AAlignment is 0');
-  if AAlignment < SizeOf(Pointer) then
-    raise EInvalidArgument.Create('TStackPool.AllocAligned: AAlignment must be >= pointer size');
-  if (AAlignment and (AAlignment - 1)) <> 0 then
-    raise EInvalidArgument.Create('TStackPool.AllocAligned: AAlignment must be power of two');
+  if not ValidateAlignArg(AAlignment) then
+    raise EInvalidArgument.Create('TStackPool.AllocAligned: AAlignment must be non-zero, >= pointer size, and power of two');
   Result := Alloc(ASize, AAlignment);
 end;
 
@@ -775,12 +770,8 @@ end;
 function TScopedStackPool.AllocAligned(ASize: SizeUInt; AAlignment: SizeUInt): Pointer;
 begin
   if ASize = 0 then Exit(nil);
-  if AAlignment = 0 then
-    raise EInvalidArgument.Create('TScopedStackPool.AllocAligned: AAlignment is 0');
-  if AAlignment < SizeOf(Pointer) then
-    raise EInvalidArgument.Create('TScopedStackPool.AllocAligned: AAlignment must be >= pointer size');
-  if (AAlignment and (AAlignment - 1)) <> 0 then
-    raise EInvalidArgument.Create('TScopedStackPool.AllocAligned: AAlignment must be power of two');
+  if not ValidateAlignArg(AAlignment) then
+    raise EInvalidArgument.Create('TScopedStackPool.AllocAligned: AAlignment must be non-zero, >= pointer size, and power of two');
   Result := Alloc(ASize, AAlignment);
 end;
 
