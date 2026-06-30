@@ -162,16 +162,21 @@ begin
   end;
 end;
 
+function BuildAllocMsg(aError: TAllocError; const aMsg: string): string; inline;
+begin
+  if aMsg <> '' then
+    Result := aMsg + ': ' + ERROR_MESSAGES[aError]
+  else
+    Result := ERROR_MESSAGES[aError];
+end;
+
 { EAllocError }
 
 constructor EAllocError.Create(aError: TAllocError; const aMsg: string);
 begin
   Assert(aError <> aeNone, 'EAllocError.Create: aeNone is not a valid error code');
   FError := aError;
-  if aMsg <> '' then
-    inherited Create(aMsg + ': ' + ERROR_MESSAGES[aError], AllocErrorCategory(aError))
-  else
-    inherited Create(ERROR_MESSAGES[aError], AllocErrorCategory(aError));
+  inherited Create(BuildAllocMsg(aError, aMsg), AllocErrorCategory(aError));
 end;
 
 { EOutOfMemory }
@@ -180,19 +185,13 @@ constructor EOutOfMemory.Create(aError: TAllocError; const aMsg: string);
 begin
   Assert(aError <> aeNone, 'EOutOfMemory.Create: aeNone is not a valid error code');
   FError := aError;
-  if aMsg <> '' then
-    inherited Create(aMsg + ': ' + ERROR_MESSAGES[aError])
-  else
-    inherited Create(ERROR_MESSAGES[aError]);
+  inherited Create(BuildAllocMsg(aError, aMsg));
 end;
 
 constructor EOutOfMemory.CreateMsg(const aMsg: string);
 begin
   FError := aeOutOfMemory;
-  if aMsg <> '' then
-    inherited Create(aMsg + ': ' + ERROR_MESSAGES[aeOutOfMemory])
-  else
-    inherited Create(ERROR_MESSAGES[aeOutOfMemory]);
+  inherited Create(BuildAllocMsg(aeOutOfMemory, aMsg));
 end;
 
 function SanitizeAlignment(AAlignment: SizeUInt): SizeUInt;
