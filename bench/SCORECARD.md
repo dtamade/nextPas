@@ -417,9 +417,9 @@
 ### Pascal Losses (biggest gaps vs Go)
 1. **InOrder BST: 20.9x** — Recursive vs iterative (implementation issue)
 2. **Lookup BST: 3.54x** — Recursive vs iterative lookup
-3. **Hash LookupMiss: 2.64x** — Go's cache-friendly miss path
+3. **Hash LookupMiss: 2.64x** — Go's cache-friendly miss path (flipped by SwissMap 1.3-1.8x)
 4. **IntToHex: 2.09x** — Pascal's padding loop overhead
-5. **Array Sum: 2.04x** — Go auto-vectorization
+5. **Base64 Enc/Dec: 2.2-2.3x** — Go SIMD encoding
 
 ### Categories
 - **Bit set operations**: Pascal dominant (5W vs Go) — `set of Byte` is killer
