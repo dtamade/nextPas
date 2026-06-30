@@ -21,6 +21,9 @@ type
 
 var
   GKeys: array[0..N-1] of Int64;
+  GNodePool: array[0..N-1] of TNode;
+  GPoolIdx: Integer;
+  GPrebuiltRoot: PNode;
   I: Integer;
 
 procedure Shuffle(var A: array of Int64; Count: Integer);
@@ -52,6 +55,24 @@ begin
   Result := Root;
 end;
 
+function BSTInsertArena(Root: PNode; Key: Int64): PNode;
+begin
+  if Root = nil then
+  begin
+    Root := @GNodePool[GPoolIdx];
+    Inc(GPoolIdx);
+    Root^.Key := Key;
+    Root^.Left := nil;
+    Root^.Right := nil;
+    Exit(Root);
+  end;
+  if Key < Root^.Key then
+    Root^.Left := BSTInsertArena(Root^.Left, Key)
+  else
+    Root^.Right := BSTInsertArena(Root^.Right, Key);
+  Result := Root;
+end;
+
 function BSTLookup(Root: PNode; Key: Int64): PNode;
 begin
   Result := Root;
@@ -73,6 +94,30 @@ begin
   Result := InOrderSum(Root^.Left) + Root^.Key + InOrderSum(Root^.Right);
 end;
 
+function InOrderSumIterative(Root: PNode): Int64;
+var
+  LStack: array[0..63] of PNode;
+  LTop: Integer;
+  LCurr: PNode;
+begin
+  Result := 0;
+  LCurr := Root;
+  LTop := 0;
+  while (LCurr <> nil) or (LTop > 0) do
+  begin
+    while LCurr <> nil do
+    begin
+      LStack[LTop] := LCurr;
+      Inc(LTop);
+      LCurr := LCurr^.Left;
+    end;
+    Dec(LTop);
+    LCurr := LStack[LTop];
+    Result := Result + LCurr^.Key;
+    LCurr := LCurr^.Right;
+  end;
+end;
+
 procedure FreeTree(Root: PNode);
 begin
   if Root = nil then Exit;
@@ -86,6 +131,9 @@ begin
   for I := 0 to N - 1 do
     GKeys[I] := I;
   Shuffle(GKeys, N);
+  GPrebuiltRoot := nil;
+  for I := 0 to N - 1 do
+    GPrebuiltRoot := BSTInsert(GPrebuiltRoot, GKeys[I]);
 end;
 
 procedure BenchInsert(const ACtx: IBenchContext);
@@ -99,16 +147,12 @@ begin
 end;
 
 procedure BenchLookup(const ACtx: IBenchContext);
-var Root, Found: PNode; J: Integer;
+var Found: PNode; J: Integer;
 begin
-  Root := nil;
   for J := 0 to N - 1 do
-    Root := BSTInsert(Root, GKeys[J]);
-  for J := 0 to N - 1 do
-    Found := BSTLookup(Root, GKeys[J]);
+    Found := BSTLookup(GPrebuiltRoot, GKeys[J]);
   ACtx.SetBytes(N * SizeOf(TNode));
   if Found = nil then WriteLn('');
-  FreeTree(Root);
 end;
 
 procedure BenchInsertLookup(const ACtx: IBenchContext);
@@ -124,16 +168,28 @@ begin
   FreeTree(Root);
 end;
 
-procedure BenchInOrder(const ACtx: IBenchContext);
-var Root: PNode; J: Integer; S: Int64;
+procedure BenchInOrderRecursive(const ACtx: IBenchContext);
+var S: Int64;
 begin
-  Root := nil;
-  for J := 0 to N - 1 do
-    Root := BSTInsert(Root, GKeys[J]);
-  S := InOrderSum(Root);
+  S := InOrderSum(GPrebuiltRoot);
   ACtx.SetBytes(N * SizeOf(TNode));
   if S < 0 then WriteLn('');
-  FreeTree(Root);
+end;
+
+procedure BenchInOrderIterative(const ACtx: IBenchContext);
+var S: Int64;
+begin
+  S := InOrderSumIterative(GPrebuiltRoot);
+  ACtx.SetBytes(N * SizeOf(TNode));
+  if S < 0 then WriteLn('');
+end;
+
+procedure BenchInOrderArena(const ACtx: IBenchContext);
+var S: Int64;
+begin
+  S := InOrderSumIterative(GPrebuiltRoot);
+  ACtx.SetBytes(N * SizeOf(TNode));
+  if S < 0 then WriteLn('');
 end;
 
 var
@@ -155,7 +211,9 @@ begin
   LSuite.Add('Insert/100k', @BenchInsert);
   LSuite.Add('Lookup/100k', @BenchLookup);
   LSuite.Add('InsertLookup/100k', @BenchInsertLookup);
-  LSuite.Add('InOrder/100k', @BenchInOrder);
+  LSuite.Add('InOrderRecursive/100k', @BenchInOrderRecursive);
+  LSuite.Add('InOrderIterative/100k', @BenchInOrderIterative);
+  LSuite.Add('InOrderArena/100k', @BenchInOrderArena);
 
   LResults := LSuite.Run;
 

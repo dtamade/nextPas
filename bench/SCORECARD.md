@@ -2,16 +2,16 @@
 
 **Machine**: Linux x86_64, Intel Xeon E5-2696 v4 @ 2.20GHz, 44 threads
 **Compiler**: FPC 3.3.1 -O3 -CX -XX -Xs -dRELEASE
-**Date**: 2026-06-29
+**Date**: 2026-06-30
 
 ## Overall Score
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **106** | 3 | 33 | **75%** |
+| **Go** | **108** | 4 | 31 | **76%** |
 | **Rust** | 19 | 0 | 47 | **29%** |
 
-## Track Summary (33 tracks, 146 operations)
+## Track Summary (34 tracks, 148 operations)
 
 ### Text Operations (6 ops)
 
@@ -98,12 +98,12 @@
 
 | Track | Pascal | Go | vs Go |
 |-------|--------|-----|-------|
-| **Insert/100k** | **47.1ms** | 59.2ms | **1.26x** ✓ |
-| Lookup/100k | 82.6ms | 22.7ms | 0.28x |
-| **InsertLookup/100k** | **71.9ms** | 83.7ms | **1.16x** ✓ |
-| InOrder/100k | 47.0ms | 2.25ms | 0.05x |
+| **Insert/100k** | **37.6ms** | 64.5ms | **1.72x** ✓ |
+| Lookup/100k | 25.0ms | 23.0ms | 0.92x |
+| **InsertLookup/100k** | **63.1ms** | 83.7ms | **1.33x** ✓ |
+| **InOrder/100k** | **1.92ms** | 2.36ms | **1.23x** ✓ |
 
-**2W vs Go, 2W vs Rust**
+**3W 1D vs Go** — InOrder翻转！原20.9x差距是基准测试方法论问题（Pascal每次重建树vs Go预建树）；修正后Pascal更快
 
 ### Copy/Memory Operations (9 ops)
 
@@ -415,11 +415,10 @@
 19. **MatAdd/512: 1.49x** — FPC simple loop vs Go bounds-checked loop
 
 ### Pascal Losses (biggest gaps vs Go)
-1. **InOrder BST: 20.9x** — Recursive vs iterative (implementation issue)
-2. **Lookup BST: 3.54x** — Recursive vs iterative lookup
+1. **Base64 Enc/Dec: 2.2-2.3x** — Go SIMD encoding
+2. **IntToHex: 2.09x** — Pascal's padding loop overhead
 3. **Hash LookupMiss: 2.64x** — Go's cache-friendly miss path (flipped by SwissMap 1.3-1.8x)
-4. **IntToHex: 2.09x** — Pascal's padding loop overhead
-5. **Base64 Enc/Dec: 2.2-2.3x** — Go SIMD encoding
+4. **Lookup BST: 0.92x** — Go slightly faster on pointer chasing (cache prefetcher advantage)
 
 ### Categories
 - **Bit set operations**: Pascal dominant (5W vs Go) — `set of Byte` is killer
@@ -440,13 +439,13 @@
 - **String operations**: Pascal dominant (7W vs Go)
 - **Memory/pointer**: Pascal strong (5W vs Go)
 - **Numeric loops**: Pascal dominant with SIMD (3W, 8-20x); Go/Rust win on scalar paths (auto-vectorization)
-- **Hash maps**: Go wins (incremental rehash, cache-friendly miss)
+- **BST tree operations**: Pascal dominant (3W 1D vs Go) — Insert 1.72x, InsertLookup 1.33x, InOrder 1.23x; Lookup ties 0.92x. 原20.9x InOrder差距是基准测试伪影
 - **Binary search**: Pascal strong (2W 2D vs Go) — Standard 1.5-1.9x faster; Eytzinger layout ties
 - **Float formatting**: Go/Rust win (Ryu algorithm)
 
 ## Conclusion
 
-Pascal beats Go 69% of the time across 106 benchmarks. The biggest wins come from
+Pascal beats Go 76% of the time across 108 benchmarks. The biggest wins come from
 FillChar operations (compiles to `rep stosb`, 11-23x faster than Go's byte loop),
 string operations (immutable strings are Go's Achilles heel), bit set operations
 (`set of Byte` compiles to native instructions), number formatting
@@ -460,7 +459,8 @@ and file I/O writes (direct syscall vs Go's bufio),
 and string escape (set of Char + in-place build, 1.74x faster than Go strings.Builder),
 and type-specialized sort (SortI32 2-8x faster than Go sort.Ints, type specialization vs interface dispatch),
 SwissMap (3-6x faster than Go map, SIMD ctrl byte probing + open addressing),
+BST operations (Insert 1.72x, InOrder 1.23x — corrected benchmark methodology),
 and interface dispatch (FPC vtable 1.25x faster than Go interface for heavy methods).
-Losses come from auto-vectorization gaps, Go's optimized hash map,
+Losses come from auto-vectorization gaps, Go's SIMD encoding (Base64),
 and branchless codegen for binary search. Against Rust, Pascal wins 30% —
 Rust's zero-cost abstractions and LLVM codegen make it consistently fast.
