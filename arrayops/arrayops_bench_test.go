@@ -11,6 +11,7 @@ const (
 var (
 	ga    [arrSZ]byte
 	sinkI int
+	sinkF float64
 )
 
 func init() {
@@ -112,6 +113,39 @@ func BenchmarkCountEven(b *testing.B) {
 				}
 			}
 			sinkI = count
+		}
+	}
+}
+
+func BenchmarkFloatArraySum(b *testing.B) {
+	var a [arrArr]float64
+	for i := 0; i < arrArr; i++ {
+		a[i] = float64(i) * 0.5
+	}
+	for n := 0; n < b.N; n++ {
+		for i := 0; i < arrN; i++ {
+			s := float64(0)
+			for j := 0; j < arrArr; j++ {
+				s += a[j]
+			}
+			sinkF = s
+		}
+	}
+}
+
+func BenchmarkFloatArrayDot(b *testing.B) {
+	var a, b2 [arrArr]float64
+	for i := 0; i < arrArr; i++ {
+		a[i] = float64(i) * 0.5
+		b2[i] = float64(i) * 0.3
+	}
+	for n := 0; n < b.N; n++ {
+		for i := 0; i < arrN; i++ {
+			s := float64(0)
+			for j := 0; j < arrArr; j++ {
+				s += a[j] * b2[j]
+			}
+			sinkF = s
 		}
 	}
 }

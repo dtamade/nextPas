@@ -44,7 +44,6 @@ var I, J, First: Integer; A: array[0..ARR_SZ-1] of Integer;
 begin
   for I := 0 to ARR_SZ-1 do A[I] := I;
   for I := 1 to N do begin
-    // Left rotate by 1
     First := A[0];
     for J := 0 to ARR_SZ-2 do
       A[J] := A[J+1];
@@ -88,6 +87,30 @@ begin
   end;
   if Count < 0 then WriteLn('');
 end;
+procedure BenchFloatArraySum(const ACtx: IBenchContext);
+const ARR_SZ = 10000;
+var I, J: Integer; S: Double; A: array[0..ARR_SZ-1] of Double;
+begin
+  for I := 0 to ARR_SZ-1 do A[I] := I * 0.5;
+  for I := 1 to N do begin
+    S := 0.0;
+    for J := 0 to ARR_SZ-1 do
+      S := S + A[J];
+  end;
+  if S < 0 then WriteLn('');
+end;
+procedure BenchFloatArrayDot(const ACtx: IBenchContext);
+const ARR_SZ = 10000;
+var I, J: Integer; S: Double; A, B: array[0..ARR_SZ-1] of Double;
+begin
+  for I := 0 to ARR_SZ-1 do begin A[I] := I * 0.5; B[I] := I * 0.3; end;
+  for I := 1 to N do begin
+    S := 0.0;
+    for J := 0 to ARR_SZ-1 do
+      S := S + A[J] * B[J];
+  end;
+  if S < 0 then WriteLn('');
+end;
 var LSuite: IBenchSuite; LResults: IBenchResults;
 begin
   InitData;
@@ -99,6 +122,8 @@ begin
   LSuite.Add('ArraySum/10Kx10K', @BenchArraySum);
   LSuite.Add('LinearSearch/10Kx10K', @BenchLinearSearch);
   LSuite.Add('CountEven/10Kx10K', @BenchCountEven);
+  LSuite.Add('FloatArraySum/10Kx10K', @BenchFloatArraySum);
+  LSuite.Add('FloatArrayDot/10Kx10K', @BenchFloatArrayDot);
   LResults := LSuite.Run;
   WriteLn(LResults.ToBenchStat);
 end.
