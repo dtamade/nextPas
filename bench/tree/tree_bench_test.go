@@ -110,3 +110,22 @@ func BenchmarkInOrder100k(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkLookupMiss100k(b *testing.B) {
+	var root *bstNode
+	for i := 0; i < treeN; i++ {
+		root = bstInsert(root, treeKeys[i])
+	}
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		sink := 0
+		for i := 1; i <= treeN; i++ {
+			if bstLookup(root, int64(treeN+i)) != nil {
+				sink++
+			}
+		}
+		if sink > 0 {
+			fmt.Println()
+		}
+	}
+}

@@ -192,6 +192,16 @@ begin
   if S < 0 then WriteLn('');
 end;
 
+procedure BenchLookupMiss(const ACtx: IBenchContext);
+var Found: PNode; J: Integer;
+begin
+  // Search for keys that don't exist (N+1..2N)
+  for J := 1 to N do
+    Found := BSTLookup(GPrebuiltRoot, Int64(N + J));
+  ACtx.SetBytes(N * SizeOf(TNode));
+  if Found <> nil then WriteLn('');
+end;
+
 var
   LSuite: IBenchSuite;
   LResults: IBenchResults;
@@ -214,6 +224,7 @@ begin
   LSuite.Add('InOrderRecursive/100k', @BenchInOrderRecursive);
   LSuite.Add('InOrderIterative/100k', @BenchInOrderIterative);
   LSuite.Add('InOrderArena/100k', @BenchInOrderArena);
+  LSuite.Add('LookupMiss/100k', @BenchLookupMiss);
 
   LResults := LSuite.Run;
 
