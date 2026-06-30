@@ -72,6 +72,10 @@ procedure WriteTestStatusVerbose(AStatus: TTestStatus; const AName, AFailMsg,
   ASkipReason: string; ADurationMs: Int64;
   const ASink: IOutputSink; const AConfig: TTestConfig);
   { Write verbose per-test status line with duration to ASink. }
+procedure WriteTestOutput(AStatus: TTestStatus; const AName, AFailMsg,
+  ASkipReason: string; ADurationMs: Int64;
+  const ASink: IOutputSink; const AConfig: TTestConfig);
+  { Dispatch to WriteTestStatusVerbose or WriteTestStatus based on config. }
 
 { ── Diagnostic Output ─────────────────────────────────────────────────────── }
 
@@ -439,6 +443,17 @@ begin
           ASink.WriteLn('    ' + AnsiDim(AFailMsg, AConfig));
       end;
   end;
+end;
+
+procedure WriteTestOutput(AStatus: TTestStatus; const AName, AFailMsg,
+  ASkipReason: string; ADurationMs: Int64;
+  const ASink: IOutputSink; const AConfig: TTestConfig);
+begin
+  if AConfig.VerboseMode then
+    WriteTestStatusVerbose(AStatus, AName, AFailMsg, ASkipReason,
+      ADurationMs, ASink, AConfig)
+  else
+    WriteTestStatus(AStatus, AName, AFailMsg, ASkipReason, ASink, AConfig);
 end;
 
 procedure WriteRetryHint(ACurrent, ATotal: Integer;

@@ -1303,12 +1303,8 @@ begin
       LTestResult := MakeTestResult(LEntry.Name, tsSkipped,
         'skipped: short mode', 0);
       AppendResult(AResult.Results, LTestResult);
-      if LConfig.VerboseMode then
-        WriteTestStatusVerbose(tsSkipped, LEntry.Name, '', 'short mode',
-          0, LOutSink, LConfig)
-      else
-        LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, LEntry.Name,
-          'short mode', LConfig));
+      WriteTestOutput(tsSkipped, LEntry.Name, '', 'short mode',
+        0, LOutSink, LConfig);
       ReportLeakIfAny(LStatus, LConfig);
       Continue;
     end;
@@ -1333,14 +1329,8 @@ begin
       LTestResult := MakeTestResult(LEntry.Name, tsSkipped,
         LEntry.SkipReason, 0);
       AppendResult(AResult.Results, LTestResult);
-      if LConfig.VerboseMode then
-        WriteTestStatusVerbose(tsSkipped, LEntry.Name, '', LEntry.SkipReason,
-          0, LOutSink, LConfig)
-      else if LEntry.SkipReason <> '' then
-        LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, LEntry.Name,
-          LEntry.SkipReason, LConfig))
-      else
-        LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, LEntry.Name, LConfig));
+      WriteTestOutput(tsSkipped, LEntry.Name, '', LEntry.SkipReason,
+        0, LOutSink, LConfig);
       ReportLeakIfAny(LStatus, LConfig);
       Continue;
     end;
@@ -1357,12 +1347,8 @@ begin
           Inc(LSkip);
           LTestResult := MakeTestResult(LEntry.Name, tsSkipped, E.Message, 0);
           AppendResult(AResult.Results, LTestResult);
-          if LConfig.VerboseMode then
-            WriteTestStatusVerbose(tsSkipped, LEntry.Name, '', E.Message,
-              0, LOutSink, LConfig)
-          else
-            LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, LEntry.Name,
-              E.Message, LConfig));
+          WriteTestOutput(tsSkipped, LEntry.Name, '', E.Message,
+            0, LOutSink, LConfig);
           ReportLeakIfAny(LStatus, LConfig);
           Continue;
         end;
@@ -1373,12 +1359,8 @@ begin
           LTestResult := MakeTestResult(LEntry.Name, tsError,
             'beforeEach failed: ' + E.Message, 0);
           AppendResult(AResult.Results, LTestResult);
-          if LConfig.VerboseMode then
-            WriteTestStatusVerbose(tsError, LEntry.Name,
-              'beforeEach failed: ' + E.Message, '', 0, LOutSink, LConfig)
-          else
-            LOutSink.WriteLn('  ' + FormatStatusLine(tsError, LEntry.Name,
-              'beforeEach failed: ' + E.Message, LConfig));
+          WriteTestOutput(tsError, LEntry.Name,
+            'beforeEach failed: ' + E.Message, '', 0, LOutSink, LConfig);
           Inc(LFail);
           Continue;
         end;
@@ -1634,13 +1616,9 @@ begin
     AppendResult(AResult.Results, LTestResult);
 
     { Output per-test — use DisplayName + progress prefix }
-    if LConfig.VerboseMode then
-      WriteTestStatusVerbose(LStatus, LProgressPrefix + LDisplayName,
-        LLastFailMsg, LEntry.SkipReason,
-        GetTickCount64 - LStartMs, LOutSink, LConfig)
-    else
-      WriteTestStatus(LStatus, LProgressPrefix + LDisplayName, LLastFailMsg,
-        LEntry.SkipReason, LOutSink, LConfig);
+    WriteTestOutput(LStatus, LProgressPrefix + LDisplayName,
+      LLastFailMsg, LEntry.SkipReason,
+      GetTickCount64 - LStartMs, LOutSink, LConfig);
 
     LLastFailMsg := '';
     ReportLeakIfAny(LStatus, LConfig);
