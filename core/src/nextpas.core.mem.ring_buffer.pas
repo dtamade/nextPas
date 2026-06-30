@@ -344,7 +344,7 @@ begin
 
   FBuffer := FBaseAllocator.GetMem(FCapacity * FElementSize);
   if FBuffer = nil then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'Failed to allocate ring buffer memory');
+    raise EOutOfMemory.CreateMsg('Failed to allocate ring buffer memory');
 end;
 
 destructor TRingBuffer.Destroy;

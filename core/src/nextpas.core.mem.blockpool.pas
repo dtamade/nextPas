@@ -400,10 +400,10 @@ begin
   // 额外字节数最大为 (Alignment - 1)，保证对齐后仍有 TotalSize 可用空间
   LAllocSize := LTotalSize + (FAlignment - 1);
   if LAllocSize < LTotalSize then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'TBlockPool: allocation size overflow');
+    raise EOutOfMemory.CreateMsg('TBlockPool: allocation size overflow');
   GetMem(LRaw, LAllocSize);
   if LRaw = nil then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'TBlockPool: failed to allocate memory');
+    raise EOutOfMemory.CreateMsg('TBlockPool: failed to allocate memory');
 
   FRawBuffer := LRaw;
 

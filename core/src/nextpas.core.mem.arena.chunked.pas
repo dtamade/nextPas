@@ -483,7 +483,7 @@ begin
   FCacheLimit := CHUNK_CACHE_LIMIT;
 
   if not AddSegment(LInitSize) then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'TChunkedArena: failed to allocate initial segment');
+    raise EOutOfMemory.CreateMsg('TChunkedArena: failed to allocate initial segment');
   FActive := 0;
 end;
 

@@ -78,7 +78,7 @@ begin
   begin
     FBacking := FAllocator.GetMem(ACapacity);
     if FBacking = nil then
-      raise EOutOfMemory.Create(aeOutOfMemory, 'TLocalArena.Create: out of memory');
+      raise EOutOfMemory.CreateMsg('TLocalArena.Create: out of memory');
   end
   else
     FBacking := nil;

@@ -317,14 +317,14 @@ begin
 
   LBytes := aBlocks * FBlockSize;
   if (FBlockSize <> 0) and ((LBytes div FBlockSize) <> aBlocks) then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'TGrowingBlockPool: segment size overflow');
+    raise EOutOfMemory.CreateMsg('TGrowingBlockPool: segment size overflow');
 
   if FAlignment <= 1 then
     LAllocSize := LBytes
   else
     LAllocSize := LBytes + (FAlignment - 1);
   if LAllocSize < LBytes then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'TGrowingBlockPool: allocation size overflow');
+    raise EOutOfMemory.CreateMsg('TGrowingBlockPool: allocation size overflow');
 
   LRaw := FAllocator.GetMem(LAllocSize);
   if LRaw = nil then
@@ -564,7 +564,7 @@ begin
 
   LInitCap := FInitialCapacity;
   if not AddSegment(LInitCap) then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'TGrowingBlockPool: failed to allocate initial segment');
+    raise EOutOfMemory.CreateMsg('TGrowingBlockPool: failed to allocate initial segment');
 end;
 
 constructor TGrowingBlockPool.Create(ABlockSize, aInitialCapacity: SizeUInt; AAlignment: SizeUInt);

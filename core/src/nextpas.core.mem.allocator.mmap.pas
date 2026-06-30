@@ -228,7 +228,7 @@ begin
     FMap.Free;
     FMap := nil;
     DoneCriticalSection(FLock);
-    raise EOutOfMemory.Create(aeOutOfMemory, 'TMemoryMapAllocator: failed to create anonymous mapping');
+    raise EOutOfMemory.CreateMsg('TMemoryMapAllocator: failed to create anonymous mapping');
   end;
 
   FBase := FMap.BaseAddress;

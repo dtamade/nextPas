@@ -137,7 +137,7 @@ end;
 
 procedure RaiseMemOutOfMemory;
 begin
-  raise nextpas.core.mem.error.EOutOfMemory.Create(aeOutOfMemory, 'alloc result');
+  raise nextpas.core.mem.error.EOutOfMemory.CreateMsg('alloc result');
 end;
 
 procedure RaiseBlockPoolTotalSizeOverflow;

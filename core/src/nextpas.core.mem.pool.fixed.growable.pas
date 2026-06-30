@@ -257,11 +257,11 @@ begin
 
   LBytes := aBlocks * FBlockSize;
   if (FBlockSize <> 0) and ((LBytes div FBlockSize) <> aBlocks) then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'Total size overflow');
+    raise EOutOfMemory.CreateMsg('Total size overflow');
 
   LArena.Base := FAllocator.GetMem(LBytes);
   if LArena.Base = nil then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'Failed to allocate arena');
+    raise EOutOfMemory.CreateMsg('Failed to allocate arena');
   LArena.Blocks := aBlocks;
   LArena.Size := LBytes;
 
@@ -280,7 +280,7 @@ begin
 
   // grow free stack space and push all blocks
   if FFreeTop > (High(SizeUInt) - aBlocks) then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'Free stack size overflow');
+    raise EOutOfMemory.CreateMsg('Free stack size overflow');
   LNewLen := FFreeTop + aBlocks;
   if SizeUInt(Length(FFreeStack)) < LNewLen then
     SetLength(FFreeStack, LNewLen);

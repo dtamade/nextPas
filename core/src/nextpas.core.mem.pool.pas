@@ -139,10 +139,10 @@ begin
 
   LTotalSize := LActualBlockSize * ABlockCount;
   if (LActualBlockSize <> 0) and ((LTotalSize div LActualBlockSize) <> ABlockCount) then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'TLocalBlockPool.Create: size overflow');
+    raise EOutOfMemory.CreateMsg('TLocalBlockPool.Create: size overflow');
   FBacking := GetMem(LTotalSize);
   if FBacking = nil then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'TLocalBlockPool.Create: out of memory');
+    raise EOutOfMemory.CreateMsg('TLocalBlockPool.Create: out of memory');
   ZeroMem(FBacking, LTotalSize);
 
   { 初始化位图：所有块标记为 free（位=1） }

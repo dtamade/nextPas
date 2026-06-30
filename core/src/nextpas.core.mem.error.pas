@@ -94,6 +94,8 @@ type
     FError: TAllocError;
   public
     constructor Create(aError: TAllocError; const aMsg: string = '');
+    {** 快捷构造：自动使用 aeOutOfMemory，18 处调用点统一。 }
+    constructor CreateMsg(const aMsg: string);
     property Error: TAllocError read FError;
   end;
   EInvalidLayout = class(EAllocError);
@@ -170,6 +172,15 @@ begin
     inherited Create(aMsg + ': ' + ERROR_MESSAGES[aError])
   else
     inherited Create(ERROR_MESSAGES[aError]);
+end;
+
+constructor EOutOfMemory.CreateMsg(const aMsg: string);
+begin
+  FError := aeOutOfMemory;
+  if aMsg <> '' then
+    inherited Create(aMsg + ': ' + ERROR_MESSAGES[aeOutOfMemory])
+  else
+    inherited Create(ERROR_MESSAGES[aeOutOfMemory]);
 end;
 
 end.
