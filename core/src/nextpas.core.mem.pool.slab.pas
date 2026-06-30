@@ -13,7 +13,7 @@ uses
   nextpas.core.mem.base,
   nextpas.core.mem.utils,
   nextpas.core.mem.allocator,
-  nextpas.core.mem.intf,
+  nextpas.core.mem.allocator.base,
   nextpas.core.mem.pool.memory_pool,
   nextpas.core.mem.pool.fixed_slab,
   nextpas.core.base.utils,

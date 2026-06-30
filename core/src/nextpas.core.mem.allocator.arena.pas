@@ -6,7 +6,6 @@ interface
 
 uses
   nextpas.core.mem.base,
-  nextpas.core.mem.intf,
   nextpas.core.mem.allocator.base,
   nextpas.core.base.utils,
   nextpas.core.mem.arena.virtual;

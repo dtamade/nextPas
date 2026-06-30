@@ -26,7 +26,6 @@ interface
 uses
   nextpas.core.mem.base,
   nextpas.core.mem.error,
-  nextpas.core.mem.intf,
   nextpas.core.mem.allocator.base,
   nextpas.core.mem.arena.base,
   nextpas.core.mem.arena.intf;

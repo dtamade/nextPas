@@ -7,10 +7,9 @@ uses
   nextpas.core.exception,
   nextpas.core.fs,
   nextpas.core.test,
-  nextpas.core.mem.intf,
+  nextpas.core.mem.allocator.base,
   nextpas.core.mem.utils,
   nextpas.core.mem.allocator,
-  nextpas.core.mem.allocator.base,
   nextpas.core.mem.allocator.mimalloc,
   nextpas.core.platform.mmap;
 
@@ -226,7 +225,7 @@ end;
 
 procedure TestCallbackAllocatorSupportsCanonicalInterface;
 var
-  LAllocator: nextpas.core.mem.intf.IAllocator;
+  LAllocator: nextpas.core.mem.allocator.base.IAllocator;
   LPtr: Pointer;
 begin
   ResetAllocatorCounters;
@@ -619,8 +618,8 @@ end;
 
 procedure TestCanonicalAllocatorSurface;
 var
-  LAllocator: nextpas.core.mem.intf.IAllocator;
-  LTraits: nextpas.core.mem.intf.TAllocatorTraits;
+  LAllocator: nextpas.core.mem.allocator.base.IAllocator;
+  LTraits: nextpas.core.mem.allocator.base.TAllocatorTraits;
   LPtr: Pointer;
 begin
   LAllocator := GetRtlAllocator;

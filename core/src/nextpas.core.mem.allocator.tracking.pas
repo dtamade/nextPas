@@ -8,7 +8,6 @@ uses
   nextpas.core.base,
   nextpas.core.mem.base,
   nextpas.core.mem.error,
-  nextpas.core.mem.intf,
   nextpas.core.mem.allocator.base;
 
 type
