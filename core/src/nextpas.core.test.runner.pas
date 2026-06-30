@@ -1059,26 +1059,13 @@ begin
   AfterEachClosure := AProc;
 end;
 
-{ ── EachCleanups capacity growth helper ─────────────────────────────────────── }
-
-function GrowEachCleanups(var ACleanups: specialize TArray<TTestClosure>): Integer;
-{ Returns the index where the new element should be placed (old length). }
-var
-  LOldLen, LCap: Integer;
-begin
-  LOldLen := Length(ACleanups);
-  LCap := GrowCapacity(LOldLen, 4);
-  if LCap <> LOldLen then SetLength(ACleanups, LCap);
-  Result := LOldLen;
-end;
-
 procedure TTestSuite.Cleanup(AProc: TTestProc);
 var
   LProc: TTestProc;
   LIdx: Integer;
 begin
   LProc := AProc;
-  LIdx := GrowEachCleanups(EachCleanups);
+  LIdx := GrowCleanups(EachCleanups);
   EachCleanups[LIdx] := procedure
   begin
     LProc;
@@ -1090,7 +1077,7 @@ procedure TTestSuite.Cleanup(AProc: TTestClosure);
 var
   LIdx: Integer;
 begin
-  LIdx := GrowEachCleanups(EachCleanups);
+  LIdx := GrowCleanups(EachCleanups);
   EachCleanups[LIdx] := AProc;
   SetLength(EachCleanups, LIdx + 1);
 end;
@@ -1164,7 +1151,7 @@ var
 begin
   Result := Self;
   LProc := AProc;
-  LIdx := GrowEachCleanups(Result.EachCleanups);
+  LIdx := GrowCleanups(Result.EachCleanups);
   Result.EachCleanups[LIdx] := procedure
   begin
     LProc;
@@ -1177,7 +1164,7 @@ var
   LIdx: Integer;
 begin
   Result := Self;
-  LIdx := GrowEachCleanups(Result.EachCleanups);
+  LIdx := GrowCleanups(Result.EachCleanups);
   Result.EachCleanups[LIdx] := AProc;
   SetLength(Result.EachCleanups, LIdx + 1);
 end;

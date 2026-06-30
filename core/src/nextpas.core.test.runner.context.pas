@@ -184,28 +184,24 @@ end;
 procedure TTestContext.OnCleanup(AProc: TTestProc);
 var
   LProc: TTestProc;
-  LOldLen, LCap: Integer;
+  LIdx: Integer;
 begin
   LProc := AProc;
-  LOldLen := Length(FCleanups);
-  LCap := GrowCapacity(LOldLen, 4);
-  if LCap <> LOldLen then SetLength(FCleanups, LCap);
-  FCleanups[LOldLen] := procedure
+  LIdx := GrowCleanups(FCleanups);
+  FCleanups[LIdx] := procedure
   begin
     LProc;
   end;
-  SetLength(FCleanups, LOldLen + 1);
+  SetLength(FCleanups, LIdx + 1);
 end;
 
 procedure TTestContext.OnCleanup(AProc: TTestClosure);
 var
-  LOldLen, LCap: Integer;
+  LIdx: Integer;
 begin
-  LOldLen := Length(FCleanups);
-  LCap := GrowCapacity(LOldLen, 4);
-  if LCap <> LOldLen then SetLength(FCleanups, LCap);
-  FCleanups[LOldLen] := AProc;
-  SetLength(FCleanups, LOldLen + 1);
+  LIdx := GrowCleanups(FCleanups);
+  FCleanups[LIdx] := AProc;
+  SetLength(FCleanups, LIdx + 1);
 end;
 
 procedure TTestContext.ClearLog;

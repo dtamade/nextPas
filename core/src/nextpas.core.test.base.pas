@@ -198,6 +198,9 @@ procedure CopyTags(out ATags: specialize TArray<string>;
 function GrowCapacity(ALen, AInitCap: Integer): Integer;
   { Returns new capacity for a dynamic array. Geometric growth above AInitCap.
     Shared by runner, context, and other growth call-sites. }
+function GrowCleanups(var ACleanups: specialize TArray<TTestClosure>): Integer;
+  { Grow ACleanups capacity and return insertion index (old length).
+    Shared by runner.EachCleanups and context.FCleanups. }
 
 { ── Exception Formatting (eliminate repeated ClassName + trace patterns) ──── }
 
@@ -397,6 +400,16 @@ begin
     Result := AInitCap
   else
     Result := ALen * 2;
+end;
+
+function GrowCleanups(var ACleanups: specialize TArray<TTestClosure>): Integer;
+var
+  LOldLen, LCap: Integer;
+begin
+  LOldLen := Length(ACleanups);
+  LCap := GrowCapacity(LOldLen, 4);
+  if LCap <> LOldLen then SetLength(ACleanups, LCap);
+  Result := LOldLen;
 end;
 
 { Exception Formatting }
