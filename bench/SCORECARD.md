@@ -8,10 +8,10 @@
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **122** | 5 | 33 | **76%** |
+| **Go** | **125** | 5 | 33 | **77%** |
 | **Rust** | 19 | 0 | 47 | **29%** |
 
-## Track Summary (40 tracks, 165 operations)
+## Track Summary (41 tracks, 168 operations)
 
 ### Text Operations (6 ops)
 
@@ -438,6 +438,16 @@
 
 **2W vs Go** — FillChar→rep stosb 27x crushes Go byte loop; Move/copy 1.42x; CompareMem ties
 
+### ByteWise Operations (3 ops)
+
+| Track | Pascal | Go | vs Go |
+|-------|--------|-----|-------|
+| **MemZero/4KB×100K** | **5.92ms** | 6.94ms | **1.17x** ✓ |
+| **BufferXor/4KB×100K** | **320ms** | 491ms | **1.54x** ✓ |
+| **WordCount/100KB×1K** | **81.9ms** | 103ms | **1.26x** ✓ |
+
+**3W vs Go** — Simple scalar loops: FPC generates tighter code than Go
+
 ### Pascal Wins (biggest margins vs Go)
 1. **String Concat: 3557x** — Go immutable strings O(n²) vs Pascal COW
 2. **SIMD ReduceSum/4K: 20.0x** — AVX2 vpaddps vs Go scalar loop
@@ -486,6 +496,7 @@
 - **Object lifecycle**: Pascal dominant (3W vs Go) — New/Dispose vs GC write barrier
 - **Memory move**: Pascal strong (3W vs Go) — ERMSB + prefetchnta at 16K-256K
 - **ByteArray ops**: Pascal strong (2W 1D vs Go) — FillBytes 27x, CopyBytes 1.42x, CompareBytes ties
+- **Scalar loops**: Pascal strong (3W vs Go) — MemZero 1.17x, BufferXor 1.54x, WordCount 1.26x; FPC tighter codegen
 - **File I/O Write**: Pascal dominant (3W vs Go) — direct syscall vs Go's bufio
 - **String operations**: Pascal dominant (7W vs Go)
 - **Memory/pointer**: Pascal strong (5W vs Go)
@@ -496,7 +507,7 @@
 
 ## Conclusion
 
-Pascal beats Go 76% of the time across 111 benchmarks. The biggest wins come from
+Pascal beats Go 77% of the time across 114 benchmarks. The biggest wins come from
 FillChar operations (compiles to `rep stosb`, 11-27x faster than Go's byte loop),
 string operations (immutable strings are Go's Achilles heel), bit set operations
 string operations (immutable strings are Go's Achilles heel), bit set operations
@@ -507,6 +518,7 @@ matrix operations (FPC loop optimization),
 object lifecycle (New/Dispose vs GC write barrier, 1.5-1.7x),
 memory move (FPC_MOVE ERMSB+prefetchnta vs Go memmove, 1.23-1.31x at 16K-256K),
 packed records (19% smaller than Go struct, 1.24x faster filter),
+scalar loops (FillChar/memzero 1.17x, BufferXor 1.54x, WordCount 1.26x — FPC tighter codegen),
 and file I/O writes (direct syscall vs Go's bufio),
 and string escape (set of Char + in-place build, 1.74x faster than Go strings.Builder),
 and type-specialized sort (SortI32 2-8x faster than Go sort.Ints, type specialization vs interface dispatch),
