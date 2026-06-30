@@ -63,8 +63,6 @@ function TCrtAllocator.Traits: TAllocatorTraits;
 begin
   Result := inherited Traits;
   Result.ZeroInitialized := True;
-  Result.SupportsAligned := False;
-  Result.HasMemSize      := False;
 end;
 
 function GetCrtAllocator: TAllocator;

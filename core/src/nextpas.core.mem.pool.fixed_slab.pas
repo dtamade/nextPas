@@ -1502,11 +1502,10 @@ begin
 end;
 function TFixedSlabPool.Traits: TAllocatorTraits;
 begin
-  // 固定 slab：AllocMem 保证零填充，默认非线程安全，提供块大小查询
-  Result.ZeroInitialized := True;   // AllocMem 中有 FillChar
-  Result.ThreadSafe      := False;  // 当前实现未加锁
-  Result.HasMemSize      := True;   // 提供 ChunkSizeOf / MemSizeOf
-  Result.SupportsAligned := True;   // AllocAligned 通过 fallback 路径实现
+  Result.ZeroInitialized := True;
+  Result.ThreadSafe      := False;
+  Result.HasMemSize      := True;
+  Result.SupportsAligned := True;
 end;
 
 function TFixedSlabPool.MemSizeOf(APtr: Pointer): SizeUInt;

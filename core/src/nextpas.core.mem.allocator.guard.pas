@@ -172,10 +172,8 @@ end;
 function TGuardAllocator.Traits: TAllocatorTraits;
 begin
   Result := inherited Traits;
-  Result.ZeroInitialized := False;
   Result.ThreadSafe := False;
   Result.HasMemSize := True;
-  Result.SupportsAligned := False;
 end;
 
 end.

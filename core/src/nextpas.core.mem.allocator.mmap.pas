@@ -325,9 +325,6 @@ function TMemoryMapAllocator.Traits: TAllocatorTraits;
 begin
   Result := inherited Traits;
   Result.ZeroInitialized := True;
-  Result.ThreadSafe := True;
-  Result.HasMemSize := False;
-  Result.SupportsAligned := False;
 end;
 
 function CreateAnonymousMemoryMapAllocator(aReservationSize: UInt64): TAllocator;

@@ -899,11 +899,10 @@ end;
 
 function TSlabPoolSharded.Traits: TAllocatorTraits;
 begin
-  // keep consistent with TSlabPool but mark as thread-safe
   Result.ZeroInitialized := True;
-  Result.ThreadSafe := True;
-  Result.HasMemSize := True;
-  Result.SupportsAligned := True;   // AllocAligned 通过 fallback 路径实现
+  Result.ThreadSafe      := True;
+  Result.HasMemSize      := True;
+  Result.SupportsAligned := True;
 end;
 
 function TSlabPoolSharded.Owns(APtr: Pointer): Boolean;

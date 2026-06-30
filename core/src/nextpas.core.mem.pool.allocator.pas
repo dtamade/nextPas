@@ -329,10 +329,8 @@ end;
 
 function TPoolAllocator.Traits: TAllocatorTraits;
 begin
-  Result.ZeroInitialized := False;
+  Result := inherited Traits;
   Result.ThreadSafe := False;
-  Result.HasMemSize := False;
-  Result.SupportsAligned := False;
 end;
 
 function TPoolAllocator.AllocAligned(ASize, AAlignment: SizeUInt): Pointer;

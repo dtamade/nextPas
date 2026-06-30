@@ -168,12 +168,7 @@ end;
 function TMimallocAllocator.Traits: TAllocatorTraits;
 begin
   Result := inherited Traits;
-  // mimalloc semantics:
-  // - AllocMem uses mi_calloc => zero initialized; GetMem not guaranteed
-  // - SupportsAligned remains False here (use aligned bridge or module)
-  // - HasMemSize is true only when the optional usable-size symbol is present
   Result.ZeroInitialized := True;
-  Result.SupportsAligned := False;
   Result.HasMemSize      := MimallocUsableSizeAvailable;
 end;
 

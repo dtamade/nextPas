@@ -932,10 +932,10 @@ end;
 
 function TSlabPool.Traits: TAllocatorTraits;
 begin
-  Result.ZeroInitialized := True;   // AllocMem 保证零填充
-  Result.ThreadSafe      := False;  // 当前未加锁
-  Result.HasMemSize      := True;   // 通过 ChunkSizeOf/MemSizeOf
-  Result.SupportsAligned := True;   // AllocAligned 通过 fallback 路径实现
+  Result.ZeroInitialized := True;
+  Result.ThreadSafe      := False;
+  Result.HasMemSize      := True;
+  Result.SupportsAligned := True;
 end;
 
 constructor TSlabPool.Create(ACapacity: SizeUInt; const AConfig: TSlabConfig; AAllocator: TAllocator);

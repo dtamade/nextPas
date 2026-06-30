@@ -86,9 +86,8 @@ end;
 
 function TVirtualArenaAllocator.Traits: TAllocatorTraits;
 begin
-  Result.ZeroInitialized := False;
+  Result := inherited Traits;
   Result.ThreadSafe      := False;
-  Result.HasMemSize      := False;
   Result.SupportsAligned := True;
 end;
 

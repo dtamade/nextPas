@@ -286,10 +286,8 @@ end;
 
 function TTrackingAllocator.Traits: TAllocatorTraits;
 begin
-  Result.ZeroInitialized := False;
-  Result.ThreadSafe      := True;
-  Result.HasMemSize      := FInner.Traits.HasMemSize;
-  Result.SupportsAligned := False;
+  Result := inherited Traits;
+  Result.HasMemSize := FInner.Traits.HasMemSize;
 end;
 
 procedure TTrackingAllocator.FreeMem(ADst: Pointer);
