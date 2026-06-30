@@ -1028,35 +1028,42 @@ begin
   AfterEachClosure := AProc;
 end;
 
-procedure TTestSuite.Cleanup(AProc: TTestProc);
+{ ── EachCleanups capacity growth helper ─────────────────────────────────────── }
+
+function GrowEachCleanups(var ACleanups: specialize TArray<TTestClosure>): Integer;
+{ Returns the index where the new element should be placed (old length). }
 var
-  LProc: TTestProc;
   LOldLen, LCap: Integer;
 begin
-  LProc := AProc;
-  LOldLen := Length(EachCleanups);
+  LOldLen := Length(ACleanups);
   LCap := LOldLen;
   if LCap < 4 then LCap := 4
   else if LOldLen >= LCap then LCap := LCap * 2;
-  if LCap <> LOldLen then SetLength(EachCleanups, LCap);
-  EachCleanups[LOldLen] := procedure
+  if LCap <> LOldLen then SetLength(ACleanups, LCap);
+  Result := LOldLen;
+end;
+
+procedure TTestSuite.Cleanup(AProc: TTestProc);
+var
+  LProc: TTestProc;
+  LIdx: Integer;
+begin
+  LProc := AProc;
+  LIdx := GrowEachCleanups(EachCleanups);
+  EachCleanups[LIdx] := procedure
   begin
     LProc;
   end;
-  SetLength(EachCleanups, LOldLen + 1);
+  SetLength(EachCleanups, LIdx + 1);
 end;
 
 procedure TTestSuite.Cleanup(AProc: TTestClosure);
 var
-  LOldLen, LCap: Integer;
+  LIdx: Integer;
 begin
-  LOldLen := Length(EachCleanups);
-  LCap := LOldLen;
-  if LCap < 4 then LCap := 4
-  else if LOldLen >= LCap then LCap := LCap * 2;
-  if LCap <> LOldLen then SetLength(EachCleanups, LCap);
-  EachCleanups[LOldLen] := AProc;
-  SetLength(EachCleanups, LOldLen + 1);
+  LIdx := GrowEachCleanups(EachCleanups);
+  EachCleanups[LIdx] := AProc;
+  SetLength(EachCleanups, LIdx + 1);
 end;
 
 function TTestSuite.WithConfig(const AConfig: TTestConfig): TTestSuite;
@@ -1124,34 +1131,26 @@ end;
 function TTestSuite.WithEachCleanup(AProc: TTestProc): TTestSuite;
 var
   LProc: TTestProc;
-  LOldLen, LCap: Integer;
+  LIdx: Integer;
 begin
   Result := Self;
   LProc := AProc;
-  LOldLen := Length(Result.EachCleanups);
-  LCap := LOldLen;
-  if LCap < 4 then LCap := 4
-  else if LOldLen >= LCap then LCap := LCap * 2;
-  if LCap <> LOldLen then SetLength(Result.EachCleanups, LCap);
-  Result.EachCleanups[LOldLen] := procedure
+  LIdx := GrowEachCleanups(Result.EachCleanups);
+  Result.EachCleanups[LIdx] := procedure
   begin
     LProc;
   end;
-  SetLength(Result.EachCleanups, LOldLen + 1);
+  SetLength(Result.EachCleanups, LIdx + 1);
 end;
 
 function TTestSuite.WithEachCleanup(AProc: TTestClosure): TTestSuite;
 var
-  LOldLen, LCap: Integer;
+  LIdx: Integer;
 begin
   Result := Self;
-  LOldLen := Length(Result.EachCleanups);
-  LCap := LOldLen;
-  if LCap < 4 then LCap := 4
-  else if LOldLen >= LCap then LCap := LCap * 2;
-  if LCap <> LOldLen then SetLength(Result.EachCleanups, LCap);
-  Result.EachCleanups[LOldLen] := AProc;
-  SetLength(Result.EachCleanups, LOldLen + 1);
+  LIdx := GrowEachCleanups(Result.EachCleanups);
+  Result.EachCleanups[LIdx] := AProc;
+  SetLength(Result.EachCleanups, LIdx + 1);
 end;
 
 function TTestSuite.Run: Boolean;
