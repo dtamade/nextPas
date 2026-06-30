@@ -4703,7 +4703,8 @@ begin
     SameText(AMemberName, 'Clone') or SameText(AMemberName, 'Reset') or
     SameText(AMemberName, 'SetBlocking') or
     SameText(AMemberName, 'CreateWithContext') or
-    SameText(AMemberName, 'Contains');
+    SameText(AMemberName, 'Contains') or
+    SameText(AMemberName, 'Render') or SameText(AMemberName, '_AddRef');
 end;
 
 function TSemanticAnalyzer.TypeMetaSize(const ATypeName: string): Int64;
@@ -6579,7 +6580,12 @@ begin
     { Math functions }
     SameText(AName, 'Cos') or SameText(AName, 'Sin') or SameText(AName, 'Sqrt') or
     SameText(AName, 'Abs') or SameText(AName, 'ArcTan') or
-    SameText(AName, 'Pi') or SameText(AName, 'Power');
+    SameText(AName, 'Pi') or SameText(AName, 'Power') or
+    SameText(AName, 'X86VendorStringFromLeaf0') or SameText(AName, 'BuildScalarDoubleToSingle') or
+    SameText(AName, 'simd_storeu_ps') or SameText(AName, 'UnloadProvider') or
+    SameText(AName, 'DoubleIsInf') or SameText(AName, 'TC_Initialize') or
+    SameText(AName, 'BsrQWord') or SameText(AName, 'EvaluateScalarCompareSd') or
+    SameText(AName, 'simd_max_epu8');
 end;
 
 function TSemanticAnalyzer.InferExpressionType(const ANode: TGreenNode): LongInt;
