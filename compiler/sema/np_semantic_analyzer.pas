@@ -6585,7 +6585,8 @@ begin
     SameText(AName, 'simd_storeu_ps') or SameText(AName, 'UnloadProvider') or
     SameText(AName, 'DoubleIsInf') or SameText(AName, 'TC_Initialize') or
     SameText(AName, 'BsrQWord') or SameText(AName, 'EvaluateScalarCompareSd') or
-    SameText(AName, 'simd_max_epu8');
+    SameText(AName, 'simd_max_epu8') or SameText(AName, 'UMul128') or
+    SameText(AName, 'BuildScalarDoubleCompareMask') or SameText(AName, 'simd_min_epu8');
 end;
 
 function TSemanticAnalyzer.InferExpressionType(const ANode: TGreenNode): LongInt;
