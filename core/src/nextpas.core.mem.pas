@@ -11,7 +11,6 @@ uses
   nextpas.core.base,
   nextpas.core.base.utils,
   nextpas.core.mem.base,
-  nextpas.core.mem.intf,
   nextpas.core.mem.error,
   nextpas.core.mem.default,
   nextpas.core.mem.mutex,
@@ -54,8 +53,8 @@ uses
 type
   // === 基础类型 ===
   TAllocatorKind = nextpas.core.mem.base.TAllocatorKind;
-  TAllocatorTraits = nextpas.core.mem.intf.TAllocatorTraits;
-  IAllocator = nextpas.core.mem.intf.IAllocator;
+  TAllocatorTraits = nextpas.core.mem.allocator.base.TAllocatorTraits;
+  IAllocator = nextpas.core.mem.allocator.base.IAllocator;
   TAllocator = nextpas.core.mem.allocator.base.TAllocator;
   TMemAllocator = nextpas.core.mem.allocator.base.TMemAllocator;
   TAllocError = nextpas.core.mem.error.TAllocError;
