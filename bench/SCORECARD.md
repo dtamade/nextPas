@@ -8,10 +8,10 @@
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **108** | 4 | 31 | **76%** |
+| **Go** | **110** | 4 | 31 | **76%** |
 | **Rust** | 19 | 0 | 47 | **29%** |
 
-## Track Summary (34 tracks, 148 operations)
+## Track Summary (35 tracks, 150 operations)
 
 ### Text Operations (6 ops)
 
@@ -202,15 +202,6 @@
 
 **2W vs Go, 0W vs Rust**
 
-### Binary Search (2 ops)
-
-| Track | Pascal | Go | vs Go |
-|-------|--------|-----|-------|
-| BinarySearch/100k | 18.3ms | 14.9ms | 0.81x |
-| BinarySearchHit/100k | 8.92ms | 6.39ms | 0.72x |
-
-**0W vs Go, 0W vs Rust**
-
 ### Bit Scan / Byte Swap Operations (4 ops)
 
 | Track | Pascal (ns) | Go (ns) | vs Go |
@@ -221,6 +212,15 @@
 | **ByteSwap/100K** | **65976** | 287882 | **4.36x** ✓ |
 
 **3W vs Go** — BSR/BSF x86 intrinsics; BSwap→`bswap` vs Go manual bit manipulation
+
+### Bit Rotation Operations (2 ops)
+
+| Track | Pascal (ns) | Go (ns) | vs Go |
+|-------|-------------|---------|-------|
+| **Rol64/1M** | **731477** | 2153000 | **2.94x** ✓ |
+| **Ror64/1M** | **1008903** | 1308000 | **1.30x** ✓ |
+
+**2W vs Go** — FPC `RolQWord`/`RorQWord` → x86 `rol`/`ror` intrinsics vs Go `bits.RotateLeft64` (extra wrapper overhead)
 
 ### Packed Record Operations (5 ops)
 
@@ -417,8 +417,7 @@
 ### Pascal Losses (biggest gaps vs Go)
 1. **Base64 Enc/Dec: 2.2-2.3x** — Go SIMD encoding
 2. **IntToHex: 2.09x** — Pascal's padding loop overhead
-3. **Hash LookupMiss: 2.64x** — Go's cache-friendly miss path (flipped by SwissMap 1.3-1.8x)
-4. **Lookup BST: 0.92x** — Go slightly faster on pointer chasing (cache prefetcher advantage)
+3. **Lookup BST: 0.92x** — Go slightly faster on pointer chasing (cache prefetcher advantage)
 
 ### Categories
 - **Bit set operations**: Pascal dominant (5W vs Go) — `set of Byte` is killer
