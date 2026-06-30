@@ -151,6 +151,12 @@ type
 var
   ActiveExpressionTree: TGreenTree = nil;
 
+{ Parent terminator stack for nested statement parsing.
+  When parsing if..then followed by while..do body, the body's
+  statement list must also stop at ELSE (which belongs to the if). }
+var
+  GParentTerminators: TTokenKindSet = [];
+
 function CurrentToken(const ALexer: TLexerResult; const ACursor: LongInt): TToken;
   forward;
 
@@ -598,7 +604,10 @@ end;
 function IsDirectiveToken(AKind: TTokenKind): Boolean;
 begin
   Result := AKind in [tkInlineKeyword, tkOverloadKeyword, tkCdeclKeyword,
+    tkStdCallKeyword, tkSafeCallKeyword, tkRegisterKeyword, tkPascalKeyword,
+    tkFarKeyword, tkNearKeyword, tkCppDeclKeyword, tkVarArgsKeyword,
     tkVirtualKeyword, tkOverrideKeyword, tkAbstractKeyword, tkStaticKeyword,
+    tkDynamicKeyword, tkReintroduceKeyword, tkMessageKeyword,
     tkDeprecatedKeyword, tkPlatformKeyword, tkExperimentalKeyword];
 end;
 
@@ -729,6 +738,16 @@ begin
 
   while True do
   begin
+    SkipDirectives(ALexer, ACursor);
+
+    { FPC leniency: allow trailing comma before semicolon in uses clause.
+      This happens when conditional compilation strips platform-specific units:
+        uses Foo, {$IFDEF WINDOWS} Bar {$ENDIF} ;
+      After preprocessing: uses Foo, ;  (dangling comma) }
+    if (ACursor < ALexer.TokenCount) and
+       (CurrentToken(ALexer, ACursor).Kind = tkSemicolon) then
+      Break;
+
     if not ConsumeIdentifierPath(
       ALexer,
       ACursor,
@@ -768,17 +787,36 @@ begin
     AdvanceCursor(ACursor);
   end;
 
-  if not MatchToken(
+  if not MatchTokenSilent(
     ALexer,
     ACursor,
-    tkSemicolon,
-    ADiagnostics,
-    ARootFileId,
-    ';'
+    tkSemicolon
   ) then
   begin
-    UsesNode.Free;
-    Exit(False);
+    { FPC leniency: allow uses clause without trailing semicolon
+      when followed by a section-starting keyword like type/const/var/begin.
+      e.g. "uses Foo\n type" is accepted by FPC. }
+    SkipDirectives(ALexer, ACursor);
+    if (ACursor < ALexer.TokenCount) and
+       (CurrentToken(ALexer, ACursor).Kind in [
+         tkTypeKeyword, tkConstKeyword, tkVarKeyword,
+         tkBeginKeyword, tkProcedureKeyword, tkFunctionKeyword,
+         tkClassKeyword, tkInterfaceKeyword
+       ]) then
+    begin
+      { Recover: treat as valid uses clause without semicolon }
+    end
+    else
+    begin
+      EmitSyntaxError(
+        ADiagnostics,
+        ARootFileId,
+        CurrentToken(ALexer, ACursor),
+        ';'
+      );
+      UsesNode.Free;
+      Exit(False);
+    end;
   end;
 
   AParent.AppendChild(UsesNode);
@@ -972,7 +1010,8 @@ begin
     tkIdentifier, tkNameKeyword, tkMessageKeyword, tkFileKeyword,
       tkStringKeyword, tkInheritedKeyword, tkContainsKeyword,
       tkRequiresKeyword, tkOnKeyword, tkIsKeyword, tkAsKeyword,
-      tkInKeyword, tkInlineKeyword, tkOverloadKeyword:
+      tkInKeyword, tkInlineKeyword, tkOverloadKeyword,
+      tkForwardKeyword:
       begin
         Inc(ACursor);
         if (Token.Kind = tkInheritedKeyword) and (ACursor < ALexer.TokenCount) and
@@ -3881,6 +3920,7 @@ function ParseIfStatement(
 var
   Node: TGreenNode;
   CondExpr: TGreenNode;
+  SavedParentTerm: TTokenKindSet;
 begin
   Node := TGreenNode.Create(gnkIfStatement,
     CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
@@ -3898,9 +3938,14 @@ begin
     Exit(False);
   end;
 
+  { Propagate ELSE as a parent terminator for nested loop bodies:
+    while..do begin..end in a then-branch must stop at ELSE. }
+  SavedParentTerm := GParentTerminators;
+  Include(GParentTerminators, tkElseKeyword);
   ParseStatementList(ALexer, ACursor, Node,
     [tkElseKeyword, tkEndKeyword, tkSemicolon, tkEOF],
     ATree, ADiagnostics, ARootFileId);
+  GParentTerminators := SavedParentTerm;
 
   if (ACursor < ALexer.TokenCount) and
     (CurrentToken(ALexer, ACursor).Kind = tkElseKeyword) then
@@ -4575,7 +4620,8 @@ var
         end;
       tkIdentifier, tkSelfKeyword, tkNameKeyword, tkStringKeyword,
         tkMessageKeyword, tkFileKeyword, tkContainsKeyword,
-        tkRequiresKeyword, tkOnKeyword, tkInlineKeyword, tkOverloadKeyword:
+        tkRequiresKeyword, tkOnKeyword, tkInlineKeyword, tkOverloadKeyword,
+        tkForwardKeyword:
         begin
           if (ACursor + 1 < ALexer.TokenCount) and
             (ALexer.TokenAt(ACursor + 1).Kind = tkColon) then
@@ -4734,7 +4780,7 @@ begin
   begin
     SkipDirectives(ALexer, ACursor);
     if (ACursor >= ALexer.TokenCount) or
-      (CurrentToken(ALexer, ACursor).Kind in ATerminatorSet) then
+      (CurrentToken(ALexer, ACursor).Kind in (ATerminatorSet + GParentTerminators)) then
       Break;
     if not ParseStatement then
     begin
