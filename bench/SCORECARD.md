@@ -8,10 +8,10 @@
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **135** | 5 | 33 | **78%** |
+| **Go** | **138** | 5 | 33 | **79%** |
 | **Rust** | 19 | 0 | 47 | **29%** |
 
-## Track Summary (42 tracks, 178 operations)
+## Track Summary (42 tracks, 181 operations)
 
 ### Text Operations (6 ops)
 
@@ -450,7 +450,7 @@
 
 **3W vs Go** — Simple scalar loops: FPC generates tighter code than Go
 
-### Array Operations (8 ops)
+### Array Operations (11 ops)
 
 | Track | Pascal | Go | vs Go |
 |-------|--------|-----|-------|
@@ -462,8 +462,11 @@
 | **CountEven/10K×10K** | **78.3ms** | 758ms | **9.69x** ✓ |
 | **FloatArraySum/10K×10K** | **109.5ms** | 1124ms | **10.3x** ✓ |
 | **FloatArrayDot/10K×10K** | **110ms** | 1115ms | **10.1x** ✓ |
+| **FloatArrayMinMax/10K×10K** | **134.7ms** | 1369ms | **10.2x** ✓ |
+| **IntArrayFilter/10K×10K** | **83.8ms** | 761ms | **9.07x** ✓ |
+| **FloatArrayNorm/10K×10K** | **110.6ms** | 1100ms | **9.95x** ✓ |
 
-**8W vs Go** — Simple indexed array loops (int + float): FPC consistently 6-11x faster; Go overhead from bounds checking + write barriers + less aggressive loop optimization
+**11W vs Go** — Simple indexed array loops (int + float, all patterns): FPC consistently 6-11x faster; Go overhead from bounds checking + write barriers + less aggressive loop optimization
 
 ### Pascal Wins (biggest margins vs Go)
 1. **String Concat: 3557x** — Go immutable strings O(n²) vs Pascal COW
@@ -519,7 +522,7 @@
 - **Memory move**: Pascal strong (3W vs Go) — ERMSB + prefetchnta at 16K-256K
 - **ByteArray ops**: Pascal strong (2W 1D vs Go) — FillBytes 27x, CopyBytes 1.42x, CompareBytes ties
 - **Scalar loops**: Pascal strong (3W vs Go) — MemZero 1.17x, BufferXor 1.54x, WordCount 1.26x; FPC tighter codegen
-- **Array indexed loops**: Pascal dominant (8W vs Go) — ArraySum 11.1x, ByteFrequency 10.4x, FloatArraySum 10.3x, FloatArrayDot 10.1x, CountEven 9.69x, ArrayReverse 8.75x, ArrayRotate 8.57x, LinearSearch 6.51x; Go bounds check + write barrier overhead
+- **Array indexed loops**: Pascal dominant (11W vs Go) — ArraySum 11.1x, ByteFrequency 10.4x, FloatArraySum 10.3x, FloatArrayMinMax 10.2x, FloatArrayDot 10.1x, FloatArrayNorm 9.95x, CountEven 9.69x, IntArrayFilter 9.07x, ArrayReverse 8.75x, ArrayRotate 8.57x, LinearSearch 6.51x; Go bounds check + write barrier overhead
 - **File I/O Write**: Pascal dominant (3W vs Go) — direct syscall vs Go's bufio
 - **String operations**: Pascal dominant (7W vs Go)
 - **Memory/pointer**: Pascal strong (5W vs Go)
@@ -530,7 +533,7 @@
 
 ## Conclusion
 
-Pascal beats Go 78% of the time across 124 benchmarks. The biggest wins come from
+Pascal beats Go 79% of the time across 127 benchmarks. The biggest wins come from
 FillChar operations (compiles to `rep stosb`, 11-27x faster than Go's byte loop),
 string operations (immutable strings are Go's Achilles heel), bit set operations
 string operations (immutable strings are Go's Achilles heel), bit set operations
