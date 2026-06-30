@@ -569,7 +569,7 @@ function RunProcessCapture(
   const AWorkingDirectory: string;
   const AParameters: TStrings;
   out AOutput: string;
-  ATimeoutMs: LongInt = 30000
+  ATimeoutMs: LongInt = 120000
 ): LongInt;
 var
   Proc: TProcess;
