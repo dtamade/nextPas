@@ -175,6 +175,10 @@ type
       out AResults: specialize TArray<TBenchResults>): Boolean;
     procedure Summary;
     function  AllPassed: Boolean;
+  private
+    function RunAllIterLoop(
+      out AResults: specialize TArray<TTestRunResult>;
+      AIsParallel: Boolean; APool: IThreadPool): Boolean;
   end;
 
 { Register a heap-allocated method stub for later disposal.
@@ -2203,8 +2207,11 @@ begin
   Result := RunAllParallelWithResult(APool, LResults);
 end;
 
-function TTestRunner.RunAllWithResult(
-  out AResults: specialize TArray<TTestRunResult>): Boolean;
+function TTestRunner.RunAllIterLoop(
+  out AResults: specialize TArray<TTestRunResult>;
+  AIsParallel: Boolean; APool: IThreadPool): Boolean;
+{ Shared iteration loop for RunAllWithResult and RunAllParallelWithResult.
+  Handles RepeatAll, FailFast, MaxFailures, cleanup, and JSON output. }
 var
   I, LIter, LRepeatAll: Integer;
   LAllPassed: Boolean;
@@ -2216,7 +2223,6 @@ var
   LMaxFailures: Integer;
   LBenchResults: specialize TArray<TBenchResults>;
 begin
-  ApplyCLIArgs;
   LConfig := RunnerConfig(Self);
   LOutSink := ResolveOutSink(LConfig);
 
@@ -2232,7 +2238,7 @@ begin
   LFailFast := GetFailFast(LConfig);
   LMaxFailures := GetMaxFailures(LConfig);
 
-  WriteRunnerBanner(Name, LConfig, LOutSink, False);
+  WriteRunnerBanner(Name, LConfig, LOutSink, AIsParallel);
 
   LAllPassed := True;
   TotalPass := 0;
@@ -2248,7 +2254,6 @@ begin
       LOutSink.WriteLn(AnsiBold(
         '--- Iteration ' + IntToStr(LIter) + '/' + IntToStr(LRepeatAll) +
         ' ---', LConfig));
-      { Reset counters each iteration — only the last iteration's totals are kept }
       TotalPass := 0;
       TotalFail := 0;
       TotalSkip := 0;
@@ -2256,26 +2261,30 @@ begin
     LStartMs := GetTickCount64;
     for I := 0 to High(Suites) do
     begin
-      if not Suites[I].RunWithResult(LSuiteResult) then
+      if AIsParallel then
       begin
-        LAllPassed := False;
-        if LFailFast then
-        begin
-          LOutSink.WriteLn(AnsiYellow(
-            '  FAILFAST: stopping after suite failure', LConfig));
-          AResults[I] := LSuiteResult;
-          Inc(TotalPass, Suites[I].LastPass);
-          Inc(TotalFail, Suites[I].LastFail);
-          Inc(TotalSkip, Suites[I].LastSkip);
-          Break;
-        end;
+        if not Suites[I].RunParallelWithResult(APool, LSuiteResult) then
+          LAllPassed := False;
+      end
+      else
+      begin
+        if not Suites[I].RunWithResult(LSuiteResult) then
+          LAllPassed := False;
       end;
-      { Only keep the last iteration's results }
+      if not LAllPassed and LFailFast then
+      begin
+        LOutSink.WriteLn(AnsiYellow(
+          '  FAILFAST: stopping after suite failure', LConfig));
+        AResults[I] := LSuiteResult;
+        Inc(TotalPass, Suites[I].LastPass);
+        Inc(TotalFail, Suites[I].LastFail);
+        Inc(TotalSkip, Suites[I].LastSkip);
+        Break;
+      end;
       AResults[I] := LSuiteResult;
       Inc(TotalPass, Suites[I].LastPass);
       Inc(TotalFail, Suites[I].LastFail);
       Inc(TotalSkip, Suites[I].LastSkip);
-      { MaxFailures: stop after N total failures across all suites }
       if (LMaxFailures > 0) and (TotalFail >= LMaxFailures) then
       begin
         LOutSink.WriteLn(AnsiYellow(
@@ -2290,116 +2299,30 @@ begin
         FormatDuration(GetTickCount64 - LStartMs), LConfig));
   end;
 
-  { Cleanup after all iterations: stubs/fixtures/table data must survive
-    --count=N re-runs. FinalizeResults no longer calls this. }
   for I := 0 to High(Suites) do
     Suites[I].CleanupTableAllocations;
 
   HasRun := True;
   Result := LAllPassed;
-  { JSON output — emit machine-readable report to stdout }
   if GetJsonOutput(LConfig) then
     LOutSink.WriteLn(JSONReport(AResults, Name));
-  { Benchmarks — run after regular tests if --bench was passed }
-  if GetBenchEnabled(LConfig) then
+  { Benchmarks — run after regular tests if --bench was passed (serial only) }
+  if (not AIsParallel) and GetBenchEnabled(LConfig) then
     RunAllBenchmarks(LBenchResults);
+end;
+
+function TTestRunner.RunAllWithResult(
+  out AResults: specialize TArray<TTestRunResult>): Boolean;
+begin
+  ApplyCLIArgs;
+  Result := RunAllIterLoop(AResults, False, nil);
 end;
 
 function TTestRunner.RunAllParallelWithResult(APool: IThreadPool;
   out AResults: specialize TArray<TTestRunResult>): Boolean;
-var
-  I, LIter, LRepeatAll: Integer;
-  LAllPassed: Boolean;
-  LSuiteResult: TTestRunResult;
-  LConfig: TTestConfig;
-  LOutSink: IOutputSink;
-  LStartMs: Int64;
-  LFailFast: Boolean;
-  LMaxFailures: Integer;
 begin
   ApplyCLIArgs;
-  LConfig := RunnerConfig(Self);
-  LOutSink := ResolveOutSink(LConfig);
-
-  { List mode: print test names and exit without running }
-  if GetListMode(LConfig) then
-  begin
-    HasRun := True;
-    Exit(WriteListMode(Suites, LConfig, AResults));
-  end;
-
-  LRepeatAll := GetRepeatAllCount(LConfig);
-  if LRepeatAll <= 0 then LRepeatAll := 1;
-  LFailFast := GetFailFast(LConfig);
-  LMaxFailures := GetMaxFailures(LConfig);
-
-  WriteRunnerBanner(Name, LConfig, LOutSink, True);
-
-  LAllPassed := True;
-  TotalPass := 0;
-  TotalFail := 0;
-  TotalSkip := 0;
-  SetLength(AResults, Length(Suites));
-
-  for LIter := 1 to LRepeatAll do
-  begin
-    if LRepeatAll > 1 then
-    begin
-      LOutSink.WriteLn('');
-      LOutSink.WriteLn(AnsiBold(
-        '--- Iteration ' + IntToStr(LIter) + '/' + IntToStr(LRepeatAll) +
-        ' ---', LConfig));
-      { Reset counters each iteration — only the last iteration's totals are kept }
-      TotalPass := 0;
-      TotalFail := 0;
-      TotalSkip := 0;
-    end;
-    LStartMs := GetTickCount64;
-    for I := 0 to High(Suites) do
-    begin
-      if not Suites[I].RunParallelWithResult(APool, LSuiteResult) then
-      begin
-        LAllPassed := False;
-        if LFailFast then
-        begin
-          LOutSink.WriteLn(AnsiYellow(
-            '  FAILFAST: stopping after suite failure', LConfig));
-          AResults[I] := LSuiteResult;
-          Inc(TotalPass, Suites[I].LastPass);
-          Inc(TotalFail, Suites[I].LastFail);
-          Inc(TotalSkip, Suites[I].LastSkip);
-          Break;
-        end;
-      end;
-      AResults[I] := LSuiteResult;
-      Inc(TotalPass, Suites[I].LastPass);
-      Inc(TotalFail, Suites[I].LastFail);
-      Inc(TotalSkip, Suites[I].LastSkip);
-      { MaxFailures: stop after N total failures across all suites }
-      if (LMaxFailures > 0) and (TotalFail >= LMaxFailures) then
-      begin
-        LOutSink.WriteLn(AnsiYellow(
-          '  stopping after ' + IntToStr(TotalFail) +
-          ' total failures (--failures-max)', LConfig));
-        Break;
-      end;
-    end;
-    if LRepeatAll > 1 then
-      LOutSink.WriteLn(AnsiDim(
-        '  Iteration ' + IntToStr(LIter) + ' completed in ' +
-        FormatDuration(GetTickCount64 - LStartMs), LConfig));
-  end;
-
-  { Cleanup after all iterations: stubs/fixtures/table data must survive
-    --count=N re-runs. FinalizeResults no longer calls this. }
-  for I := 0 to High(Suites) do
-    Suites[I].CleanupTableAllocations;
-
-  HasRun := True;
-  Result := LAllPassed;
-  { JSON output — emit machine-readable report to stdout }
-  if GetJsonOutput(LConfig) then
-    LOutSink.WriteLn(JSONReport(AResults, Name));
+  Result := RunAllIterLoop(AResults, True, APool);
 end;
 
 function TTestRunner.RunAllBenchmarks(
