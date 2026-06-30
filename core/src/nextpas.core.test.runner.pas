@@ -1876,8 +1876,8 @@ begin
       Inc(LSkip);
       LResults[I] := MakeTestResult(Tests[I].Name, tsSkipped,
         'skipped: short mode', 0);
-      LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, Tests[I].Name,
-        'short mode', LConfig));
+      WriteTestOutput(tsSkipped, Tests[I].Name, '', 'short mode',
+        0, LOutSink, LConfig);
       Continue;
     end;
 
