@@ -8,10 +8,10 @@
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **114** | 4 | 31 | **77%** |
+| **Go** | **115** | 4 | 32 | **76%** |
 | **Rust** | 19 | 0 | 47 | **29%** |
 
-## Track Summary (36 tracks, 154 operations)
+## Track Summary (37 tracks, 156 operations)
 
 ### Text Operations (6 ops)
 
@@ -256,6 +256,15 @@
 | **NewDispose/100K** | **4672613** | 6705767 | **1.43x** ✓ |
 
 **4W vs Go** — Pascal `GetMem`/`FreeMem` (direct malloc/free) vs Go `make` (zeroing + slice header + GC write barrier); 4KB gap (22x) is Go runtime overhead per allocation
+
+### Random Number Generation (2 ops)
+
+| Track | Pascal (ns) | Go (ns) | vs Go |
+|-------|-------------|---------|-------|
+| **RandomInt/1M** | **12788266** | 31034821 | **2.42x** ✓ |
+| RandomFloat/1M | 10254855 | 6602875 | 0.64x |
+
+**1W 1L vs Go** — FPC `Random` LCG (fast, minimal state) vs Go `math/rand` locked lagged Fibonacci (better stats, mutex overhead)
 
 ### Const Lookup Table Operations (3 ops)
 
