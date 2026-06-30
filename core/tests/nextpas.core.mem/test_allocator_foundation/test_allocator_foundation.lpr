@@ -50,7 +50,7 @@ end;
 procedure TestFoundationRtlAllocatorMatchesCanonicalSingleton;
 var
   LFoundationAllocator: TAllocator;
-  LCanonicalAllocator: nextpas.core.mem.allocator.base.IAllocator;
+  LCanonicalAllocator: nextpas.core.mem.allocator.base.TAllocator;
 begin
   LFoundationAllocator := GetRtlAllocator;
   LCanonicalAllocator := nextpas.core.mem.allocator.rtl.GetRtlAllocator;

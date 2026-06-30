@@ -55,7 +55,7 @@ procedure TFailAllocator.DoFreeMem(ADst: Pointer);
 begin
 end;
 
-function NewFailAllocator: nextpas.core.mem.allocator.IAllocator;
+function NewFailAllocator: nextpas.core.mem.allocator.TAllocator;
 begin
   Result := TFailAllocator.Create;
 end;
