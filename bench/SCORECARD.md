@@ -8,10 +8,10 @@
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **110** | 4 | 31 | **76%** |
+| **Go** | **114** | 4 | 31 | **77%** |
 | **Rust** | 19 | 0 | 47 | **29%** |
 
-## Track Summary (35 tracks, 150 operations)
+## Track Summary (36 tracks, 154 operations)
 
 ### Text Operations (6 ops)
 
@@ -245,6 +245,17 @@
 | **SliceCopy/100K** | **308204** | 748499 | **2.43x** ✓ |
 
 **4W vs Go** — Pascal `SetLength` + direct indexing vs Go `append` + bounds check + GC write barrier
+
+### Memory Allocation Operations (4 ops)
+
+| Track | Pascal (ns) | Go (ns) | vs Go |
+|-------|-------------|---------|-------|
+| **GetFree64/100K** | **4660960** | 18351214 | **3.94x** ✓ |
+| **GetFree1K/100K** | **8215287** | 50064485 | **6.09x** ✓ |
+| **GetFree4K/100K** | **8028954** | 178499727 | **22.23x** ✓ |
+| **NewDispose/100K** | **4672613** | 6705767 | **1.43x** ✓ |
+
+**4W vs Go** — Pascal `GetMem`/`FreeMem` (direct malloc/free) vs Go `make` (zeroing + slice header + GC write barrier); 4KB gap (22x) is Go runtime overhead per allocation
 
 ### Const Lookup Table Operations (3 ops)
 
