@@ -87,8 +87,6 @@ function fma3_fmsubadd_pd256(const a, b, c: TM256): TM256;
 
 implementation
 
-uses
-
 procedure EnsureExperimentalIntrinsicsEnabled; inline;
 begin
   {$IFNDEF NEXTPAS_SIMD_EXPERIMENTAL_INTRINSICS}

@@ -19,7 +19,9 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.base.utils,
   nextpas.core.text.conv,
+  nextpas.core.text.strings,
   nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.wolfssl.base,
@@ -85,12 +87,21 @@ type
 implementation
 
 uses
-  nextpas.core.text.strings,
     nextpas.core.tls.wolfssl.certificate;
 
 const
   WOLFSSL_SESSION_SERIALIZATION_MAGIC = 'fafafa-wolfssl-session-v1';
   HEX_DIGITS: array[0..15] of Char = '0123456789ABCDEF';
+
+function LocalBytesOf(const S: RawByteString): TBytes;
+var
+  Len: Integer;
+begin
+  Len := Length(S);
+  SetLength(Result, Len);
+  if Len > 0 then
+    Move(S[1], Result[0], Len);
+end;
 
 function ParseWolfSSLVersionString(const AVersion: string): TSSLProtocolVersion;
 begin
@@ -357,14 +368,15 @@ begin
     else
       LCreatedUnix := 0;
 
-    StringPairsGet(LPairs, 'magic') := WOLFSSL_SESSION_SERIALIZATION_MAGIC;
-    StringPairsGet(LPairs, 'id') := FSessionID;
-    StringPairsGet(LPairs, 'created_unix') := IntToStr(LCreatedUnix);
-    StringPairsGet(LPairs, 'timeout') := IntToStr(FTimeout);
-    StringPairsGet(LPairs, 'protocol') := IntToStr(Ord(FProtocolVersion));
-    StringPairsGet(LPairs, 'cipher') := FCipherName;
-    StringPairsGet(LPairs, 'native_hex') := BytesToHexString(ANativeData);
-    Result := BytesOf(UTF8String(LData.Text));
+    SetLength(LData, 7);
+    LData[0] := 'magic=' + WOLFSSL_SESSION_SERIALIZATION_MAGIC;
+    LData[1] := 'id=' + FSessionID;
+    LData[2] := 'created_unix=' + IntToStr(LCreatedUnix);
+    LData[3] := 'timeout=' + IntToStr(FTimeout);
+    LData[4] := 'protocol=' + IntToStr(Ord(FProtocolVersion));
+    LData[5] := 'cipher=' + FCipherName;
+    LData[6] := 'native_hex=' + BytesToHexString(ANativeData);
+    Result := LocalBytesOf(UTF8String(StringsJoin(LData, sLineBreak)));
   finally
   end;
 end;
@@ -374,13 +386,28 @@ function TWolfSSLSession.TryLoadSerializedSessionData(const AData: TBytes;
   out ACreationTime: TDateTime; out ATimeout: Integer;
   out AProtocolVersion: TSSLProtocolVersion; out ACipherName: string;
   out AHasEnvelope: Boolean): Boolean;
+
+  function FindValue(const ALines: TStringArray; const AKey: string): string;
+  var
+    i, EqPos: Integer;
+  begin
+    Result := '';
+    for i := 0 to High(ALines) do
+    begin
+      EqPos := Pos('=', ALines[i]);
+      if (EqPos > 0) and (Copy(ALines[i], 1, EqPos - 1) = AKey) then
+        Exit(Copy(ALines[i], EqPos + 1, MaxInt));
+    end;
+  end;
+
 var
-  LData: TStringArray;
+  LLines: TStringArray;
   LText: RawByteString;
   LCreatedUnix: Int64;
   LProtocolOrdinal: Integer;
   LNativeHex: string;
   LPrefix: RawByteString;
+  LMagic: string;
 begin
   Result := False;
   AHasEnvelope := False;
@@ -402,24 +429,25 @@ begin
   AHasEnvelope := True;
   SetString(LText, PAnsiChar(@AData[0]), Length(AData));
   try
-    LData.Text := string(UTF8String(LText));
-    if StringPairsGet(LPairs, 'magic') <> WOLFSSL_SESSION_SERIALIZATION_MAGIC then
+    LLines := StringsSplit(string(UTF8String(LText)), sLineBreak);
+    LMagic := FindValue(LLines, 'magic');
+    if LMagic <> WOLFSSL_SESSION_SERIALIZATION_MAGIC then
       Exit;
 
-    ASessionID := StringPairsGet(LPairs, 'id');
+    ASessionID := FindValue(LLines, 'id');
     if ASessionID = '' then
       Exit;
-    if not TryStrToInt64(StringPairsGet(LPairs, 'created_unix'), LCreatedUnix) then
+    if not TryStrToInt(FindValue(LLines, 'created_unix'), LCreatedUnix) then
       Exit;
-    if not TryStrToInt(StringPairsGet(LPairs, 'timeout'), ATimeout) then
+    if not TryStrToInt(FindValue(LLines, 'timeout'), ATimeout) then
       Exit;
-    if not TryStrToInt(StringPairsGet(LPairs, 'protocol'), LProtocolOrdinal) then
+    if not TryStrToInt(FindValue(LLines, 'protocol'), LProtocolOrdinal) then
       Exit;
     if (LProtocolOrdinal < Ord(Low(TSSLProtocolVersion))) or
        (LProtocolOrdinal > Ord(High(TSSLProtocolVersion))) then
       Exit;
 
-    LNativeHex := StringPairsGet(LPairs, 'native_hex');
+    LNativeHex := FindValue(LLines, 'native_hex');
     if not TryHexStringToBytes(LNativeHex, ANativeData) then
       Exit;
     if Length(ANativeData) = 0 then
@@ -430,7 +458,7 @@ begin
     else
       ACreationTime := 0;
     AProtocolVersion := TSSLProtocolVersion(LProtocolOrdinal);
-    ACipherName := StringPairsGet(LPairs, 'cipher');
+    ACipherName := FindValue(LLines, 'cipher');
     Result := True;
   finally
   end;
@@ -464,12 +492,10 @@ begin
 end;
 
 function TWolfSSLSession.GenerateSessionID: string;
-var
-  LGuid: TGUID;
 begin
-  // 生成唯一会话标识符
-  CreateGUID(LGuid);
-  Result := GUIDToString(LGuid);
+  // Generate unique session identifier using pointer + timestamp
+  Result := IntToHex(PtrUInt(Self), 8) + '-' +
+            IntToHex(DateTimeToUnix(DateTimeNow), 8);
 end;
 
 function TWolfSSLSession.GetID: string;

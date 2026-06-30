@@ -12,7 +12,8 @@ uses
   nextpas.core.collections,
   nextpas.core.collections.base,
   nextpas.core.collections.list,
-  nextpas.core.collections.list.intf;
+  nextpas.core.collections.list.intf,
+  nextpas.core.mem.allocator.base;
 
 type
   IIntList = specialize IList<Integer>;
@@ -263,7 +264,7 @@ end;
 procedure TestPushBackBlockRegistryAllocationFailureIsAtomic;
 var
   LL: TIntList;
-  LAllocator: IAllocator;
+  LAllocator: TMemAllocator;
   LAlloc: TFailingAllocatorSnapshot;
   LCaught: Boolean;
 begin

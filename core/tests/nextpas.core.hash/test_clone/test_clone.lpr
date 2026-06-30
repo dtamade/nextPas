@@ -1,21 +1,13 @@
 program test_clone;
 
-{$mode objfpc}{$H+}
+{$I nextpas.core.settings.inc}
 
 uses
   SysUtils,
   nextpas.core.hash.base,
   nextpas.core.hash.intf,
-  nextpas.core.hash;
-
-var
-  GPass, GFail: Integer;
-
-procedure Check(const AName: string; ACondition: Boolean);
-begin
-  if ACondition then begin WriteLn('  [PASS] ', AName); Inc(GPass); end
-  else begin WriteLn('  [FAIL] ', AName); Inc(GFail); end;
-end;
+  nextpas.core.hash,
+  nextpas.core.test;
 
 procedure TestCloneAlgo(const AName: string; AFactory: IHasher);
 var
@@ -29,15 +21,13 @@ begin
   H1 := AFactory;
   H1.Write(A[0], 4);
   H2 := H1.Clone;
-
   H1.Write(A[0], 4);
   H2.Write(B[0], 4);
-
   D1 := H1.SumBytes;
   D2 := H2.SumBytes;
-  Check(AName + ': divergent after clone', not CompareMem(@D1[0], @D2[0], Length(D1)));
+  CheckTrue(not CompareMem(@D1[0], @D2[0], Length(D1)),
+    AName + ': divergent after clone');
 
-  // Same continuation produces same result
   H1 := AFactory;
   H1.Write(A[0], 4);
   H2 := H1.Clone;
@@ -45,9 +35,9 @@ begin
   H2.Write(B[0], 4);
   D1 := H1.SumBytes;
   D2 := H2.SumBytes;
-  Check(AName + ': same continuation = same result', CompareMem(@D1[0], @D2[0], Length(D1)));
+  CheckTrue(CompareMem(@D1[0], @D2[0], Length(D1)),
+    AName + ': same continuation = same result');
 
-  // Reset clone doesn't affect original
   H1 := AFactory;
   H1.Write(A[0], 4);
   H2 := H1.Clone;
@@ -55,22 +45,30 @@ begin
   H2.Write(B[0], 4);
   D1 := H1.SumBytes;
   D2 := H2.SumBytes;
-  Check(AName + ': reset clone independent', not CompareMem(@D1[0], @D2[0], Length(D1)));
+  CheckTrue(not CompareMem(@D1[0], @D2[0], Length(D1)),
+    AName + ': reset clone independent');
 end;
 
+procedure TestMD5; begin TestCloneAlgo('MD5', NewMD5); end;
+procedure TestSHA1; begin TestCloneAlgo('SHA1', NewSHA1); end;
+procedure TestSHA256; begin TestCloneAlgo('SHA256', NewSHA256); end;
+procedure TestSHA384; begin TestCloneAlgo('SHA384', NewSHA384); end;
+procedure TestSHA512; begin TestCloneAlgo('SHA512', NewSHA512); end;
+
+var
+  LRunner: TTestRunner;
+  LSuite: TTestSuite;
 begin
-  GPass := 0;
-  GFail := 0;
-  WriteLn('=== Hash Clone Tests ===');
-  WriteLn;
-
-  TestCloneAlgo('MD5', NewMD5);
-  TestCloneAlgo('SHA1', NewSHA1);
-  TestCloneAlgo('SHA256', NewSHA256);
-  TestCloneAlgo('SHA384', NewSHA384);
-  TestCloneAlgo('SHA512', NewSHA512);
-
-  WriteLn;
-  WriteLn(Format('Results: %d passed, %d failed', [GPass, GFail]));
-  if GFail > 0 then Halt(1);
+  LSuite := TTestSuite.Create('clone');
+  LSuite.Test('MD5 clone', @TestMD5);
+  LSuite.Test('SHA1 clone', @TestSHA1);
+  LSuite.Test('SHA256 clone', @TestSHA256);
+  LSuite.Test('SHA384 clone', @TestSHA384);
+  LSuite.Test('SHA512 clone', @TestSHA512);
+  LRunner := TTestRunner.Create('nextpas.core.hash.clone');
+  LRunner.Add(LSuite);
+  LRunner.RunAll;
+  LRunner.Summary;
+  if not LRunner.AllPassed then
+    Halt(1);
 end.

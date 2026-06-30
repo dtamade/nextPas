@@ -17,6 +17,7 @@ unit nextpas.core.tls.mbedtls.certificate;
 interface
 
 uses
+  SysUtils, DateUtils,
   nextpas.core.base,
   nextpas.core.io.intf, nextpas.core.fs.stream,
   nextpas.core.base.utils,
@@ -862,7 +863,7 @@ begin
         end;
 
         if (LYear > 0) and (LMonth in [1..12]) and (LDay in [1..31]) then
-          Result := System.EncodeDate(LYear, LMonth, LDay) + System.EncodeTime(LHour, LMin, LSec, 0);
+          Result := SysUtils.EncodeDate(LYear, LMonth, LDay) + SysUtils.EncodeTime(LHour, LMin, LSec, 0);
       except
         Result := 0;
       end;

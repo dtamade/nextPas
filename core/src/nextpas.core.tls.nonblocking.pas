@@ -5,9 +5,8 @@ unit nextpas.core.tls.nonblocking;
 interface
 
 uses
-   nextpas.core.io.intf,
-  nextpas.core.io.base,
   nextpas.core.io.intf,
+  nextpas.core.io.base,
   nextpas.core.base.utils;
 
 type
@@ -24,7 +23,6 @@ type
     FInner: IStream;
     FLastIOResult: TSSLIOResult;
   public
-    constructor Create(AInner: IStream); overload;
     constructor Create(AInner: IStream); overload;
     function Read(var Buffer; Count: Longint): Longint; overload;
     function Write(const Buffer; Count: Longint): Longint; overload;
@@ -71,11 +69,6 @@ begin
   FLastIOResult := ioSuccess;
   if (FInner <> nil) and Supports(FInner, ITcpSocketRuntime, LRuntime) then
     LRuntime.SetBlocking(False);
-end;
-
-constructor TNonBlockingStream.Create(AInner: IStream);
-begin
-  Create(WrapTStream(AInner, False));
 end;
 
 function TNonBlockingStream.Read(var Buffer; Count: Longint): Longint;

@@ -7,7 +7,8 @@ interface
 uses
   nextpas.core.text.view,
   nextpas.core.mem.intf,
-  nextpas.core.json.types;
+  nextpas.core.json.types,
+  nextpas.core.mem.allocator.base;
 
 type
   TJsonObjectIndex = record
@@ -21,7 +22,7 @@ type
     FNodes: PJsonNode;
     FNodeCount: UInt32;
     FNodeCap: UInt32;
-    FAllocator: IAllocator;
+    FAllocator: TMemAllocator;
     FStrArena: PAnsiChar;
     FStrArenaUsed: UInt32;
     FStrArenaCap: UInt32;
@@ -39,7 +40,7 @@ type
     function AddNode: UInt32;
     function AllocStrBuf(ASize: SizeUInt): PAnsiChar;
   public
-    procedure Init(const AAllocator: IAllocator);
+    procedure Init(const AAllocator: TMemAllocator);
     procedure Done;
     function Parse(const AInput: TStringView): Boolean;
     function Root: UInt32; inline;
@@ -53,7 +54,7 @@ type
   end;
 
 function JsonParseDoc(const AInput: TStringView;
-  const AAllocator: IAllocator): TJsonDocument;
+  const AAllocator: TMemAllocator): TJsonDocument;
 
 implementation
 
@@ -72,7 +73,7 @@ const
   INITIAL_ARENA_CAP = 1024;
   POS_NONE = UInt32($FFFFFFFF);
 
-procedure TJsonDocument.Init(const AAllocator: IAllocator);
+procedure TJsonDocument.Init(const AAllocator: TMemAllocator);
 var
   LNodeSize, LTotalSize: SizeUInt;
   LBase: PAnsiChar;
@@ -925,7 +926,7 @@ begin
 end;
 
 function JsonParseDoc(const AInput: TStringView;
-  const AAllocator: IAllocator): TJsonDocument;
+  const AAllocator: TMemAllocator): TJsonDocument;
 begin
   Result.Init(AAllocator);
   if not Result.Parse(AInput) then

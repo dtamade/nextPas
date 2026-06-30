@@ -580,6 +580,38 @@ begin
     PassTest('Cleanup in parallel');
   end;
 
+  { ── Phase 10b: Cleanup exception in parallel ───────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 10b: Cleanup Exception in Parallel');
+  begin
+    ResetDefaultConfig;
+    GCleanupCounter := 0;
+    GVerbSuite := TTestSuite.Create('CleanupExceptParallel');
+    { First cleanup raises, second should still run }
+    GVerbSuite.Cleanup(procedure
+    begin
+      InterLockedIncrement(GCleanupCounter);
+      raise Exception.Create('cleanup boom');
+    end);
+    GVerbSuite.Cleanup(procedure
+    begin
+      InterLockedIncrement(GCleanupCounter);
+    end);
+    GVerbSuite.Test('ce1', @TestParallelPassA);
+    GVerbSuite.Test('ce2', @TestParallelPassA);
+    GVerbSuite.RunParallelWithResult(nil, GVerbResult);
+    { Both cleanups should run for each test: 2 tests * 2 cleanups = 4 }
+    if GCleanupCounter <> 4 then
+      FailTest('cleanup except parallel: expected 4 cleanup calls, got ' +
+        IntToStr(GCleanupCounter));
+    { Tests should still pass — cleanup exceptions don't fail the test }
+    if GVerbResult.Passed <> 2 then
+      FailTest('cleanup except parallel: expected 2 passed, got ' +
+        IntToStr(GVerbResult.Passed));
+    ResetDefaultConfig;
+    PassTest('Cleanup exception in parallel');
+  end;
+
   WriteLn;
   PassTest('ALL PARALLEL TESTS PASSED');
 end.

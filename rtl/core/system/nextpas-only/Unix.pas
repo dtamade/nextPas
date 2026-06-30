@@ -11,6 +11,7 @@ unit Unix;
  *}
 
 {$mode objfpc}{$H+}
+{$IFNDEF FPC}
 
 interface
 
@@ -37,5 +38,10 @@ const
 implementation
 
 function fpSysConf(AName: cint): clong; cdecl; external 'c' name 'sysconf';
+
+{$ELSE}
+interface
+implementation
+{$ENDIF}
 
 end.

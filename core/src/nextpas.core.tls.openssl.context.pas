@@ -236,7 +236,8 @@ uses
   nextpas.core.tls.openssl.api.pkcs12,
   nextpas.core.tls.openssl.api.rsa,
   nextpas.core.tls.openssl.api.err,
-  nextpas.core.mem.secure;
+  nextpas.core.mem.secure,
+  Classes, nextpas.core.text.strings;
 
 var
   GContextRegistry: TList = nil;
@@ -420,7 +421,7 @@ end;
 
 function ReadPrivateKeyStreamBytes(AStream: IStream): TBytes;
 begin
-  Result := IoReadAll(WrapTStream(AStream, False));
+  Result := IoReadAll(AStream);
 end;
 
 function ReadLimitedStreamBytes(AStream: IStream; const AMaxSize: Int64;
@@ -431,7 +432,7 @@ begin
   if AStream = nil then
     RaiseInvalidParameter('AStream');
 
-  LReader := IoLimitReader(WrapTStream(AStream, False), AMaxSize + 1);
+  LReader := IoLimitReader(AStream, AMaxSize + 1);
   Result := IoReadAll(LReader);
 
   if Length(Result) = 0 then
@@ -808,7 +809,7 @@ var
   AnsiProto: AnsiString;
 begin
   TotalLen := 0;
-  ProtoList := AProtocols.Split([',']);
+  ProtoList := StringsSplit(AProtocols, ',');
   for Proto in ProtoList do
   begin
     Trimmed := Trim(Proto);
@@ -2385,7 +2386,7 @@ begin
     );
 
   try
-    LTransport := WrapTStream(AStream, False);
+    LTransport := AStream;
     LExposeEarlyData := Supports(Self, ISSLEarlyDataContext, LEarlyDataContext);
     LExposeOCSP := HasClientOCSPCapability;
 

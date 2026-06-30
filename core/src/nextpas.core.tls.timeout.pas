@@ -5,9 +5,8 @@ unit nextpas.core.tls.timeout;
 interface
 
 uses
-   nextpas.core.io.intf,
-  nextpas.core.io.base,
-  nextpas.core.io.intf;
+  nextpas.core.io.intf,
+  nextpas.core.io.base;
 
 type
   TTimeoutStream = class(TInterfacedObject, IStream)
@@ -19,8 +18,6 @@ type
     procedure ApplyReadTimeout;
     procedure ApplyWriteTimeout;
   public
-    constructor Create(AInner: IStream; AReadTimeoutMs: Integer = 30000;
-      AWriteTimeoutMs: Integer = 30000); overload;
     constructor Create(AInner: IStream; AReadTimeoutMs: Integer = 30000;
       AWriteTimeoutMs: Integer = 30000); overload;
     function Read(var Buffer; Count: Longint): Longint; overload;
@@ -60,12 +57,6 @@ begin
   FReadTimeout := AReadTimeoutMs;
   FWriteTimeout := AWriteTimeoutMs;
   FConnectTimeout := 10000;
-end;
-
-constructor TTimeoutStream.Create(AInner: IStream; AReadTimeoutMs: Integer;
-  AWriteTimeoutMs: Integer);
-begin
-  Create(WrapTStream(AInner, False), AReadTimeoutMs, AWriteTimeoutMs);
 end;
 
 procedure TTimeoutStream.ApplyReadTimeout;

@@ -20,7 +20,10 @@ unit nextpas.core.tls.dane;
 
 interface
 
-uses nextpas.core.base, nextpas.core.text.conv, nextpas.core.tls.base, nextpas.core.tls.openssl.base;
+uses nextpas.core.base, nextpas.core.text.conv, SysUtils,
+     nextpas.core.tls.base, nextpas.core.tls.openssl.base,
+     nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.evp,
+     nextpas.core.tls.logging, nextpas.core.tls.dane.ldns;
 
 type
   {**

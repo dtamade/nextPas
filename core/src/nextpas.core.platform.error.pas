@@ -25,8 +25,8 @@ procedure platform_fatal_code(const AMsg: PAnsiChar; ACode: Int32);
 
 implementation
 
+{$IF defined(NEXTPAS_UNIX)}
 uses
-{$IFDEF NEXTPAS_UNIX}
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi
   {$IFDEF NEXTPAS_LINUX}
@@ -40,12 +40,13 @@ uses
   {$ELSE}
   , nextpas.core.platform.unix.base
   {$ENDIF}
-{$ENDIF}
-{$IFDEF NEXTPAS_WINDOWS}
+  ;
+{$ELSEIF defined(NEXTPAS_WINDOWS)}
+uses
   nextpas.core.platform.windows.base,
   nextpas.core.platform.windows.ffi
-{$ENDIF}
   ;
+{$ENDIF}
 
 function CopyPlatformErrorMessage(const AMessage: PAnsiChar; ABuf: PAnsiChar;
   ABufLen: Int32): Int32;

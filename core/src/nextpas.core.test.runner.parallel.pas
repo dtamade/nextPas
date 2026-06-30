@@ -306,17 +306,31 @@ begin
     R^.Mtx.Acquire;
     try
       R^.Skip^ := R^.Skip^ + 1;
-      if LConfig.VerboseMode then
-        WriteTestStatusVerbose(tsSkipped, R^.Entry.Name, '',
-          R^.Entry.SkipReason, 0, LOutSink, LConfig)
-      else
-        LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, R^.Entry.Name, LConfig));
+      WriteTestOutput(tsSkipped, R^.Entry.Name, '', R^.Entry.SkipReason,
+        0, LOutSink, LConfig);
     finally
       SafeRelease(R^.Mtx, LConfig);
     end;
     if R^.Res <> nil then
       R^.Res^ := MakeTestResult(R^.Entry.Name, tsSkipped,
         R^.Entry.SkipReason, 0);
+    Exit;
+  end;
+
+  { Benchmarks: not supported in parallel mode — skip gracefully }
+  if R^.Entry.Kind = ekBench then
+  begin
+    R^.Mtx.Acquire;
+    try
+      R^.Skip^ := R^.Skip^ + 1;
+      WriteTestOutput(tsSkipped, R^.Entry.Name, '',
+        'benchmarks not supported in parallel mode', 0, LOutSink, LConfig);
+    finally
+      SafeRelease(R^.Mtx, LConfig);
+    end;
+    if R^.Res <> nil then
+      R^.Res^ := MakeTestResult(R^.Entry.Name, tsSkipped,
+        'benchmarks not supported in parallel mode', 0);
     Exit;
   end;
 
@@ -367,61 +381,30 @@ begin
         begin
           { Timeout-enabled path — spawns watchdog sub-thread }
           if Assigned(R^.Entry.Closure) then
-          begin
-            if RunTestWithTimeout(R^.Entry.Closure, LTimeoutMs,
-              LConfig, LStatus, LFailMsg) then
-            begin
-              if LStatus = tsPassed then { ok }
-              else { LStatus already set }
-            end
-            else
-              { Timed out — LStatus already set to tsError };
-          end
+            RunTestWithTimeout(R^.Entry.Closure, LTimeoutMs,
+              LConfig, LStatus, LFailMsg)
           else
-          begin
-            if RunTestWithTimeout(R^.Entry.Proc, LTimeoutMs,
-              LConfig, LStatus, LFailMsg) then
-            begin
-              if LStatus = tsPassed then { ok }
-              else { LStatus already set }
-            end
-            else
-              { Timed out — LStatus already set to tsError };
-          end;
+            RunTestWithTimeout(R^.Entry.Proc, LTimeoutMs,
+              LConfig, LStatus, LFailMsg);
         end
         else if R^.Entry.Kind = ekTableTest then
         begin
-          { Table-driven test: invoke the stored proc with case data }
-          PTestCaseProc(R^.Entry.TableProc)^(PTestCase(R^.Entry.TableCase)^);
+          { Table-driven test: invoke the stored proc with case data.
+            Nil guard: --count=N re-runs the suite after CleanupTableAllocations
+            has disposed TableCase/TableProc. Skip gracefully on re-run. }
+          if (R^.Entry.TableCase = nil) or (R^.Entry.TableProc = nil) then
+          begin
+            LStatus := tsSkipped;
+            LSkipReason := 'table data already disposed (--count re-run)';
+          end
+          else
+            PTestCaseProc(R^.Entry.TableProc)^(PTestCase(R^.Entry.TableCase)^);
         end
         else if R^.Entry.Kind = ekShouldFail then
         begin
-          { ShouldFail: test passes if proc raises, fails if it doesn't.
-            Rust-style #[should_panic] expected-failure testing. }
-          try
-            if Assigned(R^.Entry.Closure) then
-              R^.Entry.Closure()
-            else
-              R^.Entry.Proc;
-            { No exception = unexpected success }
-            LStatus := tsFailed;
-            if R^.Entry.ShouldFailMsg <> '' then
-              LFailMsg := 'Expected failure (' + R^.Entry.ShouldFailMsg +
-                ') but test passed'
-            else
-              LFailMsg := 'Expected failure but test passed';
-          except
-            on E: ETestSkipped do
-            begin
-              LStatus := tsSkipped;
-              LSkipReason := E.Message;
-            end;
-            on E: Exception do
-            begin
-              { Expected failure — test passes }
-              LStatus := tsPassed;
-            end;
-          end;
+          RunShouldFailEntry(R^.Entry, LStatus, LFailMsg);
+          if LStatus = tsSkipped then
+            LSkipReason := LFailMsg;
         end
         else if Assigned(R^.Entry.Closure) then
           R^.Entry.Closure()
@@ -522,37 +505,17 @@ begin
     begin
       R^.ProgressCounter^ := R^.ProgressCounter^ + 1;
       if R^.ProgressTotal > 0 then
-      begin
-        if LConfig.VerboseMode then
-          WriteTestStatusVerbose(LStatus,
-            '[' + IntToStr(R^.ProgressCounter^) + '/' +
-            IntToStr(R^.ProgressTotal) + '] ' + R^.Entry.Name,
-            LFailMsg, LSkipReason, LDurMs, LOutSink, LConfig)
-        else
-          WriteTestStatus(LStatus,
-            '[' + IntToStr(R^.ProgressCounter^) + '/' +
-            IntToStr(R^.ProgressTotal) + '] ' + R^.Entry.Name,
-            LFailMsg, LSkipReason, LOutSink, LConfig);
-      end
+        WriteTestOutput(LStatus,
+          '[' + IntToStr(R^.ProgressCounter^) + '/' +
+          IntToStr(R^.ProgressTotal) + '] ' + R^.Entry.Name,
+          LFailMsg, LSkipReason, LDurMs, LOutSink, LConfig)
       else
-      begin
-        if LConfig.VerboseMode then
-          WriteTestStatusVerbose(LStatus, R^.Entry.Name, LFailMsg,
-            LSkipReason, LDurMs, LOutSink, LConfig)
-        else
-          WriteTestStatus(LStatus, R^.Entry.Name, LFailMsg, LSkipReason,
-            LOutSink, LConfig);
-      end;
+        WriteTestOutput(LStatus, R^.Entry.Name, LFailMsg,
+          LSkipReason, LDurMs, LOutSink, LConfig);
     end
     else
-    begin
-      if LConfig.VerboseMode then
-        WriteTestStatusVerbose(LStatus, R^.Entry.Name, LFailMsg,
-          LSkipReason, LDurMs, LOutSink, LConfig)
-      else
-        WriteTestStatus(LStatus, R^.Entry.Name, LFailMsg, LSkipReason,
-          LOutSink, LConfig);
-    end;
+      WriteTestOutput(LStatus, R^.Entry.Name, LFailMsg,
+        LSkipReason, LDurMs, LOutSink, LConfig);
     { Write per-test result inside mutex for safety (skip if already written
       by beforeEach failure path, which sets Duration = 0 directly) }
     if (R^.Res <> nil) and (not LResultWritten) then

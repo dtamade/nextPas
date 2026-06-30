@@ -3,64 +3,79 @@ program test_fs_facade;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.fs;
+  nextpas.core.fs,
+  nextpas.core.test;
 
 var
   TmpDir, FilePath, RenamedPath: string;
   SplitDir, SplitBase: string;
   F: IFile;
   Info: TFileInfo;
-
-procedure Check(const ACondition: Boolean; const AMessage: string);
+  LRunner: TTestRunner;
+  LSuite: TTestSuite;
 begin
-  if not ACondition then
-  begin
-    WriteLn('FAIL: ', AMessage);
-    Halt(1);
-  end;
-  WriteLn('PASS: ', AMessage);
-end;
-
-begin
+  LSuite := TTestSuite.Create('fs.facade');
   TmpDir := PathJoin([GetTempDir, 'nextpas_fs_facade_gate']);
-  if Exists(TmpDir) then
-    RemoveAll(TmpDir);
-  Check(MkdirAll(TmpDir), 'MkdirAll through facade');
-  try
-    FilePath := PathJoin([TmpDir, 'sample.txt']);
-    RenamedPath := PathJoin([TmpDir, 'renamed.txt']);
 
+  LSuite.Test('MkdirAll through facade', procedure begin
+    if Exists(TmpDir) then RemoveAll(TmpDir);
+    CheckTrue(MkdirAll(TmpDir), 'MkdirAll should succeed');
+  end);
+
+  LSuite.Test('Create and write file', procedure begin
+    FilePath := PathJoin([TmpDir, 'sample.txt']);
     F := Create(FilePath, PermDefault);
     F.Write(PAnsiChar('hello')^, 5);
     F.Close;
+    CheckEqual(5, Length(ReadFile(FilePath)));
+  end);
 
-    F := Open(FilePath, [fmRead]);
-    F.Close;
-
-    Check(Length(ReadFile(FilePath)) = 5, 'ReadFile through facade');
+  LSuite.Test('Exists and IsFile', procedure begin
+    RenamedPath := PathJoin([TmpDir, 'renamed.txt']);
     WriteFile(RenamedPath, ReadFile(FilePath));
-    Check(Exists(RenamedPath), 'Exists through facade');
-    Check(IsFile(RenamedPath), 'IsFile through facade');
+    CheckTrue(Exists(RenamedPath), 'Exists through facade');
+    CheckTrue(IsFile(RenamedPath), 'IsFile through facade');
+  end);
 
+  LSuite.Test('Stat and Lstat', procedure begin
     Info := Stat(RenamedPath);
-    Check(Info.Size = 5, 'Stat through facade');
+    CheckEqual(Int64(5), Info.Size);
     Info := Lstat(RenamedPath);
-    Check(Info.FileType = ftRegular, 'Lstat through facade');
+    CheckTrue(Info.FileType = ftRegular, 'Lstat through facade');
+  end);
 
-    Check(PathBase(RenamedPath) = 'renamed.txt', 'PathBase through facade');
+  LSuite.Test('PathBase and PathSplit', procedure begin
+    CheckEqual('renamed.txt', PathBase(RenamedPath));
     PathSplit(RenamedPath, SplitDir, SplitBase);
-    Check(SplitDir = TmpDir, 'PathSplit dir through facade');
-    Check(SplitBase = 'renamed.txt', 'PathSplit base through facade');
-    Check(PathWithoutExt(RenamedPath) = PathJoin([TmpDir, 'renamed']),
-      'PathWithoutExt through facade');
-    Check(PathRelative(TmpDir, RenamedPath) = 'renamed.txt',
-      'PathRelative through facade');
-    Check(SameFileName(RenamedPath, RenamedPath),
+    CheckEqual(TmpDir, SplitDir);
+    CheckEqual('renamed.txt', SplitBase);
+  end);
+
+  LSuite.Test('PathWithoutExt and PathRelative', procedure begin
+    CheckEqual(PathJoin([TmpDir, 'renamed']),
+      PathWithoutExt(RenamedPath));
+    CheckEqual('renamed.txt',
+      PathRelative(TmpDir, RenamedPath));
+  end);
+
+  LSuite.Test('SameFileName and GetTempDir', procedure begin
+    CheckTrue(SameFileName(RenamedPath, RenamedPath),
       'SameFileName through facade');
-    Check(GetTempDir <> '', 'GetTempDir through facade');
-    Check(Remove(RenamedPath), 'Remove through facade');
-  finally
-    if Exists(TmpDir) then
-      RemoveAll(TmpDir);
-  end;
+    CheckTrue(GetTempDir <> '', 'GetTempDir through facade');
+  end);
+
+  LSuite.Test('Remove file', procedure begin
+    CheckTrue(Remove(RenamedPath), 'Remove through facade');
+  end);
+
+  LSuite.SetTeardown(procedure begin
+    if Exists(TmpDir) then RemoveAll(TmpDir);
+  end);
+
+  LRunner := TTestRunner.Create('nextpas.core.fs');
+  LRunner.Add(LSuite);
+  LRunner.RunAll;
+  LRunner.Summary;
+  if not LRunner.AllPassed then
+    Halt(1);
 end.

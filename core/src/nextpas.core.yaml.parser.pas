@@ -9,7 +9,8 @@ uses
   nextpas.core.text.number,
   nextpas.core.mem.intf,
   nextpas.core.yaml.types,
-  nextpas.core.yaml.scanner;
+  nextpas.core.yaml.scanner,
+  nextpas.core.mem.allocator.base;
 
 type
   TYamlAnchorEntry = record
@@ -27,14 +28,14 @@ type
     FAnchors: PYamlAnchorEntry;
     FAnchorCount: UInt32;
     FAnchorCap: UInt32;
-    FAllocator: IAllocator;
+    FAllocator: TMemAllocator;
     FParseDepth: Int32;
     FError: TYamlError;
     FHasError: Boolean;
     FInitMagic: QWord;
     procedure RegisterAnchor(const AName: TStringView; ANodeIdx: UInt32);
   public
-    procedure Init(const AAllocator: IAllocator);
+    procedure Init(const AAllocator: TMemAllocator);
     procedure Done;
     function AddNode: UInt32;
     function Node(AIdx: UInt32): PYamlNode; inline;
@@ -46,19 +47,19 @@ type
     function HasError: Boolean; inline;
     function Error: TYamlError; inline;
     function ParseDepth: Int32; inline;
-    function Allocator: IAllocator; inline;
+    function Allocator: TMemAllocator; inline;
     procedure SetError(const AMsg: string; const ALine, ACol: UInt32;
       const AOffset: SizeUInt);
   end;
 
 procedure YamlDocInit(var ADoc: TYamlDocument);
-procedure YamlDocInitWith(var ADoc: TYamlDocument; const AAllocator: IAllocator);
+procedure YamlDocInitWith(var ADoc: TYamlDocument; const AAllocator: TMemAllocator);
 procedure YamlDocParse(var ADoc: TYamlDocument; const AInput: PAnsiChar; const ALen: SizeUInt);
 procedure YamlDocParseWith(var ADoc: TYamlDocument; const AInput: PAnsiChar; const ALen: SizeUInt;
-  const AAllocator: IAllocator);
+  const AAllocator: TMemAllocator);
 procedure YamlDocParseView(var ADoc: TYamlDocument; const AView: TStringView);
 procedure YamlDocParseViewWith(var ADoc: TYamlDocument; const AView: TStringView;
-  const AAllocator: IAllocator);
+  const AAllocator: TMemAllocator);
 
 implementation
 
@@ -69,7 +70,7 @@ const
   INITIAL_CAPACITY = 64;
   YAML_DOCUMENT_INIT_MAGIC = QWord($59414D4C444F4331);
 
-procedure TYamlDocument.Init(const AAllocator: IAllocator);
+procedure TYamlDocument.Init(const AAllocator: TMemAllocator);
 var
   LPtr: Pointer;
 begin
@@ -231,7 +232,7 @@ begin
   Result := FParseDepth;
 end;
 
-function TYamlDocument.Allocator: IAllocator;
+function TYamlDocument.Allocator: TMemAllocator;
 begin
   Result := FAllocator;
 end;
@@ -251,7 +252,7 @@ begin
   ADoc.Init(DefaultAllocator);
 end;
 
-procedure YamlDocInitWith(var ADoc: TYamlDocument; const AAllocator: IAllocator);
+procedure YamlDocInitWith(var ADoc: TYamlDocument; const AAllocator: TMemAllocator);
 begin
   ADoc.Init(AAllocator);
 end;
@@ -1053,7 +1054,7 @@ begin
 end;
 
 procedure YamlDocParseWith(var ADoc: TYamlDocument; const AInput: PAnsiChar; const ALen: SizeUInt;
-  const AAllocator: IAllocator);
+  const AAllocator: TMemAllocator);
 var
   LScanner: TYamlScanner;
   LTok: TYamlToken;
@@ -1109,7 +1110,7 @@ begin
 end;
 
 procedure YamlDocParseViewWith(var ADoc: TYamlDocument; const AView: TStringView;
-  const AAllocator: IAllocator);
+  const AAllocator: TMemAllocator);
 begin
   YamlDocParseWith(ADoc, AView.Data, AView.Len, AAllocator);
 end;

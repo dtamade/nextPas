@@ -195,6 +195,17 @@ procedure RegisterEntry(var AEntries: specialize TArray<TTestEntry>;
 procedure CopyTags(out ATags: specialize TArray<string>;
   const ASource: array of string);
   { Copy an open array of tag strings into a dynamic array. }
+function GrowCapacity(ALen, AInitCap: Integer): Integer;
+  { Returns new capacity for a dynamic array. Geometric growth above AInitCap.
+    Shared by runner, context, and other growth call-sites. }
+function GrowCleanups(var ACleanups: specialize TArray<TTestClosure>): Integer;
+  { Grow ACleanups capacity and return insertion index (old length).
+    Shared by runner.EachCleanups and context.FCleanups. }
+procedure RunShouldFailEntry(const AEntry: TTestEntry;
+  out AStatus: TTestStatus; out AFailMsg: string);
+  { Execute a ShouldFail test entry. Sets AStatus to tsPassed if the proc
+    raises (expected), tsFailed if it doesn't, tsSkipped on ETestSkipped.
+    Shared by serial and parallel runners. }
 
 { ── Exception Formatting (eliminate repeated ClassName + trace patterns) ──── }
 
@@ -286,9 +297,17 @@ end;
 
 procedure AppendResult(var AResults: specialize TArray<TTestResult>;
   const AResult: TTestResult);
+var
+  LOldLen, LNewLen, LCap: Integer;
 begin
-  SetLength(AResults, Length(AResults) + 1);
-  AResults[High(AResults)] := AResult;
+  LOldLen := Length(AResults);
+  LCap := GrowCapacity(LOldLen, 16);
+  if LCap <> LOldLen then
+    SetLength(AResults, LCap);
+  AResults[LOldLen] := AResult;
+  LNewLen := LOldLen + 1;
+  if LNewLen <> LCap then
+    SetLength(AResults, LNewLen);
 end;
 
 function GetTopSlowest(const AResults: TTestResults;
@@ -359,9 +378,15 @@ end;
 
 procedure RegisterEntry(var AEntries: specialize TArray<TTestEntry>;
   const AEntry: TTestEntry);
+var
+  LOldLen, LCap: Integer;
 begin
-  SetLength(AEntries, Length(AEntries) + 1);
-  AEntries[High(AEntries)] := AEntry;
+  LOldLen := Length(AEntries);
+  LCap := GrowCapacity(LOldLen, 16);
+  if LCap <> LOldLen then
+    SetLength(AEntries, LCap);
+  AEntries[LOldLen] := AEntry;
+  SetLength(AEntries, LOldLen + 1);
 end;
 
 procedure CopyTags(out ATags: specialize TArray<string>;
@@ -372,6 +397,54 @@ begin
   SetLength(ATags, Length(ASource));
   for I := 0 to High(ASource) do
     ATags[I] := ASource[I];
+end;
+
+function GrowCapacity(ALen, AInitCap: Integer): Integer;
+begin
+  if ALen < AInitCap then
+    Result := AInitCap
+  else
+    Result := ALen * 2;
+end;
+
+function GrowCleanups(var ACleanups: specialize TArray<TTestClosure>): Integer;
+var
+  LOldLen, LCap: Integer;
+begin
+  LOldLen := Length(ACleanups);
+  LCap := GrowCapacity(LOldLen, 4);
+  if LCap <> LOldLen then SetLength(ACleanups, LCap);
+  Result := LOldLen;
+end;
+
+procedure RunShouldFailEntry(const AEntry: TTestEntry;
+  out AStatus: TTestStatus; out AFailMsg: string);
+begin
+  AStatus := tsPassed;
+  AFailMsg := '';
+  try
+    if Assigned(AEntry.Closure) then
+      AEntry.Closure()
+    else
+      AEntry.Proc;
+    { No exception = unexpected success }
+    AStatus := tsFailed;
+    if AEntry.ShouldFailMsg <> '' then
+      AFailMsg := 'Expected failure (' + AEntry.ShouldFailMsg + ') but test passed'
+    else
+      AFailMsg := 'Expected failure but test passed';
+  except
+    on E: ETestSkipped do
+    begin
+      AStatus := tsSkipped;
+      AFailMsg := E.Message;
+    end;
+    on E: Exception do
+    begin
+      { Expected failure — test passes }
+      AStatus := tsPassed;
+    end;
+  end;
 end;
 
 { Exception Formatting }

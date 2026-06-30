@@ -488,4 +488,10 @@ begin
     PassTest('ALL PASSED')
   else
     FailTest('SOME FAILED');
+
+  { Release closures before heaptrc reports (unit finalization runs before
+    main block locals are freed — closures would appear as unfreed). }
+  Runner := Default(TTestRunner);
+  Suite := Default(TTestSuite);
+  LResults := nil;
 end.

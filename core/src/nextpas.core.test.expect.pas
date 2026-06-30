@@ -376,6 +376,8 @@ var
   LRaised: Boolean = False;
 begin
   RequireKind(ekProc, 'ToRaise');
+  if AExceptionClass = nil then
+    InternalFail('ToRaise: AExceptionClass is nil');
   try
     FProcValue;
   except

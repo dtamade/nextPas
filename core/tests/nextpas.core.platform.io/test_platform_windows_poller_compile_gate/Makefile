@@ -1,25 +1,7 @@
-FPC ?= fpc
-CORE_ROOT := ../../..
-BUILD_DIR ?= $(CORE_ROOT)/build/projects/nextpas.core.platform.io/test_platform_windows_poller_compile_gate
 PROGRAM := test_platform_windows_poller_compile_gate
-SOURCE := $(PROGRAM).lpr
-FPC_FLAGS ?= -MObjFPC -Sh -O2 -gl
-FPC_FLAGS += -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src
-COMPILE_ONLY_FLAGS ?= -Cn
-FORCE_WINDOWS_FLAGS ?= -dNEXTPAS_FORCE_HOST_WINDOWS
-WIN64_FLAGS ?= -Twin64 -Px86_64
-
-.PHONY: build cross-win64 test clean
-
-build:
-	@mkdir -p $(BUILD_DIR)
-	$(FPC) $(FPC_FLAGS) $(COMPILE_ONLY_FLAGS) $(FORCE_WINDOWS_FLAGS) $(SOURCE)
+FPC_FLAGS += -Cn -dNEXTPAS_FORCE_HOST_WINDOWS
+include ../../common_compile_gate.mk
 
 cross-win64:
 	@mkdir -p $(BUILD_DIR)
-	$(FPC) $(FPC_FLAGS) $(COMPILE_ONLY_FLAGS) $(WIN64_FLAGS) $(SOURCE)
-
-test: build
-
-clean:
-	rm -rf $(BUILD_DIR)
+	$(FPC) $(FPC_FLAGS) -Twin64 -Px86_64 $(SOURCE)

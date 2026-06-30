@@ -62,18 +62,18 @@ procedure Skip(const AReason: string = '');
 
 implementation
 
+procedure FailWithDefault(const AMessage, ADefaultMsg: string);
+begin
+  if AMessage <> '' then
+    InternalFail(AMessage)
+  else
+    InternalFail(ADefaultMsg);
+end;
+
 procedure Check(ACondition: Boolean; const AMessage: string);
-var
-  LMsg: string;
 begin
   if not ACondition then
-  begin
-    if AMessage <> '' then
-      LMsg := AMessage
-    else
-      LMsg := 'Check failed';
-    InternalFail(LMsg);
-  end;
+    FailWithDefault(AMessage, 'Check failed');
 end;
 
 function Utf8SafeStart(const S: string; APos: Integer): Integer;
@@ -205,45 +205,26 @@ end;
 procedure CheckTrue(AValue: Boolean; const AMessage: string);
 begin
   if not AValue then
-  begin
-    if AMessage <> '' then
-      InternalFail(AMessage)
-    else
-      InternalFail('Expected condition to be True but got False');
-  end;
+    FailWithDefault(AMessage, 'Expected condition to be True but got False');
 end;
 
 procedure CheckFalse(AValue: Boolean; const AMessage: string);
 begin
   if AValue then
-  begin
-    if AMessage <> '' then
-      InternalFail(AMessage)
-    else
-      InternalFail('Expected condition to be False but got True');
-  end;
+    FailWithDefault(AMessage, 'Expected condition to be False but got True');
 end;
 
 procedure CheckNil(AValue: Pointer; const AMessage: string);
 begin
   if AValue <> nil then
-  begin
-    if AMessage <> '' then
-      InternalFail(AMessage)
-    else
-      InternalFail('Expected nil but got $' + IntToHex(NativeUInt(AValue), 16));
-  end;
+    FailWithDefault(AMessage,
+      'Expected nil but got $' + IntToHex(NativeUInt(AValue), 16));
 end;
 
 procedure CheckNotNil(AValue: Pointer; const AMessage: string);
 begin
   if AValue = nil then
-  begin
-    if AMessage <> '' then
-      InternalFail(AMessage)
-    else
-      InternalFail('Expected non-nil but got nil');
-  end;
+    FailWithDefault(AMessage, 'Expected non-nil but got nil');
 end;
 
 procedure CheckContains(const AHaystack, ANeedle: string);
@@ -283,14 +264,9 @@ end;
 procedure CheckSame(const AExpected, AActual: Pointer; const AMessage: string);
 begin
   if AExpected <> AActual then
-  begin
-    if AMessage <> '' then
-      InternalFail(AMessage)
-    else
-      InternalFail('Expected same pointer $' +
-        IntToHex(NativeUInt(AExpected), 16) + ' but got $' +
-        IntToHex(NativeUInt(AActual), 16));
-  end;
+    FailWithDefault(AMessage,
+      'Expected same pointer $' + IntToHex(NativeUInt(AExpected), 16) +
+      ' but got $' + IntToHex(NativeUInt(AActual), 16));
 end;
 
 procedure CheckInRange(const AValue, ALow, AHigh: Int64);
@@ -392,13 +368,9 @@ begin
   LDiff := AActual - AExpected;
   if LDiff < 0 then LDiff := -LDiff;
   if LDiff > AEpsilon then
-  begin
-    if AMessage <> '' then
-      InternalFail(AMessage)
-    else
-      InternalFail('Expected ' + FloatToStr(AExpected) +
-        ' (+/-' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual));
-  end;
+    FailWithDefault(AMessage,
+      'Expected ' + FloatToStr(AExpected) +
+      ' (+/-' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual));
 end;
 
 procedure CheckNotNear(const AExpected, AActual: Double;
@@ -409,13 +381,9 @@ begin
   LDiff := AActual - AExpected;
   if LDiff < 0 then LDiff := -LDiff;
   if LDiff <= AEpsilon then
-  begin
-    if AMessage <> '' then
-      InternalFail(AMessage)
-    else
-      InternalFail('Expected not near ' + FloatToStr(AExpected) +
-        ' (+/-' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual));
-  end;
+    FailWithDefault(AMessage,
+      'Expected not near ' + FloatToStr(AExpected) +
+      ' (+/-' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual));
 end;
 
 procedure Fail(const AMessage: string);

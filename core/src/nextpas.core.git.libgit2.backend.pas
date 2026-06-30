@@ -15,6 +15,7 @@ interface
 
 uses
   nextpas.core.base, nextpas.core.text.conv, nextpas.core.time,
+  nextpas.core.exception, nextpas.core.fs, nextpas.core.system.classes,
   nextpas.core.git.libgit2.ffi, nextpas.core.git.libgit2.binding,
   nextpas.core.git.base;
 
@@ -214,7 +215,70 @@ function GitTimeToString(const ATime: TGitTime): string;
 implementation
 
 uses
-  nextpas.core.text.strings;
+  nextpas.core.base.utils, nextpas.core.text.strings;
+
+{ Local helpers replacing SysUtils functions to avoid TBytes/TStringArray conflicts }
+
+function LocalLastDelimiter(const ADelimiter: Char; const S: string): Integer;
+var
+  i: Integer;
+begin
+  Result := 0;
+  for i := Length(S) downto 1 do
+    if S[i] = ADelimiter then
+      Exit(i);
+end;
+
+function LocalExcludeTrailingPathDelimiter(const S: string): string;
+begin
+  Result := S;
+  if (Length(Result) > 0) and (Result[Length(Result)] in ['/', '\']) then
+    SetLength(Result, Length(Result) - 1);
+end;
+
+function LocalExpandFileName(const APath: string): string;
+var
+  Cwd: string;
+begin
+  if (Length(APath) > 0) and (APath[1] = '/') then
+    Result := APath
+  else
+  begin
+    {$I-}
+    GetDir(0, Cwd);
+    {$I+}
+    if (Length(Cwd) > 0) and (Cwd[Length(Cwd)] <> '/') then
+      Cwd := Cwd + '/';
+    Result := Cwd + APath;
+  end;
+end;
+
+function LocalExtractFileName(const APath: string): string;
+var
+  i: Integer;
+begin
+  for i := Length(APath) downto 1 do
+    if APath[i] = '/' then
+      Exit(Copy(APath, i + 1, MaxInt));
+  Result := APath;
+end;
+
+function LocalExtractFileDir(const APath: string): string;
+var
+  i: Integer;
+begin
+  for i := Length(APath) downto 1 do
+    if APath[i] = '/' then
+      Exit(Copy(APath, 1, i - 1));
+  Result := '';
+end;
+
+function LocalIncludeTrailingPathDelimiter(const S: string): string;
+begin
+  Result := S;
+  if (Length(Result) = 0) or (Result[Length(Result)] <> '/') then
+    Result := Result + '/';
+end;
 
 
 const
@@ -354,7 +418,7 @@ var
 begin
   GitTime.time := DateTimeToUnix(DateTimeNow);
   GitTime.offset := 0;
-  GitTime.sign := Ord('+');
+  GitTime.sign := '+';
   Tm := CreateGitTimeFromGitTime(GitTime);
   inherited Create;
   FName := AName;
@@ -715,8 +779,8 @@ begin
     LP.Filter := Filter;
     LP.Items := LList;
     CheckGitResult(git_status_foreach(FHandle, @StatusEntriesCb, @LP), 'Status foreach');
-    SetLength(Result, Length(LList));
-    for i := 0 to Length(LList)-1 do
+    SetLength(Result, LList.Count);
+    for i := 0 to LList.Count-1 do
     begin
       LItem := PGitStatusEntry(LList[i]);
       Result[i] := LItem^;
@@ -724,7 +788,7 @@ begin
       LList[i] := nil;
     end;
   finally
-    for i := 0 to Length(LList) - 1 do
+    for i := 0 to LList.Count - 1 do
       if LList[i] <> nil then
         Dispose(PGitStatusEntry(LList[i]));
   end;
@@ -1039,7 +1103,7 @@ begin
   begin
     FOID.Data := git_reference_target(AHandle)^;
     FShortName := Copy(
-      FName, LastDelimiter(GIT_REF_NAME_DELIMITER, FName) + 1, MaxInt
+      FName, LocalLastDelimiter(GIT_REF_NAME_DELIMITER, FName) + 1, MaxInt
     );
   end
   else
@@ -1047,7 +1111,7 @@ begin
     FSymbolicTarget := string(git_reference_symbolic_target(AHandle));
     FShortName := Copy(
       FSymbolicTarget,
-      LastDelimiter(GIT_REF_NAME_DELIMITER, FSymbolicTarget) + 1,
+      LocalLastDelimiter(GIT_REF_NAME_DELIMITER, FSymbolicTarget) + 1,
       MaxInt
     );
   end;
@@ -1175,20 +1239,20 @@ begin
     if (git_repository_discover(LBuf, PChar(AStartPath), 0, nil) = GIT_OK) and
        (LBuf.ptr <> nil) then
     begin
-      LRawPath := ExcludeTrailingPathDelimiter(ExpandFileName(string(LBuf.ptr)));
+      LRawPath := LocalExcludeTrailingPathDelimiter(LocalExpandFileName(string(LBuf.ptr)));
       LRepoHandle := nil;
       if git_repository_open(LRepoHandle, PChar(LRawPath)) = GIT_OK then
       begin
         try
           LWorkDir := git_repository_workdir(LRepoHandle);
           if LWorkDir <> nil then
-            Exit(ExcludeTrailingPathDelimiter(ExpandFileName(string(LWorkDir))));
+            Exit(LocalExcludeTrailingPathDelimiter(LocalExpandFileName(string(LWorkDir))));
         finally
           git_repository_free(LRepoHandle);
         end;
       end;
-      if SameText(ExtractFileName(LRawPath), '.git') then
-        Exit(ExtractFileDir(LRawPath));
+      if SameText(LocalExtractFileName(LRawPath), '.git') then
+        Exit(LocalExtractFileDir(LRawPath));
       Exit(LRawPath);
     end;
   finally
@@ -1196,14 +1260,14 @@ begin
   end;
 
   Result := '';
-  LPath := ExpandFileName(AStartPath);
+  LPath := LocalExpandFileName(AStartPath);
   LPrev := '';
   while (LPath <> '') and (LPath <> LPrev) do
   begin
-    if DirectoryExists(IncludeTrailingPathDelimiter(LPath) + '.git') then
+    if DirectoryExists(LocalIncludeTrailingPathDelimiter(LPath) + '.git') then
       Exit(LPath);
     LPrev := LPath;
-    LPath := ExtractFileDir(LPath);
+    LPath := LocalExtractFileDir(LPath);
   end;
 end;
 

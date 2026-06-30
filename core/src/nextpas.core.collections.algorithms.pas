@@ -161,8 +161,13 @@ generic procedure _SiftDownImpl<T>(var aArr: array of T; aStart, aEnd: SizeInt;
   aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer);
 generic procedure _HeapSortImpl<T>(var aArr: array of T; aLo, aHi: SizeInt;
   aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer);
+generic function _MedianOfThreeIdx<T>(const aArr: array of T; aLo, aMid, aHi: SizeInt;
+  aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer): SizeInt;
 generic procedure _IntroSortImpl<T>(var aArr: array of T; aLo, aHi: SizeInt;
   aDepthLimit: SizeInt; aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer);
+
+const
+  _INSERTION_SORT_THRESHOLD = 16;
 
 implementation
 
@@ -186,9 +191,6 @@ begin
     Dec(aHi);
   end;
 end;
-
-const
-  _INSERTION_SORT_THRESHOLD = 16;
 
 { Insertion sort for small partitions }
 generic procedure _InsertionSortImpl<T>(var aArr: array of T; aLo, aHi: SizeInt;
@@ -248,7 +250,7 @@ begin
 end;
 
 { Median-of-three pivot selection }
-function _MedianOfThreeIdx<T>(const aArr: array of T; aLo, aMid, aHi: SizeInt;
+generic function _MedianOfThreeIdx<T>(const aArr: array of T; aLo, aMid, aHi: SizeInt;
   aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer): SizeInt;
 begin
   if aCompare(aArr[aLo], aArr[aMid], aData) < 0 then
@@ -288,7 +290,7 @@ begin
     Dec(aDepthLimit);
 
     { Median-of-three pivot }
-    PivotIdx := _MedianOfThreeIdx(aArr, aLo, aLo + (aHi - aLo) div 2, aHi,
+    PivotIdx := specialize _MedianOfThreeIdx<T>(aArr, aLo, aLo + (aHi - aLo) div 2, aHi,
       aCompare, aData);
     Pivot := aArr[PivotIdx];
 

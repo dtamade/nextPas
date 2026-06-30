@@ -30,11 +30,11 @@ uses nextpas.core.platform.dl, nextpas.core.tls.mbedtls.base;
 type
   { BIO 回调类型 - MbedTLS 特有 }
   Tmbedtls_ssl_send = function(ctx: Pointer; const buf: PByte;
-    len: NativeUInt): Integer; cdecl;
+    len: QWord): Integer; cdecl;
   Tmbedtls_ssl_recv = function(ctx: Pointer; buf: PByte;
-    len: NativeUInt): Integer; cdecl;
+    len: QWord): Integer; cdecl;
   Tmbedtls_ssl_recv_timeout = function(ctx: Pointer; buf: PByte;
-    len: NativeUInt; timeout: Cardinal): Integer; cdecl;
+    len: QWord; timeout: Cardinal): Integer; cdecl;
 
   { 熵源回调 }
   Tmbedtls_entropy_f_source_ptr = function(data: Pointer; output: PByte;

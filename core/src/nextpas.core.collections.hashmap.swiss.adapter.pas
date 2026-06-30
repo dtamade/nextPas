@@ -12,7 +12,8 @@ uses
   nextpas.core.collections.intf,
   nextpas.core.collections.hashmap.base,
   nextpas.core.collections.hashmap.intf,
-  nextpas.core.collections.hashmap.swiss;
+  nextpas.core.collections.hashmap.swiss,
+  nextpas.core.mem.allocator.base;
 
 type
   generic TSwissHashMap<K, V> = class(specialize TGenericCollection<specialize TMapEntry<K, V>>, specialize IHashMap<K, V>)
@@ -33,7 +34,7 @@ type
     function DoIterMoveNext(aIter: PPtrIter): Boolean;
   public
     constructor Create(aCapacity: SizeUInt = 0; aHash: THash = nil;
-      aEquals: TEquals = nil; aAllocator: IAllocator = nil);
+      aEquals: TEquals = nil; aAllocator: TMemAllocator = nil);
     destructor Destroy; override;
 
     function GetCount: SizeUInt; override;
@@ -61,7 +62,7 @@ implementation
 { TSwissHashMap }
 
 constructor TSwissHashMap.Create(aCapacity: SizeUInt; aHash: THash;
-  aEquals: TEquals; aAllocator: IAllocator);
+  aEquals: TEquals; aAllocator: TMemAllocator);
 begin
   inherited Create(aAllocator);
   FInner := TInner.Create(aCapacity, aHash, aEquals, aAllocator);

@@ -53,7 +53,8 @@ begin
     AConfig.ResponseFilePolicy,
     AConfig.LinkScriptPolicy,
     AConfig.LlvmEnabled,
-    AConfig.LlvmExecutableSetId
+    AConfig.LlvmExecutableSetId,
+    AConfig.LlvmOptLevel
   );
 end;
 

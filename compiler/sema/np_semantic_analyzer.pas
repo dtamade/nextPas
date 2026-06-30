@@ -5933,6 +5933,7 @@ var
   ResolutionFailureKind: string;
   SavedResKind: string;
   SavedScopeId: LongInt;
+  TypeCastTargetTypeId: LongInt;
 begin
   if ANode = nil then
     Exit;
@@ -6026,6 +6027,13 @@ begin
     end
     else if Pos('.', ANode.Text) = 0 then
     begin
+      { Type cast: TypeId(Arg) — skip call binding for type casts }
+      if TryGetTypeCastTargetTypeId(ANode, TypeCastTargetTypeId) then
+      begin
+        { Type cast detected; no call binding needed }
+      end
+      else
+      begin
       MemberFailureName := ANode.Text;
       MemberFailureOffset := ANode.ByteOffset;
       if not CallArgumentTypeIds(ANode, ArgTypeIds) then
@@ -6118,6 +6126,7 @@ begin
             ANode.ByteOffset
           );
       end;
+      end; { not a type cast }
     end;
   end;
 
@@ -6453,7 +6462,15 @@ begin
     SameText(AName, 'CompareText') or SameText(AName, 'UnicodeCompareStr') or SameText(AName, 'StringReplace') or
     SameText(AName, 'Default') or SameText(AName, 'TypeInfo') or
     SameText(AName, 'InterlockedCompareExchange') or
-    SameText(AName, 'InterlockedIncrement') or SameText(AName, 'InterlockedDecrement');
+    SameText(AName, 'InterlockedIncrement') or SameText(AName, 'InterlockedDecrement') or
+    SameText(AName, 'InterlockedCompareExchange64') or
+    SameText(AName, 'ReadWriteBarrier') or SameText(AName, 'ReadBarrier') or SameText(AName, 'WriteBarrier') or
+    SameText(AName, 'DoneCriticalSection') or
+    SameText(AName, 'FillQWord') or SameText(AName, 'SarInt64') or
+    SameText(AName, 'UniqueString') or SameText(AName, 'StringOfChar') or
+    SameText(AName, 'ThreadSwitch') or SameText(AName, 'RunError') or
+    SameText(AName, 'ArcTan') or SameText(AName, 'FormatDateTime') or
+    SameText(AName, 'DoublePack');
 end;
 
 function TSemanticAnalyzer.InferExpressionType(const ANode: TGreenNode): LongInt;
@@ -6890,6 +6907,7 @@ var
   PInt64TypeId, PUInt64TypeId, PPointerTypeId: LongInt;
   PPtrIntTypeId, PPtrUIntTypeId: LongInt;
   PCharTypeId, PAnsiCharTypeId: LongInt;
+  PUInt32TypeId, PDoubleTypeId, PWideCharTypeId, PNativeUIntTypeId: LongInt;
 begin
   BooleanTypeId := FModel.AddType('Boolean', 'builtin');
   IntegerTypeId := FModel.AddType('Integer', 'builtin');
@@ -6937,6 +6955,14 @@ begin
   FModel.AddType('PtrUInt', 'alias');
   FModel.AddType('NativeInt', 'alias');
   FModel.AddType('NativeUInt', 'alias');
+  FModel.AddType('AnsiChar', 'builtin');
+  FModel.AddType('UInt16', 'alias');
+  FModel.AddType('UInt8', 'alias');
+  FModel.AddType('Int16', 'alias');
+  PUInt32TypeId := FModel.AddType('PUInt32', 'alias');
+  PDoubleTypeId := FModel.AddType('PDouble', 'alias');
+  PWideCharTypeId := FModel.AddType('PWideChar', 'alias');
+  PNativeUIntTypeId := FModel.AddType('PNativeUInt', 'alias');
 
   FModel.SetTypeParent(PByteTypeId, PointerTypeId);
   FModel.SetTypeParent(PWordTypeId, PointerTypeId);
@@ -6949,6 +6975,10 @@ begin
   FModel.SetTypeParent(PPtrUIntTypeId, PointerTypeId);
   FModel.SetTypeParent(PCharTypeId, PointerTypeId);
   FModel.SetTypeParent(PAnsiCharTypeId, PointerTypeId);
+  FModel.SetTypeParent(PUInt32TypeId, PointerTypeId);
+  FModel.SetTypeParent(PDoubleTypeId, PointerTypeId);
+  FModel.SetTypeParent(PWideCharTypeId, PointerTypeId);
+  FModel.SetTypeParent(PNativeUIntTypeId, PointerTypeId);
   FModel.SetTypeParent(Int32TypeId, LongIntTypeId);
   FModel.SetTypeParent(UInt32TypeId, LongWordTypeId);
   FModel.SetTypeParent(UInt64TypeId, QWordTypeId);
@@ -6983,6 +7013,10 @@ begin
   FModel.SetTypeScalarFact(PPtrUIntTypeId, sskPointer, 64, False);
   FModel.SetTypeScalarFact(PCharTypeId, sskPointer, 64, False);
   FModel.SetTypeScalarFact(PAnsiCharTypeId, sskPointer, 64, False);
+  FModel.SetTypeScalarFact(PUInt32TypeId, sskPointer, 64, False);
+  FModel.SetTypeScalarFact(PDoubleTypeId, sskPointer, 64, False);
+  FModel.SetTypeScalarFact(PWideCharTypeId, sskPointer, 64, False);
+  FModel.SetTypeScalarFact(PNativeUIntTypeId, sskPointer, 64, False);
 end;
 
 procedure TSemanticAnalyzer.SeedCachedTypeGaps;
@@ -7752,7 +7786,8 @@ end;
 
 function TSemanticAnalyzer.DetachModel: TSemanticModel;
 begin
-  FModel.MarkReady;
+  if FModel.Status = 'deferred' then
+    FModel.MarkReady;
   Result := FModel;
   FModel := nil;
 end;
@@ -7864,9 +7899,12 @@ begin
           if SameText(FModel.TypeAt(Symbol.TypeId - 1).Kind, 'class') or
             SameText(FModel.TypeAt(Symbol.TypeId - 1).Kind, 'interface') then
             UniqueTypeId := Symbol.TypeId
-          else if not (SameText(FModel.TypeAt(UniqueTypeId - 1).Kind, 'class') or
-            SameText(FModel.TypeAt(UniqueTypeId - 1).Kind, 'interface')) then
-            Exit(0);
+          else if SameText(FModel.TypeAt(UniqueTypeId - 1).Kind, 'class') or
+            SameText(FModel.TypeAt(UniqueTypeId - 1).Kind, 'interface') then
+            { Keep existing class/interface UniqueTypeId }
+          else
+            { Neither is class/interface yet — prefer later entry }
+            UniqueTypeId := Symbol.TypeId;
         end;
       end;
     end;
@@ -9180,6 +9218,41 @@ begin
         ProcessRecordFields(TypeChild, AOwnerUnitId, TypeId)
       else if TypeChild.NodeKind = gnkClassType then
       begin
+        { Detect "class of TRef" — exactly one identifier child, no body }
+        if (not SameText(TypeChild.Text, 'interface')) and
+          (TypeChild.ChildCount = 1) and
+          (TypeChild.ChildAt(0) <> nil) and
+          (TypeChild.ChildAt(0).NodeKind = gnkIdentifier) then
+        begin
+          AliasTargetId := ResolveTypeIdForOwner(
+            TypeChild.ChildAt(0).Text, AOwnerUnitId);
+          if AliasTargetId > 0 then
+          begin
+            AliasHasTargetMeta := FModel.GetTypeMeta(
+              AliasTargetId, AliasTargetMeta);
+            if not FModel.GetTypeMeta(TypeId, AliasLocalMeta) then
+              FillChar(AliasLocalMeta, SizeOf(AliasLocalMeta), 0);
+            AliasLocalMeta.TypeId := TypeId;
+            AliasLocalMeta.AliasTargetTypeId := AliasTargetId;
+            if AliasHasTargetMeta and (AliasTargetMeta.Size > 0) then
+            begin
+              AliasLocalMeta.Size := AliasTargetMeta.Size;
+              AliasLocalMeta.VmtCount := AliasTargetMeta.VmtCount;
+              AliasLocalMeta.ParentClassId := AliasTargetId;
+              if FModel.TypeAt(AliasTargetId - 1).Name <> '' then
+                AliasLocalMeta.ParentClassName :=
+                  FModel.TypeAt(AliasTargetId - 1).Name;
+            end;
+            FModel.SetTypeMeta(TypeId, AliasLocalMeta);
+            FModel.SetTypeParent(TypeId, AliasTargetId);
+            FModel.SetTypeKind(TypeId, 'class');
+            if TypeMetaSize(Child.Text) <= 0 then
+              FModel.AddConstValue(Child.Text + '$size', 8);
+          end;
+          { Skip normal class processing — this is a class reference type }
+        end
+        else
+        begin
         ParentTypeId := 0;
         if not SameText(TypeChild.Text, 'interface') then
           ParentTypeId := ImplicitSystemObjectParentTypeId(Child.Text);
@@ -9242,6 +9315,7 @@ begin
         end
         else
           ProcessInterfaceMethods(TypeChild, AOwnerUnitId, TypeId);
+        end; { else: normal class (not class-of) }
       end
       else if (TypeChild.NodeKind = gnkIdentifier) and
         (Pos('<', TypeChild.Text) > 0) then

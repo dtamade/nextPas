@@ -1059,6 +1059,7 @@ var
   TokenColumn: LongInt;
   ClosedFlag: Boolean;
   SawQuoted: Boolean;
+  LEnd: SizeInt;
 begin
   StartIndex := 1;
   { Skip UTF-8 BOM (EF BB BF) at the start of the source so the
@@ -1464,6 +1465,27 @@ begin
         AddTokenAt(tkRBracket, ']', StartIndex, TokenLine);
       '@':
         AddTokenAt(tkAt, '@', StartIndex, TokenLine);
+      '%':
+        begin
+          { AT&T assembly register prefix: %rax, %rdi, etc.
+            Treat % followed by alpha as an identifier for asm compatibility.
+            After this block, the main Inc(StartIndex) advances past %. }
+          if (StartIndex + 1 <= Length(ASourceText)) and
+            (ASourceText[StartIndex + 1] in ['a'..'z', 'A'..'Z', '_']) then
+          begin
+            { %register: scan full register name, emit as single identifier }
+            LEnd := StartIndex + 2;
+            while (LEnd <= Length(ASourceText)) and
+              (ASourceText[LEnd] in ['a'..'z', 'A'..'Z', '0'..'9', '_']) do
+              Inc(LEnd);
+            AddTokenAt(tkIdentifier,
+              Copy(ASourceText, StartIndex, LEnd - StartIndex),
+              StartIndex, TokenLine);
+            StartIndex := LEnd - 1; { -1 because main loop does Inc }
+          end
+          else
+            AddTokenAt(tkIdentifier, '%', StartIndex, TokenLine);
+        end;
     else
       begin
         AddTokenAt(tkError, CurrentChar, StartIndex, TokenLine);

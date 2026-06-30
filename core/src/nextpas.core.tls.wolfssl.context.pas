@@ -553,7 +553,7 @@ begin
     raise ESSLCertError.Create('wolfSSL_CTX_use_certificate_buffer not available');
 
   LBuffer := ReadLimitedStreamBytes(
-    WrapTStream(AStream, False),
+    AStream,
     MAX_CERTIFICATE_SIZE,
     'Certificate stream'
   );
@@ -644,7 +644,7 @@ begin
     RejectUnsupportedPasswordProtectedKey('TWolfSSLContext.LoadPrivateKey(AStream)');
 
   LBuffer := ReadLimitedStreamBytes(
-    WrapTStream(AStream, False),
+    AStream,
     MAX_PRIVATE_KEY_SIZE,
     'Private key stream'
   );
@@ -678,7 +678,7 @@ begin
     raise ESSLCertError.Create('wolfSSL_CTX_use_certificate_buffer not available');
 
   // 转换 PEM 字符串为字节数组
-  LBuffer := nextpas.core.text.conv.StringToUTF8Bytes(APEM));
+  LBuffer := nextpas.core.text.conv.StringToUTF8Bytes(APEM);
 
   LRet := wolfSSL_CTX_use_certificate_buffer(FWolfSSLCtx, @LBuffer[0],
     Length(LBuffer), WOLFSSL_FILETYPE_PEM);
@@ -701,7 +701,7 @@ begin
     raise ESSLCertError.Create('wolfSSL_CTX_use_PrivateKey_buffer not available');
 
   // 转换 PEM 字符串为字节数组
-  LBuffer := nextpas.core.text.conv.StringToUTF8Bytes(APEM));
+  LBuffer := nextpas.core.text.conv.StringToUTF8Bytes(APEM);
 
   if APassword <> '' then
     RejectUnsupportedPasswordProtectedKey('TWolfSSLContext.LoadPrivateKeyPEM');
@@ -1098,7 +1098,7 @@ begin
 
   LExposeEarlyData := HasEarlyDataCapability;
   LExposeOCSP := HasClientOCSPCapability;
-  LTransport := WrapTStream(AStream, False);
+  LTransport := AStream;
 
   if LExposeEarlyData and LExposeOCSP then
     Result := nextpas.core.tls.wolfssl.connection.TWolfSSLAdvancedConnection.Create(Self, LTransport)

@@ -17,7 +17,8 @@ uses
   nextpas.core.collections.base,
   nextpas.core.collections.multiset.base,
   nextpas.core.collections.multiset.intf,
-  nextpas.core.collections.hashmap;
+  nextpas.core.collections.hashmap,
+ nextpas.core.mem.allocator.base;
 
 type
   {**
@@ -35,7 +36,7 @@ type
     FTotalCount: SizeUInt;
   public
     constructor Create;
-    constructor Create(aAllocator: IAllocator);
+    constructor Create(aAllocator: TMemAllocator);
     destructor Destroy; override;
 
     // IMultiSet<T>
@@ -76,7 +77,7 @@ begin
   Create(nil);
 end;
 
-constructor TMultiSet.Create(aAllocator: IAllocator);
+constructor TMultiSet.Create(aAllocator: TMemAllocator);
 begin
   inherited Create;
   FMap := TInternalMap.Create(0, nil, nil, aAllocator);

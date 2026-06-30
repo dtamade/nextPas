@@ -1603,18 +1603,183 @@ begin
         LBenchResults[0].Name + '"');
     if LBenchResults[0].N <= 0 then
       FailTest('bench: expected N > 0');
-    if LBenchResults[0].N <= 0 then
-      FailTest('bench: expected N > 0');
     { NsPerOp may be 0 for sub-ms operations (ms granularity) — that's OK }
     if LBenchResults[1].Name <> 'StringConcat' then
       FailTest('bench: expected name "StringConcat", got "' +
         LBenchResults[1].Name + '"');
     if LBenchResults[1].N <= 0 then
       FailTest('bench: expected N > 0');
+    { Verify NsPerOp is populated (may be 0 for sub-ms, but TotalNs should be > 0) }
+    if LBenchResults[0].TotalNs <= 0 then
+      FailTest('bench: expected TotalNs > 0');
     ResetDefaultConfig;
     PassTest('Benchmark');
   end;
 
+  { ── Phase 13b: Cleanup LIFO order ──────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 13b: Cleanup LIFO order');
+  begin
+    ResetDefaultConfig;
+    GCleanupCalled := 0;
+    LVerbSuite := TTestSuite.Create('CleanupLifoTest');
+    { Register 3 cleanup handlers — should run in LIFO order (3, 2, 1) }
+    LVerbSuite.Cleanup(procedure
+    begin
+      Inc(GCleanupCalled);
+      if GCleanupCalled <> 3 then
+        FailTest('LIFO: first registered should be called 3rd (LIFO), got ' +
+          IntToStr(GCleanupCalled));
+    end);
+    LVerbSuite.Cleanup(procedure
+    begin
+      Inc(GCleanupCalled);
+      if GCleanupCalled <> 2 then
+        FailTest('LIFO: second registered should be called 2nd, got ' +
+          IntToStr(GCleanupCalled));
+    end);
+    LVerbSuite.Cleanup(procedure
+    begin
+      Inc(GCleanupCalled);
+      if GCleanupCalled <> 1 then
+        FailTest('LIFO: third registered should be called 1st (LIFO), got ' +
+          IntToStr(GCleanupCalled));
+    end);
+    LVerbSuite.Test('dummy', procedure begin CheckTrue(True); end);
+    LVerbSuite.RunWithResult(LVerbResult);
+    { 3 cleanups ran for 1 test }
+    if GCleanupCalled <> 3 then
+      FailTest('LIFO: expected 3 cleanup calls, got ' +
+        IntToStr(GCleanupCalled));
+    if not LVerbResult.AllPassed then
+      FailTest('LIFO: all tests should pass');
+    ResetDefaultConfig;
+    PassTest('Cleanup LIFO order');
+  end;
+
+  { ── Phase 13c: Cleanup exception handling ──────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 13c: Cleanup exception handling');
+  begin
+    ResetDefaultConfig;
+    GCleanupCalled := 0;
+    LVerbSuite := TTestSuite.Create('CleanupExceptTest');
+    { First cleanup raises, second should still run }
+    LVerbSuite.Cleanup(procedure
+    begin
+      Inc(GCleanupCalled);
+      raise Exception.Create('cleanup boom');
+    end);
+    LVerbSuite.Cleanup(procedure
+    begin
+      Inc(GCleanupCalled);
+    end);
+    LVerbSuite.Test('dummy', procedure begin CheckTrue(True); end);
+    LVerbSuite.RunWithResult(LVerbResult);
+    { Both cleanups should run even though first raised }
+    if GCleanupCalled <> 2 then
+      FailTest('cleanup except: expected 2 cleanup calls, got ' +
+        IntToStr(GCleanupCalled));
+    { Test should still pass — cleanup exceptions don't fail the test }
+    if not LVerbResult.AllPassed then
+      FailTest('cleanup except: test should still pass');
+    ResetDefaultConfig;
+    PassTest('Cleanup exception handling');
+  end;
+
+  { ── Phase 13d: Benchmark with --benchmem ───────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 13d: Benchmark with --benchmem');
+  begin
+    ResetDefaultConfig;
+    LBenchSuite := TTestSuite.Create('BenchMemTest');
+    LBenchSuite.Bench('Alloc', procedure(BC: PBenchContext)
+    var
+      I: Integer;
+      P: Pointer;
+    begin
+      for I := 1 to BC^.N do
+      begin
+        GetMem(P, 64);
+        BC^.AllocBytes := BC^.AllocBytes + 64;
+        BC^.AllocCount := BC^.AllocCount + 1;
+        FreeMem(P);
+      end;
+    end);
+    LBenchConfig := DefaultConfig;
+    LBenchConfig.BenchEnabled := True;
+    LBenchConfig.BenchTimeMs := 100;
+    LBenchConfig.BenchMem := True;
+    LBenchSuite.Config := LBenchConfig;
+    LBenchSuite.RunBenchmarks(LBenchResults);
+    if Length(LBenchResults) <> 1 then
+      FailTest('benchmem: expected 1 result');
+    if LBenchResults[0].N <= 0 then
+      FailTest('benchmem: expected N > 0');
+    { With benchmem, FormatBenchLine should include B/op info }
+    { We verify via the result fields rather than output parsing }
+    if LBenchResults[0].AllocBytes < 0 then
+      FailTest('benchmem: AllocBytes should be >= 0');
+    if LBenchResults[0].AllocCount < 0 then
+      FailTest('benchmem: AllocCount should be >= 0');
+    ResetDefaultConfig;
+    PassTest('Benchmark with --benchmem');
+  end;
+
+  { ── Phase 13e: Benchmarks skipped in regular Run ───────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 13e: Benchmarks skipped in Run');
+  begin
+    ResetDefaultConfig;
+    LBenchSuite := TTestSuite.Create('BenchSkipTest');
+    { Register both a test and a benchmark in the same suite }
+    LBenchSuite.Test('normal', procedure begin CheckTrue(True); end);
+    LBenchSuite.Bench('skipped_bench', procedure(BC: PBenchContext)
+    begin
+      { This should never be called in regular Run }
+      FailTest('bench: benchmark should not run in regular test mode');
+    end);
+    LBenchSuite.Config := DefaultConfig;
+    LBenchSuite.RunWithResult(LVerbResult);
+    { Only the normal test should run, benchmark should be skipped }
+    if LVerbResult.Passed <> 1 then
+      FailTest('bench skip: expected 1 passed, got ' +
+        IntToStr(LVerbResult.Passed));
+    { Benchmark should not appear in results at all }
+    if LVerbResult.Failed <> 0 then
+      FailTest('bench skip: expected 0 failed, got ' +
+        IntToStr(LVerbResult.Failed));
+    ResetDefaultConfig;
+    PassTest('Benchmarks skipped in Run');
+  end;
+
   WriteLn;
   PassTest('test_runner');
+
+  { Release closures before heaptrc reports (unit finalization runs before
+    main block locals are freed — closures would appear as unfreed). }
+  LRunner := Default(TTestRunner);
+  LSumRunner := Default(TTestRunner);
+  LMaxFailRunner := Default(TTestRunner);
+  LExactRunner68 := Default(TTestRunner);
+  LSuite1 := Default(TTestSuite);
+  LSuite2 := Default(TTestSuite);
+  LFailSuite1 := Default(TTestSuite);
+  LFailSuite2 := Default(TTestSuite);
+  LFailSuite3 := Default(TTestSuite);
+  LRunNestedS1 := Default(TTestSuite);
+  LRunNestedS2 := Default(TTestSuite);
+  LCacheSuite := Default(TTestSuite);
+  LSummarySuite := Default(TTestSuite);
+  LSumSuite3 := Default(TTestSuite);
+  LResultSuite := Default(TTestSuite);
+  LExactSuite68 := Default(TTestSuite);
+  LShortSuite := Default(TTestSuite);
+  LProgressSuite := Default(TTestSuite);
+  LMaxFailSuite := Default(TTestSuite);
+  LJsonSuite := Default(TTestSuite);
+  LJsonSink := nil;
+  LVerbSuite := Default(TTestSuite);
+  LVerbSink := nil;
+  LBenchSuite := Default(TTestSuite);
 end.

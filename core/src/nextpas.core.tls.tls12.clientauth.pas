@@ -4,7 +4,8 @@ unit nextpas.core.tls.tls12.clientauth;
 
 interface
 
-uses nextpas.core.base, nextpas.core.tls.x509; type TTLS12ClientCertConfig = record CertificateDER: TBytes;
+uses nextpas.core.base, nextpas.core.tls.x509, nextpas.core.tls.tls12.wire,
+  nextpas.core.tls.tls13.servercertverify; type TTLS12ClientCertConfig = record CertificateDER: TBytes;
     PrivateKeyDER: TBytes;
     Certificate: TX509Certificate;
   end;
@@ -15,6 +16,7 @@ function TLS12BuildCertificateVerify(const AConfig: TTLS12ClientCertConfig;
 
 implementation
 
+function TLS12BuildClientCertificate(const AConfig: TTLS12ClientCertConfig): TBytes;
 var
   LCertLen, LTotalLen: Integer;
 begin

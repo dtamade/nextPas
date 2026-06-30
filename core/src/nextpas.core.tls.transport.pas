@@ -60,7 +60,7 @@ type
 
 implementation
 
-uses ; constructor TSSLMemoryTransport.Create(ACapacity: Integer);
+constructor TSSLMemoryTransport.Create(ACapacity: Integer);
 begin
   inherited Create;
   SetLength(FBuffer, ACapacity);

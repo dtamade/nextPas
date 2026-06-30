@@ -1534,6 +1534,16 @@ end;
 
 // === Non-RISC-V platform stubs ===
 
+uses
+  nextpas.core.simd.cpuinfo.base;
+
+type
+  TRISCVProcessorInfo = record
+    Architecture: string;
+    ISA: string;
+    XLEN: Integer;
+  end;
+
 function DetectRISCVFeatures: TRISCVFeatures;
 begin
   FillChar(Result, SizeOf(TRISCVFeatures), 0);

@@ -11,7 +11,8 @@ uses
   nextpas.core.collections.queue.intf,
   nextpas.core.collections.deque.intf,
   nextpas.core.collections.vecdeque.intf,
-  nextpas.core.collections.vecdeque;
+  nextpas.core.collections.vecdeque,
+  nextpas.core.mem.allocator.base;
 
 type
 
@@ -40,11 +41,11 @@ type
     TVecDequeIntf = specialize IVecDeque<T>;
   private
     FDeque: TInternalDeque;
-    FAllocator: IAllocator;
+    FAllocator: TMemAllocator;
 
   public
-    constructor Create(const aAllocator: IAllocator = nil); overload;
-    constructor Create(const aElements: array of T; const aAllocator: IAllocator = nil); overload;
+    constructor Create(const aAllocator: TMemAllocator = nil); overload;
+    constructor Create(const aElements: array of T; const aAllocator: TMemAllocator = nil); overload;
     destructor Destroy; override;
 
     { IQueue 接口实现 }
@@ -105,14 +106,14 @@ type
   end;
 
   { 泛型双端队列工厂函数 }
-  generic function MakeDeque<T>(const aAllocator: IAllocator = nil): specialize IDeque<T>;
-  generic function MakeDeque<T>(const aElements: array of T; const aAllocator: IAllocator = nil): specialize IDeque<T>;
+  generic function MakeDeque<T>(const aAllocator: TMemAllocator = nil): specialize IDeque<T>;
+  generic function MakeDeque<T>(const aElements: array of T; const aAllocator: TMemAllocator = nil): specialize IDeque<T>;
 
 implementation
 
 { TArrayDeque<T> }
 
-constructor TArrayDeque.Create(const aAllocator: IAllocator = nil);
+constructor TArrayDeque.Create(const aAllocator: TMemAllocator = nil);
 begin
   inherited Create;
   if aAllocator <> nil then
@@ -122,7 +123,7 @@ begin
   FDeque := TInternalDeque.Create(FAllocator);
 end;
 
-constructor TArrayDeque.Create(const aElements: array of T; const aAllocator: IAllocator = nil);
+constructor TArrayDeque.Create(const aElements: array of T; const aAllocator: TMemAllocator = nil);
 begin
   inherited Create;
   if aAllocator <> nil then
@@ -466,7 +467,7 @@ end;
 
 { 泛型工厂函数实现 }
 
-generic function MakeDeque<T>(const aAllocator: IAllocator = nil): specialize IDeque<T>;
+generic function MakeDeque<T>(const aAllocator: TMemAllocator = nil): specialize IDeque<T>;
 type
   TDequeImpl = specialize TArrayDeque<T>;
 var
@@ -476,7 +477,7 @@ begin
   Result := LDeque;  // 接口引用
 end;
 
-generic function MakeDeque<T>(const aElements: array of T; const aAllocator: IAllocator = nil): specialize IDeque<T>;
+generic function MakeDeque<T>(const aElements: array of T; const aAllocator: TMemAllocator = nil): specialize IDeque<T>;
 type
   TDequeImpl = specialize TArrayDeque<T>;
 var

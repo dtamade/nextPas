@@ -346,6 +346,19 @@ begin
   end;
 end;
 
+{ P0: CheckRaises with nil ExceptClass — must fail gracefully, not SIGSEGV }
+procedure TestCheckRaisesNilClass;
+begin
+  try
+    CheckRaises(nil, procedure begin end);
+    Halt(1); { should not reach here }
+  except
+    on E: EAssertionFailed do
+      Check(Pos('nil', E.Message) > 0,
+        'Expected nil in error message, got: ' + E.Message);
+  end;
+end;
+
 procedure TestCheckStartsWithEmptyPrefix;
 begin
   { Empty pattern matches everything — consistent across Contains/StartsWith/EndsWith }
@@ -622,6 +635,7 @@ begin
   LSuite.Test('CheckRaises+Skip',      @TestCheckRaisesSkipPassthrough);
   LSuite.Test('CheckNoRaise+Skip',     @TestCheckNoRaiseSkipPassthrough);
   LSuite.Test('CheckRaises nil',        @TestCheckRaisesNil); { R4-09 }
+  LSuite.Test('CheckRaises nil class',  @TestCheckRaisesNilClass); { P0 }
   LSuite.Test('StartsWith empty',      @TestCheckStartsWithEmptyPrefix);
   LSuite.Test('Fail',                  @TestFail);
   LSuite.Test('Skip',                  @TestSkip);

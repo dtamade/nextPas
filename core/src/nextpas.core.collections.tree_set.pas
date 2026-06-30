@@ -12,7 +12,8 @@ uses
   nextpas.core.collections.tree_set.intf,
   nextpas.core.collections.tree.rb,
   nextpas.core.mem.intf,
-  nextpas.core.mem.default;
+  nextpas.core.mem.default,
+  nextpas.core.mem.allocator.base;
 
 type
   generic TTreeSet<T> = class(specialize TGenericCollection<T>, specialize ITreeSet<T>)
@@ -41,8 +42,8 @@ type
     procedure DoZero; override;
   public
     constructor Create; reintroduce; overload;
-    constructor Create(aAllocator: IAllocator); reintroduce; overload;
-    constructor Create(aAllocator: IAllocator; aData: Pointer); override;
+    constructor Create(aAllocator: TMemAllocator); reintroduce; overload;
+    constructor Create(aAllocator: TMemAllocator; aData: Pointer); override;
     destructor Destroy; override;
 
     function Add(const AValue: T): Boolean;
@@ -213,12 +214,12 @@ begin
   Create(DefaultAllocator(), nil);
 end;
 
-constructor TTreeSet.Create(aAllocator: IAllocator);
+constructor TTreeSet.Create(aAllocator: TMemAllocator);
 begin
   Create(aAllocator, nil);
 end;
 
-constructor TTreeSet.Create(aAllocator: IAllocator; aData: Pointer);
+constructor TTreeSet.Create(aAllocator: TMemAllocator; aData: Pointer);
 begin
   inherited Create(aAllocator, aData);
   FTree := TRBCore.Create(@CompareAdapter, nil, @FinalizeAdapter);

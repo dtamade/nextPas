@@ -23,14 +23,13 @@ function SnapshotDiffPathForFixture(
   const AGroupRoot: string;
   const AFixturePath: string
 ): string;
-function SnapshotStatusForFixture(
-  const AGroupName: string;
-  const AGroupRoot: string;
-  const AFixturePath: string
-): string;
 function ReadTextFile(const APath: string): string;
 procedure WriteTextFile(const APath: string; const AText: string);
 function NormalizeSnapshotText(const AText: string): string;
+function RelativeFixtureName(
+  const AGroupRoot: string;
+  const AFixturePath: string
+): string;
 
 implementation
 
@@ -124,33 +123,6 @@ begin
   Result := SnapshotDiffPath(
     SnapshotKeyForFixture(AGroupName, AGroupRoot, AFixturePath)
   );
-end;
-
-function SnapshotStatusForFixture(
-  const AGroupName: string;
-  const AGroupRoot: string;
-  const AFixturePath: string
-): string;
-var
-  SnapshotPathValue: string;
-  RawSnapshotText: string;
-  NormalizedSnapshotText: string;
-begin
-  SnapshotPathValue := SnapshotPathForFixture(
-    AGroupName,
-    AGroupRoot,
-    AFixturePath
-  );
-
-  if not FileExists(SnapshotPathValue) then
-    Exit('missing');
-
-  RawSnapshotText := ReadTextFile(SnapshotPathValue);
-  NormalizedSnapshotText := NormalizeSnapshotText(RawSnapshotText);
-  if RawSnapshotText <> NormalizedSnapshotText then
-    Exit('unstable');
-
-  Result := 'ready';
 end;
 
 function ReadTextFile(const APath: string): string;

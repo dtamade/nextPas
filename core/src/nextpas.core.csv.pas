@@ -10,7 +10,8 @@ interface
 
 uses
   nextpas.core.errors,
-  nextpas.core.mem.intf;
+  nextpas.core.mem.intf,
+ nextpas.core.mem.allocator.base;
 
 type
   TStringArray = array of string;
@@ -36,7 +37,7 @@ type
     FComment: AnsiChar;
     FHasError: Boolean;
     FError: TCsvError;
-    FAllocator: IAllocator;
+    FAllocator: TMemAllocator;
     procedure SetError(const AMessage: string);
     procedure SetErrorAt(const AMessage: string; AOffset: SizeUInt);
     procedure SetErrorPosition(var AError: TCsvError; AOffset: SizeUInt);
@@ -51,17 +52,17 @@ type
   public
     procedure Init(const AInput: string; ADelimiter: AnsiChar = ',';
       AFieldsPerRecord: Integer = 0; ATrimSpace: Boolean = False;
-      AComment: AnsiChar = #0; const AAllocator: IAllocator = nil);
+      AComment: AnsiChar = #0; const AAllocator: TMemAllocator = nil);
     procedure Done;
     class function Create(const AInput: string; ADelimiter: AnsiChar = ',';
       AFieldsPerRecord: Integer = 0; ATrimSpace: Boolean = False;
-      AComment: AnsiChar = #0; const AAllocator: IAllocator = nil): TCsvReader; static;
+      AComment: AnsiChar = #0; const AAllocator: TMemAllocator = nil): TCsvReader; static;
     function ReadRow(out AFields: TStringArray): Boolean;
     function ReadAll: TStringMatrix;
     function HasError: Boolean;
     function GetError: string;
     function Error: TCsvError;
-    function Allocator: IAllocator;
+    function Allocator: TMemAllocator;
     property Delimiter: AnsiChar read FDelimiter write SetDelimiter;
   end;
 
@@ -73,22 +74,22 @@ type
     FUseCRLF: Boolean;
     FComment: AnsiChar;
     FFieldCount: Integer;
-    FAllocator: IAllocator;
+    FAllocator: TMemAllocator;
   public
     class function Create(ADelimiter: AnsiChar = ',';
       AUseCRLF: Boolean = False; AComment: AnsiChar = #0): TCsvWriter; static;
-    class function CreateWith(const AAllocator: IAllocator;
+    class function CreateWith(const AAllocator: TMemAllocator;
       ADelimiter: AnsiChar = ','; AUseCRLF: Boolean = False;
       AComment: AnsiChar = #0): TCsvWriter; static;
     procedure WriteRow(const AFields: array of string);
     procedure WriteField(const AField: string);
     procedure EndRow;
     function ToString: string;
-    function Allocator: IAllocator;
+    function Allocator: TMemAllocator;
   end;
 
 function CsvParse(const AInput: string; ADelimiter: AnsiChar = ','): TStringMatrix;
-function CsvParseWith(const AInput: string; const AAllocator: IAllocator;
+function CsvParseWith(const AInput: string; const AAllocator: TMemAllocator;
   ADelimiter: AnsiChar = ','): TStringMatrix;
 
 implementation
@@ -101,7 +102,7 @@ type
   TStringArraySlot = TStringArray;
   PStringArraySlot = ^TStringArraySlot;
 
-function GrowStringSlots(const AAllocator: IAllocator; var ASlots: PStringSlot;
+function GrowStringSlots(const AAllocator: TMemAllocator; var ASlots: PStringSlot;
   var ACap: Integer; ANeeded: Integer): Boolean;
 var
   LNewCap: Integer;
@@ -127,7 +128,7 @@ begin
   Result := True;
 end;
 
-procedure ReleaseStringSlots(const AAllocator: IAllocator; var ASlots: PStringSlot;
+procedure ReleaseStringSlots(const AAllocator: TMemAllocator; var ASlots: PStringSlot;
   ACount: Integer);
 var
   LI: Integer;
@@ -140,7 +141,7 @@ begin
   ASlots := nil;
 end;
 
-function GrowRowSlots(const AAllocator: IAllocator; var ASlots: PStringArraySlot;
+function GrowRowSlots(const AAllocator: TMemAllocator; var ASlots: PStringArraySlot;
   var ACap: Integer; ANeeded: Integer): Boolean;
 var
   LNewCap: Integer;
@@ -166,7 +167,7 @@ begin
   Result := True;
 end;
 
-procedure ReleaseRowSlots(const AAllocator: IAllocator; var ASlots: PStringArraySlot;
+procedure ReleaseRowSlots(const AAllocator: TMemAllocator; var ASlots: PStringArraySlot;
   ACount: Integer);
 var
   LI: Integer;
@@ -204,7 +205,7 @@ end;
 
 procedure TCsvReader.Init(const AInput: string; ADelimiter: AnsiChar;
   AFieldsPerRecord: Integer; ATrimSpace: Boolean; AComment: AnsiChar;
-  const AAllocator: IAllocator);
+  const AAllocator: TMemAllocator);
 begin
   ValidateCsvDelimiter(ADelimiter, 'TCsvReader.Create');
   ValidateCsvCommentMarker(AComment, ADelimiter, 'TCsvReader.Create');
@@ -247,7 +248,7 @@ end;
 
 class function TCsvReader.Create(const AInput: string; ADelimiter: AnsiChar;
   AFieldsPerRecord: Integer; ATrimSpace: Boolean; AComment: AnsiChar;
-  const AAllocator: IAllocator): TCsvReader;
+  const AAllocator: TMemAllocator): TCsvReader;
 begin
   Result.Init(AInput, ADelimiter, AFieldsPerRecord, ATrimSpace, AComment,
     AAllocator);
@@ -600,7 +601,7 @@ begin
   Result := FError;
 end;
 
-function TCsvReader.Allocator: IAllocator;
+function TCsvReader.Allocator: TMemAllocator;
 begin
   if FAllocator = nil then
     Result := DefaultAllocator
@@ -623,7 +624,7 @@ begin
   Result.FAllocator := nil;
 end;
 
-class function TCsvWriter.CreateWith(const AAllocator: IAllocator;
+class function TCsvWriter.CreateWith(const AAllocator: TMemAllocator;
   ADelimiter: AnsiChar; AUseCRLF: Boolean; AComment: AnsiChar): TCsvWriter;
 begin
   ValidateCsvDelimiter(ADelimiter, 'TCsvWriter.CreateWith');
@@ -725,7 +726,7 @@ begin
   Result := CsvParseWith(AInput, DefaultAllocator, ADelimiter);
 end;
 
-function CsvParseWith(const AInput: string; const AAllocator: IAllocator;
+function CsvParseWith(const AInput: string; const AAllocator: TMemAllocator;
   ADelimiter: AnsiChar): TStringMatrix;
 var
   LReader: TCsvReader;
@@ -748,7 +749,7 @@ begin
   Result := FResult;
 end;
 
-function TCsvWriter.Allocator: IAllocator;
+function TCsvWriter.Allocator: TMemAllocator;
 begin
   if FAllocator = nil then
     Result := DefaultAllocator

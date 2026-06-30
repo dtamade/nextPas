@@ -41,16 +41,18 @@ type
     AfterEach       : TTestProc;
     AfterEachClosure : TTestClosure;
     EachCleanups     : specialize TArray<TTestClosure>;  { LIFO cleanup after each test }
-    { Heap-allocated stubs from DiscoverTests — disposed by CleanupTableAllocations.
+    { Heap-allocated stubs from DiscoverTests — disposed by CleanupTableAllocations
+      (FCleanupDone guard) or in finalization safety net.
       Stores GStubRegistry indices for O(1) cleanup (R4-10).
       Raw pointers because discovery.pas uses PMethodStub which runner.pas cannot see. }
     StubAllocations: specialize TArray<Integer>;
     { R6-05: GFixtureRegistry indices for fixtures registered by DiscoverTests.
-      Freed by CleanupTableAllocations when suite runs, or by finalization if not. }
+      Freed by CleanupTableAllocations (FCleanupDone guard) or finalization. }
     FixtureAllocations: specialize TArray<Integer>;
     { Cached run results — set by Run/RunParallel }
     LastRunPassed: Boolean;
     HasRun       : Boolean;
+    FCleanupDone : Boolean;  { prevents double-free on --count=N re-runs }
     LastPass     : Integer;
     LastFail     : Integer;
     LastSkip     : Integer;
@@ -135,12 +137,17 @@ type
     function  RunBenchmarks(out AResults: TBenchResults): Boolean;
     procedure Summary;
     function  AllPassed: Boolean;
-    { Free heap-allocated table test pointers (TableCase, TableProc) }
+    { Dispose table test data, stubs, and fixtures. FCleanupDone guard
+      prevents double-free on --count=N re-runs. }
     procedure CleanupTableAllocations;
     { Shared helpers for RunWithResult/RunParallelWithResult (R4-03) }
     function  RunSetup(const AConfig: TTestConfig; out ASkipCount: Integer;
                 out AErrorMsg: string): Boolean;
     procedure RunTeardown(const AConfig: TTestConfig);
+    procedure HandleSetupFailure(var AResult: TTestRunResult;
+                ASkipCount: Integer; const AErrorMsg: string;
+                const ASink: IOutputSink; const AConfig: TTestConfig;
+                APopulateResults: Boolean);
     procedure FinalizeResults(const AConfig: TTestConfig;
                 var AResult: TTestRunResult;
                 APass, AFail, ASkip: Integer);
@@ -168,6 +175,10 @@ type
       out AResults: specialize TArray<TBenchResults>): Boolean;
     procedure Summary;
     function  AllPassed: Boolean;
+  private
+    function RunAllIterLoop(
+      out AResults: specialize TArray<TTestRunResult>;
+      AIsParallel: Boolean; APool: IThreadPool): Boolean;
   end;
 
 { Register a heap-allocated method stub for later disposal.
@@ -181,6 +192,12 @@ procedure RegisterFixture(var ASuite: TTestSuite; AFixture: TObject);
 function ParseFilter(const AArg: string): string;
 { White-box helper for test_runner: parse --tag=value form from one argv item. }
 function ParseTag(const AArg: string): string;
+{ Generic arg parsing primitives — all ParseXxx/IsXxxArg delegate here. }
+function HasArgFlag(const AArg, AFlag1: string;
+  const AFlag2: string = ''): Boolean;
+function ExtractArgValue(const AArg, APrefix: string): string;
+function ExtractArgIntValue(const AArg, APrefix: string;
+  ADefault: Integer): Integer;
 { Check if a test entry matches a tag filter. Empty filter = match all. }
 function MatchesTagFilter(const AEntryTags: specialize TArray<string>;
   const ATagFilter: string): Boolean;
@@ -196,8 +213,8 @@ uses
   nextpas.core.test.runner.parallel;
 
 { Global registry of all heap-allocated method stubs from DiscoverTests.
-  Stubs are disposed here in finalization as a safety net for suites that
-  are created but never run (and thus never call CleanupTableAllocations).
+  Stubs are disposed by CleanupTableAllocations (with FCleanupDone guard)
+  or in finalization as safety net for suites that are never run.
   R6-08: NOT thread-safe — all access must be from the main thread only. }
 var
   GStubRegistry: specialize TArray<Pointer>;
@@ -211,31 +228,60 @@ var
 threadvar
   GCurrentTestContextObj: TObject;
 
-{ ── Command-line helpers ──────────────────────────────────────────────────── }
+type
+  TArgStringParser = function(const AArg: string): string;
+  TArgIntParser = function(const AArg: string): Integer;
+  TArgFlagChecker = function(const AArg: string): Boolean;
+
+{ ── Command-line helpers ────────────────────────────────────────────────────── }
+{ Generic arg parsing primitives — all ParseXxx/IsXxxArg functions delegate here }
+
+function HasArgFlag(const AArg, AFlag1: string;
+  const AFlag2: string = ''): Boolean;
+{ Returns True if AArg equals AFlag1 or AFlag2. }
+begin
+  Result := (AArg = AFlag1) or ((AFlag2 <> '') and (AArg = AFlag2));
+end;
+
+function ExtractArgValue(const AArg, APrefix: string): string;
+{ Returns the value portion of '--prefix=value' if AArg starts with APrefix+'='.
+  Returns '' if no match. }
+begin
+  if Copy(AArg, 1, Length(APrefix) + 1) = APrefix + '=' then
+    Result := Copy(AArg, Length(APrefix) + 2, MaxInt)
+  else
+    Result := '';
+end;
+
+function ExtractArgIntValue(const AArg, APrefix: string;
+  ADefault: Integer): Integer;
+{ Returns integer value of '--prefix=N', clamped to >= 0, or ADefault if no match. }
+var
+  LValue: string;
+begin
+  LValue := ExtractArgValue(AArg, APrefix);
+  if LValue = '' then
+    Exit(ADefault);
+  Result := StrToIntDef(LValue, ADefault);
+  if Result < 0 then
+    Result := 0;
+end;
+
+{ ── Single-arg parsers (delegated to generic primitives) ───────────────────── }
 
 function ParseFilter(const AArg: string): string;
 begin
-  if Copy(AArg, 1, 9) = '--filter=' then
-    Exit(Copy(AArg, 10, MaxInt));
-  Result := '';
+  Result := ExtractArgValue(AArg, '--filter');
 end;
 
 function ParseTag(const AArg: string): string;
 begin
-  if Copy(AArg, 1, 6) = '--tag=' then
-    Exit(Copy(AArg, 7, MaxInt));
-  Result := '';
+  Result := ExtractArgValue(AArg, '--tag');
 end;
 
 function ParseCount(const AArg: string): Integer;
 begin
-  if Copy(AArg, 1, 8) = '--count=' then
-  begin
-    Result := StrToIntDef(Copy(AArg, 9, MaxInt), 0);
-    if Result < 0 then Result := 0;
-  end
-  else
-    Result := 0;
+  Result := ExtractArgIntValue(AArg, '--count', 0);
 end;
 
 function ParseShuffleSeed(const AArg: string): Integer;
@@ -243,65 +289,48 @@ function ParseShuffleSeed(const AArg: string): Integer;
 begin
   if AArg = '--shuffle' then
     Exit(-1);
-  if Copy(AArg, 1, 16) = '--shuffle-seed=' then
-  begin
-    Result := StrToIntDef(Copy(AArg, 17, MaxInt), -1);
-    if Result = 0 then Result := -1; { seed=0 means off, so treat 0 as -1 }
-  end
-  else
-    Result := 0;
+  Result := ExtractArgIntValue(AArg, '--shuffle-seed', 0);
+  if Result = 0 then Result := -1; { seed=0 means off, so treat 0 as -1 }
 end;
 
 function IsFailFastArg(const AArg: string): Boolean;
 begin
-  Result := (AArg = '--failfast') or (AArg = '--fail-fast');
+  Result := HasArgFlag(AArg, '--failfast', '--fail-fast');
 end;
 
 function IsListArg(const AArg: string): Boolean;
 begin
-  Result := (AArg = '--list') or (AArg = '--list-tests');
+  Result := HasArgFlag(AArg, '--list', '--list-tests');
 end;
 
 function IsShortArg(const AArg: string): Boolean;
 begin
-  Result := (AArg = '--short') or (AArg = '-short');
+  Result := HasArgFlag(AArg, '--short', '-short');
 end;
 
 function IsProgressArg(const AArg: string): Boolean;
 begin
-  Result := (AArg = '--progress') or (AArg = '-progress');
+  Result := HasArgFlag(AArg, '--progress', '-progress');
 end;
 
 function ParseMaxFailures(const AArg: string): Integer;
 begin
-  if Copy(AArg, 1, 16) = '--failures-max=' then
-  begin
-    Result := StrToIntDef(Copy(AArg, 17, MaxInt), 0);
-    if Result < 0 then Result := 0;
-  end
-  else
-    Result := 0;
+  Result := ExtractArgIntValue(AArg, '--failures-max', 0);
 end;
 
 function IsJsonArg(const AArg: string): Boolean;
 begin
-  Result := (AArg = '--json') or (AArg = '-json');
+  Result := HasArgFlag(AArg, '--json', '-json');
 end;
 
 function IsVerboseArg(const AArg: string): Boolean;
 begin
-  Result := (AArg = '--verbose') or (AArg = '-v');
+  Result := HasArgFlag(AArg, '--verbose', '-v');
 end;
 
 function ParseRunTimeout(const AArg: string): Integer;
 begin
-  if Copy(AArg, 1, 10) = '--timeout=' then
-  begin
-    Result := StrToIntDef(Copy(AArg, 11, MaxInt), 0);
-    if Result < 0 then Result := 0;
-  end
-  else
-    Result := 0;
+  Result := ExtractArgIntValue(AArg, '--timeout', 0);
 end;
 
 function IsBenchArg(const AArg: string): Boolean;
@@ -351,7 +380,7 @@ end;
 
 function IsBenchMemArg(const AArg: string): Boolean;
 begin
-  Result := (AArg = '--benchmem') or (AArg = '-benchmem');
+  Result := HasArgFlag(AArg, '--benchmem', '-benchmem');
 end;
 
 procedure SetCurrentTestContext(AContext: TObject);
@@ -414,168 +443,133 @@ begin
     Result := AEntry.Name;
 end;
 
-function ParseFilterFromArgs: string;
+{ ── FromArgs helpers (iterate ParamCount once, delegate to single-arg parsers) }
+
+function FindArgValue(
+  AParseFunc: TArgStringParser;
+  const ALongFlag: string
+): string;
+{ Generic: scan argv for --flag=value (via AParseFunc) or --flag value form. }
 var
   K: Integer;
-  LFilter: string;
+  LVal: string;
 begin
-  Result := '';
   for K := 1 to ParamCount do
   begin
-    { Support both --filter value and --filter=value syntax }
-    LFilter := ParseFilter(ParamStr(K));
-    if LFilter <> '' then
-      Exit(LFilter);
-    if (ParamStr(K) = '--filter') and (K < ParamCount) then
+    LVal := AParseFunc(ParamStr(K));
+    if LVal <> '' then
+      Exit(LVal);
+    if (ParamStr(K) = ALongFlag) and (K < ParamCount) then
       Exit(ParamStr(K + 1));
   end;
-end;
-
-function ParseTagFromArgs: string;
-var
-  K: Integer;
-  LTag: string;
-begin
   Result := '';
-  for K := 1 to ParamCount do
-  begin
-    LTag := ParseTag(ParamStr(K));
-    if LTag <> '' then
-      Exit(LTag);
-    if (ParamStr(K) = '--tag') and (K < ParamCount) then
-      Exit(ParamStr(K + 1));
-  end;
 end;
 
-function ParseCountFromArgs: Integer;
+function FindArgInt(
+  AParseFunc: TArgIntParser;
+  const ALongFlag: string;
+  ADefault: Integer
+): Integer;
+{ Generic: scan argv for --flag=N (via AParseFunc) or --flag N form. }
 var
   K: Integer;
-  LCount: Integer;
+  LVal: Integer;
 begin
-  Result := 0;
   for K := 1 to ParamCount do
   begin
-    LCount := ParseCount(ParamStr(K));
-    if LCount > 0 then
-      Exit(LCount);
-    if (ParamStr(K) = '--count') and (K < ParamCount) then
+    LVal := AParseFunc(ParamStr(K));
+    if LVal <> 0 then
+      Exit(LVal);
+    if (ParamStr(K) = ALongFlag) and (K < ParamCount) then
     begin
-      Result := StrToIntDef(ParamStr(K + 1), 0);
+      Result := StrToIntDef(ParamStr(K + 1), ADefault);
       if Result < 0 then Result := 0;
       Exit;
     end;
   end;
+  Result := ADefault;
+end;
+
+function FindFlagInArgs(
+  AIsFlagFunc: TArgFlagChecker
+): Boolean;
+{ Generic: scan argv for a boolean flag. }
+var
+  K: Integer;
+begin
+  for K := 1 to ParamCount do
+    if AIsFlagFunc(ParamStr(K)) then
+      Exit(True);
+  Result := False;
+end;
+
+function ParseFilterFromArgs: string;
+begin
+  Result := FindArgValue(@ParseFilter, '--filter');
+end;
+
+function ParseTagFromArgs: string;
+begin
+  Result := FindArgValue(@ParseTag, '--tag');
+end;
+
+function ParseCountFromArgs: Integer;
+begin
+  Result := FindArgInt(@ParseCount, '--count', 0);
 end;
 
 function ParseShuffleFromArgs: Integer;
 var
-  K, LSeed: Integer;
+  K: Integer;
+  LSeed: Integer;
 begin
-  Result := 0;
   for K := 1 to ParamCount do
   begin
     LSeed := ParseShuffleSeed(ParamStr(K));
     if LSeed <> 0 then
       Exit(LSeed);
   end;
+  Result := 0;
 end;
 
 function ParseFailFastFromArgs: Boolean;
-var
-  K: Integer;
 begin
-  Result := False;
-  for K := 1 to ParamCount do
-    if IsFailFastArg(ParamStr(K)) then
-      Exit(True);
+  Result := FindFlagInArgs(@IsFailFastArg);
 end;
 
 function ParseListFromArgs: Boolean;
-var
-  K: Integer;
 begin
-  Result := False;
-  for K := 1 to ParamCount do
-    if IsListArg(ParamStr(K)) then
-      Exit(True);
+  Result := FindFlagInArgs(@IsListArg);
 end;
 
 function ParseShortFromArgs: Boolean;
-var
-  K: Integer;
 begin
-  Result := False;
-  for K := 1 to ParamCount do
-    if IsShortArg(ParamStr(K)) then
-      Exit(True);
+  Result := FindFlagInArgs(@IsShortArg);
 end;
 
 function ParseProgressFromArgs: Boolean;
-var
-  K: Integer;
 begin
-  Result := False;
-  for K := 1 to ParamCount do
-    if IsProgressArg(ParamStr(K)) then
-      Exit(True);
+  Result := FindFlagInArgs(@IsProgressArg);
 end;
 
 function ParseMaxFailuresFromArgs: Integer;
-var
-  K, LVal: Integer;
 begin
-  Result := 0;
-  for K := 1 to ParamCount do
-  begin
-    LVal := ParseMaxFailures(ParamStr(K));
-    if LVal > 0 then
-      Exit(LVal);
-    if (ParamStr(K) = '--failures-max') and (K < ParamCount) then
-    begin
-      Result := StrToIntDef(ParamStr(K + 1), 0);
-      if Result < 0 then Result := 0;
-      Exit;
-    end;
-  end;
+  Result := FindArgInt(@ParseMaxFailures, '--failures-max', 0);
 end;
 
 function ParseJsonFromArgs: Boolean;
-var
-  K: Integer;
 begin
-  Result := False;
-  for K := 1 to ParamCount do
-    if IsJsonArg(ParamStr(K)) then
-      Exit(True);
+  Result := FindFlagInArgs(@IsJsonArg);
 end;
 
 function ParseVerboseFromArgs: Boolean;
-var
-  K: Integer;
 begin
-  Result := False;
-  for K := 1 to ParamCount do
-    if IsVerboseArg(ParamStr(K)) then
-      Exit(True);
+  Result := FindFlagInArgs(@IsVerboseArg);
 end;
 
 function ParseRunTimeoutFromArgs: Integer;
-var
-  K, LVal: Integer;
 begin
-  Result := 0;
-  for K := 1 to ParamCount do
-  begin
-    LVal := ParseRunTimeout(ParamStr(K));
-    if LVal > 0 then
-      Exit(LVal);
-    if (ParamStr(K) = '--timeout') and (K < ParamCount) then
-    begin
-      Result := StrToIntDef(ParamStr(K + 1), 0);
-      if Result < 0 then Result := 0;
-      Exit;
-    end;
-  end;
+  Result := FindArgInt(@ParseRunTimeout, '--timeout', 0);
 end;
 
 function ParseBenchFromArgs: string;
@@ -583,46 +577,25 @@ function ParseBenchFromArgs: string;
 var
   K: Integer;
 begin
-  Result := '';
   for K := 1 to ParamCount do
   begin
     if IsBenchArg(ParamStr(K)) then
-    begin
-      Result := ParseBenchPattern(ParamStr(K));
-      Exit;
-    end;
+      Exit(ParseBenchPattern(ParamStr(K)));
     if (ParamStr(K) = '--bench') and (K < ParamCount) and
        (Copy(ParamStr(K + 1), 1, 1) <> '-') then
       Exit(ParamStr(K + 1));
   end;
+  Result := '';
 end;
 
 function ParseBenchTimeFromArgs: Integer;
-var
-  K, LVal: Integer;
 begin
-  Result := 0;
-  for K := 1 to ParamCount do
-  begin
-    LVal := ParseBenchTime(ParamStr(K));
-    if LVal > 0 then
-      Exit(LVal);
-    if (ParamStr(K) = '--benchtime') and (K < ParamCount) then
-    begin
-      Result := StrToIntDef(ParamStr(K + 1), 0);
-      if Result > 0 then Exit(Result * 1000);
-    end;
-  end;
+  Result := FindArgInt(@ParseBenchTime, '--benchtime', 0);
 end;
 
 function ParseBenchMemFromArgs: Boolean;
-var
-  K: Integer;
 begin
-  Result := False;
-  for K := 1 to ParamCount do
-    if IsBenchMemArg(ParamStr(K)) then
-      Exit(True);
+  Result := FindFlagInArgs(@IsBenchMemArg);
 end;
 
 function RunnerConfig(const ARunner: TTestRunner): TTestConfig;
@@ -734,9 +707,53 @@ begin
   Result.FixtureAllocations := nil;
   Result.LastRunPassed := False;
   Result.HasRun        := False;
+  Result.FCleanupDone  := False;
   Result.LastPass      := 0;
   Result.LastFail      := 0;
   Result.LastSkip      := 0;
+end;
+
+{ ── Generic array capacity growth ───────────────────────────────────────────── }
+
+function GrowArrayLen(var AArray: specialize TArray<Pointer>; AInitCap: Integer): Integer;
+{ Grow AArray capacity if needed. Returns old length (= insertion index). }
+var
+  LOldLen, LCap: Integer;
+begin
+  LOldLen := Length(AArray);
+  LCap := GrowCapacity(LOldLen, AInitCap);
+  if LCap <> LOldLen then SetLength(AArray, LCap);
+  Result := LOldLen;
+end;
+
+function GrowArrayLen(var AArray: specialize TArray<TObject>; AInitCap: Integer): Integer;
+var
+  LOldLen, LCap: Integer;
+begin
+  LOldLen := Length(AArray);
+  LCap := GrowCapacity(LOldLen, AInitCap);
+  if LCap <> LOldLen then SetLength(AArray, LCap);
+  Result := LOldLen;
+end;
+
+function GrowArrayLen(var AArray: specialize TArray<Integer>; AInitCap: Integer): Integer;
+var
+  LOldLen, LCap: Integer;
+begin
+  LOldLen := Length(AArray);
+  LCap := GrowCapacity(LOldLen, AInitCap);
+  if LCap <> LOldLen then SetLength(AArray, LCap);
+  Result := LOldLen;
+end;
+
+function GrowArrayLen(var AArray: specialize TArray<TTestSuite>; AInitCap: Integer): Integer;
+var
+  LOldLen, LCap: Integer;
+begin
+  LOldLen := Length(AArray);
+  LCap := GrowCapacity(LOldLen, AInitCap);
+  if LCap <> LOldLen then SetLength(AArray, LCap);
+  Result := LOldLen;
 end;
 
 procedure RegisterStub(var ASuite: TTestSuite; APtr: Pointer);
@@ -745,13 +762,19 @@ procedure RegisterStub(var ASuite: TTestSuite; APtr: Pointer);
     with no synchronization. Current usage is safe: registration and
     cleanup both occur on the main thread during discovery and suite
     finalization. }
+var
+  LIdx: Integer;
 begin
-  { Global safety-net — disposed in finalization for suites that never run }
-  SetLength(GStubRegistry, Length(GStubRegistry) + 1);
-  GStubRegistry[High(GStubRegistry)] := APtr;
-  { Per-suite tracking — stores GStubRegistry index for O(1) cleanup (R4-10) }
-  SetLength(ASuite.StubAllocations, Length(ASuite.StubAllocations) + 1);
-  ASuite.StubAllocations[High(ASuite.StubAllocations)] := High(GStubRegistry);
+  { Global safety-net — disposed in finalization for suites that never run.
+    Geometric growth to avoid O(n²) realloc on repeated RegisterStub calls. }
+  LIdx := GrowArrayLen(GStubRegistry, 16);
+  GStubRegistry[LIdx] := APtr;
+  SetLength(GStubRegistry, LIdx + 1);
+  { Per-suite tracking — stores GStubRegistry index for O(1) cleanup (R4-10).
+    Geometric growth: pre-allocate capacity to avoid per-registration realloc. }
+  LIdx := GrowArrayLen(ASuite.StubAllocations, 8);
+  ASuite.StubAllocations[LIdx] := High(GStubRegistry);
+  SetLength(ASuite.StubAllocations, LIdx + 1);
 end;
 
 procedure RegisterFixture(var ASuite: TTestSuite; AFixture: TObject);
@@ -760,22 +783,46 @@ procedure RegisterFixture(var ASuite: TTestSuite; AFixture: TObject);
     with no synchronization. Current usage is safe: registration and
     cleanup both occur on the main thread during discovery and suite
     finalization. }
+var
+  LIdx: Integer;
 begin
-  { Global safety-net — disposed in finalization for suites that never run }
-  SetLength(GFixtureRegistry, Length(GFixtureRegistry) + 1);
-  GFixtureRegistry[High(GFixtureRegistry)] := AFixture;
-  { Per-suite tracking — stores GFixtureRegistry index for O(1) cleanup }
-  SetLength(ASuite.FixtureAllocations, Length(ASuite.FixtureAllocations) + 1);
-  ASuite.FixtureAllocations[High(ASuite.FixtureAllocations)] := High(GFixtureRegistry);
+  { Global safety-net — disposed in finalization for suites that never run.
+    Geometric growth to avoid O(n²) realloc on repeated RegisterFixture calls. }
+  LIdx := GrowArrayLen(GFixtureRegistry, 16);
+  GFixtureRegistry[LIdx] := AFixture;
+  SetLength(GFixtureRegistry, LIdx + 1);
+  { Per-suite tracking — stores GFixtureRegistry index for O(1) cleanup.
+    Geometric growth to avoid per-registration realloc. }
+  LIdx := GrowArrayLen(ASuite.FixtureAllocations, 8);
+  ASuite.FixtureAllocations[LIdx] := High(GFixtureRegistry);
+  SetLength(ASuite.FixtureAllocations, LIdx + 1);
+end;
+
+{ ── Registration helpers ────────────────────────────────────────────────────── }
+{ Reduce boilerplate in Test/ShouldFail/ShortSkip overloads. Each public method
+  calls InitProcEntry or InitClosureEntry, sets extra fields, then RegisterEntry. }
+
+procedure InitProcEntry(var AEntry: TTestEntry; const AName: string;
+  AProc: TTestProc);
+begin
+  ClearEntry(AEntry);
+  AEntry.Name := AName;
+  AEntry.Proc := AProc;
+end;
+
+procedure InitClosureEntry(var AEntry: TTestEntry; const AName: string;
+  AProc: TTestClosure);
+begin
+  ClearEntry(AEntry);
+  AEntry.Name := AName;
+  AEntry.Closure := AProc;
 end;
 
 procedure TTestSuite.Test(const AName: string; AProc: TTestProc);
 var
   LEntry: TTestEntry;
 begin
-  ClearEntry(LEntry);
-  LEntry.Name := AName;
-  LEntry.Proc := AProc;
+  InitProcEntry(LEntry, AName, AProc);
   RegisterEntry(Tests, LEntry);
 end;
 
@@ -783,9 +830,7 @@ procedure TTestSuite.Test(const AName: string; AProc: TTestClosure);
 var
   LEntry: TTestEntry;
 begin
-  ClearEntry(LEntry);
-  LEntry.Name    := AName;
-  LEntry.Closure := AProc;
+  InitClosureEntry(LEntry, AName, AProc);
   RegisterEntry(Tests, LEntry);
 end;
 
@@ -794,9 +839,7 @@ procedure TTestSuite.Test(const AName: string; AProc: TTestProc;
 var
   LEntry: TTestEntry;
 begin
-  ClearEntry(LEntry);
-  LEntry.Name       := AName;
-  LEntry.Proc       := AProc;
+  InitProcEntry(LEntry, AName, AProc);
   LEntry.RetryCount := ARetryCount;
   RegisterEntry(Tests, LEntry);
 end;
@@ -806,9 +849,7 @@ procedure TTestSuite.Test(const AName: string; AProc: TTestClosure;
 var
   LEntry: TTestEntry;
 begin
-  ClearEntry(LEntry);
-  LEntry.Name       := AName;
-  LEntry.Closure    := AProc;
+  InitClosureEntry(LEntry, AName, AProc);
   LEntry.RetryCount := ARetryCount;
   RegisterEntry(Tests, LEntry);
 end;
@@ -818,9 +859,7 @@ procedure TTestSuite.Test(const AName: string; AProc: TTestProc;
 var
   LEntry: TTestEntry;
 begin
-  ClearEntry(LEntry);
-  LEntry.Name := AName;
-  LEntry.Proc := AProc;
+  InitProcEntry(LEntry, AName, AProc);
   CopyTags(LEntry.Tags, ATags);
   RegisterEntry(Tests, LEntry);
 end;
@@ -830,9 +869,7 @@ procedure TTestSuite.Test(const AName: string; AProc: TTestClosure;
 var
   LEntry: TTestEntry;
 begin
-  ClearEntry(LEntry);
-  LEntry.Name    := AName;
-  LEntry.Closure := AProc;
+  InitClosureEntry(LEntry, AName, AProc);
   CopyTags(LEntry.Tags, ATags);
   RegisterEntry(Tests, LEntry);
 end;
@@ -842,9 +879,7 @@ procedure TTestSuite.Test(const AName: string; AProc: TTestProc;
 var
   LEntry: TTestEntry;
 begin
-  ClearEntry(LEntry);
-  LEntry.Name        := AName;
-  LEntry.Proc        := AProc;
+  InitProcEntry(LEntry, AName, AProc);
   LEntry.DisplayName := ADisplayName;
   CopyTags(LEntry.Tags, ATags);
   RegisterEntry(Tests, LEntry);
@@ -855,9 +890,7 @@ procedure TTestSuite.Test(const AName: string; AProc: TTestClosure;
 var
   LEntry: TTestEntry;
 begin
-  ClearEntry(LEntry);
-  LEntry.Name        := AName;
-  LEntry.Closure     := AProc;
+  InitClosureEntry(LEntry, AName, AProc);
   LEntry.DisplayName := ADisplayName;
   CopyTags(LEntry.Tags, ATags);
   RegisterEntry(Tests, LEntry);
@@ -868,9 +901,7 @@ procedure TTestSuite.TestRepeat(const AName: string; AProc: TTestProc;
 var
   LEntry: TTestEntry;
 begin
-  ClearEntry(LEntry);
-  LEntry.Name        := AName;
-  LEntry.Proc        := AProc;
+  InitProcEntry(LEntry, AName, AProc);
   LEntry.RepeatCount := ARepeatCount;
   RegisterEntry(Tests, LEntry);
 end;
@@ -880,9 +911,7 @@ procedure TTestSuite.TestRepeat(const AName: string; AProc: TTestClosure;
 var
   LEntry: TTestEntry;
 begin
-  ClearEntry(LEntry);
-  LEntry.Name        := AName;
-  LEntry.Closure     := AProc;
+  InitClosureEntry(LEntry, AName, AProc);
   LEntry.RepeatCount := ARepeatCount;
   RegisterEntry(Tests, LEntry);
 end;
@@ -940,9 +969,7 @@ procedure TTestSuite.ShouldFail(const AName: string; AProc: TTestProc;
 var
   LEntry: TTestEntry;
 begin
-  ClearEntry(LEntry);
-  LEntry.Name          := AName;
-  LEntry.Proc          := AProc;
+  InitProcEntry(LEntry, AName, AProc);
   LEntry.Kind          := ekShouldFail;
   LEntry.ShouldFailMsg := AShouldFailMsg;
   RegisterEntry(Tests, LEntry);
@@ -953,9 +980,7 @@ procedure TTestSuite.ShouldFail(const AName: string; AProc: TTestClosure;
 var
   LEntry: TTestEntry;
 begin
-  ClearEntry(LEntry);
-  LEntry.Name          := AName;
-  LEntry.Closure       := AProc;
+  InitClosureEntry(LEntry, AName, AProc);
   LEntry.Kind          := ekShouldFail;
   LEntry.ShouldFailMsg := AShouldFailMsg;
   RegisterEntry(Tests, LEntry);
@@ -965,9 +990,7 @@ procedure TTestSuite.ShortSkip(const AName: string; AProc: TTestProc);
 var
   LEntry: TTestEntry;
 begin
-  ClearEntry(LEntry);
-  LEntry.Name      := AName;
-  LEntry.Proc      := AProc;
+  InitProcEntry(LEntry, AName, AProc);
   LEntry.ShortSkip := True;
   RegisterEntry(Tests, LEntry);
 end;
@@ -976,9 +999,7 @@ procedure TTestSuite.ShortSkip(const AName: string; AProc: TTestClosure);
 var
   LEntry: TTestEntry;
 begin
-  ClearEntry(LEntry);
-  LEntry.Name      := AName;
-  LEntry.Closure   := AProc;
+  InitClosureEntry(LEntry, AName, AProc);
   LEntry.ShortSkip := True;
   RegisterEntry(Tests, LEntry);
 end;
@@ -1045,19 +1066,24 @@ end;
 procedure TTestSuite.Cleanup(AProc: TTestProc);
 var
   LProc: TTestProc;
+  LIdx: Integer;
 begin
   LProc := AProc;
-  SetLength(EachCleanups, Length(EachCleanups) + 1);
-  EachCleanups[High(EachCleanups)] := procedure
+  LIdx := GrowCleanups(EachCleanups);
+  EachCleanups[LIdx] := procedure
   begin
     LProc;
   end;
+  SetLength(EachCleanups, LIdx + 1);
 end;
 
 procedure TTestSuite.Cleanup(AProc: TTestClosure);
+var
+  LIdx: Integer;
 begin
-  SetLength(EachCleanups, Length(EachCleanups) + 1);
-  EachCleanups[High(EachCleanups)] := AProc;
+  LIdx := GrowCleanups(EachCleanups);
+  EachCleanups[LIdx] := AProc;
+  SetLength(EachCleanups, LIdx + 1);
 end;
 
 function TTestSuite.WithConfig(const AConfig: TTestConfig): TTestSuite;
@@ -1125,21 +1151,26 @@ end;
 function TTestSuite.WithEachCleanup(AProc: TTestProc): TTestSuite;
 var
   LProc: TTestProc;
+  LIdx: Integer;
 begin
   Result := Self;
   LProc := AProc;
-  SetLength(Result.EachCleanups, Length(Result.EachCleanups) + 1);
-  Result.EachCleanups[High(Result.EachCleanups)] := procedure
+  LIdx := GrowCleanups(Result.EachCleanups);
+  Result.EachCleanups[LIdx] := procedure
   begin
     LProc;
   end;
+  SetLength(Result.EachCleanups, LIdx + 1);
 end;
 
 function TTestSuite.WithEachCleanup(AProc: TTestClosure): TTestSuite;
+var
+  LIdx: Integer;
 begin
   Result := Self;
-  SetLength(Result.EachCleanups, Length(Result.EachCleanups) + 1);
-  Result.EachCleanups[High(Result.EachCleanups)] := AProc;
+  LIdx := GrowCleanups(Result.EachCleanups);
+  Result.EachCleanups[LIdx] := AProc;
+  SetLength(Result.EachCleanups, LIdx + 1);
 end;
 
 function TTestSuite.Run: Boolean;
@@ -1224,26 +1255,8 @@ begin
   { Suite-level setup (uses shared helper) }
   if not RunSetup(LConfig, LSkip, LLastFailMsg) then
   begin
-    { All tests skipped — populate results with skipped entries }
-    for I := 0 to High(Tests) do
-    begin
-      LTestResult := MakeTestResult(Tests[I].Name, tsSkipped,
-        'setup failed: ' + LLastFailMsg, 0);
-      AppendResult(AResult.Results, LTestResult);
-      LOutSink.WriteLn('    ' + FormatStatusLine(tsSkipped, Tests[I].Name, LConfig));
-    end;
-    AResult.Failed    := 1;
-    AResult.Skipped   := LSkip;
-    AResult.AllPassed := False;
-    HasRun        := True;
-    LastRunPassed := False;
-    LastPass      := 0;
-    LastFail      := 1;
-    LastSkip      := LSkip;
-    Result         := False;
-    CleanupTableAllocations;
-    LOutSink.WriteLn(
-      AnsiDim('  ' + IntToStr(LSkip) + ' skipped (setup failure)', LConfig));
+    HandleSetupFailure(AResult, LSkip, LLastFailMsg, LOutSink, LConfig, True);
+    Result := False;
     Exit;
   end;
 
@@ -1291,12 +1304,8 @@ begin
       LTestResult := MakeTestResult(LEntry.Name, tsSkipped,
         'skipped: short mode', 0);
       AppendResult(AResult.Results, LTestResult);
-      if LConfig.VerboseMode then
-        WriteTestStatusVerbose(tsSkipped, LEntry.Name, '', 'short mode',
-          0, LOutSink, LConfig)
-      else
-        LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, LEntry.Name,
-          'short mode', LConfig));
+      WriteTestOutput(tsSkipped, LEntry.Name, '', 'short mode',
+        0, LOutSink, LConfig);
       ReportLeakIfAny(LStatus, LConfig);
       Continue;
     end;
@@ -1309,6 +1318,10 @@ begin
     else
       LProgressPrefix := '';
 
+    { Benchmarks: skip in regular test run (only run via RunBenchmarks) }
+    if LEntry.Kind = ekBench then
+      Continue;
+
     { Skip check BEFORE BeforeEach — skipped tests don't need hooks }
     if LEntry.Kind = ekSkipped then
     begin
@@ -1317,14 +1330,8 @@ begin
       LTestResult := MakeTestResult(LEntry.Name, tsSkipped,
         LEntry.SkipReason, 0);
       AppendResult(AResult.Results, LTestResult);
-      if LConfig.VerboseMode then
-        WriteTestStatusVerbose(tsSkipped, LEntry.Name, '', LEntry.SkipReason,
-          0, LOutSink, LConfig)
-      else if LEntry.SkipReason <> '' then
-        LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, LEntry.Name,
-          LEntry.SkipReason, LConfig))
-      else
-        LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, LEntry.Name, LConfig));
+      WriteTestOutput(tsSkipped, LEntry.Name, '', LEntry.SkipReason,
+        0, LOutSink, LConfig);
       ReportLeakIfAny(LStatus, LConfig);
       Continue;
     end;
@@ -1341,12 +1348,8 @@ begin
           Inc(LSkip);
           LTestResult := MakeTestResult(LEntry.Name, tsSkipped, E.Message, 0);
           AppendResult(AResult.Results, LTestResult);
-          if LConfig.VerboseMode then
-            WriteTestStatusVerbose(tsSkipped, LEntry.Name, '', E.Message,
-              0, LOutSink, LConfig)
-          else
-            LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, LEntry.Name,
-              E.Message, LConfig));
+          WriteTestOutput(tsSkipped, LEntry.Name, '', E.Message,
+            0, LOutSink, LConfig);
           ReportLeakIfAny(LStatus, LConfig);
           Continue;
         end;
@@ -1357,12 +1360,8 @@ begin
           LTestResult := MakeTestResult(LEntry.Name, tsError,
             'beforeEach failed: ' + E.Message, 0);
           AppendResult(AResult.Results, LTestResult);
-          if LConfig.VerboseMode then
-            WriteTestStatusVerbose(tsError, LEntry.Name,
-              'beforeEach failed: ' + E.Message, '', 0, LOutSink, LConfig)
-          else
-            LOutSink.WriteLn('  ' + FormatStatusLine(tsError, LEntry.Name,
-              'beforeEach failed: ' + E.Message, LConfig));
+          WriteTestOutput(tsError, LEntry.Name,
+            'beforeEach failed: ' + E.Message, '', 0, LOutSink, LConfig);
           Inc(LFail);
           Continue;
         end;
@@ -1409,7 +1408,16 @@ begin
       end
       else if LEntry.Kind = ekTableTest then
       begin
-        { Table-driven test: invoke the stored proc with case data }
+        { Table-driven test: invoke the stored proc with case data.
+          Nil guard: --count=N re-runs the suite after CleanupTableAllocations
+          has disposed TableCase/TableProc. Skip gracefully on re-run. }
+        if (LEntry.TableCase = nil) or (LEntry.TableProc = nil) then
+        begin
+          LStatus := tsSkipped;
+          LLastFailMsg := 'table data already disposed (--count re-run)';
+          Inc(LSkip);
+        end
+        else
         try
           PTestCaseProc(LEntry.TableProc)^(PTestCase(LEntry.TableCase)^);
           Inc(LPass);
@@ -1436,34 +1444,11 @@ begin
       end
       else if LEntry.Kind = ekShouldFail then
       begin
-        { ShouldFail: test passes if proc raises, fails if it doesn't.
-          Rust-style #[should_panic] expected-failure testing. }
-        try
-          if Assigned(LEntry.Closure) then
-            LEntry.Closure()
-          else
-            LEntry.Proc;
-          { No exception = unexpected success }
-          LStatus := tsFailed;
-          if LEntry.ShouldFailMsg <> '' then
-            LLastFailMsg := 'Expected failure (' + LEntry.ShouldFailMsg +
-              ') but test passed'
-          else
-            LLastFailMsg := 'Expected failure but test passed';
-          Inc(LFail);
-        except
-          on E: ETestSkipped do
-          begin
-            LStatus := tsSkipped;
-            LLastFailMsg := E.Message;
-            Inc(LSkip);
-          end;
-          on E: Exception do
-          begin
-            { Expected failure — test passes }
-            LStatus := tsPassed;
-            Inc(LPass);
-          end;
+        RunShouldFailEntry(LEntry, LStatus, LLastFailMsg);
+        case LStatus of
+          tsFailed:  Inc(LFail);
+          tsSkipped: Inc(LSkip);
+          tsPassed:  Inc(LPass);
         end;
       end
       else
@@ -1485,22 +1470,11 @@ begin
                (Assigned(LEntry.Proc) or Assigned(LEntry.Closure)) then
             begin
               if Assigned(LEntry.Closure) then
-              begin
-                if not RunTestWithTimeout(LEntry.Closure, LGTestTimeoutMs,
-                  LConfig, LStatus, LLastFailMsg) then
-                  { Timed out — LStatus already set to tsError };
-              end
+                RunTestWithTimeout(LEntry.Closure, LGTestTimeoutMs,
+                  LConfig, LStatus, LLastFailMsg)
               else
-              begin
-                if RunTestWithTimeout(LEntry.Proc, LGTestTimeoutMs, LConfig,
-                  LStatus, LLastFailMsg) then
-                begin
-                  if LStatus = tsPassed then { ok }
-                  else { LStatus already set }
-                end
-                else
-                  { Timed out — LStatus already set to tsError };
-              end;
+                RunTestWithTimeout(LEntry.Proc, LGTestTimeoutMs,
+                  LConfig, LStatus, LLastFailMsg);
             end
             else
             begin
@@ -1609,13 +1583,9 @@ begin
     AppendResult(AResult.Results, LTestResult);
 
     { Output per-test — use DisplayName + progress prefix }
-    if LConfig.VerboseMode then
-      WriteTestStatusVerbose(LStatus, LProgressPrefix + LDisplayName,
-        LLastFailMsg, LEntry.SkipReason,
-        GetTickCount64 - LStartMs, LOutSink, LConfig)
-    else
-      WriteTestStatus(LStatus, LProgressPrefix + LDisplayName, LLastFailMsg,
-        LEntry.SkipReason, LOutSink, LConfig);
+    WriteTestOutput(LStatus, LProgressPrefix + LDisplayName,
+      LLastFailMsg, LEntry.SkipReason,
+      GetTickCount64 - LStartMs, LOutSink, LConfig);
 
     LLastFailMsg := '';
     ReportLeakIfAny(LStatus, LConfig);
@@ -1651,6 +1621,13 @@ begin
     LSubCtx := nil;
     LAppender.Free;
   end;
+
+  { Dispose table test allocations (PTestCase/PTestCaseProc heap data).
+    Must be called before FinalizeResults so that --count=N re-runs can
+    skip already-disposed entries via the nil guard in the test loop.
+    FCleanupDone guard prevents double-free when RunAllWithResult also
+    calls CleanupTableAllocations after the full run. }
+  CleanupTableAllocations;
 
   FinalizeResults(LConfig, AResult, LPass, LFail, LSkip);
   Result := LastRunPassed;
@@ -1718,12 +1695,50 @@ begin
   TeardownClosure := nil;
 end;
 
+procedure TTestSuite.HandleSetupFailure(var AResult: TTestRunResult;
+  ASkipCount: Integer; const AErrorMsg: string;
+  const ASink: IOutputSink; const AConfig: TTestConfig;
+  APopulateResults: Boolean);
+{ Shared setup-failure handler for RunWithResult and RunParallelWithResult.
+  APopulateResults: True for serial (populates AResult.Results with skipped entries),
+  False for parallel (output only). }
+var
+  I: Integer;
+  LTestResult: TTestResult;
+begin
+  if APopulateResults then
+    for I := 0 to High(Tests) do
+    begin
+      LTestResult := MakeTestResult(Tests[I].Name, tsSkipped,
+        'setup failed: ' + AErrorMsg, 0);
+      AppendResult(AResult.Results, LTestResult);
+      ASink.WriteLn('    ' + FormatStatusLine(tsSkipped, Tests[I].Name, AConfig));
+    end
+  else
+    for I := 0 to High(Tests) do
+      ASink.WriteLn('    ' + FormatStatusLine(tsSkipped, Tests[I].Name, AConfig));
+  AResult.Failed    := 1;
+  AResult.Skipped   := ASkipCount;
+  AResult.AllPassed := False;
+  HasRun        := True;
+  LastRunPassed := False;
+  LastPass      := 0;
+  LastFail      := 1;
+  LastSkip      := ASkipCount;
+  ASink.WriteLn(
+    AnsiDim('  ' + IntToStr(ASkipCount) + ' skipped (setup failure)', AConfig));
+end;
+
 procedure TTestSuite.FinalizeResults(const AConfig: TTestConfig;
   var AResult: TTestRunResult; APass, AFail, ASkip: Integer);
+{ Sets result counters, populates slow test report, writes summary line.
+  Does NOT call CleanupTableAllocations — stubs/fixtures must survive the
+  full suite lifetime (--count=N re-runs need valid closure pointers).
+  The caller (RunAll* or finalization) is responsible for cleanup. }
 var
   LSlowCount: Integer;
+  LOutSink: IOutputSink;
 begin
-  CleanupTableAllocations;
   AResult.Passed    := APass;
   AResult.Failed    := AFail;
   AResult.Skipped   := ASkip;
@@ -1737,8 +1752,9 @@ begin
   LSlowCount := GetSlowTestCount(AConfig);
   if LSlowCount > 0 then
     AResult.SlowTests := GetTopSlowest(AResult.Results, LSlowCount);
-  WriteSlowTests(AResult.SlowTests, ResolveOutSink(AConfig), AConfig);
-  ResolveOutSink(AConfig).WriteLn(
+  LOutSink := ResolveOutSink(AConfig);
+  WriteSlowTests(AResult.SlowTests, LOutSink, AConfig);
+  LOutSink.WriteLn(
     AnsiDim(
       '  ' + IntToStr(APass) + ' passed, ' +
       IntToStr(AFail) + ' failed, ' +
@@ -1795,20 +1811,8 @@ begin
   { Suite-level setup (serial, uses shared helper) }
   if not RunSetup(LConfig, LSkip, LErrorMsg) then
   begin
-    for I := 0 to High(Tests) do
-      LOutSink.WriteLn('    ' + FormatStatusLine(tsSkipped, Tests[I].Name, LConfig));
-    AResult.Failed    := 1;
-    AResult.Skipped   := LSkip;
-    AResult.AllPassed := False;
-    HasRun        := True;
-    LastRunPassed := False;
-    LastPass      := 0;
-    LastFail      := 1;
-    LastSkip      := LSkip;
-    Result         := False;
-    CleanupTableAllocations;
-    LOutSink.WriteLn(
-      AnsiDim('  ' + IntToStr(LSkip) + ' skipped (setup failure)', LConfig));
+    HandleSetupFailure(AResult, LSkip, LErrorMsg, LOutSink, LConfig, False);
+    Result := False;
     Exit;
   end;
 
@@ -1839,8 +1843,8 @@ begin
       Inc(LSkip);
       LResults[I] := MakeTestResult(Tests[I].Name, tsSkipped,
         'skipped: short mode', 0);
-      LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, Tests[I].Name,
-        'short mode', LConfig));
+      WriteTestOutput(tsSkipped, Tests[I].Name, '', 'short mode',
+        0, LOutSink, LConfig);
       Continue;
     end;
 
@@ -1949,6 +1953,11 @@ begin
        (LResults[I].Name <> '') then
       AppendResult(AResult.Results, LResults[I]);
 
+  { Dispose table test allocations from parallel worker records.
+    Same rationale as RunWithResult — FCleanupDone guard prevents
+    double-free when RunAllParallelWithResult also calls this. }
+  CleanupTableAllocations;
+
   FinalizeResults(LConfig, AResult, LPass, LFail, LSkip);
   Result := LastRunPassed;
 end;
@@ -1972,7 +1981,7 @@ var
   LN: Integer;
   LStartMs, LElapsedMs: Int64;
   LResult: TBenchResult;
-  LCount: Integer;
+  LCount, LCap: Integer;
 begin
   LConfig := ResolveConfig(Config);
   LOutSink := ResolveOutSink(LConfig);
@@ -1980,6 +1989,7 @@ begin
   if LBenchTimeMs <= 0 then LBenchTimeMs := 1000;
   LShowMem := GetBenchMem(LConfig);
   LCount := 0;
+  LCap := 0;
   SetLength(AResults, 0);
   LOutSink.WriteLn('');
   WriteSuiteHeader(Name, 'benchmarks', LOutSink, LConfig);
@@ -1998,11 +2008,11 @@ begin
       LElapsedMs := GetTickCount64 - LStartMs;
       if LElapsedMs >= LBenchTimeMs then
         Break;
-      { Scale N: if too fast (< 10ms), multiply aggressively }
+      { Scale N: use Int64 to prevent overflow before bounds check }
       if LElapsedMs < 10 then
-        LN := LN * 100
+        LN := Int64(LN) * 100
       else
-        LN := Integer(Int64(LN) * LBenchTimeMs div LElapsedMs);
+        LN := Int64(LN) * LBenchTimeMs div LElapsedMs;
       if LN > 1000000000 then
       begin
         LN := 1000000000;
@@ -2017,11 +2027,19 @@ begin
     LElapsedMs := GetTickCount64 - LStartMs;
     LResult := MakeBenchResult(LEntry.Name, LN,
       LElapsedMs * 1000000, LCtx.AllocBytes, LCtx.AllocCount);
-    SetLength(AResults, Length(AResults) + 1);
-    AResults[High(AResults)] := LResult;
+    { Geometric growth: only grow during loop, trim once at end.
+      Writing beyond logical length after SetLength-down triggers heaptrc
+      guard violation even though allocated capacity is sufficient. }
+    if LCount >= LCap then
+    begin
+      LCap := GrowCapacity(LCap, 4);
+      SetLength(AResults, LCap);
+    end;
+    AResults[LCount] := LResult;
     LOutSink.WriteLn(FormatBenchLine(LResult, LShowMem, LConfig));
     Inc(LCount);
   end;
+  SetLength(AResults, LCount); { trim to logical size }
   if LCount = 0 then
     LOutSink.WriteLn(AnsiDim('  (no benchmarks matched)', LConfig));
   Result := LCount > 0;
@@ -2062,13 +2080,15 @@ begin
 end;
 
 procedure TTestSuite.CleanupTableAllocations;
-  { Note: Must be called from the main thread only. Accesses GStubRegistry
-    and GFixtureRegistry which are not thread-safe. Current usage is safe:
-    called from FinalizeResults which runs on the main thread after all
-    parallel worker threads have joined. }
+  { Disposes heap-allocated table test data, stubs, and fixtures.
+    FCleanupDone guard prevents double-free on --count=N re-runs where
+    CleanupTableAllocations is called once after the final iteration.
+    Must be called from the main thread only. }
 var
   I: Integer;
 begin
+  if FCleanupDone then Exit;
+  FCleanupDone := True;
   for I := 0 to High(Tests) do
   begin
     if Tests[I].Kind = ekTableTest then
@@ -2123,10 +2143,54 @@ procedure TTestRunner.Add(const ASuite: TTestSuite);
   { const avoids copying the entire record on the call side (same as var for
     structured types). Internally the suite IS copied into Suites[] via Pascal
     assignment. Mutations to the caller's ASuite after Add() are NOT visible
-    to the runner. Rule: register ALL tests before calling Add. }
+    to the runner. Rule: register ALL tests before calling Add.
+    IMPORTANT: Pascal record assignment shares dynamic array references via
+    refcount. We must deep-copy Tests so that runner operations (shuffle,
+    etc.) don't mutate the caller's original suite data. }
+var
+  LIdx: Integer;
 begin
-  SetLength(Suites, Length(Suites) + 1);
-  Suites[High(Suites)] := ASuite;
+  LIdx := GrowArrayLen(Suites, 4);
+  Suites[LIdx] := ASuite;
+  { Deep-copy Tests to break refcount sharing — shuffle and other
+    mutations in RunWithResult must not affect the caller's suite. }
+  Suites[LIdx].Tests := Copy(ASuite.Tests, 0, Length(ASuite.Tests));
+  SetLength(Suites, LIdx + 1);
+end;
+
+{ ── Runner banner (shared by sequential + parallel paths) ────────────────────── }
+
+procedure WriteRunnerBanner(const AName: string; const AConfig: TTestConfig;
+  const ASink: IOutputSink; AIsParallel: Boolean);
+var
+  LRepeatAll, LMaxFailures: Integer;
+  LLabel: string;
+begin
+  if AIsParallel then LLabel := ' (parallel)' else LLabel := '';
+  ASink.WriteLn(
+    AnsiBold('=== ', AConfig) +
+    AnsiBold(AName, AConfig) +
+    AnsiBold(LLabel + ' ===', AConfig));
+  LRepeatAll := GetRepeatAllCount(AConfig);
+  if LRepeatAll > 1 then
+    ASink.WriteLn(AnsiDim(
+      '  Running all tests ' + IntToStr(LRepeatAll) + ' times (--count=' +
+      IntToStr(LRepeatAll) + ')', AConfig));
+  if GetFailFast(AConfig) then
+    ASink.WriteLn(AnsiDim('  FailFast enabled', AConfig));
+  LMaxFailures := GetMaxFailures(AConfig);
+  if LMaxFailures > 0 then
+    ASink.WriteLn(AnsiDim(
+      '  Failures max: ' + IntToStr(LMaxFailures) + ' (--failures-max)',
+      AConfig));
+  if GetShortMode(AConfig) then
+    ASink.WriteLn(AnsiDim('  Short mode enabled (--short)', AConfig));
+  if GetVerboseMode(AConfig) then
+    ASink.WriteLn(AnsiDim('  Verbose mode (--verbose)', AConfig));
+  if GetRunTimeoutSec(AConfig) > 0 then
+    ASink.WriteLn(AnsiDim(
+      '  Run timeout: ' + IntToStr(GetRunTimeoutSec(AConfig)) + 's (--timeout)',
+      AConfig));
 end;
 
 function TTestRunner.RunAll: Boolean;
@@ -2143,8 +2207,11 @@ begin
   Result := RunAllParallelWithResult(APool, LResults);
 end;
 
-function TTestRunner.RunAllWithResult(
-  out AResults: specialize TArray<TTestRunResult>): Boolean;
+function TTestRunner.RunAllIterLoop(
+  out AResults: specialize TArray<TTestRunResult>;
+  AIsParallel: Boolean; APool: IThreadPool): Boolean;
+{ Shared iteration loop for RunAllWithResult and RunAllParallelWithResult.
+  Handles RepeatAll, FailFast, MaxFailures, cleanup, and JSON output. }
 var
   I, LIter, LRepeatAll: Integer;
   LAllPassed: Boolean;
@@ -2156,7 +2223,6 @@ var
   LMaxFailures: Integer;
   LBenchResults: specialize TArray<TBenchResults>;
 begin
-  ApplyCLIArgs;
   LConfig := RunnerConfig(Self);
   LOutSink := ResolveOutSink(LConfig);
 
@@ -2172,28 +2238,7 @@ begin
   LFailFast := GetFailFast(LConfig);
   LMaxFailures := GetMaxFailures(LConfig);
 
-  LOutSink.WriteLn(
-    AnsiBold('=== ', LConfig) +
-    AnsiBold(Name, LConfig) +
-    AnsiBold(' ===', LConfig));
-  if LRepeatAll > 1 then
-    LOutSink.WriteLn(AnsiDim(
-      '  Running all tests ' + IntToStr(LRepeatAll) + ' times (--count=' +
-      IntToStr(LRepeatAll) + ')', LConfig));
-  if LFailFast then
-    LOutSink.WriteLn(AnsiDim('  FailFast enabled', LConfig));
-  if LMaxFailures > 0 then
-    LOutSink.WriteLn(AnsiDim(
-      '  Failures max: ' + IntToStr(LMaxFailures) + ' (--failures-max)',
-      LConfig));
-  if GetShortMode(LConfig) then
-    LOutSink.WriteLn(AnsiDim('  Short mode enabled (--short)', LConfig));
-  if GetVerboseMode(LConfig) then
-    LOutSink.WriteLn(AnsiDim('  Verbose mode (--verbose)', LConfig));
-  if GetRunTimeoutSec(LConfig) > 0 then
-    LOutSink.WriteLn(AnsiDim(
-      '  Run timeout: ' + IntToStr(GetRunTimeoutSec(LConfig)) + 's (--timeout)',
-      LConfig));
+  WriteRunnerBanner(Name, LConfig, LOutSink, AIsParallel);
 
   LAllPassed := True;
   TotalPass := 0;
@@ -2209,7 +2254,6 @@ begin
       LOutSink.WriteLn(AnsiBold(
         '--- Iteration ' + IntToStr(LIter) + '/' + IntToStr(LRepeatAll) +
         ' ---', LConfig));
-      { Reset counters each iteration — only the last iteration's totals are kept }
       TotalPass := 0;
       TotalFail := 0;
       TotalSkip := 0;
@@ -2217,26 +2261,30 @@ begin
     LStartMs := GetTickCount64;
     for I := 0 to High(Suites) do
     begin
-      if not Suites[I].RunWithResult(LSuiteResult) then
+      if AIsParallel then
       begin
-        LAllPassed := False;
-        if LFailFast then
-        begin
-          LOutSink.WriteLn(AnsiYellow(
-            '  FAILFAST: stopping after suite failure', LConfig));
-          AResults[I] := LSuiteResult;
-          Inc(TotalPass, Suites[I].LastPass);
-          Inc(TotalFail, Suites[I].LastFail);
-          Inc(TotalSkip, Suites[I].LastSkip);
-          Break;
-        end;
+        if not Suites[I].RunParallelWithResult(APool, LSuiteResult) then
+          LAllPassed := False;
+      end
+      else
+      begin
+        if not Suites[I].RunWithResult(LSuiteResult) then
+          LAllPassed := False;
       end;
-      { Only keep the last iteration's results }
+      if not LAllPassed and LFailFast then
+      begin
+        LOutSink.WriteLn(AnsiYellow(
+          '  FAILFAST: stopping after suite failure', LConfig));
+        AResults[I] := LSuiteResult;
+        Inc(TotalPass, Suites[I].LastPass);
+        Inc(TotalFail, Suites[I].LastFail);
+        Inc(TotalSkip, Suites[I].LastSkip);
+        Break;
+      end;
       AResults[I] := LSuiteResult;
       Inc(TotalPass, Suites[I].LastPass);
       Inc(TotalFail, Suites[I].LastFail);
       Inc(TotalSkip, Suites[I].LastSkip);
-      { MaxFailures: stop after N total failures across all suites }
       if (LMaxFailures > 0) and (TotalFail >= LMaxFailures) then
       begin
         LOutSink.WriteLn(AnsiYellow(
@@ -2251,127 +2299,30 @@ begin
         FormatDuration(GetTickCount64 - LStartMs), LConfig));
   end;
 
+  for I := 0 to High(Suites) do
+    Suites[I].CleanupTableAllocations;
+
   HasRun := True;
   Result := LAllPassed;
-  { JSON output — emit machine-readable report to stdout }
   if GetJsonOutput(LConfig) then
     LOutSink.WriteLn(JSONReport(AResults, Name));
-  { Benchmarks — run after regular tests if --bench was passed }
-  if GetBenchEnabled(LConfig) then
+  { Benchmarks — run after regular tests if --bench was passed (serial only) }
+  if (not AIsParallel) and GetBenchEnabled(LConfig) then
     RunAllBenchmarks(LBenchResults);
+end;
+
+function TTestRunner.RunAllWithResult(
+  out AResults: specialize TArray<TTestRunResult>): Boolean;
+begin
+  ApplyCLIArgs;
+  Result := RunAllIterLoop(AResults, False, nil);
 end;
 
 function TTestRunner.RunAllParallelWithResult(APool: IThreadPool;
   out AResults: specialize TArray<TTestRunResult>): Boolean;
-var
-  I, LIter, LRepeatAll: Integer;
-  LAllPassed: Boolean;
-  LSuiteResult: TTestRunResult;
-  LConfig: TTestConfig;
-  LOutSink: IOutputSink;
-  LStartMs: Int64;
-  LFailFast: Boolean;
-  LMaxFailures: Integer;
 begin
   ApplyCLIArgs;
-  LConfig := RunnerConfig(Self);
-  LOutSink := ResolveOutSink(LConfig);
-
-  { List mode: print test names and exit without running }
-  if GetListMode(LConfig) then
-  begin
-    HasRun := True;
-    Exit(WriteListMode(Suites, LConfig, AResults));
-  end;
-
-  LRepeatAll := GetRepeatAllCount(LConfig);
-  if LRepeatAll <= 0 then LRepeatAll := 1;
-  LFailFast := GetFailFast(LConfig);
-  LMaxFailures := GetMaxFailures(LConfig);
-
-  LOutSink.WriteLn(
-    AnsiBold('=== ', LConfig) +
-    AnsiBold(Name, LConfig) +
-    AnsiBold(' (parallel) ===', LConfig));
-  if LRepeatAll > 1 then
-    LOutSink.WriteLn(AnsiDim(
-      '  Running all tests ' + IntToStr(LRepeatAll) + ' times (--count=' +
-      IntToStr(LRepeatAll) + ')', LConfig));
-  if LFailFast then
-    LOutSink.WriteLn(AnsiDim('  FailFast enabled', LConfig));
-  if LMaxFailures > 0 then
-    LOutSink.WriteLn(AnsiDim(
-      '  Failures max: ' + IntToStr(LMaxFailures) + ' (--failures-max)',
-      LConfig));
-  if GetShortMode(LConfig) then
-    LOutSink.WriteLn(AnsiDim('  Short mode enabled (--short)', LConfig));
-  if GetVerboseMode(LConfig) then
-    LOutSink.WriteLn(AnsiDim('  Verbose mode (--verbose)', LConfig));
-  if GetRunTimeoutSec(LConfig) > 0 then
-    LOutSink.WriteLn(AnsiDim(
-      '  Run timeout: ' + IntToStr(GetRunTimeoutSec(LConfig)) + 's (--timeout)',
-      LConfig));
-
-  LAllPassed := True;
-  TotalPass := 0;
-  TotalFail := 0;
-  TotalSkip := 0;
-  SetLength(AResults, Length(Suites));
-
-  for LIter := 1 to LRepeatAll do
-  begin
-    if LRepeatAll > 1 then
-    begin
-      LOutSink.WriteLn('');
-      LOutSink.WriteLn(AnsiBold(
-        '--- Iteration ' + IntToStr(LIter) + '/' + IntToStr(LRepeatAll) +
-        ' ---', LConfig));
-      { Reset counters each iteration — only the last iteration's totals are kept }
-      TotalPass := 0;
-      TotalFail := 0;
-      TotalSkip := 0;
-    end;
-    LStartMs := GetTickCount64;
-    for I := 0 to High(Suites) do
-    begin
-      if not Suites[I].RunParallelWithResult(APool, LSuiteResult) then
-      begin
-        LAllPassed := False;
-        if LFailFast then
-        begin
-          LOutSink.WriteLn(AnsiYellow(
-            '  FAILFAST: stopping after suite failure', LConfig));
-          AResults[I] := LSuiteResult;
-          Inc(TotalPass, Suites[I].LastPass);
-          Inc(TotalFail, Suites[I].LastFail);
-          Inc(TotalSkip, Suites[I].LastSkip);
-          Break;
-        end;
-      end;
-      AResults[I] := LSuiteResult;
-      Inc(TotalPass, Suites[I].LastPass);
-      Inc(TotalFail, Suites[I].LastFail);
-      Inc(TotalSkip, Suites[I].LastSkip);
-      { MaxFailures: stop after N total failures across all suites }
-      if (LMaxFailures > 0) and (TotalFail >= LMaxFailures) then
-      begin
-        LOutSink.WriteLn(AnsiYellow(
-          '  stopping after ' + IntToStr(TotalFail) +
-          ' total failures (--failures-max)', LConfig));
-        Break;
-      end;
-    end;
-    if LRepeatAll > 1 then
-      LOutSink.WriteLn(AnsiDim(
-        '  Iteration ' + IntToStr(LIter) + ' completed in ' +
-        FormatDuration(GetTickCount64 - LStartMs), LConfig));
-  end;
-
-  HasRun := True;
-  Result := LAllPassed;
-  { JSON output — emit machine-readable report to stdout }
-  if GetJsonOutput(LConfig) then
-    LOutSink.WriteLn(JSONReport(AResults, Name));
+  Result := RunAllIterLoop(AResults, True, APool);
 end;
 
 function TTestRunner.RunAllBenchmarks(
@@ -2424,15 +2375,17 @@ end;
 
 finalization
   { Safety net: dispose any method stubs and fixture objects that were not
-    cleaned up by CleanupTableAllocations (e.g. suites created but never run). }
+    cleaned up by CleanupTableAllocations (e.g. suites created but never run).
+    For suites that ran, CleanupTableAllocations already freed these and
+    set the GStubRegistry/GFixtureRegistry entries to nil — the nil check
+    prevents double-free here. Iterate each registry independently to handle
+    length mismatches. }
   for GStubCleanupI := 0 to High(GStubRegistry) do
-  begin
     if GStubRegistry[GStubCleanupI] <> nil then
       FreeMem(GStubRegistry[GStubCleanupI]);
-    if GStubCleanupI <= High(GFixtureRegistry) then
-      if GFixtureRegistry[GStubCleanupI] <> nil then
-        GFixtureRegistry[GStubCleanupI].Free;
-  end;
+  for GStubCleanupI := 0 to High(GFixtureRegistry) do
+    if GFixtureRegistry[GStubCleanupI] <> nil then
+      GFixtureRegistry[GStubCleanupI].Free;
   GStubRegistry := nil;
   GFixtureRegistry := nil;
 

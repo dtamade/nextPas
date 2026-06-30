@@ -103,6 +103,8 @@ type
     FCalls   : TMockCalls;
     FSetups  : specialize TArray<TMockCall>;
     FCallOrder: specialize TArray<string>;  { records method names in call order }
+    procedure AppendCall(const ACall: TMockCall; const AMethodName: string);
+    procedure AppendSetup(const ASetup: TMockCall);
     procedure SetTypedReturnValue(const AMethodName: string;
       const AValue: TMockValue);
   public
@@ -270,9 +272,14 @@ end;
 
 procedure RecordOrder(var AOrder: specialize TArray<string>;
   const AName: string);
+var
+  LOldLen, LCap: Integer;
 begin
-  SetLength(AOrder, Length(AOrder) + 1);
-  AOrder[High(AOrder)] := AName;
+  LOldLen := Length(AOrder);
+  LCap := GrowCapacity(LOldLen, 16);
+  if LCap <> LOldLen then SetLength(AOrder, LCap);
+  AOrder[LOldLen] := AName;
+  SetLength(AOrder, LOldLen + 1);
 end;
 
 function FindSetupIndex(const ASetups: specialize TArray<TMockCall>;
@@ -304,6 +311,30 @@ begin
   inherited Destroy;
 end;
 
+procedure TMockState.AppendCall(const ACall: TMockCall;
+  const AMethodName: string);
+var
+  LOldLen, LCap: Integer;
+begin
+  LOldLen := Length(FCalls);
+  LCap := GrowCapacity(LOldLen, 16);
+  if LCap <> LOldLen then SetLength(FCalls, LCap);
+  FCalls[LOldLen] := ACall;
+  SetLength(FCalls, LOldLen + 1);
+  RecordOrder(FCallOrder, AMethodName);
+end;
+
+procedure TMockState.AppendSetup(const ASetup: TMockCall);
+var
+  LOldLen, LCap: Integer;
+begin
+  LOldLen := Length(FSetups);
+  LCap := GrowCapacity(LOldLen, 4);
+  if LCap <> LOldLen then SetLength(FSetups, LCap);
+  FSetups[LOldLen] := ASetup;
+  SetLength(FSetups, LOldLen + 1);
+end;
+
 procedure TMockState.RecordCall(const AMethodName: string;
   const AArgs: array of string);
 var
@@ -318,10 +349,7 @@ begin
     LCall.Args[I] := AArgs[I];
     LCall.TypedArgs[I] := MockStr(AArgs[I]);
   end;
-
-  SetLength(FCalls, Length(FCalls) + 1);
-  FCalls[High(FCalls)] := LCall;
-  RecordOrder(FCallOrder, AMethodName);
+  AppendCall(LCall, AMethodName);
 end;
 
 procedure TMockState.RecordCallTyped(const AMethodName: string;
@@ -338,10 +366,7 @@ begin
     LCall.TypedArgs[I] := AArgs[I];
     LCall.Args[I] := MockValueToString(AArgs[I]);
   end;
-
-  SetLength(FCalls, Length(FCalls) + 1);
-  FCalls[High(FCalls)] := LCall;
-  RecordOrder(FCallOrder, AMethodName);
+  AppendCall(LCall, AMethodName);
 end;
 
 function TMockState.GetReturn(const AMethodName: string): string;
@@ -416,15 +441,14 @@ begin
     FSetups[LIdx].HasResult        := True;
     Exit;
   end;
-  { No existing setup found — append new slot }
+  { No existing setup found — append new slot with geometric growth }
   LSetup.MethodName       := AMethodName;
   LSetup.ResultValue      := AValue;
   LSetup.TypedReturnValue := MockStr(AValue);
   LSetup.HasResult        := True;
   LSetup.Args             := nil;
   LSetup.TypedArgs        := nil;
-  SetLength(FSetups, Length(FSetups) + 1);
-  FSetups[High(FSetups)] := LSetup;
+  AppendSetup(LSetup);
 end;
 
 procedure TMockState.SetTypedReturnValue(const AMethodName: string;
@@ -446,8 +470,7 @@ begin
   LSetup.HasResult        := True;
   LSetup.ResultValue      := MockValueToString(AValue);
   LSetup.TypedReturnValue := AValue;
-  SetLength(FSetups, Length(FSetups) + 1);
-  FSetups[High(FSetups)] := LSetup;
+  AppendSetup(LSetup);
 end;
 
 function TMockState.CallCount(const AMethodName: string): Integer;
@@ -559,6 +582,10 @@ type
   private
     FState: TMockState;
     FMethod: string;
+    procedure CheckCount(AActual, AExpected: Integer;
+      const AQualifier: string; APasses: Boolean);
+    function CheckCallOrder(const AOtherMethod: string;
+      AExpectBefore: Boolean): IMockVerify;
   public
     constructor Create(AState: TMockState; const AMethod: string);
     procedure CalledExactly(ACount: Integer);
@@ -581,15 +608,21 @@ begin
   FMethod := AMethod;
 end;
 
+procedure TMockVerifier.CheckCount(AActual, AExpected: Integer;
+  const AQualifier: string; APasses: Boolean);
+begin
+  if not APasses then
+    InternalFail('Expected ' + FMethod + ' called ' + AQualifier + ' ' +
+      IntToStr(AExpected) + ' time(s), but was called ' +
+      IntToStr(AActual) + ' time(s)');
+end;
+
 procedure TMockVerifier.CalledExactly(ACount: Integer);
 var
   LCount: Integer;
 begin
   LCount := FState.CallCount(FMethod);
-  if LCount <> ACount then
-    InternalFail('Expected ' + FMethod + ' called exactly ' +
-      IntToStr(ACount) + ' time(s), but was called ' +
-      IntToStr(LCount) + ' time(s)');
+  CheckCount(LCount, ACount, 'exactly', LCount = ACount);
 end;
 
 procedure TMockVerifier.CalledAtLeast(ACount: Integer);
@@ -597,10 +630,7 @@ var
   LCount: Integer;
 begin
   LCount := FState.CallCount(FMethod);
-  if LCount < ACount then
-    InternalFail('Expected ' + FMethod + ' called at least ' +
-      IntToStr(ACount) + ' time(s), but was called ' +
-      IntToStr(LCount) + ' time(s)');
+  CheckCount(LCount, ACount, 'at least', LCount >= ACount);
 end;
 
 procedure TMockVerifier.CalledAtMost(ACount: Integer);
@@ -608,10 +638,7 @@ var
   LCount: Integer;
 begin
   LCount := FState.CallCount(FMethod);
-  if LCount > ACount then
-    InternalFail('Expected ' + FMethod + ' called at most ' +
-      IntToStr(ACount) + ' time(s), but was called ' +
-      IntToStr(LCount) + ' time(s)');
+  CheckCount(LCount, ACount, 'at most', LCount <= ACount);
 end;
 
 procedure TMockVerifier.CalledNever;
@@ -630,15 +657,26 @@ begin
   Result := Self;
 end;
 
-function TMockVerifier.CalledBefore(const AOtherMethod: string): IMockVerify;
+function TMockVerifier.CheckCallOrder(const AOtherMethod: string;
+  AExpectBefore: Boolean): IMockVerify;
 var
   I, LSelfIdx, LOtherIdx: Integer;
+  LRelWord, LOppositeWord: string;
 begin
+  if AExpectBefore then
+  begin
+    LRelWord := 'before';
+    LOppositeWord := 'after';
+  end
+  else
+  begin
+    LRelWord := 'after';
+    LOppositeWord := 'before';
+  end;
   LSelfIdx := -1;
   LOtherIdx := -1;
   for I := 0 to High(FState.CallOrder) do
   begin
-    { Find first occurrence of each method }
     if (LSelfIdx < 0) and (FState.CallOrder[I] = FMethod) then
       LSelfIdx := I;
     if (LOtherIdx < 0) and (FState.CallOrder[I] = AOtherMethod) then
@@ -647,47 +685,38 @@ begin
       Break;
   end;
   if LSelfIdx < 0 then
-    InternalFail('Expected ' + FMethod + ' called before ' +
+    InternalFail('Expected ' + FMethod + ' called ' + LRelWord + ' ' +
       AOtherMethod + ', but ' + FMethod + ' was never called');
   if LOtherIdx < 0 then
-    InternalFail('Expected ' + FMethod + ' called before ' +
+    InternalFail('Expected ' + FMethod + ' called ' + LRelWord + ' ' +
       AOtherMethod + ', but ' + AOtherMethod + ' was never called');
-  if LSelfIdx >= LOtherIdx then
-    InternalFail('Expected ' + FMethod + ' called before ' +
-      AOtherMethod + ', but ' + FMethod + ' was called at index ' +
-      IntToStr(LSelfIdx) + ' (after ' + AOtherMethod + ' at index ' +
-      IntToStr(LOtherIdx) + ')');
+  if AExpectBefore then
+  begin
+    if LSelfIdx >= LOtherIdx then
+      InternalFail('Expected ' + FMethod + ' called ' + LRelWord + ' ' +
+        AOtherMethod + ', but ' + FMethod + ' was called at index ' +
+        IntToStr(LSelfIdx) + ' (' + LOppositeWord + ' ' + AOtherMethod +
+        ' at index ' + IntToStr(LOtherIdx) + ')');
+  end
+  else
+  begin
+    if LSelfIdx <= LOtherIdx then
+      InternalFail('Expected ' + FMethod + ' called ' + LRelWord + ' ' +
+        AOtherMethod + ', but ' + FMethod + ' was called at index ' +
+        IntToStr(LSelfIdx) + ' (' + LOppositeWord + ' ' + AOtherMethod +
+        ' at index ' + IntToStr(LOtherIdx) + ')');
+  end;
   Result := Self;
 end;
 
-function TMockVerifier.CalledAfter(const AOtherMethod: string): IMockVerify;
-var
-  I, LSelfIdx, LOtherIdx: Integer;
+function TMockVerifier.CalledBefore(const AOtherMethod: string): IMockVerify;
 begin
-  LSelfIdx := -1;
-  LOtherIdx := -1;
-  for I := 0 to High(FState.CallOrder) do
-  begin
-    { Find first occurrence of each method }
-    if (LSelfIdx < 0) and (FState.CallOrder[I] = FMethod) then
-      LSelfIdx := I;
-    if (LOtherIdx < 0) and (FState.CallOrder[I] = AOtherMethod) then
-      LOtherIdx := I;
-    if (LSelfIdx >= 0) and (LOtherIdx >= 0) then
-      Break;
-  end;
-  if LSelfIdx < 0 then
-    InternalFail('Expected ' + FMethod + ' called after ' +
-      AOtherMethod + ', but ' + FMethod + ' was never called');
-  if LOtherIdx < 0 then
-    InternalFail('Expected ' + FMethod + ' called after ' +
-      AOtherMethod + ', but ' + AOtherMethod + ' was never called');
-  if LSelfIdx <= LOtherIdx then
-    InternalFail('Expected ' + FMethod + ' called after ' +
-      AOtherMethod + ', but ' + FMethod + ' was called at index ' +
-      IntToStr(LSelfIdx) + ' (before ' + AOtherMethod + ' at index ' +
-      IntToStr(LOtherIdx) + ')');
-  Result := Self;
+  Result := CheckCallOrder(AOtherMethod, True);
+end;
+
+function TMockVerifier.CalledAfter(const AOtherMethod: string): IMockVerify;
+begin
+  Result := CheckCallOrder(AOtherMethod, False);
 end;
 
 function TMockVerifier.CalledWith(const AArgs: array of string): IMockVerify;

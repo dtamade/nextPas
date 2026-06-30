@@ -17,10 +17,10 @@ unit nextpas.core.tls.wolfssl.connection;
 
 interface
 
+uses
   nextpas.core.base,
   nextpas.core.base.utils,
   nextpas.core.text.conv, nextpas.core.io.intf,
-  nextpas.core.io.intf,
   nextpas.core.io.stream_adapter,
   nextpas.core.tls.base,
   nextpas.core.tls.errors,
@@ -108,7 +108,6 @@ type
   public
     constructor Create(AContext: ISSLContext; ASocket: THandle); overload;
     constructor Create(AContext: ISSLContext; AStream: IStream); overload;
-    constructor Create(AContext: ISSLContext; AStream: IStream); overload;
     destructor Destroy; override;
 
     function GetConnectionInfo: TSSLConnectionInfo; override;
@@ -155,8 +154,8 @@ uses
 function NormalizeWolfCertificateLinkText(const AValue: string): string;
 begin
   Result := Trim(UpperCase(AValue));
-  Result := StringReplace(Result, ',', '', [rfReplaceAll]);
-  Result := StringReplace(Result, ' ', '', [rfReplaceAll]);
+  Result := StringReplace(Result, ',', '', True);
+  Result := StringReplace(Result, ' ', '', True);
 end;
 
 function WolfSSL_StreamRecvCallback(ssl: PWOLFSSL; buf: PAnsiChar; sz: Integer;
@@ -241,11 +240,6 @@ begin
   SetupSocket;
   SetupSNI;
   SetupALPN;
-end;
-
-constructor TWolfSSLConnection.Create(AContext: ISSLContext; AStream: IStream);
-begin
-  Create(AContext, WrapTStream(AStream, False));
 end;
 
 constructor TWolfSSLConnection.Create(AContext: ISSLContext; AStream: IStream);
