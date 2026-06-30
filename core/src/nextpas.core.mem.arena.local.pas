@@ -133,7 +133,7 @@ begin
     Exit;
   if AAlign = 0 then
     AAlign := MEM_DEFAULT_ALIGN;
-  if not IsPowerOfTwo(AAlign) then
+  if not ValidateAlignArg(AAlign) then
     Exit;
   if FOffset > FCapacity then
     Exit;

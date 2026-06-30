@@ -214,7 +214,7 @@ var
   LHeaderPtr: PPointer;
 begin
   if ASize = 0 then Exit(nil);
-  if (AAlignment < SizeOf(Pointer)) or (not IsPowerOfTwo(AAlignment)) then
+  if not ValidateAlignArg(AAlignment) then
     Exit(nil);
   // Over-allocate and store the original pointer just before the aligned block
   LAlignMask := AAlignment - 1;
