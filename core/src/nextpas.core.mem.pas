@@ -9,7 +9,6 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.base.utils,
   nextpas.core.mem.base,
   nextpas.core.mem.error,
   nextpas.core.mem.default,
