@@ -12,7 +12,7 @@ uses
   nextpas.core.mem.error,
   nextpas.core.mem.pool.base,     // IPool (decoupled)
   nextpas.core.mem.allocator.base,  // TAllocator
-  nextpas.core.mem.allocator.rtl;   // GetRtlAllocator
+  nextpas.core.mem.allocator.rtl;   // ResolveAllocator
 
 type
   EGrowingFixedPoolError = class(EAllocError);

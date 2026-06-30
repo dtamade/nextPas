@@ -13,7 +13,7 @@ uses
   nextpas.core.base,
   nextpas.core.mem.base,
   nextpas.core.mem.pool.memory_pool,
-  nextpas.core.mem.allocator.rtl,   // GetRtlAllocator
+  nextpas.core.mem.allocator.rtl,   // ResolveAllocator
   nextpas.core.mem.allocator.base,
   nextpas.core.base.utils,
   nextpas.core.mem.error;

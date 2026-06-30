@@ -20,7 +20,7 @@ uses
   nextpas.core.mem.pool.base,     // DefaultAcquireN / DefaultReleaseN (CS-001)
   nextpas.core.mem.blockpool,
   nextpas.core.mem.allocator.base, // TAllocator
-  nextpas.core.mem.allocator.rtl,  // GetRtlAllocator
+  nextpas.core.mem.allocator.rtl,  // ResolveAllocator
   nextpas.core.mem.error;
 
 type

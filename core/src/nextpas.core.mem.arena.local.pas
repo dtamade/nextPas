@@ -8,7 +8,7 @@ uses
   nextpas.core.mem.base,
   nextpas.core.mem.error,
   nextpas.core.mem.allocator.base,
-  nextpas.core.mem.allocator.rtl,  // GetRtlAllocator
+  nextpas.core.mem.allocator.rtl,  // ResolveAllocator
   nextpas.core.mem.arena.base,
   nextpas.core.base.utils,
   nextpas.core.mem.arena.intf;

@@ -8,7 +8,7 @@ uses
   nextpas.core.base,
   nextpas.core.base.utils,
   nextpas.core.mem.pool.base,    // IPool (decoupled from facade)
-  nextpas.core.mem.allocator.base, // TAllocator + GetRtlAllocator
+  nextpas.core.mem.allocator.base, // TAllocator
   nextpas.core.mem.allocator.rtl,
   nextpas.core.mem.mutex,
   nextpas.core.mem.error;        // EAllocError, TAllocError
