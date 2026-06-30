@@ -5195,6 +5195,31 @@ begin
   if not TypeSymbolForTypeId(AClassTypeId, TypeSymbol) then
     Exit;
 
+  { Skip overload resolution for constructors/destructors with many overloads }
+  if SameText(AMemberName, 'Create') or SameText(AMemberName, 'Destroy') or
+    SameText(AMemberName, 'CreateFmt') or SameText(AMemberName, 'CreateRes') then
+  begin
+    QualifiedName := TypeSymbol.Name + '.' + AMemberName;
+    for Index := 0 to FModel.SymbolCount - 1 do
+    begin
+      Symbol := FModel.SymbolAt(Index);
+      if SameText(Symbol.Name, QualifiedName) and
+        (SameText(Symbol.Kind, 'constructor') or
+         SameText(Symbol.Kind, 'destructor') or
+         SameText(Symbol.Kind, 'method')) then
+      begin
+        AMethodNameFound := True;
+        if (AArgCount >= Symbol.MinParamCount) and
+           (AArgCount <= Symbol.ParamCount) then
+        begin
+          Result := Symbol.SymbolId;
+          Exit;
+        end;
+      end;
+    end;
+    Exit;
+  end;
+
   QualifiedName := TypeSymbol.Name + '.' + AMemberName;
   HasArgTypeIds := (Length(AArgTypeIds) = AArgCount) and
     TypeIdArrayHasKnownTypes(AArgTypeIds);
