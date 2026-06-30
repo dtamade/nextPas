@@ -1466,22 +1466,11 @@ begin
                (Assigned(LEntry.Proc) or Assigned(LEntry.Closure)) then
             begin
               if Assigned(LEntry.Closure) then
-              begin
-                if not RunTestWithTimeout(LEntry.Closure, LGTestTimeoutMs,
-                  LConfig, LStatus, LLastFailMsg) then
-                  { Timed out — LStatus already set to tsError };
-              end
+                RunTestWithTimeout(LEntry.Closure, LGTestTimeoutMs,
+                  LConfig, LStatus, LLastFailMsg)
               else
-              begin
-                if RunTestWithTimeout(LEntry.Proc, LGTestTimeoutMs, LConfig,
-                  LStatus, LLastFailMsg) then
-                begin
-                  if LStatus = tsPassed then { ok }
-                  else { LStatus already set }
-                end
-                else
-                  { Timed out — LStatus already set to tsError };
-              end;
+                RunTestWithTimeout(LEntry.Proc, LGTestTimeoutMs,
+                  LConfig, LStatus, LLastFailMsg);
             end
             else
             begin

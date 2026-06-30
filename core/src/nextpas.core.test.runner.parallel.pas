@@ -381,27 +381,11 @@ begin
         begin
           { Timeout-enabled path — spawns watchdog sub-thread }
           if Assigned(R^.Entry.Closure) then
-          begin
-            if RunTestWithTimeout(R^.Entry.Closure, LTimeoutMs,
-              LConfig, LStatus, LFailMsg) then
-            begin
-              if LStatus = tsPassed then { ok }
-              else { LStatus already set }
-            end
-            else
-              { Timed out — LStatus already set to tsError };
-          end
+            RunTestWithTimeout(R^.Entry.Closure, LTimeoutMs,
+              LConfig, LStatus, LFailMsg)
           else
-          begin
-            if RunTestWithTimeout(R^.Entry.Proc, LTimeoutMs,
-              LConfig, LStatus, LFailMsg) then
-            begin
-              if LStatus = tsPassed then { ok }
-              else { LStatus already set }
-            end
-            else
-              { Timed out — LStatus already set to tsError };
-          end;
+            RunTestWithTimeout(R^.Entry.Proc, LTimeoutMs,
+              LConfig, LStatus, LFailMsg);
         end
         else if R^.Entry.Kind = ekTableTest then
         begin
