@@ -4996,6 +4996,7 @@ begin
   SmallIntTypeId := FModel.AddType('SmallInt', 'builtin');
   LongIntTypeId := FModel.AddType('LongInt', 'builtin');
   LongWordTypeId := FModel.AddType('LongWord', 'builtin');
+  FModel.AddType('DWord', 'alias');
   Int64TypeId := FModel.AddType('Int64', 'builtin');
   QWordTypeId := FModel.AddType('QWord', 'builtin');
   SingleTypeId := FModel.AddType('Single', 'builtin');
@@ -5076,6 +5077,7 @@ begin
   FModel.SetTypeParent(Int32TypeId, LongIntTypeId);
   FModel.SetTypeParent(UInt32TypeId, LongWordTypeId);
   FModel.SetTypeParent(UInt64TypeId, QWordTypeId);
+  FModel.SetTypeParent(FModel.FindTypeByName('DWord'), LongWordTypeId);
 
   FModel.SetTypeScalarFact(BooleanTypeId, sskBool, 1, False);
   FModel.SetTypeScalarFact(CharTypeId, sskInt, 8, False);
@@ -5087,6 +5089,7 @@ begin
   FModel.SetTypeScalarFact(IntegerTypeId, sskInt, 32, True);
   FModel.SetTypeScalarFact(LongIntTypeId, sskInt, 32, True);
   FModel.SetTypeScalarFact(LongWordTypeId, sskInt, 32, False);
+  FModel.SetTypeScalarFact(FModel.FindTypeByName('DWord'), sskInt, 32, False);
   FModel.SetTypeScalarFact(CardinalTypeId, sskInt, 32, False);
   FModel.SetTypeScalarFact(Int32TypeId, sskInt, 32, True);
   FModel.SetTypeScalarFact(Int64TypeId, sskInt, 64, True);
