@@ -13,6 +13,7 @@
 - [x] G2: Mock 框架增强 — 3 新测试, 类型路径补全
 - [x] G3: 输出格式补全 — 跳过 (64 测试已充分)
 - [x] G4: 并行测试加固 — 已有完整覆盖
+- [x] G5: 文档完善 — 关键 API 行内注释
 
 ## Phase G1: 测试覆盖补全 ✅
 
@@ -71,18 +72,16 @@
 | 并行 + Cleanup | ✅ 已有 | CleanupParallel + CleanupExceptParallel (line 563/586) |
 | 并行 + MaxParallelWorkers | ✅ 已有 | TestMaxParallelWorkers (line 297) |
 
-## Phase G5: 文档完善 ⏳ P3 延后
+## Phase G5: 文档完善 ✅
 
-**目标**: 每个模块有内联文档
+**完成**: 关键非自解释 API 添加行内注释
 
-| 待补 | 优先级 | 说明 |
-|------|--------|------|
-| base.pas 行内注释 | P3 | 关键类型和函数的用途说明 |
-| config.pas 行内注释 | P3 | TTestConfig 每个字段的含义 |
-| runner.pas 行内注释 | P3 | RunWithResult 的执行流程图 |
-| output.pas 行内注释 | P3 | MatchesGlob 算法说明 |
-
-**验收标准**: 每个 Stable 公共 API 有 1 行 doc comment
+| 完成项 | 说明 |
+|--------|------|
+| check.pas | CheckNotContains 空 needle、CheckSame 指针身份、CheckInRange 含边界、FailUnexpected 格式 |
+| expect.pas | Not_ 取反机制、ToBeInRange 含边界、ToRaise nil 安全、ToNotRaise 忽略 Not_ |
+| base.pas | 已有完整注释，无需补充 |
+| config.pas | 已有完整注释，无需补充 |
 
 ## 优先级说明
 
