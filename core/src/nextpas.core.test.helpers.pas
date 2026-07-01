@@ -64,14 +64,18 @@ end;
 
 procedure ExpectFailWithMock(AProc: TMockProc;
   const AContains: string);
+var
+  LM: TMock;
 begin
-  WithMock(procedure(AMock: TMock)
-  begin
+  LM := TMock.Create;
+  try
     ExpectFail(procedure
     begin
-      AProc(AMock);
+      AProc(LM);
     end, AContains);
-  end);
+  finally
+    LM.Free;
+  end;
 end;
 
 end.

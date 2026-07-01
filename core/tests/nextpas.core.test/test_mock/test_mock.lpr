@@ -12,7 +12,7 @@ uses
   cthreads,
   SysUtils,
   nextpas.core.test,
-  nextpas.core.test.mock;
+  nextpas.core.test.mock,
   nextpas.core.test.helpers;
 
 { ── TMockValue constructors ────────────────────────────────────────────────── }
@@ -223,6 +223,8 @@ begin
 end;
 
 procedure TestReturnsDoubleImpl(AMock: TMock);
+var
+  LValue: TMockValue;
 begin
     AMock.Setup('Pi').ReturnsDouble(3.14);
     LValue := AMock.State.GetReturnTyped('Pi', []);
@@ -446,6 +448,8 @@ begin
 end;
 
 procedure TestGetReturnTypedFromStringSetupImpl(AMock: TMock);
+var
+  LValue: TMockValue;
 begin
     AMock.Setup('Echo').Returns('typed');
     LValue := AMock.State.GetReturnTyped('Echo', [MockStr('ignored')]);
@@ -459,6 +463,8 @@ begin
 end;
 
 procedure TestStateGetReturnInt64FromTypedSetupImpl(AMock: TMock);
+var
+  LValue: TMockValue;
 begin
     AMock.Setup('Count').ReturnsInt(42);
     LValue := AMock.State.GetReturnTyped('Count', []);
@@ -473,6 +479,8 @@ begin
 end;
 
 procedure TestStateGetReturnBoolFromTypedSetupImpl(AMock: TMock);
+var
+  LValue: TMockValue;
 begin
     AMock.Setup('Flag').ReturnsBool(True);
     LValue := AMock.State.GetReturnTyped('Flag', []);
@@ -488,6 +496,8 @@ begin
 end;
 
 procedure TestTypedAndLegacyStringReturnCoexistImpl(AMock: TMock);
+var
+  LValue: TMockValue;
 begin
     AMock.State.SetReturn('LegacyInt', '42');
     AMock.State.SetReturn('LegacyFlag', 'true');
@@ -511,6 +521,8 @@ begin
 end;
 
 procedure TestUnsetTypedReturnDefaultsImpl(AMock: TMock);
+var
+  LValue: TMockValue;
 begin
     LValue := AMock.State.GetReturnTyped('Missing', []);
     CheckTrue(LValue.Kind = mvUnset, 'unset typed kind');
@@ -794,6 +806,8 @@ begin
 end;
 
 procedure TestRecordCallTypedAllTypesImpl(AMock: TMock);
+var
+  LCall: TMockCall;
 begin
     AMock.RecordCallTyped('Op', [
       MockStr('hello'),
