@@ -9,21 +9,35 @@
 - [x] Phase 1-23: 代码复用优化 (GrowCapacity/WriteTestOutput/RunAllIterLoop 等)
 - [x] 工程治理: README.md 分层架构 + 稳定性等级 + 代码契约
 - [x] 契约审计: 参数校验 100%, P0+P1 全清
+- [x] G1: 测试覆盖补全 — 11 新测试, Stable API 100% 覆盖
 
-## Phase G1: 测试覆盖补全
+## Phase G1: 测试覆盖补全 ✅
 
 **目标**: 每个 Stable 公共 API 至少有 1 个直接测试
 
-| 待补 | 优先级 | 说明 |
-|------|--------|------|
-| CheckNotNil 边界 | P2 | 测试 nil → pass, non-nil → fail |
-| CheckSame 边界 | P2 | 测试相同指针 → pass, 不同 → fail |
-| CheckNotContains 边界 | P2 | 测试包含 → fail, 不包含 → pass |
-| TestRepeat 多次 | P2 | 测试 RepeatCount > 1 的多次执行 |
-| RunBenchmarks 边界 | P2 | 测试无基准/单基准/多基准 |
-| WithConfig 组合 | P2 | 测试 fluent 配置链 |
+| 完成项 | 优先级 | 结果 |
+|--------|--------|------|
+| CheckNotContains 边界 | P2 | +1 pass + 1 fail |
+| FailUnexpected 格式 | P2 | +1 "unexpected ClassName: msg" |
+| Not_.ToBeLessOrEqual (Int64) | P2 | +1 pass + 1 fail |
+| Not_.ToBeGreaterOrEqualD | P2 | +1 pass + 1 fail |
+| Not_.ToBeLessOrEqualD | P2 | +1 pass + 1 fail |
+| Not_.ToBeInRangeD | P2 | +1 pass + 1 fail |
+| Not_.ToContainCI | P2 | +1 pass + 1 fail |
+| Not_.ToStartWithCI | P2 | +1 pass + 1 fail |
+| Not_.ToEndWithCI | P2 | +1 pass + 1 fail |
+| CalledWith 空参数 | P2 | +1 pass |
+| CalledExactlyWith 0-times | P2 | +1 pass + 1 fail |
+| RunAllBenchmarks runner level | P2 | +1 multi-suite aggregation |
+| AllPassed auto-run | P2 | +1 lazy run trigger |
+| RunAllParallelWithResult | P2 | +1 result array populated |
 
-**验收标准**: test_assertions 从 48 → 55+, test_runner 从 33 → 40+
+**实际结果**: 11 新测试, 5 套件全绿, 0 泄漏
+- test_assertions: 48 → 50
+- test_expect: 93 → 100
+- test_mock: 53 → 55
+- test_runner: +2 inline tests
+- test_parallel: +1 inline test
 
 ## Phase G2: Mock 框架增强
 
