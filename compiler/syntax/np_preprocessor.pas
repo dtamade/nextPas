@@ -450,7 +450,7 @@ begin
   AArg := '';
   if Length(ALexeme) < 3 then Exit;
   if (ALexeme[1] = '{') and (ALexeme[2] = '$') then
-    Content := Copy(ALexeme, 3, Length(ALexeme) - 3)
+    Content := Copy(ALexeme, 3, Length(ALexeme) - 4)
   else if (Length(ALexeme) >= 4) and (ALexeme[1] = '(') and
     (ALexeme[2] = '*') and (ALexeme[3] = '$') then
     Content := Copy(ALexeme, 4, Length(ALexeme) - 5)
