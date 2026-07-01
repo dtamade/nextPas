@@ -9,8 +9,7 @@ uses
   cthreads,
   SysUtils,
   Math,
-  nextpas.core.test,
-  nextpas.core.test.helpers;
+  nextpas.core.test;
 
 { ── Test procedures ──────────────────────────────────────────────────────── }
 

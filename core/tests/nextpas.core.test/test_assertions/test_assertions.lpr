@@ -8,8 +8,7 @@ program test_assertions;
 uses
   cthreads,
   SysUtils,
-  nextpas.core.test,
-  nextpas.core.test.helpers;
+  nextpas.core.test;
 
 { ── Test procedures ──────────────────────────────────────────────────────── }
 

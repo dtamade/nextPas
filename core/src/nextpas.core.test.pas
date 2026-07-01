@@ -241,6 +241,7 @@ function JSONReport(const AResults: specialize TArray<TTestRunResult>;
 
 type
   TMockValueKind = nextpas.core.test.mock.TMockValueKind;
+  TMockCall = nextpas.core.test.mock.TMockCall;
   TMock = nextpas.core.test.mock.TMock;
   TMockState = nextpas.core.test.mock.TMockState;
   TMockValue = nextpas.core.test.mock.TMockValue;
@@ -252,6 +253,19 @@ function MockStr(const AValue: string): TMockValue;
 function MockInt(const AValue: Int64): TMockValue;
 function MockBool(AValue: Boolean): TMockValue;
 function MockDouble(const AValue: Double): TMockValue;
+
+{ ── Re-exported types from test.helpers ─────────────────────────────────── }
+
+type
+  TMockProc = nextpas.core.test.helpers.TMockProc;
+
+{ ── Re-exported functions from test.helpers ─────────────────────────────── }
+
+procedure ExpectFail(AProc: TTestClosure;
+  const AContains: string = '');
+procedure WithMock(AProc: TMockProc);
+procedure ExpectFailWithMock(AProc: TMockProc;
+  const AContains: string = '');
 
 implementation
 
@@ -607,5 +621,18 @@ begin Result := nextpas.core.test.mock.MockBool(AValue); end;
 
 function MockDouble(const AValue: Double): TMockValue;
 begin Result := nextpas.core.test.mock.MockDouble(AValue); end;
+
+{ ── Forward to test.helpers ──────────────────────────────────────────────── }
+
+procedure ExpectFail(AProc: TTestClosure;
+  const AContains: string);
+begin nextpas.core.test.helpers.ExpectFail(AProc, AContains); end;
+
+procedure WithMock(AProc: TMockProc);
+begin nextpas.core.test.helpers.WithMock(AProc); end;
+
+procedure ExpectFailWithMock(AProc: TMockProc;
+  const AContains: string);
+begin nextpas.core.test.helpers.ExpectFailWithMock(AProc, AContains); end;
 
 end.
