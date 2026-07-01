@@ -2,16 +2,16 @@
 
 **Machine**: Linux x86_64, Intel Xeon E5-2696 v4 @ 2.20GHz, 44 threads
 **Compiler**: FPC 3.3.1 -O3 -CX -XX -Xs -dRELEASE
-**Date**: 2026-06-30
+**Date**: 2026-07-01
 
 ## Overall Score
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **140** | 5 | 33 | **79%** |
+| **Go** | **150** | 7 | 34 | **78%** |
 | **Rust** | 19 | 0 | 47 | **29%** |
 
-## Track Summary (42 tracks, 183 operations)
+## Track Summary (51 tracks, 196 operations)
 
 ### Text Operations (6 ops)
 
@@ -391,6 +391,18 @@
 
 **3W vs Go** — AVX2 vpaddps explicit SIMD vs Go scalar loop (no auto-vectorization); flips previous "Array Sum: Go wins" loss
 
+### Float64 Operations (5 ops)
+
+| Track | Pascal (ns) | Go (ns) | vs Go |
+|-------|-------------|---------|-------|
+| **EuclideanDist/10K×10K** | **110599302** | 149000000 | **1.35x** ✓ |
+| **WeightedSum/10K×10K** | **128268899** | 190700000 | **1.49x** ✓ |
+| ClampNormalize/10K×10K | 293651184 | 301000000 | 1.03x — |
+| **FMAccum/10K×10K** | **111690552** | 189400000 | **1.70x** ✓ |
+| **DAXPY/10K×10K** | **167988593** | 186400000 | **1.11x** ✓ |
+
+**4W 1D vs Go** — FPC tighter loop codegen vs Go bounds check + write barrier on float64 arrays; FMAccum 1.70x (1 mul+1 add+1 accumulate per element)
+
 ### Set Intersection (6 ops)
 
 | Track | Pascal (ns) | Go (ns) | vs Go |
@@ -469,6 +481,21 @@
 | **FloatArrayNorm/10K×10K** | **110.6ms** | 1100ms | **9.95x** ✓ |
 
 **11W vs Go** — Simple indexed array loops (int + float, all patterns): FPC consistently 6-11x faster; Go overhead from bounds checking + write barriers + less aggressive loop optimization
+
+### Byte-Level Operations (8 ops)
+
+| Track | Pascal (ns) | Go (ns) | vs Go |
+|-------|-------------|---------|-------|
+| **NonZeroCount/8K×10K** | **65542312** | 69700000 | **1.06x** ✓ |
+| **ByteSum/8K×10K** | **39254081** | 56500000 | **1.44x** ✓ |
+| **ByteMax/8K×10K** | **61036771** | 72600000 | **1.19x** ✓ |
+| **XorAccum/8K×10K** | **39644644** | 55500000 | **1.40x** ✓ |
+| MaskCopy/8K×10K | 121828439 | 120300000 | 0.99x — |
+| **WordSum/8K×10K** | **40344350** | 54500000 | **1.35x** ✓ |
+| **DWordSum/8K×10K** | **39673317** | 48400000 | **1.22x** ✓ |
+| NibbleSwap/8K×10K | 106071196 | 87100000 | 0.82x |
+
+**6W 1D 1L vs Go** — FPC tight accumulation loops 1.1-1.44x faster; NibbleSwap loses (Go auto-vectorizes shift+mask)
 
 ### Pascal Wins (biggest margins vs Go)
 1. **String Concat: 3557x** — Go immutable strings O(n²) vs Pascal COW
