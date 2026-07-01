@@ -1470,12 +1470,8 @@ begin
     LVerbSuite.Test('vpass', procedure begin CheckTrue(True); end);
     LVerbSuite.Test('vfail', procedure begin CheckTrue(False, 'intentional'); end);
     LVerbSuite.Skip('vskip', 'planned');
-    LVerbConfig := DefaultConfig;
+    LVerbConfig := MakeBufferConfig(LVerbSink);
     LVerbConfig.VerboseMode := True;
-    LVerbSink := TBufferSink.Create;
-    LVerbConfig.OutSink := LVerbSink;
-    LVerbConfig.ErrSink := LVerbSink;
-    LVerbConfig.AnsiMode := amOff;
     LVerbSuite.Config := LVerbConfig;
     LVerbSuite.RunWithResult(LVerbResult);
     LVerbOut := LVerbSink.GetOutput;
@@ -1510,12 +1506,8 @@ begin
     LTimeoutRunSuite.Test('fast1', procedure begin CheckTrue(True); end);
     LTimeoutRunSuite.Test('fast2', procedure begin CheckTrue(True); end);
     { Set a 1-second run timeout — should be enough for fast tests }
-    LTimeoutRunConfig := DefaultConfig;
+    LTimeoutRunConfig := MakeBufferConfig(LTimeoutRunSink);
     LTimeoutRunConfig.RunTimeoutSec := 10;
-    LTimeoutRunSink := TBufferSink.Create;
-    LTimeoutRunConfig.OutSink := LTimeoutRunSink;
-    LTimeoutRunConfig.ErrSink := LTimeoutRunSink;
-    LTimeoutRunConfig.AnsiMode := amOff;
     LTimeoutRunSuite.Config := LTimeoutRunConfig;
     LTimeoutRunSuite.RunWithResult(LTimeoutRunResult);
     LTimeoutRunOut := LTimeoutRunSink.GetOutput;

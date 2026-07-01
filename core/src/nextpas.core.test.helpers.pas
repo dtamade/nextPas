@@ -88,6 +88,7 @@ begin
   ASink := TBufferSink.Create;
   Result := DefaultConfig;
   Result.OutSink := ASink;
+  Result.ErrSink := ASink;
   Result.AnsiMode := amOff;
 end;
 
