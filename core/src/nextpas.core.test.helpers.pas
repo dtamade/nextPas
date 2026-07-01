@@ -35,7 +35,7 @@ procedure WithMock(AProc: TMockProc);
 procedure ExpectFailWithMock(AProc: TMockProc;
   const AContains: string = '');
 
-{ Create a TTestConfig with a fresh TBufferSink as OutSink and AnsiMode=amOff.
+{ Create a TTestConfig with a fresh TBufferSink as OutSink+ErrSink and AnsiMode=amOff.
   Returns the sink so the caller can read captured output. }
 function MakeBufferConfig(out ASink: TBufferSink): TTestConfig;
 

@@ -2,11 +2,14 @@ TEST_FILTER ?= smoke
 BASE_REF ?= main
 CORE_CI_HOST ?= host
 
-.PHONY: rebuild-compiler stage0 verify test test-smoke test-tooling focused lane-focused landing-check core-ci-test core-ci-best-effort-test self-compile-module self-compile-modules c8-probe-np-allocator hygiene clean clean-artifacts
+.PHONY: rebuild-compiler stage0 verify test test-smoke test-tooling focused lane-focused landing-check core-ci-test core-ci-best-effort-test self-compile-module self-compile-modules c8-probe-np-allocator hygiene clean clean-artifacts contract
 
 rebuild-compiler:
 	./scripts/rebuild-compiler.sh
 	$(MAKE) hygiene
+
+contract:
+	./scripts/run-all-contract-checks.sh
 
 stage0: rebuild-compiler
 
