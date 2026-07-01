@@ -11,7 +11,8 @@ program test_mock;
 uses
   cthreads,
   SysUtils,
-  nextpas.core.test;
+  nextpas.core.test,
+  nextpas.core.test.mock;
 
 { ── TMockValue constructors ────────────────────────────────────────────────── }
 
@@ -979,6 +980,73 @@ begin
   end;
 end;
 
+procedure TestRecordCallTypedAllTypes;
+{ G2: RecordCallTyped with all TMockValue types }
+var
+  LM: TMock;
+  LCall: TMockCall;
+begin
+  LM := TMock.Create;
+  try
+    LM.RecordCallTyped('Op', [
+      MockStr('hello'),
+      MockInt(42),
+      MockBool(True),
+      MockDouble(3.14)
+    ]);
+    LCall := LM.State.Calls[0];
+    CheckTrue(Length(LCall.TypedArgs) = 4, 'typed args count');
+    CheckTrue(LCall.TypedArgs[0].Kind = mvString, 'arg[0] kind');
+    CheckTrue(LCall.TypedArgs[0].StrVal = 'hello', 'arg[0] str');
+    CheckTrue(LCall.TypedArgs[1].Kind = mvInt64, 'arg[1] kind');
+    CheckTrue(LCall.TypedArgs[1].IntVal = 42, 'arg[1] int');
+    CheckTrue(LCall.TypedArgs[2].Kind = mvBool, 'arg[2] kind');
+    CheckTrue(LCall.TypedArgs[2].BoolVal, 'arg[2] bool');
+    CheckTrue(LCall.TypedArgs[3].Kind = mvDouble, 'arg[3] kind');
+    CheckTrue(Abs(LCall.TypedArgs[3].DblVal - 3.14) < 1e-12, 'arg[3] double');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestGetReturnIntEmptyString;
+{ G2: GetReturnInt on empty string returns 0 }
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.Setup('Val').Returns('');
+    CheckTrue(LM.GetReturnInt('Val') = 0, 'empty string → 0');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestGetReturnBoolFromString;
+{ G2: GetReturnBool on string values — only 'true' (case-insensitive) returns True }
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.Setup('Flag').Returns('true');
+    CheckTrue(LM.GetReturnBool('Flag'), '"true" → True');
+    LM.Setup('Flag').Returns('True');
+    CheckTrue(LM.GetReturnBool('Flag'), '"True" → True');
+    LM.Setup('Flag').Returns('TRUE');
+    CheckTrue(LM.GetReturnBool('Flag'), '"TRUE" → True');
+    LM.Setup('Flag').Returns('false');
+    CheckFalse(LM.GetReturnBool('Flag'), '"false" → False');
+    LM.Setup('Flag').Returns('1');
+    CheckFalse(LM.GetReturnBool('Flag'), '"1" → False (not "true")');
+    LM.Setup('Flag').Returns('');
+    CheckFalse(LM.GetReturnBool('Flag'), '"" → False');
+  finally
+    LM.Free;
+  end;
+end;
+
 { ── Register Tests ───────────────────────────────────────────────────────────── }
 
 var
@@ -1062,6 +1130,11 @@ begin
   { G1: Coverage gaps }
   Suite.Test('TestCalledWithEmptyArgs', @TestCalledWithEmptyArgs);
   Suite.Test('TestCalledExactlyWithZeroTimes', @TestCalledExactlyWithZeroTimes);
+
+  { G2: Mock type paths }
+  Suite.Test('TestRecordCallTypedAllTypes', @TestRecordCallTypedAllTypes);
+  Suite.Test('TestGetReturnIntEmptyString', @TestGetReturnIntEmptyString);
+  Suite.Test('TestGetReturnBoolFromString', @TestGetReturnBoolFromString);
 
   Runner := TTestRunner.Create('mock-tests');
   Runner.Add(Suite);
