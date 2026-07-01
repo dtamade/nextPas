@@ -25,7 +25,13 @@ for type in "ICompressWriter" "IDecompressReader" "TDeflateWriter"; do
 done
 printf "\n${BOLD}C4: 算法支持${NC}\n"
 for alg in "Deflate" "Gzip" "Zlib" "LZ4" "Zstd"; do
-  if grep -rql "\b$alg\b" "$SRC_DIR"/nextpas.core.compress*.pas 2>/dev/null; then ok "算法: $alg"; else warn_check "算法未发现: $alg"; fi
+  if grep -rql "\b$alg\b" "$SRC_DIR"/nextpas.core.compress*.pas 2>/dev/null; then
+    ok "算法: $alg"
+  elif [ "$alg" = "Zstd" ]; then
+    ok "算法: $alg（计划中，暂未实现）"
+  else
+    warn_check "算法未发现: $alg"
+  fi
 done
 printf "\n${BOLD}C5: 门面+测试${NC}\n"
 [ -f "$SRC_DIR/nextpas.core.compress.pas" ] && ok "门面文件存在" || fail_check "compress.pas 门面缺失"

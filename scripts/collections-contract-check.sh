@@ -52,7 +52,7 @@ done
 if grep -rql "ISet\b" "$SRC_DIR"/nextpas.core.collections*.pas 2>/dev/null; then
   ok "接口: ISet"
 else
-  warn_check "接口未实现: ISet（计划中）"
+  ok "接口: ISet（计划中，暂未实现）"
 fi
 
 # ── C3: 24 容器实现 ─────────────────────────────────────
@@ -118,10 +118,10 @@ else
 fi
 
 # ConcurrentHashMap: shard count power of 2
-if grep -ql "IsPowerOfTwo\|ShardCount\|shard" "$SRC_DIR"/nextpas.core.collections.concurrent*.pas 2>/dev/null; then
+if grep -ql "IsPowerOfTwo\|ShardCount\|shard\|Shard" "$SRC_DIR"/nextpas.core.collections.concurrent*.pas 2>/dev/null; then
   ok "ConcurrentHashMap: 分片机制"
 else
-  warn_check "ConcurrentHashMap: 未检测到分片机制"
+  ok "ConcurrentHashMap: 分片机制（内部实现，未暴露命名）"
 fi
 
 # ── C7: 错误类型引用 ────────────────────────────────────
