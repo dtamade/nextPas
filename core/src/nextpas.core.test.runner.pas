@@ -683,6 +683,7 @@ function WriteListMode(const ASuites: specialize TArray<TTestSuite>;
 var
   I, J: Integer;
   LOutSink: IOutputSink;
+  LSuffix: string;
 begin
   LOutSink := ResolveOutSink(AConfig);
   for I := 0 to High(ASuites) do
@@ -690,14 +691,14 @@ begin
     LOutSink.WriteLn(ASuites[I].Name + ':');
     for J := 0 to High(ASuites[I].Tests) do
     begin
-      if ASuites[I].Tests[J].Kind = ekSkipped then
-        LOutSink.WriteLn('  ' + ASuites[I].Tests[J].Name + ' (skipped)')
-      else if ASuites[I].Tests[J].Kind = ekShouldFail then
-        LOutSink.WriteLn('  ' + ASuites[I].Tests[J].Name + ' (should-fail)')
+      LSuffix := '';
+      case ASuites[I].Tests[J].Kind of
+        ekSkipped:    LSuffix := ' (skipped)';
+        ekShouldFail: LSuffix := ' (should-fail)';
       else if ASuites[I].Tests[J].ShortSkip then
-        LOutSink.WriteLn('  ' + ASuites[I].Tests[J].Name + ' (short-skip)')
-      else
-        LOutSink.WriteLn('  ' + ASuites[I].Tests[J].Name);
+        LSuffix := ' (short-skip)';
+      end;
+      LOutSink.WriteLn('  ' + ASuites[I].Tests[J].Name + LSuffix);
     end;
   end;
   SetLength(AResults, 0);
@@ -1114,57 +1115,49 @@ end;
 function TTestSuite.WithSetup(AProc: TTestProc): TTestSuite;
 begin
   Result := Self;
-  Result.Setup := AProc;
-  Result.SetupClosure := nil;
+  Result.SetSetup(AProc);
 end;
 
 function TTestSuite.WithSetup(AProc: TTestClosure): TTestSuite;
 begin
   Result := Self;
-  Result.Setup := nil;
-  Result.SetupClosure := AProc;
+  Result.SetSetup(AProc);
 end;
 
 function TTestSuite.WithTeardown(AProc: TTestProc): TTestSuite;
 begin
   Result := Self;
-  Result.Teardown := AProc;
-  Result.TeardownClosure := nil;
+  Result.SetTeardown(AProc);
 end;
 
 function TTestSuite.WithTeardown(AProc: TTestClosure): TTestSuite;
 begin
   Result := Self;
-  Result.Teardown := nil;
-  Result.TeardownClosure := AProc;
+  Result.SetTeardown(AProc);
 end;
 
 function TTestSuite.WithBeforeEach(AProc: TTestProc): TTestSuite;
 begin
   Result := Self;
-  Result.BeforeEach := AProc;
-  Result.BeforeEachClosure := nil;
+  Result.OnBeforeEach(AProc);
 end;
 
 function TTestSuite.WithBeforeEach(AProc: TTestClosure): TTestSuite;
 begin
   Result := Self;
-  Result.BeforeEach := nil;
-  Result.BeforeEachClosure := AProc;
+  Result.OnBeforeEach(AProc);
 end;
 
 function TTestSuite.WithAfterEach(AProc: TTestProc): TTestSuite;
 begin
   Result := Self;
-  Result.AfterEach := AProc;
-  Result.AfterEachClosure := nil;
+  Result.OnAfterEach(AProc);
 end;
 
 function TTestSuite.WithAfterEach(AProc: TTestClosure): TTestSuite;
 begin
   Result := Self;
-  Result.AfterEach := nil;
-  Result.AfterEachClosure := AProc;
+  Result.OnAfterEach(AProc);
 end;
 
 function TTestSuite.WithEachCleanup(AProc: TTestProc): TTestSuite;
