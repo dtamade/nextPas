@@ -373,6 +373,17 @@ begin
   WriteLn(AnsiBold('─── ' + ATitle + ' ───'));
 end;
 
+function ResolveSkipReason(const ASkipReason, AFailMsg: string): string;
+{ Priority: ASkipReason > AFailMsg > '' }
+begin
+  if ASkipReason <> '' then
+    Result := ASkipReason
+  else if AFailMsg <> '' then
+    Result := AFailMsg
+  else
+    Result := '';
+end;
+
 procedure WriteTestStatus(AStatus: TTestStatus; const AName, AFailMsg,
   ASkipReason: string; const ASink: IOutputSink; const AConfig: TTestConfig);
 begin
@@ -385,16 +396,8 @@ begin
         ASink.WriteLn('    ' + FormatFailDetail(AFailMsg, AConfig));
       end;
     tsSkipped:
-      begin
-        if ASkipReason <> '' then
-          ASink.WriteLn('  ' + FormatStatusLine(tsSkipped, AName,
-            ASkipReason, AConfig))
-        else if AFailMsg <> '' then
-          ASink.WriteLn('  ' + FormatStatusLine(tsSkipped, AName,
-            AFailMsg, AConfig))
-        else
-          ASink.WriteLn('  ' + FormatStatusLine(tsSkipped, AName, AConfig));
-      end;
+      ASink.WriteLn('  ' + FormatStatusLine(tsSkipped, AName,
+        ResolveSkipReason(ASkipReason, AFailMsg), AConfig));
     tsError:
       begin
         ASink.WriteLn('  ' + FormatStatusLine(tsError, AName, AConfig) +
@@ -411,7 +414,7 @@ procedure WriteTestStatusVerbose(AStatus: TTestStatus; const AName, AFailMsg,
 { Verbose mode: show every test with status + duration.
   Format: '  [PASS] name (12ms)' or '  [FAIL] name (1.23s)' or '  [SKIP] name - reason'. }
 var
-  LDurStr: string;
+  LDurStr, LSkipMsg: string;
 begin
   LDurStr := ' (' + FormatDuration(ADurationMs) + ')';
   case AStatus of
@@ -426,12 +429,10 @@ begin
       end;
     tsSkipped:
       begin
-        if ASkipReason <> '' then
+        LSkipMsg := ResolveSkipReason(ASkipReason, AFailMsg);
+        if LSkipMsg <> '' then
           ASink.WriteLn('  ' + AnsiYellow('[SKIP]', AConfig) + ' ' +
-            AName + ' - ' + ASkipReason)
-        else if AFailMsg <> '' then
-          ASink.WriteLn('  ' + AnsiYellow('[SKIP]', AConfig) + ' ' +
-            AName + ' - ' + AFailMsg)
+            AName + ' - ' + LSkipMsg)
         else
           ASink.WriteLn('  ' + AnsiYellow('[SKIP]', AConfig) + ' ' + AName);
       end;

@@ -151,6 +151,13 @@ type
     procedure FinalizeResults(const AConfig: TTestConfig;
                 var AResult: TTestRunResult;
                 APass, AFail, ASkip: Integer);
+    { Emit a skipped test result: MakeTestResult + AppendResult + WriteTestOutput
+      + ReportLeakIfAny. Returns True (caller should Continue). }
+    function  EmitSkipResult(const AEntry: TTestEntry;
+                const ASkipReason: string; var ASkipCount: Integer;
+                var AResults: specialize TArray<TTestResult>;
+                const AOutSink: IOutputSink;
+                const AConfig: TTestConfig): Boolean;
   end;
 
 { ── Test Runner (multi-suite) ─────────────────────────────────────────────── }
@@ -1291,14 +1298,8 @@ begin
     { Short mode — skip tests marked with ShortSkip }
     if LConfig.ShortMode and LEntry.ShortSkip then
     begin
-      LStatus := tsSkipped;
-      Inc(LSkip);
-      LTestResult := MakeTestResult(LEntry.Name, tsSkipped,
-        'skipped: short mode', 0);
-      AppendResult(AResult.Results, LTestResult);
-      WriteTestOutput(tsSkipped, LEntry.Name, '', 'short mode',
-        0, LOutSink, LConfig);
-      ReportLeakIfAny(LStatus, LConfig);
+      EmitSkipResult(LEntry, 'skipped: short mode', LSkip,
+        AResult.Results, LOutSink, LConfig);
       Continue;
     end;
 
@@ -1317,14 +1318,8 @@ begin
     { Skip check BEFORE BeforeEach — skipped tests don't need hooks }
     if LEntry.Kind = ekSkipped then
     begin
-      LStatus := tsSkipped;
-      Inc(LSkip);
-      LTestResult := MakeTestResult(LEntry.Name, tsSkipped,
-        LEntry.SkipReason, 0);
-      AppendResult(AResult.Results, LTestResult);
-      WriteTestOutput(tsSkipped, LEntry.Name, '', LEntry.SkipReason,
-        0, LOutSink, LConfig);
-      ReportLeakIfAny(LStatus, LConfig);
+      EmitSkipResult(LEntry, LEntry.SkipReason, LSkip,
+        AResult.Results, LOutSink, LConfig);
       Continue;
     end;
 
@@ -1336,13 +1331,8 @@ begin
       except
         on E: ETestSkipped do
         begin
-          LStatus := tsSkipped;
-          Inc(LSkip);
-          LTestResult := MakeTestResult(LEntry.Name, tsSkipped, E.Message, 0);
-          AppendResult(AResult.Results, LTestResult);
-          WriteTestOutput(tsSkipped, LEntry.Name, '', E.Message,
-            0, LOutSink, LConfig);
-          ReportLeakIfAny(LStatus, LConfig);
+          EmitSkipResult(LEntry, E.Message, LSkip,
+            AResult.Results, LOutSink, LConfig);
           Continue;
         end;
         on E: Exception do
@@ -1714,6 +1704,21 @@ begin
       '  ' + IntToStr(APass) + ' passed, ' +
       IntToStr(AFail) + ' failed, ' +
       IntToStr(ASkip) + ' skipped', AConfig));
+end;
+
+function TTestSuite.EmitSkipResult(const AEntry: TTestEntry;
+  const ASkipReason: string; var ASkipCount: Integer;
+  var AResults: specialize TArray<TTestResult>;
+  const AOutSink: IOutputSink; const AConfig: TTestConfig): Boolean;
+var
+  LTestResult: TTestResult;
+begin
+  Inc(ASkipCount);
+  LTestResult := MakeTestResult(AEntry.Name, tsSkipped, ASkipReason, 0);
+  AppendResult(AResults, LTestResult);
+  WriteTestOutput(tsSkipped, AEntry.Name, '', ASkipReason, 0, AOutSink, AConfig);
+  ReportLeakIfAny(tsSkipped, AConfig);
+  Result := True; { caller should Continue }
 end;
 
 function TTestSuite.RunParallelWithResult(APool: IThreadPool;
