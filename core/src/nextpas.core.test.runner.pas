@@ -201,6 +201,10 @@ function ExtractArgIntValue(const AArg, APrefix: string;
 { Check if a test entry matches a tag filter. Empty filter = match all. }
 function MatchesTagFilter(const AEntryTags: specialize TArray<string>;
   const ATagFilter: string): Boolean;
+{ Unified eligibility filter: name + tag + optional ShortSkip check.
+  AIncludeShortSkip=True means ShortSkip tests are eligible (for pre-count). }
+function IsTestEligible(const AEntry: TTestEntry; const AConfig: TTestConfig;
+  const ATagFilter: string; AIncludeShortSkip: Boolean = False): Boolean;
 { Get effective display name: DisplayName if non-empty, else Name. }
 function GetDisplayName(const AEntry: TTestEntry): string;
 { Active test context for the currently executing test. }
@@ -433,6 +437,14 @@ begin
         Exit(True);
   end;
   Result := False;
+end;
+
+function IsTestEligible(const AEntry: TTestEntry; const AConfig: TTestConfig;
+  const ATagFilter: string; AIncludeShortSkip: Boolean): Boolean;
+begin
+  Result := MatchesFilter(AEntry.Name, AConfig) and
+            MatchesTagFilter(AEntry.Tags, ATagFilter) and
+            (AIncludeShortSkip or not (AConfig.ShortMode and AEntry.ShortSkip));
 end;
 
 function GetDisplayName(const AEntry: TTestEntry): string;
@@ -1180,30 +1192,6 @@ begin
   Result := RunWithResult(LResult);
 end;
 
-procedure ClassifyTestException(E: Exception;
-  out AStatus: TTestStatus; out AMsg: string);
-{ Standard exception → status classification for test execution.
-  ETestSkipped → tsSkipped (flow control, not a failure)
-  EAssertionFailed → tsFailed (test assertion)
-  Other Exception → tsError (unexpected) }
-begin
-  if E is ETestSkipped then
-  begin
-    AStatus := tsSkipped;
-    AMsg := E.Message;
-  end
-  else if E is EAssertionFailed then
-  begin
-    AStatus := tsFailed;
-    AMsg := AppendTestTrace(E.Message);
-  end
-  else
-  begin
-    AStatus := tsError;
-    AMsg := AppendTestTrace(FormatExceptionMsg(E));
-  end;
-end;
-
 function TTestSuite.RunWithResult(out AResult: TTestRunResult): Boolean;
 var
   I, J: Integer;
@@ -1250,8 +1238,7 @@ begin
   begin
     LProgressTotal := 0;
     for I := 0 to High(Tests) do
-      if MatchesFilter(Tests[I].Name, LConfig) and
-         MatchesTagFilter(Tests[I].Tags, LTagFilter) then
+      if IsTestEligible(Tests[I], LConfig, LTagFilter) then
         Inc(LProgressTotal);
   end
   else
@@ -1308,15 +1295,9 @@ begin
     end;
 
     { Test filter — skip non-matching tests silently }
-    if not MatchesFilter(LEntry.Name, LConfig) then
+    if not IsTestEligible(LEntry, LConfig, LTagFilter, True) then
     begin
       { Not counted as pass/fail/skip — just invisible }
-      Continue;
-    end;
-
-    { Tag filter — skip tests that don't match the tag filter }
-    if not MatchesTagFilter(LEntry.Tags, LTagFilter) then
-    begin
       Continue;
     end;
 
@@ -1787,9 +1768,7 @@ begin
   begin
     LProgressTotal := 0;
     for I := 0 to High(Tests) do
-      if MatchesFilter(Tests[I].Name, LConfig) and
-         MatchesTagFilter(Tests[I].Tags, LTagFilter) and
-         not (LConfig.ShortMode and Tests[I].ShortSkip) then
+      if IsTestEligible(Tests[I], LConfig, LTagFilter) then
         Inc(LProgressTotal);
   end
   else
@@ -1812,15 +1791,9 @@ begin
   begin
     { Test filter — skip non-matching tests silently (same as serial mode:
       filtered tests are invisible, not counted as pass/fail/skip) }
-    if not MatchesFilter(Tests[I].Name, LConfig) then
+    if not IsTestEligible(Tests[I], LConfig, LTagFilter, True) then
     begin
       LThreads[I] := 0;  { no thread for this slot — also marks filter-excluded }
-      Continue;
-    end;
-    { Tag filter }
-    if not MatchesTagFilter(Tests[I].Tags, LTagFilter) then
-    begin
-      LThreads[I] := 0;
       Continue;
     end;
     { Short mode — skip tests marked with ShortSkip (handle before thread spawn) }
@@ -1881,9 +1854,7 @@ begin
     LFirstEligible := -1;
     for I := LBatchStart to High(Tests) do
     begin
-      if MatchesFilter(Tests[I].Name, LConfig) and
-         MatchesTagFilter(Tests[I].Tags, LTagFilter) and
-         not (LConfig.ShortMode and Tests[I].ShortSkip) then
+      if IsTestEligible(Tests[I], LConfig, LTagFilter) then
       begin
         LFirstEligible := I;
         Break;
@@ -1897,11 +1868,7 @@ begin
     begin
       if LSpawned >= LMaxWorkers then
         Break;
-      if not MatchesFilter(Tests[I].Name, LConfig) then
-        Continue;
-      if not MatchesTagFilter(Tests[I].Tags, LTagFilter) then
-        Continue;
-      if LConfig.ShortMode and Tests[I].ShortSkip then
+      if not IsTestEligible(Tests[I], LConfig, LTagFilter) then
         Continue;
       LThreads[I] := BeginThread(@ParallelThreadEntry, @LRecs[I]);
       if LThreads[I] = 0 then
@@ -1984,7 +1951,7 @@ begin
   begin
     LEntry := Tests[I];
     if LEntry.Kind <> ekBench then Continue;
-    if not MatchesFilter(LEntry.Name, LConfig) then Continue;
+    if not IsTestEligible(LEntry, LConfig, '', True) then Continue;
     { Adaptive N scaling — use GetTickCount64 (ms) for reliable timing }
     LN := 1;
     repeat

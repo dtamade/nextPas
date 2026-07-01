@@ -214,6 +214,11 @@ function FormatExceptionMsg(E: Exception): string;
 function AppendTestTrace(const AMsg: string): string;
   { Appends ' [file:line]' from GLastTestTrace if non-empty; returns AMsg as-is
     when no trace was captured. }
+procedure ClassifyTestException(E: Exception;
+  out AStatus: TTestStatus; out AMsg: string);
+  { Standard exception → status classification for test execution.
+    ETestSkipped → tsSkipped, EAssertionFailed → tsFailed, other → tsError.
+    Shared by serial runner, parallel worker, and any future runners. }
 
 { ── Internal Helpers (exported for use by other test.* units) ─────────────── }
 
@@ -460,6 +465,26 @@ begin
     Result := AMsg + ' [' + GLastTestTrace + ']'
   else
     Result := AMsg;
+end;
+
+procedure ClassifyTestException(E: Exception;
+  out AStatus: TTestStatus; out AMsg: string);
+begin
+  if E is ETestSkipped then
+  begin
+    AStatus := tsSkipped;
+    AMsg := E.Message;
+  end
+  else if E is EAssertionFailed then
+  begin
+    AStatus := tsFailed;
+    AMsg := AppendTestTrace(E.Message);
+  end
+  else
+  begin
+    AStatus := tsError;
+    AMsg := AppendTestTrace(FormatExceptionMsg(E));
+  end;
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }

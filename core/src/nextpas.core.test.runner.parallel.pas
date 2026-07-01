@@ -411,20 +411,11 @@ begin
         else
           R^.Entry.Proc;
       except
-        on E: ETestSkipped do
-        begin
-          LStatus := tsSkipped;
-          LSkipReason := E.Message;
-        end;
-        on E: EAssertionFailed do
-        begin
-          LStatus := tsFailed;
-          LFailMsg := AppendTestTrace(E.Message);
-        end;
         on E: Exception do
         begin
-          LStatus := tsError;
-          LFailMsg := AppendTestTrace(FormatExceptionMsg(E));
+          ClassifyTestException(E, LStatus, LFailMsg);
+          if LStatus = tsSkipped then
+            LSkipReason := LFailMsg;
         end;
       end;
 
