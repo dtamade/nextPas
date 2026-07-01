@@ -940,6 +940,45 @@ begin
   end;
 end;
 
+procedure TestCalledWithEmptyArgs;
+{ G1: CalledWith([]) matches no-arg calls }
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.RecordCall('Foo', []);
+    LM.RecordCall('Foo', []);
+    { CalledWith([]) should match both no-arg calls }
+    LM.Verify('Foo').CalledWith([]);
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestCalledExactlyWithZeroTimes;
+{ G1: CalledExactlyWith(0, [...]) when method was never called with those args }
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.RecordCall('Foo', ['a']);
+    { 0 times with ['b'] — method was called with ['a'], not ['b'] }
+    LM.Verify('Foo').CalledExactlyWith(0, ['b']);
+    { 0 times with ['a'] should FAIL since we recorded ['a'] once }
+    try
+      LM.Verify('Foo').CalledExactlyWith(0, ['a']);
+      CheckTrue(False, 'CalledExactlyWith(0) should fail when args were recorded');
+    except
+      on E: EAssertionFailed do
+        CheckTrue(True, 'expected 0-times fail');
+    end;
+  finally
+    LM.Free;
+  end;
+end;
+
 { ── Register Tests ───────────────────────────────────────────────────────────── }
 
 var
@@ -1019,6 +1058,10 @@ begin
   Suite.Test('TestCalledWithFail', @TestCalledWithFail);
   Suite.Test('TestCalledExactlyWithSuccess', @TestCalledExactlyWithSuccess);
   Suite.Test('TestCalledExactlyWithFail', @TestCalledExactlyWithFail);
+
+  { G1: Coverage gaps }
+  Suite.Test('TestCalledWithEmptyArgs', @TestCalledWithEmptyArgs);
+  Suite.Test('TestCalledExactlyWithZeroTimes', @TestCalledExactlyWithZeroTimes);
 
   Runner := TTestRunner.Create('mock-tests');
   Runner.Add(Suite);

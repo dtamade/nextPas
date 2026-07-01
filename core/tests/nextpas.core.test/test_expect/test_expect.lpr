@@ -1002,6 +1002,101 @@ begin
   end;
 end;
 
+procedure TestExpectLessOrEqualNot;
+{ G1: Not_.ToBeLessOrEqual negation path }
+begin
+  { 4 <= 5 is true → Not_ inverts → pass }
+  ExpectInt(5).Not_.ToBeLessOrEqual(4);
+  { 5 <= 5 is true → Not_ inverts → fail }
+  try
+    ExpectInt(5).Not_.ToBeLessOrEqual(5);
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(True, 'expected Not_ <= fail');
+  end;
+end;
+
+procedure TestExpectDoubleGreaterOrEqualNot;
+{ G1: Not_.ToBeGreaterOrEqualD negation path }
+begin
+  ExpectDouble(4.9).Not_.ToBeGreaterOrEqualD(5.0);
+  try
+    ExpectDouble(5.0).Not_.ToBeGreaterOrEqualD(5.0);
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(True, 'expected Not_ >=D fail');
+  end;
+end;
+
+procedure TestExpectDoubleLessOrEqualNot;
+{ G1: Not_.ToBeLessOrEqualD negation path }
+begin
+  ExpectDouble(5.1).Not_.ToBeLessOrEqualD(5.0);
+  try
+    ExpectDouble(5.0).Not_.ToBeLessOrEqualD(5.0);
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(True, 'expected Not_ <=D fail');
+  end;
+end;
+
+procedure TestExpectDoubleInRangeNot;
+{ G1: Not_.ToBeInRangeD negation path }
+begin
+  { Outside range → Not_ inverts → pass }
+  ExpectDouble(9.9).Not_.ToBeInRangeD(0.0, 9.0);
+  { Inside range → Not_ inverts → fail }
+  try
+    ExpectDouble(5.0).Not_.ToBeInRangeD(0.0, 9.0);
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(True, 'expected Not_ InRangeD fail');
+  end;
+end;
+
+procedure TestExpectContainCINot;
+{ G1: Not_.ToContainCI negation path }
+begin
+  Expect('Hello World').Not_.ToContainCI('xyz');
+  try
+    Expect('Hello World').Not_.ToContainCI('hello');
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(True, 'expected Not_ ContainCI fail');
+  end;
+end;
+
+procedure TestExpectStartWithCINot;
+{ G1: Not_.ToStartWithCI negation path }
+begin
+  Expect('Hello World').Not_.ToStartWithCI('world');
+  try
+    Expect('Hello World').Not_.ToStartWithCI('hello');
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(True, 'expected Not_ StartWithCI fail');
+  end;
+end;
+
+procedure TestExpectEndWithCINot;
+{ G1: Not_.ToEndWithCI negation path }
+begin
+  Expect('Hello World').Not_.ToEndWithCI('hello');
+  try
+    Expect('Hello World').Not_.ToEndWithCI('WORLD');
+    Halt(1);
+  except
+    on E: EAssertionFailed do
+      Check(True, 'expected Not_ EndWithCI fail');
+  end;
+end;
+
 procedure TestExpectToRaiseNilClass;
 { P0: ToRaise(nil) must fail gracefully, not SIGSEGV }
 begin
@@ -1141,6 +1236,15 @@ begin
   LSuite.Test('ToStartWithCI',               @TestExpectStartWithCI);
   LSuite.Test('ToEndWithCI',                 @TestExpectEndWithCI);
   LSuite.Test('Not_.ToBeGreaterOrEqual',      @TestExpectGreaterOrEqualNot);
+
+  { G1: Negation path for v3.1 additions }
+  LSuite.Test('Not_.ToBeLessOrEqual',        @TestExpectLessOrEqualNot);
+  LSuite.Test('Not_.ToBeGreaterOrEqualD',    @TestExpectDoubleGreaterOrEqualNot);
+  LSuite.Test('Not_.ToBeLessOrEqualD',       @TestExpectDoubleLessOrEqualNot);
+  LSuite.Test('Not_.ToBeInRangeD',           @TestExpectDoubleInRangeNot);
+  LSuite.Test('Not_.ToContainCI',            @TestExpectContainCINot);
+  LSuite.Test('Not_.ToStartWithCI',          @TestExpectStartWithCINot);
+  LSuite.Test('Not_.ToEndWithCI',            @TestExpectEndWithCINot);
 
   { P0: ToRaise nil ExceptClass guard }
   LSuite.Test('ToRaise(nil) → graceful fail', @TestExpectToRaiseNilClass);

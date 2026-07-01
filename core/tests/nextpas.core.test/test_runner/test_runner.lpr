@@ -299,6 +299,12 @@ var
   LBenchSuite: TTestSuite;
   LBenchResults: TBenchResults;
   LBenchConfig: TTestConfig;
+  { G1: RunAllBenchmarks }
+  LBenchRunner: TTestRunner;
+  LBenchRunnerResults: specialize TArray<TBenchResults>;
+  { G1: AllPassed auto-run }
+  LAutoRunSuite: TTestSuite;
+  LAutoRunRunner: TTestRunner;
 begin
   WriteLn('=== test_runner ===');
   { Suite 1: lifecycle }
@@ -1753,6 +1759,69 @@ begin
     PassTest('Benchmarks skipped in Run');
   end;
 
+  { ── G1: RunAllBenchmarks at runner level ───────────────────────── }
+  WriteLn;
+  SectionHeader('G1: RunAllBenchmarks (runner level)');
+  begin
+    ResetDefaultConfig;
+    LBenchConfig := DefaultConfig;
+    LBenchConfig.BenchEnabled := True;
+    LBenchConfig.BenchTimeMs := 100;
+    LBenchRunner := TTestRunner.Create('BenchRunner');
+    { Suite A: 1 benchmark }
+    LBenchSuite := TTestSuite.Create('BenchSuiteA');
+    LBenchSuite.Bench('OpA', procedure(BC: PBenchContext)
+    var
+      I: Integer;
+    begin
+      for I := 1 to BC^.N do
+        if I < 0 then WriteLn('x');
+    end);
+    LBenchSuite.Config := LBenchConfig;
+    LBenchRunner.Add(LBenchSuite);
+    { Suite B: 1 benchmark }
+    LBenchSuite := TTestSuite.Create('BenchSuiteB');
+    LBenchSuite.Bench('OpB', procedure(BC: PBenchContext)
+    var
+      I: Integer;
+    begin
+      for I := 1 to BC^.N do
+        if I < 0 then WriteLn('x');
+    end);
+    LBenchSuite.Config := LBenchConfig;
+    LBenchRunner.Add(LBenchSuite);
+    { RunAllBenchmarks aggregates results from all suites }
+    if not LBenchRunner.RunAllBenchmarks(LBenchRunnerResults) then
+      FailTest('RunAllBenchmarks should return True');
+    { Should have results from both suites }
+    if Length(LBenchRunnerResults) < 2 then
+      FailTest('RunAllBenchmarks: expected >= 2 suite results, got ' +
+        IntToStr(Length(LBenchRunnerResults)));
+    ResetDefaultConfig;
+    PassTest('RunAllBenchmarks runner level');
+  end;
+
+  { ── G1: AllPassed auto-run behavior ────────────────────────────── }
+  WriteLn;
+  SectionHeader('G1: AllPassed auto-run');
+  begin
+    ResetDefaultConfig;
+    LAutoRunSuite := TTestSuite.Create('AutoRunSuite');
+    LAutoRunSuite.Test('auto1', procedure begin CheckTrue(True); end);
+    LAutoRunSuite.Test('auto2', procedure begin CheckTrue(True); end);
+    LAutoRunRunner := TTestRunner.Create('AutoRunRunner');
+    LAutoRunRunner.Add(LAutoRunSuite);
+    { AllPassed before RunAll should trigger auto-run }
+    if not LAutoRunRunner.AllPassed then
+      FailTest('AllPassed auto-run should return True for passing suite');
+    { After auto-run, HasRun should be true and TotalPass should reflect results }
+    if LAutoRunRunner.TotalPass <> 2 then
+      FailTest('AllPassed auto-run: expected 2 passes, got ' +
+        IntToStr(LAutoRunRunner.TotalPass));
+    ResetDefaultConfig;
+    PassTest('AllPassed auto-run');
+  end;
+
   WriteLn;
   PassTest('test_runner');
 
@@ -1778,6 +1847,10 @@ begin
   LProgressSuite := Default(TTestSuite);
   LMaxFailSuite := Default(TTestSuite);
   LJsonSuite := Default(TTestSuite);
+  LBenchSuite := Default(TTestSuite);
+  LBenchRunner := Default(TTestRunner);
+  LAutoRunSuite := Default(TTestSuite);
+  LAutoRunRunner := Default(TTestRunner);
   LJsonSink := nil;
   LVerbSuite := Default(TTestSuite);
   LVerbSink := nil;

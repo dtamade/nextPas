@@ -603,6 +603,36 @@ begin
   CheckTrue(LCaught, 'CheckLessOrEqual(6,5) should fail with <= message');
 end;
 
+procedure TestCheckNotContains;
+{ G1: CheckNotContains — symmetric to CheckContains }
+begin
+  { pass: haystack does NOT contain needle }
+  CheckNotContains('hello world', 'xyz');
+  { fail: haystack DOES contain needle }
+  try
+    CheckNotContains('hello world', 'world');
+    Fail('CheckNotContains should fail when haystack contains needle');
+  except
+    on E: EAssertionFailed do
+      CheckContains(E.Message, 'should not contain');
+  end;
+end;
+
+procedure TestFailUnexpected;
+{ G1: FailUnexpected — formats "unexpected ClassName: Message" }
+begin
+  try
+    FailUnexpected(Exception.Create('boom'));
+    Fail('FailUnexpected should raise');
+  except
+    on E: EAssertionFailed do
+    begin
+      CheckContains(E.Message, 'unexpected');
+      CheckContains(E.Message, 'boom');
+    end;
+  end;
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -671,6 +701,10 @@ begin
   LSuite.Test('GreaterOrEqual fail',         @TestCheckGreaterOrEqualFail);
   LSuite.Test('LessOrEqual pass',            @TestCheckLessOrEqualPass);
   LSuite.Test('LessOrEqual fail',            @TestCheckLessOrEqualFail);
+
+  { G1: Coverage gaps }
+  LSuite.Test('CheckNotContains',            @TestCheckNotContains);
+  LSuite.Test('FailUnexpected',              @TestFailUnexpected);
 
   if not LSuite.Run then
   begin

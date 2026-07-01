@@ -332,6 +332,7 @@ var
   LSuite: TTestSuite;
   LFailSuite, LSkipSuite: TTestSuite;
   LRunner: TTestRunner;
+  LResults: specialize TArray<TTestRunResult>;
 begin
   WriteLn('=== test_parallel ===');
   LSuite := TTestSuite.Create('Parallel Tests');
@@ -610,6 +611,29 @@ begin
         IntToStr(GVerbResult.Passed));
     ResetDefaultConfig;
     PassTest('Cleanup exception in parallel');
+  end;
+
+  { ── G1: RunAllParallelWithResult at runner level ───────────────── }
+  WriteLn;
+  SectionHeader('G1: RunAllParallelWithResult');
+  begin
+    ResetDefaultConfig;
+    GTestCounter := 0;
+    LRunner := TTestRunner.Create('ParResultRunner');
+    LSuite := TTestSuite.Create('ParResSuiteA');
+    LSuite.Test('pra1', @TestParallelPassA);
+    LSuite.Test('pra2', @TestParallelPassA);
+    LRunner.Add(LSuite);
+    LFailSuite := TTestSuite.Create('ParResSuiteB');
+    LFailSuite.Test('prb1', @TestParallelPassA);
+    LRunner.Add(LFailSuite);
+    LRunner.RunAllParallelWithResult(nil, LResults);
+    { Verify results are populated }
+    if Length(LResults) < 2 then
+      FailTest('RunAllParallelWithResult: expected >= 2 suite results, got ' +
+        IntToStr(Length(LResults)));
+    ResetDefaultConfig;
+    PassTest('RunAllParallelWithResult');
   end;
 
   WriteLn;
