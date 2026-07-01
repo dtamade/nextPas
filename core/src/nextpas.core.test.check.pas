@@ -182,28 +182,42 @@ begin
       IntToHex(NativeUInt(AActual), 16));
 end;
 
-procedure CheckEqual(const AExpected, AActual: Double;
-  AEpsilon: Double);
+procedure CheckNear(const AExpected, AActual: Double;
+  const AEpsilon: Double; const AMessage: string);
 var
   LDiff: Double;
 begin
   LDiff := AActual - AExpected;
   if LDiff < 0 then LDiff := -LDiff;
   if LDiff > AEpsilon then
-    InternalFail('Expected ' + FloatToStr(AExpected) +
+    FailWithDefault(AMessage,
+      'Expected ' + FloatToStr(AExpected) +
       ' (+/-' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual));
 end;
 
-procedure CheckNotEqual(const AExpected, AActual: Double;
-  AEpsilon: Double);
+procedure CheckNotNear(const AExpected, AActual: Double;
+  const AEpsilon: Double; const AMessage: string);
 var
   LDiff: Double;
 begin
   LDiff := AActual - AExpected;
   if LDiff < 0 then LDiff := -LDiff;
   if LDiff <= AEpsilon then
-    InternalFail('Expected values to differ but both are ' +
-      FloatToStr(AActual) + ' (within ' + FloatToStr(AEpsilon) + ')');
+    FailWithDefault(AMessage,
+      'Expected not near ' + FloatToStr(AExpected) +
+      ' (+/-' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual));
+end;
+
+procedure CheckEqual(const AExpected, AActual: Double;
+  AEpsilon: Double);
+begin
+  CheckNear(AExpected, AActual, AEpsilon);
+end;
+
+procedure CheckNotEqual(const AExpected, AActual: Double;
+  AEpsilon: Double);
+begin
+  CheckNotNear(AExpected, AActual, AEpsilon);
 end;
 
 procedure CheckTrue(AValue: Boolean; const AMessage: string);
@@ -362,32 +376,6 @@ begin
         InternalFail('Unexpected exception: ' + E.ClassName + ': ' + E.Message);
     end;
   end;
-end;
-
-procedure CheckNear(const AExpected, AActual: Double;
-  const AEpsilon: Double; const AMessage: string);
-var
-  LDiff: Double;
-begin
-  LDiff := AActual - AExpected;
-  if LDiff < 0 then LDiff := -LDiff;
-  if LDiff > AEpsilon then
-    FailWithDefault(AMessage,
-      'Expected ' + FloatToStr(AExpected) +
-      ' (+/-' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual));
-end;
-
-procedure CheckNotNear(const AExpected, AActual: Double;
-  const AEpsilon: Double; const AMessage: string);
-var
-  LDiff: Double;
-begin
-  LDiff := AActual - AExpected;
-  if LDiff < 0 then LDiff := -LDiff;
-  if LDiff <= AEpsilon then
-    FailWithDefault(AMessage,
-      'Expected not near ' + FloatToStr(AExpected) +
-      ' (+/-' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual));
 end;
 
 procedure Fail(const AMessage: string);
