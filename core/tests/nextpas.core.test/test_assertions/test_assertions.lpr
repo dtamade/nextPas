@@ -10,6 +10,24 @@ uses
   SysUtils,
   nextpas.core.test;
 
+{ ── Test helpers ──────────────────────────────────────────────────────────── }
+
+procedure CheckFail(AProc: TTestClosure;
+  const AContains: string = '');
+{ Call AProc, expecting EAssertionFailed.
+  If AContains <> '', verify the message contains that substring. }
+begin
+  try
+    AProc;
+    Fail('expected assertion failure');
+  except
+    on E: EAssertionFailed do
+      if AContains <> '' then
+        Check(Pos(AContains, E.Message) > 0,
+          'expected "' + AContains + '" in "' + E.Message + '"');
+  end;
+end;
+
 { ── Test procedures ──────────────────────────────────────────────────────── }
 
 procedure TestCheckPass;
@@ -20,59 +38,26 @@ end;
 
 procedure TestCheckFail;
 begin
-  try
-    Check(False, 'expected failure');
-    WriteLn('ERROR: Check(False) did not raise');
-    Halt(1);
-  except
-    on E: EAssertionFailed do
-      CheckContains(E.Message, 'expected failure');
-    on E: Exception do
-      FailUnexpected(E);
-  end;
+  CheckFail(procedure begin Check(False, 'expected failure'); WriteLn('ERROR: Check(False) did not raise'); end, 'expected failure');
 end;
 
 procedure TestCheckEqualString;
 begin
   CheckEqual('hello', 'hello');
-  try
-    CheckEqual('hello', 'world');
-    Halt(1);
-  except
-    on E: EAssertionFailed do
-      CheckContains(E.Message, 'hello');
-    on E: Exception do
-      FailUnexpected(E);
-  end;
+  CheckFail(procedure begin CheckEqual('hello', 'world'); end, 'hello');
 end;
 
 procedure TestCheckEqualInt;
 begin
   CheckEqual(Int64(42), Int64(42));
-  try
-    CheckEqual(Int64(42), Int64(99));
-    Halt(1);
-  except
-    on E: EAssertionFailed do
-      CheckContains(E.Message, '42');
-    on E: Exception do
-      FailUnexpected(E);
-  end;
+  CheckFail(procedure begin CheckEqual(Int64(42), Int64(99)); end, '42');
 end;
 
 procedure TestCheckEqualBool;
 begin
   CheckEqual(True, True);
   CheckEqual(False, False);
-  try
-    CheckEqual(True, False);
-    Halt(1);
-  except
-    on E: EAssertionFailed do
-      CheckContains(E.Message, 'True');
-    on E: Exception do
-      FailUnexpected(E);
-  end;
+  CheckFail(procedure begin CheckEqual(True, False); end, 'True');
 end;
 
 procedure TestCheckEqualPtr;
@@ -81,14 +66,14 @@ var
 begin
   LP := @LP;
   CheckEqual(LP, LP);
+  { FPC internal error when LP is captured by anonymous closure }
   try
     CheckEqual(nil, LP);
-    Halt(1);
+    Fail('expected pointer equality fail');
   except
     on E: EAssertionFailed do
-      CheckContains(LowerCase(E.Message), 'pointer');
-    on E: Exception do
-      FailUnexpected(E);
+      Check(Pos(LowerCase('pointer'), LowerCase(E.Message)) > 0,
+        'expected "pointer" in message');
   end;
 end;
 
@@ -96,25 +81,13 @@ procedure TestCheckNotEqual;
 begin
   CheckNotEqual('a', 'b');
   CheckNotEqual(Int64(1), Int64(2));
-  try
-    CheckNotEqual('x', 'x');
-    Halt(1);
-  except
-    on E: EAssertionFailed do CheckContains(E.Message, 'differ');
-    on E: Exception do FailUnexpected(E);
-  end;
+  CheckFail(procedure begin CheckNotEqual('x', 'x'); end, 'differ');
 end;
 
 procedure TestCheckNotEqualBool;
 begin
   CheckNotEqual(True, False);
-  try
-    CheckNotEqual(True, True);
-    Halt(1);
-  except
-    on E: EAssertionFailed do CheckContains(E.Message, 'True');
-    on E: Exception do FailUnexpected(E);
-  end;
+  CheckFail(procedure begin CheckNotEqual(True, True); end, 'True');
 end;
 
 procedure TestCheckNotEqualPtr;
@@ -139,13 +112,7 @@ begin
   CheckTrue(2 > 1, 'math works');
   CheckFalse(False);
   CheckFalse(1 > 2);
-  try
-    CheckTrue(False, 'should fail');
-    Halt(1);
-  except
-    on E: EAssertionFailed do CheckContains(E.Message, 'should fail');
-    on E: Exception do FailUnexpected(E);
-  end;
+  CheckFail(procedure begin CheckTrue(False, 'should fail'); end, 'should fail');
 end;
 
 procedure TestCheckNilNotNil;
@@ -169,26 +136,14 @@ procedure TestCheckContains;
 begin
   CheckContains('hello world', 'world');
   CheckContains('abcdef', 'cde');
-  try
-    CheckContains('hello', 'xyz');
-    Halt(1);
-  except
-    on E: EAssertionFailed do CheckContains(E.Message, 'does not contain');
-    on E: Exception do FailUnexpected(E);
-  end;
+  CheckFail(procedure begin CheckContains('hello', 'xyz'); end, 'does not contain');
 end;
 
 procedure TestCheckStartsWith;
 begin
   CheckStartsWith('hello world', 'hello');
   CheckStartsWith('abc', 'a');
-  try
-    CheckStartsWith('hello', 'xyz');
-    Halt(1);
-  except
-    on E: EAssertionFailed do CheckContains(E.Message, 'does not start');
-    on E: Exception do FailUnexpected(E);
-  end;
+  CheckFail(procedure begin CheckStartsWith('hello', 'xyz'); end, 'does not start');
 end;
 
 procedure TestCheckEndsWith;
@@ -198,13 +153,7 @@ begin
   { Empty suffix matches everything (consistent with ToEndWith) }
   CheckEndsWith('hello', '');
   CheckEndsWith('', '');
-  try
-    CheckEndsWith('hello', 'xyz');
-    Halt(1);
-  except
-    on E: EAssertionFailed do CheckContains(E.Message, 'does not end');
-    on E: Exception do FailUnexpected(E);
-  end;
+  CheckFail(procedure begin CheckEndsWith('hello', 'xyz'); end, 'does not end');
 end;
 
 procedure TestCheckSame;
@@ -214,12 +163,14 @@ begin
   LP1 := @LP1;
   LP2 := LP1;
   CheckSame(LP1, LP2);
+  { FPC internal error when LP1 is captured by anonymous closure }
   try
     CheckSame(LP1, nil, 'should be same');
-    Halt(1);
+    Fail('expected CheckSame fail');
   except
-    on E: EAssertionFailed do CheckContains(E.Message, 'should be same');
-    on E: Exception do FailUnexpected(E);
+    on E: EAssertionFailed do
+      Check(Pos('should be same', E.Message) > 0,
+        'expected message in CheckSame fail');
   end;
 end;
 
@@ -228,83 +179,41 @@ begin
   CheckInRange(5, 1, 10);
   CheckInRange(1, 1, 10);
   CheckInRange(10, 1, 10);
-  try
-    CheckInRange(0, 1, 10);
-    Halt(1);
-  except
-    on E: EAssertionFailed do CheckContains(E.Message, 'not in range');
-    on E: Exception do FailUnexpected(E);
-  end;
+  CheckFail(procedure begin CheckInRange(0, 1, 10); end, 'not in range');
 end;
 
 procedure TestCheckGreaterThan;
 begin
   CheckGreaterThan(10, 5);
   CheckGreaterThan(1, 0);
-  try
-    CheckGreaterThan(5, 10);
-    Halt(1);
-  except
-    on E: EAssertionFailed do CheckContains(E.Message, '>');
-    on E: Exception do FailUnexpected(E);
-  end;
+  CheckFail(procedure begin CheckGreaterThan(5, 10); end, '>');
 end;
 
 procedure TestCheckLessThan;
 begin
   CheckLessThan(5, 10);
   CheckLessThan(0, 1);
-  try
-    CheckLessThan(10, 5);
-    Halt(1);
-  except
-    on E: EAssertionFailed do CheckContains(E.Message, '<');
-    on E: Exception do FailUnexpected(E);
-  end;
+  CheckFail(procedure begin CheckLessThan(10, 5); end, '<');
 end;
 
 procedure TestCheckLength;
 begin
   CheckLength(5, 5);
   CheckLength(0, 0);
-  try
-    CheckLength(5, 3);
-    Halt(1);
-  except
-    on E: EAssertionFailed do CheckContains(E.Message, 'Expected length');
-    on E: Exception do FailUnexpected(E);
-  end;
+  CheckFail(procedure begin CheckLength(5, 3); end, 'Expected length');
 end;
 
 procedure TestCheckRaises;
 begin
   CheckRaises(EConvertError,
     procedure begin StrToInt('not_a_number'); end);
-  try
-    CheckRaises(EConvertError,
-      procedure begin { does nothing } end);
-    Halt(1);
-  except
-    on E: EAssertionFailed do
-      CheckContains(E.Message, 'EConvertError');
-    on E: Exception do
-      FailUnexpected(E);
-  end;
+  CheckFail(procedure begin CheckRaises(EConvertError, procedure begin { does nothing } end); end, 'EConvertError');
 end;
 
 procedure TestCheckNoRaise;
 begin
   CheckNoRaise(procedure begin { ok } end);
-  try
-    CheckNoRaise(
-      procedure begin raise EConvertError.Create('oops'); end);
-    Halt(1);
-  except
-    on E: EAssertionFailed do
-      CheckContains(E.Message, 'EConvertError');
-    on E: Exception do
-      FailUnexpected(E);
-  end;
+  CheckFail(procedure begin CheckNoRaise( procedure begin raise EConvertError.Create('oops'); end); end, 'EConvertError');
 end;
 
 procedure TestCheckRaisesSkipPassthrough;
@@ -372,15 +281,7 @@ end;
 
 procedure TestFail;
 begin
-  try
-    Fail('intentional');
-    Halt(1);
-  except
-    on E: EAssertionFailed do
-      CheckContains(E.Message, 'intentional');
-    on E: Exception do
-      FailUnexpected(E);
-  end;
+  CheckFail(procedure begin Fail('intentional'); end, 'intentional');
 end;
 
 procedure TestSkip;
@@ -403,16 +304,7 @@ end;
 
 procedure TestCheckNearFail;
 begin
-  try
-    CheckNear(2.0, 1.0, 1e-10, 'should differ');
-    WriteLn('ERROR: CheckNear did not raise');
-    Halt(1);
-  except
-    on E: EAssertionFailed do
-      CheckContains(E.Message, 'should differ');
-    on E: Exception do
-      FailUnexpected(E);
-  end;
+  CheckFail(procedure begin CheckNear(2.0, 1.0, 1e-10, 'should differ'); end, 'should differ');
 end;
 
 { CheckEqual(Double) / CheckNotEqual(Double) }
@@ -430,15 +322,7 @@ end;
 
 procedure TestCheckEqualDoubleFail;
 begin
-  try
-    CheckEqual(1.0, 2.0, 1e-10);
-    Halt(1);
-  except
-    on E: EAssertionFailed do
-      CheckContains(E.Message, 'Expected');
-    on E: Exception do
-      FailUnexpected(E);
-  end;
+  CheckFail(procedure begin CheckEqual(1.0, 2.0, 1e-10); end, 'Expected');
 end;
 
 procedure TestCheckNotEqualDoublePass;
@@ -449,15 +333,7 @@ end;
 
 procedure TestCheckNotEqualDoubleFail;
 begin
-  try
-    CheckNotEqual(1.0, 1.0);
-    Halt(1);
-  except
-    on E: EAssertionFailed do
-      CheckContains(E.Message, 'differ');
-    on E: Exception do
-      FailUnexpected(E);
-  end;
+  CheckFail(procedure begin CheckNotEqual(1.0, 1.0); end, 'differ');
 end;
 
 procedure TestCheckNotNearPass;
@@ -468,16 +344,7 @@ end;
 
 procedure TestCheckNotNearFail;
 begin
-  try
-    CheckNotNear(1.0, 1.0, 1e-10, 'too close');
-    WriteLn('ERROR: CheckNotNear did not raise');
-    Halt(1);
-  except
-    on E: EAssertionFailed do
-      CheckContains(E.Message, 'too close');
-    on E: Exception do
-      FailUnexpected(E);
-  end;
+  CheckFail(procedure begin CheckNotNear(1.0, 1.0, 1e-10, 'too close'); end, 'too close');
 end;
 
 { R6-40: Empty string semantics for Contains/StartsWith/EndsWith }
@@ -520,31 +387,13 @@ end;
 { R6-42: CheckGreaterThan/CheckLessThan equal values should fail }
 
 procedure TestCheckGreaterThanEqualFail;
-var
-  LCaught: Boolean = False;
 begin
-  try
-    CheckGreaterThan(5, 5);
-    Halt(1);
-  except
-    on E: EAssertionFailed do
-      LCaught := True;
-  end;
-  CheckTrue(LCaught, 'CheckGreaterThan(5,5) should fail');
+  CheckFail(procedure begin CheckGreaterThan(5, 5); end);
 end;
 
 procedure TestCheckLessThanEqualFail;
-var
-  LCaught: Boolean = False;
 begin
-  try
-    CheckLessThan(5, 5);
-    Halt(1);
-  except
-    on E: EAssertionFailed do
-      LCaught := True;
-  end;
-  CheckTrue(LCaught, 'CheckLessThan(5,5) should fail');
+  CheckFail(procedure begin CheckLessThan(5, 5); end);
 end;
 
 { R6-43: CheckRaises catches child exception with parent class }
@@ -568,18 +417,8 @@ begin
 end;
 
 procedure TestCheckGreaterOrEqualFail;
-var
-  LCaught: Boolean = False;
 begin
-  try
-    CheckGreaterOrEqual(4, 5);
-  except
-    on E: EAssertionFailed do
-    begin
-      LCaught := Pos('>=', E.Message) > 0;
-    end;
-  end;
-  CheckTrue(LCaught, 'CheckGreaterOrEqual(4,5) should fail with >= message');
+  CheckFail(procedure begin CheckGreaterOrEqual(4, 5); end, '>=');
 end;
 
 procedure TestCheckLessOrEqualPass;
@@ -589,18 +428,8 @@ begin
 end;
 
 procedure TestCheckLessOrEqualFail;
-var
-  LCaught: Boolean = False;
 begin
-  try
-    CheckLessOrEqual(6, 5);
-  except
-    on E: EAssertionFailed do
-    begin
-      LCaught := Pos('<=', E.Message) > 0;
-    end;
-  end;
-  CheckTrue(LCaught, 'CheckLessOrEqual(6,5) should fail with <= message');
+  CheckFail(procedure begin CheckLessOrEqual(6, 5); end, '<=');
 end;
 
 procedure TestCheckNotContains;
