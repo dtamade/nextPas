@@ -32,12 +32,17 @@ compiler/
 - 函数不超过 100 行（超过必须拆分）
 
 ### np_semantic_analyzer.pas 治理
-当前 17,600 行，是最大的技术债。拆分计划：
+原 17,735 行，已拆分为 3 文件 (12,175 + 2,217 + 3,345)。
+已完成提取:
+- `np_sema_string_ops.inc` — 字符串所有权追踪 (2,217 行)
+- `np_sema_runtime_expr.inc` — BuildRuntimeScalarHirExpr (3,345 行)
+- `np_sema_name_set.pas` — 名称集合查找 (O(log n), 100 行)
+
+进一步拆分计划:
 - `np_sema_overload.pas` — 重载解析 (LookupCallBindingDeclaration 等)
 - `np_sema_type_check.pas` — 类型检查和推导
 - `np_sema_call_binding.pas` — 调用绑定和成员解析
 - `np_sema_hir_gen.pas` — HIR 生成
-- `np_sema_builtins.pas` — 内建函数/类型注册
 
 ## 质量门禁
 
@@ -76,10 +81,11 @@ bash scripts/c8_scan.sh
 - compiler-pass: 30/30 ✅
 - self-compile: 19/19 ✅
 - C8 scan: 856/965 (88.7%), 语义通过率 97.7%
-- 主要债务: sema 17,600 行需拆分, permissive overload 是临时方案
+- 主要债务: sema 主文件 12,175 行 (已从 17,735 行拆分), permissive overload 是临时方案
 
 ## 已知技术债
 - ~~IsBuiltinProcedure 函数列表过长（150+ 函数），需重构为注册表~~ ✅ 已完成
 - ~~IsDeferredSystemObjectMember 扩展过多（30+ 方法），需接口方法解析~~ ✅ 已清理并组织
+- ~~sema 17,735 行需拆分~~ ✅ 已拆分为 3 文件 (12,175 + 2,217 + 3,345)
 - Permissive overload resolution（选第一个候选）是 C8 临时方案
 - C6-H4 owned string return 限制需编译器级修复
