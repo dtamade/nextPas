@@ -1919,15 +1919,27 @@ begin
       LElapsedMs := GetTickCount64 - LStartMs;
       if LElapsedMs >= LBenchTimeMs then
         Break;
-      { Scale N: use Int64 to prevent overflow before bounds check }
+      { Scale N: use Int64 to prevent overflow before bounds check.
+        Must check bounds BEFORE assigning back to Integer LN to avoid
+        truncation overflow on fast benchmarks where multiplication
+        exceeds MaxInt. }
       if LElapsedMs < 10 then
-        LN := Int64(LN) * 100
-      else
-        LN := Int64(LN) * LBenchTimeMs div LElapsedMs;
-      if LN > 1000000000 then
       begin
-        LN := 1000000000;
-        Break;
+        if Int64(LN) * 100 > 1000000000 then
+        begin
+          LN := 1000000000;
+          Break;
+        end;
+        LN := Int64(LN) * 100;
+      end
+      else
+      begin
+        if Int64(LN) * LBenchTimeMs div LElapsedMs > 1000000000 then
+        begin
+          LN := 1000000000;
+          Break;
+        end;
+        LN := Int64(LN) * LBenchTimeMs div LElapsedMs;
       end;
     until False;
     { Final run with calibrated N }

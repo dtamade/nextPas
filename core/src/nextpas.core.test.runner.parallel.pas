@@ -306,7 +306,7 @@ begin
   LStatus := tsPassed;
   LFailMsg := '';
   LSkipReason := '';
-  LStartMs := 0;
+  LStartMs := GetTickCount64; { set before BeforeEach so duration is correct on skip }
   LResultWritten := False;
   LSkippedByBeforeEach := False;
   LTimeoutMs := GetTestTimeout(LConfig);
