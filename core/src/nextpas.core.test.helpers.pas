@@ -16,6 +16,7 @@ uses
   SysUtils,
   nextpas.core.test.base,
   nextpas.core.test.check,
+  nextpas.core.test.config,
   nextpas.core.test.mock;
 
 type
@@ -33,6 +34,10 @@ procedure WithMock(AProc: TMockProc);
   Combines mock lifecycle with assertion-failure verification. }
 procedure ExpectFailWithMock(AProc: TMockProc;
   const AContains: string = '');
+
+{ Create a TTestConfig with a fresh TBufferSink as OutSink and AnsiMode=amOff.
+  Returns the sink so the caller can read captured output. }
+function MakeBufferConfig(out ASink: TBufferSink): TTestConfig;
 
 implementation
 
@@ -76,6 +81,14 @@ begin
   finally
     LM.Free;
   end;
+end;
+
+function MakeBufferConfig(out ASink: TBufferSink): TTestConfig;
+begin
+  ASink := TBufferSink.Create;
+  Result := DefaultConfig;
+  Result.OutSink := ASink;
+  Result.AnsiMode := amOff;
 end;
 
 end.

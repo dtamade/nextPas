@@ -1066,10 +1066,7 @@ var
   LSink: TBufferSink;
   LOut: string;
 begin
-  LSink := TBufferSink.Create;
-  LConfig := DefaultConfig;
-  LConfig.OutSink := LSink;
-  LConfig.AnsiMode := amOff;
+  LConfig := MakeBufferConfig(LSink);
 
   LSuite := TTestSuite.Create('disp');
   LSuite.Config := LConfig;
@@ -1090,10 +1087,7 @@ var
   LSink: TBufferSink;
   LOut: string;
 begin
-  LSink := TBufferSink.Create;
-  LConfig := DefaultConfig;
-  LConfig.OutSink := LSink;
-  LConfig.AnsiMode := amOff;
+  LConfig := MakeBufferConfig(LSink);
 
   LSuite := TTestSuite.Create('disp');
   LSuite.Config := LConfig;
@@ -1115,10 +1109,7 @@ var
   LSink: TBufferSink;
   LOut: string;
 begin
-  LSink := TBufferSink.Create;
-  LConfig := DefaultConfig;
-  LConfig.OutSink := LSink;
-  LConfig.AnsiMode := amOff;
+  LConfig := MakeBufferConfig(LSink);
   LConfig.TagFilter := 'fast';
 
   LSuite := TTestSuite.Create('tags');
@@ -1147,10 +1138,7 @@ var
   LConfig: TTestConfig;
   LSink: TBufferSink;
 begin
-  LSink := TBufferSink.Create;
-  LConfig := DefaultConfig;
-  LConfig.OutSink := LSink;
-  LConfig.AnsiMode := amOff;
+  LConfig := MakeBufferConfig(LSink);
   LConfig.TagFilter := '';
 
   LSuite := TTestSuite.Create('tags');
@@ -1174,10 +1162,7 @@ var
   LSink: TBufferSink;
 begin
   GRepeatCounter := 0;
-  LSink := TBufferSink.Create;
-  LConfig := DefaultConfig;
-  LConfig.OutSink := LSink;
-  LConfig.AnsiMode := amOff;
+  LConfig := MakeBufferConfig(LSink);
 
   LSuite := TTestSuite.Create('repeat');
   LSuite.Config := LConfig;
@@ -1289,10 +1274,7 @@ var
   LConfig: TTestConfig;
   LSink: TBufferSink;
 begin
-  LSink := TBufferSink.Create;
-  LConfig := DefaultConfig;
-  LConfig.OutSink := LSink;
-  LConfig.AnsiMode := amOff;
+  LConfig := MakeBufferConfig(LSink);
 
   LSuite := TTestSuite.Create('tag_runner');
   LSuite.Config := LConfig;

@@ -266,6 +266,7 @@ procedure ExpectFail(AProc: TTestClosure;
 procedure WithMock(AProc: TMockProc);
 procedure ExpectFailWithMock(AProc: TMockProc;
   const AContains: string = '');
+function MakeBufferConfig(out ASink: TBufferSink): TTestConfig;
 
 implementation
 
@@ -634,5 +635,8 @@ begin nextpas.core.test.helpers.WithMock(AProc); end;
 procedure ExpectFailWithMock(AProc: TMockProc;
   const AContains: string);
 begin nextpas.core.test.helpers.ExpectFailWithMock(AProc, AContains); end;
+
+function MakeBufferConfig(out ASink: TBufferSink): TTestConfig;
+begin Result := nextpas.core.test.helpers.MakeBufferConfig(ASink); end;
 
 end.
