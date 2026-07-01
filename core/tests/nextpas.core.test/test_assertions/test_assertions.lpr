@@ -8,25 +8,8 @@ program test_assertions;
 uses
   cthreads,
   SysUtils,
-  nextpas.core.test;
-
-{ ── Test helpers ──────────────────────────────────────────────────────────── }
-
-procedure CheckFail(AProc: TTestClosure;
-  const AContains: string = '');
-{ Call AProc, expecting EAssertionFailed.
-  If AContains <> '', verify the message contains that substring. }
-begin
-  try
-    AProc;
-    Fail('expected assertion failure');
-  except
-    on E: EAssertionFailed do
-      if AContains <> '' then
-        Check(Pos(AContains, E.Message) > 0,
-          'expected "' + AContains + '" in "' + E.Message + '"');
-  end;
-end;
+  nextpas.core.test,
+  nextpas.core.test.helpers;
 
 { ── Test procedures ──────────────────────────────────────────────────────── }
 
@@ -38,26 +21,26 @@ end;
 
 procedure TestCheckFail;
 begin
-  CheckFail(procedure begin Check(False, 'expected failure'); WriteLn('ERROR: Check(False) did not raise'); end, 'expected failure');
+  ExpectFail(procedure begin Check(False, 'expected failure'); WriteLn('ERROR: Check(False) did not raise'); end, 'expected failure');
 end;
 
 procedure TestCheckEqualString;
 begin
   CheckEqual('hello', 'hello');
-  CheckFail(procedure begin CheckEqual('hello', 'world'); end, 'hello');
+  ExpectFail(procedure begin CheckEqual('hello', 'world'); end, 'hello');
 end;
 
 procedure TestCheckEqualInt;
 begin
   CheckEqual(Int64(42), Int64(42));
-  CheckFail(procedure begin CheckEqual(Int64(42), Int64(99)); end, '42');
+  ExpectFail(procedure begin CheckEqual(Int64(42), Int64(99)); end, '42');
 end;
 
 procedure TestCheckEqualBool;
 begin
   CheckEqual(True, True);
   CheckEqual(False, False);
-  CheckFail(procedure begin CheckEqual(True, False); end, 'True');
+  ExpectFail(procedure begin CheckEqual(True, False); end, 'True');
 end;
 
 procedure TestCheckEqualPtr;
@@ -81,13 +64,13 @@ procedure TestCheckNotEqual;
 begin
   CheckNotEqual('a', 'b');
   CheckNotEqual(Int64(1), Int64(2));
-  CheckFail(procedure begin CheckNotEqual('x', 'x'); end, 'differ');
+  ExpectFail(procedure begin CheckNotEqual('x', 'x'); end, 'differ');
 end;
 
 procedure TestCheckNotEqualBool;
 begin
   CheckNotEqual(True, False);
-  CheckFail(procedure begin CheckNotEqual(True, True); end, 'True');
+  ExpectFail(procedure begin CheckNotEqual(True, True); end, 'True');
 end;
 
 procedure TestCheckNotEqualPtr;
@@ -112,7 +95,7 @@ begin
   CheckTrue(2 > 1, 'math works');
   CheckFalse(False);
   CheckFalse(1 > 2);
-  CheckFail(procedure begin CheckTrue(False, 'should fail'); end, 'should fail');
+  ExpectFail(procedure begin CheckTrue(False, 'should fail'); end, 'should fail');
 end;
 
 procedure TestCheckNilNotNil;
@@ -136,14 +119,14 @@ procedure TestCheckContains;
 begin
   CheckContains('hello world', 'world');
   CheckContains('abcdef', 'cde');
-  CheckFail(procedure begin CheckContains('hello', 'xyz'); end, 'does not contain');
+  ExpectFail(procedure begin CheckContains('hello', 'xyz'); end, 'does not contain');
 end;
 
 procedure TestCheckStartsWith;
 begin
   CheckStartsWith('hello world', 'hello');
   CheckStartsWith('abc', 'a');
-  CheckFail(procedure begin CheckStartsWith('hello', 'xyz'); end, 'does not start');
+  ExpectFail(procedure begin CheckStartsWith('hello', 'xyz'); end, 'does not start');
 end;
 
 procedure TestCheckEndsWith;
@@ -153,7 +136,7 @@ begin
   { Empty suffix matches everything (consistent with ToEndWith) }
   CheckEndsWith('hello', '');
   CheckEndsWith('', '');
-  CheckFail(procedure begin CheckEndsWith('hello', 'xyz'); end, 'does not end');
+  ExpectFail(procedure begin CheckEndsWith('hello', 'xyz'); end, 'does not end');
 end;
 
 procedure TestCheckSame;
@@ -179,41 +162,41 @@ begin
   CheckInRange(5, 1, 10);
   CheckInRange(1, 1, 10);
   CheckInRange(10, 1, 10);
-  CheckFail(procedure begin CheckInRange(0, 1, 10); end, 'not in range');
+  ExpectFail(procedure begin CheckInRange(0, 1, 10); end, 'not in range');
 end;
 
 procedure TestCheckGreaterThan;
 begin
   CheckGreaterThan(10, 5);
   CheckGreaterThan(1, 0);
-  CheckFail(procedure begin CheckGreaterThan(5, 10); end, '>');
+  ExpectFail(procedure begin CheckGreaterThan(5, 10); end, '>');
 end;
 
 procedure TestCheckLessThan;
 begin
   CheckLessThan(5, 10);
   CheckLessThan(0, 1);
-  CheckFail(procedure begin CheckLessThan(10, 5); end, '<');
+  ExpectFail(procedure begin CheckLessThan(10, 5); end, '<');
 end;
 
 procedure TestCheckLength;
 begin
   CheckLength(5, 5);
   CheckLength(0, 0);
-  CheckFail(procedure begin CheckLength(5, 3); end, 'Expected length');
+  ExpectFail(procedure begin CheckLength(5, 3); end, 'Expected length');
 end;
 
 procedure TestCheckRaises;
 begin
   CheckRaises(EConvertError,
     procedure begin StrToInt('not_a_number'); end);
-  CheckFail(procedure begin CheckRaises(EConvertError, procedure begin { does nothing } end); end, 'EConvertError');
+  ExpectFail(procedure begin CheckRaises(EConvertError, procedure begin { does nothing } end); end, 'EConvertError');
 end;
 
 procedure TestCheckNoRaise;
 begin
   CheckNoRaise(procedure begin { ok } end);
-  CheckFail(procedure begin CheckNoRaise( procedure begin raise EConvertError.Create('oops'); end); end, 'EConvertError');
+  ExpectFail(procedure begin CheckNoRaise( procedure begin raise EConvertError.Create('oops'); end); end, 'EConvertError');
 end;
 
 procedure TestCheckRaisesSkipPassthrough;
@@ -281,7 +264,7 @@ end;
 
 procedure TestFail;
 begin
-  CheckFail(procedure begin Fail('intentional'); end, 'intentional');
+  ExpectFail(procedure begin Fail('intentional'); end, 'intentional');
 end;
 
 procedure TestSkip;
@@ -304,7 +287,7 @@ end;
 
 procedure TestCheckNearFail;
 begin
-  CheckFail(procedure begin CheckNear(2.0, 1.0, 1e-10, 'should differ'); end, 'should differ');
+  ExpectFail(procedure begin CheckNear(2.0, 1.0, 1e-10, 'should differ'); end, 'should differ');
 end;
 
 { CheckEqual(Double) / CheckNotEqual(Double) }
@@ -322,7 +305,7 @@ end;
 
 procedure TestCheckEqualDoubleFail;
 begin
-  CheckFail(procedure begin CheckEqual(1.0, 2.0, 1e-10); end, 'Expected');
+  ExpectFail(procedure begin CheckEqual(1.0, 2.0, 1e-10); end, 'Expected');
 end;
 
 procedure TestCheckNotEqualDoublePass;
@@ -333,7 +316,7 @@ end;
 
 procedure TestCheckNotEqualDoubleFail;
 begin
-  CheckFail(procedure begin CheckNotEqual(1.0, 1.0); end, 'differ');
+  ExpectFail(procedure begin CheckNotEqual(1.0, 1.0); end, 'differ');
 end;
 
 procedure TestCheckNotNearPass;
@@ -344,7 +327,7 @@ end;
 
 procedure TestCheckNotNearFail;
 begin
-  CheckFail(procedure begin CheckNotNear(1.0, 1.0, 1e-10, 'too close'); end, 'too close');
+  ExpectFail(procedure begin CheckNotNear(1.0, 1.0, 1e-10, 'too close'); end, 'too close');
 end;
 
 { R6-40: Empty string semantics for Contains/StartsWith/EndsWith }
@@ -388,12 +371,12 @@ end;
 
 procedure TestCheckGreaterThanEqualFail;
 begin
-  CheckFail(procedure begin CheckGreaterThan(5, 5); end);
+  ExpectFail(procedure begin CheckGreaterThan(5, 5); end);
 end;
 
 procedure TestCheckLessThanEqualFail;
 begin
-  CheckFail(procedure begin CheckLessThan(5, 5); end);
+  ExpectFail(procedure begin CheckLessThan(5, 5); end);
 end;
 
 { R6-43: CheckRaises catches child exception with parent class }
@@ -418,7 +401,7 @@ end;
 
 procedure TestCheckGreaterOrEqualFail;
 begin
-  CheckFail(procedure begin CheckGreaterOrEqual(4, 5); end, '>=');
+  ExpectFail(procedure begin CheckGreaterOrEqual(4, 5); end, '>=');
 end;
 
 procedure TestCheckLessOrEqualPass;
@@ -429,7 +412,7 @@ end;
 
 procedure TestCheckLessOrEqualFail;
 begin
-  CheckFail(procedure begin CheckLessOrEqual(6, 5); end, '<=');
+  ExpectFail(procedure begin CheckLessOrEqual(6, 5); end, '<=');
 end;
 
 procedure TestCheckNotContains;

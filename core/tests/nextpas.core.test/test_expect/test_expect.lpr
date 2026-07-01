@@ -9,26 +9,8 @@ uses
   cthreads,
   SysUtils,
   Math,
-  nextpas.core.test;
-
-{ ── Test helpers ──────────────────────────────────────────────────────────── }
-
-procedure ExpectFail(AProc: TTestClosure;
-  const AContains: string = '');
-{ Call AProc, expecting it to raise EAssertionFailed.
-  If AContains <> '', verify the message contains that substring.
-  Raises EAssertionFailed if no exception was raised (Halt would kill the process). }
-begin
-  try
-    AProc;
-    Fail('expected assertion failure');
-  except
-    on E: EAssertionFailed do
-      if AContains <> '' then
-        Check(Pos(AContains, E.Message) > 0,
-          'expected "' + AContains + '" in "' + E.Message + '"');
-  end;
-end;
+  nextpas.core.test,
+  nextpas.core.test.helpers;
 
 { ── Test procedures ──────────────────────────────────────────────────────── }
 
