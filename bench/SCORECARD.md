@@ -8,10 +8,10 @@
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **153** | 7 | 35 | **77%** |
+| **Go** | **154** | 7 | 35 | **77%** |
 | **Rust** | 19 | 0 | 47 | **29%** |
 
-## Track Summary (52 tracks, 200 operations)
+## Track Summary (53 tracks, 201 operations)
 
 ### Text Operations (6 ops)
 
@@ -508,6 +508,14 @@
 
 **3W 1L vs Go** — FPC record value-type operations without bounds check/GC write barrier; RecFilter 3.95x (conditional record copy), RecCopy 1.16x (Move 48B records), RecBuild 1.97x (construct records from components); RecFieldSum loses (Go faster Int64 accumulator)
 
+### Exception Handling (1 comparable op)
+
+| Track | Pascal (ns) | Go (ns) | vs Go |
+|-------|-------------|---------|-------|
+| **ExFinally/10M** | **95586300** | 68937863 | **7.2x** ✓ |
+
+**1W vs Go** — FPC `try..finally..end` zero-cost exception model (table-based, no runtime overhead when no exception) vs Go `defer` + closure (fixed per-call cost ~69ns); other exception ops (ExNoThrow/ExCatchRate/ExMixed) not comparable — Go uses idiomatic error returns (inlined away) vs FPC's real `raise`/`except` (stack unwinding)
+
 ### Pascal Wins (biggest margins vs Go)
 1. **String Concat: 3557x** — Go immutable strings O(n²) vs Pascal COW
 2. **SIMD ReduceSum/4K: 20.0x** — AVX2 vpaddps vs Go scalar loop
@@ -570,6 +578,7 @@
 - **BST tree operations**: Pascal dominant (5W 1D vs Go) — Insert 1.72x, InsertLookup 1.33x, InOrder 1.23x, LookupMiss 1.59x, Delete 1.17x; Lookup ties 0.92x
 - **Binary search**: Pascal strong (2W 2D vs Go) — Standard 1.5-1.9x faster; Eytzinger layout ties
 - **Record operations**: Pascal strong (3W 1L vs Go) — RecFilter 3.95x, RecBuild 1.97x, RecCopy 1.16x; value-type records without bounds check/GC barrier; RecFieldSum loses (Go faster Int64 accumulator)
+- **Exception handling**: Pascal dominant (1W vs Go) — try/finally zero-cost model 7.2x faster than Go defer+closure (69ns vs 9.6ns per protected operation)
 - **Float formatting**: Go/Rust win (Ryu algorithm)
 
 ## Conclusion
