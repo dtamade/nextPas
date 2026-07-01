@@ -79,7 +79,7 @@ bash scripts/c8_scan.sh
 - 主要债务: sema 17,600 行需拆分, permissive overload 是临时方案
 
 ## 已知技术债
-- `IsBuiltinProcedure` 函数列表过长（150+ 函数），需重构为注册表
+- ~~IsBuiltinProcedure 函数列表过长（150+ 函数），需重构为注册表~~ ✅ 已完成
 - `IsDeferredSystemObjectMember` 扩展过多（30+ 方法），需接口方法解析
 - Permissive overload resolution（选第一个候选）是 C8 临时方案
 - C6-H4 owned string return 限制需编译器级修复

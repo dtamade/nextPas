@@ -87,7 +87,7 @@
 | ID | 描述 | 等级 | 状态 |
 |----|------|------|------|
 | D-001 | sema 17,600 行需拆分 | P1 | 计划中 |
-| D-002 | IsBuiltinProcedure 150+ 函数列表 | P1 | 计划中 |
+| D-002 | ~~IsBuiltinProcedure 150+ 函数列表~~ | P1 | ✅ 已完成 (157d02355) |
 | D-003 | Permissive overload 是临时方案 | P2 | 已知 |
 | D-004 | C6-H4 owned string return 限制 | P2 | 已知 |
 | D-005 | 接口方法解析缺失 | P1 | 计划中 |
