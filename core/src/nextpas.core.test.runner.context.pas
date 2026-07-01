@@ -275,10 +275,12 @@ var
   LSubCtxI: ITestContext;
   LTestResult: TTestResult;
   LNames: string;
+  LOutSink: IOutputSink;
   K: Integer;
   J: Integer;
   LTotal, LPos: Integer;
 begin
+  LOutSink := ResolveOutSink(FConfig);
   for I := 0 to High(FSubtests) do
   begin
     LEntry := FSubtests[I];
@@ -292,7 +294,7 @@ begin
         LStatus := tsSkipped;
         LMsg    := LEntry.SkipReason;
         WriteSubtestStatus(tsSkipped, LEntry.Name, '', LEntry.SkipReason,
-          '', ResolveOutSink(FConfig), FConfig);
+          '', LOutSink, FConfig);
         Inc(FSubSkip);
       end
       else if LEntry.Kind = ekSubtest then
@@ -316,7 +318,7 @@ begin
       begin
         PTestCaseProc(LEntry.TableProc)^(PTestCase(LEntry.TableCase)^);
         WriteSubtestStatus(tsPassed, LEntry.Name, '', '', '',
-          ResolveOutSink(FConfig), FConfig);
+          LOutSink, FConfig);
         Inc(FSubPass);
       end
       else if LEntry.Kind = ekShouldFail then
@@ -333,7 +335,7 @@ begin
           else
             LMsg := 'Expected failure but test passed';
           WriteSubtestStatus(tsFailed, LEntry.Name, LMsg, '', '',
-            ResolveOutSink(FConfig), FConfig);
+            LOutSink, FConfig);
           Inc(FSubFail);
           AppendFailedName(FFailedNames, LEntry.Name);
         except
@@ -342,7 +344,7 @@ begin
             LStatus := tsSkipped;
             LMsg := E.Message;
             WriteSubtestStatus(tsSkipped, LEntry.Name, '', '', '',
-              ResolveOutSink(FConfig), FConfig);
+              LOutSink, FConfig);
             Inc(FSubSkip);
           end;
           on E: Exception do
@@ -350,7 +352,7 @@ begin
             { Expected failure — subtest passes }
             LStatus := tsPassed;
             WriteSubtestStatus(tsPassed, LEntry.Name, '', '', '',
-              ResolveOutSink(FConfig), FConfig);
+              LOutSink, FConfig);
             Inc(FSubPass);
           end;
         end;
@@ -362,7 +364,7 @@ begin
         else
           LEntry.Proc;
         WriteSubtestStatus(tsPassed, LEntry.Name, '', '', '',
-          ResolveOutSink(FConfig), FConfig);
+          LOutSink, FConfig);
         Inc(FSubPass);
       end;
     except
@@ -371,7 +373,7 @@ begin
         LStatus := tsSkipped;
         LMsg    := E.Message;
         WriteSubtestStatus(tsSkipped, LEntry.Name, '', '', '',
-          ResolveOutSink(FConfig), FConfig);
+          LOutSink, FConfig);
         Inc(FSubSkip);
       end;
       on E: EAssertionFailed do
@@ -379,8 +381,8 @@ begin
         LStatus := tsFailed;
         LMsg    := AppendTestTrace(E.Message);
         WriteSubtestStatus(tsFailed, LEntry.Name, LMsg, '', '',
-          ResolveOutSink(FConfig), FConfig);
-        OutputCapturedLog(FLogLines, ResolveOutSink(FConfig), FConfig);
+          LOutSink, FConfig);
+        OutputCapturedLog(FLogLines, LOutSink, FConfig);
         Inc(FSubFail);
         AppendFailedName(FFailedNames, LEntry.Name);
       end;
@@ -389,8 +391,8 @@ begin
         LStatus := tsError;
         LMsg    := AppendTestTrace(FormatExceptionMsg(E));
         WriteSubtestStatus(tsError, LEntry.Name, E.Message, '',
-          E.ClassName, ResolveOutSink(FConfig), FConfig);
-        OutputCapturedLog(FLogLines, ResolveOutSink(FConfig), FConfig);
+          E.ClassName, LOutSink, FConfig);
+        OutputCapturedLog(FLogLines, LOutSink, FConfig);
         Inc(FSubFail);
         AppendFailedName(FFailedNames, LEntry.Name);
       end;
