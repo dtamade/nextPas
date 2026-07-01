@@ -13,7 +13,7 @@ contract:
 
 stage0: rebuild-compiler
 
-verify: hygiene
+verify: hygiene contract
 	./build/verify_local.sh
 	$(MAKE) hygiene
 
