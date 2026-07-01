@@ -510,7 +510,7 @@
 
 **3W 1L vs Go** — FPC record value-type operations without bounds check/GC write barrier; RecFilter 3.95x (conditional record copy), RecCopy 1.16x (Move 48B records), RecBuild 1.97x (construct records from components); RecFieldSum loses (Go faster Int64 accumulator)
 
-### Exception Handling (1 comparable op)
+### Exception Handling (1 op)
 
 | Track | Pascal (ns) | Go (ns) | vs Go |
 |-------|-------------|---------|-------|
