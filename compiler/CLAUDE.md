@@ -80,7 +80,7 @@ bash scripts/c8_scan.sh
 ## 当前状态 (2026-07-01)
 - compiler-pass: 34/34 ✅
 - self-compile: 19/19 ✅
-- C8 scan: 860/965 (89.1%), semantic failures: 19
+- C8 scan: 865/965 (89.6%), semantic failures: 14
 - 主要债务: sema 主文件 12,175 行 (已从 17,735 行拆分), permissive overload 是临时方案
 
 ## 已知技术债
