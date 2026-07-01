@@ -9,7 +9,7 @@ unit nextpas.core.test.expect;
 interface
 
 uses
-  SysUtils,          { ExceptClass, EAbort, EAssertionFailed — FPC built-in, irreplaceable }
+  SysUtils,          { ExceptClass — FPC built-in, irreplaceable }
   nextpas.core.text.conv,
   nextpas.core.test.base;
 
@@ -450,8 +450,7 @@ var
   LDiff: Double;
 begin
   RequireKind(ekDouble, 'ToBeNear');
-  LDiff := FDoubleValue - AExpected;
-  if LDiff < 0 then LDiff := -LDiff;
+  LDiff := Abs(FDoubleValue - AExpected);
   if FNegated then
   begin
     if LDiff <= AEpsilon then
@@ -470,9 +469,7 @@ end;
 function TExpectation.ToNotBeNear(const AExpected: Double;
   const AEpsilon: Double): IExpectation;
 begin
-  { Flip negated flag in-place to avoid allocating a temporary TExpectation
-    copy via Not_.  The try/finally ensures the flag is restored even if
-    ToBeNear raises. }
+  RequireKind(ekDouble, 'ToNotBeNear');
   FNegated := not FNegated;
   try
     Result := ToBeNear(AExpected, AEpsilon);

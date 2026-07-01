@@ -9,7 +9,7 @@ unit nextpas.core.test.check;
 interface
 
 uses
-  SysUtils,          { ExceptClass, EAbort, EAssertionFailed — FPC built-in, irreplaceable }
+  SysUtils,          { ExceptClass — FPC built-in, irreplaceable }
   nextpas.core.text.conv,
   nextpas.core.test.base;
 
@@ -187,8 +187,7 @@ procedure CheckNear(const AExpected, AActual: Double;
 var
   LDiff: Double;
 begin
-  LDiff := AActual - AExpected;
-  if LDiff < 0 then LDiff := -LDiff;
+  LDiff := Abs(AActual - AExpected);
   if LDiff > AEpsilon then
     FailWithDefault(AMessage,
       'Expected ' + FloatToStr(AExpected) +
@@ -200,8 +199,7 @@ procedure CheckNotNear(const AExpected, AActual: Double;
 var
   LDiff: Double;
 begin
-  LDiff := AActual - AExpected;
-  if LDiff < 0 then LDiff := -LDiff;
+  LDiff := Abs(AActual - AExpected);
   if LDiff <= AEpsilon then
     FailWithDefault(AMessage,
       'Expected not near ' + FloatToStr(AExpected) +
