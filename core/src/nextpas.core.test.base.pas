@@ -500,17 +500,26 @@ var
 function IsFrameworkFrame(const AFrameStr: string): Boolean;
 { Returns True if the frame belongs to the test framework and should be hidden
   from the user-facing output. Matches unit name prefixes:
-    nextpas.core.test.  (any sub-unit of the test framework)
-    sysutils             (FPC exception machinery)
-    system               (FPC runtime) }
+    nextpas.core.test  (any sub-unit — followed by . , space, newline, or EOS)
+    sysutils            (FPC exception machinery)
+    system              (FPC runtime) }
+const
+  CPrefix = 'nextpas.core.test';
 var
   LLower: string;
+  LPos, LAfter: Integer;
 begin
   LLower := LowerCase(AFrameStr);
-  Result := (Pos('nextpas.core.test.', LLower) > 0) or
-            (Pos('nextpas.core.test,', LLower) > 0) or
-            (Pos('nextpas.core.test ', LLower) > 0) or
-            (Pos('nextpas.core.test'#10, LLower) > 0);
+  LPos := Pos(CPrefix, LLower);
+  if LPos > 0 then
+  begin
+    LAfter := LPos + Length(CPrefix);
+    { Match if followed by delimiter (., comma, space, newline) or at end-of-string }
+    Result := (LAfter > Length(LLower)) or
+              (LLower[LAfter] in ['.', ',', ' ', #10]);
+  end
+  else
+    Result := False;
   if not Result then
     { Also filter sysutils/system frames that appear in exception stack }
     Result := (Pos('sysutils', LLower) > 0) or
