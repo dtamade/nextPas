@@ -4685,6 +4685,7 @@ function TSemanticAnalyzer.IsDeferredSystemObjectMember(
   const AMemberName: string
 ): Boolean;
 begin
+  { TObject methods that are genuinely deferred because System.pas is skipped }
   Result := SameText(AMemberName, 'Free') or
     SameText(AMemberName, 'Create') or
     SameText(AMemberName, 'Destroy') or
@@ -4697,7 +4698,10 @@ begin
     SameText(AMemberName, 'GetInterface') or
     SameText(AMemberName, 'AfterConstruction') or
     SameText(AMemberName, 'BeforeDestruction') or
-    { Common interface methods not yet tracked by the compiler }
+    { FPC System builtins that are methods }
+    SameText(AMemberName, '_AddRef') or
+    SameText(AMemberName, '_Release') or
+    { Interface methods that need deferred handling }
     SameText(AMemberName, 'Write') or SameText(AMemberName, 'Read') or
     SameText(AMemberName, 'Close') or SameText(AMemberName, 'Flush') or
     SameText(AMemberName, 'Seek') or SameText(AMemberName, 'GetSize') or
@@ -4707,7 +4711,7 @@ begin
     SameText(AMemberName, 'SetBlocking') or
     SameText(AMemberName, 'CreateWithContext') or
     SameText(AMemberName, 'Contains') or
-    SameText(AMemberName, 'Render') or SameText(AMemberName, '_AddRef');
+    SameText(AMemberName, 'Render');
 end;
 
 function TSemanticAnalyzer.TypeMetaSize(const ATypeName: string): Int64;
