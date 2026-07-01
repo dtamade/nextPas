@@ -35,7 +35,7 @@ WIDGET_COUNT=$(find "$SRC_DIR" -name 'nextpas.core.tui.widget*.pas' | wc -l)
 if [ "$WIDGET_COUNT" -gt 0 ]; then ok "Widget: $WIDGET_COUNT 文件"; else warn_check "Widget 子系统缺失"; fi
 
 # Core widget interfaces
-for w in "IWidget" "IBlock" "IText"; do
+for w in "IWidget" "IBlock" "IParagraph"; do
   if grep -rql "\b$w\b" "$SRC_DIR"/nextpas.core.tui*.pas 2>/dev/null; then ok "Widget 基础: $w"; else warn_check "Widget 基础未发现: $w"; fi
 done
 

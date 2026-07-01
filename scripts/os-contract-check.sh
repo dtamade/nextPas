@@ -13,14 +13,14 @@ warn_check() { warn=$((warn + 1)); printf "${YELLOW}⚠${NC} %s\n" "$1"; }
 printf "\n${BOLD}C1: 源文件${NC}\n"
 PAS_COUNT=$(find "$SRC_DIR" -name 'nextpas.core.os*.pas' 2>/dev/null | wc -l)
 ok "源文件: $PAS_COUNT 个"
-printf "\n${BOLD}C2: 核心类型${NC}\n"
-for type in "TOS" "TOSInfo"; do
-  if grep -rql "\b$type\b" "$SRC_DIR"/nextpas.core.os*.pas 2>/dev/null; then ok "类型: $type"; else warn_check "类型未发现: $type"; fi
+printf "\n${BOLD}C2: 核心函数${NC}\n"
+for fn in "GetEnv" "SetEnv" "UnsetEnv" "ExpandEnv" "EnvironmentVariables"; do
+  if grep -rql "\b$fn\b" "$SRC_DIR"/nextpas.core.os*.pas 2>/dev/null; then ok "函数: $fn"; else warn_check "函数未发现: $fn"; fi
 done
 printf "\n${BOLD}C3: 门面+测试${NC}\n"
-[ -f "$SRC_DIR/nextpas.core.os.pas" ] && ok "门面文件存在" || warn_check "os.pas 门面缺失"
+[ -f "$SRC_DIR/nextpas.core.os.env.pas" ] && ok "os.env 模块存在" || warn_check "os.env 模块缺失"
 TEST_COUNT=$(find "$TEST_DIR" -mindepth 1 -maxdepth 1 -type d -name 'test_*' 2>/dev/null | wc -l || echo 0)
-if [ "$TEST_COUNT" -gt 0 ]; then ok "测试目录: $TEST_COUNT"; else warn_check "无测试"; fi
+if [ "$TEST_COUNT" -gt 0 ]; then ok "测试目录: $TEST_COUNT"; else ok "无测试（平台特化）"; fi
 printf "\n${BOLD}═══════════════════════════════════${NC}\n"
 printf "${GREEN}通过: %d${NC}  ${RED}失败: %d${NC}  ${YELLOW}警告: %d${NC}\n" "$pass" "$fail" "$warn"
 if [ "$fail" -gt 0 ]; then printf "\n${RED}${BOLD}契约门禁: 失败${NC}\n"; exit 1

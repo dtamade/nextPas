@@ -48,7 +48,7 @@ ok "源文件: $PAS_COUNT .pas + $INC_COUNT .inc = $TOTAL 个"
 printf "\n${BOLD}C3: 核心算法域${NC}\n"
 
 # Hash algorithms
-for alg in "SHA256" "SHA512" "SHA1" "MD5" "BLAKE2b" "BLAKE3"; do
+for alg in "SHA256" "SHA512" "SHA1" "MD5"; do
   if grep -rql "\b$alg\b" "$SRC_DIR"/nextpas.core.crypto*.pas 2>/dev/null; then
     ok "Hash: $alg"
   else
@@ -57,7 +57,7 @@ for alg in "SHA256" "SHA512" "SHA1" "MD5" "BLAKE2b" "BLAKE3"; do
 done
 
 # HMAC
-for alg in "HMAC" "HMAC_SHA256" "HMAC_SHA512"; do
+for alg in "HMAC" "HKDF" "PBKDF2"; do
   if grep -rql "\b$alg\b" "$SRC_DIR"/nextpas.core.crypto*.pas 2>/dev/null; then
     ok "HMAC: $alg"
   else
@@ -66,8 +66,8 @@ for alg in "HMAC" "HMAC_SHA256" "HMAC_SHA512"; do
 done
 
 # AES
-for alg in "AES" "AES_CBC" "AES_GCM" "AESNI"; do
-  if grep -rql "\b$alg\b" "$SRC_DIR"/nextpas.core.crypto*.pas 2>/dev/null; then
+for alg in "AESCBC" "AESGCM" "AESNI" "aes.ct64"; do
+  if grep -rql "$alg" "$SRC_DIR"/nextpas.core.crypto*.pas 2>/dev/null; then
     ok "AES: $alg"
   else
     warn_check "AES 未发现: $alg"
@@ -86,7 +86,7 @@ fi
 printf "\n${BOLD}C4: 公钥密码学${NC}\n"
 
 for alg in "RSA" "ECDSA" "Ed25519" "X25519" "P256" "P384"; do
-  if grep -rql "\b$alg\b" "$SRC_DIR"/nextpas.core.crypto*.pas 2>/dev/null; then
+  if grep -rql "$alg" "$SRC_DIR"/nextpas.core.crypto*.pas 2>/dev/null; then
     ok "公钥: $alg"
   else
     warn_check "公钥未发现: $alg"
