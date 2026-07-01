@@ -17,6 +17,7 @@ uses
 
 type
   TTestProc = procedure;
+  TTestClosure = reference to procedure;
 
   TTestRunner = record
   private
@@ -45,6 +46,20 @@ procedure CheckEqual(const AExpected, AActual: Boolean;
 
 implementation
 
+{ Wraps a 2-arg CheckEqual call, prepending AMessage on assertion failure. }
+procedure CheckEqualWithMsg(const AMessage: string; AProc: TTestClosure);
+begin
+  try
+    AProc;
+  except
+    on E: EAssertionFailed do
+      if AMessage <> '' then
+        raise EAssertionFailed.Create(AMessage + ': ' + E.Message)
+      else
+        raise;
+  end;
+end;
+
 { Forward to nextpas.core.test.check }
 
 procedure Check(const ACondition: Boolean; const AMessage: string);
@@ -56,43 +71,22 @@ begin nextpas.core.test.check.Fail(AMessage); end;
 procedure CheckEqual(const AExpected, AActual: string;
   const AMessage: string);
 begin
-  try
-    nextpas.core.test.check.CheckEqual(AExpected, AActual);
-  except
-    on E: EAssertionFailed do
-      if AMessage <> '' then
-        raise EAssertionFailed.Create(AMessage + ': ' + E.Message)
-      else
-        raise;
-  end;
+  CheckEqualWithMsg(AMessage, procedure
+    begin nextpas.core.test.check.CheckEqual(AExpected, AActual); end);
 end;
 
 procedure CheckEqual(const AExpected, AActual: Int64;
   const AMessage: string);
 begin
-  try
-    nextpas.core.test.check.CheckEqual(AExpected, AActual);
-  except
-    on E: EAssertionFailed do
-      if AMessage <> '' then
-        raise EAssertionFailed.Create(AMessage + ': ' + E.Message)
-      else
-        raise;
-  end;
+  CheckEqualWithMsg(AMessage, procedure
+    begin nextpas.core.test.check.CheckEqual(AExpected, AActual); end);
 end;
 
 procedure CheckEqual(const AExpected, AActual: Boolean;
   const AMessage: string);
 begin
-  try
-    nextpas.core.test.check.CheckEqual(AExpected, AActual);
-  except
-    on E: EAssertionFailed do
-      if AMessage <> '' then
-        raise EAssertionFailed.Create(AMessage + ': ' + E.Message)
-      else
-        raise;
-  end;
+  CheckEqualWithMsg(AMessage, procedure
+    begin nextpas.core.test.check.CheckEqual(AExpected, AActual); end);
 end;
 
 { TTestRunner }
