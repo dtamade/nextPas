@@ -540,25 +540,16 @@ begin
 end;
 
 function TExpectation.ToBeInRangeD(const ALow, AHigh: Double): IExpectation;
-var
-  LMatch: Boolean;
 begin
   RequireKind(ekDouble, 'ToBeInRangeD');
   if ALow > AHigh then
-    InternalFail('ToBeInRangeD: low (' + FloatToStr(ALow) + ') > high (' + FloatToStr(AHigh) + ')');
-  LMatch := (FDoubleValue >= ALow) and (FDoubleValue <= AHigh);
-  if FNegated then
-  begin
-    if LMatch then
-      InternalFail(FloatToStr(FDoubleValue) + ' should not be in [' +
-        FloatToStr(ALow) + '..' + FloatToStr(AHigh) + ']');
-  end
-  else
-  begin
-    if not LMatch then
-      InternalFail(FloatToStr(FDoubleValue) + ' is not in [' +
-        FloatToStr(ALow) + '..' + FloatToStr(AHigh) + ']');
-  end;
+    InternalFail('ToBeInRangeD: low (' + FloatToStr(ALow) +
+      ') > high (' + FloatToStr(AHigh) + ')');
+  CheckMatch((FDoubleValue >= ALow) and (FDoubleValue <= AHigh),
+    FloatToStr(FDoubleValue) + ' should not be in [' +
+      FloatToStr(ALow) + '..' + FloatToStr(AHigh) + ']',
+    FloatToStr(FDoubleValue) + ' is not in [' +
+      FloatToStr(ALow) + '..' + FloatToStr(AHigh) + ']');
   Result := Self;
 end;
 

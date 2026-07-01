@@ -1161,28 +1161,15 @@ begin
 end;
 
 function TTestSuite.WithEachCleanup(AProc: TTestProc): TTestSuite;
-var
-  LProc: TTestProc;
-  LIdx: Integer;
 begin
   Result := Self;
-  LProc := AProc;
-  LIdx := GrowCleanups(Result.EachCleanups);
-  Result.EachCleanups[LIdx] := procedure
-  begin
-    LProc;
-  end;
-  SetLength(Result.EachCleanups, LIdx + 1);
+  Result.Cleanup(AProc);
 end;
 
 function TTestSuite.WithEachCleanup(AProc: TTestClosure): TTestSuite;
-var
-  LIdx: Integer;
 begin
   Result := Self;
-  LIdx := GrowCleanups(Result.EachCleanups);
-  Result.EachCleanups[LIdx] := AProc;
-  SetLength(Result.EachCleanups, LIdx + 1);
+  Result.Cleanup(AProc);
 end;
 
 function TTestSuite.Run: Boolean;
