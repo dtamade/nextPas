@@ -78,10 +78,10 @@ bash scripts/c8_scan.sh
 ```
 
 ## 当前状态 (2026-07-01)
-- compiler-pass: 33/34 ✅ (1 pre-existing: implicit_system_imported_unit)
+- compiler-pass: 34/34 ✅
 - self-compile: 19/19 ✅
 - C8 scan: ~867/965 (89.8%), semantic failures: ~12
-- 本次修复: SIMD empty uses (3), parser optional interface/implementation, git binding keyword, preprocessor platform defines
+- 本次修复: SIMD empty uses (3), parser optional interface/implementation, git binding keyword, preprocessor platform defines, {$H+} directive parsing
 - 主要债务: sema 主文件 12,175 行 (已从 17,735 行拆分), permissive overload 是临时方案
 
 ## 已知技术债
