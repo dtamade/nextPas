@@ -96,44 +96,32 @@ TAllocatorTraits = record
 end;
 ```
 
-### 1.3 辅助函数
+### 1.3 分配器解析模式
 
-#### `ResolveAllocator`（`nextpas.core.mem.allocator.rtl`）
+构造函数中 nil→默认分配器使用内联 fallback：
 
 ```pascal
-function ResolveAllocator(AAllocator: TAllocator): TAllocator; inline;
-// 前置：无
-// 后置：返回 AAllocator（非 nil）或 GetRtlAllocator
-// 用途：构造函数中统一处理 nil→默认分配器
+// 典型模式（构造函数中）：
+if AAllocator <> nil then
+  FAllocator := AAllocator
+else
+  FAllocator := GetRtlAllocator;
+// INV-1: FAllocator 永远非 nil
 ```
 
-#### `ValidateAlignArg`（`nextpas.core.mem.base`）
+`GetRtlAllocator`（`nextpas.core.mem.allocator.rtl`）：返回全局 `TRtlAllocator` 单例。
+
+### 1.4 对齐验证模式
+
+对齐验证使用内联 `IsPowerOfTwo`，不引入独立辅助函数：
 
 ```pascal
-function ValidateAlignArg(AAlignment: SizeUInt): Boolean; inline;
-// 前置：无
-// 后置：返回 (AAlignment <> 0) and (AAlignment >= SizeOf(Pointer)) and IsPowerOfTwo(AAlignment)
-// 用途：AllocAligned 的对齐验证（不抛异常）
-```
+// Arena 路径（bump allocator，无 header，接受任意 2 的幂对齐）：
+if not IsPowerOfTwo(AAlign) then Exit;
 
-#### `SanitizeAlignment`（`nextpas.core.mem.error`）
-
-```pascal
-function SanitizeAlignment(AAlignment: SizeUInt): SizeUInt;
-// 前置：无
-// 后置：clamp >= SizeOf(Pointer)，验证 power-of-two
-// 异常：非 2 的幂时抛 EAllocError(aeAlignmentNotSupported)
-// 用途：AllocAligned 路径的对齐清理
-```
-
-#### `SanitizeConfigAlignment`（`nextpas.core.mem.error`）
-
-```pascal
-function SanitizeConfigAlignment(AAlignment: SizeUInt): SizeUInt;
-// 前置：无
-// 后置：0→DEFAULT_ALIGNMENT(16)，验证 power-of-two，clamp >= MEM_DEFAULT_ALIGN(8)
-// 异常：非 2 的幂时抛 EAllocError(aeAlignmentNotSupported)
-// 用途：构造函数配置参数的对齐清理
+// Allocator 路径（over-allocate with pointer-sized header，要求 >= SizeOf(Pointer)）：
+if (AAlign = 0) or (AAlign < SizeOf(Pointer)) or not IsPowerOfTwo(AAlign) then
+  raise EAllocError.Create(aeAlignmentNotSupported, ...);
 ```
 
 #### `EOutOfMemory.CreateMsg`（`nextpas.core.mem.error`）
@@ -151,8 +139,8 @@ constructor EOutOfMemory.CreateMsg(const aMsg: string);
 
 ### 全局不变量
 
-- **[INV-1]** `FAllocator` 字段永远非 nil（构造时通过 `ResolveAllocator` 保证）
-- **[INV-2]** 对齐参数必须是 2 的幂（`SanitizeAlignment` / `ValidateAlignArg` 验证）
+- **[INV-1]** `FAllocator` 字段永远非 nil（构造时通过内联 nil→GetRtlAllocator fallback 保证）
+- **[INV-2]** 对齐参数必须是 2 的幂（`IsPowerOfTwo` 验证）
 - **[INV-3]** `TAllocator` 子类的 `DoGetMem` 返回 nil 表示 OOM（不抛异常）
 - **[INV-4]** `TAllocator` 子类的 `DoFreeMem(nil)` 必须安全（基类保证 nil 不传入）
 
@@ -167,7 +155,7 @@ constructor EOutOfMemory.CreateMsg(const aMsg: string);
 - **[INV-P1]** `TFixedPool.FBlockSize` 是 8 的倍数且 >= SizeOf(Pointer)
 - **[INV-P2]** `TFixedPool.FAlignment` 是 2 的幂且 >= MEM_DEFAULT_ALIGN
 - **[INV-P3]** `TFixedPool.FBlockSize mod FAlignment = 0`
-- **[INV-P4]** `TSlabPool.FAllocator <> nil`（ResolveAllocator 保证）
+- **[INV-P4]** `TSlabPool.FAllocator <> nil`（内联 fallback 保证）
 - **[INV-P5]** `TPoolAllocator.FBlockSize` 是 8 的倍数
 
 ### 安全不变量
@@ -216,7 +204,7 @@ Exception
 | GetMem/AllocMem 失败 | 返回 nil，不抛异常 |
 | Arena 容量不足 | 返回 nil，不抛异常 |
 | 构造时 OOM | 抛 EOutOfMemory |
-| 对齐参数非法 | Sanitize* 抛 EAllocError；Validate* 返回 false |
+| 对齐参数非法 | Allocator: raise EAllocError; Arena: 返回 nil |
 | 双重释放 | 抛 EDoubleFree（TTrackingAllocator）或 Assert（TFixedPool） |
 
 ---
@@ -276,7 +264,7 @@ Arena（IArena 实现）
 ```
 TAllocator 子类：
   Create → [GetMem/FreeMem 循环] → Destroy
-    └── FAllocator 通过 ResolveAllocator 绑定，生命周期跟随调用方
+    └── FAllocator 通过内联 nil→GetRtlAllocator fallback 绑定，生命周期跟随调用方
 
 IArena 实现：
   Create → [Alloc 循环] → Reset → [Alloc 循环] → Destroy
@@ -289,7 +277,7 @@ IArena 实现：
 - **heaptrc 测试**：所有测试套件启用 `-gh`（heaptrc），报告未释放内存
 - **异常路径**：构造函数中的异常不会泄漏已分配资源（try/except/finally）
 - **Destroy 完整性**：所有 `Destroy` 释放 `Create` 分配的所有资源
-- **ResolveAllocator 保证**：`FAllocator` 永远非 nil，避免 nil 解引用泄漏
+- **内联 fallback 保证**：`FAllocator` 永远非 nil，避免 nil 解引用泄漏
 
 ---
 
@@ -302,10 +290,9 @@ IArena 实现：
 | Allocator 基础 | test_allocator_foundation | 1 | 8 | 0 |
 | Allocator CRT | test_allocator_crt | 1 | 5 | 0 |
 | Allocator 默认 | test_default_allocator | 1 | 4 | 0 |
-| Allocator 增长 | test_growing_allocator | 1 | 13 | 0 |
-| Allocator 跟踪 | test_tracking_allocator | 1 | 20 | 0 |
-| Allocator 守卫 | test_guard | 1 | 9 | 0 |
 | Allocator Fallback | test_fallback_allocator | 1 | 15 | 0 |
+| Allocator 跟踪 | test_tracking_allocator | 1 | 20 | 0 |
+| Allocator 基准 | test_mem | 1 | — | 0 |
 | Arena 基础 | test_arena | 1 | 15 | 0 |
 | Arena 分段 | test_arena_chunked | 1 | 10 | 0 |
 | Arena 类 | test_arena_class | 1 | 6 | 0 |
@@ -315,21 +302,14 @@ IArena 实现：
 | Pool 固定 | test_pool_allocator | 1 | 6 | 0 |
 | Pool Slab | test_slab_pool | 1 | 16 | 0 |
 | Pool Slab 分片 | test_sharded_pools | 1 | 9 | 0 |
-| Pool SizeClass | test_sizeclass | 1 | 15 | 0 |
-| Pool SizeClass 池 | test_sizeclass_pool | 1 | 6 | 0 |
+| Pool SizeClass | test_sizeclass_pool | 1 | 6 | 0 |
 | Pool 增长固定 | test_growing_fixed_pool | 1 | 8 | 0 |
 | Pool 对象 | test_object_pool | 1 | 12 | 0 |
 | BlockPool | test_blockpool | 1 | 15 | 0 |
 | BlockPool 增长 | test_growing_block_pool | 1 | 8 | 0 |
 | Stack Pool | test_stack_pool | 1 | 15 | 0 |
 | Ring Buffer | test_ring_buffer | 1 | 30 | 0 |
-| Concurrent | test_concurrent | 1 | 4 | 0 |
 | Concurrent 包装 | test_concurrent_wrappers | 1 | 6 | 0 |
-| Thread Cache | test_thread_cache | 1 | 7 | 0 |
-| Scavenger | test_scavenger | 1 | 5 | 0 |
-| Span | test_span | 1 | 7 | 0 |
-| Shuffle | test_shuffle | 1 | 4 | 0 |
-| 稳定性 | test_stability | 1 | 16 | 0 |
 | 契约 | test_contracts | 1 | 22 | 0 |
 | L0 边界 | test_l0_dependency_boundaries | 1 | 1 | 0 |
 | OOM | test_oom | 1 | 5 | 0 |
@@ -337,7 +317,9 @@ IArena 实现：
 | Secure | test_mem_secure | 1 | 6 | 0 |
 | Memory Map | test_memory_map_allocator | 1 | 4 | 0 |
 | Mapped Slab | test_mapped_slab_pool | 1 | 5 | 0 |
-| **合计** | **38 个测试文件** | **38** | **~400** | **0** |
+| **合计** | **30 个测试套件** | **30** | **~286** | **0** |
+
+注：另有 4 个 compile-gate 测试（test_memory_map_compile_gate, test_mem_secure_windows_compile_gate, test_platform_virtual, test_shared_memory），仅验证编译通过。
 
 ### 6.2 必须覆盖的场景
 
@@ -347,12 +329,11 @@ IArena 实现：
 | OOM 降级 | test_oom, test_fallback_allocator | ✅ |
 | 对齐验证 | test_arena, test_pool_allocator, test_contracts | ✅ |
 | 双重释放检测 | test_tracking_allocator, test_contracts | ✅ |
-| 线程安全 | test_concurrent, test_thread_arena, test_thread_cache | ✅ |
-| 边界条件（0 大小、最大大小） | test_contracts, test_stability | ✅ |
-| 内存泄漏检测 | test_stability（heaptrc） | ✅ |
+| 线程安全 | test_concurrent_wrappers, test_thread_arena | ✅ |
+| 边界条件（0 大小、最大大小） | test_contracts | ✅ |
 | Arena Reset/Mark | test_arena, test_arena_chunked | ✅ |
 | Pool 扩容 | test_growing_fixed_pool, test_growing_block_pool | ✅ |
-| SizeClass 路由 | test_sizeclass, test_sizeclass_pool | ✅ |
+| SizeClass 路由 | test_sizeclass_pool | ✅ |
 | Slab 分配 | test_slab_pool, test_sharded_pools | ✅ |
 | Ring Buffer 循环 | test_ring_buffer | ✅ |
 | L0 依赖边界 | test_l0_dependency_boundaries | ✅ |
@@ -371,3 +352,4 @@ IArena 实现：
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
 | 2026-07-01 | 1.0 | 初始版本：完整六项契约 | Claude |
+| 2026-07-01 | 1.1 | 修正：移除不存在的辅助函数引用、修正测试矩阵匹配实际代码 | Claude |
