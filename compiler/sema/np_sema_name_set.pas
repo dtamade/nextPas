@@ -49,6 +49,8 @@ var
   I, J: LongInt;
   Temp: string;
 begin
+  if ASet.Count = 0 then
+    Exit;
   { Simple insertion sort — good enough for ~200 elements }
   for I := 1 to ASet.Count - 1 do
   begin

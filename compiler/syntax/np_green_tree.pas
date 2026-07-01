@@ -4873,6 +4873,8 @@ begin
   AParent.AppendChild(InterfaceNode);
   Inc(ATree.FNodeCount);
 
+  SkipDirectives(ALexer, ACursor);
+
   if (ACursor < ALexer.TokenCount) and
     (CurrentToken(ALexer, ACursor).Kind = tkInterfaceKeyword) then
   begin
@@ -4891,6 +4893,7 @@ begin
   end;
 
   { implementation keyword may also be absent when preprocessor skipped it }
+  SkipDirectives(ALexer, ACursor);
   if (ACursor < ALexer.TokenCount) and
     (CurrentToken(ALexer, ACursor).Kind = tkImplementationKeyword) then
   begin
