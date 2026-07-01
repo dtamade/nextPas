@@ -60,7 +60,7 @@ for iface in "ISSLContext" "ISSLConnection" "ISSLCertificate"; do
 done
 
 # ISSLContext methods
-for method in "Connect" "Accept" "SetCertificate" "SetVerifyMode" "SetAlpnProtocols"; do
+for method in "CreateConnection" "LoadCertificate" "SetVerifyMode" "SetALPNProtocols" "LoadPrivateKey"; do
   if grep -rql "\b$method\b" "$SRC_DIR"/nextpas.core.tls*.pas 2>/dev/null; then
     ok "ISSLContext.$method"
   else
@@ -69,7 +69,7 @@ for method in "Connect" "Accept" "SetCertificate" "SetVerifyMode" "SetAlpnProtoc
 done
 
 # ISSLConnection methods
-for method in "Send" "Recv" "Close" "GetAlpnProtocol"; do
+for method in "Read" "Write" "Close" "DoHandshake" "Connect"; do
   if grep -rql "\b$method\b" "$SRC_DIR"/nextpas.core.tls*.pas 2>/dev/null; then
     ok "ISSLConnection.$method"
   else
@@ -102,7 +102,7 @@ else
 fi
 
 # 关键 TLS 1.3 组件
-for comp in "key.schedule" "aead" "handshake" "record"; do
+for comp in "keyschedule" "aead" "handshake" "record"; do
   if find "$SRC_DIR" -name "nextpas.core.tls.tls13*$comp*.pas" 2>/dev/null | grep -q .; then
     ok "TLS 1.3: $comp"
   else
@@ -114,10 +114,10 @@ done
 
 printf "\n${BOLD}C6: 错误类型${NC}\n"
 
-if grep -rql "\bETlsError\b" "$SRC_DIR"/nextpas.core.tls*.pas 2>/dev/null; then
-  ok "ETlsError"
+if grep -rql "\bESSLException\b" "$SRC_DIR"/nextpas.core.tls*.pas 2>/dev/null; then
+  ok "ESSLException"
 else
-  warn_check "ETlsError 未发现"
+  warn_check "ESSLException 未发现"
 fi
 
 # ── C7: 证书基础设施 ────────────────────────────────────

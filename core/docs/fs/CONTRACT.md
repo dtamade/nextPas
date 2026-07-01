@@ -72,12 +72,17 @@ fs.pas           ← 门面 re-export
 
 ## 6. 测试覆盖
 
+test_fs, test_fs_facade, test_fs_glob, test_fs_idir, test_fs_ifile, test_fs_text
+
 | 测试文件 | 测试数 | 说明 |
 |----------|--------|------|
 | test_fs | ~20 | 文件读写/目录操作 |
 | test_fs_glob | ~10 | GlobMatch |
-| 其他 | ~30 | 路径/遍历/临时文件 |
-| **合计** | **6 个测试目录** | **~60** |
+| test_fs_facade | ~5 | 门面完整性 |
+| test_fs_idir | ~10 | IDir 接口 |
+| test_fs_ifile | ~10 | IFile 接口 |
+| test_fs_text | ~10 | 文本文件操作 |
+| **合计** | **6 个测试目录** | **~65** |
 
 ---
 

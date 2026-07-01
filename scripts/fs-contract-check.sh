@@ -81,7 +81,7 @@ for fn in "FsCopyFile" "FsExists" "FsStat" "FsFileSize"; do
 done
 
 # Directory operations
-for fn in "FsMkdir" "FsMkdirAll" "FsRmdir" "FsIsDir" "FsGetCwd"; do
+for fn in "FsMkdir" "FsMkdirAll" "FsRemove" "FsIsDir" "FsGetCwd"; do
   if grep -rql "\b$fn\b" "$SRC_DIR"/nextpas.core.fs*.pas 2>/dev/null; then
     ok "目录操作: $fn"
   else
@@ -137,7 +137,7 @@ printf "\n${BOLD}C7: 门面单元${NC}\n"
 FACADE="$SRC_DIR/nextpas.core.fs.pas"
 if [ -f "$FACADE" ]; then
   ok "门面文件存在"
-  for fn in "FsPathJoin" "FsReadFileText" "FsExists" "FsMkdir" "GlobMatch"; do
+  for fn in "PathJoin" "ReadFileText" "Exists" "Mkdir" "Remove"; do
     if grep -q "\b$fn\b" "$FACADE"; then
       ok "门面导出: $fn"
     else

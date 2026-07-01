@@ -148,7 +148,7 @@ ICollection                    ← 非泛型根（PtrIter/Count/Clear/IsEmpty）
 
 ### 6.1 测试矩阵（44 个测试目录）
 
-覆盖范围：Vec, HashMap, SwissMap, HashSet, BTree, TreeMap, TreeSet, SkipList, Trie, PriorityQueue, LRU, MultiMap, MultiSet, Deque, VecDeque, LinkedList, ForwardList, CircularBuffer, BitSet, Arr, SmallVec, Concurrent, Algorithms, Iterators, Builder, Slice
+test_base, test_bitset, test_btree_custom_comparer, test_btree_managed_lifecycle, test_btree_managed_returns, test_btreemap, test_btreeset, test_circularbuffer, test_collections_killer, test_concurrent_hashmap, test_concurrent_hashmap_managed_returns, test_contracts, test_deque, test_error_paths, test_facade, test_forwardlist, test_forwardlist_managed_zero, test_hashmap, test_hashset, test_linkedhashmap, test_linkedhashset, test_list, test_lrucache, test_managed_stress, test_managed_types, test_multimap, test_multiset, test_priorityqueue, test_queue, test_rbtreemap_custom_comparer_data, test_rbtreemap_range_managed_state, test_skiplist, test_slice_contract, test_smallvec, test_stack, test_swiss_adapter, test_swisstable, test_swisstable_custom_callbacks, test_swisstable_managed_returns, test_treemap, test_treeset, test_trie, test_vec, test_vecdeque_full
 
 ### 6.2 必须覆盖的场景
 
