@@ -47,7 +47,7 @@ compiler/
 ## 质量门禁
 
 ### 提交前必须通过
-1. `make test TEST_FILTER=compiler-pass` — 30/30 pass
+1. `make test TEST_FILTER=compiler-pass` — 34/34 pass
 2. `make test TEST_FILTER=compiler-fail` — snapshot 匹配
 3. `make hygiene` — 无散落产物
 4. `scripts/rebuild-compiler.sh` — 编译器重建成功
