@@ -4455,6 +4455,25 @@ begin
   NameSetAdd(FBuiltinProcedures, 'FillWord');
   NameSetAdd(FBuiltinProcedures, 'Fill8');
   NameSetAdd(FBuiltinProcedures, 'SarInt64');
+  NameSetAdd(FBuiltinProcedures, 'SarLongint');
+  NameSetAdd(FBuiltinProcedures, 'SarShortint');
+  NameSetAdd(FBuiltinProcedures, 'SarSmallint');
+  NameSetAdd(FBuiltinProcedures, 'RolByte');
+  NameSetAdd(FBuiltinProcedures, 'RolWord');
+  NameSetAdd(FBuiltinProcedures, 'RolDWord');
+  NameSetAdd(FBuiltinProcedures, 'RolQWord');
+  NameSetAdd(FBuiltinProcedures, 'RorByte');
+  NameSetAdd(FBuiltinProcedures, 'RorWord');
+  NameSetAdd(FBuiltinProcedures, 'RorDWord');
+  NameSetAdd(FBuiltinProcedures, 'RorQWord');
+  NameSetAdd(FBuiltinProcedures, 'BsfByte');
+  NameSetAdd(FBuiltinProcedures, 'BsfWord');
+  NameSetAdd(FBuiltinProcedures, 'BsfDWord');
+  NameSetAdd(FBuiltinProcedures, 'BsfQWord');
+  NameSetAdd(FBuiltinProcedures, 'BsrByte');
+  NameSetAdd(FBuiltinProcedures, 'BsrWord');
+  NameSetAdd(FBuiltinProcedures, 'BsrDWord');
+  NameSetAdd(FBuiltinProcedures, 'PopCnt');
 
   { Overloaded/ambiguous resolution helpers }
   NameSetAdd(FBuiltinProcedures, 'Equal');
