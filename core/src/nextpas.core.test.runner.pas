@@ -2205,20 +2205,16 @@ begin
         if not Suites[I].RunWithResult(LSuiteResult) then
           LAllPassed := False;
       end;
-      if not LAllPassed and LFailFast then
-      begin
-        LOutSink.WriteLn(AnsiYellow(
-          '  FAILFAST: stopping after suite failure', LConfig));
-        AResults[I] := LSuiteResult;
-        Inc(TotalPass, Suites[I].LastPass);
-        Inc(TotalFail, Suites[I].LastFail);
-        Inc(TotalSkip, Suites[I].LastSkip);
-        Break;
-      end;
       AResults[I] := LSuiteResult;
       Inc(TotalPass, Suites[I].LastPass);
       Inc(TotalFail, Suites[I].LastFail);
       Inc(TotalSkip, Suites[I].LastSkip);
+      if (not LAllPassed) and LFailFast then
+      begin
+        LOutSink.WriteLn(AnsiYellow(
+          '  FAILFAST: stopping after suite failure', LConfig));
+        Break;
+      end;
       if (LMaxFailures > 0) and (TotalFail >= LMaxFailures) then
       begin
         LOutSink.WriteLn(AnsiYellow(
