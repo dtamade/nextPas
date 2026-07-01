@@ -4874,7 +4874,7 @@ end;
 function TSemanticAnalyzer.AreTypesCompatible(
   const ALhsTypeId, ARhsTypeId: LongInt): Boolean;
 var
-  IntIds: array[0..14] of LongInt;
+  IntIds: array[0..16] of LongInt;
   StrIds: array[0..4] of LongInt;
   I: LongInt;
   LhsIsInt, RhsIsInt, LhsIsStr, RhsIsStr: Boolean;
@@ -4912,6 +4912,8 @@ begin
   IntIds[12] := FModel.FindTypeByName('WideChar');
   IntIds[13] := FModel.FindTypeByName('Single');
   IntIds[14] := FModel.FindTypeByName('Double');
+  IntIds[15] := FModel.FindTypeByName('AnsiChar');
+  IntIds[16] := FModel.FindTypeByName('Char');
 
   LhsIsInt := False;
   RhsIsInt := False;
@@ -4954,6 +4956,16 @@ begin
     (CanonicalLhsTypeId = WideCharTypeId)) and
     ((CanonicalRhsTypeId = CharTypeId) or
      (CanonicalRhsTypeId = WideCharTypeId)) then
+    Exit(True);
+
+  { String literal → PAnsiChar / PChar implicit conversion }
+  if RhsIsStr and IsPointerTypeId(CanonicalLhsTypeId) then
+    Exit(True);
+
+  { Single-char string literal → Char/AnsiChar/WideChar implicit conversion }
+  if RhsIsStr and ((CanonicalLhsTypeId = CharTypeId) or
+    (CanonicalLhsTypeId = WideCharTypeId) or
+    (CanonicalLhsTypeId = FModel.FindTypeByName('AnsiChar'))) then
     Exit(True);
 
   Result := False;
