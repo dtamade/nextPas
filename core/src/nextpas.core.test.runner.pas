@@ -1400,11 +1400,7 @@ begin
       else if LEntry.Kind = ekShouldFail then
       begin
         RunShouldFailEntry(LEntry, LStatus, LLastFailMsg);
-        case LStatus of
-          tsFailed:  Inc(LFail);
-          tsSkipped: Inc(LSkip);
-          tsPassed:  Inc(LPass);
-        end;
+        IncByStatus(LStatus, LPass, LFail, LSkip);
       end
       else
       begin
@@ -1453,9 +1449,8 @@ begin
         until False;
         end; { end repeat loop }
 
-        if LStatus = tsPassed then Inc(LPass)
-        else if LStatus = tsSkipped then Inc(LSkip)
-        else Inc(LFail);
+        IncByStatus(LStatus, LPass, LFail, LSkip);
+
       end;
     except
       on E: Exception do

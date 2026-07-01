@@ -226,6 +226,9 @@ procedure SetTestContext(const ASuiteName, ATestName: string);
 procedure InternalFail(const AMessage: string);
 procedure InternalSkip(const AReason: string);
 function  StrStartsWith(const S, APrefix: string): Boolean;
+procedure IncByStatus(AStatus: TTestStatus;
+  var APass, AFail, ASkip: Integer);
+  { Increment the appropriate counter based on test status. }
 
 implementation
 
@@ -584,6 +587,17 @@ begin
     Exit(True); { empty prefix matches everything — consistent with Contains/EndsWith }
   Result := (Length(S) >= Length(APrefix)) and
             (Copy(S, 1, Length(APrefix)) = APrefix);
+end;
+
+procedure IncByStatus(AStatus: TTestStatus;
+  var APass, AFail, ASkip: Integer);
+begin
+  case AStatus of
+    tsPassed:  Inc(APass);
+    tsSkipped: Inc(ASkip);
+  else
+    Inc(AFail);
+  end;
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }
