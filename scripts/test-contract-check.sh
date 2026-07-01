@@ -17,11 +17,11 @@ printf "\n${BOLD}C2: 源文件规模${NC}\n"
 PAS_COUNT=$(find "$SRC_DIR" -name 'nextpas.core.test*.pas' 2>/dev/null | wc -l)
 ok "源文件: $PAS_COUNT 个"
 printf "\n${BOLD}C3: 核心子模块${NC}\n"
-for sub in "test.pas" "test.mock.pas" "test.helpers.pas" "test.report.pas" "test.config.pas" "test.builder.pas" "test.discovery.pas" "test.runner.pas" "test.benchmark.pas"; do
+for sub in "test.pas" "test.mock.pas" "test.helpers.pas" "test.runner.pas" "test.config.pas" "test.discovery.pas" "test.expect.pas" "test.check.pas" "test.base.pas"; do
   if [ -f "$SRC_DIR/nextpas.core.$sub" ]; then ok "子模块: $sub"; else warn_check "子模块缺失: $sub"; fi
 done
 printf "\n${BOLD}C4: 核心类型${NC}\n"
-for type in "TTestCase" "TTestSuite" "TTestRunner" "TMock" "TExpect"; do
+for type in "TTestCase" "TTestSuite" "TTestRunner" "TMock" "IExpectation"; do
   if grep -rql "\b$type\b" "$SRC_DIR"/nextpas.core.test*.pas 2>/dev/null; then ok "类型: $type"; else warn_check "类型未发现: $type"; fi
 done
 printf "\n${BOLD}C5: 门面+测试${NC}\n"

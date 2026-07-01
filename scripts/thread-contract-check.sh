@@ -20,7 +20,7 @@ printf "\n${BOLD}C2: 源文件完备性${NC}\n"
 PAS_COUNT=$(find "$SRC_DIR" -name 'nextpas.core.thread*.pas' 2>/dev/null | wc -l)
 ok "源文件: $PAS_COUNT 个"
 printf "\n${BOLD}C3: 核心类型${NC}\n"
-for type in "TThread" "TThreadPool" "TWorker"; do
+for type in "ICancellationToken" "TCancellationToken" "TCancellationSource"; do
   if grep -rql "\b$type\b" "$SRC_DIR"/nextpas.core.thread*.pas 2>/dev/null; then ok "类型: $type"; else warn_check "类型未发现: $type"; fi
 done
 printf "\n${BOLD}C4: 门面+测试${NC}\n"

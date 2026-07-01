@@ -29,7 +29,7 @@ for f in "${CFG_FILES[@]}"; do
 done
 
 printf "\n${BOLD}C3: 核心类型${NC}\n"
-for type in "TConfig" "TConfigBuilder" "TConfigWatcher"; do
+for type in "IConfig" "TConfigWatcher" "TConfigSource"; do
   if grep -rql "\b$type\b" "$SRC_DIR"/nextpas.core.config*.pas 2>/dev/null; then ok "类型: $type"; else warn_check "类型未发现: $type"; fi
 done
 

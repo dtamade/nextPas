@@ -19,7 +19,7 @@ done
 printf "\n${BOLD}C2: 源文件${NC}\n"
 if [ -f "$SRC_DIR/nextpas.core.csv.pas" ]; then ok "文件: nextpas.core.csv.pas"; else fail_check "文件缺失"; fi
 printf "\n${BOLD}C3: 核心类型${NC}\n"
-for type in "TCsvReader" "TCsvWriter" "TCsvParser"; do
+for type in "TCsvReader" "TCsvWriter" "TCsvError"; do
   if grep -rql "\b$type\b" "$SRC_DIR"/nextpas.core.csv*.pas 2>/dev/null; then ok "类型: $type"; else warn_check "类型未发现: $type"; fi
 done
 printf "\n${BOLD}C4: 门面+测试${NC}\n"

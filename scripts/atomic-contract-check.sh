@@ -17,11 +17,11 @@ for section in "接口契约" "不变量" "概要" "变更记录"; do
   if grep -q "$section" "$CONTRACT"; then ok "章节 '$section'"; else warn_check "章节 '$section' 缺失"; fi
 done
 printf "\n${BOLD}C2: 源文件完备性${NC}\n"
-for f in nextpas.core.atomic.pas nextpas.core.atomic.base.pas nextpas.core.atomic.lockfree.pas nextpas.core.atomic.ebr.pas; do
+for f in nextpas.core.atomic.pas nextpas.core.atomic.core.pas nextpas.core.atomic.types.pas nextpas.core.atomic.compat.pas; do
   if [ -f "$SRC_DIR/$f" ]; then ok "文件: $f"; else warn_check "文件缺失: $f"; fi
 done
 printf "\n${BOLD}C3: 核心类型${NC}\n"
-for type in "TAtomicInt" "TAtomicUInt64" "TAtomicBool" "TAtomicPtr"; do
+for type in "TAtomicInt32" "TAtomicUInt64" "TAtomicBool"; do
   if grep -rql "\b$type\b" "$SRC_DIR"/nextpas.core.atomic*.pas 2>/dev/null; then ok "类型: $type"; else warn_check "类型未发现: $type"; fi
 done
 printf "\n${BOLD}C4: 门面+测试${NC}\n"

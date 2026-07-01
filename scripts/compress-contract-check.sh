@@ -20,7 +20,7 @@ printf "\n${BOLD}C2: 源文件完备性${NC}\n"
 PAS_COUNT=$(find "$SRC_DIR" -name 'nextpas.core.compress*.pas' 2>/dev/null | wc -l)
 ok "源文件: $PAS_COUNT 个"
 printf "\n${BOLD}C3: 核心接口${NC}\n"
-for type in "ICompressor" "IDecompressor" "TCompressStream"; do
+for type in "ICompressWriter" "IDecompressReader" "TDeflateWriter"; do
   if grep -rql "\b$type\b" "$SRC_DIR"/nextpas.core.compress*.pas 2>/dev/null; then ok "类型: $type"; else warn_check "类型未发现: $type"; fi
 done
 printf "\n${BOLD}C4: 算法支持${NC}\n"

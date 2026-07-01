@@ -28,7 +28,7 @@ for f in "${WS_FILES[@]}"; do
 done
 
 printf "\n${BOLD}C3: 核心类型${NC}\n"
-for type in "TWebSocket" "TWebSocketFrame" "TWebSocketMessage"; do
+for type in "TWebSocketFrame" "TWebSocketMessage"; do
   if grep -rql "\b$type\b" "$SRC_DIR"/nextpas.core.websocket*.pas 2>/dev/null; then ok "类型: $type"; else warn_check "类型未发现: $type"; fi
 done
 

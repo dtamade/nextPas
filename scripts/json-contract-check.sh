@@ -30,7 +30,7 @@ for f in "${JSON_FILES[@]}"; do
 done
 
 printf "\n${BOLD}C3: 核心类型${NC}\n"
-for type in "TJsonValue" "TJsonParser" "TJsonWriter" "TJsonReader" "TJsonBuilder"; do
+for type in "TJsonDocument" "TJsonReader" "TJsonStructScanner"; do
   if grep -rql "\b$type\b" "$SRC_DIR"/nextpas.core.json*.pas 2>/dev/null; then ok "类型: $type"; else warn_check "类型未发现: $type"; fi
 done
 

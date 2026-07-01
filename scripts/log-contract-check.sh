@@ -21,7 +21,7 @@ for f in nextpas.core.log.pas nextpas.core.log.intf.pas; do
   if [ -f "$SRC_DIR/$f" ]; then ok "文件: $f"; else warn_check "文件缺失: $f"; fi
 done
 printf "\n${BOLD}C3: 核心类型${NC}\n"
-for type in "ILogger" "TLogLevel" "TLogEntry"; do
+for type in "ILogger" "TNullLogger" "TAttr"; do
   if grep -rql "\b$type\b" "$SRC_DIR"/nextpas.core.log*.pas 2>/dev/null; then ok "类型: $type"; else warn_check "类型未发现: $type"; fi
 done
 printf "\n${BOLD}C4: 门面+测试${NC}\n"

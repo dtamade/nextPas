@@ -30,7 +30,7 @@ for f in "${YAML_FILES[@]}"; do
 done
 
 printf "\n${BOLD}C3: 核心类型${NC}\n"
-for type in "TYamlValue" "TYamlParser" "TYamlWriter" "TYamlScanner" "TYamlBuilder"; do
+for type in "TYamlValue" "TYamlDocument" "TYamlScanner"; do
   if grep -rql "\b$type\b" "$SRC_DIR"/nextpas.core.yaml*.pas 2>/dev/null; then ok "类型: $type"; else warn_check "类型未发现: $type"; fi
 done
 

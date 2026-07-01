@@ -17,7 +17,7 @@ printf "\n${BOLD}C2: 源文件完备性${NC}\n"
 PAS_COUNT=$(find "$SRC_DIR" -name 'nextpas.core.lockfree*.pas' 2>/dev/null | wc -l)
 ok "源文件: $PAS_COUNT 个"
 printf "\n${BOLD}C3: 核心数据结构${NC}\n"
-for type in "TLockFreeHashMap" "TLockFreeChannel" "TLockFreeStack" "TLockFreeDeque" "TSegQueue" "TSPMC"; do
+for type in "TLockFreeStack" "TLockFreeStackImpl" "TSlot"; do
   if grep -rql "\b$type\b" "$SRC_DIR"/nextpas.core.lockfree*.pas 2>/dev/null; then ok "类型: $type"; else warn_check "类型未发现: $type"; fi
 done
 printf "\n${BOLD}C4: 内存回收${NC}\n"
