@@ -13,7 +13,7 @@ fail_check() { fail=$((fail + 1)); printf "${RED}✗${NC} %s\n" "$1"; }
 warn_check() { warn=$((warn + 1)); printf "${YELLOW}⚠${NC} %s\n" "$1"; }
 printf "\n${BOLD}C1: 契约文件结构${NC}\n"
 if [ ! -f "$CONTRACT" ]; then fail_check "CONTRACT.md 不存在"; exit 1; fi
-for section in "接口契约" "不变量" "概要" "变更记录"; do
+for section in "接口契约" "不变量" "错误处理" "线程安全" "内存管理" "测试覆盖"; do
   if grep -q "$section" "$CONTRACT"; then ok "章节 '$section'"; else warn_check "章节 '$section' 缺失"; fi
 done
 printf "\n${BOLD}C2: 源文件完备性${NC}\n"
