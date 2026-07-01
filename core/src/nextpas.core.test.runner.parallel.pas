@@ -251,6 +251,23 @@ begin
   end;
 end;
 
+procedure EmitParallelSkip(const R: PThreadRec; const ASkipReason: string;
+  const AOutSink: IOutputSink; const AConfig: TTestConfig);
+{ Shared early-exit for parallel skip paths: acquire mutex, increment skip
+  counter, write output, release mutex, set result. }
+begin
+  R^.Mtx.Acquire;
+  try
+    R^.Skip^ := R^.Skip^ + 1;
+    WriteTestOutput(tsSkipped, R^.Entry.Name, '', ASkipReason,
+      0, AOutSink, AConfig);
+  finally
+    SafeRelease(R^.Mtx, AConfig);
+  end;
+  if R^.Res <> nil then
+    R^.Res^ := MakeTestResult(R^.Entry.Name, tsSkipped, ASkipReason, 0);
+end;
+
 function ParallelWorkerProc(AArg: Pointer): Pointer; cdecl;
 var
   R: PThreadRec;
@@ -287,50 +304,22 @@ begin
   { Subtests are not supported in parallel mode — skip gracefully }
   if R^.Entry.Kind = ekSubtest then
   begin
-    R^.Mtx.Acquire;
-    try
-      R^.Skip^ := R^.Skip^ + 1;
-      LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, R^.Entry.Name,
-        'subtests not supported in parallel mode', LConfig));
-    finally
-      SafeRelease(R^.Mtx, LConfig);
-    end;
-    if R^.Res <> nil then
-      R^.Res^ := MakeTestResult(R^.Entry.Name, tsSkipped,
-        'subtests not supported in parallel mode', 0);
+    EmitParallelSkip(R, 'subtests not supported in parallel mode',
+      LOutSink, LConfig);
     Exit;
   end;
 
   if R^.Entry.Kind = ekSkipped then
   begin
-    R^.Mtx.Acquire;
-    try
-      R^.Skip^ := R^.Skip^ + 1;
-      WriteTestOutput(tsSkipped, R^.Entry.Name, '', R^.Entry.SkipReason,
-        0, LOutSink, LConfig);
-    finally
-      SafeRelease(R^.Mtx, LConfig);
-    end;
-    if R^.Res <> nil then
-      R^.Res^ := MakeTestResult(R^.Entry.Name, tsSkipped,
-        R^.Entry.SkipReason, 0);
+    EmitParallelSkip(R, R^.Entry.SkipReason, LOutSink, LConfig);
     Exit;
   end;
 
   { Benchmarks: not supported in parallel mode — skip gracefully }
   if R^.Entry.Kind = ekBench then
   begin
-    R^.Mtx.Acquire;
-    try
-      R^.Skip^ := R^.Skip^ + 1;
-      WriteTestOutput(tsSkipped, R^.Entry.Name, '',
-        'benchmarks not supported in parallel mode', 0, LOutSink, LConfig);
-    finally
-      SafeRelease(R^.Mtx, LConfig);
-    end;
-    if R^.Res <> nil then
-      R^.Res^ := MakeTestResult(R^.Entry.Name, tsSkipped,
-        'benchmarks not supported in parallel mode', 0);
+    EmitParallelSkip(R, 'benchmarks not supported in parallel mode',
+      LOutSink, LConfig);
     Exit;
   end;
 
@@ -511,17 +500,15 @@ begin
       by beforeEach failure path, which sets Duration = 0 directly) }
     if (R^.Res <> nil) and (not LResultWritten) then
     begin
-      case LStatus of
-        tsSkipped: R^.Res^ := MakeTestResult(R^.Entry.Name, LStatus,
-                      LSkipReason, GetTickCount64 - LStartMs);
-        tsFailed:  R^.Res^ := MakeTestResult(R^.Entry.Name, LStatus,
-                      LFailMsg, GetTickCount64 - LStartMs);
-        tsError:   R^.Res^ := MakeTestResult(R^.Entry.Name, LStatus,
-                      LFailMsg, GetTickCount64 - LStartMs);
+      if LStatus = tsSkipped then
+        R^.Res^ := MakeTestResult(R^.Entry.Name, LStatus,
+          LSkipReason, LDurMs)
+      else if LStatus in [tsFailed, tsError] then
+        R^.Res^ := MakeTestResult(R^.Entry.Name, LStatus,
+          LFailMsg, LDurMs)
       else
         R^.Res^ := MakeTestResult(R^.Entry.Name, LStatus,
-                      '', GetTickCount64 - LStartMs);
-      end;
+          '', LDurMs);
     end;
   finally
     SafeRelease(R^.Mtx, LConfig);
