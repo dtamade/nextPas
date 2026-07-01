@@ -894,6 +894,21 @@ var
   LTotalTests, LTotalFailures, LTotalErrors, LTotalSkipped: Integer;
   LSuiteName: string;
   LSuiteErrors: Integer;
+  procedure AppendFailureBlock(const ATag, AType: string;
+    const AResult: TTestResult);
+  begin
+    LSb.AppendStr('>' + LineEnding);
+    LSb.AppendStr('      <' + ATag + ' type="' + AType + '" message="' +
+      XmlEscape(AResult.Message) + '">');
+    if Length(AResult.CapturedLog) > 0 then
+    begin
+      LSb.AppendStr(LineEnding);
+      LSb.AppendStr(XmlEscape(JoinLines(AResult.CapturedLog)));
+      LSb.AppendStr(LineEnding + '      ');
+    end;
+    LSb.AppendStr('</' + ATag + '>' + LineEnding);
+    LSb.AppendStr('    </testcase>' + LineEnding);
+  end;
 begin
   LSb.Init;
   try
@@ -953,33 +968,9 @@ begin
           '" time="' + FormatFloat('0.000', LTestResult.Duration / 1000.0) + '"');
         case LTestResult.Status of
           tsFailed:
-            begin
-              LSb.AppendStr('>' + LineEnding);
-              LSb.AppendStr('      <failure type="AssertionFailure" message="' +
-                XmlEscape(LTestResult.Message) + '">');
-              if Length(LTestResult.CapturedLog) > 0 then
-              begin
-                LSb.AppendStr(LineEnding);
-                LSb.AppendStr(XmlEscape(JoinLines(LTestResult.CapturedLog)));
-                LSb.AppendStr(LineEnding + '      ');
-              end;
-              LSb.AppendStr('</failure>' + LineEnding);
-              LSb.AppendStr('    </testcase>' + LineEnding);
-            end;
+            AppendFailureBlock('failure', 'AssertionFailure', LTestResult);
           tsError:
-            begin
-              LSb.AppendStr('>' + LineEnding);
-              LSb.AppendStr('      <error type="Error" message="' +
-                XmlEscape(LTestResult.Message) + '">');
-              if Length(LTestResult.CapturedLog) > 0 then
-              begin
-                LSb.AppendStr(LineEnding);
-                LSb.AppendStr(XmlEscape(JoinLines(LTestResult.CapturedLog)));
-                LSb.AppendStr(LineEnding + '      ');
-              end;
-              LSb.AppendStr('</error>' + LineEnding);
-              LSb.AppendStr('    </testcase>' + LineEnding);
-            end;
+            AppendFailureBlock('error', 'Error', LTestResult);
           tsSkipped:
             begin
               LSb.AppendStr('>' + LineEnding);
