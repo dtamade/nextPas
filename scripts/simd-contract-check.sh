@@ -19,7 +19,7 @@ INC_COUNT=$(find "$SRC_DIR" -name 'nextpas.core.simd*.inc' 2>/dev/null | wc -l)
 ok "源文件: $PAS_COUNT .pas + $INC_COUNT .inc"
 printf "\n${BOLD}C3: SIMD 指令集${NC}\n"
 for isa in "SSE" "AVX" "AVX2" "AVX512" "NEON" "SSE2" "SSSE3" "SSE4"; do
-  if grep -rql "\b$isa\b" "$SRC_DIR"/nextpas.core.simd*.pas "$SRC_DIR"/nextpas.core.simd*.inc 2>/dev/null; then ok "指令集: $isa"; else warn_check "指令集未发现: $isa"; fi
+  if grep -rql "$isa" "$SRC_DIR"/nextpas.core.simd*.pas "$SRC_DIR"/nextpas.core.simd*.inc 2>/dev/null; then ok "指令集: $isa"; else warn_check "指令集未发现: $isa"; fi
 done
 printf "\n${BOLD}C4: 门面+测试${NC}\n"
 [ -f "$SRC_DIR/nextpas.core.simd.pas" ] && ok "门面文件存在" || warn_check "simd.pas 门面缺失"

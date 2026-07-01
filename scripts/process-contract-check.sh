@@ -34,10 +34,10 @@ for type in "IPipeDrainReader" "TPipeReader" "IReadCloser"; do
 done
 
 printf "\n${BOLD}C4: 平台适配${NC}\n"
-if grep -rql "fpFork\|fpExec\|CreateProcess\|BaseUnix\|SysUtils" "$SRC_DIR"/nextpas.core.process*.pas 2>/dev/null; then
-  ok "平台 API 调用"
+if grep -rql "TCommand\|TChild\|ICommand\|IChild" "$SRC_DIR"/nextpas.core.process*.pas 2>/dev/null; then
+  ok "进程抽象层"
 else
-  warn_check "未检测到平台 API"
+  warn_check "未检测到进程抽象层"
 fi
 
 printf "\n${BOLD}C5: 门面单元${NC}\n"

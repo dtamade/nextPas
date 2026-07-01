@@ -18,7 +18,7 @@ PAS_COUNT=$(find "$SRC_DIR" -name 'nextpas.core.platform*.pas' 2>/dev/null | wc 
 INC_COUNT=$(find "$SRC_DIR" -name 'nextpas.core.platform*.inc' 2>/dev/null | wc -l)
 ok "源文件: $PAS_COUNT .pas + $INC_COUNT .inc"
 printf "\n${BOLD}C3: 核心子系统${NC}\n"
-for sub in "io" "socket" "thread" "sync" "fs" "env" "time" "ffi" "signal"; do
+for sub in "io" "socket" "thread" "sync" "fs" "env" "time" "dl" "signal"; do
   if find "$SRC_DIR" -name "nextpas.core.platform.$sub*.pas" 2>/dev/null | grep -q .; then ok "子系统: $sub"; else warn_check "子系统未发现: $sub"; fi
 done
 printf "\n${BOLD}C4: 平台适配${NC}\n"

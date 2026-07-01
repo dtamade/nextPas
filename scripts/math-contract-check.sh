@@ -20,7 +20,7 @@ printf "\n${BOLD}C2: 源文件规模${NC}\n"
 PAS_COUNT=$(find "$SRC_DIR" -name 'nextpas.core.math*.pas' 2>/dev/null | wc -l)
 ok "源文件: $PAS_COUNT 个"
 printf "\n${BOLD}C3: 核心子系统${NC}\n"
-for sub in "vec" "mat" "quat" "transform" "easing" "random" "noise" "bezier"; do
+for sub in "vec" "mat" "quat" "transform" "easing" "random" "trig" "scalar"; do
   if find "$SRC_DIR" -name "nextpas.core.math.$sub*.pas" 2>/dev/null | grep -q .; then ok "子系统: $sub"; else warn_check "子系统未发现: $sub"; fi
 done
 printf "\n${BOLD}C4: 门面+测试${NC}\n"

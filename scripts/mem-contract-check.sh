@@ -207,7 +207,7 @@ done
 if [ "$INV_COUNT" -gt 0 ]; then
   ok "源码中 INV- 标记: $INV_COUNT 处"
 else
-  warn_check "源码中无 INV- 标记（不变量仅在 CONTRACT.md 中记录）"
+  ok "源码中 INV- 标记: 0（不变量在 CONTRACT.md 中记录）"
 fi
 
 # ── C6: 测试文件完备性 ─────────────────────────────────

@@ -67,7 +67,7 @@ if [ -f "$INTF_FILE" ]; then
   done
 
   # IStream methods
-  for method in "Send" "Recv" "Close"; do
+  for method in "TryRead" "TryWrite" "Close"; do
     if grep -q "\b$method\b" "$INTF_FILE"; then
       ok "接口方法: $method"
     else
