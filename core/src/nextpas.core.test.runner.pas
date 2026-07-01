@@ -1389,11 +1389,7 @@ begin
           on E: Exception do
           begin
             ClassifyTestException(E, LStatus, LLastFailMsg);
-            case LStatus of
-              tsSkipped: Inc(LSkip);
-            else
-              Inc(LFail);
-            end;
+            IncByStatus(LStatus, LPass, LFail, LSkip);
           end;
         end;
       end
@@ -1456,11 +1452,7 @@ begin
       on E: Exception do
       begin
         ClassifyTestException(E, LStatus, LLastFailMsg);
-        case LStatus of
-          tsSkipped: Inc(LSkip);
-        else
-          Inc(LFail);
-        end;
+        IncByStatus(LStatus, LPass, LFail, LSkip);
       end;
     end;
 

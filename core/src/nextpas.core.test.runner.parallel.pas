@@ -472,16 +472,7 @@ begin
 
   R^.Mtx.Acquire;
   try
-    case LStatus of
-      tsPassed:
-        R^.Pass^ := R^.Pass^ + 1;
-      tsFailed:
-        R^.Fail^ := R^.Fail^ + 1;
-      tsSkipped:
-        R^.Skip^ := R^.Skip^ + 1;
-      tsError:
-        R^.Fail^ := R^.Fail^ + 1;
-    end;
+    IncByStatus(LStatus, R^.Pass^, R^.Fail^, R^.Skip^);
     { Progress counter — increment and format prefix }
     LDurMs := GetTickCount64 - LStartMs;
     LProgressPrefix := '';
