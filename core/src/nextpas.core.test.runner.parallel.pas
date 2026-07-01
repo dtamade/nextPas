@@ -268,6 +268,18 @@ begin
     R^.Res^ := MakeTestResult(R^.Entry.Name, tsSkipped, ASkipReason, 0);
 end;
 
+procedure MutexWarn(const R: PThreadRec; const AMsg: string;
+  const AErrSink: IOutputSink; const AConfig: TTestConfig);
+{ Acquire mutex, write warning, release. Shared by afterEach/cleanup paths. }
+begin
+  R^.Mtx.Acquire;
+  try
+    WriteWarning(AMsg, AErrSink, AConfig);
+  finally
+    SafeRelease(R^.Mtx, AConfig);
+  end;
+end;
+
 function ParallelWorkerProc(AArg: Pointer): Pointer; cdecl;
 var
   R: PThreadRec;
@@ -284,6 +296,7 @@ var
   LErrSink: IOutputSink;
   LCIdx: Integer;
   LDurMs: Int64;
+  LProgressPrefix: string;
 begin
   Result := nil;
   R := PThreadRec(AArg);
@@ -431,12 +444,7 @@ begin
     except
       on E: Exception do
       begin
-        R^.Mtx.Acquire;
-        try
-          WriteWarning('afterEach failed: ' + E.Message, LErrSink, LConfig);
-        finally
-          SafeRelease(R^.Mtx, LConfig);
-        end;
+        MutexWarn(R, 'afterEach failed: ' + E.Message, LErrSink, LConfig);
         if LStatus = tsPassed then
         begin
           LStatus := tsError;
@@ -456,12 +464,7 @@ begin
       except
         on E: Exception do
         begin
-          R^.Mtx.Acquire;
-          try
-            WriteWarning('cleanup failed: ' + E.Message, LErrSink, LConfig);
-          finally
-            SafeRelease(R^.Mtx, LConfig);
-          end;
+          MutexWarn(R, 'cleanup failed: ' + E.Message, LErrSink, LConfig);
         end;
       end;
     end;
@@ -481,21 +484,16 @@ begin
     end;
     { Progress counter — increment and format prefix }
     LDurMs := GetTickCount64 - LStartMs;
+    LProgressPrefix := '';
     if R^.ProgressCounter <> nil then
     begin
       R^.ProgressCounter^ := R^.ProgressCounter^ + 1;
       if R^.ProgressTotal > 0 then
-        WriteTestOutput(LStatus,
-          '[' + IntToStr(R^.ProgressCounter^) + '/' +
-          IntToStr(R^.ProgressTotal) + '] ' + R^.Entry.Name,
-          LFailMsg, LSkipReason, LDurMs, LOutSink, LConfig)
-      else
-        WriteTestOutput(LStatus, R^.Entry.Name, LFailMsg,
-          LSkipReason, LDurMs, LOutSink, LConfig);
-    end
-    else
-      WriteTestOutput(LStatus, R^.Entry.Name, LFailMsg,
-        LSkipReason, LDurMs, LOutSink, LConfig);
+        LProgressPrefix := '[' + IntToStr(R^.ProgressCounter^) + '/' +
+          IntToStr(R^.ProgressTotal) + '] ';
+    end;
+    WriteTestOutput(LStatus, LProgressPrefix + R^.Entry.Name,
+      LFailMsg, LSkipReason, LDurMs, LOutSink, LConfig);
     { Write per-test result inside mutex for safety (skip if already written
       by beforeEach failure path, which sets Duration = 0 directly) }
     if (R^.Res <> nil) and (not LResultWritten) then
