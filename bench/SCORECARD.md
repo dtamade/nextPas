@@ -8,10 +8,10 @@
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **150** | 7 | 34 | **78%** |
+| **Go** | **153** | 7 | 35 | **77%** |
 | **Rust** | 19 | 0 | 47 | **29%** |
 
-## Track Summary (51 tracks, 196 operations)
+## Track Summary (52 tracks, 200 operations)
 
 ### Text Operations (6 ops)
 
@@ -497,6 +497,17 @@
 
 **6W 1D 1L vs Go** — FPC tight accumulation loops 1.1-1.44x faster; NibbleSwap loses (Go auto-vectorizes shift+mask)
 
+### Record Operations (4 ops)
+
+| Track | Pascal (ns) | Go (ns) | vs Go |
+|-------|-------------|---------|-------|
+| **RecFilter/10K×1K** | **107572384** | 42408447 | **3.95x** ✓ |
+| **RecCopy/10K×1K** | **29727447** | 34565691 | **1.16x** ✓ |
+| RecFieldSum/10K×1K | 12123219 | 3776882 | 0.31x |
+| **RecBuild/10K×1K** | **36019243** | 70953455 | **1.97x** ✓ |
+
+**3W 1L vs Go** — FPC record value-type operations without bounds check/GC write barrier; RecFilter 3.95x (conditional record copy), RecCopy 1.16x (Move 48B records), RecBuild 1.97x (construct records from components); RecFieldSum loses (Go faster Int64 accumulator)
+
 ### Pascal Wins (biggest margins vs Go)
 1. **String Concat: 3557x** — Go immutable strings O(n²) vs Pascal COW
 2. **SIMD ReduceSum/4K: 20.0x** — AVX2 vpaddps vs Go scalar loop
@@ -558,13 +569,13 @@
 - **Numeric loops**: Pascal dominant with SIMD (3W, 8-20x); Go/Rust win on scalar paths (auto-vectorization)
 - **BST tree operations**: Pascal dominant (5W 1D vs Go) — Insert 1.72x, InsertLookup 1.33x, InOrder 1.23x, LookupMiss 1.59x, Delete 1.17x; Lookup ties 0.92x
 - **Binary search**: Pascal strong (2W 2D vs Go) — Standard 1.5-1.9x faster; Eytzinger layout ties
+- **Record operations**: Pascal strong (3W 1L vs Go) — RecFilter 3.95x, RecBuild 1.97x, RecCopy 1.16x; value-type records without bounds check/GC barrier; RecFieldSum loses (Go faster Int64 accumulator)
 - **Float formatting**: Go/Rust win (Ryu algorithm)
 
 ## Conclusion
 
-Pascal beats Go 79% of the time across 127 benchmarks. The biggest wins come from
+Pascal beats Go 77% of the time across 200 benchmarks on 52 tracks. The biggest wins come from
 FillChar operations (compiles to `rep stosb`, 11-27x faster than Go's byte loop),
-string operations (immutable strings are Go's Achilles heel), bit set operations
 string operations (immutable strings are Go's Achilles heel), bit set operations
 (`set of Byte` compiles to native instructions), number formatting
 (direct digit writing), dynamic arrays (SetLength realloc 2-8x faster than Go append),
@@ -573,6 +584,7 @@ matrix operations (FPC loop optimization),
 object lifecycle (New/Dispose vs GC write barrier, 1.5-1.7x),
 memory move (FPC_MOVE ERMSB+prefetchnta vs Go memmove, 1.23-1.31x at 16K-256K),
 packed records (19% smaller than Go struct, 1.24x faster filter),
+record operations (RecFilter 3.95x, RecBuild 1.97x — value-type records without bounds check/GC barrier),
 scalar loops (FillChar/memzero 1.17x, BufferXor 1.54x, WordCount 1.26x — FPC tighter codegen),
 and file I/O writes (direct syscall vs Go's bufio),
 and string escape (set of Char + in-place build, 1.74x faster than Go strings.Builder),
@@ -582,5 +594,6 @@ BST operations (Insert 1.72x, InsertLookup 1.33x, InOrder 1.23x, LookupMiss 1.59
 and interface dispatch (FPC vtable 1.25x faster than Go interface for heavy methods),
 and array indexed loops (ArraySum 11.1x, ByteFrequency 10.4x, FloatArraySum 10.3x, CountEven 9.69x — FPC tighter codegen vs Go bounds check + write barrier).
 Losses come from auto-vectorization gaps, Go's SIMD encoding (Base64),
-and branchless codegen for binary search. Against Rust, Pascal wins 30% —
+Go's faster Int64 accumulator (reduction operations), and branchless codegen for binary search.
+Against Rust, Pascal wins 29% —
 Rust's zero-cost abstractions and LLVM codegen make it consistently fast.
