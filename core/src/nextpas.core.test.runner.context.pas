@@ -281,6 +281,19 @@ begin
   AppendFailedName(AFailedNames, AName);
 end;
 
+procedure HandleSubtestSkipped(const AName, ASkipReason: string;
+  const ASink: IOutputSink; const AConfig: TTestConfig;
+  out AStatus: TTestStatus; out AMsg: string;
+  var ASkipCount: Integer);
+{ Shared handler for subtest ETestSkipped paths.
+  Sets status/msg, writes output, increments skip counter. }
+begin
+  AStatus := tsSkipped;
+  AMsg    := ASkipReason;
+  WriteSubtestStatus(tsSkipped, AName, '', ASkipReason, '', ASink, AConfig);
+  Inc(ASkipCount);
+end;
+
 procedure TTestContext.ExecuteSubtests;
 var
   I: Integer;
@@ -307,11 +320,8 @@ begin
     try
       if LEntry.Kind = ekSkipped then
       begin
-        LStatus := tsSkipped;
-        LMsg    := LEntry.SkipReason;
-        WriteSubtestStatus(tsSkipped, LEntry.Name, '', LEntry.SkipReason,
-          '', LOutSink, FConfig);
-        Inc(FSubSkip);
+        HandleSubtestSkipped(LEntry.Name, LEntry.SkipReason,
+          LOutSink, FConfig, LStatus, LMsg, FSubSkip);
       end
       else if LEntry.Kind = ekSubtest then
       begin
@@ -355,13 +365,8 @@ begin
             LOutSink, FConfig, FSubFail, FFailedNames, FLogLines);
         except
           on E: ETestSkipped do
-          begin
-            LStatus := tsSkipped;
-            LMsg := E.Message;
-            WriteSubtestStatus(tsSkipped, LEntry.Name, '', '', '',
-              LOutSink, FConfig);
-            Inc(FSubSkip);
-          end;
+            HandleSubtestSkipped(LEntry.Name, E.Message,
+              LOutSink, FConfig, LStatus, LMsg, FSubSkip);
           on E: Exception do
           begin
             { Expected failure — subtest passes }
@@ -384,13 +389,8 @@ begin
       end;
     except
       on E: ETestSkipped do
-      begin
-        LStatus := tsSkipped;
-        LMsg    := E.Message;
-        WriteSubtestStatus(tsSkipped, LEntry.Name, '', '', '',
-          LOutSink, FConfig);
-        Inc(FSubSkip);
-      end;
+        HandleSubtestSkipped(LEntry.Name, E.Message,
+          LOutSink, FConfig, LStatus, LMsg, FSubSkip);
       on E: EAssertionFailed do
       begin
         LStatus := tsFailed;
