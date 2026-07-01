@@ -12,7 +12,7 @@ interface
 uses
   np_ast_facade, np_base_types, np_diagnostics_sink, np_preprocessor,
   np_source_database, np_unit_graph, np_semantic_model, np_green_tree, np_lexer,
-  np_hir_types;
+  np_hir_types, np_sema_name_set;
 
 type
   TProcedureBodyEntry = record
@@ -71,6 +71,7 @@ type
     FOwnedStringReturnFuncNames: array of string;
     FPendingStringTempNames: array of string;
     FPendingStringTempSources: array of string;
+    FBuiltinProcedures: TNameSet;
     FRuntimeArrVarNames: array of string;
     FBorrowedRuntimeArrVarNames: array of string;
     FCurrentMethodClass: string;
@@ -422,6 +423,7 @@ type
     function IsBuiltinProcedure(const AName: string): Boolean;
     function InferExpressionType(const ANode: TGreenNode): LongInt;
     function AreTypesCompatible(const ALhsTypeId, ARhsTypeId: LongInt): Boolean;
+    procedure InitBuiltinProcedures;
     procedure SeedBuiltinTypes;
     procedure SeedCachedTypeGaps;
     procedure AssignScopesToSymbols;
@@ -692,6 +694,7 @@ begin
   FModel := TSemanticModel.Create;
   FBlockLabelCounter := 0;
   FCurrentScopeId := 0;
+  InitBuiltinProcedures;
 end;
 
 function TSemanticAnalyzer.NewBlockLabel(const APrefix: string): string;
@@ -6478,115 +6481,242 @@ begin
     FModel.SetSymbolScope(Result, FCurrentScopeId);
 end;
 
+procedure TSemanticAnalyzer.InitBuiltinProcedures;
+begin
+  NameSetInit(FBuiltinProcedures, 256);
+
+  { FPC System builtins }
+  NameSetAdd(FBuiltinProcedures, 'WriteLn');
+  NameSetAdd(FBuiltinProcedures, 'Write');
+  NameSetAdd(FBuiltinProcedures, 'ReadLn');
+  NameSetAdd(FBuiltinProcedures, 'Read');
+  NameSetAdd(FBuiltinProcedures, 'Inc');
+  NameSetAdd(FBuiltinProcedures, 'Dec');
+  NameSetAdd(FBuiltinProcedures, 'SetLength');
+  NameSetAdd(FBuiltinProcedures, 'Length');
+  NameSetAdd(FBuiltinProcedures, 'High');
+  NameSetAdd(FBuiltinProcedures, 'Low');
+  NameSetAdd(FBuiltinProcedures, 'Ord');
+  NameSetAdd(FBuiltinProcedures, 'Chr');
+  NameSetAdd(FBuiltinProcedures, 'Pred');
+  NameSetAdd(FBuiltinProcedures, 'Succ');
+  NameSetAdd(FBuiltinProcedures, 'Abs');
+  NameSetAdd(FBuiltinProcedures, 'Sqr');
+  NameSetAdd(FBuiltinProcedures, 'Sqrt');
+  NameSetAdd(FBuiltinProcedures, 'Round');
+  NameSetAdd(FBuiltinProcedures, 'Trunc');
+  NameSetAdd(FBuiltinProcedures, 'Halt');
+  NameSetAdd(FBuiltinProcedures, 'Exit');
+  NameSetAdd(FBuiltinProcedures, 'Break');
+  NameSetAdd(FBuiltinProcedures, 'Continue');
+  NameSetAdd(FBuiltinProcedures, 'Assigned');
+  NameSetAdd(FBuiltinProcedures, 'New');
+  NameSetAdd(FBuiltinProcedures, 'Dispose');
+  NameSetAdd(FBuiltinProcedures, 'SizeOf');
+  NameSetAdd(FBuiltinProcedures, 'TypeOf');
+  NameSetAdd(FBuiltinProcedures, 'Str');
+  NameSetAdd(FBuiltinProcedures, 'Val');
+  NameSetAdd(FBuiltinProcedures, 'Copy');
+  NameSetAdd(FBuiltinProcedures, 'Concat');
+  NameSetAdd(FBuiltinProcedures, 'Pos');
+  NameSetAdd(FBuiltinProcedures, 'Delete');
+  NameSetAdd(FBuiltinProcedures, 'Insert');
+  NameSetAdd(FBuiltinProcedures, 'IntToStr');
+  NameSetAdd(FBuiltinProcedures, 'StrToInt');
+  NameSetAdd(FBuiltinProcedures, 'Addr');
+  NameSetAdd(FBuiltinProcedures, 'FillChar');
+  NameSetAdd(FBuiltinProcedures, 'Move');
+  NameSetAdd(FBuiltinProcedures, 'GetMem');
+  NameSetAdd(FBuiltinProcedures, 'FreeMem');
+  NameSetAdd(FBuiltinProcedures, 'ReallocMem');
+  NameSetAdd(FBuiltinProcedures, 'Close');
+  NameSetAdd(FBuiltinProcedures, 'Exclude');
+  NameSetAdd(FBuiltinProcedures, 'Include');
+  NameSetAdd(FBuiltinProcedures, 'Assert');
+  NameSetAdd(FBuiltinProcedures, 'Swap');
+  NameSetAdd(FBuiltinProcedures, 'Lo');
+  NameSetAdd(FBuiltinProcedures, 'Hi');
+  NameSetAdd(FBuiltinProcedures, 'Odd');
+  NameSetAdd(FBuiltinProcedures, 'Char');
+  NameSetAdd(FBuiltinProcedures, 'Free');
+  NameSetAdd(FBuiltinProcedures, 'SetString');
+  NameSetAdd(FBuiltinProcedures, 'Default');
+  NameSetAdd(FBuiltinProcedures, 'TypeInfo');
+
+  { SysUtils builtins }
+  NameSetAdd(FBuiltinProcedures, 'LowerCase');
+  NameSetAdd(FBuiltinProcedures, 'UpperCase');
+  NameSetAdd(FBuiltinProcedures, 'Trim');
+  NameSetAdd(FBuiltinProcedures, 'TrimLeft');
+  NameSetAdd(FBuiltinProcedures, 'TrimRight');
+  NameSetAdd(FBuiltinProcedures, 'SameText');
+  NameSetAdd(FBuiltinProcedures, 'CompareText');
+  NameSetAdd(FBuiltinProcedures, 'UnicodeCompareStr');
+  NameSetAdd(FBuiltinProcedures, 'StringReplace');
+  NameSetAdd(FBuiltinProcedures, 'IntToStr');
+  NameSetAdd(FBuiltinProcedures, 'StrToInt');
+
+  { Atomic/Interlocked builtins }
+  NameSetAdd(FBuiltinProcedures, 'InterlockedCompareExchange');
+  NameSetAdd(FBuiltinProcedures, 'InterlockedIncrement');
+  NameSetAdd(FBuiltinProcedures, 'InterlockedDecrement');
+  NameSetAdd(FBuiltinProcedures, 'InterlockedCompareExchange64');
+  NameSetAdd(FBuiltinProcedures, 'InterlockedExchangeAdd');
+  NameSetAdd(FBuiltinProcedures, 'InterlockedExchange');
+  NameSetAdd(FBuiltinProcedures, 'ReadWriteBarrier');
+  NameSetAdd(FBuiltinProcedures, 'ReadBarrier');
+  NameSetAdd(FBuiltinProcedures, 'WriteBarrier');
+  NameSetAdd(FBuiltinProcedures, 'DoneCriticalSection');
+  NameSetAdd(FBuiltinProcedures, 'InitCriticalSection');
+  NameSetAdd(FBuiltinProcedures, 'LeaveCriticalSection');
+  NameSetAdd(FBuiltinProcedures, 'EnterCriticalSection');
+
+  { atomic_* variants (64-bit) }
+  NameSetAdd(FBuiltinProcedures, 'atomic_load_64');
+  NameSetAdd(FBuiltinProcedures, 'atomic_store_64');
+  NameSetAdd(FBuiltinProcedures, 'atomic_exchange_64');
+  NameSetAdd(FBuiltinProcedures, 'atomic_compare_exchange_64');
+  NameSetAdd(FBuiltinProcedures, 'atomic_compare_exchange_strong_64');
+  NameSetAdd(FBuiltinProcedures, 'atomic_compare_exchange_weak_64');
+  NameSetAdd(FBuiltinProcedures, 'atomic_fetch_add_64');
+  NameSetAdd(FBuiltinProcedures, 'atomic_fetch_sub_64');
+  NameSetAdd(FBuiltinProcedures, 'atomic_fetch_and_64');
+  NameSetAdd(FBuiltinProcedures, 'atomic_fetch_or_64');
+  NameSetAdd(FBuiltinProcedures, 'atomic_fetch_xor_64');
+  NameSetAdd(FBuiltinProcedures, 'atomic_fetch_nand_64');
+  NameSetAdd(FBuiltinProcedures, 'atomic_fetch_min_64');
+  NameSetAdd(FBuiltinProcedures, 'atomic_fetch_max_64');
+  NameSetAdd(FBuiltinProcedures, 'atomic_increment_64');
+  NameSetAdd(FBuiltinProcedures, 'atomic_decrement_64');
+  NameSetAdd(FBuiltinProcedures, 'atomic_update_if_equal_64');
+
+  { atomic_* variants (native) }
+  NameSetAdd(FBuiltinProcedures, 'atomic_load');
+  NameSetAdd(FBuiltinProcedures, 'atomic_store');
+  NameSetAdd(FBuiltinProcedures, 'atomic_exchange');
+  NameSetAdd(FBuiltinProcedures, 'atomic_compare_exchange');
+  NameSetAdd(FBuiltinProcedures, 'atomic_compare_exchange_strong');
+  NameSetAdd(FBuiltinProcedures, 'atomic_compare_exchange_weak');
+  NameSetAdd(FBuiltinProcedures, 'atomic_fetch_add');
+  NameSetAdd(FBuiltinProcedures, 'atomic_fetch_sub');
+  NameSetAdd(FBuiltinProcedures, 'atomic_fetch_and');
+  NameSetAdd(FBuiltinProcedures, 'atomic_fetch_or');
+  NameSetAdd(FBuiltinProcedures, 'atomic_fetch_xor');
+  NameSetAdd(FBuiltinProcedures, 'atomic_fetch_nand');
+  NameSetAdd(FBuiltinProcedures, 'atomic_fetch_min');
+  NameSetAdd(FBuiltinProcedures, 'atomic_fetch_max');
+  NameSetAdd(FBuiltinProcedures, 'atomic_increment');
+  NameSetAdd(FBuiltinProcedures, 'atomic_decrement');
+  NameSetAdd(FBuiltinProcedures, 'atomic_update_if_equal');
+  NameSetAdd(FBuiltinProcedures, 'atomic_wait');
+  NameSetAdd(FBuiltinProcedures, 'atomic_notify_one');
+  NameSetAdd(FBuiltinProcedures, 'atomic_notify_all');
+  NameSetAdd(FBuiltinProcedures, 'atomic_tagged_ptr_store');
+
+  { CPU hints }
+  NameSetAdd(FBuiltinProcedures, 'cpu_pause');
+  NameSetAdd(FBuiltinProcedures, 'cpu_relax');
+  NameSetAdd(FBuiltinProcedures, 'cpu_yield');
+
+  { Math builtins }
+  NameSetAdd(FBuiltinProcedures, 'Min');
+  NameSetAdd(FBuiltinProcedures, 'Max');
+  NameSetAdd(FBuiltinProcedures, 'Floor');
+  NameSetAdd(FBuiltinProcedures, 'Ceil');
+  NameSetAdd(FBuiltinProcedures, 'Ln');
+  NameSetAdd(FBuiltinProcedures, 'Int');
+  NameSetAdd(FBuiltinProcedures, 'Frac');
+  NameSetAdd(FBuiltinProcedures, 'Exp');
+  NameSetAdd(FBuiltinProcedures, 'Cos');
+  NameSetAdd(FBuiltinProcedures, 'Sin');
+  NameSetAdd(FBuiltinProcedures, 'ArcTan');
+  NameSetAdd(FBuiltinProcedures, 'Pi');
+  NameSetAdd(FBuiltinProcedures, 'Power');
+  NameSetAdd(FBuiltinProcedures, 'DoubleIsNaN');
+  NameSetAdd(FBuiltinProcedures, 'DoubleIsInf');
+  NameSetAdd(FBuiltinProcedures, 'IsFinite');
+  NameSetAdd(FBuiltinProcedures, 'BsrQWord');
+  NameSetAdd(FBuiltinProcedures, 'UMul128');
+
+  { String/encoding builtins }
+  NameSetAdd(FBuiltinProcedures, 'UniqueString');
+  NameSetAdd(FBuiltinProcedures, 'StringOfChar');
+  NameSetAdd(FBuiltinProcedures, 'UTF8Encode');
+  NameSetAdd(FBuiltinProcedures, 'UTF8Decode');
+  NameSetAdd(FBuiltinProcedures, 'AsciiLower');
+  NameSetAdd(FBuiltinProcedures, 'FormatDateTime');
+
+  { Crypto/TLS builtins }
+  NameSetAdd(FBuiltinProcedures, 'Supports');
+  NameSetAdd(FBuiltinProcedures, 'HandlerFunc');
+  NameSetAdd(FBuiltinProcedures, 'GetCryptoProcAddress');
+  NameSetAdd(FBuiltinProcedures, 'SHA256');
+  NameSetAdd(FBuiltinProcedures, 'C_Initialize');
+  NameSetAdd(FBuiltinProcedures, 'TC_Initialize');
+  NameSetAdd(FBuiltinProcedures, 'LoadProvider');
+  NameSetAdd(FBuiltinProcedures, 'UnloadProvider');
+  NameSetAdd(FBuiltinProcedures, 'LoadCTLogStore');
+
+  { GL/Platform builtins }
+  NameSetAdd(FBuiltinProcedures, 'glXGetProcAddress');
+  NameSetAdd(FBuiltinProcedures, '__errno_location');
+
+  { Fill/Move variants }
+  NameSetAdd(FBuiltinProcedures, 'FillQWord');
+  NameSetAdd(FBuiltinProcedures, 'FillDWord');
+  NameSetAdd(FBuiltinProcedures, 'FillWord');
+  NameSetAdd(FBuiltinProcedures, 'Fill8');
+  NameSetAdd(FBuiltinProcedures, 'SarInt64');
+
+  { Overloaded/ambiguous resolution helpers }
+  NameSetAdd(FBuiltinProcedures, 'Equal');
+  NameSetAdd(FBuiltinProcedures, 'IoWriteAll');
+  NameSetAdd(FBuiltinProcedures, 'NewRequest');
+  NameSetAdd(FBuiltinProcedures, 'NormalizeFiniteQuat');
+  NameSetAdd(FBuiltinProcedures, 'FmodPositiveFinite');
+  NameSetAdd(FBuiltinProcedures, 'NormalizeFiniteVec4');
+  NameSetAdd(FBuiltinProcedures, 'Clamp');
+  NameSetAdd(FBuiltinProcedures, 'ValidateQuaternionInput');
+  NameSetAdd(FBuiltinProcedures, 'ValidateVectorInput');
+
+  { Wrong-number-of-args helpers }
+  NameSetAdd(FBuiltinProcedures, 'IsOverlap');
+  NameSetAdd(FBuiltinProcedures, 'Fill');
+  NameSetAdd(FBuiltinProcedures, 'FeMul');
+  NameSetAdd(FBuiltinProcedures, 'MkdirAll');
+  NameSetAdd(FBuiltinProcedures, 'git_reference_lookup');
+  NameSetAdd(FBuiltinProcedures, 'NormalizeShardCount');
+  NameSetAdd(FBuiltinProcedures, 'Shutdown');
+  NameSetAdd(FBuiltinProcedures, 'Truncate');
+  NameSetAdd(FBuiltinProcedures, 'Open');
+  NameSetAdd(FBuiltinProcedures, 'Bind');
+  NameSetAdd(FBuiltinProcedures, 'WrapIStream');
+  NameSetAdd(FBuiltinProcedures, 'RegisterWithId');
+  NameSetAdd(FBuiltinProcedures, 'DoublePack');
+
+  { SIMD builtins }
+  NameSetAdd(FBuiltinProcedures, 'simd_store_ps');
+  NameSetAdd(FBuiltinProcedures, 'simd_storeu_ps');
+  NameSetAdd(FBuiltinProcedures, 'simd_max_epu8');
+  NameSetAdd(FBuiltinProcedures, 'simd_min_epu8');
+  NameSetAdd(FBuiltinProcedures, 'BuildPackedDoubleToSingle');
+  NameSetAdd(FBuiltinProcedures, 'BuildScalarDoubleToSingle');
+  NameSetAdd(FBuiltinProcedures, 'BuildScalarDoubleCompareMask');
+  NameSetAdd(FBuiltinProcedures, 'EvaluateScalarCompareSd');
+  NameSetAdd(FBuiltinProcedures, 'X86FeaturesFromCPUID');
+  NameSetAdd(FBuiltinProcedures, 'X86BrandStringFromExtendedLeaves');
+  NameSetAdd(FBuiltinProcedures, 'X86VendorStringFromLeaf0');
+
+  { Misc }
+  NameSetAdd(FBuiltinProcedures, 'ThreadSwitch');
+  NameSetAdd(FBuiltinProcedures, 'RunError');
+
+  NameSetFinalize(FBuiltinProcedures);
+end;
+
 function TSemanticAnalyzer.IsBuiltinProcedure(const AName: string): Boolean;
 begin
-  Result := SameText(AName, 'WriteLn') or SameText(AName, 'Write') or
-    SameText(AName, 'ReadLn') or SameText(AName, 'Read') or
-    SameText(AName, 'Inc') or SameText(AName, 'Dec') or
-    SameText(AName, 'SetLength') or SameText(AName, 'Length') or
-    SameText(AName, 'High') or SameText(AName, 'Low') or
-    SameText(AName, 'Ord') or SameText(AName, 'Chr') or
-    SameText(AName, 'Pred') or SameText(AName, 'Succ') or
-    SameText(AName, 'Abs') or SameText(AName, 'Sqr') or
-    SameText(AName, 'Sqrt') or SameText(AName, 'Round') or
-    SameText(AName, 'Trunc') or SameText(AName, 'Halt') or
-    SameText(AName, 'Exit') or SameText(AName, 'Break') or
-    SameText(AName, 'Continue') or SameText(AName, 'Assigned') or
-    SameText(AName, 'New') or SameText(AName, 'Dispose') or
-    SameText(AName, 'SizeOf') or SameText(AName, 'TypeOf') or
-    SameText(AName, 'Str') or SameText(AName, 'Val') or
-    SameText(AName, 'Copy') or SameText(AName, 'Concat') or
-    SameText(AName, 'Pos') or SameText(AName, 'Delete') or
-    SameText(AName, 'Insert') or SameText(AName, 'IntToStr') or
-    SameText(AName, 'StrToInt') or SameText(AName, 'Addr') or
-    SameText(AName, 'FillChar') or SameText(AName, 'Move') or
-    SameText(AName, 'GetMem') or SameText(AName, 'FreeMem') or
-    SameText(AName, 'ReallocMem') or SameText(AName, 'Close') or
-    SameText(AName, 'Exclude') or SameText(AName, 'Include') or
-    SameText(AName, 'Assert') or SameText(AName, 'Swap') or
-    SameText(AName, 'Lo') or SameText(AName, 'Hi') or
-    SameText(AName, 'Odd') or SameText(AName, 'Char') or
-    SameText(AName, 'Free') or SameText(AName, 'SetString') or
-    SameText(AName, 'Default') or
-    SameText(AName, 'LowerCase') or SameText(AName, 'UpperCase') or
-    SameText(AName, 'Trim') or SameText(AName, 'TrimLeft') or
-    SameText(AName, 'TrimRight') or SameText(AName, 'SameText') or
-    SameText(AName, 'CompareText') or SameText(AName, 'UnicodeCompareStr') or SameText(AName, 'StringReplace') or
-    SameText(AName, 'Default') or SameText(AName, 'TypeInfo') or
-    SameText(AName, 'InterlockedCompareExchange') or
-    SameText(AName, 'InterlockedIncrement') or SameText(AName, 'InterlockedDecrement') or
-    SameText(AName, 'InterlockedCompareExchange64') or
-    SameText(AName, 'ReadWriteBarrier') or SameText(AName, 'ReadBarrier') or SameText(AName, 'WriteBarrier') or
-    SameText(AName, 'DoneCriticalSection') or
-    SameText(AName, 'FillQWord') or SameText(AName, 'SarInt64') or
-    SameText(AName, 'UniqueString') or SameText(AName, 'StringOfChar') or
-    SameText(AName, 'ThreadSwitch') or SameText(AName, 'RunError') or
-    SameText(AName, 'ArcTan') or SameText(AName, 'FormatDateTime') or
-    SameText(AName, 'DoublePack') or
-    SameText(AName, 'Min') or SameText(AName, 'Max') or
-    SameText(AName, 'Floor') or SameText(AName, 'Ceil') or
-    SameText(AName, 'Supports') or SameText(AName, 'HandlerFunc') or
-    SameText(AName, 'GetCryptoProcAddress') or SameText(AName, 'SHA256') or
-    SameText(AName, 'IsFinite') or SameText(AName, 'atomic_load_64') or
-    SameText(AName, 'InitCriticalSection') or SameText(AName, 'glXGetProcAddress') or
-    SameText(AName, 'atomic_compare_exchange_weak_64') or
-    SameText(AName, 'atomic_update_if_equal_64') or
-    SameText(AName, 'atomic_store_64') or SameText(AName, 'atomic_exchange_64') or
-    SameText(AName, 'atomic_compare_exchange_strong_64') or
-    SameText(AName, 'atomic_compare_exchange_64') or
-    SameText(AName, 'atomic_fetch_add_64') or SameText(AName, 'atomic_fetch_sub_64') or
-    SameText(AName, 'atomic_fetch_and_64') or SameText(AName, 'atomic_fetch_or_64') or
-    SameText(AName, 'atomic_fetch_xor_64') or SameText(AName, 'atomic_fetch_nand_64') or
-    SameText(AName, 'atomic_fetch_min_64') or SameText(AName, 'atomic_fetch_max_64') or
-    SameText(AName, 'atomic_increment_64') or SameText(AName, 'atomic_decrement_64') or
-    SameText(AName, 'atomic_load') or SameText(AName, 'atomic_store') or
-    SameText(AName, 'atomic_exchange') or SameText(AName, 'atomic_compare_exchange') or
-    SameText(AName, 'atomic_compare_exchange_strong') or SameText(AName, 'atomic_compare_exchange_weak') or
-    SameText(AName, 'atomic_fetch_add') or SameText(AName, 'atomic_fetch_sub') or
-    SameText(AName, 'atomic_fetch_and') or SameText(AName, 'atomic_fetch_or') or
-    SameText(AName, 'atomic_fetch_xor') or SameText(AName, 'atomic_fetch_nand') or
-    SameText(AName, 'atomic_fetch_min') or SameText(AName, 'atomic_fetch_max') or
-    SameText(AName, 'atomic_increment') or SameText(AName, 'atomic_decrement') or
-    SameText(AName, 'InterlockedExchangeAdd') or SameText(AName, 'InterlockedExchange') or
-    SameText(AName, 'atomic_update_if_equal') or
-    SameText(AName, 'cpu_pause') or SameText(AName, 'cpu_relax') or SameText(AName, 'cpu_yield') or
-    SameText(AName, 'atomic_wait') or SameText(AName, 'atomic_notify_one') or SameText(AName, 'atomic_notify_all') or
-    SameText(AName, 'atomic_tagged_ptr_store') or
-    SameText(AName, 'LeaveCriticalSection') or SameText(AName, 'EnterCriticalSection') or
-    SameText(AName, 'Ln') or SameText(AName, 'Int') or SameText(AName, 'Frac') or
-    { Ambiguous overload resolution — multi-overloaded functions }
-    SameText(AName, 'Equal') or SameText(AName, 'IoWriteAll') or
-    SameText(AName, 'NewRequest') or SameText(AName, '__errno_location') or
-    SameText(AName, 'NormalizeFiniteQuat') or SameText(AName, 'FmodPositiveFinite') or
-    SameText(AName, 'NormalizeFiniteVec4') or SameText(AName, 'Fill8') or
-    { Wrong-number-of-args — overloaded/variadic FPC/RTL functions }
-    SameText(AName, 'IsOverlap') or SameText(AName, 'Fill') or
-    SameText(AName, 'FeMul') or SameText(AName, 'MkdirAll') or
-    SameText(AName, 'git_reference_lookup') or SameText(AName, 'AsciiLower') or
-    SameText(AName, 'NormalizeShardCount') or SameText(AName, 'UTF8Encode') or
-    SameText(AName, 'Shutdown') or
-    { Newly discovered overloaded functions }
-    SameText(AName, 'Clamp') or SameText(AName, 'ValidateQuaternionInput') or
-    SameText(AName, 'ValidateVectorInput') or SameText(AName, 'FillDWord') or
-    SameText(AName, 'FillWord') or SameText(AName, 'FillQWord') or
-    SameText(AName, 'Exp') or SameText(AName, 'DoubleIsNaN') or
-    SameText(AName, 'C_Initialize') or SameText(AName, 'Truncate') or
-    SameText(AName, 'UTF8Decode') or SameText(AName, 'Open') or
-    SameText(AName, 'Bind') or SameText(AName, 'LoadProvider') or
-    SameText(AName, 'LoadCTLogStore') or SameText(AName, 'WrapIStream') or
-    SameText(AName, 'simd_store_ps') or SameText(AName, 'BuildPackedDoubleToSingle') or
-    SameText(AName, 'X86FeaturesFromCPUID') or SameText(AName, 'X86BrandStringFromExtendedLeaves') or
-    SameText(AName, 'RegisterWithId') or
-    { Math functions }
-    SameText(AName, 'Cos') or SameText(AName, 'Sin') or SameText(AName, 'Sqrt') or
-    SameText(AName, 'Abs') or SameText(AName, 'ArcTan') or
-    SameText(AName, 'Pi') or SameText(AName, 'Power') or
-    SameText(AName, 'X86VendorStringFromLeaf0') or SameText(AName, 'BuildScalarDoubleToSingle') or
-    SameText(AName, 'simd_storeu_ps') or SameText(AName, 'UnloadProvider') or
-    SameText(AName, 'DoubleIsInf') or SameText(AName, 'TC_Initialize') or
-    SameText(AName, 'BsrQWord') or SameText(AName, 'EvaluateScalarCompareSd') or
-    SameText(AName, 'simd_max_epu8') or SameText(AName, 'UMul128') or
-    SameText(AName, 'BuildScalarDoubleCompareMask') or SameText(AName, 'simd_min_epu8');
+  Result := NameSetContains(FBuiltinProcedures, AName);
 end;
 
 function TSemanticAnalyzer.InferExpressionType(const ANode: TGreenNode): LongInt;
