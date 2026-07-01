@@ -4864,75 +4864,56 @@ var
   LInitNode: TGreenNode;
   LFiniNode: TGreenNode;
 begin
-  Result := MatchToken(
-    ALexer,
-    ACursor,
-    tkInterfaceKeyword,
-    ADiagnostics,
-    ARootFileId,
-    'INTERFACE'
-  );
-  if not Result then
-    Exit;
-
+  { interface keyword may be absent when preprocessor skipped it
+    (e.g. {$IFDEF WINDOWS} wrapping the entire unit on Linux) }
   InterfaceNode := TGreenNode.Create(
     gnkInterfaceSection,
-    CurrentToken(ALexer, ACursor - 1).ByteOffset,
-    0,
-    ''
+    0, 0, ''
   );
   AParent.AppendChild(InterfaceNode);
   Inc(ATree.FNodeCount);
 
-  Result := ParseUsesClause(
-    ALexer,
-    ACursor,
-    ATree,
-    uskInterface,
-    InterfaceNode,
-    ADiagnostics,
-    ARootFileId
-  );
-  if not Result then
-    Exit;
+  if (ACursor < ALexer.TokenCount) and
+    (CurrentToken(ALexer, ACursor).Kind = tkInterfaceKeyword) then
+  begin
+    Inc(ACursor);
 
-  Result := ParseBlockDeclarations(
-    ALexer, ACursor, InterfaceNode, ATree, ADiagnostics, ARootFileId);
+    Result := ParseUsesClause(
+      ALexer, ACursor, ATree, uskInterface,
+      InterfaceNode, ADiagnostics, ARootFileId);
+    if not Result then
+      Exit;
 
-  Result := MatchToken(
-    ALexer,
-    ACursor,
-    tkImplementationKeyword,
-    ADiagnostics,
-    ARootFileId,
-    'IMPLEMENTATION'
-  );
-  if not Result then
-    Exit;
+    Result := ParseBlockDeclarations(
+      ALexer, ACursor, InterfaceNode, ATree, ADiagnostics, ARootFileId);
+    if not Result then
+      Exit;
+  end;
 
-  ImplementationNode := TGreenNode.Create(
-    gnkImplementationSection,
-    CurrentToken(ALexer, ACursor - 1).ByteOffset,
-    0,
-    ''
-  );
-  AParent.AppendChild(ImplementationNode);
-  Inc(ATree.FNodeCount);
+  { implementation keyword may also be absent when preprocessor skipped it }
+  if (ACursor < ALexer.TokenCount) and
+    (CurrentToken(ALexer, ACursor).Kind = tkImplementationKeyword) then
+  begin
+    Inc(ACursor);
 
-  Result := ParseUsesClause(
-    ALexer,
-    ACursor,
-    ATree,
-    uskImplementation,
-    ImplementationNode,
-    ADiagnostics,
-    ARootFileId
-  );
-  if not Result then
-    Exit;
+    ImplementationNode := TGreenNode.Create(
+      gnkImplementationSection,
+      CurrentToken(ALexer, ACursor - 1).ByteOffset, 0, ''
+    );
+    AParent.AppendChild(ImplementationNode);
+    Inc(ATree.FNodeCount);
 
-  Result := ParseBlockDeclarations(
-    ALexer, ACursor, ImplementationNode, ATree, ADiagnostics, ARootFileId);
+    Result := ParseUsesClause(
+      ALexer, ACursor, ATree, uskImplementation,
+      ImplementationNode, ADiagnostics, ARootFileId);
+    if not Result then
+      Exit;
+
+    Result := ParseBlockDeclarations(
+      ALexer, ACursor, ImplementationNode, ATree, ADiagnostics, ARootFileId);
+    if not Result then
+      Exit;
+  end;
 
   { handle begin...end. initialization block (FPC syntax without 'initialization' keyword) }
   if (ACursor < ALexer.TokenCount) and
