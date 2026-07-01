@@ -1180,6 +1180,30 @@ begin
   Result := RunWithResult(LResult);
 end;
 
+procedure ClassifyTestException(E: Exception;
+  out AStatus: TTestStatus; out AMsg: string);
+{ Standard exception → status classification for test execution.
+  ETestSkipped → tsSkipped (flow control, not a failure)
+  EAssertionFailed → tsFailed (test assertion)
+  Other Exception → tsError (unexpected) }
+begin
+  if E is ETestSkipped then
+  begin
+    AStatus := tsSkipped;
+    AMsg := E.Message;
+  end
+  else if E is EAssertionFailed then
+  begin
+    AStatus := tsFailed;
+    AMsg := AppendTestTrace(E.Message);
+  end
+  else
+  begin
+    AStatus := tsError;
+    AMsg := AppendTestTrace(FormatExceptionMsg(E));
+  end;
+end;
+
 function TTestSuite.RunWithResult(out AResult: TTestRunResult): Boolean;
 var
   I, J: Integer;
@@ -1392,17 +1416,10 @@ begin
         try
           LSubCtx.ExecuteSubtests;
         except
-          on E: EAssertionFailed do
-          begin
-            LStatus := tsFailed;
-            LLastFailMsg := AppendTestTrace(E.Message);
-            Inc(LFail);
-          end;
           on E: Exception do
           begin
-            LStatus := tsError;
-            LLastFailMsg := AppendTestTrace(FormatExceptionMsg(E));
-            Inc(LFail);
+            ClassifyTestException(E, LStatus, LLastFailMsg);
+            if LStatus <> tsSkipped then Inc(LFail);
           end;
         end;
       end
@@ -1422,23 +1439,14 @@ begin
           PTestCaseProc(LEntry.TableProc)^(PTestCase(LEntry.TableCase)^);
           Inc(LPass);
         except
-          on E: ETestSkipped do
-          begin
-            LStatus := tsSkipped;
-            LLastFailMsg := E.Message;
-            Inc(LSkip);
-          end;
-          on E: EAssertionFailed do
-          begin
-            LStatus := tsFailed;
-            LLastFailMsg := AppendTestTrace(E.Message);
-            Inc(LFail);
-          end;
           on E: Exception do
           begin
-            LStatus := tsError;
-            LLastFailMsg := AppendTestTrace(FormatExceptionMsg(E));
-            Inc(LFail);
+            ClassifyTestException(E, LStatus, LLastFailMsg);
+            case LStatus of
+              tsSkipped: Inc(LSkip);
+            else
+              Inc(LFail);
+            end;
           end;
         end;
       end
@@ -1484,21 +1492,8 @@ begin
                 LEntry.Proc;
             end;
           except
-            on E: ETestSkipped do
-            begin
-              LStatus := tsSkipped;
-              LLastFailMsg := E.Message;
-            end;
-            on E: EAssertionFailed do
-            begin
-              LStatus := tsFailed;
-              LLastFailMsg := AppendTestTrace(E.Message);
-            end;
             on E: Exception do
-            begin
-              LStatus := tsError;
-              LLastFailMsg := AppendTestTrace(FormatExceptionMsg(E));
-            end;
+              ClassifyTestException(E, LStatus, LLastFailMsg);
           end;
 
           if (LStatus = tsPassed) or (LStatus = tsSkipped) or (LRetriesLeft <= 0) then
@@ -1516,22 +1511,14 @@ begin
         else Inc(LFail);
       end;
     except
-      on E: ETestSkipped do
-      begin
-        LStatus := tsSkipped;
-        Inc(LSkip);
-      end;
-      on E: EAssertionFailed do
-      begin
-        LStatus := tsFailed;
-        LLastFailMsg := AppendTestTrace(E.Message);
-        Inc(LFail);
-      end;
       on E: Exception do
       begin
-        LStatus := tsError;
-        LLastFailMsg := AppendTestTrace(FormatExceptionMsg(E));
-        Inc(LFail);
+        ClassifyTestException(E, LStatus, LLastFailMsg);
+        case LStatus of
+          tsSkipped: Inc(LSkip);
+        else
+          Inc(LFail);
+        end;
       end;
     end;
 
