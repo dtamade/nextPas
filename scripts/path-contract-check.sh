@@ -25,7 +25,7 @@ printf "\n${BOLD}C2: 源文件完备性${NC}\n"
 if [ -f "$SRC_DIR/nextpas.core.path.pas" ]; then ok "文件: nextpas.core.path.pas"; else fail_check "文件缺失: nextpas.core.path.pas"; fi
 
 printf "\n${BOLD}C3: 核心函数${NC}\n"
-for fn in "PathJoin" "PathDir" "PathBase" "PathExt" "PathIsAbs" "PathClean"; do
+for fn in "PathJoin" "PathDir" "PathBase" "PathExt" "PathIsAbsolute" "PathNormalize"; do
   if grep -rql "\b$fn\b" "$SRC_DIR"/nextpas.core.path*.pas 2>/dev/null; then ok "函数: $fn"; else warn_check "函数未发现: $fn"; fi
 done
 

@@ -17,7 +17,7 @@ printf "\n${BOLD}C2: 源文件完备性${NC}\n"
 PAS_COUNT=$(find "$SRC_DIR" -name 'nextpas.core.hash*.pas' 2>/dev/null | wc -l)
 ok "源文件: $PAS_COUNT 个"
 printf "\n${BOLD}C3: Hash 算法${NC}\n"
-for alg in "FNV1a" "xxHash" "Murmur" "SipHash" "CityHash" "Wyhash"; do
+for alg in "THashAlgorithm" "IHasher" "HashFileHex"; do
   if grep -rql "\b$alg\b" "$SRC_DIR"/nextpas.core.hash*.pas 2>/dev/null; then ok "算法: $alg"; else warn_check "算法未发现: $alg"; fi
 done
 printf "\n${BOLD}C4: 门面+测试${NC}\n"

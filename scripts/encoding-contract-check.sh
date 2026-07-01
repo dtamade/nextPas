@@ -20,7 +20,7 @@ printf "\n${BOLD}C2: 源文件完备性${NC}\n"
 PAS_COUNT=$(find "$SRC_DIR" -name 'nextpas.core.encoding*.pas' 2>/dev/null | wc -l)
 ok "源文件: $PAS_COUNT 个"
 printf "\n${BOLD}C3: 核心编码${NC}\n"
-for enc in "Base64" "Hex" "Url" "Json"; do
+for enc in "Base64Encode" "Base64Decode" "Base64UrlEncode"; do
   if grep -rql "\b$enc\b" "$SRC_DIR"/nextpas.core.encoding*.pas 2>/dev/null; then ok "编码: $enc"; else warn_check "编码未发现: $enc"; fi
 done
 printf "\n${BOLD}C4: 门面+测试${NC}\n"
