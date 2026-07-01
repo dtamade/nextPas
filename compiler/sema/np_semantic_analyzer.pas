@@ -4254,6 +4254,10 @@ begin
   begin
     Existing := FModel.FindSymbolInScope(AName, FCurrentScopeId);
     if (Existing > 0) and
+      not SameText(AKind, 'parameter') and
+      not SameText(FModel.SymbolAt(Existing - 1).Kind, 'parameter') and
+      not SameText(AKind, 'constant') and
+      not SameText(FModel.SymbolAt(Existing - 1).Kind, 'constant') and
       not (SameText(AKind, 'type') and
            SameText(FModel.SymbolAt(Existing - 1).Kind, 'type')) then
     begin
@@ -5253,6 +5257,9 @@ begin
         (SymI.Kind <> 'field') and (SymJ.Kind <> 'field') and
         (SymI.Kind <> 'function') and (SymJ.Kind <> 'function') and
         (SymI.Kind <> 'procedure') and (SymJ.Kind <> 'procedure') and
+        { 函数类型参数在 var/const 节中被注册为 constant/variable }
+        (SymI.Kind <> 'constant') and (SymJ.Kind <> 'constant') and
+        (SymI.Kind <> 'variable') and (SymJ.Kind <> 'variable') and
         { 允许 type 的前向声明后重新声明 (如 TConfig = class; → TConfig = class ... end) }
         not (SameText(SymI.Kind, 'type') and SameText(SymJ.Kind, 'type')) then
       begin
