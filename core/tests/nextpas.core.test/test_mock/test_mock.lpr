@@ -13,6 +13,7 @@ uses
   SysUtils,
   nextpas.core.test,
   nextpas.core.test.mock;
+  nextpas.core.test.helpers;
 
 { ── TMockValue constructors ────────────────────────────────────────────────── }
 
@@ -64,937 +65,743 @@ begin
   CheckNear(3.25, LValue.DblVal, 1e-12, 'MockDouble value');
 end;
 
-{ ── Setup + GetReturn ──────────────────────────────────────────────────────── }
+procedure TestSetupReturnsImpl(AMock: TMock);
+begin
+    AMock.Setup('Foo').Returns('bar');
+    CheckEqual('bar', AMock.GetReturn('Foo'));
+end;
 
 procedure TestSetupReturns;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.Setup('Foo').Returns('bar');
-    CheckEqual('bar', LM.GetReturn('Foo'));
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestSetupReturnsImpl);
+end;
+
+procedure TestSetupChainedImpl(AMock: TMock);
+begin
+    AMock.Setup('A').Returns('x').Returns('y');
+    { Last .Returns wins }
+    CheckEqual('y', AMock.GetReturn('A'));
 end;
 
 procedure TestSetupChained;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.Setup('A').Returns('x').Returns('y');
-    { Last .Returns wins }
-    CheckEqual('y', LM.GetReturn('A'));
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestSetupChainedImpl);
+end;
+
+procedure TestSetupMultipleMethodsImpl(AMock: TMock);
+begin
+    AMock.Setup('Foo').Returns('hello');
+    AMock.Setup('Bar').Returns('world');
+    CheckEqual('hello', AMock.GetReturn('Foo'));
+    CheckEqual('world', AMock.GetReturn('Bar'));
 end;
 
 procedure TestSetupMultipleMethods;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.Setup('Foo').Returns('hello');
-    LM.Setup('Bar').Returns('world');
-    CheckEqual('hello', LM.GetReturn('Foo'));
-    CheckEqual('world', LM.GetReturn('Bar'));
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestSetupMultipleMethodsImpl);
 end;
 
-{ ── RecordCall + CallCount ─────────────────────────────────────────────────── }
+procedure TestRecordCallImpl(AMock: TMock);
+begin
+    AMock.RecordCall('Foo', ['a', 'b']);
+    CheckEqual(1, AMock.CallCount('Foo'));
+    CheckEqual(0, AMock.CallCount('Bar'));
+end;
 
 procedure TestRecordCall;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.RecordCall('Foo', ['a', 'b']);
-    CheckEqual(1, LM.CallCount('Foo'));
-    CheckEqual(0, LM.CallCount('Bar'));
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestRecordCallImpl);
+end;
+
+procedure TestRecordCallMultipleImpl(AMock: TMock);
+begin
+    AMock.RecordCall('Foo', []);
+    AMock.RecordCall('Bar', []);
+    AMock.RecordCall('Foo', []);
+    CheckEqual(2, AMock.CallCount('Foo'));
+    CheckEqual(1, AMock.CallCount('Bar'));
 end;
 
 procedure TestRecordCallMultiple;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.RecordCall('Foo', []);
-    LM.RecordCall('Bar', []);
-    LM.RecordCall('Foo', []);
-    CheckEqual(2, LM.CallCount('Foo'));
-    CheckEqual(1, LM.CallCount('Bar'));
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestRecordCallMultipleImpl);
 end;
 
-{ ── Verify ─────────────────────────────────────────────────────────────────── }
+procedure TestVerifyCalledExactlyImpl(AMock: TMock);
+begin
+    AMock.RecordCall('Foo', []);
+    AMock.RecordCall('Foo', []);
+    { Should not raise }
+    AMock.Verify('Foo').CalledExactly(2);
+end;
 
 procedure TestVerifyCalledExactly;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.RecordCall('Foo', []);
-    LM.RecordCall('Foo', []);
-    { Should not raise }
-    LM.Verify('Foo').CalledExactly(2);
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestVerifyCalledExactlyImpl);
+end;
+
+procedure TestVerifyCalledNeverImpl(AMock: TMock);
+begin
+    { Should not raise — Foo never called }
+    AMock.Verify('Foo').CalledNever;
 end;
 
 procedure TestVerifyCalledNever;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    { Should not raise — Foo never called }
-    LM.Verify('Foo').CalledNever;
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestVerifyCalledNeverImpl);
+end;
+
+procedure TestVerifyCalledOnceImpl(AMock: TMock);
+begin
+    AMock.RecordCall('Foo', []);
+    AMock.Verify('Foo').CalledOnce;
 end;
 
 procedure TestVerifyCalledOnce;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.RecordCall('Foo', []);
-    LM.Verify('Foo').CalledOnce;
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestVerifyCalledOnceImpl);
+end;
+
+procedure TestVerifyCalledAtLeastImpl(AMock: TMock);
+begin
+    AMock.RecordCall('Foo', []);
+    AMock.RecordCall('Foo', []);
+    AMock.RecordCall('Foo', []);
+    { 3 >= 2 → ok }
+    AMock.Verify('Foo').CalledAtLeast(2);
 end;
 
 procedure TestVerifyCalledAtLeast;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.RecordCall('Foo', []);
-    LM.RecordCall('Foo', []);
-    LM.RecordCall('Foo', []);
-    { 3 >= 2 → ok }
-    LM.Verify('Foo').CalledAtLeast(2);
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestVerifyCalledAtLeastImpl);
+end;
+
+procedure TestVerifyCalledAtMostImpl(AMock: TMock);
+begin
+    AMock.RecordCall('Foo', []);
+    AMock.RecordCall('Foo', []);
+    { 2 <= 3 → ok }
+    AMock.Verify('Foo').CalledAtMost(3);
 end;
 
 procedure TestVerifyCalledAtMost;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.RecordCall('Foo', []);
-    LM.RecordCall('Foo', []);
-    { 2 <= 3 → ok }
-    LM.Verify('Foo').CalledAtMost(3);
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestVerifyCalledAtMostImpl);
 end;
 
-{ ── ReturnsInt / ReturnsBool ───────────────────────────────────────────────── }
+procedure TestReturnsIntImpl(AMock: TMock);
+begin
+    AMock.Setup('Val').ReturnsInt(42);
+    CheckEqual(42, AMock.GetReturnInt('Val'));
+end;
 
 procedure TestReturnsInt;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.Setup('Val').ReturnsInt(42);
-    CheckEqual(42, LM.GetReturnInt('Val'));
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestReturnsIntImpl);
+end;
+
+procedure TestReturnsBoolTrueImpl(AMock: TMock);
+begin
+    AMock.Setup('Flag').ReturnsBool(True);
+    CheckTrue(AMock.GetReturnBool('Flag'), 'expected True');
 end;
 
 procedure TestReturnsBoolTrue;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.Setup('Flag').ReturnsBool(True);
-    CheckTrue(LM.GetReturnBool('Flag'), 'expected True');
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestReturnsBoolTrueImpl);
+end;
+
+procedure TestReturnsBoolFalseImpl(AMock: TMock);
+begin
+    AMock.Setup('Flag').ReturnsBool(False);
+    CheckFalse(AMock.GetReturnBool('Flag'), 'expected False');
 end;
 
 procedure TestReturnsBoolFalse;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.Setup('Flag').ReturnsBool(False);
-    CheckFalse(LM.GetReturnBool('Flag'), 'expected False');
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestReturnsBoolFalseImpl);
+end;
+
+procedure TestReturnsDoubleImpl(AMock: TMock);
+begin
+    AMock.Setup('Pi').ReturnsDouble(3.14);
+    LValue := AMock.State.GetReturnTyped('Pi', []);
+    CheckTrue(LValue.Kind = mvDouble, 'expected mvDouble return kind');
+    CheckNear(3.14, LValue.DblVal, 1e-12, 'expected 3.14 typed return');
 end;
 
 procedure TestReturnsDouble;
-var
-  LM: TMock;
-  LValue: TMockValue;
 begin
-  LM := TMock.Create;
-  try
-    LM.Setup('Pi').ReturnsDouble(3.14);
-    LValue := LM.State.GetReturnTyped('Pi', []);
-    CheckTrue(LValue.Kind = mvDouble, 'expected mvDouble return kind');
-    CheckNear(3.14, LValue.DblVal, 1e-12, 'expected 3.14 typed return');
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestReturnsDoubleImpl);
+end;
+
+procedure TestGetTypedReturnOverloadsWithArgsImpl(AMock: TMock);
+begin
+    AMock.Setup('Count').ReturnsInt(7);
+    AMock.Setup('Flag').ReturnsBool(True);
+    CheckEqual(Int64(7), AMock.GetReturnInt('Count', ['legacy']));
+    CheckTrue(AMock.GetReturnBool('Flag', ['legacy']),
+      'bool overload with args should preserve configured value');
 end;
 
 procedure TestGetTypedReturnOverloadsWithArgs;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.Setup('Count').ReturnsInt(7);
-    LM.Setup('Flag').ReturnsBool(True);
-    CheckEqual(Int64(7), LM.GetReturnInt('Count', ['legacy']));
-    CheckTrue(LM.GetReturnBool('Flag', ['legacy']),
-      'bool overload with args should preserve configured value');
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestGetTypedReturnOverloadsWithArgsImpl);
 end;
 
-{ ── Unconfigured return defaults ───────────────────────────────────────────── }
+procedure TestGetReturnUnconfiguredImpl(AMock: TMock);
+begin
+    CheckEqual('', AMock.GetReturn('NoSuch'));
+    CheckEqual(0, AMock.GetReturnInt('NoSuch'));
+    CheckFalse(AMock.GetReturnBool('NoSuch'), 'unconfigured bool should be False');
+end;
 
 procedure TestGetReturnUnconfigured;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    CheckEqual('', LM.GetReturn('NoSuch'));
-    CheckEqual(0, LM.GetReturnInt('NoSuch'));
-    CheckFalse(LM.GetReturnBool('NoSuch'), 'unconfigured bool should be False');
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestGetReturnUnconfiguredImpl);
 end;
 
-{ ── ResetCalls keeps setup ─────────────────────────────────────────────────── }
+procedure TestResetCallsPreservesSetupImpl(AMock: TMock);
+begin
+    AMock.Setup('Foo').Returns('keep');
+    AMock.RecordCall('Foo', []);
+    AMock.RecordCall('Foo', []);
+    CheckEqual(2, AMock.CallCount('Foo'));
+
+    AMock.ResetCalls;
+    CheckTrue(AMock.CallCount('Foo') = 0, 'calls should be cleared');
+    CheckEqual('keep', AMock.GetReturn('Foo'));
+end;
 
 procedure TestResetCallsPreservesSetup;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.Setup('Foo').Returns('keep');
-    LM.RecordCall('Foo', []);
-    LM.RecordCall('Foo', []);
-    CheckEqual(2, LM.CallCount('Foo'));
-
-    LM.ResetCalls;
-    CheckTrue(LM.CallCount('Foo') = 0, 'calls should be cleared');
-    CheckEqual('keep', LM.GetReturn('Foo'));
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestResetCallsPreservesSetupImpl);
 end;
 
-{ ── Verify fail paths ───────────────────────────────────────────────────── }
+procedure TestVerifyCalledExactlyFailImpl(AMock: TMock);
+begin
+    AMock.RecordCall('Foo', []);
+  ExpectFail(procedure
+  begin
+      AMock.Verify('Foo').CalledExactly(3);
+  end, 'exactly');
+end;
 
 procedure TestVerifyCalledExactlyFail;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.RecordCall('Foo', []);
-    try
-      LM.Verify('Foo').CalledExactly(3);
-      Halt(1);
-    except
-      on E: EAssertionFailed do
-        CheckContains(LowerCase(E.Message), 'exactly');
-    end;
-  finally
-    LM.Free;
-  end;
+  ExpectFailWithMock(@TestVerifyCalledExactlyFailImpl);
+end;
+
+procedure TestVerifyCalledNeverFailImpl(AMock: TMock);
+begin
+    AMock.RecordCall('Foo', []);
+  ExpectFail(procedure
+  begin
+      AMock.Verify('Foo').CalledNever;
+  end, 'exactly');
 end;
 
 procedure TestVerifyCalledNeverFail;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.RecordCall('Foo', []);
-    try
-      LM.Verify('Foo').CalledNever;
-      Halt(1);
-    except
-      on E: EAssertionFailed do
-        CheckContains(LowerCase(E.Message), 'exactly');
-    end;
-  finally
-    LM.Free;
-  end;
+  ExpectFailWithMock(@TestVerifyCalledNeverFailImpl);
+end;
+
+procedure TestVerifyCalledOnceFailImpl(AMock: TMock);
+begin
+    AMock.RecordCall('Foo', []);
+    AMock.RecordCall('Foo', []);
+  ExpectFail(procedure
+  begin
+      AMock.Verify('Foo').CalledOnce;
+  end, 'exactly');
 end;
 
 procedure TestVerifyCalledOnceFail;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.RecordCall('Foo', []);
-    LM.RecordCall('Foo', []);
-    try
-      LM.Verify('Foo').CalledOnce;
-      Halt(1);
-    except
-      on E: EAssertionFailed do
-        CheckContains(LowerCase(E.Message), 'exactly');
-    end;
-  finally
-    LM.Free;
-  end;
+  ExpectFailWithMock(@TestVerifyCalledOnceFailImpl);
+end;
+
+procedure TestVerifyCalledAtLeastFailImpl(AMock: TMock);
+begin
+    AMock.RecordCall('Foo', []);
+  ExpectFail(procedure
+  begin
+      AMock.Verify('Foo').CalledAtLeast(5);
+  end, 'at least');
 end;
 
 procedure TestVerifyCalledAtLeastFail;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.RecordCall('Foo', []);
-    try
-      LM.Verify('Foo').CalledAtLeast(5);
-      Halt(1);
-    except
-      on E: EAssertionFailed do
-        CheckContains(LowerCase(E.Message), 'at least');
-    end;
-  finally
-    LM.Free;
-  end;
+  ExpectFailWithMock(@TestVerifyCalledAtLeastFailImpl);
+end;
+
+procedure TestVerifyCalledAtMostFailImpl(AMock: TMock);
+begin
+    AMock.RecordCall('Foo', []);
+    AMock.RecordCall('Foo', []);
+    AMock.RecordCall('Foo', []);
+  ExpectFail(procedure
+  begin
+      AMock.Verify('Foo').CalledAtMost(1);
+  end, 'at most');
 end;
 
 procedure TestVerifyCalledAtMostFail;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.RecordCall('Foo', []);
-    LM.RecordCall('Foo', []);
-    LM.RecordCall('Foo', []);
-    try
-      LM.Verify('Foo').CalledAtMost(1);
-      Halt(1);
-    except
-      on E: EAssertionFailed do
-        CheckContains(LowerCase(E.Message), 'at most');
-    end;
-  finally
-    LM.Free;
-  end;
+  ExpectFailWithMock(@TestVerifyCalledAtMostFailImpl);
 end;
 
-{ ── GetReturnInt non-numeric ────────────────────────────────────────────── }
+procedure TestGetReturnIntNonNumericImpl(AMock: TMock);
+begin
+    AMock.Setup('Val').Returns('not_a_number');
+    { GetReturnInt on non-numeric string should return 0 }
+    CheckEqual(0, AMock.GetReturnInt('Val'));
+end;
 
 procedure TestGetReturnIntNonNumeric;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.Setup('Val').Returns('not_a_number');
-    { GetReturnInt on non-numeric string should return 0 }
-    CheckEqual(0, LM.GetReturnInt('Val'));
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestGetReturnIntNonNumericImpl);
 end;
 
-{ ── State.Calls direct access ──────────────────────────────────────────────── }
+procedure TestStateCallsDirectAccessImpl(AMock: TMock);
+begin
+    AMock.RecordCall('A', ['x']);
+    AMock.RecordCall('B', ['y', 'z']);
+    CheckEqual(2, Length(AMock.State.Calls));
+    CheckEqual('A', AMock.State.Calls[0].MethodName);
+    CheckEqual(1, Length(AMock.State.Calls[0].Args));
+    CheckEqual('x', AMock.State.Calls[0].Args[0]);
+    CheckEqual('B', AMock.State.Calls[1].MethodName);
+    CheckEqual(2, Length(AMock.State.Calls[1].Args));
+end;
 
 procedure TestStateCallsDirectAccess;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.RecordCall('A', ['x']);
-    LM.RecordCall('B', ['y', 'z']);
-    CheckEqual(2, Length(LM.State.Calls));
-    CheckEqual('A', LM.State.Calls[0].MethodName);
-    CheckEqual(1, Length(LM.State.Calls[0].Args));
-    CheckEqual('x', LM.State.Calls[0].Args[0]);
-    CheckEqual('B', LM.State.Calls[1].MethodName);
-    CheckEqual(2, Length(LM.State.Calls[1].Args));
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestStateCallsDirectAccessImpl);
+end;
+
+procedure TestStateCallsTypedArgsMirrorStringsImpl(AMock: TMock);
+begin
+    AMock.RecordCall('Mirror', ['left', 'right']);
+    CheckEqual(2, Length(AMock.State.Calls[0].TypedArgs));
+    CheckTrue(AMock.State.Calls[0].TypedArgs[0].Kind = mvString,
+      'first typed arg kind');
+    CheckEqual('left', AMock.State.Calls[0].TypedArgs[0].StrVal);
+    CheckTrue(AMock.State.Calls[0].TypedArgs[1].Kind = mvString,
+      'second typed arg kind');
+    CheckEqual('right', AMock.State.Calls[0].TypedArgs[1].StrVal);
 end;
 
 procedure TestStateCallsTypedArgsMirrorStrings;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.RecordCall('Mirror', ['left', 'right']);
-    CheckEqual(2, Length(LM.State.Calls[0].TypedArgs));
-    CheckTrue(LM.State.Calls[0].TypedArgs[0].Kind = mvString,
-      'first typed arg kind');
-    CheckEqual('left', LM.State.Calls[0].TypedArgs[0].StrVal);
-    CheckTrue(LM.State.Calls[0].TypedArgs[1].Kind = mvString,
-      'second typed arg kind');
-    CheckEqual('right', LM.State.Calls[0].TypedArgs[1].StrVal);
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestStateCallsTypedArgsMirrorStringsImpl);
 end;
 
-procedure TestRecordCallTypedPreservesLegacyArgs;
-var
-  LM: TMock;
+procedure TestRecordCallTypedPreservesLegacyArgsImpl(AMock: TMock);
 begin
-  LM := TMock.Create;
-  try
-    LM.State.RecordCallTyped('TypedCall', [
+    AMock.State.RecordCallTyped('TypedCall', [
       MockStr('alpha'),
       MockInt(42),
       MockBool(True)
     ]);
-    CheckEqual(1, LM.CallCount('TypedCall'));
-    CheckEqual(3, Length(LM.State.Calls[0].TypedArgs));
-    CheckTrue(LM.State.Calls[0].TypedArgs[0].Kind = mvString,
+    CheckEqual(1, AMock.CallCount('TypedCall'));
+    CheckEqual(3, Length(AMock.State.Calls[0].TypedArgs));
+    CheckTrue(AMock.State.Calls[0].TypedArgs[0].Kind = mvString,
       'typed string arg kind');
-    CheckEqual('alpha', LM.State.Calls[0].TypedArgs[0].StrVal);
-    CheckTrue(LM.State.Calls[0].TypedArgs[1].Kind = mvInt64,
+    CheckEqual('alpha', AMock.State.Calls[0].TypedArgs[0].StrVal);
+    CheckTrue(AMock.State.Calls[0].TypedArgs[1].Kind = mvInt64,
       'typed int arg kind');
-    CheckEqual(Int64(42), LM.State.Calls[0].TypedArgs[1].IntVal);
-    CheckTrue(LM.State.Calls[0].TypedArgs[2].Kind = mvBool,
+    CheckEqual(Int64(42), AMock.State.Calls[0].TypedArgs[1].IntVal);
+    CheckTrue(AMock.State.Calls[0].TypedArgs[2].Kind = mvBool,
       'typed bool arg kind');
-    CheckTrue(LM.State.Calls[0].TypedArgs[2].BoolVal, 'typed bool arg value');
-    CheckEqual('alpha', LM.State.Calls[0].Args[0]);
-    CheckEqual('42', LM.State.Calls[0].Args[1]);
-    CheckEqual('true', LM.State.Calls[0].Args[2]);
-  finally
-    LM.Free;
-  end;
+    CheckTrue(AMock.State.Calls[0].TypedArgs[2].BoolVal, 'typed bool arg value');
+    CheckEqual('alpha', AMock.State.Calls[0].Args[0]);
+    CheckEqual('42', AMock.State.Calls[0].Args[1]);
+    CheckEqual('true', AMock.State.Calls[0].Args[2]);
+end;
+
+procedure TestRecordCallTypedPreservesLegacyArgs;
+begin
+  WithMock(@TestRecordCallTypedPreservesLegacyArgsImpl);
+end;
+
+procedure TestRecordCallTypedOnMockImpl(AMock: TMock);
+begin
+    AMock.RecordCallTyped('Foo', [MockStr('a'), MockInt(42)]);
+    CheckEqual(1, AMock.CallCount('Foo'));
+    CheckEqual(1, Length(AMock.State.Calls));
+    CheckEqual('Foo', AMock.State.Calls[0].MethodName);
+    CheckEqual(2, Length(AMock.State.Calls[0].TypedArgs));
+    CheckTrue(AMock.State.Calls[0].TypedArgs[0].Kind = mvString,
+      'typed string arg kind');
+    CheckEqual('a', AMock.State.Calls[0].TypedArgs[0].StrVal);
+    CheckTrue(AMock.State.Calls[0].TypedArgs[1].Kind = mvInt64,
+      'typed int arg kind');
+    CheckEqual(Int64(42), AMock.State.Calls[0].TypedArgs[1].IntVal);
 end;
 
 procedure TestRecordCallTypedOnMock;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.RecordCallTyped('Foo', [MockStr('a'), MockInt(42)]);
-    CheckEqual(1, LM.CallCount('Foo'));
-    CheckEqual(1, Length(LM.State.Calls));
-    CheckEqual('Foo', LM.State.Calls[0].MethodName);
-    CheckEqual(2, Length(LM.State.Calls[0].TypedArgs));
-    CheckTrue(LM.State.Calls[0].TypedArgs[0].Kind = mvString,
-      'typed string arg kind');
-    CheckEqual('a', LM.State.Calls[0].TypedArgs[0].StrVal);
-    CheckTrue(LM.State.Calls[0].TypedArgs[1].Kind = mvInt64,
-      'typed int arg kind');
-    CheckEqual(Int64(42), LM.State.Calls[0].TypedArgs[1].IntVal);
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestRecordCallTypedOnMockImpl);
+end;
+
+procedure TestGetReturnTypedFromStringSetupImpl(AMock: TMock);
+begin
+    AMock.Setup('Echo').Returns('typed');
+    LValue := AMock.State.GetReturnTyped('Echo', [MockStr('ignored')]);
+    CheckTrue(LValue.Kind = mvString, 'typed return kind');
+    CheckEqual('typed', LValue.StrVal);
 end;
 
 procedure TestGetReturnTypedFromStringSetup;
-var
-  LM: TMock;
-  LValue: TMockValue;
 begin
-  LM := TMock.Create;
-  try
-    LM.Setup('Echo').Returns('typed');
-    LValue := LM.State.GetReturnTyped('Echo', [MockStr('ignored')]);
-    CheckTrue(LValue.Kind = mvString, 'typed return kind');
-    CheckEqual('typed', LValue.StrVal);
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestGetReturnTypedFromStringSetupImpl);
+end;
+
+procedure TestStateGetReturnInt64FromTypedSetupImpl(AMock: TMock);
+begin
+    AMock.Setup('Count').ReturnsInt(42);
+    LValue := AMock.State.GetReturnTyped('Count', []);
+    CheckTrue(LValue.Kind = mvInt64, 'typed int return kind');
+    CheckEqual(Int64(42), LValue.IntVal);
+    CheckEqual(Int64(42), AMock.State.GetReturnInt64('Count', ['legacy']));
 end;
 
 procedure TestStateGetReturnInt64FromTypedSetup;
-var
-  LM: TMock;
-  LValue: TMockValue;
 begin
-  LM := TMock.Create;
-  try
-    LM.Setup('Count').ReturnsInt(42);
-    LValue := LM.State.GetReturnTyped('Count', []);
-    CheckTrue(LValue.Kind = mvInt64, 'typed int return kind');
-    CheckEqual(Int64(42), LValue.IntVal);
-    CheckEqual(Int64(42), LM.State.GetReturnInt64('Count', ['legacy']));
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestStateGetReturnInt64FromTypedSetupImpl);
+end;
+
+procedure TestStateGetReturnBoolFromTypedSetupImpl(AMock: TMock);
+begin
+    AMock.Setup('Flag').ReturnsBool(True);
+    LValue := AMock.State.GetReturnTyped('Flag', []);
+    CheckTrue(LValue.Kind = mvBool, 'typed bool return kind');
+    CheckTrue(LValue.BoolVal, 'typed bool return value');
+    CheckTrue(AMock.State.GetReturnBool('Flag', ['legacy']),
+      'state typed bool getter');
 end;
 
 procedure TestStateGetReturnBoolFromTypedSetup;
-var
-  LM: TMock;
-  LValue: TMockValue;
 begin
-  LM := TMock.Create;
-  try
-    LM.Setup('Flag').ReturnsBool(True);
-    LValue := LM.State.GetReturnTyped('Flag', []);
-    CheckTrue(LValue.Kind = mvBool, 'typed bool return kind');
-    CheckTrue(LValue.BoolVal, 'typed bool return value');
-    CheckTrue(LM.State.GetReturnBool('Flag', ['legacy']),
-      'state typed bool getter');
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestStateGetReturnBoolFromTypedSetupImpl);
+end;
+
+procedure TestTypedAndLegacyStringReturnCoexistImpl(AMock: TMock);
+begin
+    AMock.State.SetReturn('LegacyInt', '42');
+    AMock.State.SetReturn('LegacyFlag', 'true');
+
+    LValue := AMock.State.GetReturnTyped('LegacyInt', [MockStr('legacy')]);
+    CheckTrue(LValue.Kind = mvString, 'legacy int typed kind');
+    CheckEqual('42', LValue.StrVal);
+    CheckEqual('42', AMock.GetReturn('LegacyInt'));
+    CheckEqual(Int64(42), AMock.State.GetReturnInt64('LegacyInt', ['legacy']));
+
+    LValue := AMock.State.GetReturnTyped('LegacyFlag', [MockStr('legacy')]);
+    CheckTrue(LValue.Kind = mvString, 'legacy bool typed kind');
+    CheckEqual('true', LValue.StrVal);
+    CheckTrue(AMock.State.GetReturnBool('LegacyFlag', ['legacy']),
+      'legacy bool fallback');
 end;
 
 procedure TestTypedAndLegacyStringReturnCoexist;
-var
-  LM: TMock;
-  LValue: TMockValue;
 begin
-  LM := TMock.Create;
-  try
-    LM.State.SetReturn('LegacyInt', '42');
-    LM.State.SetReturn('LegacyFlag', 'true');
+  WithMock(@TestTypedAndLegacyStringReturnCoexistImpl);
+end;
 
-    LValue := LM.State.GetReturnTyped('LegacyInt', [MockStr('legacy')]);
-    CheckTrue(LValue.Kind = mvString, 'legacy int typed kind');
-    CheckEqual('42', LValue.StrVal);
-    CheckEqual('42', LM.GetReturn('LegacyInt'));
-    CheckEqual(Int64(42), LM.State.GetReturnInt64('LegacyInt', ['legacy']));
-
-    LValue := LM.State.GetReturnTyped('LegacyFlag', [MockStr('legacy')]);
-    CheckTrue(LValue.Kind = mvString, 'legacy bool typed kind');
-    CheckEqual('true', LValue.StrVal);
-    CheckTrue(LM.State.GetReturnBool('LegacyFlag', ['legacy']),
-      'legacy bool fallback');
-  finally
-    LM.Free;
-  end;
+procedure TestUnsetTypedReturnDefaultsImpl(AMock: TMock);
+begin
+    LValue := AMock.State.GetReturnTyped('Missing', []);
+    CheckTrue(LValue.Kind = mvUnset, 'unset typed kind');
+    CheckEqual('', AMock.GetReturn('Missing'));
+    CheckEqual(Int64(0), AMock.State.GetReturnInt64('Missing', []));
+    CheckFalse(AMock.State.GetReturnBool('Missing', []),
+      'unset bool should be false');
 end;
 
 procedure TestUnsetTypedReturnDefaults;
-var
-  LM: TMock;
-  LValue: TMockValue;
 begin
-  LM := TMock.Create;
-  try
-    LValue := LM.State.GetReturnTyped('Missing', []);
-    CheckTrue(LValue.Kind = mvUnset, 'unset typed kind');
-    CheckEqual('', LM.GetReturn('Missing'));
-    CheckEqual(Int64(0), LM.State.GetReturnInt64('Missing', []));
-    CheckFalse(LM.State.GetReturnBool('Missing', []),
-      'unset bool should be false');
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestUnsetTypedReturnDefaultsImpl);
 end;
 
-{ R6-46: Verify expects 1 but called 2 times → should fail }
+procedure TestVerifyCalledExactlyOverCallImpl(AMock: TMock);
+begin
+    AMock.Setup('Foo').Returns('1');
+    AMock.RecordCall('Foo', []);
+    AMock.RecordCall('Foo', []);
+  ExpectFail(procedure
+  begin
+      AMock.Verify('Foo').CalledExactly(1);
+  end);
+end;
 
 procedure TestVerifyCalledExactlyOverCall;
-var
-  LM: TMock;
-  LCaught: Boolean = False;
 begin
-  LM := TMock.Create;
-  try
-    LM.Setup('Foo').Returns('1');
-    LM.RecordCall('Foo', []);
-    LM.RecordCall('Foo', []);
-    try
-      LM.Verify('Foo').CalledExactly(1);
-      Halt(1);
-    except
-      on E: EAssertionFailed do
-        LCaught := True;
-    end;
-    CheckTrue(LCaught, 'Verify(1) should fail when called 2 times');
-  finally
-    LM.Free;
-  end;
+  ExpectFailWithMock(@TestVerifyCalledExactlyOverCallImpl);
 end;
 
-{ R6-47: Duplicate Setup overwrites previous return value }
+procedure TestSetupDuplicateOverwriteImpl(AMock: TMock);
+begin
+    AMock.Setup('Foo').Returns('1');
+    AMock.Setup('Foo').Returns('2');
+    CheckEqual('2', AMock.GetReturn('Foo'));
+end;
 
 procedure TestSetupDuplicateOverwrite;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.Setup('Foo').Returns('1');
-    LM.Setup('Foo').Returns('2');
-    CheckEqual('2', LM.GetReturn('Foo'));
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestSetupDuplicateOverwriteImpl);
 end;
 
-{ R6-48: GetReturnInt negative return value }
+procedure TestGetReturnIntNegativeImpl(AMock: TMock);
+begin
+    AMock.Setup('Foo').Returns('-42');
+    CheckEqual(Int64(-42), AMock.GetReturnInt('Foo'));
+end;
 
 procedure TestGetReturnIntNegative;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.Setup('Foo').Returns('-42');
-    CheckEqual(Int64(-42), LM.GetReturnInt('Foo'));
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestGetReturnIntNegativeImpl);
 end;
 
-{ ── Phase 3: Times / InOrder / CalledBefore / CalledAfter ──────────────────── }
+procedure TestTimesSuccessImpl(AMock: TMock);
+begin
+    AMock.RecordCall('Foo', []);
+    AMock.RecordCall('Foo', []);
+    AMock.RecordCall('Foo', []);
+    { Times(3) should not raise }
+    AMock.Verify('Foo').Times(3);
+end;
 
 procedure TestTimesSuccess;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.RecordCall('Foo', []);
-    LM.RecordCall('Foo', []);
-    LM.RecordCall('Foo', []);
-    { Times(3) should not raise }
-    LM.Verify('Foo').Times(3);
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestTimesSuccessImpl);
+end;
+
+procedure TestTimesFailImpl(AMock: TMock);
+begin
+    AMock.RecordCall('Foo', []);
+  ExpectFail(procedure
+  begin
+      AMock.Verify('Foo').Times(5);
+  end);
 end;
 
 procedure TestTimesFail;
-var
-  LM: TMock;
-  LCaught: Boolean = False;
 begin
-  LM := TMock.Create;
-  try
-    LM.RecordCall('Foo', []);
-    try
-      LM.Verify('Foo').Times(5);
-      Halt(1);
-    except
-      on E: EAssertionFailed do
-        LCaught := True;
-    end;
-    CheckTrue(LCaught, 'Times(5) should fail when called once');
-  finally
-    LM.Free;
-  end;
+  ExpectFailWithMock(@TestTimesFailImpl);
+end;
+
+procedure TestInOrderSetupImpl(AMock: TMock);
+begin
+    { InOrder is a fluent marker — should not raise }
+    AMock.Setup('Foo').InOrder.Returns('bar');
+    CheckEqual('bar', AMock.GetReturn('Foo'));
 end;
 
 procedure TestInOrderSetup;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    { InOrder is a fluent marker — should not raise }
-    LM.Setup('Foo').InOrder.Returns('bar');
-    CheckEqual('bar', LM.GetReturn('Foo'));
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestInOrderSetupImpl);
+end;
+
+procedure TestCallOrderTrackingImpl(AMock: TMock);
+begin
+    AMock.RecordCall('A', []);
+    AMock.RecordCall('B', []);
+    AMock.RecordCall('C', []);
+    AMock.RecordCall('A', []);
+    CheckEqual(4, Length(AMock.State.CallOrder));
+    CheckEqual('A', AMock.State.CallOrder[0]);
+    CheckEqual('B', AMock.State.CallOrder[1]);
+    CheckEqual('C', AMock.State.CallOrder[2]);
+    CheckEqual('A', AMock.State.CallOrder[3]);
 end;
 
 procedure TestCallOrderTracking;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.RecordCall('A', []);
-    LM.RecordCall('B', []);
-    LM.RecordCall('C', []);
-    LM.RecordCall('A', []);
-    CheckEqual(4, Length(LM.State.CallOrder));
-    CheckEqual('A', LM.State.CallOrder[0]);
-    CheckEqual('B', LM.State.CallOrder[1]);
-    CheckEqual('C', LM.State.CallOrder[2]);
-    CheckEqual('A', LM.State.CallOrder[3]);
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestCallOrderTrackingImpl);
+end;
+
+procedure TestCalledBeforeSuccessImpl(AMock: TMock);
+begin
+    AMock.RecordCall('Setup', []);
+    AMock.RecordCall('Execute', []);
+    AMock.RecordCall('Cleanup', []);
+    { Setup was called before Execute — should not raise }
+    AMock.Verify('Setup').CalledBefore('Execute');
 end;
 
 procedure TestCalledBeforeSuccess;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.RecordCall('Setup', []);
-    LM.RecordCall('Execute', []);
-    LM.RecordCall('Cleanup', []);
-    { Setup was called before Execute — should not raise }
-    LM.Verify('Setup').CalledBefore('Execute');
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestCalledBeforeSuccessImpl);
+end;
+
+procedure TestCalledBeforeFailImpl(AMock: TMock);
+begin
+    AMock.RecordCall('Execute', []);
+    AMock.RecordCall('Setup', []);
+  ExpectFail(procedure
+  begin
+      AMock.Verify('Setup').CalledBefore('Execute');
+  end);
 end;
 
 procedure TestCalledBeforeFail;
-var
-  LM: TMock;
-  LCaught: Boolean = False;
 begin
-  LM := TMock.Create;
-  try
-    LM.RecordCall('Execute', []);
-    LM.RecordCall('Setup', []);
-    try
-      LM.Verify('Setup').CalledBefore('Execute');
-      Halt(1);
-    except
-      on E: EAssertionFailed do
-        LCaught := True;
-    end;
-    CheckTrue(LCaught, 'CalledBefore should fail when order is reversed');
-  finally
-    LM.Free;
-  end;
+  ExpectFailWithMock(@TestCalledBeforeFailImpl);
+end;
+
+procedure TestCalledAfterSuccessImpl(AMock: TMock);
+begin
+    AMock.RecordCall('Setup', []);
+    AMock.RecordCall('Execute', []);
+    AMock.RecordCall('Cleanup', []);
+    { Cleanup was called after Execute — should not raise }
+    AMock.Verify('Cleanup').CalledAfter('Execute');
 end;
 
 procedure TestCalledAfterSuccess;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.RecordCall('Setup', []);
-    LM.RecordCall('Execute', []);
-    LM.RecordCall('Cleanup', []);
-    { Cleanup was called after Execute — should not raise }
-    LM.Verify('Cleanup').CalledAfter('Execute');
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestCalledAfterSuccessImpl);
+end;
+
+procedure TestCalledAfterFailImpl(AMock: TMock);
+begin
+    AMock.RecordCall('Cleanup', []);
+    AMock.RecordCall('Execute', []);
+  ExpectFail(procedure
+  begin
+      AMock.Verify('Cleanup').CalledAfter('Execute');
+  end);
 end;
 
 procedure TestCalledAfterFail;
-var
-  LM: TMock;
-  LCaught: Boolean = False;
 begin
-  LM := TMock.Create;
-  try
-    LM.RecordCall('Cleanup', []);
-    LM.RecordCall('Execute', []);
-    try
-      LM.Verify('Cleanup').CalledAfter('Execute');
-      Halt(1);
-    except
-      on E: EAssertionFailed do
-        LCaught := True;
-    end;
-    CheckTrue(LCaught, 'CalledAfter should fail when order is reversed');
-  finally
-    LM.Free;
-  end;
+  ExpectFailWithMock(@TestCalledAfterFailImpl);
+end;
+
+procedure TestCalledBeforeNeverCalledImpl(AMock: TMock);
+begin
+    AMock.RecordCall('Foo', []);
+  ExpectFail(procedure
+  begin
+      AMock.Verify('Foo').CalledBefore('Bar');
+  end);
 end;
 
 procedure TestCalledBeforeNeverCalled;
-var
-  LM: TMock;
-  LCaught: Boolean = False;
 begin
-  LM := TMock.Create;
-  try
-    LM.RecordCall('Foo', []);
-    try
-      LM.Verify('Foo').CalledBefore('Bar');
-      Halt(1);
-    except
-      on E: EAssertionFailed do
-        LCaught := True;
-    end;
-    CheckTrue(LCaught, 'CalledBefore should fail when other method never called');
-  finally
-    LM.Free;
-  end;
+  ExpectFailWithMock(@TestCalledBeforeNeverCalledImpl);
+end;
+
+procedure TestCallOrderResetImpl(AMock: TMock);
+begin
+    AMock.RecordCall('A', []);
+    AMock.RecordCall('B', []);
+    CheckEqual(2, Length(AMock.State.CallOrder));
+    AMock.ResetCalls;
+    CheckEqual(0, Length(AMock.State.CallOrder));
 end;
 
 procedure TestCallOrderReset;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.RecordCall('A', []);
-    LM.RecordCall('B', []);
-    CheckEqual(2, Length(LM.State.CallOrder));
-    LM.ResetCalls;
-    CheckEqual(0, Length(LM.State.CallOrder));
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestCallOrderResetImpl);
 end;
 
-{ ── v3.1: CalledWith / CalledExactlyWith ────────────────────────────────────── }
+procedure TestCalledWithSuccessImpl(AMock: TMock);
+begin
+    AMock.RecordCall('Foo', ['bar', 'baz']);
+    AMock.RecordCall('Foo', ['other', 'args']);
+    AMock.Verify('Foo').CalledWith(['bar', 'baz']);
+end;
 
 procedure TestCalledWithSuccess;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.RecordCall('Foo', ['bar', 'baz']);
-    LM.RecordCall('Foo', ['other', 'args']);
-    LM.Verify('Foo').CalledWith(['bar', 'baz']);
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestCalledWithSuccessImpl);
+end;
+
+procedure TestCalledWithFailImpl(AMock: TMock);
+begin
+    AMock.RecordCall('Foo', ['bar']);
+  ExpectFail(procedure
+  begin
+      AMock.Verify('Foo').CalledWith(['nonexistent']);
+  end);
 end;
 
 procedure TestCalledWithFail;
-var
-  LM: TMock;
-  LCaught: Boolean = False;
 begin
-  LM := TMock.Create;
-  try
-    LM.RecordCall('Foo', ['bar']);
-    try
-      LM.Verify('Foo').CalledWith(['nonexistent']);
-    except
-      on E: EAssertionFailed do
-        LCaught := True;
-    end;
-    CheckTrue(LCaught, 'CalledWith should fail when no matching args');
-  finally
-    LM.Free;
-  end;
+  ExpectFailWithMock(@TestCalledWithFailImpl);
+end;
+
+procedure TestCalledExactlyWithSuccessImpl(AMock: TMock);
+begin
+    AMock.RecordCall('Foo', ['a']);
+    AMock.RecordCall('Foo', ['b']);
+    AMock.RecordCall('Foo', ['a']);
+    AMock.Verify('Foo').CalledExactlyWith(2, ['a']);
 end;
 
 procedure TestCalledExactlyWithSuccess;
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.RecordCall('Foo', ['a']);
-    LM.RecordCall('Foo', ['b']);
-    LM.RecordCall('Foo', ['a']);
-    LM.Verify('Foo').CalledExactlyWith(2, ['a']);
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestCalledExactlyWithSuccessImpl);
+end;
+
+procedure TestCalledExactlyWithFailImpl(AMock: TMock);
+begin
+    AMock.RecordCall('Foo', ['a']);
+    AMock.RecordCall('Foo', ['b']);
+  ExpectFail(procedure
+  begin
+      AMock.Verify('Foo').CalledExactlyWith(2, ['a']);
+  end);
 end;
 
 procedure TestCalledExactlyWithFail;
-var
-  LM: TMock;
-  LCaught: Boolean = False;
 begin
-  LM := TMock.Create;
-  try
-    LM.RecordCall('Foo', ['a']);
-    LM.RecordCall('Foo', ['b']);
-    try
-      LM.Verify('Foo').CalledExactlyWith(2, ['a']);
-    except
-      on E: EAssertionFailed do
-        LCaught := True;
-    end;
-    CheckTrue(LCaught, 'CalledExactlyWith should fail on count mismatch');
-  finally
-    LM.Free;
-  end;
+  ExpectFailWithMock(@TestCalledExactlyWithFailImpl);
+end;
+
+procedure TestCalledWithEmptyArgsImpl(AMock: TMock);
+begin
+    AMock.RecordCall('Foo', []);
+    AMock.RecordCall('Foo', []);
+    { CalledWith([]) should match both no-arg calls }
+    AMock.Verify('Foo').CalledWith([]);
 end;
 
 procedure TestCalledWithEmptyArgs;
-{ G1: CalledWith([]) matches no-arg calls }
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.RecordCall('Foo', []);
-    LM.RecordCall('Foo', []);
-    { CalledWith([]) should match both no-arg calls }
-    LM.Verify('Foo').CalledWith([]);
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestCalledWithEmptyArgsImpl);
+end;
+
+procedure TestCalledExactlyWithZeroTimesImpl(AMock: TMock);
+begin
+    AMock.RecordCall('Foo', ['a']);
+    { 0 times with ['b'] — method was called with ['a'], not ['b'] }
+    AMock.Verify('Foo').CalledExactlyWith(0, ['b']);
+    { 0 times with ['a'] should FAIL since we recorded ['a'] once }
+  ExpectFail(procedure
+  begin
+      AMock.Verify('Foo').CalledExactlyWith(0, ['a']);
+      CheckTrue(False, 'CalledExactlyWith(0) should fail when args were recorded');
+  end);
 end;
 
 procedure TestCalledExactlyWithZeroTimes;
-{ G1: CalledExactlyWith(0, [...]) when method was never called with those args }
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.RecordCall('Foo', ['a']);
-    { 0 times with ['b'] — method was called with ['a'], not ['b'] }
-    LM.Verify('Foo').CalledExactlyWith(0, ['b']);
-    { 0 times with ['a'] should FAIL since we recorded ['a'] once }
-    try
-      LM.Verify('Foo').CalledExactlyWith(0, ['a']);
-      CheckTrue(False, 'CalledExactlyWith(0) should fail when args were recorded');
-    except
-      on E: EAssertionFailed do
-        CheckTrue(True, 'expected 0-times fail');
-    end;
-  finally
-    LM.Free;
-  end;
+  ExpectFailWithMock(@TestCalledExactlyWithZeroTimesImpl);
 end;
 
-procedure TestRecordCallTypedAllTypes;
-{ G2: RecordCallTyped with all TMockValue types }
-var
-  LM: TMock;
-  LCall: TMockCall;
+procedure TestRecordCallTypedAllTypesImpl(AMock: TMock);
 begin
-  LM := TMock.Create;
-  try
-    LM.RecordCallTyped('Op', [
+    AMock.RecordCallTyped('Op', [
       MockStr('hello'),
       MockInt(42),
       MockBool(True),
       MockDouble(3.14)
     ]);
-    LCall := LM.State.Calls[0];
+    LCall := AMock.State.Calls[0];
     CheckTrue(Length(LCall.TypedArgs) = 4, 'typed args count');
     CheckTrue(LCall.TypedArgs[0].Kind = mvString, 'arg[0] kind');
     CheckTrue(LCall.TypedArgs[0].StrVal = 'hello', 'arg[0] str');
@@ -1004,48 +811,45 @@ begin
     CheckTrue(LCall.TypedArgs[2].BoolVal, 'arg[2] bool');
     CheckTrue(LCall.TypedArgs[3].Kind = mvDouble, 'arg[3] kind');
     CheckTrue(Abs(LCall.TypedArgs[3].DblVal - 3.14) < 1e-12, 'arg[3] double');
-  finally
-    LM.Free;
-  end;
+end;
+
+procedure TestRecordCallTypedAllTypes;
+begin
+  WithMock(@TestRecordCallTypedAllTypesImpl);
+end;
+
+procedure TestGetReturnIntEmptyStringImpl(AMock: TMock);
+begin
+    AMock.Setup('Val').Returns('');
+    CheckTrue(AMock.GetReturnInt('Val') = 0, 'empty string → 0');
 end;
 
 procedure TestGetReturnIntEmptyString;
-{ G2: GetReturnInt on empty string returns 0 }
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.Setup('Val').Returns('');
-    CheckTrue(LM.GetReturnInt('Val') = 0, 'empty string → 0');
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestGetReturnIntEmptyStringImpl);
+end;
+
+procedure TestGetReturnBoolFromStringImpl(AMock: TMock);
+begin
+    AMock.Setup('Flag').Returns('true');
+    CheckTrue(AMock.GetReturnBool('Flag'), '"true" → True');
+    AMock.Setup('Flag').Returns('True');
+    CheckTrue(AMock.GetReturnBool('Flag'), '"True" → True');
+    AMock.Setup('Flag').Returns('TRUE');
+    CheckTrue(AMock.GetReturnBool('Flag'), '"TRUE" → True');
+    AMock.Setup('Flag').Returns('false');
+    CheckFalse(AMock.GetReturnBool('Flag'), '"false" → False');
+    AMock.Setup('Flag').Returns('1');
+    CheckFalse(AMock.GetReturnBool('Flag'), '"1" → False (not "true")');
+    AMock.Setup('Flag').Returns('');
+    CheckFalse(AMock.GetReturnBool('Flag'), '"" → False');
 end;
 
 procedure TestGetReturnBoolFromString;
-{ G2: GetReturnBool on string values — only 'true' (case-insensitive) returns True }
-var
-  LM: TMock;
 begin
-  LM := TMock.Create;
-  try
-    LM.Setup('Flag').Returns('true');
-    CheckTrue(LM.GetReturnBool('Flag'), '"true" → True');
-    LM.Setup('Flag').Returns('True');
-    CheckTrue(LM.GetReturnBool('Flag'), '"True" → True');
-    LM.Setup('Flag').Returns('TRUE');
-    CheckTrue(LM.GetReturnBool('Flag'), '"TRUE" → True');
-    LM.Setup('Flag').Returns('false');
-    CheckFalse(LM.GetReturnBool('Flag'), '"false" → False');
-    LM.Setup('Flag').Returns('1');
-    CheckFalse(LM.GetReturnBool('Flag'), '"1" → False (not "true")');
-    LM.Setup('Flag').Returns('');
-    CheckFalse(LM.GetReturnBool('Flag'), '"" → False');
-  finally
-    LM.Free;
-  end;
+  WithMock(@TestGetReturnBoolFromStringImpl);
 end;
+
 
 { ── Register Tests ───────────────────────────────────────────────────────────── }
 

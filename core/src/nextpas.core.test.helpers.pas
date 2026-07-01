@@ -1,7 +1,11 @@
-{ nextpas.core.test.helpers — Shared test helpers for failure-path testing
+{ nextpas.core.test.helpers — shared test helpers
   =========================================================
-  Depends on: nextpas.core.test.base, nextpas.core.test.check }
+  Reusable helpers for test programs.
+  Import explicitly: uses nextpas.core.test.helpers;
 
+  ExpectFail       — verify that a closure raises EAssertionFailed
+  WithMock         — create+run+free a TMock in one call
+  ExpectFailWithMock — mock lifecycle + assertion-failure check }
 unit nextpas.core.test.helpers;
 
 {$I nextpas.core.settings.inc}
@@ -11,12 +15,23 @@ interface
 uses
   SysUtils,
   nextpas.core.test.base,
-  nextpas.core.test.check;
+  nextpas.core.test.check,
+  nextpas.core.test.mock;
 
-{ Call AProc, expecting EAssertionFailed.
-  If AContains <> '', verify the message contains that substring.
-  Fails the test if no exception was raised. }
+type
+  TMockProc = procedure(AMock: TMock);
+
+{ Verify closure raises EAssertionFailed.
+  Optional AContains: substring check on the message. }
 procedure ExpectFail(AProc: TTestClosure;
+  const AContains: string = '');
+
+{ Create TMock, run AProc, free mock — even on exception. }
+procedure WithMock(AProc: TMockProc);
+
+{ Create TMock, run AProc inside ExpectFail, free mock.
+  Combines mock lifecycle with assertion-failure verification. }
+procedure ExpectFailWithMock(AProc: TMockProc;
   const AContains: string = '');
 
 implementation
@@ -33,6 +48,30 @@ begin
         Check(Pos(AContains, E.Message) > 0,
           'expected "' + AContains + '" in "' + E.Message + '"');
   end;
+end;
+
+procedure WithMock(AProc: TMockProc);
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    AProc(LM);
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure ExpectFailWithMock(AProc: TMockProc;
+  const AContains: string);
+begin
+  WithMock(procedure(AMock: TMock)
+  begin
+    ExpectFail(procedure
+    begin
+      AProc(AMock);
+    end, AContains);
+  end);
 end;
 
 end.
