@@ -1644,17 +1644,16 @@ var
   I: Integer;
   LTestResult: TTestResult;
 begin
-  if APopulateResults then
-    for I := 0 to High(Tests) do
+  for I := 0 to High(Tests) do
+  begin
+    if APopulateResults then
     begin
       LTestResult := MakeTestResult(Tests[I].Name, tsSkipped,
         'setup failed: ' + AErrorMsg, 0);
       AppendResult(AResult.Results, LTestResult);
-      ASink.WriteLn('    ' + FormatStatusLine(tsSkipped, Tests[I].Name, AConfig));
-    end
-  else
-    for I := 0 to High(Tests) do
-      ASink.WriteLn('    ' + FormatStatusLine(tsSkipped, Tests[I].Name, AConfig));
+    end;
+    ASink.WriteLn('    ' + FormatStatusLine(tsSkipped, Tests[I].Name, AConfig));
+  end;
   AResult.Failed    := 1;
   AResult.Skipped   := ASkipCount;
   AResult.AllPassed := False;
