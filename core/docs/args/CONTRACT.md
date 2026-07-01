@@ -1,7 +1,7 @@
 # nextpas.core.args 代码契约
 
 **模块路径**：`core/src/nextpas.core.args*.pas`（2 个源文件）
-**层级**：L1
+**层级**：L1（依赖 L0: base, text）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-01
 **版本**：1.0
@@ -10,22 +10,79 @@
 
 ## 1. 接口契约
 
-参见源文件注释和接口声明。
+### 1.1 子模块
+
+| 文件 | 职责 |
+|------|------|
+| args.base | TArgKind, EArgParseError, EArgHelp, EArgVersion, TArgPositionalSpec |
+| args.pas | TArgParser (单命令) + TArgApp (子命令路由) |
+
+### 1.2 两层架构
+
+```pascal
+// 层 1: 单命令解析器
+TArgParser = class
+  procedure AddOption(const AOption: TArgOption);
+  procedure AddPositional(const ASpec: TArgPositionalSpec);
+  function Parse(const AArgs: TStringArray): Boolean;
+  function GetString(const AName: string): string;
+  function GetInt(const AName: string): Int64;
+  function GetBool(const AName: string): Boolean;
+  function GetRemaining: TStringArray;
+  procedure ShowHelp;
+end;
+
+// 层 2: 子命令路由器
+TArgApp = class
+  procedure SetName(const AName: string);
+  procedure SetVersion(const AVersion: string);
+  procedure AddCommand(const AName: string; AParser: TArgParser; AHandler: TProc);
+  procedure Run(const AArgs: TStringArray);
+end;
+```
+
+### 1.3 选项类型
+
+```pascal
+TArgKind = (akString, akInt, akBool, akCount);
+TArgOption = record
+  Name: string;
+  Short: AnsiChar;       // 如 'v'
+  Help: string;
+  Kind: TArgKind;
+  Required: Boolean;
+  DefaultStr: string;
+  DefaultInt: Int64;
+end;
+```
 
 ---
 
 ## 2. 不变量
 
-参见源文件中的断言和注释。
+- **[INV-1]** `--help` 触发 EArgHelp（调用方捕获后显示帮助）
+- **[INV-2]** `--version` 触发 EArgVersion
+- **[INV-3]** Required 选项缺失时 Parse 返回 False
+- **[INV-4]** 子命令路由按第一个非 `--` 参数匹配
 
 ---
 
-## 3-6. 概要
+## 3. 错误处理
 
-- **错误**: 参见异常类型定义
-- **线程安全**: 参见各文件头注释
-- **内存**: 参见所有权模型
-- **测试**: 1 个测试目录
+| 场景 | 异常 |
+|------|------|
+| `--help` / `-h` | EArgHelp |
+| `--version` | EArgVersion |
+| 非法参数 | EArgParseError + 描述 |
+| Required 缺失 | Parse 返回 False |
+
+---
+
+## 4-6. 概要
+
+- **线程安全**: TArgParser/TArgApp ❌（单次解析使用）
+- **内存**: TArgParser 拥有选项列表; Run 完成后 TArgApp 释放
+- **测试**: 1 个测试目录，56 tests
 
 ---
 

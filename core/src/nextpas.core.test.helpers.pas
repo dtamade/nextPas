@@ -21,9 +21,6 @@ procedure ExpectFail(AProc: TTestClosure;
 
 implementation
 
-uses
-  nextpas.core.text.utils;
-
 procedure ExpectFail(AProc: TTestClosure;
   const AContains: string);
 begin
