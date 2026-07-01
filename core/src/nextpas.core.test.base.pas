@@ -411,8 +411,10 @@ function GrowCapacity(ALen, AInitCap: Integer): Integer;
 begin
   if ALen < AInitCap then
     Result := AInitCap
+  else if ALen < MaxInt div 2 then
+    Result := ALen * 2
   else
-    Result := ALen * 2;
+    Result := MaxInt;
 end;
 
 function GrowCleanups(var ACleanups: specialize TArray<TTestClosure>): Integer;
