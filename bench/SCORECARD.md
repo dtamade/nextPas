@@ -580,7 +580,6 @@
 38. **Rol64/1M: 2.94x** — FPC `RolQWord` → x86 `rol` intrinsic vs Go bits.RotateLeft64
 39. **JSON/Parse/404B: 2.88x** — SAX parser vs Go's reflect-heavy encoding/json
 40. **SortDedup/1M: 2.77x** — SortI32 + linear scan vs Go sort + dedup
-40. **SortDedup/1M: 2.77x** — SortI32 + linear scan vs Go sort + dedup
 41. **SetContainsSparse/10M: 2.65x** — FPC sparse literal set → bitmap constant vs Go hash lookup
 42. **SortDedup/100K: 2.54x** — SortI32 + linear scan vs Go sort + dedup
 43. **Swiss/Map/100Kx100K: 2.49x** — Swiss hash intersection vs Go map
@@ -588,10 +587,9 @@
 45. **Format/Int/100k: 2.24x** — IntToStr + concat vs Go's fmt.Sprintf reflect overhead
 46. **ReplaceShortAll/50K: 2.18x** — FPC pointer-based StringReplace vs Go allocation-heavy
 47. **Concat/100K (DynArr): 2.16x** — Pascal concat vs Go append
-47. **Concat/100K (DynArr): 2.16x** — Pascal concat vs Go append
 48. **LowerCase/100k: 2.12x** — Go's strings.ToLower Unicode overhead for ASCII
-49. **ReplaceLongAll/50K: 2.07x** — FPC StringReplace pointer-based COW
-50. **IntToStr/100K: 2.08x** — Pascal direct digit writing vs Go strconv.Itoa
+49. **IntToStr/100K: 2.08x** — Pascal direct digit writing vs Go strconv.Itoa
+50. **ReplaceLongAll/50K: 2.07x** — FPC StringReplace pointer-based COW
 51. **RecBuild/10K×1K: 1.97x** — Construct records from components
 52. **Standard/Hit/100K (BinSearch): 1.89x** — Standard binary search vs Go sort.Search closure
 53. **IsHexDigit/2.56M: 1.85x** — FPC efficient table lookup vs Go inline range checks
@@ -615,8 +613,8 @@
 71. **Standard/Miss/100K (BinSearch): 1.51x** — Standard search miss path
 72. **ManualParse/100K: 1.51x** — Pascal hand-written parse vs Go strconv.Atoi
 73. **Count/10Kx100K: 1.49x** — Sorted merge count
-74. **LookupMiss/10K (HashSet): 1.48x** — SwissTable probing
-75. **MatAdd/512: 1.49x** — FPC simple loop vs Go bounds-checked loop
+74. **MatAdd/512: 1.49x** — FPC simple loop vs Go bounds-checked loop
+75. **LookupMiss/10K (HashSet): 1.48x** — SwissTable probing
 76. **NewDispose/100K: 1.43x** — Pascal New/Dispose vs Go GC
 77. **CopyBytes/4KB×10K: 1.42x** — Move vs Go copy
 78. **Transpose/512: 1.41x** — FPC loop optimization
