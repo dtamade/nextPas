@@ -18,6 +18,7 @@ uses
 type
   IExpectation = interface
     ['{A7B3D91E-4C6F-4A28-B5D8-9E1F3C7A2B54}']
+    { Toggle negation: Not_.ToEqual('x') passes when value <> 'x'. }
     function Not_: IExpectation;
     function ToEqual(const AExpected: string): IExpectation;
     function ToEqualInt(const AExpected: Int64): IExpectation;
@@ -33,10 +34,13 @@ type
     function ToBeLessThan(const AExpected: Int64): IExpectation;
     function ToBeGreaterOrEqual(const AExpected: Int64): IExpectation;
     function ToBeLessOrEqual(const AExpected: Int64): IExpectation;
+    { Inclusive range: ALow <= value <= AHigh. }
     function ToBeInRange(const ALow, AHigh: Int64): IExpectation;
     function ToHaveLength(const AExpected: NativeInt): IExpectation;
+    { Assert proc raises AExceptionClass. nil class → graceful fail. }
     function ToRaise(AExceptionClass: ExceptClass;
       const AMessage: string = ''): IExpectation;
+    { Always asserts no exception, ignoring Not_. }
     function ToNotRaise: IExpectation;
     function ToBeNear(const AExpected: Double;
       const AEpsilon: Double = 1e-10): IExpectation;

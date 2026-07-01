@@ -35,10 +35,13 @@ procedure CheckFalse(AValue: Boolean; const AMessage: string = '');
 procedure CheckNil(AValue: Pointer; const AMessage: string = '');
 procedure CheckNotNil(AValue: Pointer; const AMessage: string = '');
 procedure CheckContains(const AHaystack, ANeedle: string);
+{ Fails if AHaystack contains ANeedle. Empty needle is a no-op (always passes). }
 procedure CheckNotContains(const AHaystack, ANeedle: string);
 procedure CheckStartsWith(const AStr, APrefix: string);
 procedure CheckEndsWith(const AStr, ASuffix: string);
+{ Pointer identity: passes if AExpected = AActual (same address). }
 procedure CheckSame(const AExpected, AActual: Pointer; const AMessage: string = '');
+{ Inclusive range: passes if ALow <= AValue <= AHigh. }
 procedure CheckInRange(const AValue, ALow, AHigh: Int64);
 procedure CheckGreaterThan(const AValue, AExpected: Int64);
 procedure CheckLessThan(const AValue, AExpected: Int64);
@@ -57,6 +60,7 @@ procedure CheckNear(const AExpected, AActual: Double;
 procedure CheckNotNear(const AExpected, AActual: Double;
   const AEpsilon: Double = 1e-10; const AMessage: string = '');
 procedure Fail(const AMessage: string);
+{ Fail with "unexpected ClassName: Message" — for catch-all exception handlers. }
 procedure FailUnexpected(const E: Exception);
 procedure Skip(const AReason: string = '');
 
