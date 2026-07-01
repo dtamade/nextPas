@@ -265,6 +265,22 @@ begin
   SetLength(ANames, LOldLen + 1);
 end;
 
+procedure RecordSubtestFailure(AStatus: TTestStatus;
+  const AName, AFailMsg, AClassName: string;
+  ALogCaptured: Boolean;
+  const ASink: IOutputSink; const AConfig: TTestConfig;
+  var ASubFail: Integer; var AFailedNames: specialize TArray<string>;
+  const ALogLines: specialize TArray<string>);
+{ Shared handler for subtest failure/error results.
+  WriteSubtestStatus + optional captured log + Inc(SubFail) + AppendFailedName. }
+begin
+  WriteSubtestStatus(AStatus, AName, AFailMsg, '', AClassName, ASink, AConfig);
+  if ALogCaptured then
+    OutputCapturedLog(ALogLines, ASink, AConfig);
+  Inc(ASubFail);
+  AppendFailedName(AFailedNames, AName);
+end;
+
 procedure TTestContext.ExecuteSubtests;
 var
   I: Integer;
@@ -328,16 +344,15 @@ begin
             LEntry.Closure()
           else
             LEntry.Proc;
+          { No exception = unexpected success }
           LStatus := tsFailed;
           if LEntry.ShouldFailMsg <> '' then
             LMsg := 'Expected failure (' + LEntry.ShouldFailMsg +
               ') but test passed'
           else
             LMsg := 'Expected failure but test passed';
-          WriteSubtestStatus(tsFailed, LEntry.Name, LMsg, '', '',
-            LOutSink, FConfig);
-          Inc(FSubFail);
-          AppendFailedName(FFailedNames, LEntry.Name);
+          RecordSubtestFailure(tsFailed, LEntry.Name, LMsg, '', False,
+            LOutSink, FConfig, FSubFail, FFailedNames, FLogLines);
         except
           on E: ETestSkipped do
           begin
@@ -380,21 +395,15 @@ begin
       begin
         LStatus := tsFailed;
         LMsg    := AppendTestTrace(E.Message);
-        WriteSubtestStatus(tsFailed, LEntry.Name, LMsg, '', '',
-          LOutSink, FConfig);
-        OutputCapturedLog(FLogLines, LOutSink, FConfig);
-        Inc(FSubFail);
-        AppendFailedName(FFailedNames, LEntry.Name);
+        RecordSubtestFailure(tsFailed, LEntry.Name, LMsg, '', True,
+          LOutSink, FConfig, FSubFail, FFailedNames, FLogLines);
       end;
       on E: Exception do
       begin
         LStatus := tsError;
         LMsg    := AppendTestTrace(FormatExceptionMsg(E));
-        WriteSubtestStatus(tsError, LEntry.Name, E.Message, '',
-          E.ClassName, LOutSink, FConfig);
-        OutputCapturedLog(FLogLines, LOutSink, FConfig);
-        Inc(FSubFail);
-        AppendFailedName(FFailedNames, LEntry.Name);
+        RecordSubtestFailure(tsError, LEntry.Name, E.Message, E.ClassName, True,
+          LOutSink, FConfig, FSubFail, FFailedNames, FLogLines);
       end;
     end;
     ReportLeakIfAny(LStatus, FConfig);
