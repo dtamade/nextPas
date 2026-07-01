@@ -8,10 +8,10 @@
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **154** | 7 | 35 | **77%** |
+| **Go** | **157** | 7 | 37 | **77%** |
 | **Rust** | 19 | 0 | 47 | **29%** |
 
-## Track Summary (53 tracks, 201 operations)
+## Track Summary (54 tracks, 206 operations)
 
 ### Text Operations (6 ops)
 
@@ -516,6 +516,18 @@
 
 **1W vs Go** — FPC `try..finally..end` zero-cost exception model (table-based, no runtime overhead when no exception) vs Go `defer` + closure (fixed per-call cost ~69ns); other exception ops (ExNoThrow/ExCatchRate/ExMixed) not comparable — Go uses idiomatic error returns (inlined away) vs FPC's real `raise`/`except` (stack unwinding)
 
+### StringReplace Operations (5 ops)
+
+| Track | Pascal (ns) | Go (ns) | vs Go |
+|-------|-------------|---------|-------|
+| **ReplaceShortAll/50K** | **10937087** | 23863005 | **2.18x** ✓ |
+| **ReplaceLongAll/50K** | **10781473** | 22329847 | **2.07x** ✓ |
+| **ReplaceCharAll/50K** | **10671694** | 17603687 | **1.65x** ✓ |
+| ReplaceNoMatch/50K | 6853365 | 1301213 | 0.19x |
+| ReplaceWord/50K | 11807116 | 16968598 | 0.71x |
+
+**3W 2L vs Go** — FPC `StringReplace` pointer-based COW vs Go `strings.Replace` with per-replace allocation; when replacements happen (ReplaceShortAll/LongAll/CharAll) FPC 1.65-2.18x faster; ReplaceNoMatch loses 5.3x (Go compiler inlines the no-alloc scan path); ReplaceWord loses 1.4x (Go faster on word-boundary scan in longer string)
+
 ### Pascal Wins (biggest margins vs Go)
 1. **String Concat: 3557x** — Go immutable strings O(n²) vs Pascal COW
 2. **SIMD ReduceSum/4K: 20.0x** — AVX2 vpaddps vs Go scalar loop
@@ -528,6 +540,7 @@
 7. **SIMD ReduceSum/1M: 8.4x** — AVX2 vpaddps vs Go scalar loop
 8. **ArraySum/10K×10K: 11.1x** — FPC tight accumulate loop vs Go bounds check overhead
 9. **BuildDoubling: 7.87x** — Pascal SetLength realloc vs Go append GC overhead
+10. **ExFinally: 7.2x** — FPC zero-cost try/finally vs Go defer+closure (69ns per op)
 6. **Set Union: 7.06x** — Pascal `set of Byte` native bit operations vs Go byte loop
 6. **Set Intersection: 6.74x** — Same mechanism, 4 AND instructions
 7. **Set Difference: 6.54x** — Same mechanism, 4 BIC instructions
@@ -537,13 +550,14 @@
 11. **Builder/IntAppend: 4.95x** — Direct digit writing vs Go's allocation per int
 9. **ByteSwap: 4.36x** — Pascal `Swap()`→`bswap` intrinsic vs Go manual bit ops
 10. **Format/Hex: 4.59x** — IntToHex + concat vs Go's fmt.Sprintf format parsing
+11. **RecFilter: 3.95x** — FPC value-type record conditional copy vs Go bounds check + GC barrier
 10. **Builder/Large: 3.77x** — Mixed formatting, Go's strconv overhead
 11. **JSON/Parse: 2.88x** — SAX parser vs Go's reflect-heavy encoding/json
 12. **Format/Int: 2.24x** — IntToStr + concat vs Go's fmt.Sprintf reflect overhead
 13. **LowerCase: 2.12x** — Go's strings.ToLower Unicode overhead for ASCII
 14. **AllocFree/100k: 1.74x** — Pascal New/Dispose vs Go GC write barrier
 15. **MatMul/128: 1.75x** — FPC loop optimization vs Go compiler
-16. **StrReplace: 1.75x** — FPC string replacement vs Go's reflect-heavy ReplaceAll
+16. **StrReplace: 2.18x** — FPC pointer-based StringReplace vs Go allocation-heavy strings.Replace
 17. **LinkedBuild/100k: 1.67x** — Pascal pointer lifecycle vs Go GC
 18. **AllocFreeShuffle/100k: 1.54x** — Pascal direct alloc/free vs Go GC
 19. **MatAdd/512: 1.49x** — FPC simple loop vs Go bounds-checked loop
@@ -579,11 +593,12 @@
 - **Binary search**: Pascal strong (2W 2D vs Go) — Standard 1.5-1.9x faster; Eytzinger layout ties
 - **Record operations**: Pascal strong (3W 1L vs Go) — RecFilter 3.95x, RecBuild 1.97x, RecCopy 1.16x; value-type records without bounds check/GC barrier; RecFieldSum loses (Go faster Int64 accumulator)
 - **Exception handling**: Pascal dominant (1W vs Go) — try/finally zero-cost model 7.2x faster than Go defer+closure (69ns vs 9.6ns per protected operation)
+- **String replace**: Pascal strong (3W 2L vs Go) — ReplaceShortAll 2.18x, ReplaceLongAll 2.07x, ReplaceCharAll 1.65x; pointer-based COW vs Go allocation-heavy; ReplaceNoMatch/ReplaceWord lose (Go compiler inlining)
 - **Float formatting**: Go/Rust win (Ryu algorithm)
 
 ## Conclusion
 
-Pascal beats Go 77% of the time across 200 benchmarks on 52 tracks. The biggest wins come from
+Pascal beats Go 77% of the time across 206 benchmarks on 54 tracks. The biggest wins come from
 FillChar operations (compiles to `rep stosb`, 11-27x faster than Go's byte loop),
 string operations (immutable strings are Go's Achilles heel), bit set operations
 (`set of Byte` compiles to native instructions), number formatting
