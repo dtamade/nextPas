@@ -353,13 +353,8 @@ function ParseBenchPattern(const AArg: string): string;
 begin
   if AArg = '--bench' then
     Exit('.');  { match all benchmarks }
-  if Copy(AArg, 1, 7) = '--bench' then
-  begin
-    if AArg[8] = '=' then
-      Exit(Copy(AArg, 9, MaxInt))
-    else if AArg = '--bench' then
-      Exit('.');
-  end;
+  if Copy(AArg, 1, 8) = '--bench=' then
+    Exit(Copy(AArg, 9, MaxInt));
   Result := '';
 end;
 
@@ -597,13 +592,8 @@ var
   K: Integer;
 begin
   for K := 1 to ParamCount do
-  begin
     if IsBenchArg(ParamStr(K)) then
       Exit(ParseBenchPattern(ParamStr(K)));
-    if (ParamStr(K) = '--bench') and (K < ParamCount) and
-       (Copy(ParamStr(K + 1), 1, 1) <> '-') then
-      Exit(ParamStr(K + 1));
-  end;
   Result := '';
 end;
 
