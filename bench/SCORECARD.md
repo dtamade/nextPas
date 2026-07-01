@@ -1,15 +1,17 @@
 # nextPas Benchmark Scorecard
 
 **Machine**: Linux x86_64, Intel Xeon E5-2696 v4 @ 2.20GHz, 44 threads
-**Compiler**: FPC 3.3.1 -O3 -CX -XX -Xs -dRELEASE
+**Compiler**: FPC 3.3.1 -O3 -CX -XX -Xs -dRELEASE | Go default -O2 (no explicit flag)
 **Date**: 2026-07-01
 
 ## Overall Score
 
 | vs | W | D | L | Win% |
 |----|---|---|---|------|
-| **Go** | **157** | 7 | 37 | **77%** |
+| **Go** | **154** | 7 | 37 | **81%** |
 | **Rust** | 19 | 0 | 47 | **29%** |
+
+> **Note**: 3 additional dual wins (Go+Rust) in Copy/Memory bring combined unique wins to 157. Go-only = 154W.
 
 ## Track Summary (54 tracks, 201 operations)
 
@@ -616,13 +618,13 @@
 85. **BsrQWord/100K: 1.29x** — BSR x86 intrinsic
 86. **Build/100 (HashSet): 1.27x** — SetLength + insert
 87. **Build/100k (BitSet): 1.27x** — `set of Byte` build
-88. **MatMul/256: 1.24x** — FPC loop optimization
-89. **PackedFilter/100K: 1.24x** — Packed record filter
-90. **HexEnc/1KB: 1.23x** — FPC hex encoding
-91. **InOrder/100k (BST): 1.23x** — Pointer traversal
-92. **DWordSum/8K×10K: 1.22x** — FPC tight accumulation
-93. **BufferNot/4KB×100K: 1.22x** — FPC scalar loop
-94. **WordCount/100KB×1K: 1.26x** — FPC scalar loop
+88. **WordCount/100KB×1K: 1.26x** — FPC scalar loop
+89. **MatMul/256: 1.24x** — FPC loop optimization
+90. **PackedFilter/100K: 1.24x** — Packed record filter
+91. **HexEnc/1KB: 1.23x** — FPC hex encoding
+92. **InOrder/100k (BST): 1.23x** — Pointer traversal
+93. **DWordSum/8K×10K: 1.22x** — FPC tight accumulation
+94. **BufferNot/4KB×100K: 1.22x** — FPC scalar loop
 95. **MergeSort/100k: 1.19x** — Merge sort
 96. **ByteMax/8K×10K: 1.19x** — FPC tight loop
 97. **Delete/100k (BST): 1.17x** — Function pointer dispatch
@@ -645,12 +647,13 @@
 3. **ReplaceNoMatch/50K: 0.19x** — Go inlines no-alloc scan path 5.3x faster
 4. **Direct/Area/100K: 0.32x** — Go devirtualization 3.1x faster on direct interface calls
 5. **Sort/Sorted/100k: 0.34x** — Go sorted-data sort 2.9x faster (adaptive pdqsort)
-6. **Base64 Enc/Dec: 0.43-0.45x** — Go SIMD encoding 2.2-2.3x faster
-7. **IntToHex/1M: 0.48x** — Go 2.09x faster (Pascal padding loop overhead)
-8. **Sum/1M (Vec/Array): 0.49x** — Go 2.04x faster (Int64 accumulator advantage)
+6. **Base64 Dec/5.3KB: 0.43x** — Go SIMD decoding 2.3x faster
+7. **Base64 Enc/4KB: 0.45x** — Go SIMD encoding 2.2x faster
+8. **IntToHex/1M: 0.48x** — Go 2.09x faster (Pascal padding loop overhead)
+9. **Sum/1M (Vec/Array): 0.49x** — Go 2.04x faster (Int64 accumulator advantage)
 
 ### Categories
-- **Bit set operations**: Pascal dominant (5W vs Go) — `set of Byte` is killer
+- **Bit set operations**: Pascal dominant (4W 1L vs Go) — `set of Byte` is killer; Membership loses (0.13x, single-test overhead)
 - **FillChar/Fill**: Pascal dominant (4W vs Go) — `rep stosb` vs Go byte loop (FillBytes 27x, Fill 11-23x)
 - **String escape**: Pascal strong (2W vs Go) — `set of Char` + in-place build 1.74x faster
 - **String conversion**: Pascal strong (2W vs Go) — hand-written parse 1.51x, IntToStr 2.08x faster
