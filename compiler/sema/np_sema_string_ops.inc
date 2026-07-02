@@ -1455,12 +1455,9 @@ begin
       end;
     end;
   until not Changed;
-  if (FRootAst <> nil) and FRootAst.IsValid then
-  begin
-    RootNode := FRootAst.RootNode;
-    if RootNode <> nil then
-      CheckDeferredOwnedStringReturnConsumers(RootNode);
-  end;
+  { Root-level C6-H4 check removed: procedure body loop below already covers
+    all root-unit bodies with OwnerUnitId filtering. The old root-level call
+    traversed imported units' code and caused false positives. }
   if not FDiagnostics.HasErrors then
   begin
     for I := 0 to Length(FProcedureBodies) - 1 do
