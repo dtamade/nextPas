@@ -5,7 +5,7 @@ program bench_allocator;
 {$modeswitch functionreferences}
 
 uses
-  cthreads,
+  nextpas.core.thread.init,
   nextpas.core.base,
   nextpas.core.exception,
   nextpas.core.text.conv,

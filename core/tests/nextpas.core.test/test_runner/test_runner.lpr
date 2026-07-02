@@ -6,8 +6,8 @@ program test_runner;
 {$modeswitch functionreferences}
 
 uses
-  cthreads,
-  SysUtils,
+  nextpas.core.thread.init,
+  nextpas.core.text.conv,
   nextpas.core.test,
   { 白盒测试：直接验证 runner 内部 helper，而不是仅通过 facade 间接覆盖。 }
   nextpas.core.test.runner,
@@ -679,7 +679,7 @@ begin
   begin
     LResultSuite := TTestSuite.Create('Timeout Trigger');
     LTimeoutSleepMs := 500;
-    LResultSuite.Test('slow closure', procedure begin Sleep(LTimeoutSleepMs); end);
+    LResultSuite.Test('slow closure', procedure begin SleepMs(LTimeoutSleepMs); end);
     SetTestTimeout(10); { 10ms — much less than the 500ms Sleep }
     LResultSuite.RunWithResult(LTimeoutResult);
     SetTestTimeout(0);

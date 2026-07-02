@@ -16,7 +16,7 @@ program test_client_cert_validation;
 
 uses
   {$IFDEF UNIX}
-  cthreads,
+  nextpas.core.thread.init,
   {$ENDIF}
   Classes, SysUtils,
   nextpas.core.tls.base;

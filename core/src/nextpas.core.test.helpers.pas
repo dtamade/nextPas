@@ -13,7 +13,7 @@ unit nextpas.core.test.helpers;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.system,
   nextpas.core.test.base,
   nextpas.core.test.check,
   nextpas.core.test.config,

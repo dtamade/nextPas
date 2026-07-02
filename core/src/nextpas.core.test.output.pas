@@ -9,7 +9,8 @@ unit nextpas.core.test.output;
 interface
 
 uses
-  SysUtils,          { GetEnvironmentVariable — platform env, no project alternative }
+  nextpas.core.system,
+  nextpas.core.platform.env,
   nextpas.core.test.base,
   nextpas.core.test.config,
   nextpas.core.text.conv,
@@ -147,6 +148,12 @@ implementation
 function c_isatty(fd: LongInt): LongInt; cdecl; external 'c' name 'isatty';
 {$ENDIF}
 
+{ Local wrapper: platform_env_get_str returns '' for missing vars }
+function GetEnv(const AName: string): string;
+begin
+  Result := string(platform_env_get_str(AnsiString(AName)));
+end;
+
 { ═════════════════════════════════════════════════════════════════════════════ }
 { ANSI Helpers                                                                 }
 { ═════════════════════════════════════════════════════════════════════════════ }
@@ -174,7 +181,7 @@ begin
   begin
     GAnsiChecked := True;
     { Standard: https://no-color.org/ }
-    if GetEnvironmentVariable('NO_COLOR') <> '' then
+    if GetEnv('NO_COLOR') <> '' then
     begin
       GAnsiEnabled := False;
       Exit;
@@ -184,15 +191,15 @@ begin
       When piped to a file or non-TTY, disable to avoid escape sequences. }
     GAnsiEnabled := c_isatty(1) <> 0;
     {$ELSE}
-    GAnsiEnabled := (GetEnvironmentVariable('TERM') <> '') or
-                    (GetEnvironmentVariable('ANSICON') <> '') or
-                    (GetEnvironmentVariable('ConEmuANSI') = 'ON') or
-                    (GetEnvironmentVariable('WT_SESSION') <> '');
+    GAnsiEnabled := (GetEnv('TERM') <> '') or
+                    (GetEnv('ANSICON') <> '') or
+                    (GetEnv('ConEmuANSI') = 'ON') or
+                    (GetEnv('WT_SESSION') <> '');
     {$ENDIF}
     { Override via NEXTPAS_COLOR: '1' forces on, '0' forces off }
-    if GetEnvironmentVariable('NEXTPAS_COLOR') = '1' then
+    if GetEnv('NEXTPAS_COLOR') = '1' then
       GAnsiEnabled := True
-    else if GetEnvironmentVariable('NEXTPAS_COLOR') = '0' then
+    else if GetEnv('NEXTPAS_COLOR') = '0' then
       GAnsiEnabled := False;
   end;
 end;

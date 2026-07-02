@@ -9,8 +9,7 @@ program test_mock;
 {$modeswitch functionreferences}
 
 uses
-  cthreads,
-  SysUtils,
+  nextpas.core.thread.init,
   nextpas.core.test;
 
 { ── TMockValue constructors ────────────────────────────────────────────────── }

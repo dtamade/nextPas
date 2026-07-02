@@ -3,7 +3,7 @@ program test_timeout_stream;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   SysUtils, Classes, nextpas.core.tls.timeout;
 
 var

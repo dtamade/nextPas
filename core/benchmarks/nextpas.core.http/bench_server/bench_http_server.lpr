@@ -7,7 +7,7 @@ program bench_http_server;
 {$I nextpas.core.settings.inc}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   SysUtils,
   nextpas.core.http.base,
   nextpas.core.http.intf,

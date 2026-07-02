@@ -9,7 +9,9 @@ unit nextpas.core.test.base;
 interface
 
 uses
-  SysUtils;         { ExceptClass, EAbort, EAssertionFailed — FPC built-in }
+  nextpas.core.system,   { Exception, EAbort, EAssertionFailed, ExceptClass }
+  nextpas.core.text.conv, { LowerCase }
+  nextpas.core.time;     { GetTickCount64 }
 
 { ── Test Context (for subtests) ───────────────────────────────────────────── }
 { ITestContext MUST be declared before TSubtestProc which references it.       }
@@ -50,10 +52,10 @@ type
 
   PTestCaseProc = ^TTestCaseProc;
 
-{ ── Re-exported from SysUtils (avoid facade depending on FPC RTL) ──────────── }
+{ ── Re-exported from nextpas.core.system ───────────────────────────────────── }
 
 type
-  ExceptClass = SysUtils.ExceptClass;
+  ExceptClass = nextpas.core.system.ExceptClass;
 
 { ── Status ────────────────────────────────────────────────────────────────── }
 
@@ -229,6 +231,11 @@ function  StrStartsWith(const S, APrefix: string): Boolean;
 procedure IncByStatus(AStatus: TTestStatus;
   var APass, AFail, ASkip: Integer);
   { Increment the appropriate counter based on test status. }
+
+{ ── Timing helpers ────────────────────────────────────────────────────────── }
+
+procedure SleepMs(AMilliseconds: Integer);
+  { Cross-platform millisecond sleep. Replaces SysUtils.Sleep for test programs. }
 
 implementation
 
@@ -628,6 +635,13 @@ begin
   GExecState^.TestName   := ATestName;
   GExecState^.Failed     := False;
   GExecState^.SkipReason := '';
+end;
+
+{ ── SleepMs ───────────────────────────────────────────────────────────────── }
+
+procedure SleepMs(AMilliseconds: Integer);
+begin
+  TSleep.ForDuration(TDuration.FromMilliseconds(AMilliseconds));
 end;
 
 initialization

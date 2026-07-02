@@ -4,7 +4,7 @@ program test_bench_invalid_parameters_heaptrc;
 
 uses
   {$ifdef unix}
-  cthreads,
+  nextpas.core.thread.init,
   {$endif}
   nextpas.core.exception,
   nextpas.core.bench,

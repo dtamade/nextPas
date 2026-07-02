@@ -3,7 +3,7 @@ program test_p384_ecdsa_verify;
 {$mode ObjFPC}{$H+}{$J-}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   SysUtils, nextpas.core.tls.crypto.p384;
 
 var

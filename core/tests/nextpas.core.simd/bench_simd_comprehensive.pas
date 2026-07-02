@@ -3,7 +3,7 @@ program bench_simd_comprehensive;
 {$OPTIMIZATION LEVEL3}
 
 uses
-  {$IFDEF UNIX}cthreads, Unix,{$ENDIF}
+  nextpas.core.thread.init, {$IFDEF UNIX}Unix,{$ENDIF}
   nextpas.core.text.conv,
   nextpas.core.simd,
   nextpas.core.simd.base,

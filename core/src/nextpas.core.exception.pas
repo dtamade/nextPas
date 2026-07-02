@@ -7,8 +7,19 @@ unit nextpas.core.exception;
 
 interface
 
+{$IFDEF FPC}
+uses
+  SysUtils;  { Exception, ExceptClass — FPC runtime, routed through here }
+
 type
-  { Base Exception class — owned by nextpas.core, not re-exported from FPC SysUtils.
+  Exception = SysUtils.Exception;
+  ExceptClass = SysUtils.ExceptClass;
+  EConvertError = SysUtils.EConvertError;
+  EAssertionFailed = SysUtils.EAssertionFailed;
+  EAbort = SysUtils.EAbort;
+{$ELSE}
+type
+  { Base Exception class — nextPas native implementation.
     Field layout is FPC-compatible (fmessage/fhelpcontext) for ABI safety. }
   Exception = class(TObject)
   private
@@ -24,8 +35,9 @@ type
   ExceptClass = class of Exception;
 
   EConvertError = class(Exception);
-
   EAssertionFailed = class(Exception);
+  EAbort = class(Exception);
+{$ENDIF}
 
   TErrorCategory = (
     ecNone,
@@ -207,9 +219,7 @@ function ErrorCategoryToString(const ACategory: TErrorCategory): string;
 
 implementation
 
-{ Exception }
-
-{ Internal format helper — self-contained, no SysUtils dependency.
+{ Internal format helper — used by ENextPasError constructors under both compilers.
   Supports %s (string), %d (integer), %% (literal percent).
   Uses Result := Result + Ch/S pattern (no nested procedures, no SetString). }
 function FormatStr(const AFmt: string; const AArgs: array of const): string;
@@ -279,6 +289,7 @@ begin
   end;
 end;
 
+{$IFNDEF FPC}
 constructor Exception.Create(const msg: string);
 begin
   inherited Create;
@@ -290,6 +301,7 @@ constructor Exception.CreateFmt(const msg: string; const args: array of const);
 begin
   Create(FormatStr(msg, args));
 end;
+{$ENDIF}
 
 function ErrorCategoryToString(const ACategory: TErrorCategory): string;
 begin

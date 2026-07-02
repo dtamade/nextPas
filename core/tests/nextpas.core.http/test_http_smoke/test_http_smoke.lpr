@@ -7,7 +7,7 @@ program test_http_smoke;
 {$I nextpas.core.settings.inc}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   nextpas.core.testing,
   nextpas.core.io.intf,
   nextpas.core.text.conv,

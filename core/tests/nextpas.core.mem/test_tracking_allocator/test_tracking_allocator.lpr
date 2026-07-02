@@ -4,7 +4,7 @@ program test_tracking_allocator;
 
 uses
   {$IFDEF UNIX}
-  cthreads,
+  nextpas.core.thread.init,
   {$ENDIF}
   nextpas.core.text.conv,
   Classes,

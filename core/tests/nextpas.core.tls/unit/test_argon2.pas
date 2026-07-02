@@ -3,7 +3,7 @@ program test_argon2;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   SysUtils, nextpas.core.tls.crypto.argon2;
 
 var

@@ -5,7 +5,7 @@ program nextpas.core.simd.ulp_exhaustive;
 
 uses
   {$IFDEF UNIX}
-  cthreads,
+  nextpas.core.thread.init,
   {$ENDIF}
   nextpas.core.text.conv, Math,
   nextpas.core.simd,

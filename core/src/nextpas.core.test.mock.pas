@@ -18,7 +18,8 @@ unit nextpas.core.test.mock;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.system,
+  nextpas.core.text.conv,
   nextpas.core.test.base;
 
 { ── Typed Mock Values ──────────────────────────────────────────────────────── }
@@ -188,9 +189,6 @@ type
   end;
 
 implementation
-
-uses
-  nextpas.core.text.conv;
 
 { ── TMockValue helpers ─────────────────────────────────────────────────────── }
 

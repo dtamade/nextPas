@@ -17,7 +17,7 @@ unit nextpas.core.test;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.system,
   nextpas.core.test.base,
   nextpas.core.test.check,
   nextpas.core.test.config,
@@ -34,6 +34,10 @@ uses
 
 type
   ExceptClass = nextpas.core.test.base.ExceptClass;
+  Exception = nextpas.core.system.Exception;
+  EAbort = nextpas.core.system.EAbort;
+  EAssertionFailed = nextpas.core.system.EAssertionFailed;
+  EConvertError = nextpas.core.system.EConvertError;
   TTestProc = nextpas.core.test.base.TTestProc;
   TTestClosure = nextpas.core.test.base.TTestClosure;
   ITestContext = nextpas.core.test.base.ITestContext;
@@ -141,6 +145,7 @@ procedure CheckNotNear(const AExpected, AActual: Double;
 procedure Fail(const AMessage: string);
 procedure FailUnexpected(const E: Exception);
 procedure Skip(const AReason: string = '');
+procedure SleepMs(AMilliseconds: Integer);
 
 { ── Re-exported from test.base (stack trace) ─────────────────────────────── }
 
@@ -395,6 +400,9 @@ begin nextpas.core.test.check.FailUnexpected(E); end;
 
 procedure Skip(const AReason: string);
 begin nextpas.core.test.check.Skip(AReason); end;
+
+procedure SleepMs(AMilliseconds: Integer);
+begin nextpas.core.test.base.SleepMs(AMilliseconds); end;
 
 { ── Forward to test.base (stack trace) ───────────────────────────────────── }
 

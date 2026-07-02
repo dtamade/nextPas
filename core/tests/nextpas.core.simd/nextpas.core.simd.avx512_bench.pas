@@ -5,7 +5,7 @@ program nextpas.core.simd.avx512_bench;
 
 uses
   {$IFDEF UNIX}
-  cthreads, Unix,
+  nextpas.core.thread.init, Unix,
   {$ENDIF}
   {$IFDEF WINDOWS}
   Windows,

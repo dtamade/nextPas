@@ -3,7 +3,7 @@ program test_x509_chain_ecdsa;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   SysUtils, nextpas.core.tls.crypto.x509verify, nextpas.core.tls.x509;
 
 var

@@ -9,7 +9,7 @@ unit nextpas.core.test.expect;
 interface
 
 uses
-  SysUtils,          { ExceptClass — FPC built-in, irreplaceable }
+  nextpas.core.system,
   nextpas.core.text.conv,
   nextpas.core.test.base;
 

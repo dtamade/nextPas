@@ -6,8 +6,8 @@ program test_assertions;
 {$modeswitch functionreferences}
 
 uses
-  cthreads,
-  SysUtils,
+  nextpas.core.thread.init,
+  nextpas.core.text.conv,
   nextpas.core.test;
 
 { ── Test procedures ──────────────────────────────────────────────────────── }

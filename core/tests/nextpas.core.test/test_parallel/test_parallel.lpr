@@ -6,8 +6,8 @@ program test_parallel;
 {$modeswitch functionreferences}
 
 uses
-  cthreads,
-  SysUtils,
+  nextpas.core.thread.init,
+  nextpas.core.text.conv,
   nextpas.core.test;
 
 var
@@ -290,7 +290,7 @@ begin
   { Update max concurrent — InterlockedExchange if new max }
   if LCount > GMaxConcurrent then
     InterlockedExchange(GMaxConcurrent, LCount);
-  Sleep(50); { hold the slot briefly to ensure overlap detection }
+  SleepMs(50); { hold the slot briefly to ensure overlap detection }
   InterLockedDecrement(GConcurrentCount);
 end;
 

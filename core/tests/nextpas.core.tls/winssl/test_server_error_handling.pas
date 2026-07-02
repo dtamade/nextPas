@@ -16,7 +16,7 @@ program test_server_error_handling;
 
 uses
   {$IFDEF UNIX}
-  cthreads,
+  nextpas.core.thread.init,
   {$ENDIF}
   Classes, SysUtils,
   nextpas.core.tls.base,

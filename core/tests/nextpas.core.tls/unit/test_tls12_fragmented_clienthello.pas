@@ -3,7 +3,7 @@ program test_tls12_fragmented_clienthello;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   SysUtils, Classes,
   nextpas.core.tls.base,
   nextpas.core.tls.tls12.clienthello,

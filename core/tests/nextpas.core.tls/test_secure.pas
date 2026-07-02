@@ -9,7 +9,7 @@ program test_secure;
 {$UNITPATH framework}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   SysUtils, Classes,
   nextpas.core.tls.base,
   nextpas.core.tls.secure,

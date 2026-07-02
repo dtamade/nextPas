@@ -9,7 +9,7 @@ unit nextpas.core.test.config;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.test.base;
 
 type
   TAnsiMode = (amAuto, amOn, amOff);

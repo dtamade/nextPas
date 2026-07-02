@@ -3,7 +3,7 @@ program test_p384_validation;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   SysUtils, nextpas.core.tls.crypto.p384;
 
 var

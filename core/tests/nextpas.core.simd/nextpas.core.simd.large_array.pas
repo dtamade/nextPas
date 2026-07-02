@@ -5,7 +5,7 @@ program nextpas.core.simd.large_array;
 
 uses
   {$IFDEF UNIX}
-  cthreads,
+  nextpas.core.thread.init,
   {$ENDIF}
   nextpas.core.text.conv, Math,
   nextpas.core.simd,

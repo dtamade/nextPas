@@ -4,7 +4,7 @@ program nextpas.core.simd.bench_transcendental;
 
 uses
   {$IFDEF UNIX}
-  cthreads, Unix,
+  nextpas.core.thread.init, Unix,
   {$ENDIF}
   nextpas.core.text.conv, Math,
   nextpas.core.simd,

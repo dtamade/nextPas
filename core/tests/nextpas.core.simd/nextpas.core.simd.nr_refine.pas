@@ -5,7 +5,7 @@ program nextpas.core.simd.nr_refine;
 
 uses
   {$IFDEF UNIX}
-  cthreads,
+  nextpas.core.thread.init,
   {$ENDIF}
   nextpas.core.text.conv, Math,
   nextpas.core.simd,

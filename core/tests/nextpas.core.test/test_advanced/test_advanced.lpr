@@ -9,8 +9,8 @@ program test_advanced;
 {$M+}
 
 uses
-  cthreads,
-  SysUtils,
+  nextpas.core.thread.init,
+  nextpas.core.text.conv,
   nextpas.core.test;
 
 { ── Fixtures and globals ──────────────────────────────────────────────────── }

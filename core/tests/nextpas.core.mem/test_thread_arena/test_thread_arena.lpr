@@ -4,7 +4,7 @@ program test_thread_arena;
 
 uses
   {$IFDEF UNIX}
-  cthreads,
+  nextpas.core.thread.init,
   {$ENDIF}
   nextpas.core.errors,
   nextpas.core.text.conv,

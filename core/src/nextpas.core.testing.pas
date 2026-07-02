@@ -10,7 +10,7 @@ unit nextpas.core.testing;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.system,
   nextpas.core.errors,
   nextpas.core.text.conv,
   nextpas.core.test.check;

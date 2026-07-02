@@ -16,7 +16,7 @@ program test_cert_chain_validation_logic;
 
 uses
   {$IFDEF UNIX}
-  cthreads,
+  nextpas.core.thread.init,
   {$ENDIF}
   Classes, SysUtils,
   nextpas.core.tls.base;

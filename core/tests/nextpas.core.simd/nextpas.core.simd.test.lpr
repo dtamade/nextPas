@@ -5,7 +5,7 @@ program nextpas.core.simd.test;
 
 uses
   {$IFDEF UNIX}
-  cthreads,
+  nextpas.core.thread.init,
   {$ENDIF}
   Classes,
   fpcunit, testregistry,

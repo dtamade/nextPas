@@ -5,7 +5,7 @@ program nextpas.core.simd.cpuinfo_dump;
 
 uses
   {$IFDEF UNIX}
-  cthreads,
+  nextpas.core.thread.init,
   {$ENDIF}
   nextpas.core.simd,
   nextpas.core.simd.base,

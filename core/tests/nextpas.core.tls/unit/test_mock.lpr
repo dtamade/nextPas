@@ -4,7 +4,7 @@ program test_mock;
 
 uses
   {$IFDEF UNIX}
-  cthreads,
+  nextpas.core.thread.init,
   {$ENDIF}
   Classes, SysUtils,
   fpcunit, testregistry, consoletestrunner,

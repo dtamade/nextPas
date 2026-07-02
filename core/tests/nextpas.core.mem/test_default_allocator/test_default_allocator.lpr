@@ -4,7 +4,7 @@ program test_default_allocator;
 
 uses
   {$IFDEF UNIX}
-  cthreads,
+  nextpas.core.thread.init,
   {$ENDIF}
   nextpas.core.errors,
   nextpas.core.exception,

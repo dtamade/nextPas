@@ -10,8 +10,11 @@ program test_output;
 {$modeswitch functionreferences}
 
 uses
-  cthreads,
-  SysUtils,
+  nextpas.core.thread.init,
+  nextpas.core.text.conv,
+  nextpas.core.time,
+  nextpas.core.path,
+  nextpas.core.fs,
   nextpas.core.test;
 
 function ExtractXmlAttributeInt(const AXml, AAttribute: string): Integer;
@@ -52,10 +55,10 @@ end;
 
 function CompactJson(const AJson: string): string;
 begin
-  Result := StringReplace(AJson, ' ', '', [rfReplaceAll]);
-  Result := StringReplace(Result, #9, '', [rfReplaceAll]);
-  Result := StringReplace(Result, #13, '', [rfReplaceAll]);
-  Result := StringReplace(Result, #10, '', [rfReplaceAll]);
+  Result := StringReplace(AJson, ' ', '', True);
+  Result := StringReplace(Result, #9, '', True);
+  Result := StringReplace(Result, #13, '', True);
+  Result := StringReplace(Result, #10, '', True);
 end;
 
 { ── ANSI helpers ───────────────────────────────────────────────────────────── }
@@ -532,16 +535,9 @@ begin
 end;
 
 function MakeTempJUnitPath: string;
-var
-  LGuid: TGuid;
-  LName: string;
 begin
-  if CreateGUID(LGuid) = 0 then
-    LName := GUIDToString(LGuid)
-  else
-    LName := IntToStr(GetTickCount64);
-  Result := IncludeTrailingPathDelimiter(GetTempDir(False)) +
-    'nextpas_test_junit_' + LName + '.xml';
+  Result := IncludeTrailingPathDelimiter(GetTempDir) +
+    'nextpas_test_junit_' + IntToStr(GetTickCount64) + '.xml';
 end;
 
 procedure TestWriteJUnitXML;

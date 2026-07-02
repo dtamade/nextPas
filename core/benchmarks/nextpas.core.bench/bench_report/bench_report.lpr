@@ -7,7 +7,7 @@ program bench_report;
 
 uses
   {$ifdef unix}
-  cthreads,
+  nextpas.core.thread.init,
   {$endif}
   nextpas.core.bench,
   nextpas.core.bench.base,

@@ -5,7 +5,7 @@ program bench_arrayadd_scaling;
 
 uses
   {$IFDEF UNIX}
-  cthreads, BaseUnix, Unix,
+  nextpas.core.thread.init, BaseUnix, Unix,
   {$ENDIF}
   {$IFDEF WINDOWS}
   Windows,

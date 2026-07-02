@@ -6,8 +6,8 @@ program test_expect;
 {$modeswitch functionreferences}
 
 uses
-  cthreads,
-  SysUtils,
+  nextpas.core.thread.init,
+  nextpas.core.text.conv,
   Math,
   nextpas.core.test;
 
@@ -83,7 +83,7 @@ begin
   ExpectProc(procedure begin StrToInt('bad'); end)
     .ToRaise(EConvertError);
   ExpectProc(procedure begin StrToInt('bad'); end)
-    .ToRaise(EConvertError, 'invalid');
+    .ToRaise(EConvertError, 'Invalid');
 end;
 
 procedure TestExpectProcNotRaise;
@@ -404,17 +404,17 @@ procedure TestNotToRaiseOtherException;
 var
   LCaught: Boolean = False;
 begin
-  { Not_.ToRaise(EConvertError) + EAccessViolation → re-raise (not swallowed) }
+  { Not_.ToRaise(EConvertError) + EAbort → re-raise (not swallowed) }
   try
-    ExpectProc(procedure begin raise EAccessViolation.Create('av'); end)
+    ExpectProc(procedure begin raise EAbort.Create('abort'); end)
       .Not_.ToRaise(EConvertError);
   except
-    on E: EAccessViolation do
+    on E: EAbort do
       LCaught := True;
   end;
   if not LCaught then
   begin
-    FailTest('EAccessViolation should propagate through Not_.ToRaise');
+    FailTest('EAbort should propagate through Not_.ToRaise');
   end;
 end;
 

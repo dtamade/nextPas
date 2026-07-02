@@ -3,7 +3,7 @@ program test_sync;
 {$I nextpas.core.settings.inc}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   SysUtils, Classes,
   nextpas.core.testing,
   nextpas.core.sync;

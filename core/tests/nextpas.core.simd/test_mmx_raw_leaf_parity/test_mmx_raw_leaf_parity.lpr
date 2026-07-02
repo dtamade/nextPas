@@ -2,7 +2,7 @@ program test_mmx_raw_leaf_parity;
 {$I ../../src/nextpas.core.settings.inc}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   nextpas.core.simd.intrinsics.mmx;
 
 type

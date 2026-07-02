@@ -40,6 +40,7 @@ type
   ExceptClass = nextpas.core.exception.ExceptClass;
   EConvertError = nextpas.core.exception.EConvertError;
   EAssertionFailed = nextpas.core.exception.EAssertionFailed;
+  EAbort = nextpas.core.exception.EAbort;
 
   TErrorCategory = nextpas.core.exception.TErrorCategory;
   ENextPasError = nextpas.core.exception.ENextPasError;

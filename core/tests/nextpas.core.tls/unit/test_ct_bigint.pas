@@ -3,7 +3,7 @@ program test_ct_bigint;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   SysUtils, nextpas.core.tls.crypto.ct.bigint;
 
 var
