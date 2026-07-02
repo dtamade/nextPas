@@ -8,7 +8,7 @@
 
 | vs | W | D | L | Win% | Tracks | Ops |
 |----|---|---|---|------|--------|-----|
-| **Go** | **171** | 9 | 39 | **81%** | 62 | 219 |
+| **Go** | **172** | 10 | 39 | **80%** | 62 | 221 |
 | **Rust** | 19 | 0 | 47 | **29%** | — | — |
 
 > **Note**: 3 additional dual wins (Go+Rust) in Copy/Memory bring combined unique wins to 166. Go-only = 163W.
@@ -643,69 +643,70 @@
 62. **Standard/Hit/100K (BinSearch): 1.89x**
 63. **IsHexDigit/2.56M: 1.85x**
 64. **Write/10MB: 1.83x**
-65. **MatMul/128: 1.75x**
-66. **AllocFree/100k: 1.74x**
-67. **Escape/SetBuild/10K: 1.74x**
-68. **Insert/100k (BST): 1.72x**
-69. **EnumArray SumOrdinals/1M: 1.72x — FPC 1-byte enum sequential scan vs Go 8-byte int scan**
-70. **Swiss/Map/10Kx100K: 1.69x**
-71. **LinkedBuild/100k: 1.67x**
-72. **Read/1MB: 1.66x**
-73. **ReplaceCharAll/50K: 1.65x**
-74. **LookupHit/1K (HashSet): 1.62x**
-75. **TryStrToInt/1M: 1.60x**
-76. **LookupMiss/100k (BST): 1.59x**
-77. **UIntToStr/1M: 1.56x**
-78. **AllocFreeShuffle/100k: 1.54x**
-79. **BufferXor/4KB×100K: 1.54x**
-80. **BufferAnd/4KB×100K: 1.54x**
-81. **Escape/TwoPass/10K: 1.53x**
-82. **Standard/Miss/100K (BinSearch): 1.51x**
-83. **ManualParse/100K: 1.51x**
-84. **IntToHex64/500 vs Strconv: 1.49x**
-85. **Count/10Kx100K: 1.49x**
-86. **MatAdd/512: 1.49x**
-87. **LookupMiss/10K (HashSet): 1.48x**
-88. **NewDispose/100K: 1.43x**
-89. **CopyBytes/4KB×10K: 1.42x**
-90. **Transpose/512: 1.41x**
-91. **Merge/10Kx100K: 1.39x**
-92. **EuclideanDist/10K×10K: 1.35x**
-93. **WordSum/8K×10K: 1.35x**
-94. **Multidim RandomRead/150: 1.34x**
-95. **InsertLookup/100k (BST): 1.33x**
-96. **UpperCase/100k: 1.33x**
-97. **IsWhitespace/2.56M: 1.33x**
-98. **Variant TagOnly/10M: 1.33x**
-99. **ToUpper/Table/100K: 1.33x**
-100. **Ror64/1M: 1.30x**
-101. **BsrQWord/100K: 1.29x**
-102. **Multidim RandomWrite/150: 1.28x**
-103. **Build/100 (HashSet): 1.27x**
-104. **Build/100k (BitSet): 1.27x**
-105. **WordCount/100KB×1K: 1.26x**
-106. **MatMul/256: 1.24x**
-107. **PackedFilter/100K: 1.24x**
-108. **HexEnc/1KB: 1.23x**
-109. **InOrder/100k (BST): 1.23x**
-110. **DWordSum/8K×10K: 1.22x**
-111. **BufferNot/4KB×100K: 1.22x**
-112. **MergeSort/100k: 1.19x**
-113. **ByteMax/8K×10K: 1.19x**
-114. **Delete/100k (BST): 1.17x**
-115. **Build/100k (LinkedList): 1.17x**
-116. **Read/10MB: 1.17x**
-117. **MemZero/4KB×100K: 1.17x**
-118. **RecCopy/10K×1K: 1.16x**
-119. **Reverse/1M: 1.15x**
-120. **Compare/Diff1K: 1.15x**
-121. **EnumArray FilterCount/1M: 1.13x — FPC ordinal comparison on packed enum vs Go int comparison**
-122. **DAXPY/10K×10K: 1.11x**
-123. **Sort/1M: 1.11x**
-124. **Sort/100k: 1.10x**
-125. **PackedUpdate/100K: 1.08x**
-126. **PackedMove/100K: 1.06x**
-127. **NonZeroCount/8K×10K: 1.06x**
+65. **EnumArray SetFilter/100K: 1.83x — FPC set of → bt instruction vs Go 5-way equality chain**
+66. **MatMul/128: 1.75x**
+67. **AllocFree/100k: 1.74x**
+68. **Escape/SetBuild/10K: 1.74x**
+69. **Insert/100k (BST): 1.72x**
+70. **EnumArray SumOrdinals/1M: 1.72x — FPC 1-byte enum sequential scan vs Go 8-byte int scan**
+71. **Swiss/Map/10Kx100K: 1.69x**
+72. **LinkedBuild/100k: 1.67x**
+73. **Read/1MB: 1.66x**
+74. **ReplaceCharAll/50K: 1.65x**
+75. **LookupHit/1K (HashSet): 1.62x**
+76. **TryStrToInt/1M: 1.60x**
+77. **LookupMiss/100k (BST): 1.59x**
+78. **UIntToStr/1M: 1.56x**
+79. **AllocFreeShuffle/100k: 1.54x**
+80. **BufferXor/4KB×100K: 1.54x**
+81. **BufferAnd/4KB×100K: 1.54x**
+82. **Escape/TwoPass/10K: 1.53x**
+83. **Standard/Miss/100K (BinSearch): 1.51x**
+84. **ManualParse/100K: 1.51x**
+85. **IntToHex64/500 vs Strconv: 1.49x**
+86. **Count/10Kx100K: 1.49x**
+87. **MatAdd/512: 1.49x**
+88. **LookupMiss/10K (HashSet): 1.48x**
+89. **NewDispose/100K: 1.43x**
+90. **CopyBytes/4KB×10K: 1.42x**
+91. **Transpose/512: 1.41x**
+92. **Merge/10Kx100K: 1.39x**
+93. **EuclideanDist/10K×10K: 1.35x**
+94. **WordSum/8K×10K: 1.35x**
+95. **Multidim RandomRead/150: 1.34x**
+96. **InsertLookup/100k (BST): 1.33x**
+97. **UpperCase/100k: 1.33x**
+98. **IsWhitespace/2.56M: 1.33x**
+99. **Variant TagOnly/10M: 1.33x**
+100. **ToUpper/Table/100K: 1.33x**
+101. **Ror64/1M: 1.30x**
+102. **BsrQWord/100K: 1.29x**
+103. **Multidim RandomWrite/150: 1.28x**
+104. **Build/100 (HashSet): 1.27x**
+105. **Build/100k (BitSet): 1.27x**
+106. **WordCount/100KB×1K: 1.26x**
+107. **MatMul/256: 1.24x**
+108. **PackedFilter/100K: 1.24x**
+109. **HexEnc/1KB: 1.23x**
+110. **InOrder/100k (BST): 1.23x**
+111. **DWordSum/8K×10K: 1.22x**
+112. **BufferNot/4KB×100K: 1.22x**
+113. **MergeSort/100k: 1.19x**
+114. **ByteMax/8K×10K: 1.19x**
+115. **Delete/100k (BST): 1.17x**
+116. **Build/100k (LinkedList): 1.17x**
+117. **Read/10MB: 1.17x**
+118. **MemZero/4KB×100K: 1.17x**
+119. **RecCopy/10K×1K: 1.16x**
+120. **Reverse/1M: 1.15x**
+121. **Compare/Diff1K: 1.15x**
+122. **EnumArray FilterCount/1M: 1.13x — FPC ordinal comparison on packed enum vs Go int comparison**
+123. **DAXPY/10K×10K: 1.11x**
+124. **Sort/1M: 1.11x**
+125. **Sort/100k: 1.10x**
+126. **PackedUpdate/100K: 1.08x**
+127. **PackedMove/100K: 1.06x**
+128. **NonZeroCount/8K×10K: 1.06x**
 
 ### Pascal Losses (biggest gaps vs Go)
 1. **CompareStr/100k: 0.03x** — Go string comparison 33x faster (FPC CompareStr library call overhead)
@@ -760,7 +761,7 @@
 
 ## Conclusion
 
-Pascal beats Go 81% of the time across 219 benchmarks on 62 tracks. The biggest wins come from
+Pascal beats Go 81% of the time across 221 benchmarks on 62 tracks. The biggest wins come from
 native set operations (`set of 0..255` bitmap 9.4-8941x faster than Go map),
 integer-to-hex conversion (FPC lookup table 4.9-5.2x faster than Go fmt.Sprintf),
 bitfield operations (`packed array of Boolean` 3.2-4.5x, 8x less memory traffic),
