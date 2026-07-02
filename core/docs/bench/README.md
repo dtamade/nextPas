@@ -47,6 +47,19 @@ begin
 end.
 ```
 
+使用 `{$modeswitch anonymousfunctions}` 时也可以用 lambda：
+
+```pascal
+{$modeswitch anonymousfunctions}
+
+LResults := TBenchSuite.Create('MySuite')
+  .Add('Sort/1000', procedure(const ACtx: IBenchContext)
+    begin
+      // 排序操作
+    end)
+  .Run;
+```
+
 ## Fluent Builder API
 
 | 方法 | 说明 |
@@ -96,7 +109,7 @@ end.
 
 | 方法 | 说明 |
 |------|------|
-| `PrintToConsole` | 控制台表格（Name/Iterations/ns/op/ops/s/StdDev/Median/P95/P99） |
+| `PrintToConsole` | 控制台表格 + 返回相同字符串（Name/Iterations/ns/op/ops/s/StdDev/Median/P95/P99） |
 | `ToBenchstat` | Go benchstat 兼容格式（tab-separated，可直接用 `benchstat` 分析） |
 | `ToJSON` | JSON 格式（含环境信息、统计详情） |
 | `ToTSV` | TSV 格式（含状态/跳过原因） |
@@ -251,3 +264,11 @@ make -C core/tests/nextpas.core.bench/test_bench_matrix clean test
 | `NEXTPAS_BENCH_WARMUP` | 热身次数 |
 | `NEXTPAS_BENCH_QUIET` | 安静模式（=1） |
 | `NEXTPAS_BENCH_MEMTRACK` | 内存追踪（=0 禁用，默认启用） |
+
+## 线程安全
+
+`TBenchSuite` 和 `TBenchRunner` **不是线程安全的**。所有方法必须从单个拥有线程调用。
+
+并行基准通过 `AddParallel` 注册，框架内部管理线程池，不需要调用方自行管理线程。
+
+如需并发执行多个套件，每个套件必须拥有独立的 `TBenchSuite` 实例。

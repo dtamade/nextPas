@@ -212,7 +212,8 @@ type
     {** 获取所有结果 }
     function GetAll: TBenchResultArray;
 
-    {** 获取单个结果（按名称） }
+    {** 获取单个结果（按名称）。
+     *  @raises EBenchError 当名称不存在时。安全替代方案：TryGetByName。 }
     function GetByName(const AName: string): TBenchResult;
 
     {** 尝试获取单个结果（按名称），返回是否找到 }

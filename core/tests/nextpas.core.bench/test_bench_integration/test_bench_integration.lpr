@@ -302,6 +302,7 @@ procedure TestTBenchSuite_WithFilter;
 var
   LSuite: IBenchSuite;
   LResults: IBenchResults;
+  LResult: TBenchResult;
 begin
 
   // 创建套件
@@ -321,7 +322,7 @@ begin
   Check(LResults.Count = 1, 'Result count = 1');
   Check(LResults.GetByName('Fast').Name = 'Fast', 'Filtered result exists');
   Check(LResults.GetByName('Fast').NsPerOp > 0, 'Filtered NsPerOp > 0');
-  Check(not LResults.GetByName('Medium').Executed, 'Filtered-out benchmark not executed');
+  Check(not LResults.TryGetByName('Medium', LResult), 'Filtered-out benchmark not in results');
 end;
 
 procedure TestTBenchSuite_Conditional;

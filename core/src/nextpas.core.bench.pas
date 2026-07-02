@@ -70,6 +70,11 @@ type
     {** PF-24: 确保基线数组有足够容量 }
     procedure EnsureBaselineCapacity;
 
+    {** 验证函数指针非 nil (P0-1) }
+    procedure GuardFuncAssigned(AFunc: TBenchFunc; const AMethod: string);
+    procedure GuardParamFuncAssigned(AFunc: TBenchParamFunc; const AMethod: string);
+    procedure GuardLoopFuncAssigned(AFunc: TBenchLoopFunc; const AMethod: string);
+
   public
     constructor Create(const ASuiteName: string);
     {** ST-11: 使用自定义配置创建基准套件 }
@@ -186,11 +191,10 @@ begin
   FBaselineCapacity := 0;
   SetLength(FBaselines, 0);
 
-  // 初始化默认配置
-  FConfig := DefaultBenchConfig;
+  FRunner := TBenchRunner.Create;
+  FConfig := FRunner.GetConfig;
   FConfig.SuiteName := ASuiteName;
 
-  FRunner := TBenchRunner.Create;
   FReportGenerator := TBenchReportGenerator.Create;
   FHasRun := False;
 end;
@@ -271,11 +275,30 @@ begin
   end;
 end;
 
+procedure TBenchSuite.GuardFuncAssigned(AFunc: TBenchFunc; const AMethod: string);
+begin
+  if not Assigned(AFunc) then
+    raise EBenchInvalidParam.CreateFmt('TBenchSuite.%s: function must not be nil', [AMethod]);
+end;
+
+procedure TBenchSuite.GuardParamFuncAssigned(AFunc: TBenchParamFunc; const AMethod: string);
+begin
+  if not Assigned(AFunc) then
+    raise EBenchInvalidParam.CreateFmt('TBenchSuite.%s: function must not be nil', [AMethod]);
+end;
+
+procedure TBenchSuite.GuardLoopFuncAssigned(AFunc: TBenchLoopFunc; const AMethod: string);
+begin
+  if not Assigned(AFunc) then
+    raise EBenchInvalidParam.CreateFmt('TBenchSuite.%s: function must not be nil', [AMethod]);
+end;
+
 function TBenchSuite.Add(const AName: string; AFunc: TBenchFunc): IBenchSuite;
 var
   LEntry: TBenchEntry;
 begin
   GuardNotRun;
+  GuardFuncAssigned(AFunc, 'Add');
   Result := Self;
   LEntry := Default(TBenchEntry);
   LEntry.Name := AName;
@@ -293,6 +316,7 @@ var
   LEntry: TBenchEntry;
 begin
   GuardNotRun;
+  GuardFuncAssigned(AFunc, 'AddWithSetup');
   Result := Self;
   LEntry := Default(TBenchEntry);
   LEntry.Name := AName;
@@ -312,6 +336,7 @@ var
   LEntry: TBenchEntry;
 begin
   GuardNotRun;
+  GuardFuncAssigned(AFunc, 'AddWhen');
   Result := Self;
   LEntry := Default(TBenchEntry);
   LEntry.Name := AName;
@@ -329,6 +354,7 @@ var
   LEntry: TBenchEntry;
 begin
   GuardNotRun;
+  GuardFuncAssigned(AFunc, 'AddParallel');
   Result := Self;
   if AThreads <= 0 then
     raise EBenchInvalidParam.Create('TBenchSuite.AddParallel: thread count must be > 0');
@@ -352,6 +378,7 @@ var
   LIndex: Integer;
 begin
   GuardNotRun;
+  GuardParamFuncAssigned(AFunc, 'AddRange');
   Result := Self;
   for LIndex := 0 to High(AParams) do
   begin
@@ -375,6 +402,7 @@ var
   LIndex: Integer;
 begin
   GuardNotRun;
+  GuardParamFuncAssigned(AFunc, 'AddRange');
   Result := Self;
   for LIndex := 0 to High(AParams) do
   begin
@@ -397,6 +425,7 @@ var
   LEntry: TBenchEntry;
 begin
   GuardNotRun;
+  GuardLoopFuncAssigned(AFunc, 'AddLoop');
   Result := Self;
   LEntry := Default(TBenchEntry);
   LEntry.Name := AName;
@@ -521,6 +550,7 @@ function TBenchSuite.AddBaselines(const ABaselines: array of TBenchBaseline): IB
 var
   I: Integer;
 begin
+  GuardNotRun;
   Result := Self;
   for I := 0 to High(ABaselines) do
     AddBaseline(ABaselines[I].Name, ABaselines[I].NsPerOp);
@@ -538,6 +568,8 @@ begin
   try
     LManager.LoadFromFile(APath);
   except
+    on E: EBenchBaselineNotFound do
+      raise;
     on E: Exception do
       raise EBenchError.CreateFmt('Failed to load baseline from "%s": %s', [APath, E.Message]);
   end;
@@ -575,6 +607,9 @@ begin
   FRunner.SetConfig(FConfig);
   FRunner.SetFilter(FFilter);
   FRunner.ClearResults;
+
+  if (FEntryCount = 0) and (not FConfig.Quiet) then
+    WriteLn('WARNING: TBenchSuite.Run called with no registered entries');
 
   // ST-04: 超时检查初始化
   LTimeoutNs := UInt64(FConfig.TimeoutMs) * 1000000;
@@ -748,9 +783,6 @@ function TBenchResults.GetByName(const AName: string): TBenchResult;
 var
   I: Integer;
 begin
-  Result := Default(TBenchResult);
-  Result.Name := AName;
-
   for I := 0 to FResultCount - 1 do
   begin
     if FResults[I].Name = AName then
@@ -759,6 +791,7 @@ begin
       Exit;
     end;
   end;
+  raise EBenchError.CreateFmt('Benchmark result not found: "%s" (use TryGetByName for safe lookup)', [AName]);
 end;
 
 function TBenchResults.TryGetByName(const AName: string; out AResult: TBenchResult): Boolean;

@@ -197,6 +197,117 @@ begin
   end;
 end;
 
+procedure ExpectAddNilFuncRaised;
+var
+  LRaised: Boolean;
+  LCorrectType: Boolean;
+  LSuite: IBenchSuite;
+begin
+  LRaised := False;
+  LCorrectType := False;
+  LSuite := TBenchSuite.Create('Invalid');
+  try
+    try
+      LSuite.Add('NilFunc', nil);
+    except
+      on E: EBenchInvalidParam do
+      begin
+        LRaised := True;
+        LCorrectType := True;
+      end;
+      on E: Exception do
+        LRaised := True;
+    end;
+  finally
+    LSuite := nil;
+  end;
+
+  if not LRaised then
+  begin
+    WriteLn('MISSING_EXCEPTION=Add(nil)');
+    Halt(7);
+  end;
+  if not LCorrectType then
+  begin
+    WriteLn('WRONG_EXCEPTION_TYPE=Add(nil) (expected EBenchInvalidParam)');
+    Halt(107);
+  end;
+end;
+
+procedure ExpectAddLoopNilFuncRaised;
+var
+  LRaised: Boolean;
+  LCorrectType: Boolean;
+  LSuite: IBenchSuite;
+begin
+  LRaised := False;
+  LCorrectType := False;
+  LSuite := TBenchSuite.Create('Invalid');
+  try
+    try
+      LSuite.AddLoop('NilLoop', nil);
+    except
+      on E: EBenchInvalidParam do
+      begin
+        LRaised := True;
+        LCorrectType := True;
+      end;
+      on E: Exception do
+        LRaised := True;
+    end;
+  finally
+    LSuite := nil;
+  end;
+
+  if not LRaised then
+  begin
+    WriteLn('MISSING_EXCEPTION=AddLoop(nil)');
+    Halt(8);
+  end;
+  if not LCorrectType then
+  begin
+    WriteLn('WRONG_EXCEPTION_TYPE=AddLoop(nil) (expected EBenchInvalidParam)');
+    Halt(108);
+  end;
+end;
+
+procedure ExpectAddRangeNilFuncRaised;
+var
+  LRaised: Boolean;
+  LCorrectType: Boolean;
+  LSuite: IBenchSuite;
+begin
+  LRaised := False;
+  LCorrectType := False;
+  LSuite := TBenchSuite.Create('Invalid');
+  try
+    try
+      LSuite.AddRange('NilRange', nil, [1, 2, 3]);
+    except
+      on E: EBenchInvalidParam do
+      begin
+        LRaised := True;
+        LCorrectType := True;
+      end;
+      on E: Exception do
+        LRaised := True;
+    end;
+  finally
+    LSuite := nil;
+  end;
+
+  if not LRaised then
+  begin
+    WriteLn('MISSING_EXCEPTION=AddRange(nil)');
+    Halt(9);
+  end;
+  if not LCorrectType then
+  begin
+    WriteLn('WRONG_EXCEPTION_TYPE=AddRange(nil) (expected EBenchInvalidParam)');
+    Halt(109);
+  end;
+end;
+
 var
   T: TTestSuite;
 begin
@@ -206,6 +317,9 @@ begin
   T.Test('SetMinSamples(0) raises EBenchInvalidParam', @ExpectSetMinSamplesRaised);
   T.Test('AddParallel(nil,0) raises EBenchInvalidParam', @ExpectAddParallelRaised);
   T.Test('SetWarmupIters(-1) raises EBenchInvalidParam', @ExpectSetWarmupItersRaised);
+  T.Test('Add(nil) raises EBenchInvalidParam', @ExpectAddNilFuncRaised);
+  T.Test('AddLoop(nil) raises EBenchInvalidParam', @ExpectAddLoopNilFuncRaised);
+  T.Test('AddRange(nil) raises EBenchInvalidParam', @ExpectAddRangeNilFuncRaised);
   T.Run;
   T.Summary;
 
