@@ -44,7 +44,8 @@ uses
   nextpas.core.mem.memory_map,
   nextpas.core.mem.mapped_slab_pool,
   nextpas.core.mem.secure,
-  nextpas.core.mem.pool;
+  nextpas.core.mem.pool,
+  nextpas.core.mem.pool.allocator;
 
 type
   // === 基础类型 ===
@@ -121,6 +122,10 @@ function DefaultAllocator: IAllocator; inline;
 function AllocZeroed(const AAllocator: IAllocator; const ASize: SizeUInt): Pointer; inline;
 function AllocArray(const AAllocator: IAllocator; const ACount, AElemSize: SizeUInt): Pointer; inline;
 
+function MakeFixedSlabPool(ACapacity: SizeUInt): IFixedSlabPool; inline;
+function MakePoolAllocator(ABlockSize: SizeUInt; ACapacity: Integer;
+  AFallback: IAllocator = nil): IAllocator; inline;
+
 {** 创建默认 Arena（TLocalArena，指定容量） }
 function CreateDefaultArena(ACapacity: SizeUInt): IArena;
 {** 创建可增长 Arena（TChunkedArena，指定初始容量和最大容量） }
@@ -153,6 +158,17 @@ begin
   if (LTotal div AElemSize) <> ACount then
     raise EOutOfMemory.Create(aeOutOfMemory, 'AllocArray: size overflow');
   Result := AAllocator.AllocMem(LTotal);
+end;
+
+function MakeFixedSlabPool(ACapacity: SizeUInt): IFixedSlabPool;
+begin
+  Result := nextpas.core.mem.pool.MakeFixedSlabPool(ACapacity);
+end;
+
+function MakePoolAllocator(ABlockSize: SizeUInt; ACapacity: Integer;
+  AFallback: IAllocator): IAllocator;
+begin
+  Result := nextpas.core.mem.pool.allocator.MakePoolAllocator(ABlockSize, ACapacity, AFallback);
 end;
 
 function CreateDefaultArena(ACapacity: SizeUInt): IArena;

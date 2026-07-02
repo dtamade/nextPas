@@ -35,7 +35,7 @@ begin
   if AInnerAllocator <> nil then
     LInner := AInnerAllocator
   else
-    LInner := GetRtlAllocator;
+    LInner := GetRtlAllocator as TAllocator;
 
   LTracker := TTrackingAllocator.Create(LInner);
   try

@@ -539,6 +539,8 @@ begin
   if aSize = 0 then Exit;
   if aAlignment = 0 then
     aAlignment := SizeOf(Pointer);
+  if (aAlignment < SizeOf(Pointer)) and IsPowerOfTwo(aAlignment) then
+    aAlignment := SizeOf(Pointer);
   if not ValidateAlignArg(aAlignment) then
   begin
     FLastAllocFailure := vaafInvalidAlignment;

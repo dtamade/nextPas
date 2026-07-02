@@ -7,6 +7,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.mem.base,
+  nextpas.core.mem.intf,
   nextpas.core.mem.error,
   nextpas.core.mem.arena.base,
   nextpas.core.base.utils,

@@ -32,7 +32,7 @@ type
   TRtlAllocator = nextpas.core.mem.allocator.rtl.TRtlAllocator;
   TCallbackAllocator = nextpas.core.mem.allocator.callback.TCallbackAllocator;
 
-function GetRtlAllocator: TAllocator;
+function GetRtlAllocator: IAllocator;
 function CreateCallbackAllocator(aGetMem: TGetMemCallback;
                                  aAllocMem: TAllocMemCallback;
                                  aReallocMem: TReallocMemCallback;
@@ -40,7 +40,7 @@ function CreateCallbackAllocator(aGetMem: TGetMemCallback;
 
 implementation
 
-function GetRtlAllocator: TAllocator;
+function GetRtlAllocator: IAllocator;
 begin
   Result := nextpas.core.mem.allocator.rtl.GetRtlAllocator;
 end;

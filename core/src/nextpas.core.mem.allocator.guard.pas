@@ -36,7 +36,6 @@ type
     function DoGetMem(ASize: SizeUInt): Pointer; override;
     function DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
     procedure DoFreeMem(ADst: Pointer); override;
-    function DoMemSize(APtr: Pointer): SizeUInt; override;
     function Traits: TAllocatorTraits; override;
   end;
 
@@ -157,21 +156,10 @@ begin
   platform_virtual_release(LHdr^.Base, LHdr^.TotalSize);
 end;
 
-function TGuardAllocator.DoMemSize(APtr: Pointer): SizeUInt;
-var
-  LHdr: PGuardHeader;
-begin
-  LHdr := PGuardHeader(PtrUInt(APtr) - HeaderSize);
-  if LHdr^.Magic <> GUARD_MAGIC then
-    Exit(0);
-  Result := LHdr^.UserSize;
-end;
-
 function TGuardAllocator.Traits: TAllocatorTraits;
 begin
   Result := inherited Traits;
   Result.ThreadSafe := False;
-  Result.HasMemSize := True;
 end;
 
 end.

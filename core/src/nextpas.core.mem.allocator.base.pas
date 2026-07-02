@@ -16,6 +16,7 @@ uses
 type
   TAllocatorTraits = nextpas.core.mem.intf.TAllocatorTraits;
   IAllocator = nextpas.core.mem.intf.IAllocator;
+  TMemAllocator = nextpas.core.mem.intf.IAllocator;
 
   {**
    * TAllocator
