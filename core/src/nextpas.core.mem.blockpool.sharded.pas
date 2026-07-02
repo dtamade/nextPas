@@ -18,7 +18,6 @@ interface
 uses
   nextpas.core.base.utils,
   nextpas.core.base,
-  nextpas.core.atomic,
   nextpas.core.mem.base,
   nextpas.core.mem.utils,
   nextpas.core.mem.blockpool,
@@ -189,6 +188,13 @@ uses
 var
   GShardedBlockPoolIdGen: UInt64 = 0;
 
+{ Spin-hint placeholder: PAUSE/YIELD is an optimization, not a correctness
+  requirement. This keeps the source free of inline assembly for nextPas. }
+procedure cpu_pause; inline;
+begin
+  { intentionally empty — PAUSE instruction is an optimization hint only }
+end;
+
 type
   TThreadRouteCache = record
     PoolPtr: Pointer;
@@ -226,7 +232,7 @@ const
 
 function NextShardedBlockPoolId: UInt64; inline;
 begin
-  Result := atomic_fetch_add_64(GShardedBlockPoolIdGen, 1) + 1;
+  Result := UInt64(InterlockedExchangeAdd64(PInt64(@GShardedBlockPoolIdGen)^, 1)) + 1;
 end;
 
 class function TShardedBlockPoolConfig.Default(aBlockSize, aCapacity: SizeUInt; aShardCount: Integer): TShardedBlockPoolConfig;
@@ -274,7 +280,7 @@ var
 begin
   LSpins := 0;
   repeat
-    LState := atomic_load(FRoutingState);
+    LState := FRoutingState;
     if (LState and (ROUTING_WRITE_BIT or ROUTING_WAIT_BIT)) <> 0 then
     begin
       platform_thread_yield;
@@ -288,30 +294,35 @@ begin
       raise EAllocError.Create(aeInternalError, 'TShardedBlockPool: routing reader overflow');
 
     LDesired := LState + 1;
-    if atomic_compare_exchange_weak(FRoutingState, LState, LDesired) then
+    if InterlockedCompareExchange(FRoutingState, LDesired, LState) = LState then
       Exit;
   until False;
 end;
 
 procedure TShardedBlockPool.RouteReadUnlock;
 begin
-  atomic_fetch_add(FRoutingState, -1);
+  InterlockedExchangeAdd(FRoutingState, -1);
 end;
 
 procedure TShardedBlockPool.RouteWriteLock;
 var
   LState: Int32;
   LExpected: Int32;
+  LOld: Int32;
   LSpins: UInt32;
 begin
   LSpins := 0;
   // Announce writer intent: block new readers.
-  atomic_fetch_or(FRoutingState, ROUTING_WAIT_BIT);
   repeat
-    LState := atomic_load(FRoutingState);
+    LOld := FRoutingState;
+  until InterlockedCompareExchange(FRoutingState, LOld or ROUTING_WAIT_BIT, LOld) = LOld;
+  repeat
+    LState := FRoutingState;
     if (LState and ROUTING_WAIT_BIT) = 0 then
     begin
-      atomic_fetch_or(FRoutingState, ROUTING_WAIT_BIT);
+      repeat
+        LOld := FRoutingState;
+      until InterlockedCompareExchange(FRoutingState, LOld or ROUTING_WAIT_BIT, LOld) = LOld;
       Continue;
     end;
 
@@ -319,7 +330,7 @@ begin
     if ((LState and ROUTING_READ_MASK) = 0) and ((LState and ROUTING_WRITE_BIT) = 0) then
     begin
       LExpected := LState;
-      if atomic_compare_exchange_weak(FRoutingState, LExpected, LState or ROUTING_WRITE_BIT) then
+      if InterlockedCompareExchange(FRoutingState, LState or ROUTING_WRITE_BIT, LExpected) = LExpected then
         Exit;
       Continue;
     end;
@@ -333,7 +344,7 @@ end;
 
 procedure TShardedBlockPool.RouteWriteUnlock;
 begin
-  atomic_store(FRoutingState, 0, mo_release);
+  FRoutingState := 0;
 end;
 
 procedure TShardedBlockPool.RouteClear;
@@ -662,7 +673,7 @@ begin
   if (aShard < 0) or (aShard >= FShardCount) then Exit;
   if FShards[aShard].Pool = nil then Exit;
 
-  LNode := atomic_exchange(FShards[aShard].RemoteFreeHead, nil, mo_acq_rel);
+  LNode := InterlockedExchange(FShards[aShard].RemoteFreeHead, nil);
   if LNode = nil then Exit;
   while LNode <> nil do
   begin
@@ -680,10 +691,10 @@ begin
   if (aShard < 0) or (aShard >= FShardCount) then
     raise EInvalidArgument.Create('TShardedBlockPool.RemoteFreePush: invalid shard index');
 
-  LExpected := atomic_load(FShards[aShard].RemoteFreeHead, mo_relaxed);
+  LExpected := FShards[aShard].RemoteFreeHead;
   repeat
     PPointer(aPtr)^ := LExpected;
-  until atomic_compare_exchange_strong(FShards[aShard].RemoteFreeHead, LExpected, aPtr, mo_release, mo_relaxed);
+  until InterlockedCompareExchange(FShards[aShard].RemoteFreeHead, aPtr, LExpected) = LExpected;
 end;
 
 procedure TShardedBlockPool.RemoteFreePushList(aShard: Integer; aHead, aTail: Pointer);
@@ -694,10 +705,10 @@ begin
   if (aShard < 0) or (aShard >= FShardCount) then
     raise EInvalidArgument.Create('TShardedBlockPool.RemoteFreePushList: invalid shard index');
 
-  LExpected := atomic_load(FShards[aShard].RemoteFreeHead, mo_relaxed);
+  LExpected := FShards[aShard].RemoteFreeHead;
   repeat
     PPointer(aTail)^ := LExpected;
-  until atomic_compare_exchange_strong(FShards[aShard].RemoteFreeHead, LExpected, aHead, mo_release, mo_relaxed);
+  until InterlockedCompareExchange(FShards[aShard].RemoteFreeHead, aHead, LExpected) = LExpected;
 end;
 
 procedure TShardedBlockPool.RemoteFreeBufferPush(aNode: PThreadCacheNode; aShard: Integer; aPtr: Pointer);
@@ -803,7 +814,7 @@ begin
     LAdded := LNewCap - FShards[aShard].KnownCapacity;
     FShards[aShard].KnownCapacity := LNewCap;
     if LAdded <> 0 then
-      atomic_fetch_add_64(FTotalCapacity, Int64(LAdded));
+      InterlockedExchangeAdd64(FTotalCapacity, Int64(LAdded));
   end
   else if LNewCap < FShards[aShard].KnownCapacity then
     FShards[aShard].KnownCapacity := LNewCap;
@@ -1092,7 +1103,7 @@ begin
       Result := LNode^.Ptrs[LNode^.Count];
       LCachedShard := LNode^.Shard;
       if FTrackInUse and (LCachedShard >= 0) and (LCachedShard < FShardCount) then
-        atomic_fetch_add_64(FShards[LCachedShard].InUseCount, 1, mo_relaxed);
+        InterlockedExchangeAdd64(FShards[LCachedShard].InUseCount, 1);
       Exit;
     end;
 
@@ -1114,7 +1125,7 @@ begin
   end;
 
   if FTrackInUse and (Result <> nil) then
-    atomic_fetch_add_64(FShards[LShard].InUseCount, 1, mo_relaxed);
+    InterlockedExchangeAdd64(FShards[LShard].InUseCount, 1);
 end;
 
 function TShardedBlockPool.TryAcquire(out aPtr: Pointer): Boolean;
@@ -1161,7 +1172,7 @@ begin
   end;
 
   if FTrackInUse then
-    atomic_fetch_add_64(FShards[LShard].InUseCount, -1, mo_relaxed);
+    InterlockedExchangeAdd64(FShards[LShard].InUseCount, -1);
 end;
 
 procedure TShardedBlockPool.Reset;
@@ -1203,7 +1214,7 @@ begin
   end;
 
   for LIdx := 0 to High(FShards) do
-    atomic_store_64(FShards[LIdx].InUseCount, 0, mo_relaxed);
+    FShards[LIdx].InUseCount := 0;
   Inc(FCacheEpoch);
 end;
 
@@ -1216,7 +1227,7 @@ function TShardedBlockPool.Capacity: SizeUInt;
 var
   LCap: Int64;
 begin
-  LCap := atomic_load_64(FTotalCapacity);
+  LCap := FTotalCapacity;
   if LCap < 0 then LCap := 0;
   Result := SizeUInt(LCap);
 end;
@@ -1248,10 +1259,10 @@ begin
     Exit(SizeUInt(LSum));
   end;
 
-  LCap := atomic_load_64(FTotalCapacity);
+  LCap := FTotalCapacity;
   LSum := 0;
   for LIdx := 0 to High(FShards) do
-    Inc(LSum, atomic_load_64(FShards[LIdx].InUseCount));
+    Inc(LSum, FShards[LIdx].InUseCount);
   LInUse := LSum;
   LAvail := LCap - LInUse;
   if LAvail < 0 then LAvail := 0;
@@ -1267,7 +1278,7 @@ var
 begin
   if not FTrackInUse then
   begin
-    LCap := atomic_load_64(FTotalCapacity);
+    LCap := FTotalCapacity;
     LSum := 0;
     for LIdx := 0 to High(FShards) do
     begin
@@ -1288,7 +1299,7 @@ begin
 
   LSum := 0;
   for LIdx := 0 to High(FShards) do
-    Inc(LSum, atomic_load_64(FShards[LIdx].InUseCount));
+    Inc(LSum, FShards[LIdx].InUseCount);
   if LSum < 0 then LSum := 0;
   Result := SizeUInt(LSum);
 end;
