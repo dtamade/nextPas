@@ -214,8 +214,13 @@ end;
 
 procedure CheckNotEqual(const AExpected, AActual: Double;
   AEpsilon: Double);
+var
+  LDiff: Double;
 begin
-  CheckNotNear(AExpected, AActual, AEpsilon);
+  LDiff := Abs(AActual - AExpected);
+  if LDiff <= AEpsilon then
+    InternalFail('Expected values to differ but both are ' +
+      FloatToStr(AExpected) + ' (+/-' + FloatToStr(AEpsilon) + ')');
 end;
 
 procedure CheckTrue(AValue: Boolean; const AMessage: string);
