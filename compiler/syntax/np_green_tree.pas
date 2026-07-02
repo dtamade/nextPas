@@ -1199,7 +1199,8 @@ begin
 
   if (Result <> nil) and (Result.NodeKind in
     [gnkIdentifier, gnkDotAccess, gnkArrayAccess, gnkFunctionCall,
-     gnkDereference]) then
+     gnkDereference, gnkStringLiteral, gnkCharLiteral,
+     gnkIntegerLiteral, gnkRealLiteral]) then
   begin
     while ACursor < ALexer.TokenCount do
     begin
