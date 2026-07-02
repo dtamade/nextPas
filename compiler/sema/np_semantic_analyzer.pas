@@ -721,8 +721,9 @@ var
   ImportName: string;
   ImportId: string;
 begin
+  { Only flag duplicates WITHIN the same section.
+    FPC allows the same unit in both interface and implementation uses. }
   SeenImports := nil;
-
   for Index := 0 to FRootAst.InterfaceUseCount - 1 do
   begin
     ImportName := FRootAst.InterfaceUseAt(Index);
@@ -732,6 +733,7 @@ begin
     AppendString(SeenImports, ImportId);
   end;
 
+  SeenImports := nil;
   for Index := 0 to FRootAst.ImplementationUseCount - 1 do
   begin
     ImportName := FRootAst.ImplementationUseAt(Index);
@@ -4355,6 +4357,8 @@ begin
   NameSetAdd(FBuiltinProcedures, 'InterlockedCompareExchange64');
   NameSetAdd(FBuiltinProcedures, 'InterlockedExchangeAdd');
   NameSetAdd(FBuiltinProcedures, 'InterlockedExchange');
+  NameSetAdd(FBuiltinProcedures, 'InterlockedExchange64');
+  NameSetAdd(FBuiltinProcedures, 'InterlockedExchangeAdd64');
   NameSetAdd(FBuiltinProcedures, 'ReadWriteBarrier');
   NameSetAdd(FBuiltinProcedures, 'ReadBarrier');
   NameSetAdd(FBuiltinProcedures, 'WriteBarrier');
