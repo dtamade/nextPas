@@ -2092,12 +2092,14 @@ begin
   begin
     ParamModifier := '';
     if CurrentToken(ALexer, ACursor).Kind in
-      [tkVarKeyword, tkConstKeyword, tkOutKeyword] then
+      [tkVarKeyword, tkConstKeyword, tkConstRefKeyword, tkOutKeyword] then
     begin
       if CurrentToken(ALexer, ACursor).Kind = tkVarKeyword then
         ParamModifier := 'var:'
       else if CurrentToken(ALexer, ACursor).Kind = tkOutKeyword then
-        ParamModifier := 'out:';
+        ParamModifier := 'out:'
+      else if CurrentToken(ALexer, ACursor).Kind = tkConstRefKeyword then
+        ParamModifier := 'constref:';
       Inc(ACursor);
     end;
 
