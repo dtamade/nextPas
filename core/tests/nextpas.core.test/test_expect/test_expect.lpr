@@ -8,7 +8,7 @@ program test_expect;
 uses
   nextpas.core.thread.init,
   nextpas.core.text.conv,
-  Math,
+  nextpas.core.math,
   nextpas.core.test;
 
 { ── Test procedures ──────────────────────────────────────────────────────── }
