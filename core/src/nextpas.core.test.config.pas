@@ -18,7 +18,7 @@ type
     ckOutSink, ckErrSink, ckRetry, ckWorkers, ckCount, ckSlow,
     ckShuffle, ckFailFast, ckList, ckShort, ckProgress, ckMaxFail,
     ckJsonOutput, ckVerbose, ckRunTimeout,
-    ckBench, ckBenchTime, ckBenchMem);
+    ckBench, ckBenchTime, ckBenchMem, ckRun);
   TConfigKeys = set of TConfigKey;
 
   IOutputSink = interface
@@ -85,6 +85,7 @@ type
     BenchEnabled  : Boolean; { true = run benchmarks (Go -bench=. equivalent) }
     BenchTimeMs   : Integer; { benchmark target duration in ms (default 1000 = 1s) }
     BenchMem      : Boolean; { true = report memory allocations per op }
+    RunPattern    : string;  { --run: exact test name match (case-insensitive) }
   end;
 
 function DefaultConfig: TTestConfig;
@@ -114,6 +115,7 @@ procedure SetDefaultRunTimeoutSec(ATimeoutSec: Integer);
 procedure SetDefaultBenchEnabled(AEnabled: Boolean);
 procedure SetDefaultBenchTimeMs(ATimeMs: Integer);
 procedure SetDefaultBenchMem(ABenchMem: Boolean);
+procedure SetDefaultRunPattern(const APattern: string);
 function  GetRepeatAllCount(const AConfig: TTestConfig): Integer;
 function  GetSlowTestCount(const AConfig: TTestConfig): Integer;
 function  GetShuffleSeed(const AConfig: TTestConfig): Integer;
@@ -128,6 +130,7 @@ function  GetRunTimeoutSec(const AConfig: TTestConfig): Integer;
 function  GetBenchEnabled(const AConfig: TTestConfig): Boolean;
 function  GetBenchTimeMs(const AConfig: TTestConfig): Integer;
 function  GetBenchMem(const AConfig: TTestConfig): Boolean;
+function  GetRunPattern(const AConfig: TTestConfig): string;
 
 implementation
 
@@ -159,6 +162,7 @@ begin
   Result.BenchEnabled  := False;
   Result.BenchTimeMs   := 1000; { default 1 second per benchmark }
   Result.BenchMem      := False;
+  Result.RunPattern    := '';
 end;
 
 function DefaultConfig: TTestConfig;
@@ -195,6 +199,8 @@ begin
   if (Result.ShuffleSeed = 0) and not (ckShuffle in GExplicit) then
     Result.ShuffleSeed := LDefaults.ShuffleSeed;
   { FailFast and ListMode: false is the intentional default, no merge needed }
+  if Result.RunPattern = '' then
+    Result.RunPattern := LDefaults.RunPattern;
 end;
 
 function ResolveOutSink(const AConfig: TTestConfig): IOutputSink;
@@ -351,6 +357,12 @@ begin
   Include(GExplicit, ckBenchMem);
 end;
 
+procedure SetDefaultRunPattern(const APattern: string);
+begin
+  GDefaultConfig.RunPattern := APattern;
+  Include(GExplicit, ckRun);
+end;
+
 function GetRepeatAllCount(const AConfig: TTestConfig): Integer;
 begin
   Result := ResolveConfig(AConfig).RepeatAllCount;
@@ -419,6 +431,11 @@ end;
 function GetBenchMem(const AConfig: TTestConfig): Boolean;
 begin
   Result := ResolveConfig(AConfig).BenchMem;
+end;
+
+function GetRunPattern(const AConfig: TTestConfig): string;
+begin
+  Result := ResolveConfig(AConfig).RunPattern;
 end;
 
 procedure TStdoutSink.Write(const AText: string);

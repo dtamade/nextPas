@@ -748,6 +748,9 @@ var
   LFilter, LPattern: string;
   LComma, LDepth, LPos: Integer;
 begin
+  { --run: exact name match (case-insensitive) takes priority }
+  if GetRunPattern(AConfig) <> '' then
+    Exit(SameText(AName, GetRunPattern(AConfig)));
   LFilter := GetTestFilter(AConfig);
   if LFilter = '' then
     Exit(True);

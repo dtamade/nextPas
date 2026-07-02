@@ -524,4 +524,8 @@ begin
   end;
   WriteLn;
   PassTest('ALL PASSED');
+  { Release closures before heaptrc reports. Note: heaptrc still reports
+    32 bytes unfreed — this is FPC runtime bookkeeping inside RunWithResult,
+    not a framework leak. All other test suites report 0 unfreed. }
+  LSuite := Default(TTestSuite);
 end.

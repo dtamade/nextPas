@@ -592,6 +592,16 @@ begin
   Result := FindFlagInArgs(@IsBenchMemArg);
 end;
 
+function ParseRunPattern(const AArg: string): string;
+begin
+  Result := ExtractArgValue(AArg, '--run');
+end;
+
+function ParseRunFromArgs: string;
+begin
+  Result := FindArgValue(@ParseRunPattern, '--run');
+end;
+
 function RunnerConfig(const ARunner: TTestRunner): TTestConfig;
 begin
   if Length(ARunner.Suites) > 0 then
@@ -605,12 +615,18 @@ procedure ApplyCLIArgs;
   Shared by RunAllWithResult and RunAllParallelWithResult. }
 var
   LCount, LShuffleSeed, LMaxFail, LRunTimeout, LBenchTime: Integer;
-  LBenchPattern: string;
+  LBenchPattern, LRunPattern: string;
 begin
   if GetTestFilter = '' then
     SetTestFilter(ParseFilterFromArgs);
   if GetTagFilter = '' then
     SetTagFilter(ParseTagFromArgs);
+  if GetRunPattern(DefaultConfig) = '' then
+  begin
+    LRunPattern := ParseRunFromArgs;
+    if LRunPattern <> '' then
+      SetDefaultRunPattern(LRunPattern);
+  end;
   if GetRepeatAllCount(DefaultConfig) = 0 then
   begin
     LCount := ParseCountFromArgs;
@@ -1183,6 +1199,7 @@ var
   LRunStartMs: Int64;
   LRunTimeoutMs: Int64;
 begin
+  ApplyCLIArgs;
   AResult := TTestRunResult.Create(Name);
   LPass := 0;
   LFail := 0;
@@ -1694,6 +1711,7 @@ var
   LProgressCounter: Integer;
   LProgressTotal: Integer;
 begin
+  ApplyCLIArgs;
   AResult := TTestRunResult.Create(Name);
   LTotal := Length(Tests);
   LPass := 0;

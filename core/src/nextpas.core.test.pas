@@ -171,6 +171,8 @@ function  MatchesFilter(const AName: string): Boolean;
 function  MatchesFilter(const AName: string; const AConfig: TTestConfig): Boolean;
 procedure SetTagFilter(const APattern: string);
 function  GetTagFilter: string;
+procedure SetRunPattern(const APattern: string);
+function  GetRunPattern: string;
 procedure SetTestTimeout(AMillis: Integer);
 function  GetTestTimeout: Integer;
 procedure ReportLeakIfAny(AStatus: TTestStatus);
@@ -464,6 +466,12 @@ begin nextpas.core.test.output.SetTagFilter(APattern); end;
 
 function GetTagFilter: string;
 begin Result := nextpas.core.test.output.GetTagFilter; end;
+
+procedure SetRunPattern(const APattern: string);
+begin nextpas.core.test.config.SetDefaultRunPattern(APattern); end;
+
+function GetRunPattern: string;
+begin Result := nextpas.core.test.config.GetRunPattern(nextpas.core.test.config.DefaultConfig); end;
 
 procedure SetTestTimeout(AMillis: Integer);
 begin nextpas.core.test.output.SetTestTimeout(AMillis); end;
