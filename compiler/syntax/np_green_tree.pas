@@ -4600,6 +4600,19 @@ var
             (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
             Inc(ACursor);
           MatchTokenSilent(ALexer, ACursor, tkEndKeyword);
+          { FPC asm clobber list: end ['eax', 'ebx', ...] }
+          if (ACursor < ALexer.TokenCount) and
+            (CurrentToken(ALexer, ACursor).Kind = tkLBracket) then
+          begin
+            Inc(ACursor);
+            while (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind <> tkRBracket) and
+              (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+              Inc(ACursor);
+            if (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind = tkRBracket) then
+              Inc(ACursor);
+          end;
           Result := True;
         end;
       tkSemicolon:
