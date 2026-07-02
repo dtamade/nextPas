@@ -447,6 +447,7 @@ var
   C_GetInfo: TC_GetInfo;
   Info: CK_INFO;
   RV: CK_RV;
+  LManufacturer, LDescription: string;
 begin
   Loader := TPKCS11Loader.Create;
   try
@@ -466,7 +467,9 @@ begin
     RV := C_GetInfo(@Info);
     if RV <> CKR_OK then
       raise EPKCS11Exception.Create('Failed to get module info', RV);
-    
+
+    LManufacturer := TrimPKCS11String(Info.manufacturerID);
+    LDescription := TrimPKCS11String(Info.libraryDescription);
     Result := Format(
       'PKCS#11 Module Information:'#13#10 +
       '  Cryptoki Version: %d.%d'#13#10 +
@@ -475,8 +478,8 @@ begin
       '  Library Version: %d.%d',
       [
         Info.cryptokiVersion.major, Info.cryptokiVersion.minor,
-        TrimPKCS11String(Info.manufacturerID),
-        TrimPKCS11String(Info.libraryDescription),
+        LManufacturer,
+        LDescription,
         Info.libraryVersion.major, Info.libraryVersion.minor
       ]
     );
