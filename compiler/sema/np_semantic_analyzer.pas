@@ -1180,14 +1180,32 @@ function TSemanticAnalyzer.ProcedureBodyScopeIdForDecl(
   const ADecl: TGreenNode
 ): LongInt;
 var
-  Index: LongInt;
+  Index, NameMatchCount, NameMatchScopeId: LongInt;
+  DeclName: string;
 begin
   Result := 0;
   if ADecl = nil then
     Exit;
+  DeclName := ADecl.Text;
+  { Try exact pointer match first }
   for Index := 0 to Length(FProcedureBodies) - 1 do
     if FProcedureBodies[Index].Decl = ADecl then
       Exit(FProcedureBodies[Index].ScopeId);
+  { Fallback: name match for overloaded declarations sharing same body entry.
+    Only when exactly one entry has this name (no ambiguity). }
+  if DeclName <> '' then
+  begin
+    NameMatchCount := 0;
+    NameMatchScopeId := 0;
+    for Index := 0 to Length(FProcedureBodies) - 1 do
+      if SameText(FProcedureBodies[Index].Name, DeclName) then
+      begin
+        Inc(NameMatchCount);
+        NameMatchScopeId := FProcedureBodies[Index].ScopeId;
+      end;
+    if NameMatchCount = 1 then
+      Result := NameMatchScopeId;
+  end;
 end;
 
 function TSemanticAnalyzer.ParamDeclTypeId(
@@ -3889,6 +3907,7 @@ begin
       HasTypeMismatchEvidence := HasArgSignature and
         CallArgumentSignatureIsStable(ANode, ACurrentOwnerUnitId);
       ImplicitSelfBound := False;
+      if SameText(ANode.Text, 'ACallback') then
       if LookupCallBindingDeclaration(
         ANode.Text,
         CallArgumentCount(ANode),
