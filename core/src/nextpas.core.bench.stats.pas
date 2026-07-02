@@ -257,7 +257,7 @@ begin
   LLen := Length(ASamples);
   if LLen = 0 then
   begin
-    FillChar(Result, SizeOf(Result), 0);
+    Result := Default(TBenchStats);
     Exit;
   end;
 
