@@ -25,13 +25,14 @@ type
   end;
 
   {** 报告生成器 }
-  TBenchReportGenerator = class
+  TBenchReportGenerator = class(TInterfacedObject, IBenchReportGenerator)
   private
     FResults: array of TBenchResult;
     FResultCount: Integer;
     FEnvironment: TBenchEnvironment;
     FCachedCSS: string; { PF-19: cached CSS string }
     FCSSCached: Boolean;
+    FMaxDetailCount: Integer;
 
     {** 生成 HTML 图表 }
     function GenerateChart(const AResults: array of TBenchResult): string;
@@ -60,6 +61,9 @@ type
   public
     constructor Create;
     destructor Destroy; override;
+
+    {** 设置统计详情最大显示数量 }
+    procedure SetMaxDetailCount(ACount: Integer);
 
     {** 格式化数字 }
     function FormatNumber(AValue: Double; APrecision: Integer): string;
@@ -198,6 +202,12 @@ begin
   SetLength(FResults, 0);
   FCSSCached := False;
   FCachedCSS := '';
+  FMaxDetailCount := 5;
+end;
+
+procedure TBenchReportGenerator.SetMaxDetailCount(ACount: Integer);
+begin
+  FMaxDetailCount := ACount;
 end;
 
 destructor TBenchReportGenerator.Destroy;
@@ -435,7 +445,7 @@ begin
 
   // detailed statistics (non-skipped, up to LMaxDetail)
   LSkippedCount := 0;
-  LMaxDetail := Min(FResultCount, 5);
+  LMaxDetail := Min(FResultCount, FMaxDetailCount);
   for I := 0 to FResultCount - 1 do
   begin
     if FResults[I].Skipped then
@@ -808,7 +818,7 @@ begin
   BufferAddLine(ABuf, '    <h2>Detailed Statistics</h2>');
 
   LSkippedCount := 0;
-  LMaxDetail := Min(FResultCount, 5);
+  LMaxDetail := Min(FResultCount, FMaxDetailCount);
   for I := 0 to FResultCount - 1 do
   begin
     if FResults[I].Skipped then

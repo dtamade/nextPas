@@ -55,7 +55,7 @@ type
     FBaselineCount: Integer;
     FBaselineCapacity: Integer;
     FRunner: TBenchRunner;
-    FReportGenerator: TBenchReportGenerator;
+    FReportGenerator: IBenchReportGenerator;
     {** ST-08: prevents mutation after Run has been called }
     FHasRun: Boolean;
 
@@ -123,7 +123,7 @@ type
     FEnvironment: TBenchEnvironment;
     FBaselines: array of TBenchBaseline;
     FBaselineCount: Integer;
-    FReportGenerator: TBenchReportGenerator;
+    FReportGenerator: IBenchReportGenerator;
 
     {** 生成基线对比 }
     function GenerateComparisons: TBenchComparisonArray;
@@ -196,6 +196,7 @@ begin
   FConfig.SuiteName := ASuiteName;
 
   FReportGenerator := TBenchReportGenerator.Create;
+  FReportGenerator.SetMaxDetailCount(FConfig.MaxDetailCount);
   FHasRun := False;
 end;
 
@@ -215,6 +216,7 @@ begin
 
   FRunner := TBenchRunner.CreateNoEnv;
   FReportGenerator := TBenchReportGenerator.Create;
+  FReportGenerator.SetMaxDetailCount(FConfig.MaxDetailCount);
   FHasRun := False;
 end;
 
@@ -223,7 +225,7 @@ begin
   SetLength(FEntries, 0);
   SetLength(FBaselines, 0);
   FRunner.Free;
-  FReportGenerator.Free;
+  FReportGenerator := nil;
   inherited Destroy;
 end;
 
@@ -693,7 +695,7 @@ destructor TBenchResults.Destroy;
 begin
   SetLength(FResults, 0);
   SetLength(FBaselines, 0);
-  FReportGenerator.Free;
+  FReportGenerator := nil;
   inherited Destroy;
 end;
 

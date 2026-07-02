@@ -290,7 +290,9 @@ type
   IBenchStatsAnalyzer = interface
     ['{D4E5F6A7-B8C9-0D1E-2F3A-4B5C6D7E8F9A}']
 
-    {** 计算统计摘要 }
+    {** 计算统计摘要
+     *  @edge ASamples 为空时返回 Default(TBenchStats)；
+     *        样本数=1 时 StdDev=0, 置信区间退化为 [mean, mean] }
     function ComputeStats(const ASamples: TDoubleArray): TBenchStats;
 
     {** 检测异常值 }
@@ -324,8 +326,50 @@ type
     {** Mann-Whitney U 检验 p-value（非参数，适用于右偏基准数据） }
     function ComputeMannWhitneyPValue(const A, B: TDoubleArray): Double;
 
-    {** 几何均值（多 benchmark ratio 聚合的正确方法） }
+    {** 几何均值（多 benchmark ratio 聚合的正确方法）
+     *  @edge 空数组返回 1.0；非正 ratio 返回 0.0（哨兵值，表示非法输入） }
     function GeometricMean(const ARatios: TDoubleArray): Double;
+  end;
+
+  {** 报告生成器接口
+   *
+   *  提供多种格式的基准结果输出。
+   *  所有方法均为纯函数（不写 stdout），返回格式化字符串。 }
+  IBenchReportGenerator = interface
+    ['{A1B2C3D4-E5F6-7890-ABCD-EF0123456789}']
+
+    {** 设置结果数据 }
+    procedure SetResults(const AResults: array of TBenchResult);
+
+    {** 设置环境信息 }
+    procedure SetEnvironment(const AEnvironment: TBenchEnvironment);
+
+    {** 设置统计详情最大显示数量 }
+    procedure SetMaxDetailCount(ACount: Integer);
+
+    {** 格式化的控制台表格字符串（纯函数，不写 stdout） }
+    function PrintToConsole: string;
+
+    {** Go benchstat 兼容格式 }
+    function ToBenchstat: string;
+
+    {** JSON 格式（含环境信息、统计详情） }
+    function ToJSON: string;
+
+    {** TSV 格式（含状态/跳过原因） }
+    function ToTSV: string;
+
+    {** 自包含 HTML（内联 CSS/SVG 图表/箱线图） }
+    function ToHTML: string;
+
+    {** 多基线矩阵 Console 报告 }
+    function GenerateMatrixReport(const AMatrix: TMatrixResult): string;
+
+    {** 多基线矩阵 HTML（含 B/op + allocs/op） }
+    function GenerateMatrixHTML(const AMatrix: TMatrixResult): string;
+
+    {** 多基线矩阵 JSON（CI 可消费） }
+    function GenerateMatrixJSON(const AMatrix: TMatrixResult): string;
   end;
 
 implementation

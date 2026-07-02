@@ -511,8 +511,6 @@ var
   LZ: Double;
   LRunStart, LRunEnd, I, J, K: Integer;
   LAvgRank: Double;
-  LTemp: Double;
-  LTmpIdx: Int64;
 
   { 从 z-score 计算双侧 p-value（Hastings 近似） }
   function ZToPValue(AZ: Double): Double;
@@ -562,19 +560,8 @@ begin
   for I := 0 to LN - 1 do
     LSortedIdx[I] := I;
 
-  { 简单插入排序（基准样本通常 <1000 个） }
-  for I := 1 to LN - 1 do
-  begin
-    LTmpIdx := LSortedIdx[I];
-    LTemp := LCombined[LTmpIdx];
-    J := I - 1;
-    while (J >= 0) and (LCombined[LSortedIdx[J]] > LTemp) do
-    begin
-      LSortedIdx[J + 1] := LSortedIdx[J];
-      Dec(J);
-    end;
-    LSortedIdx[J + 1] := LTmpIdx;
-  end;
+  { IntroSort 间接排序（替换原插入排序，处理大样本更高效） }
+  SortIndirect(LSortedIdx, LCombined);
 
   { 3. 分配秩次（并列值取平均秩） }
   SetLength(LRanks, LN);
