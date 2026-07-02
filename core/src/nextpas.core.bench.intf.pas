@@ -118,18 +118,22 @@ type
   IBenchSuite = interface
     ['{A1B2C3D4-5E6F-7A8B-9C0D-1E2F3A4B5C6D}']
 
-    {** 添加基准测试（简单版本） }
+    {** 添加基准测试（简单版本）
+     *  @raises EBenchInvalidParam 当 AFunc 为 nil 时 }
     function Add(const AName: string; AFunc: TBenchFunc): IBenchSuite;
 
-    {** 添加基准测试（带 setup/teardown） }
+    {** 添加基准测试（带 setup/teardown）
+     *  @raises EBenchInvalidParam 当 AFunc 为 nil 时 }
     function AddWithSetup(const AName: string; AFunc: TBenchFunc;
       ASetup: TBenchSetupFunc; ATeardown: TBenchTeardownFunc): IBenchSuite;
 
-    {** 条件添加基准测试（仅当条件为真时执行） }
+    {** 条件添加基准测试（仅当条件为真时执行）
+     *  @raises EBenchInvalidParam 当 AFunc 为 nil 时 }
     function AddWhen(const AName: string; AFunc: TBenchFunc;
       ACondition: Boolean): IBenchSuite;
 
-    {** 添加并行基准测试 }
+    {** 添加并行基准测试
+     *  @raises EBenchInvalidParam 当 AFunc 为 nil 时 }
     function AddParallel(const AName: string; AFunc: TBenchFunc;
       AThreads: Integer): IBenchSuite;
 
@@ -148,7 +152,8 @@ type
       const AParams: array of Int64;
       ASetup: TBenchSetupFunc; ATeardown: TBenchTeardownFunc): IBenchSuite;
 
-    {** 添加用户控制循环的基准测试 — TBenchLoopFunc 不支持 IBenchContext }
+    {** 添加用户控制循环的基准测试 — TBenchLoopFunc 不支持 IBenchContext
+     *  @raises EBenchInvalidParam 当 AFunc 为 nil 时 }
     function AddLoop(const AName: string; AFunc: TBenchLoopFunc): IBenchSuite;
 
     {** 清空所有已注册条目 (DS-03) }
@@ -191,7 +196,9 @@ type
     {** 批量添加基线 (ST-06) }
     function AddBaselines(const ABaselines: array of TBaselineData): IBenchSuite;
 
-    {** 加载基线文件 }
+    {** 加载基线文件
+     *  @raises EBenchBaselineNotFound 当文件不存在时
+     *  @raises EBenchError 当文件格式错误时 }
     function LoadBaseline(const APath: string): IBenchSuite;
 
     {** 设置过滤条件 }
@@ -253,7 +260,8 @@ type
      *  @raises EBenchError 当任一名称不存在时。 }
     function CompareTwoResults(const ANameA, ANameB: string): TBenchComparison;
 
-    {** 保存当前结果为命名基线文件 }
+    {** 保存当前结果为命名基线文件
+     *  @raises EBenchError 当保存失败时 }
     procedure SaveBaseline(const APath: string; const AGitHash: string = '');
 
     {** 追加当前结果到时间线 JSONL 文件 (P1-5) }
