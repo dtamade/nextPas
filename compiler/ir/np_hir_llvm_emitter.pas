@@ -979,6 +979,55 @@ begin
           FNeedsFree := True;
         end;
       end
+      else if AInstr.IntrinsicName = 'interlocked-cas' then
+      begin
+        if Length(AInstr.Operands) >= 3 then
+        begin
+          Emit('  %cas.pair.' + IntToStr(AInstr.ResultId) +
+            ' = cmpxchg ptr ' + ValueRef(AInstr.Operands[0].ValueId) +
+            ', i64 ' + ValueRef(AInstr.Operands[2].ValueId) +
+            ', i64 ' + ValueRef(AInstr.Operands[1].ValueId) +
+            ' seq_cst seq_cst');
+          Emit('  ' + ValueRef(AInstr.ResultId) +
+            ' = extractvalue { i64, i1 } %cas.pair.' +
+            IntToStr(AInstr.ResultId) + ', 0');
+        end;
+      end
+      else if AInstr.IntrinsicName = 'interlocked-cas64' then
+      begin
+        if Length(AInstr.Operands) >= 3 then
+        begin
+          Emit('  %cas64.pair.' + IntToStr(AInstr.ResultId) +
+            ' = cmpxchg ptr ' + ValueRef(AInstr.Operands[0].ValueId) +
+            ', i64 ' + ValueRef(AInstr.Operands[2].ValueId) +
+            ', i64 ' + ValueRef(AInstr.Operands[1].ValueId) +
+            ' seq_cst seq_cst');
+          Emit('  ' + ValueRef(AInstr.ResultId) +
+            ' = extractvalue { i64, i1 } %cas64.pair.' +
+            IntToStr(AInstr.ResultId) + ', 0');
+        end;
+      end
+      else if AInstr.IntrinsicName = 'interlocked-xchg' then
+      begin
+        if Length(AInstr.Operands) >= 2 then
+          Emit('  ' + ValueRef(AInstr.ResultId) +
+            ' = atomicrmw xchg ptr ' + ValueRef(AInstr.Operands[0].ValueId) +
+            ', i64 ' + ValueRef(AInstr.Operands[1].ValueId) + ' seq_cst');
+      end
+      else if AInstr.IntrinsicName = 'interlocked-fetch-add' then
+      begin
+        if Length(AInstr.Operands) >= 2 then
+          Emit('  ' + ValueRef(AInstr.ResultId) +
+            ' = atomicrmw add ptr ' + ValueRef(AInstr.Operands[0].ValueId) +
+            ', i64 ' + ValueRef(AInstr.Operands[1].ValueId) + ' seq_cst');
+      end
+      else if AInstr.IntrinsicName = 'interlocked-fetch-add64' then
+      begin
+        if Length(AInstr.Operands) >= 2 then
+          Emit('  ' + ValueRef(AInstr.ResultId) +
+            ' = atomicrmw add ptr ' + ValueRef(AInstr.Operands[0].ValueId) +
+            ', i64 ' + ValueRef(AInstr.Operands[1].ValueId) + ' seq_cst');
+      end
       else if AInstr.IntrinsicName = 'tstring_init' then
       begin
         FNeedsTStringRuntime := True;

@@ -6462,15 +6462,18 @@ begin
     SameText(AName, 'CompareText') or SameText(AName, 'UnicodeCompareStr') or SameText(AName, 'StringReplace') or
     SameText(AName, 'Default') or SameText(AName, 'TypeInfo') or
     SameText(AName, 'InterlockedCompareExchange') or
-    SameText(AName, 'InterlockedIncrement') or SameText(AName, 'InterlockedDecrement') or
-    SameText(AName, 'InterlockedCompareExchange64') or
-    SameText(AName, 'ReadWriteBarrier') or SameText(AName, 'ReadBarrier') or SameText(AName, 'WriteBarrier') or
-    SameText(AName, 'DoneCriticalSection') or
-    SameText(AName, 'FillQWord') or SameText(AName, 'SarInt64') or
-    SameText(AName, 'UniqueString') or SameText(AName, 'StringOfChar') or
-    SameText(AName, 'ThreadSwitch') or SameText(AName, 'RunError') or
-    SameText(AName, 'ArcTan') or SameText(AName, 'FormatDateTime') or
-    SameText(AName, 'DoublePack');
+    SameText(AName, InterlockedExchange) or
+    SameText(AName, InterlockedExchangeAdd) or
+    SameText(AName, InterlockedIncrement) or SameText(AName, InterlockedDecrement) or
+    SameText(AName, InterlockedCompareExchange64) or
+    SameText(AName, InterlockedExchangeAdd64) or
+    SameText(AName, ReadWriteBarrier) or SameText(AName, ReadBarrier) or SameText(AName, WriteBarrier) or
+    SameText(AName, DoneCriticalSection) or
+    SameText(AName, FillQWord) or SameText(AName, SarInt64) or
+    SameText(AName, UniqueString) or SameText(AName, StringOfChar) or
+    SameText(AName, ThreadSwitch) or SameText(AName, RunError) or
+    SameText(AName, ArcTan) or SameText(AName, FormatDateTime) or
+    SameText(AName, DoublePack);
 end;
 
 function TSemanticAnalyzer.InferExpressionType(const ANode: TGreenNode): LongInt;
@@ -15745,6 +15748,167 @@ begin
           Decoded := Arg.ChildAt(ArgIndex).Text;
           FModel.AddTypedHirNode(
             'assigned-runtime', Decoded, 0, 0, Decoded);
+        end;
+        Continue;
+      end;
+      { InterlockedCompareExchange(Target, NewValue, CompareValue) -> old value }
+      if FNoFold and SameText(Child.Text, 'InterlockedCompareExchange') then
+      begin
+        Arg := Child;
+        ArgIndex := 0;
+        if (Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) and
+          (Child.ChildAt(0).NodeKind = gnkFunctionCall) then
+        begin
+          Arg := Child.ChildAt(0);
+          ArgIndex := 1;
+        end;
+        if (Arg <> nil) and (Arg.ChildCount >= ArgIndex + 3) then
+        begin
+          Decoded := Arg.ChildAt(ArgIndex).Text;
+          Operand := '';
+          if EncodeRuntimeIntExprFold(Arg.ChildAt(ArgIndex + 1), StringValue) then
+            Operand := StringValue
+          else
+            Operand := 'int 0' + #10;
+          if EncodeRuntimeIntExprFold(Arg.ChildAt(ArgIndex + 2), StringValue) then
+            Operand := Operand + #9 + StringValue
+          else
+            Operand := Operand + #9 + 'int 0' + #10;
+          FModel.AddTypedHirNode(
+            'interlocked-cas-runtime', Decoded, 0, 0,
+            Decoded + #9 + Operand);
+        end;
+        Continue;
+      end;
+      { InterlockedExchange(Target, NewValue) -> old value }
+      if FNoFold and SameText(Child.Text, 'InterlockedExchange') then
+      begin
+        Arg := Child;
+        ArgIndex := 0;
+        if (Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) and
+          (Child.ChildAt(0).NodeKind = gnkFunctionCall) then
+        begin
+          Arg := Child.ChildAt(0);
+          ArgIndex := 1;
+        end;
+        if (Arg <> nil) and (Arg.ChildCount >= ArgIndex + 2) then
+        begin
+          Decoded := Arg.ChildAt(ArgIndex).Text;
+          if EncodeRuntimeIntExprFold(Arg.ChildAt(ArgIndex + 1), StringValue) then
+            FModel.AddTypedHirNode(
+              'interlocked-xchg-runtime', Decoded, 0, 0,
+              Decoded + #9 + StringValue);
+        end;
+        Continue;
+      end;
+      { InterlockedExchangeAdd(Target, Value) -> old value }
+      if FNoFold and SameText(Child.Text, 'InterlockedExchangeAdd') then
+      begin
+        Arg := Child;
+        ArgIndex := 0;
+        if (Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) and
+          (Child.ChildAt(0).NodeKind = gnkFunctionCall) then
+        begin
+          Arg := Child.ChildAt(0);
+          ArgIndex := 1;
+        end;
+        if (Arg <> nil) and (Arg.ChildCount >= ArgIndex + 2) then
+        begin
+          Decoded := Arg.ChildAt(ArgIndex).Text;
+          if EncodeRuntimeIntExprFold(Arg.ChildAt(ArgIndex + 1), StringValue) then
+            FModel.AddTypedHirNode(
+              'interlocked-fetch-add-runtime', Decoded, 0, 0,
+              Decoded + #9 + StringValue);
+        end;
+        Continue;
+      end;
+      { InterlockedCompareExchange64(Target, NewValue, CompareValue) -> old value }
+      if FNoFold and SameText(Child.Text, 'InterlockedCompareExchange64') then
+      begin
+        Arg := Child;
+        ArgIndex := 0;
+        if (Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) and
+          (Child.ChildAt(0).NodeKind = gnkFunctionCall) then
+        begin
+          Arg := Child.ChildAt(0);
+          ArgIndex := 1;
+        end;
+        if (Arg <> nil) and (Arg.ChildCount >= ArgIndex + 3) then
+        begin
+          Decoded := Arg.ChildAt(ArgIndex).Text;
+          Operand := '';
+          if EncodeRuntimeIntExprFold(Arg.ChildAt(ArgIndex + 1), StringValue) then
+            Operand := StringValue
+          else
+            Operand := 'int 0' + #10;
+          if EncodeRuntimeIntExprFold(Arg.ChildAt(ArgIndex + 2), StringValue) then
+            Operand := Operand + #9 + StringValue
+          else
+            Operand := Operand + #9 + 'int 0' + #10;
+          FModel.AddTypedHirNode(
+            'interlocked-cas64-runtime', Decoded, 0, 0,
+            Decoded + #9 + Operand);
+        end;
+        Continue;
+      end;
+      { InterlockedExchangeAdd64(Target, Value) -> old value }
+      if FNoFold and SameText(Child.Text, 'InterlockedExchangeAdd64') then
+      begin
+        Arg := Child;
+        ArgIndex := 0;
+        if (Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) and
+          (Child.ChildAt(0).NodeKind = gnkFunctionCall) then
+        begin
+          Arg := Child.ChildAt(0);
+          ArgIndex := 1;
+        end;
+        if (Arg <> nil) and (Arg.ChildCount >= ArgIndex + 2) then
+        begin
+          Decoded := Arg.ChildAt(ArgIndex).Text;
+          if EncodeRuntimeIntExprFold(Arg.ChildAt(ArgIndex + 1), StringValue) then
+            FModel.AddTypedHirNode(
+              'interlocked-fetch-add64-runtime', Decoded, 0, 0,
+              Decoded + #9 + StringValue);
+        end;
+        Continue;
+      end;
+      { InterlockedIncrement(Target) -> new value (= old + 1) }
+      if FNoFold and SameText(Child.Text, 'InterlockedIncrement') then
+      begin
+        Arg := Child;
+        ArgIndex := 0;
+        if (Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) and
+          (Child.ChildAt(0).NodeKind = gnkFunctionCall) then
+        begin
+          Arg := Child.ChildAt(0);
+          ArgIndex := 1;
+        end;
+        if (Arg <> nil) and (Arg.ChildCount >= ArgIndex + 1) then
+        begin
+          Decoded := Arg.ChildAt(ArgIndex).Text;
+          FModel.AddTypedHirNode(
+            'interlocked-fetch-add-runtime', Decoded, 0, 0,
+            Decoded + #9 + 'int 1' + #10);
+        end;
+        Continue;
+      end;
+      { InterlockedDecrement(Target) -> new value (= old - 1) }
+      if FNoFold and SameText(Child.Text, 'InterlockedDecrement') then
+      begin
+        Arg := Child;
+        ArgIndex := 0;
+        if (Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) and
+          (Child.ChildAt(0).NodeKind = gnkFunctionCall) then
+        begin
+          Arg := Child.ChildAt(0);
+          ArgIndex := 1;
+        end;
+        if (Arg <> nil) and (Arg.ChildCount >= ArgIndex + 1) then
+        begin
+          Decoded := Arg.ChildAt(ArgIndex).Text;
+          FModel.AddTypedHirNode(
+            'interlocked-fetch-add-runtime', Decoded, 0, 0,
+            Decoded + #9 + 'int -1' + #10);
         end;
         Continue;
       end;

@@ -243,6 +243,7 @@ type
     procedure ProcessGetMemRuntime(const ANode: TTypedHirNode);
     procedure ProcessFreeMemRuntime(const ANode: TTypedHirNode);
     procedure ProcessAssignedRuntime(const ANode: TTypedHirNode);
+    procedure ProcessInterlockedOp(const ANode: TTypedHirNode);
     procedure ProcessWriteInt(const ANode: TTypedHirNode);
     procedure ProcessWriteStr(const ANode: TTypedHirNode);
     procedure ProcessWriteString(const ANode: TTypedHirNode);
@@ -4216,6 +4217,107 @@ begin
     PtrVal, EmitNullPtrValue, GetPtrType, GetPtrType);
 end;
 
+procedure THIRBuilder.ProcessInterlockedOp(const ANode: TTypedHirNode);
+var
+  TabPos: LongInt;
+  TargetName, ArgBlob, NewValBlob, CmpValBlob, Rest: string;
+  TargetAlloca, TargetPtr, NewVal, CmpVal, Addend, FetchAddResult, OneVal: THIRValueId;
+  Instr: THIRInstr;
+  IntrinsicOpName: string;
+  IsCas: Boolean;
+begin
+  Rest := ANode.Operand;
+  TabPos := Pos(#9, Rest);
+  if TabPos = 0 then Exit;
+  TargetName := Trim(Copy(Rest, 1, TabPos - 1));
+  Rest := Copy(Rest, TabPos + 1, Length(Rest));
+
+  TargetAlloca := FindAlloca(TargetName);
+  if TargetAlloca = 0 then Exit;
+  TargetPtr := EmitLoad(GetPtrType, TargetAlloca);
+  if TargetPtr = 0 then Exit;
+
+  IsCas := (ANode.NodeKind = hnkInterlockedCasRuntime) or
+           (ANode.NodeKind = hnkInterlockedCas64Runtime);
+
+  if IsCas then
+  begin
+    { CAS: Target #9 NewValue #9 CompareValue }
+    TabPos := Pos(#9, Rest);
+    if TabPos = 0 then Exit;
+    NewValBlob := Trim(Copy(Rest, 1, TabPos - 1));
+    CmpValBlob := Trim(Copy(Rest, TabPos + 1, Length(Rest)));
+
+    NewVal := LowerNodeExprOrBlob(ANode, NewValBlob);
+    CmpVal := LowerNodeExprOrBlob(ANode, CmpValBlob);
+    if (NewVal = 0) or (CmpVal = 0) then Exit;
+
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := FModule.NewValue;
+    Instr.Kind := hikIntrinsic;
+    Instr.TypeId := GetIntType;
+    if ANode.NodeKind = hnkInterlockedCas64Runtime then
+      Instr.IntrinsicName := 'interlocked-cas64'
+    else
+      Instr.IntrinsicName := 'interlocked-cas';
+    SetLength(Instr.Operands, 3);
+    Instr.Operands[0] := MakeTypedOperand(TargetPtr, GetPtrType);
+    Instr.Operands[1] := MakeTypedOperand(NewVal, GetIntType);
+    Instr.Operands[2] := MakeTypedOperand(CmpVal, GetIntType);
+    EmitInstr(Instr);
+  end
+  else
+  begin
+    { Exchange / FetchAdd: Target #9 Value }
+    ArgBlob := Trim(Rest);
+    Addend := LowerNodeExprOrBlob(ANode, ArgBlob);
+    if Addend = 0 then Exit;
+
+    if ANode.NodeKind = hnkInterlockedXchgRuntime then
+      IntrinsicOpName := 'interlocked-xchg'
+    else if ANode.NodeKind = hnkInterlockedFetchAdd64Runtime then
+      IntrinsicOpName := 'interlocked-fetch-add64'
+    else
+      IntrinsicOpName := 'interlocked-fetch-add';
+
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := FModule.NewValue;
+    Instr.Kind := hikIntrinsic;
+    Instr.TypeId := GetIntType;
+    Instr.IntrinsicName := IntrinsicOpName;
+    SetLength(Instr.Operands, 2);
+    Instr.Operands[0] := MakeTypedOperand(TargetPtr, GetPtrType);
+    Instr.Operands[1] := MakeTypedOperand(Addend, GetIntType);
+    EmitInstr(Instr);
+    FetchAddResult := Instr.ResultId;
+
+    { InterlockedIncrement/Decrement return new value (old+1 / old-1), not old value }
+    if (ANode.NodeKind = hnkInterlockedFetchAddRuntime) then
+    begin
+      { The blob for Increment is 'int 1' + #10, for Decrement is 'int -1' + #10
+        For ExchangeAdd, the blob is a runtime expression. Only adjust for constants +/-1 }
+      if (Length(ArgBlob) >= 7) and
+         ((Copy(ArgBlob, 1, 7) = 'int 1' + #10) or
+          (Copy(ArgBlob, 1, 8) = 'int -1' + #10)) then
+      begin
+        { This is Increment or Decrement: adjust result }
+        FillChar(Instr, SizeOf(Instr), 0);
+        Instr.ResultId := FModule.NewValue;
+        if Copy(ArgBlob, 1, 6) = 'int -1' then
+          Instr.Kind := hikSub
+        else
+          Instr.Kind := hikAdd;
+        Instr.TypeId := GetIntType;
+        SetLength(Instr.Operands, 2);
+        Instr.Operands[0] := MakeTypedOperand(FetchAddResult, GetIntType);
+        OneVal := EmitConstIntOfType(1, GetIntType);
+        Instr.Operands[1] := MakeTypedOperand(OneVal, GetIntType);
+        EmitInstr(Instr);
+      end;
+    end;
+  end;
+end;
+
 procedure THIRBuilder.ProcessWriteInt(const ANode: TTypedHirNode);
 var
   V: THIRValueId;
@@ -6152,6 +6254,10 @@ begin
       ProcessFillCharRuntime(ANode);
     hnkMoveRuntime:
       ProcessMoveRuntime(ANode);
+    hnkInterlockedCasRuntime, hnkInterlockedXchgRuntime,
+    hnkInterlockedFetchAddRuntime, hnkInterlockedCas64Runtime,
+    hnkInterlockedFetchAdd64Runtime:
+      ProcessInterlockedOp(ANode);
     hnkGetMemRuntime:
       ProcessGetMemRuntime(ANode);
     hnkFreeMemRuntime:
