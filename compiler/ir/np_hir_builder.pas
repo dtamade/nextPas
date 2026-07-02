@@ -230,6 +230,7 @@ type
     procedure ProcessBlockLabel(const ANode: TTypedHirNode);
     procedure ProcessFunctionBegin(const ANode: TTypedHirNode);
     procedure ProcessFunctionEnd(const ANode: TTypedHirNode);
+    procedure ProcessExternalDecl(const ANode: TTypedHirNode);
     procedure ProcessRetRuntime(const ANode: TTypedHirNode);
     procedure ProcessCallRuntime(const ANode: TTypedHirNode);
     procedure ProcessStringTempOwnedRuntime(const ANode: TTypedHirNode);
@@ -3726,6 +3727,53 @@ begin
   end;
 end;
 
+procedure THIRBuilder.ProcessExternalDecl(const ANode: TTypedHirNode);
+var
+  I, LBindingIdx: LongInt;
+  LBinding: TSemanticForeignProcedureBinding;
+  LFuncId: THIRFuncId;
+  LSymbol: TSemanticSymbol;
+  LReturnTypeId: THIRTypeId;
+  LParamCount: LongInt;
+begin
+  { Check if this declaration has a corresponding foreign procedure binding }
+  LBindingIdx := -1;
+  for I := 0 to FSemaModel.ForeignProcedureBindingCount - 1 do
+  begin
+    LBinding := FSemaModel.ForeignProcedureBindingAt(I);
+    if SameText(LBinding.PascalName, ANode.DisplayName) then
+    begin
+      LBindingIdx := I;
+      Break;
+    end;
+  end;
+  if LBindingIdx < 0 then
+    Exit; { Not an external function — ignore }
+
+  LBinding := FSemaModel.ForeignProcedureBindingAt(LBindingIdx);
+
+  { Determine return type from symbol }
+  LReturnTypeId := GetIntType;
+  if (LBinding.SymbolId > 0) and (LBinding.SymbolId <= FSemaModel.SymbolCount) then
+  begin
+    LSymbol := FSemaModel.SymbolAt(LBinding.SymbolId - 1);
+    if LSymbol.TypeId > 0 then
+      LReturnTypeId := SemanticTypeIdToHirTypeId(LSymbol.TypeId);
+    LParamCount := LSymbol.ParamCount;
+  end
+  else
+    LParamCount := 0;
+
+  LFuncId := FModule.AddFunction(LBinding.PascalName, LReturnTypeId);
+  FModule.SetFunctionExternal(LFuncId, True, LBinding.LibraryId,
+    LBinding.ExternalSymbolName);
+
+  { Add parameters — use generic int type for now since detailed type
+    resolution for external FFI params is not yet implemented. }
+  for I := 0 to LParamCount - 1 do
+    FModule.AddFunctionParam(LFuncId, 'arg' + IntToStr(I), GetIntType, False, False);
+end;
+
 procedure THIRBuilder.ProcessRetRuntime(const ANode: TTypedHirNode);
 var
   V, ObjPtr: THIRValueId;
@@ -6027,6 +6075,8 @@ begin
       ProcessFunctionBegin(ANode);
     hnkFunctionBodyEnd:
       ProcessFunctionEnd(ANode);
+    hnkProcedureDecl, hnkFunctionDecl:
+      ProcessExternalDecl(ANode);
     hnkRetRuntime:
       ProcessRetRuntime(ANode);
     hnkRetTStringRuntime:

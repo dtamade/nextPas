@@ -128,6 +128,8 @@ type
     Blocks: array of THIRBlock;
     EntryBlockId: THIRBlockId;
     IsExternal: Boolean;
+    ExternalLib: string;
+    ExternalName: string;
     UsesOwnedStringReturnAbi: Boolean; { 旧 4-slot owned path — 迁移后删除 }
     IsTStringReturnAbi: Boolean;        { 新 TString 24B sret path }
   end;
@@ -183,6 +185,9 @@ type
       AValue: Boolean);
     procedure SetFunctionTStringReturnAbi(AFuncId: THIRFuncId;
       AValue: Boolean);
+    procedure SetFunctionExternal(AFuncId: THIRFuncId;
+      AIsExternal: Boolean; const AExternalLib: string;
+      const AExternalName: string);
     procedure AddFunctionParam(AFuncId: THIRFuncId;
       const AName: string; ATypeId: THIRTypeId;
       AIsVar: Boolean; AIsConst: Boolean);
@@ -320,6 +325,22 @@ begin
     if FFunctions[I].Id = AFuncId then
     begin
       FFunctions[I].IsTStringReturnAbi := AValue;
+      Exit;
+    end;
+end;
+
+procedure THIRModule.SetFunctionExternal(AFuncId: THIRFuncId;
+  AIsExternal: Boolean; const AExternalLib: string;
+  const AExternalName: string);
+var
+  I: SizeInt;
+begin
+  for I := 0 to High(FFunctions) do
+    if FFunctions[I].Id = AFuncId then
+    begin
+      FFunctions[I].IsExternal := AIsExternal;
+      FFunctions[I].ExternalLib := AExternalLib;
+      FFunctions[I].ExternalName := AExternalName;
       Exit;
     end;
 end;

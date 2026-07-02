@@ -8059,9 +8059,40 @@ var
   ParamTypeId: LongInt;
   ParamCount: LongInt;
   SymCountBefore: LongInt;
+  LExtPos: LongInt;
+  LExtInfo, LExtLib, LExtName, LCleanName: string;
+  LColonPos: LongInt;
 begin
   if ANode = nil then
     Exit;
+
+  { Detect external 'lib' name 'sym' encoding }
+  LExtPos := Pos(';external:', ANode.Text);
+  if LExtPos > 0 then
+  begin
+    LCleanName := Copy(ANode.Text, 1, LExtPos - 1);
+    LExtInfo := Copy(ANode.Text, LExtPos + 10, Length(ANode.Text));
+    LColonPos := Pos(':', LExtInfo);
+    if LColonPos > 0 then
+    begin
+      LExtLib := Copy(LExtInfo, 1, LColonPos - 1);
+      LExtName := Copy(LExtInfo, LColonPos + 1, Length(LExtInfo));
+    end
+    else
+    begin
+      LExtLib := LExtInfo;
+      LExtName := LCleanName;
+    end;
+
+    FModel.AddSymbol(LCleanName, 'procedure', AOwnerUnitId, 0,
+      ANode.ByteOffset);
+    FModel.AddForeignProcedureBinding(LCleanName, 'cdecl', LExtLib, LExtName,
+      FModel.SymbolCount);
+    FModel.AddTypedHirNode('procedure-decl', LCleanName,
+      FModel.SymbolCount, 0, '');
+    Exit;
+  end;
+
   SymbolId := FModel.AddSymbol(ANode.Text, 'procedure', AOwnerUnitId, 0,
     ANode.ByteOffset);
   FModel.AddTypedHirNode('procedure-decl', ANode.Text, SymbolId, 0, '');
@@ -8130,9 +8161,54 @@ var
   ParamTypeId: LongInt;
   ParamCount: LongInt;
   SymCountBefore: LongInt;
+  LExtPos: LongInt;
+  LExtInfo, LExtLib, LExtName, LCleanName: string;
+  LColonPos: LongInt;
 begin
   if ANode = nil then
     Exit;
+
+  { Detect external 'lib' name 'sym' encoding }
+  LExtPos := Pos(';external:', ANode.Text);
+  if LExtPos > 0 then
+  begin
+    LCleanName := Copy(ANode.Text, 1, LExtPos - 1);
+    LExtInfo := Copy(ANode.Text, LExtPos + 10, Length(ANode.Text));
+    LColonPos := Pos(':', LExtInfo);
+    if LColonPos > 0 then
+    begin
+      LExtLib := Copy(LExtInfo, 1, LColonPos - 1);
+      LExtName := Copy(LExtInfo, LColonPos + 1, Length(LExtInfo));
+    end
+    else
+    begin
+      LExtLib := LExtInfo;
+      LExtName := LCleanName;
+    end;
+
+    TypeId := 0;
+    for J := 0 to ANode.ChildCount - 1 do
+    begin
+      Child := ANode.ChildAt(J);
+      if (Child <> nil) and (Child.NodeKind = gnkIdentifier) then
+      begin
+        TypeId := ResolveTypeIdForOwner(Child.Text, AOwnerUnitId);
+        Break;
+      end;
+    end;
+
+    SymbolId := FModel.AddSymbol(LCleanName, 'function', AOwnerUnitId, TypeId,
+      ANode.ByteOffset);
+    FModel.AddForeignProcedureBinding(LCleanName, 'cdecl', LExtLib, LExtName,
+      SymbolId);
+    FModel.AddTypedHirNode('function-decl', LCleanName,
+      SymbolId, TypeId, '');
+    FModel.SetSymbolParamCount(SymbolId, CountRequiredDeclParams(ANode));
+    FModel.SetSymbolMinParamCount(SymbolId, CountRequiredDeclParams(ANode));
+    FModel.SetSymbolParamSignature(SymbolId, GetParamSignature(ANode));
+    Exit;
+  end;
+
   TypeId := 0;
   for J := 0 to ANode.ChildCount - 1 do
   begin

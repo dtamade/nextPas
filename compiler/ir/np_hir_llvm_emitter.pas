@@ -1221,7 +1221,20 @@ var
   ParamStr, RetStr: string;
   T: THIRTypeRec;
 begin
-  if AFunc.IsExternal then Exit;
+  if AFunc.IsExternal then
+  begin
+    { Emit LLVM declare for external functions }
+    ParamStr := '';
+    for I := 0 to High(AFunc.Params) do
+    begin
+      if ParamStr <> '' then
+        ParamStr := ParamStr + ', ';
+      ParamStr := ParamStr + TypeToLlvm(AFunc.Params[I].TypeId);
+    end;
+    RetStr := TypeToLlvm(AFunc.ReturnTypeId);
+    Emit('declare ' + RetStr + ' @' + AFunc.ExternalName + '(' + ParamStr + ')');
+    Exit;
+  end;
   FGlobalRefCount := 0;
 
   ParamStr := '';

@@ -3506,6 +3506,39 @@ begin
     MatchTokenSilent(ALexer, ACursor, tkSemicolon);
   end;
 
+  { external 'lib' name 'sym' — mark node and skip body }
+  if (ACursor < ALexer.TokenCount) and
+    (CurrentToken(ALexer, ACursor).Kind = tkExternalKeyword) then
+  begin
+    Inc(ACursor);
+    if (ACursor < ALexer.TokenCount) and
+      (CurrentToken(ALexer, ACursor).Kind = tkStringLiteral) then
+    begin
+      Node.FText := Node.FText + ';external:' +
+        DecodePascalStringLiteral(CurrentToken(ALexer, ACursor).Lexeme);
+      Inc(ACursor);
+      if (ACursor < ALexer.TokenCount) and
+        ((CurrentToken(ALexer, ACursor).Kind = tkNameKeyword) or
+         ((CurrentToken(ALexer, ACursor).Kind = tkIdentifier) and
+          SameText(CurrentToken(ALexer, ACursor).Lexeme, 'name'))) then
+      begin
+        Inc(ACursor);
+        if (ACursor < ALexer.TokenCount) and
+          (CurrentToken(ALexer, ACursor).Kind = tkStringLiteral) then
+        begin
+          Node.FText := Node.FText + ':' +
+            DecodePascalStringLiteral(CurrentToken(ALexer, ACursor).Lexeme);
+          Inc(ACursor);
+        end;
+      end;
+    end;
+    MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+    AParent.AppendChild(Node);
+    Inc(ATree.FNodeCount);
+    Result := True;
+    Exit;
+  end;
+
   if (ACursor < ALexer.TokenCount) and
     (CurrentToken(ALexer, ACursor).Kind = tkForwardKeyword) then
   begin
@@ -3707,6 +3740,39 @@ begin
       Node.FText := Node.FText + ';compilerproc';
     Inc(ACursor);
     MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+  end;
+
+  { external 'lib' name 'sym' — mark node and skip body }
+  if (ACursor < ALexer.TokenCount) and
+    (CurrentToken(ALexer, ACursor).Kind = tkExternalKeyword) then
+  begin
+    Inc(ACursor);
+    if (ACursor < ALexer.TokenCount) and
+      (CurrentToken(ALexer, ACursor).Kind = tkStringLiteral) then
+    begin
+      Node.FText := Node.FText + ';external:' +
+        DecodePascalStringLiteral(CurrentToken(ALexer, ACursor).Lexeme);
+      Inc(ACursor);
+      if (ACursor < ALexer.TokenCount) and
+        ((CurrentToken(ALexer, ACursor).Kind = tkNameKeyword) or
+         ((CurrentToken(ALexer, ACursor).Kind = tkIdentifier) and
+          SameText(CurrentToken(ALexer, ACursor).Lexeme, 'name'))) then
+      begin
+        Inc(ACursor);
+        if (ACursor < ALexer.TokenCount) and
+          (CurrentToken(ALexer, ACursor).Kind = tkStringLiteral) then
+        begin
+          Node.FText := Node.FText + ':' +
+            DecodePascalStringLiteral(CurrentToken(ALexer, ACursor).Lexeme);
+          Inc(ACursor);
+        end;
+      end;
+    end;
+    MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+    AParent.AppendChild(Node);
+    Inc(ATree.FNodeCount);
+    Result := True;
+    Exit;
   end;
 
   if (ACursor < ALexer.TokenCount) and
