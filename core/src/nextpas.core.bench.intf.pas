@@ -249,7 +249,8 @@ type
     {** 与基线对比 }
     function CompareWithBaseline: TBenchComparisonArray;
 
-    {** 两个结果对比（Mann-Whitney U 检验，需 RawSamples） }
+    {** 两个结果对比（Mann-Whitney U 检验，需 RawSamples）。
+     *  @raises EBenchError 当任一名称不存在时。 }
     function CompareTwoResults(const ANameA, ANameB: string): TBenchComparison;
 
     {** 保存当前结果为命名基线文件 }

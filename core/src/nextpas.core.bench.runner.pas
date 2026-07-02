@@ -132,6 +132,8 @@ type
 
   public
     constructor Create;
+    {** 跳过环境变量加载（CreateWithConfig 内部使用） }
+    constructor CreateNoEnv;
     destructor Destroy; override;
 
     {** 测量函数执行时间 }
@@ -414,6 +416,19 @@ begin
   SetLength(FResults, 0);
   SetLength(FParallelContexts, 0);
   LoadConfigFromEnv;
+end;
+
+constructor TBenchRunner.CreateNoEnv;
+begin
+  inherited Create;
+  FStatsAnalyzer := TBenchStatsAnalyzer.Create;
+  FResultCount := 0;
+  FResultCapacity := 0;
+  FParallelBridgeFunc := nil;
+  FParallelContextsInitialized := False;
+  SetLength(FResults, 0);
+  SetLength(FParallelContexts, 0);
+  FConfig := DefaultBenchConfig;
 end;
 
 destructor TBenchRunner.Destroy;
@@ -930,6 +945,8 @@ end;
 
 function TBenchRunner.RunOne(const AName: string; AFunc: TBenchFunc): TBenchResult;
 begin
+  if not Assigned(AFunc) then
+    raise EBenchInvalidParam.CreateFmt('TBenchRunner.RunOne: function must not be nil (name="%s")', [AName]);
   Result := RunOne(BuildEntry(AName, AFunc));
 end;
 

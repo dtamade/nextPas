@@ -213,7 +213,7 @@ begin
   FConfig := AConfig;
   FConfig.SuiteName := ASuiteName;
 
-  FRunner := TBenchRunner.Create;
+  FRunner := TBenchRunner.CreateNoEnv;
   FReportGenerator := TBenchReportGenerator.Create;
   FHasRun := False;
 end;
@@ -776,7 +776,7 @@ end;
 
 function TBenchResults.GetAll: TBenchResultArray;
 begin
-  Result := FResults;
+  Result := Copy(FResults, 0, FResultCount);
 end;
 
 function TBenchResults.GetByName(const AName: string): TBenchResult;
@@ -893,8 +893,10 @@ begin
   LFoundA := TryGetByName(ANameA, LA);
   LFoundB := TryGetByName(ANameB, LB);
 
-  if (not LFoundA) or (not LFoundB) then
-    Exit;
+  if not LFoundA then
+    raise EBenchError.CreateFmt('CompareTwoResults: benchmark not found: "%s"', [ANameA]);
+  if not LFoundB then
+    raise EBenchError.CreateFmt('CompareTwoResults: benchmark not found: "%s"', [ANameB]);
 
   Result.BaselineNsPerOp := LB.NsPerOp;
   Result.CurrentNsPerOp := LA.NsPerOp;
@@ -937,7 +939,12 @@ begin
     if FResults[I].Executed and (not FResults[I].Skipped) then
       LManager.AddBaselineFromResult(FResults[I], AGitHash);
   end;
-  LManager.SaveToFile(APath);
+  try
+    LManager.SaveToFile(APath);
+  except
+    on E: Exception do
+      raise EBenchError.CreateFmt('Failed to save baseline to "%s": %s', [APath, E.Message]);
+  end;
 end;
 
 procedure TBenchResults.AppendToTimeline(const APath: string);
@@ -980,7 +987,11 @@ begin
       try
         AppendFileText(APath, LBuilder.ToString);
       except
-        WriteFileText(APath, LBuilder.ToString, PermDefault);
+        on E: Exception do
+        begin
+          WriteLn('WARNING: AppendToTimeline: append failed (', E.Message, '), overwriting file');
+          WriteFileText(APath, LBuilder.ToString, PermDefault);
+        end;
       end;
     end;
   finally

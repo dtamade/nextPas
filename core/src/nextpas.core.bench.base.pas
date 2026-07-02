@@ -92,8 +92,9 @@ type
     MinSamples: Integer;
     WarmupIterations: Integer;
     EnableMemoryTracking: Boolean;
-    {** DS-01: 保留用于 suite 级默认并行配置。当前并行由 AddParallel 在 entry 级别设置。 }
+    {** DS-01: 保留字段，当前未使用。并行由 AddParallel 在 entry 级别设置。 }
     EnableParallel: Boolean;
+    {** DS-01: 保留字段，当前未使用。并行线程数由 AddParallel 的 AThreads 参数控制。 }
     ParallelThreads: Integer;
     CollectRawSamples: Boolean;
     Quiet: Boolean;

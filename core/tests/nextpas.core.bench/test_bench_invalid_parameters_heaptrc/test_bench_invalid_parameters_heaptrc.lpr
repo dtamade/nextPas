@@ -308,6 +308,43 @@ begin
   end;
 end;
 
+procedure ExpectRunOneNilFuncRaised;
+var
+  LRaised: Boolean;
+  LCorrectType: Boolean;
+  LRunner: TBenchRunner;
+begin
+  LRaised := False;
+  LCorrectType := False;
+  LRunner := TBenchRunner.Create;
+  try
+    try
+      LRunner.RunOne('NilFunc', nil);
+    except
+      on E: EBenchInvalidParam do
+      begin
+        LRaised := True;
+        LCorrectType := True;
+      end;
+      on E: Exception do
+        LRaised := True;
+    end;
+  finally
+    LRunner.Free;
+  end;
+
+  if not LRaised then
+  begin
+    WriteLn('MISSING_EXCEPTION=RunOne(nil)');
+    Halt(10);
+  end;
+  if not LCorrectType then
+  begin
+    WriteLn('WRONG_EXCEPTION_TYPE=RunOne(nil) (expected EBenchInvalidParam)');
+    Halt(110);
+  end;
+end;
+
 var
   T: TTestSuite;
 begin
@@ -320,6 +357,7 @@ begin
   T.Test('Add(nil) raises EBenchInvalidParam', @ExpectAddNilFuncRaised);
   T.Test('AddLoop(nil) raises EBenchInvalidParam', @ExpectAddLoopNilFuncRaised);
   T.Test('AddRange(nil) raises EBenchInvalidParam', @ExpectAddRangeNilFuncRaised);
+  T.Test('RunOne(nil) raises EBenchInvalidParam', @ExpectRunOneNilFuncRaised);
   T.Run;
   T.Summary;
 
