@@ -13,7 +13,7 @@ type
 
 var
   T: TTestSuite;
-  GAllocator: TAllocator = nil;
+  GAllocator: IAllocator = nil;
   GPtr: Pointer = nil;
   GForeignPtr: Pointer = nil;
   GStackByte: Byte = 0;
@@ -55,7 +55,7 @@ end;
 
 procedure TestAnonymousAllocatorTraitsAndZeroing;
 var
-  LAllocator: TAllocator;
+  LAllocator: IAllocator;
   LPtr: Pointer;
   LIndex: Integer;
 begin
@@ -76,7 +76,7 @@ end;
 
 procedure TestReallocPreservesPrefix;
 var
-  LAllocator: TAllocator;
+  LAllocator: IAllocator;
   LPtr: Pointer;
 begin
   LAllocator := CreateAnonymousMemoryMapAllocator(4096);
@@ -95,7 +95,7 @@ end;
 
 procedure TestMultipleBlocksDoNotAliasAndCanReuse;
 var
-  LAllocator: TAllocator;
+  LAllocator: IAllocator;
   LFirst: Pointer;
   LSecond: Pointer;
   LReused: Pointer;
@@ -146,7 +146,7 @@ end;
 
 procedure TestCapacityExhaustionReturnsNil;
 var
-  LAllocator: TAllocator;
+  LAllocator: IAllocator;
   LPtr: Pointer;
 begin
   LAllocator := CreateAnonymousMemoryMapAllocator(512);

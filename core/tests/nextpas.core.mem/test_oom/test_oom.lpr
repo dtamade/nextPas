@@ -55,9 +55,9 @@ procedure TFailAllocator.DoFreeMem(ADst: Pointer);
 begin
 end;
 
-function NewFailAllocator: nextpas.core.mem.allocator.TAllocator;
+function NewFailAllocator: nextpas.core.mem.allocator.IAllocator;
 begin
-  Result := TFailAllocator.Create;
+  Result := TFailAllocator.Create as nextpas.core.mem.allocator.IAllocator;
 end;
 
 procedure ResetVirtualArenaHooks;
@@ -137,7 +137,7 @@ end;
 
 procedure RaiseMemOutOfMemory;
 begin
-  raise nextpas.core.mem.error.EOutOfMemory.CreateMsg('alloc result');
+  raise nextpas.core.mem.error.EOutOfMemory.Create(aeOutOfMemory, 'alloc result');
 end;
 
 procedure RaiseBlockPoolTotalSizeOverflow;

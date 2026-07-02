@@ -5,13 +5,13 @@ unit nextpas.core.mem.allocator.crt;
 interface
 
 uses
+  nextpas.core.errors,
   nextpas.core.mem.allocator.base;
 
 type
   {**
    * TCrtAllocator
-   * @desc 使用 C 运行时库 (CRT) 内存管理器实现的分配器。
-   *       FreeMem/ASize 参数被忽略（CRT 通过 header 知道大小）。
+   * @desc 使用 C 运行时库 (CRT) 内存管理器实现的 IAllocator 具体类
    *}
   TCrtAllocator = class(TAllocator)
   protected
@@ -23,8 +23,8 @@ type
     function  Traits: TAllocatorTraits; override;
   end;
 
-function GetCrtAllocator: TAllocator;
-function TryGetCrtAllocator(out A: TAllocator): Boolean;
+function GetCrtAllocator: IAllocator;
+function TryGetCrtAllocator(out A: IAllocator): Boolean;
 
 implementation
 
@@ -37,8 +37,8 @@ function  crt_realloc(APtr: Pointer; ASize: SizeUInt): Pointer; cdecl external {
 procedure crt_free(APtr: Pointer); cdecl external {$IFDEF MSWINDOWS}'msvcrt.dll'{$ELSE}'c'{$ENDIF} name 'free';
 
 var
-  _CrtAllocatorObj: TCrtAllocator;
-  _CrtAllocatorIntf: IAllocator;
+  _CrtAllocatorObj: TAllocator = nil;
+  _CrtAllocatorIntf: IAllocator = nil;
   GCrtAllocLock: TPlatformMutex;
 
 function TCrtAllocator.DoGetMem(ASize: SizeUInt): Pointer;
@@ -64,10 +64,14 @@ end;
 function TCrtAllocator.Traits: TAllocatorTraits;
 begin
   Result := inherited Traits;
+  // CRT semantics:
+  // - AllocMem uses calloc path => zero initialized; GetMem not guaranteed
+  // - No native aligned API exposed via this allocator
+  // - No MemSize/usable_size available
   Result.ZeroInitialized := True;
 end;
 
-function GetCrtAllocator: TAllocator;
+function GetCrtAllocator: IAllocator;
 begin
   { GCrtAllocLock is TPlatformMutex — zero-initialized, no explicit Init needed.
     See allocator.rtl.pas for full rationale. }
@@ -78,16 +82,16 @@ begin
       if _CrtAllocatorObj = nil then
       begin
         _CrtAllocatorObj := TCrtAllocator.Create;
-        _CrtAllocatorIntf := _CrtAllocatorObj as IAllocator;
+        _CrtAllocatorIntf := _CrtAllocatorObj as IAllocator; // anchor lifetime
       end;
     finally
       platform_mutex_unlock(GCrtAllocLock);
     end;
   end;
-  Result := _CrtAllocatorObj;
+  Result := _CrtAllocatorIntf;
 end;
 
-function TryGetCrtAllocator(out A: TAllocator): Boolean;
+function TryGetCrtAllocator(out A: IAllocator): Boolean;
 begin
   try
     A := GetCrtAllocator;

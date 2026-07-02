@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 cd "$ROOT"
 
 FORBIDDEN_UNITS=(
@@ -76,7 +76,7 @@ while IFS= read -r file; do
       if ($0 ~ /;/) in_uses = 0
     }
   ' "$file"
-done < <(find src -maxdepth 1 -name 'nextpas.core.mem*.pas' | sort) | sort -u > "$tmp_found"
+done < <(find core/src -maxdepth 1 -name 'nextpas.core.mem*.pas' | sort) | sort -u > "$tmp_found"
 
 while IFS='|' read -r file unit; do
   if is_forbidden_unit "$unit"; then

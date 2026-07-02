@@ -5,6 +5,7 @@ unit nextpas.core.mem.allocator.mimalloc;
 interface
 
 uses
+  nextpas.core.errors,
   nextpas.core.mem.allocator.base
   {$IFNDEF NEXTPAS_CORE_MIMALLOC_STATIC}
   ,nextpas.core.mem.allocator.mimalloc.loader
@@ -15,7 +16,7 @@ uses
 type
   {**
    * TMimallocAllocator
-   * @desc 使用 mimalloc 库的 TAllocator 实现
+   * @desc 使用 mimalloc 库的 IAllocator 实现
    *}
   TMimallocAllocator = class(TAllocator)
   protected
@@ -23,13 +24,14 @@ type
     function  DoAllocMem(ASize: SizeUInt): Pointer; override;
     function  DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
     procedure DoFreeMem(ADst: Pointer); override;
-    function  DoMemSize(APtr: Pointer): SizeUInt; override;
   public
+    {** 查询 mimalloc 分配的实际可用大小（独立方法，非 IAllocator 接口） }
+    function  UsableSize(APtr: Pointer): SizeUInt;
     function  Traits: TAllocatorTraits; override;
   end;
 
-function TryGetMimallocAllocator(out A: TAllocator): Boolean;
-function GetMimallocAllocator: TAllocator;
+function TryGetMimallocAllocator(out A: IAllocator): Boolean;
+function GetMimallocAllocator: IAllocator;
 function MimallocUsableSizeAvailable: Boolean;
 function TryGetMimallocUsableSize(APtr: Pointer; out ASize: SizeUInt): Boolean;
 
@@ -105,8 +107,8 @@ uses
 {$ENDIF}
 
 var
-  _MimallocAllocatorObj: TMimallocAllocator;
-  _MimallocAllocatorIntf: IAllocator;
+  _MimallocAllocatorObj: TAllocator = nil;
+  _MimallocAllocatorIntf: IAllocator = nil;
   GAllocatorLock: TPlatformMutex;
 
 function MimallocUsableSizeAvailable: Boolean;
@@ -155,11 +157,11 @@ end;
 procedure TMimallocAllocator.DoFreeMem(ADst: Pointer);
 begin
   if not EnsureMimallocLoaded then
-    Exit;
+    Exit; // free path when library missing: nothing to do
   _mi_free(ADst);
 end;
 
-function TMimallocAllocator.DoMemSize(APtr: Pointer): SizeUInt;
+function TMimallocAllocator.UsableSize(APtr: Pointer): SizeUInt;
 begin
   if not TryGetMimallocUsableSize(APtr, Result) then
     Result := 0;
@@ -168,11 +170,12 @@ end;
 function TMimallocAllocator.Traits: TAllocatorTraits;
 begin
   Result := inherited Traits;
+  // mimalloc semantics:
+  // - AllocMem uses mi_calloc => zero initialized; GetMem not guaranteed
   Result.ZeroInitialized := True;
-  Result.HasMemSize      := MimallocUsableSizeAvailable;
 end;
 
-function GetMimallocAllocator: TAllocator;
+function GetMimallocAllocator: IAllocator;
 begin
   if _MimallocAllocatorObj = nil then
   begin
@@ -187,9 +190,9 @@ begin
       platform_mutex_unlock(GAllocatorLock);
     end;
   end;
-  Result := _MimallocAllocatorObj;
+  Result := _MimallocAllocatorIntf;
 end;
-function TryGetMimallocAllocator(out A: TAllocator): Boolean;
+function TryGetMimallocAllocator(out A: IAllocator): Boolean;
 begin
   try
     A := GetMimallocAllocator;

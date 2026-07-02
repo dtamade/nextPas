@@ -499,6 +499,54 @@ begin
   end;
 end;
 
+{ Regression: Reset(KeepSegments) must rebuild StartOffset so
+  RestoreToMark binary search works correctly. }
+procedure TestResetKeepSegmentsThenRestoreToMark;
+var
+  LConfig: TArenaConfig;
+  LArena: TChunkedArena;
+  LMark: TArenaMark;
+  LP: Pointer;
+  LUsed1: SizeUInt;
+begin
+  LConfig := TArenaConfig.Default(1024);
+  LConfig.KeepSegments := True;
+  LArena := TChunkedArena.Create(LConfig);
+  try
+    { Allocate enough to create multiple segments }
+    while LArena.SegmentCount < 3 do
+      LArena.Alloc(512);
+    Check(LArena.SegmentCount >= 3, 'rgrs: should have 3+ segments');
+
+    { Reset with KeepSegments=True }
+    LArena.Reset;
+    Check(LArena.UsedSize = 0, 'rgrs: UsedSize 0 after reset');
+    Check(LArena.SegmentCount >= 3, 'rgrs: segments preserved');
+
+    { Allocate some, save mark }
+    LArena.Alloc(256);
+    LArena.Alloc(256);
+    LUsed1 := LArena.UsedSize;
+    LMark := LArena.SaveMark;
+
+    { Allocate more (may cross into segment 2) }
+    LP := LArena.Alloc(512);
+    Check(LP <> nil, 'rgrs: alloc after mark should succeed');
+
+    { RestoreToMark must work correctly after Reset+KeepSegments }
+    LArena.RestoreToMark(LMark);
+    Check(LArena.UsedSize = LUsed1,
+      'rgrs: RestoreToMark should restore to mark (got ' +
+      IntToStr(LArena.UsedSize) + ', expected ' + IntToStr(LUsed1) + ')');
+
+    { Can still allocate after restore }
+    LP := LArena.Alloc(128);
+    Check(LP <> nil, 'rgrs: can alloc after restore');
+  finally
+    LArena.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.mem.arena.chunked');
 
@@ -528,6 +576,7 @@ begin
   T.Test('reset_then_large_alloc', @TestResetThenLargeAlloc);
   T.Test('remaining_size', @TestRemainingSize);
   T.Test('segment_count_initial', @TestSegmentCountZero);
+  T.Test('reset_keep_segments_restore_mark', @TestResetKeepSegmentsThenRestoreToMark);
 
   T.Run;
 

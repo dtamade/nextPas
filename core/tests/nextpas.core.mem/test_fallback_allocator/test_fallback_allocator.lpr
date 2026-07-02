@@ -16,35 +16,62 @@ uses
 
 type
   {** 总是返回 nil 的分配器 (模拟 OOM) }
-  TOomAllocator = class(TAllocator)
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(ADst: Pointer); override;
+  TOomAllocator = class(TInterfacedObject, IAllocator)
   public
-    function Traits: TAllocatorTraits; override;
+    function GetMem(ASize: SizeUInt): Pointer;
+    function AllocMem(ASize: SizeUInt): Pointer;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(ADst: Pointer);
+    procedure FreeAligned(APtr: Pointer);
+    function MemSize(APtr: Pointer): SizeUInt;
+    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
+    function Traits: TAllocatorTraits;
   end;
 
-function TOomAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TOomAllocator.GetMem(ASize: SizeUInt): Pointer;
 begin Result := nil; end;
-function TOomAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TOomAllocator.AllocMem(ASize: SizeUInt): Pointer;
 begin Result := nil; end;
-function TOomAllocator.DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+function TOomAllocator.ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
 begin Result := nil; end;
-procedure TOomAllocator.DoFreeMem(ADst: Pointer);
+procedure TOomAllocator.FreeMem(ADst: Pointer);
 begin end;
+procedure TOomAllocator.FreeAligned(APtr: Pointer);
+begin end;
+function TOomAllocator.MemSize(APtr: Pointer): SizeUInt;
+begin Result := 0; end;
+function TOomAllocator.AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
+begin Result := nil; end;
 function TOomAllocator.Traits: TAllocatorTraits;
 begin FillChar(Result, SizeOf(Result), 0); end;
 
 var
   T: TTestSuite;
 
-{ --- TFallbackAllocator tests --- }
+{ ---------------------------------------------------------------------------
+  TFallbackAllocator
+  --------------------------------------------------------------------------- }
+
+procedure TestFallbackAllocatorCreateDestroy;
+var
+  LOom: TOomAllocator;
+  LRtl: IAllocator;
+  LFall: TFallbackAllocator;
+begin
+  LOom := TOomAllocator.Create;
+  LRtl := GetRtlAllocator;
+  LFall := TFallbackAllocator.Create(LOom, LRtl);
+  try
+    Check(LFall <> nil, 'created');
+    Check(Int64(0) = Int64(LFall.TotalFallbacks), 'initial fallbacks 0');
+  finally
+    LFall.Free;
+  end;
+end;
 
 procedure TestFallbackAllocatorPrimarySucceeds;
 var
-  LRtl: TAllocator;
+  LRtl: IAllocator;
   LFall: TFallbackAllocator;
   LP: Pointer;
 begin
@@ -63,7 +90,7 @@ end;
 procedure TestFallbackAllocatorPrimaryFails;
 var
   LOom: TOomAllocator;
-  LRtl: TAllocator;
+  LRtl: IAllocator;
   LFall: TFallbackAllocator;
   LP: Pointer;
 begin
@@ -83,7 +110,7 @@ end;
 procedure TestFallbackAllocatorFreeFromCorrect;
 var
   LOom: TOomAllocator;
-  LRtl: TAllocator;
+  LRtl: IAllocator;
   LFall: TFallbackAllocator;
   LP1: Pointer;
 begin
@@ -91,9 +118,12 @@ begin
   LRtl := GetRtlAllocator;
   LFall := TFallbackAllocator.Create(LRtl, LOom);
   try
+    { primary succeeds }
     LP1 := LFall.GetMem(32);
     Check(LP1 <> nil, 'primary alloc');
     Check(Int64(0) = Int64(LFall.TotalFallbacks), 'no fallback');
+
+    { free from primary — 不崩溃 }
     LFall.FreeMem(LP1);
     Check(True, 'free primary succeeded');
   finally
@@ -104,7 +134,7 @@ end;
 procedure TestFallbackAllocatorMultiple;
 var
   LOom: TOomAllocator;
-  LRtl: TAllocator;
+  LRtl: IAllocator;
   LFall: TFallbackAllocator;
   LPs: array[0..9] of Pointer;
   I: Integer;
@@ -118,8 +148,10 @@ begin
       Check(LPs[I] <> nil, 'fallback alloc #' + IntToStr(I));
     end;
     Check(Int64(10) = Int64(LFall.TotalFallbacks), '10 fallbacks');
+
     for I := 0 to 9 do
       LFall.FreeMem(LPs[I]);
+
     Check(Int64(10) = Int64(LFall.TotalFallbacks), 'total fallback count unchanged');
   finally
     LFall.Free;
@@ -129,7 +161,7 @@ end;
 procedure TestFallbackAllocatorAllocMem;
 var
   LOom: TOomAllocator;
-  LRtl: TAllocator;
+  LRtl: IAllocator;
   LFall: TFallbackAllocator;
   LP: PByte;
   I: Integer;
@@ -140,6 +172,7 @@ begin
   try
     LP := PByte(LFall.AllocMem(64));
     Check(LP <> nil, 'AllocMem succeeds');
+    { AllocMem 应返回零初始化内存 }
     for I := 0 to 63 do
       Check(LP[I] = 0, 'zeroed at ' + IntToStr(I));
     LFall.FreeMem(LP);
@@ -150,13 +183,13 @@ end;
 
 procedure TestFallbackAllocatorFreeNil;
 var
-  LRtl: TAllocator;
+  LRtl: IAllocator;
   LFall: TFallbackAllocator;
 begin
   LRtl := GetRtlAllocator;
   LFall := TFallbackAllocator.Create(LRtl, LRtl);
   try
-    LFall.FreeMem(nil);
+    LFall.FreeMem(nil); { 不崩溃 }
     Check(True, 'free nil does not crash');
   finally
     LFall.Free;
@@ -166,7 +199,7 @@ end;
 procedure TestFallbackAllocatorReallocMemFromFallbackUpdatesSize;
 var
   LOom: TOomAllocator;
-  LRtl: TAllocator;
+  LRtl: IAllocator;
   LFall: TFallbackAllocator;
   LP, LP2: PByte;
 begin
@@ -174,12 +207,17 @@ begin
   LRtl := GetRtlAllocator;
   LFall := TFallbackAllocator.Create(LOom, LRtl);
   try
+    { 分配来自 fallback }
     LP := PByte(LFall.GetMem(64));
     Check(LP <> nil, 'fallback alloc succeeds');
-    LP^ := $AB;
-    LP2 := PByte(LFall.ReallocMem(LP, 64, 128));
+    LP^ := $AB; { 写入标记 }
+
+    { ReallocMem 来自 fallback 的记录应更新 size }
+    LP2 := PByte(LFall.ReallocMem(LP, 128));
     Check(LP2 <> nil, 'realloc from fallback succeeds');
     Check(LP2^ = $AB, 'data preserved after realloc');
+
+    { 释放后不再有跟踪记录 — 通过 FreeMem 不崩溃验证 }
     LFall.FreeMem(LP2);
     Check(True, 'free after realloc succeeds');
   finally
@@ -187,12 +225,14 @@ begin
   end;
 end;
 
-{ --- TFallbackArena tests --- }
+{ ---------------------------------------------------------------------------
+  TFallbackArena
+  --------------------------------------------------------------------------- }
 
 procedure TestFallbackArenaCreateDestroy;
 var
   LArena: TLocalArena;
-  LRtl: TAllocator;
+  LRtl: IAllocator;
   LFall: TFallbackArena;
 begin
   LArena := TLocalArena.Create(256);
@@ -209,7 +249,7 @@ end;
 procedure TestFallbackArenaPrimarySucceeds;
 var
   LArena: TLocalArena;
-  LRtl: TAllocator;
+  LRtl: IAllocator;
   LFall: TFallbackArena;
   LP: Pointer;
 begin
@@ -228,7 +268,7 @@ end;
 procedure TestFallbackArenaExhaustAndFallback;
 var
   LArena: TLocalArena;
-  LRtl: TAllocator;
+  LRtl: IAllocator;
   LFall: TFallbackArena;
   LP1, LP2: Pointer;
 begin
@@ -236,9 +276,12 @@ begin
   LRtl := GetRtlAllocator;
   LFall := TFallbackArena.Create(LArena, LRtl);
   try
+    { 填满 Arena }
     LP1 := LFall.Alloc(64);
     Check(LP1 <> nil, 'arena alloc');
     Check(Int64(0) = Int64(LFall.TotalFallbacks), 'no fallback yet');
+
+    { Arena 耗尽, 降级到 fallback }
     LP2 := LFall.Alloc(32);
     Check(LP2 <> nil, 'fallback alloc succeeds');
     Check(Int64(1) = Int64(LFall.TotalFallbacks), 'one fallback');
@@ -250,7 +293,7 @@ end;
 procedure TestFallbackArenaReset;
 var
   LArena: TLocalArena;
-  LRtl: TAllocator;
+  LRtl: IAllocator;
   LFall: TFallbackArena;
   LP: Pointer;
 begin
@@ -262,6 +305,7 @@ begin
     Check(LP <> nil, 'alloc before reset');
     LFall.Reset;
     Check(Int64(0) = Int64(LFall.UsedSize), 'arena reset');
+    { 可以重新从 Arena 分配 }
     LP := LFall.Alloc(128);
     Check(LP <> nil, 'alloc after reset');
     Check(Int64(0) = Int64(LFall.TotalFallbacks), 'no fallback after reset');
@@ -273,7 +317,7 @@ end;
 procedure TestFallbackArenaMarkRestore;
 var
   LArena: TLocalArena;
-  LRtl: TAllocator;
+  LRtl: IAllocator;
   LFall: TFallbackArena;
   LMark: TArenaMark;
 begin
@@ -294,7 +338,7 @@ end;
 procedure TestFallbackArenaFreeFallbacks;
 var
   LArena: TLocalArena;
-  LRtl: TAllocator;
+  LRtl: IAllocator;
   LFall: TFallbackArena;
   LP: Pointer;
 begin
@@ -302,10 +346,11 @@ begin
   LRtl := GetRtlAllocator;
   LFall := TFallbackArena.Create(LArena, LRtl);
   try
-    LFall.Alloc(32);
-    LP := LFall.Alloc(32);
+    LFall.Alloc(32); { fill arena }
+    LP := LFall.Alloc(32); { fallback }
     Check(LP <> nil, 'fallback alloc');
     Check(Int64(1) = Int64(LFall.TotalFallbacks), 'one fallback');
+
     LFall.FreeFallbacks;
     Check(Int64(1) = Int64(LFall.TotalFallbacks), 'total unchanged');
   finally
@@ -316,17 +361,22 @@ end;
 { R-21 regression: ReallocMem(ptr, 0) frees and removes entry }
 procedure TestFallbackReallocZeroSize;
 var
-  LPrimary: TAllocator;
+  LPrimary: IAllocator;
   LFallback: TFallbackAllocator;
   LPtr, LNew: Pointer;
 begin
   LPrimary := TOomAllocator.Create;
   LFallback := TFallbackAllocator.Create(LPrimary, GetRtlAllocator);
   try
+    { Allocate via fallback }
     LPtr := LFallback.GetMem(64);
     Check(LPtr <> nil, 'fallback alloc succeeded');
-    LNew := LFallback.ReallocMem(LPtr, 64, 0);
+
+    { ReallocMem(ptr, 0) should free and return nil }
+    LNew := LFallback.ReallocMem(LPtr, 0);
     Check(LNew = nil, 'ReallocMem(ptr, 0) returns nil');
+
+    { Verify entry was removed: re-allocating should create new fallback entry }
     LPtr := LFallback.GetMem(64);
     Check(LPtr <> nil, 're-alloc after zero-realloc succeeds');
     LFallback.FreeMem(LPtr);
@@ -338,29 +388,49 @@ end;
 { R-21 regression: ReallocMem failure returns nil, not original pointer }
 procedure TestFallbackReallocFailureReturnsNil;
 var
-  LPrimary: TAllocator;
+  LPrimary: IAllocator;
   LFallback: TFallbackAllocator;
   LPtr, LNew: Pointer;
 begin
+  { Use OOM allocator as primary — all primary allocs fail.
+    Allocate via fallback, then try to realloc to a size that the
+    fallback (RTL) allocator rejects. Use 0 as the test for "failure
+    returns nil" — but 0 is now handled as free. Instead, verify
+    that the fix removed the Result := APtr line by checking that
+    a successful realloc returns a different pointer (not the original). }
   LPrimary := TOomAllocator.Create;
   LFallback := TFallbackAllocator.Create(LPrimary, GetRtlAllocator);
   try
+    { Allocate via fallback }
     LPtr := LFallback.GetMem(64);
     Check(LPtr <> nil, 'fallback alloc succeeded');
-    LNew := LFallback.ReallocMem(LPtr, 64, 128);
+
+    { Successful realloc should return a new pointer (or same if shrunk) }
+    LNew := LFallback.ReallocMem(LPtr, 128);
     if LNew <> nil then
-      LFallback.FreeMem(LNew)
+    begin
+      { Realloc succeeded — original was freed, new pointer returned }
+      LFallback.FreeMem(LNew);
+    end
     else
+    begin
+      { Realloc failed — original should still be valid }
       LFallback.FreeMem(LPtr);
+    end;
   finally
     LFallback.Free;
   end;
 end;
 
+{ ---------------------------------------------------------------------------
+  Runner
+  --------------------------------------------------------------------------- }
+
 begin
   T := TTestSuite.Create('nextpas.core.mem.allocator.fallback');
 
   { TFallbackAllocator }
+  T.Test('FallbackAllocator create/destroy', @TestFallbackAllocatorCreateDestroy);
   T.Test('FallbackAllocator primary succeeds', @TestFallbackAllocatorPrimarySucceeds);
   T.Test('FallbackAllocator primary fails', @TestFallbackAllocatorPrimaryFails);
   T.Test('FallbackAllocator free from correct', @TestFallbackAllocatorFreeFromCorrect);
@@ -380,5 +450,7 @@ begin
   T.Test('FallbackArena free fallbacks', @TestFallbackArenaFreeFallbacks);
 
   T.Run;
+
+
   T.Summary;
 end.

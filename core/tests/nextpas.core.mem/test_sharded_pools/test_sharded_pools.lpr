@@ -4,7 +4,7 @@ program test_sharded_pools;
 
 uses
   {$IFDEF UNIX}
-  nextpas.core.thread.init,
+  cthreads,
   {$ENDIF}
   nextpas.core.errors,
   nextpas.core.exception,

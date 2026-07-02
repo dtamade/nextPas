@@ -12,8 +12,8 @@ uses
   nextpas.core.base,
   nextpas.core.mem.base,
   nextpas.core.mem.utils,
-  nextpas.core.mem.allocator.rtl,   // ResolveAllocator
-  nextpas.core.mem.allocator.base,
+  nextpas.core.mem.allocator,
+  nextpas.core.mem.intf,
   nextpas.core.mem.pool.memory_pool,
   nextpas.core.mem.pool.fixed_slab,
   nextpas.core.base.utils,
@@ -110,7 +110,10 @@ type
    *}
   TSlabPool = class(TInterfacedObject, IMemoryPool, IAllocator)
   private
-    FAllocator: TAllocator;
+    {$IFDEF DEBUG}
+    FOwnerThreadId: UInt64;  // DEBUG: 检测未受保护的并发访问 (CS-017)
+    {$ENDIF}
+    FAllocator: IAllocator;
     FSegments: array of TFixedSlabPool;
     FActive: Integer;
     FInitialCapacity, FMinShift: SizeUInt;
@@ -169,9 +172,9 @@ type
     procedure IndexSegmentPages(aSegIdx: Integer);
   public
     {** 创建 Slab 池（默认配置）*}
-    constructor Create(ACapacity: SizeUInt; AAllocator: TAllocator = nil; aMinShift: SizeUInt = 3); overload;
+    constructor Create(aCapacity: SizeUInt; aAllocator: IAllocator = nil; aMinShift: SizeUInt = 3); overload;
     {** 创建 Slab 池（自定义配置）*}
-    constructor Create(ACapacity: SizeUInt; const AConfig: TSlabConfig; AAllocator: TAllocator = nil); overload;
+    constructor Create(aCapacity: SizeUInt; const aConfig: TSlabConfig; aAllocator: IAllocator = nil); overload;
     {** 销毁池并释放所有段和回退分配 *}
     destructor Destroy; override;
     // IPool
@@ -263,6 +266,9 @@ function CreateDefaultSlabConfig: TSlabConfig;
 {** 创建启用了页合并的 Slab 配置 *}
 function CreateSlabConfigWithPageMerging: TSlabConfig;
 implementation
+
+uses
+  nextpas.core.platform.thread;  // platform_thread_id for DEBUG thread-safety check (CS-017)
 
 const
   HASH_MIN_CAP = 64;
@@ -630,7 +636,7 @@ var
   LIdx: SizeUInt;
   LKey: PtrUInt;
 begin
-  if Length(FFbKeys) > 0 then
+  if (FAllocator <> nil) and (Length(FFbKeys) > 0) then
     for LIdx := 0 to FFbMask do
     begin
       LKey := FFbKeys[LIdx];
@@ -647,8 +653,15 @@ var
   LRaw, LUser: Pointer;
 begin
   Result := nil;
+  if (ASize = 0) or (FAllocator = nil) then Exit(nil);
 
-  LAlign := SanitizeConfigAlignment(AAlignment);
+  LAlign := AAlignment;
+  if LAlign = 0 then
+    LAlign := 16;
+  if LAlign < SizeOf(Pointer) then
+    LAlign := SizeOf(Pointer);
+  if not IsPowerOfTwo(LAlign) then
+    raise EInvalidArgument.Create('TSlabPool.AllocFallback: AAlignment must be power of two and >= pointer size');
 
   // over-allocate for alignment; raw pointer is tracked out-of-band
   if ASize > High(SizeUInt) - (LAlign - 1) then
@@ -894,13 +907,13 @@ begin
   end;
 end;
 
-constructor TSlabPool.Create(ACapacity: SizeUInt; AAllocator: TAllocator; aMinShift: SizeUInt);
+constructor TSlabPool.Create(aCapacity: SizeUInt; aAllocator: IAllocator; aMinShift: SizeUInt);
 var
   LSegment: TFixedSlabPool;
 begin
   inherited Create;
-  FAllocator:=ResolveAllocator(AAllocator);
-  if ACapacity=0 then ACapacity:=64*1024;
+  if aAllocator=nil then FAllocator:=nextpas.core.mem.allocator.GetRtlAllocator else FAllocator:=aAllocator;
+  if aCapacity=0 then aCapacity:=64*1024;
   if aMinShift=0 then aMinShift:=3;
 
   if FConfig.MinShift = 0 then
@@ -912,32 +925,33 @@ begin
     FConfig.PageSize := 4096;
 
 
-  FInitialCapacity:=ACapacity; FMinShift:=aMinShift; FActive:=0;
+  FInitialCapacity:=aCapacity; FMinShift:=aMinShift; FActive:=0;
+  {$IFDEF DEBUG}
+  FOwnerThreadId := platform_thread_id;  // CS-017: 记录创建线程
+  {$ENDIF}
   ZeroMem(@FPerf, SizeOf(FPerf));
   SetLength(FSegments,1);
-  LSegment:=TFixedSlabPool.Create(ACapacity,FAllocator,aMinShift);
+  LSegment:=TFixedSlabPool.Create(aCapacity,FAllocator,aMinShift);
   FSegments[0]:=LSegment;
   FAvailCount := 0;  // 显式初始化
   FbMapInit(8);
-  PageMapInit( (ACapacity shr LSegment.PageShift) * 2 );
+  PageMapInit( (aCapacity shr LSegment.PageShift) * 2 );
   IndexSegmentPages(0);
 end;
 
 function TSlabPool.Traits: TAllocatorTraits;
 begin
-  Result.ZeroInitialized := True;
-  Result.ThreadSafe      := False;
-  Result.HasMemSize      := True;
-  Result.SupportsAligned := True;
+  Result.ZeroInitialized := True;   // AllocMem 保证零填充
+  Result.ThreadSafe      := False;  // 当前未加锁
 end;
 
-constructor TSlabPool.Create(ACapacity: SizeUInt; const AConfig: TSlabConfig; AAllocator: TAllocator);
+constructor TSlabPool.Create(aCapacity: SizeUInt; const aConfig: TSlabConfig; aAllocator: IAllocator);
 begin
-  // 忽略 AConfig.EnablePageMerging（兼容字段）
+  // 忽略 aConfig.EnablePageMerging（兼容字段）
   // MinShift 和 MaxAllocSize 采纳
-  FConfig := AConfig;
+  FConfig := aConfig;
   if FConfig.MinShift=0 then FConfig.MinShift := 3;
-  Create(ACapacity, AAllocator, FConfig.MinShift);
+  Create(aCapacity, aAllocator, FConfig.MinShift);
 end;
 
 function TSlabPool.Alloc(ASize: SizeUInt): Pointer; inline;
@@ -1064,6 +1078,11 @@ var
   LNewSeg: TFixedSlabPool;
   LPerfEnabled: Boolean;
 begin
+  {$IFDEF DEBUG}
+  if (FOwnerThreadId <> 0) and (platform_thread_id <> FOwnerThreadId) then
+    raise EAllocError.Create(aeInvalidLayout,
+      'TSlabPool.GetMem: thread-safety violation — use TSlabPoolConcurrent for multi-threaded access');
+  {$ENDIF}
   if ASize=0 then Exit(nil);
   LPerfEnabled := FConfig.EnablePerfMonitoring;
   if LPerfEnabled then
@@ -1117,12 +1136,13 @@ begin
   Result := GetMem(ASize);
   if Result <> nil then
   begin
-    // 清零实际分配块大小（而非仅请求大小），防止旧数据泄露 (CS-006)
+    { Zero the full allocated block to prevent stale data leaks.
+      MemSizeOf returns actual block size (>= ASize). Fallback to ASize
+      only when MemSizeOf is unavailable (should not happen for slab). }
     LActualSize := MemSizeOf(Result);
-    if LActualSize > 0 then
-      FillChar(Result^, LActualSize, 0)
-    else
-      FillChar(Result^, ASize, 0); // fallback: MemSizeOf 不可用时清零请求大小
+    if LActualSize < ASize then
+      LActualSize := ASize;
+    FillChar(Result^, LActualSize, 0);
   end;
 end;
 
@@ -1163,7 +1183,7 @@ begin
 
   // 释放旧块并移除 tracking（注意：先分配成功再销毁旧块）
   if TryUntrackFallbackAlloc(ADst, LAlloc) then
-    if LAlloc.RawPtr <> nil then
+    if (FAllocator <> nil) and (LAlloc.RawPtr <> nil) then
       FAllocator.FreeMem(LAlloc.RawPtr);
 
   Result := LNew;
@@ -1176,6 +1196,11 @@ var
   LPerfEnabled: Boolean;
 begin
   if ADst=nil then Exit;
+  {$IFDEF DEBUG}
+  if (FOwnerThreadId <> 0) and (platform_thread_id <> FOwnerThreadId) then
+    raise EAllocError.Create(aeInvalidLayout,
+      'TSlabPool.FreeMem: thread-safety violation — use TSlabPoolConcurrent for multi-threaded access');
+  {$ENDIF}
   LPerfEnabled := FConfig.EnablePerfMonitoring;
   if LPerfEnabled then
     Inc(FPerf.FreeCalls);
@@ -1188,7 +1213,7 @@ begin
   end
   else if TryUntrackFallbackAlloc(ADst, LAlloc) then
   begin
-    if LAlloc.RawPtr <> nil then
+    if (FAllocator <> nil) and (LAlloc.RawPtr <> nil) then
       FAllocator.FreeMem(LAlloc.RawPtr);
     Inc(FTotalFrees);
   end
@@ -1258,7 +1283,10 @@ begin
 
   LPerfEnabled := FConfig.EnablePerfMonitoring;
 
-  AAlignment := SanitizeAlignment(AAlignment);
+  if AAlignment < SizeOf(Pointer) then
+    AAlignment := SizeOf(Pointer);
+  if not IsPowerOfTwo(AAlignment) then
+    raise EInvalidArgument.Create('TSlabPool.AllocAligned: AAlignment must be power of two and >= pointer size');
 
   if ShouldUseFallback(ASize) then
   begin

@@ -6,6 +6,7 @@ interface
 
 uses
   nextpas.core.mem.base,
+  nextpas.core.mem.intf,
   nextpas.core.mem.allocator.base,
   nextpas.core.base.utils,
   nextpas.core.mem.arena.virtual;
@@ -13,7 +14,7 @@ uses
 type
   {** TVirtualArenaAllocator
    *
-   *  将 TVirtualArena 包装为 TAllocator 子类。
+   *  将 TVirtualArena 包装为 IAllocator 接口。
    *  分配通过 TVirtualArena 的 bump 指针完成，DoFreeMem 为 no-op。
    *  Reset 方法一次性释放所有内存。
    *
@@ -28,10 +29,17 @@ type
     function DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
     procedure DoFreeMem(ADst: Pointer); override;
   public
+    {** 创建 TVirtualArenaAllocator }
     constructor Create(AAlignment: SizeUInt = DEFAULT_ALIGNMENT);
     destructor Destroy; override;
+
+    {** 重置 Arena（保留 mmap 映射，从头开始分配） }
     procedure Reset;
+
+    {** 直接访问内部 TVirtualArena }
     property Arena: TVirtualArena read FArena;
+
+    {** IAllocator traits }
     function Traits: TAllocatorTraits; override;
   end;
 
@@ -86,9 +94,8 @@ end;
 
 function TVirtualArenaAllocator.Traits: TAllocatorTraits;
 begin
-  Result := inherited Traits;
+  Result.ZeroInitialized := True;
   Result.ThreadSafe      := False;
-  Result.SupportsAligned := True;
 end;
 
 end.

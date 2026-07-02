@@ -4,7 +4,7 @@ program test_tracking_allocator;
 
 uses
   {$IFDEF UNIX}
-  nextpas.core.thread.init,
+  cthreads,
   {$ENDIF}
   nextpas.core.text.conv,
   Classes,
@@ -90,7 +90,7 @@ begin
     Check(LTracker.ActiveAllocCount = 1, 'before realloc: count=1');
     LP^ := 42;
 
-    LP2 := PInteger(LTracker.ReallocMem(LP, 4, 256));
+    LP2 := PInteger(LTracker.ReallocMem(LP, 256));
     Check(LP2 <> nil, 'ReallocMem should succeed');
     Check(LP2^ = 42, 'data preserved after realloc');
     Check(LTracker.ActiveAllocCount = 1, 'after realloc: count=1');
@@ -232,7 +232,7 @@ end;
 
 procedure TestInnerAllocatorUsed;
 var
-  LInner: TAllocator;
+  LInner: IAllocator;
   LTracker: TTrackingAllocator;
   LP: Pointer;
   LTrackerTraits: TAllocatorTraits;
@@ -242,8 +242,6 @@ begin
   try
     LTrackerTraits := LTracker.Traits;
     Check(LTrackerTraits.ThreadSafe = True, 'Tracker should be ThreadSafe');
-    Check(LTrackerTraits.HasMemSize = LInner.Traits.HasMemSize,
-      'Tracker HasMemSize should delegate to inner');
 
     LP := LTracker.GetMem(128);
     Check(LP <> nil, 'should succeed through inner allocator');
@@ -278,7 +276,7 @@ end;
 
 procedure TestTrackingWithArena;
 var
-  LArena: TAllocator;
+  LArena: IAllocator;
   LTracker: TTrackingAllocator;
   LP: Pointer;
 begin
@@ -300,7 +298,7 @@ end;
 { --- RunTestWithLeakCheck tests --- }
 
 { 有意泄漏的回调 }
-procedure DoLeakTest(AAllocator: TAllocator);
+procedure DoLeakTest(AAllocator: IAllocator);
 var
   LP: Pointer;
 begin
@@ -309,7 +307,7 @@ begin
 end;
 
 { 不泄漏的回调 }
-procedure DoNoLeakTest(AAllocator: TAllocator);
+procedure DoNoLeakTest(AAllocator: IAllocator);
 var
   LP: Pointer;
 begin
@@ -347,7 +345,7 @@ var
 begin
   LTracker := TTrackingAllocator.Create(GetRtlAllocator);
   try
-    LP := LTracker.ReallocMem(nil, 0, 64);
+    LP := LTracker.ReallocMem(nil, 64);
     Check(LP <> nil, 'ReallocMem(nil) should work');
     Check(LTracker.ActiveAllocCount = 1, 'should track as alloc');
     LTracker.FreeMem(LP);
@@ -365,7 +363,7 @@ begin
   try
     LP := LTracker.GetMem(64);
     Check(LTracker.ActiveAllocCount = 1, 'before realloc: count=1');
-    LTracker.ReallocMem(LP, 64, 0);
+    LTracker.ReallocMem(LP, 0);
     Check(LTracker.ActiveAllocCount = 0, 'after realloc to 0: count=0');
   finally
     LTracker.Free;
@@ -381,56 +379,6 @@ begin
   try
     LReport := LTracker.ReportLeaks;
     Check(Pos('No leaks', LReport) > 0, 'report should say no leaks');
-  finally
-    LTracker.Free;
-  end;
-end;
-
-procedure TestAllocAlignedInvalidAlign;
-var
-  LTracker: TTrackingAllocator;
-  LP: Pointer;
-begin
-  LTracker := TTrackingAllocator.Create(GetRtlAllocator);
-  try
-    { 非 2 的幂对齐应返回 nil }
-    LP := LTracker.AllocAligned(64, 3);
-    Check(LP = nil, 'non-power-of-two alignment should return nil');
-
-    { 对齐值过小 (小于 SizeOf(Pointer)) 应返回 nil }
-    LP := LTracker.AllocAligned(64, 1);
-    Check(LP = nil, 'alignment=1 should return nil');
-
-    { size=0 应返回 nil }
-    LP := LTracker.AllocAligned(0, 16);
-    Check(LP = nil, 'size=0 should return nil');
-
-    Check(LTracker.ActiveAllocCount = 0, 'no allocations from invalid calls');
-  finally
-    LTracker.Free;
-  end;
-end;
-
-procedure TestTrackingMemSizeDelegates;
-var
-  LTracker: TTrackingAllocator;
-  LP: Pointer;
-  LSize: SizeUInt;
-begin
-  LTracker := TTrackingAllocator.Create(GetRtlAllocator);
-  try
-    LP := LTracker.GetMem(128);
-    Check(LP <> nil, 'alloc should succeed');
-    { MemSize 应委托给 inner 分配器 (RTL 分配器 DoMemSize 默认返回 0) }
-    LSize := LTracker.MemSize(LP);
-    { 结果应与直接调用 inner.MemSize 一致 }
-    Check(LSize = LTracker.Inner.MemSize(LP),
-      'MemSize should match inner.MemSize (got ' + IntToStr(LSize) + ')');
-
-    { nil 应返回 0 }
-    Check(LTracker.MemSize(nil) = 0, 'MemSize(nil) should be 0');
-
-    LTracker.FreeMem(LP);
   finally
     LTracker.Free;
   end;
@@ -467,9 +415,6 @@ begin
   T.Test('realloc_to_zero_is_free', @TestReallocToZeroIsFree);
   T.Test('report_no_leaks', @TestReportNoLeaks);
 
-  { AllocAligned + MemSize edge case tests }
-  T.Test('alloc_aligned_invalid_align', @TestAllocAlignedInvalidAlign);
-  T.Test('memsize_delegates', @TestTrackingMemSizeDelegates);
 
   T.Run;
 

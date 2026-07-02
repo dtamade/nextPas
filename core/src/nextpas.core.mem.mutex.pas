@@ -1,8 +1,4 @@
 unit nextpas.core.mem.mutex;
-{
-  注意: TMemMutex 的方法调用在 FPC -O2 下存在已知问题，指针调用可能死锁。
-  开发时使用 -O1 或无优化。
-}
 
 {$I nextpas.core.settings.inc}
 
@@ -12,8 +8,6 @@ uses
   nextpas.core.platform.sync;
 
 type
-  PMemMutex = ^TMemMutex;
-
   {** TMemMutex — 平台互斥锁 record 封装
    *
    *  @warning 不可拷贝/传值 — TPlatformMutex 是 opaque record (64 字节)，

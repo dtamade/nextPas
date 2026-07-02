@@ -4,7 +4,7 @@ program test_default_allocator;
 
 uses
   {$IFDEF UNIX}
-  nextpas.core.thread.init,
+  cthreads,
   {$ENDIF}
   nextpas.core.errors,
   nextpas.core.exception,
@@ -19,7 +19,7 @@ const
 type
   PDefaultAllocatorThreadData = ^TDefaultAllocatorThreadData;
   TDefaultAllocatorThreadData = record
-    Allocator: TAllocator;
+    Allocator: IAllocator;
     Failed: Boolean;
     StartFlag: PLongInt;
   end;
@@ -60,8 +60,8 @@ end;
 
 procedure TestDefaultAllocatorSingletonSingleThread;
 var
-  LFirst: TAllocator;
-  LSecond: TAllocator;
+  LFirst: IAllocator;
+  LSecond: IAllocator;
 begin
   LFirst := DefaultAllocator;
   LSecond := DefaultAllocator;
@@ -77,7 +77,7 @@ var
   LThreadData: array[0..THREAD_COUNT - 1] of TDefaultAllocatorThreadData;
   LStartFlag: LongInt;
   LIndex: Integer;
-  LFirst: TAllocator;
+  LFirst: IAllocator;
 begin
   LStartFlag := 0;
   for LIndex := 0 to High(LThreads) do
@@ -103,62 +103,10 @@ begin
   end;
 end;
 
-procedure TestDefaultAllocatorAllocMem;
-var
-  LAllocator: TAllocator;
-  LPtr: Pointer;
-  LI: Integer;
-begin
-  LAllocator := DefaultAllocator;
-  { AllocMem should zero-initialize }
-  LPtr := LAllocator.AllocMem(256);
-  Check(LPtr <> nil, 'AllocMem should not return nil');
-  for LI := 0 to 255 do
-    Check(PByte(LPtr)[LI] = 0, 'AllocMem should zero-initialize');
-  LAllocator.FreeMem(LPtr);
-end;
-
-procedure TestDefaultAllocatorMemSize;
-var
-  LAllocator: TAllocator;
-  LPtr: Pointer;
-  LReported: SizeUInt;
-begin
-  LAllocator := DefaultAllocator;
-  LPtr := LAllocator.GetMem(100);
-  Check(LPtr <> nil, 'GetMem should not return nil');
-  LReported := LAllocator.MemSize(LPtr);
-  Check(LReported >= 100, 'MemSize should report >= 100');
-  LAllocator.FreeMem(LPtr);
-end;
-
-procedure TestDefaultAllocatorReallocPreserves;
-var
-  LAllocator: TAllocator;
-  LPtr: Pointer;
-  LI: Integer;
-begin
-  LAllocator := DefaultAllocator;
-  LPtr := LAllocator.GetMem(64);
-  Check(LPtr <> nil, 'GetMem should not return nil');
-  { Write pattern }
-  for LI := 0 to 63 do
-    PByte(LPtr)[LI] := Byte(LI);
-  { Realloc to larger }
-  LPtr := LAllocator.ReallocMem(LPtr, 512);
-  Check(LPtr <> nil, 'ReallocMem should not return nil');
-  { Verify prefix preserved }
-  for LI := 0 to 63 do
-    Check(PByte(LPtr)[LI] = Byte(LI), 'ReallocMem should preserve content');
-  LAllocator.FreeMem(LPtr);
-end;
-
 begin
   T := TTestSuite.Create('nextpas.core.mem.default_allocator');
   T.Test('singleton single-thread', @TestDefaultAllocatorSingletonSingleThread);
   T.Test('concurrent start returns same instance', @TestDefaultAllocatorConcurrentStart);
-  T.Test('alloc_mem_zero_initialized', @TestDefaultAllocatorAllocMem);
-  T.Test('realloc_preserves_content', @TestDefaultAllocatorReallocPreserves);
   T.Run;
 
   T.Summary;

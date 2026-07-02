@@ -9,7 +9,7 @@ uses
 
 var
   LMap: TMemoryMap;
-  LAllocator: TAllocator;
+  LAllocator: IAllocator;
 
 begin
   LMap := TMemoryMap.Create;

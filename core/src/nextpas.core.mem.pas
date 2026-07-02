@@ -1,6 +1,6 @@
 unit nextpas.core.mem;
 {**
- * @desc 内存管理门面：默认分配器、工具函数。
+ * @desc 内存管理门面：IAllocator 抽象、默认分配器、工具函数。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -9,7 +9,9 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.base.utils,
   nextpas.core.mem.base,
+  nextpas.core.mem.intf,
   nextpas.core.mem.error,
   nextpas.core.mem.default,
   nextpas.core.mem.mutex,
@@ -22,23 +24,18 @@ uses
   nextpas.core.mem.arena.thread,
   nextpas.core.mem.arena.concurrent,
   nextpas.core.mem.allocator.arena,
-  nextpas.core.mem.allocator.base,
-  nextpas.core.mem.allocator.rtl,
-  nextpas.core.mem.allocator.callback,
-  nextpas.core.mem.allocator.guard,
   nextpas.core.mem.allocator.tracking,
   nextpas.core.mem.allocator.leak_check,
   nextpas.core.mem.allocator.fallback,
   nextpas.core.mem.allocator.mmap,
   nextpas.core.mem.allocator.mimalloc,
-  nextpas.core.mem.allocator.growing,
   nextpas.core.mem.pool.sizeclass,
   nextpas.core.mem.pool.fixed,
+  nextpas.core.mem.pool.fixed_slab,
   nextpas.core.mem.pool.slab,
   nextpas.core.mem.pool.slab.concurrent,
   nextpas.core.mem.pool.slab.sharded,
   nextpas.core.mem.pool.memory_pool,
-  nextpas.core.mem.pool.allocator,
   nextpas.core.mem.blockpool,
   nextpas.core.mem.blockpool.concurrent,
   nextpas.core.mem.blockpool.sharded,
@@ -52,10 +49,8 @@ uses
 type
   // === 基础类型 ===
   TAllocatorKind = nextpas.core.mem.base.TAllocatorKind;
-  TAllocatorTraits = nextpas.core.mem.allocator.base.TAllocatorTraits;
-  IAllocator = nextpas.core.mem.allocator.base.IAllocator;
-  TAllocator = nextpas.core.mem.allocator.base.TAllocator;
-  TMemAllocator = nextpas.core.mem.allocator.base.TMemAllocator;
+  TAllocatorTraits = nextpas.core.mem.intf.TAllocatorTraits;
+  IAllocator = nextpas.core.mem.intf.IAllocator;
   TAllocError = nextpas.core.mem.error.TAllocError;
   EAllocError = nextpas.core.mem.error.EAllocError;
   EOutOfMemory = nextpas.core.mem.error.EOutOfMemory;
@@ -85,12 +80,7 @@ type
   TThreadArena = nextpas.core.mem.arena.thread.TThreadArena;
 
   // === 分配器包装 ===
-  TGrowingAllocator = nextpas.core.mem.allocator.growing.TGrowingAllocator;
-  TVirtualArenaAllocator = nextpas.core.mem.allocator.arena.TVirtualArenaAllocator;
   TArenaAllocator = nextpas.core.mem.allocator.arena.TFastArenaAllocator;
-  TRtlAllocator = nextpas.core.mem.allocator.rtl.TRtlAllocator;
-  TCallbackAllocator = nextpas.core.mem.allocator.callback.TCallbackAllocator;
-  TGuardAllocator = nextpas.core.mem.allocator.guard.TGuardAllocator;
   TTrackingAllocator = nextpas.core.mem.allocator.tracking.TTrackingAllocator;
   TLeakCheckResult = nextpas.core.mem.allocator.leak_check.TLeakCheckResult;
   TFallbackAllocator = nextpas.core.mem.allocator.fallback.TFallbackAllocator;
@@ -100,7 +90,6 @@ type
 
   // === Pool 子系统 ===
   IMemoryPool = nextpas.core.mem.pool.memory_pool.IMemoryPool;
-  IFixedSlabPool = nextpas.core.mem.pool.IFixedSlabPool;
   TLocalBlockPool = nextpas.core.mem.pool.TLocalBlockPool;
   TPool = nextpas.core.mem.pool.TPool;
   TSizeClassPool = nextpas.core.mem.pool.sizeclass.TSizeClassPool;
@@ -112,11 +101,12 @@ type
   TStackPool = nextpas.core.mem.stack_pool.TStackPool;
   TFixedPool = nextpas.core.mem.pool.fixed.TFixedPool;
   TFixedPoolConcurrent = nextpas.core.mem.pool.fixed.TFixedPoolConcurrent;
+  IFixedSlabPool = nextpas.core.mem.pool.fixed_slab.IFixedSlabPool;
+  TFixedSlabPool = nextpas.core.mem.pool.fixed_slab.TFixedSlabPool;
   TSlabPool = nextpas.core.mem.pool.slab.TSlabPool;
   TSlabConfig = nextpas.core.mem.pool.slab.TSlabConfig;
   TSlabPoolConcurrent = nextpas.core.mem.pool.slab.concurrent.TSlabPoolConcurrent;
   TSlabPoolSharded = nextpas.core.mem.pool.slab.sharded.TSlabPoolSharded;
-  TPoolAllocator = nextpas.core.mem.pool.allocator.TPoolAllocator;
 
   // === 容器 ===
   TRingBuffer = nextpas.core.mem.ring_buffer.TRingBuffer;
@@ -126,14 +116,17 @@ type
   TSharedMemory = nextpas.core.mem.memory_map.TSharedMemory;
   TMappedSlabAllocator = nextpas.core.mem.mapped_slab_pool.TMappedSlabAllocator;
 
-function DefaultAllocator: TAllocator; inline;
+function DefaultAllocator: IAllocator; inline;
 
-function AllocZeroed(const AAllocator: TAllocator; const ASize: SizeUInt): Pointer; inline;
-function AllocArray(const AAllocator: TAllocator; const ACount, AElemSize: SizeUInt): Pointer; inline;
+function AllocZeroed(const AAllocator: IAllocator; const ASize: SizeUInt): Pointer; inline;
+function AllocArray(const AAllocator: IAllocator; const ACount, AElemSize: SizeUInt): Pointer; inline;
 
-function MakeFixedSlabPool(ACapacity: SizeUInt): IFixedSlabPool; inline;
-function MakePoolAllocator(ABlockSize: SizeUInt; ACapacity: Integer;
-  AFallback: TAllocator = nil): TAllocator; inline;
+{** 创建默认 Arena（TLocalArena，指定容量） }
+function CreateDefaultArena(ACapacity: SizeUInt): IArena;
+{** 创建可增长 Arena（TChunkedArena，指定初始容量和最大容量） }
+function CreateChunkedArena(AInitialSize: SizeUInt; AMaxSize: SizeUInt = 0): IArena;
+{** 创建 Arena 包装的 IAllocator（TLocalArena 后端，仅分配不释放） }
+function CreateArenaAllocator(ACapacity: SizeUInt): IAllocator;
 
 procedure SecureZeroMemory(ABuffer: Pointer; ASize: NativeUInt); inline;
 procedure SecureZeroBytes(var AData: TBytes); inline;
@@ -141,37 +134,40 @@ procedure SecureZeroString(var AStr: AnsiString); inline;
 
 implementation
 
-function DefaultAllocator: TAllocator;
+function DefaultAllocator: IAllocator;
 begin
   Result := nextpas.core.mem.default.DefaultAllocator;
 end;
 
-function AllocZeroed(const AAllocator: TAllocator; const ASize: SizeUInt): Pointer;
+function AllocZeroed(const AAllocator: IAllocator; const ASize: SizeUInt): Pointer;
 begin
   Result := AAllocator.AllocMem(ASize);
 end;
 
-function AllocArray(const AAllocator: TAllocator; const ACount, AElemSize: SizeUInt): Pointer;
+function AllocArray(const AAllocator: IAllocator; const ACount, AElemSize: SizeUInt): Pointer;
 var
   LTotal: SizeUInt;
 begin
   if (ACount = 0) or (AElemSize = 0) then Exit(nil);
-  { Overflow-safe: check before multiply }
-  if ACount > (High(SizeUInt) div AElemSize) then
-    raise EOutOfMemory.CreateMsg('AllocArray: size overflow');
   LTotal := ACount * AElemSize;
+  if (LTotal div AElemSize) <> ACount then
+    raise EOutOfMemory.Create(aeOutOfMemory, 'AllocArray: size overflow');
   Result := AAllocator.AllocMem(LTotal);
 end;
 
-function MakeFixedSlabPool(ACapacity: SizeUInt): IFixedSlabPool;
+function CreateDefaultArena(ACapacity: SizeUInt): IArena;
 begin
-  Result := nextpas.core.mem.pool.MakeFixedSlabPool(ACapacity);
+  Result := TLocalArena.Create(ACapacity);
 end;
 
-function MakePoolAllocator(ABlockSize: SizeUInt; ACapacity: Integer;
-  AFallback: TAllocator): TAllocator;
+function CreateChunkedArena(AInitialSize: SizeUInt; AMaxSize: SizeUInt): IArena;
 begin
-  Result := nextpas.core.mem.pool.allocator.MakePoolAllocator(ABlockSize, ACapacity, AFallback);
+  Result := TChunkedArena.Create(AInitialSize, AMaxSize);
+end;
+
+function CreateArenaAllocator(ACapacity: SizeUInt): IAllocator;
+begin
+  Result := TArenaAllocator.Create(ACapacity);
 end;
 
 procedure SecureZeroMemory(ABuffer: Pointer; ASize: NativeUInt);

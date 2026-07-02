@@ -37,7 +37,7 @@ type
     property ReservationSize: SizeUInt read FReservationSize;
   end;
 
-function CreateAnonymousMemoryMapAllocator(aReservationSize: UInt64): TAllocator;
+function CreateAnonymousMemoryMapAllocator(aReservationSize: UInt64): IAllocator;
 
 implementation
 
@@ -138,6 +138,7 @@ var
   LSplit: PMemoryMapBlockHeader;
 begin
   Result := nil;
+  if ASize = 0 then Exit;
 
   LNeeded := AlignUp(HeaderSize + ASize, SizeOf(Pointer));
   if LNeeded < ASize then Exit;
@@ -229,7 +230,7 @@ begin
     FMap.Free;
     FMap := nil;
     FLock.Done;
-    raise EOutOfMemory.CreateMsg('TMemoryMapAllocator:
+    raise EOutOfMemory.Create(aeOutOfMemory, 'TMemoryMapAllocator: failed to create anonymous mapping');
   end;
 
   FBase := FMap.BaseAddress;
@@ -325,9 +326,10 @@ function TMemoryMapAllocator.Traits: TAllocatorTraits;
 begin
   Result := inherited Traits;
   Result.ZeroInitialized := True;
+  Result.ThreadSafe := True;
 end;
 
-function CreateAnonymousMemoryMapAllocator(aReservationSize: UInt64): TAllocator;
+function CreateAnonymousMemoryMapAllocator(aReservationSize: UInt64): IAllocator;
 begin
   Result := TMemoryMapAllocator.CreateAnonymous(aReservationSize);
 end;

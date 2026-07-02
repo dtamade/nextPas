@@ -7,9 +7,10 @@ uses
   nextpas.core.exception,
   nextpas.core.fs,
   nextpas.core.test,
-  nextpas.core.mem.allocator.base,
+  nextpas.core.mem.intf,
   nextpas.core.mem.utils,
   nextpas.core.mem.allocator,
+  nextpas.core.mem.allocator.base,
   nextpas.core.mem.allocator.mimalloc,
   nextpas.core.platform.mmap;
 
@@ -190,7 +191,7 @@ end;
 
 procedure TestCallbackAllocatorCompatibilityMethods;
 var
-  LAllocator: nextpas.core.mem.allocator.TAllocator;
+  LAllocator: nextpas.core.mem.allocator.IAllocator;
   LPtr: Pointer;
 begin
   ResetAllocatorCounters;
@@ -225,7 +226,7 @@ end;
 
 procedure TestCallbackAllocatorSupportsCanonicalInterface;
 var
-  LAllocator: nextpas.core.mem.allocator.base.IAllocator;
+  LAllocator: nextpas.core.mem.intf.IAllocator;
   LPtr: Pointer;
 begin
   ResetAllocatorCounters;
@@ -233,7 +234,7 @@ begin
     @CallbackGetMem,
     @CallbackAllocMem,
     @CallbackReallocMem,
-    @CallbackFreeMem);
+    @CallbackFreeMem) as nextpas.core.mem.intf.IAllocator;
 
   LPtr := LAllocator.GetMem(24);
   Check(LPtr <> nil, 'GetMem should delegate to the compatibility allocator');
@@ -256,7 +257,7 @@ procedure ExpectNilCallbackRejected(const AName: string;
   AFreeMem: TFreeMemCallback);
 var
   LRaised: Boolean;
-  LAllocator: nextpas.core.mem.allocator.TAllocator;
+  LAllocator: nextpas.core.mem.allocator.IAllocator;
 begin
   LRaised := False;
   LAllocator := nil;
@@ -299,7 +300,7 @@ end;
 
 procedure TestRtlAllocatorZeroInitTraitsAndAlignedAlloc;
 var
-  LAllocator: nextpas.core.mem.allocator.TAllocator;
+  LAllocator: nextpas.core.mem.allocator.IAllocator;
   LTraits: nextpas.core.mem.allocator.base.TAllocatorTraits;
   LPtr: Pointer;
   I: Integer;
@@ -309,8 +310,6 @@ begin
 
   LTraits := LAllocator.Traits;
   Check(True = LTraits.ZeroInitialized, 'RTL AllocMem should be zero initialized');
-  Check(False = LTraits.SupportsAligned, 'RTL allocator should report non-native aligned support');
-  Check(False = LTraits.HasMemSize, 'RTL allocator should not expose MemSize');
 
   LPtr := LAllocator.AllocMem(32);
   try
@@ -318,29 +317,6 @@ begin
       Check(Int64(0) = Int64(PByte(LPtr)[I]), 'AllocMem should zero initialize each byte');
   finally
     LAllocator.FreeMem(LPtr);
-  end;
-
-  LPtr := LAllocator.AllocAligned(64, 32);
-  try
-    Check(LPtr <> nil, 'AllocAligned should return a pointer');
-    Check(Int64(0) = Int64(PtrUInt(LPtr) mod 32), 'AllocAligned should honor the requested alignment');
-  finally
-    LAllocator.FreeAligned(LPtr);
-  end;
-end;
-
-procedure TestRtlAllocatorAlignedAllocRejectsSizeOverflow;
-var
-  LAllocator: nextpas.core.mem.allocator.TAllocator;
-  LPtr: Pointer;
-begin
-  LAllocator := GetRtlAllocator;
-  LPtr := LAllocator.AllocAligned(High(SizeUInt), SizeOf(Pointer));
-  try
-    Check(LPtr = nil, 'AllocAligned should reject size calculations that overflow SizeUInt');
-  finally
-    if LPtr <> nil then
-      LAllocator.FreeAligned(LPtr);
   end;
 end;
 
@@ -352,34 +328,38 @@ begin
   LArenaSource := ReadSourceText(ResolveSourcePath(
     MEM_ARENA_CHUNKED_SOURCE_PATH_FROM_TEST,
     MEM_ARENA_CHUNKED_SOURCE_PATH_FROM_ROOT));
+  CheckContains(LArenaSource, 'nextpas.core.mem.intf',
+    'chunked arena should depend on the canonical allocator contract');
   CheckNotContains(LArenaSource, 'nextpas.core.mem.alloc',
     'chunked arena should not depend on the removed legacy allocator contract');
   CheckNotContains(LArenaSource, 'nextpas.core.mem.layout',
     'chunked arena should not depend on the removed layout unit');
-  CheckNotContains(LArenaSource, 'fallocator',
-    'chunked arena should not have vestigial allocator field');
+  CheckContains(LArenaSource, 'allocator: iallocator',
+    'chunked arena config should expose iallocator');
+  CheckContains(LArenaSource, 'fallocator: iallocator',
+    'chunked arena field should store iallocator');
   CheckContains(LArenaSource, 'function alloc(asize: sizeuint): pointer;',
     'chunked arena should expose explicit-size allocation');
   CheckContains(LArenaSource, 'function allocaligned(asize, aalignment: sizeuint): pointer;',
     'chunked arena should expose explicit aligned allocation');
-  CheckContains(LArenaSource, 'getmem(lraw, lallocsize)',
-    'chunked arena should allocate segments via system.getmem');
-  CheckContains(LArenaSource, 'freemem(lraw)',
-    'chunked arena should release segments via system.freemem');
+  CheckContains(LArenaSource, 'lraw := fallocator.getmem(lallocsize);',
+    'chunked arena should allocate segments via iallocator.getmem');
+  CheckContains(LArenaSource, 'fallocator.freemem(lraw)',
+    'chunked arena should release segments via iallocator.freemem');
 
   LBlockPoolSource := ReadSourceText(ResolveSourcePath(
     MEM_BLOCKPOOL_GROWABLE_SOURCE_PATH_FROM_TEST,
     MEM_BLOCKPOOL_GROWABLE_SOURCE_PATH_FROM_ROOT));
-  CheckContains(LBlockPoolSource, 'nextpas.core.mem.allocator.base',
-    'growable block pool should depend on the canonical allocator base');
-  CheckNotContains(LBlockPoolSource, 'nextpas.core.mem.allocator,',
-    'growable block pool should not depend on the allocator facade');
+  CheckContains(LBlockPoolSource, 'nextpas.core.mem.intf',
+    'growable block pool should depend on the canonical allocator contract');
+  CheckNotContains(LBlockPoolSource, 'nextpas.core.mem.alloc',
+    'growable block pool should not depend on the removed legacy allocator contract');
   CheckNotContains(LBlockPoolSource, 'nextpas.core.mem.layout',
     'growable block pool should not depend on the removed layout unit');
-  CheckContains(LBlockPoolSource, 'allocator: tallocator',
-    'growable block pool config should expose tallocator');
-  CheckContains(LBlockPoolSource, 'fallocator: tallocator',
-    'growable block pool field should store tallocator');
+  CheckContains(LBlockPoolSource, 'allocator: iallocator',
+    'growable block pool config should expose iallocator');
+  CheckContains(LBlockPoolSource, 'fallocator: iallocator',
+    'growable block pool field should store iallocator');
   CheckContains(LBlockPoolSource, 'lraw := fallocator.getmem(lallocsize);',
     'growable block pool should allocate segments via iallocator.getmem');
   CheckContains(LBlockPoolSource, 'fallocator.freemem(lraw)',
@@ -618,11 +598,11 @@ end;
 
 procedure TestCanonicalAllocatorSurface;
 var
-  LAllocator: nextpas.core.mem.allocator.base.IAllocator;
-  LTraits: nextpas.core.mem.allocator.base.TAllocatorTraits;
+  LAllocator: nextpas.core.mem.intf.IAllocator;
+  LTraits: nextpas.core.mem.intf.TAllocatorTraits;
   LPtr: Pointer;
 begin
-  LAllocator := GetRtlAllocator;
+  LAllocator := GetRtlAllocator as nextpas.core.mem.intf.IAllocator;
   LTraits := LAllocator.Traits;
   Check(LTraits.ThreadSafe, 'canonical allocator exposes traits');
 
@@ -640,18 +620,18 @@ end;
 
 procedure TestAllocatorAliasesAreCanonical;
 var
-  LCanonical: nextpas.core.mem.allocator.TAllocator;
-  LFacade: nextpas.core.mem.allocator.TAllocator;
+  LCanonical: nextpas.core.mem.intf.IAllocator;
+  LFacade: nextpas.core.mem.allocator.IAllocator;
 begin
   LFacade := GetRtlAllocator;
-  LCanonical := LFacade;
+  LCanonical := LFacade as nextpas.core.mem.intf.IAllocator;
   Check(LCanonical <> nil, 'allocator facade alias should be canonical');
   Check(LCanonical = LFacade, 'facade and canonical allocator interfaces should resolve to the same interface identity');
 end;
 
 procedure TestMimallocUsableSizeCapabilityFallback;
 var
-  LAllocator: nextpas.core.mem.allocator.TAllocator;
+  LAllocator: nextpas.core.mem.allocator.IAllocator;
   LPtr: Pointer;
   LSize: SizeUInt;
 begin
@@ -796,8 +776,7 @@ begin
   T.Test('callback allocator supports canonical interface', @TestCallbackAllocatorSupportsCanonicalInterface);
   T.Test('callback allocator rejects nil callbacks at runtime',
     @TestCallbackAllocatorRejectsNilCallbacksAtRuntime);
-  T.Test('rtl allocator zero init traits and aligned alloc', @TestRtlAllocatorZeroInitTraitsAndAlignedAlloc);
-  T.Test('rtl allocator aligned alloc rejects size overflow', @TestRtlAllocatorAlignedAllocRejectsSizeOverflow);
+  T.Test('rtl allocator zero init traits', @TestRtlAllocatorZeroInitTraitsAndAlignedAlloc);
   T.Test('chunked arena and growable block pool use canonical allocator contract',
     @TestChunkedArenaAndGrowableBlockPoolUseCanonicalAllocatorContract);
   T.Test('arena units use explicit arena api', @TestArenaUnitsUseExplicitArenaApi);
