@@ -296,12 +296,14 @@ begin
 end;
 
 function ParseShuffleSeed(const AArg: string): Integer;
-{ Returns: 0 = no shuffle, -1 = --shuffle (random), >0 = --shuffle-seed=N }
+{ Returns: 0 = not matched, >0 = --shuffle-seed=N }
 begin
-  if AArg = '--shuffle' then
-    Exit(-1);
   Result := ExtractArgIntValue(AArg, '--shuffle-seed', 0);
-  if Result = 0 then Result := -1; { seed=0 means off, so treat 0 as -1 }
+end;
+
+function IsShuffleFlag(const AArg: string): Boolean;
+begin
+  Result := HasArgFlag(AArg, '--shuffle', '');
 end;
 
 function IsFailFastArg(const AArg: string): Boolean;
@@ -342,11 +344,6 @@ end;
 function ParseRunTimeout(const AArg: string): Integer;
 begin
   Result := ExtractArgIntValue(AArg, '--timeout', 0);
-end;
-
-function IsBenchArg(const AArg: string): Boolean;
-begin
-  Result := (Copy(AArg, 1, 8) = '--bench');
 end;
 
 function ParseBenchPattern(const AArg: string): string;
@@ -533,17 +530,10 @@ begin
 end;
 
 function ParseShuffleFromArgs: Integer;
-var
-  K: Integer;
-  LSeed: Integer;
 begin
-  for K := 1 to ParamCount do
-  begin
-    LSeed := ParseShuffleSeed(ParamStr(K));
-    if LSeed <> 0 then
-      Exit(LSeed);
-  end;
-  Result := 0;
+  if FindFlagInArgs(@IsShuffleFlag) then
+    Exit(-1);
+  Result := FindArgInt(@ParseShuffleSeed, '--shuffle-seed', 0);
 end;
 
 function ParseFailFastFromArgs: Boolean;
@@ -588,13 +578,8 @@ end;
 
 function ParseBenchFromArgs: string;
 { Returns bench pattern: '' = no bench, '.' = all, 'Foo' = match 'Foo'. }
-var
-  K: Integer;
 begin
-  for K := 1 to ParamCount do
-    if IsBenchArg(ParamStr(K)) then
-      Exit(ParseBenchPattern(ParamStr(K)));
-  Result := '';
+  Result := FindArgValue(@ParseBenchPattern, '--bench');
 end;
 
 function ParseBenchTimeFromArgs: Integer;
