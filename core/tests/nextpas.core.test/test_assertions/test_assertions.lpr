@@ -8,6 +8,7 @@ program test_assertions;
 uses
   nextpas.core.thread.init,
   nextpas.core.text.conv,
+  nextpas.core.math,
   nextpas.core.test;
 
 { ── Test procedures ──────────────────────────────────────────────────────── }
@@ -444,6 +445,345 @@ begin
   end;
 end;
 
+{ ── S1: New Check*D + CI + Negation tests ──────────────────────────────────── }
+
+procedure TestCheckGreaterThanDPass;
+begin
+  CheckGreaterThanD(5.5, 5.0);
+  CheckGreaterThanD(1.0 + 1e-9, 1.0, 1e-8);
+end;
+
+procedure TestCheckGreaterThanDFail;
+begin
+  ExpectFail(procedure begin CheckGreaterThanD(5.0, 5.0); end);
+end;
+
+procedure TestCheckGreaterThanDEqEps;
+begin
+  { Equal within epsilon — should fail (strict >, not >=) }
+  ExpectFail(procedure begin CheckGreaterThanD(5.0, 5.0 + 1e-11, 1e-10); end, 'epsilon');
+end;
+
+procedure TestCheckLessThanDPass;
+begin
+  CheckLessThanD(4.5, 5.0);
+  CheckLessThanD(1.0 - 1e-9, 1.0, 1e-8);
+end;
+
+procedure TestCheckLessThanDFail;
+begin
+  ExpectFail(procedure begin CheckLessThanD(5.0, 5.0); end);
+end;
+
+procedure TestCheckLessThanDEqEps;
+begin
+  ExpectFail(procedure begin CheckLessThanD(5.0, 5.0 - 1e-11, 1e-10); end, 'epsilon');
+end;
+
+procedure TestCheckGreaterOrEqualDPass;
+begin
+  CheckGreaterOrEqualD(5.0, 5.0);
+  CheckGreaterOrEqualD(5.1, 5.0);
+  CheckGreaterOrEqualD(5.0 + 1e-11, 5.0, 1e-10);
+end;
+
+procedure TestCheckGreaterOrEqualDFail;
+begin
+  ExpectFail(procedure begin CheckGreaterOrEqualD(4.0, 5.0); end);
+end;
+
+procedure TestCheckGreaterOrEqualDEq;
+begin
+  { Value slightly below expected but within epsilon — should pass }
+  CheckGreaterOrEqualD(5.0 - 1e-11, 5.0, 1e-10);
+end;
+
+procedure TestCheckGreaterOrEqualDNaN;
+var
+  LNaN: Double;
+  LOldMask: TFPUExceptionMask;
+begin
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exZeroDivide, exOverflow, exUnderflow, exPrecision, exDenormalized]);
+  LNaN := 0.0 / 0.0;
+  ExpectFail(procedure begin CheckGreaterOrEqualD(LNaN, 0.0); end, 'NaN');
+  ExpectFail(procedure begin CheckGreaterOrEqualD(0.0, LNaN); end, 'NaN');
+  SetExceptionMask(LOldMask);
+end;
+
+procedure TestCheckLessOrEqualDPass;
+begin
+  CheckLessOrEqualD(5.0, 5.0);
+  CheckLessOrEqualD(4.9, 5.0);
+  CheckLessOrEqualD(5.0 - 1e-11, 5.0, 1e-10);
+end;
+
+procedure TestCheckLessOrEqualDFail;
+begin
+  ExpectFail(procedure begin CheckLessOrEqualD(6.0, 5.0); end);
+end;
+
+procedure TestCheckLessOrEqualDEq;
+begin
+  { Value slightly above expected but within epsilon — should pass }
+  CheckLessOrEqualD(5.0 + 1e-11, 5.0, 1e-10);
+end;
+
+procedure TestCheckLessOrEqualDNaN;
+var
+  LNaN: Double;
+  LOldMask: TFPUExceptionMask;
+begin
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exZeroDivide, exOverflow, exUnderflow, exPrecision, exDenormalized]);
+  LNaN := 0.0 / 0.0;
+  ExpectFail(procedure begin CheckLessOrEqualD(LNaN, 0.0); end, 'NaN');
+  ExpectFail(procedure begin CheckLessOrEqualD(0.0, LNaN); end, 'NaN');
+  SetExceptionMask(LOldMask);
+end;
+
+procedure TestCheckInRangeDPass;
+begin
+  CheckInRangeD(5.0, 1.0, 10.0);
+  CheckInRangeD(3.14, 3.0, 4.0);
+end;
+
+procedure TestCheckInRangeDBounds;
+begin
+  CheckInRangeD(1.0, 1.0, 10.0);
+  CheckInRangeD(10.0, 1.0, 10.0);
+  { Boundary within epsilon }
+  CheckInRangeD(1.0 - 1e-11, 1.0, 10.0, 1e-10);
+  CheckInRangeD(10.0 + 1e-11, 1.0, 10.0, 1e-10);
+end;
+
+procedure TestCheckInRangeDFail;
+begin
+  ExpectFail(procedure begin CheckInRangeD(11.0, 1.0, 10.0); end, 'not in range');
+end;
+
+procedure TestCheckInRangeDInverted;
+begin
+  ExpectFail(procedure begin CheckInRangeD(5.0, 10.0, 1.0); end, 'ALow');
+end;
+
+procedure TestCheckInRangeDNaN;
+var
+  LNaN: Double;
+  LOldMask: TFPUExceptionMask;
+begin
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exZeroDivide, exOverflow, exUnderflow, exPrecision, exDenormalized]);
+  LNaN := 0.0 / 0.0;
+  ExpectFail(procedure begin CheckInRangeD(LNaN, 0.0, 1.0); end, 'NaN');
+  { ALow/High NaN must also fail }
+  ExpectFail(procedure begin CheckInRangeD(0.5, LNaN, 1.0); end, 'NaN');
+  ExpectFail(procedure begin CheckInRangeD(0.5, 0.0, LNaN); end, 'NaN');
+  SetExceptionMask(LOldMask);
+end;
+
+procedure TestCheckGreaterThanDNaN;
+var
+  LNaN: Double;
+  LOldMask: TFPUExceptionMask;
+begin
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exZeroDivide, exOverflow, exUnderflow, exPrecision, exDenormalized]);
+  LNaN := 0.0 / 0.0;
+  ExpectFail(procedure begin CheckGreaterThanD(LNaN, 0.0); end, 'NaN');
+  ExpectFail(procedure begin CheckGreaterThanD(0.0, LNaN); end, 'NaN');
+  SetExceptionMask(LOldMask);
+end;
+
+procedure TestCheckLessThanDNaN;
+var
+  LNaN: Double;
+  LOldMask: TFPUExceptionMask;
+begin
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exZeroDivide, exOverflow, exUnderflow, exPrecision, exDenormalized]);
+  LNaN := 0.0 / 0.0;
+  ExpectFail(procedure begin CheckLessThanD(LNaN, 0.0); end, 'NaN');
+  ExpectFail(procedure begin CheckLessThanD(0.0, LNaN); end, 'NaN');
+  SetExceptionMask(LOldMask);
+end;
+
+procedure TestCheckNearNaN;
+var
+  LNaN: Double;
+  LOldMask: TFPUExceptionMask;
+begin
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exZeroDivide, exOverflow, exUnderflow, exPrecision, exDenormalized]);
+  LNaN := 0.0 / 0.0;
+  ExpectFail(procedure begin CheckNear(LNaN, 0.0, 1e-10); end, 'NaN');
+  ExpectFail(procedure begin CheckNear(0.0, LNaN, 1e-10); end, 'NaN');
+  ExpectFail(procedure begin CheckNear(LNaN, LNaN, 1e-10); end, 'NaN');
+  SetExceptionMask(LOldMask);
+end;
+
+procedure TestCheckNotNearNaN;
+var
+  LNaN: Double;
+  LOldMask: TFPUExceptionMask;
+begin
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exZeroDivide, exOverflow, exUnderflow, exPrecision, exDenormalized]);
+  LNaN := 0.0 / 0.0;
+  ExpectFail(procedure begin CheckNotNear(LNaN, 0.0, 1e-10); end, 'NaN');
+  ExpectFail(procedure begin CheckNotNear(0.0, LNaN, 1e-10); end, 'NaN');
+  SetExceptionMask(LOldMask);
+end;
+
+{ ── P3: Edge cases — -0.0, Infinity, negative epsilon, denormals ──────────── }
+
+procedure TestCheckNearNegativeZero;
+begin
+  { IEEE 754: -0.0 = +0.0 }
+  CheckNear(0.0, -0.0, 1e-10);
+  CheckNear(-0.0, 0.0, 1e-10);
+end;
+
+procedure TestCheckEqualDoubleNegativeZero;
+begin
+  CheckEqual(0.0, -0.0);
+  CheckEqual(-0.0, 0.0);
+end;
+
+procedure TestCheckNearNegativeEpsilon;
+begin
+  { Negative epsilon: Abs() of the diff is always positive, so
+    negative epsilon means everything is "not near" — near should always fail.
+    But Abs(epsilon) would be more user-friendly. Current behavior: fail. }
+  ExpectFail(procedure begin CheckNear(1.0, 1.0, -1e-10); end);
+end;
+
+procedure TestCheckNearDenormal;
+var
+  LDenorm: Double;
+begin
+  { Smallest positive denormalized Double }
+  LDenorm := 5e-324;
+  CheckNear(0.0, LDenorm, 1e-300);
+  CheckNear(LDenorm, LDenorm, 0.0);
+end;
+
+procedure TestCheckGreaterThanDInfinity;
+var
+  LInf: Double;
+  LOldMask: TFPUExceptionMask;
+begin
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exZeroDivide, exOverflow, exUnderflow, exPrecision, exDenormalized]);
+  LInf := 1.0 / 0.0;
+  CheckGreaterThanD(LInf, 1e308);
+  ExpectFail(procedure begin CheckGreaterThanD(1e308, LInf); end);
+  SetExceptionMask(LOldMask);
+end;
+
+procedure TestCheckLessThanDInfinity;
+var
+  LInf: Double;
+  LOldMask: TFPUExceptionMask;
+begin
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exZeroDivide, exOverflow, exUnderflow, exPrecision, exDenormalized]);
+  LInf := 1.0 / 0.0;
+  CheckLessThanD(1e308, LInf);
+  ExpectFail(procedure begin CheckLessThanD(LInf, 1e308); end);
+  SetExceptionMask(LOldMask);
+end;
+
+procedure TestCheckContainsCIEmptyHaystack;
+begin
+  { Empty haystack with non-empty needle → fail }
+  ExpectFail(procedure begin CheckContainsCI('', 'abc'); end);
+end;
+
+procedure TestCheckNotStartsWithPass;
+begin
+  CheckNotStartsWith('hello', 'xyz');
+  CheckNotStartsWith('hello', 'world');
+end;
+
+procedure TestCheckNotStartsWithFail;
+begin
+  ExpectFail(procedure begin CheckNotStartsWith('hello', 'hel'); end, 'should not start');
+end;
+
+procedure TestCheckNotStartsWithEmpty;
+begin
+  { Empty prefix is a no-op (always passes) }
+  CheckNotStartsWith('hello', '');
+end;
+
+procedure TestCheckNotEndsWithPass;
+begin
+  CheckNotEndsWith('hello', 'xyz');
+  CheckNotEndsWith('hello', 'world');
+end;
+
+procedure TestCheckNotEndsWithFail;
+begin
+  ExpectFail(procedure begin CheckNotEndsWith('hello', 'llo'); end, 'should not end');
+end;
+
+procedure TestCheckNotEndsWithEmpty;
+begin
+  { Empty suffix is a no-op (always passes) }
+  CheckNotEndsWith('hello', '');
+end;
+
+procedure TestCheckContainsCIPass;
+begin
+  CheckContainsCI('Hello World', 'hello');
+  CheckContainsCI('Hello World', 'WORLD');
+  CheckContainsCI('abc', 'ABC');
+end;
+
+procedure TestCheckContainsCIFail;
+begin
+  ExpectFail(procedure begin CheckContainsCI('Hello', 'xyz'); end, 'does not contain (ci)');
+end;
+
+procedure TestCheckContainsCIEmpty;
+begin
+  CheckContainsCI('hello', '');
+  CheckContainsCI('', '');
+end;
+
+procedure TestCheckNotContainsCIPass;
+begin
+  CheckNotContainsCI('Hello World', 'xyz');
+end;
+
+procedure TestCheckNotContainsCIFail;
+begin
+  ExpectFail(procedure begin CheckNotContainsCI('Hello World', 'hello'); end, 'should not contain (ci)');
+end;
+
+procedure TestCheckStartsWithCIPass;
+begin
+  CheckStartsWithCI('Hello World', 'hello');
+  CheckStartsWithCI('HELLO', 'hel');
+end;
+
+procedure TestCheckStartsWithCIFail;
+begin
+  ExpectFail(procedure begin CheckStartsWithCI('Hello World', 'world'); end, 'does not start with (ci)');
+end;
+
+procedure TestCheckEndsWithCIPass;
+begin
+  CheckEndsWithCI('Hello World', 'WORLD');
+  CheckEndsWithCI('hello', 'LLo');
+end;
+
+procedure TestCheckEndsWithCIFail;
+begin
+  ExpectFail(procedure begin CheckEndsWithCI('Hello World', 'hello'); end, 'does not end with (ci)');
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -516,6 +856,61 @@ begin
   { G1: Coverage gaps }
   LSuite.Test('CheckNotContains',            @TestCheckNotContains);
   LSuite.Test('FailUnexpected',              @TestFailUnexpected);
+
+  { === S1: New Check*D + CI + Negation tests (usability audit) === }
+
+  { Double comparison operators }
+  LSuite.Test('GreaterThanD pass',           @TestCheckGreaterThanDPass);
+  LSuite.Test('GreaterThanD fail',           @TestCheckGreaterThanDFail);
+  LSuite.Test('GreaterThanD eq+eps',         @TestCheckGreaterThanDEqEps);
+  LSuite.Test('LessThanD pass',              @TestCheckLessThanDPass);
+  LSuite.Test('LessThanD fail',              @TestCheckLessThanDFail);
+  LSuite.Test('LessThanD eq+eps',            @TestCheckLessThanDEqEps);
+  LSuite.Test('GreaterOrEqualD pass',        @TestCheckGreaterOrEqualDPass);
+  LSuite.Test('GreaterOrEqualD fail',        @TestCheckGreaterOrEqualDFail);
+  LSuite.Test('GreaterOrEqualD eq',          @TestCheckGreaterOrEqualDEq);
+  LSuite.Test('GreaterOrEqualD NaN',         @TestCheckGreaterOrEqualDNaN);
+  LSuite.Test('LessOrEqualD pass',           @TestCheckLessOrEqualDPass);
+  LSuite.Test('LessOrEqualD fail',           @TestCheckLessOrEqualDFail);
+  LSuite.Test('LessOrEqualD eq',             @TestCheckLessOrEqualDEq);
+  LSuite.Test('LessOrEqualD NaN',            @TestCheckLessOrEqualDNaN);
+  LSuite.Test('InRangeD pass',               @TestCheckInRangeDPass);
+  LSuite.Test('InRangeD bounds',             @TestCheckInRangeDBounds);
+  LSuite.Test('InRangeD fail',               @TestCheckInRangeDFail);
+  LSuite.Test('InRangeD inverted',           @TestCheckInRangeDInverted);
+  LSuite.Test('InRangeD NaN',                @TestCheckInRangeDNaN);
+  LSuite.Test('GreaterThanD NaN',            @TestCheckGreaterThanDNaN);
+  LSuite.Test('LessThanD NaN',               @TestCheckLessThanDNaN);
+  LSuite.Test('Near NaN',                    @TestCheckNearNaN);
+  LSuite.Test('NotNear NaN',                 @TestCheckNotNearNaN);
+
+  { P3: Edge cases }
+  LSuite.Test('Near -0.0 = +0.0',           @TestCheckNearNegativeZero);
+  LSuite.Test('EqualD -0.0 = +0.0',         @TestCheckEqualDoubleNegativeZero);
+  LSuite.Test('Near negative epsilon',       @TestCheckNearNegativeEpsilon);
+  LSuite.Test('Near denormal',               @TestCheckNearDenormal);
+  LSuite.Test('GreaterThanD Infinity',       @TestCheckGreaterThanDInfinity);
+  LSuite.Test('LessThanD Infinity',          @TestCheckLessThanDInfinity);
+  LSuite.Test('ContainsCI empty haystack',   @TestCheckContainsCIEmptyHaystack);
+
+  { String negation }
+  LSuite.Test('NotStartsWith pass',          @TestCheckNotStartsWithPass);
+  LSuite.Test('NotStartsWith fail',          @TestCheckNotStartsWithFail);
+  LSuite.Test('NotStartsWith empty',         @TestCheckNotStartsWithEmpty);
+  LSuite.Test('NotEndsWith pass',            @TestCheckNotEndsWithPass);
+  LSuite.Test('NotEndsWith fail',            @TestCheckNotEndsWithFail);
+  LSuite.Test('NotEndsWith empty',           @TestCheckNotEndsWithEmpty);
+
+  { Case-insensitive string }
+  LSuite.Test('ContainsCI pass',             @TestCheckContainsCIPass);
+  LSuite.Test('ContainsCI fail',             @TestCheckContainsCIFail);
+  LSuite.Test('ContainsCI empty',            @TestCheckContainsCIEmpty);
+  LSuite.Test('NotContainsCI pass',          @TestCheckNotContainsCIPass);
+  LSuite.Test('NotContainsCI fail',          @TestCheckNotContainsCIFail);
+  LSuite.Test('StartsWithCI pass',           @TestCheckStartsWithCIPass);
+  LSuite.Test('StartsWithCI fail',           @TestCheckStartsWithCIFail);
+  LSuite.Test('EndsWithCI pass',             @TestCheckEndsWithCIPass);
+  LSuite.Test('EndsWithCI fail',             @TestCheckEndsWithCIFail);
 
   if not LSuite.Run then
   begin

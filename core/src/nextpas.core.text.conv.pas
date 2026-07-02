@@ -77,11 +77,20 @@ end;
 
 function FloatToStr(const AValue: Double): string;
 var LI, LDot: Integer;
+  C: Char;
 begin
   Str(AValue:0:15, Result);
-  LDot := Pos('.', Result);
+  { Find the decimal separator (could be '.' or ',' depending on locale) }
+  LDot := 0;
+  for LI := 1 to Length(Result) do
+    if Result[LI] in ['.', ','] then
+    begin
+      LDot := LI;
+      Break;
+    end;
   if LDot > 0 then
   begin
+    C := Result[LDot];
     LI := Length(Result);
     while (LI > LDot) and (Result[LI] = '0') do
       Dec(LI);
@@ -89,12 +98,27 @@ begin
       SetLength(Result, LDot - 1)
     else
       SetLength(Result, LI);
+    { Normalize to '.' for locale-independent output }
+    if C <> '.' then
+    begin
+      LDot := Pos(C, Result);
+      if LDot > 0 then
+        Result[LDot] := '.';
+    end;
   end;
 end;
 
 function FloatToStrF(const AValue: Double; ADecimals: Integer): string;
+var I: Integer;
 begin
   Str(AValue:0:ADecimals, Result);
+  { Normalize decimal separator to '.' }
+  for I := 1 to Length(Result) do
+    if Result[I] = ',' then
+    begin
+      Result[I] := '.';
+      Break;
+    end;
 end;
 
 function FormatFloat(const AFmt: string; const AValue: Double): string;
@@ -112,6 +136,13 @@ begin
     Str(AValue:0:2, Result);
   while (Length(Result) > 0) and (Result[1] = ' ') do
     Delete(Result, 1, 1);
+  { Normalize decimal separator to '.' }
+  for LI := 1 to Length(Result) do
+    if Result[LI] = ',' then
+    begin
+      Result[LI] := '.';
+      Break;
+    end;
 end;
 
 function BoolToStr(const AValue: Boolean): string;

@@ -469,12 +469,23 @@ var
   LOldMask: TFPUExceptionMask;
 begin
   LNaN := 0.0;
-  { Generate NaN and evaluate near-ness without triggering EInvalidOp }
+  { Generate NaN without triggering EInvalidOp }
   LOldMask := GetExceptionMask;
   SetExceptionMask([exInvalidOp, exZeroDivide, exOverflow, exUnderflow, exPrecision, exDenormalized]);
   LNaN := 0.0/0.0;
-  ExpectDouble(LNaN).Not_.ToBeNear(0.0, 1e-10);
-  ExpectDouble(LNaN).Not_.ToBeNear(1.0, 1e-10);
+  { NaN guard: all ordered/near comparisons must fail, even with Not_ }
+  ExpectFail(procedure begin ExpectDouble(LNaN).ToBeNear(0.0, 1e-10); end, 'NaN');
+  ExpectFail(procedure begin ExpectDouble(LNaN).Not_.ToBeNear(0.0, 1e-10); end, 'NaN');
+  ExpectFail(procedure begin ExpectDouble(LNaN).ToBeGreaterThanD(0.0); end, 'NaN');
+  ExpectFail(procedure begin ExpectDouble(LNaN).Not_.ToBeGreaterThanD(0.0); end, 'NaN');
+  ExpectFail(procedure begin ExpectDouble(LNaN).ToBeLessThanD(0.0); end, 'NaN');
+  ExpectFail(procedure begin ExpectDouble(LNaN).Not_.ToBeLessThanD(0.0); end, 'NaN');
+  ExpectFail(procedure begin ExpectDouble(LNaN).ToBeGreaterOrEqualD(0.0); end, 'NaN');
+  ExpectFail(procedure begin ExpectDouble(LNaN).Not_.ToBeGreaterOrEqualD(0.0); end, 'NaN');
+  ExpectFail(procedure begin ExpectDouble(LNaN).ToBeLessOrEqualD(0.0); end, 'NaN');
+  ExpectFail(procedure begin ExpectDouble(LNaN).Not_.ToBeLessOrEqualD(0.0); end, 'NaN');
+  ExpectFail(procedure begin ExpectDouble(LNaN).ToBeInRangeD(0.0, 1.0); end, 'NaN');
+  ExpectFail(procedure begin ExpectDouble(LNaN).Not_.ToBeInRangeD(0.0, 1.0); end, 'NaN');
   SetExceptionMask(LOldMask);
 end;
 
@@ -495,6 +506,30 @@ begin
   SetExceptionMask(LOldMask);
 end;
 
+procedure TestExpectDoubleInfinityComparison;
+var
+  LInf: Double;
+  LOldMask: TFPUExceptionMask;
+begin
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exZeroDivide, exOverflow, exUnderflow, exPrecision, exDenormalized]);
+  LInf := 1.0 / 0.0;
+  { +Inf > any finite }
+  ExpectDouble(LInf).ToBeGreaterThanD(1e308);
+  ExpectDouble(1e308).ToBeLessThanD(LInf);
+  ExpectDouble(LInf).ToBeGreaterOrEqualD(LInf);
+  ExpectDouble(LInf).ToBeLessOrEqualD(LInf);
+  ExpectDouble(LInf).ToBeInRangeD(0.0, LInf);
+  SetExceptionMask(LOldMask);
+end;
+
+procedure TestExpectDoubleNegativeZero;
+begin
+  { IEEE 754: -0.0 = +0.0 }
+  ExpectDouble(0.0).ToBeNear(-0.0, 0.0);
+  ExpectDouble(-0.0).ToEqualD(0.0, 0.0);
+end;
+
 procedure TestExpectIntMaxMin;
 begin
   { Int64 boundary values }
@@ -511,16 +546,18 @@ end;
 
 procedure TestNotToNotRaiseSameAsToNotRaise;
 begin
-  { Not_.ToNotRaise should behave the same as ToNotRaise when no exception:
-    both pass. }
-  ExpectProc(procedure begin end).Not_.ToNotRaise;
+  { Not_.ToNotRaise is now an error — fails with diagnostic message }
+  ExpectFail(procedure begin
+    ExpectProc(procedure begin end).Not_.ToNotRaise;
+  end, 'ToRaise');
 end;
 
 procedure TestNotToNotRaiseAlwaysExpectsNoException;
 begin
-  { Not_.ToNotRaise + exception raised → still fails (same as ToNotRaise).
-    This verifies the FNegated flag is ignored. }
-  ExpectFail(procedure begin ExpectProc(procedure begin StrToInt('bad'); end).Not_.ToNotRaise; end, 'no exception');
+  { Not_.ToNotRaise fails before even running the proc — diagnostic message }
+  ExpectFail(procedure begin
+    ExpectProc(procedure begin StrToInt('bad'); end).Not_.ToNotRaise;
+  end, 'ToRaise');
 end;
 
 { R6-44: Type mismatch edge cases — verify EAssertionFailed with type hint }
@@ -695,6 +732,72 @@ begin
   end, 'nil');
 end;
 
+{ ── F5/F6: New API — ToBeSame, ToEqualPointer, ToEqualD ───────────────────── }
+
+procedure TestExpectToBeSamePass;
+var
+  LP: Pointer;
+begin
+  LP := @LP;
+  ExpectPtr(LP).ToBeSame(LP);
+  ExpectPtr(nil).ToBeSame(nil);
+end;
+
+procedure TestExpectToBeSameFail;
+var
+  LA, LB: Integer;
+begin
+  LA := 1; LB := 2;
+  ExpectFail(procedure begin ExpectPtr(@LA).ToBeSame(@LB); end);
+end;
+
+procedure TestExpectToBeSameNot;
+var
+  LA, LB: Integer;
+begin
+  LA := 1; LB := 2;
+  ExpectPtr(@LA).Not_.ToBeSame(@LB);
+end;
+
+procedure TestExpectToEqualPointerIsAlias;
+var
+  LP: Pointer;
+begin
+  LP := @LP;
+  ExpectPtr(LP).ToEqualPointer(LP);
+end;
+
+procedure TestExpectToEqualDPass;
+begin
+  ExpectDouble(1.0).ToEqualD(1.0);
+  ExpectDouble(1.0).ToEqualD(1.0 + 1e-11);
+  ExpectDouble(1.0).ToEqualD(1.0, 1e-6);
+end;
+
+procedure TestExpectToEqualDFail;
+begin
+  ExpectFail(procedure begin ExpectDouble(1.0).ToEqualD(2.0); end);
+end;
+
+procedure TestExpectToEqualDNot;
+begin
+  ExpectDouble(1.0).Not_.ToEqualD(2.0);
+  ExpectFail(procedure begin ExpectDouble(1.0).Not_.ToEqualD(1.0); end);
+end;
+
+procedure TestExpectToEqualDNaN;
+var
+  LNaN: Double;
+  LOldMask: TFPUExceptionMask;
+begin
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exZeroDivide, exOverflow, exUnderflow, exPrecision, exDenormalized]);
+  LNaN := 0.0 / 0.0;
+  ExpectFail(procedure begin ExpectDouble(LNaN).ToEqualD(0.0); end, 'NaN');
+  ExpectFail(procedure begin ExpectDouble(0.0).ToEqualD(LNaN); end, 'NaN');
+  SetExceptionMask(LOldMask);
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -796,8 +899,10 @@ begin
   LSuite.Test('Type: Double→ToEqualInt',       @TestExpectDoubleTypeMismatch);
 
   { R2-F15: NaN/Infinity/Int64 boundary }
-  LSuite.Test('Double NaN not near',           @TestExpectDoubleNaN);
+  LSuite.Test('Double NaN guard all comparisons',   @TestExpectDoubleNaN);
   LSuite.Test('Double Infinity near',          @TestExpectDoubleInfinity);
+  LSuite.Test('Double Infinity comparison',     @TestExpectDoubleInfinityComparison);
+  LSuite.Test('Double -0.0 = +0.0',            @TestExpectDoubleNegativeZero);
   LSuite.Test('Int64 max/min boundary',        @TestExpectIntMaxMin);
 
   { R6-44: Type mismatch edge cases }
@@ -833,6 +938,16 @@ begin
 
   { P0: ToRaise nil ExceptClass guard }
   LSuite.Test('ToRaise(nil) → graceful fail', @TestExpectToRaiseNilClass);
+
+  { F5/F6: New API — ToBeSame, ToEqualPointer, ToEqualD }
+  LSuite.Test('ToBeSame pass',                 @TestExpectToBeSamePass);
+  LSuite.Test('ToBeSame fail',                 @TestExpectToBeSameFail);
+  LSuite.Test('Not_.ToBeSame',                 @TestExpectToBeSameNot);
+  LSuite.Test('ToEqualPointer alias',          @TestExpectToEqualPointerIsAlias);
+  LSuite.Test('ToEqualD pass',                 @TestExpectToEqualDPass);
+  LSuite.Test('ToEqualD fail',                 @TestExpectToEqualDFail);
+  LSuite.Test('Not_.ToEqualD',                 @TestExpectToEqualDNot);
+  LSuite.Test('ToEqualD NaN',                  @TestExpectToEqualDNaN);
 
   if not LSuite.Run then
   begin

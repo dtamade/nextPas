@@ -40,7 +40,7 @@ type
     { Assert proc raises AExceptionClass. nil class → graceful fail. }
     function ToRaise(AExceptionClass: ExceptClass;
       const AMessage: string = ''): IExpectation;
-    { Always asserts no exception, ignoring Not_. }
+    { Asserts no exception. Not_.ToNotRaise is an error — use ToRaise(EClass) instead. }
     function ToNotRaise: IExpectation;
     function ToBeNear(const AExpected: Double;
       const AEpsilon: Double = 1e-10): IExpectation;
@@ -56,6 +56,13 @@ type
     function ToContainCI(const ASubstr: string): IExpectation;
     function ToStartWithCI(const APrefix: string): IExpectation;
     function ToEndWithCI(const ASuffix: string): IExpectation;
+    { Pointer identity: same address (like CheckSame). }
+    function ToBeSame(const AExpected: Pointer): IExpectation;
+    { Pointer equality: same address (alias for ToBeSame). }
+    function ToEqualPointer(const AExpected: Pointer): IExpectation;
+    { Double equality within epsilon (like CheckEqual(Double)). }
+    function ToEqualD(const AExpected: Double;
+      const AEpsilon: Double = 1e-10): IExpectation;
   end;
 
 { ── Expect (fluent factory) ───────────────────────────────────────────────── }
@@ -68,6 +75,9 @@ function ExpectPtr(const AValue: Pointer): IExpectation;
 function ExpectProc(AProc: TTestProc): IExpectation;
 
 implementation
+
+uses
+  Math; { IsNan for Double comparison NaN guards }
 
 { ═════════════════════════════════════════════════════════════════════════════ }
 { TExpectation (fluent API)                                                    }
@@ -139,6 +149,10 @@ type
     function ToContainCI(const ASubstr: string): IExpectation;
     function ToStartWithCI(const APrefix: string): IExpectation;
     function ToEndWithCI(const ASuffix: string): IExpectation;
+    function ToBeSame(const AExpected: Pointer): IExpectation;
+    function ToEqualPointer(const AExpected: Pointer): IExpectation;
+    function ToEqualD(const AExpected: Double;
+      const AEpsilon: Double = 1e-10): IExpectation;
   end;
 
 constructor TExpectation.CreateStr(const AValue: string);
@@ -419,19 +433,17 @@ end;
 
 { ToNotRaise — asserts that the proc does NOT raise any exception.
 
-  NOTE: ToNotRaise does NOT honor the Not_ (FNegated) flag.
-  Not_.ToNotRaise behaves identically to ToNotRaise — it still asserts that
-  no exception is raised.  The Not_ token is silently ignored.
-
-  If you need to assert that a proc DOES raise, use
-    ExpectProc(...).ToRaise(SpecificException)
-  which properly supports Not_.ToRaise(EClass) for negative assertions.
+  NOTE: Not_.ToNotRaise is an error — it fails with a diagnostic message
+  directing the user to use ToRaise(EClass) instead.
 
   Implementation: ToNotRaise runs the proc; if any exception (other than
-  ETestSkipped) escapes, it calls InternalFail.  FNegated is never checked. }
+  ETestSkipped) escapes, it calls InternalFail. }
 function TExpectation.ToNotRaise: IExpectation;
 begin
   RequireKind(ekProc, 'ToNotRaise');
+  if FNegated then
+    InternalFail('Not_.ToNotRaise is not supported — ' +
+      'use ToRaise(EClass) to assert that a specific exception is raised');
   try
     FProcValue;
   except
@@ -450,6 +462,9 @@ var
   LDiff: Double;
 begin
   RequireKind(ekDouble, 'ToBeNear');
+  if IsNan(FDoubleValue) or IsNan(AExpected) then
+    InternalFail('Expected ' + FloatToStr(AExpected) +
+      ' (+/-' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(FDoubleValue) + ' (NaN)');
   LDiff := Abs(FDoubleValue - AExpected);
   if FNegated then
   begin
@@ -503,6 +518,9 @@ end;
 function TExpectation.ToBeGreaterThanD(const AExpected: Double): IExpectation;
 begin
   RequireKind(ekDouble, 'ToBeGreaterThanD');
+  if IsNan(FDoubleValue) or IsNan(AExpected) then
+    InternalFail(FloatToStr(FDoubleValue) + ' is not > ' +
+      FloatToStr(AExpected) + ' (NaN)');
   CheckMatch(FDoubleValue > AExpected,
     FloatToStr(FDoubleValue) + ' should not be > ' + FloatToStr(AExpected),
     FloatToStr(FDoubleValue) + ' is not > ' + FloatToStr(AExpected));
@@ -512,6 +530,9 @@ end;
 function TExpectation.ToBeLessThanD(const AExpected: Double): IExpectation;
 begin
   RequireKind(ekDouble, 'ToBeLessThanD');
+  if IsNan(FDoubleValue) or IsNan(AExpected) then
+    InternalFail(FloatToStr(FDoubleValue) + ' is not < ' +
+      FloatToStr(AExpected) + ' (NaN)');
   CheckMatch(FDoubleValue < AExpected,
     FloatToStr(FDoubleValue) + ' should not be < ' + FloatToStr(AExpected),
     FloatToStr(FDoubleValue) + ' is not < ' + FloatToStr(AExpected));
@@ -521,6 +542,9 @@ end;
 function TExpectation.ToBeGreaterOrEqualD(const AExpected: Double): IExpectation;
 begin
   RequireKind(ekDouble, 'ToBeGreaterOrEqualD');
+  if IsNan(FDoubleValue) or IsNan(AExpected) then
+    InternalFail(FloatToStr(FDoubleValue) + ' is not >= ' +
+      FloatToStr(AExpected) + ' (NaN)');
   CheckMatch(FDoubleValue >= AExpected,
     FloatToStr(FDoubleValue) + ' should not be >= ' + FloatToStr(AExpected),
     FloatToStr(FDoubleValue) + ' is not >= ' + FloatToStr(AExpected));
@@ -530,6 +554,9 @@ end;
 function TExpectation.ToBeLessOrEqualD(const AExpected: Double): IExpectation;
 begin
   RequireKind(ekDouble, 'ToBeLessOrEqualD');
+  if IsNan(FDoubleValue) or IsNan(AExpected) then
+    InternalFail(FloatToStr(FDoubleValue) + ' is not <= ' +
+      FloatToStr(AExpected) + ' (NaN)');
   CheckMatch(FDoubleValue <= AExpected,
     FloatToStr(FDoubleValue) + ' should not be <= ' + FloatToStr(AExpected),
     FloatToStr(FDoubleValue) + ' is not <= ' + FloatToStr(AExpected));
@@ -539,6 +566,9 @@ end;
 function TExpectation.ToBeInRangeD(const ALow, AHigh: Double): IExpectation;
 begin
   RequireKind(ekDouble, 'ToBeInRangeD');
+  if IsNan(FDoubleValue) or IsNan(ALow) or IsNan(AHigh) then
+    InternalFail(FloatToStr(FDoubleValue) + ' is not in [' +
+      FloatToStr(ALow) + '..' + FloatToStr(AHigh) + '] (NaN)');
   if ALow > AHigh then
     InternalFail('ToBeInRangeD: low (' + FloatToStr(ALow) +
       ') > high (' + FloatToStr(AHigh) + ')');
@@ -583,6 +613,41 @@ begin
      Length(ASuffix))) = LowerCase(ASuffix)),
     '"' + FStrValue + '" should not end with (ci) "' + ASuffix + '"',
     '"' + FStrValue + '" does not end with (ci) "' + ASuffix + '"');
+  Result := Self;
+end;
+
+{ ── TExpectation: Pointer identity ───────────────────────────────────────── }
+
+function TExpectation.ToBeSame(const AExpected: Pointer): IExpectation;
+begin
+  RequireKind(ekPointer, 'ToBeSame');
+  CheckMatch(FPtrValue = AExpected,
+    'Expected same pointer $' + IntToHex(NativeUInt(FPtrValue), 16) +
+      ' but got $' + IntToHex(NativeUInt(AExpected), 16),
+    'Expected different pointer but both are $' +
+      IntToHex(NativeUInt(FPtrValue), 16));
+  Result := Self;
+end;
+
+function TExpectation.ToEqualPointer(const AExpected: Pointer): IExpectation;
+begin
+  Result := ToBeSame(AExpected);
+end;
+
+{ ── TExpectation: Double equality ────────────────────────────────────────── }
+
+function TExpectation.ToEqualD(const AExpected: Double;
+  const AEpsilon: Double): IExpectation;
+begin
+  RequireKind(ekDouble, 'ToEqualD');
+  if IsNan(FDoubleValue) or IsNan(AExpected) then
+    InternalFail(FloatToStr(FDoubleValue) + ' <> ' +
+      FloatToStr(AExpected) + ' (NaN)');
+  CheckMatch(Abs(FDoubleValue - AExpected) <= AEpsilon,
+    FloatToStr(FDoubleValue) + ' should not equal ' +
+      FloatToStr(AExpected) + ' (+/-' + FloatToStr(AEpsilon) + ')',
+    FloatToStr(FDoubleValue) + ' <> ' +
+      FloatToStr(AExpected) + ' (+/-' + FloatToStr(AEpsilon) + ')');
   Result := Self;
 end;
 
