@@ -5083,9 +5083,14 @@ begin
   FModel.SetTypeParent(PWideCharTypeId, PointerTypeId);
   FModel.SetTypeParent(PNativeUIntTypeId, PointerTypeId);
   FModel.SetTypeParent(Int32TypeId, LongIntTypeId);
+  FModel.SetTypeAliasTarget(Int32TypeId, LongIntTypeId);
   FModel.SetTypeParent(UInt32TypeId, LongWordTypeId);
+  FModel.SetTypeAliasTarget(UInt32TypeId, LongWordTypeId);
   FModel.SetTypeParent(UInt64TypeId, QWordTypeId);
+  FModel.SetTypeAliasTarget(UInt64TypeId, QWordTypeId);
   FModel.SetTypeParent(FModel.FindTypeByName('DWord'), LongWordTypeId);
+  FModel.SetTypeAliasTarget(FModel.FindTypeByName('DWord'), LongWordTypeId);
+  FModel.SetTypeAliasTarget(FModel.FindTypeByName('Cardinal'), LongWordTypeId);
 
   FModel.SetTypeScalarFact(BooleanTypeId, sskBool, 1, False);
   FModel.SetTypeScalarFact(CharTypeId, sskInt, 8, False);
