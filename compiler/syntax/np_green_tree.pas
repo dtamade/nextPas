@@ -27,7 +27,7 @@ type
     gnkInterfaceSection, gnkImplementationSection,
     gnkInitializationSection, gnkFinalizationSection,
     gnkForeignProcedureDecl,
-    gnkBeginBlock, gnkEndBlock,
+    gnkBeginBlock, gnkAsmBlock, gnkEndBlock,
     gnkStatementList,
     gnkIfStatement, gnkWhileStatement, gnkForStatement,
     gnkForInStatement,
@@ -430,6 +430,7 @@ begin
     gnkFinalizationSection: Result := 'finalization-section';
     gnkForeignProcedureDecl: Result := 'foreign-procedure-decl';
     gnkBeginBlock: Result := 'begin-block';
+    gnkAsmBlock: Result := 'asm-block';
     gnkEndBlock: Result := 'end-block';
     gnkStatementList: Result := 'statement-list';
     gnkIfStatement: Result := 'if-statement';
@@ -3424,6 +3425,7 @@ function ParseProcedureDecl(
 ): Boolean;
 var
   Node: TGreenNode;
+  AsmNode: TGreenNode;
   NameToken: TToken;
   I: LongInt;
   J: LongInt;
@@ -3566,13 +3568,30 @@ begin
     else if (ACursor < ALexer.TokenCount) and
       (CurrentToken(ALexer, ACursor).Kind = tkAsmKeyword) then
     begin
+      AsmNode := TGreenNode.Create(gnkAsmBlock,
+        CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
       Inc(ACursor);
       while (ACursor < ALexer.TokenCount) and
         (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
         (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
         Inc(ACursor);
       MatchTokenSilent(ALexer, ACursor, tkEndKeyword);
+      { FPC asm clobber list: end ['eax', 'ebx', ...] }
+      if (ACursor < ALexer.TokenCount) and
+        (CurrentToken(ALexer, ACursor).Kind = tkLBracket) then
+      begin
+        Inc(ACursor);
+        while (ACursor < ALexer.TokenCount) and
+          (CurrentToken(ALexer, ACursor).Kind <> tkRBracket) and
+          (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+          Inc(ACursor);
+        if (ACursor < ALexer.TokenCount) and
+          (CurrentToken(ALexer, ACursor).Kind = tkRBracket) then
+          Inc(ACursor);
+      end;
       MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+      Node.AppendChild(AsmNode);
+      Inc(ATree.FNodeCount);
     end
     else
     begin
@@ -3607,6 +3626,7 @@ function ParseFunctionDecl(
 ): Boolean;
 var
   Node: TGreenNode;
+  AsmNode: TGreenNode;
   NameToken: TToken;
   TypeNode: TGreenNode;
   I: LongInt;
@@ -3769,13 +3789,30 @@ begin
     else if (ACursor < ALexer.TokenCount) and
       (CurrentToken(ALexer, ACursor).Kind = tkAsmKeyword) then
     begin
+      AsmNode := TGreenNode.Create(gnkAsmBlock,
+        CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
       Inc(ACursor);
       while (ACursor < ALexer.TokenCount) and
         (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
         (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
         Inc(ACursor);
       MatchTokenSilent(ALexer, ACursor, tkEndKeyword);
+      { FPC asm clobber list: end ['eax', 'ebx', ...] }
+      if (ACursor < ALexer.TokenCount) and
+        (CurrentToken(ALexer, ACursor).Kind = tkLBracket) then
+      begin
+        Inc(ACursor);
+        while (ACursor < ALexer.TokenCount) and
+          (CurrentToken(ALexer, ACursor).Kind <> tkRBracket) and
+          (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+          Inc(ACursor);
+        if (ACursor < ALexer.TokenCount) and
+          (CurrentToken(ALexer, ACursor).Kind = tkRBracket) then
+          Inc(ACursor);
+      end;
       MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+      Node.AppendChild(AsmNode);
+      Inc(ATree.FNodeCount);
     end
     else
     begin

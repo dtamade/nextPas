@@ -6237,6 +6237,11 @@ begin
     begin
       RegisterProcedureBody(ANode.Text, Child, ANode, AOwnerUnitId);
       Break;
+    end
+    else if Child.NodeKind = gnkAsmBlock then
+    begin
+      RegisterProcedureBody(ANode.Text, Child, ANode, AOwnerUnitId);
+      Break;
     end;
   end;
 
@@ -6315,6 +6320,11 @@ begin
     else if Child.NodeKind = gnkFunctionDecl then
       ProcessFunctionDecl(Child, AOwnerUnitId)
     else if Child.NodeKind = gnkBeginBlock then
+    begin
+      RegisterProcedureBody(ANode.Text, Child, ANode, AOwnerUnitId);
+      Break;
+    end
+    else if Child.NodeKind = gnkAsmBlock then
     begin
       RegisterProcedureBody(ANode.Text, Child, ANode, AOwnerUnitId);
       Break;
@@ -11970,7 +11980,8 @@ procedure TSemanticAnalyzer.SeedImportedUnitBodies;
           BodyChild := nil;
           for BodyIdx := 0 to Child.ChildCount - 1 do
             if (Child.ChildAt(BodyIdx) <> nil) and
-              (Child.ChildAt(BodyIdx).NodeKind = gnkBeginBlock) then
+              ((Child.ChildAt(BodyIdx).NodeKind = gnkBeginBlock) or
+               (Child.ChildAt(BodyIdx).NodeKind = gnkAsmBlock)) then
             begin
               BodyChild := Child.ChildAt(BodyIdx);
               Break;
