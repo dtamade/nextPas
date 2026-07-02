@@ -623,6 +623,34 @@ begin
   CheckContains(LConsole, 'nextpas.core.bench v1.0');
 end;
 
+procedure TestSetMaxDetailCount;
+var
+  LResults: TBenchResultArray;
+  LHTML: string;
+  LCount1, LCount2: Integer;
+begin
+  LResults := CreateTestResults;
+
+  { Default max detail count (5) should include detailed stats }
+  GGenerator.SetResults(LResults);
+  GGenerator.SetEnvironment(CreateTestEnvironment);
+  LHTML := GGenerator.ToHTML;
+  LCount1 := Length(LHTML);
+
+  { Set max detail to 0 — should exclude detailed stats, shorter HTML }
+  GGenerator.SetMaxDetailCount(0);
+  GGenerator.SetResults(LResults);
+  LHTML := GGenerator.ToHTML;
+  LCount2 := Length(LHTML);
+  Check(LCount2 < LCount1, 'SetMaxDetailCount(0) produces shorter HTML than default');
+
+  { Set max detail to 100 — should not crash, same or longer than default }
+  GGenerator.SetMaxDetailCount(100);
+  GGenerator.SetResults(LResults);
+  LHTML := GGenerator.ToHTML;
+  Check(Length(LHTML) >= LCount1, 'SetMaxDetailCount(100) produces at least as much as default');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -657,6 +685,7 @@ begin
     T.Test('empty results to JSON', @Test_EmptyResults_ToJSON);
     T.Test('empty results to HTML', @Test_EmptyResults_ToHTML);
     T.Test('empty results print to console', @Test_EmptyResults_PrintToConsole);
+    T.Test('set max detail count', @TestSetMaxDetailCount);
     T.Run;
     T.Summary;
   finally

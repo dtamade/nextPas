@@ -656,6 +656,168 @@ begin
   end;
 end;
 
+{ ---- SortIndirect: sort indices by data values ---- }
+
+procedure TestSortIndirect_Basic;
+var
+  LData: TDoubleArray;
+  LIndices: TInt64Array;
+  I: Integer;
+begin
+  { Data: [50, 10, 40, 20, 30] => sorted indices: [1,3,4,2,0] }
+  SetLength(LData, 5);
+  LData[0] := 50.0; LData[1] := 10.0; LData[2] := 40.0; LData[3] := 20.0; LData[4] := 30.0;
+  SetLength(LIndices, 5);
+  for I := 0 to 4 do LIndices[I] := I;
+  SortIndirect(LIndices, LData);
+  { After sort: LIndices[i] is the original index of the i-th smallest value }
+  Check(LIndices[0] = 1, 'SortIndirect[0] = 1 (value 10)');
+  Check(LIndices[1] = 3, 'SortIndirect[1] = 3 (value 20)');
+  Check(LIndices[2] = 4, 'SortIndirect[2] = 4 (value 30)');
+  Check(LIndices[3] = 2, 'SortIndirect[3] = 2 (value 40)');
+  Check(LIndices[4] = 0, 'SortIndirect[4] = 0 (value 50)');
+  { Verify monotonicity: data[indices[i]] should be non-decreasing }
+  for I := 0 to 3 do
+    Check(LData[LIndices[I]] <= LData[LIndices[I + 1]],
+      'SortIndirect monotonic[' + IntToStr(I) + ']');
+end;
+
+procedure TestSortIndirect_Empty;
+var
+  LData: TDoubleArray;
+  LIndices: TInt64Array;
+  LNoCrash: Boolean;
+begin
+  SetLength(LData, 0);
+  SetLength(LIndices, 0);
+  LNoCrash := True;
+  try
+    SortIndirect(LIndices, LData);
+  except
+    LNoCrash := False;
+  end;
+  Check(LNoCrash, 'SortIndirect empty does not crash');
+  Check(Length(LIndices) = 0, 'SortIndirect empty length preserved');
+end;
+
+procedure TestSortIndirect_SingleElement;
+var
+  LData: TDoubleArray;
+  LIndices: TInt64Array;
+begin
+  SetLength(LData, 1); LData[0] := 42.0;
+  SetLength(LIndices, 1); LIndices[0] := 0;
+  SortIndirect(LIndices, LData);
+  Check(LIndices[0] = 0, 'SortIndirect single element index unchanged');
+end;
+
+procedure TestSortIndirect_AlreadySorted;
+var
+  LData: TDoubleArray;
+  LIndices: TInt64Array;
+  I: Integer;
+begin
+  SetLength(LData, 5);
+  for I := 0 to 4 do LData[I] := I * 10.0;
+  SetLength(LIndices, 5);
+  for I := 0 to 4 do LIndices[I] := I;
+  SortIndirect(LIndices, LData);
+  for I := 0 to 4 do
+    Check(LIndices[I] = I, 'SortIndirect already-sorted[' + IntToStr(I) + '] = ' + IntToStr(I));
+end;
+
+procedure TestSortIndirect_ReverseOrder;
+var
+  LData: TDoubleArray;
+  LIndices: TInt64Array;
+  I: Integer;
+begin
+  SetLength(LData, 10);
+  for I := 0 to 9 do LData[I] := (9 - I) * 10.0;  { 90, 80, ... 0 }
+  SetLength(LIndices, 10);
+  for I := 0 to 9 do LIndices[I] := I;
+  SortIndirect(LIndices, LData);
+  { Smallest value (0) is at original index 9 }
+  for I := 0 to 9 do
+    Check(LIndices[I] = 9 - I, 'SortIndirect reverse[' + IntToStr(I) + '] = ' + IntToStr(9 - I));
+end;
+
+procedure TestSortIndirect_AllEqual;
+var
+  LData: TDoubleArray;
+  LIndices: TInt64Array;
+  I, J: Integer;
+  LSorted: Boolean;
+  LSeen: array[0..9] of Boolean;
+begin
+  SetLength(LData, 10);
+  for I := 0 to 9 do LData[I] := 7.0;
+  SetLength(LIndices, 10);
+  for I := 0 to 9 do LIndices[I] := I;
+  SortIndirect(LIndices, LData);
+  { All equal => any permutation is valid; verify monotonicity (trivially true) }
+  LSorted := True;
+  for I := 0 to 8 do
+    if LData[LIndices[I]] > LData[LIndices[I + 1]] then LSorted := False;
+  Check(LSorted, 'SortIndirect all-equal maintains monotonicity');
+  { Verify all indices are still present (no data loss) }
+  for I := 0 to 9 do LSeen[I] := False;
+  for I := 0 to 9 do LSeen[LIndices[I]] := True;
+  for I := 0 to 9 do
+    Check(LSeen[I], 'SortIndirect all-equal index ' + IntToStr(I) + ' preserved');
+end;
+
+procedure TestSortIndirect_LargeArray;
+var
+  LData: TDoubleArray;
+  LIndices: TInt64Array;
+  I: Integer;
+  LSorted: Boolean;
+  LSeen: array[0..999] of Boolean;
+begin
+  RandSeed := 42;
+  SetLength(LData, 1000);
+  SetLength(LIndices, 1000);
+  for I := 0 to 999 do
+  begin
+    LData[I] := Random * 10000.0;
+    LIndices[I] := I;
+  end;
+  SortIndirect(LIndices, LData);
+  { Verify sorted order }
+  LSorted := True;
+  for I := 0 to 998 do
+    if LData[LIndices[I]] > LData[LIndices[I + 1]] then LSorted := False;
+  Check(LSorted, 'SortIndirect 1000 elements sorted correctly');
+  { Verify permutation is valid (all indices present) }
+  for I := 0 to 999 do LSeen[I] := False;
+  for I := 0 to 999 do LSeen[LIndices[I]] := True;
+  LSorted := True;
+  for I := 0 to 999 do
+    if not LSeen[I] then LSorted := False;
+  Check(LSorted, 'SortIndirect 1000 elements: valid permutation');
+end;
+
+procedure TestSortIndirect_OddLength;
+var
+  LData: TDoubleArray;
+  LIndices: TInt64Array;
+  I: Integer;
+begin
+  { 7 elements — exercises odd-length path in MedianOfThree }
+  SetLength(LData, 7);
+  LData[0] := 70.0; LData[1] := 10.0; LData[2] := 50.0; LData[3] := 30.0;
+  LData[4] := 60.0; LData[5] := 20.0; LData[6] := 40.0;
+  SetLength(LIndices, 7);
+  for I := 0 to 6 do LIndices[I] := I;
+  SortIndirect(LIndices, LData);
+  Check(LIndices[0] = 1, 'SortIndirect odd[0] = 1 (value 10)');
+  Check(LIndices[6] = 0, 'SortIndirect odd[6] = 0 (value 70)');
+  for I := 0 to 5 do
+    Check(LData[LIndices[I]] <= LData[LIndices[I + 1]],
+      'SortIndirect odd monotonic[' + IntToStr(I) + ']');
+end;
+
 procedure TestGlobMatch;
 begin
   { 精确匹配 }
@@ -730,6 +892,14 @@ begin
   T.Test('OLSRegression', @TestOLSRegression);
   T.Test('OLSRegression_InsufficientData', @TestOLSRegression_InsufficientData);
   T.Test('OLSRegression_PerfectFit', @TestOLSRegression_PerfectFit);
+  T.Test('SortIndirect_Basic', @TestSortIndirect_Basic);
+  T.Test('SortIndirect_Empty', @TestSortIndirect_Empty);
+  T.Test('SortIndirect_SingleElement', @TestSortIndirect_SingleElement);
+  T.Test('SortIndirect_AlreadySorted', @TestSortIndirect_AlreadySorted);
+  T.Test('SortIndirect_ReverseOrder', @TestSortIndirect_ReverseOrder);
+  T.Test('SortIndirect_AllEqual', @TestSortIndirect_AllEqual);
+  T.Test('SortIndirect_LargeArray', @TestSortIndirect_LargeArray);
+  T.Test('SortIndirect_OddLength', @TestSortIndirect_OddLength);
 
   T.Run;
   T.Summary;
