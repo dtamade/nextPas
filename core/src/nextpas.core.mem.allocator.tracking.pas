@@ -8,7 +8,8 @@ uses
   nextpas.core.base,
   nextpas.core.mem.base,
   nextpas.core.mem.error,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.allocator.base,
+  nextpas.core.mem.mutex;
 
 type
   {** TAllocRecord — 单次分配的跟踪信息 }
@@ -25,7 +26,7 @@ type
    *  包装任意 IAllocator，记录所有分配/释放操作，
    *  用于测试时检测内存泄漏。
    *
-   *  线程安全（内部用 TRTLCriticalSection 保护记录表）。
+   *  线程安全（内部用 TMemMutex 保护记录表）。
    *  仅用于测试/诊断场景，不建议在生产热路径使用。
    *}
   TTrackingAllocator = class(TAllocator)
@@ -35,7 +36,7 @@ type
     FCount: SizeInt;
     FCapacity: SizeInt;
     FNextAllocId: QWord;
-    FLock: TRTLCriticalSection;
+    FLock: TMemMutex;
     function FindRecordIndex(APtr: Pointer): SizeInt;
     procedure AddRecord(APtr: Pointer; ASize: SizeUInt);
     procedure RemoveRecord(APtr: Pointer);
@@ -75,12 +76,12 @@ begin
   FCount := 0;
   FCapacity := 0;
   FNextAllocId := 1;
-  InitCriticalSection(FLock);
+  FLock.Init;
 end;
 
 destructor TTrackingAllocator.Destroy;
 begin
-  DoneCriticalSection(FLock);
+  FLock.Done;
   FInner := nil;
   inherited Destroy;
 end;
@@ -153,29 +154,29 @@ end;
 function TTrackingAllocator.DoGetMem(ASize: SizeUInt): Pointer;
 begin
   Result := FInner.GetMem(ASize);
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     AddRecord(Result, ASize);
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
 function TTrackingAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
 begin
   Result := FInner.AllocMem(ASize);
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     AddRecord(Result, ASize);
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
 function TTrackingAllocator.DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
 begin
   Result := FInner.ReallocMem(ADst, ASize);
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     if Result <> nil then
     begin
@@ -189,7 +190,7 @@ begin
       { ReallocMem 失败：原指针仍有效 }
     end;
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
@@ -197,15 +198,18 @@ procedure TTrackingAllocator.DoFreeMem(ADst: Pointer);
 begin
   if ADst = nil then
     Exit;
-  { Double-free / unknown pointer detection: check BEFORE freeing }
-  EnterCriticalSection(FLock);
+  { Double-free / unknown pointer detection: check BEFORE freeing.
+    Inner free is inside the lock to close the race window where another
+    thread could re-allocate the same pointer between RemoveRecord and
+    the actual deallocation. }
+  FLock.Acquire;
   try
     if FindRecordIndex(ADst) < 0 then
       raise EDoubleFree.Create(aeDoubleFree,
         'TTrackingAllocator.DoFreeMem: pointer not tracked (double-free or foreign pointer)');
     RemoveRecord(ADst);
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
   FInner.FreeMem(ADst);
 end;
@@ -217,11 +221,11 @@ end;
 
 function TTrackingAllocator.ActiveAllocCount: SizeInt;
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     Result := FCount;
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
@@ -229,13 +233,13 @@ function TTrackingAllocator.ActiveAllocBytes: SizeUInt;
 var
   I: SizeInt;
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     Result := 0;
     for I := 0 to FCount - 1 do
       Inc(Result, FRecords[I].Size);
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
@@ -265,7 +269,7 @@ var
   LLine: string;
   LCountStr: string;
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     if FCount = 0 then
       Exit('No leaks detected.');
@@ -280,7 +284,7 @@ begin
       Result := Result + ' size=' + LLine + #10;
     end;
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
@@ -294,14 +298,14 @@ procedure TTrackingAllocator.FreeMem(ADst: Pointer);
 begin
   if ADst = nil then
     Exit;
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     if FindRecordIndex(ADst) < 0 then
       raise EDoubleFree.Create(aeDoubleFree,
         'TTrackingAllocator.FreeMem: pointer not tracked (double-free or foreign pointer)');
     RemoveRecord(ADst);
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
   FInner.FreeMem(ADst);
 end;
@@ -313,12 +317,12 @@ begin
   if (APtr = nil) or (ANewSize = 0) then
     Exit(inherited ReallocMem(APtr, AOldSize, ANewSize));
   Result := FInner.ReallocMem(APtr, AOldSize, ANewSize);
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     if Result <> nil then
       UpdateRecord(APtr, Result, ANewSize);
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 

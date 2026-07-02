@@ -6462,18 +6462,18 @@ begin
     SameText(AName, 'CompareText') or SameText(AName, 'UnicodeCompareStr') or SameText(AName, 'StringReplace') or
     SameText(AName, 'Default') or SameText(AName, 'TypeInfo') or
     SameText(AName, 'InterlockedCompareExchange') or
-    SameText(AName, InterlockedExchange) or
-    SameText(AName, InterlockedExchangeAdd) or
-    SameText(AName, InterlockedIncrement) or SameText(AName, InterlockedDecrement) or
-    SameText(AName, InterlockedCompareExchange64) or
-    SameText(AName, InterlockedExchangeAdd64) or
-    SameText(AName, ReadWriteBarrier) or SameText(AName, ReadBarrier) or SameText(AName, WriteBarrier) or
-    SameText(AName, DoneCriticalSection) or
-    SameText(AName, FillQWord) or SameText(AName, SarInt64) or
-    SameText(AName, UniqueString) or SameText(AName, StringOfChar) or
-    SameText(AName, ThreadSwitch) or SameText(AName, RunError) or
-    SameText(AName, ArcTan) or SameText(AName, FormatDateTime) or
-    SameText(AName, DoublePack);
+    SameText(AName, 'InterlockedExchange') or
+    SameText(AName, 'InterlockedExchangeAdd') or
+    SameText(AName, 'InterlockedIncrement') or SameText(AName, 'InterlockedDecrement') or
+    SameText(AName, 'InterlockedCompareExchange64') or
+    SameText(AName, 'InterlockedExchangeAdd64') or
+    SameText(AName, 'ReadWriteBarrier') or SameText(AName, 'ReadBarrier') or SameText(AName, 'WriteBarrier') or
+    SameText(AName, 'DoneCriticalSection') or
+    SameText(AName, 'FillQWord') or SameText(AName, 'SarInt64') or
+    SameText(AName, 'UniqueString') or SameText(AName, 'StringOfChar') or
+    SameText(AName, 'ThreadSwitch') or SameText(AName, 'RunError') or
+    SameText(AName, 'ArcTan') or SameText(AName, 'FormatDateTime') or
+    SameText(AName, 'DoublePack');
 end;
 
 function TSemanticAnalyzer.InferExpressionType(const ANode: TGreenNode): LongInt;

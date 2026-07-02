@@ -31,10 +31,13 @@ function ResolveAllocator(AAllocator: TAllocator): TAllocator; inline;
 
 implementation
 
+uses
+  nextpas.core.platform.sync;
+
 var
   _RTLAllocatorObj: TRtlAllocator;
   _RTLAllocatorIntf: IAllocator;
-  GRtlAllocLock: TRTLCriticalSection;
+  GRtlAllocLock: TPlatformMutex;
 
 function TRtlAllocator.DoGetMem(ASize: SizeUInt): Pointer;
 begin
@@ -64,9 +67,16 @@ end;
 
 function GetRtlAllocator: TAllocator;
 begin
+  { Double-check locking. Safe on x86 (TSO: stores visible in program order).
+    On ARM/AArch64 the outer nil check may read a stale pointer; this module
+    targets x86-64 Linux where the pattern is correct.
+
+    GRtlAllocLock is a TPlatformMutex — zero-initialized (valid pthread_mutex_t
+    default), no explicit Init needed. This avoids TMemMutex's lazy-init state
+    machine which would fail if called before the mutex's unit initialization. }
   if _RTLAllocatorObj = nil then
   begin
-    EnterCriticalSection(GRtlAllocLock);
+    platform_mutex_lock(GRtlAllocLock);
     try
       if _RTLAllocatorObj = nil then
       begin
@@ -74,7 +84,7 @@ begin
         _RTLAllocatorIntf := _RTLAllocatorObj as IAllocator;
       end;
     finally
-      LeaveCriticalSection(GRtlAllocLock);
+      platform_mutex_unlock(GRtlAllocLock);
     end;
   end;
   Result := _RTLAllocatorObj;
@@ -91,19 +101,8 @@ begin
   end;
 end;
 
-function ResolveAllocator(AAllocator: TAllocator): TAllocator;
-begin
-  if AAllocator <> nil then
-    Result := AAllocator
-  else
-    Result := GetRtlAllocator;
-end;
-
-initialization
-  InitCriticalSection(GRtlAllocLock);
 finalization
-  DoneCriticalSection(GRtlAllocLock);
-  _RTLAllocatorIntf := nil;
+  _RTLAllocatorIntf := nil; // release anchor; object will be freed by interface refcount
   _RTLAllocatorObj := nil;
 
 end.
