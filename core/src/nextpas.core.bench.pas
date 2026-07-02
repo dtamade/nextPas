@@ -718,7 +718,7 @@ begin
   try
     for I := 0 to FResultCount - 1 do
     begin
-      for j := 0 to FBaselineCount - 1 do
+      for J := 0 to FBaselineCount - 1 do
       begin
         if FResults[I].Name = FBaselines[J].Name then
         begin

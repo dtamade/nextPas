@@ -177,6 +177,9 @@ const
    *  设置 =0 / false / no 时禁用内存跟踪。 }
   BENCH_ENV_MEMTRACK = 'NEXTPAS_BENCH_MEMTRACK';
 
+  {** 元数据常量 }
+  BENCH_VERSION = '1.0';
+
   {** 统计常量 }
   Z_SCORE_95 = 1.96;
   Z_SCORE_99 = 2.576;

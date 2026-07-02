@@ -376,7 +376,7 @@ begin
   LLines := Default(TLineBuffer);
 
   // title
-  BufferAddLine(LLines, '=== nextpas.core.bench v1.0 ===');
+  BufferAddLine(LLines, '=== nextpas.core.bench v' + BENCH_VERSION + ' ===');
   BufferAddLine(LLines, '');
   BufferAddLine(LLines, 'Environment:');
   BufferAddLine(LLines, '  OS: ' + FEnvironment.OS);

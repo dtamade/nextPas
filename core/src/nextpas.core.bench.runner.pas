@@ -1024,7 +1024,7 @@ var
   I: Integer;
 begin
   if not FConfig.Quiet then
-    WriteLn('=== nextpas.core.bench v1.0 ===');
+    WriteLn('=== nextpas.core.bench v' + BENCH_VERSION + ' ===');
 
   for I := 0 to High(AEntries) do
   begin

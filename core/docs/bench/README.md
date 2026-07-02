@@ -109,7 +109,7 @@ LResults := TBenchSuite.Create('MySuite')
 
 | 方法 | 说明 |
 |------|------|
-| `PrintToConsole` | 控制台表格 + 返回相同字符串（Name/Iterations/ns/op/ops/s/StdDev/Median/P95/P99） |
+| `PrintToConsole` | 返回格式化的控制台表格字符串（纯函数，不写 stdout） |
 | `ToBenchstat` | Go benchstat 兼容格式（tab-separated，可直接用 `benchstat` 分析） |
 | `ToJSON` | JSON 格式（含环境信息、统计详情） |
 | `ToTSV` | TSV 格式（含状态/跳过原因） |
