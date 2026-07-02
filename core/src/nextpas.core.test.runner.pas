@@ -1221,8 +1221,12 @@ begin
   if LConfig.ShuffleSeed <> 0 then
   begin
     ShuffleEntries(Tests, LConfig.ShuffleSeed);
-    LOutSink.WriteLn(AnsiDim(
-      '  shuffled (seed=' + IntToStr(Abs(LConfig.ShuffleSeed)) + ')', LConfig));
+    if LConfig.ShuffleSeed = -1 then
+      LOutSink.WriteLn(AnsiDim(
+        '  shuffled (random)', LConfig))
+    else
+      LOutSink.WriteLn(AnsiDim(
+        '  shuffled (seed=' + IntToStr(LConfig.ShuffleSeed) + ')', LConfig));
   end;
 
   { Suite-level setup (uses shared helper) }
