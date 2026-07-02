@@ -611,7 +611,7 @@ begin
   FRunner.ClearResults;
 
   if (FEntryCount = 0) and (not FConfig.Quiet) then
-    WriteLn('WARNING: TBenchSuite.Run called with no registered entries');
+    WriteLn(StdErr, 'WARNING: TBenchSuite.Run called with no registered entries');
 
   // ST-04: 超时检查初始化
   LTimeoutNs := UInt64(FConfig.TimeoutMs) * 1000000;
@@ -991,7 +991,7 @@ begin
       except
         on E: Exception do
         begin
-          WriteLn('WARNING: AppendToTimeline: append failed (', E.Message, '), overwriting file');
+          WriteLn(StdErr, 'WARNING: AppendToTimeline: append failed (', E.Message, '), overwriting file');
           WriteFileText(APath, LBuilder.ToString, PermDefault);
         end;
       end;
