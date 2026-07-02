@@ -38,7 +38,7 @@ type
     gnkExitStatement,
     gnkTryExceptStatement, gnkTryFinallyStatement,
     gnkExceptionHandler, gnkRaiseStatement,
-    gnkVarSection, gnkConstSection, gnkTypeSection,
+    gnkVarSection, gnkThreadVarSection, gnkConstSection, gnkTypeSection,
     gnkLabelSection,
     gnkVarDecl, gnkConstDecl, gnkTypeDecl,
     gnkProcedureDecl, gnkFunctionDecl,
@@ -279,7 +279,8 @@ function ParseVarSection(
   const AParent: TGreenNode;
   const ATree: TGreenTree;
   const ADiagnostics: TDiagnosticsSink;
-  const ARootFileId: TSourceFileId
+  const ARootFileId: TSourceFileId;
+  ANodeKind: TGreenNodeKind = gnkVarSection
 ): Boolean; forward;
 
 function ParseConstSection(
@@ -452,6 +453,7 @@ begin
     gnkExceptionHandler: Result := 'exception-handler';
     gnkRaiseStatement: Result := 'raise-statement';
     gnkVarSection: Result := 'var-section';
+    gnkThreadVarSection: Result := 'threadvar-section';
     gnkConstSection: Result := 'const-section';
     gnkTypeSection: Result := 'type-section';
     gnkLabelSection: Result := 'label-section';
@@ -2186,7 +2188,8 @@ function ParseVarSection(
   const AParent: TGreenNode;
   const ATree: TGreenTree;
   const ADiagnostics: TDiagnosticsSink;
-  const ARootFileId: TSourceFileId
+  const ARootFileId: TSourceFileId;
+  ANodeKind: TGreenNodeKind
 ): Boolean;
 var
   Section: TGreenNode;
@@ -2196,7 +2199,7 @@ var
   I: LongInt;
   Child: TGreenNode;
 begin
-  Section := TGreenNode.Create(gnkVarSection,
+  Section := TGreenNode.Create(ANodeKind,
     CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
   AParent.AppendChild(Section);
   Inc(ATree.FNodeCount);
@@ -3825,7 +3828,7 @@ begin
           ADiagnostics, ARootFileId) and Result;
       tkThreadVarKeyword:
         Result := ParseVarSection(ALexer, ACursor, AParent, ATree,
-          ADiagnostics, ARootFileId) and Result;
+          ADiagnostics, ARootFileId, gnkThreadVarSection) and Result;
       tkConstKeyword:
         Result := ParseConstSection(ALexer, ACursor, AParent, ATree,
           ADiagnostics, ARootFileId) and Result;

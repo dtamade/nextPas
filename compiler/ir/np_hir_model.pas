@@ -152,6 +152,7 @@ type
     InitValue: Int64;
     InitStr: string;
     HasInit: Boolean;
+    IsThreadVar: Boolean;
   end;
 
   THIRModule = class
@@ -194,7 +195,8 @@ type
     procedure SetTerminator(AFuncId: THIRFuncId; ABlockId: THIRBlockId;
       const ATerm: THIRTerminator);
 
-    procedure AddGlobal(const AName: string; ATypeId: THIRTypeId);
+    procedure AddGlobal(const AName: string; ATypeId: THIRTypeId;
+      AIsThreadVar: Boolean = False);
 
     function FunctionCount: LongInt;
     function FunctionAt(AIndex: LongInt): THIRFunction;
@@ -414,7 +416,8 @@ begin
     end;
 end;
 
-procedure THIRModule.AddGlobal(const AName: string; ATypeId: THIRTypeId);
+procedure THIRModule.AddGlobal(const AName: string; ATypeId: THIRTypeId;
+  AIsThreadVar: Boolean);
 var
   Idx: SizeInt;
 begin
@@ -424,6 +427,7 @@ begin
   FGlobals[Idx].TypeId := ATypeId;
   FGlobals[Idx].ValueId := NewValue;
   FGlobals[Idx].HasInit := False;
+  FGlobals[Idx].IsThreadVar := AIsThreadVar;
 end;
 
 function THIRModule.FunctionCount: LongInt;

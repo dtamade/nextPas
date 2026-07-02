@@ -3144,7 +3144,7 @@ begin
       FGlobalNames[FGlobalCount] := ANode.Operand;
       FGlobalTypes[FGlobalCount] := GetIntType;
       Inc(FGlobalCount);
-      FModule.AddGlobal(ANode.Operand, GetIntType);
+      FModule.AddGlobal(ANode.Operand, GetIntType, ANode.IsThreadVar);
     end
     else
       EnsureAlloca(ANode.Operand, DeclType);

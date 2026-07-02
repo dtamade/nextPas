@@ -9769,7 +9769,7 @@ begin
     if Child = nil then
       Continue;
     case Child.NodeKind of
-      gnkVarSection:
+      gnkVarSection, gnkThreadVarSection:
         ProcessVarSection(Child, AOwnerUnitId);
       gnkConstSection:
         ProcessConstSection(Child, AOwnerUnitId);
@@ -16435,6 +16435,8 @@ var
   IsStr: Boolean;
   ArrOperand: string;
   Folded, Value: Int64;
+  LIsThreadVar: Boolean;
+  LHirNodeId: LongInt;
 begin
   if ANode = nil then
     Exit;
@@ -16446,8 +16448,10 @@ begin
     if (Child.NodeKind = gnkProcedureDecl) or
       (Child.NodeKind = gnkFunctionDecl) then
       Continue;
-    if Child.NodeKind = gnkVarSection then
+    if (Child.NodeKind = gnkVarSection) or
+      (Child.NodeKind = gnkThreadVarSection) then
     begin
+      LIsThreadVar := Child.NodeKind = gnkThreadVarSection;
       for J := 0 to Child.ChildCount - 1 do
       begin
         Decl := Child.ChildAt(J);
@@ -16466,18 +16470,19 @@ begin
         end;
         ArrayTypeNode := FindArrayTypeNodeForVarDecl(Child, J);
         RegisterRuntimeVar(Decl.Text);
+        LHirNodeId := 0;
         if IsStr then
         begin
           RegisterRuntimeStrVar(Decl.Text);
           RegisterOwnedRuntimeStrVar(Decl.Text);
-          FModel.AddTypedHirNode(
+          LHirNodeId := FModel.AddTypedHirNode(
             'var-decl-tstring-runtime', Decl.Text, 0, 0, Decl.Text
           );
         end
         else if ArrayTypeNode <> nil then
         begin
           RegisterArrayVarMetadata(Decl.Text, ArrayTypeNode, ArrOperand);
-          FModel.AddTypedHirNode(
+          LHirNodeId := FModel.AddTypedHirNode(
             'var-decl-arr-runtime', Decl.Text, 0, 0, ArrOperand
           );
         end
@@ -16487,7 +16492,7 @@ begin
           RegisterRuntimeVar(Decl.Text);
           RegisterPointerVar(Decl.Text, Copy(Decl.ChildAt(0).Text, 2,
             Length(Decl.ChildAt(0).Text)));
-          FModel.AddTypedHirNode(
+          LHirNodeId := FModel.AddTypedHirNode(
             'var-decl-ptr-runtime', Decl.Text, 0, 0, Decl.Text
           );
         end
@@ -16497,7 +16502,7 @@ begin
           if TypeMetaIsRecord(Decl.ChildAt(0).Text) then
           begin
             RegisterRecordVar(Decl.Text, Decl.ChildAt(0).Text);
-            FModel.AddTypedHirNode(
+            LHirNodeId := FModel.AddTypedHirNode(
               'var-decl-record-runtime', Decl.Text, 0, 0,
               Decl.Text + #9 + IntToStr(TypeMetaSize(Decl.ChildAt(0).Text) div 8)
             );
@@ -16516,15 +16521,17 @@ begin
           else
           begin
             RegisterClassVar(Decl.Text, Decl.ChildAt(0).Text);
-            FModel.AddTypedHirNode(
+            LHirNodeId := FModel.AddTypedHirNode(
               'var-decl-ptr-runtime', Decl.Text, 0, 0, Decl.Text
             );
           end;
         end
         else
-          FModel.AddTypedHirNode(
+          LHirNodeId := FModel.AddTypedHirNode(
             'var-decl-runtime', Decl.Text, 0, 0, Decl.Text
           );
+        if LIsThreadVar and (LHirNodeId <> 0) then
+          FModel.SetTypedHirNodeIsThreadVar(LHirNodeId, True);
       end;
       Continue;
     end;

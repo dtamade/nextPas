@@ -1349,10 +1349,20 @@ begin
   begin
     G := FModule.GlobalAt(I);
     Emit('');
-    if FModule.Types.GetType(G.TypeId).Kind = htkPointer then
-      Emit('@g_' + G.Name + ' = internal global ptr null')
+    if G.IsThreadVar then
+    begin
+      if FModule.Types.GetType(G.TypeId).Kind = htkPointer then
+        Emit('@g_' + G.Name + ' = internal thread_local global ptr null')
+      else
+        Emit('@g_' + G.Name + ' = internal thread_local global i64 0');
+    end
     else
-      Emit('@g_' + G.Name + ' = internal global i64 0');
+    begin
+      if FModule.Types.GetType(G.TypeId).Kind = htkPointer then
+        Emit('@g_' + G.Name + ' = internal global ptr null')
+      else
+        Emit('@g_' + G.Name + ' = internal global i64 0');
+    end;
   end;
 
   for I := 0 to FModule.FunctionCount - 1 do
