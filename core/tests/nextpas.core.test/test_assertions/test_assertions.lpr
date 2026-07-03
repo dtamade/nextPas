@@ -294,18 +294,23 @@ end;
 
 procedure TestCheckEqualDoublePass;
 begin
+  { Exact comparison: same values pass }
   CheckEqual(1.0, 1.0);
   CheckEqual(3.14159, 3.14159);
   CheckEqual(0.0, 0.0);
   CheckEqual(-1.0, -1.0);
-  { With epsilon }
-  CheckEqual(1.0, 1.0 + 1e-11, 1e-10);
-  CheckEqual(1.0, 1.0 - 1e-11, 1e-10);
+  { IEEE 754: -0.0 = +0.0 }
+  CheckEqual(0.0, -0.0);
+  CheckEqual(-0.0, 0.0);
+  { Note: CheckEqual ignores epsilon parameter — use CheckNear for tolerance }
 end;
 
 procedure TestCheckEqualDoubleFail;
 begin
-  ExpectFail(procedure begin CheckEqual(1.0, 2.0, 1e-10); end, 'Expected');
+  { Exact comparison: different values fail }
+  ExpectFail(procedure begin CheckEqual(1.0, 2.0); end, 'Expected');
+  { Values within epsilon but not exact should also fail }
+  ExpectFail(procedure begin CheckEqual(1.0, 1.0 + 1e-11); end, 'Expected');
 end;
 
 procedure TestCheckNotEqualDoublePass;

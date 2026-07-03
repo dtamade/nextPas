@@ -825,6 +825,24 @@ begin
   ExpectFail(procedure begin ExpectDouble(1.0).ToEqualD(1.0 + 1.01e-10, 1e-10); end);
 end;
 
+{ ── P1: nil proc guard ────────────────────────────────────────────────────── }
+
+procedure TestExpectProcNilToRaise;
+begin
+  { ExpectProc(nil).ToRaise should fail gracefully, not SIGSEGV }
+  ExpectFail(procedure begin
+    ExpectProc(nil).ToRaise(Exception);
+  end, 'nil');
+end;
+
+procedure TestExpectProcNilToNotRaise;
+begin
+  { ExpectProc(nil).ToNotRaise should fail gracefully, not SIGSEGV }
+  ExpectFail(procedure begin
+    ExpectProc(nil).ToNotRaise;
+  end, 'nil');
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -978,6 +996,10 @@ begin
   LSuite.Test('Not_.ToEqualD',                 @TestExpectToEqualDNot);
   LSuite.Test('ToEqualD NaN',                  @TestExpectToEqualDNaN);
   LSuite.Test('ToEqualD epsilon boundary',     @TestExpectToEqualDEpsilonBoundary);
+
+  { P1: nil proc guard }
+  LSuite.Test('Proc nil → ToRaise fail',       @TestExpectProcNilToRaise);
+  LSuite.Test('Proc nil → ToNotRaise fail',    @TestExpectProcNilToNotRaise);
 
   if not LSuite.Run then
   begin

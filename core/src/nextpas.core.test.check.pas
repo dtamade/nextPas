@@ -18,8 +18,11 @@ procedure CheckEqual(const AExpected, AActual: string); overload;
 procedure CheckEqual(const AExpected, AActual: Int64); overload;
 procedure CheckEqual(const AExpected, AActual: Boolean); overload;
 procedure CheckEqual(const AExpected, AActual: Pointer); overload;
-{ CheckEqual for Double — exact bit-wise comparison.
-  For floating-point tolerance comparisons, use CheckNear instead. }
+{ CheckEqual for Double — IEEE 754 exact comparison (uses = operator).
+  NaN == NaN is false per IEEE 754. -0.0 == +0.0 is true.
+  For floating-point tolerance comparisons, use CheckNear instead.
+  The AEpsilon parameter is kept for backward compatibility but is ignored;
+  this performs exact comparison regardless of AEpsilon value. }
 procedure CheckEqual(const AExpected, AActual: Double;
   AEpsilon: Double = 1e-10); overload;
 procedure CheckNotEqual(const AExpected, AActual: string); overload;
@@ -243,7 +246,13 @@ end;
 procedure CheckEqual(const AExpected, AActual: Double;
   AEpsilon: Double);
 begin
-  CheckNear(AExpected, AActual, AEpsilon);
+  { IEEE 754 exact comparison: NaN != NaN, -0.0 = +0.0 }
+  if IsNan(AExpected) or IsNan(AActual) then
+    InternalFail('Expected ' + FloatToStr(AExpected) +
+      ' but got ' + FloatToStr(AActual) + ' (NaN)');
+  if AExpected <> AActual then
+    InternalFail('Expected ' + FloatToStr(AExpected) +
+      ' but got ' + FloatToStr(AActual));
 end;
 
 procedure CheckNotEqual(const AExpected, AActual: Double;

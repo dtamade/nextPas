@@ -396,6 +396,8 @@ begin
   RequireKind(ekProc, 'ToRaise');
   if AExceptionClass = nil then
     InternalFail('ToRaise: AExceptionClass is nil');
+  if not Assigned(FProcValue) then
+    InternalFail('ToRaise: proc is nil');
   try
     FProcValue;
   except
@@ -444,6 +446,8 @@ begin
   if FNegated then
     InternalFail('Not_.ToNotRaise is not supported — ' +
       'use ToRaise(EClass) to assert that a specific exception is raised');
+  if not Assigned(FProcValue) then
+    InternalFail('ToNotRaise: proc is nil');
   try
     FProcValue;
   except
