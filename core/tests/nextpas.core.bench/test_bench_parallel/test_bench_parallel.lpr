@@ -4,7 +4,7 @@ program test_bench_parallel;
 
 uses
   {$ifdef unix}
-  nextpas.core.thread.init,
+  cthreads,
   {$endif}
   nextpas.core.text.conv,
   nextpas.core.sync.mutex,

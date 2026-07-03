@@ -4,7 +4,7 @@ program test_bench_parallel_heaptrc;
 
 uses
   {$ifdef unix}
-  nextpas.core.thread.init,
+  cthreads,
   {$endif}
   nextpas.core.exception,
   nextpas.core.sync.mutex,

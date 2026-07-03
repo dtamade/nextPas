@@ -6,7 +6,7 @@ program test_bench_integration;
 
 uses
   {$ifdef unix}
-  nextpas.core.thread.init,
+  cthreads,
   {$endif}
   nextpas.core.exception,
   nextpas.core.math.scalar,
@@ -21,6 +21,12 @@ uses
   nextpas.core.bench.intf,
   nextpas.core.simd.cpuinfo,
   nextpas.core.test;
+
+type
+  TBenchResult = nextpas.core.bench.base.TBenchResult;
+  TBenchResultArray = nextpas.core.bench.base.TBenchResultArray;
+  TBenchBaseline = nextpas.core.bench.base.TBaselineData;
+  TBenchEnvironment = nextpas.core.bench.base.TBenchEnvironment;
 
 var
   GSetupCallCount: Integer;
@@ -302,6 +308,7 @@ procedure TestTBenchSuite_WithFilter;
 var
   LSuite: IBenchSuite;
   LResults: IBenchResults;
+  LResult: TBenchResult;
 begin
 
   // 创建套件
@@ -321,7 +328,7 @@ begin
   Check(LResults.Count = 1, 'Result count = 1');
   Check(LResults.GetByName('Fast').Name = 'Fast', 'Filtered result exists');
   Check(LResults.GetByName('Fast').NsPerOp > 0, 'Filtered NsPerOp > 0');
-  Check(not LResults.GetByName('Medium').Executed, 'Filtered-out benchmark not executed');
+  Check(not LResults.TryGetByName('Medium', LResult), 'Filtered-out benchmark not in results');
 end;
 
 procedure TestTBenchSuite_Conditional;
@@ -1403,9 +1410,15 @@ begin
   Check(LComparison.ApproximatePValue > 0, 'CompareTwoResults: PValue > 0');
   Check(LComparison.ApproximatePValue <= 1.0, 'CompareTwoResults: PValue <= 1');
 
-  { 不存在的 benchmark 名称 }
-  LComparison := LResults.CompareTwoResults('Fast', 'NonExistent');
-  Check(LComparison.Ratio = 1.0, 'CompareTwoResults: missing baseline returns ratio=1');
+  { 不存在的 benchmark 名称 → 应 raise }
+  LComparison := Default(TBenchComparison);
+  try
+    LComparison := LResults.CompareTwoResults('Fast', 'NonExistent');
+    Check(False, 'CompareTwoResults: should raise for missing name');
+  except
+    on E: EBenchError do
+      Check(Pos('NonExistent', E.Message) > 0, 'CompareTwoResults: error mentions missing name');
+  end;
 end;
 
 procedure TestGetEnvironment;

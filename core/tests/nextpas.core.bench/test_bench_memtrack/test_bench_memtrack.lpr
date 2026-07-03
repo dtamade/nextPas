@@ -4,7 +4,7 @@ program test_bench_memtrack;
 
 uses
   {$ifdef unix}
-  nextpas.core.thread.init,
+  cthreads,
   {$endif}
   nextpas.core.math.scalar,
   nextpas.core.system.classes,
@@ -372,9 +372,10 @@ end;
 procedure Test_GlobalMemoryTracker_Reset;
 var
   LStats: TMemoryStats;
+  LPtr: Pointer;
 begin
   EnableGlobalMemoryTracking;
-  GetMem(128);
+  LPtr := GetMem(128);
 
   ResetGlobalMemoryTracker;
   LStats := GetGlobalMemoryStats;
@@ -386,6 +387,7 @@ begin
   Check(LStats.PeakBytes = 0, 'ResetGlobalMemoryTracker resets PeakBytes to 0');
 
   DisableGlobalMemoryTracking;
+  FreeMem(LPtr);
 end;
 
 procedure Test_GetGlobalMemoryStats;

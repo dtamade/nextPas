@@ -8,6 +8,10 @@ uses
   nextpas.core.bench.xlang,
   nextpas.core.test;
 
+type
+  TBenchResult = nextpas.core.bench.base.TBenchResult;
+  TBenchResultArray = nextpas.core.bench.base.TBenchResultArray;
+
 { === Go Bench Parser Tests === }
 
 procedure Test_ParseGoBenchLine_Basic;

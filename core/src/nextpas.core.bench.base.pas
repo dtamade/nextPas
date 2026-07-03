@@ -92,11 +92,14 @@ type
     MinSamples: Integer;
     WarmupIterations: Integer;
     EnableMemoryTracking: Boolean;
-    {** DS-01: 保留用于 suite 级默认并行配置。当前并行由 AddParallel 在 entry 级别设置。 }
+    {** DS-01: 保留字段，当前未使用。并行由 AddParallel 在 entry 级别设置。 }
     EnableParallel: Boolean;
+    {** DS-01: 保留字段，当前未使用。并行线程数由 AddParallel 的 AThreads 参数控制。 }
     ParallelThreads: Integer;
     CollectRawSamples: Boolean;
     Quiet: Boolean;
+    {** PrintToConsole 统计详情最大显示数量（默认 5），0=不显示详情 }
+    MaxDetailCount: Integer;
     SuiteName: string;
     {** ST-04: 整体超时（毫秒），0=不超时。超时后跳过剩余 benchmark。 }
     TimeoutMs: Cardinal;
@@ -176,6 +179,9 @@ const
    *  设置 =0 / false / no 时禁用内存跟踪。 }
   BENCH_ENV_MEMTRACK = 'NEXTPAS_BENCH_MEMTRACK';
 
+  {** 元数据常量 }
+  BENCH_VERSION = '1.0';
+
   {** 统计常量 }
   Z_SCORE_95 = 1.96;
   Z_SCORE_99 = 2.576;
@@ -210,6 +216,9 @@ function TInvLookup(ADF: Double; const ATable: array of Double; AZScore: Double)
 
 {** 对双精度浮点数组原地排序（IntroSort：小数组插入排序 + 大数组 QuickSort） }
 procedure SortDoubleArray(var AData: TDoubleArray);
+
+{** 间接排序：对索引数组排序，比较依据是 AData[AIndices[i]] }
+procedure SortIndirect(var AIndices: TInt64Array; const AData: TDoubleArray);
 
 {** 创建默认基准配置 }
 function DefaultBenchConfig: TBenchConfig;
@@ -430,6 +439,148 @@ begin
   end;
 end;
 
+{ ---- Indirect sort (sort indices by data values) ---- }
+
+procedure InsertionSortIndirect(var AIndices: TInt64Array;
+  const AData: TDoubleArray; ALeft, ARight: Integer);
+var
+  I, J: Integer;
+  LKey: Int64;
+begin
+  for I := ALeft + 1 to ARight do
+  begin
+    LKey := AIndices[I];
+    J := I - 1;
+    while (J >= ALeft) and (AData[AIndices[J]] > AData[LKey]) do
+    begin
+      AIndices[J + 1] := AIndices[J];
+      Dec(J);
+    end;
+    AIndices[J + 1] := LKey;
+  end;
+end;
+
+function MedianOfThreeIndirect(const AIndices: TInt64Array;
+  const AData: TDoubleArray; ALeft, ARight: Integer): Double;
+var
+  LMid: Integer;
+begin
+  LMid := (ALeft + ARight) div 2;
+  if AData[AIndices[ALeft]] > AData[AIndices[LMid]] then
+  begin
+    if AData[AIndices[LMid]] > AData[AIndices[ARight]] then
+      Result := AData[AIndices[LMid]]
+    else if AData[AIndices[ALeft]] > AData[AIndices[ARight]] then
+      Result := AData[AIndices[ARight]]
+    else
+      Result := AData[AIndices[ALeft]];
+  end
+  else
+  begin
+    if AData[AIndices[ALeft]] > AData[AIndices[ARight]] then
+      Result := AData[AIndices[ALeft]]
+    else if AData[AIndices[LMid]] > AData[AIndices[ARight]] then
+      Result := AData[AIndices[ARight]]
+    else
+      Result := AData[AIndices[LMid]];
+  end;
+end;
+
+procedure SiftDownIndirect(var AIndices: TInt64Array; const AData: TDoubleArray;
+  AStart, AEnd: Integer);
+var
+  LRoot, LChild, LSwap: Integer;
+  LTmp: Int64;
+begin
+  LRoot := AStart;
+  while True do
+  begin
+    LChild := 2 * LRoot - AStart + 1;
+    if LChild > AEnd then Break;
+    LSwap := LRoot;
+    if AData[AIndices[LChild]] > AData[AIndices[LSwap]] then
+      LSwap := LChild;
+    Inc(LChild);
+    if (LChild <= AEnd) and (AData[AIndices[LChild]] > AData[AIndices[LSwap]]) then
+      LSwap := LChild;
+    if LSwap = LRoot then Break;
+    LTmp := AIndices[LRoot];
+    AIndices[LRoot] := AIndices[LSwap];
+    AIndices[LSwap] := LTmp;
+    LRoot := LSwap;
+  end;
+end;
+
+procedure HeapSortIndirect(var AIndices: TInt64Array; const AData: TDoubleArray;
+  ALeft, ARight: Integer);
+var
+  I: Integer;
+  LTmp: Int64;
+begin
+  for I := (ALeft + ARight) div 2 downto ALeft do
+    SiftDownIndirect(AIndices, AData, I, ARight);
+  for I := ARight downto ALeft + 1 do
+  begin
+    LTmp := AIndices[ALeft];
+    AIndices[ALeft] := AIndices[I];
+    AIndices[I] := LTmp;
+    SiftDownIndirect(AIndices, AData, ALeft, I - 1);
+  end;
+end;
+
+procedure DoQuickSortIndirect(var AIndices: TInt64Array;
+  const AData: TDoubleArray; ALeft, ARight: Integer; ADepthLimit: Integer);
+var
+  LPivot: Double;
+  LTmp: Int64;
+  I, J: Integer;
+begin
+  while ARight - ALeft >= 16 do
+  begin
+    if ADepthLimit = 0 then
+    begin
+      HeapSortIndirect(AIndices, AData, ALeft, ARight);
+      Exit;
+    end;
+    Dec(ADepthLimit);
+    LPivot := MedianOfThreeIndirect(AIndices, AData, ALeft, ARight);
+    I := ALeft;
+    J := ARight;
+    repeat
+      while AData[AIndices[I]] < LPivot do Inc(I);
+      while AData[AIndices[J]] > LPivot do Dec(J);
+      if I <= J then
+      begin
+        LTmp := AIndices[I];
+        AIndices[I] := AIndices[J];
+        AIndices[J] := LTmp;
+        Inc(I);
+        Dec(J);
+      end;
+    until I > J;
+    if J - ALeft < ARight - I then
+    begin
+      DoQuickSortIndirect(AIndices, AData, ALeft, J, ADepthLimit);
+      ALeft := I;
+    end
+    else
+    begin
+      DoQuickSortIndirect(AIndices, AData, I, ARight, ADepthLimit);
+      ARight := J;
+    end;
+  end;
+  InsertionSortIndirect(AIndices, AData, ALeft, ARight);
+end;
+
+procedure SortIndirect(var AIndices: TInt64Array; const AData: TDoubleArray);
+var
+  LLen: Integer;
+begin
+  LLen := Length(AIndices);
+  if LLen > 1 then
+    DoQuickSortIndirect(AIndices, AData, 0, LLen - 1, 2 * IntLog2(LLen));
+end;
+
 function DefaultBenchConfig: TBenchConfig;
 begin
   Result := Default(TBenchConfig);
@@ -442,6 +593,7 @@ begin
   Result.ParallelThreads := BENCH_DEFAULT_PARALLEL_THREADS;
   Result.CollectRawSamples := False;
   Result.Quiet := False;
+  Result.MaxDetailCount := 5;
 end;
 
 function ClassifyOutlierSeverity(AValue, AQ1, AQ3: Double): TOutlierSeverity;
