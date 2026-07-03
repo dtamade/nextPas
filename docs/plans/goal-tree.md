@@ -67,11 +67,14 @@
 2. [x] 编译器 C6: C6-H4 owned string return 改进
 3. [x] Collections 语法修复
 4. [x] C7: 自举验证
+5. [x] Test framework polish: CheckEqual IEEE 754 + expect nil guards
+6. [x] make focused 修复: include-aware target 检测
+7. [x] 契约体系: base/errors/mem/exception/atomic
 
 ### 本月任务
 1. [ ] C7 深化: 目标运行时配置、多目标 IR、LLVM O2/LTO
-2. [ ] 建立完整契约体系
-3. [ ] 完善测试覆盖
+2. [x] 建立完整契约体系 (L0 核心模块: 6/11 完成)
+3. [x] 完善测试覆盖 (合同审计全部 P0-P1 项已解决)
 
 ---
 
@@ -84,7 +87,12 @@
 | 2026-07-03 | Collections 修复 | hashmap 语法错误 |
 | 2026-07-03 | 预处理器支持完成 | 99.0% 覆盖率 |
 | 2026-07-03 | 创建目标树 | 项目治理启动 |
+| 2026-07-04 | CheckEqual IEEE 754 精确比较 | Breaking: epsilon 参数废弃 |
+| 2026-07-04 | expect nil 防护 | ToRaise/ToNotRaise SIGSEGV 修复 |
+| 2026-07-04 | make focused 修复 | awk→make -n，支持 include |
+| 2026-07-04 | 契约体系启动 | base/errors/mem/exception/atomic 共 5 份 |
+| 2026-07-04 | 合同审计完成 | 全部 P0-P1 项已解决 |
 
 ---
 
-*最后更新: 2026-07-03*
+*最后更新: 2026-07-04*
