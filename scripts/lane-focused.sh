@@ -27,22 +27,10 @@ EOF
 require_makefile_target() {
   makefile_path="$1"
   target="$2"
+  makefile_dir=$(dirname "$makefile_path")
 
-  awk -v target="$target" '
-    BEGIN { found = 0 }
-    /^[^#[:space:]][^:]*:/ {
-      split($0, parts, ":")
-      n = split(parts[1], names, /[[:space:]]+/)
-      for (i = 1; i <= n; i++) {
-        if (names[i] == target) {
-          found = 1
-        }
-      }
-    }
-    END { exit found ? 0 : 1 }
-  ' "$makefile_path"
+  make -C "$makefile_dir" --dry-run "$target" >/dev/null 2>&1
 }
-
 set_lane_defaults() {
   lane_name="$1"
 
