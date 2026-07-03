@@ -7,6 +7,7 @@ interface
 uses
   nextpas.core.mem.base,
   nextpas.core.mem.intf,
+  nextpas.core.mem.error,
   nextpas.core.mem.allocator.base,
   nextpas.core.base.utils,
   nextpas.core.mem.arena.virtual;
@@ -18,7 +19,7 @@ type
    *  分配通过 TVirtualArena 的 bump 指针完成，DoFreeMem 为 no-op。
    *  Reset 方法一次性释放所有内存。
    *
-   *  注意：DoReallocMem 会分配新块并复制数据，效率不如原地扩展。
+   *  注意：DoReallocMem 不支持（arena 不跟踪单个分配大小）。
    *  非线程安全。}
   TVirtualArenaAllocator = class(TAllocator)
   private
@@ -74,12 +75,8 @@ end;
 
 function TVirtualArenaAllocator.DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
 begin
-  Result := FArena.Alloc(ASize);
-  if (Result <> nil) and (ADst <> nil) then
-  begin
-    { Arena 不跟踪单个分配大小，保守复制 ASize 字节。 }
-    CopyMem(Result, ADst, ASize);
-  end;
+  raise EAllocError.Create(aeReallocNotSupported,
+    'TVirtualArenaAllocator.ReallocMem: arena does not track individual allocation sizes');
 end;
 
 procedure TVirtualArenaAllocator.DoFreeMem(ADst: Pointer);

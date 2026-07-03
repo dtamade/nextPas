@@ -64,6 +64,7 @@ type
     FPoolLock: TMemMutex;
     FTotalCreated: Integer;
     FTotalRecycled: Integer;
+    FDead: LongBool;
     function PopFromPool: TLocalArena;
     procedure PushToPool(AArena: TLocalArena);
     {** 只归还 Arena 到池, 不清 TLS manager (供跨 manager 切换时调用) }
@@ -165,6 +166,7 @@ begin
   FPoolLock.Init;
   FTotalCreated := 0;
   FTotalRecycled := 0;
+  FDead := False;
 end;
 
 destructor TThreadArenaManager.Destroy;
@@ -173,6 +175,8 @@ var
 begin
   { 先回收当前线程 Arena }
   DrainTLS;
+  { 标记即将销毁 — 冷路径 DrainArenaOnly 检查此标志避免 push 到死亡 manager }
+  FDead := True;
   { 释放池中所有 Arena }
   FPoolLock.Acquire;
   try
@@ -235,10 +239,15 @@ begin
       Exit;
   end;
 
-  { 冷路径: manager 不匹配或无 Arena → 先归还旧 Arena }
+  { 冷路径: manager 不匹配或无 Arena → 归还旧 Arena 给原 manager }
   if TLSCurrentArena <> nil then begin
-    if TLSCurrentManager <> nil then
-      TThreadArenaManager(TLSCurrentManager).DrainArenaOnly;
+    if (TLSCurrentManager <> nil) and
+       (not TThreadArenaManager(TLSCurrentManager).FDead) then
+      TThreadArenaManager(TLSCurrentManager).DrainArenaOnly
+    else
+      TLSCurrentArena.Free;
+    TLSCurrentArena := nil;
+    TLSCurrentManager := nil;
   end;
 
   { 从池中取 }

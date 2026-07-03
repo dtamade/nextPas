@@ -9,6 +9,7 @@ uses
   nextpas.core.mem.arena.virtual,
   nextpas.core.mem.allocator.arena,
   nextpas.core.mem.intf,
+  nextpas.core.mem.error,
   nextpas.core.mem.base;
 
 var
@@ -437,16 +438,26 @@ end;
 procedure TestArenaAllocatorRealloc;
 var
   LAlloc: IAllocator;
-  LP, LP2: PInteger;
+  LP: PInteger;
+  LExcept: Boolean;
 begin
   LAlloc := TVirtualArenaAllocator.Create;
   LP := PInteger(LAlloc.GetMem(4));
   Check(LP <> nil, 'initial alloc');
   LP^ := 42;
 
-  LP2 := PInteger(LAlloc.ReallocMem(LP, 8));
-  Check(LP2 <> nil, 'realloc should succeed');
-  Check(LP2^ = 42, 'data should be preserved after realloc');
+  { Arena 不支持 realloc — 必须抛 EAllocError(aeReallocNotSupported) }
+  LExcept := False;
+  try
+    LAlloc.ReallocMem(LP, 8);
+  except
+    on E: EAllocError do
+    begin
+      Check(E.Error = aeReallocNotSupported, 'expected aeReallocNotSupported');
+      LExcept := True;
+    end;
+  end;
+  Check(LExcept, 'ReallocMem on arena must raise');
 end;
 
 { --- Additional edge-case tests --- }

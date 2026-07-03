@@ -33,7 +33,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.mem.base,            // ValidateAlignArg
-  nextpas.core.mem.allocator.base,  // TAllocator
+  nextpas.core.mem.intf,
   nextpas.core.mem.allocator.rtl,   // ResolveAllocator
   nextpas.core.mem.error;
 
@@ -47,7 +47,7 @@ type
     TotalSize: SizeUInt;
     Alignment: SizeUInt;    // 默认指针大小
     ZeroOnAlloc: Boolean;   // 分配后是否清零（默认False）
-    Allocator: TAllocator;
+    Allocator: IAllocator;
   end;
 
 type
@@ -65,7 +65,7 @@ type
     FBuffer: Pointer;
     FSize: SizeUInt;
     FOffset: SizeUInt;
-    FBaseAllocator: TAllocator;
+    FBaseAllocator: IAllocator;
 
     function GetAvailableSize: SizeUInt;
     function AlignOffset(AOffset, AAlignment: SizeUInt): SizeUInt;
@@ -80,7 +80,7 @@ type
      * @param ASize 总大小 Total size
      * @param AAllocator 基础分配器 Base allocator (optional)
      *}
-    constructor Create(ASize: SizeUInt; AAllocator: TAllocator = nil); overload;
+    constructor Create(ASize: SizeUInt; AAllocator: IAllocator = nil); overload;
     {** 使用配置记录创建栈式内存池 *}
     constructor Create(const AConfig: TStackPoolConfig); overload;
 
@@ -295,7 +295,7 @@ type
 
   public
     {** 创建作用域栈池，指定大小、策略和可选的基础分配器 *}
-    constructor Create(ASize: SizeUInt; const APolicy: TStackPoolPolicy; AAllocator: TAllocator = nil);
+    constructor Create(ASize: SizeUInt; const APolicy: TStackPoolPolicy; AAllocator: IAllocator = nil);
     {** 销毁作用域栈池，释放所有内部资源 *}
     destructor Destroy; override;
 
@@ -384,7 +384,7 @@ end;
 
 { TStackPool }
 
-constructor TStackPool.Create(ASize: SizeUInt; AAllocator: TAllocator);
+constructor TStackPool.Create(ASize: SizeUInt; AAllocator: IAllocator);
 begin
   inherited Create;
 
@@ -681,7 +681,7 @@ end;
 // TScopedStackPool
 // ============================================================================
 
-constructor TScopedStackPool.Create(ASize: SizeUInt; const APolicy: TStackPoolPolicy; AAllocator: TAllocator);
+constructor TScopedStackPool.Create(ASize: SizeUInt; const APolicy: TStackPoolPolicy; AAllocator: IAllocator);
 begin
   inherited Create(ASize, AAllocator);
 

@@ -491,8 +491,8 @@ begin
     Result := Pointer((PtrUInt(LRaw) + SizeOf(Pointer) + LAlignMask) and not LAlignMask);
     LHeaderPtr := PPointer(PtrUInt(Result) - SizeOf(Pointer));
     LHeaderPtr^ := LRaw;
-    if Result <> nil then
-      TrackFallback(Result);
+    if LRaw <> nil then
+      TrackFallback(LRaw);
   end;
 end;
 

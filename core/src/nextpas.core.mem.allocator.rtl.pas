@@ -25,7 +25,7 @@ type
 
 function GetRtlAllocator: IAllocator;
 function TryGetRtlAllocator(out A: IAllocator): Boolean;
-function ResolveAllocator(const AAllocator: TAllocator): TAllocator;
+function ResolveAllocator(const AAllocator: IAllocator): IAllocator;
 
 implementation
 
@@ -103,16 +103,12 @@ begin
   end;
 end;
 
-function ResolveAllocator(const AAllocator: TAllocator): TAllocator;
+function ResolveAllocator(const AAllocator: IAllocator): IAllocator;
 begin
   if AAllocator <> nil then
     Result := AAllocator
   else
-  begin
-    if _RTLAllocatorObj = nil then
-      GetRtlAllocator;
-    Result := _RTLAllocatorObj;
-  end;
+    Result := GetRtlAllocator;
 end;
 
 finalization
