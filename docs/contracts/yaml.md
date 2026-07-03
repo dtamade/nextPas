@@ -8,7 +8,49 @@
 
 ## 概述
 
-unit nextpas.core.yaml;
+YAML 门面。提供解析、序列化、DOM 访问。
+
+---
+
+## 关键接口
+
+```pascal
+type
+  IYamlDocument = interface
+    function Root: TYamlNode;
+    function HasError: Boolean;
+    function Error: TYamlError;
+    function Stringify: string;
+  end;
+  TYamlNode = record ... end;
+
+function YamlParse(AInput: string): IYamlDocument;
+function TryYamlParse(AInput: string; out ADoc: IYamlDocument): Boolean;
+function YamlStringify(ADoc: IYamlDocument): string;
+```
+
+---
+
+## 错误语义
+
+| 场景 | 行为 |
+|------|------|
+| 非法 YAML | HasError=true |
+| TryYamlParse 失败 | 返回 false |
+
+---
+
+## 线程安全
+
+- IYamlDocument 不线程安全
+- YamlParse 为纯函数，可安全并发调用
+
+---
+
+## 依赖关系
+
+- 依赖: text, mem
+- 被依赖: config (YAML 格式)
 
 ---
 
