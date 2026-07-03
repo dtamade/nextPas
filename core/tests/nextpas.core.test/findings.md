@@ -240,7 +240,7 @@
 |---------|------|---------|
 | **P0 — 空 Suite 并行崩溃** | ✅ FIXED | `RunParallelWithResult` 添加 `if LTotal = 0` 早期返回，避免数组越界 |
 | **C-01** LRec 泄漏监控 | ✅ IMPROVED | 添加 `GTimeoutLeakCount` 全局计数器（parallel.pas），超时泄漏时 `Inc`，可通过诊断读取 |
-| **E-01** TimeoutWorker 结构 | ⏸ DEFERRED | 结构性改动（move to impl section），需独立规划 |
+| **E-01** TimeoutWorker 结构 | ✅ FIXED | TTimeoutRec/PTimeoutRec 移入 implementation 段，减少 interface 暴露面 |
 | **E-03** Ctx() 错误信息 | ✅ FIXED | 错误信息扩展为 "No active test context — Ctx can only be called from within a running test..." |
 | **D-04** FExecMtx 命名 | ✅ FIXED | TThreadRec.Mtx 添加注释 `protects Pass/Fail/Skip counters + result output` |
 | **T-01** NaN/边界测试补全 | ✅ FIXED | 6 新测试: CheckEqualD NaN, CheckNotEqualD NaN, CheckNear epsilon, CheckSame nil=nil, CheckSame nil<>ptr, ToEqualD epsilon boundary |
