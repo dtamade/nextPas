@@ -196,6 +196,8 @@ procedure TestParallelSubtestSkip;
 var
   LSuite: TTestSuite;
   LResult: TTestRunResult;
+  I: Integer;
+  LFoundSubtestSkip: Boolean;
 begin
   { In parallel mode, subtests (TestSubtest) should get tsSkipped
     since they cannot run in parallel workers. }
@@ -211,6 +213,19 @@ begin
   CheckTrue(LResult.Passed >= 1, 'At least 1 normal test should pass');
   { Subtests in parallel mode get skipped — verify they don't crash the suite }
   CheckTrue(LResult.Failed = 0, 'No tests should fail');
+  { T-03: Verify skip message mentions parallel mode }
+  LFoundSubtestSkip := False;
+  for I := 0 to High(LResult.Results) do
+    if (LResult.Results[I].Status = tsSkipped) and
+       (LResult.Results[I].Name = 'subtest_entry') then
+    begin
+      LFoundSubtestSkip := True;
+      CheckTrue(
+        Pos('subtests not supported', LResult.Results[I].Message) > 0,
+        'Skip message should mention parallel mode');
+      Break;
+    end;
+  CheckTrue(LFoundSubtestSkip, 'subtest_entry should be skipped');
   PassTest('✓ Parallel subtest skip');
 end;
 

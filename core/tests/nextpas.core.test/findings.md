@@ -254,8 +254,6 @@
 **未修复项**（需要更大结构性改动或独立规划）：
 - A-01: runner.pas 拆分 (~2300 行) — 结构性改动，需独立 worktree
 - C-02: 10ms 轮询 → condition variable — 性能改动，需跨平台测试
-- T-03: Parallel subtest graceful-skip message 验证
 - T-04: TAP/JSON 输出格式合规测试
 - T-05: Glob/hierarchical filter 复杂场景
-- T-06: Config zero-value ambiguity 测试
 - 其余 P3 项 — 渐进改进

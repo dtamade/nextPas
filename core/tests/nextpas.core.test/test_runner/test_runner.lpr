@@ -1943,6 +1943,40 @@ begin
     PassTest('Test timeout exceeded');
   end;
 
+  { ── T-06: Config zero-value ambiguity ────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('T-06: Config zero-value ambiguity');
+  begin
+    ResetDefaultConfig;
+    LVerbSuite := TTestSuite.Create('ZeroConfig');
+    { MaxParallelWorkers = 0 should mean "use default" — not crash }
+    LVerbSuite.Config.MaxParallelWorkers := 0;
+    LVerbSuite.Test('z1', procedure begin CheckTrue(True); end);
+    LVerbSuite.Test('z2', procedure begin CheckTrue(True); end);
+    LVerbSuite.RunParallelWithResult(nil, LVerbResult);
+    if LVerbResult.Passed <> 2 then
+      FailTest('MaxParallelWorkers=0: expected 2 passed, got ' +
+        IntToStr(LVerbResult.Passed));
+    { TestTimeout = 0 should mean "no timeout" — slow test should not fail }
+    SetTestTimeout(0);
+    LVerbSuite := TTestSuite.Create('ZeroTimeout');
+    LVerbSuite.Test('fast', procedure begin CheckTrue(True); end);
+    LVerbSuite.RunWithResult(LVerbResult);
+    if LVerbResult.Passed <> 1 then
+      FailTest('TestTimeout=0: expected 1 pass, got ' +
+        IntToStr(LVerbResult.Passed));
+    { RunTimeoutSec = 0 should mean "no run timeout" }
+    LVerbSuite := TTestSuite.Create('ZeroRunTimeout');
+    LVerbSuite.Config.RunTimeoutSec := 0;
+    LVerbSuite.Test('zrt1', procedure begin CheckTrue(True); end);
+    LVerbSuite.RunWithResult(LVerbResult);
+    if LVerbResult.Passed <> 1 then
+      FailTest('RunTimeoutSec=0: expected 1 pass, got ' +
+        IntToStr(LVerbResult.Passed));
+    ResetDefaultConfig;
+    PassTest('Config zero-value ambiguity');
+  end;
+
   WriteLn;
   PassTest('test_runner');
 

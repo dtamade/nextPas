@@ -17,7 +17,7 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 - **v6.1**: R3 quality — NaN guards (11 methods), locale-independent FloatToStr, ToBeSame/ToEqualD API, P3 edge-case coverage
 - **v6.2**: Audit fixes — empty suite crash guard, Ctx() diagnostics, ShouldFail/glob/parallel tests, leak monitor counter
 - **v6.3**: T-01 NaN/边界补全 + facade re-export 补全 (Check*D, CI, NotStartsWith/EndsWith)
-- **v6.4**: P2 coverage — T-02 typed mock returns (7 tests), T-07 test timeout exceeded (2 phases), E-01 TTimeoutRec impl-only
+- **v6.4**: P2 coverage — T-02 typed mock returns (7 tests), T-03 subtest skip message, T-06 config zero-value, T-07 test timeout exceeded
 
 ## 竞品对比
 
