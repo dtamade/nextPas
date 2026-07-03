@@ -368,7 +368,8 @@ end;
 
 procedure ShuffleEntries(var AEntries: specialize TArray<TTestEntry>;
   ASeed: Integer);
-{ Fisher-Yates (Knuth) shuffle. ASeed > 0 = deterministic, ASeed = -1 = random. }
+{ Fisher-Yates (Knuth) shuffle. ASeed > 0 = deterministic, ASeed = -1 = random.
+  ASeed = 0 treated as -1 (random) to avoid degenerate LCG sequence. }
 var
   I, J, N: Integer;
   LSeed: Integer;
@@ -376,7 +377,7 @@ var
 begin
   N := Length(AEntries);
   if N <= 1 then Exit;
-  if ASeed = -1 then
+  if (ASeed = -1) or (ASeed = 0) then
     LSeed := Integer(GetTickCount64 and $7FFFFFFF)
   else
     LSeed := ASeed;

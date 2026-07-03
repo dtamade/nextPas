@@ -318,6 +318,11 @@ var
   LRetryResult: TTestRunResult;
   LRetryConfig: TTestConfig;
   LRetryAttempts: Integer;
+  { T-08: CleanupTableAllocations idempotent }
+  LIdempotentSuite: TTestSuite;
+  LIdempotentResult: TTestRunResult;
+  { E-03: FormatDuration regression }
+  LFormatMs: string;
 begin
   WriteLn('=== test_runner ===');
   { Suite 1: lifecycle }
@@ -2193,6 +2198,48 @@ begin
     PassTest('Entry-level retry overrides suite-level');
   end;
 
+  { ── T-08: CleanupTableAllocations idempotent ──────────────────────────── }
+
+  SectionHeader('T-08: CleanupTableAllocations idempotent');
+
+  begin
+    LIdempotentSuite := TTestSuite.Create('Idempotent');
+    LIdempotentSuite.Test('dummy', procedure begin CheckTrue(True); end);
+    LIdempotentSuite.RunWithResult(LIdempotentResult);
+    { First cleanup should succeed }
+    LIdempotentSuite.CleanupTableAllocations;
+    { Second cleanup should be a no-op (FCleanupDone guard) — must not crash }
+    LIdempotentSuite.CleanupTableAllocations;
+    { Third call — still safe }
+    LIdempotentSuite.CleanupTableAllocations;
+    if LIdempotentResult.Passed <> 1 then
+      FailTest('idempotent: expected 1 passed');
+    PassTest('CleanupTableAllocations idempotent');
+  end;
+
+  { ── E-03: FormatDuration locale regression ────────────────────────────── }
+
+  SectionHeader('E-03: FormatDuration locale');
+
+  begin
+    { FormatDuration must use '.' as decimal separator, not locale-dependent ',' }
+    LFormatMs := FormatDuration(1234);
+    { Should contain '.' not ',' }
+    if Pos(',', LFormatMs) > 0 then
+      FailTest('FormatDuration uses locale comma: ' + LFormatMs);
+    { Should contain '1.' for 1.234s }
+    if Pos('1.', LFormatMs) = 0 then
+      FailTest('FormatDuration missing decimal point: ' + LFormatMs);
+    { Verify small durations }
+    LFormatMs := FormatDuration(0);
+    if LFormatMs <> '0ms' then
+      FailTest('FormatDuration(0) = "' + LFormatMs + '"');
+    LFormatMs := FormatDuration(999);
+    if Pos('999ms', LFormatMs) = 0 then
+      FailTest('FormatDuration(999) = "' + LFormatMs + '"');
+    PassTest('FormatDuration locale-independent');
+  end;
+
   ResetDefaultConfig;
   WriteLn;
   PassTest('test_runner');
@@ -2229,4 +2276,5 @@ begin
   LBenchSuite := Default(TTestSuite);
   LBenchScalingSuite := Default(TTestSuite);
   LRetrySuite := Default(TTestSuite);
+  LIdempotentSuite := Default(TTestSuite);
 end.

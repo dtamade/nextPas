@@ -156,6 +156,7 @@
 - **位置**: `test_runner/test_runner.lpr`
 - **描述**: `--count=N` 重跑时，`CleanupTableAllocations` 应只在最后一次执行。`FCleanupDone` guard 防止 double-free，但没有测试验证连续调用的安全性。
 - **建议**: 添加 `TestCleanupIdempotent` 测试。
+- **状态**: ✅ **已修复** — 连续 3 次调用 CleanupTableAllocations 不崩溃，验证 FCleanupDone 幂等
 
 ---
 
@@ -176,11 +177,13 @@
 - **位置**: `nextpas.core.test.output.pas:518` (FormatBenchLine 使用 FormatFloat)
 - **描述**: R3 修复了 `text.conv.pas` 中的 locale 依赖（FormatFloat 归一化小数分隔符），但 output 模块没有专门的 locale 回归测试。FormatBenchLine 在非英语 locale 下的行为未验证。
 - **建议**: 添加 `TestFormatBenchLineLocaleIndependent` 测试。
+- **状态**: ✅ **已修复** — FormatDuration 回归测试验证 '.' 分隔符和边界值 (0ms, 999ms, 1.234s)
 
 #### E-04 [P3] 部分函数缺少参数验证
 - **位置**: `nextpas.core.test.base.pas:328` (GetTopSlowest)、`369` (ShuffleEntries)
 - **描述**: `GetTopSlowest(Results, -1)` 会返回 nil（ACount <= 0 检查），但 `ShuffleEntries(Entries, 0)` 的行为未定义（LSeed=0 时 LCG 的第一个输出是 `0 * 1103515245 + 12345 = 12345`，不崩溃但分布不理想）。
 - **建议**: ShuffleEntries 对 ASeed=0 发出 warning 或当作 -1（随机）处理。
+- **状态**: ✅ **已修复** — ASeed=0 现在等同于 ASeed=-1 (随机种子)
 
 #### E-05 [P3] 注释密度不均匀
 - **位置**: 全局
@@ -259,6 +262,9 @@
 | **A-01** runner.pas 拆分 | ✅ FIXED | 提取 `runner.cli.pas` (373行 CLI 解析)；配合已有的 `runner.context.pas`/`runner.parallel.pas`，runner.pas 从 2336行降至 1980行 |
 | **T-06** Benchmark N scaling | ✅ FIXED | 3 新测试: fast (N≥100), slow (N=1 immediate), medium (N≥10) |
 | **T-07** Suite-level retry | ✅ FIXED | 2 新测试: suite RetryCount=3 pass-on-3rd, entry override (4 retries overriding suite 1) |
+| **T-08** CleanupTableAllocations 幂等 | ✅ FIXED | 连续 3 次调用不崩溃，验证 FCleanupDone guard |
+| **E-03** FormatDuration locale 回归 | ✅ FIXED | FormatDuration 回归测试: '.' 分隔符 + 边界值 (0/999/1234ms) |
+| **E-04** ShuffleEntries seed=0 | ✅ FIXED | ASeed=0 现在等同于 -1 (随机)，避免退化 LCG 序列 |
 
 **所有 P1/P2 测试覆盖项已修复**。剩余项为架构决策或低优先级工程改进。
 - 其余 P3 项 — 渐进改进
