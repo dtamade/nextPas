@@ -14,6 +14,19 @@ uses
   nextpas.core.mem.arena.intf;
 
 type
+  TChunkedArenaConfig = record
+    InitialSize: SizeUInt;
+    MaxSize: SizeUInt;
+    GrowthKind: TArenaGrowthKind;
+    GrowthFactor: Double;
+    GrowthStep: SizeUInt;
+    Alignment: SizeUInt;
+    KeepSegments: Boolean;
+    Allocator: IAllocator;
+
+    class function Default(aInitialSize: SizeUInt): TChunkedArenaConfig; static;
+  end;
+
   {** TChunkedArena
    *
    *  基于段的可增长 Arena 分配器（Bump Allocator），使用单调递增的标记管理虚拟地址空间。
@@ -51,6 +64,7 @@ type
     FFreeSegments: array of TSegment;
     FFreeCount: SizeInt;
     FCacheLimit: SizeInt;
+    FAllocator: IAllocator;
   private
     function CurrentUsed: SizeUInt; inline;
     function AlignPtr(aPtr: PByte; aAlign: SizeUInt): PByte; inline;
@@ -64,7 +78,7 @@ type
     procedure NormalizeState(aActiveIndex: SizeInt; aActiveUsed: SizeUInt);
     procedure ClearCache;
   public
-    constructor Create(const aConfig: TArenaConfig); overload;
+    constructor Create(const aConfig: TChunkedArenaConfig); overload;
     constructor Create(aInitialSize: SizeUInt; aMaxSize: SizeUInt = 0); overload;
     destructor Destroy; override;
 
@@ -231,7 +245,10 @@ begin
   if LAllocSize < LSegSize then
     Exit(False);
 
-  GetMem(LRaw, LAllocSize);
+  if FAllocator = nil then
+    LRaw := System.GetMem(LAllocSize)
+  else
+    LRaw := FAllocator.GetMem(LAllocSize);
   if LRaw = nil then
     Exit(False);
 
@@ -243,7 +260,10 @@ begin
     LMask := FAlignment - 1;
     if PtrUInt(LMask) > (High(PtrUInt) - LAddr) then
     begin
-      FreeMem(LRaw);
+      if FAllocator <> nil then
+        FAllocator.FreeMem(LRaw)
+      else
+        System.FreeMem(LRaw);
       Exit(False);
     end;
     LAligned := (LAddr + PtrUInt(LMask)) and not PtrUInt(LMask);
@@ -251,7 +271,10 @@ begin
 
   if (High(SizeUInt) - FTotalSize) < LSegSize then
   begin
-    FreeMem(LRaw);
+    if FAllocator <> nil then
+      FAllocator.FreeMem(LRaw)
+    else
+      System.FreeMem(LRaw);
     Exit(False);
   end;
 
@@ -293,7 +316,10 @@ begin
   FSegments[aIndex].RawSize := 0;
   if LRaw = nil then
     Exit;
-  FreeMem(LRaw);
+  if FAllocator <> nil then
+    FAllocator.FreeMem(LRaw)
+  else
+    System.FreeMem(LRaw);
 end;
 
 { CacheSegment - move segment to free list for reuse instead of freeing }
@@ -375,7 +401,12 @@ begin
   for I := 0 to FFreeCount - 1 do
   begin
     if FFreeSegments[I].Raw <> nil then
-      FreeMem(FFreeSegments[I].Raw);
+    begin
+      if FAllocator <> nil then
+        FAllocator.FreeMem(FFreeSegments[I].Raw)
+      else
+        System.FreeMem(FFreeSegments[I].Raw);
+    end;
     FFreeSegments[I].Raw := nil;
   end;
   FFreeCount := 0;
@@ -439,7 +470,19 @@ begin
   FActive := aActiveIndex;
 end;
 
-constructor TChunkedArena.Create(const aConfig: TArenaConfig);
+class function TChunkedArenaConfig.Default(aInitialSize: SizeUInt): TChunkedArenaConfig;
+begin
+  Result.InitialSize := aInitialSize;
+  Result.MaxSize := 0;
+  Result.GrowthKind := agkGeometric;
+  Result.GrowthFactor := 2.0;
+  Result.GrowthStep := 0;
+  Result.Alignment := 0;
+  Result.KeepSegments := True;
+  Result.Allocator := nil;
+end;
+
+constructor TChunkedArena.Create(const aConfig: TChunkedArenaConfig);
 var
   LAlign: SizeUInt;
   LInitSize: SizeUInt;
@@ -462,6 +505,7 @@ begin
 
   FMaxSize := aConfig.MaxSize;
   FKeepSegments := aConfig.KeepSegments;
+  FAllocator := aConfig.Allocator;
 
   LAlign := SanitizeConfigAlignment(aConfig.Alignment);
   FAlignment := LAlign;
@@ -484,9 +528,9 @@ end;
 
 constructor TChunkedArena.Create(aInitialSize: SizeUInt; aMaxSize: SizeUInt);
 var
-  LConfig: TArenaConfig;
+  LConfig: TChunkedArenaConfig;
 begin
-  LConfig := TArenaConfig.Default(aInitialSize);
+  LConfig := TChunkedArenaConfig.Default(aInitialSize);
   LConfig.MaxSize := aMaxSize;
   Create(LConfig);
 end;

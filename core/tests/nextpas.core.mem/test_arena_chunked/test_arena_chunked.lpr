@@ -108,12 +108,12 @@ end;
 
 procedure TestLinearGrowth;
 var
-  LConfig: TArenaConfig;
+  LConfig: TChunkedArenaConfig;
   LArena: TChunkedArena;
   LP: Pointer;
   I: Integer;
 begin
-  LConfig := TArenaConfig.Default(1024);
+  LConfig := TChunkedArenaConfig.Default(1024);
   LConfig.GrowthKind := agkLinear;
   LConfig.GrowthStep := 1024;
   LArena := TChunkedArena.Create(LConfig);
@@ -229,11 +229,11 @@ end;
 
 procedure TestResetKeepSegments;
 var
-  LConfig: TArenaConfig;
+  LConfig: TChunkedArenaConfig;
   LArena: TChunkedArena;
   LSegCount: SizeUInt;
 begin
-  LConfig := TArenaConfig.Default(1024);
+  LConfig := TChunkedArenaConfig.Default(1024);
   LConfig.KeepSegments := True;
   LArena := TChunkedArena.Create(LConfig);
   try
@@ -251,11 +251,11 @@ end;
 
 procedure TestMaxSize;
 var
-  LConfig: TArenaConfig;
+  LConfig: TChunkedArenaConfig;
   LArena: TChunkedArena;
   LP: Pointer;
 begin
-  LConfig := TArenaConfig.Default(1024);
+  LConfig := TChunkedArenaConfig.Default(1024);
   LConfig.MaxSize := 4096;
   LArena := TChunkedArena.Create(LConfig);
   try
@@ -330,13 +330,13 @@ end;
 
 procedure TestChunkCacheLimit;
 var
-  LConfig: TArenaConfig;
+  LConfig: TChunkedArenaConfig;
   LArena: TChunkedArena;
   I: Integer;
   LSegCount: SizeUInt;
 begin
   { KeepSegments=False so Reset uses chunk cache }
-  LConfig := TArenaConfig.Default(128);
+  LConfig := TChunkedArenaConfig.Default(128);
   LConfig.GrowthKind := agkLinear;
   LConfig.GrowthStep := 128;
   LConfig.KeepSegments := False;
@@ -503,13 +503,13 @@ end;
   RestoreToMark binary search works correctly. }
 procedure TestResetKeepSegmentsThenRestoreToMark;
 var
-  LConfig: TArenaConfig;
+  LConfig: TChunkedArenaConfig;
   LArena: TChunkedArena;
   LMark: TArenaMark;
   LP: Pointer;
   LUsed1: SizeUInt;
 begin
-  LConfig := TArenaConfig.Default(1024);
+  LConfig := TChunkedArenaConfig.Default(1024);
   LConfig.KeepSegments := True;
   LArena := TChunkedArena.Create(LConfig);
   try

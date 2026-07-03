@@ -19,8 +19,7 @@ uses
   nextpas.core.mem.utils,
   nextpas.core.mem.pool.base,     // DefaultAcquireN / DefaultReleaseN (CS-001)
   nextpas.core.mem.blockpool,
-  nextpas.core.mem.allocator.base, // TAllocator
-  nextpas.core.mem.allocator.rtl,  // ResolveAllocator
+  nextpas.core.mem.intf,          // IAllocator
   nextpas.core.mem.error;
 
 type
@@ -34,7 +33,7 @@ type
     GrowthFactor: Double;          // geometric only (>= 1.1 recommended)
     GrowthStep: SizeUInt;          // linear only (>= 1)
     Alignment: SizeUInt;           // 0 = DEFAULT_ALIGNMENT, must be power of two
-    Allocator: TAllocator;         // nil = system heap (GetMem/FreeMem)
+    Allocator: IAllocator;         // nil = system heap (GetMem/FreeMem)
     KeepSegments: Boolean;         // keep extra segments on Reset
 
     class function Default(ABlockSize, aInitialCapacity: SizeUInt): TGrowingBlockPoolConfig; static;
@@ -83,7 +82,7 @@ type
     FGrowthStep: SizeUInt;
     FKeepSegments: Boolean;
 
-    FAllocator: TAllocator;
+    FAllocator: IAllocator;
 
     // statistics
     FPeakAlloc: SizeUInt;
@@ -326,7 +325,10 @@ begin
   if LAllocSize < LBytes then
     raise EOutOfMemory.CreateMsg('TGrowingBlockPool: allocation size overflow');
 
-  LRaw := FAllocator.GetMem(LAllocSize);
+  if FAllocator = nil then
+    LRaw := System.GetMem(LAllocSize)
+  else
+    LRaw := FAllocator.GetMem(LAllocSize);
   if LRaw = nil then
     Exit(False);
 
@@ -338,7 +340,10 @@ begin
     LMask := FAlignment - 1;
     if PtrUInt(LMask) > (High(PtrUInt) - LAddr) then
     begin
-      FAllocator.FreeMem(LRaw);
+      if FAllocator <> nil then
+        FAllocator.FreeMem(LRaw)
+      else
+        System.FreeMem(LRaw);
       Exit(False);
     end;
     LAligned := (LAddr + PtrUInt(LMask)) and not PtrUInt(LMask);
@@ -464,7 +469,10 @@ begin
   if LRaw = nil then
     Exit;
 
-  FAllocator.FreeMem(LRaw);
+  if FAllocator <> nil then
+    FAllocator.FreeMem(LRaw)
+  else
+    System.FreeMem(LRaw);
 end;
 
 procedure TGrowingBlockPool.ShrinkToSegmentCount(ACount: SizeInt);
@@ -522,7 +530,7 @@ begin
     FBlockShift := 0;
   end;
 
-  FAllocator := ResolveAllocator(aConfig.Allocator);
+  FAllocator := aConfig.Allocator;
   FKeepSegments := aConfig.KeepSegments;
   FInitialCapacity := aConfig.InitialCapacity;
   if FInitialCapacity = 0 then
