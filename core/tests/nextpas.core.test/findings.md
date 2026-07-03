@@ -250,10 +250,10 @@
 | **Facade re-export** | ✅ FIXED | nextpas.core.test.pas 补全 12 个缺失函数 re-export (Check*D, CI, NotStart/EndsWith) |
 | **T-02** TMock typed args/return | ✅ FIXED | 7 新测试: ReturnsDouble/Int/Bool typed retrieval, RecordCallTyped via TMock, GetReturnInt with args, typed overwrite, mixed type |
 | **T-07** Test timeout exceeded | ✅ FIXED | 2 阶段测试: fast test within 200ms passes + slow test (300ms) with 50ms timeout fails with "timed out" message |
+| **T-04** TAP/JSON compliance | ✅ FIXED | 6 新测试: severity fail vs error, YAML block markers, diagnostic footer, sequential numbering, JSON error/passed status |
+| **T-05** Complex filter scenarios | ✅ FIXED | 5 测试: multi-star glob, brace expansion, substring match, ?-wildcard, hierarchical filter |
 
 **未修复项**（需要更大结构性改动或独立规划）：
 - A-01: runner.pas 拆分 (~2300 行) — 结构性改动，需独立 worktree
 - C-02: 10ms 轮询 → condition variable — 性能改动，需跨平台测试
-- T-04: TAP/JSON 输出格式合规测试
-- T-05: Glob/hierarchical filter 复杂场景
 - 其余 P3 项 — 渐进改进

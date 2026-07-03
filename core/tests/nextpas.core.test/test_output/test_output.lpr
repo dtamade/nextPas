@@ -902,6 +902,145 @@ begin
   CheckContains(LOut, 'EAccessViolation');
 end;
 
+{ ── T-04: TAP/JSON compliance tests ──────────────────────────────────────── }
+
+procedure TestTAPSeverityFailVsError;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+begin
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('TapSeverity');
+  LResults[0].Failed := 2;
+  SetLength(LResults[0].Results, 2);
+  LResults[0].Results[0].Name    := 'fail_case';
+  LResults[0].Results[0].Status  := tsFailed;
+  LResults[0].Results[0].Message := 'assertion failed';
+  LResults[0].Results[1].Name    := 'error_case';
+  LResults[0].Results[1].Status  := tsError;
+  LResults[0].Results[1].Message := 'EAccessViolation';
+
+  LOut := TAPReport(LResults);
+  { tsFailed → severity: fail }
+  CheckContains(LOut, 'severity: fail');
+  { tsError → severity: error }
+  CheckContains(LOut, 'severity: error');
+  { Both should be "not ok" }
+  CheckContains(LOut, 'not ok 1 -');
+  CheckContains(LOut, 'not ok 2 -');
+end;
+
+procedure TestTAPYAMLBlockMarkers;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+begin
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('TapYAML');
+  LResults[0].Failed := 1;
+  SetLength(LResults[0].Results, 1);
+  LResults[0].Results[0].Name    := 'yml';
+  LResults[0].Results[0].Status  := tsFailed;
+  LResults[0].Results[0].Message := 'bad';
+
+  LOut := TAPReport(LResults);
+  { YAML block must have --- and ... markers }
+  CheckContains(LOut, '  ---');
+  CheckContains(LOut, '  ...');
+  { message must be inside the block }
+  CheckContains(LOut, 'message: |-');
+end;
+
+procedure TestTAPDiagnosticFooter;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+begin
+  SetLength(LResults, 2);
+  LResults[0] := TTestRunResult.Create('S1');
+  LResults[0].Passed := 2;
+  SetLength(LResults[0].Results, 2);
+  LResults[0].Results[0].Name := 'a'; LResults[0].Results[0].Status := tsPassed;
+  LResults[0].Results[1].Name := 'b'; LResults[0].Results[1].Status := tsPassed;
+
+  LResults[1] := TTestRunResult.Create('S2');
+  LResults[1].Passed := 1;
+  LResults[1].Skipped := 1;
+  SetLength(LResults[1].Results, 2);
+  LResults[1].Results[0].Name := 'c'; LResults[1].Results[0].Status := tsPassed;
+  LResults[1].Results[1].Name := 'd'; LResults[1].Results[1].Status := tsSkipped;
+  LResults[1].Results[1].Message := 'deferred';
+
+  LOut := TAPReport(LResults);
+  CheckContains(LOut, '# suites: 2');
+  CheckContains(LOut, '# total: 4');
+  CheckContains(LOut, '# passed: 3');
+  CheckContains(LOut, '# failed: 0');
+  CheckContains(LOut, '# skipped: 1');
+end;
+
+procedure TestTAPSequentialNumbering;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+begin
+  SetLength(LResults, 2);
+  LResults[0] := TTestRunResult.Create('S1');
+  LResults[0].Passed := 2;
+  SetLength(LResults[0].Results, 2);
+  LResults[0].Results[0].Name := 't1'; LResults[0].Results[0].Status := tsPassed;
+  LResults[0].Results[1].Name := 't2'; LResults[0].Results[1].Status := tsPassed;
+
+  LResults[1] := TTestRunResult.Create('S2');
+  LResults[1].Passed := 1;
+  SetLength(LResults[1].Results, 1);
+  LResults[1].Results[0].Name := 't3'; LResults[1].Results[0].Status := tsPassed;
+
+  LOut := TAPReport(LResults);
+  { Plan: 1..3 }
+  CheckContains(LOut, '1..3');
+  { Sequential numbering across suites }
+  CheckContains(LOut, 'ok 1 - S1 / t1');
+  CheckContains(LOut, 'ok 2 - S1 / t2');
+  CheckContains(LOut, 'ok 3 - S2 / t3');
+end;
+
+procedure TestJSONErrorStatus;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+begin
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('JsErr');
+  LResults[0].Failed := 1;
+  SetLength(LResults[0].Results, 1);
+  LResults[0].Results[0].Name    := 'crash';
+  LResults[0].Results[0].Status  := tsError;
+  LResults[0].Results[0].Message := 'Segfault';
+
+  LOut := JSONReport(LResults);
+  CheckContains(LOut, '"status": "error"');
+  CheckContains(LOut, '"message": "Segfault"');
+end;
+
+procedure TestJSONPassedStatus;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+begin
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('JsPass');
+  LResults[0].Passed := 2;
+  SetLength(LResults[0].Results, 2);
+  LResults[0].Results[0].Name := 'p1'; LResults[0].Results[0].Status := tsPassed;
+  LResults[0].Results[1].Name := 'p2'; LResults[0].Results[1].Status := tsPassed;
+
+  LOut := JSONReport(LResults);
+  CheckContains(LOut, '"status": "passed"');
+  CheckEqual(2, ExtractJSONInt(LOut, 'totalPassed'));
+  CheckEqual(0, ExtractJSONInt(LOut, 'totalFailed'));
+end;
+
 { R6-49: Unicode test name StatusDot should not crash }
 
 procedure TestStatusDotUnicodeName;
@@ -1467,6 +1606,14 @@ begin
   Suite.Test('TestJSONReportDuration', @TestJSONReportDuration);
   Suite.Test('TestTAPReportMultiLineYAML', @TestTAPReportMultiLineYAML);
   Suite.Test('TestTAPReportError', @TestTAPReportError);
+
+  { T-04: TAP/JSON compliance tests }
+  Suite.Test('TestTAPSeverityFailVsError', @TestTAPSeverityFailVsError);
+  Suite.Test('TestTAPYAMLBlockMarkers', @TestTAPYAMLBlockMarkers);
+  Suite.Test('TestTAPDiagnosticFooter', @TestTAPDiagnosticFooter);
+  Suite.Test('TestTAPSequentialNumbering', @TestTAPSequentialNumbering);
+  Suite.Test('TestJSONErrorStatus', @TestJSONErrorStatus);
+  Suite.Test('TestJSONPassedStatus', @TestJSONPassedStatus);
 
   { R6-49~52, R6-61, R6-65: new coverage tests }
   Suite.Test('StatusDot unicode',         @TestStatusDotUnicodeName);

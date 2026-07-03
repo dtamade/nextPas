@@ -1977,6 +1977,88 @@ begin
     PassTest('Config zero-value ambiguity');
   end;
 
+  { ── T-05: Complex glob/hierarchical filter scenarios ─────────────────────── }
+  WriteLn;
+  SectionHeader('T-05: Complex filter scenarios');
+  begin
+    ResetDefaultConfig;
+    { Test 1: Multiple * wildcards in pattern }
+    LVerbSuite := TTestSuite.Create('GlobMultiStar');
+    LVerbSuite.Test('test_alpha_pass', procedure begin CheckTrue(True); end);
+    LVerbSuite.Test('test_beta_pass', procedure begin CheckTrue(True); end);
+    LVerbSuite.Test('other_gamma', procedure begin CheckTrue(True); end);
+    LVerbConfig := DefaultConfig;
+    LVerbConfig.FilterPattern := '*test*pass*';
+    LVerbSuite.Config := LVerbConfig;
+    LVerbSuite.RunWithResult(LVerbResult);
+    if LVerbResult.Passed <> 2 then
+      FailTest('multi-star: expected 2 passed, got ' +
+        IntToStr(LVerbResult.Passed));
+    ResetDefaultConfig;
+    PassTest('Multiple * wildcards');
+
+    { Test 2: Brace expansion {a,b} }
+    LVerbSuite := TTestSuite.Create('GlobBrace');
+    LVerbSuite.Test('alpha', procedure begin CheckTrue(True); end);
+    LVerbSuite.Test('beta', procedure begin CheckTrue(True); end);
+    LVerbSuite.Test('gamma', procedure begin CheckTrue(True); end);
+    LVerbConfig := DefaultConfig;
+    LVerbConfig.FilterPattern := '{alpha,beta}';
+    LVerbSuite.Config := LVerbConfig;
+    LVerbSuite.RunWithResult(LVerbResult);
+    if LVerbResult.Passed <> 2 then
+      FailTest('brace: expected 2 passed, got ' +
+        IntToStr(LVerbResult.Passed));
+    ResetDefaultConfig;
+    PassTest('Brace expansion');
+
+    { Test 3: Filter exact match (no wildcards = substring) }
+    LVerbSuite := TTestSuite.Create('GlobExact');
+    LVerbSuite.Test('exact_match', procedure begin CheckTrue(True); end);
+    LVerbSuite.Test('exact_no', procedure begin CheckTrue(True); end);
+    LVerbConfig := DefaultConfig;
+    LVerbConfig.FilterPattern := 'exact_match';
+    LVerbSuite.Config := LVerbConfig;
+    LVerbSuite.RunWithResult(LVerbResult);
+    { Substring match: 'exact_match' matches only 'exact_match' }
+    if LVerbResult.Passed <> 1 then
+      FailTest('substring: expected 1 passed, got ' +
+        IntToStr(LVerbResult.Passed));
+    ResetDefaultConfig;
+    PassTest('Substring match');
+
+    { Test 4: ? single-char wildcard }
+    LVerbSuite := TTestSuite.Create('GlobQuestion');
+    LVerbSuite.Test('a1x', procedure begin CheckTrue(True); end);
+    LVerbSuite.Test('b1x', procedure begin CheckTrue(True); end);
+    LVerbSuite.Test('aa1x', procedure begin CheckTrue(True); end);
+    LVerbConfig := DefaultConfig;
+    LVerbConfig.FilterPattern := '?1*';
+    LVerbSuite.Config := LVerbConfig;
+    LVerbSuite.RunWithResult(LVerbResult);
+    { Should match a1x and b1x, not aa1x (too long before '1') }
+    if LVerbResult.Passed <> 2 then
+      FailTest('question-mark: expected 2 passed, got ' +
+        IntToStr(LVerbResult.Passed));
+    ResetDefaultConfig;
+    PassTest('? single-char wildcard');
+
+    { Test 5: Hierarchical filter — test name with / separator }
+    LVerbSuite := TTestSuite.Create('HierFilter');
+    LVerbSuite.Test('ParentA', procedure begin CheckTrue(True); end);
+    LVerbSuite.Test('ParentB', procedure begin CheckTrue(True); end);
+    LVerbConfig := DefaultConfig;
+    LVerbConfig.FilterPattern := 'ParentA';
+    LVerbSuite.Config := LVerbConfig;
+    LVerbSuite.RunWithResult(LVerbResult);
+    { Substring match: 'ParentA' matches 'ParentA' }
+    if LVerbResult.Passed <> 1 then
+      FailTest('hierarchical: expected 1 passed, got ' +
+        IntToStr(LVerbResult.Passed));
+    ResetDefaultConfig;
+    PassTest('Hierarchical filter');
+  end;
+
   WriteLn;
   PassTest('test_runner');
 
