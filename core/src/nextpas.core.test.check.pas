@@ -18,16 +18,16 @@ procedure CheckEqual(const AExpected, AActual: string); overload;
 procedure CheckEqual(const AExpected, AActual: Int64); overload;
 procedure CheckEqual(const AExpected, AActual: Boolean); overload;
 procedure CheckEqual(const AExpected, AActual: Pointer); overload;
-{ CheckEqual for Double — exact bit-wise comparison.
-  For floating-point tolerance comparisons, use CheckNear instead. }
+{ CheckEqual for Double — uses CheckNear (absolute epsilon |a-b| <= AEpsilon).
+  For floating-point tolerance comparisons, use CheckNear directly. }
 procedure CheckEqual(const AExpected, AActual: Double;
   AEpsilon: Double = 1e-10); overload;
 procedure CheckNotEqual(const AExpected, AActual: string); overload;
 procedure CheckNotEqual(const AExpected, AActual: Int64); overload;
 procedure CheckNotEqual(const AExpected, AActual: Boolean); overload;
 procedure CheckNotEqual(const AExpected, AActual: Pointer); overload;
-{ CheckNotEqual for Double — values must differ by more than AEpsilon.
-  For floating-point tolerance comparisons, use CheckNotNear instead. }
+{ CheckNotEqual for Double — uses absolute epsilon |a-b| <= AEpsilon.
+  For floating-point tolerance comparisons, use CheckNotNear directly. }
 procedure CheckNotEqual(const AExpected, AActual: Double;
   AEpsilon: Double = 1e-10); overload;
 procedure CheckTrue(AValue: Boolean; const AMessage: string = '');
@@ -77,12 +77,18 @@ procedure CheckLessOrEqualD(const AValue, AExpected: Double;
   const AEpsilon: Double = 1e-10);
 { Check that AActual is within AEpsilon of AExpected (absolute difference).
   R4-07: Uses absolute epsilon — for large values (e.g. 1e15), the default
-  1e-10 is too tight. Callers should pass a larger AEpsilon or use a
-  relative-epsilon variant for magnitude-spanning comparisons. }
+  1e-10 is too tight. Callers should pass a larger AEpsilon or use
+  CheckNearRel (relative tolerance) for magnitude-spanning comparisons. }
 procedure CheckNear(const AExpected, AActual: Double;
   const AEpsilon: Double = 1e-10; const AMessage: string = '');
 procedure CheckNotNear(const AExpected, AActual: Double;
   const AEpsilon: Double = 1e-10; const AMessage: string = '');
+{ CheckNearRel — relative tolerance: |a-b| <= ARelEps * max(|a|, |b|).
+  Falls back to absolute comparison when both values are near zero. }
+procedure CheckNearRel(const AExpected, AActual: Double;
+  const ARelEps: Double = 1e-9; const AMessage: string = '');
+procedure CheckNotNearRel(const AExpected, AActual: Double;
+  const ARelEps: Double = 1e-9; const AMessage: string = '');
 procedure Fail(const AMessage: string);
 { Fail with "unexpected ClassName: Message" — for catch-all exception handlers. }
 procedure FailUnexpected(const E: Exception);
@@ -238,6 +244,58 @@ begin
     FailWithDefault(AMessage,
       'Expected not near ' + FloatToStr(AExpected) +
       ' (+/-' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual));
+end;
+
+procedure CheckNearRel(const AExpected, AActual: Double;
+  const ARelEps: Double; const AMessage: string);
+var
+  LAbsDiff, LScale: Double;
+begin
+  if IsNan(AExpected) or IsNan(AActual) then
+    InternalFail('Expected ' + FloatToStr(AExpected) +
+      ' (rel ' + FloatToStr(ARelEps) + ') but got ' + FloatToStr(AActual) + ' (NaN)');
+  LAbsDiff := Abs(AActual - AExpected);
+  LScale := Abs(AExpected);
+  if Abs(AActual) > LScale then
+    LScale := Abs(AActual);
+  { When both values are near zero, LScale ≈ 0 → relative comparison degenerates.
+    Fall back to absolute comparison using ARelEps as absolute tolerance. }
+  if LScale < ARelEps then
+  begin
+    if LAbsDiff > ARelEps then
+      FailWithDefault(AMessage,
+        'Expected ' + FloatToStr(AExpected) +
+        ' (rel ' + FloatToStr(ARelEps) + ') but got ' + FloatToStr(AActual));
+  end
+  else if LAbsDiff > ARelEps * LScale then
+    FailWithDefault(AMessage,
+      'Expected ' + FloatToStr(AExpected) +
+      ' (rel ' + FloatToStr(ARelEps) + ') but got ' + FloatToStr(AActual));
+end;
+
+procedure CheckNotNearRel(const AExpected, AActual: Double;
+  const ARelEps: Double; const AMessage: string);
+var
+  LAbsDiff, LScale: Double;
+begin
+  if IsNan(AExpected) or IsNan(AActual) then
+    InternalFail('Expected not near ' + FloatToStr(AExpected) +
+      ' (rel ' + FloatToStr(ARelEps) + ') but got ' + FloatToStr(AActual) + ' (NaN)');
+  LAbsDiff := Abs(AActual - AExpected);
+  LScale := Abs(AExpected);
+  if Abs(AActual) > LScale then
+    LScale := Abs(AActual);
+  if LScale < ARelEps then
+  begin
+    if LAbsDiff <= ARelEps then
+      FailWithDefault(AMessage,
+        'Expected not near ' + FloatToStr(AExpected) +
+        ' (rel ' + FloatToStr(ARelEps) + ') but got ' + FloatToStr(AActual));
+  end
+  else if LAbsDiff <= ARelEps * LScale then
+    FailWithDefault(AMessage,
+      'Expected not near ' + FloatToStr(AExpected) +
+      ' (rel ' + FloatToStr(ARelEps) + ') but got ' + FloatToStr(AActual));
 end;
 
 procedure CheckEqual(const AExpected, AActual: Double;

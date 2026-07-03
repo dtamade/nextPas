@@ -825,6 +825,49 @@ begin
   ExpectFail(procedure begin ExpectDouble(1.0).ToEqualD(1.0 + 1.01e-10, 1e-10); end);
 end;
 
+{ ── ToBeNearRel / ToNotBeNearRel ─────────────────────────────────────────── }
+
+procedure TestExpectToBeNearRelPass;
+begin
+  ExpectDouble(1e15).ToBeNearRel(1e15 + 1e5, 1e-9);
+  ExpectDouble(1.0).ToBeNearRel(1.0 + 1e-10, 1e-9);
+  ExpectDouble(42.0).ToBeNearRel(42.0);
+  ExpectDouble(0.0).ToBeNearRel(1e-12, 1e-9);
+end;
+
+procedure TestExpectToBeNearRelFail;
+begin
+  ExpectFail(procedure begin ExpectDouble(1e15).ToBeNearRel(1e15 + 1e10, 1e-9); end, 'Expected');
+  ExpectFail(procedure begin ExpectDouble(1.0).ToBeNearRel(2.0, 1e-9); end, 'Expected');
+end;
+
+procedure TestExpectToNotBeNearRelPass;
+begin
+  ExpectDouble(1.0).ToNotBeNearRel(2.0, 1e-9);
+  ExpectDouble(1e15).ToNotBeNearRel(2e15, 1e-9);
+end;
+
+procedure TestExpectToNotBeNearRelFail;
+begin
+  ExpectFail(procedure begin ExpectDouble(1.0).ToNotBeNearRel(1.0, 1e-9); end, 'not near');
+end;
+
+procedure TestExpectToBeNearRelNot;
+begin
+  ExpectDouble(1.0).Not_.ToBeNearRel(2.0, 1e-9);
+  ExpectFail(procedure begin ExpectDouble(1.0).Not_.ToBeNearRel(1.0, 1e-9); end, 'not near');
+end;
+
+{ ── ExpectStr alias ──────────────────────────────────────────────────────── }
+
+procedure TestExpectStrAlias;
+begin
+  ExpectStr('hello').ToEqual('hello');
+  ExpectStr('abc').ToContain('b');
+  ExpectStr('abc').ToStartWith('a');
+  ExpectStr('abc').ToEndWith('c');
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -978,6 +1021,16 @@ begin
   LSuite.Test('Not_.ToEqualD',                 @TestExpectToEqualDNot);
   LSuite.Test('ToEqualD NaN',                  @TestExpectToEqualDNaN);
   LSuite.Test('ToEqualD epsilon boundary',     @TestExpectToEqualDEpsilonBoundary);
+
+  { Relative tolerance (ToBeNearRel / ToNotBeNearRel) }
+  LSuite.Test('ToBeNearRel pass',              @TestExpectToBeNearRelPass);
+  LSuite.Test('ToBeNearRel fail',              @TestExpectToBeNearRelFail);
+  LSuite.Test('ToNotBeNearRel pass',           @TestExpectToNotBeNearRelPass);
+  LSuite.Test('ToNotBeNearRel fail',           @TestExpectToNotBeNearRelFail);
+  LSuite.Test('Not_.ToBeNearRel',              @TestExpectToBeNearRelNot);
+
+  { ExpectStr alias }
+  LSuite.Test('ExpectStr alias',               @TestExpectStrAlias);
 
   if not LSuite.Run then
   begin

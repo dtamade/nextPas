@@ -330,6 +330,52 @@ begin
   ExpectFail(procedure begin CheckNotNear(1.0, 1.0, 1e-10, 'too close'); end, 'too close');
 end;
 
+{ CheckNearRel / CheckNotNearRel — relative tolerance }
+
+procedure TestCheckNearRelPass;
+begin
+  { Both near zero — falls back to absolute }
+  CheckNearRel(0.0, 1e-12, 1e-9);
+  { Large values with small relative difference }
+  CheckNearRel(1e15, 1e15 + 1e5, 1e-9);
+  { Small values }
+  CheckNearRel(1.0, 1.0 + 1e-10, 1e-9);
+  { Exact match }
+  CheckNearRel(42.0, 42.0);
+end;
+
+procedure TestCheckNearRelFail;
+begin
+  { Large values that differ significantly in relative terms }
+  ExpectFail(procedure begin CheckNearRel(1e15, 1e15 + 1e10, 1e-9); end, 'Expected');
+  { Small values with large relative difference }
+  ExpectFail(procedure begin CheckNearRel(1.0, 2.0, 1e-9); end, 'Expected');
+end;
+
+procedure TestCheckNearRelNaN;
+begin
+  { NaN guard: relative comparison with NaN must fail }
+  ExpectFail(procedure begin CheckNearRel(1.0, Sqrt(-1.0), 1e-9); end, 'NaN');
+  ExpectFail(procedure begin CheckNearRel(Sqrt(-1.0), 1.0, 1e-9); end, 'NaN');
+end;
+
+procedure TestCheckNotNearRelPass;
+begin
+  CheckNotNearRel(1.0, 2.0, 1e-9);
+  CheckNotNearRel(1e15, 2e15, 1e-9);
+end;
+
+procedure TestCheckNotNearRelFail;
+begin
+  ExpectFail(procedure begin CheckNotNearRel(1.0, 1.0, 1e-9, 'too close'); end, 'too close');
+  ExpectFail(procedure begin CheckNotNearRel(1e15, 1e15 + 1e3, 1e-9, 'rel near'); end, 'rel near');
+end;
+
+procedure TestCheckNotNearRelNaN;
+begin
+  ExpectFail(procedure begin CheckNotNearRel(1.0, Sqrt(-1.0), 1e-9); end, 'NaN');
+end;
+
 { R6-40: Empty string semantics for Contains/StartsWith/EndsWith }
 
 procedure TestR640CheckContainsEmptyNeedle;
@@ -982,6 +1028,14 @@ begin
   LSuite.Test('StartsWithCI fail',           @TestCheckStartsWithCIFail);
   LSuite.Test('EndsWithCI pass',             @TestCheckEndsWithCIPass);
   LSuite.Test('EndsWithCI fail',             @TestCheckEndsWithCIFail);
+
+  { Relative tolerance }
+  LSuite.Test('NearRel pass',               @TestCheckNearRelPass);
+  LSuite.Test('NearRel fail',               @TestCheckNearRelFail);
+  LSuite.Test('NearRel NaN',                @TestCheckNearRelNaN);
+  LSuite.Test('NotNearRel pass',            @TestCheckNotNearRelPass);
+  LSuite.Test('NotNearRel fail',            @TestCheckNotNearRelFail);
+  LSuite.Test('NotNearRel NaN',             @TestCheckNotNearRelNaN);
 
   if not LSuite.Run then
   begin

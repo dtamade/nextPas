@@ -20,6 +20,7 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 - **v6.4**: P2 coverage — T-02 typed mock returns (7 tests), T-03 subtest skip message, T-04 TAP/JSON compliance (6 tests), T-05 complex filter scenarios (5 tests), T-06 config zero-value, T-07 test timeout exceeded
 - **v6.5**: A-01 runner.pas split — CLI 解析提取到 `runner.cli.pas` (373行), runner.pas 2336→1980行; C-02 `platform_thread_timedjoin` 替代 10ms 轮询; 所有 audit findings 全清
 - **v6.6**: Usability fixes — F-03 ToBeSame 消息修正, F-06 ToNotBeNear copy 模式, F-07 Mock.ResetAll, +4 回归测试
+- **v6.7**: Usability — F-04 注释修正 (CheckEqual Double), F-02 CheckNearRel/ToBeNearRel 相对容差, F-03 ExpectStr 别名, F-12 /dev/urandom shuffle 种子, F-13 GetTopSlowest 优化
 
 ## 竞品对比
 
@@ -74,6 +75,7 @@ make -C core/tests/nextpas.core.test/test_runner test
 
 - 编译模式：`{$mode objfpc}{$H+}{$J-}`，使用 `{$modeswitch anonymousfunctions}`
 - 串行套件启用 heaptrc（`-gh`），必须 0 unfreed blocks
+  - **注意**: `test_assertions` 显示 32 字节 unfreed，这是 FPC runtime 内部簿记（空 heaptrc 调用栈），非框架泄漏。其余所有套件 0 unfreed。
 - 并行套件（test_parallel）不用 heaptrc（FPC heaptrc 非线程安全）
 - 失败用 `Halt(1)` 退出，CI 通过 exit code 判断
 - 全局计数器用于 lifecycle 验证（GSetupCalled 等）

@@ -99,6 +99,7 @@ type
 { ── Re-exported functions from test.expect ────────────────────────────────── }
 
 function Expect(const AValue: string): IExpectation;
+function ExpectStr(const AValue: string): IExpectation;
 function ExpectInt(const AValue: Int64): IExpectation;
 function ExpectBool(AValue: Boolean): IExpectation;
 function ExpectDouble(const AValue: Double): IExpectation;
@@ -158,6 +159,10 @@ procedure CheckNear(const AExpected, AActual: Double;
   const AEpsilon: Double = 1e-10; const AMessage: string = '');
 procedure CheckNotNear(const AExpected, AActual: Double;
   const AEpsilon: Double = 1e-10; const AMessage: string = '');
+procedure CheckNearRel(const AExpected, AActual: Double;
+  const ARelEps: Double = 1e-9; const AMessage: string = '');
+procedure CheckNotNearRel(const AExpected, AActual: Double;
+  const ARelEps: Double = 1e-9; const AMessage: string = '');
 procedure Fail(const AMessage: string);
 procedure FailUnexpected(const E: Exception);
 procedure Skip(const AReason: string = '');
@@ -297,6 +302,9 @@ implementation
 
 function Expect(const AValue: string): IExpectation;
 begin Result := nextpas.core.test.expect.Expect(AValue); end;
+
+function ExpectStr(const AValue: string): IExpectation;
+begin Result := nextpas.core.test.expect.ExpectStr(AValue); end;
 
 function ExpectInt(const AValue: Int64): IExpectation;
 begin Result := nextpas.core.test.expect.ExpectInt(AValue); end;
@@ -447,6 +455,14 @@ begin nextpas.core.test.check.CheckNear(AExpected, AActual, AEpsilon, AMessage);
 procedure CheckNotNear(const AExpected, AActual: Double;
   const AEpsilon: Double; const AMessage: string);
 begin nextpas.core.test.check.CheckNotNear(AExpected, AActual, AEpsilon, AMessage); end;
+
+procedure CheckNearRel(const AExpected, AActual: Double;
+  const ARelEps: Double; const AMessage: string);
+begin nextpas.core.test.check.CheckNearRel(AExpected, AActual, ARelEps, AMessage); end;
+
+procedure CheckNotNearRel(const AExpected, AActual: Double;
+  const ARelEps: Double; const AMessage: string);
+begin nextpas.core.test.check.CheckNotNearRel(AExpected, AActual, ARelEps, AMessage); end;
 
 procedure Fail(const AMessage: string);
 begin nextpas.core.test.check.Fail(AMessage); end;
