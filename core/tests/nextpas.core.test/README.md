@@ -82,6 +82,83 @@ make -C core/tests/nextpas.core.test/test_runner test
 
 ## 注意事项
 
+### 快速上手
+
+```pascal
+program my_tests;
+{$mode objfpc}{$H+}{$J-}
+{$modeswitch anonymousfunctions}
+{$modeswitch functionreferences}
+uses
+  nextpas.core.test;
+
+procedure TestAddition;
+begin
+  // 过程式断言
+  CheckEqual(4, 2 + 2);
+  // 流式断言
+  ExpectInt(2 + 2).ToEqualInt(4).ToBeGreaterThan(0);
+end;
+
+procedure TestString;
+begin
+  CheckContains('hello world', 'world');
+  ExpectStr('hello').ToStartWith('he').ToEndWith('lo').ToHaveLength(5);
+end;
+
+procedure TestFloat;
+begin
+  // 绝对容差
+  CheckNear(3.14, Pi, 0.01);
+  // 相对容差（大数值推荐）
+  CheckNearRel(1e15, 1e15 + 1e5, 1e-9);
+  ExpectDouble(Pi).ToBeNear(3.14, 0.01);
+end;
+
+procedure TestException;
+begin
+  CheckRaises(EConvertError, procedure begin StrToInt('bad'); end);
+  ExpectProc(procedure begin StrToInt('bad'); end).ToRaise(EConvertError);
+end;
+
+procedure TestMock;
+var
+  M: TMock;
+begin
+  M := TMock.Create;
+  try
+    M.Setup('Foo').Returns('bar');
+    M.RecordCall('Foo', []);
+    CheckEqual('bar', M.GetReturn('Foo'));
+    M.Verify('Foo').CalledOnce;
+    M.VerifyAll; // 检查所有 setup 的方法都被调用
+  finally
+    M.Free;
+  end;
+end;
+
+procedure TestSnapshot;
+begin
+  // 首次运行自动创建快照，后续对比
+  CheckSnapshot('expected output', '__snapshots__', 'output.txt');
+  // 更新: NEXTPAS_UPDATE_SNAPSHOTS=1 ./my_tests
+end;
+
+var
+  Suite: TTestSuite;
+begin
+  Suite := TTestSuite.Create('my-tests');
+  Suite.Test('addition', @TestAddition);
+  Suite.Test('string', @TestString);
+  Suite.Test('float', @TestFloat);
+  Suite.Test('exception', @TestException);
+  Suite.Test('mock', @TestMock);
+  Suite.Test('snapshot', @TestSnapshot);
+  if not Suite.Run then
+    Halt(1);
+end.
+```
+
 ### TTestSuite 是 mutable record
 
 `TTestSuite` 是 Pascal record（值类型），`With*` 方法返回新值：
@@ -111,12 +188,16 @@ Suite.Test('name', TestProc);
 
 ```
 core/src/nextpas.core.test.pas              ← Facade（re-export）
+core/src/nextpas.core.test.fwd.expect.inc   ← Expect 转发实现
+core/src/nextpas.core.test.fwd.check.inc    ← Check 转发实现
+core/src/nextpas.core.test.fwd.output.inc   ← Output/Config 转发实现
+core/src/nextpas.core.test.fwd.other.inc    ← Base/Discovery/Mock/Helpers 转发实现
 core/src/nextpas.core.test.base.pas         ← 基础类型
 core/src/nextpas.core.test.config.pas       ← TTestConfig + IOutputSink + ANSI
-core/src/nextpas.core.test.check.pas        ← Check* 断言
+core/src/nextpas.core.test.check.pas        ← Check* 断言 + 快照测试
 core/src/nextpas.core.test.expect.pas       ← IExpectation 流式断言
 core/src/nextpas.core.test.discovery.pas    ← RTTI 测试发现
-core/src/nextpas.core.test.mock.pas         ← TMock
+core/src/nextpas.core.test.mock.pas         ← TMock + VerifyAll
 core/src/nextpas.core.test.runner.pas       ← TTestSuite/TTestRunner + 批次调度
 core/src/nextpas.core.test.runner.cli.pas   ← CLI 参数解析 (FromArgs/ApplyCLIArgs)
 core/src/nextpas.core.test.runner.parallel.pas ← 超时+并行 worker
