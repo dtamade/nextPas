@@ -33,8 +33,8 @@ focused: hygiene
 	@test -d "$(FOCUS)" || { echo "FOCUS directory not found: $(FOCUS)" >&2; exit 1; }
 	@focus_path=$$(CDPATH= cd -- "$(FOCUS)" && pwd -P); core_tests_path=$$(CDPATH= cd -- core/tests && pwd -P); case "$$focus_path/" in "$$core_tests_path"/*) ;; *) echo "FOCUS must be under core/tests/" >&2; exit 1; esac
 	@test -f "$(FOCUS)/Makefile" || { echo "FOCUS Makefile not found: $(FOCUS)/Makefile" >&2; exit 1; }
-	@awk -v target=clean 'BEGIN { found = 0 } /^[^#[:space:]][^:]*:/ { split($$0, parts, ":"); n = split(parts[1], names, /[[:space:]]+/); for (i = 1; i <= n; i++) if (names[i] == target) found = 1 } END { exit found ? 0 : 1 }' "$(FOCUS)/Makefile" || { echo "FOCUS Makefile must expose a clean target: $(FOCUS)" >&2; exit 1; }
-	@awk -v target=test 'BEGIN { found = 0 } /^[^#[:space:]][^:]*:/ { split($$0, parts, ":"); n = split(parts[1], names, /[[:space:]]+/); for (i = 1; i <= n; i++) if (names[i] == target) found = 1 } END { exit found ? 0 : 1 }' "$(FOCUS)/Makefile" || { echo "FOCUS Makefile must expose a test target: $(FOCUS)" >&2; exit 1; }
+	@$(MAKE) -C "$(FOCUS)" --dry-run clean >/dev/null 2>&1 || { echo "FOCUS Makefile must expose a clean target: $(FOCUS)" >&2; exit 1; }
+	@$(MAKE) -C "$(FOCUS)" --dry-run test >/dev/null 2>&1 || { echo "FOCUS Makefile must expose a test target: $(FOCUS)" >&2; exit 1; }
 	$(MAKE) -C "$(FOCUS)" clean
 	$(MAKE) -C "$(FOCUS)" test
 	$(MAKE) hygiene
