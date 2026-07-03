@@ -119,12 +119,12 @@ function RunTestWithTimeout_internal(AProc: TTestProc; AClosure: TTestClosure;
   ATimeoutMs: Integer; const AConfig: TTestConfig;
   out AStatus: TTestStatus; out AMsg: string): Boolean;
 { Returns True if test completed (pass/fail/error/skip).
-  Returns False if timed out (AStatus = tsError, AMsg = 'timeout'). }
+  Returns False if timed out (AStatus = tsError, AMsg = 'timeout').
+  C-02: Uses platform_thread_timedjoin instead of polling for zero CPU waste. }
 var
   LRec: PTimeoutRec;
   LHandle: TPlatformThreadHandle;
   LRetVal: Pointer;
-  LElapsed: Integer;
   LJoinTimeoutMs: Int64;
   LJoinResult: Int32;
 begin
@@ -137,39 +137,18 @@ begin
 
   platform_thread_create(LHandle, @TimeoutWorker, LRec);
 
-  { Poll with sleep — cross-platform via platform_thread_sleep_ns }
-  LElapsed := 0;
-  repeat
-    platform_thread_sleep_ns(10 * 1000 * 1000); { 10 ms }
-    Inc(LElapsed, 10);
-    { R6-07: ReadBarrier ensures we see the worker's writes to Status/ErrorMsg
-      when Done becomes true. On weakly-ordered architectures (ARM/AArch64)
-      the worker's WriteBarrier pairs with this ReadBarrier. }
-    ReadBarrier;
-  until (LElapsed >= ATimeoutMs) or LRec^.Done;
+  { C-02: Use timed-join instead of poll loop — blocks efficiently via
+    pthread_timedjoin_np, no CPU waste, instant detection on completion. }
+  LJoinResult := platform_thread_timedjoin(LHandle, ATimeoutMs, LRetVal);
 
-  { Secondary join timeout: after detecting a timeout, give the worker extra
-    time to finish cleanup. Use max(2x original, 5s) to handle short timeouts
-    where the worker might just be slow, not truly stuck. }
-  if LRec^.Done then
-    LJoinTimeoutMs := 5000  { normal path: 5s grace for thread teardown }
-  else
-  begin
-    LJoinTimeoutMs := Int64(ATimeoutMs) * 2;
-    if LJoinTimeoutMs < 5000 then
-      LJoinTimeoutMs := 5000;
-  end;
-
-  LJoinResult := platform_thread_timedjoin(LHandle, LJoinTimeoutMs, LRetVal);
-
-  { R6-07: ReadBarrier before reading results — join provides happens-before
-    on success path, but on failure path we need an explicit barrier to see
+  { ReadBarrier before reading results — join provides happens-before on
+    success path, but on timeout path we need an explicit barrier to see
     the worker's writes to Status/ErrorMsg/Done. }
   ReadBarrier;
 
   if LJoinResult = 0 then
   begin
-    { Thread finished — read results and dispose }
+    { Thread finished within timeout — read results and dispose }
     AStatus := LRec^.Status;
     AMsg := LRec^.ErrorMsg;
     if not LRec^.Done then
@@ -179,48 +158,44 @@ begin
       AMsg := 'worker exited without completing';
       Result := False;
     end
-    else if LElapsed >= ATimeoutMs then
-    begin
-      { Worker finished, but we detected a timeout first.
-        Report as timeout — the test was too slow. }
-      AStatus := tsError;
-      AMsg := 'test timed out after ' + IntToStr(ATimeoutMs) + 'ms';
-      Result := False;
-    end
     else
       Result := True;
-  end
-  else if LRec^.Done then
-  begin
-    { Worker finished (Done=True) but timed join didn't complete —
-      extremely unlikely; treat as success with potential stale data.
-      Dispose LRec here: worker is done so no concurrent access,
-      and LJoinResult ≠ 0 means the Dispose below won't run. }
-    AStatus := LRec^.Status;
-    AMsg := LRec^.ErrorMsg;
-    Result := True;
     Dispose(LRec);
-    { Detach to prevent handle leak — worker is done, thread is exiting }
-    platform_thread_detach(LHandle);
-    ResolveErrSink(AConfig).WriteLn(
-      'WARNING: timed-join failed after worker completed - handle detached');
   end
   else
   begin
-    { Truly stuck worker — timed join also expired. Detach and warn.
-      LRec will leak because we can't safely access it after detach. }
-    AStatus := tsError;
-    AMsg := 'test timed out after ' + IntToStr(ATimeoutMs) + 'ms';
-    Result := False;
-    Inc(GTimeoutLeakCount);
-    platform_thread_detach(LHandle);
-    ResolveErrSink(AConfig).WriteLn(
-      '  ' + AnsiYellow('WARNING', AConfig) + ': test timed out after ' +
-      IntToStr(ATimeoutMs) +
-      'ms - worker thread stuck, detached (LRec leaked)');
+    { Timed out — give worker extra time to finish cleanup.
+      Use max(2x original, 5s) for short timeouts. }
+    LJoinTimeoutMs := Int64(ATimeoutMs) * 2;
+    if LJoinTimeoutMs < 5000 then
+      LJoinTimeoutMs := 5000;
+
+    LJoinResult := platform_thread_timedjoin(LHandle, LJoinTimeoutMs, LRetVal);
+    ReadBarrier;
+
+    if (LJoinResult = 0) or LRec^.Done then
+    begin
+      { Worker finished during grace period — test was too slow }
+      AStatus := tsError;
+      AMsg := 'test timed out after ' + IntToStr(ATimeoutMs) + 'ms';
+      Result := False;
+      Dispose(LRec);
+    end
+    else
+    begin
+      { Truly stuck worker — timed join also expired. Detach and warn.
+        LRec will leak because we can't safely access it after detach. }
+      AStatus := tsError;
+      AMsg := 'test timed out after ' + IntToStr(ATimeoutMs) + 'ms';
+      Result := False;
+      Inc(GTimeoutLeakCount);
+      platform_thread_detach(LHandle);
+      ResolveErrSink(AConfig).WriteLn(
+        '  ' + AnsiYellow('WARNING', AConfig) + ': test timed out after ' +
+        IntToStr(ATimeoutMs) +
+        'ms - worker thread stuck, detached (LRec leaked)');
+    end;
   end;
-  if LJoinResult = 0 then
-    Dispose(LRec);
 end;
 
 function RunTestWithTimeout(AProc: TTestProc; ATimeoutMs: Integer;
