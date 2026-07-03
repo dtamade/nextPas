@@ -12,6 +12,35 @@ unit nextpas.core.sse;
 
 ---
 
+## 关键类型
+
+```pascal
+  type
+    TSseEvent = nextpas.core.sse.base.TSseEvent;
+    TSseEventArray = nextpas.core.sse.base.TSseEventArray;
+    TSseParser = nextpas.core.sse.parser.TSseParser;
+  function SseParseAll(const AInput: string): TSseEventArray;
+  function TrySseParseAll(const AInput: string; out AEvents: TSseEventArray): Boolean;
+  function SseParseOne(const AInput: string; out AEvent: TSseEvent): Boolean;
+  function SseParseAll(const AInput: string): TSseEventArray;
+```
+
+---
+
+## 线程安全
+
+- 值类型 record 为天然线程安全
+- 接口类型按具体实现确定
+
+---
+
+## 依赖关系
+
+- 依赖: base
+- 被依赖: 上层模块
+
+---
+
 ## 变更记录
 
 | 日期 | 变更 | 原因 |

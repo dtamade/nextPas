@@ -12,6 +12,35 @@ unit nextpas.core.path;
 
 ---
 
+## 关键类型
+
+```pascal
+  function PathJoin(const ABase, AChild: string): string;
+  function PathJoin3(const A, B, C: string): string;
+  function PathDir(const APath: string): string;
+  function PathBase(const APath: string): string;
+  procedure PathSplit(const APath: string; out ADir, ABase: string);
+  function PathExt(const APath: string): string;
+  function PathChangeExt(const APath, ANewExt: string): string;
+  function PathIsAbsolute(const APath: string): Boolean;
+```
+
+---
+
+## 线程安全
+
+- 值类型 record 为天然线程安全
+- 接口类型按具体实现确定
+
+---
+
+## 依赖关系
+
+- 依赖: base
+- 被依赖: 上层模块
+
+---
+
 ## 变更记录
 
 | 日期 | 变更 | 原因 |

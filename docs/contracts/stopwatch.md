@@ -12,6 +12,35 @@ unit nextpas.core.stopwatch;
 
 ---
 
+## 关键类型
+
+```pascal
+  type
+    TLapArray = array of TDuration;
+    TStopwatch = record
+      procedure EnsureTick;
+      function CurrentTicks: UInt64;
+      function TicksToNs(ATicks: UInt64): Int64;
+      procedure Start;
+      procedure Stop;
+```
+
+---
+
+## 线程安全
+
+- 值类型 record 为天然线程安全
+- 接口类型按具体实现确定
+
+---
+
+## 依赖关系
+
+- 依赖: base
+- 被依赖: 上层模块
+
+---
+
 ## 变更记录
 
 | 日期 | 变更 | 原因 |
