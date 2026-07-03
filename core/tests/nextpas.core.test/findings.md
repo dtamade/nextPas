@@ -39,6 +39,7 @@
 - **风险**: 如果用户在 `Add()` 后修改原始 suite 的 Setup/Teardown，runner 看不到变更（或反过来）。当前用法是"注册完就 Add"所以无实际 bug，但缺少防御性文档。
 - **建议**: 在 TTestSuite 声明处加注释说明值语义和 Add() 的深拷贝行为；或改为 class 类型。
 - **对标**: Go testing.T 是指针语义；Rust TestDesc 是 clone-safe struct。
+- **状态**: ⏭️ **设计决策** — record 语义已通过 Add() 深拷贝保护；改为 class 需要大规模重构所有消费者
 
 #### A-03 [P2] Config 零值歧义 — 无法显式设置 0
 - **位置**: `nextpas.core.test.config.pas:173-204` (ResolveConfig)
@@ -46,12 +47,14 @@
 - **风险**: 低。当前所有 0 值语义恰好与 "未设置" 一致。
 - **建议**: 将剩余数字字段也加入 GExplicit 跟踪，或改为 `Integer = -1` 表示未设置。
 - **对标**: Go 用 zero-value 语义（0 = 无超时）；Rust 用 `Option<u64>`。
+- **状态**: ⏭️ **设计决策** — 当前 0 值语义与 "未设置" 一致，无实际 bug；GExplicit 扩展需改 22 个 setter
 
 #### A-04 [P3] discovery.pas 的 VMT 偏移硬编码 — FPC 版本耦合
 - **位置**: `nextpas.core.test.discovery.pas:89-93` (CEntrySize/CCountSize 常量)
 - **描述**: VMT method table 的布局 (count=4字节, entry=16字节) 基于 FPC trunk 的 `objpas.inc` 实现。如果 FPC 改变 VMT 格式，此模块会静默损坏。
 - **风险**: 极低。FPC VMT 格式多年未变，且有 `vmtMethodTable` 常量保证偏移正确。
 - **建议**: 添加注释引用 FPC 源码位置 (`objpas.inc tmethodnametable`) 和测试的 FPC 版本。
+- **状态**: ⏭️ **FPC 限制** — VMT 格式由 FPC 控制，无法在用户代码层面修复
 
 ---
 
@@ -76,30 +79,35 @@
 - **描述**: 每次 `GetReturn` 都从后向前线性扫描 FSetups 数组。如果一个 mock 有大量 setup（>50），每次调用都是 O(n)。
 - **风险**: 极低。Mock 通常只有 1-10 个 setup。
 - **建议**: 无需修改。如未来需要，可改为 hash map 或在 `Setup()` 时构建索引。
+- **状态**: ⏭️ **设计如此** — 1-10 项 setup 线性扫描比 HashMap 更快
 
 #### C-04 [P2] GAnsiEnabled/GAnsiChecked 无同步保护
 - **位置**: `nextpas.core.test.output.pas:175-176`
 - **描述**: 注释声明 "SetAnsiEnabled must be called BEFORE spawning worker threads" 且 "No synchronization needed for Boolean reads under x86-64 TSO"。在 ARM/AArch64 等弱内存序架构上，Boolean 读可能看到 stale 值。
 - **风险**: 极低。ANSI 状态在程序启动时设置一次，之后不再变更。且目标平台主要是 x86-64。
 - **建议**: 如需 ARM 支持，加 `ReadBarrier` 或改为 `AtomicBoolean`。
+- **状态**: ⏭️ **设计决策** — 启动时一次性设置，x86-64 TSO 保证可见性
 
 #### C-05 [P2] ExpectFail 不捕获非 EAssertionFailed 异常
 - **位置**: `nextpas.core.test.helpers.pas:44-56`
 - **描述**: `ExpectFail` 只捕获 `EAssertionFailed`，其他异常（如 EConvertError）会传播到调用者。这意味着如果被测代码抛出非断言异常，测试会以 "unexpected error" 失败而非 "expected assertion failure"。
 - **风险**: 低。当前用法都是验证断言失败，非断言异常确实应该传播。
 - **建议**: 可选地添加 `ExpectError` 变体捕获所有异常，或在 `ExpectFail` 中加 `on E: Exception do` 分支并输出更清晰的诊断。
+- **状态**: ⏭️ **设计决策** — 非断言异常传播是正确的语义（区分 "断言失败" vs "意外错误"）
 
 #### C-06 [P3] RunWithResult 方法 ~380 行 — 嵌套深度达 5 层
 - **位置**: `nextpas.core.test.runner.pas:1173-1551`
 - **描述**: 方法包含 test filter、short mode、bench skip、ekSkipped check、BeforeEach、6 种 entry kind 分支、retry loop、repeat loop、AfterEach、EachCleanups、EmitResult、FailFast/MaxFailures check。嵌套深度达 5 层。
 - **风险**: 可维护性问题，非正确性问题。
 - **建议**: 提取 `RunSingleTest(LEntry, LConfig)` helper 处理单个测试的完整生命周期。
+- **状态**: ⏭️ **推迟** — 重构风险高（需重写 380 行逻辑），当前可维护性可接受
 
 #### C-07 [P3] TBufferSink.GetOutput 使用 Move() 拼接 — 手动内存管理
 - **位置**: `nextpas.core.test.config.pas:514-551`
 - **描述**: `GetOutput` 手动计算总长度并用 `Move()` 拼接字符串。逻辑正确但代码密度高，容易出 off-by-one 错误。
 - **风险**: 极低。已有测试覆盖。
 - **建议**: 可改为 `TBufStringBuilder`（output.pas 已使用）简化。
+- **状态**: ⏭️ **推迟** — 已有测试覆盖，改动无收益
 
 ---
 
@@ -166,12 +174,14 @@
 - **位置**: `nextpas.core.test.config.pas:222-364`
 - **描述**: 每个 SetDefault* 函数都是相同的模式：赋值 + Include(GExplicit, ckXxx)。22 个函数 × 4 行 = 88 行样板代码。
 - **建议**: 可用代码生成或宏减少样板。但 Pascal 没有宏，且显式函数对 IDE 跳转友好，所以保持现状也可接受。
+- **状态**: ⏭️ **设计决策** — 显式函数对 IDE 跳转友好，Pascal 无宏，保持现状
 
 #### E-02 [P2] Test() 12 种重载 — 注册入口过多
 - **位置**: `nextpas.core.test.runner.pas:61-82`
 - **描述**: TTestSuite.Test 有 12 种重载（Proc/Closure × {plain, Retry, Tags, DisplayName+Tags}），加上 TestRepeat/TestSubtest/TestTable/ShouldFail/ShortSkip/Skip/Bench，共 19 种注册方法。
 - **风险**: 用户选择困难；新重载的添加呈组合爆炸。
 - **建议**: 可引入 builder pattern（`Suite.Test('name', proc).WithTag('x').Retry(3)`）收敛重载数量。但当前 API 已稳定且有测试覆盖，改动成本高于收益。
+- **状态**: ⏭️ **设计决策** — API 已稳定，builder pattern 改动成本高于收益
 
 #### E-03 [P3] output.pas 中 FormatFloat 的 locale 依赖已修复但未回归测试
 - **位置**: `nextpas.core.test.output.pas:518` (FormatBenchLine 使用 FormatFloat)
@@ -193,6 +203,7 @@
   - `parallel.pas` 的 TimeoutWorker 有详细注释
   - `mock.pas` 公共 API 注释完整，内部实现注释稀疏
 - **建议**: RunWithResult 的 retry/repeat 逻辑、AfterEach 失败计数调整等关键路径应补充注释。
+- **状态**: ⏭️ **渐进改进** — 关键路径已补充注释（retry loop、FailFast/MaxFailures），其余可逐步补充
 
 ---
 
@@ -202,26 +213,31 @@
 - **描述**: Go 1.10+ 支持 `go test` 自动缓存未变更的测试结果。nextpas.core.test 无此功能，每次运行都执行全部测试。
 - **影响**: 大型测试套件的 CI 反馈时间。
 - **建议**: 可通过源文件 hash + 结果 hash 实现简单缓存。优先级低。
+- **状态**: ⏭️ **大型特性** — 需要独立设计和实施，建议 v7.0+
 
 #### B-02 [P2] 缺少 fuzzing 支持
 - **描述**: Go 1.18+ 内置 fuzzing (`testing.F`)。Rust 有 `cargo-fuzz` / `proptest`。nextpas.core.test 无 property-based testing。
 - **影响**: 无法自动发现边界条件 bug。
 - **建议**: 可在 v7.0 考虑添加 `Fuzz()` API，基于随机输入生成 + shrinking。
+- **状态**: ⏭️ **大型特性** — 需要独立设计，建议 v7.0+
 
 #### B-03 [P3] 无并行测试 opt-in 机制
 - **描述**: Go 的 `t.Parallel()` 让测试显式 opt-in 并行；nextpas.core.test 的 `RunParallel` 将所有测试并行执行，无 per-test 控制。
 - **影响**: 有共享状态的测试在并行模式下可能 flaky。
 - **建议**: 可添加 `Test('name', proc).Sequential()` 标记，让并行 runner 跳过这些测试。
+- **状态**: ⏭️ **设计扩展** — 当前 RunParallel 是全量并行，per-test 控制需 API 扩展
 
 #### B-04 [P3] 无 test binary 编译缓存
 - **描述**: Rust 的 `cargo test` 编译测试二进制后缓存，未变更时不重编。nextpas.core.test 每次 `make test` 都重编译。
 - **影响**: FPC 编译速度快（秒级），影响较小。
 - **建议**: 可在 Makefile 中添加 `.ppu` 时间戳检查。
+- **状态**: ⏭️ **构建系统改进** — FPC 编译秒级，优先级极低
 
 #### B-05 [P3] 无 snapshot testing 支持
 - **描述**: Rust 的 `insta` crate、Jest 的 snapshot testing 允许自动更新 golden files。nextpas.core.test 的 diagnostics 套件手动对比 stderr snapshot。
 - **影响**: snapshot 更新需手动操作。
 - **建议**: 可添加 `CheckSnapshot(name, actual)` 断言，自动对比 `tests/snapshots/<name>.txt`，`--update-snapshots` 标志自动更新。
+- **状态**: ⏭️ **大型特性** — 当前 diagnostics 手动对比已足够，snapshot 自动更新需独立设计
 
 ---
 
@@ -236,7 +252,17 @@
 
 ## 结论
 
-`nextpas.core.test` **无 P0 阻断项**。模块在正确性、资源安全、并发安全方面均表现良好。4 个 P1 项均为非阻塞性改进（runner 拆分、timeout 轮询优化、LRec 泄漏缓解、NaN/边界测试补全）。建议优先处理 P1 测试覆盖补全 (T-01)，其次考虑 P2 项的渐进改进。
+`nextpas.core.test` **无 P0 阻断项**。模块在正确性、资源安全、并发安全方面均表现良好。
+
+**全部 P1 项已修复**：runner 拆分、timeout 轮询优化、LRec 泄漏监控、NaN/边界测试补全。
+
+**全部可行动 P2/P3 测试覆盖已修复**：T-02~T-08 全部补全，E-03 locale 回归、E-04 seed=0 修复。
+
+**剩余项为设计决策保留或大型特性规划**：
+- 设计决策 (6项): A-02 mutable record、A-03 Config 零值、C-03 Mock O(n)、C-04 ANSI 无同步、C-05 ExpectFail 范围、E-01/E-02 API 设计
+- 推迟 (3项): C-06 RunWithResult 复杂度、C-07 TBufferSink、E-05 注释密度
+- 大型特性 (5项): B-01~B-05 (test cache、fuzzing、parallel opt-in、compile cache、snapshot testing)
+- FPC 限制 (1项): A-04 VMT 偏移
 
 ---
 
