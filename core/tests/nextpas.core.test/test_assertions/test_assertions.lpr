@@ -376,6 +376,24 @@ begin
   ExpectFail(procedure begin CheckNotNearRel(1.0, Sqrt(-1.0), 1e-9); end, 'NaN');
 end;
 
+{ F-06: CheckSnapshot }
+
+procedure TestCheckSnapshotCreateAndMatch;
+const
+  LSnapDir = '/tmp/np_snap_a';
+begin
+  CheckSnapshot('hello world', LSnapDir, 'test1.txt');
+  CheckSnapshot('hello world', LSnapDir, 'test1.txt');
+end;
+
+procedure TestCheckSnapshotMismatch;
+const
+  LSnapDir = '/tmp/np_snap_b';
+begin
+  CheckSnapshot('hello world', LSnapDir, 'test2.txt');
+  ExpectFail(procedure begin CheckSnapshot('goodbye world', LSnapDir, 'test2.txt'); end, 'mismatch');
+end;
+
 { R6-40: Empty string semantics for Contains/StartsWith/EndsWith }
 
 procedure TestR640CheckContainsEmptyNeedle;
@@ -1036,6 +1054,10 @@ begin
   LSuite.Test('NotNearRel pass',            @TestCheckNotNearRelPass);
   LSuite.Test('NotNearRel fail',            @TestCheckNotNearRelFail);
   LSuite.Test('NotNearRel NaN',             @TestCheckNotNearRelNaN);
+
+  { F-06: Snapshot testing }
+  LSuite.Test('Snapshot create+match',     @TestCheckSnapshotCreateAndMatch);
+  LSuite.Test('Snapshot mismatch',         @TestCheckSnapshotMismatch);
 
   if not LSuite.Run then
   begin

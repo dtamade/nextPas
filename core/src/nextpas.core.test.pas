@@ -167,6 +167,8 @@ procedure Fail(const AMessage: string);
 procedure FailUnexpected(const E: Exception);
 procedure Skip(const AReason: string = '');
 procedure SleepMs(AMilliseconds: Integer);
+procedure CheckSnapshot(const AActual: string;
+  const ASnapshotDir, ASnapshotName: string);
 
 { ── Re-exported from test.base (stack trace) ─────────────────────────────── }
 
@@ -475,6 +477,10 @@ begin nextpas.core.test.check.Skip(AReason); end;
 
 procedure SleepMs(AMilliseconds: Integer);
 begin nextpas.core.test.base.SleepMs(AMilliseconds); end;
+
+procedure CheckSnapshot(const AActual: string;
+  const ASnapshotDir, ASnapshotName: string);
+begin nextpas.core.test.check.CheckSnapshot(AActual, ASnapshotDir, ASnapshotName); end;
 
 { ── Forward to test.base (stack trace) ───────────────────────────────────── }
 

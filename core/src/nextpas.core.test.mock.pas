@@ -139,6 +139,8 @@ type
     procedure Reset;
     { Clear all recorded calls AND setup configurations }
     procedure ResetAll;
+    { Get names of all set-up methods }
+    function GetSetupMethodNames: specialize TArray<string>;
   end;
 
 { ── Mock Object ───────────────────────────────────────────────────────────── }
@@ -158,6 +160,10 @@ type
     { Verify a method was called as expected.
       Example: Mock.Verify('Foo').CalledExactly(2); }
     function Verify(const AMethodName: string): IMockVerify;
+
+    { Verify all set-up methods were called at least once.
+      Fails with a list of uncalled methods if any setup was never invoked. }
+    procedure VerifyAll;
 
     { Record a method call (called by generated stubs or manual recording).
       Example: Mock.RecordCall('Foo', ['arg1', 'arg2']); }
@@ -523,6 +529,16 @@ begin
   FCallOrder := nil;
 end;
 
+function TMockState.GetSetupMethodNames: specialize TArray<string>;
+var
+  I, LCount: Integer;
+begin
+  LCount := Length(FSetups);
+  SetLength(Result, LCount);
+  for I := 0 to LCount - 1 do
+    Result[I] := FSetups[I].MethodName;
+end;
+
 { ── IMockSetup implementation ──────────────────────────────────────────────── }
 
 type
@@ -619,11 +635,23 @@ end;
 
 procedure TMockVerifier.CheckCount(AActual, AExpected: Integer;
   const AQualifier: string; APasses: Boolean);
+var
+  LHistory: string;
+  I: Integer;
 begin
   if not APasses then
+  begin
+    LHistory := '';
+    if Length(FState.Calls) > 0 then
+    begin
+      LHistory := '; actual calls:';
+      for I := 0 to High(FState.Calls) do
+        LHistory := LHistory + ' ' + FState.Calls[I].MethodName;
+    end;
     InternalFail('Expected ' + FMethod + ' called ' + AQualifier + ' ' +
       IntToStr(AExpected) + ' time(s), but was called ' +
-      IntToStr(AActual) + ' time(s)');
+      IntToStr(AActual) + ' time(s)' + LHistory);
+  end;
 end;
 
 procedure TMockVerifier.CalledExactly(ACount: Integer);
@@ -775,6 +803,25 @@ end;
 function TMock.Verify(const AMethodName: string): IMockVerify;
 begin
   Result := TMockVerifier.Create(FState, AMethodName);
+end;
+
+procedure TMock.VerifyAll;
+var
+  LNames: specialize TArray<string>;
+  LUncalled: string;
+  I: Integer;
+begin
+  LNames := FState.GetSetupMethodNames;
+  LUncalled := '';
+  for I := 0 to High(LNames) do
+    if FState.CallCount(LNames[I]) = 0 then
+    begin
+      if LUncalled <> '' then
+        LUncalled := LUncalled + ', ';
+      LUncalled := LUncalled + LNames[I];
+    end;
+  if LUncalled <> '' then
+    InternalFail('VerifyAll: set-up methods never called: ' + LUncalled);
 end;
 
 procedure TMock.RecordCall(const AMethodName: string;

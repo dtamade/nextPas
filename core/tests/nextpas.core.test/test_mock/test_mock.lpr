@@ -1040,6 +1040,70 @@ begin
   end;
 end;
 
+{ F-05: VerifyAll }
+
+procedure TestVerifyAllPass;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.Setup('Foo').Returns('bar');
+    LM.Setup('Baz').Returns('qux');
+    LM.RecordCall('Foo', []);
+    LM.RecordCall('Baz', []);
+    LM.VerifyAll; { should not fail }
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestVerifyAllFailUncalled;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.Setup('Foo').Returns('bar');
+    LM.Setup('Baz').Returns('qux');
+    LM.RecordCall('Foo', []);
+    { Baz was set up but never called — should fail }
+    ExpectFail(procedure begin LM.VerifyAll; end, 'Baz');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestVerifyAllNoSetups;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    { No setups at all — VerifyAll should pass vacuously }
+    LM.VerifyAll;
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestVerifyErrorMessage;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.Setup('Foo').Returns('bar');
+    LM.Setup('Baz').Returns('qux');
+    LM.RecordCall('Foo', []);
+    LM.RecordCall('Baz', []);
+    { Verify wrong count — error message should include actual calls }
+    ExpectFail(procedure begin LM.Verify('Foo').CalledExactly(5); end, 'actual calls');
+  finally
+    LM.Free;
+  end;
+end;
+
 
 { ── Register Tests ───────────────────────────────────────────────────────────── }
 
@@ -1142,6 +1206,12 @@ begin
   { F-07: Mock.ResetAll }
   Suite.Test('TestMockResetAllClearsSetups', @TestMockResetAllClearsSetups);
   Suite.Test('TestMockResetCallsKeepsSetups', @TestMockResetCallsKeepsSetups);
+
+  { F-05: VerifyAll + error messages }
+  Suite.Test('TestVerifyAllPass', @TestVerifyAllPass);
+  Suite.Test('TestVerifyAllFailUncalled', @TestVerifyAllFailUncalled);
+  Suite.Test('TestVerifyAllNoSetups', @TestVerifyAllNoSetups);
+  Suite.Test('TestVerifyErrorMessage', @TestVerifyErrorMessage);
 
   Runner := TTestRunner.Create('mock-tests');
   Runner.Add(Suite);

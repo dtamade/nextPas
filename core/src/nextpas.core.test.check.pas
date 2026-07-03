@@ -94,10 +94,20 @@ procedure Fail(const AMessage: string);
 procedure FailUnexpected(const E: Exception);
 procedure Skip(const AReason: string = '');
 
+{ ── Snapshot Testing ──────────────────────────────────────────────────────── }
+
+procedure CheckSnapshot(const AActual: string;
+  const ASnapshotDir, ASnapshotName: string);
+{ Compare AActual against a saved snapshot file at ASnapshotDir/ASnapshotName.
+  If the file does not exist, creates it (first-run auto-approval).
+  If the file exists and differs, fails with a diff message.
+  Set NEXTPAS_UPDATE_SNAPSHOTS=1 environment variable to auto-update. }
+
 implementation
 
 uses
-  Math; { IsNan for Double comparison NaN guards }
+  Math,       { IsNan for Double comparison NaN guards }
+  SysUtils;   { GetEnvironmentVariable for snapshot update flag }
 
 procedure FailWithDefault(const AMessage, ADefaultMsg: string);
 begin
@@ -619,6 +629,81 @@ end;
 procedure Skip(const AReason: string);
 begin
   InternalSkip(AReason);
+end;
+
+{ ── Snapshot Testing ──────────────────────────────────────────────────────── }
+
+function ReadFileContents(const APath: string; out AContents: string): Boolean;
+var
+  F: TextFile;
+  LLine: string;
+begin
+  Result := False;
+  AContents := '';
+  Assign(F, APath);
+  {$I-}
+  Reset(F);
+  {$I+}
+  if IOResult <> 0 then
+    Exit;
+  while not Eof(F) do
+  begin
+    ReadLn(F, LLine);
+    if AContents <> '' then
+      AContents := AContents + #10;
+    AContents := AContents + LLine;
+  end;
+  Close(F);
+  Result := True;
+end;
+
+procedure WriteFileContents(const APath, AContents: string);
+var
+  F: TextFile;
+begin
+  Assign(F, APath);
+  {$I-}
+  Rewrite(F);
+  {$I+}
+  if IOResult <> 0 then
+    InternalFail('CheckSnapshot: cannot write ' + APath);
+  Write(F, AContents);
+  Flush(F);
+  Close(F);
+end;
+
+procedure CheckSnapshot(const AActual: string;
+  const ASnapshotDir, ASnapshotName: string);
+var
+  LPath, LExisting, LUpdateEnv: string;
+  LShouldUpdate: Boolean;
+begin
+  LPath := ASnapshotDir + '/' + ASnapshotName;
+  LShouldUpdate := GetEnvironmentVariable('NEXTPAS_UPDATE_SNAPSHOTS') = '1';
+  if ReadFileContents(LPath, LExisting) then
+  begin
+    if LShouldUpdate then
+    begin
+      WriteFileContents(LPath, AActual);
+      Exit;
+    end;
+    if AActual <> LExisting then
+    begin
+      { Show first difference for debugging }
+      InternalFail('Snapshot mismatch: ' + LPath +
+        ' (set NEXTPAS_UPDATE_SNAPSHOTS=1 to update)' + #10 +
+        StringDiff(LExisting, AActual));
+    end;
+  end
+  else
+  begin
+    { First run — create snapshot directory and file }
+    {$I-}
+    MkDir(ASnapshotDir);
+    {$I+}
+    { Ignore MkDir error if directory already exists }
+    WriteFileContents(LPath, AActual);
+  end;
 end;
 
 end.
