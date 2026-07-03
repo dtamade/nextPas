@@ -10,6 +10,7 @@ uses
   nextpas.core.system.typinfo,
   nextpas.core.base,
   nextpas.core.mem.intf,
+  nextpas.core.mem.allocator.base,
   nextpas.core.collections.base,
   nextpas.core.collections.hashmap.base,
   nextpas.core.collections.hashmap.intf,

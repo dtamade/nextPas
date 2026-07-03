@@ -824,8 +824,7 @@ begin
     Exit;
   if not StringReturnFunctionNameFromNode(ANode, AFuncName) then
     Exit;
-  Result := SameText(FuncNode.Text, AFuncName) and
-    (not HasOverload(AFuncName));
+  Result := SameText(FuncNode.Text, AFuncName);
 end;
 
 function TSemanticAnalyzer.IsSupportedOwnedStringReturnConcatOperand(
@@ -1025,6 +1024,36 @@ begin
   if (ANode.NodeKind = gnkProcedureDecl) or
     (ANode.NodeKind = gnkFunctionDecl) then
     Exit;
+
+  { Concatenation (+) is a safe context: temporaries live for the entire
+    expression evaluation. This handles patterns like FormatFloat(...) + 'x'
+    or 'a' + F() + 'b' where the owned string return is used in a concatenation. }
+  if (ANode.NodeKind = gnkBinaryExpression) and (ANode.Text = '+') then
+  begin
+    for I := 0 to ANode.ChildCount - 1 do
+    begin
+      Child := ANode.ChildAt(I);
+      if Child = nil then Continue;
+      if NodeConsumesOwnedStringReturnDeferred(Child, True) then
+        Exit(True);
+    end;
+    Exit(False);
+  end;
+
+  { Set constructors [...] are safe contexts: temporaries live for the entire
+    constructor evaluation. This handles patterns like TextFormat('...', [FormatFloat(...)])
+    where the owned string return is used inside a set constructor. }
+  if ANode.NodeKind = gnkSetConstructor then
+  begin
+    for I := 0 to ANode.ChildCount - 1 do
+    begin
+      Child := ANode.ChildAt(I);
+      if Child = nil then Continue;
+      if NodeConsumesOwnedStringReturnDeferred(Child, True) then
+        Exit(True);
+    end;
+    Exit(False);
+  end;
 
   if (ANode.NodeKind = gnkIfStatement) and (ANode.ChildCount >= 1) then
   begin
