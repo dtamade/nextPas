@@ -17,7 +17,7 @@
 
 | # | 模块 | 问题 | 状态 |
 |---|------|------|------|
-| 3 | test_assertions | 无测试 `CheckRaises(nil, @Proc)` nil ExceptClass 路径 | 待补 |
+| 3 | test_assertions | 无测试 `CheckRaises(nil, @Proc)` nil ExceptClass 路径 | ✅ 已覆盖: TestCheckRaisesNilClass |
 
 ### P2 — 低优先级
 
