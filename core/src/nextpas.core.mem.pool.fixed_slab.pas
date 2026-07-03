@@ -1519,7 +1519,7 @@ end;
 function TFixedSlabPool.Traits: TAllocatorTraits;
 begin
   // 固定 slab：AllocMem 保证零填充，默认非线程安全，提供块大小查询
-  Result.ZeroInitialized := True;   // AllocMem 中有 FillChar
+  Result.ZeroInitialized := True;   // AllocMem 中有 SecureZeroMemory
   Result.ThreadSafe      := False;  // 当前实现未加锁
 end;
 
@@ -1604,11 +1604,12 @@ begin
   if Result <> nil then
   begin
     // 清零实际分配块大小（而非仅请求大小），防止旧数据泄露 (CS-005)
+    // 使用 SecureZeroMemory 防止编译器优化消除清零
     LActualSize := MemSizeOf(Result);
     if LActualSize > 0 then
-      FillChar(Result^, LActualSize, 0)
+      SecureZeroMemory(Result, LActualSize)
     else
-      FillChar(Result^, ASize, 0); // fallback: MemSizeOf 不可用时清零请求大小
+      SecureZeroMemory(Result, ASize); // fallback: MemSizeOf 不可用时清零请求大小
   end;
 end;
 

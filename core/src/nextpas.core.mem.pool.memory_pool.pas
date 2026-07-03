@@ -10,12 +10,21 @@ uses
 
 type
 
-  // 与 TMemAllocator 对齐的通用内存池接口（作为“友好接口”层）
+  // IMemoryPool — 通用内存池接口
   //
-  // 说明：
-  // - 历史原因：IMemoryPool 继承自 IPool，因此会暴露 Acquire/TryAcquire/AcquireN/Release 等“单位”API。
-  // - 语义约定：对可变大小的池（如 slab），Acquire 系列应当分配该池的“最小分配粒度”（而不是 SizeOf(Pointer) 这种无意义的尺寸）。
-  // - 实际使用：可变大小分配请优先使用 GetMem/AllocMem/ReallocMem/FreeMem；Acquire 系列仅用于兼容层/极简场景。
+  // 继承自 IPool，同时暴露固定大小 API (Acquire/Release) 和可变大小 API (GetMem/FreeMem)。
+  //
+  // 语义约定：
+  // - GetMem/FreeMem: 可变大小分配，支持任意大小（池内部可能走 size class 或 fallback）
+  // - Acquire/Release: 固定大小分配，分配该池的”最小分配粒度”
+  // - 实际使用：可变大小分配优先使用 GetMem/AllocMem/ReallocMem/FreeMem
+  // - Acquire 系列仅用于兼容层/极简场景（如只需要固定大小块的场景）
+  //
+  // 与 IAllocator 的关系：
+  // - IMemoryPool 同时实现 IAllocator（通过 GetMem/FreeMem/AllocMem/ReallocMem/Traits）
+  // - 调用方可以将 IMemoryPool 当作 IAllocator 使用
+  //
+  // 实现者：TSlabPool, TFixedSlabPool, TSlabPoolConcurrent 等
   IMemoryPool = interface(IPool)
     ['{6F6B4299-3B29-4C6F-917D-8D6B4B5E0E99}']
     function GetMem(ASize: SizeUInt): Pointer;

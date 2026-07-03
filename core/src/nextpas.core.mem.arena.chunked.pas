@@ -34,7 +34,7 @@ type
    *
    *  非线程安全。多线程环境请自行加锁。
    *}
-  TChunkedArena = class(TInterfacedObject, IArena)
+  TChunkedArena = class(TInterfacedObject, IArena, IArenaCapacity)
   private
     type
       TSegment = record
@@ -92,6 +92,9 @@ type
     function UsedSize: SizeUInt;
     function RemainingSize: SizeUInt;
     function Stats: TArenaStats;
+
+    { IArenaCapacity }
+    function TotalCapacity: SizeUInt;
 
     { Diagnostics }
     function SegmentCount: SizeUInt; inline;
@@ -658,6 +661,20 @@ begin
     Inc(LActiveIdx);
     LSegOffset := 0;
   end;
+
+  {$IFDEF DEBUG}
+  { Poison memory being released by the restore }
+  if FSegments[LActiveIdx].Base <> nil then
+  begin
+    LEnd := FSegments[LActiveIdx].Used;
+    if LSegOffset < LEnd then
+      FillChar(FSegments[LActiveIdx].Base[LSegOffset], LEnd - LSegOffset, MEM_POISON_FREED);
+  end;
+  for LMid := LActiveIdx + 1 to FSegmentCount - 1 do
+    if (FSegments[LMid].Base <> nil) and (FSegments[LMid].Used > 0) then
+      FillChar(FSegments[LMid].Base^, FSegments[LMid].Used, MEM_POISON_FREED);
+  {$ENDIF}
+
   NormalizeState(LActiveIdx, LSegOffset);
 end;
 
@@ -667,6 +684,13 @@ var
 begin
   if FSegmentCount = 0 then
     Exit;
+
+  {$IFDEF DEBUG}
+  { Poison used regions in all segments to detect use-after-reset }
+  for LIdx := 0 to FSegmentCount - 1 do
+    if (FSegments[LIdx].Base <> nil) and (FSegments[LIdx].Used > 0) then
+      FillChar(FSegments[LIdx].Base^, FSegments[LIdx].Used, MEM_POISON_FREED);
+  {$ENDIF}
 
   if not FKeepSegments then
   begin
@@ -713,6 +737,11 @@ begin
   Result.TotalUsed := CurrentUsed;
   Result.PeakUsed := FPeakUsed;
   Result.AllocCount := FTotalAllocs;
+end;
+
+function TChunkedArena.TotalCapacity: SizeUInt;
+begin
+  Result := FTotalSize;
 end;
 
 function TChunkedArena.SegmentCount: SizeUInt;

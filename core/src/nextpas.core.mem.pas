@@ -65,6 +65,7 @@ type
 
   // === Arena 子系统 ===
   IArena = nextpas.core.mem.arena.intf.IArena;
+  IArenaCapacity = nextpas.core.mem.arena.intf.IArenaCapacity;
   TArenaMark = nextpas.core.mem.arena.base.TArenaMark;
   TArenaGrowthKind = nextpas.core.mem.arena.base.TArenaGrowthKind;
   TArenaStats = nextpas.core.mem.arena.base.TArenaStats;
