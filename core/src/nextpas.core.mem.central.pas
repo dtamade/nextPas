@@ -47,6 +47,7 @@ type
     FSlotSize: SizeUInt;
     FSpinLock: SizeUInt;    { Simple test-and-set lock. }
     FInboxHead: Pointer;    { Lock-free inbox: CAS singly linked list. }
+    FLastHitIndex: Int32;   { MRU cache: last span found by FindSpanIndex (-1 = none). }
   end;
 
 {** Initialize a central pool for a given slot size. }
@@ -113,6 +114,7 @@ begin
   APool.FPartialHead := -1;
   APool.FSpinLock := 0;
   APool.FInboxHead := nil;
+  APool.FLastHitIndex := -1;
   SetLength(APool.FEntries, INITIAL_CAPACITY);
   SetLength(APool.FPartialNext, INITIAL_CAPACITY);
 end;
@@ -220,19 +222,36 @@ begin
   Result := LCount;
 end;
 
-{** Find which span owns APtr (by checking address range). }
-function FindSpanIndex(const APool: TCentralPool; APtr: Pointer): Int32;
+{** Find which span owns APtr (by checking address range).
+    Uses MRU cache (FLastHitIndex) for O(1) in the common case
+    where consecutive frees go to the same span. }
+function FindSpanIndex(var APool: TCentralPool; APtr: Pointer): Int32;
 var
   I: Int32;
   LBase: PByte;
   LSize: SizeUInt;
 begin
-  for I := 0 to APool.FEntryCount - 1 do
+  { Check MRU cache first — most frees return to the same span. }
+  I := APool.FLastHitIndex;
+  if (I >= 0) and (I < APool.FEntryCount) and (APool.FEntries[I].FMemory <> nil) then
   begin
     LBase := PByte(APool.FEntries[I].FMemory);
     LSize := APool.FEntries[I].FMemorySize;
     if (PByte(APtr) >= LBase) and (PByte(APtr) < LBase + LSize) then
       Exit(I);
+  end;
+  { Linear scan — update cache on hit. }
+  for I := 0 to APool.FEntryCount - 1 do
+  begin
+    if APool.FEntries[I].FMemory = nil then
+      Continue;
+    LBase := PByte(APool.FEntries[I].FMemory);
+    LSize := APool.FEntries[I].FMemorySize;
+    if (PByte(APtr) >= LBase) and (PByte(APtr) < LBase + LSize) then
+    begin
+      APool.FLastHitIndex := I;
+      Exit(I);
+    end;
   end;
   Result := -1;
 end;
@@ -368,6 +387,9 @@ begin
         APool.FEntries[I].FLastFreeTick := 0;
         APool.FEntries[I].FSpan.FBitmap := 0;
         APool.FEntries[I].FSpan.FFreeCount := 0;
+        { Invalidate MRU cache if it points to the released span. }
+        if APool.FLastHitIndex = I then
+          APool.FLastHitIndex := -1;
         Inc(Result);
       end;
     end;

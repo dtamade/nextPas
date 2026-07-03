@@ -194,6 +194,10 @@ var
   LHeaderOffset: UInt64;
   LBlockPtr: Pointer;
   LBlock: PMemoryMapBlockHeader;
+  LCurrentOffset: UInt64;
+  LCurBlock: PMemoryMapBlockHeader;
+  LRunBase: PMemoryMapBlockHeader;
+  LRunSize: SizeUInt;
 begin
   if APtr = nil then Exit;
   if not FindBlockForPayload(APtr, LBlockPtr, LHeaderOffset) then
@@ -204,10 +208,61 @@ begin
   if LBlock^.State <> MAP_BLOCK_USED then
     raise EAllocError.Create(aeInvalidPointer, 'TMemoryMapAllocator.FreeMem: invalid block state');
 
+  { Mark the freed block as free. }
   LBlock^.State := MAP_BLOCK_FREE;
   LBlock^.RequestedSize := 0;
-  LBlock^.NextFreeOffset := FFreeHeadOffset;
-  FFreeHeadOffset := LHeaderOffset;
+
+  { Coalesce adjacent free blocks: single pass over the block chain.
+    Consecutive free runs are merged so the first block's TotalSize
+    covers the entire run. Merged-away blocks remain valid but are
+    invisible to the allocation scan (AllocateLocked walks by TotalSize). }
+  LCurrentOffset := 0;
+  while LCurrentOffset < FReservationSize do
+  begin
+    LCurBlock := PMemoryMapBlockHeader(FBase + LCurrentOffset);
+    if (LCurBlock^.Magic <> MAP_BLOCK_MAGIC) or (LCurBlock^.TotalSize < HeaderSize) then
+      raise EAllocError.Create(aeInternalError, 'TMemoryMapAllocator: coalesce scan corruption');
+
+    if LCurBlock^.State = MAP_BLOCK_FREE then
+    begin
+      LRunBase := LCurBlock;
+      LRunSize := LCurBlock^.TotalSize;
+      Inc(LCurrentOffset, LCurBlock^.TotalSize);
+
+      { Extend the run through consecutive free blocks. }
+      while LCurrentOffset < FReservationSize do
+      begin
+        LCurBlock := PMemoryMapBlockHeader(FBase + LCurrentOffset);
+        if (LCurBlock^.Magic <> MAP_BLOCK_MAGIC) or (LCurBlock^.TotalSize < HeaderSize) then
+          raise EAllocError.Create(aeInternalError, 'TMemoryMapAllocator: coalesce scan corruption');
+        if LCurBlock^.State <> MAP_BLOCK_FREE then
+          Break;
+        Inc(LRunSize, LCurBlock^.TotalSize);
+        Inc(LCurrentOffset, LCurBlock^.TotalSize);
+      end;
+
+      { Merge: extend the first free block to cover the entire run. }
+      LRunBase^.TotalSize := LRunSize;
+      LRunBase^.NextFreeOffset := NO_FREE_OFFSET;
+    end
+    else
+      Inc(LCurrentOffset, LCurBlock^.TotalSize);
+  end;
+
+  { Rebuild the free list from the merged block chain.
+    Forward scan with prepend produces a list ordered by ascending address. }
+  FFreeHeadOffset := NO_FREE_OFFSET;
+  LCurrentOffset := 0;
+  while LCurrentOffset < FReservationSize do
+  begin
+    LCurBlock := PMemoryMapBlockHeader(FBase + LCurrentOffset);
+    if LCurBlock^.State = MAP_BLOCK_FREE then
+    begin
+      LCurBlock^.NextFreeOffset := FFreeHeadOffset;
+      FFreeHeadOffset := LCurrentOffset;
+    end;
+    Inc(LCurrentOffset, LCurBlock^.TotalSize);
+  end;
 end;
 
 constructor TMemoryMapAllocator.CreateAnonymous(aReservationSize: UInt64);
