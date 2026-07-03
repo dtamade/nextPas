@@ -92,10 +92,6 @@ type
     MinSamples: Integer;
     WarmupIterations: Integer;
     EnableMemoryTracking: Boolean;
-    {** DS-01: 保留字段，当前未使用。并行由 AddParallel 在 entry 级别设置。 }
-    EnableParallel: Boolean;
-    {** DS-01: 保留字段，当前未使用。并行线程数由 AddParallel 的 AThreads 参数控制。 }
-    ParallelThreads: Integer;
     CollectRawSamples: Boolean;
     Quiet: Boolean;
     {** PrintToConsole 统计详情最大显示数量（默认 5），0=不显示详情 }
@@ -589,8 +585,6 @@ begin
   Result.MinSamples := BENCH_DEFAULT_MIN_SAMPLES;
   Result.WarmupIterations := BENCH_DEFAULT_WARMUP_ITERATIONS;
   Result.EnableMemoryTracking := True;
-  Result.EnableParallel := False;
-  Result.ParallelThreads := BENCH_DEFAULT_PARALLEL_THREADS;
   Result.CollectRawSamples := False;
   Result.Quiet := False;
   Result.MaxDetailCount := 5;

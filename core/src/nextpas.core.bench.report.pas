@@ -193,6 +193,27 @@ begin
       Result[I] := AStr[I];
 end;
 
+{ CR-23: Percentile with linear interpolation on already-sorted array }
+function PercentileSorted(const ASorted: TDoubleArray; APercent: Double): Double;
+var
+  LIndex: Double;
+  LLower, LUpper: Integer;
+  LCount: Integer;
+begin
+  LCount := Length(ASorted);
+  if LCount = 0 then Exit(0.0);
+  if LCount = 1 then Exit(ASorted[0]);
+  if APercent <= 0 then Exit(ASorted[0]);
+  if APercent >= 100 then Exit(ASorted[High(ASorted)]);
+
+  LIndex := (APercent / 100.0) * (LCount - 1);
+  LLower := Trunc(LIndex);
+  LUpper := LLower + 1;
+  if LUpper >= LCount then
+    Exit(ASorted[High(ASorted)]);
+  Result := ASorted[LLower] + (LIndex - LLower) * (ASorted[LUpper] - ASorted[LLower]);
+end;
+
 { TBenchReportGenerator }
 
 constructor TBenchReportGenerator.Create;
@@ -989,34 +1010,20 @@ begin
 
   LMin := LSorted[0];
   LMax := LSorted[LCount - 1];
-  if LCount >= 4 then
+  { CR-23: Use linear interpolation for quartiles (same as Percentile function)
+    instead of integer division which degenerates for small samples. }
+  if LCount >= 2 then
   begin
-    LQ1 := LSorted[LCount div 4];
-    LMedian := LSorted[LCount div 2];
-    LQ3 := LSorted[(3 * LCount) div 4];
+    LQ1 := PercentileSorted(LSorted, 25.0);
+    LMedian := PercentileSorted(LSorted, 50.0);
+    LQ3 := PercentileSorted(LSorted, 75.0);
   end
   else
   begin
-    case LCount of
-      1:
-        begin
-          LQ1 := LSorted[0];
-          LMedian := LSorted[0];
-          LQ3 := LSorted[0];
-        end;
-      2:
-        begin
-          LQ1 := LSorted[0];
-          LMedian := (LSorted[0] + LSorted[1]) / 2.0;
-          LQ3 := LSorted[1];
-        end;
-    else
-      begin
-        LQ1 := LSorted[0];
-        LMedian := LSorted[1];
-        LQ3 := LSorted[2];
-      end;
-    end;
+    { LCount = 1: all quartiles equal the single value }
+    LQ1 := LSorted[0];
+    LMedian := LSorted[0];
+    LQ3 := LSorted[0];
   end;
 
   LIQR := LQ3 - LQ1;
