@@ -613,6 +613,7 @@ begin
           begin
             case Args[ArgIdx].VType of
               vtInteger: Buf := IntToStr(Args[ArgIdx].VInteger);
+              vtInt64: Buf := IntToStr(Args[ArgIdx].VInt64^);
             else
               Buf := '?';
             end;
@@ -624,6 +625,17 @@ begin
             case Args[ArgIdx].VType of
               vtAnsiString: Buf := string(Args[ArgIdx].VAnsiString);
               vtPChar: Buf := string(Args[ArgIdx].VPChar);
+            else
+              Buf := '?';
+            end;
+            Result := Result + Buf;
+            Inc(ArgIdx);
+          end;
+        'x':
+          begin
+            case Args[ArgIdx].VType of
+              vtInteger: Buf := HexStr(Args[ArgIdx].VInteger, 8);
+              vtInt64: Buf := HexStr(Args[ArgIdx].VInt64^, 16);
             else
               Buf := '?';
             end;

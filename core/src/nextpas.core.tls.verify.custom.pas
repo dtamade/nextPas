@@ -39,7 +39,8 @@ uses
   nextpas.core.base.utils,
   nextpas.core.text.conv,
   nextpas.core.tls.exceptions,
-  nextpas.core.crypto.hash;
+  nextpas.core.crypto.hash,
+  nextpas.core.crypto.constant_time;
 
 { TSSLPinningVerifier }
 
@@ -101,7 +102,7 @@ begin
 
   for I := 0 to High(FPins) do
   begin
-    if (Length(FPins[I]) = 32) and CompareMem(@FPins[I][0], @LCertHash[0], 32) then
+    if (Length(FPins[I]) = 32) and (TConstantTime.CompareBytes(FPins[I], LCertHash) = 1) then
       Exit(TSSLOperationResult.Ok);
   end;
 

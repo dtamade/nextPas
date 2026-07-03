@@ -53,7 +53,7 @@ type
   generic TLockFreeChannel<T> = class(specialize TLockFreeChannelImpl<T>)
   end;
 
-  generic TLockFreeHashMap<TKey, TValue> = class(specialize TLockFreeHashMapImpl<TKey, TValue>)
+  generic TShardedHashMap<TKey, TValue> = class(specialize TShardedHashMapImpl<TKey, TValue>)
   end;
 
 implementation

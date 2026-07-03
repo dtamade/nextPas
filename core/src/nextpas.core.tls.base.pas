@@ -368,6 +368,7 @@ type
     KeySize: Integer;                      // 密钥长度（位）
     MacSize: Integer;                      // 认证/MAC/tag 长度（字节，best-effort）
     IsResumed: Boolean;                    // 是否为恢复的会话
+    IsWeakCipher: Boolean;                 // 弱密码套件标志（3DES/RC4/DES/MD5/SHA1）
     SessionId: string;                     // 会话ID
     CompressionMethod: string;             // 压缩方法
     ServerName: string;                    // SNI服务器名称

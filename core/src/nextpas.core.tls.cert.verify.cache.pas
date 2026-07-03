@@ -93,6 +93,9 @@ function GetGlobalCertVerifyCache: TCertVerifyCache;
 
 implementation
 
+uses
+  nextpas.core.crypto.constant_time;
+
 var
   GlobalCache: TCertVerifyCache = nil;
   GlobalCacheLock: IMutex = nil;
@@ -231,7 +234,7 @@ begin
 
   for i := 0 to FCount - 1 do
   begin
-    if CompareMem(@FEntries[i].Fingerprint[0], @AFingerprint[0], 32) then
+    if TConstantTime.CompareBytes(FEntries[i].Fingerprint, AFingerprint) = 1 then
     begin
       Result := i;
       Exit;

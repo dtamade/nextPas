@@ -34,6 +34,16 @@ uses
 
 { TCondVar }
 
+{** TFutexMutex.NativeHandle 指向 4 字节 futex state，
+    platform_condvar_wait 需要完整 TPlatformMutex，配对使用会导致 buffer overread }
+procedure CheckNotFutexMutex(const AMutex: IMutex);
+begin
+  if AMutex is TFutexMutex then
+    raise ENextPasError.Create(
+      'TCondVar 不能与 TFutexMutex 配对使用：NativeHandle 指向 4 字节 futex state，' +
+      'platform_condvar_wait 需要完整 TPlatformMutex。请使用 TMutex。');
+end;
+
 constructor TCondVar.Create;
 var
   LRet: Int32;
@@ -54,6 +64,7 @@ procedure TCondVar.Wait(const AMutex: IMutex);
 var
   LRet: Int32;
 begin
+  CheckNotFutexMutex(AMutex);
   LRet := platform_condvar_wait(FHandle, TPlatformMutex(AMutex.NativeHandle^));
   if LRet <> 0 then
     raise ENextPasError.CreateFmt('TCondVar.Wait failed: %d', [LRet]);
@@ -63,6 +74,7 @@ function TCondVar.WaitTimeout(const AMutex: IMutex; const ATimeoutNs: Int64): Bo
 var
   LRet: Int32;
 begin
+  CheckNotFutexMutex(AMutex);
   LRet := platform_condvar_timedwait(FHandle, TPlatformMutex(AMutex.NativeHandle^), ATimeoutNs);
   Result := (LRet = 0);
 end;

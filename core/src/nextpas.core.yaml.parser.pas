@@ -1070,6 +1070,14 @@ begin
       ADoc.FNodes[ADoc.FRootIdx].Kind := ynkNull;
     Exit;
   end;
+  if ALen > 16 * 1024 * 1024 then
+  begin
+    ADoc.FHasError := True;
+    ADoc.FError.Line := 1;
+    ADoc.FError.Col := 1;
+    ADoc.FError.Message := TStringView.Create(PAnsiChar('YAML input exceeds maximum size (16 MB)'), 38);
+    Exit;
+  end;
 
   LScanner.Init(AInput, ALen);
   LTok := LScanner.NextToken; // StreamStart

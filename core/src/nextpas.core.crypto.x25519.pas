@@ -31,7 +31,8 @@ implementation
 
 uses
   nextpas.core.tls.random,
-  nextpas.core.crypto.field25519;
+  nextpas.core.crypto.field25519,
+  nextpas.core.mem.secure;
 
 procedure EnsureKeyLength(const AValue: TBytes; const AParamName: string);
 begin
@@ -139,6 +140,7 @@ begin
   FeInvert(LZ2, LZ2);
   FeMul(LX2, LX2, LZ2);
   FeToBytes(LResultBytes, LX2);
+  SecureZeroBytes(LClampedScalar);
   Result := LResultBytes;
 end;
 

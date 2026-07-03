@@ -118,6 +118,21 @@ begin
   LList := PEbrRetiredNode(atomic_exchange(PPointer(@FRetired)^, nil, moAcqRel));
   if LList = nil then
     Exit;
+  { 二次检查：atomic_exchange(moAcqRel) 与 Enter 的 AtomicFetchAdd32(moAcquire)
+    建立 happens-before 链。若 exchange 后 FActiveCount <> 0，说明有新 reader
+    在 exchange 前已 Enter，此时不能释放，需归还列表。 }
+  if AtomicLoad32(FActiveCount, moAcquire) <> 0 then
+  begin
+    LNode := LList;
+    while LNode^.Next <> nil do
+      LNode := LNode^.Next;
+    repeat
+      LNext := PEbrRetiredNode(atomic_load(PPointer(@FRetired)^, moRelaxed));
+      LNode^.Next := LNext;
+    until atomic_compare_exchange_weak(
+        PPointer(@FRetired)^, PPointer(@LNode^.Next)^, LList, moRelease, moRelaxed);
+    Exit;
+  end;
   LNode := LList;
   while LNode <> nil do
   begin

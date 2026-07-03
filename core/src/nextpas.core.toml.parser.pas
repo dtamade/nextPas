@@ -73,6 +73,7 @@ const
   INITIAL_NODE_CAP = 64;
   INITIAL_OWNED_CAP = 16;
   MAX_NESTING_DEPTH = 128;
+  MAX_INPUT_SIZE = 16 * 1024 * 1024; { 16 MB — 防止超大浅文档耗尽内存 }
   NAN_BITS: QWord = QWord($7FF8000000000000);
 
 var
@@ -1855,6 +1856,13 @@ begin
   begin
     if not FHasError then
       SetOutOfMemoryError;
+    Exit(False);
+  end;
+  if SizeUInt(AInput.Len) > MAX_INPUT_SIZE then
+  begin
+    FError.Line := 1;
+    FError.Col := 1;
+    FError.Message := TStringView.Create(PAnsiChar('TOML input exceeds maximum size (16 MB)'), 38);
     Exit(False);
   end;
   // Clean up state from any previous parse
