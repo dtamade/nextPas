@@ -18,6 +18,7 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 - **v6.2**: Audit fixes — empty suite crash guard, Ctx() diagnostics, ShouldFail/glob/parallel tests, leak monitor counter
 - **v6.3**: T-01 NaN/边界补全 + facade re-export 补全 (Check*D, CI, NotStartsWith/EndsWith)
 - **v6.4**: P2 coverage — T-02 typed mock returns (7 tests), T-03 subtest skip message, T-04 TAP/JSON compliance (6 tests), T-05 complex filter scenarios (5 tests), T-06 config zero-value, T-07 test timeout exceeded
+- **v6.5**: A-01 runner.pas split — CLI 解析提取到 `runner.cli.pas` (373行), runner.pas 2336→1980行; C-02 `platform_thread_timedjoin` 替代 10ms 轮询; 所有 audit findings 全清
 
 ## 竞品对比
 
@@ -87,6 +88,7 @@ core/src/nextpas.core.test.expect.pas       ← IExpectation 流式断言
 core/src/nextpas.core.test.discovery.pas    ← RTTI 测试发现
 core/src/nextpas.core.test.mock.pas         ← TMock
 core/src/nextpas.core.test.runner.pas       ← TTestSuite/TTestRunner + 批次调度
+core/src/nextpas.core.test.runner.cli.pas   ← CLI 参数解析 (FromArgs/ApplyCLIArgs)
 core/src/nextpas.core.test.runner.parallel.pas ← 超时+并行 worker
 core/src/nextpas.core.test.runner.context.pas  ← 子测试 ITestContext
 core/src/nextpas.core.test.output.pas       ← ANSI/filter/JUnit

@@ -31,6 +31,7 @@
 - **风险**: 认知负荷高，新贡献者难以定位；修改一个功能可能意外影响其他路径。
 - **建议**: 拆分为 `runner.cli.pas` (CLI 解析)、`runner.serial.pas` (串行执行)、`runner.bench.pas` (Benchmark)，保留 `runner.pas` 作为注册 + 编排入口。参考当前已拆分的 `runner.context.pas` / `runner.parallel.pas` 模式。
 - **对标**: Go `testing` 包同样较大 (~3000行)，但 Go 是标准库无需考虑可维护性；Rust `libtest` 拆分为 `formatters.rs` / `options.rs` / `bench.rs`。
+- **状态**: ✅ **已修复** — 已拆分 `runner.cli.pas` (373行 CLI 解析)、`runner.context.pas` (471行 子测试上下文)、`runner.parallel.pas` (~450行 并行+超时)。runner.pas 从 2336行降至 1980行。
 
 #### A-02 [P2] TTestSuite 是 mutable record — 值语义陷阱
 - **位置**: `nextpas.core.test.runner.pas:31` (TTestSuite 声明)
@@ -253,7 +254,7 @@
 | **T-04** TAP/JSON compliance | ✅ FIXED | 6 新测试: severity fail vs error, YAML block markers, diagnostic footer, sequential numbering, JSON error/passed status |
 | **T-05** Complex filter scenarios | ✅ FIXED | 5 测试: multi-star glob, brace expansion, substring match, ?-wildcard, hierarchical filter |
 | **C-02** 10ms 轮询 → timed-join | ✅ FIXED | RunTestWithTimeout_internal 改用 platform_thread_timedjoin，零 CPU 浪费，即时检测完成 |
+| **A-01** runner.pas 拆分 | ✅ FIXED | 提取 `runner.cli.pas` (373行 CLI 解析)；配合已有的 `runner.context.pas`/`runner.parallel.pas`，runner.pas 从 2336行降至 1980行 |
 
-**未修复项**（需要更大结构性改动或独立规划）：
-- A-01: runner.pas 拆分 (~2300 行) — 结构性改动，需独立 worktree
+**所有 P1 项已修复**。剩余 P2/P3 项为渐进改进，无阻断风险。
 - 其余 P3 项 — 渐进改进

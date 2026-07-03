@@ -5,7 +5,7 @@
     test.output.tap, test.output.json, test.runner, test.discovery,
     test.mock, test.helpers
   White-box modules (not re-exported — import directly for internals):
-    test.runner.context, test.runner.parallel
+    test.runner.cli, test.runner.context, test.runner.parallel
   Dual API: procedural Check* + fluent IExpectation chain.
   Parallel execution, subtests, ANSI output, leak detection,
   RTTI discovery, retry, TAP/JSON/JUnit output, mock framework. }
