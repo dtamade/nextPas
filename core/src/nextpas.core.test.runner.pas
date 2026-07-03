@@ -395,7 +395,9 @@ function Ctx: ITestContext;
 begin
   if (GCurrentTestContextObj = nil) or
      (not Supports(GCurrentTestContextObj, ITestContext, Result)) then
-    raise Exception.Create('No active test context');
+    raise Exception.Create(
+      'No active test context — Ctx can only be called from within a running test.' +
+      ' If called from a parallel worker, ensure BeforeEach has completed.');
 end;
 
 function MatchesTagFilter(const AEntryTags: specialize TArray<string>;
@@ -1408,6 +1410,7 @@ begin
         repeat
           LStatus := tsPassed;
           LLastFailMsg := '';
+          LStartMs := GetTickCount64;
           try
             if (LGTestTimeoutMs > 0) and (LEntry.Kind = ekTest) and
                (Assigned(LEntry.Proc) or Assigned(LEntry.Closure)) then
@@ -1725,6 +1728,17 @@ begin
   LOutSink.WriteLn('');
   WriteSuiteHeader(Name, IntToStr(LTotal) + ' tests, parallel',
     LOutSink, LConfig);
+
+  { Empty suite guard: skip thread spawn + batch dispatch entirely.
+    Without this, the while-loop falls through with LBatchStart=0=LTotal,
+    but the array allocation + thread-join scan still runs on garbage. }
+  if LTotal = 0 then
+  begin
+    RunTeardown(LConfig);
+    FinalizeResults(LConfig, AResult, 0, 0, 0);
+    Result := LastRunPassed;
+    Exit;
+  end;
 
   { Pre-count eligible tests for progress display }
   LProgressCounter := 0;
@@ -2085,6 +2099,10 @@ begin
   { Deep-copy Tests to break refcount sharing — shuffle and other
     mutations in RunWithResult must not affect the caller's suite. }
   Suites[LIdx].Tests := Copy(ASuite.Tests, 0, Length(ASuite.Tests));
+  { Deep-copy EachCleanups to break refcount sharing with the original suite.
+    Parallel mode shares this array across threads via TThreadRec references;
+    an independent copy eliminates implicit lifetime coupling. }
+  Suites[LIdx].EachCleanups := Copy(ASuite.EachCleanups, 0, Length(ASuite.EachCleanups));
   SetLength(Suites, LIdx + 1);
 end;
 

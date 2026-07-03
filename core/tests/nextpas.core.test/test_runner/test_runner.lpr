@@ -1814,6 +1814,79 @@ begin
     PassTest('AllPassed auto-run');
   end;
 
+  { ── G2: Empty suite parallel crash guard ────────────────────────────── }
+  WriteLn;
+  SectionHeader('G2: Empty suite parallel crash guard');
+  begin
+    ResetDefaultConfig;
+    LResultSuite := TTestSuite.Create('EmptyParallel');
+    { No tests registered — should not crash in parallel mode }
+    LResultSuite.RunParallelWithResult(nil, LParallelResult);
+    if LParallelResult.Passed <> 0 then
+      FailTest('empty parallel: expected 0 passed, got ' +
+        IntToStr(LParallelResult.Passed));
+    if LParallelResult.Failed <> 0 then
+      FailTest('empty parallel: expected 0 failed, got ' +
+        IntToStr(LParallelResult.Failed));
+    if not LParallelResult.AllPassed then
+      FailTest('empty parallel: AllPassed should be True for empty suite');
+    ResetDefaultConfig;
+    PassTest('Empty suite parallel crash guard');
+  end;
+
+  { ── G3: Exec-fail ShouldFail test ────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('G3: ShouldFail explicit exec-fail');
+  begin
+    ResetDefaultConfig;
+    LResultSuite := TTestSuite.Create('ShouldFailTest');
+    { Test that passes when proc raises }
+    LResultSuite.ShouldFail('expect_raise',
+      procedure begin raise Exception.Create('boom'); end, 'boom');
+    { Test that fails when proc does NOT raise }
+    LResultSuite.ShouldFail('no_raise_fails',
+      procedure begin { no exception } end);
+    LResultSuite.RunWithResult(LRegularLogResult);
+    { expect_raise should pass (proc raised), no_raise_fails should fail }
+    if LRegularLogResult.Passed <> 1 then
+      FailTest('ShouldFail: expected 1 passed, got ' +
+        IntToStr(LRegularLogResult.Passed));
+    if LRegularLogResult.Failed <> 1 then
+      FailTest('ShouldFail: expected 1 failed, got ' +
+        IntToStr(LRegularLogResult.Failed));
+    ResetDefaultConfig;
+    PassTest('ShouldFail exec-fail');
+  end;
+
+  { ── G4: Glob filter edge cases ────────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('G4: Glob filter edge cases');
+  begin
+    ResetDefaultConfig;
+    LFilterSuite := TTestSuite.Create('GlobFilter');
+    LFilterSuite.Test('abc', procedure begin CheckTrue(True); end);
+    LFilterSuite.Test('abcd', procedure begin CheckTrue(True); end);
+    LFilterSuite.Test('xyz', procedure begin CheckTrue(True); end);
+    { Test: pattern "abc" should match "abc" exactly }
+    LFilterSuite.Config.FilterPattern := 'abc';
+    LFilterSuite.RunWithResult(LFilterResult);
+    { abc matches "abc" and "abcd" (prefix match) — verify at least 1 pass }
+    if LFilterResult.Passed < 1 then
+      FailTest('glob filter abc: expected >= 1 passed');
+    ResetDefaultConfig;
+    { Test: pattern "" (empty) should match all }
+    LFilterSuite := TTestSuite.Create('GlobFilterEmpty');
+    LFilterSuite.Test('a', procedure begin CheckTrue(True); end);
+    LFilterSuite.Test('b', procedure begin CheckTrue(True); end);
+    LFilterSuite.Config.FilterPattern := '';
+    LFilterSuite.RunWithResult(LFilterResult);
+    if LFilterResult.Passed <> 2 then
+      FailTest('glob filter empty: expected 2 passed, got ' +
+        IntToStr(LFilterResult.Passed));
+    ResetDefaultConfig;
+    PassTest('Glob filter edge cases');
+  end;
+
   WriteLn;
   PassTest('test_runner');
 

@@ -45,7 +45,7 @@ type
     Entry          : TTestEntry;
     SuiteName      : string;
     Config         : TTestConfig;
-    Mtx            : IMutex;
+    Mtx            : IMutex;  { protects Pass/Fail/Skip counters + result output }
     Before         : TTestProc;
     BeforeClosure  : TTestClosure;
     After          : TTestProc;
@@ -61,6 +61,14 @@ type
   PThreadRec = ^TThreadRec;
 
 function ParallelWorkerProc(AArg: Pointer): Pointer; cdecl;
+
+{ ── Monitoring ───────────────────────────────────────────────────────────── }
+
+{ Counter: how many timeout-worker LRec records were leaked (truly stuck
+  threads where both poll and timed-join expired). Exposed for test diagnostics.
+  A non-zero value after a full test run means at least one test deadlocked. }
+var
+  GTimeoutLeakCount: Integer;
 
 implementation
 
@@ -204,6 +212,7 @@ begin
     AStatus := tsError;
     AMsg := 'test timed out after ' + IntToStr(ATimeoutMs) + 'ms';
     Result := False;
+    Inc(GTimeoutLeakCount);
     platform_thread_detach(LHandle);
     ResolveErrSink(AConfig).WriteLn(
       '  ' + AnsiYellow('WARNING', AConfig) + ': test timed out after ' +
@@ -289,6 +298,7 @@ var
   LSkipReason: string;
   LStartMs: Int64;
   LResultWritten: Boolean;
+  LTotalRetries: Integer;
   LRetriesLeft: Integer;
   LSkippedByBeforeEach: Boolean;
   LTimeoutMs: Integer;
@@ -372,7 +382,10 @@ begin
   if LStatus = tsPassed then
   begin
     { R4-04: Retry loop — mirrors serial RunWithResult retry logic }
-    LRetriesLeft := R^.Entry.RetryCount;
+    LTotalRetries := R^.Entry.RetryCount;
+    if LTotalRetries = 0 then
+      LTotalRetries := LConfig.RetryCount;
+    LRetriesLeft := LTotalRetries;
     repeat
       LStatus := tsPassed;
       LFailMsg := '';
@@ -428,8 +441,8 @@ begin
       Dec(LRetriesLeft);
       R^.Mtx.Acquire;
       try
-        WriteRetryHint(R^.Entry.RetryCount - LRetriesLeft,
-          R^.Entry.RetryCount, LOutSink, LConfig);
+        WriteRetryHint(LTotalRetries - LRetriesLeft,
+          LTotalRetries, LOutSink, LConfig);
       finally
         SafeRelease(R^.Mtx, LConfig);
       end;
