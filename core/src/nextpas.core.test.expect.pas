@@ -622,10 +622,10 @@ function TExpectation.ToBeSame(const AExpected: Pointer): IExpectation;
 begin
   RequireKind(ekPointer, 'ToBeSame');
   CheckMatch(FPtrValue = AExpected,
-    'Expected same pointer $' + IntToHex(NativeUInt(FPtrValue), 16) +
-      ' but got $' + IntToHex(NativeUInt(AExpected), 16),
     'Expected different pointer but both are $' +
-      IntToHex(NativeUInt(FPtrValue), 16));
+      IntToHex(NativeUInt(FPtrValue), 16),
+    'Expected $' + IntToHex(NativeUInt(AExpected), 16) +
+      ' but got $' + IntToHex(NativeUInt(FPtrValue), 16));
   Result := Self;
 end;
 

@@ -759,6 +759,24 @@ begin
   ExpectPtr(@LA).Not_.ToBeSame(@LB);
 end;
 
+procedure TestExpectToBeSameMessageCorrectness;
+var
+  LA, LB: Integer;
+begin
+  LA := 1; LB := 2;
+  { Negative fail: Not_.ToBeSame with same pointer → message should say "both are" }
+  ExpectFail(procedure begin ExpectPtr(@LA).Not_.ToBeSame(@LA); end, 'both are');
+end;
+
+procedure TestExpectToNotBeNearReturnsExpectation;
+var
+  LResult: IExpectation;
+begin
+  { ToNotBeNear must return IExpectation for chaining }
+  LResult := ExpectDouble(1.0).ToNotBeNear(2.0);
+  ExpectBool(LResult <> nil).ToBeTrue;
+end;
+
 procedure TestExpectToEqualPointerIsAlias;
 var
   LP: Pointer;
@@ -952,6 +970,8 @@ begin
   LSuite.Test('ToBeSame pass',                 @TestExpectToBeSamePass);
   LSuite.Test('ToBeSame fail',                 @TestExpectToBeSameFail);
   LSuite.Test('Not_.ToBeSame',                 @TestExpectToBeSameNot);
+  LSuite.Test('ToBeSame message correctness',  @TestExpectToBeSameMessageCorrectness);
+  LSuite.Test('ToNotBeNear returns chain',      @TestExpectToNotBeNearReturnsExpectation);
   LSuite.Test('ToEqualPointer alias',          @TestExpectToEqualPointerIsAlias);
   LSuite.Test('ToEqualD pass',                 @TestExpectToEqualDPass);
   LSuite.Test('ToEqualD fail',                 @TestExpectToEqualDFail);

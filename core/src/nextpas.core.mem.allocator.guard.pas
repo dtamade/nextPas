@@ -43,7 +43,8 @@ type
 implementation
 
 uses
-  nextpas.core.platform.memory;
+  nextpas.core.platform.memory,
+  nextpas.core.mem.error;
 
 const
   GUARD_PAGE_SIZE = MEM_PAGE_SIZE;  { 4K guard page }
@@ -159,7 +160,14 @@ begin
     Exit;
   LHdr := PGuardHeader(PtrUInt(ADst) - HeaderSize);
   if LHdr^.Magic <> GUARD_MAGIC then
-    Exit;  { Invalid pointer — silently ignore to avoid crash on bad input. }
+  begin
+    {$IFDEF DEBUG}
+    raise EAllocError.Create(aeInvalidPointer,
+      'TGuardAllocator.FreeMem: invalid guard magic (possible double free or wild pointer)');
+    {$ELSE}
+    Exit;
+    {$ENDIF}
+  end;
   LHdr^.Magic := 0;  { Clear magic to detect double free. }
   platform_virtual_release(LHdr^.Base, LHdr^.TotalSize);
 end;

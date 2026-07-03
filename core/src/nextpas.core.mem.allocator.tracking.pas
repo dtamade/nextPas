@@ -431,8 +431,11 @@ end;
 
 function TTrackingAllocator.Traits: TAllocatorTraits;
 begin
-  Result.ZeroInitialized := False;
-  Result.ThreadSafe      := True;
+  if FInner <> nil then
+    Result := FInner.Traits
+  else
+    Result.ZeroInitialized := False;
+  Result.ThreadSafe := True;
 end;
 
 end.

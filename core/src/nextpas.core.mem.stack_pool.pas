@@ -866,8 +866,13 @@ begin
   // 计算最小所需大小
   LMinRequired := UsedSize + ARequiredSize;
 
-  // 按增长因子计算新大小
-  LNewSize := Round(FSize * FPolicy.GrowthFactor);
+  // 按增长因子计算新大小（用整数运算避免大值浮点精度丢失）
+  if FPolicy.GrowthFactor <= 1.0 then
+    LNewSize := FSize + FSize  // 最少 2x
+  else if FPolicy.GrowthFactor >= 2.0 then
+    LNewSize := FSize * 2
+  else
+    LNewSize := FSize + (FSize shr 1);  // 1.5x
 
   // 确保新大小足够容纳所需
   if LNewSize < LMinRequired then

@@ -1001,6 +1001,45 @@ begin
   WithMock(@TestMixedTypeSetupOnSameMethodImpl);
 end;
 
+{ ── F-07: Mock.ResetAll ───────────────────────────────────────────────────── }
+
+procedure TestMockResetAllClearsSetups;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.Setup('Foo').Returns('bar');
+    LM.RecordCall('Foo', []);
+    CheckEqual('bar', LM.GetReturn('Foo'));
+    CheckEqual(1, LM.CallCount('Foo'));
+    LM.ResetAll;
+    { After ResetAll: calls cleared }
+    CheckEqual(0, LM.CallCount('Foo'));
+    { After ResetAll: setups also cleared — GetReturn returns '' }
+    CheckEqual('', LM.GetReturn('Foo'));
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestMockResetCallsKeepsSetups;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.Setup('Foo').Returns('bar');
+    LM.RecordCall('Foo', []);
+    LM.ResetCalls;
+    { After ResetCalls: calls cleared but setups preserved }
+    CheckEqual(0, LM.CallCount('Foo'));
+    CheckEqual('bar', LM.GetReturn('Foo'));
+  finally
+    LM.Free;
+  end;
+end;
+
 
 { ── Register Tests ───────────────────────────────────────────────────────────── }
 
@@ -1099,6 +1138,10 @@ begin
   Suite.Test('TestGetReturnIntWithArgs', @TestGetReturnIntWithArgs);
   Suite.Test('TestTypedSetupOverwrite', @TestTypedSetupOverwrite);
   Suite.Test('TestMixedTypeSetupOnSameMethod', @TestMixedTypeSetupOnSameMethod);
+
+  { F-07: Mock.ResetAll }
+  Suite.Test('TestMockResetAllClearsSetups', @TestMockResetAllClearsSetups);
+  Suite.Test('TestMockResetCallsKeepsSetups', @TestMockResetCallsKeepsSetups);
 
   Runner := TTestRunner.Create('mock-tests');
   Runner.Add(Suite);

@@ -220,6 +220,8 @@ var
   LHash: QWord;
 begin
   LOldCap := FMask + 1;
+  if LOldCap > High(SizeUInt) shr 1 then
+    raise EOutOfMemory.CreateMsg('TFallbackAllocator.MapGrow: capacity overflow');
   LOldKeys := FKeys;
   LOldSources := FSources;
   LOldSizes := FSizes;

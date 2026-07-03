@@ -29,9 +29,9 @@ type
   TGrowingAllocator = class
   private
     FCentrals: array[0..MEM_SIZECLASS_COUNT - 1] of TCentralPool;
+    FOpCounter: UInt64;  { Monotonic op counter for scavenger idle tracking. }
     procedure InitCentrals;
   public
-    FOpCounter: UInt64;  { Monotonic op counter for scavenger idle tracking. }
     constructor Create;
     destructor Destroy; override;
 
@@ -70,6 +70,9 @@ type
     {** Force a scavenge pass across all central pools.
         Releases long-idle fully-free spans to OS. }
     procedure Scavenge;
+
+    {** Monotonic op counter for scavenger idle tracking. }
+    property OpCounter: UInt64 read FOpCounter;
   end;
 
 {** Get the global singleton growing allocator. }
@@ -79,6 +82,9 @@ function DefaultGrowingAllocator: TGrowingAllocator;
 procedure ResetDefaultGrowingAllocator;
 
 implementation
+
+uses
+  nextpas.core.mem.error;
 
 var
   GGrowingAllocator: TGrowingAllocator;
@@ -133,15 +139,27 @@ end;
 {$ENDIF}
 
 { Fast inline size class lookup — same logic as the band checks in GetMem/FreeMem
-  but as a single function for use in ReallocMem's same-class check. }
+  but as a single function for use in ReallocMem's same-class check.
+  Must produce the same index as SizeClassIndex() from mem.sizeclass.
+  Band layout: 16-256 (step 16, 16 classes), 256-1024 (step 64, 13 classes). }
 function FastSizeClassIndex(ASize: SizeUInt): Int32; inline;
 begin
   if ASize <= 256 then
     Result := Int32((ASize + 15) shr 4) - 1
   else if ASize <= 1024 then
-    Result := Int32(ASize shr 6) + 14
+    Result := 16 + Int32((ASize + 63 - 256) shr 6)
   else
     Result := SizeClassIndex(ASize);
+end;
+
+procedure ValidateFastSizeClassIndex;
+var
+  LCheckSize: SizeUInt;
+begin
+  for LCheckSize := 16 to 1024 do
+    if FastSizeClassIndex(LCheckSize) <> SizeClassIndex(LCheckSize) then
+      raise EAllocError.Create(aeInternalError,
+        'FastSizeClassIndex formula mismatch: sizeclass table inconsistency detected');
 end;
 
 { Refill/Flush callbacks (standalone functions for TRefillProc/TFlushProc) --- }
@@ -617,6 +635,7 @@ begin
 end;
 
 initialization
+  ValidateFastSizeClassIndex;
   {$IFDEF UNIX}pthread_key_create(GCacheCleanupKey, @ThreadExitFlush);{$ENDIF}
   {$IFDEF MSWINDOWS}GCacheCleanupIndex := FlsAlloc(@ThreadExitFlsCallback);{$ENDIF}
   GGrowingAllocator := TGrowingAllocator.Create;

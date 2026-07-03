@@ -619,7 +619,7 @@ begin
   Result.BackOffset := 0;
   Result.TotalUsed := CurrentUsed;
   Result.LargeUsed := 0;
-  Result.AllocCount := 0;  // TChunkedArena 不在此处跟踪
+  Result.AllocCount := FTotalAllocs;
 end;
 
 procedure TChunkedArena.RestoreToMark(aMark: TArenaMark);

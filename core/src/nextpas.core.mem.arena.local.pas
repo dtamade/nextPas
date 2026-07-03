@@ -205,7 +205,7 @@ begin
   Result.BackOffset := 0;
   Result.TotalUsed := FOffset;
   Result.LargeUsed := 0;
-  Result.AllocCount := 0;  // TLocalArena 不在此处跟踪
+  Result.AllocCount := FTotalAllocs;
 end;
 
 procedure TLocalArena.RestoreToMark(AMark: TArenaMark);

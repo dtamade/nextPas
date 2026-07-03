@@ -137,6 +137,8 @@ type
     property CallOrder: specialize TArray<string> read FCallOrder;
     { Clear all recorded calls }
     procedure Reset;
+    { Clear all recorded calls AND setup configurations }
+    procedure ResetAll;
   end;
 
 { ── Mock Object ───────────────────────────────────────────────────────────── }
@@ -183,6 +185,8 @@ type
 
     { Reset all recorded calls (keeps setup configuration) }
     procedure ResetCalls;
+    { Reset all recorded calls AND setup configurations }
+    procedure ResetAll;
 
     { Access to the raw state for advanced usage }
     property State: TMockState read FState;
@@ -512,6 +516,13 @@ begin
   FCallOrder := nil;
 end;
 
+procedure TMockState.ResetAll;
+begin
+  FCalls := nil;
+  FSetups := nil;
+  FCallOrder := nil;
+end;
+
 { ── IMockSetup implementation ──────────────────────────────────────────────── }
 
 type
@@ -813,6 +824,11 @@ end;
 procedure TMock.ResetCalls;
 begin
   FState.Reset;
+end;
+
+procedure TMock.ResetAll;
+begin
+  FState.ResetAll;
 end;
 
 end.

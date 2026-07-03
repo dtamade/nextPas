@@ -157,7 +157,8 @@ end;
 procedure TMimallocAllocator.DoFreeMem(ADst: Pointer);
 begin
   if not EnsureMimallocLoaded then
-    Exit; // free path when library missing: nothing to do
+    raise EAllocError.Create(aeInternalError,
+      'TMimallocAllocator.FreeMem: mimalloc library unavailable (was previously loaded)');
   _mi_free(ADst);
 end;
 
