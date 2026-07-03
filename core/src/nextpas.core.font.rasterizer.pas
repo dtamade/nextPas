@@ -79,7 +79,12 @@ begin
   if (LDistSq <= AFlatness) or (ADepth >= RASTERIZER_MAX_SUBDIVISIONS) then
   begin
     if ACount >= Length(ALines) then
-      SetLength(ALines, Length(ALines) + 16);
+    begin
+      if Length(ALines) = 0 then
+        SetLength(ALines, 32)
+      else
+        SetLength(ALines, Length(ALines) * 2);
+    end;
     ALines[ACount].X0 := AP0X;
     ALines[ACount].Y0 := AP0Y;
     ALines[ACount].X1 := AP2X;
@@ -281,20 +286,26 @@ end;
 
 procedure TFontRasterizer.SortEdgeTable;
 var
-  LI, LJ: Int32;
+  LI, LJ, LGap: Int32;
   LTemp: TFontEdge;
 begin
-  for LI := 1 to FEdgeCount - 1 do
+  // Shell sort — 比插入排序的 O(n²) 更好，对复杂字形（数百条边）有明显优势
+  LGap := FEdgeCount div 2;
+  while LGap > 0 do
   begin
-    LTemp := FEdges[LI];
-    LJ := LI;
-    while (LJ > 0) and (FEdges[LJ - 1].YMin > LTemp.YMin) do
+    for LI := LGap to FEdgeCount - 1 do
     begin
-      FEdges[LJ] := FEdges[LJ - 1];
-      Dec(LJ);
+      LTemp := FEdges[LI];
+      LJ := LI;
+      while (LJ >= LGap) and (FEdges[LJ - LGap].YMin > LTemp.YMin) do
+      begin
+        FEdges[LJ] := FEdges[LJ - LGap];
+        Dec(LJ, LGap);
+      end;
+      if LJ <> LI then
+        FEdges[LJ] := LTemp;
     end;
-    if LJ <> LI then
-      FEdges[LJ] := LTemp;
+    LGap := LGap div 2;
   end;
 end;
 
@@ -385,7 +396,13 @@ begin
     // 偶奇规则：在每个交叉点翻转，奇数区间填充
     if FActiveCount >= 2 then
     begin
-      LRow := ABitmap + Trunc(LScanY) * AWidth;
+      LI := Trunc(LScanY);
+      if (LI < 0) or (LI >= AHeight) then
+      begin
+        LScanY := LScanY + 1.0;
+        Continue;
+      end;
+      LRow := ABitmap + LI * AWidth;
       LInside := False;
       for LJ := 0 to FActiveCount - 2 do
       begin
