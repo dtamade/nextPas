@@ -1,0 +1,15 @@
+[package]
+name = "bitcount_bench"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "bitcount_bench"
+path = "benches/bitcount_bench.rs"
+
+[dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "bitcount_bench"
+harness = false

@@ -41,9 +41,15 @@ type
     Stack: array of UInt32;
     CodeLen: UInt32;
   end;
+  PDfaCache = ^TDfaCache;
 
 function DfaIsMatch(const AProgram: TRegexProgram;
   const AInput: PAnsiChar; ALen: SizeUInt): Boolean;
+
+{** DfaIsMatchCached — same as DfaIsMatch but reuses pre-allocated cache *}
+function DfaIsMatchCached(const AProgram: TRegexProgram;
+  const AInput: PAnsiChar; ALen: SizeUInt;
+  var ACache: TDfaCache): Boolean;
 
 function DfaIsFullMatch(const AProgram: TRegexProgram;
   const AInput: PAnsiChar; ALen: SizeUInt): Boolean;
@@ -51,7 +57,18 @@ function DfaIsFullMatch(const AProgram: TRegexProgram;
 function DfaFindAll(const AProgram: TRegexProgram;
   const AInput: PAnsiChar; ALen: SizeUInt; AMaxMatches: SizeInt = -1): TMatchArray;
 
+{** DfaFindAllCached — same as DfaFindAll but reuses pre-allocated cache *}
+function DfaFindAllCached(const AProgram: TRegexProgram;
+  const AInput: PAnsiChar; ALen: SizeUInt;
+  var ACache: TDfaCache; AMaxMatches: SizeInt = -1): TMatchArray;
+
 function ProgramHasAsserts(const AProgram: TRegexProgram): Boolean;
+
+{** DfaCacheReset — reset state but keep allocated arrays *}
+procedure DfaCacheReset(var C: TDfaCache);
+
+{** DfaCacheInit — full initialization with array allocation *}
+procedure DfaCacheInit(var C: TDfaCache; ACodeLen: UInt32);
 
 implementation
 
@@ -96,6 +113,26 @@ begin
   C.NextCount := 0;
   SetLength(C.Stack, ACodeLen * 3);
   // Initialize the empty start state (state 0 = no active PCs)
+  SetLength(C.States[0].PCs, 0);
+  C.States[0].Hash := 0;
+  C.States[0].IsMatch := False;
+  FillWord(C.States[0].Next, SizeOf(C.States[0].Next) div 2, DFA_UNKNOWN);
+  FillChar(C.States[0].MatchOnTrans, SizeOf(C.States[0].MatchOnTrans), 0);
+  for ctx := 0 to 3 do
+    C.States[0].AcceptEof[ctx] := -1;
+  C.StateCount := 1;
+end;
+
+{ --- Reset DFA cache for reuse: keep allocated arrays, reset all state --- }
+
+procedure DfaCacheReset(var C: TDfaCache);
+var ctx: Integer;
+begin
+  C.StateCount := 0;
+  C.Overflow := False;
+  C.CloseCount := 0;
+  C.NextCount := 0;
+  { Reinitialize state 0 — skip SetLength (arrays already allocated) }
   SetLength(C.States[0].PCs, 0);
   C.States[0].Hash := 0;
   C.States[0].IsMatch := False;
@@ -663,6 +700,255 @@ begin
   end;
 end;
 
+{ --- DfaIsMatchCached: reuse pre-allocated cache for batch matching --- }
+
+function DfaIsMatchCached(const AProgram: TRegexProgram;
+  const AInput: PAnsiChar; ALen: SizeUInt;
+  var ACache: TDfaCache): Boolean;
+var
+  LCodeLen: UInt32;
+  pos: SizeUInt;
+  curState: UInt16;
+  nextState: UInt16;
+  ch: Byte;
+  LPrefixByte: Byte;
+  LHasPrefix: Boolean;
+  LPrefixLen: SizeUInt;
+  LPrefixStr: string;
+  prefixPos: SizeInt;
+  startPos: SizeUInt;
+  k: SizeUInt;
+  LCtx: Byte;
+  LAtStart: Boolean;
+  LPrevIsWord: Boolean;
+  LCurrIsWord: Boolean;
+  LRoots: array of UInt32;
+  LNoAsserts: Boolean;
+begin
+  Result := False;
+  LCodeLen := Length(AProgram.Code);
+  if LCodeLen = 0 then Exit;
+  if rfMultiLine in AProgram.Flags then
+    Exit(NfaIsMatch(AProgram, AInput, ALen));
+
+  DfaCacheReset(ACache);
+
+  { Check if pattern has no assertions — enables context-free fast path }
+  LNoAsserts := not AProgram.HasAsserts;
+
+  LHasPrefix := AProgram.LiteralPrefixLen > 0;
+  LPrefixLen := AProgram.LiteralPrefixLen;
+  LPrefixStr := AProgram.LiteralPrefix;
+  startPos := 0;
+
+  if LHasPrefix then
+  begin
+    LPrefixByte := Byte(LPrefixStr[1]);
+    prefixPos := SizeInt(ScanFindByte(AInput, ALen, LPrefixByte));
+    if prefixPos < 0 then Exit;
+    startPos := SizeUInt(prefixPos);
+    if LPrefixLen > 1 then
+    begin
+      while True do
+      begin
+        if startPos + LPrefixLen > ALen then Exit;
+        k := 1;
+        while (k < LPrefixLen) and (AInput[startPos + k] = AnsiChar(LPrefixStr[k + 1])) do
+          Inc(k);
+        if k = LPrefixLen then Break;
+        if startPos + 1 >= ALen then Exit;
+        prefixPos := SizeInt(ScanFindByte(AInput + startPos + 1,
+                      ALen - startPos - 1, LPrefixByte));
+        if prefixPos < 0 then Exit;
+        startPos := startPos + 1 + SizeUInt(prefixPos);
+      end;
+    end;
+  end
+  else if (AProgram.StartClassSize > 0) and (AProgram.StartClassSize < 128) then
+  begin
+    while (startPos < ALen) and
+          (not CharBitmapTest(AProgram.StartClass, Ord(AInput[startPos]))) do
+      Inc(startPos);
+  end;
+
+  LAtStart := (startPos = 0);
+  LPrevIsWord := (startPos > 0) and IsWordChar(Ord(AInput[startPos - 1]));
+  if startPos < ALen then
+    LCurrIsWord := IsWordChar(Ord(AInput[startPos]))
+  else
+    LCurrIsWord := False;
+
+  SetLength(LRoots, 1);
+  LRoots[0] := 0;
+  if startPos < ALen then
+  begin
+    if EpsilonClose(ACache, AProgram, LRoots, 1,
+         LAtStart, LPrevIsWord, LCurrIsWord, False) then
+      Exit(True);
+  end
+  else
+  begin
+    if EpsilonClose(ACache, AProgram, LRoots, 1,
+         LAtStart, LPrevIsWord, False, True) then
+      Exit(True);
+  end;
+
+  curState := 0;
+  pos := startPos;
+
+  { --- Fast path: no assertions, context always 0, no IsWordChar calls --- }
+  if LNoAsserts then
+  begin
+    while pos < ALen do
+    begin
+      ch := Ord(AInput[pos]);
+
+      nextState := ACache.States[curState].Next[0, ch];
+
+      if nextState = DFA_UNKNOWN then
+      begin
+        nextState := ComputeTransition(ACache, AProgram, curState, 0, ch, True);
+        if ACache.Overflow then
+          Exit(NfaIsMatch(AProgram, AInput, ALen));
+      end;
+
+      if ACache.States[curState].MatchOnTrans[0, ch] then
+        Exit(True);
+
+      if nextState = DFA_DEAD then
+      begin
+        Inc(pos);
+        if LHasPrefix and (pos < ALen) then
+        begin
+          LPrefixByte := Byte(LPrefixStr[1]);
+          while True do
+          begin
+            prefixPos := SizeInt(ScanFindByte(AInput + pos, ALen - pos, LPrefixByte));
+            if prefixPos < 0 then Exit;
+            pos := pos + SizeUInt(prefixPos);
+            if LPrefixLen <= 1 then Break;
+            if pos + LPrefixLen > ALen then Exit;
+            k := 1;
+            while (k < LPrefixLen) and (AInput[pos + k] = AnsiChar(LPrefixStr[k + 1])) do
+              Inc(k);
+            if k = LPrefixLen then Break;
+            Inc(pos);
+            if pos >= ALen then Exit;
+          end;
+        end
+        else if (AProgram.StartClassSize > 0) and (AProgram.StartClassSize < 128) and
+                (not LHasPrefix) then
+        begin
+          while (pos < ALen) and
+                (not CharBitmapTest(AProgram.StartClass, Ord(AInput[pos]))) do
+            Inc(pos);
+        end;
+        curState := 0;
+        Continue;
+      end;
+
+      curState := nextState;
+      Inc(pos);
+    end;
+
+    // EOF check (no-assertion path)
+    if curState > 0 then
+    begin
+      LPrevIsWord := (ALen > 0) and IsWordChar(Ord(AInput[ALen - 1]));
+      LCtx := Ord(LPrevIsWord);
+      if ALen = 0 then LCtx := LCtx or 2;
+      if CheckEofAccept(ACache, AProgram, curState, LCtx, True) then
+        Exit(True);
+    end
+    else
+    begin
+      SetLength(LRoots, 1);
+      LRoots[0] := 0;
+      LAtStart := (ALen = 0);
+      LPrevIsWord := (ALen > 0) and IsWordChar(Ord(AInput[ALen - 1]));
+      if EpsilonClose(ACache, AProgram, LRoots, 1,
+           LAtStart, LPrevIsWord, False, True) then
+        Exit(True);
+    end;
+    Exit(False);
+  end;
+
+  { --- Standard path: has assertions, full context computation --- }
+  while pos < ALen do
+  begin
+    ch := Ord(AInput[pos]);
+    LAtStart := (pos = 0);
+    LPrevIsWord := (pos > 0) and IsWordChar(Ord(AInput[pos - 1]));
+    LCtx := (Ord(LAtStart) shl 1) or Ord(LPrevIsWord);
+
+    nextState := ACache.States[curState].Next[LCtx, ch];
+
+    if nextState = DFA_UNKNOWN then
+    begin
+      nextState := ComputeTransition(ACache, AProgram, curState, LCtx, ch, True);
+      if ACache.Overflow then
+        Exit(NfaIsMatch(AProgram, AInput, ALen));
+    end;
+
+    if ACache.States[curState].MatchOnTrans[LCtx, ch] then
+      Exit(True);
+
+    if nextState = DFA_DEAD then
+    begin
+      Inc(pos);
+      if LHasPrefix and (pos < ALen) then
+      begin
+        LPrefixByte := Byte(LPrefixStr[1]);
+        while True do
+        begin
+          prefixPos := SizeInt(ScanFindByte(AInput + pos, ALen - pos, LPrefixByte));
+          if prefixPos < 0 then Exit;
+          pos := pos + SizeUInt(prefixPos);
+          if LPrefixLen <= 1 then Break;
+          if pos + LPrefixLen > ALen then Exit;
+          k := 1;
+          while (k < LPrefixLen) and (AInput[pos + k] = AnsiChar(LPrefixStr[k + 1])) do
+            Inc(k);
+          if k = LPrefixLen then Break;
+          Inc(pos);
+          if pos >= ALen then Exit;
+        end;
+      end
+      else if (AProgram.StartClassSize > 0) and (AProgram.StartClassSize < 128) and
+              (not LHasPrefix) then
+      begin
+        while (pos < ALen) and
+              (not CharBitmapTest(AProgram.StartClass, Ord(AInput[pos]))) do
+          Inc(pos);
+      end;
+      curState := 0;
+      Continue;
+    end;
+
+    curState := nextState;
+    Inc(pos);
+  end;
+
+  LPrevIsWord := (ALen > 0) and IsWordChar(Ord(AInput[ALen - 1]));
+  LCtx := Ord(LPrevIsWord);
+  if ALen = 0 then
+    LCtx := LCtx or 2;
+  if curState > 0 then
+  begin
+    if CheckEofAccept(ACache, AProgram, curState, LCtx, True) then
+      Exit(True);
+  end
+  else
+  begin
+    SetLength(LRoots, 1);
+    LRoots[0] := 0;
+    LAtStart := (ALen = 0);
+    if EpsilonClose(ACache, AProgram, LRoots, 1,
+         LAtStart, LPrevIsWord, False, True) then
+      Exit(True);
+  end;
+end;
+
 { --- DfaIsFullMatch: anchored DFA, match only at EOF --- }
 
 function DfaIsFullMatch(const AProgram: TRegexProgram;
@@ -919,6 +1205,178 @@ begin
     end;
 
     // Record match if found
+    if LMatchEnd >= 0 then
+    begin
+      if LCount >= SizeUInt(Length(Result)) then
+        SetLength(Result, LCount + 32);
+      Result[LCount].Start := SizeInt(LStart);
+      Result[LCount].Len := LMatchEnd - SizeInt(LStart);
+      Result[LCount].Groups := nil;
+      Inc(LCount);
+      if (AMaxMatches > 0) and (SizeInt(LCount) >= AMaxMatches) then Break;
+
+      if LMatchEnd > SizeInt(LStart) then
+        LStart := SizeUInt(LMatchEnd)
+      else
+        Inc(LStart);
+    end
+    else
+      Inc(LStart);
+  end;
+
+  SetLength(Result, LCount);
+end;
+
+{ --- DfaFindAllCached: reuse pre-allocated cache for batch findall --- }
+
+function DfaFindAllCached(const AProgram: TRegexProgram;
+  const AInput: PAnsiChar; ALen: SizeUInt;
+  var ACache: TDfaCache; AMaxMatches: SizeInt = -1): TMatchArray;
+var
+  LCodeLen: UInt32;
+  LCount: SizeUInt;
+  LStart: SizeUInt;
+  LPos: SizeUInt;
+  LMatchEnd: SizeInt;
+  curState: UInt16;
+  nextState: UInt16;
+  ch: Byte;
+  LCtx: Byte;
+  LPrevIsWord: Boolean;
+  LCurrIsWord: Boolean;
+  LAtStart: Boolean;
+  LRoots: array[0..0] of UInt32;
+  LInitCount: UInt32;
+  LPrefixByte: Byte;
+  LHasPrefix: Boolean;
+  LPrefixLen: SizeUInt;
+  LPrefixStr: string;
+  prefixPos: SizeInt;
+  k: SizeUInt;
+  LHasStartClass: Boolean;
+begin
+  Result := nil;
+  LCodeLen := Length(AProgram.Code);
+  if LCodeLen = 0 then Exit;
+  if rfMultiLine in AProgram.Flags then
+    Exit(NfaFindAll(AProgram, AInput, ALen, AMaxMatches));
+
+  DfaCacheReset(ACache);
+  LCount := 0;
+  LStart := 0;
+
+  LHasPrefix := AProgram.LiteralPrefixLen > 0;
+  LPrefixLen := AProgram.LiteralPrefixLen;
+  LPrefixStr := AProgram.LiteralPrefix;
+  LHasStartClass := (AProgram.StartClassSize > 0) and (AProgram.StartClassSize < 128)
+                     and (not LHasPrefix);
+  if LHasPrefix then
+    LPrefixByte := Byte(LPrefixStr[1])
+  else
+    LPrefixByte := 0;
+
+  LRoots[0] := 0;
+
+  while LStart <= ALen do
+  begin
+    if LHasPrefix and (LStart < ALen) then
+    begin
+      while True do
+      begin
+        prefixPos := SizeInt(ScanFindByte(AInput + LStart, ALen - LStart, LPrefixByte));
+        if prefixPos < 0 then begin SetLength(Result, LCount); Exit; end;
+        LStart := LStart + SizeUInt(prefixPos);
+        if LPrefixLen <= 1 then Break;
+        if LStart + LPrefixLen > ALen then begin SetLength(Result, LCount); Exit; end;
+        k := 1;
+        while (k < LPrefixLen) and (AInput[LStart + k] = AnsiChar(LPrefixStr[k + 1])) do
+          Inc(k);
+        if k = LPrefixLen then Break;
+        Inc(LStart);
+        if LStart >= ALen then begin SetLength(Result, LCount); Exit; end;
+      end;
+    end
+    else if LHasStartClass and (LStart < ALen) then
+    begin
+      while (LStart < ALen) and
+            (not CharBitmapTest(AProgram.StartClass, Ord(AInput[LStart]))) do
+        Inc(LStart);
+    end;
+
+    LMatchEnd := -1;
+
+    LAtStart := (LStart = 0);
+    LPrevIsWord := (LStart > 0) and IsWordChar(Ord(AInput[LStart - 1]));
+
+    if LStart >= ALen then
+    begin
+      if EpsilonClose(ACache, AProgram, LRoots, 1,
+           LAtStart, LPrevIsWord, False, True) then
+        LMatchEnd := SizeInt(LStart);
+    end
+    else
+    begin
+      LCurrIsWord := IsWordChar(Ord(AInput[LStart]));
+
+      if EpsilonClose(ACache, AProgram, LRoots, 1,
+           LAtStart, LPrevIsWord, LCurrIsWord, False) then
+        LMatchEnd := SizeInt(LStart);
+
+      ByteStep(ACache, AProgram, Ord(AInput[LStart]));
+
+      if ACache.NextCount > 0 then
+      begin
+        SortPCs(ACache.NextPCs, ACache.NextCount);
+        LInitCount := DeduplicatePCs(ACache.NextPCs, ACache.NextCount);
+        curState := FindOrCreateState(ACache, ACache.NextPCs, LInitCount);
+
+        if curState = DFA_UNKNOWN then
+        begin
+          Result := NfaFindAll(AProgram, AInput, ALen, AMaxMatches);
+          Exit;
+        end;
+
+        if curState <> DFA_DEAD then
+        begin
+          LPos := LStart + 1;
+
+          while LPos < ALen do
+          begin
+            ch := Ord(AInput[LPos]);
+            LPrevIsWord := IsWordChar(Ord(AInput[LPos - 1]));
+            LCtx := Ord(LPrevIsWord);
+
+            nextState := ACache.States[curState].Next[LCtx, ch];
+            if nextState = DFA_UNKNOWN then
+            begin
+              nextState := ComputeTransition(ACache, AProgram, curState, LCtx, ch, False);
+              if ACache.Overflow then
+              begin
+                Result := NfaFindAll(AProgram, AInput, ALen, AMaxMatches);
+                Exit;
+              end;
+            end;
+
+            if ACache.States[curState].MatchOnTrans[LCtx, ch] then
+              LMatchEnd := SizeInt(LPos);
+
+            if nextState = DFA_DEAD then Break;
+
+            curState := nextState;
+            Inc(LPos);
+          end;
+
+          if LPos >= ALen then
+          begin
+            LPrevIsWord := (ALen > 0) and IsWordChar(Ord(AInput[ALen - 1]));
+            LCtx := Ord(LPrevIsWord);
+            if CheckEofAccept(ACache, AProgram, curState, LCtx, False) then
+              LMatchEnd := SizeInt(ALen);
+          end;
+        end;
+      end;
+    end;
+
     if LMatchEnd >= 0 then
     begin
       if LCount >= SizeUInt(Length(Result)) then
