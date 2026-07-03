@@ -4,8 +4,6 @@ unit SysUtils;
 
 interface
 
-uses
-  nextpas.core.exception;
 const
   PathDelim = '/';
   DirectorySeparator = '/';
