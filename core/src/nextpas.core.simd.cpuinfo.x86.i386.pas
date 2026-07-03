@@ -2,7 +2,6 @@ unit nextpas.core.simd.cpuinfo.x86.i386;
 
 {$I nextpas.core.settings.inc}
 {$I nextpas.core.simd.settings.inc}
-{$ASMMODE INTEL}
 
 interface
 
@@ -23,6 +22,10 @@ function GetX86CacheInfo: TX86CacheInfo;
 function IsAVXSupportedByOS: Boolean;
 
 implementation
+
+{$IFDEF CPU386}
+
+{$ASMMODE INTEL}
 
 type
   TCPUIDResult = array[0..3] of DWord;
@@ -298,8 +301,51 @@ begin
   end;
 end;
 
+{$ELSE}
+
+{ Stubs for non-i386 platforms — these functions are only meaningful on 32-bit x86 }
+
+function HasCPUID: Boolean;
+begin
+  Result := False;
+end;
+
+procedure CPUID(EAX: DWord; var EAX_Out, EBX_Out, ECX_Out, EDX_Out: DWord);
+begin
+  EAX_Out := 0; EBX_Out := 0; ECX_Out := 0; EDX_Out := 0;
+end;
+
+procedure CPUIDEX(EAX, ECX_In: DWord; var EAX_Out, EBX_Out, ECX_Out, EDX_Out: DWord);
+begin
+  EAX_Out := 0; EBX_Out := 0; ECX_Out := 0; EDX_Out := 0;
+end;
+
+function ReadXCR0: UInt64;
+begin
+  Result := 0;
+end;
+
+function DetectX86Features: TX86Features;
+begin
+  Result := Default(TX86Features);
+end;
+
+procedure DetectX86VendorAndModel(var cpuInfo: TCPUInfo);
+begin
+  cpuInfo.Vendor := 'Non-i386';
+  cpuInfo.Model := 'Non-i386 Processor';
+end;
+
+function GetX86CacheInfo: TX86CacheInfo;
+begin
+  Result := Default(TX86CacheInfo);
+end;
+
+function IsAVXSupportedByOS: Boolean;
+begin
+  Result := False;
+end;
+
+{$ENDIF}
+
 end.
-
-
-
-

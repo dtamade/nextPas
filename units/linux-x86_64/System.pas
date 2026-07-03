@@ -2,6 +2,7 @@ unit System;
 
 {$mode objfpc}{$H+}
 
+{$IFNDEF FPC}
 interface
 
 type
@@ -196,5 +197,16 @@ destructor Exception.Destroy;
 begin
   inherited Destroy;
 end;
+
+function InterlockedCompareExchange(var Target: Pointer; NewValue: Pointer; Comperand: Pointer): Pointer;
+begin
+  Result := Target;
+  Target := NewValue;
+end;
+
+{$ELSE}
+interface
+implementation
+{$ENDIF}
 
 end.

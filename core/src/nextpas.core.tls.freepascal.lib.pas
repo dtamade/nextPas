@@ -11,6 +11,8 @@ unit nextpas.core.tls.freepascal.lib;
 interface
 
 uses
+  Classes, SysUtils,
+  nextpas.core.base,
   nextpas.core.fs,
   nextpas.core.io.intf,
   nextpas.core.tls.base;
@@ -118,7 +120,7 @@ type
     FPEMData: string;
     FInfo: TSSLCertificateInfo;
     FIssuerCert: ISSLCertificate;
-    function ReadAllBytes(AStream: TStream): TBytes;
+    function ReadAllBytes(AStream: IStream): TBytes;
     function HexNormalize(const AValue: string): string;
     function CopyBytes(const AData: TBytes): TBytes;
     procedure RebuildInfo;
@@ -127,13 +129,13 @@ type
     constructor Create;
 
     function LoadFromFile(const AFileName: string): Boolean;
-    function LoadFromStream(AStream: TStream): Boolean;
+    function LoadFromStream(AStream: IStream): Boolean;
     function LoadFromMemory(const AData: Pointer; ASize: Integer): Boolean;
     function LoadFromPEM(const APEM: string): Boolean;
     function LoadFromDER(const ADER: TBytes): Boolean;
 
     function SaveToFile(const AFileName: string): Boolean;
-    function SaveToStream(AStream: TStream): Boolean;
+    function SaveToStream(AStream: IStream): Boolean;
     function SaveToPEM: string;
     function SaveToDER: TBytes;
 
@@ -215,12 +217,12 @@ begin
   FIssuerCert := nil;
 end;
 
-function TFreePascalCertificate.ReadAllBytes(AStream: TStream): TBytes;
+function TFreePascalCertificate.ReadAllBytes(AStream: IStream): TBytes;
 begin
   SetLength(Result, 0);
   if AStream = nil then
     Exit;
-  Result := IoReadAll(WrapTStream(AStream, False));
+  Result := IoReadAll(AStream);
 end;
 
 function TFreePascalCertificate.HexNormalize(const AValue: string): string;
@@ -378,7 +380,7 @@ begin
   end;
 end;
 
-function TFreePascalCertificate.LoadFromStream(AStream: TStream): Boolean;
+function TFreePascalCertificate.LoadFromStream(AStream: IStream): Boolean;
 var
   LRaw: TBytes;
   LText: string;
@@ -512,7 +514,7 @@ begin
   if Length(LBytes) = 0 then
     Exit;
 
-  LStream := TFileStream.Create(AFileName, fmCreate);
+  LStream := TFileStream.Create(AFileName, Word(fmCreate));
   try
     LStream.WriteBuffer(LBytes[0], Length(LBytes));
     Result := True;
@@ -521,7 +523,7 @@ begin
   end;
 end;
 
-function TFreePascalCertificate.SaveToStream(AStream: TStream): Boolean;
+function TFreePascalCertificate.SaveToStream(AStream: IStream): Boolean;
 var
   LBytes: TBytes;
 begin
@@ -540,7 +542,7 @@ begin
   if Length(LBytes) = 0 then
     Exit;
 
-  AStream.WriteBuffer(LBytes[0], Length(LBytes));
+  AStream.Write(LBytes[0], Length(LBytes));
   Result := True;
 end;
 

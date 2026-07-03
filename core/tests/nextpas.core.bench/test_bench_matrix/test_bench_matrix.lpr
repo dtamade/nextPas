@@ -10,6 +10,12 @@ uses
   nextpas.core.text.conv,
   nextpas.core.test;
 
+type
+  TBenchResult = nextpas.core.bench.base.TBenchResult;
+  TBenchResultArray = nextpas.core.bench.base.TBenchResultArray;
+  TBenchBaseline = nextpas.core.bench.base.TBaselineData;
+  TBenchResults = nextpas.core.bench.TBenchResults;
+
 { 构造 TBenchResult 用于测试（不实际运行 benchmark） }
 function MakeResult(const AName: string; ANsPerOp: Double;
   ASampleCount: Integer = 0): TBenchResult;

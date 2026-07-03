@@ -12,7 +12,7 @@ unit nextpas.core.tls.cert;
 
 interface
 
-uses nextpas.core.tls.cert.builder; type TCertificate = class public class function CreateBuilder: ICertificateBuilder; static;
+uses nextpas.core.base, nextpas.core.tls.cert.builder; type TCertificate = class public class function CreateBuilder: ICertificateBuilder; static;
     class function CreateSelfSigned(const ACommonName: string): IKeyPairWithCertificate; static;
     class function CreateServerCert(const ACommonName: string; const ASANs: array of string): IKeyPairWithCertificate; static;
     class function CreateClientCert(const ACommonName: string): IKeyPairWithCertificate; static;

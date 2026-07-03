@@ -13,7 +13,8 @@ uses
 const
   CTRL_EMPTY   = Byte($FF);
   CTRL_DELETED = Byte($80);
-  GROUP_SIZE   = 16;
+  GROUP_SIZE   = 16,
+  nextpas.core.mem.allocator.base;
 
 type
   generic TSwissTableStr<V> = class
@@ -30,7 +31,7 @@ type
     FGroupCount: SizeUInt;
     FCount: SizeUInt;
     FGrowthLeft: SizeUInt;
-    FAllocator: IAllocator;
+    FAllocator: TMemAllocator;
 
     procedure AllocTable(ACapacity: SizeUInt);
     procedure FreeTable;
@@ -41,7 +42,7 @@ type
 
   public
     constructor Create(aCapacity: SizeUInt = 0);
-    constructor CreateWith(aCapacity: SizeUInt; const aAllocator: IAllocator);
+    constructor CreateWith(aCapacity: SizeUInt; const aAllocator: TMemAllocator);
     destructor Destroy; override;
 
     function TryGetValue(const AKey: string; out AValue: V): Boolean;
@@ -191,7 +192,7 @@ begin
   end;
 end;
 
-constructor TSwissTableStr.CreateWith(aCapacity: SizeUInt; const aAllocator: IAllocator);
+constructor TSwissTableStr.CreateWith(aCapacity: SizeUInt; const aAllocator: TMemAllocator);
 begin
   inherited Create;
   FCtrl := nil; FSlots := nil; FAllocator := aAllocator;

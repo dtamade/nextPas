@@ -47,6 +47,8 @@ function SSE2DivF64x2_i386(const a, b: TVecF64x2): TVecF64x2;
 
 implementation
 
+{$IFDEF CPU386}
+
 uses
   nextpas.core.simd.cpuinfo,
   nextpas.core.simd.cpuinfo.base,
@@ -680,6 +682,48 @@ begin
 end;
 
 {$I nextpas.core.simd.sse2.i386.register.inc}
+
+{$ELSE}
+
+procedure RegisterSSE2i386Backend;
+begin
+  // No-op on non-i386
+end;
+
+function MemEqual_SSE2_i386(a, b: Pointer; len: SizeUInt): LongBool;
+begin Result := False; end;
+function MemFindByte_SSE2_i386(p: Pointer; len: SizeUInt; value: Byte): PtrInt;
+begin Result := -1; end;
+function SumBytes_SSE2_i386(p: Pointer; len: SizeUInt): UInt64;
+begin Result := 0; end;
+function CountByte_SSE2_i386(p: Pointer; len: SizeUInt; value: Byte): SizeUInt;
+begin Result := 0; end;
+function BitsetPopCount_SSE2_i386(p: Pointer; len: SizeUInt): SizeUInt;
+begin Result := 0; end;
+function SSE2AddF32x4_i386(const a, b: TVecF32x4): TVecF32x4;
+begin Result := Default(TVecF32x4); end;
+function SSE2SubF32x4_i386(const a, b: TVecF32x4): TVecF32x4;
+begin Result := Default(TVecF32x4); end;
+function SSE2MulF32x4_i386(const a, b: TVecF32x4): TVecF32x4;
+begin Result := Default(TVecF32x4); end;
+function SSE2DivF32x4_i386(const a, b: TVecF32x4): TVecF32x4;
+begin Result := Default(TVecF32x4); end;
+function SSE2AddI32x4_i386(const a, b: TVecI32x4): TVecI32x4;
+begin Result := Default(TVecI32x4); end;
+function SSE2SubI32x4_i386(const a, b: TVecI32x4): TVecI32x4;
+begin Result := Default(TVecI32x4); end;
+function SSE2MulI32x4_i386(const a, b: TVecI32x4): TVecI32x4;
+begin Result := Default(TVecI32x4); end;
+function SSE2AddF64x2_i386(const a, b: TVecF64x2): TVecF64x2;
+begin Result := Default(TVecF64x2); end;
+function SSE2SubF64x2_i386(const a, b: TVecF64x2): TVecF64x2;
+begin Result := Default(TVecF64x2); end;
+function SSE2MulF64x2_i386(const a, b: TVecF64x2): TVecF64x2;
+begin Result := Default(TVecF64x2); end;
+function SSE2DivF64x2_i386(const a, b: TVecF64x2): TVecF64x2;
+begin Result := Default(TVecF64x2); end;
+
+{$ENDIF}
 
 
 end.

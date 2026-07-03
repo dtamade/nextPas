@@ -4,7 +4,7 @@ program test_wolfssl_metadata_accuracy;
 
 uses
   {$IFDEF UNIX}
-  cthreads,
+  nextpas.core.thread.init,
   {$ENDIF}
   SysUtils,
   Classes,

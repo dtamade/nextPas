@@ -7,12 +7,9 @@ uses
   nextpas.core.test,
   nextpas.core.mem.error,
   nextpas.core.mem.allocator.base,
-  nextpas.core.mem.allocator.rtl,
   nextpas.core.mem.pool,
   nextpas.core.mem.pool.base,
   nextpas.core.mem.pool.fixed,
-  nextpas.core.mem.pool.allocator,
-  nextpas.core.mem.pool.slab,
   nextpas.core.mem.pool.object_pool;
 
 type
@@ -90,8 +87,6 @@ function TFixedPoolRecordingAllocator.Traits: TAllocatorTraits;
 begin
   Result.ZeroInitialized := False;
   Result.ThreadSafe := False;
-  Result.HasMemSize := False;
-  Result.SupportsAligned := False;
 end;
 
 procedure ReleaseExternalPointer;
@@ -411,65 +406,6 @@ begin
   end;
 end;
 
-{ ── Test: MakeFixedSlabPool factory ── }
-
-procedure TestMakeFixedSlabPoolFactory;
-var
-  LPool: IFixedSlabPool;
-  LPtr: Pointer;
-  LOk: Boolean;
-begin
-  LPool := MakeFixedSlabPool(1024);
-  Check(LPool <> nil, 'MakeFixedSlabPool should return non-nil');
-  LOk := LPool.Acquire(LPtr);
-  Check(LOk, 'Acquire from MakeFixedSlabPool should succeed');
-  Check(LPtr <> nil, 'Acquire should return non-nil pointer');
-  LPool.Release(LPtr);
-end;
-
-{ ── Test: AllocErrorToString ── }
-
-procedure TestAllocErrorToString;
-begin
-  Check(AllocErrorToString(aeOutOfMemory) <> '', 'aeOutOfMemory should have string');
-  Check(AllocErrorToString(aeInvalidPointer) <> '', 'aeInvalidPointer should have string');
-  Check(AllocErrorToString(aeDoubleFree) <> '', 'aeDoubleFree should have string');
-  Check(AllocErrorToString(aeInvalidLayout) <> '', 'aeInvalidLayout should have string');
-end;
-
-{ ── Test: MakePoolAllocator factory ── }
-
-procedure TestMakePoolAllocatorFactory;
-var
-  LAllocator: IAllocator;
-  LPtr: Pointer;
-begin
-  LAllocator := MakePoolAllocator(64, 100);
-  Check(LAllocator <> nil, 'MakePoolAllocator should return non-nil');
-  LPtr := LAllocator.GetMem(32);
-  Check(LPtr <> nil, 'GetMem from pool allocator should succeed');
-  PByte(LPtr)^ := $5A;
-  Check(PByte(LPtr)^ = $5A, 'pool allocator memory should be writable');
-  LAllocator.FreeMem(LPtr);
-end;
-
-{ ── Test: CreateSlabConfigWithPageMerging ── }
-
-procedure TestCreateSlabConfigWithPageMerging;
-var
-  LCfg: TSlabConfig;
-  LDefault: TSlabConfig;
-begin
-  LCfg := CreateSlabConfigWithPageMerging;
-  Check(LCfg.EnablePageMerging, 'CreateSlabConfigWithPageMerging should enable page merging');
-
-  LDefault := CreateDefaultSlabConfig;
-  Check(not LDefault.EnablePageMerging, 'default config should have page merging disabled');
-  Check(LCfg.MinShift = LDefault.MinShift, 'page merging config should preserve MinShift');
-  Check(LCfg.PageSize = LDefault.PageSize, 'page merging config should preserve PageSize');
-  Check(LCfg.EnablePerfMonitoring = LDefault.EnablePerfMonitoring, 'page merging config should preserve EnablePerfMonitoring');
-end;
-
 begin
   T := TTestSuite.Create('nextpas.core.mem.pool');
   T.Test('Create', @TestPoolCreate);
@@ -487,10 +423,6 @@ begin
   T.Test('fixed pool batch clamps to open-array length', @TestFixedPoolBatchClampsToOpenArrayLength);
   T.Test('fixed pool rejects total-size overflow before alloc', @TestFixedPoolRejectsTotalSizeOverflowBeforeAlloc);
   T.Test('object pool batch clamps to open-array length', @TestObjectPoolBatchClampsToOpenArrayLength);
-  T.Test('MakeFixedSlabPool factory', @TestMakeFixedSlabPoolFactory);
-  T.Test('AllocErrorToString', @TestAllocErrorToString);
-  T.Test('MakePoolAllocator factory', @TestMakePoolAllocatorFactory);
-  T.Test('CreateSlabConfigWithPageMerging', @TestCreateSlabConfigWithPageMerging);
   T.Run;
 
   T.Summary;

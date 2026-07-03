@@ -19,7 +19,7 @@ uses
   nextpas.core.mem.utils,
   nextpas.core.mem.pool.base,     // DefaultAcquireN / DefaultReleaseN (CS-001)
   nextpas.core.mem.blockpool,
-  nextpas.core.mem.intf,
+  nextpas.core.mem.intf,          // IAllocator
   nextpas.core.mem.error;
 
 type
@@ -316,27 +316,21 @@ begin
 
   LBytes := aBlocks * FBlockSize;
   if (FBlockSize <> 0) and ((LBytes div FBlockSize) <> aBlocks) then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'TGrowingBlockPool: segment size overflow');
+    raise EOutOfMemory.CreateMsg('TGrowingBlockPool: segment size overflow');
 
   if FAlignment <= 1 then
     LAllocSize := LBytes
   else
     LAllocSize := LBytes + (FAlignment - 1);
   if LAllocSize < LBytes then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'TGrowingBlockPool: allocation size overflow');
+    raise EOutOfMemory.CreateMsg('TGrowingBlockPool: allocation size overflow');
 
-  if FAllocator <> nil then
-  begin
-    LRaw := FAllocator.GetMem(LAllocSize);
-    if LRaw = nil then
-      Exit(False);
-  end
+  if FAllocator = nil then
+    LRaw := System.GetMem(LAllocSize)
   else
-  begin
-    GetMem(LRaw, LAllocSize);
-    if LRaw = nil then
-      Exit(False);
-  end;
+    LRaw := FAllocator.GetMem(LAllocSize);
+  if LRaw = nil then
+    Exit(False);
 
   LAddr := PtrUInt(LRaw);
   if FAlignment <= 1 then
@@ -349,7 +343,7 @@ begin
       if FAllocator <> nil then
         FAllocator.FreeMem(LRaw)
       else
-        FreeMem(LRaw);
+        System.FreeMem(LRaw);
       Exit(False);
     end;
     LAligned := (LAddr + PtrUInt(LMask)) and not PtrUInt(LMask);
@@ -478,7 +472,7 @@ begin
   if FAllocator <> nil then
     FAllocator.FreeMem(LRaw)
   else
-    FreeMem(LRaw);
+    System.FreeMem(LRaw);
 end;
 
 procedure TGrowingBlockPool.ShrinkToSegmentCount(ACount: SizeInt);
@@ -510,16 +504,7 @@ begin
   if aConfig.BlockSize = 0 then
     raise EAllocError.Create(aeInvalidLayout, 'TGrowingBlockPool: block size must be > 0');
 
-  LAlign := aConfig.Alignment;
-  if LAlign = 0 then
-    LAlign := DEFAULT_ALIGNMENT
-  else
-  begin
-    if (LAlign and (LAlign - 1)) <> 0 then
-      raise EAllocError.Create(aeAlignmentNotSupported, 'TGrowingBlockPool: alignment must be power of 2');
-    if LAlign < MEM_DEFAULT_ALIGN then
-      LAlign := MEM_DEFAULT_ALIGN;
-  end;
+  LAlign := SanitizeConfigAlignment(aConfig.Alignment);
 
   if aConfig.BlockSize < LAlign then
     LActualBlockSize := LAlign
@@ -578,7 +563,7 @@ begin
 
   LInitCap := FInitialCapacity;
   if not AddSegment(LInitCap) then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'TGrowingBlockPool: failed to allocate initial segment');
+    raise EOutOfMemory.CreateMsg('TGrowingBlockPool: failed to allocate initial segment');
 end;
 
 constructor TGrowingBlockPool.Create(ABlockSize, aInitialCapacity: SizeUInt; AAlignment: SizeUInt);

@@ -64,11 +64,14 @@ type
     procedure ParseCompoundComponents(AOffset: Int32;
       out AComponents: TFontCompoundComponentArray);
     function ExpandCompoundOutline(
-      const AComponents: TFontCompoundComponentArray): TFontGlyphOutline;
+      const AComponents: TFontCompoundComponentArray;
+      ADepth: Int32): TFontGlyphOutline;
+    function GlyphOutlineInternal(AGlyphIndex: UInt32;
+      ADepth: Int32): TFontGlyphOutline;
   public
     {** 从文件路径加载字体 }
     constructor Create(const AFilePath: string);
-    {** 从内存数据加载字体（AData 不复制，调用方需保活） }
+    {** 从内存数据加载字体（AData 会被复制到内部缓冲区） }
     constructor CreateFromMemory(const AData: array of Byte);
     destructor Destroy; override;
 
@@ -158,7 +161,11 @@ begin
       LStream := nil;
     end;
   except
-    Exit;
+    on E: Exception do
+    begin
+      FLastError := 'Failed to load font file: ' + E.Message;
+      Exit;
+    end;
   end;
 
   try
@@ -176,10 +183,16 @@ begin
     try
       ParseGpos;
     except
+      on E: Exception do
+        if FLastError = '' then
+          FLastError := 'GPOS: ' + E.Message;
     end;
     try
       ParseGsub;
     except
+      on E: Exception do
+        if FLastError = '' then
+          FLastError := 'GSUB: ' + E.Message;
     end;
     FValid := True;
   except
@@ -225,10 +238,16 @@ begin
     try
       ParseGpos;
     except
+      on E: Exception do
+        if FLastError = '' then
+          FLastError := 'GPOS: ' + E.Message;
     end;
     try
       ParseGsub;
     except
+      on E: Exception do
+        if FLastError = '' then
+          FLastError := 'GSUB: ' + E.Message;
     end;
     FValid := True;
   except
@@ -252,6 +271,8 @@ begin
   SetLength(FCmapFmt4.IdRangeOffset, 0);
   SetLength(FCmapFmt4.GlyphIdArray, 0);
   SetLength(FCmapFmt12.Groups, 0);
+  SetLength(FPairPosSubtables, 0);
+  SetLength(FLigatureSubtables, 0);
   inherited Destroy;
 end;
 
@@ -845,13 +866,16 @@ begin
     // Get class1 and class2.
     LClass1 := GetClass(LSub.ClassDef1Offset, ALeftGlyph);
     LClass2 := GetClass(LSub.ClassDef2Offset, ARightGlyph);
-    if (LClass1 * LSub.Class2Count + LClass2) < 0 then
+    // 使用 Int64 防止乘法溢出（恶意 GPOS 表可构造大 Class2Count）
+    if (Int64(LClass1) * LSub.Class2Count + LClass2) < 0 then
       Continue;
-    // Read kern value.
-    if FDataLength < LSub.BaseOffset + 14 + (LClass1 * LSub.Class2Count + LClass2) * LSub.ValueRecordSize + LSub.XAdvanceOffset + 2 then
+    // 安全的边界检查（Int64 防止中间结果溢出）
+    if FDataLength < Int64(LSub.BaseOffset) + 14 +
+       (Int64(LClass1) * LSub.Class2Count + LClass2) * LSub.ValueRecordSize +
+       LSub.XAdvanceOffset + 2 then
       Continue;
     Result := ReadInt16BE(LSub.BaseOffset + 14 +
-      (LClass1 * LSub.Class2Count + LClass2) * LSub.ValueRecordSize +
+      (Int64(LClass1) * LSub.Class2Count + LClass2) * LSub.ValueRecordSize +
       LSub.XAdvanceOffset);
     if Result <> 0 then
       Exit;
@@ -1022,11 +1046,14 @@ begin
           // 通过 IdRangeOffset 索引 GlyphIdArray
           // IdRangeOffset 是相对于自身位置的字节偏移
           // 具体公式：*(&IdRangeOffset[J] + (cp - startCode) + IdRangeOffset/2 - segCount)
-          LOffset := (ACodepoint - LStartCode) +
-            (LIdRangeOff div 2) - (FCmapFmt4.SegmentCount - J);
-          if LOffset < UInt32(Length(FCmapFmt4.GlyphIdArray)) then
+          // 使用 Int64 防止无符号下溢回绕
+          if LIdRangeOff div 2 < FCmapFmt4.SegmentCount - J then
+            Continue;  // 偏移量不足，跳过此段
+          LOffset := Int64(ACodepoint - LStartCode) +
+            Int64(LIdRangeOff div 2) - Int64(FCmapFmt4.SegmentCount - J);
+          if (LOffset >= 0) and (LOffset < Int64(Length(FCmapFmt4.GlyphIdArray))) then
           begin
-            LGlyphId := FCmapFmt4.GlyphIdArray[LOffset];
+            LGlyphId := FCmapFmt4.GlyphIdArray[Int32(LOffset)];
             if LGlyphId <> 0 then
               LGlyphId := UInt16((LGlyphId + LIdDelta) and $FFFF);
             Result := LGlyphId;
@@ -1270,18 +1297,21 @@ begin
 end;
 
 function TTFontFace.ExpandCompoundOutline(
-  const AComponents: TFontCompoundComponentArray): TFontGlyphOutline;
+  const AComponents: TFontCompoundComponentArray;
+  ADepth: Int32): TFontGlyphOutline;
 var
   LI, LJ: Int32;
   LPart: TFontGlyphOutline;
   LBasePointCount: Int32;
   LScaleX, LScaleY, LOffX, LOffY: Single;
+  LHasUseMetrics: Boolean;
 begin
   FontGlyphOutlineClear(Result);
+  LHasUseMetrics := False;
 
   for LI := 0 to High(AComponents) do
   begin
-    LPart := GlyphOutline(AComponents[LI].GlyphIndex);
+    LPart := GlyphOutlineInternal(AComponents[LI].GlyphIndex, ADepth + 1);
     if LPart.ContourCount <= 0 then
       Continue;
 
@@ -1313,19 +1343,19 @@ begin
 
     Inc(Result.ContourCount, LPart.ContourCount);
 
-    // 使用第一个成分的 metrics 作为复合字形边界框
-    if AComponents[LI].UseMetrics then
+    // 使用第一个 UseMetrics 成分的边界框
+    if AComponents[LI].UseMetrics and (not LHasUseMetrics) then
     begin
       Result.XMin := LPart.XMin;
       Result.YMin := LPart.YMin;
       Result.XMax := LPart.XMax;
       Result.YMax := LPart.YMax;
+      LHasUseMetrics := True;
     end;
   end;
 
   // 如果没有 UseMetrics，从所有点计算边界框
-  if (Length(Result.Points) > 0) and
-     (not AComponents[0].UseMetrics) then
+  if (Length(Result.Points) > 0) and (not LHasUseMetrics) then
   begin
     Result.XMin := High(Int16);
     Result.YMin := High(Int16);
@@ -1346,6 +1376,12 @@ begin
 end;
 
 function TTFontFace.GlyphOutline(AGlyphIndex: UInt32): TFontGlyphOutline;
+begin
+  Result := GlyphOutlineInternal(AGlyphIndex, 0);
+end;
+
+function TTFontFace.GlyphOutlineInternal(AGlyphIndex: UInt32;
+  ADepth: Int32): TFontGlyphOutline;
 var
   LGlyfIdx: Int32;
   LOffset, LNextOffset: Int32;
@@ -1361,11 +1397,26 @@ begin
   if LGlyfIdx < 0 then
     Exit;
 
+  // loca 偏移安全检查（防止恶意字体越界读取）
+  if (FLocaOffsets[AGlyphIndex] > UInt32(High(Int32))) or
+     (FLocaOffsets[AGlyphIndex + 1] > UInt32(High(Int32))) then
+    Exit;
+
   LOffset := Int32(FTables[LGlyfIdx].Offset) + Int32(FLocaOffsets[AGlyphIndex]);
   LNextOffset := Int32(FTables[LGlyfIdx].Offset) + Int32(FLocaOffsets[AGlyphIndex + 1]);
 
+  // 检查偏移是否在文件范围内
+  if (LOffset < 0) or (LOffset >= FDataLength) then
+    Exit;
+  if (LNextOffset < 0) or (LNextOffset > FDataLength) then
+    Exit;
+
   // 零长度 = 空字形（空格等）
   if LNextOffset <= LOffset then
+    Exit;
+
+  // 至少需要 10 字节的 glyf header
+  if LNextOffset - LOffset < 10 then
     Exit;
 
   LContours := ReadInt16BE(LOffset);
@@ -1378,9 +1429,11 @@ begin
     ParseGlyphOutlineSimple(LOffset + 10, LContours, Result)
   else if LContours < 0 then
   begin
-    // 复合字形
+    // 复合字形：检查递归深度
+    if ADepth >= GLYF_COMPOUND_MAX_DEPTH then
+      Exit;  // 安全降级，返回空轮廓
     ParseCompoundComponents(LOffset + 10, LCompoundBuf);
-    Result := ExpandCompoundOutline(LCompoundBuf);
+    Result := ExpandCompoundOutline(LCompoundBuf, ADepth);
   end;
 end;
 

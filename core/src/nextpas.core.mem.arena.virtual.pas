@@ -242,16 +242,11 @@ end;
 
 procedure TVirtualArena_Init(var AArena: TVirtualArena; AAlignment: SizeUInt);
 begin
-  if (AAlignment = 0) or (not IsPowerOfTwo(AAlignment)) then
-    AArena.FAlignment := DEFAULT_ALIGNMENT
-  else if AAlignment < SizeOf(Pointer) then
-    AArena.FAlignment := SizeOf(Pointer)
-  else
-    AArena.FAlignment := AAlignment;
+  AArena.FAlignment := SanitizeConfigAlignment(AAlignment);
 
   AArena.FReservedBase := VirtualArenaReserve(ARENA_VIRTUAL_RESERVE);
   if AArena.FReservedBase = nil then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'TVirtualArena_Init: failed to reserve virtual address space');
+    raise EOutOfMemory.CreateMsg('TVirtualArena_Init: failed to reserve virtual address space');
 
   AArena.FReservedSize := ARENA_VIRTUAL_RESERVE;
   AArena.FFrontCommittedSize := 0;
@@ -544,12 +539,13 @@ begin
   if aSize = 0 then Exit;
   if aAlignment = 0 then
     aAlignment := SizeOf(Pointer);
-  if not IsPowerOfTwo(aAlignment) then
+  if (aAlignment < SizeOf(Pointer)) and IsPowerOfTwo(aAlignment) then
+    aAlignment := SizeOf(Pointer);
+  if not ValidateAlignArg(aAlignment) then
   begin
     FLastAllocFailure := vaafInvalidAlignment;
     Exit;
   end;
-  if aAlignment < SizeOf(Pointer) then aAlignment := SizeOf(Pointer);
 
   { Large objects: direct mmap }
   if aSize >= ARENA_LARGE_THRESHOLD then

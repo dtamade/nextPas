@@ -3,7 +3,7 @@ program bench_sync;
 {$I nextpas.core.settings.inc}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   nextpas.core.bench,
   nextpas.core.sync;
 

@@ -29,42 +29,6 @@ begin
   end;
 end;
 
-procedure TestAllocMem;
-var
-  LAlloc: TGuardAllocator;
-  LPtr: PByte;
-  LI: Int32;
-begin
-  LAlloc := TGuardAllocator.Create;
-  try
-    LPtr := PByte(LAlloc.AllocMem(128));
-    Check(LPtr <> nil, 'AllocMem(128) returns non-nil');
-    for LI := 0 to 127 do
-      Check(LPtr[LI] = 0, 'AllocMem zero-initialized');
-    LAlloc.FreeMem(LPtr);
-    WriteLn('PASS: AllocMem zero-initialized');
-  finally
-    LAlloc.Free;
-  end;
-end;
-
-procedure TestMemSize;
-var
-  LAlloc: TGuardAllocator;
-  LPtr: Pointer;
-begin
-  LAlloc := TGuardAllocator.Create;
-  try
-    LPtr := LAlloc.GetMem(100);
-    Check(LPtr <> nil, 'GetMem(100)');
-    Check(LAlloc.MemSize(LPtr) = 100, 'MemSize = 100');
-    LAlloc.FreeMem(LPtr);
-    WriteLn('PASS: MemSize');
-  finally
-    LAlloc.Free;
-  end;
-end;
-
 procedure TestRealloc;
 var
   LAlloc: TGuardAllocator;
@@ -140,8 +104,28 @@ begin
   try
     Check(LAlloc.GetMem(0) = nil, 'GetMem(0) = nil');
     LAlloc.FreeMem(nil);
-    Check(LAlloc.MemSize(nil) = 0, 'MemSize(nil) = 0');
     WriteLn('PASS: nil handling');
+  finally
+    LAlloc.Free;
+  end;
+end;
+
+{ T-02: AllocMem must zero-initialize (DoAllocMem override) }
+
+procedure TestAllocMemZeroed;
+var
+  LAlloc: TGuardAllocator;
+  LPtr: PByte;
+  LI: Int32;
+begin
+  LAlloc := TGuardAllocator.Create;
+  try
+    LPtr := PByte(LAlloc.AllocMem(256));
+    Check(LPtr <> nil, 'AllocMem(256) returns non-nil');
+    for LI := 0 to 255 do
+      Check(LPtr[LI] = 0, 'byte[' + IntToStr(LI) + '] is zero');
+    LAlloc.FreeMem(LPtr);
+    WriteLn('PASS: AllocMem zero-initialization');
   finally
     LAlloc.Free;
   end;
@@ -155,7 +139,6 @@ begin
   LAlloc := TGuardAllocator.Create;
   try
     LTraits := LAlloc.Traits;
-    Check(LTraits.HasMemSize = True, 'HasMemSize = True');
     Check(LTraits.ThreadSafe = False, 'ThreadSafe = False');
     WriteLn('PASS: traits');
   finally
@@ -198,12 +181,11 @@ begin
   T := TTestSuite.Create('test_guard');
 
   T.Test('get_mem', @TestGetMem);
-  T.Test('alloc_mem', @TestAllocMem);
-  T.Test('mem_size', @TestMemSize);
   T.Test('realloc', @TestRealloc);
   T.Test('multiple_allocs', @TestMultipleAllocs);
   T.Test('page_aligned', @TestPageAligned);
   T.Test('nil_handling', @TestNilHandling);
+  T.Test('alloc_mem_zeroed', @TestAllocMemZeroed);
   T.Test('traits', @TestTraits);
   T.Test('double_free_detection', @TestDoubleFreeDetection);
 

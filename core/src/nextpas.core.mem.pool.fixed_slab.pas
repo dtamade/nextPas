@@ -16,7 +16,9 @@ uses
   nextpas.core.mem.allocator,
   nextpas.core.mem.intf,
   nextpas.core.base.utils,
-  nextpas.core.mem.error;
+  nextpas.core.mem.utils,
+  nextpas.core.mem.error,
+  nextpas.core.mem.secure;      // SecureZeroMemory for CS-016
 
 type
   {$IFDEF NEXTPAS_CORE_SLAB_STATS}
@@ -62,7 +64,8 @@ type
     FOwnSizes: array of SizeUInt;
     FOwnMask: SizeUInt;
     FOwnFill: SizeUInt;
-    FAlignedFallbackPtrs: array of Pointer;
+    FAlignedFallbackPtrs: array of Pointer;     { 用户看到的对齐指针 }
+    FAlignedFallbackRawPtrs: array of Pointer;  { 原始分配指针（用于 FreeMem） }
     FAlignedFallbackStates: array of Byte;
 
     // Private helpers
@@ -82,7 +85,7 @@ type
     procedure TrackAllocated(APtr: Pointer; ASize: SizeUInt);
     procedure ValidateTrackedLivePointer(APtr: Pointer; const AOperation: string; out ASize: SizeUInt);
     function AlignedFallbackIndexOf(APtr: Pointer): Integer;
-    procedure TrackAlignedFallback(APtr: Pointer);
+    procedure TrackAlignedFallback(APtr, ARawPtr: Pointer);
     function ValidateAlignedFallbackPointer(APtr: Pointer; const AOperation: string): Integer;
     procedure FreeActiveAlignedFallbacks;
 
@@ -104,6 +107,8 @@ type
     function AllocMem(ASize: SizeUInt): Pointer;
     function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
     procedure FreeMem(ADst: Pointer);
+    {** 安全释放：释放前用 SecureZeroMemory 清零数据，防止敏感信息残留 (CS-016) *}
+    procedure SecureFree(ADst: Pointer);
     function MemSize(APtr: Pointer): SizeUInt;
 
     // IAllocator aligned allocation (fallback to GetMem with size class alignment)
@@ -298,6 +303,10 @@ begin
     n := n shr 1;
     Inc(ngx_slab_exact_shift);
   end;
+
+  // Release barrier: 确保上面的写入对其他线程可见 (CS-004)
+  // InterlockedExchange 提供全屏障语义，对 ARM 弱内存序至关重要
+  InterlockedExchange(ngx_slab_sizes_initialized, 1);
 end;
 
 // ngx_slab_init 的字节级移植
@@ -966,6 +975,8 @@ done:
   Dec(pool^.stats[slot].used);
 end;
 
+// 所有旧的 slab 函数已删除，使用 nginx 移植版本
+
 { TFixedSlabPool }
 constructor TFixedSlabPool.Create(ACapacity: SizeUInt; AAllocator: IAllocator; AMinShift: SizeUInt);
 var
@@ -1045,6 +1056,7 @@ destructor TFixedSlabPool.Destroy;
 begin
   FreeActiveAlignedFallbacks;
   SetLength(FAlignedFallbackPtrs, 0);
+  SetLength(FAlignedFallbackRawPtrs, 0);
   SetLength(FAlignedFallbackStates, 0);
   // In the current design, FCore points inside the aligned region FRaw.
   // So we must only free FRaw to avoid double free.
@@ -1372,7 +1384,7 @@ begin
   Result := -1;
 end;
 
-procedure TFixedSlabPool.TrackAlignedFallback(APtr: Pointer);
+procedure TFixedSlabPool.TrackAlignedFallback(APtr, ARawPtr: Pointer);
 var
   LIndex: Integer;
   LCount: Integer;
@@ -1384,13 +1396,16 @@ begin
   if LIndex >= 0 then
   begin
     FAlignedFallbackStates[LIndex] := FIXED_SLAB_ALIGNED_ACTIVE;
+    FAlignedFallbackRawPtrs[LIndex] := ARawPtr;
     Exit;
   end;
 
   LCount := Length(FAlignedFallbackPtrs);
   SetLength(FAlignedFallbackPtrs, LCount + 1);
+  SetLength(FAlignedFallbackRawPtrs, LCount + 1);
   SetLength(FAlignedFallbackStates, LCount + 1);
   FAlignedFallbackPtrs[LCount] := APtr;
+  FAlignedFallbackRawPtrs[LCount] := ARawPtr;
   FAlignedFallbackStates[LCount] := FIXED_SLAB_ALIGNED_ACTIVE;
 end;
 
@@ -1421,7 +1436,7 @@ begin
     if (FAlignedFallbackPtrs[LIndex] <> nil) and
        (FAlignedFallbackStates[LIndex] = FIXED_SLAB_ALIGNED_ACTIVE) then
     begin
-      FAllocator.FreeAligned(FAlignedFallbackPtrs[LIndex]);
+      FAllocator.FreeMem(FAlignedFallbackRawPtrs[LIndex]);
       FAlignedFallbackStates[LIndex] := FIXED_SLAB_ALIGNED_RELEASED;
     end;
 end;
@@ -1430,6 +1445,7 @@ procedure TFixedSlabPool.Reset;
 begin
   FreeActiveAlignedFallbacks;
   SetLength(FAlignedFallbackPtrs, 0);
+  SetLength(FAlignedFallbackRawPtrs, 0);
   SetLength(FAlignedFallbackStates, 0);
   if (FBase <> nil) and (FCore <> nil) and (FRegionEnd <> nil) then
   begin
@@ -1505,8 +1521,6 @@ begin
   // 固定 slab：AllocMem 保证零填充，默认非线程安全，提供块大小查询
   Result.ZeroInitialized := True;   // AllocMem 中有 FillChar
   Result.ThreadSafe      := False;  // 当前实现未加锁
-  Result.HasMemSize      := True;   // 提供 ChunkSizeOf / MemSizeOf
-  Result.SupportsAligned := True;   // AllocAligned 通过 fallback 路径实现
 end;
 
 function TFixedSlabPool.MemSizeOf(APtr: Pointer): SizeUInt;
@@ -1644,29 +1658,68 @@ begin
   end;
 end;
 
+procedure TFixedSlabPool.SecureFree(ADst: Pointer);
+var
+  LIndex: SizeUInt;
+  LSize: SizeUInt;
+begin
+  if ADst = nil then Exit;
+  if FCore = nil then
+    raise EAllocError.Create(aeInvalidPointer, 'TFixedSlabPool.SecureFree: pool is not initialized');
+  ValidateTrackedLivePointer(ADst, 'SecureFree', LSize);
+  // 关键顺序：先清零再释放。一旦 ngx_slab_free_locked 标记块为可用，
+  // 其他线程可能分配并写入该块，导致清零竞争。
+  SecureZeroMemory(ADst, LSize);
+  ngx_slab_free_locked(Pngx_slab_pool_t(FCore), ADst);
+  if OwnershipLookup(PtrUInt(ADst), LIndex) then
+  begin
+    FOwnStates[LIndex] := FIXED_SLAB_OWNERSHIP_RELEASED;
+    FOwnSizes[LIndex] := LSize;
+  end;
+end;
+
 function TFixedSlabPool.AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
+var
+  LRaw: Pointer;
+  LAlignMask: SizeUInt;
+  LExtra: SizeUInt;
+  LNeeded: SizeUInt;
+  LHeaderPtr: PPointer;
 begin
   // Slab pool size classes provide natural alignment based on size class:
   // - 8B blocks are 8-byte aligned
   // - 16B blocks are 16-byte aligned
   // - etc.
   // For alignment requests ≤ size class alignment, GetMem works directly.
-  // For larger alignment, fall back to underlying allocator if available.
+  // For larger alignment, over-allocate via FAllocator.GetMem + manual alignment.
   if (AAlignment <= 8) or (AAlignment <= ASize) then
     Result := GetMem(ASize)
   else if FAllocator <> nil then
   begin
-    Result := FAllocator.AllocAligned(ASize, AAlignment);
-    TrackAlignedFallback(Result);
+    if (ASize = 0) or (AAlignment < SizeOf(Pointer)) or (not IsPowerOfTwo(AAlignment)) then
+      Exit(nil);
+    LAlignMask := AAlignment - 1;
+    LExtra := LAlignMask + SizeOf(Pointer);
+    if LExtra < LAlignMask then Exit(nil);
+    LNeeded := ASize + LExtra;
+    if LNeeded < ASize then Exit(nil);
+    LRaw := FAllocator.GetMem(LNeeded);
+    if LRaw = nil then Exit(nil);
+    Result := AlignUpUnChecked(Pointer(PtrUInt(LRaw) + SizeOf(Pointer)), AAlignment);
+    LHeaderPtr := PPointer(PtrUInt(Result) - SizeOf(Pointer));
+    LHeaderPtr^ := LRaw;
+    TrackAlignedFallback(Result, LRaw);
   end
   else
-    Result := nil; // Cannot satisfy alignment request without backing allocator
+    Result := nil;
 end;
 
 procedure TFixedSlabPool.FreeAligned(APtr: Pointer);
 var
   LIndex: Integer;
   LSize: SizeUInt;
+  LHeaderPtr: PPointer;
+  LRaw: Pointer;
 begin
   if APtr = nil then Exit;
   if Owns(APtr) then
@@ -1676,7 +1729,16 @@ begin
     if AlignedFallbackIndexOf(APtr) < 0 then
       ValidateTrackedLivePointer(APtr, 'FreeAligned', LSize);
     LIndex := ValidateAlignedFallbackPointer(APtr, 'FreeAligned');
-    FAllocator.FreeAligned(APtr);
+    LRaw := FAlignedFallbackRawPtrs[LIndex];
+    if LRaw <> nil then
+      FAllocator.FreeMem(LRaw)
+    else
+    begin
+      // Fallback: recover raw pointer from header
+      LHeaderPtr := PPointer(PtrUInt(APtr) - SizeOf(Pointer));
+      LRaw := LHeaderPtr^;
+      FAllocator.FreeMem(LRaw);
+    end;
     FAlignedFallbackStates[LIndex] := FIXED_SLAB_ALIGNED_RELEASED;
   end;
 end;

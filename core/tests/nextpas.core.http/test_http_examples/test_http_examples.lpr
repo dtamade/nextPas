@@ -3,7 +3,7 @@ program test_http_examples;
 {$I nextpas.core.settings.inc}
 
 uses
-  {$IFDEF UNIX}cthreads, BaseUnix,{$ENDIF}
+  nextpas.core.thread.init, {$IFDEF UNIX}BaseUnix,{$ENDIF}
   Classes,
   Process,
   SysUtils,

@@ -3,7 +3,7 @@ program test_sni_callback;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   SysUtils, nextpas.core.tls.sni.callback, nextpas.core.tls.x509;
 
 var

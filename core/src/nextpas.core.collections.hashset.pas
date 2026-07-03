@@ -12,7 +12,8 @@ uses
   nextpas.core.collections.base,
   nextpas.core.collections.hashmap.base,
   nextpas.core.collections.hashset.intf,
-  nextpas.core.collections.hashmap;
+  nextpas.core.collections.hashmap,
+  nextpas.core.mem.allocator.base;
 
 type
   {**
@@ -83,7 +84,7 @@ type
      *   aEquals     自定义相等比较函数（可选）
      *   aAllocator  自定义内存分配器（可选）
      *}
-    constructor Create(aCapacity: SizeUInt = 0; aHash: specialize TKeyHashFunc<K> = nil; aEquals: specialize TKeyEqualsFunc<K> = nil; aAllocator: IAllocator = nil);
+    constructor Create(aCapacity: SizeUInt = 0; aHash: specialize TKeyHashFunc<K> = nil; aEquals: specialize TKeyEqualsFunc<K> = nil; aAllocator: TMemAllocator = nil);
 
     {**
      * Destroy
@@ -173,7 +174,7 @@ implementation
 
 { THashSet<K> }
 
-constructor THashSet.Create(aCapacity: SizeUInt; aHash: specialize TKeyHashFunc<K>; aEquals: specialize TKeyEqualsFunc<K>; aAllocator: IAllocator);
+constructor THashSet.Create(aCapacity: SizeUInt; aHash: specialize TKeyHashFunc<K>; aEquals: specialize TKeyEqualsFunc<K>; aAllocator: TMemAllocator);
 begin
   inherited Create(aAllocator);
   FHash := aHash;

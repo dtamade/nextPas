@@ -86,6 +86,7 @@ type
       aAccess: TMemoryMapAccess = mmaReadWrite): Boolean;
     function OpenShared(const aName: string; aAccess: TMemoryMapAccess = mmaReadWrite): Boolean;
     procedure Close;
+    procedure CloseAndUnlink;
 
     function IsValid: Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function GetPointer(aOffset: UInt64 = 0): Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
@@ -470,6 +471,14 @@ begin
   FName := '';
   FSize := 0;
   FIsCreator := False;
+end;
+
+procedure TSharedMemory.CloseAndUnlink;
+begin
+  { Mark as creator so platform_mmap_close calls shm_unlink. }
+  if FMemoryMap.IsOpen then
+    FMemoryMap.FPlatformMap.IsCreator := True;
+  Close;
 end;
 
 function TSharedMemory.IsValid: Boolean;

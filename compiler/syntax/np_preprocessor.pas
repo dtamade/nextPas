@@ -450,7 +450,11 @@ begin
   AArg := '';
   if Length(ALexeme) < 3 then Exit;
   if (ALexeme[1] = '{') and (ALexeme[2] = '$') then
-    Content := Copy(ALexeme, 3, Length(ALexeme) - 3)
+  begin
+    Content := Copy(ALexeme, 3, Length(ALexeme) - 3);
+    if (Content <> '') and (Content[Length(Content)] = '}') then
+      SetLength(Content, Length(Content) - 1);
+  end
   else if (Length(ALexeme) >= 4) and (ALexeme[1] = '(') and
     (ALexeme[2] = '*') and (ALexeme[3] = '$') then
     Content := Copy(ALexeme, 4, Length(ALexeme) - 5)
@@ -723,8 +727,9 @@ begin
       end;
       if Dir = 'ifdef' then PushFrame(EvalSimpleCondition(DirArg))
       else if Dir = 'ifndef' then PushFrame(not EvalSimpleCondition(DirArg))
+      else if Dir = 'if' then PushFrame(EvalIfExpr(DirArg))
       else if Dir = 'else' then HandleElse
-      else if Dir = 'elseif' then HandleElseIf(EvalSimpleCondition(DirArg))
+      else if Dir = 'elseif' then HandleElseIf(EvalIfExpr(DirArg))
       else if (Dir = 'endif') or (Dir = 'ifend') then HandleEndIf
       else if Dir = 'define' then begin if IsActive then FDefines.Define(DirArg); end
       else if Dir = 'undef' then begin if IsActive then FDefines.Undef(DirArg); end

@@ -4,7 +4,7 @@ program test_openssl_basic;
 
 uses
   {$IFDEF UNIX}
-  cthreads,
+  nextpas.core.thread.init,
   {$ENDIF}
   SysUtils, Classes,
   // Core units

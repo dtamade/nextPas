@@ -2,7 +2,7 @@ program test_concurrent;
 {$mode ObjFPC}{$H+}
 
 uses
-  cthreads,
+  nextpas.core.thread.init,
   SysUtils,
   nextpas.core.test,
   nextpas.core.mem.sizeclass,

@@ -11,6 +11,7 @@ uses
   nextpas.core.mem.utils,
   nextpas.core.mem.allocator,
   nextpas.core.mem.allocator.base,
+  nextpas.core.mem.allocator.guard,
   nextpas.core.mem.allocator.mimalloc,
   nextpas.core.platform.mmap;
 
@@ -63,6 +64,14 @@ const
   MEM_STACK_SCOPE_HELPERS_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.stack_scope_helpers.pas';
   MEM_STATS_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.stats.pas';
   MEM_STATS_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.stats.pas';
+  MEM_ALLOCATOR_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.allocator.pas';
+  MEM_ALLOCATOR_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.allocator.pas';
+  MEM_ALLOCATOR_GUARD_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.allocator.guard.pas';
+  MEM_ALLOCATOR_GUARD_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.allocator.guard.pas';
+  MEM_ALLOCATOR_TRACKING_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.allocator.tracking.pas';
+  MEM_ALLOCATOR_TRACKING_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.allocator.tracking.pas';
+  MEM_CENTRAL_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.central.pas';
+  MEM_CENTRAL_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.central.pas';
 
 type
   TByteArray = array[0..5] of Byte;
@@ -310,8 +319,6 @@ begin
 
   LTraits := LAllocator.Traits;
   Check(True = LTraits.ZeroInitialized, 'RTL AllocMem should be zero initialized');
-  Check(False = LTraits.SupportsAligned, 'RTL allocator should report non-native aligned support');
-  Check(False = LTraits.HasMemSize, 'RTL allocator should not expose MemSize');
 
   LPtr := LAllocator.AllocMem(32);
   try
@@ -319,29 +326,6 @@ begin
       Check(Int64(0) = Int64(PByte(LPtr)[I]), 'AllocMem should zero initialize each byte');
   finally
     LAllocator.FreeMem(LPtr);
-  end;
-
-  LPtr := LAllocator.AllocAligned(64, 32);
-  try
-    Check(LPtr <> nil, 'AllocAligned should return a pointer');
-    Check(Int64(0) = Int64(PtrUInt(LPtr) mod 32), 'AllocAligned should honor the requested alignment');
-  finally
-    LAllocator.FreeAligned(LPtr);
-  end;
-end;
-
-procedure TestRtlAllocatorAlignedAllocRejectsSizeOverflow;
-var
-  LAllocator: nextpas.core.mem.allocator.IAllocator;
-  LPtr: Pointer;
-begin
-  LAllocator := GetRtlAllocator;
-  LPtr := LAllocator.AllocAligned(High(SizeUInt), SizeOf(Pointer));
-  try
-    Check(LPtr = nil, 'AllocAligned should reject size calculations that overflow SizeUInt');
-  finally
-    if LPtr <> nil then
-      LAllocator.FreeAligned(LPtr);
   end;
 end;
 
@@ -795,14 +779,96 @@ begin
     'ring buffer bulk/index paths avoid raw modulo');
 end;
 
+procedure TestGuardAllocatorRuntimeContract;
+var
+  LAllocator: nextpas.core.mem.allocator.IAllocator;
+  LPtr: Pointer;
+  I: Integer;
+begin
+  { Guard allocator uses mmap guard pages for each allocation.
+    DoAllocMem zeroes the committed region even though Traits.ZeroInitialized
+    is False (it inherits the base TAllocator default). }
+  LAllocator := TGuardAllocator.Create;
+  try
+    LPtr := LAllocator.AllocMem(64);
+    try
+      for I := 0 to 63 do
+        Check(Int64(0) = Int64(PByte(LPtr)[I]), 'guard AllocMem should be zeroed');
+    finally
+      LAllocator.FreeMem(LPtr);
+    end;
+  finally
+    LAllocator := nil;
+  end;
+end;
+
+procedure TestNoFpcRtlViolationInCoreAllocatorUnits;
+var
+  LAllocatorSrc: string;
+  LGuardSrc: string;
+  LTrackingSrc: string;
+  LCentralSrc: string;
+begin
+  { The core allocator units must NOT import FPC RTL units directly. }
+  LAllocatorSrc := LowerCase(ReadSourceText(ResolveSourcePath(
+    MEM_ALLOCATOR_SOURCE_PATH_FROM_TEST,
+    MEM_ALLOCATOR_SOURCE_PATH_FROM_ROOT)));
+  LGuardSrc := LowerCase(ReadSourceText(ResolveSourcePath(
+    MEM_ALLOCATOR_GUARD_SOURCE_PATH_FROM_TEST,
+    MEM_ALLOCATOR_GUARD_SOURCE_PATH_FROM_ROOT)));
+  LTrackingSrc := LowerCase(ReadSourceText(ResolveSourcePath(
+    MEM_ALLOCATOR_TRACKING_SOURCE_PATH_FROM_TEST,
+    MEM_ALLOCATOR_TRACKING_SOURCE_PATH_FROM_ROOT)));
+  LCentralSrc := LowerCase(ReadSourceText(ResolveSourcePath(
+    MEM_CENTRAL_SOURCE_PATH_FROM_TEST,
+    MEM_CENTRAL_SOURCE_PATH_FROM_ROOT)));
+
+  CheckNotContains(LAllocatorSrc, 'sysutils',
+    'allocator.pas must not import SysUtils');
+  CheckNotContains(LAllocatorSrc, 'classes',
+    'allocator.pas must not import Classes');
+  CheckNotContains(LGuardSrc, 'sysutils',
+    'allocator.guard.pas must not import SysUtils');
+  CheckNotContains(LGuardSrc, 'classes',
+    'allocator.guard.pas must not import Classes');
+  CheckNotContains(LTrackingSrc, 'sysutils',
+    'allocator.tracking.pas must not import SysUtils');
+  CheckNotContains(LTrackingSrc, 'classes',
+    'allocator.tracking.pas must not import Classes');
+  CheckNotContains(LCentralSrc, 'sysutils',
+    'central.pas must not import SysUtils');
+  CheckNotContains(LCentralSrc, 'classes',
+    'central.pas must not import Classes');
+end;
+
+procedure TestDualCompilerAllocatorParity;
+var
+  LAllocatorSrc: string;
+begin
+  { The allocator facade must export the key functions needed by both compilers. }
+  LAllocatorSrc := LowerCase(ReadSourceText(ResolveSourcePath(
+    MEM_ALLOCATOR_SOURCE_PATH_FROM_TEST,
+    MEM_ALLOCATOR_SOURCE_PATH_FROM_ROOT)));
+
+  CheckContains(LAllocatorSrc, 'function getrtlallocator',
+    'allocator.pas must export GetRtlAllocator');
+  CheckContains(LAllocatorSrc, 'function createcallbackallocator',
+    'allocator.pas must export CreateCallbackAllocator');
+  CheckContains(LAllocatorSrc, 'function createanonymousmemorymapallocator',
+    'allocator.pas must export CreateAnonymousMemoryMapAllocator');
+  CheckContains(LAllocatorSrc, 'function getcrtallocator',
+    'allocator.pas must export GetCrtAllocator');
+  CheckContains(LAllocatorSrc, 'function getmimallocallocator',
+    'allocator.pas must export GetMimallocAllocator');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.mem.contracts');
   T.Test('callback allocator compatibility methods', @TestCallbackAllocatorCompatibilityMethods);
   T.Test('callback allocator supports canonical interface', @TestCallbackAllocatorSupportsCanonicalInterface);
   T.Test('callback allocator rejects nil callbacks at runtime',
     @TestCallbackAllocatorRejectsNilCallbacksAtRuntime);
-  T.Test('rtl allocator zero init traits and aligned alloc', @TestRtlAllocatorZeroInitTraitsAndAlignedAlloc);
-  T.Test('rtl allocator aligned alloc rejects size overflow', @TestRtlAllocatorAlignedAllocRejectsSizeOverflow);
+  T.Test('rtl allocator zero init traits', @TestRtlAllocatorZeroInitTraitsAndAlignedAlloc);
   T.Test('chunked arena and growable block pool use canonical allocator contract',
     @TestChunkedArenaAndGrowableBlockPoolUseCanonicalAllocatorContract);
   T.Test('arena units use explicit arena api', @TestArenaUnitsUseExplicitArenaApi);
@@ -827,6 +893,9 @@ begin
   T.Test('mem.utils copy unchecked handles overlap', @TestMemUtilsCopyUncheckedHandlesOverlap);
   T.Test('mem.utils fill and zero helpers', @TestMemUtilsFillAndZeroHelpers);
   T.Test('ring buffer advance-index fast path contract', @TestRingBufferAdvanceIndexFastPathContract);
+  T.Test('guard allocator runtime contract', @TestGuardAllocatorRuntimeContract);
+  T.Test('no FPC RTL violation in core allocator units', @TestNoFpcRtlViolationInCoreAllocatorUnits);
+  T.Test('dual-compiler allocator parity', @TestDualCompilerAllocatorParity);
   T.Run;
 
   T.Summary;

@@ -94,10 +94,10 @@ begin
   ResetMocks;
   ThreadCacheInit(LCache);
   ThreadCacheRefill(LCache, 0, @MockRefill);
-  Check(ThreadCacheCount(LCache, 0) = CACHE_BATCH_SIZE, 'count = batch after refill');
+  Check(ThreadCacheCount(LCache, 0) = CACHE_ADAPTIVE_BATCH_SMALL, 'count = batch after refill');
   LPtr := ThreadCacheAlloc(LCache, 0);
   Check(LPtr <> nil, 'alloc after refill non-nil');
-  Check(ThreadCacheCount(LCache, 0) = CACHE_BATCH_SIZE - 1, 'count decreased');
+  Check(ThreadCacheCount(LCache, 0) = CACHE_ADAPTIVE_BATCH_SMALL - 1, 'count decreased');
   WriteLn('PASS: refill and alloc');
 end;
 
@@ -112,14 +112,14 @@ begin
   { Refill some blocks. }
   ThreadCacheRefill(LCache, 0, @MockRefill);
   { Alloc all. }
-  for I := 0 to CACHE_BATCH_SIZE - 1 do
+  for I := 0 to CACHE_ADAPTIVE_BATCH_SMALL - 1 do
     LBlocks[0] := ThreadCacheAlloc(LCache, 0);
   Check(ThreadCacheCount(LCache, 0) = 0, 'empty after alloc all');
   { Now refill again and alloc one to free. }
   ThreadCacheRefill(LCache, 0, @MockRefill);
   LBlocks[0] := ThreadCacheAlloc(LCache, 0);
   Check(ThreadCacheFree(LCache, 0, LBlocks[0]), 'free succeeds');
-  Check(ThreadCacheCount(LCache, 0) = CACHE_BATCH_SIZE - 1 + 1, 'count after free');
+  Check(ThreadCacheCount(LCache, 0) = CACHE_ADAPTIVE_BATCH_SMALL, 'count after free');
   { Flush. }
   GFreeCount[0] := 0;
   ThreadCacheFlush(LCache, 0, @MockFlush);

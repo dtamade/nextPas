@@ -13,7 +13,7 @@ program test_concurrent_connections;
 
 uses
   {$IFDEF UNIX}
-  cthreads,
+  nextpas.core.thread.init,
   {$ENDIF}
   SysUtils, Classes, SyncObjs,
   nextpas.core.tls.base,

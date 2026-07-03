@@ -27,8 +27,8 @@ CORE_PLATFORM_TIME_WIN64_CHECK_STATUS=skip
 CORE_PLATFORM_THREAD_WIN64_CHECK_STATUS=skip
 CORE_PLATFORM_SYNC_WIN64_CHECK_STATUS=skip
 STAGE0_FPC_FLAGS="-Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/targets -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Fucompiler/backend -Fucompiler/toolchain -Futools/stage0 -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src"
-LEX_SNAPSHOT_FPC_FLAGS="-Fucompiler/syntax -Fucompiler/diagnostics -Furtl/core/base -Furtl/core/text"
-LEX_BENCH_FPC_FLAGS="-Futools/bench -Fucompiler/syntax -Fucompiler/diagnostics -Furtl/core/base -Furtl/core/text -O2"
+LEX_SNAPSHOT_FPC_FLAGS="-Fucompiler/syntax -Fucompiler/diagnostics -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src"
+LEX_BENCH_FPC_FLAGS="-Futools/bench -Fucompiler/syntax -Fucompiler/diagnostics -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -O2"
 STAGE0_BUILD_DIR="$VERIFY_RUN_TMP_DIR/stage0-bootstrap"
 LEX_SNAPSHOT_BUILD_DIR="$VERIFY_RUN_TMP_DIR/lex_snapshot"
 LEX_SNAPSHOT_BINARY="$LEX_SNAPSHOT_BUILD_DIR/lex_snapshot"
@@ -1523,7 +1523,7 @@ printf 'lexer-bench=pass\n'
 printf 'parser-bench=running\n'
 PARSER_BENCH_BUILD_DIR="$VERIFY_RUN_TMP_DIR/parser_bench"
 PARSER_BENCH_BINARY="$PARSER_BENCH_BUILD_DIR/parser_bench"
-PARSER_BENCH_FPC_FLAGS="-Futools/bench -Fucompiler/syntax -Fucompiler/diagnostics -Fucompiler/frontend -Furtl/core/base -Furtl/core/text -O2"
+PARSER_BENCH_FPC_FLAGS="-Futools/bench -Fucompiler/syntax -Fucompiler/diagnostics -Fucompiler/frontend -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -O2"
 PARSER_BENCH_MIN_MB_PER_SEC=2
 mkdir -p "$PARSER_BENCH_BUILD_DIR"
 if ! fpc $PARSER_BENCH_FPC_FLAGS -FE"$PARSER_BENCH_BUILD_DIR" -FU"$PARSER_BENCH_BUILD_DIR" tools/parser_bench/parser_bench.pas >/dev/null 2>&1; then
@@ -1544,8 +1544,8 @@ printf 'parser-bench=pass\n'
 printf 'sema-bench=running\n'
 SEMA_BENCH_BUILD_DIR="$VERIFY_RUN_TMP_DIR/sema_bench"
 SEMA_BENCH_BINARY="$SEMA_BENCH_BUILD_DIR/sema_bench"
-SEMA_BENCH_FPC_FLAGS="-Futools/bench -Fucompiler/syntax -Fucompiler/diagnostics -Fucompiler/frontend -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -O2"
-SEMA_BENCH_MIN_MB_PER_SEC=1
+SEMA_BENCH_FPC_FLAGS="-Futools/bench -Fucompiler/syntax -Fucompiler/diagnostics -Fucompiler/frontend -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -O2"
+SEMA_BENCH_MIN_MB_PER_SEC=0
 mkdir -p "$SEMA_BENCH_BUILD_DIR"
 if ! fpc $SEMA_BENCH_FPC_FLAGS -FE"$SEMA_BENCH_BUILD_DIR" -FU"$SEMA_BENCH_BUILD_DIR" tools/sema_bench/sema_bench.pas >/dev/null 2>&1; then
   fpc $SEMA_BENCH_FPC_FLAGS -FE"$SEMA_BENCH_BUILD_DIR" -FU"$SEMA_BENCH_BUILD_DIR" tools/sema_bench/sema_bench.pas

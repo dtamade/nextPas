@@ -15,7 +15,8 @@ uses
   nextpas.core.toml.parser,
   nextpas.core.toml.value,
   nextpas.core.toml.writer,
-  nextpas.core.toml.builder;
+  nextpas.core.toml.builder,
+ nextpas.core.mem.allocator.base;
 
 type
   TTomlNodeKind = nextpas.core.toml.base.TTomlNodeKind;
@@ -38,8 +39,8 @@ type
 function TomlParse(const AInput: string): ITomlDocument; overload;
 function TomlParse(const AInput: TStringView): ITomlDocument; overload;
 function TryTomlParse(const AInput: string; out ADoc: ITomlDocument): Boolean;
-function TomlParseWith(const AInput: string; const AAllocator: IAllocator): ITomlDocument; overload;
-function TomlParseWith(const AInput: TStringView; const AAllocator: IAllocator): ITomlDocument; overload;
+function TomlParseWith(const AInput: string; const AAllocator: TMemAllocator): ITomlDocument; overload;
+function TomlParseWith(const AInput: TStringView; const AAllocator: TMemAllocator): ITomlDocument; overload;
 function TomlBuilder: ITomlBuilder; overload; inline;
 function TomlBuilder(const AInitialCap: SizeUInt): ITomlBuilder; overload; inline;
 function TomlDateTime(AYear: UInt16; AMonth, ADay, AHour, AMinute, ASecond: Byte;
@@ -66,8 +67,8 @@ type
     FInputCopy: string;
     procedure RequireStringifiable(const AOperation: string);
   public
-    constructor Create(const AInput: string; const AAllocator: IAllocator);
-    constructor CreateFromView(const AInput: TStringView; const AAllocator: IAllocator);
+    constructor Create(const AInput: string; const AAllocator: TMemAllocator);
+    constructor CreateFromView(const AInput: TStringView; const AAllocator: TMemAllocator);
     destructor Destroy; override;
     function Root: TTomlValue;
     function HasError: Boolean;
@@ -76,7 +77,7 @@ type
     function StringifyPretty(const AIndent: Int32): string;
   end;
 
-constructor TTomlDocumentImpl.Create(const AInput: string; const AAllocator: IAllocator);
+constructor TTomlDocumentImpl.Create(const AInput: string; const AAllocator: TMemAllocator);
 begin
   inherited Create;
   FInputCopy := AInput;
@@ -84,7 +85,7 @@ begin
   FDoc.Parse(TStringView.FromStr(FInputCopy));
 end;
 
-constructor TTomlDocumentImpl.CreateFromView(const AInput: TStringView; const AAllocator: IAllocator);
+constructor TTomlDocumentImpl.CreateFromView(const AInput: TStringView; const AAllocator: TMemAllocator);
 begin
   inherited Create;
   SetString(FInputCopy, AInput.Data, AInput.Len);
@@ -359,12 +360,12 @@ begin
   Result := not ADoc.HasError;
 end;
 
-function TomlParseWith(const AInput: string; const AAllocator: IAllocator): ITomlDocument;
+function TomlParseWith(const AInput: string; const AAllocator: TMemAllocator): ITomlDocument;
 begin
   Result := TTomlDocumentImpl.Create(AInput, AAllocator);
 end;
 
-function TomlParseWith(const AInput: TStringView; const AAllocator: IAllocator): ITomlDocument;
+function TomlParseWith(const AInput: TStringView; const AAllocator: TMemAllocator): ITomlDocument;
 begin
   Result := TTomlDocumentImpl.CreateFromView(AInput, AAllocator);
 end;

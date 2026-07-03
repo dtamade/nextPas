@@ -47,6 +47,7 @@ type
     FSlotSize: SizeUInt;
     FSpinLock: SizeUInt;    { Simple test-and-set lock. }
     FInboxHead: Pointer;    { Lock-free inbox: CAS singly linked list. }
+    FLastHitIndex: Int32;   { MRU cache: last span found by FindSpanIndex (-1 = none). }
   end;
 
 {** Initialize a central pool for a given slot size. }
@@ -113,6 +114,7 @@ begin
   APool.FPartialHead := -1;
   APool.FSpinLock := 0;
   APool.FInboxHead := nil;
+  APool.FLastHitIndex := -1;
   SetLength(APool.FEntries, INITIAL_CAPACITY);
   SetLength(APool.FPartialNext, INITIAL_CAPACITY);
 end;
@@ -220,19 +222,36 @@ begin
   Result := LCount;
 end;
 
-{** Find which span owns APtr (by checking address range). }
-function FindSpanIndex(const APool: TCentralPool; APtr: Pointer): Int32;
+{** Find which span owns APtr (by checking address range).
+    Uses MRU cache (FLastHitIndex) for O(1) in the common case
+    where consecutive frees go to the same span. }
+function FindSpanIndex(var APool: TCentralPool; APtr: Pointer): Int32;
 var
   I: Int32;
   LBase: PByte;
   LSize: SizeUInt;
 begin
-  for I := 0 to APool.FEntryCount - 1 do
+  { Check MRU cache first — most frees return to the same span. }
+  I := APool.FLastHitIndex;
+  if (I >= 0) and (I < APool.FEntryCount) and (APool.FEntries[I].FMemory <> nil) then
   begin
     LBase := PByte(APool.FEntries[I].FMemory);
     LSize := APool.FEntries[I].FMemorySize;
     if (PByte(APtr) >= LBase) and (PByte(APtr) < LBase + LSize) then
       Exit(I);
+  end;
+  { Linear scan — update cache on hit. }
+  for I := 0 to APool.FEntryCount - 1 do
+  begin
+    if APool.FEntries[I].FMemory = nil then
+      Continue;
+    LBase := PByte(APool.FEntries[I].FMemory);
+    LSize := APool.FEntries[I].FMemorySize;
+    if (PByte(APtr) >= LBase) and (PByte(APtr) < LBase + LSize) then
+    begin
+      APool.FLastHitIndex := I;
+      Exit(I);
+    end;
   end;
   Result := -1;
 end;
@@ -255,13 +274,15 @@ begin
     if LIdx >= 0 then
     begin
       LWasFull := not SpanHasFree(APool.FEntries[LIdx].FSpan);
-      SpanFree(APool.FEntries[LIdx].FSpan, Pointer(LHead));
-      if SpanIsEmpty(APool.FEntries[LIdx].FSpan) then
-        APool.FEntries[LIdx].FLastFreeTick := AOpCounter;
-      if LWasFull and SpanHasFree(APool.FEntries[LIdx].FSpan) then
+      if SpanFree(APool.FEntries[LIdx].FSpan, Pointer(LHead)) then
       begin
-        APool.FPartialNext[LIdx] := APool.FPartialHead;
-        APool.FPartialHead := LIdx;
+        if SpanIsEmpty(APool.FEntries[LIdx].FSpan) then
+          APool.FEntries[LIdx].FLastFreeTick := AOpCounter;
+        if LWasFull and SpanHasFree(APool.FEntries[LIdx].FSpan) then
+        begin
+          APool.FPartialNext[LIdx] := APool.FPartialHead;
+          APool.FPartialHead := LIdx;
+        end;
       end;
     end;
     Inc(Result);
@@ -287,15 +308,17 @@ begin
         Continue;
       end;
       LWasFull := not SpanHasFree(APool.FEntries[LIdx].FSpan);
-      SpanFree(APool.FEntries[LIdx].FSpan, ABlocks^);
-      { If span became completely empty, mark it as idle for scavenging. }
-      if SpanIsEmpty(APool.FEntries[LIdx].FSpan) then
-        APool.FEntries[LIdx].FLastFreeTick := AOpCounter;
-      { If span was full and now has space, re-add to partial list. }
-      if LWasFull and SpanHasFree(APool.FEntries[LIdx].FSpan) then
+      if SpanFree(APool.FEntries[LIdx].FSpan, ABlocks^) then
       begin
-        APool.FPartialNext[LIdx] := APool.FPartialHead;
-        APool.FPartialHead := LIdx;
+        { If span became completely empty, mark it as idle for scavenging. }
+        if SpanIsEmpty(APool.FEntries[LIdx].FSpan) then
+          APool.FEntries[LIdx].FLastFreeTick := AOpCounter;
+        { If span was full and now has space, re-add to partial list. }
+        if LWasFull and SpanHasFree(APool.FEntries[LIdx].FSpan) then
+        begin
+          APool.FPartialNext[LIdx] := APool.FPartialHead;
+          APool.FPartialHead := LIdx;
+        end;
       end;
       Inc(ABlocks);
     end;
@@ -322,7 +345,7 @@ end;
 function ScavengeCentralPools(var APool: TCentralPool;
   AOpCounter: UInt64; AIdleThreshold: UInt64): Int32;
 var
-  I: Int32;
+  I, LPrev, LCur: Int32;
   LAge: UInt64;
 begin
   Result := 0;
@@ -343,13 +366,30 @@ begin
       LAge := AOpCounter - APool.FEntries[I].FLastFreeTick;
       if LAge >= AIdleThreshold then
       begin
+        { Unlink from partial list if present (safety for edge cases). }
+        LPrev := -1;
+        LCur := APool.FPartialHead;
+        while LCur >= 0 do
+        begin
+          if LCur = I then
+          begin
+            if LPrev < 0 then
+              APool.FPartialHead := APool.FPartialNext[LCur]
+            else
+              APool.FPartialNext[LPrev] := APool.FPartialNext[LCur];
+            Break;
+          end;
+          LPrev := LCur;
+          LCur := APool.FPartialNext[LCur];
+        end;
         FreeMem(APool.FEntries[I].FMemory, APool.FEntries[I].FMemorySize);
         APool.FEntries[I].FMemory := nil;
         APool.FEntries[I].FLastFreeTick := 0;
-        { Mark span as empty so SpanAlloc returns nil if entry is still
-          on the partial list (edge case: race with concurrent alloc). }
         APool.FEntries[I].FSpan.FBitmap := 0;
         APool.FEntries[I].FSpan.FFreeCount := 0;
+        { Invalidate MRU cache if it points to the released span. }
+        if APool.FLastHitIndex = I then
+          APool.FLastHitIndex := -1;
         Inc(Result);
       end;
     end;

@@ -17,6 +17,11 @@ const
     and AVX (32-byte, when combined with AllocAligned) use cases. }
   DEFAULT_ALIGNMENT = 16;
 
+  { Debug-mode poison pattern written to freed memory to detect use-after-free.
+    0xDE is chosen because: (1) recognisable in hex dumps, (2) unlikely valid pointer,
+    (3) non-zero so dereference traps. }
+  MEM_POISON_FREED = $DE;
+
 type
   TAllocatorKind = (
     akDefault,
@@ -39,6 +44,10 @@ function AlignUp(const AValue, AAlignment: SizeUInt): SizeUInt; inline;
 {** Return AAlignment if it is a power of two and >= DEFAULT_ALIGNMENT,
     otherwise return DEFAULT_ALIGNMENT. }
 function NormalizeAlignment(const AAlignment: SizeUInt): SizeUInt; inline;
+
+{** Validate an alignment argument: must be non-zero, >= pointer size, and
+    power of two. Returns True if valid. }
+function ValidateAlignArg(const AAlignment: SizeUInt): Boolean; inline;
 
 {** Fibonacci hash: multiply by 2^64/golden-ratio. Used for shard routing and
     open-addressing hash maps. }
@@ -81,6 +90,11 @@ begin
     Result := AAlignment
   else
     Result := DEFAULT_ALIGNMENT;
+end;
+
+function ValidateAlignArg(const AAlignment: SizeUInt): Boolean;
+begin
+  Result := (AAlignment <> 0) and (AAlignment >= SizeOf(Pointer)) and IsPowerOfTwo(AAlignment);
 end;
 
 {$PUSH}{$Q-}

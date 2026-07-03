@@ -11,7 +11,8 @@ interface
 uses
   nextpas.core.text.conv,
   nextpas.core.errors,
-  nextpas.core.mem.intf;
+  nextpas.core.mem.intf,
+ nextpas.core.mem.allocator.base;
 
 type
   TStringArray = array of string;
@@ -35,7 +36,7 @@ type
     FSections: PTIniSection;
     FSectionCount: Integer;
     FSectionCap: Integer;
-    FAllocator: IAllocator;
+    FAllocator: TMemAllocator;
     procedure ClearSection(var ASection: TIniSection);
     procedure ClearSections;
     procedure EnsureSectionCapacity(ANeeded: Integer);
@@ -48,7 +49,7 @@ type
     procedure ParseLine(const ALine: string; var ACurrentSection: Integer);
     function CaseInsensitiveEqual(const A, B: string): Boolean;
   public
-    constructor Create(const AAllocator: IAllocator = nil);
+    constructor Create(const AAllocator: TMemAllocator = nil);
     destructor Destroy; override;
     procedure LoadFromFile(const AFileName: string);
     procedure LoadFromString(const AContent: string);
@@ -70,11 +71,11 @@ type
     procedure DeleteSection(const ASection: string);
     function GetSections: TStringArray;
     function GetKeys(const ASection: string): TStringArray;
-    function Allocator: IAllocator;
+    function Allocator: TMemAllocator;
   end;
 
 function IniParse(const AContent: string): TIniFile;
-function IniParseWith(const AContent: string; const AAllocator: IAllocator): TIniFile;
+function IniParseWith(const AContent: string; const AAllocator: TMemAllocator): TIniFile;
 function IniStringify(const AFile: TIniFile): string; inline;
 
 implementation
@@ -84,7 +85,7 @@ uses
 
 { TIniFile }
 
-constructor TIniFile.Create(const AAllocator: IAllocator);
+constructor TIniFile.Create(const AAllocator: TMemAllocator);
 begin
   inherited Create;
   if AAllocator = nil then
@@ -761,7 +762,7 @@ begin
     Result[I] := FSections[LSIdx].Entries[I].Key;
 end;
 
-function TIniFile.Allocator: IAllocator;
+function TIniFile.Allocator: TMemAllocator;
 begin
   if FAllocator = nil then
     Result := DefaultAllocator
@@ -774,7 +775,7 @@ begin
   Result := IniParseWith(AContent, DefaultAllocator);
 end;
 
-function IniParseWith(const AContent: string; const AAllocator: IAllocator): TIniFile;
+function IniParseWith(const AContent: string; const AAllocator: TMemAllocator): TIniFile;
 begin
   Result := TIniFile.Create(AAllocator);
   try

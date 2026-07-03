@@ -22,6 +22,12 @@ uses
   nextpas.core.simd.cpuinfo,
   nextpas.core.test;
 
+type
+  TBenchResult = nextpas.core.bench.base.TBenchResult;
+  TBenchResultArray = nextpas.core.bench.base.TBenchResultArray;
+  TBenchBaseline = nextpas.core.bench.base.TBaselineData;
+  TBenchEnvironment = nextpas.core.bench.base.TBenchEnvironment;
+
 var
   GSetupCallCount: Integer;
   GTeardownCallCount: Integer;

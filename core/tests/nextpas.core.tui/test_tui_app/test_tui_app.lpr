@@ -3,7 +3,7 @@ program test_tui_app;
 {$I nextpas.core.settings.inc}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   SysUtils,
   nextpas.core.tui.base,
   nextpas.core.tui.event,

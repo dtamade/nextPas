@@ -3,9 +3,9 @@
   Re-exports all public API from sub-modules:
     test.base, test.check, test.config, test.expect, test.output,
     test.output.tap, test.output.json, test.runner, test.discovery,
-    test.mock
+    test.mock, test.helpers
   White-box modules (not re-exported — import directly for internals):
-    test.runner.context, test.runner.parallel
+    test.runner.cli, test.runner.context, test.runner.parallel
   Dual API: procedural Check* + fluent IExpectation chain.
   Parallel execution, subtests, ANSI output, leak detection,
   RTTI discovery, retry, TAP/JSON/JUnit output, mock framework. }
@@ -17,7 +17,7 @@ unit nextpas.core.test;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.system,
   nextpas.core.test.base,
   nextpas.core.test.check,
   nextpas.core.test.config,
@@ -27,12 +27,17 @@ uses
   nextpas.core.test.output.json,
   nextpas.core.test.runner,
   nextpas.core.test.discovery,
-  nextpas.core.test.mock;
+  nextpas.core.test.mock,
+  nextpas.core.test.helpers;
 
 { ── Re-exported types from test.base ─────────────────────────────────────── }
 
 type
   ExceptClass = nextpas.core.test.base.ExceptClass;
+  Exception = nextpas.core.system.Exception;
+  EAbort = nextpas.core.system.EAbort;
+  EAssertionFailed = nextpas.core.system.EAssertionFailed;
+  EConvertError = nextpas.core.system.EConvertError;
   TTestProc = nextpas.core.test.base.TTestProc;
   TTestClosure = nextpas.core.test.base.TTestClosure;
   ITestContext = nextpas.core.test.base.ITestContext;
@@ -45,6 +50,11 @@ type
   ETestSkipped = nextpas.core.test.base.ETestSkipped;
   TTestEntryKind = nextpas.core.test.base.TTestEntryKind;
   TTestEntry = nextpas.core.test.base.TTestEntry;
+  TBenchProc = nextpas.core.test.base.TBenchProc;
+  TBenchContext = nextpas.core.test.base.TBenchContext;
+  PBenchContext = nextpas.core.test.base.PBenchContext;
+  TBenchResult = nextpas.core.test.base.TBenchResult;
+  TBenchResults = nextpas.core.test.base.TBenchResults;
   TAnsiMode = nextpas.core.test.config.TAnsiMode;
   TConfigKey = nextpas.core.test.config.TConfigKey;
   TConfigKeys = nextpas.core.test.config.TConfigKeys;
@@ -64,6 +74,8 @@ const
   ekSubtest = nextpas.core.test.base.ekSubtest;
   ekSkipped = nextpas.core.test.base.ekSkipped;
   ekTableTest = nextpas.core.test.base.ekTableTest;
+  ekShouldFail = nextpas.core.test.base.ekShouldFail;
+  ekBench    = nextpas.core.test.base.ekBench;
   amAuto = nextpas.core.test.config.amAuto;
   amOn = nextpas.core.test.config.amOn;
   amOff = nextpas.core.test.config.amOff;
@@ -87,6 +99,7 @@ type
 { ── Re-exported functions from test.expect ────────────────────────────────── }
 
 function Expect(const AValue: string): IExpectation;
+function ExpectStr(const AValue: string): IExpectation;
 function ExpectInt(const AValue: Int64): IExpectation;
 function ExpectBool(AValue: Boolean): IExpectation;
 function ExpectDouble(const AValue: Double): IExpectation;
@@ -118,10 +131,26 @@ procedure CheckStartsWith(const AStr, APrefix: string);
 procedure CheckEndsWith(const AStr, ASuffix: string);
 procedure CheckSame(const AExpected, AActual: Pointer; const AMessage: string = '');
 procedure CheckInRange(const AValue, ALow, AHigh: Int64);
+procedure CheckInRangeD(const AValue, ALow, AHigh: Double;
+  const AEpsilon: Double = 1e-10);
 procedure CheckGreaterThan(const AValue, AExpected: Int64);
 procedure CheckLessThan(const AValue, AExpected: Int64);
 procedure CheckGreaterOrEqual(const AValue, AExpected: Int64);
 procedure CheckLessOrEqual(const AValue, AExpected: Int64);
+procedure CheckGreaterThanD(const AValue, AExpected: Double;
+  const AEpsilon: Double = 1e-10);
+procedure CheckLessThanD(const AValue, AExpected: Double;
+  const AEpsilon: Double = 1e-10);
+procedure CheckGreaterOrEqualD(const AValue, AExpected: Double;
+  const AEpsilon: Double = 1e-10);
+procedure CheckLessOrEqualD(const AValue, AExpected: Double;
+  const AEpsilon: Double = 1e-10);
+procedure CheckContainsCI(const AHaystack, ANeedle: string);
+procedure CheckNotContainsCI(const AHaystack, ANeedle: string);
+procedure CheckStartsWithCI(const AStr, APrefix: string);
+procedure CheckEndsWithCI(const AStr, ASuffix: string);
+procedure CheckNotStartsWith(const AStr, APrefix: string);
+procedure CheckNotEndsWith(const AStr, ASuffix: string);
 procedure CheckLength(const AExpected, AActual: NativeInt);
 procedure CheckRaises(AExceptionClass: ExceptClass; AProc: TTestProc;
   const AMessage: string = '');
@@ -130,9 +159,16 @@ procedure CheckNear(const AExpected, AActual: Double;
   const AEpsilon: Double = 1e-10; const AMessage: string = '');
 procedure CheckNotNear(const AExpected, AActual: Double;
   const AEpsilon: Double = 1e-10; const AMessage: string = '');
+procedure CheckNearRel(const AExpected, AActual: Double;
+  const ARelEps: Double = 1e-9; const AMessage: string = '');
+procedure CheckNotNearRel(const AExpected, AActual: Double;
+  const ARelEps: Double = 1e-9; const AMessage: string = '');
 procedure Fail(const AMessage: string);
 procedure FailUnexpected(const E: Exception);
 procedure Skip(const AReason: string = '');
+procedure SleepMs(AMilliseconds: Integer);
+procedure CheckSnapshot(const AActual: string;
+  const ASnapshotDir, ASnapshotName: string);
 
 { ── Re-exported from test.base (stack trace) ─────────────────────────────── }
 
@@ -158,6 +194,8 @@ function  MatchesFilter(const AName: string): Boolean;
 function  MatchesFilter(const AName: string; const AConfig: TTestConfig): Boolean;
 procedure SetTagFilter(const APattern: string);
 function  GetTagFilter: string;
+procedure SetRunPattern(const APattern: string);
+function  GetRunPattern: string;
 procedure SetTestTimeout(AMillis: Integer);
 function  GetTestTimeout: Integer;
 procedure ReportLeakIfAny(AStatus: TTestStatus);
@@ -173,13 +211,39 @@ procedure SetDefaultRetryCount(ARetryCount: Integer);
 procedure SetDefaultMaxParallelWorkers(AMaxWorkers: Integer);
 procedure SetDefaultRepeatAllCount(ARepeatCount: Integer);
 procedure SetDefaultSlowTestCount(ACount: Integer);
+procedure SetDefaultShuffleSeed(ASeed: Integer);
+procedure SetDefaultFailFast(AFailFast: Boolean);
+procedure SetDefaultListMode(AListMode: Boolean);
+procedure SetDefaultShortMode(AShortMode: Boolean);
+procedure SetDefaultShowProgress(AShowProgress: Boolean);
+procedure SetDefaultMaxFailures(AMaxFailures: Integer);
+procedure SetDefaultJsonOutput(AJsonOutput: Boolean);
+procedure SetDefaultVerboseMode(AVerbose: Boolean);
+procedure SetDefaultRunTimeoutSec(ATimeoutSec: Integer);
+procedure SetDefaultBenchEnabled(AEnabled: Boolean);
+procedure SetDefaultBenchTimeMs(ATimeMs: Integer);
+procedure SetDefaultBenchMem(ABenchMem: Boolean);
 function  GetRepeatAllCount(const AConfig: TTestConfig): Integer;
 function  GetSlowTestCount(const AConfig: TTestConfig): Integer;
+function  GetShuffleSeed(const AConfig: TTestConfig): Integer;
+function  GetFailFast(const AConfig: TTestConfig): Boolean;
+function  GetListMode(const AConfig: TTestConfig): Boolean;
+function  GetShortMode(const AConfig: TTestConfig): Boolean;
+function  GetShowProgress(const AConfig: TTestConfig): Boolean;
+function  GetMaxFailures(const AConfig: TTestConfig): Integer;
+function  GetJsonOutput(const AConfig: TTestConfig): Boolean;
+function  GetVerboseMode(const AConfig: TTestConfig): Boolean;
+function  GetRunTimeoutSec(const AConfig: TTestConfig): Integer;
+function  GetBenchEnabled(const AConfig: TTestConfig): Boolean;
+function  GetBenchTimeMs(const AConfig: TTestConfig): Integer;
+function  GetBenchMem(const AConfig: TTestConfig): Boolean;
 function  FormatDuration(AMillis: Int64): string;
 function  GetTopSlowest(const AResults: TTestResults;
   ACount: Integer): TTestResults;
 function  MakeTestResult(const AName: string; AStatus: TTestStatus;
   const AMessage: string; ADuration: Int64): TTestResult;
+procedure ShuffleEntries(var AEntries: specialize TArray<TTestEntry>;
+  ASeed: Integer);
 
 type
   TTestResults = nextpas.core.test.base.TTestResults;
@@ -207,6 +271,7 @@ function JSONReport(const AResults: specialize TArray<TTestRunResult>;
 
 type
   TMockValueKind = nextpas.core.test.mock.TMockValueKind;
+  TMockCall = nextpas.core.test.mock.TMockCall;
   TMock = nextpas.core.test.mock.TMock;
   TMockState = nextpas.core.test.mock.TMockState;
   TMockValue = nextpas.core.test.mock.TMockValue;
@@ -219,12 +284,29 @@ function MockInt(const AValue: Int64): TMockValue;
 function MockBool(AValue: Boolean): TMockValue;
 function MockDouble(const AValue: Double): TMockValue;
 
+{ ── Re-exported types from test.helpers ─────────────────────────────────── }
+
+type
+  TMockProc = nextpas.core.test.helpers.TMockProc;
+
+{ ── Re-exported functions from test.helpers ─────────────────────────────── }
+
+procedure ExpectFail(AProc: TTestClosure;
+  const AContains: string = '');
+procedure WithMock(AProc: TMockProc);
+procedure ExpectFailWithMock(AProc: TMockProc;
+  const AContains: string = '');
+function MakeBufferConfig(out ASink: TBufferSink): TTestConfig;
+
 implementation
 
 { ── Forward to test.expect ────────────────────────────────────────────────── }
 
 function Expect(const AValue: string): IExpectation;
 begin Result := nextpas.core.test.expect.Expect(AValue); end;
+
+function ExpectStr(const AValue: string): IExpectation;
+begin Result := nextpas.core.test.expect.ExpectStr(AValue); end;
 
 function ExpectInt(const AValue: Int64): IExpectation;
 begin Result := nextpas.core.test.expect.ExpectInt(AValue); end;
@@ -320,6 +402,44 @@ begin nextpas.core.test.check.CheckGreaterOrEqual(AValue, AExpected); end;
 procedure CheckLessOrEqual(const AValue, AExpected: Int64);
 begin nextpas.core.test.check.CheckLessOrEqual(AValue, AExpected); end;
 
+procedure CheckInRangeD(const AValue, ALow, AHigh: Double;
+  const AEpsilon: Double);
+begin nextpas.core.test.check.CheckInRangeD(AValue, ALow, AHigh, AEpsilon); end;
+
+procedure CheckGreaterThanD(const AValue, AExpected: Double;
+  const AEpsilon: Double);
+begin nextpas.core.test.check.CheckGreaterThanD(AValue, AExpected, AEpsilon); end;
+
+procedure CheckLessThanD(const AValue, AExpected: Double;
+  const AEpsilon: Double);
+begin nextpas.core.test.check.CheckLessThanD(AValue, AExpected, AEpsilon); end;
+
+procedure CheckGreaterOrEqualD(const AValue, AExpected: Double;
+  const AEpsilon: Double);
+begin nextpas.core.test.check.CheckGreaterOrEqualD(AValue, AExpected, AEpsilon); end;
+
+procedure CheckLessOrEqualD(const AValue, AExpected: Double;
+  const AEpsilon: Double);
+begin nextpas.core.test.check.CheckLessOrEqualD(AValue, AExpected, AEpsilon); end;
+
+procedure CheckContainsCI(const AHaystack, ANeedle: string);
+begin nextpas.core.test.check.CheckContainsCI(AHaystack, ANeedle); end;
+
+procedure CheckNotContainsCI(const AHaystack, ANeedle: string);
+begin nextpas.core.test.check.CheckNotContainsCI(AHaystack, ANeedle); end;
+
+procedure CheckStartsWithCI(const AStr, APrefix: string);
+begin nextpas.core.test.check.CheckStartsWithCI(AStr, APrefix); end;
+
+procedure CheckEndsWithCI(const AStr, ASuffix: string);
+begin nextpas.core.test.check.CheckEndsWithCI(AStr, ASuffix); end;
+
+procedure CheckNotStartsWith(const AStr, APrefix: string);
+begin nextpas.core.test.check.CheckNotStartsWith(AStr, APrefix); end;
+
+procedure CheckNotEndsWith(const AStr, ASuffix: string);
+begin nextpas.core.test.check.CheckNotEndsWith(AStr, ASuffix); end;
+
 procedure CheckLength(const AExpected, AActual: NativeInt);
 begin nextpas.core.test.check.CheckLength(AExpected, AActual); end;
 
@@ -338,6 +458,14 @@ procedure CheckNotNear(const AExpected, AActual: Double;
   const AEpsilon: Double; const AMessage: string);
 begin nextpas.core.test.check.CheckNotNear(AExpected, AActual, AEpsilon, AMessage); end;
 
+procedure CheckNearRel(const AExpected, AActual: Double;
+  const ARelEps: Double; const AMessage: string);
+begin nextpas.core.test.check.CheckNearRel(AExpected, AActual, ARelEps, AMessage); end;
+
+procedure CheckNotNearRel(const AExpected, AActual: Double;
+  const ARelEps: Double; const AMessage: string);
+begin nextpas.core.test.check.CheckNotNearRel(AExpected, AActual, ARelEps, AMessage); end;
+
 procedure Fail(const AMessage: string);
 begin nextpas.core.test.check.Fail(AMessage); end;
 
@@ -346,6 +474,13 @@ begin nextpas.core.test.check.FailUnexpected(E); end;
 
 procedure Skip(const AReason: string);
 begin nextpas.core.test.check.Skip(AReason); end;
+
+procedure SleepMs(AMilliseconds: Integer);
+begin nextpas.core.test.base.SleepMs(AMilliseconds); end;
+
+procedure CheckSnapshot(const AActual: string;
+  const ASnapshotDir, ASnapshotName: string);
+begin nextpas.core.test.check.CheckSnapshot(AActual, ASnapshotDir, ASnapshotName); end;
 
 { ── Forward to test.base (stack trace) ───────────────────────────────────── }
 
@@ -408,6 +543,12 @@ begin nextpas.core.test.output.SetTagFilter(APattern); end;
 function GetTagFilter: string;
 begin Result := nextpas.core.test.output.GetTagFilter; end;
 
+procedure SetRunPattern(const APattern: string);
+begin nextpas.core.test.config.SetDefaultRunPattern(APattern); end;
+
+function GetRunPattern: string;
+begin Result := nextpas.core.test.config.GetRunPattern(nextpas.core.test.config.DefaultConfig); end;
+
 procedure SetTestTimeout(AMillis: Integer);
 begin nextpas.core.test.output.SetTestTimeout(AMillis); end;
 
@@ -455,6 +596,78 @@ begin Result := nextpas.core.test.config.GetRepeatAllCount(AConfig); end;
 function GetSlowTestCount(const AConfig: TTestConfig): Integer;
 begin Result := nextpas.core.test.config.GetSlowTestCount(AConfig); end;
 
+function GetShuffleSeed(const AConfig: TTestConfig): Integer;
+begin Result := nextpas.core.test.config.GetShuffleSeed(AConfig); end;
+
+function GetFailFast(const AConfig: TTestConfig): Boolean;
+begin Result := nextpas.core.test.config.GetFailFast(AConfig); end;
+
+function GetListMode(const AConfig: TTestConfig): Boolean;
+begin Result := nextpas.core.test.config.GetListMode(AConfig); end;
+
+procedure SetDefaultShuffleSeed(ASeed: Integer);
+begin nextpas.core.test.config.SetDefaultShuffleSeed(ASeed); end;
+
+procedure SetDefaultFailFast(AFailFast: Boolean);
+begin nextpas.core.test.config.SetDefaultFailFast(AFailFast); end;
+
+procedure SetDefaultListMode(AListMode: Boolean);
+begin nextpas.core.test.config.SetDefaultListMode(AListMode); end;
+
+procedure SetDefaultShortMode(AShortMode: Boolean);
+begin nextpas.core.test.config.SetDefaultShortMode(AShortMode); end;
+
+procedure SetDefaultShowProgress(AShowProgress: Boolean);
+begin nextpas.core.test.config.SetDefaultShowProgress(AShowProgress); end;
+
+procedure SetDefaultMaxFailures(AMaxFailures: Integer);
+begin nextpas.core.test.config.SetDefaultMaxFailures(AMaxFailures); end;
+
+procedure SetDefaultJsonOutput(AJsonOutput: Boolean);
+begin nextpas.core.test.config.SetDefaultJsonOutput(AJsonOutput); end;
+
+procedure SetDefaultVerboseMode(AVerbose: Boolean);
+begin nextpas.core.test.config.SetDefaultVerboseMode(AVerbose); end;
+
+procedure SetDefaultRunTimeoutSec(ATimeoutSec: Integer);
+begin nextpas.core.test.config.SetDefaultRunTimeoutSec(ATimeoutSec); end;
+
+procedure SetDefaultBenchEnabled(AEnabled: Boolean);
+begin nextpas.core.test.config.SetDefaultBenchEnabled(AEnabled); end;
+
+procedure SetDefaultBenchTimeMs(ATimeMs: Integer);
+begin nextpas.core.test.config.SetDefaultBenchTimeMs(ATimeMs); end;
+
+procedure SetDefaultBenchMem(ABenchMem: Boolean);
+begin nextpas.core.test.config.SetDefaultBenchMem(ABenchMem); end;
+
+function GetShortMode(const AConfig: TTestConfig): Boolean;
+begin Result := nextpas.core.test.config.GetShortMode(AConfig); end;
+
+function GetShowProgress(const AConfig: TTestConfig): Boolean;
+begin Result := nextpas.core.test.config.GetShowProgress(AConfig); end;
+
+function GetMaxFailures(const AConfig: TTestConfig): Integer;
+begin Result := nextpas.core.test.config.GetMaxFailures(AConfig); end;
+
+function GetJsonOutput(const AConfig: TTestConfig): Boolean;
+begin Result := nextpas.core.test.config.GetJsonOutput(AConfig); end;
+
+function GetVerboseMode(const AConfig: TTestConfig): Boolean;
+begin Result := nextpas.core.test.config.GetVerboseMode(AConfig); end;
+
+function GetRunTimeoutSec(const AConfig: TTestConfig): Integer;
+begin Result := nextpas.core.test.config.GetRunTimeoutSec(AConfig); end;
+
+function GetBenchEnabled(const AConfig: TTestConfig): Boolean;
+begin Result := nextpas.core.test.config.GetBenchEnabled(AConfig); end;
+
+function GetBenchTimeMs(const AConfig: TTestConfig): Integer;
+begin Result := nextpas.core.test.config.GetBenchTimeMs(AConfig); end;
+
+function GetBenchMem(const AConfig: TTestConfig): Boolean;
+begin Result := nextpas.core.test.config.GetBenchMem(AConfig); end;
+
 function FormatDuration(AMillis: Int64): string;
 begin Result := nextpas.core.test.output.FormatDuration(AMillis); end;
 
@@ -465,6 +678,10 @@ begin Result := nextpas.core.test.base.GetTopSlowest(AResults, ACount); end;
 function MakeTestResult(const AName: string; AStatus: TTestStatus;
   const AMessage: string; ADuration: Int64): TTestResult;
 begin Result := nextpas.core.test.base.MakeTestResult(AName, AStatus, AMessage, ADuration); end;
+
+procedure ShuffleEntries(var AEntries: specialize TArray<TTestEntry>;
+  ASeed: Integer);
+begin nextpas.core.test.base.ShuffleEntries(AEntries, ASeed); end;
 
 { ── Forward to test.discovery ──────────────────────────────────────────────── }
 
@@ -497,5 +714,21 @@ begin Result := nextpas.core.test.mock.MockBool(AValue); end;
 
 function MockDouble(const AValue: Double): TMockValue;
 begin Result := nextpas.core.test.mock.MockDouble(AValue); end;
+
+{ ── Forward to test.helpers ──────────────────────────────────────────────── }
+
+procedure ExpectFail(AProc: TTestClosure;
+  const AContains: string);
+begin nextpas.core.test.helpers.ExpectFail(AProc, AContains); end;
+
+procedure WithMock(AProc: TMockProc);
+begin nextpas.core.test.helpers.WithMock(AProc); end;
+
+procedure ExpectFailWithMock(AProc: TMockProc;
+  const AContains: string);
+begin nextpas.core.test.helpers.ExpectFailWithMock(AProc, AContains); end;
+
+function MakeBufferConfig(out ASink: TBufferSink): TTestConfig;
+begin Result := nextpas.core.test.helpers.MakeBufferConfig(ASink); end;
 
 end.

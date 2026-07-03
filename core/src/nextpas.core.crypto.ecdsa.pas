@@ -52,9 +52,11 @@ implementation
 uses
   nextpas.core.tls.asn1,
   nextpas.core.crypto.bigint,
+  nextpas.core.crypto.constant_time,
   nextpas.core.crypto.hmac,
   nextpas.core.crypto.p256.field,
-  nextpas.core.crypto.p256.point;
+  nextpas.core.crypto.p256.point,
+  nextpas.core.mem.secure;
 
 const
   P256_FIELD_P: array[0..31] of Byte = (
@@ -189,6 +191,18 @@ end;
 function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean;
 begin
   Result := CompareUnsignedBytes(ALeft, ARight) = 0;
+end;
+
+{** 恒定时间无符号字节数组相等比较（纵深防御：签名验证路径） }
+function ConstantTimeUnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean;
+var
+  LLeft, LRight: TBytes;
+begin
+  LLeft := StripLeadingZeroBytes(ALeft);
+  LRight := StripLeadingZeroBytes(ARight);
+  if Length(LLeft) <> Length(LRight) then
+    Exit(False);
+  Result := TConstantTime.CompareBytes(LLeft, LRight) = 1;
 end;
 
 function TryUnsignedSubtractSmall(const AValue: TBytes; ASub: Byte; out AResult: TBytes): Boolean;
@@ -897,7 +911,7 @@ begin
   if not TryMod(LSumPoint.X, LOrder, LXModN, AError) then
     Exit;
 
-  if not UnsignedBytesEqual(LXModN, LR) then
+  if not ConstantTimeUnsignedBytesEqual(LXModN, LR) then
   begin
     AError := 'ECDSA signature does not match public key';
     Exit;
@@ -944,11 +958,15 @@ begin
   LN := ConstToBytes(P256_ORDER_N);
 
   if not TryMod(StripLeadingZeroBytes(APrivateScalar), LN, LD, AError) then
+  begin
+    SecureZeroBytes(LD);
     Exit;
+  end;
 
   if IsZeroBytes(LD) then
   begin
     AError := 'ECDSA private scalar is zero';
+    SecureZeroBytes(LD);
     Exit;
   end;
 
@@ -1010,8 +1028,14 @@ begin
     end;
 
     if not TryBuildECDSASignatureDER(LR, LS, ASignatureDER, AError) then
+    begin
+      SecureZeroBytes(LD); SecureZeroBytes(LK); SecureZeroBytes(LV);
+      SecureZeroBytes(LS); SecureZeroBytes(LKInv); SecureZeroBytes(LCandidateK);
       Exit;
+    end;
 
+    SecureZeroBytes(LD); SecureZeroBytes(LK); SecureZeroBytes(LV);
+    SecureZeroBytes(LS); SecureZeroBytes(LKInv); SecureZeroBytes(LCandidateK);
     Exit(True);
   end;
 
@@ -1021,6 +1045,8 @@ begin
   LV := HMAC_SHA256(LK, LV);
 
   AError := 'ECDSA signing failed after repeated nonce attempts';
+  SecureZeroBytes(LD); SecureZeroBytes(LK); SecureZeroBytes(LV);
+  SecureZeroBytes(LCandidateK);
 end;
 
 end.

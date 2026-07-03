@@ -8,7 +8,8 @@ uses
   nextpas.core.base,
   nextpas.core.mem.base,          // AlignUp (QA-003: 去重)
   nextpas.core.mem.allocator.base,
-  nextpas.core.mem.memory_map;
+  nextpas.core.mem.memory_map,
+  nextpas.core.mem.mutex;
 
 type
   TMemoryMapAllocator = class(TAllocator)
@@ -17,7 +18,7 @@ type
     FBase: PByte;
     FReservationSize: SizeUInt;
     FFreeHeadOffset: UInt64;
-    FLock: TRTLCriticalSection;
+    FLock: TMemMutex;
 
     function AllocateLocked(ASize: SizeUInt): Pointer;
     procedure FreeLocked(APtr: Pointer);
@@ -193,6 +194,10 @@ var
   LHeaderOffset: UInt64;
   LBlockPtr: Pointer;
   LBlock: PMemoryMapBlockHeader;
+  LCurrentOffset: UInt64;
+  LCurBlock: PMemoryMapBlockHeader;
+  LRunBase: PMemoryMapBlockHeader;
+  LRunSize: SizeUInt;
 begin
   if APtr = nil then Exit;
   if not FindBlockForPayload(APtr, LBlockPtr, LHeaderOffset) then
@@ -203,10 +208,61 @@ begin
   if LBlock^.State <> MAP_BLOCK_USED then
     raise EAllocError.Create(aeInvalidPointer, 'TMemoryMapAllocator.FreeMem: invalid block state');
 
+  { Mark the freed block as free. }
   LBlock^.State := MAP_BLOCK_FREE;
   LBlock^.RequestedSize := 0;
-  LBlock^.NextFreeOffset := FFreeHeadOffset;
-  FFreeHeadOffset := LHeaderOffset;
+
+  { Coalesce adjacent free blocks: single pass over the block chain.
+    Consecutive free runs are merged so the first block's TotalSize
+    covers the entire run. Merged-away blocks remain valid but are
+    invisible to the allocation scan (AllocateLocked walks by TotalSize). }
+  LCurrentOffset := 0;
+  while LCurrentOffset < FReservationSize do
+  begin
+    LCurBlock := PMemoryMapBlockHeader(FBase + LCurrentOffset);
+    if (LCurBlock^.Magic <> MAP_BLOCK_MAGIC) or (LCurBlock^.TotalSize < HeaderSize) then
+      raise EAllocError.Create(aeInternalError, 'TMemoryMapAllocator: coalesce scan corruption');
+
+    if LCurBlock^.State = MAP_BLOCK_FREE then
+    begin
+      LRunBase := LCurBlock;
+      LRunSize := LCurBlock^.TotalSize;
+      Inc(LCurrentOffset, LCurBlock^.TotalSize);
+
+      { Extend the run through consecutive free blocks. }
+      while LCurrentOffset < FReservationSize do
+      begin
+        LCurBlock := PMemoryMapBlockHeader(FBase + LCurrentOffset);
+        if (LCurBlock^.Magic <> MAP_BLOCK_MAGIC) or (LCurBlock^.TotalSize < HeaderSize) then
+          raise EAllocError.Create(aeInternalError, 'TMemoryMapAllocator: coalesce scan corruption');
+        if LCurBlock^.State <> MAP_BLOCK_FREE then
+          Break;
+        Inc(LRunSize, LCurBlock^.TotalSize);
+        Inc(LCurrentOffset, LCurBlock^.TotalSize);
+      end;
+
+      { Merge: extend the first free block to cover the entire run. }
+      LRunBase^.TotalSize := LRunSize;
+      LRunBase^.NextFreeOffset := NO_FREE_OFFSET;
+    end
+    else
+      Inc(LCurrentOffset, LCurBlock^.TotalSize);
+  end;
+
+  { Rebuild the free list from the merged block chain.
+    Forward scan with prepend produces a list ordered by ascending address. }
+  FFreeHeadOffset := NO_FREE_OFFSET;
+  LCurrentOffset := 0;
+  while LCurrentOffset < FReservationSize do
+  begin
+    LCurBlock := PMemoryMapBlockHeader(FBase + LCurrentOffset);
+    if LCurBlock^.State = MAP_BLOCK_FREE then
+    begin
+      LCurBlock^.NextFreeOffset := FFreeHeadOffset;
+      FFreeHeadOffset := LCurrentOffset;
+    end;
+    Inc(LCurrentOffset, LCurBlock^.TotalSize);
+  end;
 end;
 
 constructor TMemoryMapAllocator.CreateAnonymous(aReservationSize: UInt64);
@@ -214,7 +270,7 @@ var
   LInitialBlock: PMemoryMapBlockHeader;
 begin
   inherited Create;
-  InitCriticalSection(FLock);
+  FLock.Init;
 
   if aReservationSize < HeaderSize + SizeOf(Pointer) then
     raise EAllocError.Create(aeInvalidLayout, 'TMemoryMapAllocator: invalid reservation size');
@@ -228,7 +284,7 @@ begin
   begin
     FMap.Free;
     FMap := nil;
-    DoneCriticalSection(FLock);
+    FLock.Done;
     raise EOutOfMemory.Create(aeOutOfMemory, 'TMemoryMapAllocator: failed to create anonymous mapping');
   end;
 
@@ -251,29 +307,29 @@ begin
   FFreeHeadOffset := NO_FREE_OFFSET;
   FMap.Free;
   FMap := nil;
-  DoneCriticalSection(FLock);
+  FLock.Done;
   inherited Destroy;
 end;
 
 function TMemoryMapAllocator.DoGetMem(ASize: SizeUInt): Pointer;
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     Result := AllocateLocked(ASize);
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
 function TMemoryMapAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     Result := AllocateLocked(ASize);
     if Result <> nil then
       ZeroMem(Result, ASize);
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
@@ -284,7 +340,7 @@ var
   LOldBlock: PMemoryMapBlockHeader;
   LCopySize: SizeUInt;
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     if not FindBlockForPayload(ADst, LOldBlockPtr, LHeaderOffset) then
       raise EAllocError.Create(aeInvalidPointer, 'TMemoryMapAllocator.ReallocMem: pointer not owned');
@@ -307,17 +363,17 @@ begin
       CopyMem(Result, ADst, LCopySize);
     FreeLocked(ADst);
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
 procedure TMemoryMapAllocator.DoFreeMem(ADst: Pointer);
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     FreeLocked(ADst);
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
@@ -326,8 +382,6 @@ begin
   Result := inherited Traits;
   Result.ZeroInitialized := True;
   Result.ThreadSafe := True;
-  Result.HasMemSize := False;
-  Result.SupportsAligned := False;
 end;
 
 function CreateAnonymousMemoryMapAllocator(aReservationSize: UInt64): IAllocator;

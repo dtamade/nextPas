@@ -32,7 +32,9 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.mem.allocator,
+  nextpas.core.mem.base,            // ValidateAlignArg
+  nextpas.core.mem.intf,
+  nextpas.core.mem.allocator.rtl,   // ResolveAllocator
   nextpas.core.mem.error;
 
 type
@@ -392,14 +394,11 @@ begin
   FSize := ASize;
   FOffset := 0;
 
-  if AAllocator = nil then
-    FBaseAllocator := nextpas.core.mem.allocator.GetRtlAllocator
-  else
-    FBaseAllocator := AAllocator;
+  FBaseAllocator := ResolveAllocator(AAllocator);
 
   FBuffer := FBaseAllocator.GetMem(ASize);
   if FBuffer = nil then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'Failed to allocate stack buffer');
+    raise EOutOfMemory.CreateMsg('Failed to allocate stack buffer');
 end;
 
 destructor TStackPool.Destroy;
@@ -475,13 +474,8 @@ end;
 function TStackPool.AllocAligned(ASize: SizeUInt; AAlignment: SizeUInt): Pointer;
 begin
   if ASize = 0 then Exit(nil);
-  // ✅ M-4: 统一对齐验证逻辑，与 TAllocator.AllocAligned 保持一致
-  if AAlignment = 0 then
-    raise EInvalidArgument.Create('TStackPool.AllocAligned: AAlignment is 0');
-  if AAlignment < SizeOf(Pointer) then
-    raise EInvalidArgument.Create('TStackPool.AllocAligned: AAlignment must be >= pointer size');
-  if (AAlignment and (AAlignment - 1)) <> 0 then
-    raise EInvalidArgument.Create('TStackPool.AllocAligned: AAlignment must be power of two');
+  if not ValidateAlignArg(AAlignment) then
+    raise EInvalidArgument.Create('TStackPool.AllocAligned: AAlignment must be non-zero, >= pointer size, and power of two');
   Result := Alloc(ASize, AAlignment);
 end;
 
@@ -777,12 +771,8 @@ end;
 function TScopedStackPool.AllocAligned(ASize: SizeUInt; AAlignment: SizeUInt): Pointer;
 begin
   if ASize = 0 then Exit(nil);
-  if AAlignment = 0 then
-    raise EInvalidArgument.Create('TScopedStackPool.AllocAligned: AAlignment is 0');
-  if AAlignment < SizeOf(Pointer) then
-    raise EInvalidArgument.Create('TScopedStackPool.AllocAligned: AAlignment must be >= pointer size');
-  if (AAlignment and (AAlignment - 1)) <> 0 then
-    raise EInvalidArgument.Create('TScopedStackPool.AllocAligned: AAlignment must be power of two');
+  if not ValidateAlignArg(AAlignment) then
+    raise EInvalidArgument.Create('TScopedStackPool.AllocAligned: AAlignment must be non-zero, >= pointer size, and power of two');
   Result := Alloc(ASize, AAlignment);
 end;
 
@@ -876,8 +866,13 @@ begin
   // 计算最小所需大小
   LMinRequired := UsedSize + ARequiredSize;
 
-  // 按增长因子计算新大小
-  LNewSize := Round(FSize * FPolicy.GrowthFactor);
+  // 按增长因子计算新大小（用整数运算避免大值浮点精度丢失）
+  if FPolicy.GrowthFactor <= 1.0 then
+    LNewSize := FSize + FSize  // 最少 2x
+  else if FPolicy.GrowthFactor >= 2.0 then
+    LNewSize := FSize * 2
+  else
+    LNewSize := FSize + (FSize shr 1);  // 1.5x
 
   // 确保新大小足够容纳所需
   if LNewSize < LMinRequired then

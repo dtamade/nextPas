@@ -28,47 +28,26 @@ const
   HarnessTempRoot = 'build/harness/work';
   DefaultStage0Executable = 'build/stage0-bootstrap/nextpas';
   HostCompilerExecutable = 'fpc';
-
-  HARNESS_GROUP_NAMES: array[THarnessGroup] of string = (
-    'compiler-pass',
-    'compiler-fail',
-    'diagnostics',
-    'lexer',
-    'parser',
-    'semantic',
-    'toolchain',
-    'rtl',
-    'crt',
-    'regression'
-  );
-
-  HARNESS_GROUP_DIRECTORIES: array[THarnessGroup] of string = (
-    'tests/compiler/pass',
-    'tests/compiler/fail',
-    'tests/diagnostics',
-    'tests/lexer',
-    'tests/parser',
-    'tests/semantic',
-    'tests/toolchain',
-    'tests/rtl',
-    'tests/crt',
-    'tests/regression'
-  );
-
-  HARNESS_GROUP_EXPECTATIONS: array[THarnessGroup] of string = (
-    'compile-success',
-    'expected-compile-failure',
-    'diagnostic-snapshot',
-    'lexer-tokenization',
-    'parse-success',
-    'semantic-analysis',
-    'toolchain-contract',
-    'rtl-smoke',
-    'crt-smoke',
-    'regression-guard'
-  );
+  ProcessReadBufferSize = 4096;
+  ProcessPollIntervalMs = 50;
 
 type
+  TCompilerMode = (
+    cmStage0BuildRun,
+    cmStage0BuildValidate,
+    cmHostFpcBuildValidate,
+    cmHostFpcBuildRun
+  );
+
+  TGroupConfig = record
+    Name: string;
+    Directory: string;
+    Expectation: string;
+    Suffixes: string;
+    UsesSnapshot: Boolean;
+    CompilerMode: TCompilerMode;
+  end;
+
   TFixtureExecution = record
     FixturePath: string;
     ToolName: string;
@@ -85,6 +64,41 @@ type
     Passed: Boolean;
   end;
 
+const
+  HARNESS_GROUPS: array[THarnessGroup] of TGroupConfig = (
+    (Name: 'compiler-pass'; Directory: 'tests/compiler/pass';
+     Expectation: 'compile-success'; Suffixes: '_pass.pas';
+     UsesSnapshot: False; CompilerMode: cmStage0BuildRun),
+    (Name: 'compiler-fail'; Directory: 'tests/compiler/fail';
+     Expectation: 'expected-compile-failure'; Suffixes: '_fail.pas';
+     UsesSnapshot: True; CompilerMode: cmStage0BuildValidate),
+    (Name: 'diagnostics'; Directory: 'tests/diagnostics';
+     Expectation: 'diagnostic-snapshot'; Suffixes: '';
+     UsesSnapshot: True; CompilerMode: cmHostFpcBuildValidate),
+    (Name: 'lexer'; Directory: 'tests/lexer';
+     Expectation: 'lexer-tokenization'; Suffixes: '_pass.pas';
+     UsesSnapshot: False; CompilerMode: cmStage0BuildRun),
+    (Name: 'parser'; Directory: 'tests/parser';
+     Expectation: 'parse-success'; Suffixes: '_pass.pas';
+     UsesSnapshot: False; CompilerMode: cmStage0BuildRun),
+    (Name: 'semantic'; Directory: 'tests/semantic';
+     Expectation: 'semantic-analysis'; Suffixes: '_pass.pas;_fail.pas';
+     UsesSnapshot: False; CompilerMode: cmStage0BuildRun),
+    (Name: 'toolchain'; Directory: 'tests/toolchain';
+     Expectation: 'toolchain-contract'; Suffixes: '_smoke.pas';
+     UsesSnapshot: False; CompilerMode: cmHostFpcBuildRun),
+    (Name: 'rtl'; Directory: 'tests/rtl';
+     Expectation: 'rtl-smoke'; Suffixes: '_smoke.pas';
+     UsesSnapshot: False; CompilerMode: cmHostFpcBuildRun),
+    (Name: 'crt'; Directory: 'tests/crt';
+     Expectation: 'crt-smoke'; Suffixes: '_smoke.pas';
+     UsesSnapshot: False; CompilerMode: cmHostFpcBuildRun),
+    (Name: 'regression'; Directory: 'tests/regression';
+     Expectation: 'regression-guard'; Suffixes: '_regression.pas';
+     UsesSnapshot: False; CompilerMode: cmHostFpcBuildRun)
+  );
+
+type
   TGroupRunSummary = record
     FixtureCount: SizeInt;
     ExecutedCount: SizeInt;
@@ -99,28 +113,41 @@ type
     HumanSummary: string;
   end;
 
-function GroupUsesDiagnosticsSnapshot(const AGroup: THarnessGroup): Boolean; forward;
-
 function JsonEscape(const Value: string): string;
 var
   Index: SizeInt;
+  Ch: Char;
 begin
   Result := '';
   for Index := 1 to Length(Value) do
-    case Value[Index] of
+  begin
+    Ch := Value[Index];
+    case Ch of
       '\':
         Result := Result + '\\';
       '"':
         Result := Result + '\"';
-      #10:
-        Result := Result + '\n';
-      #13:
-        Result := Result + '\r';
+      #8:
+        Result := Result + '\b';
       #9:
         Result := Result + '\t';
+      #10:
+        Result := Result + '\n';
+      #11:
+        Result := Result + '\u000b';
+      #12:
+        Result := Result + '\f';
+      #13:
+        Result := Result + '\r';
     else
-      Result := Result + Value[Index];
+      if (Ord(Ch) < 32) then
+        Result := Result + '\u' + LowerCase(
+          IntToHex(Ord(Ch), 4)
+        )
+      else
+        Result := Result + Ch;
     end;
+  end;
 end;
 
 function JsonString(const Value: string): string;
@@ -203,6 +230,8 @@ begin
     WriteLn('command-envelope=', EnvelopeJson);
 end;
 
+function GroupUsesDiagnosticsSnapshot(const AGroup: THarnessGroup): Boolean; forward;
+
 function BuildGroupResultFields(
   const AGroup: THarnessGroup;
   const AFixtureCount: SizeInt;
@@ -217,8 +246,8 @@ begin
   Result := '';
   AppendJsonStringField(Result, 'selector', 'group');
   AppendJsonStringField(Result, 'target', BaselineTargetName);
-  AppendJsonStringField(Result, 'group', HARNESS_GROUP_NAMES[AGroup]);
-  AppendJsonStringField(Result, 'path', HARNESS_GROUP_DIRECTORIES[AGroup]);
+  AppendJsonStringField(Result, 'group', HARNESS_GROUPS[AGroup].Name);
+  AppendJsonStringField(Result, 'path', HARNESS_GROUPS[AGroup].Directory);
   AppendJsonIntegerField(Result, 'fixtures', LongInt(AFixtureCount), True);
   AppendJsonIntegerField(
     Result,
@@ -232,7 +261,7 @@ begin
     LongInt(AFailedFixtureCount),
     True
   );
-  AppendJsonStringField(Result, 'expectation', HARNESS_GROUP_EXPECTATIONS[AGroup]);
+  AppendJsonStringField(Result, 'expectation', HARNESS_GROUPS[AGroup].Expectation);
   AppendJsonStringField(Result, 'status', AStatusValue);
   AppendJsonStringField(Result, 'result', AResultValue);
   if GroupUsesDiagnosticsSnapshot(AGroup) then
@@ -305,21 +334,19 @@ begin
 end;
 
 procedure PrintUsage;
+var
+  Group: THarnessGroup;
 begin
   WriteLn('Usage:');
   WriteLn('  ./tests/run_all_tests.sh --list-groups');
   WriteLn('  ./tests/run_all_tests.sh --filter <group>');
   WriteLn;
   WriteLn('Supported groups:');
-  WriteLn('  compiler-pass');
-  WriteLn('  compiler-fail');
-  WriteLn('  diagnostics');
-  WriteLn('  rtl');
-  WriteLn('  crt');
-  WriteLn('  regression');
+  for Group := Low(THarnessGroup) to High(THarnessGroup) do
+    WriteLn('  ', HARNESS_GROUPS[Group].Name, '    ', HARNESS_GROUPS[Group].Expectation);
   WriteLn;
   WriteLn('Special filter:');
-  WriteLn('  smoke');
+  WriteLn('  smoke            run all groups as baseline check');
 end;
 
 procedure PrintUsageError;
@@ -328,16 +355,7 @@ begin
   WriteLn(StdErr, '  ./tests/run_all_tests.sh --list-groups');
   WriteLn(StdErr, '  ./tests/run_all_tests.sh --filter <group>');
   WriteLn(StdErr);
-  WriteLn(StdErr, 'Supported groups:');
-  WriteLn(StdErr, '  compiler-pass');
-  WriteLn(StdErr, '  compiler-fail');
-  WriteLn(StdErr, '  diagnostics');
-  WriteLn(StdErr, '  rtl');
-  WriteLn(StdErr, '  crt');
-  WriteLn(StdErr, '  regression');
-  WriteLn(StdErr);
-  WriteLn(StdErr, 'Special filter:');
-  WriteLn(StdErr, '  smoke');
+  WriteLn(StdErr, 'Run with --help for full group list.');
 end;
 
 function TryFindGroup(const AName: string; out AGroup: THarnessGroup): Boolean;
@@ -345,7 +363,7 @@ var
   Group: THarnessGroup;
 begin
   for Group := Low(THarnessGroup) to High(THarnessGroup) do
-    if HARNESS_GROUP_NAMES[Group] = AName then
+    if HARNESS_GROUPS[Group].Name = AName then
     begin
       AGroup := Group;
       Exit(True);
@@ -354,17 +372,12 @@ begin
   Result := False;
 end;
 
-function IsSmokeSelector(const AName: string): Boolean;
-begin
-  Result := AName = 'smoke';
-end;
-
 procedure PrintKnownGroups;
 var
   Group: THarnessGroup;
 begin
   for Group := Low(THarnessGroup) to High(THarnessGroup) do
-    WriteLn(HARNESS_GROUP_NAMES[Group]);
+    WriteLn(HARNESS_GROUPS[Group].Name);
 end;
 
 function EndsWithText(const AValue: string; const ASuffix: string): Boolean;
@@ -391,23 +404,6 @@ begin
     Result := GetCurrentDir;
 end;
 
-function RelativeFixturePath(const AGroupRoot: string; const AFixturePath: string): string;
-var
-  ExpandedGroupRoot: string;
-  ExpandedFixturePath: string;
-begin
-  ExpandedGroupRoot := IncludeTrailingPathDelimiter(ExpandFileName(AGroupRoot));
-  ExpandedFixturePath := ExpandFileName(AFixturePath);
-  if Pos(ExpandedGroupRoot, ExpandedFixturePath) = 1 then
-    Result := Copy(
-      ExpandedFixturePath,
-      Length(ExpandedGroupRoot) + 1,
-      Length(ExpandedFixturePath) - Length(ExpandedGroupRoot)
-    )
-  else
-    Result := ExtractFileName(AFixturePath);
-end;
-
 function FixtureToken(
   const AGroup: THarnessGroup;
   const AFixturePath: string
@@ -416,7 +412,7 @@ var
   RelativeName: string;
 begin
   RelativeName := ChangeFileExt(
-    RelativeFixturePath(HARNESS_GROUP_DIRECTORIES[AGroup], AFixturePath),
+    RelativeFixtureName(HARNESS_GROUPS[AGroup].Directory, AFixturePath),
     ''
   );
   RelativeName := StringReplace(
@@ -425,7 +421,7 @@ begin
     '-',
     [rfReplaceAll]
   );
-  Result := HARNESS_GROUP_NAMES[AGroup] + '-' + RelativeName;
+  Result := HARNESS_GROUPS[AGroup].Name + '-' + RelativeName;
 end;
 
 function FixtureTempDirectory(
@@ -500,31 +496,32 @@ function GroupFixtureMatches(
 ): Boolean;
 var
   FileName: string;
+  Suffixes: string;
+  SemicolonPos: SizeInt;
 begin
   if CompareText(ExtractFileExt(AFixturePath), '.pas') <> 0 then
     Exit(False);
 
+  Suffixes := HARNESS_GROUPS[AGroup].Suffixes;
+  if Suffixes = '' then
+    Exit(True);
+
   FileName := LowerCase(ExtractFileName(AFixturePath));
-  case AGroup of
-    hgCompilerPass:
-      Result := EndsWithText(FileName, '_pass.pas');
-    hgCompilerFail:
-      Result := EndsWithText(FileName, '_fail.pas');
-    hgDiagnostics:
-      Result := True;
-    hgRTL, hgCRT:
-      Result := EndsWithText(FileName, '_smoke.pas');
-    hgLexer:
-      Result := EndsWithText(FileName, '_pass.pas');
-    hgParser:
-      Result := EndsWithText(FileName, '_pass.pas');
-    hgSemantic:
-      Result := EndsWithText(FileName, '_pass.pas') or
-        EndsWithText(FileName, '_fail.pas');
-    hgToolchain:
-      Result := EndsWithText(FileName, '_smoke.pas');
-    hgRegression:
-      Result := EndsWithText(FileName, '_regression.pas');
+  Result := False;
+  while Suffixes <> '' do
+  begin
+    SemicolonPos := Pos(';', Suffixes);
+    if SemicolonPos > 0 then
+    begin
+      if EndsWithText(FileName, Copy(Suffixes, 1, SemicolonPos - 1)) then
+        Exit(True);
+      Delete(Suffixes, 1, SemicolonPos);
+    end
+    else
+    begin
+      Result := EndsWithText(FileName, Suffixes);
+      Exit;
+    end;
   end;
 end;
 
@@ -561,28 +558,30 @@ end;
 
 procedure CollectGroupFixtures(const AGroup: THarnessGroup; AFiles: TStrings);
 begin
-  CollectFilesRecursive(AGroup, HARNESS_GROUP_DIRECTORIES[AGroup], AFiles);
+  CollectFilesRecursive(AGroup, HARNESS_GROUPS[AGroup].Directory, AFiles);
   if AFiles is TStringList then
     TStringList(AFiles).Sort;
 end;
 
 function GroupUsesDiagnosticsSnapshot(const AGroup: THarnessGroup): Boolean;
 begin
-  Result := GroupUsesSnapshot(HARNESS_GROUP_NAMES[AGroup]);
+  Result := HARNESS_GROUPS[AGroup].UsesSnapshot;
 end;
 
 function RunProcessCapture(
   const AExecutable: string;
   const AWorkingDirectory: string;
   const AParameters: TStrings;
-  out AOutput: string
+  out AOutput: string;
+  ATimeoutMs: LongInt = 120000
 ): LongInt;
 var
   Proc: TProcess;
-  Buffer: array[0..4095] of Byte;
+  Buffer: array[0..ProcessReadBufferSize - 1] of Byte;
   BytesRead: LongInt;
   Chunk: RawByteString;
   Index: Integer;
+  ElapsedMs: LongInt;
 begin
   Proc := TProcess.Create(nil);
   try
@@ -594,6 +593,7 @@ begin
       Proc.Parameters.Add(AParameters[Index]);
     Proc.Execute;
     AOutput := '';
+    ElapsedMs := 0;
     repeat
       while Proc.Output.NumBytesAvailable > 0 do
       begin
@@ -604,7 +604,18 @@ begin
         AOutput := AOutput + string(Chunk);
       end;
       if Proc.Running then
-        Sleep(10);
+      begin
+        if (ATimeoutMs > 0) and (ElapsedMs >= ATimeoutMs) then
+        begin
+          Proc.Terminate(9);
+          AOutput := AOutput + LineEnding +
+            'harness: process killed after ' + IntToStr(ATimeoutMs) + 'ms timeout';
+          Result := ExitFailureCode;
+          Exit;
+        end;
+        Sleep(ProcessPollIntervalMs);
+        Inc(ElapsedMs, ProcessPollIntervalMs);
+      end;
     until not Proc.Running;
     while Proc.Output.NumBytesAvailable > 0 do
     begin
@@ -665,6 +676,59 @@ begin
   finally
     LoaderParameters.Free;
   end;
+end;
+
+function SafeRunProcessCapture(
+  const AExecutable: string;
+  const AWorkingDirectory: string;
+  const AParameters: TStrings;
+  out AOutput: string;
+  var AExitCode: LongInt;
+  const AFailureKind: string;
+  var AExecution: TFixtureExecution
+): Boolean;
+begin
+  try
+    AExitCode := RunProcessCapture(
+      AExecutable, AWorkingDirectory, AParameters, AOutput
+    );
+    Result := True;
+  except
+    on E: Exception do
+    begin
+      AOutput := E.Message + LineEnding;
+      AExitCode := ExitFailureCode;
+      AExecution.FailureKind := AFailureKind;
+      Result := False;
+    end;
+  end;
+end;
+
+function SafeRunTargetArtifactCapture(
+  const AArtifactPath: string;
+  out AOutput: string;
+  var AExitCode: LongInt;
+  var AExecution: TFixtureExecution
+): Boolean;
+var
+  EmptyParams: TStringList;
+begin
+  EmptyParams := TStringList.Create;
+  try
+    AExitCode := RunTargetArtifactCapture(
+      AArtifactPath, '', EmptyParams, AOutput
+    );
+    Result := True;
+  except
+    on E: Exception do
+    begin
+      AOutput := E.Message + LineEnding;
+      AExitCode := ExitFailureCode;
+      AExecution.FailureKind := 'fixture-runtime-failed';
+      Result := False;
+    end;
+  end;
+  EmptyParams.Free;
 end;
 
 function ExtractProjectionValue(
@@ -786,7 +850,7 @@ begin
   if FailureKind <> '' then
     Exit(FailureKind);
 
-  if Pos('status=success', AOutput) > 0 then
+  if ExtractProjectionValue(AOutput, 'status=') = 'success' then
     Exit('unexpected command success');
 
   Result := 'execution result unavailable';
@@ -842,13 +906,13 @@ var
   ExpectedText: string;
 begin
   AExecution.SnapshotPath := SnapshotPathForFixture(
-    HARNESS_GROUP_NAMES[AGroup],
-    HARNESS_GROUP_DIRECTORIES[AGroup],
+    HARNESS_GROUPS[AGroup].Name,
+    HARNESS_GROUPS[AGroup].Directory,
     AFixturePath
   );
   AExecution.SnapshotDiffPath := SnapshotDiffPathForFixture(
-    HARNESS_GROUP_NAMES[AGroup],
-    HARNESS_GROUP_DIRECTORIES[AGroup],
+    HARNESS_GROUPS[AGroup].Name,
+    HARNESS_GROUPS[AGroup].Directory,
     AFixturePath
   );
 
@@ -899,8 +963,8 @@ begin
   WriteLn(
     'snapshot-entry=',
     SnapshotKeyForFixture(
-      HARNESS_GROUP_NAMES[AGroup],
-      HARNESS_GROUP_DIRECTORIES[AGroup],
+      HARNESS_GROUPS[AGroup].Name,
+      HARNESS_GROUPS[AGroup].Directory,
       AExecution.FixturePath
     ),
     ' fixture=',
@@ -975,7 +1039,7 @@ begin
     ASummary.StatusValue := 'skeleton';
     ASummary.ResultValue := 'missing-fixtures';
     ASummary.HumanSummary :=
-      'group ' + HARNESS_GROUP_NAMES[AGroup] + ' missing fixtures';
+      'group ' + HARNESS_GROUPS[AGroup].Name + ' missing fixtures';
     Exit;
   end;
 
@@ -984,7 +1048,7 @@ begin
     ASummary.StatusValue := 'snapshot-missing';
     ASummary.ResultValue := 'missing-snapshots';
     ASummary.HumanSummary :=
-      'group ' + HARNESS_GROUP_NAMES[AGroup] + ' missing snapshot baselines';
+      'group ' + HARNESS_GROUPS[AGroup].Name + ' missing snapshot baselines';
     Exit;
   end;
 
@@ -993,7 +1057,7 @@ begin
     ASummary.StatusValue := 'snapshot-unstable';
     ASummary.ResultValue := 'unstable-snapshots';
     ASummary.HumanSummary :=
-      'group ' + HARNESS_GROUP_NAMES[AGroup] + ' snapshot mismatch detected';
+      'group ' + HARNESS_GROUPS[AGroup].Name + ' snapshot mismatch detected';
     Exit;
   end;
 
@@ -1002,13 +1066,257 @@ begin
     ASummary.StatusValue := 'failure';
     ASummary.ResultValue := 'fixture-failures';
     ASummary.HumanSummary :=
-      'group ' + HARNESS_GROUP_NAMES[AGroup] + ' has failing fixtures';
+      'group ' + HARNESS_GROUPS[AGroup].Name + ' has failing fixtures';
     Exit;
   end;
 
   ASummary.StatusValue := 'ready';
   ASummary.ResultValue := 'pass';
-  ASummary.HumanSummary := 'group ' + HARNESS_GROUP_NAMES[AGroup] + ' passed';
+  ASummary.HumanSummary := 'group ' + HARNESS_GROUPS[AGroup].Name + ' passed';
+end;
+
+procedure ExecuteStage0BuildRunFixture(
+  const AGroup: THarnessGroup;
+  const AFixturePath: string;
+  const ASupportsFailSuffix: Boolean;
+  var AExecution: TFixtureExecution
+);
+var
+  Params: TStringList;
+  BuildOutput: string;
+  RunOutput: string;
+  ArtifactPath: string;
+begin
+  AExecution.ToolName := 'stage0-build-run';
+  ClearStage0FixtureArtifacts(AGroup, AFixturePath);
+
+  { Build step }
+  Params := TStringList.Create;
+  try
+    Params.Add('build');
+    Params.Add(AFixturePath);
+    Params.Add('--target');
+    Params.Add(BaselineTargetName);
+    Params.Add('--workspace');
+    Params.Add(WorkspaceRootPath);
+    Params.Add('--out-dir');
+    Params.Add(FixtureBinaryDirectory(AGroup, AFixturePath));
+    SafeRunProcessCapture(
+      Stage0ExecutablePath, '', Params, BuildOutput,
+      AExecution.ExitCode, 'fixture-exec-failed', AExecution
+    );
+  finally
+    Params.Free;
+  end;
+
+  WriteTextFile(AExecution.OutputPath, BuildOutput);
+  ArtifactPath := ExtractProjectionValue(BuildOutput, 'artifact=');
+  if ArtifactPath = '' then
+    ArtifactPath := FixtureBinaryPath(AGroup, AFixturePath);
+  AExecution.ArtifactPath := ArtifactPath;
+
+  if (AExecution.FailureKind = '') and (AExecution.ExitCode <> 0) then
+    AExecution.FailureKind := ExtractProjectionValue(
+      BuildOutput, 'failure-kind='
+    );
+  if AExecution.FailureKind = '' then
+    AExecution.FailureKind := 'unexpected-build-failure';
+
+  if AExecution.ExitCode <> 0 then
+    Exit;
+
+  { Run step }
+  AExecution.RunOutputPath := FixtureRunOutputPath(AGroup, AFixturePath);
+  SafeRunTargetArtifactCapture(
+    ArtifactPath, RunOutput, AExecution.ExitCode, AExecution
+  );
+  WriteTextFile(AExecution.RunOutputPath, RunOutput);
+
+  if ASupportsFailSuffix and
+     EndsWithText(LowerCase(ExtractFileName(AFixturePath)), '_fail.pas') then
+  begin
+    { _fail.pas: runtime failure is expected → pass; runtime success → fail }
+    if AExecution.ExitCode = 0 then
+    begin
+      AExecution.FailureKind := 'unexpected-semantic-pass';
+      AExecution.ResultValue := 'failure';
+    end
+    else
+    begin
+      AExecution.ResultValue := 'pass';
+      AExecution.FailureKind := '';
+      AExecution.Passed := True;
+    end;
+  end
+  else if AExecution.ExitCode = 0 then
+  begin
+    AExecution.ResultValue := 'pass';
+    AExecution.FailureKind := '';
+    AExecution.Passed := True;
+  end
+  else
+  begin
+    AExecution.ResultValue := 'failure';
+    if AExecution.FailureKind = '' then
+      AExecution.FailureKind := 'fixture-runtime-failed';
+  end;
+
+  ClearStage0FixtureArtifacts(AGroup, AFixturePath);
+end;
+
+procedure ApplyCompilerBuildResult(
+  AExitCode: LongInt;
+  var AExecution: TFixtureExecution
+);
+begin
+  if AExitCode = 0 then
+  begin
+    AExecution.FailureKind := 'unexpected-build-success';
+    AExecution.ResultValue := 'failure';
+  end
+  else
+  begin
+    AExecution.FailureKind := '';
+    AExecution.ResultValue := 'pass';
+    AExecution.Passed := True;
+  end;
+end;
+
+procedure ExecuteCompilerBuildValidateFixture(
+  const AGroup: THarnessGroup;
+  const AFixturePath: string;
+  const ACompilerExecutable: string;
+  const AToolName: string;
+  var AExecution: TFixtureExecution
+);
+var
+  Params: TStringList;
+  BuildOutput: string;
+begin
+  AExecution.ToolName := AToolName;
+  if ACompilerExecutable = Stage0ExecutablePath then
+    ClearStage0FixtureArtifacts(AGroup, AFixturePath);
+
+  Params := TStringList.Create;
+  try
+    if ACompilerExecutable = HostCompilerExecutable then
+    begin
+      Params.Add('-FE' + FixtureTempDirectory(AGroup, AFixturePath));
+      Params.Add('-FU' + FixtureTempDirectory(AGroup, AFixturePath));
+    end
+    else
+    begin
+      Params.Add('build');
+      Params.Add(AFixturePath);
+      Params.Add('--target');
+      Params.Add(BaselineTargetName);
+      Params.Add('--workspace');
+      Params.Add(WorkspaceRootPath);
+      Params.Add('--out-dir');
+      Params.Add(FixtureBinaryDirectory(AGroup, AFixturePath));
+    end;
+    if ACompilerExecutable = HostCompilerExecutable then
+      Params.Add(AFixturePath);
+    SafeRunProcessCapture(
+      ACompilerExecutable, '', Params, BuildOutput,
+      AExecution.ExitCode, 'fixture-exec-failed', AExecution
+    );
+  finally
+    Params.Free;
+  end;
+
+  WriteTextFile(AExecution.OutputPath, BuildOutput);
+  if ACompilerExecutable = Stage0ExecutablePath then
+    ClearStage0FixtureArtifacts(AGroup, AFixturePath);
+
+  ApplyCompilerBuildResult(
+    AExecution.ExitCode, AExecution
+  );
+
+  ApplySnapshotValidation(
+    AGroup, AFixturePath,
+    BuildSnapshotActualText(AGroup, AFixturePath, BuildOutput),
+    AExecution
+  );
+end;
+
+procedure ExecuteHostFpcBuildRunFixture(
+  const AGroup: THarnessGroup;
+  const AFixturePath: string;
+  var AExecution: TFixtureExecution
+);
+var
+  Params: TStringList;
+  BuildOutput: string;
+  RunOutput: string;
+  TempBinaryPath: string;
+begin
+  AExecution.ToolName := 'host-fpc-build-run';
+  TempBinaryPath := FixtureBinaryPath(AGroup, AFixturePath);
+
+  { Build step }
+  Params := TStringList.Create;
+  try
+    Params.Add('-FE' + FixtureBinaryDirectory(AGroup, AFixturePath));
+    Params.Add('-FU' + FixtureTempDirectory(AGroup, AFixturePath));
+    if AGroup = hgToolchain then
+    begin
+      Params.Add('-Furtl/core/base');
+      Params.Add('-Furtl/core/text');
+      Params.Add('-Fucompiler/sema');
+      Params.Add('-Fucompiler/backend');
+      Params.Add('-Fucompiler/diagnostics');
+      Params.Add('-Fucompiler/frontend');
+      Params.Add('-Fucompiler/ir');
+      Params.Add('-Fucompiler/syntax');
+      Params.Add('-Fucompiler/toolchain');
+      Params.Add('-Fucompiler/targets');
+      Params.Add('-Futools/stage0');
+      Params.Add('-Fucore/src');
+      Params.Add('-Ficore/src');
+    end
+    else if AGroup = hgRTL then
+    begin
+      Params.Add('-Furtl/core/base');
+      Params.Add('-Furtl/core/text');
+    end;
+    Params.Add(AFixturePath);
+    SafeRunProcessCapture(
+      HostCompilerExecutable, '', Params, BuildOutput,
+      AExecution.ExitCode, 'fixture-exec-failed', AExecution
+    );
+  finally
+    Params.Free;
+  end;
+
+  WriteTextFile(AExecution.OutputPath, BuildOutput);
+  AExecution.ArtifactPath := TempBinaryPath;
+  if AExecution.ExitCode <> 0 then
+  begin
+    AExecution.ResultValue := 'failure';
+    if AExecution.FailureKind = '' then
+      AExecution.FailureKind := 'host-compile-failed';
+    Exit;
+  end;
+
+  { Run step }
+  AExecution.RunOutputPath := FixtureRunOutputPath(AGroup, AFixturePath);
+  SafeRunTargetArtifactCapture(
+    TempBinaryPath, RunOutput, AExecution.ExitCode, AExecution
+  );
+  WriteTextFile(AExecution.RunOutputPath, RunOutput);
+  if AExecution.ExitCode = 0 then
+  begin
+    AExecution.ResultValue := 'pass';
+    AExecution.FailureKind := '';
+    AExecution.Passed := True;
+  end
+  else
+  begin
+    AExecution.ResultValue := 'failure';
+    if AExecution.FailureKind = '' then
+      AExecution.FailureKind := 'fixture-runtime-failed';
+  end;
 end;
 
 function ExecuteFixture(
@@ -1016,12 +1324,6 @@ function ExecuteFixture(
   const AFixturePath: string;
   out AExecution: TFixtureExecution
 ): Boolean;
-var
-  Params: TStringList;
-  BuildOutput: string;
-  RunOutput: string;
-  ArtifactPath: string;
-  TempBinaryPath: string;
 begin
   AExecution.FixturePath := AFixturePath;
   AExecution.ToolName := '';
@@ -1037,585 +1339,17 @@ begin
   AExecution.Executed := True;
   AExecution.Passed := False;
 
-  Params := TStringList.Create;
-  try
-    case AGroup of
-      hgCompilerPass:
-        begin
-            AExecution.ToolName := 'stage0-build-run';
-          ClearStage0FixtureArtifacts(AGroup, AFixturePath);
-          Params.Add('build');
-          Params.Add(AFixturePath);
-          Params.Add('--target');
-          Params.Add(BaselineTargetName);
-          Params.Add('--workspace');
-          Params.Add(WorkspaceRootPath);
-          Params.Add('--out-dir');
-          Params.Add(FixtureBinaryDirectory(AGroup, AFixturePath));
-          try
-            AExecution.ExitCode := RunProcessCapture(
-              Stage0ExecutablePath,
-              '',
-              Params,
-              BuildOutput
-            );
-          except
-            on E: Exception do
-            begin
-              BuildOutput := E.Message + LineEnding;
-              AExecution.ExitCode := ExitFailureCode;
-              AExecution.FailureKind := 'fixture-exec-failed';
-            end;
-          end;
-          WriteTextFile(AExecution.OutputPath, BuildOutput);
-          ArtifactPath := ExtractProjectionValue(BuildOutput, 'artifact=');
-          if ArtifactPath = '' then
-            ArtifactPath := FixtureBinaryPath(AGroup, AFixturePath);
-          AExecution.ArtifactPath := ArtifactPath;
-
-          if (AExecution.FailureKind = '') and (AExecution.ExitCode <> 0) then
-            AExecution.FailureKind := ExtractProjectionValue(
-              BuildOutput,
-              'failure-kind='
-            );
-          if AExecution.FailureKind = '' then
-            AExecution.FailureKind := 'unexpected-build-failure';
-
-          if AExecution.ExitCode = 0 then
-          begin
-            Params.Clear;
-            AExecution.RunOutputPath := FixtureRunOutputPath(AGroup, AFixturePath);
-            try
-              AExecution.ExitCode := RunTargetArtifactCapture(
-                ArtifactPath,
-                '',
-                Params,
-                RunOutput
-              );
-            except
-              on E: Exception do
-              begin
-                RunOutput := E.Message + LineEnding;
-                AExecution.ExitCode := ExitFailureCode;
-                AExecution.FailureKind := 'fixture-runtime-failed';
-              end;
-            end;
-            WriteTextFile(AExecution.RunOutputPath, RunOutput);
-            if AExecution.ExitCode = 0 then
-            begin
-              AExecution.ResultValue := 'pass';
-              AExecution.FailureKind := '';
-              AExecution.Passed := True;
-            end
-            else
-            begin
-              AExecution.ResultValue := 'failure';
-              if AExecution.FailureKind = '' then
-                AExecution.FailureKind := 'fixture-runtime-failed';
-            end;
-          end;
-          ClearStage0FixtureArtifacts(AGroup, AFixturePath);
-        end;
-
-      hgCompilerFail:
-        begin
-          AExecution.ToolName := 'stage0-build';
-          ClearStage0FixtureArtifacts(AGroup, AFixturePath);
-          Params.Add('build');
-          Params.Add(AFixturePath);
-          Params.Add('--target');
-          Params.Add(BaselineTargetName);
-          Params.Add('--workspace');
-          Params.Add(WorkspaceRootPath);
-          Params.Add('--out-dir');
-          Params.Add(FixtureBinaryDirectory(AGroup, AFixturePath));
-          try
-            AExecution.ExitCode := RunProcessCapture(
-              Stage0ExecutablePath,
-              '',
-              Params,
-              BuildOutput
-            );
-          except
-            on E: Exception do
-            begin
-              BuildOutput := E.Message + LineEnding;
-              AExecution.ExitCode := ExitFailureCode;
-              AExecution.FailureKind := 'fixture-exec-failed';
-            end;
-          end;
-          WriteTextFile(AExecution.OutputPath, BuildOutput);
-          ClearStage0FixtureArtifacts(AGroup, AFixturePath);
-          if AExecution.ExitCode = 0 then
-          begin
-            AExecution.FailureKind := 'unexpected-build-success';
-            AExecution.ResultValue := 'failure';
-          end
-          else
-          begin
-            AExecution.FailureKind := '';
-            AExecution.ResultValue := 'pass';
-            AExecution.Passed := True;
-          end;
-          ApplySnapshotValidation(
-            AGroup,
-            AFixturePath,
-            BuildSnapshotActualText(AGroup, AFixturePath, BuildOutput),
-            AExecution
-          );
-        end;
-
-      hgDiagnostics:
-        begin
-          AExecution.ToolName := 'host-fpc-diagnostic';
-          Params.Add('-FE' + FixtureTempDirectory(AGroup, AFixturePath));
-          Params.Add('-FU' + FixtureTempDirectory(AGroup, AFixturePath));
-          Params.Add(AFixturePath);
-          try
-            AExecution.ExitCode := RunProcessCapture(
-              HostCompilerExecutable,
-              '',
-              Params,
-              BuildOutput
-            );
-          except
-            on E: Exception do
-            begin
-              BuildOutput := E.Message + LineEnding;
-              AExecution.ExitCode := ExitFailureCode;
-              AExecution.FailureKind := 'fixture-exec-failed';
-            end;
-          end;
-          WriteTextFile(AExecution.OutputPath, BuildOutput);
-          if AExecution.ExitCode = 0 then
-          begin
-            AExecution.FailureKind := 'unexpected-build-success';
-            AExecution.ResultValue := 'failure';
-          end
-          else
-          begin
-            AExecution.FailureKind := '';
-            AExecution.ResultValue := 'pass';
-            AExecution.Passed := True;
-          end;
-          ApplySnapshotValidation(
-            AGroup,
-            AFixturePath,
-            BuildSnapshotActualText(AGroup, AFixturePath, BuildOutput),
-            AExecution
-          );
-        end;
-
-      hgLexer:
-        begin
-          AExecution.ToolName := 'stage0-build-run';
-          ClearStage0FixtureArtifacts(AGroup, AFixturePath);
-          Params.Add('build');
-          Params.Add(AFixturePath);
-          Params.Add('--target');
-          Params.Add(BaselineTargetName);
-          Params.Add('--workspace');
-          Params.Add(WorkspaceRootPath);
-          Params.Add('--out-dir');
-          Params.Add(FixtureBinaryDirectory(AGroup, AFixturePath));
-          try
-            AExecution.ExitCode := RunProcessCapture(
-              Stage0ExecutablePath,
-              '',
-              Params,
-              BuildOutput
-            );
-          except
-            on E: Exception do
-            begin
-              BuildOutput := E.Message + LineEnding;
-              AExecution.ExitCode := ExitFailureCode;
-              AExecution.FailureKind := 'fixture-exec-failed';
-            end;
-          end;
-          WriteTextFile(AExecution.OutputPath, BuildOutput);
-          ArtifactPath := ExtractProjectionValue(BuildOutput, 'artifact=');
-          if ArtifactPath = '' then
-            ArtifactPath := FixtureBinaryPath(AGroup, AFixturePath);
-          AExecution.ArtifactPath := ArtifactPath;
-
-          if (AExecution.FailureKind = '') and (AExecution.ExitCode <> 0) then
-            AExecution.FailureKind := ExtractProjectionValue(
-              BuildOutput,
-              'failure-kind='
-            );
-          if AExecution.FailureKind = '' then
-            AExecution.FailureKind := 'unexpected-build-failure';
-
-          if AExecution.ExitCode = 0 then
-          begin
-            Params.Clear;
-            AExecution.RunOutputPath := FixtureRunOutputPath(AGroup, AFixturePath);
-            try
-              AExecution.ExitCode := RunTargetArtifactCapture(
-                ArtifactPath,
-                '',
-                Params,
-                RunOutput
-              );
-            except
-              on E: Exception do
-              begin
-                RunOutput := E.Message + LineEnding;
-                AExecution.ExitCode := ExitFailureCode;
-                AExecution.FailureKind := 'fixture-runtime-failed';
-              end;
-            end;
-            WriteTextFile(AExecution.RunOutputPath, RunOutput);
-            if AExecution.ExitCode = 0 then
-            begin
-              AExecution.ResultValue := 'pass';
-              AExecution.FailureKind := '';
-              AExecution.Passed := True;
-            end
-            else
-            begin
-              AExecution.ResultValue := 'failure';
-              if AExecution.FailureKind = '' then
-                AExecution.FailureKind := 'fixture-runtime-failed';
-            end;
-          end;
-          ClearStage0FixtureArtifacts(AGroup, AFixturePath);
-        end;
-
-      hgParser:
-        begin
-          AExecution.ToolName := 'stage0-build-run';
-          ClearStage0FixtureArtifacts(AGroup, AFixturePath);
-          Params.Add('build');
-          Params.Add(AFixturePath);
-          Params.Add('--target');
-          Params.Add(BaselineTargetName);
-          Params.Add('--workspace');
-          Params.Add(WorkspaceRootPath);
-          Params.Add('--out-dir');
-          Params.Add(FixtureBinaryDirectory(AGroup, AFixturePath));
-          try
-            AExecution.ExitCode := RunProcessCapture(
-              Stage0ExecutablePath,
-              '',
-              Params,
-              BuildOutput
-            );
-          except
-            on E: Exception do
-            begin
-              BuildOutput := E.Message + LineEnding;
-              AExecution.ExitCode := ExitFailureCode;
-              AExecution.FailureKind := 'fixture-exec-failed';
-            end;
-          end;
-          WriteTextFile(AExecution.OutputPath, BuildOutput);
-          ArtifactPath := ExtractProjectionValue(BuildOutput, 'artifact=');
-          if ArtifactPath = '' then
-            ArtifactPath := FixtureBinaryPath(AGroup, AFixturePath);
-          AExecution.ArtifactPath := ArtifactPath;
-
-          if (AExecution.FailureKind = '') and (AExecution.ExitCode <> 0) then
-            AExecution.FailureKind := ExtractProjectionValue(
-              BuildOutput,
-              'failure-kind='
-            );
-          if AExecution.FailureKind = '' then
-            AExecution.FailureKind := 'unexpected-build-failure';
-
-          if AExecution.ExitCode = 0 then
-          begin
-            Params.Clear;
-            AExecution.RunOutputPath := FixtureRunOutputPath(AGroup, AFixturePath);
-            try
-              AExecution.ExitCode := RunTargetArtifactCapture(
-                ArtifactPath,
-                '',
-                Params,
-                RunOutput
-              );
-            except
-              on E: Exception do
-              begin
-                RunOutput := E.Message + LineEnding;
-                AExecution.ExitCode := ExitFailureCode;
-                AExecution.FailureKind := 'fixture-runtime-failed';
-              end;
-            end;
-            WriteTextFile(AExecution.RunOutputPath, RunOutput);
-            if AExecution.ExitCode = 0 then
-            begin
-              AExecution.ResultValue := 'pass';
-              AExecution.FailureKind := '';
-              AExecution.Passed := True;
-            end
-            else
-            begin
-              AExecution.ResultValue := 'failure';
-              if AExecution.FailureKind = '' then
-                AExecution.FailureKind := 'fixture-runtime-failed';
-            end;
-          end;
-          ClearStage0FixtureArtifacts(AGroup, AFixturePath);
-        end;
-
-      hgSemantic:
-        begin
-          AExecution.ToolName := 'stage0-build-run';
-          ClearStage0FixtureArtifacts(AGroup, AFixturePath);
-          Params.Add('build');
-          Params.Add(AFixturePath);
-          Params.Add('--target');
-          Params.Add(BaselineTargetName);
-          Params.Add('--workspace');
-          Params.Add(WorkspaceRootPath);
-          Params.Add('--out-dir');
-          Params.Add(FixtureBinaryDirectory(AGroup, AFixturePath));
-          try
-            AExecution.ExitCode := RunProcessCapture(
-              Stage0ExecutablePath,
-              '',
-              Params,
-              BuildOutput
-            );
-          except
-            on E: Exception do
-            begin
-              BuildOutput := E.Message + LineEnding;
-              AExecution.ExitCode := ExitFailureCode;
-              AExecution.FailureKind := 'fixture-exec-failed';
-            end;
-          end;
-          WriteTextFile(AExecution.OutputPath, BuildOutput);
-          ArtifactPath := ExtractProjectionValue(BuildOutput, 'artifact=');
-          if ArtifactPath = '' then
-            ArtifactPath := FixtureBinaryPath(AGroup, AFixturePath);
-          AExecution.ArtifactPath := ArtifactPath;
-
-          if (AExecution.FailureKind = '') and (AExecution.ExitCode <> 0) then
-            AExecution.FailureKind := ExtractProjectionValue(
-              BuildOutput,
-              'failure-kind='
-            );
-          if AExecution.FailureKind = '' then
-            AExecution.FailureKind := 'unexpected-build-failure';
-
-          if AExecution.ExitCode = 0 then
-          begin
-            Params.Clear;
-            AExecution.RunOutputPath := FixtureRunOutputPath(AGroup, AFixturePath);
-            try
-              AExecution.ExitCode := RunTargetArtifactCapture(
-                ArtifactPath,
-                '',
-                Params,
-                RunOutput
-              );
-            except
-              on E: Exception do
-              begin
-                RunOutput := E.Message + LineEnding;
-                AExecution.ExitCode := ExitFailureCode;
-                AExecution.FailureKind := 'fixture-runtime-failed';
-              end;
-            end;
-            WriteTextFile(AExecution.RunOutputPath, RunOutput);
-            if AExecution.ExitCode = 0 then
-            begin
-              if EndsWithText(LowerCase(ExtractFileName(AFixturePath)), '_fail.pas') then
-              begin
-                AExecution.FailureKind := 'unexpected-semantic-pass';
-                AExecution.ResultValue := 'failure';
-              end
-              else
-              begin
-                AExecution.ResultValue := 'pass';
-                AExecution.FailureKind := '';
-                AExecution.Passed := True;
-              end;
-            end
-            else
-            begin
-              if EndsWithText(LowerCase(ExtractFileName(AFixturePath)), '_fail.pas') then
-              begin
-                AExecution.ResultValue := 'pass';
-                AExecution.FailureKind := '';
-                AExecution.Passed := True;
-              end
-              else
-              begin
-                AExecution.ResultValue := 'failure';
-                if AExecution.FailureKind = '' then
-                  AExecution.FailureKind := 'fixture-runtime-failed';
-              end;
-            end;
-          end;
-          ClearStage0FixtureArtifacts(AGroup, AFixturePath);
-        end;
-
-      hgToolchain:
-        begin
-          AExecution.ToolName := 'host-fpc-build-run';
-          TempBinaryPath := FixtureBinaryPath(AGroup, AFixturePath);
-          Params.Add('-FE' + FixtureBinaryDirectory(AGroup, AFixturePath));
-          Params.Add('-FU' + FixtureTempDirectory(AGroup, AFixturePath));
-          Params.Add('-Furtl/core/base');
-          Params.Add('-Furtl/core/text');
-          Params.Add('-Fucompiler/sema');
-          Params.Add('-Fucompiler/backend');
-          Params.Add('-Fucompiler/diagnostics');
-          Params.Add('-Fucompiler/frontend');
-          Params.Add('-Fucompiler/ir');
-          Params.Add('-Fucompiler/syntax');
-          Params.Add('-Fucompiler/toolchain');
-          Params.Add('-Fucompiler/targets');
-          Params.Add('-Futools/stage0');
-          Params.Add('-Fucore/src');
-          Params.Add('-Ficore/src');
-          Params.Add(AFixturePath);
-          try
-            AExecution.ExitCode := RunProcessCapture(
-              HostCompilerExecutable,
-              '',
-              Params,
-              BuildOutput
-            );
-          except
-            on E: Exception do
-            begin
-              BuildOutput := E.Message + LineEnding;
-              AExecution.ExitCode := ExitFailureCode;
-              AExecution.FailureKind := 'fixture-exec-failed';
-            end;
-          end;
-          WriteTextFile(AExecution.OutputPath, BuildOutput);
-          if AExecution.ExitCode <> 0 then
-          begin
-            AExecution.FailureKind := 'host-compile-failed';
-            AExecution.ResultValue := 'failure';
-          end
-          else
-          begin
-            Params.Clear;
-            AExecution.RunOutputPath := FixtureRunOutputPath(AGroup, AFixturePath);
-            try
-              AExecution.ExitCode := RunProcessCapture(
-                ExpandFileName(TempBinaryPath),
-                '',
-                Params,
-                RunOutput
-              );
-            except
-              on E: Exception do
-              begin
-                RunOutput := E.Message + LineEnding;
-                AExecution.ExitCode := ExitFailureCode;
-                AExecution.FailureKind := 'fixture-runtime-failed';
-              end;
-            end;
-            WriteTextFile(AExecution.RunOutputPath, RunOutput);
-            if AExecution.ExitCode = 0 then
-            begin
-              AExecution.ResultValue := 'pass';
-              AExecution.FailureKind := '';
-              AExecution.Passed := True;
-            end
-            else
-            begin
-              AExecution.ResultValue := 'failure';
-              if AExecution.FailureKind = '' then
-                AExecution.FailureKind := 'fixture-runtime-failed';
-            end;
-          end;
-        end;
-
-      hgRTL, hgCRT, hgRegression:
-        begin
-          AExecution.ToolName := 'host-fpc-build-run';
-          TempBinaryPath := FixtureBinaryPath(AGroup, AFixturePath);
-          Params.Add('-FE' + FixtureBinaryDirectory(AGroup, AFixturePath));
-          Params.Add('-FU' + FixtureTempDirectory(AGroup, AFixturePath));
-          if AGroup = hgRTL then
-          begin
-            Params.Add('-Furtl/core/base');
-            Params.Add('-Furtl/core/text');
-          end;
-          if AGroup = hgToolchain then
-          begin
-            Params.Add('-Furtl/core/base');
-            Params.Add('-Furtl/core/text');
-            Params.Add('-Fucompiler/sema');
-            Params.Add('-Fucompiler/backend');
-            Params.Add('-Fucompiler/diagnostics');
-            Params.Add('-Fucompiler/frontend');
-            Params.Add('-Fucompiler/ir');
-            Params.Add('-Fucompiler/syntax');
-            Params.Add('-Fucompiler/toolchain');
-            Params.Add('-Fucompiler/targets');
-            Params.Add('-Futools/stage0');
-          end;
-          Params.Add(AFixturePath);
-          try
-            AExecution.ExitCode := RunProcessCapture(
-              HostCompilerExecutable,
-              '',
-              Params,
-              BuildOutput
-            );
-          except
-            on E: Exception do
-            begin
-              BuildOutput := E.Message + LineEnding;
-              AExecution.ExitCode := ExitFailureCode;
-              AExecution.FailureKind := 'fixture-exec-failed';
-            end;
-          end;
-          WriteTextFile(AExecution.OutputPath, BuildOutput);
-          AExecution.ArtifactPath := TempBinaryPath;
-          if AExecution.ExitCode <> 0 then
-          begin
-            AExecution.ResultValue := 'failure';
-            if AExecution.FailureKind = '' then
-              AExecution.FailureKind := 'host-compile-failed';
-          end
-          else
-          begin
-            Params.Clear;
-            AExecution.RunOutputPath := FixtureRunOutputPath(AGroup, AFixturePath);
-            try
-              AExecution.ExitCode := RunProcessCapture(
-                ExpandFileName(TempBinaryPath),
-                '',
-                Params,
-                RunOutput
-              );
-            except
-              on E: Exception do
-              begin
-                RunOutput := E.Message + LineEnding;
-                AExecution.ExitCode := ExitFailureCode;
-                AExecution.FailureKind := 'fixture-runtime-failed';
-              end;
-            end;
-            WriteTextFile(AExecution.RunOutputPath, RunOutput);
-            if AExecution.ExitCode = 0 then
-            begin
-              AExecution.ResultValue := 'pass';
-              AExecution.FailureKind := '';
-              AExecution.Passed := True;
-            end
-            else
-            begin
-              AExecution.ResultValue := 'failure';
-              if AExecution.FailureKind = '' then
-                AExecution.FailureKind := 'fixture-runtime-failed';
-            end;
-          end;
-        end;
-    end;
-  finally
-    Params.Free;
+  case HARNESS_GROUPS[AGroup].CompilerMode of
+    cmStage0BuildRun:
+      ExecuteStage0BuildRunFixture(AGroup, AFixturePath, AGroup = hgSemantic, AExecution);
+    cmStage0BuildValidate:
+      ExecuteCompilerBuildValidateFixture(
+        AGroup, AFixturePath, Stage0ExecutablePath, 'stage0-build', AExecution);
+    cmHostFpcBuildValidate:
+      ExecuteCompilerBuildValidateFixture(
+        AGroup, AFixturePath, HostCompilerExecutable, 'host-fpc-diagnostic', AExecution);
+    cmHostFpcBuildRun:
+      ExecuteHostFpcBuildRunFixture(AGroup, AFixturePath, AExecution);
   end;
 
   Result := AExecution.Passed;
@@ -1691,6 +1425,28 @@ begin
   WriteLn(StdErr, AMessage);
 end;
 
+procedure PrintOutcomeBlock(
+  ASucceeded: Boolean;
+  const AResultFields: string;
+  const AHumanSummary: string;
+  AUseStdErr: Boolean
+);
+var
+  ExitCode: LongInt;
+begin
+  if ASucceeded then
+  begin
+    WriteLn('command-outcome=success');
+    ExitCode := ExitSuccessCode;
+  end
+  else
+  begin
+    WriteLn('command-outcome=failure');
+    ExitCode := ExitFailureCode;
+  end;
+  PrintCommandEnvelope(ExitCode, AResultFields, AHumanSummary, AUseStdErr);
+end;
+
 function RunGroup(const AGroup: THarnessGroup): Boolean;
 var
   FixturePaths: TStringList;
@@ -1704,10 +1460,10 @@ begin
     WriteLn('command=test');
     WriteLn('selector=group');
     WriteLn('target=', BaselineTargetName);
-    WriteLn('group=', HARNESS_GROUP_NAMES[AGroup]);
-    WriteLn('path=', HARNESS_GROUP_DIRECTORIES[AGroup]);
+    WriteLn('group=', HARNESS_GROUPS[AGroup].Name);
+    WriteLn('path=', HARNESS_GROUPS[AGroup].Directory);
     WriteLn('fixtures=', FixturePaths.Count);
-    WriteLn('expectation=', HARNESS_GROUP_EXPECTATIONS[AGroup]);
+    WriteLn('expectation=', HARNESS_GROUPS[AGroup].Expectation);
     if GroupUsesDiagnosticsSnapshot(AGroup) then
     begin
       WriteLn('snapshot-root=', SnapshotRoot);
@@ -1734,27 +1490,10 @@ begin
       Summary.SnapshotStatus
     );
     Result := Summary.ResultValue = 'pass';
-    if Result then
-      WriteLn('command-outcome=success')
-    else
-      WriteLn('command-outcome=failure');
-    if Result then
-      PrintCommandEnvelope(
-        ExitSuccessCode,
-        ResultFields,
-        Summary.HumanSummary,
-        False
-      )
-    else
-      PrintCommandEnvelope(
-        ExitFailureCode,
-        ResultFields,
-        Summary.HumanSummary,
-        False
-      );
+    PrintOutcomeBlock(Result, ResultFields, Summary.HumanSummary, False);
     WriteLn('human-summary=', Summary.HumanSummary);
     if not Result then
-      WriteLn(StdErr, 'group-failed: ', HARNESS_GROUP_NAMES[AGroup]);
+      WriteLn(StdErr, 'group-failed: ', HARNESS_GROUPS[AGroup].Name);
   finally
     FixturePaths.Free;
   end;
@@ -1773,6 +1512,7 @@ var
   StatusValue: string;
   ResultValue: string;
   HumanSummary: string;
+  SnapshotFieldValue: string;
 begin
   MissingFixtureCount := 0;
   FailedGroupCount := 0;
@@ -1799,25 +1539,17 @@ begin
       Inc(UnstableSnapshotCount, Summary.UnstableSnapshotCount);
 
       if GroupUsesDiagnosticsSnapshot(Group) then
-      begin
-        WriteLn(
-          'smoke-group=', HARNESS_GROUP_NAMES[Group],
-          ' result=', Summary.ResultValue,
-          ' expectation=', HARNESS_GROUP_EXPECTATIONS[Group],
-          ' fixtures=', Summary.FixtureCount,
-          ' executed=', Summary.ExecutedCount,
-          ' snapshot=', Summary.SnapshotStatus
-        );
-      end
+        SnapshotFieldValue := Summary.SnapshotStatus
       else
-        WriteLn(
-          'smoke-group=', HARNESS_GROUP_NAMES[Group],
-          ' result=', Summary.ResultValue,
-          ' expectation=', HARNESS_GROUP_EXPECTATIONS[Group],
-          ' fixtures=', Summary.FixtureCount,
-          ' executed=', Summary.ExecutedCount,
-          ' snapshot=none'
-        );
+        SnapshotFieldValue := 'none';
+      WriteLn(
+        'smoke-group=', HARNESS_GROUPS[Group].Name,
+        ' result=', Summary.ResultValue,
+        ' expectation=', HARNESS_GROUPS[Group].Expectation,
+        ' fixtures=', Summary.FixtureCount,
+        ' executed=', Summary.ExecutedCount,
+        ' snapshot=', SnapshotFieldValue
+      );
     end;
   finally
     FixturePaths.Free;
@@ -1867,24 +1599,7 @@ begin
     UnstableSnapshotCount
   );
   Result := ResultValue = 'pass';
-  if Result then
-    WriteLn('command-outcome=success')
-  else
-    WriteLn('command-outcome=failure');
-  if Result then
-    PrintCommandEnvelope(
-      ExitSuccessCode,
-      ResultFields,
-      HumanSummary,
-      False
-    )
-  else
-    PrintCommandEnvelope(
-      ExitFailureCode,
-      ResultFields,
-      HumanSummary,
-      False
-    );
+  PrintOutcomeBlock(Result, ResultFields, HumanSummary, False);
   WriteLn('human-summary=', HumanSummary);
   if not Result then
   begin
@@ -1903,7 +1618,7 @@ procedure RunFilter(const ASelector: string);
 var
   Group: THarnessGroup;
 begin
-  if IsSmokeSelector(ASelector) then
+  if ASelector = 'smoke' then
   begin
     if RunSmoke then
       Halt(ExitSuccessCode)

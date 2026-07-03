@@ -5,23 +5,24 @@ program test_errors;
 uses
   SysUtils,
   nextpas.core.base,
-  nextpas.core.errors;
+  nextpas.core.errors,
+  nextpas.core.test;
 
 procedure TestExceptionHierarchy;
 var
   LErr: ENextPasError;
 begin
   LErr := EArgumentError.Create('test argument error');
-  Assert(LErr is ENextPasError, 'EArgumentError should inherit ENextPasError');
-  Assert(LErr.Message = 'test argument error');
+  CheckTrue(LErr is ENextPasError, 'EArgumentError should inherit ENextPasError');
+  CheckEqual('test argument error', LErr.Message);
   LErr.Free;
 
   LErr := EIOError.Create('io failed');
-  Assert(LErr is ENextPasError);
+  CheckTrue(LErr is ENextPasError, 'EIOError should inherit ENextPasError');
   LErr.Free;
 
   LErr := ETimeoutError.Create('timed out');
-  Assert(LErr is ENextPasError);
+  CheckTrue(LErr is ENextPasError, 'ETimeoutError should inherit ENextPasError');
   LErr.Free;
 end;
 
@@ -36,7 +37,7 @@ begin
     on E: ENextPasError do
       LCaught := True;
   end;
-  Assert(LCaught, 'Should catch EIndexOutOfRangeError as ENextPasError');
+  CheckTrue(LCaught, 'Should catch EIndexOutOfRangeError as ENextPasError');
 end;
 
 procedure TestCategoryConstantsRemainPublic;
@@ -45,16 +46,24 @@ var
 begin
   LErr := ENextPasError.Create('network failed', ecNetwork);
   try
-    Assert(LErr.Category = ecNetwork, 'ecNetwork should remain public through nextpas.core.errors');
+    CheckTrue(LErr.Category = ecNetwork, 'ecNetwork should remain public through nextpas.core.errors');
   finally
     LErr.Free;
   end;
 end;
 
+var
+  LRunner: TTestRunner;
+  LSuite: TTestSuite;
 begin
-  WriteLn('=== nextpas.core.errors tests ===');
-  TestExceptionHierarchy;
-  TestExceptionRaise;
-  TestCategoryConstantsRemainPublic;
-  WriteLn('PASS: all errors tests passed');
+  LSuite := TTestSuite.Create('errors');
+  LSuite.Test('exception hierarchy', @TestExceptionHierarchy);
+  LSuite.Test('exception raise', @TestExceptionRaise);
+  LSuite.Test('category constants public', @TestCategoryConstantsRemainPublic);
+  LRunner := TTestRunner.Create('nextpas.core.errors');
+  LRunner.Add(LSuite);
+  LRunner.RunAll;
+  LRunner.Summary;
+  if not LRunner.AllPassed then
+    Halt(1);
 end.

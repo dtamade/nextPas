@@ -358,6 +358,37 @@ begin
   end;
 end;
 
+{ T-03: AllocAligned fallback path — F-01 regression test }
+
+procedure TestFallbackArenaAllocAlignedFallback;
+var
+  LArena: TLocalArena;
+  LRtl: IAllocator;
+  LFall: TFallbackArena;
+  LP1, LP2: Pointer;
+begin
+  { Small arena that cannot satisfy aligned allocs after first alloc }
+  LArena := TLocalArena.Create(64);
+  LRtl := GetRtlAllocator;
+  LFall := TFallbackArena.Create(LArena, LRtl);
+  try
+    LP1 := LFall.Alloc(48); { consume 48 of 64 bytes }
+    Check(LP1 <> nil, 'first alloc');
+    { This aligned alloc should fail in arena (not enough room), fall back }
+    LP2 := LFall.AllocAligned(32, 64);
+    Check(LP2 <> nil, 'aligned fallback alloc');
+    Check((PtrUInt(LP2) and 63) = 0, 'pointer is 64-byte aligned');
+    Check(LP1 <> LP2, 'different from first alloc');
+    { Write to verify memory is valid }
+    FillChar(LP2^, 32, $EE);
+    { FreeFallbacks should correctly free the raw pointer (F-01 fix) }
+    LFall.FreeFallbacks;
+    Check(True, 'FreeFallbacks did not crash (raw pointer stored correctly)');
+  finally
+    LFall.Free;
+  end;
+end;
+
 { R-21 regression: ReallocMem(ptr, 0) frees and removes entry }
 procedure TestFallbackReallocZeroSize;
 var
@@ -448,6 +479,7 @@ begin
   T.Test('FallbackArena reset', @TestFallbackArenaReset);
   T.Test('FallbackArena mark/restore', @TestFallbackArenaMarkRestore);
   T.Test('FallbackArena free fallbacks', @TestFallbackArenaFreeFallbacks);
+  T.Test('FallbackArena aligned fallback (F-01)', @TestFallbackArenaAllocAlignedFallback);
 
   T.Run;
 

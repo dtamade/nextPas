@@ -10,8 +10,11 @@ program test_output;
 {$modeswitch functionreferences}
 
 uses
-  cthreads,
-  SysUtils,
+  nextpas.core.thread.init,
+  nextpas.core.text.conv,
+  nextpas.core.time,
+  nextpas.core.path,
+  nextpas.core.fs,
   nextpas.core.test;
 
 function ExtractXmlAttributeInt(const AXml, AAttribute: string): Integer;
@@ -52,10 +55,10 @@ end;
 
 function CompactJson(const AJson: string): string;
 begin
-  Result := StringReplace(AJson, ' ', '', [rfReplaceAll]);
-  Result := StringReplace(Result, #9, '', [rfReplaceAll]);
-  Result := StringReplace(Result, #13, '', [rfReplaceAll]);
-  Result := StringReplace(Result, #10, '', [rfReplaceAll]);
+  Result := StringReplace(AJson, ' ', '', True);
+  Result := StringReplace(Result, #9, '', True);
+  Result := StringReplace(Result, #13, '', True);
+  Result := StringReplace(Result, #10, '', True);
 end;
 
 { ── ANSI helpers ───────────────────────────────────────────────────────────── }
@@ -532,16 +535,9 @@ begin
 end;
 
 function MakeTempJUnitPath: string;
-var
-  LGuid: TGuid;
-  LName: string;
 begin
-  if CreateGUID(LGuid) = 0 then
-    LName := GUIDToString(LGuid)
-  else
-    LName := IntToStr(GetTickCount64);
-  Result := IncludeTrailingPathDelimiter(GetTempDir(False)) +
-    'nextpas_test_junit_' + LName + '.xml';
+  Result := IncludeTrailingPathDelimiter(GetTempDir) +
+    'nextpas_test_junit_' + IntToStr(GetTickCount64) + '.xml';
 end;
 
 procedure TestWriteJUnitXML;
@@ -906,6 +902,145 @@ begin
   CheckContains(LOut, 'EAccessViolation');
 end;
 
+{ ── T-04: TAP/JSON compliance tests ──────────────────────────────────────── }
+
+procedure TestTAPSeverityFailVsError;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+begin
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('TapSeverity');
+  LResults[0].Failed := 2;
+  SetLength(LResults[0].Results, 2);
+  LResults[0].Results[0].Name    := 'fail_case';
+  LResults[0].Results[0].Status  := tsFailed;
+  LResults[0].Results[0].Message := 'assertion failed';
+  LResults[0].Results[1].Name    := 'error_case';
+  LResults[0].Results[1].Status  := tsError;
+  LResults[0].Results[1].Message := 'EAccessViolation';
+
+  LOut := TAPReport(LResults);
+  { tsFailed → severity: fail }
+  CheckContains(LOut, 'severity: fail');
+  { tsError → severity: error }
+  CheckContains(LOut, 'severity: error');
+  { Both should be "not ok" }
+  CheckContains(LOut, 'not ok 1 -');
+  CheckContains(LOut, 'not ok 2 -');
+end;
+
+procedure TestTAPYAMLBlockMarkers;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+begin
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('TapYAML');
+  LResults[0].Failed := 1;
+  SetLength(LResults[0].Results, 1);
+  LResults[0].Results[0].Name    := 'yml';
+  LResults[0].Results[0].Status  := tsFailed;
+  LResults[0].Results[0].Message := 'bad';
+
+  LOut := TAPReport(LResults);
+  { YAML block must have --- and ... markers }
+  CheckContains(LOut, '  ---');
+  CheckContains(LOut, '  ...');
+  { message must be inside the block }
+  CheckContains(LOut, 'message: |-');
+end;
+
+procedure TestTAPDiagnosticFooter;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+begin
+  SetLength(LResults, 2);
+  LResults[0] := TTestRunResult.Create('S1');
+  LResults[0].Passed := 2;
+  SetLength(LResults[0].Results, 2);
+  LResults[0].Results[0].Name := 'a'; LResults[0].Results[0].Status := tsPassed;
+  LResults[0].Results[1].Name := 'b'; LResults[0].Results[1].Status := tsPassed;
+
+  LResults[1] := TTestRunResult.Create('S2');
+  LResults[1].Passed := 1;
+  LResults[1].Skipped := 1;
+  SetLength(LResults[1].Results, 2);
+  LResults[1].Results[0].Name := 'c'; LResults[1].Results[0].Status := tsPassed;
+  LResults[1].Results[1].Name := 'd'; LResults[1].Results[1].Status := tsSkipped;
+  LResults[1].Results[1].Message := 'deferred';
+
+  LOut := TAPReport(LResults);
+  CheckContains(LOut, '# suites: 2');
+  CheckContains(LOut, '# total: 4');
+  CheckContains(LOut, '# passed: 3');
+  CheckContains(LOut, '# failed: 0');
+  CheckContains(LOut, '# skipped: 1');
+end;
+
+procedure TestTAPSequentialNumbering;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+begin
+  SetLength(LResults, 2);
+  LResults[0] := TTestRunResult.Create('S1');
+  LResults[0].Passed := 2;
+  SetLength(LResults[0].Results, 2);
+  LResults[0].Results[0].Name := 't1'; LResults[0].Results[0].Status := tsPassed;
+  LResults[0].Results[1].Name := 't2'; LResults[0].Results[1].Status := tsPassed;
+
+  LResults[1] := TTestRunResult.Create('S2');
+  LResults[1].Passed := 1;
+  SetLength(LResults[1].Results, 1);
+  LResults[1].Results[0].Name := 't3'; LResults[1].Results[0].Status := tsPassed;
+
+  LOut := TAPReport(LResults);
+  { Plan: 1..3 }
+  CheckContains(LOut, '1..3');
+  { Sequential numbering across suites }
+  CheckContains(LOut, 'ok 1 - S1 / t1');
+  CheckContains(LOut, 'ok 2 - S1 / t2');
+  CheckContains(LOut, 'ok 3 - S2 / t3');
+end;
+
+procedure TestJSONErrorStatus;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+begin
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('JsErr');
+  LResults[0].Failed := 1;
+  SetLength(LResults[0].Results, 1);
+  LResults[0].Results[0].Name    := 'crash';
+  LResults[0].Results[0].Status  := tsError;
+  LResults[0].Results[0].Message := 'Segfault';
+
+  LOut := JSONReport(LResults);
+  CheckContains(LOut, '"status": "error"');
+  CheckContains(LOut, '"message": "Segfault"');
+end;
+
+procedure TestJSONPassedStatus;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+begin
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('JsPass');
+  LResults[0].Passed := 2;
+  SetLength(LResults[0].Results, 2);
+  LResults[0].Results[0].Name := 'p1'; LResults[0].Results[0].Status := tsPassed;
+  LResults[0].Results[1].Name := 'p2'; LResults[0].Results[1].Status := tsPassed;
+
+  LOut := JSONReport(LResults);
+  CheckContains(LOut, '"status": "passed"');
+  CheckEqual(2, ExtractJSONInt(LOut, 'totalPassed'));
+  CheckEqual(0, ExtractJSONInt(LOut, 'totalFailed'));
+end;
+
 { R6-49: Unicode test name StatusDot should not crash }
 
 procedure TestStatusDotUnicodeName;
@@ -1066,10 +1201,7 @@ var
   LSink: TBufferSink;
   LOut: string;
 begin
-  LSink := TBufferSink.Create;
-  LConfig := DefaultConfig;
-  LConfig.OutSink := LSink;
-  LConfig.AnsiMode := amOff;
+  LConfig := MakeBufferConfig(LSink);
 
   LSuite := TTestSuite.Create('disp');
   LSuite.Config := LConfig;
@@ -1090,10 +1222,7 @@ var
   LSink: TBufferSink;
   LOut: string;
 begin
-  LSink := TBufferSink.Create;
-  LConfig := DefaultConfig;
-  LConfig.OutSink := LSink;
-  LConfig.AnsiMode := amOff;
+  LConfig := MakeBufferConfig(LSink);
 
   LSuite := TTestSuite.Create('disp');
   LSuite.Config := LConfig;
@@ -1115,10 +1244,7 @@ var
   LSink: TBufferSink;
   LOut: string;
 begin
-  LSink := TBufferSink.Create;
-  LConfig := DefaultConfig;
-  LConfig.OutSink := LSink;
-  LConfig.AnsiMode := amOff;
+  LConfig := MakeBufferConfig(LSink);
   LConfig.TagFilter := 'fast';
 
   LSuite := TTestSuite.Create('tags');
@@ -1147,10 +1273,7 @@ var
   LConfig: TTestConfig;
   LSink: TBufferSink;
 begin
-  LSink := TBufferSink.Create;
-  LConfig := DefaultConfig;
-  LConfig.OutSink := LSink;
-  LConfig.AnsiMode := amOff;
+  LConfig := MakeBufferConfig(LSink);
   LConfig.TagFilter := '';
 
   LSuite := TTestSuite.Create('tags');
@@ -1174,10 +1297,7 @@ var
   LSink: TBufferSink;
 begin
   GRepeatCounter := 0;
-  LSink := TBufferSink.Create;
-  LConfig := DefaultConfig;
-  LConfig.OutSink := LSink;
-  LConfig.AnsiMode := amOff;
+  LConfig := MakeBufferConfig(LSink);
 
   LSuite := TTestSuite.Create('repeat');
   LSuite.Config := LConfig;
@@ -1289,10 +1409,7 @@ var
   LConfig: TTestConfig;
   LSink: TBufferSink;
 begin
-  LSink := TBufferSink.Create;
-  LConfig := DefaultConfig;
-  LConfig.OutSink := LSink;
-  LConfig.AnsiMode := amOff;
+  LConfig := MakeBufferConfig(LSink);
 
   LSuite := TTestSuite.Create('tag_runner');
   LSuite.Config := LConfig;
@@ -1346,6 +1463,50 @@ begin
     'hierarchical glob: parent matches');
   CheckFalse(MatchesFilter('OtherParent/SubA', LConfig),
     'hierarchical glob: unrelated should not match');
+
+  { Hierarchical + glob combo: filter with glob in segment }
+  SetTestFilter('TestParent/Sub*');
+  CheckTrue(MatchesFilter('TestParent/SubA', LConfig),
+    'hierarchical glob combo: Sub* matches SubA');
+  CheckTrue(MatchesFilter('TestParent/SubB', LConfig),
+    'hierarchical glob combo: Sub* matches SubB');
+  CheckTrue(MatchesFilter('TestParent/SubAlpha', LConfig),
+    'hierarchical glob combo: Sub* matches SubAlpha');
+  CheckFalse(MatchesFilter('TestParent/LeafA', LConfig),
+    'hierarchical glob combo: Sub* does not match LeafA');
+  CheckTrue(MatchesFilter('TestParent', LConfig),
+    'hierarchical glob combo: parent matches');
+
+  { Hierarchical with ? wildcard }
+  SetTestFilter('TestParent/Sub?');
+  CheckTrue(MatchesFilter('TestParent/SubA', LConfig),
+    'hierarchical ? wildcard: Sub? matches SubA');
+  CheckTrue(MatchesFilter('TestParent/SubX', LConfig),
+    'hierarchical ? wildcard: Sub? matches SubX');
+  CheckFalse(MatchesFilter('TestParent/SubAB', LConfig),
+    'hierarchical ? wildcard: Sub? does not match SubAB');
+  CheckTrue(MatchesFilter('TestParent', LConfig),
+    'hierarchical ? wildcard: parent matches');
+
+  { Hierarchical with brace expansion }
+  SetTestFilter('TestParent/{SubA,SubB}');
+  CheckTrue(MatchesFilter('TestParent/SubA', LConfig),
+    'hierarchical brace: matches SubA');
+  CheckTrue(MatchesFilter('TestParent/SubB', LConfig),
+    'hierarchical brace: matches SubB');
+  CheckFalse(MatchesFilter('TestParent/SubC', LConfig),
+    'hierarchical brace: does not match SubC');
+  CheckTrue(MatchesFilter('TestParent', LConfig),
+    'hierarchical brace: parent matches');
+
+  { Hierarchical with comma-separated top-level filters }
+  SetTestFilter('TestParent/SubA,OtherParent/SubB');
+  CheckTrue(MatchesFilter('TestParent/SubA', LConfig),
+    'comma hierarchical: matches first filter');
+  CheckTrue(MatchesFilter('OtherParent/SubB', LConfig),
+    'comma hierarchical: matches second filter');
+  CheckFalse(MatchesFilter('OtherParent/SubA', LConfig),
+    'comma hierarchical: does not match wrong combo');
 
   { Reset filter }
   SetTestFilter('');
@@ -1446,6 +1607,14 @@ begin
   Suite.Test('TestTAPReportMultiLineYAML', @TestTAPReportMultiLineYAML);
   Suite.Test('TestTAPReportError', @TestTAPReportError);
 
+  { T-04: TAP/JSON compliance tests }
+  Suite.Test('TestTAPSeverityFailVsError', @TestTAPSeverityFailVsError);
+  Suite.Test('TestTAPYAMLBlockMarkers', @TestTAPYAMLBlockMarkers);
+  Suite.Test('TestTAPDiagnosticFooter', @TestTAPDiagnosticFooter);
+  Suite.Test('TestTAPSequentialNumbering', @TestTAPSequentialNumbering);
+  Suite.Test('TestJSONErrorStatus', @TestJSONErrorStatus);
+  Suite.Test('TestJSONPassedStatus', @TestJSONPassedStatus);
+
   { R6-49~52, R6-61, R6-65: new coverage tests }
   Suite.Test('StatusDot unicode',         @TestStatusDotUnicodeName);
   Suite.Test('Filter nested a*b*c',       @TestFilterNestedGlob);
@@ -1475,7 +1644,7 @@ begin
   WriteLn;
   Runner.Summary;
 
-  CheckTrue(LResults[0].Passed >= 59, 'Expected at least 59 tests, got ' + IntToStr(LResults[0].Passed));
+  CheckTrue(LResults[0].Passed >= 63, 'Expected at least 63 tests, got ' + IntToStr(LResults[0].Passed));
   CheckTrue(LSuccess, 'All output tests should pass');
 
   if Runner.AllPassed then

@@ -84,7 +84,7 @@ begin
             LLine := LLine + ' # duration_ms: ' + IntToStr(LRes.Duration);
           AddLine(LLines, LLine);
         end;
-        tsFailed:
+        tsFailed, tsError:
         begin
           LLine := 'not ok ' + IntToStr(LCount) + ' - ' + LLine;
           AddLine(LLines, LLine);
@@ -92,18 +92,10 @@ begin
           AddYAMLBlockScalar(LLines, 'message', LRes.Message);
           if Length(LRes.CapturedLog) > 0 then
             AddYAMLBlockScalar(LLines, 'log', JoinLines(LRes.CapturedLog));
-          AddLine(LLines, '  severity: fail');
-          AddLine(LLines, '  ...');
-        end;
-        tsError:
-        begin
-          LLine := 'not ok ' + IntToStr(LCount) + ' - ' + LLine;
-          AddLine(LLines, LLine);
-          AddLine(LLines, '  ---');
-          AddYAMLBlockScalar(LLines, 'message', LRes.Message);
-          if Length(LRes.CapturedLog) > 0 then
-            AddYAMLBlockScalar(LLines, 'log', JoinLines(LRes.CapturedLog));
-          AddLine(LLines, '  severity: error');
+          if LRes.Status = tsFailed then
+            AddLine(LLines, '  severity: fail')
+          else
+            AddLine(LLines, '  severity: error');
           AddLine(LLines, '  ...');
         end;
         tsSkipped:

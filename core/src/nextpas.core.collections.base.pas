@@ -11,7 +11,8 @@ uses
   nextpas.core.math,
   nextpas.core.mem.intf,
   nextpas.core.mem.default,
-  nextpas.core.collections.element_manager.intf;
+  nextpas.core.collections.element_manager.intf,
+  nextpas.core.mem.allocator.base;
 
 // Suppress unused parameter hints - growth strategies and IsOverlap have intentionally unused params
 {$WARN 5024 OFF}
@@ -87,22 +88,22 @@ type
   private
     FData:      Pointer;
   protected
-    FAllocator: IAllocator;
+    FAllocator: TMemAllocator;
     function IsOverlap(const aSrc: Pointer; aElementCount: SizeUInt): Boolean; virtual; abstract;
   public
     constructor Create; overload;
-    constructor Create(aAllocator: IAllocator); overload;
-    constructor Create(aAllocator: IAllocator; aData: Pointer); virtual; overload;
+    constructor Create(aAllocator: TMemAllocator); overload;
+    constructor Create(aAllocator: TMemAllocator; aData: Pointer); virtual; overload;
     constructor Create(const aSrc: TCollection); overload;
-    constructor Create(const aSrc: TCollection; aAllocator: IAllocator); overload;
-    constructor Create(const aSrc: TCollection; aAllocator: IAllocator; aData: Pointer); overload;
+    constructor Create(const aSrc: TCollection; aAllocator: TMemAllocator); overload;
+    constructor Create(const aSrc: TCollection; aAllocator: TMemAllocator; aData: Pointer); overload;
     constructor Create(aSrc: Pointer; aElementCount: SizeUInt); overload;
-    constructor Create(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: IAllocator); overload;
-    constructor Create(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: IAllocator; aData: Pointer); overload;
+    constructor Create(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator); overload;
+    constructor Create(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator; aData: Pointer); overload;
 
     function  PtrIter: TPtrIter; virtual; abstract;
 
-    function  GetAllocator: IAllocator; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function  GetAllocator: TMemAllocator; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function  GetCount: SizeUInt; virtual; abstract;
     function  IsEmpty: Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function  GetData: Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
@@ -139,7 +140,7 @@ type
 
     property  Count:     SizeUInt   read GetCount;
     property  Data:      Pointer    read GetData write SetData;
-    property  Allocator: IAllocator read GetAllocator;
+    property  Allocator: TMemAllocator read GetAllocator;
   end;
 
   TCollectionClass = class of TCollection;
@@ -349,10 +350,10 @@ type
     procedure DoReverse; virtual;abstract;
 
   public
-    constructor Create(aAllocator: IAllocator; aData: Pointer); override; overload;
+    constructor Create(aAllocator: TMemAllocator; aData: Pointer); override; overload;
     constructor Create(const aSrc: array of T); overload;
-    constructor Create(const aSrc: array of T; aAllocator: IAllocator); overload;
-    constructor Create(const aSrc: array of T; aAllocator: IAllocator; aData: Pointer); overload;
+    constructor Create(const aSrc: array of T; aAllocator: TMemAllocator); overload;
+    constructor Create(const aSrc: array of T; aAllocator: TMemAllocator; aData: Pointer); overload;
 
     destructor  Destroy; override;
 
@@ -1168,12 +1169,12 @@ begin
   Create(DefaultAllocator());
 end;
 
-constructor TCollection.Create(aAllocator: IAllocator);
+constructor TCollection.Create(aAllocator: TMemAllocator);
 begin
   Create(aAllocator, nil);
 end;
 
-constructor TCollection.Create(aAllocator: IAllocator; aData: Pointer);
+constructor TCollection.Create(aAllocator: TMemAllocator; aData: Pointer);
 begin
   inherited Create;
   FData := aData;
@@ -1192,7 +1193,7 @@ begin
   Create(aSrc, aSrc.GetAllocator, aSrc.Data);
 end;
 
-constructor TCollection.Create(const aSrc: TCollection; aAllocator: IAllocator);
+constructor TCollection.Create(const aSrc: TCollection; aAllocator: TMemAllocator);
 begin
   if aSrc = nil then
     raise EArgumentNil.Create('TCollection.Create: aSrc is nil');
@@ -1200,7 +1201,7 @@ begin
   Create(aSrc, aAllocator, aSrc.Data);
 end;
 
-constructor TCollection.Create(const aSrc: TCollection; aAllocator: IAllocator; aData: Pointer);
+constructor TCollection.Create(const aSrc: TCollection; aAllocator: TMemAllocator; aData: Pointer);
 begin
   Create(aAllocator, aData);
   LoadFrom(aSrc);
@@ -1211,18 +1212,18 @@ begin
   Create(aSrc, aElementCount, DefaultAllocator(), nil);
 end;
 
-constructor TCollection.Create(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: IAllocator);
+constructor TCollection.Create(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator);
 begin
   Create(aSrc, aElementCount, aAllocator, nil);
 end;
 
-constructor TCollection.Create(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: IAllocator; aData: Pointer);
+constructor TCollection.Create(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator; aData: Pointer);
 begin
   Create(aAllocator, aData);
   LoadFrom(aSrc, aElementCount);
 end;
 
-function TCollection.GetAllocator: IAllocator;
+function TCollection.GetAllocator: TMemAllocator;
 begin
   Result := FAllocator;
 end;
@@ -1954,7 +1955,7 @@ end;
 {$POP}
 
 
-constructor TGenericCollection.Create(aAllocator: IAllocator; aData: Pointer);
+constructor TGenericCollection.Create(aAllocator: TMemAllocator; aData: Pointer);
 var
   LTypeInfo: PTypeInfo;
 begin
@@ -2108,12 +2109,12 @@ begin
   Create(aSrc, DefaultAllocator(), nil);
 end;
 
-constructor TGenericCollection.Create(const aSrc: array of T; aAllocator: IAllocator);
+constructor TGenericCollection.Create(const aSrc: array of T; aAllocator: TMemAllocator);
 begin
   Create(aSrc, aAllocator, nil);
 end;
 
-constructor TGenericCollection.Create(const aSrc: array of T; aAllocator: IAllocator; aData: Pointer);
+constructor TGenericCollection.Create(const aSrc: array of T; aAllocator: TMemAllocator; aData: Pointer);
 begin
   Create(aAllocator, aData);
   LoadFrom(aSrc);

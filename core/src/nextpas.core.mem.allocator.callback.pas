@@ -17,7 +17,7 @@ type
 
   {**
    * TCallbackAllocator
-   * @desc 使用用户提供的回调函数进行内存管理的 IAllocator 具体类
+   * @desc 使用用户提供的回调函数进行内存管理的 TMemAllocator 具体类
    *}
   TCallbackAllocator = class(TAllocator)
   private

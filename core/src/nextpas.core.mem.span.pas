@@ -38,8 +38,10 @@ function SpanAlloc(var ASpan: TSpan): Pointer;
 
 {** Free a previously allocated slot back to the span.
     APtr must have been returned by SpanAlloc from this span.
-    O(1): compute bit index, set the bit. }
-procedure SpanFree(var ASpan: TSpan; APtr: Pointer);
+    O(1): compute bit index, set the bit.
+    Returns True on success, False if the pointer is out-of-range or
+    already free (double-free detection). }
+function SpanFree(var ASpan: TSpan; APtr: Pointer): Boolean;
 
 {** Return True if the span has at least one free slot. }
 function SpanHasFree(const ASpan: TSpan): Boolean; inline;
@@ -90,17 +92,26 @@ begin
   Result := Pointer(PByte(ASpan.FBase) + LBit * ASpan.FSlotSize);
 end;
 
-procedure SpanFree(var ASpan: TSpan; APtr: Pointer);
+function SpanFree(var ASpan: TSpan; APtr: Pointer): Boolean;
 var
   LOffset: SizeUInt;
   LBit: SizeUInt;
+  LBitMask: UInt64;
 begin
-  { Calculate bit index from address. }
+  Result := False;
+  { Bounds check: pointer must be within this span's memory range. }
   LOffset := SizeUInt(PByte(APtr) - PByte(ASpan.FBase));
+  if LOffset >= SizeUInt(ASpan.FSlotCount) * ASpan.FSlotSize then
+    Exit;
   LBit := LOffset div ASpan.FSlotSize;
+  { Double-free check: if the bit is already set, the slot is already free. }
+  LBitMask := UInt64(1) shl LBit;
+  if (ASpan.FBitmap and LBitMask) <> 0 then
+    Exit;
   { Set the bit (mark as free). }
-  ASpan.FBitmap := ASpan.FBitmap or (UInt64(1) shl LBit);
+  ASpan.FBitmap := ASpan.FBitmap or LBitMask;
   Inc(ASpan.FFreeCount);
+  Result := True;
 end;
 
 function SpanHasFree(const ASpan: TSpan): Boolean;

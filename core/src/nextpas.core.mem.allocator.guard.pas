@@ -37,14 +37,14 @@ type
     function DoAllocMem(ASize: SizeUInt): Pointer; override;
     function DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
     procedure DoFreeMem(ADst: Pointer); override;
-    function DoMemSize(APtr: Pointer): SizeUInt; override;
     function Traits: TAllocatorTraits; override;
   end;
 
 implementation
 
 uses
-  nextpas.core.platform.memory;
+  nextpas.core.platform.memory,
+  nextpas.core.mem.error;
 
 const
   GUARD_PAGE_SIZE = MEM_PAGE_SIZE;  { 4K guard page }
@@ -96,8 +96,6 @@ var
   LHdr: PGuardHeader;
 begin
   Result := nil;
-  if ASize = 0 then
-    Exit;
   if not CalcLayout(ASize, LCommittedSize, LTotalSize) then
     Exit;
 
@@ -138,14 +136,6 @@ var
   LOldSize: SizeUInt;
   LCopySize: SizeUInt;
 begin
-  if ADst = nil then
-    Exit(DoGetMem(ASize));
-  if ASize = 0 then
-  begin
-    DoFreeMem(ADst);
-    Exit(nil);
-  end;
-
   LHdr := PGuardHeader(PtrUInt(ADst) - HeaderSize);
   LOldSize := LHdr^.UserSize;
 
@@ -170,28 +160,22 @@ begin
     Exit;
   LHdr := PGuardHeader(PtrUInt(ADst) - HeaderSize);
   if LHdr^.Magic <> GUARD_MAGIC then
-    Exit;  { Invalid pointer — silently ignore to avoid crash on bad input. }
+  begin
+    {$IFDEF DEBUG}
+    raise EAllocError.Create(aeInvalidPointer,
+      'TGuardAllocator.FreeMem: invalid guard magic (possible double free or wild pointer)');
+    {$ELSE}
+    Exit;
+    {$ENDIF}
+  end;
   LHdr^.Magic := 0;  { Clear magic to detect double free. }
   platform_virtual_release(LHdr^.Base, LHdr^.TotalSize);
-end;
-
-function TGuardAllocator.DoMemSize(APtr: Pointer): SizeUInt;
-var
-  LHdr: PGuardHeader;
-begin
-  LHdr := PGuardHeader(PtrUInt(APtr) - HeaderSize);
-  if LHdr^.Magic <> GUARD_MAGIC then
-    Exit(0);
-  Result := LHdr^.UserSize;
 end;
 
 function TGuardAllocator.Traits: TAllocatorTraits;
 begin
   Result := inherited Traits;
-  Result.ZeroInitialized := False;
-  Result.ThreadSafe := False;  { no internal locking }
-  Result.HasMemSize := True;   { we store UserSize in header }
-  Result.SupportsAligned := False;
+  Result.ThreadSafe := False;
 end;
 
 end.

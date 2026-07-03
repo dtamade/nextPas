@@ -5,7 +5,11 @@ unit nextpas.core.tls.aesgcm.pool;
 
 interface
 
-uses nextpas.core.base, nextpas.core.base.utils, nextpas.core.sync, nextpas.core.time, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.rand, nextpas.core.tls.exceptions; const // GCM 标准 IV 长度：12 字节（96 位） GCM_IV_LENGTH = 12;
+uses nextpas.core.base, nextpas.core.base.utils, nextpas.core.sync, nextpas.core.time, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.rand, nextpas.core.tls.exceptions;
+
+const
+  // GCM 标准 IV 长度：12 字节（96 位）
+  GCM_IV_LENGTH = 12;
 
   // IV 结构：[8字节随机基础] + [4字节计数器]
   GCM_IV_BASE_LENGTH = 8;
@@ -120,6 +124,9 @@ function PooledAESGCMContext(
 function DefaultAESGCMPoolConfig: TAESGCMPoolConfig;
 
 implementation
+
+uses
+  nextpas.core.crypto.constant_time;
 
 var
   GlobalAESGCMPool: TAESGCMContextPool = nil;
@@ -241,7 +248,7 @@ begin
       (Length(FEntries[I].KeyHash) = Length(LKeyHash)) then
     begin
       // 比较密钥哈希
-      if CompareMem(@FEntries[I].KeyHash[0], @LKeyHash[0], Length(LKeyHash)) then
+      if TConstantTime.CompareBytes(FEntries[I].KeyHash, LKeyHash) = 1 then
       begin
         Result := I;
         LFound := True;

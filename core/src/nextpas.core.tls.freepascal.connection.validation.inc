@@ -540,7 +540,7 @@ var
   LVerifyCallback: TSSLVerifyCallback;
   LTrustedStore: ISSLCertificateStore;
   LIntermediateStore: ISSLCertificateStore;
-  LCRLStore: TStringList;
+  LCRLStore: TStringArray;
   LVerifier: ISSLCertificateChainVerifier;
   LVerifyResult: TChainVerifyResult;
   LErrorCode: TSSLErrorCode;
@@ -605,8 +605,6 @@ begin
     LVerifyResult := LVerifier.VerifyCertificate(FPeerCertificate);
   finally
     LVerifier := nil;
-    if LCRLStore <> nil then
-      LCRLStore.Free;
   end;
 
   try
@@ -651,8 +649,7 @@ begin
       Exit;
     end;
   finally
-    if Assigned(LVerifyResult.Warnings) then
-      LVerifyResult.Warnings.Free;
+    SetLength(LVerifyResult.Warnings, 0);
   end;
 
   if not ValidateCertificatePinIfEnabled then

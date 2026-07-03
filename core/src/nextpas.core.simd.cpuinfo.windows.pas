@@ -10,6 +10,8 @@ function DetectCoreCounts(out Physical, Logical: LongInt): Boolean;
 
 implementation
 
+{$IFDEF WINDOWS}
+
 uses
   Windows;
 
@@ -96,5 +98,16 @@ begin
   if Logical < 1 then Logical := 1;
   Result := (Physical > 0) and (Logical > 0);
 end;
+
+{$ELSE}
+
+function DetectCoreCounts(out Physical, Logical: LongInt): Boolean;
+begin
+  Physical := 0;
+  Logical := 0;
+  Result := False;
+end;
+
+{$ENDIF}
 
 end.

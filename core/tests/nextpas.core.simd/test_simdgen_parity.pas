@@ -2,7 +2,7 @@ program test_simdgen_parity;
 {$I ../../src/nextpas.core.settings.inc}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   nextpas.core.text.conv, Math,
   nextpas.core.simd.base,
   nextpas.core.simd.dispatch,

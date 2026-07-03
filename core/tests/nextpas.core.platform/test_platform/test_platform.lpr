@@ -4,25 +4,37 @@ program test_platform;
 
 uses
   nextpas.core.platform,
-  nextpas.core.platform.base;
+  nextpas.core.platform.base,
+  nextpas.core.test;
 
+var
+  LRunner: TTestRunner;
+  LSuite: TTestSuite;
 begin
-  WriteLn('=== nextpas.core.platform tests ===');
+  LSuite := TTestSuite.Create('platform');
 
-  WriteLn('OS: ', OSName);
-  WriteLn('CPU: ', CPUName);
+  LSuite.Test('OS detection', procedure begin
+    {$IFDEF LINUX}
+    CheckTrue(CurrentOS = osLinux, 'Should detect Linux');
+    CheckEqual('Linux', OSName);
+    {$ENDIF}
+  end);
 
-  {$IFDEF LINUX}
-  Assert(CurrentOS = osLinux, 'Should detect Linux');
-  Assert(OSName = 'Linux');
-  {$ENDIF}
+  LSuite.Test('CPU detection', procedure begin
+    {$IFDEF CPUX86_64}
+    CheckTrue(CurrentCPU = cpuX86_64, 'Should detect x86_64');
+    CheckEqual('x86_64', CPUName);
+    {$ENDIF}
+  end);
 
-  {$IFDEF CPUX86_64}
-  Assert(CurrentCPU = cpuX86_64, 'Should detect x86_64');
-  Assert(CPUName = 'x86_64');
-  {$ENDIF}
+  LSuite.Test('endianness', procedure begin
+    CheckTrue(CurrentEndian = endLittle, 'Should be little-endian');
+  end);
 
-  Assert(CurrentEndian = endLittle, 'Should be little-endian');
-
-  WriteLn('PASS: all platform tests passed');
+  LRunner := TTestRunner.Create('nextpas.core.platform');
+  LRunner.Add(LSuite);
+  LRunner.RunAll;
+  LRunner.Summary;
+  if not LRunner.AllPassed then
+    Halt(1);
 end.

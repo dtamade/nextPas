@@ -3,7 +3,7 @@
 
   核心设计:
     1. threadvar 存储 per-thread Arena 指针 — 零锁热路径
-    2. 全局 Arena 池 (TRTLCriticalSection) 回收空闲 Arena
+    2. 全局 Arena 池 (TMemMutex) 回收空闲 Arena
     3. Arena 是 TLocalArena (固定容量 bump pointer)
     4. 热路径 Alloc: TLS hit → ~2ns (与裸 TLocalArena 相同)
     5. 冷路径 Get miss → pool hit → ~100ns; miss → new Arena → ~1μs
@@ -28,7 +28,8 @@ uses
   nextpas.core.mem.base,
   nextpas.core.mem.error,
   nextpas.core.mem.arena.base,
-  nextpas.core.mem.arena.local;
+  nextpas.core.mem.arena.local,
+  nextpas.core.mem.mutex;
 
 type
   {** Thread-Local Arena 配置 }
@@ -60,9 +61,10 @@ type
     FConfig: TThreadArenaConfig;
     FPool: array of TLocalArena;
     FPoolCount: Integer;
-    FPoolLock: TRTLCriticalSection;
+    FPoolLock: TMemMutex;
     FTotalCreated: Integer;
     FTotalRecycled: Integer;
+    FDead: LongBool;
     function PopFromPool: TLocalArena;
     procedure PushToPool(AArena: TLocalArena);
     {** 只归还 Arena 到池, 不清 TLS manager (供跨 manager 切换时调用) }
@@ -161,9 +163,10 @@ begin
     FConfig.MaxPoolSize := DEFAULT_MAX_POOL_SIZE;
   FPool := nil;
   FPoolCount := 0;
-  InitCriticalSection(FPoolLock);
+  FPoolLock.Init;
   FTotalCreated := 0;
   FTotalRecycled := 0;
+  FDead := False;
 end;
 
 destructor TThreadArenaManager.Destroy;
@@ -172,24 +175,26 @@ var
 begin
   { 先回收当前线程 Arena }
   DrainTLS;
+  { 标记即将销毁 — 冷路径 DrainArenaOnly 检查此标志避免 push 到死亡 manager }
+  FDead := True;
   { 释放池中所有 Arena }
-  EnterCriticalSection(FPoolLock);
+  FPoolLock.Acquire;
   try
     for I := 0 to FPoolCount - 1 do
       FPool[I].Free;
     FPoolCount := 0;
     FPool := nil;
   finally
-    LeaveCriticalSection(FPoolLock);
+    FPoolLock.Release;
   end;
-  DoneCriticalSection(FPoolLock);
+  FPoolLock.Done;
   inherited Destroy;
 end;
 
 function TThreadArenaManager.PopFromPool: TLocalArena;
 begin
   Result := nil;
-  EnterCriticalSection(FPoolLock);
+  FPoolLock.Acquire;
   try
     if FPoolCount > 0 then begin
       Dec(FPoolCount);
@@ -197,13 +202,13 @@ begin
       FPool[FPoolCount] := nil;
     end;
   finally
-    LeaveCriticalSection(FPoolLock);
+    FPoolLock.Release;
   end;
 end;
 
 procedure TThreadArenaManager.PushToPool(AArena: TLocalArena);
 begin
-  EnterCriticalSection(FPoolLock);
+  FPoolLock.Acquire;
   try
     if FPoolCount < Length(FPool) then begin
       FPool[FPoolCount] := AArena;
@@ -221,7 +226,7 @@ begin
       AArena.Free;
     end;
   finally
-    LeaveCriticalSection(FPoolLock);
+    FPoolLock.Release;
   end;
 end;
 
@@ -234,10 +239,15 @@ begin
       Exit;
   end;
 
-  { 冷路径: manager 不匹配或无 Arena → 先归还旧 Arena }
+  { 冷路径: manager 不匹配或无 Arena → 归还旧 Arena 给原 manager }
   if TLSCurrentArena <> nil then begin
-    if TLSCurrentManager <> nil then
-      TThreadArenaManager(TLSCurrentManager).DrainArenaOnly;
+    if (TLSCurrentManager <> nil) and
+       (not TThreadArenaManager(TLSCurrentManager).FDead) then
+      TThreadArenaManager(TLSCurrentManager).DrainArenaOnly
+    else
+      TLSCurrentArena.Free;
+    TLSCurrentArena := nil;
+    TLSCurrentManager := nil;
   end;
 
   { 从池中取 }
@@ -289,11 +299,11 @@ end;
 
 function TThreadArenaManager.PoolSize: Integer;
 begin
-  EnterCriticalSection(FPoolLock);
+  FPoolLock.Acquire;
   try
     Result := FPoolCount;
   finally
-    LeaveCriticalSection(FPoolLock);
+    FPoolLock.Release;
   end;
 end;
 

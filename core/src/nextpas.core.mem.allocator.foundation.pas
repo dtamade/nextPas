@@ -22,6 +22,7 @@ uses
 type
   IAllocator = nextpas.core.mem.allocator.base.IAllocator;
   TAllocator = nextpas.core.mem.allocator.base.TAllocator;
+  TMemAllocator = nextpas.core.mem.allocator.base.TMemAllocator;
 
   TGetMemCallback = nextpas.core.mem.allocator.callback.TGetMemCallback;
   TAllocMemCallback = nextpas.core.mem.allocator.callback.TAllocMemCallback;

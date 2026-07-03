@@ -47,6 +47,7 @@ type
   TThreadCache = record
     FHeads: array[0..MEM_SIZECLASS_COUNT - 1] of PFreeNode;
     FCounts: array[0..MEM_SIZECLASS_COUNT - 1] of Word;
+    FOpCount: UInt64;
   end;
 
   {** Callback for batch refill: allocate ACount blocks of size class AIndex
@@ -88,10 +89,15 @@ function ThreadCacheCount(const ACache: TThreadCache;
 
 {** Adaptive batch size for a size class index.
     Small objects → larger batches (throughput), large → smaller (memory). }
-function AdaptiveBatchSize(ASizeClassIndex: Int32): Word;
+function AdaptiveBatchSize(ASizeClassIndex: Int32): Word; inline;
 
 {** Adaptive max list size for a size class index. }
-function AdaptiveMaxListSize(ASizeClassIndex: Int32): Word;
+function AdaptiveMaxListSize(ASizeClassIndex: Int32): Word; inline;
+
+{** Flush all cached blocks from all size classes using AFlushProc.
+    Used for thread-exit cleanup to prevent cache block leakage. }
+procedure ThreadCacheFlushAll(var ACache: TThreadCache;
+  AFlushProc: TFlushProc);
 
 implementation
 
@@ -221,6 +227,20 @@ begin
     Result := CACHE_ADAPTIVE_MAX_LARGE
   else
     Result := CACHE_ADAPTIVE_MAX_HUGE;
+end;
+
+procedure ThreadCacheFlushAll(var ACache: TThreadCache;
+  AFlushProc: TFlushProc);
+var
+  LSizeClass: Int32;
+begin
+  if not Assigned(AFlushProc) then
+    Exit;
+  for LSizeClass := 0 to MEM_SIZECLASS_COUNT - 1 do
+  begin
+    while ACache.FHeads[LSizeClass] <> nil do
+      ThreadCacheFlush(ACache, LSizeClass, AFlushProc);
+  end;
 end;
 
 end.

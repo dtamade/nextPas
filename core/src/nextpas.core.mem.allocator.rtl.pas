@@ -25,13 +25,17 @@ type
 
 function GetRtlAllocator: IAllocator;
 function TryGetRtlAllocator(out A: IAllocator): Boolean;
+function ResolveAllocator(const AAllocator: IAllocator): IAllocator;
 
 implementation
+
+uses
+  nextpas.core.platform.sync;
 
 var
   _RTLAllocatorObj: TAllocator = nil;
   _RTLAllocatorIntf: IAllocator = nil;
-  GRtlAllocLock: TRTLCriticalSection;
+  GRtlAllocLock: TPlatformMutex;
 
 function TRtlAllocator.DoGetMem(ASize: SizeUInt): Pointer;
 begin
@@ -61,15 +65,20 @@ begin
   // - No native aligned API exposed via this allocator (use aligned module/bridge)
   // - No MemSize/usable_size available
   Result.ZeroInitialized := True;
-  Result.SupportsAligned := False;
-  Result.HasMemSize      := False;
 end;
 
 function GetRtlAllocator: IAllocator;
 begin
+  { Double-check locking. Safe on x86 (TSO: stores visible in program order).
+    On ARM/AArch64 the outer nil check may read a stale pointer; this module
+    targets x86-64 Linux where the pattern is correct.
+
+    GRtlAllocLock is a TPlatformMutex — zero-initialized (valid pthread_mutex_t
+    default), no explicit Init needed. This avoids TMemMutex's lazy-init state
+    machine which would fail if called before the mutex's unit initialization. }
   if _RTLAllocatorObj = nil then
   begin
-    EnterCriticalSection(GRtlAllocLock);
+    platform_mutex_lock(GRtlAllocLock);
     try
       if _RTLAllocatorObj = nil then
       begin
@@ -77,7 +86,7 @@ begin
         _RTLAllocatorIntf := _RTLAllocatorObj as IAllocator; // anchor lifetime via interface
       end;
     finally
-      LeaveCriticalSection(GRtlAllocLock);
+      platform_mutex_unlock(GRtlAllocLock);
     end;
   end;
   Result := _RTLAllocatorIntf;
@@ -94,10 +103,15 @@ begin
   end;
 end;
 
-initialization
-  InitCriticalSection(GRtlAllocLock);
+function ResolveAllocator(const AAllocator: IAllocator): IAllocator;
+begin
+  if AAllocator <> nil then
+    Result := AAllocator
+  else
+    Result := GetRtlAllocator;
+end;
+
 finalization
-  DoneCriticalSection(GRtlAllocLock);
   _RTLAllocatorIntf := nil; // release anchor; object will be freed by interface refcount
   _RTLAllocatorObj := nil;
 

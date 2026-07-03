@@ -17,12 +17,14 @@ type
   TAllocatorTraits = record
     ZeroInitialized: Boolean;  { AllocMem 返回全零内存 }
     ThreadSafe: Boolean;       { 所有方法线程安全 }
-    HasMemSize: Boolean;       { MemSize 返回实际分配块大小 }
-    SupportsAligned: Boolean;  { AllocAligned 可用 }
   end;
 
   {**
    * @desc Canonical nextpas.core allocator contract.
+   *
+   *  核心 5 方法：GetMem/AllocMem/ReallocMem/FreeMem + Traits。
+   *  MemSize 和 AllocAligned/FreeAligned 已移至更专门的接口
+   *  （IMemoryPool.MemSizeOf 和 IArena.AllocAligned）。
    *}
   IAllocator = interface
     ['{1CEB691D-D538-48D2-A5C4-A4F0A1B98928}']
@@ -30,9 +32,6 @@ type
     function AllocMem(ASize: SizeUInt): Pointer;
     function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
     procedure FreeMem(ADst: Pointer);
-    function MemSize(APtr: Pointer): SizeUInt;
-    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
-    procedure FreeAligned(APtr: Pointer);
     function Traits: TAllocatorTraits;
   end;
 

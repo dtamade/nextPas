@@ -8,7 +8,7 @@ program benchmark_ringbuffer;
 {$mode objfpc}{$H+}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   SysUtils, Classes, DateUtils,
   nextpas.core.tls.base,
   nextpas.core.tls.ringbuffer,

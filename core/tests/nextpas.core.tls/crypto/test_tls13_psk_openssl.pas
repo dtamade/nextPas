@@ -3,7 +3,7 @@ program test_tls13_psk_openssl;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   SysUtils, Classes, Sockets, ssockets,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,

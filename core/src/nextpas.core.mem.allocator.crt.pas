@@ -28,6 +28,9 @@ function TryGetCrtAllocator(out A: IAllocator): Boolean;
 
 implementation
 
+uses
+  nextpas.core.platform.sync;
+
 function  crt_malloc(ASize: SizeUInt): Pointer; cdecl external {$IFDEF MSWINDOWS}'msvcrt.dll'{$ELSE}'c'{$ENDIF} name 'malloc';
 function  crt_calloc(aNum, ASize: SizeUInt): Pointer; cdecl external {$IFDEF MSWINDOWS}'msvcrt.dll'{$ELSE}'c'{$ENDIF} name 'calloc';
 function  crt_realloc(APtr: Pointer; ASize: SizeUInt): Pointer; cdecl external {$IFDEF MSWINDOWS}'msvcrt.dll'{$ELSE}'c'{$ENDIF} name 'realloc';
@@ -36,7 +39,7 @@ procedure crt_free(APtr: Pointer); cdecl external {$IFDEF MSWINDOWS}'msvcrt.dll'
 var
   _CrtAllocatorObj: TAllocator = nil;
   _CrtAllocatorIntf: IAllocator = nil;
-  GCrtAllocLock: TRTLCriticalSection;
+  GCrtAllocLock: TPlatformMutex;
 
 function TCrtAllocator.DoGetMem(ASize: SizeUInt): Pointer;
 begin
@@ -66,15 +69,15 @@ begin
   // - No native aligned API exposed via this allocator
   // - No MemSize/usable_size available
   Result.ZeroInitialized := True;
-  Result.SupportsAligned := False;
-  Result.HasMemSize      := False;
 end;
 
 function GetCrtAllocator: IAllocator;
 begin
+  { GCrtAllocLock is TPlatformMutex — zero-initialized, no explicit Init needed.
+    See allocator.rtl.pas for full rationale. }
   if _CrtAllocatorObj = nil then
   begin
-    EnterCriticalSection(GCrtAllocLock);
+    platform_mutex_lock(GCrtAllocLock);
     try
       if _CrtAllocatorObj = nil then
       begin
@@ -82,7 +85,7 @@ begin
         _CrtAllocatorIntf := _CrtAllocatorObj as IAllocator; // anchor lifetime
       end;
     finally
-      LeaveCriticalSection(GCrtAllocLock);
+      platform_mutex_unlock(GCrtAllocLock);
     end;
   end;
   Result := _CrtAllocatorIntf;
@@ -99,10 +102,7 @@ begin
   end;
 end;
 
-initialization
-  InitCriticalSection(GCrtAllocLock);
 finalization
-  DoneCriticalSection(GCrtAllocLock);
   _CrtAllocatorIntf := nil;
   _CrtAllocatorObj := nil;
 

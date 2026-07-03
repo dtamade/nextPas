@@ -8,7 +8,7 @@ program test_ringbuffer_lockfree;
 {$UNITPATH framework}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   SysUtils, Classes,
   nextpas.core.tls.base,
   nextpas.core.tls.ringbuffer.lockfree,

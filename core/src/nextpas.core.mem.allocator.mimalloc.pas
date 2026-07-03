@@ -24,8 +24,9 @@ type
     function  DoAllocMem(ASize: SizeUInt): Pointer; override;
     function  DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
     procedure DoFreeMem(ADst: Pointer); override;
-    function  DoMemSize(APtr: Pointer): SizeUInt; override;
   public
+    {** 查询 mimalloc 分配的实际可用大小（独立方法，非 IAllocator 接口） }
+    function  UsableSize(APtr: Pointer): SizeUInt;
     function  Traits: TAllocatorTraits; override;
   end;
 
@@ -37,7 +38,8 @@ function TryGetMimallocUsableSize(APtr: Pointer; out ASize: SizeUInt): Boolean;
 implementation
 
 uses
-  nextpas.core.mem.error;
+  nextpas.core.mem.error,
+  nextpas.core.platform.sync;
 
 {$IFDEF NEXTPAS_CORE_MIMALLOC_STATIC}
   {$LINKLIB mimalloc}
@@ -64,7 +66,7 @@ uses
     _mi_realloc: function(APtr: Pointer; aNewSize: SizeUInt): Pointer; cdecl = nil;
     _mi_free: procedure(APtr: Pointer); cdecl = nil;
     _mi_malloc_usable_size: function(APtr: Pointer): SizeUInt; cdecl = nil;
-    GLoadLock: TRTLCriticalSection;
+    GLoadLock: TPlatformMutex;
 
   function IsLibValid(const ALib: TPlatformLibrary): Boolean; inline;
   begin
@@ -80,7 +82,7 @@ uses
     LLib: TPlatformLibrary;
   begin
     if _miLoaded then Exit(True);
-    EnterCriticalSection(GLoadLock);
+    platform_mutex_lock(GLoadLock);
     try
       if _miLoaded then Exit(True);
       if not TryLoadMimallocLibrary(LLib) then
@@ -99,7 +101,7 @@ uses
       end;
       Result := _miLoaded;
     finally
-      LeaveCriticalSection(GLoadLock);
+      platform_mutex_unlock(GLoadLock);
     end;
   end;
 {$ENDIF}
@@ -107,7 +109,7 @@ uses
 var
   _MimallocAllocatorObj: TAllocator = nil;
   _MimallocAllocatorIntf: IAllocator = nil;
-  GAllocatorLock: TRTLCriticalSection;
+  GAllocatorLock: TPlatformMutex;
 
 function MimallocUsableSizeAvailable: Boolean;
 begin
@@ -155,11 +157,12 @@ end;
 procedure TMimallocAllocator.DoFreeMem(ADst: Pointer);
 begin
   if not EnsureMimallocLoaded then
-    Exit; // free path when library missing: nothing to do
+    raise EAllocError.Create(aeInternalError,
+      'TMimallocAllocator.FreeMem: mimalloc library unavailable (was previously loaded)');
   _mi_free(ADst);
 end;
 
-function TMimallocAllocator.DoMemSize(APtr: Pointer): SizeUInt;
+function TMimallocAllocator.UsableSize(APtr: Pointer): SizeUInt;
 begin
   if not TryGetMimallocUsableSize(APtr, Result) then
     Result := 0;
@@ -170,18 +173,14 @@ begin
   Result := inherited Traits;
   // mimalloc semantics:
   // - AllocMem uses mi_calloc => zero initialized; GetMem not guaranteed
-  // - SupportsAligned remains False here (use aligned bridge or module)
-  // - HasMemSize is true only when the optional usable-size symbol is present
   Result.ZeroInitialized := True;
-  Result.SupportsAligned := False;
-  Result.HasMemSize      := MimallocUsableSizeAvailable;
 end;
 
 function GetMimallocAllocator: IAllocator;
 begin
   if _MimallocAllocatorObj = nil then
   begin
-    EnterCriticalSection(GAllocatorLock);
+    platform_mutex_lock(GAllocatorLock);
     try
       if _MimallocAllocatorObj = nil then
       begin
@@ -189,7 +188,7 @@ begin
         _MimallocAllocatorIntf := _MimallocAllocatorObj as IAllocator; // anchor lifetime
       end;
     finally
-      LeaveCriticalSection(GAllocatorLock);
+      platform_mutex_unlock(GAllocatorLock);
     end;
   end;
   Result := _MimallocAllocatorIntf;
@@ -205,16 +204,7 @@ begin
   end;
 end;
 
-initialization
-  {$IFNDEF NEXTPAS_CORE_MIMALLOC_STATIC}
-  InitCriticalSection(GLoadLock);
-  {$ENDIF}
-  InitCriticalSection(GAllocatorLock);
 finalization
-  DoneCriticalSection(GAllocatorLock);
-  {$IFNDEF NEXTPAS_CORE_MIMALLOC_STATIC}
-  DoneCriticalSection(GLoadLock);
-  {$ENDIF}
   _MimallocAllocatorIntf := nil;
   _MimallocAllocatorObj := nil;
   {$IFNDEF NEXTPAS_CORE_MIMALLOC_STATIC}

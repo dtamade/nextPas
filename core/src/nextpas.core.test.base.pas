@@ -9,7 +9,9 @@ unit nextpas.core.test.base;
 interface
 
 uses
-  SysUtils;         { ExceptClass, EAbort, EAssertionFailed — FPC built-in }
+  nextpas.core.system,   { Exception, EAbort, EAssertionFailed, ExceptClass }
+  nextpas.core.text.conv, { LowerCase }
+  nextpas.core.time;     { GetTickCount64 }
 
 { ── Test Context (for subtests) ───────────────────────────────────────────── }
 { ITestContext MUST be declared before TSubtestProc which references it.       }
@@ -50,10 +52,10 @@ type
 
   PTestCaseProc = ^TTestCaseProc;
 
-{ ── Re-exported from SysUtils (avoid facade depending on FPC RTL) ──────────── }
+{ ── Re-exported from nextpas.core.system ───────────────────────────────────── }
 
 type
-  ExceptClass = SysUtils.ExceptClass;
+  ExceptClass = nextpas.core.system.ExceptClass;
 
 { ── Status ────────────────────────────────────────────────────────────────── }
 
@@ -93,7 +95,27 @@ type
     constructor Create(const AReason: string);
   end;
 
-  TTestEntryKind = (ekTest, ekSubtest, ekSkipped, ekTableTest, ekShouldFail);
+  TTestEntryKind = (ekTest, ekSubtest, ekSkipped, ekTableTest, ekShouldFail,
+    ekBench);
+
+  TBenchContext = record
+    N        : Integer;  { iterations — set by framework, user loop runs N times }
+    TotalNs  : Int64;    { accumulated by StartTimer/StopTimer pairs }
+    AllocBytes: Int64;   { set by user (or framework) if --benchmem }
+    AllocCount: Int64;   { set by user (or framework) if --benchmem }
+  end;
+  PBenchContext = ^TBenchContext;
+  TBenchProc = procedure(BC: PBenchContext);
+
+  TBenchResult = record
+    Name      : string;
+    N         : Integer;  { total iterations }
+    TotalNs   : Int64;    { total time in nanoseconds }
+    NsPerOp   : Int64;    { nanoseconds per operation }
+    AllocBytes: Int64;    { bytes per op (0 if not tracked) }
+    AllocCount: Int64;    { allocs per op (0 if not tracked) }
+  end;
+  TBenchResults = array of TBenchResult;
 
   TTestEntry = record
     Name       : string;
@@ -113,8 +135,10 @@ type
       pointers. Safety net: GStubRegistry in finalization catches suites that
       never run. }
     ShouldFailMsg: string;  { ekShouldFail: expected failure reason; test passes if it fails }
+    ShortSkip  : Boolean;  { true = skip this test in --short mode (Go testing.Short()) }
     TableCase  : Pointer;       { PTestCase, heap-allocated }
     TableProc  : Pointer;       { PTestCaseProc, heap-allocated }
+    BenchProc  : TBenchProc;    { ekBench: benchmark function }
   end;
 
 { ── Internal State ───────────────────────────────────────────────────────── }
@@ -154,18 +178,36 @@ procedure ClearEntry(out AEntry: TTestEntry);
 function MakeTestResult(const AName: string; AStatus: TTestStatus;
   const AMessage: string; ADuration: Int64): TTestResult;
   { Construct a fully-initialized TTestResult in one call. }
+function MakeBenchResult(const AName: string; AN: Integer;
+  ATotalNs: Int64; AAllocBytes: Int64 = 0; AAllocCount: Int64 = 0): TBenchResult;
+  { Construct a TBenchResult with computed NsPerOp. }
 procedure AppendResult(var AResults: specialize TArray<TTestResult>;
   const AResult: TTestResult);
   { Append a TTestResult to a dynamic array. }
 function GetTopSlowest(const AResults: TTestResults;
   ACount: Integer): TTestResults;
   { Return up to ACount slowest tests from AResults, sorted descending by Duration. }
+procedure ShuffleEntries(var AEntries: specialize TArray<TTestEntry>;
+  ASeed: Integer);
+  { Fisher-Yates shuffle of test entries. ASeed > 0 for deterministic shuffle.
+    ASeed = -1 uses a pseudo-random seed based on current tick count. }
 procedure RegisterEntry(var AEntries: specialize TArray<TTestEntry>;
   const AEntry: TTestEntry);
   { Append a TTestEntry to a dynamic array. }
 procedure CopyTags(out ATags: specialize TArray<string>;
   const ASource: array of string);
   { Copy an open array of tag strings into a dynamic array. }
+function GrowCapacity(ALen, AInitCap: Integer): Integer;
+  { Returns new capacity for a dynamic array. Geometric growth above AInitCap.
+    Shared by runner, context, and other growth call-sites. }
+function GrowCleanups(var ACleanups: specialize TArray<TTestClosure>): Integer;
+  { Grow ACleanups capacity and return insertion index (old length).
+    Shared by runner.EachCleanups and context.FCleanups. }
+procedure RunShouldFailEntry(const AEntry: TTestEntry;
+  out AStatus: TTestStatus; out AFailMsg: string);
+  { Execute a ShouldFail test entry. Sets AStatus to tsPassed if the proc
+    raises (expected), tsFailed if it doesn't, tsSkipped on ETestSkipped.
+    Shared by serial and parallel runners. }
 
 { ── Exception Formatting (eliminate repeated ClassName + trace patterns) ──── }
 
@@ -174,6 +216,11 @@ function FormatExceptionMsg(E: Exception): string;
 function AppendTestTrace(const AMsg: string): string;
   { Appends ' [file:line]' from GLastTestTrace if non-empty; returns AMsg as-is
     when no trace was captured. }
+procedure ClassifyTestException(E: Exception;
+  out AStatus: TTestStatus; out AMsg: string);
+  { Standard exception → status classification for test execution.
+    ETestSkipped → tsSkipped, EAssertionFailed → tsFailed, other → tsError.
+    Shared by serial runner, parallel worker, and any future runners. }
 
 { ── Internal Helpers (exported for use by other test.* units) ─────────────── }
 
@@ -181,6 +228,14 @@ procedure SetTestContext(const ASuiteName, ATestName: string);
 procedure InternalFail(const AMessage: string);
 procedure InternalSkip(const AReason: string);
 function  StrStartsWith(const S, APrefix: string): Boolean;
+procedure IncByStatus(AStatus: TTestStatus;
+  var APass, AFail, ASkip: Integer);
+  { Increment the appropriate counter based on test status. }
+
+{ ── Timing helpers ────────────────────────────────────────────────────────── }
+
+procedure SleepMs(AMilliseconds: Integer);
+  { Cross-platform millisecond sleep. Replaces SysUtils.Sleep for test programs. }
 
 implementation
 
@@ -225,8 +280,10 @@ begin
   AEntry.Tags        := nil;
   AEntry.RepeatCount := 0;
   AEntry.ShouldFailMsg := '';
+  AEntry.ShortSkip   := False;
   AEntry.TableCase   := nil;
   AEntry.TableProc   := nil;
+  AEntry.BenchProc   := nil;
 end;
 
 function MakeTestResult(const AName: string; AStatus: TTestStatus;
@@ -239,59 +296,184 @@ begin
   Result.CapturedLog := nil;
 end;
 
+function MakeBenchResult(const AName: string; AN: Integer;
+  ATotalNs: Int64; AAllocBytes: Int64; AAllocCount: Int64): TBenchResult;
+begin
+  Result.Name       := AName;
+  Result.N          := AN;
+  Result.TotalNs    := ATotalNs;
+  if AN > 0 then
+    Result.NsPerOp  := ATotalNs div AN
+  else
+    Result.NsPerOp  := 0;
+  Result.AllocBytes := AAllocBytes;
+  Result.AllocCount := AAllocCount;
+end;
+
 procedure AppendResult(var AResults: specialize TArray<TTestResult>;
   const AResult: TTestResult);
+var
+  LOldLen, LNewLen, LCap: Integer;
 begin
-  SetLength(AResults, Length(AResults) + 1);
-  AResults[High(AResults)] := AResult;
+  LOldLen := Length(AResults);
+  LCap := GrowCapacity(LOldLen, 16);
+  if LCap <> LOldLen then
+    SetLength(AResults, LCap);
+  AResults[LOldLen] := AResult;
+  LNewLen := LOldLen + 1;
+  if LNewLen <> LCap then
+    SetLength(AResults, LNewLen);
 end;
 
 function GetTopSlowest(const AResults: TTestResults;
   ACount: Integer): TTestResults;
-{ Simple selection: scan AResults up to ACount times, each time picking the
-  highest-duration entry not yet selected. O(ACount * N) but ACount is tiny. }
+{ Returns up to ACount slowest tests, sorted descending by Duration.
+  Uses full sort when K is large relative to N, selection scan otherwise. }
 var
+  LCopy: TTestResults;
+  LCount, I, J, LBestIdx: Integer;
   LUsed: array of Boolean;
-  I, J, LBestIdx: Integer;
-  LCount: Integer;
+  LTemp: TTestResult;
 begin
   if (ACount <= 0) or (Length(AResults) = 0) then
     Exit(nil);
   LCount := Length(AResults);
   if ACount > LCount then
     ACount := LCount;
-  SetLength(LUsed, LCount);
-  SetLength(Result, ACount);
-  for I := 0 to ACount - 1 do
+  { For small K relative to N, selection is O(K*N) which is fine.
+    For larger K, just sort a copy. Threshold: K*4 > N → sort. }
+  if ACount * 4 > LCount then
   begin
-    LBestIdx := -1;
-    for J := 0 to LCount - 1 do
+    { Full copy + insertion sort (small arrays, O(N^2) worst but fast in practice) }
+    SetLength(LCopy, LCount);
+    for I := 0 to LCount - 1 do
+      LCopy[I] := AResults[I];
+    for I := 1 to LCount - 1 do
     begin
-      if LUsed[J] then Continue;
-      if (LBestIdx < 0) or (AResults[J].Duration > AResults[LBestIdx].Duration) then
-        LBestIdx := J;
+      LTemp := LCopy[I];
+      J := I;
+      while (J > 0) and (LCopy[J - 1].Duration < LTemp.Duration) do
+      begin
+        LCopy[J] := LCopy[J - 1];
+        Dec(J);
+      end;
+      LCopy[J] := LTemp;
     end;
-    if LBestIdx < 0 then
+    SetLength(Result, ACount);
+    for I := 0 to ACount - 1 do
+      Result[I] := LCopy[I];
+    { Trim trailing zero-duration entries }
+    while (ACount > 0) and (Result[ACount - 1].Duration = 0) do
     begin
-      SetLength(Result, I);
-      Exit;
+      Dec(ACount);
+      SetLength(Result, ACount);
     end;
-    LUsed[LBestIdx] := True;
-    Result[I] := AResults[LBestIdx];
-    { Stop if the next best has 0 duration — no more meaningful entries }
-    if AResults[LBestIdx].Duration = 0 then
+  end
+  else
+  begin
+    { Selection scan for small K — O(K*N) }
+    SetLength(LUsed, LCount);
+    SetLength(Result, ACount);
+    for I := 0 to ACount - 1 do
     begin
-      SetLength(Result, I);
-      Exit;
+      LBestIdx := -1;
+      for J := 0 to LCount - 1 do
+      begin
+        if LUsed[J] then Continue;
+        if (LBestIdx < 0) or (AResults[J].Duration > AResults[LBestIdx].Duration) then
+          LBestIdx := J;
+      end;
+      if LBestIdx < 0 then
+      begin
+        SetLength(Result, I);
+        Exit;
+      end;
+      LUsed[LBestIdx] := True;
+      Result[I] := AResults[LBestIdx];
+      if AResults[LBestIdx].Duration = 0 then
+      begin
+        SetLength(Result, I);
+        Exit;
+      end;
     end;
+  end;
+end;
+
+procedure ShuffleEntries(var AEntries: specialize TArray<TTestEntry>;
+  ASeed: Integer);
+{ Fisher-Yates (Knuth) shuffle. ASeed > 0 = deterministic, ASeed = -1 = random.
+  ASeed = 0 treated as -1 (random) to avoid degenerate LCG sequence.
+  Random seed reads from /dev/urandom (Unix) or CryptGenRandom (Windows)
+  for better entropy than GetTickCount64 alone. }
+var
+  I, J, N: Integer;
+  LSeed: Integer;
+  LTemp: TTestEntry;
+
+  function ReadRandomSeed: Integer;
+  { Best-effort entropy source. Falls back to tick count if unavailable. }
+  var
+    F: file;
+    LBytes: array[0..3] of Byte;
+    LRead: Integer;
+  begin
+    {$IFDEF UNIX}
+    Assign(F, '/dev/urandom');
+    {$I-}
+    Reset(F, 1);
+    {$I+}
+    if IOResult = 0 then
+    begin
+      BlockRead(F, LBytes, 4, LRead);
+      Close(F);
+      if LRead = 4 then
+      begin
+        Result := Integer((Cardinal(LBytes[0]) shl 24) or
+                          (Cardinal(LBytes[1]) shl 16) or
+                          (Cardinal(LBytes[2]) shl 8) or
+                          Cardinal(LBytes[3]));
+        Result := Result and $7FFFFFFF;
+        if Result = 0 then
+          Result := 1;
+        Exit;
+      end;
+    end;
+    {$ENDIF}
+    { Fallback: mix tick count with stack address for less predictability }
+    Result := Integer((GetTickCount64 xor NativeUInt(@LBytes)) and $7FFFFFFF);
+    if Result = 0 then
+      Result := 1;
+  end;
+
+begin
+  N := Length(AEntries);
+  if N <= 1 then Exit;
+  if (ASeed = -1) or (ASeed = 0) then
+    LSeed := ReadRandomSeed
+  else
+    LSeed := ASeed;
+  { Simple LCG PRNG — not cryptographic, just needs to be uniform }
+  for I := N - 1 downto 1 do
+  begin
+    LSeed := LSeed * 1103515245 + 12345;
+    J := (LSeed and $7FFFFFFF) mod (I + 1);
+    LTemp := AEntries[I];
+    AEntries[I] := AEntries[J];
+    AEntries[J] := LTemp;
   end;
 end;
 
 procedure RegisterEntry(var AEntries: specialize TArray<TTestEntry>;
   const AEntry: TTestEntry);
+var
+  LOldLen, LCap: Integer;
 begin
-  SetLength(AEntries, Length(AEntries) + 1);
-  AEntries[High(AEntries)] := AEntry;
+  LOldLen := Length(AEntries);
+  LCap := GrowCapacity(LOldLen, 16);
+  if LCap <> LOldLen then
+    SetLength(AEntries, LCap);
+  AEntries[LOldLen] := AEntry;
+  SetLength(AEntries, LOldLen + 1);
 end;
 
 procedure CopyTags(out ATags: specialize TArray<string>;
@@ -302,6 +484,56 @@ begin
   SetLength(ATags, Length(ASource));
   for I := 0 to High(ASource) do
     ATags[I] := ASource[I];
+end;
+
+function GrowCapacity(ALen, AInitCap: Integer): Integer;
+begin
+  if ALen < AInitCap then
+    Result := AInitCap
+  else if ALen < MaxInt div 2 then
+    Result := ALen * 2
+  else
+    Result := MaxInt;
+end;
+
+function GrowCleanups(var ACleanups: specialize TArray<TTestClosure>): Integer;
+var
+  LOldLen, LCap: Integer;
+begin
+  LOldLen := Length(ACleanups);
+  LCap := GrowCapacity(LOldLen, 4);
+  if LCap <> LOldLen then SetLength(ACleanups, LCap);
+  Result := LOldLen;
+end;
+
+procedure RunShouldFailEntry(const AEntry: TTestEntry;
+  out AStatus: TTestStatus; out AFailMsg: string);
+begin
+  AStatus := tsPassed;
+  AFailMsg := '';
+  try
+    if Assigned(AEntry.Closure) then
+      AEntry.Closure()
+    else
+      AEntry.Proc;
+    { No exception = unexpected success }
+    AStatus := tsFailed;
+    if AEntry.ShouldFailMsg <> '' then
+      AFailMsg := 'Expected failure (' + AEntry.ShouldFailMsg + ') but test passed'
+    else
+      AFailMsg := 'Expected failure but test passed';
+  except
+    on E: ETestSkipped do
+    begin
+      AStatus := tsSkipped;
+      AFailMsg := E.Message;
+    end;
+    on E: Exception do
+    begin
+      { Expected failure — test passes }
+      AStatus := tsPassed;
+    end;
+  end;
 end;
 
 { Exception Formatting }
@@ -319,6 +551,26 @@ begin
     Result := AMsg;
 end;
 
+procedure ClassifyTestException(E: Exception;
+  out AStatus: TTestStatus; out AMsg: string);
+begin
+  if E is ETestSkipped then
+  begin
+    AStatus := tsSkipped;
+    AMsg := E.Message;
+  end
+  else if E is EAssertionFailed then
+  begin
+    AStatus := tsFailed;
+    AMsg := AppendTestTrace(E.Message);
+  end
+  else
+  begin
+    AStatus := tsError;
+    AMsg := AppendTestTrace(FormatExceptionMsg(E));
+  end;
+end;
+
 { ═════════════════════════════════════════════════════════════════════════════ }
 { Stack Trace Capture                                                         }
 { ═════════════════════════════════════════════════════════════════════════════ }
@@ -332,17 +584,26 @@ var
 function IsFrameworkFrame(const AFrameStr: string): Boolean;
 { Returns True if the frame belongs to the test framework and should be hidden
   from the user-facing output. Matches unit name prefixes:
-    nextpas.core.test.  (any sub-unit of the test framework)
-    sysutils             (FPC exception machinery)
-    system               (FPC runtime) }
+    nextpas.core.test  (any sub-unit — followed by . , space, newline, or EOS)
+    sysutils            (FPC exception machinery)
+    system              (FPC runtime) }
+const
+  CPrefix = 'nextpas.core.test';
 var
   LLower: string;
+  LPos, LAfter: Integer;
 begin
   LLower := LowerCase(AFrameStr);
-  Result := (Pos('nextpas.core.test.', LLower) > 0) or
-            (Pos('nextpas.core.test,', LLower) > 0) or
-            (Pos('nextpas.core.test ', LLower) > 0) or
-            (Pos('nextpas.core.test'#10, LLower) > 0);
+  LPos := Pos(CPrefix, LLower);
+  if LPos > 0 then
+  begin
+    LAfter := LPos + Length(CPrefix);
+    { Match if followed by delimiter (., comma, space, newline) or at end-of-string }
+    Result := (LAfter > Length(LLower)) or
+              (LLower[LAfter] in ['.', ',', ' ', #10]);
+  end
+  else
+    Result := False;
   if not Result then
     { Also filter sysutils/system frames that appear in exception stack }
     Result := (Pos('sysutils', LLower) > 0) or
@@ -409,6 +670,17 @@ begin
             (Copy(S, 1, Length(APrefix)) = APrefix);
 end;
 
+procedure IncByStatus(AStatus: TTestStatus;
+  var APass, AFail, ASkip: Integer);
+begin
+  case AStatus of
+    tsPassed:  Inc(APass);
+    tsSkipped: Inc(ASkip);
+  else
+    Inc(AFail);
+  end;
+end;
+
 { ═════════════════════════════════════════════════════════════════════════════ }
 { Internal State Management                                                    }
 { ═════════════════════════════════════════════════════════════════════════════ }
@@ -435,6 +707,13 @@ begin
   GExecState^.TestName   := ATestName;
   GExecState^.Failed     := False;
   GExecState^.SkipReason := '';
+end;
+
+{ ── SleepMs ───────────────────────────────────────────────────────────────── }
+
+procedure SleepMs(AMilliseconds: Integer);
+begin
+  TSleep.ForDuration(TDuration.FromMilliseconds(AMilliseconds));
 end;
 
 initialization

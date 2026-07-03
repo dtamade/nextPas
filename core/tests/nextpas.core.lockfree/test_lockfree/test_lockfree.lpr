@@ -3,7 +3,7 @@ program test_lockfree;
 {$I nextpas.core.settings.inc}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   SysUtils, Classes,
   nextpas.core.testing,
   nextpas.core.errors,
@@ -22,7 +22,7 @@ type
   TIntSegQueue = specialize TSegQueue<Integer>;
   TIntSpmc = specialize TSpmcQueue<Integer>;
   TIntChannel = specialize TLockFreeChannel<Integer>;
-  TIntIntMap = specialize TLockFreeHashMap<Integer, Integer>;
+  TIntIntMap = specialize TShardedHashMap<Integer, Integer>;
 
 const
   CloseWakePendingProbeNs = 50000000;

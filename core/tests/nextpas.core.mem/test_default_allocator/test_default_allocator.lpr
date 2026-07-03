@@ -103,62 +103,10 @@ begin
   end;
 end;
 
-procedure TestDefaultAllocatorAllocMem;
-var
-  LAllocator: IAllocator;
-  LPtr: Pointer;
-  LI: Integer;
-begin
-  LAllocator := DefaultAllocator;
-  { AllocMem should zero-initialize }
-  LPtr := LAllocator.AllocMem(256);
-  Check(LPtr <> nil, 'AllocMem should not return nil');
-  for LI := 0 to 255 do
-    Check(PByte(LPtr)[LI] = 0, 'AllocMem should zero-initialize');
-  LAllocator.FreeMem(LPtr);
-end;
-
-procedure TestDefaultAllocatorMemSize;
-var
-  LAllocator: IAllocator;
-  LPtr: Pointer;
-  LReported: SizeUInt;
-begin
-  LAllocator := DefaultAllocator;
-  LPtr := LAllocator.GetMem(100);
-  Check(LPtr <> nil, 'GetMem should not return nil');
-  LReported := LAllocator.MemSize(LPtr);
-  Check(LReported >= 100, 'MemSize should report >= 100');
-  LAllocator.FreeMem(LPtr);
-end;
-
-procedure TestDefaultAllocatorReallocPreserves;
-var
-  LAllocator: IAllocator;
-  LPtr: Pointer;
-  LI: Integer;
-begin
-  LAllocator := DefaultAllocator;
-  LPtr := LAllocator.GetMem(64);
-  Check(LPtr <> nil, 'GetMem should not return nil');
-  { Write pattern }
-  for LI := 0 to 63 do
-    PByte(LPtr)[LI] := Byte(LI);
-  { Realloc to larger }
-  LPtr := LAllocator.ReallocMem(LPtr, 512);
-  Check(LPtr <> nil, 'ReallocMem should not return nil');
-  { Verify prefix preserved }
-  for LI := 0 to 63 do
-    Check(PByte(LPtr)[LI] = Byte(LI), 'ReallocMem should preserve content');
-  LAllocator.FreeMem(LPtr);
-end;
-
 begin
   T := TTestSuite.Create('nextpas.core.mem.default_allocator');
   T.Test('singleton single-thread', @TestDefaultAllocatorSingletonSingleThread);
   T.Test('concurrent start returns same instance', @TestDefaultAllocatorConcurrentStart);
-  T.Test('alloc_mem_zero_initialized', @TestDefaultAllocatorAllocMem);
-  T.Test('realloc_preserves_content', @TestDefaultAllocatorReallocPreserves);
   T.Run;
 
   T.Summary;

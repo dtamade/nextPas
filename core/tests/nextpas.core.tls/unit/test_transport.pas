@@ -3,7 +3,7 @@ program test_transport;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   SysUtils, nextpas.core.tls.transport, nextpas.core.platform.socket;
 
 var

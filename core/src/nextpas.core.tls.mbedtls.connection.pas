@@ -24,7 +24,6 @@ uses
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.connection.base,
-  nextpas.core.io.intf,
   nextpas.core.io.stream_adapter,
   nextpas.core.tls.mbedtls.base,
   nextpas.core.tls.mbedtls.native_handle,
@@ -91,7 +90,6 @@ type
 
   public
     constructor Create(AContext: ISSLContext; ASSLConfig: Pmbedtls_ssl_config; ASocket: THandle); overload;
-    constructor Create(AContext: ISSLContext; ASSLConfig: Pmbedtls_ssl_config; AStream: IStream); overload;
     constructor Create(AContext: ISSLContext; ASSLConfig: Pmbedtls_ssl_config; AStream: IStream); overload;
     destructor Destroy; override;
 
@@ -192,7 +190,7 @@ begin
 end;
 
 { Socket BIO callbacks for MbedTLS }
-function MbedTLSSocketSend(ctx: Pointer; const buf: PByte; len: NativeUInt): Integer; cdecl;
+function MbedTLSSocketSend(ctx: Pointer; const buf: PByte; len: QWord): Integer; cdecl;
 var
   LSocket: TSocket;
 begin
@@ -202,7 +200,7 @@ begin
     Result := MBEDTLS_ERR_SSL_WANT_WRITE;
 end;
 
-function MbedTLSSocketRecv(ctx: Pointer; buf: PByte; len: NativeUInt): Integer; cdecl;
+function MbedTLSSocketRecv(ctx: Pointer; buf: PByte; len: QWord): Integer; cdecl;
 var
   LSocket: TSocket;
 begin
@@ -215,7 +213,7 @@ begin
 end;
 
 { Stream BIO callbacks for MbedTLS }
-function MbedTLSStreamSend(ctx: Pointer; const buf: PByte; len: NativeUInt): Integer; cdecl;
+function MbedTLSStreamSend(ctx: Pointer; const buf: PByte; len: QWord): Integer; cdecl;
 var
   LContext: PMbedTLSIOContext;
 begin
@@ -231,7 +229,7 @@ begin
   end;
 end;
 
-function MbedTLSStreamRecv(ctx: Pointer; buf: PByte; len: NativeUInt): Integer; cdecl;
+function MbedTLSStreamRecv(ctx: Pointer; buf: PByte; len: QWord): Integer; cdecl;
 var
   LContext: PMbedTLSIOContext;
 begin
@@ -266,11 +264,6 @@ begin
   FSessionReused := False;
 
   AllocateSSLContext;
-end;
-
-constructor TMbedTLSConnection.Create(AContext: ISSLContext; ASSLConfig: Pmbedtls_ssl_config; AStream: IStream);
-begin
-  Create(AContext, ASSLConfig, WrapTStream(AStream, False));
 end;
 
 constructor TMbedTLSConnection.Create(AContext: ISSLContext; ASSLConfig: Pmbedtls_ssl_config; AStream: IStream);

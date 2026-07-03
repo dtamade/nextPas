@@ -60,8 +60,6 @@ procedure sse3_mwait(extensions, hints: Cardinal);
 
 implementation
 
-uses
-
 procedure EnsureExperimentalIntrinsicsEnabled; inline;
 begin
   {$IFNDEF NEXTPAS_SIMD_EXPERIMENTAL_INTRINSICS}

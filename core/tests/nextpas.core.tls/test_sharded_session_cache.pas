@@ -14,7 +14,7 @@ program test_sharded_session_cache;
 
 uses
   {$IFDEF UNIX}
-  cthreads,
+  nextpas.core.thread.init,
   {$ENDIF}
   SysUtils, Classes, SyncObjs, DateUtils,
   nextpas.core.tls.base,

@@ -338,10 +338,7 @@ begin
   else
     FMaxSize := AMaxSize;
 
-  if AAllocator = nil then
-    FAllocator := GetRtlAllocator
-  else
-    FAllocator := AAllocator;
+  FAllocator := ResolveAllocator(AAllocator);
 
   FTotalCreated := 0;
   FInPoolCount := 0;

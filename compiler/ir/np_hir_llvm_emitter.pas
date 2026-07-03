@@ -979,6 +979,55 @@ begin
           FNeedsFree := True;
         end;
       end
+      else if AInstr.IntrinsicName = 'interlocked-cas' then
+      begin
+        if Length(AInstr.Operands) >= 3 then
+        begin
+          Emit('  %cas.pair.' + IntToStr(AInstr.ResultId) +
+            ' = cmpxchg ptr ' + ValueRef(AInstr.Operands[0].ValueId) +
+            ', i64 ' + ValueRef(AInstr.Operands[2].ValueId) +
+            ', i64 ' + ValueRef(AInstr.Operands[1].ValueId) +
+            ' seq_cst seq_cst');
+          Emit('  ' + ValueRef(AInstr.ResultId) +
+            ' = extractvalue { i64, i1 } %cas.pair.' +
+            IntToStr(AInstr.ResultId) + ', 0');
+        end;
+      end
+      else if AInstr.IntrinsicName = 'interlocked-cas64' then
+      begin
+        if Length(AInstr.Operands) >= 3 then
+        begin
+          Emit('  %cas64.pair.' + IntToStr(AInstr.ResultId) +
+            ' = cmpxchg ptr ' + ValueRef(AInstr.Operands[0].ValueId) +
+            ', i64 ' + ValueRef(AInstr.Operands[2].ValueId) +
+            ', i64 ' + ValueRef(AInstr.Operands[1].ValueId) +
+            ' seq_cst seq_cst');
+          Emit('  ' + ValueRef(AInstr.ResultId) +
+            ' = extractvalue { i64, i1 } %cas64.pair.' +
+            IntToStr(AInstr.ResultId) + ', 0');
+        end;
+      end
+      else if AInstr.IntrinsicName = 'interlocked-xchg' then
+      begin
+        if Length(AInstr.Operands) >= 2 then
+          Emit('  ' + ValueRef(AInstr.ResultId) +
+            ' = atomicrmw xchg ptr ' + ValueRef(AInstr.Operands[0].ValueId) +
+            ', i64 ' + ValueRef(AInstr.Operands[1].ValueId) + ' seq_cst');
+      end
+      else if AInstr.IntrinsicName = 'interlocked-fetch-add' then
+      begin
+        if Length(AInstr.Operands) >= 2 then
+          Emit('  ' + ValueRef(AInstr.ResultId) +
+            ' = atomicrmw add ptr ' + ValueRef(AInstr.Operands[0].ValueId) +
+            ', i64 ' + ValueRef(AInstr.Operands[1].ValueId) + ' seq_cst');
+      end
+      else if AInstr.IntrinsicName = 'interlocked-fetch-add64' then
+      begin
+        if Length(AInstr.Operands) >= 2 then
+          Emit('  ' + ValueRef(AInstr.ResultId) +
+            ' = atomicrmw add ptr ' + ValueRef(AInstr.Operands[0].ValueId) +
+            ', i64 ' + ValueRef(AInstr.Operands[1].ValueId) + ' seq_cst');
+      end
       else if AInstr.IntrinsicName = 'tstring_init' then
       begin
         FNeedsTStringRuntime := True;
@@ -1221,7 +1270,20 @@ var
   ParamStr, RetStr: string;
   T: THIRTypeRec;
 begin
-  if AFunc.IsExternal then Exit;
+  if AFunc.IsExternal then
+  begin
+    { Emit LLVM declare for external functions }
+    ParamStr := '';
+    for I := 0 to High(AFunc.Params) do
+    begin
+      if ParamStr <> '' then
+        ParamStr := ParamStr + ', ';
+      ParamStr := ParamStr + TypeToLlvm(AFunc.Params[I].TypeId);
+    end;
+    RetStr := TypeToLlvm(AFunc.ReturnTypeId);
+    Emit('declare ' + RetStr + ' @' + AFunc.ExternalName + '(' + ParamStr + ')');
+    Exit;
+  end;
   FGlobalRefCount := 0;
 
   ParamStr := '';
@@ -1349,10 +1411,20 @@ begin
   begin
     G := FModule.GlobalAt(I);
     Emit('');
-    if FModule.Types.GetType(G.TypeId).Kind = htkPointer then
-      Emit('@g_' + G.Name + ' = internal global ptr null')
+    if G.IsThreadVar then
+    begin
+      if FModule.Types.GetType(G.TypeId).Kind = htkPointer then
+        Emit('@g_' + G.Name + ' = internal thread_local global ptr null')
+      else
+        Emit('@g_' + G.Name + ' = internal thread_local global i64 0');
+    end
     else
-      Emit('@g_' + G.Name + ' = internal global i64 0');
+    begin
+      if FModule.Types.GetType(G.TypeId).Kind = htkPointer then
+        Emit('@g_' + G.Name + ' = internal global ptr null')
+      else
+        Emit('@g_' + G.Name + ' = internal global i64 0');
+    end;
   end;
 
   for I := 0 to FModule.FunctionCount - 1 do

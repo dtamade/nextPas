@@ -5,7 +5,7 @@ program test_error_mapping;
 
 uses
   {$IFDEF UNIX}
-  cthreads,
+  nextpas.core.thread.init,
   {$ENDIF}
   SysUtils;
 

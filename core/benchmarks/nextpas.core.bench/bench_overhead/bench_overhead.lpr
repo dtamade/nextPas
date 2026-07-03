@@ -7,7 +7,7 @@ program bench_overhead;
 
 uses
   {$ifdef unix}
-  cthreads,
+  nextpas.core.thread.init,
   {$endif}
   nextpas.core.bench,
   nextpas.core.time.base,

@@ -9,6 +9,7 @@ uses
   nextpas.core.mem.arena.virtual,
   nextpas.core.mem.allocator.arena,
   nextpas.core.mem.intf,
+  nextpas.core.mem.error,
   nextpas.core.mem.base;
 
 var
@@ -370,8 +371,6 @@ begin
   LP := LAlloc.GetMem(128);
   Check(LP <> nil, 'IAllocator.GetMem should work');
   Check(LAlloc.Traits.ThreadSafe = False, 'should not be thread-safe');
-  Check(LAlloc.Traits.SupportsAligned = True, 'should support aligned');
-  Check(LAlloc.Traits.HasMemSize = False, 'should not have MemSize');
 end;
 
 procedure TestArenaAllocatorReset;
@@ -403,10 +402,8 @@ begin
   LAlloc := TVirtualArenaAllocator.Create;
   try
     LTraits := LAlloc.Traits;
-    Check(LTraits.ZeroInitialized = False, 'ZeroInitialized should be False');
+    Check(LTraits.ZeroInitialized = True, 'ZeroInitialized should be True (DoAllocMem calls AllocZeroed)');
     Check(LTraits.ThreadSafe = False, 'ThreadSafe should be False');
-    Check(LTraits.HasMemSize = False, 'HasMemSize should be False');
-    Check(LTraits.SupportsAligned = True, 'SupportsAligned should be True');
   finally
     LAlloc.Free;
   end;
@@ -441,16 +438,26 @@ end;
 procedure TestArenaAllocatorRealloc;
 var
   LAlloc: IAllocator;
-  LP, LP2: PInteger;
+  LP: PInteger;
+  LExcept: Boolean;
 begin
   LAlloc := TVirtualArenaAllocator.Create;
   LP := PInteger(LAlloc.GetMem(4));
   Check(LP <> nil, 'initial alloc');
   LP^ := 42;
 
-  LP2 := PInteger(LAlloc.ReallocMem(LP, 8));
-  Check(LP2 <> nil, 'realloc should succeed');
-  Check(LP2^ = 42, 'data should be preserved after realloc');
+  { Arena 不支持 realloc — 必须抛 EAllocError(aeReallocNotSupported) }
+  LExcept := False;
+  try
+    LAlloc.ReallocMem(LP, 8);
+  except
+    on E: EAllocError do
+    begin
+      Check(E.Error = aeReallocNotSupported, 'expected aeReallocNotSupported');
+      LExcept := True;
+    end;
+  end;
+  Check(LExcept, 'ReallocMem on arena must raise');
 end;
 
 { --- Additional edge-case tests --- }

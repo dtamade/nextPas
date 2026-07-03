@@ -11,8 +11,8 @@ program test_lifecycle;
 {$modeswitch functionreferences}
 
 uses
-  cthreads,
-  SysUtils,
+  nextpas.core.thread.init,
+  nextpas.core.text.conv,
   nextpas.core.test,
   { 白盒测试：直接覆盖 runner.context 的结果收集边界。 }
   nextpas.core.test.runner.context;
@@ -488,4 +488,10 @@ begin
     PassTest('ALL PASSED')
   else
     FailTest('SOME FAILED');
+
+  { Release closures before heaptrc reports (unit finalization runs before
+    main block locals are freed — closures would appear as unfreed). }
+  Runner := Default(TTestRunner);
+  Suite := Default(TTestSuite);
+  LResults := nil;
 end.

@@ -25,9 +25,11 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.base.utils,
+  nextpas.core.mem.base,
   nextpas.core.mem.allocator,
   nextpas.core.mem.intf,
   nextpas.core.mem.error,
+  nextpas.core.mem.utils,
   nextpas.core.mem.pool.fixed;
 
 type
@@ -53,14 +55,21 @@ type
     FPool: TFixedPool;
     FBlockSize: SizeUInt;
     FFallback: IAllocator;  // 用于非标准大小分配的后备分配器
-    FAllocs: array of TPoolAllocatorAlloc;
+    { Open-addressing hash map: PtrUInt → TPoolAllocatorAlloc }
+    FMap: array of TPoolAllocatorAlloc;
+    FMapCapacity: SizeUInt;   { always power-of-two, or 0 }
+    FMapCount: SizeUInt;      { live entries }
+    FMapTombstones: SizeUInt;
+    function MapGet(APtr: Pointer; out AAlloc: TPoolAllocatorAlloc): Boolean;
+    function MapInsertOrReplace(APtr: Pointer; const AAlloc: TPoolAllocatorAlloc): Boolean;
+    function MapDelete(APtr: Pointer; out AAlloc: TPoolAllocatorAlloc): Boolean;
+    procedure MapGrow;
+    function MapProbe(APtr: Pointer): SizeUInt;
     function GetAllocatedCount: Integer;
     function GetCapacity: Integer;
     function GetAvailable: Integer;
     function IsPoolRange(APtr: Pointer): Boolean;
     function IsPoolBlockStart(APtr: Pointer): Boolean;
-    function FindAlloc(APtr: Pointer): Integer;
-    function TryGetAlloc(APtr: Pointer; out aAlloc: TPoolAllocatorAlloc): Boolean;
     procedure TrackAlloc(APtr: Pointer; ASize, AAlignment: SizeUInt; aOwner: TPoolAllocatorOwner; aAligned: Boolean);
     function UntrackAlloc(APtr: Pointer; out aAlloc: TPoolAllocatorAlloc): Boolean;
     procedure UpdateTrackedAlloc(aOldPtr, aNewPtr: Pointer; ASize, AAlignment: SizeUInt; aAligned: Boolean);
@@ -112,9 +121,133 @@ function MakePoolAllocator(ABlockSize: SizeUInt; ACapacity: Integer; AFallback: 
 
 implementation
 
-{ TPoolAllocator }
+const
+  MAP_TOMBSTONE_PTR = Pointer(PtrUInt(1));
 
-constructor TPoolAllocator.Create(ABlockSize: SizeUInt; ACapacity: Integer; AFallback: IAllocator);
+{ TPoolAllocator — hash map internals }
+
+function TPoolAllocator.MapProbe(APtr: Pointer): SizeUInt;
+begin
+  Result := MulHash64(PtrUInt(APtr)) and (FMapCapacity - 1);
+end;
+
+function TPoolAllocator.MapGet(APtr: Pointer; out AAlloc: TPoolAllocatorAlloc): Boolean;
+var
+  LIdx: SizeUInt;
+  LSlotPtr: Pointer;
+begin
+  Result := False;
+  if FMapCapacity = 0 then
+    Exit;
+  LIdx := MapProbe(APtr);
+  while True do
+  begin
+    LSlotPtr := FMap[LIdx].Ptr;
+    if LSlotPtr = nil then
+      Exit;
+    if LSlotPtr = APtr then
+    begin
+      AAlloc := FMap[LIdx];
+      Exit(True);
+    end;
+    LIdx := (LIdx + 1) and (FMapCapacity - 1);
+  end;
+end;
+
+function TPoolAllocator.MapInsertOrReplace(APtr: Pointer;
+  const AAlloc: TPoolAllocatorAlloc): Boolean;
+var
+  LIdx: SizeUInt;
+  LTombIdx: SizeUInt;
+  LSlotPtr: Pointer;
+begin
+  if (3 * (FMapCount + FMapTombstones + 1)) >= (2 * FMapCapacity) then
+    MapGrow;
+  Result := False;
+  LIdx := MapProbe(APtr);
+  LTombIdx := High(SizeUInt);
+  while True do
+  begin
+    LSlotPtr := FMap[LIdx].Ptr;
+    if LSlotPtr = nil then
+    begin
+      if LTombIdx <> High(SizeUInt) then
+        LIdx := LTombIdx;
+      FMap[LIdx] := AAlloc;
+      Inc(FMapCount);
+      if LTombIdx <> High(SizeUInt) then
+        Dec(FMapTombstones);
+      Exit;
+    end;
+    if LSlotPtr = MAP_TOMBSTONE_PTR then
+    begin
+      if LTombIdx = High(SizeUInt) then
+        LTombIdx := LIdx;
+    end
+    else if LSlotPtr = APtr then
+    begin
+      FMap[LIdx] := AAlloc;
+      Exit(True);
+    end;
+    LIdx := (LIdx + 1) and (FMapCapacity - 1);
+  end;
+end;
+
+function TPoolAllocator.MapDelete(APtr: Pointer;
+  out AAlloc: TPoolAllocatorAlloc): Boolean;
+var
+  LIdx: SizeUInt;
+begin
+  Result := False;
+  if FMapCapacity = 0 then
+    Exit;
+  LIdx := MapProbe(APtr);
+  while True do
+  begin
+    if FMap[LIdx].Ptr = nil then
+      Exit;
+    if (FMap[LIdx].Ptr <> MAP_TOMBSTONE_PTR) and (FMap[LIdx].Ptr = APtr) then
+    begin
+      AAlloc := FMap[LIdx];
+      FMap[LIdx].Ptr := MAP_TOMBSTONE_PTR;
+      FMap[LIdx].Size := 0;
+      Dec(FMapCount);
+      Inc(FMapTombstones);
+      Exit(True);
+    end;
+    LIdx := (LIdx + 1) and (FMapCapacity - 1);
+  end;
+end;
+
+procedure TPoolAllocator.MapGrow;
+var
+  LOldMap: array of TPoolAllocatorAlloc;
+  LOldCap: SizeUInt;
+  I: SizeUInt;
+  LAlloc: TPoolAllocatorAlloc;
+begin
+  LOldMap := FMap;
+  LOldCap := FMapCapacity;
+  if FMapCapacity = 0 then
+    FMapCapacity := 64
+  else
+    FMapCapacity := FMapCapacity shl 1;
+  SetLength(FMap, FMapCapacity);
+  FMapCount := 0;
+  FMapTombstones := 0;
+  if LOldCap > 0 then
+    for I := 0 to LOldCap - 1 do
+      if (LOldMap[I].Ptr <> nil) and (LOldMap[I].Ptr <> MAP_TOMBSTONE_PTR) then
+      begin
+        LAlloc := LOldMap[I];
+        MapInsertOrReplace(LAlloc.Ptr, LAlloc);
+      end;
+end;
+
+{ TPoolAllocator — lifecycle }
+
+constructor TPoolAllocator.Create(ABlockSize: SizeUInt; ACapacity: Integer;
+  AFallback: IAllocator);
 var
   LAlignedSize: SizeUInt;
 begin
@@ -136,15 +269,21 @@ begin
     FFallback := AFallback;
 
   FPool := TFixedPool.Create(FBlockSize, ACapacity, 16, FFallback);
+  FMap := nil;
+  FMapCapacity := 0;
+  FMapCount := 0;
+  FMapTombstones := 0;
 end;
 
 destructor TPoolAllocator.Destroy;
 begin
   FreeTrackedFallbackAllocs;
-  SetLength(FAllocs, 0);
+  FMap := nil;
   FreeAndNil(FPool);
   inherited Destroy;
 end;
+
+{ TPoolAllocator — helpers }
 
 function TPoolAllocator.IsPoolRange(APtr: Pointer): Boolean;
 begin
@@ -169,101 +308,62 @@ begin
   Result := (FBlockSize <> 0) and ((LDiff mod FBlockSize) = 0);
 end;
 
-function TPoolAllocator.FindAlloc(APtr: Pointer): Integer;
-var
-  LIndex: Integer;
-begin
-  for LIndex := 0 to High(FAllocs) do
-    if FAllocs[LIndex].Ptr = APtr then
-      Exit(LIndex);
-  Result := -1;
-end;
-
-function TPoolAllocator.TryGetAlloc(APtr: Pointer; out aAlloc: TPoolAllocatorAlloc): Boolean;
-var
-  LIndex: Integer;
-begin
-  LIndex := FindAlloc(APtr);
-  Result := LIndex >= 0;
-  if Result then
-    aAlloc := FAllocs[LIndex]
-  else
-  begin
-    aAlloc.Ptr := nil;
-    aAlloc.Size := 0;
-    aAlloc.Alignment := 0;
-    aAlloc.Owner := paoFallback;
-    aAlloc.Aligned := False;
-  end;
-end;
-
 procedure TPoolAllocator.TrackAlloc(APtr: Pointer; ASize, AAlignment: SizeUInt;
   aOwner: TPoolAllocatorOwner; aAligned: Boolean);
 var
-  LIndex: Integer;
+  LAlloc: TPoolAllocatorAlloc;
 begin
   if APtr = nil then
     Exit;
-
-  LIndex := FindAlloc(APtr);
-  if LIndex < 0 then
-  begin
-    LIndex := Length(FAllocs);
-    SetLength(FAllocs, LIndex + 1);
-  end;
-
-  FAllocs[LIndex].Ptr := APtr;
-  FAllocs[LIndex].Size := ASize;
-  FAllocs[LIndex].Alignment := AAlignment;
-  FAllocs[LIndex].Owner := aOwner;
-  FAllocs[LIndex].Aligned := aAligned;
+  LAlloc.Ptr := APtr;
+  LAlloc.Size := ASize;
+  LAlloc.Alignment := AAlignment;
+  LAlloc.Owner := aOwner;
+  LAlloc.Aligned := aAligned;
+  MapInsertOrReplace(APtr, LAlloc);
 end;
 
-function TPoolAllocator.UntrackAlloc(APtr: Pointer; out aAlloc: TPoolAllocatorAlloc): Boolean;
-var
-  LIndex: Integer;
-  LLast: Integer;
+function TPoolAllocator.UntrackAlloc(APtr: Pointer;
+  out aAlloc: TPoolAllocatorAlloc): Boolean;
 begin
-  LIndex := FindAlloc(APtr);
-  Result := LIndex >= 0;
-  if not Result then
-  begin
-    aAlloc.Ptr := nil;
-    aAlloc.Size := 0;
-    aAlloc.Alignment := 0;
-    aAlloc.Owner := paoFallback;
-    aAlloc.Aligned := False;
-    Exit;
-  end;
-
-  aAlloc := FAllocs[LIndex];
-  LLast := High(FAllocs);
-  FAllocs[LIndex] := FAllocs[LLast];
-  SetLength(FAllocs, LLast);
+  Result := MapDelete(APtr, aAlloc);
 end;
 
-procedure TPoolAllocator.UpdateTrackedAlloc(aOldPtr, aNewPtr: Pointer; ASize,
-  AAlignment: SizeUInt; aAligned: Boolean);
+procedure TPoolAllocator.UpdateTrackedAlloc(aOldPtr, aNewPtr: Pointer;
+  ASize, AAlignment: SizeUInt; aAligned: Boolean);
 var
-  LIndex: Integer;
+  LAlloc: TPoolAllocatorAlloc;
 begin
-  LIndex := FindAlloc(aOldPtr);
-  if LIndex < 0 then
+  if not MapDelete(aOldPtr, LAlloc) then
     raise EAllocError.Create(aeInvalidPointer, 'TPoolAllocator: pointer is not tracked');
-  FAllocs[LIndex].Ptr := aNewPtr;
-  FAllocs[LIndex].Size := ASize;
-  FAllocs[LIndex].Alignment := AAlignment;
-  FAllocs[LIndex].Owner := paoFallback;
-  FAllocs[LIndex].Aligned := aAligned;
+  LAlloc.Ptr := aNewPtr;
+  LAlloc.Size := ASize;
+  LAlloc.Alignment := AAlignment;
+  LAlloc.Owner := paoFallback;
+  LAlloc.Aligned := aAligned;
+  MapInsertOrReplace(aNewPtr, LAlloc);
 end;
 
-function TPoolAllocator.AllocFallback(ASize, AAlignment: SizeUInt; aAligned: Boolean): Pointer;
+function TPoolAllocator.AllocFallback(ASize, AAlignment: SizeUInt;
+  aAligned: Boolean): Pointer;
+var
+  LRaw: Pointer;
+  LAlignMask: SizeUInt;
 begin
   if ASize = 0 then
     Exit(nil);
 
   if aAligned then
-    Result := FFallback.AllocAligned(ASize, AAlignment)
+  begin
+    if AAlignment < SizeOf(Pointer) then
+      AAlignment := SizeOf(Pointer);
+    LAlignMask := AAlignment - 1;
+    LRaw := FFallback.GetMem(ASize + LAlignMask + SizeOf(Pointer));
+    if LRaw = nil then
+      Exit(nil);
+    Result := AlignUpUnChecked(LRaw + SizeOf(Pointer), AAlignment);
+    PPointer(PByte(Result) - SizeOf(Pointer))^ := LRaw;
+  end
   else
     Result := FFallback.GetMem(ASize);
 
@@ -273,7 +373,7 @@ begin
       TrackAlloc(Result, ASize, AAlignment, paoFallback, aAligned);
     except
       if aAligned then
-        FFallback.FreeAligned(Result)
+        FFallback.FreeMem(PPointer(PByte(Result) - SizeOf(Pointer))^)
       else
         FFallback.FreeMem(Result);
       raise;
@@ -283,20 +383,26 @@ end;
 
 procedure TPoolAllocator.FreeTrackedFallbackAllocs;
 var
-  LIndex: Integer;
+  I: SizeUInt;
 begin
-  for LIndex := 0 to High(FAllocs) do
-    if (FAllocs[LIndex].Owner = paoFallback) and (FAllocs[LIndex].Ptr <> nil) then
-    begin
-      if FAllocs[LIndex].Aligned then
-        FFallback.FreeAligned(FAllocs[LIndex].Ptr)
-      else
-        FFallback.FreeMem(FAllocs[LIndex].Ptr);
-    end;
-  SetLength(FAllocs, 0);
+  if FMapCapacity > 0 then
+    for I := 0 to FMapCapacity - 1 do
+      if (FMap[I].Ptr <> nil) and (FMap[I].Ptr <> MAP_TOMBSTONE_PTR) and
+         (FMap[I].Owner = paoFallback) then
+      begin
+        if FMap[I].Aligned then
+          FFallback.FreeMem(PPointer(PByte(FMap[I].Ptr) - SizeOf(Pointer))^)
+        else
+          FFallback.FreeMem(FMap[I].Ptr);
+      end;
+  FMap := nil;
+  FMapCapacity := 0;
+  FMapCount := 0;
+  FMapTombstones := 0;
 end;
 
-procedure TPoolAllocator.RaiseUnknownPointer(APtr: Pointer; const aOperation: string);
+procedure TPoolAllocator.RaiseUnknownPointer(APtr: Pointer;
+  const aOperation: string);
 begin
   if IsPoolRange(APtr) and not IsPoolBlockStart(APtr) then
     raise EAllocError.Create(aeInvalidPointer, 'TPoolAllocator.' + aOperation + ': pointer is not a pool block start');
@@ -318,6 +424,8 @@ begin
   Result := FPool.Available;
 end;
 
+{ TPoolAllocator — IAllocator }
+
 function TPoolAllocator.GetMem(ASize: SizeUInt): Pointer;
 begin
   if ASize = 0 then
@@ -325,7 +433,6 @@ begin
 
   if ASize <= FBlockSize then
   begin
-    // 从池分配
     if FPool.TryAlloc(Result) then
     begin
       try
@@ -338,7 +445,6 @@ begin
     end;
   end;
 
-  // 池满或大小超出，使用后备分配器
   Result := AllocFallback(ASize, 0, False);
 end;
 
@@ -366,12 +472,11 @@ begin
     Exit(nil);
   end;
 
-  if not TryGetAlloc(ADst, LAlloc) then
+  if not MapGet(ADst, LAlloc) then
     RaiseUnknownPointer(ADst, 'ReallocMem');
 
   if LAlloc.Owner = paoPool then
   begin
-    // Pool allocations are fixed-size; realloc uses allocate-copy-release.
     Result := GetMem(ASize);
     if Result <> nil then
     begin
@@ -422,14 +527,21 @@ begin
   if LAlloc.Owner = paoPool then
     FPool.ReleasePtr(ADst)
   else if LAlloc.Aligned then
-    FFallback.FreeAligned(ADst)
+    FFallback.FreeMem(PPointer(PByte(ADst) - SizeOf(Pointer))^)
   else
     FFallback.FreeMem(ADst);
 end;
 
 function TPoolAllocator.MemSize(APtr: Pointer): SizeUInt;
+var
+  LAlloc: TPoolAllocatorAlloc;
 begin
-  Result := GetMemSize(APtr);
+  if APtr = nil then
+    Exit(0);
+  if MapGet(APtr, LAlloc) then
+    Result := LAlloc.Size
+  else
+    Result := 0;
 end;
 
 function TPoolAllocator.AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
@@ -441,8 +553,6 @@ begin
   if AAlignment < SizeOf(Pointer) then
     AAlignment := SizeOf(Pointer);
 
-  // 池分配器的块已经是 16 字节对齐的
-  // 如果请求的对齐 <= 16，直接使用池分配
   if (AAlignment <= 16) and (ASize <= FBlockSize) then
   begin
     if FPool.TryAlloc(Result) then
@@ -457,7 +567,6 @@ begin
     end;
   end;
 
-  // 否则使用后备分配器
   Result := AllocFallback(ASize, AAlignment, True);
 end;
 
@@ -474,7 +583,7 @@ begin
   if LAlloc.Owner = paoPool then
     FPool.ReleasePtr(APtr)
   else if LAlloc.Aligned then
-    FFallback.FreeAligned(APtr)
+    FFallback.FreeMem(PPointer(PByte(APtr) - SizeOf(Pointer))^)
   else
     FFallback.FreeMem(APtr);
 end;
@@ -482,12 +591,10 @@ end;
 function TPoolAllocator.Traits: TAllocatorTraits;
 begin
   Result.ZeroInitialized := False;
-  Result.ThreadSafe := False;  // TFixedPool 不是线程安全的
-  Result.HasMemSize := False;  // IAllocator surface has no mem-size query.
-  Result.SupportsAligned := False;  // non-native fallback path remains available.
+  Result.ThreadSafe := False;
 end;
 
-// 扩展方法（非 IAllocator 接口，仅 TPoolAllocator 提供）
+{ Extended methods }
 
 function TPoolAllocator.GetMemSize(APtr: Pointer): SizeUInt;
 var
@@ -495,7 +602,7 @@ var
 begin
   if APtr = nil then
     Exit(0);
-  if TryGetAlloc(APtr, LAlloc) then
+  if MapGet(APtr, LAlloc) then
     Result := LAlloc.Size
   else
     Result := 0;
@@ -515,7 +622,8 @@ end;
 
 { Factory function }
 
-function MakePoolAllocator(ABlockSize: SizeUInt; ACapacity: Integer; AFallback: IAllocator): IAllocator;
+function MakePoolAllocator(ABlockSize: SizeUInt; ACapacity: Integer;
+  AFallback: IAllocator): IAllocator;
 begin
   Result := TPoolAllocator.Create(ABlockSize, ACapacity, AFallback);
 end;

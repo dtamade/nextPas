@@ -8,6 +8,7 @@ uses
   nextpas.core.mem.base,
   nextpas.core.mem.error,
   nextpas.core.mem.intf,
+  nextpas.core.mem.allocator.rtl,  // ResolveAllocator
   nextpas.core.mem.arena.base,
   nextpas.core.base.utils,
   nextpas.core.mem.arena.intf;
@@ -72,15 +73,12 @@ end;
 constructor TLocalArena.Create(const ACapacity: SizeUInt; const AAllocator: IAllocator);
 begin
   inherited Create;
-  FAllocator := AAllocator;
+  FAllocator := ResolveAllocator(AAllocator);
   if ACapacity > 0 then
   begin
-    if FAllocator <> nil then
-      FBacking := FAllocator.GetMem(ACapacity)
-    else
-      FBacking := GetMem(ACapacity);
+    FBacking := FAllocator.GetMem(ACapacity);
     if FBacking = nil then
-      raise EOutOfMemory.Create(aeOutOfMemory, 'TLocalArena.Create: out of memory');
+      raise EOutOfMemory.CreateMsg('TLocalArena.Create: out of memory');
   end
   else
     FBacking := nil;
@@ -94,10 +92,7 @@ destructor TLocalArena.Destroy;
 begin
   if FBacking <> nil then
   begin
-    if FAllocator <> nil then
-      FAllocator.FreeMem(FBacking)
-    else
-      FreeMem(FBacking);
+    FAllocator.FreeMem(FBacking);
     FBacking := nil;
   end;
   FAllocator := nil;
@@ -210,7 +205,7 @@ begin
   Result.BackOffset := 0;
   Result.TotalUsed := FOffset;
   Result.LargeUsed := 0;
-  Result.AllocCount := 0;  // TLocalArena 不在此处跟踪
+  Result.AllocCount := FTotalAllocs;
 end;
 
 procedure TLocalArena.RestoreToMark(AMark: TArenaMark);

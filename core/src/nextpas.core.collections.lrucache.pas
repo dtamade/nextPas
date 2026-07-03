@@ -18,7 +18,8 @@ uses
   nextpas.core.collections.element_manager;
 
 threadvar
-  GLruCacheActive: Pointer;
+  GLruCacheActive: Pointer,
+  nextpas.core.mem.allocator.base;
 
 type
   {**
@@ -48,7 +49,7 @@ type
     FSize: SizeUInt;
     FHitCount: UInt64;
     FMissCount: UInt64;
-    FAllocator: IAllocator;
+    FAllocator: TMemAllocator;
     FHashFunc: specialize THashFunc<K>;
     FEqualsFunc: specialize TEqualsFunc<K>;
     FHashData: Pointer;
@@ -68,7 +69,7 @@ type
     class function EqualsAdapter(const aLeft, aRight: K): Boolean; static;
 
   public
-    constructor Create(aMaxSize: SizeUInt; const aAllocator: IAllocator = nil;
+    constructor Create(aMaxSize: SizeUInt; const aAllocator: TMemAllocator = nil;
       const aHash: specialize THashFunc<K> = nil; const aEquals: specialize TEqualsFunc<K> = nil;
       aHashData: Pointer = nil; aEqualsData: Pointer = nil);
     destructor Destroy; override;
@@ -94,7 +95,7 @@ implementation
 
 { TLruCache }
 
-constructor TLruCache.Create(aMaxSize: SizeUInt; const aAllocator: IAllocator;
+constructor TLruCache.Create(aMaxSize: SizeUInt; const aAllocator: TMemAllocator;
   const aHash: specialize THashFunc<K>; const aEquals: specialize TEqualsFunc<K>;
   aHashData: Pointer; aEqualsData: Pointer);
 var

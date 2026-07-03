@@ -10,6 +10,10 @@ uses
   nextpas.core.bench.report,
   nextpas.core.test;
 
+type
+  TBenchResult = nextpas.core.bench.base.TBenchResult;
+  TBenchResultArray = nextpas.core.bench.base.TBenchResultArray;
+
 var
   GGenerator: TBenchReportGenerator;
 

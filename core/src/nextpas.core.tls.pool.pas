@@ -4,10 +4,10 @@ unit nextpas.core.tls.pool;
 
 interface
 
-uses nextpas.core.base, nextpas.core.sync, nextpas.core.tls.base, nextpas.core.tls.tls, nextpas.core.tls.dialer; type TSSLPoolEntry = record Host: string;
+uses nextpas.core.base, nextpas.core.io.intf, nextpas.core.sync, nextpas.core.tls.base, nextpas.core.tls.tls, nextpas.core.tls.dialer; type TSSLPoolEntry = record Host: string;
   
     Port: Word;
-    Stream: TSSLStream;
+    Stream: IStream;
     IdleSince: TDateTime;
   end;
 
@@ -24,8 +24,8 @@ uses nextpas.core.base, nextpas.core.sync, nextpas.core.tls.base, nextpas.core.t
     destructor Destroy; override;
 
     function Acquire(const AHost: string; APort: Word;
-      out AStream: TSSLStream; out AError: string): Boolean;
-    procedure Release(const AHost: string; APort: Word; AStream: TSSLStream);
+      out AStream: IStream; out AError: string): Boolean;
+    procedure Release(const AHost: string; APort: Word; AStream: IStream);
     procedure CloseIdle;
     procedure CloseAll;
 
@@ -53,11 +53,11 @@ begin
 end;
 
 function TSSLConnectionPool.Acquire(const AHost: string; APort: Word;
-  out AStream: TSSLStream; out AError: string): Boolean;
+  out AStream: IStream; out AError: string): Boolean;
 var
   I: Integer;
   LNow: TDateTime;
-  LExpired: TSSLStream;
+  LExpired: IStream;
 begin
   AStream := nil;
   AError := '';
@@ -97,14 +97,14 @@ begin
 
   // Free expired stream outside lock (may block on shutdown)
   if LExpired <> nil then
-    LExpired.Free;
+    LExpired := nil;
 
   // No idle connection found — create new
   Result := FDialer.TryDial(AHost, APort, AStream, AError);
 end;
 
 procedure TSSLConnectionPool.Release(const AHost: string; APort: Word;
-  AStream: TSSLStream);
+  AStream: IStream);
 var
   LIdx: Integer;
 begin
@@ -113,7 +113,7 @@ begin
   // MaxIdle=0 means don't pool — close immediately
   if FMaxIdle <= 0 then
   begin
-    AStream.Free;
+    AStream := nil;
     Exit;
   end;
 
@@ -125,7 +125,7 @@ begin
       // Pool full — close oldest
       if Length(FEntries) > 0 then
       begin
-        FEntries[0].Stream.Free;
+        FEntries[0].Stream := nil;
         FEntries[0] := FEntries[High(FEntries)];
         SetLength(FEntries, Length(FEntries) - 1);
       end;
@@ -155,7 +155,7 @@ begin
     begin
       if DateTimeMillisecondsBetween(LNow, FEntries[I].IdleSince) >= FIdleTimeoutMs then
       begin
-        FEntries[I].Stream.Free;
+        FEntries[I].Stream := nil;
         FEntries[I] := FEntries[High(FEntries)];
         SetLength(FEntries, Length(FEntries) - 1);
       end
@@ -174,7 +174,7 @@ begin
   FLock.Acquire;
   try
     for I := 0 to High(FEntries) do
-      FEntries[I].Stream.Free;
+      FEntries[I].Stream := nil;
     SetLength(FEntries, 0);
   finally
     FLock.Release;

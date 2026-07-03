@@ -49,7 +49,8 @@ function FL_GetDtorCount: SizeInt;
 {$IFDEF DEBUG}
 var
   G_FL_Create_Count: SizeInt = 0;
-  G_FL_Destroy_Count: SizeInt = 0;
+  G_FL_Destroy_Count: SizeInt = 0,
+ nextpas.core.mem.allocator.base;
 {$ENDIF}
 
 
@@ -123,17 +124,17 @@ type
 
   public
     constructor Create; overload;
-    constructor Create(aAllocator: IAllocator); overload;
-    constructor Create(aAllocator: IAllocator; aData: Pointer); override; overload;
+    constructor Create(aAllocator: TMemAllocator); overload;
+    constructor Create(aAllocator: TMemAllocator; aData: Pointer); override; overload;
     constructor Create(const aSrc: array of T); overload;
-    constructor Create(const aSrc: array of T; aAllocator: IAllocator); overload;
-    constructor Create(const aSrc: array of T; aAllocator: IAllocator; aData: Pointer); overload;
+    constructor Create(const aSrc: array of T; aAllocator: TMemAllocator); overload;
+    constructor Create(const aSrc: array of T; aAllocator: TMemAllocator; aData: Pointer); overload;
     constructor Create(const aSrc: TCollection); overload;
-    constructor Create(const aSrc: TCollection; aAllocator: IAllocator); overload;
-    constructor Create(const aSrc: TCollection; aAllocator: IAllocator; aData: Pointer); overload;
+    constructor Create(const aSrc: TCollection; aAllocator: TMemAllocator); overload;
+    constructor Create(const aSrc: TCollection; aAllocator: TMemAllocator; aData: Pointer); overload;
     constructor Create(aSrc: Pointer; aElementCount: SizeUInt); overload;
-    constructor Create(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: IAllocator); overload;
-    constructor Create(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: IAllocator; aData: Pointer); overload;
+    constructor Create(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator); overload;
+    constructor Create(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator; aData: Pointer); overload;
 
     destructor  Destroy; override;
 
@@ -479,13 +480,13 @@ begin
   // which is overridden below to perform actual initialization.
 end;
 
-constructor TForwardList.Create(aAllocator: IAllocator);
+constructor TForwardList.Create(aAllocator: TMemAllocator);
 begin
   // Delegate to base; actual init happens in overridden Create(aAllocator, aData)
   inherited Create(aAllocator);
 end;
 
-constructor TForwardList.Create(aAllocator: IAllocator; aData: Pointer);
+constructor TForwardList.Create(aAllocator: TMemAllocator; aData: Pointer);
 begin
   inherited Create(aAllocator, aData);
   {$IFDEF DEBUG}Inc(G_FL_Create_Count);{$ENDIF}
@@ -506,7 +507,7 @@ begin
   end;
 end;
 
-constructor TForwardList.Create(const aSrc: array of T; aAllocator: IAllocator);
+constructor TForwardList.Create(const aSrc: array of T; aAllocator: TMemAllocator);
 begin
   Create(aAllocator);
   try
@@ -517,7 +518,7 @@ begin
   end;
 end;
 
-constructor TForwardList.Create(const aSrc: array of T; aAllocator: IAllocator; aData: Pointer);
+constructor TForwardList.Create(const aSrc: array of T; aAllocator: TMemAllocator; aData: Pointer);
 begin
   Create(aAllocator, aData);
   try
@@ -539,7 +540,7 @@ begin
   end;
 end;
 
-constructor TForwardList.Create(const aSrc: TCollection; aAllocator: IAllocator);
+constructor TForwardList.Create(const aSrc: TCollection; aAllocator: TMemAllocator);
 begin
   Create(aAllocator);
   try
@@ -550,7 +551,7 @@ begin
   end;
 end;
 
-constructor TForwardList.Create(const aSrc: TCollection; aAllocator: IAllocator; aData: Pointer);
+constructor TForwardList.Create(const aSrc: TCollection; aAllocator: TMemAllocator; aData: Pointer);
 begin
   Create(aAllocator, aData);
   try
@@ -572,7 +573,7 @@ begin
   end;
 end;
 
-constructor TForwardList.Create(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: IAllocator);
+constructor TForwardList.Create(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator);
 begin
   Create(aAllocator);
   try
@@ -583,7 +584,7 @@ begin
   end;
 end;
 
-constructor TForwardList.Create(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: IAllocator; aData: Pointer);
+constructor TForwardList.Create(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator; aData: Pointer);
 begin
   Create(aAllocator, aData);
   try

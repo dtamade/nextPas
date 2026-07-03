@@ -33,22 +33,23 @@ procedure Pass(const AName: string);
 begin
   WriteLn('  PASS: ', AName);
   Inc(GPass);
-end;
+end,
+  nextpas.core.mem.allocator.base;
 
 type
-  TCountingAllocator = class(TInterfacedObject, IAllocator)
+  TCountingAllocator = class(TAllocator)
   private
     FAllocCount: SizeUInt;
     FDeallocCount: SizeUInt;
   public
-    function GetMem(ASize: SizeUInt): Pointer;
-    function AllocMem(ASize: SizeUInt): Pointer;
-    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
-    procedure FreeMem(ADst: Pointer);
-    function MemSize(APtr: Pointer): SizeUInt;
-    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
-    procedure FreeAligned(APtr: Pointer);
-    function Traits: TAllocatorTraits;
+    function GetMem(ASize: SizeUInt): Pointer; override;
+    function AllocMem(ASize: SizeUInt): Pointer; override;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
+    procedure FreeMem(ADst: Pointer); override;
+    function MemSize(APtr: Pointer): SizeUInt; override;
+    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer; override;
+    procedure FreeAligned(APtr: Pointer); override;
+    function Traits: TAllocatorTraits; override;
 
     property AllocCount: SizeUInt read FAllocCount;
     property DeallocCount: SizeUInt read FDeallocCount;
@@ -1240,7 +1241,7 @@ type TStrTrackedSwiss = specialize TSwissTableStr<ITracked>;
 var
   M: TStrTrackedSwiss;
   AllocatorObj: TCountingAllocator;
-  Allocator: IAllocator;
+  Allocator: TMemAllocator;
   Snap: TLeakSnapshot;
   BeforeSecondPutAllocCount: SizeUInt;
   BeforeSecondClearDeallocCount: SizeUInt;
@@ -1248,7 +1249,7 @@ var
 begin
   Snap := SnapTake;
   AllocatorObj := TCountingAllocator.Create;
-  Allocator := AllocatorObj as IAllocator;
+  Allocator := AllocatorObj;
   M := TStrTrackedSwiss.CreateWith(16, Allocator);
   try
     t := MakeTracked(7101);
@@ -1399,12 +1400,12 @@ procedure TestSwissTableI32I32ClearKeepsCustomAllocator;
 var
   M: TSwissTableI32I32;
   AllocatorObj: TCountingAllocator;
-  Allocator: IAllocator;
+  Allocator: TMemAllocator;
   BeforeSecondPutAllocCount: SizeUInt;
   BeforeSecondClearDeallocCount: SizeUInt;
 begin
   AllocatorObj := TCountingAllocator.Create;
-  Allocator := AllocatorObj as IAllocator;
+  Allocator := AllocatorObj;
   M := TSwissTableI32I32.CreateWith(16, Allocator);
   try
     M.Put(1, 10);

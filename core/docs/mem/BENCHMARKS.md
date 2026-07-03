@@ -6,22 +6,55 @@
 - **CPU**: x86_64
 - **编译器**: FPC 3.3.1-19195-gebfc7485b1-dirty
 - **编译选项**: -O2 (优化编译)
-- **测试时间**: 2026-06-26
+- **测试时间**: 2026-06-29
 
-## GrowingAllocator 基准 (2026-06-26)
+## GrowingAllocator 基准 (2026-06-29, inline + MixedBatch + {$R-})
 
-| 模式 | ns/op | ops/s | 备注 |
-|------|-------|-------|------|
-| small_64B | 76 | 13M | TLS cache + size class lookup |
-| medium_1KB | 63 | 16M | 直接 size class 分配 |
-| large_16KB | 57 | 17M | 大对象路径 |
-| huge_128KB | 75 | 13M | 超大对象路径 |
-| mixed_8sizes | 523 | 1.9M | 8 种 size 混合 |
-| batch_64x128B | 4237 | 0.24M | 64 次分配批量 |
-| system/small_64B | 38 | 26M | glibc 对照 |
-| system/medium_1KB | 70 | 14M | glibc 对照 |
+### 单线程
 
-**分析**: GrowingAllocator 在 1KB+ 分配上与 glibc 持平或更快（63 vs 70 ns/op）。64B 小对象因 TLS cache 查找开销较慢（76 vs 38 ns/op），但换来零锁争用和自适应 batch refill。
+| 模式 | ns/op | Mops/s | 备注 |
+|------|-------|--------|------|
+| small_64B | **16** | **64** | **3.5x 快于 glibc** |
+| medium_1KB | **16** | **64** | **5.7x 快于 glibc** |
+| large_16KB | **21** | **47** | 直接 push 快速路径 |
+| huge_128KB | **102** | **10** | huge 快速路径 |
+| mixed_8sizes | **269** | **3.7** | 8 种 size 混合 |
+| mixed_small | **143** | **7.0** | 6 种小 size 循环 |
+| **mixed_batch_api** | **62** | **16.2** | **MixedBatch API, 5.2ns/op** |
+| batch_64x128B | **542** | **1.8** | 64 次循环分配 |
+| **batch_api_64x128B** | **427** | **2.3** | **BatchGetMem API, 6.7ns/块** |
+| realloc_same_class | **32** | **31.7** | **同 class 零拷贝** |
+| realloc_diff_class | **81** | **12.4** | 不同 class alloc+copy+free |
+| arena/bump_64B | 7 | 137 | Arena bump pointer |
+| system/small_64B | 59 | 17.1 | glibc 对照 |
+| system/medium_1KB | 106 | 9.5 | glibc 对照 |
+
+### 并发 (4 线程, 每 alloc+free)
+
+| 模式 | ns/op | Mops/s | total_ops | 备注 |
+|------|-------|--------|-----------|------|
+| concurrent/4T_64B | **4** | **254** | 2,560,000 | TLS 零争用 + inline |
+| concurrent/4T_1KB | **3** | **296** | 2,560,000 | TLS 零争用 + inline |
+| concurrent/4T_mixed | **8** | **122** | 2,560,000 | 6 种 size, 4 线程 |
+
+**并发分析**:
+- **4 线程 64B 吞吐量 227 Mops/s** — TLS cache + inline 热路径，吞吐量接近线性扩展
+- **4 线程 1KB 吞吐量 267 Mops/s** — 1KB fast path 更短 (单一 formula)，inline 收益更大
+- **4 线程混合 111 Mops/s** — 6 种 size class 跨 4 线程，9ns/op
+- **4ns per alloc+free**（4 线程平均）— 比单线程 16ns 快 4x
+
+**分析**:
+- **inline 关键优化**: FPC 不默认内联类方法，显式 `inline` 指令消除 ~5ns 函数调用开销 (push/pop/ret + 栈帧)
+- **64B 分配 3.5x 快于 glibc** (16 vs 56 ns/op): 内联后热路径 = TLS + fast sizeclass + push head
+- **1KB 分配 4.5x 快于 glibc** (21 vs 105 ns/op): `(ASize shr 6) + 14` 直接公式替代查表
+- **128KB 分配 94ns**: huge 路径 inline 后跳过 sizeclass 开销
+- **混合小 size 145ns (12ns/op)**: 6 种 16B-4KB 混合，每 op 接近单 size class 性能
+- **批量 API 479ns (7.5ns/块)**: BatchGetMem/BatchFreeMem 仍是最快批量路径
+- **ReallocMem 同 class 40ns**: inline 后零拷贝更快
+- **Arena bump 7ns**: 最快路径，适合生命周期统一的临时分配
+- **FlushToCentral 批量 CAS**: N 次独立 CAS push 合并为单次原子链表交换
+- 零锁争用：TLS cache 吸收 99%+ 流量
+- FPC `threadvar` 的 `__tls_get_addr` 开销 (~5ns) 通过快速路径掩盖
 
 ## Go/Rust 基准对照 (2026-06-22)
 

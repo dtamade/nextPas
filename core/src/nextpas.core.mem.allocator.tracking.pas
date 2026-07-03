@@ -9,44 +9,46 @@ uses
   nextpas.core.mem.base,
   nextpas.core.mem.error,
   nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.allocator.base,
+  nextpas.core.mem.mutex;
 
 type
-  {** TAllocRecord — 单次分配的跟踪信息 }
-  TAllocRecord = record
-    Ptr: Pointer;
-    Size: SizeUInt;
-    AllocId: QWord;
-  end;
-
-  TAllocRecordArray = array of TAllocRecord;
-
   {** TTrackingAllocator
    *
    *  包装任意 IAllocator，记录所有分配/释放操作，
    *  用于测试时检测内存泄漏。
    *
-   *  线程安全（内部用 TRTLCriticalSection 保护记录表）。
+   *  线程安全（内部用 TMemMutex 保护记录表）。
    *  仅用于测试/诊断场景，不建议在生产热路径使用。
+   *
+   *  内部使用 open-addressing hash map (MulHash64 + 线性探测)
+   *  实现 O(1) 平均查找/插入/删除。
    *}
   TTrackingAllocator = class(TAllocator)
   private
     FInner: IAllocator;
-    FRecords: TAllocRecordArray;
-    FCount: SizeInt;
-    FCapacity: SizeInt;
+    FLock: TMemMutex;
     FNextAllocId: QWord;
-    FLock: TRTLCriticalSection;
-    function FindRecordIndex(APtr: Pointer): SizeInt;
-    procedure AddRecord(APtr: Pointer; ASize: SizeUInt);
-    procedure RemoveRecord(APtr: Pointer);
-    procedure UpdateRecord(aOldPtr, aNewPtr: Pointer; aNewSize: SizeUInt);
+    { Open-addressing hash map: Ptr → (Size, AllocId) }
+    FKeys: array of PtrUInt;     { 0 = empty, 1 = tombstone }
+    FSizes: array of SizeUInt;
+    FAllocIds: array of QWord;
+    FMask: SizeUInt;
+    FHighShift: SizeUInt;
+    FCount: SizeUInt;            { live entries }
+    FFill: SizeUInt;             { live + tombstones }
+    FTotalBytes: SizeUInt;       { sum of live sizes }
+    procedure MapInit(aMinCapacity: SizeUInt);
+    procedure MapClear;
+    procedure MapGrow;
+    function MapLookup(aKey: PtrUInt; out aSize: SizeUInt; out aAllocId: QWord): Boolean;
+    procedure MapInsert(aKey: PtrUInt; aSize: SizeUInt; aAllocId: QWord);
+    function MapDelete(aKey: PtrUInt; out aSize: SizeUInt; out aAllocId: QWord): Boolean;
   protected
     function DoGetMem(ASize: SizeUInt): Pointer; override;
     function DoAllocMem(ASize: SizeUInt): Pointer; override;
     function DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
     procedure DoFreeMem(ADst: Pointer); override;
-    function DoMemSize(APtr: Pointer): SizeUInt; override;
   public
     constructor Create(aInner: IAllocator);
     destructor Destroy; override;
@@ -67,6 +69,13 @@ type
 
 implementation
 
+uses
+  nextpas.core.mem.utils;
+
+const
+  TRACK_MAP_MIN_CAP = 64;
+  TRACK_TOMBSTONE = PtrUInt(1);
+
 { TTrackingAllocator }
 
 constructor TTrackingAllocator.Create(aInner: IAllocator);
@@ -75,171 +84,300 @@ begin
   if aInner = nil then
     raise EArgumentNil.Create('TTrackingAllocator.Create: aInner cannot be nil');
   FInner := aInner;
-  FRecords := nil;
-  FCount := 0;
-  FCapacity := 0;
   FNextAllocId := 1;
-  InitCriticalSection(FLock);
+  FLock.Init;
+  MapInit(TRACK_MAP_MIN_CAP);
 end;
 
 destructor TTrackingAllocator.Destroy;
 begin
-  DoneCriticalSection(FLock);
+  FLock.Done;
+  MapClear;
   FInner := nil;
   inherited Destroy;
 end;
 
-function TTrackingAllocator.FindRecordIndex(APtr: Pointer): SizeInt;
-var
-  I: SizeInt;
-begin
-  for I := 0 to FCount - 1 do
-    if FRecords[I].Ptr = APtr then
-      Exit(I);
-  Result := -1;
-end;
+{ --- Hash map internals --- }
 
-procedure TTrackingAllocator.AddRecord(APtr: Pointer; ASize: SizeUInt);
+procedure TTrackingAllocator.MapInit(aMinCapacity: SizeUInt);
 var
-  LNewCapacity: SizeInt;
+  LCap: SizeUInt;
+  LIdx: SizeUInt;
 begin
-  if APtr = nil then
-    Exit;
-  if FCount >= FCapacity then
+  LCap := TRACK_MAP_MIN_CAP;
+  while LCap < aMinCapacity do
+    LCap := LCap shl 1;
+  SetLength(FKeys, LCap);
+  SetLength(FSizes, LCap);
+  SetLength(FAllocIds, LCap);
+  for LIdx := 0 to LCap - 1 do
   begin
-    if FCapacity = 0 then
-      LNewCapacity := 16
-    else
-      LNewCapacity := FCapacity * 2;
-    SetLength(FRecords, LNewCapacity);
-    FCapacity := LNewCapacity;
+    FKeys[LIdx] := 0;
+    FSizes[LIdx] := 0;
+    FAllocIds[LIdx] := 0;
   end;
-  FRecords[FCount].Ptr := APtr;
-  FRecords[FCount].Size := ASize;
-  FRecords[FCount].AllocId := FNextAllocId;
-  Inc(FNextAllocId);
-  Inc(FCount);
+  FMask := LCap - 1;
+  FHighShift := SizeUInt(64 - Log2UInt(LCap));
+  FCount := 0;
+  FFill := 0;
+  FTotalBytes := 0;
 end;
 
-procedure TTrackingAllocator.RemoveRecord(APtr: Pointer);
+procedure TTrackingAllocator.MapClear;
 var
-  LIdx: SizeInt;
+  LIdx: SizeUInt;
 begin
-  if APtr = nil then
-    Exit;
-  LIdx := FindRecordIndex(APtr);
-  if LIdx >= 0 then
+  if Length(FKeys) = 0 then Exit;
+  for LIdx := 0 to FMask do
   begin
-    { 用最后一个元素覆盖被删除的元素 }
-    Dec(FCount);
-    if LIdx < FCount then
-      FRecords[LIdx] := FRecords[FCount];
+    FKeys[LIdx] := 0;
+    FSizes[LIdx] := 0;
+    FAllocIds[LIdx] := 0;
+  end;
+  FCount := 0;
+  FFill := 0;
+  FTotalBytes := 0;
+end;
+
+procedure TTrackingAllocator.MapGrow;
+var
+  LOldKeys: array of PtrUInt;
+  LOldSizes: array of SizeUInt;
+  LOldAllocIds: array of QWord;
+  LOldCap: SizeUInt;
+  LIdx: SizeUInt;
+  LKey: PtrUInt;
+  LPos: SizeUInt;
+  LHash: QWord;
+begin
+  LOldCap := FMask + 1;
+  LOldKeys := FKeys;
+  LOldSizes := FSizes;
+  LOldAllocIds := FAllocIds;
+
+  SetLength(FKeys, LOldCap shl 1);
+  SetLength(FSizes, LOldCap shl 1);
+  SetLength(FAllocIds, LOldCap shl 1);
+  FMask := (LOldCap shl 1) - 1;
+  FHighShift := SizeUInt(64 - Log2UInt(FMask + 1));
+
+  for LIdx := 0 to FMask do
+  begin
+    FKeys[LIdx] := 0;
+    FSizes[LIdx] := 0;
+    FAllocIds[LIdx] := 0;
+  end;
+  FCount := 0;
+  FFill := 0;
+  FTotalBytes := 0;
+
+  for LIdx := 0 to LOldCap - 1 do
+  begin
+    LKey := LOldKeys[LIdx];
+    if (LKey <> 0) and (LKey <> TRACK_TOMBSTONE) then
+    begin
+      LHash := MulHash64(LKey);
+      LPos := (LHash shr FHighShift) and FMask;
+      while FKeys[LPos] <> 0 do
+        LPos := (LPos + 1) and FMask;
+      FKeys[LPos] := LKey;
+      FSizes[LPos] := LOldSizes[LIdx];
+      FAllocIds[LPos] := LOldAllocIds[LIdx];
+      Inc(FCount);
+      Inc(FFill);
+      Inc(FTotalBytes, LOldSizes[LIdx]);
+    end;
   end;
 end;
 
-procedure TTrackingAllocator.UpdateRecord(aOldPtr, aNewPtr: Pointer; aNewSize: SizeUInt);
+function TTrackingAllocator.MapLookup(aKey: PtrUInt; out aSize: SizeUInt; out aAllocId: QWord): Boolean;
 var
-  LIdx: SizeInt;
+  LPos: SizeUInt;
+  LHash: QWord;
 begin
-  LIdx := FindRecordIndex(aOldPtr);
-  if LIdx >= 0 then
+  aSize := 0;
+  aAllocId := 0;
+  if (aKey = 0) or (aKey = TRACK_TOMBSTONE) then Exit(False);
+  if Length(FKeys) = 0 then Exit(False);
+  LHash := MulHash64(aKey);
+  LPos := (LHash shr FHighShift) and FMask;
+  while True do
   begin
-    FRecords[LIdx].Ptr := aNewPtr;
-    FRecords[LIdx].Size := aNewSize;
-  end
+    if FKeys[LPos] = 0 then Exit(False);
+    if FKeys[LPos] = aKey then
+    begin
+      aSize := FSizes[LPos];
+      aAllocId := FAllocIds[LPos];
+      Exit(True);
+    end;
+    LPos := (LPos + 1) and FMask;
+  end;
+end;
+
+procedure TTrackingAllocator.MapInsert(aKey: PtrUInt; aSize: SizeUInt; aAllocId: QWord);
+var
+  LPos: SizeUInt;
+  LHash: QWord;
+  LTomb: SizeUInt;
+begin
+  if (aKey = 0) or (aKey = TRACK_TOMBSTONE) then Exit;
+  { Grow if load factor > 50% (including tombstones) }
+  if (FFill + 1) > ((FMask + 1) shr 1) then
+    MapGrow;
+  LHash := MulHash64(aKey);
+  LPos := (LHash shr FHighShift) and FMask;
+  LTomb := High(SizeUInt);
+  while True do
+  begin
+    if FKeys[LPos] = 0 then Break;
+    if FKeys[LPos] = aKey then
+    begin
+      { Replace existing (should be rare) }
+      if FSizes[LPos] <= FTotalBytes then
+        Dec(FTotalBytes, FSizes[LPos])
+      else
+        FTotalBytes := 0;
+      FSizes[LPos] := aSize;
+      FAllocIds[LPos] := aAllocId;
+      Inc(FTotalBytes, aSize);
+      Exit;
+    end;
+    if (LTomb = High(SizeUInt)) and (FKeys[LPos] = TRACK_TOMBSTONE) then
+      LTomb := LPos;
+    LPos := (LPos + 1) and FMask;
+  end;
+  if LTomb <> High(SizeUInt) then
+    LPos := LTomb
   else
+    Inc(FFill);
+  FKeys[LPos] := aKey;
+  FSizes[LPos] := aSize;
+  FAllocIds[LPos] := aAllocId;
+  Inc(FCount);
+  Inc(FTotalBytes, aSize);
+end;
+
+function TTrackingAllocator.MapDelete(aKey: PtrUInt; out aSize: SizeUInt; out aAllocId: QWord): Boolean;
+var
+  LPos: SizeUInt;
+  LHash: QWord;
+begin
+  aSize := 0;
+  aAllocId := 0;
+  Result := False;
+  if (aKey = 0) or (aKey = TRACK_TOMBSTONE) then Exit;
+  if Length(FKeys) = 0 then Exit;
+  LHash := MulHash64(aKey);
+  LPos := (LHash shr FHighShift) and FMask;
+  while True do
   begin
-    { 旧指针未跟踪，可能是直接用 FInner 分配的，直接添加新记录 }
-    AddRecord(aNewPtr, aNewSize);
+    if FKeys[LPos] = 0 then Exit;
+    if FKeys[LPos] = aKey then
+    begin
+      aSize := FSizes[LPos];
+      aAllocId := FAllocIds[LPos];
+      FKeys[LPos] := TRACK_TOMBSTONE;
+      FSizes[LPos] := 0;
+      FAllocIds[LPos] := 0;
+      if FCount > 0 then Dec(FCount);
+      if aSize <= FTotalBytes then
+        Dec(FTotalBytes, aSize)
+      else
+        FTotalBytes := 0;
+      Exit(True);
+    end;
+    LPos := (LPos + 1) and FMask;
   end;
 end;
+
+{ --- IAllocator implementation --- }
 
 function TTrackingAllocator.DoGetMem(ASize: SizeUInt): Pointer;
 begin
   Result := FInner.GetMem(ASize);
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
-    AddRecord(Result, ASize);
+    MapInsert(PtrUInt(Result), ASize, FNextAllocId);
+    Inc(FNextAllocId);
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
 function TTrackingAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
 begin
   Result := FInner.AllocMem(ASize);
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
-    AddRecord(Result, ASize);
+    MapInsert(PtrUInt(Result), ASize, FNextAllocId);
+    Inc(FNextAllocId);
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
 function TTrackingAllocator.DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+var
+  LOldSize: SizeUInt;
+  LOldAllocId: QWord;
 begin
   Result := FInner.ReallocMem(ADst, ASize);
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     if Result <> nil then
     begin
       if ADst <> nil then
-        UpdateRecord(ADst, Result, ASize)
+      begin
+        { Update: delete old, insert new }
+        MapDelete(PtrUInt(ADst), LOldSize, LOldAllocId);
+        MapInsert(PtrUInt(Result), ASize, LOldAllocId);
+      end
       else
-        AddRecord(Result, ASize);
-    end
-    else if ADst <> nil then
-    begin
-      { ReallocMem 失败：原指针仍有效 }
+      begin
+        MapInsert(PtrUInt(Result), ASize, FNextAllocId);
+        Inc(FNextAllocId);
+      end;
     end;
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
 procedure TTrackingAllocator.DoFreeMem(ADst: Pointer);
+var
+  LSize: SizeUInt;
+  LAllocId: QWord;
 begin
   if ADst = nil then
     Exit;
-  { Double-free / unknown pointer detection: check BEFORE freeing }
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
-    if FindRecordIndex(ADst) < 0 then
+    if not MapDelete(PtrUInt(ADst), LSize, LAllocId) then
       raise EDoubleFree.Create(aeDoubleFree,
         'TTrackingAllocator.DoFreeMem: pointer not tracked (double-free or foreign pointer)');
-    RemoveRecord(ADst);
+    FInner.FreeMem(ADst);
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
-  FInner.FreeMem(ADst);
-end;
-
-function TTrackingAllocator.DoMemSize(APtr: Pointer): SizeUInt;
-begin
-  Result := FInner.MemSize(APtr);
 end;
 
 function TTrackingAllocator.ActiveAllocCount: SizeInt;
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
-    Result := FCount;
+    Result := SizeInt(FCount);
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
 function TTrackingAllocator.ActiveAllocBytes: SizeUInt;
-var
-  I: SizeInt;
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
-    Result := 0;
-    for I := 0 to FCount - 1 do
-      Inc(Result, FRecords[I].Size);
+    Result := FTotalBytes;
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
@@ -265,35 +403,39 @@ end;
 
 function TTrackingAllocator.ReportLeaks: string;
 var
-  I: SizeInt;
+  LIdx: SizeUInt;
   LLine: string;
   LCountStr: string;
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     if FCount = 0 then
       Exit('No leaks detected.');
     Str(FCount, LCountStr);
     Result := 'Leak report: ' + LCountStr + ' block(s) not freed:' + #10;
-    for I := 0 to FCount - 1 do
+    for LIdx := 0 to FMask do
     begin
-      Str(FRecords[I].AllocId, LLine);
-      Result := Result + '  [' + LLine + '] $';
-      Result := Result + PtrToHexString(PtrUInt(FRecords[I].Ptr));
-      Str(FRecords[I].Size, LLine);
-      Result := Result + ' size=' + LLine + #10;
+      if (FKeys[LIdx] <> 0) and (FKeys[LIdx] <> TRACK_TOMBSTONE) then
+      begin
+        Str(FAllocIds[LIdx], LLine);
+        Result := Result + '  [' + LLine + '] $';
+        Result := Result + PtrToHexString(FKeys[LIdx]);
+        Str(FSizes[LIdx], LLine);
+        Result := Result + ' size=' + LLine + #10;
+      end;
     end;
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
 function TTrackingAllocator.Traits: TAllocatorTraits;
 begin
-  Result.ZeroInitialized := False;
-  Result.ThreadSafe      := True;
-  Result.HasMemSize      := FInner.Traits.HasMemSize;
-  Result.SupportsAligned := False;
+  if FInner <> nil then
+    Result := FInner.Traits
+  else
+    Result.ZeroInitialized := False;
+  Result.ThreadSafe := True;
 end;
 
 end.

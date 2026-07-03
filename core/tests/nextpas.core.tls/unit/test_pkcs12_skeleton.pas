@@ -3,7 +3,7 @@ program test_pkcs12_skeleton;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   SysUtils, nextpas.core.tls.pkcs12;
 
 var

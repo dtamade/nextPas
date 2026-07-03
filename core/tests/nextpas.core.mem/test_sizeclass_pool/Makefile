@@ -1,25 +1,30 @@
 PROJECT = test_sizeclass_pool
+EXEC = $(PROJECT)
+SRC = $(PROJECT).lpr
 
-FPC ?= fpc
-CORE_ROOT = ../../..
-BUILD_DIR = $(CORE_ROOT)/build/projects/nextpas.core.mem/$(PROJECT)
+FPC = fpc
+UNIT_DIR = ../../../src
+BUILD_DIR = ../../../build/projects/nextpas.core.mem/$(PROJECT)
+OUTPUT_DIR = $(BUILD_DIR)
+PPU_DIR = $(BUILD_DIR)/units
 
-FPC_FLAGS = -MObjFPC -Sh -O2 -gl -gh \
-  -Fu$(CORE_ROOT)/src \
-  -Fi$(CORE_ROOT)/src \
-  -FE$(BUILD_DIR) \
-  -FU$(BUILD_DIR)
+FPC_FLAGS = -MObjFPC -Sh -gl -gh \
+  -Fu$(UNIT_DIR) \
+  -FE$(OUTPUT_DIR) \
+  -FU$(PPU_DIR) \
+  -Fi$(UNIT_DIR) \
+  -Fl/usr/lib/x86_64-linux-gnu
 
 .PHONY: all clean test
 
-all: $(PROJECT)
+all: $(EXEC)
 
-$(PROJECT): $(PROJECT).lpr
-	@mkdir -p $(BUILD_DIR)
-	$(FPC) $(FPC_FLAGS) $(PROJECT).lpr
+$(EXEC): $(SRC)
+	@mkdir -p $(OUTPUT_DIR) $(PPU_DIR)
+	$(FPC) $(FPC_FLAGS) $(SRC)
 
 clean:
 	rm -rf $(BUILD_DIR)
 
-test: $(PROJECT)
-	$(BUILD_DIR)/$(PROJECT)
+test: $(EXEC)
+	$(OUTPUT_DIR)/$(EXEC)

@@ -125,11 +125,6 @@ begin
   GAllocator.FreeMem(@GForeignByte);
 end;
 
-procedure FreeAlignedForeignPointer;
-begin
-  GAllocator.FreeAligned(@GForeignByte);
-end;
-
 procedure ReallocForeignPointer;
 begin
   GAllocator.ReallocMem(@GForeignByte, 128);
@@ -149,11 +144,6 @@ begin
   GAllocator.FreeMem(GPtr);
 end;
 
-procedure AllocAlignedWithInvalidAlignment;
-begin
-  GAllocator.AllocAligned(16, 3);
-end;
-
 procedure FreeReleasedPoolPointerAgain;
 begin
   GAllocator.FreeMem(GPtr);
@@ -161,7 +151,6 @@ end;
 
 procedure TestZeroSizeAndTraits;
 var
-  LTraits: TAllocatorTraits;
   LBaselineAvailable: Integer;
 begin
   GFallback := TRecordingFallback.Create;
@@ -171,13 +160,8 @@ begin
     LBaselineAvailable := GPoolAllocator.Available;
     Check(GAllocator.GetMem(0) = nil, 'GetMem(0) should return nil');
     Check(GAllocator.AllocMem(0) = nil, 'AllocMem(0) should return nil');
-    Check(GAllocator.AllocAligned(0, 16) = nil, 'AllocAligned(0) should return nil');
     Check(GAllocator.ReallocMem(nil, 0) = nil, 'ReallocMem(nil, 0) should return nil');
     Check(Int64(LBaselineAvailable) = Int64(GPoolAllocator.Available), 'zero-size operations must not consume pool capacity');
-
-    LTraits := GAllocator.Traits;
-    Check(False = LTraits.HasMemSize, 'pool allocator should not claim complete mem-size support');
-    Check(False = LTraits.SupportsAligned, 'pool allocator should not claim native generic aligned support');
   finally
     GAllocator := nil;
     GPoolAllocator := nil;
@@ -211,33 +195,12 @@ begin
   end;
 end;
 
-procedure TestInvalidAlignmentFailsClosed;
-var
-  LBaselineGetCalls: Integer;
-  LBaselineAllocCalls: Integer;
-begin
-  GFallback := TRecordingFallback.Create;
-  GAllocator := TPoolAllocator.Create(32, 1, GFallback);
-  try
-    LBaselineGetCalls := GFallback.GetCalls;
-    LBaselineAllocCalls := GFallback.AllocCalls;
-
-    CheckRaisesAllocError(@AllocAlignedWithInvalidAlignment, aeAlignmentNotSupported, 'invalid alignment');
-    Check(Int64(LBaselineGetCalls) = Int64(GFallback.GetCalls), 'invalid alignment must not allocate fallback memory');
-    Check(Int64(LBaselineAllocCalls) = Int64(GFallback.AllocCalls), 'invalid alignment must not call fallback AllocMem');
-  finally
-    GAllocator := nil;
-    GFallback := nil;
-  end;
-end;
-
 procedure TestForeignPointersFailClosed;
 begin
   GFallback := TRecordingFallback.Create;
   GAllocator := TPoolAllocator.Create(32, 1, GFallback);
   try
     CheckRaisesAllocError(@FreeForeignPointer, aeInvalidPointer, 'foreign FreeMem');
-    CheckRaisesAllocError(@FreeAlignedForeignPointer, aeInvalidPointer, 'foreign FreeAligned');
     CheckRaisesAllocError(@ReallocForeignPointer, aeInvalidPointer, 'foreign ReallocMem');
     Check(Int64(0) = Int64(GFallback.FreeCalls), 'foreign pointer must not be forwarded to fallback FreeMem');
     Check(Int64(0) = Int64(GFallback.ReallocCalls), 'foreign pointer must not be forwarded to fallback ReallocMem');
@@ -312,14 +275,77 @@ begin
   end;
 end;
 
+procedure TestStressManyAllocsAndFrees;
+const
+  COUNT = 50;
+var
+  LAllocator: IAllocator;
+  LFallback: TRecordingFallback;
+  LPtrs: array[0..COUNT - 1] of Pointer;
+  LLiveCount: Integer;
+  I: Integer;
+begin
+  LFallback := TRecordingFallback.Create;
+  LAllocator := TPoolAllocator.Create(64, COUNT, LFallback) as IAllocator;
+  { LFallback is now owned by the pool — do not free it separately. }
+
+  { Allocate all pointers — all fit in pool (sizes <= block size). }
+  for I := 0 to COUNT - 1 do
+  begin
+    LPtrs[I] := LAllocator.GetMem(32);
+    Check(LPtrs[I] <> nil, 'stress: alloc should succeed');
+    PByte(LPtrs[I])^ := Byte(I and $FF);
+  end;
+
+  { Free every other pointer. }
+  for I := 0 to COUNT - 1 do
+  begin
+    if I mod 2 = 0 then
+    begin
+      LAllocator.FreeMem(LPtrs[I]);
+      LPtrs[I] := nil;
+    end;
+  end;
+
+  { Re-allocate freed slots. }
+  for I := 0 to COUNT - 1 do
+  begin
+    if LPtrs[I] = nil then
+    begin
+      LPtrs[I] := LAllocator.GetMem(32);
+      Check(LPtrs[I] <> nil, 'stress: realloc should succeed');
+      PByte(LPtrs[I])^ := Byte(I and $FF);
+    end;
+  end;
+
+  { Verify data integrity. }
+  LLiveCount := 0;
+  for I := 0 to COUNT - 1 do
+  begin
+    if LPtrs[I] <> nil then
+    begin
+      Check(Int64(Byte(I and $FF)) = Int64(PByte(LPtrs[I])^),
+        'stress: data integrity');
+      Inc(LLiveCount);
+    end;
+  end;
+  Check(LLiveCount = COUNT, 'stress: all slots should be live after realloc');
+
+  { Final cleanup. }
+  for I := 0 to COUNT - 1 do
+    LAllocator.FreeMem(LPtrs[I]);
+
+  LAllocator := nil;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.mem.pool_allocator');
   T.Test('zero-size and traits', @TestZeroSizeAndTraits);
   T.Test('realloc zero frees pool pointer', @TestReallocZeroFreesPoolPointer);
-  T.Test('invalid alignment fails closed', @TestInvalidAlignmentFailsClosed);
   T.Test('foreign pointers fail closed', @TestForeignPointersFailClosed);
   T.Test('interior pool realloc fails without leaking', @TestInteriorPoolReallocFailsWithoutLeaking);
   T.Test('fallback allocations are tracked', @TestFallbackAllocationsAreTracked);
+  T.Test('stress many allocs and frees', @TestStressManyAllocsAndFrees);
   T.Run;
 
   T.Summary;

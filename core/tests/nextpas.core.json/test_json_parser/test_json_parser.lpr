@@ -20,39 +20,40 @@ var
 
 const
   JSON_PARSER_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.json.parser.pas';
-  JSON_PARSER_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.json.parser.pas';
+  JSON_PARSER_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.json.parser.pas',
+  nextpas.core.mem.allocator.base;
 
 type
-  TFailingReallocateAllocator = class(TInterfacedObject, IAllocator)
+  TFailingReallocateAllocator = class(TAllocator)
   private
     FFailOnReallocateCall: SizeUInt;
     FReallocateCalls: SizeUInt;
   public
     constructor Create(const AFailOnReallocateCall: SizeUInt);
-    function GetMem(ASize: SizeUInt): Pointer;
-    function AllocMem(ASize: SizeUInt): Pointer;
-    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
-    procedure FreeMem(ADst: Pointer);
-    function MemSize(APtr: Pointer): SizeUInt;
-    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
-    procedure FreeAligned(APtr: Pointer);
-    function Traits: TAllocatorTraits;
+    function GetMem(ASize: SizeUInt): Pointer; override;
+    function AllocMem(ASize: SizeUInt): Pointer; override;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
+    procedure FreeMem(ADst: Pointer); override;
+    function MemSize(APtr: Pointer): SizeUInt; override;
+    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer; override;
+    procedure FreeAligned(APtr: Pointer); override;
+    function Traits: TAllocatorTraits; override;
   end;
 
-  TFailingAllocateAllocator = class(TInterfacedObject, IAllocator)
+  TFailingAllocateAllocator = class(TAllocator)
   private
     FFailOnAllocateCall: SizeUInt;
     FAllocateCalls: SizeUInt;
   public
     constructor Create(const AFailOnAllocateCall: SizeUInt);
-    function GetMem(ASize: SizeUInt): Pointer;
-    function AllocMem(ASize: SizeUInt): Pointer;
-    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
-    procedure FreeMem(ADst: Pointer);
-    function MemSize(APtr: Pointer): SizeUInt;
-    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
-    procedure FreeAligned(APtr: Pointer);
-    function Traits: TAllocatorTraits;
+    function GetMem(ASize: SizeUInt): Pointer; override;
+    function AllocMem(ASize: SizeUInt): Pointer; override;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
+    procedure FreeMem(ADst: Pointer); override;
+    function MemSize(APtr: Pointer): SizeUInt; override;
+    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer; override;
+    procedure FreeAligned(APtr: Pointer); override;
+    function Traits: TAllocatorTraits; override;
   end;
 
 constructor TFailingReallocateAllocator.Create(
@@ -906,11 +907,11 @@ end;
 procedure TestNodeGrowthOOMFailsClosed;
 var
   LAllocatorObj: TFailingReallocateAllocator;
-  LAllocator: IAllocator;
+  LAllocator: TMemAllocator;
   Doc: TJsonDocument;
 begin
   LAllocatorObj := TFailingReallocateAllocator.Create(1);
-  LAllocator := LAllocatorObj as IAllocator;
+  LAllocator := LAllocatorObj;
   Doc.Init(LAllocator);
   try
     Check(not Doc.Parse(SV(BuildJsonNumberArray(80))),
@@ -926,11 +927,11 @@ end;
 procedure TestStringOverflowOOMFailsClosed;
 var
   LAllocatorObj: TFailingReallocateAllocator;
-  LAllocator: IAllocator;
+  LAllocator: TMemAllocator;
   Doc: TJsonDocument;
 begin
   LAllocatorObj := TFailingReallocateAllocator.Create(1);
-  LAllocator := LAllocatorObj as IAllocator;
+  LAllocator := LAllocatorObj;
   Doc.Init(LAllocator);
   try
     Check(not Doc.Parse(SV(BuildEscapedJsonStringArray(10, 600))),
@@ -946,11 +947,11 @@ end;
 procedure TestParsePreallocationOOMFailsClosed;
 var
   LAllocatorObj: TFailingReallocateAllocator;
-  LAllocator: IAllocator;
+  LAllocator: TMemAllocator;
   Doc: TJsonDocument;
 begin
   LAllocatorObj := TFailingReallocateAllocator.Create(1);
-  LAllocator := LAllocatorObj as IAllocator;
+  LAllocator := LAllocatorObj;
   Doc.Init(LAllocator);
   try
     Check(Doc.Parse(SV(StringOfChar('a', 200).QuotedString('"'))),
@@ -968,11 +969,11 @@ end;
 procedure TestInitAllocateOOMSetsError;
 var
   LAllocatorObj: TFailingAllocateAllocator;
-  LAllocator: IAllocator;
+  LAllocator: TMemAllocator;
   Doc: TJsonDocument;
 begin
   LAllocatorObj := TFailingAllocateAllocator.Create(1);
-  LAllocator := LAllocatorObj as IAllocator;
+  LAllocator := LAllocatorObj;
   Doc.Init(LAllocator);
   try
     Check(Doc.HasError, 'init allocate OOM sets error');

@@ -144,7 +144,7 @@ var
 begin
   LCaught := False;
   try
-    raise nextpas.core.mem.error.EOutOfMemory.Create(aeOutOfMemory, 'allocation contract');
+    raise nextpas.core.mem.error.EOutOfMemory.CreateMsg('allocation contract');
   except
     on E: nextpas.core.errors.EOutOfMemoryError do
       LCaught := E is nextpas.core.exception.ENextPasError;
@@ -158,7 +158,7 @@ var
 begin
   LSeen := '';
   try
-    raise nextpas.core.mem.error.EOutOfMemory.Create(aeOutOfMemory, 'allocation contract');
+    raise nextpas.core.mem.error.EOutOfMemory.CreateMsg('allocation contract');
   except
     on E: nextpas.core.mem.error.EAllocError do
       LSeen := 'alloc';
@@ -173,7 +173,7 @@ procedure TestMemOutOfMemoryKeepsConstructorCompatibility;
 var
   LErr: nextpas.core.mem.error.EOutOfMemory;
 begin
-  LErr := nextpas.core.mem.error.EOutOfMemory.Create(aeOutOfMemory, 'allocation contract');
+  LErr := nextpas.core.mem.error.EOutOfMemory.CreateMsg('allocation contract');
   try
     Check(LErr.Error = aeOutOfMemory,
       'mem EOutOfMemory must preserve the TAllocError detail code');

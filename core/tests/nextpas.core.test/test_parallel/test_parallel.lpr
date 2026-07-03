@@ -6,8 +6,8 @@ program test_parallel;
 {$modeswitch functionreferences}
 
 uses
-  cthreads,
-  SysUtils,
+  nextpas.core.thread.init,
+  nextpas.core.text.conv,
   nextpas.core.test;
 
 var
@@ -15,6 +15,17 @@ var
   GParallelRetryCount: Integer = 0;
   GConcurrentCount: Integer = 0;
   GMaxConcurrent: Integer = 0;
+  { v3.12: ShouldFail in parallel }
+  GShouldFailSuite: TTestSuite;
+  GShouldFailResult: TTestRunResult;
+  { Phase 9: ShortSkip in parallel }
+  GShortSkipSuite: TTestSuite;
+  GShortSkipResult: TTestRunResult;
+  { Phase 10: Verbose in parallel }
+  GVerbSuite: TTestSuite;
+  GVerbResult: TTestRunResult;
+  { Phase 10: Cleanup in parallel }
+  GCleanupCounter: Integer = 0;
 
 procedure TestParallelSimple;
 begin
@@ -185,6 +196,8 @@ procedure TestParallelSubtestSkip;
 var
   LSuite: TTestSuite;
   LResult: TTestRunResult;
+  I: Integer;
+  LFoundSubtestSkip: Boolean;
 begin
   { In parallel mode, subtests (TestSubtest) should get tsSkipped
     since they cannot run in parallel workers. }
@@ -200,6 +213,19 @@ begin
   CheckTrue(LResult.Passed >= 1, 'At least 1 normal test should pass');
   { Subtests in parallel mode get skipped — verify they don't crash the suite }
   CheckTrue(LResult.Failed = 0, 'No tests should fail');
+  { T-03: Verify skip message mentions parallel mode }
+  LFoundSubtestSkip := False;
+  for I := 0 to High(LResult.Results) do
+    if (LResult.Results[I].Status = tsSkipped) and
+       (LResult.Results[I].Name = 'subtest_entry') then
+    begin
+      LFoundSubtestSkip := True;
+      CheckTrue(
+        Pos('subtests not supported', LResult.Results[I].Message) > 0,
+        'Skip message should mention parallel mode');
+      Break;
+    end;
+  CheckTrue(LFoundSubtestSkip, 'subtest_entry should be skipped');
   PassTest('✓ Parallel subtest skip');
 end;
 
@@ -279,7 +305,7 @@ begin
   { Update max concurrent — InterlockedExchange if new max }
   if LCount > GMaxConcurrent then
     InterlockedExchange(GMaxConcurrent, LCount);
-  Sleep(50); { hold the slot briefly to ensure overlap detection }
+  SleepMs(50); { hold the slot briefly to ensure overlap detection }
   InterLockedDecrement(GConcurrentCount);
 end;
 
@@ -321,6 +347,7 @@ var
   LSuite: TTestSuite;
   LFailSuite, LSkipSuite: TTestSuite;
   LRunner: TTestRunner;
+  LResults: specialize TArray<TTestRunResult>;
 begin
   WriteLn('=== test_parallel ===');
   LSuite := TTestSuite.Create('Parallel Tests');
@@ -460,6 +487,169 @@ begin
   WriteLn;
   SectionHeader('v3.1: MaxParallelWorkers Batch Dispatch');
   TestMaxParallelWorkers;
+
+  { ── v3.12: ShouldFail in parallel mode ────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('v3.12: ShouldFail in Parallel');
+  begin
+    GShouldFailSuite := TTestSuite.Create('ShouldFailParallel');
+    { ShouldFail that raises = should pass in parallel mode }
+    GShouldFailSuite.ShouldFail('raises_ok', procedure begin
+      raise Exception.Create('expected error');
+    end);
+    { ShouldFail that does NOT raise = should fail in parallel mode }
+    GShouldFailSuite.ShouldFail('no_raise_fail', procedure begin
+      { intentionally empty }
+    end);
+    { Regular test alongside ShouldFail }
+    GShouldFailSuite.Test('regular_pass', @TestParallelPassA);
+    GShouldFailSuite.RunParallelWithResult(nil, GShouldFailResult);
+    if GShouldFailResult.Passed <> 2 then
+      FailTest('expected 2 passed (raises_ok + regular_pass), got ' +
+        IntToStr(GShouldFailResult.Passed));
+    if GShouldFailResult.Failed <> 1 then
+      FailTest('expected 1 failed (no_raise_fail), got ' +
+        IntToStr(GShouldFailResult.Failed));
+    PassTest('✓ ShouldFail in parallel mode');
+  end;
+
+  { ── Phase 9: ShortSkip in parallel mode ───────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 9: ShortSkip in Parallel');
+  begin
+    ResetDefaultConfig;
+    { Test 1: ShortSkip test runs normally when ShortMode is off }
+    GShortSkipSuite := TTestSuite.Create('ShortSkipOff');
+    GShortSkipSuite.Test('fast_pass', @TestParallelPassA);
+    GShortSkipSuite.ShortSkip('slow_skip', procedure begin
+      CheckTrue(True);
+    end);
+    GShortSkipSuite.Test('fast_pass2', @TestParallelPassA);
+    GShortSkipSuite.RunParallelWithResult(nil, GShortSkipResult);
+    if GShortSkipResult.Passed <> 3 then
+      FailTest('ShortSkip off: expected 3 passed, got ' +
+        IntToStr(GShortSkipResult.Passed));
+    if GShortSkipResult.Skipped <> 0 then
+      FailTest('ShortSkip off: expected 0 skipped, got ' +
+        IntToStr(GShortSkipResult.Skipped));
+    ResetDefaultConfig;
+    PassTest('ShortSkip off in parallel');
+    { Test 2: ShortSkip test is skipped in parallel when ShortMode is on }
+    GShortSkipSuite := TTestSuite.Create('ShortSkipOn');
+    GShortSkipSuite.Test('fast1', @TestParallelPassA);
+    GShortSkipSuite.ShortSkip('slow1', procedure begin
+      CheckTrue(True);
+    end);
+    GShortSkipSuite.Test('fast2', @TestParallelPassA);
+    SetDefaultShortMode(True);
+    GShortSkipSuite.Config := DefaultConfig;
+    GShortSkipSuite.RunParallelWithResult(nil, GShortSkipResult);
+    if GShortSkipResult.Passed <> 2 then
+      FailTest('ShortSkip on: expected 2 passed, got ' +
+        IntToStr(GShortSkipResult.Passed));
+    if GShortSkipResult.Skipped <> 1 then
+      FailTest('ShortSkip on: expected 1 skipped, got ' +
+        IntToStr(GShortSkipResult.Skipped));
+    ResetDefaultConfig;
+    PassTest('ShortSkip on in parallel');
+  end;
+
+  { ── Phase 10: Verbose mode in parallel ──────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 10: Verbose in Parallel');
+  begin
+    ResetDefaultConfig;
+    SetDefaultVerboseMode(True);
+    GVerbSuite := TTestSuite.Create('VerbParallel');
+    GVerbSuite.Test('vp1', @TestParallelPassA);
+    GVerbSuite.Test('vp2', @TestParallelPassA);
+    GVerbSuite.Test('vp3', @TestParallelPassA);
+    GVerbSuite.Config := DefaultConfig;
+    GVerbSuite.RunParallelWithResult(nil, GVerbResult);
+    if GVerbResult.Passed <> 3 then
+      FailTest('verbose parallel: expected 3 passed, got ' +
+        IntToStr(GVerbResult.Passed));
+    ResetDefaultConfig;
+    PassTest('Verbose in parallel');
+  end;
+
+  { ── Phase 10: Cleanup in parallel ───────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 10: Cleanup in Parallel');
+  begin
+    ResetDefaultConfig;
+    GCleanupCounter := 0;
+    GVerbSuite := TTestSuite.Create('CleanupParallel');
+    GVerbSuite.Cleanup(procedure begin InterLockedIncrement(GCleanupCounter); end);
+    GVerbSuite.Test('cp1', @TestParallelPassA);
+    GVerbSuite.Test('cp2', @TestParallelPassA);
+    GVerbSuite.Test('cp3', @TestParallelPassA);
+    GVerbSuite.RunParallelWithResult(nil, GVerbResult);
+    { Cleanup should run after each test: 3 tests = 3 cleanup calls }
+    if GCleanupCounter <> 3 then
+      FailTest('cleanup parallel: expected 3 cleanup calls, got ' +
+        IntToStr(GCleanupCounter));
+    if GVerbResult.Passed <> 3 then
+      FailTest('cleanup parallel: expected 3 passed, got ' +
+        IntToStr(GVerbResult.Passed));
+    ResetDefaultConfig;
+    PassTest('Cleanup in parallel');
+  end;
+
+  { ── Phase 10b: Cleanup exception in parallel ───────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 10b: Cleanup Exception in Parallel');
+  begin
+    ResetDefaultConfig;
+    GCleanupCounter := 0;
+    GVerbSuite := TTestSuite.Create('CleanupExceptParallel');
+    { First cleanup raises, second should still run }
+    GVerbSuite.Cleanup(procedure
+    begin
+      InterLockedIncrement(GCleanupCounter);
+      raise Exception.Create('cleanup boom');
+    end);
+    GVerbSuite.Cleanup(procedure
+    begin
+      InterLockedIncrement(GCleanupCounter);
+    end);
+    GVerbSuite.Test('ce1', @TestParallelPassA);
+    GVerbSuite.Test('ce2', @TestParallelPassA);
+    GVerbSuite.RunParallelWithResult(nil, GVerbResult);
+    { Both cleanups should run for each test: 2 tests * 2 cleanups = 4 }
+    if GCleanupCounter <> 4 then
+      FailTest('cleanup except parallel: expected 4 cleanup calls, got ' +
+        IntToStr(GCleanupCounter));
+    { Tests should still pass — cleanup exceptions don't fail the test }
+    if GVerbResult.Passed <> 2 then
+      FailTest('cleanup except parallel: expected 2 passed, got ' +
+        IntToStr(GVerbResult.Passed));
+    ResetDefaultConfig;
+    PassTest('Cleanup exception in parallel');
+  end;
+
+  { ── G1: RunAllParallelWithResult at runner level ───────────────── }
+  WriteLn;
+  SectionHeader('G1: RunAllParallelWithResult');
+  begin
+    ResetDefaultConfig;
+    GTestCounter := 0;
+    LRunner := TTestRunner.Create('ParResultRunner');
+    LSuite := TTestSuite.Create('ParResSuiteA');
+    LSuite.Test('pra1', @TestParallelPassA);
+    LSuite.Test('pra2', @TestParallelPassA);
+    LRunner.Add(LSuite);
+    LFailSuite := TTestSuite.Create('ParResSuiteB');
+    LFailSuite.Test('prb1', @TestParallelPassA);
+    LRunner.Add(LFailSuite);
+    LRunner.RunAllParallelWithResult(nil, LResults);
+    { Verify results are populated }
+    if Length(LResults) < 2 then
+      FailTest('RunAllParallelWithResult: expected >= 2 suite results, got ' +
+        IntToStr(Length(LResults)));
+    ResetDefaultConfig;
+    PassTest('RunAllParallelWithResult');
+  end;
 
   WriteLn;
   PassTest('ALL PARALLEL TESTS PASSED');

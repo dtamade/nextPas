@@ -110,6 +110,9 @@ type
    *}
   TSlabPool = class(TInterfacedObject, IMemoryPool, IAllocator)
   private
+    {$IFDEF DEBUG}
+    FOwnerThreadId: UInt64;  // DEBUG: 检测未受保护的并发访问 (CS-017)
+    {$ENDIF}
     FAllocator: IAllocator;
     FSegments: array of TFixedSlabPool;
     FActive: Integer;
@@ -169,9 +172,9 @@ type
     procedure IndexSegmentPages(aSegIdx: Integer);
   public
     {** 创建 Slab 池（默认配置）*}
-    constructor Create(ACapacity: SizeUInt; AAllocator: IAllocator = nil; aMinShift: SizeUInt = 3); overload;
+    constructor Create(aCapacity: SizeUInt; aAllocator: IAllocator = nil; aMinShift: SizeUInt = 3); overload;
     {** 创建 Slab 池（自定义配置）*}
-    constructor Create(ACapacity: SizeUInt; const AConfig: TSlabConfig; AAllocator: IAllocator = nil); overload;
+    constructor Create(aCapacity: SizeUInt; const aConfig: TSlabConfig; aAllocator: IAllocator = nil); overload;
     {** 销毁池并释放所有段和回退分配 *}
     destructor Destroy; override;
     // IPool
@@ -263,6 +266,9 @@ function CreateDefaultSlabConfig: TSlabConfig;
 {** 创建启用了页合并的 Slab 配置 *}
 function CreateSlabConfigWithPageMerging: TSlabConfig;
 implementation
+
+uses
+  nextpas.core.platform.thread;  // platform_thread_id for DEBUG thread-safety check (CS-017)
 
 const
   HASH_MIN_CAP = 64;
@@ -901,13 +907,13 @@ begin
   end;
 end;
 
-constructor TSlabPool.Create(ACapacity: SizeUInt; AAllocator: IAllocator; aMinShift: SizeUInt);
+constructor TSlabPool.Create(aCapacity: SizeUInt; aAllocator: IAllocator; aMinShift: SizeUInt);
 var
   LSegment: TFixedSlabPool;
 begin
   inherited Create;
-  if AAllocator=nil then FAllocator:=nextpas.core.mem.allocator.GetRtlAllocator else FAllocator:=AAllocator;
-  if ACapacity=0 then ACapacity:=64*1024;
+  if aAllocator=nil then FAllocator:=nextpas.core.mem.allocator.GetRtlAllocator else FAllocator:=aAllocator;
+  if aCapacity=0 then aCapacity:=64*1024;
   if aMinShift=0 then aMinShift:=3;
 
   if FConfig.MinShift = 0 then
@@ -919,14 +925,17 @@ begin
     FConfig.PageSize := 4096;
 
 
-  FInitialCapacity:=ACapacity; FMinShift:=aMinShift; FActive:=0;
+  FInitialCapacity:=aCapacity; FMinShift:=aMinShift; FActive:=0;
+  {$IFDEF DEBUG}
+  FOwnerThreadId := platform_thread_id;  // CS-017: 记录创建线程
+  {$ENDIF}
   ZeroMem(@FPerf, SizeOf(FPerf));
   SetLength(FSegments,1);
-  LSegment:=TFixedSlabPool.Create(ACapacity,FAllocator,aMinShift);
+  LSegment:=TFixedSlabPool.Create(aCapacity,FAllocator,aMinShift);
   FSegments[0]:=LSegment;
   FAvailCount := 0;  // 显式初始化
   FbMapInit(8);
-  PageMapInit( (ACapacity shr LSegment.PageShift) * 2 );
+  PageMapInit( (aCapacity shr LSegment.PageShift) * 2 );
   IndexSegmentPages(0);
 end;
 
@@ -934,17 +943,15 @@ function TSlabPool.Traits: TAllocatorTraits;
 begin
   Result.ZeroInitialized := True;   // AllocMem 保证零填充
   Result.ThreadSafe      := False;  // 当前未加锁
-  Result.HasMemSize      := True;   // 通过 ChunkSizeOf/MemSizeOf
-  Result.SupportsAligned := True;   // AllocAligned 通过 fallback 路径实现
 end;
 
-constructor TSlabPool.Create(ACapacity: SizeUInt; const AConfig: TSlabConfig; AAllocator: IAllocator);
+constructor TSlabPool.Create(aCapacity: SizeUInt; const aConfig: TSlabConfig; aAllocator: IAllocator);
 begin
-  // 忽略 AConfig.EnablePageMerging（兼容字段）
+  // 忽略 aConfig.EnablePageMerging（兼容字段）
   // MinShift 和 MaxAllocSize 采纳
-  FConfig := AConfig;
+  FConfig := aConfig;
   if FConfig.MinShift=0 then FConfig.MinShift := 3;
-  Create(ACapacity, AAllocator, FConfig.MinShift);
+  Create(aCapacity, aAllocator, FConfig.MinShift);
 end;
 
 function TSlabPool.Alloc(ASize: SizeUInt): Pointer; inline;
@@ -1071,6 +1078,11 @@ var
   LNewSeg: TFixedSlabPool;
   LPerfEnabled: Boolean;
 begin
+  {$IFDEF DEBUG}
+  if (FOwnerThreadId <> 0) and (platform_thread_id <> FOwnerThreadId) then
+    raise EAllocError.Create(aeInvalidLayout,
+      'TSlabPool.GetMem: thread-safety violation — use TSlabPoolConcurrent for multi-threaded access');
+  {$ENDIF}
   if ASize=0 then Exit(nil);
   LPerfEnabled := FConfig.EnablePerfMonitoring;
   if LPerfEnabled then
@@ -1124,12 +1136,13 @@ begin
   Result := GetMem(ASize);
   if Result <> nil then
   begin
-    // 清零实际分配块大小（而非仅请求大小），防止旧数据泄露 (CS-006)
+    { Zero the full allocated block to prevent stale data leaks.
+      MemSizeOf returns actual block size (>= ASize). Fallback to ASize
+      only when MemSizeOf is unavailable (should not happen for slab). }
     LActualSize := MemSizeOf(Result);
-    if LActualSize > 0 then
-      FillChar(Result^, LActualSize, 0)
-    else
-      FillChar(Result^, ASize, 0); // fallback: MemSizeOf 不可用时清零请求大小
+    if LActualSize < ASize then
+      LActualSize := ASize;
+    FillChar(Result^, LActualSize, 0);
   end;
 end;
 
@@ -1183,6 +1196,11 @@ var
   LPerfEnabled: Boolean;
 begin
   if ADst=nil then Exit;
+  {$IFDEF DEBUG}
+  if (FOwnerThreadId <> 0) and (platform_thread_id <> FOwnerThreadId) then
+    raise EAllocError.Create(aeInvalidLayout,
+      'TSlabPool.FreeMem: thread-safety violation — use TSlabPoolConcurrent for multi-threaded access');
+  {$ENDIF}
   LPerfEnabled := FConfig.EnablePerfMonitoring;
   if LPerfEnabled then
     Inc(FPerf.FreeCalls);

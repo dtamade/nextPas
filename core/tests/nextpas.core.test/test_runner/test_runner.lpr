@@ -6,8 +6,8 @@ program test_runner;
 {$modeswitch functionreferences}
 
 uses
-  cthreads,
-  SysUtils,
+  nextpas.core.thread.init,
+  nextpas.core.text.conv,
   nextpas.core.test,
   { 白盒测试：直接验证 runner 内部 helper，而不是仅通过 facade 间接覆盖。 }
   nextpas.core.test.runner,
@@ -257,6 +257,72 @@ var
   { R6-68: Strong exact-value assertions }
   LExactSuite68: TTestSuite;
   LExactRunner68: TTestRunner;
+  { Phase 8: shuffle determinism }
+  LOrder1: specialize TArray<string>;
+  LIdx: Integer;
+  { Phase 8: TableTest failure message }
+  LTableCases: specialize TArray<TTestCase>;
+  { Phase 9: short mode }
+  LShortSuite: TTestSuite;
+  LShortResult: TTestRunResult;
+  LShortConfig: TTestConfig;
+  { Phase 9: progress }
+  LProgressSuite: TTestSuite;
+  LProgressResult: TTestRunResult;
+  LProgressConfig: TTestConfig;
+  { Phase 9: max failures }
+  LMaxFailSuite: TTestSuite;
+  LMaxFailResult: TTestRunResult;
+  LMaxFailConfig: TTestConfig;
+  LMaxFailRunner: TTestRunner;
+  LMaxFailRunnerResults: specialize TArray<TTestRunResult>;
+  { Phase 9: JSON output }
+  LJsonSuite: TTestSuite;
+  LJsonResult: TTestRunResult;
+  LJsonConfig: TTestConfig;
+  LJsonSink: TBufferSink;
+  { Phase 10: verbose mode }
+  LVerbSuite: TTestSuite;
+  LVerbResult: TTestRunResult;
+  LVerbConfig: TTestConfig;
+  LVerbSink: TBufferSink;
+  LVerbOut: string;
+  { Phase 11: run timeout }
+  LTimeoutRunSuite: TTestSuite;
+  LTimeoutRunResult: TTestRunResult;
+  LTimeoutRunConfig: TTestConfig;
+  LTimeoutRunSink: TBufferSink;
+  LTimeoutRunOut: string;
+  { Phase 12: cleanup }
+  GCleanupCalled: Integer;
+  { Phase 13: benchmark }
+  LBenchSuite: TTestSuite;
+  LBenchResults: TBenchResults;
+  LBenchConfig: TTestConfig;
+  { G1: RunAllBenchmarks }
+  LBenchRunner: TTestRunner;
+  LBenchRunnerResults: specialize TArray<TBenchResults>;
+  { G1: AllPassed auto-run }
+  LAutoRunSuite: TTestSuite;
+  LAutoRunRunner: TTestRunner;
+  { T-07: timeout exceeded }
+  LFoundTimeout: Boolean;
+  LI: Integer;
+  { T-06: benchmark N scaling edge cases }
+  LBenchScalingSuite: TTestSuite;
+  LBenchScalingResults: TBenchResults;
+  LBenchScalingConfig: TTestConfig;
+  LBenchScalingSink: TBufferSink;
+  { T-07: suite-level retry }
+  LRetrySuite: TTestSuite;
+  LRetryResult: TTestRunResult;
+  LRetryConfig: TTestConfig;
+  LRetryAttempts: Integer;
+  { T-08: CleanupTableAllocations idempotent }
+  LIdempotentSuite: TTestSuite;
+  LIdempotentResult: TTestRunResult;
+  { E-03: FormatDuration regression }
+  LFormatMs: string;
 begin
   WriteLn('=== test_runner ===');
   { Suite 1: lifecycle }
@@ -631,7 +697,7 @@ begin
   begin
     LResultSuite := TTestSuite.Create('Timeout Trigger');
     LTimeoutSleepMs := 500;
-    LResultSuite.Test('slow closure', procedure begin Sleep(LTimeoutSleepMs); end);
+    LResultSuite.Test('slow closure', procedure begin SleepMs(LTimeoutSleepMs); end);
     SetTestTimeout(10); { 10ms — much less than the 500ms Sleep }
     LResultSuite.RunWithResult(LTimeoutResult);
     SetTestTimeout(0);
@@ -1057,9 +1123,1158 @@ begin
       FailTest('FormatDuration(1234) = ' + FormatDuration(1234));
     if FormatDuration(500) <> '500ms' then
       FailTest('FormatDuration(500) = ' + FormatDuration(500));
+    { Additional edge cases }
+    if FormatDuration(1200) <> '1.2s' then
+      FailTest('FormatDuration(1200) = ' + FormatDuration(1200));
+    if FormatDuration(10500) <> '10.5s' then
+      FailTest('FormatDuration(10500) = ' + FormatDuration(10500));
+    if FormatDuration(59999) <> '59.99s' then
+      FailTest('FormatDuration(59999) = ' + FormatDuration(59999));
+    if FormatDuration(1) <> '1ms' then
+      FailTest('FormatDuration(1) = ' + FormatDuration(1));
+    if FormatDuration(1100) <> '1.1s' then
+      FailTest('FormatDuration(1100) = ' + FormatDuration(1100));
+    if FormatDuration(60000) <> '60s' then
+      FailTest('FormatDuration(60000) = ' + FormatDuration(60000));
     PassTest('FormatDuration formatting');
   end;
 
+  { ── Shuffle (deterministic) ───────────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 7: Shuffle entries');
+  begin
+    LResultSuite := TTestSuite.Create('ShuffleTest');
+    LResultSuite.Test('alpha', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('beta', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('gamma', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('delta', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('epsilon', procedure begin CheckTrue(True); end);
+    { Run with seed=42 and verify order changed }
+    LResultSuite.Config.ShuffleSeed := 42;
+    LResultSuite.RunWithResult(LRegularLogResult);
+    if LRegularLogResult.Passed <> 5 then
+      FailTest('expected 5 passed after shuffle, got ' + IntToStr(LRegularLogResult.Passed));
+    { Verify order actually changed — check at least one test moved }
+    if (LRegularLogResult.Results[0].Name = 'alpha') and
+       (LRegularLogResult.Results[1].Name = 'beta') and
+       (LRegularLogResult.Results[2].Name = 'gamma') and
+       (LRegularLogResult.Results[3].Name = 'delta') and
+       (LRegularLogResult.Results[4].Name = 'epsilon') then
+      FailTest('shuffle seed=42 did not change order');
+    PassTest('Shuffle deterministic with seed');
+  end;
+
+  { ── FailFast ────────────────────────────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 7: FailFast');
+  begin
+    LResultSuite := TTestSuite.Create('FailFastSuite');
+    LResultSuite.Config.FailFast := True;
+    LRunCount := 0;
+    LResultSuite.Test('pass1', procedure begin
+      InterLockedIncrement(LRunCount);
+      CheckTrue(True);
+    end);
+    LResultSuite.Test('fail1', procedure begin
+      InterLockedIncrement(LRunCount);
+      Fail('expected failure');
+    end);
+    LResultSuite.Test('pass2', procedure begin
+      InterLockedIncrement(LRunCount);
+      CheckTrue(True);
+    end);
+    if LResultSuite.RunWithResult(LRegularLogResult) then
+      FailTest('FailFast suite should fail');
+    { pass1 runs, fail1 runs (and fails → break), pass2 should NOT run }
+    if LRunCount <> 2 then
+      FailTest('FailFast should stop after failure, ran ' + IntToStr(LRunCount) + ' tests');
+    PassTest('FailFast stops after first failure');
+  end;
+
+  { ── ListMode ────────────────────────────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 7: ListMode');
+  begin
+    LResultSuite := TTestSuite.Create('ListSuite');
+    LResultSuite.Test('testA', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('testB', procedure begin CheckTrue(True); end);
+    LResultSuite.Skip('testC', 'reason');
+    LResultSuite.ShouldFail('testD', procedure begin
+      raise Exception.Create('expected');
+    end);
+    { List mode is handled at runner level, but we can test the concept:
+      the suite should still have all 4 entries registered }
+    if Length(LResultSuite.Tests) <> 4 then
+      FailTest('expected 4 entries, got ' + IntToStr(Length(LResultSuite.Tests)));
+    CheckTrue(LResultSuite.Tests[2].Kind = ekSkipped, 'testC should be ekSkipped');
+    CheckTrue(LResultSuite.Tests[3].Kind = ekShouldFail, 'testD should be ekShouldFail');
+    PassTest('ListMode entries registered correctly');
+  end;
+
+  { ── ShouldFail with closure ────────────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 8: ShouldFail with closure');
+  begin
+    LResultSuite := TTestSuite.Create('ShouldFailClosure');
+    { ShouldFail with closure that raises = pass }
+    LResultSuite.ShouldFail('closure raises', procedure begin
+      raise EConvertError.Create('closure error');
+    end);
+    { ShouldFail with closure that does not raise = fail }
+    LResultSuite.ShouldFail('closure no raise', procedure begin
+      { intentionally empty }
+    end);
+    if LResultSuite.RunWithResult(LRegularLogResult) then
+      FailTest('ShouldFailClosure suite should fail');
+    if LRegularLogResult.Passed <> 1 then
+      FailTest('expected 1 passed (closure raises), got ' + IntToStr(LRegularLogResult.Passed));
+    if LRegularLogResult.Failed <> 1 then
+      FailTest('expected 1 failed (closure no raise), got ' + IntToStr(LRegularLogResult.Failed));
+    PassTest('ShouldFail with closure');
+  end;
+
+  { ── ShouldFail with Skip inside ────────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 8: ShouldFail with Skip inside');
+  begin
+    LResultSuite := TTestSuite.Create('ShouldFailSkip');
+    LResultSuite.ShouldFail('skip inside', procedure begin
+      Skip('skipped inside should-fail');
+    end);
+    LResultSuite.ShouldFail('raise inside', procedure begin
+      raise Exception.Create('expected');
+    end);
+    LResultSuite.RunWithResult(LRegularLogResult);
+    { skip inside ShouldFail = skipped (not passed, not failed) }
+    if LRegularLogResult.Skipped <> 1 then
+      FailTest('expected 1 skipped, got ' + IntToStr(LRegularLogResult.Skipped));
+    if LRegularLogResult.Passed <> 1 then
+      FailTest('expected 1 passed (raise), got ' + IntToStr(LRegularLogResult.Passed));
+    if LRegularLogResult.Failed <> 0 then
+      FailTest('expected 0 failed, got ' + IntToStr(LRegularLogResult.Failed));
+    PassTest('ShouldFail with Skip inside');
+  end;
+
+  { ── Shuffle determinism: same seed = same order ────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 8: Shuffle determinism');
+  begin
+    { Two runs with same seed must produce identical order }
+    LResultSuite := TTestSuite.Create('ShuffleDeterminism');
+    LResultSuite.Test('a', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('b', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('c', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('d', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('e', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('f', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('g', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('h', procedure begin CheckTrue(True); end);
+
+    LResultSuite.Config.ShuffleSeed := 12345;
+    LResultSuite.RunWithResult(LRegularLogResult);
+    { Capture order from first run }
+    SetLength(LOrder1, Length(LRegularLogResult.Results));
+    for LIdx := 0 to High(LRegularLogResult.Results) do
+      LOrder1[LIdx] := LRegularLogResult.Results[LIdx].Name;
+
+    { Reset and run again with same seed — need fresh suite since entries are shuffled in-place }
+    LResultSuite := TTestSuite.Create('ShuffleDeterminism2');
+    LResultSuite.Test('a', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('b', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('c', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('d', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('e', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('f', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('g', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('h', procedure begin CheckTrue(True); end);
+    LResultSuite.Config.ShuffleSeed := 12345;
+    LResultSuite.RunWithResult(LRegularLogResult);
+
+    for LIdx := 0 to High(LOrder1) do
+    begin
+      if LOrder1[LIdx] <> LRegularLogResult.Results[LIdx].Name then
+        FailTest('order mismatch at index ' + IntToStr(LIdx) +
+          ': ' + LOrder1[LIdx] + ' vs ' + LRegularLogResult.Results[LIdx].Name);
+    end;
+    PassTest('Shuffle determinism: same seed = same order');
+  end;
+
+  { ── Shuffle boundary: seed=1 (minimum valid) ──────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 8: Shuffle boundary seeds');
+  begin
+    LResultSuite := TTestSuite.Create('ShuffleBoundary');
+    LResultSuite.Test('x1', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('x2', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('x3', procedure begin CheckTrue(True); end);
+    { seed=1 should not crash }
+    LResultSuite.Config.ShuffleSeed := 1;
+    LResultSuite.RunWithResult(LRegularLogResult);
+    if LRegularLogResult.Passed <> 3 then
+      FailTest('seed=1: expected 3 passed, got ' + IntToStr(LRegularLogResult.Passed));
+    { seed=MaxInt should not crash }
+    LResultSuite := TTestSuite.Create('ShuffleBoundary2');
+    LResultSuite.Test('y1', procedure begin CheckTrue(True); end);
+    LResultSuite.Test('y2', procedure begin CheckTrue(True); end);
+    LResultSuite.Config.ShuffleSeed := MaxInt;
+    LResultSuite.RunWithResult(LRegularLogResult);
+    if LRegularLogResult.Passed <> 2 then
+      FailTest('seed=MaxInt: expected 2 passed, got ' + IntToStr(LRegularLogResult.Passed));
+    PassTest('Shuffle boundary seeds');
+  end;
+
+  { ── TableTest failure preserves message (audit P0-2) ───────────────────── }
+  WriteLn;
+  SectionHeader('Phase 8: TableTest failure message');
+  begin
+    LResultSuite := TTestSuite.Create('TableTestMsg');
+    LTableCases := nil;
+    SetLength(LTableCases, 2);
+    LTableCases[0].Name := 'add'; LTableCases[0].Data := '1+1=2';
+    LTableCases[1].Name := 'fail_case'; LTableCases[1].Data := 'boom';
+    LResultSuite.TestTable('math', LTableCases,
+      procedure(const AC: TTestCase)
+      begin
+        if AC.Name = 'fail_case' then
+          CheckTrue(False, 'table fail message');
+      end);
+    LResultSuite.RunWithResult(LRegularLogResult);
+    if LRegularLogResult.Failed <> 1 then
+      FailTest('expected 1 failed table case, got ' + IntToStr(LRegularLogResult.Failed));
+    { Verify failure message is NOT empty (the bug was: LLastFailMsg stayed empty) }
+    if LRegularLogResult.Results[1].Message = '' then
+      FailTest('table test failure message should not be empty');
+    if Pos('table fail message', LRegularLogResult.Results[1].Message) = 0 then
+      FailTest('table test failure message should contain assertion text, got: ' +
+        LRegularLogResult.Results[1].Message);
+    PassTest('TableTest failure preserves message');
+  end;
+
+  { ── Phase 9: ShortSkip ───────────────────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 9: ShortSkip');
+  begin
+    { Test 1: ShortSkip test runs normally when ShortMode is off }
+    LShortSuite := TTestSuite.Create('ShortSkipNormal');
+    LShortSuite.Test('normal_pass', procedure begin CheckTrue(True); end);
+    LShortSuite.ShortSkip('slow_test', procedure begin CheckTrue(True); end);
+    ResetDefaultConfig;
+    LShortSuite.RunWithResult(LShortResult);
+    if LShortResult.Passed <> 2 then
+      FailTest('ShortSkip off: expected 2 passed, got ' +
+        IntToStr(LShortResult.Passed));
+    if LShortResult.Skipped <> 0 then
+      FailTest('ShortSkip off: expected 0 skipped, got ' +
+        IntToStr(LShortResult.Skipped));
+    { Test 2: ShortSkip test is skipped when ShortMode is on }
+    LShortSuite := TTestSuite.Create('ShortSkipActive');
+    LShortSuite.Test('fast_pass', procedure begin CheckTrue(True); end);
+    LShortSuite.ShortSkip('slow_test', procedure begin CheckTrue(True); end);
+    LShortSuite.ShortSkip('another_slow', procedure begin CheckTrue(True); end);
+    ResetDefaultConfig;
+    SetDefaultShortMode(True);
+    LShortConfig := DefaultConfig;
+    LShortSuite.Config := LShortConfig;
+    LShortSuite.RunWithResult(LShortResult);
+    if LShortResult.Passed <> 1 then
+      FailTest('ShortSkip on: expected 1 passed, got ' +
+        IntToStr(LShortResult.Passed));
+    if LShortResult.Skipped <> 2 then
+      FailTest('ShortSkip on: expected 2 skipped, got ' +
+        IntToStr(LShortResult.Skipped));
+    ResetDefaultConfig;
+    PassTest('ShortSkip');
+  end;
+
+  { ── Phase 9: Progress counter ────────────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 9: Progress counter');
+  begin
+    ResetDefaultConfig;
+    SetDefaultShowProgress(True);
+    LProgressConfig := DefaultConfig;
+    { Test 1: Progress mode runs normally and reports correct counts }
+    LProgressSuite := TTestSuite.Create('ProgressTest');
+    LProgressSuite.Test('p1', procedure begin CheckTrue(True); end);
+    LProgressSuite.Test('p2', procedure begin CheckTrue(True); end);
+    LProgressSuite.Test('p3', procedure begin CheckTrue(True); end);
+    LProgressSuite.Config := LProgressConfig;
+    LProgressSuite.RunWithResult(LProgressResult);
+    if LProgressResult.Passed <> 3 then
+      FailTest('progress: expected 3 passed, got ' +
+        IntToStr(LProgressResult.Passed));
+    if LProgressResult.Failed <> 0 then
+      FailTest('progress: expected 0 failed, got ' +
+        IntToStr(LProgressResult.Failed));
+    ResetDefaultConfig;
+    PassTest('Progress counter');
+  end;
+
+  { ── Phase 9: MaxFailures ─────────────────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 9: MaxFailures');
+  begin
+    ResetDefaultConfig;
+    { Test 1: Suite-level max failures }
+    LMaxFailSuite := TTestSuite.Create('MaxFailSuite');
+    LMaxFailSuite.Test('fail1', procedure begin CheckTrue(False, 'fail1'); end);
+    LMaxFailSuite.Test('fail2', procedure begin CheckTrue(False, 'fail2'); end);
+    LMaxFailSuite.Test('fail3', procedure begin CheckTrue(False, 'fail3'); end);
+    LMaxFailSuite.Test('pass1', procedure begin CheckTrue(True); end);
+    SetDefaultMaxFailures(2);
+    LMaxFailConfig := DefaultConfig;
+    LMaxFailSuite.Config := LMaxFailConfig;
+    LMaxFailSuite.RunWithResult(LMaxFailResult);
+    { Should stop after 2 failures, fail3 and pass1 not run }
+    if LMaxFailResult.Failed <> 2 then
+      FailTest('MaxFailures: expected 2 failed, got ' +
+        IntToStr(LMaxFailResult.Failed));
+    if LMaxFailResult.Passed <> 0 then
+      FailTest('MaxFailures: expected 0 passed (pass1 not reached), got ' +
+        IntToStr(LMaxFailResult.Passed));
+    ResetDefaultConfig;
+    { Test 2: Cross-suite max failures via TTestRunner (separate suite) }
+    LMaxFailSuite := TTestSuite.Create('MaxFailRunner2');
+    LMaxFailSuite.Test('fail_a', procedure begin CheckTrue(False, 'fail_a'); end);
+    LMaxFailSuite.Test('fail_b', procedure begin CheckTrue(False, 'fail_b'); end);
+    LMaxFailSuite.Test('pass_a', procedure begin CheckTrue(True); end);
+    SetDefaultMaxFailures(1);
+    LMaxFailRunner := TTestRunner.Create('MaxFailRunner');
+    LMaxFailRunner.Add(LMaxFailSuite);
+    LMaxFailRunner.RunAllWithResult(LMaxFailRunnerResults);
+    { Runner should stop after 1 total failure across suites }
+    if LMaxFailRunner.TotalFail < 1 then
+      FailTest('MaxFailures runner: expected >= 1 total fail, got ' +
+        IntToStr(LMaxFailRunner.TotalFail));
+    ResetDefaultConfig;
+    PassTest('MaxFailures');
+  end;
+
+  { ── Phase 9: JSON output ─────────────────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 9: JSON output');
+  begin
+    ResetDefaultConfig;
+    { Test JSON report generation via programmatic API }
+    LJsonSuite := TTestSuite.Create('JsonTest');
+    LJsonSuite.Test('jpass', procedure begin CheckTrue(True); end);
+    LJsonSuite.Skip('jskip', 'planned');
+    LJsonSuite.RunWithResult(LJsonResult);
+    { Verify JSON report function works correctly }
+    LJsonSink := TBufferSink.Create;
+    try
+      LJsonSink.Write(JSONReport(specialize TArray<TTestRunResult>.Create(LJsonResult), 'JsonTest'));
+      if Pos('"totalPassed"', LJsonSink.GetOutput) = 0 then
+        FailTest('json: expected "totalPassed" in output');
+      if Pos('"totalSkipped"', LJsonSink.GetOutput) = 0 then
+        FailTest('json: expected "totalSkipped" in output');
+      if Pos('"suites"', LJsonSink.GetOutput) = 0 then
+        FailTest('json: expected "suites" in output');
+      if Pos('"name": "JsonTest"', LJsonSink.GetOutput) = 0 then
+        FailTest('json: expected suite name "JsonTest" in output');
+    finally
+      LJsonSink.Free;
+    end;
+    ResetDefaultConfig;
+    PassTest('JSON output');
+  end;
+
+  { ── Phase 10: Verbose mode ───────────────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 10: Verbose mode');
+  begin
+    ResetDefaultConfig;
+    LVerbSuite := TTestSuite.Create('VerbTest');
+    LVerbSuite.Test('vpass', procedure begin CheckTrue(True); end);
+    LVerbSuite.Test('vfail', procedure begin CheckTrue(False, 'intentional'); end);
+    LVerbSuite.Skip('vskip', 'planned');
+    LVerbConfig := MakeBufferConfig(LVerbSink);
+    LVerbConfig.VerboseMode := True;
+    LVerbSuite.Config := LVerbConfig;
+    LVerbSuite.RunWithResult(LVerbResult);
+    LVerbOut := LVerbSink.GetOutput;
+    LVerbSink := nil;  { release via refcount, don't .Free }
+    { Verify verbose output contains [PASS], [FAIL], [SKIP] }
+    if Pos('[PASS]', LVerbOut) = 0 then
+      FailTest('verbose: expected [PASS] in output');
+    if Pos('[FAIL]', LVerbOut) = 0 then
+      FailTest('verbose: expected [FAIL] in output');
+    if Pos('[SKIP]', LVerbOut) = 0 then
+      FailTest('verbose: expected [SKIP] in output');
+    { Verify timing is shown (parentheses with ms/s) }
+    if Pos('(', LVerbOut) = 0 then
+      FailTest('verbose: expected timing in output');
+    { Verify counts }
+    if LVerbResult.Passed <> 1 then
+      FailTest('verbose: expected 1 passed, got ' + IntToStr(LVerbResult.Passed));
+    if LVerbResult.Failed <> 1 then
+      FailTest('verbose: expected 1 failed, got ' + IntToStr(LVerbResult.Failed));
+    if LVerbResult.Skipped <> 1 then
+      FailTest('verbose: expected 1 skipped, got ' + IntToStr(LVerbResult.Skipped));
+    ResetDefaultConfig;
+    PassTest('Verbose mode');
+  end;
+
+  { ── Phase 11: Run timeout ────────────────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 11: Run timeout');
+  begin
+    ResetDefaultConfig;
+    LTimeoutRunSuite := TTestSuite.Create('TimeoutRunTest');
+    LTimeoutRunSuite.Test('fast1', procedure begin CheckTrue(True); end);
+    LTimeoutRunSuite.Test('fast2', procedure begin CheckTrue(True); end);
+    { Set a 1-second run timeout — should be enough for fast tests }
+    LTimeoutRunConfig := MakeBufferConfig(LTimeoutRunSink);
+    LTimeoutRunConfig.RunTimeoutSec := 10;
+    LTimeoutRunSuite.Config := LTimeoutRunConfig;
+    LTimeoutRunSuite.RunWithResult(LTimeoutRunResult);
+    LTimeoutRunOut := LTimeoutRunSink.GetOutput;
+    LTimeoutRunSink := nil;  { release via refcount }
+    { Fast tests should pass within 10s timeout }
+    if not LTimeoutRunResult.AllPassed then
+      FailTest('run timeout: fast tests should pass within 10s');
+    if LTimeoutRunResult.Passed <> 2 then
+      FailTest('run timeout: expected 2 passed, got ' +
+        IntToStr(LTimeoutRunResult.Passed));
+    ResetDefaultConfig;
+    PassTest('Run timeout');
+  end;
+
+  { ── Phase 12: Cleanup handlers ───────────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 12: Cleanup handlers');
+  begin
+    ResetDefaultConfig;
+    GCleanupCalled := 0;
+    LVerbSuite := TTestSuite.Create('CleanupTest');
+    { Register cleanup handler via procedure-based API }
+    LVerbSuite.Cleanup(procedure begin Inc(GCleanupCalled); end);
+    LVerbSuite.Test('clean1', procedure begin CheckTrue(True); end);
+    LVerbSuite.Test('clean2', procedure begin CheckTrue(True); end);
+    LVerbSuite.RunWithResult(LVerbResult);
+    { Cleanup runs after each test: 2 tests = 2 cleanup calls }
+    if GCleanupCalled <> 2 then
+      FailTest('cleanup: expected 2 cleanup calls, got ' +
+        IntToStr(GCleanupCalled));
+    if not LVerbResult.AllPassed then
+      FailTest('cleanup: all tests should pass');
+    { Test cleanup runs even on failure }
+    GCleanupCalled := 0;
+    LVerbSuite := TTestSuite.Create('CleanupFailTest');
+    LVerbSuite.Cleanup(procedure begin Inc(GCleanupCalled); end);
+    LVerbSuite.Test('willfail', procedure begin CheckTrue(False, 'intentional'); end);
+    LVerbSuite.Test('willpass', procedure begin CheckTrue(True); end);
+    LVerbSuite.RunWithResult(LVerbResult);
+    { Cleanup should still run for both tests (even the failed one) }
+    if GCleanupCalled <> 2 then
+      FailTest('cleanup on fail: expected 2 cleanup calls, got ' +
+        IntToStr(GCleanupCalled));
+    if LVerbResult.Failed <> 1 then
+      FailTest('cleanup on fail: expected 1 failure');
+    if LVerbResult.Passed <> 1 then
+      FailTest('cleanup on fail: expected 1 pass');
+    ResetDefaultConfig;
+    PassTest('Cleanup handlers');
+  end;
+
+  { ── Phase 13: Benchmark ──────────────────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 13: Benchmark');
+  begin
+    ResetDefaultConfig;
+    LBenchSuite := TTestSuite.Create('BenchTest');
+    { Register a simple benchmark }
+    LBenchSuite.Bench('Addition', procedure(BC: PBenchContext)
+    var
+      I: Integer;
+      LSum: Int64;
+    begin
+      LSum := 0;
+      for I := 1 to BC^.N do
+        LSum := LSum + I;
+      { Prevent optimizer from eliminating the loop }
+      if LSum < 0 then WriteLn('impossible');
+    end);
+    LBenchSuite.Bench('StringConcat', procedure(BC: PBenchContext)
+    var
+      I: Integer;
+      S: string;
+    begin
+      S := '';
+      for I := 1 to BC^.N do
+        S := S + 'x';
+      if Length(S) < 0 then WriteLn('impossible');
+    end);
+    LBenchConfig := DefaultConfig;
+    LBenchConfig.BenchEnabled := True;
+    LBenchConfig.BenchTimeMs := 100; { short time for fast test }
+    LBenchSuite.Config := LBenchConfig;
+    LBenchSuite.RunBenchmarks(LBenchResults);
+    { Verify benchmark results }
+    if Length(LBenchResults) <> 2 then
+      FailTest('bench: expected 2 results, got ' +
+        IntToStr(Length(LBenchResults)));
+    if LBenchResults[0].Name <> 'Addition' then
+      FailTest('bench: expected name "Addition", got "' +
+        LBenchResults[0].Name + '"');
+    if LBenchResults[0].N <= 0 then
+      FailTest('bench: expected N > 0');
+    { NsPerOp may be 0 for sub-ms operations (ms granularity) — that's OK }
+    if LBenchResults[1].Name <> 'StringConcat' then
+      FailTest('bench: expected name "StringConcat", got "' +
+        LBenchResults[1].Name + '"');
+    if LBenchResults[1].N <= 0 then
+      FailTest('bench: expected N > 0');
+    { Verify NsPerOp is populated (may be 0 for sub-ms, but TotalNs should be > 0) }
+    if LBenchResults[0].TotalNs <= 0 then
+      FailTest('bench: expected TotalNs > 0');
+    ResetDefaultConfig;
+    PassTest('Benchmark');
+  end;
+
+  { ── Phase 13b: Cleanup LIFO order ──────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 13b: Cleanup LIFO order');
+  begin
+    ResetDefaultConfig;
+    GCleanupCalled := 0;
+    LVerbSuite := TTestSuite.Create('CleanupLifoTest');
+    { Register 3 cleanup handlers — should run in LIFO order (3, 2, 1) }
+    LVerbSuite.Cleanup(procedure
+    begin
+      Inc(GCleanupCalled);
+      if GCleanupCalled <> 3 then
+        FailTest('LIFO: first registered should be called 3rd (LIFO), got ' +
+          IntToStr(GCleanupCalled));
+    end);
+    LVerbSuite.Cleanup(procedure
+    begin
+      Inc(GCleanupCalled);
+      if GCleanupCalled <> 2 then
+        FailTest('LIFO: second registered should be called 2nd, got ' +
+          IntToStr(GCleanupCalled));
+    end);
+    LVerbSuite.Cleanup(procedure
+    begin
+      Inc(GCleanupCalled);
+      if GCleanupCalled <> 1 then
+        FailTest('LIFO: third registered should be called 1st (LIFO), got ' +
+          IntToStr(GCleanupCalled));
+    end);
+    LVerbSuite.Test('dummy', procedure begin CheckTrue(True); end);
+    LVerbSuite.RunWithResult(LVerbResult);
+    { 3 cleanups ran for 1 test }
+    if GCleanupCalled <> 3 then
+      FailTest('LIFO: expected 3 cleanup calls, got ' +
+        IntToStr(GCleanupCalled));
+    if not LVerbResult.AllPassed then
+      FailTest('LIFO: all tests should pass');
+    ResetDefaultConfig;
+    PassTest('Cleanup LIFO order');
+  end;
+
+  { ── Phase 13c: Cleanup exception handling ──────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 13c: Cleanup exception handling');
+  begin
+    ResetDefaultConfig;
+    GCleanupCalled := 0;
+    LVerbSuite := TTestSuite.Create('CleanupExceptTest');
+    { First cleanup raises, second should still run }
+    LVerbSuite.Cleanup(procedure
+    begin
+      Inc(GCleanupCalled);
+      raise Exception.Create('cleanup boom');
+    end);
+    LVerbSuite.Cleanup(procedure
+    begin
+      Inc(GCleanupCalled);
+    end);
+    LVerbSuite.Test('dummy', procedure begin CheckTrue(True); end);
+    LVerbSuite.RunWithResult(LVerbResult);
+    { Both cleanups should run even though first raised }
+    if GCleanupCalled <> 2 then
+      FailTest('cleanup except: expected 2 cleanup calls, got ' +
+        IntToStr(GCleanupCalled));
+    { Test should still pass — cleanup exceptions don't fail the test }
+    if not LVerbResult.AllPassed then
+      FailTest('cleanup except: test should still pass');
+    ResetDefaultConfig;
+    PassTest('Cleanup exception handling');
+  end;
+
+  { ── Phase 13d: Benchmark with --benchmem ───────────────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 13d: Benchmark with --benchmem');
+  begin
+    ResetDefaultConfig;
+    LBenchSuite := TTestSuite.Create('BenchMemTest');
+    LBenchSuite.Bench('Alloc', procedure(BC: PBenchContext)
+    var
+      I: Integer;
+      P: Pointer;
+    begin
+      for I := 1 to BC^.N do
+      begin
+        GetMem(P, 64);
+        BC^.AllocBytes := BC^.AllocBytes + 64;
+        BC^.AllocCount := BC^.AllocCount + 1;
+        FreeMem(P);
+      end;
+    end);
+    LBenchConfig := DefaultConfig;
+    LBenchConfig.BenchEnabled := True;
+    LBenchConfig.BenchTimeMs := 100;
+    LBenchConfig.BenchMem := True;
+    LBenchSuite.Config := LBenchConfig;
+    LBenchSuite.RunBenchmarks(LBenchResults);
+    if Length(LBenchResults) <> 1 then
+      FailTest('benchmem: expected 1 result');
+    if LBenchResults[0].N <= 0 then
+      FailTest('benchmem: expected N > 0');
+    { With benchmem, FormatBenchLine should include B/op info }
+    { We verify via the result fields rather than output parsing }
+    if LBenchResults[0].AllocBytes < 0 then
+      FailTest('benchmem: AllocBytes should be >= 0');
+    if LBenchResults[0].AllocCount < 0 then
+      FailTest('benchmem: AllocCount should be >= 0');
+    ResetDefaultConfig;
+    PassTest('Benchmark with --benchmem');
+  end;
+
+  { ── Phase 13e: Benchmarks skipped in regular Run ───────────────────────── }
+  WriteLn;
+  SectionHeader('Phase 13e: Benchmarks skipped in Run');
+  begin
+    ResetDefaultConfig;
+    LBenchSuite := TTestSuite.Create('BenchSkipTest');
+    { Register both a test and a benchmark in the same suite }
+    LBenchSuite.Test('normal', procedure begin CheckTrue(True); end);
+    LBenchSuite.Bench('skipped_bench', procedure(BC: PBenchContext)
+    begin
+      { This should never be called in regular Run }
+      FailTest('bench: benchmark should not run in regular test mode');
+    end);
+    LBenchSuite.Config := DefaultConfig;
+    LBenchSuite.RunWithResult(LVerbResult);
+    { Only the normal test should run, benchmark should be skipped }
+    if LVerbResult.Passed <> 1 then
+      FailTest('bench skip: expected 1 passed, got ' +
+        IntToStr(LVerbResult.Passed));
+    { Benchmark should not appear in results at all }
+    if LVerbResult.Failed <> 0 then
+      FailTest('bench skip: expected 0 failed, got ' +
+        IntToStr(LVerbResult.Failed));
+    ResetDefaultConfig;
+    PassTest('Benchmarks skipped in Run');
+  end;
+
+  { ── G1: RunAllBenchmarks at runner level ───────────────────────── }
+  WriteLn;
+  SectionHeader('G1: RunAllBenchmarks (runner level)');
+  begin
+    ResetDefaultConfig;
+    LBenchConfig := DefaultConfig;
+    LBenchConfig.BenchEnabled := True;
+    LBenchConfig.BenchTimeMs := 100;
+    LBenchRunner := TTestRunner.Create('BenchRunner');
+    { Suite A: 1 benchmark }
+    LBenchSuite := TTestSuite.Create('BenchSuiteA');
+    LBenchSuite.Bench('OpA', procedure(BC: PBenchContext)
+    var
+      I: Integer;
+    begin
+      for I := 1 to BC^.N do
+        if I < 0 then WriteLn('x');
+    end);
+    LBenchSuite.Config := LBenchConfig;
+    LBenchRunner.Add(LBenchSuite);
+    { Suite B: 1 benchmark }
+    LBenchSuite := TTestSuite.Create('BenchSuiteB');
+    LBenchSuite.Bench('OpB', procedure(BC: PBenchContext)
+    var
+      I: Integer;
+    begin
+      for I := 1 to BC^.N do
+        if I < 0 then WriteLn('x');
+    end);
+    LBenchSuite.Config := LBenchConfig;
+    LBenchRunner.Add(LBenchSuite);
+    { RunAllBenchmarks aggregates results from all suites }
+    if not LBenchRunner.RunAllBenchmarks(LBenchRunnerResults) then
+      FailTest('RunAllBenchmarks should return True');
+    { Should have results from both suites }
+    if Length(LBenchRunnerResults) < 2 then
+      FailTest('RunAllBenchmarks: expected >= 2 suite results, got ' +
+        IntToStr(Length(LBenchRunnerResults)));
+    ResetDefaultConfig;
+    PassTest('RunAllBenchmarks runner level');
+  end;
+
+  { ── G1: AllPassed auto-run behavior ────────────────────────────── }
+  WriteLn;
+  SectionHeader('G1: AllPassed auto-run');
+  begin
+    ResetDefaultConfig;
+    LAutoRunSuite := TTestSuite.Create('AutoRunSuite');
+    LAutoRunSuite.Test('auto1', procedure begin CheckTrue(True); end);
+    LAutoRunSuite.Test('auto2', procedure begin CheckTrue(True); end);
+    LAutoRunRunner := TTestRunner.Create('AutoRunRunner');
+    LAutoRunRunner.Add(LAutoRunSuite);
+    { AllPassed before RunAll should trigger auto-run }
+    if not LAutoRunRunner.AllPassed then
+      FailTest('AllPassed auto-run should return True for passing suite');
+    { After auto-run, HasRun should be true and TotalPass should reflect results }
+    if LAutoRunRunner.TotalPass <> 2 then
+      FailTest('AllPassed auto-run: expected 2 passes, got ' +
+        IntToStr(LAutoRunRunner.TotalPass));
+    ResetDefaultConfig;
+    PassTest('AllPassed auto-run');
+  end;
+
+  { ── G2: Empty suite parallel crash guard ────────────────────────────── }
+  WriteLn;
+  SectionHeader('G2: Empty suite parallel crash guard');
+  begin
+    ResetDefaultConfig;
+    LResultSuite := TTestSuite.Create('EmptyParallel');
+    { No tests registered — should not crash in parallel mode }
+    LResultSuite.RunParallelWithResult(nil, LParallelResult);
+    if LParallelResult.Passed <> 0 then
+      FailTest('empty parallel: expected 0 passed, got ' +
+        IntToStr(LParallelResult.Passed));
+    if LParallelResult.Failed <> 0 then
+      FailTest('empty parallel: expected 0 failed, got ' +
+        IntToStr(LParallelResult.Failed));
+    if not LParallelResult.AllPassed then
+      FailTest('empty parallel: AllPassed should be True for empty suite');
+    ResetDefaultConfig;
+    PassTest('Empty suite parallel crash guard');
+  end;
+
+  { ── G3: Exec-fail ShouldFail test ────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('G3: ShouldFail explicit exec-fail');
+  begin
+    ResetDefaultConfig;
+    LResultSuite := TTestSuite.Create('ShouldFailTest');
+    { Test that passes when proc raises }
+    LResultSuite.ShouldFail('expect_raise',
+      procedure begin raise Exception.Create('boom'); end, 'boom');
+    { Test that fails when proc does NOT raise }
+    LResultSuite.ShouldFail('no_raise_fails',
+      procedure begin { no exception } end);
+    LResultSuite.RunWithResult(LRegularLogResult);
+    { expect_raise should pass (proc raised), no_raise_fails should fail }
+    if LRegularLogResult.Passed <> 1 then
+      FailTest('ShouldFail: expected 1 passed, got ' +
+        IntToStr(LRegularLogResult.Passed));
+    if LRegularLogResult.Failed <> 1 then
+      FailTest('ShouldFail: expected 1 failed, got ' +
+        IntToStr(LRegularLogResult.Failed));
+    ResetDefaultConfig;
+    PassTest('ShouldFail exec-fail');
+  end;
+
+  { ── G4: Glob filter edge cases ────────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('G4: Glob filter edge cases');
+  begin
+    ResetDefaultConfig;
+    LFilterSuite := TTestSuite.Create('GlobFilter');
+    LFilterSuite.Test('abc', procedure begin CheckTrue(True); end);
+    LFilterSuite.Test('abcd', procedure begin CheckTrue(True); end);
+    LFilterSuite.Test('xyz', procedure begin CheckTrue(True); end);
+    { Test: pattern "abc" should match "abc" exactly }
+    LFilterSuite.Config.FilterPattern := 'abc';
+    LFilterSuite.RunWithResult(LFilterResult);
+    { abc matches "abc" and "abcd" (prefix match) — verify at least 1 pass }
+    if LFilterResult.Passed < 1 then
+      FailTest('glob filter abc: expected >= 1 passed');
+    ResetDefaultConfig;
+    { Test: pattern "" (empty) should match all }
+    LFilterSuite := TTestSuite.Create('GlobFilterEmpty');
+    LFilterSuite.Test('a', procedure begin CheckTrue(True); end);
+    LFilterSuite.Test('b', procedure begin CheckTrue(True); end);
+    LFilterSuite.Config.FilterPattern := '';
+    LFilterSuite.RunWithResult(LFilterResult);
+    if LFilterResult.Passed <> 2 then
+      FailTest('glob filter empty: expected 2 passed, got ' +
+        IntToStr(LFilterResult.Passed));
+    ResetDefaultConfig;
+    PassTest('Glob filter edge cases');
+  end;
+
+  { ── T-07: Test-level timeout exceeded ─────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('T-07: Test timeout exceeded');
+  begin
+    ResetDefaultConfig;
+    { Test with a generous timeout for fast tests, and a slow test that exceeds it }
+    LVerbSuite := TTestSuite.Create('TimeoutExceeded');
+    SetTestTimeout(200);
+    LVerbSuite.Test('fast_test', procedure begin
+      CheckTrue(True);
+    end);
+    LVerbSuite.RunWithResult(LVerbResult);
+    { fast_test should pass within 200ms }
+    if LVerbResult.Passed <> 1 then
+      FailTest('timeout fast: expected 1 pass, got Passed=' +
+        IntToStr(LVerbResult.Passed));
+    if LVerbResult.Failed <> 0 then
+      FailTest('timeout fast: expected 0 failures, got Failed=' +
+        IntToStr(LVerbResult.Failed));
+    ResetDefaultConfig;
+    PassTest('fast test within timeout');
+
+    { Now test with a tight timeout that a slow test will exceed }
+    LVerbSuite := TTestSuite.Create('TimeoutSlow');
+    SetTestTimeout(50);
+    LVerbSuite.Test('slow_test', procedure begin
+      SleepMs(300);
+    end);
+    LVerbSuite.RunWithResult(LVerbResult);
+    { slow_test should have timed out → at least 1 failure }
+    if LVerbResult.Failed < 1 then
+      FailTest('timeout slow: expected at least 1 failure, got Failed=' +
+        IntToStr(LVerbResult.Failed));
+    { Check timeout message in results }
+    begin
+      LFoundTimeout := False;
+      for LI := 0 to High(LVerbResult.Results) do
+        if LVerbResult.Results[LI].Status = tsError then
+        begin
+          LFoundTimeout := True;
+          if Pos('timed out', LVerbResult.Results[LI].Message) = 0 then
+            FailTest('timeout: expected "timed out" in message, got "' +
+              LVerbResult.Results[LI].Message + '"');
+          Break;
+        end;
+      if not LFoundTimeout then
+        FailTest('timeout: expected a tsError result');
+    end;
+    SetTestTimeout(0);
+    ResetDefaultConfig;
+    PassTest('Test timeout exceeded');
+  end;
+
+  { ── T-06: Config zero-value ambiguity ────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('T-06: Config zero-value ambiguity');
+  begin
+    ResetDefaultConfig;
+    LVerbSuite := TTestSuite.Create('ZeroConfig');
+    { MaxParallelWorkers = 0 should mean "use default" — not crash }
+    LVerbSuite.Config.MaxParallelWorkers := 0;
+    LVerbSuite.Test('z1', procedure begin CheckTrue(True); end);
+    LVerbSuite.Test('z2', procedure begin CheckTrue(True); end);
+    LVerbSuite.RunParallelWithResult(nil, LVerbResult);
+    if LVerbResult.Passed <> 2 then
+      FailTest('MaxParallelWorkers=0: expected 2 passed, got ' +
+        IntToStr(LVerbResult.Passed));
+    { TestTimeout = 0 should mean "no timeout" — slow test should not fail }
+    SetTestTimeout(0);
+    LVerbSuite := TTestSuite.Create('ZeroTimeout');
+    LVerbSuite.Test('fast', procedure begin CheckTrue(True); end);
+    LVerbSuite.RunWithResult(LVerbResult);
+    if LVerbResult.Passed <> 1 then
+      FailTest('TestTimeout=0: expected 1 pass, got ' +
+        IntToStr(LVerbResult.Passed));
+    { RunTimeoutSec = 0 should mean "no run timeout" }
+    LVerbSuite := TTestSuite.Create('ZeroRunTimeout');
+    LVerbSuite.Config.RunTimeoutSec := 0;
+    LVerbSuite.Test('zrt1', procedure begin CheckTrue(True); end);
+    LVerbSuite.RunWithResult(LVerbResult);
+    if LVerbResult.Passed <> 1 then
+      FailTest('RunTimeoutSec=0: expected 1 pass, got ' +
+        IntToStr(LVerbResult.Passed));
+    ResetDefaultConfig;
+    PassTest('Config zero-value ambiguity');
+  end;
+
+  { ── T-05: Complex glob/hierarchical filter scenarios ─────────────────────── }
+  WriteLn;
+  SectionHeader('T-05: Complex filter scenarios');
+  begin
+    ResetDefaultConfig;
+    { Test 1: Multiple * wildcards in pattern }
+    LVerbSuite := TTestSuite.Create('GlobMultiStar');
+    LVerbSuite.Test('test_alpha_pass', procedure begin CheckTrue(True); end);
+    LVerbSuite.Test('test_beta_pass', procedure begin CheckTrue(True); end);
+    LVerbSuite.Test('other_gamma', procedure begin CheckTrue(True); end);
+    LVerbConfig := DefaultConfig;
+    LVerbConfig.FilterPattern := '*test*pass*';
+    LVerbSuite.Config := LVerbConfig;
+    LVerbSuite.RunWithResult(LVerbResult);
+    if LVerbResult.Passed <> 2 then
+      FailTest('multi-star: expected 2 passed, got ' +
+        IntToStr(LVerbResult.Passed));
+    ResetDefaultConfig;
+    PassTest('Multiple * wildcards');
+
+    { Test 2: Brace expansion {a,b} }
+    LVerbSuite := TTestSuite.Create('GlobBrace');
+    LVerbSuite.Test('alpha', procedure begin CheckTrue(True); end);
+    LVerbSuite.Test('beta', procedure begin CheckTrue(True); end);
+    LVerbSuite.Test('gamma', procedure begin CheckTrue(True); end);
+    LVerbConfig := DefaultConfig;
+    LVerbConfig.FilterPattern := '{alpha,beta}';
+    LVerbSuite.Config := LVerbConfig;
+    LVerbSuite.RunWithResult(LVerbResult);
+    if LVerbResult.Passed <> 2 then
+      FailTest('brace: expected 2 passed, got ' +
+        IntToStr(LVerbResult.Passed));
+    ResetDefaultConfig;
+    PassTest('Brace expansion');
+
+    { Test 3: Filter exact match (no wildcards = substring) }
+    LVerbSuite := TTestSuite.Create('GlobExact');
+    LVerbSuite.Test('exact_match', procedure begin CheckTrue(True); end);
+    LVerbSuite.Test('exact_no', procedure begin CheckTrue(True); end);
+    LVerbConfig := DefaultConfig;
+    LVerbConfig.FilterPattern := 'exact_match';
+    LVerbSuite.Config := LVerbConfig;
+    LVerbSuite.RunWithResult(LVerbResult);
+    { Substring match: 'exact_match' matches only 'exact_match' }
+    if LVerbResult.Passed <> 1 then
+      FailTest('substring: expected 1 passed, got ' +
+        IntToStr(LVerbResult.Passed));
+    ResetDefaultConfig;
+    PassTest('Substring match');
+
+    { Test 4: ? single-char wildcard }
+    LVerbSuite := TTestSuite.Create('GlobQuestion');
+    LVerbSuite.Test('a1x', procedure begin CheckTrue(True); end);
+    LVerbSuite.Test('b1x', procedure begin CheckTrue(True); end);
+    LVerbSuite.Test('aa1x', procedure begin CheckTrue(True); end);
+    LVerbConfig := DefaultConfig;
+    LVerbConfig.FilterPattern := '?1*';
+    LVerbSuite.Config := LVerbConfig;
+    LVerbSuite.RunWithResult(LVerbResult);
+    { Should match a1x and b1x, not aa1x (too long before '1') }
+    if LVerbResult.Passed <> 2 then
+      FailTest('question-mark: expected 2 passed, got ' +
+        IntToStr(LVerbResult.Passed));
+    ResetDefaultConfig;
+    PassTest('? single-char wildcard');
+
+    { Test 5: Hierarchical filter — test name with / separator }
+    LVerbSuite := TTestSuite.Create('HierFilter');
+    LVerbSuite.Test('ParentA', procedure begin CheckTrue(True); end);
+    LVerbSuite.Test('ParentB', procedure begin CheckTrue(True); end);
+    LVerbConfig := DefaultConfig;
+    LVerbConfig.FilterPattern := 'ParentA';
+    LVerbSuite.Config := LVerbConfig;
+    LVerbSuite.RunWithResult(LVerbResult);
+    { Substring match: 'ParentA' matches 'ParentA' }
+    if LVerbResult.Passed <> 1 then
+      FailTest('hierarchical: expected 1 passed, got ' +
+        IntToStr(LVerbResult.Passed));
+    ResetDefaultConfig;
+    PassTest('Hierarchical filter');
+  end;
+
+  { ── T-06: Benchmark N scaling edge cases ───────────────────────────────── }
+
+  SectionHeader('T-06: Benchmark N scaling');
+
+  begin
+    { Fast benchmark: 0ms elapsed → N should scale up from 1 }
+    LBenchScalingSuite := TTestSuite.Create('BenchFast');
+    LBenchScalingSuite.Bench('noop', procedure(BC: PBenchContext)
+    begin
+      { Intentionally empty — 0ms elapsed forces maximum N scaling }
+    end);
+    LBenchScalingConfig := DefaultConfig;
+    LBenchScalingConfig.BenchEnabled := True;
+    LBenchScalingConfig.BenchTimeMs := 50; { short bench time }
+    LBenchScalingSuite.Config := LBenchScalingConfig;
+    LBenchScalingSuite.RunBenchmarks(LBenchScalingResults);
+    if Length(LBenchScalingResults) <> 1 then
+      FailTest('fast bench: expected 1 result, got ' +
+        IntToStr(Length(LBenchScalingResults)));
+    { N should have scaled up significantly from 1 (100x per step) }
+    if LBenchScalingResults[0].N < 100 then
+      FailTest('fast bench: expected N >= 100, got ' +
+        IntToStr(LBenchScalingResults[0].N));
+    { ns/op should be very low }
+    if LBenchScalingResults[0].NsPerOp > 1000 then
+      FailTest('fast bench: expected ns/op < 1000, got ' +
+        IntToStr(LBenchScalingResults[0].NsPerOp));
+    PassTest('Fast benchmark N scaling');
+
+    { Slow benchmark: work exceeds BenchTimeMs on N=1 → immediate report }
+    LBenchScalingSuite := TTestSuite.Create('BenchSlow');
+    LBenchScalingSuite.Bench('sleep_100ms', procedure(BC: PBenchContext)
+    begin
+      SleepMs(100);
+    end);
+    LBenchScalingConfig := DefaultConfig;
+    LBenchScalingConfig.BenchEnabled := True;
+    LBenchScalingConfig.BenchTimeMs := 50; { shorter than work }
+    LBenchScalingSuite.Config := LBenchScalingConfig;
+    LBenchScalingSuite.RunBenchmarks(LBenchScalingResults);
+    if Length(LBenchScalingResults) <> 1 then
+      FailTest('slow bench: expected 1 result, got ' +
+        IntToStr(Length(LBenchScalingResults)));
+    { N should stay at 1 since work already exceeds bench time }
+    if LBenchScalingResults[0].N <> 1 then
+      FailTest('slow bench: expected N=1, got ' +
+        IntToStr(LBenchScalingResults[0].N));
+    { ns/op should be ~100ms = 100,000,000 ns }
+    if LBenchScalingResults[0].NsPerOp < 50000000 then
+      FailTest('slow bench: expected ns/op >= 50M, got ' +
+        IntToStr(LBenchScalingResults[0].NsPerOp));
+    PassTest('Slow benchmark N=1 immediate');
+
+    { Medium benchmark: work within bench time → N scales but not to max }
+    LBenchScalingSuite := TTestSuite.Create('BenchMedium');
+    LBenchScalingSuite.Bench('fast_loop', procedure(BC: PBenchContext)
+    var K: Integer;
+    begin
+      for K := 1 to BC^.N do ; { trivial work }
+    end);
+    LBenchScalingConfig := DefaultConfig;
+    LBenchScalingConfig.BenchEnabled := True;
+    LBenchScalingConfig.BenchTimeMs := 100;
+    LBenchScalingSuite.Config := LBenchScalingConfig;
+    LBenchScalingSuite.RunBenchmarks(LBenchScalingResults);
+    if Length(LBenchScalingResults) <> 1 then
+      FailTest('medium bench: expected 1 result');
+    if LBenchScalingResults[0].N < 10 then
+      FailTest('medium bench: expected N >= 10, got ' +
+        IntToStr(LBenchScalingResults[0].N));
+    PassTest('Medium benchmark N scaling');
+  end;
+
+  { ── T-07: Suite-level retry (RetryCount via config) ───────────────────── }
+
+  SectionHeader('T-07: Suite-level retry');
+
+  begin
+    { Test: suite-level RetryCount retries failed tests }
+    LRetryAttempts := 0;
+    LRetrySuite := TTestSuite.Create('SuiteRetry');
+    LRetryConfig := DefaultConfig;
+    LRetryConfig.RetryCount := 3; { suite-level: retry up to 3 times }
+    LRetrySuite.Config := LRetryConfig;
+    LRetrySuite.Test('flaky_pass', procedure
+    begin
+      Inc(LRetryAttempts);
+      { Fail first 2 attempts, pass on 3rd }
+      if LRetryAttempts < 3 then
+        CheckTrue(False, 'intentional fail attempt ' + IntToStr(LRetryAttempts));
+    end);
+    LRetrySuite.RunWithResult(LRetryResult);
+    { Should eventually pass after retries }
+    if LRetryResult.Passed <> 1 then
+      FailTest('suite retry: expected 1 passed, got ' +
+        IntToStr(LRetryResult.Passed));
+    if LRetryAttempts < 3 then
+      FailTest('suite retry: expected >= 3 attempts, got ' +
+        IntToStr(LRetryAttempts));
+    PassTest('Suite-level retry (RetryCount)');
+
+    { Test: entry-level RetryCount overrides suite-level }
+    LRetryAttempts := 0;
+    LRetrySuite := TTestSuite.Create('EntryRetry');
+    LRetryConfig := DefaultConfig;
+    LRetryConfig.RetryCount := 1; { suite-level: 1 retry }
+    LRetrySuite.Config := LRetryConfig;
+    LRetrySuite.Test('entry_override', procedure
+    begin
+      Inc(LRetryAttempts);
+      { Fail first 4 attempts, pass on 5th }
+      if LRetryAttempts < 5 then
+        CheckTrue(False, 'intentional fail ' + IntToStr(LRetryAttempts));
+    end, 4); { entry-level: 4 retries (overrides suite 1) }
+    LRetrySuite.RunWithResult(LRetryResult);
+    if LRetryResult.Passed <> 1 then
+      FailTest('entry retry: expected 1 passed, got ' +
+        IntToStr(LRetryResult.Passed));
+    if LRetryAttempts < 5 then
+      FailTest('entry retry: expected >= 5 attempts, got ' +
+        IntToStr(LRetryAttempts));
+    PassTest('Entry-level retry overrides suite-level');
+  end;
+
+  { ── T-08: CleanupTableAllocations idempotent ──────────────────────────── }
+
+  SectionHeader('T-08: CleanupTableAllocations idempotent');
+
+  begin
+    LIdempotentSuite := TTestSuite.Create('Idempotent');
+    LIdempotentSuite.Test('dummy', procedure begin CheckTrue(True); end);
+    LIdempotentSuite.RunWithResult(LIdempotentResult);
+    { First cleanup should succeed }
+    LIdempotentSuite.CleanupTableAllocations;
+    { Second cleanup should be a no-op (FCleanupDone guard) — must not crash }
+    LIdempotentSuite.CleanupTableAllocations;
+    { Third call — still safe }
+    LIdempotentSuite.CleanupTableAllocations;
+    if LIdempotentResult.Passed <> 1 then
+      FailTest('idempotent: expected 1 passed');
+    PassTest('CleanupTableAllocations idempotent');
+  end;
+
+  { ── E-03: FormatDuration locale regression ────────────────────────────── }
+
+  SectionHeader('E-03: FormatDuration locale');
+
+  begin
+    { FormatDuration must use '.' as decimal separator, not locale-dependent ',' }
+    LFormatMs := FormatDuration(1234);
+    { Should contain '.' not ',' }
+    if Pos(',', LFormatMs) > 0 then
+      FailTest('FormatDuration uses locale comma: ' + LFormatMs);
+    { Should contain '1.' for 1.234s }
+    if Pos('1.', LFormatMs) = 0 then
+      FailTest('FormatDuration missing decimal point: ' + LFormatMs);
+    { Verify small durations }
+    LFormatMs := FormatDuration(0);
+    if LFormatMs <> '0ms' then
+      FailTest('FormatDuration(0) = "' + LFormatMs + '"');
+    LFormatMs := FormatDuration(999);
+    if Pos('999ms', LFormatMs) = 0 then
+      FailTest('FormatDuration(999) = "' + LFormatMs + '"');
+    PassTest('FormatDuration locale-independent');
+  end;
+
+  ResetDefaultConfig;
   WriteLn;
   PassTest('test_runner');
+
+  { Release closures before heaptrc reports (unit finalization runs before
+    main block locals are freed — closures would appear as unfreed). }
+  LRunner := Default(TTestRunner);
+  LSumRunner := Default(TTestRunner);
+  LMaxFailRunner := Default(TTestRunner);
+  LExactRunner68 := Default(TTestRunner);
+  LSuite1 := Default(TTestSuite);
+  LSuite2 := Default(TTestSuite);
+  LFailSuite1 := Default(TTestSuite);
+  LFailSuite2 := Default(TTestSuite);
+  LFailSuite3 := Default(TTestSuite);
+  LRunNestedS1 := Default(TTestSuite);
+  LRunNestedS2 := Default(TTestSuite);
+  LCacheSuite := Default(TTestSuite);
+  LSummarySuite := Default(TTestSuite);
+  LSumSuite3 := Default(TTestSuite);
+  LResultSuite := Default(TTestSuite);
+  LExactSuite68 := Default(TTestSuite);
+  LShortSuite := Default(TTestSuite);
+  LProgressSuite := Default(TTestSuite);
+  LMaxFailSuite := Default(TTestSuite);
+  LJsonSuite := Default(TTestSuite);
+  LBenchSuite := Default(TTestSuite);
+  LBenchRunner := Default(TTestRunner);
+  LAutoRunSuite := Default(TTestSuite);
+  LAutoRunRunner := Default(TTestRunner);
+  LJsonSink := nil;
+  LVerbSuite := Default(TTestSuite);
+  LVerbSink := nil;
+  LBenchSuite := Default(TTestSuite);
+  LBenchScalingSuite := Default(TTestSuite);
+  LRetrySuite := Default(TTestSuite);
+  LIdempotentSuite := Default(TTestSuite);
 end.

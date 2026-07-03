@@ -1,19 +1,14 @@
 program test_vec_all;
-{$mode objfpc}{$H+}
+
+{$I nextpas.core.settings.inc}
+
 uses
+  nextpas.core.text.conv,
+  nextpas.core.test,
   nextpas.core.simd.base,
   nextpas.core.simd.vec16,
   nextpas.core.simd.vec32,
   nextpas.core.simd.vec64;
-
-var
-  GTestCount: Integer = 0;
-  GPassCount: Integer = 0;
-
-function LocalIntToStr(aValue: Integer): string;
-begin
-  Str(aValue, Result);
-end;
 
 function LocalIntToHex(aValue: Integer; aDigits: Integer): string;
 const
@@ -27,16 +22,6 @@ begin
     Result[i] := HexChars[aValue and $F];
     aValue := aValue shr 4;
   end;
-end;
-
-procedure Check(cond: Boolean; const msg: string);
-begin
-  Inc(GTestCount);
-  if not cond then begin
-    WriteLn('FAIL: ', msg);
-    Halt(1);
-  end;
-  Inc(GPassCount);
 end;
 
 // ============================================================
@@ -151,15 +136,15 @@ var
   r: Int32;
 begin
   r := Vec16Ctz(TMask16(0));
-  Check(r = -1, 'Vec16Ctz(0)=-1: got ' + LocalIntToStr(r));
+  Check(r = -1, 'Vec16Ctz(0)=-1: got ' + IntToStr(r));
   r := Vec16Ctz(TMask16(1));
-  Check(r = 0, 'Vec16Ctz(1)=0: got ' + LocalIntToStr(r));
+  Check(r = 0, 'Vec16Ctz(1)=0: got ' + IntToStr(r));
   r := Vec16Ctz(TMask16($8000));
-  Check(r = 15, 'Vec16Ctz(highest)=15: got ' + LocalIntToStr(r));
+  Check(r = 15, 'Vec16Ctz(highest)=15: got ' + IntToStr(r));
   r := Vec16Ctz(TMask16($FFFF));
-  Check(r = 0, 'Vec16Ctz(all1)=0: got ' + LocalIntToStr(r));
+  Check(r = 0, 'Vec16Ctz(all1)=0: got ' + IntToStr(r));
   r := Vec16Ctz(TMask16($0080));
-  Check(r = 7, 'Vec16Ctz($0080)=7: got ' + LocalIntToStr(r));
+  Check(r = 7, 'Vec16Ctz($0080)=7: got ' + IntToStr(r));
 end;
 
 procedure TestVec16Popcnt;
@@ -167,15 +152,15 @@ var
   r: Int32;
 begin
   r := Vec16Popcnt(TMask16(0));
-  Check(r = 0, 'Vec16Popcnt(0)=0: got ' + LocalIntToStr(r));
+  Check(r = 0, 'Vec16Popcnt(0)=0: got ' + IntToStr(r));
   r := Vec16Popcnt(TMask16($FFFF));
-  Check(r = 16, 'Vec16Popcnt(all1)=16: got ' + LocalIntToStr(r));
+  Check(r = 16, 'Vec16Popcnt(all1)=16: got ' + IntToStr(r));
   r := Vec16Popcnt(TMask16($5555));
-  Check(r = 8, 'Vec16Popcnt($5555)=8: got ' + LocalIntToStr(r));
+  Check(r = 8, 'Vec16Popcnt($5555)=8: got ' + IntToStr(r));
   r := Vec16Popcnt(TMask16($AAAA));
-  Check(r = 8, 'Vec16Popcnt($AAAA)=8: got ' + LocalIntToStr(r));
+  Check(r = 8, 'Vec16Popcnt($AAAA)=8: got ' + IntToStr(r));
   r := Vec16Popcnt(TMask16($0080));
-  Check(r = 1, 'Vec16Popcnt($0080)=1: got ' + LocalIntToStr(r));
+  Check(r = 1, 'Vec16Popcnt($0080)=1: got ' + IntToStr(r));
 end;
 
 procedure TestVec16AddWhere;
@@ -188,22 +173,22 @@ begin
   m := TMask16($FFFF);
   Vec16AddWhere(@data[0], m, 10);
   for i := 0 to 15 do
-    Check(data[i] = Byte(i + 10), 'Vec16AddWhere +10 idx=' + LocalIntToStr(i) + ': got ' + LocalIntToStr(data[i]));
+    Check(data[i] = Byte(i + 10), 'Vec16AddWhere +10 idx=' + IntToStr(i) + ': got ' + IntToStr(data[i]));
 
   FillByte(data[0], 16, 255);
   Vec16AddWhere(@data[0], m, 1);
   for i := 0 to 15 do
-    Check(data[i] = 0, 'Vec16AddWhere overflow idx=' + LocalIntToStr(i) + ': got ' + LocalIntToStr(data[i]));
+    Check(data[i] = 0, 'Vec16AddWhere overflow idx=' + IntToStr(i) + ': got ' + IntToStr(data[i]));
 
   for i := 0 to 15 do data[i] := i;
   Vec16AddWhere(@data[0], TMask16(0), 50);
   for i := 0 to 15 do
-    Check(data[i] = i, 'Vec16AddWhere mask=0 idx=' + LocalIntToStr(i) + ': got ' + LocalIntToStr(data[i]));
+    Check(data[i] = i, 'Vec16AddWhere mask=0 idx=' + IntToStr(i) + ': got ' + IntToStr(data[i]));
 
   for i := 0 to 15 do data[i] := i;
   Vec16AddWhere(@data[0], m, 0);
   for i := 0 to 15 do
-    Check(data[i] = i, 'Vec16AddWhere delta=0 idx=' + LocalIntToStr(i) + ': got ' + LocalIntToStr(data[i]));
+    Check(data[i] = i, 'Vec16AddWhere delta=0 idx=' + IntToStr(i) + ': got ' + IntToStr(data[i]));
 end;
 
 procedure TestVec16SubWhere;
@@ -216,22 +201,22 @@ begin
   m := TMask16($FFFF);
   Vec16SubWhere(@data[0], m, 10);
   for i := 0 to 15 do
-    Check(data[i] = Byte(i + 10), 'Vec16SubWhere -10 idx=' + LocalIntToStr(i) + ': got ' + LocalIntToStr(data[i]));
+    Check(data[i] = Byte(i + 10), 'Vec16SubWhere -10 idx=' + IntToStr(i) + ': got ' + IntToStr(data[i]));
 
   FillByte(data[0], 16, 0);
   Vec16SubWhere(@data[0], m, 1);
   for i := 0 to 15 do
-    Check(data[i] = 255, 'Vec16SubWhere underflow idx=' + LocalIntToStr(i) + ': got ' + LocalIntToStr(data[i]));
+    Check(data[i] = 255, 'Vec16SubWhere underflow idx=' + IntToStr(i) + ': got ' + IntToStr(data[i]));
 
   for i := 0 to 15 do data[i] := i;
   Vec16SubWhere(@data[0], TMask16(0), 50);
   for i := 0 to 15 do
-    Check(data[i] = i, 'Vec16SubWhere mask=0 idx=' + LocalIntToStr(i) + ': got ' + LocalIntToStr(data[i]));
+    Check(data[i] = i, 'Vec16SubWhere mask=0 idx=' + IntToStr(i) + ': got ' + IntToStr(data[i]));
 
   for i := 0 to 15 do data[i] := i;
   Vec16SubWhere(@data[0], m, 0);
   for i := 0 to 15 do
-    Check(data[i] = i, 'Vec16SubWhere delta=0 idx=' + LocalIntToStr(i) + ': got ' + LocalIntToStr(data[i]));
+    Check(data[i] = i, 'Vec16SubWhere delta=0 idx=' + IntToStr(i) + ': got ' + IntToStr(data[i]));
 end;
 
 // ============================================================
@@ -346,15 +331,15 @@ var
   r: Int32;
 begin
   r := Vec32Ctz(TMask32(0));
-  Check(r = -1, 'Vec32Ctz(0)=-1: got ' + LocalIntToStr(r));
+  Check(r = -1, 'Vec32Ctz(0)=-1: got ' + IntToStr(r));
   r := Vec32Ctz(TMask32(1));
-  Check(r = 0, 'Vec32Ctz(1)=0: got ' + LocalIntToStr(r));
+  Check(r = 0, 'Vec32Ctz(1)=0: got ' + IntToStr(r));
   r := Vec32Ctz(TMask32($80000000));
-  Check(r = 31, 'Vec32Ctz(highest)=31: got ' + LocalIntToStr(r));
+  Check(r = 31, 'Vec32Ctz(highest)=31: got ' + IntToStr(r));
   r := Vec32Ctz(TMask32($FFFFFFFF));
-  Check(r = 0, 'Vec32Ctz(all1)=0: got ' + LocalIntToStr(r));
+  Check(r = 0, 'Vec32Ctz(all1)=0: got ' + IntToStr(r));
   r := Vec32Ctz(TMask32($0080));
-  Check(r = 7, 'Vec32Ctz($0080)=7: got ' + LocalIntToStr(r));
+  Check(r = 7, 'Vec32Ctz($0080)=7: got ' + IntToStr(r));
 end;
 
 procedure TestVec32Popcnt;
@@ -362,15 +347,15 @@ var
   r: Int32;
 begin
   r := Vec32Popcnt(TMask32(0));
-  Check(r = 0, 'Vec32Popcnt(0)=0: got ' + LocalIntToStr(r));
+  Check(r = 0, 'Vec32Popcnt(0)=0: got ' + IntToStr(r));
   r := Vec32Popcnt(TMask32($FFFFFFFF));
-  Check(r = 32, 'Vec32Popcnt(all1)=32: got ' + LocalIntToStr(r));
+  Check(r = 32, 'Vec32Popcnt(all1)=32: got ' + IntToStr(r));
   r := Vec32Popcnt(TMask32($55555555));
-  Check(r = 16, 'Vec32Popcnt($5555...)=16: got ' + LocalIntToStr(r));
+  Check(r = 16, 'Vec32Popcnt($5555...)=16: got ' + IntToStr(r));
   r := Vec32Popcnt(TMask32($AAAAAAAA));
-  Check(r = 16, 'Vec32Popcnt($AAAA...)=16: got ' + LocalIntToStr(r));
+  Check(r = 16, 'Vec32Popcnt($AAAA...)=16: got ' + IntToStr(r));
   r := Vec32Popcnt(TMask32($0080));
-  Check(r = 1, 'Vec32Popcnt($0080)=1: got ' + LocalIntToStr(r));
+  Check(r = 1, 'Vec32Popcnt($0080)=1: got ' + IntToStr(r));
 end;
 
 procedure TestVec32AddWhere;
@@ -383,22 +368,22 @@ begin
   m := TMask32($FFFFFFFF);
   Vec32AddWhere(@data[0], m, 10);
   for i := 0 to 31 do
-    Check(data[i] = Byte(i + 10), 'Vec32AddWhere +10 idx=' + LocalIntToStr(i) + ': got ' + LocalIntToStr(data[i]));
+    Check(data[i] = Byte(i + 10), 'Vec32AddWhere +10 idx=' + IntToStr(i) + ': got ' + IntToStr(data[i]));
 
   FillByte(data[0], 32, 255);
   Vec32AddWhere(@data[0], m, 1);
   for i := 0 to 31 do
-    Check(data[i] = 0, 'Vec32AddWhere overflow idx=' + LocalIntToStr(i) + ': got ' + LocalIntToStr(data[i]));
+    Check(data[i] = 0, 'Vec32AddWhere overflow idx=' + IntToStr(i) + ': got ' + IntToStr(data[i]));
 
   for i := 0 to 31 do data[i] := i;
   Vec32AddWhere(@data[0], TMask32(0), 50);
   for i := 0 to 31 do
-    Check(data[i] = i, 'Vec32AddWhere mask=0 idx=' + LocalIntToStr(i) + ': got ' + LocalIntToStr(data[i]));
+    Check(data[i] = i, 'Vec32AddWhere mask=0 idx=' + IntToStr(i) + ': got ' + IntToStr(data[i]));
 
   for i := 0 to 31 do data[i] := i;
   Vec32AddWhere(@data[0], m, 0);
   for i := 0 to 31 do
-    Check(data[i] = i, 'Vec32AddWhere delta=0 idx=' + LocalIntToStr(i) + ': got ' + LocalIntToStr(data[i]));
+    Check(data[i] = i, 'Vec32AddWhere delta=0 idx=' + IntToStr(i) + ': got ' + IntToStr(data[i]));
 end;
 
 procedure TestVec32SubWhere;
@@ -411,22 +396,22 @@ begin
   m := TMask32($FFFFFFFF);
   Vec32SubWhere(@data[0], m, 10);
   for i := 0 to 31 do
-    Check(data[i] = Byte(i + 10), 'Vec32SubWhere -10 idx=' + LocalIntToStr(i) + ': got ' + LocalIntToStr(data[i]));
+    Check(data[i] = Byte(i + 10), 'Vec32SubWhere -10 idx=' + IntToStr(i) + ': got ' + IntToStr(data[i]));
 
   FillByte(data[0], 32, 0);
   Vec32SubWhere(@data[0], m, 1);
   for i := 0 to 31 do
-    Check(data[i] = 255, 'Vec32SubWhere underflow idx=' + LocalIntToStr(i) + ': got ' + LocalIntToStr(data[i]));
+    Check(data[i] = 255, 'Vec32SubWhere underflow idx=' + IntToStr(i) + ': got ' + IntToStr(data[i]));
 
   for i := 0 to 31 do data[i] := i;
   Vec32SubWhere(@data[0], TMask32(0), 50);
   for i := 0 to 31 do
-    Check(data[i] = i, 'Vec32SubWhere mask=0 idx=' + LocalIntToStr(i) + ': got ' + LocalIntToStr(data[i]));
+    Check(data[i] = i, 'Vec32SubWhere mask=0 idx=' + IntToStr(i) + ': got ' + IntToStr(data[i]));
 
   for i := 0 to 31 do data[i] := i;
   Vec32SubWhere(@data[0], m, 0);
   for i := 0 to 31 do
-    Check(data[i] = i, 'Vec32SubWhere delta=0 idx=' + LocalIntToStr(i) + ': got ' + LocalIntToStr(data[i]));
+    Check(data[i] = i, 'Vec32SubWhere delta=0 idx=' + IntToStr(i) + ': got ' + IntToStr(data[i]));
 end;
 
 // ============================================================
@@ -541,15 +526,15 @@ var
   r: Int32;
 begin
   r := Vec64Ctz(TMask64(0));
-  Check(r = -1, 'Vec64Ctz(0)=-1: got ' + LocalIntToStr(r));
+  Check(r = -1, 'Vec64Ctz(0)=-1: got ' + IntToStr(r));
   r := Vec64Ctz(TMask64(1));
-  Check(r = 0, 'Vec64Ctz(1)=0: got ' + LocalIntToStr(r));
+  Check(r = 0, 'Vec64Ctz(1)=0: got ' + IntToStr(r));
   r := Vec64Ctz(TMask64(QWord($8000000000000000)));
-  Check(r = 63, 'Vec64Ctz(highest)=63: got ' + LocalIntToStr(r));
+  Check(r = 63, 'Vec64Ctz(highest)=63: got ' + IntToStr(r));
   r := Vec64Ctz(TMask64(QWord($FFFFFFFFFFFFFFFF)));
-  Check(r = 0, 'Vec64Ctz(all1)=0: got ' + LocalIntToStr(r));
+  Check(r = 0, 'Vec64Ctz(all1)=0: got ' + IntToStr(r));
   r := Vec64Ctz(TMask64($0080));
-  Check(r = 7, 'Vec64Ctz($0080)=7: got ' + LocalIntToStr(r));
+  Check(r = 7, 'Vec64Ctz($0080)=7: got ' + IntToStr(r));
 end;
 
 procedure TestVec64Popcnt;
@@ -557,15 +542,15 @@ var
   r: Int32;
 begin
   r := Vec64Popcnt(TMask64(0));
-  Check(r = 0, 'Vec64Popcnt(0)=0: got ' + LocalIntToStr(r));
+  Check(r = 0, 'Vec64Popcnt(0)=0: got ' + IntToStr(r));
   r := Vec64Popcnt(TMask64(QWord($FFFFFFFFFFFFFFFF)));
-  Check(r = 64, 'Vec64Popcnt(all1)=64: got ' + LocalIntToStr(r));
+  Check(r = 64, 'Vec64Popcnt(all1)=64: got ' + IntToStr(r));
   r := Vec64Popcnt(TMask64(QWord($5555555555555555)));
-  Check(r = 32, 'Vec64Popcnt($5555...)=32: got ' + LocalIntToStr(r));
+  Check(r = 32, 'Vec64Popcnt($5555...)=32: got ' + IntToStr(r));
   r := Vec64Popcnt(TMask64(QWord($AAAAAAAAAAAAAAAA)));
-  Check(r = 32, 'Vec64Popcnt($AAAA...)=32: got ' + LocalIntToStr(r));
+  Check(r = 32, 'Vec64Popcnt($AAAA...)=32: got ' + IntToStr(r));
   r := Vec64Popcnt(TMask64($0080));
-  Check(r = 1, 'Vec64Popcnt($0080)=1: got ' + LocalIntToStr(r));
+  Check(r = 1, 'Vec64Popcnt($0080)=1: got ' + IntToStr(r));
 end;
 
 procedure TestVec64AddWhere;
@@ -578,22 +563,22 @@ begin
   m := TMask64(QWord($FFFFFFFFFFFFFFFF));
   Vec64AddWhere(@data[0], m, 10);
   for i := 0 to 63 do
-    Check(data[i] = Byte(i + 10), 'Vec64AddWhere +10 idx=' + LocalIntToStr(i) + ': got ' + LocalIntToStr(data[i]));
+    Check(data[i] = Byte(i + 10), 'Vec64AddWhere +10 idx=' + IntToStr(i) + ': got ' + IntToStr(data[i]));
 
   FillByte(data[0], 64, 255);
   Vec64AddWhere(@data[0], m, 1);
   for i := 0 to 63 do
-    Check(data[i] = 0, 'Vec64AddWhere overflow idx=' + LocalIntToStr(i) + ': got ' + LocalIntToStr(data[i]));
+    Check(data[i] = 0, 'Vec64AddWhere overflow idx=' + IntToStr(i) + ': got ' + IntToStr(data[i]));
 
   for i := 0 to 63 do data[i] := i;
   Vec64AddWhere(@data[0], TMask64(0), 50);
   for i := 0 to 63 do
-    Check(data[i] = i, 'Vec64AddWhere mask=0 idx=' + LocalIntToStr(i) + ': got ' + LocalIntToStr(data[i]));
+    Check(data[i] = i, 'Vec64AddWhere mask=0 idx=' + IntToStr(i) + ': got ' + IntToStr(data[i]));
 
   for i := 0 to 63 do data[i] := i;
   Vec64AddWhere(@data[0], m, 0);
   for i := 0 to 63 do
-    Check(data[i] = i, 'Vec64AddWhere delta=0 idx=' + LocalIntToStr(i) + ': got ' + LocalIntToStr(data[i]));
+    Check(data[i] = i, 'Vec64AddWhere delta=0 idx=' + IntToStr(i) + ': got ' + IntToStr(data[i]));
 end;
 
 procedure TestVec64SubWhere;
@@ -606,66 +591,55 @@ begin
   m := TMask64(QWord($FFFFFFFFFFFFFFFF));
   Vec64SubWhere(@data[0], m, 10);
   for i := 0 to 63 do
-    Check(data[i] = Byte(i + 10), 'Vec64SubWhere -10 idx=' + LocalIntToStr(i) + ': got ' + LocalIntToStr(data[i]));
+    Check(data[i] = Byte(i + 10), 'Vec64SubWhere -10 idx=' + IntToStr(i) + ': got ' + IntToStr(data[i]));
 
   FillByte(data[0], 64, 0);
   Vec64SubWhere(@data[0], m, 1);
   for i := 0 to 63 do
-    Check(data[i] = 255, 'Vec64SubWhere underflow idx=' + LocalIntToStr(i) + ': got ' + LocalIntToStr(data[i]));
+    Check(data[i] = 255, 'Vec64SubWhere underflow idx=' + IntToStr(i) + ': got ' + IntToStr(data[i]));
 
   for i := 0 to 63 do data[i] := i;
   Vec64SubWhere(@data[0], TMask64(0), 50);
   for i := 0 to 63 do
-    Check(data[i] = i, 'Vec64SubWhere mask=0 idx=' + LocalIntToStr(i) + ': got ' + LocalIntToStr(data[i]));
+    Check(data[i] = i, 'Vec64SubWhere mask=0 idx=' + IntToStr(i) + ': got ' + IntToStr(data[i]));
 
   for i := 0 to 63 do data[i] := i;
   Vec64SubWhere(@data[0], m, 0);
   for i := 0 to 63 do
-    Check(data[i] = i, 'Vec64SubWhere delta=0 idx=' + LocalIntToStr(i) + ': got ' + LocalIntToStr(data[i]));
+    Check(data[i] = i, 'Vec64SubWhere delta=0 idx=' + IntToStr(i) + ': got ' + IntToStr(data[i]));
 end;
 
+var
+  T: TTestSuite;
 begin
-  WriteLn('=== Vec16/32/64 Complete Test Suite ===');
-  WriteLn;
-
-  WriteLn('--- Vec16 ---');
-  TestVec16CmpEq;
-  TestVec16CmpEq2;
-  TestVec16CmpLtU;
-  TestVec16CmpGtU;
-  TestVec16CmpRange;
-  TestVec16Ctz;
-  TestVec16Popcnt;
-  TestVec16AddWhere;
-  TestVec16SubWhere;
-  WriteLn('  Vec16: OK');
-  WriteLn;
-
-  WriteLn('--- Vec32 ---');
-  TestVec32CmpEq;
-  TestVec32CmpEq2;
-  TestVec32CmpLtU;
-  TestVec32CmpGtU;
-  TestVec32CmpRange;
-  TestVec32Ctz;
-  TestVec32Popcnt;
-  TestVec32AddWhere;
-  TestVec32SubWhere;
-  WriteLn('  Vec32: OK');
-  WriteLn;
-
-  WriteLn('--- Vec64 ---');
-  TestVec64CmpEq;
-  TestVec64CmpEq2;
-  TestVec64CmpLtU;
-  TestVec64CmpGtU;
-  TestVec64CmpRange;
-  TestVec64Ctz;
-  TestVec64Popcnt;
-  TestVec64AddWhere;
-  TestVec64SubWhere;
-  WriteLn('  Vec64: OK');
-  WriteLn;
-
-  WriteLn('--- ', LocalIntToStr(GTestCount), ' tests, ', LocalIntToStr(GPassCount), ' passed, 0 failed ---');
+  T := TTestSuite.Create('simd.vec-all');
+  T.Test('Vec16.CmpEq', @TestVec16CmpEq);
+  T.Test('Vec16.CmpEq2', @TestVec16CmpEq2);
+  T.Test('Vec16.CmpLtU', @TestVec16CmpLtU);
+  T.Test('Vec16.CmpGtU', @TestVec16CmpGtU);
+  T.Test('Vec16.CmpRange', @TestVec16CmpRange);
+  T.Test('Vec16.Ctz', @TestVec16Ctz);
+  T.Test('Vec16.Popcnt', @TestVec16Popcnt);
+  T.Test('Vec16.AddWhere', @TestVec16AddWhere);
+  T.Test('Vec16.SubWhere', @TestVec16SubWhere);
+  T.Test('Vec32.CmpEq', @TestVec32CmpEq);
+  T.Test('Vec32.CmpEq2', @TestVec32CmpEq2);
+  T.Test('Vec32.CmpLtU', @TestVec32CmpLtU);
+  T.Test('Vec32.CmpGtU', @TestVec32CmpGtU);
+  T.Test('Vec32.CmpRange', @TestVec32CmpRange);
+  T.Test('Vec32.Ctz', @TestVec32Ctz);
+  T.Test('Vec32.Popcnt', @TestVec32Popcnt);
+  T.Test('Vec32.AddWhere', @TestVec32AddWhere);
+  T.Test('Vec32.SubWhere', @TestVec32SubWhere);
+  T.Test('Vec64.CmpEq', @TestVec64CmpEq);
+  T.Test('Vec64.CmpEq2', @TestVec64CmpEq2);
+  T.Test('Vec64.CmpLtU', @TestVec64CmpLtU);
+  T.Test('Vec64.CmpGtU', @TestVec64CmpGtU);
+  T.Test('Vec64.CmpRange', @TestVec64CmpRange);
+  T.Test('Vec64.Ctz', @TestVec64Ctz);
+  T.Test('Vec64.Popcnt', @TestVec64Popcnt);
+  T.Test('Vec64.AddWhere', @TestVec64AddWhere);
+  T.Test('Vec64.SubWhere', @TestVec64SubWhere);
+  T.Run;
+  T.Summary;
 end.

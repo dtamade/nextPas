@@ -37,7 +37,8 @@ uses
   nextpas.core.collections.intf,
   nextpas.core.collections.list.intf,
   nextpas.core.collections.element_manager,
-  nextpas.core.collections.node;
+  nextpas.core.collections.node,
+ nextpas.core.mem.allocator.base;
 
 type
 
@@ -106,12 +107,12 @@ type
   public
     { 构造函数和析构函数 }
     constructor Create; overload;
-    constructor Create(aAllocator: IAllocator); overload;
-    constructor Create(aAllocator: IAllocator; aData: Pointer); override; overload;
+    constructor Create(aAllocator: TMemAllocator); overload;
+    constructor Create(aAllocator: TMemAllocator; aData: Pointer); override; overload;
     constructor Create(const aSrc: array of T); overload;
     constructor Create(aSrc: Pointer; aElementCount: SizeUInt); overload;
-    constructor Create(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: IAllocator); overload;
-    constructor Create(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: IAllocator; aData: Pointer); overload;
+    constructor Create(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator); overload;
+    constructor Create(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator; aData: Pointer); overload;
 
     destructor  Destroy; override;
 
@@ -223,13 +224,13 @@ begin
   inherited Create;
 end;
 
-constructor TList.Create(aAllocator: IAllocator);
+constructor TList.Create(aAllocator: TMemAllocator);
 begin
   // Delegate to base; actual initialization happens in Create(aAllocator, aData)
   inherited Create(aAllocator);
 end;
 
-constructor TList.Create(aAllocator: IAllocator; aData: Pointer);
+constructor TList.Create(aAllocator: TMemAllocator; aData: Pointer);
 begin
   inherited Create(aAllocator, aData);
   FNodeManager := TNodeManager.Create(FAllocator);
@@ -253,13 +254,13 @@ begin
   AppendUnchecked(aSrc, aElementCount);
 end;
 
-constructor TList.Create(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: IAllocator);
+constructor TList.Create(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator);
 begin
   Create(aAllocator);
   AppendUnchecked(aSrc, aElementCount);
 end;
 
-constructor TList.Create(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: IAllocator; aData: Pointer);
+constructor TList.Create(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator; aData: Pointer);
 begin
   Create(aAllocator, aData);
   AppendUnchecked(aSrc, aElementCount);

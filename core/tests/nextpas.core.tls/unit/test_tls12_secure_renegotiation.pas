@@ -3,7 +3,7 @@ program test_tls12_secure_renegotiation;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   SysUtils,
   nextpas.core.tls.tls12.clienthello,
   nextpas.core.tls.tls12.parser,

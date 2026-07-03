@@ -22,8 +22,8 @@ implementation
 
 uses
   nextpas.core.base.utils,
-  nextpas.core.os.env,
-  nextpas.core.path;
+  nextpas.core.platform.env,
+  nextpas.core.platform.path;
 
 function AsciiLower(const AValue: string): string;
 var
@@ -49,6 +49,17 @@ begin
   Result := AsciiLower({$I %FPCTARGETCPU%}) + '-' + AsciiLower({$I %FPCTARGETOS%});
 end;
 
+{** 内联 ExtractFilePath：避免引入 L2 nextpas.core.path 依赖 }
+function ExtractFileDir(const APath: string): string;
+var
+  LPos: Integer;
+begin
+  for LPos := Length(APath) downto 1 do
+    if (APath[LPos] = PLATFORM_PATH_SEP) {$IFDEF NEXTPAS_WINDOWS}or (APath[LPos] = PLATFORM_PATH_ALT_SEP){$ENDIF} then
+      Exit(Copy(APath, 1, LPos));
+  Result := '';
+end;
+
 function TryOpenLibrary(const APath: string; out ALibrary: TPlatformLibrary): Boolean;
 begin
   ZeroMem(@ALibrary, SizeOf(ALibrary));
@@ -66,7 +77,7 @@ begin
   if ADirectory = '' then
     LPath := ALibName
   else
-    LPath := PathJoin(ADirectory, ALibName);
+    LPath := ADirectory + PLATFORM_PATH_SEP + ALibName;
   Result := TryOpenLibrary(LPath, ALibrary);
 end;
 
@@ -75,9 +86,9 @@ var
   LEnvPath: string;
 begin
   {$IFDEF MSWINDOWS}
-  LEnvPath := GetEnvironmentVariable('NEXTPAS_MIMALLOC_DLL');
+  LEnvPath := platform_env_get_str('NEXTPAS_MIMALLOC_DLL');
   {$ELSE}
-  LEnvPath := GetEnvironmentVariable('NEXTPAS_MIMALLOC_SO');
+  LEnvPath := platform_env_get_str('NEXTPAS_MIMALLOC_SO');
   {$ENDIF}
 
   if LEnvPath = '' then
@@ -95,8 +106,8 @@ begin
   if LSubdir = '' then
     Exit(False);
 
-  LExeDir := ExtractFilePath(ParamStr(0));
-  LLibDir := PathJoin3(LExeDir, 'lib', LSubdir);
+  LExeDir := ExtractFileDir(ParamStr(0));
+  LLibDir := LExeDir + PLATFORM_PATH_SEP + 'lib' + PLATFORM_PATH_SEP + LSubdir;
 
   {$IFDEF MSWINDOWS}
   Result := TryLoadCandidate(LLibDir, 'mimalloc.dll', ALibrary);

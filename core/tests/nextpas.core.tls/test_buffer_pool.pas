@@ -4,7 +4,7 @@ program test_buffer_pool;
 
 uses
   {$IFDEF UNIX}
-  cthreads,
+  nextpas.core.thread.init,
   {$ENDIF}
   SysUtils, Classes, SyncObjs, DateUtils, Math,
   nextpas.core.tls.buffer.pool;

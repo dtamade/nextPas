@@ -3,7 +3,7 @@ program test_tls12_clientauth;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   SysUtils, nextpas.core.tls.tls12.clientauth, nextpas.core.tls.x509;
 
 var

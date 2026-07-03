@@ -34,7 +34,8 @@ uses
   nextpas.core.base.utils,
   nextpas.core.base,
   nextpas.core.mem.base,
-  nextpas.core.mem.allocator,
+  nextpas.core.mem.intf,
+  nextpas.core.mem.allocator.rtl,   // ResolveAllocator
   nextpas.core.mem.error;
 
 type
@@ -335,10 +336,7 @@ begin
   FCount := 0;
   FIsPow2Capacity := nextpas.core.mem.base.IsPowerOfTwo(FCapacity);
 
-  if aAllocator = nil then
-    FBaseAllocator := nextpas.core.mem.allocator.GetRtlAllocator
-  else
-    FBaseAllocator := aAllocator;
+  FBaseAllocator := ResolveAllocator(aAllocator);
 
   // 防止乘法溢出并分配内存
   if (FElementSize <> 0) and (FCapacity > MAX_SIZE_UINT div FElementSize) then
@@ -346,7 +344,7 @@ begin
 
   FBuffer := FBaseAllocator.GetMem(FCapacity * FElementSize);
   if FBuffer = nil then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'Failed to allocate ring buffer memory');
+    raise EOutOfMemory.CreateMsg('Failed to allocate ring buffer memory');
 end;
 
 destructor TRingBuffer.Destroy;

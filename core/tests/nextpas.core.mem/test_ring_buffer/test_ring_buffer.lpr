@@ -306,6 +306,38 @@ begin
   end;
 end;
 
+procedure TestBoundaryResizeFullToLarger;
+var
+  LBuf: TRingBuffer;
+  I, LOut: Integer;
+begin
+  LBuf := TRingBuffer.Create(4, SizeOf(Integer));
+  try
+    { Fill to capacity. }
+    for I := 1 to 4 do
+      LBuf.Push(@I);
+    Check(LBuf.IsFull, 'should be full at capacity 4');
+    Check(LBuf.Count = 4, 'count=4');
+
+    { Grow while full — all 4 elements must survive. }
+    Check(LBuf.Resize(8), 'resize full to larger');
+    Check(LBuf.Capacity = 8, 'new capacity=8');
+    Check(LBuf.Count = 4, 'count preserved');
+    Check(not LBuf.IsFull, 'no longer full');
+
+    { Verify element order. }
+    for I := 1 to 4 do
+    begin
+      LOut := 0;
+      Check(LBuf.Pop(@LOut), 'pop after grow ' + IntToStr(I));
+      Check(LOut = I, 'element order ' + IntToStr(I));
+    end;
+    Check(LBuf.IsEmpty, 'empty after all pops');
+  finally
+    LBuf.Free;
+  end;
+end;
+
 { --- 批量 Push/Pop --- }
 
 procedure TestBatchPushPop;
@@ -740,6 +772,7 @@ begin
   T.Test('resize grow preserves data', @TestResizeGrow);
   T.Test('resize shrink preserves data', @TestResizeShrink);
   T.Test('resize truncates to oldest elements', @TestResizeTruncate);
+  T.Test('boundary resize full to larger', @TestBoundaryResizeFullToLarger);
 
   { 批量 Push/Pop }
   T.Test('batch push/pop 5 elements', @TestBatchPushPop);

@@ -214,6 +214,7 @@ procedure ResetDefaultFreePascalEarlyDataReplayStoreDirectoryForTesting;
 implementation
 
 uses
+  DateUtils,
   nextpas.core.tls.freepascal.earlydatareplay.dirstore;
 
 const

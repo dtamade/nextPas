@@ -14,7 +14,8 @@ uses
   nextpas.core.collections.element_manager,
   nextpas.core.mem.intf,
   nextpas.core.mem.default,
-  nextpas.core.collections.tree.rb;
+  nextpas.core.collections.tree.rb,
+  nextpas.core.mem.allocator.base;
 
 type
   // 红黑树 OrderedMap（薄适配 TRBTreeCore + 集成 TGenericCollection 以复用迭代框架）。
@@ -60,8 +61,8 @@ type
     procedure FreeRangeIterStates;
   public
     constructor Create(aKeyComparer: TKeyCmp); reintroduce; overload;
-    constructor Create(aKeyComparer: TKeyCmp; aAllocator: IAllocator); reintroduce; overload;
-    constructor Create(aKeyComparer: TKeyCmp; aAllocator: IAllocator; aCompareData: Pointer); reintroduce; overload;
+    constructor Create(aKeyComparer: TKeyCmp; aAllocator: TMemAllocator); reintroduce; overload;
+    constructor Create(aKeyComparer: TKeyCmp; aAllocator: TMemAllocator; aCompareData: Pointer); reintroduce; overload;
     destructor Destroy; override;
 
     // 基本操作
@@ -135,12 +136,12 @@ begin
   Create(aKeyComparer, DefaultAllocator(), nil);
 end;
 
-constructor TRBTreeMap.Create(aKeyComparer: TKeyCmp; aAllocator: IAllocator);
+constructor TRBTreeMap.Create(aKeyComparer: TKeyCmp; aAllocator: TMemAllocator);
 begin
   Create(aKeyComparer, aAllocator, nil);
 end;
 
-constructor TRBTreeMap.Create(aKeyComparer: TKeyCmp; aAllocator: IAllocator; aCompareData: Pointer);
+constructor TRBTreeMap.Create(aKeyComparer: TKeyCmp; aAllocator: TMemAllocator; aCompareData: Pointer);
 begin
   inherited Create(aAllocator, nil);
   FKeyCmp := aKeyComparer;

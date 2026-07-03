@@ -225,8 +225,8 @@ begin
       LHeader[2] := 3;
       LHeader[3] := Byte(Length(LEncrypted) shr 8);
       LHeader[4] := Byte(Length(LEncrypted));
-      FStream.WriteBuffer(LHeader[0], 5);
-      FStream.WriteBuffer(LEncrypted[0], Length(LEncrypted));
+      FStream.Write(LHeader[0], 5);
+      FStream.Write(LEncrypted[0], Length(LEncrypted));
       Inc(Result, LCopyLen);
     end;
     Exit;

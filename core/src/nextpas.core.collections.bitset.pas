@@ -11,7 +11,8 @@ uses
   nextpas.core.mem.intf,
   nextpas.core.collections.base,
   nextpas.core.collections.bitset.base,
-  nextpas.core.collections.bitset.intf;
+  nextpas.core.collections.bitset.intf,
+  nextpas.core.mem.allocator.base;
 
 type
   {**
@@ -31,8 +32,8 @@ type
   public
     constructor Create; overload;
     constructor Create(aInitialCapacity: SizeUInt); overload;
-    constructor Create(aAllocator: IAllocator); overload;
-    constructor Create(aInitialCapacity: SizeUInt; aAllocator: IAllocator); overload;
+    constructor Create(aAllocator: TMemAllocator); overload;
+    constructor Create(aInitialCapacity: SizeUInt; aAllocator: TMemAllocator); overload;
     destructor Destroy; override;
 
     // IBitSet interface
@@ -79,12 +80,12 @@ begin
   Create(aInitialCapacity, nil);
 end;
 
-constructor TBitSet.Create(aAllocator: IAllocator);
+constructor TBitSet.Create(aAllocator: TMemAllocator);
 begin
   Create(BITSET_DEFAULT_CAPACITY, aAllocator);
 end;
 
-constructor TBitSet.Create(aInitialCapacity: SizeUInt; aAllocator: IAllocator);
+constructor TBitSet.Create(aInitialCapacity: SizeUInt; aAllocator: TMemAllocator);
 var
   LWordCount: SizeUInt;
 begin

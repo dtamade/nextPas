@@ -147,7 +147,7 @@ begin
 
   LPage := GetMem(LSlotSize * LCount);
   if LPage = nil then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'TSizeClassPool.AllocatePage: out of memory');
+    raise EOutOfMemory.CreateMsg('TSizeClassPool.AllocatePage: out of memory');
 
   { 记录页 }
   if FPageCounts[AClass] >= Length(FPages[AClass]) then
@@ -178,7 +178,7 @@ var
 begin
   LIdx := SizeClassIndex(ASize);
   if LIdx < 0 then
-    raise EOutOfMemory.Create(aeOutOfMemory,
+    raise EOutOfMemory.CreateMsg(
       'TSizeClassPool: size exceeds max size class (512)');
   Result := TSizeClassIndex(LIdx);
 end;

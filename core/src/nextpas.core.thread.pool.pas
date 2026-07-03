@@ -95,6 +95,8 @@ begin
       try
         LDirectProc(LDirectData);
       except
+        on E: Exception do
+          WriteLn(StdErr, '[ThreadPool] task raised: ', E.ClassName, ': ', E.Message);
       end;
     end
     else
@@ -102,6 +104,8 @@ begin
       try
         LTask();
       except
+        on E: Exception do
+          WriteLn(StdErr, '[ThreadPool] task raised: ', E.ClassName, ': ', E.Message);
       end;
       Dispose(LNode);
       LTask := nil;

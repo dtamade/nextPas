@@ -1,156 +1,128 @@
 program test_result_utils;
 
-{$mode objfpc}{$H+}
+{$I nextpas.core.settings.inc}
 
 uses
   SysUtils,
   nextpas.core.tls.base,
-  nextpas.core.tls.result.utils;
+  nextpas.core.tls.result.utils,
+  nextpas.core.test;
+
+function AlwaysTrue: Boolean; begin Result := True; end;
+function AlwaysFalse: Boolean; begin Result := False; end;
 
 var
-  LResult: TSSLOperationResult;
-  LDataResult: TSSLDataResult;
-  LStringResult: TSSLStringResult;
-  LTestsPassed, LTestsFailed: Integer;
-
-procedure Test(const AName: string; ACondition: Boolean);
+  LRunner: TTestRunner;
+  LSuite: TTestSuite;
 begin
-  if ACondition then
+  LSuite := TTestSuite.Create('tls.result_utils');
+
+  LSuite.Test('Ok/Err basics', procedure
+  var LR: TSSLOperationResult;
   begin
-    WriteLn('[PASS] ', AName);
-    Inc(LTestsPassed);
-  end
-  else
+    LR := Ok;
+    CheckTrue(LR.IsOk); CheckTrue(not LR.IsErr);
+    LR := Err(sslErrGeneral, 'Test error');
+    CheckTrue(LR.IsErr); CheckTrue(not LR.IsOk);
+    CheckTrue(LR.ErrorCode = sslErrGeneral);
+    CheckEqual('Test error', LR.ErrorMessage);
+  end);
+
+  LSuite.Test('FromBool', procedure
+  var LR: TSSLOperationResult;
   begin
-    WriteLn('[FAIL] ', AName);
-    Inc(LTestsFailed);
-  end;
-end;
+    LR := TResultUtils.FromBool(True, 'TestOp');
+    CheckTrue(LR.IsOk);
+    LR := TResultUtils.FromBool(False, 'TestOp');
+    CheckTrue(LR.IsErr);
+    CheckTrue(Pos('TestOp', LR.ErrorMessage) > 0);
+  end);
 
-function AlwaysTrue: Boolean;
-begin
-  Result := True;
-end;
-
-function AlwaysFalse: Boolean;
-begin
-  Result := False;
-end;
-
-begin
-  LTestsPassed := 0;
-  LTestsFailed := 0;
-
-  WriteLn('=== nextpas.core.tls.result.utils Tests ===');
-  WriteLn;
-
-  // Test 1: Ok() convenience function
-  WriteLn('--- TSSLOperationResult Tests ---');
-  LResult := Ok;
-  Test('Ok() creates success result', LResult.IsOk);
-  Test('Ok() is not error', not LResult.IsErr);
-
-  // Test 2: Err() convenience function
-  LResult := Err(sslErrGeneral, 'Test error');
-  Test('Err() creates error result', LResult.IsErr);
-  Test('Err() is not ok', not LResult.IsOk);
-  Test('Err() has correct error code', LResult.ErrorCode = sslErrGeneral);
-  Test('Err() has correct message', LResult.ErrorMessage = 'Test error');
-
-  // Test 3: FromBool conversion
-  LResult := TResultUtils.FromBool(True, 'TestOp');
-  Test('FromBool(True) is ok', LResult.IsOk);
-
-  LResult := TResultUtils.FromBool(False, 'TestOp');
-  Test('FromBool(False) is error', LResult.IsErr);
-  Test('FromBool(False) has context in message', Pos('TestOp', LResult.ErrorMessage) > 0);
-
-  // Test 4: ToResult inline function
-  LResult := ToResult(True, 'InlineTest');
-  Test('ToResult(True) is ok', LResult.IsOk);
-
-  LResult := ToResult(False, 'InlineTest');
-  Test('ToResult(False) is error', LResult.IsErr);
-
-  // Test 5: TryOperation
-  LResult := TResultUtils.TryOperation(@AlwaysTrue, 'AlwaysTrue');
-  Test('TryOperation with true func is ok', LResult.IsOk);
-
-  LResult := TResultUtils.TryOperation(@AlwaysFalse, 'AlwaysFalse');
-  Test('TryOperation with false func is error', LResult.IsErr);
-
-  // Test 6: WithContext helper
-  LResult := Err(sslErrCertificate, 'cert error');
-  LResult := LResult.WithContext('LoadCertificate');
-  Test('WithContext adds prefix', Pos('LoadCertificate', LResult.ErrorMessage) > 0);
-
-  // Test 7: ToString helper
-  LResult := Ok;
-  Test('Ok.ToString is "Ok"', LResult.ToString = 'Ok');
-
-  LResult := Err(sslErrGeneral, 'test');
-  Test('Err.ToString contains error info', Pos('Err', LResult.ToString) > 0);
-
-  // Test 8: OrElse helper
-  LResult := Err(sslErrGeneral, 'first error');
-  LResult := LResult.OrElse(Ok);
-  Test('OrElse returns default on error', LResult.IsOk);
-
-  LResult := Ok;
-  LResult := LResult.OrElse(Err(sslErrGeneral, 'should not use'));
-  Test('OrElse keeps ok value', LResult.IsOk);
-
-  // Test 9: All combinator
-  LResult := TResultUtils.All([Ok, Ok, Ok]);
-  Test('All([Ok, Ok, Ok]) is ok', LResult.IsOk);
-
-  LResult := TResultUtils.All([Ok, Err(sslErrGeneral, 'fail'), Ok]);
-  Test('All with one error is error', LResult.IsErr);
-
-  // Test 10: Any combinator
-  LResult := TResultUtils.Any([Err(sslErrGeneral, 'e1'), Ok, Err(sslErrGeneral, 'e2')]);
-  Test('Any with one ok is ok', LResult.IsOk);
-
-  LResult := TResultUtils.Any([Err(sslErrGeneral, 'e1'), Err(sslErrCertificate, 'e2')]);
-  Test('Any with all errors is error', LResult.IsErr);
-
-  // Test 11: TSSLDataResult
-  WriteLn;
-  WriteLn('--- TSSLDataResult Tests ---');
-  LDataResult := OkData(TBytes.Create(1, 2, 3, 4));
-  Test('OkData creates success', LDataResult.IsOk);
-  Test('OkData has correct data length', Length(LDataResult.Data) = 4);
-
-  LDataResult := ErrData(sslErrInvalidData, 'bad data');
-  Test('ErrData creates error', LDataResult.IsErr);
-  Test('ErrData.ToString contains Err', Pos('Err', LDataResult.ToString) > 0);
-
-  // Test 12: TSSLStringResult
-  WriteLn;
-  WriteLn('--- TSSLStringResult Tests ---');
-  LStringResult := OkString('hello');
-  Test('OkString creates success', LStringResult.IsOk);
-  Test('OkString has correct value', LStringResult.Value = 'hello');
-
-  LStringResult := ErrString(sslErrParseFailed, 'parse error');
-  Test('ErrString creates error', LStringResult.IsErr);
-  Test('ErrString.ToString contains Err', Pos('Err', LStringResult.ToString) > 0);
-
-  // Summary
-  WriteLn;
-  WriteLn('=== Summary ===');
-  WriteLn('Passed: ', LTestsPassed);
-  WriteLn('Failed: ', LTestsFailed);
-  WriteLn;
-
-  if LTestsFailed = 0 then
+  LSuite.Test('ToResult', procedure
+  var LR: TSSLOperationResult;
   begin
-    WriteLn('All tests passed!');
-    ExitCode := 0;
-  end
-  else
+    LR := ToResult(True, 'InlineTest');
+    CheckTrue(LR.IsOk);
+    LR := ToResult(False, 'InlineTest');
+    CheckTrue(LR.IsErr);
+  end);
+
+  LSuite.Test('TryOperation', procedure
+  var LR: TSSLOperationResult;
   begin
-    WriteLn('Some tests failed!');
-    ExitCode := 1;
-  end;
+    LR := TResultUtils.TryOperation(@AlwaysTrue, 'AlwaysTrue');
+    CheckTrue(LR.IsOk);
+    LR := TResultUtils.TryOperation(@AlwaysFalse, 'AlwaysFalse');
+    CheckTrue(LR.IsErr);
+  end);
+
+  LSuite.Test('WithContext', procedure
+  var LR: TSSLOperationResult;
+  begin
+    LR := Err(sslErrCertificate, 'cert error');
+    LR := LR.WithContext('LoadCertificate');
+    CheckTrue(Pos('LoadCertificate', LR.ErrorMessage) > 0);
+  end);
+
+  LSuite.Test('ToString', procedure
+  var LR: TSSLOperationResult;
+  begin
+    LR := Ok;
+    CheckEqual('Ok', LR.ToString);
+    LR := Err(sslErrGeneral, 'test');
+    CheckTrue(Pos('Err', LR.ToString) > 0);
+  end);
+
+  LSuite.Test('OrElse', procedure
+  var LR: TSSLOperationResult;
+  begin
+    LR := Err(sslErrGeneral, 'first error');
+    LR := LR.OrElse(Ok);
+    CheckTrue(LR.IsOk);
+    LR := Ok;
+    LR := LR.OrElse(Err(sslErrGeneral, 'should not use'));
+    CheckTrue(LR.IsOk);
+  end);
+
+  LSuite.Test('All combinator', procedure
+  var LR: TSSLOperationResult;
+  begin
+    LR := TResultUtils.All([Ok, Ok, Ok]);
+    CheckTrue(LR.IsOk);
+    LR := TResultUtils.All([Ok, Err(sslErrGeneral, 'fail'), Ok]);
+    CheckTrue(LR.IsErr);
+  end);
+
+  LSuite.Test('Any combinator', procedure
+  var LR: TSSLOperationResult;
+  begin
+    LR := TResultUtils.Any([Err(sslErrGeneral, 'e1'), Ok, Err(sslErrGeneral, 'e2')]);
+    CheckTrue(LR.IsOk);
+    LR := TResultUtils.Any([Err(sslErrGeneral, 'e1'), Err(sslErrCertificate, 'e2')]);
+    CheckTrue(LR.IsErr);
+  end);
+
+  LSuite.Test('TSSLDataResult', procedure
+  var LR: TSSLDataResult;
+  begin
+    LR := OkData(TBytes.Create(1, 2, 3, 4));
+    CheckTrue(LR.IsOk); CheckEqual(4, Length(LR.Data));
+    LR := ErrData(sslErrInvalidData, 'bad data');
+    CheckTrue(LR.IsErr); CheckTrue(Pos('Err', LR.ToString) > 0);
+  end);
+
+  LSuite.Test('TSSLStringResult', procedure
+  var LR: TSSLStringResult;
+  begin
+    LR := OkString('hello');
+    CheckTrue(LR.IsOk); CheckEqual('hello', LR.Value);
+    LR := ErrString(sslErrParseFailed, 'parse error');
+    CheckTrue(LR.IsErr); CheckTrue(Pos('Err', LR.ToString) > 0);
+  end);
+
+  LRunner := TTestRunner.Create('nextpas.core.tls.result_utils');
+  LRunner.Add(LSuite);
+  LRunner.RunAll;
+  LRunner.Summary;
+  if not LRunner.AllPassed then Halt(1);
 end.

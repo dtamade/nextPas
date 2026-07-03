@@ -3,7 +3,7 @@ program bench_aesgcm;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   SysUtils, DateUtils, nextpas.core.tls.crypto.aesgcm, nextpas.core.tls.crypto.aesni;
 
 const
