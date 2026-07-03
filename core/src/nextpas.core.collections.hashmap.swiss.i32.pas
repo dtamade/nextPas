@@ -15,8 +15,7 @@ const
   CTRL_DELETED = Byte($80);
   GROUP_SIZE   = 16;
 
-function InlineHash32(x: UInt32): UInt32; inline,
-  nextpas.core.mem.allocator.base;
+function InlineHash32(x: UInt32): UInt32; inline;
 
 type
   generic TSwissTableI32<V> = class
@@ -33,7 +32,7 @@ type
     FGroupCount: SizeUInt;
     FCount: SizeUInt;
     FGrowthLeft: SizeUInt;
-    FAllocator: TMemAllocator;
+    FAllocator: IAllocator;
 
     procedure AllocTable(ACapacity: SizeUInt);
     procedure FreeTable;
@@ -42,7 +41,7 @@ type
 
   public
     constructor Create(aCapacity: SizeUInt = 0);
-    constructor CreateWith(aCapacity: SizeUInt; const aAllocator: TMemAllocator);
+    constructor CreateWith(aCapacity: SizeUInt; const aAllocator: IAllocator);
     destructor Destroy; override;
 
     function TryGetValue(AKey: Int32; out AValue: V): Boolean;
@@ -82,8 +81,8 @@ begin
   FSlots := nil;
   if FAllocator <> nil then
   begin
-    FCtrl := FAllocator.GetMem(ACapacity + GROUP_SIZE);
-    FSlots := FAllocator.GetMem(ACapacity * SizeOf(TSlot));
+    FCtrl := FAllocator.Allocate(ACapacity + GROUP_SIZE);
+    FSlots := FAllocator.Allocate(ACapacity * SizeOf(TSlot));
   end
   else
   begin
@@ -111,8 +110,8 @@ begin
         Finalize(FSlots[i].Value);
   if FAllocator <> nil then
   begin
-    FAllocator.FreeMem(FSlots);
-    FAllocator.FreeMem(FCtrl);
+    FAllocator.Deallocate(FSlots);
+    FAllocator.Deallocate(FCtrl);
   end
   else
   begin
@@ -170,8 +169,8 @@ begin
     end;
     if FAllocator <> nil then
     begin
-      FAllocator.FreeMem(LOldSlots);
-      FAllocator.FreeMem(LOldCtrl);
+      FAllocator.Deallocate(LOldSlots);
+      FAllocator.Deallocate(LOldCtrl);
     end
     else
     begin
@@ -200,7 +199,7 @@ begin
   end;
 end;
 
-constructor TSwissTableI32.CreateWith(aCapacity: SizeUInt; const aAllocator: TMemAllocator);
+constructor TSwissTableI32.CreateWith(aCapacity: SizeUInt; const aAllocator: IAllocator);
 begin
   inherited Create;
   FCtrl := nil; FSlots := nil; FAllocator := aAllocator;

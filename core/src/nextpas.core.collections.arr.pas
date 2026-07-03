@@ -14,8 +14,7 @@ uses
   nextpas.core.collections.arr.intf;
 
 procedure MemCopyUnchecked(aSrc, aDst: Pointer; aSize: SizeUInt); inline;
-function MemIsOverlap(aPtr1: Pointer; aSize1: SizeUInt; aPtr2: Pointer; aSize2: SizeUInt): Boolean; inline,
-  nextpas.core.mem.allocator.base;
+function MemIsOverlap(aPtr1: Pointer; aSize1: SizeUInt; aPtr2: Pointer; aSize2: SizeUInt): Boolean; inline;
 
 type
 
@@ -79,10 +78,10 @@ type
     procedure DoShuffle(aProxy: TRandomGeneratorProxyMethod; aStartIndex, aCount: SizeUInt; aRandomGenerator, aData: Pointer); virtual;
 
   public
-    constructor Create(aAllocator: TMemAllocator; aData: Pointer); override; overload;
+    constructor Create(aAllocator: IAllocator; aData: Pointer); override; overload;
     constructor Create(aCount: SizeUInt); overload;
-    constructor Create(aCount: SizeUInt; aAllocator: TMemAllocator); overload;
-    constructor Create(aCount: SizeUInt; aAllocator: TMemAllocator; aData: Pointer); virtual; overload;
+    constructor Create(aCount: SizeUInt; aAllocator: IAllocator); overload;
+    constructor Create(aCount: SizeUInt; aAllocator: IAllocator; aData: Pointer); virtual; overload;
     destructor  Destroy; override;
 
     { ICollection }
@@ -1205,7 +1204,7 @@ begin
     SwapUnchecked(i, aStartIndex + aProxy(aRandomGenerator, i - aStartIndex + 1, aData));
 end;
 
-constructor TArray.Create(aAllocator: TMemAllocator; aData: Pointer);
+constructor TArray.Create(aAllocator: IAllocator; aData: Pointer);
 begin
   Create(0, aAllocator, aData);
 end;
@@ -1215,12 +1214,12 @@ begin
   Create(aCount, DefaultAllocator(), nil);
 end;
 
-constructor TArray.Create(aCount: SizeUInt; aAllocator: TMemAllocator);
+constructor TArray.Create(aCount: SizeUInt; aAllocator: IAllocator);
 begin
   Create(aCount, aAllocator, nil);
 end;
 
-constructor TArray.Create(aCount: SizeUInt; aAllocator: TMemAllocator; aData: Pointer);
+constructor TArray.Create(aCount: SizeUInt; aAllocator: IAllocator; aData: Pointer);
 begin
   inherited Create(aAllocator, aData);
   FMemory := nil;

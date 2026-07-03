@@ -12,7 +12,8 @@ uses
   nextpas.core.mem.intf,
   nextpas.core.collections.base,
   nextpas.core.collections.hashmap.base,
-  nextpas.core.collections.hashmap.intf;
+  nextpas.core.collections.hashmap.intf,
+  nextpas.core.mem.allocator.base;
 
 const
   DEFAULT_MAX_LOAD_FACTOR = nextpas.core.collections.hashmap.base.DEFAULT_MAX_LOAD_FACTOR;
@@ -71,8 +72,7 @@ function HashOfAnsiString(const s: AnsiString): UInt32;
  * @param s String to hash
  * @return UInt32 Hash value
  *}
-function HashOfUnicodeString(const s: UnicodeString): UInt32,
-  nextpas.core.mem.allocator.base;
+function HashOfUnicodeString(const s: UnicodeString): UInt32;
 
 type
   {**
