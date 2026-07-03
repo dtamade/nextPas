@@ -21,16 +21,6 @@ uses
 
 { ── Timeout worker (internal) ──────────────────────────────────────────────── }
 
-type
-  TTimeoutRec = record
-    Proc    : TTestProc;
-    Closure : TTestClosure;
-    Done    : Boolean;
-    ErrorMsg: string;
-    Status  : TTestStatus;
-  end;
-  PTimeoutRec = ^TTimeoutRec;
-
 function RunTestWithTimeout(AProc: TTestProc; ATimeoutMs: Integer;
   const AConfig: TTestConfig; out AStatus: TTestStatus;
   out AMsg: string): Boolean;
@@ -75,6 +65,16 @@ implementation
 { ═════════════════════════════════════════════════════════════════════════════ }
 { Timeout worker                                                                }
 { ═════════════════════════════════════════════════════════════════════════════ }
+
+type
+  TTimeoutRec = record
+    Proc    : TTestProc;
+    Closure : TTestClosure;
+    Done    : Boolean;
+    ErrorMsg: string;
+    Status  : TTestStatus;
+  end;
+  PTimeoutRec = ^TTimeoutRec;
 
 function TimeoutWorker(AArg: Pointer): Pointer; cdecl;
 var
