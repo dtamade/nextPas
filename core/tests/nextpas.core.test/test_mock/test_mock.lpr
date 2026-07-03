@@ -861,6 +861,146 @@ begin
   WithMock(@TestGetReturnBoolFromStringImpl);
 end;
 
+{ ── T-02: Typed return tests via TMock public API ─────────────────────── }
+
+procedure TestReturnsDoubleTypedImpl(AMock: TMock);
+var
+  LValue: TMockValue;
+begin
+    AMock.Setup('Pi').ReturnsDouble(3.14159);
+    { GetReturn should contain the string representation }
+    CheckTrue(AMock.GetReturn('Pi') <> '', 'double return string non-empty');
+    { Typed retrieval via State should be mvDouble }
+    LValue := AMock.State.GetReturnTyped('Pi', []);
+    CheckTrue(LValue.Kind = mvDouble, 'ReturnsDouble → typed kind mvDouble');
+    CheckTrue(Abs(LValue.DblVal - 3.14159) < 1e-12, 'ReturnsDouble → typed value');
+    { GetReturnInt64 on a double setup should return 0 (kind mismatch) }
+    CheckEqual(Int64(0), AMock.GetReturnInt('Pi'));
+end;
+
+procedure TestReturnsDoubleTyped;
+begin
+  WithMock(@TestReturnsDoubleTypedImpl);
+end;
+
+procedure TestReturnsIntTypedImpl(AMock: TMock);
+var
+  LValue: TMockValue;
+begin
+    AMock.Setup('Count').ReturnsInt(999);
+    { TMock.GetReturnInt should read typed value }
+    CheckEqual(Int64(999), AMock.GetReturnInt('Count'));
+    { Typed retrieval should be mvInt64 }
+    LValue := AMock.State.GetReturnTyped('Count', []);
+    CheckTrue(LValue.Kind = mvInt64, 'ReturnsInt → typed kind mvInt64');
+    CheckEqual(Int64(999), LValue.IntVal);
+    { String fallback should work too }
+    CheckEqual('999', AMock.GetReturn('Count'));
+end;
+
+procedure TestReturnsIntTyped;
+begin
+  WithMock(@TestReturnsIntTypedImpl);
+end;
+
+procedure TestReturnsBoolTypedImpl(AMock: TMock);
+var
+  LValue: TMockValue;
+begin
+    AMock.Setup('Enabled').ReturnsBool(True);
+    CheckTrue(AMock.GetReturnBool('Enabled'));
+    LValue := AMock.State.GetReturnTyped('Enabled', []);
+    CheckTrue(LValue.Kind = mvBool, 'ReturnsBool → typed kind mvBool');
+    CheckTrue(LValue.BoolVal, 'ReturnsBool → typed value True');
+
+    AMock.Setup('Disabled').ReturnsBool(False);
+    CheckFalse(AMock.GetReturnBool('Disabled'));
+    LValue := AMock.State.GetReturnTyped('Disabled', []);
+    CheckTrue(LValue.Kind = mvBool, 'ReturnsBool false → typed kind mvBool');
+    CheckFalse(LValue.BoolVal, 'ReturnsBool false → typed value False');
+end;
+
+procedure TestReturnsBoolTyped;
+begin
+  WithMock(@TestReturnsBoolTypedImpl);
+end;
+
+procedure TestRecordCallTypedViaMockImpl(AMock: TMock);
+begin
+    AMock.RecordCallTyped('Calc', [MockInt(10), MockDouble(2.5), MockBool(False)]);
+    CheckEqual(1, AMock.CallCount('Calc'));
+    CheckTrue(AMock.State.Calls[0].TypedArgs[0].Kind = mvInt64, 'arg0 kind');
+    CheckEqual(Int64(10), AMock.State.Calls[0].TypedArgs[0].IntVal);
+    CheckTrue(AMock.State.Calls[0].TypedArgs[1].Kind = mvDouble, 'arg1 kind');
+    CheckTrue(Abs(AMock.State.Calls[0].TypedArgs[1].DblVal - 2.5) < 1e-12, 'arg1 dbl');
+    CheckTrue(AMock.State.Calls[0].TypedArgs[2].Kind = mvBool, 'arg2 kind');
+    CheckFalse(AMock.State.Calls[0].TypedArgs[2].BoolVal, 'arg2 bool');
+    { Legacy string args should be auto-converted }
+    CheckEqual('10', AMock.State.Calls[0].Args[0]);
+    CheckTrue(AMock.State.Calls[0].Args[1] <> '', 'legacy arg1 non-empty');
+    CheckEqual('false', AMock.State.Calls[0].Args[2]);
+end;
+
+procedure TestRecordCallTypedViaMock;
+begin
+  WithMock(@TestRecordCallTypedViaMockImpl);
+end;
+
+procedure TestGetReturnIntWithArgsImpl(AMock: TMock);
+begin
+    AMock.Setup('Lookup').ReturnsInt(77);
+    { GetReturnInt with args — typed path should still return 77 }
+    CheckEqual(Int64(77), AMock.GetReturnInt('Lookup', ['key']));
+    { No args path should also work }
+    CheckEqual(Int64(77), AMock.GetReturnInt('Lookup'));
+end;
+
+procedure TestGetReturnIntWithArgs;
+begin
+  WithMock(@TestGetReturnIntWithArgsImpl);
+end;
+
+procedure TestTypedSetupOverwriteImpl(AMock: TMock);
+var
+  LValue: TMockValue;
+begin
+    AMock.Setup('Counter').ReturnsInt(1);
+    AMock.Setup('Counter').ReturnsInt(2);
+    CheckEqual(Int64(2), AMock.GetReturnInt('Counter'));
+    LValue := AMock.State.GetReturnTyped('Counter', []);
+    CheckEqual(Int64(2), LValue.IntVal);
+
+    AMock.Setup('Flag').ReturnsBool(True);
+    AMock.Setup('Flag').ReturnsBool(False);
+    CheckFalse(AMock.GetReturnBool('Flag'), 'bool overwrite');
+    LValue := AMock.State.GetReturnTyped('Flag', []);
+    CheckFalse(LValue.BoolVal, 'typed bool overwrite');
+end;
+
+procedure TestTypedSetupOverwrite;
+begin
+  WithMock(@TestTypedSetupOverwriteImpl);
+end;
+
+procedure TestMixedTypeSetupOnSameMethodImpl(AMock: TMock);
+var
+  LValue: TMockValue;
+begin
+    { Setup as int, then overwrite as double — last write wins }
+    AMock.Setup('Mixed').ReturnsInt(42);
+    AMock.Setup('Mixed').ReturnsDouble(3.14);
+    LValue := AMock.State.GetReturnTyped('Mixed', []);
+    CheckTrue(LValue.Kind = mvDouble, 'overwritten kind should be mvDouble');
+    CheckTrue(Abs(LValue.DblVal - 3.14) < 1e-12, 'overwritten double value');
+    { GetReturnInt should return 0 (kind mismatch after overwrite) }
+    CheckEqual(Int64(0), AMock.GetReturnInt('Mixed'));
+end;
+
+procedure TestMixedTypeSetupOnSameMethod;
+begin
+  WithMock(@TestMixedTypeSetupOnSameMethodImpl);
+end;
+
 
 { ── Register Tests ───────────────────────────────────────────────────────────── }
 
@@ -950,6 +1090,15 @@ begin
   Suite.Test('TestRecordCallTypedAllTypes', @TestRecordCallTypedAllTypes);
   Suite.Test('TestGetReturnIntEmptyString', @TestGetReturnIntEmptyString);
   Suite.Test('TestGetReturnBoolFromString', @TestGetReturnBoolFromString);
+
+  { T-02: Typed return tests via TMock public API }
+  Suite.Test('TestReturnsDoubleTyped', @TestReturnsDoubleTyped);
+  Suite.Test('TestReturnsIntTyped', @TestReturnsIntTyped);
+  Suite.Test('TestReturnsBoolTyped', @TestReturnsBoolTyped);
+  Suite.Test('TestRecordCallTypedViaMock', @TestRecordCallTypedViaMock);
+  Suite.Test('TestGetReturnIntWithArgs', @TestGetReturnIntWithArgs);
+  Suite.Test('TestTypedSetupOverwrite', @TestTypedSetupOverwrite);
+  Suite.Test('TestMixedTypeSetupOnSameMethod', @TestMixedTypeSetupOnSameMethod);
 
   Runner := TTestRunner.Create('mock-tests');
   Runner.Add(Suite);

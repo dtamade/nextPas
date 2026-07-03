@@ -305,6 +305,9 @@ var
   { G1: AllPassed auto-run }
   LAutoRunSuite: TTestSuite;
   LAutoRunRunner: TTestRunner;
+  { T-07: timeout exceeded }
+  LFoundTimeout: Boolean;
+  LI: Integer;
 begin
   WriteLn('=== test_runner ===');
   { Suite 1: lifecycle }
@@ -1885,6 +1888,59 @@ begin
         IntToStr(LFilterResult.Passed));
     ResetDefaultConfig;
     PassTest('Glob filter edge cases');
+  end;
+
+  { ── T-07: Test-level timeout exceeded ─────────────────────────────────────── }
+  WriteLn;
+  SectionHeader('T-07: Test timeout exceeded');
+  begin
+    ResetDefaultConfig;
+    { Test with a generous timeout for fast tests, and a slow test that exceeds it }
+    LVerbSuite := TTestSuite.Create('TimeoutExceeded');
+    SetTestTimeout(200);
+    LVerbSuite.Test('fast_test', procedure begin
+      CheckTrue(True);
+    end);
+    LVerbSuite.RunWithResult(LVerbResult);
+    { fast_test should pass within 200ms }
+    if LVerbResult.Passed <> 1 then
+      FailTest('timeout fast: expected 1 pass, got Passed=' +
+        IntToStr(LVerbResult.Passed));
+    if LVerbResult.Failed <> 0 then
+      FailTest('timeout fast: expected 0 failures, got Failed=' +
+        IntToStr(LVerbResult.Failed));
+    ResetDefaultConfig;
+    PassTest('fast test within timeout');
+
+    { Now test with a tight timeout that a slow test will exceed }
+    LVerbSuite := TTestSuite.Create('TimeoutSlow');
+    SetTestTimeout(50);
+    LVerbSuite.Test('slow_test', procedure begin
+      SleepMs(300);
+    end);
+    LVerbSuite.RunWithResult(LVerbResult);
+    { slow_test should have timed out → at least 1 failure }
+    if LVerbResult.Failed < 1 then
+      FailTest('timeout slow: expected at least 1 failure, got Failed=' +
+        IntToStr(LVerbResult.Failed));
+    { Check timeout message in results }
+    begin
+      LFoundTimeout := False;
+      for LI := 0 to High(LVerbResult.Results) do
+        if LVerbResult.Results[LI].Status = tsError then
+        begin
+          LFoundTimeout := True;
+          if Pos('timed out', LVerbResult.Results[LI].Message) = 0 then
+            FailTest('timeout: expected "timed out" in message, got "' +
+              LVerbResult.Results[LI].Message + '"');
+          Break;
+        end;
+      if not LFoundTimeout then
+        FailTest('timeout: expected a tsError result');
+    end;
+    SetTestTimeout(0);
+    ResetDefaultConfig;
+    PassTest('Test timeout exceeded');
   end;
 
   WriteLn;

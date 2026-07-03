@@ -248,9 +248,14 @@
 | **P2 — Glob filter 边界** | ✅ FIXED | 添加 G4 测试验证空 pattern 和精确匹配 |
 | **P2 — 空 Suite 并行测试** | ✅ FIXED | 添加 G2 测试验证空 suite 并行执行不崩溃 |
 | **Facade re-export** | ✅ FIXED | nextpas.core.test.pas 补全 12 个缺失函数 re-export (Check*D, CI, NotStart/EndsWith) |
+| **T-02** TMock typed args/return | ✅ FIXED | 7 新测试: ReturnsDouble/Int/Bool typed retrieval, RecordCallTyped via TMock, GetReturnInt with args, typed overwrite, mixed type |
+| **T-07** Test timeout exceeded | ✅ FIXED | 2 阶段测试: fast test within 200ms passes + slow test (300ms) with 50ms timeout fails with "timed out" message |
 
 **未修复项**（需要更大结构性改动或独立规划）：
 - A-01: runner.pas 拆分 (~2300 行) — 结构性改动，需独立 worktree
 - C-02: 10ms 轮询 → condition variable — 性能改动，需跨平台测试
-- T-01: NaN/边界测试补全 — P1 优先，待下一轮
-- 其余 P2/P3 项 — 渐进改进
+- T-03: Parallel subtest graceful-skip message 验证
+- T-04: TAP/JSON 输出格式合规测试
+- T-05: Glob/hierarchical filter 复杂场景
+- T-06: Config zero-value ambiguity 测试
+- 其余 P3 项 — 渐进改进
