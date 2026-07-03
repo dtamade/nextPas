@@ -110,6 +110,27 @@ begin
   end;
 end;
 
+{ T-02: AllocMem must zero-initialize (DoAllocMem override) }
+
+procedure TestAllocMemZeroed;
+var
+  LAlloc: TGuardAllocator;
+  LPtr: PByte;
+  LI: Int32;
+begin
+  LAlloc := TGuardAllocator.Create;
+  try
+    LPtr := PByte(LAlloc.AllocMem(256));
+    Check(LPtr <> nil, 'AllocMem(256) returns non-nil');
+    for LI := 0 to 255 do
+      Check(LPtr[LI] = 0, 'byte[' + IntToStr(LI) + '] is zero');
+    LAlloc.FreeMem(LPtr);
+    WriteLn('PASS: AllocMem zero-initialization');
+  finally
+    LAlloc.Free;
+  end;
+end;
+
 procedure TestTraits;
 var
   LAlloc: TGuardAllocator;
@@ -164,6 +185,7 @@ begin
   T.Test('multiple_allocs', @TestMultipleAllocs);
   T.Test('page_aligned', @TestPageAligned);
   T.Test('nil_handling', @TestNilHandling);
+  T.Test('alloc_mem_zeroed', @TestAllocMemZeroed);
   T.Test('traits', @TestTraits);
   T.Test('double_free_detection', @TestDoubleFreeDetection);
 

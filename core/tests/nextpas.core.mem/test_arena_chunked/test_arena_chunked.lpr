@@ -8,6 +8,8 @@ uses
   nextpas.core.mem.arena.base,
   nextpas.core.mem.arena.chunked,
   nextpas.core.mem.arena.intf,
+  nextpas.core.mem.intf,
+  nextpas.core.mem.allocator.rtl,
   nextpas.core.mem.base;
 
 var
@@ -547,6 +549,29 @@ begin
   end;
 end;
 
+{ T-06: ChunkedArena with custom IAllocator }
+
+procedure TestCustomAllocatorConfig;
+var
+  LConfig: TChunkedArenaConfig;
+  LArena: TChunkedArena;
+  LP: Pointer;
+begin
+  LConfig := TChunkedArenaConfig.Default(512);
+  LConfig.Allocator := GetRtlAllocator;
+  LArena := TChunkedArena.Create(LConfig);
+  try
+    LP := LArena.Alloc(64);
+    Check(LP <> nil, 'custom allocator alloc');
+    FillChar(LP^, 64, $AB);
+    LP := LArena.Alloc(256);
+    Check(LP <> nil, 'custom allocator alloc 256');
+    Check(LArena.UsedSize > 0, 'used > 0');
+  finally
+    LArena.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.mem.arena.chunked');
 
@@ -577,6 +602,7 @@ begin
   T.Test('remaining_size', @TestRemainingSize);
   T.Test('segment_count_initial', @TestSegmentCountZero);
   T.Test('reset_keep_segments_restore_mark', @TestResetKeepSegmentsThenRestoreToMark);
+  T.Test('custom_allocator_config', @TestCustomAllocatorConfig);
 
   T.Run;
 
