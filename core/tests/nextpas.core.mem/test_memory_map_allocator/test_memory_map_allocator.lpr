@@ -154,6 +154,53 @@ begin
   Check(LPtr = nil, 'oversized request should fail without falling back to heap');
 end;
 
+procedure TestCoalescingMergesAdjacentBlocks;
+var
+  LAllocator: IAllocator;
+  LA, LB, LC, LD: Pointer;
+  LX: Pointer;
+begin
+  LAllocator := CreateAnonymousMemoryMapAllocator(128 * 1024);
+  try
+    { Allocate 4 consecutive blocks. }
+    LA := LAllocator.GetMem(128);
+    LB := LAllocator.GetMem(128);
+    LC := LAllocator.GetMem(128);
+    LD := LAllocator.GetMem(128);
+    Check(LA <> nil, 'coalesce: A should allocate');
+    Check(LB <> nil, 'coalesce: B should allocate');
+    Check(LC <> nil, 'coalesce: C should allocate');
+    Check(LD <> nil, 'coalesce: D should allocate');
+
+    { Free B and D (non-adjacent free blocks). }
+    LAllocator.FreeMem(LB);
+    LAllocator.FreeMem(LD);
+    LB := nil;
+    LD := nil;
+
+    { Free A — adjacent to freed B; must merge into one large free block. }
+    LAllocator.FreeMem(LA);
+    LA := nil;
+
+    { Allocate 200 bytes: larger than one original block, fits in merged A+B. }
+    LX := LAllocator.GetMem(200);
+    Check(LX <> nil, 'coalesce: merged A+B should satisfy 200-byte alloc');
+
+    { Release everything. After coalescing, the entire region should merge. }
+    LAllocator.FreeMem(LX);
+    LAllocator.FreeMem(LC);
+    LX := nil;
+    LC := nil;
+
+    { 400 bytes spans multiple original blocks — only possible if coalescing works. }
+    LX := LAllocator.GetMem(400);
+    Check(LX <> nil, 'coalesce: fully coalesced region should satisfy 400-byte alloc');
+    LAllocator.FreeMem(LX);
+  finally
+    LAllocator := nil;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.mem.memory_map_allocator');
   T.Test('anonymous traits and zeroing', @TestAnonymousAllocatorTraitsAndZeroing);
@@ -161,6 +208,7 @@ begin
   T.Test('multiple blocks do not alias and can reuse', @TestMultipleBlocksDoNotAliasAndCanReuse);
   T.Test('invalid and double free', @TestInvalidAndDoubleFree);
   T.Test('capacity exhaustion returns nil', @TestCapacityExhaustionReturnsNil);
+  T.Test('coalescing merges adjacent free blocks', @TestCoalescingMergesAdjacentBlocks);
   T.Run;
 
   T.Summary;

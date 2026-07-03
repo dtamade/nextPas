@@ -384,6 +384,21 @@ begin
   end;
 end;
 
+procedure TestTraitsForwardsInnerAllocator;
+var
+  LAllocator: TTrackingAllocator;
+  LTraits: TAllocatorTraits;
+begin
+  LAllocator := TTrackingAllocator.Create(GetRtlAllocator);
+  try
+    LTraits := LAllocator.Traits;
+    Check(True = LTraits.ZeroInitialized, 'RTL zero-init should forward through tracking');
+    Check(True = LTraits.ThreadSafe, 'RTL thread-safe should forward through tracking');
+  finally
+    LAllocator.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.mem.allocator.tracking');
 
@@ -414,7 +429,7 @@ begin
   T.Test('realloc_nil_is_getmem', @TestReallocNilIsGetMem);
   T.Test('realloc_to_zero_is_free', @TestReallocToZeroIsFree);
   T.Test('report_no_leaks', @TestReportNoLeaks);
-
+  T.Test('traits forwards inner allocator', @TestTraitsForwardsInnerAllocator);
 
   T.Run;
 

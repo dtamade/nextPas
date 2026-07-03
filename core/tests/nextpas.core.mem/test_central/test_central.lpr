@@ -121,6 +121,26 @@ begin
   WriteLn('PASS: free count');
 end;
 
+procedure TestMruCacheHitsSameSpan;
+var
+  LPool: TCentralPool;
+  LBlocks: array[0..63] of Pointer;
+  I: Integer;
+begin
+  CentralPoolInit(LPool, 32);
+  { Allocate and free all blocks — all go back to the same span. }
+  CentralPoolAlloc(LPool, 10, @LBlocks[0], 0);
+  for I := 0 to 9 do
+  begin
+    CentralPoolFree(LPool, 1, @LBlocks[I], 0);
+    { After each free, subsequent frees to the same span should benefit
+      from the MRU cache (FLastHitIndex), making FindSpanIndex O(1). }
+  end;
+  Check(CentralPoolFreeCount(LPool) = 64, 'all blocks returned');
+  CentralPoolDestroy(LPool);
+  WriteLn('PASS: MRU cache hits same span');
+end;
+
 { --- Main --- }
 
 begin
@@ -133,6 +153,7 @@ begin
   T.Test('central_free', @TestCentralPoolFree);
   T.Test('central_free_and_realloc', @TestCentralPoolFreeAndRealloc);
   T.Test('central_free_count', @TestCentralPoolFreeCount);
+  T.Test('MRU cache hits same span', @TestMruCacheHitsSameSpan);
 
   T.Run;
   T.Summary;

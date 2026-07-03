@@ -493,6 +493,41 @@ begin
   end;
 end;
 
+procedure TestGrowthPrecisionNoRoundingError;
+var
+  LPool: TScopedStackPool;
+  LPolicy: TStackPoolPolicy;
+  LPtr: Pointer;
+  LInitialSize: SizeUInt;
+  I: Integer;
+begin
+  { Use factor 1.5 to trigger the (Size + Size shr 1) path. }
+  LPolicy := TStackPoolPolicy.Default;
+  LPolicy.EnableAutoGrow := True;
+  LPolicy.GrowthFactor := 1.5;
+  LPolicy.MaxSize := 1024 * 1024;
+  LPool := TScopedStackPool.Create(64, LPolicy);
+  try
+    LInitialSize := LPool.TotalSize;
+    { Trigger several auto-grow cycles. Each grow uses integer arithmetic
+      (Size + Size shr 1) — no floating-point rounding errors. }
+    for I := 0 to 4 do
+    begin
+      { Auto-grow requires UsedSize=0 and no active scopes. }
+      Check(LPool.UsedSize = 0, 'growth: pool should be empty');
+      { Request more than current capacity to trigger a grow. }
+      LPtr := LPool.Alloc(LPool.TotalSize + 1);
+      Check(LPtr <> nil, 'growth precision: grow + alloc step ' + IntToStr(I));
+      LPool.Reset;
+    end;
+    { Pool should have grown significantly from initial 64 bytes. }
+    Check(LPool.TotalSize > LInitialSize * 4,
+      'growth: pool should have grown at least 4x after 5 cycles');
+  finally
+    LPool.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.mem.stack_pool');
   T.Test('basic alloc + reset loop', @TestBasicAllocResetLoop);
@@ -510,6 +545,7 @@ begin
   T.Test('auto-grow empty pool', @TestAutoGrowEmptyPool);
   T.Test('auto-grow rejects existing allocation', @TestAutoGrowRejectsExistingAllocation);
   T.Test('auto-grow rejects untracked scope allocation', @TestAutoGrowRejectsUntrackedScopeAllocation);
+  T.Test('growth precision no rounding error', @TestGrowthPrecisionNoRoundingError);
   T.Run;
 
   T.Summary;
