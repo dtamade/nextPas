@@ -308,6 +308,16 @@ var
   { T-07: timeout exceeded }
   LFoundTimeout: Boolean;
   LI: Integer;
+  { T-06: benchmark N scaling edge cases }
+  LBenchScalingSuite: TTestSuite;
+  LBenchScalingResults: TBenchResults;
+  LBenchScalingConfig: TTestConfig;
+  LBenchScalingSink: TBufferSink;
+  { T-07: suite-level retry }
+  LRetrySuite: TTestSuite;
+  LRetryResult: TTestRunResult;
+  LRetryConfig: TTestConfig;
+  LRetryAttempts: Integer;
 begin
   WriteLn('=== test_runner ===');
   { Suite 1: lifecycle }
@@ -2059,6 +2069,131 @@ begin
     PassTest('Hierarchical filter');
   end;
 
+  { ── T-06: Benchmark N scaling edge cases ───────────────────────────────── }
+
+  SectionHeader('T-06: Benchmark N scaling');
+
+  begin
+    { Fast benchmark: 0ms elapsed → N should scale up from 1 }
+    LBenchScalingSuite := TTestSuite.Create('BenchFast');
+    LBenchScalingSuite.Bench('noop', procedure(BC: PBenchContext)
+    begin
+      { Intentionally empty — 0ms elapsed forces maximum N scaling }
+    end);
+    LBenchScalingConfig := DefaultConfig;
+    LBenchScalingConfig.BenchEnabled := True;
+    LBenchScalingConfig.BenchTimeMs := 50; { short bench time }
+    LBenchScalingSuite.Config := LBenchScalingConfig;
+    LBenchScalingSuite.RunBenchmarks(LBenchScalingResults);
+    if Length(LBenchScalingResults) <> 1 then
+      FailTest('fast bench: expected 1 result, got ' +
+        IntToStr(Length(LBenchScalingResults)));
+    { N should have scaled up significantly from 1 (100x per step) }
+    if LBenchScalingResults[0].N < 100 then
+      FailTest('fast bench: expected N >= 100, got ' +
+        IntToStr(LBenchScalingResults[0].N));
+    { ns/op should be very low }
+    if LBenchScalingResults[0].NsPerOp > 1000 then
+      FailTest('fast bench: expected ns/op < 1000, got ' +
+        IntToStr(LBenchScalingResults[0].NsPerOp));
+    PassTest('Fast benchmark N scaling');
+
+    { Slow benchmark: work exceeds BenchTimeMs on N=1 → immediate report }
+    LBenchScalingSuite := TTestSuite.Create('BenchSlow');
+    LBenchScalingSuite.Bench('sleep_100ms', procedure(BC: PBenchContext)
+    begin
+      SleepMs(100);
+    end);
+    LBenchScalingConfig := DefaultConfig;
+    LBenchScalingConfig.BenchEnabled := True;
+    LBenchScalingConfig.BenchTimeMs := 50; { shorter than work }
+    LBenchScalingSuite.Config := LBenchScalingConfig;
+    LBenchScalingSuite.RunBenchmarks(LBenchScalingResults);
+    if Length(LBenchScalingResults) <> 1 then
+      FailTest('slow bench: expected 1 result, got ' +
+        IntToStr(Length(LBenchScalingResults)));
+    { N should stay at 1 since work already exceeds bench time }
+    if LBenchScalingResults[0].N <> 1 then
+      FailTest('slow bench: expected N=1, got ' +
+        IntToStr(LBenchScalingResults[0].N));
+    { ns/op should be ~100ms = 100,000,000 ns }
+    if LBenchScalingResults[0].NsPerOp < 50000000 then
+      FailTest('slow bench: expected ns/op >= 50M, got ' +
+        IntToStr(LBenchScalingResults[0].NsPerOp));
+    PassTest('Slow benchmark N=1 immediate');
+
+    { Medium benchmark: work within bench time → N scales but not to max }
+    LBenchScalingSuite := TTestSuite.Create('BenchMedium');
+    LBenchScalingSuite.Bench('fast_loop', procedure(BC: PBenchContext)
+    var K: Integer;
+    begin
+      for K := 1 to BC^.N do ; { trivial work }
+    end);
+    LBenchScalingConfig := DefaultConfig;
+    LBenchScalingConfig.BenchEnabled := True;
+    LBenchScalingConfig.BenchTimeMs := 100;
+    LBenchScalingSuite.Config := LBenchScalingConfig;
+    LBenchScalingSuite.RunBenchmarks(LBenchScalingResults);
+    if Length(LBenchScalingResults) <> 1 then
+      FailTest('medium bench: expected 1 result');
+    if LBenchScalingResults[0].N < 10 then
+      FailTest('medium bench: expected N >= 10, got ' +
+        IntToStr(LBenchScalingResults[0].N));
+    PassTest('Medium benchmark N scaling');
+  end;
+
+  { ── T-07: Suite-level retry (RetryCount via config) ───────────────────── }
+
+  SectionHeader('T-07: Suite-level retry');
+
+  begin
+    { Test: suite-level RetryCount retries failed tests }
+    LRetryAttempts := 0;
+    LRetrySuite := TTestSuite.Create('SuiteRetry');
+    LRetryConfig := DefaultConfig;
+    LRetryConfig.RetryCount := 3; { suite-level: retry up to 3 times }
+    LRetrySuite.Config := LRetryConfig;
+    LRetrySuite.Test('flaky_pass', procedure
+    begin
+      Inc(LRetryAttempts);
+      { Fail first 2 attempts, pass on 3rd }
+      if LRetryAttempts < 3 then
+        CheckTrue(False, 'intentional fail attempt ' + IntToStr(LRetryAttempts));
+    end);
+    LRetrySuite.RunWithResult(LRetryResult);
+    { Should eventually pass after retries }
+    if LRetryResult.Passed <> 1 then
+      FailTest('suite retry: expected 1 passed, got ' +
+        IntToStr(LRetryResult.Passed));
+    if LRetryAttempts < 3 then
+      FailTest('suite retry: expected >= 3 attempts, got ' +
+        IntToStr(LRetryAttempts));
+    PassTest('Suite-level retry (RetryCount)');
+
+    { Test: entry-level RetryCount overrides suite-level }
+    LRetryAttempts := 0;
+    LRetrySuite := TTestSuite.Create('EntryRetry');
+    LRetryConfig := DefaultConfig;
+    LRetryConfig.RetryCount := 1; { suite-level: 1 retry }
+    LRetrySuite.Config := LRetryConfig;
+    LRetrySuite.Test('entry_override', procedure
+    begin
+      Inc(LRetryAttempts);
+      { Fail first 4 attempts, pass on 5th }
+      if LRetryAttempts < 5 then
+        CheckTrue(False, 'intentional fail ' + IntToStr(LRetryAttempts));
+    end, 4); { entry-level: 4 retries (overrides suite 1) }
+    LRetrySuite.RunWithResult(LRetryResult);
+    if LRetryResult.Passed <> 1 then
+      FailTest('entry retry: expected 1 passed, got ' +
+        IntToStr(LRetryResult.Passed));
+    if LRetryAttempts < 5 then
+      FailTest('entry retry: expected >= 5 attempts, got ' +
+        IntToStr(LRetryAttempts));
+    PassTest('Entry-level retry overrides suite-level');
+  end;
+
+  ResetDefaultConfig;
   WriteLn;
   PassTest('test_runner');
 
@@ -2092,4 +2227,6 @@ begin
   LVerbSuite := Default(TTestSuite);
   LVerbSink := nil;
   LBenchSuite := Default(TTestSuite);
+  LBenchScalingSuite := Default(TTestSuite);
+  LRetrySuite := Default(TTestSuite);
 end.

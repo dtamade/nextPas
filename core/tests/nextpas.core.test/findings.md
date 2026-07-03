@@ -144,11 +144,13 @@
   - 极慢 benchmark (>BenchTimeMs on N=1) → 直接报告
   - N 溢出保护 (Int64(LN) * 100 > 1e9)
 - **建议**: 补充 3 个 benchmark 边界测试。
+- **状态**: ✅ **已修复** — 3 新测试: fast (N≥100), slow (N=1), medium (N≥10)
 
 #### T-07 [P3] Suite-level retry (RetryCount) 缺少测试
 - **位置**: `test_runner/test_runner.lpr`
 - **描述**: `TTestEntry.RetryCount` 和 `TTestConfig.RetryCount` 支持 suite-level retry，但测试只覆盖了 entry-level retry。Suite-level config retry (通过 `SetDefaultRetryCount`) 未测试。
 - **建议**: 添加 `TestSuiteLevelRetry` 测试。
+- **状态**: ✅ **已修复** — 2 新测试: suite-level RetryCount=3 + entry-level override (4 retries overriding suite 1)
 
 #### T-08 [P3] CleanupTableAllocations 的 FCleanupDone 防重入未测试
 - **位置**: `test_runner/test_runner.lpr`
@@ -255,6 +257,8 @@
 | **T-05** Complex filter scenarios | ✅ FIXED | 5 测试: multi-star glob, brace expansion, substring match, ?-wildcard, hierarchical filter |
 | **C-02** 10ms 轮询 → timed-join | ✅ FIXED | RunTestWithTimeout_internal 改用 platform_thread_timedjoin，零 CPU 浪费，即时检测完成 |
 | **A-01** runner.pas 拆分 | ✅ FIXED | 提取 `runner.cli.pas` (373行 CLI 解析)；配合已有的 `runner.context.pas`/`runner.parallel.pas`，runner.pas 从 2336行降至 1980行 |
+| **T-06** Benchmark N scaling | ✅ FIXED | 3 新测试: fast (N≥100), slow (N=1 immediate), medium (N≥10) |
+| **T-07** Suite-level retry | ✅ FIXED | 2 新测试: suite RetryCount=3 pass-on-3rd, entry override (4 retries overriding suite 1) |
 
-**所有 P1 项已修复**。剩余 P2/P3 项为渐进改进，无阻断风险。
+**所有 P1/P2 测试覆盖项已修复**。剩余项为架构决策或低优先级工程改进。
 - 其余 P3 项 — 渐进改进
