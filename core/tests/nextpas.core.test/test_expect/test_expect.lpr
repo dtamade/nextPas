@@ -798,6 +798,15 @@ begin
   SetExceptionMask(LOldMask);
 end;
 
+procedure TestExpectToEqualDEpsilonBoundary;
+begin
+  { Diff slightly less than epsilon — should pass }
+  ExpectDouble(1.0).ToEqualD(1.0 + 9.99e-11, 1e-10);
+  ExpectDouble(1.0).ToEqualD(1.0 - 9.99e-11, 1e-10);
+  { Diff > epsilon → should fail }
+  ExpectFail(procedure begin ExpectDouble(1.0).ToEqualD(1.0 + 1.01e-10, 1e-10); end);
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -948,6 +957,7 @@ begin
   LSuite.Test('ToEqualD fail',                 @TestExpectToEqualDFail);
   LSuite.Test('Not_.ToEqualD',                 @TestExpectToEqualDNot);
   LSuite.Test('ToEqualD NaN',                  @TestExpectToEqualDNaN);
+  LSuite.Test('ToEqualD epsilon boundary',     @TestExpectToEqualDEpsilonBoundary);
 
   if not LSuite.Run then
   begin

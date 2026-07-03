@@ -130,10 +130,26 @@ procedure CheckStartsWith(const AStr, APrefix: string);
 procedure CheckEndsWith(const AStr, ASuffix: string);
 procedure CheckSame(const AExpected, AActual: Pointer; const AMessage: string = '');
 procedure CheckInRange(const AValue, ALow, AHigh: Int64);
+procedure CheckInRangeD(const AValue, ALow, AHigh: Double;
+  const AEpsilon: Double = 1e-10);
 procedure CheckGreaterThan(const AValue, AExpected: Int64);
 procedure CheckLessThan(const AValue, AExpected: Int64);
 procedure CheckGreaterOrEqual(const AValue, AExpected: Int64);
 procedure CheckLessOrEqual(const AValue, AExpected: Int64);
+procedure CheckGreaterThanD(const AValue, AExpected: Double;
+  const AEpsilon: Double = 1e-10);
+procedure CheckLessThanD(const AValue, AExpected: Double;
+  const AEpsilon: Double = 1e-10);
+procedure CheckGreaterOrEqualD(const AValue, AExpected: Double;
+  const AEpsilon: Double = 1e-10);
+procedure CheckLessOrEqualD(const AValue, AExpected: Double;
+  const AEpsilon: Double = 1e-10);
+procedure CheckContainsCI(const AHaystack, ANeedle: string);
+procedure CheckNotContainsCI(const AHaystack, ANeedle: string);
+procedure CheckStartsWithCI(const AStr, APrefix: string);
+procedure CheckEndsWithCI(const AStr, ASuffix: string);
+procedure CheckNotStartsWith(const AStr, APrefix: string);
+procedure CheckNotEndsWith(const AStr, ASuffix: string);
 procedure CheckLength(const AExpected, AActual: NativeInt);
 procedure CheckRaises(AExceptionClass: ExceptClass; AProc: TTestProc;
   const AMessage: string = '');
@@ -375,6 +391,44 @@ begin nextpas.core.test.check.CheckGreaterOrEqual(AValue, AExpected); end;
 
 procedure CheckLessOrEqual(const AValue, AExpected: Int64);
 begin nextpas.core.test.check.CheckLessOrEqual(AValue, AExpected); end;
+
+procedure CheckInRangeD(const AValue, ALow, AHigh: Double;
+  const AEpsilon: Double);
+begin nextpas.core.test.check.CheckInRangeD(AValue, ALow, AHigh, AEpsilon); end;
+
+procedure CheckGreaterThanD(const AValue, AExpected: Double;
+  const AEpsilon: Double);
+begin nextpas.core.test.check.CheckGreaterThanD(AValue, AExpected, AEpsilon); end;
+
+procedure CheckLessThanD(const AValue, AExpected: Double;
+  const AEpsilon: Double);
+begin nextpas.core.test.check.CheckLessThanD(AValue, AExpected, AEpsilon); end;
+
+procedure CheckGreaterOrEqualD(const AValue, AExpected: Double;
+  const AEpsilon: Double);
+begin nextpas.core.test.check.CheckGreaterOrEqualD(AValue, AExpected, AEpsilon); end;
+
+procedure CheckLessOrEqualD(const AValue, AExpected: Double;
+  const AEpsilon: Double);
+begin nextpas.core.test.check.CheckLessOrEqualD(AValue, AExpected, AEpsilon); end;
+
+procedure CheckContainsCI(const AHaystack, ANeedle: string);
+begin nextpas.core.test.check.CheckContainsCI(AHaystack, ANeedle); end;
+
+procedure CheckNotContainsCI(const AHaystack, ANeedle: string);
+begin nextpas.core.test.check.CheckNotContainsCI(AHaystack, ANeedle); end;
+
+procedure CheckStartsWithCI(const AStr, APrefix: string);
+begin nextpas.core.test.check.CheckStartsWithCI(AStr, APrefix); end;
+
+procedure CheckEndsWithCI(const AStr, ASuffix: string);
+begin nextpas.core.test.check.CheckEndsWithCI(AStr, ASuffix); end;
+
+procedure CheckNotStartsWith(const AStr, APrefix: string);
+begin nextpas.core.test.check.CheckNotStartsWith(AStr, APrefix); end;
+
+procedure CheckNotEndsWith(const AStr, ASuffix: string);
+begin nextpas.core.test.check.CheckNotEndsWith(AStr, ASuffix); end;
 
 procedure CheckLength(const AExpected, AActual: NativeInt);
 begin nextpas.core.test.check.CheckLength(AExpected, AActual); end;

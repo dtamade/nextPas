@@ -243,9 +243,11 @@
 | **E-01** TimeoutWorker 结构 | ⏸ DEFERRED | 结构性改动（move to impl section），需独立规划 |
 | **E-03** Ctx() 错误信息 | ✅ FIXED | 错误信息扩展为 "No active test context — Ctx can only be called from within a running test..." |
 | **D-04** FExecMtx 命名 | ✅ FIXED | TThreadRec.Mtx 添加注释 `protects Pass/Fail/Skip counters + result output` |
+| **T-01** NaN/边界测试补全 | ✅ FIXED | 6 新测试: CheckEqualD NaN, CheckNotEqualD NaN, CheckNear epsilon, CheckSame nil=nil, CheckSame nil<>ptr, ToEqualD epsilon boundary |
 | **P2 — ShouldFail 测试** | ✅ FIXED | 添加 G3 测试验证 ShouldFail pass/fail 路径 |
 | **P2 — Glob filter 边界** | ✅ FIXED | 添加 G4 测试验证空 pattern 和精确匹配 |
 | **P2 — 空 Suite 并行测试** | ✅ FIXED | 添加 G2 测试验证空 suite 并行执行不崩溃 |
+| **Facade re-export** | ✅ FIXED | nextpas.core.test.pas 补全 12 个缺失函数 re-export (Check*D, CI, NotStart/EndsWith) |
 
 **未修复项**（需要更大结构性改动或独立规划）：
 - A-01: runner.pas 拆分 (~2300 行) — 结构性改动，需独立 worktree

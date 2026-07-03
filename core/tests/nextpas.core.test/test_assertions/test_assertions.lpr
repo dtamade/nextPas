@@ -700,6 +700,70 @@ begin
   ExpectFail(procedure begin CheckContainsCI('', 'abc'); end);
 end;
 
+{ ── T-01: NaN/边界测试补全 ───────────────────────────────────────────────── }
+
+procedure TestCheckEqualDoubleNaN;
+var
+  LNaN: Double;
+  LOldMask: TFPUExceptionMask;
+begin
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exZeroDivide, exOverflow, exUnderflow, exPrecision, exDenormalized]);
+  LNaN := 0.0 / 0.0;
+  { NaN == NaN should fail (IEEE 754: NaN ≠ NaN) }
+  ExpectFail(procedure begin CheckEqual(LNaN, LNaN); end, 'NaN');
+  { NaN == 0.0 should also fail }
+  ExpectFail(procedure begin CheckEqual(LNaN, 0.0); end, 'NaN');
+  ExpectFail(procedure begin CheckEqual(0.0, LNaN); end, 'NaN');
+  SetExceptionMask(LOldMask);
+end;
+
+procedure TestCheckNotEqualDoubleNaN;
+var
+  LNaN: Double;
+  LOldMask: TFPUExceptionMask;
+begin
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exZeroDivide, exOverflow, exUnderflow, exPrecision, exDenormalized]);
+  LNaN := 0.0 / 0.0;
+  { NaN != NaN should pass (NaN is always "not equal" to anything) }
+  CheckNotEqual(LNaN, LNaN);
+  { NaN != 0.0 should also pass }
+  CheckNotEqual(LNaN, 0.0);
+  CheckNotEqual(0.0, LNaN);
+  SetExceptionMask(LOldMask);
+end;
+
+procedure TestCheckNearEpsilonExact;
+begin
+  { Diff slightly less than epsilon — should pass }
+  CheckNear(1.0, 1.0 + 9.99e-11, 1e-10);
+  CheckNear(1.0, 1.0 - 9.99e-11, 1e-10);
+end;
+
+procedure TestCheckSameNilNil;
+begin
+  { nil == nil should pass }
+  CheckSame(nil, nil);
+end;
+
+procedure TestCheckSameNilNotNil;
+var
+  LDummy: Integer;
+  LP: Pointer;
+begin
+  LDummy := 42;
+  LP := @LDummy;
+  { nil != @LP should fail }
+  try
+    CheckSame(nil, LP);
+    Fail('expected CheckSame(nil, ptr) to fail');
+  except
+    on E: EAssertionFailed do
+      Check(True, 'CheckSame(nil, ptr) raised as expected');
+  end;
+end;
+
 procedure TestCheckNotStartsWithPass;
 begin
   CheckNotStartsWith('hello', 'xyz');
@@ -892,6 +956,13 @@ begin
   LSuite.Test('GreaterThanD Infinity',       @TestCheckGreaterThanDInfinity);
   LSuite.Test('LessThanD Infinity',          @TestCheckLessThanDInfinity);
   LSuite.Test('ContainsCI empty haystack',   @TestCheckContainsCIEmptyHaystack);
+
+  { T-01: NaN/边界补全 }
+  LSuite.Test('CheckEqualD NaN',             @TestCheckEqualDoubleNaN);
+  LSuite.Test('CheckNotEqualD NaN',          @TestCheckNotEqualDoubleNaN);
+  LSuite.Test('Near epsilon exact',          @TestCheckNearEpsilonExact);
+  LSuite.Test('CheckSame nil=nil',           @TestCheckSameNilNil);
+  LSuite.Test('CheckSame nil<>ptr',          @TestCheckSameNilNotNil);
 
   { String negation }
   LSuite.Test('NotStartsWith pass',          @TestCheckNotStartsWithPass);

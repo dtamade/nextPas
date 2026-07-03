@@ -16,6 +16,7 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 - **v6.0**: Benchmark — adaptive N scaling, ns/op, --bench/--benchtime/--benchmem
 - **v6.1**: R3 quality — NaN guards (11 methods), locale-independent FloatToStr, ToBeSame/ToEqualD API, P3 edge-case coverage
 - **v6.2**: Audit fixes — empty suite crash guard, Ctx() diagnostics, ShouldFail/glob/parallel tests, leak monitor counter
+- **v6.3**: T-01 NaN/边界补全 + facade re-export 补全 (Check*D, CI, NotStartsWith/EndsWith)
 
 ## 竞品对比
 
@@ -45,8 +46,8 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 
 | 套件 | 覆盖范围 | 测试数 |
 |------|---------|--------|
-| `test_assertions` | Check* 过程式断言 API + NaN/边界覆盖 | 95 |
-| `test_expect` | IExpectation 流式断言 API + NaN/Pointer/Double equality | 110 |
+| `test_assertions` | Check* 过程式断言 API + NaN/边界/epsilon 覆盖 | 100 |
+| `test_expect` | IExpectation 流式断言 API + NaN/Pointer/Double/epsilon 边界 | 111 |
 | `test_mock` | TMock 录制/验证/返回值/参数匹配 | 53 |
 | `test_output` | ANSI、StatusDot、filter、timeout、JUnit/TAP/JSON 格式化、brace expansion、层级过滤、hierarchical+glob 组合 | 64 |
 | `test_runner` | TTestRunner 多 suite、lifecycle、subtest、timeout、空 suite、ShouldFail、FormatDuration、shuffle、failfast、list、determinism、verbose、runtimeout、cleanup、benchmark、parallel空suite防护、glob边界 | 52+1x |
