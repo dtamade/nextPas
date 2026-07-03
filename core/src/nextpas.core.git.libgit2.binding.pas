@@ -49,7 +49,7 @@ function git_remote_name(remote: git_remote): PChar; cdecl;
 procedure git_remote_free(remote: git_remote); cdecl;
 
 // Reference operations
-function git_reference_lookup(out reference: git_reference; repo: git_repository; const name: PChar): cint; cdecl;
+function git_reference_lookup(out ref_out: git_reference; repo: git_repository; const name: PChar): cint; cdecl;
 function git_reference_name(ref: git_reference): PChar; cdecl;
 function git_reference_target(ref: git_reference): Pgit_oid; cdecl;
 function git_reference_symbolic_target(ref: git_reference): PChar; cdecl;
@@ -208,7 +208,7 @@ type
   TLibGit2_git_remote_url = function(remote: git_remote): PChar; cdecl;
   TLibGit2_git_remote_name = function(remote: git_remote): PChar; cdecl;
   TLibGit2_git_remote_free = procedure(remote: git_remote); cdecl;
-  TLibGit2_git_reference_lookup = function(out reference: git_reference; repo: git_repository; const name: PChar): cint; cdecl;
+  TLibGit2_git_reference_lookup = function(out ref_out: git_reference; repo: git_repository; const name: PChar): cint; cdecl;
   TLibGit2_git_reference_name = function(ref: git_reference): PChar; cdecl;
   TLibGit2_git_reference_target = function(ref: git_reference): Pgit_oid; cdecl;
   TLibGit2_git_reference_symbolic_target = function(ref: git_reference): PChar; cdecl;
@@ -306,7 +306,7 @@ function static_git_remote_list(out out_list: git_strarray; repo: git_repository
 function static_git_remote_url(remote: git_remote): PChar; cdecl; external LIBGIT2_LIB name 'git_remote_url';
 function static_git_remote_name(remote: git_remote): PChar; cdecl; external LIBGIT2_LIB name 'git_remote_name';
 procedure static_git_remote_free(remote: git_remote); cdecl; external LIBGIT2_LIB name 'git_remote_free';
-function static_git_reference_lookup(out reference: git_reference; repo: git_repository; const name: PChar): cint; cdecl; external LIBGIT2_LIB name 'git_reference_lookup';
+function static_git_reference_lookup(out ref_out: git_reference; repo: git_repository; const name: PChar): cint; cdecl; external LIBGIT2_LIB name 'git_reference_lookup';
 function static_git_reference_name(ref: git_reference): PChar; cdecl; external LIBGIT2_LIB name 'git_reference_name';
 function static_git_reference_target(ref: git_reference): Pgit_oid; cdecl; external LIBGIT2_LIB name 'git_reference_target';
 function static_git_reference_symbolic_target(ref: git_reference): PChar; cdecl; external LIBGIT2_LIB name 'git_reference_symbolic_target';
@@ -510,7 +510,7 @@ begin
   static_git_remote_free(remote);
 end;
 
-function git_reference_lookup(out reference: git_reference; repo: git_repository; const name: PChar): cint; cdecl;
+function git_reference_lookup(out ref_out: git_reference; repo: git_repository; const name: PChar): cint; cdecl;
 begin
   Result := static_git_reference_lookup(reference, repo, name);
 end;
@@ -1382,7 +1382,7 @@ begin
   dyn_git_remote_free(remote);
 end;
 
-function git_reference_lookup(out reference: git_reference; repo: git_repository; const name: PChar): cint; cdecl;
+function git_reference_lookup(out ref_out: git_reference; repo: git_repository; const name: PChar): cint; cdecl;
 begin
   if not Assigned(dyn_git_reference_lookup) then
     Pointer(dyn_git_reference_lookup) := ResolveLibGit2Symbol('git_reference_lookup');

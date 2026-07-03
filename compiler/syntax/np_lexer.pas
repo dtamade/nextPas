@@ -45,6 +45,7 @@ type
     tkExitKeyword,
     tkVarKeyword,
     tkConstKeyword,
+    tkConstRefKeyword,
     tkTypeKeyword,
     tkFunctionKeyword,
     tkArrayKeyword,
@@ -314,6 +315,7 @@ begin
     'exit': Exit(tkExitKeyword);
     'var': Exit(tkVarKeyword);
     'const': Exit(tkConstKeyword);
+    'constref': Exit(tkConstRefKeyword);
     'type': Exit(tkTypeKeyword);
     'array': Exit(tkArrayKeyword);
     'set': Exit(tkSetKeyword);
@@ -1562,6 +1564,7 @@ begin
     tkExitKeyword: Result := 'exit';
     tkVarKeyword: Result := 'var';
     tkConstKeyword: Result := 'const';
+    tkConstRefKeyword: Result := 'constref';
     tkTypeKeyword: Result := 'type';
     tkArrayKeyword: Result := 'array';
     tkSetKeyword: Result := 'set';

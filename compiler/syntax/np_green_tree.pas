@@ -27,7 +27,7 @@ type
     gnkInterfaceSection, gnkImplementationSection,
     gnkInitializationSection, gnkFinalizationSection,
     gnkForeignProcedureDecl,
-    gnkBeginBlock, gnkEndBlock,
+    gnkBeginBlock, gnkAsmBlock, gnkEndBlock,
     gnkStatementList,
     gnkIfStatement, gnkWhileStatement, gnkForStatement,
     gnkForInStatement,
@@ -431,6 +431,7 @@ begin
     gnkFinalizationSection: Result := 'finalization-section';
     gnkForeignProcedureDecl: Result := 'foreign-procedure-decl';
     gnkBeginBlock: Result := 'begin-block';
+    gnkAsmBlock: Result := 'asm-block';
     gnkEndBlock: Result := 'end-block';
     gnkStatementList: Result := 'statement-list';
     gnkIfStatement: Result := 'if-statement';
@@ -1201,7 +1202,8 @@ begin
 
   if (Result <> nil) and (Result.NodeKind in
     [gnkIdentifier, gnkDotAccess, gnkArrayAccess, gnkFunctionCall,
-     gnkDereference]) then
+     gnkDereference, gnkStringLiteral, gnkCharLiteral,
+     gnkIntegerLiteral, gnkRealLiteral]) then
   begin
     while ACursor < ALexer.TokenCount do
     begin
@@ -2093,12 +2095,14 @@ begin
   begin
     ParamModifier := '';
     if CurrentToken(ALexer, ACursor).Kind in
-      [tkVarKeyword, tkConstKeyword, tkOutKeyword] then
+      [tkVarKeyword, tkConstKeyword, tkConstRefKeyword, tkOutKeyword] then
     begin
       if CurrentToken(ALexer, ACursor).Kind = tkVarKeyword then
         ParamModifier := 'var:'
       else if CurrentToken(ALexer, ACursor).Kind = tkOutKeyword then
-        ParamModifier := 'out:';
+        ParamModifier := 'out:'
+      else if CurrentToken(ALexer, ACursor).Kind = tkConstRefKeyword then
+        ParamModifier := 'constref:';
       Inc(ACursor);
     end;
 
@@ -3424,6 +3428,7 @@ function ParseProcedureDecl(
 ): Boolean;
 var
   Node: TGreenNode;
+  AsmNode: TGreenNode;
   NameToken: TToken;
   I: LongInt;
   J: LongInt;
@@ -3599,13 +3604,30 @@ begin
     else if (ACursor < ALexer.TokenCount) and
       (CurrentToken(ALexer, ACursor).Kind = tkAsmKeyword) then
     begin
+      AsmNode := TGreenNode.Create(gnkAsmBlock,
+        CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
       Inc(ACursor);
       while (ACursor < ALexer.TokenCount) and
         (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
         (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
         Inc(ACursor);
       MatchTokenSilent(ALexer, ACursor, tkEndKeyword);
+      { FPC asm clobber list: end ['eax', 'ebx', ...] }
+      if (ACursor < ALexer.TokenCount) and
+        (CurrentToken(ALexer, ACursor).Kind = tkLBracket) then
+      begin
+        Inc(ACursor);
+        while (ACursor < ALexer.TokenCount) and
+          (CurrentToken(ALexer, ACursor).Kind <> tkRBracket) and
+          (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+          Inc(ACursor);
+        if (ACursor < ALexer.TokenCount) and
+          (CurrentToken(ALexer, ACursor).Kind = tkRBracket) then
+          Inc(ACursor);
+      end;
       MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+      Node.AppendChild(AsmNode);
+      Inc(ATree.FNodeCount);
     end
     else
     begin
@@ -3640,6 +3662,7 @@ function ParseFunctionDecl(
 ): Boolean;
 var
   Node: TGreenNode;
+  AsmNode: TGreenNode;
   NameToken: TToken;
   TypeNode: TGreenNode;
   I: LongInt;
@@ -3835,13 +3858,30 @@ begin
     else if (ACursor < ALexer.TokenCount) and
       (CurrentToken(ALexer, ACursor).Kind = tkAsmKeyword) then
     begin
+      AsmNode := TGreenNode.Create(gnkAsmBlock,
+        CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
       Inc(ACursor);
       while (ACursor < ALexer.TokenCount) and
         (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
         (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
         Inc(ACursor);
       MatchTokenSilent(ALexer, ACursor, tkEndKeyword);
+      { FPC asm clobber list: end ['eax', 'ebx', ...] }
+      if (ACursor < ALexer.TokenCount) and
+        (CurrentToken(ALexer, ACursor).Kind = tkLBracket) then
+      begin
+        Inc(ACursor);
+        while (ACursor < ALexer.TokenCount) and
+          (CurrentToken(ALexer, ACursor).Kind <> tkRBracket) and
+          (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+          Inc(ACursor);
+        if (ACursor < ALexer.TokenCount) and
+          (CurrentToken(ALexer, ACursor).Kind = tkRBracket) then
+          Inc(ACursor);
+      end;
       MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+      Node.AppendChild(AsmNode);
+      Inc(ATree.FNodeCount);
     end
     else
     begin
@@ -4669,6 +4709,19 @@ var
             (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
             Inc(ACursor);
           MatchTokenSilent(ALexer, ACursor, tkEndKeyword);
+          { FPC asm clobber list: end ['eax', 'ebx', ...] }
+          if (ACursor < ALexer.TokenCount) and
+            (CurrentToken(ALexer, ACursor).Kind = tkLBracket) then
+          begin
+            Inc(ACursor);
+            while (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind <> tkRBracket) and
+              (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+              Inc(ACursor);
+            if (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind = tkRBracket) then
+              Inc(ACursor);
+          end;
           Result := True;
         end;
       tkSemicolon:
@@ -4933,75 +4986,59 @@ var
   LInitNode: TGreenNode;
   LFiniNode: TGreenNode;
 begin
-  Result := MatchToken(
-    ALexer,
-    ACursor,
-    tkInterfaceKeyword,
-    ADiagnostics,
-    ARootFileId,
-    'INTERFACE'
-  );
-  if not Result then
-    Exit;
-
+  { interface keyword may be absent when preprocessor skipped it
+    (e.g. {$IFDEF WINDOWS} wrapping the entire unit on Linux) }
   InterfaceNode := TGreenNode.Create(
     gnkInterfaceSection,
-    CurrentToken(ALexer, ACursor - 1).ByteOffset,
-    0,
-    ''
+    0, 0, ''
   );
   AParent.AppendChild(InterfaceNode);
   Inc(ATree.FNodeCount);
 
-  Result := ParseUsesClause(
-    ALexer,
-    ACursor,
-    ATree,
-    uskInterface,
-    InterfaceNode,
-    ADiagnostics,
-    ARootFileId
-  );
-  if not Result then
-    Exit;
+  SkipDirectives(ALexer, ACursor);
 
-  Result := ParseBlockDeclarations(
-    ALexer, ACursor, InterfaceNode, ATree, ADiagnostics, ARootFileId);
+  if (ACursor < ALexer.TokenCount) and
+    (CurrentToken(ALexer, ACursor).Kind = tkInterfaceKeyword) then
+  begin
+    Inc(ACursor);
 
-  Result := MatchToken(
-    ALexer,
-    ACursor,
-    tkImplementationKeyword,
-    ADiagnostics,
-    ARootFileId,
-    'IMPLEMENTATION'
-  );
-  if not Result then
-    Exit;
+    Result := ParseUsesClause(
+      ALexer, ACursor, ATree, uskInterface,
+      InterfaceNode, ADiagnostics, ARootFileId);
+    if not Result then
+      Exit;
 
-  ImplementationNode := TGreenNode.Create(
-    gnkImplementationSection,
-    CurrentToken(ALexer, ACursor - 1).ByteOffset,
-    0,
-    ''
-  );
-  AParent.AppendChild(ImplementationNode);
-  Inc(ATree.FNodeCount);
+    Result := ParseBlockDeclarations(
+      ALexer, ACursor, InterfaceNode, ATree, ADiagnostics, ARootFileId);
+    if not Result then
+      Exit;
+  end;
 
-  Result := ParseUsesClause(
-    ALexer,
-    ACursor,
-    ATree,
-    uskImplementation,
-    ImplementationNode,
-    ADiagnostics,
-    ARootFileId
-  );
-  if not Result then
-    Exit;
+  { implementation keyword may also be absent when preprocessor skipped it }
+  SkipDirectives(ALexer, ACursor);
+  if (ACursor < ALexer.TokenCount) and
+    (CurrentToken(ALexer, ACursor).Kind = tkImplementationKeyword) then
+  begin
+    Inc(ACursor);
 
-  Result := ParseBlockDeclarations(
-    ALexer, ACursor, ImplementationNode, ATree, ADiagnostics, ARootFileId);
+    ImplementationNode := TGreenNode.Create(
+      gnkImplementationSection,
+      CurrentToken(ALexer, ACursor - 1).ByteOffset, 0, ''
+    );
+    AParent.AppendChild(ImplementationNode);
+    Inc(ATree.FNodeCount);
+
+    Result := ParseUsesClause(
+      ALexer, ACursor, ATree, uskImplementation,
+      ImplementationNode, ADiagnostics, ARootFileId);
+    if not Result then
+      Exit;
+
+    Result := ParseBlockDeclarations(
+      ALexer, ACursor, ImplementationNode, ATree, ADiagnostics, ARootFileId);
+    if not Result then
+      Exit;
+  end;
 
   { handle begin...end. initialization block (FPC syntax without 'initialization' keyword) }
   if (ACursor < ALexer.TokenCount) and
