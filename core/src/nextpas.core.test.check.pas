@@ -363,7 +363,7 @@ end;
 procedure CheckNotContains(const AHaystack, ANeedle: string);
 begin
   if (Length(ANeedle) = 0) then
-    Exit; { empty needle matches everything — companion to CheckContains }
+    Exit; { empty needle is a no-op — consistent with CheckContains }
   if Pos(ANeedle, AHaystack) > 0 then
     InternalFail('"' + AHaystack + '" should not contain "' + ANeedle + '"');
 end;
