@@ -4,7 +4,7 @@ program test_ringbuffer;
 
 uses
   {$IFDEF UNIX}
-  cthreads,
+  nextpas.core.thread.init,
   {$ENDIF}
   SysUtils, Classes, DateUtils,
   nextpas.core.tls.ringbuffer;

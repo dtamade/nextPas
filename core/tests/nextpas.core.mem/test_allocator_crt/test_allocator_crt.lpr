@@ -12,8 +12,8 @@ var
 
 procedure TestCrtAllocatorSingletonAndTraits;
 var
-  LFirst: TMemAllocator;
-  LSecond: TMemAllocator;
+  LFirst: IAllocator;
+  LSecond: IAllocator;
   LTraits: TAllocatorTraits;
 begin
   LFirst := GetCrtAllocator;
@@ -25,13 +25,11 @@ begin
   LTraits := LFirst.Traits;
   Check(LTraits.ThreadSafe, 'CRT allocator should report thread-safe traits');
   Check(LTraits.ZeroInitialized, 'CRT allocator AllocMem should report zero initialization');
-  Check(False = LTraits.SupportsAligned, 'CRT allocator should report fallback aligned alloc');
-  Check(False = LTraits.HasMemSize, 'CRT allocator should not expose MemSize');
 end;
 
 procedure TestCrtAllocatorAllocMemAndReallocMem;
 var
-  LAllocator: TMemAllocator;
+  LAllocator: IAllocator;
   LPtr: PByte;
   LI: Integer;
 begin
@@ -51,40 +49,10 @@ begin
   end;
 end;
 
-procedure TestCrtAllocatorAlignedFallback;
-var
-  LAllocator: TMemAllocator;
-  LPtr: Pointer;
-begin
-  LAllocator := GetCrtAllocator;
-  LPtr := LAllocator.AllocAligned(96, 32);
-  try
-    Check(LPtr <> nil, 'AllocAligned should return a pointer');
-    Check(Int64(0) = Int64(PtrUInt(LPtr) mod 32), 'AllocAligned should honor the requested alignment');
-  finally
-    LAllocator.FreeAligned(LPtr);
-  end;
-end;
-
-procedure TestTryGetCrtAllocator;
-var
-  LTry: TMemAllocator;
-  LGet: TMemAllocator;
-  LOk: Boolean;
-begin
-  LOk := TryGetCrtAllocator(LTry);
-  LGet := GetCrtAllocator;
-  Check(LOk, 'TryGetCrtAllocator should return True');
-  Check(LTry <> nil, 'TryGetCrtAllocator should return non-nil allocator');
-  Check(LTry = LGet, 'TryGetCrtAllocator should match GetCrtAllocator singleton');
-end;
-
 begin
   T := TTestSuite.Create('nextpas.core.mem.allocator.crt');
   T.Test('singleton and traits', @TestCrtAllocatorSingletonAndTraits);
   T.Test('AllocMem and ReallocMem', @TestCrtAllocatorAllocMemAndReallocMem);
-  T.Test('aligned fallback', @TestCrtAllocatorAlignedFallback);
-  T.Test('TryGetCrtAllocator', @TestTryGetCrtAllocator);
   T.Run;
 
   T.Summary;

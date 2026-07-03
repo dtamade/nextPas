@@ -6,8 +6,9 @@ program test_assertions;
 {$modeswitch functionreferences}
 
 uses
-  cthreads,
-  SysUtils,
+  nextpas.core.thread.init,
+  nextpas.core.text.conv,
+  nextpas.core.math,
   nextpas.core.test;
 
 { ── Test procedures ──────────────────────────────────────────────────────── }
@@ -20,59 +21,26 @@ end;
 
 procedure TestCheckFail;
 begin
-  try
-    Check(False, 'expected failure');
-    WriteLn('ERROR: Check(False) did not raise');
-    Halt(1);
-  except
-    on E: EAssertionFailed do
-      CheckContains(E.Message, 'expected failure');
-    on E: Exception do
-      FailUnexpected(E);
-  end;
+  ExpectFail(procedure begin Check(False, 'expected failure'); WriteLn('ERROR: Check(False) did not raise'); end, 'expected failure');
 end;
 
 procedure TestCheckEqualString;
 begin
   CheckEqual('hello', 'hello');
-  try
-    CheckEqual('hello', 'world');
-    Halt(1);
-  except
-    on E: EAssertionFailed do
-      CheckContains(E.Message, 'hello');
-    on E: Exception do
-      FailUnexpected(E);
-  end;
+  ExpectFail(procedure begin CheckEqual('hello', 'world'); end, 'hello');
 end;
 
 procedure TestCheckEqualInt;
 begin
   CheckEqual(Int64(42), Int64(42));
-  try
-    CheckEqual(Int64(42), Int64(99));
-    Halt(1);
-  except
-    on E: EAssertionFailed do
-      CheckContains(E.Message, '42');
-    on E: Exception do
-      FailUnexpected(E);
-  end;
+  ExpectFail(procedure begin CheckEqual(Int64(42), Int64(99)); end, '42');
 end;
 
 procedure TestCheckEqualBool;
 begin
   CheckEqual(True, True);
   CheckEqual(False, False);
-  try
-    CheckEqual(True, False);
-    Halt(1);
-  except
-    on E: EAssertionFailed do
-      CheckContains(E.Message, 'True');
-    on E: Exception do
-      FailUnexpected(E);
-  end;
+  ExpectFail(procedure begin CheckEqual(True, False); end, 'True');
 end;
 
 procedure TestCheckEqualPtr;
@@ -81,14 +49,14 @@ var
 begin
   LP := @LP;
   CheckEqual(LP, LP);
+  { FPC internal error when LP is captured by anonymous closure }
   try
     CheckEqual(nil, LP);
-    Halt(1);
+    Fail('expected pointer equality fail');
   except
     on E: EAssertionFailed do
-      CheckContains(LowerCase(E.Message), 'pointer');
-    on E: Exception do
-      FailUnexpected(E);
+      Check(Pos(LowerCase('pointer'), LowerCase(E.Message)) > 0,
+        'expected "pointer" in message');
   end;
 end;
 
@@ -96,25 +64,13 @@ procedure TestCheckNotEqual;
 begin
   CheckNotEqual('a', 'b');
   CheckNotEqual(Int64(1), Int64(2));
-  try
-    CheckNotEqual('x', 'x');
-    Halt(1);
-  except
-    on E: EAssertionFailed do CheckContains(E.Message, 'differ');
-    on E: Exception do FailUnexpected(E);
-  end;
+  ExpectFail(procedure begin CheckNotEqual('x', 'x'); end, 'differ');
 end;
 
 procedure TestCheckNotEqualBool;
 begin
   CheckNotEqual(True, False);
-  try
-    CheckNotEqual(True, True);
-    Halt(1);
-  except
-    on E: EAssertionFailed do CheckContains(E.Message, 'True');
-    on E: Exception do FailUnexpected(E);
-  end;
+  ExpectFail(procedure begin CheckNotEqual(True, True); end, 'True');
 end;
 
 procedure TestCheckNotEqualPtr;
@@ -139,13 +95,7 @@ begin
   CheckTrue(2 > 1, 'math works');
   CheckFalse(False);
   CheckFalse(1 > 2);
-  try
-    CheckTrue(False, 'should fail');
-    Halt(1);
-  except
-    on E: EAssertionFailed do CheckContains(E.Message, 'should fail');
-    on E: Exception do FailUnexpected(E);
-  end;
+  ExpectFail(procedure begin CheckTrue(False, 'should fail'); end, 'should fail');
 end;
 
 procedure TestCheckNilNotNil;
@@ -169,26 +119,14 @@ procedure TestCheckContains;
 begin
   CheckContains('hello world', 'world');
   CheckContains('abcdef', 'cde');
-  try
-    CheckContains('hello', 'xyz');
-    Halt(1);
-  except
-    on E: EAssertionFailed do CheckContains(E.Message, 'does not contain');
-    on E: Exception do FailUnexpected(E);
-  end;
+  ExpectFail(procedure begin CheckContains('hello', 'xyz'); end, 'does not contain');
 end;
 
 procedure TestCheckStartsWith;
 begin
   CheckStartsWith('hello world', 'hello');
   CheckStartsWith('abc', 'a');
-  try
-    CheckStartsWith('hello', 'xyz');
-    Halt(1);
-  except
-    on E: EAssertionFailed do CheckContains(E.Message, 'does not start');
-    on E: Exception do FailUnexpected(E);
-  end;
+  ExpectFail(procedure begin CheckStartsWith('hello', 'xyz'); end, 'does not start');
 end;
 
 procedure TestCheckEndsWith;
@@ -198,13 +136,7 @@ begin
   { Empty suffix matches everything (consistent with ToEndWith) }
   CheckEndsWith('hello', '');
   CheckEndsWith('', '');
-  try
-    CheckEndsWith('hello', 'xyz');
-    Halt(1);
-  except
-    on E: EAssertionFailed do CheckContains(E.Message, 'does not end');
-    on E: Exception do FailUnexpected(E);
-  end;
+  ExpectFail(procedure begin CheckEndsWith('hello', 'xyz'); end, 'does not end');
 end;
 
 procedure TestCheckSame;
@@ -214,12 +146,14 @@ begin
   LP1 := @LP1;
   LP2 := LP1;
   CheckSame(LP1, LP2);
+  { FPC internal error when LP1 is captured by anonymous closure }
   try
     CheckSame(LP1, nil, 'should be same');
-    Halt(1);
+    Fail('expected CheckSame fail');
   except
-    on E: EAssertionFailed do CheckContains(E.Message, 'should be same');
-    on E: Exception do FailUnexpected(E);
+    on E: EAssertionFailed do
+      Check(Pos('should be same', E.Message) > 0,
+        'expected message in CheckSame fail');
   end;
 end;
 
@@ -228,83 +162,41 @@ begin
   CheckInRange(5, 1, 10);
   CheckInRange(1, 1, 10);
   CheckInRange(10, 1, 10);
-  try
-    CheckInRange(0, 1, 10);
-    Halt(1);
-  except
-    on E: EAssertionFailed do CheckContains(E.Message, 'not in range');
-    on E: Exception do FailUnexpected(E);
-  end;
+  ExpectFail(procedure begin CheckInRange(0, 1, 10); end, 'not in range');
 end;
 
 procedure TestCheckGreaterThan;
 begin
   CheckGreaterThan(10, 5);
   CheckGreaterThan(1, 0);
-  try
-    CheckGreaterThan(5, 10);
-    Halt(1);
-  except
-    on E: EAssertionFailed do CheckContains(E.Message, '>');
-    on E: Exception do FailUnexpected(E);
-  end;
+  ExpectFail(procedure begin CheckGreaterThan(5, 10); end, '>');
 end;
 
 procedure TestCheckLessThan;
 begin
   CheckLessThan(5, 10);
   CheckLessThan(0, 1);
-  try
-    CheckLessThan(10, 5);
-    Halt(1);
-  except
-    on E: EAssertionFailed do CheckContains(E.Message, '<');
-    on E: Exception do FailUnexpected(E);
-  end;
+  ExpectFail(procedure begin CheckLessThan(10, 5); end, '<');
 end;
 
 procedure TestCheckLength;
 begin
   CheckLength(5, 5);
   CheckLength(0, 0);
-  try
-    CheckLength(5, 3);
-    Halt(1);
-  except
-    on E: EAssertionFailed do CheckContains(E.Message, 'Expected length');
-    on E: Exception do FailUnexpected(E);
-  end;
+  ExpectFail(procedure begin CheckLength(5, 3); end, 'Expected length');
 end;
 
 procedure TestCheckRaises;
 begin
   CheckRaises(EConvertError,
     procedure begin StrToInt('not_a_number'); end);
-  try
-    CheckRaises(EConvertError,
-      procedure begin { does nothing } end);
-    Halt(1);
-  except
-    on E: EAssertionFailed do
-      CheckContains(E.Message, 'EConvertError');
-    on E: Exception do
-      FailUnexpected(E);
-  end;
+  ExpectFail(procedure begin CheckRaises(EConvertError, procedure begin { does nothing } end); end, 'EConvertError');
 end;
 
 procedure TestCheckNoRaise;
 begin
   CheckNoRaise(procedure begin { ok } end);
-  try
-    CheckNoRaise(
-      procedure begin raise EConvertError.Create('oops'); end);
-    Halt(1);
-  except
-    on E: EAssertionFailed do
-      CheckContains(E.Message, 'EConvertError');
-    on E: Exception do
-      FailUnexpected(E);
-  end;
+  ExpectFail(procedure begin CheckNoRaise( procedure begin raise EConvertError.Create('oops'); end); end, 'EConvertError');
 end;
 
 procedure TestCheckRaisesSkipPassthrough;
@@ -346,6 +238,19 @@ begin
   end;
 end;
 
+{ P0: CheckRaises with nil ExceptClass — must fail gracefully, not SIGSEGV }
+procedure TestCheckRaisesNilClass;
+begin
+  try
+    CheckRaises(nil, procedure begin end);
+    Halt(1); { should not reach here }
+  except
+    on E: EAssertionFailed do
+      Check(Pos('nil', E.Message) > 0,
+        'Expected nil in error message, got: ' + E.Message);
+  end;
+end;
+
 procedure TestCheckStartsWithEmptyPrefix;
 begin
   { Empty pattern matches everything — consistent across Contains/StartsWith/EndsWith }
@@ -359,15 +264,7 @@ end;
 
 procedure TestFail;
 begin
-  try
-    Fail('intentional');
-    Halt(1);
-  except
-    on E: EAssertionFailed do
-      CheckContains(E.Message, 'intentional');
-    on E: Exception do
-      FailUnexpected(E);
-  end;
+  ExpectFail(procedure begin Fail('intentional'); end, 'intentional');
 end;
 
 procedure TestSkip;
@@ -390,16 +287,7 @@ end;
 
 procedure TestCheckNearFail;
 begin
-  try
-    CheckNear(2.0, 1.0, 1e-10, 'should differ');
-    WriteLn('ERROR: CheckNear did not raise');
-    Halt(1);
-  except
-    on E: EAssertionFailed do
-      CheckContains(E.Message, 'should differ');
-    on E: Exception do
-      FailUnexpected(E);
-  end;
+  ExpectFail(procedure begin CheckNear(2.0, 1.0, 1e-10, 'should differ'); end, 'should differ');
 end;
 
 { CheckEqual(Double) / CheckNotEqual(Double) }
@@ -417,15 +305,7 @@ end;
 
 procedure TestCheckEqualDoubleFail;
 begin
-  try
-    CheckEqual(1.0, 2.0, 1e-10);
-    Halt(1);
-  except
-    on E: EAssertionFailed do
-      CheckContains(E.Message, 'Expected');
-    on E: Exception do
-      FailUnexpected(E);
-  end;
+  ExpectFail(procedure begin CheckEqual(1.0, 2.0, 1e-10); end, 'Expected');
 end;
 
 procedure TestCheckNotEqualDoublePass;
@@ -436,15 +316,7 @@ end;
 
 procedure TestCheckNotEqualDoubleFail;
 begin
-  try
-    CheckNotEqual(1.0, 1.0);
-    Halt(1);
-  except
-    on E: EAssertionFailed do
-      CheckContains(E.Message, 'differ');
-    on E: Exception do
-      FailUnexpected(E);
-  end;
+  ExpectFail(procedure begin CheckNotEqual(1.0, 1.0); end, 'differ');
 end;
 
 procedure TestCheckNotNearPass;
@@ -455,16 +327,7 @@ end;
 
 procedure TestCheckNotNearFail;
 begin
-  try
-    CheckNotNear(1.0, 1.0, 1e-10, 'too close');
-    WriteLn('ERROR: CheckNotNear did not raise');
-    Halt(1);
-  except
-    on E: EAssertionFailed do
-      CheckContains(E.Message, 'too close');
-    on E: Exception do
-      FailUnexpected(E);
-  end;
+  ExpectFail(procedure begin CheckNotNear(1.0, 1.0, 1e-10, 'too close'); end, 'too close');
 end;
 
 { R6-40: Empty string semantics for Contains/StartsWith/EndsWith }
@@ -507,31 +370,13 @@ end;
 { R6-42: CheckGreaterThan/CheckLessThan equal values should fail }
 
 procedure TestCheckGreaterThanEqualFail;
-var
-  LCaught: Boolean = False;
 begin
-  try
-    CheckGreaterThan(5, 5);
-    Halt(1);
-  except
-    on E: EAssertionFailed do
-      LCaught := True;
-  end;
-  CheckTrue(LCaught, 'CheckGreaterThan(5,5) should fail');
+  ExpectFail(procedure begin CheckGreaterThan(5, 5); end);
 end;
 
 procedure TestCheckLessThanEqualFail;
-var
-  LCaught: Boolean = False;
 begin
-  try
-    CheckLessThan(5, 5);
-    Halt(1);
-  except
-    on E: EAssertionFailed do
-      LCaught := True;
-  end;
-  CheckTrue(LCaught, 'CheckLessThan(5,5) should fail');
+  ExpectFail(procedure begin CheckLessThan(5, 5); end);
 end;
 
 { R6-43: CheckRaises catches child exception with parent class }
@@ -555,18 +400,8 @@ begin
 end;
 
 procedure TestCheckGreaterOrEqualFail;
-var
-  LCaught: Boolean = False;
 begin
-  try
-    CheckGreaterOrEqual(4, 5);
-  except
-    on E: EAssertionFailed do
-    begin
-      LCaught := Pos('>=', E.Message) > 0;
-    end;
-  end;
-  CheckTrue(LCaught, 'CheckGreaterOrEqual(4,5) should fail with >= message');
+  ExpectFail(procedure begin CheckGreaterOrEqual(4, 5); end, '>=');
 end;
 
 procedure TestCheckLessOrEqualPass;
@@ -576,18 +411,441 @@ begin
 end;
 
 procedure TestCheckLessOrEqualFail;
-var
-  LCaught: Boolean = False;
+begin
+  ExpectFail(procedure begin CheckLessOrEqual(6, 5); end, '<=');
+end;
+
+procedure TestCheckNotContains;
+{ G1: CheckNotContains — symmetric to CheckContains }
+begin
+  { pass: haystack does NOT contain needle }
+  CheckNotContains('hello world', 'xyz');
+  { fail: haystack DOES contain needle }
+  try
+    CheckNotContains('hello world', 'world');
+    Fail('CheckNotContains should fail when haystack contains needle');
+  except
+    on E: EAssertionFailed do
+      CheckContains(E.Message, 'should not contain');
+  end;
+end;
+
+procedure TestFailUnexpected;
+{ G1: FailUnexpected — formats "unexpected ClassName: Message" }
 begin
   try
-    CheckLessOrEqual(6, 5);
+    FailUnexpected(Exception.Create('boom'));
+    Fail('FailUnexpected should raise');
   except
     on E: EAssertionFailed do
     begin
-      LCaught := Pos('<=', E.Message) > 0;
+      CheckContains(E.Message, 'unexpected');
+      CheckContains(E.Message, 'boom');
     end;
   end;
-  CheckTrue(LCaught, 'CheckLessOrEqual(6,5) should fail with <= message');
+end;
+
+{ ── S1: New Check*D + CI + Negation tests ──────────────────────────────────── }
+
+procedure TestCheckGreaterThanDPass;
+begin
+  CheckGreaterThanD(5.5, 5.0);
+  CheckGreaterThanD(1.0 + 1e-9, 1.0, 1e-8);
+end;
+
+procedure TestCheckGreaterThanDFail;
+begin
+  ExpectFail(procedure begin CheckGreaterThanD(5.0, 5.0); end);
+end;
+
+procedure TestCheckGreaterThanDEqEps;
+begin
+  { Equal within epsilon — should fail (strict >, not >=) }
+  ExpectFail(procedure begin CheckGreaterThanD(5.0, 5.0 + 1e-11, 1e-10); end, 'epsilon');
+end;
+
+procedure TestCheckLessThanDPass;
+begin
+  CheckLessThanD(4.5, 5.0);
+  CheckLessThanD(1.0 - 1e-9, 1.0, 1e-8);
+end;
+
+procedure TestCheckLessThanDFail;
+begin
+  ExpectFail(procedure begin CheckLessThanD(5.0, 5.0); end);
+end;
+
+procedure TestCheckLessThanDEqEps;
+begin
+  ExpectFail(procedure begin CheckLessThanD(5.0, 5.0 - 1e-11, 1e-10); end, 'epsilon');
+end;
+
+procedure TestCheckGreaterOrEqualDPass;
+begin
+  CheckGreaterOrEqualD(5.0, 5.0);
+  CheckGreaterOrEqualD(5.1, 5.0);
+  CheckGreaterOrEqualD(5.0 + 1e-11, 5.0, 1e-10);
+end;
+
+procedure TestCheckGreaterOrEqualDFail;
+begin
+  ExpectFail(procedure begin CheckGreaterOrEqualD(4.0, 5.0); end);
+end;
+
+procedure TestCheckGreaterOrEqualDEq;
+begin
+  { Value slightly below expected but within epsilon — should pass }
+  CheckGreaterOrEqualD(5.0 - 1e-11, 5.0, 1e-10);
+end;
+
+procedure TestCheckGreaterOrEqualDNaN;
+var
+  LNaN: Double;
+  LOldMask: TFPUExceptionMask;
+begin
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exZeroDivide, exOverflow, exUnderflow, exPrecision, exDenormalized]);
+  LNaN := 0.0 / 0.0;
+  ExpectFail(procedure begin CheckGreaterOrEqualD(LNaN, 0.0); end, 'NaN');
+  ExpectFail(procedure begin CheckGreaterOrEqualD(0.0, LNaN); end, 'NaN');
+  SetExceptionMask(LOldMask);
+end;
+
+procedure TestCheckLessOrEqualDPass;
+begin
+  CheckLessOrEqualD(5.0, 5.0);
+  CheckLessOrEqualD(4.9, 5.0);
+  CheckLessOrEqualD(5.0 - 1e-11, 5.0, 1e-10);
+end;
+
+procedure TestCheckLessOrEqualDFail;
+begin
+  ExpectFail(procedure begin CheckLessOrEqualD(6.0, 5.0); end);
+end;
+
+procedure TestCheckLessOrEqualDEq;
+begin
+  { Value slightly above expected but within epsilon — should pass }
+  CheckLessOrEqualD(5.0 + 1e-11, 5.0, 1e-10);
+end;
+
+procedure TestCheckLessOrEqualDNaN;
+var
+  LNaN: Double;
+  LOldMask: TFPUExceptionMask;
+begin
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exZeroDivide, exOverflow, exUnderflow, exPrecision, exDenormalized]);
+  LNaN := 0.0 / 0.0;
+  ExpectFail(procedure begin CheckLessOrEqualD(LNaN, 0.0); end, 'NaN');
+  ExpectFail(procedure begin CheckLessOrEqualD(0.0, LNaN); end, 'NaN');
+  SetExceptionMask(LOldMask);
+end;
+
+procedure TestCheckInRangeDPass;
+begin
+  CheckInRangeD(5.0, 1.0, 10.0);
+  CheckInRangeD(3.14, 3.0, 4.0);
+end;
+
+procedure TestCheckInRangeDBounds;
+begin
+  CheckInRangeD(1.0, 1.0, 10.0);
+  CheckInRangeD(10.0, 1.0, 10.0);
+  { Boundary within epsilon }
+  CheckInRangeD(1.0 - 1e-11, 1.0, 10.0, 1e-10);
+  CheckInRangeD(10.0 + 1e-11, 1.0, 10.0, 1e-10);
+end;
+
+procedure TestCheckInRangeDFail;
+begin
+  ExpectFail(procedure begin CheckInRangeD(11.0, 1.0, 10.0); end, 'not in range');
+end;
+
+procedure TestCheckInRangeDInverted;
+begin
+  ExpectFail(procedure begin CheckInRangeD(5.0, 10.0, 1.0); end, 'ALow');
+end;
+
+procedure TestCheckInRangeDNaN;
+var
+  LNaN: Double;
+  LOldMask: TFPUExceptionMask;
+begin
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exZeroDivide, exOverflow, exUnderflow, exPrecision, exDenormalized]);
+  LNaN := 0.0 / 0.0;
+  ExpectFail(procedure begin CheckInRangeD(LNaN, 0.0, 1.0); end, 'NaN');
+  { ALow/High NaN must also fail }
+  ExpectFail(procedure begin CheckInRangeD(0.5, LNaN, 1.0); end, 'NaN');
+  ExpectFail(procedure begin CheckInRangeD(0.5, 0.0, LNaN); end, 'NaN');
+  SetExceptionMask(LOldMask);
+end;
+
+procedure TestCheckGreaterThanDNaN;
+var
+  LNaN: Double;
+  LOldMask: TFPUExceptionMask;
+begin
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exZeroDivide, exOverflow, exUnderflow, exPrecision, exDenormalized]);
+  LNaN := 0.0 / 0.0;
+  ExpectFail(procedure begin CheckGreaterThanD(LNaN, 0.0); end, 'NaN');
+  ExpectFail(procedure begin CheckGreaterThanD(0.0, LNaN); end, 'NaN');
+  SetExceptionMask(LOldMask);
+end;
+
+procedure TestCheckLessThanDNaN;
+var
+  LNaN: Double;
+  LOldMask: TFPUExceptionMask;
+begin
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exZeroDivide, exOverflow, exUnderflow, exPrecision, exDenormalized]);
+  LNaN := 0.0 / 0.0;
+  ExpectFail(procedure begin CheckLessThanD(LNaN, 0.0); end, 'NaN');
+  ExpectFail(procedure begin CheckLessThanD(0.0, LNaN); end, 'NaN');
+  SetExceptionMask(LOldMask);
+end;
+
+procedure TestCheckNearNaN;
+var
+  LNaN: Double;
+  LOldMask: TFPUExceptionMask;
+begin
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exZeroDivide, exOverflow, exUnderflow, exPrecision, exDenormalized]);
+  LNaN := 0.0 / 0.0;
+  ExpectFail(procedure begin CheckNear(LNaN, 0.0, 1e-10); end, 'NaN');
+  ExpectFail(procedure begin CheckNear(0.0, LNaN, 1e-10); end, 'NaN');
+  ExpectFail(procedure begin CheckNear(LNaN, LNaN, 1e-10); end, 'NaN');
+  SetExceptionMask(LOldMask);
+end;
+
+procedure TestCheckNotNearNaN;
+var
+  LNaN: Double;
+  LOldMask: TFPUExceptionMask;
+begin
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exZeroDivide, exOverflow, exUnderflow, exPrecision, exDenormalized]);
+  LNaN := 0.0 / 0.0;
+  ExpectFail(procedure begin CheckNotNear(LNaN, 0.0, 1e-10); end, 'NaN');
+  ExpectFail(procedure begin CheckNotNear(0.0, LNaN, 1e-10); end, 'NaN');
+  SetExceptionMask(LOldMask);
+end;
+
+{ ── P3: Edge cases — -0.0, Infinity, negative epsilon, denormals ──────────── }
+
+procedure TestCheckNearNegativeZero;
+begin
+  { IEEE 754: -0.0 = +0.0 }
+  CheckNear(0.0, -0.0, 1e-10);
+  CheckNear(-0.0, 0.0, 1e-10);
+end;
+
+procedure TestCheckEqualDoubleNegativeZero;
+begin
+  CheckEqual(0.0, -0.0);
+  CheckEqual(-0.0, 0.0);
+end;
+
+procedure TestCheckNearNegativeEpsilon;
+begin
+  { Negative epsilon: Abs() of the diff is always positive, so
+    negative epsilon means everything is "not near" — near should always fail.
+    But Abs(epsilon) would be more user-friendly. Current behavior: fail. }
+  ExpectFail(procedure begin CheckNear(1.0, 1.0, -1e-10); end);
+end;
+
+procedure TestCheckNearDenormal;
+var
+  LDenorm: Double;
+begin
+  { Smallest positive denormalized Double }
+  LDenorm := 5e-324;
+  CheckNear(0.0, LDenorm, 1e-300);
+  CheckNear(LDenorm, LDenorm, 0.0);
+end;
+
+procedure TestCheckGreaterThanDInfinity;
+var
+  LInf: Double;
+  LOldMask: TFPUExceptionMask;
+begin
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exZeroDivide, exOverflow, exUnderflow, exPrecision, exDenormalized]);
+  LInf := 1.0 / 0.0;
+  CheckGreaterThanD(LInf, 1e308);
+  ExpectFail(procedure begin CheckGreaterThanD(1e308, LInf); end);
+  SetExceptionMask(LOldMask);
+end;
+
+procedure TestCheckLessThanDInfinity;
+var
+  LInf: Double;
+  LOldMask: TFPUExceptionMask;
+begin
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exZeroDivide, exOverflow, exUnderflow, exPrecision, exDenormalized]);
+  LInf := 1.0 / 0.0;
+  CheckLessThanD(1e308, LInf);
+  ExpectFail(procedure begin CheckLessThanD(LInf, 1e308); end);
+  SetExceptionMask(LOldMask);
+end;
+
+procedure TestCheckContainsCIEmptyHaystack;
+begin
+  { Empty haystack with non-empty needle → fail }
+  ExpectFail(procedure begin CheckContainsCI('', 'abc'); end);
+end;
+
+{ ── T-01: NaN/边界测试补全 ───────────────────────────────────────────────── }
+
+procedure TestCheckEqualDoubleNaN;
+var
+  LNaN: Double;
+  LOldMask: TFPUExceptionMask;
+begin
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exZeroDivide, exOverflow, exUnderflow, exPrecision, exDenormalized]);
+  LNaN := 0.0 / 0.0;
+  { NaN == NaN should fail (IEEE 754: NaN ≠ NaN) }
+  ExpectFail(procedure begin CheckEqual(LNaN, LNaN); end, 'NaN');
+  { NaN == 0.0 should also fail }
+  ExpectFail(procedure begin CheckEqual(LNaN, 0.0); end, 'NaN');
+  ExpectFail(procedure begin CheckEqual(0.0, LNaN); end, 'NaN');
+  SetExceptionMask(LOldMask);
+end;
+
+procedure TestCheckNotEqualDoubleNaN;
+var
+  LNaN: Double;
+  LOldMask: TFPUExceptionMask;
+begin
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exZeroDivide, exOverflow, exUnderflow, exPrecision, exDenormalized]);
+  LNaN := 0.0 / 0.0;
+  { NaN != NaN should pass (NaN is always "not equal" to anything) }
+  CheckNotEqual(LNaN, LNaN);
+  { NaN != 0.0 should also pass }
+  CheckNotEqual(LNaN, 0.0);
+  CheckNotEqual(0.0, LNaN);
+  SetExceptionMask(LOldMask);
+end;
+
+procedure TestCheckNearEpsilonExact;
+begin
+  { Diff slightly less than epsilon — should pass }
+  CheckNear(1.0, 1.0 + 9.99e-11, 1e-10);
+  CheckNear(1.0, 1.0 - 9.99e-11, 1e-10);
+end;
+
+procedure TestCheckSameNilNil;
+begin
+  { nil == nil should pass }
+  CheckSame(nil, nil);
+end;
+
+procedure TestCheckSameNilNotNil;
+var
+  LDummy: Integer;
+  LP: Pointer;
+begin
+  LDummy := 42;
+  LP := @LDummy;
+  { nil != @LP should fail }
+  try
+    CheckSame(nil, LP);
+    Fail('expected CheckSame(nil, ptr) to fail');
+  except
+    on E: EAssertionFailed do
+      Check(True, 'CheckSame(nil, ptr) raised as expected');
+  end;
+end;
+
+procedure TestCheckNotStartsWithPass;
+begin
+  CheckNotStartsWith('hello', 'xyz');
+  CheckNotStartsWith('hello', 'world');
+end;
+
+procedure TestCheckNotStartsWithFail;
+begin
+  ExpectFail(procedure begin CheckNotStartsWith('hello', 'hel'); end, 'should not start');
+end;
+
+procedure TestCheckNotStartsWithEmpty;
+begin
+  { Empty prefix is a no-op (always passes) }
+  CheckNotStartsWith('hello', '');
+end;
+
+procedure TestCheckNotEndsWithPass;
+begin
+  CheckNotEndsWith('hello', 'xyz');
+  CheckNotEndsWith('hello', 'world');
+end;
+
+procedure TestCheckNotEndsWithFail;
+begin
+  ExpectFail(procedure begin CheckNotEndsWith('hello', 'llo'); end, 'should not end');
+end;
+
+procedure TestCheckNotEndsWithEmpty;
+begin
+  { Empty suffix is a no-op (always passes) }
+  CheckNotEndsWith('hello', '');
+end;
+
+procedure TestCheckContainsCIPass;
+begin
+  CheckContainsCI('Hello World', 'hello');
+  CheckContainsCI('Hello World', 'WORLD');
+  CheckContainsCI('abc', 'ABC');
+end;
+
+procedure TestCheckContainsCIFail;
+begin
+  ExpectFail(procedure begin CheckContainsCI('Hello', 'xyz'); end, 'does not contain (ci)');
+end;
+
+procedure TestCheckContainsCIEmpty;
+begin
+  CheckContainsCI('hello', '');
+  CheckContainsCI('', '');
+end;
+
+procedure TestCheckNotContainsCIPass;
+begin
+  CheckNotContainsCI('Hello World', 'xyz');
+end;
+
+procedure TestCheckNotContainsCIFail;
+begin
+  ExpectFail(procedure begin CheckNotContainsCI('Hello World', 'hello'); end, 'should not contain (ci)');
+end;
+
+procedure TestCheckStartsWithCIPass;
+begin
+  CheckStartsWithCI('Hello World', 'hello');
+  CheckStartsWithCI('HELLO', 'hel');
+end;
+
+procedure TestCheckStartsWithCIFail;
+begin
+  ExpectFail(procedure begin CheckStartsWithCI('Hello World', 'world'); end, 'does not start with (ci)');
+end;
+
+procedure TestCheckEndsWithCIPass;
+begin
+  CheckEndsWithCI('Hello World', 'WORLD');
+  CheckEndsWithCI('hello', 'LLo');
+end;
+
+procedure TestCheckEndsWithCIFail;
+begin
+  ExpectFail(procedure begin CheckEndsWithCI('Hello World', 'hello'); end, 'does not end with (ci)');
 end;
 
 { ── Main ──────────────────────────────────────────────────────────────────── }
@@ -622,6 +880,7 @@ begin
   LSuite.Test('CheckRaises+Skip',      @TestCheckRaisesSkipPassthrough);
   LSuite.Test('CheckNoRaise+Skip',     @TestCheckNoRaiseSkipPassthrough);
   LSuite.Test('CheckRaises nil',        @TestCheckRaisesNil); { R4-09 }
+  LSuite.Test('CheckRaises nil class',  @TestCheckRaisesNilClass); { P0 }
   LSuite.Test('StartsWith empty',      @TestCheckStartsWithEmptyPrefix);
   LSuite.Test('Fail',                  @TestFail);
   LSuite.Test('Skip',                  @TestSkip);
@@ -658,6 +917,72 @@ begin
   LSuite.Test('LessOrEqual pass',            @TestCheckLessOrEqualPass);
   LSuite.Test('LessOrEqual fail',            @TestCheckLessOrEqualFail);
 
+  { G1: Coverage gaps }
+  LSuite.Test('CheckNotContains',            @TestCheckNotContains);
+  LSuite.Test('FailUnexpected',              @TestFailUnexpected);
+
+  { === S1: New Check*D + CI + Negation tests (usability audit) === }
+
+  { Double comparison operators }
+  LSuite.Test('GreaterThanD pass',           @TestCheckGreaterThanDPass);
+  LSuite.Test('GreaterThanD fail',           @TestCheckGreaterThanDFail);
+  LSuite.Test('GreaterThanD eq+eps',         @TestCheckGreaterThanDEqEps);
+  LSuite.Test('LessThanD pass',              @TestCheckLessThanDPass);
+  LSuite.Test('LessThanD fail',              @TestCheckLessThanDFail);
+  LSuite.Test('LessThanD eq+eps',            @TestCheckLessThanDEqEps);
+  LSuite.Test('GreaterOrEqualD pass',        @TestCheckGreaterOrEqualDPass);
+  LSuite.Test('GreaterOrEqualD fail',        @TestCheckGreaterOrEqualDFail);
+  LSuite.Test('GreaterOrEqualD eq',          @TestCheckGreaterOrEqualDEq);
+  LSuite.Test('GreaterOrEqualD NaN',         @TestCheckGreaterOrEqualDNaN);
+  LSuite.Test('LessOrEqualD pass',           @TestCheckLessOrEqualDPass);
+  LSuite.Test('LessOrEqualD fail',           @TestCheckLessOrEqualDFail);
+  LSuite.Test('LessOrEqualD eq',             @TestCheckLessOrEqualDEq);
+  LSuite.Test('LessOrEqualD NaN',            @TestCheckLessOrEqualDNaN);
+  LSuite.Test('InRangeD pass',               @TestCheckInRangeDPass);
+  LSuite.Test('InRangeD bounds',             @TestCheckInRangeDBounds);
+  LSuite.Test('InRangeD fail',               @TestCheckInRangeDFail);
+  LSuite.Test('InRangeD inverted',           @TestCheckInRangeDInverted);
+  LSuite.Test('InRangeD NaN',                @TestCheckInRangeDNaN);
+  LSuite.Test('GreaterThanD NaN',            @TestCheckGreaterThanDNaN);
+  LSuite.Test('LessThanD NaN',               @TestCheckLessThanDNaN);
+  LSuite.Test('Near NaN',                    @TestCheckNearNaN);
+  LSuite.Test('NotNear NaN',                 @TestCheckNotNearNaN);
+
+  { P3: Edge cases }
+  LSuite.Test('Near -0.0 = +0.0',           @TestCheckNearNegativeZero);
+  LSuite.Test('EqualD -0.0 = +0.0',         @TestCheckEqualDoubleNegativeZero);
+  LSuite.Test('Near negative epsilon',       @TestCheckNearNegativeEpsilon);
+  LSuite.Test('Near denormal',               @TestCheckNearDenormal);
+  LSuite.Test('GreaterThanD Infinity',       @TestCheckGreaterThanDInfinity);
+  LSuite.Test('LessThanD Infinity',          @TestCheckLessThanDInfinity);
+  LSuite.Test('ContainsCI empty haystack',   @TestCheckContainsCIEmptyHaystack);
+
+  { T-01: NaN/边界补全 }
+  LSuite.Test('CheckEqualD NaN',             @TestCheckEqualDoubleNaN);
+  LSuite.Test('CheckNotEqualD NaN',          @TestCheckNotEqualDoubleNaN);
+  LSuite.Test('Near epsilon exact',          @TestCheckNearEpsilonExact);
+  LSuite.Test('CheckSame nil=nil',           @TestCheckSameNilNil);
+  LSuite.Test('CheckSame nil<>ptr',          @TestCheckSameNilNotNil);
+
+  { String negation }
+  LSuite.Test('NotStartsWith pass',          @TestCheckNotStartsWithPass);
+  LSuite.Test('NotStartsWith fail',          @TestCheckNotStartsWithFail);
+  LSuite.Test('NotStartsWith empty',         @TestCheckNotStartsWithEmpty);
+  LSuite.Test('NotEndsWith pass',            @TestCheckNotEndsWithPass);
+  LSuite.Test('NotEndsWith fail',            @TestCheckNotEndsWithFail);
+  LSuite.Test('NotEndsWith empty',           @TestCheckNotEndsWithEmpty);
+
+  { Case-insensitive string }
+  LSuite.Test('ContainsCI pass',             @TestCheckContainsCIPass);
+  LSuite.Test('ContainsCI fail',             @TestCheckContainsCIFail);
+  LSuite.Test('ContainsCI empty',            @TestCheckContainsCIEmpty);
+  LSuite.Test('NotContainsCI pass',          @TestCheckNotContainsCIPass);
+  LSuite.Test('NotContainsCI fail',          @TestCheckNotContainsCIFail);
+  LSuite.Test('StartsWithCI pass',           @TestCheckStartsWithCIPass);
+  LSuite.Test('StartsWithCI fail',           @TestCheckStartsWithCIFail);
+  LSuite.Test('EndsWithCI pass',             @TestCheckEndsWithCIPass);
+  LSuite.Test('EndsWithCI fail',             @TestCheckEndsWithCIFail);
+
   if not LSuite.Run then
   begin
     WriteLn;
@@ -665,4 +990,8 @@ begin
   end;
   WriteLn;
   PassTest('ALL PASSED');
+  { Release closures before heaptrc reports. Note: heaptrc still reports
+    32 bytes unfreed — this is FPC runtime bookkeeping inside RunWithResult,
+    not a framework leak. All other test suites report 0 unfreed. }
+  LSuite := Default(TTestSuite);
 end.

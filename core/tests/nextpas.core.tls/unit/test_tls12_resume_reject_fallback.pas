@@ -3,7 +3,7 @@ program test_tls12_resume_reject_fallback;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   SysUtils, Classes, Sockets, ssockets,
   nextpas.core.tls.tls12.client,
   nextpas.core.tls.tls12.server,

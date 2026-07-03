@@ -8,7 +8,8 @@ uses
   nextpas.core.base,
   nextpas.core.mem.base,          // AlignUp (QA-003: 去重)
   nextpas.core.mem.allocator.base,
-  nextpas.core.mem.memory_map;
+  nextpas.core.mem.memory_map,
+  nextpas.core.mem.mutex;
 
 type
   TMemoryMapAllocator = class(TAllocator)
@@ -17,7 +18,7 @@ type
     FBase: PByte;
     FReservationSize: SizeUInt;
     FFreeHeadOffset: UInt64;
-    FLock: TRTLCriticalSection;
+    FLock: TMemMutex;
 
     function AllocateLocked(ASize: SizeUInt): Pointer;
     procedure FreeLocked(APtr: Pointer);
@@ -36,7 +37,7 @@ type
     property ReservationSize: SizeUInt read FReservationSize;
   end;
 
-function CreateAnonymousMemoryMapAllocator(aReservationSize: UInt64): TMemAllocator;
+function CreateAnonymousMemoryMapAllocator(aReservationSize: UInt64): IAllocator;
 
 implementation
 
@@ -214,7 +215,7 @@ var
   LInitialBlock: PMemoryMapBlockHeader;
 begin
   inherited Create;
-  InitCriticalSection(FLock);
+  FLock.Init;
 
   if aReservationSize < HeaderSize + SizeOf(Pointer) then
     raise EAllocError.Create(aeInvalidLayout, 'TMemoryMapAllocator: invalid reservation size');
@@ -228,7 +229,7 @@ begin
   begin
     FMap.Free;
     FMap := nil;
-    DoneCriticalSection(FLock);
+    FLock.Done;
     raise EOutOfMemory.Create(aeOutOfMemory, 'TMemoryMapAllocator: failed to create anonymous mapping');
   end;
 
@@ -251,29 +252,29 @@ begin
   FFreeHeadOffset := NO_FREE_OFFSET;
   FMap.Free;
   FMap := nil;
-  DoneCriticalSection(FLock);
+  FLock.Done;
   inherited Destroy;
 end;
 
 function TMemoryMapAllocator.DoGetMem(ASize: SizeUInt): Pointer;
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     Result := AllocateLocked(ASize);
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
 function TMemoryMapAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     Result := AllocateLocked(ASize);
     if Result <> nil then
       ZeroMem(Result, ASize);
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
@@ -284,7 +285,7 @@ var
   LOldBlock: PMemoryMapBlockHeader;
   LCopySize: SizeUInt;
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     if not FindBlockForPayload(ADst, LOldBlockPtr, LHeaderOffset) then
       raise EAllocError.Create(aeInvalidPointer, 'TMemoryMapAllocator.ReallocMem: pointer not owned');
@@ -307,17 +308,17 @@ begin
       CopyMem(Result, ADst, LCopySize);
     FreeLocked(ADst);
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
 procedure TMemoryMapAllocator.DoFreeMem(ADst: Pointer);
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     FreeLocked(ADst);
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
@@ -326,11 +327,9 @@ begin
   Result := inherited Traits;
   Result.ZeroInitialized := True;
   Result.ThreadSafe := True;
-  Result.HasMemSize := False;
-  Result.SupportsAligned := False;
 end;
 
-function CreateAnonymousMemoryMapAllocator(aReservationSize: UInt64): TMemAllocator;
+function CreateAnonymousMemoryMapAllocator(aReservationSize: UInt64): IAllocator;
 begin
   Result := TMemoryMapAllocator.CreateAnonymous(aReservationSize);
 end;

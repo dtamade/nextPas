@@ -4,7 +4,7 @@ program test_cert_rotation_expiry_check;
 
 uses
   {$IFDEF UNIX}
-  cthreads,
+  nextpas.core.thread.init,
   {$ENDIF}
   SysUtils,
   Math,

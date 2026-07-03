@@ -5,7 +5,7 @@ program nextpas.core.simd.integer_batch;
 
 uses
   {$IFDEF UNIX}
-  cthreads,
+  nextpas.core.thread.init,
   {$ENDIF}
   nextpas.core.text.conv,
   nextpas.core.simd,

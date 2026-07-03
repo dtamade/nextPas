@@ -34,10 +34,8 @@ type
   TGuardAllocator = class(TAllocator)
   public
     function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
     function DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
     procedure DoFreeMem(ADst: Pointer); override;
-    function DoMemSize(APtr: Pointer): SizeUInt; override;
     function Traits: TAllocatorTraits; override;
   end;
 
@@ -96,8 +94,6 @@ var
   LHdr: PGuardHeader;
 begin
   Result := nil;
-  if ASize = 0 then
-    Exit;
   if not CalcLayout(ASize, LCommittedSize, LTotalSize) then
     Exit;
 
@@ -125,27 +121,12 @@ begin
   Result := Pointer(PtrUInt(LCommitBase) + HeaderSize);
 end;
 
-function TGuardAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
-begin
-  Result := DoGetMem(ASize);
-  if Result <> nil then
-    FillChar(Result^, ASize, 0);
-end;
-
 function TGuardAllocator.DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
 var
   LHdr: PGuardHeader;
   LOldSize: SizeUInt;
   LCopySize: SizeUInt;
 begin
-  if ADst = nil then
-    Exit(DoGetMem(ASize));
-  if ASize = 0 then
-  begin
-    DoFreeMem(ADst);
-    Exit(nil);
-  end;
-
   LHdr := PGuardHeader(PtrUInt(ADst) - HeaderSize);
   LOldSize := LHdr^.UserSize;
 
@@ -175,23 +156,10 @@ begin
   platform_virtual_release(LHdr^.Base, LHdr^.TotalSize);
 end;
 
-function TGuardAllocator.DoMemSize(APtr: Pointer): SizeUInt;
-var
-  LHdr: PGuardHeader;
-begin
-  LHdr := PGuardHeader(PtrUInt(APtr) - HeaderSize);
-  if LHdr^.Magic <> GUARD_MAGIC then
-    Exit(0);
-  Result := LHdr^.UserSize;
-end;
-
 function TGuardAllocator.Traits: TAllocatorTraits;
 begin
   Result := inherited Traits;
-  Result.ZeroInitialized := False;
-  Result.ThreadSafe := False;  { no internal locking }
-  Result.HasMemSize := True;   { we store UserSize in header }
-  Result.SupportsAligned := False;
+  Result.ThreadSafe := False;
 end;
 
 end.

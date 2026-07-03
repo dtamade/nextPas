@@ -9,7 +9,7 @@ unit nextpas.core.test.check;
 interface
 
 uses
-  SysUtils,          { ExceptClass, EAbort, EAssertionFailed — FPC built-in, irreplaceable }
+  nextpas.core.system,
   nextpas.core.text.conv,
   nextpas.core.test.base;
 
@@ -35,11 +35,29 @@ procedure CheckFalse(AValue: Boolean; const AMessage: string = '');
 procedure CheckNil(AValue: Pointer; const AMessage: string = '');
 procedure CheckNotNil(AValue: Pointer; const AMessage: string = '');
 procedure CheckContains(const AHaystack, ANeedle: string);
+{ Case-insensitive containment. }
+procedure CheckContainsCI(const AHaystack, ANeedle: string);
+{ Fails if AHaystack contains ANeedle. Empty needle is a no-op (always passes). }
 procedure CheckNotContains(const AHaystack, ANeedle: string);
+{ Case-insensitive CheckNotContains. }
+procedure CheckNotContainsCI(const AHaystack, ANeedle: string);
 procedure CheckStartsWith(const AStr, APrefix: string);
+{ Case-insensitive prefix check. }
+procedure CheckStartsWithCI(const AStr, APrefix: string);
 procedure CheckEndsWith(const AStr, ASuffix: string);
+{ Case-insensitive suffix check. }
+procedure CheckEndsWithCI(const AStr, ASuffix: string);
+{ Fails if AStr starts with APrefix. Empty prefix is a no-op (always passes). }
+procedure CheckNotStartsWith(const AStr, APrefix: string);
+{ Fails if AStr ends with ASuffix. Empty suffix is a no-op (always passes). }
+procedure CheckNotEndsWith(const AStr, ASuffix: string);
+{ Pointer identity: passes if AExpected = AActual (same address). }
 procedure CheckSame(const AExpected, AActual: Pointer; const AMessage: string = '');
+{ Inclusive range: passes if ALow <= AValue <= AHigh. }
 procedure CheckInRange(const AValue, ALow, AHigh: Int64);
+{ Double inclusive range: passes if ALow <= AValue <= AHigh (absolute epsilon). }
+procedure CheckInRangeD(const AValue, ALow, AHigh: Double;
+  const AEpsilon: Double = 1e-10);
 procedure CheckGreaterThan(const AValue, AExpected: Int64);
 procedure CheckLessThan(const AValue, AExpected: Int64);
 procedure CheckLength(const AExpected, AActual: NativeInt);
@@ -48,6 +66,15 @@ procedure CheckRaises(AExceptionClass: ExceptClass; AProc: TTestProc;
 procedure CheckNoRaise(AProc: TTestProc; const AMessage: string = '');
 procedure CheckGreaterOrEqual(const AValue, AExpected: Int64);
 procedure CheckLessOrEqual(const AValue, AExpected: Int64);
+{ Double comparisons — absolute epsilon. }
+procedure CheckGreaterThanD(const AValue, AExpected: Double;
+  const AEpsilon: Double = 1e-10);
+procedure CheckLessThanD(const AValue, AExpected: Double;
+  const AEpsilon: Double = 1e-10);
+procedure CheckGreaterOrEqualD(const AValue, AExpected: Double;
+  const AEpsilon: Double = 1e-10);
+procedure CheckLessOrEqualD(const AValue, AExpected: Double;
+  const AEpsilon: Double = 1e-10);
 { Check that AActual is within AEpsilon of AExpected (absolute difference).
   R4-07: Uses absolute epsilon — for large values (e.g. 1e15), the default
   1e-10 is too tight. Callers should pass a larger AEpsilon or use a
@@ -57,23 +84,27 @@ procedure CheckNear(const AExpected, AActual: Double;
 procedure CheckNotNear(const AExpected, AActual: Double;
   const AEpsilon: Double = 1e-10; const AMessage: string = '');
 procedure Fail(const AMessage: string);
+{ Fail with "unexpected ClassName: Message" — for catch-all exception handlers. }
 procedure FailUnexpected(const E: Exception);
 procedure Skip(const AReason: string = '');
 
 implementation
 
+uses
+  Math; { IsNan for Double comparison NaN guards }
+
+procedure FailWithDefault(const AMessage, ADefaultMsg: string);
+begin
+  if AMessage <> '' then
+    InternalFail(AMessage)
+  else
+    InternalFail(ADefaultMsg);
+end;
+
 procedure Check(ACondition: Boolean; const AMessage: string);
-var
-  LMsg: string;
 begin
   if not ACondition then
-  begin
-    if AMessage <> '' then
-      LMsg := AMessage
-    else
-      LMsg := 'Check failed';
-    InternalFail(LMsg);
-  end;
+    FailWithDefault(AMessage, 'Check failed');
 end;
 
 function Utf8SafeStart(const S: string; APos: Integer): Integer;
@@ -152,7 +183,8 @@ begin
   begin
     if (Length(AActual) > 40) or (Pos(#10, AActual) > 0) then
       InternalFail('Expected values to differ but both have length ' +
-        IntToStr(Length(AActual)))
+        IntToStr(Length(AActual)) + ': "' +
+        Copy(AActual, 1, 30) + '..."')
     else
       InternalFail('Expected values to differ but both are "' + AActual + '"');
   end;
@@ -178,16 +210,40 @@ begin
       IntToHex(NativeUInt(AActual), 16));
 end;
 
-procedure CheckEqual(const AExpected, AActual: Double;
-  AEpsilon: Double);
+procedure CheckNear(const AExpected, AActual: Double;
+  const AEpsilon: Double; const AMessage: string);
 var
   LDiff: Double;
 begin
-  LDiff := AActual - AExpected;
-  if LDiff < 0 then LDiff := -LDiff;
-  if LDiff > AEpsilon then
+  if IsNan(AExpected) or IsNan(AActual) then
     InternalFail('Expected ' + FloatToStr(AExpected) +
+      ' (+/-' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual) + ' (NaN)');
+  LDiff := Abs(AActual - AExpected);
+  if LDiff > AEpsilon then
+    FailWithDefault(AMessage,
+      'Expected ' + FloatToStr(AExpected) +
       ' (+/-' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual));
+end;
+
+procedure CheckNotNear(const AExpected, AActual: Double;
+  const AEpsilon: Double; const AMessage: string);
+var
+  LDiff: Double;
+begin
+  if IsNan(AExpected) or IsNan(AActual) then
+    InternalFail('Expected not near ' + FloatToStr(AExpected) +
+      ' (+/-' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual) + ' (NaN)');
+  LDiff := Abs(AActual - AExpected);
+  if LDiff <= AEpsilon then
+    FailWithDefault(AMessage,
+      'Expected not near ' + FloatToStr(AExpected) +
+      ' (+/-' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual));
+end;
+
+procedure CheckEqual(const AExpected, AActual: Double;
+  AEpsilon: Double);
+begin
+  CheckNear(AExpected, AActual, AEpsilon);
 end;
 
 procedure CheckNotEqual(const AExpected, AActual: Double;
@@ -195,55 +251,37 @@ procedure CheckNotEqual(const AExpected, AActual: Double;
 var
   LDiff: Double;
 begin
-  LDiff := AActual - AExpected;
-  if LDiff < 0 then LDiff := -LDiff;
+  if IsNan(AExpected) or IsNan(AActual) then
+    Exit; { NaN != anything, including NaN — always "not equal" }
+  LDiff := Abs(AActual - AExpected);
   if LDiff <= AEpsilon then
     InternalFail('Expected values to differ but both are ' +
-      FloatToStr(AActual) + ' (within ' + FloatToStr(AEpsilon) + ')');
+      FloatToStr(AExpected) + ' (+/-' + FloatToStr(AEpsilon) + ')');
 end;
 
 procedure CheckTrue(AValue: Boolean; const AMessage: string);
 begin
   if not AValue then
-  begin
-    if AMessage <> '' then
-      InternalFail(AMessage)
-    else
-      InternalFail('Expected condition to be True but got False');
-  end;
+    FailWithDefault(AMessage, 'Expected condition to be True but got False');
 end;
 
 procedure CheckFalse(AValue: Boolean; const AMessage: string);
 begin
   if AValue then
-  begin
-    if AMessage <> '' then
-      InternalFail(AMessage)
-    else
-      InternalFail('Expected condition to be False but got True');
-  end;
+    FailWithDefault(AMessage, 'Expected condition to be False but got True');
 end;
 
 procedure CheckNil(AValue: Pointer; const AMessage: string);
 begin
   if AValue <> nil then
-  begin
-    if AMessage <> '' then
-      InternalFail(AMessage)
-    else
-      InternalFail('Expected nil but got $' + IntToHex(NativeUInt(AValue), 16));
-  end;
+    FailWithDefault(AMessage,
+      'Expected nil but got $' + IntToHex(NativeUInt(AValue), 16));
 end;
 
 procedure CheckNotNil(AValue: Pointer; const AMessage: string);
 begin
   if AValue = nil then
-  begin
-    if AMessage <> '' then
-      InternalFail(AMessage)
-    else
-      InternalFail('Expected non-nil but got nil');
-  end;
+    FailWithDefault(AMessage, 'Expected non-nil but got nil');
 end;
 
 procedure CheckContains(const AHaystack, ANeedle: string);
@@ -283,14 +321,9 @@ end;
 procedure CheckSame(const AExpected, AActual: Pointer; const AMessage: string);
 begin
   if AExpected <> AActual then
-  begin
-    if AMessage <> '' then
-      InternalFail(AMessage)
-    else
-      InternalFail('Expected same pointer $' +
-        IntToHex(NativeUInt(AExpected), 16) + ' but got $' +
-        IntToHex(NativeUInt(AActual), 16));
-  end;
+    FailWithDefault(AMessage,
+      'Expected $' + IntToHex(NativeUInt(AExpected), 16) +
+      ' but got $' + IntToHex(NativeUInt(AActual), 16));
 end;
 
 procedure CheckInRange(const AValue, ALow, AHigh: Int64);
@@ -329,6 +362,137 @@ begin
   if AValue > AExpected then
     InternalFail('Expected ' + IntToStr(AValue) + ' <= ' +
       IntToStr(AExpected));
+end;
+
+{ ── Double comparison operators ────────────────────────────────────────────── }
+
+procedure CheckGreaterThanD(const AValue, AExpected: Double;
+  const AEpsilon: Double);
+begin
+  if IsNan(AValue) or IsNan(AExpected) then
+    InternalFail('Expected ' + FloatToStr(AValue) + ' > ' +
+      FloatToStr(AExpected) + ' (NaN)');
+  if AValue <= AExpected then
+    if Abs(AValue - AExpected) <= AEpsilon then
+      InternalFail('Expected ' + FloatToStr(AValue) + ' > ' +
+        FloatToStr(AExpected) + ' (within epsilon ' + FloatToStr(AEpsilon) + ')')
+    else
+      InternalFail('Expected ' + FloatToStr(AValue) + ' > ' +
+        FloatToStr(AExpected));
+end;
+
+procedure CheckLessThanD(const AValue, AExpected: Double;
+  const AEpsilon: Double);
+begin
+  if IsNan(AValue) or IsNan(AExpected) then
+    InternalFail('Expected ' + FloatToStr(AValue) + ' < ' +
+      FloatToStr(AExpected) + ' (NaN)');
+  if AValue >= AExpected then
+    if Abs(AValue - AExpected) <= AEpsilon then
+      InternalFail('Expected ' + FloatToStr(AValue) + ' < ' +
+        FloatToStr(AExpected) + ' (within epsilon ' + FloatToStr(AEpsilon) + ')')
+    else
+      InternalFail('Expected ' + FloatToStr(AValue) + ' < ' +
+        FloatToStr(AExpected));
+end;
+
+procedure CheckGreaterOrEqualD(const AValue, AExpected: Double;
+  const AEpsilon: Double);
+begin
+  if IsNan(AValue) or IsNan(AExpected) then
+    InternalFail('Expected ' + FloatToStr(AValue) + ' >= ' +
+      FloatToStr(AExpected) + ' (NaN)');
+  if AValue < AExpected then
+    if Abs(AValue - AExpected) <= AEpsilon then
+      Exit { within epsilon of equal — pass }
+    else
+      InternalFail('Expected ' + FloatToStr(AValue) + ' >= ' +
+        FloatToStr(AExpected));
+end;
+
+procedure CheckLessOrEqualD(const AValue, AExpected: Double;
+  const AEpsilon: Double);
+begin
+  if IsNan(AValue) or IsNan(AExpected) then
+    InternalFail('Expected ' + FloatToStr(AValue) + ' <= ' +
+      FloatToStr(AExpected) + ' (NaN)');
+  if AValue > AExpected then
+    if Abs(AValue - AExpected) <= AEpsilon then
+      Exit { within epsilon of equal — pass }
+    else
+      InternalFail('Expected ' + FloatToStr(AValue) + ' <= ' +
+        FloatToStr(AExpected));
+end;
+
+procedure CheckInRangeD(const AValue, ALow, AHigh: Double;
+  const AEpsilon: Double);
+begin
+  if IsNan(AValue) or IsNan(ALow) or IsNan(AHigh) then
+    InternalFail(FloatToStr(AValue) + ' not in range [' +
+      FloatToStr(ALow) + '..' + FloatToStr(AHigh) + '] (NaN)');
+  if ALow > AHigh then
+    InternalFail('CheckInRangeD: ALow (' + FloatToStr(ALow) +
+      ') > AHigh (' + FloatToStr(AHigh) + ')');
+  if (AValue < ALow) and (Abs(AValue - ALow) > AEpsilon) then
+    InternalFail(FloatToStr(AValue) + ' not in range [' +
+      FloatToStr(ALow) + '..' + FloatToStr(AHigh) + '] (within epsilon ' +
+      FloatToStr(AEpsilon) + ')');
+  if (AValue > AHigh) and (Abs(AValue - AHigh) > AEpsilon) then
+    InternalFail(FloatToStr(AValue) + ' not in range [' +
+      FloatToStr(ALow) + '..' + FloatToStr(AHigh) + '] (within epsilon ' +
+      FloatToStr(AEpsilon) + ')');
+end;
+
+{ ── String prefix/suffix negation ──────────────────────────────────────────── }
+
+procedure CheckContainsCI(const AHaystack, ANeedle: string);
+begin
+  if Length(ANeedle) = 0 then
+    Exit;
+  if Pos(LowerCase(ANeedle), LowerCase(AHaystack)) = 0 then
+    InternalFail('"' + AHaystack + '" does not contain (ci) "' + ANeedle + '"');
+end;
+
+procedure CheckNotContainsCI(const AHaystack, ANeedle: string);
+begin
+  if Length(ANeedle) = 0 then
+    Exit;
+  if Pos(LowerCase(ANeedle), LowerCase(AHaystack)) > 0 then
+    InternalFail('"' + AHaystack + '" should not contain (ci) "' + ANeedle + '"');
+end;
+
+procedure CheckStartsWithCI(const AStr, APrefix: string);
+begin
+  if (Length(AStr) < Length(APrefix)) or
+     (LowerCase(Copy(AStr, 1, Length(APrefix))) <> LowerCase(APrefix)) then
+    InternalFail('"' + AStr + '" does not start with (ci) "' + APrefix + '"');
+end;
+
+procedure CheckEndsWithCI(const AStr, ASuffix: string);
+begin
+  if Length(ASuffix) = 0 then
+    Exit;
+  if (Length(AStr) < Length(ASuffix)) or
+     (LowerCase(Copy(AStr, Length(AStr) - Length(ASuffix) + 1,
+      Length(ASuffix))) <> LowerCase(ASuffix)) then
+    InternalFail('"' + AStr + '" does not end with (ci) "' + ASuffix + '"');
+end;
+
+procedure CheckNotStartsWith(const AStr, APrefix: string);
+begin
+  if Length(APrefix) = 0 then
+    Exit; { empty prefix matches everything — consistent with CheckStartsWith }
+  if StrStartsWith(AStr, APrefix) then
+    InternalFail('"' + AStr + '" should not start with "' + APrefix + '"');
+end;
+
+procedure CheckNotEndsWith(const AStr, ASuffix: string);
+begin
+  if Length(ASuffix) = 0 then
+    Exit; { empty suffix matches everything — consistent with CheckEndsWith }
+  if (Length(AStr) >= Length(ASuffix)) and
+     (Copy(AStr, Length(AStr) - Length(ASuffix) + 1, Length(ASuffix)) = ASuffix) then
+    InternalFail('"' + AStr + '" should not end with "' + ASuffix + '"');
 end;
 
 procedure CheckLength(const AExpected, AActual: NativeInt);
@@ -381,40 +545,6 @@ begin
       else
         InternalFail('Unexpected exception: ' + E.ClassName + ': ' + E.Message);
     end;
-  end;
-end;
-
-procedure CheckNear(const AExpected, AActual: Double;
-  const AEpsilon: Double; const AMessage: string);
-var
-  LDiff: Double;
-begin
-  LDiff := AActual - AExpected;
-  if LDiff < 0 then LDiff := -LDiff;
-  if LDiff > AEpsilon then
-  begin
-    if AMessage <> '' then
-      InternalFail(AMessage)
-    else
-      InternalFail('Expected ' + FloatToStr(AExpected) +
-        ' (+/-' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual));
-  end;
-end;
-
-procedure CheckNotNear(const AExpected, AActual: Double;
-  const AEpsilon: Double; const AMessage: string);
-var
-  LDiff: Double;
-begin
-  LDiff := AActual - AExpected;
-  if LDiff < 0 then LDiff := -LDiff;
-  if LDiff <= AEpsilon then
-  begin
-    if AMessage <> '' then
-      InternalFail(AMessage)
-    else
-      InternalFail('Expected not near ' + FloatToStr(AExpected) +
-        ' (+/-' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual));
   end;
 end;
 

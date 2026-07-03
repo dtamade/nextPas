@@ -11,7 +11,6 @@ unit nextpas.core.test.discovery;
 interface
 
 uses
-  SysUtils,
   nextpas.core.test.base,
   nextpas.core.test.runner;
 

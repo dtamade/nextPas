@@ -5,7 +5,7 @@ program fafafa_core_simd_array_f32_ieee754;
 
 uses
   {$IFDEF UNIX}
-  cthreads,
+  nextpas.core.thread.init,
   {$ENDIF}
   nextpas.core.text.conv, Math,
   nextpas.core.simd,

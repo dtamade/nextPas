@@ -5,7 +5,7 @@ program test_handshake_error_handling;
 
 uses
   {$IFDEF UNIX}
-  cthreads,
+  nextpas.core.thread.init,
   {$ENDIF}
   SysUtils;
 

@@ -8,7 +8,7 @@ program bench_fullchain;
 {$I nextpas.core.settings.inc}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   SysUtils,
   nextpas.core.base,
   nextpas.core.text.conv,

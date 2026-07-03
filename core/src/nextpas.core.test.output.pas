@@ -9,7 +9,8 @@ unit nextpas.core.test.output;
 interface
 
 uses
-  SysUtils,          { GetEnvironmentVariable — platform env, no project alternative }
+  nextpas.core.system,
+  nextpas.core.platform.env,
   nextpas.core.test.base,
   nextpas.core.test.config,
   nextpas.core.text.conv,
@@ -72,6 +73,10 @@ procedure WriteTestStatusVerbose(AStatus: TTestStatus; const AName, AFailMsg,
   ASkipReason: string; ADurationMs: Int64;
   const ASink: IOutputSink; const AConfig: TTestConfig);
   { Write verbose per-test status line with duration to ASink. }
+procedure WriteTestOutput(AStatus: TTestStatus; const AName, AFailMsg,
+  ASkipReason: string; ADurationMs: Int64;
+  const ASink: IOutputSink; const AConfig: TTestConfig);
+  { Dispatch to WriteTestStatusVerbose or WriteTestStatus based on config. }
 
 { ── Diagnostic Output ─────────────────────────────────────────────────────── }
 
@@ -143,6 +148,12 @@ implementation
 function c_isatty(fd: LongInt): LongInt; cdecl; external 'c' name 'isatty';
 {$ENDIF}
 
+{ Local wrapper: platform_env_get_str returns '' for missing vars }
+function GetEnv(const AName: string): string;
+begin
+  Result := string(platform_env_get_str(AnsiString(AName)));
+end;
+
 { ═════════════════════════════════════════════════════════════════════════════ }
 { ANSI Helpers                                                                 }
 { ═════════════════════════════════════════════════════════════════════════════ }
@@ -170,7 +181,7 @@ begin
   begin
     GAnsiChecked := True;
     { Standard: https://no-color.org/ }
-    if GetEnvironmentVariable('NO_COLOR') <> '' then
+    if GetEnv('NO_COLOR') <> '' then
     begin
       GAnsiEnabled := False;
       Exit;
@@ -180,15 +191,15 @@ begin
       When piped to a file or non-TTY, disable to avoid escape sequences. }
     GAnsiEnabled := c_isatty(1) <> 0;
     {$ELSE}
-    GAnsiEnabled := (GetEnvironmentVariable('TERM') <> '') or
-                    (GetEnvironmentVariable('ANSICON') <> '') or
-                    (GetEnvironmentVariable('ConEmuANSI') = 'ON') or
-                    (GetEnvironmentVariable('WT_SESSION') <> '');
+    GAnsiEnabled := (GetEnv('TERM') <> '') or
+                    (GetEnv('ANSICON') <> '') or
+                    (GetEnv('ConEmuANSI') = 'ON') or
+                    (GetEnv('WT_SESSION') <> '');
     {$ENDIF}
     { Override via NEXTPAS_COLOR: '1' forces on, '0' forces off }
-    if GetEnvironmentVariable('NEXTPAS_COLOR') = '1' then
+    if GetEnv('NEXTPAS_COLOR') = '1' then
       GAnsiEnabled := True
-    else if GetEnvironmentVariable('NEXTPAS_COLOR') = '0' then
+    else if GetEnv('NEXTPAS_COLOR') = '0' then
       GAnsiEnabled := False;
   end;
 end;
@@ -369,6 +380,17 @@ begin
   WriteLn(AnsiBold('─── ' + ATitle + ' ───'));
 end;
 
+function ResolveSkipReason(const ASkipReason, AFailMsg: string): string;
+{ Priority: ASkipReason > AFailMsg > '' }
+begin
+  if ASkipReason <> '' then
+    Result := ASkipReason
+  else if AFailMsg <> '' then
+    Result := AFailMsg
+  else
+    Result := '';
+end;
+
 procedure WriteTestStatus(AStatus: TTestStatus; const AName, AFailMsg,
   ASkipReason: string; const ASink: IOutputSink; const AConfig: TTestConfig);
 begin
@@ -381,16 +403,8 @@ begin
         ASink.WriteLn('    ' + FormatFailDetail(AFailMsg, AConfig));
       end;
     tsSkipped:
-      begin
-        if ASkipReason <> '' then
-          ASink.WriteLn('  ' + FormatStatusLine(tsSkipped, AName,
-            ASkipReason, AConfig))
-        else if AFailMsg <> '' then
-          ASink.WriteLn('  ' + FormatStatusLine(tsSkipped, AName,
-            AFailMsg, AConfig))
-        else
-          ASink.WriteLn('  ' + FormatStatusLine(tsSkipped, AName, AConfig));
-      end;
+      ASink.WriteLn('  ' + FormatStatusLine(tsSkipped, AName,
+        ResolveSkipReason(ASkipReason, AFailMsg), AConfig));
     tsError:
       begin
         ASink.WriteLn('  ' + FormatStatusLine(tsError, AName, AConfig) +
@@ -407,7 +421,7 @@ procedure WriteTestStatusVerbose(AStatus: TTestStatus; const AName, AFailMsg,
 { Verbose mode: show every test with status + duration.
   Format: '  [PASS] name (12ms)' or '  [FAIL] name (1.23s)' or '  [SKIP] name - reason'. }
 var
-  LDurStr: string;
+  LDurStr, LSkipMsg: string;
 begin
   LDurStr := ' (' + FormatDuration(ADurationMs) + ')';
   case AStatus of
@@ -422,12 +436,10 @@ begin
       end;
     tsSkipped:
       begin
-        if ASkipReason <> '' then
+        LSkipMsg := ResolveSkipReason(ASkipReason, AFailMsg);
+        if LSkipMsg <> '' then
           ASink.WriteLn('  ' + AnsiYellow('[SKIP]', AConfig) + ' ' +
-            AName + ' - ' + ASkipReason)
-        else if AFailMsg <> '' then
-          ASink.WriteLn('  ' + AnsiYellow('[SKIP]', AConfig) + ' ' +
-            AName + ' - ' + AFailMsg)
+            AName + ' - ' + LSkipMsg)
         else
           ASink.WriteLn('  ' + AnsiYellow('[SKIP]', AConfig) + ' ' + AName);
       end;
@@ -439,6 +451,17 @@ begin
           ASink.WriteLn('    ' + AnsiDim(AFailMsg, AConfig));
       end;
   end;
+end;
+
+procedure WriteTestOutput(AStatus: TTestStatus; const AName, AFailMsg,
+  ASkipReason: string; ADurationMs: Int64;
+  const ASink: IOutputSink; const AConfig: TTestConfig);
+begin
+  if AConfig.VerboseMode then
+    WriteTestStatusVerbose(AStatus, AName, AFailMsg, ASkipReason,
+      ADurationMs, ASink, AConfig)
+  else
+    WriteTestStatus(AStatus, AName, AFailMsg, ASkipReason, ASink, AConfig);
 end;
 
 procedure WriteRetryHint(ACurrent, ATotal: Integer;
@@ -725,6 +748,9 @@ var
   LFilter, LPattern: string;
   LComma, LDepth, LPos: Integer;
 begin
+  { --run: exact name match (case-insensitive) takes priority }
+  if GetRunPattern(AConfig) <> '' then
+    Exit(SameText(AName, GetRunPattern(AConfig)));
   LFilter := GetTestFilter(AConfig);
   if LFilter = '' then
     Exit(True);
@@ -878,6 +904,21 @@ var
   LTotalTests, LTotalFailures, LTotalErrors, LTotalSkipped: Integer;
   LSuiteName: string;
   LSuiteErrors: Integer;
+  procedure AppendFailureBlock(const ATag, AType: string;
+    const AResult: TTestResult);
+  begin
+    LSb.AppendStr('>' + LineEnding);
+    LSb.AppendStr('      <' + ATag + ' type="' + AType + '" message="' +
+      XmlEscape(AResult.Message) + '">');
+    if Length(AResult.CapturedLog) > 0 then
+    begin
+      LSb.AppendStr(LineEnding);
+      LSb.AppendStr(XmlEscape(JoinLines(AResult.CapturedLog)));
+      LSb.AppendStr(LineEnding + '      ');
+    end;
+    LSb.AppendStr('</' + ATag + '>' + LineEnding);
+    LSb.AppendStr('    </testcase>' + LineEnding);
+  end;
 begin
   LSb.Init;
   try
@@ -937,33 +978,9 @@ begin
           '" time="' + FormatFloat('0.000', LTestResult.Duration / 1000.0) + '"');
         case LTestResult.Status of
           tsFailed:
-            begin
-              LSb.AppendStr('>' + LineEnding);
-              LSb.AppendStr('      <failure type="AssertionFailure" message="' +
-                XmlEscape(LTestResult.Message) + '">');
-              if Length(LTestResult.CapturedLog) > 0 then
-              begin
-                LSb.AppendStr(LineEnding);
-                LSb.AppendStr(XmlEscape(JoinLines(LTestResult.CapturedLog)));
-                LSb.AppendStr(LineEnding + '      ');
-              end;
-              LSb.AppendStr('</failure>' + LineEnding);
-              LSb.AppendStr('    </testcase>' + LineEnding);
-            end;
+            AppendFailureBlock('failure', 'AssertionFailure', LTestResult);
           tsError:
-            begin
-              LSb.AppendStr('>' + LineEnding);
-              LSb.AppendStr('      <error type="Error" message="' +
-                XmlEscape(LTestResult.Message) + '">');
-              if Length(LTestResult.CapturedLog) > 0 then
-              begin
-                LSb.AppendStr(LineEnding);
-                LSb.AppendStr(XmlEscape(JoinLines(LTestResult.CapturedLog)));
-                LSb.AppendStr(LineEnding + '      ');
-              end;
-              LSb.AppendStr('</error>' + LineEnding);
-              LSb.AppendStr('    </testcase>' + LineEnding);
-            end;
+            AppendFailureBlock('error', 'Error', LTestResult);
           tsSkipped:
             begin
               LSb.AppendStr('>' + LineEnding);
@@ -1032,14 +1049,11 @@ end;
 { ═════════════════════════════════════════════════════════════════════════════ }
 
 procedure AddLine(var ALines: specialize TArray<string>; const ALine: string);
-{ Geometric growth: pre-allocate capacity to avoid O(n²) realloc. }
 var
   LOldLen, LCap: Integer;
 begin
   LOldLen := Length(ALines);
-  LCap := LOldLen;
-  if LCap < 8 then LCap := 8
-  else if LOldLen >= LCap then LCap := LCap * 2;
+  LCap := GrowCapacity(LOldLen, 8);
   if LCap <> LOldLen then SetLength(ALines, LCap);
   ALines[LOldLen] := ALine;
   SetLength(ALines, LOldLen + 1);

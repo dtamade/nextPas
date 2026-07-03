@@ -55,7 +55,7 @@ type
     FBaselineCount: Integer;
     FBaselineCapacity: Integer;
     FRunner: TBenchRunner;
-    FReportGenerator: TBenchReportGenerator;
+    FReportGenerator: IBenchReportGenerator;
     {** ST-08: prevents mutation after Run has been called }
     FHasRun: Boolean;
 
@@ -69,6 +69,11 @@ type
     procedure EnsureEntryCapacity;
     {** PF-24: 确保基线数组有足够容量 }
     procedure EnsureBaselineCapacity;
+
+    {** 验证函数指针非 nil (P0-1) }
+    procedure GuardFuncAssigned(AFunc: TBenchFunc; const AMethod: string);
+    procedure GuardParamFuncAssigned(AFunc: TBenchParamFunc; const AMethod: string);
+    procedure GuardLoopFuncAssigned(AFunc: TBenchLoopFunc; const AMethod: string);
 
   public
     constructor Create(const ASuiteName: string);
@@ -118,7 +123,7 @@ type
     FEnvironment: TBenchEnvironment;
     FBaselines: array of TBenchBaseline;
     FBaselineCount: Integer;
-    FReportGenerator: TBenchReportGenerator;
+    FReportGenerator: IBenchReportGenerator;
 
     {** 生成基线对比 }
     function GenerateComparisons: TBenchComparisonArray;
@@ -186,12 +191,12 @@ begin
   FBaselineCapacity := 0;
   SetLength(FBaselines, 0);
 
-  // 初始化默认配置
-  FConfig := DefaultBenchConfig;
+  FRunner := TBenchRunner.Create;
+  FConfig := FRunner.GetConfig;
   FConfig.SuiteName := ASuiteName;
 
-  FRunner := TBenchRunner.Create;
   FReportGenerator := TBenchReportGenerator.Create;
+  FReportGenerator.SetMaxDetailCount(FConfig.MaxDetailCount);
   FHasRun := False;
 end;
 
@@ -209,8 +214,9 @@ begin
   FConfig := AConfig;
   FConfig.SuiteName := ASuiteName;
 
-  FRunner := TBenchRunner.Create;
+  FRunner := TBenchRunner.CreateNoEnv;
   FReportGenerator := TBenchReportGenerator.Create;
+  FReportGenerator.SetMaxDetailCount(FConfig.MaxDetailCount);
   FHasRun := False;
 end;
 
@@ -219,7 +225,7 @@ begin
   SetLength(FEntries, 0);
   SetLength(FBaselines, 0);
   FRunner.Free;
-  FReportGenerator.Free;
+  FReportGenerator := nil;
   inherited Destroy;
 end;
 
@@ -271,11 +277,30 @@ begin
   end;
 end;
 
+procedure TBenchSuite.GuardFuncAssigned(AFunc: TBenchFunc; const AMethod: string);
+begin
+  if not Assigned(AFunc) then
+    raise EBenchInvalidParam.CreateFmt('TBenchSuite.%s: function must not be nil', [AMethod]);
+end;
+
+procedure TBenchSuite.GuardParamFuncAssigned(AFunc: TBenchParamFunc; const AMethod: string);
+begin
+  if not Assigned(AFunc) then
+    raise EBenchInvalidParam.CreateFmt('TBenchSuite.%s: function must not be nil', [AMethod]);
+end;
+
+procedure TBenchSuite.GuardLoopFuncAssigned(AFunc: TBenchLoopFunc; const AMethod: string);
+begin
+  if not Assigned(AFunc) then
+    raise EBenchInvalidParam.CreateFmt('TBenchSuite.%s: function must not be nil', [AMethod]);
+end;
+
 function TBenchSuite.Add(const AName: string; AFunc: TBenchFunc): IBenchSuite;
 var
   LEntry: TBenchEntry;
 begin
   GuardNotRun;
+  GuardFuncAssigned(AFunc, 'Add');
   Result := Self;
   LEntry := Default(TBenchEntry);
   LEntry.Name := AName;
@@ -293,6 +318,7 @@ var
   LEntry: TBenchEntry;
 begin
   GuardNotRun;
+  GuardFuncAssigned(AFunc, 'AddWithSetup');
   Result := Self;
   LEntry := Default(TBenchEntry);
   LEntry.Name := AName;
@@ -312,6 +338,7 @@ var
   LEntry: TBenchEntry;
 begin
   GuardNotRun;
+  GuardFuncAssigned(AFunc, 'AddWhen');
   Result := Self;
   LEntry := Default(TBenchEntry);
   LEntry.Name := AName;
@@ -329,6 +356,7 @@ var
   LEntry: TBenchEntry;
 begin
   GuardNotRun;
+  GuardFuncAssigned(AFunc, 'AddParallel');
   Result := Self;
   if AThreads <= 0 then
     raise EBenchInvalidParam.Create('TBenchSuite.AddParallel: thread count must be > 0');
@@ -352,6 +380,7 @@ var
   LIndex: Integer;
 begin
   GuardNotRun;
+  GuardParamFuncAssigned(AFunc, 'AddRange');
   Result := Self;
   for LIndex := 0 to High(AParams) do
   begin
@@ -375,6 +404,7 @@ var
   LIndex: Integer;
 begin
   GuardNotRun;
+  GuardParamFuncAssigned(AFunc, 'AddRange');
   Result := Self;
   for LIndex := 0 to High(AParams) do
   begin
@@ -397,6 +427,7 @@ var
   LEntry: TBenchEntry;
 begin
   GuardNotRun;
+  GuardLoopFuncAssigned(AFunc, 'AddLoop');
   Result := Self;
   LEntry := Default(TBenchEntry);
   LEntry.Name := AName;
@@ -521,6 +552,7 @@ function TBenchSuite.AddBaselines(const ABaselines: array of TBenchBaseline): IB
 var
   I: Integer;
 begin
+  GuardNotRun;
   Result := Self;
   for I := 0 to High(ABaselines) do
     AddBaseline(ABaselines[I].Name, ABaselines[I].NsPerOp);
@@ -538,6 +570,8 @@ begin
   try
     LManager.LoadFromFile(APath);
   except
+    on E: EBenchBaselineNotFound do
+      raise;
     on E: Exception do
       raise EBenchError.CreateFmt('Failed to load baseline from "%s": %s', [APath, E.Message]);
   end;
@@ -575,6 +609,9 @@ begin
   FRunner.SetConfig(FConfig);
   FRunner.SetFilter(FFilter);
   FRunner.ClearResults;
+
+  if (FEntryCount = 0) and (not FConfig.Quiet) then
+    WriteLn(StdErr, 'WARNING: TBenchSuite.Run called with no registered entries');
 
   // ST-04: 超时检查初始化
   LTimeoutNs := UInt64(FConfig.TimeoutMs) * 1000000;
@@ -658,7 +695,7 @@ destructor TBenchResults.Destroy;
 begin
   SetLength(FResults, 0);
   SetLength(FBaselines, 0);
-  FReportGenerator.Free;
+  FReportGenerator := nil;
   inherited Destroy;
 end;
 
@@ -683,7 +720,7 @@ begin
   try
     for I := 0 to FResultCount - 1 do
     begin
-      for j := 0 to FBaselineCount - 1 do
+      for J := 0 to FBaselineCount - 1 do
       begin
         if FResults[I].Name = FBaselines[J].Name then
         begin
@@ -741,16 +778,13 @@ end;
 
 function TBenchResults.GetAll: TBenchResultArray;
 begin
-  Result := FResults;
+  Result := Copy(FResults, 0, FResultCount);
 end;
 
 function TBenchResults.GetByName(const AName: string): TBenchResult;
 var
   I: Integer;
 begin
-  Result := Default(TBenchResult);
-  Result.Name := AName;
-
   for I := 0 to FResultCount - 1 do
   begin
     if FResults[I].Name = AName then
@@ -759,6 +793,7 @@ begin
       Exit;
     end;
   end;
+  raise EBenchError.CreateFmt('Benchmark result not found: "%s" (use TryGetByName for safe lookup)', [AName]);
 end;
 
 function TBenchResults.TryGetByName(const AName: string; out AResult: TBenchResult): Boolean;
@@ -860,8 +895,10 @@ begin
   LFoundA := TryGetByName(ANameA, LA);
   LFoundB := TryGetByName(ANameB, LB);
 
-  if (not LFoundA) or (not LFoundB) then
-    Exit;
+  if not LFoundA then
+    raise EBenchError.CreateFmt('CompareTwoResults: benchmark not found: "%s"', [ANameA]);
+  if not LFoundB then
+    raise EBenchError.CreateFmt('CompareTwoResults: benchmark not found: "%s"', [ANameB]);
 
   Result.BaselineNsPerOp := LB.NsPerOp;
   Result.CurrentNsPerOp := LA.NsPerOp;
@@ -904,7 +941,12 @@ begin
     if FResults[I].Executed and (not FResults[I].Skipped) then
       LManager.AddBaselineFromResult(FResults[I], AGitHash);
   end;
-  LManager.SaveToFile(APath);
+  try
+    LManager.SaveToFile(APath);
+  except
+    on E: Exception do
+      raise EBenchError.CreateFmt('Failed to save baseline to "%s": %s', [APath, E.Message]);
+  end;
 end;
 
 procedure TBenchResults.AppendToTimeline(const APath: string);
@@ -947,7 +989,11 @@ begin
       try
         AppendFileText(APath, LBuilder.ToString);
       except
-        WriteFileText(APath, LBuilder.ToString, PermDefault);
+        on E: Exception do
+        begin
+          WriteLn(StdErr, 'WARNING: AppendToTimeline: append failed (', E.Message, '), overwriting file');
+          WriteFileText(APath, LBuilder.ToString, PermDefault);
+        end;
       end;
     end;
   finally

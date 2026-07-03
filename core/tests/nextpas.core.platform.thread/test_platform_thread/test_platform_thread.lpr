@@ -3,7 +3,7 @@ program test_platform_thread;
 {$I nextpas.core.settings.inc}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   SysUtils,
   nextpas.core.testing,
   nextpas.core.platform.thread;

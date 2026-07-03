@@ -230,6 +230,7 @@ type
     procedure ProcessBlockLabel(const ANode: TTypedHirNode);
     procedure ProcessFunctionBegin(const ANode: TTypedHirNode);
     procedure ProcessFunctionEnd(const ANode: TTypedHirNode);
+    procedure ProcessExternalDecl(const ANode: TTypedHirNode);
     procedure ProcessRetRuntime(const ANode: TTypedHirNode);
     procedure ProcessCallRuntime(const ANode: TTypedHirNode);
     procedure ProcessStringTempOwnedRuntime(const ANode: TTypedHirNode);
@@ -242,6 +243,7 @@ type
     procedure ProcessGetMemRuntime(const ANode: TTypedHirNode);
     procedure ProcessFreeMemRuntime(const ANode: TTypedHirNode);
     procedure ProcessAssignedRuntime(const ANode: TTypedHirNode);
+    procedure ProcessInterlockedOp(const ANode: TTypedHirNode);
     procedure ProcessWriteInt(const ANode: TTypedHirNode);
     procedure ProcessWriteStr(const ANode: TTypedHirNode);
     procedure ProcessWriteString(const ANode: TTypedHirNode);
@@ -3144,7 +3146,7 @@ begin
       FGlobalNames[FGlobalCount] := ANode.Operand;
       FGlobalTypes[FGlobalCount] := GetIntType;
       Inc(FGlobalCount);
-      FModule.AddGlobal(ANode.Operand, GetIntType);
+      FModule.AddGlobal(ANode.Operand, GetIntType, ANode.IsThreadVar);
     end
     else
       EnsureAlloca(ANode.Operand, DeclType);
@@ -3726,6 +3728,53 @@ begin
   end;
 end;
 
+procedure THIRBuilder.ProcessExternalDecl(const ANode: TTypedHirNode);
+var
+  I, LBindingIdx: LongInt;
+  LBinding: TSemanticForeignProcedureBinding;
+  LFuncId: THIRFuncId;
+  LSymbol: TSemanticSymbol;
+  LReturnTypeId: THIRTypeId;
+  LParamCount: LongInt;
+begin
+  { Check if this declaration has a corresponding foreign procedure binding }
+  LBindingIdx := -1;
+  for I := 0 to FSemaModel.ForeignProcedureBindingCount - 1 do
+  begin
+    LBinding := FSemaModel.ForeignProcedureBindingAt(I);
+    if SameText(LBinding.PascalName, ANode.DisplayName) then
+    begin
+      LBindingIdx := I;
+      Break;
+    end;
+  end;
+  if LBindingIdx < 0 then
+    Exit; { Not an external function — ignore }
+
+  LBinding := FSemaModel.ForeignProcedureBindingAt(LBindingIdx);
+
+  { Determine return type from symbol }
+  LReturnTypeId := GetIntType;
+  if (LBinding.SymbolId > 0) and (LBinding.SymbolId <= FSemaModel.SymbolCount) then
+  begin
+    LSymbol := FSemaModel.SymbolAt(LBinding.SymbolId - 1);
+    if LSymbol.TypeId > 0 then
+      LReturnTypeId := SemanticTypeIdToHirTypeId(LSymbol.TypeId);
+    LParamCount := LSymbol.ParamCount;
+  end
+  else
+    LParamCount := 0;
+
+  LFuncId := FModule.AddFunction(LBinding.PascalName, LReturnTypeId);
+  FModule.SetFunctionExternal(LFuncId, True, LBinding.LibraryId,
+    LBinding.ExternalSymbolName);
+
+  { Add parameters — use generic int type for now since detailed type
+    resolution for external FFI params is not yet implemented. }
+  for I := 0 to LParamCount - 1 do
+    FModule.AddFunctionParam(LFuncId, 'arg' + IntToStr(I), GetIntType, False, False);
+end;
+
 procedure THIRBuilder.ProcessRetRuntime(const ANode: TTypedHirNode);
 var
   V, ObjPtr: THIRValueId;
@@ -4166,6 +4215,107 @@ begin
   PtrVal := EmitLoad(GetPtrType, PtrAlloca);
   EmitCmpOp(hikCmpNe, GetBoolType,
     PtrVal, EmitNullPtrValue, GetPtrType, GetPtrType);
+end;
+
+procedure THIRBuilder.ProcessInterlockedOp(const ANode: TTypedHirNode);
+var
+  TabPos: LongInt;
+  TargetName, ArgBlob, NewValBlob, CmpValBlob, Rest: string;
+  TargetAlloca, TargetPtr, NewVal, CmpVal, Addend, FetchAddResult, OneVal: THIRValueId;
+  Instr: THIRInstr;
+  IntrinsicOpName: string;
+  IsCas: Boolean;
+begin
+  Rest := ANode.Operand;
+  TabPos := Pos(#9, Rest);
+  if TabPos = 0 then Exit;
+  TargetName := Trim(Copy(Rest, 1, TabPos - 1));
+  Rest := Copy(Rest, TabPos + 1, Length(Rest));
+
+  TargetAlloca := FindAlloca(TargetName);
+  if TargetAlloca = 0 then Exit;
+  TargetPtr := EmitLoad(GetPtrType, TargetAlloca);
+  if TargetPtr = 0 then Exit;
+
+  IsCas := (ANode.NodeKind = hnkInterlockedCasRuntime) or
+           (ANode.NodeKind = hnkInterlockedCas64Runtime);
+
+  if IsCas then
+  begin
+    { CAS: Target #9 NewValue #9 CompareValue }
+    TabPos := Pos(#9, Rest);
+    if TabPos = 0 then Exit;
+    NewValBlob := Trim(Copy(Rest, 1, TabPos - 1));
+    CmpValBlob := Trim(Copy(Rest, TabPos + 1, Length(Rest)));
+
+    NewVal := LowerNodeExprOrBlob(ANode, NewValBlob);
+    CmpVal := LowerNodeExprOrBlob(ANode, CmpValBlob);
+    if (NewVal = 0) or (CmpVal = 0) then Exit;
+
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := FModule.NewValue;
+    Instr.Kind := hikIntrinsic;
+    Instr.TypeId := GetIntType;
+    if ANode.NodeKind = hnkInterlockedCas64Runtime then
+      Instr.IntrinsicName := 'interlocked-cas64'
+    else
+      Instr.IntrinsicName := 'interlocked-cas';
+    SetLength(Instr.Operands, 3);
+    Instr.Operands[0] := MakeTypedOperand(TargetPtr, GetPtrType);
+    Instr.Operands[1] := MakeTypedOperand(NewVal, GetIntType);
+    Instr.Operands[2] := MakeTypedOperand(CmpVal, GetIntType);
+    EmitInstr(Instr);
+  end
+  else
+  begin
+    { Exchange / FetchAdd: Target #9 Value }
+    ArgBlob := Trim(Rest);
+    Addend := LowerNodeExprOrBlob(ANode, ArgBlob);
+    if Addend = 0 then Exit;
+
+    if ANode.NodeKind = hnkInterlockedXchgRuntime then
+      IntrinsicOpName := 'interlocked-xchg'
+    else if ANode.NodeKind = hnkInterlockedFetchAdd64Runtime then
+      IntrinsicOpName := 'interlocked-fetch-add64'
+    else
+      IntrinsicOpName := 'interlocked-fetch-add';
+
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := FModule.NewValue;
+    Instr.Kind := hikIntrinsic;
+    Instr.TypeId := GetIntType;
+    Instr.IntrinsicName := IntrinsicOpName;
+    SetLength(Instr.Operands, 2);
+    Instr.Operands[0] := MakeTypedOperand(TargetPtr, GetPtrType);
+    Instr.Operands[1] := MakeTypedOperand(Addend, GetIntType);
+    EmitInstr(Instr);
+    FetchAddResult := Instr.ResultId;
+
+    { InterlockedIncrement/Decrement return new value (old+1 / old-1), not old value }
+    if (ANode.NodeKind = hnkInterlockedFetchAddRuntime) then
+    begin
+      { The blob for Increment is 'int 1' + #10, for Decrement is 'int -1' + #10
+        For ExchangeAdd, the blob is a runtime expression. Only adjust for constants +/-1 }
+      if (Length(ArgBlob) >= 7) and
+         ((Copy(ArgBlob, 1, 7) = 'int 1' + #10) or
+          (Copy(ArgBlob, 1, 8) = 'int -1' + #10)) then
+      begin
+        { This is Increment or Decrement: adjust result }
+        FillChar(Instr, SizeOf(Instr), 0);
+        Instr.ResultId := FModule.NewValue;
+        if Copy(ArgBlob, 1, 6) = 'int -1' then
+          Instr.Kind := hikSub
+        else
+          Instr.Kind := hikAdd;
+        Instr.TypeId := GetIntType;
+        SetLength(Instr.Operands, 2);
+        Instr.Operands[0] := MakeTypedOperand(FetchAddResult, GetIntType);
+        OneVal := EmitConstIntOfType(1, GetIntType);
+        Instr.Operands[1] := MakeTypedOperand(OneVal, GetIntType);
+        EmitInstr(Instr);
+      end;
+    end;
+  end;
 end;
 
 procedure THIRBuilder.ProcessWriteInt(const ANode: TTypedHirNode);
@@ -6027,6 +6177,8 @@ begin
       ProcessFunctionBegin(ANode);
     hnkFunctionBodyEnd:
       ProcessFunctionEnd(ANode);
+    hnkProcedureDecl, hnkFunctionDecl:
+      ProcessExternalDecl(ANode);
     hnkRetRuntime:
       ProcessRetRuntime(ANode);
     hnkRetTStringRuntime:
@@ -6102,6 +6254,10 @@ begin
       ProcessFillCharRuntime(ANode);
     hnkMoveRuntime:
       ProcessMoveRuntime(ANode);
+    hnkInterlockedCasRuntime, hnkInterlockedXchgRuntime,
+    hnkInterlockedFetchAddRuntime, hnkInterlockedCas64Runtime,
+    hnkInterlockedFetchAdd64Runtime:
+      ProcessInterlockedOp(ANode);
     hnkGetMemRuntime:
       ProcessGetMemRuntime(ANode);
     hnkFreeMemRuntime:

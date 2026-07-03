@@ -32,9 +32,10 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.mem.allocator,
-  nextpas.core.mem.error,
-   nextpas.core.mem.allocator.base;
+  nextpas.core.mem.base,            // ValidateAlignArg
+  nextpas.core.mem.allocator.base,  // TAllocator
+  nextpas.core.mem.allocator.rtl,   // ResolveAllocator
+  nextpas.core.mem.error;
 
 type
   {** 栈池异常 Stack pool exception *}
@@ -46,7 +47,7 @@ type
     TotalSize: SizeUInt;
     Alignment: SizeUInt;    // 默认指针大小
     ZeroOnAlloc: Boolean;   // 分配后是否清零（默认False）
-    Allocator: TMemAllocator;
+    Allocator: TAllocator;
   end;
 
 type
@@ -64,7 +65,7 @@ type
     FBuffer: Pointer;
     FSize: SizeUInt;
     FOffset: SizeUInt;
-    FBaseAllocator: TMemAllocator;
+    FBaseAllocator: TAllocator;
 
     function GetAvailableSize: SizeUInt;
     function AlignOffset(AOffset, AAlignment: SizeUInt): SizeUInt;
@@ -79,7 +80,7 @@ type
      * @param ASize 总大小 Total size
      * @param AAllocator 基础分配器 Base allocator (optional)
      *}
-    constructor Create(ASize: SizeUInt; AAllocator: TMemAllocator = nil); overload;
+    constructor Create(ASize: SizeUInt; AAllocator: TAllocator = nil); overload;
     {** 使用配置记录创建栈式内存池 *}
     constructor Create(const AConfig: TStackPoolConfig); overload;
 
@@ -294,7 +295,7 @@ type
 
   public
     {** 创建作用域栈池，指定大小、策略和可选的基础分配器 *}
-    constructor Create(ASize: SizeUInt; const APolicy: TStackPoolPolicy; AAllocator: TMemAllocator = nil);
+    constructor Create(ASize: SizeUInt; const APolicy: TStackPoolPolicy; AAllocator: TAllocator = nil);
     {** 销毁作用域栈池，释放所有内部资源 *}
     destructor Destroy; override;
 
@@ -383,7 +384,7 @@ end;
 
 { TStackPool }
 
-constructor TStackPool.Create(ASize: SizeUInt; AAllocator: TMemAllocator);
+constructor TStackPool.Create(ASize: SizeUInt; AAllocator: TAllocator);
 begin
   inherited Create;
 
@@ -393,14 +394,11 @@ begin
   FSize := ASize;
   FOffset := 0;
 
-  if AAllocator = nil then
-    FBaseAllocator := nextpas.core.mem.allocator.GetRtlAllocator
-  else
-    FBaseAllocator := AAllocator;
+  FBaseAllocator := ResolveAllocator(AAllocator);
 
   FBuffer := FBaseAllocator.GetMem(ASize);
   if FBuffer = nil then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'Failed to allocate stack buffer');
+    raise EOutOfMemory.CreateMsg('Failed to allocate stack buffer');
 end;
 
 destructor TStackPool.Destroy;
@@ -476,13 +474,8 @@ end;
 function TStackPool.AllocAligned(ASize: SizeUInt; AAlignment: SizeUInt): Pointer;
 begin
   if ASize = 0 then Exit(nil);
-  // ✅ M-4: 统一对齐验证逻辑，与 TAllocator.AllocAligned 保持一致
-  if AAlignment = 0 then
-    raise EInvalidArgument.Create('TStackPool.AllocAligned: AAlignment is 0');
-  if AAlignment < SizeOf(Pointer) then
-    raise EInvalidArgument.Create('TStackPool.AllocAligned: AAlignment must be >= pointer size');
-  if (AAlignment and (AAlignment - 1)) <> 0 then
-    raise EInvalidArgument.Create('TStackPool.AllocAligned: AAlignment must be power of two');
+  if not ValidateAlignArg(AAlignment) then
+    raise EInvalidArgument.Create('TStackPool.AllocAligned: AAlignment must be non-zero, >= pointer size, and power of two');
   Result := Alloc(ASize, AAlignment);
 end;
 
@@ -688,7 +681,7 @@ end;
 // TScopedStackPool
 // ============================================================================
 
-constructor TScopedStackPool.Create(ASize: SizeUInt; const APolicy: TStackPoolPolicy; AAllocator: TMemAllocator);
+constructor TScopedStackPool.Create(ASize: SizeUInt; const APolicy: TStackPoolPolicy; AAllocator: TAllocator);
 begin
   inherited Create(ASize, AAllocator);
 
@@ -778,12 +771,8 @@ end;
 function TScopedStackPool.AllocAligned(ASize: SizeUInt; AAlignment: SizeUInt): Pointer;
 begin
   if ASize = 0 then Exit(nil);
-  if AAlignment = 0 then
-    raise EInvalidArgument.Create('TScopedStackPool.AllocAligned: AAlignment is 0');
-  if AAlignment < SizeOf(Pointer) then
-    raise EInvalidArgument.Create('TScopedStackPool.AllocAligned: AAlignment must be >= pointer size');
-  if (AAlignment and (AAlignment - 1)) <> 0 then
-    raise EInvalidArgument.Create('TScopedStackPool.AllocAligned: AAlignment must be power of two');
+  if not ValidateAlignArg(AAlignment) then
+    raise EInvalidArgument.Create('TScopedStackPool.AllocAligned: AAlignment must be non-zero, >= pointer size, and power of two');
   Result := Alloc(ASize, AAlignment);
 end;
 

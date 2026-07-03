@@ -3,7 +3,7 @@ program test_thread;
 {$I nextpas.core.settings.inc}
 
 uses
-  {$IFDEF UNIX}cthreads, BaseUnix, Syscall,{$ENDIF}
+  nextpas.core.thread.init, {$IFDEF UNIX}BaseUnix, Syscall,{$ENDIF}
   SysUtils,
   nextpas.core.testing,
   nextpas.core.errors,

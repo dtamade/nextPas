@@ -1,5 +1,7 @@
 { DEPRECATED: Use nextpas.core.test instead.
-  This unit is kept for backward compatibility with existing callers. }
+  This unit is kept for backward compatibility with existing callers.
+  Check/CheckEqual/Fail delegate to nextpas.core.test.check for consistent
+  error messages and behavior (StringDiff, stack traces, etc.). }
 
 unit nextpas.core.testing;
 
@@ -8,11 +10,14 @@ unit nextpas.core.testing;
 interface
 
 uses
+  nextpas.core.system,
   nextpas.core.errors,
-  nextpas.core.text.conv;
+  nextpas.core.text.conv,
+  nextpas.core.test.check;
 
 type
   TTestProc = procedure;
+  TTestClosure = reference to procedure;
 
   TTestRunner = record
   private
@@ -27,63 +32,61 @@ type
     function AllPassed: Boolean;
   end;
 
+{ Re-exported from nextpas.core.test.check }
 procedure Check(const ACondition: Boolean; const AMessage: string = '');
-procedure CheckEqual(const AExpected, AActual: string; const AMessage: string = ''); overload;
-procedure CheckEqual(const AExpected, AActual: Int64; const AMessage: string = ''); overload;
-procedure CheckEqual(const AExpected, AActual: Boolean; const AMessage: string = ''); overload;
 procedure Fail(const AMessage: string);
+
+{ 3-arg overloads for backward compat — delegates to test.check internally }
+procedure CheckEqual(const AExpected, AActual: string;
+  const AMessage: string = ''); overload;
+procedure CheckEqual(const AExpected, AActual: Int64;
+  const AMessage: string = ''); overload;
+procedure CheckEqual(const AExpected, AActual: Boolean;
+  const AMessage: string = ''); overload;
 
 implementation
 
+{ Wraps a 2-arg CheckEqual call, prepending AMessage on assertion failure. }
+procedure CheckEqualWithMsg(const AMessage: string; AProc: TTestClosure);
+begin
+  try
+    AProc;
+  except
+    on E: EAssertionFailed do
+      if AMessage <> '' then
+        raise EAssertionFailed.Create(AMessage + ': ' + E.Message)
+      else
+        raise;
+  end;
+end;
+
+{ Forward to nextpas.core.test.check }
+
 procedure Check(const ACondition: Boolean; const AMessage: string);
-begin
-  if not ACondition then
-  begin
-    if AMessage <> '' then
-      raise EAssertionFailed.Create(AMessage)
-    else
-      raise EAssertionFailed.Create('Check failed');
-  end;
-end;
-
-procedure CheckEqual(const AExpected, AActual: string; const AMessage: string);
-begin
-  if AExpected <> AActual then
-  begin
-    if AMessage <> '' then
-      raise EAssertionFailed.CreateFmt('%s: expected "%s", got "%s"', [AMessage, AExpected, AActual])
-    else
-      raise EAssertionFailed.CreateFmt('expected "%s", got "%s"', [AExpected, AActual]);
-  end;
-end;
-
-procedure CheckEqual(const AExpected, AActual: Int64; const AMessage: string);
-begin
-  if AExpected <> AActual then
-  begin
-    if AMessage <> '' then
-      raise EAssertionFailed.CreateFmt('%s: expected %d, got %d', [AMessage, AExpected, AActual])
-    else
-      raise EAssertionFailed.CreateFmt('expected %d, got %d', [AExpected, AActual]);
-  end;
-end;
-
-procedure CheckEqual(const AExpected, AActual: Boolean; const AMessage: string);
-begin
-  if AExpected <> AActual then
-  begin
-    if AMessage <> '' then
-      raise EAssertionFailed.CreateFmt('%s: expected %s, got %s',
-        [AMessage, BoolToStr(AExpected), BoolToStr(AActual)])
-    else
-      raise EAssertionFailed.CreateFmt('expected %s, got %s',
-        [BoolToStr(AExpected), BoolToStr(AActual)]);
-  end;
-end;
+begin nextpas.core.test.check.Check(ACondition, AMessage); end;
 
 procedure Fail(const AMessage: string);
+begin nextpas.core.test.check.Fail(AMessage); end;
+
+procedure CheckEqual(const AExpected, AActual: string;
+  const AMessage: string);
 begin
-  raise EAssertionFailed.Create(AMessage);
+  CheckEqualWithMsg(AMessage, procedure
+    begin nextpas.core.test.check.CheckEqual(AExpected, AActual); end);
+end;
+
+procedure CheckEqual(const AExpected, AActual: Int64;
+  const AMessage: string);
+begin
+  CheckEqualWithMsg(AMessage, procedure
+    begin nextpas.core.test.check.CheckEqual(AExpected, AActual); end);
+end;
+
+procedure CheckEqual(const AExpected, AActual: Boolean;
+  const AMessage: string);
+begin
+  CheckEqualWithMsg(AMessage, procedure
+    begin nextpas.core.test.check.CheckEqual(AExpected, AActual); end);
 end;
 
 { TTestRunner }

@@ -38,7 +38,7 @@ type
     gnkExitStatement,
     gnkTryExceptStatement, gnkTryFinallyStatement,
     gnkExceptionHandler, gnkRaiseStatement,
-    gnkVarSection, gnkConstSection, gnkTypeSection,
+    gnkVarSection, gnkThreadVarSection, gnkConstSection, gnkTypeSection,
     gnkLabelSection,
     gnkVarDecl, gnkConstDecl, gnkTypeDecl,
     gnkProcedureDecl, gnkFunctionDecl,
@@ -279,7 +279,8 @@ function ParseVarSection(
   const AParent: TGreenNode;
   const ATree: TGreenTree;
   const ADiagnostics: TDiagnosticsSink;
-  const ARootFileId: TSourceFileId
+  const ARootFileId: TSourceFileId;
+  ANodeKind: TGreenNodeKind = gnkVarSection
 ): Boolean; forward;
 
 function ParseConstSection(
@@ -453,6 +454,7 @@ begin
     gnkExceptionHandler: Result := 'exception-handler';
     gnkRaiseStatement: Result := 'raise-statement';
     gnkVarSection: Result := 'var-section';
+    gnkThreadVarSection: Result := 'threadvar-section';
     gnkConstSection: Result := 'const-section';
     gnkTypeSection: Result := 'type-section';
     gnkLabelSection: Result := 'label-section';
@@ -2190,7 +2192,8 @@ function ParseVarSection(
   const AParent: TGreenNode;
   const ATree: TGreenTree;
   const ADiagnostics: TDiagnosticsSink;
-  const ARootFileId: TSourceFileId
+  const ARootFileId: TSourceFileId;
+  ANodeKind: TGreenNodeKind
 ): Boolean;
 var
   Section: TGreenNode;
@@ -2200,7 +2203,7 @@ var
   I: LongInt;
   Child: TGreenNode;
 begin
-  Section := TGreenNode.Create(gnkVarSection,
+  Section := TGreenNode.Create(ANodeKind,
     CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
   AParent.AppendChild(Section);
   Inc(ATree.FNodeCount);
@@ -3508,6 +3511,39 @@ begin
     MatchTokenSilent(ALexer, ACursor, tkSemicolon);
   end;
 
+  { external 'lib' name 'sym' — mark node and skip body }
+  if (ACursor < ALexer.TokenCount) and
+    (CurrentToken(ALexer, ACursor).Kind = tkExternalKeyword) then
+  begin
+    Inc(ACursor);
+    if (ACursor < ALexer.TokenCount) and
+      (CurrentToken(ALexer, ACursor).Kind = tkStringLiteral) then
+    begin
+      Node.FText := Node.FText + ';external:' +
+        DecodePascalStringLiteral(CurrentToken(ALexer, ACursor).Lexeme);
+      Inc(ACursor);
+      if (ACursor < ALexer.TokenCount) and
+        ((CurrentToken(ALexer, ACursor).Kind = tkNameKeyword) or
+         ((CurrentToken(ALexer, ACursor).Kind = tkIdentifier) and
+          SameText(CurrentToken(ALexer, ACursor).Lexeme, 'name'))) then
+      begin
+        Inc(ACursor);
+        if (ACursor < ALexer.TokenCount) and
+          (CurrentToken(ALexer, ACursor).Kind = tkStringLiteral) then
+        begin
+          Node.FText := Node.FText + ':' +
+            DecodePascalStringLiteral(CurrentToken(ALexer, ACursor).Lexeme);
+          Inc(ACursor);
+        end;
+      end;
+    end;
+    MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+    AParent.AppendChild(Node);
+    Inc(ATree.FNodeCount);
+    Result := True;
+    Exit;
+  end;
+
   if (ACursor < ALexer.TokenCount) and
     (CurrentToken(ALexer, ACursor).Kind = tkForwardKeyword) then
   begin
@@ -3729,6 +3765,39 @@ begin
     MatchTokenSilent(ALexer, ACursor, tkSemicolon);
   end;
 
+  { external 'lib' name 'sym' — mark node and skip body }
+  if (ACursor < ALexer.TokenCount) and
+    (CurrentToken(ALexer, ACursor).Kind = tkExternalKeyword) then
+  begin
+    Inc(ACursor);
+    if (ACursor < ALexer.TokenCount) and
+      (CurrentToken(ALexer, ACursor).Kind = tkStringLiteral) then
+    begin
+      Node.FText := Node.FText + ';external:' +
+        DecodePascalStringLiteral(CurrentToken(ALexer, ACursor).Lexeme);
+      Inc(ACursor);
+      if (ACursor < ALexer.TokenCount) and
+        ((CurrentToken(ALexer, ACursor).Kind = tkNameKeyword) or
+         ((CurrentToken(ALexer, ACursor).Kind = tkIdentifier) and
+          SameText(CurrentToken(ALexer, ACursor).Lexeme, 'name'))) then
+      begin
+        Inc(ACursor);
+        if (ACursor < ALexer.TokenCount) and
+          (CurrentToken(ALexer, ACursor).Kind = tkStringLiteral) then
+        begin
+          Node.FText := Node.FText + ':' +
+            DecodePascalStringLiteral(CurrentToken(ALexer, ACursor).Lexeme);
+          Inc(ACursor);
+        end;
+      end;
+    end;
+    MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+    AParent.AppendChild(Node);
+    Inc(ATree.FNodeCount);
+    Result := True;
+    Exit;
+  end;
+
   if (ACursor < ALexer.TokenCount) and
     (CurrentToken(ALexer, ACursor).Kind = tkForwardKeyword) then
   begin
@@ -3865,7 +3934,7 @@ begin
           ADiagnostics, ARootFileId) and Result;
       tkThreadVarKeyword:
         Result := ParseVarSection(ALexer, ACursor, AParent, ATree,
-          ADiagnostics, ARootFileId) and Result;
+          ADiagnostics, ARootFileId, gnkThreadVarSection) and Result;
       tkConstKeyword:
         Result := ParseConstSection(ALexer, ACursor, AParent, ATree,
           ADiagnostics, ARootFileId) and Result;

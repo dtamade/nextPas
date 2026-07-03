@@ -4,7 +4,7 @@ program test_tls12_session_resume;
 
 uses
   {$IFDEF USE_HEAPTRC}heaptrc,{$ENDIF}
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   SysUtils, DateUtils,
   nextpas.core.tls.base,
   nextpas.core.tls.freepascal.session;

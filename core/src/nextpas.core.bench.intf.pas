@@ -118,18 +118,22 @@ type
   IBenchSuite = interface
     ['{A1B2C3D4-5E6F-7A8B-9C0D-1E2F3A4B5C6D}']
 
-    {** 添加基准测试（简单版本） }
+    {** 添加基准测试（简单版本）
+     *  @raises EBenchInvalidParam 当 AFunc 为 nil 时 }
     function Add(const AName: string; AFunc: TBenchFunc): IBenchSuite;
 
-    {** 添加基准测试（带 setup/teardown） }
+    {** 添加基准测试（带 setup/teardown）
+     *  @raises EBenchInvalidParam 当 AFunc 为 nil 时 }
     function AddWithSetup(const AName: string; AFunc: TBenchFunc;
       ASetup: TBenchSetupFunc; ATeardown: TBenchTeardownFunc): IBenchSuite;
 
-    {** 条件添加基准测试（仅当条件为真时执行） }
+    {** 条件添加基准测试（仅当条件为真时执行）
+     *  @raises EBenchInvalidParam 当 AFunc 为 nil 时 }
     function AddWhen(const AName: string; AFunc: TBenchFunc;
       ACondition: Boolean): IBenchSuite;
 
-    {** 添加并行基准测试 }
+    {** 添加并行基准测试
+     *  @raises EBenchInvalidParam 当 AFunc 为 nil 时 }
     function AddParallel(const AName: string; AFunc: TBenchFunc;
       AThreads: Integer): IBenchSuite;
 
@@ -148,7 +152,8 @@ type
       const AParams: array of Int64;
       ASetup: TBenchSetupFunc; ATeardown: TBenchTeardownFunc): IBenchSuite;
 
-    {** 添加用户控制循环的基准测试 — TBenchLoopFunc 不支持 IBenchContext }
+    {** 添加用户控制循环的基准测试 — TBenchLoopFunc 不支持 IBenchContext
+     *  @raises EBenchInvalidParam 当 AFunc 为 nil 时 }
     function AddLoop(const AName: string; AFunc: TBenchLoopFunc): IBenchSuite;
 
     {** 清空所有已注册条目 (DS-03) }
@@ -191,7 +196,9 @@ type
     {** 批量添加基线 (ST-06) }
     function AddBaselines(const ABaselines: array of TBaselineData): IBenchSuite;
 
-    {** 加载基线文件 }
+    {** 加载基线文件
+     *  @raises EBenchBaselineNotFound 当文件不存在时
+     *  @raises EBenchError 当文件格式错误时 }
     function LoadBaseline(const APath: string): IBenchSuite;
 
     {** 设置过滤条件 }
@@ -212,7 +219,8 @@ type
     {** 获取所有结果 }
     function GetAll: TBenchResultArray;
 
-    {** 获取单个结果（按名称） }
+    {** 获取单个结果（按名称）。
+     *  @raises EBenchError 当名称不存在时。安全替代方案：TryGetByName。 }
     function GetByName(const AName: string): TBenchResult;
 
     {** 尝试获取单个结果（按名称），返回是否找到 }
@@ -248,10 +256,12 @@ type
     {** 与基线对比 }
     function CompareWithBaseline: TBenchComparisonArray;
 
-    {** 两个结果对比（Mann-Whitney U 检验，需 RawSamples） }
+    {** 两个结果对比（Mann-Whitney U 检验，需 RawSamples）。
+     *  @raises EBenchError 当任一名称不存在时。 }
     function CompareTwoResults(const ANameA, ANameB: string): TBenchComparison;
 
-    {** 保存当前结果为命名基线文件 }
+    {** 保存当前结果为命名基线文件
+     *  @raises EBenchError 当保存失败时 }
     procedure SaveBaseline(const APath: string; const AGitHash: string = '');
 
     {** 追加当前结果到时间线 JSONL 文件 (P1-5) }
@@ -288,7 +298,9 @@ type
   IBenchStatsAnalyzer = interface
     ['{D4E5F6A7-B8C9-0D1E-2F3A-4B5C6D7E8F9A}']
 
-    {** 计算统计摘要 }
+    {** 计算统计摘要
+     *  @edge ASamples 为空时返回 Default(TBenchStats)；
+     *        样本数=1 时 StdDev=0, 置信区间退化为 [mean, mean] }
     function ComputeStats(const ASamples: TDoubleArray): TBenchStats;
 
     {** 检测异常值 }
@@ -322,8 +334,50 @@ type
     {** Mann-Whitney U 检验 p-value（非参数，适用于右偏基准数据） }
     function ComputeMannWhitneyPValue(const A, B: TDoubleArray): Double;
 
-    {** 几何均值（多 benchmark ratio 聚合的正确方法） }
+    {** 几何均值（多 benchmark ratio 聚合的正确方法）
+     *  @edge 空数组返回 1.0；非正 ratio 返回 0.0（哨兵值，表示非法输入） }
     function GeometricMean(const ARatios: TDoubleArray): Double;
+  end;
+
+  {** 报告生成器接口
+   *
+   *  提供多种格式的基准结果输出。
+   *  所有方法均为纯函数（不写 stdout），返回格式化字符串。 }
+  IBenchReportGenerator = interface
+    ['{A1B2C3D4-E5F6-7890-ABCD-EF0123456789}']
+
+    {** 设置结果数据 }
+    procedure SetResults(const AResults: array of TBenchResult);
+
+    {** 设置环境信息 }
+    procedure SetEnvironment(const AEnvironment: TBenchEnvironment);
+
+    {** 设置统计详情最大显示数量 }
+    procedure SetMaxDetailCount(ACount: Integer);
+
+    {** 格式化的控制台表格字符串（纯函数，不写 stdout） }
+    function PrintToConsole: string;
+
+    {** Go benchstat 兼容格式 }
+    function ToBenchstat: string;
+
+    {** JSON 格式（含环境信息、统计详情） }
+    function ToJSON: string;
+
+    {** TSV 格式（含状态/跳过原因） }
+    function ToTSV: string;
+
+    {** 自包含 HTML（内联 CSS/SVG 图表/箱线图） }
+    function ToHTML: string;
+
+    {** 多基线矩阵 Console 报告 }
+    function GenerateMatrixReport(const AMatrix: TMatrixResult): string;
+
+    {** 多基线矩阵 HTML（含 B/op + allocs/op） }
+    function GenerateMatrixHTML(const AMatrix: TMatrixResult): string;
+
+    {** 多基线矩阵 JSON（CI 可消费） }
+    function GenerateMatrixJSON(const AMatrix: TMatrixResult): string;
   end;
 
 implementation

@@ -14,7 +14,7 @@ procedure GemmParallelF32(AA, AB, AC: PSingle;
 implementation
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   nextpas.core.simd.linalg.gemm;
 
 type

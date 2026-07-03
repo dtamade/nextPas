@@ -22,7 +22,7 @@ program test_sync_pool;
 {$I nextpas.core.settings.inc}
 
 uses
-  {$ifdef unix}cthreads,{$endif}
+  nextpas.core.thread.init,
   SysUtils, Classes, SyncObjs, Math,
   nextpas.core.sync.pool;
 

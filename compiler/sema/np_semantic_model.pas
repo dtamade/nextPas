@@ -110,6 +110,7 @@ type
     ExprId: LongInt;
     TargetExprId: LongInt;
     GreenNodeRef: TObject;  // optional: green tree node for unit init/fini body
+    IsThreadVar: Boolean;   // true for threadvar declarations
   end;
 
   TSemanticBinding = record
@@ -315,6 +316,8 @@ type
       const AExprId: LongInt);
     procedure SetTypedHirNodeGreenRef(const AHirNodeId: LongInt;
       const AGreenNode: TObject);
+    procedure SetTypedHirNodeIsThreadVar(const AHirNodeId: LongInt;
+      const AIsThreadVar: Boolean);
     function AddBinding(
       const AKind: string;
       const AName: string;
@@ -958,6 +961,17 @@ begin
   if (Idx < 0) or (Idx >= Length(FTypedHirNodes)) then
     Exit;
   FTypedHirNodes[Idx].GreenNodeRef := AGreenNode;
+end;
+
+procedure TSemanticModel.SetTypedHirNodeIsThreadVar(
+  const AHirNodeId: LongInt; const AIsThreadVar: Boolean);
+var
+  Idx: LongInt;
+begin
+  Idx := AHirNodeId - 1;
+  if (Idx < 0) or (Idx >= Length(FTypedHirNodes)) then
+    Exit;
+  FTypedHirNodes[Idx].IsThreadVar := AIsThreadVar;
 end;
 
 function TSemanticModel.AddBinding(

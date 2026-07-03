@@ -38,6 +38,8 @@ type
     hnkVarDeclPtrRuntime,
     hnkVarDeclVarrefRuntime,
     hnkVarDeclRecordRuntime,
+    hnkProcedureDecl,
+    hnkFunctionDecl,
     hnkAssignRuntime,
     hnkHaltCallRuntime,
     hnkHaltCall,
@@ -87,6 +89,11 @@ type
     hnkUnitFiniRuntime,
     hnkFillCharRuntime,
     hnkMoveRuntime,
+    hnkInterlockedCasRuntime,
+    hnkInterlockedXchgRuntime,
+    hnkInterlockedFetchAddRuntime,
+    hnkInterlockedCas64Runtime,
+    hnkInterlockedFetchAdd64Runtime,
     hnkGetMemRuntime,
     hnkFreeMemRuntime,
     hnkReallocMemRuntime,
@@ -183,6 +190,8 @@ begin
     'var-decl-ptr-runtime': Result := hnkVarDeclPtrRuntime;
     'var-decl-varref-runtime': Result := hnkVarDeclVarrefRuntime;
     'var-decl-record-runtime': Result := hnkVarDeclRecordRuntime;
+    'procedure-decl': Result := hnkProcedureDecl;
+    'function-decl': Result := hnkFunctionDecl;
     'assign-runtime': Result := hnkAssignRuntime;
     'halt-call-runtime': Result := hnkHaltCallRuntime;
     'halt-call': Result := hnkHaltCall;
@@ -232,6 +241,11 @@ begin
     'unit-fini-runtime': Result := hnkUnitFiniRuntime;
     'fillchar-runtime': Result := hnkFillCharRuntime;
     'move-runtime': Result := hnkMoveRuntime;
+    'interlocked-cas-runtime': Result := hnkInterlockedCasRuntime;
+    'interlocked-xchg-runtime': Result := hnkInterlockedXchgRuntime;
+    'interlocked-fetch-add-runtime': Result := hnkInterlockedFetchAddRuntime;
+    'interlocked-cas64-runtime': Result := hnkInterlockedCas64Runtime;
+    'interlocked-fetch-add64-runtime': Result := hnkInterlockedFetchAdd64Runtime;
     'getmem-runtime': Result := hnkGetMemRuntime;
     'freemem-runtime': Result := hnkFreeMemRuntime;
     'reallocmem-runtime': Result := hnkReallocMemRuntime;

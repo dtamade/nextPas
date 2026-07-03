@@ -16,7 +16,7 @@ program test_verify_callback_logic;
 
 uses
   {$IFDEF UNIX}
-  cthreads,
+  nextpas.core.thread.init,
   {$ENDIF}
   Classes, SysUtils,
   nextpas.core.tls.base;

@@ -20,7 +20,7 @@ interface
 
 uses
   {$IFDEF UNIX}
-  cthreads,
+  nextpas.core.thread.init,
   {$ENDIF}
   Classes, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.time.cpu, Math,
   fpcunit, testregistry,

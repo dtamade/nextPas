@@ -9,7 +9,9 @@ unit nextpas.core.test.base;
 interface
 
 uses
-  SysUtils;         { ExceptClass, EAbort, EAssertionFailed — FPC built-in }
+  nextpas.core.system,   { Exception, EAbort, EAssertionFailed, ExceptClass }
+  nextpas.core.text.conv, { LowerCase }
+  nextpas.core.time;     { GetTickCount64 }
 
 { ── Test Context (for subtests) ───────────────────────────────────────────── }
 { ITestContext MUST be declared before TSubtestProc which references it.       }
@@ -50,10 +52,10 @@ type
 
   PTestCaseProc = ^TTestCaseProc;
 
-{ ── Re-exported from SysUtils (avoid facade depending on FPC RTL) ──────────── }
+{ ── Re-exported from nextpas.core.system ───────────────────────────────────── }
 
 type
-  ExceptClass = SysUtils.ExceptClass;
+  ExceptClass = nextpas.core.system.ExceptClass;
 
 { ── Status ────────────────────────────────────────────────────────────────── }
 
@@ -195,6 +197,17 @@ procedure RegisterEntry(var AEntries: specialize TArray<TTestEntry>;
 procedure CopyTags(out ATags: specialize TArray<string>;
   const ASource: array of string);
   { Copy an open array of tag strings into a dynamic array. }
+function GrowCapacity(ALen, AInitCap: Integer): Integer;
+  { Returns new capacity for a dynamic array. Geometric growth above AInitCap.
+    Shared by runner, context, and other growth call-sites. }
+function GrowCleanups(var ACleanups: specialize TArray<TTestClosure>): Integer;
+  { Grow ACleanups capacity and return insertion index (old length).
+    Shared by runner.EachCleanups and context.FCleanups. }
+procedure RunShouldFailEntry(const AEntry: TTestEntry;
+  out AStatus: TTestStatus; out AFailMsg: string);
+  { Execute a ShouldFail test entry. Sets AStatus to tsPassed if the proc
+    raises (expected), tsFailed if it doesn't, tsSkipped on ETestSkipped.
+    Shared by serial and parallel runners. }
 
 { ── Exception Formatting (eliminate repeated ClassName + trace patterns) ──── }
 
@@ -203,6 +216,11 @@ function FormatExceptionMsg(E: Exception): string;
 function AppendTestTrace(const AMsg: string): string;
   { Appends ' [file:line]' from GLastTestTrace if non-empty; returns AMsg as-is
     when no trace was captured. }
+procedure ClassifyTestException(E: Exception;
+  out AStatus: TTestStatus; out AMsg: string);
+  { Standard exception → status classification for test execution.
+    ETestSkipped → tsSkipped, EAssertionFailed → tsFailed, other → tsError.
+    Shared by serial runner, parallel worker, and any future runners. }
 
 { ── Internal Helpers (exported for use by other test.* units) ─────────────── }
 
@@ -210,6 +228,14 @@ procedure SetTestContext(const ASuiteName, ATestName: string);
 procedure InternalFail(const AMessage: string);
 procedure InternalSkip(const AReason: string);
 function  StrStartsWith(const S, APrefix: string): Boolean;
+procedure IncByStatus(AStatus: TTestStatus;
+  var APass, AFail, ASkip: Integer);
+  { Increment the appropriate counter based on test status. }
+
+{ ── Timing helpers ────────────────────────────────────────────────────────── }
+
+procedure SleepMs(AMilliseconds: Integer);
+  { Cross-platform millisecond sleep. Replaces SysUtils.Sleep for test programs. }
 
 implementation
 
@@ -290,16 +316,10 @@ var
   LOldLen, LNewLen, LCap: Integer;
 begin
   LOldLen := Length(AResults);
-  LCap := LOldLen;
-  if LCap < 16 then
-    LCap := 16
-  else if LOldLen >= LCap then
-    LCap := LCap * 2;
+  LCap := GrowCapacity(LOldLen, 16);
   if LCap <> LOldLen then
     SetLength(AResults, LCap);
   AResults[LOldLen] := AResult;
-  { Trim to actual length — FPC keeps capacity internally,
-    so the next SetLength to the same size is a no-op. }
   LNewLen := LOldLen + 1;
   if LNewLen <> LCap then
     SetLength(AResults, LNewLen);
@@ -348,7 +368,8 @@ end;
 
 procedure ShuffleEntries(var AEntries: specialize TArray<TTestEntry>;
   ASeed: Integer);
-{ Fisher-Yates (Knuth) shuffle. ASeed > 0 = deterministic, ASeed = -1 = random. }
+{ Fisher-Yates (Knuth) shuffle. ASeed > 0 = deterministic, ASeed = -1 = random.
+  ASeed = 0 treated as -1 (random) to avoid degenerate LCG sequence. }
 var
   I, J, N: Integer;
   LSeed: Integer;
@@ -356,7 +377,7 @@ var
 begin
   N := Length(AEntries);
   if N <= 1 then Exit;
-  if ASeed = -1 then
+  if (ASeed = -1) or (ASeed = 0) then
     LSeed := Integer(GetTickCount64 and $7FFFFFFF)
   else
     LSeed := ASeed;
@@ -377,11 +398,7 @@ var
   LOldLen, LCap: Integer;
 begin
   LOldLen := Length(AEntries);
-  LCap := LOldLen;
-  if LCap < 16 then
-    LCap := 16
-  else if LOldLen >= LCap then
-    LCap := LCap * 2;
+  LCap := GrowCapacity(LOldLen, 16);
   if LCap <> LOldLen then
     SetLength(AEntries, LCap);
   AEntries[LOldLen] := AEntry;
@@ -396,6 +413,56 @@ begin
   SetLength(ATags, Length(ASource));
   for I := 0 to High(ASource) do
     ATags[I] := ASource[I];
+end;
+
+function GrowCapacity(ALen, AInitCap: Integer): Integer;
+begin
+  if ALen < AInitCap then
+    Result := AInitCap
+  else if ALen < MaxInt div 2 then
+    Result := ALen * 2
+  else
+    Result := MaxInt;
+end;
+
+function GrowCleanups(var ACleanups: specialize TArray<TTestClosure>): Integer;
+var
+  LOldLen, LCap: Integer;
+begin
+  LOldLen := Length(ACleanups);
+  LCap := GrowCapacity(LOldLen, 4);
+  if LCap <> LOldLen then SetLength(ACleanups, LCap);
+  Result := LOldLen;
+end;
+
+procedure RunShouldFailEntry(const AEntry: TTestEntry;
+  out AStatus: TTestStatus; out AFailMsg: string);
+begin
+  AStatus := tsPassed;
+  AFailMsg := '';
+  try
+    if Assigned(AEntry.Closure) then
+      AEntry.Closure()
+    else
+      AEntry.Proc;
+    { No exception = unexpected success }
+    AStatus := tsFailed;
+    if AEntry.ShouldFailMsg <> '' then
+      AFailMsg := 'Expected failure (' + AEntry.ShouldFailMsg + ') but test passed'
+    else
+      AFailMsg := 'Expected failure but test passed';
+  except
+    on E: ETestSkipped do
+    begin
+      AStatus := tsSkipped;
+      AFailMsg := E.Message;
+    end;
+    on E: Exception do
+    begin
+      { Expected failure — test passes }
+      AStatus := tsPassed;
+    end;
+  end;
 end;
 
 { Exception Formatting }
@@ -413,6 +480,26 @@ begin
     Result := AMsg;
 end;
 
+procedure ClassifyTestException(E: Exception;
+  out AStatus: TTestStatus; out AMsg: string);
+begin
+  if E is ETestSkipped then
+  begin
+    AStatus := tsSkipped;
+    AMsg := E.Message;
+  end
+  else if E is EAssertionFailed then
+  begin
+    AStatus := tsFailed;
+    AMsg := AppendTestTrace(E.Message);
+  end
+  else
+  begin
+    AStatus := tsError;
+    AMsg := AppendTestTrace(FormatExceptionMsg(E));
+  end;
+end;
+
 { ═════════════════════════════════════════════════════════════════════════════ }
 { Stack Trace Capture                                                         }
 { ═════════════════════════════════════════════════════════════════════════════ }
@@ -426,17 +513,26 @@ var
 function IsFrameworkFrame(const AFrameStr: string): Boolean;
 { Returns True if the frame belongs to the test framework and should be hidden
   from the user-facing output. Matches unit name prefixes:
-    nextpas.core.test.  (any sub-unit of the test framework)
-    sysutils             (FPC exception machinery)
-    system               (FPC runtime) }
+    nextpas.core.test  (any sub-unit — followed by . , space, newline, or EOS)
+    sysutils            (FPC exception machinery)
+    system              (FPC runtime) }
+const
+  CPrefix = 'nextpas.core.test';
 var
   LLower: string;
+  LPos, LAfter: Integer;
 begin
   LLower := LowerCase(AFrameStr);
-  Result := (Pos('nextpas.core.test.', LLower) > 0) or
-            (Pos('nextpas.core.test,', LLower) > 0) or
-            (Pos('nextpas.core.test ', LLower) > 0) or
-            (Pos('nextpas.core.test'#10, LLower) > 0);
+  LPos := Pos(CPrefix, LLower);
+  if LPos > 0 then
+  begin
+    LAfter := LPos + Length(CPrefix);
+    { Match if followed by delimiter (., comma, space, newline) or at end-of-string }
+    Result := (LAfter > Length(LLower)) or
+              (LLower[LAfter] in ['.', ',', ' ', #10]);
+  end
+  else
+    Result := False;
   if not Result then
     { Also filter sysutils/system frames that appear in exception stack }
     Result := (Pos('sysutils', LLower) > 0) or
@@ -503,6 +599,17 @@ begin
             (Copy(S, 1, Length(APrefix)) = APrefix);
 end;
 
+procedure IncByStatus(AStatus: TTestStatus;
+  var APass, AFail, ASkip: Integer);
+begin
+  case AStatus of
+    tsPassed:  Inc(APass);
+    tsSkipped: Inc(ASkip);
+  else
+    Inc(AFail);
+  end;
+end;
+
 { ═════════════════════════════════════════════════════════════════════════════ }
 { Internal State Management                                                    }
 { ═════════════════════════════════════════════════════════════════════════════ }
@@ -529,6 +636,13 @@ begin
   GExecState^.TestName   := ATestName;
   GExecState^.Failed     := False;
   GExecState^.SkipReason := '';
+end;
+
+{ ── SleepMs ───────────────────────────────────────────────────────────────── }
+
+procedure SleepMs(AMilliseconds: Integer);
+begin
+  TSleep.ForDuration(TDuration.FromMilliseconds(AMilliseconds));
 end;
 
 initialization

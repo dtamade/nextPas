@@ -5,7 +5,7 @@ program nextpas.core.simd.concurrent;
 
 uses
   {$IFDEF UNIX}
-  cthreads,
+  nextpas.core.thread.init,
   {$ENDIF}
   nextpas.core.text.conv, Classes, Math,
   nextpas.core.simd,

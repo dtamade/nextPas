@@ -7,12 +7,11 @@ interface
 uses
   nextpas.core.mem.base,
   nextpas.core.mem.error,
-  nextpas.core.mem.intf,
+  nextpas.core.mem.allocator.base,
   nextpas.core.mem.pool.base,
   nextpas.core.mem.pool.memory_pool,
   nextpas.core.base.utils,
-  nextpas.core.mem.pool.fixed_slab,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.pool.fixed_slab;
 
 type
   IPool = nextpas.core.mem.pool.base.IPool;
@@ -71,8 +70,8 @@ type
 
   TPool = TLocalBlockPool;
 
-function MakeFixedSlabPool(ACapacity: SizeUInt; AAllocator: TMemAllocator; AMinShift: SizeUInt = 3): IFixedSlabPool; overload;
-function MakeFixedSlabPool(ACapacity: SizeUInt; AAllocator: TMemAllocator): IFixedSlabPool; overload;
+function MakeFixedSlabPool(ACapacity: SizeUInt; AAllocator: TAllocator; AMinShift: SizeUInt = 3): IFixedSlabPool; overload;
+function MakeFixedSlabPool(ACapacity: SizeUInt; AAllocator: TAllocator): IFixedSlabPool; overload;
 function MakeFixedSlabPool(ACapacity: SizeUInt): IFixedSlabPool; overload;
 
 implementation
@@ -83,12 +82,12 @@ type
     Next: PFreeNode;
   end;
 
-function MakeFixedSlabPool(ACapacity: SizeUInt; AAllocator: TMemAllocator; AMinShift: SizeUInt): IFixedSlabPool;
+function MakeFixedSlabPool(ACapacity: SizeUInt; AAllocator: TAllocator; AMinShift: SizeUInt): IFixedSlabPool;
 begin
   Result := TFixedSlabPool.Create(ACapacity, AAllocator, AMinShift);
 end;
 
-function MakeFixedSlabPool(ACapacity: SizeUInt; AAllocator: TMemAllocator): IFixedSlabPool;
+function MakeFixedSlabPool(ACapacity: SizeUInt; AAllocator: TAllocator): IFixedSlabPool;
 begin
   Result := TFixedSlabPool.Create(ACapacity, AAllocator);
 end;
@@ -140,10 +139,10 @@ begin
 
   LTotalSize := LActualBlockSize * ABlockCount;
   if (LActualBlockSize <> 0) and ((LTotalSize div LActualBlockSize) <> ABlockCount) then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'TLocalBlockPool.Create: size overflow');
+    raise EOutOfMemory.CreateMsg('TLocalBlockPool.Create: size overflow');
   FBacking := GetMem(LTotalSize);
   if FBacking = nil then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'TLocalBlockPool.Create: out of memory');
+    raise EOutOfMemory.CreateMsg('TLocalBlockPool.Create: out of memory');
   ZeroMem(FBacking, LTotalSize);
 
   { 初始化位图：所有块标记为 free（位=1） }

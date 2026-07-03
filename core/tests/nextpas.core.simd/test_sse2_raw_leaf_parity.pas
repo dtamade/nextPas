@@ -2,7 +2,7 @@ program test_sse2_raw_leaf_parity;
 {$I ../../src/nextpas.core.settings.inc}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   nextpas.core.text.conv, Math,
   nextpas.core.simd.intrinsics.base,
   nextpas.core.simd.memutils,

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 cd "$ROOT"
 
 FORBIDDEN_UNITS=(
@@ -76,7 +76,7 @@ while IFS= read -r file; do
       if ($0 ~ /;/) in_uses = 0
     }
   ' "$file"
-done < <(find src -maxdepth 1 -name 'nextpas.core.mem*.pas' | sort) | sort -u > "$tmp_found"
+done < <(find core/src -maxdepth 1 -name 'nextpas.core.mem*.pas' | sort) | sort -u > "$tmp_found"
 
 while IFS='|' read -r file unit; do
   if is_forbidden_unit "$unit"; then
@@ -90,6 +90,44 @@ done < "$tmp_found"
 if [[ -s "$tmp_unknown" ]]; then
   echo "Unexpected mem L0 dependency boundary violations:"
   cat "$tmp_unknown"
+  exit 1
+fi
+
+# --- Phase 2: forbidden identifier scan (implicit System unit references) ---
+# TRTLCriticalSection comes from implicit `System` unit, not visible in uses clauses.
+# mem module must use TPlatformMutex (nextpas.core.platform.sync) or TMemMutex instead.
+FORBIDDEN_IDENTIFIERS=(
+  "TRTLCriticalSection"
+  "InitCriticalSection"
+  "DoneCriticalSection"
+  "EnterCriticalSection"
+  "LeaveCriticalSection"
+)
+
+tmp_id_violations="$(mktemp)"
+tmp_id_raw="$(mktemp)"
+trap 'rm -f "$tmp_found" "$tmp_unknown" "$tmp_id_violations" "$tmp_id_raw"' EXIT
+
+MEM_SRC_FILES=$(find core/src -maxdepth 1 -name 'nextpas.core.mem*.pas' | sort)
+
+for ident in "${FORBIDDEN_IDENTIFIERS[@]}"; do
+  # grep may return 1 if no matches — that's fine
+  grep -rn "\b${ident}\b" $MEM_SRC_FILES 2>/dev/null | grep -v '^\s*//' >> "$tmp_id_raw" || true
+done
+
+while IFS=: read -r file line content; do
+  # Extract which forbidden identifier was found
+  for ident in "${FORBIDDEN_IDENTIFIERS[@]}"; do
+    if echo "$content" | grep -q "\b${ident}\b"; then
+      echo "${file}:${line}: forbidden identifier '${ident}' — use TPlatformMutex or TMemMutex" >> "$tmp_id_violations"
+      break
+    fi
+  done
+done < "$tmp_id_raw"
+
+if [[ -s "$tmp_id_violations" ]]; then
+  echo "Forbidden FPC System unit identifiers in mem module:"
+  cat "$tmp_id_violations"
   exit 1
 fi
 

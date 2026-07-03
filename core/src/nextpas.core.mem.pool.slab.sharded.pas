@@ -19,8 +19,7 @@ uses
   nextpas.core.mem.rwlock,
   nextpas.core.mem.pool.slab,
   nextpas.core.mem.error,
-  nextpas.core.platform.thread,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.platform.thread;
 
 type
   {**
@@ -33,7 +32,7 @@ type
    *   - Reset 会使之前分配的指针失效；调用端需自行保证语义正确。
    *   - 仍保持 TSlabPool 的严格所有权：释放非本池指针会抛 ESlabPoolCorruption。
    *}
-  TSlabPoolSharded = class(TAllocator, IMemoryPool)
+  TSlabPoolSharded = class(TInterfacedObject, IMemoryPool, IAllocator)
   private
     type
       TShard = record
@@ -42,7 +41,7 @@ type
         KnownSegmentCount: Integer;
       end;
   private
-    FAllocator: TMemAllocator;
+    FAllocator: IAllocator;
     FConfig: TSlabConfig;
     FInitialCapacity: SizeUInt;
     FMinShift: SizeUInt;
@@ -69,7 +68,7 @@ type
     FFbCount: SizeUInt;            // live entries
     FFbFill: SizeUInt;             // live + tombstones
   private
-    function NormalizeShardCount(AShardCount: Integer): Integer;
+    function NormalizeShardCount(aShardCount: Integer): Integer;
     function ChooseShardIndex: Integer; inline;
     function PageKeyOf(APtr: Pointer): PtrUInt; inline;
 
@@ -94,8 +93,8 @@ type
     function ShouldUseFallback(const ASize: SizeUInt): Boolean; inline;
     function TryRouteShardIndex(APtr: Pointer; out aShard: Integer; out aIsFallback: Boolean): Boolean;
   public
-    constructor Create(aCapacity: SizeUInt; AShardCount: Integer = 0; AAllocator: TMemAllocator = nil; aMinShift: SizeUInt = 3); overload;
-    constructor Create(aCapacity: SizeUInt; const AConfig: TSlabConfig; AShardCount: Integer = 0; AAllocator: TMemAllocator = nil); overload;
+    constructor Create(aCapacity: SizeUInt; aShardCount: Integer = 0; aAllocator: IAllocator = nil; aMinShift: SizeUInt = 3); overload;
+    constructor Create(aCapacity: SizeUInt; const aConfig: TSlabConfig; aShardCount: Integer = 0; aAllocator: IAllocator = nil); overload;
     destructor Destroy; override;
   public
     // IPool
@@ -107,22 +106,22 @@ type
     procedure Reset;
 
     // IMemoryPool
-    function GetMem(ASize: SizeUInt): Pointer; override;
-    function AllocMem(ASize: SizeUInt): Pointer; override;
-    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure FreeMem(ADst: Pointer); override;
-    function MemSize(APtr: Pointer): SizeUInt; override;
+    function GetMem(ASize: SizeUInt): Pointer;
+    function AllocMem(ASize: SizeUInt): Pointer;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(ADst: Pointer);
+    function MemSize(APtr: Pointer): SizeUInt;
 
-    // TMemAllocator aligned allocation
-    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer; override;
-    procedure FreeAligned(APtr: Pointer); override;
+    // IAllocator aligned allocation
+    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
+    procedure FreeAligned(APtr: Pointer);
 
-    // TMemAllocator capability
-    function Traits: TAllocatorTraits; override;
+    // IAllocator capability
+    function Traits: TAllocatorTraits;
   public
     // Diagnostics
     function Owns(APtr: Pointer): Boolean;
-    function MemSizeOf(APtr: Pointer): SizeUInt; override;
+    function MemSizeOf(APtr: Pointer): SizeUInt;
     function Stats: TSlabPoolStats;
     function GetPerfCounters: TSlabPerfCounters;
     function ShardCount: Integer; inline;
@@ -143,9 +142,9 @@ end;
 
 { TSlabPoolSharded }
 
-function TSlabPoolSharded.NormalizeShardCount(AShardCount: Integer): Integer;
+function TSlabPoolSharded.NormalizeShardCount(aShardCount: Integer): Integer;
 begin
-  Result := nextpas.core.mem.utils.NormalizeShardCount(AShardCount, platform_cpu_count);
+  Result := nextpas.core.mem.utils.NormalizeShardCount(aShardCount, platform_cpu_count);
 end;
 
 function TSlabPoolSharded.ChooseShardIndex: Integer; inline;
@@ -240,12 +239,12 @@ var
   LPos: SizeUInt;
   LHash: QWord;
 begin
-  if aKey = 0 then aKey := 1;
-  LHash := MulHash64(aKey);
+  // 存储 aKey+1，保留 0 为空标记，避免 key 0 和 key 1 碰撞 (CS-014)
+  LHash := MulHash64(aKey + 1);
   LPos := (LHash shr FPageHighShift) and FPageMask;
   while FPageKeys[LPos] <> 0 do
     LPos := (LPos + 1) and FPageMask;
-  FPageKeys[LPos] := aKey;
+  FPageKeys[LPos] := aKey + 1;
   FPageVals[LPos] := aShard;
   Inc(FPageCount);
 end;
@@ -254,14 +253,16 @@ function TSlabPoolSharded.PageMapLookup(aKey: PtrUInt; out aShard: Integer): Boo
 var
   LPos: SizeUInt;
   LHash: QWord;
+  LKey: PtrUInt;
 begin
-  if aKey = 0 then aKey := 1;
-  LHash := MulHash64(aKey);
+  // 查询 aKey+1，与 Insert 的存储格式一致 (CS-014)
+  LKey := aKey + 1;
+  LHash := MulHash64(LKey);
   LPos := (LHash shr FPageHighShift) and FPageMask;
   while True do
   begin
     if FPageKeys[LPos] = 0 then Exit(False);
-    if FPageKeys[LPos] = aKey then
+    if FPageKeys[LPos] = LKey then
     begin
       aShard := FPageVals[LPos];
       Exit(True);
@@ -541,7 +542,7 @@ begin
   end;
 end;
 
-constructor TSlabPoolSharded.Create(aCapacity: SizeUInt; AShardCount: Integer; AAllocator: TMemAllocator; aMinShift: SizeUInt);
+constructor TSlabPoolSharded.Create(aCapacity: SizeUInt; aShardCount: Integer; aAllocator: IAllocator; aMinShift: SizeUInt);
 var
   LShardCount, LIdx: Integer;
   LStart, LEnd: PByte;
@@ -550,7 +551,7 @@ var
 begin
   inherited Create;
 
-  FAllocator := AAllocator;
+  FAllocator := aAllocator;
   if FAllocator = nil then
     FAllocator := nextpas.core.mem.allocator.GetRtlAllocator;
 
@@ -567,7 +568,7 @@ begin
     FConfig.MinShift := aMinShift;
   end;
 
-  LShardCount := NormalizeShardCount(AShardCount);
+  LShardCount := NormalizeShardCount(aShardCount);
   FShardCount := LShardCount;
   FShardMask := LShardCount - 1;
   SetLength(FShards, LShardCount);
@@ -606,12 +607,12 @@ begin
   end;
 end;
 
-constructor TSlabPoolSharded.Create(aCapacity: SizeUInt; const AConfig: TSlabConfig; AShardCount: Integer; AAllocator: TMemAllocator);
+constructor TSlabPoolSharded.Create(aCapacity: SizeUInt; const aConfig: TSlabConfig; aShardCount: Integer; aAllocator: IAllocator);
 begin
-  FConfig := AConfig;
+  FConfig := aConfig;
   if FConfig.MinShift = 0 then
     FConfig.MinShift := 3;
-  Create(aCapacity, AShardCount, AAllocator, FConfig.MinShift);
+  Create(aCapacity, aShardCount, aAllocator, FConfig.MinShift);
 end;
 
 destructor TSlabPoolSharded.Destroy;
@@ -903,8 +904,6 @@ begin
   // keep consistent with TSlabPool but mark as thread-safe
   Result.ZeroInitialized := True;
   Result.ThreadSafe := True;
-  Result.HasMemSize := True;
-  Result.SupportsAligned := True;   // AllocAligned 通过 fallback 路径实现
 end;
 
 function TSlabPoolSharded.Owns(APtr: Pointer): Boolean;

@@ -5,7 +5,7 @@ program test_worksteal;
 {$modeswitch functionreferences}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   SysUtils,
   nextpas.core.thread.base,
   nextpas.core.thread.intf,

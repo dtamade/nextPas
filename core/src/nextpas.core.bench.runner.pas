@@ -132,6 +132,8 @@ type
 
   public
     constructor Create;
+    {** 跳过环境变量加载（CreateWithConfig 内部使用） }
+    constructor CreateNoEnv;
     destructor Destroy; override;
 
     {** 测量函数执行时间 }
@@ -416,6 +418,19 @@ begin
   LoadConfigFromEnv;
 end;
 
+constructor TBenchRunner.CreateNoEnv;
+begin
+  inherited Create;
+  FStatsAnalyzer := TBenchStatsAnalyzer.Create;
+  FResultCount := 0;
+  FResultCapacity := 0;
+  FParallelBridgeFunc := nil;
+  FParallelContextsInitialized := False;
+  SetLength(FResults, 0);
+  SetLength(FParallelContexts, 0);
+  FConfig := DefaultBenchConfig;
+end;
+
 destructor TBenchRunner.Destroy;
 begin
   FinalizeParallelContexts;
@@ -600,7 +615,7 @@ begin
 
   // 并行基准自动跳过内存跟踪
   if ATrackMemory and (not FConfig.Quiet) then
-    WriteLn('  WARNING: Memory tracking disabled for parallel benchmark "', AEntry.Name, '"');
+    WriteLn(StdErr, '  WARNING: Memory tracking disabled for parallel benchmark "', AEntry.Name, '"');
 
   LPerThreadIterations := AIters div AEntry.ParallelThreads;
   if (AIters mod AEntry.ParallelThreads) <> 0 then
@@ -930,6 +945,8 @@ end;
 
 function TBenchRunner.RunOne(const AName: string; AFunc: TBenchFunc): TBenchResult;
 begin
+  if not Assigned(AFunc) then
+    raise EBenchInvalidParam.CreateFmt('TBenchRunner.RunOne: function must not be nil (name="%s")', [AName]);
   Result := RunOne(BuildEntry(AName, AFunc));
 end;
 
@@ -1007,7 +1024,7 @@ var
   I: Integer;
 begin
   if not FConfig.Quiet then
-    WriteLn('=== nextpas.core.bench v1.0 ===');
+    WriteLn('=== nextpas.core.bench v' + BENCH_VERSION + ' ===');
 
   for I := 0 to High(AEntries) do
   begin

@@ -3,7 +3,7 @@ program test_concurrent_hashmap;
 {$I nextpas.core.settings.inc}
 
 uses
-  {$ifdef unix}cthreads,{$endif}
+  nextpas.core.thread.init,
   SysUtils, Classes,
   nextpas.core.testing,
   nextpas.core.collections.concurrent.hashmap;

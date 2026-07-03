@@ -4,7 +4,7 @@ program test_factory_concurrent_initialization_contract;
 
 uses
   {$IFDEF UNIX}
-  cthreads,
+  nextpas.core.thread.init,
   {$ENDIF}
   SysUtils, Classes, SyncObjs,
   nextpas.core.tls.base,

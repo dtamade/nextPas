@@ -14,6 +14,11 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 - **v4.0**: --short + --progress + --failures-max + --json + parallel ShortSkip fix
 - **v5.0**: --verbose + --timeout + Cleanup() + parallel verbose/cleanup
 - **v6.0**: Benchmark — adaptive N scaling, ns/op, --bench/--benchtime/--benchmem
+- **v6.1**: R3 quality — NaN guards (11 methods), locale-independent FloatToStr, ToBeSame/ToEqualD API, P3 edge-case coverage
+- **v6.2**: Audit fixes — empty suite crash guard, Ctx() diagnostics, ShouldFail/glob/parallel tests, leak monitor counter
+- **v6.3**: T-01 NaN/边界补全 + facade re-export 补全 (Check*D, CI, NotStartsWith/EndsWith)
+- **v6.4**: P2 coverage — T-02 typed mock returns (7 tests), T-03 subtest skip message, T-04 TAP/JSON compliance (6 tests), T-05 complex filter scenarios (5 tests), T-06 config zero-value, T-07 test timeout exceeded
+- **v6.5**: A-01 runner.pas split — CLI 解析提取到 `runner.cli.pas` (373行), runner.pas 2336→1980行; C-02 `platform_thread_timedjoin` 替代 10ms 轮询; 所有 audit findings 全清
 
 ## 竞品对比
 
@@ -43,11 +48,11 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 
 | 套件 | 覆盖范围 | 测试数 |
 |------|---------|--------|
-| `test_assertions` | Check* 过程式断言 API | 47 |
-| `test_expect` | IExpectation 流式断言 API | 92 |
-| `test_mock` | TMock 录制/验证/返回值/参数匹配 | 53 |
-| `test_output` | ANSI、StatusDot、filter、timeout、JUnit/TAP/JSON 格式化、brace expansion、层级过滤、hierarchical+glob 组合 | 64 |
-| `test_runner` | TTestRunner 多 suite、lifecycle、subtest、timeout、空 suite、ShouldFail、FormatDuration、shuffle、failfast、list、determinism、verbose、runtimeout、cleanup、benchmark | 49+1x |
+| `test_assertions` | Check* 过程式断言 API + NaN/边界/epsilon 覆盖 | 100 |
+| `test_expect` | IExpectation 流式断言 API + NaN/Pointer/Double/epsilon 边界 | 111 |
+| `test_mock` | TMock 录制/验证/返回值/参数匹配/typed 返回覆盖 | 65 |
+| `test_output` | ANSI、StatusDot、filter、timeout、JUnit/TAP/JSON 格式化、brace expansion、层级过滤、hierarchical+glob 组合、TAP/JSON compliance | 70 |
+| `test_runner` | TTestRunner 多 suite、lifecycle、subtest、timeout、空 suite、ShouldFail、FormatDuration、shuffle、failfast、list、determinism、verbose、runtimeout、cleanup、benchmark、parallel空suite防护、glob边界、test timeout exceeded、config zero-value、complex filter、benchmark N scaling、suite-level retry、CleanupTableAllocations 幂等、FormatDuration locale | 74+1x |
 | `test_lifecycle` | TestTable、TTestClosure、lifecycle 组合、facade 符号完整性 | 15 |
 | `test_parallel` | 并行执行、lifecycle、retry、skip、MaxParallelWorkers 批次调度、verbose、cleanup | 10 |
 | `test_diagnostics` | 错误诊断、stack trace、Double 比较、Error vs Failure | 15 |
@@ -83,6 +88,7 @@ core/src/nextpas.core.test.expect.pas       ← IExpectation 流式断言
 core/src/nextpas.core.test.discovery.pas    ← RTTI 测试发现
 core/src/nextpas.core.test.mock.pas         ← TMock
 core/src/nextpas.core.test.runner.pas       ← TTestSuite/TTestRunner + 批次调度
+core/src/nextpas.core.test.runner.cli.pas   ← CLI 参数解析 (FromArgs/ApplyCLIArgs)
 core/src/nextpas.core.test.runner.parallel.pas ← 超时+并行 worker
 core/src/nextpas.core.test.runner.context.pas  ← 子测试 ITestContext
 core/src/nextpas.core.test.output.pas       ← ANSI/filter/JUnit

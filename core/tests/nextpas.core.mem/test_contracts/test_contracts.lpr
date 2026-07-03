@@ -191,7 +191,7 @@ end;
 
 procedure TestCallbackAllocatorCompatibilityMethods;
 var
-  LAllocator: nextpas.core.mem.allocator.TMemAllocator;
+  LAllocator: nextpas.core.mem.allocator.IAllocator;
   LPtr: Pointer;
 begin
   ResetAllocatorCounters;
@@ -226,7 +226,7 @@ end;
 
 procedure TestCallbackAllocatorSupportsCanonicalInterface;
 var
-  LAllocator: TMemAllocator;
+  LAllocator: nextpas.core.mem.intf.IAllocator;
   LPtr: Pointer;
 begin
   ResetAllocatorCounters;
@@ -234,7 +234,7 @@ begin
     @CallbackGetMem,
     @CallbackAllocMem,
     @CallbackReallocMem,
-    @CallbackFreeMem);
+    @CallbackFreeMem) as nextpas.core.mem.intf.IAllocator;
 
   LPtr := LAllocator.GetMem(24);
   Check(LPtr <> nil, 'GetMem should delegate to the compatibility allocator');
@@ -257,7 +257,7 @@ procedure ExpectNilCallbackRejected(const AName: string;
   AFreeMem: TFreeMemCallback);
 var
   LRaised: Boolean;
-  LAllocator: nextpas.core.mem.allocator.TMemAllocator;
+  LAllocator: nextpas.core.mem.allocator.IAllocator;
 begin
   LRaised := False;
   LAllocator := nil;
@@ -300,7 +300,7 @@ end;
 
 procedure TestRtlAllocatorZeroInitTraitsAndAlignedAlloc;
 var
-  LAllocator: nextpas.core.mem.allocator.TMemAllocator;
+  LAllocator: nextpas.core.mem.allocator.IAllocator;
   LTraits: nextpas.core.mem.allocator.base.TAllocatorTraits;
   LPtr: Pointer;
   I: Integer;
@@ -310,8 +310,6 @@ begin
 
   LTraits := LAllocator.Traits;
   Check(True = LTraits.ZeroInitialized, 'RTL AllocMem should be zero initialized');
-  Check(False = LTraits.SupportsAligned, 'RTL allocator should report non-native aligned support');
-  Check(False = LTraits.HasMemSize, 'RTL allocator should not expose MemSize');
 
   LPtr := LAllocator.AllocMem(32);
   try
@@ -319,29 +317,6 @@ begin
       Check(Int64(0) = Int64(PByte(LPtr)[I]), 'AllocMem should zero initialize each byte');
   finally
     LAllocator.FreeMem(LPtr);
-  end;
-
-  LPtr := LAllocator.AllocAligned(64, 32);
-  try
-    Check(LPtr <> nil, 'AllocAligned should return a pointer');
-    Check(Int64(0) = Int64(PtrUInt(LPtr) mod 32), 'AllocAligned should honor the requested alignment');
-  finally
-    LAllocator.FreeAligned(LPtr);
-  end;
-end;
-
-procedure TestRtlAllocatorAlignedAllocRejectsSizeOverflow;
-var
-  LAllocator: nextpas.core.mem.allocator.TMemAllocator;
-  LPtr: Pointer;
-begin
-  LAllocator := GetRtlAllocator;
-  LPtr := LAllocator.AllocAligned(High(SizeUInt), SizeOf(Pointer));
-  try
-    Check(LPtr = nil, 'AllocAligned should reject size calculations that overflow SizeUInt');
-  finally
-    if LPtr <> nil then
-      LAllocator.FreeAligned(LPtr);
   end;
 end;
 
@@ -623,11 +598,11 @@ end;
 
 procedure TestCanonicalAllocatorSurface;
 var
-  LAllocator: TMemAllocator;
+  LAllocator: nextpas.core.mem.intf.IAllocator;
   LTraits: nextpas.core.mem.intf.TAllocatorTraits;
   LPtr: Pointer;
 begin
-  LAllocator := GetRtlAllocator;
+  LAllocator := GetRtlAllocator as nextpas.core.mem.intf.IAllocator;
   LTraits := LAllocator.Traits;
   Check(LTraits.ThreadSafe, 'canonical allocator exposes traits');
 
@@ -645,18 +620,18 @@ end;
 
 procedure TestAllocatorAliasesAreCanonical;
 var
-  LCanonical: TMemAllocator;
-  LFacade: nextpas.core.mem.allocator.TMemAllocator;
+  LCanonical: nextpas.core.mem.intf.IAllocator;
+  LFacade: nextpas.core.mem.allocator.IAllocator;
 begin
   LFacade := GetRtlAllocator;
-  LCanonical := LFacade;
+  LCanonical := LFacade as nextpas.core.mem.intf.IAllocator;
   Check(LCanonical <> nil, 'allocator facade alias should be canonical');
   Check(LCanonical = LFacade, 'facade and canonical allocator interfaces should resolve to the same interface identity');
 end;
 
 procedure TestMimallocUsableSizeCapabilityFallback;
 var
-  LAllocator: nextpas.core.mem.allocator.TMemAllocator;
+  LAllocator: nextpas.core.mem.allocator.IAllocator;
   LPtr: Pointer;
   LSize: SizeUInt;
 begin
@@ -801,8 +776,7 @@ begin
   T.Test('callback allocator supports canonical interface', @TestCallbackAllocatorSupportsCanonicalInterface);
   T.Test('callback allocator rejects nil callbacks at runtime',
     @TestCallbackAllocatorRejectsNilCallbacksAtRuntime);
-  T.Test('rtl allocator zero init traits and aligned alloc', @TestRtlAllocatorZeroInitTraitsAndAlignedAlloc);
-  T.Test('rtl allocator aligned alloc rejects size overflow', @TestRtlAllocatorAlignedAllocRejectsSizeOverflow);
+  T.Test('rtl allocator zero init traits', @TestRtlAllocatorZeroInitTraitsAndAlignedAlloc);
   T.Test('chunked arena and growable block pool use canonical allocator contract',
     @TestChunkedArenaAndGrowableBlockPoolUseCanonicalAllocatorContract);
   T.Test('arena units use explicit arena api', @TestArenaUnitsUseExplicitArenaApi);

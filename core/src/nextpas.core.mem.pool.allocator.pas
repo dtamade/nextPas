@@ -5,14 +5,14 @@ unit nextpas.core.mem.pool.allocator;
 {**
  * TPoolAllocator - 固定块池分配器适配器
  *
- * 将 TFixedPool 适配为 TMemAllocator 接口，用于集合节点分配优化。
+ * 将 TFixedPool 适配为 IAllocator 接口，用于集合节点分配优化。
  * 对标 Rust bumpalo / typed-arena 的设计理念：
  * - O(1) 分配和释放
  * - 固定块大小，零碎片
  * - 适用于 TreeMap/LinkedHashMap/ForwardList 等节点分配
  *
  * 使用示例:
- *   var Pool: TMemAllocator;
+ *   var Pool: IAllocator;
  *       Map: ITreeMap<Integer, String>;
  *   begin
  *     Pool := MakePoolAllocator(SizeOf(TRedBlackTreeNode<Integer, String>), 10000);
@@ -28,17 +28,17 @@ uses
   nextpas.core.mem.allocator,
   nextpas.core.mem.intf,
   nextpas.core.mem.error,
-  nextpas.core.mem.pool.fixed,
- nextpas.core.mem.allocator.base;
+  nextpas.core.mem.utils,
+  nextpas.core.mem.pool.fixed;
 
 type
   {**
    * TPoolAllocator
    *
-   * @desc 固定块池分配器，实现 TMemAllocator 接口
+   * @desc 固定块池分配器，实现 IAllocator 接口
    * @note 固定大小分配使用池，超出大小使用后备分配器
    *}
-  TPoolAllocator = class(TAllocator)
+  TPoolAllocator = class(TInterfacedObject, IAllocator)
   private
     type
       TPoolAllocatorOwner = (paoPool, paoFallback);
@@ -53,7 +53,7 @@ type
   private
     FPool: TFixedPool;
     FBlockSize: SizeUInt;
-    FFallback: TMemAllocator;  // 用于非标准大小分配的后备分配器
+    FFallback: IAllocator;  // 用于非标准大小分配的后备分配器
     FAllocs: array of TPoolAllocatorAlloc;
     function GetAllocatedCount: Integer;
     function GetCapacity: Integer;
@@ -76,19 +76,19 @@ type
      * @param ACapacity 池容量（块数量）
      * @param AFallback 后备分配器（用于非标准大小分配）
      *}
-    constructor Create(ABlockSize: SizeUInt; ACapacity: Integer; AFallback: TMemAllocator = nil);
+    constructor Create(ABlockSize: SizeUInt; ACapacity: Integer; AFallback: IAllocator = nil);
     destructor Destroy; override;
 
-    // TMemAllocator
-    function GetMem(ASize: SizeUInt): Pointer; override;
-    function AllocMem(ASize: SizeUInt): Pointer; override;
-    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure FreeMem(ADst: Pointer); override;
-    function MemSize(APtr: Pointer): SizeUInt; override;
-    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer; override;
-    procedure FreeAligned(APtr: Pointer); override;
-    function Traits: TAllocatorTraits; override;
-    // 扩展方法（非 TMemAllocator 接口，仅 TPoolAllocator 提供）
+    // IAllocator
+    function GetMem(ASize: SizeUInt): Pointer;
+    function AllocMem(ASize: SizeUInt): Pointer;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(ADst: Pointer);
+    function MemSize(APtr: Pointer): SizeUInt;
+    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
+    procedure FreeAligned(APtr: Pointer);
+    function Traits: TAllocatorTraits;
+    // 扩展方法（非 IAllocator 接口，仅 TPoolAllocator 提供）
     function GetMemSize(APtr: Pointer): SizeUInt;
     function TryGetMem(ASize: SizeUInt; out APtr: Pointer): Boolean;
     function TryAllocMem(ASize: SizeUInt; out APtr: Pointer): Boolean;
@@ -107,15 +107,15 @@ type
  * @param ABlockSize 块大小
  * @param ACapacity 池容量
  * @param AFallback 后备分配器
- * @return TMemAllocator 池分配器接口
+ * @return IAllocator 池分配器接口
  *}
-function MakePoolAllocator(ABlockSize: SizeUInt; ACapacity: Integer; AFallback: TMemAllocator = nil): TMemAllocator;
+function MakePoolAllocator(ABlockSize: SizeUInt; ACapacity: Integer; AFallback: IAllocator = nil): IAllocator;
 
 implementation
 
 { TPoolAllocator }
 
-constructor TPoolAllocator.Create(ABlockSize: SizeUInt; ACapacity: Integer; AFallback: TMemAllocator);
+constructor TPoolAllocator.Create(ABlockSize: SizeUInt; ACapacity: Integer; AFallback: IAllocator);
 var
   LAlignedSize: SizeUInt;
 begin
@@ -259,12 +259,24 @@ begin
 end;
 
 function TPoolAllocator.AllocFallback(ASize, AAlignment: SizeUInt; aAligned: Boolean): Pointer;
+var
+  LRaw: Pointer;
+  LAlignMask: SizeUInt;
 begin
   if ASize = 0 then
     Exit(nil);
 
   if aAligned then
-    Result := FFallback.AllocAligned(ASize, AAlignment)
+  begin
+    if AAlignment < SizeOf(Pointer) then
+      AAlignment := SizeOf(Pointer);
+    LAlignMask := AAlignment - 1;
+    LRaw := FFallback.GetMem(ASize + LAlignMask + SizeOf(Pointer));
+    if LRaw = nil then
+      Exit(nil);
+    Result := AlignUpUnChecked(LRaw + SizeOf(Pointer), AAlignment);
+    PPointer(PByte(Result) - SizeOf(Pointer))^ := LRaw;
+  end
   else
     Result := FFallback.GetMem(ASize);
 
@@ -274,7 +286,7 @@ begin
       TrackAlloc(Result, ASize, AAlignment, paoFallback, aAligned);
     except
       if aAligned then
-        FFallback.FreeAligned(Result)
+        FFallback.FreeMem(PPointer(PByte(Result) - SizeOf(Pointer))^)
       else
         FFallback.FreeMem(Result);
       raise;
@@ -290,7 +302,7 @@ begin
     if (FAllocs[LIndex].Owner = paoFallback) and (FAllocs[LIndex].Ptr <> nil) then
     begin
       if FAllocs[LIndex].Aligned then
-        FFallback.FreeAligned(FAllocs[LIndex].Ptr)
+        FFallback.FreeMem(PPointer(PByte(FAllocs[LIndex].Ptr) - SizeOf(Pointer))^)
       else
         FFallback.FreeMem(FAllocs[LIndex].Ptr);
     end;
@@ -423,7 +435,7 @@ begin
   if LAlloc.Owner = paoPool then
     FPool.ReleasePtr(ADst)
   else if LAlloc.Aligned then
-    FFallback.FreeAligned(ADst)
+    FFallback.FreeMem(PPointer(PByte(ADst) - SizeOf(Pointer))^)
   else
     FFallback.FreeMem(ADst);
 end;
@@ -475,7 +487,7 @@ begin
   if LAlloc.Owner = paoPool then
     FPool.ReleasePtr(APtr)
   else if LAlloc.Aligned then
-    FFallback.FreeAligned(APtr)
+    FFallback.FreeMem(PPointer(PByte(APtr) - SizeOf(Pointer))^)
   else
     FFallback.FreeMem(APtr);
 end;
@@ -484,11 +496,9 @@ function TPoolAllocator.Traits: TAllocatorTraits;
 begin
   Result.ZeroInitialized := False;
   Result.ThreadSafe := False;  // TFixedPool 不是线程安全的
-  Result.HasMemSize := False;  // TMemAllocator surface has no mem-size query.
-  Result.SupportsAligned := False;  // non-native fallback path remains available.
 end;
 
-// 扩展方法（非 TMemAllocator 接口，仅 TPoolAllocator 提供）
+// 扩展方法（非 IAllocator 接口，仅 TPoolAllocator 提供）
 
 function TPoolAllocator.GetMemSize(APtr: Pointer): SizeUInt;
 var
@@ -516,7 +526,7 @@ end;
 
 { Factory function }
 
-function MakePoolAllocator(ABlockSize: SizeUInt; ACapacity: Integer; AFallback: TMemAllocator): TMemAllocator;
+function MakePoolAllocator(ABlockSize: SizeUInt; ACapacity: Integer; AFallback: IAllocator): IAllocator;
 begin
   Result := TPoolAllocator.Create(ABlockSize, ACapacity, AFallback);
 end;

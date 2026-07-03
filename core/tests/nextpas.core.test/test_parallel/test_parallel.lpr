@@ -6,8 +6,8 @@ program test_parallel;
 {$modeswitch functionreferences}
 
 uses
-  cthreads,
-  SysUtils,
+  nextpas.core.thread.init,
+  nextpas.core.text.conv,
   nextpas.core.test;
 
 var
@@ -196,6 +196,8 @@ procedure TestParallelSubtestSkip;
 var
   LSuite: TTestSuite;
   LResult: TTestRunResult;
+  I: Integer;
+  LFoundSubtestSkip: Boolean;
 begin
   { In parallel mode, subtests (TestSubtest) should get tsSkipped
     since they cannot run in parallel workers. }
@@ -211,6 +213,19 @@ begin
   CheckTrue(LResult.Passed >= 1, 'At least 1 normal test should pass');
   { Subtests in parallel mode get skipped — verify they don't crash the suite }
   CheckTrue(LResult.Failed = 0, 'No tests should fail');
+  { T-03: Verify skip message mentions parallel mode }
+  LFoundSubtestSkip := False;
+  for I := 0 to High(LResult.Results) do
+    if (LResult.Results[I].Status = tsSkipped) and
+       (LResult.Results[I].Name = 'subtest_entry') then
+    begin
+      LFoundSubtestSkip := True;
+      CheckTrue(
+        Pos('subtests not supported', LResult.Results[I].Message) > 0,
+        'Skip message should mention parallel mode');
+      Break;
+    end;
+  CheckTrue(LFoundSubtestSkip, 'subtest_entry should be skipped');
   PassTest('✓ Parallel subtest skip');
 end;
 
@@ -290,7 +305,7 @@ begin
   { Update max concurrent — InterlockedExchange if new max }
   if LCount > GMaxConcurrent then
     InterlockedExchange(GMaxConcurrent, LCount);
-  Sleep(50); { hold the slot briefly to ensure overlap detection }
+  SleepMs(50); { hold the slot briefly to ensure overlap detection }
   InterLockedDecrement(GConcurrentCount);
 end;
 
@@ -332,6 +347,7 @@ var
   LSuite: TTestSuite;
   LFailSuite, LSkipSuite: TTestSuite;
   LRunner: TTestRunner;
+  LResults: specialize TArray<TTestRunResult>;
 begin
   WriteLn('=== test_parallel ===');
   LSuite := TTestSuite.Create('Parallel Tests');
@@ -610,6 +626,29 @@ begin
         IntToStr(GVerbResult.Passed));
     ResetDefaultConfig;
     PassTest('Cleanup exception in parallel');
+  end;
+
+  { ── G1: RunAllParallelWithResult at runner level ───────────────── }
+  WriteLn;
+  SectionHeader('G1: RunAllParallelWithResult');
+  begin
+    ResetDefaultConfig;
+    GTestCounter := 0;
+    LRunner := TTestRunner.Create('ParResultRunner');
+    LSuite := TTestSuite.Create('ParResSuiteA');
+    LSuite.Test('pra1', @TestParallelPassA);
+    LSuite.Test('pra2', @TestParallelPassA);
+    LRunner.Add(LSuite);
+    LFailSuite := TTestSuite.Create('ParResSuiteB');
+    LFailSuite.Test('prb1', @TestParallelPassA);
+    LRunner.Add(LFailSuite);
+    LRunner.RunAllParallelWithResult(nil, LResults);
+    { Verify results are populated }
+    if Length(LResults) < 2 then
+      FailTest('RunAllParallelWithResult: expected >= 2 suite results, got ' +
+        IntToStr(Length(LResults)));
+    ResetDefaultConfig;
+    PassTest('RunAllParallelWithResult');
   end;
 
   WriteLn;

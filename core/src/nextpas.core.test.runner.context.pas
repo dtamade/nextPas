@@ -9,7 +9,7 @@ unit nextpas.core.test.runner.context;
 interface
 
 uses
-  SysUtils,          { Exception, EAbort, EAssertionFailed — FPC built-in }
+  nextpas.core.system,
   nextpas.core.text.conv,
   nextpas.core.text.format,
   nextpas.core.test.base,
@@ -170,9 +170,7 @@ var
   LOldLen, LCap: Integer;
 begin
   LOldLen := Length(FLogLines);
-  LCap := LOldLen;
-  if LCap < 8 then LCap := 8
-  else if LOldLen >= LCap then LCap := LCap * 2;
+  LCap := GrowCapacity(LOldLen, 8);
   if LCap <> LOldLen then SetLength(FLogLines, LCap);
   FLogLines[LOldLen] := AMessage;
   SetLength(FLogLines, LOldLen + 1);
@@ -186,32 +184,24 @@ end;
 procedure TTestContext.OnCleanup(AProc: TTestProc);
 var
   LProc: TTestProc;
-  LOldLen, LCap: Integer;
+  LIdx: Integer;
 begin
   LProc := AProc;
-  LOldLen := Length(FCleanups);
-  LCap := LOldLen;
-  if LCap < 4 then LCap := 4
-  else if LOldLen >= LCap then LCap := LCap * 2;
-  if LCap <> LOldLen then SetLength(FCleanups, LCap);
-  FCleanups[LOldLen] := procedure
+  LIdx := GrowCleanups(FCleanups);
+  FCleanups[LIdx] := procedure
   begin
     LProc;
   end;
-  SetLength(FCleanups, LOldLen + 1);
+  SetLength(FCleanups, LIdx + 1);
 end;
 
 procedure TTestContext.OnCleanup(AProc: TTestClosure);
 var
-  LOldLen, LCap: Integer;
+  LIdx: Integer;
 begin
-  LOldLen := Length(FCleanups);
-  LCap := LOldLen;
-  if LCap < 4 then LCap := 4
-  else if LOldLen >= LCap then LCap := LCap * 2;
-  if LCap <> LOldLen then SetLength(FCleanups, LCap);
-  FCleanups[LOldLen] := AProc;
-  SetLength(FCleanups, LOldLen + 1);
+  LIdx := GrowCleanups(FCleanups);
+  FCleanups[LIdx] := AProc;
+  SetLength(FCleanups, LIdx + 1);
 end;
 
 procedure TTestContext.ClearLog;
@@ -265,17 +255,43 @@ end;
 
 procedure AppendFailedName(var ANames: specialize TArray<string>;
   const AName: string);
-{ Geometric growth: pre-allocate capacity to avoid O(n²) realloc. }
 var
   LOldLen, LCap: Integer;
 begin
   LOldLen := Length(ANames);
-  LCap := LOldLen;
-  if LCap < 4 then LCap := 4
-  else if LOldLen >= LCap then LCap := LCap * 2;
+  LCap := GrowCapacity(LOldLen, 4);
   if LCap <> LOldLen then SetLength(ANames, LCap);
   ANames[LOldLen] := AName;
   SetLength(ANames, LOldLen + 1);
+end;
+
+procedure RecordSubtestFailure(AStatus: TTestStatus;
+  const AName, AFailMsg, AClassName: string;
+  ALogCaptured: Boolean;
+  const ASink: IOutputSink; const AConfig: TTestConfig;
+  var ASubFail: Integer; var AFailedNames: specialize TArray<string>;
+  const ALogLines: specialize TArray<string>);
+{ Shared handler for subtest failure/error results.
+  WriteSubtestStatus + optional captured log + Inc(SubFail) + AppendFailedName. }
+begin
+  WriteSubtestStatus(AStatus, AName, AFailMsg, '', AClassName, ASink, AConfig);
+  if ALogCaptured then
+    OutputCapturedLog(ALogLines, ASink, AConfig);
+  Inc(ASubFail);
+  AppendFailedName(AFailedNames, AName);
+end;
+
+procedure HandleSubtestSkipped(const AName, ASkipReason: string;
+  const ASink: IOutputSink; const AConfig: TTestConfig;
+  out AStatus: TTestStatus; out AMsg: string;
+  var ASkipCount: Integer);
+{ Shared handler for subtest ETestSkipped paths.
+  Sets status/msg, writes output, increments skip counter. }
+begin
+  AStatus := tsSkipped;
+  AMsg    := ASkipReason;
+  WriteSubtestStatus(tsSkipped, AName, '', ASkipReason, '', ASink, AConfig);
+  Inc(ASkipCount);
 end;
 
 procedure TTestContext.ExecuteSubtests;
@@ -288,10 +304,12 @@ var
   LSubCtxI: ITestContext;
   LTestResult: TTestResult;
   LNames: string;
+  LOutSink: IOutputSink;
   K: Integer;
   J: Integer;
   LTotal, LPos: Integer;
 begin
+  LOutSink := ResolveOutSink(FConfig);
   for I := 0 to High(FSubtests) do
   begin
     LEntry := FSubtests[I];
@@ -302,11 +320,8 @@ begin
     try
       if LEntry.Kind = ekSkipped then
       begin
-        LStatus := tsSkipped;
-        LMsg    := LEntry.SkipReason;
-        WriteSubtestStatus(tsSkipped, LEntry.Name, '', LEntry.SkipReason,
-          '', ResolveOutSink(FConfig), FConfig);
-        Inc(FSubSkip);
+        HandleSubtestSkipped(LEntry.Name, LEntry.SkipReason,
+          LOutSink, FConfig, LStatus, LMsg, FSubSkip);
       end
       else if LEntry.Kind = ekSubtest then
       begin
@@ -329,7 +344,7 @@ begin
       begin
         PTestCaseProc(LEntry.TableProc)^(PTestCase(LEntry.TableCase)^);
         WriteSubtestStatus(tsPassed, LEntry.Name, '', '', '',
-          ResolveOutSink(FConfig), FConfig);
+          LOutSink, FConfig);
         Inc(FSubPass);
       end
       else if LEntry.Kind = ekShouldFail then
@@ -339,31 +354,25 @@ begin
             LEntry.Closure()
           else
             LEntry.Proc;
+          { No exception = unexpected success }
           LStatus := tsFailed;
           if LEntry.ShouldFailMsg <> '' then
             LMsg := 'Expected failure (' + LEntry.ShouldFailMsg +
               ') but test passed'
           else
             LMsg := 'Expected failure but test passed';
-          WriteSubtestStatus(tsFailed, LEntry.Name, LMsg, '', '',
-            ResolveOutSink(FConfig), FConfig);
-          Inc(FSubFail);
-          AppendFailedName(FFailedNames, LEntry.Name);
+          RecordSubtestFailure(tsFailed, LEntry.Name, LMsg, '', False,
+            LOutSink, FConfig, FSubFail, FFailedNames, FLogLines);
         except
           on E: ETestSkipped do
-          begin
-            LStatus := tsSkipped;
-            LMsg := E.Message;
-            WriteSubtestStatus(tsSkipped, LEntry.Name, '', '', '',
-              ResolveOutSink(FConfig), FConfig);
-            Inc(FSubSkip);
-          end;
+            HandleSubtestSkipped(LEntry.Name, E.Message,
+              LOutSink, FConfig, LStatus, LMsg, FSubSkip);
           on E: Exception do
           begin
             { Expected failure — subtest passes }
             LStatus := tsPassed;
             WriteSubtestStatus(tsPassed, LEntry.Name, '', '', '',
-              ResolveOutSink(FConfig), FConfig);
+              LOutSink, FConfig);
             Inc(FSubPass);
           end;
         end;
@@ -375,37 +384,26 @@ begin
         else
           LEntry.Proc;
         WriteSubtestStatus(tsPassed, LEntry.Name, '', '', '',
-          ResolveOutSink(FConfig), FConfig);
+          LOutSink, FConfig);
         Inc(FSubPass);
       end;
     except
       on E: ETestSkipped do
-      begin
-        LStatus := tsSkipped;
-        LMsg    := E.Message;
-        WriteSubtestStatus(tsSkipped, LEntry.Name, '', '', '',
-          ResolveOutSink(FConfig), FConfig);
-        Inc(FSubSkip);
-      end;
+        HandleSubtestSkipped(LEntry.Name, E.Message,
+          LOutSink, FConfig, LStatus, LMsg, FSubSkip);
       on E: EAssertionFailed do
       begin
         LStatus := tsFailed;
         LMsg    := AppendTestTrace(E.Message);
-        WriteSubtestStatus(tsFailed, LEntry.Name, LMsg, '', '',
-          ResolveOutSink(FConfig), FConfig);
-        OutputCapturedLog(FLogLines, ResolveOutSink(FConfig), FConfig);
-        Inc(FSubFail);
-        AppendFailedName(FFailedNames, LEntry.Name);
+        RecordSubtestFailure(tsFailed, LEntry.Name, LMsg, '', True,
+          LOutSink, FConfig, FSubFail, FFailedNames, FLogLines);
       end;
       on E: Exception do
       begin
         LStatus := tsError;
         LMsg    := AppendTestTrace(FormatExceptionMsg(E));
-        WriteSubtestStatus(tsError, LEntry.Name, E.Message, '',
-          E.ClassName, ResolveOutSink(FConfig), FConfig);
-        OutputCapturedLog(FLogLines, ResolveOutSink(FConfig), FConfig);
-        Inc(FSubFail);
-        AppendFailedName(FFailedNames, LEntry.Name);
+        RecordSubtestFailure(tsError, LEntry.Name, E.Message, E.ClassName, True,
+          LOutSink, FConfig, FSubFail, FFailedNames, FLogLines);
       end;
     end;
     ReportLeakIfAny(LStatus, FConfig);

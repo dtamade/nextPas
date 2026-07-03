@@ -13,7 +13,7 @@ program test_cert_verification_failures;
 
 uses
   {$IFDEF UNIX}
-  cthreads,
+  nextpas.core.thread.init,
   {$ENDIF}
   SysUtils, Classes,
   nextpas.core.tls.base,

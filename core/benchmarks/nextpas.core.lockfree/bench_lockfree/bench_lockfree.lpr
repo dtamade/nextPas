@@ -3,7 +3,7 @@ program bench_lockfree;
 {$I nextpas.core.settings.inc}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   SysUtils,
   nextpas.core.atomic,
   nextpas.core.time.base,

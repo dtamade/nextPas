@@ -1017,6 +1017,140 @@ begin
   end;
 end;
 
+{ Mixed reader+writer contention: readers verify monotonic counter }
+type
+  PRwLockMixedReaderData = ^TRwLockMixedReaderData;
+  TRwLockMixedReaderData = record
+    RwLock: ^TMemRwLock;
+    Counter: PInt64;
+    StartFlag: PLongInt;
+    MaxSeen: Int64;
+    Failure: string;
+  end;
+
+  PRwLockMixedWriterData = ^TRwLockMixedWriterData;
+  TRwLockMixedWriterData = record
+    RwLock: ^TMemRwLock;
+    Counter: PInt64;
+    StartFlag: PLongInt;
+    Failure: string;
+  end;
+
+function MixedReaderProc(AArg: Pointer): Pointer; cdecl;
+var
+  LData: PRwLockMixedReaderData;
+  LRwLock: ^TMemRwLock;
+  LI: Integer;
+  LVal: Int64;
+begin
+  LData := PRwLockMixedReaderData(AArg);
+  LRwLock := LData^.RwLock;
+  LData^.MaxSeen := 0;
+  WaitForStartFlag(LData^.StartFlag);
+  try
+    for LI := 0 to STRESS_ITERATION_COUNT - 1 do
+    begin
+      LRwLock^.AcquireRead;
+      LVal := LData^.Counter^;
+      LRwLock^.ReleaseRead;
+      if LVal < 0 then
+      begin
+        LData^.Failure := 'negative counter read: ' + IntToStr(LVal);
+        Break;
+      end;
+      if LVal > LData^.MaxSeen then
+        LData^.MaxSeen := LVal;
+    end;
+  except
+    on E: Exception do
+      LData^.Failure := E.Message;
+  end;
+  Result := nil;
+end;
+
+function MixedWriterProc(AArg: Pointer): Pointer; cdecl;
+var
+  LData: PRwLockMixedWriterData;
+  LRwLock: ^TMemRwLock;
+  LI: Integer;
+begin
+  LData := PRwLockMixedWriterData(AArg);
+  LRwLock := LData^.RwLock;
+  WaitForStartFlag(LData^.StartFlag);
+  try
+    for LI := 0 to STRESS_ITERATION_COUNT - 1 do
+    begin
+      LRwLock^.AcquireWrite;
+      Inc(LData^.Counter^);
+      LRwLock^.ReleaseWrite;
+    end;
+  except
+    on E: Exception do
+      LData^.Failure := E.Message;
+  end;
+  Result := nil;
+end;
+
+procedure TestRwLockMixedReaderWriterContention;
+const
+  READER_COUNT = 4;
+  WRITER_COUNT = 4;
+var
+  LRwLock: TMemRwLock;
+  LReaders: array[0..READER_COUNT - 1] of TPlatformThreadRecord;
+  LWriters: array[0..WRITER_COUNT - 1] of TPlatformThreadRecord;
+  LReaderData: array[0..READER_COUNT - 1] of TRwLockMixedReaderData;
+  LWriterData: array[0..WRITER_COUNT - 1] of TRwLockMixedWriterData;
+  LStartFlag: LongInt;
+  LCounter: Int64;
+  LIndex: Integer;
+  LFailure: string;
+begin
+  FillChar(LRwLock, SizeOf(LRwLock), 0);
+  LRwLock.Init;
+  LCounter := 0;
+  try
+    LStartFlag := 0;
+    for LIndex := 0 to High(LReaders) do
+    begin
+      LReaderData[LIndex].RwLock := @LRwLock;
+      LReaderData[LIndex].Counter := @LCounter;
+      LReaderData[LIndex].StartFlag := @LStartFlag;
+      LReaderData[LIndex].Failure := '';
+      platform_thread_spawn(LReaders[LIndex], @MixedReaderProc,
+        @LReaderData[LIndex]);
+    end;
+    for LIndex := 0 to High(LWriters) do
+    begin
+      LWriterData[LIndex].RwLock := @LRwLock;
+      LWriterData[LIndex].Counter := @LCounter;
+      LWriterData[LIndex].StartFlag := @LStartFlag;
+      LWriterData[LIndex].Failure := '';
+      platform_thread_spawn(LWriters[LIndex], @MixedWriterProc,
+        @LWriterData[LIndex]);
+    end;
+
+    LStartFlag := 1;
+    for LIndex := 0 to High(LReaders) do
+      platform_thread_wait(LReaders[LIndex]);
+    for LIndex := 0 to High(LWriters) do
+      platform_thread_wait(LWriters[LIndex]);
+
+    LFailure := '';
+    for LIndex := 0 to High(LReaders) do
+      if (LFailure = '') and (LReaderData[LIndex].Failure <> '') then
+        LFailure := 'reader ' + IntToStr(LIndex) + ': ' + LReaderData[LIndex].Failure;
+    for LIndex := 0 to High(LWriters) do
+      if (LFailure = '') and (LWriterData[LIndex].Failure <> '') then
+        LFailure := 'writer ' + IntToStr(LIndex) + ': ' + LWriterData[LIndex].Failure;
+    Check(LFailure = '', 'mixed rwlock contention should not fail: ' + LFailure);
+    Check(LCounter = Int64(WRITER_COUNT * STRESS_ITERATION_COUNT),
+      'writer counter should be exact');
+  finally
+    LRwLock.Done;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.mem.concurrent_wrappers');
   T.Test('T-01 mutex direct', @TestMemMutexDirect);
@@ -1034,6 +1168,7 @@ begin
   T.Test('T-04 mutex release without lock raises', @TestMutexReleaseWithoutLock);
   T.Test('T-04 rwlock multiple readers', @TestRwLockMultipleReaders);
   T.Test('D-2d rwlock write contention', @TestRwLockWriteContention);
+  T.Test('D-2e rwlock mixed reader+writer contention', @TestRwLockMixedReaderWriterContention);
   T.Run;
   T.Summary;
 end.

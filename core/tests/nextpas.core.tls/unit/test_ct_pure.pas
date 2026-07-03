@@ -3,7 +3,7 @@ program test_ct_pure;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   SysUtils,
   nextpas.core.tls.base64,
   nextpas.core.tls.ct.logs,

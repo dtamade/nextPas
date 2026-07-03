@@ -3,7 +3,7 @@ program test_tls13_adversarial;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  {$IFDEF UNIX}cthreads, BaseUnix, Sockets,{$ENDIF}
+  nextpas.core.thread.init, {$IFDEF UNIX}BaseUnix, Sockets,{$ENDIF}
   SysUtils, Classes,
   nextpas.core.tls.base,
   nextpas.core.tls.freepascal.lib;

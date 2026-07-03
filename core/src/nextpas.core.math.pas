@@ -203,6 +203,19 @@ function EaseInBounce(const AT: Double): Double; inline;
 function EaseOutBounce(const AT: Double): Double; inline;
 function EaseInOutBounce(const AT: Double): Double; inline;
 
+{ ── FPU Exception Control (x86_64 MXCSR) ──────────────────────────────────── }
+{ Replaces Math.GetExceptionMask/SetExceptionMask — no FPC RTL dependency. }
+
+type
+  TFPUException = (
+    exInvalidOp, exDenormalized, exZeroDivide,
+    exOverflow, exUnderflow, exPrecision
+  );
+  TFPUExceptionMask = set of TFPUException;
+
+function GetExceptionMask: TFPUExceptionMask;
+procedure SetExceptionMask(const AMask: TFPUExceptionMask);
+
 implementation
 
 function Vec3fExtend(const AVec: TVec3f; const AW: Single): TVec4f;
@@ -934,6 +947,47 @@ end;
 function EaseInOutBounce(const AT: Double): Double;
 begin
   Result := nextpas.core.math.easing.EaseInOutBounce(AT);
+end;
+
+{ ── FPU Exception Control ─────────────────────────────────────────────────── }
+
+function GetExceptionMask: TFPUExceptionMask;
+var
+  LMxcsr: UInt32;
+  LMask: Byte;
+begin
+  {$IFDEF CPUX86_64}
+  {$asmmode intel}
+  asm
+    stmxcsr [LMxcsr]
+  end;
+  {$asmmode att}
+  LMask := Byte((LMxcsr shr 7) and $3F);
+  Move(LMask, Result, SizeOf(Result));
+  {$ELSE}
+  Result := [];
+  {$ENDIF}
+end;
+
+procedure SetExceptionMask(const AMask: TFPUExceptionMask);
+var
+  LMxcsr: UInt32;
+  LMask: Byte;
+begin
+  {$IFDEF CPUX86_64}
+  {$asmmode intel}
+  asm
+    stmxcsr [LMxcsr]
+  end;
+  {$asmmode att}
+  Move(AMask, LMask, SizeOf(LMask));
+  LMxcsr := (LMxcsr and not ($3F shl 7)) or (UInt32(LMask) shl 7);
+  {$asmmode intel}
+  asm
+    ldmxcsr [LMxcsr]
+  end;
+  {$asmmode att}
+  {$ENDIF}
 end;
 
 end.

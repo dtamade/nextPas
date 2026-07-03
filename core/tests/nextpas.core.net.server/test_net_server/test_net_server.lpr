@@ -3,7 +3,7 @@ program test_net_server;
 {$I nextpas.core.settings.inc}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   Classes,
   SysUtils,
   StrUtils,

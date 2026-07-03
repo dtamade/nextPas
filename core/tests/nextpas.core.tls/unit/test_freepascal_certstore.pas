@@ -3,7 +3,7 @@ program test_freepascal_certstore;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   SysUtils, Classes,
   nextpas.core.tls.base,
   nextpas.core.tls.freepascal.lib;

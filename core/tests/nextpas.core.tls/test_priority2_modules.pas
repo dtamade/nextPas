@@ -4,7 +4,7 @@ program test_priority2_modules;
 
 uses
   {$IFDEF UNIX}
-  cthreads,  // 必须在最前面，用于线程模块
+  nextpas.core.thread.init,  // 必须在最前面，用于线程模块
   {$ENDIF}
   SysUtils,
   // Priority 2 - Symmetric Ciphers (2 modules)

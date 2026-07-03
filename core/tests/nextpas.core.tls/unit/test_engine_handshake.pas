@@ -3,7 +3,7 @@ program test_engine_handshake;
 {$mode objfpc}{$H+}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   SysUtils, Classes, Sockets,
   nextpas.core.tls.base,
   nextpas.core.tls.engine,

@@ -4,7 +4,7 @@ program test_dtls_layer;
 
 uses
   {$IFDEF USE_HEAPTRC}heaptrc,{$ENDIF}
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   SysUtils, nextpas.core.tls.dtls.layer;
 
 var

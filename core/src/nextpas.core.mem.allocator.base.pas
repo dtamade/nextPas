@@ -16,6 +16,7 @@ uses
 type
   TAllocatorTraits = nextpas.core.mem.intf.TAllocatorTraits;
   IAllocator = nextpas.core.mem.intf.IAllocator;
+  TMemAllocator = nextpas.core.mem.intf.IAllocator;
 
   {**
    * TAllocator
@@ -28,20 +29,13 @@ type
     function DoAllocMem(ASize: SizeUInt): Pointer; virtual; abstract;
     function DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; virtual; abstract;
     procedure DoFreeMem(ADst: Pointer); virtual; abstract;
-    function DoMemSize(APtr: Pointer): SizeUInt; virtual;
   public
-    function  GetMem(ASize: SizeUInt): Pointer; virtual;
-    function  AllocMem(ASize: SizeUInt): Pointer; virtual;
-    function  ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; virtual;
-    procedure FreeMem(ADst: Pointer); virtual;
-    function  MemSize(APtr: Pointer): SizeUInt; virtual;
-    function  AllocAligned(ASize, AAlignment: SizeUInt): Pointer; virtual;
-    procedure FreeAligned(APtr: Pointer); virtual;
+    function  GetMem(ASize: SizeUInt): Pointer; {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
+    function  AllocMem(ASize: SizeUInt): Pointer; {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
+    function  ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
+    procedure FreeMem(ADst: Pointer); {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
     function  Traits: TAllocatorTraits; virtual;
-    procedure FreeMem(APtr: Pointer; ASize: SizeUInt); virtual;
-    function  ReallocMem(APtr: Pointer; AOldSize, ANewSize: SizeUInt): Pointer; virtual;
   end;
-  TMemAllocator = TAllocator;
 
 
 implementation
@@ -54,24 +48,8 @@ begin
   // 基类缺省值：
   // - ThreadSafe=True: 大多数 RTL 分配器线程安全
   // - ZeroInitialized=False: GetMem 不保证零填充
-  // - HasMemSize=False: 不支持查询块大小
-  // - SupportsAligned=False: 通过 over-allocate 模拟
   Result.ZeroInitialized := False;
   Result.ThreadSafe      := True;
-  Result.HasMemSize      := False;
-  Result.SupportsAligned := False;
-end;
-
-function TAllocator.DoMemSize(APtr: Pointer): SizeUInt;
-begin
-  Result := 0;
-end;
-
-function TAllocator.MemSize(APtr: Pointer): SizeUInt;
-begin
-  if APtr = nil then
-    Exit(0);
-  Result := DoMemSize(APtr);
 end;
 
 function TAllocator.GetMem(ASize: SizeUInt): Pointer;
@@ -112,53 +90,6 @@ begin
     {$ENDIF}
   end;
   DoFreeMem(ADst);
-end;
-
-procedure TAllocator.FreeMem(APtr: Pointer; ASize: SizeUInt);
-begin
-  FreeMem(APtr);
-end;
-
-function TAllocator.ReallocMem(APtr: Pointer; AOldSize, ANewSize: SizeUInt): Pointer;
-begin
-  Result := ReallocMem(APtr, ANewSize);
-end;
-
-function TAllocator.AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
-var
-  LRaw: Pointer;
-  LAlignMask: SizeUInt;
-  LExtra: SizeUInt;
-  LNeeded: SizeUInt;
-  LHeaderPtr: PPointer;
-begin
-  if ASize = 0 then Exit(nil);
-  if (AAlignment < SizeOf(Pointer)) or (not IsPowerOfTwo(AAlignment)) then
-    Exit(nil);
-  // Over-allocate and store the original pointer just before the aligned block
-  LAlignMask := AAlignment - 1;
-  LExtra := LAlignMask + SizeOf(Pointer);
-  if LExtra < LAlignMask then
-    Exit(nil);
-  LNeeded := ASize + LExtra;
-  if LNeeded < ASize then
-    Exit(nil);
-  LRaw := GetMem(LNeeded);
-  if LRaw = nil then Exit(nil);
-  Result := AlignUpUnChecked(Pointer(PtrUInt(LRaw) + SizeOf(Pointer)), AAlignment);
-  LHeaderPtr := PPointer(PtrUInt(Result) - SizeOf(Pointer));
-  LHeaderPtr^ := LRaw;
-end;
-
-procedure TAllocator.FreeAligned(APtr: Pointer);
-var
-  LRaw: Pointer;
-  LHeaderPtr: PPointer;
-begin
-  if APtr = nil then Exit;
-  LHeaderPtr := PPointer(PtrUInt(APtr) - SizeOf(Pointer));
-  LRaw := LHeaderPtr^;
-  FreeMem(LRaw);
 end;
 
 {$POP}

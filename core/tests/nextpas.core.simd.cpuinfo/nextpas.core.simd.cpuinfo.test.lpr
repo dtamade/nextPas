@@ -5,7 +5,7 @@ program nextpas.core.simd.cpuinfo.test;
 
 uses
   {$IFDEF UNIX}
-  cthreads,
+  nextpas.core.thread.init,
   {$ENDIF}
   Classes, SysUtils,
   fpcunit, consoletestrunner, testregistry,

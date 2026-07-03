@@ -363,15 +363,13 @@ end;
 
 procedure TestArenaAllocatorInterface;
 var
-  LAlloc: TMemAllocator;
+  LAlloc: IAllocator;
   LP: Pointer;
 begin
   LAlloc := TVirtualArenaAllocator.Create;
   LP := LAlloc.GetMem(128);
-  Check(LP <> nil, 'TMemAllocator.GetMem should work');
+  Check(LP <> nil, 'IAllocator.GetMem should work');
   Check(LAlloc.Traits.ThreadSafe = False, 'should not be thread-safe');
-  Check(LAlloc.Traits.SupportsAligned = True, 'should support aligned');
-  Check(LAlloc.Traits.HasMemSize = False, 'should not have MemSize');
 end;
 
 procedure TestArenaAllocatorReset;
@@ -403,10 +401,8 @@ begin
   LAlloc := TVirtualArenaAllocator.Create;
   try
     LTraits := LAlloc.Traits;
-    Check(LTraits.ZeroInitialized = False, 'ZeroInitialized should be False');
+    Check(LTraits.ZeroInitialized = True, 'ZeroInitialized should be True (DoAllocMem calls AllocZeroed)');
     Check(LTraits.ThreadSafe = False, 'ThreadSafe should be False');
-    Check(LTraits.HasMemSize = False, 'HasMemSize should be False');
-    Check(LTraits.SupportsAligned = True, 'SupportsAligned should be True');
   finally
     LAlloc.Free;
   end;
@@ -414,7 +410,7 @@ end;
 
 procedure TestArenaAllocatorFreeIsNop;
 var
-  LAlloc: TMemAllocator;
+  LAlloc: IAllocator;
   LP1, LP2: Pointer;
 begin
   LAlloc := TVirtualArenaAllocator.Create;
@@ -427,7 +423,7 @@ end;
 
 procedure TestArenaAllocatorAllocMem;
 var
-  LAlloc: TMemAllocator;
+  LAlloc: IAllocator;
   LP: PByte;
   I: Integer;
 begin
@@ -440,7 +436,7 @@ end;
 
 procedure TestArenaAllocatorRealloc;
 var
-  LAlloc: TMemAllocator;
+  LAlloc: IAllocator;
   LP, LP2: PInteger;
 begin
   LAlloc := TVirtualArenaAllocator.Create;

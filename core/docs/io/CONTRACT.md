@@ -1,0 +1,97 @@
+# nextpas.core.io 代码契约
+
+**模块路径**：`core/src/nextpas.core.io*.pas`（22 个源文件）
+**层级**：L1（依赖 L0: base, bytes, platform）
+**Owner**：Claude（AI 负责）
+**最后更新**：2026-07-01
+**版本**：1.0
+
+---
+
+## 1. 接口契约
+
+### 1.1 子模块
+
+| 文件 | 职责 |
+|------|------|
+| io.base | 基础类型和常量 |
+| io.intf | IReader, IWriter, IFlusher 接口定义 |
+| io.binary | TBinaryReader, TBinaryWriter 二进制读写 |
+| io.buffer | TBufferedReader, TBufferedWriter 缓冲读写 |
+| io.linewriter | ILineWriter, TLineWriter 行写入 |
+| io.mapped | 内存映射文件 |
+| io.mapped.ring_buffer | 环形缓冲区 |
+| io.collect | 收集器 |
+| io.pas | 门面 re-export |
+
+### 1.2 核心接口
+
+```pascal
+IReader = interface
+  function Read(var ABuffer; ACount: SizeInt): SizeInt;
+  function ReadAll: TBytes;
+  function ReadLine: string;
+  function EOF: Boolean;
+end;
+
+IWriter = interface
+  function Write(const ABuffer; ACount: SizeInt): SizeInt;
+  procedure WriteAll(const AData: TBytes);
+  procedure WriteLine(const ALine: string);
+end;
+
+ILineWriter = interface(IWriter)
+  procedure WriteLines(const ALines: TStringArray);
+end;
+```
+
+### 1.3 核心类型
+
+```pascal
+TBinaryReader = record
+  // 小端序读取
+end;
+
+TBinaryWriter = record
+  // 小端序写入
+end;
+
+TBufferedReader = class(TInterfacedObject, IReader, IByteReader, IByteScanner)
+  // 缓冲读取
+end;
+```
+
+---
+
+## 2. 不变量
+
+- TBinaryReader/Writer 使用小端序
+- TBufferedReader 默认缓冲区 8KB
+- EOF 后 Read 返回 0
+
+---
+
+## 3. 错误处理
+
+- IO 错误抛 `EIOError`
+- EOF 不抛异常
+
+---
+
+## 4. 线程安全
+
+- IReader/IWriter 实例非线程安全
+- 调用方自行同步
+
+---
+
+## 5. 内存管理
+
+- IReader/IWriter 通过引用计数自动释放
+- ReadAll 返回的 TBytes 由调用方负责释放
+
+---
+
+## 6. 测试覆盖
+
+- `test_io`: Binary/Buffer/LineWriter/Mapped/Collect 测试

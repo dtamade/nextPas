@@ -3,7 +3,7 @@ program test_ed25519_certverify;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   SysUtils, nextpas.core.tls.tls13.servercertverify, nextpas.core.tls.x509;
 
 var

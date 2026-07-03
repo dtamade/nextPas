@@ -3,7 +3,7 @@ program nextpas.core.simd.pipeline_bench;
 {$I ../../src/nextpas.core.settings.inc}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   nextpas.core.simd,
   nextpas.core.simd.base,
   nextpas.core.simd.dispatch,

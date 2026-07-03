@@ -11,8 +11,8 @@ program test_diagnostics;
 {$modeswitch functionreferences}
 
 uses
-  cthreads,
-  SysUtils,
+  nextpas.core.thread.init,
+  nextpas.core.text.conv,
   nextpas.core.test,
   nextpas.core.test.base; { for IsFrameworkFrame, GLastTestTrace }
 

@@ -10,7 +10,7 @@ unit nextpas.core.test.runner.parallel;
 interface
 
 uses
-  SysUtils,          { Exception, EAbort, EAssertionFailed — FPC built-in }
+  nextpas.core.system,
   nextpas.core.text.conv,
   nextpas.core.test.base,
   nextpas.core.test.config,
@@ -20,16 +20,6 @@ uses
   nextpas.core.time.cpu;
 
 { ── Timeout worker (internal) ──────────────────────────────────────────────── }
-
-type
-  TTimeoutRec = record
-    Proc    : TTestProc;
-    Closure : TTestClosure;
-    Done    : Boolean;
-    ErrorMsg: string;
-    Status  : TTestStatus;
-  end;
-  PTimeoutRec = ^TTimeoutRec;
 
 function RunTestWithTimeout(AProc: TTestProc; ATimeoutMs: Integer;
   const AConfig: TTestConfig; out AStatus: TTestStatus;
@@ -45,7 +35,7 @@ type
     Entry          : TTestEntry;
     SuiteName      : string;
     Config         : TTestConfig;
-    Mtx            : IMutex;
+    Mtx            : IMutex;  { protects Pass/Fail/Skip counters + result output }
     Before         : TTestProc;
     BeforeClosure  : TTestClosure;
     After          : TTestProc;
@@ -62,11 +52,29 @@ type
 
 function ParallelWorkerProc(AArg: Pointer): Pointer; cdecl;
 
+{ ── Monitoring ───────────────────────────────────────────────────────────── }
+
+{ Counter: how many timeout-worker LRec records were leaked (truly stuck
+  threads where both poll and timed-join expired). Exposed for test diagnostics.
+  A non-zero value after a full test run means at least one test deadlocked. }
+var
+  GTimeoutLeakCount: Integer;
+
 implementation
 
 { ═════════════════════════════════════════════════════════════════════════════ }
 { Timeout worker                                                                }
 { ═════════════════════════════════════════════════════════════════════════════ }
+
+type
+  TTimeoutRec = record
+    Proc    : TTestProc;
+    Closure : TTestClosure;
+    Done    : Boolean;
+    ErrorMsg: string;
+    Status  : TTestStatus;
+  end;
+  PTimeoutRec = ^TTimeoutRec;
 
 function TimeoutWorker(AArg: Pointer): Pointer; cdecl;
 var
@@ -111,12 +119,12 @@ function RunTestWithTimeout_internal(AProc: TTestProc; AClosure: TTestClosure;
   ATimeoutMs: Integer; const AConfig: TTestConfig;
   out AStatus: TTestStatus; out AMsg: string): Boolean;
 { Returns True if test completed (pass/fail/error/skip).
-  Returns False if timed out (AStatus = tsError, AMsg = 'timeout'). }
+  Returns False if timed out (AStatus = tsError, AMsg = 'timeout').
+  C-02: Uses platform_thread_timedjoin instead of polling for zero CPU waste. }
 var
   LRec: PTimeoutRec;
   LHandle: TPlatformThreadHandle;
   LRetVal: Pointer;
-  LElapsed: Integer;
   LJoinTimeoutMs: Int64;
   LJoinResult: Int32;
 begin
@@ -129,39 +137,18 @@ begin
 
   platform_thread_create(LHandle, @TimeoutWorker, LRec);
 
-  { Poll with sleep — cross-platform via platform_thread_sleep_ns }
-  LElapsed := 0;
-  repeat
-    platform_thread_sleep_ns(10 * 1000 * 1000); { 10 ms }
-    Inc(LElapsed, 10);
-    { R6-07: ReadBarrier ensures we see the worker's writes to Status/ErrorMsg
-      when Done becomes true. On weakly-ordered architectures (ARM/AArch64)
-      the worker's WriteBarrier pairs with this ReadBarrier. }
-    ReadBarrier;
-  until (LElapsed >= ATimeoutMs) or LRec^.Done;
+  { C-02: Use timed-join instead of poll loop — blocks efficiently via
+    pthread_timedjoin_np, no CPU waste, instant detection on completion. }
+  LJoinResult := platform_thread_timedjoin(LHandle, ATimeoutMs, LRetVal);
 
-  { Secondary join timeout: after detecting a timeout, give the worker extra
-    time to finish cleanup. Use max(2x original, 5s) to handle short timeouts
-    where the worker might just be slow, not truly stuck. }
-  if LRec^.Done then
-    LJoinTimeoutMs := 5000  { normal path: 5s grace for thread teardown }
-  else
-  begin
-    LJoinTimeoutMs := Int64(ATimeoutMs) * 2;
-    if LJoinTimeoutMs < 5000 then
-      LJoinTimeoutMs := 5000;
-  end;
-
-  LJoinResult := platform_thread_timedjoin(LHandle, LJoinTimeoutMs, LRetVal);
-
-  { R6-07: ReadBarrier before reading results — join provides happens-before
-    on success path, but on failure path we need an explicit barrier to see
+  { ReadBarrier before reading results — join provides happens-before on
+    success path, but on timeout path we need an explicit barrier to see
     the worker's writes to Status/ErrorMsg/Done. }
   ReadBarrier;
 
   if LJoinResult = 0 then
   begin
-    { Thread finished — read results and dispose }
+    { Thread finished within timeout — read results and dispose }
     AStatus := LRec^.Status;
     AMsg := LRec^.ErrorMsg;
     if not LRec^.Done then
@@ -171,47 +158,44 @@ begin
       AMsg := 'worker exited without completing';
       Result := False;
     end
-    else if LElapsed >= ATimeoutMs then
-    begin
-      { Worker finished, but we detected a timeout first.
-        Report as timeout — the test was too slow. }
-      AStatus := tsError;
-      AMsg := 'test timed out after ' + IntToStr(ATimeoutMs) + 'ms';
-      Result := False;
-    end
     else
       Result := True;
-  end
-  else if LRec^.Done then
-  begin
-    { Worker finished (Done=True) but timed join didn't complete —
-      extremely unlikely; treat as success with potential stale data.
-      Dispose LRec here: worker is done so no concurrent access,
-      and LJoinResult ≠ 0 means the Dispose below won't run. }
-    AStatus := LRec^.Status;
-    AMsg := LRec^.ErrorMsg;
-    Result := True;
     Dispose(LRec);
-    { Detach to prevent handle leak — worker is done, thread is exiting }
-    platform_thread_detach(LHandle);
-    ResolveErrSink(AConfig).WriteLn(
-      'WARNING: timed-join failed after worker completed - handle detached');
   end
   else
   begin
-    { Truly stuck worker — timed join also expired. Detach and warn.
-      LRec will leak because we can't safely access it after detach. }
-    AStatus := tsError;
-    AMsg := 'test timed out after ' + IntToStr(ATimeoutMs) + 'ms';
-    Result := False;
-    platform_thread_detach(LHandle);
-    ResolveErrSink(AConfig).WriteLn(
-      '  ' + AnsiYellow('WARNING', AConfig) + ': test timed out after ' +
-      IntToStr(ATimeoutMs) +
-      'ms - worker thread stuck, detached (LRec leaked)');
+    { Timed out — give worker extra time to finish cleanup.
+      Use max(2x original, 5s) for short timeouts. }
+    LJoinTimeoutMs := Int64(ATimeoutMs) * 2;
+    if LJoinTimeoutMs < 5000 then
+      LJoinTimeoutMs := 5000;
+
+    LJoinResult := platform_thread_timedjoin(LHandle, LJoinTimeoutMs, LRetVal);
+    ReadBarrier;
+
+    if (LJoinResult = 0) or LRec^.Done then
+    begin
+      { Worker finished during grace period — test was too slow }
+      AStatus := tsError;
+      AMsg := 'test timed out after ' + IntToStr(ATimeoutMs) + 'ms';
+      Result := False;
+      Dispose(LRec);
+    end
+    else
+    begin
+      { Truly stuck worker — timed join also expired. Detach and warn.
+        LRec will leak because we can't safely access it after detach. }
+      AStatus := tsError;
+      AMsg := 'test timed out after ' + IntToStr(ATimeoutMs) + 'ms';
+      Result := False;
+      Inc(GTimeoutLeakCount);
+      platform_thread_detach(LHandle);
+      ResolveErrSink(AConfig).WriteLn(
+        '  ' + AnsiYellow('WARNING', AConfig) + ': test timed out after ' +
+        IntToStr(ATimeoutMs) +
+        'ms - worker thread stuck, detached (LRec leaked)');
+    end;
   end;
-  if LJoinResult = 0 then
-    Dispose(LRec);
 end;
 
 function RunTestWithTimeout(AProc: TTestProc; ATimeoutMs: Integer;
@@ -251,6 +235,35 @@ begin
   end;
 end;
 
+procedure EmitParallelSkip(const R: PThreadRec; const ASkipReason: string;
+  const AOutSink: IOutputSink; const AConfig: TTestConfig);
+{ Shared early-exit for parallel skip paths: acquire mutex, increment skip
+  counter, write output, release mutex, set result. }
+begin
+  R^.Mtx.Acquire;
+  try
+    R^.Skip^ := R^.Skip^ + 1;
+    WriteTestOutput(tsSkipped, R^.Entry.Name, '', ASkipReason,
+      0, AOutSink, AConfig);
+  finally
+    SafeRelease(R^.Mtx, AConfig);
+  end;
+  if R^.Res <> nil then
+    R^.Res^ := MakeTestResult(R^.Entry.Name, tsSkipped, ASkipReason, 0);
+end;
+
+procedure MutexWarn(const R: PThreadRec; const AMsg: string;
+  const AErrSink: IOutputSink; const AConfig: TTestConfig);
+{ Acquire mutex, write warning, release. Shared by afterEach/cleanup paths. }
+begin
+  R^.Mtx.Acquire;
+  try
+    WriteWarning(AMsg, AErrSink, AConfig);
+  finally
+    SafeRelease(R^.Mtx, AConfig);
+  end;
+end;
+
 function ParallelWorkerProc(AArg: Pointer): Pointer; cdecl;
 var
   R: PThreadRec;
@@ -260,6 +273,7 @@ var
   LSkipReason: string;
   LStartMs: Int64;
   LResultWritten: Boolean;
+  LTotalRetries: Integer;
   LRetriesLeft: Integer;
   LSkippedByBeforeEach: Boolean;
   LTimeoutMs: Integer;
@@ -267,6 +281,7 @@ var
   LErrSink: IOutputSink;
   LCIdx: Integer;
   LDurMs: Int64;
+  LProgressPrefix: string;
 begin
   Result := nil;
   R := PThreadRec(AArg);
@@ -276,7 +291,7 @@ begin
   LStatus := tsPassed;
   LFailMsg := '';
   LSkipReason := '';
-  LStartMs := 0;
+  LStartMs := GetTickCount64; { set before BeforeEach so duration is correct on skip }
   LResultWritten := False;
   LSkippedByBeforeEach := False;
   LTimeoutMs := GetTestTimeout(LConfig);
@@ -287,53 +302,22 @@ begin
   { Subtests are not supported in parallel mode — skip gracefully }
   if R^.Entry.Kind = ekSubtest then
   begin
-    R^.Mtx.Acquire;
-    try
-      R^.Skip^ := R^.Skip^ + 1;
-      LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, R^.Entry.Name,
-        'subtests not supported in parallel mode', LConfig));
-    finally
-      SafeRelease(R^.Mtx, LConfig);
-    end;
-    if R^.Res <> nil then
-      R^.Res^ := MakeTestResult(R^.Entry.Name, tsSkipped,
-        'subtests not supported in parallel mode', 0);
+    EmitParallelSkip(R, 'subtests not supported in parallel mode',
+      LOutSink, LConfig);
     Exit;
   end;
 
   if R^.Entry.Kind = ekSkipped then
   begin
-    R^.Mtx.Acquire;
-    try
-      R^.Skip^ := R^.Skip^ + 1;
-      if LConfig.VerboseMode then
-        WriteTestStatusVerbose(tsSkipped, R^.Entry.Name, '',
-          R^.Entry.SkipReason, 0, LOutSink, LConfig)
-      else
-        LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, R^.Entry.Name, LConfig));
-    finally
-      SafeRelease(R^.Mtx, LConfig);
-    end;
-    if R^.Res <> nil then
-      R^.Res^ := MakeTestResult(R^.Entry.Name, tsSkipped,
-        R^.Entry.SkipReason, 0);
+    EmitParallelSkip(R, R^.Entry.SkipReason, LOutSink, LConfig);
     Exit;
   end;
 
   { Benchmarks: not supported in parallel mode — skip gracefully }
   if R^.Entry.Kind = ekBench then
   begin
-    R^.Mtx.Acquire;
-    try
-      R^.Skip^ := R^.Skip^ + 1;
-      LOutSink.WriteLn('  ' + FormatStatusLine(tsSkipped, R^.Entry.Name,
-        'benchmarks not supported in parallel mode', LConfig));
-    finally
-      SafeRelease(R^.Mtx, LConfig);
-    end;
-    if R^.Res <> nil then
-      R^.Res^ := MakeTestResult(R^.Entry.Name, tsSkipped,
-        'benchmarks not supported in parallel mode', 0);
+    EmitParallelSkip(R, 'benchmarks not supported in parallel mode',
+      LOutSink, LConfig);
     Exit;
   end;
 
@@ -373,7 +357,10 @@ begin
   if LStatus = tsPassed then
   begin
     { R4-04: Retry loop — mirrors serial RunWithResult retry logic }
-    LRetriesLeft := R^.Entry.RetryCount;
+    LTotalRetries := R^.Entry.RetryCount;
+    if LTotalRetries = 0 then
+      LTotalRetries := LConfig.RetryCount;
+    LRetriesLeft := LTotalRetries;
     repeat
       LStatus := tsPassed;
       LFailMsg := '';
@@ -384,27 +371,11 @@ begin
         begin
           { Timeout-enabled path — spawns watchdog sub-thread }
           if Assigned(R^.Entry.Closure) then
-          begin
-            if RunTestWithTimeout(R^.Entry.Closure, LTimeoutMs,
-              LConfig, LStatus, LFailMsg) then
-            begin
-              if LStatus = tsPassed then { ok }
-              else { LStatus already set }
-            end
-            else
-              { Timed out — LStatus already set to tsError };
-          end
+            RunTestWithTimeout(R^.Entry.Closure, LTimeoutMs,
+              LConfig, LStatus, LFailMsg)
           else
-          begin
-            if RunTestWithTimeout(R^.Entry.Proc, LTimeoutMs,
-              LConfig, LStatus, LFailMsg) then
-            begin
-              if LStatus = tsPassed then { ok }
-              else { LStatus already set }
-            end
-            else
-              { Timed out — LStatus already set to tsError };
-          end;
+            RunTestWithTimeout(R^.Entry.Proc, LTimeoutMs,
+              LConfig, LStatus, LFailMsg);
         end
         else if R^.Entry.Kind = ekTableTest then
         begin
@@ -421,52 +392,20 @@ begin
         end
         else if R^.Entry.Kind = ekShouldFail then
         begin
-          { ShouldFail: test passes if proc raises, fails if it doesn't.
-            Rust-style #[should_panic] expected-failure testing. }
-          try
-            if Assigned(R^.Entry.Closure) then
-              R^.Entry.Closure()
-            else
-              R^.Entry.Proc;
-            { No exception = unexpected success }
-            LStatus := tsFailed;
-            if R^.Entry.ShouldFailMsg <> '' then
-              LFailMsg := 'Expected failure (' + R^.Entry.ShouldFailMsg +
-                ') but test passed'
-            else
-              LFailMsg := 'Expected failure but test passed';
-          except
-            on E: ETestSkipped do
-            begin
-              LStatus := tsSkipped;
-              LSkipReason := E.Message;
-            end;
-            on E: Exception do
-            begin
-              { Expected failure — test passes }
-              LStatus := tsPassed;
-            end;
-          end;
+          RunShouldFailEntry(R^.Entry, LStatus, LFailMsg);
+          if LStatus = tsSkipped then
+            LSkipReason := LFailMsg;
         end
         else if Assigned(R^.Entry.Closure) then
           R^.Entry.Closure()
         else
           R^.Entry.Proc;
       except
-        on E: ETestSkipped do
-        begin
-          LStatus := tsSkipped;
-          LSkipReason := E.Message;
-        end;
-        on E: EAssertionFailed do
-        begin
-          LStatus := tsFailed;
-          LFailMsg := AppendTestTrace(E.Message);
-        end;
         on E: Exception do
         begin
-          LStatus := tsError;
-          LFailMsg := AppendTestTrace(FormatExceptionMsg(E));
+          ClassifyTestException(E, LStatus, LFailMsg);
+          if LStatus = tsSkipped then
+            LSkipReason := LFailMsg;
         end;
       end;
 
@@ -477,8 +416,8 @@ begin
       Dec(LRetriesLeft);
       R^.Mtx.Acquire;
       try
-        WriteRetryHint(R^.Entry.RetryCount - LRetriesLeft,
-          R^.Entry.RetryCount, LOutSink, LConfig);
+        WriteRetryHint(LTotalRetries - LRetriesLeft,
+          LTotalRetries, LOutSink, LConfig);
       finally
         SafeRelease(R^.Mtx, LConfig);
       end;
@@ -493,12 +432,7 @@ begin
     except
       on E: Exception do
       begin
-        R^.Mtx.Acquire;
-        try
-          WriteWarning('afterEach failed: ' + E.Message, LErrSink, LConfig);
-        finally
-          SafeRelease(R^.Mtx, LConfig);
-        end;
+        MutexWarn(R, 'afterEach failed: ' + E.Message, LErrSink, LConfig);
         if LStatus = tsPassed then
         begin
           LStatus := tsError;
@@ -518,12 +452,7 @@ begin
       except
         on E: Exception do
         begin
-          R^.Mtx.Acquire;
-          try
-            WriteWarning('cleanup failed: ' + E.Message, LErrSink, LConfig);
-          finally
-            SafeRelease(R^.Mtx, LConfig);
-          end;
+          MutexWarn(R, 'cleanup failed: ' + E.Message, LErrSink, LConfig);
         end;
       end;
     end;
@@ -531,68 +460,32 @@ begin
 
   R^.Mtx.Acquire;
   try
-    case LStatus of
-      tsPassed:
-        R^.Pass^ := R^.Pass^ + 1;
-      tsFailed:
-        R^.Fail^ := R^.Fail^ + 1;
-      tsSkipped:
-        R^.Skip^ := R^.Skip^ + 1;
-      tsError:
-        R^.Fail^ := R^.Fail^ + 1;
-    end;
+    IncByStatus(LStatus, R^.Pass^, R^.Fail^, R^.Skip^);
     { Progress counter — increment and format prefix }
     LDurMs := GetTickCount64 - LStartMs;
+    LProgressPrefix := '';
     if R^.ProgressCounter <> nil then
     begin
       R^.ProgressCounter^ := R^.ProgressCounter^ + 1;
       if R^.ProgressTotal > 0 then
-      begin
-        if LConfig.VerboseMode then
-          WriteTestStatusVerbose(LStatus,
-            '[' + IntToStr(R^.ProgressCounter^) + '/' +
-            IntToStr(R^.ProgressTotal) + '] ' + R^.Entry.Name,
-            LFailMsg, LSkipReason, LDurMs, LOutSink, LConfig)
-        else
-          WriteTestStatus(LStatus,
-            '[' + IntToStr(R^.ProgressCounter^) + '/' +
-            IntToStr(R^.ProgressTotal) + '] ' + R^.Entry.Name,
-            LFailMsg, LSkipReason, LOutSink, LConfig);
-      end
-      else
-      begin
-        if LConfig.VerboseMode then
-          WriteTestStatusVerbose(LStatus, R^.Entry.Name, LFailMsg,
-            LSkipReason, LDurMs, LOutSink, LConfig)
-        else
-          WriteTestStatus(LStatus, R^.Entry.Name, LFailMsg, LSkipReason,
-            LOutSink, LConfig);
-      end;
-    end
-    else
-    begin
-      if LConfig.VerboseMode then
-        WriteTestStatusVerbose(LStatus, R^.Entry.Name, LFailMsg,
-          LSkipReason, LDurMs, LOutSink, LConfig)
-      else
-        WriteTestStatus(LStatus, R^.Entry.Name, LFailMsg, LSkipReason,
-          LOutSink, LConfig);
+        LProgressPrefix := '[' + IntToStr(R^.ProgressCounter^) + '/' +
+          IntToStr(R^.ProgressTotal) + '] ';
     end;
+    WriteTestOutput(LStatus, LProgressPrefix + R^.Entry.Name,
+      LFailMsg, LSkipReason, LDurMs, LOutSink, LConfig);
     { Write per-test result inside mutex for safety (skip if already written
       by beforeEach failure path, which sets Duration = 0 directly) }
     if (R^.Res <> nil) and (not LResultWritten) then
     begin
-      case LStatus of
-        tsSkipped: R^.Res^ := MakeTestResult(R^.Entry.Name, LStatus,
-                      LSkipReason, GetTickCount64 - LStartMs);
-        tsFailed:  R^.Res^ := MakeTestResult(R^.Entry.Name, LStatus,
-                      LFailMsg, GetTickCount64 - LStartMs);
-        tsError:   R^.Res^ := MakeTestResult(R^.Entry.Name, LStatus,
-                      LFailMsg, GetTickCount64 - LStartMs);
+      if LStatus = tsSkipped then
+        R^.Res^ := MakeTestResult(R^.Entry.Name, LStatus,
+          LSkipReason, LDurMs)
+      else if LStatus in [tsFailed, tsError] then
+        R^.Res^ := MakeTestResult(R^.Entry.Name, LStatus,
+          LFailMsg, LDurMs)
       else
         R^.Res^ := MakeTestResult(R^.Entry.Name, LStatus,
-                      '', GetTickCount64 - LStartMs);
-      end;
+          '', LDurMs);
     end;
   finally
     SafeRelease(R^.Mtx, LConfig);

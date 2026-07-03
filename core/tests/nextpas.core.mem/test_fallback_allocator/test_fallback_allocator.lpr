@@ -12,21 +12,20 @@ uses
   nextpas.core.mem.arena.intf,
   nextpas.core.mem.arena.local,
   nextpas.core.mem.allocator,
-  nextpas.core.mem.allocator.fallback,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.allocator.fallback;
 
 type
   {** 总是返回 nil 的分配器 (模拟 OOM) }
-  TOomAllocator = class(TAllocator)
+  TOomAllocator = class(TInterfacedObject, IAllocator)
   public
-    function GetMem(ASize: SizeUInt): Pointer; override;
-    function AllocMem(ASize: SizeUInt): Pointer; override;
-    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure FreeMem(ADst: Pointer); override;
-    procedure FreeAligned(APtr: Pointer); override;
-    function MemSize(APtr: Pointer): SizeUInt; override;
-    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer; override;
-    function Traits: TAllocatorTraits; override;
+    function GetMem(ASize: SizeUInt): Pointer;
+    function AllocMem(ASize: SizeUInt): Pointer;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(ADst: Pointer);
+    procedure FreeAligned(APtr: Pointer);
+    function MemSize(APtr: Pointer): SizeUInt;
+    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
+    function Traits: TAllocatorTraits;
   end;
 
 function TOomAllocator.GetMem(ASize: SizeUInt): Pointer;
@@ -56,7 +55,7 @@ var
 procedure TestFallbackAllocatorCreateDestroy;
 var
   LOom: TOomAllocator;
-  LRtl: TMemAllocator;
+  LRtl: IAllocator;
   LFall: TFallbackAllocator;
 begin
   LOom := TOomAllocator.Create;
@@ -72,7 +71,7 @@ end;
 
 procedure TestFallbackAllocatorPrimarySucceeds;
 var
-  LRtl: TMemAllocator;
+  LRtl: IAllocator;
   LFall: TFallbackAllocator;
   LP: Pointer;
 begin
@@ -91,7 +90,7 @@ end;
 procedure TestFallbackAllocatorPrimaryFails;
 var
   LOom: TOomAllocator;
-  LRtl: TMemAllocator;
+  LRtl: IAllocator;
   LFall: TFallbackAllocator;
   LP: Pointer;
 begin
@@ -111,7 +110,7 @@ end;
 procedure TestFallbackAllocatorFreeFromCorrect;
 var
   LOom: TOomAllocator;
-  LRtl: TMemAllocator;
+  LRtl: IAllocator;
   LFall: TFallbackAllocator;
   LP1: Pointer;
 begin
@@ -135,7 +134,7 @@ end;
 procedure TestFallbackAllocatorMultiple;
 var
   LOom: TOomAllocator;
-  LRtl: TMemAllocator;
+  LRtl: IAllocator;
   LFall: TFallbackAllocator;
   LPs: array[0..9] of Pointer;
   I: Integer;
@@ -159,10 +158,10 @@ begin
   end;
 end;
 
-procedure TestFallbackAllocatorAllocMem; override;
+procedure TestFallbackAllocatorAllocMem;
 var
   LOom: TOomAllocator;
-  LRtl: TMemAllocator;
+  LRtl: IAllocator;
   LFall: TFallbackAllocator;
   LP: PByte;
   I: Integer;
@@ -184,7 +183,7 @@ end;
 
 procedure TestFallbackAllocatorFreeNil;
 var
-  LRtl: TMemAllocator;
+  LRtl: IAllocator;
   LFall: TFallbackAllocator;
 begin
   LRtl := GetRtlAllocator;
@@ -197,10 +196,10 @@ begin
   end;
 end;
 
-procedure TestFallbackAllocatorReallocMemFromFallbackUpdatesSize; override;
+procedure TestFallbackAllocatorReallocMemFromFallbackUpdatesSize;
 var
   LOom: TOomAllocator;
-  LRtl: TMemAllocator;
+  LRtl: IAllocator;
   LFall: TFallbackAllocator;
   LP, LP2: PByte;
 begin
@@ -233,7 +232,7 @@ end;
 procedure TestFallbackArenaCreateDestroy;
 var
   LArena: TLocalArena;
-  LRtl: TMemAllocator;
+  LRtl: IAllocator;
   LFall: TFallbackArena;
 begin
   LArena := TLocalArena.Create(256);
@@ -250,7 +249,7 @@ end;
 procedure TestFallbackArenaPrimarySucceeds;
 var
   LArena: TLocalArena;
-  LRtl: TMemAllocator;
+  LRtl: IAllocator;
   LFall: TFallbackArena;
   LP: Pointer;
 begin
@@ -269,7 +268,7 @@ end;
 procedure TestFallbackArenaExhaustAndFallback;
 var
   LArena: TLocalArena;
-  LRtl: TMemAllocator;
+  LRtl: IAllocator;
   LFall: TFallbackArena;
   LP1, LP2: Pointer;
 begin
@@ -294,7 +293,7 @@ end;
 procedure TestFallbackArenaReset;
 var
   LArena: TLocalArena;
-  LRtl: TMemAllocator;
+  LRtl: IAllocator;
   LFall: TFallbackArena;
   LP: Pointer;
 begin
@@ -318,7 +317,7 @@ end;
 procedure TestFallbackArenaMarkRestore;
 var
   LArena: TLocalArena;
-  LRtl: TMemAllocator;
+  LRtl: IAllocator;
   LFall: TFallbackArena;
   LMark: TArenaMark;
 begin
@@ -339,7 +338,7 @@ end;
 procedure TestFallbackArenaFreeFallbacks;
 var
   LArena: TLocalArena;
-  LRtl: TMemAllocator;
+  LRtl: IAllocator;
   LFall: TFallbackArena;
   LP: Pointer;
 begin
@@ -362,7 +361,7 @@ end;
 { R-21 regression: ReallocMem(ptr, 0) frees and removes entry }
 procedure TestFallbackReallocZeroSize;
 var
-  LPrimary: TMemAllocator;
+  LPrimary: IAllocator;
   LFallback: TFallbackAllocator;
   LPtr, LNew: Pointer;
 begin
@@ -389,7 +388,7 @@ end;
 { R-21 regression: ReallocMem failure returns nil, not original pointer }
 procedure TestFallbackReallocFailureReturnsNil;
 var
-  LPrimary: TMemAllocator;
+  LPrimary: IAllocator;
   LFallback: TFallbackAllocator;
   LPtr, LNew: Pointer;
 begin
