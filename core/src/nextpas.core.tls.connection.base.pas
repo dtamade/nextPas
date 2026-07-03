@@ -678,6 +678,10 @@ begin
   else if Pos('SHA', LName) > 0 then
     AInfo.Hash := sslHashSHA1;
 
+  { 标记弱密码套件：3DES/RC4/DES 加密或 MD5/SHA1 哈希 }
+  AInfo.IsWeakCipher := (AInfo.Cipher in [sslCipher3DES, sslCipherRC4, sslCipherDES])
+    or (AInfo.Hash in [sslHashMD5, sslHashSHA1]);
+
   if AInfo.MacSize = 0 then
   begin
     // AEAD suites can safely expose their auth-tag length from the suite name;

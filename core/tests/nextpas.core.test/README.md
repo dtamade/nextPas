@@ -54,7 +54,7 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 | `test_expect` | IExpectation 流式断言 API + NaN/Pointer/Double/epsilon 边界 | 113 |
 | `test_mock` | TMock 录制/验证/返回值/参数匹配/typed 返回/ResetAll | 67 |
 | `test_output` | ANSI、StatusDot、filter、timeout、JUnit/TAP/JSON 格式化、brace expansion、层级过滤、hierarchical+glob 组合、TAP/JSON compliance | 70 |
-| `test_runner` | TTestRunner 多 suite、lifecycle、subtest、timeout、空 suite、ShouldFail、FormatDuration、shuffle、failfast、list、determinism、verbose、runtimeout、cleanup、benchmark、parallel空suite防护、glob边界、test timeout exceeded、config zero-value、complex filter、benchmark N scaling、suite-level retry、CleanupTableAllocations 幂等、FormatDuration locale | 74+1x |
+| `test_runner` | TTestRunner 多 suite、lifecycle、subtest、timeout、空 suite、ShouldFail、FormatDuration、shuffle、failfast、list、determinism、verbose、runtimeout、cleanup、benchmark、parallel空suite防护、glob边界、test timeout exceeded、config zero-value、complex filter、benchmark N scaling、suite-level retry、CleanupTableAllocations 幂等、FormatDuration locale | 134 (101+14x+15skip) |
 | `test_lifecycle` | TestTable、TTestClosure、lifecycle 组合、facade 符号完整性 | 15 |
 | `test_parallel` | 并行执行、lifecycle、retry、skip、MaxParallelWorkers 批次调度、verbose、cleanup | 10 |
 | `test_diagnostics` | 错误诊断、stack trace、Double 比较、Error vs Failure | 15 |
@@ -79,6 +79,33 @@ make -C core/tests/nextpas.core.test/test_runner test
 - 并行套件（test_parallel）不用 heaptrc（FPC heaptrc 非线程安全）
 - 失败用 `Halt(1)` 退出，CI 通过 exit code 判断
 - 全局计数器用于 lifecycle 验证（GSetupCalled 等）
+
+## 注意事项
+
+### TTestSuite 是 mutable record
+
+`TTestSuite` 是 Pascal record（值类型），`With*` 方法返回新值：
+
+```pascal
+// ❌ 错误：WithSetup 返回新 record，原 Suite 不变
+Suite.WithSetup(Proc);
+Suite.Test('name', TestProc);
+
+// ✅ 正确：保存返回值
+Suite := Suite.WithSetup(Proc);
+Suite.Test('name', TestProc);
+```
+
+`Test()`/`Bench()`/`SetSetup()` 等过程式方法直接修改 record，无需保存返回值。
+
+### 并行模式限制
+
+子测试 (`TestSubtest`)、benchmarks、RTTI discovery 子测试在 `RunParallel` 模式下自动跳过。
+
+### Mock.ResetCalls vs ResetAll
+
+- `Mock.ResetCalls` — 只清 calls，保留 setup 配置
+- `Mock.ResetAll` — 清除 calls + setup 配置
 
 ## 文件结构
 

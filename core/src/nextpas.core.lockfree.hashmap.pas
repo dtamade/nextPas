@@ -15,7 +15,7 @@ const
   HASHMAP_LOAD_FACTOR_DEN = 4;
 
 type
-  generic TLockFreeHashMapImpl<TKey, TValue> = class
+  generic TShardedHashMapImpl<TKey, TValue> = class
   private type
     TEntryState = (esEmpty, esOccupied, esDeleted);
     TEntry = record
@@ -58,12 +58,12 @@ type
     function Count: PtrUInt;
   end;
 
-  generic TLockFreeHashMap<TKey, TValue> = class(specialize TLockFreeHashMapImpl<TKey, TValue>)
+  generic TShardedHashMap<TKey, TValue> = class(specialize TShardedHashMapImpl<TKey, TValue>)
   end;
 
 implementation
 
-function TLockFreeHashMapImpl.HashKey(const AKey: TKey): PtrUInt;
+function TShardedHashMapImpl.HashKey(const AKey: TKey): PtrUInt;
 var
   LPtr: PByte;
   LI: PtrUInt;
@@ -79,23 +79,23 @@ begin
   Result := LH;
 end;
 
-function TLockFreeHashMapImpl.ShardIndex(const AKey: TKey): PtrUInt;
+function TShardedHashMapImpl.ShardIndex(const AKey: TKey): PtrUInt;
 begin
   Result := HashKey(AKey) mod FShardCount;
 end;
 
-procedure TLockFreeHashMapImpl.ShardLock(var AShard: TShard);
+procedure TShardedHashMapImpl.ShardLock(var AShard: TShard);
 begin
   while AtomicExchange32(AShard.Lock, 1, moAcquire) <> 0 do
     CpuPause;
 end;
 
-procedure TLockFreeHashMapImpl.ShardUnlock(var AShard: TShard);
+procedure TShardedHashMapImpl.ShardUnlock(var AShard: TShard);
 begin
   AtomicStore32(AShard.Lock, 0, moRelease);
 end;
 
-procedure TLockFreeHashMapImpl.ShardInit(var AShard: TShard; const ACapacity: PtrUInt);
+procedure TShardedHashMapImpl.ShardInit(var AShard: TShard; const ACapacity: PtrUInt);
 var
   LI: PtrUInt;
 begin
@@ -108,7 +108,7 @@ begin
     AShard.Entries[LI].State := esEmpty;
 end;
 
-procedure TLockFreeHashMapImpl.ShardResize(var AShard: TShard);
+procedure TShardedHashMapImpl.ShardResize(var AShard: TShard);
 var
   LOldEntries: array of TEntry;
   LOldCapacity: PtrUInt;
@@ -139,7 +139,7 @@ begin
   end;
 end;
 
-function TLockFreeHashMapImpl.ShardFind(const AShard: TShard; const AKey: TKey; out AIdx: PtrUInt): Boolean;
+function TShardedHashMapImpl.ShardFind(const AShard: TShard; const AKey: TKey; out AIdx: PtrUInt): Boolean;
 var
   LStart: PtrUInt;
 begin
@@ -156,13 +156,13 @@ begin
   Result := False;
 end;
 
-constructor TLockFreeHashMapImpl.Create(const AInitialCapacity: PtrUInt);
+constructor TShardedHashMapImpl.Create(const AInitialCapacity: PtrUInt);
 var
   LI: PtrUInt;
   LCap: PtrUInt;
 begin
   if IsManagedType(TKey) or IsManagedType(TValue) then
-    raise EArgumentError.Create('TLockFreeHashMap: TKey and TValue must be unmanaged');
+    raise EArgumentError.Create('TShardedHashMap: TKey and TValue must be unmanaged');
   inherited Create;
   LCap := AInitialCapacity;
   if LCap < 4 then
@@ -173,7 +173,7 @@ begin
     ShardInit(FShards[LI], LCap);
 end;
 
-destructor TLockFreeHashMapImpl.Destroy;
+destructor TShardedHashMapImpl.Destroy;
 var
   LI: PtrUInt;
 begin
@@ -182,7 +182,7 @@ begin
   inherited;
 end;
 
-procedure TLockFreeHashMapImpl.Insert(const AKey: TKey; const AValue: TValue);
+procedure TShardedHashMapImpl.Insert(const AKey: TKey; const AValue: TValue);
 var
   LIdx: PtrUInt;
   LShardIdx: PtrUInt;
@@ -212,7 +212,7 @@ begin
   end;
 end;
 
-function TLockFreeHashMapImpl.Find(const AKey: TKey; out AValue: TValue): Boolean;
+function TShardedHashMapImpl.Find(const AKey: TKey; out AValue: TValue): Boolean;
 var
   LShardIdx: PtrUInt;
   LIdx: PtrUInt;
@@ -228,7 +228,7 @@ begin
   end;
 end;
 
-function TLockFreeHashMapImpl.Remove(const AKey: TKey): Boolean;
+function TShardedHashMapImpl.Remove(const AKey: TKey): Boolean;
 var
   LShardIdx: PtrUInt;
   LIdx: PtrUInt;
@@ -249,14 +249,14 @@ begin
   end;
 end;
 
-function TLockFreeHashMapImpl.Contains(const AKey: TKey): Boolean;
+function TShardedHashMapImpl.Contains(const AKey: TKey): Boolean;
 var
   LDummy: TValue;
 begin
   Result := Find(AKey, LDummy);
 end;
 
-function TLockFreeHashMapImpl.Count: PtrUInt;
+function TShardedHashMapImpl.Count: PtrUInt;
 var
   LI: PtrUInt;
 begin

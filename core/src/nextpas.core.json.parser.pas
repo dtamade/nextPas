@@ -826,6 +826,12 @@ begin
       SetOutOfMemoryError;
     Exit(False);
   end;
+  if SizeUInt(AInput.Len) > 16 * 1024 * 1024 then
+  begin
+    FHasError := True;
+    FError.Message := TStringView.Create(PAnsiChar('JSON input exceeds maximum size (16 MB)'), 39);
+    Exit(False);
+  end;
   FInput := AInput;
   FNodeCount := 0;
   FHasError := False;

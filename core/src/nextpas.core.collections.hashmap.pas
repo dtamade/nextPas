@@ -13,7 +13,8 @@ uses
   nextpas.core.mem.allocator.base,
   nextpas.core.collections.base,
   nextpas.core.collections.hashmap.base,
-  nextpas.core.collections.hashmap.intf;
+  nextpas.core.collections.hashmap.intf,
+  nextpas.core.mem.allocator.base;
 
 const
   DEFAULT_MAX_LOAD_FACTOR = nextpas.core.collections.hashmap.base.DEFAULT_MAX_LOAD_FACTOR;

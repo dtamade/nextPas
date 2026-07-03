@@ -75,7 +75,7 @@ type
     function Encode: TBytes;
     class function Decode(ANode: TASN1Node): TOCSPCertID; static;
     class function Create(ACert, AIssuerCert: TX509Certificate;
-      AHashAlg: THashAlgorithm = haSHA1): TOCSPCertID; static;
+      AHashAlg: THashAlgorithm = haSHA256): TOCSPCertID; static;
   end;
 
   // ========================================================================

@@ -125,6 +125,9 @@ function DefaultAESGCMPoolConfig: TAESGCMPoolConfig;
 
 implementation
 
+uses
+  nextpas.core.crypto.constant_time;
+
 var
   GlobalAESGCMPool: TAESGCMContextPool = nil;
 
@@ -245,7 +248,7 @@ begin
       (Length(FEntries[I].KeyHash) = Length(LKeyHash)) then
     begin
       // 比较密钥哈希
-      if CompareMem(@FEntries[I].KeyHash[0], @LKeyHash[0], Length(LKeyHash)) then
+      if TConstantTime.CompareBytes(FEntries[I].KeyHash, LKeyHash) = 1 then
       begin
         Result := I;
         LFound := True;

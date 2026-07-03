@@ -112,7 +112,6 @@ implementation
 uses
   nextpas.core.text.conv,
   nextpas.core.errors,
-  nextpas.core.fs.util,
   nextpas.core.platform.files,
   nextpas.core.platform.files.base,
   nextpas.core.time.base;
@@ -126,6 +125,14 @@ const
   );
   RESET = #27'[0m';
   DIM = #27'[90m';
+
+{** 内联文件存在检查，避免引入 L2 nextpas.core.fs.util }
+function FileExists(const APath: string): Boolean;
+var
+  LStat: TPlatformFileStat;
+begin
+  Result := platform_file_stat(PAnsiChar(AnsiString(APath)), LStat) = 0;
+end;
 
 { Attr constructors }
 
@@ -198,8 +205,9 @@ begin
   Result := @Self;
 end;
 
-var
-  GLogDepth: Int32 = 0; // TODO: threadvar when FPC supports threadvar initialization
+{ 每线程独立的重入检测计数器（threadvar 自动零初始化） }
+threadvar
+  GLogDepth: Int32;
 
 procedure TLogEvent.Msg(const AText: string);
 begin
@@ -633,12 +641,16 @@ var
 
 procedure SetLogContext(ACtx: Pointer);
 begin
+  EnterCriticalSection(GDefaultLock);
   GLogContext := ACtx;
+  LeaveCriticalSection(GDefaultLock);
 end;
 
 function GetLogContext: Pointer;
 begin
+  EnterCriticalSection(GDefaultLock);
   Result := GLogContext;
+  LeaveCriticalSection(GDefaultLock);
 end;
 
 procedure SetDefaultLogger(const ALogger: TLogger);
@@ -742,7 +754,7 @@ begin
   if FBroken or FOpened then Exit;
   try
     AssignFile(FFile, FPath);
-    if FsExists(FPath) then
+    if FileExists(FPath) then
       Append(FFile)
     else
       Rewrite(FFile);
@@ -767,14 +779,14 @@ begin
     FOpened := False;
   end;
   LDst := FPath + '.' + IntToStr(FMaxFiles);
-  if FsExists(LDst) then platform_file_unlink(PAnsiChar(LDst));
+  if FileExists(LDst) then platform_file_unlink(PAnsiChar(LDst));
   for LI := FMaxFiles - 1 downto 1 do
   begin
     LSrc := FPath + '.' + IntToStr(LI);
     LDst := FPath + '.' + IntToStr(LI + 1);
-    if FsExists(LSrc) then platform_file_rename(PAnsiChar(LSrc), PAnsiChar(LDst));
+    if FileExists(LSrc) then platform_file_rename(PAnsiChar(LSrc), PAnsiChar(LDst));
   end;
-  if FsExists(FPath) then platform_file_rename(PAnsiChar(FPath), PAnsiChar(FPath + '.1'));
+  if FileExists(FPath) then platform_file_rename(PAnsiChar(FPath), PAnsiChar(FPath + '.1'));
   FCurrentSize := 0;
 end;
 
