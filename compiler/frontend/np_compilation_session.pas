@@ -781,12 +781,18 @@ var
   RawLexer: TLexerResult;
   PP: TPreprocessor;
   Defines: TDefineTable;
+  IncResolver: TFileIncludeResolver;
+  SourceDir: string;
 begin
   ResetSyntaxState;
   RawLexer := TLexerResult.Create(FSourceDatabase.RootSourceText,
     FDiagnosticsSink, FRootFileId);
   Defines := TDefineTable.Create;
-  PP := TPreprocessor.Create(Defines, True, nil);
+  Defines.SeedFPCDefines;
+  SourceDir := ExtractFileDir(FSourceDatabase.RootSourceCanonicalPath);
+  IncResolver := TFileIncludeResolver.Create(SourceDir);
+  IncResolver.AddSearchPath(SourceDir);
+  PP := TPreprocessor.Create(Defines, True, IncResolver);
   PP.Process(RawLexer);
   FLexerResult := PP.ToLexerResult;
   PP.Free;
