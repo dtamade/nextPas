@@ -102,6 +102,31 @@ type
     FGvar: TGvarTable;
     FGvarValid: Boolean;
     FCurrentNormCoords: array of Single;  // 当前归一化坐标（用于 CFF2 blend）
+    {** COLR 表数据（颜色层） }
+    FColrValid: Boolean;
+    FColrBaseGlyphRecords: array of record
+      GlyphId: UInt16;
+      FirstLayerIdx: UInt16;
+      NumLayers: UInt16;
+    end;
+    FColrLayerRecords: array of TFontColrLayer;
+    {** CPAL 表数据（调色板） }
+    FCpalValid: Boolean;
+    FCpalNumPaletteEntries: UInt16;
+    FCpalNumPalettes: UInt16;
+    FCpalColors: array of TFontCpalColor;
+    {** CBDT/CBLC 表数据（位图字形） }
+    FCbdtValid: Boolean;
+    FCbdtTableOff: UInt32;  // CBDT 表在字体数据中的偏移
+    FCblcSubTables: array of record
+      FirstGlyph: UInt16;
+      LastGlyph: UInt16;
+      IdxFormat: UInt16;    // index format (1/2/3/5)
+      ImgFormat: UInt16;    // image data format (17/18/19)
+      IdxDataOff: UInt32;   // offsetToImageData (absolute, into CBDT)
+      GlyphOffsets: array of UInt32;  // format 1/3: 每字形的图像偏移
+      GlyphSize: UInt32;    // format 2/5: 所有字形相同大小
+    end;
     FValid: Boolean;
     FLastError: string;
     procedure ParseHeader;
@@ -125,6 +150,9 @@ type
     procedure ParseVvar;
     procedure ParseGvar;
     procedure ParseName;
+    procedure ParseColr;
+    procedure ParseCpal;
+    procedure ParseCbdt;
     {** 计算通用 ItemVariationStore 的 region scalar（Single 坐标） }
     function CalcItemVarRegionScalar(const ARegions: TCff2VariationRegionArray;
       ARegionCount, ARegionIdx: Int32;
@@ -384,6 +412,20 @@ type
     {** 设置当前归一化坐标（用于 CFF2 blend 和后续可变字形生成）。
         传入空数组清除变化状态。 }
     procedure SetVariationCoords(const ANormCoords: array of Single);
+    {** COLR 表是否有效（颜色层） }
+    function HasColorLayers: Boolean;
+    {** 获取指定字形的颜色层（COLR v0） }
+    function GetColorLayers(AGlyphId: UInt16): TFontColrLayerArray;
+    {** CPAL 表是否有效（调色板） }
+    function HasPalette: Boolean;
+    {** 每个调色板的颜色数量 }
+    function ColorsPerPalette: UInt16;
+    {** 获取调色板颜色（BGRA → ARGB） }
+    function GetPaletteColor(APaletteIndex, AEntryIndex: UInt16): TFontCpalColor;
+    {** CBDT/CBLC 表是否有效（位图字形） }
+    function HasBitmapStrikes: Boolean;
+    {** 获取位图字形数据 }
+    function GetBitmapGlyph(AGlyphId: UInt16): TFontBitmapGlyph;
   end;
 
 implementation
@@ -437,6 +479,10 @@ begin
   FHvarValid := False;
   FVvarValid := False;
   FGvarValid := False;
+  FColrValid := False;
+  FCpalValid := False;
+  FCbdtValid := False;
+  FCbdtTableOff := 0;
   FLastError := '';
 
   if not FsExists(AFilePath) then
@@ -528,6 +574,18 @@ begin
       ParseGvar;
     except
     end;
+    try
+      ParseColr;
+    except
+    end;
+    try
+      ParseCpal;
+    except
+    end;
+    try
+      ParseCbdt;
+    except
+    end;
     FValid := True;
   except
     on E: Exception do
@@ -560,6 +618,10 @@ begin
   FHvarValid := False;
   FVvarValid := False;
   FGvarValid := False;
+  FColrValid := False;
+  FCpalValid := False;
+  FCbdtValid := False;
+  FCbdtTableOff := 0;
   FLastError := '';
 
   LLen := Length(AData);
@@ -636,6 +698,18 @@ begin
       ParseGvar;
     except
     end;
+    try
+      ParseColr;
+    except
+    end;
+    try
+      ParseCpal;
+    except
+    end;
+    try
+      ParseCbdt;
+    except
+    end;
     FValid := True;
   except
     on E: Exception do
@@ -647,6 +721,8 @@ begin
 end;
 
 destructor TTFontFace.Destroy;
+var
+  LI: Int32;
 begin
   SetLength(FData, 0);
   SetLength(FTables, 0);
@@ -660,6 +736,12 @@ begin
   SetLength(FCmapFmt12.Groups, 0);
   SetLength(FPairPosSubtables, 0);
   SetLength(FLigatureSubtables, 0);
+  SetLength(FColrBaseGlyphRecords, 0);
+  SetLength(FColrLayerRecords, 0);
+  SetLength(FCpalColors, 0);
+  for LI := 0 to High(FCblcSubTables) do
+    SetLength(FCblcSubTables[LI].GlyphOffsets, 0);
+  SetLength(FCblcSubTables, 0);
   inherited Destroy;
 end;
 
@@ -6828,6 +6910,372 @@ begin
   Result.ContourCount := LEndCount;
   Result.Points := LPoints;
   Result.ContourEnds := LEnds;
+end;
+
+{ ========================================================================= }
+{ COLR/CPAL/CBDT 解析                                                        }
+{ ========================================================================= }
+
+procedure TTFontFace.ParseColr;
+var
+  LIdx, LOff: Int32;
+  LVersion, LBaseGlyphRecordCount, LBaseGlyphRecordArrayOff: UInt16;
+  LLayerArrayOff, LLayerCount: UInt32;
+  LI: Int32;
+begin
+  FColrValid := False;
+  LIdx := FindTable($434F4C52); { 'COLR' }
+  if LIdx < 0 then
+    Exit;
+  LOff := Int32(FTables[LIdx].Offset);
+  if Int32(FTables[LIdx].Length) < 14 then
+    Exit;
+  LVersion := ReadUInt16BE(LOff);
+  if LVersion > 1 then
+    Exit; { 只支持 v0/v1 }
+  LBaseGlyphRecordCount := ReadUInt16BE(LOff + 2);
+  LBaseGlyphRecordArrayOff := ReadUInt16BE(LOff + 4); { 注意: v0 是 UInt32 }
+  LBaseGlyphRecordArrayOff := Int32(ReadUInt32BE(LOff + 4));
+  LLayerArrayOff := ReadUInt32BE(LOff + 8);
+  LLayerCount := ReadUInt16BE(LOff + 12);
+  if (LBaseGlyphRecordCount <= 0) or (LLayerCount <= 0) then
+    Exit;
+  if Int32(FTables[LIdx].Length) < LBaseGlyphRecordArrayOff + LBaseGlyphRecordCount * 6 then
+    Exit;
+  SetLength(FColrBaseGlyphRecords, LBaseGlyphRecordCount);
+  for LI := 0 to LBaseGlyphRecordCount - 1 do
+  begin
+    FColrBaseGlyphRecords[LI].GlyphId := ReadUInt16BE(LOff + LBaseGlyphRecordArrayOff + LI * 6);
+    FColrBaseGlyphRecords[LI].FirstLayerIdx := ReadUInt16BE(LOff + LBaseGlyphRecordArrayOff + LI * 6 + 2);
+    FColrBaseGlyphRecords[LI].NumLayers := ReadUInt16BE(LOff + LBaseGlyphRecordArrayOff + LI * 6 + 4);
+  end;
+  if Int32(FTables[LIdx].Length) < Int32(LLayerArrayOff) + LLayerCount * 4 then
+    Exit;
+  SetLength(FColrLayerRecords, LLayerCount);
+  for LI := 0 to LLayerCount - 1 do
+  begin
+    FColrLayerRecords[LI].GlyphId := ReadUInt16BE(LOff + Int32(LLayerArrayOff) + LI * 4);
+    FColrLayerRecords[LI].PaletteIndex := ReadUInt16BE(LOff + Int32(LLayerArrayOff) + LI * 4 + 2);
+  end;
+  FColrValid := True;
+end;
+
+procedure TTFontFace.ParseCpal;
+var
+  LIdx, LOff: Int32;
+  LVersion: UInt16;
+  LNumPaletteEntries, LNumPalettes: UInt16;
+  LColorRecordArrayOff: UInt32;
+  LI: Int32;
+begin
+  FCpalValid := False;
+  LIdx := FindTable($4350414C); { 'CPAL' }
+  if LIdx < 0 then
+    Exit;
+  LOff := Int32(FTables[LIdx].Offset);
+  if Int32(FTables[LIdx].Length) < 12 then
+    Exit;
+  LVersion := ReadUInt16BE(LOff);
+  if LVersion > 1 then
+    Exit;
+  LNumPaletteEntries := ReadUInt16BE(LOff + 2);
+  LNumPalettes := ReadUInt16BE(LOff + 4);
+  LColorRecordArrayOff := ReadUInt32BE(LOff + 8);
+  if (LNumPaletteEntries <= 0) or (LNumPalettes <= 0) then
+    Exit;
+  if Int32(FTables[LIdx].Length) < Int32(LColorRecordArrayOff) + LNumPaletteEntries * 4 then
+    Exit;
+  FCpalNumPaletteEntries := LNumPaletteEntries;
+  FCpalNumPalettes := LNumPalettes;
+  SetLength(FCpalColors, LNumPaletteEntries);
+  for LI := 0 to LNumPaletteEntries - 1 do
+  begin
+    { CPAL colors are BGRA }
+    FCpalColors[LI].Blue := ReadUInt8(LOff + Int32(LColorRecordArrayOff) + LI * 4);
+    FCpalColors[LI].Green := ReadUInt8(LOff + Int32(LColorRecordArrayOff) + LI * 4 + 1);
+    FCpalColors[LI].Red := ReadUInt8(LOff + Int32(LColorRecordArrayOff) + LI * 4 + 2);
+    FCpalColors[LI].Alpha := ReadUInt8(LOff + Int32(LColorRecordArrayOff) + LI * 4 + 3);
+  end;
+  FCpalValid := True;
+end;
+
+procedure TTFontFace.ParseCbdt;
+{ 解析 CBLC（Color Bitmap Location Table）+ CBDT（Color Bitmap Data Table）。
+  CBLC 提供字形到位图数据的索引，CBDT 存储实际的位图/PNG 数据。 }
+var
+  LCbdtIdx, LCblcIdx: Int32;
+  LCblcOff, LCbdtOff, LCbdtLen: UInt32;
+  LNumSizes, LStrikeBase: UInt32;
+  LSubArrOff, LIdxTableSize, LNumSubTables: UInt32;
+  LStartGlyph, LEndGlyph: UInt16;
+  LI, LJ, LK: Int32;
+  LEntryOff, LSubOff, LIdxFormat, LImgFormat: UInt32;
+  LIdxDataOff, LNumGlyphs, LAddOff: UInt32;
+  LSubEntryIdx: Int32;
+begin
+  FCbdtValid := False;
+  LCbdtIdx := FindTable($43424454); { 'CBDT' }
+  LCblcIdx := FindTable($43424C43); { 'CBLC' }
+  if (LCbdtIdx < 0) or (LCblcIdx < 0) then
+    Exit;
+
+  LCbdtOff := FTables[LCbdtIdx].Offset;
+  LCbdtLen := FTables[LCbdtIdx].Length;
+  LCblcOff := FTables[LCblcIdx].Offset;
+  FCbdtTableOff := LCbdtOff;
+
+  try
+    { CBLC header: version(Fixed) + numSizes(UInt32) }
+    { 忽略版本号（v1/v2/v3 的 BitmapSize record 大小不同，但我们按 v3 48字节处理） }
+    LNumSizes := ReadUInt32BE(Int32(LCblcOff) + 4);
+    if LNumSizes = 0 then
+      Exit;
+
+    SetLength(FCblcSubTables, 0);
+    LSubEntryIdx := 0;
+
+    { 遍历每个 strike }
+    for LI := 0 to Int32(LNumSizes) - 1 do
+    begin
+      LStrikeBase := LCblcOff + 8 + UInt32(LI) * 48;
+
+      { BitmapSize record (v3: 48 bytes) }
+      LSubArrOff := ReadUInt32BE(Int32(LStrikeBase)) + LCblcOff;
+      LIdxTableSize := ReadUInt32BE(Int32(LStrikeBase) + 4);
+      LNumSubTables := ReadUInt32BE(Int32(LStrikeBase) + 8);
+      { colorRef at +12 (skip) }
+      { hori SBitLineMetrics at +16 (12 bytes, skip) }
+      { vert SBitLineMetrics at +28 (12 bytes, skip) }
+      LStartGlyph := ReadUInt16BE(Int32(LStrikeBase) + 40);
+      LEndGlyph := ReadUInt16BE(Int32(LStrikeBase) + 42);
+      { ppemX, ppemY, bitDepth, flags at +44..+47 (skip) }
+
+      if LNumSubTables = 0 then
+        Continue;
+
+      { 遍历 index sub-table array entries }
+      for LJ := 0 to Int32(LNumSubTables) - 1 do
+      begin
+        LEntryOff := LSubArrOff + UInt32(LJ) * 8;
+        { firstGlyphIndex(UInt16) + lastGlyphIndex(UInt16) + additionalOffsetToIndexSubtable(UInt32) }
+        { additionalOffsetToIndexSubtable 是相对于 indexSubTableArray 起始的偏移 }
+        LAddOff := ReadUInt32BE(Int32(LEntryOff) + 4);
+        LSubOff := LSubArrOff + LAddOff;
+
+        { Index sub-table header: indexFormat(UInt16) + imageFormat(UInt16) + ... }
+        LIdxFormat := ReadUInt16BE(Int32(LSubOff));
+        LImgFormat := ReadUInt16BE(Int32(LSubOff) + 2);
+
+        { 添加新的 sub-table 条目 }
+        SetLength(FCblcSubTables, LSubEntryIdx + 1);
+        with FCblcSubTables[LSubEntryIdx] do
+        begin
+          FirstGlyph := ReadUInt16BE(Int32(LEntryOff));
+          LastGlyph := ReadUInt16BE(Int32(LEntryOff) + 2);
+          IdxFormat := LIdxFormat;
+          ImgFormat := LImgFormat;
+
+          LNumGlyphs := UInt32(LastGlyph - FirstGlyph + 1);
+
+          case LIdxFormat of
+            1: begin
+              { Format 1: offsetToImageData(UInt32) + offsetArray[numGlyphs](UInt32) }
+              IdxDataOff := ReadUInt32BE(Int32(LSubOff) + 4) + LCbdtOff;
+              SetLength(GlyphOffsets, LNumGlyphs);
+              for LK := 0 to Int32(LNumGlyphs) - 1 do
+                GlyphOffsets[LK] := ReadUInt32BE(Int32(LSubOff) + 8 + LK * 4);
+              GlyphSize := 0;
+            end;
+            2: begin
+              { Format 2: offsetToImageData(UInt32) + imageSize(UInt32) }
+              IdxDataOff := ReadUInt32BE(Int32(LSubOff) + 4) + LCbdtOff;
+              GlyphSize := ReadUInt32BE(Int32(LSubOff) + 8);
+              SetLength(GlyphOffsets, 0);
+            end;
+            3: begin
+              { Format 3: offsetToImageData(UInt32) + offsetArray[numGlyphs](UInt16) }
+              IdxDataOff := ReadUInt32BE(Int32(LSubOff) + 4) + LCbdtOff;
+              SetLength(GlyphOffsets, LNumGlyphs);
+              for LK := 0 to Int32(LNumGlyphs) - 1 do
+                GlyphOffsets[LK] := ReadUInt16BE(Int32(LSubOff) + 8 + LK * 2);
+              GlyphSize := 0;
+            end;
+            5: begin
+              { Format 5: offsetToImageData(UInt32) + imageSize(UInt32) }
+              IdxDataOff := ReadUInt32BE(Int32(LSubOff) + 4) + LCbdtOff;
+              GlyphSize := ReadUInt32BE(Int32(LSubOff) + 8);
+              SetLength(GlyphOffsets, 0);
+            end;
+          else
+            { 不支持的格式，跳过 }
+            SetLength(GlyphOffsets, 0);
+            GlyphSize := 0;
+          end;
+        end;
+        Inc(LSubEntryIdx);
+      end;
+    end;
+
+    if LSubEntryIdx > 0 then
+      FCbdtValid := True;
+  except
+    { 解析失败不崩溃，标记无效 }
+    FCbdtValid := False;
+  end;
+end;
+
+function TTFontFace.HasColorLayers: Boolean;
+begin
+  Result := FColrValid and (Length(FColrBaseGlyphRecords) > 0);
+end;
+
+function TTFontFace.GetColorLayers(AGlyphId: UInt16): TFontColrLayerArray;
+var
+  L, R, M: Int32;
+  LI, LFirst, LNum: Int32;
+begin
+  SetLength(Result, 0);
+  if not FColrValid then
+    Exit;
+  { Binary search for AGlyphId in baseGlyphRecordArray (sorted by GID) }
+  L := 0;
+  R := High(FColrBaseGlyphRecords);
+  while L <= R do
+  begin
+    M := L + (R - L) div 2;
+    if FColrBaseGlyphRecords[M].GlyphId = AGlyphId then
+    begin
+      LFirst := FColrBaseGlyphRecords[M].FirstLayerIdx;
+      LNum := FColrBaseGlyphRecords[M].NumLayers;
+      if (LFirst + LNum) <= Length(FColrLayerRecords) then
+      begin
+        SetLength(Result, LNum);
+        for LI := 0 to LNum - 1 do
+          Result[LI] := FColrLayerRecords[LFirst + LI];
+      end;
+      Exit;
+    end;
+    if FColrBaseGlyphRecords[M].GlyphId < AGlyphId then
+      L := M + 1
+    else
+      R := M - 1;
+  end;
+end;
+
+function TTFontFace.HasPalette: Boolean;
+begin
+  Result := FCpalValid;
+end;
+
+function TTFontFace.ColorsPerPalette: UInt16;
+begin
+  if FCpalValid then
+    Result := FCpalNumPaletteEntries
+  else
+    Result := 0;
+end;
+
+function TTFontFace.GetPaletteColor(APaletteIndex, AEntryIndex: UInt16): TFontCpalColor;
+begin
+  Result.Blue := 0;
+  Result.Green := 0;
+  Result.Red := 0;
+  Result.Alpha := 0;
+  if not FCpalValid then
+    Exit;
+  if AEntryIndex >= FCpalNumPaletteEntries then
+    Exit;
+  Result := FCpalColors[AEntryIndex];
+end;
+
+function TTFontFace.HasBitmapStrikes: Boolean;
+begin
+  Result := FCbdtValid;
+end;
+
+function TTFontFace.GetBitmapGlyph(AGlyphId: UInt16): TFontBitmapGlyph;
+{ 查找 AGlyphId 的位图字形数据。CBLC index sub-tables 提供索引，
+  CBDT 存储实际 PNG 数据。支持 imageFormat 17/18（嵌入 PNG）。 }
+var
+  LI, LK: Int32;
+  LGlyphOff: UInt32;
+  LAbsOff: UInt32;
+begin
+  FillChar(Result, SizeOf(Result), 0);
+  if not FCbdtValid then
+    Exit;
+
+  { 线性搜索 sub-tables（通常只有几个条目） }
+  for LI := 0 to High(FCblcSubTables) do
+  begin
+    with FCblcSubTables[LI] do
+    begin
+      if (AGlyphId < FirstGlyph) or (AGlyphId > LastGlyph) then
+        Continue;
+
+      { 找到包含此字形的 sub-table }
+      case IdxFormat of
+        1, 3: begin
+          { Format 1/3: 每字形独立偏移 }
+          LK := Int32(AGlyphId - FirstGlyph);
+          if LK >= Length(GlyphOffsets) then
+            Exit;
+          LGlyphOff := GlyphOffsets[LK];
+          LAbsOff := IdxDataOff + LGlyphOff;
+        end;
+        2, 5: begin
+          { Format 2/5: 所有字形相同大小 }
+          if GlyphSize = 0 then
+            Exit;
+          LGlyphOff := UInt32(AGlyphId - FirstGlyph) * GlyphSize;
+          LAbsOff := IdxDataOff + LGlyphOff;
+        end;
+      else
+        Exit;
+      end;
+
+      { 边界检查 }
+      if Int32(LAbsOff) + 9 > FDataLength then
+        Exit;
+
+      { 解析 imageFormat 17/18 的头部：
+        width(UInt8) + height(UInt8) + bearingX(Int8) + bearingY(Int8) +
+        advance(UInt8) + dataLen(UInt32) + data[dataLen] }
+      if (ImgFormat = 17) or (ImgFormat = 18) then
+      begin
+        Result.Width := ReadUInt8(Int32(LAbsOff));
+        Result.Height := ReadUInt8(Int32(LAbsOff) + 1);
+        Result.BearingX := Int16(ShortInt(ReadUInt8(Int32(LAbsOff) + 2)));
+        Result.BearingY := Int16(ShortInt(ReadUInt8(Int32(LAbsOff) + 3)));
+        Result.Advance := ReadUInt8(Int32(LAbsOff) + 4);
+        Result.PngDataLength := Int32(ReadUInt32BE(Int32(LAbsOff) + 5));
+
+        if (Result.PngDataLength > 0) and
+           (Int32(LAbsOff) + 9 + Result.PngDataLength <= FDataLength) then
+        begin
+          SetLength(Result.PngData, Result.PngDataLength);
+          Move(FData[Int32(LAbsOff) + 9], Result.PngData[0], Result.PngDataLength);
+        end
+        else
+        begin
+          Result.PngDataLength := 0;
+          SetLength(Result.PngData, 0);
+        end;
+      end
+      else if ImgFormat = 19 then
+      begin
+        { Format 19: 压缩数据（不支持解压，但返回元数据） }
+        Result.Width := ReadUInt8(Int32(LAbsOff));
+        Result.Height := ReadUInt8(Int32(LAbsOff) + 1);
+        Result.BearingX := Int16(ShortInt(ReadUInt8(Int32(LAbsOff) + 2)));
+        Result.BearingY := Int16(ShortInt(ReadUInt8(Int32(LAbsOff) + 3)));
+        Result.Advance := ReadUInt8(Int32(LAbsOff) + 4);
+        Result.PngDataLength := 0;
+        SetLength(Result.PngData, 0);
+      end;
+      Exit;
+    end;
+  end;
 end;
 
 end.
