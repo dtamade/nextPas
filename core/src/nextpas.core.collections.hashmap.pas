@@ -10,6 +10,7 @@ uses
   nextpas.core.system.typinfo,
   nextpas.core.base,
   nextpas.core.mem.intf,
+  nextpas.core.mem.allocator.base,
   nextpas.core.collections.base,
   nextpas.core.collections.hashmap.base,
   nextpas.core.collections.hashmap.intf;
@@ -71,8 +72,7 @@ function HashOfAnsiString(const s: AnsiString): UInt32;
  * @param s String to hash
  * @return UInt32 Hash value
  *}
-function HashOfUnicodeString(const s: UnicodeString): UInt32,
-  nextpas.core.mem.allocator.base;
+function HashOfUnicodeString(const s: UnicodeString): UInt32;
 
 type
   {**

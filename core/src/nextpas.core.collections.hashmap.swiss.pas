@@ -9,6 +9,7 @@ uses
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.mem.intf,
+  nextpas.core.mem.allocator.base,
   nextpas.core.collections.hashmap.base,
   nextpas.core.simd.base,
   {$IFDEF HAS_AVX2}
@@ -25,8 +26,7 @@ const
   {$ELSE}
   GROUP_SIZE   = 16;
   {$ENDIF}
-  MIN_CAPACITY = GROUP_SIZE,
-  nextpas.core.mem.allocator.base;
+  MIN_CAPACITY = GROUP_SIZE;
 
 type
   {$IFDEF HAS_AVX2}
