@@ -63,7 +63,7 @@ begin
 end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   if not EnsureTestCert then begin
@@ -154,7 +154,7 @@ begin
     finally LStore.Free; LCert.Free; end;
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.crypto.x509verify');
+  LRunner := TSuiteRunner.Create('nextpas.core.crypto.x509verify');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

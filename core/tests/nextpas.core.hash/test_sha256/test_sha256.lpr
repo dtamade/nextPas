@@ -136,7 +136,7 @@ begin
 end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('sha256');
@@ -148,7 +148,7 @@ begin
   LSuite.Test('SumBytes', @TestSumBytes);
   LSuite.Test('Reset', @TestReset);
   LSuite.Test('metadata', @TestMetadata);
-  LRunner := TTestRunner.Create('nextpas.core.hash.sha256');
+  LRunner := TSuiteRunner.Create('nextpas.core.hash.sha256');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

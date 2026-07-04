@@ -15,7 +15,7 @@ begin Result := '';
 end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   if not IsAESNIAvailable then begin
@@ -76,7 +76,7 @@ begin
     CheckTrue(CompareMem(@LNI, @LCT, 16));
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.crypto.aesni');
+  LRunner := TSuiteRunner.Create('nextpas.core.crypto.aesni');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

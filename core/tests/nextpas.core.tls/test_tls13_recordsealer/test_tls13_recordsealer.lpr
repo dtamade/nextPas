@@ -9,7 +9,7 @@ uses
   nextpas.core.test;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('tls13.recordsealer');
@@ -193,7 +193,7 @@ begin
     LSealer.Clear;
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.tls.tls13.recordsealer');
+  LRunner := TSuiteRunner.Create('nextpas.core.tls.tls13.recordsealer');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

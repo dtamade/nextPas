@@ -15,7 +15,7 @@ begin Result := '';
 end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('pbkdf2');
@@ -107,7 +107,7 @@ begin
     CheckEqual('120fb6cffcf8b32c43e7225256c4f837a86548c92ccc35480805987cb70be17b', ToHex(LKey));
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.crypto.pbkdf2');
+  LRunner := TSuiteRunner.Create('nextpas.core.crypto.pbkdf2');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

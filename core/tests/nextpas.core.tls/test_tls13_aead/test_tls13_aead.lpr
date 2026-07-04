@@ -26,7 +26,7 @@ const
   CS_CHACHA20   = $1303;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('tls13.aead');
@@ -112,7 +112,7 @@ begin
     CheckTrue(Pos('upport', LError) > 0);
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.tls.tls13.aead');
+  LRunner := TSuiteRunner.Create('nextpas.core.tls.tls13.aead');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

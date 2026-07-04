@@ -102,7 +102,7 @@ begin
 end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('comprehensive');
@@ -111,7 +111,7 @@ begin
   LSuite.Test('SHA-384 full', @TestSHA384Full);
   LSuite.Test('block boundary', @TestBlockBoundary);
   LSuite.Test('DigestToHex', @TestDigestToHex);
-  LRunner := TTestRunner.Create('nextpas.core.hash.comprehensive');
+  LRunner := TSuiteRunner.Create('nextpas.core.hash.comprehensive');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

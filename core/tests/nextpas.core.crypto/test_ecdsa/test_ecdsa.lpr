@@ -20,7 +20,7 @@ begin Result := '';
 end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('ecdsa');
@@ -103,7 +103,7 @@ begin
     CheckEqual('4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5', BytesToHex(LPoint.Y));
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.crypto.ecdsa');
+  LRunner := TSuiteRunner.Create('nextpas.core.crypto.ecdsa');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

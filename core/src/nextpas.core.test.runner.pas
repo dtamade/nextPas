@@ -1,4 +1,4 @@
-{ nextpas.core.test.runner — TTestSuite, TTestRunner, parallel execution
+{ nextpas.core.test.runner — TTestSuite, TSuiteRunner, parallel execution
   =========================================================
   Depends on: nextpas.core.test.base, nextpas.core.test.check, nextpas.core.test.output,
               nextpas.core.test.runner.cli, nextpas.core.test.runner.context,
@@ -166,7 +166,7 @@ type
 
 { ── Test Runner (multi-suite) ─────────────────────────────────────────────── }
 
-  TTestRunner = record
+  TSuiteRunner = record
     Name     : string;
     Suites   : specialize TArray<TTestSuite>;
     TotalPass: Integer;
@@ -174,7 +174,7 @@ type
     TotalSkip: Integer;
     HasRun   : Boolean;
 
-    class function Create(const AName: string): TTestRunner; static;
+    class function Create(const AName: string): TSuiteRunner; static;
     procedure Add(const ASuite: TTestSuite);
     function  RunAll: Boolean;
     function  RunAllWithResult(
@@ -316,7 +316,7 @@ begin
     Result := AEntry.Name;
 end;
 
-function RunnerConfig(const ARunner: TTestRunner): TTestConfig;
+function RunnerConfig(const ARunner: TSuiteRunner): TTestConfig;
 begin
   if Length(ARunner.Suites) > 0 then
     Result := ResolveConfig(ARunner.Suites[0].Config)
@@ -1734,10 +1734,10 @@ begin
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }
-{ TTestRunner                                                                  }
+{ TSuiteRunner                                                                  }
 { ═════════════════════════════════════════════════════════════════════════════ }
 
-class function TTestRunner.Create(const AName: string): TTestRunner;
+class function TSuiteRunner.Create(const AName: string): TSuiteRunner;
 begin
   Result.Name      := AName;
   Result.Suites    := nil;
@@ -1747,7 +1747,7 @@ begin
   Result.HasRun    := False;
 end;
 
-procedure TTestRunner.Add(const ASuite: TTestSuite);
+procedure TSuiteRunner.Add(const ASuite: TTestSuite);
   { const avoids copying the entire record on the call side (same as var for
     structured types). Internally the suite IS copied into Suites[] via Pascal
     assignment. Mutations to the caller's ASuite after Add() are NOT visible
@@ -1805,21 +1805,21 @@ begin
       AConfig));
 end;
 
-function TTestRunner.RunAll: Boolean;
+function TSuiteRunner.RunAll: Boolean;
 var
   LResults: specialize TArray<TTestRunResult>;
 begin
   Result := RunAllWithResult(LResults);
 end;
 
-function TTestRunner.RunAllParallel(APool: IThreadPool): Boolean;
+function TSuiteRunner.RunAllParallel(APool: IThreadPool): Boolean;
 var
   LResults: specialize TArray<TTestRunResult>;
 begin
   Result := RunAllParallelWithResult(APool, LResults);
 end;
 
-function TTestRunner.RunAllIterLoop(
+function TSuiteRunner.RunAllIterLoop(
   out AResults: specialize TArray<TTestRunResult>;
   AIsParallel: Boolean; APool: IThreadPool): Boolean;
 { Shared iteration loop for RunAllWithResult and RunAllParallelWithResult.
@@ -1919,21 +1919,21 @@ begin
     RunAllBenchmarks(LBenchResults);
 end;
 
-function TTestRunner.RunAllWithResult(
+function TSuiteRunner.RunAllWithResult(
   out AResults: specialize TArray<TTestRunResult>): Boolean;
 begin
   ApplyCLIArgs;
   Result := RunAllIterLoop(AResults, False, nil);
 end;
 
-function TTestRunner.RunAllParallelWithResult(APool: IThreadPool;
+function TSuiteRunner.RunAllParallelWithResult(APool: IThreadPool;
   out AResults: specialize TArray<TTestRunResult>): Boolean;
 begin
   ApplyCLIArgs;
   Result := RunAllIterLoop(AResults, True, APool);
 end;
 
-function TTestRunner.RunAllBenchmarks(
+function TSuiteRunner.RunAllBenchmarks(
   out AResults: specialize TArray<TBenchResults>): Boolean;
 var
   I: Integer;
@@ -1957,7 +1957,7 @@ begin
   end;
 end;
 
-procedure TTestRunner.Summary;
+procedure TSuiteRunner.Summary;
 var
   LConfig: TTestConfig;
   LOutSink: IOutputSink;
@@ -1973,7 +1973,7 @@ begin
     ', Skipped: ' + IntToStr(TotalSkip));
 end;
 
-function TTestRunner.AllPassed: Boolean;
+function TSuiteRunner.AllPassed: Boolean;
 begin
   if HasRun then
     Result := TotalFail = 0

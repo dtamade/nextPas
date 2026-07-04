@@ -1,4 +1,4 @@
-{ test_runner — Validates TTestRunner multi-suite + subtests + lifecycle }
+{ test_runner — Validates TSuiteRunner multi-suite + subtests + lifecycle }
 program test_runner;
 
 {$mode objfpc}{$H+}{$J-}
@@ -144,8 +144,8 @@ procedure TestRunnerConfigIsolation;
 var
   LSuiteA: TTestSuite;
   LSuiteB: TTestSuite;
-  LRunnerA: TTestRunner;
-  LRunnerB: TTestRunner;
+  LRunnerA: TSuiteRunner;
+  LRunnerB: TSuiteRunner;
   LResultsA: specialize TArray<TTestRunResult>;
   LResultsB: specialize TArray<TTestRunResult>;
   LOutA: TBufferSink;
@@ -172,9 +172,9 @@ begin
   LSuiteB.Test('beta-hidden', @TestSimplePass);
   LSuiteB.Test('beta-only', @TestSimplePass2);
 
-  LRunnerA := TTestRunner.Create('Runner A');
+  LRunnerA := TSuiteRunner.Create('Runner A');
   LRunnerA.Add(LSuiteA);
-  LRunnerB := TTestRunner.Create('Runner B');
+  LRunnerB := TSuiteRunner.Create('Runner B');
   LRunnerB.Add(LSuiteB);
 
   if not LRunnerA.RunAllWithResult(LResultsA) then
@@ -230,14 +230,14 @@ end;
 
 var
   LSuite1, LSuite2: TTestSuite;
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LPass: Boolean;
   { B5.3 lifecycle failure tests }
   LFailSuite1, LFailSuite2, LFailSuite3: TTestSuite;
   LBeforeEachCounter: Integer;
   { B5.5/B5.6/B5.9 runner feature tests }
   LRunNestedS1, LRunNestedS2, LCacheSuite, LSummarySuite, LSumSuite3: TTestSuite;
-  LRunNestedR, LSumRunner: TTestRunner;
+  LRunNestedR, LSumRunner: TSuiteRunner;
   LRunCount: Integer;
   { RunWithResult test }
   LResultSuite: TTestSuite;
@@ -256,7 +256,7 @@ var
   LDefaults60: TTestRunResult;
   { R6-68: Strong exact-value assertions }
   LExactSuite68: TTestSuite;
-  LExactRunner68: TTestRunner;
+  LExactRunner68: TSuiteRunner;
   { Phase 8: shuffle determinism }
   LOrder1: specialize TArray<string>;
   LIdx: Integer;
@@ -274,7 +274,7 @@ var
   LMaxFailSuite: TTestSuite;
   LMaxFailResult: TTestRunResult;
   LMaxFailConfig: TTestConfig;
-  LMaxFailRunner: TTestRunner;
+  LMaxFailRunner: TSuiteRunner;
   LMaxFailRunnerResults: specialize TArray<TTestRunResult>;
   { Phase 9: JSON output }
   LJsonSuite: TTestSuite;
@@ -300,11 +300,11 @@ var
   LBenchResults: TBenchResults;
   LBenchConfig: TTestConfig;
   { G1: RunAllBenchmarks }
-  LBenchRunner: TTestRunner;
+  LBenchRunner: TSuiteRunner;
   LBenchRunnerResults: specialize TArray<TBenchResults>;
   { G1: AllPassed auto-run }
   LAutoRunSuite: TTestSuite;
-  LAutoRunRunner: TTestRunner;
+  LAutoRunRunner: TSuiteRunner;
   { T-07: timeout exceeded }
   LFoundTimeout: Boolean;
   LI: Integer;
@@ -345,7 +345,7 @@ begin
   LSuite2.Test('skip in suite',      @TestSkipInSuite);
 
   { Multi-suite runner }
-  LRunner := TTestRunner.Create('Test Runner Integration');
+  LRunner := TSuiteRunner.Create('Test Runner Integration');
   LRunner.Add(LSuite1);
   LRunner.Add(LSuite2);
 
@@ -455,12 +455,12 @@ begin
 
   { ── B5.5/B5.6/B5.9: Runner feature tests ────────────────────────────── }
 
-  { Test: RunAll aggregation — TTestRunner with multiple suites }
+  { Test: RunAll aggregation — TSuiteRunner with multiple suites }
   LRunNestedS1 := TTestSuite.Create('Suite A');
   LRunNestedS1.Test('a1', procedure begin CheckTrue(True); end);
   LRunNestedS2 := TTestSuite.Create('Suite B');
   LRunNestedS2.Test('b1', procedure begin CheckTrue(True); end);
-  LRunNestedR := TTestRunner.Create('Multi-Suite Runner');
+  LRunNestedR := TSuiteRunner.Create('Multi-Suite Runner');
   LRunNestedR.Add(LRunNestedS1);
   LRunNestedR.Add(LRunNestedS2);
   if not LRunNestedR.RunAll then
@@ -503,7 +503,7 @@ begin
   LSumSuite3 := TTestSuite.Create('Summary Suite');
   LSumSuite3.Test('pass', procedure begin CheckTrue(True); end);
   LSumSuite3.Skip('skipped', 'reason');
-  LSumRunner := TTestRunner.Create('Summary Runner');
+  LSumRunner := TSuiteRunner.Create('Summary Runner');
   LSumRunner.Add(LSumSuite3);
   LSumRunner.RunAll;
   LSumRunner.Summary; { should not raise }
@@ -669,7 +669,7 @@ begin
     LRunNestedS1.Skip('x2', 'planned');
     LRunNestedS2 := TTestSuite.Create('SuiteY');
     LRunNestedS2.Test('y1', procedure begin CheckTrue(True); end);
-    LRunNestedR := TTestRunner.Create('WithResult Runner');
+    LRunNestedR := TSuiteRunner.Create('WithResult Runner');
     LRunNestedR.Add(LRunNestedS1);
     LRunNestedR.Add(LRunNestedS2);
     if not LRunNestedR.RunAllWithResult(LRunAllSuiteResults) then
@@ -960,7 +960,7 @@ begin
     LExactSuite68.Test('p1', @TestSimplePass);
     LExactSuite68.Test('p2', @TestSimplePass2);
     LExactSuite68.Skip('s1', 'planned');
-    LExactRunner68 := TTestRunner.Create('Exact Runner');
+    LExactRunner68 := TSuiteRunner.Create('Exact Runner');
     LExactRunner68.Add(LExactSuite68);
     LExactRunner68.RunAll;
     { R6-68: Use exact value checks, not weak "Count > 0" }
@@ -1433,13 +1433,13 @@ begin
       FailTest('MaxFailures: expected 0 passed (pass1 not reached), got ' +
         IntToStr(LMaxFailResult.Passed));
     ResetDefaultConfig;
-    { Test 2: Cross-suite max failures via TTestRunner (separate suite) }
+    { Test 2: Cross-suite max failures via TSuiteRunner (separate suite) }
     LMaxFailSuite := TTestSuite.Create('MaxFailRunner2');
     LMaxFailSuite.Test('fail_a', procedure begin CheckTrue(False, 'fail_a'); end);
     LMaxFailSuite.Test('fail_b', procedure begin CheckTrue(False, 'fail_b'); end);
     LMaxFailSuite.Test('pass_a', procedure begin CheckTrue(True); end);
     SetDefaultMaxFailures(1);
-    LMaxFailRunner := TTestRunner.Create('MaxFailRunner');
+    LMaxFailRunner := TSuiteRunner.Create('MaxFailRunner');
     LMaxFailRunner.Add(LMaxFailSuite);
     LMaxFailRunner.RunAllWithResult(LMaxFailRunnerResults);
     { Runner should stop after 1 total failure across suites }
@@ -1777,7 +1777,7 @@ begin
     LBenchConfig := DefaultConfig;
     LBenchConfig.BenchEnabled := True;
     LBenchConfig.BenchTimeMs := 100;
-    LBenchRunner := TTestRunner.Create('BenchRunner');
+    LBenchRunner := TSuiteRunner.Create('BenchRunner');
     { Suite A: 1 benchmark }
     LBenchSuite := TTestSuite.Create('BenchSuiteA');
     LBenchSuite.Bench('OpA', procedure(BC: PBenchContext)
@@ -1819,7 +1819,7 @@ begin
     LAutoRunSuite := TTestSuite.Create('AutoRunSuite');
     LAutoRunSuite.Test('auto1', procedure begin CheckTrue(True); end);
     LAutoRunSuite.Test('auto2', procedure begin CheckTrue(True); end);
-    LAutoRunRunner := TTestRunner.Create('AutoRunRunner');
+    LAutoRunRunner := TSuiteRunner.Create('AutoRunRunner');
     LAutoRunRunner.Add(LAutoRunSuite);
     { AllPassed before RunAll should trigger auto-run }
     if not LAutoRunRunner.AllPassed then
@@ -2246,10 +2246,10 @@ begin
 
   { Release closures before heaptrc reports (unit finalization runs before
     main block locals are freed — closures would appear as unfreed). }
-  LRunner := Default(TTestRunner);
-  LSumRunner := Default(TTestRunner);
-  LMaxFailRunner := Default(TTestRunner);
-  LExactRunner68 := Default(TTestRunner);
+  LRunner := Default(TSuiteRunner);
+  LSumRunner := Default(TSuiteRunner);
+  LMaxFailRunner := Default(TSuiteRunner);
+  LExactRunner68 := Default(TSuiteRunner);
   LSuite1 := Default(TTestSuite);
   LSuite2 := Default(TTestSuite);
   LFailSuite1 := Default(TTestSuite);
@@ -2267,9 +2267,9 @@ begin
   LMaxFailSuite := Default(TTestSuite);
   LJsonSuite := Default(TTestSuite);
   LBenchSuite := Default(TTestSuite);
-  LBenchRunner := Default(TTestRunner);
+  LBenchRunner := Default(TSuiteRunner);
   LAutoRunSuite := Default(TTestSuite);
-  LAutoRunRunner := Default(TTestRunner);
+  LAutoRunRunner := Default(TSuiteRunner);
   LJsonSink := nil;
   LVerbSuite := Default(TTestSuite);
   LVerbSink := nil;

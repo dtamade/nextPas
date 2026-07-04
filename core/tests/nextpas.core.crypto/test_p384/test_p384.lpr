@@ -20,7 +20,7 @@ begin Result := '';
 end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('p384');
@@ -75,7 +75,7 @@ begin
     CheckTrue(not LOk);
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.crypto.p384');
+  LRunner := TSuiteRunner.Create('nextpas.core.crypto.p384');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

@@ -268,10 +268,10 @@ uses
   nextpas.core.platform.sync;
 
 var
-  T: TTestRunner;
+  T: TSuiteRunner;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.linux_riscv64_smoke');
+  T := TSuiteRunner.Create('nextpas.core.platform.linux_riscv64_smoke');
   T.Run('platform.time smoke', @TestTimeSmoke);
   T.Run('platform.memory smoke', @TestMemorySmoke);
   T.Run('platform.sync smoke', @TestSyncSmoke);
@@ -408,10 +408,10 @@ uses
   nextpas.core.platform.sync;
 
 var
-  T: TTestRunner;
+  T: TSuiteRunner;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.linux_arm32_smoke');
+  T := TSuiteRunner.Create('nextpas.core.platform.linux_arm32_smoke');
   T.Run('platform.time smoke', @TestTimeSmoke);
   T.Run('platform.memory smoke', @TestMemorySmoke);
   T.Run('platform.sync smoke', @TestSyncSmoke);

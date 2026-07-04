@@ -148,8 +148,8 @@ S.RunParallel(0);  // 0 = CPU 核心数
 ### 7. Runner
 
 ```pascal
-var R: TTestRunner;
-R := TTestRunner.Create;
+var R: TSuiteRunner;
+R := TSuiteRunner.Create;
 R.Add(S1);
 R.Add(S2);
 R.RunAll;         // 串行运行所有 Suite
@@ -221,7 +221,7 @@ S.Test('no leak', @MyTest);
 - [ ] 自定义失败消息支持
 
 ### Phase 4: 并行 + Runner（~200 行）
-- [ ] TTestRunner 记录
+- [ ] TSuiteRunner 记录
 - [ ] RunParallel（IThreadPool + TAtomicInt32 + IMutex）
 - [ ] 命令行过滤参数解析
 - [ ] 子测试 (Ctx.Run) 支持

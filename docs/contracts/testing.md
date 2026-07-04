@@ -19,8 +19,8 @@
 type
   TTestProc = procedure;
   TTestClosure = reference to procedure;
-  TTestRunner = record
-    class function Create(ASuiteName: string): TTestRunner; static;
+  TSuiteRunner = record
+    class function Create(ASuiteName: string): TSuiteRunner; static;
     procedure Run(AName: string; AProc: TTestProc);
     procedure Summary;
     function AllPassed: Boolean;

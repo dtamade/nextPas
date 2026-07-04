@@ -45,7 +45,7 @@ begin
 end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('event');
@@ -200,7 +200,7 @@ begin
     CheckTrue(True, 'no crash');
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.event');
+  LRunner := TSuiteRunner.Create('nextpas.core.event');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

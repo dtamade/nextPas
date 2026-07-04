@@ -24,7 +24,7 @@ const
   TLS_AES_256_GCM_SHA384 = $1302;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('tls13.keyschedule');
@@ -89,7 +89,7 @@ begin
     CheckTrue(True, 'no crash');
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.tls.tls13.keyschedule');
+  LRunner := TSuiteRunner.Create('nextpas.core.tls.tls13.keyschedule');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

@@ -9,7 +9,7 @@ uses
   nextpas.core.test;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('tls.sni_resolver');
@@ -110,7 +110,7 @@ begin
     finally LResolver.Free; end;
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.tls.sni_resolver');
+  LRunner := TSuiteRunner.Create('nextpas.core.tls.sni_resolver');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

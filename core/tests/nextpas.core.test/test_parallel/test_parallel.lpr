@@ -312,7 +312,7 @@ end;
 procedure TestMaxParallelWorkers;
 var
   LSuite: TTestSuite;
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LResults: specialize TArray<TTestRunResult>;
   I: Integer;
 begin
@@ -322,7 +322,7 @@ begin
   LSuite.Config.MaxParallelWorkers := 2;
   for I := 1 to 8 do
     LSuite.Test('batch_' + IntToStr(I), @TestBatchedWorkerProc);
-  LRunner := TTestRunner.Create('batch_test');
+  LRunner := TSuiteRunner.Create('batch_test');
   LRunner.Add(LSuite);
   LRunner.RunAllWithResult(LResults);
   if Length(LResults) = 0 then
@@ -346,7 +346,7 @@ end;
 var
   LSuite: TTestSuite;
   LFailSuite, LSkipSuite: TTestSuite;
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LResults: specialize TArray<TTestRunResult>;
 begin
   WriteLn('=== test_parallel ===');
@@ -407,7 +407,7 @@ begin
   PassTest('✓ Parallel with skip');
 
   { ── B5.10: RunAllParallel ─────────────────────────────────────────────── }
-  LRunner := TTestRunner.Create('Parallel Runner');
+  LRunner := TSuiteRunner.Create('Parallel Runner');
   LRunner.Add(LSkipSuite);
   LRunner.Add(LFailSuite);
   if LRunner.RunAllParallel(nil) then
@@ -420,7 +420,7 @@ begin
   WriteLn;
   SectionHeader('F08: RunAllParallel Aggregation');
   begin
-    LRunner := TTestRunner.Create('Aggregation Runner');
+    LRunner := TSuiteRunner.Create('Aggregation Runner');
     { Suite A: 3 pass + 1 skip + 1 fail = 5 }
     LSkipSuite := TTestSuite.Create('Suite A');
     LSkipSuite.Test('a1', @TestParallelPassA);
@@ -634,7 +634,7 @@ begin
   begin
     ResetDefaultConfig;
     GTestCounter := 0;
-    LRunner := TTestRunner.Create('ParResultRunner');
+    LRunner := TSuiteRunner.Create('ParResultRunner');
     LSuite := TTestSuite.Create('ParResSuiteA');
     LSuite.Test('pra1', @TestParallelPassA);
     LSuite.Test('pra2', @TestParallelPassA);

@@ -21,7 +21,7 @@ begin Result := '';
 end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('aes_ct64');
@@ -89,7 +89,7 @@ begin
     CheckTrue(LAllMatch);
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.crypto.aes_ct64');
+  LRunner := TSuiteRunner.Create('nextpas.core.crypto.aes_ct64');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

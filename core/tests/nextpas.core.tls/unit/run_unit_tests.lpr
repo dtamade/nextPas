@@ -11,8 +11,8 @@ uses
   test_openssl_core_unit;
 
 type
-  { TTestRunner }
-  TTestRunner = class(TCustomApplication)
+  { TSuiteRunner }
+  TSuiteRunner = class(TCustomApplication)
   protected
     procedure DoRun; override;
   public
@@ -20,9 +20,9 @@ type
     destructor Destroy; override;
   end;
 
-{ TTestRunner }
+{ TSuiteRunner }
 
-procedure TTestRunner.DoRun;
+procedure TSuiteRunner.DoRun;
 var
   TestResult: TTestResult;
   ResultsWriter: TPlainResultsWriter;
@@ -109,22 +109,22 @@ begin
   Terminate;
 end;
 
-constructor TTestRunner.Create(TheOwner: TComponent);
+constructor TSuiteRunner.Create(TheOwner: TComponent);
 begin
   inherited Create(TheOwner);
   StopOnException := True;
 end;
 
-destructor TTestRunner.Destroy;
+destructor TSuiteRunner.Destroy;
 begin
   inherited Destroy;
 end;
 
 var
-  Application: TTestRunner;
+  Application: TSuiteRunner;
 
 begin
-  Application := TTestRunner.Create(nil);
+  Application := TSuiteRunner.Create(nil);
   try
     Application.Title := 'fafafa.ssl Unit Test Runner';
     Application.Run;

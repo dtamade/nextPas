@@ -56,7 +56,7 @@ procedure TestSHA384; begin TestCloneAlgo('SHA384', NewSHA384); end;
 procedure TestSHA512; begin TestCloneAlgo('SHA512', NewSHA512); end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('clone');
@@ -65,7 +65,7 @@ begin
   LSuite.Test('SHA256 clone', @TestSHA256);
   LSuite.Test('SHA384 clone', @TestSHA384);
   LSuite.Test('SHA512 clone', @TestSHA512);
-  LRunner := TTestRunner.Create('nextpas.core.hash.clone');
+  LRunner := TSuiteRunner.Create('nextpas.core.hash.clone');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

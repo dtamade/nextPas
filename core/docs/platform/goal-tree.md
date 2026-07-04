@@ -91,7 +91,7 @@ completion, Winsock-specific behaviors, AcceptEx/ConnectEx).
 
 These tests are:
 - Cross-compiled to Win64 PE and deployed to real Windows VM via SCP+SSH
-- Use `nextpas.core.testing` framework (TTestRunner)
+- Use `nextpas.core.testing` framework (TSuiteRunner)
 - Include `-gh` heaptrc for memory leak detection
 - Have `try/finally` resource protection for all socket/poller handles
 - Use port 0 + `getsockname` to avoid port conflicts

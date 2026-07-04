@@ -10,9 +10,9 @@ uses
   nextpas.core.simd.algorithms.testcase;
 
 var
-  App: TTestRunner;
+  App: TSuiteRunner;
 begin
-  App := TTestRunner.Create(nil);
+  App := TSuiteRunner.Create(nil);
   try
     App.Initialize;
     App.Run;

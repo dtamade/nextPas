@@ -21,7 +21,7 @@ begin SetLength(Result, Length(AHex) div 2);
 end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('hkdf');
@@ -123,7 +123,7 @@ begin
     CheckEqual(64, Length(LOKM));
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.hash.hkdf');
+  LRunner := TSuiteRunner.Create('nextpas.core.hash.hkdf');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

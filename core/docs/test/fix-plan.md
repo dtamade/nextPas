@@ -309,10 +309,10 @@ end;
 
 **修复方案**: 不做深拷贝（过度工程化），改为文档说明：
 
-文件: `core/src/nextpas.core.test.pas`, TTestRunner.Add 注释
+文件: `core/src/nextpas.core.test.pas`, TSuiteRunner.Add 注释
 
 ```pascal
-procedure TTestRunner.Add(var ASuite: TTestSuite);
+procedure TSuiteRunner.Add(var ASuite: TTestSuite);
   { Note: ASuite is copied by value. After Add(), further modifications to the
     original ASuite variable will NOT be reflected in the runner due to Pascal
     dynamic-array copy-on-write semantics. Add all tests before calling Add. }
@@ -331,7 +331,7 @@ end;
 
 **判断**: 部分同意。隐式 Run 是有意设计（懒执行），但确实可能意外触发。
 
-**分析**: `TTestSuite.AllPassed` 在未运行时自动调用 `Run`，`TTestRunner.AllPassed` 在计数为 0 时调用 `RunAll`。这是一个便捷 API，但确实有意外执行副作用的风险。
+**分析**: `TTestSuite.AllPassed` 在未运行时自动调用 `Run`，`TSuiteRunner.AllPassed` 在计数为 0 时调用 `RunAll`。这是一个便捷 API，但确实有意外执行副作用的风险。
 
 **修复方案**: 不改变当前行为（懒执行是有用的便捷模式），添加文档注释：
 
@@ -1015,7 +1015,7 @@ end;
 
 **判断**: 同意。
 
-**分析**: `TotalErr` 在 `TTestRunner.Create` 中初始化为 0，但在 `RunAll`/`RunAllParallel` 中从未递增。tsError 被计为 fail（`R^.Fail^ + 1`），不单独计数。
+**分析**: `TotalErr` 在 `TSuiteRunner.Create` 中初始化为 0，但在 `RunAll`/`RunAllParallel` 中从未递增。tsError 被计为 fail（`R^.Fail^ + 1`），不单独计数。
 
 **修复方案**: 移除 `TotalErr` 字段，因为它与 `TotalFail` 语义重叠（tsError 是一种失败）。
 
@@ -1034,7 +1034,7 @@ end;
 
 **分析**: `Summary` 在 Run 之前调用会显示全 0。但 `Summary` 的目的是在 Run 之后调用。`AllPassed` 已有 FHasRun 检查。
 
-**修复方案**: 在 `TTestSuite.Summary` 和 `TTestRunner.Summary` 中添加 FHasRun 检查：
+**修复方案**: 在 `TTestSuite.Summary` 和 `TSuiteRunner.Summary` 中添加 FHasRun 检查：
 
 ```pascal
 procedure TTestSuite.Summary;
@@ -1286,7 +1286,7 @@ end;
 
 文件: `core/src/nextpas.core.test.pas`
 
-TTestSuite.Summary 和 TTestRunner.Summary 添加前置检查。
+TTestSuite.Summary 和 TSuiteRunner.Summary 添加前置检查。
 
 **B2 依赖**: B1
 **B2 总计修改**: 1 个源文件
@@ -1680,13 +1680,13 @@ end;
 ```pascal
 procedure TestRunAllParallel;
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('Parallel Suite');
   LSuite.Test('p1', @TestParallelSimple1);
   LSuite.Test('p2', @TestParallelSimple2);
-  LRunner := TTestRunner.Create('Runner');
+  LRunner := TSuiteRunner.Create('Runner');
   LRunner.Add(LSuite);
   CheckTrue(LRunner.RunAllParallel(nil));
   CheckTrue(LRunner.TotalPass = 2);

@@ -18,7 +18,7 @@
 | test.expect.pas | 流式 IExpectation 接口 + TExpectation 实现 | ~776 |
 | test.mock.pas | TMock/TMockState 手动 Mock 框架 | ~881 |
 | test.config.pas | TTestConfig record (22 字段) + IOutputSink + 配置解析 | ~563 |
-| test.runner.pas | TTestSuite/TTestRunner + 串行/并行执行 + Benchmark | ~1988 |
+| test.runner.pas | TTestSuite/TSuiteRunner + 串行/并行执行 + Benchmark | ~1988 |
 | test.runner.cli.pas | CLI 参数解析（16 个 flag） | ~374 |
 | test.runner.parallel.pas | 并行 worker + timeout watchdog | ~528 |
 | test.runner.context.pas | TTestContext (ITestContext) + TTestResultAppender | ~471 |
@@ -184,10 +184,10 @@ end;
 
 **⚠️ With* 方法返回新 record，必须赋值**：`Suite := Suite.WithSetup(Proc);`
 
-### 3.3 TTestRunner (record)
+### 3.3 TSuiteRunner (record)
 
 ```pascal
-TTestRunner = record
+TSuiteRunner = record
   Name     : string;
   Suites   : specialize TArray<TTestSuite>;
   TotalPass/TotalFail/TotalSkip: Integer;

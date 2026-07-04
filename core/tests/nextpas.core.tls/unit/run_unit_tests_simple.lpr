@@ -12,10 +12,10 @@ uses
   test_openssl_async_unit;
 
 var
-  App: TTestRunner;
+  App: TSuiteRunner;
 
 begin
-  App := TTestRunner.Create(nil);
+  App := TSuiteRunner.Create(nil);
   try
     App.Initialize;
     App.Title := 'fafafa.ssl Unit Tests';

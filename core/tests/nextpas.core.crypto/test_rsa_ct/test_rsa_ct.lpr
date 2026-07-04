@@ -37,7 +37,7 @@ begin
 end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('rsa_ct');
@@ -150,7 +150,7 @@ begin
     CheckTrue(Pos('ctmontctxsecurezero(lctxn);', LSource) > 0);
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.crypto.rsa_ct');
+  LRunner := TSuiteRunner.Create('nextpas.core.crypto.rsa_ct');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

@@ -82,7 +82,7 @@ procedure TestDiscoverFindsPublishedMethods;
 var
   LFixture: TDiscoveryFixture;
   LSuite: TTestSuite;
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LResults: specialize TArray<TTestRunResult>;
   LFoundAlpha, LFoundBeta: Boolean;
   I: Integer;
@@ -104,7 +104,7 @@ begin
   CheckTrue(LFoundBeta,  'TestBeta not discovered');
 
   { Actually run them to verify dispatch works }
-  LRunner := TTestRunner.Create('DiscoveryRunner');
+  LRunner := TSuiteRunner.Create('DiscoveryRunner');
   LRunner.Add(LSuite);
   LRunner.RunAllWithResult(LResults);
   CheckTrue(Length(LResults) > 0);
@@ -150,13 +150,13 @@ end;
 procedure TestRetryEventuallyPasses;
 var
   LSuite: TTestSuite;
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LResults: specialize TArray<TTestRunResult>;
 begin
   GRetryCount := 0;
   LSuite := TTestSuite.Create('RetryTest');
   LSuite.Test('flaky', @FlakyThenPass, 5);  { retry up to 5 times }
-  LRunner := TTestRunner.Create('RetryRunner');
+  LRunner := TSuiteRunner.Create('RetryRunner');
   LRunner.Add(LSuite);
   LRunner.RunAllWithResult(LResults);
   CheckTrue(LResults[0].AllPassed);
@@ -171,12 +171,12 @@ end;
 procedure TestRetryExhausted;
 var
   LSuite: TTestSuite;
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LResults: specialize TArray<TTestRunResult>;
 begin
   LSuite := TTestSuite.Create('RetryExhaust');
   LSuite.Test('always_fail', @AlwaysFail, 2);  { retry 2 times, still fails }
-  LRunner := TTestRunner.Create('RetryExhaustRunner');
+  LRunner := TSuiteRunner.Create('RetryExhaustRunner');
   LRunner.Add(LSuite);
   LRunner.RunAllWithResult(LResults);
   CheckFalse(LResults[0].AllPassed);
@@ -186,12 +186,12 @@ end;
 procedure TestRetryZeroMeansNoRetry;
 var
   LSuite: TTestSuite;
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LResults: specialize TArray<TTestRunResult>;
 begin
   LSuite := TTestSuite.Create('RetryZero');
   LSuite.Test('simple', @AlwaysFail, 0);  { no retry }
-  LRunner := TTestRunner.Create('RetryZeroRunner');
+  LRunner := TSuiteRunner.Create('RetryZeroRunner');
   LRunner.Add(LSuite);
   LRunner.RunAllWithResult(LResults);
   CheckFalse(LResults[0].AllPassed);
@@ -202,7 +202,7 @@ function RunSuiteAndGetResults(const ASuiteName, ATestName: string;
   AOutcome: TReportOutcome; const AMessage: string = ''): specialize TArray<TTestRunResult>;
 var
   LSuite: TTestSuite;
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
 begin
   LSuite := TTestSuite.Create(ASuiteName);
   case AOutcome of
@@ -221,7 +221,7 @@ begin
         LSuite.Test(ATestName, @ReportErrorProc);
       end;
   end;
-  LRunner := TTestRunner.Create(ASuiteName + 'Runner');
+  LRunner := TSuiteRunner.Create(ASuiteName + 'Runner');
   LRunner.Add(LSuite);
   LRunner.RunAllWithResult(Result);
 end;
@@ -318,7 +318,7 @@ procedure TestDiscoveryFixtureTeardown;
 var
   LFixture: TTeardownFixture;
   LSuite: TTestSuite;
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LResults: specialize TArray<TTestRunResult>;
 begin
   { R6-53: RTTI discovery + run, verifying fixture method dispatch works.
@@ -330,7 +330,7 @@ begin
   LSuite := DiscoverTests(LFixture, 'TeardownTest');
   CheckTrue(Length(LSuite.Tests) > 0, 'Should discover at least 1 test');
   CheckEqual('TestOne', LSuite.Tests[0].Name);
-  LRunner := TTestRunner.Create('TeardownRunner');
+  LRunner := TSuiteRunner.Create('TeardownRunner');
   LRunner.Add(LSuite);
   LRunner.RunAllWithResult(LResults);
   CheckTrue(Length(LResults) > 0);
@@ -342,7 +342,7 @@ end;
 
 var
   LSuite: TTestSuite;
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LResults: specialize TArray<TTestRunResult>;
 begin
   WriteLn('=== test_advanced ===');
@@ -371,7 +371,7 @@ begin
   { R6-53: Discovery fixture teardown }
   LSuite.Test('DiscoveryFixtureTeardown', @TestDiscoveryFixtureTeardown);
 
-  LRunner := TTestRunner.Create('main');
+  LRunner := TSuiteRunner.Create('main');
   LRunner.Add(LSuite);
   LRunner.RunAllWithResult(LResults);
   WriteLn;

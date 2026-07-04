@@ -20,7 +20,7 @@ begin Result := '';
 end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('tls12record');
@@ -90,7 +90,7 @@ begin
     end;
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.crypto.tls12record');
+  LRunner := TSuiteRunner.Create('nextpas.core.crypto.tls12record');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

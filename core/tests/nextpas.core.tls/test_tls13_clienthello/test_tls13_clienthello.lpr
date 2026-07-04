@@ -20,7 +20,7 @@ begin Result := '';
 end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('tls13.clienthello');
@@ -87,7 +87,7 @@ begin
     CheckTrue(Length(LCH1) = Length(LCH2));
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.tls.tls13.clienthello');
+  LRunner := TSuiteRunner.Create('nextpas.core.tls.tls13.clienthello');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

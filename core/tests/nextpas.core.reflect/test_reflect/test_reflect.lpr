@@ -44,7 +44,7 @@ procedure TCollectorVisitor.VisitBool(const AField: TFieldDef; APtr: PBoolean);
 begin if APtr^ then Inc(BoolCount); end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('reflect');
@@ -182,7 +182,7 @@ begin
     CheckEqual(8, LDef^.Fields[2].Size);
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.reflect');
+  LRunner := TSuiteRunner.Create('nextpas.core.reflect');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

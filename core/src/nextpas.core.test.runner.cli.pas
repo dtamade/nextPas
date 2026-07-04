@@ -1,6 +1,6 @@
 { nextpas.core.test.runner.cli — CLI argument parsing for test runner
   =========================================================
-  Pure arg parsing: no dependency on TTestSuite or TTestRunner.
+  Pure arg parsing: no dependency on TTestSuite or TSuiteRunner.
   Depends on: nextpas.core.test.config, nextpas.core.test.output }
 
 unit nextpas.core.test.runner.cli;

@@ -20,7 +20,7 @@ begin Result := '';
 end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('tls12prf');
@@ -91,7 +91,7 @@ begin
     CheckTrue(BytesToHex(LR1) <> BytesToHex(TLS12PRF_SHA256(LSecret, 'tlslabel', LSeed, 32)));
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.crypto.tls12prf');
+  LRunner := TSuiteRunner.Create('nextpas.core.crypto.tls12prf');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

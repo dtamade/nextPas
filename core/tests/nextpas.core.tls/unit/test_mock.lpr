@@ -18,12 +18,12 @@ uses
   test_rand_mock;
 
 var
-  App: TTestRunner;
+  App: TSuiteRunner;
 begin
   DefaultFormat := fPlain;
   DefaultRunAllTests := True;
   
-  App := TTestRunner.Create(nil);
+  App := TSuiteRunner.Create(nil);
   try
     App.Initialize;
     App.Title := 'Mock Unit Tests';

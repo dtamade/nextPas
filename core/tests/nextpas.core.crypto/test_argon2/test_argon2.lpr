@@ -14,7 +14,7 @@ begin Result := '';
 end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('argon2');
@@ -60,7 +60,7 @@ begin
     CheckEqual(64, Length(LHash));
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.crypto.argon2');
+  LRunner := TSuiteRunner.Create('nextpas.core.crypto.argon2');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

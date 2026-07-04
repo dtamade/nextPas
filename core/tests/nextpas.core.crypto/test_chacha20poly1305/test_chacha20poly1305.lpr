@@ -20,7 +20,7 @@ begin Result := '';
 end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('chacha20poly1305');
@@ -137,7 +137,7 @@ begin
     CheckTrue(not LOk);
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.crypto.chacha20poly1305');
+  LRunner := TSuiteRunner.Create('nextpas.core.crypto.chacha20poly1305');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

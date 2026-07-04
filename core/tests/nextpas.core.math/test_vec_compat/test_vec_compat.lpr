@@ -11,7 +11,7 @@ uses
   nextpas.core.test;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('vec_compat');
@@ -131,7 +131,7 @@ begin
     CheckTrue(Abs(LLen - 5.0) < 1e-6);
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.math.vec.compat');
+  LRunner := TSuiteRunner.Create('nextpas.core.math.vec.compat');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

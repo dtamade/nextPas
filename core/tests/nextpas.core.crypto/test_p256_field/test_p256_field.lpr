@@ -20,7 +20,7 @@ begin Result := ''; for I := 0 to Length(D)-1 do Result := Result + LowerCase(In
 end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('p256_field');
@@ -91,7 +91,7 @@ begin
     CheckEqual(BytesToHex(LA), BytesToHex(LOut));
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.crypto.p256_field');
+  LRunner := TSuiteRunner.Create('nextpas.core.crypto.p256_field');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

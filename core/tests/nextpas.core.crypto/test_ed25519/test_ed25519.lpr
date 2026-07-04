@@ -20,7 +20,7 @@ begin Result := '';
 end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('ed25519');
@@ -78,7 +78,7 @@ begin
     CheckTrue(not Ed25519Verify(LPub, LMsg, LSig));
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.crypto.ed25519');
+  LRunner := TSuiteRunner.Create('nextpas.core.crypto.ed25519');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

@@ -20,7 +20,7 @@ begin Result := '';
 end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('bigint');
@@ -101,7 +101,7 @@ begin
     CheckTrue(LOk); CheckEqual('00000102', BytesToHex(LResult));
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.crypto.bigint');
+  LRunner := TSuiteRunner.Create('nextpas.core.crypto.bigint');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

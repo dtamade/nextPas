@@ -20,7 +20,7 @@ begin Result := '';
 end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('rsa');
@@ -92,7 +92,7 @@ begin
     CheckTrue(BytesToHex(LC1) <> BytesToHex(LC2));
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.crypto.rsa');
+  LRunner := TSuiteRunner.Create('nextpas.core.crypto.rsa');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

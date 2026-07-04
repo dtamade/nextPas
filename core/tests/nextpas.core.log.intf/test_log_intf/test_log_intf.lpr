@@ -8,7 +8,7 @@ uses
 
 var
   LLogger: ILogger;
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('log.intf');
@@ -33,7 +33,7 @@ begin
     CheckTrue(NullLogger = NullLogger, 'NullLogger should be singleton');
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.log.intf');
+  LRunner := TSuiteRunner.Create('nextpas.core.log.intf');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

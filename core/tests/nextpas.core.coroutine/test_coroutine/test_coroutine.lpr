@@ -15,7 +15,7 @@ procedure IncrementAction({%H-}AUserData: Pointer); begin Inc(GActionCount); end
 function CheckFlag({%H-}AUserData: Pointer): Boolean; begin Result := GConditionFlag; end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('coroutine');
@@ -154,7 +154,7 @@ begin
     CheckTrue(LID = COROUTINE_INVALID_ID);
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.coroutine');
+  LRunner := TSuiteRunner.Create('nextpas.core.coroutine');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

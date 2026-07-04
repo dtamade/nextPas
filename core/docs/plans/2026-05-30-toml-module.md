@@ -6,7 +6,7 @@
 
 **Architecture:** Two-layer API mirroring `nextpas.core.json.*` — bottom layer is zero-alloc records (`TTomlDocument`, `TTomlWriter`) for hot paths; top layer is reference-counted interfaces (`ITomlDocument`, `ITomlBuilder`) for ergonomic use. Parser builds a flat node array; values are accessed via `TTomlValue` borrowing views. SIMD-accelerated whitespace/comment skipping via `text.scan`.
 
-**Tech Stack:** Free Pascal (objfpc mode), `nextpas.core.text.*` utilities, `nextpas.core.simd.vec16`, `nextpas.core.mem.intf` (IAllocator), `nextpas.core.testing` (TTestRunner).
+**Tech Stack:** Free Pascal (objfpc mode), `nextpas.core.text.*` utilities, `nextpas.core.simd.vec16`, `nextpas.core.mem.intf` (IAllocator), `nextpas.core.testing` (TSuiteRunner).
 
 ---
 
@@ -31,7 +31,7 @@ uses
   nextpas.core.testing;
 
 var
-  T: TTestRunner;
+  T: TSuiteRunner;
 
 procedure TestNodeKindValues;
 begin
@@ -73,7 +73,7 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.toml.types');
+  T := TSuiteRunner.Create('nextpas.core.toml.types');
   T.Run('node kind values', @TestNodeKindValues);
   T.Run('datetime record', @TestDateTimeRecord);
   T.Run('node size', @TestNodeSize);

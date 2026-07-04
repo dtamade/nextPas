@@ -12,7 +12,7 @@ function AlwaysTrue: Boolean; begin Result := True; end;
 function AlwaysFalse: Boolean; begin Result := False; end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('tls.result_utils');
@@ -120,7 +120,7 @@ begin
     CheckTrue(LR.IsErr); CheckTrue(Pos('Err', LR.ToString) > 0);
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.tls.result_utils');
+  LRunner := TSuiteRunner.Create('nextpas.core.tls.result_utils');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

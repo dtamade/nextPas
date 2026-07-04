@@ -17,7 +17,7 @@
 - **ANSI colored output**: Auto-detected terminal color support
 - **Memory leak detection**: Built-in heap trace integration (serial mode only)
 - **Full lifecycle**: Setup/Teardown, BeforeEach/AfterEach hooks (both proc and closure overloads)
-- **Multi-suite runner**: `TTestRunner` aggregates multiple suites
+- **Multi-suite runner**: `TSuiteRunner` aggregates multiple suites
 - **JUnit XML export**: `JUnitXML` / `WriteJUnitXML` for CI integration
 - **TAP v13 export**: `TAPReport` for CI integration
 - **JSON export**: `JSONReport` for CI integration
@@ -256,7 +256,7 @@ LSuite.Test('test 2', @Test2);
 LRunner.Add(LSuite);  { runner gets a snapshot }
 ```
 
-`TTestRunner.Add` takes `var ASuite: TTestSuite` and copies it. Any modifications
+`TSuiteRunner.Add` takes `var ASuite: TTestSuite` and copies it. Any modifications
 to the original `LSuite` variable after `Add` are NOT reflected in the runner.
 
 #### AllPassed Lazy Execution
@@ -270,14 +270,14 @@ This means `AllPassed` is safe to call as the sole entry point, but be aware it
 triggers a serial run if needed. For parallel results, call `RunParallel` explicitly
 before checking `AllPassed`.
 
-### TTestRunner (multi-suite)
+### TSuiteRunner (multi-suite)
 
 ```pascal
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LResults: specialize TArray<TTestRunResult>;
 begin
-  LRunner := TTestRunner.Create('All Tests');
+  LRunner := TSuiteRunner.Create('All Tests');
   LRunner.Add(LSuite1);
   LRunner.Add(LSuite2);
   LRunner.RunAll;                             { Serial: runs each suite sequentially }
@@ -471,7 +471,7 @@ test.pas (facade, 610 lines) — 纯 re-export, 无逻辑
   ├── test.output (1092)   — L2: ANSI + 过滤 + JUnit XML + 泄漏报告
   ├── test.output.json (185)  — L2: JSON 输出
   ├── test.output.tap (131)   — L2: TAP v13 输出
-  ├── test.runner (2392)   — L3: TTestSuite + TTestRunner
+  ├── test.runner (2392)   — L3: TTestSuite + TSuiteRunner
   ├── test.discovery (154) — L4: RTTI 自动发现
   └── test.mock (820)      — L4: Mock 框架
 
@@ -647,7 +647,7 @@ L4 扩展层:  discovery.pas, mock.pas
 | 符号 | 稳定性 | 说明 |
 |------|--------|------|
 | `TTestSuite` (record + 所有 public 方法) | Stable | 测试套件 |
-| `TTestRunner` (record + 所有 public 方法) | Stable | 多套件 runner |
+| `TSuiteRunner` (record + 所有 public 方法) | Stable | 多套件 runner |
 | `Ctx` | Stable | 当前测试上下文 |
 | `RegisterStub`, `RegisterFixture` | **Internal** | 注册辅助 |
 | `ParseFilter`, `ParseTag` | **Internal** | CLI 解析 |
@@ -690,7 +690,7 @@ L4 扩展层:  discovery.pas, mock.pas
 | threadvar 隔离 | 并行测试不共享可变状态 |
 | LIFO 清理 | EachCleanups 按注册逆序执行 |
 | FCleanupDone 守卫 | 防止 --count=N 重复释放 |
-| 深拷贝 | `TTestRunner.Add` 深拷贝 Tests 数组 |
+| 深拷贝 | `TSuiteRunner.Add` 深拷贝 Tests 数组 |
 
 #### 4. 并行安全
 
@@ -713,7 +713,7 @@ L4 扩展层:  discovery.pas, mock.pas
 | test.output.pas | 1092 | L2 | ANSI、过滤、JUnit XML |
 | test.output.json.pas | 185 | L2 | JSON 输出 |
 | test.output.tap.pas | 131 | L2 | TAP v13 输出 |
-| test.runner.pas | 2392 | L3 | TTestSuite、TTestRunner |
+| test.runner.pas | 2392 | L3 | TTestSuite、TSuiteRunner |
 | test.runner.context.pas | 460 | L3 | 子测试上下文 |
 | test.runner.parallel.pas | 573 | L3 | 并行执行 |
 | test.discovery.pas | 154 | L4 | RTTI 自动发现 |

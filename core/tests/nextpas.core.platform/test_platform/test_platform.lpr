@@ -8,7 +8,7 @@ uses
   nextpas.core.test;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('platform');
@@ -31,7 +31,7 @@ begin
     CheckTrue(CurrentEndian = endLittle, 'Should be little-endian');
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.platform');
+  LRunner := TSuiteRunner.Create('nextpas.core.platform');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

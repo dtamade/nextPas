@@ -41,7 +41,7 @@ uses
   nextpas.core.platform.io;
 
 var
-  T: TTestRunner;
+  T: TSuiteRunner;
 
 procedure TestCreateWithWinsockInit;
 var
@@ -187,7 +187,7 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.io.windows_real');
+  T := TSuiteRunner.Create('nextpas.core.platform.io.windows_real');
   T.Run('create_with_winsock_init', @TestCreateWithWinsockInit);
   T.Run('close_cleans_up_winsock', @TestCloseCleansUpWinsock);
   T.Run('wait_polling_with_ready_socket', @TestWaitPollingWithReadySocket);
@@ -270,7 +270,7 @@ uses
   nextpas.core.platform.socket;
 
 var
-  T: TTestRunner;
+  T: TSuiteRunner;
 
 procedure TestTcpBindSpecificPort;
 var
@@ -506,7 +506,7 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.socket.windows_real');
+  T := TSuiteRunner.Create('nextpas.core.platform.socket.windows_real');
   T.Run('tcp_bind_specific_port', @TestTcpBindSpecificPort);
   T.Run('tcp_listen_backlog', @TestTcpListenBacklog);
   T.Run('accept_returns_client', @TestAcceptReturnsClient);

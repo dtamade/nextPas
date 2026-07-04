@@ -11,7 +11,7 @@ var
   SplitDir, SplitBase: string;
   F: IFile;
   Info: TFileInfo;
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('fs.facade');
@@ -72,7 +72,7 @@ begin
     if Exists(TmpDir) then RemoveAll(TmpDir);
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.fs');
+  LRunner := TSuiteRunner.Create('nextpas.core.fs');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

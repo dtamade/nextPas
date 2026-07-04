@@ -87,7 +87,7 @@ uses
   nextpas.core.testing;
 
 var
-  T: TTestRunner;
+  T: TSuiteRunner;
 
 procedure TestCapabilityStatus;
 var

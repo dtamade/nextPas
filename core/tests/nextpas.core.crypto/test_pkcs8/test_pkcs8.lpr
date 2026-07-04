@@ -20,7 +20,7 @@ begin Result := '';
 end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('pkcs8');
@@ -93,7 +93,7 @@ begin
     end;
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.crypto.pkcs8');
+  LRunner := TSuiteRunner.Create('nextpas.core.crypto.pkcs8');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

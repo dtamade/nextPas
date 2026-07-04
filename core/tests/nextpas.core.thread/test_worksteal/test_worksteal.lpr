@@ -16,7 +16,7 @@ uses
 var GCounter: Integer = 0;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('thread.worksteal');
@@ -87,7 +87,7 @@ begin
     LPool.Shutdown;
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.thread.worksteal');
+  LRunner := TSuiteRunner.Create('nextpas.core.thread.worksteal');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

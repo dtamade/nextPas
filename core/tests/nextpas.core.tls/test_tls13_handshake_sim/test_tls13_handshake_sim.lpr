@@ -21,7 +21,7 @@ end;
 const TLS_AES_128_GCM_SHA256 = $1301;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('tls13.handshake_sim');
@@ -81,7 +81,7 @@ begin
     ClearTLS13HandshakeSecrets(LSecrets);
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.tls.tls13.handshake_sim');
+  LRunner := TSuiteRunner.Create('nextpas.core.tls.tls13.handshake_sim');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

@@ -15,7 +15,7 @@ type
   TBytesStringResult = specialize TResult<TBytes, string>;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('tls.type_safety');
@@ -171,7 +171,7 @@ begin
     CheckEqual('default.server.com', LD.UnwrapOr('default.server.com'));
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.tls.type_safety');
+  LRunner := TSuiteRunner.Create('nextpas.core.tls.type_safety');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

@@ -45,7 +45,7 @@
 | ftui_platform read/write        | nextpas.core.platform.posix.ffi                      |
 | ftui_platform 等待可读          | nextpas.core.platform.io (epoll)                     |
 | ftui_platform TickMs            | nextpas.core.platform.time                           |
-| ftui_testkit                    | nextpas.core.testing.TTestRunner                     |
+| ftui_testkit                    | nextpas.core.testing.TSuiteRunner                     |
 
 ---
 

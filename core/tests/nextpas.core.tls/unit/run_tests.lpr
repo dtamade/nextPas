@@ -9,13 +9,13 @@ uses
   test_openssl_core_unit;
 
 var
-  App: TTestRunner;
+  App: TSuiteRunner;
 
 begin
   DefaultFormat := fPlain;
   DefaultRunAllTests := True;
   
-  App := TTestRunner.Create(nil);
+  App := TSuiteRunner.Create(nil);
   try
     App.Initialize;
     App.Run;

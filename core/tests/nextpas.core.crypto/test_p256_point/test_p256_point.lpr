@@ -16,7 +16,7 @@ begin Result := '';
 end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('p256_point');
@@ -58,7 +58,7 @@ begin
     CheckEqual(BytesToHex(LX1B), BytesToHex(LX2B));
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.crypto.p256_point');
+  LRunner := TSuiteRunner.Create('nextpas.core.crypto.p256_point');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

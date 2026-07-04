@@ -764,7 +764,7 @@ end;
 
 var
   Suite: TTestSuite;
-  Runner: TTestRunner;
+  Runner: TSuiteRunner;
   LResults: specialize TArray<TTestRunResult>;
 begin
   Suite := TTestSuite.Create('nextpas.core.base');
@@ -788,7 +788,7 @@ begin
   Suite.Test('result surface', @TestResultSurface);
   Suite.Test('result interface payload lifecycle', @TestResultInterfacePayloadLifecycle);
 
-  Runner := TTestRunner.Create('base-tests');
+  Runner := TSuiteRunner.Create('base-tests');
   Runner.Add(Suite);
   Runner.RunAllWithResult(LResults);
   Runner.Summary;

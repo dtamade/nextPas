@@ -17,7 +17,7 @@ begin
 end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('wyhash');
@@ -117,7 +117,7 @@ begin
     CheckTrue(H32 = UInt32(H64 xor (H64 shr 32)));
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.hash.wyhash');
+  LRunner := TSuiteRunner.Create('nextpas.core.hash.wyhash');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

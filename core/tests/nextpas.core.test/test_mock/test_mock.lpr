@@ -1164,7 +1164,7 @@ end;
 
 var
   Suite: TTestSuite;
-  Runner: TTestRunner;
+  Runner: TSuiteRunner;
   LResults: specialize TArray<TTestRunResult>;
   LSuccess: Boolean;
 begin
@@ -1274,7 +1274,7 @@ begin
   Suite.Test('TestVerifyAllNoSetups', @TestVerifyAllNoSetups);
   Suite.Test('TestVerifyErrorMessage', @TestVerifyErrorMessage);
 
-  Runner := TTestRunner.Create('mock-tests');
+  Runner := TSuiteRunner.Create('mock-tests');
   Runner.Add(Suite);
   LSuccess := Runner.RunAllWithResult(LResults);
   WriteLn;

@@ -53,14 +53,14 @@ begin
 end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('errors');
   LSuite.Test('exception hierarchy', @TestExceptionHierarchy);
   LSuite.Test('exception raise', @TestExceptionRaise);
   LSuite.Test('category constants public', @TestCategoryConstantsRemainPublic);
-  LRunner := TTestRunner.Create('nextpas.core.errors');
+  LRunner := TSuiteRunner.Create('nextpas.core.errors');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

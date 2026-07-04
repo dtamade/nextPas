@@ -1,7 +1,7 @@
 { test_lifecycle — Lifecycle, closure, table, facade coverage
   =========================================================
   Covers: TestTable, TTestClosure (setup/teardown/beforeEach/afterEach),
-          ITestContext.Fail, ITestContext.Skip, TTestRunner.AllPassed auto-run,
+          ITestContext.Fail, ITestContext.Skip, TSuiteRunner.AllPassed auto-run,
           closure-based Test() overloads, TTestSuite.Create defaults }
 
 program test_lifecycle;
@@ -102,7 +102,7 @@ end;
 procedure TestClosureBasic;
 var
   Suite: TTestSuite;
-  Runner: TTestRunner;
+  Runner: TSuiteRunner;
   LResults: specialize TArray<TTestRunResult>;
   LSuccess: Boolean;
   LC1, LC2: TTestClosure;
@@ -112,7 +112,7 @@ begin
   LC2 := @ClosureExpect;
   Suite.Test('closure-pass', LC1);
   Suite.Test('closure-expect', LC2);
-  Runner := TTestRunner.Create('closure-tests');
+  Runner := TSuiteRunner.Create('closure-tests');
   Runner.Add(Suite);
   LSuccess := Runner.RunAllWithResult(LResults);
   CheckTrue(LSuccess, 'Closure tests should pass');
@@ -122,7 +122,7 @@ end;
 procedure TestClosureSetupTeardown;
 var
   Suite: TTestSuite;
-  Runner: TTestRunner;
+  Runner: TSuiteRunner;
   LResults: specialize TArray<TTestRunResult>;
   LSuccess: Boolean;
   LSetup, LTear, LC1, LC2: TTestClosure;
@@ -138,7 +138,7 @@ begin
   LC2 := @ClosurePass;
   Suite.Test('t1', LC1);
   Suite.Test('t2', LC2);
-  Runner := TTestRunner.Create('closure-lifecycle-tests');
+  Runner := TSuiteRunner.Create('closure-lifecycle-tests');
   Runner.Add(Suite);
   LSuccess := Runner.RunAllWithResult(LResults);
   CheckTrue(LSuccess, 'Closure lifecycle should pass');
@@ -150,7 +150,7 @@ end;
 procedure TestClosureBeforeEachAfterEach;
 var
   Suite: TTestSuite;
-  Runner: TTestRunner;
+  Runner: TSuiteRunner;
   LResults: specialize TArray<TTestRunResult>;
   LSuccess: Boolean;
   LBefore, LAfter, LC: TTestClosure;
@@ -166,7 +166,7 @@ begin
   Suite.Test('h1', LC);
   Suite.Test('h2', LC);
   Suite.Test('h3', LC);
-  Runner := TTestRunner.Create('closure-hooks-tests');
+  Runner := TSuiteRunner.Create('closure-hooks-tests');
   Runner.Add(Suite);
   LSuccess := Runner.RunAllWithResult(LResults);
   CheckTrue(LSuccess, 'Closure hooks should pass');
@@ -229,17 +229,17 @@ begin
   CheckTrue(LResult.AllPassed, 'Suite should pass when subtests only skip');
 end;
 
-{ ── TTestRunner.AllPassed auto-run ─────────────────────────────────────────── }
+{ ── TSuiteRunner.AllPassed auto-run ─────────────────────────────────────────── }
 
 procedure TestRunnerAllPassedAutoRun;
 var
   Suite: TTestSuite;
-  Runner: TTestRunner;
+  Runner: TSuiteRunner;
   LAutoPassed: Boolean;
 begin
   Suite := TTestSuite.Create('auto-run');
   Suite.Test('ok', @SimpleTrue);
-  Runner := TTestRunner.Create('auto-runner');
+  Runner := TSuiteRunner.Create('auto-runner');
   Runner.Add(Suite);
   CheckFalse(Runner.HasRun, 'HasRun should be false before AllPassed');
   LAutoPassed := Runner.AllPassed;
@@ -272,13 +272,13 @@ begin
   CheckTrue(Suite.LastSkip = 0);
 end;
 
-{ ── TTestRunner.Create defaults ────────────────────────────────────────────── }
+{ ── TSuiteRunner.Create defaults ────────────────────────────────────────────── }
 
 procedure TestRunnerCreateDefaults;
 var
-  Runner: TTestRunner;
+  Runner: TSuiteRunner;
 begin
-  Runner := TTestRunner.Create('my-runner');
+  Runner := TSuiteRunner.Create('my-runner');
   CheckTrue(Runner.Name = 'my-runner');
   CheckTrue(Length(Runner.Suites) = 0);
   CheckTrue(Runner.TotalPass = 0);
@@ -453,7 +453,7 @@ end;
 
 var
   Suite: TTestSuite;
-  Runner: TTestRunner;
+  Runner: TSuiteRunner;
   LResults: specialize TArray<TTestRunResult>;
   LSuccess: Boolean;
 begin
@@ -475,7 +475,7 @@ begin
   Suite.Test('TestResultAppenderResultsProperty', @TestResultAppenderResultsProperty);
   Suite.Test('R657SetupFailTeardown', @R657SetupFailTeardown);
 
-  Runner := TTestRunner.Create('lifecycle-tests');
+  Runner := TSuiteRunner.Create('lifecycle-tests');
   Runner.Add(Suite);
   LSuccess := Runner.RunAllWithResult(LResults);
   WriteLn;
@@ -491,7 +491,7 @@ begin
 
   { Release closures before heaptrc reports (unit finalization runs before
     main block locals are freed — closures would appear as unfreed). }
-  Runner := Default(TTestRunner);
+  Runner := Default(TSuiteRunner);
   Suite := Default(TTestSuite);
   LResults := nil;
 end.

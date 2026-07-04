@@ -94,7 +94,7 @@ type
 
 type
   TTestSuite = nextpas.core.test.runner.TTestSuite;
-  TTestRunner = nextpas.core.test.runner.TTestRunner;
+  TSuiteRunner = nextpas.core.test.runner.TSuiteRunner;
 
 { ── Re-exported functions from test.expect ────────────────────────────────── }
 

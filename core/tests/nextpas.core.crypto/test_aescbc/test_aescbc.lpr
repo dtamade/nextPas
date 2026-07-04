@@ -20,7 +20,7 @@ begin Result := '';
 end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('aescbc');
@@ -107,7 +107,7 @@ begin
     CheckTrue(LRaised);
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.crypto.aescbc');
+  LRunner := TSuiteRunner.Create('nextpas.core.crypto.aescbc');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

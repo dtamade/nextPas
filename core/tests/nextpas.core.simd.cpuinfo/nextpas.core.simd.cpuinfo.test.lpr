@@ -14,7 +14,7 @@ uses
   ;
 
 var
-  LApplication: TTestRunner;
+  LApplication: TSuiteRunner;
 
 begin
   DefaultFormat := fPlain;
@@ -23,13 +23,13 @@ begin
   {$IFDEF SIMD_RISCV_AVAILABLE}
   // RISC-V/qemu user-mode workaround: avoid teardown path that intermittently AVs
   // after successful execution in consoletestrunner.
-  LApplication := TTestRunner.Create(nil);
+  LApplication := TSuiteRunner.Create(nil);
   LApplication.Initialize;
   LApplication.Title := 'nextpas.core.simd.cpuinfo tests';
   LApplication.Run;
   Halt(ExitCode);
   {$ELSE}
-  LApplication := TTestRunner.Create(nil);
+  LApplication := TSuiteRunner.Create(nil);
   try
     LApplication.Initialize;
     LApplication.Title := 'nextpas.core.simd.cpuinfo tests';

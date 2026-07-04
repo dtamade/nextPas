@@ -24,7 +24,7 @@ begin
 end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('ct_bigint');
@@ -64,7 +64,7 @@ begin
     CheckEqual('1111', BytesToHex(LB));
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.crypto.ct.bigint');
+  LRunner := TSuiteRunner.Create('nextpas.core.crypto.ct.bigint');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

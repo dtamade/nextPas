@@ -546,13 +546,13 @@ uses
 
 var
   LSuite: TTestSuite;
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LResults: specialize TArray<TTestRunResult>;
 begin
   LSuite := TTestSuite.Create('xxx');
   LSuite.Test('TestFoo', @TestFoo);
   LSuite.Test('TestBar', @TestBar);
-  LRunner := TTestRunner.Create('main');
+  LRunner := TSuiteRunner.Create('main');
   LRunner.Add(LSuite);
   LRunner.RunAllWithResult(LResults);
   if (Length(LResults) = 0) or (not LResults[0].AllPassed) then

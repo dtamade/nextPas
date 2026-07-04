@@ -6,7 +6,7 @@
 
 **Architecture:** Two-layer API mirroring `nextpas.core.json.*` — bottom layer is zero-alloc records (`TTomlDocument`, `TTomlWriter`) for hot paths; top layer is reference-counted interfaces (`ITomlDocument`, `ITomlBuilder`) for ergonomic use. Parser builds a flat node array with embedded keys; values are accessed via `TTomlValue` borrowing views (12 bytes: doc pointer + node index). SIMD-accelerated whitespace/comment skipping via `text.scan`. Node layout is 40 bytes with embedded key TStringView to avoid separate key nodes.
 
-**Tech Stack:** Free Pascal (objfpc mode), `nextpas.core.text.*` utilities, `nextpas.core.simd.vec16`, `nextpas.core.mem.intf` (IAllocator), `nextpas.core.testing` (TTestRunner).
+**Tech Stack:** Free Pascal (objfpc mode), `nextpas.core.text.*` utilities, `nextpas.core.simd.vec16`, `nextpas.core.mem.intf` (IAllocator), `nextpas.core.testing` (TSuiteRunner).
 
 **TOML v1.0 Feature Coverage:**
 - Basic/literal/multi-line strings
@@ -67,7 +67,7 @@ uses
   nextpas.core.toml.base,
   nextpas.core.testing;
 var
-  T: TTestRunner;
+  T: TSuiteRunner;
 
 procedure TestNodeKindEnum;
 begin
@@ -141,7 +141,7 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.toml.base');
+  T := TSuiteRunner.Create('nextpas.core.toml.base');
   T.Run('node kind enum', @TestNodeKindEnum);
   T.Run('datetime create', @TestDateTimeCreate);
   T.Run('datetime offset', @TestDateTimeOffset);

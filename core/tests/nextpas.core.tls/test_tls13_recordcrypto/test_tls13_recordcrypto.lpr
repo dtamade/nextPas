@@ -20,7 +20,7 @@ begin Result := '';
 end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('tls13.recordcrypto');
@@ -88,7 +88,7 @@ begin
     CheckTrue(not IncrementTLS13Sequence(LSeq));
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.tls.tls13.recordcrypto');
+  LRunner := TSuiteRunner.Create('nextpas.core.tls.tls13.recordcrypto');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

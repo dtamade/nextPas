@@ -24,7 +24,7 @@ begin
 end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('hmac');
@@ -130,7 +130,7 @@ begin
     CheckTrue(CompareMem(@LD1[0], @LD2[0], 32));
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.hash.hmac');
+  LRunner := TSuiteRunner.Create('nextpas.core.hash.hmac');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;
