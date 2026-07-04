@@ -299,7 +299,7 @@ begin
     [CorsMiddleware(TCorsOptions.Default)]
   );
   LReq := TMockRequest.Create(hmOptions, '/api');
-  LReq.GetHeaders.Set_('Origin', 'http://example.com');
+  LReq.GetHeaders.SetHeader('Origin', 'http://example.com');
   LReqIntf := LReq;
   LWObj := TMockResponseWriter.Create;
   LW := LWObj;
@@ -327,7 +327,7 @@ begin
     [CorsMiddleware(TCorsOptions.Default)]
   );
   LReq := TMockRequest.Create(hmGet, '/api');
-  LReq.GetHeaders.Set_('Origin', 'http://example.com');
+  LReq.GetHeaders.SetHeader('Origin', 'http://example.com');
   LReqIntf := LReq;
   LWObj := TMockResponseWriter.Create;
   LW := LWObj;
@@ -378,7 +378,7 @@ begin
     [CorsMiddleware(LOpts)]
   );
   LReq := TMockRequest.Create(hmGet, '/api');
-  LReq.GetHeaders.Set_('Origin', 'http://example.com');
+  LReq.GetHeaders.SetHeader('Origin', 'http://example.com');
   LReqIntf := LReq;
   LWObj := TMockResponseWriter.Create;
   LW := LWObj;
