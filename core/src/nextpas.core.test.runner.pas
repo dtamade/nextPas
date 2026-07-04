@@ -112,6 +112,9 @@ type
       failure (Go t.Cleanup() equivalent). Handlers execute in LIFO order. }
     procedure Cleanup(AProc: TTestProc);
     procedure Cleanup(AProc: TTestClosure);
+    { ⚠️ With* methods return a NEW record — you MUST assign the return value:
+        Suite := Suite.WithSetup(Proc);  // ✅ correct
+        Suite.WithSetup(Proc);           // ❌ BUG: changes discarded }
     function  WithConfig(const AConfig: TTestConfig): TTestSuite;
     function  WithSetup(AProc: TTestProc): TTestSuite; overload;
     function  WithSetup(AProc: TTestClosure): TTestSuite; overload;
@@ -1200,6 +1203,16 @@ begin
     FCleanupDone guard prevents double-free when RunAllWithResult also
     calls CleanupTableAllocations after the full run. }
   CleanupTableAllocations;
+
+  { Dispose thread-local GExecState allocated by SetTestContext.
+    Matches the parallel worker's cleanup in its finally block.
+    Without this, heaptrc reports a 32-byte leak because the
+    finalization section may run after heaptrc's tally. }
+  if GExecState <> nil then
+  begin
+    Dispose(GExecState);
+    GExecState := nil;
+  end;
 
   FinalizeResults(LConfig, AResult, LPass, LFail, LSkip);
   Result := LastRunPassed;

@@ -86,6 +86,11 @@ procedure CheckNear(const AExpected, AActual: Double;
   const AEpsilon: Double = 1e-10; const AMessage: string = '');
 procedure CheckNotNear(const AExpected, AActual: Double;
   const AEpsilon: Double = 1e-10; const AMessage: string = '');
+{ Check that AActual is within relative tolerance of AExpected.
+  Uses |AActual - AExpected| / max(|AExpected|, |AActual|) < AEpsilon.
+  Better for magnitude-spanning comparisons than absolute epsilon. }
+procedure CheckApprox(const AExpected, AActual: Double;
+  const AEpsilon: Double = 1e-6; const AMessage: string = '');
 procedure Fail(const AMessage: string);
 { Fail with "unexpected ClassName: Message" — for catch-all exception handlers. }
 procedure FailUnexpected(const E: Exception);
@@ -241,6 +246,36 @@ begin
     FailWithDefault(AMessage,
       'Expected not near ' + FloatToStr(AExpected) +
       ' (+/-' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual));
+end;
+
+procedure CheckApprox(const AExpected, AActual: Double;
+  const AEpsilon: Double; const AMessage: string);
+var
+  LDiff, LScale: Double;
+begin
+  if IsNan(AExpected) or IsNan(AActual) then
+    InternalFail('Expected approx ' + FloatToStr(AExpected) +
+      ' (rel ' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual) + ' (NaN)');
+  LDiff := Abs(AActual - AExpected);
+  { Relative error: use max(|expected|, |actual|) as scale }
+  LScale := Abs(AExpected);
+  if Abs(AActual) > LScale then
+    LScale := Abs(AActual);
+  { Both near zero: fall back to absolute comparison with AEpsilon }
+  if LScale < AEpsilon then
+  begin
+    if LDiff > AEpsilon then
+      FailWithDefault(AMessage,
+        'Expected approx ' + FloatToStr(AExpected) +
+        ' (rel ' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual));
+  end
+  else
+  begin
+    if LDiff / LScale > AEpsilon then
+      FailWithDefault(AMessage,
+        'Expected approx ' + FloatToStr(AExpected) +
+        ' (rel ' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual));
+  end;
 end;
 
 procedure CheckEqual(const AExpected, AActual: Double;

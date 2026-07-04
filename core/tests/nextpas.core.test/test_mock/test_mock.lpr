@@ -772,11 +772,14 @@ begin
 end;
 
 procedure TestCalledWithEmptyArgsImpl(AMock: TMock);
+var
+  LEmpty: array of string;
 begin
+    LEmpty := nil;
     AMock.RecordCall('Foo', []);
     AMock.RecordCall('Foo', []);
     { CalledWith([]) should match both no-arg calls }
-    AMock.Verify('Foo').CalledWith([]);
+    AMock.Verify('Foo').CalledWith(LEmpty);
 end;
 
 procedure TestCalledWithEmptyArgs;
@@ -800,6 +803,60 @@ end;
 procedure TestCalledExactlyWithZeroTimes;
 begin
   ExpectFailWithMock(@TestCalledExactlyWithZeroTimesImpl);
+end;
+
+{ F-04: Typed CalledWith / CalledExactlyWith }
+
+procedure TestCalledWithTypedSuccessImpl(AMock: TMock);
+begin
+    AMock.RecordCallTyped('Calc', [MockInt(42), MockStr('hello')]);
+    AMock.Verify('Calc').CalledWith([MockInt(42), MockStr('hello')]);
+end;
+
+procedure TestCalledWithTypedSuccess;
+begin
+  WithMock(@TestCalledWithTypedSuccessImpl);
+end;
+
+procedure TestCalledWithTypedDistinguishesTypesImpl(AMock: TMock);
+begin
+    { Record with MockInt(42) }
+    AMock.RecordCallTyped('Calc', [MockInt(42)]);
+    { MockStr('42') should NOT match MockInt(42) — different kind }
+    AMock.Verify('Calc').CalledWith([MockStr('42')]);
+    CheckTrue(False, 'Should fail: MockStr(''42'') ≠ MockInt(42)');
+end;
+
+procedure TestCalledWithTypedDistinguishesTypes;
+begin
+  ExpectFailWithMock(@TestCalledWithTypedDistinguishesTypesImpl);
+end;
+
+procedure TestCalledExactlyWithTypedSuccessImpl(AMock: TMock);
+begin
+    AMock.RecordCallTyped('Calc', [MockInt(1)]);
+    AMock.RecordCallTyped('Calc', [MockInt(1)]);
+    AMock.RecordCallTyped('Calc', [MockInt(2)]);
+    AMock.Verify('Calc').CalledExactlyWith(2, [MockInt(1)]);
+end;
+
+procedure TestCalledExactlyWithTypedSuccess;
+begin
+  WithMock(@TestCalledExactlyWithTypedSuccessImpl);
+end;
+
+procedure TestCalledExactlyWithTypedFailImpl(AMock: TMock);
+begin
+    AMock.RecordCallTyped('Calc', [MockInt(1)]);
+    AMock.RecordCallTyped('Calc', [MockInt(2)]);
+    { Expect 3 but only 1 matches }
+    AMock.Verify('Calc').CalledExactlyWith(3, [MockInt(1)]);
+    CheckTrue(False, 'Should fail: only 1 call with MockInt(1)');
+end;
+
+procedure TestCalledExactlyWithTypedFail;
+begin
+  ExpectFailWithMock(@TestCalledExactlyWithTypedFailImpl);
 end;
 
 procedure TestRecordCallTypedAllTypesImpl(AMock: TMock);
@@ -1124,6 +1181,12 @@ begin
   { G1: Coverage gaps }
   Suite.Test('TestCalledWithEmptyArgs', @TestCalledWithEmptyArgs);
   Suite.Test('TestCalledExactlyWithZeroTimes', @TestCalledExactlyWithZeroTimes);
+
+  { F-04: Typed CalledWith / CalledExactlyWith }
+  Suite.Test('TestCalledWithTypedSuccess', @TestCalledWithTypedSuccess);
+  Suite.Test('TestCalledWithTypedDistinguishesTypes', @TestCalledWithTypedDistinguishesTypes);
+  Suite.Test('TestCalledExactlyWithTypedSuccess', @TestCalledExactlyWithTypedSuccess);
+  Suite.Test('TestCalledExactlyWithTypedFail', @TestCalledExactlyWithTypedFail);
 
   { G2: Mock type paths }
   Suite.Test('TestRecordCallTypedAllTypes', @TestRecordCallTypedAllTypes);

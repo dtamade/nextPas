@@ -257,6 +257,32 @@ type
     IsFixedPitch: UInt32;        // 0=比例间距, 非0=等宽
   end;
 
+  {** COLR 表颜色层（v0 格式） }
+  TFontColrLayer = record
+    GlyphId: UInt16;           // 层字形 ID
+    PaletteIndex: UInt16;      // 调色板索引
+  end;
+  TFontColrLayerArray = array of TFontColrLayer;
+
+  {** CPAL 表调色板颜色（BGRA 格式） }
+  TFontCpalColor = record
+    Blue: Byte;
+    Green: Byte;
+    Red: Byte;
+    Alpha: Byte;
+  end;
+
+  {** CBDT/CBLC 位图字形数据 }
+  TFontBitmapGlyph = record
+    Width: UInt16;             // 位图宽度（像素）
+    Height: UInt16;            // 位图高度（像素）
+    BearingX: Int16;           // 水平 bearing
+    BearingY: Int16;           // 垂直 bearing
+    Advance: UInt16;           // 步进宽度
+    PngDataLength: Int32;      // PNG 数据字节数
+    PngData: array of Byte;    // PNG 压缩数据
+  end;
+
   {** 字体级指标 }
   TFontMetrics = record
     UnitsPerEm: UInt16;

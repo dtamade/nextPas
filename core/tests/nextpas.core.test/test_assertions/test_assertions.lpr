@@ -853,6 +853,41 @@ begin
   ExpectFail(procedure begin CheckEndsWithCI('Hello World', 'hello'); end, 'does not end with (ci)');
 end;
 
+{ ── P2: CheckApprox (relative epsilon) ────────────────────────────────────── }
+
+procedure TestCheckApproxPass;
+begin
+  { Large values: relative error is more meaningful than absolute }
+  CheckApprox(1e15, 1.000001e15, 1e-5);
+  CheckApprox(1e-15, 1.000001e-15, 1e-5);
+  { Exact match }
+  CheckApprox(1.0, 1.0);
+  CheckApprox(0.0, 0.0);
+  { Near zero: falls back to absolute comparison }
+  CheckApprox(0.0, 1e-7, 1e-6);
+end;
+
+procedure TestCheckApproxFail;
+begin
+  { Values differ by more than relative epsilon }
+  ExpectFail(procedure begin CheckApprox(1.0, 2.0, 1e-6); end, 'approx');
+  { Large values with tight tolerance }
+  ExpectFail(procedure begin CheckApprox(1e15, 1.001e15, 1e-6); end, 'approx');
+end;
+
+procedure TestCheckApproxNaN;
+var
+  LNaN: Double;
+  LOldMask: TFPUExceptionMask;
+begin
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exZeroDivide, exOverflow, exUnderflow, exPrecision, exDenormalized]);
+  LNaN := 0.0 / 0.0;
+  ExpectFail(procedure begin CheckApprox(LNaN, 1.0); end, 'NaN');
+  ExpectFail(procedure begin CheckApprox(1.0, LNaN); end, 'NaN');
+  SetExceptionMask(LOldMask);
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -987,6 +1022,11 @@ begin
   LSuite.Test('StartsWithCI fail',           @TestCheckStartsWithCIFail);
   LSuite.Test('EndsWithCI pass',             @TestCheckEndsWithCIPass);
   LSuite.Test('EndsWithCI fail',             @TestCheckEndsWithCIFail);
+
+  { P2: CheckApprox (relative epsilon) }
+  LSuite.Test('Approx pass',                 @TestCheckApproxPass);
+  LSuite.Test('Approx fail',                 @TestCheckApproxFail);
+  LSuite.Test('Approx NaN',                  @TestCheckApproxNaN);
 
   if not LSuite.Run then
   begin

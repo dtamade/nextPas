@@ -158,6 +158,8 @@ procedure CheckNear(const AExpected, AActual: Double;
   const AEpsilon: Double = 1e-10; const AMessage: string = '');
 procedure CheckNotNear(const AExpected, AActual: Double;
   const AEpsilon: Double = 1e-10; const AMessage: string = '');
+procedure CheckApprox(const AExpected, AActual: Double;
+  const AEpsilon: Double = 1e-6; const AMessage: string = '');
 procedure Fail(const AMessage: string);
 procedure FailUnexpected(const E: Exception);
 procedure Skip(const AReason: string = '');
@@ -447,6 +449,10 @@ begin nextpas.core.test.check.CheckNear(AExpected, AActual, AEpsilon, AMessage);
 procedure CheckNotNear(const AExpected, AActual: Double;
   const AEpsilon: Double; const AMessage: string);
 begin nextpas.core.test.check.CheckNotNear(AExpected, AActual, AEpsilon, AMessage); end;
+
+procedure CheckApprox(const AExpected, AActual: Double;
+  const AEpsilon: Double; const AMessage: string);
+begin nextpas.core.test.check.CheckApprox(AExpected, AActual, AEpsilon, AMessage); end;
 
 procedure Fail(const AMessage: string);
 begin nextpas.core.test.check.Fail(AMessage); end;

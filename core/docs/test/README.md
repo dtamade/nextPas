@@ -91,13 +91,15 @@ Without these modeswitches, you must use named procedures with `@Proc` syntax.
 | `CheckNoRaise(proc, msg)` | Assert no exception raised |
 | `CheckNear(expected, actual, epsilon, msg)` | Assert floating-point nearness (absolute epsilon) |
 | `CheckNotNear(expected, actual, epsilon, msg)` | Assert floating-point not near |
+| `CheckApprox(expected, actual, epsilon, msg)` | Assert floating-point nearness (relative epsilon) |
 | `Fail(msg)` | Unconditional failure |
 | `Skip(reason)` | Skip current test (raises `ETestSkipped`) |
 
 **Note on Double comparisons**:
 - `CheckEqual(Double)` performs IEEE 754 **exact comparison** (`=` operator). NaN != NaN, -0.0 = +0.0.
 - `CheckNear(Double)` performs **tolerance comparison** with absolute epsilon.
-- For floating-point tolerance, use `CheckNear` instead of `CheckEqual`.
+- `CheckApprox(Double)` performs **tolerance comparison** with relative epsilon (better for magnitude-spanning comparisons).
+- For floating-point tolerance, use `CheckNear` or `CheckApprox` instead of `CheckEqual`.
 
 ### Fluent API (IExpectation)
 
