@@ -60,10 +60,10 @@ uses
 
 | # | 文件 | 违规单元 | 用途 |
 |---|------|----------|------|
-| 8 | `tools/lexer_snapshot/lex_bench.pas:27` | SysUtils, Classes | 基准测试 |
-| 9 | `tools/lexer_snapshot/lex_snapshot.pas:29` | SysUtils, Classes | 快照工具 |
-| 10 | `tools/parser_bench/parser_bench.pas:33` | SysUtils, Classes | 基准测试 |
-| 11 | `tools/sema_bench/sema_bench.pas:32` | SysUtils, Classes | 基准测试 |
+| 8 | `tools/lexer_snapshot/lex_bench.pas:27` | SysUtils, Classes | 基准测试 | ✅ UNITPATH 指向 rtl/ 版本 |
+| 9 | `tools/lexer_snapshot/lex_snapshot.pas:29` | SysUtils, Classes | 快照工具 | ✅ UNITPATH 指向 rtl/ 版本 |
+| 10 | `tools/parser_bench/parser_bench.pas:33` | SysUtils, Classes | 基准测试 | ✅ UNITPATH 指向 rtl/ 版本 |
+| 11 | `tools/sema_bench/sema_bench.pas:32` | SysUtils, Classes | 基准测试 | ✅ UNITPATH 指向 rtl/ 版本 |
 
 **分析**: 开发/基准工具，不进入生产。但仍应使用框架接口以保持一致性。
 
@@ -124,8 +124,8 @@ uses
 - [ ] `np_sysutils.pas`: BaseUnix → nextpas.core.platform（需要深度重构）
 - [x] `np_allocator.pas`: UNITPATH 指向 rtl/ SysUtils
 
-### Phase 3: 工具（2-3 天）
-- [ ] 基准测试工具迁移到框架接口
+### Phase 3: 工具
+- [x] 基准测试工具 UNITPATH 指向 rtl/ SysUtils/Classes
 
 ### 已知例外（不修复）
 - tests/harness/ — 测试运行器，独立可执行
