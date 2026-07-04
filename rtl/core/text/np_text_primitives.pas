@@ -2,6 +2,8 @@ unit np_text_primitives;
 
 {$mode objfpc}{$H+}
 {$UNITPATH ../base}
+{$UNITPATH ../sysutils}
+{$UNITPATH ../classes}
 
 interface
 
