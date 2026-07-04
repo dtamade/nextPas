@@ -1,5 +1,154 @@
 # nextpas.core.mem API 参考
 
+## 分配器选择指南
+
+### 决策树
+
+```
+需要分配内存？
+├─ 通用场景 (malloc 替代) → DefaultAllocator (IAllocator)
+│  └─ 需要跟踪/泄漏检测 → TTrackingAllocator 包装
+│
+├─ 请求/帧级生命周期 → CreateDefaultArena (IArena)
+│  ├─ 固定容量 → TLocalArena
+│  ├─ 可增长 → TChunkedArena
+│  └─ 虚拟内存 → TVirtualArena (record, 不实现 IArena)
+│
+├─ 高频小对象 (8B-512B)
+│  ├─ 单线程 → TSizeClassPool / TFixedSlabPool
+│  └─ 多线程 → TSlabPoolConcurrent / TSlabPoolSharded
+│
+├─ 固定大小块池
+│  ├─ 单线程 → TBlockPool / TFixedPool
+│  └─ 多线程 → TBlockPoolConcurrent / TShardedBlockPool
+│
+└─ 特殊场景
+   ├─ 需要 IAllocator 接口的 Arena → CreateArenaAllocator
+   ├─ 需要 fallback 链 → TFallbackAllocator
+   ├─ 需要 mmap 匿名映射 → TMemoryMapAllocator
+   └─ 需要 mimalloc → TMimallocAllocator (动态库)
+```
+
+### 性能特征
+
+| 分配器 | 64B ns/op | 线程安全 | 适用场景 |
+|--------|-----------|----------|----------|
+| DefaultAllocator | 16 | ✅ | 通用 |
+| TLocalArena | 5 | ❌ | 帧分配 |
+| TChunkedArena | 26 | ❌ | 可增长帧分配 |
+| TVirtualArena | 44 | ❌ | 编译器热路径 |
+| TSizeClassPool | 8 | ❌ | 小对象池 |
+| TSlabPoolConcurrent | 4 | ✅ | 并发小对象 |
+| TBlockPool | 12 | ❌ | 固定大小块 |
+| TBlockPoolConcurrent | 8 | ✅ | 并发固定块 |
+
+### 常见场景示例
+
+**场景 1: 通用分配**
+```pascal
+uses nextpas.core.mem;
+
+var
+  LPtr: Pointer;
+begin
+  LPtr := DefaultAllocator.GetMem(1024);
+  try
+    // 使用内存...
+  finally
+    DefaultAllocator.FreeMem(LPtr);
+  end;
+end;
+```
+
+**场景 2: 请求级 Arena**
+```pascal
+uses nextpas.core.mem;
+
+var
+  LArena: IArena;
+  LPtr: Pointer;
+begin
+  LArena := CreateDefaultArena(64 * 1024);  // 64KB
+  try
+    LPtr := LArena.Alloc(1024);
+    // 使用内存...不需要单独 Free
+  finally
+    LArena.Reset;  // 一次性释放全部
+  end;
+end;
+```
+
+**场景 3: 高频小对象**
+```pascal
+uses nextpas.core.mem;
+
+var
+  LPool: TSizeClassPool;
+  LPtr: Pointer;
+begin
+  LPool := TSizeClassPool.Create;
+  try
+    LPtr := LPool.Alloc(64);
+    try
+      // 使用内存...
+    finally
+      LPool.Release(LPtr, 64);
+    end;
+  finally
+    LPool.Free;
+  end;
+end;
+```
+
+**场景 4: 并发分配**
+```pascal
+uses nextpas.core.mem;
+
+var
+  LPool: TSlabPoolConcurrent;
+  LPtr: Pointer;
+begin
+  LPool := TSlabPoolConcurrent.Create(4096);
+  try
+    LPtr := LPool.GetMem(64);
+    try
+      // 使用内存...
+    finally
+      LPool.FreeMem(LPtr);
+    end;
+  finally
+    LPool.Free;
+  end;
+end;
+```
+
+**场景 5: 泄漏检测**
+```pascal
+uses nextpas.core.mem;
+
+var
+  LTracker: TTrackingAllocator;
+  LPtr: Pointer;
+begin
+  LTracker := TTrackingAllocator.Create(DefaultAllocator);
+  try
+    LPtr := LTracker.GetMem(1024);
+    try
+      // 使用内存...
+    finally
+      LTracker.FreeMem(LPtr);
+    end;
+    
+    if LTracker.HasLeaks then
+      WriteLn(LTracker.ReportLeaks);
+  finally
+    LTracker.Free;
+  end;
+end;
+```
+
+---
+
 ## 先看这两个核心契约
 
 ### `IArena`
