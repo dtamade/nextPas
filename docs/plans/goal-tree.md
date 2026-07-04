@@ -72,7 +72,7 @@
 7. [x] 契约体系: base/errors/mem/exception/atomic
 
 ### 本月任务
-1. [ ] C7 深化: 目标运行时配置、多目标 IR、LLVM O2/LTO
+1. [x] C7 深化: 目标运行时配置、多目标 IR、LLVM O2/LTO
 2. [x] 建立完整契约体系 (57 模块全覆盖)
 3. [x] 完善测试覆盖 (合同审计全部 P0-P1 项已解决)
 
@@ -92,6 +92,7 @@
 | 2026-07-04 | make focused 修复 | awk→make -n，支持 include |
 | 2026-07-04 | 契约体系全部完成 | 57 模块全覆盖 |
 | 2026-07-04 | 合同审计完成 | 全部 P0-P1 项已解决 |
+| 2026-07-05 | C7 深化完成 | target runtime profile + 多目标 IR smoke |
 
 ---
 
