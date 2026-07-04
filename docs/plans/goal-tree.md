@@ -71,10 +71,19 @@
 6. [x] make focused 修复: include-aware target 检测
 7. [x] 契约体系: base/errors/mem/exception/atomic
 
+### 本周任务 (2026-07-05)
+1. [x] Test framework 可用性修复 M1-M2
+2. [x] bench 审计收尾 (14/17 fixed, 3 documented)
+3. [x] 治理文档刷新 (PLAN.md + CLAUDE.md + 路线图合并 + 技术债看板)
+4. [ ] c2p_win32_compat 平台排除
+5. [ ] mail 模块契约 (L3 最后一块)
+
 ### 本月任务
-1. [x] C7 深化: 目标运行时配置、多目标 IR、LLVM O2/LTO
+1. [ ] C7 深化: 多目标 IR、LLVM O2/LTO (smoke 已完成，多目标 IR 待完成)
 2. [x] 建立完整契约体系 (57 模块全覆盖)
 3. [x] 完善测试覆盖 (合同审计全部 P0-P1 项已解决)
+4. [ ] sema 继续拆分 (12,175 → 目标 <8000)
+5. [ ] permissive overload → 正式重载解析
 
 ---
 
@@ -92,8 +101,9 @@
 | 2026-07-04 | make focused 修复 | awk→make -n，支持 include |
 | 2026-07-04 | 契约体系全部完成 | 57 模块全覆盖 |
 | 2026-07-04 | 合同审计完成 | 全部 P0-P1 项已解决 |
-| 2026-07-05 | C7 深化完成 | target runtime profile + 多目标 IR smoke |
+| 2026-07-05 | C7 深化 smoke 完成 | target runtime profile 完成；多目标 IR + LLVM O2/LTO 待完成 |
+| 2026-07-05 | 治理文档刷新 | PLAN.md 重写 + CLAUDE.md 更新 + 路线图合并 + 技术债看板建立 |
 
 ---
 
-*最后更新: 2026-07-04*
+*最后更新: 2026-07-05*
