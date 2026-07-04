@@ -18,8 +18,7 @@ uses
   nextpas.core.collections.element_manager;
 
 threadvar
-  GLruCacheActive: Pointer,
-  nextpas.core.mem.allocator.base;
+  GLruCacheActive: Pointer;
 
 type
   {**
