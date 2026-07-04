@@ -69,6 +69,7 @@ type
 
       MPSC inbox: other threads can push freed blocks here via lock-free
       exchange. Owner thread drains inbox during allocation (before refill). }
+  PThreadCache = ^TThreadCache;
   TThreadCache = record
     FHeads: array[0..MEM_SIZECLASS_COUNT - 1] of PFreeNode;
     FCounts: array[0..MEM_SIZECLASS_COUNT - 1] of Word;
@@ -139,6 +140,11 @@ function MpscInboxDrain(var AInbox: TMpscInbox;
 
 {** Check if the MPSC inbox is empty. }
 function MpscInboxIsEmpty(var AInbox: TMpscInbox): Boolean;
+
+{** Push a block to a specific size class inbox in the thread cache.
+    Lock-free, safe from any thread. Used for cross-thread free. }
+procedure ThreadCacheInboxPush(var ACache: TThreadCache;
+  ASizeClass: Int32; APtr: Pointer);
 
 implementation
 
@@ -386,6 +392,14 @@ begin
   end
   else
     Result := False;
+end;
+
+procedure ThreadCacheInboxPush(var ACache: TThreadCache;
+  ASizeClass: Int32; APtr: Pointer);
+begin
+  if (ASizeClass < 0) or (ASizeClass >= MEM_SIZECLASS_COUNT) then
+    Exit;
+  MpscInboxPush(ACache.FInbox, APtr);
 end;
 
 end.

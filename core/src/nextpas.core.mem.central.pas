@@ -33,6 +33,7 @@ type
     FMemory: Pointer;     { Allocated memory backing the span. }
     FMemorySize: SizeUInt;
     FLastFreeTick: UInt64; { Op counter when span became fully free (0 = not idle). }
+    FOwnerThreadId: QWord; { Thread that allocated this span (for cross-thread free). }
   end;
 
   {** Central span pool for one size class. Manages partial and full spans.
@@ -84,6 +85,12 @@ function ScavengeCentralPools(var APool: TCentralPool;
     Safe to call from any thread without locking.
     Inbox is drained on the next CentralPoolAlloc call. }
 procedure CentralPoolInboxPush(var APool: TCentralPool; APtr: Pointer);
+
+{** Find the owner thread ID for a given pointer.
+    Returns the thread ID that allocated the span containing APtr.
+    Returns 0 if APtr is not found in any span.
+    Uses MRU cache for O(1) common case. }
+function FindSpanOwnerThreadId(var APool: TCentralPool; APtr: Pointer): QWord;
 
 implementation
 
@@ -176,6 +183,7 @@ begin
   APool.FEntries[LIdx].FMemory := LMem;
   APool.FEntries[LIdx].FMemorySize := LMemSize;
   APool.FEntries[LIdx].FLastFreeTick := 0;
+  APool.FEntries[LIdx].FOwnerThreadId := GetCurrentThreadId;
   { Add to partial list. }
   APool.FPartialNext[LIdx] := APool.FPartialHead;
   APool.FPartialHead := LIdx;
@@ -426,6 +434,37 @@ begin
   finally
     CentralPoolUnlock(APool.FSpinLock);
   end;
+end;
+
+function FindSpanOwnerThreadId(var APool: TCentralPool; APtr: Pointer): QWord;
+var
+  I: Int32;
+  LBase: PByte;
+  LSize: SizeUInt;
+begin
+  { Check MRU cache first. }
+  I := APool.FLastHitIndex;
+  if (I >= 0) and (I < APool.FEntryCount) and (APool.FEntries[I].FMemory <> nil) then
+  begin
+    LBase := PByte(APool.FEntries[I].FMemory);
+    LSize := APool.FEntries[I].FMemorySize;
+    if (PByte(APtr) >= LBase) and (PByte(APtr) < LBase + LSize) then
+      Exit(APool.FEntries[I].FOwnerThreadId);
+  end;
+  { Scan in reverse order. }
+  for I := APool.FEntryCount - 1 downto 0 do
+  begin
+    if APool.FEntries[I].FMemory = nil then
+      Continue;
+    LBase := PByte(APool.FEntries[I].FMemory);
+    LSize := APool.FEntries[I].FMemorySize;
+    if (PByte(APtr) >= LBase) and (PByte(APtr) < LBase + LSize) then
+    begin
+      APool.FLastHitIndex := I;
+      Exit(APool.FEntries[I].FOwnerThreadId);
+    end;
+  end;
+  Result := 0;
 end;
 
 end.
