@@ -43,6 +43,7 @@ type
   TBenchFunc = nextpas.core.bench.intf.TBenchFunc;
   TBenchParamFunc = nextpas.core.bench.intf.TBenchParamFunc;
   TBenchLoopFunc = nextpas.core.bench.intf.TBenchLoopFunc;
+  TBenchLoopContextFunc = nextpas.core.bench.intf.TBenchLoopContextFunc;
   TBenchSetupFunc = nextpas.core.bench.intf.TBenchSetupFunc;
   TBenchTeardownFunc = nextpas.core.bench.intf.TBenchTeardownFunc;
 
@@ -102,6 +103,8 @@ type
       ASetup: TBenchSetupFunc; ATeardown: TBenchTeardownFunc): IBenchSuite;
     {** 用户控制循环 — TBenchLoopFunc 不支持 IBenchContext }
     function AddLoop(const AName: string; AFunc: TBenchLoopFunc): IBenchSuite;
+    {** F-01: 用户控制循环 — TBenchLoopContextFunc 支持 IBenchContext }
+    function AddLoopWithContext(const AName: string; AFunc: TBenchLoopContextFunc): IBenchSuite;
     function Clear: IBenchSuite;
     function RemoveByName(const AName: string): IBenchSuite;
     function SetMinDuration(ADuration: TDuration): IBenchSuite;
@@ -445,6 +448,27 @@ begin
   LEntry.Condition := True;
   LEntry.IsLoop := True;
   LEntry.LoopFunc := AFunc;
+
+  EnsureEntryCapacity;
+  FEntries[FEntryCount] := LEntry;
+  Inc(FEntryCount);
+end;
+
+{** F-01: AddLoopWithContext — loop with IBenchContext access }
+function TBenchSuite.AddLoopWithContext(const AName: string;
+  AFunc: TBenchLoopContextFunc): IBenchSuite;
+var
+  LEntry: TBenchEntry;
+begin
+  GuardNotRun;
+  if not Assigned(AFunc) then
+    raise EBenchInvalidParam.Create('TBenchSuite.AddLoopWithContext: function must not be nil');
+  Result := Self;
+  LEntry := Default(TBenchEntry);
+  LEntry.Name := AName;
+  LEntry.Condition := True;
+  LEntry.IsLoop := True;
+  LEntry.LoopContextFunc := AFunc;
 
   EnsureEntryCapacity;
   FEntries[FEntryCount] := LEntry;

@@ -34,6 +34,7 @@ type
   {** 从 base 模块 re-export 数组类型 }
   TBenchResultArray = nextpas.core.bench.base.TBenchResultArray;
   TBenchComparisonArray = nextpas.core.bench.base.TBenchComparisonArray;
+  {** @deprecated Use TBaselineData instead. Kept for backward compatibility. }
   TBenchBaseline = nextpas.core.bench.base.TBaselineData;
 
   {** 从 base 模块 re-export 多基线矩阵类型 }
@@ -98,8 +99,11 @@ type
   {** 参数化基准函数类型 }
   TBenchParamFunc = procedure(const ACtx: IBenchContext; AParam: Int64);
 
-  {** 用户控制循环的基准函数类型 }
+  {** 用户控制循环的基准函数类型（不支持 IBenchContext） }
   TBenchLoopFunc = procedure(AN: Int64);
+
+  {** 用户控制循环的基准函数类型（支持 IBenchContext，可设置 bytes/allocs/skip） }
+  TBenchLoopContextFunc = procedure(const ACtx: IBenchContext; AN: Int64);
 
   {** 基准函数类型 - 带 setup/teardown }
   TBenchSetupFunc = function: Pointer;
@@ -112,8 +116,9 @@ type
     Func: TBenchFunc;        {< 标准基准函数（框架控制迭代） }
     ParamFunc: TBenchParamFunc; {< 参数化基准函数 }
     ParamValue: Int64;       {< 传递给 ParamFunc 的参数值 }
-    IsLoop: Boolean;         {< true = 用户控制循环（LoopFunc），false = 框架控制 }
-    LoopFunc: TBenchLoopFunc; {< 用户控制循环的基准函数 }
+    IsLoop: Boolean;         {< true = 用户控制循环（LoopFunc/LoopContextFunc），false = 框架控制 }
+    LoopFunc: TBenchLoopFunc; {< 用户控制循环的基准函数（无 context） }
+    LoopContextFunc: TBenchLoopContextFunc; {< F-01: 用户控制循环的基准函数（有 context） }
     Setup: TBenchSetupFunc;  {< 每次基准运行前调用（所有迭代共享同一 context 数据） }
     Teardown: TBenchTeardownFunc; {< 基准运行结束后调用，释放 Setup 返回的数据 }
     Condition: Boolean;      {< false 时跳过此条目（用于条件基准） }
@@ -163,6 +168,11 @@ type
     {** 添加用户控制循环的基准测试 — TBenchLoopFunc 不支持 IBenchContext
      *  @raises EBenchInvalidParam 当 AFunc 为 nil 时 }
     function AddLoop(const AName: string; AFunc: TBenchLoopFunc): IBenchSuite;
+
+    {** F-01: 添加用户控制循环的基准测试（带 IBenchContext）。
+     *  与 AddLoop 相同，但回调可访问 IBenchContext 以设置 bytes/allocs/skip。
+     *  @raises EBenchInvalidParam 当 AFunc 为 nil 时 }
+    function AddLoopWithContext(const AName: string; AFunc: TBenchLoopContextFunc): IBenchSuite;
 
     {** 清空所有已注册条目 (DS-03) }
     function Clear: IBenchSuite;
@@ -270,6 +280,7 @@ type
     function CompareWithBaseline: TBenchComparisonArray;
 
     {** 两个结果对比（Mann-Whitney U 检验，需 RawSamples）。
+     *  ANameA = current（当前结果），ANameB = baseline（基线结果）。
      *  @raises EBenchError 当任一名称不存在时。 }
     function CompareTwoResults(const ANameA, ANameB: string): TBenchComparison;
 

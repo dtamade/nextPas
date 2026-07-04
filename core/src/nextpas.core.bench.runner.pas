@@ -541,11 +541,8 @@ begin
   if AIters <= 0 then
     Exit;
 
-  { CR-13 Known Limitation: Loop path (TBenchLoopFunc) does not support IBenchContext.
-  *  TBenchLoopFunc takes only (AIters: Int64) — no context parameter is available.
-  *  Therefore, loop benchmarks cannot use SetBytes/SetAllocs/Skip/ResetTimer.
-  *  Use the regular TBenchFunc path if context operations are needed. }
-  if AEntry.IsLoop and Assigned(AEntry.LoopFunc) then
+  { F-01: LoopFunc (no context) or LoopContextFunc (with context) }
+  if AEntry.IsLoop and (Assigned(AEntry.LoopFunc) or Assigned(AEntry.LoopContextFunc)) then
     Result := ExecuteLoopEntry(AEntry, AIters, ATrackMemory)
   else if AEntry.EnableParallel and (AEntry.ParallelThreads > 1) then
     Result := ExecuteParallelEntry(AEntry, AIters, ATrackMemory)
@@ -576,21 +573,26 @@ begin
     try
       LContextObj.Reset;
       LContextObj.SetIterations(AIters);
-      AEntry.LoopFunc(AIters);
+      { F-01: dispatch to LoopContextFunc (with context) or LoopFunc (without) }
+      if Assigned(AEntry.LoopContextFunc) then
+        AEntry.LoopContextFunc(LContext, AIters)
+      else
+        AEntry.LoopFunc(AIters);
 
       Result.Iterations := AIters;
       Result.TotalNs := platform_monotonic_ns - LContextObj.GetStartNs;
+      Result.BytesPerOp := LContextObj.GetBytesPerOp;
+      Result.AllocsPerOp := LContextObj.GetAllocsPerOp;
       Result.Skipped := LContextObj.IsSkipped;
       Result.SkipReason := LContextObj.GetSkipReason;
 
       if ATrackMemory then
       begin
         LMemoryStats := GetGlobalMemoryStats;
-        if Result.Iterations > 0 then
-        begin
+        if (Result.Iterations > 0) and (Result.BytesPerOp = 0) then
           Result.BytesPerOp := Ceil(LMemoryStats.AllocBytes / Result.Iterations);
+        if (Result.Iterations > 0) and (Result.AllocsPerOp = 0) then
           Result.AllocsPerOp := Ceil(LMemoryStats.AllocCount / Result.Iterations);
-        end;
       end;
     finally
       if ATrackMemory then

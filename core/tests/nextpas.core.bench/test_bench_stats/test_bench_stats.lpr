@@ -574,9 +574,9 @@ begin
   LRatios[3] := 1.0; LRatios[4] := 1.0;
   CheckNear(1.0, GAnalyzer.GeometricMean(LRatios), 0.001, 'All 1.0 = 1.0');
 
-  { 非法 ratio (负数) 返回 0 }
+  { F-13: 非法 ratio (负数) 返回 NaN }
   SetLength(LRatios, 2); LRatios[0] := 1.0; LRatios[1] := -0.5;
-  CheckNear(0.0, GAnalyzer.GeometricMean(LRatios), 0.001, 'Negative ratio returns 0');
+  Check(IsDoubleNaN(GAnalyzer.GeometricMean(LRatios)), 'Negative ratio returns NaN');
 end;
 
 procedure TestOLSRegression;
