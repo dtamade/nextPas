@@ -135,6 +135,8 @@ type
       pointers. Safety net: GStubRegistry in finalization catches suites that
       never run. }
     ShouldFailMsg: string;  { ekShouldFail: expected failure reason; test passes if it fails }
+    ShouldFailClass: TClass;      { ekShouldFail: expected exception class (nil = any) }
+    ShouldFailContains: string;   { ekShouldFail: expected substring in exception message }
     ShortSkip  : Boolean;  { true = skip this test in --short mode (Go testing.Short()) }
     TableCase  : Pointer;       { PTestCase, heap-allocated }
     TableProc  : Pointer;       { PTestCaseProc, heap-allocated }
@@ -280,6 +282,8 @@ begin
   AEntry.Tags        := nil;
   AEntry.RepeatCount := 0;
   AEntry.ShouldFailMsg := '';
+  AEntry.ShouldFailClass := nil;
+  AEntry.ShouldFailContains := '';
   AEntry.ShortSkip   := False;
   AEntry.TableCase   := nil;
   AEntry.TableProc   := nil;
@@ -530,6 +534,24 @@ begin
     end;
     on E: Exception do
     begin
+      { Check exception class if specified }
+      if (AEntry.ShouldFailClass <> nil) and
+         not (E.InheritsFrom(AEntry.ShouldFailClass)) then
+      begin
+        AStatus := tsFailed;
+        AFailMsg := 'Expected exception ' + AEntry.ShouldFailClass.ClassName +
+          ' but got ' + E.ClassName + ': ' + E.Message;
+        Exit;
+      end;
+      { Check message substring if specified }
+      if (AEntry.ShouldFailContains <> '') and
+         (Pos(AEntry.ShouldFailContains, E.Message) = 0) then
+      begin
+        AStatus := tsFailed;
+        AFailMsg := 'Expected exception message containing "' +
+          AEntry.ShouldFailContains + '" but got: ' + E.Message;
+        Exit;
+      end;
       { Expected failure — test passes }
       AStatus := tsPassed;
     end;

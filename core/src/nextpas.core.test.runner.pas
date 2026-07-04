@@ -91,6 +91,22 @@ type
       const AShouldFailMsg: string = '');
     procedure ShouldFail(const AName: string; AProc: TTestClosure;
       const AShouldFailMsg: string = '');
+    { ShouldFail with exception class matching:
+      test passes only if proc raises AExpectedClass (or subclass).
+      AContains is optional substring that must appear in exception message. }
+    procedure ShouldFail(const AName: string; AProc: TTestProc;
+      AExpectedClass: TClass;
+      const AContains: string = '');
+    procedure ShouldFail(const AName: string; AProc: TTestClosure;
+      AExpectedClass: TClass;
+      const AContains: string = '');
+    { ShouldFail with message substring matching only (no class check). }
+    procedure ShouldFail(const AName: string; AProc: TTestProc;
+      const AContains: string;
+      ADummy: Integer);  { disambiguate from ShouldFail(name, proc, msg) }
+    procedure ShouldFail(const AName: string; AProc: TTestClosure;
+      const AContains: string;
+      ADummy: Integer);
     { ShortSkip: mark a test to be skipped in --short mode (Go testing.Short()).
       When ShortMode is off, the test runs normally. }
     procedure ShortSkip(const AName: string; AProc: TTestProc);
@@ -242,6 +258,7 @@ var
     R6-08: NOT thread-safe — all access must be from the main thread only. }
   GFixtureRegistry: specialize TArray<TObject>;
   GStubCleanupI: Integer;
+  GMainThreadId: UInt64;
 
 threadvar
   GCurrentTestContextObj: TObject;
@@ -433,6 +450,8 @@ procedure RegisterStub(var ASuite: TTestSuite; APtr: Pointer);
 var
   LIdx: Integer;
 begin
+  Assert(platform_thread_id = GMainThreadId,
+    'RegisterStub must be called from the main thread');
   { Global safety-net — disposed in finalization for suites that never run.
     Geometric growth to avoid O(n²) realloc on repeated RegisterStub calls. }
   LIdx := GrowArrayLen(GStubRegistry, 16);
@@ -454,6 +473,8 @@ procedure RegisterFixture(var ASuite: TTestSuite; AFixture: TObject);
 var
   LIdx: Integer;
 begin
+  Assert(platform_thread_id = GMainThreadId,
+    'RegisterFixture must be called from the main thread');
   { Global safety-net — disposed in finalization for suites that never run.
     Geometric growth to avoid O(n²) realloc on repeated RegisterFixture calls. }
   LIdx := GrowArrayLen(GFixtureRegistry, 16);
@@ -651,6 +672,52 @@ begin
   InitClosureEntry(LEntry, AName, AProc);
   LEntry.Kind          := ekShouldFail;
   LEntry.ShouldFailMsg := AShouldFailMsg;
+  RegisterEntry(Tests, LEntry);
+end;
+
+procedure TTestSuite.ShouldFail(const AName: string; AProc: TTestProc;
+  AExpectedClass: TClass; const AContains: string);
+var
+  LEntry: TTestEntry;
+begin
+  InitProcEntry(LEntry, AName, AProc);
+  LEntry.Kind             := ekShouldFail;
+  LEntry.ShouldFailClass  := AExpectedClass;
+  LEntry.ShouldFailContains := AContains;
+  RegisterEntry(Tests, LEntry);
+end;
+
+procedure TTestSuite.ShouldFail(const AName: string; AProc: TTestClosure;
+  AExpectedClass: TClass; const AContains: string);
+var
+  LEntry: TTestEntry;
+begin
+  InitClosureEntry(LEntry, AName, AProc);
+  LEntry.Kind             := ekShouldFail;
+  LEntry.ShouldFailClass  := AExpectedClass;
+  LEntry.ShouldFailContains := AContains;
+  RegisterEntry(Tests, LEntry);
+end;
+
+procedure TTestSuite.ShouldFail(const AName: string; AProc: TTestProc;
+  const AContains: string; ADummy: Integer);
+var
+  LEntry: TTestEntry;
+begin
+  InitProcEntry(LEntry, AName, AProc);
+  LEntry.Kind               := ekShouldFail;
+  LEntry.ShouldFailContains := AContains;
+  RegisterEntry(Tests, LEntry);
+end;
+
+procedure TTestSuite.ShouldFail(const AName: string; AProc: TTestClosure;
+  const AContains: string; ADummy: Integer);
+var
+  LEntry: TTestEntry;
+begin
+  InitClosureEntry(LEntry, AName, AProc);
+  LEntry.Kind               := ekShouldFail;
+  LEntry.ShouldFailContains := AContains;
   RegisterEntry(Tests, LEntry);
 end;
 
@@ -1980,6 +2047,9 @@ begin
   else
     Result := RunAll;
 end;
+
+initialization
+  GMainThreadId := platform_thread_id;
 
 finalization
   { Safety net: dispose any method stubs and fixture objects that were not

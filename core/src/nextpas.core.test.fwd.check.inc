@@ -15,6 +15,9 @@ begin nextpas.core.test.check.CheckEqual(AExpected, AActual); end;
 procedure CheckEqual(const AExpected, AActual: Pointer);
 begin nextpas.core.test.check.CheckEqual(AExpected, AActual); end;
 
+procedure CheckEqual(const AExpected, AActual: UInt64);
+begin nextpas.core.test.check.CheckEqual(AExpected, AActual); end;
+
 procedure CheckEqual(const AExpected, AActual: Double;
   AEpsilon: Double);
 begin nextpas.core.test.check.CheckEqual(AExpected, AActual, AEpsilon); end;
@@ -54,9 +57,18 @@ begin nextpas.core.test.check.CheckNotEqual(AExpected, AActual); end;
 procedure CheckNotEqual(const AExpected, AActual: Pointer);
 begin nextpas.core.test.check.CheckNotEqual(AExpected, AActual); end;
 
+procedure CheckNotEqual(const AExpected, AActual: UInt64);
+begin nextpas.core.test.check.CheckNotEqual(AExpected, AActual); end;
+
 procedure CheckNotEqual(const AExpected, AActual: Double;
   AEpsilon: Double);
 begin nextpas.core.test.check.CheckNotEqual(AExpected, AActual, AEpsilon); end;
+
+procedure CheckEqual(const AExpected, AActual: TBytes);
+begin nextpas.core.test.check.CheckEqual(AExpected, AActual); end;
+
+procedure CheckNotEqual(const AExpected, AActual: TBytes);
+begin nextpas.core.test.check.CheckNotEqual(AExpected, AActual); end;
 
 procedure CheckTrue(AValue: Boolean; const AMessage: string);
 begin nextpas.core.test.check.CheckTrue(AValue, AMessage); end;
