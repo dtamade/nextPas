@@ -45,7 +45,7 @@ type
     FPartialHead: Int32;    { Index of first partial entry (-1 = none). }
     FPartialNext: array of Int32; { Intrusive linked list via indices. }
     FSlotSize: SizeUInt;
-    FSpinLock: SizeUInt;    { Simple test-and-set lock. }
+    FSpinLock: SizeUInt;    { CentralPoolLock/CentralPoolUnlock. }
     FInboxHead: Pointer;    { Lock-free inbox: CAS singly linked list. }
     FLastHitIndex: Int32;   { MRU cache: last span found by FindSpanIndex (-1 = none). }
   end;
@@ -96,13 +96,20 @@ type
     FNext: PInboxNode;
   end;
 
-procedure SpinLock(var ALock: SizeUInt);
+procedure CentralPoolLock(var ALock: SizeUInt);
+var
+  LBackoff: SizeUInt;
 begin
+  LBackoff := 1;
   while AtomicCmpExchange(ALock, 1, 0) <> 0 do
-    { Spin }; { No backoff: contention is rare with TLS cache. }
+  begin
+    ThreadSwitch;
+    if LBackoff < 64 then
+      LBackoff := LBackoff shl 1;
+  end;
 end;
 
-procedure SpinUnlock(var ALock: SizeUInt);
+procedure CentralPoolUnlock(var ALock: SizeUInt);
 begin
   AtomicExchange(ALock, 0);
 end;
@@ -184,7 +191,7 @@ var
   LPtr: Pointer;
 begin
   LCount := 0;
-  SpinLock(APool.FSpinLock);
+  CentralPoolLock(APool.FSpinLock);
   try
     { Drain lock-free inbox first — returned blocks become available. }
     if APool.FInboxHead <> nil then
@@ -217,7 +224,7 @@ begin
         APool.FPartialHead := APool.FPartialNext[LIdx];
     end;
   finally
-    SpinUnlock(APool.FSpinLock);
+    CentralPoolUnlock(APool.FSpinLock);
   end;
   Result := LCount;
 end;
@@ -297,7 +304,7 @@ var
   LIdx: Int32;
   LWasFull: Boolean;
 begin
-  SpinLock(APool.FSpinLock);
+  CentralPoolLock(APool.FSpinLock);
   try
     for I := 0 to ACount - 1 do
     begin
@@ -323,7 +330,7 @@ begin
       Inc(ABlocks);
     end;
   finally
-    SpinUnlock(APool.FSpinLock);
+    CentralPoolUnlock(APool.FSpinLock);
   end;
 end;
 
@@ -332,13 +339,13 @@ var
   I: Int32;
 begin
   Result := 0;
-  SpinLock(APool.FSpinLock);
+  CentralPoolLock(APool.FSpinLock);
   try
     for I := 0 to APool.FEntryCount - 1 do
       if APool.FEntries[I].FMemory <> nil then
         Inc(Result, SpanFreeCount(APool.FEntries[I].FSpan));
   finally
-    SpinUnlock(APool.FSpinLock);
+    CentralPoolUnlock(APool.FSpinLock);
   end;
 end;
 
@@ -349,7 +356,7 @@ var
   LAge: UInt64;
 begin
   Result := 0;
-  SpinLock(APool.FSpinLock);
+  CentralPoolLock(APool.FSpinLock);
   try
     for I := 0 to APool.FEntryCount - 1 do
     begin
@@ -394,7 +401,7 @@ begin
       end;
     end;
   finally
-    SpinUnlock(APool.FSpinLock);
+    CentralPoolUnlock(APool.FSpinLock);
   end;
 end;
 

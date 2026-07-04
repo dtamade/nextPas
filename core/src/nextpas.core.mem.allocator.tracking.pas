@@ -355,7 +355,13 @@ begin
     if not MapDelete(PtrUInt(ADst), LSize, LAllocId) then
       raise EDoubleFree.Create(aeDoubleFree,
         'TTrackingAllocator.DoFreeMem: pointer not tracked (double-free or foreign pointer)');
-    FInner.FreeMem(ADst);
+    try
+      FInner.FreeMem(ADst);
+    except
+      { Restore tracking record so double-free detection still works. }
+      MapInsert(PtrUInt(ADst), LSize, LAllocId);
+      raise;
+    end;
   finally
     FLock.Release;
   end;
