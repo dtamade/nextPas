@@ -844,7 +844,7 @@ begin
     'end.');
   LRunnerSection := ExtractSection(LAtomicTestSource,
     'begin' + LineEnding +
-    '  T := TTestSuite.Create(''nextpas.core.atomic'');' + LineEnding +
+    '  T := TTestSuite.Create(''nextpas.core.atomic'');',
     '  if not T.Run then Halt(1);');
   LInvalidOrderMatrixSection := ExtractSection(LAtomicTestSource,
     'procedure ' + 'TestAtomicInvalidMemoryOrderSurfaceMatrix;' + LineEnding +
