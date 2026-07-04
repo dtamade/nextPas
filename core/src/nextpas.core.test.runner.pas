@@ -339,6 +339,10 @@ begin
     Result := AEntry.Name;
 end;
 
+{ Runner-level config: reads from the first suite's config.
+  In practice all suites share the same DefaultConfig, so reading Suites[0]
+  is correct. Per-suite config differences are handled by each suite's
+  own RunWithResult/RunParallelWithResult via ResolveConfig. }
 function RunnerConfig(const ARunner: TSuiteRunner): TTestConfig;
 begin
   if Length(ARunner.Suites) > 0 then
