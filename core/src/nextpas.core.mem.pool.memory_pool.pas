@@ -24,6 +24,12 @@ type
   // - IMemoryPool 同时实现 IAllocator（通过 GetMem/FreeMem/AllocMem/ReallocMem/Traits）
   // - 调用方可以将 IMemoryPool 当作 IAllocator 使用
   //
+  // ⚠️ 同一对象两种分配语义 (以 TSlabPool 为例):
+  //   - 通过 IPool 引用调用 Acquire → 分配最小 slab 单元 (通常 8B)
+  //   - 通过 IAllocator 引用调用 GetMem(64) → 走 size-class 路由
+  //   两者返回的指针可以互相 FreeMem/Release，但分配粒度不同。
+  //   新代码应统一使用 IAllocator.GetMem/FreeMem，Acquire 仅保留向后兼容。
+  //
   // 实现者：TSlabPool, TFixedSlabPool, TSlabPoolConcurrent 等
   IMemoryPool = interface(IPool)
     ['{6F6B4299-3B29-4C6F-917D-8D6B4B5E0E99}']

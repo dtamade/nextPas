@@ -453,6 +453,26 @@ begin
   end;
 end;
 
+{ F-04: TFallbackAllocator.Traits must report ThreadSafe=False
+  because its internal hash map has no synchronization. }
+procedure TestFallbackAllocatorTraitsThreadSafeFalse;
+var
+  LPrimary, LFallbackAlloc: IAllocator;
+  LFallback: TFallbackAllocator;
+  LTraits: TAllocatorTraits;
+begin
+  LPrimary := GetRtlAllocator;
+  LFallbackAlloc := GetRtlAllocator;
+  LFallback := TFallbackAllocator.Create(LPrimary, LFallbackAlloc);
+  try
+    LTraits := LFallback.Traits;
+    Check(not LTraits.ThreadSafe, 'FallbackAllocator.Traits.ThreadSafe must be False');
+    Check(LTraits.SupportsRealloc, 'FallbackAllocator.Traits.SupportsRealloc should be True');
+  finally
+    LFallback.Free;
+  end;
+end;
+
 { ---------------------------------------------------------------------------
   Runner
   --------------------------------------------------------------------------- }
@@ -471,6 +491,7 @@ begin
   T.Test('FallbackAllocator realloc from fallback updates size', @TestFallbackAllocatorReallocMemFromFallbackUpdatesSize);
   T.Test('FallbackAllocator realloc(ptr,0) frees entry (R-21)', @TestFallbackReallocZeroSize);
   T.Test('FallbackAllocator realloc failure returns nil (R-21)', @TestFallbackReallocFailureReturnsNil);
+  T.Test('FallbackAllocator traits ThreadSafe=False (F-04)', @TestFallbackAllocatorTraitsThreadSafeFalse);
 
   { TFallbackArena }
   T.Test('FallbackArena create/destroy', @TestFallbackArenaCreateDestroy);

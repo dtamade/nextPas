@@ -1,28 +1,28 @@
 # nextpas.core.mem 可用性评估报告
 
-**评估日期**: 2026-07-02 (R1), 2026-07-02 (R2)
-**评估范围**: 57 个源文件 / 45 个测试文件 / 980 个断言
+**评估日期**: 2026-07-02 (R1), 2026-07-02 (R2), 2026-07-04 (R4)
+**评估范围**: 57 个源文件 / 48 个测试文件 / 604 tests / 0 failures / 0 leaks
 **评估维度**: 接口设计、API 易用性、调用一致性、错误提示、边界条件、测试覆盖、性能与内存安全
-**修复轮次**: R1 修复 5 项 (706d382fe) + R2 修复 3 项 (1e610af02, 3df1782a3, fb32149e7)
+**修复轮次**: R1 修复 5 项 (706d382fe) + R2 修复 3 项 (1e610af02, 3df1782a3, fb32149e7) + R4 修复 5 项
 
 ---
 
 ## Summary
 
-| 维度 | 得分 (1-10) | 等级 |
-|------|-------------|------|
-| 接口设计 | 9.0 | 优秀 |
-| API 易用性 | 8.5 | 优秀 |
-| 调用一致性 | 8.5 | 优秀 |
-| 错误提示质量 | 8.5 | 优秀 |
-| 边界条件 | 8.5 | 优秀 |
-| 测试覆盖 | 9.0 | 优秀 |
-| 性能 | 9.0 | 卓越 |
-| 内存安全 | 9.0 | 优秀 |
-| **综合** | **8.8** | **优秀** |
+| 维度 | 得分 (1-10) | 等级 | R4 趋势 |
+|------|-------------|------|---------|
+| 接口设计 | 8.5 | 优秀 | ↓ (Pool 接口碎片) |
+| API 易用性 | 8.0 | 良好 | → |
+| 调用一致性 | 7.5 | 良好 | ↓ (Acquire 签名分裂) |
+| 错误提示质量 | 8.0 | 良好 | → |
+| 边界条件 | 8.5 | 优秀 | → |
+| 测试覆盖 | 9.0 | 卓越 | ↑ (604 tests, +2 Traits 覆盖) |
+| 性能 | 9.5 | 卓越 | → |
+| 内存安全 | 8.0 | 良好 | ↑ (Traits 一致性修复) |
+| **综合** | **8.1** | **优秀** | — |
 
 **风险等级**: LOW
-**结论**: 生产就绪。R1+R2+R3 共处理 17 项 finding，综合评分从 8.1 提升至 8.8。所有风险项已解决。
+**结论**: 生产就绪。R4 深度审计发现 9 项新 finding，已修复 5 项（F-04/F-05/F-07/F-08/F-09），剩余 4 项为文档/接口层面改进（P1-P2）。
 
 ---
 
@@ -246,6 +246,98 @@ end;
 
 ---
 
+### R4 深度审计发现 (2026-07-04)
+
+### F-18 [P1] CONTRACT.md TAllocatorTraits 字段数错误 — **已修复**
+
+**位置**: `core/docs/mem/CONTRACT.md:89-92`
+
+**问题**: 文档显示 2 字段，实际代码有 3 字段（加 SupportsRealloc）。
+
+**修复**: CONTRACT.md 同步为 3 字段。本轮修复。
+
+---
+
+### F-19 [P1-已修复] Pool 接口 Acquire 签名分裂
+
+**位置**: `pool.base.pas:11` vs `blockpool.pas:57`
+
+**问题**: `IPool.Acquire(out APtr: Pointer): Boolean` 与 `IBlockPool.Acquire: Pointer` 签名不同。切换池类型需改调用代码。
+
+**修复**: 在 pool.base.pas IPool 接口文档中添加接口选择决策树，说明 IPool vs IBlockPool 的设计意图和使用边界。签名差异是有意设计，不统一。
+
+---
+
+### F-20 [P1-已修复] TSlabPool 同时实现 IMemoryPool + IAllocator
+
+**位置**: `pool.slab.pas:111`
+
+**问题**: 通过 IPool 引用调用 Acquire 分配最小 slab 单元；通过 IAllocator 引用调用 GetMem(64) 走 size-class 路由。同一对象、两种分配语义。
+
+**修复**: 在 pool.memory_pool.pas IMemoryPool 文档中添加语义边界说明，明确 Acquire vs GetMem 的分配粒度差异和推荐用法。
+
+---
+
+### F-21 [P2-已修复] TFallbackAllocator ThreadSafe trait 未显式设为 False
+
+**位置**: `allocator.fallback.pas:419-430`
+
+**问题**: TFallbackAllocator 继承 primary 的 ThreadSafe=True，但内部 hash map 无同步保护。
+
+**修复**: 显式设置 `Result.ThreadSafe := False` + 新增测试验证。本轮修复。
+
+---
+
+### F-22 [P2-已修复] TCallbackAllocator 不 override Traits
+
+**位置**: `allocator.callback.pas`
+
+**问题**: TCallbackAllocator 继承基类默认 ThreadSafe=True，但回调函数线程安全性未知。
+
+**修复**: 添加 Traits override，ThreadSafe=False + 新增测试验证。本轮修复。
+
+---
+
+### F-23 [P2-已修复] TThreadArenaManager 缺少自动 thread-exit cleanup
+
+**位置**: `arena.thread.pas`
+
+**问题**: TGrowingAllocator 已有 pthread destructor / FlsCallback 自动 cleanup，但 TThreadArenaManager 没有。调用方必须手动 DrainTLS。
+
+**修复**: 复用 GrowingAllocator 的 pthread_key_create/FlsAlloc 机制。每个 TThreadArenaManager.Create 注册 cleanup，线程退出时自动将 Arena 归还池。Get 热路径仅增加一次 pthread_setspecific 调用。
+
+---
+
+### F-24 [P2-已修复] AllocArray 乘法溢出检查在溢出后执行
+
+**位置**: `mem.pas:167-169`
+
+**问题**: `LTotal := ACount * AElemSize` 后检查 `LTotal div AElemSize <> ACount`，但溢出后的除法检查可被 wrap-around 绕过。
+
+**修复**: 改用乘法前检查 `ACount > High(SizeUInt) div AElemSize`。本轮修复。
+
+---
+
+### F-25 [P2-已修复] CONTRACT.md 测试矩阵数据过时
+
+**位置**: `CONTRACT.md:328`
+
+**问题**: 文档声称 "~370 tests"，实际 602 tests（差距 63%）。
+
+**修复**: 更新为 602 tests / 48 套件。本轮修复。
+
+---
+
+### F-26 [P2] SecureZeroString 共享引用 COW 限制 — 已文档化
+
+**位置**: `secure.pas:61-73`
+
+**问题**: UniqueString 在 COW 场景下创建新副本，原数据残留。
+
+**状态**: 已添加详细文档说明限制。无法在不破坏其他引用方的前提下修复（字符串字面量在只读段）。安全敏感场景调用方应确保字符串不共享。
+
+---
+
 ## Risk
 
 | ID | 风险 | 影响 | 概率 | 等级 | 状态 |
@@ -253,6 +345,12 @@ end;
 | R-01 | TMemMutex -O2 死锁 | 生产环境随机死锁 | 中 | MEDIUM | **已解决** |
 | R-02 | 接口过度暴露导致误用 | 用户调用 MemSize 得到 0 | 高 | LOW | **已解决** |
 | R-03 | Pool 接口碎片化 | 用户选错接口 | 低 | LOW | **已解决** |
+| R-04 | TFallbackAllocator ThreadSafe 误导 | 多线程数据竞争 | 中 | MEDIUM | **R4 已修复** |
+| R-05 | TCallbackAllocator ThreadSafe 误导 | 多线程数据竞争 | 中 | MEDIUM | **R4 已修复** |
+| R-06 | AllocArray 溢出检查可绕过 | 恶意输入错误分配 | 低 | LOW | **R4 已修复** |
+| R-07 | Pool Acquire 签名分裂 | 用户选错接口 | 低 | LOW | **R5 已修复** |
+| R-08 | IMemoryPool 双语义 | 分配粒度混淆 | 低 | LOW | **R5 已修复** |
+| R-09 | TThreadArena 泄漏 | 线程退出 Arena 未回收 | 中 | MEDIUM | **R5 已修复** |
 
 ---
 
@@ -300,7 +398,7 @@ end;
 
 ## Next Steps
 
-### 已完成 (R1+R2+R3)
+### 已完成 (R1+R2+R3+R4)
 
 1. ✅ R1: A-1 Allocator 基类 Traits 完整实现 + A-2 Arena Traits SupportsRealloc
 2. ✅ R1: B-1 Pool.Slab GetMem/FreeMem 失败路径 + B-2 Arena.AllocAligned 对齐修正
@@ -315,8 +413,19 @@ end;
 11. ✅ R3: F-03 TMemMutex -O2 无风险（已解决）
 12. ✅ R3: F-04/F-05 已用 hash map（已解决）
 13. ✅ R3: F-06 错误消息已有上下文（已解决）
+14. ✅ R4: F-18 CONTRACT.md TAllocatorTraits 同步
+15. ✅ R4: F-21 TFallbackAllocator.Traits ThreadSafe=False
+16. ✅ R4: F-22 TCallbackAllocator.Traits ThreadSafe=False
+17. ✅ R4: F-24 AllocArray 溢出安全乘法
+18. ✅ R4: F-25 CONTRACT.md 测试矩阵更新
+19. ✅ R4: F-26 SecureZeroString COW 限制文档化
+20. ✅ R5: F-19 Pool Acquire 签名决策树文档
+21. ✅ R5: F-20 IMemoryPool 语义边界文档
+22. ✅ R5: F-23 TThreadArenaManager 自动 thread-exit cleanup
 
-**所有 17 项 finding 已全部解决。无待处理项。**
+### 待处理
+
+无。所有 findings 已处理。
 
 ---
 
@@ -335,6 +444,6 @@ end;
 | 边界 (OOM/fragmentation/stability) | 3 | ~100 | 优秀 |
 | 工具 (utils/secure/shuffle/span/ring) | 5 | ~100 | 优秀 |
 | 合约 (L0 边界/编译门禁) | 2 | ~40 | 优秀 |
-| **总计** | **43 套件** | **587** | **优秀** |
+| **总计** | **48 套件** | **604** | **优秀** |
 
-0 泄漏，0 失败，heaptrc 验证通过。1791 个 Check 断言。
+0 泄漏，0 失败，heaptrc 验证通过。

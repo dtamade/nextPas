@@ -89,6 +89,7 @@ end;
 TAllocatorTraits = record
   ZeroInitialized: Boolean;  // AllocMem 是否零初始化
   ThreadSafe: Boolean;       // 是否线程安全
+  SupportsRealloc: Boolean;  // ReallocMem 可用；False 时 ReallocMem 会抛 aeReallocNotSupported
 end;
 ```
 
@@ -325,7 +326,7 @@ IArena 实现：
 | Secure | test_mem_secure | 1 | 6 | 0 |
 | Memory Map | test_memory_map_allocator | 1 | 4 | 0 |
 | Mapped Slab | test_mapped_slab_pool | 1 | 5 | 0 |
-| **合计** | **39 个测试套件** | **39** | **~370** | **0** |
+| **合计** | **48 个测试套件** | **48** | **602** | **0** |
 
 注：另有 5 个 compile-gate 测试（test_memory_map_compile_gate, test_mem_secure_windows_compile_gate, test_platform_virtual, test_shared_memory, test_mem），仅验证编译通过。
 

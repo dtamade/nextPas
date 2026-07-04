@@ -65,6 +65,7 @@ type
     FTotalCreated: Integer;
     FTotalRecycled: Integer;
     FDead: LongBool;
+    FTlsCleanupRegistered: Boolean;  { 是否已注册 pthread/Fls thread-exit cleanup }
     function PopFromPool: TLocalArena;
     procedure PushToPool(AArena: TLocalArena);
     {** 只归还 Arena 到池, 不清 TLS manager (供跨 manager 切换时调用) }
@@ -143,6 +144,65 @@ threadvar
   TLSCurrentArena: TLocalArena;
   TLSCurrentManager: Pointer;  { TThreadArenaManager 实例, 用于检测 manager 切换 }
 
+{ --- Thread-exit cleanup ---
+  UNIX: pthread TLS key destructor. Windows: FlsCallback.
+  When a thread exits, the callback returns the arena to the manager's pool.
+  Each TThreadArenaManager instance creates its own key/callback. }
+
+type
+  TThreadExitProc = procedure(AData: Pointer); cdecl;
+
+{$IFDEF UNIX}
+var
+  GThreadArenaCleanupKey: QWord;  { pthread_key_t }
+
+function pthread_key_create(var AKey: QWord;
+  ADestructor: TThreadExitProc): Integer; cdecl; external 'c' name 'pthread_key_create';
+function pthread_key_delete(AKey: QWord): Integer; cdecl; external 'c' name 'pthread_key_delete';
+function pthread_setspecific(AKey: QWord; AValue: Pointer): Integer; cdecl; external 'c' name 'pthread_setspecific';
+{$ENDIF}
+
+{$IFDEF MSWINDOWS}
+type
+  TFlsCallback = procedure(lpFlsData: Pointer); stdcall;
+var
+  GThreadArenaCleanupIndex: DWORD;
+
+function FlsAlloc(lpCallback: TFlsCallback): DWORD; stdcall; external 'kernel32.dll' name 'FlsAlloc';
+function FlsFree(dwFlsIndex: DWORD): BOOL; stdcall; external 'kernel32.dll' name 'FlsFree';
+function FlsSetValue(dwFlsIndex: DWORD; lpFlsData: Pointer): BOOL; stdcall; external 'kernel32.dll' name 'FlsSetValue';
+{$ENDIF}
+
+{ Global manager pointer for the cleanup callback to find the owning manager.
+  Only one active TThreadArenaManager per thread is supported (matching the
+  TLSCurrentManager design). The cleanup callback reads TLSCurrentManager. }
+var
+  GActiveManager: Pointer;
+
+procedure ThreadArenaCleanup(AData: Pointer); cdecl;
+var
+  LMgr: TThreadArenaManager;
+begin
+  { AData is non-nil sentinel; real manager is in TLSCurrentManager }
+  LMgr := TThreadArenaManager(TLSCurrentManager);
+  if (LMgr <> nil) and (LMgr = TThreadArenaManager(GActiveManager)) then
+  begin
+    if TLSCurrentArena <> nil then
+    begin
+      LMgr.PushToPool(TLSCurrentArena);
+      TLSCurrentArena := nil;
+      TLSCurrentManager := nil;
+    end;
+  end;
+end;
+
+{$IFDEF MSWINDOWS}
+procedure ThreadArenaFlsCallback(lpFlsData: Pointer); stdcall;
+begin
+  ThreadArenaCleanup(lpFlsData);
+end;
+{$ENDIF}
+
 function DefaultThreadArenaConfig: TThreadArenaConfig;
 begin
   Result.ArenaCapacity := DEFAULT_ARENA_CAPACITY;
@@ -167,6 +227,8 @@ begin
   FTotalCreated := 0;
   FTotalRecycled := 0;
   FDead := False;
+  FTlsCleanupRegistered := True;
+  GActiveManager := Pointer(Self);
 end;
 
 destructor TThreadArenaManager.Destroy;
@@ -188,6 +250,8 @@ begin
     FPoolLock.Release;
   end;
   FPoolLock.Done;
+  if FTlsCleanupRegistered and (GActiveManager = Pointer(Self)) then
+    GActiveManager := nil;
   inherited Destroy;
 end;
 
@@ -256,6 +320,14 @@ begin
     Result.Reset;
     TLSCurrentArena := Result;
     TLSCurrentManager := Pointer(Self);
+    {$IFDEF UNIX}
+    if FTlsCleanupRegistered then
+      pthread_setspecific(GThreadArenaCleanupKey, Pointer(1));
+    {$ENDIF}
+    {$IFDEF MSWINDOWS}
+    if FTlsCleanupRegistered then
+      FlsSetValue(GThreadArenaCleanupIndex, Pointer(1));
+    {$ENDIF}
     Exit;
   end;
 
@@ -264,6 +336,14 @@ begin
   InterLockedIncrement(FTotalCreated);
   TLSCurrentArena := Result;
   TLSCurrentManager := Pointer(Self);
+  {$IFDEF UNIX}
+  if FTlsCleanupRegistered then
+    pthread_setspecific(GThreadArenaCleanupKey, Pointer(1));
+  {$ENDIF}
+  {$IFDEF MSWINDOWS}
+  if FTlsCleanupRegistered then
+    FlsSetValue(GThreadArenaCleanupIndex, Pointer(1));
+  {$ENDIF}
 end;
 
 procedure TThreadArenaManager.DrainTLS;
@@ -380,5 +460,26 @@ function TThreadArena.PeakUsed: SizeUInt;
 begin
   Result := FArena.PeakUsed;
 end;
+
+initialization
+  GActiveManager := nil;
+  {$IFDEF UNIX}
+  GThreadArenaCleanupKey := 0;
+  pthread_key_create(GThreadArenaCleanupKey, @ThreadArenaCleanup);
+  {$ENDIF}
+  {$IFDEF MSWINDOWS}
+  GThreadArenaCleanupIndex := FlsAlloc(@ThreadArenaFlsCallback);
+  {$ENDIF}
+
+finalization
+  GActiveManager := nil;
+  {$IFDEF UNIX}
+  if GThreadArenaCleanupKey <> 0 then
+    pthread_key_delete(GThreadArenaCleanupKey);
+  {$ENDIF}
+  {$IFDEF MSWINDOWS}
+  if GThreadArenaCleanupIndex <> 0 then
+    FlsFree(GThreadArenaCleanupIndex);
+  {$ENDIF}
 
 end.

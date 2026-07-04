@@ -164,9 +164,10 @@ var
   LTotal: SizeUInt;
 begin
   if (ACount = 0) or (AElemSize = 0) then Exit(nil);
-  LTotal := ACount * AElemSize;
-  if (LTotal div AElemSize) <> ACount then
+  { 乘法前溢出检查：ACount * AElemSize > High(SizeUInt) 时拒绝 }
+  if ACount > (High(SizeUInt) div AElemSize) then
     raise EOutOfMemory.Create(aeOutOfMemory, 'AllocArray: size overflow');
+  LTotal := ACount * AElemSize;
   Result := AAllocator.AllocMem(LTotal);
 end;
 
