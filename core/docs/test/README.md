@@ -75,8 +75,8 @@ Without these modeswitches, you must use named procedures with `@Proc` syntax.
 | Procedure | Description |
 |-----------|-------------|
 | `Check(cond, msg)` | Assert boolean condition |
-| `CheckEqual(expected, actual)` | Assert equality (string/Int64/Boolean/Pointer) |
-| `CheckNotEqual(expected, actual)` | Assert inequality (string/Int64/Boolean/Pointer) |
+| `CheckEqual(expected, actual)` | Assert equality (string/Int64/Boolean/Pointer/Double) |
+| `CheckNotEqual(expected, actual)` | Assert inequality (string/Int64/Boolean/Pointer/Double) |
 | `CheckTrue(value, msg)` | Assert True |
 | `CheckFalse(value, msg)` | Assert False |
 | `CheckNil(ptr, msg)` | Assert nil pointer |
@@ -89,10 +89,17 @@ Without these modeswitches, you must use named procedures with `@Proc` syntax.
 | `CheckLength(actual, expected)` | Assert length equality |
 | `CheckRaises(class, proc, msg)` | Assert expected exception raised |
 | `CheckNoRaise(proc, msg)` | Assert no exception raised |
-| `CheckNear(expected, actual, epsilon, msg)` | Assert floating-point nearness |
+| `CheckNear(expected, actual, epsilon, msg)` | Assert floating-point nearness (absolute epsilon) |
 | `CheckNotNear(expected, actual, epsilon, msg)` | Assert floating-point not near |
+| `CheckApprox(expected, actual, epsilon, msg)` | Assert floating-point nearness (relative epsilon) |
 | `Fail(msg)` | Unconditional failure |
 | `Skip(reason)` | Skip current test (raises `ETestSkipped`) |
+
+**Note on Double comparisons**:
+- `CheckEqual(Double)` performs IEEE 754 **exact comparison** (`=` operator). NaN != NaN, -0.0 = +0.0.
+- `CheckNear(Double)` performs **tolerance comparison** with absolute epsilon.
+- `CheckApprox(Double)` performs **tolerance comparison** with relative epsilon (better for magnitude-spanning comparisons).
+- For floating-point tolerance, use `CheckNear` or `CheckApprox` instead of `CheckEqual`.
 
 ### Fluent API (IExpectation)
 
@@ -129,6 +136,7 @@ ExpectProc(procedure begin StrToInt('bad'); end)
 | `ToEqual` | string |
 | `ToEqualInt` | Int64 |
 | `ToEqualBool` | Boolean |
+| `ToEqualD(expected, epsilon)` | Double (tolerance comparison within epsilon) |
 | `ToBeTrue/ToBeFalse` | Boolean |
 | `ToBeNil/ToBeNotNil` | Pointer |
 | `ToContain` | string (empty substring matches everything) |
@@ -138,6 +146,8 @@ ExpectProc(procedure begin StrToInt('bad'); end)
 | `ToHaveLength` | string |
 | `ToBeNear(expected, epsilon)` | Double (floating-point nearness) |
 | `ToNotBeNear(expected, epsilon)` | Double (negated nearness) |
+| `ToBeSame(expected)` | Pointer (identity comparison) |
+| `ToEqualPointer(expected)` | Pointer (alias for ToBeSame) |
 | `ToRaise(class, msg)` | proc |
 | `ToNotRaise` | proc (fails if any exception raised) |
 

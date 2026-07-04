@@ -27,8 +27,22 @@ function NameSetContains(const ASet: TNameSet; const AName: string): Boolean;
 
 implementation
 
-uses
-  SysUtils;
+{ ASCII-only lowercase — sufficient for Pascal identifiers }
+function AsciiLowerCase(const S: string): string;
+var
+  I: LongInt;
+  C: Char;
+begin
+  SetLength(Result, Length(S));
+  for I := 1 to Length(S) do
+  begin
+    C := S[I];
+    if (C >= 'A') and (C <= 'Z') then
+      Result[I] := Chr(Ord(C) + 32)
+    else
+      Result[I] := C;
+  end;
+end;
 
 procedure NameSetInit(out ASet: TNameSet; ACapacity: LongInt);
 begin
@@ -40,7 +54,7 @@ procedure NameSetAdd(var ASet: TNameSet; const AName: string);
 begin
   if ASet.Count >= Length(ASet.Names) then
     SetLength(ASet.Names, ASet.Count + 64);
-  ASet.Names[ASet.Count] := LowerCase(AName);
+  ASet.Names[ASet.Count] := AsciiLowerCase(AName);
   Inc(ASet.Count);
 end;
 
@@ -84,7 +98,7 @@ begin
   Result := False;
   if ASet.Count = 0 then
     Exit;
-  Lower := LowerCase(AName);
+  Lower := AsciiLowerCase(AName);
   Lo := 0;
   Hi := ASet.Count - 1;
   while Lo <= Hi do

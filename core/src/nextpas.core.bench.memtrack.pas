@@ -110,6 +110,7 @@ var
   GGlobalTrackerInitialized: Integer = 0;  // 0=未初始化, 1=已初始化
   GOriginalMemoryManager: TMemoryManager;
   GTrackingEnabled: Boolean = False;
+  GEnableLock: Integer = 0;  // 0=unlocked, 1=locked — CAS spin lock for enable/disable
 
 function AtomicInc64(var ATarget: Int64; ADelta: Int64): Int64;
 var
@@ -284,34 +285,54 @@ procedure EnableGlobalMemoryTracking;
 begin
   if GTrackingEnabled then Exit;
 
-  // 保存原始 memory manager
-  GetMemoryManager(GOriginalMemoryManager);
+  // CAS spin lock: 防止并发调用
+  if InterlockedCompareExchange(GEnableLock, 1, 0) <> 0 then
+    Exit;  // 另一个线程正在启用，直接返回
 
-  // 设置跟踪 memory manager
-  GTrackingMemoryManager := GOriginalMemoryManager;
-  GTrackingMemoryManager.GetMem := @TrackingGetMem;
-  GTrackingMemoryManager.AllocMem := @TrackingAllocMem;
-  GTrackingMemoryManager.FreeMem := @TrackingFreeMem;
-  GTrackingMemoryManager.FreeMemSize := @TrackingFreeMemSize;
-  GTrackingMemoryManager.ReAllocMem := @TrackingReAllocMem;
+  try
+    if GTrackingEnabled then Exit;  // double-check
 
-  // 重置统计
-  if InterlockedCompareExchange(GGlobalTrackerInitialized, 1, 0) = 0 then
-    GGlobalTracker := TMemoryTracker.Create(True);
-  GGlobalTracker.Reset;
+    // 保存原始 memory manager
+    GetMemoryManager(GOriginalMemoryManager);
 
-  // 启用跟踪
-  GTrackingEnabled := True;
-  SetMemoryManager(GTrackingMemoryManager);
+    // 设置跟踪 memory manager
+    GTrackingMemoryManager := GOriginalMemoryManager;
+    GTrackingMemoryManager.GetMem := @TrackingGetMem;
+    GTrackingMemoryManager.AllocMem := @TrackingAllocMem;
+    GTrackingMemoryManager.FreeMem := @TrackingFreeMem;
+    GTrackingMemoryManager.FreeMemSize := @TrackingFreeMemSize;
+    GTrackingMemoryManager.ReAllocMem := @TrackingReAllocMem;
+
+    // 重置统计
+    if InterlockedCompareExchange(GGlobalTrackerInitialized, 1, 0) = 0 then
+      GGlobalTracker := TMemoryTracker.Create(True);
+    GGlobalTracker.Reset;
+
+    // 启用跟踪
+    GTrackingEnabled := True;
+    SetMemoryManager(GTrackingMemoryManager);
+  finally
+    GEnableLock := 0;
+  end;
 end;
 
 procedure DisableGlobalMemoryTracking;
 begin
   if not GTrackingEnabled then Exit;
 
-  // 恢复原始 memory manager
-  SetMemoryManager(GOriginalMemoryManager);
-  GTrackingEnabled := False;
+  // CAS spin lock: 防止并发调用
+  if InterlockedCompareExchange(GEnableLock, 1, 0) <> 0 then
+    Exit;  // 另一个线程正在操作，直接返回
+
+  try
+    if not GTrackingEnabled then Exit;  // double-check
+
+    // 恢复原始 memory manager
+    SetMemoryManager(GOriginalMemoryManager);
+    GTrackingEnabled := False;
+  finally
+    GEnableLock := 0;
+  end;
 end;
 
 procedure ResetGlobalMemoryTracker;

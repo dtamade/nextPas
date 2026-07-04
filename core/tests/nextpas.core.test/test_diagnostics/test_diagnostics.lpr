@@ -86,13 +86,15 @@ end;
 
 procedure TestCheckEqualDoublePass;
 begin
+  { IEEE 754 exact comparison }
   CheckEqual(1.0, 1.0);
   CheckEqual(3.14159, 3.14159);
   CheckEqual(0.0, 0.0);
   CheckEqual(-1.0, -1.0);
-  { With epsilon tolerance }
-  CheckEqual(1.0, 1.0 + 1e-11, 1e-10);
-  CheckEqual(1.0, 1.0 - 1e-11, 1e-10);
+  { IEEE 754: -0.0 = +0.0 }
+  CheckEqual(0.0, -0.0);
+  CheckEqual(-0.0, 0.0);
+  { Note: epsilon parameter is ignored — use CheckNear for tolerance }
 end;
 
 procedure TestCheckEqualDoubleFail;
@@ -115,9 +117,21 @@ end;
 
 procedure TestCheckEqualDoubleCustomEpsilon;
 begin
-  { With a larger epsilon, values that are close should pass }
-  CheckEqual(1.0, 1.01, 0.1);
-  CheckEqual(100.0, 100.5, 1.0);
+  { CheckEqual ignores epsilon — these should FAIL because values differ }
+  try
+    CheckEqual(1.0, 1.01, 0.1);
+    Halt(1); { should not reach here }
+  except
+    on E: EAssertionFailed do
+      CheckContains(E.Message, 'Expected');
+  end;
+  try
+    CheckEqual(100.0, 100.5, 1.0);
+    Halt(1); { should not reach here }
+  except
+    on E: EAssertionFailed do
+      CheckContains(E.Message, 'Expected');
+  end;
 end;
 
 procedure TestCheckNotEqualDoublePass;

@@ -110,6 +110,7 @@ type
     ExprId: LongInt;
     TargetExprId: LongInt;
     GreenNodeRef: TObject;  // optional: green tree node for unit init/fini body
+    IsThreadVar: Boolean;   // true for threadvar declarations
   end;
 
   TSemanticBinding = record
@@ -263,6 +264,7 @@ type
     function TypeHasScalarFact(const ATypeId: LongInt): Boolean;
     procedure SetTypeOwner(const ATypeId: LongInt; const AOwnerUnitId: string);
     procedure SetTypeParent(const ATypeId: LongInt; const AParentTypeId: LongInt);
+    procedure SetTypeAliasTarget(const ATypeId: LongInt; const ATargetTypeId: LongInt);
     procedure SetTypeGenericParent(const ATypeId: LongInt;
       const ATemplateTypeId: LongInt; const AArgIndices: array of LongInt);
     procedure SetTypeParams(const ATypeId: LongInt; const AParamListNode: TGreenNode);
@@ -314,6 +316,8 @@ type
       const AExprId: LongInt);
     procedure SetTypedHirNodeGreenRef(const AHirNodeId: LongInt;
       const AGreenNode: TObject);
+    procedure SetTypedHirNodeIsThreadVar(const AHirNodeId: LongInt;
+      const AIsThreadVar: Boolean);
     function AddBinding(
       const AKind: string;
       const AName: string;
@@ -543,6 +547,22 @@ begin
   Idx := ATypeId - 1;
   if (Idx >= 0) and (Idx < Length(FTypes)) then
     FTypes[Idx].ParentTypeId := AParentTypeId;
+end;
+
+procedure TSemanticModel.SetTypeAliasTarget(const ATypeId: LongInt;
+  const ATargetTypeId: LongInt);
+var
+  I: LongInt;
+begin
+  for I := 0 to Length(FTypeMetadataEntries) - 1 do
+    if FTypeMetadataEntries[I].TypeId = ATypeId then
+    begin
+      FTypeMetadataEntries[I].AliasTargetTypeId := ATargetTypeId;
+      Exit;
+    end;
+  SetLength(FTypeMetadataEntries, Length(FTypeMetadataEntries) + 1);
+  FTypeMetadataEntries[High(FTypeMetadataEntries)].TypeId := ATypeId;
+  FTypeMetadataEntries[High(FTypeMetadataEntries)].AliasTargetTypeId := ATargetTypeId;
 end;
 
 procedure TSemanticModel.SetTypeGenericParent(const ATypeId: LongInt;
@@ -941,6 +961,17 @@ begin
   if (Idx < 0) or (Idx >= Length(FTypedHirNodes)) then
     Exit;
   FTypedHirNodes[Idx].GreenNodeRef := AGreenNode;
+end;
+
+procedure TSemanticModel.SetTypedHirNodeIsThreadVar(
+  const AHirNodeId: LongInt; const AIsThreadVar: Boolean);
+var
+  Idx: LongInt;
+begin
+  Idx := AHirNodeId - 1;
+  if (Idx < 0) or (Idx >= Length(FTypedHirNodes)) then
+    Exit;
+  FTypedHirNodes[Idx].IsThreadVar := AIsThreadVar;
 end;
 
 function TSemanticModel.AddBinding(

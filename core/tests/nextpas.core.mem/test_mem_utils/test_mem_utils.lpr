@@ -434,6 +434,108 @@ begin
   Check(LResult = 1500, '1000*1.5=1500 got ' + IntToStr(LResult));
 end;
 
+{ --- MulHash64 quality tests (F-20) --- }
+
+{$PUSH}{$Q-}
+procedure TestMulHash64Deterministic;
+var
+  LH1, LH2: QWord;
+  LInput: QWord;
+begin
+  { 同一输入必须产生同一输出 }
+  LInput := 42;
+  LH1 := MulHash64(LInput);
+  LH2 := MulHash64(LInput);
+  Check(LH1 = LH2, 'MulHash64 must be deterministic');
+  WriteLn('PASS: MulHash64 deterministic');
+end;
+{$POP}
+
+{$PUSH}{$Q-}
+procedure TestMulHash64Avalanche;
+var
+  LI: Integer;
+  LH1, LH2: QWord;
+  LFlips: Integer;
+  LBits: Integer;
+  LInput: QWord;
+begin
+  { 相邻输入应产生显著不同的输出（雪崩效应） }
+  LFlips := 0;
+  for LI := 1 to 100 do
+  begin
+    LInput := QWord(LI);
+    LH1 := MulHash64(LInput);
+    LInput := QWord(LI + 1);
+    LH2 := MulHash64(LInput);
+    { 计算不同位数 }
+    LBits := PopCnt(LH1 xor LH2);
+    LFlips := LFlips + LBits;
+  end;
+  { 平均每次应翻转 ~32 位（50%），接受 20-44 范围 }
+  LFlips := LFlips div 100;
+  Check((LFlips >= 20) and (LFlips <= 44),
+    'MulHash64 avalanche: expected 20-44 bit flips, got ' + IntToStr(LFlips));
+  WriteLn('PASS: MulHash64 avalanche (avg ' + IntToStr(LFlips) + ' flips)');
+end;
+{$POP}
+
+procedure TestMulHash64ZeroInput;
+var
+  LZero: QWord;
+begin
+  { MulHash64(0) = 0 是可接受的（黄金比例 * 0 = 0） }
+  LZero := 0;
+  Check(MulHash64(LZero) = 0, 'MulHash64(0) should be 0');
+  WriteLn('PASS: MulHash64 zero input');
+end;
+
+{$PUSH}{$Q-}
+procedure TestMulHash64Distribution;
+var
+  LH: QWord;
+  LHighBits: array[0..3] of Integer;
+  LI: Integer;
+  LBit: Integer;
+  LInput: QWord;
+begin
+  { 检查高 2 位的分布应大致均匀 }
+  LHighBits[0] := 0; LHighBits[1] := 0; LHighBits[2] := 0; LHighBits[3] := 0;
+  for LI := 1 to 1000 do
+  begin
+    LInput := QWord(LI);
+    LH := MulHash64(LInput);
+    LBit := Integer(LH shr 62);
+    Inc(LHighBits[LBit]);
+  end;
+  { 每个桶应有 ~250 个，接受 150-350 范围 }
+  for LI := 0 to 3 do
+    Check((LHighBits[LI] >= 150) and (LHighBits[LI] <= 350),
+      'MulHash64 distribution: bucket ' + IntToStr(LI) + ' has ' + IntToStr(LHighBits[LI]));
+  WriteLn('PASS: MulHash64 distribution');
+end;
+{$POP}
+
+{ --- ValidateAlignArg tests (F-20 补充) --- }
+
+procedure TestValidateAlignArgValid;
+begin
+  Check(ValidateAlignArg(SizeOf(Pointer)), 'pointer size should be valid');
+  Check(ValidateAlignArg(16), '16 should be valid');
+  Check(ValidateAlignArg(64), '64 should be valid');
+  Check(ValidateAlignArg(4096), '4096 should be valid');
+  WriteLn('PASS: ValidateAlignArg valid');
+end;
+
+procedure TestValidateAlignArgInvalid;
+begin
+  Check(not ValidateAlignArg(0), '0 should be invalid');
+  Check(not ValidateAlignArg(3), '3 (not power of 2) should be invalid');
+  Check(not ValidateAlignArg(5), '5 (not power of 2) should be invalid');
+  Check(not ValidateAlignArg(6), '6 (not power of 2) should be invalid');
+  WriteLn('PASS: ValidateAlignArg invalid');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.mem.utils');
   T.Test('IsOverlap no-overlap', @TestIsOverlapNoOverlap);
@@ -472,6 +574,12 @@ begin
   T.Test('CalcGeometricGrowth overflow', @TestGeometricGrowthOverflow);
   T.Test('CalcGeometricGrowth monotonic', @TestGeometricGrowthMonotonic);
   T.Test('CalcGeometricGrowth ceiling', @TestGeometricGrowthCeiling);
+  T.Test('MulHash64 deterministic', @TestMulHash64Deterministic);
+  T.Test('MulHash64 avalanche', @TestMulHash64Avalanche);
+  T.Test('MulHash64 zero input', @TestMulHash64ZeroInput);
+  T.Test('MulHash64 distribution', @TestMulHash64Distribution);
+  T.Test('ValidateAlignArg valid', @TestValidateAlignArgValid);
+  T.Test('ValidateAlignArg invalid', @TestValidateAlignArgInvalid);
   T.Run;
 
   T.Summary;

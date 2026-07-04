@@ -190,6 +190,8 @@ uses
 constructor TBenchSuite.Create(const ASuiteName: string);
 begin
   inherited Create;
+  if ASuiteName = '' then
+    raise EBenchInvalidParam.Create('TBenchSuite.Create: suite name must not be empty');
   FEntryCount := 0;
   FEntryCapacity := 0;
   SetLength(FEntries, 0);
@@ -210,6 +212,8 @@ end;
 constructor TBenchSuite.CreateWithConfig(const ASuiteName: string; const AConfig: TBenchConfig);
 begin
   inherited Create;
+  if ASuiteName = '' then
+    raise EBenchInvalidParam.Create('TBenchSuite.CreateWithConfig: suite name must not be empty');
   FEntryCount := 0;
   FEntryCapacity := 0;
   SetLength(FEntries, 0);
@@ -478,8 +482,8 @@ function TBenchSuite.SetMinDuration(ADuration: TDuration): IBenchSuite;
 begin
   GuardNotRun;
   Result := Self;
-  if ADuration.AsNanoseconds <= 0 then
-    raise EBenchInvalidParam.Create('TBenchSuite.SetMinDuration: duration must be > 0');
+  if ADuration.AsNanoseconds < 1000 then
+    raise EBenchInvalidParam.Create('TBenchSuite.SetMinDuration: duration must be >= 1 microsecond (1000 ns)');
   FConfig.MinDurationNs := ADuration.AsNanoseconds;
 end;
 
@@ -799,7 +803,7 @@ begin
       Exit;
     end;
   end;
-  raise EBenchError.CreateFmt('Benchmark result not found: "%s" (use TryGetByName for safe lookup)', [AName]);
+  raise EBenchError.CreateFmt('Benchmark result not found: "%s"', [AName]);
 end;
 
 function TBenchResults.TryGetByName(const AName: string; out AResult: TBenchResult): Boolean;
@@ -991,17 +995,7 @@ begin
     end;
 
     if LBuilder.Len > 0 then
-    begin
-      try
-        AppendFileText(APath, LBuilder.ToString);
-      except
-        on E: Exception do
-        begin
-          WriteLn(StdErr, 'WARNING: AppendToTimeline: append failed (', E.Message, '), overwriting file');
-          WriteFileText(APath, LBuilder.ToString, PermDefault);
-        end;
-      end;
-    end;
+      AppendFileText(APath, LBuilder.ToString);
   finally
     LBuilder.Done;
   end;

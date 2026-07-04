@@ -22,22 +22,28 @@ type
     Codepoint: UInt32;     // 原始 Unicode 码位
     AdvanceWidth: UInt16;  // 水平步进（font units）
     LeftSideBearing: Int16; // 左侧边距（font units）
+    MarkOffsetX: Int16;    // Mark-to-Base X 偏移（font units，0 = 无）
+    MarkOffsetY: Int16;    // Mark-to-Base Y 偏移（font units，0 = 无）
   end;
 
   {** 塑形输出序列 }
   TFontShapedGlyphArray = array of TFontShapedGlyph;
 
-  {** 精简版文本塑形器：cmap + hmtx + kern + ligature }
+  {** 精简版文本塑形器：cmap + hmtx + SingleSubst + kern + SinglePos + CursivePos + ligature + mark positioning }
   TFontLiteShaper = class
   private
     FFace: TTFontFace;
+    FFeatureConfig: TFontFeatureConfig;
   public
     {** 创建塑形器（AFontFace 不归本对象所有，调用方需保活） }
     constructor Create(AFontFace: TTFontFace);
+    {** 创建塑形器（带特性配置） }
+    constructor CreateWithFeatures(AFontFace: TTFontFace;
+      const AFeatureConfig: TFontFeatureConfig);
     destructor Destroy; override;
     {** 塑形单个 codepoint }
     function ShapeCodepoint(ACodepoint: UInt32): TFontShapedGlyph;
-    {** 塑形 codepoint 序列，应用 kern 调整和连字替换。
+    {** 塑形 codepoint 序列，应用 SingleSubst + kern + SinglePos + CursivePos + 连字 + mark 定位。
         返回的字形数可能少于输入（连字合并时）。 }
     function ShapeString(const ACodepoints: array of UInt32): TFontShapedGlyphArray;
     {** 获取字形水平步进宽度（font units） }
@@ -62,6 +68,19 @@ begin
   if not AFontFace.IsValid then
     raise EInvalidArgument.Create('AFontFace is not valid');
   FFace := AFontFace;
+  FFeatureConfig := FontFeatureConfigDefault;
+end;
+
+constructor TFontLiteShaper.CreateWithFeatures(AFontFace: TTFontFace;
+  const AFeatureConfig: TFontFeatureConfig);
+begin
+  inherited Create;
+  if AFontFace = nil then
+    raise EArgumentNil.Create('AFontFace');
+  if not AFontFace.IsValid then
+    raise EInvalidArgument.Create('AFontFace is not valid');
+  FFace := AFontFace;
+  FFeatureConfig := AFeatureConfig;
 end;
 
 destructor TFontLiteShaper.Destroy;
@@ -93,6 +112,9 @@ var
   LKernVal: Int16;
   LSubArr: array of UInt16;
   LTotalAdvance: Int32;
+  LMarkAnchor: TFontAnchor;
+  LSubstGlyph: UInt16;
+  LCExit, LCEntry: TFontAnchor;
 begin
   LCount := Length(ACodepoints);
   if LCount = 0 then
@@ -110,13 +132,79 @@ begin
     LGlyphs[LI] := Result[LI].GlyphIndex;
   end;
 
-  // Second pass: ligature substitution.
+  // 1.5 pass: single substitution (GSUB SingleSubst).
+  // Applied after cmap, before ligature, so ligature tables can match substituted glyphs.
+  if FFace.HasSingleSubst then
+    for LI := 0 to LCount - 1 do
+    begin
+      LSubstGlyph := FFace.LookupSingleSubst(LGlyphs[LI]);
+      if LSubstGlyph <> 0 then
+      begin
+        LGlyphs[LI] := LSubstGlyph;
+        Result[LI].GlyphIndex := LSubstGlyph;
+      end;
+    end;
+
+  // 1.7 pass: multiple substitution (GSUB MultipleSubst, one-to-many).
+  // Expands single glyphs into glyph sequences. Must run before ligature.
+  if FFace.HasMultipleSubst then
+  begin
+    LM := 0;
+    for LI := 0 to LCount - 1 do
+    begin
+      LSubArr := FFace.LookupMultipleSubst(LGlyphs[LI]);
+      if Length(LSubArr) > 0 then
+        Inc(LM, Length(LSubArr))
+      else
+        Inc(LM);
+    end;
+    if LM <> LCount then
+    begin
+      // Array grew — reallocate and expand.
+      SetLength(Result, LM);
+      SetLength(LGlyphs, LM);
+      LK := LM - 1;
+      for LI := LCount - 1 downto 0 do
+      begin
+        LSubArr := FFace.LookupMultipleSubst(Result[LI].GlyphIndex);
+        if Length(LSubArr) > 1 then
+        begin
+          // Expand: first glyph keeps original advance, rest get their own.
+          for LM := High(LSubArr) downto 1 do
+          begin
+            Result[LK] := Result[LI];
+            Result[LK].GlyphIndex := LSubArr[LM];
+            Result[LK].AdvanceWidth := FFace.GlyphHorizontalMetric(LSubArr[LM]).AdvanceWidth;
+            LGlyphs[LK] := LSubArr[LM];
+            Dec(LK);
+          end;
+          // First substitute replaces original.
+          Result[LK].GlyphIndex := LSubArr[0];
+          Result[LK].AdvanceWidth := FFace.GlyphHorizontalMetric(LSubArr[0]).AdvanceWidth;
+          LGlyphs[LK] := LSubArr[0];
+          Dec(LK);
+        end
+        else if LK <> LI then
+        begin
+          Result[LK] := Result[LI];
+          LGlyphs[LK] := LGlyphs[LI];
+          Dec(LK);
+        end
+        else
+          Dec(LK);
+      end;
+      LCount := LM;
+    end;
+  end;
+
+  // Second pass: ligature substitution (only if liga feature is enabled).
   LOut := 0;
   LI := 0;
   while LI < LCount do
   begin
     // Try to find a ligature starting at LI.
-    if (LI + 1 < LCount) and FFace.HasLigatures then
+    if (LI + 1 < LCount) and FFace.HasLigatures and
+       FontFeatureIsEnabled(FFeatureConfig, FEATURE_TAG_LIGA) then
     begin
       // Try progressively longer sequences.
       LLigGlyph := 0;
@@ -155,13 +243,77 @@ begin
   end;
   SetLength(Result, LOut);
 
-  // Third pass: kern adjustment (adjust advance of preceding glyph).
-  if FFace.HasKernPairs then
-    for LI := 0 to High(Result) - 1 do
+  // Third pass: kern adjustment (both class-based Fmt2 and pair-based Fmt1)
+  // and SinglePos positioning (only if kern feature is enabled).
+  for LI := 0 to High(Result) - 1 do
+  begin
+    // Try class-based PairPos Fmt2 first, then pair-based Fmt1.
+    if FFace.HasKernPairs and FontFeatureIsEnabled(FFeatureConfig, FEATURE_TAG_KERN) then
     begin
       LKernVal := FFace.LookupKern(Result[LI].GlyphIndex, Result[LI + 1].GlyphIndex);
       if LKernVal <> 0 then
         Result[LI].AdvanceWidth := Result[LI].AdvanceWidth + LKernVal;
+    end;
+    if FFace.HasKernFmt1Pairs and FontFeatureIsEnabled(FFeatureConfig, FEATURE_TAG_KERN) then
+    begin
+      LKernVal := FFace.LookupKernFmt1(Result[LI].GlyphIndex, Result[LI + 1].GlyphIndex);
+      if LKernVal <> 0 then
+        Result[LI].AdvanceWidth := Result[LI].AdvanceWidth + LKernVal;
+    end;
+  end;
+  // SinglePos adjustments (applied to every glyph independently).
+  if FFace.HasSinglePos then
+    for LI := 0 to High(Result) do
+    begin
+      LKernVal := FFace.LookupSinglePosXAdvance(Result[LI].GlyphIndex);
+      if LKernVal <> 0 then
+        Result[LI].AdvanceWidth := Result[LI].AdvanceWidth + LKernVal;
+    end;
+  // CursivePos: cursive attachment (entry/exit anchors).
+  // Align glyph B's entry anchor with glyph A's exit anchor (X direction).
+  if FFace.HasCursivePos then
+    for LI := 0 to High(Result) - 1 do
+    begin
+      LCExit := FFace.LookupCursivePosExitAnchor(Result[LI].GlyphIndex);
+      if (LCExit.X = 0) and (LCExit.Y = 0) then
+        Continue;
+      LCEntry := FFace.LookupCursivePosEntryAnchor(Result[LI + 1].GlyphIndex);
+      if (LCEntry.X = 0) and (LCEntry.Y = 0) then
+        Continue;
+      Result[LI].AdvanceWidth := Result[LI].AdvanceWidth + (LCExit.X - LCEntry.X);
+    end;
+
+  // Fourth pass: Mark-to-Base and Mark-to-Mark positioning.
+  // Combining marks (zero advance width) are positioned relative to the
+  // preceding base glyph or base mark using GPOS MarkBasePos/MarkMarkPos.
+  if FFace.HasMarkToBase or FFace.HasMarkToMark then
+    for LI := 1 to High(Result) do
+    begin
+      if Result[LI].AdvanceWidth <> 0 then
+        Continue;
+      // Find the nearest preceding glyph (may be base or mark).
+      LK := LI - 1;
+      if LK < 0 then
+        Continue;
+      // If preceding glyph is also a combining mark, try Mark-to-Mark first.
+      LMarkAnchor.X := 0;
+      LMarkAnchor.Y := 0;
+      if (Result[LK].AdvanceWidth = 0) and FFace.HasMarkToMark then
+        LMarkAnchor := FFace.LookupMarkToMark(Result[LI].GlyphIndex, Result[LK].GlyphIndex);
+      // If no Mark-to-Mark match, find nearest base glyph for Mark-to-Base.
+      if (LMarkAnchor.X = 0) and (LMarkAnchor.Y = 0) and FFace.HasMarkToBase then
+      begin
+        LK := LI - 1;
+        while (LK >= 0) and (Result[LK].AdvanceWidth = 0) do
+          Dec(LK);
+        if LK >= 0 then
+          LMarkAnchor := FFace.LookupMarkToBase(Result[LI].GlyphIndex, Result[LK].GlyphIndex);
+      end;
+      if (LMarkAnchor.X <> 0) or (LMarkAnchor.Y <> 0) then
+      begin
+        Result[LI].MarkOffsetX := LMarkAnchor.X;
+        Result[LI].MarkOffsetY := LMarkAnchor.Y;
+      end;
     end;
 end;
 

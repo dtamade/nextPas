@@ -38,18 +38,17 @@ type
     function AllocMem(ASize: SizeUInt): Pointer;
     function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
     procedure FreeMem(ADst: Pointer);
-    function MemSize(APtr: Pointer): SizeUInt;
-    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
-    procedure FreeAligned(APtr: Pointer);
     function Traits: TAllocatorTraits;
   end;
 ```
 
 要点：
 
+- 核心 5 方法：GetMem/AllocMem/ReallocMem/FreeMem + Traits
 - `AllocMem` 语义是 zero-initialized allocation
 - `FreeMem` 当前是 `procedure`，不返回释放字节数
-- `AllocAligned` / `FreeAligned` 是和普通分配分开的显式 contract
+- `MemSize` 和 `AllocAligned`/`FreeAligned` 已移至更专门的接口（`IMemoryPool.MemSizeOf` 和 `IArena.AllocAligned`）
+- `FreeMem(nil)` 静默返回（无操作）；`GetMem(0)` 返回 nil
 
 ## 共享 arena 类型
 
@@ -58,13 +57,17 @@ type
 ```pascal
 type
   TArenaMark = record
-    FrontOffset: SizeUInt;
-    BackOffset: SizeUInt;
-    TotalUsed: SizeUInt;
+    FrontOffset: SizeUInt;  // 含指针对象的偏移
+    BackOffset: SizeUInt;   // 无指针对象的偏移
+    TotalUsed: SizeUInt;    // 标记时的 TotalUsed
+    LargeUsed: SizeUInt;    // 仅 TVirtualArena 使用：标记时仍存活的大对象字节数
+    AllocCount: QWord;      // 标记时的分配计数（用于 RestoreToMark 回退）
   end;
 ```
 
-`SaveMark` / `RestoreToMark` 通过这个记录表达“回退到某个分配位置”。
+`SaveMark` / `RestoreToMark` 通过这个记录表达”回退到某个分配位置”。
+
+注意：`LargeUsed` 和 `AllocCount` 是扩展字段，仅 `TVirtualArena` 有效使用；其他 Arena 实现填 0。
 
 ### `TArenaStats`
 

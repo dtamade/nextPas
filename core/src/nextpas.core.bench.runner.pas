@@ -910,7 +910,14 @@ end;
 function TBenchRunner.ComputeNsPerOp(ATotalNs: UInt64; AIters: Int64): Double;
 begin
   if AIters > 0 then
-    Result := Double(ATotalNs) / Double(AIters)
+  begin
+    { Guard: Double has 53-bit mantissa. When ATotalNs > 2^53, convert
+      after division to preserve low-order digits. }
+    if ATotalNs > 9007199254740992 then
+      Result := Double(ATotalNs div UInt64(AIters))
+    else
+      Result := Double(ATotalNs) / Double(AIters);
+  end
   else
     Result := 0.0;
 end;

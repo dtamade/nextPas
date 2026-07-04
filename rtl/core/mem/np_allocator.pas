@@ -2,6 +2,7 @@ unit np_allocator;
 
 {$mode objfpc}{$H+}
 {$UNITPATH ../base}
+{$UNITPATH ../sysutils}
 
 interface
 

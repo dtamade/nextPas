@@ -204,13 +204,13 @@ type
     {** 释放 AllocAligned 分配的内存块 *}
     procedure FreeAligned(APtr: Pointer);
     // IMemoryPool + IAllocator
-    // Compatibility helpers for older tests
-    {** GetMem 的别名 *}
-    function Alloc(ASize: SizeUInt): Pointer; inline;
-    {** FreeMem 的别名 *}
-    procedure Free(APtr: Pointer); overload; inline;
-    {** FreeMem 的别名 *}
-    procedure ReleasePtr(APtr: Pointer); inline;
+    // Compatibility helpers — prefer GetMem/FreeMem for new code
+    {** GetMem 的别名 — deprecated: 请使用 GetMem *}
+    function Alloc(ASize: SizeUInt): Pointer; inline; deprecated 'use GetMem instead';
+    {** FreeMem 的别名 — deprecated: 请使用 FreeMem *}
+    procedure Free(APtr: Pointer); overload; inline; deprecated 'use FreeMem instead';
+    {** FreeMem 的别名 — deprecated: 请使用 FreeMem *}
+    procedure ReleasePtr(APtr: Pointer); inline; deprecated 'use FreeMem instead';
     {**
      * 预热池：按指定单元大小预分配若干页
      *
@@ -268,7 +268,8 @@ function CreateSlabConfigWithPageMerging: TSlabConfig;
 implementation
 
 uses
-  nextpas.core.platform.thread;  // platform_thread_id for DEBUG thread-safety check (CS-017)
+  nextpas.core.platform.thread,  // platform_thread_id for DEBUG thread-safety check (CS-017)
+  nextpas.core.mem.secure;       // SecureZeroMemory for AllocMem zero-fill
 
 const
   HASH_MIN_CAP = 64;
@@ -1138,12 +1139,13 @@ begin
   if Result <> nil then
   begin
     { Zero the full allocated block to prevent stale data leaks.
+      Use SecureZeroMemory to prevent compiler from optimizing away the zero-fill.
       MemSizeOf returns actual block size (>= ASize). Fallback to ASize
       only when MemSizeOf is unavailable (should not happen for slab). }
     LActualSize := MemSizeOf(Result);
     if LActualSize < ASize then
       LActualSize := ASize;
-    FillChar(Result^, LActualSize, 0);
+    SecureZeroMemory(Result, LActualSize);
   end;
 end;
 

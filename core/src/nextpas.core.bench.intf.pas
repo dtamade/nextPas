@@ -180,7 +180,9 @@ type
     {** 设置热身迭代次数 }
     function SetWarmupIters(ACount: Integer): IBenchSuite;
 
-    {** 启用内存跟踪 }
+    {** 启用内存跟踪。
+     *  注意：此操作替换进程级 MemoryManager，影响所有线程的内存分配。
+     *  不可在多个 TBenchSuite 实例间并发调用。 }
     function EnableMemoryTracking: IBenchSuite;
 
     {** 禁用内存跟踪 }

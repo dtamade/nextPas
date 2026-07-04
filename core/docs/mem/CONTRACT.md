@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.mem*.pas`（57 个源文件）
 **层级**：L0-L3（内部分层）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-01
-**版本**：1.0
+**最后更新**：2026-07-03
+**版本**：1.3
 
 ---
 
@@ -22,23 +22,26 @@ IAllocator = interface
   function AllocMem(ASize: SizeUInt): Pointer;
   function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
   procedure FreeMem(ADst: Pointer);
-  function MemSize(APtr: Pointer): SizeUInt;
-  function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
-  procedure FreeAligned(APtr: Pointer);
   function Traits: TAllocatorTraits;
 end;
 ```
 
 | 方法 | 前置条件 | 后置条件 | 异常 |
 |------|----------|----------|------|
-| `GetMem(ASize)` | ASize > 0 | 返回非 nil 指针，或 nil（OOM） | 不抛异常 |
-| `AllocMem(ASize)` | ASize > 0 | 返回零初始化指针，或 nil（OOM） | 不抛异常 |
-| `ReallocMem(APtr, ASize)` | APtr 有效或 nil | nil→分配，ASize=0→释放，其他→重分配 | 不抛异常 |
-| `FreeMem(APtr)` | APtr 有效或 nil | APtr=nil 时无操作 | 不抛异常 |
-| `MemSize(APtr)` | APtr 有效 | 返回分配大小，未知返回 0 | 不抛异常 |
-| `AllocAligned(ASize, AAlign)` | AAlign 是 2 的幂且 >= SizeOf(Pointer) | 返回对齐指针，或 nil | 不抛异常 |
-| `FreeAligned(APtr)` | APtr 由 AllocAligned 分配 | 释放内存 | 不抛异常 |
+| `GetMem(ASize)` | ASize >= 0 | ASize=0→nil；否则返回非 nil 指针或 nil（OOM） | 不抛异常 |
+| `AllocMem(ASize)` | ASize >= 0 | ASize=0→nil；否则返回零初始化指针或 nil（OOM） | 不抛异常 |
+| `ReallocMem(APtr, ASize)` | APtr 有效或 nil | nil→分配；ASize=0→释放；nil+0→nil；其他→重分配 | 不抛异常 |
+| `FreeMem(APtr)` | APtr 有效或 nil | APtr=nil 时无操作（静默返回） | 不抛异常 |
 | `Traits` | 无 | 返回分配器能力特征 | 不抛异常 |
+
+**nil/0 契约（全局统一）**：
+- `GetMem(0)` / `AllocMem(0)` → 返回 nil
+- `FreeMem(nil)` → 静默返回，无操作
+- `ReallocMem(nil, Size)` → 等价于 `GetMem(Size)`
+- `ReallocMem(Ptr, 0)` → 等价于 `FreeMem(Ptr)`
+- `ReallocMem(nil, 0)` → 无操作，返回 nil
+
+注：`STRICT_NULL_FREE` 调试模式下 `FreeMem(nil)` 会抛异常，仅用于检测调用方 bug，不影响 `ReallocMem` 路径。
 
 #### `IArena`（`nextpas.core.mem.arena.intf`）
 
@@ -72,18 +75,13 @@ end;
 
 **公开方法**：
 - `GetMem` / `AllocMem` / `ReallocMem` / `FreeMem` — 基类处理 nil/0 守卫后委托给 Do*
-- `FreeMem(APtr, ASize)` — 2 参数版本，ASize 被忽略
-- `ReallocMem(APtr, AOldSize, ANewSize)` — 3 参数版本，AOldSize 传给子类
-- `BatchGetMem` / `BatchFreeMem` — 批量操作，默认循环调用
-- `AllocAligned` / `FreeAligned` — over-allocate 实现
 - `Traits` — 返回默认特征
 
 **Do* 模板方法**（子类 override）：
 - `DoGetMem(ASize)` — 抽象，必须实现
-- `DoAllocMem(ASize)` — 默认：DoGetMem + FillChar(0)
+- `DoAllocMem(ASize)` — 抽象，必须实现
 - `DoReallocMem(APtr, ASize)` — 抽象，必须实现
 - `DoFreeMem(APtr)` — 抽象，必须实现
-- `DoMemSize(APtr)` — 默认返回 0
 
 #### `TAllocatorTraits`（`nextpas.core.mem.intf`）
 
@@ -91,8 +89,6 @@ end;
 TAllocatorTraits = record
   ZeroInitialized: Boolean;  // AllocMem 是否零初始化
   ThreadSafe: Boolean;       // 是否线程安全
-  HasMemSize: Boolean;       // 是否支持 MemSize 查询
-  SupportsAligned: Boolean;  // 是否支持原生 AllocAligned
 end;
 ```
 
@@ -370,3 +366,4 @@ IArena 实现：
 | 2026-07-01 | 1.0 | 初始版本：完整六项契约 | Claude |
 | 2026-07-01 | 1.1 | 修正：移除不存在的辅助函数引用、修正测试矩阵匹配实际代码 | Claude |
 | 2026-07-01 | 1.2 | 同步 main：57 源文件 + 39 测试套件 | Claude |
+| 2026-07-03 | 1.3 | 可用性审计修复：IAllocator 定义同步、nil/0 契约文档化、TAllocatorTraits 精简、IArenaCapacity 扩展接口 | Claude |

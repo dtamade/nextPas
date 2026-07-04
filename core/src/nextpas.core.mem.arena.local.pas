@@ -21,7 +21,7 @@ type
    *
    *  非线程安全。适用于请求/帧/文档等有限生命周期的场景。
    *}
-  TLocalArena = class(TInterfacedObject, IArena)
+  TLocalArena = class(TInterfacedObject, IArena, IArenaCapacity)
   private
     FBacking: Pointer;
     FCapacity: SizeUInt;
@@ -47,6 +47,9 @@ type
     function UsedSize: SizeUInt;
     function RemainingSize: SizeUInt;
     function Stats: TArenaStats;
+
+    { IArenaCapacity }
+    function TotalCapacity: SizeUInt;
 
     {** 快速分配（无检查版本，极致性能）。 }
     function AllocFast(ASize: SizeUInt): Pointer; inline;
@@ -211,11 +214,22 @@ end;
 procedure TLocalArena.RestoreToMark(AMark: TArenaMark);
 begin
   if AMark.FrontOffset <= FOffset then
+  begin
+    {$IFDEF DEBUG}
+    if (FBacking <> nil) and (FOffset > AMark.FrontOffset) then
+      FillChar(Pointer(PtrUInt(FBacking) + AMark.FrontOffset)^,
+        FOffset - AMark.FrontOffset, MEM_POISON_FREED);
+    {$ENDIF}
     FOffset := AMark.FrontOffset;
+  end;
 end;
 
 procedure TLocalArena.Reset;
 begin
+  {$IFDEF DEBUG}
+  if (FBacking <> nil) and (FOffset > 0) then
+    FillChar(FBacking^, FOffset, MEM_POISON_FREED);
+  {$ENDIF}
   FOffset := 0;
   { 注意：FPeakUsed 和 FTotalAllocs 不重置，保留统计信息 }
 end;
@@ -227,6 +241,8 @@ end;
 
 function TLocalArena.RemainingSize: SizeUInt;
 begin
+  if FOffset >= FCapacity then
+    Exit(0);
   Result := FCapacity - FOffset;
 end;
 
@@ -236,6 +252,11 @@ begin
   Result.TotalUsed := FOffset;
   Result.PeakUsed := FPeakUsed;
   Result.AllocCount := FTotalAllocs;
+end;
+
+function TLocalArena.TotalCapacity: SizeUInt;
+begin
+  Result := FCapacity;
 end;
 
 end.

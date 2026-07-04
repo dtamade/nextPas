@@ -193,6 +193,30 @@ begin
   LStats.Free;
 end;
 
+procedure Test_BootstrapCI_Empty;
+var LData: TDoubleArray; LStats: TAdvancedStats; LCI: TConfidenceInterval;
+begin
+  LData := nil;
+  LStats := TAdvancedStats.Create(LData);
+  LCI := LStats.BootstrapCI(1000, 0.95);
+  Check(LCI.Lower = 0.0, 'Bootstrap CI empty: lower = 0');
+  Check(LCI.Upper = 0.0, 'Bootstrap CI empty: upper = 0');
+  Check(Abs(LCI.Level - 0.95) < 0.01, 'Bootstrap CI empty: level = 0.95');
+  LStats.Free;
+end;
+
+procedure Test_BootstrapCI_Single;
+var LData: TDoubleArray; LStats: TAdvancedStats; LCI: TConfidenceInterval;
+begin
+  LData := CreateTestData([42.0]);
+  LStats := TAdvancedStats.Create(LData);
+  LCI := LStats.BootstrapCI(1000, 0.95);
+  Check(Abs(LCI.Lower - 42.0) < 0.001, 'Bootstrap CI single: lower = 42.0');
+  Check(Abs(LCI.Upper - 42.0) < 0.001, 'Bootstrap CI single: upper = 42.0');
+  Check(Abs(LCI.Level - 0.95) < 0.01, 'Bootstrap CI single: level = 0.95');
+  LStats.Free;
+end;
+
 procedure Test_TestNormality;
 var LData: TDoubleArray; LStats: TAdvancedStats; LResult: TNormalityTest;
 begin
@@ -216,6 +240,29 @@ begin
   LStats.Free;
 end;
 
+procedure Test_WelchTScore_SignificantDifference;
+var LData1, LData2: TDoubleArray; LStats: TAdvancedStats; LTStat: Double;
+begin
+  { data1 mean=100, data2 mean=1, very different → large |t| }
+  LData1 := CreateTestData([98.0, 99.0, 100.0, 101.0, 102.0]);
+  LData2 := CreateTestData([0.0, 0.5, 1.0, 1.5, 2.0]);
+  LStats := TAdvancedStats.Create(LData1);
+  LTStat := LStats.ApproximateWelchTScore(LData2);
+  Check(LTStat > 10, 'Significant difference: t > 10');
+  LStats.Free;
+end;
+
+procedure Test_WelchTScore_NoDifference;
+var LData: TDoubleArray; LStats: TAdvancedStats; LTStat: Double;
+begin
+  { Same data → t should be ~0 }
+  LData := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0]);
+  LStats := TAdvancedStats.Create(LData);
+  LTStat := LStats.ApproximateWelchTScore(LData);
+  Check(Abs(LTStat) < 0.01, 'No difference: t ~ 0');
+  LStats.Free;
+end;
+
 procedure Test_EffectSize;
 var LData1, LData2: TDoubleArray; LStats: TAdvancedStats; LD: Double;
 begin
@@ -226,6 +273,29 @@ begin
   LD := LStats.EffectSize(LData2);
   Check(LD < 0, 'Effect size < 0 (data1 mean < data2 mean)');
   Check(LD > -3, 'Effect size > -3 (not extreme for close distributions)');
+  LStats.Free;
+end;
+
+procedure Test_EffectSize_LargeEffect;
+var LData1, LData2: TDoubleArray; LStats: TAdvancedStats; LD: Double;
+begin
+  { data1 mean=1, data2 mean=100, same spread → large negative Cohen's d }
+  LData1 := CreateTestData([0.0, 0.5, 1.0, 1.5, 2.0]);
+  LData2 := CreateTestData([98.0, 99.0, 100.0, 101.0, 102.0]);
+  LStats := TAdvancedStats.Create(LData1);
+  LD := LStats.EffectSize(LData2);
+  Check(LD < -10, 'Large effect: d < -10');
+  LStats.Free;
+end;
+
+procedure Test_EffectSize_SameData;
+var LData1: TDoubleArray; LStats: TAdvancedStats; LD: Double;
+begin
+  { Same data → Cohen's d should be ~0 }
+  LData1 := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0]);
+  LStats := TAdvancedStats.Create(LData1);
+  LD := LStats.EffectSize(LData1);
+  Check(Abs(LD) < 0.01, 'Same data: effect size ~ 0');
   LStats.Free;
 end;
 
@@ -491,9 +561,15 @@ begin
   T.Test('DetectOutliers_ModifiedZScore', @Test_DetectOutliers_ModifiedZScore);
   T.Test('ConfidenceInterval', @Test_ConfidenceInterval);
   T.Test('BootstrapCI', @Test_BootstrapCI);
+  T.Test('BootstrapCI_Empty', @Test_BootstrapCI_Empty);
+  T.Test('BootstrapCI_Single', @Test_BootstrapCI_Single);
   T.Test('TestNormality', @Test_TestNormality);
   T.Test('CompareWith', @Test_CompareWith);
+  T.Test('WelchTScore_SignificantDifference', @Test_WelchTScore_SignificantDifference);
+  T.Test('WelchTScore_NoDifference', @Test_WelchTScore_NoDifference);
   T.Test('EffectSize', @Test_EffectSize);
+  T.Test('EffectSize_LargeEffect', @Test_EffectSize_LargeEffect);
+  T.Test('EffectSize_SameData', @Test_EffectSize_SameData);
   T.Test('EmptyData', @Test_EmptyData);
   T.Test('SingleValue', @Test_SingleValue);
   T.Test('NaNInput_NoCrash', @Test_NaNInput_NoCrash);

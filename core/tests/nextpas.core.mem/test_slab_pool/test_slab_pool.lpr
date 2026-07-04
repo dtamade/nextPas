@@ -696,6 +696,82 @@ begin
   end;
 end;
 
+{ C-1: Slab Reset 后哈希表一致性验证 }
+procedure TestSlabResetConsistency;
+var
+  LPool: TSlabPool;
+  LSlabPtr, LFbPtr, LNewPtr: Pointer;
+  LStats: TSlabPoolStats;
+begin
+  LPool := TSlabPool.Create(4096);
+  try
+    { 1. 分配 slab 内指针 }
+    LSlabPtr := LPool.GetMem(32);
+    Check(LSlabPtr <> nil, 'slab alloc should succeed');
+
+    { 2. 分配 fallback 指针（超过 FInitialCapacity 才走 fallback） }
+    LFbPtr := LPool.GetMem(8192);
+    Check(LFbPtr <> nil, 'fallback alloc should succeed');
+
+    { 3. 验证 stats 有 fallback 记录 }
+    LStats := LPool.Stats;
+    Check(LStats.FallbackAllocCount >= 1, 'should have fallback alloc before reset');
+
+    { 4. Reset }
+    LPool.Reset;
+
+    { 5. Reset 后 FbMap 应清空 }
+    LStats := LPool.Stats;
+    Check(Int64(0) = Int64(LStats.FallbackAllocCount), 'FbMap should be empty after reset');
+    Check(Int64(0) = Int64(LStats.FallbackBytes), 'FbMap bytes should be zero after reset');
+
+    { 6. 新分配应正常工作 }
+    LNewPtr := LPool.GetMem(64);
+    Check(LNewPtr <> nil, 'post-reset slab alloc should succeed');
+    LPool.FreeMem(LNewPtr);
+
+    LNewPtr := LPool.GetMem(8192);
+    Check(LNewPtr <> nil, 'post-reset fallback alloc should succeed');
+    LPool.FreeMem(LNewPtr);
+  finally
+    LPool.Free;
+  end;
+end;
+
+{ C-2: AllocAligned 大对齐测试 (64KB/128KB/1MB) }
+procedure TestAllocAlignedLargeAlignment;
+var
+  LPool: TSlabPool;
+  LPtr: Pointer;
+  LAlign: SizeUInt;
+begin
+  LPool := TSlabPool.Create(4096);
+  try
+    { 64KB 对齐 }
+    LAlign := 64 * 1024;
+    LPtr := LPool.AllocAligned(128, LAlign);
+    Check(LPtr <> nil, 'AllocAligned(128, 64KB) should succeed');
+    Check((PtrUInt(LPtr) mod LAlign) = 0, 'AllocAligned(128, 64KB) should be aligned');
+    LPool.FreeAligned(LPtr);
+
+    { 128KB 对齐 }
+    LAlign := 128 * 1024;
+    LPtr := LPool.AllocAligned(256, LAlign);
+    Check(LPtr <> nil, 'AllocAligned(256, 128KB) should succeed');
+    Check((PtrUInt(LPtr) mod LAlign) = 0, 'AllocAligned(256, 128KB) should be aligned');
+    LPool.FreeAligned(LPtr);
+
+    { 1MB 对齐 }
+    LAlign := 1024 * 1024;
+    LPtr := LPool.AllocAligned(512, LAlign);
+    Check(LPtr <> nil, 'AllocAligned(512, 1MB) should succeed');
+    Check((PtrUInt(LPtr) mod LAlign) = 0, 'AllocAligned(512, 1MB) should be aligned');
+    LPool.FreeAligned(LPtr);
+  finally
+    LPool.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.mem.slab_pool');
   T.Test('create stats and traits', @TestCreateStatsAndTraits);
@@ -715,6 +791,8 @@ begin
   T.Test('slab pool OOM safe (B3)', @TestSlabPoolOomWhenBackingFails);
   T.Test('fixed slab zero capacity safe (B3)', @TestFixedSlabPoolZeroCapacity);
   T.Test('secure free zeros before release (CS-016)', @TestSecureFreeZerosBeforeRelease);
+  T.Test('slab reset consistency (C-1)', @TestSlabResetConsistency);
+  T.Test('alloc aligned large alignment 64K/128K/1M (C-2)', @TestAllocAlignedLargeAlignment);
   T.Run;
 
   T.Summary;

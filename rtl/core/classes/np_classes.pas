@@ -1,6 +1,7 @@
 unit Classes;
 
 {$mode objfpc}{$H+}
+{$UNITPATH ../sysutils}
 
 interface
 

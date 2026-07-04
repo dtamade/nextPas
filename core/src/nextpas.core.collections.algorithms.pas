@@ -152,6 +152,13 @@ generic procedure StableSort<T>(var aArr: array of T;
 generic function Merge<T>(const aFirst, aSecond: array of T;
   aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer): specialize TGenericArray<T>;
 
+{**
+ * SortInt32 - 特化的 Int32 IntroSort (无函数指针开销)
+ *
+ * @param aArr  要排序的 Int32 数组
+ *}
+procedure SortInt32(var aArr: array of Int32);
+
 { Internal helpers - do not use directly }
 generic procedure _Swap<T>(var A, B: T); inline;
 generic procedure _ReverseRange<T>(var aArr: array of T; aLo, aHi: SizeInt);
@@ -161,13 +168,8 @@ generic procedure _SiftDownImpl<T>(var aArr: array of T; aStart, aEnd: SizeInt;
   aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer);
 generic procedure _HeapSortImpl<T>(var aArr: array of T; aLo, aHi: SizeInt;
   aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer);
-generic function _MedianOfThreeIdx<T>(const aArr: array of T; aLo, aMid, aHi: SizeInt;
-  aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer): SizeInt;
 generic procedure _IntroSortImpl<T>(var aArr: array of T; aLo, aHi: SizeInt;
   aDepthLimit: SizeInt; aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer);
-
-const
-  _INSERTION_SORT_THRESHOLD = 16;
 
 implementation
 
@@ -191,6 +193,9 @@ begin
     Dec(aHi);
   end;
 end;
+
+const
+  _INSERTION_SORT_THRESHOLD = 16;
 
 { Insertion sort for small partitions }
 generic procedure _InsertionSortImpl<T>(var aArr: array of T; aLo, aHi: SizeInt;
@@ -250,7 +255,7 @@ begin
 end;
 
 { Median-of-three pivot selection }
-generic function _MedianOfThreeIdx<T>(const aArr: array of T; aLo, aMid, aHi: SizeInt;
+function _MedianOfThreeIdx<T>(const aArr: array of T; aLo, aMid, aHi: SizeInt;
   aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer): SizeInt;
 begin
   if aCompare(aArr[aLo], aArr[aMid], aData) < 0 then
@@ -273,13 +278,46 @@ begin
   end;
 end;
 
-{ IntroSort — QuickSort + InsertionSort + HeapSort fallback }
+{ IntroSort — QuickSort + InsertionSort + HeapSort fallback
+  pdqsort-inspired: top-level sorted detection, Tukey ninther pivot }
 generic procedure _IntroSortImpl<T>(var aArr: array of T; aLo, aHi: SizeInt;
   aDepthLimit: SizeInt; aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer);
 var
-  I, J, PivotIdx: SizeInt;
+  I, J, PivotIdx, Mid, N: SizeInt;
   Pivot: T;
+  AlreadySorted: Boolean;
 begin
+  { Top-level sorted/revsorted detection (only for large ranges) }
+  N := aHi - aLo;
+  if N > _INSERTION_SORT_THRESHOLD then
+  begin
+    AlreadySorted := True;
+    for I := aLo + 1 to aHi do
+    begin
+      if aCompare(aArr[I - 1], aArr[I], aData) > 0 then
+      begin
+        AlreadySorted := False;
+        Break;
+      end;
+    end;
+    if AlreadySorted then Exit;
+    { Check reverse-sorted }
+    AlreadySorted := True;
+    for I := aLo + 1 to aHi do
+    begin
+      if aCompare(aArr[I - 1], aArr[I], aData) < 0 then
+      begin
+        AlreadySorted := False;
+        Break;
+      end;
+    end;
+    if AlreadySorted then
+    begin
+      specialize _ReverseRange<T>(aArr, aLo, aHi);
+      Exit;
+    end;
+  end;
+
   while aHi - aLo > _INSERTION_SORT_THRESHOLD do
   begin
     if aDepthLimit = 0 then
@@ -289,12 +327,23 @@ begin
     end;
     Dec(aDepthLimit);
 
-    { Median-of-three pivot }
-    PivotIdx := specialize _MedianOfThreeIdx<T>(aArr, aLo, aLo + (aHi - aLo) div 2, aHi,
-      aCompare, aData);
+    { Pivot selection: Tukey's ninther for large, median-of-three otherwise }
+    Mid := aLo + (aHi - aLo) div 2;
+    if aHi - aLo > 128 then
+    begin
+      { Tukey's ninther: median of three medians-of-three }
+      N := (aHi - aLo) div 8;
+      PivotIdx := _MedianOfThreeIdx(aArr,
+        _MedianOfThreeIdx(aArr, aLo, aLo + N, aLo + 2 * N, aCompare, aData),
+        _MedianOfThreeIdx(aArr, Mid - N, Mid, Mid + N, aCompare, aData),
+        _MedianOfThreeIdx(aArr, aHi - 2 * N, aHi - N, aHi, aCompare, aData),
+        aCompare, aData);
+    end
+    else
+      PivotIdx := _MedianOfThreeIdx(aArr, aLo, Mid, aHi, aCompare, aData);
     Pivot := aArr[PivotIdx];
 
-    { Partition }
+    { Hoare partition }
     I := aLo;
     J := aHi;
     repeat
@@ -606,6 +655,195 @@ begin
   end;
   while i < LenA do begin Result[k] := aFirst[i]; Inc(i); Inc(k); end;
   while j < LenB do begin Result[k] := aSecond[j]; Inc(j); Inc(k); end;
+end;
+
+{ SortInt32 — specialized IntroSort for Int32 without function pointer overhead }
+procedure _InsertionSortInt32(var aArr: array of Int32; aLo, aHi: SizeInt);
+var
+  I, J: SizeInt;
+  Tmp: Int32;
+begin
+  for I := aLo + 1 to aHi do
+  begin
+    Tmp := aArr[I];
+    J := I - 1;
+    while (J >= aLo) and (aArr[J] > Tmp) do
+    begin
+      aArr[J + 1] := aArr[J];
+      Dec(J);
+    end;
+    aArr[J + 1] := Tmp;
+  end;
+end;
+
+procedure _SiftDownInt32(var aArr: array of Int32; aStart, aEnd: SizeInt);
+var
+  LRoot, LChild, LSwap: SizeInt;
+begin
+  LRoot := aStart;
+  while True do
+  begin
+    LChild := 2 * LRoot + 1;
+    if LChild > aEnd then Break;
+    LSwap := LRoot;
+    if aArr[LSwap] < aArr[LChild] then
+      LSwap := LChild;
+    if (LChild + 1 <= aEnd) and (aArr[LSwap] < aArr[LChild + 1]) then
+      LSwap := LChild + 1;
+    if LSwap = LRoot then Break;
+    aArr[LRoot] := aArr[LRoot] xor aArr[LSwap];
+    aArr[LSwap] := aArr[LRoot] xor aArr[LSwap];
+    aArr[LRoot] := aArr[LRoot] xor aArr[LSwap];
+    LRoot := LSwap;
+  end;
+end;
+
+procedure _HeapSortInt32(var aArr: array of Int32; aLo, aHi: SizeInt);
+var
+  I: SizeInt;
+begin
+  for I := (aLo + aHi) div 2 downto aLo do
+    _SiftDownInt32(aArr, I, aHi);
+  for I := aHi downto aLo + 1 do
+  begin
+    aArr[aLo] := aArr[aLo] xor aArr[I];
+    aArr[I] := aArr[aLo] xor aArr[I];
+    aArr[aLo] := aArr[aLo] xor aArr[I];
+    _SiftDownInt32(aArr, aLo, I - 1);
+  end;
+end;
+
+procedure _IntroSortInt32(var aArr: array of Int32; aLo, aHi: SizeInt; aDepthLimit: SizeInt);
+var
+  I, J, Mid, PivotIdx, N: SizeInt;
+  Pivot, Tmp: Int32;
+begin
+  while aHi - aLo > 16 do
+  begin
+    if aDepthLimit = 0 then
+    begin
+      _HeapSortInt32(aArr, aLo, aHi);
+      Exit;
+    end;
+    Dec(aDepthLimit);
+
+    { Pivot: Tukey's ninther for large, median-of-three otherwise }
+    Mid := aLo + (aHi - aLo) div 2;
+    if aHi - aLo > 128 then
+    begin
+      N := (aHi - aLo) div 8;
+      PivotIdx := aLo + N;
+      if aArr[aLo] < aArr[aLo + N] then
+      begin
+        if aArr[aLo + N] < aArr[aLo + 2*N] then PivotIdx := aLo + N
+        else if aArr[aLo] < aArr[aLo + 2*N] then PivotIdx := aLo + 2*N
+        else PivotIdx := aLo;
+      end
+      else
+      begin
+        if aArr[aLo] < aArr[aLo + 2*N] then PivotIdx := aLo
+        else if aArr[aLo + N] < aArr[aLo + 2*N] then PivotIdx := aLo + 2*N;
+      end;
+      I := PivotIdx; { save first median }
+
+      PivotIdx := Mid - N;
+      if aArr[Mid - N] < aArr[Mid] then
+      begin
+        if aArr[Mid] < aArr[Mid + N] then PivotIdx := Mid
+        else if aArr[Mid - N] < aArr[Mid + N] then PivotIdx := Mid + N
+        else PivotIdx := Mid - N;
+      end
+      else
+      begin
+        if aArr[Mid - N] < aArr[Mid + N] then PivotIdx := Mid - N
+        else if aArr[Mid] < aArr[Mid + N] then PivotIdx := Mid + N;
+      end;
+      J := PivotIdx; { save second median }
+
+      PivotIdx := aHi - 2*N;
+      if aArr[aHi - 2*N] < aArr[aHi - N] then
+      begin
+        if aArr[aHi - N] < aArr[aHi] then PivotIdx := aHi - N
+        else if aArr[aHi - 2*N] < aArr[aHi] then PivotIdx := aHi
+        else PivotIdx := aHi - 2*N;
+      end
+      else
+      begin
+        if aArr[aHi - 2*N] < aArr[aHi] then PivotIdx := aHi - 2*N
+        else if aArr[aHi - N] < aArr[aHi] then PivotIdx := aHi;
+      end;
+      { median of three medians }
+      if aArr[I] < aArr[J] then
+      begin
+        if aArr[J] < aArr[PivotIdx] then PivotIdx := J
+        else if aArr[I] < aArr[PivotIdx] then { keep PivotIdx }
+        else PivotIdx := I;
+      end
+      else
+      begin
+        if aArr[I] < aArr[PivotIdx] then PivotIdx := I
+        else if aArr[J] < aArr[PivotIdx] then { keep PivotIdx }
+        else PivotIdx := J;
+      end;
+    end
+    else
+    begin
+      { Median-of-three }
+      if aArr[aLo] < aArr[Mid] then
+      begin
+        if aArr[Mid] < aArr[aHi] then PivotIdx := Mid
+        else if aArr[aLo] < aArr[aHi] then PivotIdx := aHi
+        else PivotIdx := aLo;
+      end
+      else
+      begin
+        if aArr[aLo] < aArr[aHi] then PivotIdx := aLo
+        else if aArr[Mid] < aArr[aHi] then PivotIdx := aHi
+        else PivotIdx := Mid;
+      end;
+    end;
+    Pivot := aArr[PivotIdx];
+
+    { Hoare partition }
+    I := aLo;
+    J := aHi;
+    repeat
+      while aArr[I] < Pivot do Inc(I);
+      while aArr[J] > Pivot do Dec(J);
+      if I <= J then
+      begin
+        Tmp := aArr[I]; aArr[I] := aArr[J]; aArr[J] := Tmp;
+        Inc(I);
+        Dec(J);
+      end;
+    until I > J;
+
+    { Tail call elimination: recurse on smaller partition }
+    if J - aLo < aHi - J then
+    begin
+      _IntroSortInt32(aArr, aLo, J, aDepthLimit);
+      aLo := I;
+    end
+    else
+    begin
+      _IntroSortInt32(aArr, I, aHi, aDepthLimit);
+      aHi := J;
+    end;
+  end;
+
+  _InsertionSortInt32(aArr, aLo, aHi);
+end;
+
+procedure SortInt32(var aArr: array of Int32);
+var
+  N, DepthLimit: SizeInt;
+begin
+  N := Length(aArr);
+  if N <= 1 then Exit;
+  DepthLimit := 1;
+  while (1 shl DepthLimit) < N do
+    Inc(DepthLimit);
+  _IntroSortInt32(aArr, 0, High(aArr), DepthLimit * 2);
 end;
 
 end.

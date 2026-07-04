@@ -23,6 +23,10 @@
 program lex_bench;
 
 {$mode objfpc}{$H+}
+{$UNITPATH ../../rtl/core/base}
+{$UNITPATH ../../rtl/core/text}
+{$UNITPATH ../../rtl/core/sysutils}
+{$UNITPATH ../../rtl/core/classes}
 
 uses
   SysUtils, Classes, np_lexer, np_bench_timing;

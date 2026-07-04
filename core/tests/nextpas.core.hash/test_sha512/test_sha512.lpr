@@ -21,7 +21,7 @@ begin
 end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TTestSuite;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('sha512');
@@ -70,7 +70,7 @@ begin
     CheckEqual(128, LH.BlockSize);
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.hash.sha512');
+  LRunner := TTestSuite.Create('nextpas.core.hash.sha512');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

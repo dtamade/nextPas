@@ -11,18 +11,19 @@
 | # | 模块 | 问题 | 状态 |
 |---|------|------|------|
 | 1 | expect.pas `ToRaise` | nil `AExceptionClass` → SIGSEGV | ✅ 已修复 + 测试 |
+| 2 | check.pas `CheckEqual(Double)` | 文档声称"exact bit-wise comparison"但实际调用 CheckNear (epsilon 比较) | ✅ 已修复: 改为 IEEE 754 精确比较 |
 
 ### P1 — 待补测试
 
 | # | 模块 | 问题 | 状态 |
 |---|------|------|------|
-| 2 | test_assertions | 无测试 `CheckRaises(nil, @Proc)` nil ExceptClass 路径 | 待补 |
+| 3 | test_assertions | 无测试 `CheckRaises(nil, @Proc)` nil ExceptClass 路径 | ✅ 已覆盖: TestCheckRaisesNilClass |
 
 ### P2 — 低优先级
 
 | # | 模块 | 问题 | 状态 |
 |---|------|------|------|
-| 3 | testing.pas | 直接 `raise EAssertionFailed` 不经过 `InternalFail` → `GExecState^.Failed` 不被设置 | 设计如此 (已废弃) |
+| 4 | testing.pas | 直接 `raise EAssertionFailed` 不经过 `InternalFail` → `GExecState^.Failed` 不被设置 | 设计如此 (已废弃) |
 
 ## 公共 API 参数校验矩阵
 
@@ -33,7 +34,7 @@
 | Check | N/A | N/A | N/A | ✅ |
 | CheckEqual(string) | N/A | ✅ | N/A | ✅ |
 | CheckEqual(Int64) | N/A | N/A | ✅ | ✅ |
-| CheckEqual(Double) | N/A | N/A | ✅ | ✅ |
+| CheckEqual(Double) | N/A | N/A | ✅ | ✅ (IEEE 754 精确比较) |
 | CheckNil/NotNil | ✅ | N/A | N/A | ✅ |
 | CheckContains | N/A | ✅ (空匹配一切) | N/A | ✅ |
 | CheckStartsWith | N/A | ✅ (空匹配一切) | N/A | ✅ |
