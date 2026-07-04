@@ -24,10 +24,10 @@ type
 
   TCrossLangEntryArray = array of TCrossLangEntry;
 
-  {** 行缓冲区（直接字符串追加，消除中间数组）}
+  {** 行缓冲区（F-04: 动态数组 + Join 替代 O(n²) 拼接）}
   TLineBuffer = record
-    Content: string;
-    IsEmpty: Boolean;
+    Lines: array of string;
+    LineCount: Integer;
   end;
 
   {** 报告生成器 }
@@ -151,19 +151,47 @@ uses
 
 procedure BufferAddLine(var ABuf: TLineBuffer; const ALine: string);
 begin
-  if ABuf.IsEmpty then
+  if ABuf.LineCount >= Length(ABuf.Lines) then
   begin
-    ABuf.Content := ALine;
-    ABuf.IsEmpty := False;
-  end
-  else
-    ABuf.Content := ABuf.Content + LineEnding + ALine;
+    if ABuf.LineCount = 0 then
+      SetLength(ABuf.Lines, 64)
+    else
+      SetLength(ABuf.Lines, ABuf.LineCount * 2);
+  end;
+  ABuf.Lines[ABuf.LineCount] := ALine;
+  Inc(ABuf.LineCount);
 end;
 
 function BufferToString(const ABuf: TLineBuffer): string;
+var
+  I, LTotalLen, LLELen: Integer;
+  LP: PChar;
+  LLE: string;
 begin
-  if ABuf.IsEmpty then Exit('');
-  Result := ABuf.Content;
+  if ABuf.LineCount = 0 then Exit('');
+  LLE := LineEnding;
+  LLELen := Length(LLE);
+  { 一次性分配，逐行拷贝 }
+  LTotalLen := 0;
+  for I := 0 to ABuf.LineCount - 1 do
+    Inc(LTotalLen, Length(ABuf.Lines[I]));
+  if ABuf.LineCount > 1 then
+    Inc(LTotalLen, LLELen * (ABuf.LineCount - 1));
+  SetLength(Result, LTotalLen);
+  LP := PChar(Result);
+  for I := 0 to ABuf.LineCount - 1 do
+  begin
+    if I > 0 then
+    begin
+      Move(LLE[1], LP^, LLELen);
+      Inc(LP, LLELen);
+    end;
+    if Length(ABuf.Lines[I]) > 0 then
+    begin
+      Move(ABuf.Lines[I][1], LP^, Length(ABuf.Lines[I]));
+      Inc(LP, Length(ABuf.Lines[I]));
+    end;
+  end;
 end;
 
 procedure SortCrossLangEntriesByName(var AEntries: TCrossLangEntryArray);
