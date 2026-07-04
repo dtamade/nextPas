@@ -8,9 +8,6 @@ uses
   nextpas.core.mem.base,
   nextpas.core.mem.utils,
   nextpas.core.mem.intf
-  {$IFDEF NEXTPAS_CORE_STRICT_NULL_FREE}
-  , nextpas.core.base
-  {$ENDIF}
   ;
 
 type
@@ -50,6 +47,7 @@ begin
   // - ZeroInitialized=False: GetMem 不保证零填充
   Result.ZeroInitialized := False;
   Result.ThreadSafe      := True;
+  Result.SupportsRealloc := True;
 end;
 
 function TAllocator.GetMem(ASize: SizeUInt): Pointer;
@@ -84,7 +82,7 @@ begin
   if ADst = nil then
   begin
     {$IFDEF NEXTPAS_CORE_STRICT_NULL_FREE}
-    raise EArgumentNil.Create('TAllocator.FreeMem: ADst cannot be nil.');
+    Assert(False, 'TAllocator.FreeMem: ADst must not be nil');
     {$ELSE}
     Exit;
     {$ENDIF}

@@ -75,6 +75,7 @@ end;
 
 function TVirtualArenaAllocator.DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
 begin
+  Result := nil; // suppress compiler warning — raise below never returns
   raise EAllocError.Create(aeReallocNotSupported,
     'TVirtualArenaAllocator.ReallocMem: arena does not track individual allocation sizes');
 end;
@@ -93,6 +94,7 @@ function TVirtualArenaAllocator.Traits: TAllocatorTraits;
 begin
   Result.ZeroInitialized := True;
   Result.ThreadSafe      := False;
+  Result.SupportsRealloc := False;
 end;
 
 end.

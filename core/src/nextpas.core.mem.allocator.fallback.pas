@@ -425,6 +425,8 @@ begin
   { 合并 primary + fallback 能力：任一支持则组合支持 }
   if LFallbackTraits.ZeroInitialized then
     Result.ZeroInitialized := True;
+  if LFallbackTraits.SupportsRealloc then
+    Result.SupportsRealloc := True;
 end;
 
 { ---------------------------------------------------------------------------

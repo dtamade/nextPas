@@ -17,6 +17,7 @@ type
   TAllocatorTraits = record
     ZeroInitialized: Boolean;  { AllocMem 返回全零内存 }
     ThreadSafe: Boolean;       { 所有方法线程安全 }
+    SupportsRealloc: Boolean;  { ReallocMem 可用；False 时 ReallocMem 会抛异常 }
   end;
 
   {**

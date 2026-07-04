@@ -592,9 +592,8 @@ function TPoolAllocator.Traits: TAllocatorTraits;
 begin
   Result.ZeroInitialized := False;
   Result.ThreadSafe := False;
+  Result.SupportsRealloc := True;
 end;
-
-{ Extended methods }
 
 function TPoolAllocator.GetMemSize(APtr: Pointer): SizeUInt;
 var

@@ -1521,6 +1521,7 @@ begin
   // 固定 slab：AllocMem 保证零填充，默认非线程安全，提供块大小查询
   Result.ZeroInitialized := True;   // AllocMem 中有 SecureZeroMemory
   Result.ThreadSafe      := False;  // 当前实现未加锁
+  Result.SupportsRealloc := True;
 end;
 
 function TFixedSlabPool.MemSizeOf(APtr: Pointer): SizeUInt;
