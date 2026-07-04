@@ -1258,7 +1258,7 @@ var
 begin
   if _WaitAddressResolved then
     Exit;
-  LLib := GetModuleHandleW('kernel32');
+  LLib := GetModuleHandleW(L'kernel32');
   if LLib <> 0 then
   begin
     _WaitOnAddress := TWaitOnAddressFunc(GetProcAddress(LLib, 'WaitOnAddress'));
