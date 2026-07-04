@@ -2,6 +2,7 @@
 
 ROOT_DIR := $(abspath ../../..)
 TARGET_ID := linux-x86_64
+NEXTPAS_RUNTIME_DIR := $(ROOT_DIR)/rtl/runtime/src
 PROCESS_RUNTIME_CONTRACT_SEED_BUILD_DIR := $(ROOT_DIR)/build/.tmp/core-system-process-runtime-contract-seed
 PROCESS_RUNTIME_CONTRACT_SEED_BINARY := $(PROCESS_RUNTIME_CONTRACT_SEED_BUILD_DIR)/test_semantic_runtime_contract_seed
 PROCESS_RUNTIME_CONTRACT_SEED_SOURCE := $(ROOT_DIR)/tests/semantic/test_semantic_runtime_contract_seed.pas
@@ -84,13 +85,13 @@ test-field-dynarray-runtime-smoke:
 	rm -rf "$(FIELD_DYNARRAY_RUNTIME_BUILD_DIR)"
 	mkdir -p "$(FIELD_DYNARRAY_RUNTIME_BUILD_DIR)"
 	fpc $(FIELD_DYNARRAY_RUNTIME_FPC_FLAGS) -FE"$(FIELD_DYNARRAY_RUNTIME_BUILD_DIR)" -FU"$(FIELD_DYNARRAY_RUNTIME_BUILD_DIR)" "$(FIELD_DYNARRAY_RUNTIME_SOURCE)"
-	"$(FIELD_DYNARRAY_RUNTIME_BINARY)" "$(FIELD_DYNARRAY_RUNTIME_BUILD_DIR)"
+	NEXTPAS_RUNTIME_DIR="$(NEXTPAS_RUNTIME_DIR)" "$(FIELD_DYNARRAY_RUNTIME_BINARY)" "$(FIELD_DYNARRAY_RUNTIME_BUILD_DIR)"
 
 test-large-alloc-runtime-smoke:
 	rm -rf "$(LARGE_ALLOC_RUNTIME_BUILD_DIR)"
 	mkdir -p "$(LARGE_ALLOC_RUNTIME_BUILD_DIR)"
 	fpc $(LARGE_ALLOC_RUNTIME_FPC_FLAGS) -FE"$(LARGE_ALLOC_RUNTIME_BUILD_DIR)" -FU"$(LARGE_ALLOC_RUNTIME_BUILD_DIR)" "$(LARGE_ALLOC_RUNTIME_SOURCE)"
-	"$(LARGE_ALLOC_RUNTIME_BINARY)" "$(LARGE_ALLOC_RUNTIME_BUILD_DIR)"
+	NEXTPAS_RUNTIME_DIR="$(NEXTPAS_RUNTIME_DIR)" "$(LARGE_ALLOC_RUNTIME_BINARY)" "$(LARGE_ALLOC_RUNTIME_BUILD_DIR)"
 
 test-stage0-system-object-free-query:
 	rm -rf "$(STAGE0_SYSTEM_OBJECT_FREE_QUERY_BUILD_DIR)"
@@ -125,9 +126,9 @@ test-stage0-system-object-free-query:
 	  require_pattern '^query-symbols=\[.*"name":"TObject".*"kind":"type".*"ownerUnitId":"system".*"ownerUnitName":"System"' "$$output" "$$label-missing-object-type-symbol"; \
 	  require_pattern '^query-symbols=\[.*"name":"TObject.Free".*"kind":"method".*"ownerUnitId":"system".*"ownerUnitName":"System".*"paramCount":0' "$$output" "$$label-missing-object-free-symbol"; \
 	  require_pattern "^query-bindings=\\[.*\"kind\":\"member-call\".*\"name\":\"Free\".*\"ownerUnitId\":\"$$owner_unit_id\".*\"byteOffset\":$$object_free_offset.*\"targetSymbolId\":[1-9][0-9]*" "$$output" "$$label-missing-object-free-binding"; \
-	  require_pattern "^query-definitions=\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Free\".*\"bindingByteOffset\":$$object_free_offset.*\"targetName\":\"TObject.Free\".*\"targetKind\":\"method\".*\"targetOwnerUnitName\":\"System\".*\"targetSourcePath\":\".*units/linux-x86_64/System\\.pas\"" "$$output" "$$label-missing-object-free-definition"; \
+	  require_pattern "^query-definitions=\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Free\".*\"bindingByteOffset\":$$object_free_offset.*\"targetName\":\"TObject.Free\".*\"targetKind\":\"method\".*\"targetOwnerUnitName\":\"System\".*\"targetSourcePath\":\".*(units/linux-x86_64|rtl/core/system)/System\\.pas\"" "$$output" "$$label-missing-object-free-definition"; \
 	  require_pattern '^command-envelope=.*"querySymbols":\[.*"name":"TObject.Free".*"kind":"method".*"ownerUnitId":"system".*"ownerUnitName":"System".*"paramCount":0' "$$output" "$$label-missing-object-free-symbol-envelope"; \
-	  require_pattern "^command-envelope=.*\"queryDefinitions\":\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Free\".*\"bindingByteOffset\":$$object_free_offset.*\"targetName\":\"TObject.Free\".*\"targetKind\":\"method\".*\"targetOwnerUnitName\":\"System\".*\"targetSourcePath\":\".*units/linux-x86_64/System\\.pas\"" "$$output" "$$label-missing-object-free-definition-envelope"; \
+	  require_pattern "^command-envelope=.*\"queryDefinitions\":\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Free\".*\"bindingByteOffset\":$$object_free_offset.*\"targetName\":\"TObject.Free\".*\"targetKind\":\"method\".*\"targetOwnerUnitName\":\"System\".*\"targetSourcePath\":\".*(units/linux-x86_64|rtl/core/system)/System\\.pas\"" "$$output" "$$label-missing-object-free-definition-envelope"; \
 	  require_pattern '^mir-status=deferred$$' "$$output" "$$label-missing-deferred-mir"; \
 	  require_pattern '^backend-plan-status=deferred$$' "$$output" "$$label-missing-deferred-backend"; \
 	  require_pattern '^toolchain-plan-status=deferred$$' "$$output" "$$label-missing-deferred-toolchain"; \
