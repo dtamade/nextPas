@@ -43,12 +43,12 @@ uses
 
 | # | 文件 | 违规单元 | 用途 | 框架替代 |
 |---|------|----------|------|----------|
-| 2 | `rtl/core/text/np_text_primitives.pas:8` | Classes, SysUtils | TStream 基类, 字符串操作 | nextpas.core.system.classes, nextpas.core.text |
-| 3 | `rtl/core/process/np_process.pas:7` | Classes, SysUtils | TProcess, 字符串操作 | nextpas.core.process |
-| 4 | `rtl/core/classes/np_classes.pas:7` | SysUtils | 字符串操作 | nextpas.core.text |
+| 2 | `rtl/core/text/np_text_primitives.pas:8` | Classes, SysUtils | TStream 基类, 字符串操作 | ✅ UNITPATH 指向 rtl/ 版本 |
+| 3 | `rtl/core/process/np_process.pas:7` | Classes, SysUtils | TProcess, 字符串操作 | ✅ UNITPATH 指向 rtl/ 版本 |
+| 4 | `rtl/core/classes/np_classes.pas:7` | SysUtils | 字符串操作 | ✅ UNITPATH 指向 rtl/ 版本 |
 | 5 | `rtl/core/sysutils/np_sysutils.pas:92` | BaseUnix | POSIX 系统调用 | nextpas.core.platform |
 | 6 | `rtl/core/sysutils/np_sysutils_test.pas:5` | SysUtils | 测试 | nextpas.core.test |
-| 7 | `rtl/core/mem/np_allocator.pas:8` | SysUtils, np_base_types | 内存分配 | nextpas.core.mem |
+| 7 | `rtl/core/mem/np_allocator.pas:8` | SysUtils, np_base_types | 内存分配 | ✅ UNITPATH 指向 rtl/ 版本 |
 
 **分析**: rtl/ 模块是 FPC RTL 的替代实现，部分模块仍依赖 FPC RTL 自身。这违反了"编译器无关性原则"——如果要在 nextpas 编译器下编译 rtl/，这些依赖会导致循环或不可用。
 
@@ -117,12 +117,12 @@ uses
 ### Phase 1: 编译器核心（1 天）
 - [ ] `np_sema_name_set.pas`: `SysUtils.LowerCase` → 手写 ASCII tolower 或 `nextpas.core.text.conv.LowerCase`
 
-### Phase 2: RTL 模块（5-10 天）
-- [ ] `np_text_primitives.pas`: Classes/SysUtils → framework 替代
-- [ ] `np_process.pas`: Classes/SysUtils → nextpas.core.process
-- [ ] `np_classes.pas`: SysUtils → nextpas.core.text
-- [ ] `np_sysutils.pas`: BaseUnix → nextpas.core.platform
-- [ ] `np_allocator.pas`: SysUtils → nextpas.core.mem
+### Phase 2: RTL 模块
+- [x] `np_text_primitives.pas`: UNITPATH 指向 rtl/ SysUtils/Classes
+- [x] `np_process.pas`: UNITPATH 指向 rtl/ SysUtils/Classes
+- [x] `np_classes.pas`: UNITPATH 指向 rtl/ SysUtils
+- [ ] `np_sysutils.pas`: BaseUnix → nextpas.core.platform（需要深度重构）
+- [x] `np_allocator.pas`: UNITPATH 指向 rtl/ SysUtils
 
 ### Phase 3: 工具（2-3 天）
 - [ ] 基准测试工具迁移到框架接口
