@@ -253,6 +253,9 @@ var
   I: Integer;
   LMean: Double;
   LSum: Double;
+  LCompensation: Double;
+  LDiff: Double;
+  LTemp: Double;
 begin
   if Length(FData) < 2 then Exit(0);
 
@@ -261,10 +264,20 @@ begin
   if IsNaN(LMean) or IsInfinite(LMean) then
     Exit(0);
 
+  { F-09: Kahan 补偿求和，减少大数组浮点累积误差 }
   LSum := 0;
+  LCompensation := 0;
   for I := 0 to High(FData) do
-    LSum := LSum + Sqr(FData[I] - LMean);
-  Result := LSum / (Length(FData) - 1);
+  begin
+    LDiff := Sqr(FData[I] - LMean);
+    LTemp := LSum + LDiff;
+    if Abs(LSum) >= Abs(LDiff) then
+      LCompensation := LCompensation + ((LSum - LTemp) + LDiff)
+    else
+      LCompensation := LCompensation + ((LDiff - LTemp) + LSum);
+    LSum := LTemp;
+  end;
+  Result := (LSum + LCompensation) / (Length(FData) - 1);
 end;
 
 function TAdvancedStats.Skewness: Double;
@@ -342,29 +355,9 @@ begin
 end;
 
 function TAdvancedStats.Percentile(APercentile: Double): Double;
-var
-  LIndex: Double;
-  LFloor: Integer;
-  LCeil: Integer;
-  LCount: Integer;
 begin
-  LCount := Length(FData);
-  if LCount = 0 then Exit(0);
-
-  // PF-06: Validate input range
-  if APercentile < 0 then APercentile := 0;
-  if APercentile > 100 then APercentile := 100;
-
   EnsureSorted;
-
-  LIndex := (APercentile / 100) * (LCount - 1);
-  LFloor := Floor(LIndex);
-  LCeil := Ceil(LIndex);
-
-  if LFloor = LCeil then
-    Result := FSortedData[LFloor]
-  else
-    Result := FSortedData[LFloor] + (FSortedData[LCeil] - FSortedData[LFloor]) * (LIndex - LFloor);
+  Result := PercentileSorted(FSortedData, APercentile);
 end;
 
 function TAdvancedStats.IQR: Double;

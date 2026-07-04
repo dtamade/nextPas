@@ -210,26 +210,8 @@ begin
 end;
 
 function TBenchStatsAnalyzer.Percentile(const ASorted: TDoubleArray; APercent: Double): Double;
-var
-  LIndex: Double;
-  LLower, LUpper: Integer;
 begin
-  if Length(ASorted) = 0 then
-    Exit(0.0);
-
-  if APercent <= 0 then
-    Exit(ASorted[0]);
-  if APercent >= 100 then
-    Exit(ASorted[High(ASorted)]);
-
-  LIndex := (APercent / 100.0) * (Length(ASorted) - 1);
-  LLower := Integer(Floor(LIndex));
-  LUpper := Integer(Ceil(LIndex));
-
-  if LLower = LUpper then
-    Result := ASorted[LLower]
-  else
-    Result := ASorted[LLower] + (LIndex - LLower) * (ASorted[LUpper] - ASorted[LLower]);
+  Result := PercentileSorted(ASorted, APercent);
 end;
 
 function TBenchStatsAnalyzer.CountOutliers(const ASorted: TDoubleArray;

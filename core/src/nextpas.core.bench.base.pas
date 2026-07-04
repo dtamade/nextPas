@@ -241,6 +241,9 @@ function GlobMatch(const APattern, AStr: string): Boolean;
 {** IEEE 754 NaN 检测: exponent=全1 且 mantissa≠0 }
 function IsDoubleNaN(const AValue: Double): Boolean; inline;
 
+{** Percentile 线性插值（输入必须已排序） }
+function PercentileSorted(const ASorted: TDoubleArray; APercent: Double): Double;
+
 implementation
 
 function TInvLookup(ADF: Double; const ATable: array of Double; AZScore: Double): Double;
@@ -409,6 +412,26 @@ var
 begin
   Result := ((LBits and $7FF0000000000000) = $7FF0000000000000)
         and ((LBits and $000FFFFFFFFFFFFF) <> 0);
+end;
+
+function PercentileSorted(const ASorted: TDoubleArray; APercent: Double): Double;
+var
+  LIndex: Double;
+  LLower, LUpper: Integer;
+  LCount: Integer;
+begin
+  LCount := Length(ASorted);
+  if LCount = 0 then Exit(0.0);
+  if LCount = 1 then Exit(ASorted[0]);
+  if APercent <= 0 then Exit(ASorted[0]);
+  if APercent >= 100 then Exit(ASorted[High(ASorted)]);
+
+  LIndex := (APercent / 100.0) * (LCount - 1);
+  LLower := Trunc(LIndex);
+  LUpper := LLower + 1;
+  if LUpper >= LCount then
+    Exit(ASorted[High(ASorted)]);
+  Result := ASorted[LLower] + (LIndex - LLower) * (ASorted[LUpper] - ASorted[LLower]);
 end;
 
 { NaN 安全分区: 将 NaN 值移到数组末尾，返回非 NaN 元素个数 }

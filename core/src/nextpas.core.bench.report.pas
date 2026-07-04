@@ -228,25 +228,7 @@ begin
 end;
 
 { CR-23: Percentile with linear interpolation on already-sorted array }
-function PercentileSorted(const ASorted: TDoubleArray; APercent: Double): Double;
-var
-  LIndex: Double;
-  LLower, LUpper: Integer;
-  LCount: Integer;
-begin
-  LCount := Length(ASorted);
-  if LCount = 0 then Exit(0.0);
-  if LCount = 1 then Exit(ASorted[0]);
-  if APercent <= 0 then Exit(ASorted[0]);
-  if APercent >= 100 then Exit(ASorted[High(ASorted)]);
-
-  LIndex := (APercent / 100.0) * (LCount - 1);
-  LLower := Trunc(LIndex);
-  LUpper := LLower + 1;
-  if LUpper >= LCount then
-    Exit(ASorted[High(ASorted)]);
-  Result := ASorted[LLower] + (LIndex - LLower) * (ASorted[LUpper] - ASorted[LLower]);
-end;
+{ 已移至 base.pas 作为公共函数 PercentileSorted }
 
 { TBenchReportGenerator }
 

@@ -884,8 +884,9 @@ begin
 
   for I := 1 to LSampleCount - 1 do
   begin
+    { F-11: 在最后一次采样时启用内存追踪，而非仅第二次 }
     LMeasurement := ExecuteEntry(AEntry, AIters,
-      FConfig.EnableMemoryTracking and (I = 1));  { 只在第二次采样时追踪内存 }
+      FConfig.EnableMemoryTracking and (I = LSampleCount - 1));
 
     if LMeasurement.Iterations > 0 then
       LSamples[I] := Double(LMeasurement.TotalNs) / Double(LMeasurement.Iterations)
@@ -965,6 +966,8 @@ var
   LSamples: TDoubleArray;
   LStats: TBenchStats;
   LMeasurement: TBenchResult;
+  LStartNs: UInt64;
+  LTimeoutMs: Int64;
 begin
   LEntry := AEntry;
   Result := Default(TBenchResult);
@@ -977,10 +980,27 @@ begin
 
   Result.Executed := True;
   LSetupData := nil;
+
+  { F-10: per-benchmark timeout 检查 }
+  LTimeoutMs := LEntry.TimeoutMs;
+  if LTimeoutMs > 0 then
+    LStartNs := platform_monotonic_ns
+  else
+    LStartNs := 0;
   if Assigned(LEntry.Setup) then
     LSetupData := LEntry.Setup();
   try
     LIters := CalibrateEntryIterations(LEntry);
+
+    { F-10: 校准后检查 timeout，避免白跑采样 }
+    if (LTimeoutMs > 0) and
+       (platform_monotonic_ns - LStartNs >= UInt64(LTimeoutMs) * 1000000) then
+    begin
+      Result.Skipped := True;
+      Result.SkipReason := 'Per-benchmark timeout exceeded';
+      AddResult(Result);
+      Exit;
+    end;
 
     LSamples := CollectEntrySamples(LEntry, LIters, LMeasurement);
     if LMeasurement.Skipped then

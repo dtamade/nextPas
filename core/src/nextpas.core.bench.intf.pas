@@ -203,6 +203,9 @@ type
      *  内部转换为 Double ns/op，与 Double 版本共存。 }
     function AddBaseline(const AName: string; ANsPerOp: TDuration): IBenchSuite;
 
+    {** 添加完整基线数据（包含 BytesPerOp/AllocsPerOp/GitHash 等） }
+    function AddBaselineData(const ABaseline: TBaselineData): IBenchSuite;
+
     {** 批量添加基线 (ST-06) }
     function AddBaselines(const ABaselines: array of TBaselineData): IBenchSuite;
 
