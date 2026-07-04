@@ -65,9 +65,14 @@ begin
   LLen := Length(AStr);
   if LLen > 0 then
   begin
+    { 先 UniqueString 确保 AStr 指向可写副本（字符串字面量可能在只读段），
+      然后清零该副本并释放。
+      注意：如果 AStr 有其他共享引用，原始缓冲区的数据不会被清零，
+      因为其他所有者仍然持有该引用。对于安全敏感场景，调用方应确保
+      在调用前断开所有共享引用（或将字符串复制到独立变量）。 }
     UniqueString(AStr);
     if Length(AStr) > 0 then
-      SecureZeroMemory(@AStr[1], LLen);
+      SecureZeroMemory(@AStr[1], Length(AStr));
     AStr := '';
   end;
 end;

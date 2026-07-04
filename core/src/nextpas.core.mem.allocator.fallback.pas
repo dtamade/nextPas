@@ -427,6 +427,8 @@ begin
     Result.ZeroInitialized := True;
   if LFallbackTraits.SupportsRealloc then
     Result.SupportsRealloc := True;
+  { Fallback 内部 hash map 无同步保护，覆盖 primary 的 ThreadSafe 声明 }
+  Result.ThreadSafe := False;
 end;
 
 { ---------------------------------------------------------------------------

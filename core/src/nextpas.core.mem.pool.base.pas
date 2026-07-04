@@ -5,7 +5,20 @@ unit nextpas.core.mem.pool.base;
 interface
 
 type
-  {** 最小基座接口（可用于统一抽象，但不强制大小语义） *}
+  {** 最小基座接口（可用于统一抽象，但不强制大小语义）
+   *
+   * 接口选择决策树:
+   *   - 需要固定大小块池 + 容量/可用量查询？→ IBlockPool (blockpool.pas)
+   *   - 需要可变大小分配 + 固定大小 Acquire 兼容？→ IMemoryPool (pool.memory_pool.pas)
+   *   - 只需通用 Acquire/Release 抽象？→ IPool (本单元)
+   *
+   * IPool vs IBlockPool 签名差异说明:
+   *   - IPool.Acquire(out APtr: Pointer): Boolean — Boolean + out param 模式，
+   *     适用于需要区分"池耗尽"和"分配失败"的场景
+   *   - IBlockPool.Acquire: Pointer — 直接返回指针，nil = 池耗尽，
+   *     适用于热路径（减少分支，inline 友好）
+   *   - 两者是不同层次的接口，不建议强行统一签名
+   *}
   IPool = interface
     ['{6B2E8E2D-0C3A-4E6C-9D7F-2B7E4B7A9A10}']
     function Acquire(out APtr: Pointer): Boolean;

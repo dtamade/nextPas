@@ -32,6 +32,9 @@ type
     procedure DoFreeMem(ADst: Pointer); override;
   public
     constructor Init(aGetMem: TGetMemCallback; aAllocMem: TAllocMemCallback; aReallocMem: TReallocMemCallback; aFreeMem: TFreeMemCallback);
+    {** 回调分配器的线程安全性取决于回调函数实现，默认报告 False (保守策略)。
+        如果回调指向线程安全的分配器，调用方可忽略此声明。 }
+    function Traits: TAllocatorTraits; override;
   end;
 
 function CreateCallbackAllocator(aGetMem: TGetMemCallback;
@@ -70,6 +73,13 @@ end;
 procedure TCallbackAllocator.DoFreeMem(ADst: Pointer);
 begin
   FFreeMemCallback(ADst)
+end;
+
+function TCallbackAllocator.Traits: TAllocatorTraits;
+begin
+  Result := inherited Traits;
+  { 回调函数是否线程安全取决于调用方，默认保守报告 False }
+  Result.ThreadSafe := False;
 end;
 
 function CreateCallbackAllocator(aGetMem: TGetMemCallback;

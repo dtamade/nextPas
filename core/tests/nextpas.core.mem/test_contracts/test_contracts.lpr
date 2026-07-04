@@ -259,6 +259,24 @@ begin
   Check(Int64(1) = Int64(GFreeMemCalls), 'FreeMem should route through FreeMem');
 end;
 
+{ F-05: TCallbackAllocator.Traits.ThreadSafe must be False because
+  the thread safety of callback functions is unknown to the allocator. }
+procedure TestCallbackAllocatorTraitsThreadSafeFalse;
+var
+  LAllocator: nextpas.core.mem.allocator.IAllocator;
+  LTraits: nextpas.core.mem.allocator.base.TAllocatorTraits;
+begin
+  ResetAllocatorCounters;
+  LAllocator := CreateCallbackAllocator(
+    @CallbackGetMem,
+    @CallbackAllocMem,
+    @CallbackReallocMem,
+    @CallbackFreeMem);
+  LTraits := LAllocator.Traits;
+  Check(not LTraits.ThreadSafe, 'CallbackAllocator.Traits.ThreadSafe must be False');
+  Check(LTraits.SupportsRealloc, 'CallbackAllocator.Traits.SupportsRealloc should be True');
+end;
+
 procedure ExpectNilCallbackRejected(const AName: string;
   AGetMem: TGetMemCallback;
   AAllocMem: TAllocMemCallback;
@@ -868,6 +886,8 @@ begin
   T.Test('callback allocator supports canonical interface', @TestCallbackAllocatorSupportsCanonicalInterface);
   T.Test('callback allocator rejects nil callbacks at runtime',
     @TestCallbackAllocatorRejectsNilCallbacksAtRuntime);
+  T.Test('callback allocator traits ThreadSafe=False (F-05)',
+    @TestCallbackAllocatorTraitsThreadSafeFalse);
   T.Test('rtl allocator zero init traits', @TestRtlAllocatorZeroInitTraitsAndAlignedAlloc);
   T.Test('chunked arena and growable block pool use canonical allocator contract',
     @TestChunkedArenaAndGrowableBlockPoolUseCanonicalAllocatorContract);
