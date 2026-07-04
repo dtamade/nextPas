@@ -19,13 +19,15 @@
 
 | # | 债务 | 严重度 | 范围 | 预估 | 状态 |
 |---|------|--------|------|------|------|
-| C1 | **sema 主文件过大** (12,175 行 → 目标 <8000) |    | compiler/sema | 3d |   待拆分 |
+| C1 | **TSemanticAnalyzer God Class** (279 方法/1 class) |    | compiler/sema | 10d |   架构重构 |
 | C2 | **permissive overload resolution** (选第一个候选) |    | compiler/sema | 3d |   C8 临时方案 |
-| C3 | **增量编译** (符号表热缓存) |    | compiler/frontend | 5d |   方案已有 |
-| C4 | **并行编译** (拓扑序分层) |    | compiler/frontend | 3d |   依赖 C3 |
-| C5 | **Gate 2 unit lifecycle** (@llvm.global_ctors) |    | compiler/ir | 5d |   方案已有 |
-| C6 | **Gate 4 heap manager** (真实 malloc/free) |    | compiler/ir + core/mem | 4.5d |   方案已有 |
-| C7 | **c2p_win32_compat** (平台排除) |    | compiler | 1d |   最后残留 |
+| C3 | **Pipeline 阶段模糊** (sema 做了 ir 的活) |    | compiler/sema+ir | 5d |   边界重划 |
+| C4 | **.inc 文件伪装架构** (2 个 include 文件) |    | compiler/sema | 3d |   改为独立 unit |
+| C5 | **增量编译** (符号表热缓存) |    | compiler/frontend | 5d |   方案已有 |
+| C6 | **并行编译** (拓扑序分层) |    | compiler/frontend | 3d |   依赖 C5 |
+| C7 | **Gate 2 unit lifecycle** (@llvm.global_ctors) |    | compiler/ir | 5d |   方案已有 |
+| C8 | **Gate 4 heap manager** (真实 malloc/free) |    | compiler/ir + core/mem | 4.5d |   方案已有 |
+| C9 | **c2p_win32_compat** (平台排除) |    | compiler | 1d |   最后残留 |
 
 ### Core 框架
 
@@ -77,22 +79,30 @@
 
 ## Sprint 建议
 
-### 当前 Sprint (2026-07-05 起)
+### 当前 Sprint (2026-07-05 起) — 收尾
 
 | 优先级 | 债务 | 理由 |
 |--------|------|------|
-| P0 | C7: c2p_win32_compat | C8 最后残留 |
+| P0 | C9: c2p_win32_compat | C8 最后残留 |
 | P0 | L1: mail 模块契约 | L3 最后一块 |
-| P1 | C1: sema 继续拆分 | 降低改动风险 |
-| P1 | C5: Gate 2 unit lifecycle | 自举硬依赖 |
+| P1 | C7: Gate 2 unit lifecycle | 自举硬依赖 |
 
-### 下一 Sprint
+### 下一 Sprint — 基础设施
 
 | 优先级 | 债务 | 理由 |
 |--------|------|------|
-| P0 | C6: Gate 4 heap manager | 自举硬依赖 |
-| P1 | C3: 增量编译 | 开发体验质变 |
-| P1 | C2: permissive overload → 正式 | 正确性 |
+| P0 | C8: Gate 4 heap manager | 自举硬依赖 |
+| P1 | C5: 增量编译 | 开发体验质变 |
+| P1 | C1: sema 架构重构 Phase 1 (抽离 builtins) | 降低后续改动风险 |
+
+### 后续 Sprint — 架构偿还
+
+| 优先级 | 债务 | 理由 |
+|--------|------|------|
+| P0 | C2: permissive overload → 正式 | 正确性 |
+| P1 | C1: sema 架构重构 Phase 2-5 | 持续降低复杂度 |
+| P1 | C3: Pipeline 边界重划 | 清晰职责 |
+| P1 | C4: .inc → 独立 unit | 消除伪架构 |
 
 ---
 
@@ -106,3 +116,55 @@
 ---
 
 *最后 review: 2026-07-05*
+---
+
+## 架构诊断 (2026-07-05)
+
+### 核心问题：TSemanticAnalyzer God Class
+
+| 指标 | 当前值 | 健康标准 |
+|------|--------|----------|
+| 方法声明 | 279 | <50 |
+| 方法实现 | 183 | <50 |
+| 文件行数 | 12,255 | <3,000 |
+| include 文件 | 2 (.inc) | 0 |
+| 私有字段 | 60+ | <15 |
+
+**职责混乱**：单一 class 同时承担类型检查、重载解析、HIR 生成、字符串所有权、
+内置函数注册、运行时变量种子化、条件编译等 7+ 种职责。
+
+### 派生问题
+
+1. **Pipeline 边界模糊** — sema 直接生成 HIR 表达式（`BuildRuntime*` 系列方法），
+   ir/ 中的 HIR Builder 退化为被动数据结构填充器
+2. **.inc 是补丁不是架构** — `np_sema_string_ops.inc` (2,243行) 和
+   `np_sema_runtime_expr.inc` (3,345行) 物理分离但逻辑上仍是同一 class 的方法
+3. **Permissive overload** — 代码中 15+ 处 `{ Permissive: ... }` 注释，
+   是 C8 冲刺的工程妥协，埋在主文件中难以清理
+
+### 目标架构
+
+```
+sema/ 应拆分为:
+├── np_sema_type_checker       — 类型检查 + 推导 (纯函数)
+├── np_sema_overload_resolver  — 重载解析 (独立可测)
+├── np_sema_builtins           — 内置函数注册表 (数据驱动)
+├── np_sema_hir_lowering       — AST→HIR 降级 (桥接 sema→ir)
+└── np_sema_string_ownership   — 字符串所有权 pass (独立 visitor)
+
+ir/ 应承担:
+├── np_hir_builder             — 从 sema 接收指令，不再被动
+└── np_hir_lowering            — HIR 规范化/优化
+```
+
+### 迁移路径
+
+| 阶段 | 内容 | 风险 | 预估 |
+|------|------|------|------|
+| 1 | 抽离 `np_sema_builtins` (~500行) | 极低 | 0.5d |
+| 2 | 抽离 `np_sema_string_ownership` (~2000行) | 低 | 1d |
+| 3 | 抽离 `np_sema_overload_resolver` (~1500行) | 中 | 2d |
+| 4 | 重新设计 sema↔ir 边界 | 高 | 3d |
+| 5 | 清理 permissive overload | 高 | 3d |
+
+---

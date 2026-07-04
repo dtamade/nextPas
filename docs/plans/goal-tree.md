@@ -62,15 +62,6 @@
 
 ## 任务清单
 
-### 本周任务
-1. [x] 编译器 C5: 预处理器 {$IFDEF} 支持
-2. [x] 编译器 C6: C6-H4 owned string return 改进
-3. [x] Collections 语法修复
-4. [x] C7: 自举验证
-5. [x] Test framework polish: CheckEqual IEEE 754 + expect nil guards
-6. [x] make focused 修复: include-aware target 检测
-7. [x] 契约体系: base/errors/mem/exception/atomic
-
 ### 本周任务 (2026-07-05)
 1. [x] Test framework 可用性修复 M1-M2
 2. [x] bench 审计收尾 (14/17 fixed, 3 documented)
@@ -82,8 +73,10 @@
 1. [ ] C7 深化: 多目标 IR、LLVM O2/LTO (smoke 已完成，多目标 IR 待完成)
 2. [x] 建立完整契约体系 (57 模块全覆盖)
 3. [x] 完善测试覆盖 (合同审计全部 P0-P1 项已解决)
-4. [ ] sema 继续拆分 (12,175 → 目标 <8000)
+4. [ ] **sema 架构重构 Phase 1**: 抽离 builtins → 独立 unit (见 debt-roadmap 架构诊断)
 5. [ ] permissive overload → 正式重载解析
+6. [ ] c2p_win32_compat 平台排除
+7. [ ] mail 模块契约 (L3 最后一块)
 
 ---
 
@@ -103,6 +96,10 @@
 | 2026-07-04 | 合同审计完成 | 全部 P0-P1 项已解决 |
 | 2026-07-05 | C7 深化 smoke 完成 | target runtime profile 完成；多目标 IR + LLVM O2/LTO 待完成 |
 | 2026-07-05 | 治理文档刷新 | PLAN.md 重写 + CLAUDE.md 更新 + 路线图合并 + 技术债看板建立 |
+
+---
+
+| 2026-07-05 | 架构诊断 | TSemanticAnalyzer God Class (279方法/1class)；制定 5 阶段重构方案 |
 
 ---
 
