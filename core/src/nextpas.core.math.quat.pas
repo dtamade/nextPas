@@ -24,6 +24,13 @@ type
     function ToRotationMatrix: TMat3f;
     function Rotate(const AVector: TVec3f): TVec3f;
     function Conjugate: TQuatf; inline;
+    function Dot(const AOther: TQuatf): Single; inline;
+    function Inverse: TQuatf;
+    function IsNormalized: Boolean; inline;
+    class function FromEuler(const AYaw, APitch, ARoll: Single): TQuatf; static;
+    function ToEuler: TVec3f;
+    class function FromRotationArc(const AFrom, ATo: TVec3f): TQuatf; static;
+    function RotateTowards(const ATarget: TQuatf; const AMaxAngle: Single): TQuatf;
     function Normalize: TQuatf;
     var
       case Integer of
@@ -46,6 +53,13 @@ type
     function ToRotationMatrix: TMat3d;
     function Rotate(const AVector: TVec3d): TVec3d;
     function Conjugate: TQuatd; inline;
+    function Dot(const AOther: TQuatd): Double; inline;
+    function Inverse: TQuatd;
+    function IsNormalized: Boolean; inline;
+    class function FromEuler(const AYaw, APitch, ARoll: Double): TQuatd; static;
+    function ToEuler: TVec3d;
+    class function FromRotationArc(const AFrom, ATo: TVec3d): TQuatd; static;
+    function RotateTowards(const ATarget: TQuatd; const AMaxAngle: Double): TQuatd;
     function Normalize: TQuatd;
     var
       case Integer of
@@ -517,6 +531,96 @@ begin
   Result := NormalizeFiniteQuat(Self);
 end;
 
+function TQuatf.Dot(const AOther: TQuatf): Single;
+begin
+  Result := X * AOther.X + Y * AOther.Y + Z * AOther.Z + W * AOther.W;
+end;
+
+function TQuatf.Inverse: TQuatf;
+var
+  LLenSqr: Single;
+begin
+  LLenSqr := X * X + Y * Y + Z * Z + W * W;
+  if LLenSqr < 1e-20 then
+    Exit(TQuatf.Identity);
+  LLenSqr := 1.0 / LLenSqr;
+  Result := TQuatf.Create(-X * LLenSqr, -Y * LLenSqr, -Z * LLenSqr, W * LLenSqr);
+end;
+
+function TQuatf.IsNormalized: Boolean;
+begin
+  Result := Abs(X * X + Y * Y + Z * Z + W * W - 1.0) < 1e-6;
+end;
+
+class function TQuatf.FromEuler(const AYaw, APitch, ARoll: Single): TQuatf;
+var
+  CY, SY, CP, SP, CR, SR: Single;
+begin
+  CY := Cos(AYaw * 0.5);
+  SY := Sin(AYaw * 0.5);
+  CP := Cos(APitch * 0.5);
+  SP := Sin(APitch * 0.5);
+  CR := Cos(ARoll * 0.5);
+  SR := Sin(ARoll * 0.5);
+  Result := TQuatf.Create(
+    SR * CP * CY - CR * SP * SY,
+    CR * SP * CY + SR * CP * SY,
+    CR * CP * SY - SR * SP * CY,
+    CR * CP * CY + SR * SP * SY);
+end;
+
+function TQuatf.ToEuler: TVec3f;
+var
+  Sinr, Cosr, Sinp, Siny, Cosy: Single;
+begin
+  Sinr := 2.0 * (W * X + Y * Z);
+  Cosr := 1.0 - 2.0 * (X * X + Y * Y);
+  Result.X := ArcTan2(Sinr, Cosr);
+  Sinp := 2.0 * (W * Y - Z * X);
+  if Abs(Sinp) >= 1.0 then
+    if Sinp < 0 then Result.Y := -Pi * 0.5 else Result.Y := Pi * 0.5
+  else
+    Result.Y := ArcSin(Sinp);
+  Siny := 2.0 * (W * Z + X * Y);
+  Cosy := 1.0 - 2.0 * (Y * Y + Z * Z);
+  Result.Z := ArcTan2(Siny, Cosy);
+end;
+
+class function TQuatf.FromRotationArc(const AFrom, ATo: TVec3f): TQuatf;
+var
+  D: Single;
+  Axis: TVec3f;
+begin
+  D := AFrom.Dot(ATo);
+  if D > 0.999999 then
+    Exit(TQuatf.Identity);
+  if D < -0.999999 then
+  begin
+    Axis := TVec3f.Create(0, 0, 1).Cross(AFrom);
+    if Axis.LengthSqr < 1e-6 then
+      Axis := TVec3f.Create(1, 0, 0).Cross(AFrom);
+    Axis := Axis.Normalize;
+    Result := TQuatf.Create(Axis.X, Axis.Y, Axis.Z, 0);
+    Exit;
+  end;
+  Axis := AFrom.Cross(ATo);
+  Result := TQuatf.Create(Axis.X, Axis.Y, Axis.Z, 1.0 + D).Normalize;
+end;
+
+function TQuatf.RotateTowards(const ATarget: TQuatf; const AMaxAngle: Single): TQuatf;
+var
+  DotVal, Theta: Single;
+begin
+  DotVal := Dot(ATarget);
+  if DotVal > 0.999999 then
+    Exit(ATarget);
+  DotVal := Max(-1.0, Min(1.0, DotVal));
+  Theta := ArcCos(DotVal);
+  if Theta <= AMaxAngle then
+    Exit(ATarget);
+  Result := Slerp(Self, ATarget, AMaxAngle / Theta);
+end;
+
 { TQuatd }
 
 class function TQuatd.Create(const AX, AY, AZ, AW: Double): TQuatd;
@@ -664,6 +768,96 @@ function TQuatd.Normalize: TQuatd;
 begin
   ValidateQuaternionInput('TQuatd.Normalize', 'quaternion', Self);
   Result := NormalizeFiniteQuat(Self);
+end;
+
+function TQuatd.Dot(const AOther: TQuatd): Double;
+begin
+  Result := X * AOther.X + Y * AOther.Y + Z * AOther.Z + W * AOther.W;
+end;
+
+function TQuatd.Inverse: TQuatd;
+var
+  LLenSqr: Double;
+begin
+  LLenSqr := X * X + Y * Y + Z * Z + W * W;
+  if LLenSqr < 1e-20 then
+    Exit(TQuatd.Identity);
+  LLenSqr := 1.0 / LLenSqr;
+  Result := TQuatd.Create(-X * LLenSqr, -Y * LLenSqr, -Z * LLenSqr, W * LLenSqr);
+end;
+
+function TQuatd.IsNormalized: Boolean;
+begin
+  Result := Abs(X * X + Y * Y + Z * Z + W * W - 1.0) < 1e-6;
+end;
+
+class function TQuatd.FromEuler(const AYaw, APitch, ARoll: Double): TQuatd;
+var
+  CY, SY, CP, SP, CR, SR: Double;
+begin
+  CY := Cos(AYaw * 0.5);
+  SY := Sin(AYaw * 0.5);
+  CP := Cos(APitch * 0.5);
+  SP := Sin(APitch * 0.5);
+  CR := Cos(ARoll * 0.5);
+  SR := Sin(ARoll * 0.5);
+  Result := TQuatd.Create(
+    SR * CP * CY - CR * SP * SY,
+    CR * SP * CY + SR * CP * SY,
+    CR * CP * SY - SR * SP * CY,
+    CR * CP * CY + SR * SP * SY);
+end;
+
+function TQuatd.ToEuler: TVec3d;
+var
+  Sinr, Cosr, Sinp, Siny, Cosy: Double;
+begin
+  Sinr := 2.0 * (W * X + Y * Z);
+  Cosr := 1.0 - 2.0 * (X * X + Y * Y);
+  Result.X := ArcTan2(Sinr, Cosr);
+  Sinp := 2.0 * (W * Y - Z * X);
+  if Abs(Sinp) >= 1.0 then
+    if Sinp < 0 then Result.Y := -Pi * 0.5 else Result.Y := Pi * 0.5
+  else
+    Result.Y := ArcSin(Sinp);
+  Siny := 2.0 * (W * Z + X * Y);
+  Cosy := 1.0 - 2.0 * (Y * Y + Z * Z);
+  Result.Z := ArcTan2(Siny, Cosy);
+end;
+
+class function TQuatd.FromRotationArc(const AFrom, ATo: TVec3d): TQuatd;
+var
+  D: Double;
+  Axis: TVec3d;
+begin
+  D := AFrom.Dot(ATo);
+  if D > 0.999999 then
+    Exit(TQuatd.Identity);
+  if D < -0.999999 then
+  begin
+    Axis := TVec3d.Create(0, 0, 1).Cross(AFrom);
+    if Axis.LengthSqr < 1e-6 then
+      Axis := TVec3d.Create(1, 0, 0).Cross(AFrom);
+    Axis := Axis.Normalize;
+    Result := TQuatd.Create(Axis.X, Axis.Y, Axis.Z, 0);
+    Exit;
+  end;
+  Axis := AFrom.Cross(ATo);
+  Result := TQuatd.Create(Axis.X, Axis.Y, Axis.Z, 1.0 + D).Normalize;
+end;
+
+function TQuatd.RotateTowards(const ATarget: TQuatd; const AMaxAngle: Double): TQuatd;
+var
+  DotVal, Theta: Double;
+begin
+  DotVal := Dot(ATarget);
+  if DotVal > 0.999999 then
+    Exit(ATarget);
+  DotVal := Max(-1.0, Min(1.0, DotVal));
+  Theta := ArcCos(DotVal);
+  if Theta <= AMaxAngle then
+    Exit(ATarget);
+  Result := Slerp(Self, ATarget, AMaxAngle / Theta);
 end;
 
 end.
