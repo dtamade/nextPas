@@ -1,6 +1,7 @@
 { StringReplace benchmark — FPC pointer-based vs Go allocation-heavy }
 program strreplace_bench;
-uses SysUtils, Classes, nextpas.core.base, nextpas.core.time.base, nextpas.core.bench, nextpas.core.bench.intf;
+uses nextpas.core.base, nextpas.core.time.base, nextpas.core.bench, nextpas.core.bench.intf,
+  nextpas.core.text.conv;
 const
   N = 500;
   ITERS = 100;
@@ -16,7 +17,7 @@ var I, Iter: Integer; LResult: string;
 begin
   for Iter := 1 to ITERS do
     for I := 0 to N-1 do begin
-      LResult := StringReplace(GShortHay[I], 'ZZZZ', 'YY', [rfReplaceAll]);
+      LResult := StringReplace(GShortHay[I], 'ZZZZ', 'YY', True);
       GSink := GSink + Length(LResult);
     end;
 end;
@@ -27,7 +28,7 @@ var I, Iter: Integer; LResult: string;
 begin
   for Iter := 1 to ITERS do
     for I := 0 to N-1 do begin
-      LResult := StringReplace(GShortHay[I], 'ab', 'XY', [rfReplaceAll]);
+      LResult := StringReplace(GShortHay[I], 'ab', 'XY', True);
       GSink := GSink + Length(LResult);
     end;
 end;
@@ -38,7 +39,7 @@ var I, Iter: Integer; LResult: string;
 begin
   for Iter := 1 to ITERS do
     for I := 0 to N-1 do begin
-      LResult := StringReplace(GLongHay[I], 'the', 'THE', [rfReplaceAll]);
+      LResult := StringReplace(GLongHay[I], 'the', 'THE', True);
       GSink := GSink + Length(LResult);
     end;
 end;
@@ -49,7 +50,7 @@ var I, Iter: Integer; LResult: string;
 begin
   for Iter := 1 to ITERS do
     for I := 0 to N-1 do begin
-      LResult := StringReplace(GShortHay[I], 'a', 'Z', [rfReplaceAll]);
+      LResult := StringReplace(GShortHay[I], 'a', 'Z', True);
       GSink := GSink + Length(LResult);
     end;
 end;
@@ -60,7 +61,7 @@ var I, Iter: Integer; LResult: string;
 begin
   for Iter := 1 to ITERS do
     for I := 0 to N-1 do begin
-      LResult := StringReplace(GLongHay[I], 'quick', 'SLOW', [rfReplaceAll]);
+      LResult := StringReplace(GLongHay[I], 'quick', 'SLOW', True);
       GSink := GSink + Length(LResult);
     end;
 end;
@@ -82,7 +83,7 @@ begin
   for I := 0 to N-1 do
     GLongHay[I] := 'the quick brown fox jumps over the lazy dog and the fox is quick again and the end';
 
-  LSuite := TBenchSuite.Create('StringReplace');
+  LSuite := TBenchSuite.Create('strreplace');
   LSuite.SetMinDuration(TDuration.FromMilliseconds(200)).SetMaxIterations(1000).SetMinSamples(6).SetWarmupIters(3);
   LSuite.Add('ReplaceNoMatch',  @ReplaceShortNoMatch);
   LSuite.Add('ReplaceShortAll', @ReplaceShortAll);

@@ -3,7 +3,6 @@ program bench_btree;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.bench,
   nextpas.core.collections.btree,
   nextpas.core.collections.treemap;

@@ -10,7 +10,7 @@ program bench_assertions;
 {$modeswitch functionreferences}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.bench,
   nextpas.core.test;
 

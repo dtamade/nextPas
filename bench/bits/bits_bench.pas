@@ -2,7 +2,6 @@ program bits_bench;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils, Classes,
   nextpas.core.base,
   nextpas.core.time.base,
   nextpas.core.bench,
@@ -94,7 +93,7 @@ begin
   WriteLn('set of Byte (256-bit), N=', N);
   WriteLn;
 
-  LSuite := TBenchSuite.Create('Bits')
+  LSuite := TBenchSuite.Create('bits')
     .SetMinDuration(TDuration.FromMilliseconds(100))
     .SetMaxIterations(10000)
     .SetMinSamples(6)

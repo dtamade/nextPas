@@ -1,7 +1,6 @@
 {$mode objfpc}{$H+}
 program objlife_bench;
 uses
-  SysUtils, Classes,
   nextpas.core.base,
   nextpas.core.time.base,
   nextpas.core.bench,
@@ -97,7 +96,7 @@ var
   LSuite: IBenchSuite;
   LResults: IBenchResults;
 begin
-  LSuite := TBenchSuite.Create('ObjLife');
+  LSuite := TBenchSuite.Create('objlife');
   LSuite.SetMinDuration(TDuration.FromMilliseconds(200));
   LSuite.SetMaxIterations(1000);
   LSuite.SetMinSamples(6);

@@ -26,67 +26,43 @@ const
   TABLE_TAG_CMAP = $636D6170;   // 'cmap'
   TABLE_TAG_LOCA = $6C6F6361;   // 'loca'
   TABLE_TAG_GLYF = $676C7966;   // 'glyf'
-  TABLE_TAG_CFF  = $43464620;   // 'CFF '
-  TABLE_TAG_CFF2 = $43464632;   // 'CFF2'
   TABLE_TAG_HMTX = $686D7478;   // 'hmtx'
   TABLE_TAG_OS2  = $4F532F32;   // 'OS/2'
   TABLE_TAG_GPOS = $47504F53;   // 'GPOS'
   TABLE_TAG_GSUB = $47535542;   // 'GSUB'
-  TABLE_TAG_POST = $706F7374;   // 'post'
   TABLE_TAG_FVAR = $66766172;   // 'fvar'
   TABLE_TAG_AVAR = $61766172;   // 'avar'
-  TABLE_TAG_HVAR = $48564152;   // 'HVAR'
-  TABLE_TAG_VVAR = $56564152;   // 'VVAR'
-  TABLE_TAG_GVAR = $67766172;   // 'gvar'
   TABLE_TAG_NAME = $6E616D65;   // 'name'
+  TABLE_TAG_POST = $706F7374;   // 'post'
+  TABLE_TAG_GVAR = $67766172;   // 'gvar'
+  TABLE_TAG_HVAR = $48564152;   // 'HVAR'
+  TABLE_TAG_CFF  = $43464620;   // 'CFF '
+  TABLE_TAG_CFF2 = $43464632;   // 'CFF2'
+  TABLE_TAG_COLR = $434F4C52;   // 'COLR'
+  TABLE_TAG_CPAL = $4350414C;   // 'CPAL'
+  TABLE_TAG_CBDT = $43424454;   // 'CBDT'
+  TABLE_TAG_CBLC = $43424C43;   // 'CBLC'
 
   {** GPOS Lookup Type：Pair Adjustment（kern） }
   GPOS_LOOKUP_PAIR_ADJUSTMENT = 2;
-  {** GPOS Lookup Type：Single Adjustment }
-  GPOS_LOOKUP_SINGLE_POS = 1;
-  {** GPOS Lookup Type：Cursive Attachment }
-  GPOS_LOOKUP_CursivePos = 3;
-  {** GPOS Lookup Type：Mark-to-Base Attachment }
-  GPOS_LOOKUP_MARK_TO_BASE = 4;
-  {** GPOS Lookup Type：Mark-to-Ligature Attachment }
-  GPOS_LOOKUP_MARK_TO_LIGATURE = 5;
-  {** GPOS Lookup Type：Mark-to-Mark Attachment }
-  GPOS_LOOKUP_MARK_TO_MARK = 6;
-  {** GPOS/GSUB Lookup Type：Extension（32-bit offset 包装） }
-  GPOS_LOOKUP_EXTENSION = 9;
-  GSUB_LOOKUP_EXTENSION = 7;
 
-  {** GSUB Lookup Type：Single Substitution }
-  GSUB_LOOKUP_SINGLE = 1;
   {** GSUB Lookup Type：Ligature Substitution }
   GSUB_LOOKUP_LIGATURE = 4;
-  {** GSUB Lookup Type：Multiple Substitution（一对多） }
-  GSUB_LOOKUP_MULTIPLE = 2;
-  {** GSUB Lookup Type：Alternate Substitution（备选替换） }
-  GSUB_LOOKUP_ALTERNATE = 3;
-  {** GSUB Lookup Type：Context Substitution（规则匹配） }
-  GSUB_LOOKUP_CONTEXT = 5;
-  {** GSUB Lookup Type：Chained Context Substitution }
-  GSUB_LOOKUP_CHAINED_CONTEXT = 6;
-  {** GPOS Lookup Type：Context Positioning（规则匹配定位） }
-  GPOS_LOOKUP_CONTEXT_POS = 7;
-  {** GPOS Lookup Type：Chained Context Positioning }
-  GPOS_LOOKUP_CONTEXT_POS_CHAINED = 8;
+  GSUB_LOOKUP_SINGLE_SUBST = 1;
+  GSUB_LOOKUP_MULTIPLE_SUBST = 2;
+  GPOS_LOOKUP_SINGLE_ADJUSTMENT = 1;
+  GPOS_LOOKUP_CURSIVE = 3;
+  GPOS_LOOKUP_MARK_TO_BASE = 4;
+  GPOS_LOOKUP_MARK_TO_MARK = 6;
 
-  {** OpenType Feature Tags（Big-Endian 4 字节标识） }
-  FEATURE_TAG_KERN = $6B65726E;  // 'kern' — Kerning
-  FEATURE_TAG_LIGA = $6C696761;  // 'liga' — Standard Ligatures
-  FEATURE_TAG_CLIG = $636C6967;  // 'clig' — Contextual Ligatures
-  FEATURE_TAG_MARK = $6D61726B;  // 'mark' — Mark Positioning
-  FEATURE_TAG_MKMK = $6D6B6D6B;  // 'mkmk' — Mark-to-Mark Positioning
-  FEATURE_TAG_CURS = $63757273;  // 'curs' — Cursive Positioning
-  FEATURE_TAG_CALT = $63616C74;  // 'calt' — Contextual Alternates
-  FEATURE_TAG_DLIG = $646C6967;  // 'dlig' — Discretionary Ligatures
-  FEATURE_TAG_HLIG = $686C6967;  // 'hlig' — Historical Ligatures
-  FEATURE_TAG_RLIG = $726C6967;  // 'rlig' — Required Ligatures
-  FEATURE_TAG_CCMP = $63636D70;  // 'ccmp' — Glyph Composition/Decomposition
-  FEATURE_TAG_LOCL = $6C6F636C;  // 'locl' — Localized Forms
-  FEATURE_TAG_SALT = $73616C74;  // 'salt' — Stylistic Alternates
+  {** GSUB Lookup Type：Context/ChainedContext Substitution }
+  GSUB_LOOKUP_CONTEXT_SUBST       = 5;
+  GSUB_LOOKUP_CHAINED_CONTEXT_SUBST = 6;
+
+  {** GPOS Lookup Type：MarkToLigature/Context/ChainedContext Positioning }
+  GPOS_LOOKUP_MARK_TO_LIGATURE = 5;
+  GPOS_LOOKUP_CONTEXT_POS       = 7;
+  GPOS_LOOKUP_CHAINED_CONTEXT_POS = 8;
 
   {** cmap 平台 ID }
   CMAP_PLATFORM_UNICODE   = 0;
@@ -107,31 +83,6 @@ const
   CMAP_FORMAT_4  = 4;   // BMP（最常用）
   CMAP_FORMAT_6  = 6;   // 紧凑单区间
   CMAP_FORMAT_12 = 12;  // 全 Unicode（SMP emoji 等）
-  CMAP_FORMAT_14 = 14;  // IVS（Variation Selector）
-
-  {** name 表 NameID }
-  NAME_ID_COPYRIGHT        = 0;
-  NAME_ID_FONT_FAMILY      = 1;
-  NAME_ID_FONT_SUBFAMILY   = 2;
-  NAME_ID_UNIQUE_ID        = 3;
-  NAME_ID_FULL_NAME        = 4;
-  NAME_ID_VERSION          = 5;
-  NAME_ID_POSTSCRIPT_NAME  = 6;
-  NAME_ID_TRADEMARK        = 7;
-  NAME_ID_MANUFACTURER     = 8;
-  NAME_ID_DESIGNER         = 9;
-  NAME_ID_DESCRIPTION      = 10;
-  NAME_ID_VENDOR_URL       = 11;
-  NAME_ID_DESIGNER_URL     = 12;
-  NAME_ID_LICENSE          = 13;
-  NAME_ID_LICENSE_URL      = 14;
-  NAME_ID_TYPOGRAPHIC_FAMILY    = 16;
-  NAME_ID_TYPOGRAPHIC_SUBFAMILY = 17;
-  NAME_ID_COMPATIBLE_FULL       = 18;
-  NAME_ID_SAMPLE_TEXT           = 19;
-  NAME_ID_POSTSCRIPT_CID        = 20;
-  NAME_ID_WWS_FAMILY            = 21;
-  NAME_ID_WWS_SUBFAMILY         = 22;
 
   {** glyf 简单字形标志位 }
   GLYF_FLAG_ON_CURVE        = $01;
@@ -152,22 +103,6 @@ const
   GLYF_COMPOUND_HAVE_INSTRUCTIONS = $0100;
   GLYF_COMPOUND_USE_METRICS       = $0400;
 
-  {** gvar tuple variation header flags }
-  GVAR_TUPLE_COUNT_MASK           = $0FFF;  // tupleCount 低 12 位
-  GVAR_TUPLES_SHARE_POINT_NUMBERS = $8000;  // 共享 packed points
-  {** gvar tuple index flags }
-  GVAR_TI_EMBEDDED_TUPLE_COORD    = $8000;  // 内嵌 tuple coords
-  GVAR_TI_INTERMEDIATE_TUPLE      = $4000;  // 中间区域 tuple
-  GVAR_TI_PRIVATE_POINT_NUMBERS   = $2000;  // 该 tuple 有自己的 point numbers
-  GVAR_TI_TUPLE_INDEX_MASK        = $0FFF;  // 共享 tuple 索引掩码
-  {** gvar packed points encoding }
-  GVAR_PT_POINTS_ARE_WORDS        = $80;    // 点索引为 16-bit
-  GVAR_PT_POINT_RUN_COUNT_MASK    = $7F;    // 运行计数掩码
-  {** gvar packed deltas encoding }
-  GVAR_DT_DELTAS_ARE_ZERO         = $80;    // 全零 delta 运行
-  GVAR_DT_DELTAS_ARE_WORDS        = $40;    // 16-bit delta 运行
-  GVAR_DT_DELTA_RUN_COUNT_MASK    = $3F;    // 运行计数掩码
-
   {** Bezier 光栅化默认参数 }
   RASTERIZER_FLATNESS_PX = 0.25;    // 自适应细分平坦度阈值（像素）
   RASTERIZER_MAX_SUBDIVISIONS = 64; // 每条曲线最大细分数
@@ -180,20 +115,8 @@ type
   TFontFileFormat = (
     fffUnknown,
     fffTrueType,     // glyf 轮廓
-    fffOpenTypeCff   // CFF 轮廓
+    fffOpenTypeCff   // CFF 轮廓（不支持）
   );
-
-  {** OpenType 特性设置 }
-  TFontFeatureSetting = record
-    Tag: UInt32;       // Feature tag (e.g., FEATURE_TAG_LIGA)
-    Value: UInt32;     // 0 = disabled, 1 = enabled, 2+ = variant selector
-  end;
-  TFontFeatureSettingArray = array of TFontFeatureSetting;
-
-  {** 字体特性配置 }
-  TFontFeatureConfig = record
-    Features: TFontFeatureSettingArray;
-  end;
 
   {** TTF 表目录条目 }
   TFontTableEntry = record
@@ -248,39 +171,7 @@ type
     STypoLineGap: Int16;
     SxHeight: Int16;
     SCapHeight: Int16;
-  end;
-
-  {** post 表关键字段（参考 Ghostty post.zig） }
-  TFontPostTable = record
-    UnderlinePosition: Int16;    // 下划线顶部 y 坐标建议值
-    UnderlineThickness: Int16;   // 下划线粗细建议值（0 = broken）
-    IsFixedPitch: UInt32;        // 0=比例间距, 非0=等宽
-  end;
-
-  {** COLR 表颜色层（v0 格式） }
-  TFontColrLayer = record
-    GlyphId: UInt16;           // 层字形 ID
-    PaletteIndex: UInt16;      // 调色板索引
-  end;
-  TFontColrLayerArray = array of TFontColrLayer;
-
-  {** CPAL 表调色板颜色（BGRA 格式） }
-  TFontCpalColor = record
-    Blue: Byte;
-    Green: Byte;
-    Red: Byte;
-    Alpha: Byte;
-  end;
-
-  {** CBDT/CBLC 位图字形数据 }
-  TFontBitmapGlyph = record
-    Width: UInt16;             // 位图宽度（像素）
-    Height: UInt16;            // 位图高度（像素）
-    BearingX: Int16;           // 水平 bearing
-    BearingY: Int16;           // 垂直 bearing
-    Advance: UInt16;           // 步进宽度
-    PngDataLength: Int32;      // PNG 数据字节数
-    PngData: array of Byte;    // PNG 压缩数据
+    Panose: array[0..9] of Byte;
   end;
 
   {** 字体级指标 }
@@ -385,40 +276,6 @@ type
     Groups: TFontCmapFmt12GroupArray;
   end;
 
-  {** cmap 格式 14 (IVS) — Variation Selector 映射 }
-  TFontCmapFmt14DefaultUVSRange = record
-    StartUnicodeValue: UInt32;  // 3 字节
-    AdditionalCount: Byte;
-  end;
-  TFontCmapFmt14DefaultUVSRangeArray = array of TFontCmapFmt14DefaultUVSRange;
-
-  TFontCmapFmt14UVSMapping = record
-    UnicodeValue: UInt32;      // 3 字节
-    GlyphID: UInt16;
-  end;
-  TFontCmapFmt14UVSMappingArray = array of TFontCmapFmt14UVSMapping;
-
-  TFontCmapFmt14VarSelector = record
-    VarSelector: UInt32;       // 3 字节，U+E0100-U+E01EF
-    DefaultUVSRanges: TFontCmapFmt14DefaultUVSRangeArray;
-    NonDefaultUVS: TFontCmapFmt14UVSMappingArray;
-  end;
-  TFontCmapFmt14VarSelectorArray = array of TFontCmapFmt14VarSelector;
-
-  TFontCmapFmt14 = record
-    VarSelectors: TFontCmapFmt14VarSelectorArray;
-  end;
-
-  {** name 表名称记录 }
-  TFontNameRecord = record
-    PlatformID: UInt16;
-    EncodingID: UInt16;
-    LanguageID: UInt16;
-    NameID: UInt16;
-    Value: AnsiString;       // UTF-8 解码后的值
-  end;
-  TFontNameRecordArray = array of TFontNameRecord;
-
   {** 字体加载错误 }
   EFontError = class(Exception);
 
@@ -434,28 +291,6 @@ type
   end;
   TFontPairPosSubtableArray = array of TFontPairPosSubtable;
 
-  {** GPOS PairPos kern 子表 Format 1（逐对调整，查询时解析 PairSet） }
-  TFontPairPosFmt1Subtable = record
-    BaseOffset: Int32;       // 子表在文件中的偏移
-    CoverageOffset: Int32;   // Coverage 表偏移（相对文件）
-    PairSetCount: Int32;      // PairSet 数量（= coverage glyph 数）
-    ValueRecordSize: Int32;  // 每条 PairValueRecord 的总字节数（VR1 + VR2）
-    XAdvanceOffset: Int32;   // XAdvance 在 ValueRecord1 中的字节偏移（-1 = 无）
-  end;
-  TFontPairPosFmt1SubtableArray = array of TFontPairPosFmt1Subtable;
-
-  {** GPOS SinglePos 子表（Format 1 uniform / Format 2 per-glyph） }
-  TFontSinglePosSubtable = record
-    BaseOffset: Int32;         // 子表在文件中的偏移
-    CoverageOffset: Int32;     // Coverage 表偏移（相对文件）
-    Format: UInt16;            // 1=uniform, 2=per-glyph array
-    ValueRecordSize: Int32;    // 每条 ValueRecord 的字节数
-    XAdvanceOffset: Int32;     // XAdvance 在 ValueRecord 中的字节偏移（-1 = 无）
-    GlyphCount: Int32;         // Format 2: glyph count
-    ValueArrayOffset: Int32;   // Format 1/2: ValueRecord 数据起始偏移（相对文件）
-  end;
-  TFontSinglePosSubtableArray = array of TFontSinglePosSubtable;
-
   {** GSUB 连字子表数据（查询时解析） }
   TFontLigatureSubtable = record
     BaseOffset: Int32;       // 子表在文件中的偏移
@@ -464,303 +299,214 @@ type
   end;
   TFontLigatureSubtableArray = array of TFontLigatureSubtable;
 
-  {** GSUB Single Substitution 子表（Format 1 delta 或 Format 2 array） }
+  {** GSUB/GPOS 锚点（mark attachment） }
+  TFontAnchor = record
+    X, Y: Int16;
+  end;
+
+  {** Glyph ID 数组（MultipleSubst 结果） }
+  TFontGlyphIdArray = array of UInt16;
+
+  {** GSUB SingleSubst 子表（查询时解析） }
   TFontSingleSubstSubtable = record
-    BaseOffset: Int32;       // 子表在文件中的偏移
-    CoverageOffset: Int32;   // Coverage 表偏移（相对文件）
-    Format: UInt16;          // 1=delta, 2=array
-    DeltaGlyphID: Int16;    // Format 1: delta value
-    GlyphCount: Int32;      // Format 2: substitute glyph count
-    SubstituteArrayOffset: Int32; // Format 2: substitute glyph array offset（相对文件）
+    CoverageOffset: Int32;
+    Format: UInt16;
+    DeltaGlyphID: Int16;
+    GlyphCount: Int32;
+    GlyphArrayOffset: Int32;
   end;
   TFontSingleSubstSubtableArray = array of TFontSingleSubstSubtable;
 
-  {** Feature 相关 lookup 索引数组 }
-  TFontFeatureLookupIndexArray = array of UInt16;
-  TFontGlyphIdArray = array of UInt16;
-
-  {** GPOS Anchor 表（X/Y 坐标，font units） }
-  TFontAnchor = record
-    X: Int16;
-    Y: Int16;
+  {** GPOS SinglePos 子表（查询时解析） }
+  TFontSinglePosSubtable = record
+    CoverageOffset: Int32;
+    Format: UInt16;
+    ValueFormat: UInt16;
+    XAdvanceOffset: Int32;
+    ValueRecordSize: Int32;
+    ValueOffset: Int32;
   end;
+  TFontSinglePosSubtableArray = array of TFontSinglePosSubtable;
 
-  {** GPOS Mark-to-Base 子表（查询时解析 MarkArray + BaseArray） }
+  {** GPOS MarkToBase 子表（查询时解析） }
   TFontMarkToBaseSubtable = record
-    BaseOffset: Int32;         // 子表在文件中的偏移
-    MarkCoverageOffset: Int32; // Mark Coverage 表偏移（相对文件）
-    BaseCoverageOffset: Int32; // Base Coverage 表偏移（相对文件）
-    ClassCount: Int32;         // mark class 数量
-    MarkArrayOffset: Int32;    // MarkArray 偏移（相对文件）
-    BaseArrayOffset: Int32;    // BaseArray 偏移（相对文件）
+    MarkCoverageOffset: Int32;
+    BaseCoverageOffset: Int32;
+    ClassCount: Int32;
+    MarkArrayOffset: Int32;
+    BaseArrayOffset: Int32;
   end;
   TFontMarkToBaseSubtableArray = array of TFontMarkToBaseSubtable;
 
-  {** GPOS Mark-to-Mark 子表（结构同 Mark-to-Base，Mark1=base mark, Mark2=attaching mark） }
+  {** GPOS MarkToMark 子表（查询时解析） }
   TFontMarkToMarkSubtable = record
-    BaseOffset: Int32;           // 子表在文件中的偏移
-    Mark1CoverageOffset: Int32;  // Mark1 Coverage（base mark）偏移
-    Mark2CoverageOffset: Int32;  // Mark2 Coverage（attaching mark）偏移
-    ClassCount: Int32;           // mark class 数量
-    Mark1ArrayOffset: Int32;     // Mark1Array 偏移（base mark anchors）
-    Mark2ArrayOffset: Int32;     // Mark2Array 偏移（attaching mark class + anchor）
+    Mark1CoverageOffset: Int32;
+    Mark2CoverageOffset: Int32;
+    ClassCount: Int32;
+    Mark1ArrayOffset: Int32;
+    Mark2ArrayOffset: Int32;
   end;
   TFontMarkToMarkSubtableArray = array of TFontMarkToMarkSubtable;
 
-  {** GPOS Mark-to-Ligature 子表（MarkLigPos Format 1）
-      结构同 Mark-to-Base，但 LigatureArray 中每个连字有多个组件锚点 }
-  TFontMarkToLigSubtable = record
-    BaseOffset: Int32;           // 子表在文件中的偏移
-    MarkCoverageOffset: Int32;   // Mark Coverage 表偏移（相对文件）
-    LigCoverageOffset: Int32;    // Ligature Coverage 表偏移（相对文件）
-    ClassCount: Int32;           // mark class 数量
-    MarkArrayOffset: Int32;      // MarkArray 偏移（相对文件）
-    LigArrayOffset: Int32;       // LigatureArray 偏移（相对文件）
+  {** GPOS MarkToLigature 子表（查询时解析） }
+  TFontMarkToLigatureSubtable = record
+    MarkCoverageOffset: Int32;
+    LigatureCoverageOffset: Int32;
+    ClassCount: Int32;
+    MarkArrayOffset: Int32;
+    LigatureArrayOffset: Int32;
   end;
-  TFontMarkToLigSubtableArray = array of TFontMarkToLigSubtable;
+  TFontMarkToLigatureSubtableArray = array of TFontMarkToLigatureSubtable;
 
-  {** GPOS CursivePos 子表（Format 1: Entry/Exit anchor pairs） }
+  {** GPOS CursivePos 子表（查询时解析） }
   TFontCursivePosSubtable = record
-    BaseOffset: Int32;           // 子表在文件中的偏移
-    CoverageOffset: Int32;       // Coverage 表偏移（相对文件）
-    EntryExitCount: Int32;       // EntryExitRecord 数量
-    EntryExitArrayOffset: Int32; // EntryExitRecord 数组起始偏移（相对文件）
+    CoverageOffset: Int32;
+    EntryExitCount: Int32;
+    EntryExitArrayOffset: Int32;
   end;
   TFontCursivePosSubtableArray = array of TFontCursivePosSubtable;
 
-  {** GSUB MultipleSubst 子表（Format 1: 一对多替换） }
+  {** GPOS PairPos Fmt1 子表（pair-based kern，查询时解析） }
+  TFontPairPosFmt1Subtable = record
+    CoverageOffset: Int32;
+    ValueFormat1: UInt16;
+    ValueFormat2: UInt16;
+    PairSetCount: Int32;
+    PairSetOffsetsOffset: Int32;
+    XAdvance1Offset: Int32;
+    ValueRecord1Size: Int32;
+  end;
+  TFontPairPosFmt1SubtableArray = array of TFontPairPosFmt1Subtable;
+
+  {** GSUB MultipleSubst 子表（查询时解析） }
   TFontMultipleSubstSubtable = record
-    BaseOffset: Int32;           // 子表在文件中的偏移
-    CoverageOffset: Int32;       // Coverage 表偏移（相对文件）
-    SequenceCount: Int32;        // SequenceTable 数量（= Coverage glyph 数量）
-    SequenceArrayOffset: Int32;  // SequenceTable 偏移数组起始（相对文件）
-                                 // 每个偏移(2 bytes)相对于子表起始
+    CoverageOffset: Int32;
+    SequenceCount: Int32;
+    SequenceOffsetsOffset: Int32; { 子表内 Sequence 偏移数组的起始位置 }
+    BaseOffset: Int32;           { 子表起始位置 }
   end;
   TFontMultipleSubstSubtableArray = array of TFontMultipleSubstSubtable;
 
-  {** GSUB AlternateSubst 子表（Format 1: 备选替换，结构同 MultipleSubst） }
+  {** GSUB AlternateSubst 子表（查询时解析） }
   TFontAlternateSubstSubtable = record
-    BaseOffset: Int32;           // 子表在文件中的偏移
-    CoverageOffset: Int32;       // Coverage 表偏移（相对文件）
-    AlternateSetCount: Int32;    // AlternateSet 数量
-    AlternateSetArrayOffset: Int32; // AlternateSet 偏移数组起始（相对文件）
+    CoverageOffset: Int32;
+    AlternateSetCount: Int32;
+    AlternateSetOffsetsOffset: Int32;
+    BaseOffset: Int32;
   end;
   TFontAlternateSubstSubtableArray = array of TFontAlternateSubstSubtable;
 
-  {** GSUB ContextSubst/ChainedContextSubst 子表 — 存储 Format 1/2/3 数据 }
-  TFontContextSubstSubtable = record
-    BaseOffset: Int32;               // 子表在文件中的偏移
-    Format: Int32;                   // 子表格式（1=glyph-based, 2=class-based, 3=coverage-based）
-    InputGlyphCount: Int32;          // 匹配序列长度（Format 3 专用）
-    SubstCount: Int32;              // Substitution 记录数（Format 3 专用）
-    InputCoverageOffsets: array of Int32; // 每个输入位置的 Coverage 偏移（Format 3）
-    SubstSeqIndices: array of UInt16;    // 每个 subst 的序列索引（Format 3）
-    SubstLookupIndices: array of UInt16; // 每个 subst 的 lookup 索引（Format 3）
-    RuleSetCount: Int32;             // RuleSet/ClassSeqRuleSet 数量（Format 1/2）
-    RuleSetOffsets: array of Int32;  // 每个 RuleSet 的绝对文件偏移（Format 1/2，0=空）
-    IsChained: Boolean;              // True = ChainedContext (有 backtrack/lookahead)
-  end;
-  TFontContextSubstSubtableArray = array of TFontContextSubstSubtable;
-
-  {** Context 子表中的单条 lookup 记录（sequenceIndex + lookupIndex） }
+  {** ContextSubst/ContextPos LookupRecord }
   TFontContextLookupRecord = record
     SequenceIndex: UInt16;
     LookupIndex: UInt16;
   end;
   TFontContextLookupRecordArray = array of TFontContextLookupRecord;
 
+  {** ContextSubst/ContextPos 子表（支持 Format 1/2/3 + Chained） }
+  TFontContextSubtable = record
+    Format: Int32;            { 1=glyph, 2=class, 3=coverage }
+    CoverageOffset: Int32;    { 绝对偏移 }
+    IsChained: Boolean;       { True = ChainedContext (GSUB type 6 / GPOS type 8) }
+    { Format 1: glyph-based rule sets }
+    RuleSetCount: Int32;
+    RuleSetOffsetsOffset: Int32; { RuleSet offsets array from subtable start }
+    { Format 2: class-based }
+    ClassDefOffset: Int32;
+    ClassSetCount: Int32;
+    ClassSetOffsetsOffset: Int32;
+    { Format 3: coverage-based }
+    GlyphCount: Int32;
+    LookupRecordCount: Int32;
+    LookupRecordsOffset: Int32;
+    { Chained Fmt1/Fmt3: backtrack + lookahead + inputGlyphCount }
+    InputGlyphCount: Int32;
+    BacktrackGlyphCount: Int32;
+    BacktrackCoverageOffsetsOffset: Int32;
+    LookaheadGlyphCount: Int32;
+    LookaheadCoverageOffsetsOffset: Int32;
+  end;
+  TFontContextSubtableArray = array of TFontContextSubtable;
+
+  {** COLR v0 颜色层：一个 glyph 由多个彩色层叠加组成 }
+  TFontColorLayer = record
+    GlyphId: UInt16;       { 层字形 ID }
+    PaletteIndex: UInt16;  { 调色板颜色索引（$FFFF = 前景色） }
+  end;
+  TFontColorLayerArray = array of TFontColorLayer;
+
+  {** COLR v0 颜色层记录：base glyph → layers }
+  TFontColorLayerRecord = record
+    BaseGlyphId: UInt16;
+    Layers: TFontColorLayerArray;
+  end;
+  TFontColorLayerRecordArray = array of TFontColorLayerRecord;
+
+  {** CPAL 调色板颜色（BGRA 顺序） }
+  TFontPaletteColor = record
+    Blue, Green, Red, Alpha: Byte;
+  end;
+  TFontPaletteColorArray = array of TFontPaletteColor;
+
+  {** CBDT 位图字形数据（从 CBDT/CBLC 表提取） }
+  TFontBitmapGlyph = record
+    Width, Height: UInt8;        { 位图像素尺寸 }
+    BearingX, BearingY: Int8;    { 基线偏移 }
+    Advance: UInt8;              { 水平步进（像素） }
+    PngData: array of Byte;      { 原始 PNG 数据（可直接解码） }
+    PngDataLength: Int32;        { PNG 数据有效长度 }
+  end;
+
+  {** fvar 变体轴 }
+  TFontVariationAxis = record
+    Tag: UInt32;
+    MinValue, DefaultValue, MaxValue: Single;
+    AxisNameID: UInt16;
+  end;
+
+  {** fvar 命名实例 }
+  TFontNamedInstance = record
+    NameID: UInt16;
+    Coordinates: array of Single;
+  end;
+
+  {** CFF2 Font DICT }
+  TFontCff2FontDict = record
+    PrivateDictOffset: UInt32;
+    PrivateDictSize: UInt32;
+  end;
+  TCff2FontDict = TFontCff2FontDict;
+
+  {** 字体特性配置 }
+  TFontFeatureConfig = record
+    Tag: UInt32;
+    Enabled: Boolean;
+    Value: UInt16;
+  end;
+
+const
+  {** OpenType Feature Tags }
+  FEATURE_TAG_LIGA = $6C696761; { 'liga' }
+  FEATURE_TAG_KERN = $6B65726E; { 'kern' }
+  FEATURE_TAG_DLIG = $646C6967; { 'dlig' }
+  FEATURE_TAG_CLIG = $636C6967; { 'clig' }
+  FEATURE_TAG_MARK = $6D61726B; { 'mark' }
+  FEATURE_TAG_MKMK = $6D6B6D6B; { 'mkmk' }
+  FEATURE_TAG_RLIG = $726C6967; { 'rlig' }
+  FEATURE_TAG_LOCA = $6C6F6361; { 'loca' }
+  FEATURE_TAG_CALT = $63616C74; { 'calt' }
+
+function FontFeatureConfigDefault: TFontFeatureConfig;
+function FontFeatureIsEnabled(const AConfig: TFontFeatureConfig; ATag: UInt32): Boolean;
+function FontFeatureGetValue(const AConfig: TFontFeatureConfig; ATag: UInt32): UInt16;
+function FontFeatureParseString(const AStr: string; out ATag: UInt32; out AValue: UInt32): Boolean;
+function FontFeatureTagFromString(const AStr: string): UInt32;
+
 {** 字形轮廓内存释放 }
 procedure FontGlyphOutlineClear(var AOutline: TFontGlyphOutline);
 
 {** 光栅化结果内存释放 }
 procedure FontRasterResultClear(var AResult: TFontRasterResult);
-
-{ ========================================================================= }
-{ CFF2 可变字体支持                                                         }
-{ ========================================================================= }
-
-const
-  {** CFF2 ItemVariationStore region indices count }
-  CFF2_MAX_AXES = 16;       // OpenType 最多支持 16 个变化轴
-  CFF2_MAX_REGIONS = 64;    // 实用上限：同一 VariationStore 中的区域数量
-
-type
-  {** CFF2 变化轴区域（一个 Region 的单轴范围，F2Dot14 格式） }
-  TCff2VariationRegionAxis = record
-    StartCoord: Int16;
-    PeakCoord: Int16;
-    EndCoord: Int16;
-  end;
-
-  {** CFF2 变化区域（一组轴范围，共同定义一个 "region"） }
-  TCff2VariationRegion = record
-    AxisCount: Int32;
-    Axes: array[0..CFF2_MAX_AXES - 1] of TCff2VariationRegionAxis;
-  end;
-  TCff2VariationRegionArray = array of TCff2VariationRegion;
-
-  {** CFF2 ItemVariationStore 解析结果（定义在 TItemVariationDataSubtableArray 之后） }
-  // 注意：此类型使用了 TItemVariationDataSubtableArray，需要在该类型之后定义
-  // 移至 TItemVariationStore 附近定义
-
-  {** CFF2 顶层 DICT 基本数据 }
-  TCff2TopDict = record
-    CharStringsType: Int32;         // 通常 2 (Type 2)
-    CharStringsOff: Int32;          // CharStrings INDEX 偏移
-    FDArrayOff: Int32;              // Font DICT Array 偏移
-    FDSelectOff: Int32;             // FDSelect 偏移
-    TopDictSize: Int32;             // Top DICT 数据长度
-    VStoreOff: Int32;               // ItemVariationStore 偏移（0=无）
-    HasVStore: Boolean;
-  end;
-
-  {** CFF2 FDArray 中的单个 Font DICT }
-  TCff2FontDict = record
-    PrivateDictSize: Int32;
-    PrivateDictOff: Int32;
-    SubrsOff: Int32;
-  end;
-  TCff2FontDictArray = array of TCff2FontDict;
-
-  {** fvar 变化轴（参考 Apple TrueType Reference / OpenType fvar） }
-  TFontVariationAxis = record
-    Tag: UInt32;           // 4 字节标识符（'wght', 'wdth', 'opsz', 'ital', 'slnt'）
-    NameID: UInt16;        // name 表中的 nameID
-    MinValue: Single;      // 轴最小值
-    DefaultValue: Single;  // 轴默认值
-    MaxValue: Single;      // 轴最大值
-  end;
-  TFontVariationAxisArray = array of TFontVariationAxis;
-
-  {** fvar 命名实例 }
-  TFontNamedInstance = record
-    Flags: UInt16;         // 标志位（0x0001 = 不同的 PostScript nameID）
-    NameID: UInt16;        // 实例名称的 nameID
-    Coordinates: array of Single;  // 每个轴的坐标值
-  end;
-  TFontNamedInstanceArray = array of TFontNamedInstance;
-
-  {** fvar 表解析结果 }
-  TFontFvarTable = record
-    AxisCount: UInt16;
-    Axes: TFontVariationAxisArray;
-    InstanceCount: UInt16;
-    Instances: TFontNamedInstanceArray;
-  end;
-
-  {** avar 轴值映射对 (F2Dot14 格式) }
-  TAvarAxisValueMap = record
-    FromCoord: Int16;   // 默认归一化坐标 (F2Dot14)
-    ToCoord: Int16;     // 修改后归一化坐标 (F2Dot14)
-  end;
-  TAvarAxisValueMapArray = array of TAvarAxisValueMap;
-
-  {** avar 单轴的分段映射 }
-  TAvarSegmentMap = record
-    PairCount: Int32;
-    Pairs: TAvarAxisValueMapArray;
-  end;
-  TAvarSegmentMapArray = array of TAvarSegmentMap;
-
-  {** avar 表解析结果 }
-  TAvarTable = record
-    AxisCount: UInt16;
-    Segments: TAvarSegmentMapArray;
-  end;
-
-  {** 通用 ItemVariationStore — 用于 HVAR/VVAR 等表 }
-  TItemVariationDataSubtable = record
-    ItemCount: UInt16;
-    WordDeltaCount: UInt16;     // 含 LONG_WORDS 标志
-    RegionIndexCount: UInt16;
-    RegionIndices: array of UInt16;
-    DeltaDataOffset: Int32;     // deltaSets 数据起始（绝对文件偏移）
-    RowStride: Int32;           // 每行字节数
-  end;
-  TItemVariationDataSubtableArray = array of TItemVariationDataSubtable;
-
-  TItemVariationStore = record
-    AxisCount: UInt16;
-    RegionCount: UInt16;
-    Regions: TCff2VariationRegionArray;   // 复用已有类型
-    DataCount: UInt16;
-    DataSubtables: TItemVariationDataSubtableArray;
-  end;
-
-  {** CFF2 ItemVariationStore 解析结果（含 DataSubtable 区域索引） }
-  TCff2ItemVariationStore = record
-    Format: UInt16;           // 目前固定为 1
-    RegionCount: UInt16;
-    Regions: TCff2VariationRegionArray;
-    DataCount: UInt16;
-    DataSubtables: TItemVariationDataSubtableArray;
-  end;
-
-  {** HVAR 表解析结果 }
-  THvarTable = record
-    HasAdvWidthMapping: Boolean;          // 是否有 advance width 映射
-    AdvWidthMapFormat: Byte;              // DeltaSetIndexMap format (0 or 1)
-    AdvWidthMapEntrySize: Int32;          // 每条目字节数
-    AdvWidthMapInnerBits: Int32;          // inner index 位数
-    AdvWidthMapCount: Int32;              // 映射条目数
-    AdvWidthMapDataOff: Int32;            // mapData 绝对偏移
-    VariationStore: TItemVariationStore;
-  end;
-
-  {** VVAR 表（垂直度量变化）。
-      结构和 HVAR 完全一致，但有 vrsb 和 vadv 两个 DeltaSetIndexMap。 }
-  TVvarTable = record
-    VariationStore: TItemVariationStore;
-    HasVrsbMapping: Boolean;
-    VrsbMapDataOff: Int32;
-    VrsbMapFormat: Int32;
-    VrsbMapEntrySize: Int32;
-    VrsbMapInnerBits: Int32;
-    VrsbMapCount: Int32;
-    HasVadvMapping: Boolean;
-    VadvMapDataOff: Int32;
-    VadvMapFormat: Int32;
-    VadvMapEntrySize: Int32;
-    VadvMapInnerBits: Int32;
-    VadvMapCount: Int32;
-  end;
-
-  {** gvar 共享 tuple 坐标（已从 F2Dot14 转为 16.16 Fixed） }
-  TGvarSharedTuple = record
-    Coords: array of Int32;               // length = axisCount
-  end;
-  TGvarSharedTupleArray = array of TGvarSharedTuple;
-
-  {** gvar 表解析结果 }
-  TGvarTable = record
-    AxisCount: Int32;
-    GlyphCount: Int32;
-    SharedTupleCount: Int32;
-    SharedTuples: TGvarSharedTupleArray;  // 共享 tuple 坐标（Fixed 16.16）
-    GlyphOffsets: array of UInt32;        // glyphCount+1 个数据偏移（绝对）
-    TableStart: UInt32;                   // gvar 表起始偏移
-    TableSize: UInt32;                    // gvar 表大小（bounds check）
-  end;
-
-{** 创建默认特性配置（liga=1, kern=1） }
-function FontFeatureConfigDefault: TFontFeatureConfig;
-{** 检查特性是否启用 }
-function FontFeatureIsEnabled(const AConfig: TFontFeatureConfig;
-  ATag: UInt32): Boolean;
-{** 获取特性的值（0 = 未找到/禁用） }
-function FontFeatureGetValue(const AConfig: TFontFeatureConfig;
-  ATag: UInt32): UInt32;
-{** 解析特性字符串（如 "+liga", "-kern", "cv01=2"）。
-    成功返回 True 并设置 ATag/AValue。失败返回 False。
-    支持 Ghostty/HarfBuzz 风格语法：
-    - "+tag" / "-tag" — 启用/禁用
-    - "tag on" / "tag off" — 关键字
-    - "tag=N" — 数值参数
-    - 引号可选："'kern'" / "\"liga\"" }
-function FontFeatureParseString(const AStr: AnsiString;
-  out ATag: UInt32; out AValue: UInt32): Boolean;
-{** 从 4 字节 ASCII tag 创建 UInt32（Big-Endian） }
-function FontFeatureTagFromString(const ATag: AnsiString): UInt32;
 
 implementation
 
@@ -788,238 +534,153 @@ end;
 
 function FontFeatureConfigDefault: TFontFeatureConfig;
 begin
-  SetLength(Result.Features, 2);
-  Result.Features[0].Tag := FEATURE_TAG_LIGA;
-  Result.Features[0].Value := 1;
-  Result.Features[1].Tag := FEATURE_TAG_KERN;
-  Result.Features[1].Value := 1;
+  Result.Tag := 0;
+  Result.Enabled := True;
+  Result.Value := 0;
 end;
 
-function FontFeatureIsEnabled(const AConfig: TFontFeatureConfig;
-  ATag: UInt32): Boolean;
+function FontFeatureIsEnabled(const AConfig: TFontFeatureConfig; ATag: UInt32): Boolean;
 begin
-  Result := FontFeatureGetValue(AConfig, ATag) > 0;
+  { 如果配置指定了特定 tag，检查 tag 匹配 }
+  if (AConfig.Tag <> 0) and (AConfig.Tag <> ATag) then
+    Exit(False);
+  { 默认配置（Tag=0）时，对常见特性有内置默认行为 }
+  if AConfig.Tag = 0 then
+  begin
+    case ATag of
+      FEATURE_TAG_LIGA, FEATURE_TAG_KERN, FEATURE_TAG_CLIG,
+      FEATURE_TAG_RLIG, FEATURE_TAG_CALT: Result := True;
+    else
+      Result := False; { 其他特性默认禁用 }
+    end;
+    Exit;
+  end;
+  Result := AConfig.Enabled;
 end;
 
-function FontFeatureGetValue(const AConfig: TFontFeatureConfig;
-  ATag: UInt32): UInt32;
-var
-  I: Int32;
+function FontFeatureGetValue(const AConfig: TFontFeatureConfig; ATag: UInt32): UInt16;
 begin
-  Result := 0;
-  for I := 0 to High(AConfig.Features) do
-    if AConfig.Features[I].Tag = ATag then
-      Exit(AConfig.Features[I].Value);
+  { 如果配置指定了特定 tag，检查 tag 匹配 }
+  if (AConfig.Tag <> 0) and (AConfig.Tag <> ATag) then
+    Exit(0);
+  { 默认配置（Tag=0）时，对常见特性有内置默认值 }
+  if AConfig.Tag = 0 then
+  begin
+    case ATag of
+      FEATURE_TAG_LIGA, FEATURE_TAG_KERN, FEATURE_TAG_CLIG,
+      FEATURE_TAG_RLIG, FEATURE_TAG_CALT: Result := 1;
+    else
+      Result := 0;
+    end;
+    Exit;
+  end;
+  Result := AConfig.Value;
 end;
 
-function FontFeatureTagFromString(const ATag: AnsiString): UInt32;
+function FontFeatureParseString(const AStr: string; out ATag: UInt32; out AValue: UInt32): Boolean;
 var
+  LStr: string;
   LLen: Int32;
-begin
-  Result := 0;
-  LLen := Length(ATag);
-  if LLen >= 1 then Result := Result or (UInt32(Byte(ATag[1])) shl 24);
-  if LLen >= 2 then Result := Result or (UInt32(Byte(ATag[2])) shl 16);
-  if LLen >= 3 then Result := Result or (UInt32(Byte(ATag[3])) shl 8);
-  if LLen >= 4 then Result := Result or UInt32(Byte(ATag[4]));
-end;
+  LTagStr: string;
+  LEqPos: Int32;
 
-function FontFeatureParseString(const AStr: AnsiString;
-  out ATag: UInt32; out AValue: UInt32): Boolean;
-var
-  LI, LLen: Int32;
-  LTagStr: AnsiString;
-  LValStr: AnsiString;
-  LState: (psStart, psTag, psValue, psDone);
-  LByte: Byte;
-  LVal: Int32;
-  LSign: Int32;
-
-  function TrimStr(const S: AnsiString): AnsiString;
+  { 简单 Trim 实现（不依赖 SysUtils） }
+  function TrimStr(const S: string): string;
   var
-    LStart, LEnd: Int32;
+    L, R: Int32;
   begin
-    LStart := 1;
-    LEnd := Length(S);
-    while (LStart <= LEnd) and ((Byte(S[LStart]) = Ord(' ')) or (Byte(S[LStart]) = Ord(#9))) do
-      Inc(LStart);
-    while (LEnd >= LStart) and ((Byte(S[LEnd]) = Ord(' ')) or (Byte(S[LEnd]) = Ord(#9))) do
-      Dec(LEnd);
-    Result := Copy(S, LStart, LEnd - LStart + 1);
+    L := 1;
+    R := Length(S);
+    while (L <= R) and (S[L] = ' ') do Inc(L);
+    while (R >= L) and (S[R] = ' ') do Dec(R);
+    Result := Copy(S, L, R - L + 1);
   end;
 
-  function ParseInt(const S: AnsiString): Int32;
-  var
-    I: Int32;
-  begin
-    Result := 0;
-    LSign := 1;
-    I := 1;
-    if (Length(S) > 0) and (Byte(S[1]) = Ord('-')) then
-    begin
-      LSign := -1;
-      I := 2;
-    end;
-    while I <= Length(S) do
-    begin
-      if (Byte(S[I]) >= Ord('0')) and (Byte(S[I]) <= Ord('9')) then
-        Result := Result * 10 + (Byte(S[I]) - Ord('0'))
-      else
-        Break;
-      Inc(I);
-    end;
-    Result := Result * LSign;
-  end;
 begin
-  Result := False;
   ATag := 0;
-  AValue := 1; // 默认启用
-  LLen := Length(AStr);
-  if LLen = 0 then
+  AValue := 0;
+  Result := False;
+
+  LStr := TrimStr(AStr);
+  LLen := Length(LStr);
+  if LLen < 2 then
     Exit;
 
-  LTagStr := '';
-  LValStr := '';
-  LState := psStart;
-  LI := 1;
-
-  while LI <= LLen do
+  { 格式 1: "+tag" / "-tag" }
+  if (LStr[1] = '+') or (LStr[1] = '-') then
   begin
-    LByte := Byte(AStr[LI]);
-
-    case LState of
-      psStart: begin
-        // 跳过前导空白
-        if (LByte = Ord(' ')) or (LByte = Ord(#9)) then
-        begin
-          Inc(LI);
-          Continue;
-        end;
-        // '+' 前缀 = 启用
-        if LByte = Ord('+') then
-        begin
-          AValue := 1;
-          LState := psTag;
-          Inc(LI);
-          Continue;
-        end;
-        // '-' 前缀 = 禁用
-        if LByte = Ord('-') then
-        begin
-          AValue := 0;
-          LState := psTag;
-          Inc(LI);
-          Continue;
-        end;
-        // 引号开始
-        if (LByte = Ord('''')) or (LByte = Ord('"')) then
-        begin
-          LState := psTag;
-          Inc(LI);
-          Continue;
-        end;
-        // 直接开始 tag
-        LState := psTag;
-        Continue;
-      end;
-
-      psTag: begin
-        // 引号结束
-        if (LByte = Ord('''')) or (LByte = Ord('"')) then
-        begin
-          LState := psValue;
-          Inc(LI);
-          Continue;
-        end;
-        // 空格 = tag 结束，进入值解析
-        if (LByte = Ord(' ')) or (LByte = Ord(#9)) then
-        begin
-          LState := psValue;
-          Inc(LI);
-          Continue;
-        end;
-        // '=' = 值开始
-        if LByte = Ord('=') then
-        begin
-          LState := psValue;
-          Inc(LI);
-          Continue;
-        end;
-        // 逗号或结束 = 完成
-        if (LByte = Ord(',')) or (LI = LLen + 1) then
-        begin
-          if Length(LTagStr) >= 4 then
-          begin
-            ATag := FontFeatureTagFromString(LTagStr);
-            Result := True;
-          end;
-          Exit;
-        end;
-        // 收集 tag 字符
-        if Length(LTagStr) < 4 then
-          LTagStr := LTagStr + AnsiString(Char(LByte));
-        Inc(LI);
-      end;
-
-      psValue: begin
-        // 跳过空白
-        if (LByte = Ord(' ')) or (LByte = Ord(#9)) then
-        begin
-          Inc(LI);
-          Continue;
-        end;
-        // 逗号或结束 = 完成
-        if (LByte = Ord(',')) or (LI = LLen + 1) then
-        begin
-          if Length(LTagStr) >= 4 then
-          begin
-            ATag := FontFeatureTagFromString(LTagStr);
-            // 解析值
-            LValStr := TrimStr(LValStr);
-            if (LValStr = 'on') or (LValStr = 'On') or (LValStr = 'ON') then
-              AValue := 1
-            else if (LValStr = 'off') or (LValStr = 'Off') or (LValStr = 'OFF') then
-              AValue := 0
-            else if Length(LValStr) > 0 then
-            begin
-              LVal := ParseInt(LValStr);
-              if LVal <> 0 then
-                AValue := UInt32(LVal);
-            end;
-            Result := True;
-          end;
-          Exit;
-        end;
-        // 收集值字符
-        LValStr := LValStr + AnsiString(Char(LByte));
-        Inc(LI);
-      end;
+    ATag := FontFeatureTagFromString(Copy(LStr, 2, LLen - 1));
+    if ATag = 0 then
+      Exit;
+    if LStr[1] = '+' then
+      AValue := 1
     else
-      Inc(LI);
-    end;
+      AValue := 0;
+    Result := True;
+    Exit;
   end;
 
-  // 字符串结束，处理最后的 tag
-  if (LState = psTag) and (Length(LTagStr) >= 4) then
+  { 格式 2: "'tag'" (quoted) }
+  if (LStr[1] = '''') and (LLen >= 4) and (LStr[LLen] = '''') then
   begin
-    ATag := FontFeatureTagFromString(LTagStr);
+    ATag := FontFeatureTagFromString(Copy(LStr, 2, LLen - 2));
+    if ATag = 0 then
+      Exit;
+    AValue := 1; { 默认启用 }
     Result := True;
-  end
-  else if (LState = psValue) and (Length(LTagStr) >= 4) then
+    Exit;
+  end;
+
+  { 格式 3: "tag=value" }
+  LEqPos := Pos('=', LStr);
+  if LEqPos > 1 then
   begin
-    ATag := FontFeatureTagFromString(LTagStr);
-    LValStr := TrimStr(LValStr);
-    if (LValStr = 'on') or (LValStr = 'On') or (LValStr = 'ON') then
-      AValue := 1
-    else if (LValStr = 'off') or (LValStr = 'Off') or (LValStr = 'OFF') then
-      AValue := 0
-    else if Length(LValStr) > 0 then
-    begin
-      LVal := ParseInt(LValStr);
-      if LVal <> 0 then
-        AValue := UInt32(LVal);
-    end;
+    ATag := FontFeatureTagFromString(Copy(LStr, 1, LEqPos - 1));
+    if ATag = 0 then
+      Exit;
+    Val(Copy(LStr, LEqPos + 1, LLen - LEqPos), AValue);
     Result := True;
+    Exit;
+  end;
+
+  { 格式 4: "tag on" / "tag off" }
+  if (LLen > 3) and (Copy(LStr, LLen - 2, 3) = ' on') then
+  begin
+    ATag := FontFeatureTagFromString(Copy(LStr, 1, LLen - 3));
+    if ATag = 0 then
+      Exit;
+    AValue := 1;
+    Result := True;
+    Exit;
+  end;
+  if (LLen > 4) and (Copy(LStr, LLen - 3, 4) = ' off') then
+  begin
+    ATag := FontFeatureTagFromString(Copy(LStr, 1, LLen - 4));
+    if ATag = 0 then
+      Exit;
+    AValue := 0;
+    Result := True;
+    Exit;
+  end;
+end;
+
+function FontFeatureTagFromString(const AStr: string): UInt32;
+var
+  LStr: string;
+  I, LLen: Int32;
+begin
+  Result := 0;
+  LLen := Length(AStr);
+  if LLen < 1 then
+    Exit;
+  { 取前 4 个字符，不足 4 个补空格 }
+  for I := 1 to 4 do
+  begin
+    Result := Result shl 8;
+    if I <= LLen then
+      Result := Result or Ord(AStr[I])
+    else
+      Result := Result or Ord(' ');
   end;
 end;
 

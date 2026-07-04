@@ -2,7 +2,6 @@ program list_bench;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils, Classes,
   nextpas.core.base,
   nextpas.core.time.base,
   nextpas.core.bench,
@@ -166,7 +165,7 @@ begin
   WriteLn('N=', N, ' nodes');
   WriteLn;
 
-  LSuite := TBenchSuite.Create('List')
+  LSuite := TBenchSuite.Create('list')
     .SetMinDuration(TDuration.FromMilliseconds(100))
     .SetMaxIterations(10000)
     .SetMinSamples(6)

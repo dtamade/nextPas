@@ -1,132 +1,29 @@
 program bench_alloc;
-
 {$I nextpas.core.settings.inc}
-
-uses
-  nextpas.core.mem,
-  nextpas.core.text.conv,
-  nextpas.core.text.format,
-  nextpas.core.platform.time;
-
-const
-  WARMUP_ITERS = 1000;
-  BENCH_ITERS  = 100000;
-
-var
-  GSink: Pointer;
-
-procedure Report(const AName: string; AIterations: Integer;
-  AElapsedNs: TPlatformTimeNanoseconds);
-var
-  LNsPerOp: Double;
-  LOpsPerSec: Double;
+uses nextpas.core.bench, nextpas.core.bench.intf, nextpas.core.mem, nextpas.core.platform.time;
+var GSink: Pointer;
+procedure BenchAllocatorGetMem64(const ACtx: IBenchContext);
+var LA: IAllocator; LP: Pointer;
+begin LA := DefaultAllocator; LP := LA.GetMem(64); LA.FreeMem(LP); end;
+procedure BenchAllocatorGetMem1K(const ACtx: IBenchContext);
+var LA: IAllocator; LP: Pointer;
+begin LA := DefaultAllocator; LP := LA.GetMem(1024); LA.FreeMem(LP); end;
+procedure BenchAllocatorGetMem16K(const ACtx: IBenchContext);
+var LA: IAllocator; LP: Pointer;
+begin LA := DefaultAllocator; LP := LA.GetMem(16384); LA.FreeMem(LP); end;
+procedure BenchRawGetMem64(const ACtx: IBenchContext);
+var LP: Pointer;
+begin LP := GetMem(64); FreeMem(LP); end;
+procedure BenchRawGetMem1K(const ACtx: IBenchContext);
+var LP: Pointer;
+begin LP := GetMem(1024); FreeMem(LP); end;
+procedure BenchRawGetMem16K(const ACtx: IBenchContext);
+var LP: Pointer;
+begin LP := GetMem(16384); FreeMem(LP); end;
+var LSuite: IBenchSuite;
 begin
-  LNsPerOp := AElapsedNs / AIterations;
-  LOpsPerSec := AIterations / (AElapsedNs / 1e9);
-  WriteLn(TextFormat('  %-40s %10.1f ns/op  %12.0f ops/s',
-    [AName, LNsPerOp, LOpsPerSec]));
-end;
-
-procedure BenchAllocator_GetMem(ASize: SizeUInt);
-var
-  LA: IAllocator;
-  LStart, LEnd: TPlatformTimeNanoseconds;
-  LP: Pointer;
-  I: Integer;
-  LName: string;
-begin
-  LA := DefaultAllocator;
-
-  { Warmup }
-  for I := 0 to WARMUP_ITERS - 1 do
-  begin
-    LP := LA.GetMem(ASize);
-    LA.FreeMem(LP);
-  end;
-
-  LStart := platform_monotonic_ns;
-  for I := 0 to BENCH_ITERS - 1 do
-  begin
-    LP := LA.GetMem(ASize);
-    LA.FreeMem(LP);
-  end;
-  LEnd := platform_monotonic_ns;
-  GSink := LP;
-
-  LName := 'IAllocator.GetMem(' + IntToStr(ASize) + ')';
-  Report(LName, BENCH_ITERS, LEnd - LStart);
-end;
-
-procedure BenchRaw_GetMem(ASize: SizeUInt);
-var
-  LStart, LEnd: TPlatformTimeNanoseconds;
-  LP: Pointer;
-  I: Integer;
-  LName: string;
-begin
-  { Warmup }
-  for I := 0 to WARMUP_ITERS - 1 do
-  begin
-    LP := GetMem(ASize);
-    FreeMem(LP);
-  end;
-
-  LStart := platform_monotonic_ns;
-  for I := 0 to BENCH_ITERS - 1 do
-  begin
-    LP := GetMem(ASize);
-    FreeMem(LP);
-  end;
-  LEnd := platform_monotonic_ns;
-  GSink := LP;
-
-  LName := 'Raw GetMem(' + IntToStr(ASize) + ') baseline';
-  Report(LName, BENCH_ITERS, LEnd - LStart);
-end;
-
-procedure BenchAllocator_AllocZeroed(ASize: SizeUInt);
-var
-  LA: IAllocator;
-  LStart, LEnd: TPlatformTimeNanoseconds;
-  LP: Pointer;
-  I: Integer;
-  LName: string;
-begin
-  LA := DefaultAllocator;
-
-  { Warmup }
-  for I := 0 to WARMUP_ITERS - 1 do
-  begin
-    LP := AllocZeroed(LA, ASize);
-    LA.FreeMem(LP);
-  end;
-
-  LStart := platform_monotonic_ns;
-  for I := 0 to BENCH_ITERS - 1 do
-  begin
-    LP := AllocZeroed(LA, ASize);
-    LA.FreeMem(LP);
-  end;
-  LEnd := platform_monotonic_ns;
-  GSink := LP;
-
-  LName := 'AllocZeroed(' + IntToStr(ASize) + ')';
-  Report(LName, BENCH_ITERS, LEnd - LStart);
-end;
-
-begin
-  WriteLn('=== nextpas.core.mem allocator benchmark ===');
-  WriteLn;
-
-  BenchAllocator_GetMem(64);
-  BenchAllocator_GetMem(256);
-  BenchAllocator_GetMem(4096);
-  WriteLn;
-  BenchAllocator_AllocZeroed(64);
-  WriteLn;
-  BenchRaw_GetMem(64);
-  BenchRaw_GetMem(4096);
-
-  WriteLn;
-  WriteLn('Done.');
+  LSuite := TBenchSuite.Create('alloc');
+  LSuite.Add('IAllocator/64B', @BenchAllocatorGetMem64).Add('IAllocator/1KB', @BenchAllocatorGetMem1K).Add('IAllocator/16KB', @BenchAllocatorGetMem16K)
+    .Add('Raw/64B', @BenchRawGetMem64).Add('Raw/1KB', @BenchRawGetMem1K).Add('Raw/16KB', @BenchRawGetMem16K);
+  WriteLn(LSuite.Run.PrintToConsole);
 end.

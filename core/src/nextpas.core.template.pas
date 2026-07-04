@@ -625,7 +625,9 @@ begin
     LKeyword := ExtractKeyword(LContent, LExpr);
 
     if (LKeyword = 'define') or (LKeyword = 'template') then
-      ExtractQuotedName(LExpr, LKeyword);
+    begin
+      LLocalName := ExtractQuotedName(LExpr, LKeyword);
+    end;
     if LKeyword = 'if' then
       RequireBoolExpr(LExpr, LKeyword)
     else if (LKeyword = 'range') or (LKeyword = 'with') then

@@ -2,7 +2,7 @@
 program hashset_bench;
 
 uses
-  SysUtils, Classes, nextpas.core.base,
+  nextpas.core.base,
   nextpas.core.time.base, nextpas.core.bench, nextpas.core.bench.intf,
   nextpas.core.collections.hashmap.swiss.i32i32;
 
@@ -191,7 +191,7 @@ end;
 { --- Main --- }
 
 var
-  LSuite: TBenchSuite;
+  LSuite: IBenchSuite;
   LResults: IBenchResults;
 begin
   GenData;
@@ -201,7 +201,7 @@ begin
   WriteLn;
 
   { Suite 1: Build }
-  LSuite := TBenchSuite.Create('SwissSetBuild');
+  LSuite := TBenchSuite.Create('hashset/build');
   LSuite.SetMinDuration(TDuration.FromMilliseconds(200)).SetMaxIterations(10000).SetMinSamples(6).SetWarmupIters(3);
   LSuite.Add('100', @SwissBuild_100);
   LSuite.Add('1K', @SwissBuild_1K);
@@ -212,7 +212,7 @@ begin
   WriteLn;
 
   { Suite 2: Lookup Hit (pre-built) }
-  LSuite := TBenchSuite.Create('SwissLookupHit');
+  LSuite := TBenchSuite.Create('hashset/lookup-hit');
   LSuite.SetMinDuration(TDuration.FromMilliseconds(200)).SetMaxIterations(50000).SetMinSamples(6).SetWarmupIters(3);
   LSuite.Add('Hit/100', @SwissLookupHit_100);
   LSuite.Add('Hit/1K', @SwissLookupHit_1K);
@@ -223,7 +223,7 @@ begin
   WriteLn;
 
   { Suite 3: Lookup Miss (pre-built) }
-  LSuite := TBenchSuite.Create('SwissLookupMiss');
+  LSuite := TBenchSuite.Create('hashset/lookup-miss');
   LSuite.SetMinDuration(TDuration.FromMilliseconds(200)).SetMaxIterations(50000).SetMinSamples(6).SetWarmupIters(3);
   LSuite.Add('Miss/1K', @SwissLookupMiss_1K);
   LSuite.Add('Miss/10K', @SwissLookupMiss_10K);

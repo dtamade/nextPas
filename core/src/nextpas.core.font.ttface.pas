@@ -34,99 +34,143 @@ type
     FHmtx: TFontHorizontalMetricArray;
     FCmapFmt4: TFontCmapFmt4;
     FCmapFmt12: TFontCmapFmt12;
-    FCmapFmt14: TFontCmapFmt14;
     FHasFmt4: Boolean;
     FHasFmt12: Boolean;
     FHasFmt14: Boolean;
-    FNameRecords: TFontNameRecordArray;
+    { cmap Format 14 IVS data }
+    FFmt14Base: Int32;                   { cmap table base for offset calculations }
+    FFmt14Records: array of record       { VarSelector records }
+      VarSelector: UInt32;               { variation selector codepoint }
+      DefaultUVSOffset: Int32;           { absolute offset to DefaultUVS table }
+      NonDefaultUVSOffset: Int32;        { absolute offset to NonDefaultUVS table }
+    end;
     FLocaOffsets: array of UInt32;
     FOs2: TFontOs2Table;
     FPairPosSubtables: TFontPairPosSubtableArray;
-    FPairPosFmt1Subtables: TFontPairPosFmt1SubtableArray;
     FLigatureSubtables: TFontLigatureSubtableArray;
     FSingleSubstSubtables: TFontSingleSubstSubtableArray;
     FSinglePosSubtables: TFontSinglePosSubtableArray;
     FMarkToBaseSubtables: TFontMarkToBaseSubtableArray;
     FMarkToMarkSubtables: TFontMarkToMarkSubtableArray;
-    FMarkToLigSubtables: TFontMarkToLigSubtableArray;
     FCursivePosSubtables: TFontCursivePosSubtableArray;
+    FPairPosFmt1Subtables: TFontPairPosFmt1SubtableArray;
     FMultipleSubstSubtables: TFontMultipleSubstSubtableArray;
     FAlternateSubstSubtables: TFontAlternateSubstSubtableArray;
-    FContextSubstSubtables: TFontContextSubstSubtableArray;
-    FContextPosSubtables: TFontContextSubstSubtableArray;  // GPOS ContextPos + ChainedContextPos (same record layout)
-    {** Feature-specific lookup indices }
-    FKernLookups: TFontFeatureLookupIndexArray;     // GPOS 'kern'
-    FMarkLookups: TFontFeatureLookupIndexArray;      // GPOS 'mark'
-    FMkmkLookups: TFontFeatureLookupIndexArray;      // GPOS 'mkmk'
-    FLigaLookups: TFontFeatureLookupIndexArray;      // GSUB 'liga'
-    FCligLookups: TFontFeatureLookupIndexArray;      // GSUB 'clig'
-    FCursLookups: TFontFeatureLookupIndexArray;      // GPOS 'curs'
-    {** CFF 字体数据（OTF OpenType with CFF outlines） }
-    FCffValid: Boolean;
-    FCffOff: Int32;                    // CFF 表在文件中的偏移
-    FCffCharStringsOff: Int32;        // CharStrings INDEX 偏移（相对 CFF 起始）
-    FCffCharStringsCount: Int32;      // 字形数量
-    FCffCharStringsOffSize: Int32;    // CharStrings INDEX offset size
-    FCffCharStringsDataStart: Int32;  // CharStrings 数据起始（绝对文件偏移）
-    FCffDefaultWidthX: Int32;         // DefaultWidthX（Private DICT）
-    FCffNominalWidthX: Int32;         // NominalWidthX（Private DICT）
-    {** CFF subroutine INDEX 数据 }
-    FCffGlobalSubrIdxPos: Int32;      // Global Subr INDEX header 位置（绝对）
-    FCffGlobalSubrCount: Int32;       // Global Subr 条目数量
-    FCffLocalSubrIdxPos: Int32;       // Local Subr INDEX header 位置（绝对）
-    FCffLocalSubrCount: Int32;        // Local Subr 条目数量
-    FCffGlobalSubrBias: Int32;        // Global Subr 数字偏移
-    FCffLocalSubrBias: Int32;         // Local Subr 数字偏移
-    FPost: TFontPostTable;
-    FPostValid: Boolean;
-    FCff2Valid: Boolean;
-    FCff2Off: Int32;                    // CFF2 表在文件中的偏移
-    FCff2TopDict: TCff2TopDict;
-    FCff2ItemVarStore: TCff2ItemVariationStore;
-    FCff2HasVarStore: Boolean;
-    FCff2GlobalSubrIdxPos: Int32;       // Global Subr INDEX header 位置
-    FCff2GlobalSubrCount: Int32;
-    FCff2FontDictCount: Int32;
-    FCff2FontDicts: TCff2FontDictArray;
-    FCff2FDSelectFmt: Int32;              // FDSelect format (0 or 3)
-    FCff2FDSelectData: Int32;             // FDSelect 数据偏移（绝对）
-    FCff2FDSelectGlyphCount: Int32;       // FDSelect 覆盖的字形数
-    FFvar: TFontFvarTable;
-    FFvarValid: Boolean;
-    FAvar: TAvarTable;
-    FAvarValid: Boolean;
-    FHvar: THvarTable;
-    FHvarValid: Boolean;
-    FVvar: TVvarTable;
-    FVvarValid: Boolean;
-    FGvar: TGvarTable;
-    FGvarValid: Boolean;
-    FCurrentNormCoords: array of Single;  // 当前归一化坐标（用于 CFF2 blend）
-    {** COLR 表数据（颜色层） }
-    FColrValid: Boolean;
-    FColrBaseGlyphRecords: array of record
-      GlyphId: UInt16;
-      FirstLayerIdx: UInt16;
-      NumLayers: UInt16;
+    FMarkToLigatureSubtables: TFontMarkToLigatureSubtableArray;
+    FContextSubstSubtables: TFontContextSubtableArray;
+    FContextPosSubtables: TFontContextSubtableArray;
+    { GSUB LookupList index → (type, first subtable index, subtable count) 映射 }
+    FLookupEntries: array of record
+      LookupType: Int32;
+      FirstSubtableIndex: Int32;
+      SubtableCount: Int32;
     end;
-    FColrLayerRecords: array of TFontColrLayer;
-    {** CPAL 表数据（调色板） }
-    FCpalValid: Boolean;
-    FCpalNumPaletteEntries: UInt16;
-    FCpalNumPalettes: UInt16;
-    FCpalColors: array of TFontCpalColor;
-    {** CBDT/CBLC 表数据（位图字形） }
-    FCbdtValid: Boolean;
-    FCbdtTableOff: UInt32;  // CBDT 表在字体数据中的偏移
-    FCblcSubTables: array of record
-      FirstGlyph: UInt16;
-      LastGlyph: UInt16;
-      IdxFormat: UInt16;    // index format (1/2/3/5)
-      ImgFormat: UInt16;    // image data format (17/18/19)
-      IdxDataOff: UInt32;   // offsetToImageData (absolute, into CBDT)
-      GlyphOffsets: array of UInt32;  // format 1/3: 每字形的图像偏移
-      GlyphSize: UInt32;    // format 2/5: 所有字形相同大小
+    { COLR 表 — 颜色层 (color glyph layers) }
+    FColorLayerRecords: TFontColorLayerRecordArray;
+    { CPAL 表 — 调色板 }
+    FPaletteColors: TFontPaletteColorArray;
+    FPaletteCount: Int32;        { 调色板数量 }
+    FColorsPerPalette: Int32;    { 每个调色板的颜色数 }
+    { CBDT/CBLC 表 — 位图字形 }
+    FHasBitmapStrikes: Boolean;
+    FBitmapStrikePpem: UInt8;    { 当前 strike 的 ppem }
+    FBitmapStrikeStartGlyph: UInt16;
+    FBitmapStrikeEndGlyph: UInt16;
+    FBitmapIndexSubTables: array of record
+      FirstGlyph, LastGlyph: UInt16;
+      IndexFormat: UInt16;
+      ImageFormat: UInt16;
+      ImageDataOffset: UInt32;   { 相对 CBDT 表起始 }
+      Offsets: array of UInt32;  { 每字形偏移 (glyphCount+1) }
     end;
+    { 可变字体坐标缓存 }
+    FVariationCoords: array of Single;
+    FHasVariationCoords: Boolean;
+    FFeatureTags: array of UInt32;
+    { fvar 表 }
+    FFvarAxes: array of TFontVariationAxis;
+    FFvarInstances: array of TFontNamedInstance;
+    FFvarAxisCount: Int32;
+    FFvarInstanceCount: Int32;
+    { avar 表 segment maps }
+    FAvarSegmentMaps: array of array of record
+      FromCoord, ToCoord: Single;
+    end;
+    FAvarAxisCount: Int32;
+    { gvar 表 }
+    FGvarParsed: Boolean;
+    FGvarAxisCount: Int32;
+    FGvarGlyphCount: Int32;
+    FGvarSharedTupleCount: Int32;
+    FGvarSharedTuples: array of array of Int16;  { [sharedTupleIdx][axis] = F2.14 }
+    FGvarDataOffsets: array of UInt32;           { glyph data offsets (glyphCount+1) }
+    FGvarDataArrayBase: Int32;                   { gvarBase + offsetToGlyphVariationData }
+    FGvarBase: Int32;
+    FGvarLongOffsets: Boolean;                   { True = uint32 offsets, False = uint16 * 2 }
+    { HVAR 表 }
+    FHvarParsed: Boolean;
+    FHvarAxisCount: Int32;
+    FHvarRegions: array of array of Int16;       { [regionIdx][axis] = F2.14 start/end/peak }
+    FHvarItemCount: Int32;                       { per-item delta count }
+    FHvarDeltas: array of array of Int16;        { [outerIdx][innerIdx] = delta }
+    FHvarDeltaBits: Int32;                       { 0 = int16 deltas, 1 = int32 }
+    FHvarIndexMap: array of UInt32;              { glyph → deltaSetIndex (outer<<16|inner) }
+    FHvarIndexFormat: Int32;                     { DeltaSetIndexMap entry format }
+    { CFF 表 (OpenType CFF outlines) }
+    FCffParsed: Boolean;
+    FCffGlyphCount: Int32;
+    FCffCharStringsBase: Int32;                  { CFF table base + CharStrings offset }
+    FCffCharStringOffsets: array of UInt32;      { per-glyph charstring offset (glyphCount+1) }
+    FCffDefaultWidthX: Int32;
+    FCffNominalWidthX: Int32;
+    FCffGlobalSubrs: array of record             { global subroutines }
+      Data: array of Byte;
+    end;
+    FCffLocalSubrs: array of record              { local subroutines }
+      Data: array of Byte;
+    end;
+    { CFF2 表 (OpenType CFF2 outlines) }
+    FCff2Parsed: Boolean;
+    FCff2GlyphCount: Int32;
+    FCff2TableBase: Int32;                       { CFF2 table absolute offset }
+    FCff2CharStringsBase: Int32;
+    FCff2CharStringOffsets: array of UInt32;
+    FCff2GlobalSubrs: array of record
+      Data: array of Byte;
+    end;
+    FCff2LocalSubrs: array of record             { per-FD local subroutines }
+      Data: array of Byte;
+    end;
+    FCff2FDCount: Int32;
+    FCff2FDSelectFormat: Int32;
+    FCff2FDSelectData: array of Byte;            { raw FDSelect bytes after format }
+    FCff2FDSelectGlyphCount: Int32;
+    { CFF2 variation store }
+    FCff2VStoreParsed: Boolean;
+    FCff2AxisCount: Int32;
+    FCff2RegionCount: Int32;
+    FCff2Regions: array of record                { [regionCount] }
+      Axes: array of record                     { [axisCount] }
+        Start, Peak, EndCoord: Int16;           { raw F2DOT14 values }
+      end;
+    end;
+    FCff2VStoreDataCount: Int32;                 { ItemVariationData 子表数 }
+    FCff2VStoreDataSubtables: array of record    { [dataCount] }
+      RegionIndices: array of UInt16;            { 该子表引用的 region 索引 }
+      RegionIndexCount: Int32;
+      ItemCount: Int32;
+      Deltas: array of Int16;                   { [itemCount * regionIndexCount] }
+    end;
+    { name 表 }
+    FFamilyName: string;
+    FSubfamilyName: string;
+    FFullName: string;
+    FPostScriptName: string;
+    { post 表 }
+    FHasPostTable: Boolean;
+    FIsFixedPitch: Boolean;
+    FUnderlinePosition: Int16;
+    FUnderlineThickness: Int16;
     FValid: Boolean;
     FLastError: string;
     procedure ParseHeader;
@@ -141,25 +185,19 @@ type
     procedure ParseOs2;
     procedure ParseGpos;
     procedure ParseGsub;
-    procedure ParseCff;
-    procedure ParseCff2;
     procedure ParseFvar;
-    procedure ParsePost;
     procedure ParseAvar;
-    procedure ParseHvar;
-    procedure ParseVvar;
     procedure ParseGvar;
-    procedure ParseName;
-    procedure ParseColr;
+    procedure ParseHvar;
     procedure ParseCpal;
+    procedure ParseColr;
     procedure ParseCbdt;
-    {** 计算通用 ItemVariationStore 的 region scalar（Single 坐标） }
-    function CalcItemVarRegionScalar(const ARegions: TCff2VariationRegionArray;
-      ARegionCount, ARegionIdx: Int32;
-      const ANormCoords: array of Single): Single;
-    function GlyphOutlineCff(AGlyphIndex: UInt32): TFontGlyphOutline;
-    function ParseFeatureLookups(ATableOffset: Int32;
-      const AFeatureTags: array of UInt32): TFontFeatureLookupIndexArray;
+    procedure ParseCff;
+    function CffGlyphOutline(AGlyphIndex: UInt32): TFontGlyphOutline;
+    procedure ParseCff2;
+    function Cff2GlyphOutline(AGlyphIndex: UInt32): TFontGlyphOutline;
+    procedure ParseName;
+    procedure ParsePost;
     function ReadUInt16BE(AOffset: Int32): UInt16;
     function ReadUInt32BE(AOffset: Int32): UInt32;
     function ReadInt16BE(AOffset: Int32): Int16;
@@ -170,14 +208,21 @@ type
     procedure ParseCompoundComponents(AOffset: Int32;
       out AComponents: TFontCompoundComponentArray);
     function ExpandCompoundOutline(
-      const AComponents: TFontCompoundComponentArray;
-      ADepth: Int32): TFontGlyphOutline;
-    function GlyphOutlineInternal(AGlyphIndex: UInt32;
-      ADepth: Int32): TFontGlyphOutline;
+      const AComponents: TFontCompoundComponentArray): TFontGlyphOutline;
+    function CoverageIndex(ACovOffset, AGlyphId: Int32): Int32;
+    function ClassDefClassId(AClassDefOffset, AGlyphId: Int32): Int32;
+    function ReadAnchor(AOffset: Int32): TFontAnchor;
+    { Helpers for ContextSubst/ContextPos offset computation }
+    function CtxRuleSetArrBase(const ASub: TFontContextSubtable): Int32;
+    function CtxClassSetArrBase(const ASub: TFontContextSubtable): Int32;
+    procedure ParseContextSubtable(AOffset, AFormat: Int32; AIsChained: Boolean;
+      var ATarget: TFontContextSubtableArray);
+    {** 从 Points 重新计算 XMin/YMin/XMax/YMax 边界框 }
+    procedure RecalcOutlineBounds(var AOutline: TFontGlyphOutline);
   public
     {** 从文件路径加载字体 }
     constructor Create(const AFilePath: string);
-    {** 从内存数据加载字体（AData 会被复制到内部缓冲区） }
+    {** 从内存数据加载字体（AData 不复制，调用方需保活） }
     constructor CreateFromMemory(const AData: array of Byte);
     destructor Destroy; override;
 
@@ -202,230 +247,158 @@ type
 
     {** 是否包含 kern 对数据（GPOS PairPos） }
     function HasKernPairs: Boolean;
-    {** 是否包含逐对 kern 数据（GPOS PairPos Fmt1） }
-    function HasKernFmt1Pairs: Boolean;
     {** 是否包含连字数据（GSUB Ligature） }
     function HasLigatures: Boolean;
-    {** 查找 kern 对调整值（font units，0 = 无调整）— class-based Fmt2 }
+    {** 查找 kern 对调整值（font units，0 = 无调整） }
     function LookupKern(ALeftGlyph, ARightGlyph: UInt16): Int16;
-    {** 查找 kern 对调整值（font units，0 = 无调整）— pair-based Fmt1 }
-    function LookupKernFmt1(ALeftGlyph, ARightGlyph: UInt16): Int16;
     {** 查找连字替换。输入字形序列匹配时返回替换字形索引。
         不匹配返回 0。 }
     function LookupLigature(const AGlyphs: array of UInt16): UInt16;
-    {** 是否包含单字形替换数据（GSUB Single） }
+    {** 查找连字替换（带长度参数，避免数组长度查询）。 }
+    function LookupLigature(const AGlyphs: array of UInt16; ACount: Int32): UInt16;
+
+    {** 是否包含 GSUB SingleSubst 数据 }
     function HasSingleSubst: Boolean;
-    {** 查找单字形替换。AGlyphId 匹配 coverage 时返回替换字形索引。
-        不匹配返回 0。 }
+    function SingleSubstSubtableCount: Int32;
+    {** 查找 SingleSubst 替换。不匹配返回 0。 }
     function LookupSingleSubst(AGlyphId: UInt16): UInt16;
-
-    {** 是否包含一对多替换数据（GSUB MultipleSubst） }
+    {** 在指定 subtable 索引处查找 SingleSubst 替换。不匹配返回 0。 }
+    function LookupSingleSubstAt(AIndex: Int32; AGlyphId: UInt16): UInt16;
+    {** 是否包含 GPOS SinglePos 数据 }
+    function HasSinglePos: Boolean;
+    {** 查找 SinglePos XAdvance 调整值。不匹配返回 0。 }
+    function LookupSinglePosXAdvance(AGlyphId: UInt16): Int16;
+    {** 是否包含 GPOS MarkToBase 数据 }
+    function HasMarkToBase: Boolean;
+    {** 查找 MarkToBase 锚点。不匹配返回 {0,0}。 }
+    function LookupMarkToBase(AMarkGlyph, ABaseGlyph: UInt16): TFontAnchor;
+    {** 是否包含 GPOS MarkToMark 数据 }
+    function HasMarkToMark: Boolean;
+    {** 查找 MarkToMark 锚点。不匹配返回 {0,0}。 }
+    function LookupMarkToMark(AMarkGlyph, ABaseMarkGlyph: UInt16): TFontAnchor;
+    {** 是否包含 GPOS CursivePos 数据 }
+    function HasCursivePos: Boolean;
+    {** CursivePos Entry/Exit 锚点查询 }
+    function LookupCursivePosEntryAnchor(AGlyph: UInt16): TFontAnchor;
+    function LookupCursivePosExitAnchor(AGlyph: UInt16): TFontAnchor;
+    {** GSUB MultipleSubst }
     function HasMultipleSubst: Boolean;
-    {** 查找一对多替换。AGlyphId 匹配 coverage 时返回替换字形数量和 ID 数组。
-        不匹配返回空数组。 }
     function LookupMultipleSubst(AGlyphId: UInt16): TFontGlyphIdArray;
-
-    {** 是否包含备选替换数据（GSUB AlternateSubst） }
+    {** GSUB AlternateSubst }
     function HasAlternateSubst: Boolean;
-    {** 查找备选替换。AGlyphId 匹配 coverage 时返回备选字形数组。
-        不匹配返回空数组。返回的数组可由调用方按需选择（如 stylistic set）。 }
     function LookupAlternateSubst(AGlyphId: UInt16): TFontGlyphIdArray;
-
-    {** 是否包含规则匹配替换数据（GSUB ContextSubst + ChainedContextSubst） }
+    {** GPOS MarkToLig }
+    function HasMarkToLig: Boolean;
+    function LookupMarkToLig(AMarkGlyph, ALigatureGlyph, AComponentIndex: UInt16): TFontAnchor;
+    {** GSUB ContextSubst }
     function HasContextSubst: Boolean;
-    {** 获取 ContextSubst 子表数量 }
     function ContextSubstCount: Int32;
-    {** 获取指定索引的 ContextSubst 子表信息 }
+    function GetContextSubstFmt(AIndex: Int32): Int32;
+    function GetContextSubstRuleSetCount(AIndex: Int32): Int32;
+    function GetContextSubstForGlyph(AIndex: Int32; AGlyphId: UInt16): TFontContextLookupRecordArray;
+    {** 匹配 ContextSubst 规则（完整输入序列匹配）。
+        AGlyphs: 完整字形序列，APosition: 当前检查位置。
+        返回匹配的 lookup records（空数组 = 不匹配）。 }
+    function MatchContextSubst(AIndex: Int32;
+      const AGlyphs: array of UInt16; APosition: Int32): TFontContextLookupRecordArray;
+    {** 应用 ContextSubst 引用的 lookup。支持 SingleSubst (type 1)。
+        返回替换后的 glyph ID；不支持的 lookup type 返回原始 glyph。 }
+    function ApplyContextSubstLookup(ALookupIndex: Int32; AGlyphId: UInt16): UInt16;
+    {** 应用 ContextSubst 引用的 lookup，返回 glyph 数组。
+        SingleSubst → 1 个 glyph；MultipleSubst → N 个 glyph；
+        Ligature → 1 个 glyph（需要上下文，暂只处理 MultipleSubst）。 }
+    function ApplyContextSubstLookupMulti(ALookupIndex: Int32;
+      AGlyphId: UInt16): TFontGlyphIdArray;
     procedure GetContextSubstInfo(AIndex: Int32;
       out AInputGlyphCount, ASubstCount: Int32);
-    {** 获取指定 ContextSubst 子表的输入 Coverage 偏移 }
-    function GetContextSubstInputCoverage(AIndex, APosition: Int32): Int32;
-    {** 获取指定 ContextSubst 子表的替换记录 }
-    procedure GetContextSubstLookup(AIndex, ASubstIdx: Int32;
-      out ASeqIndex: UInt16; out ALookupIndex: UInt16);
-    {** 获取指定 ContextSubst 子表的格式（1/2/3） }
-    function GetContextSubstFmt(AIndex: Int32): Int32;
-    {** 获取指定 ContextSubst 子表的 RuleSet 数量（Format 1/2） }
-    function GetContextSubstRuleSetCount(AIndex: Int32): Int32;
-    {** 获取指定 ContextSubst 子表中指定首字形的 lookup 记录。
-        Format 1/2: 通过 CoverageIndexOf 找到 rule set，解析规则中的 subst 记录。
-        Format 3: 返回所有 subst 记录（首字形忽略）。 }
-    function GetContextSubstForGlyph(AIndex: Int32;
-      AFirstGlyph: UInt16): TFontContextLookupRecordArray;
-
-    {** 是否包含规则匹配定位数据（GPOS ContextPos + ChainedContextPos） }
+    function GetContextSubstLookup(AIndex, ASubIndex: Int32;
+      out ASeqIdx, ALookupIdx: UInt16): Boolean;
+    function GetContextSubstInputCoverage(AIndex, ASubIndex: Int32): Int32;
+    {** GPOS ContextPos }
     function HasContextPos: Boolean;
-    {** 获取 ContextPos 子表数量 }
     function ContextPosCount: Int32;
-    {** 获取指定索引的 ContextPos 子表信息 }
     procedure GetContextPosInfo(AIndex: Int32;
       out AInputGlyphCount, APosCount: Int32);
-    {** 获取指定 ContextPos 子表的输入 Coverage 偏移 }
-    function GetContextPosInputCoverage(AIndex, APosition: Int32): Int32;
-    {** 获取指定 ContextPos 子表的定位记录 }
-    procedure GetContextPosLookup(AIndex, APosIdx: Int32;
-      out ASeqIndex: UInt16; out ALookupIndex: UInt16);
-
-    {** 是否包含单字形定位数据（GPOS SinglePos） }
-    function HasSinglePos: Boolean;
-    {** 查找单字形 XAdvance 调整。AGlyphId 匹配 coverage 时返回 XAdvance 偏移。
-        不匹配返回 0。 }
-    function LookupSinglePosXAdvance(AGlyphId: UInt16): Int16;
-    {** 是否包含 Mark-to-Base 定位数据（GPOS MarkBasePos） }
-    function HasMarkToBase: Boolean;
-    {** 查找 Mark-to-Base 定位。AMarkGlyph 是 combining mark 的字形索引，
-        ABaseGlyph 是 base 字形的索引。返回 mark 的 anchor 偏移
-        （相对于 base 的 anchor）。未匹配时返回 X=0,Y=0。 }
-    function LookupMarkToBase(AMarkGlyph, ABaseGlyph: UInt16): TFontAnchor;
-    {** 是否包含 Mark-to-Mark 定位数据（GPOS MarkMarkPos） }
-    function HasMarkToMark: Boolean;
-    {** 查找 Mark-to-Mark 定位。AMarkGlyph 是 attaching mark，ABaseMarkGlyph 是 base mark。
-        返回 attaching mark 的 anchor 偏移。未匹配时返回 X=0,Y=0。 }
-    function LookupMarkToMark(AMarkGlyph, ABaseMarkGlyph: UInt16): TFontAnchor;
-
-    {** GPOS MarkLigPos 是否有子表 }
-    function HasMarkToLig: Boolean;
-    {** 查找 Mark-to-Ligature 定位。AMarkGlyph 是 combining mark，
-        ALigGlyph 是连字字形，AComponentIdx 是组件索引（0=第一个组件）。
-        返回 mark 的 anchor 偏移。未匹配时返回 X=0,Y=0。 }
-    function LookupMarkToLig(AMarkGlyph, ALigGlyph: UInt16;
-      AComponentIdx: Int32): TFontAnchor;
-
-    {** GPOS CursivePos 是否有子表 }
-    function HasCursivePos: Boolean;
-    {** 查找 CursivePos ExitAnchor（字形 A 的出口锚点）。
-        AGlyphId 是前一个字形，返回其 exit anchor 的 X/Y 偏移。
-        未匹配时返回 X=0,Y=0。 }
-    function LookupCursivePosExitAnchor(AGlyphId: UInt16): TFontAnchor;
-    {** 查找 CursivePos EntryAnchor（字形 B 的入口锚点）。
-        AGlyphId 是后一个字形，返回其 entry anchor 的 X/Y 偏移。
-        未匹配时返回 X=0,Y=0。 }
-    function LookupCursivePosEntryAnchor(AGlyphId: UInt16): TFontAnchor;
-
-    {** GPOS 是否声明了 'kern' feature（PairPos lookups 受此控制） }
+    function GetContextPosLookup(AIndex, ASubIndex: Int32;
+      out ASeqIdx, ALookupIdx: UInt16): Boolean;
+    function GetContextPosInputCoverage(AIndex, ASubIndex: Int32): Int32;
+    {** 是否包含 GPOS PairPos Fmt1 数据 }
+    function HasKernFmt1Pairs: Boolean;
+    {** 查找 PairPos Fmt1 kern 值。不匹配返回 0。 }
+    function LookupKernFmt1(ALeftGlyph, ARightGlyph: UInt16): Int16;
+    {** 是否包含 Feature List 中的指定 tag }
+    function HasFeatureTag(ATag: UInt32): Boolean;
     function HasFeatureKern: Boolean;
-    {** GPOS 是否声明了 'mark' feature（MarkBasePos lookups 受此控制） }
     function HasFeatureMark: Boolean;
-    {** GPOS 是否声明了 'mkmk' feature（MarkMarkPos lookups 受此控制） }
     function HasFeatureMkmk: Boolean;
-    {** GSUB 是否声明了 'liga' feature（Ligature lookups 受此控制） }
-    function HasFeatureLiga: Boolean;
-    {** GSUB 是否声明了 'clig' feature（Contextual Ligature lookups 受此控制） }
-    function HasFeatureClig: Boolean;
-    {** GPOS 是否声明了 'curs' feature（CursivePos lookups 受此控制） }
-    function HasFeatureCurs: Boolean;
 
-    {** 是否包含 cmap Format 14 (IVS) 数据 }
-    function HasFmt14: Boolean;
-    {** 查找 IVS (Ideographic Variation Selector) 字形。
-        ACodepoint 是基础字码（如 U+845B），AVariationSelector 是 VS（如 U+E0100）。
-        返回字形索引。未匹配返回 0（使用默认字形）。
-        - Non-Default UVS: 精确匹配返回指定 glyphID
-        - Default UVS: 范围匹配返回 0（表示使用默认字形）
-        - 无此 VS: 返回 0 }
-    function LookupIVS(ACodepoint, AVariationSelector: UInt32): UInt32;
-
-    {** 获取指定 NameID 的名称（UTF-8）。未找到返回空字符串。
-        优先返回 Windows 平台 Unicode 编码的名称。 }
-    function GetName(ANameID: UInt16): AnsiString;
-    {** 获取字体家族名（NameID 1） }
-    function FamilyName: AnsiString;
-    {** 获取字体样式名（NameID 2） }
-    function SubfamilyName: AnsiString;
-    {** 获取完整名称（NameID 4） }
-    function FullName: AnsiString;
-    {** 获取 PostScript 名称（NameID 6） }
-    function PostScriptName: AnsiString;
-
-    {** post 表是否成功解析 }
-    function HasPostTable: Boolean;
-    {** 下划线位置（font units，相对于 baseline，通常为负值表示 baseline 下方） }
-    function UnderlinePosition: Int16;
-    {** 下划线粗细（font units，0 表示字体数据损坏） }
-    function UnderlineThickness: Int16;
-    {** 是否等宽字体（post.isFixedPitch 非 0） }
-    function IsFixedPitch: Boolean;
-
-    {** CFF2 字体是否成功解析 }
-    function HasCff2: Boolean;
-    {** CFF2 是否包含 ItemVariationStore（可变字体） }
-    function HasVariationStore: Boolean;
-    {** CFF2 变化轴数量（VariationStore 中的 axisCount） }
-    function VariationAxisCount: Int32;
-    {** CFF2 变化区域数量 }
-    function VariationRegionCount: Int32;
-    {** 计算指定 normalized 坐标在指定 region 的标量（F2Dot14 输入）。
-        ACoords 数组长度应等于 VariationAxisCount。
-        值域 -1.0..+1.0 以 16384 为单位（F2Dot14 格式）。 }
-    function CalcRegionScalar(ARegionIdx: Int32;
-      const ACoords: array of Int16): Single;
-
-    {** fvar 表是否成功解析（可变字体检测） }
-    function HasFvar: Boolean;
-    {** 变化轴数量 }
-    function FvarAxisCount: Int32;
-    {** 获取指定索引的变化轴信息 }
-    function GetFvarAxis(AIndex: Int32): TFontVariationAxis;
-    {** 按 tag 查找轴索引（未找到返回 -1） }
-    function FindFvarAxisByTag(ATag: UInt32): Int32;
-    {** 命名实例数量 }
-    function FvarInstanceCount: Int32;
-    {** 获取指定索引的命名实例 }
-    function GetFvarInstance(AIndex: Int32): TFontNamedInstance;
-    {** avar 表是否有效 }
-    function HasAvar: Boolean;
-    {** 通过 avar 将用户空间坐标映射到归一化坐标。
-        若无 avar 表则使用默认线性归一化。 }
-    function NormalizeAxisValue(AAxisIndex: Int32;
-      AUserValue: Single): Single;
-    {** 获取 CFF2 字形的 FD 索引（用于多 FD 字体）。
-        仅单 FD 字体返回 0。 }
-    function GetCff2GlyphFD(AGlyphIndex: UInt32): Int32;
-    {** 获取指定 FD 索引的 Font DICT }
-    function GetCff2FontDict(AFDIndex: Int32): TCff2FontDict;
-    {** CFF2 Font DICT 数量 }
-    function Cff2FontDictCount: Int32;
-    {** HVAR 表是否有效 }
-    function HasHvar: Boolean;
-    {** 计算指定字形的水平 advance width delta。
-        ANormCoords: 已通过 NormalizeAxisValue 处理的归一化坐标数组。
-        返回 0 表示无变化或无 HVAR。 }
-    function CalcHvarAdvanceDelta(AGlyphIndex: UInt32;
-      const ANormCoords: array of Single): Single;
-    {** VVAR 表是否有效（垂直度量变化） }
-    function HasVvar: Boolean;
-    {** 计算指定字形的垂直 advance height delta。
-        ANormCoords: 已通过 NormalizeAxisValue 处理的归一化坐标数组。
-        使用 vadvMapping（如果有）或隐式映射。
-        返回 0 表示无变化或无 VVAR。 }
-    function CalcVvarAdvanceDelta(AGlyphIndex: UInt32;
-      const ANormCoords: array of Single): Single;
-    {** gvar 表是否有效（TrueType 可变字形轮廓） }
-    function HasGvar: Boolean;
-    {** 应用 gvar 字形变化 delta 到轮廓点坐标。
-        AOutline: 输入/输出，修改 Points[].X 和 Points[].Y。
-        ANormCoords: 归一化坐标数组（length = axisCount）。
-        无 gvar 或无变化数据时不做修改。 }
-    procedure ApplyGvarDeltas(AGlyphIndex: UInt32;
-      var AOutline: TFontGlyphOutline;
-      const ANormCoords: array of Single);
-    {** 设置当前归一化坐标（用于 CFF2 blend 和后续可变字形生成）。
-        传入空数组清除变化状态。 }
-    procedure SetVariationCoords(const ANormCoords: array of Single);
-    {** COLR 表是否有效（颜色层） }
+    {** COLR: 是否有颜色层数据 }
     function HasColorLayers: Boolean;
-    {** 获取指定字形的颜色层（COLR v0） }
-    function GetColorLayers(AGlyphId: UInt16): TFontColrLayerArray;
-    {** CPAL 表是否有效（调色板） }
+    {** COLR: 获取 base glyph 的颜色层。无层返回空数组。 }
+    function GetColorLayers(AGlyphId: UInt16): TFontColorLayerArray;
+    {** CPAL: 是否有调色板数据 }
     function HasPalette: Boolean;
-    {** 每个调色板的颜色数量 }
-    function ColorsPerPalette: UInt16;
-    {** 获取调色板颜色（BGRA → ARGB） }
-    function GetPaletteColor(APaletteIndex, AEntryIndex: UInt16): TFontCpalColor;
-    {** CBDT/CBLC 表是否有效（位图字形） }
+    {** CPAL: 获取调色板颜色数 }
+    function ColorsPerPalette: Int32;
+    {** CPAL: 获取指定调色板中指定索引的颜色。BGRA 顺序。 }
+    function GetPaletteColor(APaletteIndex, AColorIndex: Int32): TFontPaletteColor;
+
+    {** CBDT/CBLC: 是否有位图 strike 数据 }
     function HasBitmapStrikes: Boolean;
-    {** 获取位图字形数据 }
+    {** CBDT/CBLC: 获取位图字形数据。无数据返回空 PngData。 }
     function GetBitmapGlyph(AGlyphId: UInt16): TFontBitmapGlyph;
+
+    {** cmap Format 14 (IVS) }
+    function HasFmt14: Boolean;
+    function LookupIVS(ABaseCodepoint, AVariationSelector: UInt32): UInt32;
+
+    {** name 表查询 }
+    function FamilyName: string;
+    function SubfamilyName: string;
+    function FullName: string;
+    function PostScriptName: string;
+
+    {** post 表 }
+    function HasPostTable: Boolean;
+    function IsFixedPitch: Boolean;
+    function UnderlinePosition: Int16;
+    function UnderlineThickness: Int16;
+
+    {** fvar 表 }
+    function HasFvar: Boolean;
+    function HasCff2: Boolean;
+    function FvarAxisCount: Int32;
+    function VariationAxisCount: Int32;
+    function GetFvarAxis(AIndex: Int32): TFontVariationAxis;
+    function FindFvarAxisByTag(ATag: UInt32): Int32;
+
+    {** Variation store }
+    function HasVariationStore: Boolean;
+    function VariationRegionCount: Int32;
+    function CalcRegionScalar(ARegionIndex: Int32;
+      const ACoords: array of Single): Single;
+
+    {** avar 表 }
+    function HasAvar: Boolean;
+    function NormalizeAxisValue(AAxisIndex: Int32; AUserValue: Single): Single;
+
+    {** fvar 实例 }
+    function FvarInstanceCount: Int32;
+    function GetFvarInstance(AIndex: Int32): TFontNamedInstance;
+
+    {** Variable font advance delta }
+    function HasGvar: Boolean;
+    function HasHvar: Boolean;
+    procedure ApplyGvarDeltas(AGlyphIndex: UInt32;
+      var AOutline: TFontGlyphOutline; const ACoords: array of Single);
+    function CalcHvarAdvanceDelta(AGlyphIndex: UInt32;
+      const ACoords: array of Single): Single;
+    procedure SetVariationCoords(const ACoords: array of Single);
+
+    {** CFF2 }
+    function Cff2FontDictCount: Int32;
+    function GetCff2GlyphFD(AGlyphIndex: UInt32): Int32;
+    function GetCff2FontDict(AIndex: Int32): TFontCff2FontDict;
   end;
 
 implementation
@@ -466,23 +439,6 @@ begin
   FTTCFaceOffset := 0;
   FHasFmt4 := False;
   FHasFmt12 := False;
-  FHasFmt14 := False;
-  FPostValid := False;
-  FCff2Valid := False;
-  FCff2HasVarStore := False;
-  FCff2FontDictCount := 0;
-  FCff2FDSelectFmt := -1;
-  FCff2FDSelectData := 0;
-  FCff2FDSelectGlyphCount := 0;
-  FFvarValid := False;
-  FAvarValid := False;
-  FHvarValid := False;
-  FVvarValid := False;
-  FGvarValid := False;
-  FColrValid := False;
-  FCpalValid := False;
-  FCbdtValid := False;
-  FCbdtTableOff := 0;
   FLastError := '';
 
   if not FsExists(AFilePath) then
@@ -501,55 +457,13 @@ begin
       LStream := nil;
     end;
   except
-    on E: Exception do
-    begin
-      FLastError := 'Failed to load font file: ' + E.Message;
-      Exit;
-    end;
+    Exit;
   end;
 
   try
     ParseHeader;
-    if not (FFormat in [fffTrueType, fffOpenTypeCff]) then
-      Exit;
     ParseTableDirectory;
-    ParseHead;
-    ParseHhea;
-    ParseMaxp;
-    ParseCmap;
-    if FFormat = fffTrueType then
-      ParseLoca;
-    ParseHmtx;
-    ParseOs2;
-    if FFormat = fffOpenTypeCff then
-    begin
-      try
-        ParseCff;
-      except
-      end;
-    end;
-    try
-      ParseCff2;
-    except
-    end;
-    try
-      ParseFvar;
-    except
-    end;
-    try
-      ParseGpos;
-    except
-      on E: Exception do
-        if FLastError = '' then
-          FLastError := 'GPOS: ' + E.Message;
-    end;
-    try
-      ParseGsub;
-    except
-      on E: Exception do
-        if FLastError = '' then
-          FLastError := 'GSUB: ' + E.Message;
-    end;
+    { name、post、OS/2、cmap 表不依赖轮廓格式，始终解析 }
     try
       ParseName;
     except
@@ -559,15 +473,66 @@ begin
     except
     end;
     try
+      ParseOs2;
+    except
+    end;
+    try
+      ParseCmap;
+    except
+    end;
+    { CFF2 字体优先检测 }
+    if (FFormat = fffOpenTypeCff) and (FindTable(TABLE_TAG_CFF2) >= 0) then
+    begin
+      try ParseHead; except end;
+      try ParseHhea; except end;
+      try ParseMaxp; except end;
+      try ParseHmtx; except end;
+      try ParseCff2; except end;
+      try ParseFvar; except end;
+      try ParseAvar; except end;
+      FValid := (Length(FFamilyName) > 0) and (FCff2GlyphCount > 0);
+      Exit;
+    end;
+    { CFF 字体：解析 head/hhea/hmtx/CFF 轮廓 }
+    if FFormat = fffOpenTypeCff then
+    begin
+      try ParseHead; except end;
+      try ParseHhea; except end;
+      try ParseMaxp; except end;
+      try ParseHmtx; except end;
+      try ParseCff; except end;
+      try ParseGpos; except end;
+      try ParseGsub; except end;
+      try ParseFvar; except end;
+      try ParseAvar; except end;
+      FValid := (Length(FFamilyName) > 0) and (FCffGlyphCount > 0);
+      Exit;
+    end;
+    { 只支持 TrueType glyf 轮廓的完整解析 }
+    if not (FFormat in [fffTrueType]) then
+    begin
+      FValid := Length(FFamilyName) > 0;
+      Exit;
+    end;
+    ParseHead;
+    ParseHhea;
+    ParseMaxp;
+    ParseLoca;
+    ParseHmtx;
+    try
+      ParseGpos;
+    except
+    end;
+    try
+      ParseGsub;
+    except
+    end;
+    try
+      ParseFvar;
+    except
+    end;
+    try
       ParseAvar;
-    except
-    end;
-    try
-      ParseHvar;
-    except
-    end;
-    try
-      ParseVvar;
     except
     end;
     try
@@ -575,11 +540,15 @@ begin
     except
     end;
     try
-      ParseColr;
+      ParseHvar;
     except
     end;
     try
       ParseCpal;
+    except
+    end;
+    try
+      ParseColr;
     except
     end;
     try
@@ -605,23 +574,6 @@ begin
   FTTCFaceOffset := 0;
   FHasFmt4 := False;
   FHasFmt12 := False;
-  FHasFmt14 := False;
-  FPostValid := False;
-  FCff2Valid := False;
-  FCff2HasVarStore := False;
-  FCff2FontDictCount := 0;
-  FCff2FDSelectFmt := -1;
-  FCff2FDSelectData := 0;
-  FCff2FDSelectGlyphCount := 0;
-  FFvarValid := False;
-  FAvarValid := False;
-  FHvarValid := False;
-  FVvarValid := False;
-  FGvarValid := False;
-  FColrValid := False;
-  FCpalValid := False;
-  FCbdtValid := False;
-  FCbdtTableOff := 0;
   FLastError := '';
 
   LLen := Length(AData);
@@ -634,46 +586,8 @@ begin
 
   try
     ParseHeader;
-    if not (FFormat in [fffTrueType, fffOpenTypeCff]) then
-      Exit;
     ParseTableDirectory;
-    ParseHead;
-    ParseHhea;
-    ParseMaxp;
-    ParseCmap;
-    if FFormat = fffTrueType then
-      ParseLoca;
-    ParseHmtx;
-    ParseOs2;
-    if FFormat = fffOpenTypeCff then
-    begin
-      try
-        ParseCff;
-      except
-      end;
-    end;
-    try
-      ParseCff2;
-    except
-    end;
-    try
-      ParseFvar;
-    except
-    end;
-    try
-      ParseGpos;
-    except
-      on E: Exception do
-        if FLastError = '' then
-          FLastError := 'GPOS: ' + E.Message;
-    end;
-    try
-      ParseGsub;
-    except
-      on E: Exception do
-        if FLastError = '' then
-          FLastError := 'GSUB: ' + E.Message;
-    end;
+    { name、post、OS/2、cmap 表不依赖轮廓格式，始终解析 }
     try
       ParseName;
     except
@@ -683,15 +597,66 @@ begin
     except
     end;
     try
+      ParseOs2;
+    except
+    end;
+    try
+      ParseCmap;
+    except
+    end;
+    { CFF2 字体优先检测 }
+    if (FFormat = fffOpenTypeCff) and (FindTable(TABLE_TAG_CFF2) >= 0) then
+    begin
+      try ParseHead; except end;
+      try ParseHhea; except end;
+      try ParseMaxp; except end;
+      try ParseHmtx; except end;
+      try ParseCff2; except end;
+      try ParseFvar; except end;
+      try ParseAvar; except end;
+      FValid := (Length(FFamilyName) > 0) and (FCff2GlyphCount > 0);
+      Exit;
+    end;
+    { CFF 字体：解析 head/hhea/hmtx/CFF 轮廓 }
+    if FFormat = fffOpenTypeCff then
+    begin
+      try ParseHead; except end;
+      try ParseHhea; except end;
+      try ParseMaxp; except end;
+      try ParseHmtx; except end;
+      try ParseCff; except end;
+      try ParseGpos; except end;
+      try ParseGsub; except end;
+      try ParseFvar; except end;
+      try ParseAvar; except end;
+      FValid := (Length(FFamilyName) > 0) and (FCffGlyphCount > 0);
+      Exit;
+    end;
+    { 只支持 TrueType glyf 轮廓的完整解析 }
+    if not (FFormat in [fffTrueType]) then
+    begin
+      FValid := Length(FFamilyName) > 0;
+      Exit;
+    end;
+    ParseHead;
+    ParseHhea;
+    ParseMaxp;
+    ParseLoca;
+    ParseHmtx;
+    try
+      ParseGpos;
+    except
+    end;
+    try
+      ParseGsub;
+    except
+    end;
+    try
+      ParseFvar;
+    except
+    end;
+    try
       ParseAvar;
-    except
-    end;
-    try
-      ParseHvar;
-    except
-    end;
-    try
-      ParseVvar;
     except
     end;
     try
@@ -699,15 +664,7 @@ begin
     except
     end;
     try
-      ParseColr;
-    except
-    end;
-    try
-      ParseCpal;
-    except
-    end;
-    try
-      ParseCbdt;
+      ParseHvar;
     except
     end;
     FValid := True;
@@ -722,7 +679,7 @@ end;
 
 destructor TTFontFace.Destroy;
 var
-  LI: Int32;
+  I: Int32;
 begin
   SetLength(FData, 0);
   SetLength(FTables, 0);
@@ -734,14 +691,15 @@ begin
   SetLength(FCmapFmt4.IdRangeOffset, 0);
   SetLength(FCmapFmt4.GlyphIdArray, 0);
   SetLength(FCmapFmt12.Groups, 0);
-  SetLength(FPairPosSubtables, 0);
-  SetLength(FLigatureSubtables, 0);
-  SetLength(FColrBaseGlyphRecords, 0);
-  SetLength(FColrLayerRecords, 0);
-  SetLength(FCpalColors, 0);
-  for LI := 0 to High(FCblcSubTables) do
-    SetLength(FCblcSubTables[LI].GlyphOffsets, 0);
-  SetLength(FCblcSubTables, 0);
+  { fvar cleanup }
+  SetLength(FFvarAxes, 0);
+  for I := 0 to High(FFvarInstances) do
+    SetLength(FFvarInstances[I].Coordinates, 0);
+  SetLength(FFvarInstances, 0);
+  { avar cleanup }
+  for I := 0 to High(FAvarSegmentMaps) do
+    SetLength(FAvarSegmentMaps[I], 0);
+  SetLength(FAvarSegmentMaps, 0);
   inherited Destroy;
 end;
 
@@ -925,10 +883,6 @@ var
   LIdDelta, LIdRangeOff: UInt16;
   LGlyphId: UInt16;
   LGroupCount, K: Int32;
-  LFmt14Length, LNumVarSelectors: UInt32;
-  LVarSelectorIdx, LDefaultUVSOff, LNonDefaultUVSOff: UInt32;
-  LNumDefaultRanges, LNumNonDefaultMappings: UInt32;
-  M: Int32;
 begin
   LIdx := FindTable(TABLE_TAG_CMAP);
   if LIdx < 0 then
@@ -1026,64 +980,29 @@ begin
       end;
     end;
 
-    // Format 14（IVS — Variation Selector）
-    if (LFormat = CMAP_FORMAT_14) and (not FHasFmt14) then
+    // Format 14 (IVS - Variation Selector)
+    if LFormat = 14 then
     begin
-      LFmt14Length := ReadUInt32BE(LSubtableBase + 2);
-      LNumVarSelectors := ReadUInt32BE(LSubtableBase + 6);
-      if (LNumVarSelectors > 0) and (LNumVarSelectors < 1024) then
+      if not FHasFmt14 then
       begin
-        SetLength(FCmapFmt14.VarSelectors, LNumVarSelectors);
-        for M := 0 to Int32(LNumVarSelectors) - 1 do
+        FFmt14Base := LSubtableBase; { Format 14 子表基址，偏移量相对此处 }
+        LGroupCount := Int32(ReadUInt32BE(LSubtableBase + 6)); { numVarSelectorRecords }
+        if (LGroupCount > 0) and (LGroupCount < 10000) then
         begin
-          // 每条记录：varSelector(3) + defaultUVSOffset(4) + nonDefaultUVSOffset(4) = 11 bytes
-          J := LSubtableBase + 10 + M * 11;
-          FCmapFmt14.VarSelectors[M].VarSelector :=
-            (ReadUInt8(J) shl 16) or (ReadUInt8(J + 1) shl 8) or ReadUInt8(J + 2);
-          LDefaultUVSOff := ReadUInt32BE(J + 3);
-          LNonDefaultUVSOff := ReadUInt32BE(J + 7);
-
-          // Default UVS Table
-          if LDefaultUVSOff > 0 then
+          SetLength(FFmt14Records, LGroupCount);
+          for K := 0 to LGroupCount - 1 do
           begin
-            LNumDefaultRanges := ReadUInt32BE(LSubtableBase + LDefaultUVSOff);
-            if LNumDefaultRanges < 65536 then
-            begin
-              SetLength(FCmapFmt14.VarSelectors[M].DefaultUVSRanges, LNumDefaultRanges);
-              for K := 0 to Int32(LNumDefaultRanges) - 1 do
-              begin
-                LVarSelectorIdx := LSubtableBase + LDefaultUVSOff + 4 + K * 4;
-                FCmapFmt14.VarSelectors[M].DefaultUVSRanges[K].StartUnicodeValue :=
-                  (ReadUInt8(LVarSelectorIdx) shl 16) or
-                  (ReadUInt8(LVarSelectorIdx + 1) shl 8) or
-                  ReadUInt8(LVarSelectorIdx + 2);
-                FCmapFmt14.VarSelectors[M].DefaultUVSRanges[K].AdditionalCount :=
-                  ReadUInt8(LVarSelectorIdx + 3);
-              end;
-            end;
+            J := LSubtableBase + 10 + K * 11;
+            if J + 11 > FDataLength then Break;
+            FFmt14Records[K].VarSelector :=
+              (UInt32(ReadUInt8(J)) shl 16) or
+              (UInt32(ReadUInt8(J + 1)) shl 8) or
+              UInt32(ReadUInt8(J + 2));
+            FFmt14Records[K].DefaultUVSOffset := LSubtableBase + Int32(ReadUInt32BE(J + 3));
+            FFmt14Records[K].NonDefaultUVSOffset := LSubtableBase + Int32(ReadUInt32BE(J + 7));
           end;
-
-          // Non-Default UVS Table
-          if LNonDefaultUVSOff > 0 then
-          begin
-            LNumNonDefaultMappings := ReadUInt32BE(LSubtableBase + LNonDefaultUVSOff);
-            if LNumNonDefaultMappings < 65536 then
-            begin
-              SetLength(FCmapFmt14.VarSelectors[M].NonDefaultUVS, LNumNonDefaultMappings);
-              for K := 0 to Int32(LNumNonDefaultMappings) - 1 do
-              begin
-                LVarSelectorIdx := LSubtableBase + LNonDefaultUVSOff + 4 + K * 5;
-                FCmapFmt14.VarSelectors[M].NonDefaultUVS[K].UnicodeValue :=
-                  (ReadUInt8(LVarSelectorIdx) shl 16) or
-                  (ReadUInt8(LVarSelectorIdx + 1) shl 8) or
-                  ReadUInt8(LVarSelectorIdx + 2);
-                FCmapFmt14.VarSelectors[M].NonDefaultUVS[K].GlyphID :=
-                  ReadUInt16BE(LVarSelectorIdx + 3);
-              end;
-            end;
-          end;
+          FHasFmt14 := True;
         end;
-        FHasFmt14 := True;
       end;
     end;
   end;
@@ -1149,7 +1068,7 @@ end;
 
 procedure TTFontFace.ParseOs2;
 var
-  LIdx, LOff: Int32;
+  LIdx, LOff, I: Int32;
 begin
   LIdx := FindTable(TABLE_TAG_OS2);
   if LIdx < 0 then
@@ -1167,75 +1086,17 @@ begin
   FOs2.STypoDescender := ReadInt16BE(LOff + 70);
   FOs2.STypoLineGap := ReadInt16BE(LOff + 72);
 
+  { panose 在 offset 32，共 10 字节 }
+  if Int32(FTables[LIdx].Length) >= 42 then
+  begin
+    for I := 0 to 9 do
+      FOs2.Panose[I] := ReadUInt8(LOff + 32 + I);
+  end;
+
   if Int32(FTables[LIdx].Length) >= 96 then
   begin
     FOs2.SxHeight := ReadInt16BE(LOff + 86);
     FOs2.SCapHeight := ReadInt16BE(LOff + 88);
-  end;
-end;
-
-{ ========================================================================= }
-{ Feature List 解析                                                         }
-{ ========================================================================= }
-
-function TTFontFace.ParseFeatureLookups(ATableOffset: Int32;
-  const AFeatureTags: array of UInt32): TFontFeatureLookupIndexArray;
-var
-  LFeatListOff, LFeatCount, LI, LJ, LK: Int32;
-  LFeatTag, LFeatOff, LLookupCount, LLookupIdx: Int32;
-  LMatch, LAlready: Boolean;
-  LCapacity: Int32;
-begin
-  SetLength(Result, 0);
-  LCapacity := 0;
-  if FDataLength < ATableOffset + 10 then
-    Exit;
-  LFeatListOff := ATableOffset + ReadUInt16BE(ATableOffset + 6);
-  if LFeatListOff = ATableOffset then
-    Exit; // No feature list.
-  if FDataLength < LFeatListOff + 2 then
-    Exit;
-  LFeatCount := ReadUInt16BE(LFeatListOff);
-  for LI := 0 to LFeatCount - 1 do
-  begin
-    if FDataLength < LFeatListOff + 2 + LI * 6 + 8 then
-      Continue;
-    LFeatTag := ReadUInt32BE(LFeatListOff + 2 + LI * 6);
-    // Check if this feature tag matches any of the requested tags.
-    LMatch := False;
-    for LJ := 0 to High(AFeatureTags) do
-      if LFeatTag = AFeatureTags[LJ] then
-      begin
-        LMatch := True;
-        Break;
-      end;
-    if not LMatch then
-      Continue;
-    // Read the Feature table and collect lookup indices.
-    LFeatOff := LFeatListOff + ReadUInt16BE(LFeatListOff + 2 + LI * 6 + 4);
-    if FDataLength < LFeatOff + 4 then
-      Continue;
-    LLookupCount := ReadUInt16BE(LFeatOff + 2);
-    for LJ := 0 to LLookupCount - 1 do
-    begin
-      if FDataLength < LFeatOff + 4 + LJ * 2 + 2 then
-        Continue;
-      LLookupIdx := ReadUInt16BE(LFeatOff + 4 + LJ * 2);
-      // Add if not already present (dedup).
-      LAlready := False;
-      for LK := 0 to High(Result) do
-        if Result[LK] = LLookupIdx then
-        begin
-          LAlready := True;
-          Break;
-        end;
-      if not LAlready then
-      begin
-        LCapacity := Length(Result) + 1;
-        SetLength(Result, LCapacity);
-        Result[LCapacity - 1] := LLookupIdx;
-      end;
-    end;
   end;
 end;
 
@@ -1248,12 +1109,30 @@ var
   LTableIdx, LGposOff: Int32;
   LLookupListOff, LLookupCount, LI, LJ: Int32;
   LLookupOff, LLookupType, LSubtableCount: Int32;
-  LSubOff, LSub, LPosFmt, LCovOff, LValFmt1, LValFmt2: Int32;
-  LEntrySize, LXAdvBit, LIdx, LEECount: Int32;
-  LLookupOffOrig: Int32;
-  LLSCount, LK, LCtxIdx, LSubFmt: Int32;
+  LSubOff, LSub, LPosFmt, LCovOff, LValFmt1, LValFmt2, LSubFmt: Int32;
+  LEntrySize, LXAdvBit, LIdx: Int32;
   LSubtable: TFontPairPosSubtable;
   LSinglePos: TFontSinglePosSubtable;
+  LMarkBase: TFontMarkToBaseSubtable;
+  LMarkMark: TFontMarkToMarkSubtable;
+  LCursive: TFontCursivePosSubtable;
+  LFmt1: TFontPairPosFmt1Subtable;
+  LMarkCovOff, LBaseCovOff, LClassCount: Int32;
+  LMarkArrOff, LBaseArrOff: Int32;
+  LFeatListOff, LFeatCount: Int32;
+  procedure ParseValueFormat(ACurSub, AValFmtOffset: Int32;
+    out AXAdvOffset, ARecSize: Int32);
+  var
+    LSize: Int32;
+  begin
+    AXAdvOffset := -1;
+    ARecSize := 0;
+    LValFmt1 := ReadUInt16BE(ACurSub + AValFmtOffset);
+    if (LValFmt1 and $0001) <> 0 then Inc(ARecSize, 2);
+    if (LValFmt1 and $0002) <> 0 then Inc(ARecSize, 2);
+    if (LValFmt1 and $0004) <> 0 then begin AXAdvOffset := ARecSize; Inc(ARecSize, 2); end;
+    if (LValFmt1 and $0008) <> 0 then Inc(ARecSize, 2);
+  end;
 begin
   LTableIdx := FindTable(TABLE_TAG_GPOS);
   if LTableIdx < 0 then
@@ -1266,22 +1145,9 @@ begin
     Exit;
   LLookupCount := ReadUInt16BE(LLookupListOff);
   SetLength(FPairPosSubtables, 0);
-  SetLength(FPairPosFmt1Subtables, 0);
   SetLength(FSinglePosSubtables, 0);
   SetLength(FMarkToBaseSubtables, 0);
   SetLength(FMarkToMarkSubtables, 0);
-  SetLength(FCursivePosSubtables, 0);
-  SetLength(FMarkToLigSubtables, 0);
-  SetLength(FContextPosSubtables, 0);
-  // Parse GPOS feature list for kern/mark/mkmk/curs features.
-  FKernLookups := ParseFeatureLookups(LGposOff,
-    [FEATURE_TAG_KERN]);
-  FMarkLookups := ParseFeatureLookups(LGposOff,
-    [FEATURE_TAG_MARK]);
-  FMkmkLookups := ParseFeatureLookups(LGposOff,
-    [FEATURE_TAG_MKMK]);
-  FCursLookups := ParseFeatureLookups(LGposOff,
-    [FEATURE_TAG_CURS]);
 
   for LI := 0 to LLookupCount - 1 do
   begin
@@ -1291,123 +1157,71 @@ begin
     if FDataLength < LLookupOff + 6 then
       Continue;
     LLookupType := ReadUInt16BE(LLookupOff);
-    LLookupOffOrig := LLookupOff;
+    LSubtableCount := ReadUInt16BE(LLookupOff + 4);
 
-    // ExtensionPos (type 9): unwrap to actual lookup type + subtable offset.
-    if LLookupType = GPOS_LOOKUP_EXTENSION then
+    { GPOS Type 1: SinglePos }
+    if LLookupType = GPOS_LOOKUP_SINGLE_ADJUSTMENT then
     begin
-      if FDataLength < LLookupOff + 12 then
-        Continue;
-      LLookupType := ReadUInt16BE(LLookupOff + 6);
-      LLookupOff := LLookupOff + ReadUInt32BE(LLookupOff + 8);
-    end;
-
-    // SinglePos (type 1).
-    if LLookupType = GPOS_LOOKUP_SINGLE_POS then
-    begin
-      LSubtableCount := ReadUInt16BE(LLookupOffOrig + 4);
       for LJ := 0 to LSubtableCount - 1 do
       begin
-        if FDataLength < LLookupOffOrig + 8 + LJ * 2 then
+        if FDataLength < LLookupOff + 8 + LJ * 2 then
           Continue;
-        LSubOff := LLookupOffOrig + ReadUInt16BE(LLookupOffOrig + 6 + LJ * 2);
+        LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
+        if FDataLength < LSubOff + 4 then
+          Continue;
+        LSinglePos.Format := ReadUInt16BE(LSubOff);
+        LCovOff := ReadUInt16BE(LSubOff + 2);
+        if (LSinglePos.Format < 1) or (LSinglePos.Format > 2) then
+          Continue;
+        ParseValueFormat(LSubOff, 4, LXAdvBit, LEntrySize);
+        if LEntrySize <= 0 then
+          Continue;
+        LSinglePos.CoverageOffset := LSubOff + LCovOff;
+        LSinglePos.XAdvanceOffset := LXAdvBit;
+        LSinglePos.ValueRecordSize := LEntrySize;
+        if LSinglePos.Format = 1 then
+          LSinglePos.ValueOffset := LSubOff + 6
+        else
+          LSinglePos.ValueOffset := LSubOff + 8;
+        LSinglePos.ValueFormat := ReadUInt16BE(LSubOff + 4);
+        LIdx := Length(FSinglePosSubtables);
+        SetLength(FSinglePosSubtables, LIdx + 1);
+        FSinglePosSubtables[LIdx] := LSinglePos;
+      end;
+    end
+    { GPOS Type 2: PairPos (existing Fmt2 + new Fmt1) }
+    else if LLookupType = GPOS_LOOKUP_PAIR_ADJUSTMENT then
+    begin
+      for LJ := 0 to LSubtableCount - 1 do
+      begin
+        if FDataLength < LLookupOff + 8 + LJ * 2 then
+          Continue;
+        LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
         LSub := LSubOff;
         if FDataLength < LSub + 8 then
           Continue;
         LPosFmt := ReadUInt16BE(LSub);
         LCovOff := ReadUInt16BE(LSub + 2);
         LValFmt1 := ReadUInt16BE(LSub + 4);
-        LXAdvBit := -1;
-        LEntrySize := 0;
-        if (LValFmt1 and $0001) <> 0 then Inc(LEntrySize, 2);
-        if (LValFmt1 and $0002) <> 0 then Inc(LEntrySize, 2);
-        if (LValFmt1 and $0004) <> 0 then begin LXAdvBit := LEntrySize; Inc(LEntrySize, 2); end;
-        if (LValFmt1 and $0008) <> 0 then Inc(LEntrySize, 2);
-        if (LEntrySize <= 0) or (LXAdvBit < 0) then
-          Continue;
-        LSinglePos.BaseOffset := LSub;
-        LSinglePos.CoverageOffset := LSub + LCovOff;
-        LSinglePos.Format := LPosFmt;
-        LSinglePos.ValueRecordSize := LEntrySize;
-        LSinglePos.XAdvanceOffset := LXAdvBit;
-        if LPosFmt = 1 then
-        begin
-          LSinglePos.GlyphCount := 0;
-          LSinglePos.ValueArrayOffset := LSub + 6;
-        end
-        else if LPosFmt = 2 then
-        begin
-          if FDataLength < LSub + 8 then
-            Continue;
-          LSinglePos.GlyphCount := ReadUInt16BE(LSub + 6);
-          LSinglePos.ValueArrayOffset := LSub + 8;
-        end
-        else
-          Continue;
-        LIdx := Length(FSinglePosSubtables);
-        SetLength(FSinglePosSubtables, LIdx + 1);
-        FSinglePosSubtables[LIdx] := LSinglePos;
-      end;
-    end;
-
-    // PairPos (type 1 — pair-based, type 2 — class-based).
-    if LLookupType = GPOS_LOOKUP_PAIR_ADJUSTMENT then
-    begin
-      LSubtableCount := ReadUInt16BE(LLookupOffOrig + 4);
-      for LJ := 0 to LSubtableCount - 1 do
-      begin
-        if FDataLength < LLookupOffOrig + 8 + LJ * 2 then
-          Continue;
-        LSubOff := LLookupOffOrig + ReadUInt16BE(LLookupOffOrig + 6 + LJ * 2);
-        LSub := LSubOff;
-        if FDataLength < LSub + 10 then
-          Continue;
-        LPosFmt := ReadUInt16BE(LSub);
-        LCovOff := ReadUInt16BE(LSub + 2);
-        LValFmt1 := ReadUInt16BE(LSub + 4);
         LValFmt2 := ReadUInt16BE(LSub + 6);
 
-        // Compute VR1 size and XAdvance offset within VR1.
-        LXAdvBit := -1;
-        LEntrySize := 0;
-        if (LValFmt1 and $0001) <> 0 then Inc(LEntrySize, 2);
-        if (LValFmt1 and $0002) <> 0 then Inc(LEntrySize, 2);
-        if (LValFmt1 and $0004) <> 0 then begin LXAdvBit := LEntrySize; Inc(LEntrySize, 2); end;
-        if (LValFmt1 and $0008) <> 0 then Inc(LEntrySize, 2);
-        if (LEntrySize <= 0) or (LXAdvBit < 0) then
-          Continue;
-
-        if LPosFmt = 1 then
+        if LPosFmt = 2 then
         begin
-          // Format 1: Pair-based adjustment.
-          // PairValueRecord = SecondGlyph(2) + VR1 + VR2.
-          // Add VR2 size to get full record size.
-          LIdx := LEntrySize;  // VR1 size.
-          if (LValFmt2 and $0001) <> 0 then Inc(LEntrySize, 2);
-          if (LValFmt2 and $0002) <> 0 then Inc(LEntrySize, 2);
-          if (LValFmt2 and $0004) <> 0 then Inc(LEntrySize, 2);
-          if (LValFmt2 and $0008) <> 0 then Inc(LEntrySize, 2);
-          if FDataLength < LSub + 10 then
-            Continue;
-          LIdx := Length(FPairPosFmt1Subtables);
-          SetLength(FPairPosFmt1Subtables, LIdx + 1);
-          FPairPosFmt1Subtables[LIdx].BaseOffset := LSub;
-          FPairPosFmt1Subtables[LIdx].CoverageOffset := LSub + LCovOff;
-          FPairPosFmt1Subtables[LIdx].PairSetCount := ReadUInt16BE(LSub + 8);
-          FPairPosFmt1Subtables[LIdx].ValueRecordSize := LEntrySize;
-          FPairPosFmt1Subtables[LIdx].XAdvanceOffset := LXAdvBit;
-        end
-        else if LPosFmt = 2 then
-        begin
-          // Format 2: Class-based adjustment.
-          // Class2Record = VR1 + VR2 (no SecondGlyph prefix).
+          { Class-based PairPos (existing code) }
           if FDataLength < LSub + 16 then
             Continue;
-          // Add VR2 size to get full Class2Record size.
+          LXAdvBit := -1;
+          LEntrySize := 0;
+          if (LValFmt1 and $0001) <> 0 then Inc(LEntrySize, 2);
+          if (LValFmt1 and $0002) <> 0 then Inc(LEntrySize, 2);
+          if (LValFmt1 and $0004) <> 0 then begin LXAdvBit := LEntrySize; Inc(LEntrySize, 2); end;
+          if (LValFmt1 and $0008) <> 0 then Inc(LEntrySize, 2);
           if (LValFmt2 and $0001) <> 0 then Inc(LEntrySize, 2);
           if (LValFmt2 and $0002) <> 0 then Inc(LEntrySize, 2);
           if (LValFmt2 and $0004) <> 0 then Inc(LEntrySize, 2);
           if (LValFmt2 and $0008) <> 0 then Inc(LEntrySize, 2);
+          if (LEntrySize <= 0) or (LXAdvBit < 0) then
+            Continue;
           LSubtable.BaseOffset := LSub;
           LSubtable.CoverageOffset := LSub + LCovOff;
           LSubtable.ClassDef1Offset := LSub + ReadUInt16BE(LSub + 8);
@@ -1418,278 +1232,183 @@ begin
           LIdx := Length(FPairPosSubtables);
           SetLength(FPairPosSubtables, LIdx + 1);
           FPairPosSubtables[LIdx] := LSubtable;
+        end
+        else if LPosFmt = 1 then
+        begin
+          { Pair-based PairPos (Fmt1) }
+          if FDataLength < LSub + 10 then
+            Continue;
+          ParseValueFormat(LSub, 4, LXAdvBit, LEntrySize);
+          if LEntrySize <= 0 then
+            Continue;
+          LFmt1.CoverageOffset := LSub + LCovOff;
+          LFmt1.ValueFormat1 := LValFmt1;
+          LFmt1.ValueFormat2 := LValFmt2;
+          LFmt1.PairSetCount := ReadUInt16BE(LSub + 8);
+          LFmt1.PairSetOffsetsOffset := LSub; { PairSet offsets are relative to subtable start }
+          LFmt1.XAdvance1Offset := LXAdvBit;
+          LFmt1.ValueRecord1Size := LEntrySize;
+          LIdx := Length(FPairPosFmt1Subtables);
+          SetLength(FPairPosFmt1Subtables, LIdx + 1);
+          FPairPosFmt1Subtables[LIdx] := LFmt1;
         end;
       end;
-    end;
-
-    // CursivePos (type 3): cursive attachment (entry/exit anchors).
-    if LLookupType = GPOS_LOOKUP_CursivePos then
+    end
+    { GPOS Type 3: CursivePos }
+    else if LLookupType = GPOS_LOOKUP_CURSIVE then
     begin
-      LSubtableCount := ReadUInt16BE(LLookupOffOrig + 4);
       for LJ := 0 to LSubtableCount - 1 do
       begin
-        if FDataLength < LLookupOffOrig + 8 + LJ * 2 then
+        if FDataLength < LLookupOff + 8 + LJ * 2 then
           Continue;
-        LSubOff := LLookupOffOrig + ReadUInt16BE(LLookupOffOrig + 6 + LJ * 2);
+        LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
         if FDataLength < LSubOff + 6 then
           Continue;
-        LSub := LSubOff;
-        if ReadUInt16BE(LSub) <> 1 then
+        if ReadUInt16BE(LSubOff) <> 1 then
           Continue;
-        LEECount := ReadUInt16BE(LSub + 4);
+        LCovOff := ReadUInt16BE(LSubOff + 2);
+        LCursive.CoverageOffset := LSubOff + LCovOff;
+        LCursive.EntryExitCount := ReadUInt16BE(LSubOff + 4);
+        LCursive.EntryExitArrayOffset := LSubOff + 6;
         LIdx := Length(FCursivePosSubtables);
         SetLength(FCursivePosSubtables, LIdx + 1);
-        FCursivePosSubtables[LIdx].BaseOffset := LSub;
-        FCursivePosSubtables[LIdx].CoverageOffset := LSub + ReadUInt16BE(LSub + 2);
-        FCursivePosSubtables[LIdx].EntryExitCount := LEECount;
-        FCursivePosSubtables[LIdx].EntryExitArrayOffset := LSub + 6;
+        FCursivePosSubtables[LIdx] := LCursive;
       end;
-    end;
-
-    // MarkBasePos (type 4).
-    if LLookupType = GPOS_LOOKUP_MARK_TO_BASE then
+    end
+    { GPOS Type 4: MarkToBase }
+    else if LLookupType = GPOS_LOOKUP_MARK_TO_BASE then
     begin
-      LSubtableCount := ReadUInt16BE(LLookupOffOrig + 4);
       for LJ := 0 to LSubtableCount - 1 do
       begin
-        if FDataLength < LLookupOffOrig + 8 + LJ * 2 then
+        if FDataLength < LLookupOff + 8 + LJ * 2 then
           Continue;
-        LSubOff := LLookupOffOrig + ReadUInt16BE(LLookupOffOrig + 6 + LJ * 2);
+        LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
         if FDataLength < LSubOff + 12 then
           Continue;
-        LSub := LSubOff;
-        if ReadUInt16BE(LSub) <> 1 then
+        if ReadUInt16BE(LSubOff) <> 1 then
           Continue;
+        LMarkCovOff := ReadUInt16BE(LSubOff + 2);
+        LBaseCovOff := ReadUInt16BE(LSubOff + 4);
+        LClassCount := ReadUInt16BE(LSubOff + 6);
+        LMarkArrOff := ReadUInt16BE(LSubOff + 8);
+        LBaseArrOff := ReadUInt16BE(LSubOff + 10);
+        if (LClassCount <= 0) or (LClassCount > 256) then
+          Continue;
+        LMarkBase.MarkCoverageOffset := LSubOff + LMarkCovOff;
+        LMarkBase.BaseCoverageOffset := LSubOff + LBaseCovOff;
+        LMarkBase.ClassCount := LClassCount;
+        LMarkBase.MarkArrayOffset := LSubOff + LMarkArrOff;
+        LMarkBase.BaseArrayOffset := LSubOff + LBaseArrOff;
         LIdx := Length(FMarkToBaseSubtables);
         SetLength(FMarkToBaseSubtables, LIdx + 1);
-        FMarkToBaseSubtables[LIdx].BaseOffset := LSub;
-        FMarkToBaseSubtables[LIdx].MarkCoverageOffset := LSub + ReadUInt16BE(LSub + 2);
-        FMarkToBaseSubtables[LIdx].BaseCoverageOffset := LSub + ReadUInt16BE(LSub + 4);
-        FMarkToBaseSubtables[LIdx].ClassCount := ReadUInt16BE(LSub + 6);
-        FMarkToBaseSubtables[LIdx].MarkArrayOffset := LSub + ReadUInt16BE(LSub + 8);
-        FMarkToBaseSubtables[LIdx].BaseArrayOffset := LSub + ReadUInt16BE(LSub + 10);
+        FMarkToBaseSubtables[LIdx] := LMarkBase;
       end;
-    end;
-
-    // MarkLigPos (type 5): mark-to-ligature attachment.
-    // Structure: posFormat(2) + markCoverage(2) + ligCoverage(2) +
-    //            classCount(2) + markArray(2) + ligArray(2).
-    if LLookupType = GPOS_LOOKUP_MARK_TO_LIGATURE then
+    end
+    { GPOS Type 6: MarkToMark }
+    else if LLookupType = GPOS_LOOKUP_MARK_TO_MARK then
     begin
-      LSubtableCount := ReadUInt16BE(LLookupOffOrig + 4);
       for LJ := 0 to LSubtableCount - 1 do
       begin
-        if FDataLength < LLookupOffOrig + 8 + LJ * 2 then
+        if FDataLength < LLookupOff + 8 + LJ * 2 then
           Continue;
-        LSubOff := LLookupOffOrig + ReadUInt16BE(LLookupOffOrig + 6 + LJ * 2);
-        if FDataLength < LSubOff + 14 then
-          Continue;
-        LSub := LSubOff;
-        if ReadUInt16BE(LSub) <> 1 then
-          Continue;
-        LIdx := Length(FMarkToLigSubtables);
-        SetLength(FMarkToLigSubtables, LIdx + 1);
-        FMarkToLigSubtables[LIdx].BaseOffset := LSub;
-        FMarkToLigSubtables[LIdx].MarkCoverageOffset := LSub + ReadUInt16BE(LSub + 2);
-        FMarkToLigSubtables[LIdx].LigCoverageOffset := LSub + ReadUInt16BE(LSub + 4);
-        FMarkToLigSubtables[LIdx].ClassCount := ReadUInt16BE(LSub + 6);
-        FMarkToLigSubtables[LIdx].MarkArrayOffset := LSub + ReadUInt16BE(LSub + 8);
-        FMarkToLigSubtables[LIdx].LigArrayOffset := LSub + ReadUInt16BE(LSub + 10);
-      end;
-    end;
-
-    // MarkMarkPos (type 6).
-    if LLookupType = GPOS_LOOKUP_MARK_TO_MARK then
-    begin
-      LSubtableCount := ReadUInt16BE(LLookupOffOrig + 4);
-      for LJ := 0 to LSubtableCount - 1 do
-      begin
-        if FDataLength < LLookupOffOrig + 8 + LJ * 2 then
-          Continue;
-        LSubOff := LLookupOffOrig + ReadUInt16BE(LLookupOffOrig + 6 + LJ * 2);
+        LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
         if FDataLength < LSubOff + 12 then
           Continue;
-        LSub := LSubOff;
-        if ReadUInt16BE(LSub) <> 1 then
+        if ReadUInt16BE(LSubOff) <> 1 then
           Continue;
+        LMarkCovOff := ReadUInt16BE(LSubOff + 2);
+        LBaseCovOff := ReadUInt16BE(LSubOff + 4);
+        LClassCount := ReadUInt16BE(LSubOff + 6);
+        LMarkArrOff := ReadUInt16BE(LSubOff + 8);
+        LBaseArrOff := ReadUInt16BE(LSubOff + 10);
+        if (LClassCount <= 0) or (LClassCount > 256) then
+          Continue;
+        LMarkMark.Mark1CoverageOffset := LSubOff + LMarkCovOff;
+        LMarkMark.Mark2CoverageOffset := LSubOff + LBaseCovOff;
+        LMarkMark.ClassCount := LClassCount;
+        LMarkMark.Mark1ArrayOffset := LSubOff + LMarkArrOff;
+        LMarkMark.Mark2ArrayOffset := LSubOff + LBaseArrOff;
         LIdx := Length(FMarkToMarkSubtables);
         SetLength(FMarkToMarkSubtables, LIdx + 1);
-        FMarkToMarkSubtables[LIdx].BaseOffset := LSub;
-        FMarkToMarkSubtables[LIdx].Mark1CoverageOffset := LSub + ReadUInt16BE(LSub + 2);
-        FMarkToMarkSubtables[LIdx].Mark2CoverageOffset := LSub + ReadUInt16BE(LSub + 4);
-        FMarkToMarkSubtables[LIdx].ClassCount := ReadUInt16BE(LSub + 6);
-        FMarkToMarkSubtables[LIdx].Mark1ArrayOffset := LSub + ReadUInt16BE(LSub + 8);
-        FMarkToMarkSubtables[LIdx].Mark2ArrayOffset := LSub + ReadUInt16BE(LSub + 10);
+        FMarkToMarkSubtables[LIdx] := LMarkMark;
       end;
-    end;
-
-    // ContextPos (type 7) and ChainedContextPos (type 8).
-    // Parses Format 1 (glyph-based), Format 2 (class-based), Format 3 (coverage-based).
-    if (LLookupType = GPOS_LOOKUP_CONTEXT_POS) or
-       (LLookupType = GPOS_LOOKUP_CONTEXT_POS_CHAINED) then
+    end
+    { GPOS Type 5: MarkToLigature }
+    else if LLookupType = GPOS_LOOKUP_MARK_TO_LIGATURE then
     begin
-      LSubtableCount := ReadUInt16BE(LLookupOffOrig + 4);
       for LJ := 0 to LSubtableCount - 1 do
       begin
-        if FDataLength < LLookupOffOrig + 8 + LJ * 2 then
+        if FDataLength < LLookupOff + 8 + LJ * 2 then
           Continue;
-        LSubOff := LLookupOffOrig + ReadUInt16BE(LLookupOffOrig + 6 + LJ * 2);
-        LSub := LSubOff;
-        if FDataLength < LSub + 4 then
+        LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
+        if FDataLength < LSubOff + 12 then
           Continue;
-        LSubFmt := ReadUInt16BE(LSub);
-        if LSubFmt = 3 then
-        begin
-          if LLookupType = GPOS_LOOKUP_CONTEXT_POS then
-          begin
-            // ContextPos Fmt3: format(2) + posCount(2) + posLookupCount(2) +
-            //   inputCoverages[posCount](2) + posLookupRecords[posLookupCount](4).
-            if FDataLength < LSub + 6 then
-              Continue;
-            LLSCount := ReadUInt16BE(LSub + 2);  // posCount (input glyph count)
-            LIdx := ReadUInt16BE(LSub + 4);       // posLookupRecordCount
-            if FDataLength < LSub + 6 + LLSCount * 2 + LIdx * 4 then
-              Continue;
-            LCtxIdx := Length(FContextPosSubtables);
-            SetLength(FContextPosSubtables, LCtxIdx + 1);
-            FContextPosSubtables[LCtxIdx].BaseOffset := LSub;
-            FContextPosSubtables[LCtxIdx].Format := 3;
-            FContextPosSubtables[LCtxIdx].IsChained := False;
-            FContextPosSubtables[LCtxIdx].InputGlyphCount := LLSCount;
-            FContextPosSubtables[LCtxIdx].SubstCount := LIdx;
-            SetLength(FContextPosSubtables[LCtxIdx].InputCoverageOffsets, LLSCount);
-            SetLength(FContextPosSubtables[LCtxIdx].SubstSeqIndices, LIdx);
-            SetLength(FContextPosSubtables[LCtxIdx].SubstLookupIndices, LIdx);
-            for LK := 0 to LLSCount - 1 do
-              FContextPosSubtables[LCtxIdx].InputCoverageOffsets[LK] :=
-                LSub + ReadUInt16BE(LSub + 6 + LK * 2);
-            for LK := 0 to LIdx - 1 do
-            begin
-              FContextPosSubtables[LCtxIdx].SubstSeqIndices[LK] :=
-                ReadUInt16BE(LSub + 6 + LLSCount * 2 + LK * 4);
-              FContextPosSubtables[LCtxIdx].SubstLookupIndices[LK] :=
-                ReadUInt16BE(LSub + 6 + LLSCount * 2 + LK * 4 + 2);
-            end;
-          end
-          else
-          begin
-            // ChainedContextPos Fmt3: same structure as ChainedContextSubst Fmt3.
-            if FDataLength < LSub + 4 then
-              Continue;
-            LLSCount := ReadUInt16BE(LSub + 2);
-            LK := LSub + 4 + LLSCount * 2;
-            if FDataLength < LK + 2 then
-              Continue;
-            LLSCount := ReadUInt16BE(LK);
-            LK := LK + 2 + LLSCount * 2;
-            if FDataLength < LK + 2 then
-              Continue;
-            LCovOff := ReadUInt16BE(LK);
-            LK := LK + 2 + LCovOff * 2;
-            if FDataLength < LK + 2 then
-              Continue;
-            LIdx := ReadUInt16BE(LK);
-            if FDataLength < LK + 2 + LIdx * 4 then
-              Continue;
-            LCtxIdx := Length(FContextPosSubtables);
-            SetLength(FContextPosSubtables, LCtxIdx + 1);
-            FContextPosSubtables[LCtxIdx].BaseOffset := LSub;
-            FContextPosSubtables[LCtxIdx].Format := 3;
-            FContextPosSubtables[LCtxIdx].IsChained := True;
-            FContextPosSubtables[LCtxIdx].InputGlyphCount := LLSCount;
-            FContextPosSubtables[LCtxIdx].SubstCount := LIdx;
-            SetLength(FContextPosSubtables[LCtxIdx].InputCoverageOffsets, LLSCount);
-            SetLength(FContextPosSubtables[LCtxIdx].SubstSeqIndices, LIdx);
-            SetLength(FContextPosSubtables[LCtxIdx].SubstLookupIndices, LIdx);
-            for LCovOff := 0 to LLSCount - 1 do
-              FContextPosSubtables[LCtxIdx].InputCoverageOffsets[LCovOff] :=
-                LSub + ReadUInt16BE(LK - 2 - (LLSCount - LCovOff) * 2);
-            for LCovOff := 0 to LIdx - 1 do
-            begin
-              FContextPosSubtables[LCtxIdx].SubstSeqIndices[LCovOff] :=
-                ReadUInt16BE(LK + 2 + LCovOff * 4);
-              FContextPosSubtables[LCtxIdx].SubstLookupIndices[LCovOff] :=
-                ReadUInt16BE(LK + 2 + LCovOff * 4 + 2);
-            end;
-          end;
-        end
-        else if (LSubFmt = 1) or (LSubFmt = 2) then
-        begin
-          // Same structure as GSUB ContextSubst/ChainedContextSubst Fmt1/2.
-          if LSubFmt = 1 then
-          begin
-            if FDataLength < LSub + 6 then
-              Continue;
-            LLSCount := ReadUInt16BE(LSub + 4);
-            if FDataLength < LSub + 6 + LLSCount * 2 then
-              Continue;
-            LCtxIdx := Length(FContextPosSubtables);
-            SetLength(FContextPosSubtables, LCtxIdx + 1);
-            FContextPosSubtables[LCtxIdx].BaseOffset := LSub;
-            FContextPosSubtables[LCtxIdx].Format := 1;
-            FContextPosSubtables[LCtxIdx].IsChained := (LLookupType = GPOS_LOOKUP_CONTEXT_POS_CHAINED);
-            FContextPosSubtables[LCtxIdx].RuleSetCount := LLSCount;
-            SetLength(FContextPosSubtables[LCtxIdx].RuleSetOffsets, LLSCount);
-            for LK := 0 to LLSCount - 1 do
-            begin
-              LCovOff := ReadUInt16BE(LSub + 6 + LK * 2);
-              if LCovOff <> 0 then
-                FContextPosSubtables[LCtxIdx].RuleSetOffsets[LK] := LSub + LCovOff
-              else
-                FContextPosSubtables[LCtxIdx].RuleSetOffsets[LK] := 0;
-            end;
-          end
-          else
-          begin
-            if LLookupType = GPOS_LOOKUP_CONTEXT_POS then
-            begin
-              if FDataLength < LSub + 8 then
-                Continue;
-              LLSCount := ReadUInt16BE(LSub + 6);
-              if FDataLength < LSub + 8 + LLSCount * 2 then
-                Continue;
-              LCtxIdx := Length(FContextPosSubtables);
-              SetLength(FContextPosSubtables, LCtxIdx + 1);
-              FContextPosSubtables[LCtxIdx].BaseOffset := LSub;
-              FContextPosSubtables[LCtxIdx].Format := 2;
-              FContextPosSubtables[LCtxIdx].IsChained := False;
-              FContextPosSubtables[LCtxIdx].RuleSetCount := LLSCount;
-              SetLength(FContextPosSubtables[LCtxIdx].RuleSetOffsets, LLSCount);
-              for LK := 0 to LLSCount - 1 do
-              begin
-                LCovOff := ReadUInt16BE(LSub + 8 + LK * 2);
-                if LCovOff <> 0 then
-                  FContextPosSubtables[LCtxIdx].RuleSetOffsets[LK] := LSub + LCovOff
-                else
-                  FContextPosSubtables[LCtxIdx].RuleSetOffsets[LK] := 0;
-              end;
-            end
-            else
-            begin
-              if FDataLength < LSub + 12 then
-                Continue;
-              LLSCount := ReadUInt16BE(LSub + 10);
-              if FDataLength < LSub + 12 + LLSCount * 2 then
-                Continue;
-              LCtxIdx := Length(FContextPosSubtables);
-              SetLength(FContextPosSubtables, LCtxIdx + 1);
-              FContextPosSubtables[LCtxIdx].BaseOffset := LSub;
-              FContextPosSubtables[LCtxIdx].Format := 2;
-              FContextPosSubtables[LCtxIdx].IsChained := True;
-              FContextPosSubtables[LCtxIdx].RuleSetCount := LLSCount;
-              SetLength(FContextPosSubtables[LCtxIdx].RuleSetOffsets, LLSCount);
-              for LK := 0 to LLSCount - 1 do
-              begin
-                LCovOff := ReadUInt16BE(LSub + 12 + LK * 2);
-                if LCovOff <> 0 then
-                  FContextPosSubtables[LCtxIdx].RuleSetOffsets[LK] := LSub + LCovOff
-                else
-                  FContextPosSubtables[LCtxIdx].RuleSetOffsets[LK] := 0;
-              end;
-            end;
-          end;
-        end;
+        if ReadUInt16BE(LSubOff) <> 1 then
+          Continue;
+        LMarkCovOff := ReadUInt16BE(LSubOff + 2);
+        LBaseCovOff := ReadUInt16BE(LSubOff + 4);
+        LClassCount := ReadUInt16BE(LSubOff + 6);
+        LMarkArrOff := ReadUInt16BE(LSubOff + 8);
+        LBaseArrOff := ReadUInt16BE(LSubOff + 10);
+        if (LClassCount <= 0) or (LClassCount > 256) then
+          Continue;
+        LIdx := Length(FMarkToLigatureSubtables);
+        SetLength(FMarkToLigatureSubtables, LIdx + 1);
+        FMarkToLigatureSubtables[LIdx].MarkCoverageOffset := LSubOff + LMarkCovOff;
+        FMarkToLigatureSubtables[LIdx].LigatureCoverageOffset := LSubOff + LBaseCovOff;
+        FMarkToLigatureSubtables[LIdx].ClassCount := LClassCount;
+        FMarkToLigatureSubtables[LIdx].MarkArrayOffset := LSubOff + LMarkArrOff;
+        FMarkToLigatureSubtables[LIdx].LigatureArrayOffset := LSubOff + LBaseArrOff;
       end;
+    end
+    { GPOS Type 7: ContextPos }
+    else if LLookupType = GPOS_LOOKUP_CONTEXT_POS then
+    begin
+      for LJ := 0 to LSubtableCount - 1 do
+      begin
+        if FDataLength < LLookupOff + 8 + LJ * 2 then
+          Continue;
+        LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
+        if FDataLength < LSubOff + 4 then
+          Continue;
+        LSubFmt := ReadUInt16BE(LSubOff);
+        if (LSubFmt < 1) or (LSubFmt > 3) then
+          Continue;
+        ParseContextSubtable(LSubOff, LSubFmt, False, FContextPosSubtables);
+      end;
+    end
+    { GPOS Type 8: ChainedContextPos }
+    else if LLookupType = GPOS_LOOKUP_CHAINED_CONTEXT_POS then
+    begin
+      for LJ := 0 to LSubtableCount - 1 do
+      begin
+        if FDataLength < LLookupOff + 8 + LJ * 2 then
+          Continue;
+        LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
+        if FDataLength < LSubOff + 4 then
+          Continue;
+        LSubFmt := ReadUInt16BE(LSubOff);
+        if (LSubFmt < 1) or (LSubFmt > 3) then
+          Continue;
+        ParseContextSubtable(LSubOff, LSubFmt, True, FContextPosSubtables);
+      end;
+    end;
+  end;
+
+  { Parse FeatureList for feature tag queries. }
+  if FDataLength < LGposOff + 10 then
+    Exit;
+  LFeatListOff := LGposOff + ReadUInt16BE(LGposOff + 6); { FeatureList offset at GPOS+6 }
+  if (LFeatListOff > 0) and (FDataLength >= LFeatListOff + 2) then
+  begin
+    LFeatCount := ReadUInt16BE(LFeatListOff);
+    for LI := 0 to LFeatCount - 1 do
+    begin
+      if FDataLength < LFeatListOff + 2 + LI * 6 + 4 then
+        Continue;
+      LIdx := Length(FFeatureTags);
+      SetLength(FFeatureTags, LIdx + 1);
+      FFeatureTags[LIdx] := ReadUInt32BE(LFeatListOff + 2 + LI * 6);
     end;
   end;
 end;
@@ -1700,7 +1419,7 @@ var
   LLookupListOff, LLookupCount, LI, LJ: Int32;
   LLookupOff, LLookupType, LSubtableCount: Int32;
   LSubOff, LSub, LSubFmt, LCovOff, LLSCount, LIdx: Int32;
-  LLookupOffOrig, LK, LCtxIdx: Int32;
+  LFeatListOff, LFeatCount: Int32;
   LSubtable: TFontLigatureSubtable;
   LSingleSubst: TFontSingleSubstSubtable;
 begin
@@ -1716,14 +1435,7 @@ begin
   LLookupCount := ReadUInt16BE(LLookupListOff);
   SetLength(FLigatureSubtables, 0);
   SetLength(FSingleSubstSubtables, 0);
-  SetLength(FMultipleSubstSubtables, 0);
-  SetLength(FAlternateSubstSubtables, 0);
-  SetLength(FContextSubstSubtables, 0);
-  // Parse GSUB feature list for liga/clig features.
-  FLigaLookups := ParseFeatureLookups(LGsubOff,
-    [FEATURE_TAG_LIGA]);
-  FCligLookups := ParseFeatureLookups(LGsubOff,
-    [FEATURE_TAG_CLIG]);
+  SetLength(FLookupEntries, LLookupCount);
 
   for LI := 0 to LLookupCount - 1 do
   begin
@@ -1733,312 +1445,103 @@ begin
     if FDataLength < LLookupOff + 6 then
       Continue;
     LLookupType := ReadUInt16BE(LLookupOff);
-    LLookupOffOrig := LLookupOff;
+    LSubtableCount := ReadUInt16BE(LLookupOff + 4);
 
-    // ExtensionSubst (type 7): unwrap to actual lookup type + subtable offset.
-    if LLookupType = GSUB_LOOKUP_EXTENSION then
-    begin
-      if FDataLength < LLookupOff + 12 then
-        Continue;
-      LLookupType := ReadUInt16BE(LLookupOff + 6);
-      LLookupOff := LLookupOff + ReadUInt32BE(LLookupOff + 8);
-    end;
+    { 记录 lookup 映射（供 ContextSubst 引用） }
+    FLookupEntries[LI].LookupType := LLookupType;
+    FLookupEntries[LI].FirstSubtableIndex := -1;
+    FLookupEntries[LI].SubtableCount := 0;
 
-    // Single Substitution (type 1).
-    if LLookupType = GSUB_LOOKUP_SINGLE then
+    { GSUB Type 1: SingleSubst }
+    if LLookupType = GSUB_LOOKUP_SINGLE_SUBST then
     begin
-      LSubtableCount := ReadUInt16BE(LLookupOffOrig + 4);
+      FLookupEntries[LI].FirstSubtableIndex := Length(FSingleSubstSubtables);
+      FLookupEntries[LI].SubtableCount := 0;
       for LJ := 0 to LSubtableCount - 1 do
       begin
-        if FDataLength < LLookupOffOrig + 8 + LJ * 2 then
+        if FDataLength < LLookupOff + 8 + LJ * 2 then
           Continue;
-        LSubOff := LLookupOffOrig + ReadUInt16BE(LLookupOffOrig + 6 + LJ * 2);
-        LSub := LSubOff;
-        if FDataLength < LSub + 6 then
+        LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
+        if FDataLength < LSubOff + 4 then
           Continue;
-        LSubFmt := ReadUInt16BE(LSub);
-        LCovOff := ReadUInt16BE(LSub + 2);
-        // Format 1: delta substitution.
+        LSubFmt := ReadUInt16BE(LSubOff);
+        LCovOff := ReadUInt16BE(LSubOff + 2);
+        if (LSubFmt < 1) or (LSubFmt > 2) then
+          Continue;
+        LSingleSubst.Format := LSubFmt;
+        LSingleSubst.CoverageOffset := LSubOff + LCovOff;
         if LSubFmt = 1 then
         begin
-          if FDataLength < LSub + 6 then
+          if FDataLength < LSubOff + 6 then
             Continue;
-          LSingleSubst.BaseOffset := LSub;
-          LSingleSubst.CoverageOffset := LSub + LCovOff;
-          LSingleSubst.Format := 1;
-          LSingleSubst.DeltaGlyphID := ReadInt16BE(LSub + 4);
+          LSingleSubst.DeltaGlyphID := ReadInt16BE(LSubOff + 4);
           LSingleSubst.GlyphCount := 0;
-          LSingleSubst.SubstituteArrayOffset := 0;
-          LIdx := Length(FSingleSubstSubtables);
-          SetLength(FSingleSubstSubtables, LIdx + 1);
-          FSingleSubstSubtables[LIdx] := LSingleSubst;
+          LSingleSubst.GlyphArrayOffset := 0;
         end
-        // Format 2: array substitution.
-        else if LSubFmt = 2 then
+        else
         begin
-          if FDataLength < LSub + 8 then
+          if FDataLength < LSubOff + 6 then
             Continue;
-          LSingleSubst.BaseOffset := LSub;
-          LSingleSubst.CoverageOffset := LSub + LCovOff;
-          LSingleSubst.Format := 2;
           LSingleSubst.DeltaGlyphID := 0;
-          LSingleSubst.GlyphCount := ReadUInt16BE(LSub + 4);
-          LSingleSubst.SubstituteArrayOffset := LSub + 6;
-          LIdx := Length(FSingleSubstSubtables);
-          SetLength(FSingleSubstSubtables, LIdx + 1);
-          FSingleSubstSubtables[LIdx] := LSingleSubst;
+          LSingleSubst.GlyphCount := ReadUInt16BE(LSubOff + 4);
+          LSingleSubst.GlyphArrayOffset := LSubOff + 6;
         end;
+        LIdx := Length(FSingleSubstSubtables);
+        SetLength(FSingleSubstSubtables, LIdx + 1);
+        FSingleSubstSubtables[LIdx] := LSingleSubst;
+        Inc(FLookupEntries[LI].SubtableCount);
       end;
-    end;
-
-    // Multiple Substitution (type 2): one-to-many.
-    if LLookupType = GSUB_LOOKUP_MULTIPLE then
+    end
+    { GSUB Type 2: MultipleSubst }
+    else if LLookupType = GSUB_LOOKUP_MULTIPLE_SUBST then
     begin
-      LSubtableCount := ReadUInt16BE(LLookupOffOrig + 4);
       for LJ := 0 to LSubtableCount - 1 do
       begin
-        if FDataLength < LLookupOffOrig + 8 + LJ * 2 then
+        if FDataLength < LLookupOff + 8 + LJ * 2 then
           Continue;
-        LSubOff := LLookupOffOrig + ReadUInt16BE(LLookupOffOrig + 6 + LJ * 2);
-        LSub := LSubOff;
-        if FDataLength < LSub + 6 then
+        LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
+        if FDataLength < LSubOff + 6 then
           Continue;
-        LSubFmt := ReadUInt16BE(LSub);
+        LSubFmt := ReadUInt16BE(LSubOff);
         if LSubFmt <> 1 then
           Continue;
-        LCovOff := ReadUInt16BE(LSub + 2);
-        LLSCount := ReadUInt16BE(LSub + 4);
         LIdx := Length(FMultipleSubstSubtables);
         SetLength(FMultipleSubstSubtables, LIdx + 1);
-        FMultipleSubstSubtables[LIdx].BaseOffset := LSub;
-        FMultipleSubstSubtables[LIdx].CoverageOffset := LSub + LCovOff;
-        FMultipleSubstSubtables[LIdx].SequenceCount := LLSCount;
-        FMultipleSubstSubtables[LIdx].SequenceArrayOffset := LSub + 6;
+        FMultipleSubstSubtables[LIdx].BaseOffset := LSubOff;
+        FMultipleSubstSubtables[LIdx].CoverageOffset := LSubOff + ReadUInt16BE(LSubOff + 2);
+        FMultipleSubstSubtables[LIdx].SequenceCount := ReadUInt16BE(LSubOff + 4);
+        FMultipleSubstSubtables[LIdx].SequenceOffsetsOffset := LSubOff + 6;
       end;
-    end;
-
-    // Alternate Substitution (type 3): one-from-many.
-    if LLookupType = GSUB_LOOKUP_ALTERNATE then
+    end
+    { GSUB Type 3: AlternateSubst }
+    else if LLookupType = 3 then
     begin
-      LSubtableCount := ReadUInt16BE(LLookupOffOrig + 4);
       for LJ := 0 to LSubtableCount - 1 do
       begin
-        if FDataLength < LLookupOffOrig + 8 + LJ * 2 then
+        if FDataLength < LLookupOff + 8 + LJ * 2 then
           Continue;
-        LSubOff := LLookupOffOrig + ReadUInt16BE(LLookupOffOrig + 6 + LJ * 2);
-        LSub := LSubOff;
-        if FDataLength < LSub + 6 then
+        LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
+        if FDataLength < LSubOff + 6 then
           Continue;
-        LSubFmt := ReadUInt16BE(LSub);
+        LSubFmt := ReadUInt16BE(LSubOff);
         if LSubFmt <> 1 then
           Continue;
-        LCovOff := ReadUInt16BE(LSub + 2);
-        LLSCount := ReadUInt16BE(LSub + 4);
         LIdx := Length(FAlternateSubstSubtables);
         SetLength(FAlternateSubstSubtables, LIdx + 1);
-        FAlternateSubstSubtables[LIdx].BaseOffset := LSub;
-        FAlternateSubstSubtables[LIdx].CoverageOffset := LSub + LCovOff;
-        FAlternateSubstSubtables[LIdx].AlternateSetCount := LLSCount;
-        FAlternateSubstSubtables[LIdx].AlternateSetArrayOffset := LSub + 6;
+        FAlternateSubstSubtables[LIdx].BaseOffset := LSubOff;
+        FAlternateSubstSubtables[LIdx].CoverageOffset := LSubOff + ReadUInt16BE(LSubOff + 2);
+        FAlternateSubstSubtables[LIdx].AlternateSetCount := ReadUInt16BE(LSubOff + 4);
+        FAlternateSubstSubtables[LIdx].AlternateSetOffsetsOffset := LSubOff + 6;
       end;
-    end;
-
-    // Context Substitution (type 5) and ChainedContext Substitution (type 6).
-    // Parses Format 1 (glyph-based), Format 2 (class-based), Format 3 (coverage-based).
-    if (LLookupType = GSUB_LOOKUP_CONTEXT) or
-       (LLookupType = GSUB_LOOKUP_CHAINED_CONTEXT) then
+    end
+    { GSUB Type 4: Ligature (existing code) }
+    else if LLookupType = GSUB_LOOKUP_LIGATURE then
     begin
-      LSubtableCount := ReadUInt16BE(LLookupOffOrig + 4);
       for LJ := 0 to LSubtableCount - 1 do
       begin
-        if FDataLength < LLookupOffOrig + 8 + LJ * 2 then
+        if FDataLength < LLookupOff + 8 + LJ * 2 then
           Continue;
-        LSubOff := LLookupOffOrig + ReadUInt16BE(LLookupOffOrig + 6 + LJ * 2);
-        LSub := LSubOff;
-        if FDataLength < LSub + 4 then
-          Continue;
-        LSubFmt := ReadUInt16BE(LSub);
-        if LSubFmt = 3 then
-        begin
-          if LLookupType = GSUB_LOOKUP_CONTEXT then
-          begin
-            // ContextSubst Fmt3: format(2) + glyphCount(2) + substCount(2) +
-            //   inputCoverages[glyphCount](2) + substRecords[substCount](4).
-            if FDataLength < LSub + 6 then
-              Continue;
-            LLSCount := ReadUInt16BE(LSub + 2);  // inputGlyphCount
-            LIdx := ReadUInt16BE(LSub + 4);       // substCount
-            if FDataLength < LSub + 6 + LLSCount * 2 + LIdx * 4 then
-              Continue;
-            LCtxIdx := Length(FContextSubstSubtables);
-            SetLength(FContextSubstSubtables, LCtxIdx + 1);
-            FContextSubstSubtables[LCtxIdx].BaseOffset := LSub;
-            FContextSubstSubtables[LCtxIdx].Format := 3;
-            FContextSubstSubtables[LCtxIdx].IsChained := False;
-            FContextSubstSubtables[LCtxIdx].InputGlyphCount := LLSCount;
-            FContextSubstSubtables[LCtxIdx].SubstCount := LIdx;
-            SetLength(FContextSubstSubtables[LCtxIdx].InputCoverageOffsets, LLSCount);
-            SetLength(FContextSubstSubtables[LCtxIdx].SubstSeqIndices, LIdx);
-            SetLength(FContextSubstSubtables[LCtxIdx].SubstLookupIndices, LIdx);
-            for LK := 0 to LLSCount - 1 do
-              FContextSubstSubtables[LCtxIdx].InputCoverageOffsets[LK] :=
-                LSub + ReadUInt16BE(LSub + 6 + LK * 2);
-            for LK := 0 to LIdx - 1 do
-            begin
-              FContextSubstSubtables[LCtxIdx].SubstSeqIndices[LK] :=
-                ReadUInt16BE(LSub + 6 + LLSCount * 2 + LK * 4);
-              FContextSubstSubtables[LCtxIdx].SubstLookupIndices[LK] :=
-                ReadUInt16BE(LSub + 6 + LLSCount * 2 + LK * 4 + 2);
-            end;
-          end
-          else
-          begin
-            // ChainedContextSubst Fmt3: format(2) + backtrackGlyphCount(2) +
-            //   backtrackCoverages[bt](2) + inputGlyphCount(2) +
-            //   inputCoverages[input](2) + lookaheadGlyphCount(2) +
-            //   lookaheadCoverages[la](2) + substCount(2) + substRecords(4).
-            if FDataLength < LSub + 4 then
-              Continue;
-            LLSCount := ReadUInt16BE(LSub + 2);  // backtrackGlyphCount
-            LK := LSub + 4 + LLSCount * 2;       // offset to inputGlyphCount
-            if FDataLength < LK + 2 then
-              Continue;
-            LLSCount := ReadUInt16BE(LK);         // inputGlyphCount
-            LK := LK + 2 + LLSCount * 2;         // offset to lookaheadGlyphCount
-            if FDataLength < LK + 2 then
-              Continue;
-            LCovOff := ReadUInt16BE(LK);          // lookaheadGlyphCount
-            LK := LK + 2 + LCovOff * 2;          // offset to substCount
-            if FDataLength < LK + 2 then
-              Continue;
-            LIdx := ReadUInt16BE(LK);             // substCount
-            if FDataLength < LK + 2 + LIdx * 4 then
-              Continue;
-            LCtxIdx := Length(FContextSubstSubtables);
-            SetLength(FContextSubstSubtables, LCtxIdx + 1);
-            FContextSubstSubtables[LCtxIdx].BaseOffset := LSub;
-            FContextSubstSubtables[LCtxIdx].Format := 3;
-            FContextSubstSubtables[LCtxIdx].IsChained := True;
-            FContextSubstSubtables[LCtxIdx].InputGlyphCount := LLSCount;
-            FContextSubstSubtables[LCtxIdx].SubstCount := LIdx;
-            SetLength(FContextSubstSubtables[LCtxIdx].InputCoverageOffsets, LLSCount);
-            SetLength(FContextSubstSubtables[LCtxIdx].SubstSeqIndices, LIdx);
-            SetLength(FContextSubstSubtables[LCtxIdx].SubstLookupIndices, LIdx);
-            // Input coverage offsets are right before lookaheadGlyphCount.
-            for LCovOff := 0 to LLSCount - 1 do
-              FContextSubstSubtables[LCtxIdx].InputCoverageOffsets[LCovOff] :=
-                LSub + ReadUInt16BE(LK - 2 - (LLSCount - LCovOff) * 2);
-            for LCovOff := 0 to LIdx - 1 do
-            begin
-              FContextSubstSubtables[LCtxIdx].SubstSeqIndices[LCovOff] :=
-                ReadUInt16BE(LK + 2 + LCovOff * 4);
-              FContextSubstSubtables[LCtxIdx].SubstLookupIndices[LCovOff] :=
-                ReadUInt16BE(LK + 2 + LCovOff * 4 + 2);
-            end;
-          end;
-        end
-        else if (LSubFmt = 1) or (LSubFmt = 2) then
-        begin
-          // ContextSubst Fmt1: format(2) + coverageOffset(2) + subRuleSetCount(2) +
-          //   subRuleSetOffsets[subRuleSetCount](2).
-          // ContextSubst Fmt2: format(2) + coverageOffset(2) + classDefOffset(2) +
-          //   subClassSetCount(2) + subClassSetOffsets[subClassSetCount](2).
-          // ChainedContextSubst Fmt1: format(2) + coverageOffset(2) +
-          //   chainedSubRuleSetCount(2) + chainedSubRuleSetOffsets[...](2).
-          // ChainedContextSubst Fmt2: format(2) + coverageOffset(2) +
-          //   backtrackClassDefOffset(2) + inputClassDefOffset(2) +
-          //   lookaheadClassDefOffset(2) + chainedClassSeqRuleSetCount(2) +
-          //   chainedClassSeqRuleSetOffsets[...](2).
-          if LSubFmt = 1 then
-          begin
-            // Format 1: coverage(2) + ruleSetCount(2) + offsets(2*count).
-            if FDataLength < LSub + 6 then
-              Continue;
-            LLSCount := ReadUInt16BE(LSub + 4);  // ruleSetCount
-            if FDataLength < LSub + 6 + LLSCount * 2 then
-              Continue;
-            LCtxIdx := Length(FContextSubstSubtables);
-            SetLength(FContextSubstSubtables, LCtxIdx + 1);
-            FContextSubstSubtables[LCtxIdx].BaseOffset := LSub;
-            FContextSubstSubtables[LCtxIdx].Format := 1;
-            FContextSubstSubtables[LCtxIdx].IsChained := (LLookupType = GSUB_LOOKUP_CHAINED_CONTEXT);
-            FContextSubstSubtables[LCtxIdx].RuleSetCount := LLSCount;
-            SetLength(FContextSubstSubtables[LCtxIdx].RuleSetOffsets, LLSCount);
-            for LK := 0 to LLSCount - 1 do
-            begin
-              LCovOff := ReadUInt16BE(LSub + 6 + LK * 2);
-              if LCovOff <> 0 then
-                FContextSubstSubtables[LCtxIdx].RuleSetOffsets[LK] := LSub + LCovOff
-              else
-                FContextSubstSubtables[LCtxIdx].RuleSetOffsets[LK] := 0;
-            end;
-          end
-          else
-          begin
-            // Format 2: ruleSetCount is at different offset depending on Chained vs plain.
-            if LLookupType = GSUB_LOOKUP_CONTEXT then
-            begin
-              // ContextSubst Fmt2: format(2) + cov(2) + classDef(2) + subClassSetCount(2) + offsets.
-              if FDataLength < LSub + 8 then
-                Continue;
-              LLSCount := ReadUInt16BE(LSub + 6);  // subClassSetCount
-              if FDataLength < LSub + 8 + LLSCount * 2 then
-                Continue;
-              LCtxIdx := Length(FContextSubstSubtables);
-              SetLength(FContextSubstSubtables, LCtxIdx + 1);
-              FContextSubstSubtables[LCtxIdx].BaseOffset := LSub;
-              FContextSubstSubtables[LCtxIdx].Format := 2;
-              FContextSubstSubtables[LCtxIdx].IsChained := False;
-              FContextSubstSubtables[LCtxIdx].RuleSetCount := LLSCount;
-              SetLength(FContextSubstSubtables[LCtxIdx].RuleSetOffsets, LLSCount);
-              for LK := 0 to LLSCount - 1 do
-              begin
-                LCovOff := ReadUInt16BE(LSub + 8 + LK * 2);
-                if LCovOff <> 0 then
-                  FContextSubstSubtables[LCtxIdx].RuleSetOffsets[LK] := LSub + LCovOff
-                else
-                  FContextSubstSubtables[LCtxIdx].RuleSetOffsets[LK] := 0;
-              end;
-            end
-            else
-            begin
-              // ChainedContextSubst Fmt2: format(2) + cov(2) + btClassDef(2) +
-              //   inClassDef(2) + laClassDef(2) + ruleSetCount(2) + offsets.
-              if FDataLength < LSub + 12 then
-                Continue;
-              LLSCount := ReadUInt16BE(LSub + 10);  // chainedClassSeqRuleSetCount
-              if FDataLength < LSub + 12 + LLSCount * 2 then
-                Continue;
-              LCtxIdx := Length(FContextSubstSubtables);
-              SetLength(FContextSubstSubtables, LCtxIdx + 1);
-              FContextSubstSubtables[LCtxIdx].BaseOffset := LSub;
-              FContextSubstSubtables[LCtxIdx].Format := 2;
-              FContextSubstSubtables[LCtxIdx].IsChained := True;
-              FContextSubstSubtables[LCtxIdx].RuleSetCount := LLSCount;
-              SetLength(FContextSubstSubtables[LCtxIdx].RuleSetOffsets, LLSCount);
-              for LK := 0 to LLSCount - 1 do
-              begin
-                LCovOff := ReadUInt16BE(LSub + 12 + LK * 2);
-                if LCovOff <> 0 then
-                  FContextSubstSubtables[LCtxIdx].RuleSetOffsets[LK] := LSub + LCovOff
-                else
-                  FContextSubstSubtables[LCtxIdx].RuleSetOffsets[LK] := 0;
-              end;
-            end;
-          end;
-        end;
-      end;
-    end;
-
-    // Ligature Substitution (type 4).
-    if LLookupType = GSUB_LOOKUP_LIGATURE then
-    begin
-      LSubtableCount := ReadUInt16BE(LLookupOffOrig + 4);
-      for LJ := 0 to LSubtableCount - 1 do
-      begin
-        if FDataLength < LLookupOffOrig + 8 + LJ * 2 then
-          Continue;
-        LSubOff := LLookupOffOrig + ReadUInt16BE(LLookupOffOrig + 6 + LJ * 2);
+        LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
         LSub := LSubOff;
         if FDataLength < LSub + 6 then
           Continue;
@@ -2054,8 +1557,337 @@ begin
         SetLength(FLigatureSubtables, LIdx + 1);
         FLigatureSubtables[LIdx] := LSubtable;
       end;
+    end
+    { GSUB Type 5: ContextSubst }
+    else if LLookupType = GSUB_LOOKUP_CONTEXT_SUBST then
+    begin
+      for LJ := 0 to LSubtableCount - 1 do
+      begin
+        if FDataLength < LLookupOff + 8 + LJ * 2 then
+          Continue;
+        LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
+        if FDataLength < LSubOff + 4 then
+          Continue;
+        LSubFmt := ReadUInt16BE(LSubOff);
+        if (LSubFmt < 1) or (LSubFmt > 3) then
+          Continue;
+        ParseContextSubtable(LSubOff, LSubFmt, False, FContextSubstSubtables);
+      end;
+    end
+    { GSUB Type 6: ChainedContextSubst }
+    else if LLookupType = GSUB_LOOKUP_CHAINED_CONTEXT_SUBST then
+    begin
+      for LJ := 0 to LSubtableCount - 1 do
+      begin
+        if FDataLength < LLookupOff + 8 + LJ * 2 then
+          Continue;
+        LSubOff := LLookupOff + ReadUInt16BE(LLookupOff + 6 + LJ * 2);
+        if FDataLength < LSubOff + 4 then
+          Continue;
+        LSubFmt := ReadUInt16BE(LSubOff);
+        if (LSubFmt < 1) or (LSubFmt > 3) then
+          Continue;
+        ParseContextSubtable(LSubOff, LSubFmt, True, FContextSubstSubtables);
+      end;
+    end
+  end;
+
+  { Parse GSUB FeatureList for feature tag queries. }
+  if FDataLength < LGsubOff + 10 then
+    Exit;
+  LFeatListOff := LGsubOff + ReadUInt16BE(LGsubOff + 6); { FeatureList offset at GSUB+6 }
+  if (LFeatListOff > 0) and (FDataLength >= LFeatListOff + 2) then
+  begin
+    LFeatCount := ReadUInt16BE(LFeatListOff);
+    for LI := 0 to LFeatCount - 1 do
+    begin
+      if FDataLength < LFeatListOff + 2 + LI * 6 + 4 then
+        Continue;
+      LIdx := Length(FFeatureTags);
+      SetLength(FFeatureTags, LIdx + 1);
+      FFeatureTags[LIdx] := ReadUInt32BE(LFeatListOff + 2 + LI * 6);
     end;
   end;
+end;
+
+{ ========================================================================= }
+{ fvar 表解析（Variable Font Axes + Named Instances）                       }
+{ ========================================================================= }
+
+procedure TTFontFace.ParseFvar;
+var
+  LIdx, LOff: Int32;
+  LAxesOff, LAxisCount, LAxisSize, LInstCount, LInstSize: Int32;
+  I, J, LAxisBase, LInstBase: Int32;
+  LRaw: UInt32;
+begin
+  FFvarAxisCount := 0;
+  FFvarInstanceCount := 0;
+  SetLength(FFvarAxes, 0);
+  SetLength(FFvarInstances, 0);
+
+  LIdx := FindTable(TABLE_TAG_FVAR);
+  if LIdx < 0 then
+    Exit;
+
+  LOff := Int32(FTables[LIdx].Offset);
+  if FDataLength < LOff + 16 then
+    Exit;
+
+  { fvar header: MajorVersion(2) + MinorVersion(2) + AxesArrayOffset(2) + Reserved(2) +
+    AxisCount(2) + AxisSize(2) + InstanceCount(2) + InstanceSize(2) }
+  LAxesOff := LOff + ReadUInt16BE(LOff + 4);
+  LAxisCount := ReadUInt16BE(LOff + 8);
+  LAxisSize := ReadUInt16BE(LOff + 10);
+  LInstCount := ReadUInt16BE(LOff + 12);
+  LInstSize := ReadUInt16BE(LOff + 14);
+
+  if (LAxisCount < 1) or (LAxisCount > 64) then
+    Exit;
+  if LAxisSize < 20 then
+    Exit;
+
+  { 解析 axes }
+  FFvarAxisCount := LAxisCount;
+  SetLength(FFvarAxes, LAxisCount);
+  for I := 0 to LAxisCount - 1 do
+  begin
+    LAxisBase := LAxesOff + I * LAxisSize;
+    if FDataLength < LAxisBase + 20 then
+      Break;
+    FFvarAxes[I].Tag := ReadUInt32BE(LAxisBase);
+    { Fixed 16.16 → Single }
+    LRaw := ReadUInt32BE(LAxisBase + 4);
+    FFvarAxes[I].MinValue := SmallInt(LRaw shr 16) + (LRaw and $FFFF) / 65536.0;
+    LRaw := ReadUInt32BE(LAxisBase + 8);
+    FFvarAxes[I].DefaultValue := SmallInt(LRaw shr 16) + (LRaw and $FFFF) / 65536.0;
+    LRaw := ReadUInt32BE(LAxisBase + 12);
+    FFvarAxes[I].MaxValue := SmallInt(LRaw shr 16) + (LRaw and $FFFF) / 65536.0;
+    FFvarAxes[I].AxisNameID := ReadUInt16BE(LAxisBase + 18);
+  end;
+
+  { 解析 named instances }
+  if (LInstCount < 1) or (LInstSize < 4 + LAxisCount * 4) then
+  begin
+    FFvarInstanceCount := 0;
+    Exit;
+  end;
+
+  FFvarInstanceCount := LInstCount;
+  SetLength(FFvarInstances, LInstCount);
+  LInstBase := LAxesOff + LAxisCount * LAxisSize;
+  for I := 0 to LInstCount - 1 do
+  begin
+    LInstBase := LAxesOff + LAxisCount * LAxisSize + I * LInstSize;
+    if FDataLength < LInstBase + 4 + LAxisCount * 4 then
+      Break;
+    FFvarInstances[I].NameID := ReadUInt16BE(LInstBase);
+    { skip Flags (uint16) at offset 2 }
+    SetLength(FFvarInstances[I].Coordinates, LAxisCount);
+    for J := 0 to LAxisCount - 1 do
+    begin
+      LRaw := ReadUInt32BE(LInstBase + 4 + J * 4);
+      FFvarInstances[I].Coordinates[J] := SmallInt(LRaw shr 16) + (LRaw and $FFFF) / 65536.0;
+    end;
+  end;
+end;
+
+{ ========================================================================= }
+{ avar 表解析（Axis Variation Mapping）                                     }
+{ ========================================================================= }
+
+procedure TTFontFace.ParseAvar;
+var
+  LIdx, LOff: Int32;
+  LVersion, LAxisCount, LSegMapOff: Int32;
+  I, J, LPairCount, LSegBase: Int32;
+begin
+  FAvarAxisCount := 0;
+  SetLength(FAvarSegmentMaps, 0);
+
+  if FFvarAxisCount < 1 then
+    Exit; { 需要先解析 fvar }
+
+  LIdx := FindTable(TABLE_TAG_AVAR);
+  if LIdx < 0 then
+    Exit;
+
+  LOff := Int32(FTables[LIdx].Offset);
+  if FDataLength < LOff + 8 then
+    Exit;
+
+  LVersion := ReadUInt16BE(LOff);
+  if LVersion <> 1 then
+    Exit; { 只支持 version 1 }
+  LAxisCount := ReadUInt16BE(LOff + 6);
+  if LAxisCount <> FFvarAxisCount then
+    Exit;
+
+  FAvarAxisCount := LAxisCount;
+  SetLength(FAvarSegmentMaps, LAxisCount);
+  LSegMapOff := LOff + 8;
+
+  for I := 0 to LAxisCount - 1 do
+  begin
+    if FDataLength < LSegMapOff + 2 then
+      Break;
+    LPairCount := ReadUInt16BE(LSegMapOff);
+    SetLength(FAvarSegmentMaps[I], LPairCount);
+    LSegBase := LSegMapOff + 2;
+    for J := 0 to LPairCount - 1 do
+    begin
+      if FDataLength < LSegBase + 4 then
+        Break;
+      { avar segment map 使用 F2Dot14 格式（2 字节），值 = raw / 16384 }
+      FAvarSegmentMaps[I][J].FromCoord := ReadInt16BE(LSegBase) / 16384.0;
+      FAvarSegmentMaps[I][J].ToCoord := ReadInt16BE(LSegBase + 2) / 16384.0;
+      Inc(LSegBase, 4);
+    end;
+    LSegMapOff := LSegBase;
+  end;
+end;
+
+{ ========================================================================= }
+{ name 表解析（Font Metadata）                                              }
+{ ========================================================================= }
+
+procedure TTFontFace.ParseName;
+var
+  LIdx, LOff: Int32;
+  LFormat, LCount, LStringOffset: Int32;
+  I, LNameOffset: Int32;
+  LPlatformID, LEncodingID, LLanguageID, LNameID, LLength, LOffset: Int32;
+  LNameBytes: array of Byte;
+  LNameStr: string;
+  J: Int32;
+
+  function ReadNameString(AOffset, ALength: Int32; APlatformID, AEncodingID: Int32): string;
+  var
+    K: Int32;
+    LChars: array of WideChar;
+    LCharCount: Int32;
+  begin
+    Result := '';
+    if (APlatformID = 3) and (AEncodingID = 1) then
+    begin
+      { Windows Unicode BMP: UTF-16BE }
+      LCharCount := ALength div 2;
+      SetLength(LChars, LCharCount);
+      for K := 0 to LCharCount - 1 do
+        LChars[K] := WideChar(ReadUInt16BE(AOffset + K * 2));
+      Result := UTF8Encode(WideString(LChars));
+    end
+    else if (APlatformID = 1) and (AEncodingID = 0) then
+    begin
+      { Macintosh Roman: ASCII }
+      SetLength(Result, ALength);
+      for K := 0 to ALength - 1 do
+        Result[K + 1] := Chr(ReadUInt8(AOffset + K));
+    end
+    else if APlatformID = 0 then
+    begin
+      { Unicode platform: UTF-16BE }
+      LCharCount := ALength div 2;
+      SetLength(LChars, LCharCount);
+      for K := 0 to LCharCount - 1 do
+        LChars[K] := WideChar(ReadUInt16BE(AOffset + K * 2));
+      Result := UTF8Encode(WideString(LChars));
+    end;
+  end;
+
+begin
+  FFamilyName := '';
+  FSubfamilyName := '';
+  FFullName := '';
+  FPostScriptName := '';
+
+  LIdx := FindTable(TABLE_TAG_NAME);
+  if LIdx < 0 then
+    Exit;
+
+  LOff := Int32(FTables[LIdx].Offset);
+  if FDataLength < LOff + 6 then
+    Exit;
+
+  LFormat := ReadUInt16BE(LOff);
+  LCount := ReadUInt16BE(LOff + 2);
+  LStringOffset := ReadUInt16BE(LOff + 4);
+
+  if (LCount < 1) or (LCount > 4096) then
+    Exit;
+
+  for I := 0 to LCount - 1 do
+  begin
+    LNameOffset := LOff + 6 + I * 12;
+    if FDataLength < LNameOffset + 12 then
+      Break;
+
+    LPlatformID := ReadUInt16BE(LNameOffset);
+    LEncodingID := ReadUInt16BE(LNameOffset + 2);
+    LLanguageID := ReadUInt16BE(LNameOffset + 4);
+    LNameID := ReadUInt16BE(LNameOffset + 6);
+    LLength := ReadUInt16BE(LNameOffset + 8);
+    LOffset := ReadUInt16BE(LNameOffset + 10);
+
+    { 优先使用 Windows platform (3) + Unicode BMP (1)，语言 0x0409 (English US) }
+    if (LPlatformID = 3) and (LEncodingID = 1) then
+    begin
+      LNameStr := ReadNameString(LOff + LStringOffset + LOffset, LLength, LPlatformID, LEncodingID);
+      case LNameID of
+        1: if (FFamilyName = '') or (LLanguageID = $0409) then FFamilyName := LNameStr;
+        2: if (FSubfamilyName = '') or (LLanguageID = $0409) then FSubfamilyName := LNameStr;
+        4: if (FFullName = '') or (LLanguageID = $0409) then FFullName := LNameStr;
+        6: if (FPostScriptName = '') or (LLanguageID = $0409) then FPostScriptName := LNameStr;
+      end;
+    end
+    { 回退到 Macintosh platform (1) + Roman (0) }
+    else if (LPlatformID = 1) and (LEncodingID = 0) then
+    begin
+      LNameStr := ReadNameString(LOff + LStringOffset + LOffset, LLength, LPlatformID, LEncodingID);
+      case LNameID of
+        1: if FFamilyName = '' then FFamilyName := LNameStr;
+        2: if FSubfamilyName = '' then FSubfamilyName := LNameStr;
+        4: if FFullName = '' then FFullName := LNameStr;
+        6: if FPostScriptName = '' then FPostScriptName := LNameStr;
+      end;
+    end;
+  end;
+end;
+
+{ ========================================================================= }
+{ post 表解析（PostScript Metadata）                                        }
+{ ========================================================================= }
+
+procedure TTFontFace.ParsePost;
+var
+  LIdx, LOff: Int32;
+begin
+  FHasPostTable := False;
+  FIsFixedPitch := False;
+  FUnderlinePosition := 0;
+  FUnderlineThickness := 0;
+
+  LIdx := FindTable(TABLE_TAG_POST);
+  if LIdx < 0 then
+    Exit;
+
+  LOff := Int32(FTables[LIdx].Offset);
+  if FDataLength < LOff + 32 then
+    Exit;
+
+  FHasPostTable := True;
+
+  { post 表格式：
+    Offset 0:  MajorVersion (Fixed 16.16)
+    Offset 4:  MinorVersion (Fixed 16.16)
+    Offset 8:  italicAngle (Fixed 16.16)
+    Offset 12: underlinePosition (Int16)
+    Offset 14: underlineThickness (Int16)
+    Offset 16: isFixedPitch (UInt32)
+    ... }
+  FUnderlinePosition := ReadInt16BE(LOff + 12);
+  FUnderlineThickness := ReadInt16BE(LOff + 14);
+  FIsFixedPitch := ReadUInt32BE(LOff + 16) <> 0;
 end;
 
 function TTFontFace.LookupKern(ALeftGlyph, ARightGlyph: UInt16): Int16;
@@ -2098,147 +1930,27 @@ var
       Result := 0;
   end;
 
-  function CoverageIndexOf(ACovOffset, AGlyphId: Int32): Int32;
-  var
-    LFmt, LCnt, LM, LR2, LSG2, LEC2: Int32;
-  begin
-    if FDataLength < ACovOffset + 4 then
-      Exit(-1);
-    LFmt := ReadUInt16BE(ACovOffset);
-    if LFmt = 1 then
-    begin
-      LCnt := ReadUInt16BE(ACovOffset + 2);
-      for LM := 0 to LCnt - 1 do
-        if ReadUInt16BE(ACovOffset + 4 + LM * 2) = AGlyphId then
-          Exit(LM);
-      Result := -1;
-    end
-    else if LFmt = 2 then
-    begin
-      LCnt := ReadUInt16BE(ACovOffset + 2);
-      for LR2 := 0 to LCnt - 1 do
-      begin
-        if FDataLength < ACovOffset + 4 + LR2 * 6 + 6 then
-          Break;
-        LSG2 := ReadUInt16BE(ACovOffset + 4 + LR2 * 6);
-        LEC2 := ReadUInt16BE(ACovOffset + 4 + LR2 * 6 + 2);
-        if (AGlyphId >= LSG2) and (AGlyphId <= LEC2) then
-          Exit(ReadUInt16BE(ACovOffset + 4 + LR2 * 6 + 4) + (AGlyphId - LSG2));
-      end;
-      Result := -1;
-    end
-    else
-      Result := -1;
-  end;
-
 begin
   Result := 0;
   for LI := 0 to High(FPairPosSubtables) do
   begin
     LSub := FPairPosSubtables[LI];
-    // Check if left glyph is in coverage.
-    if CoverageIndexOf(LSub.CoverageOffset, ALeftGlyph) < 0 then
+    // Use optimized CoverageIndex (binary search for Format 1).
+    if CoverageIndex(LSub.CoverageOffset, ALeftGlyph) < 0 then
       Continue;
     // Get class1 and class2.
     LClass1 := GetClass(LSub.ClassDef1Offset, ALeftGlyph);
     LClass2 := GetClass(LSub.ClassDef2Offset, ARightGlyph);
-    // 使用 Int64 防止乘法溢出（恶意 GPOS 表可构造大 Class2Count）
-    if (Int64(LClass1) * LSub.Class2Count + LClass2) < 0 then
+    if (LClass1 * LSub.Class2Count + LClass2) < 0 then
       Continue;
-    // 安全的边界检查（Int64 防止中间结果溢出）
-    if FDataLength < Int64(LSub.BaseOffset) + 14 +
-       (Int64(LClass1) * LSub.Class2Count + LClass2) * LSub.ValueRecordSize +
-       LSub.XAdvanceOffset + 2 then
+    // Read kern value.
+    if FDataLength < LSub.BaseOffset + 14 + (LClass1 * LSub.Class2Count + LClass2) * LSub.ValueRecordSize + LSub.XAdvanceOffset + 2 then
       Continue;
     Result := ReadInt16BE(LSub.BaseOffset + 14 +
-      (Int64(LClass1) * LSub.Class2Count + LClass2) * LSub.ValueRecordSize +
+      (LClass1 * LSub.Class2Count + LClass2) * LSub.ValueRecordSize +
       LSub.XAdvanceOffset);
     if Result <> 0 then
       Exit;
-  end;
-end;
-
-function TTFontFace.LookupKernFmt1(ALeftGlyph, ARightGlyph: UInt16): Int16;
-var
-  LI: Int32;
-  LSub: TFontPairPosFmt1Subtable;
-  LCovIdx, LPairSetOff, LPairCount, LRecSize: Int32;
-  LLo, LHi, LMid, LSecondGid: Int32;
-
-  function CoverageIndexOf(ACovOffset, AGlyphId: Int32): Int32;
-  var
-    LFmt, LCnt, LM, LR2, LSG2, LEC2: Int32;
-  begin
-    if FDataLength < ACovOffset + 4 then
-      Exit(-1);
-    LFmt := ReadUInt16BE(ACovOffset);
-    if LFmt = 1 then
-    begin
-      LCnt := ReadUInt16BE(ACovOffset + 2);
-      for LM := 0 to LCnt - 1 do
-        if ReadUInt16BE(ACovOffset + 4 + LM * 2) = AGlyphId then
-          Exit(LM);
-      Result := -1;
-    end
-    else if LFmt = 2 then
-    begin
-      LCnt := ReadUInt16BE(ACovOffset + 2);
-      for LR2 := 0 to LCnt - 1 do
-      begin
-        if FDataLength < ACovOffset + 4 + LR2 * 6 + 6 then
-          Break;
-        LSG2 := ReadUInt16BE(ACovOffset + 4 + LR2 * 6);
-        LEC2 := ReadUInt16BE(ACovOffset + 4 + LR2 * 6 + 2);
-        if (AGlyphId >= LSG2) and (AGlyphId <= LEC2) then
-          Exit(ReadUInt16BE(ACovOffset + 4 + LR2 * 6 + 4) + (AGlyphId - LSG2));
-      end;
-      Result := -1;
-    end
-    else
-      Result := -1;
-  end;
-
-begin
-  Result := 0;
-  for LI := 0 to High(FPairPosFmt1Subtables) do
-  begin
-    LSub := FPairPosFmt1Subtables[LI];
-    // Check if left glyph is in coverage.
-    LCovIdx := CoverageIndexOf(LSub.CoverageOffset, ALeftGlyph);
-    if LCovIdx < 0 then
-      Continue;
-    if LCovIdx >= LSub.PairSetCount then
-      Continue;
-    // Read PairSet offset from the PairSet offset array at subtable start + 10.
-    if FDataLength < LSub.BaseOffset + 10 + (LCovIdx + 1) * 2 then
-      Continue;
-    LPairSetOff := LSub.BaseOffset + ReadUInt16BE(LSub.BaseOffset + 10 + LCovIdx * 2);
-    if FDataLength < LPairSetOff + 2 then
-      Continue;
-    LPairCount := ReadUInt16BE(LPairSetOff);
-    LRecSize := 2 + LSub.ValueRecordSize;  // SecondGlyph(2) + VR1 + VR2.
-    // Binary search for ARightGlyph in the sorted PairSet.
-    LLo := 0;
-    LHi := LPairCount - 1;
-    while LLo <= LHi do
-    begin
-      LMid := (LLo + LHi) div 2;
-      if FDataLength < LPairSetOff + 2 + (LMid + 1) * LRecSize then
-        Break;
-      LSecondGid := ReadUInt16BE(LPairSetOff + 2 + LMid * LRecSize);
-      if LSecondGid = ARightGlyph then
-      begin
-        // Found: read XAdvance from VR1.
-        if (LSub.XAdvanceOffset >= 0) and
-           (FDataLength >= LPairSetOff + 2 + LMid * LRecSize + 2 + LSub.XAdvanceOffset + 2) then
-          Result := ReadInt16BE(LPairSetOff + 2 + LMid * LRecSize + 2 + LSub.XAdvanceOffset);
-        Exit;
-      end
-      else if LSecondGid < ARightGlyph then
-        LLo := LMid + 1
-      else
-        LHi := LMid - 1;
-    end;
   end;
 end;
 
@@ -2246,7 +1958,7 @@ function TTFontFace.LookupLigature(const AGlyphs: array of UInt16): UInt16;
 var
   LI, LJ, LK, LM: Int32;
   LSub: TFontLigatureSubtable;
-  LCovFmt, LCovCount, LCovIdx: Int32;
+  LCovIdx: Int32;
   LLSOff, LLSCount, LLigOff, LCompCount: Int32;
   LMatch: Boolean;
 begin
@@ -2257,21 +1969,8 @@ begin
   for LI := 0 to High(FLigatureSubtables) do
   begin
     LSub := FLigatureSubtables[LI];
-    // Check if first glyph is in coverage and find its index.
-    if FDataLength < LSub.CoverageOffset + 4 then
-      Continue;
-    LCovFmt := ReadUInt16BE(LSub.CoverageOffset);
-    LCovIdx := -1;
-    if LCovFmt = 1 then
-    begin
-      LCovCount := ReadUInt16BE(LSub.CoverageOffset + 2);
-      for LJ := 0 to LCovCount - 1 do
-        if ReadUInt16BE(LSub.CoverageOffset + 4 + LJ * 2) = AGlyphs[0] then
-        begin
-          LCovIdx := LJ;
-          Break;
-        end;
-    end;
+    // Use optimized CoverageIndex (binary search for Format 1).
+    LCovIdx := CoverageIndex(LSub.CoverageOffset, AGlyphs[0]);
     if LCovIdx < 0 then
       Continue;
 
@@ -2311,1209 +2010,70 @@ begin
   end;
 end;
 
+function TTFontFace.LookupLigature(const AGlyphs: array of UInt16; ACount: Int32): UInt16;
+var
+  LI, LJ, LK, LM: Int32;
+  LSub: TFontLigatureSubtable;
+  LCovIdx: Int32;
+  LLSOff, LLSCount, LLigOff, LCompCount: Int32;
+  LMatch: Boolean;
+begin
+  Result := 0;
+  if ACount < 2 then
+    Exit;
+
+  for LI := 0 to High(FLigatureSubtables) do
+  begin
+    LSub := FLigatureSubtables[LI];
+    // Use optimized CoverageIndex (binary search for Format 1).
+    LCovIdx := CoverageIndex(LSub.CoverageOffset, AGlyphs[0]);
+    if LCovIdx < 0 then
+      Continue;
+
+    // Read LigatureSet[LCovIdx].
+    if FDataLength < LSub.BaseOffset + 6 + LCovIdx * 2 + 2 then
+      Continue;
+    LLSOff := LSub.BaseOffset + ReadUInt16BE(LSub.BaseOffset + 6 + LCovIdx * 2);
+    if FDataLength < LLSOff + 2 then
+      Continue;
+    LLSCount := ReadUInt16BE(LLSOff);
+
+    // Try each Ligature in the set.
+    for LJ := 0 to LLSCount - 1 do
+    begin
+      if FDataLength < LLSOff + 2 + LJ * 2 + 2 then
+        Continue;
+      LLigOff := LLSOff + ReadUInt16BE(LLSOff + 2 + LJ * 2);
+      if FDataLength < LLigOff + 4 then
+        Continue;
+      LCompCount := ReadUInt16BE(LLigOff + 2);
+      if LCompCount <> ACount then
+        Continue;
+      // Match component glyphs (skip first, which is already matched by coverage).
+      LMatch := True;
+      for LK := 1 to LCompCount - 1 do
+      begin
+        LM := ReadUInt16BE(LLigOff + 4 + (LK - 1) * 2);
+        if LM <> AGlyphs[LK] then
+        begin
+          LMatch := False;
+          Break;
+        end;
+      end;
+      if LMatch then
+        Exit(ReadUInt16BE(LLigOff));
+    end;
+  end;
+end;
+
 function TTFontFace.HasKernPairs: Boolean;
 begin
   Result := Length(FPairPosSubtables) > 0;
 end;
 
-function TTFontFace.HasKernFmt1Pairs: Boolean;
-begin
-  Result := Length(FPairPosFmt1Subtables) > 0;
-end;
-
 function TTFontFace.HasLigatures: Boolean;
 begin
   Result := Length(FLigatureSubtables) > 0;
-end;
-
-function TTFontFace.HasSingleSubst: Boolean;
-begin
-  Result := Length(FSingleSubstSubtables) > 0;
-end;
-
-function TTFontFace.LookupSingleSubst(AGlyphId: UInt16): UInt16;
-var
-  LI, LCovIdx: Int32;
-  LSub: TFontSingleSubstSubtable;
-
-  function CoverageIndexOf(ACovOffset, AGlyphId: Int32): Int32;
-  var
-    LFmt, LCnt, LM, LR, LSG, LEC: Int32;
-  begin
-    if FDataLength < ACovOffset + 4 then
-      Exit(-1);
-    LFmt := ReadUInt16BE(ACovOffset);
-    if LFmt = 1 then
-    begin
-      LCnt := ReadUInt16BE(ACovOffset + 2);
-      for LM := 0 to LCnt - 1 do
-        if ReadUInt16BE(ACovOffset + 4 + LM * 2) = AGlyphId then
-          Exit(LM);
-      Result := -1;
-    end
-    else if LFmt = 2 then
-    begin
-      LCnt := ReadUInt16BE(ACovOffset + 2);
-      for LR := 0 to LCnt - 1 do
-      begin
-        if FDataLength < ACovOffset + 4 + LR * 6 + 6 then
-          Break;
-        LSG := ReadUInt16BE(ACovOffset + 4 + LR * 6);
-        LEC := ReadUInt16BE(ACovOffset + 4 + LR * 6 + 2);
-        if (AGlyphId >= LSG) and (AGlyphId <= LEC) then
-          Exit(ReadUInt16BE(ACovOffset + 4 + LR * 6 + 4) + (AGlyphId - LSG));
-      end;
-      Result := -1;
-    end
-    else
-      Result := -1;
-  end;
-
-begin
-  Result := 0;
-  for LI := 0 to High(FSingleSubstSubtables) do
-  begin
-    LSub := FSingleSubstSubtables[LI];
-    LCovIdx := CoverageIndexOf(LSub.CoverageOffset, AGlyphId);
-    if LCovIdx < 0 then
-      Continue;
-    if LSub.Format = 1 then
-    begin
-      // Format 1: delta substitution.
-      Result := (AGlyphId + LSub.DeltaGlyphID) and $FFFF;
-      if Result <> 0 then
-        Exit;
-    end
-    else if LSub.Format = 2 then
-    begin
-      // Format 2: array substitution.
-      if LCovIdx >= LSub.GlyphCount then
-        Continue;
-      if FDataLength < LSub.SubstituteArrayOffset + (LCovIdx + 1) * 2 then
-        Continue;
-      Result := ReadUInt16BE(LSub.SubstituteArrayOffset + LCovIdx * 2);
-      if Result <> 0 then
-        Exit;
-    end;
-  end;
-end;
-
-function TTFontFace.HasMultipleSubst: Boolean;
-begin
-  Result := Length(FMultipleSubstSubtables) > 0;
-end;
-
-function TTFontFace.LookupMultipleSubst(AGlyphId: UInt16): TFontGlyphIdArray;
-var
-  LI, LCovIdx, LSeqOff, LCount, LJ: Int32;
-  LSub: TFontMultipleSubstSubtable;
-
-  function CoverageIndexOf(ACovOffset, ATarget: Int32): Int32;
-  var
-    LFmt, LCnt, LM, LR, LSG, LEC: Int32;
-  begin
-    if FDataLength < ACovOffset + 4 then
-      Exit(-1);
-    LFmt := ReadUInt16BE(ACovOffset);
-    if LFmt = 1 then
-    begin
-      LCnt := ReadUInt16BE(ACovOffset + 2);
-      for LM := 0 to LCnt - 1 do
-        if ReadUInt16BE(ACovOffset + 4 + LM * 2) = ATarget then
-          Exit(LM);
-      Result := -1;
-    end
-    else if LFmt = 2 then
-    begin
-      LCnt := ReadUInt16BE(ACovOffset + 2);
-      for LR := 0 to LCnt - 1 do
-      begin
-        if FDataLength < ACovOffset + 4 + LR * 6 + 6 then
-          Break;
-        LSG := ReadUInt16BE(ACovOffset + 4 + LR * 6);
-        LEC := ReadUInt16BE(ACovOffset + 4 + LR * 6 + 2);
-        if (ATarget >= LSG) and (ATarget <= LEC) then
-          Exit(ReadUInt16BE(ACovOffset + 4 + LR * 6 + 4) + (ATarget - LSG));
-      end;
-      Result := -1;
-    end
-    else
-      Result := -1;
-  end;
-
-begin
-  SetLength(Result, 0);
-  for LI := 0 to High(FMultipleSubstSubtables) do
-  begin
-    LSub := FMultipleSubstSubtables[LI];
-    LCovIdx := CoverageIndexOf(LSub.CoverageOffset, AGlyphId);
-    if LCovIdx < 0 then
-      Continue;
-    if LCovIdx >= LSub.SequenceCount then
-      Continue;
-    // SequenceTable offset is relative to the subtable start (BaseOffset).
-    LSeqOff := LSub.SequenceArrayOffset + LCovIdx * 2;
-    if FDataLength < LSeqOff + 2 then
-      Continue;
-    LSeqOff := LSub.BaseOffset + ReadUInt16BE(LSeqOff);
-    if FDataLength < LSeqOff + 2 then
-      Continue;
-    LCount := ReadUInt16BE(LSeqOff);
-    if LCount = 0 then
-      Continue;
-    if FDataLength < LSeqOff + 2 + LCount * 2 then
-      Continue;
-    SetLength(Result, LCount);
-    for LJ := 0 to LCount - 1 do
-      Result[LJ] := ReadUInt16BE(LSeqOff + 2 + LJ * 2);
-    Exit;
-  end;
-end;
-
-function TTFontFace.HasAlternateSubst: Boolean;
-begin
-  Result := Length(FAlternateSubstSubtables) > 0;
-end;
-
-function TTFontFace.LookupAlternateSubst(AGlyphId: UInt16): TFontGlyphIdArray;
-var
-  LI, LCovIdx, LSetOff, LCount, LJ: Int32;
-  LSub: TFontAlternateSubstSubtable;
-
-  function CoverageIndexOf(ACovOffset, ATarget: Int32): Int32;
-  var
-    LFmt, LCnt, LM, LR, LSG, LEC: Int32;
-  begin
-    if FDataLength < ACovOffset + 4 then
-      Exit(-1);
-    LFmt := ReadUInt16BE(ACovOffset);
-    if LFmt = 1 then
-    begin
-      LCnt := ReadUInt16BE(ACovOffset + 2);
-      for LM := 0 to LCnt - 1 do
-        if ReadUInt16BE(ACovOffset + 4 + LM * 2) = ATarget then
-          Exit(LM);
-      Result := -1;
-    end
-    else if LFmt = 2 then
-    begin
-      LCnt := ReadUInt16BE(ACovOffset + 2);
-      for LR := 0 to LCnt - 1 do
-      begin
-        if FDataLength < ACovOffset + 4 + LR * 6 + 6 then
-          Break;
-        LSG := ReadUInt16BE(ACovOffset + 4 + LR * 6);
-        LEC := ReadUInt16BE(ACovOffset + 4 + LR * 6 + 2);
-        if (ATarget >= LSG) and (ATarget <= LEC) then
-          Exit(ReadUInt16BE(ACovOffset + 4 + LR * 6 + 4) + (ATarget - LSG));
-      end;
-      Result := -1;
-    end
-    else
-      Result := -1;
-  end;
-
-begin
-  SetLength(Result, 0);
-  for LI := 0 to High(FAlternateSubstSubtables) do
-  begin
-    LSub := FAlternateSubstSubtables[LI];
-    LCovIdx := CoverageIndexOf(LSub.CoverageOffset, AGlyphId);
-    if LCovIdx < 0 then
-      Continue;
-    if LCovIdx >= LSub.AlternateSetCount then
-      Continue;
-    LSetOff := LSub.AlternateSetArrayOffset + LCovIdx * 2;
-    if FDataLength < LSetOff + 2 then
-      Continue;
-    LSetOff := LSub.BaseOffset + ReadUInt16BE(LSetOff);
-    if FDataLength < LSetOff + 2 then
-      Continue;
-    LCount := ReadUInt16BE(LSetOff);
-    if LCount = 0 then
-      Continue;
-    if FDataLength < LSetOff + 2 + LCount * 2 then
-      Continue;
-    SetLength(Result, LCount);
-    for LJ := 0 to LCount - 1 do
-      Result[LJ] := ReadUInt16BE(LSetOff + 2 + LJ * 2);
-    Exit;
-  end;
-end;
-
-function TTFontFace.HasContextSubst: Boolean;
-begin
-  Result := Length(FContextSubstSubtables) > 0;
-end;
-
-function TTFontFace.ContextSubstCount: Int32;
-begin
-  Result := Length(FContextSubstSubtables);
-end;
-
-procedure TTFontFace.GetContextSubstInfo(AIndex: Int32;
-  out AInputGlyphCount, ASubstCount: Int32);
-begin
-  if (AIndex >= 0) and (AIndex < Length(FContextSubstSubtables)) then
-  begin
-    AInputGlyphCount := FContextSubstSubtables[AIndex].InputGlyphCount;
-    ASubstCount := FContextSubstSubtables[AIndex].SubstCount;
-  end
-  else
-  begin
-    AInputGlyphCount := 0;
-    ASubstCount := 0;
-  end;
-end;
-
-function TTFontFace.GetContextSubstInputCoverage(AIndex, APosition: Int32): Int32;
-begin
-  Result := 0;
-  if (AIndex >= 0) and (AIndex < Length(FContextSubstSubtables)) then
-    if (APosition >= 0) and (APosition < Length(FContextSubstSubtables[AIndex].InputCoverageOffsets)) then
-      Result := FContextSubstSubtables[AIndex].InputCoverageOffsets[APosition];
-end;
-
-procedure TTFontFace.GetContextSubstLookup(AIndex, ASubstIdx: Int32;
-  out ASeqIndex: UInt16; out ALookupIndex: UInt16);
-begin
-  ASeqIndex := 0;
-  ALookupIndex := 0;
-  if (AIndex >= 0) and (AIndex < Length(FContextSubstSubtables)) then
-    if (ASubstIdx >= 0) and (ASubstIdx < FContextSubstSubtables[AIndex].SubstCount) then
-    begin
-      ASeqIndex := FContextSubstSubtables[AIndex].SubstSeqIndices[ASubstIdx];
-      ALookupIndex := FContextSubstSubtables[AIndex].SubstLookupIndices[ASubstIdx];
-    end;
-end;
-
-function TTFontFace.GetContextSubstFmt(AIndex: Int32): Int32;
-begin
-  if (AIndex >= 0) and (AIndex < Length(FContextSubstSubtables)) then
-    Result := FContextSubstSubtables[AIndex].Format
-  else
-    Result := 0;
-end;
-
-function TTFontFace.GetContextSubstRuleSetCount(AIndex: Int32): Int32;
-begin
-  if (AIndex >= 0) and (AIndex < Length(FContextSubstSubtables)) then
-    Result := FContextSubstSubtables[AIndex].RuleSetCount
-  else
-    Result := 0;
-end;
-
-function TTFontFace.GetContextSubstForGlyph(AIndex: Int32;
-  AFirstGlyph: UInt16): TFontContextLookupRecordArray;
-var
-  LSub: TFontContextSubstSubtable;
-  LCovIdx, LRuleSetOff, LRuleCount, LRuleOff: Int32;
-  LI, LK, LPos, LBtCount, LInCount, LLaCount, LSubstCount: Int32;
-  LInClassDefOff: Int32;
-  LClassId: UInt16;
-
-  function CoverageIndexOf(ACovOffset, AGlyphId: Int32): Int32;
-  var
-    LFmt, LCnt, LM, LR, LSG, LEC: Int32;
-  begin
-    if FDataLength < ACovOffset + 4 then
-      Exit(-1);
-    LFmt := ReadUInt16BE(ACovOffset);
-    if LFmt = 1 then
-    begin
-      LCnt := ReadUInt16BE(ACovOffset + 2);
-      for LM := 0 to LCnt - 1 do
-        if ReadUInt16BE(ACovOffset + 4 + LM * 2) = AGlyphId then
-          Exit(LM);
-      Result := -1;
-    end
-    else if LFmt = 2 then
-    begin
-      LCnt := ReadUInt16BE(ACovOffset + 2);
-      for LR := 0 to LCnt - 1 do
-      begin
-        if FDataLength < ACovOffset + 4 + LR * 6 + 6 then
-          Break;
-        LSG := ReadUInt16BE(ACovOffset + 4 + LR * 6);
-        LEC := ReadUInt16BE(ACovOffset + 4 + LR * 6 + 2);
-        if (AGlyphId >= LSG) and (AGlyphId <= LEC) then
-          Exit(ReadUInt16BE(ACovOffset + 4 + LR * 6 + 4) + (AGlyphId - LSG));
-      end;
-      Result := -1;
-    end
-    else
-      Result := -1;
-  end;
-
-  function GetClass(ACdOffset, AGlyphId: Int32): UInt16;
-  var
-    LFmt, LSG, LGC, LRC, LRR, LESG, LESC: Int32;
-  begin
-    if FDataLength < ACdOffset + 4 then
-      Exit(0);
-    LFmt := ReadUInt16BE(ACdOffset);
-    if LFmt = 1 then
-    begin
-      LSG := ReadUInt16BE(ACdOffset + 2);
-      LGC := ReadUInt16BE(ACdOffset + 4);
-      if (AGlyphId >= LSG) and (AGlyphId < LSG + LGC) then
-        Result := ReadUInt16BE(ACdOffset + 6 + (AGlyphId - LSG) * 2)
-      else
-        Result := 0;
-    end
-    else if LFmt = 2 then
-    begin
-      LRC := ReadUInt16BE(ACdOffset + 2);
-      for LRR := 0 to LRC - 1 do
-      begin
-        if FDataLength < ACdOffset + 4 + LRR * 6 + 6 then
-          Break;
-        LESG := ReadUInt16BE(ACdOffset + 4 + LRR * 6);
-        LESC := ReadUInt16BE(ACdOffset + 4 + LRR * 6 + 2);
-        if (AGlyphId >= LESG) and (AGlyphId <= LESC) then
-          Exit(ReadUInt16BE(ACdOffset + 4 + LRR * 6 + 4));
-      end;
-      Result := 0;
-    end
-    else
-      Result := 0;
-  end;
-
-begin
-  SetLength(Result, 0);
-  if (AIndex < 0) or (AIndex >= Length(FContextSubstSubtables)) then
-    Exit;
-  LSub := FContextSubstSubtables[AIndex];
-
-  if LSub.Format = 3 then
-  begin
-    // Format 3: return all pre-parsed records.
-    SetLength(Result, LSub.SubstCount);
-    for LI := 0 to LSub.SubstCount - 1 do
-    begin
-      Result[LI].SequenceIndex := LSub.SubstSeqIndices[LI];
-      Result[LI].LookupIndex := LSub.SubstLookupIndices[LI];
-    end;
-    Exit;
-  end;
-
-  if LSub.Format = 1 then
-  begin
-    // Format 1: use coverage index to find rule set.
-    LCovIdx := CoverageIndexOf(LSub.BaseOffset + ReadUInt16BE(LSub.BaseOffset + 2),
-      AFirstGlyph);
-    if LCovIdx < 0 then
-      Exit;
-    if LCovIdx >= LSub.RuleSetCount then
-      Exit;
-    LRuleSetOff := LSub.RuleSetOffsets[LCovIdx];
-    if LRuleSetOff = 0 then
-      Exit;
-  end
-  else if LSub.Format = 2 then
-  begin
-    // Format 2: use class ID to find rule set.
-    // InputClassDef offset depends on plain vs chained.
-    if ReadUInt16BE(LSub.BaseOffset) = 2 then
-    begin
-      // ContextSubst Fmt2: format(2) + cov(2) + classDef(2) + ...
-      LInClassDefOff := LSub.BaseOffset + ReadUInt16BE(LSub.BaseOffset + 4);
-    end
-    else
-    begin
-      // ChainedContextSubst Fmt2: format(2) + cov(2) + btClassDef(2) +
-      //   inClassDef(2) + laClassDef(2) + ...
-      LInClassDefOff := LSub.BaseOffset + ReadUInt16BE(LSub.BaseOffset + 6);
-    end;
-    LClassId := GetClass(LInClassDefOff, AFirstGlyph);
-    if LClassId >= LSub.RuleSetCount then
-      Exit;
-    LRuleSetOff := LSub.RuleSetOffsets[LClassId];
-    if LRuleSetOff = 0 then
-      Exit;
-  end
-  else
-    Exit;
-
-  // Parse rules in the rule set.
-  // RuleSet: ruleCount(2) + ruleOffsets[ruleCount](2).
-  // Rule: [backtrackGlyphCount(2) + backtrackGlyphIDs(bt*2)] +
-  //       inputGlyphCount(2) + inputGlyphIDs[(input-1)*2] +
-  //       [lookaheadGlyphCount(2) + lookaheadGlyphIDs(la*2)] +
-  //       substCount(2) + substRecords[substCount](4).
-  if FDataLength < LRuleSetOff + 2 then
-    Exit;
-  LRuleCount := ReadUInt16BE(LRuleSetOff);
-  // For simplicity, parse the first rule only (most common case).
-  if LRuleCount = 0 then
-    Exit;
-  if FDataLength < LRuleSetOff + 4 then
-    Exit;
-  LRuleOff := LRuleSetOff + ReadUInt16BE(LRuleSetOff + 2);
-  if FDataLength < LRuleOff + 2 then
-    Exit;
-
-  // Walk the rule to find substCount.
-  // Determine if this is a plain or chained context by checking the subtable's
-  // lookup type via BaseOffset format field (already stored).
-  // Plain ContextSubst (GSUB 5): inputGlyphCount(2) + inputGlyphIDs + substCount(2) + substRecords.
-  // Chained ContextSubst (GSUB 6): backtrackGlyphCount(2) + ... + substCount(2) + substRecords.
-  // We distinguish by checking if the subtable was parsed from a Chained type.
-  // Parse rules in the rule set.
-  // RuleSet: ruleCount(2) + ruleOffsets[ruleCount](2).
-  if FDataLength < LRuleSetOff + 2 then
-    Exit;
-  LRuleCount := ReadUInt16BE(LRuleSetOff);
-  if LRuleCount = 0 then
-    Exit;
-  if FDataLength < LRuleSetOff + 4 then
-    Exit;
-  LRuleOff := LRuleSetOff + ReadUInt16BE(LRuleSetOff + 2);
-  if FDataLength < LRuleOff + 2 then
-    Exit;
-
-  if LSub.IsChained then
-  begin
-    // ChainedSubRule: backtrackGlyphCount(2) + backtrackGlyphIDs(bt*2) +
-    //   inputGlyphCount(2) + inputGlyphIDs[(input-1)*2] +
-    //   lookaheadGlyphCount(2) + lookaheadGlyphIDs(la*2) +
-    //   substCount(2) + substRecords[substCount](4).
-    LBtCount := ReadUInt16BE(LRuleOff);
-    LPos := LRuleOff + 2 + LBtCount * 2;
-    if FDataLength < LPos + 2 then
-      Exit;
-    LInCount := ReadUInt16BE(LPos);
-    LPos := LPos + 2 + (LInCount - 1) * 2;
-    if FDataLength < LPos + 2 then
-      Exit;
-    LLaCount := ReadUInt16BE(LPos);
-    LPos := LPos + 2 + LLaCount * 2;
-  end
-  else
-  begin
-    // SubRule: inputGlyphCount(2) + inputGlyphIDs[(input-1)*2] +
-    //   substCount(2) + substRecords[substCount](4).
-    LPos := LRuleOff;
-    LInCount := ReadUInt16BE(LPos);
-    LPos := LPos + 2 + (LInCount - 1) * 2;
-  end;
-  if FDataLength < LPos + 2 then
-    Exit;
-  LSubstCount := ReadUInt16BE(LPos);
-  if FDataLength < LPos + 2 + LSubstCount * 4 then
-    Exit;
-  LPos := LPos + 2;
-
-  SetLength(Result, LSubstCount);
-  for LI := 0 to LSubstCount - 1 do
-  begin
-    Result[LI].SequenceIndex := ReadUInt16BE(LPos + LI * 4);
-    Result[LI].LookupIndex := ReadUInt16BE(LPos + LI * 4 + 2);
-  end;
-end;
-
-function TTFontFace.HasContextPos: Boolean;
-begin
-  Result := Length(FContextPosSubtables) > 0;
-end;
-
-function TTFontFace.ContextPosCount: Int32;
-begin
-  Result := Length(FContextPosSubtables);
-end;
-
-procedure TTFontFace.GetContextPosInfo(AIndex: Int32;
-  out AInputGlyphCount, APosCount: Int32);
-begin
-  if (AIndex >= 0) and (AIndex < Length(FContextPosSubtables)) then
-  begin
-    AInputGlyphCount := FContextPosSubtables[AIndex].InputGlyphCount;
-    APosCount := FContextPosSubtables[AIndex].SubstCount;
-  end
-  else
-  begin
-    AInputGlyphCount := 0;
-    APosCount := 0;
-  end;
-end;
-
-function TTFontFace.GetContextPosInputCoverage(AIndex, APosition: Int32): Int32;
-begin
-  Result := 0;
-  if (AIndex >= 0) and (AIndex < Length(FContextPosSubtables)) then
-    if (APosition >= 0) and (APosition < Length(FContextPosSubtables[AIndex].InputCoverageOffsets)) then
-      Result := FContextPosSubtables[AIndex].InputCoverageOffsets[APosition];
-end;
-
-procedure TTFontFace.GetContextPosLookup(AIndex, APosIdx: Int32;
-  out ASeqIndex: UInt16; out ALookupIndex: UInt16);
-begin
-  ASeqIndex := 0;
-  ALookupIndex := 0;
-  if (AIndex >= 0) and (AIndex < Length(FContextPosSubtables)) then
-    if (APosIdx >= 0) and (APosIdx < FContextPosSubtables[AIndex].SubstCount) then
-    begin
-      ASeqIndex := FContextPosSubtables[AIndex].SubstSeqIndices[APosIdx];
-      ALookupIndex := FContextPosSubtables[AIndex].SubstLookupIndices[APosIdx];
-    end;
-end;
-
-function TTFontFace.HasSinglePos: Boolean;
-begin
-  Result := Length(FSinglePosSubtables) > 0;
-end;
-
-function TTFontFace.LookupSinglePosXAdvance(AGlyphId: UInt16): Int16;
-var
-  LI, LCovIdx: Int32;
-  LSub: TFontSinglePosSubtable;
-
-  function CoverageIndexOf(ACovOffset, AGlyphId: Int32): Int32;
-  var
-    LFmt, LCnt, LM, LR, LSG, LEC: Int32;
-  begin
-    if FDataLength < ACovOffset + 4 then
-      Exit(-1);
-    LFmt := ReadUInt16BE(ACovOffset);
-    if LFmt = 1 then
-    begin
-      LCnt := ReadUInt16BE(ACovOffset + 2);
-      for LM := 0 to LCnt - 1 do
-        if ReadUInt16BE(ACovOffset + 4 + LM * 2) = AGlyphId then
-          Exit(LM);
-      Result := -1;
-    end
-    else if LFmt = 2 then
-    begin
-      LCnt := ReadUInt16BE(ACovOffset + 2);
-      for LR := 0 to LCnt - 1 do
-      begin
-        if FDataLength < ACovOffset + 4 + LR * 6 + 6 then
-          Break;
-        LSG := ReadUInt16BE(ACovOffset + 4 + LR * 6);
-        LEC := ReadUInt16BE(ACovOffset + 4 + LR * 6 + 2);
-        if (AGlyphId >= LSG) and (AGlyphId <= LEC) then
-          Exit(ReadUInt16BE(ACovOffset + 4 + LR * 6 + 4) + (AGlyphId - LSG));
-      end;
-      Result := -1;
-    end
-    else
-      Result := -1;
-  end;
-
-begin
-  Result := 0;
-  for LI := 0 to High(FSinglePosSubtables) do
-  begin
-    LSub := FSinglePosSubtables[LI];
-    LCovIdx := CoverageIndexOf(LSub.CoverageOffset, AGlyphId);
-    if LCovIdx < 0 then
-      Continue;
-    if LSub.Format = 1 then
-    begin
-      // Format 1: uniform — same ValueRecord for all glyphs.
-      if FDataLength < LSub.ValueArrayOffset + LSub.XAdvanceOffset + 2 then
-        Continue;
-      Result := ReadInt16BE(LSub.ValueArrayOffset + LSub.XAdvanceOffset);
-      if Result <> 0 then
-        Exit;
-    end
-    else if LSub.Format = 2 then
-    begin
-      // Format 2: per-glyph array.
-      if LCovIdx >= LSub.GlyphCount then
-        Continue;
-      if FDataLength < LSub.ValueArrayOffset + LCovIdx * LSub.ValueRecordSize + LSub.XAdvanceOffset + 2 then
-        Continue;
-      Result := ReadInt16BE(LSub.ValueArrayOffset + LCovIdx * LSub.ValueRecordSize + LSub.XAdvanceOffset);
-      if Result <> 0 then
-        Exit;
-    end;
-  end;
-end;
-
-function TTFontFace.HasMarkToBase: Boolean;
-begin
-  Result := Length(FMarkToBaseSubtables) > 0;
-end;
-
-function TTFontFace.LookupMarkToBase(AMarkGlyph, ABaseGlyph: UInt16): TFontAnchor;
-var
-  LI: Int32;
-  LSub: TFontMarkToBaseSubtable;
-  LMarkCovIdx, LBaseCovIdx: Int32;
-  LMarkCount, LBaseCount: Int32;
-  LMarkClass: UInt16;
-  LMarkAnchorOff, LBaseAnchorOff: Int32;
-  LBaseRecordSize: Int32;
-
-  function CoverageIndexOf(ACovOffset, AGlyphId: Int32): Int32;
-  var
-    LFmt, LCnt, LM, LR, LSG, LEC: Int32;
-  begin
-    if FDataLength < ACovOffset + 4 then
-      Exit(-1);
-    LFmt := ReadUInt16BE(ACovOffset);
-    if LFmt = 1 then
-    begin
-      LCnt := ReadUInt16BE(ACovOffset + 2);
-      for LM := 0 to LCnt - 1 do
-        if ReadUInt16BE(ACovOffset + 4 + LM * 2) = AGlyphId then
-          Exit(LM);
-      Result := -1;
-    end
-    else if LFmt = 2 then
-    begin
-      LCnt := ReadUInt16BE(ACovOffset + 2);
-      for LR := 0 to LCnt - 1 do
-      begin
-        if FDataLength < ACovOffset + 4 + LR * 6 + 6 then
-          Break;
-        LSG := ReadUInt16BE(ACovOffset + 4 + LR * 6);
-        LEC := ReadUInt16BE(ACovOffset + 4 + LR * 6 + 2);
-        if (AGlyphId >= LSG) and (AGlyphId <= LEC) then
-          Exit(ReadUInt16BE(ACovOffset + 4 + LR * 6 + 4) + (AGlyphId - LSG));
-      end;
-      Result := -1;
-    end
-    else
-      Result := -1;
-  end;
-
-begin
-  Result.X := 0;
-  Result.Y := 0;
-  for LI := 0 to High(FMarkToBaseSubtables) do
-  begin
-    LSub := FMarkToBaseSubtables[LI];
-    // Check mark coverage.
-    LMarkCovIdx := CoverageIndexOf(LSub.MarkCoverageOffset, AMarkGlyph);
-    if LMarkCovIdx < 0 then
-      Continue;
-    // Check base coverage.
-    LBaseCovIdx := CoverageIndexOf(LSub.BaseCoverageOffset, ABaseGlyph);
-    if LBaseCovIdx < 0 then
-      Continue;
-    // Read MarkArray: markCount (uint16), then per-mark: markClass (uint16) + anchor offset (uint16).
-    if FDataLength < LSub.MarkArrayOffset + 2 then
-      Continue;
-    LMarkCount := ReadUInt16BE(LSub.MarkArrayOffset);
-    if LMarkCovIdx >= LMarkCount then
-      Continue;
-    // Each mark record: 2 + 2 = 4 bytes.
-    if FDataLength < LSub.MarkArrayOffset + 2 + LMarkCovIdx * 4 + 4 then
-      Continue;
-    LMarkClass := ReadUInt16BE(LSub.MarkArrayOffset + 2 + LMarkCovIdx * 4);
-    LMarkAnchorOff := LSub.MarkArrayOffset + 2 + LMarkCovIdx * 4 +
-      ReadUInt16BE(LSub.MarkArrayOffset + 2 + LMarkCovIdx * 4 + 2);
-    // Read mark anchor (X, Y as int16).
-    if FDataLength < LMarkAnchorOff + 4 then
-      Continue;
-    // Read BaseArray: baseCount (uint16), then per-base: classCount * offset(uint16).
-    if FDataLength < LSub.BaseArrayOffset + 2 then
-      Continue;
-    LBaseCount := ReadUInt16BE(LSub.BaseArrayOffset);
-    if LBaseCovIdx >= LBaseCount then
-      Continue;
-    if LMarkClass >= LSub.ClassCount then
-      Continue;
-    // Each base record: ClassCount * 2 bytes (array of Offset16).
-    LBaseRecordSize := LSub.ClassCount * 2;
-    if FDataLength < LSub.BaseArrayOffset + 2 + LBaseCovIdx * LBaseRecordSize + LMarkClass * 2 + 2 then
-      Continue;
-    LBaseAnchorOff := LSub.BaseArrayOffset + 2 + LBaseCovIdx * LBaseRecordSize +
-      ReadUInt16BE(LSub.BaseArrayOffset + 2 + LBaseCovIdx * LBaseRecordSize + LMarkClass * 2);
-    // Read base anchor (X, Y as int16).
-    if FDataLength < LBaseAnchorOff + 4 then
-      Continue;
-    // Positioning: mark offset = base_anchor - mark_anchor.
-    Result.X := ReadInt16BE(LBaseAnchorOff) - ReadInt16BE(LMarkAnchorOff);
-    Result.Y := ReadInt16BE(LBaseAnchorOff + 2) - ReadInt16BE(LMarkAnchorOff + 2);
-    Exit;
-  end;
-end;
-
-function TTFontFace.HasMarkToMark: Boolean;
-begin
-  Result := Length(FMarkToMarkSubtables) > 0;
-end;
-
-function TTFontFace.LookupMarkToMark(AMarkGlyph, ABaseMarkGlyph: UInt16): TFontAnchor;
-var
-  LI: Int32;
-  LSub: TFontMarkToMarkSubtable;
-  LMark2CovIdx, LMark1CovIdx: Int32;
-  LMark2Count, LMark1Count: Int32;
-  LMarkClass: UInt16;
-  LMark2AnchorOff, LMark1AnchorOff: Int32;
-  LMark1RecordSize: Int32;
-
-  function CoverageIndexOf(ACovOffset, AGlyphId: Int32): Int32;
-  var
-    LFmt, LCnt, LM, LR, LSG, LEC: Int32;
-  begin
-    if FDataLength < ACovOffset + 4 then
-      Exit(-1);
-    LFmt := ReadUInt16BE(ACovOffset);
-    if LFmt = 1 then
-    begin
-      LCnt := ReadUInt16BE(ACovOffset + 2);
-      for LM := 0 to LCnt - 1 do
-        if ReadUInt16BE(ACovOffset + 4 + LM * 2) = AGlyphId then
-          Exit(LM);
-      Result := -1;
-    end
-    else if LFmt = 2 then
-    begin
-      LCnt := ReadUInt16BE(ACovOffset + 2);
-      for LR := 0 to LCnt - 1 do
-      begin
-        if FDataLength < ACovOffset + 4 + LR * 6 + 6 then
-          Break;
-        LSG := ReadUInt16BE(ACovOffset + 4 + LR * 6);
-        LEC := ReadUInt16BE(ACovOffset + 4 + LR * 6 + 2);
-        if (AGlyphId >= LSG) and (AGlyphId <= LEC) then
-          Exit(ReadUInt16BE(ACovOffset + 4 + LR * 6 + 4) + (AGlyphId - LSG));
-      end;
-      Result := -1;
-    end
-    else
-      Result := -1;
-  end;
-
-begin
-  Result.X := 0;
-  Result.Y := 0;
-  for LI := 0 to High(FMarkToMarkSubtables) do
-  begin
-    LSub := FMarkToMarkSubtables[LI];
-    // Check Mark2 coverage (attaching mark).
-    LMark2CovIdx := CoverageIndexOf(LSub.Mark2CoverageOffset, AMarkGlyph);
-    if LMark2CovIdx < 0 then
-      Continue;
-    // Check Mark1 coverage (base mark).
-    LMark1CovIdx := CoverageIndexOf(LSub.Mark1CoverageOffset, ABaseMarkGlyph);
-    if LMark1CovIdx < 0 then
-      Continue;
-    // Read Mark2Array: mark2Count, then per-mark2: markClass(uint16) + anchor offset(uint16).
-    if FDataLength < LSub.Mark2ArrayOffset + 2 then
-      Continue;
-    LMark2Count := ReadUInt16BE(LSub.Mark2ArrayOffset);
-    if LMark2CovIdx >= LMark2Count then
-      Continue;
-    if FDataLength < LSub.Mark2ArrayOffset + 2 + LMark2CovIdx * 4 + 4 then
-      Continue;
-    LMarkClass := ReadUInt16BE(LSub.Mark2ArrayOffset + 2 + LMark2CovIdx * 4);
-    LMark2AnchorOff := LSub.Mark2ArrayOffset + 2 + LMark2CovIdx * 4 +
-      ReadUInt16BE(LSub.Mark2ArrayOffset + 2 + LMark2CovIdx * 4 + 2);
-    if FDataLength < LMark2AnchorOff + 4 then
-      Continue;
-    // Read Mark1Array: mark1Count, then per-mark1: ClassCount * offset(uint16).
-    if FDataLength < LSub.Mark1ArrayOffset + 2 then
-      Continue;
-    LMark1Count := ReadUInt16BE(LSub.Mark1ArrayOffset);
-    if LMark1CovIdx >= LMark1Count then
-      Continue;
-    if LMarkClass >= LSub.ClassCount then
-      Continue;
-    LMark1RecordSize := LSub.ClassCount * 2;
-    if FDataLength < LSub.Mark1ArrayOffset + 2 + LMark1CovIdx * LMark1RecordSize + LMarkClass * 2 + 2 then
-      Continue;
-    LMark1AnchorOff := LSub.Mark1ArrayOffset + 2 + LMark1CovIdx * LMark1RecordSize +
-      ReadUInt16BE(LSub.Mark1ArrayOffset + 2 + LMark1CovIdx * LMark1RecordSize + LMarkClass * 2);
-    if FDataLength < LMark1AnchorOff + 4 then
-      Continue;
-    // Positioning: mark offset = mark1_anchor - mark2_anchor.
-    Result.X := ReadInt16BE(LMark1AnchorOff) - ReadInt16BE(LMark2AnchorOff);
-    Result.Y := ReadInt16BE(LMark1AnchorOff + 2) - ReadInt16BE(LMark2AnchorOff + 2);
-    Exit;
-  end;
-end;
-
-function TTFontFace.HasMarkToLig: Boolean;
-begin
-  Result := Length(FMarkToLigSubtables) > 0;
-end;
-
-function TTFontFace.LookupMarkToLig(AMarkGlyph, ALigGlyph: UInt16;
-  AComponentIdx: Int32): TFontAnchor;
-var
-  LI: Int32;
-  LSub: TFontMarkToLigSubtable;
-  LMarkCovIdx, LLigCovIdx: Int32;
-  LMarkCount, LMarkClass: UInt16;
-  LMarkAnchorOff: Int32;
-  LLigCount, LCompCount: UInt16;
-  LLigAttachOff, LCompOff, LAnchorOff: Int32;
-
-  function CoverageIndexOf(ACovOffset, AGlyphId: Int32): Int32;
-  var
-    LFmt, LCnt, LM, LR, LSG, LEC: Int32;
-  begin
-    if FDataLength < ACovOffset + 4 then
-      Exit(-1);
-    LFmt := ReadUInt16BE(ACovOffset);
-    if LFmt = 1 then
-    begin
-      LCnt := ReadUInt16BE(ACovOffset + 2);
-      for LM := 0 to LCnt - 1 do
-        if ReadUInt16BE(ACovOffset + 4 + LM * 2) = AGlyphId then
-          Exit(LM);
-      Result := -1;
-    end
-    else if LFmt = 2 then
-    begin
-      LCnt := ReadUInt16BE(ACovOffset + 2);
-      for LR := 0 to LCnt - 1 do
-      begin
-        if FDataLength < ACovOffset + 4 + LR * 6 + 6 then
-          Break;
-        LSG := ReadUInt16BE(ACovOffset + 4 + LR * 6);
-        LEC := ReadUInt16BE(ACovOffset + 4 + LR * 6 + 2);
-        if (AGlyphId >= LSG) and (AGlyphId <= LEC) then
-          Exit(ReadUInt16BE(ACovOffset + 4 + LR * 6 + 4) + (AGlyphId - LSG));
-      end;
-      Result := -1;
-    end
-    else
-      Result := -1;
-  end;
-
-begin
-  Result.X := 0;
-  Result.Y := 0;
-  for LI := 0 to High(FMarkToLigSubtables) do
-  begin
-    LSub := FMarkToLigSubtables[LI];
-    LMarkCovIdx := CoverageIndexOf(LSub.MarkCoverageOffset, AMarkGlyph);
-    if LMarkCovIdx < 0 then
-      Continue;
-    LLigCovIdx := CoverageIndexOf(LSub.LigCoverageOffset, ALigGlyph);
-    if LLigCovIdx < 0 then
-      Continue;
-    // Read MarkArray: markCount, then per-mark: markClass(uint16) + anchorOffset(uint16).
-    if FDataLength < LSub.MarkArrayOffset + 2 then
-      Continue;
-    LMarkCount := ReadUInt16BE(LSub.MarkArrayOffset);
-    if LMarkCovIdx >= LMarkCount then
-      Continue;
-    if FDataLength < LSub.MarkArrayOffset + 2 + LMarkCovIdx * 4 + 4 then
-      Continue;
-    LMarkClass := ReadUInt16BE(LSub.MarkArrayOffset + 2 + LMarkCovIdx * 4);
-    LMarkAnchorOff := LSub.MarkArrayOffset + 2 + LMarkCovIdx * 4 +
-      ReadUInt16BE(LSub.MarkArrayOffset + 2 + LMarkCovIdx * 4 + 2);
-    if FDataLength < LMarkAnchorOff + 4 then
-      Continue;
-    if LMarkClass >= LSub.ClassCount then
-      Continue;
-    // Read LigatureArray: ligCount, then per-lig: LigAttach offset (uint16, relative to LigArray).
-    if FDataLength < LSub.LigArrayOffset + 2 then
-      Continue;
-    LLigCount := ReadUInt16BE(LSub.LigArrayOffset);
-    if LLigCovIdx >= LLigCount then
-      Continue;
-    if FDataLength < LSub.LigArrayOffset + 2 + LLigCovIdx * 2 + 2 then
-      Continue;
-    LLigAttachOff := LSub.LigArrayOffset +
-      ReadUInt16BE(LSub.LigArrayOffset + 2 + LLigCovIdx * 2);
-    if FDataLength < LLigAttachOff + 2 then
-      Continue;
-    LCompCount := ReadUInt16BE(LLigAttachOff);
-    if (AComponentIdx < 0) or (AComponentIdx >= LCompCount) then
-      Continue;
-    // ComponentRecord[componentIdx]: ClassCount * anchor offsets (uint16, relative to LigAttach).
-    LCompOff := LLigAttachOff + 2 + AComponentIdx * (LSub.ClassCount * 2);
-    if FDataLength < LCompOff + (LMarkClass + 1) * 2 then
-      Continue;
-    LAnchorOff := LLigAttachOff + ReadUInt16BE(LCompOff + LMarkClass * 2);
-    if FDataLength < LAnchorOff + 4 then
-      Continue;
-    // Positioning: mark offset = ligature_anchor - mark_anchor.
-    Result.X := ReadInt16BE(LAnchorOff) - ReadInt16BE(LMarkAnchorOff);
-    Result.Y := ReadInt16BE(LAnchorOff + 2) - ReadInt16BE(LMarkAnchorOff + 2);
-    Exit;
-  end;
-end;
-
-function TTFontFace.HasCursivePos: Boolean;
-begin
-  Result := Length(FCursivePosSubtables) > 0;
-end;
-
-function TTFontFace.LookupCursivePosExitAnchor(AGlyphId: UInt16): TFontAnchor;
-var
-  LI, LJ: Int32;
-  LSub: TFontCursivePosSubtable;
-  LCovIdx: Int32;
-  LRecOff, LExitOff: Int32;
-
-  function CoverageIndexOf(ACovOffset, ATarget: Int32): Int32;
-  var
-    LFmt, LCnt, LM, LR, LSG, LEC: Int32;
-  begin
-    if FDataLength < ACovOffset + 4 then
-      Exit(-1);
-    LFmt := ReadUInt16BE(ACovOffset);
-    if LFmt = 1 then
-    begin
-      LCnt := ReadUInt16BE(ACovOffset + 2);
-      for LM := 0 to LCnt - 1 do
-        if ReadUInt16BE(ACovOffset + 4 + LM * 2) = ATarget then
-          Exit(LM);
-      Result := -1;
-    end
-    else if LFmt = 2 then
-    begin
-      LCnt := ReadUInt16BE(ACovOffset + 2);
-      for LR := 0 to LCnt - 1 do
-      begin
-        if FDataLength < ACovOffset + 4 + LR * 6 + 6 then
-          Break;
-        LSG := ReadUInt16BE(ACovOffset + 4 + LR * 6);
-        LEC := ReadUInt16BE(ACovOffset + 4 + LR * 6 + 2);
-        if (ATarget >= LSG) and (ATarget <= LEC) then
-          Exit(ReadUInt16BE(ACovOffset + 4 + LR * 6 + 4) + (ATarget - LSG));
-      end;
-      Result := -1;
-    end
-    else
-      Result := -1;
-  end;
-
-begin
-  Result.X := 0;
-  Result.Y := 0;
-  for LI := 0 to High(FCursivePosSubtables) do
-  begin
-    LSub := FCursivePosSubtables[LI];
-    LCovIdx := CoverageIndexOf(LSub.CoverageOffset, AGlyphId);
-    if LCovIdx < 0 then
-      Continue;
-    if LCovIdx >= LSub.EntryExitCount then
-      Continue;
-    // EntryExitRecord[LCovIdx]: entryAnchorOffset(uint16) + exitAnchorOffset(uint16).
-    LRecOff := LSub.EntryExitArrayOffset + LCovIdx * 4;
-    if FDataLength < LRecOff + 4 then
-      Continue;
-    LExitOff := ReadUInt16BE(LRecOff + 2);  // exit anchor offset (relative to subtable).
-    if LExitOff = 0 then
-      Continue;  // null exit anchor.
-    LExitOff := LSub.BaseOffset + LExitOff;
-    if FDataLength < LExitOff + 4 then
-      Continue;
-    // AnchorFormat 1: X(Int16) + Y(Int16).
-    if ReadUInt16BE(LExitOff) = 1 then
-    begin
-      Result.X := ReadInt16BE(LExitOff + 2);
-      Result.Y := ReadInt16BE(LExitOff + 4);
-    end;
-    Exit;
-  end;
-end;
-
-function TTFontFace.LookupCursivePosEntryAnchor(AGlyphId: UInt16): TFontAnchor;
-var
-  LI: Int32;
-  LSub: TFontCursivePosSubtable;
-  LCovIdx: Int32;
-  LRecOff, LEntryOff: Int32;
-
-  function CoverageIndexOf(ACovOffset, ATarget: Int32): Int32;
-  var
-    LFmt, LCnt, LM, LR, LSG, LEC: Int32;
-  begin
-    if FDataLength < ACovOffset + 4 then
-      Exit(-1);
-    LFmt := ReadUInt16BE(ACovOffset);
-    if LFmt = 1 then
-    begin
-      LCnt := ReadUInt16BE(ACovOffset + 2);
-      for LM := 0 to LCnt - 1 do
-        if ReadUInt16BE(ACovOffset + 4 + LM * 2) = ATarget then
-          Exit(LM);
-      Result := -1;
-    end
-    else if LFmt = 2 then
-    begin
-      LCnt := ReadUInt16BE(ACovOffset + 2);
-      for LR := 0 to LCnt - 1 do
-      begin
-        if FDataLength < ACovOffset + 4 + LR * 6 + 6 then
-          Break;
-        LSG := ReadUInt16BE(ACovOffset + 4 + LR * 6);
-        LEC := ReadUInt16BE(ACovOffset + 4 + LR * 6 + 2);
-        if (ATarget >= LSG) and (ATarget <= LEC) then
-          Exit(ReadUInt16BE(ACovOffset + 4 + LR * 6 + 4) + (ATarget - LSG));
-      end;
-      Result := -1;
-    end
-    else
-      Result := -1;
-  end;
-
-begin
-  Result.X := 0;
-  Result.Y := 0;
-  for LI := 0 to High(FCursivePosSubtables) do
-  begin
-    LSub := FCursivePosSubtables[LI];
-    LCovIdx := CoverageIndexOf(LSub.CoverageOffset, AGlyphId);
-    if LCovIdx < 0 then
-      Continue;
-    if LCovIdx >= LSub.EntryExitCount then
-      Continue;
-    LRecOff := LSub.EntryExitArrayOffset + LCovIdx * 4;
-    if FDataLength < LRecOff + 4 then
-      Continue;
-    LEntryOff := ReadUInt16BE(LRecOff);  // entry anchor offset (relative to subtable).
-    if LEntryOff = 0 then
-      Continue;  // null entry anchor.
-    LEntryOff := LSub.BaseOffset + LEntryOff;
-    if FDataLength < LEntryOff + 4 then
-      Continue;
-    // AnchorFormat 1: X(Int16) + Y(Int16).
-    if ReadUInt16BE(LEntryOff) = 1 then
-    begin
-      Result.X := ReadInt16BE(LEntryOff + 2);
-      Result.Y := ReadInt16BE(LEntryOff + 4);
-    end;
-    Exit;
-  end;
-end;
-
-function TTFontFace.HasFeatureKern: Boolean;
-begin
-  Result := Length(FKernLookups) > 0;
-end;
-
-function TTFontFace.HasFeatureMark: Boolean;
-begin
-  Result := Length(FMarkLookups) > 0;
-end;
-
-function TTFontFace.HasFeatureMkmk: Boolean;
-begin
-  Result := Length(FMkmkLookups) > 0;
-end;
-
-function TTFontFace.HasFeatureLiga: Boolean;
-begin
-  Result := Length(FLigaLookups) > 0;
-end;
-
-function TTFontFace.HasFeatureClig: Boolean;
-begin
-  Result := Length(FCligLookups) > 0;
-end;
-
-function TTFontFace.HasFeatureCurs: Boolean;
-begin
-  Result := Length(FCursLookups) > 0;
-end;
-
-function TTFontFace.HasFmt14: Boolean;
-begin
-  Result := FHasFmt14;
-end;
-
-function TTFontFace.LookupIVS(ACodepoint, AVariationSelector: UInt32): UInt32;
-var
-  I, J: Int32;
-  LVS: TFontCmapFmt14VarSelector;
-  LRange: TFontCmapFmt14DefaultUVSRange;
-  LMapping: TFontCmapFmt14UVSMapping;
-begin
-  Result := 0;
-  if not FHasFmt14 then
-    Exit;
-
-  // 查找 Variation Selector
-  for I := 0 to High(FCmapFmt14.VarSelectors) do
-  begin
-    if FCmapFmt14.VarSelectors[I].VarSelector = AVariationSelector then
-    begin
-      LVS := FCmapFmt14.VarSelectors[I];
-
-      // 先查 Non-Default UVS（精确匹配返回 glyphID）
-      for J := 0 to High(LVS.NonDefaultUVS) do
-      begin
-        LMapping := LVS.NonDefaultUVS[J];
-        if LMapping.UnicodeValue = ACodepoint then
-          Exit(UInt32(LMapping.GlyphID));
-      end;
-
-      // 再查 Default UVS（范围匹配返回 0 = 使用默认字形）
-      for J := 0 to High(LVS.DefaultUVSRanges) do
-      begin
-        LRange := LVS.DefaultUVSRanges[J];
-        if (ACodepoint >= LRange.StartUnicodeValue) and
-           (ACodepoint <= LRange.StartUnicodeValue + LRange.AdditionalCount) then
-          Exit(0); // Default: 使用基础字形
-      end;
-
-      // VS 存在但此字码不在任何表中
-      Exit(0);
-    end;
-  end;
-
-  // 此 VS 未在 Format 14 中注册
-  Result := 0;
-end;
-
-function TTFontFace.GetName(ANameID: UInt16): AnsiString;
-var
-  I: Int32;
-  LBestPlatform, LBestIdx: Int32;
-begin
-  Result := '';
-  LBestPlatform := 999;
-  LBestIdx := -1;
-
-  for I := 0 to High(FNameRecords) do
-  begin
-    if FNameRecords[I].NameID <> ANameID then
-      Continue;
-    // 优先 Windows 平台（Platform 3），其次 Unicode（Platform 0）
-    if FNameRecords[I].PlatformID = 3 then
-    begin
-      if LBestPlatform > 3 then
-      begin
-        LBestPlatform := 3;
-        LBestIdx := I;
-      end;
-    end
-    else if FNameRecords[I].PlatformID = 0 then
-    begin
-      if LBestPlatform > 0 then
-      begin
-        LBestPlatform := 0;
-        LBestIdx := I;
-      end;
-    end;
-  end;
-
-  if LBestIdx >= 0 then
-    Result := FNameRecords[LBestIdx].Value;
-end;
-
-function TTFontFace.FamilyName: AnsiString;
-begin
-  Result := GetName(NAME_ID_FONT_FAMILY);
-end;
-
-function TTFontFace.SubfamilyName: AnsiString;
-begin
-  Result := GetName(NAME_ID_FONT_SUBFAMILY);
-end;
-
-function TTFontFace.FullName: AnsiString;
-begin
-  Result := GetName(NAME_ID_FULL_NAME);
-end;
-
-function TTFontFace.PostScriptName: AnsiString;
-begin
-  Result := GetName(NAME_ID_POSTSCRIPT_NAME);
 end;
 
 function TTFontFace.IsValid: Boolean;
@@ -3545,52 +2105,69 @@ end;
 
 function TTFontFace.GlyphCount: UInt32;
 begin
-  if FCffValid then
-    Result := UInt32(FCffCharStringsCount)
+  if FCff2GlyphCount > 0 then
+    Result := FCff2GlyphCount
+  else if FCffGlyphCount > 0 then
+    Result := FCffGlyphCount
   else
     Result := FMaxp.NumGlyphs;
 end;
 
 function TTFontFace.LookupCodepoint(ACodepoint: UInt32): UInt32;
 var
-  J: Int32;
+  J, LStart, LEnd, LMid: Int32;
   LStartCode, LEndCode: UInt16;
   LIdDelta, LIdRangeOff: UInt16;
   LOffset, LGlyphId: UInt32;
 begin
   Result := 0; // .notdef
 
-  // Format 12 优先（覆盖全 Unicode，包括 SMP）
+  // Format 12 优先（覆盖全 Unicode，包括 SMP）— binary search
   if FHasFmt12 then
   begin
-    for J := 0 to High(FCmapFmt12.Groups) do
+    LStart := 0;
+    LEnd := High(FCmapFmt12.Groups);
+    while LStart <= LEnd do
     begin
-      if (ACodepoint >= FCmapFmt12.Groups[J].StartCharCode) and
-         (ACodepoint <= FCmapFmt12.Groups[J].EndCharCode) then
+      LMid := (LStart + LEnd) shr 1;
+      if ACodepoint < FCmapFmt12.Groups[LMid].StartCharCode then
+        LEnd := LMid - 1
+      else if ACodepoint > FCmapFmt12.Groups[LMid].EndCharCode then
+        LStart := LMid + 1
+      else
       begin
-        Result := FCmapFmt12.Groups[J].StartGlyphCode +
-                  (ACodepoint - FCmapFmt12.Groups[J].StartCharCode);
+        Result := FCmapFmt12.Groups[LMid].StartGlyphCode +
+                  (ACodepoint - FCmapFmt12.Groups[LMid].StartCharCode);
         Exit;
       end;
     end;
   end;
 
-  // Format 4（BMP）
+  // Format 4（BMP）— binary search on segments
   if FHasFmt4 then
   begin
-    for J := 0 to FCmapFmt4.SegmentCount - 1 do
+    LStart := 0;
+    LEnd := FCmapFmt4.SegmentCount - 1;
+    while LStart <= LEnd do
     begin
-      LStartCode := FCmapFmt4.StartCode[J];
-      LEndCode := FCmapFmt4.EndCode[J];
-      if LStartCode > LEndCode then
-        Continue;
+      LMid := (LStart + LEnd) shr 1;
+      LStartCode := FCmapFmt4.StartCode[LMid];
+      LEndCode := FCmapFmt4.EndCode[LMid];
       if LStartCode = $FFFF then
-        Continue; // 最后一个段是哨兵
-
-      if (ACodepoint >= LStartCode) and (ACodepoint <= LEndCode) then
       begin
-        LIdDelta := UInt16(FCmapFmt4.IdDelta[J]);
-        LIdRangeOff := FCmapFmt4.IdRangeOffset[J];
+        // Sentinel segment — search left half
+        LEnd := LMid - 1;
+        Continue;
+      end;
+      if ACodepoint < LStartCode then
+        LEnd := LMid - 1
+      else if ACodepoint > LEndCode then
+        LStart := LMid + 1
+      else
+      begin
+        // Found segment containing ACodepoint
+        LIdDelta := UInt16(FCmapFmt4.IdDelta[LMid]);
+        LIdRangeOff := FCmapFmt4.IdRangeOffset[LMid];
 
         if LIdRangeOff = 0 then
         begin
@@ -3604,19 +2181,18 @@ begin
           // 通过 IdRangeOffset 索引 GlyphIdArray
           // IdRangeOffset 是相对于自身位置的字节偏移
           // 具体公式：*(&IdRangeOffset[J] + (cp - startCode) + IdRangeOffset/2 - segCount)
-          // 使用 Int64 防止无符号下溢回绕
-          if LIdRangeOff div 2 < FCmapFmt4.SegmentCount - J then
-            Continue;  // 偏移量不足，跳过此段
-          LOffset := Int64(ACodepoint - LStartCode) +
-            Int64(LIdRangeOff div 2) - Int64(FCmapFmt4.SegmentCount - J);
-          if (LOffset >= 0) and (LOffset < Int64(Length(FCmapFmt4.GlyphIdArray))) then
+{$PUSH}{$R-}  { 中间结果可能为负，UInt32 溢出是正常的 }
+          LOffset := (ACodepoint - LStartCode) +
+            (LIdRangeOff div 2) - (FCmapFmt4.SegmentCount - LMid);
+{$POP}
+          if LOffset < UInt32(Length(FCmapFmt4.GlyphIdArray)) then
           begin
-            LGlyphId := FCmapFmt4.GlyphIdArray[Int32(LOffset)];
+            LGlyphId := FCmapFmt4.GlyphIdArray[LOffset];
             if LGlyphId <> 0 then
               LGlyphId := UInt16((LGlyphId + LIdDelta) and $FFFF);
             Result := LGlyphId;
-            Exit;
           end;
+          Exit;  // Found segment — exit regardless of offset bounds
         end;
       end;
     end;
@@ -3624,6 +2200,8 @@ begin
 end;
 
 function TTFontFace.GlyphHorizontalMetric(AGlyphIndex: UInt32): TFontHorizontalMetric;
+var
+  LHvarDelta: Single;
 begin
   if AGlyphIndex < UInt32(Length(FHmtx)) then
     Result := FHmtx[AGlyphIndex]
@@ -3631,6 +2209,13 @@ begin
   begin
     Result.AdvanceWidth := 0;
     Result.LeftSideBearing := 0;
+  end;
+  { 自动应用 HVAR delta（可变字体 advance width 调整） }
+  if FHasVariationCoords and FHvarParsed then
+  begin
+    LHvarDelta := CalcHvarAdvanceDelta(AGlyphIndex, FVariationCoords);
+    if LHvarDelta <> 0 then
+      Result.AdvanceWidth := Result.AdvanceWidth + Round(LHvarDelta);
   end;
 end;
 
@@ -3855,21 +2440,18 @@ begin
 end;
 
 function TTFontFace.ExpandCompoundOutline(
-  const AComponents: TFontCompoundComponentArray;
-  ADepth: Int32): TFontGlyphOutline;
+  const AComponents: TFontCompoundComponentArray): TFontGlyphOutline;
 var
   LI, LJ: Int32;
   LPart: TFontGlyphOutline;
   LBasePointCount: Int32;
   LScaleX, LScaleY, LOffX, LOffY: Single;
-  LHasUseMetrics: Boolean;
 begin
   FontGlyphOutlineClear(Result);
-  LHasUseMetrics := False;
 
   for LI := 0 to High(AComponents) do
   begin
-    LPart := GlyphOutlineInternal(AComponents[LI].GlyphIndex, ADepth + 1);
+    LPart := GlyphOutline(AComponents[LI].GlyphIndex);
     if LPart.ContourCount <= 0 then
       Continue;
 
@@ -3901,19 +2483,19 @@ begin
 
     Inc(Result.ContourCount, LPart.ContourCount);
 
-    // 使用第一个 UseMetrics 成分的边界框
-    if AComponents[LI].UseMetrics and (not LHasUseMetrics) then
+    // 使用第一个成分的 metrics 作为复合字形边界框
+    if AComponents[LI].UseMetrics then
     begin
       Result.XMin := LPart.XMin;
       Result.YMin := LPart.YMin;
       Result.XMax := LPart.XMax;
       Result.YMax := LPart.YMax;
-      LHasUseMetrics := True;
     end;
   end;
 
   // 如果没有 UseMetrics，从所有点计算边界框
-  if (Length(Result.Points) > 0) and (not LHasUseMetrics) then
+  if (Length(Result.Points) > 0) and
+     (not AComponents[0].UseMetrics) then
   begin
     Result.XMin := High(Int16);
     Result.YMin := High(Int16);
@@ -3934,12 +2516,6 @@ begin
 end;
 
 function TTFontFace.GlyphOutline(AGlyphIndex: UInt32): TFontGlyphOutline;
-begin
-  Result := GlyphOutlineInternal(AGlyphIndex, 0);
-end;
-
-function TTFontFace.GlyphOutlineInternal(AGlyphIndex: UInt32;
-  ADepth: Int32): TFontGlyphOutline;
 var
   LGlyfIdx: Int32;
   LOffset, LNextOffset: Int32;
@@ -3948,10 +2524,17 @@ var
 begin
   FontGlyphOutlineClear(Result);
 
-  // CFF 字体：使用 Type 2 charstring 解析
-  if FCffValid then
+  { CFF2 outlines }
+  if FCff2Parsed then
   begin
-    Result := GlyphOutlineCff(AGlyphIndex);
+    Result := Cff2GlyphOutline(AGlyphIndex);
+    Exit;
+  end;
+
+  { CFF outlines }
+  if FCffParsed then
+  begin
+    Result := CffGlyphOutline(AGlyphIndex);
     Exit;
   end;
 
@@ -3962,26 +2545,11 @@ begin
   if LGlyfIdx < 0 then
     Exit;
 
-  // loca 偏移安全检查（防止恶意字体越界读取）
-  if (FLocaOffsets[AGlyphIndex] > UInt32(High(Int32))) or
-     (FLocaOffsets[AGlyphIndex + 1] > UInt32(High(Int32))) then
-    Exit;
-
   LOffset := Int32(FTables[LGlyfIdx].Offset) + Int32(FLocaOffsets[AGlyphIndex]);
   LNextOffset := Int32(FTables[LGlyfIdx].Offset) + Int32(FLocaOffsets[AGlyphIndex + 1]);
 
-  // 检查偏移是否在文件范围内
-  if (LOffset < 0) or (LOffset >= FDataLength) then
-    Exit;
-  if (LNextOffset < 0) or (LNextOffset > FDataLength) then
-    Exit;
-
   // 零长度 = 空字形（空格等）
   if LNextOffset <= LOffset then
-    Exit;
-
-  // 至少需要 10 字节的 glyf header
-  if LNextOffset - LOffset < 10 then
     Exit;
 
   LContours := ReadInt16BE(LOffset);
@@ -3994,3288 +2562,4897 @@ begin
     ParseGlyphOutlineSimple(LOffset + 10, LContours, Result)
   else if LContours < 0 then
   begin
-    // 复合字形：检查递归深度
-    if ADepth >= GLYF_COMPOUND_MAX_DEPTH then
-      Exit;  // 安全降级，返回空轮廓
+    // 复合字形
     ParseCompoundComponents(LOffset + 10, LCompoundBuf);
-    Result := ExpandCompoundOutline(LCompoundBuf, ADepth);
+    Result := ExpandCompoundOutline(LCompoundBuf);
+  end;
+
+  { 自动应用 gvar deltas（可变字体轮廓调整） }
+  if FHasVariationCoords and FGvarParsed then
+  begin
+    ApplyGvarDeltas(AGlyphIndex, Result, FVariationCoords);
+    RecalcOutlineBounds(Result);
   end;
 end;
 
-{ ========================================================================= }
-{ name 表解析                                                                }
-{ ========================================================================= }
-
-procedure TTFontFace.ParseName;
+procedure TTFontFace.RecalcOutlineBounds(var AOutline: TFontGlyphOutline);
 var
-  LIdx, LOff: Int32;
-  LFormat, LCount, LStringOffset: Int32;
-  I, LRecOff: Int32;
-  LPlatformID, LEncodingID, LLanguageID, LNameID: UInt16;
-  LLength, LOffset: UInt16;
-  LValue: AnsiString;
-  J, LChar: Int32;
+  LI: Int32;
+  LX, LY: Int16;
 begin
-  LIdx := FindTable(TABLE_TAG_NAME);
-  if LIdx < 0 then
-    Exit;
-
-  LOff := Int32(FTables[LIdx].Offset);
-  LFormat := ReadUInt16BE(LOff);
-  LCount := ReadUInt16BE(LOff + 2);
-  LStringOffset := ReadUInt16BE(LOff + 4);
-
-  if (LCount < 1) or (LCount > 1024) then
-    Exit;
-
-  SetLength(FNameRecords, 0);
-
-  for I := 0 to LCount - 1 do
+  if Length(AOutline.Points) = 0 then
   begin
-    LRecOff := LOff + 6 + I * 12;
-    LPlatformID := ReadUInt16BE(LRecOff);
-    LEncodingID := ReadUInt16BE(LRecOff + 2);
-    LLanguageID := ReadUInt16BE(LRecOff + 4);
-    LNameID := ReadUInt16BE(LRecOff + 6);
-    LLength := ReadUInt16BE(LRecOff + 8);
-    LOffset := ReadUInt16BE(LRecOff + 10);
+    AOutline.XMin := 0;
+    AOutline.YMin := 0;
+    AOutline.XMax := 0;
+    AOutline.YMax := 0;
+    Exit;
+  end;
 
-    // 只处理 Windows 平台 Unicode BMP 编码（Platform 3, Encoding 1）
-    // 和 Unicode 平台（Platform 0）
-    if not (((LPlatformID = 3) and (LEncodingID = 1)) or
-            (LPlatformID = 0)) then
-      Continue;
+  AOutline.XMin := AOutline.Points[0].X;
+  AOutline.YMin := AOutline.Points[0].Y;
+  AOutline.XMax := AOutline.Points[0].X;
+  AOutline.YMax := AOutline.Points[0].Y;
 
-    // 解码 UTF-16BE 字符串
-    LValue := '';
-    for J := 0 to (LLength div 2) - 1 do
+  for LI := 1 to High(AOutline.Points) do
+  begin
+    LX := AOutline.Points[LI].X;
+    LY := AOutline.Points[LI].Y;
+    if LX < AOutline.XMin then AOutline.XMin := LX;
+    if LY < AOutline.YMin then AOutline.YMin := LY;
+    if LX > AOutline.XMax then AOutline.XMax := LX;
+    if LY > AOutline.YMax then AOutline.YMax := LY;
+  end;
+end;
+
+{ -- Context subtable parsing (GSUB type 5/6, GPOS type 7/8) -- }
+
+procedure TTFontFace.ParseContextSubtable(AOffset, AFormat: Int32; AIsChained: Boolean;
+  var ATarget: TFontContextSubtableArray);
+var
+  LSub: TFontContextSubtable;
+  LBase, LI, LCount, LIdx: Int32;
+begin
+  LBase := AOffset;
+
+  FillChar(LSub, SizeOf(LSub), 0);
+  LSub.Format := AFormat;
+  LSub.IsChained := AIsChained;
+
+  if AFormat = 1 then
+  begin
+    { Format 1: glyph-based rule sets.
+      ChainedContextSubstFormat1 has the SAME subtable header as non-chained:
+      +0: format, +2: coverageOffset, +4: ruleSetCount, +6: ruleSetOffsets[].
+      Offsets in the array are relative to the subtable start. }
+    if FDataLength < LBase + 6 then Exit;
+    LSub.CoverageOffset := LBase + ReadUInt16BE(LBase + 2);
+    LSub.RuleSetCount := ReadUInt16BE(LBase + 4);
+    LSub.RuleSetOffsetsOffset := LBase; { subtable base; array at +6 }
+  end
+  else if AFormat = 2 then
+  begin
+    { Format 2: class-based }
+    if AIsChained then
     begin
-      LChar := ReadUInt16BE(LOff + LStringOffset + LOffset + J * 2);
-      if LChar < 128 then
-        LValue := LValue + AnsiString(Char(LChar))
-      else if LChar < 2048 then
+      if FDataLength < LBase + 12 then Exit;
+      LSub.CoverageOffset := LBase + ReadUInt16BE(LBase + 2);
+      LSub.BacktrackGlyphCount := ReadUInt16BE(LBase + 4);
+      LSub.BacktrackCoverageOffsetsOffset := LBase + 6;
+      LI := 6 + LSub.BacktrackGlyphCount * 2;
+      if FDataLength < LBase + LI + 6 then Exit;
+      { Chained Fmt2: +LI=InputGlyphCount, +LI+2=InputClassDefOffset,
+        +LI+4=LookaheadGlyphCount, +LI+6=LookaheadCovOffsets[laGC] }
+      LSub.InputGlyphCount := ReadUInt16BE(LBase + LI);
+      LSub.LookaheadGlyphCount := ReadUInt16BE(LBase + LI + 4);
+      LSub.LookaheadCoverageOffsetsOffset := LBase + LI + 6;
+      LI := LI + 6 + LSub.LookaheadGlyphCount * 2;
+      if FDataLength < LBase + LI + 4 then Exit;
+      LSub.ClassDefOffset := LBase + ReadUInt16BE(LBase + LI);
+      LSub.ClassSetCount := ReadUInt16BE(LBase + LI + 2);
+      LSub.ClassSetOffsetsOffset := LBase; { subtable base for chained }
+    end
+    else
+    begin
+      if FDataLength < LBase + 8 then Exit;
+      LSub.CoverageOffset := LBase + ReadUInt16BE(LBase + 2);
+      LSub.ClassDefOffset := LBase + ReadUInt16BE(LBase + 4);
+      LSub.ClassSetCount := ReadUInt16BE(LBase + 6);
+      LSub.ClassSetOffsetsOffset := LBase; { subtable base }
+    end;
+  end
+  else if AFormat = 3 then
+  begin
+    { Format 3: coverage-based }
+    if AIsChained then
+    begin
+      if FDataLength < LBase + 10 then Exit;
+      LSub.BacktrackGlyphCount := ReadUInt16BE(LBase + 2);
+      LSub.BacktrackCoverageOffsetsOffset := LBase + 4;
+      LI := 4 + LSub.BacktrackGlyphCount * 2;
+      if FDataLength < LBase + LI + 2 then Exit;
+      LSub.GlyphCount := ReadUInt16BE(LBase + LI);
+      LI := LI + 2;
+      if LSub.GlyphCount > 0 then
+        LSub.CoverageOffset := LBase + ReadUInt16BE(LBase + LI);
+      LI := LI + LSub.GlyphCount * 2;
+      if FDataLength < LBase + LI + 2 then Exit;
+      LSub.LookaheadGlyphCount := ReadUInt16BE(LBase + LI);
+      LI := LI + 2 + LSub.LookaheadGlyphCount * 2;
+      if FDataLength < LBase + LI + 2 then Exit;
+      LSub.LookupRecordCount := ReadUInt16BE(LBase + LI);
+      LSub.LookupRecordsOffset := LBase + LI + 2;
+    end
+    else
+    begin
+      if FDataLength < LBase + 6 then Exit;
+      LSub.GlyphCount := ReadUInt16BE(LBase + 2);
+      LSub.LookupRecordCount := ReadUInt16BE(LBase + 4);
+      if LSub.GlyphCount > 0 then
+        LSub.CoverageOffset := LBase + ReadUInt16BE(LBase + 6);
+      LSub.LookupRecordsOffset := LBase + 6 + LSub.GlyphCount * 2;
+    end;
+  end;
+
+  { Determine which array to store in: GSUB ContextSubst vs GPOS ContextPos.
+    We distinguish by checking if the lookup was found in GSUB or GPOS parse.
+    Simple heuristic: store all in FContextSubstSubtables if coming from GSUB
+    (called before ParseGpos), else in FContextPosSubtables.
+    Since ParseGsub runs first, and both call ParseContextSubtable,
+    we use a flag to distinguish. For simplicity, store all subtables in one
+    array and the accessor methods check both arrays. }
+
+  { Store: if coverage offset is valid, the subtable is usable }
+  if LSub.CoverageOffset > 0 then
+  begin
+    LIdx := Length(ATarget);
+    SetLength(ATarget, LIdx + 1);
+    ATarget[LIdx] := LSub;
+  end;
+end;
+
+{ -- Context subtable offset helpers -- }
+
+{ Returns absolute offset of the RuleSetOffsets[] array within a Format 1 subtable.
+  RuleSetOffsetsOffset stores the subtable base (LBase); array starts at +6. }
+function TTFontFace.CtxRuleSetArrBase(const ASub: TFontContextSubtable): Int32;
+begin
+  Result := ASub.RuleSetOffsetsOffset + 6;
+end;
+
+{ Returns absolute offset of the ClassSetOffsets[] array within a Format 2 subtable. }
+function TTFontFace.CtxClassSetArrBase(const ASub: TFontContextSubtable): Int32;
+begin
+  if ASub.IsChained then
+    { ChainedFmt2: 6 + bk*2 + 2(input) + 2(la) + la*2 + 2(classDef) + 2(count) = bk*2 + la*2 + 16 }
+    Result := ASub.ClassSetOffsetsOffset + ASub.BacktrackGlyphCount * 2 + ASub.LookaheadGlyphCount * 2 + 16
+  else
+    Result := ASub.ClassSetOffsetsOffset + 8;
+end;
+
+{ -- Coverage table lookup -- }
+
+function TTFontFace.CoverageIndex(ACovOffset, AGlyphId: Int32): Int32;
+var
+  LFmt, LCount, LI, LStart, LEnd, LMid, LVal: Int32;
+begin
+  Result := -1;
+  if FDataLength < ACovOffset + 4 then
+    Exit;
+  LFmt := ReadUInt16BE(ACovOffset);
+  if LFmt = 1 then
+  begin
+    { Format 1: sorted glyph array — binary search }
+    LCount := ReadUInt16BE(ACovOffset + 2);
+    if (LCount <= 0) or (FDataLength < ACovOffset + 4 + LCount * 2) then
+      Exit;
+    LStart := 0;
+    LEnd := LCount - 1;
+    while LStart <= LEnd do
+    begin
+      LMid := (LStart + LEnd) shr 1;
+      LVal := ReadUInt16BE(ACovOffset + 4 + LMid * 2);
+      if LVal = AGlyphId then
       begin
-        LValue := LValue + AnsiString(Char($C0 or (LChar shr 6)));
-        LValue := LValue + AnsiString(Char($80 or (LChar and $3F)));
+        Result := LMid;
+        Exit;
       end
+      else if LVal < AGlyphId then
+        LStart := LMid + 1
       else
+        LEnd := LMid - 1;
+    end;
+  end
+  else if LFmt = 2 then
+  begin
+    { Format 2: range records }
+    LCount := ReadUInt16BE(ACovOffset + 2);
+    for LI := 0 to LCount - 1 do
+    begin
+      if FDataLength < ACovOffset + 4 + LI * 6 + 6 then
+        Exit;
+      LStart := ReadUInt16BE(ACovOffset + 4 + LI * 6);
+      if (AGlyphId >= LStart) and
+         (AGlyphId <= ReadUInt16BE(ACovOffset + 4 + LI * 6 + 2)) then
       begin
-        LValue := LValue + AnsiString(Char($E0 or (LChar shr 12)));
-        LValue := LValue + AnsiString(Char($80 or ((LChar shr 6) and $3F)));
-        LValue := LValue + AnsiString(Char($80 or (LChar and $3F)));
+        Result := ReadUInt16BE(ACovOffset + 4 + LI * 6 + 4) + (AGlyphId - LStart);
+        Exit;
       end;
     end;
-
-    // 添加记录
-    SetLength(FNameRecords, Length(FNameRecords) + 1);
-    FNameRecords[High(FNameRecords)].PlatformID := LPlatformID;
-    FNameRecords[High(FNameRecords)].EncodingID := LEncodingID;
-    FNameRecords[High(FNameRecords)].LanguageID := LLanguageID;
-    FNameRecords[High(FNameRecords)].NameID := LNameID;
-    FNameRecords[High(FNameRecords)].Value := LValue;
   end;
 end;
 
-{ ========================================================================= }
-{ post 表解析（参考 Ghostty post.zig）                                        }
-{ ========================================================================= }
-
-procedure TTFontFace.ParsePost;
+function TTFontFace.ClassDefClassId(AClassDefOffset, AGlyphId: Int32): Int32;
 var
-  LIdx, LOff: Int32;
-  LVersion: UInt32;
+  LFmt, LCount, LI, LStartGlyph, LGlyphCount: Int32;
 begin
-  LIdx := FindTable(TABLE_TAG_POST);
-  if LIdx < 0 then
+  Result := 0;
+  if FDataLength < AClassDefOffset + 4 then
     Exit;
-  LOff := Int32(FTables[LIdx].Offset);
-  if LOff + 32 > FDataLength then
-    Exit;
-
-  LVersion := ReadUInt32BE(LOff);   // 16.16 fixed: $00010000 = 1.0, $00030000 = 3.0
-  FPost.UnderlinePosition := ReadInt16BE(LOff + 8);
-  FPost.UnderlineThickness := ReadInt16BE(LOff + 10);
-  FPost.IsFixedPitch := ReadUInt32BE(LOff + 12);
-  FPostValid := True;
+  LFmt := ReadUInt16BE(AClassDefOffset);
+  if LFmt = 1 then
+  begin
+    { Format 1: ClassRangeRecord array }
+    LStartGlyph := ReadUInt16BE(AClassDefOffset + 2);
+    LGlyphCount := ReadUInt16BE(AClassDefOffset + 4);
+    if AGlyphId < LStartGlyph then Exit;
+    LI := AGlyphId - LStartGlyph;
+    if LI >= LGlyphCount then Exit;
+    if FDataLength < AClassDefOffset + 6 + LI * 2 + 2 then Exit;
+    Result := ReadUInt16BE(AClassDefOffset + 6 + LI * 2);
+  end
+  else if LFmt = 2 then
+  begin
+    { Format 2: ClassRangeRecord array }
+    LCount := ReadUInt16BE(AClassDefOffset + 2);
+    for LI := 0 to LCount - 1 do
+    begin
+      if FDataLength < AClassDefOffset + 4 + LI * 6 + 6 then
+        Exit;
+      LStartGlyph := ReadUInt16BE(AClassDefOffset + 4 + LI * 6);
+      if AGlyphId < LStartGlyph then
+        Break;
+      if AGlyphId <= ReadUInt16BE(AClassDefOffset + 4 + LI * 6 + 2) then
+      begin
+        Result := ReadUInt16BE(AClassDefOffset + 4 + LI * 6 + 4);
+        Exit;
+      end;
+    end;
+  end;
 end;
 
-function TTFontFace.HasPostTable: Boolean;
+function TTFontFace.ReadAnchor(AOffset: Int32): TFontAnchor;
+var
+  LFmt: Int32;
 begin
-  Result := FPostValid;
+  Result.X := 0;
+  Result.Y := 0;
+  if FDataLength < AOffset + 6 then
+    Exit;
+  LFmt := ReadUInt16BE(AOffset);
+  if (LFmt >= 1) and (LFmt <= 3) then
+  begin
+    Result.X := ReadInt16BE(AOffset + 2);
+    Result.Y := ReadInt16BE(AOffset + 4);
+  end;
 end;
 
-function TTFontFace.UnderlinePosition: Int16;
+{ -- GSUB SingleSubst -- }
+
+function TTFontFace.HasSingleSubst: Boolean;
 begin
-  if FPostValid then
-    Result := FPost.UnderlinePosition
+  Result := Length(FSingleSubstSubtables) > 0;
+end;
+
+function TTFontFace.SingleSubstSubtableCount: Int32;
+begin
+  Result := Length(FSingleSubstSubtables);
+end;
+
+function TTFontFace.LookupSingleSubst(AGlyphId: UInt16): UInt16;
+var
+  LI, LCovIdx: Int32;
+  LSub: TFontSingleSubstSubtable;
+begin
+  Result := 0;
+  for LI := 0 to High(FSingleSubstSubtables) do
+  begin
+    LSub := FSingleSubstSubtables[LI];
+    LCovIdx := CoverageIndex(LSub.CoverageOffset, AGlyphId);
+    if LCovIdx < 0 then
+      Continue;
+    if LSub.Format = 1 then
+    begin
+      Result := UInt16(Int32(AGlyphId) + LSub.DeltaGlyphID);
+      Exit;
+    end
+    else if LSub.Format = 2 then
+    begin
+      if LCovIdx < LSub.GlyphCount then
+      begin
+        if FDataLength >= LSub.GlyphArrayOffset + LCovIdx * 2 + 2 then
+        begin
+          Result := ReadUInt16BE(LSub.GlyphArrayOffset + LCovIdx * 2);
+          Exit;
+        end;
+      end;
+    end;
+  end;
+end;
+
+function TTFontFace.LookupSingleSubstAt(AIndex: Int32; AGlyphId: UInt16): UInt16;
+var
+  LCovIdx: Int32;
+  LSub: TFontSingleSubstSubtable;
+begin
+  Result := 0;
+  if (AIndex < 0) or (AIndex >= Length(FSingleSubstSubtables)) then
+    Exit;
+  LSub := FSingleSubstSubtables[AIndex];
+  LCovIdx := CoverageIndex(LSub.CoverageOffset, AGlyphId);
+  if LCovIdx < 0 then
+    Exit;
+  if LSub.Format = 1 then
+    Result := UInt16(Int32(AGlyphId) + LSub.DeltaGlyphID)
+  else if LSub.Format = 2 then
+  begin
+    if LCovIdx < LSub.GlyphCount then
+    begin
+      if FDataLength >= LSub.GlyphArrayOffset + LCovIdx * 2 + 2 then
+        Result := ReadUInt16BE(LSub.GlyphArrayOffset + LCovIdx * 2);
+    end;
+  end;
+end;
+
+{ -- GPOS SinglePos -- }
+
+function TTFontFace.HasSinglePos: Boolean;
+begin
+  Result := Length(FSinglePosSubtables) > 0;
+end;
+
+function TTFontFace.LookupSinglePosXAdvance(AGlyphId: UInt16): Int16;
+var
+  LI, LCovIdx: Int32;
+  LSub: TFontSinglePosSubtable;
+  LValOffset: Int32;
+begin
+  Result := 0;
+  for LI := 0 to High(FSinglePosSubtables) do
+  begin
+    LSub := FSinglePosSubtables[LI];
+    if LSub.XAdvanceOffset < 0 then
+      Continue;
+    LCovIdx := CoverageIndex(LSub.CoverageOffset, AGlyphId);
+    if LCovIdx < 0 then
+      Continue;
+    if LSub.Format = 1 then
+      LValOffset := LSub.ValueOffset + LSub.XAdvanceOffset
+    else
+      LValOffset := LSub.ValueOffset + LCovIdx * LSub.ValueRecordSize + LSub.XAdvanceOffset;
+    if FDataLength >= LValOffset + 2 then
+    begin
+      Result := ReadInt16BE(LValOffset);
+      Exit;
+    end;
+  end;
+end;
+
+{ -- GPOS MarkToBase -- }
+
+function TTFontFace.HasMarkToBase: Boolean;
+begin
+  Result := Length(FMarkToBaseSubtables) > 0;
+end;
+
+function TTFontFace.LookupMarkToBase(AMarkGlyph, ABaseGlyph: UInt16): TFontAnchor;
+var
+  LI, LMarkIdx, LBaseIdx: Int32;
+  LSub: TFontMarkToBaseSubtable;
+  LMarkClass, LMarkAnchorOff: Int32;
+  LBaseAnchorOff: Int32;
+begin
+  Result.X := 0;
+  Result.Y := 0;
+  for LI := 0 to High(FMarkToBaseSubtables) do
+  begin
+    LSub := FMarkToBaseSubtables[LI];
+    LMarkIdx := CoverageIndex(LSub.MarkCoverageOffset, AMarkGlyph);
+    if LMarkIdx < 0 then
+      Continue;
+    LBaseIdx := CoverageIndex(LSub.BaseCoverageOffset, ABaseGlyph);
+    if LBaseIdx < 0 then
+      Continue;
+    { Read MarkRecord from MarkArray:
+      MarkArray: uint16 MarkCount, then MarkRecord[MarkCount]
+      MarkRecord: uint16 MarkClass, Offset16 MarkAnchor }
+    if FDataLength < LSub.MarkArrayOffset + 2 + LMarkIdx * 4 + 4 then
+      Continue;
+    LMarkClass := ReadUInt16BE(LSub.MarkArrayOffset + 2 + LMarkIdx * 4);
+    LMarkAnchorOff := ReadUInt16BE(LSub.MarkArrayOffset + 2 + LMarkIdx * 4 + 2);
+    if LMarkClass >= LSub.ClassCount then
+      Continue;
+    { Read BaseRecord from BaseArray:
+      BaseArray: uint16 BaseCount, then BaseRecord[BaseCount]
+      BaseRecord: Offset16 BaseAnchor[ClassCount] }
+    if FDataLength < LSub.BaseArrayOffset + 2 + LBaseIdx * LSub.ClassCount * 2 +
+       LMarkClass * 2 + 2 then
+      Continue;
+    LBaseAnchorOff := ReadUInt16BE(
+      LSub.BaseArrayOffset + 2 + LBaseIdx * LSub.ClassCount * 2 + LMarkClass * 2);
+    if LBaseAnchorOff = 0 then
+      Continue;
+    { Mark anchor offset is relative to MarkArray. }
+    Result := ReadAnchor(LSub.MarkArrayOffset + LMarkAnchorOff);
+    Exit;
+  end;
+end;
+
+{ -- GPOS MarkToMark -- }
+
+function TTFontFace.HasMarkToMark: Boolean;
+begin
+  Result := Length(FMarkToMarkSubtables) > 0;
+end;
+
+function TTFontFace.LookupMarkToMark(AMarkGlyph, ABaseMarkGlyph: UInt16): TFontAnchor;
+var
+  LI, LMarkIdx, LBaseIdx: Int32;
+  LSub: TFontMarkToMarkSubtable;
+  LMarkClass, LMarkAnchorOff: Int32;
+  LBaseAnchorOff: Int32;
+begin
+  Result.X := 0;
+  Result.Y := 0;
+  for LI := 0 to High(FMarkToMarkSubtables) do
+  begin
+    LSub := FMarkToMarkSubtables[LI];
+    LMarkIdx := CoverageIndex(LSub.Mark1CoverageOffset, AMarkGlyph);
+    if LMarkIdx < 0 then
+      Continue;
+    LBaseIdx := CoverageIndex(LSub.Mark2CoverageOffset, ABaseMarkGlyph);
+    if LBaseIdx < 0 then
+      Continue;
+    if FDataLength < LSub.Mark1ArrayOffset + 2 + LMarkIdx * 4 + 4 then
+      Continue;
+    LMarkClass := ReadUInt16BE(LSub.Mark1ArrayOffset + 2 + LMarkIdx * 4);
+    LMarkAnchorOff := ReadUInt16BE(LSub.Mark1ArrayOffset + 2 + LMarkIdx * 4 + 2);
+    if LMarkClass >= LSub.ClassCount then
+      Continue;
+    if FDataLength < LSub.Mark2ArrayOffset + 2 + LBaseIdx * LSub.ClassCount * 2 +
+       LMarkClass * 2 + 2 then
+      Continue;
+    LBaseAnchorOff := ReadUInt16BE(
+      LSub.Mark2ArrayOffset + 2 + LBaseIdx * LSub.ClassCount * 2 + LMarkClass * 2);
+    if LBaseAnchorOff = 0 then
+      Continue;
+    Result := ReadAnchor(LSub.Mark1ArrayOffset + LMarkAnchorOff);
+    Exit;
+  end;
+end;
+
+{ -- GPOS CursivePos -- }
+
+function TTFontFace.HasCursivePos: Boolean;
+begin
+  Result := Length(FCursivePosSubtables) > 0;
+end;
+
+function TTFontFace.LookupCursivePosEntryAnchor(AGlyph: UInt16): TFontAnchor;
+var
+  LI, LCovIdx, LRecOff, LAnchorOff: Int32;
+begin
+  Result.X := 0;
+  Result.Y := 0;
+  for LI := 0 to High(FCursivePosSubtables) do
+  begin
+    LCovIdx := CoverageIndex(FCursivePosSubtables[LI].CoverageOffset, AGlyph);
+    if LCovIdx < 0 then
+      Continue;
+    if LCovIdx >= FCursivePosSubtables[LI].EntryExitCount then
+      Continue;
+    { EntryExitRecord: EntryAnchorOffset(uint16) + ExitAnchorOffset(uint16) }
+    LRecOff := FCursivePosSubtables[LI].EntryExitArrayOffset + LCovIdx * 4;
+    if FDataLength < LRecOff + 4 then
+      Continue;
+    LAnchorOff := ReadUInt16BE(LRecOff);
+    if LAnchorOff = 0 then
+      Continue;
+    LAnchorOff := LRecOff + LAnchorOff;
+    { Anchor Format 1: format(uint16) + X(int16) + Y(int16) }
+    if FDataLength < LAnchorOff + 6 then
+      Continue;
+    Result.X := Int16(ReadUInt16BE(LAnchorOff + 2));
+    Result.Y := Int16(ReadUInt16BE(LAnchorOff + 4));
+    Exit;
+  end;
+end;
+
+function TTFontFace.LookupCursivePosExitAnchor(AGlyph: UInt16): TFontAnchor;
+var
+  LI, LCovIdx, LRecOff, LAnchorOff: Int32;
+begin
+  Result.X := 0;
+  Result.Y := 0;
+  for LI := 0 to High(FCursivePosSubtables) do
+  begin
+    LCovIdx := CoverageIndex(FCursivePosSubtables[LI].CoverageOffset, AGlyph);
+    if LCovIdx < 0 then
+      Continue;
+    if LCovIdx >= FCursivePosSubtables[LI].EntryExitCount then
+      Continue;
+    { EntryExitRecord: EntryAnchorOffset(uint16) + ExitAnchorOffset(uint16) }
+    LRecOff := FCursivePosSubtables[LI].EntryExitArrayOffset + LCovIdx * 4;
+    if FDataLength < LRecOff + 4 then
+      Continue;
+    LAnchorOff := ReadUInt16BE(LRecOff + 2);
+    if LAnchorOff = 0 then
+      Continue;
+    LAnchorOff := LRecOff + LAnchorOff;
+    { Anchor Format 1: format(uint16) + X(int16) + Y(int16) }
+    if FDataLength < LAnchorOff + 6 then
+      Continue;
+    Result.X := Int16(ReadUInt16BE(LAnchorOff + 2));
+    Result.Y := Int16(ReadUInt16BE(LAnchorOff + 4));
+    Exit;
+  end;
+end;
+
+{ -- GSUB MultipleSubst -- }
+
+function TTFontFace.HasMultipleSubst: Boolean;
+begin
+  Result := Length(FMultipleSubstSubtables) > 0;
+end;
+
+function TTFontFace.LookupMultipleSubst(AGlyphId: UInt16): TFontGlyphIdArray;
+var
+  LI, LCovIdx, LSeqOff, LGlyphCount, LJ: Int32;
+begin
+  SetLength(Result, 0);
+  for LI := 0 to High(FMultipleSubstSubtables) do
+  begin
+    LCovIdx := CoverageIndex(FMultipleSubstSubtables[LI].CoverageOffset, AGlyphId);
+    if LCovIdx < 0 then
+      Continue;
+    if LCovIdx >= FMultipleSubstSubtables[LI].SequenceCount then
+      Continue;
+    { Read Sequence offset from the offsets array }
+    LSeqOff := FMultipleSubstSubtables[LI].BaseOffset +
+      ReadUInt16BE(FMultipleSubstSubtables[LI].SequenceOffsetsOffset + LCovIdx * 2);
+    { Sequence table: GlyphCount (2 bytes) + SubstituteGlyphID[GlyphCount] }
+    if FDataLength < LSeqOff + 2 then
+      Continue;
+    LGlyphCount := ReadUInt16BE(LSeqOff);
+    if (LGlyphCount < 1) or (FDataLength < LSeqOff + 2 + LGlyphCount * 2) then
+      Continue;
+    SetLength(Result, LGlyphCount);
+    for LJ := 0 to LGlyphCount - 1 do
+      Result[LJ] := ReadUInt16BE(LSeqOff + 2 + LJ * 2);
+    Exit;
+  end;
+end;
+
+{ -- GSUB AlternateSubst -- }
+
+function TTFontFace.HasAlternateSubst: Boolean;
+begin
+  Result := Length(FAlternateSubstSubtables) > 0;
+end;
+
+function TTFontFace.LookupAlternateSubst(AGlyphId: UInt16): TFontGlyphIdArray;
+var
+  LI, LCovIdx, LSetOff, LAltCount, LJ: Int32;
+begin
+  SetLength(Result, 0);
+  for LI := 0 to High(FAlternateSubstSubtables) do
+  begin
+    LCovIdx := CoverageIndex(FAlternateSubstSubtables[LI].CoverageOffset, AGlyphId);
+    if LCovIdx < 0 then
+      Continue;
+    if LCovIdx >= FAlternateSubstSubtables[LI].AlternateSetCount then
+      Continue;
+    { Read AlternateSet offset from the offsets array }
+    LSetOff := FAlternateSubstSubtables[LI].BaseOffset +
+      ReadUInt16BE(FAlternateSubstSubtables[LI].AlternateSetOffsetsOffset + LCovIdx * 2);
+    { AlternateSet table: GlyphCount (2) + AlternateGlyphID[Count] }
+    if FDataLength < LSetOff + 2 then
+      Continue;
+    LAltCount := ReadUInt16BE(LSetOff);
+    if (LAltCount < 1) or (FDataLength < LSetOff + 2 + LAltCount * 2) then
+      Continue;
+    SetLength(Result, LAltCount);
+    for LJ := 0 to LAltCount - 1 do
+      Result[LJ] := ReadUInt16BE(LSetOff + 2 + LJ * 2);
+    Exit;
+  end;
+end;
+
+{ -- GPOS MarkToLig -- }
+
+function TTFontFace.HasMarkToLig: Boolean;
+begin
+  Result := Length(FMarkToLigatureSubtables) > 0;
+end;
+
+function TTFontFace.LookupMarkToLig(AMarkGlyph, ALigatureGlyph, AComponentIndex: UInt16): TFontAnchor;
+var
+  LI, LMarkCovIdx, LLigCovIdx: Int32;
+  LSub: TFontMarkToLigatureSubtable;
+  LClassCount, LMarkClassOff, LMarkAnchorOff: Int32;
+  LLigAttachOff, LCompCount, LCompIdx: Int32;
+begin
+  Result.X := 0;
+  Result.Y := 0;
+  for LI := 0 to High(FMarkToLigatureSubtables) do
+  begin
+    LSub := FMarkToLigatureSubtables[LI];
+    LMarkCovIdx := CoverageIndex(LSub.MarkCoverageOffset, AMarkGlyph);
+    if LMarkCovIdx < 0 then Continue;
+    LLigCovIdx := CoverageIndex(LSub.LigatureCoverageOffset, ALigatureGlyph);
+    if LLigCovIdx < 0 then Continue;
+
+    { MarkArray: MarkRecord[markCovIdx] = uint16 markClass + uint16 markAnchorOffset }
+    if FDataLength < LSub.MarkArrayOffset + 2 + LMarkCovIdx * 4 + 4 then Continue;
+    LClassCount := LSub.ClassCount;
+    LMarkClassOff := ReadUInt16BE(LSub.MarkArrayOffset + 2 + LMarkCovIdx * 4);
+    LMarkAnchorOff := ReadUInt16BE(LSub.MarkArrayOffset + 2 + LMarkCovIdx * 4 + 2);
+
+    { LigatureArray: LigatureAttach offset table at +0, then LigatureAttach records }
+    if FDataLength < LSub.LigatureArrayOffset + 2 + LLigCovIdx * 2 + 2 then Continue;
+    LLigAttachOff := LSub.LigatureArrayOffset + ReadUInt16BE(LSub.LigatureArrayOffset + 2 + LLigCovIdx * 2);
+    if FDataLength < LLigAttachOff + 2 then Continue;
+    LCompCount := ReadUInt16BE(LLigAttachOff); { component count }
+    LCompIdx := AComponentIndex;
+    if LCompIdx >= LCompCount then
+      LCompIdx := LCompCount - 1;
+    { ComponentRecord[compIdx] has ClassCount anchor offsets }
+    if LCompIdx < 0 then Continue;
+    if FDataLength < LLigAttachOff + 2 + LCompIdx * LClassCount * 2 + LMarkClassOff * 2 + 2 then Continue;
+    LMarkAnchorOff := ReadUInt16BE(LLigAttachOff + 2 + LCompIdx * LClassCount * 2 + LMarkClassOff * 2);
+    if LMarkAnchorOff = 0 then Continue;
+    Result := ReadAnchor(LSub.LigatureArrayOffset + LMarkAnchorOff);
+    { Subtract the mark's own anchor }
+    if FDataLength >= LSub.MarkArrayOffset + LMarkAnchorOff + 6 then
+    begin
+      Result.X := Result.X - ReadInt16BE(LSub.MarkArrayOffset + LMarkAnchorOff);
+      Result.Y := Result.Y - ReadInt16BE(LSub.MarkArrayOffset + LMarkAnchorOff + 2);
+    end;
+    Exit;
+  end;
+end;
+
+{ -- ContextSubst/ContextPos -- }
+
+function TTFontFace.HasContextSubst: Boolean;
+begin
+  Result := Length(FContextSubstSubtables) > 0;
+end;
+
+function TTFontFace.ContextSubstCount: Int32;
+begin
+  Result := Length(FContextSubstSubtables);
+end;
+
+function TTFontFace.GetContextSubstFmt(AIndex: Int32): Int32;
+begin
+  if (AIndex < 0) or (AIndex >= Length(FContextSubstSubtables)) then
+    Exit(0);
+  Result := FContextSubstSubtables[AIndex].Format;
+end;
+
+function TTFontFace.GetContextSubstRuleSetCount(AIndex: Int32): Int32;
+begin
+  if (AIndex < 0) or (AIndex >= Length(FContextSubstSubtables)) then
+    Exit(0);
+  if FContextSubstSubtables[AIndex].Format = 1 then
+    Result := FContextSubstSubtables[AIndex].RuleSetCount
+  else if FContextSubstSubtables[AIndex].Format = 2 then
+    Result := FContextSubstSubtables[AIndex].ClassSetCount
   else
     Result := 0;
 end;
 
-function TTFontFace.UnderlineThickness: Int16;
+function TTFontFace.GetContextSubstForGlyph(AIndex: Int32; AGlyphId: UInt16): TFontContextLookupRecordArray;
+var
+  LSub: TFontContextSubtable;
+  LCovIdx, LRuleOff, LRuleCount, LSubstCount, LI, LJ: Int32;
+  LRSOff, LRuleSetCount: Int32;
+  LClassId, LClassSetOff: Int32;
+  LGlyphCount: Int32;
 begin
-  if FPostValid then
+  SetLength(Result, 0);
+  if (AIndex < 0) or (AIndex >= Length(FContextSubstSubtables)) then
+    Exit;
+  LSub := FContextSubstSubtables[AIndex];
+
+  if LSub.Format = 1 then
   begin
-    Result := FPost.UnderlineThickness;
-    // Ghostty 容错：thickness=0 视为损坏，返回 -1 作为 fallback 信号
-    if Result = 0 then
-      Result := -1;
+    { Format 1: glyph-based rule sets }
+    LCovIdx := CoverageIndex(LSub.CoverageOffset, AGlyphId);
+    if LCovIdx < 0 then Exit;
+    if (LSub.RuleSetCount <= 0) or (LCovIdx >= LSub.RuleSetCount) then Exit;
+    LJ := CtxRuleSetArrBase(LSub);
+    if FDataLength < LJ + LCovIdx * 2 + 2 then Exit;
+    LRSOff := LSub.RuleSetOffsetsOffset + ReadUInt16BE(LJ + LCovIdx * 2);
+    if (LRSOff = LSub.RuleSetOffsetsOffset) or (FDataLength < LRSOff + 2) then Exit;
+    LRuleCount := ReadUInt16BE(LRSOff);
+    if LRuleCount <= 0 then Exit;
+    { Use first rule }
+    if FDataLength < LRSOff + 4 then Exit;
+    LRuleOff := LRSOff + ReadUInt16BE(LRSOff + 2);
+    if FDataLength < LRuleOff + 4 then Exit;
+    if LSub.IsChained then
+    begin
+      { ChainedSubRule: uint16 backtrackGC, uint16 inputGC, uint16 lookaheadGC,
+        GlyphID backtrack[bkGC], input[inputGC-1], lookahead[laGC],
+        uint16 seqLookupCount, SeqLookupRecord[seqLookupCount] }
+      if FDataLength < LRuleOff + 6 then Exit;
+      LI := ReadUInt16BE(LRuleOff);     { rule's backtrackGC }
+      LGlyphCount := ReadUInt16BE(LRuleOff + 2); { rule's inputGC }
+      LJ := ReadUInt16BE(LRuleOff + 4); { rule's lookaheadGC }
+      LI := 6 + LI * 2 + (LGlyphCount - 1) * 2 + LJ * 2;
+      LSubstCount := ReadUInt16BE(LRuleOff + LI);
+      Inc(LI, 2);
+      SetLength(Result, LSubstCount);
+      for LJ := 0 to LSubstCount - 1 do
+      begin
+        if FDataLength < LRuleOff + LI + LJ * 4 + 4 then Break;
+        Result[LJ].SequenceIndex := ReadUInt16BE(LRuleOff + LI + LJ * 4);
+        Result[LJ].LookupIndex := ReadUInt16BE(LRuleOff + LI + LJ * 4 + 2);
+      end;
+    end
+    else
+    begin
+      { SubRule: uint16 glyphCount, uint16 substCount,
+        GlyphID input[glyphCount-1], SubstLookupRecord[substCount] }
+      LGlyphCount := ReadUInt16BE(LRuleOff);
+      LSubstCount := ReadUInt16BE(LRuleOff + 2);
+      LI := 2 + LGlyphCount * 2; { skip glyphCount + input[glyphCount-1] }
+      SetLength(Result, LSubstCount);
+      for LJ := 0 to LSubstCount - 1 do
+      begin
+        if FDataLength < LRuleOff + LI + LJ * 4 + 4 then Break;
+        Result[LJ].SequenceIndex := ReadUInt16BE(LRuleOff + LI + LJ * 4);
+        Result[LJ].LookupIndex := ReadUInt16BE(LRuleOff + LI + LJ * 4 + 2);
+      end;
+    end;
   end
-  else
-    Result := -1;
+  else if LSub.Format = 2 then
+  begin
+    { Format 2: class-based }
+    LCovIdx := CoverageIndex(LSub.CoverageOffset, AGlyphId);
+    if LCovIdx < 0 then Exit;
+    { Look up class ID for this glyph }
+    LClassId := 0; { Default class if ClassDef lookup fails }
+    if LSub.ClassDefOffset > 0 then
+      LClassId := ClassDefClassId(LSub.ClassDefOffset, AGlyphId);
+    if (LSub.ClassSetCount <= 0) or (LClassId >= LSub.ClassSetCount) then Exit;
+    LJ := CtxClassSetArrBase(LSub);
+    if FDataLength < LJ + LClassId * 2 + 2 then Exit;
+    LClassSetOff := LSub.ClassSetOffsetsOffset + ReadUInt16BE(LJ + LClassId * 2);
+    if (LClassSetOff = LSub.ClassSetOffsetsOffset) or (FDataLength < LClassSetOff + 2) then Exit;
+    LRuleCount := ReadUInt16BE(LClassSetOff);
+    if LRuleCount <= 0 then Exit;
+    if FDataLength < LClassSetOff + 4 then Exit;
+    LRuleOff := LClassSetOff + ReadUInt16BE(LClassSetOff + 2);
+    if FDataLength < LRuleOff + 4 then Exit;
+    LSubstCount := ReadUInt16BE(LRuleOff + 2);
+    SetLength(Result, LSubstCount);
+    for LI := 0 to LSubstCount - 1 do
+    begin
+      if FDataLength < LRuleOff + 4 + LI * 4 + 4 then Break;
+      Result[LI].SequenceIndex := ReadUInt16BE(LRuleOff + 4 + LI * 4);
+      Result[LI].LookupIndex := ReadUInt16BE(LRuleOff + 4 + LI * 4 + 2);
+    end;
+  end
+  else if LSub.Format = 3 then
+  begin
+    { Format 3: coverage-based — check if glyph is in first coverage }
+    if LSub.GlyphCount <= 0 then Exit;
+    LCovIdx := CoverageIndex(LSub.CoverageOffset, AGlyphId);
+    if LCovIdx < 0 then Exit;
+    SetLength(Result, LSub.LookupRecordCount);
+    for LI := 0 to LSub.LookupRecordCount - 1 do
+    begin
+      if FDataLength < LSub.LookupRecordsOffset + LI * 4 + 4 then Break;
+      Result[LI].SequenceIndex := ReadUInt16BE(LSub.LookupRecordsOffset + LI * 4);
+      Result[LI].LookupIndex := ReadUInt16BE(LSub.LookupRecordsOffset + LI * 4 + 2);
+    end;
+  end;
+end;
+
+function TTFontFace.MatchContextSubst(AIndex: Int32;
+  const AGlyphs: array of UInt16; APosition: Int32): TFontContextLookupRecordArray;
+var
+  LSub: TFontContextSubtable;
+  LCovIdx, LRuleOff, LRuleCount, LSubstCount, LI, LJ, LK: Int32;
+  LRSOff, LRuleSetCount: Int32;
+  LClassId, LClassSetOff, LGlyphCount: Int32;
+  LInputGlyphCount, LBkCount, LLaCount: Int32;
+  LMatch: Boolean;
+  LGlyphArr: array of UInt16;
+begin
+  SetLength(Result, 0);
+  if (AIndex < 0) or (AIndex >= Length(FContextSubstSubtables)) then
+    Exit;
+  if (APosition < 0) or (APosition >= Length(AGlyphs)) then
+    Exit;
+  LSub := FContextSubstSubtables[AIndex];
+
+  if LSub.Format = 1 then
+  begin
+    { Format 1: glyph-based rule sets — 逐规则做完整输入序列匹配 }
+    LCovIdx := CoverageIndex(LSub.CoverageOffset, AGlyphs[APosition]);
+    if LCovIdx < 0 then Exit;
+    if (LSub.RuleSetCount <= 0) or (LCovIdx >= LSub.RuleSetCount) then Exit;
+    LJ := CtxRuleSetArrBase(LSub);
+    if FDataLength < LJ + LCovIdx * 2 + 2 then Exit;
+    LRSOff := LSub.RuleSetOffsetsOffset + ReadUInt16BE(LJ + LCovIdx * 2);
+    if (LRSOff = LSub.RuleSetOffsetsOffset) or (FDataLength < LRSOff + 2) then Exit;
+    LRuleCount := ReadUInt16BE(LRSOff);
+    if LRuleCount <= 0 then Exit;
+    for LI := 0 to LRuleCount - 1 do
+    begin
+      if FDataLength < LRSOff + 2 + LI * 2 + 2 then Break;
+      LRuleOff := LRSOff + ReadUInt16BE(LRSOff + 2 + LI * 2);
+      if FDataLength < LRuleOff + 4 then Continue;
+      if LSub.IsChained then
+      begin
+        { ChainedSubRule: backtrackGC, inputGC, lookaheadGC,
+          backtrack[bkGC], input[inputGC-1], lookahead[laGC],
+          seqLookupCount, SeqLookupRecord[] }
+        if FDataLength < LRuleOff + 6 then Continue;
+        LBkCount := ReadUInt16BE(LRuleOff);
+        LInputGlyphCount := ReadUInt16BE(LRuleOff + 2);
+        LLaCount := ReadUInt16BE(LRuleOff + 4);
+        { 检查输入序列匹配（不含首个 glyph，首个已在 coverage 中匹配） }
+        if APosition + LInputGlyphCount > Length(AGlyphs) then Continue;
+        LMatch := True;
+        for LJ := 1 to LInputGlyphCount - 1 do
+        begin
+          LK := ReadUInt16BE(LRuleOff + 6 + (LBkCount + LJ - 1) * 2);
+          if AGlyphs[APosition + LJ] <> LK then
+          begin
+            LMatch := False;
+            Break;
+          end;
+        end;
+        if not LMatch then Continue;
+        { 检查 backtrack（APosition-1, APosition-2, ...） }
+        if APosition < LBkCount then Continue;
+        for LJ := 0 to LBkCount - 1 do
+        begin
+          LK := ReadUInt16BE(LRuleOff + 6 + LJ * 2);
+          if AGlyphs[APosition - 1 - LJ] <> LK then
+          begin
+            LMatch := False;
+            Break;
+          end;
+        end;
+        if not LMatch then Continue;
+        { 检查 lookahead }
+        LK := APosition + LInputGlyphCount;
+        if LK + LLaCount > Length(AGlyphs) then Continue;
+        for LJ := 0 to LLaCount - 1 do
+        begin
+          if AGlyphs[LK + LJ] <> ReadUInt16BE(LRuleOff + 6 + (LBkCount + LInputGlyphCount - 1 + LJ) * 2) then
+          begin
+            LMatch := False;
+            Break;
+          end;
+        end;
+        if not LMatch then Continue;
+        { 匹配成功 — 提取 lookup records }
+        LJ := 6 + (LBkCount + LInputGlyphCount - 1 + LLaCount) * 2;
+        LSubstCount := ReadUInt16BE(LRuleOff + LJ);
+        Inc(LJ, 2);
+        SetLength(Result, LSubstCount);
+        for LK := 0 to LSubstCount - 1 do
+        begin
+          if FDataLength < LRuleOff + LJ + LK * 4 + 4 then Break;
+          Result[LK].SequenceIndex := ReadUInt16BE(LRuleOff + LJ + LK * 4);
+          Result[LK].LookupIndex := ReadUInt16BE(LRuleOff + LJ + LK * 4 + 2);
+        end;
+        Exit;
+      end
+      else
+      begin
+        { SubRule: inputGC, substCount, input[inputGC-1], SubstLookupRecord[] }
+        LInputGlyphCount := ReadUInt16BE(LRuleOff);
+        LSubstCount := ReadUInt16BE(LRuleOff + 2);
+        if APosition + LInputGlyphCount > Length(AGlyphs) then Continue;
+        { 匹配输入序列（不含首个 glyph） }
+        LMatch := True;
+        for LJ := 1 to LInputGlyphCount - 1 do
+        begin
+          LK := ReadUInt16BE(LRuleOff + 4 + (LJ - 1) * 2);
+          if AGlyphs[APosition + LJ] <> LK then
+          begin
+            LMatch := False;
+            Break;
+          end;
+        end;
+        if not LMatch then Continue;
+        { 匹配成功 — 提取 lookup records }
+        LJ := 2 + LInputGlyphCount * 2;
+        SetLength(Result, LSubstCount);
+        for LK := 0 to LSubstCount - 1 do
+        begin
+          if FDataLength < LRuleOff + LJ + LK * 4 + 4 then Break;
+          Result[LK].SequenceIndex := ReadUInt16BE(LRuleOff + LJ + LK * 4);
+          Result[LK].LookupIndex := ReadUInt16BE(LRuleOff + LJ + LK * 4 + 2);
+        end;
+        Exit;
+      end;
+    end;
+  end
+  else if LSub.Format = 2 then
+  begin
+    { Format 2: class-based — 逐 ClassRule 做完整 class 序列匹配 }
+    LCovIdx := CoverageIndex(LSub.CoverageOffset, AGlyphs[APosition]);
+    if LCovIdx < 0 then Exit;
+    LClassId := 0;
+    if LSub.ClassDefOffset > 0 then
+      LClassId := ClassDefClassId(LSub.ClassDefOffset, AGlyphs[APosition]);
+    if (LSub.ClassSetCount <= 0) or (LClassId >= LSub.ClassSetCount) then Exit;
+    LJ := CtxClassSetArrBase(LSub);
+    if FDataLength < LJ + LClassId * 2 + 2 then Exit;
+    LClassSetOff := LSub.ClassSetOffsetsOffset + ReadUInt16BE(LJ + LClassId * 2);
+    if (LClassSetOff = LSub.ClassSetOffsetsOffset) or (FDataLength < LClassSetOff + 2) then Exit;
+    LRuleCount := ReadUInt16BE(LClassSetOff);
+    if LRuleCount <= 0 then Exit;
+    for LI := 0 to LRuleCount - 1 do
+    begin
+      if FDataLength < LClassSetOff + 2 + LI * 2 + 2 then Break;
+      LRuleOff := LClassSetOff + ReadUInt16BE(LClassSetOff + 2 + LI * 2);
+      if FDataLength < LRuleOff + 4 then Continue;
+      LInputGlyphCount := ReadUInt16BE(LRuleOff);
+      LSubstCount := ReadUInt16BE(LRuleOff + 2);
+      if APosition + LInputGlyphCount > Length(AGlyphs) then Continue;
+      { 匹配 class 序列（首个 glyph 的 class 已隐式匹配） }
+      LMatch := True;
+      for LJ := 1 to LInputGlyphCount - 1 do
+      begin
+        LK := ReadUInt16BE(LRuleOff + 4 + (LJ - 1) * 2);
+        if LSub.ClassDefOffset > 0 then
+        begin
+          if ClassDefClassId(LSub.ClassDefOffset, AGlyphs[APosition + LJ]) <> LK then
+          begin
+            LMatch := False;
+            Break;
+          end;
+        end
+        else if LK <> 0 then
+        begin
+          LMatch := False;
+          Break;
+        end;
+      end;
+      if not LMatch then Continue;
+      { 匹配成功 — 提取 lookup records }
+      LJ := 2 + LInputGlyphCount * 2;
+      SetLength(Result, LSubstCount);
+      for LK := 0 to LSubstCount - 1 do
+      begin
+        if FDataLength < LRuleOff + 4 + LJ + LK * 4 + 4 then Break;
+        Result[LK].SequenceIndex := ReadUInt16BE(LRuleOff + 4 + LJ + LK * 4);
+        Result[LK].LookupIndex := ReadUInt16BE(LRuleOff + 4 + LJ + LK * 4 + 2);
+      end;
+      Exit;
+    end;
+  end
+  else if LSub.Format = 3 then
+  begin
+    { Format 3: coverage-based — 每个 glyph 必须在对应 coverage 中 }
+    if LSub.GlyphCount <= 0 then Exit;
+    if APosition + LSub.GlyphCount > Length(AGlyphs) then Exit;
+    { 第一个 coverage 已在调用方或外部检查，但这里再做完整匹配 }
+    for LI := 0 to LSub.GlyphCount - 1 do
+    begin
+      LJ := LSub.CoverageOffset; { 第一个 coverage }
+      { 读取 coverage offset 数组（多个 coverage） }
+      if LI = 0 then
+      begin
+        if CoverageIndex(LSub.CoverageOffset, AGlyphs[APosition]) < 0 then Exit;
+      end
+      else
+      begin
+        { 后续 coverage offsets 在 LookupRecordsOffset 之前的 offset 数组中 }
+        if FDataLength < LSub.LookupRecordsOffset - (LSub.GlyphCount - 1 - LI) * 4 then Exit;
+        LJ := ReadUInt16BE(LSub.LookupRecordsOffset - (LSub.GlyphCount - LI) * 4);
+        if LJ = 0 then Exit;
+        if CoverageIndex(LJ, AGlyphs[APosition + LI]) < 0 then Exit;
+      end;
+    end;
+    { 全部匹配 — 返回 lookup records }
+    SetLength(Result, LSub.LookupRecordCount);
+    for LI := 0 to LSub.LookupRecordCount - 1 do
+    begin
+      if FDataLength < LSub.LookupRecordsOffset + LI * 4 + 4 then Break;
+      Result[LI].SequenceIndex := ReadUInt16BE(LSub.LookupRecordsOffset + LI * 4);
+      Result[LI].LookupIndex := ReadUInt16BE(LSub.LookupRecordsOffset + LI * 4 + 2);
+    end;
+  end;
+end;
+
+function TTFontFace.ApplyContextSubstLookup(ALookupIndex: Int32; AGlyphId: UInt16): UInt16;
+var
+  LType, LFirstIdx, LCount, LI, LCovIdx: Int32;
+  LSub: TFontSingleSubstSubtable;
+begin
+  Result := AGlyphId;
+  if (ALookupIndex < 0) or (ALookupIndex >= Length(FLookupEntries)) then
+    Exit;
+  LType := FLookupEntries[ALookupIndex].LookupType;
+  LFirstIdx := FLookupEntries[ALookupIndex].FirstSubtableIndex;
+  LCount := FLookupEntries[ALookupIndex].SubtableCount;
+  { GSUB Type 1: SingleSubst — 最常见的 context-referenced lookup }
+  if (LType = GSUB_LOOKUP_SINGLE_SUBST) and (LFirstIdx >= 0) and (LCount > 0) then
+  begin
+    for LI := LFirstIdx to LFirstIdx + LCount - 1 do
+    begin
+      if LI > High(FSingleSubstSubtables) then Break;
+      LSub := FSingleSubstSubtables[LI];
+      LCovIdx := CoverageIndex(LSub.CoverageOffset, AGlyphId);
+      if LCovIdx < 0 then Continue;
+      if LSub.Format = 1 then
+        Exit(UInt16(Int32(AGlyphId) + LSub.DeltaGlyphID))
+      else if LSub.Format = 2 then
+      begin
+        if LCovIdx < LSub.GlyphCount then
+        begin
+          if FDataLength >= LSub.GlyphArrayOffset + LCovIdx * 2 + 2 then
+            Exit(ReadUInt16BE(LSub.GlyphArrayOffset + LCovIdx * 2));
+        end;
+      end;
+    end;
+  end;
+  { 其他 lookup type 暂不支持（Ligature 需要多 glyph 上下文） }
+end;
+
+function TTFontFace.ApplyContextSubstLookupMulti(ALookupIndex: Int32;
+  AGlyphId: UInt16): TFontGlyphIdArray;
+var
+  LType, LFirstIdx, LCount, LI, LCovIdx: Int32;
+  LSub: TFontSingleSubstSubtable;
+  LMulSub: TFontMultipleSubstSubtable;
+  LSeqOff, LSeqCount, LJ: Int32;
+  LNewGid: UInt16;
+begin
+  SetLength(Result, 1);
+  Result[0] := AGlyphId;
+  if (ALookupIndex < 0) or (ALookupIndex >= Length(FLookupEntries)) then
+    Exit;
+  LType := FLookupEntries[ALookupIndex].LookupType;
+  LFirstIdx := FLookupEntries[ALookupIndex].FirstSubtableIndex;
+  LCount := FLookupEntries[ALookupIndex].SubtableCount;
+
+  { GSUB Type 1: SingleSubst }
+  if (LType = GSUB_LOOKUP_SINGLE_SUBST) and (LFirstIdx >= 0) and (LCount > 0) then
+  begin
+    for LI := LFirstIdx to LFirstIdx + LCount - 1 do
+    begin
+      if LI > High(FSingleSubstSubtables) then Break;
+      LSub := FSingleSubstSubtables[LI];
+      LCovIdx := CoverageIndex(LSub.CoverageOffset, AGlyphId);
+      if LCovIdx < 0 then Continue;
+      if LSub.Format = 1 then
+      begin
+        LNewGid := UInt16(Int32(AGlyphId) + LSub.DeltaGlyphID);
+        Result[0] := LNewGid;
+        Exit;
+      end
+      else if LSub.Format = 2 then
+      begin
+        if LCovIdx < LSub.GlyphCount then
+        begin
+          if FDataLength >= LSub.GlyphArrayOffset + LCovIdx * 2 + 2 then
+            Result[0] := ReadUInt16BE(LSub.GlyphArrayOffset + LCovIdx * 2);
+          Exit;
+        end;
+      end;
+    end;
+  end;
+
+  { GSUB Type 2: MultipleSubst (1 → N expansion) }
+  if (LType = GSUB_LOOKUP_MULTIPLE_SUBST) and (LFirstIdx >= 0) and (LCount > 0) then
+  begin
+    for LI := LFirstIdx to LFirstIdx + LCount - 1 do
+    begin
+      if LI > High(FMultipleSubstSubtables) then Break;
+      LMulSub := FMultipleSubstSubtables[LI];
+      LCovIdx := CoverageIndex(LMulSub.CoverageOffset, AGlyphId);
+      if LCovIdx < 0 then Continue;
+      if LCovIdx >= LMulSub.SequenceCount then Continue;
+      LSeqOff := LMulSub.SequenceOffsetsOffset + LCovIdx * 2;
+      if FDataLength < LSeqOff + 2 then Continue;
+      LSeqOff := LMulSub.BaseOffset + Int32(ReadUInt16BE(LSeqOff));
+      if FDataLength < LSeqOff + 2 then Continue;
+      LSeqCount := ReadUInt16BE(LSeqOff);
+      SetLength(Result, LSeqCount);
+      for LJ := 0 to LSeqCount - 1 do
+      begin
+        if FDataLength >= LSeqOff + 2 + LJ * 2 + 2 then
+          Result[LJ] := ReadUInt16BE(LSeqOff + 2 + LJ * 2)
+        else
+          Result[LJ] := AGlyphId;
+      end;
+      Exit;
+    end;
+  end;
+end;
+
+procedure TTFontFace.GetContextSubstInfo(AIndex: Int32;
+  out AInputGlyphCount, ASubstCount: Int32);
+var
+  LSub: TFontContextSubtable;
+  LRuleOff, LRSOff: Int32;
+begin
+  AInputGlyphCount := 0;
+  ASubstCount := 0;
+  if (AIndex < 0) or (AIndex >= Length(FContextSubstSubtables)) then
+    Exit;
+  LSub := FContextSubstSubtables[AIndex];
+
+  if LSub.Format = 3 then
+  begin
+    AInputGlyphCount := LSub.GlyphCount;
+    ASubstCount := LSub.LookupRecordCount;
+  end
+  else if (LSub.Format = 1) and (LSub.RuleSetCount > 0) then
+  begin
+    { Get first rule from first rule set }
+    LRuleOff := CtxRuleSetArrBase(LSub);
+    if FDataLength >= LRuleOff + 2 then
+    begin
+      LRSOff := LSub.RuleSetOffsetsOffset + ReadUInt16BE(LRuleOff);
+      if (LRSOff <> LSub.RuleSetOffsetsOffset) and (FDataLength >= LRSOff + 4) then
+      begin
+        LRSOff := LRSOff + ReadUInt16BE(LRSOff + 2);
+        if FDataLength >= LRSOff + 4 then
+        begin
+          AInputGlyphCount := ReadUInt16BE(LRSOff);
+          ASubstCount := ReadUInt16BE(LRSOff + 2);
+        end;
+      end;
+    end;
+  end
+  else if (LSub.Format = 2) and (LSub.ClassSetCount > 0) then
+  begin
+    { Get first rule from first non-null class set }
+    LRuleOff := CtxClassSetArrBase(LSub);
+    if FDataLength >= LRuleOff + 2 then
+    begin
+      LRSOff := LSub.ClassSetOffsetsOffset + ReadUInt16BE(LRuleOff);
+      if (LRSOff <> LSub.ClassSetOffsetsOffset) and (FDataLength >= LRSOff + 4) then
+      begin
+        LRSOff := LRSOff + ReadUInt16BE(LRSOff + 2);
+        if FDataLength >= LRSOff + 4 then
+        begin
+          AInputGlyphCount := ReadUInt16BE(LRSOff);
+          ASubstCount := ReadUInt16BE(LRSOff + 2);
+        end;
+      end;
+    end;
+  end;
+end;
+
+function TTFontFace.GetContextSubstLookup(AIndex, ASubIndex: Int32;
+  out ASeqIdx, ALookupIdx: UInt16): Boolean;
+var
+  LSub: TFontContextSubtable;
+  LRSOff, LRuleOff, LSubstCount: Int32;
+begin
+  Result := False;
+  ASeqIdx := 0;
+  ALookupIdx := 0;
+  if (AIndex < 0) or (AIndex >= Length(FContextSubstSubtables)) then
+    Exit;
+  LSub := FContextSubstSubtables[AIndex];
+
+  if LSub.Format = 3 then
+  begin
+    if (ASubIndex < 0) or (ASubIndex >= LSub.LookupRecordCount) then Exit;
+    if FDataLength < LSub.LookupRecordsOffset + ASubIndex * 4 + 4 then Exit;
+    ASeqIdx := ReadUInt16BE(LSub.LookupRecordsOffset + ASubIndex * 4);
+    ALookupIdx := ReadUInt16BE(LSub.LookupRecordsOffset + ASubIndex * 4 + 2);
+    Result := True;
+  end
+  else if LSub.Format = 1 then
+  begin
+    if LSub.RuleSetCount <= 0 then Exit;
+    LRuleOff := CtxRuleSetArrBase(LSub);
+    if FDataLength < LRuleOff + 2 then Exit;
+    LRSOff := LSub.RuleSetOffsetsOffset + ReadUInt16BE(LRuleOff);
+    if (LRSOff = LSub.RuleSetOffsetsOffset) or (FDataLength < LRSOff + 4) then Exit;
+    LRuleOff := LRSOff + ReadUInt16BE(LRSOff + 2);
+    if FDataLength < LRuleOff + 4 then Exit;
+    LSubstCount := ReadUInt16BE(LRuleOff + 2);
+    if (ASubIndex < 0) or (ASubIndex >= LSubstCount) then Exit;
+    if FDataLength < LRuleOff + 4 + ASubIndex * 4 + 4 then Exit;
+    ASeqIdx := ReadUInt16BE(LRuleOff + 4 + ASubIndex * 4);
+    ALookupIdx := ReadUInt16BE(LRuleOff + 4 + ASubIndex * 4 + 2);
+    Result := True;
+  end
+  else if LSub.Format = 2 then
+  begin
+    if LSub.ClassSetCount <= 0 then Exit;
+    LRuleOff := CtxClassSetArrBase(LSub);
+    if FDataLength < LRuleOff + 2 then Exit;
+    LRSOff := LSub.ClassSetOffsetsOffset + ReadUInt16BE(LRuleOff);
+    if (LRSOff = LSub.ClassSetOffsetsOffset) or (FDataLength < LRSOff + 4) then Exit;
+    LRuleOff := LRSOff + ReadUInt16BE(LRSOff + 2);
+    if FDataLength < LRuleOff + 4 then Exit;
+    LSubstCount := ReadUInt16BE(LRuleOff + 2);
+    if (ASubIndex < 0) or (ASubIndex >= LSubstCount) then Exit;
+    if FDataLength < LRuleOff + 4 + ASubIndex * 4 + 4 then Exit;
+    ASeqIdx := ReadUInt16BE(LRuleOff + 4 + ASubIndex * 4);
+    ALookupIdx := ReadUInt16BE(LRuleOff + 4 + ASubIndex * 4 + 2);
+    Result := True;
+  end;
+end;
+
+function TTFontFace.GetContextSubstInputCoverage(AIndex, ASubIndex: Int32): Int32;
+begin
+  Result := -1;
+  if (AIndex < 0) or (AIndex >= Length(FContextSubstSubtables)) then
+    Exit;
+  Result := FContextSubstSubtables[AIndex].CoverageOffset;
+end;
+
+function TTFontFace.HasContextPos: Boolean;
+begin
+  Result := Length(FContextPosSubtables) > 0;
+end;
+
+function TTFontFace.ContextPosCount: Int32;
+begin
+  Result := Length(FContextPosSubtables);
+end;
+
+procedure TTFontFace.GetContextPosInfo(AIndex: Int32;
+  out AInputGlyphCount, APosCount: Int32);
+var
+  LSub: TFontContextSubtable;
+  LRuleOff, LRSOff: Int32;
+begin
+  AInputGlyphCount := 0;
+  APosCount := 0;
+  if (AIndex < 0) or (AIndex >= Length(FContextPosSubtables)) then
+    Exit;
+  LSub := FContextPosSubtables[AIndex];
+
+  if LSub.Format = 3 then
+  begin
+    AInputGlyphCount := LSub.GlyphCount;
+    APosCount := LSub.LookupRecordCount;
+  end
+  else if (LSub.Format = 1) and (LSub.RuleSetCount > 0) then
+  begin
+    LRuleOff := CtxRuleSetArrBase(LSub);
+    if FDataLength >= LRuleOff + 2 then
+    begin
+      LRSOff := LSub.RuleSetOffsetsOffset + ReadUInt16BE(LRuleOff);
+      if (LRSOff <> LSub.RuleSetOffsetsOffset) and (FDataLength >= LRSOff + 4) then
+      begin
+        LRSOff := LRSOff + ReadUInt16BE(LRSOff + 2);
+        if FDataLength >= LRSOff + 4 then
+        begin
+          AInputGlyphCount := ReadUInt16BE(LRSOff);
+          APosCount := ReadUInt16BE(LRSOff + 2);
+        end;
+      end;
+    end;
+  end
+  else if (LSub.Format = 2) and (LSub.ClassSetCount > 0) then
+  begin
+    LRuleOff := CtxClassSetArrBase(LSub);
+    if FDataLength >= LRuleOff + 2 then
+    begin
+      LRSOff := LSub.ClassSetOffsetsOffset + ReadUInt16BE(LRuleOff);
+      if (LRSOff <> LSub.ClassSetOffsetsOffset) and (FDataLength >= LRSOff + 4) then
+      begin
+        LRSOff := LRSOff + ReadUInt16BE(LRSOff + 2);
+        if FDataLength >= LRSOff + 4 then
+        begin
+          AInputGlyphCount := ReadUInt16BE(LRSOff);
+          APosCount := ReadUInt16BE(LRSOff + 2);
+        end;
+      end;
+    end;
+  end;
+end;
+
+function TTFontFace.GetContextPosLookup(AIndex, ASubIndex: Int32;
+  out ASeqIdx, ALookupIdx: UInt16): Boolean;
+var
+  LSub: TFontContextSubtable;
+  LRSOff, LRuleOff, LSubstCount: Int32;
+begin
+  Result := False;
+  ASeqIdx := 0;
+  ALookupIdx := 0;
+  if (AIndex < 0) or (AIndex >= Length(FContextPosSubtables)) then
+    Exit;
+  LSub := FContextPosSubtables[AIndex];
+
+  if LSub.Format = 3 then
+  begin
+    if (ASubIndex < 0) or (ASubIndex >= LSub.LookupRecordCount) then Exit;
+    if FDataLength < LSub.LookupRecordsOffset + ASubIndex * 4 + 4 then Exit;
+    ASeqIdx := ReadUInt16BE(LSub.LookupRecordsOffset + ASubIndex * 4);
+    ALookupIdx := ReadUInt16BE(LSub.LookupRecordsOffset + ASubIndex * 4 + 2);
+    Result := True;
+  end
+  else if LSub.Format = 1 then
+  begin
+    if LSub.RuleSetCount <= 0 then Exit;
+    LRuleOff := CtxRuleSetArrBase(LSub);
+    if FDataLength < LRuleOff + 2 then Exit;
+    LRSOff := LSub.RuleSetOffsetsOffset + ReadUInt16BE(LRuleOff);
+    if (LRSOff = LSub.RuleSetOffsetsOffset) or (FDataLength < LRSOff + 4) then Exit;
+    LRuleOff := LRSOff + ReadUInt16BE(LRSOff + 2);
+    if FDataLength < LRuleOff + 4 then Exit;
+    LSubstCount := ReadUInt16BE(LRuleOff + 2);
+    if (ASubIndex < 0) or (ASubIndex >= LSubstCount) then Exit;
+    if FDataLength < LRuleOff + 4 + ASubIndex * 4 + 4 then Exit;
+    ASeqIdx := ReadUInt16BE(LRuleOff + 4 + ASubIndex * 4);
+    ALookupIdx := ReadUInt16BE(LRuleOff + 4 + ASubIndex * 4 + 2);
+    Result := True;
+  end
+  else if LSub.Format = 2 then
+  begin
+    if LSub.ClassSetCount <= 0 then Exit;
+    LRuleOff := CtxClassSetArrBase(LSub);
+    if FDataLength < LRuleOff + 2 then Exit;
+    LRSOff := LSub.ClassSetOffsetsOffset + ReadUInt16BE(LRuleOff);
+    if (LRSOff = LSub.ClassSetOffsetsOffset) or (FDataLength < LRSOff + 4) then Exit;
+    LRuleOff := LRSOff + ReadUInt16BE(LRSOff + 2);
+    if FDataLength < LRuleOff + 4 then Exit;
+    LSubstCount := ReadUInt16BE(LRuleOff + 2);
+    if (ASubIndex < 0) or (ASubIndex >= LSubstCount) then Exit;
+    if FDataLength < LRuleOff + 4 + ASubIndex * 4 + 4 then Exit;
+    ASeqIdx := ReadUInt16BE(LRuleOff + 4 + ASubIndex * 4);
+    ALookupIdx := ReadUInt16BE(LRuleOff + 4 + ASubIndex * 4 + 2);
+    Result := True;
+  end;
+end;
+
+function TTFontFace.GetContextPosInputCoverage(AIndex, ASubIndex: Int32): Int32;
+begin
+  Result := -1;
+  if (AIndex < 0) or (AIndex >= Length(FContextPosSubtables)) then
+    Exit;
+  Result := FContextPosSubtables[AIndex].CoverageOffset;
+end;
+
+{ -- GPOS PairPos Fmt1 -- }
+
+function TTFontFace.HasKernFmt1Pairs: Boolean;
+begin
+  Result := Length(FPairPosFmt1Subtables) > 0;
+end;
+
+function TTFontFace.LookupKernFmt1(ALeftGlyph, ARightGlyph: UInt16): Int16;
+var
+  LI, LCovIdx, LJ, LPairCount, LPairOff: Int32;
+  LSub: TFontPairPosFmt1Subtable;
+  LSecondGlyph: UInt16;
+  LXAdv1Off, LPairSize: Int32;
+begin
+  Result := 0;
+  for LI := 0 to High(FPairPosFmt1Subtables) do
+  begin
+    LSub := FPairPosFmt1Subtables[LI];
+    LCovIdx := CoverageIndex(LSub.CoverageOffset, ALeftGlyph);
+    if LCovIdx < 0 then
+      Continue;
+    if FDataLength < LSub.PairSetOffsetsOffset + 10 + LCovIdx * 2 + 2 then
+      Continue;
+    LPairOff := LSub.PairSetOffsetsOffset + ReadUInt16BE(LSub.PairSetOffsetsOffset + 10 + LCovIdx * 2);
+    if FDataLength < LPairOff + 2 then
+      Continue;
+    LPairCount := ReadUInt16BE(LPairOff);
+    { PairSet: uint16 PairValueCount, then PairValueRecord[PairValueCount]
+      PairValueRecord: uint16 SecondGlyph, ValueRecord1, ValueRecord2 }
+    LPairSize := 2 + LSub.ValueRecord1Size;
+    for LJ := 0 to LPairCount - 1 do
+    begin
+      if FDataLength < LPairOff + 2 + LJ * LPairSize + 2 then
+        Break;
+      LSecondGlyph := ReadUInt16BE(LPairOff + 2 + LJ * LPairSize);
+      if LSecondGlyph = ARightGlyph then
+      begin
+        if LSub.XAdvance1Offset >= 0 then
+        begin
+          LXAdv1Off := LPairOff + 2 + LJ * LPairSize + 2 + LSub.XAdvance1Offset;
+          if FDataLength >= LXAdv1Off + 2 then
+          begin
+            Result := ReadInt16BE(LXAdv1Off);
+            Exit;
+          end;
+        end;
+        Exit;
+      end;
+      if LSecondGlyph > ARightGlyph then
+        Break;
+    end;
+  end;
+end;
+
+{ -- Feature tag queries -- }
+
+function TTFontFace.HasFeatureTag(ATag: UInt32): Boolean;
+var
+  LI: Int32;
+begin
+  Result := False;
+  for LI := 0 to High(FFeatureTags) do
+    if FFeatureTags[LI] = ATag then
+    begin
+      Result := True;
+      Exit;
+    end;
+end;
+
+function TTFontFace.HasFeatureKern: Boolean;
+begin
+  Result := HasFeatureTag($6B65726E); { 'kern' }
+end;
+
+function TTFontFace.HasFeatureMark: Boolean;
+begin
+  Result := HasFeatureTag($6D61726B); { 'mark' }
+end;
+
+function TTFontFace.HasFeatureMkmk: Boolean;
+begin
+  Result := HasFeatureTag($6D6B6D6B); { 'mkmk' }
+end;
+
+{ -- COLR/CPAL: Color glyph support -- }
+
+function TTFontFace.HasColorLayers: Boolean;
+begin
+  Result := Length(FColorLayerRecords) > 0;
+end;
+
+function TTFontFace.GetColorLayers(AGlyphId: UInt16): TFontColorLayerArray;
+var
+  LI: Int32;
+begin
+  SetLength(Result, 0);
+  for LI := 0 to High(FColorLayerRecords) do
+  begin
+    if FColorLayerRecords[LI].BaseGlyphId = AGlyphId then
+    begin
+      Result := FColorLayerRecords[LI].Layers;
+      Exit;
+    end;
+  end;
+end;
+
+function TTFontFace.HasPalette: Boolean;
+begin
+  Result := (FPaletteCount > 0) and (FColorsPerPalette > 0);
+end;
+
+function TTFontFace.ColorsPerPalette: Int32;
+begin
+  Result := FColorsPerPalette;
+end;
+
+function TTFontFace.GetPaletteColor(APaletteIndex, AColorIndex: Int32): TFontPaletteColor;
+begin
+  Result.Blue := 0;
+  Result.Green := 0;
+  Result.Red := 0;
+  Result.Alpha := 0;
+  if (AColorIndex < 0) or (AColorIndex >= FColorsPerPalette) then
+    Exit;
+  if (APaletteIndex < 0) or (APaletteIndex >= FPaletteCount) then
+    Exit;
+  { 当前只解析了第一个调色板；多调色板需要偏移计算 }
+  if APaletteIndex = 0 then
+    Result := FPaletteColors[AColorIndex];
+end;
+
+{ -- cmap Format 14 (IVS) -- }
+
+function TTFontFace.HasFmt14: Boolean;
+begin
+  Result := FHasFmt14;
+end;
+
+function TTFontFace.LookupIVS(ABaseCodepoint, AVariationSelector: UInt32): UInt32;
+var
+  LI, LJ, LNumRanges, LNumMappings: Int32;
+  LStart, LEnd, LAdditional: UInt32;
+  LNonDefOff: Int32;
+begin
+  Result := 0;
+  if not FHasFmt14 then Exit;
+
+  for LI := 0 to High(FFmt14Records) do
+  begin
+    if FFmt14Records[LI].VarSelector <> AVariationSelector then
+      Continue;
+
+    { Check NonDefaultUVS first (specific glyph override) }
+    LNonDefOff := FFmt14Records[LI].NonDefaultUVSOffset;
+    if (LNonDefOff > 0) and (LNonDefOff + 4 <= FDataLength) then
+    begin
+      LNumMappings := Int32(ReadUInt32BE(LNonDefOff));
+      for LJ := 0 to LNumMappings - 1 do
+      begin
+        { NonDefaultUVS: uint24 unicodeValue + uint16 glyphID = 5 bytes/entry }
+        if LNonDefOff + 4 + LJ * 5 + 5 > FDataLength then Break;
+        LStart := (UInt32(ReadUInt8(LNonDefOff + 4 + LJ * 5)) shl 16) or
+                  (UInt32(ReadUInt8(LNonDefOff + 4 + LJ * 5 + 1)) shl 8) or
+                  UInt32(ReadUInt8(LNonDefOff + 4 + LJ * 5 + 2));
+        if LStart = ABaseCodepoint then
+        begin
+          Result := ReadUInt16BE(LNonDefOff + 4 + LJ * 5 + 3);
+          Exit;
+        end;
+        if LStart > ABaseCodepoint then
+          Break; { sorted }
+      end;
+    end;
+
+    { Check DefaultUVS (default glyph mapping) }
+    if FFmt14Records[LI].DefaultUVSOffset > 0 then
+    begin
+      if FFmt14Records[LI].DefaultUVSOffset + 4 > FDataLength then Break;
+      LNumRanges := Int32(ReadUInt32BE(FFmt14Records[LI].DefaultUVSOffset));
+      for LJ := 0 to LNumRanges - 1 do
+      begin
+        if FFmt14Records[LI].DefaultUVSOffset + 4 + LJ * 5 + 4 > FDataLength then Break;
+        LStart := (UInt32(ReadUInt8(FFmt14Records[LI].DefaultUVSOffset + 4 + LJ * 5)) shl 16) or
+                  (UInt32(ReadUInt8(FFmt14Records[LI].DefaultUVSOffset + 4 + LJ * 5 + 1)) shl 8) or
+                  UInt32(ReadUInt8(FFmt14Records[LI].DefaultUVSOffset + 4 + LJ * 5 + 2));
+        LAdditional := ReadUInt8(FFmt14Records[LI].DefaultUVSOffset + 4 + LJ * 5 + 3);
+        LEnd := LStart + LAdditional;
+        if (ABaseCodepoint >= LStart) and (ABaseCodepoint <= LEnd) then
+        begin
+          { Default UVS means use the default glyph (0 = "use default") }
+          Result := 0; { Return 0 to indicate default mapping }
+          Exit;
+        end;
+      end;
+    end;
+
+    Break; { Found the VS record, no match }
+  end;
+end;
+
+{ -- name table -- }
+
+function TTFontFace.FamilyName: string;
+begin
+  Result := FFamilyName;
+end;
+
+function TTFontFace.SubfamilyName: string;
+begin
+  Result := FSubfamilyName;
+end;
+
+function TTFontFace.FullName: string;
+begin
+  Result := FFullName;
+end;
+
+function TTFontFace.PostScriptName: string;
+begin
+  Result := FPostScriptName;
+end;
+
+{ -- post table -- }
+
+function TTFontFace.HasPostTable: Boolean;
+begin
+  Result := FHasPostTable;
 end;
 
 function TTFontFace.IsFixedPitch: Boolean;
 begin
-  Result := FPostValid and (FPost.IsFixedPitch <> 0);
+  { 优先使用 post 表的 isFixedPitch，如果为 0 则检查 OS/2 panose[3] = 9 (monospaced) }
+  Result := FIsFixedPitch or (FOs2.Panose[3] = 9);
 end;
 
-function TTFontFace.CalcRegionScalar(ARegionIdx: Int32;
-  const ACoords: array of Int16): Single;
-var
-  LRegion: TCff2VariationRegion;
-  I: Int32;
-  LStart, LPeak, LEnd, LCoord: Single;
-  LScalar: Single;
+function TTFontFace.UnderlinePosition: Int16;
 begin
-  Result := 1.0;
-  if (ARegionIdx < 0) or (ARegionIdx >= FCff2ItemVarStore.RegionCount) then
-    Exit;
-  if Length(ACoords) < FCff2ItemVarStore.Regions[0].AxisCount then
-    Exit;
-
-  LRegion := FCff2ItemVarStore.Regions[ARegionIdx];
-  LScalar := 1.0;
-  for I := 0 to LRegion.AxisCount - 1 do
-  begin
-    LStart := LRegion.Axes[I].StartCoord / 16384.0;
-    LPeak  := LRegion.Axes[I].PeakCoord / 16384.0;
-    LEnd   := LRegion.Axes[I].EndCoord / 16384.0;
-    LCoord := ACoords[I] / 16384.0;
-
-    if (LPeak = 0) or ((LStart = LPeak) and (LEnd = LPeak)) then
-      Continue;
-
-    if (LCoord < LStart) or (LCoord > LEnd) then
-    begin
-      // 超出 region 范围，整体 scalar 为 0
-      LScalar := 0;
-      Break;
-    end;
-
-    if LCoord = LPeak then
-      Continue;  // scalar 乘以 1.0
-
-    if LCoord < LPeak then
-      LScalar := LScalar * (LCoord - LStart) / (LPeak - LStart)
-    else
-      LScalar := LScalar * (LEnd - LCoord) / (LEnd - LPeak);
-  end;
-  Result := LScalar;
+  Result := FUnderlinePosition;
 end;
 
-{ ========================================================================= }
-{ fvar 表解析（可变字体轴信息 + 命名实例）                                      }
-{ ========================================================================= }
-
-procedure TTFontFace.ParseFvar;
-var
-  LIdx, LOff: Int32;
-  LVersion: UInt32;
-  LAxesArrOff, LAxisCount, LAxisSize: UInt16;
-  LInstCount, LInstSize: UInt16;
-  I, J, LBase: Int32;
+function TTFontFace.UnderlineThickness: Int16;
 begin
-  LIdx := FindTable(TABLE_TAG_FVAR);
-  if LIdx < 0 then
-    Exit;
-  LOff := Int32(FTables[LIdx].Offset);
-  if LOff + 16 > FDataLength then
-    Exit;
-
-  // fvar 头部（Apple / OpenType 兼容布局）：
-  //   0: UInt32 version (Fixed 16.16 = 0x00010000)
-  //   4: UInt16 axesArrayOffset
-  //   6: UInt16 countSizePairs (= 2)
-  //   8: UInt16 axisCount
-  //  10: UInt16 axisSize
-  //  12: UInt16 instanceCount
-  //  14: UInt16 instanceSize
-  LVersion := ReadUInt32BE(LOff);
-  if LVersion <> $00010000 then
-    Exit;
-
-  LAxesArrOff := ReadUInt16BE(LOff + 4);
-  LAxisCount := ReadUInt16BE(LOff + 8);
-  LAxisSize := ReadUInt16BE(LOff + 10);
-  LInstCount := ReadUInt16BE(LOff + 12);
-  LInstSize := ReadUInt16BE(LOff + 14);
-
-  if (LAxisCount < 1) or (LAxisCount > 32) or (LAxisSize < 20) then
-    Exit;
-
-  FFvar.AxisCount := LAxisCount;
-  SetLength(FFvar.Axes, LAxisCount);
-
-  // 解析轴记录
-  for I := 0 to LAxisCount - 1 do
-  begin
-    LBase := LOff + LAxesArrOff + I * LAxisSize;
-    if LBase + LAxisSize > FDataLength then
-      Exit;
-
-    FFvar.Axes[I].Tag := ReadUInt32BE(LBase);
-    // OpenType spec: tag(4) + min(4) + def(4) + max(4) + flags(2) + nameID(2)
-    FFvar.Axes[I].MinValue := ReadUInt32BE(LBase + 4) / 65536.0;
-    FFvar.Axes[I].DefaultValue := ReadUInt32BE(LBase + 8) / 65536.0;
-    FFvar.Axes[I].MaxValue := ReadUInt32BE(LBase + 12) / 65536.0;
-    FFvar.Axes[I].NameID := ReadUInt16BE(LBase + 18);
-  end;
-
-  // 解析命名实例
-  FFvar.InstanceCount := LInstCount;
-  SetLength(FFvar.Instances, LInstCount);
-  LBase := LOff + LAxesArrOff + LAxisCount * LAxisSize;
-
-  for I := 0 to LInstCount - 1 do
-  begin
-    J := LBase + I * LInstSize;
-    if J + LInstSize > FDataLength then
-      Exit;
-
-    FFvar.Instances[I].NameID := ReadUInt16BE(J);
-    FFvar.Instances[I].Flags := ReadUInt16BE(J + 2);
-    SetLength(FFvar.Instances[I].Coordinates, LAxisCount);
-    // 读取每个轴的坐标（Fixed 16.16）
-    // 注意：axisCount > instanceSize 中的坐标数量时可能有 subfamilyNameID 等扩展字段
-    // 但基本情况下坐标数 = axisCount
-  end;
-
-  // 第二遍读取实例坐标（避免在循环中多次检查 bounds）
-  for I := 0 to LInstCount - 1 do
-  begin
-    J := LBase + I * LInstSize + 4;  // 跳过 flags(2) + nameID(2)
-    for LIdx := 0 to LAxisCount - 1 do
-    begin
-      if J + 4 > FDataLength then
-        Break;
-      FFvar.Instances[I].Coordinates[LIdx] := ReadUInt32BE(J) / 65536.0;
-      Inc(J, 4);
-    end;
-  end;
-
-  FFvarValid := True;
+  Result := FUnderlineThickness;
 end;
 
-procedure TTFontFace.ParseAvar;
-var
-  LIdx, LOff, LAxisCount, I, K: Int32;
-  LPairCount, LBase: Int32;
-begin
-  LIdx := FindTable(TABLE_TAG_AVAR);
-  if LIdx < 0 then
-    Exit;
-  LOff := Int32(FTables[LIdx].Offset);
-
-  if LOff + 8 > FDataLength then
-    Exit;
-
-  // avar header: majorVersion(2), minorVersion(2), reserved(2), axisCount(2)
-  if ReadUInt16BE(LOff) <> 1 then
-    Exit;
-
-  LAxisCount := ReadUInt16BE(LOff + 6);
-  if (LAxisCount < 1) or (LAxisCount > 16) then
-    Exit;
-
-  FAvar.AxisCount := LAxisCount;
-  SetLength(FAvar.Segments, LAxisCount);
-
-  LBase := LOff + 8;  // 跳过 header
-  for I := 0 to LAxisCount - 1 do
-  begin
-    if LBase + 2 > FDataLength then
-      Exit;
-    LPairCount := ReadUInt16BE(LBase);
-    Inc(LBase, 2);
-
-    FAvar.Segments[I].PairCount := LPairCount;
-    SetLength(FAvar.Segments[I].Pairs, LPairCount);
-
-    for K := 0 to LPairCount - 1 do
-    begin
-      if LBase + 4 > FDataLength then
-        Exit;
-      FAvar.Segments[I].Pairs[K].FromCoord := ReadUInt16BE(LBase);
-      FAvar.Segments[I].Pairs[K].ToCoord := ReadUInt16BE(LBase + 2);
-      Inc(LBase, 4);
-    end;
-  end;
-
-  FAvarValid := True;
-end;
-
-function TTFontFace.CalcItemVarRegionScalar(
-  const ARegions: TCff2VariationRegionArray;
-  ARegionCount, ARegionIdx: Int32;
-  const ANormCoords: array of Single): Single;
-var
-  LRegion: TCff2VariationRegion;
-  I: Int32;
-  LStart, LPeak, LEnd, LCoord, LScalar: Single;
-begin
-  Result := 1.0;
-  if (ARegionIdx < 0) or (ARegionIdx >= ARegionCount) then
-    Exit;
-
-  LRegion := ARegions[ARegionIdx];
-  LScalar := 1.0;
-  for I := 0 to LRegion.AxisCount - 1 do
-  begin
-    LStart := LRegion.Axes[I].StartCoord / 16384.0;
-    LPeak  := LRegion.Axes[I].PeakCoord / 16384.0;
-    LEnd   := LRegion.Axes[I].EndCoord / 16384.0;
-    if I <= High(ANormCoords) then
-      LCoord := ANormCoords[I]
-    else
-      LCoord := 0;
-
-    if (LPeak = 0) or ((LStart = LPeak) and (LEnd = LPeak)) then
-      Continue;
-
-    if (LCoord < LStart) or (LCoord > LEnd) then
-    begin
-      LScalar := 0;
-      Break;
-    end;
-
-    if LCoord < LPeak then
-    begin
-      if LPeak <> LStart then
-        LScalar := LScalar * (LCoord - LStart) / (LPeak - LStart)
-      else
-        LScalar := 0;
-    end
-    else if LCoord > LPeak then
-    begin
-      if LEnd <> LPeak then
-        LScalar := LScalar * (LEnd - LCoord) / (LEnd - LPeak)
-      else
-        LScalar := 0;
-    end;
-  end;
-
-  Result := LScalar;
-end;
-
-procedure TTFontFace.ParseHvar;
-var
-  LIdx, LOff, LIVSOff, LAwMapOff: Int32;
-  LRegionBase, LAxisCount, LRegionCount, LDataCount: Int32;
-  LDataOff, I, J, K: Int32;
-  LMapFmt, LMapEntryFmt, LMapCount: Int32;
-  LMapEntrySize, LInnerBits: Int32;
-
-  function ReadUInt16Local(AOff: Int32): UInt16;
-  begin
-    if (AOff >= 0) and (AOff + 1 < FDataLength) then
-      Result := ReadUInt16BE(AOff)
-    else
-      Result := 0;
-  end;
-
-  function ReadUInt32Local(AOff: Int32): UInt32;
-  begin
-    if (AOff >= 0) and (AOff + 3 < FDataLength) then
-      Result := ReadUInt32BE(AOff)
-    else
-      Result := 0;
-  end;
-
-begin
-  LIdx := FindTable(TABLE_TAG_HVAR);
-  if LIdx < 0 then
-    Exit;
-  LOff := Int32(FTables[LIdx].Offset);
-
-  if LOff + 20 > FDataLength then
-    Exit;
-
-  // HVAR header
-  if ReadUInt16BE(LOff) <> 1 then
-    Exit;
-
-  LIVSOff := Int32(ReadUInt32BE(LOff + 4));    // itemVariationStoreOffset
-  LAwMapOff := Int32(ReadUInt32BE(LOff + 8));   // advanceWidthMappingOffset
-
-  if LIVSOff < 20 then
-    Exit;
-
-  // ---- 解析 ItemVariationStore（HVAR 自己的） ----
-  LIVSOff := LOff + LIVSOff;
-  if LIVSOff + 8 > FDataLength then Exit;
-
-  if ReadUInt16BE(LIVSOff) <> 1 then Exit;
-
-  LRegionBase := LIVSOff + Int32(ReadUInt32BE(LIVSOff + 2));
-  LDataCount := ReadUInt16BE(LIVSOff + 6);
-
-  if LRegionBase + 4 > FDataLength then Exit;
-  LAxisCount := ReadUInt16BE(LRegionBase);
-  if (LAxisCount < 1) or (LAxisCount > 16) then Exit;
-
-  // 解析 regions
-  FHvar.VariationStore.AxisCount := LAxisCount;
-  if LDataCount > 0 then
-  begin
-    LDataOff := Int32(ReadUInt32BE(LIVSOff + 8));
-    LDataOff := LIVSOff + LDataOff;
-    if LDataOff + 6 > FDataLength then Exit;
-    LRegionCount := ReadUInt16BE(LDataOff + 4);
-  end
-  else
-    LRegionCount := 0;
-
-  if LRegionCount > 32767 then
-    LRegionCount := 32767;
-
-  FHvar.VariationStore.RegionCount := LRegionCount;
-  SetLength(FHvar.VariationStore.Regions, LRegionCount);
-
-  K := LRegionBase + 4;  // skip axisCount(2) + regionCount(2)
-  for I := 0 to LRegionCount - 1 do
-  begin
-    FHvar.VariationStore.Regions[I].AxisCount := LAxisCount;
-    for J := 0 to LAxisCount - 1 do
-    begin
-      if K + 6 > FDataLength then Exit;
-      FHvar.VariationStore.Regions[I].Axes[J].StartCoord := ReadUInt16BE(K);
-      FHvar.VariationStore.Regions[I].Axes[J].PeakCoord := ReadUInt16BE(K + 2);
-      FHvar.VariationStore.Regions[I].Axes[J].EndCoord := ReadUInt16BE(K + 4);
-      Inc(K, 6);
-    end;
-  end;
-
-  // 解析 ItemVariationData 子表
-  FHvar.VariationStore.DataCount := LDataCount;
-  SetLength(FHvar.VariationStore.DataSubtables, LDataCount);
-  for I := 0 to LDataCount - 1 do
-  begin
-    LDataOff := Int32(ReadUInt32BE(LIVSOff + 8 + I * 4));
-    LDataOff := LIVSOff + LDataOff;
-    if LDataOff + 6 > FDataLength then Exit;
-
-    FHvar.VariationStore.DataSubtables[I].ItemCount := ReadUInt16BE(LDataOff);
-    FHvar.VariationStore.DataSubtables[I].WordDeltaCount := ReadUInt16BE(LDataOff + 2);
-    FHvar.VariationStore.DataSubtables[I].RegionIndexCount := ReadUInt16BE(LDataOff + 4);
-
-    // 解析 regionIndices
-    SetLength(FHvar.VariationStore.DataSubtables[I].RegionIndices,
-      FHvar.VariationStore.DataSubtables[I].RegionIndexCount);
-    for J := 0 to FHvar.VariationStore.DataSubtables[I].RegionIndexCount - 1 do
-      FHvar.VariationStore.DataSubtables[I].RegionIndices[J] :=
-        ReadUInt16BE(LDataOff + 6 + J * 2);
-
-    // deltaSets 数据起始
-    FHvar.VariationStore.DataSubtables[I].DeltaDataOffset :=
-      LDataOff + 6 + FHvar.VariationStore.DataSubtables[I].RegionIndexCount * 2;
-
-    // 计算每行字节数
-    // 非 LONG_WORDS 模式: wordDeltaCount 个 int16 + (regionIndexCount - wordDeltaCount) 个 int8
-    FHvar.VariationStore.DataSubtables[I].RowStride :=
-      (FHvar.VariationStore.DataSubtables[I].WordDeltaCount and $7FFF) * 2 +
-      (FHvar.VariationStore.DataSubtables[I].RegionIndexCount -
-       (FHvar.VariationStore.DataSubtables[I].WordDeltaCount and $7FFF));
-  end;
-
-  // ---- 解析 advanceWidthMapping (DeltaSetIndexMap) ----
-  if LAwMapOff > 0 then
-  begin
-    LAwMapOff := LOff + LAwMapOff;
-    if LAwMapOff + 4 > FDataLength then Exit;
-
-    LMapFmt := ReadUInt8(LAwMapOff);
-    LMapEntryFmt := ReadUInt8(LAwMapOff + 1);
-    if LMapFmt = 0 then
-    begin
-      LMapCount := ReadUInt16BE(LAwMapOff + 2);
-      FHvar.AdvWidthMapDataOff := LAwMapOff + 4;
-    end
-    else
-    begin
-      LMapCount := Int32(ReadUInt32BE(LAwMapOff + 2));
-      FHvar.AdvWidthMapDataOff := LAwMapOff + 6;
-    end;
-
-    LMapEntrySize := ((LMapEntryFmt and $30) shr 4) + 1;
-    LInnerBits := (LMapEntryFmt and $0F) + 1;
-
-    FHvar.HasAdvWidthMapping := True;
-    FHvar.AdvWidthMapFormat := LMapFmt;
-    FHvar.AdvWidthMapEntrySize := LMapEntrySize;
-    FHvar.AdvWidthMapInnerBits := LInnerBits;
-    FHvar.AdvWidthMapCount := LMapCount;
-  end
-  else
-    FHvar.HasAdvWidthMapping := False;
-
-  FHvarValid := True;
-end;
+{ -- fvar table -- }
 
 function TTFontFace.HasFvar: Boolean;
 begin
-  Result := FFvarValid;
+  Result := FFvarAxisCount > 0;
+end;
+
+function TTFontFace.HasCff2: Boolean;
+begin
+  Result := FCff2Parsed;
 end;
 
 function TTFontFace.FvarAxisCount: Int32;
 begin
-  if FFvarValid then
-    Result := FFvar.AxisCount
-  else
-    Result := 0;
+  Result := FFvarAxisCount;
+end;
+
+function TTFontFace.VariationAxisCount: Int32;
+begin
+  Result := FvarAxisCount;
 end;
 
 function TTFontFace.GetFvarAxis(AIndex: Int32): TFontVariationAxis;
 begin
-  FillChar(Result, SizeOf(Result), 0);
-  if FFvarValid and (AIndex >= 0) and (AIndex < FFvar.AxisCount) then
-    Result := FFvar.Axes[AIndex];
+  if (AIndex >= 0) and (AIndex < FFvarAxisCount) then
+    Result := FFvarAxes[AIndex]
+  else
+  begin
+    Result.Tag := 0;
+    Result.MinValue := 0;
+    Result.DefaultValue := 0;
+    Result.MaxValue := 0;
+    Result.AxisNameID := 0;
+  end;
 end;
 
 function TTFontFace.FindFvarAxisByTag(ATag: UInt32): Int32;
 var
   I: Int32;
 begin
+  for I := 0 to FFvarAxisCount - 1 do
+    if FFvarAxes[I].Tag = ATag then
+      Exit(I);
   Result := -1;
-  if not FFvarValid then
-    Exit;
-  for I := 0 to FFvar.AxisCount - 1 do
-    if FFvar.Axes[I].Tag = ATag then
-    begin
-      Result := I;
-      Exit;
-    end;
 end;
 
-function TTFontFace.FvarInstanceCount: Int32;
-begin
-  if FFvarValid then
-    Result := FFvar.InstanceCount
-  else
-    Result := 0;
-end;
-
-function TTFontFace.GetFvarInstance(AIndex: Int32): TFontNamedInstance;
-begin
-  FillChar(Result, SizeOf(Result), 0);
-  if FFvarValid and (AIndex >= 0) and (AIndex < FFvar.InstanceCount) then
-    Result := FFvar.Instances[AIndex];
-end;
-
-function TTFontFace.HasAvar: Boolean;
-begin
-  Result := FAvarValid;
-end;
-
-function TTFontFace.NormalizeAxisValue(AAxisIndex: Int32;
-  AUserValue: Single): Single;
-var
-  LAxis: TFontVariationAxis;
-  LDefaultNorm: Single;
-  LSegPairs: TAvarAxisValueMapArray;
-  LPairCount, K: Int32;
-  LFrom0, LFrom1, LTo0, LTo1: Single;
-begin
-  if not FFvarValid or (AAxisIndex < 0) or (AAxisIndex >= FFvar.AxisCount) then
-  begin
-    Result := 0;
-    Exit;
-  end;
-
-  LAxis := FFvar.Axes[AAxisIndex];
-
-  // 默认线性归一化：用户空间 → [-1, 0, +1]
-  if AUserValue < LAxis.DefaultValue then
-    LDefaultNorm := -(LAxis.DefaultValue - AUserValue) / (LAxis.DefaultValue - LAxis.MinValue)
-  else if AUserValue > LAxis.DefaultValue then
-    LDefaultNorm := (AUserValue - LAxis.DefaultValue) / (LAxis.MaxValue - LAxis.DefaultValue)
-  else
-    LDefaultNorm := 0;
-
-  // 若无 avar 或轴越界，返回默认归一化
-  if not FAvarValid or (AAxisIndex >= FAvar.AxisCount) then
-  begin
-    Result := LDefaultNorm;
-    Exit;
-  end;
-
-  // avar 分段线性映射：F2Dot14 值 → Single
-  LSegPairs := FAvar.Segments[AAxisIndex].Pairs;
-  LPairCount := FAvar.Segments[AAxisIndex].PairCount;
-  if LPairCount < 2 then
-  begin
-    Result := LDefaultNorm;
-    Exit;
-  end;
-
-  // 找到 LDefaultNorm 所在的 [from0, from1] 段
-  for K := 0 to LPairCount - 2 do
-  begin
-    LFrom0 := LSegPairs[K].FromCoord / 16384.0;
-    LFrom1 := LSegPairs[K + 1].FromCoord / 16384.0;
-    if (LDefaultNorm >= LFrom0) and (LDefaultNorm <= LFrom1) then
-    begin
-      LTo0 := LSegPairs[K].ToCoord / 16384.0;
-      LTo1 := LSegPairs[K + 1].ToCoord / 16384.0;
-      if LFrom1 = LFrom0 then
-        Result := LTo0
-      else
-        Result := LTo0 + (LDefaultNorm - LFrom0) * (LTo1 - LTo0) / (LFrom1 - LFrom0);
-      Exit;
-    end;
-  end;
-
-  // 超出映射范围，返回默认
-  Result := LDefaultNorm;
-end;
-
-function TTFontFace.GetCff2GlyphFD(AGlyphIndex: UInt32): Int32;
-var
-  LPos, LRangeCount, K, LFirst: Int32;
-begin
-  if FCff2FontDictCount <= 1 then
-  begin
-    Result := 0;
-    Exit;
-  end;
-
-  if FCff2FDSelectFmt = 0 then
-  begin
-    // Format 0: 直接查表
-    LPos := FCff2FDSelectData + 1 + Int32(AGlyphIndex);
-    if (LPos >= 0) and (LPos < FDataLength) then
-      Result := FData[LPos]
-    else
-      Result := 0;
-  end
-  else if FCff2FDSelectFmt = 3 then
-  begin
-    // Format 3: nRanges(2) + ranges(first:2, fd:1) + sentinel(2)
-    LPos := FCff2FDSelectData + 1;
-    if LPos + 2 > FDataLength then begin Result := 0; Exit; end;
-    LRangeCount := ReadUInt16BE(LPos);
-    Inc(LPos, 2);
-    Result := 0;
-    for K := 0 to LRangeCount - 1 do
-    begin
-      if LPos + 3 > FDataLength then Break;
-      LFirst := ReadUInt16BE(LPos);
-      if (K = LRangeCount - 1) or (Int32(AGlyphIndex) < ReadUInt16BE(LPos + 3)) then
-      begin
-        if Int32(AGlyphIndex) >= LFirst then
-          Result := FData[LPos + 2];
-        Break;
-      end;
-      Inc(LPos, 3);
-    end;
-  end
-  else
-    Result := 0;
-end;
-
-function TTFontFace.GetCff2FontDict(AFDIndex: Int32): TCff2FontDict;
-begin
-  FillChar(Result, SizeOf(Result), 0);
-  if (AFDIndex >= 0) and (AFDIndex < FCff2FontDictCount) then
-    Result := FCff2FontDicts[AFDIndex];
-end;
-
-function TTFontFace.Cff2FontDictCount: Int32;
-begin
-  Result := FCff2FontDictCount;
-end;
-
-function TTFontFace.HasHvar: Boolean;
-begin
-  Result := FHvarValid;
-end;
-
-function TTFontFace.CalcHvarAdvanceDelta(AGlyphIndex: UInt32;
-  const ANormCoords: array of Single): Single;
-var
-  LOuterIdx, LInnerIdx: Int32;
-  LEntry: UInt32;
-  LI, LByteOff, LBitCount: Int32;
-  LSubIdx, LSubtable: Int32;
-  LItemIdx, LRegionIdx, LRegionIdxCount, LWordCount: Int32;
-  LDeltaPos: Int32;
-  LDelta16: Int16;
-  LDelta8: Int8;
-  LScalar, LDeltaSum: Single;
-  LIsLong: Boolean;
-begin
-  Result := 0;
-  if not FHvarValid then
-    Exit;
-
-  // 确定 delta-set index
-  if FHvar.HasAdvWidthMapping then
-  begin
-    // 通过 DeltaSetIndexMap 查找
-    if Int32(AGlyphIndex) >= FHvar.AdvWidthMapCount then
-    begin
-      // 越界：使用最后一条
-      if FHvar.AdvWidthMapCount = 0 then Exit;
-      LEntry := 0;
-      for LI := 0 to FHvar.AdvWidthMapEntrySize - 1 do
-      begin
-        LByteOff := FHvar.AdvWidthMapDataOff + (FHvar.AdvWidthMapCount - 1) * FHvar.AdvWidthMapEntrySize + LI;
-        if LByteOff < FDataLength then
-          LEntry := (LEntry shl 8) or FData[LByteOff];
-      end;
-    end
-    else
-    begin
-      LEntry := 0;
-      for LI := 0 to FHvar.AdvWidthMapEntrySize - 1 do
-      begin
-        LByteOff := FHvar.AdvWidthMapDataOff + Int32(AGlyphIndex) * FHvar.AdvWidthMapEntrySize + LI;
-        if LByteOff < FDataLength then
-          LEntry := (LEntry shl 8) or FData[LByteOff];
-      end;
-    end;
-
-    LBitCount := FHvar.AdvWidthMapInnerBits;
-    LInnerIdx := LEntry and ((1 shl LBitCount) - 1);
-    LOuterIdx := LEntry shr LBitCount;
-  end
-  else
-  begin
-    // 隐式映射：outer=0, inner=glyphID
-    LOuterIdx := 0;
-    LInnerIdx := Int32(AGlyphIndex);
-  end;
-
-  // 特殊值：0xFFFF/0xFFFF = 无变化
-  if (LOuterIdx = $FFFF) and (LInnerIdx = $FFFF) then
-    Exit;
-
-  // 查找 ItemVariationData 子表
-  if LOuterIdx >= FHvar.VariationStore.DataCount then
-    Exit;
-
-  LSubtable := LOuterIdx;
-  LItemIdx := LInnerIdx;
-  LRegionIdxCount := FHvar.VariationStore.DataSubtables[LSubtable].RegionIndexCount;
-  LWordCount := FHvar.VariationStore.DataSubtables[LSubtable].WordDeltaCount and $7FFF;
-  LIsLong := (FHvar.VariationStore.DataSubtables[LSubtable].WordDeltaCount and $8000) <> 0;
-
-  if LItemIdx >= FHvar.VariationStore.DataSubtables[LSubtable].ItemCount then
-    Exit;
-
-  // 计算 delta 行偏移
-  LDeltaPos := FHvar.VariationStore.DataSubtables[LSubtable].DeltaDataOffset +
-    LItemIdx * FHvar.VariationStore.DataSubtables[LSubtable].RowStride;
-
-  // 累加 delta: Σ(delta_i * scalar_i)
-  LDeltaSum := 0;
-  for LI := 0 to LRegionIdxCount - 1 do
-  begin
-    LRegionIdx := FHvar.VariationStore.DataSubtables[LSubtable].RegionIndices[LI];
-
-    if LI < LWordCount then
-    begin
-      // "word" delta (int16 或 int32)
-      if LIsLong then
-      begin
-        // int32 delta（HVAR 通常不用）
-        if LDeltaPos + 4 > FDataLength then Break;
-        LDeltaSum := LDeltaSum + Int32(ReadUInt32BE(LDeltaPos)) *
-          CalcItemVarRegionScalar(FHvar.VariationStore.Regions, FHvar.VariationStore.RegionCount, LRegionIdx, ANormCoords);
-        Inc(LDeltaPos, 4);
-      end
-      else
-      begin
-        // int16 delta
-        if LDeltaPos + 2 > FDataLength then Break;
-        LDelta16 := Int16(ReadUInt16BE(LDeltaPos));
-        LDeltaSum := LDeltaSum + LDelta16 *
-          CalcItemVarRegionScalar(FHvar.VariationStore.Regions, FHvar.VariationStore.RegionCount, LRegionIdx, ANormCoords);
-        Inc(LDeltaPos, 2);
-      end;
-    end
-    else
-    begin
-      // "byte" delta (int8 或 int16)
-      if LIsLong then
-      begin
-        if LDeltaPos + 2 > FDataLength then Break;
-        LDelta16 := Int16(ReadUInt16BE(LDeltaPos));
-        LDeltaSum := LDeltaSum + LDelta16 *
-          CalcItemVarRegionScalar(FHvar.VariationStore.Regions, FHvar.VariationStore.RegionCount, LRegionIdx, ANormCoords);
-        Inc(LDeltaPos, 2);
-      end
-      else
-      begin
-        if LDeltaPos + 1 > FDataLength then Break;
-        LDelta8 := Int8(FData[LDeltaPos]);
-        LDeltaSum := LDeltaSum + LDelta8 *
-          CalcItemVarRegionScalar(FHvar.VariationStore.Regions, FHvar.VariationStore.RegionCount, LRegionIdx, ANormCoords);
-        Inc(LDeltaPos, 1);
-      end;
-    end;
-  end;
-
-  Result := LDeltaSum;
-end;
-
-{ ========================================================================= }
-{ VVAR 表解析（Vertical Metrics Variations）                                 }
-{ ========================================================================= }
-
-procedure TTFontFace.ParseVvar;
-var
-  LIdx, LOff, LIVSOff, LVrsbMapOff, LVadvMapOff: Int32;
-  LRegionBase, LAxisCount, LRegionCount, LDataCount: Int32;
-  LDataOff, I, J, K: Int32;
-  LMapFmt, LMapEntryFmt, LMapCount: Int32;
-  LMapEntrySize, LInnerBits: Int32;
-begin
-  LIdx := FindTable(TABLE_TAG_VVAR);
-  if LIdx < 0 then
-    Exit;
-  LOff := Int32(FTables[LIdx].Offset);
-
-  // VVAR header: 16 bytes minimum
-  // bytes 0-1: version (must be 1)
-  // bytes 2-3: reserved
-  // bytes 4-7:  itemVariationStoreOffset (Offset32)
-  // bytes 8-11: vrsbMappingOffset (Offset32)
-  // bytes 12-15: vadvMappingOffset (Offset32, optional)
-  if LOff + 16 > FDataLength then
-    Exit;
-
-  if ReadUInt16BE(LOff) <> 1 then
-    Exit;
-
-  LIVSOff := Int32(ReadUInt32BE(LOff + 4));
-  LVrsbMapOff := Int32(ReadUInt32BE(LOff + 8));
-  LVadvMapOff := Int32(ReadUInt32BE(LOff + 12));
-
-  if LIVSOff < 16 then
-    Exit;
-
-  // ---- 解析 ItemVariationStore（VVAR 自己的） ----
-  LIVSOff := LOff + LIVSOff;
-  if LIVSOff + 8 > FDataLength then Exit;
-
-  if ReadUInt16BE(LIVSOff) <> 1 then Exit;
-
-  LRegionBase := LIVSOff + Int32(ReadUInt32BE(LIVSOff + 2));
-  LDataCount := ReadUInt16BE(LIVSOff + 6);
-
-  if LRegionBase + 4 > FDataLength then Exit;
-  LAxisCount := ReadUInt16BE(LRegionBase);
-  if (LAxisCount < 1) or (LAxisCount > 16) then Exit;
-
-  FVvar.VariationStore.AxisCount := LAxisCount;
-  if LDataCount > 0 then
-  begin
-    LDataOff := Int32(ReadUInt32BE(LIVSOff + 8));
-    LDataOff := LIVSOff + LDataOff;
-    if LDataOff + 6 > FDataLength then Exit;
-    LRegionCount := ReadUInt16BE(LDataOff + 4);
-  end
-  else
-    LRegionCount := 0;
-
-  if LRegionCount > 32767 then
-    LRegionCount := 32767;
-
-  FVvar.VariationStore.RegionCount := LRegionCount;
-  SetLength(FVvar.VariationStore.Regions, LRegionCount);
-
-  K := LRegionBase + 4;  // skip axisCount(2) + regionCount(2)
-  for I := 0 to LRegionCount - 1 do
-  begin
-    FVvar.VariationStore.Regions[I].AxisCount := LAxisCount;
-    for J := 0 to LAxisCount - 1 do
-    begin
-      if K + 6 > FDataLength then Exit;
-      FVvar.VariationStore.Regions[I].Axes[J].StartCoord := ReadUInt16BE(K);
-      FVvar.VariationStore.Regions[I].Axes[J].PeakCoord := ReadUInt16BE(K + 2);
-      FVvar.VariationStore.Regions[I].Axes[J].EndCoord := ReadUInt16BE(K + 4);
-      Inc(K, 6);
-    end;
-  end;
-
-  // 解析 ItemVariationData 子表
-  FVvar.VariationStore.DataCount := LDataCount;
-  SetLength(FVvar.VariationStore.DataSubtables, LDataCount);
-  for I := 0 to LDataCount - 1 do
-  begin
-    LDataOff := Int32(ReadUInt32BE(LIVSOff + 8 + I * 4));
-    LDataOff := LIVSOff + LDataOff;
-    if LDataOff + 6 > FDataLength then Exit;
-
-    FVvar.VariationStore.DataSubtables[I].ItemCount := ReadUInt16BE(LDataOff);
-    FVvar.VariationStore.DataSubtables[I].WordDeltaCount := ReadUInt16BE(LDataOff + 2);
-    FVvar.VariationStore.DataSubtables[I].RegionIndexCount := ReadUInt16BE(LDataOff + 4);
-
-    SetLength(FVvar.VariationStore.DataSubtables[I].RegionIndices,
-      FVvar.VariationStore.DataSubtables[I].RegionIndexCount);
-    for J := 0 to FVvar.VariationStore.DataSubtables[I].RegionIndexCount - 1 do
-      FVvar.VariationStore.DataSubtables[I].RegionIndices[J] :=
-        ReadUInt16BE(LDataOff + 6 + J * 2);
-
-    FVvar.VariationStore.DataSubtables[I].DeltaDataOffset :=
-      LDataOff + 6 + FVvar.VariationStore.DataSubtables[I].RegionIndexCount * 2;
-    FVvar.VariationStore.DataSubtables[I].RowStride :=
-      (FVvar.VariationStore.DataSubtables[I].WordDeltaCount and $7FFF) * 2 +
-      (FVvar.VariationStore.DataSubtables[I].RegionIndexCount -
-       (FVvar.VariationStore.DataSubtables[I].WordDeltaCount and $7FFF));
-  end;
-
-  // ---- 解析 vrsbMapping (DeltaSetIndexMap) ----
-  if LVrsbMapOff > 0 then
-  begin
-    LVrsbMapOff := LOff + LVrsbMapOff;
-    if LVrsbMapOff + 4 > FDataLength then Exit;
-
-    LMapFmt := ReadUInt8(LVrsbMapOff);
-    LMapEntryFmt := ReadUInt8(LVrsbMapOff + 1);
-    if LMapFmt = 0 then
-    begin
-      LMapCount := ReadUInt16BE(LVrsbMapOff + 2);
-      FVvar.VrsbMapDataOff := LVrsbMapOff + 4;
-    end
-    else
-    begin
-      LMapCount := Int32(ReadUInt32BE(LVrsbMapOff + 2));
-      FVvar.VrsbMapDataOff := LVrsbMapOff + 6;
-    end;
-
-    LMapEntrySize := ((LMapEntryFmt and $30) shr 4) + 1;
-    LInnerBits := (LMapEntryFmt and $0F) + 1;
-
-    FVvar.HasVrsbMapping := True;
-    FVvar.VrsbMapFormat := LMapFmt;
-    FVvar.VrsbMapEntrySize := LMapEntrySize;
-    FVvar.VrsbMapInnerBits := LInnerBits;
-    FVvar.VrsbMapCount := LMapCount;
-  end
-  else
-    FVvar.HasVrsbMapping := False;
-
-  // ---- 解析 vadvMapping (DeltaSetIndexMap) ----
-  if LVadvMapOff > 0 then
-  begin
-    LVadvMapOff := LOff + LVadvMapOff;
-    if LVadvMapOff + 4 > FDataLength then Exit;
-
-    LMapFmt := ReadUInt8(LVadvMapOff);
-    LMapEntryFmt := ReadUInt8(LVadvMapOff + 1);
-    if LMapFmt = 0 then
-    begin
-      LMapCount := ReadUInt16BE(LVadvMapOff + 2);
-      FVvar.VadvMapDataOff := LVadvMapOff + 4;
-    end
-    else
-    begin
-      LMapCount := Int32(ReadUInt32BE(LVadvMapOff + 2));
-      FVvar.VadvMapDataOff := LVadvMapOff + 6;
-    end;
-
-    LMapEntrySize := ((LMapEntryFmt and $30) shr 4) + 1;
-    LInnerBits := (LMapEntryFmt and $0F) + 1;
-
-    FVvar.HasVadvMapping := True;
-    FVvar.VadvMapFormat := LMapFmt;
-    FVvar.VadvMapEntrySize := LMapEntrySize;
-    FVvar.VadvMapInnerBits := LInnerBits;
-    FVvar.VadvMapCount := LMapCount;
-  end
-  else
-    FVvar.HasVadvMapping := False;
-
-  FVvarValid := True;
-end;
-
-function TTFontFace.HasVvar: Boolean;
-begin
-  Result := FVvarValid;
-end;
-
-function TTFontFace.CalcVvarAdvanceDelta(AGlyphIndex: UInt32;
-  const ANormCoords: array of Single): Single;
-var
-  LOuterIdx, LInnerIdx: Int32;
-  LEntry: UInt32;
-  LI, LByteOff, LBitCount: Int32;
-  LSubIdx, LSubtable: Int32;
-  LItemIdx, LRegionIdx, LRegionIdxCount, LWordCount: Int32;
-  LDeltaPos: Int32;
-  LDelta16: Int16;
-  LDelta8: Int8;
-  LScalar, LDeltaSum: Single;
-  LIsLong: Boolean;
-begin
-  Result := 0;
-  if not FVvarValid then
-    Exit;
-
-  // VVAR: 优先使用 vadvMapping（垂直 advance），回退到隐式映射
-  if FVvar.HasVadvMapping then
-  begin
-    if Int32(AGlyphIndex) >= FVvar.VadvMapCount then
-    begin
-      if FVvar.VadvMapCount = 0 then Exit;
-      LEntry := 0;
-      for LI := 0 to FVvar.VadvMapEntrySize - 1 do
-      begin
-        LByteOff := FVvar.VadvMapDataOff + (FVvar.VadvMapCount - 1) * FVvar.VadvMapEntrySize + LI;
-        if LByteOff < FDataLength then
-          LEntry := (LEntry shl 8) or FData[LByteOff];
-      end;
-    end
-    else
-    begin
-      LEntry := 0;
-      for LI := 0 to FVvar.VadvMapEntrySize - 1 do
-      begin
-        LByteOff := FVvar.VadvMapDataOff + Int32(AGlyphIndex) * FVvar.VadvMapEntrySize + LI;
-        if LByteOff < FDataLength then
-          LEntry := (LEntry shl 8) or FData[LByteOff];
-      end;
-    end;
-
-    LBitCount := FVvar.VadvMapInnerBits;
-    LInnerIdx := LEntry and ((1 shl LBitCount) - 1);
-    LOuterIdx := LEntry shr LBitCount;
-  end
-  else
-  begin
-    // 隐式映射：outer=0, inner=glyphID
-    LOuterIdx := 0;
-    LInnerIdx := Int32(AGlyphIndex);
-  end;
-
-  // 特殊值：0xFFFF/0xFFFF = 无变化
-  if (LOuterIdx = $FFFF) and (LInnerIdx = $FFFF) then
-    Exit;
-
-  if LOuterIdx >= FVvar.VariationStore.DataCount then
-    Exit;
-
-  LSubtable := LOuterIdx;
-  LItemIdx := LInnerIdx;
-  LRegionIdxCount := FVvar.VariationStore.DataSubtables[LSubtable].RegionIndexCount;
-  LWordCount := FVvar.VariationStore.DataSubtables[LSubtable].WordDeltaCount and $7FFF;
-  LIsLong := (FVvar.VariationStore.DataSubtables[LSubtable].WordDeltaCount and $8000) <> 0;
-
-  if LItemIdx >= FVvar.VariationStore.DataSubtables[LSubtable].ItemCount then
-    Exit;
-
-  LDeltaPos := FVvar.VariationStore.DataSubtables[LSubtable].DeltaDataOffset +
-    LItemIdx * FVvar.VariationStore.DataSubtables[LSubtable].RowStride;
-
-  LDeltaSum := 0;
-  for LI := 0 to LRegionIdxCount - 1 do
-  begin
-    LRegionIdx := FVvar.VariationStore.DataSubtables[LSubtable].RegionIndices[LI];
-
-    if LI < LWordCount then
-    begin
-      if LIsLong then
-      begin
-        if LDeltaPos + 4 > FDataLength then Break;
-        LDeltaSum := LDeltaSum + Int32(ReadUInt32BE(LDeltaPos)) *
-          CalcItemVarRegionScalar(FVvar.VariationStore.Regions, FVvar.VariationStore.RegionCount, LRegionIdx, ANormCoords);
-        Inc(LDeltaPos, 4);
-      end
-      else
-      begin
-        if LDeltaPos + 2 > FDataLength then Break;
-        LDelta16 := Int16(ReadUInt16BE(LDeltaPos));
-        LDeltaSum := LDeltaSum + LDelta16 *
-          CalcItemVarRegionScalar(FVvar.VariationStore.Regions, FVvar.VariationStore.RegionCount, LRegionIdx, ANormCoords);
-        Inc(LDeltaPos, 2);
-      end;
-    end
-    else
-    begin
-      if LDeltaPos + 1 > FDataLength then Break;
-      LDelta8 := Int8(FData[LDeltaPos]);
-      LDeltaSum := LDeltaSum + LDelta8 *
-        CalcItemVarRegionScalar(FVvar.VariationStore.Regions, FVvar.VariationStore.RegionCount, LRegionIdx, ANormCoords);
-      Inc(LDeltaPos);
-    end;
-  end;
-
-  Result := LDeltaSum;
-end;
-
-{ ========================================================================= }
-{ gvar 表解析（TrueType Glyph Variations）                                   }
-{ ========================================================================= }
-
-procedure TTFontFace.ParseGvar;
-var
-  LIdx: Int32;
-  LOff: Int32;
-  LAxisCount, LSharedCount, LGlyphCount, LFlags: Int32;
-  LCoordOff, LDataOff, I, J: Int32;
-  LOffSize4: Boolean;
-  LCoordBase: Int32;
-begin
-  LIdx := FindTable(TABLE_TAG_GVAR);
-  if LIdx < 0 then
-    Exit;
-  LOff := Int32(FTables[LIdx].Offset);
-  FGvar.TableStart := UInt32(LOff);
-  FGvar.TableSize := FTables[LIdx].Length;
-
-  // gvar header: version(4)+axisCount(2)+globalCoordCount(2)+offsetToCoord(4)+glyphCount(2)+flags(2)+offsetToData(4) = 20
-  if LOff + 20 > FDataLength then
-    Exit;
-
-  if ReadUInt32BE(LOff) <> $00010000 then
-    Exit;
-
-  LAxisCount := ReadUInt16BE(LOff + 4);
-  LSharedCount := ReadUInt16BE(LOff + 6);
-  LCoordOff := Int32(ReadUInt32BE(LOff + 8));
-  LGlyphCount := ReadUInt16BE(LOff + 12);
-  LFlags := ReadUInt16BE(LOff + 14);
-  LDataOff := Int32(ReadUInt32BE(LOff + 16));
-
-  if (LAxisCount < 1) or (LAxisCount > 16) then
-    Exit;
-  if LGlyphCount < 1 then
-    Exit;
-
-  FGvar.AxisCount := LAxisCount;
-  FGvar.SharedTupleCount := LSharedCount;
-  FGvar.GlyphCount := LGlyphCount;
-  LOffSize4 := (LFlags and 1) <> 0;
-
-  // 读取 glyph offsets（glyphCount + 1 个）
-  SetLength(FGvar.GlyphOffsets, LGlyphCount + 1);
-  if LOffSize4 then
-  begin
-    if LOff + 20 + (LGlyphCount + 1) * 4 > FDataLength then
-      Exit;
-    for I := 0 to LGlyphCount do
-    begin
-      FGvar.GlyphOffsets[I] := UInt32(LOff) + UInt32(LDataOff) + ReadUInt32BE(LOff + 20 + I * 4);
-      if (I > 0) and (FGvar.GlyphOffsets[I] < FGvar.GlyphOffsets[I - 1]) then
-        FGvar.GlyphOffsets[I] := FGvar.GlyphOffsets[I - 1];
-    end;
-  end
-  else
-  begin
-    if LOff + 20 + (LGlyphCount + 1) * 2 > FDataLength then
-      Exit;
-    for I := 0 to LGlyphCount do
-    begin
-      FGvar.GlyphOffsets[I] := UInt32(LOff) + UInt32(LDataOff) + UInt32(ReadUInt16BE(LOff + 20 + I * 2)) * 2;
-      if (I > 0) and (FGvar.GlyphOffsets[I] < FGvar.GlyphOffsets[I - 1]) then
-        FGvar.GlyphOffsets[I] := FGvar.GlyphOffsets[I - 1];
-    end;
-  end;
-
-  // 读取共享 tuple 坐标（F2Dot14 → Fixed 16.16）
-  LCoordBase := LOff + LCoordOff;
-  SetLength(FGvar.SharedTuples, LSharedCount);
-  for I := 0 to LSharedCount - 1 do
-  begin
-    SetLength(FGvar.SharedTuples[I].Coords, LAxisCount);
-    for J := 0 to LAxisCount - 1 do
-    begin
-      if LCoordBase + 2 > FDataLength then
-        Exit;
-      FGvar.SharedTuples[I].Coords[J] := Int32(Int16(ReadUInt16BE(LCoordBase))) shl 2;
-      Inc(LCoordBase, 2);
-    end;
-  end;
-
-  FGvarValid := True;
-end;
-
-function TTFontFace.HasGvar: Boolean;
-begin
-  Result := FGvarValid;
-end;
-
-procedure TTFontFace.ApplyGvarDeltas(AGlyphIndex: UInt32;
-  var AOutline: TFontGlyphOutline;
-  const ANormCoords: array of Single);
-var
-  LNPoints, LTupleCount, LDataSize: Int32;
-  LGlyphStart, LTupleDataStart, LOffsetToData: Int32;
-  LI, LJ, LK: Int32;
-  LTupleDataSize, LTupleIndex: Int32;
-  LApply: Single;
-
-  LTupleCoords: array of Int32;    // Fixed 16.16
-  LImStartCoords: array of Int32;
-  LImEndCoords: array of Int32;
-
-  LSharedPoints: array of UInt16;
-  LSharedPointCount: Int32;
-  LPoints: array of UInt16;
-  LPointCount: Int32;
-  LAllPoints: Boolean;
-  LDeltasX, LDeltasY: array of Single;
-
-  LPointDeltaX, LPointDeltaY: array of Single;
-  LTouched: array of Boolean;
-  LContourStart, LContourEnd, LNumTouched, LTPrev, LTNext: Int32;
-  LTouchedPts: array of Int32;
-
-  LReadPos: Int32;
-  LRunCount, LRunFlags: Int32;
-  LFirst: UInt16;
-  LDeltaCount: Int32;
-
-  procedure ReadPackedPointsInternal(APos: Int32; out ACount: Int32;
-    out AAllPts: Boolean; out APts: array of UInt16; out ANewPos: Int32);
-  var
-    LN, LRC, LM: Int32;
-    LF: UInt16;
-  begin
-    ANewPos := APos;
-    LN := ReadUInt8(ANewPos);
-    Inc(ANewPos);
-
-    if LN = 0 then
-    begin
-      AAllPts := True;
-      ACount := 0;
-      Exit;
-    end;
-
-    AAllPts := False;
-    if (LN and GVAR_PT_POINTS_ARE_WORDS) <> 0 then
-    begin
-      LN := (LN and GVAR_PT_POINT_RUN_COUNT_MASK) shl 8;
-      LN := LN or ReadUInt8(ANewPos);
-      Inc(ANewPos);
-    end
-    else
-      LN := LN and GVAR_PT_POINT_RUN_COUNT_MASK;
-
-    ACount := LN;
-    LF := 0;
-    LM := 0;
-    while LM < LN do
-    begin
-      LRC := ReadUInt8(ANewPos);
-      Inc(ANewPos);
-      if (LRC and GVAR_PT_POINTS_ARE_WORDS) <> 0 then
-      begin
-        LRC := LRC and GVAR_PT_POINT_RUN_COUNT_MASK;
-        LF := LF + ReadUInt16BE(ANewPos);
-        Inc(ANewPos, 2);
-        if LM < Length(APts) then APts[LM] := LF;
-        Inc(LM);
-        while LRC > 0 do
-        begin
-          if LM >= LN then Break;
-          LF := LF + ReadUInt16BE(ANewPos);
-          Inc(ANewPos, 2);
-          if LM < Length(APts) then APts[LM] := LF;
-          Inc(LM);
-          Dec(LRC);
-        end;
-      end
-      else
-      begin
-        LRC := LRC and GVAR_PT_POINT_RUN_COUNT_MASK;
-        LF := LF + ReadUInt8(ANewPos);
-        Inc(ANewPos);
-        if LM < Length(APts) then APts[LM] := LF;
-        Inc(LM);
-        while LRC > 0 do
-        begin
-          if LM >= LN then Break;
-          LF := LF + ReadUInt8(ANewPos);
-          Inc(ANewPos);
-          if LM < Length(APts) then APts[LM] := LF;
-          Inc(LM);
-          Dec(LRC);
-        end;
-      end;
-    end;
-  end;
-
-  procedure ReadPackedDeltasInternal(APos, AExpectedCount: Int32;
-    out ADeltas: array of Single; out ANewPos: Int32);
-  var
-    LRC, LM, LJ2: Int32;
-  begin
-    ANewPos := APos;
-    LJ2 := 0;
-    while LJ2 < AExpectedCount do
-    begin
-      if ANewPos >= FDataLength then Break;
-      LRC := ReadUInt8(ANewPos);
-      Inc(ANewPos);
-      LM := LRC and GVAR_DT_DELTA_RUN_COUNT_MASK;
-
-      if (LRC and GVAR_DT_DELTAS_ARE_ZERO) <> 0 then
-      begin
-        while LM >= 0 do
-        begin
-          if LJ2 >= AExpectedCount then Break;
-          if LJ2 < Length(ADeltas) then ADeltas[LJ2] := 0;
-          Inc(LJ2);
-          Dec(LM);
-        end;
-      end
-      else if (LRC and GVAR_DT_DELTAS_ARE_WORDS) <> 0 then
-      begin
-        while LM >= 0 do
-        begin
-          if LJ2 >= AExpectedCount then Break;
-          if ANewPos + 2 > FDataLength then Break;
-          if LJ2 < Length(ADeltas) then ADeltas[LJ2] := Int16(ReadUInt16BE(ANewPos));
-          Inc(ANewPos, 2);
-          Inc(LJ2);
-          Dec(LM);
-        end;
-      end
-      else
-      begin
-        while LM >= 0 do
-        begin
-          if LJ2 >= AExpectedCount then Break;
-          if ANewPos >= FDataLength then Break;
-          if LJ2 < Length(ADeltas) then ADeltas[LJ2] := Int8(ReadUInt8(ANewPos));
-          Inc(ANewPos);
-          Inc(LJ2);
-          Dec(LM);
-        end;
-      end;
-    end;
-  end;
-
-  {** IUP interpolation for untouched points in a single contour range.
-      Interpolates deltas for untouched points between two touched endpoints.
-      If AStart > AEnd, the range wraps around the contour boundary. }
-  procedure IupInterpolateRange(
-    AStart, AEnd: Int32; ASxD, ASyD, AExD, AEyD: Single);
-  var
-    LI: Int32;
-    LT, LDist: Single;
-    LP0, LP1: Int32;
-  begin
-    LP0 := AStart;
-    LP1 := AEnd;
-    if LP0 = LP1 then
-    begin
-      // Single touched point — apply its delta to all untouched
-      for LI := AStart to AEnd do
-      begin
-        LDeltasX[LI] := ASxD;
-        LDeltasY[LI] := ASyD;
-      end;
-      Exit;
-    end;
-
-    for LI := AStart to AEnd do
-    begin
-      if LTouched[LI] then
-        Continue;
-
-      // X axis interpolation
-      LDist := Single(AOutline.Points[LP1].X) - Single(AOutline.Points[LP0].X);
-      if Abs(LDist) < 0.5 then
-        LT := 0.5
-      else
-        LT := (Single(AOutline.Points[LI].X) - Single(AOutline.Points[LP0].X)) / LDist;
-      if LT < 0 then LT := 0;
-      if LT > 1 then LT := 1;
-      LDeltasX[LI] := ASxD + LT * (AExD - ASxD);
-
-      // Y axis interpolation
-      LDist := Single(AOutline.Points[LP1].Y) - Single(AOutline.Points[LP0].Y);
-      if Abs(LDist) < 0.5 then
-        LT := 0.5
-      else
-        LT := (Single(AOutline.Points[LI].Y) - Single(AOutline.Points[LP0].Y)) / LDist;
-      if LT < 0 then LT := 0;
-      if LT > 1 then LT := 1;
-      LDeltasY[LI] := ASyD + LT * (AEyD - ASyD);
-    end;
-  end;
-
-begin
-  if not FGvarValid then
-    Exit;
-  if AGlyphIndex >= UInt32(FGvar.GlyphCount) then
-    Exit;
-
-  LNPoints := Length(AOutline.Points);
-  if LNPoints = 0 then
-    Exit;
-
-  // 检查该字形是否有变化数据
-  if FGvar.GlyphOffsets[AGlyphIndex] = FGvar.GlyphOffsets[AGlyphIndex + 1] then
-    Exit;
-
-  LDataSize := Int32(FGvar.GlyphOffsets[AGlyphIndex + 1] - FGvar.GlyphOffsets[AGlyphIndex]);
-  if LDataSize < 4 then
-    Exit;
-
-  LGlyphStart := Int32(FGvar.GlyphOffsets[AGlyphIndex]);
-  if LGlyphStart + 4 > FDataLength then
-    Exit;
-
-  // per-glyph header: tupleCount(2) + offsetToData(2)
-  LTupleCount := ReadUInt16BE(LGlyphStart);
-  LOffsetToData := ReadUInt16BE(LGlyphStart + 2);
-  LTupleCount := LTupleCount and GVAR_TUPLE_COUNT_MASK;
-
-  if (LTupleCount = 0) or (LOffsetToData > LDataSize) then
-    Exit;
-
-  LTupleDataStart := LGlyphStart + LOffsetToData;
-
-  // 分配累积 delta 数组
-  SetLength(LPointDeltaX, LNPoints);
-  SetLength(LPointDeltaY, LNPoints);
-  for LI := 0 to LNPoints - 1 do
-  begin
-    LPointDeltaX[LI] := 0;
-    LPointDeltaY[LI] := 0;
-  end;
-
-  // 分配 tuple 坐标缓冲区
-  SetLength(LTupleCoords, FGvar.AxisCount);
-  SetLength(LImStartCoords, FGvar.AxisCount);
-  SetLength(LImEndCoords, FGvar.AxisCount);
-
-  // 如果共享点号，读取一次
-  LSharedPointCount := 0;
-  LSharedPoints := nil;
-
-  if (ReadUInt16BE(LGlyphStart) and GVAR_TUPLES_SHARE_POINT_NUMBERS) <> 0 then
-  begin
-    SetLength(LSharedPoints, LNPoints);
-    ReadPackedPointsInternal(LTupleDataStart, LSharedPointCount,
-      LAllPoints{%H-}, LSharedPoints, LReadPos);
-    if not LAllPoints then
-      SetLength(LSharedPoints, LSharedPointCount)
-    else
-    begin
-      LSharedPointCount := 0;
-      LSharedPoints := nil;
-    end;
-    LTupleDataStart := LReadPos;
-  end;
-
-  // 遍历每个 tuple
-  for LI := 0 to LTupleCount - 1 do
-  begin
-    LReadPos := LGlyphStart + 4 + LI * 4;
-    if LReadPos + 4 > FDataLength then
-      Break;
-
-    LTupleDataSize := ReadUInt16BE(LReadPos);
-    LTupleIndex := ReadUInt16BE(LReadPos + 2);
-
-    // 移到 tuple 数据之后的坐标区
-    LReadPos := LGlyphStart + 4 + LI * 4 + 4;
-
-    // 读取 tuple 坐标（如果内嵌）
-    if (LTupleIndex and GVAR_TI_EMBEDDED_TUPLE_COORD) <> 0 then
-    begin
-      for LJ := 0 to FGvar.AxisCount - 1 do
-      begin
-        if LReadPos + 2 > FDataLength then Exit;
-        LTupleCoords[LJ] := Int32(Int16(ReadUInt16BE(LReadPos))) shl 2;
-        Inc(LReadPos, 2);
-      end;
-    end
-    else
-    begin
-      LK := LTupleIndex and GVAR_TI_TUPLE_INDEX_MASK;
-      if LK >= FGvar.SharedTupleCount then
-      begin
-        LTupleDataStart := LTupleDataStart + LTupleDataSize;
-        Continue;
-      end;
-      for LJ := 0 to FGvar.AxisCount - 1 do
-        LTupleCoords[LJ] := FGvar.SharedTuples[LK].Coords[LJ];
-    end;
-
-    // 读取中间区域坐标
-    if (LTupleIndex and GVAR_TI_INTERMEDIATE_TUPLE) <> 0 then
-    begin
-      for LJ := 0 to FGvar.AxisCount - 1 do
-      begin
-        if LReadPos + 2 > FDataLength then Exit;
-        LImStartCoords[LJ] := Int32(Int16(ReadUInt16BE(LReadPos))) shl 2;
-        Inc(LReadPos, 2);
-      end;
-      for LJ := 0 to FGvar.AxisCount - 1 do
-      begin
-        if LReadPos + 2 > FDataLength then Exit;
-        LImEndCoords[LJ] := Int32(Int16(ReadUInt16BE(LReadPos))) shl 2;
-        Inc(LReadPos, 2);
-      end;
-    end;
-
-    // 计算 tuple scaling factor
-    LApply := 1.0;
-    for LJ := 0 to FGvar.AxisCount - 1 do
-    begin
-      if LTupleCoords[LJ] = 0 then
-        Continue;
-
-      // normCoord=0 且 tupleCoord≠0 → 该轴缩放为 0
-      if ANormCoords[LJ] = 0 then
-      begin
-        LApply := 0;
-        Break;
-      end;
-
-      if (LTupleIndex and GVAR_TI_INTERMEDIATE_TUPLE) <> 0 then
-      begin
-        if (ANormCoords[LJ] <= Single(LImStartCoords[LJ]) / 65536.0) or
-           (ANormCoords[LJ] >= Single(LImEndCoords[LJ]) / 65536.0) then
-        begin
-          LApply := 0;
-          Break;
-        end;
-        if ANormCoords[LJ] < Single(LTupleCoords[LJ]) / 65536.0 then
-          LApply := LApply * (ANormCoords[LJ] - Single(LImStartCoords[LJ]) / 65536.0) /
-                    (Single(LTupleCoords[LJ]) / 65536.0 - Single(LImStartCoords[LJ]) / 65536.0)
-        else
-          LApply := LApply * (Single(LImEndCoords[LJ]) / 65536.0 - ANormCoords[LJ]) /
-                    (Single(LImEndCoords[LJ]) / 65536.0 - Single(LTupleCoords[LJ]) / 65536.0);
-      end
-      else
-      begin
-        // 检查 normCoord 是否在 [min(0,tupleCoord), max(0,tupleCoord)] 范围内
-        if LTupleCoords[LJ] > 0 then
-        begin
-          if (ANormCoords[LJ] < 0) or (ANormCoords[LJ] > Single(LTupleCoords[LJ]) / 65536.0) then
-          begin
-            LApply := 0;
-            Break;
-          end;
-        end
-        else
-        begin
-          if (ANormCoords[LJ] < Single(LTupleCoords[LJ]) / 65536.0) or (ANormCoords[LJ] > 0) then
-          begin
-            LApply := 0;
-            Break;
-          end;
-        end;
-        LApply := LApply * ANormCoords[LJ] / (Single(LTupleCoords[LJ]) / 65536.0);
-      end;
-    end;
-
-    if LApply = 0 then
-    begin
-      LTupleDataStart := LTupleDataStart + LTupleDataSize;
-      Continue;
-    end;
-
-    // 读取 point numbers（私有或共享）
-    if (LTupleIndex and GVAR_TI_PRIVATE_POINT_NUMBERS) <> 0 then
-    begin
-      SetLength(LPoints, LNPoints);
-      ReadPackedPointsInternal(LTupleDataStart, LPointCount,
-        LAllPoints, LPoints, LReadPos);
-      LTupleDataStart := LReadPos;
-    end
-    else
-    begin
-      if LSharedPointCount = 0 then
-      begin
-        LAllPoints := True;
-        LPointCount := 0;
-        LPoints := nil;
-      end
-      else
-      begin
-        LAllPoints := False;
-        LPointCount := LSharedPointCount;
-        LPoints := LSharedPoints;
-      end;
-    end;
-
-    // 读取 packed deltas
-    if LAllPoints then
-      LDeltaCount := LNPoints
-    else
-      LDeltaCount := LPointCount;
-
-    SetLength(LDeltasX, LDeltaCount);
-    for LK := 0 to LDeltaCount - 1 do
-      LDeltasX[LK] := 0;
-    ReadPackedDeltasInternal(LTupleDataStart, LDeltaCount, LDeltasX, LReadPos);
-    LTupleDataStart := LReadPos;
-
-    SetLength(LDeltasY, LDeltaCount);
-    for LK := 0 to LDeltaCount - 1 do
-      LDeltasY[LK] := 0;
-    ReadPackedDeltasInternal(LTupleDataStart, LDeltaCount, LDeltasY, LReadPos);
-    LTupleDataStart := LReadPos;
-
-    // 应用 delta（乘以 scaling factor）并累积
-    if LAllPoints then
-    begin
-      for LJ := 0 to LNPoints - 1 do
-      begin
-        LPointDeltaX[LJ] := LPointDeltaX[LJ] + LDeltasX[LJ] * LApply;
-        LPointDeltaY[LJ] := LPointDeltaY[LJ] + LDeltasY[LJ] * LApply;
-      end;
-    end
-    else
-    begin
-      // IUP: interpolate untouched points before accumulating
-      // 标记哪些点有显式 delta
-      SetLength(LTouched, LNPoints);
-      for LJ := 0 to LNPoints - 1 do
-        LTouched[LJ] := False;
-      for LJ := 0 to LPointCount - 1 do
-        if LPoints[LJ] < UInt16(LNPoints) then
-          LTouched[LPoints[LJ]] := True;
-
-      // 逐轮廓做 IUP 插值
-      for LJ := 0 to AOutline.ContourCount - 1 do
-      begin
-        if LJ = 0 then LContourStart := 0
-        else LContourStart := AOutline.ContourEnds[LJ - 1] + 1;
-        LContourEnd := AOutline.ContourEnds[LJ];
-
-        if LContourStart > LContourEnd then
-          Continue;
-
-        // 收集该轮廓内被触摸的点索引
-        LNumTouched := 0;
-        SetLength(LTouchedPts, LContourEnd - LContourStart + 1);
-        for LK := LContourStart to LContourEnd do
-          if LTouched[LK] then
-          begin
-            LTouchedPts[LNumTouched] := LK;
-            Inc(LNumTouched);
-          end;
-
-        if LNumTouched = 0 then
-          Continue;  // 全部未触摸 → delta 保持 0
-
-        if LNumTouched = 1 then
-        begin
-          // 只有一个触摸点 → 全轮廓用同一 delta
-          LK := LTouchedPts[0];
-          IupInterpolateRange(LContourStart, LContourEnd,
-            LDeltasX[LK], LDeltasY[LK], LDeltasX[LK], LDeltasY[LK]);
-          Continue;
-        end;
-
-        // 多个触摸点：在相邻触摸点之间插值
-        for LK := 0 to LNumTouched - 1 do
-        begin
-          LTPrev := LTouchedPts[LK];
-          if LK < LNumTouched - 1 then
-            LTNext := LTouchedPts[LK + 1]
-          else
-            LTNext := LTouchedPts[0];
-
-          if LTPrev < LTNext then
-          begin
-            // 普通区间（不跨越轮廓边界）
-            IupInterpolateRange(LTPrev + 1, LTNext - 1,
-              LDeltasX[LTPrev], LDeltasY[LTPrev], LDeltasX[LTNext], LDeltasY[LTNext]);
-          end
-          else
-          begin
-            // 跨越轮廓末尾 → 头部的 wrap-around 区间
-            IupInterpolateRange(LTPrev + 1, LContourEnd,
-              LDeltasX[LTPrev], LDeltasY[LTPrev], LDeltasX[LTNext], LDeltasY[LTNext]);
-            IupInterpolateRange(LContourStart, LTNext - 1,
-              LDeltasX[LTPrev], LDeltasY[LTPrev], LDeltasX[LTNext], LDeltasY[LTNext]);
-          end;
-        end;
-      end;
-
-      // 累积插值后的 delta
-      for LJ := 0 to LNPoints - 1 do
-      begin
-        LPointDeltaX[LJ] := LPointDeltaX[LJ] + LDeltasX[LJ] * LApply;
-        LPointDeltaY[LJ] := LPointDeltaY[LJ] + LDeltasY[LJ] * LApply;
-      end;
-    end;
-  end; // for each tuple
-
-  // 最终应用 delta 到轮廓坐标
-  for LI := 0 to LNPoints - 1 do
-  begin
-    AOutline.Points[LI].X := AOutline.Points[LI].X + Round(LPointDeltaX[LI]);
-    AOutline.Points[LI].Y := AOutline.Points[LI].Y + Round(LPointDeltaY[LI]);
-  end;
-end;
-
-procedure TTFontFace.SetVariationCoords(const ANormCoords: array of Single);
-var
-  LI: Int32;
-begin
-  SetLength(FCurrentNormCoords, Length(ANormCoords));
-  for LI := 0 to High(ANormCoords) do
-    FCurrentNormCoords[LI] := ANormCoords[LI];
-end;
-
-{ ========================================================================= }
-{ CFF2 (Compact Font Format 2) 解析                                          }
-{ ========================================================================= }
-
-procedure TTFontFace.ParseCff2;
-var
-  LIdx, LCff2Off, LHdrSize, LTopDictSize: Int32;
-  LPos, LEnd: Int32;
-  LOp, LVal: Int32;
-  LValBuf: array[0..3] of Byte;
-  LVStoreOff, LCharStringsOff, LPvtSize, LPvtOff: Int32;
-  LFDArrayOff, LFDSelectOff: Int32;
-  LSubrIdxPos, LSubrCount: Int32;
-  { ItemVariationStore }
-  LIVSOff, LIVSFormat, LRegionListOff, LDataCount: Int32;
-  LDataOff, LAxisCount, LRegionCount: Int32;
-  LRegionBase, LAxisBase, I, J: Int32;
-  { FDArray }
-  LFDArrayParseOff, LFDArrayOffSize, LFDArrayDataStart: Int32;
-  LFDItemOff, LFDItemEnd, LFDItemLen, LFDItemPos, LFDItemEndPos: Int32;
-  LFDOp, LFDVal0, LFDVal1: Int32;
-  { FDSelect }
-  LFDSPos: Int32;
-
-  function ReadCff2Int(APos, ASize: Int32): Int32;
-  var
-    K: Int32;
-  begin
-    Result := 0;
-    for K := 0 to ASize - 1 do
-      Result := (Result shl 8) or ReadUInt8(APos + K);
-  end;
-
-begin
-  LIdx := FindTable(TABLE_TAG_CFF2);
-  if LIdx < 0 then
-    Exit;
-  LCff2Off := Int32(FTables[LIdx].Offset);
-  FCff2Off := LCff2Off;
-
-  if LCff2Off + 5 > FDataLength then
-    Exit;
-
-  // CFF2 Header: MajorVersion(1), MinorVersion(1), HeaderSize(1), TopDICTSize(2)
-  if ReadUInt8(LCff2Off) <> 2 then
-    Exit;
-  LHdrSize := ReadUInt8(LCff2Off + 2);
-  LTopDictSize := ReadUInt16BE(LCff2Off + 3);
-
-  if (LHdrSize < 5) or (LTopDictSize < 1) then
-    Exit;
-
-  // ---- 解析 Top DICT ----
-  LVStoreOff := 0;
-  LCharStringsOff := 0;
-  LPvtSize := 0;
-  LPvtOff := 0;
-  LFDArrayOff := 0;
-  LFDSelectOff := 0;
-
-  LPos := LCff2Off + LHdrSize;
-  LEnd := LPos + LTopDictSize;
-  if LEnd > FDataLength then
-    Exit;
-
-  // CFF DICT 编码：operand 栈 + operator
-  while LPos < LEnd do
-  begin
-    LOp := ReadUInt8(LPos);
-    Inc(LPos);
-
-    if LOp = 29 then
-    begin
-      // 4-byte integer
-      if LPos + 4 > FDataLength then Exit;
-      LVal := ReadCff2Int(LPos, 4);
-      Inc(LPos, 4);
-    end
-    else if LOp = 28 then
-    begin
-      // 2-byte signed integer
-      if LPos + 2 > FDataLength then Exit;
-      LVal := Int16(ReadUInt16BE(LPos));
-      Inc(LPos, 2);
-    end
-    else if (LOp >= 32) and (LOp <= 246) then
-    begin
-      LVal := LOp - 139;
-    end
-    else if (LOp >= 247) and (LOp <= 250) then
-    begin
-      if LPos + 1 > FDataLength then Exit;
-      LVal := (LOp - 247) * 256 + ReadUInt8(LPos) + 108;
-      Inc(LPos);
-    end
-    else if (LOp >= 251) and (LOp <= 254) then
-    begin
-      if LPos + 1 > FDataLength then Exit;
-      LVal := -(LOp - 251) * 256 - ReadUInt8(LPos) - 108;
-      Inc(LPos);
-    end
-    else if LOp = 30 then
-    begin
-      // BCD（跳过，读到 0xFF 终止符）
-      while LPos < LEnd do
-      begin
-        if (ReadUInt8(LPos) and $0F) = $0F then begin Inc(LPos); Break; end;
-        if ((ReadUInt8(LPos) shr 4) and $0F) = $0F then begin Inc(LPos); Break; end;
-        Inc(LPos);
-      end;
-      LVal := 0;
-    end
-    else if LOp = 12 then
-    begin
-      // 2-byte operator (escape)
-      if LPos >= LEnd then Exit;
-      LOp := (LOp shl 8) or ReadUInt8(LPos);
-      Inc(LPos);
-      // 处理 operator
-      case LOp of
-        $0C24: LVStoreOff := LVal;    // vstore
-        $0C25: LFDSelectOff := LVal;   // FDSelect
-        $0C26: LFDArrayOff := LVal;    // FDArray
-      end;
-    end
-    else
-    begin
-      // 1-byte operator
-      case LOp of
-        17: LCharStringsOff := LVal;    // CharStrings
-        18: begin                         // Private
-              LPvtSize := LVal;
-              // 下一个 operand 是 offset
-              // 读取下一个 integer
-              if LPos < LEnd then
-              begin
-                LOp := ReadUInt8(LPos);
-                Inc(LPos);
-                if LOp = 29 then begin LPvtOff := ReadCff2Int(LPos, 4); Inc(LPos, 4); end
-                else if LOp = 28 then begin LPvtOff := Int16(ReadUInt16BE(LPos)); Inc(LPos, 2); end
-                else if (LOp >= 32) and (LOp <= 246) then LPvtOff := LOp - 139
-                else if (LOp >= 247) and (LOp <= 250) then begin LPvtOff := (LOp - 247) * 256 + ReadUInt8(LPos) + 108; Inc(LPos); end
-                else if (LOp >= 251) and (LOp <= 254) then begin LPvtOff := -(LOp - 251) * 256 - ReadUInt8(LPos) - 108; Inc(LPos); end
-                else LPvtOff := LVal;
-              end;
-            end;
-      end;
-    end;
-  end;
-
-  FCff2TopDict.CharStringsOff := LCharStringsOff;
-  FCff2TopDict.VStoreOff := LVStoreOff;
-  FCff2TopDict.FDArrayOff := LFDArrayOff;
-  FCff2TopDict.FDSelectOff := LFDSelectOff;
-  FCff2TopDict.HasVStore := (LVStoreOff > 0);
-
-  // ---- Global Subr INDEX ----
-  LSubrIdxPos := LCff2Off + LHdrSize + LTopDictSize;
-  if LSubrIdxPos + 2 <= FDataLength then
-  begin
-    LSubrCount := ReadUInt16BE(LSubrIdxPos);
-    FCff2GlobalSubrIdxPos := LSubrIdxPos;
-    FCff2GlobalSubrCount := LSubrCount;
-  end;
-
-  // ---- 解析 ItemVariationStore ----
-  if LVStoreOff > 0 then
-  begin
-    LIVSOff := LCff2Off + LVStoreOff;
-    if LIVSOff + 8 > FDataLength then Exit;
-
-    LIVSFormat := ReadUInt16BE(LIVSOff);
-    if LIVSFormat = 1 then
-    begin
-      // Format 1: format(u16), itemVariationDataCount(u16), offsets(u32[])
-      // VariationRegionList follows the offset array
-      LDataCount := ReadUInt16BE(LIVSOff + 2);
-      if LIVSOff + 4 + LDataCount * 4 > FDataLength then Exit;
-
-      // 第一个 data subtable 的偏移 (用于读取 regionIndexCount)
-      if LDataCount > 0 then
-      begin
-        LDataOff := Int32(ReadUInt32BE(LIVSOff + 4));
-        LDataOff := LIVSOff + LDataOff;
-        if LDataOff + 6 > FDataLength then Exit;
-        LRegionCount := ReadUInt16BE(LDataOff + 4);  // regionIndexCount
-      end
-      else
-        LRegionCount := 0;
-
-      // VariationRegionList 紧跟在 offset array 之后
-      LRegionListOff := 4 + LDataCount * 4;
-    end
-    else if LIVSFormat = 2 then
-    begin
-      // Format 2: format(u16), variationRegionListOffset(u32),
-      //           itemVariationDataCount(u16), ...
-      if LIVSOff + 8 > FDataLength then Exit;
-      LRegionListOff := Int32(ReadUInt32BE(LIVSOff + 2));
-      LDataCount := ReadUInt16BE(LIVSOff + 6);
-
-      if LDataCount > 0 then
-      begin
-        LDataOff := Int32(ReadUInt32BE(LIVSOff + 8));
-        LDataOff := LIVSOff + LDataOff;
-        if LDataOff + 6 > FDataLength then Exit;
-        LRegionCount := ReadUInt16BE(LDataOff + 4);
-      end
-      else
-        LRegionCount := 0;
-    end
-    else
-      Exit;
-
-    if LRegionListOff < 4 then Exit;
-
-    // 读取 VariationRegionList
-    LRegionBase := LIVSOff + LRegionListOff;
-    if LRegionBase + 4 > FDataLength then Exit;
-    LAxisCount := ReadUInt16BE(LRegionBase);
-    // regionCount at LRegionBase + 2 (由 DataSubtable 的 regionIndexCount 推导，此处跳过)
-    if (LAxisCount < 1) or (LAxisCount > CFF2_MAX_AXES) then Exit;
-
-    if LRegionCount > CFF2_MAX_REGIONS then
-      LRegionCount := CFF2_MAX_REGIONS;
-
-    // 解析 regions
-    FCff2ItemVarStore.Format := LIVSFormat;
-    FCff2ItemVarStore.RegionCount := LRegionCount;
-    SetLength(FCff2ItemVarStore.Regions, LRegionCount);
-
-    LAxisBase := LRegionBase + 4;  // skip axisCount(2) + regionCount(2)
-    for I := 0 to LRegionCount - 1 do
-    begin
-      FCff2ItemVarStore.Regions[I].AxisCount := LAxisCount;
-      for J := 0 to LAxisCount - 1 do
-      begin
-        if LAxisBase + 6 > FDataLength then Exit;
-        FCff2ItemVarStore.Regions[I].Axes[J].StartCoord := ReadUInt16BE(LAxisBase);
-        FCff2ItemVarStore.Regions[I].Axes[J].PeakCoord := ReadUInt16BE(LAxisBase + 2);
-        FCff2ItemVarStore.Regions[I].Axes[J].EndCoord := ReadUInt16BE(LAxisBase + 4);
-        Inc(LAxisBase, 6);
-      end;
-    end;
-
-    // 解析 ItemVariationData 子表（含 regionIndices）
-    FCff2ItemVarStore.DataCount := LDataCount;
-    SetLength(FCff2ItemVarStore.DataSubtables, LDataCount);
-    for I := 0 to LDataCount - 1 do
-    begin
-      if LIVSFormat = 1 then
-        LDataOff := Int32(ReadUInt32BE(LIVSOff + 4 + I * 4))
-      else
-        LDataOff := Int32(ReadUInt32BE(LIVSOff + 8 + I * 4));
-      LDataOff := LIVSOff + LDataOff;
-      if LDataOff + 6 > FDataLength then Exit;
-
-      FCff2ItemVarStore.DataSubtables[I].ItemCount := ReadUInt16BE(LDataOff);
-      FCff2ItemVarStore.DataSubtables[I].WordDeltaCount := ReadUInt16BE(LDataOff + 2);
-      FCff2ItemVarStore.DataSubtables[I].RegionIndexCount := ReadUInt16BE(LDataOff + 4);
-
-      SetLength(FCff2ItemVarStore.DataSubtables[I].RegionIndices,
-        FCff2ItemVarStore.DataSubtables[I].RegionIndexCount);
-      for J := 0 to FCff2ItemVarStore.DataSubtables[I].RegionIndexCount - 1 do
-        FCff2ItemVarStore.DataSubtables[I].RegionIndices[J] :=
-          ReadUInt16BE(LDataOff + 6 + J * 2);
-
-      FCff2ItemVarStore.DataSubtables[I].DeltaDataOffset :=
-        LDataOff + 6 + FCff2ItemVarStore.DataSubtables[I].RegionIndexCount * 2;
-      FCff2ItemVarStore.DataSubtables[I].RowStride :=
-        (FCff2ItemVarStore.DataSubtables[I].WordDeltaCount and $7FFF) * 2 +
-        (FCff2ItemVarStore.DataSubtables[I].RegionIndexCount -
-         (FCff2ItemVarStore.DataSubtables[I].WordDeltaCount and $7FFF));
-    end;
-
-    FCff2HasVarStore := True;
-  end;
-
-  // ---- 解析 FDArray (Font DICT Array) ----
-  if LFDArrayOff > 0 then
-  begin
-    LFDArrayParseOff := LCff2Off + LFDArrayOff;
-    // FDArray 是 CFF INDEX 格式
-    if LFDArrayParseOff + 3 <= FDataLength then
-    begin
-      FCff2FontDictCount := ReadUInt16BE(LFDArrayParseOff);
-      LFDArrayOffSize := ReadUInt8(LFDArrayParseOff + 2);
-      if (FCff2FontDictCount > 0) and (LFDArrayOffSize in [1..4]) then
-      begin
-        SetLength(FCff2FontDicts, FCff2FontDictCount);
-        LFDArrayDataStart := LFDArrayParseOff + 3 + (FCff2FontDictCount + 1) * LFDArrayOffSize;
-        for I := 0 to FCff2FontDictCount - 1 do
-        begin
-          // 读取第 I 项的偏移和长度
-          LFDItemOff := 0;
-          for J := 0 to LFDArrayOffSize - 1 do
-            LFDItemOff := (LFDItemOff shl 8) or ReadUInt8(LFDArrayParseOff + 3 + I * LFDArrayOffSize + J);
-          LFDItemEnd := 0;
-          for J := 0 to LFDArrayOffSize - 1 do
-            LFDItemEnd := (LFDItemEnd shl 8) or ReadUInt8(LFDArrayParseOff + 3 + (I + 1) * LFDArrayOffSize + J);
-          LFDItemLen := LFDItemEnd - LFDItemOff;
-
-          FCff2FontDicts[I].PrivateDictSize := 0;
-          FCff2FontDicts[I].PrivateDictOff := 0;
-          FCff2FontDicts[I].SubrsOff := 0;
-
-          // 解析 Font DICT（只有 operator 18 = Private）
-          LFDItemPos := LFDArrayDataStart + LFDItemOff;
-          LFDItemEndPos := LFDItemPos + LFDItemLen;
-          if LFDItemEndPos > FDataLength then
-            Continue;
-          LFDVal0 := 0;
-          LFDVal1 := 0;
-          while LFDItemPos < LFDItemEndPos do
-          begin
-            LFDOp := ReadUInt8(LFDItemPos);
-            Inc(LFDItemPos);
-            if LFDOp = 29 then
-            begin
-              if LFDItemPos + 4 > FDataLength then Break;
-              LFDVal1 := LFDVal0;
-              LFDVal0 := ReadCff2Int(LFDItemPos, 4);
-              Inc(LFDItemPos, 4);
-            end
-            else if LFDOp = 28 then
-            begin
-              if LFDItemPos + 2 > FDataLength then Break;
-              LFDVal1 := LFDVal0;
-              LFDVal0 := Int16(ReadUInt16BE(LFDItemPos));
-              Inc(LFDItemPos, 2);
-            end
-            else if (LFDOp >= 32) and (LFDOp <= 246) then
-            begin
-              LFDVal1 := LFDVal0;
-              LFDVal0 := LFDOp - 139;
-            end
-            else if (LFDOp >= 247) and (LFDOp <= 250) then
-            begin
-              if LFDItemPos + 1 > FDataLength then Break;
-              LFDVal1 := LFDVal0;
-              LFDVal0 := (LFDOp - 247) * 256 + ReadUInt8(LFDItemPos) + 108;
-              Inc(LFDItemPos);
-            end
-            else if (LFDOp >= 251) and (LFDOp <= 254) then
-            begin
-              if LFDItemPos + 1 > FDataLength then Break;
-              LFDVal1 := LFDVal0;
-              LFDVal0 := -(LFDOp - 251) * 256 - ReadUInt8(LFDItemPos) - 108;
-              Inc(LFDItemPos);
-            end
-            else if LFDOp = 30 then
-            begin
-              // BCD skip
-              while LFDItemPos < LFDItemEndPos do
-              begin
-                if (ReadUInt8(LFDItemPos) and $0F) = $0F then begin Inc(LFDItemPos); Break; end;
-                if ((ReadUInt8(LFDItemPos) shr 4) and $0F) = $0F then begin Inc(LFDItemPos); Break; end;
-                Inc(LFDItemPos);
-              end;
-              LFDVal1 := LFDVal0;
-              LFDVal0 := 0;
-            end
-            else
-            begin
-              // operator
-              if LFDOp = 18 then
-              begin
-                // Private DICT: size, offset
-                FCff2FontDicts[I].PrivateDictSize := LFDVal1;
-                FCff2FontDicts[I].PrivateDictOff := LFDVal0;
-              end;
-              LFDVal0 := 0;
-            end;
-          end;
-        end;
-      end;
-    end;
-  end;
-
-  // ---- 解析 FDSelect ----
-  if (LFDSelectOff > 0) and (FCff2FontDictCount > 1) then
-  begin
-    LFDSPos := LCff2Off + LFDSelectOff;
-    if LFDSPos + 1 <= FDataLength then
-    begin
-      FCff2FDSelectFmt := ReadUInt8(LFDSPos);
-      FCff2FDSelectData := LFDSPos;
-      FCff2FDSelectGlyphCount := FMaxp.NumGlyphs;
-    end;
-  end;
-
-  FCff2Valid := True;
-end;
-
-function TTFontFace.HasCff2: Boolean;
-begin
-  Result := FCff2Valid;
-end;
+{ -- Variation store -- }
 
 function TTFontFace.HasVariationStore: Boolean;
 begin
-  Result := FCff2Valid and FCff2HasVarStore;
-end;
-
-function TTFontFace.VariationAxisCount: Int32;
-begin
-  if FCff2HasVarStore and (FCff2ItemVarStore.RegionCount > 0) then
-    Result := FCff2ItemVarStore.Regions[0].AxisCount
-  else
-    Result := 0;
+  Result := FCff2VStoreParsed;
 end;
 
 function TTFontFace.VariationRegionCount: Int32;
 begin
-  if FCff2HasVarStore then
-    Result := FCff2ItemVarStore.RegionCount
-  else
-    Result := 0;
+  Result := FCff2RegionCount;
 end;
 
-{ ========================================================================= }
-{ CFF (Compact Font Format) 解析                                              }
-{ ========================================================================= }
-
-procedure TTFontFace.ParseCff;
+function TTFontFace.CalcRegionScalar(ARegionIndex: Int32;
+  const ACoords: array of Single): Single;
+{ ACoords 传入原始 F2DOT14 值 (范围 -16384..16384)，region 也是原始值 }
 var
-  LIdx, LCffOff, LHdrSize: Int32;
-  LNameCount, LTopDictCount: Int32;
-  LNameIdxOff, LTopDictIdxOff: Int32;
-  LTopDictOff, LTopDictLen: Int32;
-  LCharStringsIdxOff: Int32;
-  LPrivateSize, LPrivateOff: Int32;
-  LNOffSz, LNLastOff, LI2: Int32;
-
-  function ReadUInt8Local(AOff: Int32): Byte;
-  begin
-    if (AOff >= 0) and (AOff < FDataLength) then
-      Result := FData[AOff]
-    else
-      Result := 0;
-  end;
-
-  function ParseCffIndex(APos: Int32; out ACount: Int32): Int32;
-  begin
-    ACount := 0;
-    if FDataLength < APos + 3 then
-      Exit(0);
-    ACount := (ReadUInt8Local(APos) shl 8) or ReadUInt8Local(APos + 1);
-    if ACount = 0 then
-      Exit(APos + 2);
-    Result := APos + 3 + (ACount + 1) * ReadUInt8Local(APos + 2);
-  end;
-
-  procedure GetCffIndexItem(AIdxPos, AItem, ACount: Int32;
-    out AItemOff, AItemLen: Int32);
-  var
-    LOffSz, LI, LV1, LV2, LDataStart: Int32;
-  begin
-    AItemOff := 0; AItemLen := 0;
-    if (AItem < 0) or (AItem >= ACount) or (ACount = 0) then
-      Exit;
-    LOffSz := ReadUInt8Local(AIdxPos + 2);
-    LDataStart := AIdxPos + 3 + (ACount + 1) * LOffSz;
-    LV1 := 0;
-    for LI := 0 to LOffSz - 1 do
-      LV1 := (LV1 shl 8) or ReadUInt8Local(AIdxPos + 3 + AItem * LOffSz + LI);
-    LV2 := 0;
-    for LI := 0 to LOffSz - 1 do
-      LV2 := (LV2 shl 8) or ReadUInt8Local(AIdxPos + 3 + (AItem + 1) * LOffSz + LI);
-    AItemOff := LDataStart + LV1 - 1;
-    AItemLen := LV2 - LV1;
-  end;
-
-  function ParseCffDictInt(APos, ALen, ATargetOp: Int32): Int32;
-  var
-    LI, LB: Int32;
-    LOps: array[0..31] of Int32;
-    LN: Int32;
-    LOp: Int32;
-  begin
-    Result := 0;
-    LN := 0;
-    LI := APos;
-    while LI < APos + ALen do
-    begin
-      LB := ReadUInt8Local(LI);
-      if (LB >= 32) and (LB <= 246) then
-      begin
-        if LN < 32 then begin LOps[LN] := LB - 139; Inc(LN); end;
-        Inc(LI);
-      end
-      else if (LB >= 247) and (LB <= 250) then
-      begin
-        if LN < 32 then begin LOps[LN] := (LB - 247) * 256 + ReadUInt8Local(LI + 1) + 108; Inc(LN); end;
-        Inc(LI, 2);
-      end
-      else if (LB >= 251) and (LB <= 254) then
-      begin
-        if LN < 32 then begin LOps[LN] := -((LB - 251) * 256) - ReadUInt8Local(LI + 1) - 108; Inc(LN); end;
-        Inc(LI, 2);
-      end
-      else if LB = 28 then
-      begin
-        if LN < 32 then begin LOps[LN] := SmallInt((ReadUInt8Local(LI + 1) shl 8) or ReadUInt8Local(LI + 2)); Inc(LN); end;
-        Inc(LI, 3);
-      end
-      else if LB = 29 then
-      begin
-        if LN < 32 then begin LOps[LN] := Int32(ReadUInt32BE(LI + 1)); Inc(LN); end;
-        Inc(LI, 5);
-      end
-      else if LB = 30 then
-      begin
-        Inc(LI);
-        while LI < APos + ALen do
-        begin
-          LB := ReadUInt8Local(LI); Inc(LI);
-          if (LB and $0F) = $0F then Break;
-          if ((LB shr 4) and $0F) = $0F then Break;
-        end;
-        LN := 0;
-      end
-      else if LB <= 21 then
-      begin
-        LOp := LB;
-        if LB = 12 then begin Inc(LI); LOp := (12 shl 8) or ReadUInt8Local(LI); end;
-        Inc(LI);
-        if (LOp = ATargetOp) and (LN > 0) then
-          Exit(LOps[0]);
-        LN := 0;
-      end
-      else
-        Inc(LI);
-    end;
-  end;
-
-  function ParseCffDictSecondInt(APos, ALen, ATargetOp: Int32): Int32;
-  var
-    LI, LB: Int32;
-    LOps: array[0..31] of Int32;
-    LN: Int32;
-    LOp: Int32;
-  begin
-    Result := 0;
-    LN := 0;
-    LI := APos;
-    while LI < APos + ALen do
-    begin
-      LB := ReadUInt8Local(LI);
-      if (LB >= 32) and (LB <= 246) then
-      begin
-        if LN < 32 then begin LOps[LN] := LB - 139; Inc(LN); end;
-        Inc(LI);
-      end
-      else if (LB >= 247) and (LB <= 250) then
-      begin
-        if LN < 32 then begin LOps[LN] := (LB - 247) * 256 + ReadUInt8Local(LI + 1) + 108; Inc(LN); end;
-        Inc(LI, 2);
-      end
-      else if (LB >= 251) and (LB <= 254) then
-      begin
-        if LN < 32 then begin LOps[LN] := -((LB - 251) * 256) - ReadUInt8Local(LI + 1) - 108; Inc(LN); end;
-        Inc(LI, 2);
-      end
-      else if LB = 28 then
-      begin
-        if LN < 32 then begin LOps[LN] := SmallInt((ReadUInt8Local(LI + 1) shl 8) or ReadUInt8Local(LI + 2)); Inc(LN); end;
-        Inc(LI, 3);
-      end
-      else if LB = 29 then
-      begin
-        if LN < 32 then begin LOps[LN] := Int32(ReadUInt32BE(LI + 1)); Inc(LN); end;
-        Inc(LI, 5);
-      end
-      else if LB = 30 then
-      begin
-        Inc(LI);
-        while LI < APos + ALen do
-        begin
-          LB := ReadUInt8Local(LI); Inc(LI);
-          if (LB and $0F) = $0F then Break;
-          if ((LB shr 4) and $0F) = $0F then Break;
-        end;
-        LN := 0;
-      end
-      else if LB <= 21 then
-      begin
-        LOp := LB;
-        if LB = 12 then begin Inc(LI); LOp := (12 shl 8) or ReadUInt8Local(LI); end;
-        Inc(LI);
-        if (LOp = ATargetOp) and (LN >= 2) then
-          Exit(LOps[1]);
-        LN := 0;
-      end
-      else
-        Inc(LI);
-    end;
-  end;
-
-var
-  LItemOff, LItemLen: Int32;
-  LStringIdxOff: Int32;
-  LStringCount: Int32;
-  LStrOffSz, LStrLastOff: Int32;
-  LSubrsOff: Int32;
-  LPrivateAbs: Int32;
-  LTopDictOffSz, LTopDictLastOff: Int32;
+  I, LAxisCount: Int32;
+  LAS, LStartF, LPeakF, LEndF, LCoordF: Single;
 begin
-  FCffValid := False;
-  LIdx := FindTable(TABLE_TAG_CFF);
-  if LIdx < 0 then
+  Result := 1.0;
+  if (not FCff2VStoreParsed) or (ARegionIndex < 0) or
+     (ARegionIndex >= FCff2RegionCount) then
     Exit;
-  LCffOff := FTables[LIdx].Offset;
-  FCffOff := LCffOff;
-  if FDataLength < LCffOff + 4 then
-    Exit;
-
-  LHdrSize := ReadUInt8Local(LCffOff + 2);
-
-  // Name INDEX — header position
-  LNameIdxOff := LCffOff + LHdrSize;
-  ParseCffIndex(LNameIdxOff, LNameCount);
-  if LNameCount = 0 then
-    Exit;
-
-  // Top DICT INDEX — starts at end of Name INDEX data
-  LNOffSz := ReadUInt8Local(LNameIdxOff + 2);
-  LNLastOff := 0;
-  for LI2 := 0 to LNOffSz - 1 do
-    LNLastOff := (LNLastOff shl 8) or ReadUInt8Local(LNameIdxOff + 3 + LNameCount * LNOffSz + LI2);
-  // Save header position, then get data start
-  LTopDictIdxOff := LNameIdxOff + 3 + (LNameCount + 1) * LNOffSz + LNLastOff - 1;
-  ParseCffIndex(LTopDictIdxOff, LTopDictCount);
-  if LTopDictCount = 0 then
-    Exit;
-
-  // Get first Top DICT item
-  GetCffIndexItem(LTopDictIdxOff, 0, LTopDictCount, LTopDictOff, LTopDictLen);
-
-  // CharStrings offset (operator 17)
-  FCffCharStringsOff := ParseCffDictInt(LTopDictOff, LTopDictLen, 17);
-  if FCffCharStringsOff <= 0 then
-    Exit;
-
-  // Private DICT: size (first operand of op 18), offset (second operand)
-  LPrivateSize := ParseCffDictInt(LTopDictOff, LTopDictLen, 18);
-  LPrivateOff := ParseCffDictSecondInt(LTopDictOff, LTopDictLen, 18);
-
-  // CharStrings INDEX
-  LCharStringsIdxOff := LCffOff + FCffCharStringsOff;
-  FCffCharStringsDataStart := ParseCffIndex(LCharStringsIdxOff, FCffCharStringsCount);
-  if FCffCharStringsCount <= 0 then
-    Exit;
-  FCffCharStringsOffSize := ReadUInt8Local(LCharStringsIdxOff + 2);
-
-  // Private DICT: DefaultWidthX (op 20), NominalWidthX (op 21)
-  FCffDefaultWidthX := 0;
-  FCffNominalWidthX := 0;
-  if (LPrivateSize > 0) and (LPrivateOff > 0) then
+  LAxisCount := FCff2AxisCount;
+  if LAxisCount > Length(ACoords) then
+    LAxisCount := Length(ACoords);
+  for I := 0 to LAxisCount - 1 do
   begin
-    FCffDefaultWidthX := ParseCffDictInt(LCffOff + LPrivateOff, LPrivateSize, 20);
-    FCffNominalWidthX := ParseCffDictInt(LCffOff + LPrivateOff, LPrivateSize, 21);
+    LStartF := FCff2Regions[ARegionIndex].Axes[I].Start;
+    LPeakF  := FCff2Regions[ARegionIndex].Axes[I].Peak;
+    LEndF   := FCff2Regions[ARegionIndex].Axes[I].EndCoord;
+    LCoordF := ACoords[I];
+    { 无效 region 定义或 peak=0 → 该轴不影响 }
+    if (LStartF > LPeakF) or (LPeakF > LEndF) then
+      LAS := 1.0
+    else if (LStartF = LPeakF) and (LPeakF = LEndF) then
+      LAS := 1.0 { 退化轴: start=peak=end, scalar=1.0 }
+    else if (LStartF < 0) and (LEndF > 0) and (LPeakF <> 0) then
+      LAS := 1.0
+    else if LPeakF = 0 then
+      LAS := 1.0
+    else if (LCoordF < LStartF) or (LCoordF > LEndF) then
+      LAS := 0.0
+    else if LCoordF = LPeakF then
+      LAS := 1.0
+    else if LCoordF < LPeakF then
+      LAS := (LCoordF - LStartF) / (LPeakF - LStartF)
+    else
+      LAS := (LEndF - LCoordF) / (LEndF - LPeakF);
+    Result := Result * LAS;
+  end;
+end;
+
+{ -- avar table -- }
+
+function TTFontFace.HasAvar: Boolean;
+begin
+  Result := FAvarAxisCount > 0;
+end;
+
+function TTFontFace.NormalizeAxisValue(AAxisIndex: Int32; AUserValue: Single): Single;
+var
+  LAxis: TFontVariationAxis;
+  LNormBefore: Single;
+  LSegCount: Int32;
+  I: Int32;
+  LT, LFrom, LFromNext, LTo, LToNext: Single;
+begin
+  if (AAxisIndex < 0) or (AAxisIndex >= FFvarAxisCount) then
+  begin
+    Result := AUserValue;
+    Exit;
   end;
 
-  // Global Subr INDEX — follows String INDEX
-  // 计算 Top DICT INDEX 结束位置 → String INDEX header 位置
-  LTopDictOffSz := ReadUInt8Local(LTopDictIdxOff + 2);
-  LTopDictLastOff := 0;
-  for LI2 := 0 to LTopDictOffSz - 1 do
-    LTopDictLastOff := (LTopDictLastOff shl 8) or ReadUInt8Local(LTopDictIdxOff + 3 + LTopDictCount * LTopDictOffSz + LI2);
-  LStringIdxOff := LTopDictIdxOff + 3 + (LTopDictCount + 1) * LTopDictOffSz + LTopDictLastOff - 1;
+  LAxis := FFvarAxes[AAxisIndex];
 
-  // 解析 String INDEX
-  ParseCffIndex(LStringIdxOff, LStringCount);
-  // String INDEX 结束位置 → Global Subr INDEX header 位置
-  if LStringCount > 0 then
+  { 步骤 1: 将用户值归一化到 [-1, 0, +1] 范围 }
+  if AUserValue < LAxis.DefaultValue then
+    LNormBefore := (AUserValue - LAxis.DefaultValue) / (LAxis.DefaultValue - LAxis.MinValue)
+  else if AUserValue > LAxis.DefaultValue then
+    LNormBefore := (AUserValue - LAxis.DefaultValue) / (LAxis.MaxValue - LAxis.DefaultValue)
+  else
+    LNormBefore := 0;
+
+  { 步骤 2: 应用 avar segment map（如果存在） }
+  if (AAxisIndex < FAvarAxisCount) and (Length(FAvarSegmentMaps) > AAxisIndex) then
   begin
-    LStrOffSz := ReadUInt8Local(LStringIdxOff + 2);
-    LStrLastOff := 0;
-    for LI2 := 0 to LStrOffSz - 1 do
-      LStrLastOff := (LStrLastOff shl 8) or ReadUInt8Local(LStringIdxOff + 3 + LStringCount * LStrOffSz + LI2);
-    FCffGlobalSubrIdxPos := LStringIdxOff + 3 + (LStringCount + 1) * LStrOffSz + LStrLastOff - 1;
+    LSegCount := Length(FAvarSegmentMaps[AAxisIndex]);
+    if LSegCount >= 2 then
+    begin
+      { 找到包含 LNormBefore 的 segment 并线性插值 }
+      for I := 0 to LSegCount - 2 do
+      begin
+        LFrom := FAvarSegmentMaps[AAxisIndex][I].FromCoord;
+        LFromNext := FAvarSegmentMaps[AAxisIndex][I + 1].FromCoord;
+        if (LNormBefore >= LFrom) and (LNormBefore <= LFromNext) then
+        begin
+          if LFromNext <> LFrom then
+          begin
+            LTo := FAvarSegmentMaps[AAxisIndex][I].ToCoord;
+            LToNext := FAvarSegmentMaps[AAxisIndex][I + 1].ToCoord;
+            LT := (LNormBefore - LFrom) / (LFromNext - LFrom);
+            Result := LTo + LT * (LToNext - LTo);
+            Exit;
+          end;
+        end;
+      end;
+      { 如果没有命中任何 segment（边界情况），使用最后一个 segment 的 ToCoord }
+      if LNormBefore >= FAvarSegmentMaps[AAxisIndex][LSegCount - 1].FromCoord then
+        Result := FAvarSegmentMaps[AAxisIndex][LSegCount - 1].ToCoord
+      else
+        Result := LNormBefore; { 低于第一个 segment 的值，保持不变 }
+    end
+    else
+      Result := LNormBefore;
   end
   else
-    FCffGlobalSubrIdxPos := LStringIdxOff + 2; // count=0 时 header 长度为 2
-
-  ParseCffIndex(FCffGlobalSubrIdxPos, FCffGlobalSubrCount);
-  // 计算 Global Subr bias
-  if FCffGlobalSubrCount < 1240 then
-    FCffGlobalSubrBias := 107
-  else if FCffGlobalSubrCount < 33900 then
-    FCffGlobalSubrBias := 1131
-  else
-    FCffGlobalSubrBias := 32768;
-
-  // Local Subrs — 从 Private DICT op 19 获取偏移
-  FCffLocalSubrIdxPos := 0;
-  FCffLocalSubrCount := 0;
-  FCffLocalSubrBias := 107;
-  if (LPrivateSize > 0) and (LPrivateOff > 0) then
-  begin
-    LPrivateAbs := LCffOff + LPrivateOff;
-    LSubrsOff := ParseCffDictInt(LPrivateAbs, LPrivateSize, 19);
-    if LSubrsOff > 0 then
-    begin
-      FCffLocalSubrIdxPos := LPrivateAbs + LSubrsOff;
-      ParseCffIndex(FCffLocalSubrIdxPos, FCffLocalSubrCount);
-      if FCffLocalSubrCount < 1240 then
-        FCffLocalSubrBias := 107
-      else if FCffLocalSubrCount < 33900 then
-        FCffLocalSubrBias := 1131
-      else
-        FCffLocalSubrBias := 32768;
-    end;
-  end;
-
-  FCffValid := True;
+    Result := LNormBefore;
 end;
 
-function TTFontFace.GlyphOutlineCff(AGlyphIndex: UInt32): TFontGlyphOutline;
-type
-  TCffCallEntry = record
-    DataOff: Int32;   // 子程序数据起始（绝对文件偏移）
-    DataLen: Int32;   // 子程序数据长度
-    RetPos: Int32;    // 返回位置（调用点之后的下一字节）
-  end;
-var
-  LItemOff, LItemLen, LI, LB, LOp: Int32;
-  LStack: array[0..47] of Int32;
-  LST: Int32;  // stack top
-  LCx, LCy: Int32;
-  LHasWidth: Boolean;
-  LWidth: Int32;
-  LPointCount, LEndCount: Int32;
-  LStartX, LStartY, LMx, LMy, LDx, LDy: Int32;
-  LIdxOff, LOffSz, LVal1, LVal2, LDataStart: Int32;
-  LI2: Int32;
-  { call stack }
-  LCallStack: array[0..9] of TCffCallEntry;
-  LCallDepth: Int32;
-  LCurDataOff, LCurDataEnd: Int32;  // 当前执行的 charstring 范围
-  LSubrIdx, LSubrOff, LSubrLen: Int32;
-  LSubrIdxPos, LSubrCount, LSubrBias: Int32;
-  { blend 操作符变量 }
-  LVarStoreIdx: Int32;                   // vsindex 选择的子表索引
-  LBlendN, LBlendK, LBlendI, LBlendJ: Int32;
-  LBlendDelta: Int32;
-  LBlendRIdx: Int32;
-  LBlendScalars: array of Single;
+{ -- fvar instances -- }
 
-  LPoints: array of TFontContourPoint;
-  LEnds: array of UInt16;
-
-  procedure EmitP(AX, AY: Int32; AOn: Boolean);
-  begin
-    if LPointCount >= Length(LPoints) then
-      SetLength(LPoints, LPointCount + 64);
-    LPoints[LPointCount].X := AX;
-    LPoints[LPointCount].Y := AY;
-    LPoints[LPointCount].OnCurve := AOn;
-    Inc(LPointCount);
-  end;
-
-  procedure EndCtr;
-  begin
-    if LPointCount > 0 then
-    begin
-      if LEndCount >= Length(LEnds) then
-        SetLength(LEnds, LEndCount + 8);
-      LEnds[LEndCount] := LPointCount - 1;
-      Inc(LEndCount);
-    end;
-  end;
-
-  procedure CheckWidth;
-  begin
-    if (not LHasWidth) and (LST > 0) and (LST mod 2 = 1) then
-    begin
-      LWidth := FCffNominalWidthX + LStack[0];
-      LHasWidth := True;
-    end;
-  end;
-
-  procedure CubicToQuad(AX0, AY0, ADx1, ADy1, ADx2, ADy2, ADx3, ADy3: Int32);
-  var
-    LP1x, LP1y, LP2x, LP2y: Int32;
-    LMx2, LMy2: Int32;
-    LQ1x, LQ1y, LQ2x, LQ2y: Int32;
-  begin
-    LP1x := AX0 + ADx1; LP1y := AY0 + ADy1;
-    LP2x := LP1x + ADx2; LP2y := LP1y + ADy2;
-    LMx2 := LP2x + ADx3; LMy2 := LP2y + ADy3;
-    LDx := (AX0 + 3 * LP1x + 3 * LP2x + LMx2) div 8;
-    LDy := (AY0 + 3 * LP1y + 3 * LP2y + LMy2) div 8;
-    LQ1x := 2 * LP1x - (AX0 + LDx + 1) div 2;
-    LQ1y := 2 * LP1y - (AY0 + LDy + 1) div 2;
-    LQ2x := 2 * LP2x - (LMx2 + LDx + 1) div 2;
-    LQ2y := 2 * LP2y - (LMy2 + LDy + 1) div 2;
-    EmitP(LQ1x, LQ1y, False);
-    EmitP(LDx, LDy, True);
-    EmitP(LQ2x, LQ2y, False);
-    EmitP(LMx2, LMy2, True);
-  end;
-
+function TTFontFace.FvarInstanceCount: Int32;
 begin
-  FontGlyphOutlineClear(Result);
-  if not FCffValid then
-    Exit;
-  if AGlyphIndex >= UInt32(FCffCharStringsCount) then
-    Exit;
+  Result := FFvarInstanceCount;
+end;
 
-  // 获取 charstring 数据偏移
+function TTFontFace.GetFvarInstance(AIndex: Int32): TFontNamedInstance;
+begin
+  if (AIndex >= 0) and (AIndex < FFvarInstanceCount) then
+    Result := FFvarInstances[AIndex]
+  else
   begin
-    LIdxOff := FCffOff + FCffCharStringsOff;
-    LOffSz := FCffCharStringsOffSize;
-    LDataStart := LIdxOff + 3 + (FCffCharStringsCount + 1) * LOffSz;
-    LVal1 := 0;
-    for LI := 0 to LOffSz - 1 do
-      LVal1 := (LVal1 shl 8) or ReadUInt8(LIdxOff + 3 + AGlyphIndex * LOffSz + LI);
-    LVal2 := 0;
-    for LI := 0 to LOffSz - 1 do
-      LVal2 := (LVal2 shl 8) or ReadUInt8(LIdxOff + 3 + (AGlyphIndex + 1) * LOffSz + LI);
-    LItemOff := LDataStart + LVal1 - 1;
-    LItemLen := LVal2 - LVal1;
+    Result.NameID := 0;
+    SetLength(Result.Coordinates, FFvarAxisCount);
+    FillChar(Result.Coordinates[0], FFvarAxisCount * SizeOf(Single), 0);
   end;
-  if LItemLen <= 0 then
+end;
+
+{ -- Variable font deltas -- }
+
+function TTFontFace.HasGvar: Boolean;
+begin
+  Result := FGvarParsed;
+end;
+
+function TTFontFace.HasHvar: Boolean;
+begin
+  Result := FHvarParsed;
+end;
+
+procedure TTFontFace.ParseHvar;
+{**
+ * HVAR table layout:
+ *   +0:  uint32 version (0x00010000)
+ *   +4:  uint32 itemVariationStoreOffset
+ *   +8:  uint32 advanceWidthMappingOffset (0 = not present)
+ *   +12: uint32 lsbMappingOffset (0 = not present)
+ *   +16: uint32 rsbMappingOffset (0 = not present)
+ *
+ * ItemVariationStore:
+ *   +0:  uint16 format (1)
+ *   +2:  uint32 variationRegionListOffset (from IVS start)
+ *   +6:  uint16 itemVariationDataCount
+ *   +8:  uint32 itemVariationDataOffsets[itemVariationDataCount]
+ *
+ * VariationRegionList:
+ *   +0:  uint16 axisCount
+ *   +2:  uint16 regionCount
+ *   +4:  VariationRegion[regionCount] (each: axisCount * 3 * F2.14)
+ *
+ * ItemVariationData:
+ *   +0:  uint16 itemCount
+ *   +2:  uint16 wordDeltaCount (bit 15 = LONG_WORDS, bits 14:0 = count)
+ *   +4:  uint16 regionIndexCount
+ *   +6:  uint16 regionIndices[regionIndexCount]
+ *   +6 + regionIndexCount*2: delta array
+ *
+ * DeltaSetIndexMap:
+ *   +0:  uint16 format (0=entryFormat at +2, 1=innerIndex uses 32-bit)
+ *   +2:  uint8 entryFormat (bits 1:0=innerIndexBitCount, 7:2=mapCount-1... wait)
+ *   Actually: format byte, then entryFormat, then mapCount, then entries
+ *}
+var
+  LHvarIdx, LHvarBase, LHvarLen: Int32;
+  LIVSOff, LMapOff: Int32;
+  LIVSBase, LRegionListOff, LRegionCount, LAxisCount, LI, LJ: Int32;
+  LDataCount, LDataOff, LDataBase, LMapBase: Int32;
+  LItemCount, LWordDeltaCount, LRegionIdxCount: Int32;
+  LLongWords, LDeltaOffset, LDelta: Int32;
+  LMapFormat, LEntryFormat, LMapCount: Int32;
+  LInnerBits, LEntrySize, LOuter, LInner: UInt32;
+begin
+  FHvarParsed := False;
+  LHvarIdx := FindTable(TABLE_TAG_HVAR);
+  if LHvarIdx < 0 then
+    Exit;
+  LHvarBase := FTables[LHvarIdx].Offset;
+  LHvarLen := FTables[LHvarIdx].Length;
+  if FDataLength < LHvarBase + 12 then
     Exit;
 
-  LST := 0;
-  LCx := 0; LCy := 0;
-  LHasWidth := False;
-  LWidth := FCffDefaultWidthX;
-  LPointCount := 0; LEndCount := 0;
-  LCallDepth := 0;
-  LVarStoreIdx := 0;  // 默认 variation 子表索引
-  LCurDataOff := LItemOff;
-  LCurDataEnd := LItemOff + LItemLen;
-  SetLength(LPoints, 128);
-  SetLength(LEnds, 16);
+  { Read HVAR header }
+  LIVSOff := ReadUInt32BE(LHvarBase + 4);
+  LMapOff := ReadUInt32BE(LHvarBase + 8);
+  if (LIVSOff = 0) or (LHvarBase + LIVSOff + 8 > FDataLength) then
+    Exit;
 
-  LI := LCurDataOff;
-  while LI < LCurDataEnd do
+  { Parse ItemVariationStore }
+  LIVSBase := LHvarBase + LIVSOff;
+  LRegionListOff := ReadUInt32BE(LIVSBase + 2);
+  LDataCount := ReadUInt16BE(LIVSBase + 6);
+  if (LDataCount <= 0) or (LDataCount > 256) then
+    Exit;
+
+  { Parse VariationRegionList }
+  if LIVSBase + LRegionListOff + 4 > FDataLength then Exit;
+  LAxisCount := ReadUInt16BE(LIVSBase + LRegionListOff);
+  LRegionCount := ReadUInt16BE(LIVSBase + LRegionListOff + 2);
+  FHvarAxisCount := LAxisCount;
+  SetLength(FHvarRegions, LRegionCount);
+  for LI := 0 to LRegionCount - 1 do
   begin
-    LB := ReadUInt8(LI);
-
-    // 操作数
-    if (LB >= 32) and (LB <= 246) then
+    SetLength(FHvarRegions[LI], LAxisCount * 3);
+    for LJ := 0 to LAxisCount * 3 - 1 do
     begin
-      if LST < 48 then begin LStack[LST] := LB - 139; Inc(LST); end;
-      Inc(LI); Continue;
-    end
-    else if (LB >= 247) and (LB <= 250) then
-    begin
-      if LST < 48 then begin LStack[LST] := (LB - 247) * 256 + ReadUInt8(LI + 1) + 108; Inc(LST); end;
-      Inc(LI, 2); Continue;
-    end
-    else if (LB >= 251) and (LB <= 254) then
-    begin
-      if LST < 48 then begin LStack[LST] := -((LB - 251) * 256) - ReadUInt8(LI + 1) - 108; Inc(LST); end;
-      Inc(LI, 2); Continue;
-    end
-    else if LB = 28 then
-    begin
-      if LST < 48 then begin LStack[LST] := ReadInt16BE(LI + 1); Inc(LST); end;
-      Inc(LI, 3); Continue;
-    end
-    else if LB = 255 then
-    begin
-      if LST < 48 then begin LStack[LST] := Int32(ReadUInt32BE(LI + 1)) div 65536; Inc(LST); end;
-      Inc(LI, 5); Continue;
-    end;
-
-    // 操作符
-    LOp := LB;
-    Inc(LI);
-    if LB = 12 then begin LOp := (12 shl 8) or ReadUInt8(LI); Inc(LI); end;
-
-    case LOp of
-      1, 3, 18, 23: begin CheckWidth; LST := 0; end; // hstem, vstem, hstemhm, vstemhm
-
-      19, 20: begin // hintmask, cntrmask
-        CheckWidth; LST := 0;
-        Inc(LI); // skip mask byte
-      end;
-
-      4: begin // vmoveto
-        CheckWidth;
-        if LST >= 1 then begin EndCtr; Inc(LCy, LStack[LST - 1]); EmitP(LCx, LCy, True); end;
-        LST := 0;
-      end;
-      21: begin // rmoveto
-        CheckWidth;
-        if LST >= 2 then begin EndCtr; Inc(LCx, LStack[LST - 2]); Inc(LCy, LStack[LST - 1]); EmitP(LCx, LCy, True); end;
-        LST := 0;
-      end;
-      22: begin // hmoveto
-        CheckWidth;
-        if LST >= 1 then begin EndCtr; Inc(LCx, LStack[LST - 1]); EmitP(LCx, LCy, True); end;
-        LST := 0;
-      end;
-
-      5: begin // rlineto
-        while LST >= 2 do begin Dec(LST, 2); Inc(LCx, LStack[LST]); Inc(LCy, LStack[LST + 1]); EmitP(LCx, LCy, True); end;
-        LST := 0;
-      end;
-      6: begin // hlineto
-        while LST >= 1 do begin
-          Dec(LST); Inc(LCx, LStack[LST]); EmitP(LCx, LCy, True);
-          if LST >= 1 then begin Dec(LST); Inc(LCy, LStack[LST]); EmitP(LCx, LCy, True); end;
-        end;
-        LST := 0;
-      end;
-      7: begin // vlineto
-        while LST >= 1 do begin
-          Dec(LST); Inc(LCy, LStack[LST]); EmitP(LCx, LCy, True);
-          if LST >= 1 then begin Dec(LST); Inc(LCx, LStack[LST]); EmitP(LCx, LCy, True); end;
-        end;
-        LST := 0;
-      end;
-
-      8: begin // rrcurveto (cubic Bézier → 两段 quadratic)
-        while LST >= 6 do begin
-          Dec(LST, 6);
-          LStartX := LCx; LStartY := LCy;
-          CubicToQuad(LStartX, LStartY,
-            LStack[LST], LStack[LST + 1], LStack[LST + 2],
-            LStack[LST + 3], LStack[LST + 4], LStack[LST + 5]);
-          LCx := LStartX + LStack[LST] + LStack[LST + 2] + LStack[LST + 4];
-          LCy := LStartY + LStack[LST + 1] + LStack[LST + 3] + LStack[LST + 5];
-        end;
-        LST := 0;
-      end;
-
-      27: begin // hhcurveto
-        while LST >= 4 do begin
-          LStartX := LCx; LStartY := LCy;
-          if LST mod 2 = 1 then begin
-            CubicToQuad(LStartX, LStartY, LStack[1], LStack[0], LStack[2], LStack[3], LStack[4], 0);
-            LCx := LStartX + LStack[1] + LStack[2] + LStack[4];
-            LCy := LStartY + LStack[0] + LStack[3];
-          end else begin
-            CubicToQuad(LStartX, LStartY, LStack[0], 0, LStack[1], LStack[2], LStack[3], 0);
-            LCx := LStartX + LStack[0] + LStack[1] + LStack[3];
-            LCy := LStartY + LStack[2];
-          end;
-          LST := 0;
-        end;
-        LST := 0;
-      end;
-
-      31: begin // vvcurveto
-        while LST >= 4 do begin
-          LStartX := LCx; LStartY := LCy;
-          if LST mod 2 = 1 then begin
-            CubicToQuad(LStartX, LStartY, LStack[0], LStack[1], 0, LStack[2], 0, LStack[3]);
-            LCx := LStartX + LStack[0];
-            LCy := LStartY + LStack[1] + LStack[2] + LStack[3];
-          end else begin
-            CubicToQuad(LStartX, LStartY, 0, LStack[0], 0, LStack[1], 0, LStack[2]);
-            LCx := LStartX;
-            LCy := LStartY + LStack[0] + LStack[1] + LStack[2];
-          end;
-          LST := 0;
-        end;
-        LST := 0;
-      end;
-
-      30: begin // vhcurveto
-        while LST >= 4 do begin
-          LStartX := LCx; LStartY := LCy;
-          if LST >= 5 then begin
-            CubicToQuad(LStartX, LStartY, 0, LStack[0], LStack[1], LStack[2], LStack[3], LStack[4]);
-            LCx := LStartX + LStack[1] + LStack[3];
-            LCy := LStartY + LStack[0] + LStack[2] + LStack[4];
-          end else begin
-            CubicToQuad(LStartX, LStartY, 0, LStack[0], LStack[1], LStack[2], LStack[3], 0);
-            LCx := LStartX + LStack[1] + LStack[3];
-            LCy := LStartY + LStack[0] + LStack[2];
-          end;
-          LST := 0;
-        end;
-        LST := 0;
-      end;
-
-      29, 10: begin // callsubr (10), callgsubr (29)
-        if LST > 0 then
-        begin
-          Dec(LST);
-          // 计算带偏移的子程序索引
-          if LOp = 10 then
-          begin
-            // callsubr — Local Subrs
-            LSubrIdxPos := FCffLocalSubrIdxPos;
-            LSubrCount := FCffLocalSubrCount;
-            LSubrBias := FCffLocalSubrBias;
-          end
-          else
-          begin
-            // callgsubr — Global Subrs
-            LSubrIdxPos := FCffGlobalSubrIdxPos;
-            LSubrCount := FCffGlobalSubrCount;
-            LSubrBias := FCffGlobalSubrBias;
-          end;
-          LSubrIdx := LStack[LST] + LSubrBias;
-          if (LSubrIdx >= 0) and (LSubrIdx < LSubrCount) and (LCallDepth < 10) then
-          begin
-            // 获取子程序数据
-            begin
-              LIdxOff := LSubrIdxPos;
-              LOffSz := ReadUInt8(LIdxOff + 2);
-              LDataStart := LIdxOff + 3 + (LSubrCount + 1) * LOffSz;
-              LVal1 := 0;
-              for LI2 := 0 to LOffSz - 1 do
-                LVal1 := (LVal1 shl 8) or ReadUInt8(LIdxOff + 3 + LSubrIdx * LOffSz + LI2);
-              LVal2 := 0;
-              for LI2 := 0 to LOffSz - 1 do
-                LVal2 := (LVal2 shl 8) or ReadUInt8(LIdxOff + 3 + (LSubrIdx + 1) * LOffSz + LI2);
-              LSubrOff := LDataStart + LVal1 - 1;
-              LSubrLen := LVal2 - LVal1;
-            end;
-            if LSubrLen > 0 then
-            begin
-              // 保存当前执行上下文
-              LCallStack[LCallDepth].DataOff := LCurDataOff;
-              LCallStack[LCallDepth].DataLen := LCurDataEnd - LCurDataOff;
-              LCallStack[LCallDepth].RetPos := LI;
-              Inc(LCallDepth);
-              // 跳转到子程序
-              LCurDataOff := LSubrOff;
-              LCurDataEnd := LSubrOff + LSubrLen;
-              LI := LCurDataOff;
-              Continue;
-            end;
-          end;
-        end;
-      end;
-      11: begin // return — 从子程序返回
-        if LCallDepth > 0 then
-        begin
-          Dec(LCallDepth);
-          LCurDataOff := LCallStack[LCallDepth].DataOff;
-          LCurDataEnd := LCurDataOff + LCallStack[LCallDepth].DataLen;
-          LI := LCallStack[LCallDepth].RetPos;
-          Continue;
-        end;
-      end;
-
-      14: begin // endchar
-        CheckWidth;
-        EndCtr;
-        LST := 0;
+      if LIVSBase + LRegionListOff + 4 + (LI * LAxisCount * 3 + LJ) * 2 + 2 > FDataLength then
         Break;
-      end;
+      FHvarRegions[LI][LJ] := ReadInt16BE(LIVSBase + LRegionListOff + 4 +
+        (LI * LAxisCount * 3 + LJ) * 2);
+    end;
+  end;
 
-      15: begin // vsindex — 设置 variation 数据子表索引
-        if (LST >= 1) and FCff2Valid and FCff2HasVarStore then
-          LVarStoreIdx := LStack[LST - 1];
-        LST := 0;
-      end;
+  { Parse ItemVariationData and build delta table }
+  SetLength(FHvarDeltas, LDataCount);
+  FHvarItemCount := 0;
+  FHvarDeltaBits := 0;
 
-      16: begin // blend — CFF2 字形坐标变化混合
-        if (LST >= 1) and FCff2Valid and FCff2HasVarStore then
+  for LI := 0 to LDataCount - 1 do
+  begin
+    if LIVSBase + 8 + LI * 4 + 4 > FDataLength then Break;
+    LDataOff := ReadUInt32BE(LIVSBase + 8 + LI * 4);
+    LDataBase := LIVSBase + LDataOff;
+    if LDataBase + 6 > FDataLength then Continue;
+    LItemCount := ReadUInt16BE(LDataBase);
+    LWordDeltaCount := ReadUInt16BE(LDataBase + 2);
+    LRegionIdxCount := ReadUInt16BE(LDataBase + 4);
+    if LItemCount > FHvarItemCount then
+      FHvarItemCount := LItemCount;
+
+    LLongWords := (LWordDeltaCount and $8000) shr 15;
+    LWordDeltaCount := LWordDeltaCount and $7FFF;
+    if LLongWords <> 0 then
+      FHvarDeltaBits := 1;
+
+    { Delta array: first LWordDeltaCount items are 32-bit if LLongWords, else 16-bit;
+      remaining items are 16-bit if LLongWords, else 8-bit }
+    SetLength(FHvarDeltas[LI], LItemCount * LRegionIdxCount);
+    LDeltaOffset := LDataBase + 6 + LRegionIdxCount * 2;
+    for LJ := 0 to LItemCount * LRegionIdxCount - 1 do
+    begin
+      if LJ div LRegionIdxCount < LWordDeltaCount then
+      begin
+        { Word delta }
+        if LLongWords <> 0 then
         begin
-          LBlendN := LStack[LST - 1];
-          Dec(LST);
-          if (LBlendN > 0) and (LBlendN <= LST) then
-          begin
-            // 使用 vsindex 选择的子表 region 索引
-            if (LVarStoreIdx >= 0) and (LVarStoreIdx < FCff2ItemVarStore.DataCount) then
-              LBlendK := FCff2ItemVarStore.DataSubtables[LVarStoreIdx].RegionIndexCount
-            else
-              LBlendK := 0;
-
-            if (LBlendK > 0) and (LST >= LBlendN + LBlendN * LBlendK) then
-            begin
-              // 计算 region scalars（用子表的 regionIndices 索引全局 region 数组）
-              SetLength(LBlendScalars, LBlendK);
-              for LBlendI := 0 to LBlendK - 1 do
-              begin
-                LBlendScalars[LBlendI] := CalcItemVarRegionScalar(
-                  FCff2ItemVarStore.Regions, FCff2ItemVarStore.RegionCount,
-                  FCff2ItemVarStore.DataSubtables[LVarStoreIdx].RegionIndices[LBlendI],
-                  FCurrentNormCoords);
-              end;
-              // LStack: [base0..baseN-1, delta0_k0..deltaN-1_k0, ..., delta0_kK-1..deltaN-1_kK-1]
-              for LBlendI := 0 to LBlendN - 1 do
-              begin
-                LBlendDelta := 0;
-                for LBlendJ := 0 to LBlendK - 1 do
-                begin
-                  LBlendDelta := LBlendDelta +
-                    Trunc(LStack[LBlendN + LBlendJ * LBlendN + LBlendI] * LBlendScalars[LBlendJ]);
-                end;
-                LStack[LBlendI] := LStack[LBlendI] + LBlendDelta;
-              end;
-              LST := LBlendN;
-            end
-            else
-              LST := LBlendN;
-          end;
+          if LDeltaOffset + 4 > FDataLength then Break;
+          FHvarDeltas[LI][LJ] := ReadInt16BE(LDeltaOffset); { truncate to 16-bit for simplicity }
+          Inc(LDeltaOffset, 4);
         end
         else
-          LST := 0;
-      end;
-      (12 shl 8) or 34: begin // hflex — 7 args: dx1 dx2 dy2 dx3 dx4 dx5 dx6
-        if LST >= 7 then begin
-          LStartX := LCx; LStartY := LCy;
-          // 第一段: dx1,0 dx2,dy2 dx3,0
-          CubicToQuad(LStartX, LStartY, LStack[0], 0, LStack[1], LStack[2], LStack[3], 0);
-          LCx := LStartX + LStack[0] + LStack[1] + LStack[3];
-          LCy := LStartY + LStack[2];
-          // 第二段: dx4,0 dx5,-dy2 dx6,0
-          CubicToQuad(LCx, LCy, LStack[4], 0, LStack[5], -LStack[2], LStack[6], 0);
-          LCx := LCx + LStack[4] + LStack[5] + LStack[6];
+        begin
+          if LDeltaOffset + 2 > FDataLength then Break;
+          FHvarDeltas[LI][LJ] := ReadInt16BE(LDeltaOffset);
+          Inc(LDeltaOffset, 2);
         end;
-        LST := 0;
-      end;
-      (12 shl 8) or 35: begin // flex — 13 args: dx1..dy6 depth
-        if LST >= 13 then begin
-          LStartX := LCx; LStartY := LCy;
-          // 第一段: dx1,dy1 dx2,dy2 dx3,dy3
-          CubicToQuad(LStartX, LStartY, LStack[0], LStack[1], LStack[2], LStack[3], LStack[4], LStack[5]);
-          LCx := LStartX + LStack[0] + LStack[2] + LStack[4];
-          LCy := LStartY + LStack[1] + LStack[3] + LStack[5];
-          // 第二段: dx4,dy4 dx5,dy5 dx6,dy6
-          CubicToQuad(LCx, LCy, LStack[6], LStack[7], LStack[8], LStack[9], LStack[10], LStack[11]);
-          LCx := LCx + LStack[6] + LStack[8] + LStack[10];
-          LCy := LCy + LStack[7] + LStack[9] + LStack[11];
+      end
+      else
+      begin
+        { Byte delta }
+        if LLongWords <> 0 then
+        begin
+          if LDeltaOffset + 2 > FDataLength then Break;
+          FHvarDeltas[LI][LJ] := ReadInt16BE(LDeltaOffset);
+          Inc(LDeltaOffset, 2);
+        end
+        else
+        begin
+          if LDeltaOffset + 1 > FDataLength then Break;
+          FHvarDeltas[LI][LJ] := ShortInt(ReadUInt8(LDeltaOffset));
+          Inc(LDeltaOffset, 1);
         end;
-        LST := 0;
       end;
-      (12 shl 8) or 36: begin // hflex1 — 9 args: dx1 dy1 dx2 dy2 dx3 dx4 dx5 dy5 dx6
-        if LST >= 9 then begin
-          LStartX := LCx; LStartY := LCy;
-          // 第一段: dx1,dy1 dx2,dy2 dx3,0
-          CubicToQuad(LStartX, LStartY, LStack[0], LStack[1], LStack[2], LStack[3], LStack[4], 0);
-          LCx := LStartX + LStack[0] + LStack[2] + LStack[4];
-          LCy := LStartY + LStack[1] + LStack[3];
-          // 第二段: dx4,0 dx5,dy5 dx6,0
-          CubicToQuad(LCx, LCy, LStack[5], 0, LStack[6], LStack[7], LStack[8], 0);
-          LCx := LCx + LStack[5] + LStack[6] + LStack[8];
-        end;
-        LST := 0;
-      end;
-      (12 shl 8) or 37: begin // flex1 — 11 args: dx1 dy1 dx2 dy2 dx3 dy3 dx4 dy4 dx5 dy5 d6
-        if LST >= 11 then begin
-          LStartX := LCx; LStartY := LCy;
-          // 第一段: dx1,dy1 dx2,dy2 dx3,dy3
-          CubicToQuad(LStartX, LStartY, LStack[0], LStack[1], LStack[2], LStack[3], LStack[4], LStack[5]);
-          LCx := LStartX + LStack[0] + LStack[2] + LStack[4];
-          LCy := LStartY + LStack[1] + LStack[3] + LStack[5];
-          // 判断 d6 是 dx 还是 dy（基于两段曲线的总位移）
-          if Abs(LStack[0] + LStack[2] + LStack[4] + LStack[6] + LStack[8]) >
-             Abs(LStack[1] + LStack[3] + LStack[5] + LStack[7] + LStack[9]) then
-          begin
-            // d6 = dy6, dx6 = 0
-            CubicToQuad(LCx, LCy, LStack[6], LStack[7], LStack[8], LStack[9], 0, LStack[10]);
-            LCy := LCy + LStack[7] + LStack[9] + LStack[10];
-          end
-          else
-          begin
-            // d6 = dx6, dy6 = 0
-            CubicToQuad(LCx, LCy, LStack[6], LStack[7], LStack[8], LStack[9], LStack[10], 0);
-            LCx := LCx + LStack[6] + LStack[8] + LStack[10];
-          end;
-        end;
-        LST := 0;
-      end;
-    else
-      LST := 0;
     end;
   end;
 
-  EndCtr;
-  SetLength(LPoints, LPointCount);
-  SetLength(LEnds, LEndCount);
-  Result.ContourCount := LEndCount;
-  Result.Points := LPoints;
-  Result.ContourEnds := LEnds;
+  { Parse DeltaSetIndexMap (advance width mapping) }
+  if LMapOff <> 0 then
+  begin
+    LMapBase := LHvarBase + LMapOff;
+    if LMapBase + 4 > FDataLength then
+    begin
+      FHvarParsed := FHvarItemCount > 0;
+      Exit;
+    end;
+    FHvarIndexFormat := ReadUInt16BE(LMapBase);
+    LEntryFormat := ReadUInt8(LMapBase + 2);
+    LMapCount := ReadUInt32BE(LMapBase + 3) and $00FFFFFF; { 24-bit count }
+    LInnerBits := (LEntryFormat and $0F) + 1;
+    LEntrySize := ((LEntryFormat shr 4) and $03) + 1; { bytes per entry: 1-4 }
+    SetLength(FHvarIndexMap, LMapCount);
+    for LI := 0 to LMapCount - 1 do
+    begin
+      if LMapBase + 6 + LI * LEntrySize + LEntrySize > FDataLength then Break;
+      case LEntrySize of
+        1: begin
+          LOuter := 0;
+          LInner := ReadUInt8(LMapBase + 6 + LI * LEntrySize);
+        end;
+        2: begin
+          LOuter := ReadUInt8(LMapBase + 6 + LI * LEntrySize) shr (8 - LInnerBits);
+          LInner := ReadUInt16BE(LMapBase + 6 + LI * LEntrySize) and ((1 shl LInnerBits) - 1);
+        end;
+        3: begin
+          LOuter := ReadUInt16BE(LMapBase + 6 + LI * LEntrySize) shr (16 - LInnerBits);
+          LInner := (ReadUInt16BE(LMapBase + 6 + LI * LEntrySize + 1)) and ((1 shl LInnerBits) - 1);
+        end;
+        4: begin
+          LOuter := ReadUInt32BE(LMapBase + 6 + LI * LEntrySize) shr (32 - LInnerBits);
+          LInner := ReadUInt32BE(LMapBase + 6 + LI * LEntrySize) and ((1 shl LInnerBits) - 1);
+        end;
+      end;
+      FHvarIndexMap[LI] := (LOuter shl 16) or LInner;
+    end;
+  end;
+
+  FHvarParsed := FHvarItemCount > 0;
 end;
 
-{ ========================================================================= }
-{ COLR/CPAL/CBDT 解析                                                        }
-{ ========================================================================= }
-
-procedure TTFontFace.ParseColr;
-var
-  LIdx, LOff: Int32;
-  LVersion, LBaseGlyphRecordCount, LBaseGlyphRecordArrayOff: UInt16;
-  LLayerArrayOff, LLayerCount: UInt32;
-  LI: Int32;
-begin
-  FColrValid := False;
-  LIdx := FindTable($434F4C52); { 'COLR' }
-  if LIdx < 0 then
-    Exit;
-  LOff := Int32(FTables[LIdx].Offset);
-  if Int32(FTables[LIdx].Length) < 14 then
-    Exit;
-  LVersion := ReadUInt16BE(LOff);
-  if LVersion > 1 then
-    Exit; { 只支持 v0/v1 }
-  LBaseGlyphRecordCount := ReadUInt16BE(LOff + 2);
-  LBaseGlyphRecordArrayOff := ReadUInt16BE(LOff + 4); { 注意: v0 是 UInt32 }
-  LBaseGlyphRecordArrayOff := Int32(ReadUInt32BE(LOff + 4));
-  LLayerArrayOff := ReadUInt32BE(LOff + 8);
-  LLayerCount := ReadUInt16BE(LOff + 12);
-  if (LBaseGlyphRecordCount <= 0) or (LLayerCount <= 0) then
-    Exit;
-  if Int32(FTables[LIdx].Length) < LBaseGlyphRecordArrayOff + LBaseGlyphRecordCount * 6 then
-    Exit;
-  SetLength(FColrBaseGlyphRecords, LBaseGlyphRecordCount);
-  for LI := 0 to LBaseGlyphRecordCount - 1 do
-  begin
-    FColrBaseGlyphRecords[LI].GlyphId := ReadUInt16BE(LOff + LBaseGlyphRecordArrayOff + LI * 6);
-    FColrBaseGlyphRecords[LI].FirstLayerIdx := ReadUInt16BE(LOff + LBaseGlyphRecordArrayOff + LI * 6 + 2);
-    FColrBaseGlyphRecords[LI].NumLayers := ReadUInt16BE(LOff + LBaseGlyphRecordArrayOff + LI * 6 + 4);
-  end;
-  if Int32(FTables[LIdx].Length) < Int32(LLayerArrayOff) + LLayerCount * 4 then
-    Exit;
-  SetLength(FColrLayerRecords, LLayerCount);
-  for LI := 0 to LLayerCount - 1 do
-  begin
-    FColrLayerRecords[LI].GlyphId := ReadUInt16BE(LOff + Int32(LLayerArrayOff) + LI * 4);
-    FColrLayerRecords[LI].PaletteIndex := ReadUInt16BE(LOff + Int32(LLayerArrayOff) + LI * 4 + 2);
-  end;
-  FColrValid := True;
-end;
+{ -- CPAL: Color Palette Table -- }
 
 procedure TTFontFace.ParseCpal;
 var
-  LIdx, LOff: Int32;
-  LVersion: UInt16;
-  LNumPaletteEntries, LNumPalettes: UInt16;
-  LColorRecordArrayOff: UInt32;
+  LTableIdx, LBase: Int32;
+  LVersion, LNumPaletteEntries, LNumPalettes, LColorOff: Int32;
   LI: Int32;
 begin
-  FCpalValid := False;
-  LIdx := FindTable($4350414C); { 'CPAL' }
-  if LIdx < 0 then
+  LTableIdx := FindTable(TABLE_TAG_CPAL);
+  if LTableIdx < 0 then
     Exit;
-  LOff := Int32(FTables[LIdx].Offset);
-  if Int32(FTables[LIdx].Length) < 12 then
+  LBase := FTables[LTableIdx].Offset;
+  if FDataLength < LBase + 12 then
     Exit;
-  LVersion := ReadUInt16BE(LOff);
-  if LVersion > 1 then
-    Exit;
-  LNumPaletteEntries := ReadUInt16BE(LOff + 2);
-  LNumPalettes := ReadUInt16BE(LOff + 4);
-  LColorRecordArrayOff := ReadUInt32BE(LOff + 8);
+  LVersion := ReadUInt16BE(LBase);
+  LNumPaletteEntries := ReadUInt16BE(LBase + 2);
+  LNumPalettes := ReadUInt16BE(LBase + 4);
   if (LNumPaletteEntries <= 0) or (LNumPalettes <= 0) then
     Exit;
-  if Int32(FTables[LIdx].Length) < Int32(LColorRecordArrayOff) + LNumPaletteEntries * 4 then
+  { colorRecordArrayOffset (uint32 at offset 8) }
+  if FDataLength < LBase + 12 then
     Exit;
-  FCpalNumPaletteEntries := LNumPaletteEntries;
-  FCpalNumPalettes := LNumPalettes;
-  SetLength(FCpalColors, LNumPaletteEntries);
+  LColorOff := LBase + Int32(ReadUInt32BE(LBase + 8));
+  { 读取第一个调色板的所有颜色（BGRA 格式，每色 4 字节） }
+  if FDataLength < LColorOff + LNumPaletteEntries * 4 then
+    Exit;
+  FPaletteCount := LNumPalettes;
+  FColorsPerPalette := LNumPaletteEntries;
+  SetLength(FPaletteColors, LNumPaletteEntries);
   for LI := 0 to LNumPaletteEntries - 1 do
   begin
-    { CPAL colors are BGRA }
-    FCpalColors[LI].Blue := ReadUInt8(LOff + Int32(LColorRecordArrayOff) + LI * 4);
-    FCpalColors[LI].Green := ReadUInt8(LOff + Int32(LColorRecordArrayOff) + LI * 4 + 1);
-    FCpalColors[LI].Red := ReadUInt8(LOff + Int32(LColorRecordArrayOff) + LI * 4 + 2);
-    FCpalColors[LI].Alpha := ReadUInt8(LOff + Int32(LColorRecordArrayOff) + LI * 4 + 3);
+    FPaletteColors[LI].Blue := FData[LColorOff + LI * 4];
+    FPaletteColors[LI].Green := FData[LColorOff + LI * 4 + 1];
+    FPaletteColors[LI].Red := FData[LColorOff + LI * 4 + 2];
+    FPaletteColors[LI].Alpha := FData[LColorOff + LI * 4 + 3];
   end;
-  FCpalValid := True;
 end;
+
+{ -- COLR: Color Table -- }
+
+procedure TTFontFace.ParseColr;
+var
+  LTableIdx, LBase: Int32;
+  LVersion, LBaseGlyphRecordCount, LBaseGlyphRecordArrayOff: Int32;
+  LLayerArrayOff, LLayerCount: Int32;
+  LI, LJ, LBaseGid, LFirstLayerIdx, LNumLayers: Int32;
+begin
+  LTableIdx := FindTable(TABLE_TAG_COLR);
+  if LTableIdx < 0 then
+    Exit;
+  LBase := FTables[LTableIdx].Offset;
+  if FDataLength < LBase + 14 then
+    Exit;
+  LVersion := ReadUInt16BE(LBase);
+  if LVersion > 1 then
+    Exit; { 只支持 COLR v0/v1 }
+  LBaseGlyphRecordCount := ReadUInt16BE(LBase + 2);
+  LBaseGlyphRecordArrayOff := LBase + Int32(ReadUInt32BE(LBase + 4));
+  LLayerArrayOff := LBase + Int32(ReadUInt32BE(LBase + 8));
+  LLayerCount := ReadUInt16BE(LBase + 12);
+  if (LBaseGlyphRecordCount <= 0) or (LLayerCount <= 0) then
+    Exit;
+  { 解析 base glyph records: 每条 6 字节 (uint16 gid, uint16 firstLayerIdx, uint16 numLayers) }
+  if FDataLength < LBaseGlyphRecordArrayOff + LBaseGlyphRecordCount * 6 then
+    Exit;
+  SetLength(FColorLayerRecords, LBaseGlyphRecordCount);
+  for LI := 0 to LBaseGlyphRecordCount - 1 do
+  begin
+    LBaseGid := ReadUInt16BE(LBaseGlyphRecordArrayOff + LI * 6);
+    LFirstLayerIdx := ReadUInt16BE(LBaseGlyphRecordArrayOff + LI * 6 + 2);
+    LNumLayers := ReadUInt16BE(LBaseGlyphRecordArrayOff + LI * 6 + 4);
+    FColorLayerRecords[LI].BaseGlyphId := LBaseGid;
+    SetLength(FColorLayerRecords[LI].Layers, LNumLayers);
+    { 解析 layer records: 每条 4 字节 (uint16 gid, uint16 paletteIndex) }
+    for LJ := 0 to LNumLayers - 1 do
+    begin
+      if FDataLength < LLayerArrayOff + (LFirstLayerIdx + LJ) * 4 + 4 then
+      begin
+        SetLength(FColorLayerRecords[LI].Layers, LJ);
+        Break;
+      end;
+      FColorLayerRecords[LI].Layers[LJ].GlyphId :=
+        ReadUInt16BE(LLayerArrayOff + (LFirstLayerIdx + LJ) * 4);
+      FColorLayerRecords[LI].Layers[LJ].PaletteIndex :=
+        ReadUInt16BE(LLayerArrayOff + (LFirstLayerIdx + LJ) * 4 + 2);
+    end;
+  end;
+end;
+
+{ -- CBDT/CBLC: Color Bitmap Data Table -- }
 
 procedure TTFontFace.ParseCbdt;
-{ 解析 CBLC（Color Bitmap Location Table）+ CBDT（Color Bitmap Data Table）。
-  CBLC 提供字形到位图数据的索引，CBDT 存储实际的位图/PNG 数据。 }
 var
-  LCbdtIdx, LCblcIdx: Int32;
-  LCblcOff, LCbdtOff, LCbdtLen: UInt32;
-  LNumSizes, LStrikeBase: UInt32;
-  LSubArrOff, LIdxTableSize, LNumSubTables: UInt32;
+  LCblcIdx, LCbdtIdx: Int32;
+  LCblcBase, LCbdtBase: Int32;
+  LVersion, LNumSizes: UInt32;
+  LBitmapSizeOff: Int32;
+  LIndexSubTableArrayOff, LNumberOfIndexSubTables: UInt32;
   LStartGlyph, LEndGlyph: UInt16;
-  LI, LJ, LK: Int32;
-  LEntryOff, LSubOff, LIdxFormat, LImgFormat: UInt32;
-  LIdxDataOff, LNumGlyphs, LAddOff: UInt32;
-  LSubEntryIdx: Int32;
+  LPpemX, LPpemY: UInt8;
+  LI, LJ: Int32;
+  LArrOff, LSubOff: Int32;
+  LFirstGlyph, LLastGlyph: UInt16;
+  LAdditionalOffset: UInt32;
+  LIndexFormat, LImageFormat: UInt16;
+  LImageDataOffset: UInt32;
+  LNumGlyphs, LNumOffsets: Int32;
 begin
-  FCbdtValid := False;
-  LCbdtIdx := FindTable($43424454); { 'CBDT' }
-  LCblcIdx := FindTable($43424C43); { 'CBLC' }
-  if (LCbdtIdx < 0) or (LCblcIdx < 0) then
+  LCblcIdx := FindTable(TABLE_TAG_CBLC);
+  LCbdtIdx := FindTable(TABLE_TAG_CBDT);
+  if (LCblcIdx < 0) or (LCbdtIdx < 0) then
     Exit;
-
-  LCbdtOff := FTables[LCbdtIdx].Offset;
-  LCbdtLen := FTables[LCbdtIdx].Length;
-  LCblcOff := FTables[LCblcIdx].Offset;
-  FCbdtTableOff := LCbdtOff;
-
-  try
-    { CBLC header: version(Fixed) + numSizes(UInt32) }
-    { 忽略版本号（v1/v2/v3 的 BitmapSize record 大小不同，但我们按 v3 48字节处理） }
-    LNumSizes := ReadUInt32BE(Int32(LCblcOff) + 4);
-    if LNumSizes = 0 then
-      Exit;
-
-    SetLength(FCblcSubTables, 0);
-    LSubEntryIdx := 0;
-
-    { 遍历每个 strike }
-    for LI := 0 to Int32(LNumSizes) - 1 do
-    begin
-      LStrikeBase := LCblcOff + 8 + UInt32(LI) * 48;
-
-      { BitmapSize record (v3: 48 bytes) }
-      LSubArrOff := ReadUInt32BE(Int32(LStrikeBase)) + LCblcOff;
-      LIdxTableSize := ReadUInt32BE(Int32(LStrikeBase) + 4);
-      LNumSubTables := ReadUInt32BE(Int32(LStrikeBase) + 8);
-      { colorRef at +12 (skip) }
-      { hori SBitLineMetrics at +16 (12 bytes, skip) }
-      { vert SBitLineMetrics at +28 (12 bytes, skip) }
-      LStartGlyph := ReadUInt16BE(Int32(LStrikeBase) + 40);
-      LEndGlyph := ReadUInt16BE(Int32(LStrikeBase) + 42);
-      { ppemX, ppemY, bitDepth, flags at +44..+47 (skip) }
-
-      if LNumSubTables = 0 then
-        Continue;
-
-      { 遍历 index sub-table array entries }
-      for LJ := 0 to Int32(LNumSubTables) - 1 do
-      begin
-        LEntryOff := LSubArrOff + UInt32(LJ) * 8;
-        { firstGlyphIndex(UInt16) + lastGlyphIndex(UInt16) + additionalOffsetToIndexSubtable(UInt32) }
-        { additionalOffsetToIndexSubtable 是相对于 indexSubTableArray 起始的偏移 }
-        LAddOff := ReadUInt32BE(Int32(LEntryOff) + 4);
-        LSubOff := LSubArrOff + LAddOff;
-
-        { Index sub-table header: indexFormat(UInt16) + imageFormat(UInt16) + ... }
-        LIdxFormat := ReadUInt16BE(Int32(LSubOff));
-        LImgFormat := ReadUInt16BE(Int32(LSubOff) + 2);
-
-        { 添加新的 sub-table 条目 }
-        SetLength(FCblcSubTables, LSubEntryIdx + 1);
-        with FCblcSubTables[LSubEntryIdx] do
-        begin
-          FirstGlyph := ReadUInt16BE(Int32(LEntryOff));
-          LastGlyph := ReadUInt16BE(Int32(LEntryOff) + 2);
-          IdxFormat := LIdxFormat;
-          ImgFormat := LImgFormat;
-
-          LNumGlyphs := UInt32(LastGlyph - FirstGlyph + 1);
-
-          case LIdxFormat of
-            1: begin
-              { Format 1: offsetToImageData(UInt32) + offsetArray[numGlyphs](UInt32) }
-              IdxDataOff := ReadUInt32BE(Int32(LSubOff) + 4) + LCbdtOff;
-              SetLength(GlyphOffsets, LNumGlyphs);
-              for LK := 0 to Int32(LNumGlyphs) - 1 do
-                GlyphOffsets[LK] := ReadUInt32BE(Int32(LSubOff) + 8 + LK * 4);
-              GlyphSize := 0;
-            end;
-            2: begin
-              { Format 2: offsetToImageData(UInt32) + imageSize(UInt32) }
-              IdxDataOff := ReadUInt32BE(Int32(LSubOff) + 4) + LCbdtOff;
-              GlyphSize := ReadUInt32BE(Int32(LSubOff) + 8);
-              SetLength(GlyphOffsets, 0);
-            end;
-            3: begin
-              { Format 3: offsetToImageData(UInt32) + offsetArray[numGlyphs](UInt16) }
-              IdxDataOff := ReadUInt32BE(Int32(LSubOff) + 4) + LCbdtOff;
-              SetLength(GlyphOffsets, LNumGlyphs);
-              for LK := 0 to Int32(LNumGlyphs) - 1 do
-                GlyphOffsets[LK] := ReadUInt16BE(Int32(LSubOff) + 8 + LK * 2);
-              GlyphSize := 0;
-            end;
-            5: begin
-              { Format 5: offsetToImageData(UInt32) + imageSize(UInt32) }
-              IdxDataOff := ReadUInt32BE(Int32(LSubOff) + 4) + LCbdtOff;
-              GlyphSize := ReadUInt32BE(Int32(LSubOff) + 8);
-              SetLength(GlyphOffsets, 0);
-            end;
-          else
-            { 不支持的格式，跳过 }
-            SetLength(GlyphOffsets, 0);
-            GlyphSize := 0;
-          end;
-        end;
-        Inc(LSubEntryIdx);
-      end;
-    end;
-
-    if LSubEntryIdx > 0 then
-      FCbdtValid := True;
-  except
-    { 解析失败不崩溃，标记无效 }
-    FCbdtValid := False;
-  end;
-end;
-
-function TTFontFace.HasColorLayers: Boolean;
-begin
-  Result := FColrValid and (Length(FColrBaseGlyphRecords) > 0);
-end;
-
-function TTFontFace.GetColorLayers(AGlyphId: UInt16): TFontColrLayerArray;
-var
-  L, R, M: Int32;
-  LI, LFirst, LNum: Int32;
-begin
-  SetLength(Result, 0);
-  if not FColrValid then
+  LCblcBase := FTables[LCblcIdx].Offset;
+  LCbdtBase := FTables[LCbdtIdx].Offset;
+  if FDataLength < LCblcBase + 8 then
     Exit;
-  { Binary search for AGlyphId in baseGlyphRecordArray (sorted by GID) }
-  L := 0;
-  R := High(FColrBaseGlyphRecords);
-  while L <= R do
+  { CBLC header: version(uint16 major.minor) + numSizes(uint32) }
+  LVersion := ReadUInt16BE(LCblcBase);
+  if LVersion > 3 then
+    Exit;
+  LNumSizes := ReadUInt32BE(LCblcBase + 4);
+  if LNumSizes = 0 then
+    Exit;
+  { 只解析第一个 strike（最大的那个，通常是唯一的） }
+  LBitmapSizeOff := LCblcBase + 8;
+  if FDataLength < LBitmapSizeOff + 48 then
+    Exit;
+  { bitmapSize record: 48 bytes }
+  LIndexSubTableArrayOff := ReadUInt32BE(LBitmapSizeOff);
+  LNumberOfIndexSubTables := ReadUInt32BE(LBitmapSizeOff + 8);
+  { hori SbitLineMetrics at +16 (12 bytes), skip }
+  { vert SbitLineMetrics at +28 (12 bytes), skip }
+  LStartGlyph := ReadUInt16BE(LBitmapSizeOff + 40);
+  LEndGlyph := ReadUInt16BE(LBitmapSizeOff + 42);
+  LPpemX := ReadUInt8(LBitmapSizeOff + 44);
+  LPpemY := ReadUInt8(LBitmapSizeOff + 45);
+  if (LStartGlyph > LEndGlyph) or (LNumberOfIndexSubTables = 0) then
+    Exit;
+  FHasBitmapStrikes := True;
+  FBitmapStrikePpem := LPpemX;
+  FBitmapStrikeStartGlyph := LStartGlyph;
+  FBitmapStrikeEndGlyph := LEndGlyph;
+  SetLength(FBitmapIndexSubTables, LNumberOfIndexSubTables);
+  { 解析 index sub-table array }
+  for LI := 0 to LNumberOfIndexSubTables - 1 do
   begin
-    M := L + (R - L) div 2;
-    if FColrBaseGlyphRecords[M].GlyphId = AGlyphId then
+    LArrOff := LCblcBase + LIndexSubTableArrayOff + LI * 8;
+    if FDataLength < LArrOff + 8 then
     begin
-      LFirst := FColrBaseGlyphRecords[M].FirstLayerIdx;
-      LNum := FColrBaseGlyphRecords[M].NumLayers;
-      if (LFirst + LNum) <= Length(FColrLayerRecords) then
-      begin
-        SetLength(Result, LNum);
-        for LI := 0 to LNum - 1 do
-          Result[LI] := FColrLayerRecords[LFirst + LI];
-      end;
-      Exit;
+      SetLength(FBitmapIndexSubTables, LI);
+      Break;
     end;
-    if FColrBaseGlyphRecords[M].GlyphId < AGlyphId then
-      L := M + 1
-    else
-      R := M - 1;
+    LFirstGlyph := ReadUInt16BE(LArrOff);
+    LLastGlyph := ReadUInt16BE(LArrOff + 2);
+    LAdditionalOffset := ReadUInt32BE(LArrOff + 4);
+    { index sub-table 在 array 起始 + additionalOffset 处 }
+    LSubOff := LCblcBase + LIndexSubTableArrayOff + LAdditionalOffset;
+    if FDataLength < LSubOff + 8 then
+      Continue;
+    LIndexFormat := ReadUInt16BE(LSubOff);
+    LImageFormat := ReadUInt16BE(LSubOff + 2);
+    LImageDataOffset := ReadUInt32BE(LSubOff + 4);
+    FBitmapIndexSubTables[LI].FirstGlyph := LFirstGlyph;
+    FBitmapIndexSubTables[LI].LastGlyph := LLastGlyph;
+    FBitmapIndexSubTables[LI].IndexFormat := LIndexFormat;
+    FBitmapIndexSubTables[LI].ImageFormat := LImageFormat;
+    FBitmapIndexSubTables[LI].ImageDataOffset := LImageDataOffset;
+    { indexFormat 1: 偏移数组 (uint32 per glyph + 1 end) }
+    if LIndexFormat = 1 then
+    begin
+      LNumGlyphs := LLastGlyph - LFirstGlyph + 1;
+      LNumOffsets := LNumGlyphs + 1;
+      SetLength(FBitmapIndexSubTables[LI].Offsets, LNumOffsets);
+      for LJ := 0 to LNumOffsets - 1 do
+      begin
+        if FDataLength < LSubOff + 8 + (LJ + 1) * 4 then
+        begin
+          SetLength(FBitmapIndexSubTables[LI].Offsets, LJ);
+          Break;
+        end;
+        FBitmapIndexSubTables[LI].Offsets[LJ] :=
+          ReadUInt32BE(LSubOff + 8 + LJ * 4);
+      end;
+    end
+    { indexFormat 2: 所有字形等大小，不需要偏移数组 }
+    else if LIndexFormat = 2 then
+    begin
+      { 标记为 format 2，Offsets 为空，通过 ImageDataOffset + glyphIdx * size 计算 }
+      SetLength(FBitmapIndexSubTables[LI].Offsets, 0);
+    end;
   end;
-end;
-
-function TTFontFace.HasPalette: Boolean;
-begin
-  Result := FCpalValid;
-end;
-
-function TTFontFace.ColorsPerPalette: UInt16;
-begin
-  if FCpalValid then
-    Result := FCpalNumPaletteEntries
-  else
-    Result := 0;
-end;
-
-function TTFontFace.GetPaletteColor(APaletteIndex, AEntryIndex: UInt16): TFontCpalColor;
-begin
-  Result.Blue := 0;
-  Result.Green := 0;
-  Result.Red := 0;
-  Result.Alpha := 0;
-  if not FCpalValid then
-    Exit;
-  if AEntryIndex >= FCpalNumPaletteEntries then
-    Exit;
-  Result := FCpalColors[AEntryIndex];
 end;
 
 function TTFontFace.HasBitmapStrikes: Boolean;
 begin
-  Result := FCbdtValid;
+  Result := FHasBitmapStrikes;
 end;
 
 function TTFontFace.GetBitmapGlyph(AGlyphId: UInt16): TFontBitmapGlyph;
-{ 查找 AGlyphId 的位图字形数据。CBLC index sub-tables 提供索引，
-  CBDT 存储实际 PNG 数据。支持 imageFormat 17/18（嵌入 PNG）。 }
 var
-  LI, LK: Int32;
-  LGlyphOff: UInt32;
-  LAbsOff: UInt32;
+  LI, LGlyphIdx: Int32;
+  LGlyphDataOff, LGlyphDataSize: Int32;
+  LPngStart, LPngSize: Int32;
+  LJ: Int32;
+  LImageFormat: UInt16;
 begin
-  FillChar(Result, SizeOf(Result), 0);
-  if not FCbdtValid then
+  Result.Width := 0;
+  Result.Height := 0;
+  Result.BearingX := 0;
+  Result.BearingY := 0;
+  Result.Advance := 0;
+  SetLength(Result.PngData, 0);
+  Result.PngDataLength := 0;
+  if not FHasBitmapStrikes then
     Exit;
-
-  { 线性搜索 sub-tables（通常只有几个条目） }
-  for LI := 0 to High(FCblcSubTables) do
+  { 查找包含 AGlyphId 的 sub-table }
+  for LI := 0 to High(FBitmapIndexSubTables) do
   begin
-    with FCblcSubTables[LI] do
+    if (AGlyphId < FBitmapIndexSubTables[LI].FirstGlyph) or
+       (AGlyphId > FBitmapIndexSubTables[LI].LastGlyph) then
+      Continue;
+    LGlyphIdx := AGlyphId - FBitmapIndexSubTables[LI].FirstGlyph;
+    LImageFormat := FBitmapIndexSubTables[LI].ImageFormat;
+    { indexFormat 1: 偏移数组 }
+    if FBitmapIndexSubTables[LI].IndexFormat = 1 then
     begin
-      if (AGlyphId < FirstGlyph) or (AGlyphId > LastGlyph) then
-        Continue;
-
-      { 找到包含此字形的 sub-table }
-      case IdxFormat of
-        1, 3: begin
-          { Format 1/3: 每字形独立偏移 }
-          LK := Int32(AGlyphId - FirstGlyph);
-          if LK >= Length(GlyphOffsets) then
-            Exit;
-          LGlyphOff := GlyphOffsets[LK];
-          LAbsOff := IdxDataOff + LGlyphOff;
-        end;
-        2, 5: begin
-          { Format 2/5: 所有字形相同大小 }
-          if GlyphSize = 0 then
-            Exit;
-          LGlyphOff := UInt32(AGlyphId - FirstGlyph) * GlyphSize;
-          LAbsOff := IdxDataOff + LGlyphOff;
-        end;
-      else
+      if LGlyphIdx + 1 > High(FBitmapIndexSubTables[LI].Offsets) then
         Exit;
-      end;
-
-      { 边界检查 }
-      if Int32(LAbsOff) + 9 > FDataLength then
+      LGlyphDataOff := FTables[FindTable(TABLE_TAG_CBDT)].Offset +
+        FBitmapIndexSubTables[LI].ImageDataOffset +
+        FBitmapIndexSubTables[LI].Offsets[LGlyphIdx];
+      LGlyphDataSize := FBitmapIndexSubTables[LI].Offsets[LGlyphIdx + 1] -
+        FBitmapIndexSubTables[LI].Offsets[LGlyphIdx];
+    end
+    { indexFormat 2: 等大小 }
+    else if FBitmapIndexSubTables[LI].IndexFormat = 2 then
+    begin
+      { indexFormat 2 后跟 4 字节 imageSize }
+      if FDataLength < FTables[FindTable(TABLE_TAG_CBLC)].Offset +
+        FBitmapIndexSubTables[LI].ImageDataOffset + 8 + 4 then
         Exit;
-
-      { 解析 imageFormat 17/18 的头部：
-        width(UInt8) + height(UInt8) + bearingX(Int8) + bearingY(Int8) +
-        advance(UInt8) + dataLen(UInt32) + data[dataLen] }
-      if (ImgFormat = 17) or (ImgFormat = 18) then
+      LGlyphDataSize := ReadUInt32BE(
+        FTables[FindTable(TABLE_TAG_CBLC)].Offset +
+        FBitmapIndexSubTables[LI].ImageDataOffset + 8);
+      LGlyphDataOff := FTables[FindTable(TABLE_TAG_CBDT)].Offset +
+        LGlyphIdx * LGlyphDataSize;
+    end
+    else
+      Exit;
+    if (LGlyphDataSize < 9) or (FDataLength < LGlyphDataOff + LGlyphDataSize) then
+      Exit;
+    { 解析 smallGlyphMetrics (8 bytes) }
+    Result.Height := FData[LGlyphDataOff];
+    Result.Width := FData[LGlyphDataOff + 1];
+    Result.BearingX := Int8(FData[LGlyphDataOff + 2]);
+    Result.BearingY := Int8(FData[LGlyphDataOff + 3]);
+    Result.Advance := FData[LGlyphDataOff + 4];
+    { 搜索 PNG 签名 (89 50 4E 47 0D 0A 1A 0A) }
+    LPngStart := -1;
+    for LJ := 8 to LGlyphDataSize - 8 do
+    begin
+      if (FData[LGlyphDataOff + LJ] = $89) and
+         (FData[LGlyphDataOff + LJ + 1] = $50) and
+         (FData[LGlyphDataOff + LJ + 2] = $4E) and
+         (FData[LGlyphDataOff + LJ + 3] = $47) then
       begin
-        Result.Width := ReadUInt8(Int32(LAbsOff));
-        Result.Height := ReadUInt8(Int32(LAbsOff) + 1);
-        Result.BearingX := Int16(ShortInt(ReadUInt8(Int32(LAbsOff) + 2)));
-        Result.BearingY := Int16(ShortInt(ReadUInt8(Int32(LAbsOff) + 3)));
-        Result.Advance := ReadUInt8(Int32(LAbsOff) + 4);
-        Result.PngDataLength := Int32(ReadUInt32BE(Int32(LAbsOff) + 5));
+        LPngStart := LJ;
+        Break;
+      end;
+    end;
+    if LPngStart < 0 then
+      Exit;
+    LPngSize := LGlyphDataSize - LPngStart;
+    SetLength(Result.PngData, LPngSize);
+    Move(FData[LGlyphDataOff + LPngStart], Result.PngData[0], LPngSize);
+    Result.PngDataLength := LPngSize;
+    Exit;
+  end;
+end;
 
-        if (Result.PngDataLength > 0) and
-           (Int32(LAbsOff) + 9 + Result.PngDataLength <= FDataLength) then
+{ -- CFF Type 1/2 outline parsing -- }
+
+procedure TTFontFace.ParseCff;
+
+  { Read a CFF INDEX at ABase, return item count and per-item offsets }
+  procedure ReadCffIndex(ABase: Int32; out ACount: Int32;
+    out AOffsets: array of UInt32; out ADataStart: Int32);
+  var
+    LOffSize, I, J: Int32;
+    LOff: UInt32;
+  begin
+    ACount := 0;
+    ADataStart := ABase + 2;
+    if FDataLength < ABase + 2 then Exit;
+    ACount := ReadUInt16BE(ABase);
+    if ACount = 0 then
+    begin
+      ADataStart := ABase + 2;
+      Exit;
+    end;
+    if FDataLength < ABase + 3 then begin ACount := 0; Exit; end;
+    LOffSize := ReadUInt8(ABase + 2);
+    if (LOffSize < 1) or (LOffSize > 4) then begin ACount := 0; Exit; end;
+    if FDataLength < ABase + 3 + (ACount + 1) * LOffSize then
+    begin
+      ACount := 0;
+      Exit;
+    end;
+    { Read offsets }
+    for I := 0 to ACount do
+    begin
+      LOff := 0;
+      for J := 0 to LOffSize - 1 do
+        LOff := (LOff shl 8) or ReadUInt8(ABase + 3 + I * LOffSize + J);
+      AOffsets[I] := LOff;
+    end;
+    ADataStart := ABase + 3 + (ACount + 1) * LOffSize;
+  end;
+
+  { Parse CFF DICT data, extract key operators }
+  procedure ParseCffDict(ADictBase, ADictSize, ACffDataStart: Int32;
+    out ACharStringsOff, APrivateSize, APrivateOff, ASubrsOff: Int32);
+  var
+    LI, LOp: Int32;
+    LOperands: array of Int32;
+    LNumOps: Int32;
+    LB: Byte;
+    LVal: Int32;
+  begin
+    ACharStringsOff := -1;
+    APrivateSize := 0;
+    APrivateOff := -1;
+    ASubrsOff := -1;
+    SetLength(LOperands, 48);
+    LNumOps := 0;
+    LI := ADictBase;
+    while LI < ADictBase + ADictSize do
+    begin
+      LB := ReadUInt8(LI);
+      if LB <= 21 then
+      begin
+        { Operator }
+        if LB = 12 then
         begin
-          SetLength(Result.PngData, Result.PngDataLength);
-          Move(FData[Int32(LAbsOff) + 9], Result.PngData[0], Result.PngDataLength);
+          if LI + 1 >= ADictBase + ADictSize then Break;
+          LOp := (LB shl 8) or ReadUInt8(LI + 1);
+          Inc(LI, 2);
         end
         else
         begin
-          Result.PngDataLength := 0;
-          SetLength(Result.PngData, 0);
+          LOp := LB;
+          Inc(LI);
         end;
+        case LOp of
+          $11: { CharStrings }
+            if LNumOps >= 1 then
+              ACharStringsOff := LOperands[LNumOps - 1];
+          $12: { Private: size + offset }
+            if LNumOps >= 2 then
+            begin
+              APrivateSize := LOperands[LNumOps - 2];
+              APrivateOff := LOperands[LNumOps - 1];
+            end;
+        end;
+        LNumOps := 0;
       end
-      else if ImgFormat = 19 then
+      else if LB = 28 then
       begin
-        { Format 19: 压缩数据（不支持解压，但返回元数据） }
-        Result.Width := ReadUInt8(Int32(LAbsOff));
-        Result.Height := ReadUInt8(Int32(LAbsOff) + 1);
-        Result.BearingX := Int16(ShortInt(ReadUInt8(Int32(LAbsOff) + 2)));
-        Result.BearingY := Int16(ShortInt(ReadUInt8(Int32(LAbsOff) + 3)));
-        Result.Advance := ReadUInt8(Int32(LAbsOff) + 4);
-        Result.PngDataLength := 0;
-        SetLength(Result.PngData, 0);
+        { shortint }
+        LVal := SmallInt((ReadUInt8(LI + 1) shl 8) or ReadUInt8(LI + 2));
+        if LNumOps < Length(LOperands) then
+        begin
+          LOperands[LNumOps] := LVal;
+          Inc(LNumOps);
+        end;
+        Inc(LI, 3);
+      end
+      else if LB = 29 then
+      begin
+        { longint }
+        LVal := Int32((ReadUInt8(LI + 1) shl 24) or (ReadUInt8(LI + 2) shl 16) or
+          (ReadUInt8(LI + 3) shl 8) or ReadUInt8(LI + 4));
+        if LNumOps < Length(LOperands) then
+        begin
+          LOperands[LNumOps] := LVal;
+          Inc(LNumOps);
+        end;
+        Inc(LI, 5);
+      end
+      else if (LB >= 32) and (LB <= 246) then
+      begin
+        if LNumOps < Length(LOperands) then
+        begin
+          LOperands[LNumOps] := LB - 139;
+          Inc(LNumOps);
+        end;
+        Inc(LI);
+      end
+      else if (LB >= 247) and (LB <= 250) then
+      begin
+        LVal := (LB - 247) * 256 + ReadUInt8(LI + 1) + 108;
+        if LNumOps < Length(LOperands) then
+        begin
+          LOperands[LNumOps] := LVal;
+          Inc(LNumOps);
+        end;
+        Inc(LI, 2);
+      end
+      else if (LB >= 251) and (LB <= 254) then
+      begin
+        LVal := -((LB - 251) * 256) - ReadUInt8(LI + 1) - 108;
+        if LNumOps < Length(LOperands) then
+        begin
+          LOperands[LNumOps] := LVal;
+          Inc(LNumOps);
+        end;
+        Inc(LI, 2);
+      end
+      else
+        Inc(LI);
+    end;
+    { Parse Private DICT for Subrs offset (offset is CFF-relative, add base) }
+    if (APrivateOff >= 0) and (APrivateSize > 0) then
+    begin
+      LI := APrivateOff + ACffDataStart;
+      LNumOps := 0;
+      while LI < APrivateOff + ACffDataStart + APrivateSize do
+      begin
+        LB := ReadUInt8(LI);
+        if LB <= 21 then
+        begin
+          if LB = 12 then
+          begin
+            if LI + 1 >= APrivateOff + ACffDataStart + APrivateSize then Break;
+            LOp := (LB shl 8) or ReadUInt8(LI + 1);
+            Inc(LI, 2);
+          end
+          else
+          begin
+            LOp := LB;
+            Inc(LI);
+          end;
+          case LOp of
+            $13: { Subrs }
+              if LNumOps >= 1 then
+                ASubrsOff := LOperands[LNumOps - 1];
+            $14: { defaultWidthX }
+              if LNumOps >= 1 then
+                FCffDefaultWidthX := LOperands[LNumOps - 1];
+            $15: { nominalWidthX }
+              if LNumOps >= 1 then
+                FCffNominalWidthX := LOperands[LNumOps - 1];
+          end;
+          LNumOps := 0;
+        end
+        else if LB = 28 then
+        begin
+          LVal := SmallInt((ReadUInt8(LI + 1) shl 8) or ReadUInt8(LI + 2));
+          if LNumOps < Length(LOperands) then
+          begin
+            LOperands[LNumOps] := LVal;
+            Inc(LNumOps);
+          end;
+          Inc(LI, 3);
+        end
+        else if LB = 29 then
+        begin
+          LVal := Int32((ReadUInt8(LI + 1) shl 24) or (ReadUInt8(LI + 2) shl 16) or
+            (ReadUInt8(LI + 3) shl 8) or ReadUInt8(LI + 4));
+          if LNumOps < Length(LOperands) then
+          begin
+            LOperands[LNumOps] := LVal;
+            Inc(LNumOps);
+          end;
+          Inc(LI, 5);
+        end
+        else if (LB >= 32) and (LB <= 246) then
+        begin
+          if LNumOps < Length(LOperands) then
+          begin
+            LOperands[LNumOps] := LB - 139;
+            Inc(LNumOps);
+          end;
+          Inc(LI);
+        end
+        else if (LB >= 247) and (LB <= 250) then
+        begin
+          LVal := (LB - 247) * 256 + ReadUInt8(LI + 1) + 108;
+          if LNumOps < Length(LOperands) then
+          begin
+            LOperands[LNumOps] := LVal;
+            Inc(LNumOps);
+          end;
+          Inc(LI, 2);
+        end
+        else if (LB >= 251) and (LB <= 254) then
+        begin
+          LVal := -((LB - 251) * 256) - ReadUInt8(LI + 1) - 108;
+          if LNumOps < Length(LOperands) then
+          begin
+            LOperands[LNumOps] := LVal;
+            Inc(LNumOps);
+          end;
+          Inc(LI, 2);
+        end
+        else
+          Inc(LI);
       end;
-      Exit;
     end;
   end;
+
+var
+  LCffIdx, LCffBase, LCffDataStart: Int32;
+  LHdrSize, LOffSize: Int32;
+  LNameCount, LTopCount, LStrCount: Int32;
+  LNameDataStart, LTopDataStart, LStrDataStart, LGsubrDataStart: Int32;
+  LCharStringsOff, LPrivateSize, LPrivateOff, LSubrsOff: Int32;
+  LTopDictBase, LTopDictSize: Int32;
+  LI, LJ: Int32;
+  LItemBase: Int32;
+  LArr: array of UInt32;
+begin
+  FCffParsed := False;
+  FCffGlyphCount := 0;
+  FCffDefaultWidthX := 0;
+  FCffNominalWidthX := 0;
+
+  LCffIdx := FindTable(TABLE_TAG_CFF);
+  if LCffIdx < 0 then Exit;
+  LCffBase := Int32(FTables[LCffIdx].Offset);
+  LCffDataStart := LCffBase; { Save CFF table start for absolute offset calculations }
+
+  if FDataLength < LCffBase + 4 then Exit;
+  { CFF header: major(1) minor(1) hdrSize(1) offSize(1) }
+  LHdrSize := ReadUInt8(LCffBase + 2);
+
+  { Name INDEX }
+  SetLength(LArr, 2048);
+  ReadCffIndex(LCffBase + LHdrSize, LNameCount, LArr, LNameDataStart);
+  if LNameCount = 0 then Exit;
+
+  { Top DICT INDEX - compute data start from name INDEX }
+  { name data end = LNameDataStart + (last offset - 1) }
+  LItemBase := LNameDataStart + Int32(LArr[LNameCount]) - 1;
+  ReadCffIndex(LItemBase, LTopCount, LArr, LTopDataStart);
+  if LTopCount = 0 then Exit;
+
+  { Top DICT data: first item, size = offsets[1] - 1 }
+  LTopDictBase := LTopDataStart;
+  LTopDictSize := Int32(LArr[1]) - 1;
+  ParseCffDict(LTopDictBase, LTopDictSize, LCffDataStart,
+    LCharStringsOff, LPrivateSize, LPrivateOff, LSubrsOff);
+  if LCharStringsOff < 0 then Exit;
+  { Convert offsets from CFF-relative to absolute FData offsets }
+  LCharStringsOff := LCharStringsOff + LCffDataStart;
+  if LPrivateOff >= 0 then
+    LPrivateOff := LPrivateOff + LCffDataStart;
+
+  { Skip String INDEX to find Global Subrs }
+  LItemBase := LTopDataStart + Int32(LArr[LTopCount]) - 1;
+  ReadCffIndex(LItemBase, LStrCount, LArr, LStrDataStart);
+  LItemBase := LStrDataStart;
+  if LStrCount > 0 then
+    LItemBase := LStrDataStart + Int32(LArr[LStrCount]) - 1;
+
+  { Global Subrs INDEX }
+  SetLength(LArr, 65536);
+  ReadCffIndex(LItemBase, LI, LArr, LGsubrDataStart);
+  SetLength(FCffGlobalSubrs, LI);
+  for LJ := 0 to LI - 1 do
+  begin
+    FCffGlobalSubrs[LJ].Data := Copy(FData,
+      LGsubrDataStart + Int32(LArr[LJ]) - 1,
+      Int32(LArr[LJ + 1]) - Int32(LArr[LJ]));
+  end;
+
+  { CharStrings INDEX }
+  ReadCffIndex(LCharStringsOff, FCffGlyphCount, LArr, LItemBase);
+  if FCffGlyphCount <= 0 then begin FCffGlyphCount := 0; Exit; end;
+  SetLength(FCffCharStringOffsets, FCffGlyphCount + 1);
+  for LI := 0 to FCffGlyphCount do
+    FCffCharStringOffsets[LI] := UInt32(LItemBase) + LArr[LI] - 1;
+  FCffCharStringsBase := LItemBase;
+
+  { Local Subrs from Private DICT }
+  SetLength(FCffLocalSubrs, 0);
+  if (LPrivateOff >= 0) and (LSubrsOff >= 0) then
+  begin
+    LItemBase := LPrivateOff + LSubrsOff;
+    ReadCffIndex(LItemBase, LI, LArr, LJ);
+    SetLength(FCffLocalSubrs, LI);
+    for LStrCount := 0 to LI - 1 do
+    begin
+      FCffLocalSubrs[LStrCount].Data := Copy(FData,
+        LJ + Int32(LArr[LStrCount]) - 1,
+        Int32(LArr[LStrCount + 1]) - Int32(LArr[LStrCount]));
+    end;
+  end;
+
+  FCffParsed := True;
+end;
+
+function TTFontFace.CffGlyphOutline(AGlyphIndex: UInt32): TFontGlyphOutline;
+{ Type 2 charstring interpreter → outline }
+const
+  MAX_STACK = 48;
+  MAX_CALL_DEPTH = 32;
+var
+  LCharStrBase, LCharStrLen: Int32;
+  { Stack }
+  LStack: array[0..MAX_STACK - 1] of Int32;
+  LStackTop: Int32;
+  { Call stack for subroutines }
+  LCallStack: array[0..MAX_CALL_DEPTH - 1] of record
+    Data: PByte;
+    Len: Int32;
+    Pos: Int32;
+    Watermark: Int32;
+  end;
+  LCallDepth: Int32;
+  LData: PByte;
+  LLen, LPos: Int32;
+  { Path state }
+  LX, LY: Int32;
+  LPoints: TFontContourPointArray;
+  LContours: array of UInt16;
+  LPointCount, LContourCount: Int32;
+  LHasMove: Boolean;
+  LWidthParsed: Boolean;
+  LWidth: Int32;
+  LStackWatermark: Int32; { stack height at subroutine entry; hints only consume above this }
+
+  procedure Push(AVal: Int32);
+  begin
+    if LStackTop < MAX_STACK then
+    begin
+      LStack[LStackTop] := AVal;
+      Inc(LStackTop);
+    end;
+  end;
+
+  function Pop: Int32;
+  begin
+    if LStackTop > 0 then
+    begin
+      Dec(LStackTop);
+      Result := LStack[LStackTop];
+    end
+    else
+      Result := 0;
+  end;
+
+  procedure AddPoint(AX, AY: Int32; AOnCurve: Boolean);
+  begin
+    if LPointCount >= Length(LPoints) then
+      SetLength(LPoints, LPointCount + 256);
+    LPoints[LPointCount].X := AX;
+    LPoints[LPointCount].Y := AY;
+    LPoints[LPointCount].OnCurve := AOnCurve;
+    Inc(LPointCount);
+  end;
+
+  procedure CloseContour;
+  begin
+    if LPointCount > 0 then
+    begin
+      if LContourCount >= Length(LContours) then
+        SetLength(LContours, LContourCount + 16);
+      LContours[LContourCount] := LPointCount - 1;
+      Inc(LContourCount);
+    end;
+  end;
+
+  function ReadNextByte: Byte;
+  begin
+    if LPos < LLen then
+    begin
+      Result := LData[LPos];
+      Inc(LPos);
+    end
+    else
+      Result := 14; { endchar }
+  end;
+
+  function SubrBias(ACount: Int32): Int32;
+  begin
+    if ACount < 1240 then
+      Result := 107
+    else if ACount < 33900 then
+      Result := 1131
+    else
+      Result := 32768;
+  end;
+
+  procedure CallSubr(AIndex: Int32; AIsGlobal: Boolean);
+  var
+    LBias, LSubrIdx, LSubrCount: Int32;
+  begin
+    if LCallDepth >= MAX_CALL_DEPTH then Exit;
+    if AIsGlobal then
+      LSubrCount := Length(FCffGlobalSubrs)
+    else
+      LSubrCount := Length(FCffLocalSubrs);
+    if LSubrCount = 0 then Exit;
+    LBias := SubrBias(LSubrCount);
+    LSubrIdx := AIndex + LBias;
+    if (LSubrIdx < 0) or (LSubrIdx >= LSubrCount) then Exit;
+    if AIsGlobal then
+    begin
+      if Length(FCffGlobalSubrs[LSubrIdx].Data) = 0 then Exit;
+      LCallStack[LCallDepth].Data := LData;
+      LCallStack[LCallDepth].Len := LLen;
+      LCallStack[LCallDepth].Pos := LPos;
+      LCallStack[LCallDepth].Watermark := LStackWatermark;
+      Inc(LCallDepth);
+      LData := @FCffGlobalSubrs[LSubrIdx].Data[0];
+      LLen := Length(FCffGlobalSubrs[LSubrIdx].Data);
+    end
+    else
+    begin
+      if Length(FCffLocalSubrs[LSubrIdx].Data) = 0 then Exit;
+      LCallStack[LCallDepth].Data := LData;
+      LCallStack[LCallDepth].Len := LLen;
+      LCallStack[LCallDepth].Pos := LPos;
+      LCallStack[LCallDepth].Watermark := LStackWatermark;
+      Inc(LCallDepth);
+      LData := @FCffLocalSubrs[LSubrIdx].Data[0];
+      LLen := Length(FCffLocalSubrs[LSubrIdx].Data);
+    end;
+    LStackWatermark := LStackTop;
+    LPos := 0;
+  end;
+
+  procedure DoReturn;
+  begin
+    if LCallDepth > 0 then
+    begin
+      Dec(LCallDepth);
+      LData := LCallStack[LCallDepth].Data;
+      LLen := LCallStack[LCallDepth].Len;
+      LPos := LCallStack[LCallDepth].Pos;
+      LStackWatermark := LCallStack[LCallDepth].Watermark;
+    end
+    else
+      LPos := LLen; { terminate }
+  end;
+
+  procedure HandleWidth;
+  { If stack has odd number of values before first hint/moveto, first value is width }
+  begin
+    if LWidthParsed then Exit;
+    LWidthParsed := True;
+    if (LStackTop > 0) and ((LStackTop and 1) = 1) then
+    begin
+      LWidth := LStack[0] + FCffNominalWidthX;
+      { Shift stack down }
+      Move(LStack[1], LStack[0], (LStackTop - 1) * SizeOf(Int32));
+      Dec(LStackTop);
+    end
+    else if (LStackTop > 0) and ((LStackTop and 1) = 0) then
+    begin
+      LWidth := FCffDefaultWidthX;
+    end;
+  end;
+
+  procedure InterpretCharstring;
+  var
+    LB, LB2: Byte;
+    LI, LVal: Int32;
+    LArgs: array[0..MAX_STACK - 1] of Int32;
+    LArgCount: Int32;
+  begin
+    while LPos <= LLen do
+    begin
+      LB := ReadNextByte;
+      case LB of
+        $0E: begin { endchar }
+          CloseContour;
+          LPos := LLen;
+        end;
+        { Hint operators — consume hint pairs above watermark only }
+        $01: begin { hstem }
+          HandleWidth;
+          LStackTop := LStackWatermark;
+        end;
+        $03: begin { vstem }
+          HandleWidth;
+          LStackTop := LStackWatermark;
+        end;
+        $12: begin { hstemhm }
+          HandleWidth;
+          LStackTop := LStackWatermark;
+        end;
+        $17: begin { vstemhm }
+          HandleWidth;
+          LStackTop := LStackWatermark;
+        end;
+        $13: begin { hintmask }
+          HandleWidth;
+          { Skip hint mask bytes: ceil(hint_count / 8) }
+          LI := LStackTop - LStackWatermark;
+          if LI >= 2 then
+          begin
+            LI := ((LI div 2) + 7) div 8;
+            while LI > 0 do begin ReadNextByte; Dec(LI); end;
+          end;
+          LStackTop := LStackWatermark;
+        end;
+        $14: begin { cntrmask }
+          HandleWidth;
+          LI := LStackTop - LStackWatermark;
+          if LI >= 2 then
+          begin
+            LI := ((LI div 2) + 7) div 8;
+            while LI > 0 do begin ReadNextByte; Dec(LI); end;
+          end;
+          LStackTop := LStackWatermark;
+        end;
+        $15: begin { rmoveto }
+          HandleWidth;
+          CloseContour;
+          if LStackTop >= 2 then
+          begin
+            LX := LX + LStack[LStackTop - 2];
+            LY := LY + LStack[LStackTop - 1];
+            AddPoint(LX, LY, True);
+            LHasMove := True;
+          end;
+          LStackTop := 0;
+        end;
+        $16: begin { hmoveto }
+          HandleWidth;
+          CloseContour;
+          if LStackTop >= 1 then
+          begin
+            LX := LX + LStack[LStackTop - 1];
+            AddPoint(LX, LY, True);
+            LHasMove := True;
+          end;
+          LStackTop := 0;
+        end;
+        $04: begin { vmoveto }
+          HandleWidth;
+          CloseContour;
+          if LStackTop >= 1 then
+          begin
+            LY := LY + LStack[LStackTop - 1];
+            AddPoint(LX, LY, True);
+            LHasMove := True;
+          end;
+          LStackTop := 0;
+        end;
+        $05: begin { rlineto }
+          for LI := 0 to LStackTop - 1 do
+          begin
+            if LI and 1 = 0 then
+              LX := LX + LStack[LI]
+            else
+            begin
+              LY := LY + LStack[LI];
+              AddPoint(LX, LY, True);
+            end;
+          end;
+          LStackTop := 0;
+        end;
+        $06: begin { hlineto }
+          for LI := 0 to LStackTop - 1 do
+          begin
+            if LI and 1 = 0 then
+              LX := LX + LStack[LI]
+            else
+              LY := LY + LStack[LI];
+            AddPoint(LX, LY, True);
+          end;
+          LStackTop := 0;
+        end;
+        $07: begin { vlineto }
+          for LI := 0 to LStackTop - 1 do
+          begin
+            if LI and 1 = 0 then
+              LY := LY + LStack[LI]
+            else
+              LX := LX + LStack[LI];
+            AddPoint(LX, LY, True);
+          end;
+          LStackTop := 0;
+        end;
+        $08: begin { rrcurveto }
+          { 6 args per curve: dx1 dy1 dx2 dy2 dx3 dy3 }
+          for LI := 0 to (LStackTop div 6) - 1 do
+          begin
+            AddPoint(LX + LStack[LI * 6], LY + LStack[LI * 6 + 1], False);
+            AddPoint(LX + LStack[LI * 6] + LStack[LI * 6 + 2],
+                     LY + LStack[LI * 6 + 1] + LStack[LI * 6 + 3], False);
+            LX := LX + LStack[LI * 6] + LStack[LI * 6 + 2] + LStack[LI * 6 + 4];
+            LY := LY + LStack[LI * 6 + 1] + LStack[LI * 6 + 3] + LStack[LI * 6 + 5];
+            AddPoint(LX, LY, True);
+          end;
+          LStackTop := 0;
+        end;
+        $1B: begin { hhcurveto }
+          { Horizontal-horizontal curves.
+            If odd arg count, first arg is dy1 for first curve only,
+            followed by groups of 4: (dx2, dy2, dx3, dy).
+            First curve: (0, dy1, dx2, dy2, dx3, dy) = 5 args from odd case + 4 from first group }
+          LI := 0;
+          if (LStackTop > 0) and ((LStackTop and 1) = 1) then
+          begin
+            { First curve has special dy1. Combined with first group of 4:
+              (0, LStack[0], LStack[1], LStack[2], LStack[3], LStack[4]) }
+            if LStackTop >= 6 then
+            begin
+              AddPoint(LX, LY + LStack[0], False);
+              AddPoint(LX + LStack[1], LY + LStack[0] + LStack[2], False);
+              LX := LX + LStack[1] + LStack[3];
+              LY := LY + LStack[0] + LStack[2] + LStack[4];
+              AddPoint(LX, LY, True);
+            end;
+            LI := 5;
+          end;
+          while LI + 3 < LStackTop do
+          begin
+            AddPoint(LX + LStack[LI], LY, False);
+            AddPoint(LX + LStack[LI] + LStack[LI + 1], LY + LStack[LI + 2], False);
+            LX := LX + LStack[LI] + LStack[LI + 1] + LStack[LI + 3];
+            LY := LY + LStack[LI + 2];
+            AddPoint(LX, LY, True);
+            Inc(LI, 4);
+          end;
+          LStackTop := 0;
+        end;
+        $1A: begin { vvcurveto }
+          { Vertical-vertical curves.
+            If odd arg count, first arg is dx1 for first curve only. }
+          LI := 0;
+          if (LStackTop > 0) and ((LStackTop and 1) = 1) then
+          begin
+            if LStackTop >= 4 then
+            begin
+              AddPoint(LX + LStack[LI], LY, False);
+              AddPoint(LX + LStack[LI] + LStack[LI + 1], LY + LStack[LI + 2], False);
+              LX := LX + LStack[LI] + LStack[LI + 1];
+              LY := LY + LStack[LI + 2] + LStack[LI + 3];
+              AddPoint(LX, LY, True);
+            end;
+            LI := 4;
+          end;
+          while LI + 3 < LStackTop do
+          begin
+            AddPoint(LX, LY + LStack[LI], False);
+            AddPoint(LX + LStack[LI + 1], LY + LStack[LI] + LStack[LI + 2], False);
+            LX := LX + LStack[LI + 1];
+            LY := LY + LStack[LI] + LStack[LI + 2] + LStack[LI + 3];
+            AddPoint(LX, LY, True);
+            Inc(LI, 4);
+          end;
+          LStackTop := 0;
+        end;
+        $18: begin { rcurveline }
+          { N-1 curves (6 args each) + 1 line (2 args) }
+          LI := 0;
+          while LI + 6 <= LStackTop do
+          begin
+            AddPoint(LX + LStack[LI], LY + LStack[LI + 1], False);
+            AddPoint(LX + LStack[LI] + LStack[LI + 2], LY + LStack[LI + 1] + LStack[LI + 3], False);
+            LX := LX + LStack[LI] + LStack[LI + 2] + LStack[LI + 4];
+            LY := LY + LStack[LI + 1] + LStack[LI + 3] + LStack[LI + 5];
+            AddPoint(LX, LY, True);
+            Inc(LI, 6);
+          end;
+          { Last 2 args: line }
+          if LI + 2 <= LStackTop then
+          begin
+            LX := LX + LStack[LI];
+            LY := LY + LStack[LI + 1];
+            AddPoint(LX, LY, True);
+          end;
+          LStackTop := 0;
+        end;
+        $19: begin { rlinecurve }
+          { N-1 lines (2 args each) + 1 curve (6 args) }
+          LI := 0;
+          while LI + 6 <= LStackTop do
+          begin
+            LX := LX + LStack[LI];
+            LY := LY + LStack[LI + 1];
+            AddPoint(LX, LY, True);
+            Inc(LI, 2);
+          end;
+          { Last 6 args: curve }
+          if LI + 6 <= LStackTop then
+          begin
+            AddPoint(LX + LStack[LI], LY + LStack[LI + 1], False);
+            AddPoint(LX + LStack[LI] + LStack[LI + 2], LY + LStack[LI + 1] + LStack[LI + 3], False);
+            LX := LX + LStack[LI] + LStack[LI + 2] + LStack[LI + 4];
+            LY := LY + LStack[LI + 1] + LStack[LI + 3] + LStack[LI + 5];
+            AddPoint(LX, LY, True);
+          end;
+          LStackTop := 0;
+        end;
+        $1E: begin { hvcurveto }
+          { Alternating horizontal/vertical curves }
+          LI := 0;
+          while LI + 4 <= LStackTop do
+          begin
+            if (LStackTop - LI) >= 6 then
+            begin
+              { Horizontal: dx1 dx2 dy2 dy3 [dx3] }
+              AddPoint(LX + LStack[LI], LY, False);
+              AddPoint(LX + LStack[LI] + LStack[LI + 1], LY + LStack[LI + 2], False);
+              LX := LX + LStack[LI] + LStack[LI + 1] + LStack[LI + 4];
+              LY := LY + LStack[LI + 2] + LStack[LI + 3];
+              AddPoint(LX, LY, True);
+              Inc(LI, 5);
+              if (LStackTop - LI) >= 5 then
+              begin
+                { Vertical: dy1 dx2 dy2 dx3 dx4 }
+                AddPoint(LX, LY + LStack[LI], False);
+                AddPoint(LX + LStack[LI + 1], LY + LStack[LI] + LStack[LI + 2], False);
+                LX := LX + LStack[LI + 1] + LStack[LI + 3];
+                LY := LY + LStack[LI] + LStack[LI + 2] + LStack[LI + 4];
+                AddPoint(LX, LY, True);
+                Inc(LI, 5);
+              end;
+            end
+            else
+              Break;
+          end;
+          LStackTop := 0;
+        end;
+        $1F: begin { vhcurveto }
+          LI := 0;
+          while LI + 4 <= LStackTop do
+          begin
+            if (LStackTop - LI) >= 6 then
+            begin
+              AddPoint(LX, LY + LStack[LI], False);
+              AddPoint(LX + LStack[LI + 1], LY + LStack[LI] + LStack[LI + 2], False);
+              LX := LX + LStack[LI + 1] + LStack[LI + 3];
+              LY := LY + LStack[LI] + LStack[LI + 2] + LStack[LI + 4];
+              AddPoint(LX, LY, True);
+              Inc(LI, 5);
+              if (LStackTop - LI) >= 5 then
+              begin
+                AddPoint(LX + LStack[LI], LY, False);
+                AddPoint(LX + LStack[LI] + LStack[LI + 1], LY + LStack[LI + 2], False);
+                LX := LX + LStack[LI] + LStack[LI + 1] + LStack[LI + 4];
+                LY := LY + LStack[LI + 2] + LStack[LI + 3];
+                AddPoint(LX, LY, True);
+                Inc(LI, 5);
+              end;
+            end
+            else
+              Break;
+          end;
+          LStackTop := 0;
+        end;
+        $0A: begin { callsubr }
+          if LStackTop > 0 then
+          begin
+            Dec(LStackTop);
+            CallSubr(LStack[LStackTop], False);
+          end;
+        end;
+        $1D: begin { callgsubr }
+          if LStackTop > 0 then
+          begin
+            Dec(LStackTop);
+            CallSubr(LStack[LStackTop], True);
+          end;
+        end;
+        $0B: begin { return }
+          DoReturn;
+        end;
+        $0C: begin { two-byte operator }
+          LB2 := ReadNextByte;
+          case LB2 of
+            $22: begin { hflex }
+              if LStackTop >= 7 then
+              begin
+                AddPoint(LX + LStack[0], LY, False);
+                AddPoint(LX + LStack[0] + LStack[1], LY + LStack[2], False);
+                LX := LX + LStack[0] + LStack[1]; LY := LY + LStack[2] + LStack[3];
+                AddPoint(LX, LY, True);
+                AddPoint(LX + LStack[4], LY, False);
+                AddPoint(LX + LStack[4] + LStack[5], LY + LStack[6], False);
+                LX := LX + LStack[4] + LStack[5]; { dy=0 for last }
+                AddPoint(LX, LY, True);
+              end;
+              LStackTop := 0;
+            end;
+            $23: begin { flex }
+              if LStackTop >= 13 then
+              begin
+                AddPoint(LX + LStack[0], LY + LStack[1], False);
+                AddPoint(LX + LStack[0] + LStack[2], LY + LStack[1] + LStack[3], False);
+                LX := LX + LStack[0] + LStack[2] + LStack[4];
+                LY := LY + LStack[1] + LStack[3] + LStack[5];
+                AddPoint(LX, LY, True);
+                AddPoint(LX + LStack[6], LY + LStack[7], False);
+                AddPoint(LX + LStack[6] + LStack[8], LY + LStack[7] + LStack[9], False);
+                LX := LX + LStack[6] + LStack[8] + LStack[10];
+                LY := LY + LStack[7] + LStack[9] + LStack[11];
+                AddPoint(LX, LY, True);
+              end;
+              LStackTop := 0;
+            end;
+            $24: begin { hflex1 }
+              if LStackTop >= 9 then
+              begin
+                AddPoint(LX + LStack[0], LY + LStack[1], False);
+                AddPoint(LX + LStack[0] + LStack[2], LY + LStack[1] + LStack[3], False);
+                LX := LX + LStack[0] + LStack[2]; LY := LY + LStack[1] + LStack[3] + LStack[4];
+                AddPoint(LX, LY, True);
+                AddPoint(LX + LStack[5], LY, False);
+                AddPoint(LX + LStack[5] + LStack[6], LY + LStack[7], False);
+                LX := LX + LStack[5] + LStack[6]; LY := LY + LStack[7] + LStack[8];
+                AddPoint(LX, LY, True);
+              end;
+              LStackTop := 0;
+            end;
+            $25: begin { flex1 }
+              if LStackTop >= 11 then
+              begin
+                AddPoint(LX + LStack[0], LY + LStack[1], False);
+                AddPoint(LX + LStack[0] + LStack[2], LY + LStack[1] + LStack[3], False);
+                LX := LX + LStack[0] + LStack[2] + LStack[4];
+                LY := LY + LStack[1] + LStack[3] + LStack[5];
+                AddPoint(LX, LY, True);
+                AddPoint(LX + LStack[6], LY + LStack[7], False);
+                AddPoint(LX + LStack[6] + LStack[8], LY + LStack[7] + LStack[9], False);
+                LX := LX + LStack[6] + LStack[8] + LStack[10];
+                LY := LY + LStack[7] + LStack[9];
+                AddPoint(LX, LY, True);
+              end;
+              LStackTop := 0;
+            end;
+          else
+            LStackTop := 0; { unknown 2-byte op, clear stack }
+          end;
+        end;
+        $1C: begin { shortint }
+          LVal := SmallInt((ReadNextByte shl 8) or ReadNextByte);
+          Push(LVal);
+        end;
+        $FF: begin { fixed (4-byte signed) }
+          LVal := Int32((ReadNextByte shl 24) or (ReadNextByte shl 16) or
+            (ReadNextByte shl 8) or ReadNextByte);
+          Push(LVal);
+        end;
+      else
+        begin
+          { Number encoding }
+          if (LB >= 32) and (LB <= 246) then
+            Push(LB - 139)
+          else if (LB >= 247) and (LB <= 250) then
+            Push((LB - 247) * 256 + ReadNextByte + 108)
+          else if (LB >= 251) and (LB <= 254) then
+            Push(-((LB - 251) * 256) - ReadNextByte - 108)
+          else if LB = 28 then
+            Push(SmallInt((ReadNextByte shl 8) or ReadNextByte))
+          else if LB = 29 then
+            Push(Int32((ReadNextByte shl 24) or (ReadNextByte shl 16) or
+              (ReadNextByte shl 8) or ReadNextByte));
+        end;
+      end;
+      if LPos >= LLen then
+      begin
+        if LCallDepth > 0 then
+          DoReturn
+        else
+          Break;
+      end;
+    end;
+  end;
+
+var
+  LI: Int32;
+begin
+  FontGlyphOutlineClear(Result);
+  if (not FCffParsed) or (AGlyphIndex >= UInt32(FCffGlyphCount)) then
+    Exit;
+
+  LCharStrBase := Int32(FCffCharStringOffsets[AGlyphIndex]);
+  LCharStrLen := Int32(FCffCharStringOffsets[AGlyphIndex + 1]) - LCharStrBase;
+  if LCharStrLen <= 0 then Exit;
+
+  { Initialize interpreter state }
+  LStackTop := 0;
+  LCallDepth := 0;
+  LData := @FData[LCharStrBase];
+  LLen := LCharStrLen;
+  LPos := 0;
+  LX := 0; LY := 0;
+  LPointCount := 0;
+  LContourCount := 0;
+  LHasMove := False;
+  LWidthParsed := False;
+  LStackWatermark := 0;
+  LWidth := FCffDefaultWidthX;
+  SetLength(LPoints, 0);
+  SetLength(LContours, 0);
+
+  InterpretCharstring;
+  CloseContour;
+
+  { Build result }
+  if LPointCount > 0 then
+  begin
+    SetLength(Result.Points, LPointCount);
+    for LI := 0 to LPointCount - 1 do
+      Result.Points[LI] := LPoints[LI];
+
+    SetLength(Result.ContourEnds, LContourCount);
+    for LI := 0 to LContourCount - 1 do
+      Result.ContourEnds[LI] := LContours[LI];
+
+    Result.ContourCount := LContourCount;
+
+    { Compute bounding box }
+    Result.XMin := High(Int16);
+    Result.YMin := High(Int16);
+    Result.XMax := Low(Int16);
+    Result.YMax := Low(Int16);
+    for LI := 0 to LPointCount - 1 do
+    begin
+      if Result.Points[LI].X < Result.XMin then
+        Result.XMin := Result.Points[LI].X;
+      if Result.Points[LI].Y < Result.YMin then
+        Result.YMin := Result.Points[LI].Y;
+      if Result.Points[LI].X > Result.XMax then
+        Result.XMax := Result.Points[LI].X;
+      if Result.Points[LI].Y > Result.YMax then
+        Result.YMax := Result.Points[LI].Y;
+    end;
+  end;
+end;
+
+{ -- CFF2 parsing -- }
+
+procedure TTFontFace.ParseCff2;
+
+  procedure ReadCff2Index(ABase: Int32; out ACount: Int32;
+    out AOffsets: array of UInt32; out ADataStart: Int32);
+  var
+    LOffSize, I, J: Int32;
+    LOff: UInt32;
+  begin
+    ACount := 0;
+    ADataStart := ABase + 4;
+    if FDataLength < ABase + 4 then Exit;
+    ACount := Int32(ReadUInt32BE(ABase));
+    if ACount = 0 then
+    begin
+      ADataStart := ABase + 4;
+      Exit;
+    end;
+    if FDataLength < ABase + 5 then begin ACount := 0; Exit; end;
+    LOffSize := ReadUInt8(ABase + 4);
+    if (LOffSize < 1) or (LOffSize > 4) then begin ACount := 0; Exit; end;
+    if FDataLength < ABase + 5 + (ACount + 1) * LOffSize then
+    begin
+      ACount := 0;
+      Exit;
+    end;
+    for I := 0 to ACount do
+    begin
+      LOff := 0;
+      for J := 0 to LOffSize - 1 do
+        LOff := (LOff shl 8) or ReadUInt8(ABase + 5 + I * LOffSize + J);
+      AOffsets[I] := LOff;
+    end;
+    ADataStart := ABase + 5 + (ACount + 1) * LOffSize;
+  end;
+
+var
+  LIdx, LBase, LTopDictSize, LHdrSize: Int32;
+  LI, LJ: Int32;
+  LItemBase: Int32;
+  LCharStringsOff, LFontDictOff, LFDSelectOff, LVStoreOff: Int32;
+  LPrivateSize, LPrivateOff, LSubrsOff: Int32;
+  LArr: array of UInt32;
+  LFDCount, LFDIdx: Int32;
+  LTopI, LTopOp: Int32;
+  LTopStack: array of Int32;
+  LTopNumOps: Int32;
+  LB: Byte;
+  LVal: Int32;
+  LPrivateArr: array of Int32;
+  LPrivNumOps: Int32;
+  LDataCount, LDataOff, LDataBase: Int32;
+  LItemCount, LWordDeltaCount, LRegionIdxCount: Int32;
+  LLongWords, LDeltaOffset: Int32;
+begin
+  FCff2Parsed := False;
+  FCff2GlyphCount := 0;
+  SetLength(FCff2CharStringOffsets, 0);
+  SetLength(FCff2GlobalSubrs, 0);
+  SetLength(FCff2LocalSubrs, 0);
+  FCff2FDCount := 0;
+  FCff2VStoreParsed := False;
+  FCff2AxisCount := 0;
+  FCff2RegionCount := 0;
+  SetLength(FCff2Regions, 0);
+
+  LIdx := FindTable(TABLE_TAG_CFF2);
+  if LIdx < 0 then Exit;
+  LBase := Int32(FTables[LIdx].Offset);
+  if Int32(FTables[LIdx].Length) < 5 then Exit;
+  if FDataLength < LBase + 5 then Exit;
+
+  FCff2TableBase := LBase;
+  LHdrSize := ReadUInt8(LBase + 2);
+  LTopDictSize := ReadUInt16BE(LBase + 3);
+  if LHdrSize <> 5 then Exit;
+  if Int32(FTables[LIdx].Length) < LHdrSize + LTopDictSize then Exit;
+
+  SetLength(LArr, 65536);
+  SetLength(LTopStack, 48);
+  LCharStringsOff := -1;
+  LFontDictOff := -1;
+  LFDSelectOff := -1;
+  LVStoreOff := -1;
+  LTopNumOps := 0;
+
+  { Parse Top DICT }
+  LTopI := LBase + LHdrSize;
+  while LTopI < LBase + LHdrSize + LTopDictSize do
+  begin
+    LB := ReadUInt8(LTopI);
+    if LB <= 27 then
+    begin
+      if LB = 12 then
+      begin
+        if LTopI + 1 >= LBase + LHdrSize + LTopDictSize then Break;
+        LTopOp := (LB shl 8) or ReadUInt8(LTopI + 1);
+        Inc(LTopI, 2);
+      end
+      else
+      begin
+        LTopOp := LB;
+        Inc(LTopI);
+      end;
+      case LTopOp of
+        $11: { CharStrings }
+          if LTopNumOps >= 1 then
+            LCharStringsOff := LTopStack[LTopNumOps - 1];
+        $18: { vstore }
+          if LTopNumOps >= 1 then
+            LVStoreOff := LTopStack[LTopNumOps - 1];
+        $0C24: { FontDICT INDEX }
+          if LTopNumOps >= 1 then
+            LFontDictOff := LTopStack[LTopNumOps - 1];
+        $0C25: { FDSelect }
+          if LTopNumOps >= 1 then
+            LFDSelectOff := LTopStack[LTopNumOps - 1];
+      end;
+      LTopNumOps := 0;
+    end
+    else if LB = 28 then
+    begin
+      LVal := SmallInt((ReadUInt8(LTopI + 1) shl 8) or ReadUInt8(LTopI + 2));
+      if LTopNumOps < Length(LTopStack) then
+      begin
+        LTopStack[LTopNumOps] := LVal;
+        Inc(LTopNumOps);
+      end;
+      Inc(LTopI, 3);
+    end
+    else if LB = 29 then
+    begin
+      LVal := Int32((ReadUInt8(LTopI + 1) shl 24) or (ReadUInt8(LTopI + 2) shl 16) or
+        (ReadUInt8(LTopI + 3) shl 8) or ReadUInt8(LTopI + 4));
+      if LTopNumOps < Length(LTopStack) then
+      begin
+        LTopStack[LTopNumOps] := LVal;
+        Inc(LTopNumOps);
+      end;
+      Inc(LTopI, 5);
+    end
+    else if (LB >= 32) and (LB <= 246) then
+    begin
+      if LTopNumOps < Length(LTopStack) then
+      begin
+        LTopStack[LTopNumOps] := LB - 139;
+        Inc(LTopNumOps);
+      end;
+      Inc(LTopI);
+    end
+    else if (LB >= 247) and (LB <= 250) then
+    begin
+      LVal := (LB - 247) * 256 + ReadUInt8(LTopI + 1) + 108;
+      if LTopNumOps < Length(LTopStack) then
+      begin
+        LTopStack[LTopNumOps] := LVal;
+        Inc(LTopNumOps);
+      end;
+      Inc(LTopI, 2);
+    end
+    else if (LB >= 251) and (LB <= 254) then
+    begin
+      LVal := -((LB - 251) * 256) - ReadUInt8(LTopI + 1) - 108;
+      if LTopNumOps < Length(LTopStack) then
+      begin
+        LTopStack[LTopNumOps] := LVal;
+        Inc(LTopNumOps);
+      end;
+      Inc(LTopI, 2);
+    end
+    else
+      Inc(LTopI);
+  end;
+
+  if LCharStringsOff < 0 then Exit;
+
+  { CharStrings INDEX (CFF2: 4-byte count) }
+  LCharStringsOff := LCharStringsOff + LBase;
+  ReadCff2Index(LCharStringsOff, FCff2GlyphCount, LArr, LItemBase);
+  if FCff2GlyphCount <= 0 then begin FCff2GlyphCount := 0; Exit; end;
+  SetLength(FCff2CharStringOffsets, FCff2GlyphCount + 1);
+  for LI := 0 to FCff2GlyphCount do
+    FCff2CharStringOffsets[LI] := UInt32(LItemBase) + LArr[LI] - 1;
+  FCff2CharStringsBase := LItemBase;
+
+  { Global Subrs INDEX (right after Top DICT) }
+  LItemBase := LBase + LHdrSize + LTopDictSize;
+  ReadCff2Index(LItemBase, LI, LArr, LJ);
+  SetLength(FCff2GlobalSubrs, LI);
+  for LIdx := 0 to LI - 1 do
+    FCff2GlobalSubrs[LIdx].Data := Copy(FData,
+      LJ + Int32(LArr[LIdx]) - 1,
+      Int32(LArr[LIdx + 1]) - Int32(LArr[LIdx]));
+
+  { FontDICT INDEX → Private DICT → Local Subrs }
+  SetLength(FCff2LocalSubrs, 0);
+  if LFontDictOff >= 0 then
+  begin
+    LFontDictOff := LFontDictOff + LBase;
+    ReadCff2Index(LFontDictOff, LFDCount, LArr, LItemBase);
+    FCff2FDCount := LFDCount;
+    { 只解析第一个 Font DICT (index 0) 的 Private DICT }
+    if LFDCount > 0 then
+    begin
+      LPrivateSize := 0;
+      LPrivateOff := -1;
+      LSubrsOff := -1;
+      { Parse Font DICT for Private DICT operator }
+      LJ := LItemBase + Int32(LArr[0]) - 1;
+      LPrivNumOps := 0;
+      SetLength(LPrivateArr, 16);
+      while LJ < LItemBase + Int32(LArr[1]) - 1 do
+      begin
+        LB := ReadUInt8(LJ);
+        if LB <= 27 then
+        begin
+          if LB = 12 then
+          begin
+            Inc(LJ);
+            if LJ >= LItemBase + Int32(LArr[1]) - 1 then Break;
+            Inc(LJ);
+          end
+          else
+          begin
+            if LB = $12 then { Private DICT: size + offset }
+              if LPrivNumOps >= 2 then
+              begin
+                LPrivateSize := LPrivateArr[LPrivNumOps - 2];
+                LPrivateOff := LPrivateArr[LPrivNumOps - 1];
+              end;
+            Inc(LJ);
+          end;
+          LPrivNumOps := 0;
+        end
+        else if LB = 28 then
+        begin
+          LVal := SmallInt((ReadUInt8(LJ + 1) shl 8) or ReadUInt8(LJ + 2));
+          if LPrivNumOps < Length(LPrivateArr) then
+          begin
+            LPrivateArr[LPrivNumOps] := LVal;
+            Inc(LPrivNumOps);
+          end;
+          Inc(LJ, 3);
+        end
+        else if (LB >= 32) and (LB <= 246) then
+        begin
+          if LPrivNumOps < Length(LPrivateArr) then
+          begin
+            LPrivateArr[LPrivNumOps] := LB - 139;
+            Inc(LPrivNumOps);
+          end;
+          Inc(LJ);
+        end
+        else if (LB >= 247) and (LB <= 250) then
+        begin
+          LVal := (LB - 247) * 256 + ReadUInt8(LJ + 1) + 108;
+          if LPrivNumOps < Length(LPrivateArr) then
+          begin
+            LPrivateArr[LPrivNumOps] := LVal;
+            Inc(LPrivNumOps);
+          end;
+          Inc(LJ, 2);
+        end
+        else if (LB >= 251) and (LB <= 254) then
+        begin
+          LVal := -((LB - 251) * 256) - ReadUInt8(LJ + 1) - 108;
+          if LPrivNumOps < Length(LPrivateArr) then
+          begin
+            LPrivateArr[LPrivNumOps] := LVal;
+            Inc(LPrivNumOps);
+          end;
+          Inc(LJ, 2);
+        end
+        else
+          Inc(LJ);
+      end;
+      { Parse Private DICT for Subrs offset }
+      if (LPrivateOff >= 0) and (LPrivateSize > 0) then
+      begin
+        LPrivateOff := LPrivateOff + LBase;
+        LJ := LPrivateOff;
+        LPrivNumOps := 0;
+        while LJ < LPrivateOff + LPrivateSize do
+        begin
+          LB := ReadUInt8(LJ);
+          if LB <= 27 then
+          begin
+            if LB = 12 then
+            begin
+              if LJ + 1 >= LPrivateOff + LPrivateSize then Break;
+              Inc(LJ, 2);
+            end
+            else
+            begin
+              if LB = $13 then { Subrs }
+                if LPrivNumOps >= 1 then
+                  LSubrsOff := LPrivateArr[LPrivNumOps - 1];
+              Inc(LJ);
+            end;
+            LPrivNumOps := 0;
+          end
+          else if LB = 28 then
+          begin
+            LVal := SmallInt((ReadUInt8(LJ + 1) shl 8) or ReadUInt8(LJ + 2));
+            if LPrivNumOps < Length(LPrivateArr) then
+            begin
+              LPrivateArr[LPrivNumOps] := LVal;
+              Inc(LPrivNumOps);
+            end;
+            Inc(LJ, 3);
+          end
+          else if (LB >= 32) and (LB <= 246) then
+          begin
+            if LPrivNumOps < Length(LPrivateArr) then
+            begin
+              LPrivateArr[LPrivNumOps] := LB - 139;
+              Inc(LPrivNumOps);
+            end;
+            Inc(LJ);
+          end
+          else if (LB >= 247) and (LB <= 250) then
+          begin
+            LVal := (LB - 247) * 256 + ReadUInt8(LJ + 1) + 108;
+            if LPrivNumOps < Length(LPrivateArr) then
+            begin
+              LPrivateArr[LPrivNumOps] := LVal;
+              Inc(LPrivNumOps);
+            end;
+            Inc(LJ, 2);
+          end
+          else if (LB >= 251) and (LB <= 254) then
+          begin
+            LVal := -((LB - 251) * 256) - ReadUInt8(LJ + 1) - 108;
+            if LPrivNumOps < Length(LPrivateArr) then
+            begin
+              LPrivateArr[LPrivNumOps] := LVal;
+              Inc(LPrivNumOps);
+            end;
+            Inc(LJ, 2);
+          end
+          else
+            Inc(LJ);
+        end;
+        { Read Local Subrs INDEX }
+        if LSubrsOff >= 0 then
+        begin
+          LItemBase := LPrivateOff + LSubrsOff;
+          ReadCff2Index(LItemBase, LI, LArr, LJ);
+          SetLength(FCff2LocalSubrs, LI);
+          for LIdx := 0 to LI - 1 do
+            FCff2LocalSubrs[LIdx].Data := Copy(FData,
+              LJ + Int32(LArr[LIdx]) - 1,
+              Int32(LArr[LIdx + 1]) - Int32(LArr[LIdx]));
+        end;
+      end;
+    end;
+  end;
+
+  { Parse ItemVariationStore if present }
+  if LVStoreOff >= 0 then
+  begin
+    LItemBase := LVStoreOff + LBase;
+    if FDataLength >= LItemBase + 8 then
+    begin
+      { format (2) + variationRegionListOffset (4) + itemVariationDataCount (2) }
+      LJ := LItemBase + ReadUInt32BE(LItemBase + 2); { variationRegionListOffset relative to vstore start }
+      if FDataLength >= LJ + 4 then
+      begin
+        FCff2AxisCount := ReadUInt16BE(LJ);
+        FCff2RegionCount := ReadUInt16BE(LJ + 2);
+        if (FCff2AxisCount > 0) and (FCff2RegionCount > 0) then
+        begin
+          SetLength(FCff2Regions, FCff2RegionCount);
+          LI := LJ + 4; { first VariationRegion }
+          for LIdx := 0 to FCff2RegionCount - 1 do
+          begin
+            SetLength(FCff2Regions[LIdx].Axes, FCff2AxisCount);
+            for LJ := 0 to FCff2AxisCount - 1 do
+            begin
+              FCff2Regions[LIdx].Axes[LJ].Start := Int16(ReadUInt16BE(LI));
+              FCff2Regions[LIdx].Axes[LJ].Peak  := Int16(ReadUInt16BE(LI + 2));
+              FCff2Regions[LIdx].Axes[LJ].EndCoord := Int16(ReadUInt16BE(LI + 4));
+              Inc(LI, 6);
+            end;
+          end;
+          FCff2VStoreParsed := True;
+          { Parse ItemVariationData subtables }
+          LDataCount := ReadUInt16BE(LItemBase + 6);
+          if (LDataCount > 0) and (LDataCount <= 256) then
+          begin
+            FCff2VStoreDataCount := LDataCount;
+            SetLength(FCff2VStoreDataSubtables, LDataCount);
+            for LIdx := 0 to LDataCount - 1 do
+            begin
+              if LItemBase + 8 + LIdx * 4 + 4 > FDataLength then Break;
+              LDataOff := ReadUInt32BE(LItemBase + 8 + LIdx * 4);
+              LDataBase := LItemBase + LDataOff;
+              if LDataBase + 6 > FDataLength then Continue;
+              LItemCount := ReadUInt16BE(LDataBase);
+              LWordDeltaCount := ReadUInt16BE(LDataBase + 2);
+              LRegionIdxCount := ReadUInt16BE(LDataBase + 4);
+              FCff2VStoreDataSubtables[LIdx].ItemCount := LItemCount;
+              FCff2VStoreDataSubtables[LIdx].RegionIndexCount := LRegionIdxCount;
+              SetLength(FCff2VStoreDataSubtables[LIdx].RegionIndices, LRegionIdxCount);
+              { Read region indices }
+              for LJ := 0 to LRegionIdxCount - 1 do
+              begin
+                if LDataBase + 6 + LJ * 2 + 2 > FDataLength then Break;
+                FCff2VStoreDataSubtables[LIdx].RegionIndices[LJ] :=
+                  ReadUInt16BE(LDataBase + 6 + LJ * 2);
+              end;
+              { Read deltas }
+              LLongWords := (LWordDeltaCount and $8000) shr 15;
+              LWordDeltaCount := LWordDeltaCount and $7FFF;
+              LDeltaOffset := LDataBase + 6 + LRegionIdxCount * 2;
+              SetLength(FCff2VStoreDataSubtables[LIdx].Deltas,
+                LItemCount * LRegionIdxCount);
+              for LJ := 0 to LItemCount * LRegionIdxCount - 1 do
+              begin
+                if LJ div LRegionIdxCount < LWordDeltaCount then
+                begin
+                  if LLongWords <> 0 then
+                  begin
+                    if LDeltaOffset + 4 > FDataLength then Break;
+                    FCff2VStoreDataSubtables[LIdx].Deltas[LJ] :=
+                      Int16(ReadUInt16BE(LDeltaOffset)); { truncate 32→16 }
+                    Inc(LDeltaOffset, 4);
+                  end
+                  else
+                  begin
+                    if LDeltaOffset + 2 > FDataLength then Break;
+                    FCff2VStoreDataSubtables[LIdx].Deltas[LJ] :=
+                      ReadInt16BE(LDeltaOffset);
+                    Inc(LDeltaOffset, 2);
+                  end;
+                end
+                else
+                begin
+                  if LLongWords <> 0 then
+                  begin
+                    if LDeltaOffset + 2 > FDataLength then Break;
+                    FCff2VStoreDataSubtables[LIdx].Deltas[LJ] :=
+                      ReadInt16BE(LDeltaOffset);
+                    Inc(LDeltaOffset, 2);
+                  end
+                  else
+                  begin
+                    if LDeltaOffset + 1 > FDataLength then Break;
+                    FCff2VStoreDataSubtables[LIdx].Deltas[LJ] :=
+                      ShortInt(ReadUInt8(LDeltaOffset));
+                    Inc(LDeltaOffset);
+                  end;
+                end;
+              end;
+            end;
+          end;
+        end;
+      end;
+    end;
+  end;
+
+  FCff2Parsed := True;
+end;
+
+function TTFontFace.Cff2GlyphOutline(AGlyphIndex: UInt32): TFontGlyphOutline;
+{ CFF2 charstring interpreter → outline. 与 CffGlyphOutline 相同的 Type 2 算子集，
+  但无 width 解析、无 endchar、无 seac。 }
+const
+  MAX_STACK = 48;
+  MAX_CALL_DEPTH = 32;
+var
+  LCharStrBase, LCharStrLen: Int32;
+  LStack: array[0..MAX_STACK - 1] of Int32;
+  LStackTop: Int32;
+  LCallStack: array[0..MAX_CALL_DEPTH - 1] of record
+    Data: PByte; Len, Pos, Watermark: Int32;
+  end;
+  LCallDepth: Int32;
+  LData: PByte;
+  LLen, LPos: Int32;
+  LX, LY: Int32;
+  LPoints: TFontContourPointArray;
+  LContours: array of UInt16;
+  LPointCount, LContourCount: Int32;
+  LStackWatermark: Int32;
+  LVsIndex: Int32;  { CFF2 variation data subtable index for blend }
+
+  procedure Push(AVal: Int32);
+  begin
+    if LStackTop < MAX_STACK then begin LStack[LStackTop] := AVal; Inc(LStackTop); end;
+  end;
+
+  function Pop: Int32;
+  begin
+    if LStackTop > 0 then begin Dec(LStackTop); Result := LStack[LStackTop]; end
+    else Result := 0;
+  end;
+
+  procedure AddPoint(AX, AY: Int32; AOnCurve: Boolean);
+  begin
+    if LPointCount >= Length(LPoints) then SetLength(LPoints, LPointCount + 256);
+    LPoints[LPointCount].X := AX;
+    LPoints[LPointCount].Y := AY;
+    LPoints[LPointCount].OnCurve := AOnCurve;
+    Inc(LPointCount);
+  end;
+
+  procedure CloseContour;
+  begin
+    if LPointCount > 0 then
+    begin
+      if LContourCount >= Length(LContours) then SetLength(LContours, LContourCount + 16);
+      LContours[LContourCount] := LPointCount - 1;
+      Inc(LContourCount);
+    end;
+  end;
+
+  function ReadNextByte: Byte;
+  begin
+    if LPos < LLen then begin Result := LData[LPos]; Inc(LPos); end
+    else Result := 0; { EOF sentinel — no endchar in CFF2 }
+  end;
+
+  function SubrBias(ACount: Int32): Int32;
+  begin
+    if ACount < 1240 then Result := 107
+    else if ACount < 33900 then Result := 1131
+    else Result := 32768;
+  end;
+
+  procedure CallSubr(AIndex: Int32; AIsGlobal: Boolean);
+  var LBias, LSubrIdx, LSubrCount: Int32;
+  begin
+    if LCallDepth >= MAX_CALL_DEPTH then Exit;
+    if AIsGlobal then LSubrCount := Length(FCff2GlobalSubrs)
+    else LSubrCount := Length(FCff2LocalSubrs);
+    if LSubrCount = 0 then Exit;
+    LBias := SubrBias(LSubrCount);
+    LSubrIdx := AIndex + LBias;
+    if (LSubrIdx < 0) or (LSubrIdx >= LSubrCount) then Exit;
+    if AIsGlobal then
+    begin
+      if Length(FCff2GlobalSubrs[LSubrIdx].Data) = 0 then Exit;
+      LCallStack[LCallDepth].Data := LData;
+      LCallStack[LCallDepth].Len := LLen;
+      LCallStack[LCallDepth].Pos := LPos;
+      LCallStack[LCallDepth].Watermark := LStackWatermark;
+      Inc(LCallDepth);
+      LData := @FCff2GlobalSubrs[LSubrIdx].Data[0];
+      LLen := Length(FCff2GlobalSubrs[LSubrIdx].Data);
+    end
+    else
+    begin
+      if Length(FCff2LocalSubrs[LSubrIdx].Data) = 0 then Exit;
+      LCallStack[LCallDepth].Data := LData;
+      LCallStack[LCallDepth].Len := LLen;
+      LCallStack[LCallDepth].Pos := LPos;
+      LCallStack[LCallDepth].Watermark := LStackWatermark;
+      Inc(LCallDepth);
+      LData := @FCff2LocalSubrs[LSubrIdx].Data[0];
+      LLen := Length(FCff2LocalSubrs[LSubrIdx].Data);
+    end;
+    LStackWatermark := LStackTop;
+    LPos := 0;
+  end;
+
+  procedure DoReturn;
+  begin
+    if LCallDepth > 0 then
+    begin
+      Dec(LCallDepth);
+      LData := LCallStack[LCallDepth].Data;
+      LLen := LCallStack[LCallDepth].Len;
+      LPos := LCallStack[LCallDepth].Pos;
+      LStackWatermark := LCallStack[LCallDepth].Watermark;
+    end
+    else
+      LPos := LLen;
+  end;
+
+  procedure InterpretCharstring;
+  var LB, LB2: Byte; LI, LVal: Int32;
+      LBlendN, LBlendR, LBlendI, LBlendJ: Int32;
+      LBlendScalar: Single; LBlendDelta: Int32;
+  begin
+    while LPos <= LLen do
+    begin
+      LB := ReadNextByte;
+      case LB of
+        { CFF2 无 endchar (0x0E) — 忽略 }
+        $0E: ;
+        { Hint operators }
+        $01, $03, $12, $17: { hstem, vstem, hstemhm, vstemhm }
+          LStackTop := LStackWatermark;
+        $13, $14: begin { hintmask, cntrmask }
+          LI := LStackTop - LStackWatermark;
+          if LI >= 2 then begin LI := ((LI div 2) + 7) div 8;
+            while LI > 0 do begin ReadNextByte; Dec(LI); end; end;
+          LStackTop := LStackWatermark;
+        end;
+        $15: begin { rmoveto }
+          CloseContour;
+          if LStackTop >= 2 then begin LX := LX + LStack[LStackTop - 2];
+            LY := LY + LStack[LStackTop - 1]; AddPoint(LX, LY, True); end;
+          LStackTop := 0;
+        end;
+        $16: begin { hmoveto }
+          CloseContour;
+          if LStackTop >= 1 then begin LX := LX + LStack[LStackTop - 1];
+            AddPoint(LX, LY, True); end;
+          LStackTop := 0;
+        end;
+        $04: begin { vmoveto }
+          CloseContour;
+          if LStackTop >= 1 then begin LY := LY + LStack[LStackTop - 1];
+            AddPoint(LX, LY, True); end;
+          LStackTop := 0;
+        end;
+        $05: begin { rlineto }
+          for LI := 0 to LStackTop - 1 do
+            if LI and 1 = 0 then LX := LX + LStack[LI]
+            else begin LY := LY + LStack[LI]; AddPoint(LX, LY, True); end;
+          LStackTop := 0;
+        end;
+        $06: begin { hlineto }
+          for LI := 0 to LStackTop - 1 do
+          begin
+            if LI and 1 = 0 then LX := LX + LStack[LI]
+            else LY := LY + LStack[LI];
+            AddPoint(LX, LY, True);
+          end;
+          LStackTop := 0;
+        end;
+        $07: begin { vlineto }
+          for LI := 0 to LStackTop - 1 do
+          begin
+            if LI and 1 = 0 then LY := LY + LStack[LI]
+            else LX := LX + LStack[LI];
+            AddPoint(LX, LY, True);
+          end;
+          LStackTop := 0;
+        end;
+        $08: begin { rrcurveto }
+          for LI := 0 to (LStackTop div 6) - 1 do
+          begin
+            AddPoint(LX + LStack[LI*6], LY + LStack[LI*6+1], False);
+            AddPoint(LX + LStack[LI*6] + LStack[LI*6+2], LY + LStack[LI*6+1] + LStack[LI*6+3], False);
+            LX := LX + LStack[LI*6] + LStack[LI*6+2] + LStack[LI*6+4];
+            LY := LY + LStack[LI*6+1] + LStack[LI*6+3] + LStack[LI*6+5];
+            AddPoint(LX, LY, True);
+          end;
+          LStackTop := 0;
+        end;
+        $1B: begin { hhcurveto }
+          LI := 0;
+          if (LStackTop > 0) and ((LStackTop and 1) = 1) then
+          begin
+            if LStackTop >= 6 then
+            begin
+              AddPoint(LX, LY + LStack[0], False);
+              AddPoint(LX + LStack[1], LY + LStack[0] + LStack[2], False);
+              LX := LX + LStack[1] + LStack[3]; LY := LY + LStack[0] + LStack[2] + LStack[4];
+              AddPoint(LX, LY, True);
+            end;
+            LI := 5;
+          end;
+          while LI + 3 < LStackTop do
+          begin
+            AddPoint(LX + LStack[LI], LY, False);
+            AddPoint(LX + LStack[LI] + LStack[LI+1], LY + LStack[LI+2], False);
+            LX := LX + LStack[LI] + LStack[LI+1] + LStack[LI+3];
+            LY := LY + LStack[LI+2];
+            AddPoint(LX, LY, True);
+            Inc(LI, 4);
+          end;
+          LStackTop := 0;
+        end;
+        $1A: begin { vvcurveto }
+          LI := 0;
+          if (LStackTop > 0) and ((LStackTop and 1) = 1) then
+          begin
+            if LStackTop >= 4 then
+            begin
+              AddPoint(LX + LStack[0], LY, False);
+              AddPoint(LX + LStack[0] + LStack[1], LY + LStack[2], False);
+              LX := LX + LStack[0] + LStack[1]; LY := LY + LStack[2] + LStack[3];
+              AddPoint(LX, LY, True);
+            end;
+            LI := 4;
+          end;
+          while LI + 3 < LStackTop do
+          begin
+            AddPoint(LX, LY + LStack[LI], False);
+            AddPoint(LX + LStack[LI+1], LY + LStack[LI] + LStack[LI+2], False);
+            LX := LX + LStack[LI+1]; LY := LY + LStack[LI] + LStack[LI+2] + LStack[LI+3];
+            AddPoint(LX, LY, True);
+            Inc(LI, 4);
+          end;
+          LStackTop := 0;
+        end;
+        $18: begin { rcurveline }
+          LI := 0;
+          while LI + 6 <= LStackTop do
+          begin
+            AddPoint(LX + LStack[LI], LY + LStack[LI+1], False);
+            AddPoint(LX + LStack[LI] + LStack[LI+2], LY + LStack[LI+1] + LStack[LI+3], False);
+            LX := LX + LStack[LI] + LStack[LI+2] + LStack[LI+4];
+            LY := LY + LStack[LI+1] + LStack[LI+3] + LStack[LI+5];
+            AddPoint(LX, LY, True);
+            Inc(LI, 6);
+          end;
+          if LI + 2 <= LStackTop then begin LX := LX + LStack[LI];
+            LY := LY + LStack[LI+1]; AddPoint(LX, LY, True); end;
+          LStackTop := 0;
+        end;
+        $19: begin { rlinecurve }
+          LI := 0;
+          while LI + 6 <= LStackTop do
+          begin LX := LX + LStack[LI]; LY := LY + LStack[LI+1];
+            AddPoint(LX, LY, True); Inc(LI, 2); end;
+          if LI + 6 <= LStackTop then
+          begin
+            AddPoint(LX + LStack[LI], LY + LStack[LI+1], False);
+            AddPoint(LX + LStack[LI] + LStack[LI+2], LY + LStack[LI+1] + LStack[LI+3], False);
+            LX := LX + LStack[LI] + LStack[LI+2] + LStack[LI+4];
+            LY := LY + LStack[LI+1] + LStack[LI+3] + LStack[LI+5];
+            AddPoint(LX, LY, True);
+          end;
+          LStackTop := 0;
+        end;
+        $1E: begin { hvcurveto }
+          LI := 0;
+          while LI + 4 <= LStackTop do
+          begin
+            if (LStackTop - LI) >= 6 then
+            begin
+              AddPoint(LX + LStack[LI], LY, False);
+              AddPoint(LX + LStack[LI] + LStack[LI+1], LY + LStack[LI+2], False);
+              LX := LX + LStack[LI] + LStack[LI+1] + LStack[LI+4];
+              LY := LY + LStack[LI+2] + LStack[LI+3];
+              AddPoint(LX, LY, True);
+              Inc(LI, 5);
+              if (LStackTop - LI) >= 5 then
+              begin
+                AddPoint(LX, LY + LStack[LI], False);
+                AddPoint(LX + LStack[LI+1], LY + LStack[LI] + LStack[LI+2], False);
+                LX := LX + LStack[LI+1] + LStack[LI+3];
+                LY := LY + LStack[LI] + LStack[LI+2] + LStack[LI+4];
+                AddPoint(LX, LY, True);
+                Inc(LI, 5);
+              end;
+            end else Break;
+          end;
+          LStackTop := 0;
+        end;
+        $1F: begin { vhcurveto }
+          LI := 0;
+          while LI + 4 <= LStackTop do
+          begin
+            if (LStackTop - LI) >= 6 then
+            begin
+              AddPoint(LX, LY + LStack[LI], False);
+              AddPoint(LX + LStack[LI+1], LY + LStack[LI] + LStack[LI+2], False);
+              LX := LX + LStack[LI+1] + LStack[LI+3];
+              LY := LY + LStack[LI] + LStack[LI+2] + LStack[LI+4];
+              AddPoint(LX, LY, True);
+              Inc(LI, 5);
+              if (LStackTop - LI) >= 5 then
+              begin
+                AddPoint(LX + LStack[LI], LY, False);
+                AddPoint(LX + LStack[LI] + LStack[LI+1], LY + LStack[LI+2], False);
+                LX := LX + LStack[LI] + LStack[LI+1] + LStack[LI+4];
+                LY := LY + LStack[LI+2] + LStack[LI+3];
+                AddPoint(LX, LY, True);
+                Inc(LI, 5);
+              end;
+            end else Break;
+          end;
+          LStackTop := 0;
+        end;
+        $0A: begin { callsubr }
+          if LStackTop > 0 then begin Dec(LStackTop); CallSubr(LStack[LStackTop], False); end;
+        end;
+        $1D: begin { callgsubr }
+          if LStackTop > 0 then begin Dec(LStackTop); CallSubr(LStack[LStackTop], True); end;
+        end;
+        $0B: DoReturn;
+        $0C: begin { two-byte operator }
+          LB2 := ReadNextByte;
+          case LB2 of
+            $22: begin { hflex }
+              if LStackTop >= 7 then
+              begin
+                AddPoint(LX + LStack[0], LY, False);
+                AddPoint(LX + LStack[0] + LStack[1], LY + LStack[2], False);
+                LX := LX + LStack[0] + LStack[1]; LY := LY + LStack[2] + LStack[3];
+                AddPoint(LX, LY, True);
+                AddPoint(LX + LStack[4], LY, False);
+                AddPoint(LX + LStack[4] + LStack[5], LY + LStack[6], False);
+                LX := LX + LStack[4] + LStack[5];
+                AddPoint(LX, LY, True);
+              end;
+              LStackTop := 0;
+            end;
+            $23: begin { flex }
+              if LStackTop >= 13 then
+              begin
+                AddPoint(LX + LStack[0], LY + LStack[1], False);
+                AddPoint(LX + LStack[0] + LStack[2], LY + LStack[1] + LStack[3], False);
+                LX := LX + LStack[0] + LStack[2] + LStack[4];
+                LY := LY + LStack[1] + LStack[3] + LStack[5];
+                AddPoint(LX, LY, True);
+                AddPoint(LX + LStack[6], LY + LStack[7], False);
+                AddPoint(LX + LStack[6] + LStack[8], LY + LStack[7] + LStack[9], False);
+                LX := LX + LStack[6] + LStack[8] + LStack[10];
+                LY := LY + LStack[7] + LStack[9] + LStack[11];
+                AddPoint(LX, LY, True);
+              end;
+              LStackTop := 0;
+            end;
+            $24: begin { hflex1 }
+              if LStackTop >= 9 then
+              begin
+                AddPoint(LX + LStack[0], LY + LStack[1], False);
+                AddPoint(LX + LStack[0] + LStack[2], LY + LStack[1] + LStack[3], False);
+                LX := LX + LStack[0] + LStack[2]; LY := LY + LStack[1] + LStack[3] + LStack[4];
+                AddPoint(LX, LY, True);
+                AddPoint(LX + LStack[5], LY, False);
+                AddPoint(LX + LStack[5] + LStack[6], LY + LStack[7], False);
+                LX := LX + LStack[5] + LStack[6]; LY := LY + LStack[7] + LStack[8];
+                AddPoint(LX, LY, True);
+              end;
+              LStackTop := 0;
+            end;
+            $25: begin { flex1 }
+              if LStackTop >= 11 then
+              begin
+                AddPoint(LX + LStack[0], LY + LStack[1], False);
+                AddPoint(LX + LStack[0] + LStack[2], LY + LStack[1] + LStack[3], False);
+                LX := LX + LStack[0] + LStack[2] + LStack[4];
+                LY := LY + LStack[1] + LStack[3] + LStack[5];
+                AddPoint(LX, LY, True);
+                AddPoint(LX + LStack[6], LY + LStack[7], False);
+                AddPoint(LX + LStack[6] + LStack[8], LY + LStack[7] + LStack[9], False);
+                LX := LX + LStack[6] + LStack[8] + LStack[10];
+                LY := LY + LStack[7] + LStack[9];
+                AddPoint(LX, LY, True);
+              end;
+              LStackTop := 0;
+            end;
+          else
+            LStackTop := 0;
+          end;
+        end;
+        $1C: begin { shortint }
+          LVal := SmallInt((ReadNextByte shl 8) or ReadNextByte);
+          Push(LVal);
+        end;
+        $FF: begin { fixed 16.16 }
+          LVal := Int32((ReadNextByte shl 24) or (ReadNextByte shl 16) or
+            (ReadNextByte shl 8) or ReadNextByte);
+          Push(LVal);
+        end;
+        $0F: begin { vsindex — set variation data subtable index }
+          LVsIndex := Pop;
+          if LVsIndex < 0 then LVsIndex := 0;
+          if LVsIndex >= FCff2VStoreDataCount then
+            LVsIndex := FCff2VStoreDataCount - 1;
+        end;
+        $10: begin { blend — apply variation deltas }
+          { Stack: numValues values... numValues*numRegions deltas...
+            blend replaces the numValues original values with blended values }
+          if (FCff2VStoreParsed) and (LVsIndex >= 0) and
+             (LVsIndex < FCff2VStoreDataCount) then
+          begin
+            LBlendN := Pop; { numValues to blend }
+            if (LBlendN > 0) and (LBlendN <= LStackTop) then
+            begin
+              LBlendR := FCff2VStoreDataSubtables[LVsIndex].RegionIndexCount;
+              { Read deltas from stack (top of stack has the deltas) }
+              { Stack layout: [original values...] [deltas...]
+                After Pop of numValues, the deltas are at the top }
+              for LBlendI := 0 to LBlendN - 1 do
+              begin
+                LBlendDelta := 0;
+                for LBlendJ := 0 to LBlendR - 1 do
+                begin
+                  { Pop delta for this value/region pair }
+                  if LStackTop > 0 then
+                  begin
+                    Dec(LStackTop);
+                    LBlendScalar := CalcRegionScalar(
+                      FCff2VStoreDataSubtables[LVsIndex].RegionIndices[LBlendJ],
+                      FVariationCoords);
+                    LBlendDelta := LBlendDelta +
+                      Round(LStack[LStackTop] * LBlendScalar);
+                  end;
+                end;
+                { Apply delta to the original value }
+                if LStackTop > 0 then
+                begin
+                  Dec(LStackTop);
+                  LStack[LStackTop] := LStack[LStackTop] + LBlendDelta;
+                  Inc(LStackTop);
+                end;
+              end;
+            end;
+          end;
+        end;
+      else
+        begin
+          if (LB >= 32) and (LB <= 246) then Push(LB - 139)
+          else if (LB >= 247) and (LB <= 250) then Push((LB - 247) * 256 + ReadNextByte + 108)
+          else if (LB >= 251) and (LB <= 254) then Push(-((LB - 251) * 256) - ReadNextByte - 108)
+          else if LB = 28 then Push(SmallInt((ReadNextByte shl 8) or ReadNextByte))
+          else if LB = 29 then Push(Int32((ReadNextByte shl 24) or (ReadNextByte shl 16) or
+            (ReadNextByte shl 8) or ReadNextByte));
+        end;
+      end;
+      if LPos >= LLen then
+      begin
+        if LCallDepth > 0 then DoReturn
+        else Break;
+      end;
+    end;
+  end;
+
+var
+  LI: Int32;
+begin
+  FontGlyphOutlineClear(Result);
+  if (not FCff2Parsed) or (AGlyphIndex >= UInt32(FCff2GlyphCount)) then Exit;
+
+  LCharStrBase := Int32(FCff2CharStringOffsets[AGlyphIndex]);
+  LCharStrLen := Int32(FCff2CharStringOffsets[AGlyphIndex + 1]) - LCharStrBase;
+  if LCharStrLen <= 0 then Exit;
+
+  LStackTop := 0;
+  LCallDepth := 0;
+  LData := @FData[LCharStrBase];
+  LLen := LCharStrLen;
+  LPos := 0;
+  LX := 0; LY := 0;
+  LPointCount := 0;
+  LContourCount := 0;
+  LStackWatermark := 0;
+  LVsIndex := 0;
+  SetLength(LPoints, 0);
+  SetLength(LContours, 0);
+
+  InterpretCharstring;
+  CloseContour;
+
+  if LPointCount > 0 then
+  begin
+    SetLength(Result.Points, LPointCount);
+    for LI := 0 to LPointCount - 1 do Result.Points[LI] := LPoints[LI];
+    SetLength(Result.ContourEnds, LContourCount);
+    for LI := 0 to LContourCount - 1 do Result.ContourEnds[LI] := LContours[LI];
+    Result.ContourCount := LContourCount;
+    Result.XMin := High(Int16); Result.YMin := High(Int16);
+    Result.XMax := Low(Int16);  Result.YMax := Low(Int16);
+    for LI := 0 to LPointCount - 1 do
+    begin
+      if Result.Points[LI].X < Result.XMin then Result.XMin := Result.Points[LI].X;
+      if Result.Points[LI].Y < Result.YMin then Result.YMin := Result.Points[LI].Y;
+      if Result.Points[LI].X > Result.XMax then Result.XMax := Result.Points[LI].X;
+      if Result.Points[LI].Y > Result.YMax then Result.YMax := Result.Points[LI].Y;
+    end;
+  end;
+end;
+
+procedure TTFontFace.ParseGvar;
+{**
+ * gvar table layout (Apple/FreeType spec, 20-byte header):
+ *   +0:  uint32 version (0x00010000)
+ *   +4:  uint16 axisCount
+ *   +6:  uint16 sharedTupleCount
+ *   +8:  uint32 sharedTuplesOffset (from gvar start)
+ *   +12: uint16 glyphCount
+ *   +14: uint16 flags (bit 0: 1=long uint32 offsets, 0=short uint16*2)
+ *   +16: uint32 offsetToGlyphVariationData (from gvar start)
+ *   +20: offset array [(glyphCount+1) entries]
+ *   ...: shared tuples [sharedTupleCount * axisCount * F2.14]
+ *   offsetToGlyphVariationData: glyph variation data
+ *}
+var
+  LGvarIdx, LGvarBase, LGvarLen, LVersion: Int32;
+  LAxisCount, LSharedTupleCount, LSharedTuplesOff: Int32;
+  LGlyphCount, LDataArrayOff: Int32;
+  LI, LJ, LOffBase, LPos: Int32;
+begin
+  FGvarParsed := False;
+  FGvarGlyphCount := 0;
+  FGvarSharedTupleCount := 0;
+  FGvarAxisCount := 0;
+  SetLength(FGvarSharedTuples, 0);
+  SetLength(FGvarDataOffsets, 0);
+  LGvarIdx := FindTable($67766172); { 'gvar' }
+  if LGvarIdx < 0 then Exit;
+  LGvarBase := Int32(FTables[LGvarIdx].Offset);
+  LGvarLen := Int32(FTables[LGvarIdx].Length);
+  if (LGvarBase < 0) or (LGvarLen < 20) or (LGvarBase + LGvarLen > FDataLength) then Exit;
+
+  { Parse 20-byte header }
+  LVersion := ReadUInt32BE(LGvarBase);
+  if LVersion <> $00010000 then Exit;
+  LAxisCount := ReadUInt16BE(LGvarBase + 4);
+  if (LAxisCount <> FFvarAxisCount) and (FFvarAxisCount > 0) then Exit;
+  LSharedTupleCount := ReadUInt16BE(LGvarBase + 6);
+  LSharedTuplesOff  := ReadUInt32BE(LGvarBase + 8);
+  LGlyphCount        := ReadUInt16BE(LGvarBase + 12);
+  FGvarLongOffsets    := (ReadUInt16BE(LGvarBase + 14) and 1) <> 0;
+  LDataArrayOff      := ReadUInt32BE(LGvarBase + 16);
+
+  if LGlyphCount <= 0 then Exit;
+  { Offset array starts right after the 20-byte header }
+  if FGvarLongOffsets then
+  begin
+    if (LGvarBase + 20 + (LGlyphCount + 1) * 4 > FDataLength) then Exit;
+  end
+  else
+  begin
+    if (LGvarBase + 20 + (LGlyphCount + 1) * 2 > FDataLength) then Exit;
+  end;
+
+  FGvarBase := LGvarBase;
+  FGvarAxisCount := LAxisCount;
+  FGvarGlyphCount := LGlyphCount;
+  FGvarSharedTupleCount := LSharedTupleCount;
+  FGvarDataArrayBase := LGvarBase + LDataArrayOff;
+
+  { Read shared tuples (F2.14 format, 2 bytes per axis) }
+  if (LSharedTupleCount > 0) and (LSharedTuplesOff > 0) then
+  begin
+    SetLength(FGvarSharedTuples, LSharedTupleCount);
+    LPos := LGvarBase + LSharedTuplesOff;
+    for LI := 0 to LSharedTupleCount - 1 do
+    begin
+      SetLength(FGvarSharedTuples[LI], LAxisCount);
+      for LJ := 0 to LAxisCount - 1 do
+      begin
+        if LPos + 2 <= FDataLength then
+          FGvarSharedTuples[LI][LJ] := ReadInt16BE(LPos)
+        else
+          FGvarSharedTuples[LI][LJ] := 0;
+        Inc(LPos, 2);
+      end;
+    end;
+  end;
+
+  { Read glyph variation data offsets — right after the 20-byte header }
+  SetLength(FGvarDataOffsets, LGlyphCount + 1);
+  LOffBase := LGvarBase + 20;
+  if FGvarLongOffsets then
+  begin
+    for LI := 0 to LGlyphCount do
+      FGvarDataOffsets[LI] := ReadUInt32BE(LOffBase + LI * 4);
+  end
+  else
+  begin
+    for LI := 0 to LGlyphCount do
+      FGvarDataOffsets[LI] := ReadUInt16BE(LOffBase + LI * 2) * 2;
+  end;
+
+  FGvarParsed := True;
+end;
+
+procedure TTFontFace.SetVariationCoords(const ACoords: array of Single);
+var
+  LI, LCount: Int32;
+begin
+  LCount := Length(ACoords);
+  if LCount = 0 then
+  begin
+    SetLength(FVariationCoords, 0);
+    FHasVariationCoords := False;
+    Exit;
+  end;
+  SetLength(FVariationCoords, LCount);
+  for LI := 0 to LCount - 1 do
+    FVariationCoords[LI] := ACoords[LI];
+  FHasVariationCoords := True;
+end;
+
+procedure TTFontFace.ApplyGvarDeltas(AGlyphIndex: UInt32;
+  var AOutline: TFontGlyphOutline; const ACoords: array of Single);
+{**
+ * Apply gvar deltas to a glyph outline, including IUP interpolation.
+ * TupleVariationHeader: uint16 tupleDataSize, uint16 tupleIndex
+ *   tupleIndex: bit 15=EMBEDDED_PEAK, bit 14=INTERMEDIATE, bit 13=PRIVATE_POINT_NUMBERS,
+ *               bits 12:0 = shared tuple index
+ *}
+var
+  LNumPoints, LNumContours: Int32;
+  LDataStart, LTupleCount, LDataOff, LHdrOff: Int32;
+  LI, LJ, LK, LM: Int32;
+  LTupSize, LTupIdx, LHdrSize, LSharedIdx: Int32;
+  LEmbeddedPeak, LIntermediate, LPrivatePts, LAllPts: Boolean;
+  LPeak, LStartR, LEndR: array of Single;
+  LCoord, LScalar: Single;
+  LXDelta, LYDelta: array of Single;
+  LHasDelta: array of Boolean;
+  LPtNums, LSharedPtNums: array of Int32;
+  LPtNumCount, LSharedPtNumCount: Int32;
+  LSharedPtParsed: Boolean;
+  LTupleHasSharedPts: Boolean;
+  LRunPos, LRunCount, LRunType, LRunLen: Int32;
+  LXWord, LYWord: Boolean;
+  LDeltaIdx, LSerialPos, LTupBase: Int32;
+  LPIdx, LEndC, LWrapL, LFirstD, LLastD: Int32;
+  LPrevI, LNextI, LStartI: Int32;
+  LPrevD, LNextD, LTotD, LLam: Single;
+
+  { Parse packed point numbers. Returns new position after the data. }
+  function ParsePtNums(APos: Int32): Int32;
+  var
+    LPtCount, LRunH, LRunC, LBit, LPK, LPVal, LJ2: Int32;
+    LIs16: Boolean;
+  begin
+    LPtNumCount := 0;
+    if APos + 1 > FDataLength then begin Result := APos; Exit; end;
+    LPtCount := ReadUInt8(APos); Inc(APos);
+    if LPtCount = 0 then begin Result := APos; Exit; end; { 0 = all points }
+
+    SetLength(LPtNums, LNumPoints);
+    LPK := 0;
+    LPVal := 0;
+    while LPK < LPtCount do
+    begin
+      if APos + 1 > FDataLength then Break;
+      LRunH := ReadUInt8(APos); Inc(APos);
+      LRunC := (LRunH and $3F) + 1;
+      LIs16 := (LRunH and $80) <> 0;
+      for LJ2 := 0 to LRunC - 1 do
+      begin
+        if LPK >= LPtCount then Break;
+        if LIs16 then
+        begin
+          if APos + 2 <= FDataLength then
+            LPVal := LPVal + ReadUInt16BE(APos);
+          Inc(APos, 2);
+        end
+        else
+        begin
+          if APos < FDataLength then
+            LPVal := LPVal + ReadUInt8(APos);
+          Inc(APos);
+        end;
+        LPtNums[LPK] := LPVal;
+        Inc(LPK);
+      end;
+    end;
+    LPtNumCount := LPK;
+    Result := APos;
+  end;
+
+begin
+  if not FGvarParsed then Exit;
+  if (AGlyphIndex < 0) or (AGlyphIndex >= UInt32(FGvarGlyphCount)) then Exit;
+  LNumPoints := Length(AOutline.Points);
+  if LNumPoints = 0 then Exit;
+  LNumContours := AOutline.ContourCount;
+  if LNumContours <= 0 then Exit;
+
+  if FGvarDataOffsets[AGlyphIndex] = FGvarDataOffsets[AGlyphIndex + 1] then Exit;
+  LDataStart := FGvarDataArrayBase + FGvarDataOffsets[AGlyphIndex];
+  if (LDataStart < 0) or (LDataStart + 4 > FDataLength) then Exit;
+
+  { GlyphVariationData header }
+  LTupleCount := ReadUInt16BE(LDataStart) and $7FFF;
+  LDataOff := ReadUInt16BE(LDataStart + 2);
+  LHdrOff := LDataStart + 4;
+
+  LSerialPos := LDataStart + LDataOff;
+
+  { Shared point numbers (bit 15 of tupleVariationCount).
+    Position: after all tuple headers, before serialized delta data.
+    We parse them lazily: after advancing past all tuple headers. }
+  LSharedPtParsed := False;
+  LSharedPtNumCount := 0;
+  LTupleHasSharedPts := (ReadUInt16BE(LDataStart) and $8000) <> 0;
+
+  { Step 1: scan tuple headers to advance LHdrOff past all of them }
+  for LI := 0 to LTupleCount - 1 do
+  begin
+    if (LHdrOff < 0) or (LHdrOff + 4 > FDataLength) then Break;
+    LHdrSize := 4;
+    LTupIdx := ReadUInt16BE(LHdrOff + 2);
+    if (LTupIdx and $8000) <> 0 then Inc(LHdrSize, FGvarAxisCount * 2); { embedded peak }
+    if (LTupIdx and $4000) <> 0 then Inc(LHdrSize, FGvarAxisCount * 4); { intermediate }
+    Inc(LHdrOff, LHdrSize);
+  end;
+
+  { Step 2: parse shared packed point numbers at LSerialPos (data offset position).
+    Even a 0-byte count (1 byte consumed) means "all points". }
+  if LTupleHasSharedPts then
+  begin
+    LSerialPos := ParsePtNums(LSerialPos);
+    if LPtNumCount > 0 then
+    begin
+      SetLength(LSharedPtNums, LPtNumCount);
+      for LJ := 0 to LPtNumCount - 1 do
+        LSharedPtNums[LJ] := LPtNums[LJ];
+      LSharedPtNumCount := LPtNumCount;
+    end
+    else
+      LSharedPtNumCount := 0;
+    LSharedPtParsed := True;
+  end;
+
+  { Step 3: re-scan tuple headers and process delta data }
+  LHdrOff := LDataStart + 4;
+  LSerialPos := LDataStart + LDataOff;
+  for LI := 0 to LTupleCount - 1 do
+  begin
+    if (LHdrOff < 0) or (LHdrOff + 4 > FDataLength) then Break;
+
+    { TupleVariationHeader }
+    LTupSize := ReadUInt16BE(LHdrOff) and $7FFF;
+    LTupIdx := ReadUInt16BE(LHdrOff + 2);
+
+    LEmbeddedPeak := (LTupIdx and $8000) <> 0;
+    LIntermediate := (LTupIdx and $4000) <> 0;
+    LPrivatePts := (LTupIdx and $2000) <> 0;
+    LSharedIdx := LTupIdx and $0FFF;
+
+    LHdrSize := 4;
+
+    { Peak values (F2.14 / 16384.0) }
+    SetLength(LPeak, FGvarAxisCount);
+    if LEmbeddedPeak then
+    begin
+      for LJ := 0 to FGvarAxisCount - 1 do
+        LPeak[LJ] := SmallInt(ReadUInt16BE(LHdrOff + LHdrSize + LJ * 2)) / 16384.0;
+      Inc(LHdrSize, FGvarAxisCount * 2);
+    end
+    else if LSharedIdx < FGvarSharedTupleCount then
+    begin
+      for LJ := 0 to FGvarAxisCount - 1 do
+        LPeak[LJ] := FGvarSharedTuples[LSharedIdx][LJ] / 16384.0;
+    end
+    else
+    begin
+      for LJ := 0 to FGvarAxisCount - 1 do
+        LPeak[LJ] := 0;
+    end;
+
+    { Intermediate region: start / end }
+    SetLength(LStartR, FGvarAxisCount);
+    SetLength(LEndR, FGvarAxisCount);
+    if LIntermediate then
+    begin
+      for LJ := 0 to FGvarAxisCount - 1 do
+        LStartR[LJ] := SmallInt(ReadUInt16BE(LHdrOff + LHdrSize + LJ * 2)) / 16384.0;
+      Inc(LHdrSize, FGvarAxisCount * 2);
+      for LJ := 0 to FGvarAxisCount - 1 do
+        LEndR[LJ] := SmallInt(ReadUInt16BE(LHdrOff + LHdrSize + LJ * 2)) / 16384.0;
+      Inc(LHdrSize, FGvarAxisCount * 2);
+    end
+    else
+    begin
+      { Non-intermediate: start at normalized default (0.0), end at peak }
+      for LJ := 0 to FGvarAxisCount - 1 do
+      begin
+        LStartR[LJ] := 0.0;
+        LEndR[LJ] := LPeak[LJ];
+      end;
+    end;
+
+    { Compute tuple scalar }
+    LScalar := 1.0;
+    for LJ := 0 to FGvarAxisCount - 1 do
+    begin
+      if LJ >= Length(ACoords) then Break;
+      if LPeak[LJ] = 0 then Continue;
+      LCoord := ACoords[LJ];
+      if LCoord = LPeak[LJ] then Continue  { at peak → scalar unchanged }
+      else if (LCoord < LStartR[LJ]) or (LCoord > LEndR[LJ]) then LScalar := 0
+      else if LCoord < LPeak[LJ] then
+      begin
+        if LPeak[LJ] <> LStartR[LJ] then
+          LScalar := LScalar * (LCoord - LStartR[LJ]) / (LPeak[LJ] - LStartR[LJ]);
+      end
+      else if LCoord > LPeak[LJ] then
+      begin
+        if LEndR[LJ] <> LPeak[LJ] then
+          LScalar := LScalar * (LEndR[LJ] - LCoord) / (LEndR[LJ] - LPeak[LJ]);
+      end;
+    end;
+
+    if LScalar = 0 then
+    begin
+      Inc(LHdrOff, LHdrSize);
+      Inc(LSerialPos, LTupSize);
+      Continue;
+    end;
+
+    { Init delta arrays }
+    SetLength(LXDelta, LNumPoints);
+    SetLength(LYDelta, LNumPoints);
+    SetLength(LHasDelta, LNumPoints);
+    FillChar(LXDelta[0], LNumPoints * SizeOf(Single), 0);
+    FillChar(LYDelta[0], LNumPoints * SizeOf(Single), 0);
+    FillChar(LHasDelta[0], LNumPoints, 0);
+
+    { Determine which points have deltas }
+    LAllPts := True;
+    LPtNumCount := 0;
+    LRunPos := LSerialPos;
+    if LPrivatePts then
+    begin
+      LRunPos := ParsePtNums(LSerialPos);
+      LAllPts := (LPtNumCount = 0);
+    end
+    else if LSharedPtParsed and (LSharedPtNumCount > 0) then
+    begin
+      SetLength(LPtNums, LSharedPtNumCount);
+      for LJ := 0 to LSharedPtNumCount - 1 do
+        LPtNums[LJ] := LSharedPtNums[LJ];
+      LPtNumCount := LSharedPtNumCount;
+      LAllPts := False;
+    end;
+
+    { Read delta runs }
+    if LRunPos + 1 > FDataLength then
+    begin
+      Inc(LHdrOff, LHdrSize);
+      Inc(LSerialPos, LTupSize);
+      Continue;
+    end;
+
+    LRunCount := ReadUInt8(LRunPos); Inc(LRunPos);
+    LDeltaIdx := 0;
+
+    for LK := 0 to LRunCount - 1 do
+    begin
+      if LRunPos >= FDataLength then Break;
+      LRunType := ReadUInt8(LRunPos); Inc(LRunPos);
+      LRunLen := (LRunType and $3F) + 1;
+      LXWord := (LRunType and $40) <> 0;
+      LYWord := (LRunType and $80) <> 0;
+
+      { X deltas — all X values first, then all Y }
+      for LM := 0 to LRunLen - 1 do
+      begin
+        if LDeltaIdx + LM >= LNumPoints then Break;
+        if LAllPts then
+        begin
+          if LXWord then
+          begin
+            if LRunPos + 2 <= FDataLength then
+              LXDelta[LDeltaIdx + LM] := SmallInt(ReadUInt16BE(LRunPos));
+            Inc(LRunPos, 2);
+          end
+          else
+          begin
+            if LRunPos < FDataLength then
+              LXDelta[LDeltaIdx + LM] := ShortInt(ReadUInt8(LRunPos));
+            Inc(LRunPos);
+          end;
+          LHasDelta[LDeltaIdx + LM] := True;
+        end
+        else
+        begin
+          if LDeltaIdx + LM >= LPtNumCount then Break;
+          if LXWord then
+          begin
+            if LRunPos + 2 <= FDataLength then
+              LXDelta[LPtNums[LDeltaIdx + LM]] := SmallInt(ReadUInt16BE(LRunPos));
+            Inc(LRunPos, 2);
+          end
+          else
+          begin
+            if LRunPos < FDataLength then
+              LXDelta[LPtNums[LDeltaIdx + LM]] := ShortInt(ReadUInt8(LRunPos));
+            Inc(LRunPos);
+          end;
+          LHasDelta[LPtNums[LDeltaIdx + LM]] := True;
+        end;
+      end;
+      { Y deltas }
+      for LM := 0 to LRunLen - 1 do
+      begin
+        if LDeltaIdx + LM >= LNumPoints then Break;
+        if LAllPts then
+        begin
+          if LYWord then
+          begin
+            if LRunPos + 2 <= FDataLength then
+              LYDelta[LDeltaIdx + LM] := SmallInt(ReadUInt16BE(LRunPos));
+            Inc(LRunPos, 2);
+          end
+          else
+          begin
+            if LRunPos < FDataLength then
+              LYDelta[LDeltaIdx + LM] := ShortInt(ReadUInt8(LRunPos));
+            Inc(LRunPos);
+          end;
+        end
+        else
+        begin
+          if LDeltaIdx + LM >= LPtNumCount then Break;
+          if LYWord then
+          begin
+            if LRunPos + 2 <= FDataLength then
+              LYDelta[LPtNums[LDeltaIdx + LM]] := SmallInt(ReadUInt16BE(LRunPos));
+            Inc(LRunPos, 2);
+          end
+          else
+          begin
+            if LRunPos < FDataLength then
+              LYDelta[LPtNums[LDeltaIdx + LM]] := ShortInt(ReadUInt8(LRunPos));
+            Inc(LRunPos);
+          end;
+        end;
+      end;
+      Inc(LDeltaIdx, LRunLen);
+    end;
+
+    { IUP interpolation for points without explicit deltas }
+    if not LAllPts then
+    begin
+      LPIdx := 0;
+      for LJ := 0 to LNumContours - 1 do
+      begin
+        LEndC := AOutline.ContourEnds[LJ];
+        if LEndC < LPIdx then begin LPIdx := LEndC + 1; Continue; end;
+        LWrapL := LEndC - LPIdx + 1;
+        if LWrapL < 2 then begin LPIdx := LEndC + 1; Continue; end;
+
+        { Find first/last point with delta in this contour }
+        LFirstD := -1;
+        for LK := LPIdx to LEndC do
+          if LHasDelta[LK] then begin LFirstD := LK; Break; end;
+        if LFirstD < 0 then begin LPIdx := LEndC + 1; Continue; end;
+        LLastD := LFirstD;
+        for LK := LEndC downto LPIdx do
+          if LHasDelta[LK] then begin LLastD := LK; Break; end;
+
+        { Interpolate untouched points between first and last delta points }
+        for LK := LFirstD to LLastD do
+        begin
+          if LHasDelta[LK] then Continue;
+          { Find previous delta point (wrapping) }
+          LPrevI := LK - 1;
+          if LPrevI < LPIdx then LPrevI := LEndC;
+          while not LHasDelta[LPrevI] do
+          begin
+            Dec(LPrevI);
+            if LPrevI < LPIdx then LPrevI := LEndC;
+          end;
+          { Find next delta point (wrapping) }
+          LNextI := LK + 1;
+          if LNextI > LEndC then LNextI := LPIdx;
+          while not LHasDelta[LNextI] do
+          begin
+            Inc(LNextI);
+            if LNextI > LEndC then LNextI := LPIdx;
+          end;
+          { X interpolation — distance along contour using X coords }
+          LPrevD := 0;
+          LStartI := LPrevI;
+          while LStartI <> LK do
+          begin
+            LM := LStartI + 1;
+            if LM > LEndC then LM := LPIdx;
+            LPrevD := LPrevD + Abs(AOutline.Points[LM].X - AOutline.Points[LStartI].X);
+            LStartI := LM;
+          end;
+          LNextD := 0;
+          LStartI := LK;
+          while LStartI <> LNextI do
+          begin
+            LM := LStartI + 1;
+            if LM > LEndC then LM := LPIdx;
+            LNextD := LNextD + Abs(AOutline.Points[LM].X - AOutline.Points[LStartI].X);
+            LStartI := LM;
+          end;
+          LTotD := LPrevD + LNextD;
+          if LTotD > 0 then LLam := LPrevD / LTotD else LLam := 0;
+          LXDelta[LK] := LXDelta[LPrevI] + LLam * (LXDelta[LNextI] - LXDelta[LPrevI]);
+          { Y interpolation — distance along contour using Y coords }
+          LPrevD := 0;
+          LStartI := LPrevI;
+          while LStartI <> LK do
+          begin
+            LM := LStartI + 1;
+            if LM > LEndC then LM := LPIdx;
+            LPrevD := LPrevD + Abs(AOutline.Points[LM].Y - AOutline.Points[LStartI].Y);
+            LStartI := LM;
+          end;
+          LNextD := 0;
+          LStartI := LK;
+          while LStartI <> LNextI do
+          begin
+            LM := LStartI + 1;
+            if LM > LEndC then LM := LPIdx;
+            LNextD := LNextD + Abs(AOutline.Points[LM].Y - AOutline.Points[LStartI].Y);
+            LStartI := LM;
+          end;
+          LTotD := LPrevD + LNextD;
+          if LTotD > 0 then LLam := LPrevD / LTotD else LLam := 0;
+          LYDelta[LK] := LYDelta[LPrevI] + LLam * (LYDelta[LNextI] - LYDelta[LPrevI]);
+        end;
+        LPIdx := LEndC + 1;
+      end;
+    end;
+
+    { Apply scaled deltas to outline }
+    for LJ := 0 to LNumPoints - 1 do
+    begin
+      AOutline.Points[LJ].X := AOutline.Points[LJ].X + Round(LXDelta[LJ] * LScalar);
+      AOutline.Points[LJ].Y := AOutline.Points[LJ].Y + Round(LYDelta[LJ] * LScalar);
+    end;
+
+    Inc(LHdrOff, LHdrSize);
+    Inc(LSerialPos, LTupSize);
+  end;
+end;
+
+function TTFontFace.CalcHvarAdvanceDelta(AGlyphIndex: UInt32;
+  const ACoords: array of Single): Single;
+var
+  LOuter, LInner, LItemIdx, LRegionIdx, LI, LJ: Int32;
+  LCoord, LScalar, LPeak, LStart, LEnd: Single;
+  LDelta: Int16;
+begin
+  Result := 0;
+  if not FHvarParsed then Exit;
+
+  { Map glyph to delta set index via DeltaSetIndexMap }
+  if Length(FHvarIndexMap) > 0 then
+  begin
+    if AGlyphIndex >= UInt32(Length(FHvarIndexMap)) then Exit;
+    LOuter := FHvarIndexMap[AGlyphIndex] shr 16;
+    LInner := FHvarIndexMap[AGlyphIndex] and $FFFF;
+  end
+  else
+  begin
+    { No index map: glyph index IS the item index }
+    LOuter := 0;
+    LInner := AGlyphIndex;
+  end;
+
+  if (LOuter < 0) or (LOuter >= Length(FHvarDeltas)) then Exit;
+  if LInner >= FHvarItemCount then Exit;
+
+  { Compute region scalars and accumulate delta }
+  LItemIdx := LInner;
+  LRegionIdx := 0;
+  for LI := 0 to High(FHvarDeltas[LOuter]) do
+  begin
+    if LI >= FHvarItemCount * Length(FHvarRegions) then Break;
+    if LItemIdx * Length(FHvarRegions) + LRegionIdx > High(FHvarDeltas[LOuter]) then Break;
+
+    if LRegionIdx < Length(FHvarRegions) then
+    begin
+      { Compute scalar for this region }
+      LScalar := 1.0;
+      for LJ := 0 to FHvarAxisCount - 1 do
+      begin
+        if LJ >= Length(ACoords) then Break;
+        LCoord := ACoords[LJ] / 16384.0;
+
+        if Length(FHvarRegions[LRegionIdx]) >= (LJ + 1) * 3 then
+        begin
+          LPeak := FHvarRegions[LRegionIdx][LJ * 3 + 2] / 16384.0;
+          LStart := FHvarRegions[LRegionIdx][LJ * 3] / 16384.0;
+          LEnd := FHvarRegions[LRegionIdx][LJ * 3 + 1] / 16384.0;
+        end
+        else
+        begin
+          LPeak := 0; LStart := 0; LEnd := 0;
+        end;
+
+        if Abs(LCoord - LPeak) < 0.00001 then
+          Continue;
+
+        if LPeak < 0 then
+        begin
+          if (LCoord < LPeak) or (LCoord > LStart) then begin LScalar := 0; Break; end;
+          if Abs(LPeak - LStart) < 0.00001 then Continue;
+          LScalar := LScalar * (LCoord - LStart) / (LPeak - LStart);
+        end
+        else
+        begin
+          if (LCoord < LStart) or (LCoord > LPeak) then begin LScalar := 0; Break; end;
+          if Abs(LPeak - LStart) < 0.00001 then Continue;
+          LScalar := LScalar * (LCoord - LStart) / (LPeak - LStart);
+        end;
+      end;
+
+      { Add weighted delta }
+      if (LItemIdx * Length(FHvarRegions) + LRegionIdx <= High(FHvarDeltas[LOuter])) then
+      begin
+        LDelta := FHvarDeltas[LOuter][LItemIdx * Length(FHvarRegions) + LRegionIdx];
+        Result := Result + LScalar * LDelta;
+      end;
+    end;
+
+    Inc(LRegionIdx);
+    if LRegionIdx >= Length(FHvarRegions) then
+    begin
+      LRegionIdx := 0;
+      Inc(LItemIdx);
+      if LItemIdx >= FHvarItemCount then Break;
+    end;
+  end;
+end;
+
+{ -- CFF2 -- }
+
+function TTFontFace.Cff2FontDictCount: Int32;
+begin
+  Result := FCff2FDCount;
+end;
+
+function TTFontFace.GetCff2GlyphFD(AGlyphIndex: UInt32): Int32;
+var
+  LNRanges, LI, LFirst, LNext: Int32;
+begin
+  { FDSelect Format 0: one byte per glyph. Format 3: range-based. }
+  Result := 0;
+  if (FCff2FDCount <= 1) or (AGlyphIndex >= UInt32(FCff2FDSelectGlyphCount)) then
+    Exit;
+  if FCff2FDSelectFormat = 0 then
+  begin
+    if Int32(AGlyphIndex) < Length(FCff2FDSelectData) then
+      Result := FCff2FDSelectData[AGlyphIndex];
+  end
+  else if FCff2FDSelectFormat = 3 then
+  begin
+    { Format 3: nRanges * (first: uint16, fd: uint8) + sentinel first: uint16 }
+    if Length(FCff2FDSelectData) >= 2 then
+    begin
+      LNRanges := (Length(FCff2FDSelectData) - 2) div 3;
+      for LI := 0 to LNRanges - 1 do
+      begin
+        LFirst := (FCff2FDSelectData[LI * 3] shl 8) or FCff2FDSelectData[LI * 3 + 1];
+        LNext := (FCff2FDSelectData[(LI + 1) * 3] shl 8) or FCff2FDSelectData[(LI + 1) * 3 + 1];
+        if (AGlyphIndex >= UInt32(LFirst)) and (AGlyphIndex < UInt32(LNext)) then
+        begin
+          Result := FCff2FDSelectData[LI * 3 + 2];
+          Exit;
+        end;
+      end;
+    end;
+  end;
+end;
+
+function TTFontFace.GetCff2FontDict(AIndex: Int32): TFontCff2FontDict;
+begin
+  Result.PrivateDictOffset := 0;
+  Result.PrivateDictSize := 0;
+  { For multi-FD fonts, we'd need to parse each Font DICT's Private operator.
+    Currently only FD 0 is fully parsed. Return defaults for others. }
 end;
 
 end.

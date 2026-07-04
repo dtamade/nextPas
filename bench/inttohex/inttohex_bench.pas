@@ -1,8 +1,9 @@
 {$mode ObjFPC}{$H+}
 program inttohex_bench;
-uses SysUtils, Classes,
-  nextpas.core.base, nextpas.core.time.base,
-  nextpas.core.bench, nextpas.core.bench.intf;
+uses nextpas.core.base, nextpas.core.time.base,
+  nextpas.core.bench, nextpas.core.bench.intf,
+  nextpas.core.text.conv;
+
 
 const
   N = 500;
@@ -34,11 +35,13 @@ end;
 
 var
   LSuite: IBenchSuite;
+  LResults: IBenchResults;
 begin
-  LSuite := TBenchSuite.Create('IntToHex');
+  LSuite := TBenchSuite.Create('inttohex');
   LSuite.Add('IntToHex64/500', @IntToHexLarge);
   LSuite.Add('IntToHex32/500', @IntToHexSmall);
   LSuite.SetMinSamples(10);
   LSuite.SetMaxIterations(10000);
-  LSuite.Run;
+  LResults := LSuite.Run;
+  WriteLn(LResults.ToBenchStat);
 end.

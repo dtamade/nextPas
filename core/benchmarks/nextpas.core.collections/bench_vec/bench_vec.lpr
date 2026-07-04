@@ -3,7 +3,6 @@ program bench_vec;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.bench,
   nextpas.core.collections.vec;
 

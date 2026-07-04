@@ -2,7 +2,7 @@
 program dedup_bench;
 
 uses
-  SysUtils, Classes, nextpas.core.base,
+  nextpas.core.base,
   nextpas.core.time.base, nextpas.core.bench, nextpas.core.bench.intf,
   nextpas.core.collections.arr.sort,
   nextpas.core.collections.hashmap.swiss.i32i32;
@@ -102,7 +102,7 @@ begin
 end;
 
 var
-  LSuite: TBenchSuite;
+  LSuite: IBenchSuite;
   LResults: IBenchResults;
 begin
   GenData;
@@ -110,7 +110,7 @@ begin
   WriteLn('=== nextPas dedup_bench (', {$I %FPCTARGETCPU%}, '-', {$I %FPCTARGETOS%}, ') ===');
   WriteLn;
 
-  LSuite := TBenchSuite.Create('Dedup');
+  LSuite := TBenchSuite.Create('dedup');
   LSuite.SetMinDuration(TDuration.FromMilliseconds(200)).SetMaxIterations(1000).SetMinSamples(6).SetWarmupIters(3);
   LSuite.Add('SortDedup/100K', @SortDedup_100K);
   LSuite.Add('SortDedup/1M', @SortDedup_1M);

@@ -3,6 +3,12 @@
   String-based call recorder with configurable return values and
   call-count verification.  Not an interface proxy — callers record
   calls manually and retrieve configured return values.
+
+  Thread safety: NOT thread-safe. TMockState uses unsynchronized
+  dynamic arrays (FCalls, FSetups, FCallOrder). Use only within a
+  single test; for parallel tests, each worker must have its own
+  TMock instance.
+
   Usage:
     LMock := TMock.Create;
     LMock.Setup('Bar').Returns('hello');

@@ -3,7 +3,7 @@ program bench_misc;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.bench,
   nextpas.core.collections.skiplist,
   nextpas.core.collections.trie,

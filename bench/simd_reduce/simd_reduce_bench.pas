@@ -2,7 +2,7 @@
 program simd_reduce_bench;
 
 uses
-  SysUtils, Classes, nextpas.core.base,
+  nextpas.core.base,
   nextpas.core.time.base, nextpas.core.bench, nextpas.core.bench.intf,
   nextpas.core.simd.algorithms,
   nextpas.core.simd.arrays.typed;
@@ -139,7 +139,7 @@ begin
 end;
 
 var
-  LSuite: TBenchSuite;
+  LSuite: IBenchSuite;
   LResults: IBenchResults;
 begin
   GenData;
@@ -148,7 +148,7 @@ begin
   WriteLn;
 
   { Suite 1: F32 Sum }
-  LSuite := TBenchSuite.Create('ReduceSumF32');
+  LSuite := TBenchSuite.Create('simd_reduce/f32');
   LSuite.SetMinDuration(TDuration.FromMilliseconds(200)).SetMaxIterations(10000).SetMinSamples(6).SetWarmupIters(3);
   LSuite.Add('Naive/4K', @NaiveSum_F32_4K);
   LSuite.Add('SIMD/4K', @SimdSum_F32_4K);
@@ -161,7 +161,7 @@ begin
   WriteLn;
 
   { Suite 2: F64 Sum }
-  LSuite := TBenchSuite.Create('ReduceSumF64');
+  LSuite := TBenchSuite.Create('simd_reduce/f64');
   LSuite.SetMinDuration(TDuration.FromMilliseconds(200)).SetMaxIterations(10000).SetMinSamples(6).SetWarmupIters(3);
   LSuite.Add('Naive/4K', @NaiveSum_F64_4K);
   LSuite.Add('Naive/64K', @NaiveSum_F64_64K);

@@ -18,7 +18,11 @@ procedure CheckEqual(const AExpected, AActual: string); overload;
 procedure CheckEqual(const AExpected, AActual: Int64); overload;
 procedure CheckEqual(const AExpected, AActual: Boolean); overload;
 procedure CheckEqual(const AExpected, AActual: Pointer); overload;
+procedure CheckEqual(const AExpected, AActual: UInt64); overload;
 { CheckEqual for Double — uses CheckNear (absolute epsilon |a-b| <= AEpsilon).
+  Default epsilon is 1e-10, suitable for small-to-moderate values.
+  For large values (e.g. 1e15+), absolute epsilon is too tight — use
+  CheckNearRel for relative tolerance, or CheckNear with a custom epsilon.
   For floating-point tolerance comparisons, use CheckNear directly. }
 procedure CheckEqual(const AExpected, AActual: Double;
   AEpsilon: Double = 1e-10); overload;
@@ -38,10 +42,13 @@ procedure CheckNotEqual(const AExpected, AActual: string); overload;
 procedure CheckNotEqual(const AExpected, AActual: Int64); overload;
 procedure CheckNotEqual(const AExpected, AActual: Boolean); overload;
 procedure CheckNotEqual(const AExpected, AActual: Pointer); overload;
+procedure CheckNotEqual(const AExpected, AActual: UInt64); overload;
 { CheckNotEqual for Double — uses absolute epsilon |a-b| <= AEpsilon.
   For floating-point tolerance comparisons, use CheckNotNear directly. }
 procedure CheckNotEqual(const AExpected, AActual: Double;
   AEpsilon: Double = 1e-10); overload;
+procedure CheckEqual(const AExpected, AActual: TBytes); overload;
+procedure CheckNotEqual(const AExpected, AActual: TBytes); overload;
 procedure CheckTrue(AValue: Boolean; const AMessage: string = '');
 procedure CheckFalse(AValue: Boolean; const AMessage: string = '');
 procedure CheckNil(AValue: Pointer; const AMessage: string = '');
@@ -118,8 +125,8 @@ procedure CheckSnapshot(const AActual: string;
 implementation
 
 uses
-  Math,       { IsNan for Double comparison NaN guards }
-  SysUtils;   { GetEnvironmentVariable for snapshot update flag }
+  Math,                         { IsNan for Double comparison NaN guards }
+  nextpas.core.platform.env;   { platform_env_get_str for snapshot update flag }
 
 procedure FailWithDefault(const AMessage, ADefaultMsg: string);
 begin
@@ -203,6 +210,13 @@ begin
   if AExpected <> AActual then
     InternalFail('Expected pointer $' + IntToHex(NativeUInt(AExpected), 16) +
       ' but got $' + IntToHex(NativeUInt(AActual), 16));
+end;
+
+procedure CheckEqual(const AExpected, AActual: UInt64);
+begin
+  if AExpected <> AActual then
+    InternalFail('Expected ' + UIntToStr(AExpected) +
+      ' but got ' + UIntToStr(AActual));
 end;
 
 { 3-arg overloads: wrap 2-arg, prepend AMessage on failure }
@@ -336,6 +350,13 @@ begin
       IntToHex(NativeUInt(AActual), 16));
 end;
 
+procedure CheckNotEqual(const AExpected, AActual: UInt64);
+begin
+  if AExpected = AActual then
+    InternalFail('Expected values to differ but both are ' +
+      UIntToStr(AActual));
+end;
+
 procedure CheckNear(const AExpected, AActual: Double;
   const AEpsilon: Double; const AMessage: string);
 var
@@ -435,6 +456,39 @@ begin
   if LDiff <= AEpsilon then
     InternalFail('Expected values to differ but both are ' +
       FloatToStr(AExpected) + ' (+/-' + FloatToStr(AEpsilon) + ')');
+end;
+
+procedure CheckEqual(const AExpected, AActual: TBytes);
+var
+  I: Integer;
+begin
+  if Length(AExpected) <> Length(AActual) then
+    InternalFail('Expected TBytes length ' + IntToStr(Length(AExpected)) +
+      ' but got ' + IntToStr(Length(AActual)));
+  for I := 0 to High(AExpected) do
+    if AExpected[I] <> AActual[I] then
+      InternalFail('TBytes differ at index ' + IntToStr(I) +
+        ': expected $' + IntToHex(AExpected[I], 2) +
+        ' but got $' + IntToHex(AActual[I], 2));
+end;
+
+procedure CheckNotEqual(const AExpected, AActual: TBytes);
+var
+  I: Integer;
+  LDiffer: Boolean;
+begin
+  if Length(AExpected) <> Length(AActual) then
+    Exit; { different lengths = not equal }
+  LDiffer := False;
+  for I := 0 to High(AExpected) do
+    if AExpected[I] <> AActual[I] then
+    begin
+      LDiffer := True;
+      Break;
+    end;
+  if not LDiffer then
+    InternalFail('Expected TBytes to differ but both are identical (' +
+      IntToStr(Length(AExpected)) + ' bytes)');
 end;
 
 procedure CheckTrue(AValue: Boolean; const AMessage: string);
@@ -788,8 +842,8 @@ var
   LPath, LExisting, LUpdateEnv: string;
   LShouldUpdate: Boolean;
 begin
-  LPath := ASnapshotDir + '/' + ASnapshotName;
-  LShouldUpdate := GetEnvironmentVariable('NEXTPAS_UPDATE_SNAPSHOTS') = '1';
+  LPath := ASnapshotDir + DirectorySeparator + ASnapshotName;
+  LShouldUpdate := platform_env_get_str('NEXTPAS_UPDATE_SNAPSHOTS') = '1';
   if ReadFileContents(LPath, LExisting) then
   begin
     if LShouldUpdate then

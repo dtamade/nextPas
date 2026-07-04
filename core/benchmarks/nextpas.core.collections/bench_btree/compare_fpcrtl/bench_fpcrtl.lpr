@@ -1,51 +1,41 @@
 program bench_fpcrtl;
-{$mode objfpc}{$H+}
-uses SysUtils, fgl;
-
-type
-  TIntMap = specialize TFPGMap<Integer, Integer>;
-
-const
-  N = 10000;
-  ITERS = 100;
-
-var
-  i, it: Integer;
-  t1, t2: QWord;
-  M: TIntMap;
-  v: Integer;
-  sink: Int64;
+{$I nextpas.core.settings.inc}{$Q-}{$R-}
+uses nextpas.core.bench, nextpas.core.bench.intf, fgl;
+type TIntMap = specialize TFPGMap<Int64, Int64>;
+const N = 100000;
+var GKeys: array of Int64; GMap: TIntMap;
+procedure InitData;
+var LI: Integer;
 begin
-  WriteLn('=== FPC RTL TFPGMap<Integer,Integer> (N=', N, ') ===');
-  WriteLn;
-
-  // Put
-  t1 := GetTickCount64;
-  for it := 1 to ITERS do
-  begin
-    M := TIntMap.Create;
-    M.Sorted := True;
-    for i := 0 to N - 1 do M.Add(i, i);
-    M.Free;
+  SetLength(GKeys, N);
+  for LI := 0 to N - 1 do GKeys[LI] := Int64(LI) * 7919 + 42;
+  GMap := TIntMap.Create;
+  GMap.Sorted := True;
+end;
+procedure BenchPut(const ACtx: IBenchContext);
+var LI, LIx: Integer;
+begin
+  GMap.Clear;
+  for LI := 0 to N - 1 do begin
+    if GMap.FindIndexOf(GKeys[LI], LIx) < 0 then GMap.Insert(LIx, GKeys[LI], LIx + 1)
+    else GMap.Data[LIx] := LIx + 1;
   end;
-  t2 := GetTickCount64;
-  WriteLn('  Put:    ', (t2-t1)*1000000 div ITERS:10, ' ns/op');
-
-  // Get
-  M := TIntMap.Create;
-  M.Sorted := True;
-  for i := 0 to N - 1 do M.Add(i, i);
-  sink := 0;
-  t1 := GetTickCount64;
-  for it := 1 to ITERS do
-    for i := 0 to N - 1 do
-    begin
-      v := M.KeyData[i];
-      Inc(sink, v);
-    end;
-  t2 := GetTickCount64;
-  WriteLn('  Get:    ', (t2-t1)*1000000 div ITERS:10, ' ns/op');
-  M.Free;
-
-  if sink = 0 then Write('');
+  ACtx.SetAllocs(0);
+end;
+procedure BenchGet(const ACtx: IBenchContext);
+var LI, LIx, LVal: Integer;
+begin
+  for LI := 0 to N - 1 do begin
+    LIx := GMap.IndexOf(GKeys[LI]);
+    if LIx >= 0 then LVal := GMap.Data[LIx];
+  end;
+  ACtx.SetAllocs(0);
+end;
+var LSuite: IBenchSuite;
+begin
+  InitData;
+  LSuite := TBenchSuite.Create('fpcrtl');
+  LSuite.Add('Put', @BenchPut).Add('Get', @BenchGet);
+  WriteLn(LSuite.Run.PrintToConsole);
+  GMap.Free;
 end.

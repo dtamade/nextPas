@@ -12,13 +12,14 @@ program conc_bench;
 
 uses
   cthreads,
-  SysUtils, Classes,
   nextpas.core.base,
   nextpas.core.time.base,
   nextpas.core.bench,
   nextpas.core.bench.intf,
   nextpas.core.bench.parallel,
-  nextpas.core.mem;
+  nextpas.core.mem,
+  nextpas.core.text.conv;
+
 
 const
   OPS_PER_THREAD = 100000;

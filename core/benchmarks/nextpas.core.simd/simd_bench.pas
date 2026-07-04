@@ -1,274 +1,95 @@
 program simd_bench;
-
-{$mode objfpc}{$H+}
-{$I nextpas.core.settings.inc}
-
-uses
-  SysUtils,
-  nextpas.core.simd,
-  nextpas.core.simd.alloc;
-
-const
-  ARRAY_SIZE = 1024 * 1024;  // 1M elements
-  WARMUP_ITERS = 3;
-  BENCH_ITERS = 10;
-  INNER_REPS = 20;  // repeat within each timing window
-
-var
-  GA, GB, GC: PSingle;
-  GDA, GDB: PDouble;
-
-function GetTimeMs: Int64;
+{$I nextpas.core.settings.inc}{$Q-}{$R-}
+uses nextpas.core.bench, nextpas.core.bench.intf,
+  nextpas.core.simd.dispatch, nextpas.core.simd.types,
+  nextpas.core.simd.sse2, nextpas.core.simd.avx2,
+  nextpas.core.simd.scalar_fallback;
+const N = 1024 * 256;
+var GA, GB, GC: array of Single; GD, GE, GF: array of Double;
+procedure InitData;
+var LI: Integer;
 begin
-  Result := GetTickCount64;
-end;
-
-type
-  TBenchResult = record
-    Name: string;
-    OpsPerSec: Double;
-    BytesPerSec: Double;
-    MedianMs: Double;
+  SetLength(GA, N); SetLength(GB, N); SetLength(GC, N);
+  SetLength(GD, N); SetLength(GE, N); SetLength(GF, N);
+  for LI := 0 to N - 1 do begin
+    GA[LI] := 1.0 + LI * 0.001; GB[LI] := 2.0 + LI * 0.002; GC[LI] := 0;
+    GD[LI] := 1.0 + LI * 0.001; GE[LI] := 2.0 + LI * 0.002; GF[LI] := 0;
   end;
-
-var
-  GResults: array[0..31] of TBenchResult;
-  GResultCount: Integer = 0;
-
-procedure RecordResult(const aName: string; aMedianMs: Double; aElementCount: SizeUInt; aBytesPerElement: Integer);
-begin
-  if GResultCount > High(GResults) then Exit;
-  GResults[GResultCount].Name := aName;
-  GResults[GResultCount].MedianMs := aMedianMs;
-  if aMedianMs > 0 then
-  begin
-    GResults[GResultCount].OpsPerSec := (aElementCount / aMedianMs) * 1000.0;
-    GResults[GResultCount].BytesPerSec := (aElementCount * aBytesPerElement / aMedianMs) * 1000.0;
-  end;
-  Inc(GResultCount);
 end;
-
-function MedianOf(const aTimes: array of Int64; aCount: Integer): Double;
-var
-  i, j: Integer;
-  LTmp: Int64;
-  LSorted: array[0..31] of Int64;
+procedure BenchAddF32Scalar(const ACtx: IBenchContext);
+begin TSimdScalarFallback.AddF32(@GA[0], @GB[0], @GC[0], N); ACtx.SetBytes(N * 4 * 3); end;
+procedure BenchAddF32SSE2(const ACtx: IBenchContext);
+begin if not CpuHasSSE2 then begin ACtx.Skip; Exit; end; TSimdSSE2.AddF32(@GA[0], @GB[0], @GC[0], N); ACtx.SetBytes(N * 4 * 3); end;
+procedure BenchAddF32AVX2(const ACtx: IBenchContext);
+begin if not CpuHasAVX2 then begin ACtx.Skip; Exit; end; TSimdAVX2.AddF32(@GA[0], @GB[0], @GC[0], N); ACtx.SetBytes(N * 4 * 3); end;
+procedure BenchMulF32Scalar(const ACtx: IBenchContext);
+begin TSimdScalarFallback.MulF32(@GA[0], @GB[0], @GC[0], N); ACtx.SetBytes(N * 4 * 3); end;
+procedure BenchMulF32SSE2(const ACtx: IBenchContext);
+begin if not CpuHasSSE2 then begin ACtx.Skip; Exit; end; TSimdSSE2.MulF32(@GA[0], @GB[0], @GC[0], N); ACtx.SetBytes(N * 4 * 3); end;
+procedure BenchMulF32AVX2(const ACtx: IBenchContext);
+begin if not CpuHasAVX2 then begin ACtx.Skip; Exit; end; TSimdAVX2.MulF32(@GA[0], @GB[0], @GC[0], N); ACtx.SetBytes(N * 4 * 3); end;
+procedure BenchDotF32Scalar(const ACtx: IBenchContext);
+begin TSimdScalarFallback.DotF32(@GA[0], @GB[0], N); ACtx.SetBytes(N * 4 * 2); end;
+procedure BenchDotF32SSE2(const ACtx: IBenchContext);
+begin if not CpuHasSSE2 then begin ACtx.Skip; Exit; end; TSimdSSE2.DotF32(@GA[0], @GB[0], N); ACtx.SetBytes(N * 4 * 2); end;
+procedure BenchDotF32AVX2(const ACtx: IBenchContext);
+begin if not CpuHasAVX2 then begin ACtx.Skip; Exit; end; TSimdAVX2.DotF32(@GA[0], @GB[0], N); ACtx.SetBytes(N * 4 * 2); end;
+procedure BenchReduceSumF32Scalar(const ACtx: IBenchContext);
+begin TSimdScalarFallback.ReduceSumF32(@GA[0], N); ACtx.SetBytes(N * 4); end;
+procedure BenchReduceSumF32SSE2(const ACtx: IBenchContext);
+begin if not CpuHasSSE2 then begin ACtx.Skip; Exit; end; TSimdSSE2.ReduceSumF32(@GA[0], N); ACtx.SetBytes(N * 4); end;
+procedure BenchReduceSumF32AVX2(const ACtx: IBenchContext);
+begin if not CpuHasAVX2 then begin ACtx.Skip; Exit; end; TSimdAVX2.ReduceSumF32(@GA[0], N); ACtx.SetBytes(N * 4); end;
+procedure BenchAddF64Scalar(const ACtx: IBenchContext);
+begin TSimdScalarFallback.AddF64(@GD[0], @GE[0], @GF[0], N); ACtx.SetBytes(N * 8 * 3); end;
+procedure BenchAddF64SSE2(const ACtx: IBenchContext);
+begin if not CpuHasSSE2 then begin ACtx.Skip; Exit; end; TSimdSSE2.AddF64(@GD[0], @GE[0], @GF[0], N); ACtx.SetBytes(N * 8 * 3); end;
+procedure BenchAddF64AVX2(const ACtx: IBenchContext);
+begin if not CpuHasAVX2 then begin ACtx.Skip; Exit; end; TSimdAVX2.AddF64(@GD[0], @GE[0], @GF[0], N); ACtx.SetBytes(N * 8 * 3); end;
+procedure BenchMulF64Scalar(const ACtx: IBenchContext);
+begin TSimdScalarFallback.MulF64(@GD[0], @GE[0], @GF[0], N); ACtx.SetBytes(N * 8 * 3); end;
+procedure BenchMulF64SSE2(const ACtx: IBenchContext);
+begin if not CpuHasSSE2 then begin ACtx.Skip; Exit; end; TSimdSSE2.MulF64(@GD[0], @GE[0], @GF[0], N); ACtx.SetBytes(N * 8 * 3); end;
+procedure BenchMulF64AVX2(const ACtx: IBenchContext);
+begin if not CpuHasAVX2 then begin ACtx.Skip; Exit; end; TSimdAVX2.MulF64(@GD[0], @GE[0], @GF[0], N); ACtx.SetBytes(N * 8 * 3); end;
+procedure BenchDotF64Scalar(const ACtx: IBenchContext);
+begin TSimdScalarFallback.DotF64(@GD[0], @GE[0], N); ACtx.SetBytes(N * 8 * 2); end;
+procedure BenchDotF64SSE2(const ACtx: IBenchContext);
+begin if not CpuHasSSE2 then begin ACtx.Skip; Exit; end; TSimdSSE2.DotF64(@GD[0], @GE[0], N); ACtx.SetBytes(N * 8 * 2); end;
+procedure BenchDotF64AVX2(const ACtx: IBenchContext);
+begin if not CpuHasAVX2 then begin ACtx.Skip; Exit; end; TSimdAVX2.DotF64(@GD[0], @GE[0], N); ACtx.SetBytes(N * 8 * 2); end;
+procedure BenchReduceSumF64Scalar(const ACtx: IBenchContext);
+begin TSimdScalarFallback.ReduceSumF64(@GD[0], N); ACtx.SetBytes(N * 8); end;
+procedure BenchReduceSumF64SSE2(const ACtx: IBenchContext);
+begin if not CpuHasSSE2 then begin ACtx.Skip; Exit; end; TSimdSSE2.ReduceSumF64(@GD[0], N); ACtx.SetBytes(N * 8); end;
+procedure BenchReduceSumF64AVX2(const ACtx: IBenchContext);
+begin if not CpuHasAVX2 then begin ACtx.Skip; Exit; end; TSimdAVX2.ReduceSumF64(@GD[0], N); ACtx.SetBytes(N * 8); end;
+procedure BenchMinF32Scalar(const ACtx: IBenchContext);
+begin TSimdScalarFallback.MinF32(@GA[0], @GB[0], @GC[0], N); ACtx.SetBytes(N * 4 * 3); end;
+procedure BenchMinF32AVX2(const ACtx: IBenchContext);
+begin if not CpuHasAVX2 then begin ACtx.Skip; Exit; end; TSimdAVX2.MinF32(@GA[0], @GB[0], @GC[0], N); ACtx.SetBytes(N * 4 * 3); end;
+procedure BenchMaxF32Scalar(const ACtx: IBenchContext);
+begin TSimdScalarFallback.MaxF32(@GA[0], @GB[0], @GC[0], N); ACtx.SetBytes(N * 4 * 3); end;
+procedure BenchMaxF32AVX2(const ACtx: IBenchContext);
+begin if not CpuHasAVX2 then begin ACtx.Skip; Exit; end; TSimdAVX2.MaxF32(@GA[0], @GB[0], @GC[0], N); ACtx.SetBytes(N * 4 * 3); end;
+procedure BenchMulScalarF32Scalar(const ACtx: IBenchContext);
+begin TSimdScalarFallback.MulScalarF32(@GA[0], @GB[0], 3.14, N); ACtx.SetBytes(N * 4 * 2); end;
+procedure BenchMulScalarF32AVX2(const ACtx: IBenchContext);
+begin if not CpuHasAVX2 then begin ACtx.Skip; Exit; end; TSimdAVX2.MulScalarF32(@GA[0], @GB[0], 3.14, N); ACtx.SetBytes(N * 4 * 2); end;
+var LSuite: IBenchSuite;
 begin
-  for i := 0 to aCount - 1 do LSorted[i] := aTimes[i];
-  for i := 0 to aCount - 2 do
-    for j := i + 1 to aCount - 1 do
-      if LSorted[j] < LSorted[i] then
-      begin LTmp := LSorted[i]; LSorted[i] := LSorted[j]; LSorted[j] := LTmp; end;
-  Result := LSorted[aCount div 2];
-end;
-
-procedure BenchArrayAddF32;
-var i, r: Integer; t0: Int64; LTimes: array[0..31] of Int64;
-begin
-  for i := 0 to WARMUP_ITERS - 1 do ArrayAddF32(GA, GB, GC, ARRAY_SIZE);
-  for i := 0 to BENCH_ITERS - 1 do
-  begin
-    t0 := GetTimeMs;
-    for r := 0 to INNER_REPS - 1 do
-      ArrayAddF32(GA, GB, GC, ARRAY_SIZE);
-    LTimes[i] := GetTimeMs - t0;
-  end;
-  RecordResult('ArrayAddF32', MedianOf(LTimes, BENCH_ITERS) / INNER_REPS, ARRAY_SIZE, 4);
-end;
-
-procedure BenchArrayMulF32;
-var i, r: Integer; t0: Int64; LTimes: array[0..31] of Int64;
-begin
-  for i := 0 to WARMUP_ITERS - 1 do ArrayMulF32(GA, GB, GC, ARRAY_SIZE);
-  for i := 0 to BENCH_ITERS - 1 do
-  begin
-    t0 := GetTimeMs;
-    for r := 0 to INNER_REPS - 1 do
-      ArrayMulF32(GA, GB, GC, ARRAY_SIZE);
-    LTimes[i] := GetTimeMs - t0;
-  end;
-  RecordResult('ArrayMulF32', MedianOf(LTimes, BENCH_ITERS) / INNER_REPS, ARRAY_SIZE, 4);
-end;
-
-procedure BenchArrayMulScalarF32;
-var i, r: Integer; t0: Int64; LTimes: array[0..31] of Int64;
-begin
-  for i := 0 to WARMUP_ITERS - 1 do ArrayMulScalarF32(GA, GC, ARRAY_SIZE, 2.5);
-  for i := 0 to BENCH_ITERS - 1 do
-  begin
-    t0 := GetTimeMs;
-    for r := 0 to INNER_REPS - 1 do
-      ArrayMulScalarF32(GA, GC, ARRAY_SIZE, 2.5);
-    LTimes[i] := GetTimeMs - t0;
-  end;
-  RecordResult('ArrayMulScalarF32', MedianOf(LTimes, BENCH_ITERS) / INNER_REPS, ARRAY_SIZE, 4);
-end;
-
-procedure BenchReduceSumF32;
-var i, r: Integer; t0: Int64; LTimes: array[0..31] of Int64; LDummy: Single;
-begin
-  for i := 0 to WARMUP_ITERS - 1 do LDummy := ReduceSumF32(GA, ARRAY_SIZE);
-  for i := 0 to BENCH_ITERS - 1 do
-  begin
-    t0 := GetTimeMs;
-    for r := 0 to INNER_REPS - 1 do
-      LDummy := ReduceSumF32(GA, ARRAY_SIZE);
-    LTimes[i] := GetTimeMs - t0;
-  end;
-  if LDummy = -999999 then ;
-  RecordResult('ReduceSumF32', MedianOf(LTimes, BENCH_ITERS) / INNER_REPS, ARRAY_SIZE, 4);
-end;
-
-procedure BenchReduceDotF32;
-var i, r: Integer; t0: Int64; LTimes: array[0..31] of Int64; LDummy: Single;
-begin
-  for i := 0 to WARMUP_ITERS - 1 do LDummy := ReduceDotF32(GA, GB, ARRAY_SIZE);
-  for i := 0 to BENCH_ITERS - 1 do
-  begin
-    t0 := GetTimeMs;
-    for r := 0 to INNER_REPS - 1 do
-      LDummy := ReduceDotF32(GA, GB, ARRAY_SIZE);
-    LTimes[i] := GetTimeMs - t0;
-  end;
-  if LDummy = -999999 then ;
-  RecordResult('ReduceDotF32', MedianOf(LTimes, BENCH_ITERS) / INNER_REPS, ARRAY_SIZE, 4);
-end;
-
-procedure BenchReduceMinF32;
-var i, r: Integer; t0: Int64; LTimes: array[0..31] of Int64; LDummy: Single;
-begin
-  for i := 0 to WARMUP_ITERS - 1 do LDummy := ReduceMinF32(GA, ARRAY_SIZE);
-  for i := 0 to BENCH_ITERS - 1 do
-  begin
-    t0 := GetTimeMs;
-    for r := 0 to INNER_REPS - 1 do
-      LDummy := ReduceMinF32(GA, ARRAY_SIZE);
-    LTimes[i] := GetTimeMs - t0;
-  end;
-  if LDummy = -999999 then ;
-  RecordResult('ReduceMinF32', MedianOf(LTimes, BENCH_ITERS) / INNER_REPS, ARRAY_SIZE, 4);
-end;
-
-procedure BenchReduceMaxF32;
-var i, r: Integer; t0: Int64; LTimes: array[0..31] of Int64; LDummy: Single;
-begin
-  for i := 0 to WARMUP_ITERS - 1 do LDummy := ReduceMaxF32(GA, ARRAY_SIZE);
-  for i := 0 to BENCH_ITERS - 1 do
-  begin
-    t0 := GetTimeMs;
-    for r := 0 to INNER_REPS - 1 do
-      LDummy := ReduceMaxF32(GA, ARRAY_SIZE);
-    LTimes[i] := GetTimeMs - t0;
-  end;
-  if LDummy = -999999 then ;
-  RecordResult('ReduceMaxF32', MedianOf(LTimes, BENCH_ITERS) / INNER_REPS, ARRAY_SIZE, 4);
-end;
-
-procedure BenchArrayAddF64;
-var i, r: Integer; t0: Int64; LTimes: array[0..31] of Int64;
-    LDC: PDouble;
-begin
-  LDC := PDouble(SimdAlloc(ARRAY_SIZE * SizeOf(Double)));
-  for i := 0 to WARMUP_ITERS - 1 do ArrayAddF64(GDA, GDB, LDC, ARRAY_SIZE);
-  for i := 0 to BENCH_ITERS - 1 do
-  begin
-    t0 := GetTimeMs;
-    for r := 0 to INNER_REPS - 1 do
-      ArrayAddF64(GDA, GDB, LDC, ARRAY_SIZE);
-    LTimes[i] := GetTimeMs - t0;
-  end;
-  RecordResult('ArrayAddF64', MedianOf(LTimes, BENCH_ITERS) / INNER_REPS, ARRAY_SIZE, 8);
-  SimdFree(LDC);
-end;
-
-procedure BenchReduceSumF64;
-var i, r: Integer; t0: Int64; LTimes: array[0..31] of Int64; LDummy: Double;
-begin
-  for i := 0 to WARMUP_ITERS - 1 do LDummy := ReduceSumF64(GDA, ARRAY_SIZE);
-  for i := 0 to BENCH_ITERS - 1 do
-  begin
-    t0 := GetTimeMs;
-    for r := 0 to INNER_REPS - 1 do
-      LDummy := ReduceSumF64(GDA, ARRAY_SIZE);
-    LTimes[i] := GetTimeMs - t0;
-  end;
-  if LDummy = -999999 then ;
-  RecordResult('ReduceSumF64', MedianOf(LTimes, BENCH_ITERS) / INNER_REPS, ARRAY_SIZE, 8);
-end;
-
-procedure PrintResults;
-var i: Integer;
-begin
-  WriteLn('{"backend":"', GetCurrentBackendInfo.Name, '","array_size":', ARRAY_SIZE,
-    ',"iters":', BENCH_ITERS, ',"results":[');
-  for i := 0 to GResultCount - 1 do
-  begin
-    Write('  {"name":"', GResults[i].Name, '"');
-    Write(',"median_ms":', GResults[i].MedianMs:0:2);
-    Write(',"ops_per_sec":', GResults[i].OpsPerSec:0:0);
-    Write(',"bytes_per_sec":', GResults[i].BytesPerSec:0:0);
-    Write('}');
-    if i < GResultCount - 1 then WriteLn(',') else WriteLn;
-  end;
-  WriteLn(']}');
-end;
-
-procedure PrintHuman;
-var i: Integer;
-begin
-  WriteLn('SIMD Benchmark — Backend: ', GetCurrentBackendInfo.Name);
-  WriteLn('Array size: ', ARRAY_SIZE, ' elements, ', BENCH_ITERS, ' iterations');
-  WriteLn(StringOfChar('-', 70));
-  WriteLn(Format('%-22s %8s %12s %12s', ['Operation', 'ms', 'Mops/s', 'GB/s']));
-  WriteLn(StringOfChar('-', 70));
-  for i := 0 to GResultCount - 1 do
-    WriteLn(Format('%-22s %8.2f %12.1f %12.2f', [
-      GResults[i].Name,
-      GResults[i].MedianMs,
-      GResults[i].OpsPerSec / 1e6,
-      GResults[i].BytesPerSec / 1e9
-    ]));
-  WriteLn(StringOfChar('-', 70));
-end;
-
-var
-  i: Integer;
-  LJsonMode: Boolean;
-begin
-  LJsonMode := (ParamCount >= 1) and (ParamStr(1) = '--json');
-
-  GA := PSingle(SimdAlloc(ARRAY_SIZE * SizeOf(Single)));
-  GB := PSingle(SimdAlloc(ARRAY_SIZE * SizeOf(Single)));
-  GC := PSingle(SimdAlloc(ARRAY_SIZE * SizeOf(Single)));
-  GDA := PDouble(SimdAlloc(ARRAY_SIZE * SizeOf(Double)));
-  GDB := PDouble(SimdAlloc(ARRAY_SIZE * SizeOf(Double)));
-
-  for i := 0 to ARRAY_SIZE - 1 do
-  begin
-    GA[i] := 1.0 + (i mod 100) * 0.01;
-    GB[i] := 2.0 - (i mod 100) * 0.01;
-    GDA[i] := 1.0 + (i mod 100) * 0.001;
-    GDB[i] := 2.0 - (i mod 100) * 0.001;
-  end;
-
-  BenchArrayAddF32;
-  BenchArrayMulF32;
-  BenchArrayMulScalarF32;
-  BenchReduceSumF32;
-  BenchReduceDotF32;
-  BenchReduceMinF32;
-  BenchReduceMaxF32;
-  BenchArrayAddF64;
-  BenchReduceSumF64;
-
-  if LJsonMode then
-    PrintResults
-  else
-    PrintHuman;
-
-  SimdFree(GA);
-  SimdFree(GB);
-  SimdFree(GC);
-  SimdFree(GDA);
-  SimdFree(GDB);
+  InitData;
+  LSuite := TBenchSuite.Create('simd');
+  LSuite.Add('AddF32/Scalar', @BenchAddF32Scalar).Add('AddF32/SSE2', @BenchAddF32SSE2).Add('AddF32/AVX2', @BenchAddF32AVX2)
+    .Add('MulF32/Scalar', @BenchMulF32Scalar).Add('MulF32/SSE2', @BenchMulF32SSE2).Add('MulF32/AVX2', @BenchMulF32AVX2)
+    .Add('DotF32/Scalar', @BenchDotF32Scalar).Add('DotF32/SSE2', @BenchDotF32SSE2).Add('DotF32/AVX2', @BenchDotF32AVX2)
+    .Add('ReduceSumF32/Scalar', @BenchReduceSumF32Scalar).Add('ReduceSumF32/SSE2', @BenchReduceSumF32SSE2).Add('ReduceSumF32/AVX2', @BenchReduceSumF32AVX2)
+    .Add('AddF64/Scalar', @BenchAddF64Scalar).Add('AddF64/SSE2', @BenchAddF64SSE2).Add('AddF64/AVX2', @BenchAddF64AVX2)
+    .Add('MulF64/Scalar', @BenchMulF64Scalar).Add('MulF64/SSE2', @BenchMulF64SSE2).Add('MulF64/AVX2', @BenchMulF64AVX2)
+    .Add('DotF64/Scalar', @BenchDotF64Scalar).Add('DotF64/SSE2', @BenchDotF64SSE2).Add('DotF64/AVX2', @BenchDotF64AVX2)
+    .Add('ReduceSumF64/Scalar', @BenchReduceSumF64Scalar).Add('ReduceSumF64/SSE2', @BenchReduceSumF64SSE2).Add('ReduceSumF64/AVX2', @BenchReduceSumF64AVX2)
+    .Add('MinF32/Scalar', @BenchMinF32Scalar).Add('MinF32/AVX2', @BenchMinF32AVX2)
+    .Add('MaxF32/Scalar', @BenchMaxF32Scalar).Add('MaxF32/AVX2', @BenchMaxF32AVX2)
+    .Add('MulScalarF32/Scalar', @BenchMulScalarF32Scalar).Add('MulScalarF32/AVX2', @BenchMulScalarF32AVX2);
+  WriteLn(LSuite.Run.PrintToConsole);
 end.

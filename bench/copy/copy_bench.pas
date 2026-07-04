@@ -1,7 +1,6 @@
 program copy_bench;
 {$mode ObjFPC}{$H+}
 uses
-  SysUtils, Classes,
   nextpas.core.base,
   nextpas.core.time.base,
   nextpas.core.bench,

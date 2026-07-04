@@ -1,7 +1,6 @@
 program f64ops_bench;
 {$mode ObjFPC}{$H+}
 uses
-  SysUtils, Classes,
   nextpas.core.base,
   nextpas.core.time.base,
   nextpas.core.bench,
@@ -130,7 +129,7 @@ var
   LSuite: IBenchSuite;
 begin
   InitData;
-  LSuite := TBenchSuite.Create('F64Ops');
+  LSuite := TBenchSuite.Create('f64ops');
   LSuite.Add('EuclideanDist',  @BenchEuclideanDist);
   LSuite.Add('WeightedSum',    @BenchWeightedSum);
   LSuite.Add('ClampNormalize', @BenchClampNormalize);

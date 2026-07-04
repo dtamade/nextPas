@@ -1552,7 +1552,7 @@ end;
 
 var
   Suite: TTestSuite;
-  Runner: TTestSuite;
+  Runner: TSuiteRunner;
   LResults: specialize TArray<TTestRunResult>;
   LSuccess: Boolean;
 begin
@@ -1638,7 +1638,7 @@ begin
   Suite.Test('Hierarchical filter matching',  @TestHierarchicalFilter);
   Suite.Test('GetTopSlowest',                 @TestGetTopSlowest);
 
-  Runner := TTestSuite.Create('output-tests');
+  Runner := TSuiteRunner.Create('output-tests');
   Runner.Add(Suite);
   LSuccess := Runner.RunAllWithResult(LResults);
   WriteLn;

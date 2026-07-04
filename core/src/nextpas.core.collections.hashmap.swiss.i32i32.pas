@@ -6,6 +6,7 @@ interface
 
 uses
   nextpas.core.mem.intf,
+  nextpas.core.mem.allocator.base,
   nextpas.core.errors,
   nextpas.core.simd.base,
   nextpas.core.simd.vec16;
@@ -13,8 +14,7 @@ uses
 const
   CTRL_EMPTY   = Byte($FF);
   CTRL_DELETED = Byte($80);
-  GROUP_SIZE   = 16,
-  nextpas.core.mem.allocator.base;
+  GROUP_SIZE   = 16;
 
 type
   PSwissSlotI32I32 = ^TSwissSlotI32I32;

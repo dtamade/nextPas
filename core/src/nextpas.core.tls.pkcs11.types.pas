@@ -555,9 +555,12 @@ end;
 { EPKCS11Exception }
 
 constructor EPKCS11Exception.Create(const AMessage: string; AReturnValue: CK_RV);
+var
+  LMsg: string;
 begin
-  inherited Create(Format('%s (CKR: 0x%x - %s)', 
-    [AMessage, AReturnValue, PKCS11ReturnValueToString(AReturnValue)]));
+  LMsg := Format('%s (CKR: 0x%x - %s)',
+    [AMessage, AReturnValue, PKCS11ReturnValueToString(AReturnValue)]);
+  inherited Create(LMsg);
   FReturnValue := AReturnValue;
 end;
 

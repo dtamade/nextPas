@@ -1,6 +1,6 @@
 {$mode ObjFPC}{$H+}
 program shortstr_bench;
-uses SysUtils, Classes, nextpas.core.base, nextpas.core.time.base, nextpas.core.bench, nextpas.core.bench.intf;
+uses nextpas.core.base, nextpas.core.time.base, nextpas.core.bench, nextpas.core.bench.intf;
 
 const
   N = 100000;
@@ -58,7 +58,7 @@ var
   LSuite: IBenchSuite;
   LResults: IBenchResults;
 begin
-  LSuite := TBenchSuite.Create('ShortStr')
+  LSuite := TBenchSuite.Create('shortstr')
     .SetMinDuration(TDuration.FromMilliseconds(100))
     .SetMaxIterations(10000)
     .SetMinSamples(6)

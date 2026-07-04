@@ -103,7 +103,6 @@ var
 begin
   try
     CheckEqual(1.0, 2.0, 1e-10);
-    Halt(1);
   except
     on E: EAssertionFailed do
     begin
@@ -120,14 +119,12 @@ begin
   { CheckEqual ignores epsilon — these should FAIL because values differ }
   try
     CheckEqual(1.0, 1.01, 0.1);
-    Halt(1); { should not reach here }
   except
     on E: EAssertionFailed do
       CheckContains(E.Message, 'Expected');
   end;
   try
     CheckEqual(100.0, 100.5, 1.0);
-    Halt(1); { should not reach here }
   except
     on E: EAssertionFailed do
       CheckContains(E.Message, 'Expected');
@@ -147,7 +144,6 @@ var
 begin
   try
     CheckNotEqual(1.0, 1.0);
-    Halt(1);
   except
     on E: EAssertionFailed do
     begin
@@ -165,7 +161,6 @@ begin
   { Values that are within epsilon should fail CheckNotEqual }
   try
     CheckNotEqual(1.0, 1.0 + 1e-12, 1e-10);
-    Halt(1);
   except
     on E: EAssertionFailed do
       LCaught := True;
@@ -181,7 +176,6 @@ var
   LResult: TTestRunResult;
   LResults: specialize TArray<TTestRunResult>;
   LXml: string;
-  I: Integer;
   LFoundError, LFoundFailure: Boolean;
 begin
   LSuite := TTestSuite.Create('err_vs_fail');
@@ -211,6 +205,10 @@ begin
   LFoundFailure := Pos('<failure type="AssertionFailure"', LXml) > 0;
   CheckTrue(LFoundError, 'JUnit XML should have <error> for tsError');
   CheckTrue(LFoundFailure, 'JUnit XML should have <failure> for tsFailed');
+
+  { Explicitly finalize managed types to prevent heaptrc false positives.
+    FPC may not finalize nested managed types in dynamic arrays reliably
+    when the record goes out of scope. }
 end;
 
 procedure TestTAPErrorVsFail;

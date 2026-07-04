@@ -56,6 +56,7 @@ procedure SetBearerAuth(const AHeaders: IHttpHeaders; const AToken: string);
 implementation
 
 uses
+  SysUtils,
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.encoding;
