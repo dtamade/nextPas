@@ -121,7 +121,7 @@ type
     function AddBaselines(const ABaselines: array of TBenchBaseline): IBenchSuite;
     function LoadBaseline(const APath: string): IBenchSuite;
     function SetFilter(const AFilter: string): IBenchSuite;
-    function SetTimeout(ATimeoutMs: Cardinal): IBenchSuite;
+    function SetTimeout(ATimeoutMs: Int64): IBenchSuite;
     function Run: IBenchResults;
   end;
 
@@ -634,7 +634,7 @@ begin
   FFilter := AFilter;
 end;
 
-function TBenchSuite.SetTimeout(ATimeoutMs: Cardinal): IBenchSuite;
+function TBenchSuite.SetTimeout(ATimeoutMs: Int64): IBenchSuite;
 begin
   GuardNotRun;
   Result := Self;

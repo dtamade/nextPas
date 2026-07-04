@@ -206,30 +206,39 @@ type
     {** 设置安静模式 }
     function SetQuiet(AQuiet: Boolean): IBenchSuite;
 
-    {** 添加基线（ns/op，Double 精度） }
+    {** 添加基线（ns/op，Double 精度）。
+     *  适用场景：已有外部工具（如 benchstat）导出的 ns/op 数据。
+     *  对比时只能使用 ratio 启发式（无 StdDev/SampleCount）。 }
     function AddBaseline(const AName: string; ANsPerOp: Double): IBenchSuite;
 
     {** 添加基线（TDuration 便利重载，ST-05）。
      *  内部转换为 Double ns/op，与 Double 版本共存。 }
     function AddBaseline(const AName: string; ANsPerOp: TDuration): IBenchSuite;
 
-    {** 添加完整基线数据（包含 BytesPerOp/AllocsPerOp/GitHash 等） }
+    {** 添加完整基线数据（包含 BytesPerOp/AllocsPerOp/GitHash 等）。
+     *  适用场景：从 SaveBaseline 导出的 JSON 加载，或手动构建完整基线。 }
     function AddBaselineData(const ABaseline: TBaselineData): IBenchSuite;
 
-    {** 批量添加基线 (ST-06) }
+    {** 批量添加基线 (ST-06)。
+     *  适用场景：一次加载多个基线进行矩阵对比。 }
     function AddBaselines(const ABaselines: array of TBaselineData): IBenchSuite;
 
-    {** 加载基线文件
+    {** 加载基线文件（JSON 格式）。
+     *  适用场景：从 CI 产物加载历史基线。
      *  @raises EBenchBaselineNotFound 当文件不存在时
      *  @raises EBenchError 当文件格式错误时 }
     function LoadBaseline(const APath: string): IBenchSuite;
 
-    {** 设置过滤条件 }
+    {** 设置过滤条件（子串匹配或 glob 模式）。
+     *  包含 * 或 ? 时使用 glob 匹配（如 'Sort*'、'Hash??'），
+     *  否则使用子串匹配（如 'Sort' 匹配所有含 'Sort' 的名称）。
+     *  匹配不区分大小写。 }
     function SetFilter(const AFilter: string): IBenchSuite;
 
     {** 设置整体超时（毫秒），超时后跳过剩余 benchmark (ST-04)。
-     *  0 = 不超时（默认）。超时在 benchmark 条目之间检查，不中断正在执行的条目。 }
-    function SetTimeout(ATimeoutMs: Cardinal): IBenchSuite;
+     *  0 = 不超时（默认）。超时在 benchmark 条目之间检查，不中断正在执行的条目。
+     *  F-05: 参数类型统一为 Int64（与 TBenchEntry.TimeoutMs 一致）。 }
+    function SetTimeout(ATimeoutMs: Int64): IBenchSuite;
 
     {** 运行基准测试 }
     function Run: IBenchResults;
