@@ -105,19 +105,20 @@ type
   TBenchSetupFunc = function: Pointer;
   TBenchTeardownFunc = procedure(AData: Pointer);
 
-  {** 基准条目 - 单个基准测试的定义 }
+  {** 基准条目 - 单个基准测试的定义
+   *  F-015: 为所有字段添加文档 }
   TBenchEntry = record
-    Name: string;
-    Func: TBenchFunc;
-    ParamFunc: TBenchParamFunc;
-    ParamValue: Int64;
-    IsLoop: Boolean;
-    LoopFunc: TBenchLoopFunc;
-    Setup: TBenchSetupFunc;
-    Teardown: TBenchTeardownFunc;
-    Condition: Boolean;
-    EnableParallel: Boolean;
-    ParallelThreads: Integer;
+    Name: string;            {< 基准测试名称，用于报告和过滤 }
+    Func: TBenchFunc;        {< 标准基准函数（框架控制迭代） }
+    ParamFunc: TBenchParamFunc; {< 参数化基准函数 }
+    ParamValue: Int64;       {< 传递给 ParamFunc 的参数值 }
+    IsLoop: Boolean;         {< true = 用户控制循环（LoopFunc），false = 框架控制 }
+    LoopFunc: TBenchLoopFunc; {< 用户控制循环的基准函数 }
+    Setup: TBenchSetupFunc;  {< 每次迭代前调用，返回上下文数据 }
+    Teardown: TBenchTeardownFunc; {< 每次迭代后调用，释放 Setup 返回的数据 }
+    Condition: Boolean;      {< false 时跳过此条目（用于条件基准） }
+    EnableParallel: Boolean; {< true 时使用 ParallelThreads 个线程并行执行 }
+    ParallelThreads: Integer; {< 并行线程数，0 = 使用默认值 (CPU 核心数) }
   end;
 
   {** 基准套件接口 - Fluent Builder }

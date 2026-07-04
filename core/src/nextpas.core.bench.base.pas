@@ -141,7 +141,7 @@ type
     BaselineNsPerOp: Double;
     Ratio: Double;              // current / baseline
     IsSignificant: Boolean;     // 阈值启发式：|Ratio-1| > BENCH_MATRIX_DIFF_THRESHOLD
-    PValue: Double;             // 当前为阈值（非真实 p-value），baseline 无原始样本
+    SignificanceThreshold: Double; { F-014: was PValue, renamed for clarity (not a real p-value) }
   end;
 
   {** 矩阵行：一个 benchmark 对所有 baselines 的对比 }

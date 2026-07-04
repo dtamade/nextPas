@@ -405,6 +405,9 @@ begin
   Result.NsPerOp := LMean * LMultiplier;
   Result.Median := Result.NsPerOp;
   Result.StdDev := 0;
+  { F-016: Rust provides [lower, mean, upper] CI. Use upper as P95 approx.
+    Go/FPC only provide mean, so P95 = mean there. This is a cross-format
+    limitation: P95 semantics differ between parsers. }
   Result.P95 := LUpper * LMultiplier;
   Result.P99 := Result.P95;
   Result.Outliers := 0;
