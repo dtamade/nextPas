@@ -5,14 +5,14 @@ program test_xid_counter_wrap_contract;
 uses
   nextpas.core.base,
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.id.xid,
   nextpas.core.platform.random,
   nextpas.core.platform.thread,
   nextpas.core.platform.time;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestCounterWrapDoesNotRegressOrdering;
 var
@@ -60,8 +60,8 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.id.xid.counter_wrap_contract');
-  T.Run('counter wrap preserves ordering', @TestCounterWrapDoesNotRegressOrdering);
-  T.Run('realtime above XID range fails fast', @TestRealtimeAboveXidRangeFailsFast);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.id.xid.counter_wrap_contract');
+  T.Test('counter wrap preserves ordering', @TestCounterWrapDoesNotRegressOrdering);
+  T.Test('realtime above XID range fails fast', @TestRealtimeAboveXidRangeFailsFast);
+  if not T.Run then Halt(1);
 end.

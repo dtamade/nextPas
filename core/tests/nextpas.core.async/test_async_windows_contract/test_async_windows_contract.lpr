@@ -5,10 +5,10 @@ program test_async_windows_contract;
 uses
   Classes,
   SysUtils,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ExpandRepoPath(const ARelativePath: string): string;
 begin
@@ -120,9 +120,9 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.async.windows_contract');
-  T.Run('async facade re-export contract', @TestAsyncFacadeReExportContract);
-  T.Run('async Windows compile gate contract',
+  T := TTestSuite.Create('nextpas.core.async.windows_contract');
+  T.Test('async facade re-export contract', @TestAsyncFacadeReExportContract);
+  T.Test('async Windows compile gate contract',
     @TestAsyncWindowsCompileGateContract);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

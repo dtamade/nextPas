@@ -4,10 +4,10 @@ program test_tui_color;
 
 uses
   nextpas.core.tui.color,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestConstructors;
 var
@@ -59,13 +59,11 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.color');
-  T.Run('constructors', @TestConstructors);
-  T.Run('equality', @TestEquality);
-  T.Run('is set', @TestIsSet);
-  T.Run('named colors', @TestNamedColors);
-  T.Run('size 4 bytes', @TestSize);
-  T.Summary;
-  if not T.AllPassed then
-    Halt(1);
+  T := TTestSuite.Create('nextpas.core.tui.color');
+  T.Test('constructors', @TestConstructors);
+  T.Test('equality', @TestEquality);
+  T.Test('is set', @TestIsSet);
+  T.Test('named colors', @TestNamedColors);
+  T.Test('size 4 bytes', @TestSize);
+  if not T.Run then Halt(1);
 end.

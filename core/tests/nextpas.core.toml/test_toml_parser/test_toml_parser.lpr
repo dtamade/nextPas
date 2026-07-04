@@ -10,10 +10,10 @@ uses
   nextpas.core.mem.default,
   nextpas.core.toml.base,
   nextpas.core.toml.parser,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 const
   TOML_PARSER_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.toml.parser.pas';
@@ -873,55 +873,54 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.toml.parser');
-  T.Run('empty input', @TestEmptyInput);
-  T.Run('comments only', @TestCommentsOnly);
-  T.Run('comment control characters', @TestCommentControlCharacters);
-  T.Run('simple string', @TestSimpleString);
-  T.Run('simple integer', @TestSimpleInteger);
-  T.Run('negative integer', @TestNegativeInteger);
-  T.Run('hex integer', @TestHexInteger);
-  T.Run('oct integer', @TestOctInteger);
-  T.Run('bin integer', @TestBinInteger);
-  T.Run('integer underscores', @TestIntegerWithUnderscores);
-  T.Run('float', @TestFloat);
-  T.Run('float exponent', @TestFloatExponent);
-  T.Run('float inf', @TestFloatInf);
-  T.Run('float -inf', @TestFloatNegInf);
-  T.Run('float nan', @TestFloatNan);
-  T.Run('bool true', @TestBoolTrue);
-  T.Run('bool false', @TestBoolFalse);
-  T.Run('multiple keys', @TestMultipleKeys);
-  T.Run('table', @TestTable);
-  T.Run('nested table', @TestNestedTable);
-  T.Run('dotted key', @TestDottedKey);
-  T.Run('dotted key path depth boundary',
+  T := TTestSuite.Create('nextpas.core.toml.parser');
+  T.Test('empty input', @TestEmptyInput);
+  T.Test('comments only', @TestCommentsOnly);
+  T.Test('comment control characters', @TestCommentControlCharacters);
+  T.Test('simple string', @TestSimpleString);
+  T.Test('simple integer', @TestSimpleInteger);
+  T.Test('negative integer', @TestNegativeInteger);
+  T.Test('hex integer', @TestHexInteger);
+  T.Test('oct integer', @TestOctInteger);
+  T.Test('bin integer', @TestBinInteger);
+  T.Test('integer underscores', @TestIntegerWithUnderscores);
+  T.Test('float', @TestFloat);
+  T.Test('float exponent', @TestFloatExponent);
+  T.Test('float inf', @TestFloatInf);
+  T.Test('float -inf', @TestFloatNegInf);
+  T.Test('float nan', @TestFloatNan);
+  T.Test('bool true', @TestBoolTrue);
+  T.Test('bool false', @TestBoolFalse);
+  T.Test('multiple keys', @TestMultipleKeys);
+  T.Test('table', @TestTable);
+  T.Test('nested table', @TestNestedTable);
+  T.Test('dotted key', @TestDottedKey);
+  T.Test('dotted key path depth boundary',
     @TestDottedKeyPathDepthBoundary);
-  T.Run('table path depth boundary',
+  T.Test('table path depth boundary',
     @TestTablePathDepthBoundary);
-  T.Run('array table path depth boundary',
+  T.Test('array table path depth boundary',
     @TestArrayTablePathDepthBoundary);
-  T.Run('array', @TestArray);
-  T.Run('inline table', @TestInlineTable);
-  T.Run('inline table dotted key path depth boundary',
+  T.Test('array', @TestArray);
+  T.Test('inline table', @TestInlineTable);
+  T.Test('inline table dotted key path depth boundary',
     @TestInlineTableDottedKeyPathDepthBoundary);
-  T.Run('literal string', @TestLiteralString);
-  T.Run('escaped string', @TestEscapedString);
-  T.Run('raw DEL control char in strings', @TestRawDelControlCharInStrings);
-  T.Run('quoted key', @TestQuotedKey);
-  T.Run('datetime offset', @TestDateTimeOffset);
-  T.Run('local date', @TestLocalDate);
-  T.Run('local time', @TestLocalTime);
-  T.Run('array table', @TestArrayTable);
-  T.Run('duplicate key reject', @TestDuplicateKeyReject);
-  T.Run('trailing comma array', @TestTrailingCommaArray);
-  T.Run('comment after value', @TestCommentAfterValue);
-  T.Run('node growth OOM fails closed', @TestNodeGrowthOOMFailsClosed);
-  T.Run('owned buffer growth OOM fails closed',
+  T.Test('literal string', @TestLiteralString);
+  T.Test('escaped string', @TestEscapedString);
+  T.Test('raw DEL control char in strings', @TestRawDelControlCharInStrings);
+  T.Test('quoted key', @TestQuotedKey);
+  T.Test('datetime offset', @TestDateTimeOffset);
+  T.Test('local date', @TestLocalDate);
+  T.Test('local time', @TestLocalTime);
+  T.Test('array table', @TestArrayTable);
+  T.Test('duplicate key reject', @TestDuplicateKeyReject);
+  T.Test('trailing comma array', @TestTrailingCommaArray);
+  T.Test('comment after value', @TestCommentAfterValue);
+  T.Test('node growth OOM fails closed', @TestNodeGrowthOOMFailsClosed);
+  T.Test('owned buffer growth OOM fails closed',
     @TestOwnedBufferGrowthOOMFailsClosed);
-  T.Run('init allocate OOM sets error', @TestInitAllocateOOMSetsError);
-  T.Run('parser source tracks OOM and init guards',
+  T.Test('init allocate OOM sets error', @TestInitAllocateOOMSetsError);
+  T.Test('parser source tracks OOM and init guards',
     @TestParserSourceTracksOOMAndInitGuards);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  if not T.Run then Halt(1);
 end.

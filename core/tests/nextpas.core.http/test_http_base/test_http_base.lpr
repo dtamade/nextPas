@@ -5,12 +5,12 @@ program test_http_base;
 uses
   SysUtils,
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.http.base;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestHttpMethodToStr;
 begin
@@ -396,31 +396,31 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.http.base');
-  T.Run('HttpMethodToStr', @TestHttpMethodToStr);
-  T.Run('HttpStrToMethod', @TestHttpStrToMethod);
-  T.Run('EHttpError category', @TestHttpErrorCategory);
-  T.Run('HttpStatusText', @TestHttpStatusText);
-  T.Run('HttpStatus class helpers', @TestHttpStatusClassHelpers);
-  T.Run('HttpVersionToStr', @TestHttpVersionToStr);
-  T.Run('TUrl.Parse full URL', @TestUrlParseFullUrl);
-  T.Run('TUrl.Parse with userinfo', @TestUrlParseWithUserInfo);
-  T.Run('TUrl.Parse relative path', @TestUrlParseRelativePath);
-  T.Run('TUrl.Parse with port', @TestUrlParseWithPort);
-  T.Run('TUrl.Parse invalid port raises', @TestUrlParseInvalidPortRaises);
-  T.Run('TUrl.Parse empty raises', @TestUrlParseEmptyRaises);
-  T.Run('TUrl.ToString round-trip', @TestUrlToString);
-  T.Run('TUrl.HostPort', @TestUrlHostPort);
-  T.Run('TUrl.Parse IPv6', @TestUrlParseIPv6);
-  T.Run('TUrl.ParseRequestTarget origin-form', @TestUrlParseRequestTargetOriginForm);
-  T.Run('TUrl.ParseRequestTarget path-only', @TestUrlParseRequestTargetPathOnly);
-  T.Run('TUrl.ParseRequestTarget absolute-form', @TestUrlParseRequestTargetAbsoluteForm);
-  T.Run('TUrl.ParseRequestTarget asterisk-form', @TestUrlParseRequestTargetAsteriskForm);
-  T.Run('TUrl.ParseRequestTarget authority-form', @TestUrlParseRequestTargetAuthorityForm);
-  T.Run('TUrl.ParseRequestTarget scheme-like origin-form', @TestUrlParseRequestTargetOriginFormWithSchemeLikePath);
-  T.Run('TUrl.ParseRequestTarget empty raises', @TestUrlParseRequestTargetEmptyRaises);
-  T.Run('THttpClientOptions.Default', @TestHttpClientOptionsDefault);
-  T.Run('THttpServerOptions.Default', @TestHttpServerOptionsDefault);
-  T.Run('HTTP options WithVersion', @TestHttpOptionsWithVersion);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.http.base');
+  T.Test('HttpMethodToStr', @TestHttpMethodToStr);
+  T.Test('HttpStrToMethod', @TestHttpStrToMethod);
+  T.Test('EHttpError category', @TestHttpErrorCategory);
+  T.Test('HttpStatusText', @TestHttpStatusText);
+  T.Test('HttpStatus class helpers', @TestHttpStatusClassHelpers);
+  T.Test('HttpVersionToStr', @TestHttpVersionToStr);
+  T.Test('TUrl.Parse full URL', @TestUrlParseFullUrl);
+  T.Test('TUrl.Parse with userinfo', @TestUrlParseWithUserInfo);
+  T.Test('TUrl.Parse relative path', @TestUrlParseRelativePath);
+  T.Test('TUrl.Parse with port', @TestUrlParseWithPort);
+  T.Test('TUrl.Parse invalid port raises', @TestUrlParseInvalidPortRaises);
+  T.Test('TUrl.Parse empty raises', @TestUrlParseEmptyRaises);
+  T.Test('TUrl.ToString round-trip', @TestUrlToString);
+  T.Test('TUrl.HostPort', @TestUrlHostPort);
+  T.Test('TUrl.Parse IPv6', @TestUrlParseIPv6);
+  T.Test('TUrl.ParseRequestTarget origin-form', @TestUrlParseRequestTargetOriginForm);
+  T.Test('TUrl.ParseRequestTarget path-only', @TestUrlParseRequestTargetPathOnly);
+  T.Test('TUrl.ParseRequestTarget absolute-form', @TestUrlParseRequestTargetAbsoluteForm);
+  T.Test('TUrl.ParseRequestTarget asterisk-form', @TestUrlParseRequestTargetAsteriskForm);
+  T.Test('TUrl.ParseRequestTarget authority-form', @TestUrlParseRequestTargetAuthorityForm);
+  T.Test('TUrl.ParseRequestTarget scheme-like origin-form', @TestUrlParseRequestTargetOriginFormWithSchemeLikePath);
+  T.Test('TUrl.ParseRequestTarget empty raises', @TestUrlParseRequestTargetEmptyRaises);
+  T.Test('THttpClientOptions.Default', @TestHttpClientOptionsDefault);
+  T.Test('THttpServerOptions.Default', @TestHttpServerOptionsDefault);
+  T.Test('HTTP options WithVersion', @TestHttpOptionsWithVersion);
+  if not T.Run then Halt(1);
 end.

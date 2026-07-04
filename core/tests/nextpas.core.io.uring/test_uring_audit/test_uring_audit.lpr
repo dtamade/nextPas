@@ -4,14 +4,14 @@ program test_uring_audit;
 
 uses
   SysUtils, BaseUnix,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.platform.posix.base,
   nextpas.core.platform.linux.modern,
   nextpas.core.io.uring,
   nextpas.core.io.reactor;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GCallbackCount: Int32;
   GLastResult: Int32;
 
@@ -284,20 +284,20 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.io.uring.audit');
-  T.Run('Create/Close multiple', @TestCreateCloseMultiple);
-  T.Run('Double close', @TestDoubleClose);
-  T.Run('Submit empty', @TestSubmitEmpty);
-  T.Run('Pool recycling 50', @TestPoolRecycling50);
-  T.Run('Read/Write zero bytes', @TestReadWriteZeroBytes);
-  T.Run('Read/Write 64KB', @TestReadWriteLargeBlock);
-  T.Run('Read bad fd', @TestReadBadFd);
-  T.Run('Reactor stress 100', @TestReactorStress100);
-  T.Run('Reactor batch 32', @TestReactorBatchSubmit);
-  T.Run('Reactor free-list 200', @TestReactorFreeListReuse);
-  T.Run('Reactor context preserved', @TestReactorContextPreserved);
-  T.Run('Reactor close no leak', @TestReactorClosedNoLeak);
-  T.Run('Ring invalid size', @TestRingInvalidSize);
-  T.Run('User data max value', @TestUserDataMaxValue);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.io.uring.audit');
+  T.Test('Create/Close multiple', @TestCreateCloseMultiple);
+  T.Test('Double close', @TestDoubleClose);
+  T.Test('Submit empty', @TestSubmitEmpty);
+  T.Test('Pool recycling 50', @TestPoolRecycling50);
+  T.Test('Read/Write zero bytes', @TestReadWriteZeroBytes);
+  T.Test('Read/Write 64KB', @TestReadWriteLargeBlock);
+  T.Test('Read bad fd', @TestReadBadFd);
+  T.Test('Reactor stress 100', @TestReactorStress100);
+  T.Test('Reactor batch 32', @TestReactorBatchSubmit);
+  T.Test('Reactor free-list 200', @TestReactorFreeListReuse);
+  T.Test('Reactor context preserved', @TestReactorContextPreserved);
+  T.Test('Reactor close no leak', @TestReactorClosedNoLeak);
+  T.Test('Ring invalid size', @TestRingInvalidSize);
+  T.Test('User data max value', @TestUserDataMaxValue);
+  if not T.Run then Halt(1);
 end.

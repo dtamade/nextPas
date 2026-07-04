@@ -4,7 +4,7 @@ program test_swiss_adapter;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections.hashmap.intf,
   nextpas.core.collections.hashmap.swiss.adapter;
 
@@ -14,7 +14,7 @@ type
   IIntMap = specialize IHashMap<Integer, Integer>;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestPutGet;
 var M: TIntMap; v: Integer;
@@ -224,21 +224,21 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.swiss_adapter');
-  T.Run('Put/Get', @TestPutGet);
-  T.Run('Add', @TestAdd);
-  T.Run('AddOrAssign', @TestAddOrAssign);
-  T.Run('Remove', @TestRemove);
-  T.Run('Get (+ exception)', @TestGet);
-  T.Run('GetOrInsert', @TestGetOrInsert);
-  T.Run('GetOrInsertWith', @TestGetOrInsertWith);
-  T.Run('ModifyOrInsert', @TestModifyOrInsert);
-  T.Run('Retain', @TestRetain);
-  T.Run('Reserve', @TestReserve);
-  T.Run('Capacity/LoadFactor', @TestCapacityLoadFactor);
-  T.Run('Clear', @TestClear);
-  T.Run('String key', @TestStringKey);
-  T.Run('Interface refcount', @TestInterfaceRefCount);
-  T.Run('Grow (10000)', @TestGrow);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.swiss_adapter');
+  T.Test('Put/Get', @TestPutGet);
+  T.Test('Add', @TestAdd);
+  T.Test('AddOrAssign', @TestAddOrAssign);
+  T.Test('Remove', @TestRemove);
+  T.Test('Get (+ exception)', @TestGet);
+  T.Test('GetOrInsert', @TestGetOrInsert);
+  T.Test('GetOrInsertWith', @TestGetOrInsertWith);
+  T.Test('ModifyOrInsert', @TestModifyOrInsert);
+  T.Test('Retain', @TestRetain);
+  T.Test('Reserve', @TestReserve);
+  T.Test('Capacity/LoadFactor', @TestCapacityLoadFactor);
+  T.Test('Clear', @TestClear);
+  T.Test('String key', @TestStringKey);
+  T.Test('Interface refcount', @TestInterfaceRefCount);
+  T.Test('Grow (10000)', @TestGrow);
+  if not T.Run then Halt(1);
 end.

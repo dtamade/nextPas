@@ -5,7 +5,7 @@ program test_managed_types;
 uses
   SysUtils,
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections,
   nextpas.core.collections.base,
   nextpas.core.collections.arr.intf,
@@ -44,7 +44,7 @@ type
   IStrTreeSet = specialize ITreeSet<string>;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestVecStringPushPopDrain;
 var
@@ -410,25 +410,25 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.managed_types');
-  T.Run('Vec string push/pop/drain', @TestVecStringPushPopDrain);
-  T.Run('Vec string insert/remove', @TestVecStringInsertRemove);
-  T.Run('Vec string splice/retain', @TestVecStringSpliceRetain);
-  T.Run('TArray string managed TypeInfo consumer contract', @TestArrayStringManagedTypeInfoConsumerContract);
-  T.Run('Deque string push/pop/insert/remove', @TestDequeStringPushPop);
-  T.Run('Queue string FIFO', @TestQueueString);
-  T.Run('Stack string LIFO', @TestStackString);
-  T.Run('List string', @TestListString);
-  T.Run('ForwardList string', @TestForwardListString);
-  T.Run('HashMap string keys+values', @TestHashMapString);
-  T.Run('LruCache string', @TestLruCacheString);
-  T.Run('TreeSet string', @TestTreeSetString);
-  T.Run('Vec string grow stress (1000)', @TestVecStringGrowStress);
-  T.Run('HashSet string', @TestHashSetString);
-  T.Run('LinkedHashMap string', @TestLinkedHashMapString);
-  T.Run('LinkedHashSet string', @TestLinkedHashSetString);
-  T.Run('MultiMap string', @TestMultiMapString);
-  T.Run('MultiSet string', @TestMultiSetString);
-  T.Run('CircularBuffer string', @TestCircularBufferString);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.managed_types');
+  T.Test('Vec string push/pop/drain', @TestVecStringPushPopDrain);
+  T.Test('Vec string insert/remove', @TestVecStringInsertRemove);
+  T.Test('Vec string splice/retain', @TestVecStringSpliceRetain);
+  T.Test('TArray string managed TypeInfo consumer contract', @TestArrayStringManagedTypeInfoConsumerContract);
+  T.Test('Deque string push/pop/insert/remove', @TestDequeStringPushPop);
+  T.Test('Queue string FIFO', @TestQueueString);
+  T.Test('Stack string LIFO', @TestStackString);
+  T.Test('List string', @TestListString);
+  T.Test('ForwardList string', @TestForwardListString);
+  T.Test('HashMap string keys+values', @TestHashMapString);
+  T.Test('LruCache string', @TestLruCacheString);
+  T.Test('TreeSet string', @TestTreeSetString);
+  T.Test('Vec string grow stress (1000)', @TestVecStringGrowStress);
+  T.Test('HashSet string', @TestHashSetString);
+  T.Test('LinkedHashMap string', @TestLinkedHashMapString);
+  T.Test('LinkedHashSet string', @TestLinkedHashSetString);
+  T.Test('MultiMap string', @TestMultiMapString);
+  T.Test('MultiSet string', @TestMultiSetString);
+  T.Test('CircularBuffer string', @TestCircularBufferString);
+  if not T.Run then Halt(1);
 end.

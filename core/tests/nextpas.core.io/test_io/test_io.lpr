@@ -4,7 +4,7 @@ program test_io;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.io.base,
   nextpas.core.io.intf,
@@ -16,7 +16,7 @@ uses
   nextpas.core.io;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure IgnoreReader(const AReader: IReader);
 begin
@@ -1510,93 +1510,93 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.io');
+  T := TTestSuite.Create('nextpas.core.io');
 
-  T.Run('Stream write', @TestStreamWrite);
-  T.Run('Stream read/write', @TestStreamReadWrite);
-  T.Run('Stream EOF', @TestStreamEOF);
-  T.Run('Stream seek', @TestStreamSeek);
-  T.Run('Stream grow', @TestStreamGrow);
-  T.Run('Stream from data', @TestStreamFromData);
-  T.Run('Stream close', @TestStreamClose);
-  T.Run('Stream post-close operation guards',
+  T.Test('Stream write', @TestStreamWrite);
+  T.Test('Stream read/write', @TestStreamReadWrite);
+  T.Test('Stream EOF', @TestStreamEOF);
+  T.Test('Stream seek', @TestStreamSeek);
+  T.Test('Stream grow', @TestStreamGrow);
+  T.Test('Stream from data', @TestStreamFromData);
+  T.Test('Stream close', @TestStreamClose);
+  T.Test('Stream post-close operation guards',
     @TestStreamPostCloseOperationGuards);
 
-  T.Run('BufReader small', @TestBufReaderSmall);
-  T.Run('BufReader large', @TestBufReaderLarge);
-  T.Run('BufWriter flush', @TestBufWriterFlush);
-  T.Run('BufWriter large', @TestBufWriterLarge);
-  T.Run('BufWriter flush zero-progress raises', @TestBufWriterFlushZeroProgressRaises);
-  T.Run('BufWriter direct write zero-progress raises', @TestBufWriterDirectWriteZeroProgressRaises);
+  T.Test('BufReader small', @TestBufReaderSmall);
+  T.Test('BufReader large', @TestBufReaderLarge);
+  T.Test('BufWriter flush', @TestBufWriterFlush);
+  T.Test('BufWriter large', @TestBufWriterLarge);
+  T.Test('BufWriter flush zero-progress raises', @TestBufWriterFlushZeroProgressRaises);
+  T.Test('BufWriter direct write zero-progress raises', @TestBufWriterDirectWriteZeroProgressRaises);
 
-  T.Run('Copy', @TestCopy);
-  T.Run('CopyN', @TestCopyN);
-  T.Run('CopyN short source raises', @TestCopyNShortSourceRaises);
-  T.Run('ReadAll', @TestReadAll);
-  T.Run('ReadFull', @TestReadFull);
-  T.Run('ReadFull short', @TestReadFullShort);
-  T.Run('LimitReader', @TestLimitReader);
-  T.Run('LimitReader nil inner', @TestLimitReaderNilInner);
-  T.Run('TeeReader', @TestTeeReader);
-  T.Run('TeeReader retries partial tap write', @TestTeeReaderRetriesPartialTapWrite);
-  T.Run('TeeReader zero-progress tap raises', @TestTeeReaderZeroProgressTapRaises);
-  T.Run('TeeReader nil inner', @TestTeeReaderNilInner);
-  T.Run('TeeReader nil writer', @TestTeeReaderNilWriter);
-  T.Run('MultiReader', @TestMultiReader);
-  T.Run('MultiReader nil inner', @TestMultiReaderNilInner);
-  T.Run('MultiWriter', @TestMultiWriter);
-  T.Run('MultiWriter retries each writer to full payload',
+  T.Test('Copy', @TestCopy);
+  T.Test('CopyN', @TestCopyN);
+  T.Test('CopyN short source raises', @TestCopyNShortSourceRaises);
+  T.Test('ReadAll', @TestReadAll);
+  T.Test('ReadFull', @TestReadFull);
+  T.Test('ReadFull short', @TestReadFullShort);
+  T.Test('LimitReader', @TestLimitReader);
+  T.Test('LimitReader nil inner', @TestLimitReaderNilInner);
+  T.Test('TeeReader', @TestTeeReader);
+  T.Test('TeeReader retries partial tap write', @TestTeeReaderRetriesPartialTapWrite);
+  T.Test('TeeReader zero-progress tap raises', @TestTeeReaderZeroProgressTapRaises);
+  T.Test('TeeReader nil inner', @TestTeeReaderNilInner);
+  T.Test('TeeReader nil writer', @TestTeeReaderNilWriter);
+  T.Test('MultiReader', @TestMultiReader);
+  T.Test('MultiReader nil inner', @TestMultiReaderNilInner);
+  T.Test('MultiWriter', @TestMultiWriter);
+  T.Test('MultiWriter retries each writer to full payload',
     @TestMultiWriterRetriesEachWriterToFullPayload);
-  T.Run('MultiWriter zero-progress raises', @TestMultiWriterZeroProgressRaises);
-  T.Run('MultiWriter nil inner', @TestMultiWriterNilInner);
-  T.Run('Discard', @TestDiscard);
-  T.Run('NullReader', @TestNullReader);
-  T.Run('NopCloser', @TestNopCloser);
-  T.Run('NopCloser nil inner', @TestNopCloserNilInner);
-  T.Run('WriteString', @TestWriteString);
-  T.Run('WriteString retries partial writer',
+  T.Test('MultiWriter zero-progress raises', @TestMultiWriterZeroProgressRaises);
+  T.Test('MultiWriter nil inner', @TestMultiWriterNilInner);
+  T.Test('Discard', @TestDiscard);
+  T.Test('NullReader', @TestNullReader);
+  T.Test('NopCloser', @TestNopCloser);
+  T.Test('NopCloser nil inner', @TestNopCloserNilInner);
+  T.Test('WriteString', @TestWriteString);
+  T.Test('WriteString retries partial writer',
     @TestWriteStringRetriesPartialWriter);
-  T.Run('WriteString zero-progress raises',
+  T.Test('WriteString zero-progress raises',
     @TestWriteStringZeroProgressRaises);
-  T.Run('ReadAtLeast', @TestReadAtLeast);
-  T.Run('CopyBuffer', @TestCopyBuffer);
+  T.Test('ReadAtLeast', @TestReadAtLeast);
+  T.Test('CopyBuffer', @TestCopyBuffer);
 
-  T.Run('UnreadByte then Read', @TestUnreadByteThenRead);
-  T.Run('Read zero after UnreadByte', @TestReadZeroAfterUnread);
-  T.Run('UnreadByte after EOF raises', @TestUnreadByteAfterEOFRaises);
-  T.Run('UnreadByte after bulk read raises',
+  T.Test('UnreadByte then Read', @TestUnreadByteThenRead);
+  T.Test('Read zero after UnreadByte', @TestReadZeroAfterUnread);
+  T.Test('UnreadByte after EOF raises', @TestUnreadByteAfterEOFRaises);
+  T.Test('UnreadByte after bulk read raises',
     @TestUnreadByteAfterBulkReadRaises);
-  T.Run('BufReader zero size', @TestBufReaderZeroSize);
-  T.Run('BufReader nil inner', @TestBufReaderNilInner);
-  T.Run('BufWriter zero size', @TestBufWriterZeroSize);
-  T.Run('BufWriter nil inner', @TestBufWriterNilInner);
-  T.Run('ReadAtLeast min>count', @TestReadAtLeastMinGtCount);
+  T.Test('BufReader zero size', @TestBufReaderZeroSize);
+  T.Test('BufReader nil inner', @TestBufReaderNilInner);
+  T.Test('BufWriter zero size', @TestBufWriterZeroSize);
+  T.Test('BufWriter nil inner', @TestBufWriterNilInner);
+  T.Test('ReadAtLeast min>count', @TestReadAtLeastMinGtCount);
 
-  T.Run('Pipe basic', @TestPipeBasic);
-  T.Run('Pipe close writer EOF', @TestPipeCloseWriterEOF);
-  T.Run('Pipe write after writer close raises',
+  T.Test('Pipe basic', @TestPipeBasic);
+  T.Test('Pipe close writer EOF', @TestPipeCloseWriterEOF);
+  T.Test('Pipe write after writer close raises',
     @TestPipeWriteAfterWriterCloseRaises);
-  T.Run('Pipe read after reader close raises',
+  T.Test('Pipe read after reader close raises',
     @TestPipeReadAfterReaderCloseRaises);
-  T.Run('Pipe reader release closes endpoint',
+  T.Test('Pipe reader release closes endpoint',
     @TestPipeReaderReleaseClosesEndpoint);
-  T.Run('Pipe large data', @TestPipeLargeData);
+  T.Test('Pipe large data', @TestPipeLargeData);
 
-  T.Run('ReaderAt', @TestReaderAt);
-  T.Run('WriterAt', @TestWriterAt);
-  T.Run('ByteReader stream', @TestByteReaderStream);
-  T.Run('ByteScanner', @TestByteScanner);
-  T.Run('StringWriter', @TestStringWriter);
-  T.Run('SectionReader', @TestSectionReader);
-  T.Run('SectionReader nil inner', @TestSectionReaderNilInner);
+  T.Test('ReaderAt', @TestReaderAt);
+  T.Test('WriterAt', @TestWriterAt);
+  T.Test('ByteReader stream', @TestByteReaderStream);
+  T.Test('ByteScanner', @TestByteScanner);
+  T.Test('StringWriter', @TestStringWriter);
+  T.Test('SectionReader', @TestSectionReader);
+  T.Test('SectionReader nil inner', @TestSectionReaderNilInner);
 
-  T.Run('Scanner lines', @TestScannerLines);
-  T.Run('Scanner CRLF', @TestScannerCRLF);
-  T.Run('Scanner no trailing newline', @TestScannerNoTrailingNewline);
-  T.Run('Scanner empty', @TestScannerEmpty);
-  T.Run('Scanner empty lines', @TestScannerEmptyLines);
-  T.Run('Scanner nil inner', @TestScannerNilInner);
-  T.Run('ByteWriter stream', @TestByteWriterStream);
+  T.Test('Scanner lines', @TestScannerLines);
+  T.Test('Scanner CRLF', @TestScannerCRLF);
+  T.Test('Scanner no trailing newline', @TestScannerNoTrailingNewline);
+  T.Test('Scanner empty', @TestScannerEmpty);
+  T.Test('Scanner empty lines', @TestScannerEmptyLines);
+  T.Test('Scanner nil inner', @TestScannerNilInner);
+  T.Test('ByteWriter stream', @TestByteWriterStream);
 
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

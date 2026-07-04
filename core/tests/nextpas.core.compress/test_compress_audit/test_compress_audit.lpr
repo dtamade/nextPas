@@ -6,7 +6,7 @@ uses
   SysUtils,
   zlib,
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.io.base,
   nextpas.core.io.intf,
   nextpas.core.io.memory,
@@ -21,7 +21,7 @@ uses
   nextpas.core.compress.zlib.ffi;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 type
   TOneByteReader = class(TInterfacedObject, IReader)
@@ -5407,174 +5407,174 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.compress.audit');
-  T.Run('Deflate 63 bytes', @TestDeflate63Bytes);
-  T.Run('Deflate 64 bytes', @TestDeflate64Bytes);
-  T.Run('Deflate 65 bytes', @TestDeflate65Bytes);
-  T.Run('Native zlib version available', @TestNativeZlibVersionAvailable);
-  T.Run('LZ4 1-3 bytes', @TestLz4_1to3Bytes);
-  T.Run('LZ4 4 bytes', @TestLz4_4Bytes);
-  T.Run('LZ4 random data', @TestLz4RandomData);
-  T.Run('LZ4 compress bound rejects out-of-range input', @TestLz4CompressBoundRejectsOutOfRangeInput);
-  T.Run('LZ4 offset before start', @TestLz4MalformedOffsetBeforeStart);
-  T.Run('LZ4 zero offset', @TestLz4MalformedZeroOffset);
-  T.Run('LZ4 length overflow', @TestLz4MalformedLengthOverflow);
-  T.Run('LZ4 malformed original size metadata', @TestLz4MalformedOriginalSizeMetadata);
-  T.Run('LZ4 empty decode contract', @TestLz4EmptyDecodeContract);
-  T.Run('LZ4 malformed branch error model',
+  T := TTestSuite.Create('nextpas.core.compress.audit');
+  T.Test('Deflate 63 bytes', @TestDeflate63Bytes);
+  T.Test('Deflate 64 bytes', @TestDeflate64Bytes);
+  T.Test('Deflate 65 bytes', @TestDeflate65Bytes);
+  T.Test('Native zlib version available', @TestNativeZlibVersionAvailable);
+  T.Test('LZ4 1-3 bytes', @TestLz4_1to3Bytes);
+  T.Test('LZ4 4 bytes', @TestLz4_4Bytes);
+  T.Test('LZ4 random data', @TestLz4RandomData);
+  T.Test('LZ4 compress bound rejects out-of-range input', @TestLz4CompressBoundRejectsOutOfRangeInput);
+  T.Test('LZ4 offset before start', @TestLz4MalformedOffsetBeforeStart);
+  T.Test('LZ4 zero offset', @TestLz4MalformedZeroOffset);
+  T.Test('LZ4 length overflow', @TestLz4MalformedLengthOverflow);
+  T.Test('LZ4 malformed original size metadata', @TestLz4MalformedOriginalSizeMetadata);
+  T.Test('LZ4 empty decode contract', @TestLz4EmptyDecodeContract);
+  T.Test('LZ4 malformed branch error model',
     @TestLz4MalformedBranchErrorModel);
-  T.Run('LZ4 over-limit original size', @TestLz4RejectsOverLimitOriginalSize);
-  T.Run('LZ4 bounded decode output limit',
+  T.Test('LZ4 over-limit original size', @TestLz4RejectsOverLimitOriginalSize);
+  T.Test('LZ4 bounded decode output limit',
     @TestLz4DecompressOutputLimitRejectsMetadataAboveCap);
-  T.Run('Native LZ4 bounded decode output limit',
+  T.Test('Native LZ4 bounded decode output limit',
     @TestNativeLz4DecompressOutputLimitRejectsMetadataAboveCap);
-  T.Run('Root facade LZ4 bound and metadata parity',
+  T.Test('Root facade LZ4 bound and metadata parity',
     @TestRootFacadeLz4BoundAndMetadataParity);
-  T.Run('Root facade bounded LZ4 malformed parity',
+  T.Test('Root facade bounded LZ4 malformed parity',
     @TestRootFacadeLz4BoundedMalformedParity);
-  T.Run('Native LZ4 original-size mismatch',
+  T.Test('Native LZ4 original-size mismatch',
     @TestNativeLz4OriginalSizeMismatch);
-  T.Run('LZ4 frame header unsupported',
+  T.Test('LZ4 frame header unsupported',
     @TestLz4FrameHeaderRejectedAsUnsupported);
-  T.Run('LZ4 truncated frame magic unsupported',
+  T.Test('LZ4 truncated frame magic unsupported',
     @TestLz4TruncatedFrameMagicRejectedAsUnsupported);
-  T.Run('LZ4 raw block skippable magic literal prefix',
+  T.Test('LZ4 raw block skippable magic literal prefix',
     @TestLz4RawBlockSkippableMagicLiteralPrefixAccepted);
-  T.Run('LZ4 malformed raw block magic literal prefix',
+  T.Test('LZ4 malformed raw block magic literal prefix',
     @TestLz4MalformedRawBlockMagicLiteralPrefixKeepsDecodeError);
-  T.Run('LZ4 malformed block ending with match',
+  T.Test('LZ4 malformed block ending with match',
     @TestLz4MalformedBlockEndingWithMatchRejected);
-  T.Run('LZ4 malformed near-end match',
+  T.Test('LZ4 malformed near-end match',
     @TestLz4MalformedNearEndMatchRejected);
-  T.Run('Root facade LZ4 frame/raw-block boundary',
+  T.Test('Root facade LZ4 frame/raw-block boundary',
     @TestRootFacadeLz4FrameRawBlockBoundary);
-  T.Run('LZ4 pure encoder block ends with literal tail',
+  T.Test('LZ4 pure encoder block ends with literal tail',
     @TestLz4PureEncoderBlockEndsWithLiteralTail);
-  T.Run('Gzip wrong CRC', @TestGzipWrongCRC);
-  T.Run('Gzip wrong size', @TestGzipWrongSize);
-  T.Run('Gzip single-member integrity bounded parity',
+  T.Test('Gzip wrong CRC', @TestGzipWrongCRC);
+  T.Test('Gzip wrong size', @TestGzipWrongSize);
+  T.Test('Gzip single-member integrity bounded parity',
     @TestGzipSingleMemberIntegrityBoundedParity);
-  T.Run('Gzip truncated header', @TestGzipTruncatedHeader);
-  T.Run('Gzip empty encoded input error model',
+  T.Test('Gzip truncated header', @TestGzipTruncatedHeader);
+  T.Test('Gzip empty encoded input error model',
     @TestGzipEmptyEncodedInputErrorModel);
-  T.Run('Gzip truncated trailer', @TestGzipTruncatedTrailer);
-  T.Run('Gzip fixed header error model',
+  T.Test('Gzip truncated trailer', @TestGzipTruncatedTrailer);
+  T.Test('Gzip fixed header error model',
     @TestGzipFixedHeaderErrorModel);
-  T.Run('Gzip optional header truncation error model',
+  T.Test('Gzip optional header truncation error model',
     @TestGzipOptionalHeaderTruncationErrorModel);
-  T.Run('Gzip optional header field limit',
+  T.Test('Gzip optional header field limit',
     @TestGzipOptionalHeaderFieldLimit);
-  T.Run('Gzip corrupt payload error model',
+  T.Test('Gzip corrupt payload error model',
     @TestGzipCorruptPayloadErrorModel);
-  T.Run('Gzip rejects bytes before trailer', @TestGzipRejectsBytesBeforeTrailer);
-  T.Run('Gzip rejects bytes after trailer', @TestGzipRejectsTrailingBytesAfterTrailer);
-  T.Run('Gzip concatenated members', @TestGzipConcatenatedMembers);
-  T.Run('Gzip concatenated members cumulative output cap',
+  T.Test('Gzip rejects bytes before trailer', @TestGzipRejectsBytesBeforeTrailer);
+  T.Test('Gzip rejects bytes after trailer', @TestGzipRejectsTrailingBytesAfterTrailer);
+  T.Test('Gzip concatenated members', @TestGzipConcatenatedMembers);
+  T.Test('Gzip concatenated members cumulative output cap',
     @TestGzipConcatenatedMembersCumulativeOutputCap);
-  T.Run('Gzip concatenated trailer remaining cap output limit',
+  T.Test('Gzip concatenated trailer remaining cap output limit',
     @TestGzipConcatenatedTrailerSizeAboveRemainingCapReportsOutputLimit);
-  T.Run('Gzip concatenated corrupt second member error model',
+  T.Test('Gzip concatenated corrupt second member error model',
     @TestGzipConcatenatedCorruptSecondMemberErrorModel);
-  T.Run('Gzip concatenated truncated second member trailer deferred validation',
+  T.Test('Gzip concatenated truncated second member trailer deferred validation',
     @TestGzipConcatenatedTruncatedSecondMemberTrailerDeferredValidation);
-  T.Run('Gzip bounded reader concatenated truncated second member header',
+  T.Test('Gzip bounded reader concatenated truncated second member header',
     @TestGzipBoundedReaderConcatenatedTruncatedSecondMemberHeader);
-  T.Run('Gzip truncated next member header',
+  T.Test('Gzip truncated next member header',
     @TestGzipRejectsTruncatedNextMemberHeaderAfterTrailer);
-  T.Run('Gzip reserved flags', @TestGzipReservedFlagsRejected);
-  T.Run('Gzip header CRC', @TestGzipHeaderCrcRejected);
-  T.Run('Gzip optional header all fields roundtrip',
+  T.Test('Gzip reserved flags', @TestGzipReservedFlagsRejected);
+  T.Test('Gzip header CRC', @TestGzipHeaderCrcRejected);
+  T.Test('Gzip optional header all fields roundtrip',
     @TestGzipOptionalHeaderAllFieldsRoundTrip);
-  T.Run('Gzip truncated payload read', @TestGzipTruncatedPayloadRaisesOnRead);
-  T.Run('Deflate stream byte-by-byte', @TestDeflateStreamByteByByte);
-  T.Run('Deflate cross-API roundtrip', @TestDeflateCrossApiRoundTrip);
-  T.Run('Gzip cross-API roundtrip', @TestGzipCrossApiRoundTrip);
-  T.Run('Gzip stream byte-by-byte', @TestGzipStreamByteByByte);
-  T.Run('Gzip one-byte reader lifecycle', @TestGzipStreamOneByteReaderLifecycle);
-  T.Run('Streaming small input zero-write repeated EOF matrix',
+  T.Test('Gzip truncated payload read', @TestGzipTruncatedPayloadRaisesOnRead);
+  T.Test('Deflate stream byte-by-byte', @TestDeflateStreamByteByByte);
+  T.Test('Deflate cross-API roundtrip', @TestDeflateCrossApiRoundTrip);
+  T.Test('Gzip cross-API roundtrip', @TestGzipCrossApiRoundTrip);
+  T.Test('Gzip stream byte-by-byte', @TestGzipStreamByteByByte);
+  T.Test('Gzip one-byte reader lifecycle', @TestGzipStreamOneByteReaderLifecycle);
+  T.Test('Streaming small input zero-write repeated EOF matrix',
     @TestStreamingSmallInputZeroWriteAndRepeatedEOFMatrix);
-  T.Run('Streaming reader corrupt error leaves terminal matrix',
+  T.Test('Streaming reader corrupt error leaves terminal matrix',
     @TestStreamingReaderCorruptErrorLeavesTerminalMatrix);
-  T.Run('Streaming reader deferred validation after payload',
+  T.Test('Streaming reader deferred validation after payload',
     @TestStreamingReaderDeferredValidationAfterPayload);
-  T.Run('Streaming reader truncated error leaves terminal matrix',
+  T.Test('Streaming reader truncated error leaves terminal matrix',
     @TestStreamingReaderTruncatedErrorLeavesTerminalMatrix);
-  T.Run('Deflate partial close release-only',
+  T.Test('Deflate partial close release-only',
     @TestDeflateReaderPartialCloseIsReleaseOnly);
-  T.Run('Gzip partial close release-only', @TestGzipReaderPartialCloseIsReleaseOnly);
-  T.Run('Streaming reader close before first read is release-only',
+  T.Test('Gzip partial close release-only', @TestGzipReaderPartialCloseIsReleaseOnly);
+  T.Test('Streaming reader close before first read is release-only',
     @TestStreamingReaderCloseBeforeFirstReadIsReleaseOnly);
-  T.Run('Streaming writer close reports short write',
+  T.Test('Streaming writer close reports short write',
     @TestStreamingWriterCloseReportsShortWrite);
-  T.Run('Streaming writer release is non-throwing',
+  T.Test('Streaming writer release is non-throwing',
     @TestStreamingWriterReleaseIsNonThrowing);
-  T.Run('Streaming writer flush preserves continuation',
+  T.Test('Streaming writer flush preserves continuation',
     @TestStreamingWriterFlushPreservesContinuation);
-  T.Run('Streaming writer payload flush after close',
+  T.Test('Streaming writer payload flush after close',
     @TestStreamingWriterPayloadFlushAfterClose);
-  T.Run('Streaming close lifecycle contract',
+  T.Test('Streaming close lifecycle contract',
     @TestStreamingCloseLifecycleContract);
-  T.Run('Streaming writer failed close leaves terminal',
+  T.Test('Streaming writer failed close leaves terminal',
     @TestStreamingWriterFailedCloseLeavesTerminal);
-  T.Run('Streaming writer failed payload write leaves terminal',
+  T.Test('Streaming writer failed payload write leaves terminal',
     @TestStreamingWriterFailedPayloadWriteLeavesTerminal);
-  T.Run('Streaming writer raised sink failure leaves terminal',
+  T.Test('Streaming writer raised sink failure leaves terminal',
     @TestStreamingWriterRaisedSinkFailureLeavesTerminal);
-  T.Run('Streaming writer failed flush leaves terminal',
+  T.Test('Streaming writer failed flush leaves terminal',
     @TestStreamingWriterFailedFlushLeavesTerminal);
-  T.Run('Streaming reader failed read leaves terminal',
+  T.Test('Streaming reader failed read leaves terminal',
     @TestStreamingReaderFailedReadLeavesTerminal);
-  T.Run('Streaming factory rejects nil endpoints',
+  T.Test('Streaming factory rejects nil endpoints',
     @TestStreamingFactoryRejectsNilEndpoints);
-  T.Run('Streaming bounded reader rejects nil endpoints',
+  T.Test('Streaming bounded reader rejects nil endpoints',
     @TestStreamingBoundedReaderRejectsNilEndpoints);
-  T.Run('Deflate empty stream', @TestDeflateEmptyStream);
-  T.Run('Gzip empty stream', @TestGzipEmptyStream);
-  T.Run('Deflate empty one-shot stream contract',
+  T.Test('Deflate empty stream', @TestDeflateEmptyStream);
+  T.Test('Gzip empty stream', @TestGzipEmptyStream);
+  T.Test('Deflate empty one-shot stream contract',
     @TestDeflateEmptyOneShotStreamContract);
-  T.Run('Deflate invalid zlib header error model',
+  T.Test('Deflate invalid zlib header error model',
     @TestDeflateInvalidZlibHeaderErrorModel);
-  T.Run('Deflate short zlib header error model',
+  T.Test('Deflate short zlib header error model',
     @TestDeflateShortZlibHeaderErrorModel);
-  T.Run('Deflate split zlib header error model',
+  T.Test('Deflate split zlib header error model',
     @TestDeflateSplitZlibHeaderErrorModel);
-  T.Run('Deflate preset dictionary header error model',
+  T.Test('Deflate preset dictionary header error model',
     @TestDeflatePresetDictionaryHeaderErrorModel);
-  T.Run('Deflate corrupt payload error model',
+  T.Test('Deflate corrupt payload error model',
     @TestDeflateCorruptPayloadErrorModel);
-  T.Run('Deflate checksum-only corruption error model',
+  T.Test('Deflate checksum-only corruption error model',
     @TestDeflateChecksumOnlyCorruptionErrorModel);
-  T.Run('Deflate truncated stream', @TestDeflateTruncatedStreamRaises);
-  T.Run('Deflate trailing bytes', @TestDeflateRejectsTrailingBytes);
-  T.Run('Deflate trailing bytes terminal reader',
+  T.Test('Deflate truncated stream', @TestDeflateTruncatedStreamRaises);
+  T.Test('Deflate trailing bytes', @TestDeflateRejectsTrailingBytes);
+  T.Test('Deflate trailing bytes terminal reader',
     @TestDeflateTrailingBytesLeavesReaderTerminal);
-  T.Run('One-shot truncated payload contracts',
+  T.Test('One-shot truncated payload contracts',
     @TestOneShotTruncatedPayloadContracts);
-  T.Run('Deflate output limit error model', @TestDeflateOutputLimitErrorModel);
-  T.Run('Gzip output limit error model', @TestGzipOutputLimitErrorModel);
-  T.Run('Gzip trailer output limit error model',
+  T.Test('Deflate output limit error model', @TestDeflateOutputLimitErrorModel);
+  T.Test('Gzip output limit error model', @TestGzipOutputLimitErrorModel);
+  T.Test('Gzip trailer output limit error model',
     @TestGzipTrailerOutputLimitErrorModel);
-  T.Run('Gzip streaming trailer size above cap reports output limit',
+  T.Test('Gzip streaming trailer size above cap reports output limit',
     @TestGzipStreamingTrailerSizeAboveCapReportsOutputLimit);
-  T.Run('Streaming reader output limit error model',
+  T.Test('Streaming reader output limit error model',
     @TestStreamingReaderOutputLimitErrorModel);
-  T.Run('Streaming reader output limit is cumulative across reads',
+  T.Test('Streaming reader output limit is cumulative across reads',
     @TestStreamingReaderOutputLimitIsCumulativeAcrossReads);
-  T.Run('Bounded reader partial remaining cap preserves caller tail',
+  T.Test('Bounded reader partial remaining cap preserves caller tail',
     @TestBoundedReaderPartialRemainingCapPreservesCallerTail);
-  T.Run('Bounded exact cap rejects trailing bytes',
+  T.Test('Bounded exact cap rejects trailing bytes',
     @TestBoundedExactCapRejectsTrailingBytes);
-  T.Run('Bounded high-expansion limit path',
+  T.Test('Bounded high-expansion limit path',
     @TestBoundedHighExpansionLimitPath);
-  T.Run('Bounded high-expansion partial cap preserves caller tail',
+  T.Test('Bounded high-expansion partial cap preserves caller tail',
     @TestBoundedHighExpansionPartialRemainingCapPreservesCallerTail);
-  T.Run('Bounded high-expansion failure loop releases state',
+  T.Test('Bounded high-expansion failure loop releases state',
     @TestBoundedHighExpansionFailureLoopReleasesState);
-  T.Run('Root facade bounded decompress helpers',
+  T.Test('Root facade bounded decompress helpers',
     @TestRootFacadeBoundedDecompressHelpers);
-  T.Run('Deflate 1000 cycles', @TestCompressDecompressCycle1000);
-  T.Run('LZ4 1000 cycles', @TestLz4Cycle1000);
-  T.Run('Gzip nil round-trip', @TestGzipNilRoundTrip);
-  T.Run('Deflate all levels', @TestDeflateAllLevels);
-  T.Summary;
+  T.Test('Deflate 1000 cycles', @TestCompressDecompressCycle1000);
+  T.Test('LZ4 1000 cycles', @TestLz4Cycle1000);
+  T.Test('Gzip nil round-trip', @TestGzipNilRoundTrip);
+  T.Test('Deflate all levels', @TestDeflateAllLevels);
+  if not T.Run then Halt(1);
 end.

@@ -4,10 +4,10 @@ program test_tui_experimental_facade;
 
 uses
   nextpas.core.tui.experimental,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestExperimentalSurface;
 var
@@ -21,9 +21,7 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.experimental_facade');
-  T.Run('experimental surface', @TestExperimentalSurface);
-  T.Summary;
-  if not T.AllPassed then
-    Halt(1);
+  T := TTestSuite.Create('nextpas.core.tui.experimental_facade');
+  T.Test('experimental surface', @TestExperimentalSurface);
+  if not T.Run then Halt(1);
 end.

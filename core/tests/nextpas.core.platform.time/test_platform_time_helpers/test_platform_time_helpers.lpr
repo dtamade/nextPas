@@ -4,11 +4,11 @@ program test_platform_time_helpers;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.platform.time;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestQpcToNsBasic;
 begin
@@ -105,17 +105,17 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.time.helpers');
-  T.Run('QPC to ns basic', @TestQpcToNsBasic);
-  T.Run('QPC to ns high counter (no overflow)', @TestQpcToNsHighCounter);
-  T.Run('QPC to ns huge frequency fraction', @TestQpcToNsHugeFrequencyFraction);
-  T.Run('QPC to ns saturates unrepresentable values', @TestQpcToNsSaturatesOnUnrepresentableValue);
-  T.Run('QPC to ns zero frequency', @TestQpcToNsZeroFrequency);
-  T.Run('Resolution from frequency uses ceil', @TestResolutionFromFrequencyUsesCeil);
-  T.Run('Timespec to ns basic', @TestTimespecToNsBasic);
-  T.Run('Timespec to ns clamps invalid input', @TestTimespecToNsClampsInvalidInput);
-  T.Run('Monotonic never goes backward (1000 calls)', @TestMonotonicNeverGoesBackward);
-  T.Run('Realtime clock is available', @TestRealtimeClockAvailable);
-  T.Run('Monotonic resolution is available', @TestMonotonicResolutionAvailable);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.time.helpers');
+  T.Test('QPC to ns basic', @TestQpcToNsBasic);
+  T.Test('QPC to ns high counter (no overflow)', @TestQpcToNsHighCounter);
+  T.Test('QPC to ns huge frequency fraction', @TestQpcToNsHugeFrequencyFraction);
+  T.Test('QPC to ns saturates unrepresentable values', @TestQpcToNsSaturatesOnUnrepresentableValue);
+  T.Test('QPC to ns zero frequency', @TestQpcToNsZeroFrequency);
+  T.Test('Resolution from frequency uses ceil', @TestResolutionFromFrequencyUsesCeil);
+  T.Test('Timespec to ns basic', @TestTimespecToNsBasic);
+  T.Test('Timespec to ns clamps invalid input', @TestTimespecToNsClampsInvalidInput);
+  T.Test('Monotonic never goes backward (1000 calls)', @TestMonotonicNeverGoesBackward);
+  T.Test('Realtime clock is available', @TestRealtimeClockAvailable);
+  T.Test('Monotonic resolution is available', @TestMonotonicResolutionAvailable);
+  if not T.Run then Halt(1);
 end.

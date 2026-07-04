@@ -7,10 +7,10 @@ uses
   nextpas.core.errors,
   nextpas.core.fs,
   nextpas.core.ini,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function TempIniPath(const AName: string): string;
 begin
@@ -281,26 +281,26 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.config.ini_export');
-  T.Run('IniExport.ToIniBuildsSectionsAndGlobals',
+  T := TTestSuite.Create('nextpas.core.config.ini_export');
+  T.Test('IniExport.ToIniBuildsSectionsAndGlobals',
     @TestToIniBuildsSectionsAndGlobals);
-  T.Run('IniExport.ToIniUsesDeepestRepresentableSection',
+  T.Test('IniExport.ToIniUsesDeepestRepresentableSection',
     @TestToIniUsesDeepestRepresentableSection);
-  T.Run('IniExport.ToIniFallsBackToGlobalKeyWhenSplitWouldLoseMeaning',
+  T.Test('IniExport.ToIniFallsBackToGlobalKeyWhenSplitWouldLoseMeaning',
     @TestToIniFallsBackToGlobalKeyWhenSplitWouldLoseMeaning);
-  T.Run('IniExport.IConfigToIniExportsSnapshot',
+  T.Test('IniExport.IConfigToIniExportsSnapshot',
     @TestIConfigToIniExportsSnapshot);
-  T.Run('IniExport.ToIniRoundTripsCanonicalStringValues',
+  T.Test('IniExport.ToIniRoundTripsCanonicalStringValues',
     @TestToIniRoundTripsCanonicalStringValues);
-  T.Run('IniExport.ToIniPreservesTrailingWhitespaceValue',
+  T.Test('IniExport.ToIniPreservesTrailingWhitespaceValue',
     @TestToIniPreservesTrailingWhitespaceValue);
-  T.Run('IniExport.ToIniPreservesScalarSubtreeConflict',
+  T.Test('IniExport.ToIniPreservesScalarSubtreeConflict',
     @TestToIniPreservesScalarSubtreeConflict);
-  T.Run('IniExport.ToIniRejectsNonRepresentableValue',
+  T.Test('IniExport.ToIniRejectsNonRepresentableValue',
     @TestToIniRejectsNonRepresentableValue);
-  T.Run('IniExport.SaveToIniWritesFile',
+  T.Test('IniExport.SaveToIniWritesFile',
     @TestSaveToIniWritesFile);
-  T.Run('IniExport.SaveToIniPreservesExistingFileOnExportFailure',
+  T.Test('IniExport.SaveToIniPreservesExistingFileOnExportFailure',
     @TestSaveToIniPreservesExistingFileOnExportFailure);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

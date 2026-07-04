@@ -8,10 +8,10 @@ uses
   nextpas.core.platform.watch,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ExpandRepoPath(const ARelativePath: string): string;
 begin
@@ -148,12 +148,12 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.watch');
-  T.Run('create/close', @TestCreateClose);
-  T.Run('add watch', @TestAddWatch);
-  T.Run('detect file create', @TestDetectCreate);
-  T.Run('no event timeout', @TestNoEvent);
-  T.Run('double close', @TestDoubleClose);
-  T.Run('Windows watch source contract', @TestWindowsWatchSourceContract);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.watch');
+  T.Test('create/close', @TestCreateClose);
+  T.Test('add watch', @TestAddWatch);
+  T.Test('detect file create', @TestDetectCreate);
+  T.Test('no event timeout', @TestNoEvent);
+  T.Test('double close', @TestDoubleClose);
+  T.Test('Windows watch source contract', @TestWindowsWatchSourceContract);
+  if not T.Run then Halt(1);
 end.

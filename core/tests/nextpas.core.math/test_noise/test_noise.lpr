@@ -3,12 +3,12 @@ program test_noise;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.math.random;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 type
   TDoubleBitCast = packed record
@@ -890,18 +890,18 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.math.noise');
-  T.Run('noise repeatability', @TestNoiseRepeatability);
-  T.Run('zero seed uses deterministic default', @TestZeroSeedUsesDeterministicDefault);
-  T.Run('noise reference vectors', @TestNoiseReferenceVectors);
-  T.Run('noise invalid inputs', @TestNoiseInvalidInputs);
-  T.Run('large periodic coordinates stay stable', @TestNoiseLargePeriodicCoordinatesStayStable);
-  T.Run('negative fractional coordinates wrap periodically',
+  T := TTestSuite.Create('nextpas.core.math.noise');
+  T.Test('noise repeatability', @TestNoiseRepeatability);
+  T.Test('zero seed uses deterministic default', @TestZeroSeedUsesDeterministicDefault);
+  T.Test('noise reference vectors', @TestNoiseReferenceVectors);
+  T.Test('noise invalid inputs', @TestNoiseInvalidInputs);
+  T.Test('large periodic coordinates stay stable', @TestNoiseLargePeriodicCoordinatesStayStable);
+  T.Test('negative fractional coordinates wrap periodically',
     @TestNoiseNegativeFractionalCoordinatesWrapPeriodically);
-  T.Run('huge finite lattice coordinates stay stable', @TestNoiseHugeFiniteLatticeCoordinatesStayStable);
-  T.Run('FBM rejects non-finite octave coordinates', @TestFBMRejectsNonFiniteOctaveCoordinates);
-  T.Run('FBM rejects non-finite octave amplitude', @TestFBMRejectsNonFiniteOctaveAmplitude);
-  T.Run('FBM rejects non-finite accumulated result', @TestFBMRejectsNonFiniteAccumulatedResult);
-  T.Run('precision ceiling follows stored Double value', @TestNoisePrecisionCeilingFollowsStoredDoubleValue);
-  T.Summary;
+  T.Test('huge finite lattice coordinates stay stable', @TestNoiseHugeFiniteLatticeCoordinatesStayStable);
+  T.Test('FBM rejects non-finite octave coordinates', @TestFBMRejectsNonFiniteOctaveCoordinates);
+  T.Test('FBM rejects non-finite octave amplitude', @TestFBMRejectsNonFiniteOctaveAmplitude);
+  T.Test('FBM rejects non-finite accumulated result', @TestFBMRejectsNonFiniteAccumulatedResult);
+  T.Test('precision ceiling follows stored Double value', @TestNoisePrecisionCeilingFollowsStoredDoubleValue);
+  if not T.Run then Halt(1);
 end.

@@ -4,7 +4,7 @@ program test_fs_idir;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.fs.base,
   nextpas.core.fs.intf,
@@ -17,7 +17,7 @@ uses
   nextpas.core.fs;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GTmpDir: string;
 
 procedure SetupTmpDir;
@@ -237,26 +237,26 @@ end;
 begin
   SetupTmpDir;
   try
-    T := TTestRunner.Create('nextpas.core.fs.idir');
+    T := TTestSuite.Create('nextpas.core.fs.idir');
 
-    T.Run('DirIter_Basic: 3 files, count + name non-empty',
+    T.Test('DirIter_Basic: 3 files, count + name non-empty',
       @TestDirIter_Basic);
-    T.Run('DirIter_Empty: empty dir returns False immediately',
+    T.Test('DirIter_Empty: empty dir returns False immediately',
       @TestDirIter_Empty);
-    T.Run('DirIter_EntryFields: Name no prefix, FileType correct',
+    T.Test('DirIter_EntryFields: Name no prefix, FileType correct',
       @TestDirIter_EntryFields);
 {$IFDEF NEXTPAS_UNIX}
-    T.Run('DirIter_MixedEntries: file + dir + symlink FileType',
+    T.Test('DirIter_MixedEntries: file + dir + symlink FileType',
       @TestDirIter_MixedEntries);
 {$ENDIF}
-    T.Run('DirIter_DeepDir: only direct children, not recursive',
+    T.Test('DirIter_DeepDir: only direct children, not recursive',
       @TestDirIter_DeepDir);
-    T.Run('DirIter_NonexistentDir: raises ENotFoundError',
+    T.Test('DirIter_NonexistentDir: raises ENotFoundError',
       @TestDirIter_NonexistentDir);
-    T.Run('DirIter_InterfaceRelease: nil releases iterator (heaptrc)',
+    T.Test('DirIter_InterfaceRelease: nil releases iterator (heaptrc)',
       @TestDirIter_InterfaceRelease);
 
-    T.Summary;
+  if not T.Run then Halt(1);
   finally
     CleanupTmpDir;
   end;

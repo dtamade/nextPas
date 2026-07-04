@@ -5,7 +5,7 @@ program test_scalar;
 uses
   SysUtils,
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.math.base,
   nextpas.core.math.scalar;
 
@@ -18,7 +18,7 @@ uses
 {$ENDIF}
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function MakeNaN: Double;
 var
@@ -1688,26 +1688,26 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.math.scalar');
-  T.Run('constants', @TestConstants);
-  T.Run('min max clamp', @TestMinMaxClamp);
-  T.Run('interpolation', @TestInterpolation);
-  T.Run('rounding and sign', @TestRoundingAndSign);
-  T.Run('float predicates', @TestFloatPredicates);
-  T.Run('scalar predicate direct matrix contracts',
+  T := TTestSuite.Create('nextpas.core.math.scalar');
+  T.Test('constants', @TestConstants);
+  T.Test('min max clamp', @TestMinMaxClamp);
+  T.Test('interpolation', @TestInterpolation);
+  T.Test('rounding and sign', @TestRoundingAndSign);
+  T.Test('float predicates', @TestFloatPredicates);
+  T.Test('scalar predicate direct matrix contracts',
     @TestScalarPredicateDirectMatrixContracts);
-  T.Run('scalar Clamp finite-bound matrix contracts',
+  T.Test('scalar Clamp finite-bound matrix contracts',
     @TestScalarClampFiniteBoundMatrixContracts);
-  T.Run('scalar IEEE edge contracts', @TestScalarIEEEEdgeContracts);
-  T.Run('scalar range boundary edge contracts', @TestScalarRangeBoundaryEdgeContracts);
-  T.Run('number theory and scalar extras', @TestNumberTheoryAndScalarExtras);
-  T.Run('GCD LCM Int64 boundary contracts', @TestGCDLCMInt64BoundaryContracts);
-  T.Run('angle conversions', @TestAngleConversions);
-  T.Run('scalar sign and angle edge contracts', @TestSignAndAngleEdgeContracts);
-  T.Run('integer rounding boundaries', @TestIntegerRoundingBoundaries);
-  T.Run('scalar rounding subnormal contracts', @TestScalarRoundingSubnormalContracts);
-  T.Run('owner-level boundary messages', @TestOwnerLevelBoundaryMessages);
-  T.Run('single-precision boundary messages', @TestSinglePrecisionBoundaryMessages);
-  T.Run('overflow helpers', @TestOverflowHelpers);
-  T.Summary;
+  T.Test('scalar IEEE edge contracts', @TestScalarIEEEEdgeContracts);
+  T.Test('scalar range boundary edge contracts', @TestScalarRangeBoundaryEdgeContracts);
+  T.Test('number theory and scalar extras', @TestNumberTheoryAndScalarExtras);
+  T.Test('GCD LCM Int64 boundary contracts', @TestGCDLCMInt64BoundaryContracts);
+  T.Test('angle conversions', @TestAngleConversions);
+  T.Test('scalar sign and angle edge contracts', @TestSignAndAngleEdgeContracts);
+  T.Test('integer rounding boundaries', @TestIntegerRoundingBoundaries);
+  T.Test('scalar rounding subnormal contracts', @TestScalarRoundingSubnormalContracts);
+  T.Test('owner-level boundary messages', @TestOwnerLevelBoundaryMessages);
+  T.Test('single-precision boundary messages', @TestSinglePrecisionBoundaryMessages);
+  T.Test('overflow helpers', @TestOverflowHelpers);
+  if not T.Run then Halt(1);
 end.

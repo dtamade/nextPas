@@ -5,10 +5,10 @@ program test_platform_linux_subsystems_abi;
 uses
   nextpas.core.platform.posix.base,
   nextpas.core.platform.linux.base,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestEpollEventSize;
 begin
@@ -80,15 +80,15 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.linux.subsystems_abi');
-  T.Run('epoll_event size', @TestEpollEventSize);
-  T.Run('epoll constants', @TestEpollConstants);
-  T.Run('inotify_event size', @TestInotifyEventSize);
-  T.Run('inotify constants', @TestInotifyConstants);
-  T.Run('signal numbers', @TestSignalNumbers);
-  T.Run('signal action flags', @TestSignalActionFlags);
-  T.Run('TSysInfo size', @TestSysInfoSize);
-  T.Run('clone constants', @TestCloneConstants);
-  T.Run('statx constants', @TestStatxConstants);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.linux.subsystems_abi');
+  T.Test('epoll_event size', @TestEpollEventSize);
+  T.Test('epoll constants', @TestEpollConstants);
+  T.Test('inotify_event size', @TestInotifyEventSize);
+  T.Test('inotify constants', @TestInotifyConstants);
+  T.Test('signal numbers', @TestSignalNumbers);
+  T.Test('signal action flags', @TestSignalActionFlags);
+  T.Test('TSysInfo size', @TestSysInfoSize);
+  T.Test('clone constants', @TestCloneConstants);
+  T.Test('statx constants', @TestStatxConstants);
+  if not T.Run then Halt(1);
 end.

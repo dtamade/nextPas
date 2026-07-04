@@ -5,7 +5,7 @@ program test_concurrent_hashmap;
 uses
   nextpas.core.thread.init,
   SysUtils, Classes,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections.concurrent.hashmap;
 
 type
@@ -37,7 +37,7 @@ begin
 end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestPutGet;
 var M: TIntConcMap; i, v: Integer; ok: Boolean;
@@ -370,21 +370,21 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.concurrent.hashmap');
-  T.Run('Put/Get', @TestPutGet);
-  T.Run('Update', @TestUpdate);
-  T.Run('Remove', @TestRemove);
-  T.Run('GetOrInsert', @TestGetOrInsert);
-  T.Run('PutIfAbsent', @TestPutIfAbsent);
-  T.Run('Compute', @TestCompute);
-  T.Run('Replace', @TestReplace);
-  T.Run('IsEmpty', @TestIsEmpty);
-  T.Run('Keys', @TestKeys);
-  T.Run('Default hash (nil)', @TestDefaultHash);
-  T.Run('Default UnicodeString hash uses string content', @TestDefaultUnicodeStringHashUsesStringContent);
-  T.Run('Custom callbacks forwarded to segments', @TestCustomCallbacksForwardedToSegments);
-  T.Run('Clear', @TestClear);
-  T.Run('String key', @TestStringKey);
-  T.Run('Multi-thread stress (4W+4R)', @TestMultiThreadStress);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.concurrent.hashmap');
+  T.Test('Put/Get', @TestPutGet);
+  T.Test('Update', @TestUpdate);
+  T.Test('Remove', @TestRemove);
+  T.Test('GetOrInsert', @TestGetOrInsert);
+  T.Test('PutIfAbsent', @TestPutIfAbsent);
+  T.Test('Compute', @TestCompute);
+  T.Test('Replace', @TestReplace);
+  T.Test('IsEmpty', @TestIsEmpty);
+  T.Test('Keys', @TestKeys);
+  T.Test('Default hash (nil)', @TestDefaultHash);
+  T.Test('Default UnicodeString hash uses string content', @TestDefaultUnicodeStringHashUsesStringContent);
+  T.Test('Custom callbacks forwarded to segments', @TestCustomCallbacksForwardedToSegments);
+  T.Test('Clear', @TestClear);
+  T.Test('String key', @TestStringKey);
+  T.Test('Multi-thread stress (4W+4R)', @TestMultiThreadStress);
+  if not T.Run then Halt(1);
 end.

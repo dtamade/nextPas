@@ -4,7 +4,7 @@ program test_timer;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
   nextpas.core.time.timer,
@@ -12,7 +12,7 @@ uses
   nextpas.core.platform.thread;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { === TTimer tests === }
 
@@ -218,28 +218,28 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.time.timer+ticker');
+  T := TTestSuite.Create('nextpas.core.time.timer+ticker');
   { TTimer }
-  T.Run('Timer.Create returns idle', @TestTimerCreateIdle);
-  T.Run('Timer.After creates armed', @TestTimerAfterArmed);
-  T.Run('Timer.Poll on idle returns false', @TestTimerPollIdle);
-  T.Run('Timer.Poll not expired returns false', @TestTimerPollNotExpired);
-  T.Run('Timer.Poll expired returns true', @TestTimerPollExpired);
-  T.Run('Timer.Poll one-shot', @TestTimerPollOneShot);
-  T.Run('Timer.Arm arms timer', @TestTimerArm);
-  T.Run('Timer.Arm re-arms', @TestTimerRearm);
-  T.Run('Timer.Cancel disarms', @TestTimerCancel);
-  T.Run('Timer.ArmAt with deadline', @TestTimerArmAt);
+  T.Test('Timer.Create returns idle', @TestTimerCreateIdle);
+  T.Test('Timer.After creates armed', @TestTimerAfterArmed);
+  T.Test('Timer.Poll on idle returns false', @TestTimerPollIdle);
+  T.Test('Timer.Poll not expired returns false', @TestTimerPollNotExpired);
+  T.Test('Timer.Poll expired returns true', @TestTimerPollExpired);
+  T.Test('Timer.Poll one-shot', @TestTimerPollOneShot);
+  T.Test('Timer.Arm arms timer', @TestTimerArm);
+  T.Test('Timer.Arm re-arms', @TestTimerRearm);
+  T.Test('Timer.Cancel disarms', @TestTimerCancel);
+  T.Test('Timer.ArmAt with deadline', @TestTimerArmAt);
   { TTicker }
-  T.Run('Ticker.Every creates running', @TestTickerEveryRunning);
-  T.Run('Ticker.Poll before interval false', @TestTickerPollBeforeInterval);
-  T.Run('Ticker.Poll after interval true', @TestTickerPollAfterInterval);
-  T.Run('Ticker.Second poll false', @TestTickerSecondPollFalse);
-  T.Run('Ticker.Stop stops', @TestTickerStop);
-  T.Run('Ticker.Missed ticks', @TestTickerMissed);
-  T.Run('Ticker.NextDeadline running', @TestTickerNextDeadline);
-  T.Run('Ticker.NextDeadline stopped', @TestTickerNextDeadlineStopped);
-  T.Run('Ticker.GetInterval', @TestTickerGetInterval);
-  T.Run('Ticker.Start restarts', @TestTickerStart);
-  T.Summary;
+  T.Test('Ticker.Every creates running', @TestTickerEveryRunning);
+  T.Test('Ticker.Poll before interval false', @TestTickerPollBeforeInterval);
+  T.Test('Ticker.Poll after interval true', @TestTickerPollAfterInterval);
+  T.Test('Ticker.Second poll false', @TestTickerSecondPollFalse);
+  T.Test('Ticker.Stop stops', @TestTickerStop);
+  T.Test('Ticker.Missed ticks', @TestTickerMissed);
+  T.Test('Ticker.NextDeadline running', @TestTickerNextDeadline);
+  T.Test('Ticker.NextDeadline stopped', @TestTickerNextDeadlineStopped);
+  T.Test('Ticker.GetInterval', @TestTickerGetInterval);
+  T.Test('Ticker.Start restarts', @TestTickerStart);
+  if not T.Run then Halt(1);
 end.

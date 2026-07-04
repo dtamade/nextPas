@@ -4,13 +4,13 @@ program test_period;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.time.period,
   nextpas.core.time.date,
   nextpas.core.time.datetime;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestPeriodCreate;
 var P: TPeriod;
@@ -178,14 +178,14 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.time.period');
-  T.Run('Create', @TestPeriodCreate);
-  T.Run('Zero', @TestPeriodZero);
-  T.Run('Negate', @TestPeriodNegate);
-  T.Run('Arithmetic', @TestPeriodArithmetic);
-  T.Run('ISO 8601 parse', @TestPeriodISO8601);
-  T.Run('ISO 8601 format', @TestPeriodToISO8601);
-  T.Run('AddTo date', @TestPeriodAddToDate);
-  T.Run('AddTo datetime', @TestPeriodAddToDateTime);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.time.period');
+  T.Test('Create', @TestPeriodCreate);
+  T.Test('Zero', @TestPeriodZero);
+  T.Test('Negate', @TestPeriodNegate);
+  T.Test('Arithmetic', @TestPeriodArithmetic);
+  T.Test('ISO 8601 parse', @TestPeriodISO8601);
+  T.Test('ISO 8601 format', @TestPeriodToISO8601);
+  T.Test('AddTo date', @TestPeriodAddToDate);
+  T.Test('AddTo datetime', @TestPeriodAddToDateTime);
+  if not T.Run then Halt(1);
 end.

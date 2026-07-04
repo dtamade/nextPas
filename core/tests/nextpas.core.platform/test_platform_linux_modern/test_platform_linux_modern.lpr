@@ -4,12 +4,12 @@ program test_platform_linux_modern;
 
 uses
   SysUtils, BaseUnix,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.platform.posix.base,
   nextpas.core.platform.linux.modern;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestMemfdCreate;
 var
@@ -131,13 +131,13 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.linux.modern');
-  T.Run('memfd_create', @TestMemfdCreate);
-  T.Run('io_uring_setup', @TestIoUringSetup);
-  T.Run('pidfd_open', @TestPidfdOpen);
-  T.Run('close_range', @TestCloseRange);
-  T.Run('openat2', @TestOpenat2);
-  T.Run('Constants', @TestConstants);
-  T.Run('Struct sizes', @TestStructSizes);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.linux.modern');
+  T.Test('memfd_create', @TestMemfdCreate);
+  T.Test('io_uring_setup', @TestIoUringSetup);
+  T.Test('pidfd_open', @TestPidfdOpen);
+  T.Test('close_range', @TestCloseRange);
+  T.Test('openat2', @TestOpenat2);
+  T.Test('Constants', @TestConstants);
+  T.Test('Struct sizes', @TestStructSizes);
+  if not T.Run then Halt(1);
 end.

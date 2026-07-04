@@ -5,10 +5,10 @@ program test_csv_edge_cases;
 uses
   SysUtils,
   nextpas.core.csv,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { ===== RFC 4180 edge cases ===== }
 
@@ -359,47 +359,46 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('csv edge cases');
+  T := TTestSuite.Create('csv edge cases');
   { RFC 4180 line endings }
-  T.Run('CRLF line endings', @TestCRLFLineEndings);
-  T.Run('LF only line endings', @TestLFOnlyLineEndings);
-  T.Run('CR only line endings', @TestCROnlyLineEndings);
+  T.Test('CRLF line endings', @TestCRLFLineEndings);
+  T.Test('LF only line endings', @TestLFOnlyLineEndings);
+  T.Test('CR only line endings', @TestCROnlyLineEndings);
   { Quoted fields }
-  T.Run('quoted field with comma', @TestQuotedFieldWithComma);
-  T.Run('quoted field with newline', @TestQuotedFieldWithNewline);
-  T.Run('escaped quotes', @TestEscapedQuotes);
+  T.Test('quoted field with comma', @TestQuotedFieldWithComma);
+  T.Test('quoted field with newline', @TestQuotedFieldWithNewline);
+  T.Test('escaped quotes', @TestEscapedQuotes);
   { Empty/edge fields }
-  T.Run('empty fields', @TestEmptyFields);
-  T.Run('trailing empty field', @TestTrailingEmptyField);
-  T.Run('leading empty field', @TestLeadingEmptyField);
-  T.Run('single field', @TestSingleField);
-  T.Run('quoted empty string', @TestQuotedEmptyString);
+  T.Test('empty fields', @TestEmptyFields);
+  T.Test('trailing empty field', @TestTrailingEmptyField);
+  T.Test('leading empty field', @TestLeadingEmptyField);
+  T.Test('single field', @TestSingleField);
+  T.Test('quoted empty string', @TestQuotedEmptyString);
   { Custom delimiters }
-  T.Run('tab delimiter', @TestTabDelimiter);
-  T.Run('semicolon delimiter', @TestSemicolonDelimiter);
+  T.Test('tab delimiter', @TestTabDelimiter);
+  T.Test('semicolon delimiter', @TestSemicolonDelimiter);
   { Comments }
-  T.Run('comment lines', @TestCommentLines);
+  T.Test('comment lines', @TestCommentLines);
   { FieldsPerRecord }
-  T.Run('fields per record match', @TestFieldsPerRecordMatch);
-  T.Run('fields per record mismatch', @TestFieldsPerRecordMismatch);
+  T.Test('fields per record match', @TestFieldsPerRecordMatch);
+  T.Test('fields per record mismatch', @TestFieldsPerRecordMismatch);
   { TrimSpace }
-  T.Run('trim space on', @TestTrimSpaceOn);
-  T.Run('trim space on quoted', @TestTrimSpaceOnQuoted);
+  T.Test('trim space on', @TestTrimSpaceOn);
+  T.Test('trim space on quoted', @TestTrimSpaceOnQuoted);
   { BOM }
-  T.Run('UTF-8 BOM', @TestUTF8BOM);
+  T.Test('UTF-8 BOM', @TestUTF8BOM);
   { Empty input }
-  T.Run('empty input', @TestEmptyInput);
-  T.Run('blank line input', @TestBlankLineInput);
+  T.Test('empty input', @TestEmptyInput);
+  T.Test('blank line input', @TestBlankLineInput);
   { Parse functions }
-  T.Run('CsvParse empty', @TestCsvParseEmpty);
-  T.Run('CsvParse single row', @TestCsvParseSingleRow);
-  T.Run('CsvParseWith delimiter', @TestCsvParseWithDelimiter);
+  T.Test('CsvParse empty', @TestCsvParseEmpty);
+  T.Test('CsvParse single row', @TestCsvParseSingleRow);
+  T.Test('CsvParseWith delimiter', @TestCsvParseWithDelimiter);
   { Stress }
-  T.Run('long field 4KB', @TestLongField);
-  T.Run('ReadAll 200 rows', @TestReadAllLarge);
+  T.Test('long field 4KB', @TestLongField);
+  T.Test('ReadAll 200 rows', @TestReadAllLarge);
   { Error states }
-  T.Run('bare quote error', @TestBareQuoteError);
-  T.Run('unclosed quote error', @TestUnclosedQuote);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  T.Test('bare quote error', @TestBareQuoteError);
+  T.Test('unclosed quote error', @TestUnclosedQuote);
+  if not T.Run then Halt(1);
 end.

@@ -4,13 +4,13 @@ program test_io_uring;
 
 uses
   SysUtils, BaseUnix,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.platform.posix.base,
   nextpas.core.platform.linux.modern,
   nextpas.core.io.uring;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestCreateClose;
 var
@@ -213,14 +213,14 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.io.uring');
-  T.Run('Create/Close', @TestCreateClose);
-  T.Run('NOP submit', @TestNopSubmit);
-  T.Run('Read/Write', @TestReadWrite);
-  T.Run('Multiple ops', @TestMultipleOps);
-  T.Run('CqeReady', @TestCqeReady);
-  T.Run('SQE full', @TestSqeFull);
-  T.Run('User data', @TestUserData);
-  T.Run('Post-close accessors', @TestPostCloseAccessors);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.io.uring');
+  T.Test('Create/Close', @TestCreateClose);
+  T.Test('NOP submit', @TestNopSubmit);
+  T.Test('Read/Write', @TestReadWrite);
+  T.Test('Multiple ops', @TestMultipleOps);
+  T.Test('CqeReady', @TestCqeReady);
+  T.Test('SQE full', @TestSqeFull);
+  T.Test('User data', @TestUserData);
+  T.Test('Post-close accessors', @TestPostCloseAccessors);
+  if not T.Run then Halt(1);
 end.

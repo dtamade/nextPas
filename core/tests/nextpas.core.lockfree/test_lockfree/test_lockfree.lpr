@@ -5,7 +5,7 @@ program test_lockfree;
 uses
   nextpas.core.thread.init,
   SysUtils, Classes,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.atomic,
   nextpas.core.lockfree,
@@ -33,7 +33,7 @@ const
   WaitHelperImmediateReturnBudgetMs = 100;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function StartThread(out AHandle: TPlatformThreadHandle; AProc: TPlatformThreadProc; AArg: Pointer; const AMessage: string): Int32;
 begin
@@ -3976,7 +3976,7 @@ begin
   CheckContains(LMpmcSingleSlotTestSection, 'single-slot batch dequeue only returned one item',
     'MPMC single-slot test must cover DequeueBatch on a single-slot queue');
   CheckContains(LStressTestSource,
-    'T.Run(''MPMC single-slot 2P+2C exactly-once'', @TestMpmcSingleSlotContention);',
+    'T.Test(''MPMC single-slot 2P+2C exactly-once'', @TestMpmcSingleSlotContention);',
     'MPMC stress suite must run the single-slot contention test');
   CheckContains(LTestSource, 'function StartThread(',
     'lockfree behavior tests must wrap platform_thread_create with return-value checks');
@@ -4089,7 +4089,7 @@ begin
     'MPMC DequeueTimeout consumer must progress after data publish before the full timeout',
     'MPMC publish wake runtime test must bound consumer progress latency');
   CheckContains(LTestSource,
-    'T.Run(''MPMC timeout wakes on publish'', @TestMpmcDequeueTimeoutWakesOnPublish);',
+    'T.Test(''MPMC timeout wakes on publish'', @TestMpmcDequeueTimeoutWakesOnPublish);',
     'lockfree test runner must register the MPMC publish wake runtime test');
   CheckContains(LMpmcSpaceWakeTestSection,
     'MPMC EnqueueTimeout producer must observe the full queue before space release',
@@ -4107,7 +4107,7 @@ begin
     'MPMC space-woken producer item must be drainable',
     'MPMC space wake runtime test must prove the woken producer published an item');
   CheckContains(LTestSource,
-    'T.Run(''MPMC timeout wakes on space release'', @TestMpmcEnqueueTimeoutWakesOnSpace);',
+    'T.Test(''MPMC timeout wakes on space release'', @TestMpmcEnqueueTimeoutWakesOnSpace);',
     'lockfree test runner must register the MPMC space wake runtime test');
   CheckContains(LMpmcBatchSourceSection, 'if AtomicLoad32(FClosed, moAcquire) <> 0 then',
     'MPMC batch enqueue must reject new items after close');
@@ -4124,10 +4124,10 @@ begin
   CheckContains(LMpmcBatchTestSection, 'mpmc partial batch dequeue drains all currently available items',
     'MPMC batch behavior test must cover available-data-limited dequeue progress');
   CheckContains(LStressTestSource,
-    'T.Run(''MPMC close races active producers'', @TestMpmcCloseRacesActiveProducers);',
+    'T.Test(''MPMC close races active producers'', @TestMpmcCloseRacesActiveProducers);',
     'MPMC stress suite must run active-producer close race coverage');
   CheckContains(LStressTestSource,
-    'T.Run(''MPMC close races active producers timeout'', @TestMpmcCloseRacesActiveProducersTimeout);',
+    'T.Test(''MPMC close races active producers timeout'', @TestMpmcCloseRacesActiveProducersTimeout);',
     'MPMC stress suite must run active-producer close race timeout coverage');
   CheckContains(LMpmcActiveCloseStressSection, 'GMpmcCloseRaceQ.Close;',
     'MPMC active-producer close stress must close while producers are still live');
@@ -4282,7 +4282,7 @@ begin
   CheckContains(LMpscPublishWakeTestSection, 'LQ.Free;',
     'MPSC publish wake runtime test must release the queue after close and drain');
   CheckContains(LTestSource,
-    'T.Run(''MPSC timeout wakes on publish'', @TestMpscDequeueTimeoutWakesOnPublish);',
+    'T.Test(''MPSC timeout wakes on publish'', @TestMpscDequeueTimeoutWakesOnPublish);',
     'lockfree test runner must register the MPSC publish wake runtime test');
   CheckContains(LMpscTimeoutTestSection, 'LQ.Close;' + LineEnding + '  LQ.Free;',
     'MPSC timeout test must close before freeing the queue');
@@ -4546,92 +4546,92 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.lockfree');
-  T.Run('SPSC basic', @TestSpscBasic);
-  T.Run('SPSC close', @TestSpscClose);
-  T.Run('SPSC close wake timeouts', @TestSpscCloseWakeTimeouts);
-  T.Run('SPSC close wake waits', @TestSpscCloseWakeWaits);
-  T.Run('SPSC approx count', @TestSpscApproxCount);
-  T.Run('SPSC blocking', @TestSpscBlocking);
-  T.Run('SPSC timeout', @TestSpscTimeout);
-  T.Run('SPSC timeout wakes on publish', @TestSpscDequeueTimeoutWakesOnPublish);
-  T.Run('SPSC timeout wakes on space', @TestSpscEnqueueTimeoutWakesOnSpace);
-  T.Run('MPMC basic', @TestMpmcBasic);
-  T.Run('MPMC close', @TestMpmcClose);
-  T.Run('MPMC close wake waits', @TestMpmcCloseWakeWaits);
-  T.Run('MPMC timeout wakes on publish', @TestMpmcDequeueTimeoutWakesOnPublish);
-  T.Run('MPMC timeout wakes on space release', @TestMpmcEnqueueTimeoutWakesOnSpace);
-  T.Run('MPMC 4P+4C contention', @TestMpmcContention);
-  T.Run('Capacity zero reject', @TestCapacityZero);
-  T.Run('Capacity overflow reject', @TestCapacityOverflowReject);
-  T.Run('MPMC single-slot', @TestMpmcSingleSlot);
-  T.Run('Stack capacity index limit reject', @TestStackCapacityIndexLimitReject);
-  T.Run('SPSC batch', @TestSpscBatch);
-  T.Run('SPSC batch partial progress', @TestSpscBatchPartialProgress);
-  T.Run('MPMC timeout', @TestMpmcTimeout);
-  T.Run('Stack basic', @TestStackBasic);
-  T.Run('Stack query contract', @TestStackQueryContract);
-  T.Run('MPSC basic', @TestMpscBasic);
-  T.Run('MPSC close producer contract', @TestMpscCloseProducerContract);
-  T.Run('MPSC close wake timeout', @TestMpscCloseWakeTimeout);
-  T.Run('MPSC close wake wait', @TestMpscCloseWakeWait);
-  T.Run('MPSC destroy requires drain in DEBUG', @TestMpscDestroyRequiresDrainInDebug);
-  T.Run('MPSC multi-producer', @TestMpscMultiProducer);
-  T.Run('Deque basic', @TestDequeBasic);
-  T.Run('Deque query contract', @TestDequeQueryContract);
-  T.Run('SPSC capacity/empty/full', @TestSpscCapacity);
-  T.Run('MPMC batch', @TestMpmcBatch);
-  T.Run('MPMC batch partial progress', @TestMpmcBatchPartialProgress);
-  T.Run('MPMC batch dequeue AMaxCount cap', @TestMpmcBatchDequeueRespectsMaxCount);
-  T.Run('MPMC capacity/empty/full', @TestMpmcCapacity);
-  T.Run('LockFree wait stale epoch guard', @TestLockFreeWaitHelperStaleEpochGuard);
-  T.Run('MPSC dequeue wait', @TestMpscDequeueWait);
-  T.Run('MPSC timeout wakes on publish', @TestMpscDequeueTimeoutWakesOnPublish);
-  T.Run('MPSC dequeue timeout', @TestMpscDequeueTimeout);
-  T.Run('Deque capacity', @TestDequeCapacity);
-  T.Run('EBR retire and collect', @TestEbrRetireAndCollect);
-  T.Run('EBR defers while guard active', @TestEbrDefersWhileGuardActive);
-  T.Run('EBR guard leave idempotent', @TestEbrGuardLeaveIdempotent);
-  T.Run('EBR nil guard acquire', @TestEbrNilGuardAcquire);
-  T.Run('EBR multi-guard retire+collect', @TestEbrMultiGuardRetireCollect);
-  T.Run('EBR destroy reclaims retired', @TestEbrDestroyWithRetired);
-  T.Run('Channel basic', @TestChannelBasic);
-  T.Run('Channel close', @TestChannelClose);
-  T.Run('Channel close raises on Send', @TestChannelCloseRaiseOnSend);
-  T.Run('Channel Send/Receive', @TestChannelSendReceive);
-  T.Run('Channel SendTimeout', @TestChannelSendTimeout);
-  T.Run('Channel ReceiveTimeout', @TestChannelReceiveTimeout);
-  T.Run('Channel ApproxLen/Capacity', @TestChannelApproxLen);
-  T.Run('HashMap basic', @TestHashMapBasic);
-  T.Run('HashMap update', @TestHashMapUpdate);
-  T.Run('HashMap not found', @TestHashMapNotFound);
-  T.Run('HashMap multiple keys', @TestHashMapMultipleKeys);
-  T.Run('HashMap zero count', @TestHashMapZeroCount);
-  T.Run('HashMap resize', @TestHashMapResize);
-  T.Run('Stack 4P+4C stress', @TestStackStress);
-  T.Run('Deque owner+thief stress', @TestDequeOwnerThief);
-  T.Run('SegQueue basic', @TestSegQueueBasic);
-  T.Run('SegQueue segment rollover', @TestSegQueueSegmentRollover);
-  T.Run('SegQueue empty', @TestSegQueueEmpty);
-  T.Run('SegQueue approx count', @TestSegQueueApproxCount);
-  T.Run('SegQueue multi-producer', @TestSegQueueMultiProducer);
-  T.Run('SegQueue destroy active segments', @TestSegQueueDestroyActiveSegments);
-  T.Run('SPMC basic', @TestSpmcBasic);
-  T.Run('SPMC capacity', @TestSpmcCapacity);
-  T.Run('SPMC full/empty', @TestSpmcFullEmpty);
-  T.Run('SPMC wrap-around', @TestSpmcWrapAround);
-  T.Run('SPMC enqueue timeout on full', @TestSpmcEnqueueTimeoutOnFull);
-  T.Run('SPMC enqueue timeout wakes on space', @TestSpmcEnqueueTimeoutOnSpace);
-  T.Run('SPMC dequeue timeout on empty', @TestSpmcDequeueTimeoutOnEmpty);
-  T.Run('SPMC approx count', @TestSpmcApproxCount);
-  T.Run('SPMC enqueue wait wakes on space', @TestSpmcEnqueueWaitWake);
-  T.Run('SPMC dequeue wait wakes on data', @TestSpmcDequeueWaitWake);
-  T.Run('SPMC dequeue timeout on data', @TestSpmcDequeueTimeoutOnData);
+  T := TTestSuite.Create('nextpas.core.lockfree');
+  T.Test('SPSC basic', @TestSpscBasic);
+  T.Test('SPSC close', @TestSpscClose);
+  T.Test('SPSC close wake timeouts', @TestSpscCloseWakeTimeouts);
+  T.Test('SPSC close wake waits', @TestSpscCloseWakeWaits);
+  T.Test('SPSC approx count', @TestSpscApproxCount);
+  T.Test('SPSC blocking', @TestSpscBlocking);
+  T.Test('SPSC timeout', @TestSpscTimeout);
+  T.Test('SPSC timeout wakes on publish', @TestSpscDequeueTimeoutWakesOnPublish);
+  T.Test('SPSC timeout wakes on space', @TestSpscEnqueueTimeoutWakesOnSpace);
+  T.Test('MPMC basic', @TestMpmcBasic);
+  T.Test('MPMC close', @TestMpmcClose);
+  T.Test('MPMC close wake waits', @TestMpmcCloseWakeWaits);
+  T.Test('MPMC timeout wakes on publish', @TestMpmcDequeueTimeoutWakesOnPublish);
+  T.Test('MPMC timeout wakes on space release', @TestMpmcEnqueueTimeoutWakesOnSpace);
+  T.Test('MPMC 4P+4C contention', @TestMpmcContention);
+  T.Test('Capacity zero reject', @TestCapacityZero);
+  T.Test('Capacity overflow reject', @TestCapacityOverflowReject);
+  T.Test('MPMC single-slot', @TestMpmcSingleSlot);
+  T.Test('Stack capacity index limit reject', @TestStackCapacityIndexLimitReject);
+  T.Test('SPSC batch', @TestSpscBatch);
+  T.Test('SPSC batch partial progress', @TestSpscBatchPartialProgress);
+  T.Test('MPMC timeout', @TestMpmcTimeout);
+  T.Test('Stack basic', @TestStackBasic);
+  T.Test('Stack query contract', @TestStackQueryContract);
+  T.Test('MPSC basic', @TestMpscBasic);
+  T.Test('MPSC close producer contract', @TestMpscCloseProducerContract);
+  T.Test('MPSC close wake timeout', @TestMpscCloseWakeTimeout);
+  T.Test('MPSC close wake wait', @TestMpscCloseWakeWait);
+  T.Test('MPSC destroy requires drain in DEBUG', @TestMpscDestroyRequiresDrainInDebug);
+  T.Test('MPSC multi-producer', @TestMpscMultiProducer);
+  T.Test('Deque basic', @TestDequeBasic);
+  T.Test('Deque query contract', @TestDequeQueryContract);
+  T.Test('SPSC capacity/empty/full', @TestSpscCapacity);
+  T.Test('MPMC batch', @TestMpmcBatch);
+  T.Test('MPMC batch partial progress', @TestMpmcBatchPartialProgress);
+  T.Test('MPMC batch dequeue AMaxCount cap', @TestMpmcBatchDequeueRespectsMaxCount);
+  T.Test('MPMC capacity/empty/full', @TestMpmcCapacity);
+  T.Test('LockFree wait stale epoch guard', @TestLockFreeWaitHelperStaleEpochGuard);
+  T.Test('MPSC dequeue wait', @TestMpscDequeueWait);
+  T.Test('MPSC timeout wakes on publish', @TestMpscDequeueTimeoutWakesOnPublish);
+  T.Test('MPSC dequeue timeout', @TestMpscDequeueTimeout);
+  T.Test('Deque capacity', @TestDequeCapacity);
+  T.Test('EBR retire and collect', @TestEbrRetireAndCollect);
+  T.Test('EBR defers while guard active', @TestEbrDefersWhileGuardActive);
+  T.Test('EBR guard leave idempotent', @TestEbrGuardLeaveIdempotent);
+  T.Test('EBR nil guard acquire', @TestEbrNilGuardAcquire);
+  T.Test('EBR multi-guard retire+collect', @TestEbrMultiGuardRetireCollect);
+  T.Test('EBR destroy reclaims retired', @TestEbrDestroyWithRetired);
+  T.Test('Channel basic', @TestChannelBasic);
+  T.Test('Channel close', @TestChannelClose);
+  T.Test('Channel close raises on Send', @TestChannelCloseRaiseOnSend);
+  T.Test('Channel Send/Receive', @TestChannelSendReceive);
+  T.Test('Channel SendTimeout', @TestChannelSendTimeout);
+  T.Test('Channel ReceiveTimeout', @TestChannelReceiveTimeout);
+  T.Test('Channel ApproxLen/Capacity', @TestChannelApproxLen);
+  T.Test('HashMap basic', @TestHashMapBasic);
+  T.Test('HashMap update', @TestHashMapUpdate);
+  T.Test('HashMap not found', @TestHashMapNotFound);
+  T.Test('HashMap multiple keys', @TestHashMapMultipleKeys);
+  T.Test('HashMap zero count', @TestHashMapZeroCount);
+  T.Test('HashMap resize', @TestHashMapResize);
+  T.Test('Stack 4P+4C stress', @TestStackStress);
+  T.Test('Deque owner+thief stress', @TestDequeOwnerThief);
+  T.Test('SegQueue basic', @TestSegQueueBasic);
+  T.Test('SegQueue segment rollover', @TestSegQueueSegmentRollover);
+  T.Test('SegQueue empty', @TestSegQueueEmpty);
+  T.Test('SegQueue approx count', @TestSegQueueApproxCount);
+  T.Test('SegQueue multi-producer', @TestSegQueueMultiProducer);
+  T.Test('SegQueue destroy active segments', @TestSegQueueDestroyActiveSegments);
+  T.Test('SPMC basic', @TestSpmcBasic);
+  T.Test('SPMC capacity', @TestSpmcCapacity);
+  T.Test('SPMC full/empty', @TestSpmcFullEmpty);
+  T.Test('SPMC wrap-around', @TestSpmcWrapAround);
+  T.Test('SPMC enqueue timeout on full', @TestSpmcEnqueueTimeoutOnFull);
+  T.Test('SPMC enqueue timeout wakes on space', @TestSpmcEnqueueTimeoutOnSpace);
+  T.Test('SPMC dequeue timeout on empty', @TestSpmcDequeueTimeoutOnEmpty);
+  T.Test('SPMC approx count', @TestSpmcApproxCount);
+  T.Test('SPMC enqueue wait wakes on space', @TestSpmcEnqueueWaitWake);
+  T.Test('SPMC dequeue wait wakes on data', @TestSpmcDequeueWaitWake);
+  T.Test('SPMC dequeue timeout on data', @TestSpmcDequeueTimeoutOnData);
 
 
-  T.Run('SegQueue managed reject', @TestSegQueueManagedReject);
-  T.Run('Managed type reject', @TestManagedTypeReject);
-  T.Run('Source contracts', @TestLockFreeSourceContracts);
+  T.Test('SegQueue managed reject', @TestSegQueueManagedReject);
+  T.Test('Managed type reject', @TestManagedTypeReject);
+  T.Test('Source contracts', @TestLockFreeSourceContracts);
 
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

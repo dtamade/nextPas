@@ -4,10 +4,10 @@ program test_text_width;
 
 uses
   nextpas.core.text.width,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { CodepointWidth - 控制字符 }
 procedure TestControlChars;
@@ -277,33 +277,31 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.text.width');
-  T.Run('control chars width 0', @TestControlChars);
-  T.Run('narrow chars width 1', @TestNarrowChars);
-  T.Run('wide chars width 2', @TestWideChars);
-  T.Run('emoji width 2', @TestEmojiWidth);
-  T.Run('zero-width marks width 0', @TestZeroWidthMarks);
-  T.Run('supplementary wide', @TestSupplementaryWide);
-  T.Run('added wide ranges', @TestAddedWideRanges);
-  T.Run('added zero-width ranges', @TestAddedZeroWidth);
-  T.Run('ascii string fast path', @TestAsciiString);
-  T.Run('ascii control string width', @TestAsciiControlStringWidth);
-  T.Run('mixed cjk string', @TestMixedString);
-  T.Run('emoji string', @TestEmojiString);
-  T.Run('emoji cluster string', @TestEmojiClusterString);
-  T.Run('zwj after non-emoji string', @TestZWJAfterNonEmojiString);
-  T.Run('keycap emoji string', @TestKeycapEmojiString);
-  T.Run('combining string', @TestCombiningString);
-  T.Run('nko combining string', @TestNKoCombiningString);
-  T.Run('width zero-width combining string', @TestWidthZeroWidthCombiningString);
-  T.Run('Indic cluster width', @TestIndicClusterWidth);
-  T.Run('empty string', @TestEmptyString);
-  T.Run('nil nonzero span', @TestNilNonzeroSpan);
-  T.Run('simd boundary 16B', @TestSimdBoundary16);
-  T.Run('simd boundary 32B', @TestSimdBoundary32);
-  T.Run('long ascii 4096B', @TestLongAscii);
-  T.Run('non-ascii at end', @TestNonAsciiAtEnd);
-  T.Summary;
-  if not T.AllPassed then
-    Halt(1);
+  T := TTestSuite.Create('nextpas.core.text.width');
+  T.Test('control chars width 0', @TestControlChars);
+  T.Test('narrow chars width 1', @TestNarrowChars);
+  T.Test('wide chars width 2', @TestWideChars);
+  T.Test('emoji width 2', @TestEmojiWidth);
+  T.Test('zero-width marks width 0', @TestZeroWidthMarks);
+  T.Test('supplementary wide', @TestSupplementaryWide);
+  T.Test('added wide ranges', @TestAddedWideRanges);
+  T.Test('added zero-width ranges', @TestAddedZeroWidth);
+  T.Test('ascii string fast path', @TestAsciiString);
+  T.Test('ascii control string width', @TestAsciiControlStringWidth);
+  T.Test('mixed cjk string', @TestMixedString);
+  T.Test('emoji string', @TestEmojiString);
+  T.Test('emoji cluster string', @TestEmojiClusterString);
+  T.Test('zwj after non-emoji string', @TestZWJAfterNonEmojiString);
+  T.Test('keycap emoji string', @TestKeycapEmojiString);
+  T.Test('combining string', @TestCombiningString);
+  T.Test('nko combining string', @TestNKoCombiningString);
+  T.Test('width zero-width combining string', @TestWidthZeroWidthCombiningString);
+  T.Test('Indic cluster width', @TestIndicClusterWidth);
+  T.Test('empty string', @TestEmptyString);
+  T.Test('nil nonzero span', @TestNilNonzeroSpan);
+  T.Test('simd boundary 16B', @TestSimdBoundary16);
+  T.Test('simd boundary 32B', @TestSimdBoundary32);
+  T.Test('long ascii 4096B', @TestLongAscii);
+  T.Test('non-ascii at end', @TestNonAsciiAtEnd);
+  if not T.Run then Halt(1);
 end.

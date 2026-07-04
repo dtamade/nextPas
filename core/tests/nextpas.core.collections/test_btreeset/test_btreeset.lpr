@@ -4,7 +4,7 @@ program test_btreeset;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections.btree;
 
 type
@@ -16,7 +16,7 @@ begin
 end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestAddContains;
 var S: TIntSet;
@@ -179,18 +179,18 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.btreeset');
-  T.Run('Add/Contains', @TestAddContains);
-  T.Run('Remove', @TestRemove);
-  T.Run('Min/Max', @TestMinMax);
-  T.Run('PopMin/PopMax', @TestPopMinMax);
-  T.Run('LowerBound/UpperBound', @TestLowerUpperBound);
-  T.Run('Floor', @TestFloor);
-  T.Run('Union', @TestUnion);
-  T.Run('Intersection', @TestIntersection);
-  T.Run('Difference', @TestDifference);
-  T.Run('IsEmpty', @TestIsEmpty);
-  T.Run('Clear', @TestClear);
-  T.Run('Grow (1000)', @TestGrow);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.btreeset');
+  T.Test('Add/Contains', @TestAddContains);
+  T.Test('Remove', @TestRemove);
+  T.Test('Min/Max', @TestMinMax);
+  T.Test('PopMin/PopMax', @TestPopMinMax);
+  T.Test('LowerBound/UpperBound', @TestLowerUpperBound);
+  T.Test('Floor', @TestFloor);
+  T.Test('Union', @TestUnion);
+  T.Test('Intersection', @TestIntersection);
+  T.Test('Difference', @TestDifference);
+  T.Test('IsEmpty', @TestIsEmpty);
+  T.Test('Clear', @TestClear);
+  T.Test('Grow (1000)', @TestGrow);
+  if not T.Run then Halt(1);
 end.

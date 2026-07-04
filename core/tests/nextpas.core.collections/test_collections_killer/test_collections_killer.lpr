@@ -4,13 +4,13 @@ program test_collections_killer;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections.hashmap,
   nextpas.core.collections.vec,
   nextpas.core.collections.btree;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { === HashMap managed type tests === }
 
@@ -128,12 +128,12 @@ end;
 
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.killer');
-  T.Run('HashMap string clear+reuse', @TestHashMapStringClearReuse);
-  T.Run('HashMap string rehash 1000', @TestHashMapStringRehash);
-  T.Run('HashMap string remove+reinsert', @TestHashMapStringRemoveReinsert);
-  T.Run('Vec empty Any/All', @TestVecEmptyFilter);
-  T.Run('Vec EnsureCapacity', @TestVecEnsureCapacity);
-  T.Run('BTree Int32 UpperBound', @TestBTreeInt32UpperBound);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.killer');
+  T.Test('HashMap string clear+reuse', @TestHashMapStringClearReuse);
+  T.Test('HashMap string rehash 1000', @TestHashMapStringRehash);
+  T.Test('HashMap string remove+reinsert', @TestHashMapStringRemoveReinsert);
+  T.Test('Vec empty Any/All', @TestVecEmptyFilter);
+  T.Test('Vec EnsureCapacity', @TestVecEnsureCapacity);
+  T.Test('BTree Int32 UpperBound', @TestBTreeInt32UpperBound);
+  if not T.Run then Halt(1);
 end.

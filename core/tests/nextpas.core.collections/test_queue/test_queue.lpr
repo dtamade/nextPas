@@ -5,7 +5,7 @@ program test_queue;
 uses
   SysUtils,
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections,
   nextpas.core.collections.queue.intf;
 
@@ -13,7 +13,7 @@ type
   IIntQueue = specialize IQueue<Integer>;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestPushPop;
 var
@@ -113,14 +113,14 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.queue');
-  T.Run('Push/Pop FIFO', @TestPushPop);
-  T.Run('Peek', @TestPeek);
-  T.Run('TryPeek empty', @TestTryPeekEmpty);
-  T.Run('Pop(out) boolean', @TestPopOutBoolean);
-  T.Run('Push array', @TestPushArray);
-  T.Run('IsEmpty', @TestIsEmpty);
-  T.Run('Clear', @TestClear);
-  T.Run('Many elements (100)', @TestManyElements);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.queue');
+  T.Test('Push/Pop FIFO', @TestPushPop);
+  T.Test('Peek', @TestPeek);
+  T.Test('TryPeek empty', @TestTryPeekEmpty);
+  T.Test('Pop(out) boolean', @TestPopOutBoolean);
+  T.Test('Push array', @TestPushArray);
+  T.Test('IsEmpty', @TestIsEmpty);
+  T.Test('Clear', @TestClear);
+  T.Test('Many elements (100)', @TestManyElements);
+  if not T.Run then Halt(1);
 end.

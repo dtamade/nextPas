@@ -3,13 +3,13 @@ program test_normalize;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.text.utf8,
   nextpas.core.text.unicode.base,
   nextpas.core.text.unicode;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure AppendUtf8(var ADst: string; const ACp: TUnicodeCodepoint);
 var
@@ -116,14 +116,14 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.text.unicode.normalize');
-  T.Run('canonical decomposition', @TestCanonicalDecomposition);
-  T.Run('canonical composition', @TestCanonicalComposition);
-  T.Run('canonical ordering', @TestCanonicalOrdering);
-  T.Run('compatibility forms', @TestCompatibilityForms);
-  T.Run('Hangul normalization', @TestHangulNormalization);
-  T.Run('ASCII and empty inputs', @TestAsciiAndEmpty);
-  T.Run('idempotence and quick checks', @TestIdempotenceAndQuickChecks);
-  T.Run('boundary behavior', @TestBoundaryBehavior);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.text.unicode.normalize');
+  T.Test('canonical decomposition', @TestCanonicalDecomposition);
+  T.Test('canonical composition', @TestCanonicalComposition);
+  T.Test('canonical ordering', @TestCanonicalOrdering);
+  T.Test('compatibility forms', @TestCompatibilityForms);
+  T.Test('Hangul normalization', @TestHangulNormalization);
+  T.Test('ASCII and empty inputs', @TestAsciiAndEmpty);
+  T.Test('idempotence and quick checks', @TestIdempotenceAndQuickChecks);
+  T.Test('boundary behavior', @TestBoundaryBehavior);
+  if not T.Run then Halt(1);
 end.

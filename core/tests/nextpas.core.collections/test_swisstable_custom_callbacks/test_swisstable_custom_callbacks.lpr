@@ -5,7 +5,7 @@ program test_swisstable_custom_callbacks;
 uses
   SysUtils,
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections.hashmap.swiss,
   nextpas.core.collections.hashmap.swiss.adapter;
 
@@ -21,7 +21,7 @@ type
   TRecordAdapter = specialize TSwissHashMap<TRecordKey, Integer>;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GFailHashEnabled: Boolean;
   GFailHashKey: Integer;
 
@@ -323,15 +323,15 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.swisstable_custom_callbacks');
-  T.Run('integer callbacks override fast path', @TestIntegerCallbacksOverrideFastPath);
-  T.Run('string hash callback overrides fast path', @TestStringHashCallbackOverridesFastPath);
-  T.Run('adapter forwards callbacks', @TestAdapterForwardsCallbacks);
-  T.Run('record callbacks support direct table', @TestRecordCallbacksSupportDirectTable);
-  T.Run('record callbacks support adapter surface', @TestRecordCallbacksSupportAdapterSurface);
-  T.Run('partial callbacks fail closed', @TestPartialCallbacksFailClosed);
-  T.Run('unsupported record default hash fails closed', @TestUnsupportedRecordDefaultHashFailsClosed);
-  T.Run('hash exception during grow keeps old table', @TestHashExceptionDuringGrowKeepsOldTable);
-  T.Run('hash exception during shrink keeps old table', @TestHashExceptionDuringShrinkKeepsOldTable);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.swisstable_custom_callbacks');
+  T.Test('integer callbacks override fast path', @TestIntegerCallbacksOverrideFastPath);
+  T.Test('string hash callback overrides fast path', @TestStringHashCallbackOverridesFastPath);
+  T.Test('adapter forwards callbacks', @TestAdapterForwardsCallbacks);
+  T.Test('record callbacks support direct table', @TestRecordCallbacksSupportDirectTable);
+  T.Test('record callbacks support adapter surface', @TestRecordCallbacksSupportAdapterSurface);
+  T.Test('partial callbacks fail closed', @TestPartialCallbacksFailClosed);
+  T.Test('unsupported record default hash fails closed', @TestUnsupportedRecordDefaultHashFailsClosed);
+  T.Test('hash exception during grow keeps old table', @TestHashExceptionDuringGrowKeepsOldTable);
+  T.Test('hash exception during shrink keeps old table', @TestHashExceptionDuringShrinkKeepsOldTable);
+  if not T.Run then Halt(1);
 end.

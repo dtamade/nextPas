@@ -3,7 +3,7 @@ program test_forwardlist_managed_zero;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections.forward_list;
 
 type
@@ -17,7 +17,7 @@ type
   TManagedForwardList = specialize TForwardList<TManagedRecord>;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GManagedRecordAlive: Int32 = 0;
   GManagedRecordBadFinalize: Int32 = 0;
 
@@ -72,7 +72,7 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.forwardlist_managed_zero');
-  T.Run('managed Zero reinitializes forward_list slots', @TestManagedZeroReinitializesSlots);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.forwardlist_managed_zero');
+  T.Test('managed Zero reinitializes forward_list slots', @TestManagedZeroReinitializesSlots);
+  if not T.Run then Halt(1);
 end.

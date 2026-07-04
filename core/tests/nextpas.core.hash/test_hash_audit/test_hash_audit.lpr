@@ -5,7 +5,7 @@ program test_hash_audit;
 uses
   SysUtils,
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.hash.base,
   nextpas.core.hash,
   nextpas.core.hash.wyhash;
@@ -14,7 +14,7 @@ type
   TArgErrorProc = procedure;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GNilByte: PByte = nil;
 
 procedure CheckRaisesArgumentError(AProc: TArgErrorProc; const AMessage: string);
@@ -357,10 +357,10 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.hash.audit');
-  T.Run('known vectors', @TestKnownVectors);
-  T.Run('streaming boundary sizes', @TestStreamingBoundaries);
-  T.Run('sum destination bounds', @TestSumDestinationBounds);
-  T.Run('malformed input contracts', @TestMalformedInputs);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.hash.audit');
+  T.Test('known vectors', @TestKnownVectors);
+  T.Test('streaming boundary sizes', @TestStreamingBoundaries);
+  T.Test('sum destination bounds', @TestSumDestinationBounds);
+  T.Test('malformed input contracts', @TestMalformedInputs);
+  if not T.Run then Halt(1);
 end.

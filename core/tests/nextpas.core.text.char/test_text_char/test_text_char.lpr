@@ -4,10 +4,10 @@ program test_text_char;
 
 uses
   nextpas.core.text.char,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestIsDigit;
 var
@@ -113,16 +113,16 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.text.char');
-  T.Run('IsDigit', @TestIsDigit);
-  T.Run('IsAlpha', @TestIsAlpha);
-  T.Run('IsHexDigit', @TestIsHexDigit);
-  T.Run('IsWhitespace', @TestIsWhitespace);
-  T.Run('IsControl', @TestIsControl);
-  T.Run('IsJsonSpecial', @TestIsJsonSpecial);
-  T.Run('HexDigitValue', @TestHexDigitValue);
-  T.Run('ToLower/ToUpper', @TestToLowerUpper);
-  T.Run('IsAlphaNum', @TestIsAlphaNum);
-  T.Run('table completeness', @TestTableCompleteness);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.text.char');
+  T.Test('IsDigit', @TestIsDigit);
+  T.Test('IsAlpha', @TestIsAlpha);
+  T.Test('IsHexDigit', @TestIsHexDigit);
+  T.Test('IsWhitespace', @TestIsWhitespace);
+  T.Test('IsControl', @TestIsControl);
+  T.Test('IsJsonSpecial', @TestIsJsonSpecial);
+  T.Test('HexDigitValue', @TestHexDigitValue);
+  T.Test('ToLower/ToUpper', @TestToLowerUpper);
+  T.Test('IsAlphaNum', @TestIsAlphaNum);
+  T.Test('table completeness', @TestTableCompleteness);
+  if not T.Run then Halt(1);
 end.

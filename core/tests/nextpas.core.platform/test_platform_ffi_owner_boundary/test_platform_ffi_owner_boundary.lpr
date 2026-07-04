@@ -4,7 +4,7 @@ program test_platform_ffi_owner_boundary;
 
 uses
   SysUtils,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 const
   SOURCE_DIR_FROM_TEST = '../../../src';
@@ -17,7 +17,7 @@ const
   PLATFORM_THREAD_BEHAVIOR_TEST_FROM_ROOT = 'core/tests/nextpas.core.platform.thread/test_platform_thread/test_platform_thread.lpr';
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ReadSourceFile(const APath: string): string;
 var
@@ -331,8 +331,8 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.ffi_owner_boundary');
-  T.Run('platform ffi ownership stays in ffi units', @TestPlatformFFIOwnerBoundary);
-  T.Run('platform behavior tests stay on abstract APIs', @TestPlatformBehaviorTestsStayOnAbstractAPI);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.ffi_owner_boundary');
+  T.Test('platform ffi ownership stays in ffi units', @TestPlatformFFIOwnerBoundary);
+  T.Test('platform behavior tests stay on abstract APIs', @TestPlatformBehaviorTestsStayOnAbstractAPI);
+  if not T.Run then Halt(1);
 end.

@@ -6,7 +6,7 @@ program test_platform_io_windows_real;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.platform.io.base,
   nextpas.core.platform.io,
   nextpas.core.platform.socket
@@ -16,7 +16,7 @@ uses
   {$ENDIF};
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 {$IFDEF NEXTPAS_WINDOWS}
 
@@ -329,20 +329,20 @@ end;
 {$ENDIF}
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.io.windows_real');
+  T := TTestSuite.Create('nextpas.core.platform.io.windows_real');
   {$IFDEF NEXTPAS_WINDOWS}
-  T.Run('create_with_winsock_init', @TestCreateWithWinsockInit);
-  T.Run('close_cleans_up_winsock', @TestCloseCleansUpWinsock);
-  T.Run('wait_polling_with_ready_socket', @TestWaitPollingWithReadySocket);
-  T.Run('wait_timeout_no_events', @TestWaitTimeoutNoEvents);
-  T.Run('add_duplicate_fd_error', @TestAddDuplicateFdError);
-  T.Run('remove_nonexistent_fd_error', @TestRemoveNonexistentFdError);
-  T.Run('modify_nonexistent_fd_error', @TestModifyNonexistentFdError);
-  T.Run('enable_wake_socket_pair', @TestEnableWakeSocketPair);
-  T.Run('wake_drain_roundtrip', @TestWakeDrainRoundtrip);
-  T.Run('poll_multiple_sockets', @TestPollMultipleSockets);
+  T.Test('create_with_winsock_init', @TestCreateWithWinsockInit);
+  T.Test('close_cleans_up_winsock', @TestCloseCleansUpWinsock);
+  T.Test('wait_polling_with_ready_socket', @TestWaitPollingWithReadySocket);
+  T.Test('wait_timeout_no_events', @TestWaitTimeoutNoEvents);
+  T.Test('add_duplicate_fd_error', @TestAddDuplicateFdError);
+  T.Test('remove_nonexistent_fd_error', @TestRemoveNonexistentFdError);
+  T.Test('modify_nonexistent_fd_error', @TestModifyNonexistentFdError);
+  T.Test('enable_wake_socket_pair', @TestEnableWakeSocketPair);
+  T.Test('wake_drain_roundtrip', @TestWakeDrainRoundtrip);
+  T.Test('poll_multiple_sockets', @TestPollMultipleSockets);
   {$ELSE}
-  T.Run('non-Windows skip', @TestNonWindowsSkip);
+  T.Test('non-Windows skip', @TestNonWindowsSkip);
   {$ENDIF}
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

@@ -5,11 +5,11 @@ program test_path;
 uses
   Classes,
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.path;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function LoadSourceText(const ARelativePath: string): string;
 var
@@ -338,33 +338,33 @@ end;
 {$ENDIF}
 
 begin
-  T := TTestRunner.Create('nextpas.core.path');
-  T.Run('PathJoin', @TestPathJoin);
-  T.Run('PathJoin long result', @TestPathJoinLongResult);
-  T.Run('PathJoin3', @TestPathJoin3);
-  T.Run('PathJoin3 long intermediate', @TestPathJoin3LongIntermediate);
-  T.Run('PathDir', @TestPathDir);
-  T.Run('PathDir long result', @TestPathDirLongResult);
-  T.Run('PathBase', @TestPathBase);
-  T.Run('PathSplit', @TestPathSplit);
-  T.Run('PathBase long result', @TestPathBaseLongResult);
-  T.Run('PathExt', @TestPathExt);
-  T.Run('PathExt long result', @TestPathExtLongResult);
-  T.Run('PathChangeExt', @TestPathChangeExt);
-  T.Run('PathChangeExt long result', @TestPathChangeExtLongResult);
-  T.Run('PathIsAbsolute', @TestPathIsAbsolute);
-  T.Run('PathNormalize', @TestPathNormalize);
-  T.Run('PathNormalize long result', @TestPathNormalizeLongResult);
-  T.Run('PathRelative', @TestPathRelative);
-  T.Run('PathRelative long result', @TestPathRelativeLongResult);
-  T.Run('PathHasExt', @TestPathHasExt);
-  T.Run('PathWithoutExt', @TestPathWithoutExt);
-  T.Run('SysUtils compat', @TestSysUtilsCompat);
-  T.Run('ExtractFilePath source contract', @TestExtractFilePathSourceContract);
-  T.Run('PathJoin fallback source contract', @TestPathJoinFallbackSourceContract);
-  T.Run('Path delegates platform root contract', @TestPathDelegatesPlatformRootContract);
+  T := TTestSuite.Create('nextpas.core.path');
+  T.Test('PathJoin', @TestPathJoin);
+  T.Test('PathJoin long result', @TestPathJoinLongResult);
+  T.Test('PathJoin3', @TestPathJoin3);
+  T.Test('PathJoin3 long intermediate', @TestPathJoin3LongIntermediate);
+  T.Test('PathDir', @TestPathDir);
+  T.Test('PathDir long result', @TestPathDirLongResult);
+  T.Test('PathBase', @TestPathBase);
+  T.Test('PathSplit', @TestPathSplit);
+  T.Test('PathBase long result', @TestPathBaseLongResult);
+  T.Test('PathExt', @TestPathExt);
+  T.Test('PathExt long result', @TestPathExtLongResult);
+  T.Test('PathChangeExt', @TestPathChangeExt);
+  T.Test('PathChangeExt long result', @TestPathChangeExtLongResult);
+  T.Test('PathIsAbsolute', @TestPathIsAbsolute);
+  T.Test('PathNormalize', @TestPathNormalize);
+  T.Test('PathNormalize long result', @TestPathNormalizeLongResult);
+  T.Test('PathRelative', @TestPathRelative);
+  T.Test('PathRelative long result', @TestPathRelativeLongResult);
+  T.Test('PathHasExt', @TestPathHasExt);
+  T.Test('PathWithoutExt', @TestPathWithoutExt);
+  T.Test('SysUtils compat', @TestSysUtilsCompat);
+  T.Test('ExtractFilePath source contract', @TestExtractFilePathSourceContract);
+  T.Test('PathJoin fallback source contract', @TestPathJoinFallbackSourceContract);
+  T.Test('Path delegates platform root contract', @TestPathDelegatesPlatformRootContract);
 {$IFDEF NEXTPAS_WINDOWS}
-  T.Run('Windows root wrapper contract', @TestWindowsRootWrapperContract);
+  T.Test('Windows root wrapper contract', @TestWindowsRootWrapperContract);
 {$ENDIF}
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

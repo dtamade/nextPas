@@ -15,10 +15,10 @@ uses
   nextpas.core.toml.value,
   nextpas.core.toml.builder,
   nextpas.core.toml,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { === 1. Lifecycle & Resource Management === }
 
@@ -308,33 +308,32 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.toml stress');
+  T := TTestSuite.Create('nextpas.core.toml stress');
   { Lifecycle }
-  T.Run('parse reuse', @TestParseReuse);
-  T.Run('many parse reuse cycles', @TestManyParseReuseCycles);
-  T.Run('interface auto-release (1000x)', @TestInterfaceAutoRelease);
-  T.Run('builder auto-release (1000x)', @TestBuilderAutoRelease);
+  T.Test('parse reuse', @TestParseReuse);
+  T.Test('many parse reuse cycles', @TestManyParseReuseCycles);
+  T.Test('interface auto-release (1000x)', @TestInterfaceAutoRelease);
+  T.Test('builder auto-release (1000x)', @TestBuilderAutoRelease);
   { Boundary/Depth }
-  T.Run('200 empty arrays', @TestManyEmptyArrays);
-  T.Run('200 empty inline tables', @TestManyEmptyInlineTables);
-  T.Run('50-deep inline table', @TestDeepInlineTableNesting);
-  T.Run('depth limit exact (128/129)', @TestDepthLimitExact);
+  T.Test('200 empty arrays', @TestManyEmptyArrays);
+  T.Test('200 empty inline tables', @TestManyEmptyInlineTables);
+  T.Test('50-deep inline table', @TestDeepInlineTableNesting);
+  T.Test('depth limit exact (128/129)', @TestDepthLimitExact);
   { State Machine }
-  T.Run('value array then dotted key', @TestValueArrayThenDottedKey);
-  T.Run('inline dotted key correct count', @TestInlineDottedKeyCorrectCount);
-  T.Run('array-table then value array', @TestArrayTableThenValueArray);
-  T.Run('dotted then explicit rejected', @TestDottedKeyImplicitThenExplicit);
-  T.Run('explicit then dotted ok', @TestExplicitThenDottedOk);
+  T.Test('value array then dotted key', @TestValueArrayThenDottedKey);
+  T.Test('inline dotted key correct count', @TestInlineDottedKeyCorrectCount);
+  T.Test('array-table then value array', @TestArrayTableThenValueArray);
+  T.Test('dotted then explicit rejected', @TestDottedKeyImplicitThenExplicit);
+  T.Test('explicit then dotted ok', @TestExplicitThenDottedOk);
   { Large Scale }
-  T.Run('5000 keys', @TestLargeTable5000Keys);
-  T.Run('500 array-table entries', @TestLargeArrayTable);
-  T.Run('duplicate in large table', @TestDuplicateKeyInLargeTable);
+  T.Test('5000 keys', @TestLargeTable5000Keys);
+  T.Test('500 array-table entries', @TestLargeArrayTable);
+  T.Test('duplicate in large table', @TestDuplicateKeyInLargeTable);
   { Stringify }
-  T.Run('stringify round-trip large', @TestStringifyRoundTripLargeDoc);
-  T.Run('stringify empty document', @TestStringifyEmptyDocument);
+  T.Test('stringify round-trip large', @TestStringifyRoundTripLargeDoc);
+  T.Test('stringify empty document', @TestStringifyEmptyDocument);
   { Enumerator }
-  T.Run('enumerate 100 items', @TestEnumeratorOnLargeTable);
-  T.Run('enumerate empty', @TestEnumeratorOnEmptyTable);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  T.Test('enumerate 100 items', @TestEnumeratorOnLargeTable);
+  T.Test('enumerate empty', @TestEnumeratorOnEmptyTable);
+  if not T.Run then Halt(1);
 end.

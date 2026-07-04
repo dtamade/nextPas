@@ -4,7 +4,7 @@ program test_http_integration;
 
 uses
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.text.conv,
   nextpas.core.io.intf,
   nextpas.core.http.base,
@@ -84,7 +84,7 @@ type
   end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GLog: string;
   GHandlerCalled: Boolean;
 
@@ -653,29 +653,29 @@ end;
 { ===== Main ===== }
 
 begin
-  T := TTestRunner.Create('nextpas.core.http.integration');
+  T := TTestSuite.Create('nextpas.core.http.integration');
   { ServeHTTP + PathParam }
-  T.Run('ServeHTTP static route', @TestServeHTTPStaticRoute);
-  T.Run('ServeHTTP with :param', @TestServeHTTPWithParam);
-  T.Run('ServeHTTP multiple params', @TestServeHTTPMultipleParams);
-  T.Run('ServeHTTP wildcard', @TestServeHTTPWildcard);
-  T.Run('ServeHTTP 404', @TestServeHTTP404);
-  T.Run('ServeHTTP 405 + Allow header', @TestServeHTTP405);
+  T.Test('ServeHTTP static route', @TestServeHTTPStaticRoute);
+  T.Test('ServeHTTP with :param', @TestServeHTTPWithParam);
+  T.Test('ServeHTTP multiple params', @TestServeHTTPMultipleParams);
+  T.Test('ServeHTTP wildcard', @TestServeHTTPWildcard);
+  T.Test('ServeHTTP 404', @TestServeHTTP404);
+  T.Test('ServeHTTP 405 + Allow header', @TestServeHTTP405);
   { Middleware }
-  T.Run('Router.Use single middleware', @TestRouterUseSingleMiddleware);
-  T.Run('Router.Use multiple middlewares order', @TestRouterUseMultipleMiddlewares);
-  T.Run('Middleware short-circuit', @TestMiddlewareShortCircuit);
-  T.Run('Middleware + path params', @TestMiddlewareWithPathParams);
+  T.Test('Router.Use single middleware', @TestRouterUseSingleMiddleware);
+  T.Test('Router.Use multiple middlewares order', @TestRouterUseMultipleMiddlewares);
+  T.Test('Middleware short-circuit', @TestMiddlewareShortCircuit);
+  T.Test('Middleware + path params', @TestMiddlewareWithPathParams);
   { Header validation }
-  T.Run('Header CRLF in value raises', @TestHeaderCRLFInValueRaises);
-  T.Run('Header empty name raises', @TestHeaderEmptyNameRaises);
-  T.Run('Header colon in name raises', @TestHeaderColonInNameRaises);
+  T.Test('Header CRLF in value raises', @TestHeaderCRLFInValueRaises);
+  T.Test('Header empty name raises', @TestHeaderEmptyNameRaises);
+  T.Test('Header colon in name raises', @TestHeaderColonInNameRaises);
   { URL edge cases }
-  T.Run('URL parse no path', @TestUrlParseNoPath);
-  T.Run('URL parse port overflow', @TestUrlParsePortOverflow);
-  T.Run('URL parse IPv6 with port', @TestUrlParseIPv6WithPort);
+  T.Test('URL parse no path', @TestUrlParseNoPath);
+  T.Test('URL parse port overflow', @TestUrlParsePortOverflow);
+  T.Test('URL parse IPv6 with port', @TestUrlParseIPv6WithPort);
   { H1 Writer }
-  T.Run('H1 Writer chunked encoding auto-added', @TestH1WriterChunkedWhenNoContentLength);
-  T.Run('H1 Writer explicit Content-Length', @TestH1WriterExplicitContentLength);
-  T.Summary;
+  T.Test('H1 Writer chunked encoding auto-added', @TestH1WriterChunkedWhenNoContentLength);
+  T.Test('H1 Writer explicit Content-Length', @TestH1WriterExplicitContentLength);
+  if not T.Run then Halt(1);
 end.

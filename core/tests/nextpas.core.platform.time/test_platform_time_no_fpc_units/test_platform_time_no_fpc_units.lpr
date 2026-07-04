@@ -4,7 +4,7 @@ program test_platform_time_no_fpc_units;
 
 uses
   SysUtils,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 const
   TIME_FACADE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.time.pas';
@@ -13,7 +13,7 @@ const
   TIME_HOST_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.time.host.pas';
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ReadSourceFile(const APath: string): string;
 var
@@ -78,7 +78,7 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.time.no_fpc_units');
-  T.Run('No FPC platform units', @TestNoFpcPlatformUnits);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.time.no_fpc_units');
+  T.Test('No FPC platform units', @TestNoFpcPlatformUnits);
+  if not T.Run then Halt(1);
 end.

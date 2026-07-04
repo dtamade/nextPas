@@ -6,7 +6,7 @@ uses
   nextpas.core.thread.init,
   SysUtils,
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.net,
   nextpas.core.net.base,
   nextpas.core.net.intf,
@@ -50,7 +50,7 @@ type
   end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GClientFactoryTransport: IHttpTransport;
   GServerFactoryTransport: IHttpServerTransport;
   GSeenClientTimeout: Int64;
@@ -534,24 +534,24 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.http.impl.registry');
-  T.Run('ResolveClientTransport raises when version is missing',
+  T := TTestSuite.Create('nextpas.core.http.impl.registry');
+  T.Test('ResolveClientTransport raises when version is missing',
     @TestResolveClientTransportRaisesWhenMissing);
-  T.Run('ResolveServerTransport raises when version is missing',
+  T.Test('ResolveServerTransport raises when version is missing',
     @TestResolveServerTransportRaisesWhenMissing);
-  T.Run('THttpClient default constructor uses registry default',
+  T.Test('THttpClient default constructor uses registry default',
     @TestClientConstructorUsesRegistryDefault);
-  T.Run('THttpClient default constructor accepts registered HTTP/2 registry default',
+  T.Test('THttpClient default constructor accepts registered HTTP/2 registry default',
     @TestClientConstructorUsesRegisteredHttp2RegistryDefault);
-  T.Run('THttpClient explicit version overrides registry default',
+  T.Test('THttpClient explicit version overrides registry default',
     @TestClientConstructorUsesExplicitVersionOverRegistryDefault);
-  T.Run('THttpServer default constructor uses registry default',
+  T.Test('THttpServer default constructor uses registry default',
     @TestServerConstructorUsesRegistryDefault);
-  T.Run('THttpServer default constructor accepts registered HTTP/3 registry default',
+  T.Test('THttpServer default constructor accepts registered HTTP/3 registry default',
     @TestServerConstructorUsesRegisteredHttp3RegistryDefault);
-  T.Run('THttpServer explicit version overrides registry default',
+  T.Test('THttpServer explicit version overrides registry default',
     @TestServerConstructorUsesExplicitVersionOverRegistryDefault);
-  T.Run('Built-in HTTP/2 server transport is registered',
+  T.Test('Built-in HTTP/2 server transport is registered',
     @TestBuiltinHttp2ServerTransportIsRegistered);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

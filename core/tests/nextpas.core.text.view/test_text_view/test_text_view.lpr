@@ -5,10 +5,10 @@ program test_text_view;
 uses
   nextpas.core.text.view,
   nextpas.core.base,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure CheckInvalidViewCreateRaises(const AMessage: string);
 begin
@@ -274,25 +274,25 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.text.view');
-  T.Run('create and basic', @TestCreateAndBasic);
-  T.Run('reject nil data with non-zero length', @TestRejectNilDataWithNonZeroLength);
-  T.Run('from string', @TestFromStr);
-  T.Run('slice', @TestSlice);
-  T.Run('slice clamps overflowed length', @TestSliceClampsOverflowedLength);
-  T.Run('left/right', @TestLeftRight);
-  T.Run('trim', @TestTrim);
-  T.Run('equals', @TestEquals);
-  T.Run('equals ignore case', @TestEqualsIgnoreCase);
-  T.Run('starts/ends with', @TestStartsEndsWith);
-  T.Run('indexOf char', @TestIndexOf);
-  T.Run('indexOf string', @TestIndexOfStr);
-  T.Run('string index helpers', @TestStringIndexOfHelpers);
-  T.Run('advance cursor', @TestAdvanceCursor);
-  T.Run('toString', @TestToString);
-  T.Run('countChar', @TestCountChar);
-  T.Run('lastIndexOf', @TestLastIndexOf);
-  T.Run('splitFirst', @TestSplitFirst);
-  T.Run('equalsIgnoreCase empty', @TestEqualsIgnoreCaseEmpty);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.text.view');
+  T.Test('create and basic', @TestCreateAndBasic);
+  T.Test('reject nil data with non-zero length', @TestRejectNilDataWithNonZeroLength);
+  T.Test('from string', @TestFromStr);
+  T.Test('slice', @TestSlice);
+  T.Test('slice clamps overflowed length', @TestSliceClampsOverflowedLength);
+  T.Test('left/right', @TestLeftRight);
+  T.Test('trim', @TestTrim);
+  T.Test('equals', @TestEquals);
+  T.Test('equals ignore case', @TestEqualsIgnoreCase);
+  T.Test('starts/ends with', @TestStartsEndsWith);
+  T.Test('indexOf char', @TestIndexOf);
+  T.Test('indexOf string', @TestIndexOfStr);
+  T.Test('string index helpers', @TestStringIndexOfHelpers);
+  T.Test('advance cursor', @TestAdvanceCursor);
+  T.Test('toString', @TestToString);
+  T.Test('countChar', @TestCountChar);
+  T.Test('lastIndexOf', @TestLastIndexOf);
+  T.Test('splitFirst', @TestSplitFirst);
+  T.Test('equalsIgnoreCase empty', @TestEqualsIgnoreCaseEmpty);
+  if not T.Run then Halt(1);
 end.

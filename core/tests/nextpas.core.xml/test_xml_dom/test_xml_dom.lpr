@@ -9,12 +9,12 @@ uses
   nextpas.core.text.conv,
   nextpas.core.mem.default,
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.xml.base,
   nextpas.core.xml.dom;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function NodeFindChildren(const ANode: TXmlNode; const AName: string): TXmlNodeArray;
 var
@@ -872,52 +872,52 @@ end;
 { === Main === }
 
 begin
-  T := TTestRunner.Create('XML DOM');
-  T.Run('ParseSimple', @TestParseSimple);
-  T.Run('ParseWithAllocator', @TestParseWithAllocator);
-  T.Run('ParseNested', @TestParseNested);
-  T.Run('ParseAttributes', @TestParseAttributes);
-  T.Run('ParseRejectsDuplicateAttributes', @TestParseRejectsDuplicateAttributes);
-  T.Run('ParseRejectsDuplicateExpandedAttributes',
+  T := TTestSuite.Create('XML DOM');
+  T.Test('ParseSimple', @TestParseSimple);
+  T.Test('ParseWithAllocator', @TestParseWithAllocator);
+  T.Test('ParseNested', @TestParseNested);
+  T.Test('ParseAttributes', @TestParseAttributes);
+  T.Test('ParseRejectsDuplicateAttributes', @TestParseRejectsDuplicateAttributes);
+  T.Test('ParseRejectsDuplicateExpandedAttributes',
     @TestParseRejectsDuplicateExpandedAttributes);
-  T.Run('ParseAllowsDistinctExpandedAttributes',
+  T.Test('ParseAllowsDistinctExpandedAttributes',
     @TestParseAllowsDistinctExpandedAttributes);
-  T.Run('ParseRejectsUnboundNamespacePrefix',
+  T.Test('ParseRejectsUnboundNamespacePrefix',
     @TestParseRejectsUnboundNamespacePrefix);
-  T.Run('ParseRejectsRawLessThanInAttributeValue',
+  T.Test('ParseRejectsRawLessThanInAttributeValue',
     @TestParseRejectsRawLessThanInAttributeValue);
-  T.Run('FindChild', @TestFindChild);
-  T.Run('FindChildren', @TestFindChildren);
-  T.Run('TextConcat', @TestTextConcat);
-  T.Run('TextRecursive', @TestTextRecursive);
-  T.Run('SelectPathSimple', @TestSelectPathSimple);
-  T.Run('SelectPathMultiple', @TestSelectPathMultiple);
-  T.Run('SelectPathNoMatch', @TestSelectPathNoMatch);
-  T.Run('SelectPathRootMismatch', @TestSelectPathRootMismatch);
-  T.Run('EmptyDocument', @TestEmptyDocument);
-  T.Run('DocumentWhitespace', @TestDocumentWhitespace);
-  T.Run('PreRootDoctype', @TestPreRootDoctype);
-  T.Run('InvalidDocumentText', @TestInvalidDocumentText);
-  T.Run('MisplacedDoctype', @TestMisplacedDoctype);
-  T.Run('MissingRootElement', @TestMissingRootElement);
-  T.Run('SelfClosingElement', @TestSelfClosingElement);
-  T.Run('CommentNode', @TestCommentNode);
-  T.Run('RejectsInvalidCommentPayload', @TestRejectsInvalidCommentPayload);
-  T.Run('CDataNode', @TestCDataNode);
-  T.Run('PINode', @TestPINode);
-  T.Run('NamespacedAttributes', @TestNamespacedAttributes);
-  T.Run('DeepNesting', @TestDeepNesting);
-  T.Run('LargeDocument', @TestLargeDocument);
-  T.Run('ParentLink', @TestParentLink);
-  T.Run('NodeKinds', @TestNodeKinds);
-  T.Run('MixedContent', @TestMixedContent);
-  T.Run('SelectPathDeep', @TestSelectPathDeep);
-  T.Run('GetAttrWithPrefix', @TestGetAttrWithPrefix);
-  T.Run('EmptyRoot', @TestEmptyRoot);
-  T.Run('SelectPathEmpty', @TestSelectPathEmpty);
-  T.Run('SelectPathNonExistentDeep', @TestSelectPathNonExistentDeep);
-  T.Run('SelectPathMultiDepth', @TestSelectPathMultiDepth);
-  T.Run('ChildCountVaried', @TestChildCountVaried);
-  T.Run('ChildCountZero', @TestChildCountZero);
-  T.Summary;
+  T.Test('FindChild', @TestFindChild);
+  T.Test('FindChildren', @TestFindChildren);
+  T.Test('TextConcat', @TestTextConcat);
+  T.Test('TextRecursive', @TestTextRecursive);
+  T.Test('SelectPathSimple', @TestSelectPathSimple);
+  T.Test('SelectPathMultiple', @TestSelectPathMultiple);
+  T.Test('SelectPathNoMatch', @TestSelectPathNoMatch);
+  T.Test('SelectPathRootMismatch', @TestSelectPathRootMismatch);
+  T.Test('EmptyDocument', @TestEmptyDocument);
+  T.Test('DocumentWhitespace', @TestDocumentWhitespace);
+  T.Test('PreRootDoctype', @TestPreRootDoctype);
+  T.Test('InvalidDocumentText', @TestInvalidDocumentText);
+  T.Test('MisplacedDoctype', @TestMisplacedDoctype);
+  T.Test('MissingRootElement', @TestMissingRootElement);
+  T.Test('SelfClosingElement', @TestSelfClosingElement);
+  T.Test('CommentNode', @TestCommentNode);
+  T.Test('RejectsInvalidCommentPayload', @TestRejectsInvalidCommentPayload);
+  T.Test('CDataNode', @TestCDataNode);
+  T.Test('PINode', @TestPINode);
+  T.Test('NamespacedAttributes', @TestNamespacedAttributes);
+  T.Test('DeepNesting', @TestDeepNesting);
+  T.Test('LargeDocument', @TestLargeDocument);
+  T.Test('ParentLink', @TestParentLink);
+  T.Test('NodeKinds', @TestNodeKinds);
+  T.Test('MixedContent', @TestMixedContent);
+  T.Test('SelectPathDeep', @TestSelectPathDeep);
+  T.Test('GetAttrWithPrefix', @TestGetAttrWithPrefix);
+  T.Test('EmptyRoot', @TestEmptyRoot);
+  T.Test('SelectPathEmpty', @TestSelectPathEmpty);
+  T.Test('SelectPathNonExistentDeep', @TestSelectPathNonExistentDeep);
+  T.Test('SelectPathMultiDepth', @TestSelectPathMultiDepth);
+  T.Test('ChildCountVaried', @TestChildCountVaried);
+  T.Test('ChildCountZero', @TestChildCountZero);
+  if not T.Run then Halt(1);
 end.

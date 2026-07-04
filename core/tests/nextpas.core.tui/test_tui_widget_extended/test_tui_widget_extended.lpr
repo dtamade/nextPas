@@ -11,8 +11,8 @@ uses
   nextpas.core.tui.widget.tree,
   nextpas.core.tui.widget.dialog,
   nextpas.core.tui.widget.menu,
-  nextpas.core.testing;
-var T: TTestRunner;
+  nextpas.core.test;
+var T: TTestSuite;
 
 { === TTree === }
 procedure TestTreeRender;
@@ -68,10 +68,9 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.widget.extended');
-  T.Run('tree render', @TestTreeRender);
-  T.Run('dialog render', @TestDialogRender);
-  T.Run('menu render', @TestMenuRender);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  T := TTestSuite.Create('nextpas.core.tui.widget.extended');
+  T.Test('tree render', @TestTreeRender);
+  T.Test('dialog render', @TestDialogRender);
+  T.Test('menu render', @TestMenuRender);
+  if not T.Run then Halt(1);
 end.

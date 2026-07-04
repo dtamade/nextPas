@@ -5,7 +5,7 @@ program test_hash;
 uses
   SysUtils,
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.hash.base,
   nextpas.core.hash;
 
@@ -13,7 +13,7 @@ type
   TArgErrorProc = procedure;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GNilByte: PByte = nil;
 
 procedure CheckRaisesArgumentError(AProc: TArgErrorProc; const AMessage: string);
@@ -237,10 +237,10 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.hash');
-  T.Run('SHA256 vectors', @TestSHA256Vectors);
-  T.Run('MD5 and SHA1 vectors', @TestMD5AndSHA1Vectors);
-  T.Run('streaming hasher', @TestStreamingHasher);
-  T.Run('nil buffer contract', @TestNilBufferContract);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.hash');
+  T.Test('SHA256 vectors', @TestSHA256Vectors);
+  T.Test('MD5 and SHA1 vectors', @TestMD5AndSHA1Vectors);
+  T.Test('streaming hasher', @TestStreamingHasher);
+  T.Test('nil buffer contract', @TestNilBufferContract);
+  if not T.Run then Halt(1);
 end.

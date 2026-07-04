@@ -4,12 +4,12 @@ program test_encoding;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.encoding,
   nextpas.core.encoding.base;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function StrToBytes(const AStr: string): TBytes;
 var
@@ -263,34 +263,34 @@ end;
 { Main }
 
 begin
-  T := TTestRunner.Create('nextpas.core.encoding');
+  T := TTestSuite.Create('nextpas.core.encoding');
 
-  T.Run('Base64 empty', @TestBase64Empty);
-  T.Run('Base64 "f"', @TestBase64F);
-  T.Run('Base64 "fo"', @TestBase64Fo);
-  T.Run('Base64 "foo"', @TestBase64Foo);
-  T.Run('Base64 "foobar"', @TestBase64Foobar);
-  T.Run('Base64 binary', @TestBase64Binary);
-  T.Run('Base64 URL-safe', @TestBase64UrlSafe);
+  T.Test('Base64 empty', @TestBase64Empty);
+  T.Test('Base64 "f"', @TestBase64F);
+  T.Test('Base64 "fo"', @TestBase64Fo);
+  T.Test('Base64 "foo"', @TestBase64Foo);
+  T.Test('Base64 "foobar"', @TestBase64Foobar);
+  T.Test('Base64 binary', @TestBase64Binary);
+  T.Test('Base64 URL-safe', @TestBase64UrlSafe);
 
-  T.Run('Hex empty', @TestHexEmpty);
-  T.Run('Hex single byte', @TestHexSingleByte);
-  T.Run('Hex multi bytes', @TestHexMultiBytes);
+  T.Test('Hex empty', @TestHexEmpty);
+  T.Test('Hex single byte', @TestHexSingleByte);
+  T.Test('Hex multi bytes', @TestHexMultiBytes);
 
-  T.Run('Varint 0', @TestVarintZero);
-  T.Run('Varint 1', @TestVarintOne);
-  T.Run('Varint 127', @TestVarint127);
-  T.Run('Varint 128', @TestVarint128);
-  T.Run('Varint 300', @TestVarint300);
-  T.Run('Varint max UInt64', @TestVarintMaxUInt64);
-  T.Run('Signed varint positive', @TestSignedVarintPositive);
-  T.Run('Signed varint negative', @TestSignedVarintNegative);
+  T.Test('Varint 0', @TestVarintZero);
+  T.Test('Varint 1', @TestVarintOne);
+  T.Test('Varint 127', @TestVarint127);
+  T.Test('Varint 128', @TestVarint128);
+  T.Test('Varint 300', @TestVarint300);
+  T.Test('Varint max UInt64', @TestVarintMaxUInt64);
+  T.Test('Signed varint positive', @TestSignedVarintPositive);
+  T.Test('Signed varint negative', @TestSignedVarintNegative);
 
-  T.Run('URL space', @TestUrlSpace);
-  T.Run('URL Chinese', @TestUrlChinese);
-  T.Run('URL reserved chars', @TestUrlReserved);
-  T.Run('URL no double encode', @TestUrlNoDoubleEncode);
-  T.Run('URL unreserved passthrough', @TestUrlUnreserved);
+  T.Test('URL space', @TestUrlSpace);
+  T.Test('URL Chinese', @TestUrlChinese);
+  T.Test('URL reserved chars', @TestUrlReserved);
+  T.Test('URL no double encode', @TestUrlNoDoubleEncode);
+  T.Test('URL unreserved passthrough', @TestUrlUnreserved);
 
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

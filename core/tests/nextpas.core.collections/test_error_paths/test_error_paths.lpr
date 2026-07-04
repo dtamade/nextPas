@@ -5,7 +5,7 @@ program test_error_paths;
 uses
   SysUtils,
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections.vec,
   nextpas.core.collections.vecdeque,
   nextpas.core.collections.stack,
@@ -32,7 +32,7 @@ begin
 end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { Vec }
 procedure TestVecPopEmpty;
@@ -171,20 +171,20 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.error_paths');
-  T.Run('Vec.Pop empty', @TestVecPopEmpty);
-  T.Run('Vec.Get out of range', @TestVecGetOutOfRange);
-  T.Run('VecDeque.PopFront empty', @TestDequePopFrontEmpty);
-  T.Run('VecDeque.PopBack empty', @TestDequePopBackEmpty);
-  T.Run('Stack.Pop empty', @TestStackPopEmpty);
-  T.Run('Stack.Peek empty', @TestStackPeekEmpty);
-  T.Run('List.PopFront empty', @TestListPopFrontEmpty);
-  T.Run('List.PopBack empty', @TestListPopBackEmpty);
-  T.Run('ForwardList.PopFront empty', @TestFwdListPopFrontEmpty);
-  T.Run('PQ.Pop empty', @TestPQPopEmpty);
-  T.Run('PQ.Peek empty', @TestPQPeekEmpty);
-  T.Run('CircularBuffer.Pop empty', @TestCBPopEmpty);
-  T.Run('TreeSet.Min empty', @TestTreeSetMinEmpty);
-  T.Run('TreeSet.Max empty', @TestTreeSetMaxEmpty);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.error_paths');
+  T.Test('Vec.Pop empty', @TestVecPopEmpty);
+  T.Test('Vec.Get out of range', @TestVecGetOutOfRange);
+  T.Test('VecDeque.PopFront empty', @TestDequePopFrontEmpty);
+  T.Test('VecDeque.PopBack empty', @TestDequePopBackEmpty);
+  T.Test('Stack.Pop empty', @TestStackPopEmpty);
+  T.Test('Stack.Peek empty', @TestStackPeekEmpty);
+  T.Test('List.PopFront empty', @TestListPopFrontEmpty);
+  T.Test('List.PopBack empty', @TestListPopBackEmpty);
+  T.Test('ForwardList.PopFront empty', @TestFwdListPopFrontEmpty);
+  T.Test('PQ.Pop empty', @TestPQPopEmpty);
+  T.Test('PQ.Peek empty', @TestPQPeekEmpty);
+  T.Test('CircularBuffer.Pop empty', @TestCBPopEmpty);
+  T.Test('TreeSet.Min empty', @TestTreeSetMinEmpty);
+  T.Test('TreeSet.Max empty', @TestTreeSetMaxEmpty);
+  if not T.Run then Halt(1);
 end.

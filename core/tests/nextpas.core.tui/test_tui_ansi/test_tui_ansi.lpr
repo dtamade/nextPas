@@ -7,10 +7,10 @@ uses
   nextpas.core.tui.color,
   nextpas.core.tui.modifier,
   nextpas.core.tui.ansi,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   B: TStringBuilder;
 
 procedure Setup;
@@ -189,24 +189,22 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.ansi');
-  T.Run('hide cursor', @TestHideCursor);
-  T.Run('show cursor', @TestShowCursor);
-  T.Run('move to', @TestMoveTo);
-  T.Run('clear screen', @TestClearScreen);
-  T.Run('alt screen', @TestAltScreen);
-  T.Run('sgr reset', @TestSgrReset);
-  T.Run('sgr fg indexed', @TestSgrFgIndexed);
-  T.Run('sgr bg indexed', @TestSgrBgIndexed);
-  T.Run('sgr bg reset', @TestSgrBgReset);
-  T.Run('sgr fg rgb', @TestSgrFgRgb);
-  T.Run('sgr fg reset', @TestSgrFgReset);
-  T.Run('sgr underline color', @TestSgrUnderlineColor);
-  T.Run('sgr modifier add', @TestSgrModifierAdd);
-  T.Run('sgr modifier clear', @TestSgrModifierClear);
-  T.Run('sgr modifier clear deduplicates shared codes', @TestSgrModifierClearDeduplicatesSharedCodes);
-  T.Run('mouse tracking', @TestMouseTracking);
-  T.Summary;
-  if not T.AllPassed then
-    Halt(1);
+  T := TTestSuite.Create('nextpas.core.tui.ansi');
+  T.Test('hide cursor', @TestHideCursor);
+  T.Test('show cursor', @TestShowCursor);
+  T.Test('move to', @TestMoveTo);
+  T.Test('clear screen', @TestClearScreen);
+  T.Test('alt screen', @TestAltScreen);
+  T.Test('sgr reset', @TestSgrReset);
+  T.Test('sgr fg indexed', @TestSgrFgIndexed);
+  T.Test('sgr bg indexed', @TestSgrBgIndexed);
+  T.Test('sgr bg reset', @TestSgrBgReset);
+  T.Test('sgr fg rgb', @TestSgrFgRgb);
+  T.Test('sgr fg reset', @TestSgrFgReset);
+  T.Test('sgr underline color', @TestSgrUnderlineColor);
+  T.Test('sgr modifier add', @TestSgrModifierAdd);
+  T.Test('sgr modifier clear', @TestSgrModifierClear);
+  T.Test('sgr modifier clear deduplicates shared codes', @TestSgrModifierClearDeduplicatesSharedCodes);
+  T.Test('mouse tracking', @TestMouseTracking);
+  if not T.Run then Halt(1);
 end.

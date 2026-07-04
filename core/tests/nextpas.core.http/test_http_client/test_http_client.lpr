@@ -6,7 +6,7 @@ uses
   nextpas.core.thread.init,
   SysUtils,
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.text.conv,
   nextpas.core.errors,
   nextpas.core.fs,
@@ -30,7 +30,7 @@ uses
   nextpas.core.platform.thread;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GRawListener: ITcpListener;
   GRawResponse1: string;
   GRawResponse2: string;
@@ -7165,249 +7165,249 @@ end;
 { Main }
 
 begin
-  T := TTestRunner.Create('nextpas.core.http.client');
-  T.Run('Client GET returns 200 + body', @TestClientGet200);
-  T.Run('Client Send rejects nil request', @TestClientSendRejectsNilRequest);
-  T.Run('H1 client transport rejects nil request inputs',
+  T := TTestSuite.Create('nextpas.core.http.client');
+  T.Test('Client GET returns 200 + body', @TestClientGet200);
+  T.Test('Client Send rejects nil request', @TestClientSendRejectsNilRequest);
+  T.Test('H1 client transport rejects nil request inputs',
     @TestH1ClientTransportRejectsNilRequestInputs);
-  T.Run('Client Send rejects nil transport response',
+  T.Test('Client Send rejects nil transport response',
     @TestClientSendRejectsNilTransportResponse);
-  T.Run('Client Send rejects redirect with nil headers',
+  T.Test('Client Send rejects redirect with nil headers',
     @TestClientSendRejectsRedirectWithNilHeaders);
-  T.Run('Client GET with custom headers', @TestClientGetCustomHeaders);
-  T.Run('Client Send forwards Basic auth helper header',
+  T.Test('Client GET with custom headers', @TestClientGetCustomHeaders);
+  T.Test('Client Send forwards Basic auth helper header',
     @TestClientSendWithBasicAuthHelper);
-  T.Run('Client POST with body', @TestClientPostBody);
-  T.Run('Client Send uses NewRequest headers/body helper',
+  T.Test('Client POST with body', @TestClientPostBody);
+  T.Test('Client Send uses NewRequest headers/body helper',
     @TestClientSendWithRequestHelperHeadersBody);
-  T.Run('Client Send uses NewRequest headers-only helper',
+  T.Test('Client Send uses NewRequest headers-only helper',
     @TestClientSendWithRequestHelperHeadersOnly);
-  T.Run('Client Send uses NewRequest bytes body helper',
+  T.Test('Client Send uses NewRequest bytes body helper',
     @TestClientSendWithRequestHelperBytesBody);
-  T.Run('Client Send uses NewRequest string body helper without headers',
+  T.Test('Client Send uses NewRequest string body helper without headers',
     @TestClientSendWithRequestHelperStringBodyWithoutHeaders);
-  T.Run('Client Send uses NewRequest bytes body helper without headers',
+  T.Test('Client Send uses NewRequest bytes body helper without headers',
     @TestClientSendWithRequestHelperBytesBodyWithoutHeaders);
-  T.Run('Client Send uses NewRequest string body helper with content-type without headers',
+  T.Test('Client Send uses NewRequest string body helper with content-type without headers',
     @TestClientSendWithRequestHelperStringBodyAndContentTypeWithoutHeaders);
-  T.Run('Client Send uses NewRequest bytes body helper with content-type without headers',
+  T.Test('Client Send uses NewRequest bytes body helper with content-type without headers',
     @TestClientSendWithRequestHelperBytesBodyAndContentTypeWithoutHeaders);
-  T.Run('Client shortcut bodies use bytes buffer',
+  T.Test('Client shortcut bodies use bytes buffer',
     @TestClientShortcutBodyImplementationUsesBytesBuffer);
-  T.Run('H1 client transport destroy closes idle pool source contract',
+  T.Test('H1 client transport destroy closes idle pool source contract',
     @TestH1ClientTransportDestroyClosesIdlePoolSourceContract);
-  T.Run('H1 client pooled retry fresh failure closes connection source contract',
+  T.Test('H1 client pooled retry fresh failure closes connection source contract',
     @TestH1ClientPooledRetryFreshFailureClosesConnectionSourceContract);
-  T.Run('Client POST string body overload',
+  T.Test('Client POST string body overload',
     @TestClientPostStringBodyOverload);
-  T.Run('Client PUT sends body and content type', @TestClientPutBodyAndContentType);
-  T.Run('Client DELETE sends no body', @TestClientDeleteNoBody);
-  T.Run('Client PATCH bytes body overload',
+  T.Test('Client PUT sends body and content type', @TestClientPutBodyAndContentType);
+  T.Test('Client DELETE sends no body', @TestClientDeleteNoBody);
+  T.Test('Client PATCH bytes body overload',
     @TestClientPatchBytesBodyOverload);
-  T.Run('Client PATCH sends body and content type', @TestClientPatchBodyAndContentType);
-  T.Run('Client HEAD sends HEAD and exposes headers', @TestClientHeadSendsHead);
-  T.Run('Client reads chunked response body', @TestClientReadsChunkedResponse);
-  T.Run('Client reads close-delimited response body', @TestClientReadsCloseDelimitedResponse);
-  T.Run('Client does not pool response Connection close token-list',
+  T.Test('Client PATCH sends body and content type', @TestClientPatchBodyAndContentType);
+  T.Test('Client HEAD sends HEAD and exposes headers', @TestClientHeadSendsHead);
+  T.Test('Client reads chunked response body', @TestClientReadsChunkedResponse);
+  T.Test('Client reads close-delimited response body', @TestClientReadsCloseDelimitedResponse);
+  T.Test('Client does not pool response Connection close token-list',
     @TestClientDoesNotPoolResponseWithConnectionCloseTokenList);
-  T.Run('Client does not pool request Connection close token-list',
+  T.Test('Client does not pool request Connection close token-list',
     @TestClientDoesNotPoolRequestWithConnectionCloseTokenList);
-  T.Run('Client Connection close same-read tail returns first response',
+  T.Test('Client Connection close same-read tail returns first response',
     @TestClientConnectionCloseSameReadTailReturnsFirstResponse);
-  T.Run('Client rejects truncated content-length response', @TestClientRejectsTruncatedContentLengthResponse);
-  T.Run('Client skips 100 Continue before final response',
+  T.Test('Client rejects truncated content-length response', @TestClientRejectsTruncatedContentLengthResponse);
+  T.Test('Client skips 100 Continue before final response',
     @TestClientSkips100ContinueBeforeFinalResponse);
-  T.Run('Client skips 103 Early Hints before final response',
+  T.Test('Client skips 103 Early Hints before final response',
     @TestClientSkips103EarlyHintsBeforeFinalResponse);
-  T.Run('Client rejects informational-only response EOF',
+  T.Test('Client rejects informational-only response EOF',
     @TestClientRejectsInformationalOnlyResponseEof);
-  T.Run('Client does not pool 101 Switching Protocols connection',
+  T.Test('Client does not pool 101 Switching Protocols connection',
     @TestClientDoesNotPool101SwitchingProtocolsConnection);
-  T.Run('Client request body does not exceed ContentLength',
+  T.Test('Client request body does not exceed ContentLength',
     @TestClientRequestBodyDoesNotExceedContentLength);
-  T.Run('Client serializes ContentLength when request header removed',
+  T.Test('Client serializes ContentLength when request header removed',
     @TestClientSerializesContentLengthWhenRequestHeaderRemoved);
-  T.Run('Client request body skips non-nil body when ContentLength is zero',
+  T.Test('Client request body skips non-nil body when ContentLength is zero',
     @TestClientRequestBodySkipsNonNilBodyWhenContentLengthZero);
-  T.Run('Client rejects request body shorter than ContentLength',
+  T.Test('Client rejects request body shorter than ContentLength',
     @TestClientRejectsRequestBodyShorterThanContentLength);
-  T.Run('HttpGetToWriter copies response body', @TestHttpGetToWriterCopiesResponseBody);
-  T.Run('HttpGetToWriter closes body after successful copy',
+  T.Test('HttpGetToWriter copies response body', @TestHttpGetToWriterCopiesResponseBody);
+  T.Test('HttpGetToWriter closes body after successful copy',
     @TestHttpGetToWriterClosesBodyAfterSuccessfulCopy);
-  T.Run('HttpGetToWriter closes body when copy fails',
+  T.Test('HttpGetToWriter closes body when copy fails',
     @TestHttpGetToWriterClosesBodyWhenCopyFails);
-  T.Run('HttpGetToWriter keeps copy error when close fails',
+  T.Test('HttpGetToWriter keeps copy error when close fails',
     @TestHttpGetToWriterKeepsWriteErrorWhenCloseFails);
-  T.Run('HttpGetToWriter closes non-2xx body before raising',
+  T.Test('HttpGetToWriter closes non-2xx body before raising',
     @TestHttpGetToWriterClosesNon2xxBodyBeforeRaising);
-  T.Run('HttpReadResponseBodyString reads live response body',
+  T.Test('HttpReadResponseBodyString reads live response body',
     @TestHttpReadResponseBodyStringReadsLiveResponse);
-  T.Run('HttpReadResponseBodyString nil body returns empty',
+  T.Test('HttpReadResponseBodyString nil body returns empty',
     @TestHttpReadResponseBodyStringNilBodyReturnsEmpty);
-  T.Run('HttpReadResponseBodyString closes body after read',
+  T.Test('HttpReadResponseBodyString closes body after read',
     @TestHttpReadResponseBodyStringClosesBodyAfterRead);
-  T.Run('HttpReadResponseBodyString rejects nil response',
+  T.Test('HttpReadResponseBodyString rejects nil response',
     @TestHttpReadResponseBodyStringRejectsNilResponse);
-  T.Run('HttpReadResponseBodyBytes reads live response body',
+  T.Test('HttpReadResponseBodyBytes reads live response body',
     @TestHttpReadResponseBodyBytesReadsLiveResponse);
-  T.Run('HttpReadResponseBodyBytes nil body returns empty',
+  T.Test('HttpReadResponseBodyBytes nil body returns empty',
     @TestHttpReadResponseBodyBytesNilBodyReturnsEmpty);
-  T.Run('HttpReadResponseBodyBytes closes body after read',
+  T.Test('HttpReadResponseBodyBytes closes body after read',
     @TestHttpReadResponseBodyBytesClosesBodyAfterRead);
-  T.Run('HttpReadResponseBodyBytes keeps read error when close fails',
+  T.Test('HttpReadResponseBodyBytes keeps read error when close fails',
     @TestHttpReadResponseBodyBytesKeepsReadErrorWhenCloseFails);
-  T.Run('HttpReadResponseBodyBytes rejects nil response',
+  T.Test('HttpReadResponseBodyBytes rejects nil response',
     @TestHttpReadResponseBodyBytesRejectsNilResponse);
-  T.Run('HttpReleaseResponseBody closes close-capable body',
+  T.Test('HttpReleaseResponseBody closes close-capable body',
     @TestHttpReleaseResponseBodyClosesCloseCapableBody);
-  T.Run('HttpReleaseResponseBody drains plain reader',
+  T.Test('HttpReleaseResponseBody drains plain reader',
     @TestHttpReleaseResponseBodyDrainsPlainReader);
-  T.Run('HttpReleaseResponseBody nil body noop',
+  T.Test('HttpReleaseResponseBody nil body noop',
     @TestHttpReleaseResponseBodyNilBodyNoop);
-  T.Run('HttpReleaseResponseBody rejects nil response',
+  T.Test('HttpReleaseResponseBody rejects nil response',
     @TestHttpReleaseResponseBodyRejectsNilResponse);
-  T.Run('Client Send closes close-capable request body after round trip',
+  T.Test('Client Send closes close-capable request body after round trip',
     @TestClientClosesCloseCapableRequestBodyAfterSend);
-  T.Run('Client Send closes close-capable request body on transport error',
+  T.Test('Client Send closes close-capable request body on transport error',
     @TestClientClosesCloseCapableRequestBodyOnTransportError);
-  T.Run('Client Send releases response body when request body close fails',
+  T.Test('Client Send releases response body when request body close fails',
     @TestClientReleasesResponseBodyWhenRequestBodyCloseFails);
-  T.Run('Client Send keeps request close error when response release fails',
+  T.Test('Client Send keeps request close error when response release fails',
     @TestClientKeepsRequestBodyCloseErrorWhenResponseReleaseFails);
-  T.Run('Client Send keeps transport error when request body close fails',
+  T.Test('Client Send keeps transport error when request body close fails',
     @TestClientKeepsTransportErrorWhenRequestBodyCloseFails);
-  T.Run('Client reader shortcut closes source body after buffering',
+  T.Test('Client reader shortcut closes source body after buffering',
     @TestClientPostReaderClosesSourceBodyAfterBuffering);
-  T.Run('Client reader shortcuts keep read error when close fails',
+  T.Test('Client reader shortcuts keep read error when close fails',
     @TestClientReaderShortcutsKeepReadErrorWhenCloseFails);
-  T.Run('Client shortcut body overloads omit empty content-type',
+  T.Test('Client shortcut body overloads omit empty content-type',
     @TestClientShortcutBodyOverloadsOmitEmptyContentType);
-  T.Run('HttpGetToFile writes final path atomically', @TestHttpGetToFileWritesFinalPathAtomically);
-  T.Run('HttpGetToFile rejects 404 responses', @TestHttpGetToFileRejects404Responses);
-  T.Run('HttpGetToFile cleans temp files on truncated body', @TestHttpGetToFileCleansTempFilesOnTruncatedBody);
-  T.Run('HttpGetToFile keeps read error when close fails',
+  T.Test('HttpGetToFile writes final path atomically', @TestHttpGetToFileWritesFinalPathAtomically);
+  T.Test('HttpGetToFile rejects 404 responses', @TestHttpGetToFileRejects404Responses);
+  T.Test('HttpGetToFile cleans temp files on truncated body', @TestHttpGetToFileCleansTempFilesOnTruncatedBody);
+  T.Test('HttpGetToFile keeps read error when close fails',
     @TestHttpGetToFileKeepsReadErrorWhenCloseFails);
-  T.Run('Client follows redirect (301 -> 200)', @TestClientFollowsRedirect);
-  T.Run('Client closes original body before GET-style redirect follow-up',
+  T.Test('Client follows redirect (301 -> 200)', @TestClientFollowsRedirect);
+  T.Test('Client closes original body before GET-style redirect follow-up',
     @TestClientClosesOriginalBodyBeforeGetStyleRedirectFollowup);
-  T.Run('Client does not retry close when GET-style redirect body close fails',
+  T.Test('Client does not retry close when GET-style redirect body close fails',
     @TestClientDoesNotRetryCloseWhenGetStyleRedirectBodyCloseFails);
-  T.Run('Client follows 303 redirect as GET', @TestClientFollowsSeeOtherAsGet);
-  T.Run('Client preserves relative redirect query', @TestClientPreservesRelativeRedirectQuery);
-  T.Run('Client redirect transport sees parsed relative query',
+  T.Test('Client follows 303 redirect as GET', @TestClientFollowsSeeOtherAsGet);
+  T.Test('Client preserves relative redirect query', @TestClientPreservesRelativeRedirectQuery);
+  T.Test('Client redirect transport sees parsed relative query',
     @TestClientRedirectTransportSeesParsedRelativeQuery);
-  T.Run('Client preserves HEAD on 301/302/303 redirects',
+  T.Test('Client preserves HEAD on 301/302/303 redirects',
     @TestClientPreservesHeadOnGetStyleRedirects);
-  T.Run('Client redirect transport resolves network-path Location',
+  T.Test('Client redirect transport resolves network-path Location',
     @TestClientRedirectTransportResolvesNetworkPathLocation);
-  T.Run('Client redirect transport resolves uppercase absolute Location',
+  T.Test('Client redirect transport resolves uppercase absolute Location',
     @TestClientRedirectTransportResolvesUppercaseAbsoluteLocation);
-  T.Run('Client redirect rejects unsupported absolute scheme',
+  T.Test('Client redirect rejects unsupported absolute scheme',
     @TestClientRedirectRejectsUnsupportedAbsoluteScheme);
-  T.Run('Client redirect rejects absolute Location with empty host',
+  T.Test('Client redirect rejects absolute Location with empty host',
     @TestClientRedirectRejectsAbsoluteLocationWithEmptyHost);
-  T.Run('Client redirect rejects absolute Location with invalid port',
+  T.Test('Client redirect rejects absolute Location with invalid port',
     @TestClientRedirectRejectsAbsoluteLocationWithInvalidPort);
-  T.Run('Client redirect rejects network-path Location with empty host',
+  T.Test('Client redirect rejects network-path Location with empty host',
     @TestClientRedirectRejectsNetworkPathLocationWithEmptyHost);
-  T.Run('Client redirect rejects network-path Location with invalid port',
+  T.Test('Client redirect rejects network-path Location with invalid port',
     @TestClientRedirectRejectsNetworkPathLocationWithInvalidPort);
-  T.Run('Client redirect rejects malformed bracketed IPv6 authority',
+  T.Test('Client redirect rejects malformed bracketed IPv6 authority',
     @TestClientRedirectRejectsMalformedBracketedIpv6Authority);
-  T.Run('Client redirect transport resolves userinfo Location with port',
+  T.Test('Client redirect transport resolves userinfo Location with port',
     @TestClientRedirectTransportResolvesUserInfoLocationWithPort);
-  T.Run('Client redirect rejects unsupported non-hierarchical scheme',
+  T.Test('Client redirect rejects unsupported non-hierarchical scheme',
     @TestClientRedirectRejectsUnsupportedNonHierarchicalScheme);
-  T.Run('Client redirect rejects unsupported single-slash scheme',
+  T.Test('Client redirect rejects unsupported single-slash scheme',
     @TestClientRedirectRejectsUnsupportedSingleSlashScheme);
-  T.Run('Client redirect transport resolves path-relative Location',
+  T.Test('Client redirect transport resolves path-relative Location',
     @TestClientRedirectTransportResolvesPathRelativeLocation);
-  T.Run('Client redirect transport normalizes dot-segment Location',
+  T.Test('Client redirect transport normalizes dot-segment Location',
     @TestClientRedirectTransportNormalizesDotSegmentLocation);
-  T.Run('Client redirect transport preserves query on fragment-only Location',
+  T.Test('Client redirect transport preserves query on fragment-only Location',
     @TestClientRedirectTransportPreservesQueryOnFragmentOnlyLocation);
-  T.Run('Client redirect preserves headers on same authority',
+  T.Test('Client redirect preserves headers on same authority',
     @TestClientRedirectPreservesHeadersOnSameAuthority);
-  T.Run('Client redirect strips sensitive headers across authority',
+  T.Test('Client redirect strips sensitive headers across authority',
     @TestClientRedirectStripsSensitiveHeadersAcrossAuthority);
-  T.Run('Client redirect strips sensitive headers across scheme',
+  T.Test('Client redirect strips sensitive headers across scheme',
     @TestClientRedirectStripsSensitiveHeadersAcrossScheme);
-  T.Run('Client redirect strips sensitive headers to subdomain authority',
+  T.Test('Client redirect strips sensitive headers to subdomain authority',
     @TestClientRedirectStripsSensitiveHeadersToSubdomainAuthority);
-  T.Run('Client redirect preserves custom host header on relative Location',
+  T.Test('Client redirect preserves custom host header on relative Location',
     @TestClientRedirectPreservesCustomHostHeaderOnRelativeLocation);
-  T.Run('Client redirect preserves custom host header on default-port authority',
+  T.Test('Client redirect preserves custom host header on default-port authority',
     @TestClientRedirectPreservesCustomHostHeaderOnDefaultPortAuthority);
-  T.Run('Client closes redirect response body before follow-up',
+  T.Test('Client closes redirect response body before follow-up',
     @TestClientClosesRedirectResponseBodyBeforeFollowup);
-  T.Run('Client drains redirect response body before follow-up',
+  T.Test('Client drains redirect response body before follow-up',
     @TestClientDrainsRedirectResponseBodyBeforeFollowup);
-  T.Run('Client closes redirect response body on too many redirects',
+  T.Test('Client closes redirect response body on too many redirects',
     @TestClientClosesRedirectResponseBodyOnTooManyRedirects);
-  T.Run('Client closes redirect response body on missing Location',
+  T.Test('Client closes redirect response body on missing Location',
     @TestClientClosesRedirectResponseBodyOnMissingLocation);
-  T.Run('Client closes redirect response body on duplicate Location',
+  T.Test('Client closes redirect response body on duplicate Location',
     @TestClientClosesRedirectResponseBodyOnDuplicateLocation);
-  T.Run('Client redirect policy error keeps primary error when body close fails',
+  T.Test('Client redirect policy error keeps primary error when body close fails',
     @TestClientRedirectPolicyErrorKeepsPrimaryErrorWhenBodyCloseFails);
-  T.Run('Client closes redirect response body on unsupported scheme',
+  T.Test('Client closes redirect response body on unsupported scheme',
     @TestClientClosesRedirectResponseBodyOnUnsupportedScheme);
-  T.Run('Client replays seekable body on 307 redirect',
+  T.Test('Client replays seekable body on 307 redirect',
     @TestClientReplaysSeekableBodyOnTemporaryRedirect);
-  T.Run('Client rejects non-replayable body on 307 redirect',
+  T.Test('Client rejects non-replayable body on 307 redirect',
     @TestClientRejectsNonReplayableBodyOnTemporaryRedirect);
-  T.Run('Client options reject negative values',
+  T.Test('Client options reject negative values',
     @TestClientOptionsRejectNegativeValues);
-  T.Run('Client respects max redirects', @TestClientMaxRedirects);
-  T.Run('Client CloseIdleConnections drops pooled connections',
+  T.Test('Client respects max redirects', @TestClientMaxRedirects);
+  T.Test('Client CloseIdleConnections drops pooled connections',
     @TestClientCloseIdleConnectionsDropsPooledConnections);
-  T.Run('Client timeout does not poison idle connection reuse',
+  T.Test('Client timeout does not poison idle connection reuse',
     @TestClientTimeoutDoesNotPoisonIdleConnectionReuse);
-  T.Run('Client request write failure closes body and drops connection',
+  T.Test('Client request write failure closes body and drops connection',
     @TestClientRequestWriteFailureClosesBodyAndDropsConnection);
-  T.Run('Client sends idempotent replayable body after closed pooled connection',
+  T.Test('Client sends idempotent replayable body after closed pooled connection',
     @TestClientSendsIdempotentReplayableBodyAfterClosedPooledConnection);
-  T.Run('Client retries replayable body when pooled connection closes after request write',
+  T.Test('Client retries replayable body when pooled connection closes after request write',
     @TestClientRetriesReplayableBodyWhenPooledConnectionClosesAfterRequestWrite);
-  T.Run('Client does not retry local request body serialization error',
+  T.Test('Client does not retry local request body serialization error',
     @TestClientDoesNotRetryLocalRequestBodySerializationError);
-  T.Run('Client does not retry request body read error',
+  T.Test('Client does not retry request body read error',
     @TestClientDoesNotRetryRequestBodyReadError);
-  T.Run('Client pooled retry uses single timeout budget',
+  T.Test('Client pooled retry uses single timeout budget',
     @TestClientPooledRetryUsesSingleTimeoutBudget);
-  T.Run('Client sends non-idempotent body after closed pooled connection',
+  T.Test('Client sends non-idempotent body after closed pooled connection',
     @TestClientSendsNonIdempotentBodyAfterClosedPooledConnection);
-  T.Run('Client sends non-replayable idempotent body after closed pooled connection',
+  T.Test('Client sends non-replayable idempotent body after closed pooled connection',
     @TestClientSendsNonReplayableIdempotentBodyAfterClosedPooledConnection);
-  T.Run('Client does not retry after response body timeout',
+  T.Test('Client does not retry after response body timeout',
     @TestClientDoesNotRetryAfterResponseBodyTimeout);
-  T.Run('Client drops pooled connection with unread response tail',
+  T.Test('Client drops pooled connection with unread response tail',
     @TestClientDropsPooledConnectionWithUnreadResponseTail);
-  T.Run('Client drops pooled connection with same-read response tail',
+  T.Test('Client drops pooled connection with same-read response tail',
     @TestClientDropsPooledConnectionWithSameReadResponseTail);
-  T.Run('Client does not retry pooled connection after malformed chunked response',
+  T.Test('Client does not retry pooled connection after malformed chunked response',
     @TestClientDoesNotRetryPooledConnectionAfterMalformedChunkedResponse);
-  T.Run('Client timeout on slow server', @TestClientTimeout);
-  T.Run('Client handles 404 response', @TestClientHandles404);
-  T.Run('Client sets Host header automatically', @TestClientSetsHostHeader);
-  T.Run('Client auto Host does not mutate request headers',
+  T.Test('Client timeout on slow server', @TestClientTimeout);
+  T.Test('Client handles 404 response', @TestClientHandles404);
+  T.Test('Client sets Host header automatically', @TestClientSetsHostHeader);
+  T.Test('Client auto Host does not mutate request headers',
     @TestClientAutoHostDoesNotMutateRequestHeaders);
-  T.Run('Client rejects unsupported direct schemes',
+  T.Test('Client rejects unsupported direct schemes',
     @TestClientRejectsUnsupportedDirectSchemes);
-  T.Run('Client custom transport accepts non-http scheme',
+  T.Test('Client custom transport accepts non-http scheme',
     @TestClientCustomTransportAcceptsNonHttpScheme);
-  T.Run('Client direct URL rejects invalid port before transport',
+  T.Test('Client direct URL rejects invalid port before transport',
     @TestClientDirectUrlRejectsInvalidPortBeforeTransport);
-  T.Run('Client auto Host rejects invalid header value',
+  T.Test('Client auto Host rejects invalid header value',
     @TestClientAutoHostRejectsInvalidHeaderValue);
-  T.Run('Client rejects custom header value injection before wire write',
+  T.Test('Client rejects custom header value injection before wire write',
     @TestClientRejectsCustomHeaderValueInjectionBeforeWireWrite);
-  T.Run('Client rejects custom header name injection before wire write',
+  T.Test('Client rejects custom header name injection before wire write',
     @TestClientRejectsCustomHeaderNameInjectionBeforeWireWrite);
-  T.Run('Client rejects request target injection before wire write',
+  T.Test('Client rejects request target injection before wire write',
     @TestClientRejectsRequestTargetInjectionBeforeWireWrite);
-  T.Run('Client idle pool reuses case-equivalent authority host',
+  T.Test('Client idle pool reuses case-equivalent authority host',
     @TestClientIdlePoolReusesCaseEquivalentAuthorityHost);
-  T.Run('Connection reuse', @TestConnectionReuse);
-  T.Summary;
+  T.Test('Connection reuse', @TestConnectionReuse);
+  if not T.Run then Halt(1);
 end.

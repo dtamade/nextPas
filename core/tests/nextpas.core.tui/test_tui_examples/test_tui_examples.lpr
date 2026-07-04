@@ -4,10 +4,10 @@ program test_tui_examples;
 
 uses
   SysUtils,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ReadLowerSourceFile(const APath: string): string;
 var
@@ -124,9 +124,9 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.examples');
-  T.Run('layout demo teaches app-first ext path', @TestLayoutDemoTeachesAppFirstExtPath);
-  T.Run('widgets demo teaches app-first full path', @TestWidgetsDemoTeachesAppFirstFullPath);
-  T.Run('full render benchmark uses full facade', @TestFullRenderBenchmarkUsesFullFacade);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.tui.examples');
+  T.Test('layout demo teaches app-first ext path', @TestLayoutDemoTeachesAppFirstExtPath);
+  T.Test('widgets demo teaches app-first full path', @TestWidgetsDemoTeachesAppFirstFullPath);
+  T.Test('full render benchmark uses full facade', @TestFullRenderBenchmarkUsesFullFacade);
+  if not T.Run then Halt(1);
 end.

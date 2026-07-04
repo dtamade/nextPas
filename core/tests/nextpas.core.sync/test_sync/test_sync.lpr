@@ -5,11 +5,11 @@ program test_sync;
 uses
   nextpas.core.thread.init,
   SysUtils, Classes,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.sync;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 type
   TSignalOnReleaseMutex = class(TInterfacedObject, ILock, IMutex)
@@ -482,39 +482,39 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.sync');
-  T.Run('Mutex basic', @TestMutexBasic);
-  T.Run('Mutex tryacquire', @TestMutexTryAcquire);
-  T.Run('Mutex guard (RAII)', @TestMutexGuard);
-  T.Run('FutexMutex basic', @TestFutexMutexBasic);
-  T.Run('FutexMutex tryacquire', @TestFutexMutexTryAcquire);
-  T.Run('FutexMutex contention', @TestFutexMutexContention);
+  T := TTestSuite.Create('nextpas.core.sync');
+  T.Test('Mutex basic', @TestMutexBasic);
+  T.Test('Mutex tryacquire', @TestMutexTryAcquire);
+  T.Test('Mutex guard (RAII)', @TestMutexGuard);
+  T.Test('FutexMutex basic', @TestFutexMutexBasic);
+  T.Test('FutexMutex tryacquire', @TestFutexMutexTryAcquire);
+  T.Test('FutexMutex contention', @TestFutexMutexContention);
 
-  T.Run('FutexMutex guard', @TestFutexMutexGuard);
+  T.Test('FutexMutex guard', @TestFutexMutexGuard);
 
-  T.Run('RWLock basic', @TestRWLockBasic);
-  T.Run('RWLock guard (RAII)', @TestRWLockGuard);
-  T.Run('RWLock try acquire', @TestRWLockTryAcquire);
-  T.Run('WaitGroup basic', @TestWaitGroupBasic);
-  T.Run('WaitGroup multiple', @TestWaitGroupMultiple);
-  T.Run('CondVar broadcast', @TestCondVarBroadcast);
-  T.Run('CondVar does not lose signal during release', @TestCondVarDoesNotLoseSignalDuringRelease);
+  T.Test('RWLock basic', @TestRWLockBasic);
+  T.Test('RWLock guard (RAII)', @TestRWLockGuard);
+  T.Test('RWLock try acquire', @TestRWLockTryAcquire);
+  T.Test('WaitGroup basic', @TestWaitGroupBasic);
+  T.Test('WaitGroup multiple', @TestWaitGroupMultiple);
+  T.Test('CondVar broadcast', @TestCondVarBroadcast);
+  T.Test('CondVar does not lose signal during release', @TestCondVarDoesNotLoseSignalDuringRelease);
 
-  T.Run('Once basic', @TestOnceBasic);
-  T.Run('Once not done before call', @TestOnceDoneBeforeCall);
-  T.Run('Once exception resets', @TestOnceExceptionResets);
-  T.Run('SpinLock basic', @TestSpinLockBasic);
-  T.Run('SpinLock guard', @TestSpinLockGuard);
-  T.Run('Semaphore basic', @TestSemaphoreBasic);
-  T.Run('Semaphore timeout', @TestSemaphoreTimeout);
-  T.Run('Semaphore release multiple', @TestSemaphoreReleaseMultiple);
+  T.Test('Once basic', @TestOnceBasic);
+  T.Test('Once not done before call', @TestOnceDoneBeforeCall);
+  T.Test('Once exception resets', @TestOnceExceptionResets);
+  T.Test('SpinLock basic', @TestSpinLockBasic);
+  T.Test('SpinLock guard', @TestSpinLockGuard);
+  T.Test('Semaphore basic', @TestSemaphoreBasic);
+  T.Test('Semaphore timeout', @TestSemaphoreTimeout);
+  T.Test('Semaphore release multiple', @TestSemaphoreReleaseMultiple);
 
-  T.Run('Barrier single thread', @TestBarrierSingleThread);
-  T.Run('Event manual reset', @TestEventManualReset);
-  T.Run('Event auto reset', @TestEventAutoReset);
-  T.Run('Event timeout', @TestEventTimeout);
-  T.Run('AutoReset idempotent', @TestAutoResetIdempotent);
-  T.Run('ManualReset set+reset pulse', @TestManualResetSetResetPulse);
+  T.Test('Barrier single thread', @TestBarrierSingleThread);
+  T.Test('Event manual reset', @TestEventManualReset);
+  T.Test('Event auto reset', @TestEventAutoReset);
+  T.Test('Event timeout', @TestEventTimeout);
+  T.Test('AutoReset idempotent', @TestAutoResetIdempotent);
+  T.Test('ManualReset set+reset pulse', @TestManualResetSetResetPulse);
 
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

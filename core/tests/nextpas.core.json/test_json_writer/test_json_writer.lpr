@@ -8,10 +8,10 @@ uses
   nextpas.core.text.builder,
   nextpas.core.json.writer,
   nextpas.core.errors,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestEmptyObject;
 var B: TStringBuilder; W: TJsonWriter;
@@ -320,26 +320,26 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.json.writer');
-  T.Run('empty object', @TestEmptyObject);
-  T.Run('empty array', @TestEmptyArray);
-  T.Run('simple object', @TestSimpleObject);
-  T.Run('nested object', @TestNestedObject);
-  T.Run('array', @TestArray);
-  T.Run('mixed array', @TestMixedArray);
-  T.Run('escaped string', @TestEscapedString);
-  T.Run('uint64', @TestUInt);
-  T.Run('int64 min', @TestNegativeInt);
-  T.Run('raw value', @TestRawValue);
-  T.Run('complex nesting', @TestComplexNesting);
-  T.Run('long key escape', @TestLongKeyEscape);
-  T.Run('invalid close operations fail closed',
+  T := TTestSuite.Create('nextpas.core.json.writer');
+  T.Test('empty object', @TestEmptyObject);
+  T.Test('empty array', @TestEmptyArray);
+  T.Test('simple object', @TestSimpleObject);
+  T.Test('nested object', @TestNestedObject);
+  T.Test('array', @TestArray);
+  T.Test('mixed array', @TestMixedArray);
+  T.Test('escaped string', @TestEscapedString);
+  T.Test('uint64', @TestUInt);
+  T.Test('int64 min', @TestNegativeInt);
+  T.Test('raw value', @TestRawValue);
+  T.Test('complex nesting', @TestComplexNesting);
+  T.Test('long key escape', @TestLongKeyEscape);
+  T.Test('invalid close operations fail closed',
     @TestInvalidCloseOperationsFailClosed);
-  T.Run('object key/value sequence fail closed',
+  T.Test('object key/value sequence fail closed',
     @TestObjectKeyValueSequenceFailClosed);
-  T.Run('array key and root extra value fail closed',
+  T.Test('array key and root extra value fail closed',
     @TestArrayRejectsKeysAndRootRejectsExtraValues);
-  T.Run('container depth limit fails before writing',
+  T.Test('container depth limit fails before writing',
     @TestContainerDepthLimitFailsBeforeWriting);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

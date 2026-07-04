@@ -9,10 +9,10 @@ uses
   nextpas.core.tui.image_cap,
   nextpas.core.tui.interaction,
   nextpas.core.tui.terminal,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { 测试 terminal 的输入解析（通过 test seam，不需要真实 TTY） }
 
@@ -2199,146 +2199,144 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.terminal');
-  T.Run('parse ascii key', @TestParseAsciiKey);
-  T.Run('parse enter', @TestParseEnter);
-  T.Run('parse line feed as enter', @TestParseLineFeedAsEnter);
-  T.Run('parse tab', @TestParseTab);
-  T.Run('parse backspace', @TestParseBackspace);
-  T.Run('parse ctrl-h backspace alias', @TestParseCtrlHBackspaceAlias);
-  T.Run('parse esc', @TestParseEsc);
-  T.Run('parse esc esc preserves both escapes', @TestParseEscEscPreservesBothEscapes);
-  T.Run('parse alt ascii', @TestParseAltAscii);
-  T.Run('parse alt enter', @TestParseAltEnter);
-  T.Run('parse alt tab', @TestParseAltTab);
-  T.Run('parse alt backspace', @TestParseAltBackspace);
-  T.Run('parse alt ctrl-space', @TestParseAltCtrlSpace);
-  T.Run('parse arrow up', @TestParseArrowUp);
-  T.Run('parse arrow down', @TestParseArrowDown);
-  T.Run('parse arrow right', @TestParseArrowRight);
-  T.Run('parse arrow left', @TestParseArrowLeft);
-  T.Run('parse csi arrow with ctrl modifier', @TestParseCSIArrowWithCtrlModifier);
-  T.Run('parse csi pagedown with shift alt', @TestParseCSIPageDownWithShiftAlt);
-  T.Run('parse csi home with shift', @TestParseCSIHomeWithShift);
-  T.Run('parse csi home plain', @TestParseCSIHomePlain);
-  T.Run('parse csi home legacy tilde', @TestParseCSIHomeLegacyTilde);
-  T.Run('parse csi home legacy 7 tilde', @TestParseCSIHomeLegacy7Tilde);
-  T.Run('parse csi end with ctrl', @TestParseCSIEndWithCtrl);
-  T.Run('parse csi end plain', @TestParseCSIEndPlain);
-  T.Run('parse csi end legacy tilde', @TestParseCSIEndLegacyTilde);
-  T.Run('parse csi end legacy 8 tilde', @TestParseCSIEndLegacy8Tilde);
-  T.Run('parse csi f1 legacy tilde', @TestParseCSIF1LegacyTilde);
-  T.Run('parse csi f4 legacy tilde', @TestParseCSIF4LegacyTilde);
-  T.Run('parse csi f5 with shift ctrl', @TestParseCSIF5WithShiftCtrl);
-  T.Run('parse csi f6 legacy tilde', @TestParseCSIF6LegacyTilde);
-  T.Run('parse csi f9 legacy tilde', @TestParseCSIF9LegacyTilde);
-  T.Run('parse csi f12 with alt', @TestParseCSIF12WithAlt);
-  T.Run('parse csi f11 legacy tilde', @TestParseCSIF11LegacyTilde);
-  T.Run('parse csi insert', @TestParseCSIInsert);
-  T.Run('parse csi delete with ctrl', @TestParseCSIDeleteWithCtrl);
-  T.Run('parse csi pageup with shift', @TestParseCSIPageUpWithShift);
-  T.Run('parse csi f10 with alt ctrl', @TestParseCSIF10WithAltCtrl);
-  T.Run('parse bracketed paste start', @TestParseBracketedPasteStart);
-  T.Run('parse ss3 legacy f1', @TestParseSS3LegacyF1);
-  T.Run('parse ss3 legacy f2', @TestParseSS3LegacyF2);
-  T.Run('parse ss3 legacy f3', @TestParseSS3LegacyF3);
-  T.Run('parse ss3 legacy f4', @TestParseSS3LegacyF4);
-  T.Run('parse ss3 legacy end', @TestParseSS3LegacyEnd);
-  T.Run('parse ss3 legacy home', @TestParseSS3LegacyHome);
-  T.Run('parse sgr mouse down', @TestParseSgrMouseDown);
-  T.Run('parse sgr mouse middle down', @TestParseSgrMouseMiddleDown);
-  T.Run('parse sgr mouse right down', @TestParseSgrMouseRightDown);
-  T.Run('parse sgr mouse release', @TestParseSgrMouseRelease);
-  T.Run('parse sgr mouse middle release', @TestParseSgrMouseMiddleRelease);
-  T.Run('parse sgr mouse right release', @TestParseSgrMouseRightRelease);
-  T.Run('parse sgr mouse move', @TestParseSgrMouseMove);
-  T.Run('parse sgr mouse middle drag', @TestParseSgrMouseMiddleDrag);
-  T.Run('parse sgr mouse right drag', @TestParseSgrMouseRightDrag);
-  T.Run('parse sgr mouse drag with modifiers', @TestParseSgrMouseDragWithModifiers);
-  T.Run('parse sgr mouse scroll up', @TestParseSgrMouseScrollUp);
-  T.Run('parse sgr mouse scroll down with ctrl', @TestParseSgrMouseScrollDownWithCtrl);
-  T.Run('parse ctrl-a', @TestParseCtrlA);
-  T.Run('parse ctrl-g', @TestParseCtrlG);
-  T.Run('parse ctrl-c', @TestParseCtrlC);
-  T.Run('parse ctrl-k', @TestParseCtrlK);
-  T.Run('parse ctrl-n', @TestParseCtrlN);
-  T.Run('parse ctrl-z', @TestParseCtrlZ);
-  T.Run('parse ctrl-space', @TestParseCtrlSpace);
-  T.Run('parse ctrl punctuation', @TestParseCtrlPunctuation);
-  T.Run('parse utf8', @TestParseUTF8);
-  T.Run('parse alt utf8', @TestParseAltUTF8);
-  T.Run('invalid bytes recover following utf8',
+  T := TTestSuite.Create('nextpas.core.tui.terminal');
+  T.Test('parse ascii key', @TestParseAsciiKey);
+  T.Test('parse enter', @TestParseEnter);
+  T.Test('parse line feed as enter', @TestParseLineFeedAsEnter);
+  T.Test('parse tab', @TestParseTab);
+  T.Test('parse backspace', @TestParseBackspace);
+  T.Test('parse ctrl-h backspace alias', @TestParseCtrlHBackspaceAlias);
+  T.Test('parse esc', @TestParseEsc);
+  T.Test('parse esc esc preserves both escapes', @TestParseEscEscPreservesBothEscapes);
+  T.Test('parse alt ascii', @TestParseAltAscii);
+  T.Test('parse alt enter', @TestParseAltEnter);
+  T.Test('parse alt tab', @TestParseAltTab);
+  T.Test('parse alt backspace', @TestParseAltBackspace);
+  T.Test('parse alt ctrl-space', @TestParseAltCtrlSpace);
+  T.Test('parse arrow up', @TestParseArrowUp);
+  T.Test('parse arrow down', @TestParseArrowDown);
+  T.Test('parse arrow right', @TestParseArrowRight);
+  T.Test('parse arrow left', @TestParseArrowLeft);
+  T.Test('parse csi arrow with ctrl modifier', @TestParseCSIArrowWithCtrlModifier);
+  T.Test('parse csi pagedown with shift alt', @TestParseCSIPageDownWithShiftAlt);
+  T.Test('parse csi home with shift', @TestParseCSIHomeWithShift);
+  T.Test('parse csi home plain', @TestParseCSIHomePlain);
+  T.Test('parse csi home legacy tilde', @TestParseCSIHomeLegacyTilde);
+  T.Test('parse csi home legacy 7 tilde', @TestParseCSIHomeLegacy7Tilde);
+  T.Test('parse csi end with ctrl', @TestParseCSIEndWithCtrl);
+  T.Test('parse csi end plain', @TestParseCSIEndPlain);
+  T.Test('parse csi end legacy tilde', @TestParseCSIEndLegacyTilde);
+  T.Test('parse csi end legacy 8 tilde', @TestParseCSIEndLegacy8Tilde);
+  T.Test('parse csi f1 legacy tilde', @TestParseCSIF1LegacyTilde);
+  T.Test('parse csi f4 legacy tilde', @TestParseCSIF4LegacyTilde);
+  T.Test('parse csi f5 with shift ctrl', @TestParseCSIF5WithShiftCtrl);
+  T.Test('parse csi f6 legacy tilde', @TestParseCSIF6LegacyTilde);
+  T.Test('parse csi f9 legacy tilde', @TestParseCSIF9LegacyTilde);
+  T.Test('parse csi f12 with alt', @TestParseCSIF12WithAlt);
+  T.Test('parse csi f11 legacy tilde', @TestParseCSIF11LegacyTilde);
+  T.Test('parse csi insert', @TestParseCSIInsert);
+  T.Test('parse csi delete with ctrl', @TestParseCSIDeleteWithCtrl);
+  T.Test('parse csi pageup with shift', @TestParseCSIPageUpWithShift);
+  T.Test('parse csi f10 with alt ctrl', @TestParseCSIF10WithAltCtrl);
+  T.Test('parse bracketed paste start', @TestParseBracketedPasteStart);
+  T.Test('parse ss3 legacy f1', @TestParseSS3LegacyF1);
+  T.Test('parse ss3 legacy f2', @TestParseSS3LegacyF2);
+  T.Test('parse ss3 legacy f3', @TestParseSS3LegacyF3);
+  T.Test('parse ss3 legacy f4', @TestParseSS3LegacyF4);
+  T.Test('parse ss3 legacy end', @TestParseSS3LegacyEnd);
+  T.Test('parse ss3 legacy home', @TestParseSS3LegacyHome);
+  T.Test('parse sgr mouse down', @TestParseSgrMouseDown);
+  T.Test('parse sgr mouse middle down', @TestParseSgrMouseMiddleDown);
+  T.Test('parse sgr mouse right down', @TestParseSgrMouseRightDown);
+  T.Test('parse sgr mouse release', @TestParseSgrMouseRelease);
+  T.Test('parse sgr mouse middle release', @TestParseSgrMouseMiddleRelease);
+  T.Test('parse sgr mouse right release', @TestParseSgrMouseRightRelease);
+  T.Test('parse sgr mouse move', @TestParseSgrMouseMove);
+  T.Test('parse sgr mouse middle drag', @TestParseSgrMouseMiddleDrag);
+  T.Test('parse sgr mouse right drag', @TestParseSgrMouseRightDrag);
+  T.Test('parse sgr mouse drag with modifiers', @TestParseSgrMouseDragWithModifiers);
+  T.Test('parse sgr mouse scroll up', @TestParseSgrMouseScrollUp);
+  T.Test('parse sgr mouse scroll down with ctrl', @TestParseSgrMouseScrollDownWithCtrl);
+  T.Test('parse ctrl-a', @TestParseCtrlA);
+  T.Test('parse ctrl-g', @TestParseCtrlG);
+  T.Test('parse ctrl-c', @TestParseCtrlC);
+  T.Test('parse ctrl-k', @TestParseCtrlK);
+  T.Test('parse ctrl-n', @TestParseCtrlN);
+  T.Test('parse ctrl-z', @TestParseCtrlZ);
+  T.Test('parse ctrl-space', @TestParseCtrlSpace);
+  T.Test('parse ctrl punctuation', @TestParseCtrlPunctuation);
+  T.Test('parse utf8', @TestParseUTF8);
+  T.Test('parse alt utf8', @TestParseAltUTF8);
+  T.Test('invalid bytes recover following utf8',
     @TestInvalidBytesRecoverFollowingUTF8);
-  T.Run('invalid byte between events is skipped',
+  T.Test('invalid byte between events is skipped',
     @TestInvalidByteBetweenEventsIsSkipped);
-  T.Run('lone esc waits for more before eof', @TestLoneEscWaitsForMoreBeforeEOF);
-  T.Run('incomplete csi waits for more', @TestIncompleteCSIWaitsForMore);
-  T.Run('incomplete ss3 waits for more', @TestIncompleteSS3WaitsForMore);
-  T.Run('incomplete utf8 waits for more', @TestIncompleteUTF8WaitsForMore);
-  T.Run('incomplete alt utf8 waits for more', @TestIncompleteAltUTF8WaitsForMore);
-  T.Run('incomplete kitty keyboard waits for more',
+  T.Test('lone esc waits for more before eof', @TestLoneEscWaitsForMoreBeforeEOF);
+  T.Test('incomplete csi waits for more', @TestIncompleteCSIWaitsForMore);
+  T.Test('incomplete ss3 waits for more', @TestIncompleteSS3WaitsForMore);
+  T.Test('incomplete utf8 waits for more', @TestIncompleteUTF8WaitsForMore);
+  T.Test('incomplete alt utf8 waits for more', @TestIncompleteAltUTF8WaitsForMore);
+  T.Test('incomplete kitty keyboard waits for more',
     @TestIncompleteKittyKeyboardWaitsForMore);
-  T.Run('incomplete sgr mouse waits for more',
+  T.Test('incomplete sgr mouse waits for more',
     @TestIncompleteSgrMouseWaitsForMore);
-  T.Run('incomplete kitty keyboard prefix preserves esc',
+  T.Test('incomplete kitty keyboard prefix preserves esc',
     @TestIncompleteKittyKeyboardPrefixPreservesEsc);
-  T.Run('incomplete sgr mouse prefix preserves esc',
+  T.Test('incomplete sgr mouse prefix preserves esc',
     @TestIncompleteSgrMousePrefixPreservesEsc);
-  T.Run('incomplete csi prefix preserves esc', @TestIncompleteCSIPrefixPreservesEsc);
-  T.Run('incomplete ss3 prefix preserves esc', @TestIncompleteSS3PrefixPreservesEsc);
-  T.Run('incomplete alt utf8 prefix preserves esc',
+  T.Test('incomplete csi prefix preserves esc', @TestIncompleteCSIPrefixPreservesEsc);
+  T.Test('incomplete ss3 prefix preserves esc', @TestIncompleteSS3PrefixPreservesEsc);
+  T.Test('incomplete alt utf8 prefix preserves esc',
     @TestIncompleteAltUTF8PrefixPreservesEsc);
-  T.Run('invalid alt utf8 lead preserves esc',
+  T.Test('invalid alt utf8 lead preserves esc',
     @TestInvalidAltUTF8LeadPreservesEsc);
-  T.Run('bracketed paste end is swallowed', @TestBracketedPasteEndIsSwallowed);
-  T.Run('parse csi backtab', @TestParseCSIBackTab);
-  T.Run('kitty keyboard shift-tab normalizes to backtab',
+  T.Test('bracketed paste end is swallowed', @TestBracketedPasteEndIsSwallowed);
+  T.Test('parse csi backtab', @TestParseCSIBackTab);
+  T.Test('kitty keyboard shift-tab normalizes to backtab',
     @TestKittyKeyboardShiftTabNormalizesToBackTab);
-  T.Run('kitty keyboard shift-alt-tab normalizes to backtab with alt',
+  T.Test('kitty keyboard shift-alt-tab normalizes to backtab with alt',
     @TestKittyKeyboardShiftAltTabNormalizesToBackTabWithAlt);
-  T.Run('kitty keyboard shift-alt-ctrl-tab normalizes to backtab with alt ctrl',
+  T.Test('kitty keyboard shift-alt-ctrl-tab normalizes to backtab with alt ctrl',
     @TestKittyKeyboardShiftAltCtrlTabNormalizesToBackTabWithAltCtrl);
-  T.Run('kitty keyboard alt-tab preserves modifier',
+  T.Test('kitty keyboard alt-tab preserves modifier',
     @TestKittyKeyboardAltTabPreservesModifier);
-  T.Run('kitty keyboard shift-enter preserves modifier',
+  T.Test('kitty keyboard shift-enter preserves modifier',
     @TestKittyKeyboardShiftEnterPreservesModifier);
-  T.Run('kitty keyboard ctrl-esc preserves modifier',
+  T.Test('kitty keyboard ctrl-esc preserves modifier',
     @TestKittyKeyboardCtrlEscPreservesModifier);
-  T.Run('kitty keyboard alt-backspace preserves modifier',
+  T.Test('kitty keyboard alt-backspace preserves modifier',
     @TestKittyKeyboardAltBackspacePreservesModifier);
-  T.Run('kitty keyboard alt-codepoint preserves modifier',
+  T.Test('kitty keyboard alt-codepoint preserves modifier',
     @TestKittyKeyboardAltCodepointPreservesModifier);
-  T.Run('capture auto release', @TestCaptureAutoRelease);
-  T.Run('capture ignores mismatched release',
+  T.Test('capture auto release', @TestCaptureAutoRelease);
+  T.Test('capture ignores mismatched release',
     @TestCaptureIgnoresMismatchedRelease);
-  T.Run('request quit', @TestRequestQuit);
-  T.Run('terminal options default matches editor default',
+  T.Test('request quit', @TestRequestQuit);
+  T.Test('terminal options default matches editor default',
     @TestTerminalOptionsDefaultMatchesEditorDefault);
-  T.Run('terminal options native selection suppresses tracking',
+  T.Test('terminal options native selection suppresses tracking',
     @TestTerminalOptionsNativeSelectionWheelSuppressesMouseTracking);
-  T.Run('terminal options application selection preserves mouse mode',
+  T.Test('terminal options application selection preserves mouse mode',
     @TestTerminalOptionsApplicationSelectionPreservesConfiguredMouseMode);
-  T.Run('capability profile separates detected and active states',
+  T.Test('capability profile separates detected and active states',
     @TestCapabilityProfileSeparatesDetectedAndActiveStates);
-  T.Run('capability profile falls back conservatively',
+  T.Test('capability profile falls back conservatively',
     @TestCapabilityProfileFallsBackConservatively);
-  T.Run('kitty keyboard candidate uses kitty terminal hints',
+  T.Test('kitty keyboard candidate uses kitty terminal hints',
     @TestKittyKeyboardCandidateUsesKittyTerminalHints);
-  T.Run('begin frame requires active tui mode',
+  T.Test('begin frame requires active tui mode',
     @TestBeginFrameRequiresActiveTuiMode);
-  T.Run('end frame requires active begin frame',
+  T.Test('end frame requires active begin frame',
     @TestEndFrameRequiresActiveBeginFrame);
-  T.Run('begin frame rejects active frame',
+  T.Test('begin frame rejects active frame',
     @TestBeginFrameRejectsActiveFrame);
-  T.Run('end frame rejects stale frame',
+  T.Test('end frame rejects stale frame',
     @TestEndFrameRejectsStaleFrame);
-  T.Run('wezterm capability profile uses kitty compatibility',
+  T.Test('wezterm capability profile uses kitty compatibility',
     @TestWezTermCapabilityProfileUsesKittyCompatibility);
-  T.Run('ghostty capability profile uses kitty compatibility',
+  T.Test('ghostty capability profile uses kitty compatibility',
     @TestGhosttyCapabilityProfileUsesKittyCompatibility);
-  T.Run('sixel capability profile does not imply kitty keyboard',
+  T.Test('sixel capability profile does not imply kitty keyboard',
     @TestSixelCapabilityProfileDoesNotImplyKittyKeyboard);
-  T.Summary;
-  if not T.AllPassed then
-    Halt(1);
+  if not T.Run then Halt(1);
 end.

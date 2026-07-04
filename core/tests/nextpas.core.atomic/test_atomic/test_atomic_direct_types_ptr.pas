@@ -10,7 +10,7 @@ implementation
 
 uses
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.atomic,
   nextpas.core.atomic.types;
 

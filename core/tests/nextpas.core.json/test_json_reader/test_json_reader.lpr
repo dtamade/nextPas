@@ -6,10 +6,10 @@ uses
   nextpas.core.text.view,
   nextpas.core.json.types,
   nextpas.core.json.reader,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestSimpleObject;
 var R: TJsonReader;
@@ -328,24 +328,24 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.json.reader');
-  T.Run('simple object', @TestSimpleObject);
-  T.Run('array', @TestArray);
-  T.Run('literals', @TestLiterals);
-  T.Run('float', @TestFloat);
-  T.Run('nested', @TestNested);
-  T.Run('whitespace', @TestWhitespace);
-  T.Run('empty', @TestEmpty);
-  T.Run('error', @TestError);
-  T.Run('error position', @TestErrorPosition);
-  T.Run('nested error positions', @TestNestedErrorPositions);
-  T.Run('invalid token suffixes fail closed',
+  T := TTestSuite.Create('nextpas.core.json.reader');
+  T.Test('simple object', @TestSimpleObject);
+  T.Test('array', @TestArray);
+  T.Test('literals', @TestLiterals);
+  T.Test('float', @TestFloat);
+  T.Test('nested', @TestNested);
+  T.Test('whitespace', @TestWhitespace);
+  T.Test('empty', @TestEmpty);
+  T.Test('error', @TestError);
+  T.Test('error position', @TestErrorPosition);
+  T.Test('nested error positions', @TestNestedErrorPositions);
+  T.Test('invalid token suffixes fail closed',
     @TestInvalidTokenSuffixesFailClosed);
-  T.Run('int vs float', @TestIntVsFloat);
-  T.Run('integer overflow', @TestIntegerOverflow);
-  T.Run('invalid number tokens', @TestInvalidNumberTokens);
-  T.Run('long string', @TestLongString);
-  T.Run('string token validation', @TestStringTokenValidation);
-  T.Run('mixed whitespace', @TestMixedWhitespace);
-  T.Summary;
+  T.Test('int vs float', @TestIntVsFloat);
+  T.Test('integer overflow', @TestIntegerOverflow);
+  T.Test('invalid number tokens', @TestInvalidNumberTokens);
+  T.Test('long string', @TestLongString);
+  T.Test('string token validation', @TestStringTokenValidation);
+  T.Test('mixed whitespace', @TestMixedWhitespace);
+  if not T.Run then Halt(1);
 end.

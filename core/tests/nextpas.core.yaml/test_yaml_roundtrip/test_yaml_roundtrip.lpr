@@ -6,10 +6,10 @@ uses
   SysUtils,
   nextpas.core.yaml.types,
   nextpas.core.yaml,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { ===== Parse → Stringify → Re-parse → Compare ===== }
 
@@ -268,22 +268,21 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('yaml roundtrip');
+  T := TTestSuite.Create('yaml roundtrip');
   { Parse → Stringify → Re-parse → Compare }
-  T.Run('roundtrip scalars', @TestRoundtripScalars);
-  T.Run('roundtrip sequence', @TestRoundtripSequence);
-  T.Run('roundtrip mapping', @TestRoundtripMapping);
-  T.Run('roundtrip nested map', @TestRoundtripNestedMap);
-  T.Run('roundtrip map of seqs', @TestRoundtripMapOfSeqs);
-  T.Run('roundtrip empty containers', @TestRoundtripEmptyContainers);
-  T.Run('roundtrip nested with empty', @TestRoundtripNestedEmpty);
+  T.Test('roundtrip scalars', @TestRoundtripScalars);
+  T.Test('roundtrip sequence', @TestRoundtripSequence);
+  T.Test('roundtrip mapping', @TestRoundtripMapping);
+  T.Test('roundtrip nested map', @TestRoundtripNestedMap);
+  T.Test('roundtrip map of seqs', @TestRoundtripMapOfSeqs);
+  T.Test('roundtrip empty containers', @TestRoundtripEmptyContainers);
+  T.Test('roundtrip nested with empty', @TestRoundtripNestedEmpty);
   { Builder roundtrip }
-  T.Run('builder roundtrip', @TestBuilderRoundtrip);
-  T.Run('builder pretty roundtrip', @TestBuilderPrettyRoundtrip);
-  T.Run('builder empty roundtrip', @TestBuilderEmptyRoundtrip);
-  T.Run('builder deep nesting', @TestBuilderDeepNesting);
+  T.Test('builder roundtrip', @TestBuilderRoundtrip);
+  T.Test('builder pretty roundtrip', @TestBuilderPrettyRoundtrip);
+  T.Test('builder empty roundtrip', @TestBuilderEmptyRoundtrip);
+  T.Test('builder deep nesting', @TestBuilderDeepNesting);
   { Pretty roundtrip }
-  T.Run('pretty preserves structure', @TestPrettyPreservesStructure);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  T.Test('pretty preserves structure', @TestPrettyPreservesStructure);
+  if not T.Run then Halt(1);
 end.

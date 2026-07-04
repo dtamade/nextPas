@@ -9,10 +9,10 @@ uses
   nextpas.core.io.intf,
   nextpas.core.io.memory,
   nextpas.core.io.binary,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestWriteReadUInt8;
 var
@@ -319,29 +319,27 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.io.binary');
-  T.Run('uint8', @TestWriteReadUInt8);
-  T.Run('uint16 LE', @TestWriteReadUInt16LE);
-  T.Run('uint32 LE', @TestWriteReadUInt32LE);
-  T.Run('int32 LE', @TestWriteReadInt32LE);
-  T.Run('int64 LE', @TestWriteReadInt64LE);
-  T.Run('float32 LE', @TestWriteReadFloat32LE);
-  T.Run('float64 LE', @TestWriteReadFloat64LE);
-  T.Run('bytes', @TestWriteReadBytes);
-  T.Run('string', @TestWriteReadString);
-  T.Run('bool', @TestWriteReadBool);
-  T.Run('big-endian', @TestBigEndian);
-  T.Run('mixed types', @TestMixedTypes);
-  T.Run('BE 64-bit', @TestBigEndian64);
-  T.Run('init nil reader', @TestInitNilReader);
-  T.Run('init nil writer', @TestInitNilWriter);
-  T.Run('EOF on read', @TestEOFOnRead);
-  T.Run('alloc limit', @TestAllocLimit);
-  T.Run('WriteBytesRaw nil', @TestWriteBytesRawNil);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  T := TTestSuite.Create('nextpas.core.io.binary');
+  T.Test('uint8', @TestWriteReadUInt8);
+  T.Test('uint16 LE', @TestWriteReadUInt16LE);
+  T.Test('uint32 LE', @TestWriteReadUInt32LE);
+  T.Test('int32 LE', @TestWriteReadInt32LE);
+  T.Test('int64 LE', @TestWriteReadInt64LE);
+  T.Test('float32 LE', @TestWriteReadFloat32LE);
+  T.Test('float64 LE', @TestWriteReadFloat64LE);
+  T.Test('bytes', @TestWriteReadBytes);
+  T.Test('string', @TestWriteReadString);
+  T.Test('bool', @TestWriteReadBool);
+  T.Test('big-endian', @TestBigEndian);
+  T.Test('mixed types', @TestMixedTypes);
+  T.Test('BE 64-bit', @TestBigEndian64);
+  T.Test('init nil reader', @TestInitNilReader);
+  T.Test('init nil writer', @TestInitNilWriter);
+  T.Test('EOF on read', @TestEOFOnRead);
+  T.Test('alloc limit', @TestAllocLimit);
+  T.Test('WriteBytesRaw nil', @TestWriteBytesRawNil);
+  if not T.Run then Halt(1);
 end.
-  T.Run('mixed types', @TestMixedTypes);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  T.Test('mixed types', @TestMixedTypes);
+  if not T.Run then Halt(1);
 end.

@@ -5,7 +5,7 @@ program test_http_h1chunked;
 uses
   nextpas.core.base,
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.http.base,
   nextpas.core.http.impl.h1.chunked,
   nextpas.core.io.intf;
@@ -92,7 +92,7 @@ begin
 end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestSingleWriteFramesOneChunk;
 var
@@ -260,16 +260,16 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.http.impl.h1.chunked');
-  T.Run('Single Write frames one chunk', @TestSingleWriteFramesOneChunk);
-  T.Run('Multiple Write emits separate chunks', @TestMultipleWritesEmitSeparateChunks);
-  T.Run('Zero-length Write emits nothing', @TestZeroLengthWriteEmitsNothing);
-  T.Run('Flush writes terminal chunk once', @TestFlushWritesTerminalChunkOnce);
-  T.Run('Sixteen-byte chunk uses hex length', @TestSixteenByteChunkUsesHexLength);
-  T.Run('Write after Flush raises', @TestWriteAfterFlushRaises);
-  T.Run('Short writer still frames complete chunk', @TestShortWriterStillFramesCompleteChunk);
-  T.Run('Short writer Flush still writes terminal chunk', @TestShortWriterFlushStillWritesTerminalChunk);
-  T.Run('Zero-progress writer raises', @TestZeroProgressWriterRaises);
-  T.Run('Over-reporting writer raises', @TestOverreportingWriterRaises);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.http.impl.h1.chunked');
+  T.Test('Single Write frames one chunk', @TestSingleWriteFramesOneChunk);
+  T.Test('Multiple Write emits separate chunks', @TestMultipleWritesEmitSeparateChunks);
+  T.Test('Zero-length Write emits nothing', @TestZeroLengthWriteEmitsNothing);
+  T.Test('Flush writes terminal chunk once', @TestFlushWritesTerminalChunkOnce);
+  T.Test('Sixteen-byte chunk uses hex length', @TestSixteenByteChunkUsesHexLength);
+  T.Test('Write after Flush raises', @TestWriteAfterFlushRaises);
+  T.Test('Short writer still frames complete chunk', @TestShortWriterStillFramesCompleteChunk);
+  T.Test('Short writer Flush still writes terminal chunk', @TestShortWriterFlushStillWritesTerminalChunk);
+  T.Test('Zero-progress writer raises', @TestZeroProgressWriterRaises);
+  T.Test('Over-reporting writer raises', @TestOverreportingWriterRaises);
+  if not T.Run then Halt(1);
 end.

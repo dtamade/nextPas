@@ -9,10 +9,10 @@ uses
   {$ENDIF}
   Classes,
   SysUtils,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ExpandRepoPath(const ARelativePath: string): string;
 begin
@@ -157,14 +157,14 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.pipe');
-  T.Run('create/close', @TestCreateClose);
+  T := TTestSuite.Create('nextpas.core.platform.pipe');
+  T.Test('create/close', @TestCreateClose);
   {$IFDEF NEXTPAS_UNIX}
-  T.Run('write + read', @TestWriteRead);
-  T.Run('close write = EOF', @TestCloseWrite);
-  T.Run('dup2', @TestDup2);
+  T.Test('write + read', @TestWriteRead);
+  T.Test('close write = EOF', @TestCloseWrite);
+  T.Test('dup2', @TestDup2);
   {$ENDIF}
-  T.Run('double close read', @TestDoubleCloseRead);
-  T.Run('Windows pipe source contract', @TestWindowsPipeSourceContract);
-  T.Summary;
+  T.Test('double close read', @TestDoubleCloseRead);
+  T.Test('Windows pipe source contract', @TestWindowsPipeSourceContract);
+  if not T.Run then Halt(1);
 end.

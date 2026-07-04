@@ -8,11 +8,11 @@ program test_platform_socket_windows_real;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.platform.socket;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 {$IFDEF NEXTPAS_WINDOWS}
 
@@ -474,26 +474,26 @@ end;
 {$ENDIF}
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.socket.windows_real');
+  T := TTestSuite.Create('nextpas.core.platform.socket.windows_real');
   {$IFDEF NEXTPAS_WINDOWS}
-  T.Run('tcp_bind_specific_port', @TestTcpBindSpecificPort);
-  T.Run('tcp_listen_backlog', @TestTcpListenBacklog);
-  T.Run('accept_returns_client', @TestAcceptReturnsClient);
-  T.Run('full_tcp_roundtrip', @TestFullTcpRoundtrip);
-  T.Run('shutdown_rdwr', @TestShutdownRdwr);
-  T.Run('setsockopt_keepalive', @TestSetsockoptKeepalive);
-  T.Run('setsockopt_nodelay', @TestSetsockoptNodelay);
-  T.Run('setsockopt_rcvtimeo', @TestSetsockoptRcvtimeo);
-  T.Run('setsockopt_sndtimeo', @TestSetsockoptSndtimeo);
-  T.Run('getsockname_after_bind', @TestGetsocknameAfterBind);
-  T.Run('getpeername_after_connect', @TestGetpeernameAfterConnect);
-  T.Run('udp_sendto_recvfrom', @TestUdpSendtoRecvfrom);
-  T.Run('resolve_ipv4_invalid_host', @TestResolveIpv4InvalidHost);
-  T.Run('set_nonblocking_true', @TestSetNonblockingTrue);
-  T.Run('set_nonblocking_false', @TestSetNonblockingFalse);
-  T.Run('error_would_block', @TestErrorWouldBlock);
+  T.Test('tcp_bind_specific_port', @TestTcpBindSpecificPort);
+  T.Test('tcp_listen_backlog', @TestTcpListenBacklog);
+  T.Test('accept_returns_client', @TestAcceptReturnsClient);
+  T.Test('full_tcp_roundtrip', @TestFullTcpRoundtrip);
+  T.Test('shutdown_rdwr', @TestShutdownRdwr);
+  T.Test('setsockopt_keepalive', @TestSetsockoptKeepalive);
+  T.Test('setsockopt_nodelay', @TestSetsockoptNodelay);
+  T.Test('setsockopt_rcvtimeo', @TestSetsockoptRcvtimeo);
+  T.Test('setsockopt_sndtimeo', @TestSetsockoptSndtimeo);
+  T.Test('getsockname_after_bind', @TestGetsocknameAfterBind);
+  T.Test('getpeername_after_connect', @TestGetpeernameAfterConnect);
+  T.Test('udp_sendto_recvfrom', @TestUdpSendtoRecvfrom);
+  T.Test('resolve_ipv4_invalid_host', @TestResolveIpv4InvalidHost);
+  T.Test('set_nonblocking_true', @TestSetNonblockingTrue);
+  T.Test('set_nonblocking_false', @TestSetNonblockingFalse);
+  T.Test('error_would_block', @TestErrorWouldBlock);
   {$ELSE}
-  T.Run('non-Windows skip', @TestNonWindowsSkip);
+  T.Test('non-Windows skip', @TestNonWindowsSkip);
   {$ENDIF}
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

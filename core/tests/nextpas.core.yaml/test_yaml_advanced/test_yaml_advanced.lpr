@@ -4,13 +4,13 @@ program test_yaml_advanced;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.text.view,
   nextpas.core.yaml.types,
   nextpas.core.yaml;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { P7: Anchors and Aliases }
 
@@ -182,19 +182,19 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.yaml.advanced');
-  T.Run('Anchor/alias mapping', @TestAnchorAlias);
-  T.Run('Anchor/alias scalar', @TestAnchorScalar);
-  T.Run('Undefined alias', @TestUndefinedAlias);
-  T.Run('Block literal', @TestBlockLiteral);
-  T.Run('Block folded', @TestBlockFolded);
-  T.Run('Rejects multi-doc', @TestRejectsMultiDoc);
-  T.Run('Doc end marker', @TestDocEnd);
-  T.Run('Empty mapping', @TestEmptyMapping);
-  T.Run('Empty sequence', @TestEmptySequence);
-  T.Run('Trailing comma', @TestTrailingComma);
-  T.Run('Hex/octal int', @TestHexOctalInt);
-  T.Run('Special floats', @TestSpecialFloats);
-  T.Run('Quoted not resolved', @TestQuotedStringsNotResolved);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.yaml.advanced');
+  T.Test('Anchor/alias mapping', @TestAnchorAlias);
+  T.Test('Anchor/alias scalar', @TestAnchorScalar);
+  T.Test('Undefined alias', @TestUndefinedAlias);
+  T.Test('Block literal', @TestBlockLiteral);
+  T.Test('Block folded', @TestBlockFolded);
+  T.Test('Rejects multi-doc', @TestRejectsMultiDoc);
+  T.Test('Doc end marker', @TestDocEnd);
+  T.Test('Empty mapping', @TestEmptyMapping);
+  T.Test('Empty sequence', @TestEmptySequence);
+  T.Test('Trailing comma', @TestTrailingComma);
+  T.Test('Hex/octal int', @TestHexOctalInt);
+  T.Test('Special floats', @TestSpecialFloats);
+  T.Test('Quoted not resolved', @TestQuotedStringsNotResolved);
+  if not T.Run then Halt(1);
 end.

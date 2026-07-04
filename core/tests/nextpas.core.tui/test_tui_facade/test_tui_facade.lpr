@@ -4,7 +4,7 @@ program test_tui_facade;
 
 uses
   nextpas.core.tui.full,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 type
   TFullFacadeRenderHost = class
@@ -17,7 +17,7 @@ type
   end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TFullFacadeRenderHost.Render(AApp: TApp; var AFrame: TFrame);
 begin
@@ -413,17 +413,15 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.facade');
-  T.Run('core facade types', @TestCoreFacadeTypes);
-  T.Run('widget facade types', @TestWidgetFacadeTypes);
-  T.Run('facade constants and helpers', @TestFacadeConstantsAndHelpers);
-  T.Run('compatibility aliases remain', @TestCompatibilityAliasesRemain);
-  T.Run('full facade covers ext and experimental contract', @TestFullFacadeCoversExtAndExperimentalSurface);
-  T.Run('full facade covers app task runtime surface', @TestFullFacadeCoversAppTaskRuntimeSurface);
-  T.Run('full facade advanced widget catalog remains usable', @TestFullFacadeAdvancedWidgetCatalogRemainsUsable);
-  T.Run('full facade app callback wiring compiles', @TestReadmeQuickStartCompiles);
-  T.Run('full facade exposes tui exceptions', @TestFullFacadeExposesTuiExceptions);
-  T.Summary;
-  if not T.AllPassed then
-    Halt(1);
+  T := TTestSuite.Create('nextpas.core.tui.facade');
+  T.Test('core facade types', @TestCoreFacadeTypes);
+  T.Test('widget facade types', @TestWidgetFacadeTypes);
+  T.Test('facade constants and helpers', @TestFacadeConstantsAndHelpers);
+  T.Test('compatibility aliases remain', @TestCompatibilityAliasesRemain);
+  T.Test('full facade covers ext and experimental contract', @TestFullFacadeCoversExtAndExperimentalSurface);
+  T.Test('full facade covers app task runtime surface', @TestFullFacadeCoversAppTaskRuntimeSurface);
+  T.Test('full facade advanced widget catalog remains usable', @TestFullFacadeAdvancedWidgetCatalogRemainsUsable);
+  T.Test('full facade app callback wiring compiles', @TestReadmeQuickStartCompiles);
+  T.Test('full facade exposes tui exceptions', @TestFullFacadeExposesTuiExceptions);
+  if not T.Run then Halt(1);
 end.

@@ -5,10 +5,10 @@ program test_text_builder;
 uses
   nextpas.core.text.builder,
   nextpas.core.text.view,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestBasicAppend;
 var
@@ -131,16 +131,16 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.text.builder');
-  T.Run('basic append', @TestBasicAppend);
-  T.Run('append int', @TestAppendInt);
-  T.Run('append uint', @TestAppendUInt);
-  T.Run('append hex', @TestAppendHex);
-  T.Run('append bool', @TestAppendBool);
-  T.Run('grow', @TestGrow);
-  T.Run('clear', @TestClear);
-  T.Run('as view', @TestAsView);
-  T.Run('append chars', @TestAppendChars);
-  T.Run('reserve', @TestReserve);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.text.builder');
+  T.Test('basic append', @TestBasicAppend);
+  T.Test('append int', @TestAppendInt);
+  T.Test('append uint', @TestAppendUInt);
+  T.Test('append hex', @TestAppendHex);
+  T.Test('append bool', @TestAppendBool);
+  T.Test('grow', @TestGrow);
+  T.Test('clear', @TestClear);
+  T.Test('as view', @TestAsView);
+  T.Test('append chars', @TestAppendChars);
+  T.Test('reserve', @TestReserve);
+  if not T.Run then Halt(1);
 end.

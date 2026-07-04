@@ -6,12 +6,12 @@ program test_platform_thread_wine;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.platform.thread,
   nextpas.core.platform.sync;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 {$IFDEF NEXTPAS_WINDOWS}
 
@@ -350,19 +350,19 @@ end;
 {$ENDIF}
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.thread.wine_runtime_smoke');
+  T := TTestSuite.Create('nextpas.core.platform.thread.wine_runtime_smoke');
   {$IFDEF NEXTPAS_WINDOWS}
-  T.Run('platform_thread_create + platform_thread_join', @TestThreadCreateJoin);
-  T.Run('platform_thread_detach', @TestThreadDetach);
-  T.Run('platform_thread_self / platform_thread_id', @TestThreadSelfAndId);
-  T.Run('platform_thread_yield', @TestThreadYield);
-  T.Run('platform_thread_sleep_ns', @TestThreadSleepNs);
-  T.Run('platform_tls_create/set/get/destroy roundtrip', @TestTLSRoundtrip);
-  T.Run('platform_cpu_count >= 1', @TestCpuCount);
-  T.Run('condvar signal wakes one waiter', @TestCondvarSignal);
-  T.Run('condvar broadcast wakes multiple waiters', @TestCondvarBroadcast);
+  T.Test('platform_thread_create + platform_thread_join', @TestThreadCreateJoin);
+  T.Test('platform_thread_detach', @TestThreadDetach);
+  T.Test('platform_thread_self / platform_thread_id', @TestThreadSelfAndId);
+  T.Test('platform_thread_yield', @TestThreadYield);
+  T.Test('platform_thread_sleep_ns', @TestThreadSleepNs);
+  T.Test('platform_tls_create/set/get/destroy roundtrip', @TestTLSRoundtrip);
+  T.Test('platform_cpu_count >= 1', @TestCpuCount);
+  T.Test('condvar signal wakes one waiter', @TestCondvarSignal);
+  T.Test('condvar broadcast wakes multiple waiters', @TestCondvarBroadcast);
   {$ELSE}
-  T.Run('non-Windows skip', @TestNonWindowsSkip);
+  T.Test('non-Windows skip', @TestNonWindowsSkip);
   {$ENDIF}
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

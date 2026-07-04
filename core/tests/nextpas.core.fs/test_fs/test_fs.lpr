@@ -4,7 +4,7 @@ program test_fs;
 
 uses
   SysUtils, Classes,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.io.base,
   nextpas.core.io.intf,
@@ -27,7 +27,7 @@ uses
   nextpas.core.fs;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GTmpDir: string;
   GWalkErrorSeen: Boolean;
   GWalkErrorPath: string;
@@ -1698,152 +1698,152 @@ end;
 begin
   SetupTmpDir;
   try
-    T := TTestRunner.Create('nextpas.core.fs');
+    T := TTestSuite.Create('nextpas.core.fs');
 
-    T.Run('Create and read', @TestCreateAndRead);
-    T.Run('Seek', @TestSeek);
-    T.Run('Stat', @TestStat);
-    T.Run('Truncate', @TestTruncate);
-    T.Run('ReadAt', @TestReadAt);
-    T.Run('WriteAt', @TestWriteAt);
+    T.Test('Create and read', @TestCreateAndRead);
+    T.Test('Seek', @TestSeek);
+    T.Test('Stat', @TestStat);
+    T.Test('Truncate', @TestTruncate);
+    T.Test('ReadAt', @TestReadAt);
+    T.Test('WriteAt', @TestWriteAt);
 
-    T.Run('ReadFile/WriteFile', @TestReadWriteFile);
-    T.Run('WriteAtomic', @TestWriteAtomic);
-    T.Run('CopyFile', @TestCopyFile);
+    T.Test('ReadFile/WriteFile', @TestReadWriteFile);
+    T.Test('WriteAtomic', @TestWriteAtomic);
+    T.Test('CopyFile', @TestCopyFile);
 {$IFDEF NEXTPAS_LINUX}
-    T.Run('WriteFile raises on short write', @TestWriteFileRaisesOnShortWrite);
-    T.Run('AppendFile raises on short write', @TestAppendFileRaisesOnShortWrite);
+    T.Test('WriteFile raises on short write', @TestWriteFileRaisesOnShortWrite);
+    T.Test('AppendFile raises on short write', @TestAppendFileRaisesOnShortWrite);
 {$ENDIF}
-    T.Run('Exists', @TestExists);
-    T.Run('IsFile/IsDir', @TestIsFileIsDir);
-    T.Run('FileSize', @TestFileSize);
+    T.Test('Exists', @TestExists);
+    T.Test('IsFile/IsDir', @TestIsFileIsDir);
+    T.Test('FileSize', @TestFileSize);
 
-    T.Run('Mkdir + ReadDir', @TestMkdirAndReadDir);
-    T.Run('MkdirAll', @TestMkdirAll);
-    T.Run('Mkdir existing file raises already exists',
+    T.Test('Mkdir + ReadDir', @TestMkdirAndReadDir);
+    T.Test('MkdirAll', @TestMkdirAll);
+    T.Test('Mkdir existing file raises already exists',
       @TestMkdirExistingFileRaisesAlreadyExists);
-    T.Run('MkdirAll existing file child raises invalid operation',
+    T.Test('MkdirAll existing file child raises invalid operation',
       @TestMkdirAllExistingFileChildRaisesInvalidOperation);
-    T.Run('Remove', @TestRemove);
-    T.Run('Remove non-empty dir raises invalid operation',
+    T.Test('Remove', @TestRemove);
+    T.Test('Remove non-empty dir raises invalid operation',
       @TestRemoveNonEmptyDirRaisesInvalidOperation);
-    T.Run('Remove missing path returns true',
+    T.Test('Remove missing path returns true',
       @TestRemoveMissingPathReturnsTrue);
-    T.Run('RemoveAll missing path raises not found',
+    T.Test('RemoveAll missing path raises not found',
       @TestRemoveAllMissingPathRaisesNotFound);
-    T.Run('RemoveAll unsafe root guard raises invalid operation',
+    T.Test('RemoveAll unsafe root guard raises invalid operation',
       @TestRemoveAllUnsafeRootGuardRaisesInvalidOperation);
-    T.Run('RemoveAll', @TestRemoveAll);
-    T.Run('Rename', @TestRename);
-    T.Run('Rename missing source raises not found',
+    T.Test('RemoveAll', @TestRemoveAll);
+    T.Test('Rename', @TestRename);
+    T.Test('Rename missing source raises not found',
       @TestRenameMissingSourceRaisesNotFound);
-    T.Run('Fs error non-empty dir source contract',
+    T.Test('Fs error non-empty dir source contract',
       @TestFsErrorNonEmptyDirSourceContract);
-    T.Run('DirIterator', @TestDirIterator);
+    T.Test('DirIterator', @TestDirIterator);
 {$IFDEF NEXTPAS_LINUX}
-    T.Run('DirIterator close reports platform error',
+    T.Test('DirIterator close reports platform error',
       @TestDirIteratorCloseReportsPlatformError);
 {$ENDIF}
 
-    T.Run('PathJoin', @TestPathJoin);
-    T.Run('PathDir', @TestPathDir);
-    T.Run('PathBase', @TestPathBase);
-    T.Run('PathExt', @TestPathExt);
-    T.Run('PathExt long result', @TestPathExtLongResult);
-    T.Run('PathChangeExt dotfiles', @TestPathChangeExtDotfiles);
-    T.Run('PathWithoutExt dotfiles', @TestPathWithoutExtDotfiles);
-    T.Run('PathIsAbs', @TestPathIsAbs);
-    T.Run('PathClean empty', @TestPathCleanEmpty);
-    T.Run('PathRelative', @TestPathRelative);
-    T.Run('PathSplit', @TestPathSplit);
-    T.Run('Path separator source contract', @TestPathSeparatorSourceContract);
-    T.Run('Path delegates platform root contract', @TestPathDelegatesPlatformRootContract);
-    T.Run('Path stack buffer constant contract',
+    T.Test('PathJoin', @TestPathJoin);
+    T.Test('PathDir', @TestPathDir);
+    T.Test('PathBase', @TestPathBase);
+    T.Test('PathExt', @TestPathExt);
+    T.Test('PathExt long result', @TestPathExtLongResult);
+    T.Test('PathChangeExt dotfiles', @TestPathChangeExtDotfiles);
+    T.Test('PathWithoutExt dotfiles', @TestPathWithoutExtDotfiles);
+    T.Test('PathIsAbs', @TestPathIsAbs);
+    T.Test('PathClean empty', @TestPathCleanEmpty);
+    T.Test('PathRelative', @TestPathRelative);
+    T.Test('PathSplit', @TestPathSplit);
+    T.Test('Path separator source contract', @TestPathSeparatorSourceContract);
+    T.Test('Path delegates platform root contract', @TestPathDelegatesPlatformRootContract);
+    T.Test('Path stack buffer constant contract',
       @TestPathStackBufferConstantContract);
 {$IFDEF NEXTPAS_WINDOWS}
-    T.Run('Windows path wrapper contract', @TestWindowsPathWrapperContract);
+    T.Test('Windows path wrapper contract', @TestWindowsPathWrapperContract);
 {$ENDIF}
-    T.Run('PathEnsureSep/PathTrimSep', @TestPathEnsureTrimSep);
-    T.Run('SameFileName', @TestSameFileName);
-    T.Run('PathJoin long', @TestPathLong);
+    T.Test('PathEnsureSep/PathTrimSep', @TestPathEnsureTrimSep);
+    T.Test('SameFileName', @TestSameFileName);
+    T.Test('PathJoin long', @TestPathLong);
 
     { T1: ScanFileLines }
-    T.Run('ScanFileLines basic', @TestScanFileLines_Basic);
-    T.Run('ScanFileLines empty', @TestScanFileLines_Empty);
-    T.Run('ScanFileLines single line', @TestScanFileLines_SingleLine);
-    T.Run('ScanFileLines CRLF', @TestScanFileLines_CRLF);
-    T.Run('ScanFileLines large file', @TestScanFileLines_LargeFile);
-    T.Run('ScanFileLines bytes', @TestScanFileLines_Bytes);
-    T.Run('ScanFileLines error path', @TestScanFileLines_ErrorPath);
+    T.Test('ScanFileLines basic', @TestScanFileLines_Basic);
+    T.Test('ScanFileLines empty', @TestScanFileLines_Empty);
+    T.Test('ScanFileLines single line', @TestScanFileLines_SingleLine);
+    T.Test('ScanFileLines CRLF', @TestScanFileLines_CRLF);
+    T.Test('ScanFileLines large file', @TestScanFileLines_LargeFile);
+    T.Test('ScanFileLines bytes', @TestScanFileLines_Bytes);
+    T.Test('ScanFileLines error path', @TestScanFileLines_ErrorPath);
 
     { T2: MapFileLines }
-    T.Run('MapFileLines basic', @TestMapFileLines_Basic);
-    T.Run('MapFileLines empty', @TestMapFileLines_Empty);
-    T.Run('MapFileLines cross-validate', @TestMapFileLines_CrossValidate);
-    T.Run('MapFileLines IndexOf', @TestMapFileLines_IndexOf);
-    T.Run('MapFileLines IndexOf not found', @TestMapFileLines_IndexOfNotFound);
-    T.Run('MapFileLines Contains', @TestMapFileLines_Contains);
-    T.Run('MapFileLines Contains not found', @TestMapFileLines_ContainsNotFound);
-    T.Run('MapFileLines error path', @TestMapFileLines_ErrorPath);
+    T.Test('MapFileLines basic', @TestMapFileLines_Basic);
+    T.Test('MapFileLines empty', @TestMapFileLines_Empty);
+    T.Test('MapFileLines cross-validate', @TestMapFileLines_CrossValidate);
+    T.Test('MapFileLines IndexOf', @TestMapFileLines_IndexOf);
+    T.Test('MapFileLines IndexOf not found', @TestMapFileLines_IndexOfNotFound);
+    T.Test('MapFileLines Contains', @TestMapFileLines_Contains);
+    T.Test('MapFileLines Contains not found', @TestMapFileLines_ContainsNotFound);
+    T.Test('MapFileLines error path', @TestMapFileLines_ErrorPath);
 
     { T3: WriteFileLines / ReadFileLines }
-    T.Run('WriteReadFileLines roundtrip', @TestWriteReadFileLines_Roundtrip);
-    T.Run('WriteFileLines empty', @TestWriteFileLines_Empty);
-    T.Run('WriteFileLines single line', @TestWriteFileLines_SingleLine);
-    T.Run('WriteFileLines unicode', @TestWriteFileLines_Unicode);
-    T.Run('WriteFileLines native line ending', @TestWriteFileLines_NativeLineEnding);
+    T.Test('WriteReadFileLines roundtrip', @TestWriteReadFileLines_Roundtrip);
+    T.Test('WriteFileLines empty', @TestWriteFileLines_Empty);
+    T.Test('WriteFileLines single line', @TestWriteFileLines_SingleLine);
+    T.Test('WriteFileLines unicode', @TestWriteFileLines_Unicode);
+    T.Test('WriteFileLines native line ending', @TestWriteFileLines_NativeLineEnding);
 
     { T7: fs facade source-contract }
-    T.Run('ScanFileLines uses CreateScanner contract',
+    T.Test('ScanFileLines uses CreateScanner contract',
       @TestScanFileLinesUsesCreateScannerContract);
-    T.Run('MapFileLines uses MmapLines contract',
+    T.Test('MapFileLines uses MmapLines contract',
       @TestMapFileLinesUsesMmapLinesContract);
-    T.Run('Fs facade uses io.scanner and io.mapped contract',
+    T.Test('Fs facade uses io.scanner and io.mapped contract',
       @TestFsFacadeUsesIOModulesContract);
 
-    T.Run('Open not found', @TestOpenNotFound);
-    T.Run('Close invalid handle raises', @TestCloseInvalidHandleRaises);
+    T.Test('Open not found', @TestOpenNotFound);
+    T.Test('Close invalid handle raises', @TestCloseInvalidHandleRaises);
 
-    T.Run('Append', @TestAppend);
-    T.Run('Exclusive create', @TestExclusive);
-    T.Run('ReadAt position-independent', @TestReadAtPositionIndependent);
-    T.Run('Chmod + perm', @TestChmodAndPerm);
-    T.Run('Truncate path', @TestTruncatePath);
-    T.Run('TempFile in dir', @TestTempFileInDir);
-    T.Run('TempFile system dir typed handle contract',
+    T.Test('Append', @TestAppend);
+    T.Test('Exclusive create', @TestExclusive);
+    T.Test('ReadAt position-independent', @TestReadAtPositionIndependent);
+    T.Test('Chmod + perm', @TestChmodAndPerm);
+    T.Test('Truncate path', @TestTruncatePath);
+    T.Test('TempFile in dir', @TestTempFileInDir);
+    T.Test('TempFile system dir typed handle contract',
       @TestTempFileSystemDirUsesTypedHandleContract);
-    T.Run('TempFile path buffer constant contract',
+    T.Test('TempFile path buffer constant contract',
       @TestTempFilePathBufferConstantContract);
-    T.Run('FsReadFile uses read_into contract',
+    T.Test('FsReadFile uses read_into contract',
       @TestFsReadFileUsesReadIntoContract);
-    T.Run('FsGetCwd/FsSetCwd roundtrip', @TestFsCwdRoundTrip);
-    T.Run('FsSetCwd invalid path raises mapped fs error',
+    T.Test('FsGetCwd/FsSetCwd roundtrip', @TestFsCwdRoundTrip);
+    T.Test('FsSetCwd invalid path raises mapped fs error',
       @TestFsSetCwdInvalidPathRaisesNotFound);
-    T.Run('FsGetCwd/FsSetCwd use platform owner contract',
+    T.Test('FsGetCwd/FsSetCwd use platform owner contract',
       @TestFsCwdUsesPlatformOwnerContract);
-    T.Run('FsGetEnv invalid name raises', @TestFsGetEnvInvalidNameRaises);
-    T.Run('FsGetEnv uses os.env owner contract',
+    T.Test('FsGetEnv invalid name raises', @TestFsGetEnvInvalidNameRaises);
+    T.Test('FsGetEnv uses os.env owner contract',
       @TestFsGetEnvUsesOsEnvOwnerContract);
-    T.Run('Lstat', @TestLstat);
-    T.Run('FsWalk delegates to platform walker',
+    T.Test('Lstat', @TestLstat);
+    T.Test('FsWalk delegates to platform walker',
       @TestFsWalkDelegatesToPlatformWalker);
-    T.Run('Walk visits files and directories',
+    T.Test('Walk visits files and directories',
       @TestWalkVisitsFilesAndDirectories);
-    T.Run('Walk classifies file types', @TestWalkClassifiesFileTypes);
-    T.Run('Walk stops when callback returns false',
+    T.Test('Walk classifies file types', @TestWalkClassifiesFileTypes);
+    T.Test('Walk stops when callback returns false',
       @TestWalkStopsWhenCallbackReturnsFalse);
 {$IFDEF NEXTPAS_UNIX}
-    T.Run('RemoveAll symlink root', @TestRemoveAllSymlinkRoot);
-    T.Run('Walk opendir error callback', @TestWalkOpenDirErrorGoesToCallback);
-    T.Run('Walk does not descend symlink directory',
+    T.Test('RemoveAll symlink root', @TestRemoveAllSymlinkRoot);
+    T.Test('Walk opendir error callback', @TestWalkOpenDirErrorGoesToCallback);
+    T.Test('Walk does not descend symlink directory',
       @TestWalkDoesNotDescendSymlinkDirectory);
-    T.Run('Remove symlink-to-dir unlinks link', @TestRemoveSymlinkToDirUnlinksLink);
-    T.Run('Symlink + Readlink', @TestSymlinkReadlink);
-    T.Run('Symlink + Readlink long target', @TestSymlinkReadlinkLongTarget);
-    T.Run('Readlink regular file raises invalid operation', @TestReadlinkRegularFileRaisesInvalidOperation);
+    T.Test('Remove symlink-to-dir unlinks link', @TestRemoveSymlinkToDirUnlinksLink);
+    T.Test('Symlink + Readlink', @TestSymlinkReadlink);
+    T.Test('Symlink + Readlink long target', @TestSymlinkReadlinkLongTarget);
+    T.Test('Readlink regular file raises invalid operation', @TestReadlinkRegularFileRaisesInvalidOperation);
 {$ENDIF}
 
-    T.Summary;
+  if not T.Run then Halt(1);
   finally
     CleanupTmpDir;
   end;

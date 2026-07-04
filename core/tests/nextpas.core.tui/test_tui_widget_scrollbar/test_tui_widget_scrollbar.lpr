@@ -9,9 +9,9 @@ uses
   nextpas.core.tui.buffer,
   nextpas.core.tui.widget.intf,
   nextpas.core.tui.widget.scrollbar,
-  nextpas.core.testing;
+  nextpas.core.test;
 
-var T: TTestRunner;
+var T: TTestSuite;
 
 { === IScrollbar Builders === }
 
@@ -197,44 +197,44 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('test_tui_widget_scrollbar');
+  T := TTestSuite.Create('test_tui_widget_scrollbar');
   try
     { Builders }
-    T.Run('Scrollbar New', @TestScrollbarNew);
-    T.Run('Scrollbar WithTotal', @TestScrollbarWithTotal);
-    T.Run('Scrollbar WithVisible', @TestScrollbarWithVisible);
-    T.Run('Scrollbar WithOffset', @TestScrollbarWithOffset);
-    T.Run('Scrollbar WithTrackChar', @TestScrollbarWithTrackChar);
-    T.Run('Scrollbar WithThumbChar', @TestScrollbarWithThumbChar);
-    T.Run('Scrollbar WithTrackStyle', @TestScrollbarWithTrackStyle);
-    T.Run('Scrollbar WithThumbStyle', @TestScrollbarWithThumbStyle);
+    T.Test('Scrollbar New', @TestScrollbarNew);
+    T.Test('Scrollbar WithTotal', @TestScrollbarWithTotal);
+    T.Test('Scrollbar WithVisible', @TestScrollbarWithVisible);
+    T.Test('Scrollbar WithOffset', @TestScrollbarWithOffset);
+    T.Test('Scrollbar WithTrackChar', @TestScrollbarWithTrackChar);
+    T.Test('Scrollbar WithThumbChar', @TestScrollbarWithThumbChar);
+    T.Test('Scrollbar WithTrackStyle', @TestScrollbarWithTrackStyle);
+    T.Test('Scrollbar WithThumbStyle', @TestScrollbarWithThumbStyle);
 
     { Thumb calculation }
-    T.Run('Scrollbar ThumbSize', @TestScrollbarThumbSize);
-    T.Run('Scrollbar ThumbStart', @TestScrollbarThumbStart);
-    T.Run('Scrollbar ThumbStart offset', @TestScrollbarThumbStartOffset);
+    T.Test('Scrollbar ThumbSize', @TestScrollbarThumbSize);
+    T.Test('Scrollbar ThumbStart', @TestScrollbarThumbStart);
+    T.Test('Scrollbar ThumbStart offset', @TestScrollbarThumbStartOffset);
 
     { Hit test }
-    T.Run('Scrollbar HitAbove', @TestScrollbarHitAbove);
-    T.Run('Scrollbar HitBelow', @TestScrollbarHitBelow);
+    T.Test('Scrollbar HitAbove', @TestScrollbarHitAbove);
+    T.Test('Scrollbar HitBelow', @TestScrollbarHitBelow);
 
     { Page navigation }
-    T.Run('Scrollbar PageUp', @TestScrollbarPageUp);
-    T.Run('Scrollbar PageDown', @TestScrollbarPageDown);
+    T.Test('Scrollbar PageUp', @TestScrollbarPageUp);
+    T.Test('Scrollbar PageDown', @TestScrollbarPageDown);
 
     { Clamped }
-    T.Run('Scrollbar Clamped', @TestScrollbarClamped);
-    T.Run('Scrollbar Clamped zero', @TestScrollbarClampedZero);
+    T.Test('Scrollbar Clamped', @TestScrollbarClamped);
+    T.Test('Scrollbar Clamped zero', @TestScrollbarClampedZero);
 
     { OffsetFromDragY }
-    T.Run('Scrollbar OffsetFromDragY', @TestScrollbarOffsetFromDragY);
+    T.Test('Scrollbar OffsetFromDragY', @TestScrollbarOffsetFromDragY);
 
     { Render }
-    T.Run('Scrollbar render', @TestScrollbarRender);
-    T.Run('Scrollbar as IWidget', @TestScrollbarAsIWidget);
+    T.Test('Scrollbar render', @TestScrollbarRender);
+    T.Test('Scrollbar as IWidget', @TestScrollbarAsIWidget);
 
     WriteLn;
-    T.Summary;
+  if not T.Run then Halt(1);
   finally
   end;
 end.

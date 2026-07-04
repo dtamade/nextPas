@@ -7,10 +7,10 @@ uses
   SysUtils,
   nextpas.core.platform.console,
   nextpas.core.platform.pipe,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ExpandRepoPath(const ARelativePath: string): string;
 begin
@@ -139,12 +139,12 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.console');
-  T.Run('is_terminal stdout', @TestIsTerminalStdout);
-  T.Run('invalid fd', @TestInvalidFd);
-  T.Run('get size', @TestGetSize);
-  T.Run('enable ansi', @TestEnableAnsi);
-  T.Run('pipe not terminal', @TestPipeNotTerminal);
-  T.Run('Windows console source contract', @TestWindowsConsoleSourceContract);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.console');
+  T.Test('is_terminal stdout', @TestIsTerminalStdout);
+  T.Test('invalid fd', @TestInvalidFd);
+  T.Test('get size', @TestGetSize);
+  T.Test('enable ansi', @TestEnableAnsi);
+  T.Test('pipe not terminal', @TestPipeNotTerminal);
+  T.Test('Windows console source contract', @TestWindowsConsoleSourceContract);
+  if not T.Run then Halt(1);
 end.

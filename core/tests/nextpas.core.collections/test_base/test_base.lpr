@@ -4,11 +4,11 @@ program test_base;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections.base;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestBaseExportsCollectionSkeleton;
 var
@@ -112,10 +112,10 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.base');
-  T.Run('exports collection skeleton', @TestBaseExportsCollectionSkeleton);
-  T.Run('exports growth strategies', @TestBaseExportsGrowthStrategies);
-  T.Run('growth strategy interface lives in base', @TestGrowthStrategyInterfaceLivesInBase);
-  T.Run('collection interfaces live in intf', @TestCollectionInterfacesLiveInIntf);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.base');
+  T.Test('exports collection skeleton', @TestBaseExportsCollectionSkeleton);
+  T.Test('exports growth strategies', @TestBaseExportsGrowthStrategies);
+  T.Test('growth strategy interface lives in base', @TestGrowthStrategyInterfaceLivesInBase);
+  T.Test('collection interfaces live in intf', @TestCollectionInterfacesLiveInIntf);
+  if not T.Run then Halt(1);
 end.

@@ -5,14 +5,14 @@ program test_xid_counter_wrap_max_contract;
 uses
   nextpas.core.base,
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.id.xid,
   nextpas.core.platform.random,
   nextpas.core.platform.thread,
   nextpas.core.platform.time;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestCounterWrapAtMaxTimestampFailsFast;
 var
@@ -45,7 +45,7 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.id.xid.counter_wrap_max_contract');
-  T.Run('counter wrap at max timestamp fails fast', @TestCounterWrapAtMaxTimestampFailsFast);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.id.xid.counter_wrap_max_contract');
+  T.Test('counter wrap at max timestamp fails fast', @TestCounterWrapAtMaxTimestampFailsFast);
+  if not T.Run then Halt(1);
 end.

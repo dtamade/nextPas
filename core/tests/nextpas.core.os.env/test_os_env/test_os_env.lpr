@@ -3,12 +3,12 @@ program test_os_env;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.os.env;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { --- existing tests --- }
 
@@ -215,30 +215,30 @@ end;
 { --- main --- }
 
 begin
-  T := TTestRunner.Create('nextpas.core.os.env');
-  T.Run('GetEnv_HOME', @Test_GetEnv_HOME);
-  T.Run('GetEnv_Missing', @Test_GetEnv_Missing);
-  T.Run('GetEnvironmentVariable_Compat', @Test_GetEnvironmentVariable_Compat);
-  T.Run('HasEnv_Exists', @Test_HasEnv_Exists);
-  T.Run('HasEnv_Missing', @Test_HasEnv_Missing);
-  T.Run('SetEnv_And_Get', @Test_SetEnv_And_Get);
-  T.Run('SetEnv_Overwrite', @Test_SetEnv_Overwrite);
-  T.Run('SetEnv_Empty_Value', @Test_SetEnv_Empty_Value);
-  T.Run('UnsetEnv', @Test_UnsetEnv);
-  T.Run('UnsetEnv_NonExistent', @Test_UnsetEnv_NonExistent);
-  T.Run('ExpandEnv_Basic', @Test_ExpandEnv_Basic);
-  T.Run('ExpandEnv_NotFound', @Test_ExpandEnv_NotFound);
-  T.Run('ExpandEnv_Adjacent', @Test_ExpandEnv_Adjacent);
-  T.Run('ExpandEnv_NoMarkers', @Test_ExpandEnv_NoMarkers);
-  T.Run('ExpandEnv_Unterminated', @Test_ExpandEnv_Unterminated);
-  T.Run('ExpandEnv_InvalidName', @Test_ExpandEnv_InvalidName);
-  T.Run('ExpandEnv $VAR', @TestExpandEnv_DollarVar);
-  T.Run('ExpandEnv $VAR.txt', @TestExpandEnv_DollarVarWithSuffix);
-  T.Run('ExpandEnv $VAR world', @TestExpandEnv_DollarVarAtStart);
-  T.Run('ExpandEnv prefix $VAR suffix', @TestExpandEnv_DollarVarInMiddle);
-  T.Run('ExpandEnv lone $', @TestExpandEnv_DollarAlone);
-  T.Run('ExpandEnv text$', @TestExpandEnv_DollarAtEnd);
-  T.Run('ExpandEnv $VAR + ${VAR}', @TestExpandEnv_MixedSyntax);
-  T.Run('ExpandEnv $UNDEFINED', @TestExpandEnv_DollarVarUndefined);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.os.env');
+  T.Test('GetEnv_HOME', @Test_GetEnv_HOME);
+  T.Test('GetEnv_Missing', @Test_GetEnv_Missing);
+  T.Test('GetEnvironmentVariable_Compat', @Test_GetEnvironmentVariable_Compat);
+  T.Test('HasEnv_Exists', @Test_HasEnv_Exists);
+  T.Test('HasEnv_Missing', @Test_HasEnv_Missing);
+  T.Test('SetEnv_And_Get', @Test_SetEnv_And_Get);
+  T.Test('SetEnv_Overwrite', @Test_SetEnv_Overwrite);
+  T.Test('SetEnv_Empty_Value', @Test_SetEnv_Empty_Value);
+  T.Test('UnsetEnv', @Test_UnsetEnv);
+  T.Test('UnsetEnv_NonExistent', @Test_UnsetEnv_NonExistent);
+  T.Test('ExpandEnv_Basic', @Test_ExpandEnv_Basic);
+  T.Test('ExpandEnv_NotFound', @Test_ExpandEnv_NotFound);
+  T.Test('ExpandEnv_Adjacent', @Test_ExpandEnv_Adjacent);
+  T.Test('ExpandEnv_NoMarkers', @Test_ExpandEnv_NoMarkers);
+  T.Test('ExpandEnv_Unterminated', @Test_ExpandEnv_Unterminated);
+  T.Test('ExpandEnv_InvalidName', @Test_ExpandEnv_InvalidName);
+  T.Test('ExpandEnv $VAR', @TestExpandEnv_DollarVar);
+  T.Test('ExpandEnv $VAR.txt', @TestExpandEnv_DollarVarWithSuffix);
+  T.Test('ExpandEnv $VAR world', @TestExpandEnv_DollarVarAtStart);
+  T.Test('ExpandEnv prefix $VAR suffix', @TestExpandEnv_DollarVarInMiddle);
+  T.Test('ExpandEnv lone $', @TestExpandEnv_DollarAlone);
+  T.Test('ExpandEnv text$', @TestExpandEnv_DollarAtEnd);
+  T.Test('ExpandEnv $VAR + ${VAR}', @TestExpandEnv_MixedSyntax);
+  T.Test('ExpandEnv $UNDEFINED', @TestExpandEnv_DollarVarUndefined);
+  if not T.Run then Halt(1);
 end.

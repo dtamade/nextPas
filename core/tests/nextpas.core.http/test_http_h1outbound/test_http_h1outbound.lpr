@@ -5,7 +5,7 @@ program test_http_h1outbound;
 uses
   nextpas.core.base,
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.io.intf,
   nextpas.core.net.base,
   nextpas.core.net.intf,
@@ -233,18 +233,18 @@ begin
 end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 begin
-  T := TTestRunner.Create('nextpas.core.http.h1outbound');
-  T.Run('TryDrainTo would-block does not consume pending bytes',
+  T := TTestSuite.Create('nextpas.core.http.h1outbound');
+  T.Test('TryDrainTo would-block does not consume pending bytes',
     @TestTryDrainWouldBlockDoesNotConsumePendingBytes);
-  T.Run('TryDrainTo partial write consumes only written bytes',
+  T.Test('TryDrainTo partial write consumes only written bytes',
     @TestTryDrainPartialWriteConsumesOnlyWrittenBytes);
-  T.Run('TryDrainTo zero progress raises',
+  T.Test('TryDrainTo zero progress raises',
     @TestTryDrainZeroProgressRaises);
-  T.Run('DrainAllTo over-reporting writer raises',
+  T.Test('DrainAllTo over-reporting writer raises',
     @TestDrainAllOverreportingWriterRaises);
-  T.Run('TryDrainTo over-reporting runtime raises',
+  T.Test('TryDrainTo over-reporting runtime raises',
     @TestTryDrainOverreportingRuntimeRaises);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

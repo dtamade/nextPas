@@ -4,10 +4,10 @@ program test_platform_dl;
 
 uses
   nextpas.core.platform.dl,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 const
 {$IFDEF NEXTPAS_LINUX}
@@ -138,17 +138,17 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.dl');
-  T.Run('load libc', @TestLoadLibc);
-  T.Run('resolve strlen', @TestResolveSym);
-  T.Run('load non-existent', @TestLoadNonExistent);
-  T.Run('resolve non-existent sym', @TestResolveNonExistent);
-  T.Run('double close', @TestDoubleClose);
-  T.Run('nil handle sym', @TestNilHandleSym);
-  T.Run('dl_error after failure', @TestDlError);
-  T.Run('GLOBAL flag', @TestGlobalFlag);
-  T.Run('load self (nil path)', @TestLoadSelf);
-  T.Run('error small buffer', @TestErrorSmallBuffer);
-  T.Run('resolve same sym twice', @TestResolveMultiple);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.dl');
+  T.Test('load libc', @TestLoadLibc);
+  T.Test('resolve strlen', @TestResolveSym);
+  T.Test('load non-existent', @TestLoadNonExistent);
+  T.Test('resolve non-existent sym', @TestResolveNonExistent);
+  T.Test('double close', @TestDoubleClose);
+  T.Test('nil handle sym', @TestNilHandleSym);
+  T.Test('dl_error after failure', @TestDlError);
+  T.Test('GLOBAL flag', @TestGlobalFlag);
+  T.Test('load self (nil path)', @TestLoadSelf);
+  T.Test('error small buffer', @TestErrorSmallBuffer);
+  T.Test('resolve same sym twice', @TestResolveMultiple);
+  if not T.Run then Halt(1);
 end.

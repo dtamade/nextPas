@@ -12,7 +12,7 @@ uses
   nextpas.core.http.impl.h2.hpack,
   nextpas.core.http.impl.h2.stream,
   nextpas.core.http.impl.h2.types,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 function BytesToAnsiString(const ABytes: TBytes): AnsiString;
 begin
@@ -1055,7 +1055,7 @@ begin
 end;
 
 begin
-  with TTestRunner.Create('nextpas.core.http.impl.h2.stream') do
+  with TTestSuite.Create('nextpas.core.http.impl.h2.stream') do
   begin
     Run('Headers with END_STREAM decode and transition',
       @TestHeadersWithEndStreamDecodeAndTransition);

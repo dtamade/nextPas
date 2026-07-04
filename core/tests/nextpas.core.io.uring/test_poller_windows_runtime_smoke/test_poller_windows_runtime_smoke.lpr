@@ -6,7 +6,7 @@ program test_poller_windows_runtime_smoke;
 
 uses
   SysUtils,
-  nextpas.core.testing
+  nextpas.core.test
   {$IFDEF NEXTPAS_WINDOWS}
   , nextpas.core.io.poller
   , nextpas.core.io.reactor.iocp
@@ -16,7 +16,7 @@ uses
   ;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 {$IFDEF NEXTPAS_WINDOWS}
 var
@@ -184,14 +184,14 @@ end;
 {$ENDIF}
 
 begin
-  T := TTestRunner.Create('nextpas.core.io.poller.windows_runtime_smoke');
+  T := TTestSuite.Create('nextpas.core.io.poller.windows_runtime_smoke');
   {$IFDEF NEXTPAS_WINDOWS}
-  T.Run('IOCP file AsyncRead/AsyncWrite runtime smoke',
+  T.Test('IOCP file AsyncRead/AsyncWrite runtime smoke',
     @TestIocpFileReadWriteRuntimeSmoke);
-  T.Run('poller file AsyncRead/AsyncWrite runtime smoke',
+  T.Test('poller file AsyncRead/AsyncWrite runtime smoke',
     @TestPollerFileReadWriteRuntimeSmoke);
   {$ELSE}
-  T.Run('non-Windows skip', @TestNonWindowsSkip);
+  T.Test('non-Windows skip', @TestNonWindowsSkip);
   {$ENDIF}
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

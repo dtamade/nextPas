@@ -4,10 +4,10 @@ program test_tui_borders;
 
 uses
   nextpas.core.tui.borders,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestBorderSets;
 begin
@@ -55,14 +55,12 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.borders');
-  T.Run('border sets', @TestBorderSets);
-  T.Run('plain glyphs', @TestPlainGlyphs);
-  T.Run('rounded glyphs', @TestRoundedGlyphs);
-  T.Run('double glyphs', @TestDoubleGlyphs);
-  T.Run('heavy glyphs', @TestHeavyGlyphs);
-  T.Run('partial borders', @TestPartialBorders);
-  T.Summary;
-  if not T.AllPassed then
-    Halt(1);
+  T := TTestSuite.Create('nextpas.core.tui.borders');
+  T.Test('border sets', @TestBorderSets);
+  T.Test('plain glyphs', @TestPlainGlyphs);
+  T.Test('rounded glyphs', @TestRoundedGlyphs);
+  T.Test('double glyphs', @TestDoubleGlyphs);
+  T.Test('heavy glyphs', @TestHeavyGlyphs);
+  T.Test('partial borders', @TestPartialBorders);
+  if not T.Run then Halt(1);
 end.

@@ -4,13 +4,13 @@ program test_stopwatch;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.time.base,
   nextpas.core.stopwatch,
   nextpas.core.platform.thread;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestCreateStopped;
 var
@@ -200,21 +200,21 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.stopwatch');
-  T.Run('Create stopped', @TestCreateStopped);
-  T.Run('StartNew', @TestStartNew);
-  T.Run('Start/Stop', @TestStartStop);
-  T.Run('Accumulate', @TestAccumulate);
-  T.Run('Reset', @TestReset);
-  T.Run('Restart', @TestRestart);
-  T.Run('Elapsed units', @TestElapsedUnits);
-  T.Run('Elapsed duration', @TestElapsedDuration);
-  T.Run('Lap', @TestLap);
-  T.Run('Lap not running', @TestLapNotRunning);
-  T.Run('GetLaps', @TestGetLaps);
-  T.Run('ClearLaps', @TestClearLaps);
-  T.Run('ToString', @TestToString);
-  T.Run('Scope', @TestScope);
-  T.Run('MeasureTime', @TestMeasureTime);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.stopwatch');
+  T.Test('Create stopped', @TestCreateStopped);
+  T.Test('StartNew', @TestStartNew);
+  T.Test('Start/Stop', @TestStartStop);
+  T.Test('Accumulate', @TestAccumulate);
+  T.Test('Reset', @TestReset);
+  T.Test('Restart', @TestRestart);
+  T.Test('Elapsed units', @TestElapsedUnits);
+  T.Test('Elapsed duration', @TestElapsedDuration);
+  T.Test('Lap', @TestLap);
+  T.Test('Lap not running', @TestLapNotRunning);
+  T.Test('GetLaps', @TestGetLaps);
+  T.Test('ClearLaps', @TestClearLaps);
+  T.Test('ToString', @TestToString);
+  T.Test('Scope', @TestScope);
+  T.Test('MeasureTime', @TestMeasureTime);
+  if not T.Run then Halt(1);
 end.

@@ -5,10 +5,10 @@ program test_platform_linux_ostypes_abi;
 uses
   nextpas.core.platform.posix.base,
   nextpas.core.platform.linux.base,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestPollfdSize;
 begin
@@ -79,18 +79,18 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.linux.ostypes_abi');
-  T.Run('pollfd size', @TestPollfdSize);
-  T.Run('iovec size', @TestIovecSize);
-  T.Run('TRLimit size', @TestTRLimitSize);
-  T.Run('tms size', @TestTmsSize);
-  T.Run('timezone size', @TestTimezoneSize);
-  T.Run('cpu_set_t size', @TestCpuSetSize);
-  T.Run('UtsName size', @TestUtsNameSize);
-  T.Run('TStatfs size', @TestStatfsSize);
-  T.Run('TFDSet size', @TestFDSetSize);
-  T.Run('poll constants', @TestPollConstants);
-  T.Run('system limits', @TestSystemLimits);
-  T.Run('rlimit constants', @TestRLimitConstants);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.linux.ostypes_abi');
+  T.Test('pollfd size', @TestPollfdSize);
+  T.Test('iovec size', @TestIovecSize);
+  T.Test('TRLimit size', @TestTRLimitSize);
+  T.Test('tms size', @TestTmsSize);
+  T.Test('timezone size', @TestTimezoneSize);
+  T.Test('cpu_set_t size', @TestCpuSetSize);
+  T.Test('UtsName size', @TestUtsNameSize);
+  T.Test('TStatfs size', @TestStatfsSize);
+  T.Test('TFDSet size', @TestFDSetSize);
+  T.Test('poll constants', @TestPollConstants);
+  T.Test('system limits', @TestSystemLimits);
+  T.Test('rlimit constants', @TestRLimitConstants);
+  if not T.Run then Halt(1);
 end.

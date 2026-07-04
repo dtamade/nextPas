@@ -5,7 +5,7 @@ program test_platform_memory;
 uses
   SysUtils,
   nextpas.core.platform.memory,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 const
   PLATFORM_MEMORY_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.memory.pas';
@@ -16,7 +16,7 @@ const
   POSIX_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.posix.ffi.pas';
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ReadSourceFile(const APath: string): string;
 var
@@ -355,19 +355,19 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.memory');
-  T.Run('alloc aligned and writable', @TestAllocAlignedAndWritable);
-  T.Run('zero-size and invalid alignment fail closed', @TestZeroSizeAndInvalidAlignmentFailClosed);
-  T.Run('free nil no-op', @TestFreeNilNoOp);
-  T.Run('realloc nil and zero semantics', @TestReallocNilAndZeroSemantics);
-  T.Run('realloc preserves prefix and alignment', @TestReallocPreservesPrefixAndAlignment);
-  T.Run('realloc overflow fails closed', @TestReallocOverflowFailsClosedAndKeepsOldAllocation);
-  T.Run('backend truth is explicit', @TestBackendTruthIsExplicit);
-  T.Run('native backend truth matches forced host', @TestNativeBackendTruthMatchesForcedHost);
-  T.Run('native backend source contracts', @TestNativeBackendSourceContracts);
-  T.Run('secure zero clears buffer', @TestSecureZeroMemoryClearsBuffer);
-  T.Run('secure zero nil and zero-size no-op', @TestSecureZeroMemoryNilAndZeroSizeNoOp);
-  T.Run('secure zero backend truth matches host', @TestSecureZeroBackendTruthMatchesHost);
-  T.Run('secure zero source contracts', @TestSecureZeroSourceContracts);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.memory');
+  T.Test('alloc aligned and writable', @TestAllocAlignedAndWritable);
+  T.Test('zero-size and invalid alignment fail closed', @TestZeroSizeAndInvalidAlignmentFailClosed);
+  T.Test('free nil no-op', @TestFreeNilNoOp);
+  T.Test('realloc nil and zero semantics', @TestReallocNilAndZeroSemantics);
+  T.Test('realloc preserves prefix and alignment', @TestReallocPreservesPrefixAndAlignment);
+  T.Test('realloc overflow fails closed', @TestReallocOverflowFailsClosedAndKeepsOldAllocation);
+  T.Test('backend truth is explicit', @TestBackendTruthIsExplicit);
+  T.Test('native backend truth matches forced host', @TestNativeBackendTruthMatchesForcedHost);
+  T.Test('native backend source contracts', @TestNativeBackendSourceContracts);
+  T.Test('secure zero clears buffer', @TestSecureZeroMemoryClearsBuffer);
+  T.Test('secure zero nil and zero-size no-op', @TestSecureZeroMemoryNilAndZeroSizeNoOp);
+  T.Test('secure zero backend truth matches host', @TestSecureZeroBackendTruthMatchesHost);
+  T.Test('secure zero source contracts', @TestSecureZeroSourceContracts);
+  if not T.Run then Halt(1);
 end.

@@ -5,7 +5,7 @@ program test_async_timeout;
 uses
   Classes,
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
   nextpas.core.time.cpu,
@@ -19,7 +19,7 @@ uses
   nextpas.core.io.poller;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { === Shared state === }
 
@@ -902,32 +902,32 @@ end;
 { === Main === }
 
 begin
-  T := TTestRunner.Create('nextpas.core.async.timeout');
+  T := TTestSuite.Create('nextpas.core.async.timeout');
 
-  T.Run('AsyncSleep', @TestAsyncSleep);
-  T.Run('ReadSuccess', @TestReadSuccess);
-  T.Run('ReadTimeout', @TestReadTimeout);
-  T.Run('ReadTimeoutLateIoCompletionSingleFire',
+  T.Test('AsyncSleep', @TestAsyncSleep);
+  T.Test('ReadSuccess', @TestReadSuccess);
+  T.Test('ReadTimeout', @TestReadTimeout);
+  T.Test('ReadTimeoutLateIoCompletionSingleFire',
     @TestReadTimeoutLateIoCompletionSingleFire);
-  T.Run('ReadTimeoutCloseReleasesPendingContext', @TestReadTimeoutCloseReleasesPendingContext);
-  T.Run('ReadTimeoutCloseBeforeDeadlineAbortsPendingContext',
+  T.Test('ReadTimeoutCloseReleasesPendingContext', @TestReadTimeoutCloseReleasesPendingContext);
+  T.Test('ReadTimeoutCloseBeforeDeadlineAbortsPendingContext',
     @TestReadTimeoutCloseBeforeDeadlineAbortsPendingContext);
-  T.Run('CloseAbortCallbackSeesClosedLoop',
+  T.Test('CloseAbortCallbackSeesClosedLoop',
     @TestCloseAbortCallbackSeesClosedLoop);
-  T.Run('ReadTimeoutCloseDispatchesAllAbortsWhenCallbackRaises',
+  T.Test('ReadTimeoutCloseDispatchesAllAbortsWhenCallbackRaises',
     @TestReadTimeoutCloseDispatchesAllAbortsWhenCallbackRaises);
-  T.Run('WriteSuccess', @TestWriteSuccess);
-  T.Run('NoDoubleFire', @TestNoDoubleFire);
-  T.Run('InfiniteDeadline', @TestInfiniteDeadline);
-  T.Run('MultipleTimeouts', @TestMultipleTimeouts);
-  T.Run('ZeroTimeout', @TestZeroTimeout);
-  T.Run('TaskStatus', @TestTaskStatus);
-  T.Run('TaskCallback', @TestTaskCallback);
-  T.Run('TaskLateCallback', @TestTaskLateCallback);
-  T.Run('TaskCallbackOwnerRefsClearedSourceContract',
+  T.Test('WriteSuccess', @TestWriteSuccess);
+  T.Test('NoDoubleFire', @TestNoDoubleFire);
+  T.Test('InfiniteDeadline', @TestInfiniteDeadline);
+  T.Test('MultipleTimeouts', @TestMultipleTimeouts);
+  T.Test('ZeroTimeout', @TestZeroTimeout);
+  T.Test('TaskStatus', @TestTaskStatus);
+  T.Test('TaskCallback', @TestTaskCallback);
+  T.Test('TaskLateCallback', @TestTaskLateCallback);
+  T.Test('TaskCallbackOwnerRefsClearedSourceContract',
     @TestTaskCallbackOwnerRefsClearedSourceContract);
-  T.Run('TimeoutCallbackOwnerRefsDetachedSourceContract',
+  T.Test('TimeoutCallbackOwnerRefsDetachedSourceContract',
     @TestTimeoutCallbackOwnerRefsDetachedSourceContract);
 
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

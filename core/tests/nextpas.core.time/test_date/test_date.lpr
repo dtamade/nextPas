@@ -4,7 +4,7 @@ program test_date;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.time.base,
   nextpas.core.time.date,
   nextpas.core.time.timeofday,
@@ -12,7 +12,7 @@ uses
   nextpas.core.time.iso8601;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { TDate tests }
 
@@ -376,39 +376,39 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.time.wave2');
+  T := TTestSuite.Create('nextpas.core.time.wave2');
 
-  T.Run('Date create', @TestDateCreate);
-  T.Run('Date invalid', @TestDateInvalid);
-  T.Run('Date try create', @TestDateTryCreate);
-  T.Run('Date epoch', @TestDateEpoch);
-  T.Run('Date unix days', @TestDateUnixDays);
-  T.Run('Date add days', @TestDateAddDays);
-  T.Run('Date add months', @TestDateAddMonths);
-  T.Run('Date add years', @TestDateAddYears);
-  T.Run('Date day of week', @TestDateDayOfWeek);
-  T.Run('Date day of year', @TestDateDayOfYear);
-  T.Run('Date leap year', @TestDateLeapYear);
-  T.Run('Date operators', @TestDateOperators);
-  T.Run('Date ISO 8601', @TestDateISO8601);
-  T.Run('Date start/end of month', @TestDateStartEndOfMonth);
+  T.Test('Date create', @TestDateCreate);
+  T.Test('Date invalid', @TestDateInvalid);
+  T.Test('Date try create', @TestDateTryCreate);
+  T.Test('Date epoch', @TestDateEpoch);
+  T.Test('Date unix days', @TestDateUnixDays);
+  T.Test('Date add days', @TestDateAddDays);
+  T.Test('Date add months', @TestDateAddMonths);
+  T.Test('Date add years', @TestDateAddYears);
+  T.Test('Date day of week', @TestDateDayOfWeek);
+  T.Test('Date day of year', @TestDateDayOfYear);
+  T.Test('Date leap year', @TestDateLeapYear);
+  T.Test('Date operators', @TestDateOperators);
+  T.Test('Date ISO 8601', @TestDateISO8601);
+  T.Test('Date start/end of month', @TestDateStartEndOfMonth);
 
-  T.Run('Time create', @TestTimeCreate);
-  T.Run('Time from nanos', @TestTimeFromNanos);
-  T.Run('Time wrap', @TestTimeWrap);
-  T.Run('Time operators', @TestTimeOperators);
-  T.Run('Time ISO 8601', @TestTimeISO8601);
+  T.Test('Time create', @TestTimeCreate);
+  T.Test('Time from nanos', @TestTimeFromNanos);
+  T.Test('Time wrap', @TestTimeWrap);
+  T.Test('Time operators', @TestTimeOperators);
+  T.Test('Time ISO 8601', @TestTimeISO8601);
 
-  T.Run('DateTime create', @TestDateTimeCreate);
-  T.Run('DateTime add duration', @TestDateTimeAddDuration);
-  T.Run('DateTime sub duration', @TestDateTimeSubDuration);
-  T.Run('DateTime duration', @TestDateTimeDuration);
-  T.Run('DateTime comparison', @TestDateTimeComparison);
-  T.Run('DateTime ISO 8601', @TestDateTimeISO8601);
+  T.Test('DateTime create', @TestDateTimeCreate);
+  T.Test('DateTime add duration', @TestDateTimeAddDuration);
+  T.Test('DateTime sub duration', @TestDateTimeSubDuration);
+  T.Test('DateTime duration', @TestDateTimeDuration);
+  T.Test('DateTime comparison', @TestDateTimeComparison);
+  T.Test('DateTime ISO 8601', @TestDateTimeISO8601);
 
-  T.Run('Parse ISO date', @TestParseDate);
-  T.Run('Parse ISO time', @TestParseTime);
-  T.Run('Parse ISO datetime', @TestParseDateTime);
+  T.Test('Parse ISO date', @TestParseDate);
+  T.Test('Parse ISO time', @TestParseTime);
+  T.Test('Parse ISO datetime', @TestParseDateTime);
 
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

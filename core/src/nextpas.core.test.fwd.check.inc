@@ -19,6 +19,18 @@ procedure CheckEqual(const AExpected, AActual: Double;
   AEpsilon: Double);
 begin nextpas.core.test.check.CheckEqual(AExpected, AActual, AEpsilon); end;
 
+procedure CheckEqual(const AExpected, AActual: string;
+  const AMessage: string);
+begin nextpas.core.test.check.CheckEqual(AExpected, AActual, AMessage); end;
+
+procedure CheckEqual(const AExpected, AActual: Int64;
+  const AMessage: string);
+begin nextpas.core.test.check.CheckEqual(AExpected, AActual, AMessage); end;
+
+procedure CheckEqual(const AExpected, AActual: Boolean;
+  const AMessage: string);
+begin nextpas.core.test.check.CheckEqual(AExpected, AActual, AMessage); end;
+
 procedure CheckNotEqual(const AExpected, AActual: string);
 begin nextpas.core.test.check.CheckNotEqual(AExpected, AActual); end;
 

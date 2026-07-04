@@ -4,13 +4,13 @@ program test_yaml_audit;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.text.view,
   nextpas.core.yaml.types,
   nextpas.core.yaml;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { === P0: Variant Record Key Bug (R2) === }
 
@@ -269,25 +269,25 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.yaml.audit');
-  T.Run('Numeric key', @TestNumericKey);
-  T.Run('Bool key', @TestBoolKey);
-  T.Run('Null key', @TestNullKey);
-  T.Run('Alias multiple refs', @TestAliasMultipleRefs);
-  T.Run('Undefined alias', @TestUndefinedAlias);
-  T.Run('Block literal content', @TestBlockLiteralContent);
-  T.Run('Deep flow nesting', @TestDeepFlowNesting);
-  T.Run('Deep block nesting', @TestDeepBlockNesting);
-  T.Run('Deep block sequence nesting', @TestDeepBlockSequenceNesting);
-  T.Run('Truncated double quote', @TestTruncatedDoubleQuote);
-  T.Run('Truncated single quote', @TestTruncatedSingleQuote);
-  T.Run('Malformed flow collections', @TestMalformedFlowCollections);
-  T.Run('Trailing document content', @TestTrailingDocumentContent);
-  T.Run('Missing value separator', @TestMissingValueSeparator);
-  T.Run('Missing mapping key', @TestMissingMappingKey);
-  T.Run('Round-trip all types', @TestRoundTripAllTypes);
-  T.Run('Large sequence 5000', @TestLargeSequence);
-  T.Run('Large mapping 500', @TestLargeMapping);
-  T.Run('Duplicate keys', @TestDuplicateKeys);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.yaml.audit');
+  T.Test('Numeric key', @TestNumericKey);
+  T.Test('Bool key', @TestBoolKey);
+  T.Test('Null key', @TestNullKey);
+  T.Test('Alias multiple refs', @TestAliasMultipleRefs);
+  T.Test('Undefined alias', @TestUndefinedAlias);
+  T.Test('Block literal content', @TestBlockLiteralContent);
+  T.Test('Deep flow nesting', @TestDeepFlowNesting);
+  T.Test('Deep block nesting', @TestDeepBlockNesting);
+  T.Test('Deep block sequence nesting', @TestDeepBlockSequenceNesting);
+  T.Test('Truncated double quote', @TestTruncatedDoubleQuote);
+  T.Test('Truncated single quote', @TestTruncatedSingleQuote);
+  T.Test('Malformed flow collections', @TestMalformedFlowCollections);
+  T.Test('Trailing document content', @TestTrailingDocumentContent);
+  T.Test('Missing value separator', @TestMissingValueSeparator);
+  T.Test('Missing mapping key', @TestMissingMappingKey);
+  T.Test('Round-trip all types', @TestRoundTripAllTypes);
+  T.Test('Large sequence 5000', @TestLargeSequence);
+  T.Test('Large mapping 500', @TestLargeMapping);
+  T.Test('Duplicate keys', @TestDuplicateKeys);
+  if not T.Run then Halt(1);
 end.

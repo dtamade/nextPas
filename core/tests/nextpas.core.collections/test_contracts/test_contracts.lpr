@@ -5,7 +5,7 @@ program test_contracts;
 uses
   SysUtils,
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.mem.intf,
   nextpas.core.mem.default,
   nextpas.core.collections.base,
@@ -51,7 +51,7 @@ type
   end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GGrowFuncCalls: Integer = 0;
   GGrowFuncLastCurrentSize: SizeUInt = 0;
   GGrowFuncLastRequiredSize: SizeUInt = 0;
@@ -614,18 +614,18 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.contracts');
-  T.Run('element manager unmanaged copy fill zero and overlap', @TestElementManagerUnmanagedCopyFillZeroAndOverlap);
-  T.Run('element manager managed realloc and overlap copy', @TestElementManagerManagedReallocAndOverlapCopy);
-  T.Run('element manager managed CopyArray path owns refs', @TestElementManagerManagedCopyArrayPathOwnsRefs);
-  T.Run('element manager managed ZeroElements reinitializes reusable slots', @TestElementManagerManagedZeroElementsReinitializesReusableSlots);
-  T.Run('element manager managed record ZeroElements reinitializes before free', @TestElementManagerManagedRecordZeroElementsReinitializesBeforeFree);
-  T.Run('node Clear releases managed data and links', @TestNodeClearReleasesManagedDataAndLinks);
-  T.Run('growth strategies honor bounds and alignment', @TestGrowthStrategiesHonorBoundsAndAlignment);
-  T.Run('custom growth strategy function and method callbacks', @TestCustomGrowthStrategyFunctionAndMethodCallbacks);
-  T.Run('shuffle random generator function and method callbacks', @TestShuffleRandomGeneratorFunctionAndMethodCallbacks);
-  T.Run('span subspan rejects overflowing count', @TestSpanSubSpanRejectsOverflowingCount);
-  T.Run('span2 from two rejects overflowing count', @TestSpan2FromTwoRejectsOverflowingCount);
-  T.Run('span from pointer validates positive count invariants', @TestSpanFromPointerValidatesPositiveCountInvariants);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.contracts');
+  T.Test('element manager unmanaged copy fill zero and overlap', @TestElementManagerUnmanagedCopyFillZeroAndOverlap);
+  T.Test('element manager managed realloc and overlap copy', @TestElementManagerManagedReallocAndOverlapCopy);
+  T.Test('element manager managed CopyArray path owns refs', @TestElementManagerManagedCopyArrayPathOwnsRefs);
+  T.Test('element manager managed ZeroElements reinitializes reusable slots', @TestElementManagerManagedZeroElementsReinitializesReusableSlots);
+  T.Test('element manager managed record ZeroElements reinitializes before free', @TestElementManagerManagedRecordZeroElementsReinitializesBeforeFree);
+  T.Test('node Clear releases managed data and links', @TestNodeClearReleasesManagedDataAndLinks);
+  T.Test('growth strategies honor bounds and alignment', @TestGrowthStrategiesHonorBoundsAndAlignment);
+  T.Test('custom growth strategy function and method callbacks', @TestCustomGrowthStrategyFunctionAndMethodCallbacks);
+  T.Test('shuffle random generator function and method callbacks', @TestShuffleRandomGeneratorFunctionAndMethodCallbacks);
+  T.Test('span subspan rejects overflowing count', @TestSpanSubSpanRejectsOverflowingCount);
+  T.Test('span2 from two rejects overflowing count', @TestSpan2FromTwoRejectsOverflowingCount);
+  T.Test('span from pointer validates positive count invariants', @TestSpanFromPointerValidatesPositiveCountInvariants);
+  if not T.Run then Halt(1);
 end.

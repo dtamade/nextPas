@@ -3,11 +3,11 @@ program test_facade;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function HashModuloTen(const AKey: Integer): UInt32;
 begin
@@ -182,9 +182,9 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.facade');
-  T.Run('facade factories return public interfaces', @TestFacadeFactoriesReturnPublicInterfaces);
-  T.Run('facade exports growth strategies', @TestFacadeExportsGrowthStrategies);
-  T.Run('facade hash map factories forward callbacks', @TestFacadeHashMapFactoriesForwardCallbacks);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.facade');
+  T.Test('facade factories return public interfaces', @TestFacadeFactoriesReturnPublicInterfaces);
+  T.Test('facade exports growth strategies', @TestFacadeExportsGrowthStrategies);
+  T.Test('facade hash map factories forward callbacks', @TestFacadeHashMapFactoriesForwardCallbacks);
+  if not T.Run then Halt(1);
 end.

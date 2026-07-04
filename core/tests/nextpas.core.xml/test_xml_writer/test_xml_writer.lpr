@@ -8,13 +8,13 @@ program test_xml_writer;
 uses
   nextpas.core.text.conv,
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.xml.base,
   nextpas.core.xml.reader,
   nextpas.core.xml.writer;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { === Tests === }
 
@@ -1263,71 +1263,71 @@ end;
 { === Main === }
 
 begin
-  T := TTestRunner.Create('XML Writer');
-  T.Run('BasicElement', @TestBasicElement);
-  T.Run('CompactNested', @TestCompactNested);
-  T.Run('PrettyPrint', @TestPrettyPrint);
-  T.Run('PrettyDeepNesting', @TestPrettyDeepNesting);
-  T.Run('AttributeEscape', @TestAttributeEscape);
-  T.Run('AttributeRejectsInvalidControlChar',
+  T := TTestSuite.Create('XML Writer');
+  T.Test('BasicElement', @TestBasicElement);
+  T.Test('CompactNested', @TestCompactNested);
+  T.Test('PrettyPrint', @TestPrettyPrint);
+  T.Test('PrettyDeepNesting', @TestPrettyDeepNesting);
+  T.Test('AttributeEscape', @TestAttributeEscape);
+  T.Test('AttributeRejectsInvalidControlChar',
     @TestAttributeRejectsInvalidControlChar);
-  T.Run('AttributeRejectsEmptyName', @TestAttributeRejectsEmptyName);
-  T.Run('AttributeOutsideStartTagIgnoresInvalidName',
+  T.Test('AttributeRejectsEmptyName', @TestAttributeRejectsEmptyName);
+  T.Test('AttributeOutsideStartTagIgnoresInvalidName',
     @TestAttributeOutsideStartTagIgnoresInvalidName);
-  T.Run('WriterRejectsInvalidQNames', @TestWriterRejectsInvalidQNames);
-  T.Run('NamespaceDecl', @TestNamespaceDecl);
-  T.Run('DefaultNamespaceDecl', @TestDefaultNamespaceDecl);
-  T.Run('NamespaceDeclAllowsXmlPrefixBinding',
+  T.Test('WriterRejectsInvalidQNames', @TestWriterRejectsInvalidQNames);
+  T.Test('NamespaceDecl', @TestNamespaceDecl);
+  T.Test('DefaultNamespaceDecl', @TestDefaultNamespaceDecl);
+  T.Test('NamespaceDeclAllowsXmlPrefixBinding',
     @TestNamespaceDeclAllowsXmlPrefixBinding);
-  T.Run('NamespaceDeclRejectsInvalidReservedBindings',
+  T.Test('NamespaceDeclRejectsInvalidReservedBindings',
     @TestNamespaceDeclRejectsInvalidReservedBindings);
-  T.Run('CDataOutput', @TestCDataOutput);
-  T.Run('CDataSplitsEmbeddedEndMarker', @TestCDataSplitsEmbeddedEndMarker);
-  T.Run('CommentOutput', @TestCommentOutput);
-  T.Run('CommentRejectsEmbeddedDoubleDash', @TestCommentRejectsEmbeddedDoubleDash);
-  T.Run('CommentRejectsTrailingDash', @TestCommentRejectsTrailingDash);
-  T.Run('CommentRejectsInvalidControlChar',
+  T.Test('CDataOutput', @TestCDataOutput);
+  T.Test('CDataSplitsEmbeddedEndMarker', @TestCDataSplitsEmbeddedEndMarker);
+  T.Test('CommentOutput', @TestCommentOutput);
+  T.Test('CommentRejectsEmbeddedDoubleDash', @TestCommentRejectsEmbeddedDoubleDash);
+  T.Test('CommentRejectsTrailingDash', @TestCommentRejectsTrailingDash);
+  T.Test('CommentRejectsInvalidControlChar',
     @TestCommentRejectsInvalidControlChar);
-  T.Run('PIOutput', @TestPIOutput);
-  T.Run('PISplitsEmbeddedEndMarker', @TestPISplitsEmbeddedEndMarker);
-  T.Run('PIRejectsInvalidControlChar', @TestPIRejectsInvalidControlChar);
-  T.Run('PINoData', @TestPINoData);
-  T.Run('PIRejectsReservedXmlTarget', @TestPIRejectsReservedXmlTarget);
-  T.Run('PIRejectsEmptyTarget', @TestPIRejectsEmptyTarget);
-  T.Run('PIRejectsInvalidTarget', @TestPIRejectsInvalidTarget);
-  T.Run('EmptyElement', @TestEmptyElement);
-  T.Run('StartElementRejectsEmptyName', @TestStartElementRejectsEmptyName);
-  T.Run('EmptyElementRejectsEmptyName', @TestEmptyElementRejectsEmptyName);
-  T.Run('EndElementCollapsesEmpty', @TestEndElementCollapsesEmpty);
-  T.Run('EndElementRejectsMismatchedName', @TestEndElementRejectsMismatchedName);
-  T.Run('EndElementRejectsUnexpectedClose', @TestEndElementRejectsUnexpectedClose);
-  T.Run('XmlDecl', @TestXmlDecl);
-  T.Run('XmlDeclPretty', @TestXmlDeclPretty);
-  T.Run('XmlDeclWithStandalone', @TestXmlDeclWithStandalone);
-  T.Run('XmlDeclRejectsLateCall', @TestXmlDeclRejectsLateCall);
-  T.Run('XmlDeclRejectsInvalidStandaloneValue',
+  T.Test('PIOutput', @TestPIOutput);
+  T.Test('PISplitsEmbeddedEndMarker', @TestPISplitsEmbeddedEndMarker);
+  T.Test('PIRejectsInvalidControlChar', @TestPIRejectsInvalidControlChar);
+  T.Test('PINoData', @TestPINoData);
+  T.Test('PIRejectsReservedXmlTarget', @TestPIRejectsReservedXmlTarget);
+  T.Test('PIRejectsEmptyTarget', @TestPIRejectsEmptyTarget);
+  T.Test('PIRejectsInvalidTarget', @TestPIRejectsInvalidTarget);
+  T.Test('EmptyElement', @TestEmptyElement);
+  T.Test('StartElementRejectsEmptyName', @TestStartElementRejectsEmptyName);
+  T.Test('EmptyElementRejectsEmptyName', @TestEmptyElementRejectsEmptyName);
+  T.Test('EndElementCollapsesEmpty', @TestEndElementCollapsesEmpty);
+  T.Test('EndElementRejectsMismatchedName', @TestEndElementRejectsMismatchedName);
+  T.Test('EndElementRejectsUnexpectedClose', @TestEndElementRejectsUnexpectedClose);
+  T.Test('XmlDecl', @TestXmlDecl);
+  T.Test('XmlDeclPretty', @TestXmlDeclPretty);
+  T.Test('XmlDeclWithStandalone', @TestXmlDeclWithStandalone);
+  T.Test('XmlDeclRejectsLateCall', @TestXmlDeclRejectsLateCall);
+  T.Test('XmlDeclRejectsInvalidStandaloneValue',
     @TestXmlDeclRejectsInvalidStandaloneValue);
-  T.Run('XmlDeclRejectsEmptyVersion', @TestXmlDeclRejectsEmptyVersion);
-  T.Run('XmlDeclRejectsInvalidVersionNumber', @TestXmlDeclRejectsInvalidVersionNumber);
-  T.Run('XmlDeclAllowsOmittedEncoding', @TestXmlDeclAllowsOmittedEncoding);
-  T.Run('XmlDeclRejectsInvalidEncodingName', @TestXmlDeclRejectsInvalidEncodingName);
-  T.Run('TextEscape', @TestTextEscape);
-  T.Run('TextRejectsInvalidControlChar', @TestTextRejectsInvalidControlChar);
-  T.Run('CDataRejectsInvalidControlChar', @TestCDataRejectsInvalidControlChar);
-  T.Run('PrefixedElement', @TestPrefixedElement);
-  T.Run('RawOutput', @TestRawOutput);
-  T.Run('Clear', @TestClear);
-  T.Run('RoundTrip', @TestRoundTrip);
-  T.Run('MultipleAttributes', @TestMultipleAttributes);
-  T.Run('AttributeRejectsDuplicateRawQName',
+  T.Test('XmlDeclRejectsEmptyVersion', @TestXmlDeclRejectsEmptyVersion);
+  T.Test('XmlDeclRejectsInvalidVersionNumber', @TestXmlDeclRejectsInvalidVersionNumber);
+  T.Test('XmlDeclAllowsOmittedEncoding', @TestXmlDeclAllowsOmittedEncoding);
+  T.Test('XmlDeclRejectsInvalidEncodingName', @TestXmlDeclRejectsInvalidEncodingName);
+  T.Test('TextEscape', @TestTextEscape);
+  T.Test('TextRejectsInvalidControlChar', @TestTextRejectsInvalidControlChar);
+  T.Test('CDataRejectsInvalidControlChar', @TestCDataRejectsInvalidControlChar);
+  T.Test('PrefixedElement', @TestPrefixedElement);
+  T.Test('RawOutput', @TestRawOutput);
+  T.Test('Clear', @TestClear);
+  T.Test('RoundTrip', @TestRoundTrip);
+  T.Test('MultipleAttributes', @TestMultipleAttributes);
+  T.Test('AttributeRejectsDuplicateRawQName',
     @TestAttributeRejectsDuplicateRawQName);
-  T.Run('AttributeAllowsSameQNameOnDifferentElements',
+  T.Test('AttributeAllowsSameQNameOnDifferentElements',
     @TestAttributeAllowsSameQNameOnDifferentElements);
-  T.Run('NamespaceDeclRejectsDuplicateRawQName',
+  T.Test('NamespaceDeclRejectsDuplicateRawQName',
     @TestNamespaceDeclRejectsDuplicateRawQName);
-  T.Run('NamespaceDeclMultiple', @TestNamespaceDeclMultiple);
-  T.Run('RawUnescaped', @TestRawUnescaped);
-  T.Run('ClearResetsCompletely', @TestClearResetsCompletely);
-  T.Run('ConsecutiveStartEndDepth', @TestConsecutiveStartEndDepth);
-  T.Summary;
+  T.Test('NamespaceDeclMultiple', @TestNamespaceDeclMultiple);
+  T.Test('RawUnescaped', @TestRawUnescaped);
+  T.Test('ClearResetsCompletely', @TestClearResetsCompletely);
+  T.Test('ConsecutiveStartEndDepth', @TestConsecutiveStartEndDepth);
+  if not T.Run then Halt(1);
 end.

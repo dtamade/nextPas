@@ -4,10 +4,10 @@ program test_tui_text_format;
 
 uses
   nextpas.core.tui.text.format,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestBytes;
 begin
@@ -42,13 +42,11 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.text.format');
-  T.Run('bytes', @TestBytes);
-  T.Run('KB', @TestKB);
-  T.Run('MB', @TestMB);
-  T.Run('GB', @TestGB);
-  T.Run('from KB', @TestFromKB);
-  T.Summary;
-  if not T.AllPassed then
-    Halt(1);
+  T := TTestSuite.Create('nextpas.core.tui.text.format');
+  T.Test('bytes', @TestBytes);
+  T.Test('KB', @TestKB);
+  T.Test('MB', @TestMB);
+  T.Test('GB', @TestGB);
+  T.Test('from KB', @TestFromKB);
+  if not T.Run then Halt(1);
 end.

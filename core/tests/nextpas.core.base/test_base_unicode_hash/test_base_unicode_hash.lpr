@@ -8,10 +8,10 @@ program test_base_unicode_hash;
 
 uses
   nextpas.core.base,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestHashStringUsesRealUnicodeByteLength;
 var
@@ -35,8 +35,8 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.base unicode hash');
-  T.Run('hash string uses real unicode byte length', @TestHashStringUsesRealUnicodeByteLength);
-  T.Run('hash string empty string keeps offset basis', @TestHashStringEmptyStringKeepsOffsetBasis);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.base unicode hash');
+  T.Test('hash string uses real unicode byte length', @TestHashStringUsesRealUnicodeByteLength);
+  T.Test('hash string empty string keeps offset basis', @TestHashStringEmptyStringKeepsOffsetBasis);
+  if not T.Run then Halt(1);
 end.

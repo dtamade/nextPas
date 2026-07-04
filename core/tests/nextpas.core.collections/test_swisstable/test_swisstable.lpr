@@ -5,7 +5,7 @@ program test_swisstable;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections.hashmap.swiss,
   nextpas.core.collections.hashmap.swiss.str;
 
@@ -23,7 +23,7 @@ type
   TManagedRecordSwiss = specialize TSwissTable<TManagedRecord, TManagedRecord>;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GManagedRecordAlive: Int32 = 0;
   GManagedRecordBadFinalize: Int32 = 0;
   GManagedRecordDrainVisits: Int32 = 0;
@@ -401,23 +401,23 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.swisstable');
-  T.Run('Put/Get', @TestPutGet);
-  T.Run('Update', @TestUpdate);
-  T.Run('Remove', @TestRemove);
-  T.Run('Grow (10000 elements)', @TestGrow);
-  T.Run('Remove + Reinsert', @TestRemoveReinsert);
-  T.Run('Deleted slot reuse keeps stable capacity', @TestDeletedSlotReuseKeepsStableCapacity);
-  T.Run('Growth budget exhaustion reuses before grow', @TestGrowthBudgetExhaustionReusesBeforeGrow);
-  T.Run('String key', @TestStringKey);
-  T.Run('String specialized growth budget reuses before grow',
+  T := TTestSuite.Create('nextpas.core.collections.swisstable');
+  T.Test('Put/Get', @TestPutGet);
+  T.Test('Update', @TestUpdate);
+  T.Test('Remove', @TestRemove);
+  T.Test('Grow (10000 elements)', @TestGrow);
+  T.Test('Remove + Reinsert', @TestRemoveReinsert);
+  T.Test('Deleted slot reuse keeps stable capacity', @TestDeletedSlotReuseKeepsStableCapacity);
+  T.Test('Growth budget exhaustion reuses before grow', @TestGrowthBudgetExhaustionReusesBeforeGrow);
+  T.Test('String key', @TestStringKey);
+  T.Test('String specialized growth budget reuses before grow',
     @TestStringSpecializedGrowthBudgetReusesBeforeGrow);
-  T.Run('Clear', @TestClear);
-  T.Run('Prealloc', @TestPrealloc);
-  T.Run('Retain', @TestRetain);
-  T.Run('Drain', @TestDrain);
-  T.Run('Reserve', @TestReserve);
-  T.Run('ForEach/Enumerator', @TestForEachAndEnumerator);
-  T.Run('Managed record slot cleanup', @TestManagedRecordSlotCleanup);
-  T.Summary;
+  T.Test('Clear', @TestClear);
+  T.Test('Prealloc', @TestPrealloc);
+  T.Test('Retain', @TestRetain);
+  T.Test('Drain', @TestDrain);
+  T.Test('Reserve', @TestReserve);
+  T.Test('ForEach/Enumerator', @TestForEachAndEnumerator);
+  T.Test('Managed record slot cleanup', @TestManagedRecordSlotCleanup);
+  if not T.Run then Halt(1);
 end.

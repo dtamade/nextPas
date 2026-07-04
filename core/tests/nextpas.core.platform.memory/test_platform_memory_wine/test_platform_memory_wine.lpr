@@ -6,11 +6,11 @@ program test_platform_memory_wine;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.platform.memory;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 {$IFDEF NEXTPAS_WINDOWS}
 
@@ -141,18 +141,18 @@ end;
 {$ENDIF}
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.memory.wine_runtime_smoke');
+  T := TTestSuite.Create('nextpas.core.platform.memory.wine_runtime_smoke');
   {$IFDEF NEXTPAS_WINDOWS}
-  T.Run('aligned_alloc+free roundtrip', @TestAlignedAllocFree);
-  T.Run('page-aligned allocation', @TestPageAlignedAlloc);
-  T.Run('aligned_realloc preserves alignment', @TestAlignedRealloc);
-  T.Run('aligned_alloc_backend returns valid enum', @TestAlignedAllocBackend);
-  T.Run('aligned_alloc_is_native returns boolean', @TestAlignedAllocIsNative);
-  T.Run('secure_zero_memory clears buffer', @TestSecureZeroMemory);
-  T.Run('secure_zero_memory_backend returns valid enum', @TestSecureZeroBackend);
-  T.Run('secure_zero_memory_is_native returns boolean', @TestSecureZeroIsNative);
+  T.Test('aligned_alloc+free roundtrip', @TestAlignedAllocFree);
+  T.Test('page-aligned allocation', @TestPageAlignedAlloc);
+  T.Test('aligned_realloc preserves alignment', @TestAlignedRealloc);
+  T.Test('aligned_alloc_backend returns valid enum', @TestAlignedAllocBackend);
+  T.Test('aligned_alloc_is_native returns boolean', @TestAlignedAllocIsNative);
+  T.Test('secure_zero_memory clears buffer', @TestSecureZeroMemory);
+  T.Test('secure_zero_memory_backend returns valid enum', @TestSecureZeroBackend);
+  T.Test('secure_zero_memory_is_native returns boolean', @TestSecureZeroIsNative);
   {$ELSE}
-  T.Run('non-Windows skip', @TestNonWindowsSkip);
+  T.Test('non-Windows skip', @TestNonWindowsSkip);
   {$ENDIF}
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

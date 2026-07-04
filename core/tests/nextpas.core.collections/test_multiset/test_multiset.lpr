@@ -5,7 +5,7 @@ program test_multiset;
 uses
   SysUtils,
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections,
   nextpas.core.collections.multiset.intf;
 
@@ -13,7 +13,7 @@ type
   IIntMSet = specialize IMultiSet<Integer>;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestAddAndCountOf;
 var
@@ -119,15 +119,15 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.multiset');
-  T.Run('Add and CountOf', @TestAddAndCountOf);
-  T.Run('AddN', @TestAddN);
-  T.Run('Remove', @TestRemove);
-  T.Run('RemoveAll', @TestRemoveAll);
-  T.Run('SetCount', @TestSetCount);
-  T.Run('Contains', @TestContains);
-  T.Run('Count/TotalCount', @TestGetCountAndTotalCount);
-  T.Run('Clear', @TestClear);
-  T.Run('IsEmpty', @TestIsEmpty);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.multiset');
+  T.Test('Add and CountOf', @TestAddAndCountOf);
+  T.Test('AddN', @TestAddN);
+  T.Test('Remove', @TestRemove);
+  T.Test('RemoveAll', @TestRemoveAll);
+  T.Test('SetCount', @TestSetCount);
+  T.Test('Contains', @TestContains);
+  T.Test('Count/TotalCount', @TestGetCountAndTotalCount);
+  T.Test('Clear', @TestClear);
+  T.Test('IsEmpty', @TestIsEmpty);
+  if not T.Run then Halt(1);
 end.

@@ -10,10 +10,10 @@ uses
   nextpas.core.toml.value,
   nextpas.core.toml.writer,
   nextpas.core.toml,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function DottedPath(const ACount: Int32): string;
 var
@@ -260,24 +260,23 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.toml roundtrip');
-  T.Run('simple key-value', @TestSimpleKV);
-  T.Run('nested tables', @TestNestedTables);
-  T.Run('arrays', @TestArrays);
-  T.Run('inline table', @TestInlineTable);
-  T.Run('datetime', @TestDateTime);
-  T.Run('floats', @TestFloats);
-  T.Run('escaped strings', @TestEscapedStrings);
-  T.Run('dotted keys', @TestDottedKeys);
-  T.Run('deep table path', @TestDeepTablePath);
-  T.Run('array table', @TestArrayTable);
-  T.Run('complex config', @TestComplexConfig);
-  T.Run('special chars in strings', @TestSpecialCharsInStrings);
-  T.Run('empty values', @TestEmptyValues);
-  T.Run('negative numbers', @TestNegativeNumbers);
-  T.Run('large integers', @TestLargeIntegers);
-  T.Run('nested arrays', @TestNestedArrays);
-  T.Run('mixed table', @TestMixedTable);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  T := TTestSuite.Create('nextpas.core.toml roundtrip');
+  T.Test('simple key-value', @TestSimpleKV);
+  T.Test('nested tables', @TestNestedTables);
+  T.Test('arrays', @TestArrays);
+  T.Test('inline table', @TestInlineTable);
+  T.Test('datetime', @TestDateTime);
+  T.Test('floats', @TestFloats);
+  T.Test('escaped strings', @TestEscapedStrings);
+  T.Test('dotted keys', @TestDottedKeys);
+  T.Test('deep table path', @TestDeepTablePath);
+  T.Test('array table', @TestArrayTable);
+  T.Test('complex config', @TestComplexConfig);
+  T.Test('special chars in strings', @TestSpecialCharsInStrings);
+  T.Test('empty values', @TestEmptyValues);
+  T.Test('negative numbers', @TestNegativeNumbers);
+  T.Test('large integers', @TestLargeIntegers);
+  T.Test('nested arrays', @TestNestedArrays);
+  T.Test('mixed table', @TestMixedTable);
+  if not T.Run then Halt(1);
 end.

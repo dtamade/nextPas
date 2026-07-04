@@ -4,7 +4,7 @@ program test_json_marshal;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.text.view,
   nextpas.core.mem.default,
   nextpas.core.reflect.base,
@@ -16,7 +16,7 @@ uses
   nextpas.core.json.marshal;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   Reg: ITypeRegistry;
 
 type
@@ -404,24 +404,24 @@ end;
 
 begin
   RegisterTypes;
-  T := TTestRunner.Create('nextpas.core.json.marshal');
-  T.Run('marshal simple', @TestMarshalSimple);
-  T.Run('marshal all types', @TestMarshalAllTypes);
-  T.Run('marshal nested', @TestMarshalNested);
-  T.Run('marshal escape', @TestMarshalEscape);
-  T.Run('unmarshal simple', @TestUnmarshalSimple);
-  T.Run('unmarshal all types', @TestUnmarshalAllTypes);
-  T.Run('unmarshal nested', @TestUnmarshalNested);
-  T.Run('unmarshal missing field', @TestUnmarshalMissing);
-  T.Run('round trip', @TestRoundTrip);
-  T.Run('marshal int array', @TestMarshalIntArray);
-  T.Run('unmarshal int array', @TestUnmarshalIntArray);
-  T.Run('string array', @TestStringArray);
-  T.Run('record array', @TestRecordArray);
-  T.Run('empty array', @TestEmptyArray);
-  T.Run('null array', @TestNullArray);
-  T.Run('array replacement', @TestArrayReplacement);
-  T.Run('array rollback on invalid element', @TestArrayRollbackOnInvalidElement);
-  T.Run('array round trip', @TestArrayRoundTrip);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.json.marshal');
+  T.Test('marshal simple', @TestMarshalSimple);
+  T.Test('marshal all types', @TestMarshalAllTypes);
+  T.Test('marshal nested', @TestMarshalNested);
+  T.Test('marshal escape', @TestMarshalEscape);
+  T.Test('unmarshal simple', @TestUnmarshalSimple);
+  T.Test('unmarshal all types', @TestUnmarshalAllTypes);
+  T.Test('unmarshal nested', @TestUnmarshalNested);
+  T.Test('unmarshal missing field', @TestUnmarshalMissing);
+  T.Test('round trip', @TestRoundTrip);
+  T.Test('marshal int array', @TestMarshalIntArray);
+  T.Test('unmarshal int array', @TestUnmarshalIntArray);
+  T.Test('string array', @TestStringArray);
+  T.Test('record array', @TestRecordArray);
+  T.Test('empty array', @TestEmptyArray);
+  T.Test('null array', @TestNullArray);
+  T.Test('array replacement', @TestArrayReplacement);
+  T.Test('array rollback on invalid element', @TestArrayRollbackOnInvalidElement);
+  T.Test('array round trip', @TestArrayRoundTrip);
+  if not T.Run then Halt(1);
 end.

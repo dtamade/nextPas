@@ -5,11 +5,11 @@ program test_id_facade_ulid_contract;
 uses
   nextpas.core.base,
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.id;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestUlidHelpersAreAvailableFromFacade;
 const
@@ -63,10 +63,10 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.id.facade_ulid_contract');
-  T.Run('ULID helpers are available from facade', @TestUlidHelpersAreAvailableFromFacade);
-  T.Run('UlidFromTimestamp rejects overflow timestamp', @TestUlidFromTimestampRejectsOverflowTimestamp);
-  T.Run('UlidTryTimestampMs distinguishes epoch zero from malformed input',
+  T := TTestSuite.Create('nextpas.core.id.facade_ulid_contract');
+  T.Test('ULID helpers are available from facade', @TestUlidHelpersAreAvailableFromFacade);
+  T.Test('UlidFromTimestamp rejects overflow timestamp', @TestUlidFromTimestampRejectsOverflowTimestamp);
+  T.Test('UlidTryTimestampMs distinguishes epoch zero from malformed input',
     @TestUlidTryTimestampDistinguishesEpochZeroFromMalformedInput);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

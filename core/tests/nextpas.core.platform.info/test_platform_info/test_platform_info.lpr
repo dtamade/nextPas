@@ -5,10 +5,10 @@ program test_platform_info;
 uses
   nextpas.core.platform.base,
   nextpas.core.platform.info,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestCurrentOS;
 begin
@@ -59,11 +59,11 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.info');
-  T.Run('CurrentOS', @TestCurrentOS);
-  T.Run('CurrentCPU', @TestCurrentCPU);
-  T.Run('Endianness', @TestEndian);
-  T.Run('OSName', @TestOSName);
-  T.Run('CPUName', @TestCPUName);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.info');
+  T.Test('CurrentOS', @TestCurrentOS);
+  T.Test('CurrentCPU', @TestCurrentCPU);
+  T.Test('Endianness', @TestEndian);
+  T.Test('OSName', @TestOSName);
+  T.Test('CPUName', @TestCPUName);
+  if not T.Run then Halt(1);
 end.

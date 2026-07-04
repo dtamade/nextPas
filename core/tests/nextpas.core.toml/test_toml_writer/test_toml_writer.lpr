@@ -8,10 +8,10 @@ uses
   nextpas.core.text.builder,
   nextpas.core.toml.base,
   nextpas.core.toml.writer,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure CheckRawPathRejected(var W: TTomlWriter; const AFormattedPath: string;
   const AMessage: string; const AArrayTable: Boolean);
@@ -583,49 +583,48 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.toml.writer');
-  T.Run('simple key-value', @TestSimpleKeyValue);
-  T.Run('integer', @TestInteger);
-  T.Run('float', @TestFloat);
-  T.Run('bool', @TestBool);
-  T.Run('table header', @TestTableHeader);
-  T.Run('array table header', @TestArrayTableHeader);
-  T.Run('BeginTableRaw invalid path rejected',
+  T := TTestSuite.Create('nextpas.core.toml.writer');
+  T.Test('simple key-value', @TestSimpleKeyValue);
+  T.Test('integer', @TestInteger);
+  T.Test('float', @TestFloat);
+  T.Test('bool', @TestBool);
+  T.Test('table header', @TestTableHeader);
+  T.Test('array table header', @TestArrayTableHeader);
+  T.Test('BeginTableRaw invalid path rejected',
     @TestBeginTableRawRejectsInvalidPath);
-  T.Run('BeginTableRaw quoted closing bracket allowed',
+  T.Test('BeginTableRaw quoted closing bracket allowed',
     @TestBeginTableRawAllowsClosingBracketInsideQuotedKey);
-  T.Run('BeginArrayTableRaw invalid path rejected',
+  T.Test('BeginArrayTableRaw invalid path rejected',
     @TestBeginArrayTableRawRejectsInvalidPath);
-  T.Run('BeginArrayTableRaw quoted closing bracket allowed',
+  T.Test('BeginArrayTableRaw quoted closing bracket allowed',
     @TestBeginArrayTableRawAllowsClosingBracketInsideQuotedKey);
-  T.Run('inline table', @TestInlineTable);
-  T.Run('array', @TestArray);
-  T.Run('escaped string', @TestEscapedString);
-  T.Run('quoted key', @TestQuotedKey);
-  T.Run('comment', @TestComment);
-  T.Run('multiline comment', @TestMultilineComment);
-  T.Run('datetime offset Z', @TestDateTimeOffset);
-  T.Run('datetime +09:00', @TestDateTimePositiveOffset);
-  T.Run('local date', @TestLocalDate);
-  T.Run('local date pads year', @TestLocalDatePadsYear);
-  T.Run('local time', @TestLocalTime);
-  T.Run('newline', @TestNewline);
-  T.Run('key TStringView', @TestKeyStringView);
-  T.Run('str TStringView', @TestStrStringView);
-  T.Run('nested array', @TestNestedArray);
-  T.Run('pretty array', @TestPrettyArray);
-  T.Run('pretty nested array', @TestPrettyNestedArray);
-  T.Run('unmatched EndArray rejected', @TestEndArrayRejectsUnmatchedContainer);
-  T.Run('unmatched EndInlineTable rejected', @TestEndInlineTableRejectsUnmatchedContainer);
-  T.Run('mismatched inline container end rejected', @TestMismatchedInlineContainerEndIsRejected);
-  T.Run('Key inside array rejected', @TestKeyInsideArrayIsRejected);
-  T.Run('Key TStringView inside array rejected',
+  T.Test('inline table', @TestInlineTable);
+  T.Test('array', @TestArray);
+  T.Test('escaped string', @TestEscapedString);
+  T.Test('quoted key', @TestQuotedKey);
+  T.Test('comment', @TestComment);
+  T.Test('multiline comment', @TestMultilineComment);
+  T.Test('datetime offset Z', @TestDateTimeOffset);
+  T.Test('datetime +09:00', @TestDateTimePositiveOffset);
+  T.Test('local date', @TestLocalDate);
+  T.Test('local date pads year', @TestLocalDatePadsYear);
+  T.Test('local time', @TestLocalTime);
+  T.Test('newline', @TestNewline);
+  T.Test('key TStringView', @TestKeyStringView);
+  T.Test('str TStringView', @TestStrStringView);
+  T.Test('nested array', @TestNestedArray);
+  T.Test('pretty array', @TestPrettyArray);
+  T.Test('pretty nested array', @TestPrettyNestedArray);
+  T.Test('unmatched EndArray rejected', @TestEndArrayRejectsUnmatchedContainer);
+  T.Test('unmatched EndInlineTable rejected', @TestEndInlineTableRejectsUnmatchedContainer);
+  T.Test('mismatched inline container end rejected', @TestMismatchedInlineContainerEndIsRejected);
+  T.Test('Key inside array rejected', @TestKeyInsideArrayIsRejected);
+  T.Test('Key TStringView inside array rejected',
     @TestKeyStringViewInsideArrayIsRejected);
-  T.Run('table header inside array rejected',
+  T.Test('table header inside array rejected',
     @TestTableHeaderInsideArrayIsRejected);
-  T.Run('array table header inside array rejected',
+  T.Test('array table header inside array rejected',
     @TestArrayTableHeaderInsideArrayIsRejected);
-  T.Run('inline container stack overflow rejected', @TestInlineContainerStackOverflowIsRejected);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  T.Test('inline container stack overflow rejected', @TestInlineContainerStackOverflowIsRejected);
+  if not T.Run then Halt(1);
 end.

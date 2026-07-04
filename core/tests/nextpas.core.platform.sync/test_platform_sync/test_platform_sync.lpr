@@ -5,12 +5,12 @@ program test_platform_sync;
 uses
   nextpas.core.thread.init,
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.platform.thread,
   nextpas.core.platform.sync;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 const
   WAIT_PENDING = -999999;
@@ -448,24 +448,24 @@ end;
 {$ENDIF}
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.sync');
-  T.Run('Public error constants', @TestPublicErrorConstants);
-  T.Run('Mutex basic', @TestMutexBasic);
-  T.Run('Mutex trylock', @TestMutexTryLock);
-  T.Run('Mutex error-check trylock', @TestMutexErrorCheckTryLock);
-  T.Run('Mutex recursive', @TestMutexRecursive);
-  T.Run('RwLock basic', @TestRwLockBasic);
-  T.Run('RwLock write blocked by reader', @TestRwLockWriteBlockedByReader);
-  T.Run('RwLock read blocked by writer', @TestRwLockReadBlockedByWriter);
-  T.Run('CondVar basic', @TestCondVarBasic);
+  T := TTestSuite.Create('nextpas.core.platform.sync');
+  T.Test('Public error constants', @TestPublicErrorConstants);
+  T.Test('Mutex basic', @TestMutexBasic);
+  T.Test('Mutex trylock', @TestMutexTryLock);
+  T.Test('Mutex error-check trylock', @TestMutexErrorCheckTryLock);
+  T.Test('Mutex recursive', @TestMutexRecursive);
+  T.Test('RwLock basic', @TestRwLockBasic);
+  T.Test('RwLock write blocked by reader', @TestRwLockWriteBlockedByReader);
+  T.Test('RwLock read blocked by writer', @TestRwLockReadBlockedByWriter);
+  T.Test('CondVar basic', @TestCondVarBasic);
   {$IFDEF NEXTPAS_LINUX}
-  T.Run('CondVar signal wakes waiter', @TestCondVarSignalWakesWaiter);
-  T.Run('CondVar broadcast wakes waiters', @TestCondVarBroadcastWakesWaiters);
+  T.Test('CondVar signal wakes waiter', @TestCondVarSignalWakesWaiter);
+  T.Test('CondVar broadcast wakes waiters', @TestCondVarBroadcastWakesWaiters);
   {$ENDIF}
-  T.Run('Address wait', @TestAddressWait);
+  T.Test('Address wait', @TestAddressWait);
   {$IFDEF NEXTPAS_LINUX}
-  T.Run('Address wake one releases waiter', @TestAddressWakeOneReleasesWaiter);
-  T.Run('Address wake all releases waiters', @TestAddressWakeAllReleasesWaiters);
+  T.Test('Address wake one releases waiter', @TestAddressWakeOneReleasesWaiter);
+  T.Test('Address wake all releases waiters', @TestAddressWakeAllReleasesWaiters);
   {$ENDIF}
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

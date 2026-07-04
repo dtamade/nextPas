@@ -4,10 +4,10 @@ program test_platform_thread_l0_boundary;
 
 uses
   SysUtils,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ReadSourceFile(const APath: string): string;
 var
@@ -90,10 +90,10 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.thread.l0_boundary');
-  T.Run('platform.thread source stays L0', @TestPlatformThreadSourceStaysL0);
-  T.Run('platform.thread.base source stays L0', @TestPlatformThreadBaseStaysL0);
-  T.Run('platform.thread example stays L0', @TestPlatformThreadExampleStaysL0);
-  T.Run('platform.thread benchmark stays L0', @TestPlatformThreadBenchmarkStaysL0);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.thread.l0_boundary');
+  T.Test('platform.thread source stays L0', @TestPlatformThreadSourceStaysL0);
+  T.Test('platform.thread.base source stays L0', @TestPlatformThreadBaseStaysL0);
+  T.Test('platform.thread example stays L0', @TestPlatformThreadExampleStaysL0);
+  T.Test('platform.thread benchmark stays L0', @TestPlatformThreadBenchmarkStaysL0);
+  if not T.Run then Halt(1);
 end.

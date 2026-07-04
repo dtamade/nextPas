@@ -4,10 +4,10 @@ program test_platform_path;
 
 uses
   nextpas.core.platform.path,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function BufEq(const ABuf: PAnsiChar; const AExpect: PAnsiChar): Boolean;
 var
@@ -226,26 +226,26 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.path');
-  T.Run('join basic', @TestJoinBasic);
-  T.Run('join trailing sep', @TestJoinTrailingSep);
-  T.Run('dirname', @TestDirname);
-  T.Run('dirname no dir', @TestDirnameNoDir);
-  T.Run('basename', @TestBasename);
-  T.Run('extension', @TestExtension);
-  T.Run('extension none', @TestExtensionNone);
-  T.Run('change ext', @TestChangeExt);
-  T.Run('is_absolute', @TestIsAbsolute);
-  T.Run('normalize', @TestNormalize);
-  T.Run('basename_ptr zero-copy', @TestBasenamePtr);
-  T.Run('extension_ptr zero-copy', @TestExtensionPtr);
-  T.Run('join absolute child', @TestJoinAbsoluteChild);
-  T.Run('normalize relative ..', @TestNormalizeRelativeDotDot);
-  T.Run('dirname root', @TestDirnameRoot);
-  T.Run('resolve absolute', @TestResolveAbsolute);
-  T.Run('resolve relative', @TestResolveRelative);
-  T.Run('resolve non-existent', @TestResolveNonExistent);
-  T.Run('join3', @TestJoin3);
-  T.Run('is_root', @TestIsRoot);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.path');
+  T.Test('join basic', @TestJoinBasic);
+  T.Test('join trailing sep', @TestJoinTrailingSep);
+  T.Test('dirname', @TestDirname);
+  T.Test('dirname no dir', @TestDirnameNoDir);
+  T.Test('basename', @TestBasename);
+  T.Test('extension', @TestExtension);
+  T.Test('extension none', @TestExtensionNone);
+  T.Test('change ext', @TestChangeExt);
+  T.Test('is_absolute', @TestIsAbsolute);
+  T.Test('normalize', @TestNormalize);
+  T.Test('basename_ptr zero-copy', @TestBasenamePtr);
+  T.Test('extension_ptr zero-copy', @TestExtensionPtr);
+  T.Test('join absolute child', @TestJoinAbsoluteChild);
+  T.Test('normalize relative ..', @TestNormalizeRelativeDotDot);
+  T.Test('dirname root', @TestDirnameRoot);
+  T.Test('resolve absolute', @TestResolveAbsolute);
+  T.Test('resolve relative', @TestResolveRelative);
+  T.Test('resolve non-existent', @TestResolveNonExistent);
+  T.Test('join3', @TestJoin3);
+  T.Test('is_root', @TestIsRoot);
+  if not T.Run then Halt(1);
 end.

@@ -6,14 +6,14 @@ program test_platform_mmap_wine;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.platform.mmap,
   nextpas.core.platform.files,
   nextpas.core.platform.fs,
   nextpas.core.platform.files.base;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 {$IFDEF NEXTPAS_WINDOWS}
 
@@ -219,26 +219,26 @@ begin
   {$IFDEF NEXTPAS_WINDOWS}
   InitTestFilePath;
   {$ENDIF}
-  T := TTestRunner.Create('nextpas.core.platform.mmap.wine_runtime_smoke');
+  T := TTestSuite.Create('nextpas.core.platform.mmap.wine_runtime_smoke');
   {$IFDEF NEXTPAS_WINDOWS}
-  T.Run('anonymous map basic (write/read/close)', @TestAnonymousMapBasic);
-  T.Run('anonymous map page-aligned size', @TestAnonymousMapPageAligned);
-  T.Run('anonymous map zero size returns error', @TestAnonymousMapZeroSize);
-  T.Run('anonymous map multi-byte write/read (256B)', @TestAnonymousMapMultiByte);
-  T.Run('page size is positive', @TestPageSizePositive);
-  T.Run('page size is power of two', @TestPageSizePowerOfTwo);
-  T.Run('double close returns error', @TestDoubleClose);
+  T.Test('anonymous map basic (write/read/close)', @TestAnonymousMapBasic);
+  T.Test('anonymous map page-aligned size', @TestAnonymousMapPageAligned);
+  T.Test('anonymous map zero size returns error', @TestAnonymousMapZeroSize);
+  T.Test('anonymous map multi-byte write/read (256B)', @TestAnonymousMapMultiByte);
+  T.Test('page size is positive', @TestPageSizePositive);
+  T.Test('page size is power of two', @TestPageSizePowerOfTwo);
+  T.Test('double close returns error', @TestDoubleClose);
   { SKIPPED: file-backed mmap tests fail under Wine due to
     Wine's CreateFileW not handling Z: drive mapped Unicode paths
     with embedded spaces. The mmap code itself (CreateFileMappingW)
     is correct -- verified by anonymous maps passing. }
-  { T.Run('file-backed map open + read content', @TestFileBackedMap); }
-  { T.Run('file-backed map write + flush + persist', @TestFileBackedMapWrite); }
-  { T.Run('file map with explicit size and offset', @TestFileMapExplicit); }
+  { T.Test('file-backed map open + read content', @TestFileBackedMap); }
+  { T.Test('file-backed map write + flush + persist', @TestFileBackedMapWrite); }
+  { T.Test('file map with explicit size and offset', @TestFileMapExplicit); }
   {$ELSE}
-  T.Run('non-Windows skip', @TestNonWindowsSkip);
+  T.Test('non-Windows skip', @TestNonWindowsSkip);
   {$ENDIF}
-  T.Summary;
+  if not T.Run then Halt(1);
   {$IFDEF NEXTPAS_WINDOWS}
   FinalCleanup;
   {$ENDIF}

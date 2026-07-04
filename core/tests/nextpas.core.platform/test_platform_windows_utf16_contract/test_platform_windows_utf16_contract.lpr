@@ -5,13 +5,13 @@ program test_platform_windows_utf16_contract;
 uses
   Classes,
   SysUtils,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 const
   WINDOWS_UTF8_PATH_SAMPLE = 'tmp/中文文件名.txt';
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ExpandRepoPath(const ARelativePath: string): string;
 begin
@@ -138,10 +138,10 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.windows.utf16_contract');
-  T.Run('helper surface', @TestUtf16HelperSurface);
-  T.Run('FFI wide imports', @TestWindowsFfiWideImports);
-  T.Run('production wide path APIs', @TestProductionUsesWidePathApis);
-  T.Run('allowed non-path ANSI APIs', @TestAllowedAnsiApisRemainExplicitlyAllowed);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.windows.utf16_contract');
+  T.Test('helper surface', @TestUtf16HelperSurface);
+  T.Test('FFI wide imports', @TestWindowsFfiWideImports);
+  T.Test('production wide path APIs', @TestProductionUsesWidePathApis);
+  T.Test('allowed non-path ANSI APIs', @TestAllowedAnsiApisRemainExplicitlyAllowed);
+  if not T.Run then Halt(1);
 end.

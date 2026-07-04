@@ -5,12 +5,12 @@ program test_id_facade_entropy_startup_contract;
 uses
   nextpas.core.base,
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.id,
   nextpas.core.platform.random;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestFacadeImportDoesNotTouchEntropy;
 begin
@@ -49,9 +49,9 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.id.facade_entropy_startup_contract');
-  T.Run('facade import does not touch entropy', @TestFacadeImportDoesNotTouchEntropy);
-  T.Run('XidNew entropy failure is catchable at call site', @TestXidEntropyFailureIsCatchableAtCallSite);
-  T.Run('XidNew retries after entropy failure', @TestXidRetriesAfterEntropyFailure);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.id.facade_entropy_startup_contract');
+  T.Test('facade import does not touch entropy', @TestFacadeImportDoesNotTouchEntropy);
+  T.Test('XidNew entropy failure is catchable at call site', @TestXidEntropyFailureIsCatchableAtCallSite);
+  T.Test('XidNew retries after entropy failure', @TestXidRetriesAfterEntropyFailure);
+  if not T.Run then Halt(1);
 end.

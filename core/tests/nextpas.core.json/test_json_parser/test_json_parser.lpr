@@ -13,10 +13,10 @@ uses
   nextpas.core.json.parser,
   nextpas.core.json.value,
   nextpas.core.json.writer,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 const
   JSON_PARSER_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.json.parser.pas';
@@ -1024,47 +1024,47 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.json.parser');
-  T.Run('parse null', @TestParseNull);
-  T.Run('parse bool', @TestParseBool);
-  T.Run('parse int', @TestParseInt);
-  T.Run('parse float', @TestParseFloat);
-  T.Run('parse string', @TestParseString);
-  T.Run('parse array', @TestParseArray);
-  T.Run('parse object', @TestParseObject);
-  T.Run('parse nested', @TestParseNested);
-  T.Run('parse empty', @TestParseEmpty);
-  T.Run('parse error', @TestParseError);
-  T.Run('reject unexpected inter-token content', @TestRejectUnexpectedInterTokenContent);
-  T.Run('object iteration', @TestObjectIteration);
-  T.Run('string escape', @TestStringEscape);
-  T.Run('unicode escape', @TestUnicodeEscape);
-  T.Run('value kind and valid', @TestValueKindAndValid);
-  T.Run('nodecount and input', @TestNodeCountAndInput);
-  T.Run('JsonParseDoc func', @TestJsonParseDocFunc);
-  T.Run('round trip', @TestRoundTrip);
-  T.Run('large array', @TestLargeArray);
-  T.Run('large object hash lookup', @TestLargeObjectHashLookup);
-  T.Run('duplicate keys last value wins small object', @TestDuplicateKeysLastValueWinsSmallObject);
-  T.Run('duplicate keys last value wins hashed object', @TestDuplicateKeysLastValueWinsHashedObject);
-  T.Run('init nil allocator', @TestInitNilAllocator);
-  T.Run('deep nesting 500', @TestDeepNesting500);
-  T.Run('deep nesting exceeds limit', @TestDeepNestingExceedsLimit);
-  T.Run('empty input', @TestEmptyInput);
-  T.Run('whitespace only input', @TestWhitespaceOnlyInput);
-  T.Run('unicode keys', @TestUnicodeKeys);
-  T.Run('surrogate pair', @TestSurrogatePair);
-  T.Run('large document', @TestLargeDocument);
-  T.Run('number edge cases', @TestNumberEdgeCases);
-  T.Run('reject invalid number tokens', @TestRejectInvalidNumberTokens);
-  T.Run('multiple errors', @TestMultipleErrors);
-  T.Run('doc reuse', @TestDocReuse);
-  T.Run('nested object array', @TestNestedObjectArray);
-  T.Run('node growth OOM fails closed', @TestNodeGrowthOOMFailsClosed);
-  T.Run('string overflow OOM fails closed', @TestStringOverflowOOMFailsClosed);
-  T.Run('parse preallocation OOM fails closed', @TestParsePreallocationOOMFailsClosed);
-  T.Run('init allocate OOM sets error', @TestInitAllocateOOMSetsError);
-  T.Run('parser source tracks OOM and init guards',
+  T := TTestSuite.Create('nextpas.core.json.parser');
+  T.Test('parse null', @TestParseNull);
+  T.Test('parse bool', @TestParseBool);
+  T.Test('parse int', @TestParseInt);
+  T.Test('parse float', @TestParseFloat);
+  T.Test('parse string', @TestParseString);
+  T.Test('parse array', @TestParseArray);
+  T.Test('parse object', @TestParseObject);
+  T.Test('parse nested', @TestParseNested);
+  T.Test('parse empty', @TestParseEmpty);
+  T.Test('parse error', @TestParseError);
+  T.Test('reject unexpected inter-token content', @TestRejectUnexpectedInterTokenContent);
+  T.Test('object iteration', @TestObjectIteration);
+  T.Test('string escape', @TestStringEscape);
+  T.Test('unicode escape', @TestUnicodeEscape);
+  T.Test('value kind and valid', @TestValueKindAndValid);
+  T.Test('nodecount and input', @TestNodeCountAndInput);
+  T.Test('JsonParseDoc func', @TestJsonParseDocFunc);
+  T.Test('round trip', @TestRoundTrip);
+  T.Test('large array', @TestLargeArray);
+  T.Test('large object hash lookup', @TestLargeObjectHashLookup);
+  T.Test('duplicate keys last value wins small object', @TestDuplicateKeysLastValueWinsSmallObject);
+  T.Test('duplicate keys last value wins hashed object', @TestDuplicateKeysLastValueWinsHashedObject);
+  T.Test('init nil allocator', @TestInitNilAllocator);
+  T.Test('deep nesting 500', @TestDeepNesting500);
+  T.Test('deep nesting exceeds limit', @TestDeepNestingExceedsLimit);
+  T.Test('empty input', @TestEmptyInput);
+  T.Test('whitespace only input', @TestWhitespaceOnlyInput);
+  T.Test('unicode keys', @TestUnicodeKeys);
+  T.Test('surrogate pair', @TestSurrogatePair);
+  T.Test('large document', @TestLargeDocument);
+  T.Test('number edge cases', @TestNumberEdgeCases);
+  T.Test('reject invalid number tokens', @TestRejectInvalidNumberTokens);
+  T.Test('multiple errors', @TestMultipleErrors);
+  T.Test('doc reuse', @TestDocReuse);
+  T.Test('nested object array', @TestNestedObjectArray);
+  T.Test('node growth OOM fails closed', @TestNodeGrowthOOMFailsClosed);
+  T.Test('string overflow OOM fails closed', @TestStringOverflowOOMFailsClosed);
+  T.Test('parse preallocation OOM fails closed', @TestParsePreallocationOOMFailsClosed);
+  T.Test('init allocate OOM sets error', @TestInitAllocateOOMSetsError);
+  T.Test('parser source tracks OOM and init guards',
     @TestParserSourceTracksOOMAndInitGuards);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

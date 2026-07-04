@@ -4,7 +4,7 @@ program test_deadline;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.time,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
@@ -12,7 +12,7 @@ uses
   nextpas.core.platform.thread;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestAfterPositive;
 var
@@ -237,27 +237,27 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.time.deadline');
-  T.Run('After(positive) creates future', @TestAfterPositive);
-  T.Run('After(zero) creates expired', @TestAfterZero);
-  T.Run('After(negative) creates expired', @TestAfterNegative);
-  T.Run('Infinite never expires', @TestInfiniteNeverExpires);
-  T.Run('Expired always expired', @TestExpiredAlwaysExpired);
-  T.Run('IsExpired transitions', @TestIsExpiredTransition);
-  T.Run('TimeUntil future positive', @TestTimeUntilFuture);
-  T.Run('TimeUntil past non-positive', @TestTimeUntilPast);
-  T.Run('TimeUntil infinite MaxValue', @TestTimeUntilInfinite);
-  T.Run('Remaining expired zero', @TestRemainingExpired);
-  T.Run('Remaining future positive', @TestRemainingFuture);
-  T.Run('Remaining infinite MaxValue', @TestRemainingInfinite);
-  T.Run('ToInstant finite true', @TestToInstantFinite);
-  T.Run('ToInstant infinite false', @TestToInstantInfinite);
-  T.Run('Min picks earliest', @TestMinPicksEarliest);
-  T.Run('Min infinite loses', @TestMinInfiniteLoses);
-  T.Run('At(instant)', @TestAtInstant);
-  T.Run('Sleep ForDuration(0) immediate', @TestSleepForDurationZero);
-  T.Run('Sleep ForDuration(20ms) sleeps', @TestSleepForDurationPositive);
-  T.Run('Sleep Until_(Expired) immediate', @TestSleepUntilExpired);
-  T.Run('Equality', @TestEquality);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.time.deadline');
+  T.Test('After(positive) creates future', @TestAfterPositive);
+  T.Test('After(zero) creates expired', @TestAfterZero);
+  T.Test('After(negative) creates expired', @TestAfterNegative);
+  T.Test('Infinite never expires', @TestInfiniteNeverExpires);
+  T.Test('Expired always expired', @TestExpiredAlwaysExpired);
+  T.Test('IsExpired transitions', @TestIsExpiredTransition);
+  T.Test('TimeUntil future positive', @TestTimeUntilFuture);
+  T.Test('TimeUntil past non-positive', @TestTimeUntilPast);
+  T.Test('TimeUntil infinite MaxValue', @TestTimeUntilInfinite);
+  T.Test('Remaining expired zero', @TestRemainingExpired);
+  T.Test('Remaining future positive', @TestRemainingFuture);
+  T.Test('Remaining infinite MaxValue', @TestRemainingInfinite);
+  T.Test('ToInstant finite true', @TestToInstantFinite);
+  T.Test('ToInstant infinite false', @TestToInstantInfinite);
+  T.Test('Min picks earliest', @TestMinPicksEarliest);
+  T.Test('Min infinite loses', @TestMinInfiniteLoses);
+  T.Test('At(instant)', @TestAtInstant);
+  T.Test('Sleep ForDuration(0) immediate', @TestSleepForDurationZero);
+  T.Test('Sleep ForDuration(20ms) sleeps', @TestSleepForDurationPositive);
+  T.Test('Sleep Until_(Expired) immediate', @TestSleepUntilExpired);
+  T.Test('Equality', @TestEquality);
+  if not T.Run then Halt(1);
 end.

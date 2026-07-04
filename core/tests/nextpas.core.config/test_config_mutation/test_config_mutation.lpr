@@ -6,10 +6,10 @@ uses
   nextpas.core.config,
   nextpas.core.errors,
   nextpas.core.os.env,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestSetTypedValuesAndInterpolation;
 var
@@ -477,44 +477,44 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.config.mutation');
-  T.Run('Mutation.SetTypedValuesAndInterpolation',
+  T := TTestSuite.Create('nextpas.core.config.mutation');
+  T.Test('Mutation.SetTypedValuesAndInterpolation',
     @TestSetTypedValuesAndInterpolation);
-  T.Run('Mutation.SetStringArrayReplacesPriorValues',
+  T.Test('Mutation.SetStringArrayReplacesPriorValues',
     @TestSetStringArrayReplacesPriorValues);
-  T.Run('Mutation.DeleteKeyRemovesOnlyExactKey',
+  T.Test('Mutation.DeleteKeyRemovesOnlyExactKey',
     @TestDeleteKeyRemovesOnlyExactKey);
-  T.Run('Mutation.DeleteSectionRemovesExactAndNestedKeys',
+  T.Test('Mutation.DeleteSectionRemovesExactAndNestedKeys',
     @TestDeleteSectionRemovesExactAndNestedKeys);
-  T.Run('Mutation.DeleteSectionPreservesLongerPrefixes',
+  T.Test('Mutation.DeleteSectionPreservesLongerPrefixes',
     @TestDeleteSectionPreservesLongerPrefixes);
-  T.Run('Mutation.ClearRemovesAllEntries',
+  T.Test('Mutation.ClearRemovesAllEntries',
     @TestClearRemovesAllEntries);
-  T.Run('Mutation.RemainsCaseInsensitive',
+  T.Test('Mutation.RemainsCaseInsensitive',
     @TestMutationRemainsCaseInsensitive);
-  T.Run('Mutation.ArrayReadsRemainCaseInsensitive',
+  T.Test('Mutation.ArrayReadsRemainCaseInsensitive',
     @TestArrayReadsRemainCaseInsensitive);
-  T.Run('Mutation.MixedCaseOverwriteDoesNotDuplicateKey',
+  T.Test('Mutation.MixedCaseOverwriteDoesNotDuplicateKey',
     @TestMixedCaseOverwriteDoesNotDuplicateKey);
-  T.Run('Mutation.WarmLookupRemainsCorrectAfterMutation',
+  T.Test('Mutation.WarmLookupRemainsCorrectAfterMutation',
     @TestWarmLookupRemainsCorrectAfterMutation);
-  T.Run('Mutation.SetStringArrayEmptyClearsPrefix',
+  T.Test('Mutation.SetStringArrayEmptyClearsPrefix',
     @TestSetStringArrayEmptyClearsPrefix);
-  T.Run('Mutation.ArrayReadsRefreshAfterSetStringArray',
+  T.Test('Mutation.ArrayReadsRefreshAfterSetStringArray',
     @TestArrayReadsRefreshAfterSetStringArray);
-  T.Run('Mutation.OverwriteTracksLiteralAndInterpolatedModes',
+  T.Test('Mutation.OverwriteTracksLiteralAndInterpolatedModes',
     @TestOverwriteTracksLiteralAndInterpolatedModes);
-  T.Run('Mutation.InterpolationRefreshesAfterSetDefault',
+  T.Test('Mutation.InterpolationRefreshesAfterSetDefault',
     @TestInterpolationRefreshesAfterSetDefault);
-  T.Run('Mutation.InterpolationRefreshesAfterDeleteKey',
+  T.Test('Mutation.InterpolationRefreshesAfterDeleteKey',
     @TestInterpolationRefreshesAfterDeleteKey);
-  T.Run('Mutation.InterpolationRefreshesAfterDeleteSection',
+  T.Test('Mutation.InterpolationRefreshesAfterDeleteSection',
     @TestInterpolationRefreshesAfterDeleteSection);
-  T.Run('Mutation.InterpolationRefreshesAfterLoadFromIni',
+  T.Test('Mutation.InterpolationRefreshesAfterLoadFromIni',
     @TestInterpolationRefreshesAfterLoadFromIni);
-  T.Run('Mutation.InterpolationRefreshesAfterLateEnvBinding',
+  T.Test('Mutation.InterpolationRefreshesAfterLateEnvBinding',
     @TestInterpolationRefreshesAfterLateEnvBinding);
-  T.Run('Mutation.RejectsEmptyKeysAndPrefixes',
+  T.Test('Mutation.RejectsEmptyKeysAndPrefixes',
     @TestMutationRejectsEmptyKeysAndPrefixes);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

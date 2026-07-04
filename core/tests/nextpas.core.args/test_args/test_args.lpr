@@ -4,10 +4,10 @@ program test_args;
 
 uses
   nextpas.core.args,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { === Basic flag/string/int (existing coverage) === }
 
@@ -1045,78 +1045,77 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.args');
+  T := TTestSuite.Create('nextpas.core.args');
   { Basic }
-  T.Run('empty parse', @TestEmptyParse);
-  T.Run('flag', @TestFlag);
-  T.Run('flag short', @TestFlagShort);
-  T.Run('flag default', @TestFlagDefault);
-  T.Run('string option', @TestStringOption);
-  T.Run('string option =', @TestStringOptionEquals);
-  T.Run('int option', @TestIntOption);
-  T.Run('int default', @TestIntDefault);
-  T.Run('positionals', @TestPositionals);
-  T.Run('double dash', @TestDoubleDash);
+  T.Test('empty parse', @TestEmptyParse);
+  T.Test('flag', @TestFlag);
+  T.Test('flag short', @TestFlagShort);
+  T.Test('flag default', @TestFlagDefault);
+  T.Test('string option', @TestStringOption);
+  T.Test('string option =', @TestStringOptionEquals);
+  T.Test('int option', @TestIntOption);
+  T.Test('int default', @TestIntDefault);
+  T.Test('positionals', @TestPositionals);
+  T.Test('double dash', @TestDoubleDash);
   { Errors }
-  T.Run('unknown raises', @TestUnknownOptionRaises);
-  T.Run('missing value raises', @TestMissingValueRaises);
-  T.Run('invalid int raises', @TestInvalidIntRaises);
-  T.Run('TryParse false', @TestTryParseFalse);
-  T.Run('flag rejects value', @TestFlagRejectsValue);
-  T.Run('parse reset state', @TestParseResetState);
+  T.Test('unknown raises', @TestUnknownOptionRaises);
+  T.Test('missing value raises', @TestMissingValueRaises);
+  T.Test('invalid int raises', @TestInvalidIntRaises);
+  T.Test('TryParse false', @TestTryParseFalse);
+  T.Test('flag rejects value', @TestFlagRejectsValue);
+  T.Test('parse reset state', @TestParseResetState);
   { StringList }
-  T.Run('stringlist single', @TestStringListSingle);
-  T.Run('stringlist multiple', @TestStringListMultiple);
-  T.Run('stringlist equals', @TestStringListEquals);
-  T.Run('stringlist reset', @TestStringListReset);
+  T.Test('stringlist single', @TestStringListSingle);
+  T.Test('stringlist multiple', @TestStringListMultiple);
+  T.Test('stringlist equals', @TestStringListEquals);
+  T.Test('stringlist reset', @TestStringListReset);
   { Required }
-  T.Run('required string present', @TestRequiredStringPresent);
-  T.Run('required string missing', @TestRequiredStringMissing);
-  T.Run('required positional present', @TestRequiredPositionalPresent);
-  T.Run('required positional missing', @TestRequiredPositionalMissing);
-  T.Run('optional positional', @TestOptionalPositional);
+  T.Test('required string present', @TestRequiredStringPresent);
+  T.Test('required string missing', @TestRequiredStringMissing);
+  T.Test('required positional present', @TestRequiredPositionalPresent);
+  T.Test('required positional missing', @TestRequiredPositionalMissing);
+  T.Test('optional positional', @TestOptionalPositional);
   { Choices }
-  T.Run('choice valid', @TestChoiceValid);
-  T.Run('choice default', @TestChoiceDefault);
-  T.Run('choice invalid', @TestChoiceInvalid);
-  T.Run('choice short', @TestChoiceShort);
-  T.Run('choice equals', @TestChoiceEquals);
-  T.Run('choice invalid default', @TestChoiceInvalidDefault);
+  T.Test('choice valid', @TestChoiceValid);
+  T.Test('choice default', @TestChoiceDefault);
+  T.Test('choice invalid', @TestChoiceInvalid);
+  T.Test('choice short', @TestChoiceShort);
+  T.Test('choice equals', @TestChoiceEquals);
+  T.Test('choice invalid default', @TestChoiceInvalidDefault);
   { Cluster }
-  T.Run('cluster flags', @TestClusterFlags);
-  T.Run('cluster with int value', @TestClusterWithValue);
-  T.Run('cluster with string value', @TestClusterWithStringValue);
-  T.Run('cluster inline string', @TestClusterWithInlineString);
+  T.Test('cluster flags', @TestClusterFlags);
+  T.Test('cluster with int value', @TestClusterWithValue);
+  T.Test('cluster with string value', @TestClusterWithStringValue);
+  T.Test('cluster inline string', @TestClusterWithInlineString);
   { Duplicate detection }
-  T.Run('duplicate name raises', @TestDuplicateNameRaises);
-  T.Run('duplicate short raises', @TestDuplicateShortRaises);
+  T.Test('duplicate name raises', @TestDuplicateNameRaises);
+  T.Test('duplicate short raises', @TestDuplicateShortRaises);
   { Auto help/version }
-  T.Run('auto help', @TestAutoHelp);
-  T.Run('auto help short', @TestAutoHelpShort);
-  T.Run('auto version', @TestAutoVersion);
-  T.Run('auto help disabled', @TestAutoHelpDisabled);
+  T.Test('auto help', @TestAutoHelp);
+  T.Test('auto help short', @TestAutoHelpShort);
+  T.Test('auto version', @TestAutoVersion);
+  T.Test('auto help disabled', @TestAutoHelpDisabled);
   { Integration }
-  T.Run('compiler scenario', @TestCompilerScenario);
-  T.Run('help text format', @TestHelpTextFormat);
+  T.Test('compiler scenario', @TestCompilerScenario);
+  T.Test('help text format', @TestHelpTextFormat);
   { TArgApp }
-  T.Run('app basic dispatch', @TestAppBasicDispatch);
-  T.Run('app global flags', @TestAppGlobalFlags);
-  T.Run('app unknown command', @TestAppUnknownCommand);
-  T.Run('app help', @TestAppHelp);
-  T.Run('app version', @TestAppVersion);
-  T.Run('app trailing args', @TestAppTrailingArgs);
-  T.Run('app no command', @TestAppNoCommand);
-  T.Run('app command help', @TestAppCommandHelp);
-  T.Run('app global string option', @TestAppGlobalStringOption);
-  T.Run('app global int', @TestAppGlobalInt);
+  T.Test('app basic dispatch', @TestAppBasicDispatch);
+  T.Test('app global flags', @TestAppGlobalFlags);
+  T.Test('app unknown command', @TestAppUnknownCommand);
+  T.Test('app help', @TestAppHelp);
+  T.Test('app version', @TestAppVersion);
+  T.Test('app trailing args', @TestAppTrailingArgs);
+  T.Test('app no command', @TestAppNoCommand);
+  T.Test('app command help', @TestAppCommandHelp);
+  T.Test('app global string option', @TestAppGlobalStringOption);
+  T.Test('app global int', @TestAppGlobalInt);
   { Additional coverage }
-  T.Run('auto version disabled', @TestAutoVersionDisabled);
-  T.Run('TryParse true', @TestTryParseTrue);
-  T.Run('get nonexistent', @TestGetNonexistent);
-  T.Run('wrong getter kind', @TestWrongGetterKind);
-  T.Run('handler method overload', @TestHandlerMethodOverload);
-  T.Run('handler anon overload', @TestHandlerAnonOverload);
-  T.Run('app global short flag', @TestAppGlobalShortFlag);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  T.Test('auto version disabled', @TestAutoVersionDisabled);
+  T.Test('TryParse true', @TestTryParseTrue);
+  T.Test('get nonexistent', @TestGetNonexistent);
+  T.Test('wrong getter kind', @TestWrongGetterKind);
+  T.Test('handler method overload', @TestHandlerMethodOverload);
+  T.Test('handler anon overload', @TestHandlerAnonOverload);
+  T.Test('app global short flag', @TestAppGlobalShortFlag);
+  if not T.Run then Halt(1);
 end.

@@ -12,7 +12,7 @@ uses
   nextpas.core.http.base,
   nextpas.core.http.impl.h2.hpack,
   nextpas.core.text.conv,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.http.impl.h2.hpack.huffman;
 
 function HexNibble(const ACh: Char): Byte;
@@ -352,7 +352,7 @@ begin
 end;
 
 begin
-  with TTestRunner.Create('nextpas.core.http.impl.h2.hpack') do
+  with TTestSuite.Create('nextpas.core.http.impl.h2.hpack') do
   begin
     { Roundtrip tests }
     Run('RFC Appendix C string vectors', @TestRfcAppendixCStringVectors);

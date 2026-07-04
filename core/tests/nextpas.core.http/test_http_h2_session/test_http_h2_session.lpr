@@ -21,7 +21,7 @@ uses
   nextpas.core.http.impl.h2.session,
   nextpas.core.http.impl.h2.stream,
   nextpas.core.http.impl.h2.types,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 const
   H2_SESSION_SOURCE_PATH_FROM_TEST =
@@ -1826,7 +1826,7 @@ begin
 end;
 
 begin
-  with TTestRunner.Create('nextpas.core.http.impl.h2.session') do
+  with TTestSuite.Create('nextpas.core.http.impl.h2.session') do
   begin
     Run('Partial preface waits', @TestPartialPrefaceWaits);
     Run('Wrong preface is connection error', @TestWrongPrefaceIsConnectionError);

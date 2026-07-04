@@ -5,10 +5,10 @@ program test_toml_base;
 uses
   nextpas.core.text.view,
   nextpas.core.toml.base,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestNodeKindEnum;
 begin
@@ -211,24 +211,23 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.toml.base');
-  T.Run('node kind enum', @TestNodeKindEnum);
-  T.Run('datetime kind enum', @TestDateTimeKindEnum);
-  T.Run('datetime local', @TestDateTimeLocalDateTime);
-  T.Run('datetime offset +', @TestDateTimeOffset);
-  T.Run('datetime offset -', @TestDateTimeOffsetNegative);
-  T.Run('datetime offset Z', @TestDateTimeOffsetZulu);
-  T.Run('date only', @TestDateOnly);
-  T.Run('time only', @TestTimeOnly);
-  T.Run('time midnight', @TestTimeMidnight);
-  T.Run('node size', @TestNodeSize);
-  T.Run('node none constant', @TestNodeNoneConstant);
-  T.Run('node layout', @TestNodeLayout);
-  T.Run('node bool variant', @TestNodeBoolVariant);
-  T.Run('node float variant', @TestNodeFloatVariant);
-  T.Run('node container variant', @TestNodeContainerVariant);
-  T.Run('node string variant', @TestNodeStringVariant);
-  T.Run('flags encoding', @TestFlagsEncoding);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  T := TTestSuite.Create('nextpas.core.toml.base');
+  T.Test('node kind enum', @TestNodeKindEnum);
+  T.Test('datetime kind enum', @TestDateTimeKindEnum);
+  T.Test('datetime local', @TestDateTimeLocalDateTime);
+  T.Test('datetime offset +', @TestDateTimeOffset);
+  T.Test('datetime offset -', @TestDateTimeOffsetNegative);
+  T.Test('datetime offset Z', @TestDateTimeOffsetZulu);
+  T.Test('date only', @TestDateOnly);
+  T.Test('time only', @TestTimeOnly);
+  T.Test('time midnight', @TestTimeMidnight);
+  T.Test('node size', @TestNodeSize);
+  T.Test('node none constant', @TestNodeNoneConstant);
+  T.Test('node layout', @TestNodeLayout);
+  T.Test('node bool variant', @TestNodeBoolVariant);
+  T.Test('node float variant', @TestNodeFloatVariant);
+  T.Test('node container variant', @TestNodeContainerVariant);
+  T.Test('node string variant', @TestNodeStringVariant);
+  T.Test('flags encoding', @TestFlagsEncoding);
+  if not T.Run then Halt(1);
 end.

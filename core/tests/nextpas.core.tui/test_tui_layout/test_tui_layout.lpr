@@ -5,10 +5,10 @@ program test_tui_layout;
 uses
   nextpas.core.tui.base,
   nextpas.core.tui.layout,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestLengthSplit;
 var
@@ -109,17 +109,15 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.layout');
-  T.Run('length split', @TestLengthSplit);
-  T.Run('percentage split', @TestPercentageSplit);
-  T.Run('min fills remaining', @TestMinFillsRemaining);
-  T.Run('fill weights', @TestFillWeights);
-  T.Run('max constraint', @TestMaxConstraint);
-  T.Run('residual absorption', @TestResidualAbsorption);
-  T.Run('adjacent no gap', @TestAdjacentNoGap);
-  T.Run('horizontal keeps height', @TestHorizontalKeepsHeight);
-  T.Run('empty constraints', @TestEmptyConstraints);
-  T.Summary;
-  if not T.AllPassed then
-    Halt(1);
+  T := TTestSuite.Create('nextpas.core.tui.layout');
+  T.Test('length split', @TestLengthSplit);
+  T.Test('percentage split', @TestPercentageSplit);
+  T.Test('min fills remaining', @TestMinFillsRemaining);
+  T.Test('fill weights', @TestFillWeights);
+  T.Test('max constraint', @TestMaxConstraint);
+  T.Test('residual absorption', @TestResidualAbsorption);
+  T.Test('adjacent no gap', @TestAdjacentNoGap);
+  T.Test('horizontal keeps height', @TestHorizontalKeepsHeight);
+  T.Test('empty constraints', @TestEmptyConstraints);
+  if not T.Run then Halt(1);
 end.

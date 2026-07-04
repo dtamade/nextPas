@@ -4,10 +4,10 @@ program test_config_env_windows_contract;
 
 uses
   nextpas.core.config.env,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestTryConfigEnvNameToKeyMatchesPrefixCaseInsensitivelyOnWindows;
 var
@@ -32,10 +32,10 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.config.env.windows_contract');
-  T.Run('EnvNameToKey.MatchesPrefixCaseInsensitivelyOnWindows',
+  T := TTestSuite.Create('nextpas.core.config.env.windows_contract');
+  T.Test('EnvNameToKey.MatchesPrefixCaseInsensitivelyOnWindows',
     @TestTryConfigEnvNameToKeyMatchesPrefixCaseInsensitivelyOnWindows);
-  T.Run('EnvNameToKey.RejectsMissingSuffixOnWindows',
+  T.Test('EnvNameToKey.RejectsMissingSuffixOnWindows',
     @TestTryConfigEnvNameToKeyStillRejectsMissingSuffixOnWindows);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

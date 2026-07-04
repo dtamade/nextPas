@@ -11,9 +11,9 @@ uses
   nextpas.core.tui.widget.intf,
   nextpas.core.tui.widget.block,
   nextpas.core.tui.widget.input,
-  nextpas.core.testing;
+  nextpas.core.test;
 
-var T: TTestRunner;
+var T: TTestSuite;
 
 { === TInputState === }
 
@@ -347,45 +347,45 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('test_tui_widget_input');
+  T := TTestSuite.Create('test_tui_widget_input');
   try
     { TInputState }
-    T.Run('InputState Empty', @TestInputStateEmpty);
-    T.Run('InputState WithText', @TestInputStateWithText);
-    T.Run('InputState InsertChar', @TestInputStateInsertChar);
-    T.Run('InputState InsertStr', @TestInputStateInsertStr);
-    T.Run('InputState DeleteBack', @TestInputStateDeleteBack);
-    T.Run('InputState DeleteForward', @TestInputStateDeleteForward);
-    T.Run('InputState MoveLeft', @TestInputStateMoveLeft);
-    T.Run('InputState MoveRight', @TestInputStateMoveRight);
-    T.Run('InputState MoveHome', @TestInputStateMoveHome);
-    T.Run('InputState MoveEnd', @TestInputStateMoveEnd);
-    T.Run('InputState CursorCol', @TestInputStateCursorCol);
-    T.Run('InputState TextWidth', @TestInputStateTextWidth);
+    T.Test('InputState Empty', @TestInputStateEmpty);
+    T.Test('InputState WithText', @TestInputStateWithText);
+    T.Test('InputState InsertChar', @TestInputStateInsertChar);
+    T.Test('InputState InsertStr', @TestInputStateInsertStr);
+    T.Test('InputState DeleteBack', @TestInputStateDeleteBack);
+    T.Test('InputState DeleteForward', @TestInputStateDeleteForward);
+    T.Test('InputState MoveLeft', @TestInputStateMoveLeft);
+    T.Test('InputState MoveRight', @TestInputStateMoveRight);
+    T.Test('InputState MoveHome', @TestInputStateMoveHome);
+    T.Test('InputState MoveEnd', @TestInputStateMoveEnd);
+    T.Test('InputState CursorCol', @TestInputStateCursorCol);
+    T.Test('InputState TextWidth', @TestInputStateTextWidth);
 
     { IInput Builders }
-    T.Run('Input New', @TestInputNew);
-    T.Run('Input WithPlaceholder', @TestInputWithPlaceholder);
-    T.Run('Input placeholder hidden', @TestInputPlaceholderHidden);
-    T.Run('Input WithMask', @TestInputWithMask);
-    T.Run('Input WithStyle', @TestInputWithStyle);
-    T.Run('Input WithPlaceholderStyle', @TestInputWithPlaceholderStyle);
-    T.Run('Input WithCursorStyle', @TestInputWithCursorStyle);
-    T.Run('Input WithBlock', @TestInputWithBlock);
-    T.Run('Input RenderInline', @TestInputRenderInline);
-    T.Run('Input as IWidget', @TestInputAsIWidget);
+    T.Test('Input New', @TestInputNew);
+    T.Test('Input WithPlaceholder', @TestInputWithPlaceholder);
+    T.Test('Input placeholder hidden', @TestInputPlaceholderHidden);
+    T.Test('Input WithMask', @TestInputWithMask);
+    T.Test('Input WithStyle', @TestInputWithStyle);
+    T.Test('Input WithPlaceholderStyle', @TestInputWithPlaceholderStyle);
+    T.Test('Input WithCursorStyle', @TestInputWithCursorStyle);
+    T.Test('Input WithBlock', @TestInputWithBlock);
+    T.Test('Input RenderInline', @TestInputRenderInline);
+    T.Test('Input as IWidget', @TestInputAsIWidget);
 
     { HandleKey }
-    T.Run('HandleKey char', @TestInputStateHandleKeyChar);
-    T.Run('HandleKey backspace', @TestInputStateHandleKeyBackspace);
-    T.Run('HandleKey left', @TestInputStateHandleKeyLeft);
-    T.Run('HandleKey right', @TestInputStateHandleKeyRight);
-    T.Run('HandleKey home', @TestInputStateHandleKeyHome);
-    T.Run('HandleKey end', @TestInputStateHandleKeyEnd);
-    T.Run('HandleKey delete', @TestInputStateHandleKeyDelete);
+    T.Test('HandleKey char', @TestInputStateHandleKeyChar);
+    T.Test('HandleKey backspace', @TestInputStateHandleKeyBackspace);
+    T.Test('HandleKey left', @TestInputStateHandleKeyLeft);
+    T.Test('HandleKey right', @TestInputStateHandleKeyRight);
+    T.Test('HandleKey home', @TestInputStateHandleKeyHome);
+    T.Test('HandleKey end', @TestInputStateHandleKeyEnd);
+    T.Test('HandleKey delete', @TestInputStateHandleKeyDelete);
 
     WriteLn;
-    T.Summary;
+  if not T.Run then Halt(1);
   finally
   end;
 end.

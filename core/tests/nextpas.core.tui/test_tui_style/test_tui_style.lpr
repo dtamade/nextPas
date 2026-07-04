@@ -6,10 +6,10 @@ uses
   nextpas.core.tui.color,
   nextpas.core.tui.modifier,
   nextpas.core.tui.style,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestDefault;
 var
@@ -87,15 +87,13 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.style');
-  T.Run('default', @TestDefault);
-  T.Run('with fg/bg', @TestWithFgBg);
-  T.Run('with modifier', @TestWithModifier);
-  T.Run('without modifier', @TestWithoutModifier);
-  T.Run('patch colors', @TestPatchColors);
-  T.Run('patch modifiers', @TestPatchModifiers);
-  T.Run('size 16 bytes', @TestSize);
-  T.Summary;
-  if not T.AllPassed then
-    Halt(1);
+  T := TTestSuite.Create('nextpas.core.tui.style');
+  T.Test('default', @TestDefault);
+  T.Test('with fg/bg', @TestWithFgBg);
+  T.Test('with modifier', @TestWithModifier);
+  T.Test('without modifier', @TestWithoutModifier);
+  T.Test('patch colors', @TestPatchColors);
+  T.Test('patch modifiers', @TestPatchModifiers);
+  T.Test('size 16 bytes', @TestSize);
+  if not T.Run then Halt(1);
 end.

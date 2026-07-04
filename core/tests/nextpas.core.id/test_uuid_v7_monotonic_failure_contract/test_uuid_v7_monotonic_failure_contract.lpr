@@ -5,7 +5,7 @@ program test_uuid_v7_monotonic_failure_contract;
 uses
   nextpas.core.base,
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.id.base,
   nextpas.core.id.rng,
   nextpas.core.id.uuid,
@@ -14,7 +14,7 @@ uses
   nextpas.core.platform.time;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ExtractUuidV7RandA(const AUuid: TUuid): UInt16;
 begin
@@ -122,9 +122,9 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.id.uuid.v7_monotonic_failure_contract');
-  T.Run('monotonic string unlocks after entropy failure', @TestMonotonicStringUnlocksAfterEntropyFailure);
-  T.Run('monotonic raw unlocks after entropy failure', @TestMonotonicRawUnlocksAfterEntropyFailure);
-  T.Run('new ms entropy failure does not commit state', @TestNewMsEntropyFailureDoesNotCommitState);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.id.uuid.v7_monotonic_failure_contract');
+  T.Test('monotonic string unlocks after entropy failure', @TestMonotonicStringUnlocksAfterEntropyFailure);
+  T.Test('monotonic raw unlocks after entropy failure', @TestMonotonicRawUnlocksAfterEntropyFailure);
+  T.Test('new ms entropy failure does not commit state', @TestNewMsEntropyFailureDoesNotCommitState);
+  if not T.Run then Halt(1);
 end.

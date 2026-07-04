@@ -6,10 +6,10 @@ uses
   Classes,
   SysUtils,
   nextpas.core.platform.env,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function LoadSourceText(const ARelativePath: string): string;
 var
@@ -257,22 +257,22 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.env');
-  T.Run('get PATH', @TestGetPath);
-  T.Run('set + get roundtrip', @TestSetGetRoundtrip);
-  T.Run('unset', @TestUnset);
-  T.Run('get non-existent', @TestGetNonExistent);
-  T.Run('set empty value', @TestSetEmpty);
-  T.Run('buffer too small', @TestBufferTooSmall);
-  T.Run('exists false', @TestExistsFalse);
-  T.Run('get length only (nil buf)', @TestGetLengthOnly);
-  T.Run('long value (1000 chars)', @TestLongValue);
-  T.Run('special characters', @TestSpecialChars);
-  T.Run('overwrite existing', @TestOverwrite);
-  T.Run('invalid names', @TestInvalidNames);
-  T.Run('windows exists clears last-error source contract',
+  T := TTestSuite.Create('nextpas.core.platform.env');
+  T.Test('get PATH', @TestGetPath);
+  T.Test('set + get roundtrip', @TestSetGetRoundtrip);
+  T.Test('unset', @TestUnset);
+  T.Test('get non-existent', @TestGetNonExistent);
+  T.Test('set empty value', @TestSetEmpty);
+  T.Test('buffer too small', @TestBufferTooSmall);
+  T.Test('exists false', @TestExistsFalse);
+  T.Test('get length only (nil buf)', @TestGetLengthOnly);
+  T.Test('long value (1000 chars)', @TestLongValue);
+  T.Test('special characters', @TestSpecialChars);
+  T.Test('overwrite existing', @TestOverwrite);
+  T.Test('invalid names', @TestInvalidNames);
+  T.Test('windows exists clears last-error source contract',
     @TestWindowsExistsClearsLastErrorSourceContract);
-  T.Run('windows get clears last-error source contract',
+  T.Test('windows get clears last-error source contract',
     @TestWindowsGetClearsLastErrorSourceContract);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

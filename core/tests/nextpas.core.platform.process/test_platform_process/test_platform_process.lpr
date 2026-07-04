@@ -10,10 +10,10 @@ uses
   nextpas.core.process,
   nextpas.core.platform.unix.base,
   nextpas.core.platform.posix.ffi,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ExpandRepoPath(const ARelativePath: string): string;
 begin
@@ -409,23 +409,23 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.process');
-  T.Run('spawn /bin/true', @TestSpawnTrue);
-  T.Run('spawn /bin/false exit 1', @TestSpawnFalse);
-  T.Run('pid accessor', @TestPid);
-  T.Run('kill', @TestKill);
-  T.Run('try_wait non-blocking', @TestTryWait);
-  T.Run('spawn non-existent', @TestSpawnNonExistent);
-  T.Run('spawn with args', @TestSpawnWithArgs);
-  T.Run('piped: capture stdout', @TestSpawnPipedStdout);
-  T.Run('piped: capture stderr', @TestSpawnPipedStderr);
-  T.Run('piped: write stdin', @TestSpawnPipedStdin);
-  T.Run('run: capture output', @TestRun);
-  T.Run('run: working directory', @TestRunCwd);
-  T.Run('run: discard stderr without changing exit', @TestRunDiscardsStderrWithoutChangingExit);
-  T.Run('command: EnvAdd duplicate PATH final view', @TestCommandEnvAddDuplicatePathUsesFinalResolvedView);
-  T.Run('spawn_fds source: no hardcoded 1024', @TestSpawnFdsNoHardcoded1024SourceContract);
-  T.Run('spawn_fds closes high inherited fd', @TestSpawnFdsClosesHighInheritedFd);
-  T.Run('spawn_fds exec failure keeps error pipe', @TestSpawnFdsExecFailureKeepsErrorPipe);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.process');
+  T.Test('spawn /bin/true', @TestSpawnTrue);
+  T.Test('spawn /bin/false exit 1', @TestSpawnFalse);
+  T.Test('pid accessor', @TestPid);
+  T.Test('kill', @TestKill);
+  T.Test('try_wait non-blocking', @TestTryWait);
+  T.Test('spawn non-existent', @TestSpawnNonExistent);
+  T.Test('spawn with args', @TestSpawnWithArgs);
+  T.Test('piped: capture stdout', @TestSpawnPipedStdout);
+  T.Test('piped: capture stderr', @TestSpawnPipedStderr);
+  T.Test('piped: write stdin', @TestSpawnPipedStdin);
+  T.Test('run: capture output', @TestRun);
+  T.Test('run: working directory', @TestRunCwd);
+  T.Test('run: discard stderr without changing exit', @TestRunDiscardsStderrWithoutChangingExit);
+  T.Test('command: EnvAdd duplicate PATH final view', @TestCommandEnvAddDuplicatePathUsesFinalResolvedView);
+  T.Test('spawn_fds source: no hardcoded 1024', @TestSpawnFdsNoHardcoded1024SourceContract);
+  T.Test('spawn_fds closes high inherited fd', @TestSpawnFdsClosesHighInheritedFd);
+  T.Test('spawn_fds exec failure keeps error pipe', @TestSpawnFdsExecFailureKeepsErrorPipe);
+  if not T.Run then Halt(1);
 end.

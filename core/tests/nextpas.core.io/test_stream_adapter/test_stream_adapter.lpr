@@ -5,7 +5,7 @@ program test_stream_adapter;
 uses
   SysUtils,
   Classes,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.io.base,
   nextpas.core.io.intf,
@@ -20,7 +20,7 @@ type
   INextPasByteWriter = nextpas.core.io.intf.IByteWriter;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 type
   TObservedMemoryStream = class(TMemoryStream)
@@ -479,19 +479,19 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.io.stream_adapter');
-  T.Run('Wrap factories handle nil', @TestWrapFactoriesHandleNil);
-  T.Run('WrapTStream delegates read/write/seek', @TestWrapTStreamDelegatesReadWriteSeek);
-  T.Run('WrapTStream uses 64-bit seek', @TestWrapTStreamUses64BitSeek);
-  T.Run('WrapTStream close default does not own', @TestWrapTStreamCloseDefaultDoesNotOwn);
-  T.Run('WrapTStream close owns backing stream', @TestWrapTStreamCloseOwnsBackingStream);
-  T.Run('WrapIStream delegates read/write/seek', @TestWrapIStreamDelegatesReadWriteSeek);
-  T.Run('WrapIStream CopyFrom bridges TStream sources', @TestWrapIStreamCopyFromHonorsCountAndWholeSource);
-  T.Run('WrapIStream ReadByte/WriteByte prefer byte interfaces',
+  T := TTestSuite.Create('nextpas.core.io.stream_adapter');
+  T.Test('Wrap factories handle nil', @TestWrapFactoriesHandleNil);
+  T.Test('WrapTStream delegates read/write/seek', @TestWrapTStreamDelegatesReadWriteSeek);
+  T.Test('WrapTStream uses 64-bit seek', @TestWrapTStreamUses64BitSeek);
+  T.Test('WrapTStream close default does not own', @TestWrapTStreamCloseDefaultDoesNotOwn);
+  T.Test('WrapTStream close owns backing stream', @TestWrapTStreamCloseOwnsBackingStream);
+  T.Test('WrapIStream delegates read/write/seek', @TestWrapIStreamDelegatesReadWriteSeek);
+  T.Test('WrapIStream CopyFrom bridges TStream sources', @TestWrapIStreamCopyFromHonorsCountAndWholeSource);
+  T.Test('WrapIStream ReadByte/WriteByte prefer byte interfaces',
     @TestWrapIStreamReadByteWriteBytePreferByteInterfaces);
-  T.Run('WrapIStream keeps strong reference', @TestWrapIStreamKeepsStrongReference);
-  T.Run('WrapIStream 32-bit seek overflow raises', @TestWrapIStreamSeek32OverflowRaises);
-  T.Run('IoReadAllLimited handles nil and boundaries',
+  T.Test('WrapIStream keeps strong reference', @TestWrapIStreamKeepsStrongReference);
+  T.Test('WrapIStream 32-bit seek overflow raises', @TestWrapIStreamSeek32OverflowRaises);
+  T.Test('IoReadAllLimited handles nil and boundaries',
     @TestIoReadAllLimitedHandlesNilAndBoundaries);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

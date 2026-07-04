@@ -4,7 +4,7 @@ program test_ttface;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.mem,
   nextpas.core.base,
   nextpas.core.font.base,
@@ -14,7 +14,7 @@ const
   TEST_FONT_PATH = '/usr/share/fonts/truetype/freefont/FreeMono.ttf';
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { ========================================================================= }
 { 基本加载测试                                                               }
@@ -387,31 +387,31 @@ end;
 { ========================================================================= }
 
 begin
-  T := TTestRunner.Create('nextpas.core.font.ttface');
+  T := TTestSuite.Create('nextpas.core.font.ttface');
 
-  T.Run('Load: Valid font', @TestLoadValidFont);
-  T.Run('Load: Missing file', @TestLoadMissingFile);
+  T.Test('Load: Valid font', @TestLoadValidFont);
+  T.Test('Load: Missing file', @TestLoadMissingFile);
 
-  T.Run('Metrics: Font metrics', @TestFontMetrics);
-  T.Run('Metrics: Glyph count', @TestGlyphCount);
+  T.Test('Metrics: Font metrics', @TestFontMetrics);
+  T.Test('Metrics: Glyph count', @TestGlyphCount);
 
-  T.Run('Cmap: ASCII lookup', @TestCmapLookupAscii);
-  T.Run('Cmap: Digit lookup', @TestCmapLookupDigits);
-  T.Run('Cmap: Unmapped codepoint', @TestCmapLookupUnmappedCodepoint);
+  T.Test('Cmap: ASCII lookup', @TestCmapLookupAscii);
+  T.Test('Cmap: Digit lookup', @TestCmapLookupDigits);
+  T.Test('Cmap: Unmapped codepoint', @TestCmapLookupUnmappedCodepoint);
 
-  T.Run('Hmtx: Horizontal metric', @TestGlyphHorizontalMetric);
-  T.Run('Hmtx: Boundary conditions', @TestGlyphHorizontalMetricBoundaries);
+  T.Test('Hmtx: Horizontal metric', @TestGlyphHorizontalMetric);
+  T.Test('Hmtx: Boundary conditions', @TestGlyphHorizontalMetricBoundaries);
 
-  T.Run('Outline: Simple glyph', @TestGlyphOutlineSimple);
-  T.Run('Outline: Space glyph', @TestGlyphOutlineSpace);
-  T.Run('Outline: Multiple glyphs', @TestGlyphOutlineMultipleGlyphs);
+  T.Test('Outline: Simple glyph', @TestGlyphOutlineSimple);
+  T.Test('Outline: Space glyph', @TestGlyphOutlineSpace);
+  T.Test('Outline: Multiple glyphs', @TestGlyphOutlineMultipleGlyphs);
 
-  T.Run('GlyphMetrics: From outline', @TestGlyphMetricsFromOutline);
-  T.Run('GlyphMetrics: Consistency', @TestGlyphMetricsConsistency);
+  T.Test('GlyphMetrics: From outline', @TestGlyphMetricsFromOutline);
+  T.Test('GlyphMetrics: Consistency', @TestGlyphMetricsConsistency);
 
-  T.Run('Monospace: Consistency', @TestMonospaceConsistency);
+  T.Test('Monospace: Consistency', @TestMonospaceConsistency);
 
-  T.Run('Memory: Create/Destroy cycle', @TestFaceCreateDestroy);
+  T.Test('Memory: Create/Destroy cycle', @TestFaceCreateDestroy);
 
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

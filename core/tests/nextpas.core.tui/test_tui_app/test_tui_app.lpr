@@ -14,7 +14,7 @@ uses
   nextpas.core.tui.terminal,
   nextpas.core.tui.task,
   nextpas.core.tui.app.screen,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 type
   TSharedStateBox = class
@@ -129,7 +129,7 @@ type
   end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure SeedPendingCancelledTask(ATasks: TTaskManager; out CancelledTaskId: TTaskId); forward;
 
@@ -1622,40 +1622,38 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.app');
-  T.Run('app raises backend exception when enter fails', @TestAppRunRaisesBackendExceptionWhenEnterFails);
-  T.Run('app renders top screen by default', @TestAppRendersTopScreenByDefault);
-  T.Run('app routes events to top screen by default', @TestAppRoutesEventsToTopScreenByDefault);
-  T.Run('app stops when screen requests quit', @TestAppStopsWhenScreenRequestsQuit);
-  T.Run('app stops before next frame when tick requests screen quit', @TestAppStopsBeforeNextFrameWhenTickRequestsScreenQuit);
-  T.Run('screen stack push leaves old top and enters new top', @TestScreenStackPushLeavesOldTopAndEntersNewTop);
-  T.Run('screen stack pop resumes previous top', @TestScreenStackPopResumesPreviousTop);
-  T.Run('screen stack owns screen stack reference', @TestScreenStackOwnsScreenStackReference);
-  T.Run('screen stack replace frees old top', @TestScreenStackReplaceFreesOldTop);
-  T.Run('screen stack push rollback restores previous top', @TestScreenStackPushRollbackRestoresPreviousTop);
-  T.Run('screen stack rejects nil and owned screens', @TestScreenStackRejectsNilAndOwnedScreens);
-  T.Run('app ends frame when screen render raises', @TestAppEndsFrameWhenScreenRenderRaises);
-  T.Run('app routes task completions to top screen by default', @TestAppRoutesTaskCompletionsToTopScreenByDefault);
-  T.Run('app routes task completions to callback path', @TestAppRoutesTaskCompletionsToCallbackPath);
-  T.Run('app routes cancelled task completion to top screen by default', @TestAppRoutesCancelledTaskCompletionToTopScreenByDefault);
-  T.Run('app routes cancelled task completion to callback path', @TestAppRoutesCancelledTaskCompletionToCallbackPath);
-  T.Run('app routes multiple task completions to top screen in order', @TestAppRoutesMultipleTaskCompletionsToTopScreenInOrder);
-  T.Run('app preserves mixed task completion statuses on top screen', @TestAppPreservesMixedTaskCompletionStatusesOnTopScreen);
-  T.Run('app routes task completions to callback without top screen', @TestAppRoutesTaskCompletionsToCallbackWithoutTopScreen);
-  T.Run('app preserves mixed task completion statuses on callback path', @TestAppPreservesMixedTaskCompletionStatusesOnCallbackPath);
-  T.Run('app routes callback completion overflow across loop iterations', @TestAppRoutesCallbackCompletionOverflowAcrossLoopIterations);
-  T.Run('app bootstraps first screen from callback without top screen', @TestAppBootstrapsFirstScreenFromCallbackWithoutTopScreen);
-  T.Run('app drains task completions without handler', @TestAppDrainsTaskCompletionsWithoutHandler);
-  T.Run('app routes follow-up completion to new top screen', @TestAppRoutesFollowUpCompletionToNewTopScreen);
-  T.Run('app renders and polls new top screen after completion transition', @TestAppRendersAndPollsNewTopScreenAfterCompletionTransition);
-  T.Run('app renders and polls new top screen after callback transition', @TestAppRendersAndPollsNewTopScreenAfterCallbackTransition);
-  T.Run('app routes follow-up completion to callback after callback transition', @TestAppRoutesFollowUpCompletionToCallbackAfterCallbackTransition);
-  T.Run('app routes cancelled follow-up completion to new top screen', @TestAppRoutesCancelledFollowUpCompletionToNewTopScreen);
-  T.Run('app routes cancelled follow-up completion to callback after transition', @TestAppRoutesCancelledFollowUpCompletionToCallbackAfterTransition);
-  T.Run('app falls back to screen after callback bootstrap releases ownership', @TestAppFallsBackToScreenAfterCallbackBootstrapReleasesOwnership);
-  T.Run('app callback commits shared state before first render', @TestAppCallbackCommitsSharedStateBeforeFirstRender);
-  T.Run('app callback retains shared-state ownership across screen transition', @TestAppCallbackRetainsSharedStateOwnershipAcrossScreenTransition);
-  T.Summary;
-  if not T.AllPassed then
-    Halt(1);
+  T := TTestSuite.Create('nextpas.core.tui.app');
+  T.Test('app raises backend exception when enter fails', @TestAppRunRaisesBackendExceptionWhenEnterFails);
+  T.Test('app renders top screen by default', @TestAppRendersTopScreenByDefault);
+  T.Test('app routes events to top screen by default', @TestAppRoutesEventsToTopScreenByDefault);
+  T.Test('app stops when screen requests quit', @TestAppStopsWhenScreenRequestsQuit);
+  T.Test('app stops before next frame when tick requests screen quit', @TestAppStopsBeforeNextFrameWhenTickRequestsScreenQuit);
+  T.Test('screen stack push leaves old top and enters new top', @TestScreenStackPushLeavesOldTopAndEntersNewTop);
+  T.Test('screen stack pop resumes previous top', @TestScreenStackPopResumesPreviousTop);
+  T.Test('screen stack owns screen stack reference', @TestScreenStackOwnsScreenStackReference);
+  T.Test('screen stack replace frees old top', @TestScreenStackReplaceFreesOldTop);
+  T.Test('screen stack push rollback restores previous top', @TestScreenStackPushRollbackRestoresPreviousTop);
+  T.Test('screen stack rejects nil and owned screens', @TestScreenStackRejectsNilAndOwnedScreens);
+  T.Test('app ends frame when screen render raises', @TestAppEndsFrameWhenScreenRenderRaises);
+  T.Test('app routes task completions to top screen by default', @TestAppRoutesTaskCompletionsToTopScreenByDefault);
+  T.Test('app routes task completions to callback path', @TestAppRoutesTaskCompletionsToCallbackPath);
+  T.Test('app routes cancelled task completion to top screen by default', @TestAppRoutesCancelledTaskCompletionToTopScreenByDefault);
+  T.Test('app routes cancelled task completion to callback path', @TestAppRoutesCancelledTaskCompletionToCallbackPath);
+  T.Test('app routes multiple task completions to top screen in order', @TestAppRoutesMultipleTaskCompletionsToTopScreenInOrder);
+  T.Test('app preserves mixed task completion statuses on top screen', @TestAppPreservesMixedTaskCompletionStatusesOnTopScreen);
+  T.Test('app routes task completions to callback without top screen', @TestAppRoutesTaskCompletionsToCallbackWithoutTopScreen);
+  T.Test('app preserves mixed task completion statuses on callback path', @TestAppPreservesMixedTaskCompletionStatusesOnCallbackPath);
+  T.Test('app routes callback completion overflow across loop iterations', @TestAppRoutesCallbackCompletionOverflowAcrossLoopIterations);
+  T.Test('app bootstraps first screen from callback without top screen', @TestAppBootstrapsFirstScreenFromCallbackWithoutTopScreen);
+  T.Test('app drains task completions without handler', @TestAppDrainsTaskCompletionsWithoutHandler);
+  T.Test('app routes follow-up completion to new top screen', @TestAppRoutesFollowUpCompletionToNewTopScreen);
+  T.Test('app renders and polls new top screen after completion transition', @TestAppRendersAndPollsNewTopScreenAfterCompletionTransition);
+  T.Test('app renders and polls new top screen after callback transition', @TestAppRendersAndPollsNewTopScreenAfterCallbackTransition);
+  T.Test('app routes follow-up completion to callback after callback transition', @TestAppRoutesFollowUpCompletionToCallbackAfterCallbackTransition);
+  T.Test('app routes cancelled follow-up completion to new top screen', @TestAppRoutesCancelledFollowUpCompletionToNewTopScreen);
+  T.Test('app routes cancelled follow-up completion to callback after transition', @TestAppRoutesCancelledFollowUpCompletionToCallbackAfterTransition);
+  T.Test('app falls back to screen after callback bootstrap releases ownership', @TestAppFallsBackToScreenAfterCallbackBootstrapReleasesOwnership);
+  T.Test('app callback commits shared state before first render', @TestAppCallbackCommitsSharedStateBeforeFirstRender);
+  T.Test('app callback retains shared-state ownership across screen transition', @TestAppCallbackRetainsSharedStateOwnershipAcrossScreenTransition);
+  if not T.Run then Halt(1);
 end.

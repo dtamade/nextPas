@@ -3,7 +3,7 @@ program test_rbtreemap_range_managed_state;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections.base,
   nextpas.core.collections.orderedmap.rb,
   leak_tracker;
@@ -12,7 +12,7 @@ type
   TTrackedRBMap = specialize TRBTreeMap<ITracked, Integer>;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function CompareTracked(const A, B: ITracked; AData: Pointer): SizeInt;
 begin
@@ -80,7 +80,7 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.rbtreemap_range_managed_state');
-  T.Run('range iterator does not retain managed bounds', @TestRangeIteratorDoesNotRetainManagedBounds);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.rbtreemap_range_managed_state');
+  T.Test('range iterator does not retain managed bounds', @TestRangeIteratorDoesNotRetainManagedBounds);
+  if not T.Run then Halt(1);
 end.

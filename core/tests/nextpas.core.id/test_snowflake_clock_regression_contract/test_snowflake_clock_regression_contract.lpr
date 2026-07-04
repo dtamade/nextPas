@@ -3,13 +3,13 @@ program test_snowflake_clock_regression_contract;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.id.snowflake,
   nextpas.core.platform.thread,
   nextpas.core.platform.time;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestSequenceOverflowWaitsThroughClockRegression;
 const
@@ -46,7 +46,7 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.id.snowflake.clock_regression_contract');
-  T.Run('sequence overflow waits through clock regression', @TestSequenceOverflowWaitsThroughClockRegression);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.id.snowflake.clock_regression_contract');
+  T.Test('sequence overflow waits through clock regression', @TestSequenceOverflowWaitsThroughClockRegression);
+  if not T.Run then Halt(1);
 end.

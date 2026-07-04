@@ -5,10 +5,10 @@ program test_csv_facade_surface;
 uses
   nextpas.core.csv,
   nextpas.core.mem.default,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestFacadeExposesCoreSurface;
 var
@@ -68,10 +68,9 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.csv (facade surface)');
-  T.Run('facade exposes core surface', @TestFacadeExposesCoreSurface);
-  T.Run('facade exposes allocator surface',
+  T := TTestSuite.Create('nextpas.core.csv (facade surface)');
+  T.Test('facade exposes core surface', @TestFacadeExposesCoreSurface);
+  T.Test('facade exposes allocator surface',
     @TestFacadeExposesAllocatorSurface);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  if not T.Run then Halt(1);
 end.

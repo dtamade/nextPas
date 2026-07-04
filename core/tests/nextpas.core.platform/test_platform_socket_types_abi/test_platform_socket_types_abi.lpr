@@ -6,10 +6,10 @@ uses
   nextpas.core.platform.socket,
   nextpas.core.platform.posix.base,
   nextpas.core.platform.linux.base,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestInAddrSize;
 begin
@@ -90,19 +90,19 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.socket_types_abi');
-  T.Run('in_addr size', @TestInAddrSize);
-  T.Run('in6_addr size', @TestIn6AddrSize);
-  T.Run('sockaddr_in size', @TestSockAddrInSize);
-  T.Run('sockaddr_in6 size', @TestSockAddrIn6Size);
-  T.Run('sockaddr_un size', @TestSockAddrUnSize);
-  T.Run('sockaddr_storage size', @TestSockAddrStorageSize);
-  T.Run('linger size', @TestLingerSize);
-  T.Run('ucred size', @TestUcredSize);
-  T.Run('AF_* constants', @TestAFConstants);
-  T.Run('SOCK_* constants', @TestSOCKConstants);
-  T.Run('IPPROTO_* constants', @TestIPPROTOConstants);
-  T.Run('MSG_* constants', @TestMSGConstants);
-  T.Run('socket timeout error classifier', @TestSocketTimeoutErrorClassifier);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.socket_types_abi');
+  T.Test('in_addr size', @TestInAddrSize);
+  T.Test('in6_addr size', @TestIn6AddrSize);
+  T.Test('sockaddr_in size', @TestSockAddrInSize);
+  T.Test('sockaddr_in6 size', @TestSockAddrIn6Size);
+  T.Test('sockaddr_un size', @TestSockAddrUnSize);
+  T.Test('sockaddr_storage size', @TestSockAddrStorageSize);
+  T.Test('linger size', @TestLingerSize);
+  T.Test('ucred size', @TestUcredSize);
+  T.Test('AF_* constants', @TestAFConstants);
+  T.Test('SOCK_* constants', @TestSOCKConstants);
+  T.Test('IPPROTO_* constants', @TestIPPROTOConstants);
+  T.Test('MSG_* constants', @TestMSGConstants);
+  T.Test('socket timeout error classifier', @TestSocketTimeoutErrorClassifier);
+  if not T.Run then Halt(1);
 end.
